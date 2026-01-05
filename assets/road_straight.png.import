@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cukg06ofrkeki"
-path="res://.godot/imported/bridge_tee.png-c38cb8d8d86b934c368537bf0c3dfc10.ctex"
+uid="uid://bqifrjs6w2lse"
+path="res://.godot/imported/road_straight.png-730f3384dd1d78f1ec0c67f96b3b4ba4.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://modules/base_tiles/assets/map/roads/bridge_tee.png"
-dest_files=["res://.godot/imported/bridge_tee.png-c38cb8d8d86b934c368537bf0c3dfc10.ctex"]
+source_file="res://assets/road_straight.png"
+dest_files=["res://.godot/imported/road_straight.png-730f3384dd1d78f1ec0c67f96b3b4ba4.ctex"]
 
 [params]
 

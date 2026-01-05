@@ -5,17 +5,11 @@
 		"blocked": {"texture": "res://modules/base_tiles/assets/map/ground/blocked.png"}
 	},
 	"road_visuals": {
-		"default": {"texture": "res://modules/base_tiles/assets/map/roads/road_default.png"},
-		"end": {"texture": "res://modules/base_tiles/assets/map/roads/road_end.png"},
 		"straight": {"texture": "res://modules/base_tiles/assets/map/roads/road_straight.png"},
 		"corner": {"texture": "res://modules/base_tiles/assets/map/roads/road_corner.png"},
 		"tee": {"texture": "res://modules/base_tiles/assets/map/roads/road_tee.png"},
 		"cross": {"texture": "res://modules/base_tiles/assets/map/roads/road_cross.png"},
 		"bridge_default": {"texture": "res://modules/base_tiles/assets/map/roads/bridge_default.png"},
-		"bridge_end": {"texture": "res://modules/base_tiles/assets/map/roads/bridge_end.png"},
-		"bridge_straight": {"texture": "res://modules/base_tiles/assets/map/roads/bridge_straight.png"},
-		"bridge_corner": {"texture": "res://modules/base_tiles/assets/map/roads/bridge_corner.png"},
-		"bridge_tee": {"texture": "res://modules/base_tiles/assets/map/roads/bridge_tee.png"},
-		"bridge_cross": {"texture": "res://modules/base_tiles/assets/map/roads/bridge_cross.png"}
+		"road_bridge": {"texture": "res://modules/base_tiles/assets/map/roads/bridge_default.png"}
 	}
 }

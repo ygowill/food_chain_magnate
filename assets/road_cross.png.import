@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://d3dq4s2b1br8v"
-path="res://.godot/imported/road_end.png-56568f1c99f0bbf784463aa9359179ec.ctex"
+uid="uid://dq6q10n8jltsi"
+path="res://.godot/imported/road_cross.png-f16135b24461dae9cc8c536266e02232.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://modules/base_tiles/assets/map/roads/road_end.png"
-dest_files=["res://.godot/imported/road_end.png-56568f1c99f0bbf784463aa9359179ec.ctex"]
+source_file="res://assets/road_cross.png"
+dest_files=["res://.godot/imported/road_cross.png-f16135b24461dae9cc8c536266e02232.ctex"]
 
 [params]
 

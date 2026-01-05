@@ -57,14 +57,7 @@
             "N",
             "S"
           ],
-          "bridge": false
-        },
-        {
-          "dirs": [
-            "W",
-            "E"
-          ],
-          "bridge": false
+          "bridge": true
         }
       ],
       [

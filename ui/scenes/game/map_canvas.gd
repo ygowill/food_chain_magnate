@@ -337,10 +337,10 @@ func _draw_roads() -> void:
 				var shape: String = str(shape_info.get("shape", "default"))
 				var rot_deg: int = int(shape_info.get("rotation_deg", 0))
 
-				var key := ("bridge_%s" % shape) if is_bridge else shape
+				var key := "road_bridge" if is_bridge else shape
 				var tex: Texture2D = _skin.get_road_texture(key)
 
-				var margin := 1.0
+				var margin := 0.0 if seg_index == 0 else 1.0
 				var size := rect.size - Vector2(margin * 2.0, margin * 2.0)
 				var offset := Vector2.ZERO
 				if seg_index > 0:
@@ -380,31 +380,31 @@ func _compute_road_shape_info(dirs: Array) -> Dictionary:
 		var has_s := set.has("S")
 		var has_w := set.has("W")
 
-		# straight: base is E-W
+		# straight: base texture is N-S
 		if (has_e and has_w) or (has_n and has_s):
-			return {"shape": "straight", "rotation_deg": 0 if (has_e and has_w) else 90}
+			return {"shape": "straight", "rotation_deg": 0 if (has_n and has_s) else 90}
 
-		# corner: base is E-S
-		if has_e and has_s:
+		# corner: base texture is W-S
+		if has_w and has_s:
 			return {"shape": "corner", "rotation_deg": 0}
-		if has_s and has_w:
+		if has_n and has_w:
 			return {"shape": "corner", "rotation_deg": 90}
-		if has_w and has_n:
-			return {"shape": "corner", "rotation_deg": 180}
 		if has_n and has_e:
+			return {"shape": "corner", "rotation_deg": 180}
+		if has_e and has_s:
 			return {"shape": "corner", "rotation_deg": 270}
 
 		return {"shape": "corner", "rotation_deg": 0}
 
 	if n == 3:
-		# tee: base is N-E-S (missing W)
-		if not set.has("W"):
-			return {"shape": "tee", "rotation_deg": 0}
-		if not set.has("N"):
-			return {"shape": "tee", "rotation_deg": 90}
+		# tee: base texture is N-W-S (missing E)
 		if not set.has("E"):
-			return {"shape": "tee", "rotation_deg": 180}
+			return {"shape": "tee", "rotation_deg": 0}
 		if not set.has("S"):
+			return {"shape": "tee", "rotation_deg": 90}
+		if not set.has("W"):
+			return {"shape": "tee", "rotation_deg": 180}
+		if not set.has("N"):
 			return {"shape": "tee", "rotation_deg": 270}
 		return {"shape": "tee", "rotation_deg": 0}
 

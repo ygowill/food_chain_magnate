@@ -134,17 +134,17 @@ static func _test_map_baker_requires_piece_registry() -> Result:
 	var data: GameData = data_read.value
 
 	# 构造一个最小 MapDef：只放一张包含印刷建筑的 tile（依赖 piece_registry）
-	if not data.tiles.has("tile_a1"):
-		return Result.failure("测试前提不成立：tile_registry 缺少 tile_a1")
-	var tile_a1_val = data.tiles["tile_a1"]
-	if not (tile_a1_val is TileDef):
-		return Result.failure("tile_a1 定义类型错误（期望 TileDef）")
-	var tile_a1: TileDef = tile_a1_val
-	if tile_a1.printed_structures.is_empty():
-		return Result.failure("测试前提不成立：tile_a1 没有 printed_structures")
+	if not data.tiles.has("tile_a"):
+		return Result.failure("测试前提不成立：tile_registry 缺少 tile_a")
+	var tile_a_val = data.tiles["tile_a"]
+	if not (tile_a_val is TileDef):
+		return Result.failure("tile_a 定义类型错误（期望 TileDef）")
+	var tile_a: TileDef = tile_a_val
+	if tile_a.printed_structures.is_empty():
+		return Result.failure("测试前提不成立：tile_a 没有 printed_structures")
 
 	var map_def := MapDef.create_fixed("fail_fast_map", [{
-		"tile_id": "tile_a1",
+		"tile_id": "tile_a",
 		"board_pos": Vector2i(0, 0),
 		"rotation": 0,
 	}])

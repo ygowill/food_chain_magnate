@@ -115,20 +115,20 @@ static func _sdf_intersect(d1: float, d2: float) -> float: return maxf(d1, d2)
 
 # --- 道路生成逻辑 (保持 V4 直角逻辑) ---
 
-static func _generate_road_textures(errors: Array[String]) -> void:
-	var configs = [
-		{ "name": "road_default",  "dirs": ["N","S","E","W"], "bridge": false },
-		{ "name": "road_end",      "dirs": ["N"],             "bridge": false },
-		{ "name": "road_straight", "dirs": ["E","W"],         "bridge": false },
-		{ "name": "road_corner",   "dirs": ["E","S"],         "bridge": false },
-		{ "name": "road_tee",      "dirs": ["N","E","S"],     "bridge": false },
-		{ "name": "road_cross",    "dirs": ["N","S","E","W"], "bridge": false },
-		{ "name": "bridge_default",  "dirs": ["N","S","E","W"], "bridge": true },
-		{ "name": "bridge_end",      "dirs": ["N"],             "bridge": true },
-		{ "name": "bridge_straight", "dirs": ["E","W"],         "bridge": true },
-		{ "name": "bridge_corner",   "dirs": ["E","S"],         "bridge": true },
-		{ "name": "bridge_tee",      "dirs": ["N","E","S"],     "bridge": true },
-	]
+	static func _generate_road_textures(errors: Array[String]) -> void:
+		var configs = [
+			{ "name": "road_default",  "dirs": ["N","S","E","W"], "bridge": false },
+			{ "name": "road_end",      "dirs": ["N"],             "bridge": false },
+			{ "name": "road_straight", "dirs": ["N","S"],         "bridge": false },
+			{ "name": "road_corner",   "dirs": ["W","S"],         "bridge": false },
+			{ "name": "road_tee",      "dirs": ["N","W","S"],     "bridge": false },
+			{ "name": "road_cross",    "dirs": ["N","S","E","W"], "bridge": false },
+			{ "name": "bridge_default",  "dirs": ["N","S","E","W"], "bridge": true },
+			{ "name": "bridge_end",      "dirs": ["N"],             "bridge": true },
+			{ "name": "bridge_straight", "dirs": ["N","S"],         "bridge": true },
+			{ "name": "bridge_corner",   "dirs": ["W","S"],         "bridge": true },
+			{ "name": "bridge_tee",      "dirs": ["N","W","S"],     "bridge": true },
+		]
 	for cfg in configs:
 		var img := _make_road_tile_sdf(cfg.dirs, cfg.bridge)
 		_write_png("res://modules/base_tiles/assets/map/roads/%s.png" % cfg.name, img, errors)

@@ -1,19 +1,17 @@
 # Base Tiles - Road Textures
 
-Expected files (PNG):
+This module currently ships a minimal road texture set (PNG, 64x64):
 
-- `road_default.png`：道路通用纹理（fallback）
-- `road_end.png`：端点（默认朝 N，运行时旋转）
-- `road_straight.png`：直线（默认 E-W，运行时旋转）
-- `road_corner.png`：拐角（默认 E-S，运行时旋转）
-- `road_tee.png`：三岔（默认 N-E-S，运行时旋转）
-- `road_cross.png`：十字
+- `road_straight.png`
+- `road_corner.png`
+- `road_tee.png`
+- `road_cross.png`
+- `bridge_default.png`
 
-Bridge variants (independent textures):
+Other road/bridge variants are intentionally omitted; the UI will fall back to placeholder textures when a key/texture is missing.
 
-- `bridge_default.png`（fallback）
-- `bridge_end.png`
-- `bridge_straight.png`
-- `bridge_corner.png`
-- `bridge_tee.png`
-- `bridge_cross.png`
+Base orientations (as drawn in the PNGs):
+
+- `road_straight.png`: N-S
+- `road_corner.png`: W-S
+- `road_tee.png`: N-W-S (missing E)
