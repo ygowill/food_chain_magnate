@@ -1,0 +1,22 @@
+{
+  "id": "first_drink_marketed",
+  "name": "首个营销饮料",
+  "trigger": {
+    "event": "DemandMarked",
+    "filter": {
+      "product": "drink"
+    }
+  },
+  "effects": [
+    {
+      "type": "sell_bonus",
+      "product": "drink",
+      "value": 5
+    }
+  ],
+  "exclusive_type": "first_drink_marketed",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

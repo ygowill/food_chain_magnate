@@ -1,0 +1,22 @@
+{
+  "id": "first_rural_marketeer_used",
+  "name": "首个使用乡村营销员",
+  "trigger": {
+    "event": "UseEmployee",
+    "filter": {
+      "id": "rural_marketeer"
+    }
+  },
+  "effects": [
+    {
+      "type": "rural_marketeers:grant_offramp_placement"
+    }
+  ],
+  "exclusive_type": "first_rural_marketeer_used",
+  "expires_at": null,
+  "pool": {
+    "enabled": true,
+    "count": 5
+  }
+}
+

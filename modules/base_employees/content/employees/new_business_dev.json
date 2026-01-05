@@ -1,0 +1,28 @@
+{
+  "id": "new_business_dev",
+  "name": "新业务拓展经理",
+  "description": "放置房屋或花园",
+  "salary": true,
+  "unique": false,
+  "role": "special",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "place_house_or_garden",
+    "entry_level"
+  ],
+  "usage_tags": [
+    "use:place_house",
+    "use:add_garden"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 12
+  }
+}

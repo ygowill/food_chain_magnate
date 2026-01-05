@@ -1,0 +1,25 @@
+{
+  "id": "zeppelin_pilot",
+  "name": "飞艇驾驶员",
+  "description": "从路线上的每个进货点获取2瓶饮料，无视道路",
+  "salary": true,
+  "unique": true,
+  "role": "procure_drink",
+  "manager_slots": 0,
+  "range": {
+    "type": "air",
+    "value": 4
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "procure"
+  ],
+  "usage_tags": [
+    "use:procure:air"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "one_x"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "id": "burger_cook",
+  "name": "汉堡厨师",
+  "description": "生产3个汉堡",
+  "salary": true,
+  "unique": false,
+  "role": "produce_food",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [
+    "burger_chef"
+  ],
+  "train_capacity": 0,
+  "tags": [
+    "produce_burger",
+    "entry_level"
+  ],
+  "usage_tags": [
+    "use:produce:burger"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 12
+  },
+  "produces": {
+    "food_type": "burger",
+    "amount": 3
+  }
+}

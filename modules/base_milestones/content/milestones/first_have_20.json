@@ -1,0 +1,20 @@
+{
+  "id": "first_have_20",
+  "name": "首个拥有$20",
+  "trigger": {
+    "event": "CashReached",
+    "filter": {
+      "value": 20
+    }
+  },
+  "effects": [
+    {
+      "type": "peek_reserve_cards"
+    }
+  ],
+  "exclusive_type": "first_have_20",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

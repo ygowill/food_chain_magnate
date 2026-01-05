@@ -1,0 +1,32 @@
+{
+  "id": "brand_director",
+  "name": "品牌总监",
+  "description": "放置电波或以下的广告，最多持续5回合",
+  "salary": true,
+  "unique": true,
+  "role": "marketing",
+  "manager_slots": 0,
+  "range": {
+    "type": "air",
+    "value": -1
+  },
+  "marketing_max_duration": 5,
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "marketing_billboard",
+    "marketing_mailbox",
+    "marketing_airplane",
+    "marketing_radio"
+  ],
+  "usage_tags": [
+    "use:marketing:billboard",
+    "use:marketing:mailbox",
+    "use:marketing:airplane",
+    "use:marketing:radio"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "one_x"
+  }
+}

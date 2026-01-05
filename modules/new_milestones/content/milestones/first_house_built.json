@@ -1,0 +1,18 @@
+{
+  "id": "first_house_built",
+  "name": "首个建造房屋",
+  "trigger": {
+    "event": "HouseBuilt",
+    "filter": {}
+  },
+  "effects": [
+    {
+      "type": "multi_trainer_on_one"
+    }
+  ],
+  "exclusive_type": "first_house_built",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

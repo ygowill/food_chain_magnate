@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="TileDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/models/TileDef.gd" id="1_oagfh"]
+
+[resource]
+script = ExtResource("1_oagfh")
+id = "Tile_Y"
+road_segments = [[[{
+"dirs": ["E", "S"]
+}], [{
+"dirs": ["E", "W"]
+}], [{
+"dirs": ["N", "E", "W"]
+}], [{
+"dirs": ["E", "W"]
+}], [{
+"dirs": ["W", "S"]
+}]], [[{
+"dirs": ["N", "S"]
+}], [], [], [], [{
+"dirs": ["N", "S"]
+}]], [[{
+"dirs": ["N", "S", "W"]
+}], [], [], [], [{
+"dirs": ["N", "E"]
+}]], [[{
+"dirs": ["N", "S"]
+}], [], [], [], []], [[{
+"dirs": ["N", "E"]
+}], [{
+"dirs": ["E", "W"]
+}], [{
+"dirs": ["S", "W"]
+}], [], []]]
+printed_structures = Array[Dictionary]([{
+"_preview_h": 1,
+"_preview_w": 1,
+"anchor": Vector2i(1, 1),
+"piece_id": "apartment",
+"rotation": 0,
+"house_id": "9¾",
+"house_number": 9.75,
+}])

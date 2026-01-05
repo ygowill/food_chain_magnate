@@ -1,0 +1,191 @@
+[gd_scene load_steps=4 format=3 uid="uid://dph5rwtgn6tq8"]
+
+[ext_resource type="Script" path="res://ui/scenes/game/game.gd" id="1_game"]
+[ext_resource type="Script" path="res://ui/scenes/game/map_view.gd" id="2_map_view"]
+[ext_resource type="Script" path="res://ui/scenes/game/map_canvas.gd" id="3_map_canvas"]
+
+[node name="Game" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_game")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.12, 0.15, 1)
+
+[node name="TopBar" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+theme_override_constants/separation = 20
+
+[node name="RoundLabel" type="Label" parent="TopBar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "回合: 0"
+
+[node name="PhaseLabel" type="Label" parent="TopBar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "阶段: Setup"
+
+[node name="BankLabel" type="Label" parent="TopBar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "银行: $0"
+
+[node name="CurrentPlayerLabel" type="Label" parent="TopBar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "玩家: -"
+
+[node name="AdvancePhaseButton" type="Button" parent="TopBar"]
+layout_mode = 2
+text = "推进阶段"
+
+[node name="AdvanceSubPhaseButton" type="Button" parent="TopBar"]
+layout_mode = 2
+text = "推进子阶段"
+
+[node name="SkipButton" type="Button" parent="TopBar"]
+layout_mode = 2
+text = "跳过"
+
+[node name="DebugButton" type="Button" parent="TopBar"]
+layout_mode = 2
+text = "调试"
+
+[node name="Spacer" type="Control" parent="TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="MenuButton" type="Button" parent="TopBar"]
+layout_mode = 2
+text = "菜单"
+
+[node name="GameArea" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 60.0
+offset_right = -10.0
+offset_bottom = -60.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MapView" type="ScrollContainer" parent="GameArea"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_map_view")
+
+[node name="Canvas" type="Control" parent="GameArea/MapView"]
+layout_mode = 2
+script = ExtResource("3_map_canvas")
+
+[node name="BottomBar" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -50.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/separation = 10
+
+[node name="StateHashLabel" type="Label" parent="BottomBar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.4, 0.4, 0.4, 1)
+text = "Hash: ..."
+
+[node name="Spacer" type="Control" parent="BottomBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CommandCountLabel" type="Label" parent="BottomBar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.4, 0.4, 0.4, 1)
+text = "命令: 0"
+
+[node name="MenuDialog" type="Window" parent="."]
+title = "游戏菜单"
+initial_position = 2
+size = Vector2i(300, 200)
+visible = false
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MenuDialog"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="ResumeButton" type="Button" parent="MenuDialog/VBoxContainer"]
+layout_mode = 2
+text = "继续游戏"
+
+[node name="SaveButton" type="Button" parent="MenuDialog/VBoxContainer"]
+layout_mode = 2
+text = "保存游戏"
+
+[node name="QuitToMenuButton" type="Button" parent="MenuDialog/VBoxContainer"]
+layout_mode = 2
+text = "返回主菜单"
+
+[node name="DebugDialog" type="Window" parent="."]
+title = "调试"
+initial_position = 2
+size = Vector2i(700, 500)
+visible = false
+
+[node name="VBoxContainer" type="VBoxContainer" parent="DebugDialog"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = 12.0
+offset_right = -12.0
+offset_bottom = -12.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="DebugText" type="TextEdit" parent="DebugDialog/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+editable = false
+
+[connection signal="pressed" from="TopBar/MenuButton" to="." method="_on_menu_pressed"]
+[connection signal="pressed" from="TopBar/AdvancePhaseButton" to="." method="_on_advance_phase_pressed"]
+[connection signal="pressed" from="TopBar/AdvanceSubPhaseButton" to="." method="_on_advance_sub_phase_pressed"]
+[connection signal="pressed" from="TopBar/SkipButton" to="." method="_on_skip_pressed"]
+[connection signal="pressed" from="TopBar/DebugButton" to="." method="_on_debug_pressed"]
+[connection signal="close_requested" from="MenuDialog" to="." method="_on_menu_dialog_close_requested"]
+[connection signal="pressed" from="MenuDialog/VBoxContainer/ResumeButton" to="." method="_on_resume_pressed"]
+[connection signal="pressed" from="MenuDialog/VBoxContainer/SaveButton" to="." method="_on_save_pressed"]
+[connection signal="pressed" from="MenuDialog/VBoxContainer/QuitToMenuButton" to="." method="_on_quit_to_menu_pressed"]
+[connection signal="close_requested" from="DebugDialog" to="." method="_on_debug_dialog_close_requested"]

@@ -1,0 +1,24 @@
+{
+  "id": "rural_marketeer",
+  "name": "乡村营销员",
+  "description": "可在乡村地区放置巨型广告牌；放置后永久忙碌",
+  "salary": true,
+  "unique": false,
+  "role": "special",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "marketing_employee"
+  ],
+  "usage_tags": [],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 6
+  }
+}

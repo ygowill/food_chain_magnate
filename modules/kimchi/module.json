@@ -1,0 +1,14 @@
+{
+	"schema_version": 1,
+	"id": "kimchi",
+	"name": "Kimchi",
+	"version": "0.1.0",
+	"priority": 74,
+	"dependencies": ["base_rules", "base_products", "base_employees", "base_milestones"],
+	"conflicts": [],
+	"entry_script": "res://modules/kimchi/rules/entry.gd",
+	"provides": {
+		"content": ["products", "employees"]
+	}
+}
+

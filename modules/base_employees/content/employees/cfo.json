@@ -1,0 +1,27 @@
+{
+  "id": "cfo",
+  "name": "cfo",
+  "description": "本回合收入增加50%",
+  "salary": true,
+  "unique": true,
+  "role": "special",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "income_50pct"
+  ],
+  "usage_tags": [],
+  "mandatory": true,
+  "mandatory_action_id": "",
+  "effect_ids": [
+    "base_rules:dinnertime:income_bonus:cfo"
+  ],
+  "pool": {
+    "type": "one_x"
+  }
+}

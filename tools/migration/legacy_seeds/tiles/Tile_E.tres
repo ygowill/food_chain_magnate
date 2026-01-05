@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="TileDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/models/TileDef.gd" id="1_jdp2q"]
+
+[resource]
+script = ExtResource("1_jdp2q")
+id = "Tile_E"
+road_segments = [[[{
+"dirs": ["E", "S"]
+}], [{
+"dirs": ["W", "E"]
+}], [{
+"dirs": ["N", "W"]
+}], [], []], [[{
+"dirs": ["N", "S"]
+}], [], [], [], []], [[{
+"dirs": ["N", "W"]
+}], [], [], [], [{
+"dirs": ["E", "S"]
+}]], [[], [], [], [], [{
+"dirs": ["N", "S"]
+}]], [[], [], [{
+"dirs": ["E", "S"]
+}], [{
+"dirs": ["W", "E"]
+}], [{
+"dirs": ["N", "W"]
+}]]]
+printed_structures = Array[Dictionary]([{
+"_preview_h": 1,
+"_preview_w": 1,
+"anchor": Vector2i(2, 2),
+"house_id": "8",
+"house_number": 8,
+"piece_id": "house",
+"rotation": 0
+}])
+drink_sources = Array[Dictionary]([{
+"pos": Vector2i(1, 1),
+"type": "beer"
+}])

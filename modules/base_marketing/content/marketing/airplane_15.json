@@ -1,0 +1,7 @@
+{
+  "id": "airplane_15",
+  "board_number": 15,
+  "type": "airplane",
+  "min_players": 4,
+  "max_players": null
+}

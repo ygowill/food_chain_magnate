@@ -1,0 +1,13 @@
+{
+	"schema_version": 1,
+	"id": "noodles",
+	"name": "Noodles",
+	"version": "0.1.0",
+	"priority": 75,
+	"dependencies": [],
+	"conflicts": [],
+	"entry_script": "res://modules/noodles/rules/entry.gd",
+	"provides": {
+		"content": ["employees", "products"]
+	}
+}

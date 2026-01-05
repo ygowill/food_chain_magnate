@@ -1,0 +1,24 @@
+{
+  "id": "first_trainer_used",
+  "name": "首个使用培训讲师",
+  "trigger": {
+    "event": "UseEmployee",
+    "filter": {
+      "id": "trainer"
+    }
+  },
+  "effects": [
+    {
+      "type": "gain_card",
+      "value": "trainer"
+    },
+    {
+      "type": "salary_allow_unpaid"
+    }
+  ],
+  "exclusive_type": "first_trainer_used",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

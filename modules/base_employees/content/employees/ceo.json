@@ -1,0 +1,24 @@
+{
+  "id": "ceo",
+  "name": "CEO",
+  "description": "CEO就是你！",
+  "salary": false,
+  "unique": true,
+  "role": "manager",
+  "manager_slots": 3,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "recruit_capacity": 1,
+  "tags": [
+    "recruit"
+  ],
+  "usage_tags": [
+    "use:recruit"
+  ],
+  "mandatory": false,
+  "can_be_fired": false
+}

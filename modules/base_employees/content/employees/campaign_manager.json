@@ -1,0 +1,31 @@
+{
+  "id": "campaign_manager",
+  "name": "营销经理",
+  "description": "放置邮箱或以下的广告，最多持续3回合",
+  "salary": true,
+  "unique": false,
+  "role": "marketing",
+  "manager_slots": 0,
+  "range": {
+    "type": "road",
+    "value": 3
+  },
+  "marketing_max_duration": 3,
+  "train_to": [
+    "brand_manager"
+  ],
+  "train_capacity": 0,
+  "tags": [
+    "marketing_billboard",
+    "marketing_mailbox"
+  ],
+  "usage_tags": [
+    "use:marketing:billboard",
+    "use:marketing:mailbox"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 8
+  }
+}

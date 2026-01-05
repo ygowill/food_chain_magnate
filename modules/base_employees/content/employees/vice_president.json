@@ -1,0 +1,25 @@
+{
+  "id": "vice_president",
+  "name": "副总裁",
+  "description": "",
+  "salary": true,
+  "unique": false,
+  "role": "manager",
+  "manager_slots": 4,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [
+    "regional_manager",
+    "senior_vice_president",
+    "guru"
+  ],
+  "train_capacity": 0,
+  "tags": [],
+  "usage_tags": [],
+  "mandatory": false,
+  "pool": {
+    "type": "one_x"
+  }
+}

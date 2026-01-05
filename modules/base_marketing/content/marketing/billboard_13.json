@@ -1,0 +1,7 @@
+{
+  "id": "billboard_13",
+  "board_number": 13,
+  "type": "billboard",
+  "min_players": 2,
+  "max_players": null
+}

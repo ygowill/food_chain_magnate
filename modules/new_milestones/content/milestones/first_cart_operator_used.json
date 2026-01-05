@@ -1,0 +1,32 @@
+{
+  "id": "first_cart_operator_used",
+  "name": "首个使用手推车操作员",
+  "trigger": {
+    "event": "UseEmployee",
+    "filter": {
+      "id": "cart_operator"
+    }
+  },
+  "effects": [
+    {
+      "type": "drinks_per_source_delta",
+      "targets": [
+        "cart_operator",
+        "zeppelin_pilot"
+      ],
+      "value": 2
+    },
+    {
+      "type": "drinks_per_source_delta",
+      "targets": [
+        "truck_driver"
+      ],
+      "value": 4
+    }
+  ],
+  "exclusive_type": "first_cart_operator_used",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

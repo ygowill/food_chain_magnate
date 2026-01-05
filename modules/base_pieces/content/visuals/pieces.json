@@ -1,0 +1,9 @@
+{
+	"schema_version": 1,
+	"piece_visuals": {
+		"house": {"texture": "res://modules/base_pieces/assets/map/pieces/house.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"house_with_garden": {"texture": "res://modules/base_pieces/assets/map/pieces/house_with_garden.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"restaurant": {"texture": "res://modules/base_pieces/assets/map/pieces/restaurant.png", "offset_px": [0, 0], "scale": [1, 1]}
+	}
+}
+

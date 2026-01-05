@@ -1,0 +1,20 @@
+{
+  "id": "first_discount_manager_used",
+  "name": "首个使用折扣经理",
+  "trigger": {
+    "event": "UseEmployee",
+    "filter": {
+      "id": "discount_manager"
+    }
+  },
+  "effects": [
+    {
+      "type": "bank_burn_on_discount_ge_3"
+    }
+  ],
+  "exclusive_type": "first_discount_manager_used",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

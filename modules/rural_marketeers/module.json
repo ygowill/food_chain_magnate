@@ -1,0 +1,25 @@
+{
+	"schema_version": 1,
+	"id": "rural_marketeers",
+	"name": "Rural Marketeers",
+	"version": "0.1.0",
+	"priority": 80,
+	"dependencies": ["base_rules", "base_employees", "base_milestones", "base_products", "base_marketing"],
+	"conflicts": [],
+	"entry_script": "res://modules/rural_marketeers/rules/entry.gd",
+	"provides": {
+		"content": ["employees", "milestones", "pieces"],
+		"settlements": [
+			"settlement:phase:Marketing:enter:extension",
+			"settlement:phase:Dinnertime:enter:extension"
+		],
+		"hooks": [
+			"hook:phase:Restructuring:before_enter",
+			"hook:sub_phase:Working/Marketing:before_exit"
+		],
+		"actions": [
+			"action:place_giant_billboard",
+			"action:place_highway_offramp"
+		]
+	}
+}

@@ -1,0 +1,13 @@
+{
+	"schema_version": 1,
+	"id": "base_employees",
+	"name": "Base Employees",
+	"version": "0.1.0",
+	"priority": 40,
+	"dependencies": ["base_rules", "base_products"],
+	"conflicts": [],
+	"entry_script": "",
+	"provides": {
+		"content": ["employees"]
+	}
+}

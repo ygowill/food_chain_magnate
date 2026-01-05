@@ -1,0 +1,33 @@
+{
+  "id": "barista_trainee",
+  "name": "咖啡学徒",
+  "description": "生产1个咖啡；可培训为咖啡师",
+  "salary": false,
+  "unique": false,
+  "role": "produce_food",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [
+    "barista"
+  ],
+  "train_capacity": 0,
+  "tags": [
+    "produce_coffee",
+    "entry_level"
+  ],
+  "usage_tags": [
+    "use:produce:coffee"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 12
+  },
+  "produces": {
+    "food_type": "coffee",
+    "amount": 1
+  }
+}

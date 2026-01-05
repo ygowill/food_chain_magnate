@@ -1,0 +1,25 @@
+{
+  "id": "first_marketing_trainee_used",
+  "name": "首个使用营销实习生",
+  "trigger": {
+    "event": "InitiateMarketing",
+    "filter": {
+      "employee_type": "marketer"
+    }
+  },
+  "effects": [
+    {
+      "type": "gain_cards",
+      "value": [
+        "kitchen_trainee",
+        "errand_boy"
+      ]
+    }
+  ],
+  "exclusive_type": "first_marketing_trainee_used",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}
+

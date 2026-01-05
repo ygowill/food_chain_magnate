@@ -1,0 +1,21 @@
+{
+  "id": "first_errand_boy",
+  "name": "首个打出跑腿伙计",
+  "trigger": {
+    "event": "UseEmployee",
+    "filter": {
+      "id": "errand_boy"
+    }
+  },
+  "effects": [
+    {
+      "type": "procure_plus_one",
+      "value": 1
+    }
+  ],
+  "exclusive_type": "first_errand_boy",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

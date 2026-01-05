@@ -1,0 +1,26 @@
+[gd_resource type="Resource" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/seeds/MilestonesSeed.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+milestones = [
+  {"id":"first_to_hire_3_people_in_1_turn","name":"首个一回合雇佣三人","trigger_event":"Recruit","effects":[{"type":"gain_cards","value":["management_trainee","management_trainee"]}]},
+  {"id":"first_throw_away_drink_or_food","name":"首个丢弃食物/饮品","trigger_event":"CleanupDiscard","effects":[{"type":"gain_fridge","value":10}]},
+  {"id":"first_waitress_played","name":"首个使用女服务员","trigger_event":"UseEmployee","trigger_filter":{"id":"waitress"},"effects":[{"type":"waitress_tips","value":5}]},
+  {"id":"first_to_have_20","name":"首个拥有$20","trigger_event":"CashReached","trigger_filter":{"value":20},"effects":[{"type":"peek_reserve_cards"}]},
+  {"id":"first_to_have_100","name":"首个拥有$100","trigger_event":"CashReached","trigger_filter":{"value":100},"effects":[{"type":"ceo_get_cfo"},{"type":"ban_card", "target":"cfo"}]},
+  {"id":"first_to_lower_price","name":"首个降价","trigger_event":"LowerPrice","effects":[{"type":"base_price_delta","value":-1}]},
+  {"id":"first_to_train_someone","name":"首个培训员工","trigger_event":"Train","effects":[{"type":"salary_total_delta","value":-15}]},
+  {"id":"first_burger_produced","name":"首个生产汉堡","trigger_event":"Produce","trigger_filter":{"product":"burger"},"effects":[{"type":"gain_card","value":"burger_cook"}]},
+  {"id":"first_pizza_produced","name":"首个生产披萨","trigger_event":"Produce","trigger_filter":{"product":"pizza"},"effects":[{"type":"gain_card","value":"pizza_cook"}]},
+  {"id":"first_errand_boy_played","name":"首个打出跑腿伙计","trigger_event":"UseEmployee","trigger_filter":{"id":"errand_boy"},"effects":[{"type":"procure_plus_one"}]},
+  {"id":"first_cart_operator_played","name":"首个打出手推车操作员","trigger_event":"UseEmployee","trigger_filter":{"id":"cart_operator"},"effects":[{"type":"distance_plus_one","targets":["cart_operator","truck_driver","zeppeliner"]}]},
+  {"id":"first_to_pay_20_or_more_in_salaries","name":"首个支付$20+薪水","trigger_event":"PaySalaries","trigger_filter":{"paid":{"gte":20}},"effects":[{"type":"multi_trainer_on_one"}]},
+  {"id":"first_billboard_placed","name":"首个放置广告牌","trigger_event":"InitiateMarketing","trigger_filter":{"type":"billboard"},"effects":[{"type":"marketing_no_salary"},{"type":"marketing_permanent"}]},
+  {"id":"first_burger_marketed","name":"首个营销汉堡","trigger_event":"DemandMarked","trigger_filter":{"product":"burger"},"effects":[{"type":"sell_bonus","product":"burger","value":5}]},
+  {"id":"first_pizza_marketed","name":"首个营销披萨","trigger_event":"DemandMarked","trigger_filter":{"product":"pizza"},"effects":[{"type":"sell_bonus","product":"pizza","value":5}]},
+  {"id":"first_drink_marketed","name":"首个营销饮料","trigger_event":"DemandMarked","trigger_filter":{"product":"drink"},"effects":[{"type":"sell_bonus","product":"drink","value":5}]},
+  {"id":"first_airplane_campaign","name":"首个进行飞机营销","trigger_event":"InitiateMarketing","trigger_filter":{"type":"airplane"},"effects":[{"type":"turnorder_empty_slots","value":2}]},
+  {"id":"first_radio_campaign","name":"首个进行电波营销","trigger_event":"InitiateMarketing","trigger_filter":{"type":"radio"},"effects":[{"type":"extra_marketing","value":"radio"}]},
+]

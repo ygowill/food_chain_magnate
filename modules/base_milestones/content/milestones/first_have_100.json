@@ -1,0 +1,27 @@
+{
+  "id": "first_have_100",
+  "name": "首个拥有$100",
+  "trigger": {
+    "event": "CashReached",
+    "filter": {
+      "value": 100
+    }
+  },
+  "effects": [
+    {
+      "type": "ceo_get_cfo"
+    },
+    {
+      "type": "ban_card",
+      "target": "cfo"
+    }
+  ],
+  "effect_ids": [
+    "base_rules:dinnertime:income_bonus:ceo_get_cfo"
+  ],
+  "exclusive_type": "first_have_100",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

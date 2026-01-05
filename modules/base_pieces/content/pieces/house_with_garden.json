@@ -1,0 +1,18 @@
+{
+	"id": "house_with_garden",
+	"display_name": "带花园房屋",
+	"category": "structure",
+	"footprint_mask": [[1, 1, 1], [1, 1, 1]],
+	"anchor": [0, 0],
+	"allowed_rotations": [0, 90, 180, 270],
+	"mirror_allowed": false,
+	"must_be_on_empty": true,
+	"must_touch_road": true,
+	"allowed_on": ["ground"],
+	"forbidden_layers": [],
+	"entrance_type": "adjacent_road",
+	"entrance_points": [],
+	"is_house": true,
+	"can_have_garden": false,
+	"garden_extension_size": [0, 0]
+}

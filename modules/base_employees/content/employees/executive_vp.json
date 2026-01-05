@@ -1,0 +1,21 @@
+{
+  "id": "executive_vp",
+  "name": "执行副总裁",
+  "description": "",
+  "salary": true,
+  "unique": true,
+  "role": "manager",
+  "manager_slots": 10,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [],
+  "usage_tags": [],
+  "mandatory": false,
+  "pool": {
+    "type": "one_x"
+  }
+}

@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="TileDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/models/TileDef.gd" id="1_csu2m"]
+
+[resource]
+script = ExtResource("1_csu2m")
+id = "Tile_P"
+road_segments = [[[], [], [{
+"dirs": ["N", "S"]
+}], [], []], [[], [], [{
+"dirs": ["N", "S"]
+}], [], []], [[{
+"dirs": ["E", "W"]
+}], [{
+"dirs": ["E", "W"]
+}], [{
+"dirs": ["N", "S"]
+}, {
+"dirs": ["E", "W"]
+}], [{
+"dirs": ["E", "W"]
+}], [{
+"dirs": ["E", "W"]
+}]], [[], [], [{
+"dirs": ["N", "S"]
+}], [], []], [[], [], [{
+"dirs": ["N", "S"]
+}], [], []]]
+drink_sources = Array[Dictionary]([{
+"pos": Vector2i(0, 1),
+"type": "lemonade"
+}, {
+"pos": Vector2i(3, 4),
+"type": "beer"
+}])

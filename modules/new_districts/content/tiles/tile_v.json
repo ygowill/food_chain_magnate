@@ -1,0 +1,112 @@
+{
+  "id": "tile_v",
+  "display_name": "板块 V",
+  "road_segments": [
+    [
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ]
+    ],
+    [
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [],
+      [],
+      [],
+      [],
+      []
+    ]
+  ],
+  "printed_structures": [
+    {
+      "piece_id": "house",
+      "anchor": [
+        2,
+        0
+      ],
+      "rotation": 0,
+      "house_id": "22",
+      "house_number": 22
+    },
+    {
+      "piece_id": "house",
+      "anchor": [
+        1,
+        3
+      ],
+      "rotation": 0,
+      "house_id": "21",
+      "house_number": 21
+    }
+  ],
+  "drink_sources": [],
+  "blocked_cells": [],
+  "allowed_rotations": [
+    0,
+    90,
+    180,
+    270
+  ]
+}
+

@@ -1,0 +1,11 @@
+{
+	"schema_version": 1,
+	"product_icons": {
+		"beer": {"texture": "res://modules/base_products/assets/map/icons/beer.png"},
+		"burger": {"texture": "res://modules/base_products/assets/map/icons/burger.png"},
+		"lemonade": {"texture": "res://modules/base_products/assets/map/icons/lemonade.png"},
+		"pizza": {"texture": "res://modules/base_products/assets/map/icons/pizza.png"},
+		"soda": {"texture": "res://modules/base_products/assets/map/icons/soda.png"}
+	}
+}
+

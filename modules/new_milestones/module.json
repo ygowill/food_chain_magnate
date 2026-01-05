@@ -1,0 +1,17 @@
+{
+	"schema_version": 1,
+	"id": "new_milestones",
+	"name": "全新里程碑 (New Milestones)",
+	"version": "0.1.0",
+	"priority": 130,
+	"dependencies": ["base_rules", "base_employees", "base_products", "base_marketing"],
+	"conflicts": ["base_milestones", "hard_choices"],
+	"entry_script": "res://modules/new_milestones/rules/entry.gd",
+	"provides": {
+		"content": ["milestones", "marketing"],
+		"effects": [
+			"new_milestones:dinnertime:distance_delta:first_marketeer_used",
+			"new_milestones:marketing:demand_cash:first_marketeer_used"
+		]
+	}
+}

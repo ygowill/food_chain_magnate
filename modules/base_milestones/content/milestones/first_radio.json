@@ -1,0 +1,24 @@
+{
+  "id": "first_radio",
+  "name": "首个进行电波营销",
+  "trigger": {
+    "event": "InitiateMarketing",
+    "filter": {
+      "type": "radio"
+    }
+  },
+  "effects": [
+    {
+      "type": "extra_marketing",
+      "value": "radio"
+    }
+  ],
+  "effect_ids": [
+    "base_rules:marketing:demand_amount:first_radio"
+  ],
+  "exclusive_type": "first_radio",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "management_trainee",
+  "name": "管理培训生",
+  "description": "",
+  "salary": false,
+  "unique": false,
+  "role": "manager",
+  "manager_slots": 2,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [
+    "new_business_dev",
+    "junior_vice_president",
+    "luxury_manager"
+  ],
+  "train_capacity": 0,
+  "tags": [],
+  "usage_tags": [],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 8
+  }
+}

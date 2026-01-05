@@ -1,0 +1,24 @@
+{
+  "id": "coach",
+  "name": "培训指导员",
+  "description": "两次培训机会。可最多培训同一名员工两次",
+  "salary": true,
+  "unique": false,
+  "role": "recruit_train",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 2,
+  "tags": [],
+  "usage_tags": [
+    "use:train"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 4
+  }
+}

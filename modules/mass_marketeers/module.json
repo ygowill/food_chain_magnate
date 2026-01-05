@@ -1,0 +1,16 @@
+{
+	"schema_version": 1,
+	"id": "mass_marketeers",
+	"name": "Mass Marketeers",
+	"version": "0.1.0",
+	"priority": 80,
+	"dependencies": ["base_rules"],
+	"conflicts": [],
+	"entry_script": "res://modules/mass_marketeers/rules/entry.gd",
+	"provides": {
+		"content": ["employees"],
+		"settlements": [
+			"settlement:phase:Marketing:enter:extension"
+		]
+	}
+}

@@ -1,0 +1,193 @@
+{
+  "id": "tile_c",
+  "display_name": "板块 C",
+  "road_segments": [
+    [
+      [
+        {
+          "dirs": [
+            "E",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "N",
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "W",
+            "S"
+          ],
+          "bridge": false
+        }
+      ]
+    ],
+    [
+      [
+        {
+          "dirs": [
+            "N",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "S"
+          ],
+          "bridge": false
+        }
+      ]
+    ],
+    [
+      [
+        {
+          "dirs": [
+            "N",
+            "S",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "E",
+            "S"
+          ],
+          "bridge": false
+        }
+      ]
+    ],
+    [
+      [
+        {
+          "dirs": [
+            "N",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "S"
+          ],
+          "bridge": false
+        }
+      ]
+    ],
+    [
+      [
+        {
+          "dirs": [
+            "N",
+            "E"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "S",
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "N",
+            "W"
+          ],
+          "bridge": false
+        }
+      ]
+    ]
+  ],
+  "printed_structures": [
+    {
+      "piece_id": "house",
+      "anchor": [
+        2,
+        1
+      ],
+      "rotation": 0,
+      "house_id": "5",
+      "house_number": 5
+    }
+  ],
+  "drink_sources": [],
+  "blocked_cells": [],
+  "allowed_rotations": [
+    0,
+    90,
+    180,
+    270
+  ]
+}

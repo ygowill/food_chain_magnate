@@ -1,0 +1,7 @@
+{
+  "id": "radio_1",
+  "board_number": 1,
+  "type": "radio",
+  "min_players": 2,
+  "max_players": null
+}

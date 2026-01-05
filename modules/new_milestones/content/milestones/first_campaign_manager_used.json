@@ -1,0 +1,21 @@
+{
+  "id": "first_campaign_manager_used",
+  "name": "首个使用营销经理",
+  "trigger": {
+    "event": "InitiateMarketing",
+    "filter": {
+      "employee_type": "campaign_manager"
+    }
+  },
+  "effects": [
+    {
+      "type": "noop"
+    }
+  ],
+  "exclusive_type": "first_campaign_manager_used",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}
+

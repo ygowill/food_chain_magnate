@@ -1,0 +1,7 @@
+{
+	"schema_version": 1,
+	"piece_visuals": {
+		"house": {"texture": "res://modules/beta/assets/map/pieces/house.png", "offset_px": [3, 4], "scale": [1, 1]}
+	}
+}
+

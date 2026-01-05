@@ -1,0 +1,30 @@
+{
+  "id": "waitress",
+  "name": "女服务员",
+  "description": "获得3$。在平局时拥有更多服务员的餐厅获得胜利",
+  "salary": false,
+  "unique": false,
+  "role": "special",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "tips_provider",
+    "entry_level"
+  ],
+  "usage_tags": [],
+  "mandatory": true,
+  "mandatory_action_id": "",
+  "effect_ids": [
+    "base_rules:dinnertime:tiebreaker:waitress",
+    "base_rules:dinnertime:tips:waitress"
+  ],
+  "pool": {
+    "type": "fixed",
+    "count": 12
+  }
+}

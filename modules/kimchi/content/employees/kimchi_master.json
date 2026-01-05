@@ -1,0 +1,23 @@
+{
+  "id": "kimchi_master",
+  "name": "泡菜大师",
+  "description": "清理阶段在丢弃食物后生产1个泡菜（自动保存）",
+  "salary": true,
+  "unique": false,
+  "role": "produce_food",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "produce_kimchi"
+  ],
+  "usage_tags": [],
+  "mandatory": false,
+  "pool": {
+    "type": "one_x"
+  }
+}

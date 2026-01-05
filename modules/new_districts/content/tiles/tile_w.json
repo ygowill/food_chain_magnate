@@ -1,0 +1,86 @@
+{
+  "id": "tile_w",
+  "display_name": "板块 W",
+  "road_segments": [
+    [
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ]
+    ],
+    [
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [],
+      [],
+      [],
+      [],
+      []
+    ]
+  ],
+  "printed_structures": [
+    {
+      "piece_id": "house_with_garden",
+      "anchor": [
+        0,
+        1
+      ],
+      "rotation": 0,
+      "house_id": "25",
+      "house_number": 25
+    }
+  ],
+  "drink_sources": [],
+  "blocked_cells": [],
+  "allowed_rotations": [
+    0,
+    90,
+    180,
+    270
+  ]
+}
+

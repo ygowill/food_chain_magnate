@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="TileDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/models/TileDef.gd" id="1_pgbn2"]
+
+[resource]
+script = ExtResource("1_pgbn2")
+id = "Tile_Z"
+road_segments = [[[], [], [{
+"dirs": ["N", "S"]
+}], [], []], [[], [], [{
+"dirs": ["N", "S"]
+}], [], []], [[{
+"dirs": ["E", "W"]
+}], [{
+"dirs": ["E", "W"]
+}], [{
+"dirs": ["N", "E", "S", "W"]
+}], [{
+"dirs": ["E", "W"]
+}], [{
+"dirs": ["E", "W"]
+}]], [[], [], [{
+"dirs": ["N", "S"]
+}], [], []], [[], [], [{
+"dirs": ["N", "S"]
+}], [], []]]
+printed_structures = Array[Dictionary]([{
+"_preview_h": 1,
+"_preview_w": 1,
+"anchor": Vector2i(0, 0),
+"piece_id": "park",
+"rotation": 0
+}, {
+"_preview_h": 1,
+"_preview_w": 1,
+"anchor": Vector2i(3, 3),
+"piece_id": "park",
+"rotation": 0
+}])

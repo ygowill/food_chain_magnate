@@ -1,0 +1,25 @@
+{
+  "id": "mass_marketeer",
+  "name": "大众营销员",
+  "description": "每张在岗的大众营销员使营销阶段额外结算 1 轮（模块：Mass Marketeers）",
+  "salary": true,
+  "unique": false,
+  "role": "special",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "module:mass_marketeers",
+    "entry_level"
+  ],
+  "usage_tags": [],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 12
+  }
+}

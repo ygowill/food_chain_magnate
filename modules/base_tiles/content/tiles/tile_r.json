@@ -1,0 +1,132 @@
+{
+  "id": "tile_r",
+  "display_name": "板块 R",
+  "road_segments": [
+    [
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      []
+    ],
+    [
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      []
+    ],
+    [
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "N",
+            "E",
+            "S",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ]
+    ],
+    [
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      []
+    ],
+    [
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      []
+    ]
+  ],
+  "printed_structures": [],
+  "drink_sources": [
+    {
+      "pos": [
+        1,
+        1
+      ],
+      "type": "soda"
+    }
+  ],
+  "blocked_cells": [],
+  "allowed_rotations": [
+    0,
+    90,
+    180,
+    270
+  ]
+}

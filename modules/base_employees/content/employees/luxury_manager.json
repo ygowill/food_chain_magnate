@@ -1,0 +1,24 @@
+{
+  "id": "luxury_manager",
+  "name": "奢侈品经理",
+  "description": "售价+10$",
+  "salary": true,
+  "unique": true,
+  "role": "price",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "pricing"
+  ],
+  "usage_tags": [],
+  "mandatory": true,
+  "mandatory_action_id": "set_luxury_price",
+  "pool": {
+    "type": "one_x"
+  }
+}

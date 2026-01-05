@@ -1,0 +1,10 @@
+{
+	"schema_version": 1,
+	"marketing_visuals": {
+		"default": {"texture": "res://modules/base_marketing/assets/map/icons/marketing.png"},
+		"billboard": {"texture": "res://modules/base_marketing/assets/map/icons/billboard.png"},
+		"radio": {"texture": "res://modules/base_marketing/assets/map/icons/radio.png"},
+		"mailbox": {"texture": "res://modules/base_marketing/assets/map/icons/mailbox.png"},
+		"airplane": {"texture": "res://modules/base_marketing/assets/map/icons/airplane.png"}
+	}
+}

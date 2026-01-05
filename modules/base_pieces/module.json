@@ -1,0 +1,13 @@
+{
+	"schema_version": 1,
+	"id": "base_pieces",
+	"name": "Base Pieces",
+	"version": "0.1.0",
+	"priority": 40,
+	"dependencies": ["base_rules"],
+	"conflicts": [],
+	"entry_script": "",
+	"provides": {
+		"content": ["pieces"]
+	}
+}

@@ -1,0 +1,7 @@
+{
+  "id": "mailbox_5",
+  "board_number": 5,
+  "type": "mailbox",
+  "min_players": 2,
+  "max_players": null
+}

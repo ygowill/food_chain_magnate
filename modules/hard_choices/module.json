@@ -1,0 +1,17 @@
+{
+	"schema_version": 1,
+	"id": "hard_choices",
+	"name": "Hard Choices",
+	"version": "0.1.0",
+	"priority": 110,
+	"dependencies": ["base_rules", "base_milestones"],
+	"conflicts": [],
+	"entry_script": "res://modules/hard_choices/rules/entry.gd",
+	"provides": {
+		"content": [],
+		"effects": [],
+		"settlements": [],
+		"hooks": []
+	}
+}
+

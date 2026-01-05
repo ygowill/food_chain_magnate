@@ -1,0 +1,37 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="快餐连锁大亨"
+config/description="电子版《快餐连锁大亨》(Food Chain Magnate) 桌游"
+config/version="0.1.0"
+run/main_scene="uid://b7oufgye7ejgl"
+config/features=PackedStringArray("4.5", "Forward Plus")
+config/icon="res://icon.svg"
+
+[autoload]
+
+GameLog="*res://tools/logger.gd"
+DebugFlags="*res://autoload/debug_flags.gd"
+Globals="*res://autoload/globals.gd"
+SceneManager="*res://autoload/scene_manager.gd"
+EventBus="*res://core/events/event_bus.gd"
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/mode=2
+window/stretch/mode="viewport"
+
+[internationalization]
+
+locale/fallback="zh"

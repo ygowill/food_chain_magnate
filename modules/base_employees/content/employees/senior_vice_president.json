@@ -1,0 +1,22 @@
+{
+  "id": "senior_vice_president",
+  "name": "高级副总裁",
+  "description": "",
+  "salary": true,
+  "unique": false,
+  "role": "manager",
+  "manager_slots": 5,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [
+    "cfo",
+    "executive_vp",
+    "hr_director"
+  ],
+  "train_capacity": 0,
+  "tags": [],
+  "usage_tags": [],
+  "mandatory": false
+}

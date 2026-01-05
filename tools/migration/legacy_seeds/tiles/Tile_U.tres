@@ -1,0 +1,50 @@
+[gd_resource type="Resource" script_class="TileDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/models/TileDef.gd" id="1_jmmxh"]
+
+[resource]
+script = ExtResource("1_jmmxh")
+id = "Tile_U"
+road_segments = [[[], [{
+"dirs": ["S", "E"]
+}], [{
+"dirs": ["N", "E", "W"]
+}], [{
+"dirs": ["W", "S"]
+}], []], [[{
+"dirs": ["S", "E"]
+}], [{
+"dirs": ["N", "W"]
+}], [], [{
+"dirs": ["N", "E"]
+}], [{
+"dirs": ["W", "S"]
+}]], [[{
+"dirs": ["N", "S", "W"]
+}], [], [], [], [{
+"dirs": ["N", "E", "S"]
+}]], [[{
+"dirs": ["N", "E"]
+}], [{
+"dirs": ["W", "S"]
+}], [], [{
+"dirs": ["E", "S"]
+}], [{
+"dirs": ["N", "W"]
+}]], [[], [{
+"dirs": ["N", "E"]
+}], [{
+"dirs": ["E", "S", "W"]
+}], [{
+"dirs": ["W", "N"]
+}], []]]
+drink_sources = Array[Dictionary]([{
+"pos": Vector2i(1, 2),
+"type": "lemonade"
+}, {
+"pos": Vector2i(2, 3),
+"type": "lemonade"
+}, {
+"pos": Vector2i(3, 2),
+"type": "lemonade"
+}])

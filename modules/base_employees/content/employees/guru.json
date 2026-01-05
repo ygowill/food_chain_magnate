@@ -1,0 +1,24 @@
+{
+  "id": "guru",
+  "name": "培训导师",
+  "description": "三次培训机会。可最多培训同一名员工三次",
+  "salary": true,
+  "unique": true,
+  "role": "recruit_train",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 3,
+  "tags": [],
+  "usage_tags": [
+    "use:train"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 4
+  }
+}

@@ -1,0 +1,16 @@
+{
+	"schema_version": 1,
+	"cell_visuals": {
+		"ground": {"texture": "res://modules/alpha/assets/map/ground/ground.png"}
+	},
+	"road_visuals": {
+		"straight": {"texture": "res://modules/alpha/assets/map/roads/straight.png"}
+	},
+	"piece_visuals": {
+		"house": {"texture": "res://modules/alpha/assets/map/pieces/house.png", "offset_px": [1, 2], "scale": [1, 1]}
+	},
+	"product_icons": {
+		"beer": {"texture": "res://modules/alpha/assets/map/icons/beer.png"}
+	}
+}
+

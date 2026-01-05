@@ -1,0 +1,18 @@
+{
+  "id": "first_throw_away",
+  "name": "首个丢弃食物/饮品",
+  "trigger": {
+    "event": "CleanupDiscard"
+  },
+  "effects": [
+    {
+      "type": "gain_fridge",
+      "value": 10
+    }
+  ],
+  "exclusive_type": "first_throw_away",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

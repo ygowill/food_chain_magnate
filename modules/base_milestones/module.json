@@ -1,0 +1,13 @@
+{
+	"schema_version": 1,
+	"id": "base_milestones",
+	"name": "Base Milestones",
+	"version": "0.1.0",
+	"priority": 40,
+	"dependencies": ["base_rules", "base_products", "base_employees"],
+	"conflicts": [],
+	"entry_script": "",
+	"provides": {
+		"content": ["milestones"]
+	}
+}

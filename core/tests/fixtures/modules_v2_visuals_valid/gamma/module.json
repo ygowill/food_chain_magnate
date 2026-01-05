@@ -1,0 +1,14 @@
+{
+	"schema_version": 1,
+	"id": "gamma",
+	"name": "Gamma",
+	"version": "0.1.0",
+	"priority": 300,
+	"dependencies": [],
+	"conflicts": [],
+	"entry_script": "",
+	"provides": {
+		"content": ["visuals"]
+	}
+}
+

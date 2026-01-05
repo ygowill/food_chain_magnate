@@ -1,0 +1,22 @@
+{
+  "id": "first_coke_sold",
+  "name": "首个卖出可乐",
+  "trigger": {
+    "event": "ProductSold",
+    "filter": {
+      "product": "drink",
+      "product_id": "soda"
+    }
+  },
+  "effects": [
+    {
+      "type": "gain_fridge",
+      "value": 10
+    }
+  ],
+  "exclusive_type": "first_coke_sold",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

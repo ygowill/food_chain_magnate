@@ -1,0 +1,21 @@
+{
+  "id": "first_lemonade_sold",
+  "name": "首个卖出柠檬水",
+  "trigger": {
+    "event": "ProductSold",
+    "filter": {
+      "product": "drink",
+      "product_id": "lemonade"
+    }
+  },
+  "effects": [
+    {
+      "type": "train_from_active_same_color"
+    }
+  ],
+  "exclusive_type": "first_lemonade_sold",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

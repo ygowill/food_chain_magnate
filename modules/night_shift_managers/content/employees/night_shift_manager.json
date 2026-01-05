@@ -1,0 +1,24 @@
+{
+  "id": "night_shift_manager",
+  "name": "夜班经理",
+  "description": "拥有在岗夜班经理时，你所有不需要支付薪水的员工可以工作两次（CEO 除外）。",
+  "salary": true,
+  "unique": false,
+  "role": "special",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "module:night_shift_managers"
+  ],
+  "usage_tags": [],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 6
+  }
+}

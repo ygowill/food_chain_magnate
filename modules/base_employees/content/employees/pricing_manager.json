@@ -1,0 +1,24 @@
+{
+  "id": "pricing_manager",
+  "name": "定价经理",
+  "description": "售价-1$",
+  "salary": false,
+  "unique": false,
+  "role": "price",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "pricing"
+  ],
+  "usage_tags": [],
+  "mandatory": true,
+  "mandatory_action_id": "set_price",
+  "pool": {
+    "type": "one_x"
+  }
+}

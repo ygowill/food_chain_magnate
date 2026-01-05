@@ -1,0 +1,13 @@
+{
+	"schema_version": 1,
+	"id": "alpha",
+	"name": "Alpha Module",
+	"version": "1.0.0",
+	"priority": 100,
+	"dependencies": [],
+	"conflicts": [],
+	"entry_script": "",
+	"provides": {
+		"effects": ["effect:alpha"]
+	}
+}

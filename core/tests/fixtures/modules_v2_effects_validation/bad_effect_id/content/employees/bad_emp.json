@@ -1,0 +1,16 @@
+{
+	"id": "bad_emp",
+	"name": "Bad Emp",
+	"description": "",
+	"salary": true,
+	"unique": false,
+	"role": "special",
+	"manager_slots": 0,
+	"range": {"type": null, "value": 0},
+	"train_to": [],
+	"train_capacity": 0,
+	"tags": [],
+	"usage_tags": [],
+	"mandatory": false,
+	"effect_ids": ["bad"]
+}

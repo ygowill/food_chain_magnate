@@ -1,0 +1,21 @@
+{
+  "id": "first_waitress",
+  "name": "首个使用女服务员",
+  "trigger": {
+    "event": "UseEmployee",
+    "filter": {
+      "id": "waitress"
+    }
+  },
+  "effects": [
+    {
+      "type": "waitress_tips",
+      "value": 5
+    }
+  ],
+  "exclusive_type": "first_waitress",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

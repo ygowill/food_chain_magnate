@@ -1,0 +1,94 @@
+[gd_scene load_steps=2 format=3 uid="uid://cyz8qnwt4jx2m"]
+
+[ext_resource type="Script" path="res://ui/scenes/setup/game_setup.gd" id="1_setup"]
+
+[node name="GameSetup" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_setup")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.15, 0.15, 0.2, 1)
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="Title" type="Label" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "游戏设置"
+horizontal_alignment = 1
+
+[node name="Spacer1" type="Control" parent="CenterContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="PlayerCountContainer" type="HBoxContainer" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="PlayerCountLabel" type="Label" parent="CenterContainer/VBoxContainer/PlayerCountContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "玩家数量："
+
+[node name="PlayerCountSpinBox" type="SpinBox" parent="CenterContainer/VBoxContainer/PlayerCountContainer"]
+layout_mode = 2
+min_value = 2.0
+max_value = 5.0
+value = 2.0
+
+[node name="SeedContainer" type="HBoxContainer" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="SeedLabel" type="Label" parent="CenterContainer/VBoxContainer/SeedContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "随机种子："
+
+[node name="SeedLineEdit" type="LineEdit" parent="CenterContainer/VBoxContainer/SeedContainer"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+placeholder_text = "留空自动生成"
+
+[node name="Spacer2" type="Control" parent="CenterContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+
+[node name="ButtonContainer" type="HBoxContainer" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 20
+
+[node name="BackButton" type="Button" parent="CenterContainer/VBoxContainer/ButtonContainer"]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+text = "返回"
+
+[node name="StartButton" type="Button" parent="CenterContainer/VBoxContainer/ButtonContainer"]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+text = "开始游戏"
+
+[connection signal="pressed" from="CenterContainer/VBoxContainer/ButtonContainer/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="CenterContainer/VBoxContainer/ButtonContainer/StartButton" to="." method="_on_start_pressed"]

@@ -1,0 +1,28 @@
+{
+  "id": "recruiting_manager",
+  "name": "人力资源经理",
+  "description": "2x：招聘一名员工或少支付5$薪资",
+  "salary": true,
+  "unique": false,
+  "role": "recruit_train",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "recruit_capacity": 2,
+  "tags": [
+    "recruit",
+    "salary_discount"
+  ],
+  "usage_tags": [
+    "use:recruit"
+  ],
+  "mandatory": true,
+  "mandatory_action_id": "",
+  "effect_ids": [
+    "base_rules:payday:salary_discount:recruiting_manager"
+  ]
+}

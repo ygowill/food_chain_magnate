@@ -1,0 +1,28 @@
+{
+  "id": "local_manager",
+  "name": "本地经理",
+  "description": "放置新餐厅，并设置为即将开业。提供免下车服务",
+  "salary": true,
+  "unique": false,
+  "role": "new_shop",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "place_restaurant",
+    "drivethrough",
+    "entry_level"
+  ],
+  "usage_tags": [
+    "use:place_restaurant"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 12
+  }
+}

@@ -1,0 +1,18 @@
+# Godot generated/runtime
+.godot/
+.godot_home/
+.tmp_home/
+
+# Editor/local environment
+.history/
+.obsidian/
+.vscode/
+.venv/
+
+# Migration tool outputs / runtime artifacts
+tools/migration/out_legacy_json/
+
+# macOS
+.DS_Store
+
+.claude/

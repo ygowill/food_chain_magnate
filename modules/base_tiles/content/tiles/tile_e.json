@@ -1,0 +1,149 @@
+{
+  "id": "tile_e",
+  "display_name": "板块 E",
+  "road_segments": [
+    [
+      [
+        {
+          "dirs": [
+            "E",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "W",
+            "E"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "N",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      []
+    ],
+    [
+      [
+        {
+          "dirs": [
+            "N",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [
+        {
+          "dirs": [
+            "N",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "E",
+            "S"
+          ],
+          "bridge": false
+        }
+      ]
+    ],
+    [
+      [],
+      [],
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "S"
+          ],
+          "bridge": false
+        }
+      ]
+    ],
+    [
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "E",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "W",
+            "E"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "N",
+            "W"
+          ],
+          "bridge": false
+        }
+      ]
+    ]
+  ],
+  "printed_structures": [
+    {
+      "piece_id": "house",
+      "anchor": [
+        2,
+        2
+      ],
+      "rotation": 0,
+      "house_id": "8",
+      "house_number": 8
+    }
+  ],
+  "drink_sources": [
+    {
+      "pos": [
+        1,
+        1
+      ],
+      "type": "beer"
+    }
+  ],
+  "blocked_cells": [],
+  "allowed_rotations": [
+    0,
+    90,
+    180,
+    270
+  ]
+}

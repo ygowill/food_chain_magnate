@@ -1,0 +1,12 @@
+{
+	"schema_version": 1,
+	"id": "content",
+	"version": "0.1.0",
+	"priority": 10,
+	"dependencies": [],
+	"conflicts": [],
+	"entry_script": "",
+	"provides": {
+		"content": ["employees", "products", "tiles", "maps", "pieces"]
+	}
+}

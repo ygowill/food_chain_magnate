@@ -1,0 +1,29 @@
+{
+  "id": "pizza_chef",
+  "name": "披萨主厨",
+  "description": "生产8个披萨",
+  "salary": true,
+  "unique": true,
+  "role": "produce_food",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "produce_pizza"
+  ],
+  "usage_tags": [
+    "use:produce:pizza"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "one_x"
+  },
+  "produces": {
+    "food_type": "pizza",
+    "amount": 8
+  }
+}

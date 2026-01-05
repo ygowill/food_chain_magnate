@@ -1,0 +1,29 @@
+{
+  "id": "errand_boy",
+  "name": "跑腿伙计",
+  "description": "获取1瓶任意种类的饮料",
+  "salary": false,
+  "unique": false,
+  "role": "procure_drink",
+  "manager_slots": 0,
+  "range": {
+    "type": "road",
+    "value": 1
+  },
+  "train_to": [
+    "cart_operator"
+  ],
+  "train_capacity": 0,
+  "tags": [
+    "procure",
+    "entry_level"
+  ],
+  "usage_tags": [
+    "use:procure:errand_boy"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 12
+  }
+}

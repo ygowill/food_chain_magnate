@@ -1,0 +1,32 @@
+{
+  "id": "barista",
+  "name": "咖啡师",
+  "description": "生产2个咖啡；可培训为首席咖啡师",
+  "salary": true,
+  "unique": false,
+  "role": "produce_food",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [
+    "lead_barista"
+  ],
+  "train_capacity": 0,
+  "tags": [
+    "produce_coffee"
+  ],
+  "usage_tags": [
+    "use:produce:coffee"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 6
+  },
+  "produces": {
+    "food_type": "coffee",
+    "amount": 2
+  }
+}

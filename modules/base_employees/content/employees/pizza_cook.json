@@ -1,0 +1,33 @@
+{
+  "id": "pizza_cook",
+  "name": "披萨厨师",
+  "description": "生产3个披萨",
+  "salary": true,
+  "unique": false,
+  "role": "produce_food",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [
+    "pizza_chef"
+  ],
+  "train_capacity": 0,
+  "tags": [
+    "produce_pizza",
+    "entry_level"
+  ],
+  "usage_tags": [
+    "use:produce:pizza"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 12
+  },
+  "produces": {
+    "food_type": "pizza",
+    "amount": 3
+  }
+}

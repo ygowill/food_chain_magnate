@@ -1,0 +1,102 @@
+{
+	"id": "tile_z",
+	"display_name": "板块 Z（双公园）",
+	"road_segments": [
+		[
+			[],
+			[],
+			[
+				{
+					"dirs": ["N", "S"],
+					"bridge": false
+				}
+			],
+			[],
+			[]
+		],
+		[
+			[],
+			[],
+			[
+				{
+					"dirs": ["N", "S"],
+					"bridge": false
+				}
+			],
+			[],
+			[]
+		],
+		[
+			[
+				{
+					"dirs": ["E", "W"],
+					"bridge": false
+				}
+			],
+			[
+				{
+					"dirs": ["E", "W"],
+					"bridge": false
+				}
+			],
+			[
+				{
+					"dirs": ["N", "E", "S", "W"],
+					"bridge": false
+				}
+			],
+			[
+				{
+					"dirs": ["E", "W"],
+					"bridge": false
+				}
+			],
+			[
+				{
+					"dirs": ["E", "W"],
+					"bridge": false
+				}
+			]
+		],
+		[
+			[],
+			[],
+			[
+				{
+					"dirs": ["N", "S"],
+					"bridge": false
+				}
+			],
+			[],
+			[]
+		],
+		[
+			[],
+			[],
+			[
+				{
+					"dirs": ["N", "S"],
+					"bridge": false
+				}
+			],
+			[],
+			[]
+		]
+	],
+	"printed_structures": [
+		{
+			"piece_id": "park",
+			"anchor": [0, 0],
+			"rotation": 0
+		},
+		{
+			"piece_id": "park",
+			"anchor": [3, 3],
+			"rotation": 0
+		}
+	],
+	"drink_sources": [],
+	"blocked_cells": [],
+	"allowed_rotations": [0, 90, 180, 270]
+}
+

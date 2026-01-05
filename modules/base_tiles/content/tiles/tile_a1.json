@@ -1,0 +1,35 @@
+{
+	"id": "tile_a1",
+	"display_name": "板块 A1",
+	"road_segments": [
+		[[], [], [{"dirs": ["S"], "bridge": false}], [], []],
+		[[], [], [{"dirs": ["N", "S"], "bridge": false}], [], []],
+		[[{"dirs": ["E"], "bridge": false}], [{"dirs": ["W", "E"], "bridge": false}], [{"dirs": ["N", "W", "E", "S"], "bridge": false}], [{"dirs": ["W", "E"], "bridge": false}], [{"dirs": ["W"], "bridge": false}]],
+		[[], [], [{"dirs": ["N", "S"], "bridge": false}], [], []],
+		[[], [], [{"dirs": ["N"], "bridge": false}], [], []]
+	],
+	"printed_structures": [
+		{
+			"piece_id": "house",
+			"anchor": [0, 0],
+			"rotation": 0,
+			"house_id": "1",
+			"house_number": 1
+		},
+		{
+			"piece_id": "house",
+			"anchor": [3, 0],
+			"rotation": 0,
+			"house_id": "2",
+			"house_number": 2
+		}
+	],
+	"drink_sources": [
+		{
+			"pos": [4, 4],
+			"type": "beer"
+		}
+	],
+	"blocked_cells": [],
+	"allowed_rotations": [0, 90, 180, 270]
+}

@@ -1,0 +1,115 @@
+{
+  "id": "tile_l",
+  "display_name": "板块 L",
+  "road_segments": [
+    [
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      []
+    ],
+    [
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      []
+    ],
+    [
+      [
+        {
+          "dirs": [
+            "W",
+            "E"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "W",
+            "E"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "N",
+            "W",
+            "E"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "W",
+            "E"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "W",
+            "E"
+          ],
+          "bridge": false
+        }
+      ]
+    ],
+    [
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [],
+      [],
+      [],
+      [],
+      []
+    ]
+  ],
+  "printed_structures": [],
+  "drink_sources": [
+    {
+      "pos": [
+        3,
+        3
+      ],
+      "type": "lemonade"
+    }
+  ],
+  "blocked_cells": [],
+  "allowed_rotations": [
+    0,
+    90,
+    180,
+    270
+  ]
+}

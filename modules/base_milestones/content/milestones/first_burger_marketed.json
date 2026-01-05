@@ -1,0 +1,22 @@
+{
+  "id": "first_burger_marketed",
+  "name": "首个营销汉堡",
+  "trigger": {
+    "event": "DemandMarked",
+    "filter": {
+      "product": "burger"
+    }
+  },
+  "effects": [
+    {
+      "type": "sell_bonus",
+      "product": "burger",
+      "value": 5
+    }
+  ],
+  "exclusive_type": "first_burger_marketed",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

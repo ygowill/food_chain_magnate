@@ -1,0 +1,21 @@
+{
+  "id": "first_burger_sold",
+  "name": "首个卖出汉堡",
+  "trigger": {
+    "event": "ProductSold",
+    "filter": {
+      "product": "burger"
+    }
+  },
+  "effects": [
+    {
+      "type": "noop"
+    }
+  ],
+  "exclusive_type": "first_burger_sold",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}
+

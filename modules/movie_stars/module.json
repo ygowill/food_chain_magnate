@@ -1,0 +1,18 @@
+{
+	"schema_version": 1,
+	"id": "movie_stars",
+	"name": "Movie Stars",
+	"version": "0.1.0",
+	"priority": 80,
+	"dependencies": ["base_rules", "base_employees"],
+	"conflicts": [],
+	"entry_script": "res://modules/movie_stars/rules/entry.gd",
+	"provides": {
+		"content": ["employees"],
+		"effects": [
+			"movie_stars:dinnertime:tiebreaker:movie_star_b",
+			"movie_stars:dinnertime:tiebreaker:movie_star_c",
+			"movie_stars:dinnertime:tiebreaker:movie_star_d"
+		]
+	}
+}

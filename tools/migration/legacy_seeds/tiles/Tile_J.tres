@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="TileDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/models/TileDef.gd" id="1_ujyl3"]
+
+[resource]
+script = ExtResource("1_ujyl3")
+id = "Tile_J"
+road_segments = [[[], [], [{
+"dirs": ["N", "E"]
+}], [{
+"dirs": ["W", "E"]
+}], [{
+"dirs": ["W", "S"]
+}]], [[], [], [], [], [{
+"dirs": ["N", "S"]
+}]], [[{
+"dirs": ["W", "S"]
+}], [], [], [], [{
+"dirs": ["N", "E"]
+}]], [[{
+"dirs": ["N", "S"]
+}], [], [], [], []], [[{
+"dirs": ["N", "E"]
+}], [{
+"dirs": ["W", "E"]
+}], [{
+"dirs": ["W", "S"]
+}], [], []]]
+printed_structures = Array[Dictionary]([{
+"_preview_h": 1,
+"_preview_w": 1,
+"anchor": Vector2i(1, 1),
+"house_id": "16",
+"house_number": 16,
+"piece_id": "house",
+"rotation": 0
+}])

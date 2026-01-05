@@ -1,0 +1,26 @@
+{
+  "id": "junior_vice_president",
+  "name": "初级副总裁",
+  "description": "",
+  "salary": true,
+  "unique": false,
+  "role": "manager",
+  "manager_slots": 3,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [
+    "local_manager",
+    "vice_president",
+    "discount_manager",
+    "recruiting_manager"
+  ],
+  "train_capacity": 0,
+  "tags": [],
+  "usage_tags": [],
+  "mandatory": false,
+  "pool": {
+    "type": "one_x"
+  }
+}

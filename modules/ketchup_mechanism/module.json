@@ -1,0 +1,20 @@
+{
+	"schema_version": 1,
+	"id": "ketchup_mechanism",
+	"name": "The Ketchup Mechanism",
+	"version": "0.1.0",
+	"priority": 80,
+	"dependencies": ["base_rules"],
+	"conflicts": [],
+	"entry_script": "res://modules/ketchup_mechanism/rules/entry.gd",
+	"provides": {
+		"content": ["milestones"],
+		"settlements": [
+			"settlement:phase:Dinnertime:enter:extension"
+		],
+		"effects": [
+			"ketchup_mechanism:dinnertime:distance_delta:ketchup"
+		]
+	}
+}
+

@@ -1,0 +1,32 @@
+{
+  "id": "noodles_cook",
+  "name": "面条厨师",
+  "description": "生产6个面条",
+  "salary": true,
+  "unique": false,
+  "role": "produce_food",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [
+    "noodles_chef"
+  ],
+  "train_capacity": 0,
+  "tags": [
+    "produce_noodles"
+  ],
+  "usage_tags": [
+    "use:produce:noodles"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 12
+  },
+  "produces": {
+    "food_type": "noodles",
+    "amount": 6
+  }
+}

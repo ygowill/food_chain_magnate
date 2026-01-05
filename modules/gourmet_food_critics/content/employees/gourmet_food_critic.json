@@ -1,0 +1,27 @@
+{
+  "id": "gourmet_food_critic",
+  "name": "美食评论家",
+  "description": "放置美食指南：向所有有花园的房屋营销（每房屋+1需求）",
+  "salary": true,
+  "unique": false,
+  "role": "marketing",
+  "manager_slots": 0,
+  "range": {
+    "type": "air",
+    "value": -1
+  },
+  "marketing_max_duration": 3,
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "marketing_employee"
+  ],
+  "usage_tags": [
+    "use:marketing:gourmet_guide"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 6
+  }
+}

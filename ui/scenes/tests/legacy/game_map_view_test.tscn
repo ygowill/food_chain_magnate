@@ -1,0 +1,42 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/scenes/tests/legacy/game_map_view_test.gd" id="1"]
+
+[node name="GameMapViewTest" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="Root" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="TopBar" type="HBoxContainer" parent="Root"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BackButton" type="Button" parent="Root/TopBar"]
+layout_mode = 2
+text = "返回"
+
+[node name="RunButton" type="Button" parent="Root/TopBar"]
+layout_mode = 2
+text = "运行 GameMapViewTest"
+
+[node name="Output" type="RichTextLabel" parent="Root"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = false
+scroll_active = true
+
+[connection signal="pressed" from="Root/TopBar/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="Root/TopBar/RunButton" to="." method="_on_run_pressed"]

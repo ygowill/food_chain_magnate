@@ -1,0 +1,18 @@
+{
+	"schema_version": 1,
+	"id": "lobbyists",
+	"name": "说客 (Lobbyists)",
+	"version": "0.1.0",
+	"priority": 120,
+	"dependencies": ["base_rules", "base_employees", "base_milestones", "base_pieces", "base_tiles", "base_maps"],
+	"conflicts": [],
+	"entry_script": "res://modules/lobbyists/rules/entry.gd",
+	"provides": {
+		"content": ["employees", "milestones", "pieces", "tiles"],
+		"effects": [
+			"lobbyists:dinnertime:distance_delta:roadworks",
+			"lobbyists:dinnertime:sale_house_bonus:park"
+		]
+	}
+}
+

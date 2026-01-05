@@ -1,0 +1,33 @@
+{
+  "id": "brand_manager",
+  "name": "品牌经理",
+  "description": "放置飞机或以下的广告，最多持续4回合",
+  "salary": true,
+  "unique": false,
+  "role": "marketing",
+  "manager_slots": 0,
+  "range": {
+    "type": "air",
+    "value": -1
+  },
+  "marketing_max_duration": 4,
+  "train_to": [
+    "brand_director"
+  ],
+  "train_capacity": 0,
+  "tags": [
+    "marketing_billboard",
+    "marketing_mailbox",
+    "marketing_airplane"
+  ],
+  "usage_tags": [
+    "use:marketing:billboard",
+    "use:marketing:mailbox",
+    "use:marketing:airplane"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 8
+  }
+}

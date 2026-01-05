@@ -1,0 +1,10 @@
+{
+	"id": "map_2p",
+	"display_name": "基础地图主题",
+	"min_players": 2,
+	"max_players": 5,
+	"layout_mode": "random_all_tiles",
+	"random_rotation": true,
+	"required_modules": [],
+	"tiles": []
+}

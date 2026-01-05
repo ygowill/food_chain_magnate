@@ -1,0 +1,21 @@
+{
+  "id": "first_burger_produced",
+  "name": "首个生产汉堡",
+  "trigger": {
+    "event": "Produce",
+    "filter": {
+      "product": "burger"
+    }
+  },
+  "effects": [
+    {
+      "type": "gain_card",
+      "value": "burger_cook"
+    }
+  ],
+  "exclusive_type": "first_burger_produced",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

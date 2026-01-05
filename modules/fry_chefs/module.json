@@ -1,0 +1,17 @@
+{
+	"schema_version": 1,
+	"id": "fry_chefs",
+	"name": "Fry Chefs",
+	"version": "0.1.0",
+	"priority": 80,
+	"dependencies": ["base_rules", "base_employees", "base_products", "noodles", "sushi"],
+	"conflicts": [],
+	"entry_script": "res://modules/fry_chefs/rules/entry.gd",
+	"provides": {
+		"content": ["employees"],
+		"effects": [
+			"fry_chefs:dinnertime:sale_house_bonus:fry_chef"
+		]
+	}
+}
+

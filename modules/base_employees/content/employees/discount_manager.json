@@ -1,0 +1,24 @@
+{
+  "id": "discount_manager",
+  "name": "折扣经理",
+  "description": "售价-3$",
+  "salary": true,
+  "unique": false,
+  "role": "price",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "pricing"
+  ],
+  "usage_tags": [],
+  "mandatory": true,
+  "mandatory_action_id": "set_discount",
+  "pool": {
+    "type": "one_x"
+  }
+}

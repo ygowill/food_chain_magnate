@@ -1,0 +1,224 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/scenes/tools/tile_editor.gd" id="1"]
+
+[node name="TileEditor" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="Root" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="TopBar" type="HBoxContainer" parent="Root"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="BackButton" type="Button" parent="Root/TopBar"]
+layout_mode = 2
+text = "返回"
+
+[node name="TileSelect" type="OptionButton" parent="Root/TopBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(220, 0)
+
+[node name="LoadButton" type="Button" parent="Root/TopBar"]
+layout_mode = 2
+text = "加载"
+
+[node name="TileIdEdit" type="LineEdit" parent="Root/TopBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(220, 0)
+placeholder_text = "tile_id（用于保存文件名）"
+
+[node name="NewButton" type="Button" parent="Root/TopBar"]
+layout_mode = 2
+text = "新建"
+
+[node name="SaveButton" type="Button" parent="Root/TopBar"]
+layout_mode = 2
+text = "导出 JSON（保存）"
+
+[node name="ValidateButton" type="Button" parent="Root/TopBar"]
+layout_mode = 2
+text = "验证"
+
+[node name="StatusLabel" type="Label" parent="Root/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = ""
+horizontal_alignment = 2
+
+[node name="Body" type="VBoxContainer" parent="Root"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="HSplit" type="HSplitContainer" parent="Root/Body"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="GridScroll" type="ScrollContainer" parent="Root/Body/HSplit"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Grid" type="GridContainer" parent="Root/Body/HSplit/GridScroll"]
+layout_mode = 2
+columns = 5
+
+[node name="Inspector" type="VBoxContainer" parent="Root/Body/HSplit"]
+layout_mode = 2
+custom_minimum_size = Vector2(420, 0)
+theme_override_constants/separation = 8
+
+[node name="SelectedCellLabel" type="Label" parent="Root/Body/HSplit/Inspector"]
+layout_mode = 2
+text = "选中格子: (0, 0)"
+
+[node name="BlockedCheck" type="CheckButton" parent="Root/Body/HSplit/Inspector"]
+layout_mode = 2
+text = "Blocked（禁止放置）"
+
+[node name="RoadTitle" type="Label" parent="Root/Body/HSplit/Inspector"]
+layout_mode = 2
+text = "道路段"
+
+[node name="RoadRow" type="HBoxContainer" parent="Root/Body/HSplit/Inspector"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RoadN" type="CheckBox" parent="Root/Body/HSplit/Inspector/RoadRow"]
+layout_mode = 2
+text = "N"
+
+[node name="RoadE" type="CheckBox" parent="Root/Body/HSplit/Inspector/RoadRow"]
+layout_mode = 2
+text = "E"
+
+[node name="RoadS" type="CheckBox" parent="Root/Body/HSplit/Inspector/RoadRow"]
+layout_mode = 2
+text = "S"
+
+[node name="RoadW" type="CheckBox" parent="Root/Body/HSplit/Inspector/RoadRow"]
+layout_mode = 2
+text = "W"
+
+[node name="RoadBridge" type="CheckButton" parent="Root/Body/HSplit/Inspector"]
+layout_mode = 2
+text = "bridge（桥段）"
+
+[node name="RoadButtons" type="HBoxContainer" parent="Root/Body/HSplit/Inspector"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="AddRoadButton" type="Button" parent="Root/Body/HSplit/Inspector/RoadButtons"]
+layout_mode = 2
+text = "添加道路段"
+
+[node name="ClearRoadButton" type="Button" parent="Root/Body/HSplit/Inspector/RoadButtons"]
+layout_mode = 2
+text = "清空道路段"
+
+[node name="RoadSegmentsList" type="ItemList" parent="Root/Body/HSplit/Inspector"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 120)
+
+[node name="DrinkTitle" type="Label" parent="Root/Body/HSplit/Inspector"]
+layout_mode = 2
+text = "饮品源"
+
+[node name="DrinkRow" type="HBoxContainer" parent="Root/Body/HSplit/Inspector"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DrinkTypeEdit" type="LineEdit" parent="Root/Body/HSplit/Inspector/DrinkRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "beer / soda / lemonade ..."
+
+[node name="SetDrinkButton" type="Button" parent="Root/Body/HSplit/Inspector/DrinkRow"]
+layout_mode = 2
+text = "设置"
+
+[node name="ClearDrinkButton" type="Button" parent="Root/Body/HSplit/Inspector/DrinkRow"]
+layout_mode = 2
+text = "清除"
+
+[node name="PrintedTitle" type="Label" parent="Root/Body/HSplit/Inspector"]
+layout_mode = 2
+text = "印刷建筑（锚点=当前格）"
+
+[node name="PrintedRow" type="GridContainer" parent="Root/Body/HSplit/Inspector"]
+layout_mode = 2
+columns = 2
+
+[node name="PieceSelectLabel" type="Label" parent="Root/Body/HSplit/Inspector/PrintedRow"]
+layout_mode = 2
+text = "piece_id"
+
+[node name="PieceSelect" type="OptionButton" parent="Root/Body/HSplit/Inspector/PrintedRow"]
+layout_mode = 2
+
+[node name="HouseIdLabel" type="Label" parent="Root/Body/HSplit/Inspector/PrintedRow"]
+layout_mode = 2
+text = "house_id（可空）"
+
+[node name="HouseIdEdit" type="LineEdit" parent="Root/Body/HSplit/Inspector/PrintedRow"]
+layout_mode = 2
+
+[node name="HouseNumberLabel" type="Label" parent="Root/Body/HSplit/Inspector/PrintedRow"]
+layout_mode = 2
+text = "house_number"
+
+[node name="HouseNumberSpin" type="SpinBox" parent="Root/Body/HSplit/Inspector/PrintedRow"]
+layout_mode = 2
+min_value = 0
+max_value = 999
+step = 1
+value = 1
+
+[node name="RotationLabel" type="Label" parent="Root/Body/HSplit/Inspector/PrintedRow"]
+layout_mode = 2
+text = "rotation"
+
+[node name="RotationSelect" type="OptionButton" parent="Root/Body/HSplit/Inspector/PrintedRow"]
+layout_mode = 2
+
+[node name="PrintedButtons" type="HBoxContainer" parent="Root/Body/HSplit/Inspector"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="AddPrintedButton" type="Button" parent="Root/Body/HSplit/Inspector/PrintedButtons"]
+layout_mode = 2
+text = "添加"
+
+[node name="RemovePrintedButton" type="Button" parent="Root/Body/HSplit/Inspector/PrintedButtons"]
+layout_mode = 2
+text = "删除选中"
+
+[node name="PrintedList" type="ItemList" parent="Root/Body/HSplit/Inspector"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[connection signal="pressed" from="Root/TopBar/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="Root/TopBar/LoadButton" to="." method="_on_load_pressed"]
+[connection signal="pressed" from="Root/TopBar/NewButton" to="." method="_on_new_pressed"]
+[connection signal="pressed" from="Root/TopBar/SaveButton" to="." method="_on_save_pressed"]
+[connection signal="pressed" from="Root/TopBar/ValidateButton" to="." method="_on_validate_pressed"]
+[connection signal="toggled" from="Root/Body/HSplit/Inspector/BlockedCheck" to="." method="_on_blocked_toggled"]
+[connection signal="pressed" from="Root/Body/HSplit/Inspector/RoadButtons/AddRoadButton" to="." method="_on_add_road_pressed"]
+[connection signal="pressed" from="Root/Body/HSplit/Inspector/RoadButtons/ClearRoadButton" to="." method="_on_clear_road_pressed"]
+[connection signal="pressed" from="Root/Body/HSplit/Inspector/DrinkRow/SetDrinkButton" to="." method="_on_set_drink_pressed"]
+[connection signal="pressed" from="Root/Body/HSplit/Inspector/DrinkRow/ClearDrinkButton" to="." method="_on_clear_drink_pressed"]
+[connection signal="pressed" from="Root/Body/HSplit/Inspector/PrintedButtons/AddPrintedButton" to="." method="_on_add_printed_pressed"]
+[connection signal="pressed" from="Root/Body/HSplit/Inspector/PrintedButtons/RemovePrintedButton" to="." method="_on_remove_printed_pressed"]

@@ -1,0 +1,23 @@
+{
+  "id": "first_billboard",
+  "name": "首个放置广告牌",
+  "trigger": {
+    "event": "InitiateMarketing",
+    "filter": {
+      "type": "billboard"
+    }
+  },
+  "effects": [
+    {
+      "type": "marketing_no_salary"
+    },
+    {
+      "type": "marketing_permanent"
+    }
+  ],
+  "exclusive_type": "first_billboard",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

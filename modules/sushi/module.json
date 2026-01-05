@@ -1,0 +1,13 @@
+{
+	"schema_version": 1,
+	"id": "sushi",
+	"name": "Sushi",
+	"version": "0.1.0",
+	"priority": 76,
+	"dependencies": [],
+	"conflicts": [],
+	"entry_script": "res://modules/sushi/rules/entry.gd",
+	"provides": {
+		"content": ["employees", "products"]
+	}
+}

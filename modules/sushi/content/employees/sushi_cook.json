@@ -1,0 +1,32 @@
+{
+  "id": "sushi_cook",
+  "name": "寿司厨师",
+  "description": "生产2个寿司",
+  "salary": true,
+  "unique": false,
+  "role": "produce_food",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [
+    "sushi_chef"
+  ],
+  "train_capacity": 0,
+  "tags": [
+    "produce_sushi"
+  ],
+  "usage_tags": [
+    "use:produce:sushi"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 12
+  },
+  "produces": {
+    "food_type": "sushi",
+    "amount": 2
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "first_hire_3",
+  "name": "首个一回合雇佣三人",
+  "trigger": {
+    "event": "Recruit"
+  },
+  "effects": [
+    {
+      "type": "gain_cards",
+      "value": [
+        "management_trainee",
+        "management_trainee"
+      ]
+    }
+  ],
+  "exclusive_type": "first_hire_3",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

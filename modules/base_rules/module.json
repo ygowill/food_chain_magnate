@@ -1,0 +1,19 @@
+{
+	"schema_version": 1,
+	"id": "base_rules",
+	"name": "Base Rules",
+	"version": "0.1.0",
+	"priority": 50,
+	"dependencies": [],
+	"conflicts": [],
+	"entry_script": "res://modules/base_rules/rules/entry.gd",
+	"provides": {
+		"settlements": [
+			"settlement:phase:Dinnertime:enter",
+			"settlement:phase:Payday:exit",
+			"settlement:phase:Marketing:enter",
+			"settlement:phase:Cleanup:enter"
+		]
+	}
+}
+

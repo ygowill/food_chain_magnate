@@ -1,0 +1,25 @@
+{
+  "id": "first_cart_operator",
+  "name": "首个打出手推车操作员",
+  "trigger": {
+    "event": "UseEmployee",
+    "filter": {
+      "id": "cart_operator"
+    }
+  },
+  "effects": [
+    {
+      "type": "distance_plus_one",
+      "targets": [
+        "cart_operator",
+        "truck_driver",
+        "zeppelin_pilot"
+      ]
+    }
+  ],
+  "exclusive_type": "first_cart_operator",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

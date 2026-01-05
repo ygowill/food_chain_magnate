@@ -1,0 +1,139 @@
+{
+  "id": "tile_s",
+  "display_name": "板块 S",
+  "road_segments": [
+    [
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      []
+    ],
+    [
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      []
+    ],
+    [
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "N",
+            "E",
+            "S",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ]
+    ],
+    [
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      []
+    ],
+    [
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      []
+    ]
+  ],
+  "printed_structures": [],
+  "drink_sources": [
+    {
+      "pos": [
+        3,
+        0
+      ],
+      "type": "soda"
+    },
+    {
+      "pos": [
+        0,
+        3
+      ],
+      "type": "beer"
+    }
+  ],
+  "blocked_cells": [],
+  "allowed_rotations": [
+    0,
+    90,
+    180,
+    270
+  ]
+}

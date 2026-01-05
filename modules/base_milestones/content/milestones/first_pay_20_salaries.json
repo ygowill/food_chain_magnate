@@ -1,0 +1,22 @@
+{
+  "id": "first_pay_20_salaries",
+  "name": "首个支付$20+薪水",
+  "trigger": {
+    "event": "PaySalaries",
+    "filter": {
+      "paid": {
+        "gte": 20
+      }
+    }
+  },
+  "effects": [
+    {
+      "type": "multi_trainer_on_one"
+    }
+  ],
+  "exclusive_type": "first_pay_20_salaries",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "first_beer_sold",
+  "name": "首个卖出啤酒",
+  "trigger": {
+    "event": "ProductSold",
+    "filter": {
+      "product": "drink",
+      "product_id": "beer"
+    }
+  },
+  "effects": [
+    {
+      "type": "salary_pay_with_tokens"
+    }
+  ],
+  "exclusive_type": "first_beer_sold",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

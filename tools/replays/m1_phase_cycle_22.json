@@ -1,0 +1,37 @@
+{
+	"name": "m1_phase_cycle_22",
+	"description": "M1 determinism smoke test: 22x advance_phase from Setup should land on round 4 Restructuring.",
+	"player_count": 2,
+	"seed": 42,
+	"checkpoint_interval": 5,
+	"commands": [
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}},
+		{"action_id": "advance_phase", "actor": -1, "params": {}}
+	],
+	"expect": {
+		"round": 4,
+		"phase": "Restructuring",
+		"sub_phase": ""
+	}
+}
+

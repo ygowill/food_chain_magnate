@@ -1,0 +1,25 @@
+{
+  "id": "first_marketeer_used",
+  "name": "首个使用营销员",
+  "trigger": {
+    "event": "InitiateMarketing",
+    "filter": {
+      "employee_is_marketeer": true
+    }
+  },
+  "effects": [
+    {
+      "type": "noop"
+    }
+  ],
+  "effect_ids": [
+    "new_milestones:marketing:demand_cash:first_marketeer_used",
+    "new_milestones:dinnertime:distance_delta:first_marketeer_used"
+  ],
+  "exclusive_type": "first_marketeer_used",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}
+

@@ -1,0 +1,205 @@
+{
+  "id": "tile_u",
+  "display_name": "板块 U",
+  "road_segments": [
+    [
+      [],
+      [
+        {
+          "dirs": [
+            "S",
+            "E"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "N",
+            "E",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "W",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      []
+    ],
+    [
+      [
+        {
+          "dirs": [
+            "S",
+            "E"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "N",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "E"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "W",
+            "S"
+          ],
+          "bridge": false
+        }
+      ]
+    ],
+    [
+      [
+        {
+          "dirs": [
+            "N",
+            "S",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      [],
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "E",
+            "S"
+          ],
+          "bridge": false
+        }
+      ]
+    ],
+    [
+      [
+        {
+          "dirs": [
+            "N",
+            "E"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "W",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [],
+      [
+        {
+          "dirs": [
+            "E",
+            "S"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "N",
+            "W"
+          ],
+          "bridge": false
+        }
+      ]
+    ],
+    [
+      [],
+      [
+        {
+          "dirs": [
+            "N",
+            "E"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "E",
+            "S",
+            "W"
+          ],
+          "bridge": false
+        }
+      ],
+      [
+        {
+          "dirs": [
+            "W",
+            "N"
+          ],
+          "bridge": false
+        }
+      ],
+      []
+    ]
+  ],
+  "printed_structures": [],
+  "drink_sources": [
+    {
+      "pos": [
+        1,
+        2
+      ],
+      "type": "lemonade"
+    },
+    {
+      "pos": [
+        2,
+        3
+      ],
+      "type": "lemonade"
+    },
+    {
+      "pos": [
+        3,
+        2
+      ],
+      "type": "lemonade"
+    }
+  ],
+  "blocked_cells": [],
+  "allowed_rotations": [
+    0,
+    90,
+    180,
+    270
+  ]
+}
+

@@ -1,0 +1,29 @@
+{
+  "id": "regional_manager",
+  "name": "大区经理",
+  "description": "放置或现有餐厅，并设置为开业状态。提供免下车服务",
+  "salary": true,
+  "unique": false,
+  "role": "new_shop",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "place_restaurant",
+    "move_restaurant",
+    "drivethrough"
+  ],
+  "usage_tags": [
+    "use:place_restaurant",
+    "use:move_restaurant"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 4
+  }
+}

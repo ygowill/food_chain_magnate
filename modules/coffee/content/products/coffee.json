@@ -1,0 +1,7 @@
+{
+  "id": "coffee",
+  "name": "咖啡",
+  "description": "咖啡（不可营销；用于路上购买）",
+  "tags": ["food", "no_marketing"],
+  "starting_inventory": 0
+}

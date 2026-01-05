@@ -1,0 +1,20 @@
+{
+  "id": "first_brand_director_used",
+  "name": "首个使用品牌总监",
+  "trigger": {
+    "event": "InitiateMarketing",
+    "filter": {
+      "employee_type": "brand_director"
+    }
+  },
+  "effects": [
+    {
+      "type": "noop"
+    }
+  ],
+  "exclusive_type": "first_brand_director_used",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

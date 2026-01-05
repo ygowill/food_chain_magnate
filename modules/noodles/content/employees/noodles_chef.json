@@ -1,0 +1,29 @@
+{
+  "id": "noodles_chef",
+  "name": "面条主厨",
+  "description": "生产16个面条",
+  "salary": true,
+  "unique": true,
+  "role": "produce_food",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "produce_noodles"
+  ],
+  "usage_tags": [
+    "use:produce:noodles"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "one_x"
+  },
+  "produces": {
+    "food_type": "noodles",
+    "amount": 16
+  }
+}

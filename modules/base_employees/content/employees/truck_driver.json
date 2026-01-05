@@ -1,0 +1,28 @@
+{
+  "id": "truck_driver",
+  "name": "卡车司机",
+  "description": "从路线上的每个进货点获取2瓶饮料",
+  "salary": true,
+  "unique": false,
+  "role": "procure_drink",
+  "manager_slots": 0,
+  "range": {
+    "type": "road",
+    "value": 3
+  },
+  "train_to": [
+    "zeppelin_pilot"
+  ],
+  "train_capacity": 0,
+  "tags": [
+    "procure"
+  ],
+  "usage_tags": [
+    "use:procure:road"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 4
+  }
+}

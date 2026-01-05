@@ -1,0 +1,29 @@
+{
+  "id": "lead_barista",
+  "name": "首席咖啡师",
+  "description": "生产5个咖啡（唯一）",
+  "salary": true,
+  "unique": true,
+  "role": "produce_food",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "produce_coffee"
+  ],
+  "usage_tags": [
+    "use:produce:coffee"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "one_x"
+  },
+  "produces": {
+    "food_type": "coffee",
+    "amount": 5
+  }
+}

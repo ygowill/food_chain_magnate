@@ -1,0 +1,14 @@
+{
+	"schema_version": 1,
+	"id": "base_products",
+	"name": "Base Products",
+	"version": "0.1.0",
+	"priority": 40,
+	"dependencies": [],
+	"conflicts": [],
+	"entry_script": "",
+	"provides": {
+		"content": ["products"]
+	}
+}
+

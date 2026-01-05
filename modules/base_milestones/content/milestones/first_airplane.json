@@ -1,0 +1,21 @@
+{
+  "id": "first_airplane",
+  "name": "首个进行飞机营销",
+  "trigger": {
+    "event": "InitiateMarketing",
+    "filter": {
+      "type": "airplane"
+    }
+  },
+  "effects": [
+    {
+      "type": "turnorder_empty_slots",
+      "value": 2
+    }
+  ],
+  "exclusive_type": "first_airplane",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

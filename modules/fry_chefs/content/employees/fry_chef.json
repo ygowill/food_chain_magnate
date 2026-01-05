@@ -1,0 +1,25 @@
+{
+  "id": "fry_chef",
+  "name": "薯条厨师",
+  "description": "晚餐每成功售卖一个房屋：每个薯条厨师+$10（仅对非饮品 food）",
+  "salary": true,
+  "unique": false,
+  "role": "special",
+  "manager_slots": 0,
+  "range": {
+    "type": null,
+    "value": 0
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [],
+  "usage_tags": [],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 8
+  },
+  "effect_ids": [
+    "fry_chefs:dinnertime:sale_house_bonus:fry_chef"
+  ]
+}

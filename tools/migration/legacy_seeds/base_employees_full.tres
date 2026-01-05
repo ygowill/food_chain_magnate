@@ -1,0 +1,50 @@
+[gd_resource type="Resource" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/seeds/EmployeesSeed.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+employees = [
+  {"id":"ceo","name":"CEO","salary":false,"unique_1x":true,"manager_slots":3, "description":"CEO就是你！","tags":["recruit"], "usage_tags":["use:recruit"]},
+  {"id": "waitress","name":"女服务员","salary":false,"unique_1x":false,"tags":["tips_provider"], "description":"获得3$。在平局时拥有更多服务员的餐厅获得胜利"},
+  {"id": "new_business_developer","name":"新业务拓展经理","salary":true,"unique_1x":false,"tags":["place_house_or_garden"], "usage_tags":["use:place_house","use:add_garden"], "description":"放置房屋或花园"},
+  {"id": "local_manager","name":"本地经理","salary":true,"unique_1x":false,"tags":["place_restaurant", "drivethrough"], "usage_tags":["use:place_restaurant"], "description":"放置新餐厅，并设置为即将开业。提供免下车服务"},
+  {"id": "regional_manager","name":"大区经理","salary":true,"unique_1x":false,"tags":["place_restaurant", "move_restaurant", "drivethrough"], "usage_tags":["use:place_restaurant","use:move_restaurant"], "description":"放置或现有餐厅，并设置为开业状态。提供免下车服务"},
+  {"id":"cfo","name":"CFO","salary":true,"unique_1x":true,"tags":["income_50pct"], "description":"本回合收入增加50%"},
+  
+  {"id":"management_trainee","name":"管理培训生","salary":false,"unique_1x":false,"manager_slots":2,"train_to":["new_business_developer","junior_vice_precident","luxury_manager"], "description": ""},
+  {"id":"junior_vice_precident","name":"初级副总裁","salary":true,"unique_1x":false,"manager_slots":3, "train_to":["local_manager","vice_precident","discount_manager","recuriting_manager"], "description": ""},
+  {"id":"vice_precident","name":"副总裁","salary":true,"unique_1x":false,"manager_slots":4, "train_to":["regional_manager","senior_vice_precident","guru"], "description": ""},
+  {"id":"senior_vice_precident","name":"高级副总裁","salary":true,"unique_1x":false,"manager_slots":5, "train_to":["CFO","executive_vice_precident","hr_director"], "description": ""},
+  {"id":"executive_vice_precident","name":"执行副总裁","salary":true,"unique_1x":true,"manager_slots":10, "description": ""},
+
+  {"id":"pricing_manager","name":"定价经理","salary":false,"unique_1x":false,"tags":["pricing"], "description": "售价-1$"},
+  {"id":"luxury_manager","name":"奢侈品经理","salary":true,"unique_1x":true,"tags":["pricing"], "description": "售价+10$"},
+  {"id":"discount_manager","name":"折扣经理","salary":true,"unique_1x":false,"tags":["pricing"], "description": "售价-3$"},
+  
+  {"id":"recruiting_girl","name":"招聘专员","salary":false,"unique_1x":false,"tags":["recruit"], "usage_tags":["use:recruit"], "description": "招聘一名员工"},
+  {"id":"recruiting_manager","name":"人力资源经理","salary":true,"unique_1x":false,"tags":["recruit", "salary_discount"], "usage_tags":["use:recruit"], "description": "2x：招聘一名员工或少支付5$薪资"},
+  {"id":"hr_director","name":"人力资源总监","salary":true,"unique_1x":true,"tags":["recruit", "salary_discount"], "usage_tags":["use:recruit"], "description": "4x：招聘一名员工或少支付5$薪资"},
+
+  {"id":"trainer","name":"培训讲师","salary":false,"unique_1x":false, "train_capacity": 1, "usage_tags":["use:train"], "description": "培训一名员工"},
+  {"id":"coach","name":"培训指导员","salary":true,"unique_1x":false, "train_capacity": 2, "usage_tags":["use:train"], "description": "两次培训机会。可最多培训同一名员工两次"},
+  {"id":"guru","name":"培训导师","salary":true,"unique_1x":true, "train_capacity": 3, "usage_tags":["use:train"], "description": "三次培训机会。可最多培训同一名员工三次"},
+
+  {"id":"errand_boy","name":"跑腿伙计","salary":false,"unique_1x":false,"range_type":"none","tags":["procure"],"usage_tags":["use:procure:errand_boy"],"train_to":["cart_operator"],"description": "获取1瓶任意种类的饮料"},
+  {"id":"cart_operator","name":"手推车操作员","salary":true,"unique_1x":false,"range_type":"road","range_value":2,"tags":["procure"],"usage_tags":["use:procure:road"],"train_to":["truck_driver"],"description": "从路线上的每个进货点获取2瓶饮料"},
+  {"id":"truck_driver","name":"卡车司机","salary":true,"unique_1x":false,"range_type":"road","range_value":3,"tags":["procure"],"usage_tags":["use:procure:road"],"train_to":["zippelin_pilot"],"description": "从路线上的每个进货点获取2瓶饮料"},
+  {"id":"zippelin_pilot","name":"飞艇驾驶员","salary":true,"unique_1x":true,"range_type":"air","range_value":4,"tags":["procure"],"usage_tags":["use:procure:air"],"description": "从路线上的每个进货点获取2瓶饮料，无视道路"},
+
+  {"id":"marketing_trainee","name":"营销实习生","salary":false,"unique_1x":false,"range_type":"road","range_value":2,"tags":["marketing_billboard"],"usage_tags":["use:marketing:billboard"],"train_to":["campaign_manager"],"description": "放置广告牌，最多持续2回合"},
+  {"id":"campaign_manager","name":"营销经理","salary":true,"unique_1x":false,"range_type":"road","range_value":3,"tags":["marketing_billboard", "marketing_mailbox"],"usage_tags":["use:marketing:billboard","use:marketing:mailbox"],"train_to":["brand_manager"],"description": "放置邮箱或以下的广告，最多持续3回合"},
+  {"id":"brand_manager","name":"品牌经理","salary":true,"unique_1x":false,"range_type":"air","range_value":-1,"tags":["marketing_billboard", "marketing_mailbox", "marketing_airplane"],"usage_tags":["use:marketing:billboard","use:marketing:mailbox","use:marketing:airplane"],"train_to":["brand_director"],"description": "放置飞机或以下的广告，最多持续4回合"},
+  {"id":"brand_director","name":"品牌总监","salary":true,"unique_1x":true,"range_type":"air","range_value":-1,"tags":["marketing_billboard", "marketing_mailbox", "marketing_airplane", "marketing_radio"],"usage_tags":["use:marketing:billboard","use:marketing:mailbox","use:marketing:airplane","use:marketing:radio"],"description": "放置电波或以下的广告，最多持续5回合"},
+
+  {"id": "kitchen_trainee","name":"见习厨师","salary":false,"unique_1x":false,"tags":["produce_burger", "produce_pizza"], "usage_tags":["use:produce:burger","use:produce:pizza"], "train_to":["burger_cook", "pizza_cook"],"description": "生产1个汉堡或披萨"},
+  {"id":"burger_cook","name":"汉堡厨师","salary":true,"unique_1x":false,"tags":["produce_burger"], "usage_tags":["use:produce:burger"], "train_to":["burger_chef"],"description": "生产3个汉堡"},
+  {"id":"pizza_cook","name":"披萨厨师","salary":true,"unique_1x":false,"tags":["produce_pizza"], "usage_tags":["use:produce:pizza"], "train_to":["pizza_chef"],"description": "生产3个披萨"},
+  {"id":"burger_chef","name":"汉堡主厨","salary":true,"unique_1x":true,"tags":["produce_burger"],"usage_tags":["use:produce:burger"],"description": "生产8个汉堡"},
+  {"id":"pizza_chef","name":"披萨主厨","salary":true,"unique_1x":true,"tags":["produce_pizza"],"usage_tags":["use:produce:pizza"],"description": "生产8个披萨"}
+]
+
+

@@ -1,0 +1,22 @@
+{
+  "id": "first_pizza_marketed",
+  "name": "首个营销披萨",
+  "trigger": {
+    "event": "DemandMarked",
+    "filter": {
+      "product": "pizza"
+    }
+  },
+  "effects": [
+    {
+      "type": "sell_bonus",
+      "product": "pizza",
+      "value": 5
+    }
+  ],
+  "exclusive_type": "first_pizza_marketed",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

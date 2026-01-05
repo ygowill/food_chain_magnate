@@ -1,0 +1,12 @@
+{
+  "id": "action_availability_override_test",
+  "name": "Action Availability Override Test",
+  "version": "0.1.0",
+  "schema_version": 1,
+  "depends_on": [
+    "base_rules"
+  ],
+  "conflicts_with": [],
+  "entry_script": "res://modules_test/action_availability_override_test/rules/entry.gd",
+  "content": {}
+}

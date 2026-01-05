@@ -1,0 +1,10 @@
+{
+	"schema_version": 1,
+	"id": "good_effects",
+	"version": "0.1.0",
+	"priority": 100,
+	"dependencies": ["base_rules"],
+	"conflicts": [],
+	"entry_script": "res://core/tests/fixtures/modules_v2_effects_validation/good_effects/rules/entry.gd"
+}
+

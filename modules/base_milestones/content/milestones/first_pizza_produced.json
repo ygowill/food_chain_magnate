@@ -1,0 +1,21 @@
+{
+  "id": "first_pizza_produced",
+  "name": "首个生产披萨",
+  "trigger": {
+    "event": "Produce",
+    "filter": {
+      "product": "pizza"
+    }
+  },
+  "effects": [
+    {
+      "type": "gain_card",
+      "value": "pizza_cook"
+    }
+  ],
+  "exclusive_type": "first_pizza_produced",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

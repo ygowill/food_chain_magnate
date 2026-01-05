@@ -1,0 +1,23 @@
+{
+  "id": "ketchup_sold_your_demand",
+  "name": "有人卖了你的需求",
+  "trigger": {
+    "event": "KetchupSoldDemand",
+    "filter": {}
+  },
+  "effects": [
+    {
+      "type": "ketchup_active"
+    }
+  ],
+  "effect_ids": [
+    "ketchup_mechanism:dinnertime:distance_delta:ketchup"
+  ],
+  "exclusive_type": "ketchup_sold_your_demand",
+  "expires_at": null,
+  "pool": {
+    "enabled": true,
+    "count": 6
+  }
+}
+

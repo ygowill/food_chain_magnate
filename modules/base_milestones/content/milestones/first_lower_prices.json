@@ -1,0 +1,18 @@
+{
+  "id": "first_lower_prices",
+  "name": "首个降价",
+  "trigger": {
+    "event": "LowerPrice"
+  },
+  "effects": [
+    {
+      "type": "base_price_delta",
+      "value": -1
+    }
+  ],
+  "exclusive_type": "first_lower_prices",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "lobbyist",
+  "name": "说客",
+  "description": "在工作时间放置一块道路（建设中）或一块公园",
+  "salary": true,
+  "unique": false,
+  "role": "special",
+  "manager_slots": 0,
+  "range": {
+    "type": "road",
+    "value": 2
+  },
+  "train_to": [],
+  "train_capacity": 0,
+  "tags": [
+    "entry_level"
+  ],
+  "usage_tags": [
+    "use:lobbyists"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 6
+  }
+}

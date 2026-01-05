@@ -1,0 +1,18 @@
+{
+  "id": "first_train",
+  "name": "首个培训员工",
+  "trigger": {
+    "event": "Train"
+  },
+  "effects": [
+    {
+      "type": "salary_total_delta",
+      "value": -15
+    }
+  ],
+  "exclusive_type": "first_train",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}

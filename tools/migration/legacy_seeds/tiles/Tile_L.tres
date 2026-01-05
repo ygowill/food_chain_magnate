@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="TileDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/models/TileDef.gd" id="1_whtie"]
+
+[resource]
+script = ExtResource("1_whtie")
+id = "Tile_L"
+road_segments = [[[], [], [{
+"dirs": ["N", "S"]
+}], [], []], [[], [], [{
+"dirs": ["N", "S"]
+}], [], []], [[{
+"dirs": ["W", "E"]
+}], [{
+"dirs": ["W", "E"]
+}], [{
+"dirs": ["N", "W", "E"]
+}], [{
+"dirs": ["W", "E"]
+}], [{
+"dirs": ["W", "E"]
+}]], [[], [], [], [], []], [[], [], [], [], []]]
+drink_sources = Array[Dictionary]([{
+"pos": Vector2i(3, 3),
+"type": "lemonade"
+}])

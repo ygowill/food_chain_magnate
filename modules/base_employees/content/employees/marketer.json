@@ -1,0 +1,30 @@
+{
+  "id": "marketer",
+  "name": "营销实习生",
+  "description": "放置广告牌，最多持续2回合",
+  "salary": false,
+  "unique": false,
+  "role": "marketing",
+  "manager_slots": 0,
+  "range": {
+    "type": "road",
+    "value": 2
+  },
+  "marketing_max_duration": 2,
+  "train_to": [
+    "campaign_manager"
+  ],
+  "train_capacity": 0,
+  "tags": [
+    "marketing_billboard",
+    "entry_level"
+  ],
+  "usage_tags": [
+    "use:marketing:billboard"
+  ],
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 12
+  }
+}

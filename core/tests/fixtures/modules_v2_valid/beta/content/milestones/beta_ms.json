@@ -1,0 +1,12 @@
+{
+	"id": "beta_ms",
+	"name": "Beta Milestone",
+	"trigger": {
+		"event": "Dummy",
+		"filter": {}
+	},
+	"effects": [{"type": "dummy"}],
+	"exclusive_type": "dummy",
+	"expires_at": null,
+	"pool": {"enabled": true}
+}

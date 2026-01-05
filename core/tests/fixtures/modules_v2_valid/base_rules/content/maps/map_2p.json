@@ -1,0 +1,20 @@
+{
+	"id": "map_2p",
+	"display_name": "2人游戏地图 (3x3)",
+	"min_players": 2,
+	"max_players": 3,
+	"layout_mode": "fixed",
+	"random_rotation": false,
+	"required_modules": [],
+	"tiles": [
+		{"tile_id": "tile_a1", "board_pos": [0, 0], "rotation": 0},
+		{"tile_id": "tile_a2", "board_pos": [1, 0], "rotation": 0},
+		{"tile_id": "tile_b1", "board_pos": [2, 0], "rotation": 0},
+		{"tile_id": "tile_a2", "board_pos": [0, 1], "rotation": 90},
+		{"tile_id": "tile_a1", "board_pos": [1, 1], "rotation": 0},
+		{"tile_id": "tile_a2", "board_pos": [2, 1], "rotation": 270},
+		{"tile_id": "tile_b1", "board_pos": [0, 2], "rotation": 180},
+		{"tile_id": "tile_a2", "board_pos": [1, 2], "rotation": 180},
+		{"tile_id": "tile_a1", "board_pos": [2, 2], "rotation": 180}
+	]
+}

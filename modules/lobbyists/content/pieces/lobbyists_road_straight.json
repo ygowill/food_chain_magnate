@@ -1,0 +1,19 @@
+{
+	"id": "lobbyists_road_straight",
+	"display_name": "道路（直）",
+	"category": "terrain",
+	"footprint_mask": [[1, 1]],
+	"anchor": [0, 0],
+	"allowed_rotations": [0, 90, 180, 270],
+	"mirror_allowed": false,
+	"must_be_on_empty": true,
+	"must_touch_road": false,
+	"allowed_on": ["ground"],
+	"forbidden_layers": [],
+	"entrance_type": "adjacent_road",
+	"entrance_points": [],
+	"is_house": false,
+	"can_have_garden": false,
+	"garden_extension_size": [0, 0]
+}
+

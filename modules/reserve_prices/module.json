@@ -1,0 +1,19 @@
+{
+	"schema_version": 1,
+	"id": "reserve_prices",
+	"name": "Reserve Prices",
+	"version": "0.1.0",
+	"priority": 100,
+	"dependencies": ["base_rules"],
+	"conflicts": [],
+	"entry_script": "res://modules/reserve_prices/rules/entry.gd",
+	"provides": {
+		"content": [],
+		"actions": [],
+		"settlements": [],
+		"hooks": [
+			"hook:phase:Restructuring:before_enter"
+		]
+	}
+}
+

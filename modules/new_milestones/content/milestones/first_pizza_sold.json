@@ -1,0 +1,21 @@
+{
+  "id": "first_pizza_sold",
+  "name": "首个卖出披萨",
+  "trigger": {
+    "event": "ProductSold",
+    "filter": {
+      "product": "pizza"
+    }
+  },
+  "effects": [
+    {
+      "type": "noop"
+    }
+  ],
+  "exclusive_type": "first_pizza_sold",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}
+
