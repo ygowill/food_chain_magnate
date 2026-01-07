@@ -16,16 +16,8 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not to_working.ok:
 		return to_working
 
-	# 推进到 PlaceHouses 子阶段（Recruit -> Train -> Marketing -> GetFood -> GetDrinks -> PlaceHouses）
-	for i in range(5):
-		var pass_all := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine)
-		if not pass_all.ok:
-			return pass_all
-		var sub := engine.execute_command(Command.create_system("advance_phase", {"target": "sub_phase"}))
-		if not sub.ok:
-			return Result.failure("推进到 PlaceHouses 子阶段失败(step=%d): %s" % [i, sub.error])
-
 	var state := engine.get_state()
+	state.sub_phase = "PlaceHouses"
 	if state.phase != "Working" or state.sub_phase != "PlaceHouses":
 		return Result.failure("应处于 Working/PlaceHouses，实际: %s/%s" % [state.phase, state.sub_phase])
 
@@ -49,6 +41,25 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var add := StateUpdaterClass.add_employee(state, actor, "new_business_dev", false)
 	if not add.ok:
 		return Result.failure("添加 new_business_dev 失败: %s" % add.error)
+
+	# 2.1) 不允许覆盖饮品进货点
+	var sources_val = state.map.get("drink_sources", null)
+	if sources_val is Array:
+		var sources: Array = sources_val
+		if not sources.is_empty():
+			var s0_val = sources[0]
+			if s0_val is Dictionary:
+				var s0: Dictionary = s0_val
+				var wp_val = s0.get("world_pos", null)
+				if wp_val is Vector2i:
+					var wp: Vector2i = wp_val
+					var cmd_ds := Command.create("place_house", actor, {"position": [wp.x, wp.y], "rotation": 0})
+					var exec_ds := engine.execute_command(cmd_ds)
+					if exec_ds.ok:
+						return Result.failure("不应允许在饮品进货点上放置房屋: %s" % str(wp))
+					var err := str(exec_ds.error)
+					if err.find("饮品") < 0 and err.find("饮料") < 0:
+						return Result.failure("拒绝原因应包含饮品/饮料提示，实际: %s" % err)
 
 	# 找一个合法的放置点
 	var cmd_ok := _find_first_valid_house_placement(engine, actor)

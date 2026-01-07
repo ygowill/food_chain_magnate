@@ -25,6 +25,69 @@ func _init() -> void:
 	allowed_phases = ["Working"]
 	allowed_sub_phases = ["Marketing"]
 
+func can_initiate(state: GameState, player_id: int) -> bool:
+	if state == null:
+		return true
+	if state.get_current_player_id() != player_id:
+		return false
+
+	var player := state.get_player(player_id)
+	var employees_val = player.get("employees", [])
+	if not (employees_val is Array):
+		return true
+	var employees: Array = employees_val
+
+	var has_marketer := false
+	var seen := {}
+	for emp_val in employees:
+		if not (emp_val is String):
+			continue
+		var emp_id: String = str(emp_val)
+		if emp_id.is_empty():
+			continue
+		if seen.has(emp_id):
+			continue
+		seen[emp_id] = true
+
+		var def_val = EmployeeRegistryClass.get_def(emp_id)
+		if def_val == null or not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+		for t in def.usage_tags:
+			var s: String = str(t)
+			if s.begins_with("use:marketing:"):
+				has_marketer = true
+				break
+		if has_marketer:
+			break
+
+	if not has_marketer:
+		return false
+
+	var used := {}
+	for inst_val in state.marketing_instances:
+		if inst_val is Dictionary:
+			var bn = Dictionary(inst_val).get("board_number", null)
+			if bn is int:
+				used[str(int(bn))] = true
+	if state.map is Dictionary and state.map.has("marketing_placements") and (state.map["marketing_placements"] is Dictionary):
+		var placements: Dictionary = state.map["marketing_placements"]
+		for k in placements.keys():
+			used[str(k)] = true
+
+	var player_count := state.players.size()
+	for bn2 in MarketingRegistryClass.get_all_board_numbers():
+		if used.has(str(bn2)):
+			continue
+		var def2 = MarketingRegistryClass.get_def(bn2)
+		if def2 == null or not def2.has_method("is_available_for_player_count"):
+			continue
+		if not def2.is_available_for_player_count(player_count):
+			continue
+		return true
+
+	return false
+
 func _validate_specific(state: GameState, command: Command) -> Result:
 	var current_player_id := state.get_current_player_id()
 	if command.actor != current_player_id:

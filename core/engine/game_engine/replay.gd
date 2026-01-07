@@ -1,10 +1,13 @@
 # GameEngine：回放/倒带实现（基于 checkpoint + executor.compute_new_state）
 extends RefCounted
 
+const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
+
 static func rewind_to_command(
 	command_history: Array[Command],
 	checkpoints: Array[Dictionary],
 	action_registry: ActionRegistry,
+	phase_manager: PhaseManager,
 	target_index: int
 ) -> Result:
 	if target_index < -1 or target_index >= command_history.size():
@@ -63,6 +66,7 @@ static func rewind_to_command(
 	# 重放到目标位置
 	var start_index: int = int(checkpoint.index)
 	var replay_state: GameState = restored_state
+	var all_warnings: Array[String] = []
 	for i in range(start_index, target_index + 1):
 		var cmd: Command = command_history[i]
 		var executor := action_registry.get_executor(cmd.action_id)
@@ -73,6 +77,12 @@ static func rewind_to_command(
 		if not step_result.ok:
 			return Result.failure("回放命令 #%d 失败: %s" % [i, step_result.error])
 		replay_state = step_result.value
+		all_warnings.append_array(step_result.warnings)
+
+		var auto_r := AutoAdvanceClass.drain(replay_state, phase_manager, action_registry)
+		if not auto_r.ok:
+			return Result.failure("回放命令 #%d 失败: %s" % [i, auto_r.error])
+		all_warnings.append_array(auto_r.warnings)
 
 	GameLog.info("GameEngine", "回退到命令 #%d (从校验点 #%d 重放)" % [
 		target_index, checkpoint.index
@@ -82,12 +92,13 @@ static func rewind_to_command(
 		"state": replay_state,
 		"random_manager": restored_rng,
 		"current_command_index": target_index
-	})
+	}).with_warnings(all_warnings)
 
 static func full_replay(
 	command_history: Array[Command],
 	checkpoints: Array[Dictionary],
-	action_registry: ActionRegistry
+	action_registry: ActionRegistry,
+	phase_manager: PhaseManager
 ) -> Result:
 	if checkpoints.is_empty():
 		return Result.failure("缺少初始校验点，无法重放")
@@ -113,6 +124,7 @@ static func full_replay(
 
 	# 重放所有命令
 	var replay_state: GameState = restored_state
+	var all_warnings: Array[String] = []
 	for i in range(command_history.size()):
 		var cmd: Command = command_history[i]
 		var executor := action_registry.get_executor(cmd.action_id)
@@ -123,6 +135,12 @@ static func full_replay(
 		if not step_result.ok:
 			return Result.failure("重放命令 #%d 失败: %s" % [i, step_result.error])
 		replay_state = step_result.value
+		all_warnings.append_array(step_result.warnings)
+
+		var auto_r := AutoAdvanceClass.drain(replay_state, phase_manager, action_registry)
+		if not auto_r.ok:
+			return Result.failure("重放命令 #%d 失败: %s" % [i, auto_r.error])
+		all_warnings.append_array(auto_r.warnings)
 
 	GameLog.info("GameEngine", "完整重放 %d 条命令" % command_history.size())
 
@@ -130,7 +148,7 @@ static func full_replay(
 		"state": replay_state,
 		"random_manager": restored_rng,
 		"current_command_index": command_history.size() - 1
-	})
+	}).with_warnings(all_warnings)
 
 static func _require_checkpoint_rng_calls(checkpoint: Dictionary, path: String) -> Result:
 	if not (checkpoint is Dictionary):

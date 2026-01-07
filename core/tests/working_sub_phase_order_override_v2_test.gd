@@ -27,8 +27,13 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 30)
 	if not to_working.ok:
 		return to_working
-	if engine.get_state().sub_phase != "Train":
-		return Result.failure("进入 Working 后子阶段应为 Train（override），实际: %s" % engine.get_state().sub_phase)
+	var state := engine.get_state()
+	var rs_val = state.round_state.get("working_sub_phase_order", [])
+	if not (rs_val is Array):
+		return Result.failure("round_state.working_sub_phase_order 缺失或类型错误（期望 Array）")
+	var rs: Array = rs_val
+	if rs.size() < 2 or str(rs[0]) != "Train" or str(rs[1]) != "Recruit":
+		return Result.failure("round_state.working_sub_phase_order 未按 override 初始化: %s" % str(rs))
 
 	return Result.success({
 		"working_sub_phase_order": order,

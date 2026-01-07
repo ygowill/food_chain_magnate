@@ -1,0 +1,99 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/components/payday_panel/payday_panel.gd" id="1_payday_panel"]
+
+[node name="PaydayPanel" type="Control"]
+custom_minimum_size = Vector2(400, 350)
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_payday_panel")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.12, 0.14, 0.16, 0.95)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "发薪日"
+horizontal_alignment = 1
+
+[node name="HintLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+text = "勾选要解雇的员工，然后点击解雇或直接支付薪资"
+horizontal_alignment = 1
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="SalaryListContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="SummarySection" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Separator" type="HSeparator" parent="MarginContainer/VBoxContainer/SummarySection"]
+layout_mode = 2
+
+[node name="DiscountLabel" type="Label" parent="MarginContainer/VBoxContainer/SummarySection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.5, 0.8, 0.5, 1)
+text = "招聘折扣: -$0"
+horizontal_alignment = 2
+
+[node name="TotalLabel" type="Label" parent="MarginContainer/VBoxContainer/SummarySection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.9, 0.8, 0.6, 1)
+text = "应付薪资: $0"
+horizontal_alignment = 2
+
+[node name="CashLabel" type="Label" parent="MarginContainer/VBoxContainer/SummarySection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "当前现金: $0"
+horizontal_alignment = 2
+
+[node name="ButtonRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 10
+
+[node name="FireButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "解雇选中"
+
+[node name="PayButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "支付薪资"

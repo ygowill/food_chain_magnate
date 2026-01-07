@@ -1,0 +1,37 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/components/zoom_control/zoom_control.gd" id="1_zoom"]
+
+[node name="ZoomControl" type="VBoxContainer"]
+offset_right = 40.0
+offset_bottom = 140.0
+theme_override_constants/separation = 4
+script = ExtResource("1_zoom")
+
+[node name="ZoomInButton" type="Button" parent="."]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+text = "+"
+
+[node name="ZoomLabel" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "100%"
+horizontal_alignment = 1
+
+[node name="ZoomOutButton" type="Button" parent="."]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+text = "-"
+
+[node name="ResetButton" type="Button" parent="."]
+custom_minimum_size = Vector2(32, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "1:1"
+
+[node name="FitButton" type="Button" parent="."]
+custom_minimum_size = Vector2(32, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "Fit"

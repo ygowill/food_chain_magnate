@@ -61,8 +61,8 @@ static func _test_first_bankruptcy(seed_val: int) -> Result:
 		return adv
 
 	state = engine.get_state()
-	if state.phase != "Dinnertime":
-		return Result.failure("当前应为 Dinnertime，实际: %s" % state.phase)
+	if state.phase != "Payday":
+		return Result.failure("当前应为 Payday（Dinnertime 已自动结算跳过），实际: %s" % state.phase)
 
 	if int(state.bank.get("broke_count", 0)) != 1:
 		return Result.failure("第一次破产后 broke_count 应为 1，实际: %d" % int(state.bank.get("broke_count", 0)))
@@ -132,8 +132,8 @@ static func _test_second_bankruptcy_ends_game(seed_val: int) -> Result:
 		return adv
 
 	state = engine.get_state()
-	if state.phase != "Dinnertime":
-		return Result.failure("当前应为 Dinnertime，实际: %s" % state.phase)
+	if state.phase != "GameOver":
+		return Result.failure("当前应为 GameOver（第二次破产后应跳过 Payday），实际: %s" % state.phase)
 	if int(state.bank.get("broke_count", 0)) != 2:
 		return Result.failure("第二次破产后 broke_count 应为 2，实际: %d" % int(state.bank.get("broke_count", 0)))
 	if int(state.bank.get("reserve_added_total", 0)) != 20:
@@ -148,14 +148,6 @@ static func _test_second_bankruptcy_ends_game(seed_val: int) -> Result:
 	var game_over: Dictionary = state.round_state.get("game_over", {})
 	if str(game_over.get("reason", "")) != "bankruptcy":
 		return Result.failure("第二次破产后应写入 round_state.game_over，实际: %s" % str(game_over))
-
-	# 晚餐阶段结束后：推进应直接进入 GameOver（跳过 Payday）
-	var end := engine.execute_command(Command.create_system("advance_phase"))
-	if not end.ok:
-		return Result.failure("终局推进失败: %s" % end.error)
-	state = engine.get_state()
-	if state.phase != "GameOver":
-		return Result.failure("第二次破产后推进应进入 GameOver，实际: %s" % state.phase)
 
 	return Result.success()
 

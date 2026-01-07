@@ -24,16 +24,8 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not to_working.ok:
 		return to_working
 
-	# 推进到 PlaceRestaurants 子阶段（Recruit -> Train -> Marketing -> GetFood -> GetDrinks -> PlaceHouses -> PlaceRestaurants）
-	for i in range(6):
-		var pass_all := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine)
-		if not pass_all.ok:
-			return pass_all
-		var sub := engine.execute_command(Command.create_system("advance_phase", {"target": "sub_phase"}))
-		if not sub.ok:
-			return Result.failure("推进到 PlaceRestaurants 子阶段失败(step=%d): %s" % [i, sub.error])
-
 	var state := engine.get_state()
+	state.sub_phase = "PlaceRestaurants"
 	if state.phase != "Working" or state.sub_phase != "PlaceRestaurants":
 		return Result.failure("应处于 Working/PlaceRestaurants，实际: %s/%s" % [state.phase, state.sub_phase])
 
@@ -79,10 +71,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if str(exec_again.error).find("已用完") < 0:
 		return Result.failure("第二次放置应提示次数已用完，实际: %s" % exec_again.error)
 
-	# 4) 推进到 Cleanup：drive_thru_active 应被重置为 false
-	var to_cleanup := TestPhaseUtilsClass.advance_until_phase(engine, "Cleanup", 20)
-	if not to_cleanup.ok:
-		return to_cleanup
+	# 4) 推进到下一回合 Restructuring：Cleanup 会自动结算并重置 drive_thru_active
+	var to_restructuring := TestPhaseUtilsClass.advance_until_phase(engine, "Restructuring", 80)
+	if not to_restructuring.ok:
+		return to_restructuring
 	if bool(engine.get_state().players[actor].get("drive_thru_active", true)):
 		return Result.failure("进入 Cleanup 后 drive_thru_active 应被重置为 false")
 

@@ -3,7 +3,7 @@
 class_name CleanupInventoryTest
 extends RefCounted
 
-const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count < 2:
@@ -14,14 +14,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not init.ok:
 		return Result.failure("游戏初始化失败: %s" % init.error)
 
-	# 推进到 Marketing 阶段（进入 Cleanup 时触发清理）
-	var to_marketing := TestPhaseUtilsClass.advance_until_phase(engine, "Marketing", 50)
-	if not to_marketing.ok:
-		return to_marketing
-
 	var state := engine.get_state()
-	if state.phase != "Marketing":
-		return Result.failure("当前应该在 Marketing 阶段，实际: %s" % state.phase)
 
 	# 玩家 0：无冰箱 -> 清空
 	state.players[0]["inventory"] = {
@@ -45,15 +38,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		"beer": 10
 	}
 
-	# 进入 Cleanup 阶段（触发清理结算）
-	var to_cleanup := Command.create("advance_phase", -1, {})
-	var cleanup_result := engine.execute_command(to_cleanup)
+	# 触发清理结算（不依赖阶段推进细节）
+	var cleanup_result := CleanupSettlementClass.apply(state)
 	if not cleanup_result.ok:
-		return Result.failure("推进到 Cleanup 阶段失败: %s" % cleanup_result.error)
-
-	state = engine.get_state()
-	if state.phase != "Cleanup":
-		return Result.failure("当前应该在 Cleanup 阶段，实际: %s" % state.phase)
+		return Result.failure("CleanupSettlement 失败: %s" % cleanup_result.error)
 
 	var inv0: Dictionary = state.players[0].get("inventory", {})
 	for k in inv0:

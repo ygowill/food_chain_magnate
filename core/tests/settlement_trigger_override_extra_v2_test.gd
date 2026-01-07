@@ -53,11 +53,11 @@ static func _test_exit_trigger_runs(player_count: int, seed: int) -> Result:
 	if not init.ok:
 		return Result.failure("初始化失败: %s" % init.error)
 
-	# Setup -> Restructuring
-	var adv0 := engine.execute_command(Command.create_system("advance_phase"))
-	if not adv0.ok:
-		return Result.failure("推进到 Restructuring 失败: %s" % adv0.error)
 	# Restructuring -> OrderOfBusiness（离开 Restructuring 时触发 exit settlement）
+	var state := engine.get_state()
+	state.round_number = 2
+	state.phase = "Restructuring"
+	state.sub_phase = ""
 	var adv1 := engine.execute_command(Command.create_system("advance_phase"))
 	if not adv1.ok:
 		return Result.failure("推进到 OrderOfBusiness 失败: %s" % adv1.error)
@@ -83,12 +83,14 @@ static func _test_multiple_points_order(player_count: int, seed: int) -> Result:
 	if not init.ok:
 		return Result.failure("初始化失败: %s" % init.error)
 
-	var to_mk := TestPhaseUtilsClass.advance_until_phase(engine, "Marketing", 80)
-	if not to_mk.ok:
-		return to_mk
-
-	if engine.get_state().phase != "Marketing":
-		return Result.failure("当前应为 Marketing，实际: %s" % engine.get_state().phase)
+	# 进入 Marketing：该测试模块会在 enter 时同时触发 ENTER 与 EXIT（通过 trigger override）
+	var state := engine.get_state()
+	state.round_number = 1
+	state.phase = "Payday"
+	state.sub_phase = ""
+	var adv := engine.phase_manager.advance_phase(state)
+	if not adv.ok:
+		return Result.failure("推进到 Marketing 失败: %s" % adv.error)
 	var rs: Dictionary = engine.get_state().round_state
 	var arr: Array = rs.get("points_order", [])
 	if arr.size() != 2 or str(arr[0]) != "enter" or str(arr[1]) != "exit":

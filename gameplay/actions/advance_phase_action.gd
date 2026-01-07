@@ -33,6 +33,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if target == "sub_phase":
 		if state.sub_phase.is_empty():
 			return Result.failure("子阶段为空，无法推进")
+		# Working：子阶段推进是“单玩家流转”，不要求所有玩家 pass
+		if state.phase == "Working":
+			return Result.success()
 		if not (state.round_state is Dictionary):
 			return Result.failure("未初始化(round_state)")
 		assert(state.round_state.has("sub_phase_passed"), "advance_phase: round_state 缺少 sub_phase_passed")

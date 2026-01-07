@@ -165,7 +165,8 @@ func _validate_coffee_shop_placement(state: GameState, world_anchor: Vector2i) -
 		"grid_size": state.map.grid_size,
 		"map_origin": MapRuntimeClass.get_map_origin(state),
 		"houses": state.map.houses,
-		"restaurants": state.map.restaurants
+		"restaurants": state.map.restaurants,
+		"drink_sources": state.map.get("drink_sources", []),
 	}
 
 	var r := PlacementValidatorClass.validate_placement(map_ctx, PIECE_ID, world_anchor, 0, piece_defs, {})
@@ -247,4 +248,3 @@ static func _increment_used_triggers(round_state: Dictionary, player_id: int, de
 	used[player_id] = int(before_val) + delta
 	round_state["coffee_shop_triggers_used"] = used
 	return Result.success()
-

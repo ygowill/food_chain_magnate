@@ -22,6 +22,54 @@ func _init() -> void:
 	allowed_phases = ["Working"]
 	allowed_sub_phases = ["GetDrinks"]
 
+func can_initiate(state: GameState, player_id: int) -> bool:
+	if state == null:
+		return true
+	if state.get_current_player_id() != player_id:
+		return false
+
+	var restaurant_ids := MapRuntimeClass.get_player_restaurants(state, player_id)
+	if restaurant_ids.is_empty():
+		return false
+
+	var player := state.get_player(player_id)
+	var employees_val = player.get("employees", [])
+	if not (employees_val is Array):
+		return true
+	var employees: Array = employees_val
+
+	var seen := {}
+	for emp_val in employees:
+		if not (emp_val is String):
+			continue
+		var emp_id: String = str(emp_val)
+		if emp_id.is_empty():
+			continue
+		if seen.has(emp_id):
+			continue
+		seen[emp_id] = true
+
+		var def_val = EmployeeRegistryClass.get_def(emp_id)
+		if def_val == null or not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+		if not def.can_procure():
+			continue
+
+		var active_count := EmployeeRulesClass.count_active_for_working(state, player, player_id, emp_id)
+		if active_count <= 0:
+			continue
+
+		var used_result := RoundStateCountersClass.get_player_key_count(
+			state.round_state, "procurement_counts", player_id, emp_id
+		)
+		if not used_result.ok:
+			return true
+		if int(used_result.value) < active_count:
+			return true
+
+	return false
+
 func _validate_specific(state: GameState, command: Command) -> Result:
 	# 检查必需参数
 	if not command.params.has("employee_type"):

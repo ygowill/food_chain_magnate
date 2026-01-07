@@ -24,52 +24,22 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if not init.ok:
 		return Result.failure("初始化失败: %s" % init.error)
 
-	# Round 1：推进到 Working / Recruit，并招聘 1 名 recruiter（进入待命）
-	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 30)
-	if not to_working.ok:
-		return to_working
+	# 结算阶段默认自动跳过后，不再能停留在 Payday。
+	# 本用例改为直接验证 PaydaySettlement.apply 的结算结果（含 round_state.payday 记录与现金/银行变化）。
+	var target_player := 0
+	var state := engine.get_state()
+	state.phase = "Payday"
 
-	if engine.get_state().sub_phase != "Recruit":
-		return Result.failure("Working 初始子阶段应为 Recruit，实际: %s" % engine.get_state().sub_phase)
-
-	var target_player := engine.get_state().get_current_player_id()
-	var r1 := engine.execute_command(Command.create("recruit", target_player, {"employee_type": "recruiter"}))
-	if not r1.ok:
-		return Result.failure("招聘 recruiter 失败: %s" % r1.error)
-
-	# 推进到下一回合 Restructuring：待命 recruiter 自动激活
-	var to_restructuring := TestPhaseUtilsClass.advance_until_phase(engine, "Restructuring", 50)
-	if not to_restructuring.ok:
-		return to_restructuring
-
-	var p_after := engine.get_state().get_player(target_player)
-	if not p_after.get("employees", []).has("recruiter"):
-		return Result.failure("进入 Restructuring 后应自动激活 recruiter")
-
-	# Round 2：推进到 Working / Recruit，并轮转到 target_player
-	var to_working2 := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 30)
-	if not to_working2.ok:
-		return to_working2
-
-	var safety = 0
-	while engine.get_state().get_current_player_id() != target_player:
-		safety += 1
-		if safety > 20:
-			return Result.failure("轮转到目标玩家超出安全上限")
-		var sk := engine.execute_command(Command.create("skip", engine.get_state().get_current_player_id()))
-		if not sk.ok:
-			return Result.failure("skip 失败: %s" % sk.error)
-
-	# 有 recruiter：应允许 2 次招聘
-	var rr1 := engine.execute_command(Command.create("recruit", target_player, {"employee_type": "trainer"}))
-	if not rr1.ok:
-		return Result.failure("第二回合第一次招聘失败: %s" % rr1.error)
-	var rr2 := engine.execute_command(Command.create("recruit", target_player, {"employee_type": "burger_cook"}))
-	if not rr2.ok:
-		return Result.failure("第二回合第二次招聘失败: %s" % rr2.error)
+	# 注：burger_cook 不再是入门级员工（需通过培训获得）。
+	# 该测试只关心“Payday 薪水扣除”，因此这里直接从员工池取出并放入待命区（保持守恒）。
+	var take_cook := StateUpdater.take_from_pool(state, "burger_cook", 1)
+	if not take_cook.ok:
+		return Result.failure("从员工池取出 burger_cook 失败: %s" % take_cook.error)
+	var add_cook := StateUpdater.add_employee(state, target_player, "burger_cook", true)
+	if not add_cook.ok:
+		return Result.failure("添加 burger_cook 到待命区失败: %s" % add_cook.error)
 
 	# 给目标玩家发放现金（从银行转入），用于发薪
-	var state := engine.get_state()
 	var cash_before: int = int(state.get_player(target_player).get("cash", 0))
 	var bank_before: int = int(state.bank.get("total", 0))
 	var grant := 20
@@ -84,27 +54,10 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if bank_after_grant != bank_before - grant:
 		return Result.failure("现金转入后银行余额不匹配: %d != %d" % [bank_after_grant, bank_before - grant])
 
-	# 推进到 Payday：此时不应自动扣除薪水（薪资在离开 Payday 时统一结算）
-	var to_payday := TestPhaseUtilsClass.advance_until_phase(engine, "Payday", 50)
-	if not to_payday.ok:
-		return to_payday
+	var apply := PaydaySettlementClass.apply(state, engine.phase_manager)
+	if not apply.ok:
+		return Result.failure("PaydaySettlement.apply 失败: %s" % apply.error)
 
-	state = engine.get_state()
-	var cash_at_payday: int = int(state.get_player(target_player).get("cash", 0))
-	var bank_at_payday: int = int(state.bank.get("total", 0))
-	if cash_at_payday != cash_after_grant:
-		return Result.failure("进入 Payday 后不应扣薪，玩家现金不匹配: %d != %d" % [cash_at_payday, cash_after_grant])
-	if bank_at_payday != bank_after_grant:
-		return Result.failure("进入 Payday 后不应扣薪，银行余额不匹配: %d != %d" % [bank_at_payday, bank_after_grant])
-
-	# 离开 Payday 进入 Marketing：应在推进时结算薪水并写入 round_state.payday
-	var to_marketing := engine.execute_command(Command.create_system("advance_phase"))
-	if not to_marketing.ok:
-		return Result.failure("推进到 Marketing 失败: %s" % to_marketing.error)
-
-	state = engine.get_state()
-	if state.phase != "Marketing":
-		return Result.failure("当前应为 Marketing，实际: %s" % state.phase)
 	var payday: Dictionary = state.round_state.get("payday", {})
 	if payday.is_empty():
 		return Result.failure("Payday 应写入 round_state.payday")
@@ -144,10 +97,10 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 
 	var cash_after_payday: int = int(state.get_player(target_player).get("cash", 0))
 	var bank_after_payday: int = int(state.bank.get("total", 0))
-	if cash_after_payday != cash_at_payday - expected_paid:
-		return Result.failure("发薪后玩家现金不匹配: %d != %d" % [cash_after_payday, cash_at_payday - expected_paid])
-	if bank_after_payday != bank_at_payday + expected_paid:
-		return Result.failure("发薪后银行余额不匹配: %d != %d" % [bank_after_payday, bank_at_payday + expected_paid])
+	if cash_after_payday != cash_after_grant - expected_paid:
+		return Result.failure("发薪后玩家现金不匹配: %d != %d" % [cash_after_payday, cash_after_grant - expected_paid])
+	if bank_after_payday != bank_after_grant + expected_paid:
+		return Result.failure("发薪后银行余额不匹配: %d != %d" % [bank_after_payday, bank_after_grant + expected_paid])
 
 	return Result.success({
 		"player_count": player_count,

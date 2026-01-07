@@ -13,8 +13,7 @@
   "train_to": [],
   "train_capacity": 0,
   "tags": [
-    "place_house_or_garden",
-    "entry_level"
+    "place_house_or_garden"
   ],
   "usage_tags": [
     "use:place_house",

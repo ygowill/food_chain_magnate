@@ -1,8 +1,15 @@
-[gd_scene load_steps=4 format=3 uid="uid://dph5rwtgn6tq8"]
+[gd_scene load_steps=10 format=3 uid="uid://dph5rwtgn6tq8"]
 
-[ext_resource type="Script" path="res://ui/scenes/game/game.gd" id="1_game"]
-[ext_resource type="Script" path="res://ui/scenes/game/map_view.gd" id="2_map_view"]
-[ext_resource type="Script" path="res://ui/scenes/game/map_canvas.gd" id="3_map_canvas"]
+[ext_resource type="Script" uid="uid://ckmoescpu6tet" path="res://ui/scenes/game/game.gd" id="1_game"]
+[ext_resource type="Script" uid="uid://c7bjun5j7en8b" path="res://ui/scenes/game/map_view.gd" id="2_map_view"]
+[ext_resource type="Script" uid="uid://cyu0qql2ml0qt" path="res://ui/scenes/game/map_canvas.gd" id="3_map_canvas"]
+[ext_resource type="PackedScene" uid="uid://tvgadoehsaau" path="res://ui/components/player_panel/player_panel.tscn" id="4_player_panel"]
+[ext_resource type="PackedScene" path="res://ui/components/action_panel/action_panel.tscn" id="5_action_panel"]
+[ext_resource type="PackedScene" path="res://ui/components/inventory_panel/inventory_panel.tscn" id="6_inventory_panel"]
+[ext_resource type="PackedScene" path="res://ui/components/hand_area/hand_area.tscn" id="7_hand_area"]
+[ext_resource type="PackedScene" path="res://ui/components/turn_order/turn_order_track.tscn" id="8_turn_order"]
+[ext_resource type="PackedScene" path="res://ui/components/company_structure/company_structure.tscn" id="9_company_structure"]
+[ext_resource type="PackedScene" path="res://ui/components/game_log/game_log_panel.tscn" id="10_game_log_panel"]
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -52,15 +59,17 @@ text = "玩家: -"
 
 [node name="AdvancePhaseButton" type="Button" parent="TopBar"]
 layout_mode = 2
+visible = false
 text = "推进阶段"
 
 [node name="AdvanceSubPhaseButton" type="Button" parent="TopBar"]
 layout_mode = 2
+visible = false
 text = "推进子阶段"
 
 [node name="SkipButton" type="Button" parent="TopBar"]
 layout_mode = 2
-text = "跳过"
+text = "确认结束"
 
 [node name="DebugButton" type="Button" parent="TopBar"]
 layout_mode = 2
@@ -74,30 +83,80 @@ size_flags_horizontal = 3
 layout_mode = 2
 text = "菜单"
 
-[node name="GameArea" type="Panel" parent="."]
+[node name="MainContent" type="HSplitContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 10.0
-offset_top = 60.0
-offset_right = -10.0
-offset_bottom = -60.0
+offset_top = 55.0
+offset_bottom = -300.0
 grow_horizontal = 2
 grow_vertical = 2
+split_offset = 360
 
-[node name="MapView" type="ScrollContainer" parent="GameArea"]
+[node name="GameLogPanel" parent="MainContent" instance=ExtResource("10_game_log_panel")]
+custom_minimum_size = Vector2(360, 0)
+layout_mode = 2
+
+[node name="CenterSplit" type="HSplitContainer" parent="MainContent"]
+layout_mode = 2
+size_flags_horizontal = 3
+split_offset = -340
+
+[node name="GameArea" type="Panel" parent="MainContent/CenterSplit"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="MapView" type="ScrollContainer" parent="MainContent/CenterSplit/GameArea"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_bottom = -5.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("2_map_view")
 
-[node name="Canvas" type="Control" parent="GameArea/MapView"]
+[node name="Canvas" type="Control" parent="MainContent/CenterSplit/GameArea/MapView"]
 layout_mode = 2
 script = ExtResource("3_map_canvas")
+
+[node name="RightPanel" type="VBoxContainer" parent="MainContent/CenterSplit"]
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PlayerPanel" parent="MainContent/CenterSplit/RightPanel" instance=ExtResource("4_player_panel")]
+layout_mode = 2
+size_flags_vertical = 0
+
+[node name="TurnOrderTrack" parent="MainContent/CenterSplit/RightPanel" instance=ExtResource("8_turn_order")]
+layout_mode = 2
+
+[node name="InventoryPanel" parent="MainContent/CenterSplit/RightPanel" instance=ExtResource("6_inventory_panel")]
+layout_mode = 2
+
+[node name="ActionPanel" parent="MainContent/CenterSplit/RightPanel" instance=ExtResource("5_action_panel")]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="BottomPanel" type="HSplitContainer" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -250.0
+offset_bottom = -55.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="HandArea" parent="BottomPanel" instance=ExtResource("7_hand_area")]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CompanyStructure" parent="BottomPanel" instance=ExtResource("9_company_structure")]
+layout_mode = 2
 
 [node name="BottomBar" type="HBoxContainer" parent="."]
 layout_mode = 1
@@ -112,8 +171,8 @@ theme_override_constants/separation = 10
 
 [node name="StateHashLabel" type="Label" parent="BottomBar"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 12
 theme_override_colors/font_color = Color(0.4, 0.4, 0.4, 1)
+theme_override_font_sizes/font_size = 12
 text = "Hash: ..."
 
 [node name="Spacer" type="Control" parent="BottomBar"]
@@ -122,8 +181,8 @@ size_flags_horizontal = 3
 
 [node name="CommandCountLabel" type="Label" parent="BottomBar"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 12
 theme_override_colors/font_color = Color(0.4, 0.4, 0.4, 1)
+theme_override_font_sizes/font_size = 12
 text = "命令: 0"
 
 [node name="MenuDialog" type="Window" parent="."]
@@ -179,11 +238,11 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 editable = false
 
-[connection signal="pressed" from="TopBar/MenuButton" to="." method="_on_menu_pressed"]
 [connection signal="pressed" from="TopBar/AdvancePhaseButton" to="." method="_on_advance_phase_pressed"]
 [connection signal="pressed" from="TopBar/AdvanceSubPhaseButton" to="." method="_on_advance_sub_phase_pressed"]
 [connection signal="pressed" from="TopBar/SkipButton" to="." method="_on_skip_pressed"]
 [connection signal="pressed" from="TopBar/DebugButton" to="." method="_on_debug_pressed"]
+[connection signal="pressed" from="TopBar/MenuButton" to="." method="_on_menu_pressed"]
 [connection signal="close_requested" from="MenuDialog" to="." method="_on_menu_dialog_close_requested"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/ResumeButton" to="." method="_on_resume_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/SaveButton" to="." method="_on_save_pressed"]

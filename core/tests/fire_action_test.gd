@@ -6,40 +6,31 @@ extends RefCounted
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
+	# 1) Restructuring：不允许解雇（约束对齐 rules.md）
+	var engine_r := GameEngine.new()
+	var init_r := engine_r.initialize(player_count, seed_val)
+	if not init_r.ok:
+		return Result.failure("游戏初始化失败: %s" % init_r.error)
+	var state_r := engine_r.get_state()
+	state_r.phase = "Restructuring"
+	state_r.sub_phase = ""
+	var restructuring_actor := state_r.get_current_player_id()
+	if restructuring_actor < 0:
+		return Result.failure("无法获取 Restructuring 当前玩家")
+	var fire_in_restructuring := engine_r.execute_command(Command.create("fire", restructuring_actor, {"employee_id": "burger_cook"}))
+	if fire_in_restructuring.ok:
+		return Result.failure("Restructuring 不应允许解雇")
+
+	# 2) 推进到 Payday
 	var engine := GameEngine.new()
 	var init := engine.initialize(player_count, seed_val)
 	if not init.ok:
 		return Result.failure("游戏初始化失败: %s" % init.error)
-
-	# Setup -> Restructuring
-	var to_restructuring := engine.execute_command(Command.create_system("advance_phase"))
-	if not to_restructuring.ok:
-		return Result.failure("推进到 Restructuring 失败: %s" % to_restructuring.error)
-
-	var state := engine.get_state()
-	if state.phase != "Restructuring":
-		return Result.failure("当前应为 Restructuring，实际: %s" % state.phase)
-
-	var actor := state.get_current_player_id()
-	if actor < 0:
-		return Result.failure("无法获取当前玩家")
-
-	# 1) Restructuring：不允许解雇（约束对齐 rules.md）
-	var fire_in_restructuring := engine.execute_command(Command.create("fire", actor, {"employee_id": "burger_cook"}))
-	if fire_in_restructuring.ok:
-		return Result.failure("Restructuring 不应允许解雇")
-
-	# 2) 禁止解雇 CEO
-	var fire_ceo := engine.execute_command(Command.create("fire", actor, {"employee_id": "ceo"}))
-	if fire_ceo.ok:
-		return Result.failure("不应允许解雇 CEO")
-
-	# 3) 推进到 Payday
 	var to_payday := TestPhaseUtilsClass.advance_until_phase(engine, "Payday", 30)
 	if not to_payday.ok:
 		return to_payday
 
-	state = engine.get_state()
+	var state := engine.get_state()
 	if state.phase != "Payday":
 		return Result.failure("当前应为 Payday，实际: %s" % state.phase)
 
@@ -47,6 +38,11 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var payday_actor := state.get_current_player_id()
 	if payday_actor < 0:
 		return Result.failure("无法获取 Payday 当前玩家")
+
+	# 3) 禁止解雇 CEO
+	var fire_ceo := engine.execute_command(Command.create("fire", payday_actor, {"employee_id": "ceo"}))
+	if fire_ceo.ok:
+		return Result.failure("不应允许解雇 CEO")
 
 	# 4) Payday：解雇在岗员工应回补员工池
 	var pool_before_active: int = int(state.employee_pool.get("pizza_cook", 0))
@@ -113,7 +109,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	return Result.success({
 		"player_count": player_count,
 		"seed": seed_val,
-		"restructuring_actor": actor,
+		"restructuring_actor": restructuring_actor,
 		"payday_actor": payday_actor,
 		"fire_in_restructuring_error": fire_in_restructuring.error,
 		"fire_busy_denied_error": fire_busy_denied.error

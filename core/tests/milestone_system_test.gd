@@ -7,6 +7,7 @@ const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
 const PaydaySettlementClass = preload("res://core/rules/phase/payday_settlement.gd")
 const BankruptcyRulesClass = preload("res://core/rules/economy/bankruptcy_rules.gd")
 
@@ -87,16 +88,10 @@ static func _test_multi_claim_and_cleanup(seed_val: int) -> Result:
 	if not StateUpdaterClass.is_milestone_available(state, "first_train"):
 		return Result.failure("Cleanup 前 first_train 仍应可用（允许同回合多名获得）")
 
-	# 进入 Cleanup 阶段：统一从 supply 移除
-	state.phase = "Marketing"
-	state.sub_phase = ""
-	var adv := engine.execute_command(Command.create_system("advance_phase"))
-	if not adv.ok:
-		return Result.failure("推进到 Cleanup 失败: %s" % adv.error)
-
-	state = engine.get_state()
-	if state.phase != "Cleanup":
-		return Result.failure("当前应为 Cleanup，实际: %s" % state.phase)
+	# 运行 Cleanup 结算：统一从 supply 移除
+	var cleanup := CleanupSettlementClass.apply(state)
+	if not cleanup.ok:
+		return Result.failure("CleanupSettlement 失败: %s" % cleanup.error)
 
 	if StateUpdaterClass.is_milestone_available(state, "first_train"):
 		return Result.failure("Cleanup 后 first_train 应从供给中移除")
@@ -255,8 +250,6 @@ static func _test_demand_marked_triggers_first_burger_marketed(seed_val: int) ->
 		return Result.failure("推进到 Marketing 失败: %s" % adv.error)
 
 	state = engine.get_state()
-	if state.phase != "Marketing":
-		return Result.failure("当前应为 Marketing，实际: %s" % state.phase)
 
 	var milestones: Array = state.players[0].get("milestones", [])
 	if not milestones.has("first_burger_marketed"):

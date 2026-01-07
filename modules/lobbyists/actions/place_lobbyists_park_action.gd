@@ -68,7 +68,8 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		"grid_size": state.map.grid_size,
 		"map_origin": MapRuntimeClass.get_map_origin(state),
 		"houses": state.map.houses,
-		"restaurants": state.map.restaurants
+		"restaurants": state.map.restaurants,
+		"drink_sources": state.map.get("drink_sources", []),
 	}
 	var piece_registry := PieceRegistryClass.get_all_defs()
 	var validate := PlacementValidatorClass.validate_placement(map_ctx, "park", anchor_pos, rotation, piece_registry, {})

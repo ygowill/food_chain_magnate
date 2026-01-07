@@ -65,12 +65,11 @@ static func reset_working_phase_state(state: GameState) -> void:
 	# 进入 Working：重置子阶段动作计数并从顺序第一位开始
 	state.current_player_index = 0
 	reset_working_sub_phase_state(state)
+	reset_sub_phase_passed(state)
 
 static func reset_working_sub_phase_state(state: GameState) -> void:
-	state.current_player_index = 0
 	if state.round_state is Dictionary:
 		state.round_state["action_counts"] = {}
-		reset_sub_phase_passed(state)
 
 static func reset_sub_phase_passed(state: GameState) -> void:
 	if state == null:

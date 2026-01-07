@@ -1,0 +1,152 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/components/marketing_panel/marketing_panel.gd" id="1_marketing"]
+
+[node name="MarketingPanel" type="Control"]
+custom_minimum_size = Vector2(450, 300)
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_marketing")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.12, 0.14, 0.16, 0.95)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "发起营销"
+horizontal_alignment = 1
+
+[node name="TypeSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SectionLabel" type="Label" parent="MarginContainer/VBoxContainer/TypeSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.6, 0.7, 0.8, 1)
+text = "选择营销类型"
+
+[node name="TypeContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/TypeSection"]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 10
+
+[node name="MarketerSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SectionLabel" type="Label" parent="MarginContainer/VBoxContainer/MarketerSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.6, 0.7, 0.8, 1)
+text = "选择营销员"
+
+[node name="MarketerOption" type="OptionButton" parent="MarginContainer/VBoxContainer/MarketerSection"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+
+[node name="BoardSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SectionLabel" type="Label" parent="MarginContainer/VBoxContainer/BoardSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.6, 0.7, 0.8, 1)
+text = "选择板件"
+
+[node name="BoardOption" type="OptionButton" parent="MarginContainer/VBoxContainer/BoardSection"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+
+[node name="ProductSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SectionLabel" type="Label" parent="MarginContainer/VBoxContainer/ProductSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.6, 0.7, 0.8, 1)
+text = "选择产品"
+
+[node name="ProductOption" type="OptionButton" parent="MarginContainer/VBoxContainer/ProductSection"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+
+[node name="DurationSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SectionLabel" type="Label" parent="MarginContainer/VBoxContainer/DurationSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.6, 0.7, 0.8, 1)
+text = "持续回合数"
+
+[node name="DurationSpin" type="SpinBox" parent="MarginContainer/VBoxContainer/DurationSection"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+min_value = 1.0
+max_value = 10.0
+step = 1.0
+value = 1.0
+
+[node name="TargetSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 6
+
+[node name="SectionLabel" type="Label" parent="MarginContainer/VBoxContainer/TargetSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.6, 0.7, 0.8, 1)
+text = "目标位置"
+
+[node name="TargetLabel" type="Label" parent="MarginContainer/VBoxContainer/TargetSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "请先选择营销类型"
+
+[node name="RangeInfoLabel" type="Label" parent="MarginContainer/VBoxContainer/TargetSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.5, 0.6, 0.7, 1)
+text = ""
+
+[node name="ButtonRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 10
+
+[node name="CancelButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonRow"]
+custom_minimum_size = Vector2(100, 36)
+layout_mode = 2
+text = "取消"
+
+[node name="ConfirmButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonRow"]
+custom_minimum_size = Vector2(100, 36)
+layout_mode = 2
+text = "确认"

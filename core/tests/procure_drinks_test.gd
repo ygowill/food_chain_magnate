@@ -44,8 +44,10 @@ static func _run_once(player_count: int, seed_val: int) -> Result:
 		return place_result
 
 	state = engine.get_state()
-	if state.phase != "Setup":
-		return Result.failure("放置餐厅后应仍处于 Setup 阶段，实际: %s" % state.phase)
+	if state.phase != "Working":
+		# 首轮：Restructuring/OrderOfBusiness 会自动跳过到 Working
+		if state.phase != "Restructuring":
+			return Result.failure("放置餐厅并全员确认结束后应进入 Working（首轮自动跳过 Restructuring/OOB），实际: %s" % state.phase)
 
 	# 3) 推进到 Working 阶段
 	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 30)
@@ -56,19 +58,8 @@ static func _run_once(player_count: int, seed_val: int) -> Result:
 	if state.phase != "Working":
 		return Result.failure("当前应该在 Working 阶段，实际: %s" % state.phase)
 
-	# 4) 推进到 GetDrinks 子阶段（Recruit -> Train -> Marketing -> GetFood -> GetDrinks）
-	for i in range(4):  # 4 次推进
-		var pass_all := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine)
-		if not pass_all.ok:
-			return pass_all
-		var sub_advance := Command.create("advance_phase", -1, {"target": "sub_phase"})
-		var sub_result := engine.execute_command(sub_advance)
-		if not sub_result.ok:
-			return Result.failure("推进子阶段 %d 失败: %s" % [i, sub_result.error])
-
-	state = engine.get_state()
-	if state.sub_phase != "GetDrinks":
-		return Result.failure("当前子阶段应该是 GetDrinks，实际: %s" % state.sub_phase)
+	# 固定到 GetDrinks 子阶段（测试 procure_drinks 本身，不依赖 Working 自动跳子阶段的细节）
+	state.sub_phase = "GetDrinks"
 
 	# 5) 检查地图上是否有饮料源
 	var drink_sources: Array = state.map.get("drink_sources", [])
@@ -80,10 +71,13 @@ static func _run_once(player_count: int, seed_val: int) -> Result:
 	if air_player_id < 0:
 		return Result.failure("找不到任何玩家能在飞艇范围内采购饮料")
 
-	var rotate_air := _rotate_to_player(engine, air_player_id)
-	if not rotate_air.ok:
-		return rotate_air
-	state = engine.get_state()
+	# 将回合切到该玩家（避免 Working 下 skip=确认结束 的限制影响测试）
+	var turn_order: Array[int] = []
+	for pid in range(state.players.size()):
+		turn_order.append(pid)
+	state.turn_order = turn_order
+	state.current_player_index = air_player_id
+	state.sub_phase = "GetDrinks"
 
 	# 7) 给该玩家添加一个飞艇驾驶员（air range = 4）
 	if int(state.employee_pool.get("zeppelin_pilot", 0)) <= 0:
@@ -112,6 +106,8 @@ static func _run_once(player_count: int, seed_val: int) -> Result:
 		return Result.failure("飞艇采购后饮料总库存应至少增加 2，实际增量: %d" % (drinks_after_air - drinks_before_air))
 
 	# 11) 尝试再次使用同一员工采购（应该失败 - 每个员工每子阶段只能采购一次）
+	state.sub_phase = "GetDrinks"
+	state.current_player_index = air_player_id
 	var procure_again := Command.create("procure_drinks", air_player_id, {"employee_type": "zeppelin_pilot"})
 	var procure_again_result := engine.execute_command(procure_again)
 	if procure_again_result.ok:
@@ -123,10 +119,8 @@ static func _run_once(player_count: int, seed_val: int) -> Result:
 	if road_player_id < 0:
 		return Result.failure("找不到任何玩家能在卡车范围内采购饮料")
 
-	var rotate_road := _rotate_to_player(engine, road_player_id)
-	if not rotate_road.ok:
-		return rotate_road
-	state = engine.get_state()
+	state.current_player_index = road_player_id
+	state.sub_phase = "GetDrinks"
 
 	# 13) 测试卡车司机（road range = 3）
 	if state.employee_pool.get("truck_driver", 0) <= 0:
@@ -151,6 +145,8 @@ static func _run_once(player_count: int, seed_val: int) -> Result:
 		return Result.failure("recruiter 不应该能采购饮料")
 
 	# 15) 测试玩家没有的员工类型
+	state.sub_phase = "GetDrinks"
+	state.current_player_index = road_player_id
 	var no_emp := Command.create("procure_drinks", road_player_id, {"employee_type": "truck_driver"})
 	# 先移除 truck_driver
 	var employees: Array = state.players[road_player_id]["employees"]

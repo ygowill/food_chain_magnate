@@ -25,13 +25,9 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return to_working
 
 	# 推进到 PlaceRestaurants 子阶段（Recruit -> Train -> Marketing -> GetFood -> GetDrinks -> PlaceHouses -> PlaceRestaurants）
-	for i in range(6):
-		var pass_all := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine)
-		if not pass_all.ok:
-			return pass_all
-		var sub := engine.execute_command(Command.create_system("advance_phase", {"target": "sub_phase"}))
-		if not sub.ok:
-			return Result.failure("推进到 PlaceRestaurants 子阶段失败(step=%d): %s" % [i, sub.error])
+	var to_place_restaurants := TestPhaseUtilsClass.advance_until_working_sub_phase(engine, "PlaceRestaurants", 20)
+	if not to_place_restaurants.ok:
+		return to_place_restaurants
 
 	var state := engine.get_state()
 	if state.phase != "Working" or state.sub_phase != "PlaceRestaurants":

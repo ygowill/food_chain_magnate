@@ -18,6 +18,40 @@ func _init() -> void:
 	allowed_phases = ["Working"]
 	allowed_sub_phases = ["Train"]
 
+func can_initiate(state: GameState, player_id: int) -> bool:
+	if state == null:
+		return true
+	if state.get_current_player_id() != player_id:
+		return false
+
+	var pending_total := int(EmployeeRulesClass.get_immediate_train_pending_total(state, player_id))
+	var limit := EmployeeRulesClass.get_train_limit_for_working(state, player_id)
+	var used := EmployeeRulesClass.get_action_count(state, player_id, action_id)
+
+	if limit <= 0:
+		return pending_total > 0
+	if used >= limit:
+		return false
+	if pending_total > 0:
+		return true
+
+	var player := state.get_player(player_id)
+	var reserve_val = player.get("reserve_employees", [])
+	if reserve_val is Array:
+		var reserve: Array = reserve_val
+		if not reserve.is_empty():
+			return true
+
+	var can_train_from_active := bool(player.get("train_from_active_same_color", false))
+	if can_train_from_active:
+		var active_val = player.get("employees", [])
+		if active_val is Array:
+			var active: Array = active_val
+			if not active.is_empty():
+				return true
+
+	return false
+
 func _validate_specific(state: GameState, command: Command) -> Result:
 	# 检查是否是当前玩家的回合
 	var current_player_id := state.get_current_player_id()

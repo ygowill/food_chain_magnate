@@ -48,8 +48,8 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return adv
 
 	state = engine.get_state()
-	if state.phase != "Dinnertime":
-		return Result.failure("当前应为 Dinnertime，实际: %s" % state.phase)
+	if state.phase != "Payday":
+		return Result.failure("当前应为 Payday（Dinnertime 已自动结算跳过），实际: %s" % state.phase)
 
 	var milestones0: Array = state.players[0].get("milestones", [])
 	if not milestones0.has(MILESTONE_ID):
@@ -209,4 +209,3 @@ static func _set_house_demands(state: GameState, house_id: String, demands: Arra
 	house["demands"] = demands
 	houses[house_id] = house
 	state.map["houses"] = houses
-

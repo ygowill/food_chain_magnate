@@ -15,8 +15,7 @@
   ],
   "train_capacity": 0,
   "tags": [
-    "produce_pizza",
-    "entry_level"
+    "produce_pizza"
   ],
   "usage_tags": [
     "use:produce:pizza"

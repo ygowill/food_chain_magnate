@@ -67,8 +67,8 @@ static func _test_distance_winner(seed_val: int) -> Result:
 		return adv
 
 	state = engine.get_state()
-	if state.phase != "Dinnertime":
-		return Result.failure("当前应为 Dinnertime，实际: %s" % state.phase)
+	if state.phase != "Payday":
+		return Result.failure("当前应为 Payday（Dinnertime 已自动结算跳过），实际: %s" % state.phase)
 
 	if int(state.players[0].get("cash", 0)) != 10:
 		return Result.failure("玩家0 现金应为 10（赢左侧房屋），实际: %d" % int(state.players[0].get("cash", 0)))

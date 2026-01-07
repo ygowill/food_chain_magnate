@@ -85,10 +85,13 @@ static func run(player_count: int = 2, seed_val: int = 990011) -> Result:
 	if not p3.ok:
 		return Result.failure("place_pizza_radio(3) 失败: %s" % p3.error)
 
-	# 放完后应允许推进阶段
-	var adv2 := engine.execute_command(Command.create_system("advance_phase"))
-	if not adv2.ok:
-		return Result.failure("放完 radio 后应允许推进阶段: %s" % adv2.error)
+	# 放完后：若仍停留在 Dinnertime，则应允许推进阶段；
+	# 新规则下 Dinnertime 会自动结算跳过到 Payday，因此这里仅在仍处于 Dinnertime 时手动推进。
+	state = engine.get_state()
+	if state.phase == "Dinnertime":
+		var adv2 := engine.execute_command(Command.create_system("advance_phase"))
+		if not adv2.ok:
+			return Result.failure("放完 radio 后应允许推进阶段: %s" % adv2.error)
 
 	# 检查 marketing_instances：3 个 radio，product=pizza，duration=2，employee_type=__milestone__
 	state = engine.get_state()

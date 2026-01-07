@@ -132,13 +132,11 @@ static func _test_billboard_mailbox_and_expiry(player_count: int, seed_val: int)
 	var cash := StateUpdaterClass.player_receive_from_bank(state, actor, 20)
 	if not cash.ok:
 		return Result.failure("发放测试现金失败: %s" % cash.error)
-	var adv := engine.execute_command(Command.create_system("advance_phase"))
+	var adv := engine.phase_manager.advance_phase(state)
 	if not adv.ok:
 		return Result.failure("推进到 Marketing 失败: %s" % adv.error)
 
 	state = engine.get_state()
-	if state.phase != "Marketing":
-		return Result.failure("当前应为 Marketing，实际: %s" % state.phase)
 
 	# 3.1 billboard：左侧房屋应新增 1 个 burger 需求
 	houses = state.map.get("houses", {})
@@ -253,13 +251,11 @@ static func _test_radio_and_airplane_ranges(player_count: int, seed_val: int) ->
 	var cash := StateUpdaterClass.player_receive_from_bank(state, actor, 20)
 	if not cash.ok:
 		return Result.failure("发放测试现金失败: %s" % cash.error)
-	var adv := engine.execute_command(Command.create_system("advance_phase"))
+	var adv := engine.phase_manager.advance_phase(state)
 	if not adv.ok:
 		return Result.failure("推进到 Marketing 失败: %s" % adv.error)
 
 	state = engine.get_state()
-	if state.phase != "Marketing":
-		return Result.failure("当前应为 Marketing，实际: %s" % state.phase)
 
 	var houses: Dictionary = state.map.get("houses", {})
 

@@ -38,6 +38,7 @@ static func validate_placement(
 		_validate_bounds,
 		_validate_cells_empty,
 		_validate_not_blocked,
+		_validate_no_drink_source,
 		_validate_no_structure_overlap,
 		_validate_road_adjacency,
 	]
@@ -141,6 +142,44 @@ static func _validate_not_blocked(
 		assert(cell.has("blocked") and (cell["blocked"] is bool), "PlacementValidator: cell.blocked 缺失或类型错误（期望 bool）: %s" % str(cell_pos))
 		if bool(cell["blocked"]):
 			return Result.failure("位置 %s 被阻塞" % str(cell_pos))
+
+	return Result.success()
+
+
+# 验证不能覆盖饮品源（饮品进货点）
+static func _validate_no_drink_source(
+	map_ctx: Dictionary,
+	_piece_def: PieceDef,
+	footprint_cells: Array[Vector2i],
+	_context: Dictionary
+) -> Result:
+	assert(map_ctx.has("cells") and (map_ctx["cells"] is Array), "PlacementValidator: map_ctx.cells 缺失或类型错误（期望 Array）")
+
+	# 优先使用 map.drink_sources（规则层使用的“进货点列表”），避免依赖 cells 是否包含 drink_source 字段。
+	var drink_source_pos_set := {}
+	var sources_val = map_ctx.get("drink_sources", null)
+	if sources_val is Array:
+		var sources: Array = sources_val
+		for i in range(sources.size()):
+			var src_val = sources[i]
+			if not (src_val is Dictionary):
+				continue
+			var src: Dictionary = src_val
+			var wp_val = src.get("world_pos", null)
+			if wp_val is Vector2i:
+				drink_source_pos_set[wp_val] = true
+
+	for cell_pos in footprint_cells:
+		if not drink_source_pos_set.is_empty() and drink_source_pos_set.has(cell_pos):
+			return Result.failure("位置 %s 是饮品进货点，无法放置" % str(cell_pos))
+
+		var cell: Dictionary = _get_world_cell(map_ctx, cell_pos)
+		var ds = cell.get("drink_source", null)
+		if ds == null:
+			continue
+		if ds is Dictionary and (ds as Dictionary).is_empty():
+			continue
+		return Result.failure("位置 %s 是饮品进货点，无法放置" % str(cell_pos))
 
 	return Result.success()
 

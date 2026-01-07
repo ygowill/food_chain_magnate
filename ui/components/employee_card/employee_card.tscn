@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://bkamobiso8xd4"]
+
+[ext_resource type="Script" uid="uid://cjlskq7jnmb2d" path="res://ui/components/employee_card/employee_card.gd" id="1_card"]
+
+[node name="EmployeeCard" type="PanelContainer"]
+custom_minimum_size = Vector2(120, 80)
+script = ExtResource("1_card")

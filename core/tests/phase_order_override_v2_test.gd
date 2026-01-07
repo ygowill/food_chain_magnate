@@ -36,10 +36,11 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if ts0 != 0:
 		return Result.failure("Setup timestamp 应为 0，实际: %d" % ts0)
 
-	var adv := engine.execute_command(Command.create_system("advance_phase"))
-	if not adv.ok:
-		return Result.failure("推进阶段失败: %s" % adv.error)
-	var ts1 := PhaseManager.compute_timestamp(engine.get_state())
+	var state := engine.get_state()
+	state.round_number = 1
+	state.phase = "Restructuring"
+	state.sub_phase = ""
+	var ts1 := PhaseManager.compute_timestamp(state)
 	if ts1 != 1100:
 		return Result.failure("Restructuring timestamp 应为 1100，实际: %d" % ts1)
 

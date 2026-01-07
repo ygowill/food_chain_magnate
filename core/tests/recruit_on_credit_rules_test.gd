@@ -77,22 +77,23 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		return Result.failure("存在缺货预支待培训时不应允许推进主阶段（跳过 Train）")
 
 	# 3) 进入 Train 子阶段
-	var pass_all_recruit := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine)
-	if not pass_all_recruit.ok:
-		return pass_all_recruit
-	var to_train := engine.execute_command(Command.create_system("advance_phase", {"target": "sub_phase"}))
-	if not to_train.ok:
-		return Result.failure("推进到 Train 子阶段失败: %s" % to_train.error)
-	if engine.get_state().sub_phase != "Train":
-		return Result.failure("当前应为 Train，实际: %s" % engine.get_state().sub_phase)
+	state = engine.get_state()
+	if state.phase != "Working":
+		return Result.failure("当前应为 Working，实际: %s" % state.phase)
+	if state.sub_phase != "Train":
+		var pass_all_recruit := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine)
+		if not pass_all_recruit.ok:
+			return pass_all_recruit
+	state = engine.get_state()
+	if state.phase != "Working" or state.sub_phase != "Train":
+		return Result.failure("当前应为 Working/Train，实际: %s/%s" % [state.phase, state.sub_phase])
 
 	# 4) 未清账前禁止离开 Train 子阶段
-	var pass_all_train := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine)
-	if not pass_all_train.ok:
-		return pass_all_train
-	var leave_train := engine.execute_command(Command.create_system("advance_phase", {"target": "sub_phase"}))
-	if leave_train.ok:
-		return Result.failure("未完成缺货预支培训时不应允许离开 Train 子阶段")
+	state = engine.get_state()
+	state.current_player_index = 0
+	var cannot_skip_train := engine.execute_command(Command.create("skip", 0))
+	if cannot_skip_train.ok:
+		return Result.failure("存在缺货预支待培训时不应允许确认结束 Train 子阶段")
 
 	# 5) Train：用“预支的 recruiter”直接培训为 trainer（不会归还 recruiter 卡）
 	var train := engine.execute_command(Command.create("train", 0, {
@@ -116,14 +117,16 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		return Result.failure("Train 后缺货预支应清账完毕，实际: %s" % str(pending_all_after))
 
 	# 6) 清账后允许离开 Train
-	var pass_all_train2 := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine)
-	if not pass_all_train2.ok:
-		return pass_all_train2
-	var leave_train2 := engine.execute_command(Command.create_system("advance_phase", {"target": "sub_phase"}))
-	if not leave_train2.ok:
-		return Result.failure("清账后离开 Train 失败: %s" % leave_train2.error)
-	if engine.get_state().sub_phase != "Marketing":
-		return Result.failure("离开 Train 后应进入 Marketing，实际: %s" % engine.get_state().sub_phase)
+	state = engine.get_state()
+	if state.sub_phase == "Train":
+		var pass_all_train2 := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine)
+		if not pass_all_train2.ok:
+			return pass_all_train2
+	state = engine.get_state()
+	if state.phase != "Working":
+		return Result.failure("清账后推进子阶段不应离开 Working，实际: %s" % state.phase)
+	if state.sub_phase == "Train":
+		return Result.failure("清账后应允许离开 Train 子阶段，但仍在 Train")
 
 	return Result.success({
 		"seed": seed,

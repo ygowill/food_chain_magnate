@@ -71,30 +71,24 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not check_result.error.contains("set_price"):
 		return Result.failure("错误消息应该包含 'set_price'，实际: %s" % check_result.error)
 
-	# 8) 推进子阶段到最后一个（使用正确的参数 target: "sub_phase"）
-	for i in range(6):  # 从 Recruit 推进到 PlaceRestaurants (包含 GetDrinks)
-		var pass_all := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine)
-		if not pass_all.ok:
-			return pass_all
-		var sub_advance := Command.create("advance_phase", -1, {"target": "sub_phase"})
-		var sub_result := engine.execute_command(sub_advance)
-		if not sub_result.ok:
-			return Result.failure("推进子阶段 %d 失败: %s" % [i, sub_result.error])
+	# 8) 推进到最后一个子阶段 PlaceRestaurants
+	var to_place_restaurants := TestPhaseUtilsClass.advance_until_working_sub_phase(engine, "PlaceRestaurants", 20)
+	if not to_place_restaurants.ok:
+		return to_place_restaurants
 
 	state = engine.get_state()
 	if state.sub_phase != "PlaceRestaurants":
 		return Result.failure("当前子阶段应该是 PlaceRestaurants，实际: %s" % state.sub_phase)
 
-	# 9) 尝试从最后一个子阶段推进（应该触发 advance_phase 并被阻止）
-	var pass_all_last := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine)
-	if not pass_all_last.ok:
-		return pass_all_last
-	var final_advance := Command.create("advance_phase", -1, {"target": "sub_phase"})
-	var final_result := engine.execute_command(final_advance)
-	if final_result.ok:
-		return Result.failure("存在未完成强制动作时，离开 Working 阶段应该被阻止")
-	if not final_result.error.contains("set_price"):
-		return Result.failure("错误消息应该包含 'set_price'，实际: %s" % final_result.error)
+	# 9) 强制动作未完成时，不应允许“确认结束”最后子阶段（否则会软锁）
+	var idx := state.turn_order.find(current_player_id)
+	if idx >= 0:
+		state.current_player_index = idx
+	var confirm_end := engine.execute_command(Command.create("skip", current_player_id))
+	if confirm_end.ok:
+		return Result.failure("存在未完成强制动作时，不应允许确认结束 PlaceRestaurants 子阶段")
+	if not str(confirm_end.error).contains("set_price"):
+		return Result.failure("错误消息应该包含 'set_price'，实际: %s" % str(confirm_end.error))
 
 	# 10) 执行 set_price 动作（使用当前玩家 ID）
 	var set_price_cmd := Command.create("set_price", current_player_id, {})
@@ -121,18 +115,14 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_modifiers.get("pricing_manager", 0) != -1:
 		return Result.failure("pricing_manager 价格修正应该是 -1，实际: %s" % str(player_modifiers))
 
-	# 14) 现在可以离开 Working 阶段
-	var pass_all_last2 := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine)
-	if not pass_all_last2.ok:
-		return pass_all_last2
-	var final_advance2 := Command.create("advance_phase", -1, {"target": "sub_phase"})
-	var final_result2 := engine.execute_command(final_advance2)
-	if not final_result2.ok:
-		return Result.failure("完成强制动作后，离开 Working 阶段应该成功: %s" % final_result2.error)
+	# 14) 现在可以离开 Working 阶段（全员结束 Working 回合）
+	var leave_working := TestPhaseUtilsClass.complete_working_phase(engine, 200)
+	if not leave_working.ok:
+		return leave_working
 
 	state = engine.get_state()
-	if state.phase != "Dinnertime":
-		return Result.failure("应该进入 Dinnertime 阶段，实际: %s" % state.phase)
+	if state.phase == "Working":
+		return Result.failure("强制动作完成后应允许离开 Working 阶段")
 
 	return Result.success({
 		"player_count": player_count,

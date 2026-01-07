@@ -82,20 +82,16 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("推进到 Marketing 失败: %s" % to_marketing.error)
 
 	state = engine_a.get_state()
-	if state.phase != "Marketing":
-		return Result.failure("当前应为 Marketing，实际: %s" % state.phase)
 
 	var left_after_marketing: Dictionary = state.map.get("houses", {}).get("house_left", {})
 	var left_demands_after_marketing: Array = left_after_marketing.get("demands", [])
 	if left_demands_after_marketing.size() != 1 or str(left_demands_after_marketing[0].get("product", "")) != "burger":
 		return Result.failure("Marketing 后 house_left 应新增 1 个 burger 需求，实际: %s" % str(left_demands_after_marketing))
 
-	# 2) Marketing -> Cleanup -> Restructuring -> OrderOfBusiness
-	for _i in range(3):
-		var adv := engine_a.execute_command(Command.create_system("advance_phase"))
-		if not adv.ok:
-			return Result.failure("推进阶段失败: %s" % adv.error)
-
+	# 2) Restructuring -> OrderOfBusiness
+	var adv_to_oob := engine_a.execute_command(Command.create_system("advance_phase"))
+	if not adv_to_oob.ok:
+		return Result.failure("推进到 OrderOfBusiness 失败: %s" % adv_to_oob.error)
 	state = engine_a.get_state()
 	if state.phase != "OrderOfBusiness":
 		return Result.failure("当前应为 OrderOfBusiness，实际: %s" % state.phase)
@@ -104,26 +100,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not oob.ok:
 		return oob
 
-	# 3) OrderOfBusiness -> Working，并推进到 GetFood
-	var to_working := engine_a.execute_command(Command.create_system("advance_phase"))
-	if not to_working.ok:
-		return Result.failure("推进到 Working 失败: %s" % to_working.error)
-
+	# 3) OrderOfBusiness 完成后应自动进入 Working，并推进到 GetFood
 	state = engine_a.get_state()
-	if state.phase != "Working" or state.sub_phase != "Recruit":
-		return Result.failure("当前应为 Working/Recruit，实际: %s/%s" % [state.phase, state.sub_phase])
-
-	for _i in range(3): # Recruit -> Train -> Marketing -> GetFood
-		var pass_all := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine_a)
-		if not pass_all.ok:
-			return pass_all
-		var sub := engine_a.execute_command(Command.create_system("advance_phase", {"target": "sub_phase"}))
-		if not sub.ok:
-			return Result.failure("推进子阶段失败: %s" % sub.error)
-
-	state = engine_a.get_state()
-	if state.sub_phase != "GetFood":
-		return Result.failure("当前应为 GetFood，实际: %s" % state.sub_phase)
+	if state.phase != "Working":
+		return Result.failure("OrderOfBusiness 完成后应进入 Working，实际: %s" % state.phase)
 
 	# 轮转到玩家0（若 OOB 选择导致玩家1 先手）
 	var safety := 0
@@ -132,33 +112,37 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		if safety > 5:
 			return Result.failure("轮转到玩家0 超出安全上限")
 		var pid := engine_a.get_state().get_current_player_id()
-		var sk := engine_a.execute_command(Command.create("skip", pid))
-		if not sk.ok:
-			return Result.failure("skip 失败: %s" % sk.error)
+		var et := engine_a.execute_command(Command.create("end_turn", pid))
+		if not et.ok:
+			return Result.failure("end_turn 失败: %s" % et.error)
+
+	# 推进到 GetFood（记录为命令，确保回放一致）
+	var to_get_food := TestPhaseUtilsClass.advance_until_working_sub_phase(engine_a, "GetFood", 10)
+	if not to_get_food.ok:
+		return to_get_food
+	state = engine_a.get_state()
+	if state.sub_phase != "GetFood":
+		return Result.failure("当前应为 GetFood，实际: %s" % state.sub_phase)
 
 	# 4) 生产食物：burger_cook 产出 burger
 	var prod := engine_a.execute_command(Command.create("produce_food", 0, {"employee_type": "burger_cook"}))
 	if not prod.ok:
 		return Result.failure("produce_food 失败: %s" % prod.error)
 
-	# 5) 推进到 Dinnertime（通过子阶段推进）
-	for _i in range(4): # GetFood -> GetDrinks -> PlaceHouses -> PlaceRestaurants -> (leave Working)
-		var pass_all2 := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine_a)
-		if not pass_all2.ok:
-			return pass_all2
-		var sub2 := engine_a.execute_command(Command.create_system("advance_phase", {"target": "sub_phase"}))
-		if not sub2.ok:
-			return Result.failure("推进子阶段失败: %s" % sub2.error)
+	# 5) 推进到 Payday（Dinnertime 会自动结算跳过）
+	var to_payday := TestPhaseUtilsClass.advance_until_phase(engine_a, "Payday", 30)
+	if not to_payday.ok:
+		return to_payday
 
 	state = engine_a.get_state()
-	if state.phase != "Dinnertime":
-		return Result.failure("当前应为 Dinnertime，实际: %s" % state.phase)
+	if state.phase != "Payday":
+		return Result.failure("当前应为 Payday（Dinnertime 已自动结算跳过），实际: %s" % state.phase)
 
-		# 结算结果：
-		# - Payday：玩家0 有 $5，但需支付 burger_cook 的薪水（$5），因此进入后续阶段时现金变为 $0
-		# - Dinnertime：售出 1 个 burger（单价 10） + 首次营销汉堡里程碑奖励 +$5 => 现金应为 $15
-		if int(state.players[0].get("cash", 0)) != 15:
-			return Result.failure("玩家0 现金应为 15，实际: %d" % int(state.players[0].get("cash", 0)))
+	# 结算结果：
+	# - Payday：玩家0 有 $5，但需支付 burger_cook 的薪水（$5），因此进入后续阶段时现金变为 $0
+	# - Dinnertime：售出 1 个 burger（单价 10） + 首次营销汉堡里程碑奖励 +$5 => 现金应为 $15
+	if int(state.players[0].get("cash", 0)) != 15:
+		return Result.failure("玩家0 现金应为 15，实际: %d" % int(state.players[0].get("cash", 0)))
 	var left_after_dinner: Dictionary = state.map.get("houses", {}).get("house_left", {})
 	if Array(left_after_dinner.get("demands", [])).size() != 0:
 		return Result.failure("Dinnertime 后 house_left 需求应被清空，实际: %s" % str(left_after_dinner.get("demands", [])))

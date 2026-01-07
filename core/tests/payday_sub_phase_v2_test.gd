@@ -39,6 +39,6 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var adv := engine.execute_command(Command.create_system("advance_phase", {"target": "sub_phase"}))
 	if not adv.ok:
 		return Result.failure("推进 Payday 子阶段失败: %s" % adv.error)
-	if engine.get_state().phase != "Marketing":
-		return Result.failure("推进子阶段后应进入 Marketing，实际: %s" % engine.get_state().phase)
+	if engine.get_state().phase != "Restructuring":
+		return Result.failure("推进子阶段后应进入 Restructuring（Marketing/Cleanup 已自动结算跳过），实际: %s" % engine.get_state().phase)
 	return Result.success()

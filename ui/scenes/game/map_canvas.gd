@@ -3,6 +3,9 @@
 # - 仅依赖 state.map（不读取 core 的 registry/Def），为后续“图片资源替换”预留接口
 extends Control
 
+signal cell_hovered(world_pos: Vector2i)
+signal cell_selected(world_pos: Vector2i)
+
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
 const MapSkinClass = preload("res://ui/visual/map_skin.gd")
 
@@ -21,6 +24,11 @@ var _hover_pos: Vector2i = Vector2i(-1, -1) # world_pos
 
 var _marketing_by_pos: Dictionary = {}  # Vector2i -> placement dict
 var _structures_by_anchor: Dictionary = {} # Vector2i -> {piece_id, owner, rotation, min:Vector2i, max:Vector2i}
+
+var _structure_preview_cells: Array[Vector2i] = []
+var _structure_preview_valid: bool = true
+
+var _highlighted_cells: Dictionary = {} # Vector2i -> true
 
 var _skin = null
 var _skin_modules_key: String = ""
@@ -72,8 +80,45 @@ func clear() -> void:
 	_structures_by_anchor.clear()
 	_selected_pos = Vector2i(-1, -1)
 	_hover_pos = Vector2i(-1, -1)
+	_structure_preview_cells.clear()
+	_structure_preview_valid = true
+	_highlighted_cells.clear()
 	custom_minimum_size = Vector2.ZERO
 	queue_redraw()
+
+func get_cell_size() -> int:
+	return CELL_SIZE
+
+func get_world_origin() -> Vector2i:
+	return _world_origin
+
+func set_structure_preview(cells: Array[Vector2i], valid: bool) -> void:
+	_structure_preview_cells = cells.duplicate()
+	_structure_preview_valid = valid
+	queue_redraw()
+
+func clear_structure_preview() -> void:
+	if _structure_preview_cells.is_empty():
+		return
+	_structure_preview_cells.clear()
+	_structure_preview_valid = true
+	queue_redraw()
+
+func set_cell_highlights(cells: Array[Vector2i]) -> void:
+	_highlighted_cells.clear()
+	for v in cells:
+		if v is Vector2i:
+			_highlighted_cells[v] = true
+	queue_redraw()
+
+func clear_cell_highlights() -> void:
+	if _highlighted_cells.is_empty():
+		return
+	_highlighted_cells.clear()
+	queue_redraw()
+
+func is_cell_highlighted(world_pos: Vector2i) -> bool:
+	return _highlighted_cells.has(world_pos)
 
 func _ensure_skin(modules: Array[String]) -> void:
 	var key: String = str(modules)
@@ -187,6 +232,10 @@ func _gui_input(event: InputEvent) -> void:
 		var pos := _local_to_world_cell(e.position)
 		if pos != _hover_pos:
 			_hover_pos = pos
+			if _is_valid_world_pos(_hover_pos):
+				cell_hovered.emit(_hover_pos)
+			else:
+				cell_hovered.emit(Vector2i(-1, -1))
 			_update_tooltip_for_hover()
 			queue_redraw()
 		return
@@ -197,6 +246,7 @@ func _gui_input(event: InputEvent) -> void:
 			var pos2 := _local_to_world_cell(e2.position)
 			if _is_valid_world_pos(pos2):
 				_selected_pos = pos2
+				cell_selected.emit(_selected_pos)
 				queue_redraw()
 		return
 
@@ -288,7 +338,42 @@ func _draw() -> void:
 	_draw_structures()
 	_draw_marketing()
 	_draw_house_demands()
+	_draw_cell_highlights()
+	_draw_structure_preview()
 	_draw_selection()
+
+func _draw_cell_highlights() -> void:
+	if _highlighted_cells.is_empty():
+		return
+
+	for pos_val in _highlighted_cells.keys():
+		if not (pos_val is Vector2i):
+			continue
+		var world_pos: Vector2i = pos_val
+		if not _is_valid_world_pos(world_pos):
+			continue
+		var v := _world_to_view(world_pos)
+		var rect := Rect2(Vector2(v.x * CELL_SIZE, v.y * CELL_SIZE), Vector2(CELL_SIZE, CELL_SIZE))
+		draw_rect(rect, Color(0.2, 0.9, 0.35, 0.12), true)
+		draw_rect(rect, Color(0.2, 0.9, 0.35, 0.35), false, 1.0)
+
+func _draw_structure_preview() -> void:
+	if _structure_preview_cells.is_empty():
+		return
+
+	var fill := Color(0.2, 0.9, 0.35, 0.28) if _structure_preview_valid else Color(0.95, 0.25, 0.25, 0.25)
+	var border := Color(0.2, 0.9, 0.35, 0.75) if _structure_preview_valid else Color(0.95, 0.25, 0.25, 0.75)
+
+	for world_pos in _structure_preview_cells:
+		if not (world_pos is Vector2i):
+			continue
+		var p: Vector2i = world_pos
+		if not _is_valid_world_pos(p):
+			continue
+		var v := _world_to_view(p)
+		var rect := Rect2(Vector2(v.x * CELL_SIZE, v.y * CELL_SIZE), Vector2(CELL_SIZE, CELL_SIZE))
+		draw_rect(rect, fill, true)
+		draw_rect(rect, border, false, 2.0)
 
 func _draw_ground_and_blocked() -> void:
 	var ground_tex: Texture2D = _skin.get_ground_texture()
@@ -619,3 +704,12 @@ func _get_house_info(house_id: String) -> Dictionary:
 	if not (val is Dictionary):
 		return {}
 	return val
+
+# === 缩放辅助方法 ===
+
+func get_base_size() -> Vector2:
+	return Vector2(float(_grid_size.x * CELL_SIZE), float(_grid_size.y * CELL_SIZE))
+
+
+func get_grid_size() -> Vector2i:
+	return _grid_size

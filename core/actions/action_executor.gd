@@ -13,6 +13,7 @@ var allowed_phases: Array[String] = []  # 允许执行的阶段
 var allowed_sub_phases: Array[String] = []  # 允许执行的子阶段
 var requires_actor: bool = true  # 是否需要玩家执行
 var is_mandatory: bool = false  # 是否是强制动作
+var is_internal: bool = false  # 内部动作：不应出现在“可用动作列表”中（但可被直接执行）
 
 # === 核心接口（子类必须实现） ===
 
@@ -180,7 +181,8 @@ func get_metadata() -> Dictionary:
 		"allowed_phases": allowed_phases,
 		"allowed_sub_phases": allowed_sub_phases,
 		"requires_actor": requires_actor,
-		"is_mandatory": is_mandatory
+		"is_mandatory": is_mandatory,
+		"is_internal": is_internal,
 	}
 
 func _to_string() -> String:

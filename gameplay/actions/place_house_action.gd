@@ -22,6 +22,25 @@ func _init(piece_registry: Dictionary = {}) -> void:
 	allowed_sub_phases = ["PlaceHouses"]
 	_piece_registry = piece_registry
 
+func can_initiate(state: GameState, player_id: int) -> bool:
+	if state == null:
+		return true
+	if state.get_current_player_id() != player_id:
+		return false
+
+	var player := state.get_player(player_id)
+	var capacity := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, player_id, "use:place_house")
+	if capacity <= 0:
+		return false
+
+	var used_result := RoundStateCountersClass.get_player_count(
+		state.round_state, "house_placement_counts", player_id
+	)
+	if not used_result.ok:
+		return true
+	var used := int(used_result.value)
+	return used < capacity
+
 func _validate_specific(state: GameState, command: Command) -> Result:
 	# 检查必需参数
 	var pos_result := require_vector2i_param(command, "position")
@@ -197,7 +216,8 @@ func _build_map_context(state: GameState) -> Dictionary:
 		"grid_size": state.map.grid_size,
 		"map_origin": MapRuntimeClass.get_map_origin(state),
 		"houses": state.map.houses,
-		"restaurants": state.map.restaurants
+		"restaurants": state.map.restaurants,
+		"drink_sources": state.map.get("drink_sources", []),
 	}
 
 # 辅助方法：获取建筑件注册表（优先使用注入的 modules/*/content/pieces）

@@ -16,7 +16,9 @@
     "luxury_manager"
   ],
   "train_capacity": 0,
-  "tags": [],
+  "tags": [
+    "entry_level"
+  ],
   "usage_tags": [],
   "mandatory": false,
   "pool": {

@@ -168,12 +168,21 @@ func run_validators(state: GameState, command: Command) -> Result:
 # 获取当前阶段可用的动作
 func get_available_actions(state: GameState) -> Array[String]:
 	if _availability_registry != null and _availability_registry.has_method("get_available_action_ids"):
-		return _availability_registry.get_available_action_ids(str(state.phase), str(state.sub_phase))
+		var ids: Array[String] = _availability_registry.get_available_action_ids(str(state.phase), str(state.sub_phase))
+		var filtered: Array[String] = []
+		for aid in ids:
+			var ex := get_executor(aid)
+			if ex != null and ex.is_internal:
+				continue
+			filtered.append(aid)
+		return filtered
 
 	var result: Array[String] = []
 
 	for action_id in _executors:
 		var executor: ActionExecutor = _executors[action_id]
+		if executor.is_internal:
+			continue
 
 		# 检查阶段限制
 		if executor.allowed_phases.size() > 0:
@@ -210,6 +219,41 @@ func get_player_available_actions(state: GameState, player_id: int) -> Array[Str
 			result.append(action_id)
 
 	return result
+
+# 获取玩家“可启动”的动作（用于 UI：允许先点击进入选点/面板，再补齐参数执行）
+# - 若完整 validate 失败的原因仅为“缺少参数”，则仍视为可启动
+func get_player_initiatable_actions(state: GameState, player_id: int) -> Array[String]:
+	var available := get_available_actions(state)
+	var result: Array[String] = []
+
+	for action_id in available:
+		var executor := get_executor(action_id)
+		if executor == null:
+			continue
+
+		var test_command := Command.create(action_id, player_id)
+		test_command.phase = state.phase
+		test_command.sub_phase = state.sub_phase
+
+		var validate_result := executor.validate(state, test_command)
+		if validate_result.ok:
+			result.append(action_id)
+			continue
+
+		if _is_missing_params_error(validate_result.error):
+			var can_initiate := true
+			if executor.has_method("can_initiate"):
+				var v = executor.can_initiate(state, player_id)
+				if v is bool:
+					can_initiate = bool(v)
+			if can_initiate:
+				result.append(action_id)
+
+	return result
+
+static func _is_missing_params_error(err: String) -> bool:
+	# ActionExecutor.require_* 系列统一使用这些前缀
+	return err.begins_with("缺少参数:") or err.begins_with("缺少必需参数:")
 
 # 获取强制动作
 func get_mandatory_actions(state: GameState) -> Array[String]:

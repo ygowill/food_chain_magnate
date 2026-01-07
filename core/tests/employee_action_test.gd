@@ -29,11 +29,6 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if r2.ok:
 		return Result.failure("无招聘员时不应允许第二次招聘（应受 CEO 1 次限制）")
 
-	# 结束本子阶段回合（确保不影响后续阶段切换）
-	var s1 := engine.execute_command(Command.create("skip", first_actor))
-	if not s1.ok:
-		return Result.failure("skip 失败: %s" % s1.error)
-
 	# 2) 结束一整回合，进入下一回合 Restructuring：待命员工自动激活
 	var to_restructuring := TestPhaseUtilsClass.advance_until_phase(engine, "Restructuring", 50)
 	if not to_restructuring.ok:
@@ -52,25 +47,27 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if not to_working2.ok:
 		return to_working2
 
-	# 轮转到 first_actor
+	# 推进到 first_actor 的 Working 回合
 	var safety = 0
 	while engine.get_state().get_current_player_id() != first_actor:
 		safety += 1
 		if safety > 20:
 			return Result.failure("轮转到目标玩家超出安全上限")
-		var sk := engine.execute_command(Command.create("skip", engine.get_state().get_current_player_id()))
-		if not sk.ok:
-			return Result.failure("skip 失败: %s" % sk.error)
+		var end_turn := TestPhaseUtilsClass.end_current_player_working_turn(engine, 50)
+		if not end_turn.ok:
+			return end_turn
+		if engine.get_state().phase != "Working":
+			return Result.failure("未轮转到目标玩家前不应离开 Working")
 
 	var rr1 := engine.execute_command(Command.create("recruit", first_actor, {"employee_type": "trainer"}))
 	if not rr1.ok:
 		return Result.failure("有招聘员时第一次招聘失败: %s" % rr1.error)
 
-	var rr2 := engine.execute_command(Command.create("recruit", first_actor, {"employee_type": "burger_cook"}))
+	var rr2 := engine.execute_command(Command.create("recruit", first_actor, {"employee_type": "marketer"}))
 	if not rr2.ok:
 		return Result.failure("有招聘员时第二次招聘失败: %s" % rr2.error)
 
-	var rr3 := engine.execute_command(Command.create("recruit", first_actor, {"employee_type": "pizza_cook"}))
+	var rr3 := engine.execute_command(Command.create("recruit", first_actor, {"employee_type": "kitchen_trainee"}))
 	if rr3.ok:
 		return Result.failure("仅 1 名招聘员时不应允许第三次招聘（应为 2 次）")
 

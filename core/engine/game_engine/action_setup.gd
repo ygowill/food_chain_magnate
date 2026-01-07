@@ -4,6 +4,8 @@ extends RefCounted
 
 const AdvancePhaseActionClass = preload("res://gameplay/actions/advance_phase_action.gd")
 const SkipActionClass = preload("res://gameplay/actions/skip_action.gd")
+const SkipSubPhaseActionClass = preload("res://gameplay/actions/skip_sub_phase_action.gd")
+const EndTurnActionClass = preload("res://gameplay/actions/end_turn_action.gd")
 const ChooseTurnOrderActionClass = preload("res://gameplay/actions/choose_turn_order_action.gd")
 const RecruitActionClass = preload("res://gameplay/actions/recruit_action.gd")
 const TrainActionClass = preload("res://gameplay/actions/train_action.gd")
@@ -28,8 +30,10 @@ static func build_registry(phase_manager: PhaseManager, piece_registry: Dictiona
 	var registry := ActionRegistry.new()
 	registry.register_executors([
 		AdvancePhaseActionClass.new(phase_manager),
-		SkipActionClass.new(),
-		ChooseTurnOrderActionClass.new(),
+		SkipActionClass.new(phase_manager),
+		SkipSubPhaseActionClass.new(phase_manager),
+		EndTurnActionClass.new(),
+		ChooseTurnOrderActionClass.new(phase_manager),
 		RecruitActionClass.new(),
 		TrainActionClass.new(),
 		InitiateMarketingActionClass.new(),

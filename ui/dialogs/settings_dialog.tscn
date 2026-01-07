@@ -1,0 +1,207 @@
+[gd_scene load_steps=2 format=3 uid="uid://jjqdifnudjp0"]
+
+[ext_resource type="Script" uid="uid://brtyy0w3hgqld" path="res://ui/dialogs/settings_dialog.gd" id="1_settings"]
+
+[node name="SettingsDialog" type="Window"]
+title = "设置"
+initial_position = 2
+size = Vector2i(500, 450)
+visible = false
+transient = true
+script = ExtResource("1_settings")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TabContainer" type="TabContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+current_tab = 0
+
+[node name="Audio" type="Control" parent="MarginContainer/VBoxContainer/TabContainer"]
+layout_mode = 2
+metadata/_tab_index = 0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Audio"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="MasterRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer/MasterRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "主音量"
+
+[node name="MasterSlider" type="HSlider" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer/MasterRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+value = 80.0
+
+[node name="MusicRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer/MusicRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "音乐音量"
+
+[node name="MusicSlider" type="HSlider" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer/MusicRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+value = 70.0
+
+[node name="SFXRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer/SFXRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "音效音量"
+
+[node name="SFXSlider" type="HSlider" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer/SFXRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+value = 80.0
+
+[node name="MuteCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer"]
+layout_mode = 2
+text = "静音"
+
+[node name="Display" type="Control" parent="MarginContainer/VBoxContainer/TabContainer"]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Display"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="FullscreenCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
+layout_mode = 2
+text = "全屏模式"
+
+[node name="VsyncCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
+layout_mode = 2
+button_pressed = true
+text = "垂直同步"
+
+[node name="ResolutionRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/ResolutionRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "分辨率"
+
+[node name="ResolutionOption" type="OptionButton" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/ResolutionRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="UIScaleRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/UIScaleRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "UI缩放"
+
+[node name="UIScaleSlider" type="HSlider" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/UIScaleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 50.0
+max_value = 150.0
+value = 100.0
+
+[node name="Game" type="Control" parent="MarginContainer/VBoxContainer/TabContainer"]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Game"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="AutoSaveCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer"]
+layout_mode = 2
+button_pressed = true
+text = "自动存档"
+
+[node name="ConfirmActionsCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer"]
+layout_mode = 2
+button_pressed = true
+text = "操作前确认"
+
+[node name="ShowHintsCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer"]
+layout_mode = 2
+button_pressed = true
+text = "显示提示"
+
+[node name="AnimSpeedRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer/AnimSpeedRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "动画速度"
+
+[node name="AnimSpeedSlider" type="HSlider" parent="MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer/AnimSpeedRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 50.0
+max_value = 200.0
+value = 100.0
+
+[node name="ButtonRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 2
+
+[node name="ResetButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonRow"]
+custom_minimum_size = Vector2(80, 32)
+layout_mode = 2
+text = "重置"
+
+[node name="ApplyButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonRow"]
+custom_minimum_size = Vector2(80, 32)
+layout_mode = 2
+text = "应用"
+
+[node name="CloseButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonRow"]
+custom_minimum_size = Vector2(80, 32)
+layout_mode = 2
+text = "关闭"

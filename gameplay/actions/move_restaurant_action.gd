@@ -19,39 +19,53 @@ func _init(piece_registry: Dictionary = {}) -> void:
 	allowed_sub_phases = ["PlaceRestaurants"]
 	_piece_registry = piece_registry
 
+func can_initiate(state: GameState, player_id: int) -> bool:
+	if state == null:
+		return true
+	if state.get_current_player_id() != player_id:
+		return false
+
+	var player := state.get_player(player_id)
+	if not player.has("restaurants") or not (player["restaurants"] is Array):
+		return true
+	var rest_list: Array = player["restaurants"]
+	if rest_list.is_empty():
+		return false
+
+	var move_eligible := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, player_id, "use:move_restaurant")
+	if move_eligible <= 0:
+		return false
+
+	var total_eligible := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, player_id, "use:place_restaurant")
+	if total_eligible <= 0:
+		return false
+
+	var used_place := EmployeeRulesClass.get_action_count(state, player_id, "place_restaurant")
+	var used_move := EmployeeRulesClass.get_action_count(state, player_id, "move_restaurant")
+	var used_total := used_place + used_move
+	if used_total >= total_eligible:
+		return false
+	if used_move >= move_eligible:
+		return false
+
+	return true
+
 func _validate_specific(state: GameState, command: Command) -> Result:
-	var rest_id_result := require_string_param(command, "restaurant_id")
-	if not rest_id_result.ok:
-		return rest_id_result
-	var rest_id: String = rest_id_result.value
-
-	var pos_result := require_vector2i_param(command, "position")
-	if not pos_result.ok:
-		return pos_result
-	var world_anchor: Vector2i = pos_result.value
-
-	var rotation_result := require_int_param(command, "rotation")
-	if not rotation_result.ok:
-		return rotation_result
-	var rotation: int = rotation_result.value
-
 	# 检查是否是当前玩家的回合
 	var current_player_id := state.get_current_player_id()
 	if command.actor != current_player_id:
 		return Result.failure("不是你的回合")
 
+	# 需要至少有一个自己的餐厅（无需 restaurant_id）
+	var player0 := state.get_player(command.actor)
+	if player0.has("restaurants") and (player0["restaurants"] is Array):
+		if (player0["restaurants"] as Array).is_empty():
+			return Result.failure("你没有可移动的餐厅")
+
 	# 检查餐厅存在且归属当前玩家
 	assert(state.map is Dictionary, "move_restaurant: state.map 类型错误（期望 Dictionary）")
 	assert(state.map.has("restaurants") and (state.map["restaurants"] is Dictionary), "move_restaurant: state.map.restaurants 缺失或类型错误（期望 Dictionary）")
 	var restaurants: Dictionary = state.map["restaurants"]
-	if not restaurants.has(rest_id):
-		return Result.failure("餐厅不存在: %s" % rest_id)
-	var rest_val = restaurants[rest_id]
-	assert(rest_val is Dictionary, "move_restaurant: restaurants[%s] 类型错误（期望 Dictionary）" % rest_id)
-	var rest: Dictionary = rest_val
-	assert(rest.has("owner") and (rest["owner"] is int), "move_restaurant: restaurants[%s].owner 缺失或类型错误（期望 int）" % rest_id)
-	if int(rest["owner"]) != command.actor:
-		return Result.failure("只能移动自己的餐厅")
 
 	# 规则：移动餐厅需要在岗的区域经理（data/employees/*.json usage_tags）
 	var player := state.get_player(command.actor)
@@ -68,6 +82,30 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("本地/大区经理本子阶段已用完: %d/%d" % [used_total, total_eligible])
 	if used_move >= move_eligible:
 		return Result.failure("区域经理本子阶段已用完: %d/%d" % [used_move, move_eligible])
+
+	var rest_id_result := require_string_param(command, "restaurant_id")
+	if not rest_id_result.ok:
+		return rest_id_result
+	var rest_id: String = rest_id_result.value
+
+	if not restaurants.has(rest_id):
+		return Result.failure("餐厅不存在: %s" % rest_id)
+	var rest_val = restaurants[rest_id]
+	assert(rest_val is Dictionary, "move_restaurant: restaurants[%s] 类型错误（期望 Dictionary）" % rest_id)
+	var rest: Dictionary = rest_val
+	assert(rest.has("owner") and (rest["owner"] is int), "move_restaurant: restaurants[%s].owner 缺失或类型错误（期望 int）" % rest_id)
+	if int(rest["owner"]) != command.actor:
+		return Result.failure("只能移动自己的餐厅")
+
+	var pos_result := require_vector2i_param(command, "position")
+	if not pos_result.ok:
+		return pos_result
+	var world_anchor: Vector2i = pos_result.value
+
+	var rotation_result := require_int_param(command, "rotation")
+	if not rotation_result.ok:
+		return rotation_result
+	var rotation: int = rotation_result.value
 
 	var map_ctx := _build_map_context(state)
 	var piece_registry := _get_piece_registry()
@@ -194,7 +232,8 @@ func _build_map_context(state: GameState) -> Dictionary:
 		"grid_size": state.map.grid_size,
 		"map_origin": MapRuntimeClass.get_map_origin(state),
 		"houses": state.map.houses,
-		"restaurants": state.map.restaurants
+		"restaurants": state.map.restaurants,
+		"drink_sources": state.map.get("drink_sources", []),
 	}
 
 func _get_piece_registry() -> Dictionary:

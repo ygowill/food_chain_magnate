@@ -20,6 +20,25 @@ func _init(piece_registry: Dictionary = {}) -> void:
 	allowed_sub_phases = ["PlaceHouses"]
 	_piece_registry = piece_registry
 
+func can_initiate(state: GameState, player_id: int) -> bool:
+	if state == null:
+		return true
+	if state.get_current_player_id() != player_id:
+		return false
+
+	var player := state.get_player(player_id)
+	var capacity := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, player_id, "use:add_garden")
+	if capacity <= 0:
+		return false
+
+	var used_result := RoundStateCountersClass.get_player_count(
+		state.round_state, "house_placement_counts", player_id
+	)
+	if not used_result.ok:
+		return true
+	var used := int(used_result.value)
+	return used < capacity
+
 func _validate_specific(state: GameState, command: Command) -> Result:
 	var house_id_result := require_string_param(command, "house_id")
 	if not house_id_result.ok:

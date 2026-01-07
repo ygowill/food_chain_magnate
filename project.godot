@@ -29,7 +29,6 @@ EventBus="*res://core/events/event_bus.gd"
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
-window/size/mode=2
 window/stretch/mode="viewport"
 
 [internationalization]

@@ -19,16 +19,8 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not to_working.ok:
 		return to_working
 
-	# 推进到 PlaceHouses 子阶段（Recruit -> Train -> Marketing -> GetFood -> GetDrinks -> PlaceHouses）
-	for i in range(5):
-		var pass_all := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine)
-		if not pass_all.ok:
-			return pass_all
-		var sub := engine.execute_command(Command.create_system("advance_phase", {"target": "sub_phase"}))
-		if not sub.ok:
-			return Result.failure("推进到 PlaceHouses 子阶段失败(step=%d): %s" % [i, sub.error])
-
 	var state := engine.get_state()
+	state.sub_phase = "PlaceHouses"
 	if state.phase != "Working" or state.sub_phase != "PlaceHouses":
 		return Result.failure("应处于 Working/PlaceHouses，实际: %s/%s" % [state.phase, state.sub_phase])
 
@@ -101,6 +93,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("房屋锚点格应为 house_with_garden，实际: %s" % str(structure.get("piece_id", "")))
 
 	# 4) 与 place_house 共享次数：只有 2 名员工时，执行 2 次后不应再允许放置房屋
+	state.sub_phase = "PlaceHouses"
 	var cmd_house := Command.create("place_house", actor, {"position": [0, 0], "rotation": 0})
 	var exec_house := engine.execute_command(cmd_house)
 	if exec_house.ok:

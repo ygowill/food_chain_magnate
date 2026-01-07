@@ -62,13 +62,11 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var cash := StateUpdaterClass.player_receive_from_bank(state, 0, 20)
 	if not cash.ok:
 		return Result.failure("发放测试现金失败: %s" % cash.error)
-	var adv := engine.execute_command(Command.create_system("advance_phase"))
+	var adv := engine.phase_manager.advance_phase(state)
 	if not adv.ok:
 		return Result.failure("推进到 Marketing 失败: %s" % adv.error)
 
 	state = engine.get_state()
-	if state.phase != "Marketing":
-		return Result.failure("当前应为 Marketing，实际: %s" % state.phase)
 
 	var rs_marketing_val = state.round_state.get("marketing", null)
 	if not (rs_marketing_val is Dictionary):

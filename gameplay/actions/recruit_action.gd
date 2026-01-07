@@ -18,6 +18,45 @@ func _init() -> void:
 	allowed_phases = ["Working"]
 	allowed_sub_phases = ["Recruit"]
 
+func can_initiate(state: GameState, player_id: int) -> bool:
+	if state == null:
+		return true
+	if state.get_current_player_id() != player_id:
+		return false
+
+	var limit := EmployeeRulesClass.get_recruit_limit_for_working(state, player_id)
+	var used := EmployeeRulesClass.get_action_count(state, player_id, action_id)
+	if used >= limit:
+		return false
+
+	var player := state.get_player(player_id)
+	var banned: Array = []
+	var banned_val = player.get("banned_employee_ids", [])
+	if banned_val is Array:
+		banned = banned_val
+
+	var train_limit := EmployeeRulesClass.get_train_limit_for_working(state, player_id)
+	var pending_total := int(EmployeeRulesClass.get_immediate_train_pending_total(state, player_id))
+
+	for emp_val in state.employee_pool.keys():
+		if not (emp_val is String):
+			continue
+		var emp_id: String = str(emp_val)
+		if emp_id.is_empty():
+			continue
+		if not EmployeeRulesClass.is_entry_level(emp_id):
+			continue
+		if banned.has(emp_id):
+			continue
+
+		var available := int(state.employee_pool.get(emp_id, 0))
+		if available > 0:
+			return true
+		if train_limit > 0 and pending_total < train_limit:
+			return true
+
+	return false
+
 func _validate_specific(state: GameState, command: Command) -> Result:
 	# 检查必需参数
 	var employee_type_result := require_string_param(command, "employee_type")

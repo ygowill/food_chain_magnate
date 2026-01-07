@@ -12,6 +12,8 @@ static func run(player_count: int = 3, seed: int = 12345) -> Result:
 	var state := engine.get_state()
 	state.turn_order = [0, 1, 2]
 	state.current_player_index = 0
+	# 避免首轮 Restructuring/OrderOfBusiness 自动跳过：让离开 Setup 后进入 round=2
+	state.round_number = 1
 
 	# Setup -> Restructuring（回合 1）
 	var adv1 := engine.execute_command(Command.create_system("advance_phase"))
@@ -83,13 +85,10 @@ static func run(player_count: int = 3, seed: int = 12345) -> Result:
 	if engine.get_state().turn_order != expected:
 		return Result.failure("turn_order 不匹配: %s != %s" % [str(engine.get_state().turn_order), str(expected)])
 
-	# OrderOfBusiness -> Working
-	var adv3 := engine.execute_command(Command.create_system("advance_phase"))
-	if not adv3.ok:
-		return Result.failure("推进到 Working 失败: %s" % adv3.error)
+	# OrderOfBusiness 完成后应自动进入 Working
 	state = engine.get_state()
 	if state.phase != "Working":
-		return Result.failure("期望进入 Working，实际: %s" % state.phase)
+		return Result.failure("OrderOfBusiness 完成后应自动进入 Working，实际: %s" % state.phase)
 	if state.get_current_player_id() != 1:
 		return Result.failure("Working 首位玩家应为 1，实际: %d" % state.get_current_player_id())
 

@@ -20,18 +20,28 @@ func _init(piece_registry: Dictionary = {}) -> void:
 	allowed_sub_phases = ["PlaceRestaurants"]
 	_piece_registry = piece_registry
 
+func can_initiate(state: GameState, player_id: int) -> bool:
+	if state == null:
+		return true
+	if state.get_current_player_id() != player_id:
+		return false
+
+	if state.phase == "Setup":
+		var player_restaurants := MapRuntimeClass.get_player_restaurants(state, player_id)
+		return player_restaurants.size() < 1
+
+	if state.phase != "Working":
+		return true
+
+	var player := state.get_player(player_id)
+	var eligible := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, player_id, "use:place_restaurant")
+	if eligible <= 0:
+		return false
+	var used_place := EmployeeRulesClass.get_action_count(state, player_id, "place_restaurant")
+	var used_move := EmployeeRulesClass.get_action_count(state, player_id, "move_restaurant")
+	return (used_place + used_move) < eligible
+
 func _validate_specific(state: GameState, command: Command) -> Result:
-	# 检查必需参数
-	var pos_result := require_vector2i_param(command, "position")
-	if not pos_result.ok:
-		return pos_result
-	var world_anchor: Vector2i = pos_result.value
-
-	var rotation_result := require_int_param(command, "rotation")
-	if not rotation_result.ok:
-		return rotation_result
-	var rotation: int = rotation_result.value
-
 	# 检查是否是当前玩家的回合
 	var current_player_id := state.get_current_player_id()
 	if command.actor != current_player_id:
@@ -39,6 +49,13 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	# 规则：Working/PlaceRestaurants 需要在岗的本地经理或区域经理（docs/rules.md 子阶段 6）
 	var is_initial := state.phase == "Setup"
+
+	# Setup 阶段：每位玩家只能放置一个餐厅（无需 position/rotation）
+	if is_initial:
+		var player_restaurants := MapRuntimeClass.get_player_restaurants(state, command.actor)
+		if player_restaurants.size() >= 1:
+			return Result.failure("设置阶段每位玩家只能放置一个餐厅")
+
 	if state.phase == "Working":
 		var player := state.get_player(command.actor)
 		var eligible := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, command.actor, "use:place_restaurant")
@@ -49,6 +66,17 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		var used_total := used_place + used_move
 		if used_total >= eligible:
 			return Result.failure("本地/大区经理本子阶段已用完: %d/%d" % [used_total, eligible])
+
+	# 检查必需参数
+	var pos_result := require_vector2i_param(command, "position")
+	if not pos_result.ok:
+		return pos_result
+	var world_anchor: Vector2i = pos_result.value
+
+	var rotation_result := require_int_param(command, "rotation")
+	if not rotation_result.ok:
+		return rotation_result
+	var rotation: int = rotation_result.value
 
 	# 构建地图上下文
 	var map_ctx := _build_map_context(state)
@@ -64,12 +92,6 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	if not validate_result.ok:
 		return validate_result
-
-	# 检查玩家餐厅数量限制 (Setup 阶段每人只能放一个)
-	if is_initial:
-		var player_restaurants := MapRuntimeClass.get_player_restaurants(state, command.actor)
-		if player_restaurants.size() >= 1:
-			return Result.failure("设置阶段每位玩家只能放置一个餐厅")
 
 	return Result.success()
 
@@ -204,7 +226,8 @@ func _build_map_context(state: GameState) -> Dictionary:
 		"grid_size": state.map.grid_size,
 		"map_origin": MapRuntimeClass.get_map_origin(state),
 		"houses": state.map.houses,
-		"restaurants": state.map.restaurants
+		"restaurants": state.map.restaurants,
+		"drink_sources": state.map.get("drink_sources", []),
 	}
 
 # 辅助方法：获取建筑件注册表（优先使用注入的 modules/*/content/pieces）
