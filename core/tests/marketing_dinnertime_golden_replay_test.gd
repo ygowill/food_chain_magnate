@@ -89,9 +89,9 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("Marketing 后 house_left 应新增 1 个 burger 需求，实际: %s" % str(left_demands_after_marketing))
 
 	# 2) Restructuring -> OrderOfBusiness
-	var adv_to_oob := engine_a.execute_command(Command.create_system("advance_phase"))
-	if not adv_to_oob.ok:
-		return Result.failure("推进到 OrderOfBusiness 失败: %s" % adv_to_oob.error)
+	var restruct := TestPhaseUtilsClass.complete_restructuring(engine_a)
+	if not restruct.ok:
+		return restruct
 	state = engine_a.get_state()
 	if state.phase != "OrderOfBusiness":
 		return Result.failure("当前应为 OrderOfBusiness，实际: %s" % state.phase)

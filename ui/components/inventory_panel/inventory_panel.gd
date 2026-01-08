@@ -5,6 +5,7 @@ extends Control
 
 signal product_clicked(product_id: String)
 
+@onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var items_container: GridContainer = $MarginContainer/VBoxContainer/ItemsContainer
 
 var _inventory: Dictionary = {}  # product_id -> count
@@ -55,8 +56,13 @@ func _rebuild_items() -> void:
 		_product_items[str(product_id)] = item
 
 func _update_capacity_display() -> void:
-	# TODO: 显示冰箱容量限制
-	pass
+	if not is_instance_valid(title_label):
+		return
+
+	if _fridge_capacity < 0:
+		title_label.text = "库存（无冰箱）"
+	else:
+		title_label.text = "库存（冰箱：每种≤%d）" % _fridge_capacity
 
 func _on_product_clicked(product_id: String) -> void:
 	product_clicked.emit(product_id)

@@ -58,6 +58,9 @@ static func _test_exit_trigger_runs(player_count: int, seed: int) -> Result:
 	state.round_number = 2
 	state.phase = "Restructuring"
 	state.sub_phase = ""
+	var gate := _force_restructuring_submitted(state)
+	if not gate.ok:
+		return gate
 	var adv1 := engine.execute_command(Command.create_system("advance_phase"))
 	if not adv1.ok:
 		return Result.failure("推进到 OrderOfBusiness 失败: %s" % adv1.error)
@@ -95,4 +98,26 @@ static func _test_multiple_points_order(player_count: int, seed: int) -> Result:
 	var arr: Array = rs.get("points_order", [])
 	if arr.size() != 2 or str(arr[0]) != "enter" or str(arr[1]) != "exit":
 		return Result.failure("points 顺序/触发不符合预期: %s" % str(arr))
+	return Result.success()
+
+static func _force_restructuring_submitted(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("state 为空")
+	if not (state.round_state is Dictionary):
+		return Result.failure("round_state 类型错误（期望 Dictionary）")
+
+	var submitted := {}
+	for pid in range(state.players.size()):
+		submitted[pid] = true
+
+	state.round_state["restructuring"] = {
+		"submitted": submitted,
+		"finalized": true
+	}
+
+	if state.round_state.has("pending_phase_actions") and (state.round_state["pending_phase_actions"] is Dictionary):
+		var ppa: Dictionary = state.round_state["pending_phase_actions"]
+		ppa.erase("Restructuring")
+		state.round_state["pending_phase_actions"] = ppa
+
 	return Result.success()

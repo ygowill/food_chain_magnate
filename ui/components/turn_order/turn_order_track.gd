@@ -5,14 +5,6 @@ extends Control
 
 signal position_selected(position: int)
 
-const PLAYER_COLORS: Array[Color] = [
-	Color(0.9, 0.3, 0.3, 1),  # 红
-	Color(0.3, 0.6, 0.9, 1),  # 蓝
-	Color(0.3, 0.8, 0.4, 1),  # 绿
-	Color(0.9, 0.7, 0.2, 1),  # 黄
-	Color(0.7, 0.4, 0.9, 1),  # 紫
-]
-
 @onready var slots_container: HBoxContainer = $MarginContainer/VBoxContainer/SlotsContainer
 
 var _player_count: int = 2
@@ -73,7 +65,7 @@ func _update_display() -> void:
 		# 检查是否已被选择
 		if _current_selections.has(pos):
 			var player_id: int = int(_current_selections[pos])
-			var color: Color = PLAYER_COLORS[player_id % PLAYER_COLORS.size()]
+			var color: Color = Globals.get_player_color(player_id)
 			slot.set_occupied(true, player_id, color)
 			slot.set_highlighted(false)
 		else:

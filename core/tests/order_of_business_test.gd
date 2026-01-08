@@ -49,9 +49,16 @@ static func run(player_count: int = 3, seed: int = 12345) -> Result:
 				state.employee_pool[emp] = int(state.employee_pool.get(emp, 0)) - 1
 
 	# Restructuring -> OrderOfBusiness：应计算 selection_order，并初始化 picks
-	var adv2 := engine.execute_command(Command.create_system("advance_phase"))
-	if not adv2.ok:
-		return Result.failure("推进到 OrderOfBusiness 失败: %s" % adv2.error)
+	var safety2 := 0
+	while engine.get_state().phase == "Restructuring":
+		safety2 += 1
+		if safety2 > player_count + 5:
+			return Result.failure("提交 Restructuring 超出安全上限")
+		var actor := engine.get_state().get_current_player_id()
+		var submit := engine.execute_command(Command.create("submit_restructuring", actor, {}))
+		if not submit.ok:
+			return Result.failure("提交重组失败: %s" % submit.error)
+
 	state = engine.get_state()
 	if state.phase != "OrderOfBusiness":
 		return Result.failure("期望进入 OrderOfBusiness，实际: %s" % state.phase)

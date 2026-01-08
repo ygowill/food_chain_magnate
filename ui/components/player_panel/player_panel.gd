@@ -5,14 +5,6 @@ extends Control
 
 signal player_selected(player_id: int)
 
-const PLAYER_COLORS: Array[Color] = [
-	Color(0.9, 0.3, 0.3, 1),  # 红
-	Color(0.3, 0.6, 0.9, 1),  # 蓝
-	Color(0.3, 0.8, 0.4, 1),  # 绿
-	Color(0.9, 0.7, 0.2, 1),  # 黄
-	Color(0.7, 0.4, 0.9, 1),  # 紫
-]
-
 @onready var items_container: VBoxContainer = $MarginContainer/VBoxContainer/ItemsContainer
 
 var _game_state: GameState = null
@@ -63,7 +55,7 @@ func _rebuild_player_items() -> void:
 	for i in range(_game_state.players.size()):
 		var item := PlayerInfoItem.new()
 		item.player_id = i
-		item.player_color = PLAYER_COLORS[i % PLAYER_COLORS.size()]
+		item.player_color = Globals.get_player_color(i)
 		item.item_clicked.connect(_on_player_item_clicked)
 		items_container.add_child(item)
 		_player_items.append(item)

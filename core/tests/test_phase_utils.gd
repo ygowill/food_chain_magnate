@@ -222,6 +222,29 @@ static func complete_order_of_business(engine: GameEngine) -> Result:
 	# 新规则：choose_turn_order 最后一手会自动推进到 Working；此时已离开 OrderOfBusiness，视为成功
 	return Result.success()
 
+static func complete_restructuring(engine: GameEngine) -> Result:
+	var state := engine.get_state()
+	if state.phase != "Restructuring":
+		return Result.success()
+
+	var safety := 0
+	while state.phase == "Restructuring":
+		safety += 1
+		if safety > state.players.size() + 8:
+			return Result.failure("Restructuring 提交循环超出安全上限")
+
+		var actor := state.get_current_player_id()
+		if actor < 0:
+			return Result.failure("Restructuring 当前玩家无效")
+
+		var submit := engine.execute_command(Command.create("submit_restructuring", actor, {}))
+		if not submit.ok:
+			return Result.failure("提交重组失败: %s" % submit.error)
+
+		state = engine.get_state()
+
+	return Result.success()
+
 static func advance_until_phase(engine: GameEngine, target_phase: String, safety_limit: int = 50) -> Result:
 	if _is_transient_auto_skipped_phase(target_phase):
 		return Result.failure("目标阶段为自动跳过阶段：%s（请改为检查结算结果或推进到下一个可停留阶段）" % target_phase)
@@ -243,6 +266,11 @@ static func advance_until_phase(engine: GameEngine, target_phase: String, safety
 			var oob := complete_order_of_business(engine)
 			if not oob.ok:
 				return oob
+			continue
+		if engine.get_state().phase == "Restructuring" and target_phase != "Restructuring":
+			var restruct := complete_restructuring(engine)
+			if not restruct.ok:
+				return restruct
 			continue
 
 		# Working 阶段：结束所有玩家的 Working 回合后离开阶段

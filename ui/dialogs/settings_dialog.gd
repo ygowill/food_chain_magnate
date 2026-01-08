@@ -101,6 +101,7 @@ func _load_settings() -> void:
 
 func _save_settings() -> void:
 	var config := ConfigFile.new()
+	config.load("user://settings.cfg") # 保留其它系统写入的设置（例如玩家名称/模块选择）
 
 	config.set_value("audio", "master_volume", _current_settings.master_volume)
 	config.set_value("audio", "music_volume", _current_settings.music_volume)

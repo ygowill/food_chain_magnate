@@ -66,6 +66,8 @@ static func apply_initial_state(
 	for i in range(player_count):
 		state.turn_order.append(i)
 	rng_manager.shuffle(state.turn_order)
+	# 规则：初始餐厅放置从“顺序轨最后一位”开始逆序进行。
+	state.current_player_index = state.turn_order.size() - 1
 
 	var employees: Dictionary = {}
 	for emp_id in EmployeeRegistryClass.get_all_ids():

@@ -53,6 +53,9 @@ static func run(player_count: int = 2, seed_val: int = 445566) -> Result:
 	state.phase = "Restructuring"
 	state.sub_phase = ""
 	state.round_number += 1
+	var gate := _force_restructuring_submitted(state)
+	if not gate.ok:
+		return gate
 
 	var before := int(state.bank.get("total", 0))
 	var adv := engine.execute_command(Command.create_system("advance_phase"))
@@ -71,3 +74,25 @@ static func run(player_count: int = 2, seed_val: int = 445566) -> Result:
 static func _force_turn_order(state: GameState) -> void:
 	state.turn_order = [0, 1]
 	state.current_player_index = 0
+
+static func _force_restructuring_submitted(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("state 为空")
+	if not (state.round_state is Dictionary):
+		return Result.failure("round_state 类型错误（期望 Dictionary）")
+
+	var submitted := {}
+	for pid in range(state.players.size()):
+		submitted[pid] = true
+
+	state.round_state["restructuring"] = {
+		"submitted": submitted,
+		"finalized": true
+	}
+
+	if state.round_state.has("pending_phase_actions") and (state.round_state["pending_phase_actions"] is Dictionary):
+		var ppa: Dictionary = state.round_state["pending_phase_actions"]
+		ppa.erase("Restructuring")
+		state.round_state["pending_phase_actions"] = ppa
+
+	return Result.success()

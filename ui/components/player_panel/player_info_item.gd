@@ -73,7 +73,7 @@ func update_data(player: Dictionary) -> void:
 		return
 
 	color_rect.color = player_color
-	name_label.text = "P%d" % (player_id + 1)
+	name_label.text = Globals.get_player_name(player_id)
 
 	var cash: int = int(player.get("cash", 0))
 	cash_label.text = "$%d" % cash

@@ -1,0 +1,45 @@
+[gd_scene load_steps=2 format=3 uid="uid://param_dialog_scene"]
+
+[ext_resource type="Script" path="res://ui/scenes/debug/components/param_dialog.gd" id="1_main"]
+
+[node name="ParamDialog" type="Window"]
+title = "参数输入"
+initial_position = 2
+size = Vector2i(400, 250)
+min_size = Vector2i(300, 150)
+script = ExtResource("1_main")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = 12.0
+offset_right = -12.0
+offset_bottom = -12.0
+
+[node name="TitleLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "命令参数"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="ParamsContainer" type="VBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ButtonContainer" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="SubmitButton" type="Button" parent="VBoxContainer/ButtonContainer"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "确定"
+
+[node name="CancelButton" type="Button" parent="VBoxContainer/ButtonContainer"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "取消"

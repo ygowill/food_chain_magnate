@@ -27,11 +27,30 @@ var _cards: Dictionary = {}  # employee_id -> EmployeeCard
 
 var _multi_select: bool = false  # 是否支持多选
 
+var _drag_layer: CanvasLayer = null
+var _drag_preview: EmployeeCard = null
+var _dragging_employee_id: String = ""
+var _drag_source_card: EmployeeCard = null
+var _drag_source_modulate: Color = Color(1, 1, 1, 1)
+var _drag_preview_offset: Vector2 = Vector2.ZERO
+var _hover_drop_target: Control = null
+var _drag_enabled: bool = true
+
 func _ready() -> void:
-	pass
+	set_process(false)
+	if active_container != null:
+		active_container.add_to_group("employee_card_drop_target")
+	if reserve_container != null:
+		reserve_container.add_to_group("employee_card_drop_target")
 
 func set_employee_registry(registry) -> void:
 	_employee_registry = registry
+
+func set_drag_enabled(enabled: bool) -> void:
+	if _drag_enabled == enabled:
+		return
+	_drag_enabled = enabled
+	_rebuild_cards()
 
 func set_multi_select(enabled: bool) -> void:
 	_multi_select = enabled
@@ -50,6 +69,8 @@ func clear_selection() -> void:
 	_update_selection_display()
 
 func _rebuild_cards() -> void:
+	_end_drag_visuals()
+
 	# 清除旧卡牌
 	for card in _cards.values():
 		if is_instance_valid(card):
@@ -80,7 +101,7 @@ func _build_cards_for_container(employee_ids: Array[String], container: Control,
 	for emp_id in employee_ids:
 		var card := EmployeeCardClass.new()
 		card.employee_id = emp_id
-		card.draggable = not is_busy
+		card.draggable = (not is_busy) and _drag_enabled and emp_id != "ceo"
 
 		# 获取员工定义
 		var emp_def := _get_employee_def(emp_id)
@@ -127,19 +148,144 @@ func _on_card_clicked(employee_id: String) -> void:
 	cards_selected.emit(_selected_ids.duplicate())
 
 func _on_card_drag_started(employee_id: String) -> void:
-	# TODO: 实现拖拽视觉效果
-	pass
+	_start_drag_visuals(employee_id)
 
 func _on_card_drag_ended(employee_id: String, drop_position: Vector2) -> void:
 	# 检测放置目标
 	var target := _find_drop_target(drop_position)
+	_end_drag_visuals()
 	if target != null:
 		card_dropped.emit(employee_id, target)
 
 func _find_drop_target(global_pos: Vector2) -> Control:
 	# 查找放置目标（公司结构面板等）
-	# TODO: 实现放置目标检测
-	return null
+	var viewport := get_viewport()
+	if viewport == null:
+		return null
+
+	var hovered := viewport.gui_get_hovered_control() if viewport.has_method("gui_get_hovered_control") else null
+	var cur: Node = hovered
+	while cur != null:
+		if cur is Control and cur.is_in_group("employee_card_drop_target"):
+			return cur as Control
+		cur = cur.get_parent()
+
+	# 兜底：遍历 group（避免 hovered 被鼠标过滤影响）
+	var best: Control = null
+	var best_area := INF
+	for n in get_tree().get_nodes_in_group("employee_card_drop_target"):
+		if not (n is Control):
+			continue
+		var c: Control = n
+		if not c.visible:
+			continue
+		var rect := c.get_global_rect()
+		if rect.has_point(global_pos):
+			var area := rect.size.x * rect.size.y
+			if area < best_area:
+				best_area = area
+				best = c
+
+	return best
+
+func _process(_delta: float) -> void:
+	if _drag_preview == null or not is_instance_valid(_drag_preview):
+		set_process(false)
+		return
+
+	var mouse_pos := get_viewport().get_mouse_position()
+	_drag_preview.position = mouse_pos - _drag_preview_offset
+
+	var target := _find_drop_target(mouse_pos)
+	_set_hover_drop_target(target)
+
+func _start_drag_visuals(employee_id: String) -> void:
+	if employee_id.is_empty():
+		return
+	if not _cards.has(employee_id):
+		return
+	var source_val = _cards.get(employee_id, null)
+	if not (source_val is EmployeeCard):
+		return
+	var source: EmployeeCard = source_val
+	if not is_instance_valid(source):
+		return
+
+	_end_drag_visuals()
+
+	_dragging_employee_id = employee_id
+	_drag_source_card = source
+	_drag_source_modulate = source.modulate
+	source.modulate = Color(1, 1, 1, 0.5)
+
+	var size_guess := source.size
+	if size_guess == Vector2.ZERO:
+		size_guess = source.get_combined_minimum_size()
+	if size_guess == Vector2.ZERO:
+		size_guess = source.custom_minimum_size
+	if size_guess == Vector2.ZERO:
+		size_guess = Vector2(120, 80)
+	_drag_preview_offset = size_guess / 2.0
+
+	_ensure_drag_layer()
+	if _drag_layer == null:
+		return
+
+	var preview := EmployeeCardClass.new()
+	preview.employee_id = employee_id
+	preview.draggable = false
+	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.custom_minimum_size = size_guess
+	preview.size = size_guess
+	preview.scale = Vector2(1.05, 1.05)
+	preview.modulate = Color(1, 1, 1, 0.85)
+
+	var emp_def := _get_employee_def(employee_id)
+	if not emp_def.is_empty():
+		preview.setup(emp_def)
+
+	_drag_layer.add_child(preview)
+	_drag_preview = preview
+
+	_drag_preview.position = get_viewport().get_mouse_position() - _drag_preview_offset
+	set_process(true)
+
+func _end_drag_visuals() -> void:
+	_set_hover_drop_target(null)
+
+	if _drag_preview != null and is_instance_valid(_drag_preview):
+		_drag_preview.queue_free()
+	_drag_preview = null
+
+	if _drag_source_card != null and is_instance_valid(_drag_source_card):
+		_drag_source_card.modulate = _drag_source_modulate
+	_drag_source_card = null
+	_drag_source_modulate = Color(1, 1, 1, 1)
+	_dragging_employee_id = ""
+	_drag_preview_offset = Vector2.ZERO
+	set_process(false)
+
+func _ensure_drag_layer() -> void:
+	if _drag_layer != null and is_instance_valid(_drag_layer):
+		return
+
+	_drag_layer = CanvasLayer.new()
+	_drag_layer.layer = 100
+	add_child(_drag_layer)
+
+func _set_hover_drop_target(target: Control) -> void:
+	if _hover_drop_target == target:
+		return
+
+	if _hover_drop_target != null and is_instance_valid(_hover_drop_target):
+		if _hover_drop_target.has_method("set_drop_highlighted"):
+			_hover_drop_target.call("set_drop_highlighted", false)
+
+	_hover_drop_target = target
+
+	if _hover_drop_target != null and is_instance_valid(_hover_drop_target):
+		if _hover_drop_target.has_method("set_drop_highlighted"):
+			_hover_drop_target.call("set_drop_highlighted", true)
 
 func _update_selection_display() -> void:
 	for emp_id in _cards.keys():

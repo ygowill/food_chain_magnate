@@ -8,6 +8,7 @@ extends Control
 signal house_placement_confirmed(position: Vector2i, rotation: int)
 signal garden_confirmed(house_id: String, direction: String)
 signal cancelled()
+signal highlight_requested(action_id: String, rotation: int)
 
 @onready var hint_label: Label = $HintPanel/HintLabel
 @onready var bottom_bar: HBoxContainer = $BottomBar
@@ -41,6 +42,7 @@ func set_mode(action_id: String) -> void:
 	_mode = action_id
 	clear_selection()
 	_update_ui()
+	_emit_highlight_request()
 
 func set_map_data(map_data: Dictionary) -> void:
 	_rebuild_house_index(map_data)
@@ -61,6 +63,7 @@ func clear_selection() -> void:
 	_sync_rotation_selection()
 	_sync_direction_selection()
 	_update_ui()
+	_emit_highlight_request()
 
 func _ensure_controls() -> void:
 	if bottom_bar == null:
@@ -159,6 +162,7 @@ func _on_rotation_selected(index: int) -> void:
 	var meta = _rotation_option.get_item_metadata(index)
 	_selected_rotation = int(meta)
 	_update_ui()
+	_emit_highlight_request()
 
 func _on_direction_selected(index: int) -> void:
 	if _direction_option == null:
@@ -227,3 +231,8 @@ func _on_confirm_pressed() -> void:
 func _on_cancel_pressed() -> void:
 	cancelled.emit()
 	visible = false
+
+func _emit_highlight_request() -> void:
+	if _mode != "place_house":
+		return
+	highlight_requested.emit(_mode, _selected_rotation)

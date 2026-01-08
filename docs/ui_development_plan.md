@@ -10,19 +10,18 @@
 
 | 功能项 | 实现状态 | 代码位置 | 问题描述 |
 |--------|----------|----------|----------|
-| 新游戏按钮 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:10` | - |
-| 载入游戏按钮 | ❌ 未实现 | `ui/scenes/menus/main_menu.gd:14-17` | 按钮存在但点击只输出警告 |
-| 设置按钮 | ❌ 未实现 | `ui/scenes/menus/main_menu.gd:19-22` | 按钮存在但点击只输出警告 |
-| 板块编辑器按钮 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:24-26` | - |
-| 回放测试按钮 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:28-30` | - |
-| 退出按钮 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:32-34` | - |
-| 版本号显示 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:8` | 从Globals读取 |
+| 新游戏按钮 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:16` | - |
+| 载入游戏按钮 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:20` | 载入固定路径存档（缺失/损坏时弹窗提示） |
+| 设置按钮 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:39` | 打开 `SettingsDialog` |
+| 板块编辑器按钮 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:47` | - |
+| 回放测试按钮 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:51` | - |
+| 退出按钮 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:55` | - |
+| 版本号显示 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:14` | 从Globals读取 |
 
-**完成度**: 5/7 = **71%**
+**完成度**: 7/7 = **100%**
 
 **缺失清单**:
-- [ ] 载入游戏功能界面
-- [ ] 设置菜单界面
+- 无
 
 ---
 
@@ -30,22 +29,19 @@
 
 | 功能项 | 实现状态 | 代码位置 | 问题描述 |
 |--------|----------|----------|----------|
-| 玩家数量选择 | ✅ 完成 | `game_setup.gd:4` | SpinBox 2-5人 |
-| 随机种子输入 | ✅ 完成 | `game_setup.gd:5` | 支持自动生成 |
-| 返回按钮 | ✅ 完成 | `game_setup.gd:14-16` | - |
-| 开始游戏按钮 | ✅ 完成 | `game_setup.gd:18-36` | - |
-| 模块选择 | ❌ 未实现 | - | 规则支持24个模块但无UI选择 |
-| 玩家名称/颜色设置 | ❌ 未实现 | - | Globals目前只有占位方法（`autoload/globals.gd:79`），无可配置字段/持久化 |
-| 银行储备卡选择 | ❌ 未实现 | - | 规则要求玩家秘密选择；当前 `reserve_card_selected` 固定为 GameConfig 默认（`core/state/game_state_factory.gd:141`） |
-| 初始餐厅放置顺序说明 | ❌ 未实现 | - | 规则要求逆序放置；当前 turn_order 为随机洗牌结果（`core/state/game_state_factory.gd:65`），Setup 阶段未实现逆序引导 |
+| 玩家数量选择 | ✅ 完成 | `ui/scenes/setup/game_setup.gd:9` | SpinBox 2-5人 |
+| 随机种子输入 | ✅ 完成 | `ui/scenes/setup/game_setup.gd:10` | 支持自动生成 |
+| 返回按钮 | ✅ 完成 | `ui/scenes/setup/game_setup.gd:51` | - |
+| 开始游戏按钮 | ✅ 完成 | `ui/scenes/setup/game_setup.gd:55` | - |
+| 模块选择 | ✅ 完成 | `ui/scenes/setup/game_setup.gd:91` | Tab：模块列表（base_* 默认启用） |
+| 玩家名称/颜色设置 | ✅ 完成 | `ui/scenes/setup/game_setup.gd:112` | Tab：玩家名称与颜色 |
+| 银行储备卡选择 | ✅ 完成 | `ui/scenes/setup/game_setup.gd:118` | Tab：每位玩家选择一张储备卡（同屏配置；规则中的“秘密选择”后置） |
+| 初始餐厅放置顺序说明 | ✅ 完成 | `ui/scenes/setup/game_setup.gd:124` | UI 提示：从顺序轨最后一位逆序放置 |
 
-**完成度**: 4/8 = **50%**
+**完成度**: 8/8 = **100%**
 
 **缺失清单**:
-- [ ] 模块选择界面（启用/禁用24个扩展模块）
-- [ ] 玩家配置界面（名称、颜色选择）
-- [ ] 银行储备卡选择界面
-- [ ] 初始餐厅放置顺序说明
+- 无
 
 ---
 
@@ -87,11 +83,11 @@
 | 公司结构面板 | ✅ 已实现 | `ui/components/company_structure/` | 2026-01-05 完成基础版本 |
 | 库存面板 | ✅ 已实现 | `ui/components/inventory_panel/` | 2026-01-05 完成基础版本 |
 | 动作面板 | ✅ 已实现 | `ui/components/action_panel/` | 2026-01-05 完成基础版本 |
-| 里程碑面板 | ❌ 未实现 | - | 完全缺失 |
-| 游戏日志 | ❌ 未实现 | - | 完全缺失 |
+| 里程碑面板 | ⚠️ 已实现未入口 | `ui/components/milestone_panel/` | 只读展示已实现；需要入口（按钮/动作） |
+| 游戏日志 | ✅ 已实现 | `ui/components/game_log/` | 已集成到 `game.tscn`（左侧面板） |
 | 顺序轨 | ✅ 已实现 | `ui/components/turn_order/` | 2026-01-05 完成基础版本 |
 
-**GameArea完成度**: 17/19 = **89%**
+**GameArea完成度**: 18/19 = **95%**
 
 #### 1.3.3 底栏 (BottomBar)
 
@@ -143,13 +139,13 @@
 | 占位符降级 | ✅ 完成 | `MapSkin` | 缺失资源不崩溃 |
 | 外部单元格支持 | ✅ 完成 | `_external_cells_by_pos` | 扩展地图边界 |
 | 鼠标交互 | ✅ 完成 | `_gui_input()` | 悬停+点击 |
-| 建筑放置预览 | ❌ 未实现 | - | 需要放置时高亮有效位置 |
-| 营销范围预览 | ❌ 未实现 | - | 需要显示影响区域 |
-| 采购路线绘制 | ❌ 未实现 | - | 需要显示采购员路径 |
-| 距离计算可视化 | ❌ 未实现 | - | 需要显示到餐厅的距离 |
-| 缩放功能 | ❌ 未实现 | - | 大地图需要缩放 |
+| 建筑放置预览 | ✅ 完成 | `ui/scenes/game/game_map_interaction_controller.gd` | 放置/移动等场景高亮合法格（PlacementValidator 扫描） |
+| 营销范围预览 | ✅ 完成 | `ui/overlays/marketing_range_overlay.gd` | 发起营销时 hover/选点预览范围 |
+| 采购路线绘制 | ✅ 完成（自动路线预览） | `ui/overlays/procurement_route_overlay.gd` | `GetDrinks` 选择采购员后显示自动路线（手绘规划未实现） |
+| 距离计算可视化 | ⚠️ 已实现未入口 | `ui/overlays/distance_overlay.gd` | 覆盖层与接口已实现；当前缺少触发入口 |
+| 缩放功能 | ✅ 完成 | `ui/scenes/game/game_overlay_zoom.gd` | ZoomControl 已接入到游戏场景 |
 
-**完成度**: 5/10 = **50%**
+**完成度**: 9/10 = **90%**
 
 ---
 
@@ -1262,12 +1258,12 @@ Week 13+: P2增强
 |------|------|----------|----------|------|
 | marketing_panel (营销面板) | ✅ 已接入 | 2026-01-06 | `ui/components/marketing_panel/` | 发起营销输入收集（验证：`Working/Marketing` 点击 `initiate_marketing`） |
 | price_setting_panel (价格设置) | ✅ 已接入 | 2026-01-06 | `ui/components/price_panel/` | 强制动作确认面板（`set_price/set_discount/set_luxury_price` 无 params；验证：`Working` 点击对应动作） |
-| restaurant_placement (餐厅放置) | ✅ 已接入 | 2026-01-06 | `ui/components/restaurant_placement/` | 地图选点 + rotation + move 模式（未实现“有效位置扫描/高亮”；验证：`place_restaurant/move_restaurant`） |
-| house_placement (房屋放置) | ✅ 已接入 | 2026-01-06 | `ui/components/house_placement/` | 地图选点放房 + 选房添加花园（`add_garden` 需 `direction`；验证：`place_house/add_garden`） |
+| restaurant_placement (餐厅放置) | ✅ 已接入 | 2026-01-06 | `ui/components/restaurant_placement/` | 地图选点 + rotation + move 模式（已接入“有效位置扫描/高亮”：PlacementValidator 扫描；验证：`place_restaurant/move_restaurant`） |
+| house_placement (房屋放置) | ✅ 已接入 | 2026-01-06 | `ui/components/house_placement/` | 地图选点放房 + 选房添加花园（`place_house` 已支持有效位置高亮；`add_garden` 需 `direction`；验证：`place_house/add_garden`） |
 | milestone_panel (里程碑面板) | ⚠️ 已实现未入口 | 2026-01-06 | `ui/components/milestone_panel/` | 只读展示（里程碑自动授予，不支持手动领取；当前缺少 UI 入口） |
 | dinner_time_overlay (晚餐时间) | ✅ 已接入 | 2026-01-06 | `ui/components/dinner_time/` | 只读展示 `round_state["dinnertime"]`（验证：进入 `Dinnertime` 阶段自动弹出） |
 | demand_indicator (需求指示器) | ✅ 已接入 | 2026-01-06 | `ui/components/demand_indicator/` | `Dinnertime` 阶段标记已成交房屋需求（satisfied；验证：进入 `Dinnertime`） |
-| production_panel (生产面板) | ✅ 已接入 | 2026-01-06 | `ui/components/production_panel/` | 选员工并执行（采购路线交互未实现，默认走规则自动路线；验证：`produce_food/procure_drinks`） |
+| production_panel (生产面板) | ✅ 已接入 | 2026-01-06 | `ui/components/production_panel/` | 选员工并执行（采购路线已支持自动路线预览；手绘交互未实现；验证：`produce_food/procure_drinks`） |
 
 **P1 完成度（已接入）**: 7/8 = **87%** ⚠️
 
@@ -1275,15 +1271,15 @@ Week 13+: P2增强
 
 | 组件 | 状态 | 完成日期 | 文件位置 | 备注 |
 |------|------|----------|----------|------|
-| settings_dialog (设置对话框) | ⚠️ 已实现未入口 | 2026-01-06 | `ui/dialogs/settings_dialog/` | 组件已实现；`game.gd` 有 `show_settings_dialog()` 但当前无按钮入口 |
-| game_log_panel (游戏日志) | ⚠️ 已实现未入口 | 2026-01-06 | `ui/components/game_log/` | 面板已创建但无 UI 入口（`game.gd.toggle_game_log()` 暂无触发点） |
+| settings_dialog (设置对话框) | ✅ 已接入（主菜单） | 2026-01-06 | `ui/dialogs/settings_dialog/` | 主菜单已接入；游戏内入口后置 |
+| game_log_panel (游戏日志) | ✅ 已接入 | 2026-01-06 | `ui/components/game_log/` | `game.tscn` 左侧默认显示；toggle 入口后置 |
 | help_tooltip (帮助提示) | ⚠️ 已加载未使用 | 2026-01-06 | `ui/components/help_tooltip/` | 管理器已在 `game.gd` 初始化，但当前没有实际 tooltip 数据源接入 |
 | distance_overlay (距离覆盖层) | ⚠️ 已实现未入口 | 2026-01-06 | `ui/overlays/` | 工具方法已实现（`show_distance_overlay`），但暂无触发入口 |
 | marketing_range_overlay (营销范围) | ✅ 已接入 | 2026-01-06 | `ui/overlays/` | 发起营销时 hover/选点预览范围（验证：`initiate_marketing` 选类型后移动鼠标） |
 | ui_animation_manager (动画系统) | ⚠️ 已加载未使用 | 2026-01-06 | `ui/visual/` | 管理器已在 `game.gd` 初始化，但当前未被组件调用 |
 | confirm_dialog (确认对话框) | ⚠️ 已实现未入口 | 2026-01-06 | `ui/dialogs/` | 组件已实现，但当前无使用点（可用于危险操作二次确认） |
 
-**P2 完成度（已接入）**: 1/7 = **14%** ⚠️
+**P2 完成度（已接入）**: 3/7 = **43%** ⚠️
 
 ### 8.4 集成状态
 
@@ -1294,7 +1290,7 @@ Week 13+: P2增强
 | 信号连接 | ✅ 完成 | 2026-01-05 | action_requested, position_selected 等信号已连接 |
 | 阶段面板集成 | ✅ 完成 | 2026-01-06 | recruit/train/payday/game_over/bank_break/dinnertime 等按需加载或自动弹出 |
 | P1 组件集成 | ⚠️ 部分 | 2026-01-06 | 大部分面板已接入；`milestone_panel` 当前缺少 UI 入口 |
-| P2 组件集成 | ⚠️ 部分 | 2026-01-06 | `marketing_range_overlay/zoom_control` 已接入；settings/log/confirm/distance/tooltip/animation 仍缺入口或未被调用 |
+| P2 组件集成 | ⚠️ 部分 | 2026-01-06 | `settings_dialog/game_log_panel/marketing_range_overlay/zoom_control` 已接入；distance/confirm/tooltip/animation 仍缺入口或未被调用 |
 
 ### 8.5 已知问题
 
@@ -1303,15 +1299,15 @@ Week 13+: P2增强
 3. ~~**动作执行未连接**: action_panel 的 action_requested 信号尚未连接到 game.gd 的命令执行~~ ✅ 已连接
 4. ~~**银行破产 UI**: 首次/二次破产的特殊处理界面尚未实现~~ ✅ 已完成
 5. **MilestonePanel 无 UI 入口**：面板可渲染且已对齐引擎数据，但当前没有按钮/动作可打开
-6. **P2 组件入口缺失**：settings/game_log/confirm_dialog/distance_overlay 已实现但未接入到主界面
-7. **采购路线交互未实现**：`procure_drinks` 当前 UI 仅选择员工，路线由规则自动生成（暂无可视化/手绘）
+6. **P2 组件入口缺失**：confirm_dialog/distance_overlay/help_tooltip/ui_animation_manager 已实现但仍缺入口或未被调用
+7. **采购路线手绘交互未实现**：`procure_drinks` 当前路线由规则自动生成（已支持自动路线可视化预览；未支持手绘/规划）
 
 ### 8.6 下一步计划
 
 1. 完成文档对齐：更新进度/集成状态 + 增补接口契约表（见本文件 8.* 与 `docs/ui_remediation_plan.md`）
 2. 增加 `milestone_panel/settings_dialog/game_log_panel` 的 UI 入口（按钮/菜单/快捷键其一）
 3. 增加 `procure_drinks` 的路线交互与可视化（可复用 `distance_overlay`）
-4. 餐厅/房屋放置：增加“有效位置扫描/高亮”（目前仅支持地图点选回填）
+4. ✅ 餐厅/房屋放置：有效位置扫描/高亮（PlacementValidator 扫描；可继续增强：`add_garden` 方向高亮/提示）
 
 ### 8.7 新增组件（2026-01-06）
 

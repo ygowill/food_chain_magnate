@@ -1,6 +1,6 @@
 # 重构整改计划（高内聚 / 低耦合 / 零 fallback）
 
-最后更新：2026-01-05
+最后更新：2026-01-08
 
 本计划用于**落盘追踪**本仓库的结构整改与重构进度，目标是：
 
@@ -9,6 +9,722 @@
 - 将“规则实现”从“流程编排/状态机”中剥离出来，形成可组合、可测试的规则模块。
 
 > 约定：每完成一个工作项，需要同步更新本文件的状态，并（如适用）补齐/调整 `core/tests/*` 与 `ui/scenes/tests/all_tests.tscn` 覆盖，确保回归可控。
+
+---
+
+## 9. 巨型文件拆分（UI / Modules）（已完成）
+
+目标：把“职责混杂、难维护”的超大文件拆分为高内聚小文件，同时**不改变行为**；每次修改后同步更新本计划进展。
+
+### 9.1 目标文件（按行数）
+
+- `ui/scenes/game/game.gd`（1960）：主游戏场景脚本（引擎驱动/面板/地图交互/overlay/菜单调试/事件日志等混杂）
+- `modules/base_rules/rules/entry.gd`（713）：基础规则模块 entry（大量 settlement/hook/effect/milestone_effect 注册）
+- `modules/new_milestones/rules/entry.gd`（770）：新里程碑模块 entry（大量 action/handler/provider 注册）
+
+### 9.2 里程碑与验收标准
+
+- ✅ 不修改 scene 路径与 `entry_script` 路径（manifest 仍指向原 `rules/entry.gd`）
+- ✅ `game.gd` 收敛为“协调器”，逻辑迁移到独立脚本，通过委托调用
+- ✅ 拆分后保持 headless 可跑：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`
+- ✅ 缩进与格式严格保持（本仓库 GDScript 以 tab 为缩进）
+
+### 9.3 拆分清单（本轮）
+
+- ✅ UI：拆分 `ui/scenes/game/game.gd` → 控制器脚本（event_log / panels / map_interaction / overlays / menu_debug）
+- ✅ Modules：拆分 `modules/base_rules/rules/entry.gd` → 多个 `rules/*.gd`，entry 仅聚合注册
+- ✅ Modules：拆分 `modules/new_milestones/rules/entry.gd` → 多个 `rules/*.gd`，entry 仅聚合注册
+- ✅ 回归：更新本文件进度 + 跑 `AllTests`（71/71）
+
+### 9.4 进度日志
+
+- 2026-01-07：启动“巨型文件拆分（UI / Modules）”工作流（待落盘拆分与回归）。
+- 2026-01-07：UI：`ui/scenes/game/game.gd` 收敛为协调器；新增控制器：
+  - `ui/scenes/game/game_event_log_controller.gd`（EventBus → GameLogPanel）
+  - `ui/scenes/game/game_menu_debug_controller.gd`（菜单/调试/存档）
+  - `ui/scenes/game/game_overlay_controller.gd`（P2 overlays/缩放/设置）
+  - `ui/scenes/game/game_map_interaction_controller.gd`（地图交互/预览/高亮）
+  - `ui/scenes/game/game_panel_controller.gd`（Action 分发/面板生命周期/BankBreak/GameOver）
+- 2026-01-07：Modules：开始拆分 `modules/base_rules/rules/entry.gd`，已抽出 `modules/base_rules/rules/phase_and_map.gd`（settlement/hooks/map_generator）。
+- 2026-01-07：Modules：完成 `modules/base_rules/rules/entry.gd` 拆分：`phase_and_map.gd` + `effects.gd` + `milestone_effects.gd`，entry 收敛为注册聚合器（待 AllTests 回归）。
+- 2026-01-07：Modules：完成 `modules/new_milestones/rules/entry.gd` 拆分：`effects.gd` + `action_executors.gd` + `marketing_initiation.gd` + `settlement_and_hooks.gd` + `milestone_effects.gd` + `utils.gd`，entry 收敛为注册聚合器（待 AllTests 回归）。
+- 2026-01-07：回归：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+- 2026-01-07：清理误生成/未跟踪的测试场景：删除 `ui/scenes/tests/*_test.tscn` 的错误副本与 `ui/scenes/replay_test.tscn`（避免引用不存在的 `res://ui/scenes/tests/*.gd`）
+- 2026-01-08：回归测试后再次发现上述错误副本被生成；已再次清理（保持仓库不跟踪这些文件）。
+
+---
+
+## 10. 巨型文件拆分（Core：DinnertimeSettlement）（已完成）
+
+目标：将 `DinnertimeSettlement` 内部静态 helper 拆到独立脚本，降低单文件体积与复杂度；保持对外 API 与行为不变。
+
+### 10.1 目标文件（按行数）
+
+- `core/rules/phase/dinnertime_settlement.gd`（1039 → 513）：晚餐结算聚合逻辑（候选筛选/距离/库存/Effect 调用等）
+
+### 10.2 拆分落点（本轮）
+
+- 新增 `core/rules/phase/dinnertime/`：
+  - `dinnertime_selection.gd`：候选餐厅选择与平局规则
+  - `dinnertime_distance.gd`：入口点/道路距离与最短路
+  - `dinnertime_inventory.gd`：需求汇总/库存检查与扣减
+  - `dinnertime_effects.gd`：按 segment 批量调用 EffectRegistry（员工/里程碑/全局）
+  - `dinnertime_events.gd`：售出“营销需求”事件收集
+- `DinnertimeSettlement.apply(...)` 保持不变；保留 `DinnertimeSettlement._apply_*_effects_by_segment(...)` 供现有测试调用（薄委托到 `dinnertime_effects.gd`）。
+
+### 10.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 10.4 进度日志
+
+- 2026-01-07：Core：完成 `core/rules/phase/dinnertime_settlement.gd` 拆分（静态 helper 下沉到 `core/rules/phase/dinnertime/*`）。
+- 2026-01-07：回归：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+## 11. 巨型文件拆分（Core：RulesetV2）（已完成）
+
+目标：将模块系统 V2 的 `RulesetV2` 进一步拆分为独立脚本（保持对外 API 与行为不变），降低单文件体积与 review 成本。
+
+### 11.1 目标文件（按行数）
+
+- `core/modules/v2/ruleset.gd`（1143 → 759 → 237）：RulesetV2（注册/patch/apply_hooks/内容校验）
+
+### 11.2 拆分策略（本轮）
+
+- 保持 `core/modules/v2/ruleset.gd` 为对外入口（`class_name RulesetV2` 不变）。
+- 将大块内部实现（不改变对外签名）下沉到 `core/modules/v2/ruleset/*`：
+  - phase hooks 应用（`apply_hooks_to_phase_manager`）
+  - 内容校验（`validate_content_effect_handlers` / `validate_content_milestone_effect_handlers`）
+  - 注册/patch/override 进一步下沉（仍保留对外方法签名，主文件仅薄委托）
+
+### 11.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 11.4 进度日志
+
+- 2026-01-07：Core：开始拆分 `core/modules/v2/ruleset.gd`（优先抽离 phase hooks 应用与 content validation）。
+- 2026-01-07：Core：完成拆分 `core/modules/v2/ruleset.gd`：
+  - 新增 `core/modules/v2/ruleset/phase_hooks.gd`（`apply_hooks_to_phase_manager` 下沉）
+  - 新增 `core/modules/v2/ruleset/content_validation.gd`（content validation 下沉）
+  - `ruleset.gd` 保留对外 API（薄委托到上述 helper）
+- 2026-01-07：Core：二次拆分 `core/modules/v2/ruleset.gd`（进一步收敛注册/patch/override）：
+  - 新增 `core/modules/v2/ruleset/patches.gd`（employee/milestone patches）
+  - 新增 `core/modules/v2/ruleset/sub_phase_registration.gd`（working/cleanup 子阶段插入与 hook 注册）
+  - 新增 `core/modules/v2/ruleset/action_registration.gd`（action/validator/availability/marketing type 注册）
+  - 新增 `core/modules/v2/ruleset/provider_registration.gd`（marketing initiation / bankruptcy / dinnertime providers）
+  - 新增 `core/modules/v2/ruleset/state_and_order.gd`（state initializer / order override / trigger override）
+  - `ruleset.gd` 收敛为对外入口（237 行）
+- 2026-01-07：回归：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+## 12. 巨型文件拆分（Core：PhaseManager）（已完成）
+
+目标：继续收敛 `PhaseManager` 为“状态机编排 + hook 调度”，将大块推进逻辑拆到独立脚本（保持行为不变）。
+
+### 12.1 目标文件（按行数）
+
+- `core/engine/phase_manager.gd`（1034 → 495）：阶段推进（advance_phase/advance_sub_phase）、触发结算、子阶段推进等
+
+### 12.2 拆分策略（本轮）
+
+- 保持 `core/engine/phase_manager.gd` 为对外入口（`class_name PhaseManager` 不变）。
+- 将“阶段推进/子阶段推进”的大块实现下沉到 `core/engine/phase_manager/*`：
+  - `advance_phase`（含 rollback / auto-enter sub-phase）
+  - `advance_sub_phase` 及其内部 `_advance_*` helper
+
+### 12.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 12.4 进度日志
+
+- 2026-01-07：Core：开始拆分 `core/engine/phase_manager.gd`（优先抽离阶段推进与子阶段推进逻辑）。
+- 2026-01-07：Core：完成拆分 `core/engine/phase_manager.gd`：
+  - 新增 `core/engine/phase_manager/advancement.gd`（`advance_phase/advance_sub_phase` 与内部 `_advance_*` 下沉）
+  - `phase_manager.gd` 保留对外 API（薄委托到 `advancement.gd`）
+- 2026-01-07：回归：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+---
+
+## 13. 巨型文件拆分（UI：GamePanelController）（已完成）
+
+目标：将 `GamePanelController` 内部的“阶段面板/覆盖层”职责拆到独立脚本；`GamePanelController` 保持为对外入口（ActionPanel 分发 + 基础 UI 数据绑定），行为不变。
+
+### 13.1 目标文件（按行数）
+
+- `ui/scenes/game/game_panel_controller.gd`（1054 → 241）：阶段面板协调器（原先集中在一个文件）
+
+### 13.2 拆分落点（本轮）
+
+- 新增：
+  - `ui/scenes/game/game_panel_working_panels.gd`：Recruit/Train/Price/Production/Milestone 面板
+  - `ui/scenes/game/game_panel_marketing_panels.gd`：Marketing 面板（可用营销员/板件 + 地图选点）
+  - `ui/scenes/game/game_panel_placement_overlays.gd`：餐厅/住宅/花园放置覆盖层
+  - `ui/scenes/game/game_panel_end_panels.gd`：Payday/BankBreak/GameOver 面板 + 银行破产检测
+- `ui/scenes/game/game_panel_controller.gd` 保持 `class_name GamePanelController` 不变；改为薄封装与委托。
+
+### 13.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 13.4 进度日志
+
+- 2026-01-07：UI：拆分 `ui/scenes/game/game_panel_controller.gd`，按职责下沉到 `game_panel_*`；主文件收敛为 coordinator（Action 路由 + 基础 UI binding）。
+- 2026-01-07：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 14. 巨型文件拆分（Core：GameEngine 初始化）（已完成）
+
+目标：将 `GameEngine.initialize(...)` 的初始化主流程与 tile_supply 初始化抽离到独立脚本，降低 `core/engine/game_engine.gd` 体积与职责密度；保持对外 API 与行为不变。
+
+### 14.1 目标文件（按行数）
+
+- `core/engine/game_engine.gd`（763 → 599）：初始化主流程下沉后，主文件保留对外 API 与编排
+
+### 14.2 拆分落点（本轮）
+
+- 新增 `core/engine/game_engine/initializer.gd`：
+  - `initialize_new_game(...)`：抽离自 `GameEngine.initialize(...)`
+  - `_initialize_tile_supply_remaining(...)`：tile_supply_remaining 初始化（原 `GameEngine._initialize_tile_supply_remaining`）
+- `core/engine/game_engine.gd`：
+  - `initialize(...)` 改为薄委托到 `initializer.gd`
+
+### 14.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 14.4 进度日志
+
+- 2026-01-07：Core：抽离 `GameEngine.initialize(...)` 到 `core/engine/game_engine/initializer.gd`；主文件收敛为薄封装与编排。
+- 2026-01-07：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 15. 巨型文件拆分（UI：MapCanvas）（已完成）
+
+目标：将 `MapCanvas` 内部的“地图渲染 / overlay 索引 / tooltip”职责拆到独立脚本；`map_canvas.gd` 保持为对外入口（数据注入 + input/signal + coord/取 cell），行为不变。
+
+### 15.1 目标文件（按行数）
+
+- `ui/scenes/game/map_canvas.gd`（715 → 229）：地图绘制画布（原先集中在一个文件）
+
+### 15.2 拆分落点（本轮）
+
+- 新增：
+  - `ui/scenes/game/map_canvas_drawer.gd`：`_draw` 分层渲染（ground/road/drink/piece/marketing/selection）
+  - `ui/scenes/game/map_canvas_indexer.gd`：external_cells 解析 / bounds 计算 / marketing+structure 索引构建
+  - `ui/scenes/game/map_canvas_tooltip.gd`：tooltip 文本格式化
+- `ui/scenes/game/map_canvas.gd`：收敛为 coordinator（state.map 注入 + input/signal + 坐标换算/取 cell）
+
+### 15.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 15.4 进度日志
+
+- 2026-01-07：UI：拆分 `ui/scenes/game/map_canvas.gd`，按职责下沉到 `map_canvas_*`；主文件收敛为薄封装与编排。
+- 2026-01-07：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 16. 巨型文件拆分（Core：MarketingSettlement）（已完成）
+
+目标：将 `MarketingSettlement` 内部 helper 下沉到独立脚本，降低单文件体积；`MarketingSettlement.apply(...)` 行为不变。
+
+### 16.1 目标文件（按行数）
+
+- `core/rules/phase/marketing_settlement.gd`（614 → 308）：Marketing 结算（聚合层）
+
+### 16.2 拆分落点（本轮）
+
+- 新增 `core/rules/phase/marketing/settlement_helpers.gd`：
+  - 到期释放（marketing placement 回收 + busy_marketers 释放）
+  - 产品序列（multi-product settlement）
+  - 需求写入/排序（demand cap / multiplier / house_id sort）
+  - effects 应用（demand_amount / cash_bonus）
+- `core/rules/phase/marketing_settlement.gd`：保留对外 API 与 `apply` 主流程；原 `_expire/_get_products/_add_house_demand/_get_demand_amount/_apply_cash/_sort_house_ids` 改为薄委托。
+
+### 16.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 16.4 进度日志
+
+- 2026-01-07：Core：拆分 `core/rules/phase/marketing_settlement.gd` helper 到 `core/rules/phase/marketing/settlement_helpers.gd`，主文件收敛为聚合与委托。
+- 2026-01-07：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 17. 巨型文件拆分（Modules：Coffee）（已完成）
+
+目标：拆分 `coffee` 模块的 `rules/entry.gd`，将“注册/状态初始化/结算/路径算法”拆到独立脚本；保持对外 API 与行为不变。
+
+### 17.1 目标文件（按行数）
+
+- `modules/coffee/rules/entry.gd`（545 → 27）：coffee 模块 entry（收敛为聚合器 + 兼容性静态委托）
+
+### 17.2 拆分落点（本轮）
+
+- 新增：
+  - `modules/coffee/rules/coffee_actions_and_state.gd`：action executor + state initializer
+  - `modules/coffee/rules/coffee_cleanup.gd`：Cleanup 进入点的咖啡清空结算
+  - `modules/coffee/rules/coffee_dinnertime_route.gd`：dinnertime route purchase provider（路径枚举/停靠点索引/购买模拟与执行）
+- `modules/coffee/rules/entry.gd`：收敛为注册聚合器；保留 `_build_coffee_stop_index/_pos_key` 静态委托以兼容现有测试调用。
+
+### 17.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 17.4 进度日志
+
+- 2026-01-07：Modules：拆分 `modules/coffee/rules/entry.gd` 到 `coffee_*`；entry 收敛为聚合器并保留必要静态委托。
+- 2026-01-07：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 18. 巨型文件拆分（Gameplay：TrainAction）（已完成）
+
+目标：拆分 `TrainAction`，将“round_state 计数/公司结构校验/使用推导”等 helper 下沉到独立脚本；`train_action.gd` 保持为对外入口（validate/apply/event），行为不变。
+
+### 18.1 目标文件（按行数）
+
+- `gameplay/actions/train_action.gd`（588 → 291）：培训动作（收敛为 coordinator + 委托）
+
+### 18.2 拆分落点（本轮）
+
+- 新增 `gameplay/actions/train/`：
+  - `train_phase_start_counts.gd`：`train_phase_start_counts` 写入/读取/计算（含 pending/active/reserve 汇总）
+  - `train_company_validation.gd`：同色校验 + “在岗替换培训”公司结构校验
+  - `train_employee_usage.gd`：训练前“是否已使用”判断 + 训练后 `UseEmployee` 推导触发
+- `gameplay/actions/train_action.gd`：移除内部静态 helper；改为薄委托调用上述脚本。
+
+### 18.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 18.4 进度日志
+
+- 2026-01-07：Gameplay：完成 `TrainAction` 拆分（phase_start_counts/company_validation/employee_usage 下沉）。
+- 2026-01-07：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 19. 巨型文件拆分（Core：GameEngine 执行/加载）（已完成）
+
+目标：进一步拆分 `GameEngine`，将“存档加载 / 命令执行 / auto-advance & events”下沉到独立脚本；`game_engine.gd` 保持为对外入口（API 不变），行为不变。
+
+### 19.1 目标文件（按行数）
+
+- `core/engine/game_engine.gd`（599 → 271）：引擎入口（收敛为 coordinator + 委托）
+
+### 19.2 拆分落点（本轮）
+
+- 新增：
+  - `core/engine/game_engine/loader.gd`：`load_from_archive` + strict int 解析
+  - `core/engine/game_engine/command_runner.gd`：`execute_command` + auto-advance 循环 + phase/cash 事件构建
+- `core/engine/game_engine.gd`：`load_from_archive/execute_command` 改为薄委托；移除内部 `_parse_int_value/_drain_auto_advances/_build_*_events` 实现。
+
+### 19.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 19.4 进度日志
+
+- 2026-01-08：Core：拆分 `GameEngine`：存档加载与命令执行下沉到 `loader/command_runner`，主文件收敛为入口与编排。
+- 2026-01-08：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 20. 巨型文件拆分（Core：PhaseManagerAdvancement）（已完成）
+
+目标：拆分 `PhaseManagerAdvancement`，将“主阶段推进 / 子阶段推进”按职责下沉到独立脚本；`advancement.gd` 保持为对外入口（API 不变），行为不变。
+
+### 20.1 目标文件（按行数）
+
+- `core/engine/phase_manager/advancement.gd`（564 → 12）：推进入口（收敛为 delegate）
+
+### 20.2 拆分落点（本轮）
+
+- 新增：
+  - `core/engine/phase_manager/advance_phase.gd`：`advance_phase` 主阶段推进（含 hooks/settlement/auto-enter sub-phase）
+  - `core/engine/phase_manager/advance_sub_phase.gd`：`advance_sub_phase` 子阶段推进（generic/working/cleanup）
+- `core/engine/phase_manager/advancement.gd`：保留 `class_name PhaseManagerAdvancement` 与对外静态方法；内部委托到上述脚本。
+
+### 20.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 20.4 进度日志
+
+- 2026-01-08：Core：拆分 `PhaseManagerAdvancement`（advance_phase / advance_sub_phase 下沉），入口文件收敛为委托。
+- 2026-01-08：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 21. 巨型文件拆分（Gameplay：InitiateMarketingAction）（已完成）
+
+目标：拆分 `InitiateMarketingAction`，将 validate/apply 大块逻辑下沉到独立脚本；`initiate_marketing_action.gd` 保持为对外入口（can_initiate/validate/apply/events），行为不变。
+
+### 21.1 目标文件（按行数）
+
+- `gameplay/actions/initiate_marketing_action.gd`（518 → 171）：发起营销动作（收敛为 coordinator + 委托）
+
+### 21.2 拆分落点（本轮）
+
+- 新增 `gameplay/actions/initiate_marketing/`：
+  - `validation.gd`：参数/产品/板件占用/员工能力/放置/距离/飞机轴校验
+  - `apply.gd`：生效时长推导、营销员 busy、实例创建、里程碑与扩展注册表调用
+- `gameplay/actions/initiate_marketing_action.gd`：`_validate_specific/_apply_changes` 改为薄委托；保留事件生成与轴推断等小 helper。
+
+### 21.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 21.4 进度日志
+
+- 2026-01-08：Gameplay：完成 `InitiateMarketingAction` 拆分（validation/apply 下沉），主脚本收敛为入口与委托。
+- 2026-01-08：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 22. 巨型文件拆分（Core：GameStateSerialization）（已完成）
+
+目标：拆分 `GameStateSerialization`，将“JSON-safe 转换 / map 解码 / parse helpers / round_state 解析”下沉到独立脚本；`game_state_serialization.gd` 保持为对外入口（API 不变），行为不变。
+
+### 22.1 目标文件（按行数）
+
+- `core/state/game_state_serialization.gd`（524 → 230）：GameState 序列化/反序列化（收敛为 coordinator + 委托）
+
+### 22.2 拆分落点（本轮）
+
+- 新增 `core/state/serialization/`：
+  - `json_safe.gd`：`to_json_safe`（Variant 深度转换为 JSON-safe）
+  - `parse_helpers.gd`：`parse_int/parse_non_negative_int/...`（严格数值解析）
+  - `value_decoder.gd`：`decode_map/decode_value`（[x,y] ↔ Vector2i 解码）
+  - `round_state_parser.gd`：`parse_round_state`（round_state 归一化与严格校验）
+- `core/state/game_state_serialization.gd`：保留 `class_name GameStateSerialization`；内部 `_to_json_safe/_decode_*/_parse_*` 改为薄委托。
+
+### 22.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 22.4 进度日志
+
+- 2026-01-08：Core：拆分 `GameStateSerialization`：json_safe/value_decoder/parse_helpers/round_state_parser 下沉；主文件收敛为入口与委托。
+- 2026-01-08：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 23. 巨型文件拆分（UI：MarketingPanel）（已完成）
+
+目标：将 `MarketingPanel` 内部的“营销类型按钮 UI”抽离到独立脚本，降低单文件体积与职责混杂；`marketing_panel.gd` 保持为对外入口（signal/选择逻辑/option rebuild），行为不变。
+
+### 23.1 目标文件（按行数）
+
+- `ui/components/marketing_panel/marketing_panel.gd`（508 → 412）：营销面板组件（收敛为 coordinator）
+
+### 23.2 拆分落点（本轮）
+
+- 新增 `ui/components/marketing_panel/marketing_type_button.gd`：原内部类 `MarketingTypeButton`（按钮 UI/样式/点击事件）
+- `ui/components/marketing_panel/marketing_panel.gd`：移除内部类；改为 `preload` 并实例化 `marketing_type_button.gd`（其余逻辑不变）。
+
+### 23.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 23.4 进度日志
+
+- 2026-01-08：UI：拆分 `MarketingPanel`：`MarketingTypeButton` 下沉到 `marketing_type_button.gd`，主文件收敛为入口与编排。
+- 2026-01-08：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 24. 巨型文件拆分（Core：StateUpdater）（已完成）
+
+目标：拆分 `StateUpdater`，将“现金 / 集合操作 / 库存 / 员工与里程碑 / 批量更新”按职责下沉到独立脚本；`state_updater.gd` 保持为对外入口（API 不变），行为不变。
+
+### 24.1 目标文件（按行数）
+
+- `core/state/state_updater.gd`（500 → 107）：状态更新入口（收敛为 delegate）
+
+### 24.2 拆分落点（本轮）
+
+- 新增 `core/state/state_updater/`：
+  - `cash.gd`：`transfer_cash/_get_balance/_modify_balance` + 玩家现金便捷方法
+  - `collections.gd`：`increment/decrement/set_clamped` + 数组 append/remove
+  - `inventory.gd`：`add_inventory/remove_inventory/has_inventory`
+  - `employees_and_milestones.gd`：员工池/玩家员工 + 里程碑 claim/校验
+  - `batch.gd`：`apply_batch`（批量更新）
+- `core/state/state_updater.gd`：保留 `class_name StateUpdater`；所有静态方法改为薄委托到上述脚本。
+
+### 24.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 24.4 进度日志
+
+- 2026-01-08：Core：拆分 `StateUpdater`：cash/collections/inventory/employees_and_milestones/batch 下沉；主文件收敛为入口与委托。
+- 2026-01-08：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 25. 巨型文件拆分（Core：PlacementValidator）（已完成）
+
+目标：拆分 `PlacementValidator`，将“map_ctx 访问 / base validators / 放置入口 / 餐厅放置 / 花园附加 / 道路工具”按职责下沉到独立脚本；`placement_validator.gd` 保持为对外入口（API 不变），行为不变。
+
+### 25.1 目标文件（按行数）
+
+- `core/map/placement_validator.gd`（501 → 63）：放置验证入口（收敛为 delegate）
+
+### 25.2 拆分落点（本轮）
+
+- 新增 `core/map/placement_validator/`：
+  - `map_access.gd`：`get_map_origin/world_to_index/has_world_cell/get_world_cell`
+  - `validators.gd`：`validate_*`（bounds/empty/blocked/drink_source/overlap/road_adjacency）
+  - `placement.gd`：`validate_placement/get_valid_placements`
+  - `restaurant_placement.gd`：`validate_restaurant_placement`（入口邻接道路 + 初始放置约束）
+  - `garden_attachment.gd`：`validate_garden_attachment`
+  - `road_utils.gd`：`is_adjacent_to_road/get_adjacent_road_cells`
+- `core/map/placement_validator.gd`：保留 `class_name PlacementValidator`；所有静态方法改为薄委托到上述脚本。
+
+### 25.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 25.4 进度日志
+
+- 2026-01-08：Core：拆分 `PlacementValidator`：map_access/validators/placement/restaurant_placement/garden_attachment/road_utils 下沉；主文件收敛为入口与委托。
+- 2026-01-08：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 26. 巨型文件拆分（Core：RoadGraph）（已完成）
+
+目标：拆分 `RoadGraph`，将“图构建 / 最短路与连通性 / 街区划分 / 距离范围查询”按职责下沉到独立脚本；`road_graph.gd` 保持为对外入口（API 不变），行为不变。
+
+### 26.1 目标文件（按行数）
+
+- `core/map/road_graph.gd`（500 → 146）：道路图入口（收敛为 delegate）
+
+### 26.2 拆分落点（本轮）
+
+- 新增 `core/map/road_graph/`：
+  - `node_keys.gd`：节点 key 编码/解码（`make_node_key/parse_node_key`）
+  - `builder.gd`：节点/边构建（含 external_cells）与 cell access helper
+  - `pathfinding.gd`：最短路（多源 Dijkstra）+ 连通性/邻接查询
+  - `blocks.gd`：街区划分（flood fill）+ block 查询
+  - `range_query.gd`：道路范围查询（`get_cells_within_distance`）
+- `core/map/road_graph.gd`：保留 `class_name RoadGraph`；构建/查询方法改为薄委托到上述脚本。
+
+### 26.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 26.4 进度日志
+
+- 2026-01-08：Core：拆分 `RoadGraph`：builder/pathfinding/blocks/range_query/node_keys 下沉；主文件收敛为入口与委托。
+- 2026-01-08：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 27. 巨型文件拆分（UI：GameOverlayController）（已完成）
+
+目标：拆分 `GameOverlayController`，将“距离覆盖层 / 营销范围覆盖层 / 晚餐 overlay / 需求指示器 / 缩放控制 / UI 数据 helper”按职责下沉到独立脚本；`game_overlay_controller.gd` 保持为对外入口（API 不变），行为不变。
+
+### 27.1 目标文件（按行数）
+
+- `ui/scenes/game/game_overlay_controller.gd`（497 → 143）：覆盖层入口（收敛为 coordinator + 委托）
+
+### 27.2 拆分落点（本轮）
+
+- 新增 `ui/scenes/game/`：
+  - `game_overlay_zoom.gd`：缩放控制初始化与回调（ZoomControl + map_view 信号）
+  - `game_overlay_distance.gd`：距离覆盖层 show/hide
+  - `game_overlay_marketing_range.gd`：营销范围覆盖层 show/hide/preview + transform 同步
+  - `game_overlay_dinnertime.gd`：晚餐 overlay show/hide + pending orders 构建
+  - `game_overlay_demand_indicator.gd`：需求指示器 show/hide + 数据构建
+  - `game_overlay_utils.gd`：UI 数据 helper（coerce/normalize/house_pos/demands）
+- `ui/scenes/game/game_overlay_controller.gd`：保留 `class_name GameOverlayController`；改为创建子控制器并委托调用；保留 `distance_overlay/marketing_range_overlay/...` 作为兼容别名属性（指向子控制器内部节点）。
+
+### 27.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 27.4 进度日志
+
+- 2026-01-08：UI：拆分 `GameOverlayController`：distance/marketing_range/dinnertime/demand_indicator/zoom/utils 下沉；主文件收敛为入口与委托。
+- 2026-01-08：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 28. 巨型文件拆分（Core：PhaseManager 配置/结算触发）（已完成）
+
+目标：进一步拆分 `PhaseManager`，将“阶段/子阶段顺序配置 + 结算触发点配置/校验”下沉到独立脚本；`phase_manager.gd` 保持为对外入口（API 不变），行为不变。
+
+### 28.1 目标文件（按行数）
+
+- `core/engine/phase_manager.gd`（495 → 277）：阶段管理器入口（收敛为 coordinator + 委托）
+
+### 28.2 拆分落点（本轮）
+
+- 新增 `core/engine/phase_manager/`：
+  - `order_config.gd`：`phase_order/working_sub_phase_order/cleanup_sub_phase_order/phase_sub_phase_order` 的构建与严格校验
+  - `settlement_triggers.gd`：`settlement_triggers_on_{enter,exit}` 的构建/设置/执行 + required_primary 校验
+- `core/engine/phase_manager.gd`：新增 `OrderConfigClass/SettlementTriggersClass`；将相关方法改为薄委托。
+
+### 28.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 28.4 进度日志
+
+- 2026-01-08：Core：进一步拆分 `PhaseManager`：order_config/settlement_triggers 下沉；主文件收敛为入口与委托。
+- 2026-01-08：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 29. 巨型文件拆分（Core：EmployeeDef）（已完成）
+
+目标：将 `EmployeeDef` 内的“严格解析/序列化/调试输出”拆到独立脚本；`core/data/employee_def.gd` 保持为对外入口（API 不变），行为不变。
+
+### 29.1 目标文件（按行数）
+
+- `core/data/employee_def.gd`（484 → 176）：员工定义入口（解析/序列化/调试下沉后，主文件保留数据结构 + 查询 + 薄委托）
+
+### 29.2 拆分落点（本轮）
+
+- 新增 `core/data/employee_def/`：
+  - `parser.gd`：严格解析（`apply_from_dict` + 内部 `_parse_*` helper）
+  - `serialization.gd`：`to_dict(self)` 的序列化实现
+  - `debug.gd`：`dump(self)` 调试输出实现
+- `core/data/employee_def.gd`：保留 `class_name EmployeeDef`；`from_dict/to_dict/dump` 改为薄委托。
+
+### 29.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 29.4 进度日志
+
+- 2026-01-08：Core：开始拆分 `core/data/employee_def.gd`：parser/serialization/debug 下沉；主文件收敛为入口与薄委托（待 AllTests 回归）。
+- 2026-01-08：Core：修复拆分引入的 GDScript 类型推断/TypedArray 赋值问题（`has_recruit_usage` 与 `effect_ids`），保证严格类型兼容。
+- 2026-01-08：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 30. 巨型文件拆分（Core：MapBaker）（已完成）
+
+目标：将 `MapBaker` 内的“烘焙主流程 / 板块写入 / cells 查询 / 边界索引 / dump”拆到独立脚本；`core/map/map_baker.gd` 保持为对外入口（API 不变），行为不变。
+
+### 30.1 目标文件（按行数）
+
+- `core/map/map_baker.gd`（481 → 95）：地图烘焙器入口（逻辑下沉后，主文件收敛为薄委托）
+
+### 30.2 拆分落点（本轮）
+
+- 新增 `core/map/map_baker/`：
+  - `bake.gd`：`MapBaker.bake(...)` 主流程（validate → create cells → bake tiles → boundary index）
+  - `cells.gd`：cells 网格创建（`create_empty_cells/create_empty_cell`）
+  - `tile_baking.gd`：板块写入（`bake_tile/bake_tile_into_cells`）
+  - `boundary_index.gd`：板块边界索引（`build_boundary_index`）
+  - `queries.gd`：cells 查询（`get_cell/get_road_segments_at/has_*` 等）
+  - `debug.gd`：`dump_cells`
+- `core/map/map_baker.gd`：新增 preload 常量，所有 public/static 方法改为薄委托。
+
+### 30.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 30.4 进度日志
+
+- 2026-01-08：Core：开始拆分 `core/map/map_baker.gd`：bake/cells/tile_baking/boundary_index/queries/debug 下沉；主文件收敛为入口与薄委托（待 AllTests 回归）。
+- 2026-01-08：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 31. 巨型文件拆分（Core：EmployeeRules）（已完成）
+
+目标：将 `EmployeeRules` 内的“薪资规则 / 计数与额度 / round_state 计数器 / immediate_train_pending”按职责拆到独立脚本；`core/rules/employee_rules.gd` 保持为对外入口（API 不变），行为不变。
+
+### 31.1 目标文件（按行数）
+
+- `core/rules/employee_rules.gd`（479 → 79）：员工规则入口（逻辑下沉后，主文件收敛为薄委托）
+
+### 31.2 拆分落点（本轮）
+
+- 新增 `core/rules/employee_rules/`：
+  - `salary.gd`：`requires_salary/is_marketing_employee_def/count_paid_employees`
+  - `counts.gd`：`is_entry_level/count_active/*_by_usage_tag*`（含 working 版本）
+  - `working_multiplier.gd`：`get_working_employee_multiplier`
+  - `limits.gd`：`get_recruit_limit/get_train_limit`（含 working 版本）
+  - `action_counts.gd`：`get_action_count/increment_action_count/reset_action_counts`
+  - `immediate_train_pending.gd`：`get_*_pending*/has_any/add/consume`
+- `core/rules/employee_rules.gd`：新增 preload 常量，所有 public/static 方法改为薄委托。
+
+### 31.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 31.4 进度日志
+
+- 2026-01-08：Core：开始拆分 `core/rules/employee_rules.gd`：salary/counts/working_multiplier/limits/action_counts/immediate_train_pending 下沉；主文件收敛为入口与薄委托（待 AllTests 回归）。
+- 2026-01-08：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 32. 巨型文件拆分（Core：MapRuntime）（已完成）
+
+目标：将 `MapRuntime` 内的“baked_map 写入 / RoadGraph 缓存 / 坐标换算 / cells 查询 / 动态扩容与 add_map_tile / house&restaurant 查询”按职责拆到独立脚本；`core/map/map_runtime.gd` 保持为对外入口（API 不变），行为不变。
+
+### 32.1 目标文件（按行数）
+
+- `core/map/map_runtime.gd`（479 → 93）：地图运行时入口（逻辑下沉后，主文件收敛为薄委托）
+
+### 32.2 拆分落点（本轮）
+
+- 新增 `core/map/map_runtime/`：
+  - `baked_map.gd`：`apply_baked_map` + 内部严格解析 helper
+  - `road_graph_cache.gd`：`get_road_graph/invalidate_road_graph`
+  - `coords.gd`：`get_map_origin/set_map_origin/world<->index/get_world_min/max/is_on_map_edge`
+  - `cells.gd`：`get_cell/get_cell_any/has_*_at*` + external_cells 支持
+  - `tile_edit.gd`：`add_map_tile/ensure_world_rect`（含 void cell 构建与 boundary_index）
+  - `structures.gd`：`get_house/get_restaurant/get_player_restaurants/get_sorted_house_ids`
+- `core/map/map_runtime.gd`：新增 preload 常量，所有 public/static 方法改为薄委托。
+
+### 32.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 32.4 进度日志
+
+- 2026-01-08：Core：开始拆分 `core/map/map_runtime.gd`：baked_map/road_graph_cache/coords/cells/tile_edit/structures 下沉；主文件收敛为入口与薄委托（待 AllTests 回归）。
+- 2026-01-08：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
+
+---
+
+## 33. 巨型文件拆分（UI：TileEditor）（进行中）
+
+目标：将 `TileEditor` 内的“文件系统 I/O（加载 piece/tile 索引、写入 JSON）+ cell 模型查询”下沉到独立脚本；`ui/scenes/tools/tile_editor.gd` 保持为场景入口（UI 事件与渲染），行为不变。
+
+### 33.1 目标文件（按行数）
+
+- `ui/scenes/tools/tile_editor.gd`（465 → 399）：板块编辑器入口（I/O 与 cell model 下沉后仍待继续拆分）
+
+### 33.2 拆分落点（本轮）
+
+- 新增 `ui/scenes/tools/tile_editor/`：
+  - `storage.gd`：加载 piece ids、加载 tile index、写入 tile JSON（含 user:// fallback）
+  - `cell_model.gd`：drink_source / printed_anchor 的查询与删除
+- `ui/scenes/tools/tile_editor.gd`：新增 preload 常量，相关逻辑改为薄委托。
+
+### 33.3 回归
+
+- ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` → `[AllTests] SUMMARY passed=71/71 failed=[]`（见 `.godot/AllTests.log`）
+
+### 33.4 进度日志
+
+- 2026-01-08：UI：开始拆分 `ui/scenes/tools/tile_editor.gd`：storage/cell_model 下沉；主文件收敛为 UI 事件与渲染（待 AllTests 回归）。
+- 2026-01-08：回归：AllTests 71/71 通过（见 `.godot/AllTests.log`）
 
 ---
 

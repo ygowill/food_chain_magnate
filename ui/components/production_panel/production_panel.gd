@@ -5,6 +5,7 @@ extends Control
 
 signal production_requested(employee_type: String, production_type: String)
 signal cancelled()
+signal producer_changed(employee_type: String, production_type: String)
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var mode_label: Label = $MarginContainer/VBoxContainer/ModeLabel
@@ -112,6 +113,7 @@ func _rebuild_employee_options() -> void:
 		_apply_selected_employee(0)
 	else:
 		_employee_option.disabled = true
+	_selected_changed()
 
 func _apply_selected_employee(index: int) -> void:
 	if _employee_option == null:
@@ -123,8 +125,12 @@ func _apply_selected_employee(index: int) -> void:
 
 func _on_employee_selected(index: int) -> void:
 	_apply_selected_employee(index)
+	_selected_changed()
 	_update_confirm_state()
 	_update_info()
+
+func _selected_changed() -> void:
+	producer_changed.emit(_selected_employee_type, _production_type)
 
 func _update_confirm_state() -> void:
 	if confirm_btn == null:

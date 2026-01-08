@@ -21,6 +21,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if state.phase == "OrderOfBusiness":
 		return Result.failure("决定顺序阶段不能确认结束，请选择顺序")
 
+	# Restructuring（hotseat 提交制）：禁止使用“确认结束”，避免误操作导致软锁
+	if state.phase == "Restructuring" and int(state.round_number) > 1:
+		return Result.failure("重组阶段不能确认结束，请使用“确认重组”提交公司结构")
+
 	# 检查是否是当前玩家的回合
 	var current_player_id := state.get_current_player_id()
 	if command.actor != current_player_id:
@@ -138,9 +142,16 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return Result.success().with_warnings(adv.warnings)
 
 	for offset in range(1, size + 1):
-		var idx := state.current_player_index + offset
-		if idx >= size:
-			idx = idx % size
+		var idx: int
+		if state.phase == "Setup":
+			# 初始餐厅放置：逆序轮转（从顺序轨最后一位开始）
+			idx = state.current_player_index - offset
+			while idx < 0:
+				idx += size
+		else:
+			idx = state.current_player_index + offset
+			if idx >= size:
+				idx = idx % size
 		var pid_val = state.turn_order[idx]
 		if not (pid_val is int):
 			continue

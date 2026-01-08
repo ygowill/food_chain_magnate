@@ -24,6 +24,7 @@ const ACTION_DISPLAY_NAMES: Dictionary = {
 	"skip": "确认结束",
 	"skip_sub_phase": "跳过子阶段",
 	"choose_turn_order": "选择顺序",
+	"submit_restructuring": "确认重组",
 	"recruit": "招聘",
 	"train": "培训",
 	"initiate_marketing": "发起营销",
@@ -45,6 +46,7 @@ const ACTION_DESCRIPTIONS: Dictionary = {
 	"skip": "确认结束本阶段/子阶段",
 	"skip_sub_phase": "跳过当前子阶段（Working）",
 	"choose_turn_order": "在顺序轨上选择位置",
+	"submit_restructuring": "提交本回合公司结构（重组阶段）",
 	"recruit": "招聘一名入门级员工",
 	"train": "培训待命区的员工",
 	"initiate_marketing": "发起营销活动",
@@ -121,6 +123,22 @@ func refresh() -> void:
 		if HIDDEN_ACTION_IDS.has(aid2):
 			continue
 		visible_executable.append(aid2)
+
+	# Restructuring（hotseat 提交制）：隐藏“确认结束(skip)”，避免误解/误点造成卡住
+	if _game_state.phase == "Restructuring" and int(_game_state.round_number) > 1:
+		var filtered_ids: Array[String] = []
+		for aid_skip in visible_ids:
+			if aid_skip == "skip":
+				continue
+			filtered_ids.append(aid_skip)
+		visible_ids = filtered_ids
+
+		var filtered_executable: Array[String] = []
+		for aid_skip2 in visible_executable:
+			if aid_skip2 == "skip":
+				continue
+			filtered_executable.append(aid_skip2)
+		visible_executable = filtered_executable
 
 	# Working：仅当当前子阶段存在可做动作时，才显示“跳过子阶段”
 	if _game_state.phase == "Working" and visible_ids.has("skip_sub_phase"):

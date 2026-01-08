@@ -3,6 +3,7 @@ extends Control
 
 const ReplayDeterminismTestClass = preload("res://core/tests/replay_determinism_test.gd")
 const EmployeeActionTestClass = preload("res://core/tests/employee_action_test.gd")
+const RestructuringOverflowPenaltyTestClass = preload("res://core/tests/restructuring_overflow_penalty_test.gd")
 const RecruitOnCreditRulesTestClass = preload("res://core/tests/recruit_on_credit_rules_test.gd")
 const PaydaySalaryTestClass = preload("res://core/tests/payday_salary_test.gd")
 const InitialCompanyTestClass = preload("res://core/tests/initial_company_test.gd")
@@ -108,6 +109,10 @@ func _run_all() -> int:
 		{
 			"name": "EmployeeTest",
 			"fn": func() -> Result: return EmployeeActionTestClass.run(2, 12345),
+		},
+		{
+			"name": "RestructuringOverflowPenaltyTest",
+			"fn": func() -> Result: return RestructuringOverflowPenaltyTestClass.run(2, 12345),
 		},
 		{
 			"name": "RecruitOnCreditRulesTest",

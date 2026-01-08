@@ -11,7 +11,8 @@
 - 维护者：Codex（与仓库同作者协作）
 - 适用版本：当前工作区（以 `git status` 为准）
 - 测试基线：
-  - ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 600`（`71/71 PASS`，见 `.godot/AllTests.log`）
+  - ✅ `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（`72/72 PASS`，见 `.godot/AllTests.log`）
+  - ✅ `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`（`PASS`，见 `.godot/GameSmokeTest.log`）
 
 ---
 
@@ -123,7 +124,7 @@
 | ID | 优先级 | 任务 | 验收标准 | 影响文件 | 状态 |
 |---|---|---|---|---|---|
 | R-040 | P1 | ProductionPanel 改为“选择员工并执行” | `produce_food` 仅传 `employee_type`；`procure_drinks` 默认自动路线也可执行 | `ui/components/production_panel/production_panel.gd`, `.tscn`, `ui/scenes/game/game.gd` | DONE |
-| R-041 | P2 | 采购路线交互（后续） | 可选：提供 route 规划 UI | `ui/components/...`, `ui/overlays/...` | TODO |
+| R-041 | P2 | 采购路线可视化（自动路线预览） | `Working/GetDrinks` 选择采购员后地图显示自动路线（不含手绘规划） | `ui/overlays/procurement_route_overlay.*`, `ui/scenes/game/game_overlay_procurement_route.gd`, `ui/scenes/game/game_panel_working_panels.gd` | DONE |
 
 ### 4.6 P1：建筑放置/花园（参数齐全）
 
@@ -131,7 +132,7 @@
 |---|---|---|---|---|---|
 | R-050 | P1 | RestaurantPlacementOverlay 与 `game.gd` 接口对齐（rotation/模式/可选 restaurant_id） | 能放置/移动餐厅并通过 action 校验 | `ui/components/restaurant_placement/*`, `ui/scenes/game/game.gd` | DONE |
 | R-051 | P1 | HousePlacementOverlay 与 `game.gd` 接口对齐（rotation/花园方向） | `place_house` 与 `add_garden` params 符合校验（含 `direction`） | `ui/components/house_placement/*`, `ui/scenes/game/game.gd` | DONE |
-| R-052 | P2 | “有效位置高亮”改为基于 PlacementValidator 扫描（可先不做） | overlay 可显示可放置位置集合 | `ui/scenes/game/game.gd` | TODO |
+| R-052 | P2 | “有效位置高亮”基于 PlacementValidator 扫描 | 餐厅/房屋放置时高亮可放置 anchor（随 rotation 更新） | `ui/scenes/game/game_map_interaction_controller.gd`, `ui/scenes/game/game_panel_placement_overlays.gd`, `ui/components/house_placement/house_placement_overlay.gd` | DONE |
 
 ### 4.7 P1/P2：里程碑/晚餐/需求展示（按引擎现状定稿）
 
@@ -209,6 +210,8 @@
 | 2026-01-06 | R-071 | DONE | 为 `docs/ui_development_plan.md` 增补 4.7“组件接口契约表”（signals/set_* 调用关系） |
 | 2026-01-06 | R-081 | DONE | 新增 `game.tscn` headless smoke test：`ui/scenes/tests/game_smoke_test.tscn`（并修复加载 game 场景暴露的脚本解析/节点路径错误） |
 | 2026-01-06 | R-080 | DONE | 回归：GameSmokeTest PASS（见 `.godot/GameSmokeTest.log`）+ AllTests `71/71 PASS`（见 `.godot/AllTests.log`） |
+| 2026-01-09 | R-041 | DONE | 采购路线可视化：`Working/GetDrinks` 选择采购员后预览自动路线（新增 ProcurementRouteOverlay）；AllTests + GameSmokeTest PASS |
+| 2026-01-09 | R-052 | DONE | 有效位置扫描/高亮：PlacementValidator 扫描餐厅/房屋放置可用 anchor（随 rotation 更新）；AllTests + GameSmokeTest PASS |
 
 ---
 

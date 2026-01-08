@@ -29,18 +29,35 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if r2.ok:
 		return Result.failure("无招聘员时不应允许第二次招聘（应受 CEO 1 次限制）")
 
-	# 2) 结束一整回合，进入下一回合 Restructuring：待命员工自动激活
+	# 2) 结束一整回合，进入下一回合 Restructuring：待命员工需要在重组阶段手动激活
 	var to_restructuring := TestPhaseUtilsClass.advance_until_phase(engine, "Restructuring", 50)
 	if not to_restructuring.ok:
 		return to_restructuring
+
+	# 轮转到 first_actor（不写入 pass）
+	var safety2 := 0
+	while engine.get_state().get_current_player_id() != first_actor:
+		safety2 += 1
+		if safety2 > 20:
+			return Result.failure("轮转到目标玩家超出安全上限（Restructuring）")
+		var pid_turn := engine.get_state().get_current_player_id()
+		var end_turn := engine.execute_command(Command.create("end_turn", pid_turn))
+		if not end_turn.ok:
+			return Result.failure("end_turn 失败: %s" % end_turn.error)
+		if engine.get_state().phase != "Restructuring":
+			return Result.failure("轮转玩家时不应离开 Restructuring")
+
+	var activate := engine.execute_command(Command.create("restructure_employee", first_actor, {"employee_id": "recruiter", "to_reserve": false}))
+	if not activate.ok:
+		return Result.failure("重组激活 recruiter 失败: %s" % activate.error)
 
 	var p := engine.get_state().get_player(first_actor)
 	var active: Array = p.get("employees", [])
 	var reserve: Array = p.get("reserve_employees", [])
 	if not active.has("recruiter"):
-		return Result.failure("进入 Restructuring 后应自动激活待命员工 recruiter")
+		return Result.failure("重组后应激活待命员工 recruiter")
 	if reserve.has("recruiter"):
-		return Result.failure("进入 Restructuring 后 recruiter 不应仍在待命区")
+		return Result.failure("重组后 recruiter 不应仍在待命区")
 
 	# 3) 推进到下一次 Working / Recruit：招聘员应提供额外次数（共 2 次）
 	var to_working2 := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 50)

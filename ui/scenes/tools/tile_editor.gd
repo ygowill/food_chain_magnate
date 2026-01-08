@@ -5,6 +5,8 @@ const TileDefClass = preload("res://core/map/tile_def.gd")
 const PieceDefClass = preload("res://core/map/piece_def.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
+const Storage = preload("res://ui/scenes/tools/tile_editor/storage.gd")
+const CellModel = preload("res://ui/scenes/tools/tile_editor/cell_model.gd")
 
 @onready var tile_select: OptionButton = $Root/TopBar/TileSelect
 @onready var tile_id_edit: LineEdit = $Root/TopBar/TileIdEdit
@@ -100,31 +102,28 @@ func _on_save_pressed() -> void:
 
 	var path := current_tile_path
 	if path.is_empty():
-		path = _get_primary_modules_base_dir().path_join("base_tiles/content/tiles").path_join("%s.json" % new_id)
+		path = ""
 
-	var json := JSON.stringify(current_tile.to_dict(), "\t")
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if file == null:
-		var user_path := _get_user_tiles_dir().path_join("%s.json" % new_id)
-		var abs_user_path := ProjectSettings.globalize_path(user_path)
-		var abs_user_dir := abs_user_path.get_base_dir()
-		if not DirAccess.dir_exists_absolute(abs_user_dir):
-			DirAccess.make_dir_recursive_absolute(abs_user_dir)
+	var write := Storage.write_tile_json(
+		current_tile,
+		new_id,
+		path,
+		_get_primary_modules_base_dir(),
+		_get_user_tiles_dir()
+	)
+	if not write.ok:
+		_set_status(write.error, true)
+		return
+	assert(write.value is Dictionary and write.value.has("path"), "TileEditor: write_tile_json 返回值缺少 path")
+	var saved_path: String = str(write.value["path"])
+	var used_user_dir := bool(write.value.get("used_user_dir", false))
 
-		file = FileAccess.open(user_path, FileAccess.WRITE)
-		if file == null:
-			_set_status("无法写入文件: %s (fallback: %s)" % [path, user_path], true)
-			return
-		path = user_path
-	file.store_string(json)
-	file.close()
-
-	current_tile_path = path
-	_tile_paths[new_id] = path
-	if path.begins_with("user://"):
-		_set_status("已保存到 user://（导出环境 res:// 可能只读）: %s" % path, false)
+	current_tile_path = saved_path
+	_tile_paths[new_id] = saved_path
+	if used_user_dir:
+		_set_status("已保存到 user://（导出环境 res:// 可能只读）: %s" % saved_path, false)
 	else:
-		_set_status("已保存: %s" % path, false)
+		_set_status("已保存: %s" % saved_path, false)
 	_load_tile_index()
 	_refresh_selectors()
 	_refresh_all()
@@ -179,14 +178,14 @@ func _on_set_drink_pressed() -> void:
 	if drink_type.is_empty():
 		_set_status("饮品类型不能为空", true)
 		return
-	_remove_drink_source_at(selected_local)
+	CellModel.remove_drink_source_at(current_tile, selected_local)
 	current_tile.add_drink_source(selected_local, drink_type)
 	_refresh_cell(selected_local)
 
 func _on_clear_drink_pressed() -> void:
 	if current_tile == null:
 		return
-	_remove_drink_source_at(selected_local)
+	CellModel.remove_drink_source_at(current_tile, selected_local)
 	_refresh_cell(selected_local)
 
 func _on_add_printed_pressed() -> void:
@@ -239,28 +238,12 @@ func _on_cell_pressed(pos: Vector2i) -> void:
 	_select_cell(pos)
 
 func _load_piece_ids() -> void:
-	_piece_ids.clear()
-	var dir := DirAccess.open(_get_primary_modules_base_dir().path_join("base_pieces/content/pieces"))
-	if dir == null:
+	var read := Storage.load_piece_ids(_get_primary_modules_base_dir())
+	if not read.ok:
+		_set_status(read.error, true)
 		return
-
-	dir.list_dir_begin()
-	var f := dir.get_next()
-	while not f.is_empty():
-		if not dir.current_is_dir() and f.to_lower().ends_with(".json"):
-			var path := _get_primary_modules_base_dir().path_join("base_pieces/content/pieces").path_join(f)
-			var piece_result := PieceDefClass.load_from_file(path)
-			if not piece_result.ok:
-				_set_status("加载建筑件失败: %s (%s)" % [path, piece_result.error], true)
-				dir.list_dir_end()
-				return
-			var piece: PieceDef = piece_result.value
-			if not piece.id.is_empty():
-				_piece_ids.append(piece.id)
-		f = dir.get_next()
-	dir.list_dir_end()
-
-	_piece_ids.sort()
+	assert(read.value is Array, "TileEditor._load_piece_ids: 返回值类型错误（期望 Array）")
+	_piece_ids = Array(read.value, TYPE_STRING, "", null)
 	piece_select.clear()
 	for id in _piece_ids:
 		piece_select.add_item(id)
@@ -271,37 +254,12 @@ func _load_piece_ids() -> void:
 	printed_rotation.select(0)
 
 func _load_tile_index() -> void:
-	_tile_paths.clear()
-	# 先加载 res:// 模块内板块，再加载 user:// 覆盖（如导出环境的编辑结果）
-	if not _merge_tile_index_from_dir(_get_primary_modules_base_dir().path_join("base_tiles/content/tiles")):
+	var read := Storage.load_tile_paths(_get_primary_modules_base_dir(), _get_user_tiles_dir())
+	if not read.ok:
+		_set_status(read.error, true)
 		return
-	_merge_tile_index_from_dir(_get_user_tiles_dir())
-
-func _merge_tile_index_from_dir(dir_path: String) -> bool:
-	var dir := DirAccess.open(dir_path)
-	if dir == null:
-		return true
-
-	var files: Array[String] = []
-	dir.list_dir_begin()
-	var f := dir.get_next()
-	while not f.is_empty():
-		if not dir.current_is_dir() and f.to_lower().ends_with(".json"):
-			files.append(f)
-		f = dir.get_next()
-	dir.list_dir_end()
-	files.sort()
-
-	for file_name in files:
-		var path := dir_path.path_join(file_name)
-		var tile_result := TileDefClass.load_from_file(path)
-		if not tile_result.ok:
-			_set_status("加载板块失败: %s (%s)" % [path, tile_result.error], true)
-			return false
-		var tile: TileDef = tile_result.value
-		if not tile.id.is_empty():
-			_tile_paths[tile.id] = path
-	return true
+	assert(read.value is Dictionary, "TileEditor._load_tile_index: 返回值类型错误（期望 Dictionary）")
+	_tile_paths = read.value
 
 func _refresh_selectors() -> void:
 	var ids: Array[String] = []
@@ -369,11 +327,11 @@ func _refresh_cell(local_pos: Vector2i) -> void:
 	if not segs.is_empty():
 		tags.append("R%d" % segs.size())
 
-	var drink = _get_drink_source_at(local_pos)
+	var drink = CellModel.get_drink_source_at(current_tile, local_pos)
 	if drink != null:
 		tags.append("D")
 
-	if _has_printed_anchor_at(local_pos):
+	if CellModel.has_printed_anchor_at(current_tile, local_pos):
 		tags.append("P")
 
 	btn.text = "." if tags.is_empty() else "\n".join(tags)
@@ -387,7 +345,7 @@ func _refresh_cell_inspector() -> void:
 		return
 
 	blocked_check.button_pressed = current_tile.is_blocked_at(selected_local)
-	var drink = _get_drink_source_at(selected_local)
+	var drink = CellModel.get_drink_source_at(current_tile, selected_local)
 	drink_type_edit.text = drink.get("type", "") if drink != null else ""
 
 func _refresh_road_segments_list() -> void:
@@ -435,30 +393,6 @@ func _get_selected_piece_id() -> String:
 	if piece_select.get_item_count() <= 0:
 		return ""
 	return piece_select.get_item_text(piece_select.selected)
-
-func _get_drink_source_at(local_pos: Vector2i):
-	if current_tile == null:
-		return null
-	for src in current_tile.drink_sources:
-		if src.get("pos", Vector2i(-1, -1)) == local_pos:
-			return src
-	return null
-
-func _remove_drink_source_at(local_pos: Vector2i) -> void:
-	if current_tile == null:
-		return
-	for i in range(current_tile.drink_sources.size() - 1, -1, -1):
-		var src: Dictionary = current_tile.drink_sources[i]
-		if src.get("pos", Vector2i(-1, -1)) == local_pos:
-			current_tile.drink_sources.remove_at(i)
-
-func _has_printed_anchor_at(local_pos: Vector2i) -> bool:
-	if current_tile == null:
-		return false
-	for s in current_tile.printed_structures:
-		if s.get("anchor", Vector2i(-1, -1)) == local_pos:
-			return true
-	return false
 
 func _set_status(message: String, is_error: bool) -> void:
 	status_label.text = message
