@@ -10,6 +10,7 @@ var _registry: DebugCommandRegistry = null
 var _debug_mode_check: CheckBox
 var _verbose_logging_check: CheckBox
 var _validate_invariants_check: CheckBox
+var _force_execute_commands_check: CheckBox
 var _profile_commands_check: CheckBox
 var _show_console_check: CheckBox
 
@@ -36,6 +37,8 @@ func _build_ui() -> void:
 	_debug_mode_check = _create_checkbox("调试模式", _on_debug_mode_toggled)
 	_verbose_logging_check = _create_checkbox("详细日志", _on_verbose_logging_toggled)
 	_validate_invariants_check = _create_checkbox("命令后校验不变量", _on_validate_invariants_toggled)
+	_force_execute_commands_check = _create_checkbox("强制执行命令（跳过校验）", _on_force_execute_commands_toggled)
+	_create_info_label("  ⚠️ 跳过动作可用性/校验器/回合阶段等限制；可能导致状态不一致，仅用于开发调试")
 	_profile_commands_check = _create_checkbox("性能分析", _on_profile_commands_toggled)
 	_show_console_check = _create_checkbox("显示控制台", _on_show_console_toggled)
 
@@ -102,6 +105,9 @@ func _sync_from_flags() -> void:
 		_verbose_logging_check.button_pressed = DebugFlags.verbose_logging
 	if is_instance_valid(_validate_invariants_check):
 		_validate_invariants_check.button_pressed = DebugFlags.validate_invariants
+	if is_instance_valid(_force_execute_commands_check):
+		_force_execute_commands_check.button_pressed = DebugFlags.force_execute_commands
+		_force_execute_commands_check.disabled = not DebugFlags.is_debug_mode()
 	if is_instance_valid(_profile_commands_check):
 		_profile_commands_check.button_pressed = DebugFlags.profile_commands
 	if is_instance_valid(_show_console_check):
@@ -129,6 +135,12 @@ func _on_validate_invariants_toggled(pressed: bool) -> void:
 		return
 	DebugFlags.set_validate_invariants(pressed)
 
+func _on_force_execute_commands_toggled(pressed: bool) -> void:
+	if _is_syncing:
+		return
+	DebugFlags.set_force_execute_commands(pressed)
+	_sync_from_flags()
+
 func _on_profile_commands_toggled(pressed: bool) -> void:
 	if _is_syncing:
 		return
@@ -144,6 +156,7 @@ func _on_reset_pressed() -> void:
 	DebugFlags.enable_debug()
 	DebugFlags.set_verbose_logging(false)
 	DebugFlags.set_validate_invariants(true)
+	DebugFlags.set_force_execute_commands(false)
 	DebugFlags.set_profile_commands(false)
 	DebugFlags.set_show_console(false)
 	_sync_from_flags()

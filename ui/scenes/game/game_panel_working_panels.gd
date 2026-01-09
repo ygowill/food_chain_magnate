@@ -94,6 +94,63 @@ func _compute_recruit_counts(state: GameState, player_id: int) -> Dictionary:
 	var used: int = EmployeeRulesClass.get_action_count(state, player_id, "recruit")
 	return {"remaining": maxi(0, total - used), "total": total}
 
+func _compute_train_counts(state: GameState, player_id: int) -> Dictionary:
+	if state == null:
+		return {"remaining": 0, "total": 0}
+	var total: int = EmployeeRulesClass.get_train_limit_for_working(state, player_id)
+	var used: int = EmployeeRulesClass.get_action_count(state, player_id, "train")
+	return {"remaining": maxi(0, total - used), "total": total}
+
+func _build_employee_type_counts(values: Array) -> Dictionary:
+	var counts := {}
+	for v in values:
+		if not (v is String):
+			continue
+		var emp_id: String = str(v)
+		if emp_id.is_empty():
+			continue
+		counts[emp_id] = int(counts.get(emp_id, 0)) + 1
+	return counts
+
+func _read_immediate_train_pending_sources(state: GameState, player_id: int) -> Dictionary:
+	var sources := {}
+	if state == null or not (state.round_state is Dictionary):
+		return sources
+	var rs: Dictionary = state.round_state
+	var all_val = rs.get("immediate_train_pending", null)
+	if not (all_val is Dictionary):
+		return sources
+	var all: Dictionary = all_val
+
+	var per_val = null
+	if all.has(player_id):
+		per_val = all.get(player_id, null)
+	elif all.has(str(player_id)):
+		per_val = all.get(str(player_id), null)
+	if not (per_val is Dictionary):
+		return sources
+	var per: Dictionary = per_val
+
+	for k in per.keys():
+		if not (k is String):
+			continue
+		var emp_id: String = str(k)
+		if emp_id.is_empty():
+			continue
+		var v = per.get(k, 0)
+		var count := 0
+		if v is int:
+			count = int(v)
+		elif v is float:
+			var f: float = float(v)
+			if f == int(f):
+				count = int(f)
+		if count <= 0:
+			continue
+		sources[emp_id] = count
+
+	return sources
+
 func show_train_panel() -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
@@ -112,16 +169,50 @@ func show_train_panel() -> void:
 		train_panel.set_employee_pool(state.employee_pool)
 
 	if train_panel.has_method("set_trainable_employees"):
-		var reserve: Array[String] = []
-		for e in Array(current_player.get("reserve_employees", [])):
-			reserve.append(str(e))
-		train_panel.set_trainable_employees(reserve)
+		var actor_id: int = int(state.get_current_player_id())
+		var pending_total := int(EmployeeRulesClass.get_immediate_train_pending_total(state, actor_id))
+		var sources := {}
+		var requires_same_color := {}
+		var section_text := "待命区员工（点击选择）"
+		var badges := {}
+
+		if pending_total > 0:
+			sources = _read_immediate_train_pending_sources(state, actor_id)
+			section_text = "缺货预支待培训（必须先清账）"
+			for emp_id in sources.keys():
+				badges[str(emp_id)] = "预支"
+		else:
+			var reserve_counts := _build_employee_type_counts(Array(current_player.get("reserve_employees", [])))
+			sources = reserve_counts.duplicate(true)
+			var can_train_from_active := bool(current_player.get("train_from_active_same_color", false))
+			if can_train_from_active:
+				section_text = "待命/在岗员工（点击选择；在岗同色培训：目标需同色）"
+				var active_counts := _build_employee_type_counts(Array(current_player.get("employees", [])))
+				for emp_id in active_counts.keys():
+					sources[str(emp_id)] = int(sources.get(emp_id, 0)) + int(active_counts.get(emp_id, 0))
+				for emp_id in sources.keys():
+					var active_count: int = int(active_counts.get(emp_id, 0))
+					var reserve_count: int = int(reserve_counts.get(emp_id, 0))
+					if active_count > 0 and reserve_count <= 0:
+						requires_same_color[str(emp_id)] = true
+
+		if train_panel.has_method("set_source_requires_same_color"):
+			train_panel.set_source_requires_same_color(requires_same_color)
+		if train_panel.has_method("set_source_badges"):
+			train_panel.set_source_badges(badges)
+		if train_panel.has_method("set_trainable_sources"):
+			train_panel.set_trainable_sources(sources, section_text)
+		else:
+			var reserve: Array[String] = []
+			for emp_id in sources.keys():
+				reserve.append(str(emp_id))
+			reserve.sort()
+			train_panel.set_trainable_employees(reserve)
 
 	if train_panel.has_method("set_train_count"):
-		var round_state: Dictionary = state.round_state
-		var remaining: int = int(round_state.get("train_remaining", 0))
-		var total: int = int(round_state.get("train_total", 0))
-		train_panel.set_train_count(remaining, total)
+		var actor: int = int(state.get_current_player_id())
+		var counts := _compute_train_counts(state, actor)
+		train_panel.set_train_count(int(counts.remaining), int(counts.total))
 
 	train_panel.visible = true
 	if _center_popup.is_valid():
@@ -135,6 +226,10 @@ func _sync_train_panel(state: GameState) -> void:
 	if state.phase != "Working" or state.sub_phase != "Train":
 		train_panel.visible = false
 		return
+	if train_panel.has_method("set_train_count"):
+		var actor: int = int(state.get_current_player_id())
+		var counts := _compute_train_counts(state, actor)
+		train_panel.set_train_count(int(counts.remaining), int(counts.total))
 
 func show_price_panel(action_id: String) -> void:
 	if _scene == null or _scene.game_engine == null:

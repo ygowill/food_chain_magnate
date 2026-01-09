@@ -48,6 +48,19 @@ func compute_new_state(state: GameState, command: Command) -> Result:
 
 	return Result.success(new_state).with_warnings(apply_result.warnings)
 
+func compute_new_state_force(state: GameState, command: Command) -> Result:
+	# Debug：跳过 validate，仅执行基础校验 + 应用变更
+	var base_result := _validate_base(state, command)
+	if not base_result.ok:
+		return base_result
+
+	var new_state := state.duplicate_state()
+	var apply_result := _apply_changes(new_state, command)
+	if not apply_result.ok:
+		return apply_result
+
+	return Result.success(new_state).with_warnings(apply_result.warnings)
+
 # 生成事件
 # 返回事件数组，用于通知其他系统
 func generate_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:

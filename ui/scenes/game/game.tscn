@@ -188,7 +188,7 @@ text = "命令: 0"
 [node name="MenuDialog" type="Window" parent="."]
 title = "游戏菜单"
 initial_position = 2
-size = Vector2i(300, 200)
+size = Vector2i(300, 360)
 visible = false
 
 [node name="VBoxContainer" type="VBoxContainer" parent="MenuDialog"]
@@ -210,6 +210,26 @@ text = "继续游戏"
 [node name="SaveButton" type="Button" parent="MenuDialog/VBoxContainer"]
 layout_mode = 2
 text = "保存游戏"
+
+[node name="SettingsButton" type="Button" parent="MenuDialog/VBoxContainer"]
+layout_mode = 2
+text = "设置"
+
+[node name="ToggleLogButton" type="Button" parent="MenuDialog/VBoxContainer"]
+layout_mode = 2
+text = "显示/隐藏日志"
+
+[node name="MilestonesButton" type="Button" parent="MenuDialog/VBoxContainer"]
+layout_mode = 2
+text = "里程碑"
+
+[node name="DistanceToolButton" type="Button" parent="MenuDialog/VBoxContainer"]
+layout_mode = 2
+text = "距离工具"
+
+[node name="ReplayButton" type="Button" parent="MenuDialog/VBoxContainer"]
+layout_mode = 2
+text = "回放播放器"
 
 [node name="QuitToMenuButton" type="Button" parent="MenuDialog/VBoxContainer"]
 layout_mode = 2
@@ -246,5 +266,10 @@ editable = false
 [connection signal="close_requested" from="MenuDialog" to="." method="_on_menu_dialog_close_requested"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/ResumeButton" to="." method="_on_resume_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/SaveButton" to="." method="_on_save_pressed"]
+[connection signal="pressed" from="MenuDialog/VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
+[connection signal="pressed" from="MenuDialog/VBoxContainer/ToggleLogButton" to="." method="_on_toggle_log_pressed"]
+[connection signal="pressed" from="MenuDialog/VBoxContainer/MilestonesButton" to="." method="_on_milestones_pressed"]
+[connection signal="pressed" from="MenuDialog/VBoxContainer/DistanceToolButton" to="." method="_on_distance_tool_pressed"]
+[connection signal="pressed" from="MenuDialog/VBoxContainer/ReplayButton" to="." method="_on_replay_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/QuitToMenuButton" to="." method="_on_quit_to_menu_pressed"]
 [connection signal="close_requested" from="DebugDialog" to="." method="_on_debug_dialog_close_requested"]

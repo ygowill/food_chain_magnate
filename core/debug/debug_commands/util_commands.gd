@@ -16,6 +16,15 @@ static func register_all(registry: DebugCommandRegistry) -> void:
 	registry.register("undo", _cmd_undo.bind(registry), "撤销命令", "undo [steps]", ["steps"])
 	registry.register("redo", _cmd_redo.bind(registry), "重做命令", "redo [steps]", ["steps"])
 
+static func _mark_debug_force(cmd: Command) -> void:
+	if not DebugFlags.is_debug_mode():
+		return
+	if not DebugFlags.force_execute_commands:
+		return
+	if not (cmd.metadata is Dictionary):
+		cmd.metadata = {}
+	cmd.metadata["debug_force"] = true
+
 static func _cmd_help(args: Array, registry: DebugCommandRegistry) -> Result:
 	var cmd_name := ""
 	if not args.is_empty():
@@ -145,6 +154,7 @@ static func _cmd_exec(args: Array, registry: DebugCommandRegistry) -> Result:
 
 	var state := engine.get_state()
 	var cmd := Command.create(action_id, state.get_current_player_id(), params)
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:

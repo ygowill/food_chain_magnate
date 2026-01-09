@@ -39,6 +39,7 @@ var _marketing_range_controller = null
 var _procurement_route_controller = null
 var _dinnertime_overlay_controller = null
 var _demand_indicator_controller = null
+var _help_tooltips_initialized: bool = false
 
 func _init(scene, map_view, map_canvas, game_log_panel) -> void:
 	_scene = scene
@@ -65,6 +66,7 @@ func initialize() -> void:
 	if help_tooltip_manager == null:
 		help_tooltip_manager = HelpTooltipManagerScene.instantiate()
 		_scene.add_child(help_tooltip_manager)
+	_setup_help_tooltips()
 
 	# 初始化动画管理器
 	if ui_animation_manager == null:
@@ -132,6 +134,101 @@ func show_settings_dialog() -> void:
 
 func get_ui_animation_manager():
 	return ui_animation_manager
+
+func _setup_help_tooltips() -> void:
+	if _help_tooltips_initialized:
+		return
+	_help_tooltips_initialized = true
+
+	if help_tooltip_manager == null or not is_instance_valid(help_tooltip_manager):
+		return
+	if _scene == null:
+		return
+	if not help_tooltip_manager.has_method("register_control"):
+		return
+
+	# 静态 UI 元素：直接绑定固定 key
+	var action_panel = _scene.get("action_panel")
+	if is_instance_valid(action_panel) and action_panel is Control:
+		help_tooltip_manager.register_control(action_panel, "ui_action_panel")
+
+	var inventory_panel = _scene.get("inventory_panel")
+	if is_instance_valid(inventory_panel) and inventory_panel is Control:
+		help_tooltip_manager.register_control(inventory_panel, "ui_inventory")
+
+	var turn_order_track = _scene.get("turn_order_track")
+	if is_instance_valid(turn_order_track) and turn_order_track is Control:
+		help_tooltip_manager.register_control(turn_order_track, "mechanic_turn_order")
+
+	var bank_label = _scene.get("bank_label")
+	if is_instance_valid(bank_label) and bank_label is Control:
+		bank_label.mouse_filter = Control.MOUSE_FILTER_STOP
+		bank_label.mouse_default_cursor_shape = Control.CURSOR_HELP
+		help_tooltip_manager.register_control(bank_label, "mechanic_bank")
+
+	# 动态：PhaseLabel 根据当前 phase 显示不同帮助
+	var phase_label = _scene.get("phase_label")
+	if is_instance_valid(phase_label) and phase_label is Control:
+		phase_label.mouse_filter = Control.MOUSE_FILTER_STOP
+		phase_label.mouse_default_cursor_shape = Control.CURSOR_HELP
+		if not phase_label.mouse_entered.is_connected(_on_phase_label_mouse_entered):
+			phase_label.mouse_entered.connect(_on_phase_label_mouse_entered)
+		if not phase_label.mouse_exited.is_connected(_on_phase_label_mouse_exited):
+			phase_label.mouse_exited.connect(_on_phase_label_mouse_exited)
+
+func _on_phase_label_mouse_entered() -> void:
+	if help_tooltip_manager == null or not is_instance_valid(help_tooltip_manager):
+		return
+	if _scene == null:
+		return
+	if not help_tooltip_manager.has_method("show_immediate"):
+		return
+
+	var phase_label = _scene.get("phase_label")
+	if not is_instance_valid(phase_label) or not (phase_label is Control):
+		return
+
+	var engine = _scene.get("game_engine")
+	if engine == null or not (engine is GameEngine):
+		return
+	var state: GameState = engine.get_state()
+	if state == null:
+		return
+
+	var key := _get_phase_help_key(str(state.phase))
+	if key.is_empty():
+		return
+
+	var phase_ctrl: Control = phase_label
+	var pos: Vector2 = phase_ctrl.get_global_rect().position + (phase_ctrl.size / 2.0)
+	help_tooltip_manager.show_immediate(key, pos)
+
+func _on_phase_label_mouse_exited() -> void:
+	if help_tooltip_manager != null and is_instance_valid(help_tooltip_manager):
+		if help_tooltip_manager.has_method("hide_tooltip"):
+			help_tooltip_manager.hide_tooltip()
+
+func _get_phase_help_key(phase: String) -> String:
+	match phase:
+		"Setup":
+			return "phase_setup"
+		"Restructuring":
+			return "phase_restructuring"
+		"OrderOfBusiness":
+			return "phase_order_of_business"
+		"Working":
+			return "phase_working"
+		"Dinnertime":
+			return "phase_dinner_time"
+		"Payday":
+			return "phase_payday"
+		"Marketing":
+			return "phase_marketing"
+		"Cleanup":
+			return "phase_cleanup"
+		"GameOver":
+			return "phase_game_over"
+	return ""
 
 func hide_all_overlays() -> void:
 	hide_distance_overlay()

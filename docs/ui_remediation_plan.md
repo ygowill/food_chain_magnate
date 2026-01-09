@@ -212,6 +212,10 @@
 | 2026-01-06 | R-080 | DONE | 回归：GameSmokeTest PASS（见 `.godot/GameSmokeTest.log`）+ AllTests `71/71 PASS`（见 `.godot/AllTests.log`） |
 | 2026-01-09 | R-041 | DONE | 采购路线可视化：`Working/GetDrinks` 选择采购员后预览自动路线（新增 ProcurementRouteOverlay）；AllTests + GameSmokeTest PASS |
 | 2026-01-09 | R-052 | DONE | 有效位置扫描/高亮：PlacementValidator 扫描餐厅/房屋放置可用 anchor（随 rotation 更新）；AllTests + GameSmokeTest PASS |
+| 2026-01-09 | BUG-TrainCount | DONE | 修复 TrainPanel 培训次数显示：改为基于 EmployeeRules 计算（避免 `round_state.train_total/train_remaining` 缺失导致 0/0）；AllTests + GameSmokeTest PASS |
+| 2026-01-09 | BUG-TrainPendingUI | DONE | TrainPanel 支持 `round_state.immediate_train_pending`（缺货预支清账）：Train 子阶段优先显示预支来源，并展示来源数量；AllTests + GameSmokeTest PASS |
+| 2026-01-09 | BUG-TrainActiveUI | DONE | TrainPanel 支持 `train_from_active_same_color`：在无预支待清账时合并显示在岗来源；在岗-only 来源会按同色过滤培训目标；AllTests + GameSmokeTest PASS |
+| 2026-01-09 | DBG-ForceExecute | DONE | DebugPanel 增加“强制执行命令”开关：开启后 Debug 命令可跳过动作可用性/校验器/回合阶段等限制强制执行（仅允许当前玩家）；AllTests + GameSmokeTest PASS |
 
 ---
 

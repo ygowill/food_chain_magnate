@@ -13,6 +13,10 @@ signal tooltip_hidden()
 # 帮助文本数据库
 var HELP_DATABASE: Dictionary = {
 	# 阶段说明
+	"phase_setup": {
+		"title": "设置阶段",
+		"content": "开局放置初始餐厅。通常需要每位玩家放置 1 个餐厅后才能进入下一阶段。"
+	},
 	"phase_restructuring": {
 		"title": "重组阶段",
 		"content": "在此阶段，你可以调整公司结构。将员工放入卡槽中，CEO下方最多可放置的卡槽数取决于管理能力。"
@@ -32,6 +36,18 @@ var HELP_DATABASE: Dictionary = {
 	"phase_payday": {
 		"title": "发薪日",
 		"content": "支付员工薪水（每人$5）。可以在支付前解雇员工。如果现金不足，必须解雇员工直到能够支付。"
+	},
+	"phase_marketing": {
+		"title": "营销结算",
+		"content": "按营销板件编号顺序结算营销活动：在影响范围内的房屋生成需求，并减少活动持续时间；到期后回收营销员并移除放置。"
+	},
+	"phase_cleanup": {
+		"title": "清理阶段",
+		"content": "回合收尾阶段：清理库存、处理阶段性标记并准备进入下一回合。"
+	},
+	"phase_game_over": {
+		"title": "游戏结束",
+		"content": "游戏已结束。你可以查看结果并返回主菜单或重新开始。"
 	},
 
 	# 员工类型

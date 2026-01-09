@@ -9,6 +9,15 @@ static func register_all(registry: DebugCommandRegistry) -> void:
 	registry.register("set_phase", _cmd_set_phase.bind(registry), "设置当前阶段", "set_phase <phase_name>", ["phase"])
 	registry.register("next_round", _cmd_next_round.bind(registry), "跳到下一回合", "next_round")
 
+static func _mark_debug_force(cmd: Command) -> void:
+	if not DebugFlags.is_debug_mode():
+		return
+	if not DebugFlags.force_execute_commands:
+		return
+	if not (cmd.metadata is Dictionary):
+		cmd.metadata = {}
+	cmd.metadata["debug_force"] = true
+
 static func _cmd_advance(args: Array, registry: DebugCommandRegistry) -> Result:
 	var engine := registry.get_game_engine()
 	if engine == null:
@@ -24,6 +33,7 @@ static func _cmd_advance(args: Array, registry: DebugCommandRegistry) -> Result:
 	else:
 		cmd = Command.create_system("advance_phase")
 
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 	if not result.ok:
 		return result
@@ -42,7 +52,11 @@ static func _cmd_skip(args: Array, registry: DebugCommandRegistry) -> Result:
 	if not args.is_empty():
 		player_id = int(args[0])
 
+	if DebugFlags.is_debug_mode() and DebugFlags.force_execute_commands and player_id != state.get_current_player_id():
+		return Result.failure("强制执行模式下不允许指定非当前玩家")
+
 	var cmd := Command.create("skip", player_id)
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 	if not result.ok:
 		return result
@@ -74,6 +88,7 @@ static func _cmd_give_money(args: Array, registry: DebugCommandRegistry) -> Resu
 		"amount": amount
 	})
 
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 	if not result.ok:
 		return Result.failure("执行失败: %s" % result.error)
@@ -167,4 +182,5 @@ static func _advance_one_step(engine: GameEngine) -> Result:
 	else:
 		cmd = Command.create_system("advance_phase")
 
+	_mark_debug_force(cmd)
 	return engine.execute_command(cmd)

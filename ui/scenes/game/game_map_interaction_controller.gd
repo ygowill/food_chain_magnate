@@ -14,6 +14,7 @@ var _mode: String = ""
 var _payload: Dictionary = {}
 var _restaurant_valid_anchors: Dictionary = {} # Vector2i -> true
 var _house_valid_anchors: Dictionary = {} # Vector2i -> true
+var _distance_tool_from: Vector2i = Vector2i(-1, -1)
 
 var marketing_panel = null
 var restaurant_placement_overlay = null
@@ -50,6 +51,7 @@ func begin_selection(mode: String, payload: Dictionary = {}) -> void:
 		_map_canvas.call("clear_cell_highlights")
 
 func clear_selection() -> void:
+	var old_mode := _mode
 	_mode = ""
 	_payload.clear()
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_structure_preview"):
@@ -58,6 +60,26 @@ func clear_selection() -> void:
 		_map_canvas.call("clear_cell_highlights")
 	_restaurant_valid_anchors.clear()
 	_house_valid_anchors.clear()
+	if old_mode == "distance_tool":
+		_distance_tool_from = Vector2i(-1, -1)
+		if _overlay_controller != null:
+			_overlay_controller.hide_distance_overlay()
+
+func toggle_distance_tool() -> void:
+	if _mode == "distance_tool":
+		clear_selection()
+		GameLog.info("Game", "距离工具已关闭")
+		return
+
+	if not _mode.is_empty():
+		GameLog.warn("Game", "当前正在 %s 选点模式，无法启用距离工具" % _mode)
+		return
+
+	begin_selection("distance_tool")
+	_distance_tool_from = Vector2i(-1, -1)
+	if _overlay_controller != null:
+		_overlay_controller.hide_distance_overlay()
+	GameLog.info("Game", "距离工具已启用：点击起点，再点击终点")
 
 func _on_map_cell_selected(world_pos: Vector2i) -> void:
 	if world_pos == Vector2i(-1, -1):
@@ -87,6 +109,26 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 					return
 			if is_instance_valid(house_placement_overlay) and house_placement_overlay.visible and house_placement_overlay.has_method("set_selected_position"):
 				house_placement_overlay.set_selected_position(world_pos)
+		"distance_tool":
+			if _overlay_controller == null:
+				return
+
+			if _distance_tool_from == Vector2i(-1, -1):
+				_distance_tool_from = world_pos
+				_overlay_controller.hide_distance_overlay()
+				GameLog.info("Game", "距离工具：起点=%s，请选择终点" % str(world_pos))
+				return
+
+			# 再次点击起点视为重置
+			if world_pos == _distance_tool_from:
+				_distance_tool_from = Vector2i(-1, -1)
+				_overlay_controller.hide_distance_overlay()
+				GameLog.info("Game", "距离工具：已清除起点，请重新选择起点")
+				return
+
+			var to_positions: Array[Vector2i] = []
+			to_positions.append(world_pos)
+			_overlay_controller.show_distance_overlay(_distance_tool_from, to_positions)
 		_:
 			pass
 

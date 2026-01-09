@@ -9,19 +9,24 @@ const EmployeeCardClass = preload("res://ui/components/employee_card/employee_ca
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
 @onready var counter_label: Label = $MarginContainer/VBoxContainer/CounterRow/CounterLabel
+@onready var trainable_section_label: Label = $MarginContainer/VBoxContainer/TrainableSection/SectionLabel
 @onready var trainable_container: HFlowContainer = $MarginContainer/VBoxContainer/TrainableSection/TrainableContainer
 @onready var path_container: VBoxContainer = $MarginContainer/VBoxContainer/PathSection/PathContainer
 @onready var confirm_btn: Button = $MarginContainer/VBoxContainer/ConfirmButton
 
 var _employee_pool: Dictionary = {}  # employee_type -> count
 var _employee_registry = null
-var _trainable_employees: Array[String] = []
+var _trainable_sources: Dictionary = {}  # employee_type -> count
+var _trainable_order: Array[String] = []
 var _train_remaining: int = 0
 var _train_total: int = 0
 
 var _selected_source: String = ""
 var _selected_target: String = ""
 var _trainable_cards: Dictionary = {}  # employee_type -> TrainableCard
+var _requires_same_color_by_source: Dictionary = {}  # employee_type -> bool
+var _badge_text_by_source: Dictionary = {}  # employee_type -> String
+var _selected_requires_same_color: bool = false
 
 func _ready() -> void:
 	if confirm_btn != null:
@@ -35,8 +40,47 @@ func set_employee_pool(pool: Dictionary) -> void:
 	_employee_pool = pool.duplicate()
 
 func set_trainable_employees(employees: Array[String]) -> void:
-	_trainable_employees = employees.duplicate()
+	var sources := {}
+	for v in employees:
+		var emp_type := str(v)
+		if emp_type.is_empty():
+			continue
+		sources[emp_type] = int(sources.get(emp_type, 0)) + 1
+	set_trainable_sources(sources)
+
+func set_trainable_sources(sources: Dictionary, section_label_text: String = "") -> void:
+	_trainable_sources.clear()
+	_trainable_order.clear()
+
+	for k in sources.keys():
+		if not (k is String):
+			continue
+		var emp_type: String = str(k)
+		if emp_type.is_empty():
+			continue
+		var count_val = sources.get(k, 0)
+		var count := 0
+		if count_val is int:
+			count = int(count_val)
+		elif count_val is float:
+			var f: float = float(count_val)
+			if f == int(f):
+				count = int(f)
+		if count <= 0:
+			continue
+		_trainable_sources[emp_type] = count
+		_trainable_order.append(emp_type)
+
+	_trainable_order.sort()
+	if trainable_section_label != null and not section_label_text.is_empty():
+		trainable_section_label.text = section_label_text
 	_rebuild_trainable_list()
+
+func set_source_requires_same_color(map: Dictionary) -> void:
+	_requires_same_color_by_source = map.duplicate(true)
+
+func set_source_badges(map: Dictionary) -> void:
+	_badge_text_by_source = map.duplicate(true)
 
 func set_train_count(remaining: int, total: int) -> void:
 	_train_remaining = remaining
@@ -58,12 +102,18 @@ func _rebuild_trainable_list() -> void:
 	if trainable_container == null:
 		return
 
-	for emp_type in _trainable_employees:
+	for emp_type in _trainable_order:
 		var emp_def := _get_employee_def(emp_type)
+		var count: int = int(_trainable_sources.get(emp_type, 1))
+		var requires_same_color := bool(_requires_same_color_by_source.get(emp_type, false))
+		var badge_text := str(_badge_text_by_source.get(emp_type, ""))
 
 		var card := TrainableCard.new()
 		card.employee_type = emp_type
 		card.employee_def = emp_def
+		card.source_count = count
+		card.badge_text = badge_text
+		card.requires_same_color = requires_same_color
 		card.card_clicked.connect(_on_trainable_clicked)
 		trainable_container.add_child(card)
 		_trainable_cards[emp_type] = card
@@ -101,6 +151,7 @@ func _update_states() -> void:
 func _on_trainable_clicked(employee_type: String) -> void:
 	_selected_source = employee_type
 	_selected_target = ""
+	_selected_requires_same_color = bool(_requires_same_color_by_source.get(employee_type, false))
 
 	# 高亮选中
 	for emp_type in _trainable_cards.keys():
@@ -118,6 +169,7 @@ func _show_train_path(employee_type: String) -> void:
 			child.queue_free()
 
 	var emp_def := _get_employee_def(employee_type)
+	var from_role := str(emp_def.get("role", ""))
 	var train_to: Array = Array(emp_def.get("train_to", []))
 
 	if train_to.is_empty():
@@ -126,6 +178,23 @@ func _show_train_path(employee_type: String) -> void:
 		no_path_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
 		path_container.add_child(no_path_label)
 		return
+
+	if _selected_requires_same_color and not from_role.is_empty():
+		var filtered: Array = []
+		for target_type in train_to:
+			var target_def := _get_employee_def(str(target_type))
+			var to_role := str(target_def.get("role", ""))
+			if not to_role.is_empty() and to_role != from_role:
+				continue
+			filtered.append(target_type)
+		train_to = filtered
+
+		if train_to.is_empty():
+			var no_color_label := Label.new()
+			no_color_label.text = "在岗同色培训：无同色可培训目标"
+			no_color_label.add_theme_color_override("font_color", Color(0.8, 0.6, 0.3, 1))
+			path_container.add_child(no_color_label)
+			return
 
 	# 创建培训目标选项
 	for target_type in train_to:
@@ -183,11 +252,16 @@ class TrainableCard extends PanelContainer:
 
 	var employee_type: String = ""
 	var employee_def: Dictionary = {}
+	var source_count: int = 1
+	var badge_text: String = ""
+	var requires_same_color: bool = false
 
 	var _enabled: bool = true
 	var _selected: bool = false
 	var _name_label: Label
 	var _role_color: ColorRect
+	var _count_label: Label
+	var _badge_label: Label
 
 	const ROLE_COLORS: Dictionary = {
 		"manager": Color("#000000"),
@@ -225,6 +299,16 @@ class TrainableCard extends PanelContainer:
 		_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		top_hbox.add_child(_name_label)
 
+		_count_label = Label.new()
+		_count_label.add_theme_font_size_override("font_size", 12)
+		_count_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85, 1))
+		top_hbox.add_child(_count_label)
+
+		_badge_label = Label.new()
+		_badge_label.add_theme_font_size_override("font_size", 11)
+		_badge_label.add_theme_color_override("font_color", Color(0.9, 0.8, 0.6, 1))
+		top_hbox.add_child(_badge_label)
+
 		update_display()
 		_update_style()
 
@@ -238,6 +322,25 @@ class TrainableCard extends PanelContainer:
 		if _name_label != null:
 			var name: String = str(employee_def.get("name", employee_type))
 			_name_label.text = name
+
+		if _count_label != null:
+			if source_count > 1:
+				_count_label.text = "×%d" % source_count
+				_count_label.visible = true
+			else:
+				_count_label.text = ""
+				_count_label.visible = false
+
+		if _badge_label != null:
+			if not badge_text.is_empty():
+				_badge_label.text = badge_text
+				_badge_label.visible = true
+			elif requires_same_color:
+				_badge_label.text = "在岗"
+				_badge_label.visible = true
+			else:
+				_badge_label.text = ""
+				_badge_label.visible = false
 
 		if _role_color != null:
 			var role: String = str(employee_def.get("role", "special"))

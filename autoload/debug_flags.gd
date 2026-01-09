@@ -9,6 +9,7 @@ signal debug_setting_changed(setting: String, value: Variant)
 var debug_mode: bool = false
 var verbose_logging: bool = false
 var validate_invariants: bool = true  # 每条命令后校验不变量
+var force_execute_commands: bool = false  # 强制执行命令：跳过大部分校验（仅 DebugPanel 使用）
 var show_console: bool = false
 
 # 显示选项
@@ -45,6 +46,7 @@ func enable_debug() -> void:
 func disable_debug() -> void:
 	debug_mode = false
 	set_verbose_logging(false)
+	set_force_execute_commands(false)
 	set_show_console(false)
 	debug_setting_changed.emit("debug_mode", debug_mode)
 	GameLog.info("DebugFlags", "调试模式已禁用")
@@ -81,6 +83,16 @@ func set_validate_invariants(value: bool) -> void:
 	validate_invariants = value
 	debug_setting_changed.emit("validate_invariants", validate_invariants)
 
+func set_force_execute_commands(value: bool) -> void:
+	# 非调试模式下强制关闭
+	if value and not is_debug_mode():
+		value = false
+	if force_execute_commands == value:
+		return
+	force_execute_commands = value
+	debug_setting_changed.emit("force_execute_commands", force_execute_commands)
+	GameLog.info("DebugFlags", "强制执行命令: %s" % ("开启" if force_execute_commands else "关闭"))
+
 func set_profile_commands(value: bool) -> void:
 	if profile_commands == value:
 		return
@@ -106,6 +118,7 @@ func get_status() -> Dictionary:
 		"debug_mode": debug_mode,
 		"verbose_logging": verbose_logging,
 		"validate_invariants": validate_invariants,
+		"force_execute_commands": force_execute_commands,
 		"show_console": show_console,
 		"profile_commands": profile_commands,
 		"show_grid_coords": show_grid_coords,

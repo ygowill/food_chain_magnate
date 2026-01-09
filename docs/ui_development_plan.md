@@ -11,7 +11,7 @@
 | 功能项 | 实现状态 | 代码位置 | 问题描述 |
 |--------|----------|----------|----------|
 | 新游戏按钮 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:16` | - |
-| 载入游戏按钮 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:20` | 载入固定路径存档（缺失/损坏时弹窗提示） |
+| 载入游戏按钮 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:22` | 打开 `SaveLoadDialog`：支持快速存档 + 多存档槽（`user://saves/*.json`）+ 文件系统选择 |
 | 设置按钮 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:39` | 打开 `SettingsDialog` |
 | 板块编辑器按钮 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:47` | - |
 | 回放测试按钮 | ✅ 完成 | `ui/scenes/menus/main_menu.gd:51` | - |
@@ -83,11 +83,11 @@
 | 公司结构面板 | ✅ 已实现 | `ui/components/company_structure/` | 2026-01-05 完成基础版本 |
 | 库存面板 | ✅ 已实现 | `ui/components/inventory_panel/` | 2026-01-05 完成基础版本 |
 | 动作面板 | ✅ 已实现 | `ui/components/action_panel/` | 2026-01-05 完成基础版本 |
-| 里程碑面板 | ⚠️ 已实现未入口 | `ui/components/milestone_panel/` | 只读展示已实现；需要入口（按钮/动作） |
+| 里程碑面板 | ✅ 已实现 | `ui/components/milestone_panel/` | 只读展示已实现；入口：游戏菜单 → 里程碑 |
 | 游戏日志 | ✅ 已实现 | `ui/components/game_log/` | 已集成到 `game.tscn`（左侧面板） |
 | 顺序轨 | ✅ 已实现 | `ui/components/turn_order/` | 2026-01-05 完成基础版本 |
 
-**GameArea完成度**: 18/19 = **95%**
+**GameArea完成度**: 19/19 = **100%**
 
 #### 1.3.3 底栏 (BottomBar)
 
@@ -102,9 +102,9 @@
 
 | 功能项 | 实现状态 | 代码位置 | 问题描述 |
 |--------|----------|----------|----------|
-| 菜单对话框 | ✅ 完成 | `game.tscn:129-158` | 继续/保存/退出 |
+| 菜单对话框 | ✅ 完成 | `game.tscn:188` | 继续/保存/设置/日志/里程碑/距离工具/返回主菜单 |
 | 调试对话框 | ✅ 完成 | `game.tscn:159-180` | 状态摘要查看（bank/marketing_instances/round_state 等），非完整 JSON |
-| 保存游戏功能 | ✅ 完成 | `game.gd:78-91` | 保存到user://savegame.json |
+| 保存游戏功能 | ✅ 完成 | `game.gd:239` | 通过 `SaveLoadDialog` 保存到 `user://savegame.json`（快速存档）或 `user://saves/<name>.json`（多存档槽） |
 | 招聘对话框 | ❌ 未实现 | - | 完全缺失 |
 | 培训对话框 | ❌ 未实现 | - | 完全缺失 |
 | 营销对话框 | ❌ 未实现 | - | 完全缺失 |
@@ -142,10 +142,10 @@
 | 建筑放置预览 | ✅ 完成 | `ui/scenes/game/game_map_interaction_controller.gd` | 放置/移动等场景高亮合法格（PlacementValidator 扫描） |
 | 营销范围预览 | ✅ 完成 | `ui/overlays/marketing_range_overlay.gd` | 发起营销时 hover/选点预览范围 |
 | 采购路线绘制 | ✅ 完成（自动路线预览） | `ui/overlays/procurement_route_overlay.gd` | `GetDrinks` 选择采购员后显示自动路线（手绘规划未实现） |
-| 距离计算可视化 | ⚠️ 已实现未入口 | `ui/overlays/distance_overlay.gd` | 覆盖层与接口已实现；当前缺少触发入口 |
+| 距离计算可视化 | ✅ 完成 | `ui/overlays/distance_overlay.gd` | 入口：游戏菜单 → 距离工具（两次点击起点/终点） |
 | 缩放功能 | ✅ 完成 | `ui/scenes/game/game_overlay_zoom.gd` | ZoomControl 已接入到游戏场景 |
 
-**完成度**: 9/10 = **90%**
+**完成度**: 10/10 = **100%**
 
 ---
 
@@ -784,9 +784,10 @@ func refresh() -> void
 #### 3.1.9 培训面板 (`ui/components/train_panel/`)
 
 **功能需求**:
-- 显示待命区可培训员工
+- 显示可作为培训源的员工（支持“缺货预支待清账”与“在岗同色培训”）
 - 显示培训路径（当前→可选目标）
 - 显示目标职位供应状态
+- 显示培训次数（remaining/total）
 
 **接口设计**:
 ```gdscript
@@ -794,16 +795,21 @@ class_name TrainPanel extends Control
 
 signal train_requested(employee_id: String, target_id: String)
 
+func set_trainable_sources(sources: Dictionary, section_label_text: String = "") -> void
 func set_trainable_employees(employees: Array[String]) -> void
 func set_employee_pool(pool: Dictionary) -> void
-func show_train_path(employee_id: String) -> void
+func set_train_count(remaining: int, total: int) -> void
+func set_source_requires_same_color(map: Dictionary) -> void
+func set_source_badges(map: Dictionary) -> void
 ```
 
 **验收标准**:
-- [ ] 只显示待命区员工
+- [ ] 若 `round_state.immediate_train_pending` 存在：只显示预支来源（必须先清账）
+- [ ] 否则默认显示待命区员工；若启用 `train_from_active_same_color` 则合并显示在岗来源
+- [ ] 同一来源只显示一次，并显示数量（×N）
 - [ ] 正确显示培训路径
 - [ ] 目标职位无货时有提示
-- [ ] 支持多步培训（跳过中间职位）
+- [ ] 在岗-only 来源会按同色过滤培训目标（避免选择后被规则拒绝）
 
 ---
 
@@ -1055,7 +1061,7 @@ func _on_action_requested(action_id: String, params: Dictionary) -> void:
 | `HandArea` | `set_employees(employees, reserve, busy_marketers)` | `cards_selected(employee_ids)` | 当前仅记录日志（重组公司交互后续完善） |
 | `CompanyStructure` | `set_player_data(current_player)` | `structure_changed(new_structure)` | 当前仅记录日志（重组公司提交逻辑后续完善） |
 | `RecruitPanel` | `set_employee_pool(state.employee_pool)` / `set_recruit_count(remaining,total)` | `recruit_requested(employee_type)` | `Working/Recruit` 打开；确认后执行 `recruit` |
-| `TrainPanel` | `set_employee_pool(state.employee_pool)` / `set_trainable_employees(reserve_employees)` / `set_train_count(remaining,total)` | `train_requested(from_employee,to_employee)` | `Working/Train` 打开；确认后执行 `train` |
+| `TrainPanel` | `set_employee_pool(state.employee_pool)` / `set_trainable_sources(source_counts,label)` / `set_source_requires_same_color(map)` / `set_source_badges(map)` / `set_train_count(remaining,total)` | `train_requested(from_employee,to_employee)` | `Working/Train` 打开；支持缺货预支清账与在岗同色培训（按当前玩家状态注入） |
 | `PaydayPanel` | `set_employees(employees,busy_marketers)` / `set_player_cash(cash)` / `set_discount(discount)` | `fire_employees(employee_ids)` / `pay_confirmed()` | `Payday` 打开；解雇走 `fire`，确认后系统推进阶段 |
 | `BankBreakPanel` | `set_bankruptcy_info(count,before,after)` / `show_with_animation()` | `bankruptcy_acknowledged()` / `game_end_triggered()` | 银行破产事件自动弹出（`bank.broke_count` 增加） |
 | `MarketingPanel` | `set_available_marketers(entries)` / `set_available_boards(boards_by_type)` / `set_map_selection_callback(cb)` / `set_selected_target(pos)` | `marketing_requested(employee_type,board_number,position,product,duration)` / `cancelled()` | `Working/Marketing` 打开；面板请求地图选点并预览范围 |
@@ -1063,7 +1069,7 @@ func _on_action_requested(action_id: String, params: Dictionary) -> void:
 | `ProductionPanel` | `set_production_type(food|drinks)` / `set_available_producers(employee_types)` / `set_current_inventory(inv)` | `production_requested(employee_type,production_type)` / `cancelled()` | 选员工后执行 `produce_food/procure_drinks`（路线交互 TBD） |
 | `RestaurantPlacementOverlay` | `set_mode(place_restaurant|move_restaurant)` / `set_map_data(state.map)` / `set_available_restaurants(ids)` / `set_selected_position(pos)` | `placement_confirmed(position,rotation,restaurant_id)` / `cancelled()` | 地图选点回填；确认后执行 `place_restaurant/move_restaurant` |
 | `HousePlacementOverlay` | `set_mode(place_house|add_garden)` / `set_map_data(state.map)` / `set_selected_position(pos)` | `house_placement_confirmed(position,rotation)` / `garden_confirmed(house_id,direction)` / `cancelled()` | 地图选点回填；确认后执行 `place_house/add_garden` |
-| `MilestonePanel` | `set_milestone_pool(state.milestone_pool)` / `set_player_milestones(player.milestones)` | `cancelled()` | 只读展示（自动授予）；当前缺少 UI 入口（需要按钮/菜单触发 `_show_milestone_panel()`） |
+| `MilestonePanel` | `set_milestone_pool(state.milestone_pool)` / `set_player_milestones(player.milestones)` | `cancelled()` | 只读展示（自动授予）；入口：游戏菜单 → 里程碑 |
 | `DinnerTimeOverlay` | `set_pending_orders(orders)` / `show_overlay()` | `phase_completed()` | `Dinnertime` 阶段自动弹出，只读展示 `round_state["dinnertime"]` |
 | `DemandIndicator` | `set_tile_size(size)` / `set_map_offset(offset)` / `set_house_demands(data)` | - | `Dinnertime` 阶段标记成交房屋需求（绿色 satisfied；位置对齐 MapCanvas world_origin） |
 | `MapCanvas` | `set_game_state(state)` | `cell_selected(world_pos)` / `cell_hovered(world_pos)` | 地图选点信号用于营销/放置等交互；hover 触发营销范围预览 |
@@ -1226,7 +1232,7 @@ Week 13+: P2增强
 ---
 
 *文档创建日期: 2026-01-05*
-*最后更新: 2026-01-06*
+*最后更新: 2026-01-09*
 *基于代码版本: 0.1.0*
 
 ---
@@ -1260,26 +1266,27 @@ Week 13+: P2增强
 | price_setting_panel (价格设置) | ✅ 已接入 | 2026-01-06 | `ui/components/price_panel/` | 强制动作确认面板（`set_price/set_discount/set_luxury_price` 无 params；验证：`Working` 点击对应动作） |
 | restaurant_placement (餐厅放置) | ✅ 已接入 | 2026-01-06 | `ui/components/restaurant_placement/` | 地图选点 + rotation + move 模式（已接入“有效位置扫描/高亮”：PlacementValidator 扫描；验证：`place_restaurant/move_restaurant`） |
 | house_placement (房屋放置) | ✅ 已接入 | 2026-01-06 | `ui/components/house_placement/` | 地图选点放房 + 选房添加花园（`place_house` 已支持有效位置高亮；`add_garden` 需 `direction`；验证：`place_house/add_garden`） |
-| milestone_panel (里程碑面板) | ⚠️ 已实现未入口 | 2026-01-06 | `ui/components/milestone_panel/` | 只读展示（里程碑自动授予，不支持手动领取；当前缺少 UI 入口） |
+| milestone_panel (里程碑面板) | ✅ 已接入 | 2026-01-08 | `ui/components/milestone_panel/` | 只读展示（里程碑自动授予，不支持手动领取；入口：游戏菜单 → 里程碑） |
 | dinner_time_overlay (晚餐时间) | ✅ 已接入 | 2026-01-06 | `ui/components/dinner_time/` | 只读展示 `round_state["dinnertime"]`（验证：进入 `Dinnertime` 阶段自动弹出） |
 | demand_indicator (需求指示器) | ✅ 已接入 | 2026-01-06 | `ui/components/demand_indicator/` | `Dinnertime` 阶段标记已成交房屋需求（satisfied；验证：进入 `Dinnertime`） |
 | production_panel (生产面板) | ✅ 已接入 | 2026-01-06 | `ui/components/production_panel/` | 选员工并执行（采购路线已支持自动路线预览；手绘交互未实现；验证：`produce_food/procure_drinks`） |
 
-**P1 完成度（已接入）**: 7/8 = **87%** ⚠️
+**P1 完成度（已接入）**: 8/8 = **100%** ✅
 
 ### 8.3 P2 阶段进度
 
 | 组件 | 状态 | 完成日期 | 文件位置 | 备注 |
 |------|------|----------|----------|------|
-| settings_dialog (设置对话框) | ✅ 已接入（主菜单） | 2026-01-06 | `ui/dialogs/settings_dialog/` | 主菜单已接入；游戏内入口后置 |
-| game_log_panel (游戏日志) | ✅ 已接入 | 2026-01-06 | `ui/components/game_log/` | `game.tscn` 左侧默认显示；toggle 入口后置 |
-| help_tooltip (帮助提示) | ⚠️ 已加载未使用 | 2026-01-06 | `ui/components/help_tooltip/` | 管理器已在 `game.gd` 初始化，但当前没有实际 tooltip 数据源接入 |
-| distance_overlay (距离覆盖层) | ⚠️ 已实现未入口 | 2026-01-06 | `ui/overlays/` | 工具方法已实现（`show_distance_overlay`），但暂无触发入口 |
+| settings_dialog (设置对话框) | ✅ 已接入（主菜单+游戏内菜单） | 2026-01-08 | `ui/dialogs/settings_dialog/` | 入口：主菜单设置按钮；游戏菜单 → 设置 |
+| game_log_panel (游戏日志) | ✅ 已接入 | 2026-01-08 | `ui/components/game_log/` | `game.tscn` 左侧默认显示；入口：游戏菜单 → 显示/隐藏日志 |
+| help_tooltip (帮助提示) | ✅ 已接入（基础） | 2026-01-09 | `ui/components/help_tooltip/` | 入口：hover 阶段/银行/动作面板/库存/顺序轨显示说明 |
+| distance_overlay (距离覆盖层) | ✅ 已接入 | 2026-01-08 | `ui/overlays/` | 入口：游戏菜单 → 距离工具（两次点击起点/终点） |
 | marketing_range_overlay (营销范围) | ✅ 已接入 | 2026-01-06 | `ui/overlays/` | 发起营销时 hover/选点预览范围（验证：`initiate_marketing` 选类型后移动鼠标） |
-| ui_animation_manager (动画系统) | ⚠️ 已加载未使用 | 2026-01-06 | `ui/visual/` | 管理器已在 `game.gd` 初始化，但当前未被组件调用 |
-| confirm_dialog (确认对话框) | ⚠️ 已实现未入口 | 2026-01-06 | `ui/dialogs/` | 组件已实现，但当前无使用点（可用于危险操作二次确认） |
+| ui_animation_manager (动画系统) | ✅ 已接入（基础） | 2026-01-09 | `ui/visual/` | 弹窗居中后触发 bounce（`game_panel_controller.gd:_center_popup`；headless 下禁用） |
+| confirm_dialog (确认对话框) | ✅ 已接入 | 2026-01-09 | `ui/dialogs/` | 入口：游戏菜单 → 返回主菜单（弹出确认对话框） |
+| replay_player (回放播放器) | ✅ 已接入（增强） | 2026-01-09 | `ui/components/replay_player/` | 入口：游戏菜单 → 回放播放器（先经 `SaveLoadDialog` 选择存档/文件；播放器内含命令时间线列表 + 滑条跳转） |
 
-**P2 完成度（已接入）**: 3/7 = **43%** ⚠️
+**P2 完成度（已接入）**: 8/8 = **100%** ✅
 
 ### 8.4 集成状态
 
@@ -1289,8 +1296,8 @@ Week 13+: P2增强
 | game.gd 组件绑定 | ✅ 完成 | 2026-01-05 | _update_ui_components() 方法 |
 | 信号连接 | ✅ 完成 | 2026-01-05 | action_requested, position_selected 等信号已连接 |
 | 阶段面板集成 | ✅ 完成 | 2026-01-06 | recruit/train/payday/game_over/bank_break/dinnertime 等按需加载或自动弹出 |
-| P1 组件集成 | ⚠️ 部分 | 2026-01-06 | 大部分面板已接入；`milestone_panel` 当前缺少 UI 入口 |
-| P2 组件集成 | ⚠️ 部分 | 2026-01-06 | `settings_dialog/game_log_panel/marketing_range_overlay/zoom_control` 已接入；distance/confirm/tooltip/animation 仍缺入口或未被调用 |
+| P1 组件集成 | ✅ 完成 | 2026-01-08 | P1 面板/覆盖层均已接入（含 `milestone_panel`：游戏菜单 → 里程碑） |
+| P2 组件集成 | ✅ 完成 | 2026-01-09 | P2 八项均已接入；动画当前仅用于弹窗 bounce（headless 禁用） |
 
 ### 8.5 已知问题
 
@@ -1298,14 +1305,14 @@ Week 13+: P2增强
 2. ~~**EmployeeRegistry 未注入**: hand_area 和 company_structure 需要注入 EmployeeRegistry 以获取员工定义~~ ✅ game.gd 中已处理
 3. ~~**动作执行未连接**: action_panel 的 action_requested 信号尚未连接到 game.gd 的命令执行~~ ✅ 已连接
 4. ~~**银行破产 UI**: 首次/二次破产的特殊处理界面尚未实现~~ ✅ 已完成
-5. **MilestonePanel 无 UI 入口**：面板可渲染且已对齐引擎数据，但当前没有按钮/动作可打开
-6. **P2 组件入口缺失**：confirm_dialog/distance_overlay/help_tooltip/ui_animation_manager 已实现但仍缺入口或未被调用
+5. ~~**MilestonePanel 无 UI 入口**：面板可渲染且已对齐引擎数据，但当前没有按钮/动作可打开~~ ✅ 已接入：游戏菜单 → 里程碑
+6. **P2 待增强项**：音效系统尚未接入场景或缺入口；存档/回放仍缺“删除/重命名/覆盖确认”“文件系统保存”“时间线更丰富（按阶段分段/搜索）”
 7. **采购路线手绘交互未实现**：`procure_drinks` 当前路线由规则自动生成（已支持自动路线可视化预览；未支持手绘/规划）
 
 ### 8.6 下一步计划
 
 1. 完成文档对齐：更新进度/集成状态 + 增补接口契约表（见本文件 8.* 与 `docs/ui_remediation_plan.md`）
-2. 增加 `milestone_panel/settings_dialog/game_log_panel` 的 UI 入口（按钮/菜单/快捷键其一）
+2. P2 收尾：完善 `replay_player`（时间线按阶段分段/搜索；文件系统保存）；为音效系统提供最小入口或接线（游戏菜单/快捷键）
 3. 增加 `procure_drinks` 的路线交互与可视化（可复用 `distance_overlay`）
 4. ✅ 餐厅/房屋放置：有效位置扫描/高亮（PlacementValidator 扫描；可继续增强：`add_garden` 方向高亮/提示）
 
@@ -1362,5 +1369,5 @@ ui/audio/
 ---
 
 *文档创建日期: 2026-01-05*
-*最后更新: 2026-01-06*
+*最后更新: 2026-01-09*
 *基于代码版本: 0.1.0*

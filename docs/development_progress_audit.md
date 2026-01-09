@@ -30,12 +30,13 @@
 
 ### 1.2 UI 侧（主游戏场景已接线）
 
-- **主菜单/入口**：新游戏、板块编辑器、回放测试可用；载入游戏与设置按钮仍为占位（见第 2.1 节）。
+- **主菜单/入口**：新游戏、载入游戏、设置、板块编辑器、回放测试可用。
 - **主游戏场景（`ui/scenes/game/game.tscn`）**：
   - 地图交互：MapCanvas hover/选点、餐厅放置/移动合法格高亮、营销范围预览等（`ui/scenes/game/game_map_interaction_controller.gd`）。
   - 核心面板：Recruit/Train/Marketing/定价强制动作/生产采购/放置房屋&花园/放置&移动餐厅/Payday 等已接入 `game.gd` 的 Command 执行链路。
   - 覆盖层：营销范围（`ui/overlays/marketing_range_overlay.gd`）、晚餐结果只读展示、需求指示器、缩放控件等已存在。
-  - 日志与设置：`ui/components/game_log/game_log_panel.tscn` 与 `ui/dialogs/settings_dialog.tscn` 已接入（`game.gd` 通过 overlay controller 入口方法调度）。
+  - 日志与设置：`ui/components/game_log/game_log_panel.tscn` 与 `ui/dialogs/settings_dialog.tscn` 已接入；入口：游戏菜单 → 设置 / 显示-隐藏日志。
+  - 信息/工具：游戏菜单提供里程碑面板与距离工具入口（两次点选起点/终点）。
 - **调试面板（可交互命令）**：`ui/scenes/debug/debug_panel.tscn` + `core/debug/debug_commands/*` 已可执行调试命令（含 save/load/undo/redo 等命令入口）。
 
 ### 1.3 测试与工具

@@ -31,13 +31,21 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 		if command.timestamp < 0:
 			return Result.failure("回放命令缺少 timestamp: %s" % str(command))
 
-	# 运行全局校验器
-	var validator_result := engine.action_registry.run_validators(engine.state, command)
-	if not validator_result.ok:
-		return validator_result
+	var force_execute := _should_force_execute(engine, command, is_replay)
 
-	# 执行动作
-	var execute_result := executor.compute_new_state(engine.state, command)
+	# 运行全局校验器（强制模式跳过）
+	var execute_result: Result = null
+	if force_execute:
+		var force_check := _validate_force_execute(engine.state, command, executor)
+		if not force_check.ok:
+			return force_check
+		execute_result = executor.compute_new_state_force(engine.state, command)
+	else:
+		var validator_result := engine.action_registry.run_validators(engine.state, command)
+		if not validator_result.ok:
+			return validator_result
+		execute_result = executor.compute_new_state(engine.state, command)
+
 	if not execute_result.ok:
 		return execute_result
 
@@ -99,6 +107,40 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 	all_warnings.append_array(execute_result.warnings)
 	all_warnings.append_array(auto_r.warnings)
 	return Result.success(engine.state).with_warnings(all_warnings)
+
+static func _should_force_execute(engine: GameEngine, command: Command, is_replay: bool) -> bool:
+	if engine == null or command == null:
+		return false
+	if OS.has_feature("release"):
+		return false
+	if not _is_force_execute_requested(command):
+		return false
+	if is_replay:
+		return true
+	return DebugFlags.is_debug_mode() and DebugFlags.force_execute_commands
+
+static func _is_force_execute_requested(command: Command) -> bool:
+	if command == null:
+		return false
+	if not (command.metadata is Dictionary):
+		return false
+	return bool(Dictionary(command.metadata).get("debug_force", false))
+
+static func _validate_force_execute(state: GameState, command: Command, executor: ActionExecutor) -> Result:
+	if state == null:
+		return Result.failure("force_execute: state 为空")
+	if command == null:
+		return Result.failure("force_execute: command 为空")
+	if executor == null:
+		return Result.failure("force_execute: executor 为空")
+
+	# 强制模式：仍禁止“非当前玩家”执行（避免 hotseat 语义被破坏）
+	if executor.requires_actor:
+		var current_player_id := state.get_current_player_id()
+		if command.actor != current_player_id:
+			return Result.failure("强制执行仅允许当前玩家执行: actor=%d current=%d" % [command.actor, current_player_id])
+
+	return Result.success()
 
 static func _drain_auto_advances(engine: GameEngine, state_in: GameState) -> Result:
 	if state_in == null:

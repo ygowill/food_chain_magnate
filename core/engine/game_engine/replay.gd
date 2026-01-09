@@ -73,7 +73,13 @@ static func rewind_to_command(
 		if executor == null:
 			return Result.failure("回放时找不到执行器: %s" % cmd.action_id)
 
-		var step_result := executor.compute_new_state(replay_state, cmd)
+		var force_execute := _should_force_execute_in_replay(cmd)
+		if force_execute and executor.requires_actor:
+			var current_player_id := replay_state.get_current_player_id()
+			if cmd.actor != current_player_id:
+				return Result.failure("回放强制命令 #%d actor 非当前玩家: actor=%d current=%d" % [i, cmd.actor, current_player_id])
+
+		var step_result := executor.compute_new_state_force(replay_state, cmd) if force_execute else executor.compute_new_state(replay_state, cmd)
 		if not step_result.ok:
 			return Result.failure("回放命令 #%d 失败: %s" % [i, step_result.error])
 		replay_state = step_result.value
@@ -131,7 +137,13 @@ static func full_replay(
 		if executor == null:
 			return Result.failure("重放时找不到执行器: %s" % cmd.action_id)
 
-		var step_result := executor.compute_new_state(replay_state, cmd)
+		var force_execute := _should_force_execute_in_replay(cmd)
+		if force_execute and executor.requires_actor:
+			var current_player_id := replay_state.get_current_player_id()
+			if cmd.actor != current_player_id:
+				return Result.failure("重放强制命令 #%d actor 非当前玩家: actor=%d current=%d" % [i, cmd.actor, current_player_id])
+
+		var step_result := executor.compute_new_state_force(replay_state, cmd) if force_execute else executor.compute_new_state(replay_state, cmd)
 		if not step_result.ok:
 			return Result.failure("重放命令 #%d 失败: %s" % [i, step_result.error])
 		replay_state = step_result.value
@@ -149,6 +161,15 @@ static func full_replay(
 		"random_manager": restored_rng,
 		"current_command_index": command_history.size() - 1
 	}).with_warnings(all_warnings)
+
+static func _should_force_execute_in_replay(command: Command) -> bool:
+	if command == null:
+		return false
+	if OS.has_feature("release"):
+		return false
+	if not (command.metadata is Dictionary):
+		return false
+	return bool(Dictionary(command.metadata).get("debug_force", false))
 
 static func _require_checkpoint_rng_calls(checkpoint: Dictionary, path: String) -> Result:
 	if not (checkpoint is Dictionary):

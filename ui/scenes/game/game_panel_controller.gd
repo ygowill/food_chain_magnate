@@ -61,6 +61,10 @@ func reset_bank_break_tracking(state: GameState) -> void:
 	if _end_panels != null:
 		_end_panels.reset_bank_break_tracking(state)
 
+func show_milestone_panel() -> void:
+	if _working_panels != null:
+		_working_panels.show_milestone_panel()
+
 func sync(state: GameState) -> void:
 	_update_ui_components(state)
 	if _working_panels != null:
@@ -373,3 +377,12 @@ func _center_popup(panel: Control) -> void:
 	var viewport_size = _scene.get_viewport_rect().size
 	var panel_size := panel.size
 	panel.position = (viewport_size - panel_size) / 2
+
+	# P2：弹窗动画（避免 headless 影响测试/资源回收）
+	if OS.has_feature("headless"):
+		return
+	if not (_scene.has_method("get_ui_animation_manager")):
+		return
+	var anim_manager = _scene.call("get_ui_animation_manager")
+	if anim_manager != null and anim_manager.has_method("animate_scale_bounce"):
+		anim_manager.call("animate_scale_bounce", panel)

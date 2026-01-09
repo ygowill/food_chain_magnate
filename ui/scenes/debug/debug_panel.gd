@@ -207,6 +207,9 @@ func _update_status() -> void:
 	else:
 		status_parts.append("调试模式: 关闭")
 
+	# 强制执行
+	status_parts.append("强制执行: %s" % ("开启" if DebugFlags.force_execute_commands else "关闭"))
+
 	# 命令数
 	if _game_engine != null:
 		var cmd_count := _game_engine.get_command_history().size()

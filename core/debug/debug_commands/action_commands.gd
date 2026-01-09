@@ -32,6 +32,15 @@ static func register_all(registry: DebugCommandRegistry) -> void:
 	registry.register("set_discount", _cmd_set_discount.bind(registry), "设定折扣（-$3）", "set_discount")
 	registry.register("set_luxury", _cmd_set_luxury.bind(registry), "设定奢侈品价格（+$10）", "set_luxury")
 
+static func _mark_debug_force(cmd: Command) -> void:
+	if not DebugFlags.is_debug_mode():
+		return
+	if not DebugFlags.force_execute_commands:
+		return
+	if not (cmd.metadata is Dictionary):
+		cmd.metadata = {}
+	cmd.metadata["debug_force"] = true
+
 # === 阶段管理 ===
 
 static func _cmd_skip_sub_phase(args: Array, registry: DebugCommandRegistry) -> Result:
@@ -41,6 +50,7 @@ static func _cmd_skip_sub_phase(args: Array, registry: DebugCommandRegistry) -> 
 
 	var state := engine.get_state()
 	var cmd := Command.create("skip_sub_phase", state.get_current_player_id())
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:
@@ -59,6 +69,7 @@ static func _cmd_choose_order(args: Array, registry: DebugCommandRegistry) -> Re
 	var position := int(args[0])
 	var state := engine.get_state()
 	var cmd := Command.create("choose_turn_order", state.get_current_player_id(), {"position": position})
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:
@@ -71,7 +82,9 @@ static func _cmd_end_turn(args: Array, registry: DebugCommandRegistry) -> Result
 	if engine == null:
 		return Result.failure("游戏引擎未初始化")
 
-	var cmd := Command.create_system("end_turn")
+	var state := engine.get_state()
+	var cmd := Command.create("end_turn", state.get_current_player_id())
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:
@@ -92,6 +105,7 @@ static func _cmd_recruit(args: Array, registry: DebugCommandRegistry) -> Result:
 	var employee_type := str(args[0])
 	var state := engine.get_state()
 	var cmd := Command.create("recruit", state.get_current_player_id(), {"employee_type": employee_type})
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:
@@ -114,6 +128,7 @@ static func _cmd_train(args: Array, registry: DebugCommandRegistry) -> Result:
 		"from_employee": from_type,
 		"to_employee": to_type
 	})
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:
@@ -132,6 +147,7 @@ static func _cmd_fire(args: Array, registry: DebugCommandRegistry) -> Result:
 	var employee_id := str(args[0])
 	var state := engine.get_state()
 	var cmd := Command.create("fire", state.get_current_player_id(), {"employee_id": employee_id})
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:
@@ -152,6 +168,7 @@ static func _cmd_produce(args: Array, registry: DebugCommandRegistry) -> Result:
 	var employee_type := str(args[0])
 	var state := engine.get_state()
 	var cmd := Command.create("produce_food", state.get_current_player_id(), {"employee_type": employee_type})
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:
@@ -170,6 +187,7 @@ static func _cmd_procure(args: Array, registry: DebugCommandRegistry) -> Result:
 	var employee_type := str(args[0])
 	var state := engine.get_state()
 	var cmd := Command.create("procure_drinks", state.get_current_player_id(), {"employee_type": employee_type})
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:
@@ -196,6 +214,7 @@ static func _cmd_place_restaurant(args: Array, registry: DebugCommandRegistry) -
 		"position": {"x": x, "y": y},
 		"rotation": rotation
 	})
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:
@@ -220,6 +239,7 @@ static func _cmd_place_house(args: Array, registry: DebugCommandRegistry) -> Res
 		"position": {"x": x, "y": y},
 		"rotation": rotation
 	})
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:
@@ -246,6 +266,7 @@ static func _cmd_move_restaurant(args: Array, registry: DebugCommandRegistry) ->
 		"position": {"x": x, "y": y},
 		"rotation": rotation
 	})
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:
@@ -269,6 +290,7 @@ static func _cmd_add_garden(args: Array, registry: DebugCommandRegistry) -> Resu
 		"house_id": house_id,
 		"direction": direction
 	})
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:
@@ -299,6 +321,7 @@ static func _cmd_marketing(args: Array, registry: DebugCommandRegistry) -> Resul
 		"product": product,
 		"position": {"x": x, "y": y}
 	})
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:
@@ -315,6 +338,7 @@ static func _cmd_set_price(args: Array, registry: DebugCommandRegistry) -> Resul
 
 	var state := engine.get_state()
 	var cmd := Command.create("set_price", state.get_current_player_id())
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:
@@ -329,6 +353,7 @@ static func _cmd_set_discount(args: Array, registry: DebugCommandRegistry) -> Re
 
 	var state := engine.get_state()
 	var cmd := Command.create("set_discount", state.get_current_player_id())
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:
@@ -343,6 +368,7 @@ static func _cmd_set_luxury(args: Array, registry: DebugCommandRegistry) -> Resu
 
 	var state := engine.get_state()
 	var cmd := Command.create("set_luxury_price", state.get_current_player_id())
+	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
 	if not result.ok:
