@@ -24,6 +24,10 @@ var _game_engine: GameEngine = null
 func _init() -> void:
 	pass
 
+func dispose() -> void:
+	_game_engine = null
+	_commands.clear()
+
 func set_game_engine(engine: GameEngine) -> void:
 	_game_engine = engine
 

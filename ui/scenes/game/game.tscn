@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://dph5rwtgn6tq8"]
+[gd_scene load_steps=15 format=3 uid="uid://dph5rwtgn6tq8"]
 
 [ext_resource type="Script" uid="uid://ckmoescpu6tet" path="res://ui/scenes/game/game.gd" id="1_game"]
 [ext_resource type="Script" uid="uid://c7bjun5j7en8b" path="res://ui/scenes/game/map_view.gd" id="2_map_view"]
@@ -10,6 +10,10 @@
 [ext_resource type="PackedScene" path="res://ui/components/turn_order/turn_order_track.tscn" id="8_turn_order"]
 [ext_resource type="PackedScene" path="res://ui/components/company_structure/company_structure.tscn" id="9_company_structure"]
 [ext_resource type="PackedScene" path="res://ui/components/game_log/game_log_panel.tscn" id="10_game_log_panel"]
+[ext_resource type="PackedScene" path="res://ui/components/map_mode_bar/map_mode_bar.tscn" id="11_map_mode_bar"]
+[ext_resource type="PackedScene" path="res://ui/audio/audio_system_initializer.tscn" id="12_audio_init"]
+[ext_resource type="PackedScene" path="res://ui/components/left_panel/left_panel.tscn" id="13_left_panel"]
+[ext_resource type="PackedScene" path="res://ui/components/turn_order/turn_order_display.tscn" id="14_turn_order_display"]
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -29,85 +33,137 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.1, 0.12, 0.15, 1)
 
-[node name="TopBar" type="HBoxContainer" parent="."]
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_bottom = 50.0
-grow_horizontal = 2
-theme_override_constants/separation = 20
+[node name="AudioSystemInitializer" parent="." instance=ExtResource("12_audio_init")]
 
-[node name="RoundLabel" type="Label" parent="TopBar"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "回合: 0"
-
-[node name="PhaseLabel" type="Label" parent="TopBar"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "阶段: Setup"
-
-[node name="BankLabel" type="Label" parent="TopBar"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "银行: $0"
-
-[node name="CurrentPlayerLabel" type="Label" parent="TopBar"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "玩家: -"
-
-[node name="AdvancePhaseButton" type="Button" parent="TopBar"]
-layout_mode = 2
-visible = false
-text = "推进阶段"
-
-[node name="AdvanceSubPhaseButton" type="Button" parent="TopBar"]
-layout_mode = 2
-visible = false
-text = "推进子阶段"
-
-[node name="SkipButton" type="Button" parent="TopBar"]
-layout_mode = 2
-text = "确认结束"
-
-[node name="DebugButton" type="Button" parent="TopBar"]
-layout_mode = 2
-text = "调试"
-
-[node name="Spacer" type="Control" parent="TopBar"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="MenuButton" type="Button" parent="TopBar"]
-layout_mode = 2
-text = "菜单"
-
-[node name="MainContent" type="HSplitContainer" parent="."]
+[node name="UIRoot" type="VBoxContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = 55.0
-offset_bottom = -300.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_constants/separation = 5
+
+[node name="TopBar" type="VBoxContainer" parent="UIRoot"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="InfoRow" type="HBoxContainer" parent="UIRoot/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 20
+
+[node name="RoundLabel" type="Label" parent="UIRoot/TopBar/InfoRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "回合: 0"
+
+[node name="PhaseLabel" type="Label" parent="UIRoot/TopBar/InfoRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "阶段: Setup"
+
+[node name="TurnOrderDisplay" parent="UIRoot/TopBar/InfoRow" instance=ExtResource("14_turn_order_display")]
+layout_mode = 2
+
+[node name="BankLabel" type="Label" parent="UIRoot/TopBar/InfoRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "银行: $0"
+
+[node name="CurrentPlayerLabel" type="Label" parent="UIRoot/TopBar/InfoRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "玩家: -"
+
+[node name="ButtonRow" type="HBoxContainer" parent="UIRoot/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 20
+
+[node name="AdvancePhaseButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+visible = false
+layout_mode = 2
+text = "推进阶段"
+
+[node name="AdvanceSubPhaseButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+visible = false
+layout_mode = 2
+text = "推进子阶段"
+
+[node name="SkipButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+layout_mode = 2
+text = "确认结束"
+
+[node name="DebugButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+layout_mode = 2
+text = "调试"
+
+[node name="Spacer" type="Control" parent="UIRoot/TopBar/ButtonRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="LogButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+layout_mode = 2
+text = "日志"
+
+[node name="MilestonesButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+layout_mode = 2
+text = "里程碑"
+
+[node name="DistanceToolButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+layout_mode = 2
+text = "距离"
+
+[node name="SettingsButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+layout_mode = 2
+text = "设置"
+
+[node name="ToggleLeftPanelButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+layout_mode = 2
+text = "隐藏信息"
+
+[node name="ToggleRightPanelButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+layout_mode = 2
+text = "隐藏操作"
+
+[node name="MenuButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+layout_mode = 2
+text = "菜单"
+
+[node name="MainContent" type="HSplitContainer" parent="UIRoot"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
 split_offset = 360
 
-[node name="GameLogPanel" parent="MainContent" instance=ExtResource("10_game_log_panel")]
+[node name="LeftArea" type="Control" parent="UIRoot/MainContent"]
 custom_minimum_size = Vector2(360, 0)
 layout_mode = 2
 
-[node name="CenterSplit" type="HSplitContainer" parent="MainContent"]
+[node name="GameLogPanel" parent="UIRoot/MainContent/LeftArea" instance=ExtResource("10_game_log_panel")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="LeftPanel" parent="UIRoot/MainContent/LeftArea" instance=ExtResource("13_left_panel")]
+visible = false
+layout_mode = 1
+
+[node name="CenterSplit" type="HSplitContainer" parent="UIRoot/MainContent"]
 layout_mode = 2
 size_flags_horizontal = 3
 split_offset = -340
 
-[node name="GameArea" type="Panel" parent="MainContent/CenterSplit"]
+[node name="GameArea" type="Panel" parent="UIRoot/MainContent/CenterSplit"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="MapView" type="ScrollContainer" parent="MainContent/CenterSplit/GameArea"]
+[node name="MapView" type="ScrollContainer" parent="UIRoot/MainContent/CenterSplit/GameArea"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -117,78 +173,98 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("2_map_view")
 
-[node name="Canvas" type="Control" parent="MainContent/CenterSplit/GameArea/MapView"]
+[node name="Canvas" type="Control" parent="UIRoot/MainContent/CenterSplit/GameArea/MapView"]
 layout_mode = 2
 script = ExtResource("3_map_canvas")
 
-[node name="RightPanel" type="VBoxContainer" parent="MainContent/CenterSplit"]
+[node name="MapModeBar" parent="UIRoot/MainContent/CenterSplit/GameArea" instance=ExtResource("11_map_mode_bar")]
+layout_mode = 1
+
+[node name="RightPanel" type="VBoxContainer" parent="UIRoot/MainContent/CenterSplit"]
 custom_minimum_size = Vector2(320, 0)
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="PlayerPanel" parent="MainContent/CenterSplit/RightPanel" instance=ExtResource("4_player_panel")]
+[node name="HeaderRow" type="HBoxContainer" parent="UIRoot/MainContent/CenterSplit/RightPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="BackButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/HeaderRow"]
+visible = false
+layout_mode = 2
+text = "← 返回"
+
+[node name="TitleLabel" type="Label" parent="UIRoot/MainContent/CenterSplit/RightPanel/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "操作"
+
+[node name="CloseButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/HeaderRow"]
+layout_mode = 2
+text = "×"
+
+[node name="DefaultStack" type="VBoxContainer" parent="UIRoot/MainContent/CenterSplit/RightPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="PlayerPanel" parent="UIRoot/MainContent/CenterSplit/RightPanel/DefaultStack" instance=ExtResource("4_player_panel")]
 layout_mode = 2
 size_flags_vertical = 0
 
-[node name="TurnOrderTrack" parent="MainContent/CenterSplit/RightPanel" instance=ExtResource("8_turn_order")]
+[node name="TurnOrderTrack" parent="UIRoot/MainContent/CenterSplit/RightPanel/DefaultStack" instance=ExtResource("8_turn_order")]
 layout_mode = 2
 
-[node name="InventoryPanel" parent="MainContent/CenterSplit/RightPanel" instance=ExtResource("6_inventory_panel")]
+[node name="InventoryPanel" parent="UIRoot/MainContent/CenterSplit/RightPanel/DefaultStack" instance=ExtResource("6_inventory_panel")]
 layout_mode = 2
 
-[node name="ActionPanel" parent="MainContent/CenterSplit/RightPanel" instance=ExtResource("5_action_panel")]
+[node name="ActionPanel" parent="UIRoot/MainContent/CenterSplit/RightPanel/DefaultStack" instance=ExtResource("5_action_panel")]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="BottomPanel" type="HSplitContainer" parent="."]
-layout_mode = 1
-anchors_preset = 12
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_top = -250.0
-offset_bottom = -55.0
-grow_horizontal = 2
-grow_vertical = 0
-
-[node name="HandArea" parent="BottomPanel" instance=ExtResource("7_hand_area")]
+[node name="DockHost" type="Control" parent="UIRoot/MainContent/CenterSplit/RightPanel"]
+visible = false
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
 
-[node name="CompanyStructure" parent="BottomPanel" instance=ExtResource("9_company_structure")]
+[node name="FooterRow" type="HBoxContainer" parent="UIRoot/MainContent/CenterSplit/RightPanel"]
+visible = false
 layout_mode = 2
-
-[node name="BottomBar" type="HBoxContainer" parent="."]
-layout_mode = 1
-anchors_preset = 12
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_top = -50.0
-grow_horizontal = 2
-grow_vertical = 0
 theme_override_constants/separation = 10
+alignment = 2
 
-[node name="StateHashLabel" type="Label" parent="BottomBar"]
+[node name="CancelButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/FooterRow"]
+custom_minimum_size = Vector2(100, 36)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.4, 0.4, 0.4, 1)
-theme_override_font_sizes/font_size = 12
-text = "Hash: ..."
+text = "取消"
 
-[node name="Spacer" type="Control" parent="BottomBar"]
+[node name="SecondaryButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/FooterRow"]
+visible = false
+custom_minimum_size = Vector2(100, 36)
+layout_mode = 2
+text = "次要"
+
+[node name="PrimaryButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/FooterRow"]
+custom_minimum_size = Vector2(100, 36)
+layout_mode = 2
+text = "确认"
+
+[node name="BottomPanel" type="HSplitContainer" parent="UIRoot"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="CommandCountLabel" type="Label" parent="BottomBar"]
+[node name="HandArea" parent="UIRoot/BottomPanel" instance=ExtResource("7_hand_area")]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.4, 0.4, 0.4, 1)
-theme_override_font_sizes/font_size = 12
-text = "命令: 0"
+size_flags_horizontal = 3
+
+[node name="CompanyStructure" parent="UIRoot/BottomPanel" instance=ExtResource("9_company_structure")]
+layout_mode = 2
 
 [node name="MenuDialog" type="Window" parent="."]
 title = "游戏菜单"
 initial_position = 2
-size = Vector2i(300, 360)
+size = Vector2i(300, 400)
 visible = false
 
 [node name="VBoxContainer" type="VBoxContainer" parent="MenuDialog"]
@@ -218,6 +294,10 @@ text = "设置"
 [node name="ToggleLogButton" type="Button" parent="MenuDialog/VBoxContainer"]
 layout_mode = 2
 text = "显示/隐藏日志"
+
+[node name="ToggleBottomPanelButton" type="Button" parent="MenuDialog/VBoxContainer"]
+layout_mode = 2
+text = "显示/隐藏底部面板"
 
 [node name="MilestonesButton" type="Button" parent="MenuDialog/VBoxContainer"]
 layout_mode = 2
@@ -252,22 +332,49 @@ offset_bottom = -12.0
 grow_horizontal = 2
 grow_vertical = 2
 
+[node name="StatusRow" type="HBoxContainer" parent="DebugDialog/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="StateHashLabel" type="Label" parent="DebugDialog/VBoxContainer/StatusRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+theme_override_font_sizes/font_size = 12
+text = "Hash: ..."
+
+[node name="Spacer" type="Control" parent="DebugDialog/VBoxContainer/StatusRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CommandCountLabel" type="Label" parent="DebugDialog/VBoxContainer/StatusRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+theme_override_font_sizes/font_size = 12
+text = "命令: 0"
+
 [node name="DebugText" type="TextEdit" parent="DebugDialog/VBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 editable = false
 
-[connection signal="pressed" from="TopBar/AdvancePhaseButton" to="." method="_on_advance_phase_pressed"]
-[connection signal="pressed" from="TopBar/AdvanceSubPhaseButton" to="." method="_on_advance_sub_phase_pressed"]
-[connection signal="pressed" from="TopBar/SkipButton" to="." method="_on_skip_pressed"]
-[connection signal="pressed" from="TopBar/DebugButton" to="." method="_on_debug_pressed"]
-[connection signal="pressed" from="TopBar/MenuButton" to="." method="_on_menu_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/AdvancePhaseButton" to="." method="_on_advance_phase_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/AdvanceSubPhaseButton" to="." method="_on_advance_sub_phase_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/SkipButton" to="." method="_on_skip_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/DebugButton" to="." method="_on_debug_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/LogButton" to="." method="_on_log_button_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/MilestonesButton" to="." method="_on_milestones_button_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/DistanceToolButton" to="." method="_on_distance_tool_button_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/SettingsButton" to="." method="_on_settings_button_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/ToggleLeftPanelButton" to="." method="_on_toggle_left_panel_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/ToggleRightPanelButton" to="." method="_on_toggle_right_panel_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/MenuButton" to="." method="_on_menu_pressed"]
 [connection signal="close_requested" from="MenuDialog" to="." method="_on_menu_dialog_close_requested"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/ResumeButton" to="." method="_on_resume_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/SaveButton" to="." method="_on_save_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/ToggleLogButton" to="." method="_on_toggle_log_pressed"]
+[connection signal="pressed" from="MenuDialog/VBoxContainer/ToggleBottomPanelButton" to="." method="_on_toggle_bottom_panel_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/MilestonesButton" to="." method="_on_milestones_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/DistanceToolButton" to="." method="_on_distance_tool_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/ReplayButton" to="." method="_on_replay_pressed"]

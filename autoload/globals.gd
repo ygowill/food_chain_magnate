@@ -37,6 +37,13 @@ const PLAYER_COLOR_PALETTE: Array[Color] = [
 var player_names: Array[String] = []
 var player_color_indices: Array[int] = []  # player_id -> palette index
 
+# UI/游戏设置（SettingsDialog）
+var ui_scale: float = 1.0
+var ui_layout_version: int = 2 # 1=经典布局；2=新布局（默认，可回滚）
+var confirm_actions: bool = true
+var show_hints: bool = true
+var animation_speed: float = 1.0
+
 func get_version() -> String:
 	var v = ProjectSettings.get_setting("application/config/version", "")
 	var s := str(v).strip_edges()
@@ -48,6 +55,7 @@ func _ready() -> void:
 	GameLog.info("Globals", "全局配置初始化 v%s" % get_version())
 	_load_settings()
 	_ensure_player_profiles()
+	_apply_ui_scale()
 
 # 加载用户设置
 func _load_settings() -> void:
@@ -55,6 +63,12 @@ func _load_settings() -> void:
 	var err := config.load("user://settings.cfg")
 	if err == OK:
 		language = config.get_value("game", "language", "zh")
+		ui_scale = float(config.get_value("display", "ui_scale", 1.0))
+		ui_layout_version = clampi(int(config.get_value("display", "ui_layout_version", 2)), 1, 2)
+		confirm_actions = bool(config.get_value("game", "confirm_actions", true))
+		show_hints = bool(config.get_value("game", "show_hints", true))
+		animation_speed = float(config.get_value("game", "animation_speed", 1.0))
+
 		var mods_val = config.get_value("game", "enabled_modules_v2", null)
 		if mods_val is Array and not Array(mods_val).is_empty():
 			enabled_modules_v2 = Array(mods_val, TYPE_STRING, "", null)
@@ -74,6 +88,13 @@ func _load_settings() -> void:
 					player_color_indices.append(int(v))
 
 		GameLog.info("Globals", "已加载用户设置")
+
+func _apply_ui_scale() -> void:
+	if get_tree() == null or get_tree().root == null:
+		return
+	if get_tree().root is Window:
+		var w: Window = get_tree().root
+		w.content_scale_factor = clampf(ui_scale, 0.5, 2.0)
 
 # 保存用户设置
 func save_settings() -> void:

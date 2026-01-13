@@ -69,6 +69,13 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return employee_type_result
 	var employee_type: String = employee_type_result.value
 
+	var food_type := ""
+	if command.params.has("food_type"):
+		var ft_val = command.params.get("food_type", null)
+		if not (ft_val is String):
+			return Result.failure("food_type 类型错误（期望 String）")
+		food_type = str(ft_val).strip_edges()
+
 	# 从 EmployeeRegistry 获取员工定义
 	var emp_def = EmployeeRegistryClass.get_def(employee_type)
 	if emp_def == null:
@@ -77,6 +84,22 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	# 检查该员工是否能生产食物
 	if not emp_def.can_produce():
 		return Result.failure("该员工类型不能生产食物: %s" % employee_type)
+
+	var fixed_food_type: String = str(emp_def.produces_food_type)
+	var fixed_amount: int = int(emp_def.produces_amount)
+	var is_fixed := (not fixed_food_type.is_empty()) and fixed_amount > 0
+	if is_fixed:
+		if not food_type.is_empty() and food_type != fixed_food_type:
+			return Result.failure("food_type 与员工生产类型不匹配: %s != %s" % [food_type, fixed_food_type])
+	else:
+		# 多选生产（例如 kitchen_trainee）：必须显式提供 food_type 且在选项内
+		var options: Array[String] = []
+		if emp_def is EmployeeDef:
+			options = (emp_def as EmployeeDef).get_production_food_options()
+		if food_type.is_empty():
+			return Result.failure("该员工需要指定 food_type")
+		if not options.has(food_type):
+			return Result.failure("该员工不能生产: %s" % food_type)
 
 	# 检查是否是当前玩家的回合
 	var current_player_id := state.get_current_player_id()
@@ -114,8 +137,25 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if emp_def == null or not emp_def.can_produce():
 		return Result.failure("无法获取 %s 的生产信息" % employee_type)
 
-	var food_type: String = emp_def.produces_food_type
-	var amount: int = emp_def.produces_amount
+	var food_type := ""
+	var amount := 0
+	var fixed_food_type: String = str(emp_def.produces_food_type)
+	var fixed_amount: int = int(emp_def.produces_amount)
+	var is_fixed := (not fixed_food_type.is_empty()) and fixed_amount > 0
+	if is_fixed:
+		food_type = fixed_food_type
+		amount = fixed_amount
+	else:
+		var food_type_val = command.params.get("food_type", "")
+		food_type = str(food_type_val).strip_edges()
+		if food_type.is_empty():
+			return Result.failure("缺少参数: food_type")
+		var options: Array[String] = []
+		if emp_def is EmployeeDef:
+			options = (emp_def as EmployeeDef).get_production_food_options()
+		if not options.has(food_type):
+			return Result.failure("该员工不能生产: %s" % food_type)
+		amount = 1
 
 	# 添加食物到玩家库存
 	var add_result := StateUpdater.add_inventory(state, player_id, food_type, amount)
@@ -166,8 +206,19 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 	assert(emp_def != null, "produce_food 未知的员工类型: %s" % employee_type)
 	assert(emp_def.can_produce(), "produce_food 该员工类型不能生产食物: %s" % employee_type)
 
-	var food_type: String = emp_def.produces_food_type
-	var amount: int = emp_def.produces_amount
+	var food_type := ""
+	var amount := 0
+	var fixed_food_type: String = str(emp_def.produces_food_type)
+	var fixed_amount: int = int(emp_def.produces_amount)
+	var is_fixed := (not fixed_food_type.is_empty()) and fixed_amount > 0
+	if is_fixed:
+		food_type = fixed_food_type
+		amount = fixed_amount
+	else:
+		var food_type_result := require_string_param(command, "food_type")
+		assert(food_type_result.ok, "produce_food 缺少/错误参数: food_type")
+		food_type = str(food_type_result.value).strip_edges()
+		amount = 1
 
 	events.append({
 		"type": EventBus.EventType.FOOD_PRODUCED,

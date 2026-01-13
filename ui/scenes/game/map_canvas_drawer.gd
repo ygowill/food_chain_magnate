@@ -2,6 +2,31 @@
 class_name MapCanvasDrawer
 extends RefCounted
 
+const RESTAURANT_LOGO_PIECE_IDS = [
+	"restaurant_logo_fried_geese_donkey",
+	"restaurant_logo_gluttony_inc_burgers",
+	"restaurant_logo_golden_duck_diner",
+	"restaurant_logo_santa_maria_pizza",
+	"restaurant_logo_xango_blues_bar",
+]
+
+static func _draw_texture_aspect_fit(canvas, texture: Texture2D, rect: Rect2, modulate: Color = Color(1, 1, 1, 1), v_align: String = "center") -> void:
+	if texture == null:
+		return
+	var ts: Vector2 = texture.get_size()
+	if ts.x <= 0.0 or ts.y <= 0.0:
+		return
+
+	var scale := minf(rect.size.x / ts.x, rect.size.y / ts.y)
+	var size := ts * scale
+	var pos := rect.position + (rect.size - size) * 0.5
+	if v_align == "top":
+		pos.y = rect.position.y
+	elif v_align == "bottom":
+		pos.y = rect.position.y + rect.size.y - size.y
+
+	canvas.draw_texture_rect(texture, Rect2(pos, size), false, modulate)
+
 static func draw(canvas) -> void:
 	if canvas._grid_size == Vector2i.ZERO:
 		return
@@ -14,11 +39,72 @@ static func draw(canvas) -> void:
 	_draw_roads(canvas, cell_size)
 	_draw_drink_sources(canvas, cell_size)
 	_draw_structures(canvas, cell_size)
-	_draw_marketing(canvas, cell_size)
 	_draw_house_demands(canvas, cell_size)
+	_draw_marketing(canvas, cell_size)
 	_draw_cell_highlights(canvas, cell_size)
 	_draw_structure_preview(canvas, cell_size)
 	_draw_selection(canvas, cell_size)
+
+static func _hash_string_32(text: String) -> int:
+	var h: int = 2166136261
+	for i in range(text.length()):
+		h ^= text.unicode_at(i)
+		h = int((h * 16777619) & 0xFFFFFFFF)
+	return h
+
+static func _compute_demand_scatter_seed(canvas, house_id: String) -> int:
+	var seed := _hash_string_32(house_id)
+	var state_seed := 0
+	if canvas != null:
+		state_seed = int(canvas._state_seed)
+	return int((seed ^ state_seed) & 0x7FFFFFFF)
+
+static func _compute_house_number_bg_rect(cell_size: int, structure_rect: Rect2) -> Rect2:
+	var pad := maxf(2.0, float(cell_size) * 0.06)
+	var bg_size := Vector2(float(cell_size) * 0.8, float(cell_size) * 0.45)
+	return Rect2(structure_rect.position + Vector2(pad, pad), bg_size)
+
+static func _is_scatter_rect_free(candidate: Rect2, taken: Array[Rect2], min_spacing: float) -> bool:
+	var grow := maxf(min_spacing, 0.0)
+	var cand := candidate.grow(grow)
+	for r in taken:
+		if cand.intersects(r.grow(grow)):
+			return false
+	return true
+
+static func _find_scatter_rect(
+	rng: RandomNumberGenerator,
+	taken: Array[Rect2],
+	area: Rect2,
+	icon_size: float,
+	min_spacing: float,
+	fallback_index: int
+) -> Rect2:
+	var margin := maxf(2.0, min_spacing)
+	var min_x := area.position.x + margin
+	var min_y := area.position.y + margin
+	var max_x := area.position.x + area.size.x - icon_size - margin
+	var max_y := area.position.y + area.size.y - icon_size - margin
+	if max_x < min_x:
+		max_x = min_x
+	if max_y < min_y:
+		max_y = min_y
+
+	for _attempt in range(24):
+		var x := rng.randf_range(min_x, max_x)
+		var y := rng.randf_range(min_y, max_y)
+		var rect := Rect2(Vector2(x, y), Vector2(icon_size, icon_size))
+		if _is_scatter_rect_free(rect, taken, min_spacing):
+			return rect
+
+	var cols := maxi(1, int(floor(area.size.x / maxf(icon_size + min_spacing, 1.0))))
+	var col := int(fallback_index % cols)
+	var row := int(fallback_index / cols)
+	var x2 := min_x + float(col) * (icon_size + min_spacing)
+	var y2 := min_y + float(row) * (icon_size + min_spacing)
+	x2 = clampf(x2, min_x, max_x)
+	y2 = clampf(y2, min_y, max_y)
+	return Rect2(Vector2(x2, y2), Vector2(icon_size, icon_size))
 
 static func _draw_cell_highlights(canvas, cell_size: int) -> void:
 	if canvas._highlighted_cells.is_empty():
@@ -193,7 +279,7 @@ static func _draw_drink_sources(canvas, cell_size: int) -> void:
 			var rect := Rect2(Vector2(x * cell_size, y * cell_size), Vector2(cell_size, cell_size))
 			var icon_size := rect.size * 0.6
 			var icon_pos := rect.position + (rect.size - icon_size) * 0.5
-			canvas.draw_texture_rect(tex, Rect2(icon_pos, icon_size), false)
+			_draw_texture_aspect_fit(canvas, tex, Rect2(icon_pos, icon_size))
 
 static func _draw_structures(canvas, cell_size: int) -> void:
 	for anchor_val in canvas._structures_by_anchor.keys():
@@ -203,6 +289,10 @@ static func _draw_structures(canvas, cell_size: int) -> void:
 		var info: Dictionary = canvas._structures_by_anchor[anchor]
 		var piece_id: String = str(info.get("piece_id", ""))
 		if piece_id.is_empty():
+			continue
+
+		if piece_id == "house" or piece_id == "house_with_garden":
+			_draw_house_and_garden(canvas, cell_size, anchor, info)
 			continue
 
 		var min_pos: Vector2i = info.get("min", anchor)
@@ -215,7 +305,122 @@ static func _draw_structures(canvas, cell_size: int) -> void:
 
 		var pos_px := Vector2(min_pos.x * cell_size, min_pos.y * cell_size) + Vector2(offset_px.x, offset_px.y)
 		var size_px := Vector2(size_cells.x * cell_size, size_cells.y * cell_size) * scale
-		canvas.draw_texture_rect(tex, Rect2(pos_px, size_px), false, Color(1, 1, 1, 0.85))
+		var rect := Rect2(pos_px, size_px)
+		if piece_id == "house":
+			_draw_texture_aspect_fit(canvas, tex, rect, Color(1, 1, 1, 0.85), "bottom")
+		else:
+			canvas.draw_texture_rect(tex, rect, false, Color(1, 1, 1, 0.85))
+		if piece_id == "restaurant":
+			_draw_restaurant_logo(canvas, cell_size, rect, int(info.get("owner", -1)))
+
+static func _draw_restaurant_logo(canvas, cell_size: int, structure_rect: Rect2, owner: int) -> void:
+	if owner < 0:
+		return
+	if canvas._skin == null:
+		return
+	if RESTAURANT_LOGO_PIECE_IDS.is_empty():
+		return
+
+	var logo_map: Dictionary = canvas._player_restaurant_logo_ids
+	var logo_id := int(logo_map.get(owner, -1))
+	if logo_id < 0 or logo_id >= RESTAURANT_LOGO_PIECE_IDS.size():
+		return
+
+	var logo_key: String = RESTAURANT_LOGO_PIECE_IDS[logo_id]
+	var tex: Texture2D = canvas._skin.get_piece_texture(logo_key)
+
+	var size := float(cell_size) * 0.8
+	var pos := structure_rect.position + (structure_rect.size - Vector2(size, size)) * 0.5
+	_draw_texture_aspect_fit(canvas, tex, Rect2(pos, Vector2(size, size)), Color(1, 1, 1, 0.95))
+
+static func _draw_house_and_garden(canvas, cell_size: int, anchor: Vector2i, info: Dictionary) -> void:
+	var min_pos_val = info.get("min", null)
+	var max_pos_val = info.get("max", null)
+	if not (min_pos_val is Vector2i) or not (max_pos_val is Vector2i):
+		return
+	var min_pos: Vector2i = min_pos_val
+	var max_pos: Vector2i = max_pos_val
+	var size_cells := (max_pos - min_pos) + Vector2i.ONE
+
+	var rotation: int = int(info.get("rotation", 0))
+	var house_tex: Texture2D = canvas._skin.get_piece_texture("house")
+	var garden_tex: Texture2D = canvas._skin.get_piece_texture("garden_large")
+
+	# 计算“房屋主体”的 2x2 占地（考虑 rotation；anchor 不一定是左上角）
+	var house_mask := [[1, 1], [1, 1]]
+	var house_cells_world: Array[Vector2i] = MapUtils.get_footprint_cells(house_mask, Vector2i.ZERO, anchor, rotation)
+	var house_min := Vector2i(2147483647, 2147483647)
+	var house_max := Vector2i(-2147483648, -2147483648)
+	var house_cell_set := {}
+	for wpos in house_cells_world:
+		var vpos: Vector2i = canvas._world_to_view(wpos)
+		house_cell_set[vpos] = true
+		house_min.x = min(house_min.x, vpos.x)
+		house_min.y = min(house_min.y, vpos.y)
+		house_max.x = max(house_max.x, vpos.x)
+		house_max.y = max(house_max.y, vpos.y)
+
+	var house_size_cells := (house_max - house_min) + Vector2i.ONE
+	var house_rect := Rect2(Vector2(house_min.x * cell_size, house_min.y * cell_size), Vector2(house_size_cells.x * cell_size, house_size_cells.y * cell_size))
+
+	# 底色：房屋（紫）
+	var house_bg := Color("#8B5CF6")
+	house_bg.a = 0.35
+	canvas.draw_rect(house_rect, house_bg, true)
+
+	# 底色：花园（绿，仅 house_with_garden）
+	var garden_rect := Rect2()
+	var has_garden := str(info.get("piece_id", "")) == "house_with_garden"
+	if has_garden:
+		var garden_min := Vector2i(2147483647, 2147483647)
+		var garden_max := Vector2i(-2147483648, -2147483648)
+		var any := false
+		for y in range(min_pos.y, max_pos.y + 1):
+			for x in range(min_pos.x, max_pos.x + 1):
+				var v := Vector2i(x, y)
+				if house_cell_set.has(v):
+					continue
+				any = true
+				garden_min.x = min(garden_min.x, v.x)
+				garden_min.y = min(garden_min.y, v.y)
+				garden_max.x = max(garden_max.x, v.x)
+				garden_max.y = max(garden_max.y, v.y)
+		if any:
+			var garden_size_cells := (garden_max - garden_min) + Vector2i.ONE
+			garden_rect = Rect2(Vector2(garden_min.x * cell_size, garden_min.y * cell_size), Vector2(garden_size_cells.x * cell_size, garden_size_cells.y * cell_size))
+			var garden_bg := Color("#22C55E")
+			garden_bg.a = 0.30
+			canvas.draw_rect(garden_rect, garden_bg, true)
+
+	# 贴图：房屋主体
+	_draw_texture_aspect_fit(canvas, house_tex, house_rect, Color(1, 1, 1, 0.9), "bottom")
+
+	# 贴图：花园围栏
+	if has_garden and garden_rect.size != Vector2.ZERO:
+		_draw_texture_aspect_fit(canvas, garden_tex, garden_rect, Color(1, 1, 1, 0.9))
+
+	# 房屋编号：左上角（整体占地区域）
+	var house_id: String = str(info.get("house_id", ""))
+	if not house_id.is_empty():
+		var h: Dictionary = canvas._get_house_info(house_id)
+		if h.has("house_number"):
+			_draw_house_number(canvas, cell_size, Rect2(Vector2(min_pos.x * cell_size, min_pos.y * cell_size), Vector2(size_cells.x * cell_size, size_cells.y * cell_size)), h.get("house_number", ""))
+
+static func _draw_house_number(canvas, cell_size: int, structure_rect: Rect2, house_number) -> void:
+	var text := str(house_number).strip_edges()
+	if text.is_empty():
+		return
+	var pad := maxf(2.0, float(cell_size) * 0.06)
+	var font_size := maxi(10, int(round(float(cell_size) * 0.28)))
+	var bg_size := Vector2(float(cell_size) * 0.8, float(cell_size) * 0.45)
+	var bg_rect := Rect2(structure_rect.position + Vector2(pad, pad), bg_size)
+
+	canvas.draw_rect(bg_rect, Color(1, 1, 1, 0.82), true)
+	canvas.draw_rect(bg_rect, Color(0, 0, 0, 0.25), false, 1.0)
+
+	var font: Font = ThemeDB.fallback_font
+	var baseline := bg_rect.position + Vector2(pad, bg_rect.size.y - pad)
+	canvas.draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(0, 0, 0, 1))
 
 static func _draw_marketing(canvas, cell_size: int) -> void:
 	for pos_val in canvas._marketing_by_pos.keys():
@@ -236,14 +441,14 @@ static func _draw_marketing(canvas, cell_size: int) -> void:
 		var rect := Rect2(Vector2(pos.x * cell_size, pos.y * cell_size), Vector2(cell_size, cell_size))
 		var icon_size := rect.size * 0.7
 		var icon_pos := rect.position + (rect.size - icon_size) * 0.5
-		canvas.draw_texture_rect(tex, Rect2(icon_pos, icon_size), false, Color(1, 1, 1, 0.8))
+		_draw_texture_aspect_fit(canvas, tex, Rect2(icon_pos, icon_size), Color(1, 1, 1, 0.8))
 
 		var product_id: String = str(p.get("product", ""))
 		if not product_id.is_empty():
 			var product_tex: Texture2D = canvas._skin.get_product_icon_texture(product_id)
 			var badge_size := rect.size * 0.35
 			var badge_pos := rect.position + Vector2(rect.size.x - badge_size.x - 2.0, 2.0)
-			canvas.draw_texture_rect(product_tex, Rect2(badge_pos, badge_size), false)
+			_draw_texture_aspect_fit(canvas, product_tex, Rect2(badge_pos, badge_size))
 
 static func _draw_house_demands(canvas, cell_size: int) -> void:
 	if canvas._map_data.is_empty():
@@ -251,19 +456,14 @@ static func _draw_house_demands(canvas, cell_size: int) -> void:
 	if not canvas._map_data.has("houses") or not (canvas._map_data["houses"] is Dictionary):
 		return
 
-	var icon_size := float(cell_size) * 0.25
-	var spacing := 2.0
-	var cols := 3
+	var icon_size := float(cell_size) * 0.30
+	var min_spacing := float(cell_size) * 0.10
 
 	for anchor_val in canvas._structures_by_anchor.keys():
 		if not (anchor_val is Vector2i):
 			continue
 		var anchor: Vector2i = anchor_val
 		var info: Dictionary = canvas._structures_by_anchor[anchor]
-
-		var piece_id: String = str(info.get("piece_id", ""))
-		if not piece_id.begins_with("house"):
-			continue
 
 		var house_id: String = str(info.get("house_id", ""))
 		if house_id.is_empty():
@@ -278,29 +478,50 @@ static func _draw_house_demands(canvas, cell_size: int) -> void:
 		if demands.is_empty():
 			continue
 
-		var min_pos: Vector2i = info.get("min", anchor)
-		var rect := Rect2(Vector2(min_pos.x * cell_size, min_pos.y * cell_size), Vector2(cell_size, cell_size))
+		var min_pos_val = info.get("min", null)
+		var max_pos_val = info.get("max", null)
+		if not (min_pos_val is Vector2i) or not (max_pos_val is Vector2i):
+			continue
+		var min_pos: Vector2i = min_pos_val
+		var max_pos: Vector2i = max_pos_val
+		var size_cells := (max_pos - min_pos) + Vector2i.ONE
+		var structure_rect := Rect2(
+			Vector2(min_pos.x * cell_size, min_pos.y * cell_size),
+			Vector2(size_cells.x * cell_size, size_cells.y * cell_size)
+		)
 
-		var count: int = min(demands.size(), 6)
-		var rows: int = int((count + cols - 1) / cols)
-		var bg_size := Vector2(float(cols) * icon_size + float(cols + 1) * spacing, float(rows) * icon_size + float(rows + 1) * spacing)
-		var bg_pos := rect.position + Vector2(1.0, 1.0)
-		canvas.draw_rect(Rect2(bg_pos, bg_size), Color(0, 0, 0, 0.25), true)
-
-		for i in range(count):
-			var d_val = demands[i]
+		var product_ids: Array[String] = []
+		for d_val in demands:
 			if not (d_val is Dictionary):
 				continue
 			var d: Dictionary = d_val
 			var product_id: String = str(d.get("product", ""))
 			if product_id.is_empty():
 				continue
-			var tex: Texture2D = canvas._skin.get_product_icon_texture(product_id)
+			product_ids.append(product_id)
+		if product_ids.is_empty():
+			continue
+		product_ids.sort()
+		var count: int = min(product_ids.size(), 6)
 
-			var row := int(i / cols)
-			var col := int(i % cols)
-			var pos_px := bg_pos + Vector2(spacing + float(col) * (icon_size + spacing), spacing + float(row) * (icon_size + spacing))
-			canvas.draw_texture_rect(tex, Rect2(pos_px, Vector2(icon_size, icon_size)), false)
+		var seed := _compute_demand_scatter_seed(canvas, house_id)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed
+		rng.state = int(seed)
+
+		var taken: Array[Rect2] = []
+		var house_number_val = house.get("house_number", null)
+		if house_number_val != null:
+			taken.append(_compute_house_number_bg_rect(cell_size, structure_rect))
+
+		for i in range(count):
+			var product_id: String = product_ids[i]
+			if product_id.is_empty():
+				continue
+			var tex: Texture2D = canvas._skin.get_product_icon_texture(product_id)
+			var icon_rect := _find_scatter_rect(rng, taken, structure_rect, icon_size, min_spacing, i)
+			taken.append(icon_rect)
+			_draw_texture_aspect_fit(canvas, tex, icon_rect, Color(1, 1, 1, 0.95))
 
 static func _draw_selection(canvas, cell_size: int) -> void:
 	if canvas._is_valid_world_pos(canvas._selected_pos):

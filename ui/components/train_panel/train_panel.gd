@@ -4,6 +4,7 @@ class_name TrainPanel
 extends Control
 
 signal train_requested(from_employee: String, to_employee: String)
+signal right_panel_footer_changed()
 
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
@@ -11,7 +12,7 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 @onready var counter_label: Label = $MarginContainer/VBoxContainer/CounterRow/CounterLabel
 @onready var trainable_section_label: Label = $MarginContainer/VBoxContainer/TrainableSection/SectionLabel
 @onready var trainable_container: HFlowContainer = $MarginContainer/VBoxContainer/TrainableSection/TrainableContainer
-@onready var path_container: VBoxContainer = $MarginContainer/VBoxContainer/PathSection/PathContainer
+@onready var path_container: VBoxContainer = $MarginContainer/VBoxContainer/PathSection/ScrollContainer/PathContainer
 @onready var confirm_btn: Button = $MarginContainer/VBoxContainer/ConfirmButton
 
 var _employee_pool: Dictionary = {}  # employee_type -> count
@@ -27,11 +28,63 @@ var _trainable_cards: Dictionary = {}  # employee_type -> TrainableCard
 var _requires_same_color_by_source: Dictionary = {}  # employee_type -> bool
 var _badge_text_by_source: Dictionary = {}  # employee_type -> String
 var _selected_requires_same_color: bool = false
+var _embedded_in_right_panel: bool = false
+var _base_custom_minimum_size: Vector2 = Vector2.ZERO
+var _relayout_scheduled: bool = false
+
+func set_embedded_in_right_panel(embedded: bool) -> void:
+	_embedded_in_right_panel = embedded
+	if _base_custom_minimum_size == Vector2.ZERO:
+		_base_custom_minimum_size = custom_minimum_size
+	custom_minimum_size = Vector2.ZERO if embedded else _base_custom_minimum_size
+	if confirm_btn != null:
+		confirm_btn.visible = not embedded
+	right_panel_footer_changed.emit()
+	_request_relayout()
+
+func right_panel_get_footer_config() -> Dictionary:
+	if confirm_btn == null:
+		return {}
+	return {
+		"show_cancel": true,
+		"cancel_text": "取消",
+		"cancel_enabled": true,
+		"show_primary": true,
+		"primary_text": str(confirm_btn.text),
+		"primary_enabled": not confirm_btn.disabled,
+	}
+
+func right_panel_footer_primary() -> void:
+	_on_confirm_pressed()
 
 func _ready() -> void:
+	if _base_custom_minimum_size == Vector2.ZERO:
+		_base_custom_minimum_size = custom_minimum_size
 	if confirm_btn != null:
 		confirm_btn.pressed.connect(_on_confirm_pressed)
 		confirm_btn.disabled = true
+	if has_signal("resized"):
+		resized.connect(_request_relayout)
+	if has_signal("visibility_changed"):
+		visibility_changed.connect(_request_relayout)
+	right_panel_footer_changed.emit()
+	_request_relayout()
+
+func _request_relayout() -> void:
+	if _relayout_scheduled:
+		return
+	_relayout_scheduled = true
+	call_deferred("_apply_relayout")
+
+func _apply_relayout() -> void:
+	_relayout_scheduled = false
+	if not is_inside_tree():
+		return
+	# 训练源卡牌使用 HFlowContainer：在首次嵌入 RightPanel/首次显示时可能未拿到稳定宽度导致不换行。
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if trainable_container != null and is_instance_valid(trainable_container):
+		trainable_container.queue_sort()
 
 func set_employee_registry(registry) -> void:
 	_employee_registry = registry
@@ -147,6 +200,7 @@ func _update_states() -> void:
 
 	if confirm_btn != null:
 		confirm_btn.disabled = not can_train or _selected_source.is_empty() or _selected_target.is_empty()
+	right_panel_footer_changed.emit()
 
 func _on_trainable_clicked(employee_type: String) -> void:
 	_selected_source = employee_type
@@ -214,6 +268,7 @@ func _on_target_selected(target_type: String) -> void:
 	# 更新按钮状态
 	if confirm_btn != null:
 		confirm_btn.disabled = _train_remaining <= 0 or _selected_source.is_empty() or _selected_target.is_empty()
+	right_panel_footer_changed.emit()
 
 	# 高亮选中的目标
 	if path_container != null:
@@ -244,6 +299,7 @@ func _clear_selection() -> void:
 
 	if confirm_btn != null:
 		confirm_btn.disabled = true
+	right_panel_footer_changed.emit()
 
 
 # === 内部类：可培训员工卡牌 ===

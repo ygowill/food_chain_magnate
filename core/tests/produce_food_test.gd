@@ -130,12 +130,52 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if no_cook_result.ok:
 		return Result.failure("没有披萨主厨不应能生产")
 
+	# 14) 测试见习厨师（kitchen_trainee）：可选择生产汉堡/披萨（每次 1 个）
+	if state.employee_pool.get("kitchen_trainee", 0) <= 1:
+		return Result.failure("员工池中没有足够的 kitchen_trainee")
+	state.employee_pool["kitchen_trainee"] = int(state.employee_pool.get("kitchen_trainee", 0)) - 2
+	state.players[current_player_id]["employees"].append("kitchen_trainee")
+	state.players[current_player_id]["employees"].append("kitchen_trainee")
+
+	state.sub_phase = "GetFood"
+	var trainee_missing := Command.create("produce_food", current_player_id, {"employee_type": "kitchen_trainee"})
+	var trainee_missing_result := engine.execute_command(trainee_missing)
+	if trainee_missing_result.ok:
+		return Result.failure("kitchen_trainee 未提供 food_type 时不应能生产")
+
+	state.sub_phase = "GetFood"
+	var trainee_invalid := Command.create("produce_food", current_player_id, {"employee_type": "kitchen_trainee", "food_type": "lemonade"})
+	var trainee_invalid_result := engine.execute_command(trainee_invalid)
+	if trainee_invalid_result.ok:
+		return Result.failure("kitchen_trainee 不应能生产 lemonade")
+
+	state.sub_phase = "GetFood"
+	var trainee_burger := Command.create("produce_food", current_player_id, {"employee_type": "kitchen_trainee", "food_type": "burger"})
+	var trainee_burger_result := engine.execute_command(trainee_burger)
+	if not trainee_burger_result.ok:
+		return Result.failure("kitchen_trainee(burger) 应该可以生产: %s" % trainee_burger_result.error)
+
+	state.sub_phase = "GetFood"
+	var trainee_pizza := Command.create("produce_food", current_player_id, {"employee_type": "kitchen_trainee", "food_type": "pizza"})
+	var trainee_pizza_result := engine.execute_command(trainee_pizza)
+	if not trainee_pizza_result.ok:
+		return Result.failure("kitchen_trainee(pizza) 应该可以生产: %s" % trainee_pizza_result.error)
+
+	state = engine.get_state()
+	var burger_after_trainee: int = state.players[current_player_id]["inventory"].get("burger", 0)
+	if burger_after_trainee != 15: # 14 + 1
+		return Result.failure("见习厨师生产后汉堡库存应为 15，实际: %d" % burger_after_trainee)
+	var pizza_after_trainee: int = state.players[current_player_id]["inventory"].get("pizza", 0)
+	if pizza_after_trainee != 4: # 3 + 1
+		return Result.failure("见习厨师生产后披萨库存应为 4，实际: %d" % pizza_after_trainee)
+
 	return Result.success({
 		"player_count": player_count,
 		"seed": seed_val,
-		"final_burger_inventory": chef_burger,
-		"final_pizza_inventory": pizza_count,
+		"final_burger_inventory": burger_after_trainee,
+		"final_pizza_inventory": pizza_after_trainee,
 		"burger_cooks_tested": 2,
 		"burger_chef_tested": 1,
-		"pizza_cook_tested": 1
+		"pizza_cook_tested": 1,
+		"kitchen_trainees_tested": 2
 	})

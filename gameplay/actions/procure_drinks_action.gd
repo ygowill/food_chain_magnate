@@ -116,7 +116,39 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if restaurant_ids.is_empty():
 		return Result.failure("你没有餐厅，无法采购饮料")
 
-	# 若提供了路线参数，则在 validate 阶段校验路线合法性与可拾取来源
+	# 特殊：跑腿伙计（直接获得 1 瓶指定饮料，不走路线/饮料源拾取）
+	if employee_type == "errand_boy":
+		var drink_type_r := require_string_param(command, "drink_type")
+		if not drink_type_r.ok:
+			return drink_type_r
+		var drink_type: String = str(drink_type_r.value).strip_edges()
+		if drink_type.is_empty():
+			return Result.failure("drink_type 不能为空")
+
+		var map_data: Dictionary = state.map
+		if not map_data.has("drink_sources") or not (map_data["drink_sources"] is Array):
+			return Result.failure("state.map.drink_sources 缺失或类型错误")
+		var drink_sources: Array = map_data["drink_sources"]
+		var found := false
+		for src_val in drink_sources:
+			if not (src_val is Dictionary):
+				continue
+			var src: Dictionary = src_val
+			if str(src.get("type", "")) == drink_type:
+				found = true
+				break
+		if not found:
+			return Result.failure("地图上不存在该饮料源类型: %s" % drink_type)
+
+		return Result.success()
+
+	# 其它采购员工：必须由玩家手动选点生成路线后才能执行（不允许系统自动选路）
+	if not command.params.has("route"):
+		return Result.failure("缺少参数: route（请先在地图上选择进货点生成路线）")
+	if not command.params.has("selected_sources"):
+		return Result.failure("缺少参数: selected_sources（请先选择饮料点）")
+
+	# 校验路线合法性与可拾取来源
 	var plan_result := DrinksProcurementClass.resolve_procurement_plan(state, command, restaurant_ids, emp_def)
 	if not plan_result.ok:
 		return plan_result
@@ -149,14 +181,40 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if restaurant_ids.is_empty():
 		return Result.failure("你没有餐厅，无法采购饮料")
 
-	var plan_result := DrinksProcurementClass.resolve_procurement_plan(state, command, restaurant_ids, emp_def)
-	if not plan_result.ok:
-		return plan_result
-
 	# 使用员工：用于“first_cart_operator_used”等里程碑（要求首个 haul 也生效）
 	var ms_use := MilestoneSystemClass.process_event(state, "UseEmployee", {"player_id": player_id, "id": employee_type})
 	if not ms_use.ok:
 		warnings.append("里程碑触发失败(UseEmployee/%s): %s" % [employee_type, ms_use.error])
+
+	# 特殊：跑腿伙计（直接获得 1 瓶指定饮料）
+	if employee_type == "errand_boy":
+		var drink_type_r := require_string_param(command, "drink_type")
+		if not drink_type_r.ok:
+			return drink_type_r
+		var drink_type: String = str(drink_type_r.value).strip_edges()
+		if drink_type.is_empty():
+			return Result.failure("drink_type 不能为空")
+
+		var add_result := StateUpdater.add_inventory(state, player_id, drink_type, 1)
+		if not add_result.ok:
+			return add_result
+
+		var inc_result := RoundStateCountersClass.increment_player_key_count(
+			state.round_state, "procurement_counts", player_id, employee_type, 1
+		)
+		if not inc_result.ok:
+			return inc_result
+
+		return Result.success({
+			"employee_type": employee_type,
+			"player_id": player_id,
+			"drink_type": drink_type,
+			"drinks_procured": {drink_type: 1},
+		}).with_warnings(warnings)
+
+	var plan_result := DrinksProcurementClass.resolve_procurement_plan(state, command, restaurant_ids, emp_def)
+	if not plan_result.ok:
+		return plan_result
 
 	var plan: Dictionary = plan_result.value
 	if not plan.has("picked_sources") or not (plan["picked_sources"] is Array):

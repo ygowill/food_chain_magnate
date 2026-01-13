@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://ui/components/milestone_panel/milestone_panel.gd" id="1_milestone"]
 
 [node name="MilestonePanel" type="Control"]
-custom_minimum_size = Vector2(420, 400)
+custom_minimum_size = Vector2(280, 260)
 layout_mode = 3
 anchors_preset = 0
 script = ExtResource("1_milestone")

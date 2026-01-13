@@ -1,0 +1,54 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/components/map_mode_bar/map_mode_bar.gd" id="1_mode_bar"]
+
+[node name="MapModeBar" type="VBoxContainer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+visible = false
+theme_override_constants/separation = 0
+script = ExtResource("1_mode_bar")
+
+[node name="TopSpacer" type="Control" parent="."]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Bar" type="PanelContainer" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="Bar"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Bar/MarginContainer"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 2
+
+[node name="TitleLabel" type="Label" parent="Bar/MarginContainer/VBoxContainer"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 14
+text = "模式"
+horizontal_alignment = 1
+
+[node name="HintLabel" type="Label" parent="Bar/MarginContainer/VBoxContainer"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.75, 0.75, 0.8, 1)
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 2

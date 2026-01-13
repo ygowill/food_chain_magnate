@@ -1,0 +1,113 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/components/modal_panel/restructuring_modal.gd" id="1_restructuring"]
+
+[node name="RestructuringModal" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+visible = false
+mouse_filter = 0
+script = ExtResource("1_restructuring")
+
+[node name="Overlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0, 0, 0, 0.72)
+
+[node name="Panel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(980, 640)
+layout_mode = 0
+mouse_filter = 0
+
+[node name="MarginContainer" type="MarginContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/TitleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+text = "公司结构重组"
+horizontal_alignment = 1
+
+[node name="PlayerRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 8
+
+[node name="PlayerButtons" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/PlayerRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 1
+theme_override_constants/separation = 8
+
+[node name="ContentHost" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="Hint" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.7, 0.7, 0.75, 1)
+text = "拖拽员工调整公司结构；确认后提交本回合结构。"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Split" type="HSplitContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+split_offset = 420
+
+[node name="HandHost" type="Control" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CompanyHost" type="Control" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ButtonRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 10
+
+[node name="CancelButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ButtonRow"]
+custom_minimum_size = Vector2(120, 38)
+layout_mode = 2
+text = "关闭"
+
+[node name="ConfirmButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ButtonRow"]
+custom_minimum_size = Vector2(120, 38)
+layout_mode = 2
+text = "确认重组"
+
+[node name="HintLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.7, 0.7, 0.75, 1)
+text = "ESC 取消 | 按住 Space 查看地图"
+horizontal_alignment = 1

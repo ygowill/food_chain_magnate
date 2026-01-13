@@ -46,6 +46,9 @@ func show_marketing_panel() -> void:
 
 	if marketing_panel == null:
 		marketing_panel = MarketingPanelScene.instantiate()
+		marketing_panel.visible = false
+		marketing_panel.set_meta("popup_layout", "dock_right")
+		marketing_panel.set_meta("popup_title", "营销")
 		if marketing_panel.has_signal("marketing_requested"):
 			marketing_panel.marketing_requested.connect(_on_marketing_requested)
 		if marketing_panel.has_signal("cancelled"):
@@ -72,9 +75,9 @@ func show_marketing_panel() -> void:
 	if marketing_panel.has_method("set_available_boards"):
 		marketing_panel.set_available_boards(_build_available_marketing_boards_by_type(state))
 
-	marketing_panel.visible = true
 	if _center_popup.is_valid():
 		_center_popup.call(marketing_panel)
+	marketing_panel.visible = true
 
 func _build_marketing_marketer_entries(current_player: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -210,19 +213,22 @@ func _build_available_marketing_boards_by_type(state: GameState) -> Dictionary:
 
 	return out
 
-func _on_marketing_requested(employee_type: String, board_number: int, position: Vector2i, product: String, duration: int) -> void:
+func _on_marketing_requested(employee_type: String, board_number: int, position: Vector2i, product: String, duration: int, axis: String) -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
 	if not _execute_command.is_valid():
 		return
 	var current_player_id = _scene.game_engine.get_state().get_current_player_id()
-	var result: Result = _execute_command.call(Command.create("initiate_marketing", current_player_id, {
+	var params := {
 		"employee_type": employee_type,
 		"board_number": board_number,
 		"position": [position.x, position.y],
 		"product": product,
 		"duration": duration
-	}))
+	}
+	if not axis.is_empty():
+		params["axis"] = axis
+	var result: Result = _execute_command.call(Command.create("initiate_marketing", current_player_id, params))
 
 	if result.ok:
 		if _map_controller != null:
@@ -231,6 +237,21 @@ func _on_marketing_requested(employee_type: String, board_number: int, position:
 			_overlay_controller.hide_marketing_range_overlay()
 		if _hide_all.is_valid():
 			_hide_all.call()
+	else:
+		if is_instance_valid(marketing_panel) and marketing_panel.visible:
+			if marketing_panel.has_method("set_error"):
+				marketing_panel.set_error(str(result.error))
+
+		var log_panel = _scene.get("game_log_panel") if _scene != null else null
+		if is_instance_valid(log_panel) and log_panel.has_method("add_event_log"):
+			log_panel.add_event_log("营销放置失败：%s" % str(result.error), {
+				"action_id": "initiate_marketing",
+				"player_id": current_player_id,
+				"employee_type": employee_type,
+				"board_number": board_number,
+				"product": product,
+				"position": [position.x, position.y],
+			})
 
 func _on_cancelled() -> void:
 	if _hide_all.is_valid():

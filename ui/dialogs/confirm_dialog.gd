@@ -7,7 +7,7 @@ signal confirmed()
 signal cancelled()
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
-@onready var message_label: Label = $MarginContainer/VBoxContainer/MessageLabel
+@onready var message_label: Label = $MarginContainer/VBoxContainer/MessageScroll/MessageContainer/MessageLabel
 @onready var confirm_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/ConfirmButton
 @onready var cancel_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/CancelButton
 
@@ -71,12 +71,21 @@ static func show_confirm(parent: Node, title: String, message: String, on_confir
 	vbox.add_child(title_lbl)
 
 	var msg_lbl := Label.new()
+	var msg_scroll := ScrollContainer.new()
+	msg_scroll.horizontal_scroll_mode = 0
+	msg_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(msg_scroll)
+
+	var msg_box := VBoxContainer.new()
+	msg_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	msg_scroll.add_child(msg_box)
+
 	msg_lbl.text = message
 	msg_lbl.add_theme_font_size_override("font_size", 14)
 	msg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	msg_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
-	msg_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(msg_lbl)
+	msg_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	msg_box.add_child(msg_lbl)
 
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER

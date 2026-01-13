@@ -64,6 +64,9 @@ func show_payday_panel() -> void:
 
 	if payday_panel == null:
 		payday_panel = PaydayPanelScene.instantiate()
+		payday_panel.visible = false
+		payday_panel.set_meta("popup_layout", "dock_right")
+		payday_panel.set_meta("popup_title", "发薪日")
 		payday_panel.fire_employees.connect(_on_fire_employees)
 		payday_panel.pay_confirmed.connect(_on_pay_confirmed)
 		_scene.add_child(payday_panel)
@@ -88,9 +91,9 @@ func show_payday_panel() -> void:
 		var discount: int = int(round_state.get("salary_discount", 0))
 		payday_panel.set_discount(discount)
 
-	payday_panel.visible = true
 	if _center_popup.is_valid():
 		_center_popup.call(payday_panel)
+	payday_panel.visible = true
 
 func _check_bank_break(state: GameState) -> void:
 	if state == null:

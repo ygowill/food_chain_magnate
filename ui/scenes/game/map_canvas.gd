@@ -12,11 +12,15 @@ const MapCanvasIndexerClass = preload("res://ui/scenes/game/map_canvas_indexer.g
 const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
 const MapCanvasTooltipClass = preload("res://ui/scenes/game/map_canvas_tooltip.gd")
 
-const CELL_SIZE := 40
+const BASE_CELL_SIZE := 40
+
+var _zoom: float = 1.0
 
 var _grid_size: Vector2i = Vector2i.ZERO
 var _cells: Array = []
 var _map_data: Dictionary = {}
+var _state_seed: int = 0
+var _player_restaurant_logo_ids: Dictionary = {} # player_id -> logo_id
 
 var _base_grid_size: Vector2i = Vector2i.ZERO
 var _world_origin: Vector2i = Vector2i.ZERO # view(0,0) 对应的 world_pos
@@ -37,12 +41,23 @@ var _skin = null
 var _skin_modules_key: String = ""
 
 func _ready() -> void:
-	mouse_filter = Control.MOUSE_FILTER_STOP
+	# 需要让 MapView（ScrollContainer）也能收到滚轮/拖拽等输入，用于缩放/平移。
+	mouse_filter = Control.MOUSE_FILTER_PASS
 
 func set_game_state(state: GameState) -> void:
 	if state == null:
 		clear()
 		return
+	_state_seed = int(state.seed)
+	_player_restaurant_logo_ids.clear()
+	for p_val in state.players:
+		if not (p_val is Dictionary):
+			continue
+		var p: Dictionary = p_val
+		var pid := int(p.get("id", -1))
+		var logo_id := int(p.get("restaurant_logo_id", -1))
+		if pid >= 0 and logo_id >= 0:
+			_player_restaurant_logo_ids[pid] = logo_id
 	_ensure_skin(Array(state.modules, TYPE_STRING, "", null))
 	set_map_data(state.map)
 
@@ -67,7 +82,7 @@ func set_map_data(map_data: Dictionary) -> void:
 	_world_origin = bounds.get("min", Vector2i.ZERO)
 	_grid_size = bounds.get("size", _base_grid_size)
 
-	custom_minimum_size = Vector2(float(_grid_size.x * CELL_SIZE), float(_grid_size.y * CELL_SIZE))
+	custom_minimum_size = Vector2(float(_grid_size.x * get_cell_size()), float(_grid_size.y * get_cell_size()))
 
 	MapCanvasIndexerClass.rebuild_overlay_indexes(self)
 	queue_redraw()
@@ -76,6 +91,8 @@ func clear() -> void:
 	_grid_size = Vector2i.ZERO
 	_cells = []
 	_map_data = {}
+	_state_seed = 0
+	_player_restaurant_logo_ids.clear()
 	_base_grid_size = Vector2i.ZERO
 	_world_origin = Vector2i.ZERO
 	_external_cells_by_pos.clear()
@@ -90,7 +107,16 @@ func clear() -> void:
 	queue_redraw()
 
 func get_cell_size() -> int:
-	return CELL_SIZE
+	return maxi(1, int(round(float(BASE_CELL_SIZE) * _zoom)))
+
+func set_zoom(zoom: float) -> void:
+	var z := clampf(float(zoom), 0.1, 10.0)
+	if is_equal_approx(_zoom, z):
+		return
+	_zoom = z
+	if _grid_size != Vector2i.ZERO:
+		custom_minimum_size = Vector2(float(_grid_size.x * get_cell_size()), float(_grid_size.y * get_cell_size()))
+	queue_redraw()
 
 func get_world_origin() -> Vector2i:
 	return _world_origin
@@ -129,14 +155,14 @@ func _ensure_skin(modules: Array[String]) -> void:
 		return
 	_skin_modules_key = key
 
-	var read := MapSkinBuilderClass.build_for_modules(Globals.modules_v2_base_dir, modules, CELL_SIZE)
+	var read := MapSkinBuilderClass.build_for_modules(Globals.modules_v2_base_dir, modules, BASE_CELL_SIZE)
 	if read.ok and read.value != null:
 		_skin = read.value
 		return
 
 	push_error("MapCanvas: MapSkin 构建失败，将使用占位皮肤: %s" % str(read.error))
 	var fallback = MapSkinClass.new()
-	fallback.cell_size_px = CELL_SIZE
+	fallback.cell_size_px = BASE_CELL_SIZE
 	fallback._init_placeholders()
 	_skin = fallback
 
@@ -175,8 +201,9 @@ func _update_tooltip_for_hover() -> void:
 	tooltip_text = MapCanvasTooltipClass.format_cell_tooltip(self, _hover_pos, cell)
 
 func _local_to_world_cell(local_pos: Vector2) -> Vector2i:
-	var x := int(floor(local_pos.x / float(CELL_SIZE)))
-	var y := int(floor(local_pos.y / float(CELL_SIZE)))
+	var cell_size := float(get_cell_size())
+	var x := int(floor(local_pos.x / cell_size))
+	var y := int(floor(local_pos.y / cell_size))
 	return _world_origin + Vector2i(x, y)
 
 func _is_valid_world_pos(world_pos: Vector2i) -> bool:
@@ -222,8 +249,7 @@ func _get_house_info(house_id: String) -> Dictionary:
 # === 缩放辅助方法 ===
 
 func get_base_size() -> Vector2:
-	return Vector2(float(_grid_size.x * CELL_SIZE), float(_grid_size.y * CELL_SIZE))
+	return Vector2(float(_grid_size.x * BASE_CELL_SIZE), float(_grid_size.y * BASE_CELL_SIZE))
 
 func get_grid_size() -> Vector2i:
 	return _grid_size
-

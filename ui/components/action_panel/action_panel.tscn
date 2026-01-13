@@ -39,6 +39,94 @@ theme_override_font_sizes/font_size = 16
 text = "可用动作"
 horizontal_alignment = 1
 
+[node name="ContextPanel" type="PanelContainer" parent="MarginContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/VBoxContainer/ContextPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 6
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ContextTitleLabel" type="Label" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "当前操作"
+
+[node name="ContextHintLabel" type="Label" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.8, 0.8, 0.85, 1.0)
+autowrap_mode = 3
+text = ""
+
+[node name="OptionsContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="RestaurantRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RestaurantLabel" type="Label" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RestaurantRow"]
+custom_minimum_size = Vector2(42, 0)
+layout_mode = 2
+text = "餐厅"
+
+[node name="RestaurantOption" type="OptionButton" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RestaurantRow"]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RotationRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RotationLabel" type="Label" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow"]
+custom_minimum_size = Vector2(42, 0)
+layout_mode = 2
+text = "旋转"
+
+[node name="RotationOption" type="OptionButton" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow"]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="DirectionRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DirectionLabel" type="Label" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/DirectionRow"]
+custom_minimum_size = Vector2(42, 0)
+layout_mode = 2
+text = "方向"
+
+[node name="DirectionOption" type="OptionButton" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/DirectionRow"]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ButtonsRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 10
+
+[node name="CancelContextButton" type="Button" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/ButtonsRow"]
+custom_minimum_size = Vector2(90, 34)
+layout_mode = 2
+text = "取消"
+
+[node name="ConfirmContextButton" type="Button" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/ButtonsRow"]
+custom_minimum_size = Vector2(110, 34)
+layout_mode = 2
+text = "确认"
+
 [node name="ItemsContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3

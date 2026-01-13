@@ -5,12 +5,13 @@ extends Control
 
 signal structure_changed(new_structure: Dictionary)
 signal slot_overflow_warning()
+signal card_dropped(employee_id: String, target: Control)
 
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
 @onready var ceo_slot: Control = $MarginContainer/VBoxContainer/CEORow/CEOSlot
-@onready var manager_container: HBoxContainer = $MarginContainer/VBoxContainer/ManagerRow/ManagerContainer
+@onready var manager_container: HBoxContainer = $MarginContainer/VBoxContainer/ManagerRow/ManagerScroll/ManagerContainer
 @onready var slot_count_label: Label = $MarginContainer/VBoxContainer/InfoRow/SlotCountLabel
 @onready var warning_label: Label = $MarginContainer/VBoxContainer/InfoRow/WarningLabel
 
@@ -20,11 +21,23 @@ var _ceo_slots: int = 3  # 默认 CEO 卡槽数
 var _current_structure: Dictionary = {}  # 当前结构
 
 var _slot_nodes: Array = []  # CardSlot 节点列表
-var _report_boxes: Array = []  # slot_index -> ReportsDropTarget（下属列表 + drop 区）
+var _report_containers: Array = []  # slot_index -> VBoxContainer（下属卡槽容器）
+var _report_cards: Array = []  # 下属卡槽中的 EmployeeCard
 var _ceo_card: EmployeeCard = null
 var _is_rebuilding: bool = false
 
+var _drag_enabled: bool = false
+var _direct_cards_by_slot: Array = []  # slot_index -> EmployeeCard（直属槽中的卡）
+var _drag_layer: CanvasLayer = null
+var _drag_preview: EmployeeCard = null
+var _dragging_employee_id: String = ""
+var _drag_source_card: EmployeeCard = null
+var _drag_source_modulate: Color = Color(1, 1, 1, 1)
+var _drag_preview_offset: Vector2 = Vector2.ZERO
+var _hover_drop_target: Control = null
+
 func _ready() -> void:
+	set_process(false)
 	_build_initial_slots()
 
 func _build_initial_slots() -> void:
@@ -43,6 +56,14 @@ func set_player_data(player: Dictionary) -> void:
 
 	# 重建结构
 	_rebuild_structure()
+
+func set_drag_enabled(enabled: bool) -> void:
+	if _drag_enabled == enabled:
+		return
+	_drag_enabled = enabled
+	if not _drag_enabled:
+		_end_drag_visuals()
+	_update_card_drag_enabled()
 
 func get_current_structure() -> Dictionary:
 	return _current_structure.duplicate(true)
@@ -68,6 +89,8 @@ func _count_total_slots() -> int:
 	# 检查在岗员工中有多少经理
 	var employees: Array = Array(_player_data.get("employees", []))
 	for emp_id in employees:
+		if str(emp_id) == "ceo":
+			continue
 		var emp_def := _get_employee_def(str(emp_id))
 		var manager_slots: int = int(emp_def.get("manager_slots", 0))
 		if manager_slots > 0:
@@ -86,18 +109,21 @@ func _count_used_slots() -> int:
 
 func _rebuild_structure() -> void:
 	_is_rebuilding = true
+	_end_drag_visuals()
 
 	# 清除旧的卡槽
 	if manager_container != null:
 		for child in manager_container.get_children():
 			if is_instance_valid(child):
 				child.queue_free()
-	_slot_nodes.clear()
-	_report_boxes.clear()
+		_slot_nodes.clear()
+		_report_containers.clear()
+		_report_cards.clear()
+		_direct_cards_by_slot.clear()
 
-	if _ceo_card != null and is_instance_valid(_ceo_card):
-		_ceo_card.queue_free()
-		_ceo_card = null
+		if _ceo_card != null and is_instance_valid(_ceo_card):
+			_ceo_card.queue_free()
+			_ceo_card = null
 
 	# 创建 CEO 卡（始终显示）
 	if ceo_slot != null:
@@ -132,14 +158,13 @@ func _rebuild_structure() -> void:
 			slot.card_removed.connect(_on_card_removed)
 			col.add_child(slot)
 			_slot_nodes.append(slot)
+			_direct_cards_by_slot.append(null)
 
-			var reports_target := ReportsDropTarget.new()
-			reports_target.add_to_group("employee_card_drop_target")
-			reports_target.add_to_group("company_structure_reports_drop_target")
-			reports_target.set_manager_slot_index(i)
-			reports_target.visible = false
-			col.add_child(reports_target)
-			_report_boxes.append(reports_target)
+			var reports_box := VBoxContainer.new()
+			reports_box.add_theme_constant_override("separation", 4)
+			reports_box.visible = false
+			col.add_child(reports_box)
+			_report_containers.append(reports_box)
 
 	# 填充已有员工到卡槽
 	_fill_existing_structure(structure)
@@ -155,16 +180,13 @@ func _fill_existing_structure(structure: Array) -> void:
 			continue
 		var slot: CardSlot = slot_val
 
-		var reports_target_val = _report_boxes[i] if i < _report_boxes.size() else null
-		var reports_target: ReportsDropTarget = reports_target_val if reports_target_val is ReportsDropTarget else null
-		var reports_box: VBoxContainer = null
-		if reports_target != null:
-			reports_box = reports_target.get_content()
-			if reports_box != null:
-				for c in reports_box.get_children():
-					if is_instance_valid(c):
-						c.queue_free()
-			reports_target.visible = false
+		var reports_box_val = _report_containers[i] if i < _report_containers.size() else null
+		var reports_box: VBoxContainer = reports_box_val if reports_box_val is VBoxContainer else null
+		if reports_box != null:
+			for c in reports_box.get_children():
+				if is_instance_valid(c):
+					c.queue_free()
+			reports_box.visible = false
 
 		var entry: Dictionary = {}
 		if i < structure.size():
@@ -177,13 +199,18 @@ func _fill_existing_structure(structure: Array) -> void:
 			var emp_def := _get_employee_def(direct_id)
 			var card := EmployeeCardClass.new()
 			card.employee_id = direct_id
+			card.draggable = _drag_enabled
 			if not emp_def.is_empty():
 				card.setup(emp_def)
 			else:
 				card.setup({"id": direct_id, "name": direct_id})
+			card.card_drag_started.connect(_on_direct_card_drag_started.bind(card))
+			card.card_drag_ended.connect(_on_direct_card_drag_ended.bind(card))
 			slot.place_card(card)
+			if i < _direct_cards_by_slot.size():
+				_direct_cards_by_slot[i] = card
 
-		if reports_target == null or reports_box == null:
+		if reports_box == null:
 			continue
 
 		var cap := 0
@@ -195,39 +222,49 @@ func _fill_existing_structure(structure: Array) -> void:
 			continue
 
 		var reports_val = entry.get("reports", [])
-		var reports: Array = reports_val if reports_val is Array else []
+		var reports_any: Array = reports_val if reports_val is Array else []
+		var reports: Array[String] = []
+		for rep_val in reports_any:
+			if not (rep_val is String):
+				continue
+			var rep_id := str(rep_val).strip_edges()
+			if rep_id.is_empty() or rep_id == "ceo":
+				continue
+			reports.append(rep_id)
 
 		var header := Label.new()
-		header.text = "下属: %d/%d" % [reports.size(), cap]
+		header.text = "下属卡槽: %d/%d" % [min(reports.size(), cap), cap]
 		header.add_theme_font_size_override("font_size", 11)
 		header.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
 		reports_box.add_child(header)
 
-		if reports.is_empty():
-			var empty := Label.new()
-			empty.text = "（无）"
-			empty.add_theme_font_size_override("font_size", 10)
-			empty.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45, 0.9))
-			reports_box.add_child(empty)
-			reports_target.visible = true
-			continue
+		for r_i in range(cap):
+			var report_slot := CardSlot.new()
+			report_slot.add_to_group("employee_card_drop_target")
+			report_slot.add_to_group("company_structure_reports_drop_target")
+			report_slot.set_meta("manager_slot_index", i)
+			report_slot.set_meta("manager_employee_id", direct_id)
+			report_slot.set_meta("report_slot_index", r_i)
+			reports_box.add_child(report_slot)
 
-		for r_i in range(reports.size()):
-			var rep_val = reports[r_i]
-			if not (rep_val is String):
-				continue
-			var rep_id: String = str(rep_val)
-			if rep_id.is_empty():
-				continue
-			var rep_def := _get_employee_def(rep_id)
-			var rep_name: String = str(rep_def.get("name", rep_id))
+			if r_i < reports.size():
+				var rep_id2: String = reports[r_i]
+				var rep_def := _get_employee_def(rep_id2)
+				var rep_card := EmployeeCardClass.new()
+				rep_card.employee_id = rep_id2
+				rep_card.draggable = _drag_enabled
+				if not rep_def.is_empty():
+					rep_card.setup(rep_def)
+				else:
+					rep_card.setup({"id": rep_id2, "name": rep_id2})
+				rep_card.card_drag_started.connect(_on_direct_card_drag_started.bind(rep_card))
+				rep_card.card_drag_ended.connect(_on_direct_card_drag_ended.bind(rep_card))
+				report_slot.place_card(rep_card)
+				_report_cards.append(rep_card)
 
-			var line := Label.new()
-			line.text = "• %s" % rep_name
-			line.add_theme_font_size_override("font_size", 10)
-			line.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75, 1))
-			reports_box.add_child(line)
-		reports_target.visible = true
+		reports_box.visible = true
+
+	_update_card_drag_enabled()
 
 func _get_display_structure() -> Array:
 	var cs: Dictionary = _player_data.get("company_structure", {})
@@ -237,7 +274,7 @@ func _get_display_structure() -> Array:
 	if structure_val is Array:
 		var pref_arr: Array = structure_val
 		var preferred_direct: Array[String] = []
-		var preferred_reports_by_manager := {}
+		var preferred_reports_by_slot := {}
 		for i in range(_ceo_slots):
 			var pick := ""
 			if i < pref_arr.size():
@@ -249,9 +286,9 @@ func _get_display_structure() -> Array:
 						pick = str(id_val)
 						var reps_val = e.get("reports", null)
 						if reps_val is Array:
-							preferred_reports_by_manager[pick] = Array(reps_val).duplicate()
+							preferred_reports_by_slot[i] = Array(reps_val).duplicate()
 			preferred_direct.append(pick)
-		return _generate_strict_structure_from_employees_with_preferred_direct(employees, preferred_direct, preferred_reports_by_manager)
+		return _generate_strict_structure_from_employees_with_preferred_direct(employees, preferred_direct, preferred_reports_by_slot)
 
 	# 未写入 structure：用当前在岗员工生成“严格金字塔结构”作为展示预览
 	return _generate_strict_structure_from_employees(employees)
@@ -262,24 +299,23 @@ func _generate_strict_structure_from_employees(employees: Array) -> Array:
 		empty_direct.append("")
 	return _generate_strict_structure_from_employees_with_preferred_direct(employees, empty_direct, {})
 
-func _generate_strict_structure_from_employees_with_preferred_direct(employees: Array, preferred_direct: Array[String], preferred_reports_by_manager: Dictionary) -> Array:
+func _generate_strict_structure_from_employees_with_preferred_direct(employees: Array, preferred_direct: Array[String], preferred_reports_by_slot: Dictionary) -> Array:
 	if employees.is_empty():
 		return []
 
-	var non_ceo: Array[String] = []
 	var managers: Array[String] = []
 	var non_managers: Array[String] = []
+	var available_counts: Dictionary = {}  # employee_id -> count（在岗）
 
 	for i in range(employees.size()):
 		var emp_val = employees[i]
 		if not (emp_val is String):
 			continue
 		var emp_id: String = str(emp_val)
-		if emp_id.is_empty():
+		if emp_id.is_empty() or emp_id == "ceo":
 			continue
-		if emp_id == "ceo":
-			continue
-		non_ceo.append(emp_id)
+		var prev_val = available_counts.get(emp_id, 0)
+		available_counts[emp_id] = int(prev_val) + 1
 		var def := _get_employee_def(emp_id)
 		var ms := maxi(0, int(def.get("manager_slots", 0)))
 		if ms > 0:
@@ -291,7 +327,9 @@ func _generate_strict_structure_from_employees_with_preferred_direct(employees: 
 	for _i in range(_ceo_slots):
 		structure.append({"employee_id": "", "reports": []})
 
-	var used := {}
+	var used_counts: Dictionary = {}  # employee_id -> used_count（直属 + 下属）
+
+	# 1) 优先放入“手动分配”的 CEO 直属槽
 	for i_slot in range(_ceo_slots):
 		var pick := ""
 		if i_slot < preferred_direct.size():
@@ -300,16 +338,25 @@ func _generate_strict_structure_from_employees_with_preferred_direct(employees: 
 				pick = str(v)
 		if pick.is_empty() or pick == "ceo":
 			continue
-		if not non_ceo.has(pick):
+		var avail: int = int(available_counts.get(pick, 0))
+		if avail <= 0:
 			continue
-		if used.has(pick):
+		var used_now: int = int(used_counts.get(pick, 0))
+		if used_now >= avail:
 			continue
 		structure[i_slot] = {"employee_id": pick, "reports": []}
-		used[pick] = true
+		used_counts[pick] = used_now + 1
 
-	# 确保尽量放入经理（必要时替换非经理直属槽）
+	# 2) 尽量放入经理（必要时替换非经理直属槽）
 	for m in managers:
-		if used.has(m):
+		var m_id: String = str(m)
+		if m_id.is_empty() or m_id == "ceo":
+			continue
+		var avail_m: int = int(available_counts.get(m_id, 0))
+		if avail_m <= 0:
+			continue
+		var used_m: int = int(used_counts.get(m_id, 0))
+		if used_m >= avail_m:
 			continue
 
 		var placed := false
@@ -319,8 +366,8 @@ func _generate_strict_structure_from_employees_with_preferred_direct(employees: 
 				continue
 			var slot: Dictionary = slot_val
 			if str(slot.get("employee_id", "")).is_empty():
-				structure[i_empty] = {"employee_id": m, "reports": []}
-				used[m] = true
+				structure[i_empty] = {"employee_id": m_id, "reports": []}
+				used_counts[m_id] = used_m + 1
 				placed = true
 				break
 
@@ -328,6 +375,7 @@ func _generate_strict_structure_from_employees_with_preferred_direct(employees: 
 			continue
 
 		var replace_index := -1
+		var replaced_emp := ""
 		for i_rep in range(structure.size() - 1, -1, -1):
 			var slot_val2 = structure[i_rep]
 			if not (slot_val2 is Dictionary):
@@ -340,18 +388,31 @@ func _generate_strict_structure_from_employees_with_preferred_direct(employees: 
 			var cap2 := maxi(0, int(direct_def2.get("manager_slots", 0)))
 			if cap2 <= 0:
 				replace_index = i_rep
+				replaced_emp = direct2
 				break
 
 		if replace_index < 0:
 			break
 
-		structure[replace_index] = {"employee_id": m, "reports": []}
-		used[m] = true
+		structure[replace_index] = {"employee_id": m_id, "reports": []}
+		used_counts[m_id] = used_m + 1
+		if not replaced_emp.is_empty():
+			var prev_used: int = int(used_counts.get(replaced_emp, 0))
+			if prev_used > 0:
+				used_counts[replaced_emp] = prev_used - 1
 
-	# 补齐剩余空槽：放入普通员工
+	# 3) 补齐剩余空槽：放入普通员工
 	for emp_nm in non_managers:
-		if used.has(emp_nm):
+		var emp_id: String = str(emp_nm)
+		if emp_id.is_empty() or emp_id == "ceo":
 			continue
+		var avail_nm: int = int(available_counts.get(emp_id, 0))
+		if avail_nm <= 0:
+			continue
+		var used_nm: int = int(used_counts.get(emp_id, 0))
+		if used_nm >= avail_nm:
+			continue
+
 		var empty_index := -1
 		for i_empty2 in range(structure.size()):
 			var slot_val3 = structure[i_empty2]
@@ -363,18 +424,19 @@ func _generate_strict_structure_from_employees_with_preferred_direct(employees: 
 				break
 		if empty_index < 0:
 			break
-		structure[empty_index] = {"employee_id": emp_nm, "reports": []}
-		used[emp_nm] = true
+		structure[empty_index] = {"employee_id": emp_id, "reports": []}
+		used_counts[emp_id] = used_nm + 1
 
-	# 分配剩余普通员工到经理卡槽
+	# 4) 分配剩余普通员工到经理卡槽
 	var remaining_non_managers: Array[String] = []
-	# 1) 优先放入“手动分配”的下属（按 manager_id 匹配）
+
+	# 4.1) 优先放入“手动分配”的下属（按 slot_index 匹配）
 	for s_i in range(structure.size()):
-		var slot_val = structure[s_i]
-		if not (slot_val is Dictionary):
+		var slot_val4 = structure[s_i]
+		if not (slot_val4 is Dictionary):
 			continue
-		var slot: Dictionary = slot_val
-		var direct: String = str(slot.get("employee_id", ""))
+		var slot4: Dictionary = slot_val4
+		var direct: String = str(slot4.get("employee_id", ""))
 		if direct.is_empty():
 			continue
 		var direct_def := _get_employee_def(direct)
@@ -383,7 +445,7 @@ func _generate_strict_structure_from_employees_with_preferred_direct(employees: 
 			continue
 
 		var reps: Array[String] = []
-		var pref_val = preferred_reports_by_manager.get(direct, null)
+		var pref_val = preferred_reports_by_slot.get(s_i, null)
 		if pref_val is Array:
 			var pref: Array = pref_val
 			for p_i in range(pref.size()):
@@ -393,42 +455,65 @@ func _generate_strict_structure_from_employees_with_preferred_direct(employees: 
 				var rep_id: String = str(rep_val)
 				if rep_id.is_empty() or rep_id == "ceo":
 					continue
-				if used.has(rep_id):
+				var avail_rep: int = int(available_counts.get(rep_id, 0))
+				if avail_rep <= 0:
 					continue
-				if not non_managers.has(rep_id):
+				var rep_def := _get_employee_def(rep_id)
+				if maxi(0, int(rep_def.get("manager_slots", 0))) > 0:
+					continue
+				var used_rep: int = int(used_counts.get(rep_id, 0))
+				if used_rep >= avail_rep:
 					continue
 				reps.append(rep_id)
-				used[rep_id] = true
+				used_counts[rep_id] = used_rep + 1
 				if reps.size() >= cap:
 					break
-		slot["reports"] = reps
-		structure[s_i] = slot
+		slot4["reports"] = reps
+		structure[s_i] = slot4
 
-	# 2) 自动补齐剩余普通员工到经理卡槽
+	# 4.2) 自动补齐剩余普通员工到经理卡槽（保序，允许同类型重复）
+	var remaining_count_by_id: Dictionary = {}
 	for emp_nm2 in non_managers:
-		if not used.has(emp_nm2):
-			remaining_non_managers.append(emp_nm2)
+		var emp_id2: String = str(emp_nm2)
+		if emp_id2.is_empty() or emp_id2 == "ceo":
+			continue
+		if remaining_count_by_id.has(emp_id2):
+			continue
+		var avail2: int = int(available_counts.get(emp_id2, 0))
+		var used2: int = int(used_counts.get(emp_id2, 0))
+		remaining_count_by_id[emp_id2] = maxi(0, avail2 - used2)
+
+	for emp_nm3 in non_managers:
+		var emp_id3: String = str(emp_nm3)
+		if emp_id3.is_empty() or emp_id3 == "ceo":
+			continue
+		var rem_val = remaining_count_by_id.get(emp_id3, 0)
+		var rem: int = int(rem_val)
+		if rem <= 0:
+			continue
+		remaining_non_managers.append(emp_id3)
+		remaining_count_by_id[emp_id3] = rem - 1
 
 	var nm_index := 0
-	for s_i in range(structure.size()):
-		var slot_val = structure[s_i]
-		if not (slot_val is Dictionary):
+	for s_i2 in range(structure.size()):
+		var slot_val5 = structure[s_i2]
+		if not (slot_val5 is Dictionary):
 			continue
-		var slot: Dictionary = slot_val
-		var direct: String = str(slot.get("employee_id", ""))
-		if direct.is_empty():
+		var slot5: Dictionary = slot_val5
+		var direct2: String = str(slot5.get("employee_id", ""))
+		if direct2.is_empty():
 			continue
-		var direct_def := _get_employee_def(direct)
-		var cap := maxi(0, int(direct_def.get("manager_slots", 0)))
-		if cap <= 0:
+		var direct_def2 := _get_employee_def(direct2)
+		var cap2 := maxi(0, int(direct_def2.get("manager_slots", 0)))
+		if cap2 <= 0:
 			continue
-		var reps_val = slot.get("reports", [])
-		var reps: Array[String] = reps_val if reps_val is Array else []
-		while reps.size() < cap and nm_index < remaining_non_managers.size():
-			reps.append(remaining_non_managers[nm_index])
+		var reps_val2 = slot5.get("reports", [])
+		var reps2: Array[String] = reps_val2 if reps_val2 is Array else []
+		while reps2.size() < cap2 and nm_index < remaining_non_managers.size():
+			reps2.append(remaining_non_managers[nm_index])
 			nm_index += 1
-		slot["reports"] = reps
-		structure[s_i] = slot
+		slot5["reports"] = reps2
+		structure[s_i2] = slot5
 
 	return structure
 
@@ -437,7 +522,7 @@ func _update_display() -> void:
 	var used := _count_used_slots()
 
 	if slot_count_label != null:
-		slot_count_label.text = "卡槽: %d/%d" % [used, total]
+		slot_count_label.text = "卡槽: %d/%d" % [used + 1, total + 1]
 
 	if warning_label != null:
 		if used > total:
@@ -483,6 +568,176 @@ func _update_structure() -> void:
 	_current_structure["employees"] = employees
 	_update_display()
 	structure_changed.emit(_current_structure.duplicate())
+
+func _update_card_drag_enabled() -> void:
+	for card_val in _direct_cards_by_slot:
+		if not (card_val is EmployeeCard):
+			continue
+		var card: EmployeeCard = card_val
+		if not is_instance_valid(card):
+			continue
+		var emp_id := str(card.employee_id)
+		card.draggable = _drag_enabled and emp_id != "ceo"
+
+	for card_val2 in _report_cards:
+		if not (card_val2 is EmployeeCard):
+			continue
+		var card2: EmployeeCard = card_val2
+		if not is_instance_valid(card2):
+			continue
+		var emp_id2 := str(card2.employee_id)
+		card2.draggable = _drag_enabled and emp_id2 != "ceo"
+
+func _on_direct_card_drag_started(employee_id: String, source_card: EmployeeCard) -> void:
+	if not _drag_enabled:
+		return
+	var emp_id := str(employee_id).strip_edges()
+	if emp_id.is_empty() or emp_id == "ceo":
+		return
+	_start_drag_visuals(emp_id, source_card)
+
+func _on_direct_card_drag_ended(employee_id: String, drop_position: Vector2, _source_card: EmployeeCard) -> void:
+	if not _drag_enabled:
+		_end_drag_visuals()
+		return
+	var emp_id := str(employee_id).strip_edges()
+	if emp_id.is_empty() or emp_id == "ceo":
+		_end_drag_visuals()
+		return
+
+	var target := _find_drop_target(drop_position)
+	_end_drag_visuals()
+	if target != null:
+		card_dropped.emit(emp_id, target)
+
+func _start_drag_visuals(employee_id: String, source: EmployeeCard) -> void:
+	if employee_id.is_empty():
+		return
+	if not is_instance_valid(source):
+		return
+
+	_end_drag_visuals()
+
+	_dragging_employee_id = employee_id
+	_drag_source_card = source
+	_drag_source_modulate = source.modulate
+	source.modulate = Color(1, 1, 1, 0.5)
+
+	var size_guess := source.size
+	if size_guess == Vector2.ZERO:
+		size_guess = source.get_combined_minimum_size()
+	if size_guess == Vector2.ZERO:
+		size_guess = source.custom_minimum_size
+	if size_guess == Vector2.ZERO:
+		size_guess = Vector2(120, 80)
+	_drag_preview_offset = size_guess / 2.0
+
+	_ensure_drag_layer()
+	if _drag_layer == null:
+		return
+
+	var preview := EmployeeCardClass.new()
+	preview.employee_id = employee_id
+	preview.draggable = false
+	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.custom_minimum_size = size_guess
+	preview.size = size_guess
+	preview.scale = Vector2(1.05, 1.05)
+	preview.modulate = Color(1, 1, 1, 0.85)
+
+	var emp_def := _get_employee_def(employee_id)
+	if not emp_def.is_empty():
+		preview.setup(emp_def)
+
+	_drag_layer.add_child(preview)
+	_drag_preview = preview
+
+	var viewport := get_viewport()
+	if viewport != null:
+		_drag_preview.position = viewport.get_mouse_position() - _drag_preview_offset
+	set_process(true)
+
+func _process(_delta: float) -> void:
+	if _drag_preview == null or not is_instance_valid(_drag_preview):
+		set_process(false)
+		return
+
+	var viewport := get_viewport()
+	if viewport == null:
+		set_process(false)
+		return
+	var mouse_pos := viewport.get_mouse_position()
+	_drag_preview.position = mouse_pos - _drag_preview_offset
+
+	var target := _find_drop_target(mouse_pos)
+	_set_hover_drop_target(target)
+
+func _end_drag_visuals() -> void:
+	_set_hover_drop_target(null)
+
+	if _drag_preview != null and is_instance_valid(_drag_preview):
+		_drag_preview.queue_free()
+	_drag_preview = null
+
+	if _drag_source_card != null and is_instance_valid(_drag_source_card):
+		_drag_source_card.modulate = _drag_source_modulate
+	_drag_source_card = null
+	_drag_source_modulate = Color(1, 1, 1, 1)
+	_dragging_employee_id = ""
+	_drag_preview_offset = Vector2.ZERO
+	set_process(false)
+
+func _ensure_drag_layer() -> void:
+	if _drag_layer != null and is_instance_valid(_drag_layer):
+		return
+
+	_drag_layer = CanvasLayer.new()
+	_drag_layer.layer = 101
+	add_child(_drag_layer)
+
+func _find_drop_target(global_pos: Vector2) -> Control:
+	var viewport := get_viewport()
+	if viewport == null:
+		return null
+
+	var hovered := viewport.gui_get_hovered_control() if viewport.has_method("gui_get_hovered_control") else null
+	var cur: Node = hovered
+	while cur != null:
+		if cur is Control and cur.is_in_group("employee_card_drop_target"):
+			return cur as Control
+		cur = cur.get_parent()
+
+	# 兜底：遍历 group（避免 hovered 被鼠标过滤影响）
+	var best: Control = null
+	var best_area := INF
+	for n in get_tree().get_nodes_in_group("employee_card_drop_target"):
+		if not (n is Control):
+			continue
+		var c: Control = n
+		if not c.visible:
+			continue
+		var rect := c.get_global_rect()
+		if rect.has_point(global_pos):
+			var area := rect.size.x * rect.size.y
+			if area < best_area:
+				best_area = area
+				best = c
+
+	return best
+
+func _set_hover_drop_target(target: Control) -> void:
+	if _hover_drop_target == target:
+		return
+
+	if _hover_drop_target != null and is_instance_valid(_hover_drop_target):
+		if _hover_drop_target.has_method("set_drop_highlighted"):
+			_hover_drop_target.call("set_drop_highlighted", false)
+
+	_hover_drop_target = target
+
+	if _hover_drop_target != null and is_instance_valid(_hover_drop_target):
+		if _hover_drop_target.has_method("set_drop_highlighted"):
+			_hover_drop_target.call("set_drop_highlighted", true)
 
 
 # === 内部类：卡槽 ===
@@ -537,7 +792,6 @@ class CardSlot extends PanelContainer:
 			remove_card()
 
 		_card = card
-		_card.draggable = true
 		add_child(_card)
 
 		var hint := get_node_or_null("Hint")
@@ -567,46 +821,3 @@ class CardSlot extends PanelContainer:
 		if _card != null:
 			return _card.employee_id
 		return ""
-
-
-# === 内部类：经理下属 drop 区 ===
-class ReportsDropTarget extends PanelContainer:
-	var _drop_highlighted: bool = false
-	var _content: VBoxContainer = null
-
-	func _ready() -> void:
-		custom_minimum_size = Vector2(130, 60)
-		_apply_style()
-		_ensure_content()
-
-	func set_manager_slot_index(slot_index: int) -> void:
-		set_meta("manager_slot_index", slot_index)
-
-	func get_content() -> VBoxContainer:
-		_ensure_content()
-		return _content
-
-	func set_drop_highlighted(highlighted: bool) -> void:
-		if _drop_highlighted == highlighted:
-			return
-		_drop_highlighted = highlighted
-		_apply_style()
-
-	func _apply_style() -> void:
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0.12, 0.12, 0.15, 0.65)
-		if _drop_highlighted:
-			style.border_color = Color(0.35, 0.85, 0.55, 0.9)
-			style.set_border_width_all(2)
-		else:
-			style.border_color = Color(0.25, 0.25, 0.3, 0.5)
-			style.set_border_width_all(1)
-		style.set_corner_radius_all(4)
-		add_theme_stylebox_override("panel", style)
-
-	func _ensure_content() -> void:
-		if _content != null and is_instance_valid(_content):
-			return
-		_content = VBoxContainer.new()
-		_content.add_theme_constant_override("separation", 1)
-		add_child(_content)

@@ -4,6 +4,7 @@ class_name ProcureDrinksTest
 extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const DrinksProcurementClass = preload("res://core/rules/drinks_procurement.gd")
 const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 
@@ -92,7 +93,22 @@ static func _run_once(player_count: int, seed_val: int) -> Result:
 		return Result.failure("初始饮料总库存应为 0，实际: %d" % drinks_before_air)
 
 	# 9) 执行采购饮料动作（飞艇）
-	var procure_cmd := Command.create("procure_drinks", air_player_id, {"employee_type": "zeppelin_pilot"})
+	var air_pick := _pick_air_target_for_player(state, air_player_id, 4)
+	if air_pick.is_empty():
+		return Result.failure("找不到飞艇可达的饮料源（player=%d）" % air_player_id)
+	var air_restaurant_id: String = str(air_pick.get("restaurant_id", ""))
+	var air_entrance_pos: Vector2i = air_pick.get("entrance_pos", Vector2i.ZERO)
+	var air_source_pos: Vector2i = air_pick.get("source_pos", Vector2i(-1, -1))
+	if air_restaurant_id.is_empty() or air_source_pos == Vector2i(-1, -1):
+		return Result.failure("飞艇采购测试：无法解析餐厅/饮料源信息")
+	var air_route_vec := _build_air_route(air_entrance_pos, air_source_pos)
+
+	var procure_cmd := Command.create("procure_drinks", air_player_id, {
+		"employee_type": "zeppelin_pilot",
+		"restaurant_id": air_restaurant_id,
+		"route": DrinksProcurementClass.serialize_route(air_route_vec),
+		"selected_sources": DrinksProcurementClass.serialize_route([air_source_pos]),
+	})
 	var procure_result := engine.execute_command(procure_cmd)
 	if not procure_result.ok:
 		return Result.failure("执行 procure_drinks 失败: %s" % procure_result.error)
@@ -128,7 +144,21 @@ static func _run_once(player_count: int, seed_val: int) -> Result:
 	state.employee_pool["truck_driver"] = int(state.employee_pool.get("truck_driver", 0)) - 1
 	state.players[road_player_id]["employees"].append("truck_driver")
 	var drinks_before_road := _sum_drinks(state.players[road_player_id].get("inventory", {}))
-	var procure_truck := Command.create("procure_drinks", road_player_id, {"employee_type": "truck_driver"})
+	var road_pick := _pick_road_target_and_route_for_player(state, road_player_id, 3)
+	if road_pick.is_empty():
+		return Result.failure("找不到卡车可达的饮料源/路线（player=%d）" % road_player_id)
+	var road_restaurant_id: String = str(road_pick.get("restaurant_id", ""))
+	var road_route_vec: Array = road_pick.get("route", [])
+	var road_source_pos: Vector2i = road_pick.get("source_pos", Vector2i(-1, -1))
+	if road_restaurant_id.is_empty() or road_source_pos == Vector2i(-1, -1) or road_route_vec.is_empty():
+		return Result.failure("卡车采购测试：无法解析餐厅/路线/饮料源信息")
+
+	var procure_truck := Command.create("procure_drinks", road_player_id, {
+		"employee_type": "truck_driver",
+		"restaurant_id": road_restaurant_id,
+		"route": DrinksProcurementClass.serialize_route(road_route_vec),
+		"selected_sources": DrinksProcurementClass.serialize_route([road_source_pos]),
+	})
 	var procure_truck_result := engine.execute_command(procure_truck)
 	if not procure_truck_result.ok:
 		return Result.failure("卡车司机采购应成功，但失败: %s" % procure_truck_result.error)
@@ -437,6 +467,118 @@ static func _find_player_with_road_reachable_source(state: GameState, range_valu
 					return pid
 
 	return -1
+
+static func _pick_air_target_for_player(state: GameState, player_id: int, range_value: int) -> Dictionary:
+	var sources: Array = state.map.get("drink_sources", [])
+	var restaurants: Dictionary = state.map.get("restaurants", {})
+
+	var rest_ids := MapRuntimeClass.get_player_restaurants(state, player_id)
+	for rest_id in rest_ids:
+		var rest: Dictionary = restaurants.get(rest_id, {})
+		if rest.is_empty():
+			continue
+		var entrance_pos: Vector2i = rest.get("entrance_pos", rest.get("anchor_pos", Vector2i.ZERO))
+
+		for source in sources:
+			var world_pos = source.get("world_pos", null)
+			var source_pos: Vector2i
+			if world_pos is Vector2i:
+				source_pos = world_pos
+			elif world_pos is Dictionary:
+				source_pos = Vector2i(int(world_pos.get("x", 0)), int(world_pos.get("y", 0)))
+			else:
+				continue
+
+			var dist: int = abs(source_pos.x - entrance_pos.x) + abs(source_pos.y - entrance_pos.y)
+			if dist <= range_value:
+				return {"restaurant_id": str(rest_id), "entrance_pos": entrance_pos, "source_pos": source_pos}
+
+	return {}
+
+static func _build_air_route(from_pos: Vector2i, to_pos: Vector2i) -> Array[Vector2i]:
+	var route: Array[Vector2i] = []
+	route.append(from_pos)
+
+	var cur := from_pos
+	while cur.x != to_pos.x:
+		cur = Vector2i(cur.x + (1 if to_pos.x > cur.x else -1), cur.y)
+		route.append(cur)
+	while cur.y != to_pos.y:
+		cur = Vector2i(cur.x, cur.y + (1 if to_pos.y > cur.y else -1))
+		route.append(cur)
+
+	return route
+
+static func _pick_road_target_and_route_for_player(state: GameState, player_id: int, range_value: int) -> Dictionary:
+	var road_graph = MapRuntimeClass.get_road_graph(state)
+	if road_graph == null:
+		return {}
+
+	var sources: Array = state.map.get("drink_sources", [])
+	var restaurants: Dictionary = state.map.get("restaurants", {})
+
+	var rest_ids := MapRuntimeClass.get_player_restaurants(state, player_id)
+	for rest_id in rest_ids:
+		var rest: Dictionary = restaurants.get(rest_id, {})
+		if rest.is_empty():
+			continue
+		var entrance_pos: Vector2i = rest.get("entrance_pos", rest.get("anchor_pos", Vector2i.ZERO))
+		var start_road := _adjacent_road_cells(state, entrance_pos)
+		if start_road.is_empty():
+			continue
+
+		for source in sources:
+			var world_pos = source.get("world_pos", null)
+			var source_pos: Vector2i
+			if world_pos is Vector2i:
+				source_pos = world_pos
+			elif world_pos is Dictionary:
+				source_pos = Vector2i(int(world_pos.get("x", 0)), int(world_pos.get("y", 0)))
+			else:
+				continue
+
+			var end_road := _adjacent_road_cells(state, source_pos)
+			if end_road.is_empty():
+				continue
+
+			var best_path: Array[Vector2i] = []
+			var best_dist := 999999
+			var best_steps := 999999
+
+			for s in start_road:
+				for t in end_road:
+					var sp_r = road_graph.find_shortest_path(s, t)
+					if not sp_r.ok:
+						continue
+					var sp: Dictionary = sp_r.value
+					var d: int = int(sp.get("distance", 999999))
+					var steps: int = int(sp.get("steps", 999999))
+					var path_val = sp.get("path", null)
+					if not (path_val is Array):
+						continue
+					var path: Array = path_val
+
+					if d < best_dist or (d == best_dist and steps < best_steps):
+						best_dist = d
+						best_steps = steps
+						best_path = []
+						for p in path:
+							if p is Vector2i:
+								best_path.append(p)
+
+			if best_path.is_empty():
+				continue
+			if best_dist > range_value:
+				continue
+
+			return {
+				"restaurant_id": str(rest_id),
+				"entrance_pos": entrance_pos,
+				"source_pos": source_pos,
+				"route": best_path
+			}
+
+	return {}
 
 static func _rotate_to_player(engine: GameEngine, target_player_id: int) -> Result:
 	var safety := 0

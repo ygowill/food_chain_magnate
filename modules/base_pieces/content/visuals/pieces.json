@@ -3,7 +3,12 @@
 	"piece_visuals": {
 		"house": {"texture": "res://modules/base_pieces/assets/map/pieces/house.png", "offset_px": [0, 0], "scale": [1, 1]},
 		"house_with_garden": {"texture": "res://modules/base_pieces/assets/map/pieces/house_with_garden.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"garden_large": {"texture": "res://modules/base_pieces/assets/map/pieces/garden_large.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"restaurant_logo_fried_geese_donkey": {"texture": "res://modules/base_pieces/assets/map/logos/fried_geese_donkey.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"restaurant_logo_gluttony_inc_burgers": {"texture": "res://modules/base_pieces/assets/map/logos/gluttony_inc_burgers.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"restaurant_logo_golden_duck_diner": {"texture": "res://modules/base_pieces/assets/map/logos/golden_duck_diner.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"restaurant_logo_santa_maria_pizza": {"texture": "res://modules/base_pieces/assets/map/logos/santa_maria_pizza.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"restaurant_logo_xango_blues_bar": {"texture": "res://modules/base_pieces/assets/map/logos/xango_blues_bar.png", "offset_px": [0, 0], "scale": [1, 1]},
 		"restaurant": {"texture": "res://modules/base_pieces/assets/map/pieces/restaurant.png", "offset_px": [0, 0], "scale": [1, 1]}
 	}
 }
-

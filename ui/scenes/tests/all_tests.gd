@@ -17,11 +17,16 @@ const PlaceRestaurantRulesTestClass = preload("res://core/tests/place_restaurant
 const MoveRestaurantRulesTestClass = preload("res://core/tests/move_restaurant_rules_test.gd")
 const FailFastParsingTestClass = preload("res://core/tests/fail_fast_parsing_test.gd")
 const ArchiveFailFastTestClass = preload("res://core/tests/archive_fail_fast_test.gd")
+const ArchiveFileRoundtripTestClass = preload("res://core/tests/archive_file_roundtrip_test.gd")
 const InvariantsFailFastTestClass = preload("res://core/tests/invariants_fail_fast_test.gd")
 const RoundStateFailFastTestClass = preload("res://core/tests/round_state_fail_fast_test.gd")
 const CleanupInventoryTestClass = preload("res://core/tests/cleanup_inventory_test.gd")
 const FireActionTestClass = preload("res://core/tests/fire_action_test.gd")
 const CompanyStructureTestClass = preload("res://core/tests/company_structure_test.gd")
+const HandAreaViewSwitchTestClass = preload("res://ui/scenes/tests/hand_area_view_switch_test.gd")
+const UiRegressionPropertyTestClass = preload("res://ui/scenes/tests/ui_regression_property_test.gd")
+const MapZoomPropertyTestClass = preload("res://ui/scenes/tests/map_zoom_property_test.gd")
+const LogRestoreAfterLoadTestClass = preload("res://ui/scenes/tests/log_restore_after_load_test.gd")
 const OrderOfBusinessTestClass = preload("res://core/tests/order_of_business_test.gd")
 const MilestoneSystemTestClass = preload("res://core/tests/milestone_system_test.gd")
 const ModulePackageLoaderV2TestClass = preload("res://core/tests/module_package_loader_v2_test.gd")
@@ -167,6 +172,10 @@ func _run_all() -> int:
 			"fn": func() -> Result: return ArchiveFailFastTestClass.run(2, 12345),
 		},
 		{
+			"name": "ArchiveFileRoundtripTest",
+			"fn": func() -> Result: return ArchiveFileRoundtripTestClass.run(2, 12345),
+		},
+		{
 			"name": "InvariantsFailFastTest",
 			"fn": func() -> Result: return InvariantsFailFastTestClass.run(2, 12345),
 		},
@@ -187,9 +196,25 @@ func _run_all() -> int:
 			"fn": func() -> Result: return CompanyStructureTestClass.run(2, 12345),
 		},
 		{
-			"name": "OrderOfBusinessTest",
-			"fn": func() -> Result: return OrderOfBusinessTestClass.run(3, 12345),
+			"name": "HandAreaViewSwitchTest",
+			"fn": func() -> Result: return HandAreaViewSwitchTestClass.run(),
 		},
+		{
+			"name": "UiRegressionPropertyTest",
+			"fn": func() -> Result: return UiRegressionPropertyTestClass.run(),
+		},
+			{
+				"name": "MapZoomPropertyTest",
+				"fn": func() -> Result: return MapZoomPropertyTestClass.run(),
+			},
+			{
+				"name": "LogRestoreAfterLoadTest",
+				"fn": func() -> Result: return LogRestoreAfterLoadTestClass.run(),
+			},
+			{
+				"name": "OrderOfBusinessTest",
+				"fn": func() -> Result: return OrderOfBusinessTestClass.run(3, 12345),
+			},
 			{
 				"name": "MilestoneSystemTest",
 				"fn": func() -> Result: return MilestoneSystemTestClass.run(2, 12345),

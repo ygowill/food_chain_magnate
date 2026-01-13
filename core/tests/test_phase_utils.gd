@@ -227,21 +227,37 @@ static func complete_restructuring(engine: GameEngine) -> Result:
 	if state.phase != "Restructuring":
 		return Result.success()
 
-	var safety := 0
-	while state.phase == "Restructuring":
-		safety += 1
-		if safety > state.players.size() + 8:
-			return Result.failure("Restructuring 提交循环超出安全上限")
+	var player_count := state.players.size()
 
-		var actor := state.get_current_player_id()
-		if actor < 0:
-			return Result.failure("Restructuring 当前玩家无效")
+	# Restructuring 支持“同时提交”：不依赖 current_player_index 自动推进。
+	for pid in range(player_count):
+		state = engine.get_state()
+		if state.phase != "Restructuring":
+			break
 
-		var submit := engine.execute_command(Command.create("submit_restructuring", actor, {}))
+		var already := false
+		if state.round_state is Dictionary:
+			var r_val = state.round_state.get("restructuring", null)
+			if r_val is Dictionary:
+				var r: Dictionary = r_val
+				var submitted_val = r.get("submitted", null)
+				if submitted_val is Dictionary:
+					var submitted: Dictionary = submitted_val
+					var v = submitted.get(pid, null)
+					if v == null and submitted.has(str(pid)):
+						v = submitted.get(str(pid), null)
+					already = bool(v)
+
+		if already:
+			continue
+
+		var submit := engine.execute_command(Command.create("submit_restructuring", pid, {}))
 		if not submit.ok:
 			return Result.failure("提交重组失败: %s" % submit.error)
 
-		state = engine.get_state()
+	state = engine.get_state()
+	if state.phase == "Restructuring":
+		return Result.failure("Restructuring 未能自动推进（可能仍有未提交玩家）")
 
 	return Result.success()
 

@@ -24,11 +24,8 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("round_state 类型错误（期望 Dictionary）")
 	if not EmployeeRegistryClass.is_loaded():
 		return Result.failure("EmployeeRegistry 未初始化")
-
-	# hotseat：必须是当前玩家
-	var current_player_id := state.get_current_player_id()
-	if command.actor != current_player_id:
-		return Result.failure("不是你的回合")
+	if command.actor < 0 or command.actor >= state.players.size():
+		return Result.failure("玩家不存在: %d" % command.actor)
 
 	# 已提交后禁止修改
 	var r_val = state.round_state.get("restructuring", null)
@@ -116,11 +113,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if cap <= 0:
 		return Result.failure("目标槽位不是经理（无下属卡槽）: %s" % manager_id)
 
-	# 检查容量（按当前已分配的有效下属计数）
+	# 检查容量（按当前已分配的有效下属计数；允许同类型下属重复）
 	var reports_val = entry.get("reports", [])
 	var raw_reports: Array = reports_val if reports_val is Array else []
-	var seen := {}
-	var current_reports: Array[String] = []
+	var current_count := 0
 	for i in range(raw_reports.size()):
 		var rep_val = raw_reports[i]
 		if not (rep_val is String):
@@ -128,20 +124,17 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		var rep_id: String = str(rep_val)
 		if rep_id.is_empty() or rep_id == "ceo":
 			continue
-		if rep_id == employee_id:
-			continue
-		if seen.has(rep_id):
-			continue
 		if not employees.has(rep_id):
 			continue
 		var rep_def: EmployeeDef = EmployeeRegistryClass.get_def(rep_id)
 		if maxi(0, int(rep_def.manager_slots)) > 0:
 			continue
-		seen[rep_id] = true
-		current_reports.append(rep_id)
+		current_count += 1
+		if current_count >= cap:
+			break
 
-	if current_reports.size() >= cap:
-		return Result.failure("该经理下属卡槽已满（%d/%d）" % [current_reports.size(), cap])
+	if current_count >= cap:
+		return Result.failure("该经理下属卡槽已满（%d/%d）" % [current_count, cap])
 
 	return Result.success({
 		"manager_slot_index": manager_slot_index,
@@ -170,14 +163,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	assert(reserve_val is Array, "set_company_structure_report: player.reserve_employees 类型错误（期望 Array）")
 	var employees: Array = employees_val
 	var reserve: Array = reserve_val
-
-	if reserve.has(employee_id) and not employees.has(employee_id):
-		var removed := StateUpdater.remove_from_array(player, "reserve_employees", employee_id)
-		if not removed:
-			return Result.failure("移动员工到在岗失败（未在待命区找到）: %s" % employee_id)
-		StateUpdater.append_to_array(player, "employees", employee_id)
-		employees = player["employees"]
-		reserve = player["reserve_employees"]
 
 	var cs_val = player.get("company_structure", null)
 	assert(cs_val is Dictionary, "set_company_structure_report: player.company_structure 类型错误（期望 Dictionary）")
@@ -211,22 +196,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 					entry["reports"] = Array(e["reports"]).duplicate()
 		normalized.append(entry)
 
-	# 移除员工在其它位置的占用（直属/下属）
-	for i2 in range(normalized.size()):
-		var e2_val = normalized[i2]
-		if not (e2_val is Dictionary):
-			continue
-		var e2: Dictionary = e2_val
-		if str(e2.get("employee_id", "")) == employee_id:
-			e2["employee_id"] = ""
-		var reps_val = e2.get("reports", [])
-		var reps: Array = reps_val if reps_val is Array else []
-		if reps.has(employee_id):
-			while reps.has(employee_id):
-				reps.erase(employee_id)
-			e2["reports"] = reps
-		normalized[i2] = e2
-
 	# 追加到目标经理的 reports（按容量）
 	var target_val = normalized[manager_slot_index]
 	assert(target_val is Dictionary, "set_company_structure_report: 目标槽位类型错误")
@@ -241,9 +210,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if cap <= 0:
 		return Result.failure("目标槽位不是经理（无下属卡槽）: %s" % manager_id)
 
-	var reps_val2 = target.get("reports", [])
+	# 允许同类型非唯一员工重复作为下属（如两张同名员工），但仍需满足：
+	# - 必须为在岗员工
+	# - 不能是经理/CEO
+	# - 容量 cap 限制
+	var reps_val2 = target.get("reports", null)
 	var raw_reports2: Array = reps_val2 if reps_val2 is Array else []
-	var seen2 := {}
 	var reports2: Array[String] = []
 	for i3 in range(raw_reports2.size()):
 		var rep_val2 = raw_reports2[i3]
@@ -252,23 +224,43 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		var rep_id2: String = str(rep_val2)
 		if rep_id2.is_empty() or rep_id2 == "ceo":
 			continue
-		if rep_id2 == employee_id:
-			continue
-		if seen2.has(rep_id2):
-			continue
 		if not employees.has(rep_id2):
 			continue
 		var rep_def2: EmployeeDef = EmployeeRegistryClass.get_def(rep_id2)
 		if maxi(0, int(rep_def2.manager_slots)) > 0:
 			continue
-		seen2[rep_id2] = true
 		reports2.append(rep_id2)
+		if reports2.size() >= cap:
+			break
 
 	if reports2.size() >= cap:
 		return Result.failure("该经理下属卡槽已满（%d/%d）" % [reports2.size(), cap])
 	reports2.append(employee_id)
 	target["reports"] = reports2
 	normalized[manager_slot_index] = target
+
+	# 下属必须为在岗：若当前直属+下属占用数量超过在岗数量，
+	# 则优先从 reserve_employees 补齐到 employees（支持同名员工多张/多实例）。
+	var assigned_count := _count_employee_in_structure(normalized, employee_id)
+	var active_count := _count_employee_in_array(employees, employee_id)
+	if assigned_count > active_count:
+		var need := assigned_count - active_count
+		for _i in range(need):
+			if not reserve.has(employee_id):
+				break
+			var moved := StateUpdater.remove_from_array(player, "reserve_employees", employee_id)
+			if not moved:
+				break
+			StateUpdater.append_to_array(player, "employees", employee_id)
+			employees = player["employees"]
+			reserve = player["reserve_employees"]
+		active_count = _count_employee_in_array(employees, employee_id)
+
+	# 允许“非唯一员工”重复分配，但不允许超过在岗数量。
+	# 若超过，则从其它位置移除多余占用（优先直属槽，再其它经理 reports；最后才动目标经理的旧 reports）。
+	if assigned_count > active_count:
+		var to_remove := assigned_count - active_count
+		_remove_employee_for_report(normalized, employee_id, to_remove, manager_slot_index)
 
 	cs["structure"] = normalized
 	player["company_structure"] = cs
@@ -280,3 +272,102 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"employee_id": employee_id
 	})
 
+static func _count_employee_in_array(list: Array, employee_id: String) -> int:
+	if list == null:
+		return 0
+	var emp_id := str(employee_id)
+	if emp_id.is_empty():
+		return 0
+	var count := 0
+	for v in list:
+		if v is String and str(v) == emp_id:
+			count += 1
+	return count
+
+static func _count_employee_in_structure(structure: Array, employee_id: String) -> int:
+	if structure == null:
+		return 0
+	var emp_id := str(employee_id)
+	if emp_id.is_empty():
+		return 0
+	var count := 0
+	for i in range(structure.size()):
+		var entry_val = structure[i]
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		if str(entry.get("employee_id", "")) == emp_id:
+			count += 1
+		var reps_val = entry.get("reports", null)
+		if reps_val is Array:
+			var reps: Array = reps_val
+			for rep_val in reps:
+				if rep_val is String and str(rep_val) == emp_id:
+					count += 1
+	return count
+
+static func _remove_employee_for_report(structure: Array, employee_id: String, remove_count: int, protected_manager_slot_index: int) -> int:
+	if structure == null:
+		return 0
+	var emp_id := str(employee_id)
+	if emp_id.is_empty() or remove_count <= 0:
+		return 0
+
+	var removed := 0
+
+	# 1) 先从直属槽移除（把“直连 CEO”移动到“经理下属”更符合用户意图）
+	for i in range(structure.size()):
+		if removed >= remove_count:
+			break
+		var entry_val = structure[i]
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		if str(entry.get("employee_id", "")) == emp_id:
+			entry["employee_id"] = ""
+			entry["reports"] = []
+			structure[i] = entry
+			removed += 1
+
+	# 2) 再从其它经理的 reports 移除（保留目标经理新放入的那一份）
+	for i2 in range(structure.size()):
+		if removed >= remove_count:
+			break
+		if i2 == protected_manager_slot_index:
+			continue
+		var entry_val2 = structure[i2]
+		if not (entry_val2 is Dictionary):
+			continue
+		var entry2: Dictionary = entry_val2
+		var reps_val2 = entry2.get("reports", null)
+		if reps_val2 is Array:
+			var reps2: Array = reps_val2
+			while removed < remove_count and reps2.has(emp_id):
+				reps2.erase(emp_id)
+				removed += 1
+			entry2["reports"] = reps2
+			structure[i2] = entry2
+
+	# 3) 若仍超限，只能从目标经理的旧 reports 中移除（尽量保留最后追加的那一个）
+	if removed < remove_count and protected_manager_slot_index >= 0 and protected_manager_slot_index < structure.size():
+		var entry_val3 = structure[protected_manager_slot_index]
+		if entry_val3 is Dictionary:
+			var entry3: Dictionary = entry_val3
+			var reps_val3 = entry3.get("reports", null)
+			if reps_val3 is Array:
+				var reps3: Array = reps_val3
+				while removed < remove_count:
+					var idx := -1
+					for j in range(maxi(0, reps3.size() - 1)):
+						var v = reps3[j]
+						if v is String and str(v) == emp_id:
+							idx = j
+							break
+					if idx < 0:
+						break
+					reps3.remove_at(idx)
+					removed += 1
+				entry3["reports"] = reps3
+				structure[protected_manager_slot_index] = entry3
+
+	return removed

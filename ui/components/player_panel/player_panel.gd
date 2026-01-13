@@ -9,6 +9,7 @@ signal player_selected(player_id: int)
 
 var _game_state: GameState = null
 var _current_player_id: int = -1
+var _view_player_id: int = -1
 var _player_items: Array[PlayerInfoItem] = []
 
 func _ready() -> void:
@@ -28,6 +29,10 @@ func set_game_state(state: GameState) -> void:
 
 func set_current_player(player_id: int) -> void:
 	_current_player_id = player_id
+	_update_highlight()
+
+func set_view_player(player_id: int) -> void:
+	_view_player_id = player_id
 	_update_highlight()
 
 func refresh() -> void:
@@ -61,9 +66,12 @@ func _rebuild_player_items() -> void:
 		_player_items.append(item)
 
 func _update_highlight() -> void:
+	var view_id := _view_player_id
+	if _game_state != null and (view_id < 0 or view_id >= _game_state.players.size()):
+		view_id = _current_player_id
 	for item in _player_items:
 		if is_instance_valid(item):
-			item.set_highlighted(item.player_id == _current_player_id)
+			item.set_selection(item.player_id == _current_player_id, item.player_id == view_id)
 
 func _on_player_item_clicked(player_id: int) -> void:
 	player_selected.emit(player_id)

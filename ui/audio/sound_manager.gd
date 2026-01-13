@@ -293,6 +293,7 @@ func _load_settings() -> void:
 
 func _save_settings() -> void:
 	var config := ConfigFile.new()
+	config.load("user://sound_settings.cfg") # 保留其它系统写入的设置（例如 MusicManager / SettingsDialog）
 
 	config.set_value("audio", "master_volume", _master_volume)
 	config.set_value("audio", "muted", _muted)

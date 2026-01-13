@@ -11,6 +11,7 @@ signal product_clicked(product_id: String)
 var _inventory: Dictionary = {}  # product_id -> count
 var _fridge_capacity: int = -1   # -1 表示无冰箱
 var _product_items: Dictionary = {}  # product_id -> ProductItem
+var _prev_inventory: Dictionary = {}
 
 func _ready() -> void:
 	_build_ui()
@@ -20,7 +21,8 @@ func _build_ui() -> void:
 		items_container.columns = 3
 
 func set_inventory(inventory: Dictionary) -> void:
-	_inventory = inventory.duplicate()
+	_prev_inventory = _inventory.duplicate(true)
+	_inventory = inventory.duplicate(true)
 	_rebuild_items()
 
 func set_fridge_capacity(capacity: int) -> void:
@@ -48,12 +50,16 @@ func _rebuild_items() -> void:
 		if count <= 0:
 			continue
 
+		var prev_count: int = int(_prev_inventory.get(product_id, 0))
+		var delta: int = count - prev_count
+
 		var item := ProductItem.new()
 		item.product_id = str(product_id)
 		item.count = count
 		item.item_clicked.connect(_on_product_clicked)
 		items_container.add_child(item)
 		_product_items[str(product_id)] = item
+		item.animate_change(delta)
 
 func _update_capacity_display() -> void:
 	if not is_instance_valid(title_label):
@@ -75,7 +81,6 @@ class ProductItem extends PanelContainer:
 	var product_id: String = ""
 	var count: int = 0
 
-	var _icon: TextureRect
 	var _count_label: Label
 	var _highlighted: bool = false
 
@@ -109,12 +114,6 @@ class ProductItem extends PanelContainer:
 		vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 		add_child(vbox)
 
-		# 图标（用颜色方块代替）
-		_icon = TextureRect.new()
-		_icon.custom_minimum_size = Vector2(32, 32)
-		_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		vbox.add_child(_icon)
-
 		# 颜色指示
 		var color_rect := ColorRect.new()
 		color_rect.custom_minimum_size = Vector2(32, 32)
@@ -124,7 +123,7 @@ class ProductItem extends PanelContainer:
 		# 数量标签
 		_count_label = Label.new()
 		_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_count_label.add_theme_font_size_override("font_size", 14)
+		_count_label.add_theme_font_size_override("font_size", 12)
 		vbox.add_child(_count_label)
 
 		_update_display()
@@ -133,11 +132,22 @@ class ProductItem extends PanelContainer:
 	func _update_display() -> void:
 		if _count_label != null:
 			var name: String = PRODUCT_NAMES.get(product_id, product_id)
-			_count_label.text = "%s x%d" % [name, count]
+			_count_label.text = "%s\n×%d" % [name, count]
 
 	func set_highlighted(highlighted: bool) -> void:
 		_highlighted = highlighted
 		_update_style()
+
+	func animate_change(delta: int) -> void:
+		if delta == 0:
+			return
+		if OS.has_feature("headless"):
+			return
+
+		var pulse := Color(0.6, 1.0, 0.6, 1) if delta > 0 else Color(1.0, 0.6, 0.6, 1)
+		var tween := create_tween()
+		tween.tween_property(self, "modulate", pulse, 0.08)
+		tween.tween_property(self, "modulate", Color(1, 1, 1, 1), 0.25)
 
 	func _update_style() -> void:
 		var style := StyleBoxFlat.new()

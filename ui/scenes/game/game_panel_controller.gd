@@ -11,6 +11,12 @@ const MarketingPanelsClass = preload("res://ui/scenes/game/game_panel_marketing_
 const PlacementOverlaysClass = preload("res://ui/scenes/game/game_panel_placement_overlays.gd")
 const EndPanelsClass = preload("res://ui/scenes/game/game_panel_end_panels.gd")
 
+const RestructuringModalScene = preload("res://ui/components/modal_panel/restructuring_modal.tscn")
+const TurnOrderSelectionModalScene = preload("res://ui/components/modal_panel/turn_order_selection_modal.tscn")
+
+const POPUP_LAYOUT_META_KEY := "popup_layout"
+const POPUP_LAYOUT_DOCK_RIGHT := "dock_right"
+
 var _scene = null
 var _map_controller = null
 var _overlay_controller = null
@@ -22,6 +28,11 @@ var _marketing_panels = null
 var _placement_overlays = null
 var _end_panels = null
 
+var _restructuring_modal = null
+var _turn_order_modal = null
+
+var _view_player_id: int = -1
+
 func _init(scene, map_controller, overlay_controller, execute_command: Callable, refresh_ui: Callable) -> void:
 	_scene = scene
 	_map_controller = map_controller
@@ -32,7 +43,7 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 	var hide_all := Callable(self, "_hide_all_phase_panels")
 	var center_popup := Callable(self, "_center_popup")
 
-	_working_panels = WorkingPanelsClass.new(_scene, _execute_command, hide_all, center_popup, _overlay_controller)
+	_working_panels = WorkingPanelsClass.new(_scene, _map_controller, _execute_command, hide_all, center_popup, _overlay_controller)
 	_marketing_panels = MarketingPanelsClass.new(_scene, _map_controller, _overlay_controller, _execute_command, hide_all, center_popup)
 	_placement_overlays = PlacementOverlaysClass.new(_scene, _map_controller, _overlay_controller, _execute_command, hide_all)
 	_end_panels = EndPanelsClass.new(_scene, _overlay_controller, _execute_command, hide_all, center_popup, _refresh_ui)
@@ -56,6 +67,21 @@ func connect_signals(action_panel, turn_order_track, hand_area, company_structur
 	if is_instance_valid(company_structure) and company_structure.has_signal("structure_changed"):
 		if not company_structure.structure_changed.is_connected(_on_company_structure_changed):
 			company_structure.structure_changed.connect(_on_company_structure_changed)
+	if is_instance_valid(company_structure) and company_structure.has_signal("card_dropped"):
+		if not company_structure.card_dropped.is_connected(_on_hand_card_dropped):
+			company_structure.card_dropped.connect(_on_hand_card_dropped)
+
+	# 查看玩家（view_player）
+	if _scene != null and is_instance_valid(_scene.player_panel) and _scene.player_panel.has_signal("player_selected"):
+		if not _scene.player_panel.player_selected.is_connected(_on_view_player_selected):
+			_scene.player_panel.player_selected.connect(_on_view_player_selected)
+	if _scene != null and is_instance_valid(_scene.left_panel):
+		if _scene.left_panel.has_signal("player_selected"):
+			if not _scene.left_panel.player_selected.is_connected(_on_view_player_selected):
+				_scene.left_panel.player_selected.connect(_on_view_player_selected)
+		if _scene.left_panel.has_signal("milestones_requested"):
+			if not _scene.left_panel.milestones_requested.is_connected(show_milestone_panel):
+				_scene.left_panel.milestones_requested.connect(show_milestone_panel)
 
 func reset_bank_break_tracking(state: GameState) -> void:
 	if _end_panels != null:
@@ -64,6 +90,92 @@ func reset_bank_break_tracking(state: GameState) -> void:
 func show_milestone_panel() -> void:
 	if _working_panels != null:
 		_working_panels.show_milestone_panel()
+
+func show_payday_panel() -> void:
+	if _end_panels != null:
+		_end_panels.show_payday_panel()
+
+func get_view_player_id() -> int:
+	return _view_player_id
+
+func _on_view_player_selected(player_id: int) -> void:
+	_view_player_id = player_id
+	if _refresh_ui.is_valid():
+		_refresh_ui.call()
+
+func hide_all() -> void:
+	_hide_all_phase_panels()
+
+func hide_all_keep_selection() -> void:
+	_hide_all_phase_panels(true)
+
+func dispose() -> void:
+	_execute_command = Callable()
+	_refresh_ui = Callable()
+
+	_working_panels = null
+	_marketing_panels = null
+	_placement_overlays = null
+	_end_panels = null
+
+	if is_instance_valid(_restructuring_modal):
+		_restructuring_modal.queue_free()
+	_restructuring_modal = null
+
+	if is_instance_valid(_turn_order_modal):
+		_turn_order_modal.queue_free()
+	_turn_order_modal = null
+
+	_scene = null
+	_map_controller = null
+	_overlay_controller = null
+
+func has_open_modal_ui() -> bool:
+	if is_instance_valid(_restructuring_modal) and _restructuring_modal.visible:
+		return true
+	if is_instance_valid(_turn_order_modal) and _turn_order_modal.visible:
+		return true
+	return false
+
+func hide_modal_ui() -> void:
+	_hide_turn_order_modal()
+	_hide_restructuring_modal()
+
+func has_open_phase_ui() -> bool:
+	if has_open_modal_ui():
+		return true
+
+	# Working panels
+	if _working_panels != null:
+		if is_instance_valid(_working_panels.recruit_panel) and _working_panels.recruit_panel.visible:
+			return true
+		if is_instance_valid(_working_panels.train_panel) and _working_panels.train_panel.visible:
+			return true
+		if is_instance_valid(_working_panels.price_panel) and _working_panels.price_panel.visible:
+			return true
+		if is_instance_valid(_working_panels.production_panel) and _working_panels.production_panel.visible:
+			return true
+		if is_instance_valid(_working_panels.milestone_panel) and _working_panels.milestone_panel.visible:
+			return true
+
+	# Marketing
+	if _marketing_panels != null:
+		if is_instance_valid(_marketing_panels.marketing_panel) and _marketing_panels.marketing_panel.visible:
+			return true
+
+	# Placement overlays
+	if _placement_overlays != null:
+		if is_instance_valid(_placement_overlays.restaurant_placement_overlay) and _placement_overlays.restaurant_placement_overlay.visible:
+			return true
+		if is_instance_valid(_placement_overlays.house_placement_overlay) and _placement_overlays.house_placement_overlay.visible:
+			return true
+
+	# Payday panel（不包含银行破产/游戏结束等系统强提示）
+	if _end_panels != null:
+		if is_instance_valid(_end_panels.payday_panel) and _end_panels.payday_panel.visible:
+			return true
+
+	return false
 
 func sync(state: GameState) -> void:
 	_update_ui_components(state)
@@ -75,6 +187,28 @@ func sync(state: GameState) -> void:
 		_placement_overlays.sync(state)
 	if _end_panels != null:
 		_end_panels.sync(state)
+	_sync_modals(state)
+	_sync_action_panel_context()
+
+func _sync_action_panel_context() -> void:
+	if _scene == null:
+		return
+	if not is_instance_valid(_scene.action_panel):
+		return
+
+	var overlay = null
+	if _placement_overlays != null:
+		if is_instance_valid(_placement_overlays.restaurant_placement_overlay) and _placement_overlays.restaurant_placement_overlay.visible:
+			overlay = _placement_overlays.restaurant_placement_overlay
+		elif is_instance_valid(_placement_overlays.house_placement_overlay) and _placement_overlays.house_placement_overlay.visible:
+			overlay = _placement_overlays.house_placement_overlay
+
+	if overlay != null:
+		if _scene.action_panel.has_method("bind_context_overlay"):
+			_scene.action_panel.call("bind_context_overlay", overlay)
+	else:
+		if _scene.action_panel.has_method("clear_context_overlay"):
+			_scene.action_panel.call("clear_context_overlay")
 
 func _update_ui_components(state: GameState) -> void:
 	if _scene == null or state == null:
@@ -83,50 +217,115 @@ func _update_ui_components(state: GameState) -> void:
 	var current_player_id := state.get_current_player_id()
 	var current_player: Dictionary = state.get_current_player()
 
+	var view_player_id := _view_player_id
+	var using_default_view := false
+	if view_player_id < 0 or view_player_id >= state.players.size():
+		view_player_id = current_player_id
+		using_default_view = true
+
+	# Restructuring：若当前默认视图玩家已提交，自动切到第一位未提交玩家（避免“看起来无法拖拽”）。
+	if using_default_view and state.phase == "Restructuring" and (state.round_state is Dictionary):
+		var r_val = state.round_state.get("restructuring", null)
+		if r_val is Dictionary:
+			var r: Dictionary = r_val
+			var submitted_val = r.get("submitted", null)
+			if submitted_val is Dictionary:
+				var submitted: Dictionary = submitted_val
+				var view_flag = submitted.get(view_player_id, null)
+				if view_flag == null and submitted.has(str(view_player_id)):
+					view_flag = submitted.get(str(view_player_id), null)
+
+				if bool(view_flag):
+					var picked := -1
+					for i in range(state.turn_order.size()):
+						var pid_val = state.turn_order[i]
+						if not (pid_val is int):
+							continue
+						var pid: int = int(pid_val)
+						if pid < 0 or pid >= state.players.size():
+							continue
+						var flag = submitted.get(pid, null)
+						if flag == null and submitted.has(str(pid)):
+							flag = submitted.get(str(pid), null)
+						if not bool(flag):
+							picked = pid
+							break
+
+					if picked >= 0:
+						view_player_id = picked
+						_view_player_id = picked
+
+	var view_player: Dictionary = current_player
+	if view_player_id >= 0 and view_player_id < state.players.size():
+		var vp_val = state.players[view_player_id]
+		if vp_val is Dictionary:
+			view_player = Dictionary(vp_val)
+
 	# 玩家面板
 	if is_instance_valid(_scene.player_panel) and _scene.player_panel.has_method("set_game_state"):
 		_scene.player_panel.set_game_state(state)
 		if _scene.player_panel.has_method("set_current_player"):
 			_scene.player_panel.set_current_player(current_player_id)
+		if _scene.player_panel.has_method("set_view_player"):
+			_scene.player_panel.set_view_player(view_player_id)
+
+	# 左侧信息面板（P3：骨架）
+	if is_instance_valid(_scene.left_panel):
+		if _scene.left_panel.has_method("set_game_state"):
+			_scene.left_panel.set_game_state(state)
+		if _scene.left_panel.has_method("set_current_player"):
+			_scene.left_panel.set_current_player(current_player_id)
+		if _scene.left_panel.has_method("set_view_player"):
+			_scene.left_panel.set_view_player(view_player_id)
 
 	# 顺序轨
-	if is_instance_valid(_scene.turn_order_track):
-		if _scene.turn_order_track.has_method("set_player_count"):
-			_scene.turn_order_track.set_player_count(state.players.size())
-		if _scene.turn_order_track.has_method("set_current_selections"):
-			# 构建选择映射：position -> player_id
-			# - OrderOfBusiness 阶段：使用 round_state.order_of_business.picks（position -> player_id/-1）
-			# - 其他阶段：使用 state.turn_order（position -> player_id）
-			var selections := {}
-			if state.phase == "OrderOfBusiness" and (state.round_state is Dictionary):
-				var rs: Dictionary = state.round_state
-				var oob_val = rs.get("order_of_business", null)
-				if oob_val is Dictionary:
-					var oob: Dictionary = oob_val
-					var picks_val = oob.get("picks", null)
-					if picks_val is Array:
-						var picks: Array = picks_val
-						for pos in range(min(picks.size(), state.players.size())):
-							var pid: int = int(picks[pos])
-							if pid >= 0:
-								selections[pos] = pid
-			else:
-				for i in range(state.turn_order.size()):
-					if i < state.players.size():
-						selections[i] = state.turn_order[i]
-			_scene.turn_order_track.set_current_selections(selections)
-		if _scene.turn_order_track.has_method("set_selectable"):
-			var can_select := state.phase == "OrderOfBusiness"
-			_scene.turn_order_track.set_selectable(can_select, current_player_id)
-			if can_select and _scene.turn_order_track.has_method("highlight_available_positions"):
-				_scene.turn_order_track.highlight_available_positions()
+	# selections: position -> player_id
+	var selections := {}
+	if state.phase == "OrderOfBusiness" and (state.round_state is Dictionary):
+		var rs: Dictionary = state.round_state
+		var oob_val = rs.get("order_of_business", null)
+		if oob_val is Dictionary:
+			var oob: Dictionary = oob_val
+			var picks_val = oob.get("picks", null)
+			if picks_val is Array:
+				var picks: Array = picks_val
+				for pos in range(min(picks.size(), state.players.size())):
+					var pid: int = int(picks[pos])
+					if pid >= 0:
+						selections[pos] = pid
+	else:
+		for i in range(state.turn_order.size()):
+			if i < state.players.size():
+				selections[i] = state.turn_order[i]
+
+		if is_instance_valid(_scene.turn_order_track):
+			if _scene.turn_order_track.has_method("set_player_count"):
+				_scene.turn_order_track.set_player_count(state.players.size())
+			if _scene.turn_order_track.has_method("set_current_selections"):
+				_scene.turn_order_track.set_current_selections(selections)
+			if _scene.turn_order_track.has_method("set_selectable"):
+				var layout_version := int(Globals.ui_layout_version) if Globals != null else 1
+				var use_modal := (layout_version == 2)
+				var can_select := (state.phase == "OrderOfBusiness") and not use_modal
+				_scene.turn_order_track.set_selectable(can_select, current_player_id)
+				if _scene.turn_order_track is Control:
+					(_scene.turn_order_track as Control).visible = (state.phase == "OrderOfBusiness") and not use_modal
+
+		# 顶部顺序显示（展示用）
+	if is_instance_valid(_scene.turn_order_display):
+		if _scene.turn_order_display.has_method("set_player_count"):
+			_scene.turn_order_display.set_player_count(state.players.size())
+		if _scene.turn_order_display.has_method("set_current_selections"):
+			_scene.turn_order_display.set_current_selections(selections)
+		if _scene.turn_order_display.has_method("set_current_player"):
+			_scene.turn_order_display.set_current_player(current_player_id)
 
 	# 库存面板
 	if is_instance_valid(_scene.inventory_panel) and _scene.inventory_panel.has_method("set_inventory"):
-		var inventory: Dictionary = current_player.get("inventory", {})
+		var inventory: Dictionary = view_player.get("inventory", {})
 		_scene.inventory_panel.set_inventory(inventory)
 		if _scene.inventory_panel.has_method("set_fridge_capacity"):
-			_scene.inventory_panel.set_fridge_capacity(_get_fridge_capacity_for_player(current_player))
+			_scene.inventory_panel.set_fridge_capacity(_get_fridge_capacity_for_player(view_player))
 
 	# 动作面板
 	if is_instance_valid(_scene.action_panel):
@@ -145,30 +344,37 @@ func _update_ui_components(state: GameState) -> void:
 		var reserve: Array[String] = []
 		var busy: Array[String] = []
 
-		for e in Array(current_player.get("employees", [])):
+		for e in Array(view_player.get("employees", [])):
 			employees.append(str(e))
-		for e in Array(current_player.get("reserve_employees", [])):
+		for e in Array(view_player.get("reserve_employees", [])):
 			reserve.append(str(e))
-		for e in Array(current_player.get("busy_marketers", [])):
+		for e in Array(view_player.get("busy_marketers", [])):
 			busy.append(str(e))
 
 		_scene.hand_area.set_employees(employees, reserve, busy)
-		if _scene.hand_area.has_method("set_drag_enabled"):
-			var enable_drag := (state.phase == "Restructuring" and int(state.round_number) > 1)
-			if enable_drag and (state.round_state is Dictionary):
-				var r_val = state.round_state.get("restructuring", null)
-				if r_val is Dictionary:
+
+		var enable_drag := (state.phase == "Restructuring")
+		if enable_drag and (state.round_state is Dictionary):
+			var r_val = state.round_state.get("restructuring", null)
+			if r_val is Dictionary:
 					var r: Dictionary = r_val
 					var submitted_val = r.get("submitted", null)
 					if submitted_val is Dictionary:
 						var submitted: Dictionary = submitted_val
-						if bool(submitted.get(current_player_id, false)):
+						var submitted_flag = submitted.get(view_player_id, null)
+						if submitted_flag == null and submitted.has(str(view_player_id)):
+							submitted_flag = submitted.get(str(view_player_id), null)
+						if bool(submitted_flag):
 							enable_drag = false
+
+		if _scene.hand_area.has_method("set_drag_enabled"):
 			_scene.hand_area.set_drag_enabled(enable_drag)
+		if is_instance_valid(_scene.company_structure) and _scene.company_structure.has_method("set_drag_enabled"):
+			_scene.company_structure.set_drag_enabled(enable_drag)
 
 	# 公司结构面板
 	if is_instance_valid(_scene.company_structure) and _scene.company_structure.has_method("set_player_data"):
-		_scene.company_structure.set_player_data(current_player)
+		_scene.company_structure.set_player_data(view_player)
 
 func _get_fridge_capacity_for_player(player: Dictionary) -> int:
 	if player == null:
@@ -223,6 +429,7 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 		return
 
 	var current_player_id = _scene.game_engine.get_state().get_current_player_id()
+	var layout_version := int(Globals.ui_layout_version) if Globals != null else 1
 
 	match action_id:
 		# 系统动作
@@ -231,8 +438,13 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 		"skip":
 			_execute_command.call(Command.create("skip", current_player_id, params))
 		"choose_turn_order":
-			if is_instance_valid(_scene.turn_order_track) and _scene.turn_order_track.has_method("highlight_available_positions"):
-				_scene.turn_order_track.highlight_available_positions()
+			if layout_version == 2:
+				var state: GameState = _scene.game_engine.get_state()
+				if state != null:
+					_show_turn_order_modal_for_state(state)
+			else:
+				if is_instance_valid(_scene.turn_order_track) and _scene.turn_order_track.has_method("highlight_available_positions"):
+					_scene.turn_order_track.highlight_available_positions()
 
 		# P0 动作 - 需要弹出面板
 		"recruit":
@@ -261,9 +473,11 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 		"place_restaurant", "move_restaurant":
 			if _placement_overlays != null:
 				_placement_overlays.show_restaurant_placement(action_id, params)
+				_sync_action_panel_context()
 		"place_house", "add_garden":
 			if _placement_overlays != null:
 				_placement_overlays.show_house_placement(action_id, params)
+				_sync_action_panel_context()
 
 		# 其他动作直接创建命令
 		_:
@@ -293,8 +507,23 @@ func _on_hand_card_dropped(employee_id: String, target: Control) -> void:
 		return
 
 	var current_player_id := state.get_current_player_id()
-	if current_player_id < 0:
+	var actor_id := _view_player_id
+	if actor_id < 0 or actor_id >= state.players.size():
+		actor_id = current_player_id
+	if actor_id < 0:
 		return
+	if state.round_state is Dictionary:
+		var r_val = state.round_state.get("restructuring", null)
+		if r_val is Dictionary:
+			var r: Dictionary = r_val
+			var submitted_val = r.get("submitted", null)
+			if submitted_val is Dictionary:
+				var submitted: Dictionary = submitted_val
+				var submitted_flag = submitted.get(actor_id, null)
+				if submitted_flag == null and submitted.has(str(actor_id)):
+					submitted_flag = submitted.get(str(actor_id), null)
+				if bool(submitted_flag):
+					return
 
 	# 放到公司结构（经理下属区）
 	if target.is_in_group("company_structure_reports_drop_target"):
@@ -310,10 +539,50 @@ func _on_hand_card_dropped(employee_id: String, target: Control) -> void:
 		if manager_slot_index < 0:
 			GameLog.warn("Game", "无法获取经理槽位索引")
 			return
-		_execute_command.call(Command.create("set_company_structure_report", current_player_id, {
+
+		var manager_employee_id := ""
+		if target.has_meta("manager_employee_id"):
+			var m_id_val = target.get_meta("manager_employee_id")
+			if m_id_val is String:
+				manager_employee_id = str(m_id_val)
+		if manager_employee_id.is_empty():
+			GameLog.warn("Game", "无法获取该经理槽位的员工 id（manager_employee_id），无法分配下属")
+			return
+
+		var player := state.get_player(actor_id)
+		var needs_direct_sync := true
+		if not player.is_empty():
+			var cs_val = player.get("company_structure", null)
+			if cs_val is Dictionary:
+				var cs: Dictionary = cs_val
+				var struct_val = cs.get("structure", null)
+				if struct_val is Array:
+					var structure: Array = struct_val
+					if manager_slot_index < structure.size():
+						var entry_val = structure[manager_slot_index]
+						if entry_val is Dictionary:
+							var entry: Dictionary = entry_val
+							var stored_id := str(entry.get("employee_id", ""))
+							if stored_id == manager_employee_id and not stored_id.is_empty():
+								needs_direct_sync = false
+
+		# 当 UI 显示的“经理”与 state.company_structure.structure 不一致（或未初始化）时，
+		# 先同步一次直属槽，避免 set_company_structure_report 直接失败/看起来“拖拽无效”。
+		if needs_direct_sync:
+			var init_r: Result = _execute_command.call(Command.create("set_company_structure_direct", actor_id, {
+				"slot_index": manager_slot_index,
+				"employee_id": manager_employee_id
+			}))
+			if not init_r.ok:
+				GameLog.warn("Game", "初始化 CEO 直属槽失败: %s" % init_r.error)
+				return
+
+		var set_r: Result = _execute_command.call(Command.create("set_company_structure_report", actor_id, {
 			"manager_slot_index": manager_slot_index,
 			"employee_id": employee_id
 		}))
+		if not set_r.ok:
+			GameLog.warn("Game", "设置经理下属失败: %s" % set_r.error)
 		return
 
 	# 放到公司结构（CEO 直属槽）
@@ -330,10 +599,13 @@ func _on_hand_card_dropped(employee_id: String, target: Control) -> void:
 		if slot_index < 0:
 			GameLog.warn("Game", "无法获取公司结构槽位索引")
 			return
-		_execute_command.call(Command.create("set_company_structure_direct", current_player_id, {
+
+		var direct_r: Result = _execute_command.call(Command.create("set_company_structure_direct", actor_id, {
 			"slot_index": slot_index,
 			"employee_id": employee_id
 		}))
+		if not direct_r.ok:
+			GameLog.warn("Game", "设置 CEO 直属槽失败: %s" % direct_r.error)
 		return
 
 	var to_reserve := false
@@ -343,15 +615,17 @@ func _on_hand_card_dropped(employee_id: String, target: Control) -> void:
 		elif target == _scene.hand_area.active_container:
 			to_reserve = false
 
-	_execute_command.call(Command.create("restructure_employee", current_player_id, {
+	var move_r: Result = _execute_command.call(Command.create("restructure_employee", actor_id, {
 		"employee_id": employee_id,
 		"to_reserve": to_reserve
 	}))
+	if not move_r.ok:
+		GameLog.warn("Game", "移动员工失败: %s" % move_r.error)
 
 func _on_company_structure_changed(new_structure: Dictionary) -> void:
 	GameLog.info("Game", "公司结构变更: %s" % str(new_structure))
 
-func _hide_all_phase_panels() -> void:
+func _hide_all_phase_panels(keep_selection: bool = false) -> void:
 	if _working_panels != null:
 		_working_panels.hide()
 	if _end_panels != null:
@@ -363,20 +637,32 @@ func _hide_all_phase_panels() -> void:
 
 	if _overlay_controller != null:
 		_overlay_controller.hide_all_overlays()
-	if _map_controller != null:
+	if not keep_selection and _map_controller != null:
 		_map_controller.clear_selection()
 	if _overlay_controller != null:
 		_overlay_controller.hide_marketing_range_overlay()
+
+	hide_modal_ui()
+	_sync_action_panel_context()
+	if _scene != null and _scene.has_method("_sync_right_panel_docked_view"):
+		_scene.call_deferred("_sync_right_panel_docked_view")
 
 func _center_popup(panel: Control) -> void:
 	if panel == null:
 		return
 	if _scene == null:
 		return
-	await _scene.get_tree().process_frame
-	var viewport_size = _scene.get_viewport_rect().size
-	var panel_size := panel.size
-	panel.position = (viewport_size - panel_size) / 2
+	var layout := ""
+	if panel.has_meta(POPUP_LAYOUT_META_KEY):
+		layout = str(panel.get_meta(POPUP_LAYOUT_META_KEY))
+
+	panel.z_index = 500
+
+	if layout == POPUP_LAYOUT_DOCK_RIGHT:
+		_dock_popup_right(panel)
+	else:
+		await _scene.get_tree().process_frame
+		_center_popup_in_viewport(panel)
 
 	# P2：弹窗动画（避免 headless 影响测试/资源回收）
 	if OS.has_feature("headless"):
@@ -384,5 +670,429 @@ func _center_popup(panel: Control) -> void:
 	if not (_scene.has_method("get_ui_animation_manager")):
 		return
 	var anim_manager = _scene.call("get_ui_animation_manager")
-	if anim_manager != null and anim_manager.has_method("animate_scale_bounce"):
+	if anim_manager == null:
+		return
+
+	if layout == POPUP_LAYOUT_DOCK_RIGHT and anim_manager.has_method("animate_slide_in"):
+		anim_manager.call("animate_slide_in", panel, "right")
+	elif anim_manager.has_method("animate_scale_bounce"):
 		anim_manager.call("animate_scale_bounce", panel)
+
+func _center_popup_in_viewport(panel: Control) -> void:
+	if panel == null or _scene == null:
+		return
+	var viewport_size: Vector2 = _scene.get_viewport_rect().size
+	var panel_size := _get_panel_size(panel)
+	panel.position = (viewport_size - panel_size) / 2.0
+
+func _dock_popup_right(panel: Control) -> void:
+	if panel == null or _scene == null:
+		return
+
+	# v2：优先嵌入到 RightPanel（抽屉式），而不是覆盖在视口右侧
+	if _scene.has_method("dock_popup_into_right_panel"):
+		var r = _scene.call("dock_popup_into_right_panel", panel)
+		if r is bool and bool(r):
+			return
+
+	var safe := _get_popup_safe_rect()
+	var panel_size := _get_panel_size(panel)
+
+	var margin := 12.0
+	var x := safe.position.x + safe.size.x - panel_size.x - margin
+	var y := safe.position.y + (safe.size.y - panel_size.y) / 2.0
+
+	# Clamp
+	x = maxf(margin, x)
+	var min_y := safe.position.y + margin
+	var max_y := safe.position.y + safe.size.y - panel_size.y - margin
+	if max_y < min_y:
+		max_y = min_y
+	y = clampf(y, min_y, max_y)
+
+	panel.position = Vector2(x, y)
+
+func _get_panel_size(panel: Control) -> Vector2:
+	var s := panel.size
+	if s == Vector2.ZERO:
+		s = panel.get_combined_minimum_size()
+	if s == Vector2.ZERO:
+		s = panel.custom_minimum_size
+	if s == Vector2.ZERO:
+		s = Vector2(420, 260)
+	return s
+
+func _get_popup_safe_rect() -> Rect2:
+	if _scene == null:
+		return Rect2(Vector2.ZERO, Vector2.ZERO)
+
+	var viewport_size: Vector2 = _scene.get_viewport_rect().size
+	var top := 0.0
+	var bottom := viewport_size.y
+
+	var top_bar = _scene.get_node_or_null("UIRoot/TopBar")
+	if top_bar is Control:
+		var c: Control = top_bar
+		top = maxf(top, c.position.y + c.size.y)
+
+	var bottom_panel = _scene.get_node_or_null("UIRoot/BottomPanel")
+	if bottom_panel is Control:
+		var c2: Control = bottom_panel
+		bottom = minf(bottom, c2.position.y)
+
+	# 预留一点间距（避免贴边）
+	top += 5.0
+	bottom -= 5.0
+
+	if bottom < top:
+		bottom = top
+
+	return Rect2(Vector2(0, top), Vector2(viewport_size.x, bottom - top))
+
+func _sync_modals(state: GameState) -> void:
+	if _scene == null or state == null:
+		return
+
+	var layout_version := int(Globals.ui_layout_version) if Globals != null else 1
+	if layout_version != 2:
+		_hide_turn_order_modal()
+		_hide_restructuring_modal()
+		return
+
+	var current_player_id := state.get_current_player_id()
+	var covered := _get_modal_cover_rect()
+
+	# 顺序选择（OrderOfBusiness）
+	var selections := {}
+	if state.phase == "OrderOfBusiness" and (state.round_state is Dictionary):
+		var rs: Dictionary = state.round_state
+		var oob_val = rs.get("order_of_business", null)
+		if oob_val is Dictionary:
+			var oob: Dictionary = oob_val
+			var picks_val = oob.get("picks", null)
+			if picks_val is Array:
+				var picks: Array = picks_val
+				for pos in range(min(picks.size(), state.players.size())):
+					var pid: int = int(picks[pos])
+					if pid >= 0:
+						selections[pos] = pid
+	else:
+		for i in range(state.turn_order.size()):
+			if i < state.players.size():
+				selections[i] = state.turn_order[i]
+
+	var should_show_turn_order := false
+	if state.phase == "OrderOfBusiness" and current_player_id >= 0:
+		should_show_turn_order = not selections.values().has(current_player_id)
+
+	if should_show_turn_order:
+		_show_turn_order_modal(state, current_player_id, selections, covered)
+	else:
+		_hide_turn_order_modal()
+
+	# 重组（Restructuring）
+	var should_show_restructuring := false
+	if state.phase == "Restructuring" and state.players.size() > 0:
+		var all_submitted := false
+		if state.round_state is Dictionary:
+			var r_val = state.round_state.get("restructuring", null)
+			if r_val is Dictionary:
+				var r: Dictionary = r_val
+				var finalized_val = r.get("finalized", null)
+				if finalized_val is bool and bool(finalized_val):
+					all_submitted = true
+				elif r.has("submitted") and (r["submitted"] is Dictionary):
+					var submitted: Dictionary = r["submitted"]
+					all_submitted = true
+					for pid in range(state.players.size()):
+						var v = submitted.get(pid, null)
+						if v == null and submitted.has(str(pid)):
+							v = submitted.get(str(pid), null)
+						if not bool(v):
+							all_submitted = false
+							break
+		should_show_restructuring = not all_submitted
+
+	if should_show_restructuring:
+		_show_restructuring_modal(covered)
+		var view_player_id := _view_player_id
+		if view_player_id < 0 or view_player_id >= state.players.size():
+			view_player_id = current_player_id
+		_sync_restructuring_modal_ui(state, view_player_id)
+	else:
+		_hide_restructuring_modal()
+
+func _get_modal_cover_rect() -> Rect2:
+	if _scene == null:
+		return Rect2(Vector2.ZERO, Vector2.ZERO)
+
+	var center_split = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit")
+	if center_split is Control:
+		var c: Control = center_split
+		var gr := c.get_global_rect()
+		var scene_global := Vector2.ZERO
+		if _scene is Control:
+			scene_global = (_scene as Control).global_position
+		return Rect2(gr.position - scene_global, gr.size)
+
+	return Rect2(Vector2.ZERO, _scene.get_viewport_rect().size)
+
+func _show_turn_order_modal_for_state(state: GameState) -> void:
+	var layout_version := int(Globals.ui_layout_version) if Globals != null else 1
+	if layout_version != 2:
+		return
+	if state == null:
+		return
+	var current_player_id := state.get_current_player_id()
+	var selections := {}
+
+	if state.phase == "OrderOfBusiness" and (state.round_state is Dictionary):
+		var rs: Dictionary = state.round_state
+		var oob_val = rs.get("order_of_business", null)
+		if oob_val is Dictionary:
+			var oob: Dictionary = oob_val
+			var picks_val = oob.get("picks", null)
+			if picks_val is Array:
+				var picks: Array = picks_val
+				for pos in range(min(picks.size(), state.players.size())):
+					var pid: int = int(picks[pos])
+					if pid >= 0:
+						selections[pos] = pid
+	else:
+		for i in range(state.turn_order.size()):
+			if i < state.players.size():
+				selections[i] = state.turn_order[i]
+
+	_show_turn_order_modal(state, current_player_id, selections, _get_modal_cover_rect())
+
+func _show_turn_order_modal(state: GameState, current_player_id: int, selections: Dictionary, covered: Rect2) -> void:
+	if _scene == null:
+		return
+	if state == null:
+		return
+
+	if not is_instance_valid(_turn_order_modal):
+		_turn_order_modal = TurnOrderSelectionModalScene.instantiate()
+		if is_instance_valid(_turn_order_modal):
+			_scene.add_child(_turn_order_modal)
+			if _turn_order_modal is Control:
+				(_turn_order_modal as Control).z_index = 900
+			if _turn_order_modal.has_signal("completed"):
+				if not _turn_order_modal.completed.is_connected(_on_turn_order_modal_completed):
+					_turn_order_modal.completed.connect(_on_turn_order_modal_completed)
+			if _turn_order_modal.has_signal("cancelled"):
+				if not _turn_order_modal.cancelled.is_connected(_on_turn_order_modal_cancelled):
+					_turn_order_modal.cancelled.connect(_on_turn_order_modal_cancelled)
+
+	if not is_instance_valid(_turn_order_modal):
+		return
+
+	if _turn_order_modal.has_method("setup"):
+		_turn_order_modal.call("setup", state, current_player_id, selections)
+	if _turn_order_modal.has_method("open"):
+		_turn_order_modal.call("open", covered)
+	elif _turn_order_modal is Control:
+		var c: Control = _turn_order_modal
+		c.position = covered.position
+		c.size = covered.size
+		c.visible = true
+
+func _hide_turn_order_modal() -> void:
+	if not is_instance_valid(_turn_order_modal):
+		return
+	if _turn_order_modal.has_method("close"):
+		_turn_order_modal.call("close")
+	elif _turn_order_modal is Control:
+		(_turn_order_modal as Control).visible = false
+
+func _on_turn_order_modal_completed(result: Dictionary) -> void:
+	if _scene == null or _scene.game_engine == null:
+		return
+	if not is_instance_valid(_turn_order_modal):
+		return
+
+	var pos_val = result.get("position", null)
+	var position := -1
+	if pos_val is int:
+		position = int(pos_val)
+	elif pos_val is float:
+		var f: float = float(pos_val)
+		if f == floor(f):
+			position = int(f)
+	if position < 0:
+		return
+
+	if _turn_order_modal.has_method("set_confirm_enabled"):
+		_turn_order_modal.call("set_confirm_enabled", false)
+
+	var state: GameState = _scene.game_engine.get_state()
+	if state == null:
+		return
+	var current_player_id := state.get_current_player_id()
+	if current_player_id < 0:
+		return
+
+	_execute_command.call(Command.create("choose_turn_order", current_player_id, {"position": position}))
+
+func _on_turn_order_modal_cancelled() -> void:
+	_hide_turn_order_modal()
+
+func _show_restructuring_modal(covered: Rect2) -> void:
+	if _scene == null:
+		return
+
+	if not is_instance_valid(_restructuring_modal):
+		_restructuring_modal = RestructuringModalScene.instantiate()
+		if is_instance_valid(_restructuring_modal):
+			_scene.add_child(_restructuring_modal)
+			if _restructuring_modal is Control:
+				(_restructuring_modal as Control).z_index = 900
+			if _restructuring_modal.has_signal("completed"):
+				if not _restructuring_modal.completed.is_connected(_on_restructuring_modal_completed):
+					_restructuring_modal.completed.connect(_on_restructuring_modal_completed)
+				if _restructuring_modal.has_signal("cancelled"):
+					if not _restructuring_modal.cancelled.is_connected(_on_restructuring_modal_cancelled):
+						_restructuring_modal.cancelled.connect(_on_restructuring_modal_cancelled)
+				if _restructuring_modal.has_signal("player_selected"):
+					if not _restructuring_modal.player_selected.is_connected(_on_view_player_selected):
+						_restructuring_modal.player_selected.connect(_on_view_player_selected)
+
+		if not is_instance_valid(_restructuring_modal):
+			return
+
+	var hand_area = _scene.get("hand_area")
+	if is_instance_valid(hand_area) and _restructuring_modal.has_method("attach_hand_area"):
+		_restructuring_modal.call("attach_hand_area", hand_area)
+	var company_structure = _scene.get("company_structure")
+	if is_instance_valid(company_structure) and _restructuring_modal.has_method("attach_company_structure"):
+		_restructuring_modal.call("attach_company_structure", company_structure)
+
+	if _restructuring_modal.has_method("open"):
+		_restructuring_modal.call("open", covered)
+	elif _restructuring_modal is Control:
+		var c: Control = _restructuring_modal
+		c.position = covered.position
+		c.size = covered.size
+		c.visible = true
+
+func _hide_restructuring_modal() -> void:
+	if not is_instance_valid(_restructuring_modal):
+		return
+
+	if _restructuring_modal.has_method("close"):
+		_restructuring_modal.call("close")
+	elif _restructuring_modal is Control:
+		(_restructuring_modal as Control).visible = false
+
+	_restore_info_panels_after_restructuring()
+
+func _restore_info_panels_after_restructuring() -> void:
+	if _scene == null:
+		return
+
+	var hand_area = _scene.get("hand_area")
+	var company_structure = _scene.get("company_structure")
+	if not is_instance_valid(hand_area) and not is_instance_valid(company_structure):
+		return
+
+	var bottom_panel = _scene.get("bottom_panel")
+	if not is_instance_valid(bottom_panel):
+		return
+
+	if is_instance_valid(hand_area):
+		_reparent_control(hand_area, bottom_panel)
+	if is_instance_valid(company_structure):
+		_reparent_control(company_structure, bottom_panel)
+
+func _reparent_control(node: Node, target_parent: Node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if target_parent == null or not is_instance_valid(target_parent):
+		return
+	if node.get_parent() == target_parent:
+		return
+	var old_parent := node.get_parent()
+	if is_instance_valid(old_parent):
+		old_parent.remove_child(node)
+	target_parent.add_child(node)
+
+func _on_restructuring_modal_completed(result: Dictionary) -> void:
+	if _scene == null or _scene.game_engine == null:
+		return
+	if not is_instance_valid(_restructuring_modal):
+		return
+
+	if _restructuring_modal.has_method("set_confirm_enabled"):
+		_restructuring_modal.call("set_confirm_enabled", false)
+
+	var state: GameState = _scene.game_engine.get_state()
+	if state == null:
+		if is_instance_valid(_restructuring_modal) and _restructuring_modal.has_method("set_confirm_enabled"):
+			_restructuring_modal.call("set_confirm_enabled", true)
+		return
+	var current_player_id := state.get_current_player_id()
+	var actor_id := _view_player_id
+	if actor_id < 0 or actor_id >= state.players.size():
+		actor_id = current_player_id
+	if actor_id < 0:
+		if is_instance_valid(_restructuring_modal) and _restructuring_modal.has_method("set_confirm_enabled"):
+			_restructuring_modal.call("set_confirm_enabled", true)
+		return
+
+	var exec_result = _execute_command.call(Command.create("submit_restructuring", actor_id, {}))
+	if not (exec_result is Result):
+		if is_instance_valid(_restructuring_modal) and _restructuring_modal.has_method("set_confirm_enabled"):
+			_restructuring_modal.call("set_confirm_enabled", true)
+		return
+	if not (exec_result as Result).ok:
+		if is_instance_valid(_restructuring_modal) and _restructuring_modal.has_method("set_confirm_enabled"):
+			_restructuring_modal.call("set_confirm_enabled", true)
+
+func _on_restructuring_modal_cancelled() -> void:
+	_hide_restructuring_modal()
+
+func _sync_restructuring_modal_ui(state: GameState, view_player_id: int) -> void:
+	if not is_instance_valid(_restructuring_modal):
+		return
+	if state == null:
+		return
+
+	var submitted_count := 0
+	var total := state.players.size()
+	var view_submitted := false
+	var submitted: Dictionary = {}
+
+	if state.round_state is Dictionary:
+		var r_val = state.round_state.get("restructuring", null)
+		if r_val is Dictionary:
+			var r: Dictionary = r_val
+			var submitted_val = r.get("submitted", null)
+			if submitted_val is Dictionary:
+				submitted = submitted_val
+				for pid in range(total):
+					var v = submitted.get(pid, null)
+					if v == null and submitted.has(str(pid)):
+						v = submitted.get(str(pid), null)
+					if bool(v):
+						submitted_count += 1
+
+				var v2 = submitted.get(view_player_id, null)
+				if v2 == null and submitted.has(str(view_player_id)):
+					v2 = submitted.get(str(view_player_id), null)
+				view_submitted = bool(v2)
+
+	if _restructuring_modal.has_method("set_player_switcher"):
+		_restructuring_modal.call("set_player_switcher", total, view_player_id, submitted)
+
+	var view_name = Globals.get_player_name(view_player_id) if Globals != null else ("玩家%d" % (view_player_id + 1))
+	if _restructuring_modal.has_method("set_title_text"):
+		_restructuring_modal.call("set_title_text", "公司结构重组（同时）｜查看: %s" % view_name)
+
+	if _restructuring_modal.has_method("set_confirm_text"):
+		_restructuring_modal.call("set_confirm_text", "已提交" if view_submitted else ("确认重组（%s）" % view_name))
+	if _restructuring_modal.has_method("set_confirm_enabled"):
+		_restructuring_modal.call("set_confirm_enabled", not view_submitted)
+
+	if _restructuring_modal.has_method("set_status_text"):
+		var view_status := "已提交" if view_submitted else "未提交"
+		_restructuring_modal.call("set_status_text", "当前查看: %s（%s）｜提交进度: %d/%d｜可在上方切换玩家分别调整并提交" % [view_name, view_status, submitted_count, total])

@@ -62,7 +62,9 @@ theme_override_colors/font_color = Color(0.6, 0.8, 0.6, 1)
 text = "在岗员工"
 
 [node name="ActiveContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ActiveSection"]
+custom_minimum_size = Vector2(0, 90)
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 8
 
@@ -77,7 +79,9 @@ theme_override_colors/font_color = Color(0.7, 0.7, 0.5, 1)
 text = "待命区"
 
 [node name="ReserveContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ReserveSection"]
+custom_minimum_size = Vector2(0, 90)
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 8
 
@@ -93,5 +97,6 @@ text = "忙碌中"
 
 [node name="BusyContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/BusySection"]
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 8

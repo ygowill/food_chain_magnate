@@ -275,10 +275,12 @@ static func _validate_content_product_references(catalog) -> Result:
 			return Result.failure("catalog.employees[%s] 类型错误（期望 EmployeeDef）" % emp_id)
 		var emp_def: EmployeeDef = emp_def_val
 		if emp_def.can_produce():
-			var food_type: String = emp_def.produces_food_type
-			var check := _validate_product_reference(food_type, "EmployeeDef[%s].produces.food_type" % emp_id, false, "food")
-			if not check.ok:
-				return check
+			var options: Array[String] = emp_def.get_production_food_options()
+			for i in range(options.size()):
+				var food_type: String = str(options[i])
+				var check := _validate_product_reference(food_type, "EmployeeDef[%s].production_food_options[%d]" % [emp_id, i], false, "food")
+				if not check.ok:
+					return check
 
 	# === tiles.drink_sources[*].type ===
 	if not (catalog.tiles is Dictionary):

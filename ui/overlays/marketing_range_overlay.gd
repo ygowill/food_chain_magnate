@@ -8,7 +8,7 @@ signal range_clicked(position: Vector2i)
 var _tile_size: Vector2 = Vector2(64, 64)
 var _map_offset: Vector2 = Vector2.ZERO
 
-var _marketing_campaigns: Array[Dictionary] = []  # [{position, range, type, player_id}]
+var _marketing_campaigns: Array[Dictionary] = []  # [{position, range, type, player_id, tiles?}]
 var _range_rects: Array[ColorRect] = []
 var _center_markers: Array[Control] = []
 
@@ -38,23 +38,25 @@ func set_map_offset(offset: Vector2) -> void:
 	_map_offset = offset
 	_rebuild_visuals()
 
-func add_campaign(position: Vector2i, range_val: int, marketing_type: String, player_id: int = -1) -> void:
+func add_campaign(position: Vector2i, range_val: int, marketing_type: String, player_id: int = -1, tiles: Array[Vector2i] = []) -> void:
 	var campaign: Dictionary = {
 		"position": position,
 		"range": range_val,
 		"type": marketing_type,
 		"player_id": player_id,
 	}
+	if not tiles.is_empty():
+		campaign["tiles"] = tiles.duplicate()
 
 	_marketing_campaigns.append(campaign)
 	_add_campaign_visual(campaign)
 
-func show_preview(position: Vector2i, range_val: int, marketing_type: String) -> void:
+func show_preview(position: Vector2i, range_val: int, marketing_type: String, tiles: Array[Vector2i] = []) -> void:
 	# 清除旧预览
 	clear_all()
 
 	# 添加预览
-	add_campaign(position, range_val, marketing_type, -1)
+	add_campaign(position, range_val, marketing_type, -1, tiles)
 
 func set_campaigns(campaigns: Array[Dictionary]) -> void:
 	clear_all()
@@ -83,9 +85,32 @@ func _add_campaign_visual(campaign: Dictionary) -> void:
 	var fill_color: Color = MARKETING_COLORS.get(m_type, Color(0.5, 0.5, 0.5, 0.3))
 	var border_color: Color = MARKETING_BORDER_COLORS.get(m_type, Color(0.5, 0.5, 0.5, 0.6))
 
-	# 电台广告：全图范围
-	if range_val == 0:
-		_add_fullscreen_overlay(fill_color)
+	# 指定格子（例如：按规则计算的“受影响房屋”集合）
+	var tiles_val = campaign.get("tiles", null)
+	if tiles_val is Array and not (tiles_val as Array).is_empty():
+		for tile_pos_val in (tiles_val as Array):
+			if not (tile_pos_val is Vector2i):
+				continue
+			var tile_pos: Vector2i = tile_pos_val
+			var rect := ColorRect.new()
+			rect.position = Vector2(tile_pos.x, tile_pos.y) * _tile_size + _map_offset
+			rect.size = _tile_size
+			rect.color = fill_color
+			rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			add_child(rect)
+			_range_rects.append(rect)
+
+		# 添加中心标记
+		var center_marker2 := _create_center_marker(center, m_type, border_color)
+		add_child(center_marker2)
+		_center_markers.append(center_marker2)
+		return
+
+	# range_val <= 0：仅显示中心标记（例如：未提供 tiles 的轻量预览）
+	if range_val <= 0:
+		var center_marker3 := _create_center_marker(center, m_type, border_color)
+		add_child(center_marker3)
+		_center_markers.append(center_marker3)
 		return
 
 	# 获取范围内的所有格子
@@ -131,11 +156,13 @@ func _create_center_marker(position: Vector2i, m_type: String, color: Color) -> 
 	marker.position = pixel_pos
 	marker.custom_minimum_size = _tile_size
 	marker.size = _tile_size
+	marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	# 边框
 	var border := ColorRect.new()
 	border.set_anchors_preset(Control.PRESET_FULL_RECT)
 	border.color = Color(0, 0, 0, 0)
+	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	marker.add_child(border)
 
 	# 中心图标
@@ -144,6 +171,7 @@ func _create_center_marker(position: Vector2i, m_type: String, color: Color) -> 
 	icon_label.add_theme_font_size_override("font_size", 20)
 	icon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	icon_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	icon_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	match m_type:
 		"billboard":
@@ -164,6 +192,7 @@ func _create_center_marker(position: Vector2i, m_type: String, color: Color) -> 
 	var range_circle := RangeCircle.new()
 	range_circle.color = color
 	range_circle.set_anchors_preset(Control.PRESET_FULL_RECT)
+	range_circle.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	marker.add_child(range_circle)
 
 	return marker

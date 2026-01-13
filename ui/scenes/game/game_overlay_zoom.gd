@@ -30,7 +30,7 @@ func initialize() -> void:
 
 		# 将缩放控制添加到地图区域
 		# 查找 GameArea 节点并添加
-		var game_area = _scene.get_node_or_null("MainContent/CenterSplit/GameArea")
+		var game_area = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit/GameArea")
 		if game_area != null:
 			zoom_control.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 			zoom_control.position = Vector2(-50, -160)
@@ -62,4 +62,3 @@ func _on_zoom_fit_pressed() -> void:
 func _on_map_zoom_changed(zoom_level: float) -> void:
 	if is_instance_valid(zoom_control) and zoom_control.has_method("set_zoom_level"):
 		zoom_control.set_zoom_level(zoom_level)
-

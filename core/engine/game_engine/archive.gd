@@ -100,4 +100,27 @@ static func load_archive_from_file(path: String) -> Result:
 	if parsed == null or not (parsed is Dictionary):
 		return Result.failure("无法解析存档文件")
 
-	return Result.success(parsed)
+	# Godot JSON.parse_string 会把所有数字解析为 float。
+	# 存档/回放中大量字段（cash/库存/计数等）语义上是 int，若不归一化会导致加载后类型不匹配。
+	return Result.success(_normalize_json_numbers(parsed))
+
+static func _normalize_json_numbers(value):
+	match typeof(value):
+		TYPE_DICTIONARY:
+			var out := {}
+			for k in value.keys():
+				out[k] = _normalize_json_numbers(value[k])
+			return out
+		TYPE_ARRAY:
+			var out_arr := []
+			for item in value:
+				out_arr.append(_normalize_json_numbers(item))
+			return out_arr
+		TYPE_FLOAT:
+			var f: float = float(value)
+			# 仅将“整值 float”转换为 int；保留真正的小数（例如 Vector2/Color 等）
+			if f == floor(f) and f >= -9223372036854775808.0 and f <= 9223372036854775807.0:
+				return int(f)
+			return f
+		_:
+			return value

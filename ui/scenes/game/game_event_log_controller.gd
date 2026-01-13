@@ -3,37 +3,80 @@
 class_name GameEventLogController
 extends RefCounted
 
-var _game_log_panel = null
+const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 
-func setup(game_log_panel) -> void:
+const EVENT_TYPES_TO_LOG: Array[String] = [
+	EventBus.EventType.PHASE_CHANGED,
+	EventBus.EventType.SUB_PHASE_CHANGED,
+	EventBus.EventType.ROUND_STARTED,
+	EventBus.EventType.PLAYER_TURN_STARTED,
+	EventBus.EventType.PLAYER_TURN_ENDED,
+	EventBus.EventType.PLAYER_CASH_CHANGED,
+	EventBus.EventType.EMPLOYEE_RECRUITED,
+	EventBus.EventType.EMPLOYEE_TRAINED,
+	EventBus.EventType.EMPLOYEE_FIRED,
+	EventBus.EventType.RESTAURANT_PLACED,
+	EventBus.EventType.RESTAURANT_MOVED,
+	EventBus.EventType.HOUSE_PLACED,
+	EventBus.EventType.GARDEN_ADDED,
+	EventBus.EventType.FOOD_PRODUCED,
+	EventBus.EventType.DRINKS_PROCURED,
+	EventBus.EventType.MILESTONE_ACHIEVED,
+]
+
+var _game_log_panel = null
+var _eventbus_source: String = ""
+
+func setup(game_log_panel, restore_history: bool = true) -> void:
 	if not is_instance_valid(game_log_panel):
 		return
 	_game_log_panel = game_log_panel
+	if _eventbus_source.is_empty():
+		_eventbus_source = "GameScene:%s" % str(get_instance_id())
 
 	_game_log_panel.clear_logs()
-	_game_log_panel.add_system_log("事件日志已启用")
+	var history_events: Array[Dictionary] = []
+	if restore_history:
+		history_events = _collect_history_events()
+	var restored_count := history_events.size()
+	if restored_count > 0:
+		_game_log_panel.add_system_log("事件日志已启用（已恢复 %d 条历史日志）" % restored_count)
+		for event in history_events:
+			_on_eventbus_event(event)
+	else:
+		_game_log_panel.add_system_log("事件日志已启用")
 
-	var event_types: Array[String] = [
-		EventBus.EventType.PHASE_CHANGED,
-		EventBus.EventType.SUB_PHASE_CHANGED,
-		EventBus.EventType.ROUND_STARTED,
-		EventBus.EventType.PLAYER_TURN_STARTED,
-		EventBus.EventType.PLAYER_TURN_ENDED,
-		EventBus.EventType.PLAYER_CASH_CHANGED,
-		EventBus.EventType.EMPLOYEE_RECRUITED,
-		EventBus.EventType.EMPLOYEE_TRAINED,
-		EventBus.EventType.EMPLOYEE_FIRED,
-		EventBus.EventType.RESTAURANT_PLACED,
-		EventBus.EventType.RESTAURANT_MOVED,
-		EventBus.EventType.HOUSE_PLACED,
-		EventBus.EventType.GARDEN_ADDED,
-		EventBus.EventType.FOOD_PRODUCED,
-		EventBus.EventType.DRINKS_PROCURED,
-		EventBus.EventType.MILESTONE_ACHIEVED,
-	]
+	for t in EVENT_TYPES_TO_LOG:
+		EventBus.subscribe(t, Callable(self, "_on_eventbus_event"), 100, _eventbus_source)
 
-	for t in event_types:
-		EventBus.subscribe(t, Callable(self, "_on_eventbus_event"), 100, "GameScene")
+func dispose() -> void:
+	if not _eventbus_source.is_empty():
+		EventBus.unsubscribe_all_from_source(_eventbus_source)
+	_eventbus_source = ""
+	_game_log_panel = null
+
+func _collect_history_events() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var history: Array = EventBus.get_history()
+	if history.is_empty():
+		return result
+
+	var type_set := {}
+	for t in EVENT_TYPES_TO_LOG:
+		type_set[str(t)] = true
+
+	for ev_val in history:
+		if not (ev_val is Dictionary):
+			continue
+		var ev: Dictionary = ev_val
+		var t: String = str(ev.get("type", ""))
+		if t.is_empty():
+			continue
+		if not type_set.has(t):
+			continue
+		result.append(ev)
+
+	return result
 
 func _on_eventbus_event(event: Dictionary) -> void:
 	if not is_instance_valid(_game_log_panel):
@@ -94,6 +137,17 @@ func _on_eventbus_event(event: Dictionary) -> void:
 		EventBus.EventType.DRINKS_PROCURED:
 			_game_log_panel.add_player_log(int(data.get("player_id", -1)), "采购饮料", data)
 		EventBus.EventType.MILESTONE_ACHIEVED:
-			_game_log_panel.add_event_log("里程碑达成: %s" % str(data.get("milestone_id", "")), data)
+			var milestone_id := str(data.get("milestone_id", ""))
+			var player_id := int(data.get("player_id", -1))
+			var name := milestone_id
+			if MilestoneRegistryClass.is_loaded() and not milestone_id.is_empty():
+				var def_val = MilestoneRegistryClass.get_def(milestone_id)
+				if def_val != null and def_val is MilestoneDef:
+					name = str((def_val as MilestoneDef).name)
+			var who := "玩家%d" % (player_id + 1) if player_id >= 0 else "未知玩家"
+			var text := "%s 获得里程碑：%s" % [who, name]
+			if not milestone_id.is_empty() and name != milestone_id:
+				text += " (%s)" % milestone_id
+			_game_log_panel.add_event_log(text, data)
 		_:
 			_game_log_panel.add_debug_log("%s: %s" % [t, str(data)], data)

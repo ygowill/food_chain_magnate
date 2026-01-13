@@ -27,6 +27,7 @@ var _speed_selector: OptionButton
 var _command_info_label: Label
 var _command_list: ItemList
 var _status_label: Label
+var _error_label: Label
 var _close_btn: Button
 var _file_dialog: FileDialog
 
@@ -104,6 +105,14 @@ func _setup_ui() -> void:
 	_close_btn.tooltip_text = "关闭回放播放器"
 	_close_btn.custom_minimum_size = Vector2(64, 28)
 	title_row.add_child(_close_btn)
+
+	# 错误提示：显示 load_from_file 的详细错误（避免仅 tooltip 难以发现）
+	_error_label = Label.new()
+	_error_label.visible = false
+	_error_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_error_label.add_theme_font_size_override("font_size", 12)
+	_error_label.add_theme_color_override("font_color", Color(1, 0.55, 0.55, 1))
+	vbox.add_child(_error_label)
 
 	# 文件选择行
 	var file_row := HBoxContainer.new()
@@ -295,6 +304,8 @@ func load_from_engine(engine: GameEngine) -> Result:
 	if engine == null:
 		return Result.failure("游戏引擎为空")
 
+	_clear_error()
+
 	_game_engine = engine
 	_command_history = engine.get_command_history()
 	_checkpoints = engine.get_checkpoints()
@@ -319,6 +330,8 @@ func load_from_engine(engine: GameEngine) -> Result:
 func load_from_file(file_path: String) -> Result:
 	if file_path.is_empty():
 		return Result.failure("文件路径为空")
+
+	_clear_error()
 
 	var engine := GameEngine.new()
 	var load_result := engine.load_from_file(file_path)
@@ -629,4 +642,12 @@ func _set_error(message: String) -> void:
 	if _status_label != null:
 		_status_label.text = "加载失败"
 		_status_label.tooltip_text = message
+	if _error_label != null:
+		_error_label.text = message
+		_error_label.visible = true
+	GameLog.warn("ReplayPlayer", message)
 
+func _clear_error() -> void:
+	if _error_label != null:
+		_error_label.text = ""
+		_error_label.visible = false

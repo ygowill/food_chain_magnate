@@ -23,7 +23,7 @@ var _reserve_employees: Array[String] = []
 var _busy_marketers: Array[String] = []
 
 var _selected_ids: Array[String] = []
-var _cards: Dictionary = {}  # employee_id -> EmployeeCard
+var _cards: Array[EmployeeCard] = []  # 所有卡牌（包含重复 employee_id）
 
 var _multi_select: bool = false  # 是否支持多选
 
@@ -71,10 +71,10 @@ func clear_selection() -> void:
 func _rebuild_cards() -> void:
 	_end_drag_visuals()
 
-	# 清除旧卡牌
-	for card in _cards.values():
-		if is_instance_valid(card):
-			card.queue_free()
+	# 清除旧卡牌（注意：员工可能存在重复类型，不能用 employee_id 作为唯一 key）
+	_clear_container_children(active_container)
+	_clear_container_children(reserve_container)
+	_clear_container_children(busy_container)
 	_cards.clear()
 
 	# 创建在岗员工卡牌
@@ -87,12 +87,22 @@ func _rebuild_cards() -> void:
 	_build_cards_for_container(_busy_marketers, busy_container, true)
 
 	# 更新区域可见性
+	var show_empty_drop_targets := _drag_enabled
 	if active_section != null:
-		active_section.visible = not _active_employees.is_empty()
+		active_section.visible = (not _active_employees.is_empty()) or show_empty_drop_targets
 	if reserve_section != null:
-		reserve_section.visible = not _reserve_employees.is_empty()
+		reserve_section.visible = (not _reserve_employees.is_empty()) or show_empty_drop_targets
 	if busy_section != null:
 		busy_section.visible = not _busy_marketers.is_empty()
+
+func _clear_container_children(container: Node) -> void:
+	if container == null or not is_instance_valid(container):
+		return
+	for child in container.get_children():
+		if is_instance_valid(child):
+			if child.get_parent() == container:
+				container.remove_child(child)
+			child.queue_free()
 
 func _build_cards_for_container(employee_ids: Array[String], container: Control, is_busy: bool) -> void:
 	if container == null:
@@ -112,11 +122,11 @@ func _build_cards_for_container(employee_ids: Array[String], container: Control,
 			card.set_busy(true)
 
 		card.card_clicked.connect(_on_card_clicked)
-		card.card_drag_started.connect(_on_card_drag_started)
-		card.card_drag_ended.connect(_on_card_drag_ended)
+		card.card_drag_started.connect(_on_card_drag_started.bind(card))
+		card.card_drag_ended.connect(_on_card_drag_ended.bind(card))
 
 		container.add_child(card)
-		_cards[emp_id] = card
+		_cards.append(card)
 
 func _get_employee_def(employee_id: String) -> Dictionary:
 	if _employee_registry != null and _employee_registry.has_method("get_employee"):
@@ -147,10 +157,10 @@ func _on_card_clicked(employee_id: String) -> void:
 	_update_selection_display()
 	cards_selected.emit(_selected_ids.duplicate())
 
-func _on_card_drag_started(employee_id: String) -> void:
-	_start_drag_visuals(employee_id)
+func _on_card_drag_started(employee_id: String, source_card: EmployeeCard) -> void:
+	_start_drag_visuals(employee_id, source_card)
 
-func _on_card_drag_ended(employee_id: String, drop_position: Vector2) -> void:
+func _on_card_drag_ended(employee_id: String, drop_position: Vector2, _source_card: EmployeeCard) -> void:
 	# 检测放置目标
 	var target := _find_drop_target(drop_position)
 	_end_drag_visuals()
@@ -199,15 +209,9 @@ func _process(_delta: float) -> void:
 	var target := _find_drop_target(mouse_pos)
 	_set_hover_drop_target(target)
 
-func _start_drag_visuals(employee_id: String) -> void:
+func _start_drag_visuals(employee_id: String, source: EmployeeCard) -> void:
 	if employee_id.is_empty():
 		return
-	if not _cards.has(employee_id):
-		return
-	var source_val = _cards.get(employee_id, null)
-	if not (source_val is EmployeeCard):
-		return
-	var source: EmployeeCard = source_val
 	if not is_instance_valid(source):
 		return
 
@@ -288,7 +292,6 @@ func _set_hover_drop_target(target: Control) -> void:
 			_hover_drop_target.call("set_drop_highlighted", true)
 
 func _update_selection_display() -> void:
-	for emp_id in _cards.keys():
-		var card: EmployeeCard = _cards[emp_id]
+	for card in _cards:
 		if is_instance_valid(card):
-			card.set_selected(_selected_ids.has(emp_id))
+			card.set_selected(_selected_ids.has(card.employee_id))

@@ -1,0 +1,152 @@
+# 遮罩面板基类
+# - 覆盖指定区域（通常为地图+右侧操作区），不遮挡左侧信息区
+# - ESC 取消；Space 按住窥视地图（隐藏面板并降低遮罩）
+class_name ModalPanelBase
+extends Control
+
+signal completed(result: Dictionary)
+signal cancelled()
+
+@export var title: String = ""
+@export var confirm_text: String = "确认"
+@export var cancel_text: String = "取消"
+@export var allow_peek_map: bool = true
+
+@onready var overlay: ColorRect = $Overlay
+@onready var panel: PanelContainer = $Panel
+@onready var title_label: Label = $Panel/MarginContainer/VBoxContainer/TitleRow/TitleLabel
+@onready var content_host: Control = $Panel/MarginContainer/VBoxContainer/ContentHost
+@onready var confirm_button: Button = $Panel/MarginContainer/VBoxContainer/ButtonRow/ConfirmButton
+@onready var cancel_button: Button = $Panel/MarginContainer/VBoxContainer/ButtonRow/CancelButton
+@onready var hint_label: Label = $Panel/MarginContainer/VBoxContainer/HintLabel
+
+var _peek_held: bool = false
+var _overlay_alpha_normal: float = 0.72
+var _overlay_alpha_peek: float = 0.25
+
+func _ready() -> void:
+	visible = false
+	if is_instance_valid(title_label):
+		title_label.text = title
+	if is_instance_valid(confirm_button):
+		confirm_button.text = confirm_text
+		confirm_button.pressed.connect(_on_confirm_pressed)
+	if is_instance_valid(cancel_button):
+		cancel_button.text = cancel_text
+		cancel_button.pressed.connect(_on_cancel_pressed)
+	_update_hint()
+	_apply_overlay_alpha(_overlay_alpha_normal)
+
+func set_title_text(text: String) -> void:
+	title = text
+	if is_instance_valid(title_label):
+		title_label.text = title
+
+func set_confirm_text(text: String) -> void:
+	confirm_text = text
+	if is_instance_valid(confirm_button):
+		confirm_button.text = confirm_text
+
+func set_cancel_text(text: String) -> void:
+	cancel_text = text
+	if is_instance_valid(cancel_button):
+		cancel_button.text = cancel_text
+
+func set_confirm_enabled(enabled: bool) -> void:
+	if is_instance_valid(confirm_button):
+		confirm_button.disabled = not enabled
+
+func open(covered_rect: Rect2) -> void:
+	position = covered_rect.position
+	size = covered_rect.size
+	visible = true
+	_set_peek(false)
+	call_deferred("_center_panel")
+
+func close() -> void:
+	_set_peek(false)
+	visible = false
+
+func _center_panel() -> void:
+	if not is_instance_valid(panel):
+		return
+
+	var panel_size := panel.size
+	if panel_size == Vector2.ZERO:
+		panel_size = panel.get_combined_minimum_size()
+	if panel_size == Vector2.ZERO:
+		panel_size = panel.custom_minimum_size
+	if panel_size == Vector2.ZERO:
+		panel_size = Vector2(720, 520)
+
+	# 面板比覆盖区域更大时，缩小到可见范围内（保留四周 12px 边距）
+	var max_w := maxf(0.0, size.x - 24.0)
+	var max_h := maxf(0.0, size.y - 24.0)
+	if max_w > 0.0 and max_h > 0.0:
+		var clamped := Vector2(min(panel_size.x, max_w), min(panel_size.y, max_h))
+		if clamped != panel_size:
+			panel_size = clamped
+			panel.size = panel_size
+
+	var x := (size.x - panel_size.x) / 2.0
+	var y := (size.y - panel_size.y) / 2.0
+	x = clampf(x, 12.0, maxf(12.0, size.x - panel_size.x - 12.0))
+	y = clampf(y, 12.0, maxf(12.0, size.y - panel_size.y - 12.0))
+	panel.position = Vector2(x, y)
+
+func _input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if not (event is InputEventKey):
+		return
+	var e: InputEventKey = event
+	if e.echo:
+		return
+
+	match e.keycode:
+		KEY_ESCAPE:
+			if e.pressed:
+				get_viewport().set_input_as_handled()
+				_on_cancel_pressed()
+		KEY_ENTER, KEY_KP_ENTER:
+			if e.pressed and is_instance_valid(confirm_button) and not confirm_button.disabled:
+				get_viewport().set_input_as_handled()
+				_on_confirm_pressed()
+		KEY_SPACE:
+			if not allow_peek_map:
+				return
+			get_viewport().set_input_as_handled()
+			_set_peek(e.pressed)
+
+func _set_peek(enabled: bool) -> void:
+	if _peek_held == enabled:
+		return
+	_peek_held = enabled
+
+	mouse_filter = Control.MOUSE_FILTER_IGNORE if enabled else Control.MOUSE_FILTER_STOP
+
+	if is_instance_valid(panel):
+		panel.visible = not enabled
+
+	if is_instance_valid(overlay):
+		overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE if enabled else Control.MOUSE_FILTER_STOP
+		_apply_overlay_alpha(_overlay_alpha_peek if enabled else _overlay_alpha_normal)
+
+func _apply_overlay_alpha(alpha: float) -> void:
+	if not is_instance_valid(overlay):
+		return
+	var c := overlay.color
+	c.a = clampf(alpha, 0.0, 1.0)
+	overlay.color = c
+
+func _update_hint() -> void:
+	if not is_instance_valid(hint_label):
+		return
+	hint_label.text = "ESC 取消" + (" | 按住 Space 查看地图" if allow_peek_map else "")
+
+func _on_confirm_pressed() -> void:
+	completed.emit({})
+
+func _on_cancel_pressed() -> void:
+	cancelled.emit()
+	close()

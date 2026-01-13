@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://ui/components/game_log/game_log_panel.gd" id="1_log"]
 
 [node name="GameLogPanel" type="Control"]
-custom_minimum_size = Vector2(380, 250)
+custom_minimum_size = Vector2(0, 240)
 layout_mode = 3
 anchors_preset = 0
 script = ExtResource("1_log")
@@ -33,23 +33,48 @@ theme_override_constants/margin_bottom = 8
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="TitleRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="TitleRow" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="TopRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TitleRow"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer/TitleRow"]
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer/TitleRow/TopRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 14
 text = "游戏日志"
 
-[node name="FilterButton" type="MenuButton" parent="MarginContainer/VBoxContainer/TitleRow"]
+[node name="ExpandButton" type="Button" parent="MarginContainer/VBoxContainer/TitleRow/TopRow"]
 layout_mode = 2
-text = "过滤"
+text = "全屏"
 
-[node name="ClearButton" type="Button" parent="MarginContainer/VBoxContainer/TitleRow"]
+[node name="ClearButton" type="Button" parent="MarginContainer/VBoxContainer/TitleRow/TopRow"]
 layout_mode = 2
 text = "清空"
+
+[node name="FilterRow" type="HFlowContainer" parent="MarginContainer/VBoxContainer/TitleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 6
+
+[node name="PlayerFilter" type="OptionButton" parent="MarginContainer/VBoxContainer/TitleRow/FilterRow"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+
+[node name="SearchInput" type="LineEdit" parent="MarginContainer/VBoxContainer/TitleRow/FilterRow"]
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "搜索..."
+clear_button_enabled = true
+
+[node name="FilterButton" type="MenuButton" parent="MarginContainer/VBoxContainer/TitleRow/FilterRow"]
+layout_mode = 2
+text = "过滤"
 
 [node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2

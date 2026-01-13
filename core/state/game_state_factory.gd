@@ -62,6 +62,25 @@ static func apply_initial_state(
 	for i in range(player_count):
 		state.players.append(_create_player_from_config(i, cfg))
 
+	# 餐厅 Logo：进入游戏前随机分配一次，并写入存档以保证回放/联机确定性。
+	# 注意：这里使用独立 RNG（仅依赖 seed），避免影响 engine.random_manager 的调用序列。
+	var logo_ids: Array[int] = []
+	for i in range(5):
+		logo_ids.append(i)
+	var logo_rng := RandomNumberGenerator.new()
+	var logo_seed := int(rng_seed) ^ int(0x4C4F474F) # 'LOGO'
+	logo_rng.seed = logo_seed
+	logo_rng.state = int(logo_seed)
+	for i in range(logo_ids.size() - 1, 0, -1):
+		var j := logo_rng.randi_range(0, i)
+		var tmp = logo_ids[i]
+		logo_ids[i] = logo_ids[j]
+		logo_ids[j] = tmp
+	for pid in range(player_count):
+		if pid < 0 or pid >= state.players.size():
+			continue
+		state.players[pid]["restaurant_logo_id"] = int(logo_ids[pid % logo_ids.size()])
+
 	state.turn_order.clear()
 	for i in range(player_count):
 		state.turn_order.append(i)

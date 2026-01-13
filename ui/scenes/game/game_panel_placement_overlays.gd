@@ -155,6 +155,8 @@ func _on_restaurant_placement_confirmed(position: Vector2i, rotation: int, resta
 
 	var result: Result = _execute_command.call(Command.create(action_id, current_player_id, command_params))
 	if result.ok:
+		if is_instance_valid(restaurant_placement_overlay):
+			restaurant_placement_overlay.visible = false
 		if _map_controller != null:
 			_map_controller.clear_selection()
 		if _overlay_controller != null:
@@ -175,6 +177,8 @@ func _on_house_placement_confirmed(position: Vector2i, rotation: int) -> void:
 		"rotation": rotation
 	}))
 	if result.ok:
+		if is_instance_valid(house_placement_overlay):
+			house_placement_overlay.visible = false
 		if _map_controller != null:
 			_map_controller.clear_selection()
 		if _overlay_controller != null:
@@ -194,12 +198,18 @@ func _on_garden_confirmed(house_id: String, direction: String) -> void:
 		"direction": direction
 	}))
 	if result.ok:
+		if is_instance_valid(house_placement_overlay):
+			house_placement_overlay.visible = false
 		if _map_controller != null:
 			_map_controller.clear_selection()
 		if _overlay_controller != null:
 			_overlay_controller.hide_all_overlays()
 
 func _on_overlay_cancelled() -> void:
+	if is_instance_valid(restaurant_placement_overlay):
+		restaurant_placement_overlay.visible = false
+	if is_instance_valid(house_placement_overlay):
+		house_placement_overlay.visible = false
 	if _map_controller != null:
 		_map_controller.clear_selection()
 	if _overlay_controller != null:

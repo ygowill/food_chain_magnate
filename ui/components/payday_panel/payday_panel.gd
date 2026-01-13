@@ -5,11 +5,13 @@ extends Control
 
 signal fire_employees(employee_ids: Array[String])
 signal pay_confirmed()
+signal right_panel_footer_changed()
 
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
 @onready var salary_list_container: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/SalaryListContainer
+@onready var scroll_container: ScrollContainer = $MarginContainer/VBoxContainer/ScrollContainer
 @onready var discount_label: Label = $MarginContainer/VBoxContainer/SummarySection/DiscountLabel
 @onready var total_label: Label = $MarginContainer/VBoxContainer/SummarySection/TotalLabel
 @onready var cash_label: Label = $MarginContainer/VBoxContainer/SummarySection/CashLabel
@@ -25,13 +27,53 @@ var _selected_for_fire: Array[String] = []
 var _discount_amount: int = 0
 var _player_cash: int = 0
 var _salary_per_employee: int = 5  # 默认薪水 $5
+var _embedded_in_right_panel: bool = false
+var _base_custom_minimum_size: Vector2 = Vector2.ZERO
+
+func set_embedded_in_right_panel(embedded: bool) -> void:
+	_embedded_in_right_panel = embedded
+	if _base_custom_minimum_size == Vector2.ZERO:
+		_base_custom_minimum_size = custom_minimum_size
+	custom_minimum_size = Vector2.ZERO if embedded else _base_custom_minimum_size
+
+	var row = get_node_or_null("MarginContainer/VBoxContainer/ButtonRow")
+	if row is Control:
+		(row as Control).visible = not embedded
+
+	_apply_embedding_layout()
+	right_panel_footer_changed.emit()
+
+func right_panel_get_footer_config() -> Dictionary:
+	if fire_btn == null or pay_btn == null:
+		return {}
+	return {
+		"show_cancel": true,
+		"cancel_text": "取消",
+		"cancel_enabled": true,
+		"show_secondary": true,
+		"secondary_text": str(fire_btn.text),
+		"secondary_enabled": not fire_btn.disabled,
+		"show_primary": true,
+		"primary_text": str(pay_btn.text),
+		"primary_enabled": not pay_btn.disabled,
+	}
+
+func right_panel_footer_primary() -> void:
+	_on_pay_pressed()
+
+func right_panel_footer_secondary() -> void:
+	_on_fire_pressed()
 
 func _ready() -> void:
+	if _base_custom_minimum_size == Vector2.ZERO:
+		_base_custom_minimum_size = custom_minimum_size
 	if fire_btn != null:
 		fire_btn.pressed.connect(_on_fire_pressed)
 		fire_btn.disabled = true
 	if pay_btn != null:
 		pay_btn.pressed.connect(_on_pay_pressed)
+	_apply_embedding_layout()
+	right_panel_footer_changed.emit()
 
 func set_employee_registry(registry) -> void:
 	_employee_registry = registry
@@ -68,6 +110,10 @@ func refresh() -> void:
 	_rebuild_salary_list()
 	_update_summary()
 
+func _apply_embedding_layout() -> void:
+	if scroll_container != null:
+		scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if _embedded_in_right_panel else ScrollContainer.SCROLL_MODE_DISABLED
+
 func _rebuild_salary_list() -> void:
 	# 清除旧列表
 	for item in _salary_items.values():
@@ -78,20 +124,21 @@ func _rebuild_salary_list() -> void:
 	if salary_list_container == null:
 		return
 
-		for emp_type in _all_employees:
-			var emp_def := _get_employee_def(emp_type)
-			var requires_salary := _requires_salary(emp_def)
-			var is_busy := _busy_marketers.has(emp_type)
+	for emp_type in _all_employees:
+		var emp_def := _get_employee_def(emp_type)
+		var requires_salary := _requires_salary(emp_def)
+		var is_busy := _busy_marketers.has(emp_type)
 
-			var item := SalaryItem.new()
-			item.employee_type = emp_type
-			item.employee_def = emp_def
-			item.requires_salary = requires_salary
-			item.is_busy = is_busy
-			item.salary_amount = _salary_per_employee if requires_salary else 0
-			item.fire_toggled.connect(_on_fire_toggled)
-			salary_list_container.add_child(item)
-			_salary_items[emp_type] = item
+		var item := SalaryItem.new()
+		item.employee_type = emp_type
+		item.employee_def = emp_def
+		item.requires_salary = requires_salary
+		item.is_busy = is_busy
+		item.salary_amount = _salary_per_employee if requires_salary else 0
+		item.fire_toggled.connect(_on_fire_toggled)
+		salary_list_container.add_child(item)
+		_salary_items[emp_type] = item
+	right_panel_footer_changed.emit()
 
 func _get_employee_def(employee_type: String) -> Dictionary:
 	if _employee_registry != null and _employee_registry.has_method("get_employee"):
@@ -145,6 +192,7 @@ func _update_summary() -> void:
 
 	if pay_btn != null:
 		pay_btn.disabled = _player_cash < final_total
+	right_panel_footer_changed.emit()
 
 func _on_fire_toggled(employee_type: String, selected: bool) -> void:
 	if selected:
@@ -208,7 +256,7 @@ class SalaryItem extends PanelContainer:
 		_build_ui()
 
 	func _build_ui() -> void:
-		custom_minimum_size = Vector2(300, 40)
+		custom_minimum_size = Vector2(0, 40)
 
 		var style := StyleBoxFlat.new()
 		style.bg_color = Color(0.15, 0.17, 0.2, 0.8)

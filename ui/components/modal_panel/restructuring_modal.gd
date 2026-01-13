@@ -1,0 +1,129 @@
+# 公司结构重组遮罩面板
+# - 复用 HandArea + CompanyStructure 组件（由外部临时 reparent 进来）
+class_name RestructuringModal
+extends "res://ui/components/modal_panel/modal_panel_base.gd"
+
+signal player_selected(player_id: int)
+
+@onready var hand_host: Control = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split/HandHost
+@onready var company_host: Control = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split/CompanyHost
+@onready var status_label: Label = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Hint
+@onready var player_buttons_host: HBoxContainer = $Panel/MarginContainer/VBoxContainer/PlayerRow/PlayerButtons
+
+var _hand_area: Node = null
+var _company_structure: Node = null
+var _player_button_group: ButtonGroup = null
+var _player_buttons: Array[Button] = []
+
+func _ready() -> void:
+	super._ready()
+	set_title_text("公司结构重组")
+	set_confirm_text("确认重组")
+	set_cancel_text("关闭")
+	set_confirm_enabled(true)
+
+func set_status_text(text: String) -> void:
+	if not is_instance_valid(status_label):
+		return
+	status_label.text = text
+
+func set_player_switcher(player_count: int, view_player_id: int, submitted: Dictionary) -> void:
+	if not is_instance_valid(player_buttons_host):
+		return
+	if player_count <= 0:
+		player_buttons_host.visible = false
+		return
+	player_buttons_host.visible = true
+
+	var need_rebuild := (_player_buttons.size() != player_count)
+	if need_rebuild:
+		for c in player_buttons_host.get_children():
+			if is_instance_valid(c):
+				c.queue_free()
+		_player_buttons.clear()
+		_player_button_group = ButtonGroup.new()
+
+		for pid in range(player_count):
+			var btn := Button.new()
+			btn.toggle_mode = true
+			btn.button_group = _player_button_group
+			btn.custom_minimum_size = Vector2(140, 32)
+			btn.pressed.connect(_on_player_button_pressed.bind(pid))
+			player_buttons_host.add_child(btn)
+			_player_buttons.append(btn)
+
+	for pid2 in range(player_count):
+		var btn2_val = _player_buttons[pid2]
+		if not is_instance_valid(btn2_val):
+			continue
+		var btn2: Button = btn2_val
+
+		var name := Globals.get_player_name(pid2) if Globals != null else ("玩家%d" % (pid2 + 1))
+
+		var submitted_flag = submitted.get(pid2, null)
+		if submitted_flag == null and submitted.has(str(pid2)):
+			submitted_flag = submitted.get(str(pid2), null)
+		var is_submitted := bool(submitted_flag)
+
+		btn2.text = "%s%s" % [name, "（已提交）" if is_submitted else ""]
+		btn2.set_pressed_no_signal(pid2 == view_player_id)
+
+func _on_player_button_pressed(player_id: int) -> void:
+	player_selected.emit(player_id)
+
+func attach_hand_area(panel: Node) -> void:
+	_hand_area = panel
+	_attach_panel_to_host(panel, hand_host)
+
+func attach_company_structure(panel: Node) -> void:
+	_company_structure = panel
+	_attach_panel_to_host(panel, company_host)
+
+func detach_to_parent(target_parent: Node) -> void:
+	if _hand_area != null and is_instance_valid(_hand_area):
+		_detach_panel_to_parent(_hand_area, target_parent)
+	if _company_structure != null and is_instance_valid(_company_structure):
+		_detach_panel_to_parent(_company_structure, target_parent)
+
+func _attach_panel_to_host(panel: Node, host: Node) -> void:
+	if panel == null or not is_instance_valid(panel):
+		return
+	if host == null or not is_instance_valid(host):
+		return
+	if not (panel is Control):
+		return
+
+	var c: Control = panel
+	if c.get_parent() != host:
+		var old_parent := c.get_parent()
+		if is_instance_valid(old_parent):
+			old_parent.remove_child(c)
+		host.add_child(c)
+
+	c.set_anchors_preset(Control.PRESET_FULL_RECT)
+	c.offset_left = 0
+	c.offset_top = 0
+	c.offset_right = 0
+	c.offset_bottom = 0
+
+func _detach_panel_to_parent(panel: Node, target_parent: Node) -> void:
+	if panel == null or not is_instance_valid(panel):
+		return
+	if target_parent == null or not is_instance_valid(target_parent):
+		return
+
+	var old_parent := panel.get_parent()
+	if is_instance_valid(old_parent):
+		old_parent.remove_child(panel)
+	target_parent.add_child(panel)
+
+	if panel is Control:
+		var c: Control = panel
+		c.set_anchors_preset(Control.PRESET_FULL_RECT)
+		c.offset_left = 0
+		c.offset_top = 0
+		c.offset_right = 0
+		c.offset_bottom = 0
+
+func _on_confirm_pressed() -> void:
+	completed.emit({"action": "submit_restructuring"})

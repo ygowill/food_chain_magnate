@@ -30,8 +30,8 @@ static func run(player_count: int = 3, seed: int = 12345) -> Result:
 	state = engine.get_state()
 	# 说明：这里直接改写 employees 用于构造局面，需要同步 employee_pool，
 	# 保证“员工供应池守恒”不变量不被测试用例破坏。
-	for pid in range(player_count):
-		var old_emps: Array = state.players[pid].get("employees", [])
+	for pid0 in range(player_count):
+		var old_emps: Array = state.players[pid0].get("employees", [])
 		for emp in old_emps:
 			if state.employee_pool.has(emp):
 				state.employee_pool[emp] = int(state.employee_pool.get(emp, 0)) + 1
@@ -41,21 +41,18 @@ static func run(player_count: int = 3, seed: int = 12345) -> Result:
 		1: ["ceo", "executive_vp"],
 		2: ["ceo"]
 	}
-	for pid in new_emps:
-		var list: Array = new_emps[pid]
-		state.players[pid]["employees"] = list
+	for pid1 in new_emps:
+		var list: Array = new_emps[pid1]
+		state.players[pid1]["employees"] = list
 		for emp in list:
 			if state.employee_pool.has(emp):
 				state.employee_pool[emp] = int(state.employee_pool.get(emp, 0)) - 1
 
 	# Restructuring -> OrderOfBusiness：应计算 selection_order，并初始化 picks
-	var safety2 := 0
-	while engine.get_state().phase == "Restructuring":
-		safety2 += 1
-		if safety2 > player_count + 5:
-			return Result.failure("提交 Restructuring 超出安全上限")
-		var actor := engine.get_state().get_current_player_id()
-		var submit := engine.execute_command(Command.create("submit_restructuring", actor, {}))
+	for pid2 in range(player_count):
+		if engine.get_state().phase != "Restructuring":
+			break
+		var submit := engine.execute_command(Command.create("submit_restructuring", pid2, {}))
 		if not submit.ok:
 			return Result.failure("提交重组失败: %s" % submit.error)
 

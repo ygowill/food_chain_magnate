@@ -4,21 +4,67 @@ class_name RecruitPanel
 extends Control
 
 signal recruit_requested(employee_type: String)
+signal cancelled()
+signal right_panel_footer_changed()
 
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
 @onready var counter_label: Label = $MarginContainer/VBoxContainer/CounterRow/CounterLabel
-@onready var items_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ItemsContainer
+@onready var items_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ItemsContainer
+@onready var cancel_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/CancelButton
+@onready var confirm_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/ConfirmButton
 
 var _employee_pool: Dictionary = {}  # employee_type -> count
 var _employee_registry = null
 var _recruit_remaining: int = 0
 var _recruit_total: int = 0
 var _pool_cards: Dictionary = {}  # employee_type -> PoolCard
+var _selected_employee_type: String = ""
+var _relayout_scheduled: bool = false
+var _embedded_in_right_panel: bool = false
+var _base_custom_minimum_size: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
-	pass
+	if _base_custom_minimum_size == Vector2.ZERO:
+		_base_custom_minimum_size = custom_minimum_size
+	if confirm_btn != null:
+		confirm_btn.pressed.connect(_on_confirm_pressed)
+		confirm_btn.disabled = true
+	if cancel_btn != null:
+		cancel_btn.pressed.connect(_on_cancel_pressed)
+	if has_signal("resized"):
+		resized.connect(_request_relayout)
+	if has_signal("visibility_changed"):
+		visibility_changed.connect(_request_relayout)
+	right_panel_footer_changed.emit()
+	_request_relayout()
+
+func set_embedded_in_right_panel(embedded: bool) -> void:
+	_embedded_in_right_panel = embedded
+	if _base_custom_minimum_size == Vector2.ZERO:
+		_base_custom_minimum_size = custom_minimum_size
+	custom_minimum_size = Vector2.ZERO if embedded else _base_custom_minimum_size
+	var row = get_node_or_null("MarginContainer/VBoxContainer/ButtonRow")
+	if row is Control:
+		(row as Control).visible = not embedded
+	right_panel_footer_changed.emit()
+	_request_relayout()
+
+func right_panel_get_footer_config() -> Dictionary:
+	if confirm_btn == null:
+		return {}
+	return {
+		"show_cancel": true,
+		"cancel_text": "取消",
+		"cancel_enabled": true,
+		"show_primary": true,
+		"primary_text": str(confirm_btn.text),
+		"primary_enabled": not confirm_btn.disabled,
+	}
+
+func right_panel_footer_primary() -> void:
+	_on_confirm_pressed()
 
 func set_employee_registry(registry) -> void:
 	_employee_registry = registry
@@ -27,16 +73,26 @@ func set_employee_registry(registry) -> void:
 func set_employee_pool(pool: Dictionary) -> void:
 	_employee_pool = pool.duplicate()
 	_rebuild_pool_cards()
+	_update_confirm_state()
+	_request_relayout()
 
 func set_recruit_count(remaining: int, total: int) -> void:
 	_recruit_remaining = remaining
 	_recruit_total = total
 	_update_counter()
 	_update_card_states()
+	_update_confirm_state()
 
 func refresh() -> void:
 	_rebuild_pool_cards()
 	_update_counter()
+	_update_confirm_state()
+	_request_relayout()
+
+func clear_selection() -> void:
+	_selected_employee_type = ""
+	_update_card_states()
+	_update_confirm_state()
 
 func _rebuild_pool_cards() -> void:
 	# 清除旧卡牌
@@ -59,11 +115,31 @@ func _rebuild_pool_cards() -> void:
 		card.employee_type = emp_type
 		card.pool_count = count
 		card.employee_def = emp_def
-		card.recruit_clicked.connect(_on_recruit_clicked)
+		card.selected.connect(_on_card_selected)
 		items_container.add_child(card)
 		_pool_cards[emp_type] = card
 
 	_update_card_states()
+	_request_relayout()
+
+func _request_relayout() -> void:
+	if _relayout_scheduled:
+		return
+	_relayout_scheduled = true
+	call_deferred("_apply_relayout")
+
+func _apply_relayout() -> void:
+	_relayout_scheduled = false
+	if not is_inside_tree():
+		return
+	if items_container == null or not is_instance_valid(items_container):
+		return
+	# HFlowContainer 在首次嵌入 RightPanel/首次显示时，可能在 size 还未稳定时完成布局，
+	# 导致卡片不换行并溢出到右侧；延迟到布局稳定后强制重排一次。
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if items_container != null and is_instance_valid(items_container):
+		items_container.queue_sort()
 
 func _get_entry_level_employee_ids() -> Array[String]:
 	var result: Array[String] = []
@@ -112,33 +188,67 @@ func _update_counter() -> void:
 func _update_card_states() -> void:
 	var can_recruit := _recruit_remaining > 0
 
+	if not can_recruit:
+		_selected_employee_type = ""
+	elif not _selected_employee_type.is_empty():
+		var selected_count: int = int(_employee_pool.get(_selected_employee_type, 0))
+		if selected_count <= 0:
+			_selected_employee_type = ""
+
 	for emp_type in _pool_cards.keys():
 		var card: PoolCard = _pool_cards[emp_type]
 		if is_instance_valid(card):
 			var count: int = int(_employee_pool.get(emp_type, 0))
 			card.pool_count = count
 			card.set_enabled(can_recruit and count > 0)
+			card.set_selected(emp_type == _selected_employee_type)
 			card.update_display()
+	right_panel_footer_changed.emit()
 
-func _on_recruit_clicked(employee_type: String) -> void:
-	if _recruit_remaining <= 0:
-		return
-	var count: int = int(_employee_pool.get(employee_type, 0))
-	if count <= 0:
+func _on_card_selected(employee_type: String) -> void:
+	_selected_employee_type = employee_type
+	_update_card_states()
+	_update_confirm_state()
+
+func _update_confirm_state() -> void:
+	if confirm_btn == null:
 		return
 
-	recruit_requested.emit(employee_type)
+	var ok := true
+	ok = ok and _recruit_remaining > 0
+	ok = ok and not _selected_employee_type.is_empty()
+	if ok:
+		var selected_count: int = int(_employee_pool.get(_selected_employee_type, 0))
+		ok = ok and selected_count > 0
+
+	confirm_btn.disabled = not ok
+	right_panel_footer_changed.emit()
+
+func _on_confirm_pressed() -> void:
+	if confirm_btn != null and confirm_btn.disabled:
+		return
+	if _selected_employee_type.is_empty():
+		return
+
+	var emp_type := _selected_employee_type
+	clear_selection()
+	recruit_requested.emit(emp_type)
+
+func _on_cancel_pressed() -> void:
+	clear_selection()
+	cancelled.emit()
 
 
 # === 内部类：供应池卡牌 ===
 class PoolCard extends PanelContainer:
-	signal recruit_clicked(employee_type: String)
+	signal selected(employee_type: String)
 
 	var employee_type: String = ""
 	var pool_count: int = 0
 	var employee_def: Dictionary = {}
 
 	var _enabled: bool = true
+	var _selected: bool = false
 	var _name_label: Label
 	var _count_label: Label
 	var _recruit_btn: Button
@@ -187,9 +297,9 @@ class PoolCard extends PanelContainer:
 
 		# 招聘按钮
 		_recruit_btn = Button.new()
-		_recruit_btn.text = "招聘"
+		_recruit_btn.text = "选择"
 		_recruit_btn.add_theme_font_size_override("font_size", 12)
-		_recruit_btn.pressed.connect(_on_recruit_pressed)
+		_recruit_btn.pressed.connect(_on_select_pressed)
 		vbox.add_child(_recruit_btn)
 
 		update_display()
@@ -212,12 +322,18 @@ class PoolCard extends PanelContainer:
 				_count_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
 
 		if _recruit_btn != null:
+			_recruit_btn.text = "已选择" if _selected else "选择"
 			_recruit_btn.disabled = not _enabled or pool_count <= 0
 
 	func set_enabled(enabled: bool) -> void:
 		_enabled = enabled
 		if _recruit_btn != null:
 			_recruit_btn.disabled = not _enabled or pool_count <= 0
+		_update_style()
+
+	func set_selected(selected: bool) -> void:
+		_selected = selected
+		update_display()
 		_update_style()
 
 	func _update_style() -> void:
@@ -227,8 +343,11 @@ class PoolCard extends PanelContainer:
 		else:
 			style.bg_color = Color(0.15, 0.15, 0.18, 0.6)
 		style.set_corner_radius_all(4)
+		if _selected:
+			style.border_color = Color(0.4, 0.7, 1.0, 0.9)
+			style.set_border_width_all(2)
 		add_theme_stylebox_override("panel", style)
 
-	func _on_recruit_pressed() -> void:
+	func _on_select_pressed() -> void:
 		if _enabled and pool_count > 0:
-			recruit_clicked.emit(employee_type)
+			selected.emit(employee_type)

@@ -68,6 +68,12 @@ func _ready() -> void:
 	# 更新状态栏
 	_update_status()
 
+func _exit_tree() -> void:
+	if _command_registry != null and _command_registry.has_method("dispose"):
+		_command_registry.dispose()
+	_command_registry = null
+	_game_engine = null
+
 func _init_tab_titles() -> void:
 	if not is_instance_valid(tab_container):
 		return

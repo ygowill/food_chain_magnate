@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://ui/components/recruit_panel/recruit_panel.gd" id="1_recruit_panel"]
 
 [node name="RecruitPanel" type="Control"]
-custom_minimum_size = Vector2(400, 200)
+custom_minimum_size = Vector2(400, 260)
 layout_mode = 3
 anchors_preset = 0
 script = ExtResource("1_recruit_panel")
@@ -51,11 +51,31 @@ text = "招聘次数: 0 / 0"
 
 [node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
+size_flags_horizontal = 3
 size_flags_vertical = 3
-horizontal_scroll_mode = 0
+horizontal_scroll_mode = 1
 
-[node name="ItemsContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/ScrollContainer"]
+[node name="ContentVBox" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ItemsContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/h_separation = 10
 theme_override_constants/v_separation = 10
+
+[node name="ButtonRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 10
+
+[node name="CancelButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonRow"]
+custom_minimum_size = Vector2(100, 36)
+layout_mode = 2
+text = "取消"
+
+[node name="ConfirmButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonRow"]
+custom_minimum_size = Vector2(100, 36)
+layout_mode = 2
+text = "确认招聘"

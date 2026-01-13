@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://ui/components/inventory_panel/inventory_panel.gd" id="1_panel"]
 
 [node name="InventoryPanel" type="Control"]
-custom_minimum_size = Vector2(200, 100)
+custom_minimum_size = Vector2(220, 180)
 layout_mode = 3
 anchors_preset = 0
 script = ExtResource("1_panel")

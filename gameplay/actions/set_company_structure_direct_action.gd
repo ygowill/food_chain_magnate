@@ -24,11 +24,8 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("round_state 类型错误（期望 Dictionary）")
 	if not EmployeeRegistryClass.is_loaded():
 		return Result.failure("EmployeeRegistry 未初始化")
-
-	# hotseat：必须是当前玩家
-	var current_player_id := state.get_current_player_id()
-	if command.actor != current_player_id:
-		return Result.failure("不是你的回合")
+	if command.actor < 0 or command.actor >= state.players.size():
+		return Result.failure("玩家不存在: %d" % command.actor)
 
 	# 已提交后禁止修改
 	var r_val = state.round_state.get("restructuring", null)
@@ -120,14 +117,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var employees: Array = employees_val
 	var reserve: Array = reserve_val
 
-	if reserve.has(employee_id) and not employees.has(employee_id):
-		var removed := StateUpdater.remove_from_array(player, "reserve_employees", employee_id)
-		if not removed:
-			return Result.failure("移动员工到在岗失败（未在待命区找到）: %s" % employee_id)
-		StateUpdater.append_to_array(player, "employees", employee_id)
-		employees = player["employees"]
-		reserve = player["reserve_employees"]
-
 	var cs_val = player.get("company_structure", null)
 	assert(cs_val is Dictionary, "set_company_structure_direct: player.company_structure 类型错误（期望 Dictionary）")
 	var cs: Dictionary = cs_val
@@ -160,22 +149,34 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 					entry["reports"] = Array(e["reports"]).duplicate()
 		normalized.append(entry)
 
-	# 移除员工在其它槽位的占用（去重）
-	for i2 in range(normalized.size()):
-		var e2_val = normalized[i2]
-		if not (e2_val is Dictionary):
-			continue
-		var e2: Dictionary = e2_val
-		if str(e2.get("employee_id", "")) == employee_id:
-			e2["employee_id"] = ""
-			e2["reports"] = []
-			normalized[i2] = e2
-
 	# 写入目标槽位（清空 reports，避免与后续分配混淆）
 	var target: Dictionary = normalized[slot_index]
 	target["employee_id"] = employee_id
 	target["reports"] = []
 	normalized[slot_index] = target
+
+	# 直属槽中的员工必须为在岗：若当前直属+下属占用数量超过在岗数量，
+	# 则优先从 reserve_employees 补齐到 employees（支持同名员工多张/多实例）。
+	var assigned_count := _count_employee_in_structure(normalized, employee_id)
+	var active_count := _count_employee_in_array(employees, employee_id)
+	if assigned_count > active_count:
+		var need := assigned_count - active_count
+		for _i in range(need):
+			if not reserve.has(employee_id):
+				break
+			var moved := StateUpdater.remove_from_array(player, "reserve_employees", employee_id)
+			if not moved:
+				break
+			StateUpdater.append_to_array(player, "employees", employee_id)
+			employees = player["employees"]
+			reserve = player["reserve_employees"]
+		active_count = _count_employee_in_array(employees, employee_id)
+
+	# 允许“非唯一员工”重复出现在多个槽位，但不允许超过在岗数量。
+	# 若超过，则从其它位置（优先 reports，再直属槽）移除多余占用（相当于移动一个实例）。
+	if assigned_count > active_count:
+		var to_remove := assigned_count - active_count
+		_remove_employee_from_structure(normalized, employee_id, to_remove, slot_index)
 
 	cs["structure"] = normalized
 	player["company_structure"] = cs
@@ -186,3 +187,83 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"slot_index": slot_index,
 		"employee_id": employee_id
 	})
+
+static func _count_employee_in_array(list: Array, employee_id: String) -> int:
+	if list == null:
+		return 0
+	var emp_id := str(employee_id)
+	if emp_id.is_empty():
+		return 0
+	var count := 0
+	for v in list:
+		if v is String and str(v) == emp_id:
+			count += 1
+	return count
+
+static func _count_employee_in_structure(structure: Array, employee_id: String) -> int:
+	if structure == null:
+		return 0
+	var emp_id := str(employee_id)
+	if emp_id.is_empty():
+		return 0
+	var count := 0
+	for i in range(structure.size()):
+		var entry_val = structure[i]
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		if str(entry.get("employee_id", "")) == emp_id:
+			count += 1
+		var reps_val = entry.get("reports", null)
+		if reps_val is Array:
+			var reps: Array = reps_val
+			for rep_val in reps:
+				if rep_val is String and str(rep_val) == emp_id:
+					count += 1
+	return count
+
+static func _remove_employee_from_structure(structure: Array, employee_id: String, remove_count: int, skip_slot_index: int) -> int:
+	if structure == null:
+		return 0
+	var emp_id := str(employee_id)
+	if emp_id.is_empty() or remove_count <= 0:
+		return 0
+
+	var removed := 0
+
+	# 1) 优先从 reports 移除（尽量不影响直属槽布局）
+	for i in range(structure.size()):
+		if removed >= remove_count:
+			break
+		if i == skip_slot_index:
+			continue
+		var entry_val = structure[i]
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		var reps_val = entry.get("reports", null)
+		if reps_val is Array:
+			var reps: Array = reps_val
+			while removed < remove_count and reps.has(emp_id):
+				reps.erase(emp_id)
+				removed += 1
+			entry["reports"] = reps
+			structure[i] = entry
+
+	# 2) 再从其它直属槽移除（清空 employee_id 与 reports）
+	for i2 in range(structure.size()):
+		if removed >= remove_count:
+			break
+		if i2 == skip_slot_index:
+			continue
+		var entry_val2 = structure[i2]
+		if not (entry_val2 is Dictionary):
+			continue
+		var entry2: Dictionary = entry_val2
+		if str(entry2.get("employee_id", "")) == emp_id:
+			entry2["employee_id"] = ""
+			entry2["reports"] = []
+			structure[i2] = entry2
+			removed += 1
+
+	return removed

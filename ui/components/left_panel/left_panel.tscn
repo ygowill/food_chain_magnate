@@ -1,0 +1,288 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ui/components/left_panel/left_panel.gd" id="1_left_panel"]
+[ext_resource type="PackedScene" path="res://ui/components/milestone_panel/milestone_panel.tscn" id="2_milestone_panel"]
+
+[node name="LeftPanel" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_left_panel")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.1, 0.12, 0.95)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PlayerTabs" type="VBoxContainer" parent="MarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(52, 0)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="Content" type="VBoxContainer" parent="MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="SummaryRow" type="HBoxContainer" parent="MarginContainer/HBoxContainer/Content"]
+layout_mode = 2
+
+[node name="SummaryLabel" type="Label" parent="MarginContainer/HBoxContainer/Content/SummaryRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 14
+text = "查看: -"
+
+[node name="TabContainer" type="TabContainer" parent="MarginContainer/HBoxContainer/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Hand" type="Control" parent="MarginContainer/HBoxContainer/Content/TabContainer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="HandHost" type="Control" parent="MarginContainer/HBoxContainer/Content/TabContainer/Hand"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="HandIconScroll" type="ScrollContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+vertical_scroll_mode = 2
+
+[node name="HandIconGroups" type="VBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="HandManagementRow" type="HBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups/HandManagementRow"]
+custom_minimum_size = Vector2(42, 0)
+layout_mode = 2
+text = "管理"
+
+[node name="Icons" type="VBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups/HandManagementRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="HandKitchenRow" type="HBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups/HandKitchenRow"]
+custom_minimum_size = Vector2(42, 0)
+layout_mode = 2
+text = "厨房"
+
+[node name="Icons" type="VBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups/HandKitchenRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="HandMarketingRow" type="HBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups/HandMarketingRow"]
+custom_minimum_size = Vector2(42, 0)
+layout_mode = 2
+text = "营销"
+
+[node name="Icons" type="VBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups/HandMarketingRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="HandOtherRow" type="HBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups/HandOtherRow"]
+custom_minimum_size = Vector2(42, 0)
+layout_mode = 2
+text = "其他"
+
+[node name="Icons" type="VBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups/HandOtherRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="Company" type="Control" parent="MarginContainer/HBoxContainer/Content/TabContainer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CompanyHost" type="Control" parent="MarginContainer/HBoxContainer/Content/TabContainer/Company"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CompanyIconScroll" type="ScrollContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+vertical_scroll_mode = 2
+
+[node name="CompanyIconGroups" type="VBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="CompanyManagementRow" type="HBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups/CompanyManagementRow"]
+custom_minimum_size = Vector2(42, 0)
+layout_mode = 2
+text = "管理"
+
+[node name="Icons" type="VBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups/CompanyManagementRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="CompanyKitchenRow" type="HBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups/CompanyKitchenRow"]
+custom_minimum_size = Vector2(42, 0)
+layout_mode = 2
+text = "厨房"
+
+[node name="Icons" type="VBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups/CompanyKitchenRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="CompanyMarketingRow" type="HBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups/CompanyMarketingRow"]
+custom_minimum_size = Vector2(42, 0)
+layout_mode = 2
+text = "营销"
+
+[node name="Icons" type="VBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups/CompanyMarketingRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="CompanyOtherRow" type="HBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups/CompanyOtherRow"]
+custom_minimum_size = Vector2(42, 0)
+layout_mode = 2
+text = "其他"
+
+[node name="Icons" type="VBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups/CompanyOtherRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="Milestones" type="Control" parent="MarginContainer/HBoxContainer/Content/TabContainer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MilestonePanel" parent="MarginContainer/HBoxContainer/Content/TabContainer/Milestones" instance=ExtResource("2_milestone_panel")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+show_close_button = false
+
+[node name="TurnLogSection" type="PanelContainer" parent="MarginContainer/HBoxContainer/Content"]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/HBoxContainer/Content/TurnLogSection"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 6
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/HBoxContainer/Content/TurnLogSection/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="HeaderRow" type="HBoxContainer" parent="MarginContainer/HBoxContainer/Content/TurnLogSection/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ToggleButton" type="Button" parent="MarginContainer/HBoxContainer/Content/TurnLogSection/MarginContainer/VBoxContainer/HeaderRow"]
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+text = "▼ 本回合日志"
+
+[node name="Spacer" type="Control" parent="MarginContainer/HBoxContainer/Content/TurnLogSection/MarginContainer/VBoxContainer/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ToLogsButton" type="Button" parent="MarginContainer/HBoxContainer/Content/TurnLogSection/MarginContainer/VBoxContainer/HeaderRow"]
+layout_mode = 2
+text = "打开日志"
+
+[node name="LogLines" type="VBoxContainer" parent="MarginContainer/HBoxContainer/Content/TurnLogSection/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 2

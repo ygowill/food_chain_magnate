@@ -192,7 +192,13 @@ static func apply_from_dict(state, data: Dictionary, expected_schema_version: in
 		var inst_val = instances_any[i]
 		if not (inst_val is Dictionary):
 			return Result.failure("GameState.marketing_instances[%d] 类型错误（期望 Dictionary）" % i)
-		instances_out.append(inst_val)
+		var decoded_read := _decode_value(inst_val, "", "GameState.marketing_instances[%d]" % i)
+		if not decoded_read.ok:
+			return decoded_read
+		var decoded_val = decoded_read.value
+		if not (decoded_val is Dictionary):
+			return Result.failure("GameState.marketing_instances[%d] 解码后类型错误（期望 Dictionary）" % i)
+		instances_out.append(decoded_val)
 	state.marketing_instances = instances_out
 
 	var round_state_read := _parse_round_state(data.get("round_state", null))

@@ -5,6 +5,7 @@ extends Control
 
 signal price_confirmed(action_id: String)
 signal cancelled()
+signal right_panel_footer_changed()
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var products_container: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/ProductsContainer
@@ -14,6 +15,27 @@ signal cancelled()
 var _current_prices: Dictionary = {}
 var _mode: String = "price"  # price | discount | luxury
 var _action_id: String = "set_price"
+
+func set_embedded_in_right_panel(embedded: bool) -> void:
+	var row = get_node_or_null("MarginContainer/VBoxContainer/ButtonRow")
+	if row is Control:
+		(row as Control).visible = not embedded
+	right_panel_footer_changed.emit()
+
+func right_panel_get_footer_config() -> Dictionary:
+	if confirm_btn == null:
+		return {}
+	return {
+		"show_cancel": true,
+		"cancel_text": "取消",
+		"cancel_enabled": true,
+		"show_primary": true,
+		"primary_text": str(confirm_btn.text),
+		"primary_enabled": not confirm_btn.disabled,
+	}
+
+func right_panel_footer_primary() -> void:
+	_on_confirm_pressed()
 
 func _ready() -> void:
 	if confirm_btn != null:
@@ -67,6 +89,7 @@ func _rebuild_content() -> void:
 	hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
 	hint.text = "该动作不需要选择产品或输入价格，确认即可执行。"
 	products_container.add_child(hint)
+	right_panel_footer_changed.emit()
 
 func _get_action_description() -> String:
 	match _mode:

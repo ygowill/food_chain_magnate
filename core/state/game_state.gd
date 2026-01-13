@@ -109,8 +109,31 @@ static func from_dict(data: Dictionary) -> Result:
 # === 状态哈希（用于校验点） ===
 func compute_hash() -> String:
 	# sort_keys=true 以保证哈希稳定（Dictionary 遍历顺序不应影响结果）
-	var json := JSON.stringify(to_dict(), "", true)
+	# 兼容：JSON.parse_string 会把数字解析为 float；同时部分运行时数据可能携带“整值 float”。
+	# 为保证回放/存档哈希稳定，这里将“整值 float”归一化为 int 后再计算。
+	var normalized = _normalize_json_numbers(to_dict())
+	var json := JSON.stringify(normalized, "", true)
 	return json.md5_text()
+
+static func _normalize_json_numbers(value):
+	match typeof(value):
+		TYPE_DICTIONARY:
+			var out := {}
+			for k in value.keys():
+				out[k] = _normalize_json_numbers(value[k])
+			return out
+		TYPE_ARRAY:
+			var out_arr := []
+			for item in value:
+				out_arr.append(_normalize_json_numbers(item))
+			return out_arr
+		TYPE_FLOAT:
+			var f: float = float(value)
+			if f == floor(f) and f >= -9223372036854775808.0 and f <= 9223372036854775807.0:
+				return int(f)
+			return f
+		_:
+			return value
 
 # === 提取关键数值（用于快速验证） ===
 func extract_key_values() -> Dictionary:

@@ -45,20 +45,17 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		return add2
 
 	# Restructuring -> OrderOfBusiness：离开重组时应触发超限惩罚
-	var safety := 0
-	while engine.get_state().phase == "Restructuring":
-		safety += 1
-		if safety > player_count + 5:
-			return Result.failure("提交 Restructuring 超出安全上限")
-		var actor := engine.get_state().get_current_player_id()
-		var submit := engine.execute_command(Command.create("submit_restructuring", actor, {}))
+	for pid in range(player_count):
+		if engine.get_state().phase != "Restructuring":
+			break
+		var submit := engine.execute_command(Command.create("submit_restructuring", pid, {}))
 		if not submit.ok:
 			return Result.failure("提交重组失败: %s" % submit.error)
 
 	state = engine.get_state()
 	if state.phase != "OrderOfBusiness":
 		return Result.failure("期望进入 OrderOfBusiness，实际: %s" % state.phase)
-
+	
 	var p_after := state.get_player(0)
 	var active: Array = p_after.get("employees", [])
 	var reserve: Array = p_after.get("reserve_employees", [])

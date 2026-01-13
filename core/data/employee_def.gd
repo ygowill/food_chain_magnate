@@ -75,6 +75,8 @@ var effect_ids: Array[String] = []
 var produces_food_type: String = ""  # 生产的食物类型 (burger, pizza, etc.)
 var produces_amount: int = 0         # 生产数量
 
+const PRODUCE_USAGE_PREFIX := "use:produce:"
+
 # === 工厂方法 ===
 
 static func from_dict(data: Dictionary) -> Result:
@@ -125,7 +127,12 @@ func is_trainer() -> bool:
 
 # 是否可生产食物
 func can_produce() -> bool:
-	return not produces_food_type.is_empty() and produces_amount > 0
+	if not produces_food_type.is_empty() and produces_amount > 0:
+		return true
+	# 支持“多选生产”的员工（例如 kitchen_trainee）：由 usage_tags(use:produce:*) 推导
+	if role != "produce_food":
+		return false
+	return not get_production_food_options().is_empty()
 
 # 是否可采购饮料
 func can_procure() -> bool:
@@ -160,12 +167,48 @@ func get_role_color() -> String:
 
 # 获取生产信息（返回 null 如果不能生产）
 func get_production_info() -> Dictionary:
-	if not can_produce():
+	if not produces_food_type.is_empty() and produces_amount > 0:
+		return {
+			"food_type": produces_food_type,
+			"amount": produces_amount
+		}
+
+	if role != "produce_food":
 		return {}
+
+	var options := get_production_food_options()
+	if options.is_empty():
+		return {}
+
+	# 多选生产：food_type 由上层（UI/动作参数）决定
 	return {
-		"food_type": produces_food_type,
-		"amount": produces_amount
+		"food_type": "",
+		"amount": 1,
+		"food_options": options
 	}
+
+func get_production_food_options() -> Array[String]:
+	# 固定生产：直接返回唯一选项
+	if not produces_food_type.is_empty() and produces_amount > 0:
+		return [produces_food_type]
+
+	# 多选生产：从 usage_tags 中解析 use:produce:*
+	if role != "produce_food":
+		return []
+
+	var out: Array[String] = []
+	for ut in usage_tags:
+		var s := str(ut)
+		if not s.begins_with(PRODUCE_USAGE_PREFIX):
+			continue
+		var pid := s.substr(PRODUCE_USAGE_PREFIX.length()).strip_edges()
+		if pid.is_empty():
+			continue
+		if out.has(pid):
+			continue
+		out.append(pid)
+	out.sort()
+	return out
 
 # === 调试 ===
 

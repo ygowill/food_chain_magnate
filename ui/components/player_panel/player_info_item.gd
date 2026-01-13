@@ -13,7 +13,9 @@ var cash_label: Label = null
 var employee_label: Label = null
 var restaurant_label: Label = null
 
-var _highlighted: bool = false
+var _is_current: bool = false
+var _is_view: bool = false
+var _last_cash: int = -999999
 
 func _ready() -> void:
 	_build_ui()
@@ -21,11 +23,12 @@ func _ready() -> void:
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 func _build_ui() -> void:
-	custom_minimum_size = Vector2(200, 36)
+	custom_minimum_size = Vector2(240, 36)
 
 	var hbox := HBoxContainer.new()
 	hbox.name = "HBoxContainer"
 	hbox.add_theme_constant_override("separation", 8)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(hbox)
 
 	# 玩家颜色标识
@@ -33,6 +36,7 @@ func _build_ui() -> void:
 	color_rect.name = "ColorRect"
 	color_rect.custom_minimum_size = Vector2(8, 0)
 	color_rect.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	color_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(color_rect)
 
 	# 玩家名称
@@ -40,6 +44,7 @@ func _build_ui() -> void:
 	name_label.name = "NameLabel"
 	name_label.custom_minimum_size = Vector2(60, 0)
 	name_label.add_theme_font_size_override("font_size", 14)
+	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(name_label)
 
 	# 现金
@@ -48,6 +53,7 @@ func _build_ui() -> void:
 	cash_label.custom_minimum_size = Vector2(60, 0)
 	cash_label.add_theme_font_size_override("font_size", 14)
 	cash_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	cash_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(cash_label)
 
 	# 员工数
@@ -57,6 +63,7 @@ func _build_ui() -> void:
 	employee_label.add_theme_font_size_override("font_size", 12)
 	employee_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
 	employee_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	employee_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(employee_label)
 
 	# 餐厅数
@@ -66,6 +73,7 @@ func _build_ui() -> void:
 	restaurant_label.add_theme_font_size_override("font_size", 12)
 	restaurant_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
 	restaurant_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	restaurant_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(restaurant_label)
 
 func update_data(player: Dictionary) -> void:
@@ -77,6 +85,7 @@ func update_data(player: Dictionary) -> void:
 
 	var cash: int = int(player.get("cash", 0))
 	cash_label.text = "$%d" % cash
+	_animate_cash_change(cash)
 
 	var emp_count: int = 0
 	emp_count += Array(player.get("employees", [])).size()
@@ -87,23 +96,50 @@ func update_data(player: Dictionary) -> void:
 	var rest_count: int = Array(player.get("restaurants", [])).size()
 	restaurant_label.text = "%d店" % rest_count
 
-func set_highlighted(highlighted: bool) -> void:
-	_highlighted = highlighted
+func set_selection(is_current: bool, is_view: bool) -> void:
+	_is_current = is_current
+	_is_view = is_view
 	_update_style()
 
+func set_highlighted(highlighted: bool) -> void:
+	set_selection(highlighted, highlighted)
+
+func _animate_cash_change(new_cash: int) -> void:
+	if OS.has_feature("headless"):
+		_last_cash = new_cash
+		return
+	if not is_instance_valid(cash_label):
+		_last_cash = new_cash
+		return
+
+	if _last_cash != -999999 and _last_cash != new_cash:
+		var delta := new_cash - _last_cash
+		var pulse := Color(0.6, 1.0, 0.6, 1) if delta > 0 else Color(1.0, 0.6, 0.6, 1)
+		var tween := create_tween()
+		tween.tween_property(cash_label, "modulate", pulse, 0.08)
+		tween.tween_property(cash_label, "modulate", Color(1, 1, 1, 1), 0.25)
+
+	_last_cash = new_cash
+
 func _update_style() -> void:
-	if _highlighted:
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0.3, 0.5, 0.7, 0.4)
-		style.border_color = Color(0.5, 0.7, 0.9, 0.8)
+	var style := StyleBoxFlat.new()
+	style.set_corner_radius_all(4)
+
+	if _is_view:
+		style.bg_color = Color(player_color.r, player_color.g, player_color.b, 0.22)
+		style.border_color = player_color
 		style.set_border_width_all(2)
-		style.set_corner_radius_all(4)
-		add_theme_stylebox_override("panel", style)
 	else:
-		var style := StyleBoxFlat.new()
 		style.bg_color = Color(0.2, 0.2, 0.25, 0.6)
-		style.set_corner_radius_all(4)
-		add_theme_stylebox_override("panel", style)
+		style.border_color = Color(0.25, 0.25, 0.3, 0.7)
+		style.set_border_width_all(1)
+
+	# 当前行动玩家：优先白色边框
+	if _is_current:
+		style.border_color = Color(0.95, 0.95, 0.95, 0.9)
+		style.set_border_width_all(2)
+
+	add_theme_stylebox_override("panel", style)
 
 func _on_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:

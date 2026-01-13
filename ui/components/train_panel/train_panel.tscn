@@ -61,6 +61,7 @@ text = "待命区员工（点击选择）"
 
 [node name="TrainableContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/TrainableSection"]
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 8
 
@@ -75,9 +76,15 @@ theme_override_font_sizes/font_size = 14
 theme_override_colors/font_color = Color(0.6, 0.7, 0.8, 1)
 text = "培训目标"
 
-[node name="PathContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/PathSection"]
+[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer/PathSection"]
 layout_mode = 2
+size_flags_horizontal = 3
 size_flags_vertical = 3
+horizontal_scroll_mode = 1
+
+[node name="PathContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/PathSection/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/separation = 6
 
 [node name="ConfirmButton" type="Button" parent="MarginContainer/VBoxContainer"]

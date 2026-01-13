@@ -7,55 +7,65 @@ signal cancelled()
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var milestones_container: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/MilestonesContainer
+@onready var button_row: Control = $MarginContainer/VBoxContainer/ButtonRow
 @onready var close_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/CloseButton
 
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 
+@export var show_close_button: bool = true
+
 var _milestone_pool: Array[String] = []
 var _player_milestones: Array[String] = []
 var _milestone_items: Dictionary = {}  # milestone_id -> MilestoneItem
+var _embedded_in_right_panel: bool = false
 
 func _ready() -> void:
 	if close_btn != null:
 		close_btn.pressed.connect(_on_close_pressed)
+	_update_close_visibility()
 	_rebuild_milestones()
+
+func set_embedded_in_right_panel(embedded: bool) -> void:
+	_embedded_in_right_panel = embedded
+	_update_close_visibility()
 
 func set_milestone_pool(pool: Array) -> void:
 	_milestone_pool.clear()
 	for v in pool:
 		_milestone_pool.append(str(v))
-	_update_states()
+	_maybe_rebuild_milestones()
 
 func set_player_milestones(milestones: Array) -> void:
 	_player_milestones.clear()
 	for v in milestones:
 		_player_milestones.append(str(v))
-	_update_states()
+	_maybe_rebuild_milestones()
 
 func refresh() -> void:
 	_update_states()
 
-func _rebuild_milestones() -> void:
-	for item in _milestone_items.values():
-		if is_instance_valid(item):
-			item.queue_free()
-	_milestone_items.clear()
+func _update_close_visibility() -> void:
+	if not is_instance_valid(button_row):
+		return
+	button_row.visible = show_close_button and not _embedded_in_right_panel
 
+func _rebuild_milestones() -> void:
 	if milestones_container == null:
 		return
+	for c in milestones_container.get_children():
+		if is_instance_valid(c):
+			c.queue_free()
+	_milestone_items.clear()
 
-	var ids: Array[String] = []
-	if MilestoneRegistryClass.is_loaded():
-		ids = MilestoneRegistryClass.get_all_ids()
-	else:
-		var set := {}
-		for v in _milestone_pool:
-			set[str(v)] = true
-		for v in _player_milestones:
-			set[str(v)] = true
-		for k in set.keys():
-			ids.append(str(k))
-		ids.sort()
+	var ids := _get_desired_milestone_ids()
+	if ids.is_empty():
+		var empty := Label.new()
+		empty.text = "暂无已获得的里程碑"
+		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		empty.add_theme_font_size_override("font_size", 12)
+		empty.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.9))
+		milestones_container.add_child(empty)
+		return
 
 	for ms_id in ids:
 		if ms_id.is_empty():
@@ -69,6 +79,36 @@ func _rebuild_milestones() -> void:
 		_milestone_items[ms_id] = item
 
 	_update_states()
+
+func _maybe_rebuild_milestones() -> void:
+	if milestones_container == null:
+		return
+
+	var desired_ids := _get_desired_milestone_ids()
+	var current_ids: Array[String] = []
+	for k in _milestone_items.keys():
+		current_ids.append(str(k))
+	current_ids.sort()
+
+	if desired_ids != current_ids:
+		_rebuild_milestones()
+	else:
+		_update_states()
+
+func _get_desired_milestone_ids() -> Array[String]:
+	var set := {}
+	for v in _player_milestones:
+		var mid := str(v)
+		if mid.is_empty():
+			continue
+		set[mid] = true
+
+	var ids: Array[String] = []
+	for k in set.keys():
+		ids.append(str(k))
+
+	ids.sort()
+	return ids
 
 func _update_states() -> void:
 	var pool_counts := {}
@@ -106,7 +146,7 @@ class MilestoneItem extends PanelContainer:
 		_build_ui()
 
 	func _build_ui() -> void:
-		custom_minimum_size = Vector2(380, 70)
+		custom_minimum_size = Vector2(0, 70)
 
 		var hbox := HBoxContainer.new()
 		hbox.add_theme_constant_override("separation", 12)
@@ -120,11 +160,13 @@ class MilestoneItem extends PanelContainer:
 
 		_name_label = Label.new()
 		_name_label.add_theme_font_size_override("font_size", 15)
+		_name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		info_box.add_child(_name_label)
 
 		_desc_label = Label.new()
 		_desc_label.add_theme_font_size_override("font_size", 12)
 		_desc_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+		_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		info_box.add_child(_desc_label)
 
 		# 右侧：状态/按钮

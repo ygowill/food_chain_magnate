@@ -16,10 +16,8 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if state == null:
 		return Result.failure("state 为空")
 
-	# 重组：仍沿用“轮到谁谁操作”的通用回合逻辑（由 skip/end_turn 驱动）
-	var current_player_id := state.get_current_player_id()
-	if command.actor != current_player_id:
-		return Result.failure("不是你的回合")
+	if command.actor < 0 or command.actor >= state.players.size():
+		return Result.failure("玩家不存在: %d" % command.actor)
 
 	# 已提交后禁止修改
 	if state.round_state is Dictionary:
@@ -107,4 +105,57 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return Result.failure("员工不在 %s: %s" % [key_from, employee_id])
 	StateUpdater.append_to_array(state.players[player_id], key_to, employee_id)
 
+	# 若员工被移动到待命区，则同步移出 company_structure.structure（避免出现“待命员工仍占用结构槽位”的隐式残留）。
+	if to_reserve:
+		var player_val = state.players[player_id]
+		if player_val is Dictionary:
+			var player: Dictionary = player_val
+			var cs_val = player.get("company_structure", null)
+			if cs_val is Dictionary:
+				var cs: Dictionary = cs_val
+				var struct_val = cs.get("structure", null)
+				if struct_val is Array:
+					var structure: Array = struct_val
+					if _remove_one_employee_from_structure(structure, employee_id):
+						cs["structure"] = structure
+						player["company_structure"] = cs
+						state.players[player_id] = player
+
 	return Result.success({"employee_id": employee_id, "to_reserve": to_reserve})
+
+static func _remove_one_employee_from_structure(structure: Array, employee_id: String) -> bool:
+	if structure == null:
+		return false
+	var emp_id := str(employee_id)
+	if emp_id.is_empty() or emp_id == "ceo":
+		return false
+
+	# 1) 先从 CEO 直属槽移除（清空该槽位及其 reports）
+	for i in range(structure.size()):
+		var entry_val = structure[i]
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		if str(entry.get("employee_id", "")) == emp_id:
+			entry["employee_id"] = ""
+			entry["reports"] = []
+			structure[i] = entry
+			return true
+
+	# 2) 再从 reports 移除（仅移除一个实例）
+	for i2 in range(structure.size()):
+		var entry_val2 = structure[i2]
+		if not (entry_val2 is Dictionary):
+			continue
+		var entry2: Dictionary = entry_val2
+		var reps_val = entry2.get("reports", null)
+		if not (reps_val is Array):
+			continue
+		var reps: Array = reps_val
+		if reps.has(emp_id):
+			reps.erase(emp_id)
+			entry2["reports"] = reps
+			structure[i2] = entry2
+			return true
+
+	return false

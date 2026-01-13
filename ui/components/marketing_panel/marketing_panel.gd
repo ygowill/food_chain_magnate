@@ -3,8 +3,9 @@
 class_name MarketingPanel
 extends Control
 
-signal marketing_requested(employee_type: String, board_number: int, position: Vector2i, product: String, duration: int)
+signal marketing_requested(employee_type: String, board_number: int, position: Vector2i, product: String, duration: int, axis: String)
 signal cancelled()
+signal right_panel_footer_changed()
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var type_container: HFlowContainer = $MarginContainer/VBoxContainer/TypeSection/TypeContainer
@@ -14,6 +15,7 @@ signal cancelled()
 @onready var duration_spin: SpinBox = $MarginContainer/VBoxContainer/DurationSection/DurationSpin
 @onready var target_label: Label = $MarginContainer/VBoxContainer/TargetSection/TargetLabel
 @onready var range_info_label: Label = $MarginContainer/VBoxContainer/TargetSection/RangeInfoLabel
+@onready var error_label: Label = $MarginContainer/VBoxContainer/TargetSection/ErrorLabel
 @onready var confirm_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/ConfirmButton
 @onready var cancel_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/CancelButton
 
@@ -40,11 +42,33 @@ var _selected_employee_type: String = ""
 var _selected_board_number: int = 0
 var _selected_product: String = ""
 var _selected_duration: int = 1
+var _selected_axis: String = ""
 
 var _type_buttons: Dictionary = {}  # type_id -> marketing_type_button instance
 var _marketer_max_duration_by_id: Dictionary = {}  # employee_type -> max_duration
 
 var _map_callback: Callable  # 用于请求地图选择
+
+func set_embedded_in_right_panel(embedded: bool) -> void:
+	var row = get_node_or_null("MarginContainer/VBoxContainer/ButtonRow")
+	if row is Control:
+		(row as Control).visible = not embedded
+	right_panel_footer_changed.emit()
+
+func right_panel_get_footer_config() -> Dictionary:
+	if confirm_btn == null:
+		return {}
+	return {
+		"show_cancel": true,
+		"cancel_text": "取消",
+		"cancel_enabled": true,
+		"show_primary": true,
+		"primary_text": str(confirm_btn.text),
+		"primary_enabled": not confirm_btn.disabled,
+	}
+
+func right_panel_footer_primary() -> void:
+	_on_confirm_pressed()
 
 func _ready() -> void:
 	if confirm_btn != null:
@@ -84,10 +108,13 @@ func set_available_boards(boards_by_type: Dictionary) -> void:
 func set_map_selection_callback(callback: Callable) -> void:
 	_map_callback = callback
 
-func set_selected_target(position: Vector2i) -> void:
+func set_selected_target(position: Vector2i, axis: String = "") -> void:
 	_selected_target = position
+	if not axis.is_empty():
+		_selected_axis = axis
 	_update_target_display()
 	_update_confirm_state()
+	clear_error()
 
 func clear_selection() -> void:
 	_selected_type = ""
@@ -95,7 +122,9 @@ func clear_selection() -> void:
 	_selected_employee_type = ""
 	_selected_board_number = 0
 	_selected_duration = 1
+	_selected_axis = ""
 	_marketer_max_duration_by_id.clear()
+	clear_error()
 
 	for btn in _type_buttons.values():
 		if is_instance_valid(btn):
@@ -155,6 +184,8 @@ func _on_type_selected(type_id: String) -> void:
 	_selected_employee_type = ""
 	_selected_board_number = 0
 	_selected_duration = 1
+	_selected_axis = ""
+	clear_error()
 
 	for tid in _type_buttons.keys():
 		var btn = _type_buttons[tid]
@@ -168,8 +199,7 @@ func _on_type_selected(type_id: String) -> void:
 
 	# 请求地图选择
 	if _map_callback.is_valid():
-		var range_val := _get_type_range(_selected_type)
-		_map_callback.call(_selected_type, range_val)
+		_map_callback.call(_selected_type, _selected_employee_type)
 
 func _rebuild_marketer_options() -> void:
 	_selected_employee_type = ""
@@ -322,11 +352,18 @@ func _rebuild_product_options() -> void:
 
 func _on_marketer_selected(index: int) -> void:
 	_apply_selected_marketer(index)
+	_selected_target = Vector2i(-1, -1)
+	_selected_axis = ""
+	_update_target_display()
 	_update_confirm_state()
+	clear_error()
+	if _map_callback.is_valid() and not _selected_type.is_empty():
+		_map_callback.call(_selected_type, _selected_employee_type)
 
 func _on_board_selected(index: int) -> void:
 	_apply_selected_board(index)
 	_update_confirm_state()
+	clear_error()
 
 func _on_product_selected(index: int) -> void:
 	if product_option == null:
@@ -334,10 +371,12 @@ func _on_product_selected(index: int) -> void:
 	var meta = product_option.get_item_metadata(index)
 	_selected_product = str(meta)
 	_update_confirm_state()
+	clear_error()
 
 func _on_duration_changed(value: float) -> void:
 	_selected_duration = int(value)
 	_update_confirm_state()
+	clear_error()
 
 func _get_employee_display_name(employee_type: String) -> String:
 	if employee_type.is_empty():
@@ -358,6 +397,40 @@ func _get_type_range(type_id: String) -> int:
 			return int(type_def.get("range", 0))
 	return 0
 
+func _get_marketing_effect_hint(type_id: String) -> String:
+	match type_id:
+		"billboard":
+			return "影响：四向相邻房屋"
+		"mailbox":
+			return "影响：同街区房屋"
+		"airplane":
+			return "影响：整行/列（角落需选择方向）"
+		"radio":
+			return "影响：周围 3×3 板块内房屋"
+		_:
+			return ""
+
+func _get_employee_range_hint(employee_type: String) -> String:
+	if employee_type.is_empty():
+		return ""
+	if not EmployeeRegistryClass.is_loaded():
+		return ""
+	var def_val = EmployeeRegistryClass.get_def(employee_type)
+	if def_val == null:
+		return ""
+	if not (def_val is EmployeeDef):
+		return ""
+	var def: EmployeeDef = def_val
+	var range_type := str(def.range_type)
+	var range_value := int(def.range_value)
+	if range_type.is_empty() or range_value < 0:
+		return "可放置距离：不限"
+	if range_type == "road":
+		return "可放置距离：公路 %d" % range_value
+	if range_type == "air":
+		return "可放置距离：飞艇 %d" % range_value
+	return "可放置距离：%s %d" % [range_type, range_value]
+
 func _update_target_display() -> void:
 	if target_label == null:
 		return
@@ -369,18 +442,30 @@ func _update_target_display() -> void:
 		target_label.text = "请在地图上选择目标位置"
 		target_label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.4, 1))
 	else:
-		target_label.text = "目标位置: (%d, %d)" % [_selected_target.x, _selected_target.y]
+		var axis_text := ""
+		if _selected_type == "airplane":
+			if _selected_axis == "row":
+				axis_text = "（横飞）"
+			elif _selected_axis == "col":
+				axis_text = "（竖飞）"
+			else:
+				axis_text = "（未选择方向）"
+		target_label.text = "目标位置: (%d, %d)%s" % [_selected_target.x, _selected_target.y, axis_text]
 		target_label.add_theme_color_override("font_color", Color(0.6, 0.9, 0.6, 1))
 
 	if range_info_label != null:
 		if _selected_type.is_empty():
 			range_info_label.text = ""
 		else:
-			var range_val := _get_type_range(_selected_type)
-			if range_val == 0:
-				range_info_label.text = "范围: 全图"
-			else:
-				range_info_label.text = "范围: %d 格" % range_val
+			var lines: Array[String] = []
+			var effect_hint := _get_marketing_effect_hint(_selected_type)
+			if not effect_hint.is_empty():
+				lines.append(effect_hint)
+			var range_hint := _get_employee_range_hint(_selected_employee_type)
+			if not range_hint.is_empty():
+				lines.append(range_hint)
+			lines.append("绿色高亮：可放置格")
+			range_info_label.text = "\n".join(lines)
 
 func _update_confirm_state() -> void:
 	if confirm_btn == null:
@@ -393,8 +478,27 @@ func _update_confirm_state() -> void:
 	ok = ok and not _selected_product.is_empty()
 	ok = ok and _selected_target != Vector2i(-1, -1)
 	ok = ok and _selected_duration > 0
+	if _selected_type == "airplane" and _selected_target != Vector2i(-1, -1):
+		ok = ok and (_selected_axis == "row" or _selected_axis == "col")
 
 	confirm_btn.disabled = not ok
+	right_panel_footer_changed.emit()
+
+func set_error(message: String) -> void:
+	if error_label == null:
+		return
+	var msg := message.strip_edges()
+	if msg.is_empty():
+		clear_error()
+		return
+	error_label.text = msg
+	error_label.visible = true
+
+func clear_error() -> void:
+	if error_label == null:
+		return
+	error_label.text = ""
+	error_label.visible = false
 
 func _on_confirm_pressed() -> void:
 	if confirm_btn != null and confirm_btn.disabled:
@@ -405,7 +509,8 @@ func _on_confirm_pressed() -> void:
 		_selected_board_number,
 		_selected_target,
 		_selected_product,
-		_selected_duration
+		_selected_duration,
+		_selected_axis
 	)
 
 func _on_cancel_pressed() -> void:

@@ -4,10 +4,14 @@ class_name GameLogPanel
 extends Control
 
 signal log_entry_clicked(entry_id: int)
+signal log_added(entry: Dictionary)
 
-@onready var title_label: Label = $MarginContainer/VBoxContainer/TitleRow/TitleLabel
-@onready var filter_btn: MenuButton = $MarginContainer/VBoxContainer/TitleRow/FilterButton
-@onready var clear_btn: Button = $MarginContainer/VBoxContainer/TitleRow/ClearButton
+@onready var title_label: Label = $MarginContainer/VBoxContainer/TitleRow/TopRow/TitleLabel
+@onready var player_filter: OptionButton = $MarginContainer/VBoxContainer/TitleRow/FilterRow/PlayerFilter
+@onready var search_input: LineEdit = $MarginContainer/VBoxContainer/TitleRow/FilterRow/SearchInput
+@onready var filter_btn: MenuButton = $MarginContainer/VBoxContainer/TitleRow/FilterRow/FilterButton
+@onready var expand_btn: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/ExpandButton
+@onready var clear_btn: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/ClearButton
 @onready var scroll_container: ScrollContainer = $MarginContainer/VBoxContainer/ScrollContainer
 @onready var log_container: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/LogContainer
 @onready var auto_scroll_check: CheckBox = $MarginContainer/VBoxContainer/BottomRow/AutoScrollCheck
@@ -38,12 +42,20 @@ const LOG_TYPE_COLORS: Dictionary = {
 	LogType.DEBUG: Color(0.5, 0.8, 0.5, 1),
 }
 
+const PLAYER_FILTER_ALL_ITEM_ID := 9999
+
 var _entries: Array[Dictionary] = []  # [{id, type, message, timestamp, details}]
 var _entry_id_counter: int = 0
 var _log_items: Array[LogItem] = []
 var _filter_types: Array[LogType] = [LogType.SYSTEM, LogType.PHASE, LogType.PLAYER, LogType.GAME_EVENT]
+var _filter_player_id: int = -1
+var _filter_keyword: String = ""
 var _auto_scroll: bool = true
+var _scroll_to_bottom_requested: bool = false
 var _max_entries: int = 500
+var _player_count: int = 0
+
+const FullLogWindowScene = preload("res://ui/components/game_log/full_log_window.tscn")
 
 func _ready() -> void:
 	if clear_btn != null:
@@ -51,6 +63,16 @@ func _ready() -> void:
 	if auto_scroll_check != null:
 		auto_scroll_check.toggled.connect(_on_auto_scroll_toggled)
 		auto_scroll_check.button_pressed = _auto_scroll
+
+	if expand_btn != null:
+		expand_btn.pressed.connect(_on_expand_pressed)
+
+	if player_filter != null:
+		player_filter.item_selected.connect(_on_player_filter_selected)
+		set_player_count(Globals.player_count)
+
+	if search_input != null:
+		search_input.text_changed.connect(_on_search_text_changed)
 
 	_setup_filter_menu()
 
@@ -81,18 +103,57 @@ func add_log(log_type: LogType, message: String, details: Dictionary = {}) -> in
 	}
 
 	_entries.append(entry)
+	log_added.emit(entry)
 
 	# 限制最大条目数
 	while _entries.size() > _max_entries:
 		_entries.pop_front()
 
-	# 如果类型在过滤列表中，添加显示
-	if _filter_types.has(log_type):
+	# 过滤通过则显示
+	if _entry_passes_filters(entry):
 		_add_log_item(entry)
 
 	_update_entry_count()
 
 	return entry_id
+
+func append_entry(entry: Dictionary) -> void:
+	if entry == null or entry.is_empty():
+		return
+	_entries.append(entry.duplicate(true))
+	while _entries.size() > _max_entries:
+		_entries.pop_front()
+
+	if _entry_passes_filters(entry):
+		_add_log_item(entry)
+	_update_entry_count()
+
+func get_entries() -> Array[Dictionary]:
+	return _entries.duplicate(true)
+
+func load_entries(entries: Array[Dictionary]) -> void:
+	_entries.clear()
+	_entry_id_counter = 0
+
+	for e in entries:
+		if not (e is Dictionary):
+			continue
+		var d: Dictionary = e
+		_entries.append(d.duplicate(true))
+		var id_val = d.get("id", null)
+		if id_val is int:
+			_entry_id_counter = maxi(_entry_id_counter, int(id_val) + 1)
+		elif id_val is float:
+			var f: float = float(id_val)
+			if f == floor(f):
+				_entry_id_counter = maxi(_entry_id_counter, int(f) + 1)
+
+	_rebuild_display()
+	_update_entry_count()
+
+func set_expand_enabled(enabled: bool) -> void:
+	if expand_btn != null:
+		expand_btn.visible = enabled
 
 func add_system_log(message: String, details: Dictionary = {}) -> int:
 	return add_log(LogType.SYSTEM, message, details)
@@ -115,6 +176,28 @@ func clear_logs() -> void:
 	_clear_display()
 	_update_entry_count()
 
+func set_player_count(count: int) -> void:
+	_player_count = maxi(0, count)
+	if player_filter == null:
+		return
+
+	var keep := _filter_player_id
+	player_filter.clear()
+	player_filter.add_item("全部", PLAYER_FILTER_ALL_ITEM_ID)
+	for i in range(_player_count):
+		player_filter.add_item("玩家%d" % (i + 1), i)
+
+	var select_index := 0
+	for idx in range(player_filter.get_item_count()):
+		var item_id := int(player_filter.get_item_id(idx))
+		if keep < 0 and item_id == PLAYER_FILTER_ALL_ITEM_ID:
+			select_index = idx
+			break
+		if keep >= 0 and item_id == keep:
+			select_index = idx
+			break
+	player_filter.select(select_index)
+
 func _add_log_item(entry: Dictionary) -> void:
 	if log_container == null:
 		return
@@ -126,9 +209,21 @@ func _add_log_item(entry: Dictionary) -> void:
 	log_container.add_child(item)
 	_log_items.append(item)
 
-	if _auto_scroll:
-		await get_tree().process_frame
-		scroll_container.scroll_vertical = int(scroll_container.get_v_scroll_bar().max_value)
+	_request_scroll_to_bottom()
+
+func _request_scroll_to_bottom() -> void:
+	if not _auto_scroll:
+		return
+	if _scroll_to_bottom_requested:
+		return
+	_scroll_to_bottom_requested = true
+	call_deferred("_apply_scroll_to_bottom")
+
+func _apply_scroll_to_bottom() -> void:
+	_scroll_to_bottom_requested = false
+	if scroll_container == null:
+		return
+	scroll_container.scroll_vertical = int(scroll_container.get_v_scroll_bar().max_value)
 
 func _clear_display() -> void:
 	for item in _log_items:
@@ -140,14 +235,14 @@ func _rebuild_display() -> void:
 	_clear_display()
 
 	for entry in _entries:
-		if _filter_types.has(entry.type):
+		if _entry_passes_filters(entry):
 			_add_log_item(entry)
 
 func _update_entry_count() -> void:
 	if entry_count_label != null:
 		var visible_count := 0
 		for entry in _entries:
-			if _filter_types.has(entry.type):
+			if _entry_passes_filters(entry):
 				visible_count += 1
 		entry_count_label.text = "显示 %d / %d" % [visible_count, _entries.size()]
 
@@ -168,11 +263,66 @@ func _on_filter_item_pressed(id: int) -> void:
 	_rebuild_display()
 	_update_entry_count()
 
+func _on_player_filter_selected(index: int) -> void:
+	if player_filter == null:
+		return
+	var selected_id := int(player_filter.get_selected_id())
+	_filter_player_id = -1 if selected_id == PLAYER_FILTER_ALL_ITEM_ID else selected_id
+	_rebuild_display()
+	_update_entry_count()
+
+func _on_search_text_changed(text: String) -> void:
+	_filter_keyword = str(text).strip_edges()
+	_rebuild_display()
+	_update_entry_count()
+
+func _entry_passes_filters(entry: Dictionary) -> bool:
+	if entry == null or entry.is_empty():
+		return false
+	if not _filter_types.has(entry.type):
+		return false
+
+	if _filter_player_id >= 0:
+		var details = entry.get("details", {})
+		if not (details is Dictionary):
+			return false
+		var pid_val = (details as Dictionary).get("player_id", null)
+		if pid_val is int:
+			if int(pid_val) != _filter_player_id:
+				return false
+		elif pid_val is float:
+			var f: float = float(pid_val)
+			if f != floor(f) or int(f) != _filter_player_id:
+				return false
+		else:
+			return false
+
+	if not _filter_keyword.is_empty():
+		var msg := str(entry.get("message", ""))
+		if not msg.to_lower().contains(_filter_keyword.to_lower()):
+			return false
+
+	return true
+
 func _on_auto_scroll_toggled(toggled: bool) -> void:
 	_auto_scroll = toggled
 
 func _on_clear_pressed() -> void:
 	clear_logs()
+
+func _on_expand_pressed() -> void:
+	if OS.has_feature("headless"):
+		return
+	if FullLogWindowScene == null:
+		return
+	var win = FullLogWindowScene.instantiate()
+	if win == null:
+		return
+	get_tree().root.add_child(win)
+	if win.has_method("open_for"):
+		win.open_for(self)
+	else:
+		win.show()
 
 func _on_entry_clicked(entry_id: int) -> void:
 	log_entry_clicked.emit(entry_id)

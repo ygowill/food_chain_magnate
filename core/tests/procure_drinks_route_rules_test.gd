@@ -52,7 +52,8 @@ static func _run_truck_route_rules(action: ProcureDrinksAction, player_count: in
 	var cmd_uturn := Command.create("procure_drinks", actor, {
 		"employee_type": "truck_driver",
 		"restaurant_id": "rest_0",
-		"route": uturn_route
+		"route": uturn_route,
+		"selected_sources": [[2, 2]]
 	})
 	var vr := action.validate(state, cmd_uturn)
 	if vr.ok:
@@ -69,7 +70,8 @@ static func _run_truck_route_rules(action: ProcureDrinksAction, player_count: in
 	var cmd_loop := Command.create("procure_drinks", actor, {
 		"employee_type": "truck_driver",
 		"restaurant_id": "rest_0",
-		"route": loop_route
+		"route": loop_route,
+		"selected_sources": [[2, 2]]
 	})
 
 	var before := _sum_drinks(state.players[actor].get("inventory", {}))
@@ -136,7 +138,8 @@ static func _run_truck_distance_plus_one(action: ProcureDrinksAction, player_cou
 	var cmd := Command.create("procure_drinks", actor, {
 		"employee_type": "truck_driver",
 		"restaurant_id": "rest_0",
-		"route": route
+		"route": route,
+		"selected_sources": [[24, 0]]
 	})
 
 	# 无里程碑：range=3，route 跨越 4 次边界，应失败
@@ -191,7 +194,8 @@ static func _run_air_route_rules(action: ProcureDrinksAction, player_count: int,
 	var cmd_uturn := Command.create("procure_drinks", actor, {
 		"employee_type": "zeppelin_pilot",
 		"restaurant_id": "rest_0",
-		"route": uturn_route
+		"route": uturn_route,
+		"selected_sources": [[1, 1]]
 	})
 	var vr := action.validate(state, cmd_uturn)
 	if vr.ok:
@@ -204,7 +208,8 @@ static func _run_air_route_rules(action: ProcureDrinksAction, player_count: int,
 	var cmd_loop := Command.create("procure_drinks", actor, {
 		"employee_type": "zeppelin_pilot",
 		"restaurant_id": "rest_0",
-		"route": loop_route
+		"route": loop_route,
+		"selected_sources": [[1, 1]]
 	})
 
 	var before := _sum_drinks(state.players[actor].get("inventory", {}))

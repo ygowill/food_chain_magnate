@@ -95,6 +95,10 @@ var HELP_DATABASE: Dictionary = {
 		"title": "员工卡",
 		"content": "显示员工的职位、能力和薪水。点击可选中，拖拽可调整位置。"
 	},
+	"ui_player_panel": {
+		"title": "玩家面板",
+		"content": "显示所有玩家的摘要信息。\n点击玩家可切换“查看玩家”（仅影响右侧信息展示，不影响当前行动玩家）。"
+	},
 	"ui_inventory": {
 		"title": "库存面板",
 		"content": "显示当前持有的产品数量。冰箱容量限制可存储的产品总数。"
@@ -102,6 +106,26 @@ var HELP_DATABASE: Dictionary = {
 	"ui_action_panel": {
 		"title": "动作面板",
 		"content": "显示当前可执行的动作。灰色按钮表示该动作当前不可用。"
+	},
+	"ui_map_mode_bar": {
+		"title": "地图模式提示条",
+		"content": "当进入地图选点/工具模式时显示当前模式与下一步提示。\n可按 ESC 取消当前模式。"
+	},
+	"ui_topbar_log": {
+		"title": "日志",
+		"content": "一键显示/隐藏游戏日志，并支持过滤与搜索。"
+	},
+	"ui_topbar_milestones": {
+		"title": "里程碑",
+		"content": "查看/选择里程碑（根据阶段与规则可用性变化）。"
+	},
+	"ui_topbar_distance_tool": {
+		"title": "距离工具",
+		"content": "切换距离测量模式。\n快捷键：D。"
+	},
+	"ui_topbar_settings": {
+		"title": "设置",
+		"content": "打开设置面板（UI 缩放/音量/确认操作等）。"
 	},
 }
 
@@ -112,6 +136,8 @@ var _show_timer: Timer = null
 var _is_visible: bool = false
 
 func _ready() -> void:
+	add_to_group("help_tooltip_manager")
+
 	# 创建延迟定时器
 	_show_timer = Timer.new()
 	_show_timer.one_shot = true

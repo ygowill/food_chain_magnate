@@ -27,11 +27,8 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("当前不在 Restructuring")
 	if not EmployeeRegistryClass.is_loaded():
 		return Result.failure("EmployeeRegistry 未初始化")
-
-	# hotseat：必须是当前玩家
-	var current_player_id := state.get_current_player_id()
-	if command.actor != current_player_id:
-		return Result.failure("不是你的回合")
+	if command.actor < 0 or command.actor >= state.players.size():
+		return Result.failure("玩家不存在: %d" % command.actor)
 
 	var r_val = state.round_state.get("restructuring", null)
 	if not (r_val is Dictionary):
@@ -71,8 +68,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not has_ceo_active and not has_ceo_reserve:
 		return Result.failure("玩家缺少 CEO（在岗/待命均未找到）")
 
-	# 严格校验：employees 必须为去重的有效员工列表（CEO 可在 apply 时被自动纠正回在岗）
-	var seen := {}
+	# 严格校验：employees 必须为有效员工列表（允许非唯一员工出现重复）
 	for i in range(employees.size()):
 		var emp_val = employees[i]
 		if not (emp_val is String):
@@ -80,9 +76,6 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		var emp_id: String = str(emp_val)
 		if emp_id.is_empty():
 			return Result.failure("player.employees[%d] 不能为空" % i)
-		if seen.has(emp_id):
-			return Result.failure("player.employees 包含重复员工: %s" % emp_id)
-		seen[emp_id] = true
 		if not EmployeeRegistryClass.has(emp_id):
 			return Result.failure("未知员工: %s" % emp_id)
 
@@ -177,7 +170,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var preferred_direct: Array[String] = []
 	for _i2 in range(ceo_slots):
 		preferred_direct.append("")
-	var preferred_reports_by_manager := {}
+	var preferred_reports_by_slot: Dictionary = {}
 	if cs.has("structure") and (cs["structure"] is Array):
 		var pref_arr: Array = cs["structure"]
 		for i_pref in range(min(pref_arr.size(), ceo_slots)):
@@ -188,25 +181,43 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 				if id_val is String:
 					var pid: String = str(id_val)
 					preferred_direct[i_pref] = pid
-					var reps_val = e.get("reports", null)
-					if reps_val is Array:
-						preferred_reports_by_manager[pid] = Array(reps_val).duplicate()
+				var reps_val = e.get("reports", null)
+				if reps_val is Array:
+					preferred_reports_by_slot[i_pref] = Array(reps_val).duplicate()
 
-	var used := {}
+	# employee_id -> available_count（在岗）
+	var available_counts: Dictionary = {}
+	for emp_id2 in non_ceo:
+		var prev_val = available_counts.get(emp_id2, 0)
+		available_counts[emp_id2] = int(prev_val) + 1
+
+	# employee_id -> used_count（直属 + 下属）
+	var used_counts: Dictionary = {}
+
+	# 1) 先放置玩家偏好的 CEO 直属槽（允许非唯一员工重复，按数量上限）
 	for i_slot in range(ceo_slots):
 		var pick: String = preferred_direct[i_slot]
 		if pick.is_empty() or pick == "ceo":
 			continue
-		if not non_ceo.has(pick):
+		var avail: int = int(available_counts.get(pick, 0))
+		if avail <= 0:
 			continue
-		if used.has(pick):
+		var used_now: int = int(used_counts.get(pick, 0))
+		if used_now >= avail:
 			continue
 		structure[i_slot] = {"employee_id": pick, "reports": []}
-		used[pick] = true
+		used_counts[pick] = used_now + 1
 
-	# 确保尽量放入经理（经理必须直连 CEO；必要时会替换非经理直属）
+	# 2) 确保尽量放入经理（经理必须直连 CEO；必要时会替换非经理直属）
 	for m in managers:
-		if used.has(m):
+		var m_id: String = str(m)
+		if m_id.is_empty() or m_id == "ceo":
+			continue
+		var avail_m: int = int(available_counts.get(m_id, 0))
+		if avail_m <= 0:
+			continue
+		var used_m: int = int(used_counts.get(m_id, 0))
+		if used_m >= avail_m:
 			continue
 
 		var placed := false
@@ -216,8 +227,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 				continue
 			var slot: Dictionary = slot_val
 			if str(slot.get("employee_id", "")).is_empty():
-				structure[i_empty] = {"employee_id": m, "reports": []}
-				used[m] = true
+				structure[i_empty] = {"employee_id": m_id, "reports": []}
+				used_counts[m_id] = used_m + 1
 				placed = true
 				break
 
@@ -248,16 +259,26 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			# 直属槽全为经理：无法再放入更多经理（必然超限）
 			break
 
-		structure[replace_index] = {"employee_id": m, "reports": []}
-		used[m] = true
+		structure[replace_index] = {"employee_id": m_id, "reports": []}
+		used_counts[m_id] = used_m + 1
 		if not replaced_emp.is_empty():
-			used.erase(replaced_emp)
-			warnings.append("重组提交：已将 %s 从 CEO 直属槽移除以安置经理 %s" % [replaced_emp, m])
+			var prev_used: int = int(used_counts.get(replaced_emp, 0))
+			if prev_used > 0:
+				used_counts[replaced_emp] = prev_used - 1
+			warnings.append("重组提交：已将 %s 从 CEO 直属槽移除以安置经理 %s" % [replaced_emp, m_id])
 
-	# 补齐剩余空槽：放入普通员工（不强制必须填满）
+	# 3) 补齐剩余空槽：放入普通员工（不强制必须填满）
 	for emp_nm in non_managers:
-		if used.has(emp_nm):
+		var emp_id: String = str(emp_nm)
+		if emp_id.is_empty() or emp_id == "ceo":
 			continue
+		var avail_nm: int = int(available_counts.get(emp_id, 0))
+		if avail_nm <= 0:
+			continue
+		var used_nm: int = int(used_counts.get(emp_id, 0))
+		if used_nm >= avail_nm:
+			continue
+
 		var empty_index := -1
 		for i_empty2 in range(structure.size()):
 			var slot_val3 = structure[i_empty2]
@@ -269,29 +290,30 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 				break
 		if empty_index < 0:
 			break
-		structure[empty_index] = {"employee_id": emp_nm, "reports": []}
-		used[emp_nm] = true
+		structure[empty_index] = {"employee_id": emp_id, "reports": []}
+		used_counts[emp_id] = used_nm + 1
 
-	# 计算剩余普通员工（用于分配到经理 reports）
+	# 4) 分配剩余普通员工到经理卡槽
 	var remaining_non_managers: Array[String] = []
-	# 1) 优先放入“手动分配”的下属（按 manager_id 匹配）
+
+	# 4.1) 优先放入“手动分配”的下属（按 slot_index 匹配，支持重复经理类型）
 	for s_i in range(structure.size()):
-		var slot_val = structure[s_i]
-		if not (slot_val is Dictionary):
+		var slot_val4 = structure[s_i]
+		if not (slot_val4 is Dictionary):
 			continue
-		var slot: Dictionary = slot_val
-		var direct: String = str(slot.get("employee_id", ""))
-		if direct.is_empty():
+		var slot4: Dictionary = slot_val4
+		var direct4: String = str(slot4.get("employee_id", ""))
+		if direct4.is_empty():
 			continue
-		var direct_def: EmployeeDef = EmployeeRegistryClass.get_def(direct)
-		if direct_def == null:
+		var direct_def4: EmployeeDef = EmployeeRegistryClass.get_def(direct4)
+		if direct_def4 == null:
 			continue
-		var cap := maxi(0, int(direct_def.manager_slots))
-		if cap <= 0:
+		var cap4 := maxi(0, int(direct_def4.manager_slots))
+		if cap4 <= 0:
 			continue
 
 		var reps: Array[String] = []
-		var pref_val = preferred_reports_by_manager.get(direct, null)
+		var pref_val = preferred_reports_by_slot.get(s_i, null)
 		if pref_val is Array:
 			var pref: Array = pref_val
 			for p_i in range(pref.size()):
@@ -301,21 +323,46 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 				var rep_id: String = str(rep_val)
 				if rep_id.is_empty() or rep_id == "ceo":
 					continue
-				if used.has(rep_id):
+				var avail_rep: int = int(available_counts.get(rep_id, 0))
+				if avail_rep <= 0:
 					continue
-				if not non_managers.has(rep_id):
+				var rep_def: EmployeeDef = EmployeeRegistryClass.get_def(rep_id)
+				if rep_def == null:
+					continue
+				if maxi(0, int(rep_def.manager_slots)) > 0:
+					continue
+				var used_rep: int = int(used_counts.get(rep_id, 0))
+				if used_rep >= avail_rep:
 					continue
 				reps.append(rep_id)
-				used[rep_id] = true
-				if reps.size() >= cap:
+				used_counts[rep_id] = used_rep + 1
+				if reps.size() >= cap4:
 					break
-		slot["reports"] = reps
-		structure[s_i] = slot
+		slot4["reports"] = reps
+		structure[s_i] = slot4
 
-	# 2) 自动补齐剩余普通员工到经理卡槽（经理只能直接向 CEO 汇报，且下属不能是经理）
+	# 4.2) 自动补齐剩余普通员工到经理卡槽（允许同类型重复，按数量上限）
+	var remaining_count_by_id: Dictionary = {}
 	for emp_nm2 in non_managers:
-		if not used.has(emp_nm2):
-			remaining_non_managers.append(emp_nm2)
+		var emp_id3: String = str(emp_nm2)
+		if emp_id3.is_empty() or emp_id3 == "ceo":
+			continue
+		if remaining_count_by_id.has(emp_id3):
+			continue
+		var avail3: int = int(available_counts.get(emp_id3, 0))
+		var used3: int = int(used_counts.get(emp_id3, 0))
+		remaining_count_by_id[emp_id3] = maxi(0, avail3 - used3)
+
+	for emp_nm3 in non_managers:
+		var emp_id4: String = str(emp_nm3)
+		if emp_id4.is_empty() or emp_id4 == "ceo":
+			continue
+		var rem_val = remaining_count_by_id.get(emp_id4, 0)
+		var rem: int = int(rem_val)
+		if rem <= 0:
+			continue
+		remaining_non_managers.append(emp_id4)
+		remaining_count_by_id[emp_id4] = rem - 1
 
 	var nm_index := 0
 	for s_i2 in range(structure.size()):
@@ -381,20 +428,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			ppa2.erase("Restructuring")
 			state.round_state["pending_phase_actions"] = ppa2
 
-	# 推进到下一位未提交玩家
-	var size := state.turn_order.size()
-	if size > 0 and not all_submitted:
-		for offset in range(1, size + 1):
-			var idx := state.current_player_index + offset
-			if idx >= size:
-				idx = idx % size
-			var pid_val = state.turn_order[idx]
-			if not (pid_val is int):
-				continue
-			var pid: int = int(pid_val)
-			if not bool(submitted.get(pid, false)):
-				state.current_player_index = idx
-				break
+		# Restructuring 为“同时进行”：不推进 current_player_index（避免隐式顺序/误导 UI）。
 
 	# 所有人都提交后，自动进入下一阶段
 	if all_submitted and phase_manager != null:

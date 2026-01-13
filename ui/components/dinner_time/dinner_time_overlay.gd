@@ -6,11 +6,12 @@ extends Control
 signal order_confirmed(restaurant_id: String, house_id: String, products: Dictionary)
 signal phase_completed()
 
-@onready var title_label: Label = $TopBar/TitleLabel
-@onready var progress_label: Label = $TopBar/ProgressLabel
-@onready var orders_container: VBoxContainer = $CenterPanel/MarginContainer/VBoxContainer/ScrollContainer/OrdersContainer
-@onready var next_btn: Button = $BottomBar/NextButton
-@onready var auto_btn: Button = $BottomBar/AutoButton
+@onready var title_label: Label = $Layout/TopBarMargin/TopBar/TitleLabel
+@onready var progress_label: Label = $Layout/TopBarMargin/TopBar/ProgressLabel
+@onready var orders_container: VBoxContainer = $Layout/CenterMargin/CenterPanel/MarginContainer/VBoxContainer/ScrollContainer/OrdersContainer
+@onready var next_btn: Button = $Layout/BottomBarMargin/BottomBar/NextButton
+@onready var auto_btn: Button = $Layout/BottomBarMargin/BottomBar/AutoButton
+@onready var center_margin: MarginContainer = $Layout/CenterMargin
 
 var _pending_orders: Array[Dictionary] = []  # [{house_id, demands, matched_restaurant, products}]
 var _completed_orders: Array[Dictionary] = []
@@ -25,6 +26,9 @@ func _ready() -> void:
 	if auto_btn != null:
 		auto_btn.pressed.connect(_on_auto_pressed)
 
+	resized.connect(_on_overlay_resized)
+	_update_responsive_margins()
+
 	visible = false
 
 func set_pending_orders(orders: Array[Dictionary]) -> void:
@@ -36,10 +40,33 @@ func set_pending_orders(orders: Array[Dictionary]) -> void:
 
 func show_overlay() -> void:
 	visible = true
+	_update_responsive_margins()
 	_rebuild_order_list()
 
 func hide_overlay() -> void:
 	visible = false
+
+func _on_overlay_resized() -> void:
+	_update_responsive_margins()
+
+func _update_responsive_margins() -> void:
+	if center_margin == null:
+		return
+
+	var viewport_w := int(get_viewport_rect().size.x)
+	var min_margin := 12
+	var desired_panel_w := 480
+
+	var margin_lr := min_margin
+	if viewport_w > 0:
+		var max_panel_w := viewport_w - (min_margin * 2)
+		var target_panel_w := mini(desired_panel_w, maxi(0, max_panel_w))
+		if target_panel_w > 0:
+			margin_lr = maxi(min_margin, int(round(float(viewport_w - target_panel_w) * 0.5)))
+		margin_lr = mini(margin_lr, int(floor(float(viewport_w) * 0.5)))
+
+	center_margin.add_theme_constant_override("margin_left", margin_lr)
+	center_margin.add_theme_constant_override("margin_right", margin_lr)
 
 func _rebuild_order_list() -> void:
 	# 清除旧项

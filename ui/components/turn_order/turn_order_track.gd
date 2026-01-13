@@ -6,6 +6,7 @@ extends Control
 signal position_selected(position: int)
 
 @onready var slots_container: HBoxContainer = $MarginContainer/VBoxContainer/SlotsContainer
+@onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 
 var _player_count: int = 2
 var _current_selections: Dictionary = {}  # position -> player_id
@@ -27,7 +28,17 @@ func set_current_selections(selections: Dictionary) -> void:
 func set_selectable(can_select: bool, player_id: int) -> void:
 	_selectable = can_select
 	_selecting_player_id = player_id
+	_update_title()
 	_update_display()
+
+func _update_title() -> void:
+	if not is_instance_valid(title_label):
+		return
+	if not _selectable or _selecting_player_id < 0:
+		title_label.text = "顺序轨"
+		return
+	var name := Globals.get_player_name(_selecting_player_id) if Globals != null else ("玩家%d" % (_selecting_player_id + 1))
+	title_label.text = "选择顺位：%s" % name
 
 func highlight_available_positions() -> void:
 	for slot in _slot_nodes:
@@ -53,6 +64,7 @@ func _rebuild_slots() -> void:
 		slots_container.add_child(slot)
 		_slot_nodes.append(slot)
 
+	_update_title()
 	_update_display()
 
 func _update_display() -> void:

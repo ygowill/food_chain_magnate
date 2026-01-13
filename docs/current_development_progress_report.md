@@ -90,6 +90,12 @@
 - 命令：`place_house` / `add_garden` / `place_restaurant` / `move_restaurant`
 - 已支持：有效位置扫描/高亮（PlacementValidator 扫描）
 
+#### Working 强制动作（定价/折扣/奢侈品定价）
+
+- 动作：`set_price` / `set_discount` / `set_luxury_price`
+- UI 策略：`ActionPanel` 不再 auto-hide（提升发现性），并在灰显时 tooltip 提示不可用原因；强制动作加【强制】并优先展示
+- 详细报告与整改记录：`docs/ui_action_panel_pricing_actions_report.md`
+
 ### 3.5 Dinnertime（晚餐结算）
 
 - 展示：自动弹出 `ui/components/dinner_time/`（只读列表）

@@ -65,6 +65,8 @@ func _ensure_save_load_dialog() -> void:
 func _on_save_load_selected(path: String) -> void:
 	if path.is_empty():
 		return
+	if EventBus != null:
+		EventBus.clear_history()
 
 	var engine := GameEngine.new()
 	var load_result: Result = engine.load_from_file(path)
