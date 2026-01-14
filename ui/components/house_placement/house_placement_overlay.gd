@@ -8,6 +8,8 @@ extends Control
 signal house_placement_confirmed(position: Vector2i, rotation: int)
 signal garden_confirmed(house_id: String, direction: String)
 signal cancelled()
+signal preview_requested(action_id: String, position: Vector2i, rotation: int)
+signal preview_cleared()
 signal highlight_requested(action_id: String, rotation: int)
 signal ui_state_changed()
 
@@ -55,6 +57,7 @@ func set_map_data(map_data: Dictionary) -> void:
 func set_selected_position(position: Vector2i) -> void:
 	if _mode == "place_house":
 		_selected_position = position
+		_emit_preview()
 	else:
 		_selected_house_id = str(_house_id_by_cell.get(position, ""))
 	_update_ui()
@@ -64,6 +67,7 @@ func set_selected_rotation(rotation: int) -> void:
 	if _mode != "place_house":
 		return
 	_selected_rotation = _normalize_rotation(rotation)
+	_emit_preview()
 	_update_ui()
 	_emit_highlight_request()
 	ui_state_changed.emit()
@@ -83,6 +87,7 @@ func clear_selection() -> void:
 	_selected_rotation = 0
 	_selected_house_id = ""
 	_selected_direction = "E"
+	_emit_preview()
 	_update_ui()
 	_emit_highlight_request()
 	ui_state_changed.emit()
@@ -129,6 +134,7 @@ func request_confirm() -> void:
 func request_cancel() -> void:
 	cancelled.emit()
 	visible = false
+	preview_cleared.emit()
 	_emit_highlight_request()
 	ui_state_changed.emit()
 
@@ -164,3 +170,12 @@ func _emit_highlight_request() -> void:
 	if _mode != "place_house":
 		return
 	highlight_requested.emit(_mode, _selected_rotation)
+
+func _emit_preview() -> void:
+	if _mode != "place_house":
+		preview_cleared.emit()
+		return
+	if _selected_position == Vector2i(-1, -1):
+		preview_cleared.emit()
+		return
+	preview_requested.emit(_mode, _selected_position, _selected_rotation)

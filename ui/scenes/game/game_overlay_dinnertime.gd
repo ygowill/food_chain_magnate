@@ -31,6 +31,9 @@ func sync_dinnertime_overlay(state: GameState) -> void:
 	if dinner_time_overlay.visible:
 		return
 
+	if dinner_time_overlay.has_method("set_visual_modules") and (state.modules is Array):
+		dinner_time_overlay.set_visual_modules(Array(state.modules, TYPE_STRING, "", null))
+
 	var orders := _build_dinnertime_orders(state)
 	if dinner_time_overlay.has_method("set_pending_orders"):
 		dinner_time_overlay.set_pending_orders(orders)
@@ -120,4 +123,3 @@ func _build_dinnertime_orders(state: GameState) -> Array[Dictionary]:
 	for o in raw_orders:
 		orders.append(o)
 	return orders
-

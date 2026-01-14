@@ -3,23 +3,25 @@
 class_name DemandIndicator
 extends Control
 
+const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+
 var _house_demands: Dictionary = {}  # house_id -> {demands, position, satisfied}
 var _demand_markers: Dictionary = {}  # house_id -> DemandMarker
 var _tile_size: Vector2 = Vector2(64, 64)
 var _map_offset: Vector2 = Vector2.ZERO
 
-# 产品图标
-const PRODUCT_ICONS: Dictionary = {
-	"burger": "🍔",
-	"pizza": "🍕",
-	"drink": "🥤",
-	"lemonade": "🍋",
-	"beer": "🍺",
-}
+var _visual_modules: Array[String] = []
+var _skin = null
 
 func _ready() -> void:
 	# 确保在地图上层显示
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+func set_visual_modules(modules: Array[String]) -> void:
+	_visual_modules = Array(modules, TYPE_STRING, "", null)
+	_skin = null
+	_ensure_skin()
+	_update_marker_skins()
 
 func set_tile_size(size: Vector2) -> void:
 	_tile_size = size
@@ -73,6 +75,7 @@ func _create_marker(house_id: String) -> void:
 	marker.house_id = house_id
 	marker.demands = demands
 	marker.is_satisfied = satisfied
+	marker.skin = _skin
 	add_child(marker)
 	_demand_markers[house_id] = marker
 
@@ -95,6 +98,7 @@ func _update_marker(house_id: String) -> void:
 	var data: Dictionary = _house_demands.get(house_id, {})
 	marker.demands = data.get("demands", {})
 	marker.is_satisfied = data.get("satisfied", false)
+	marker.skin = _skin
 	marker.update_display()
 
 func _update_marker_positions() -> void:
@@ -108,23 +112,36 @@ func _update_marker_positions() -> void:
 		var pixel_pos := Vector2(grid_pos.x, grid_pos.y) * _tile_size + _map_offset
 		marker.position = pixel_pos + Vector2(_tile_size.x / 2, -10)
 
+func _ensure_skin() -> void:
+	if _skin != null:
+		return
+
+	var base_dir := "res://modules"
+	if Globals != null:
+		base_dir = str(Globals.modules_v2_base_dir)
+	var mods := _visual_modules
+	if mods.is_empty() and Globals != null and (Globals.enabled_modules_v2 is Array):
+		mods = Array(Globals.enabled_modules_v2, TYPE_STRING, "", null)
+	_skin = UiSkinCacheClass.get_skin_for_modules(base_dir, mods, 40)
+
+func _update_marker_skins() -> void:
+	for house_id in _demand_markers.keys():
+		var marker: DemandMarker = _demand_markers[house_id]
+		if not is_instance_valid(marker):
+			continue
+		marker.skin = _skin
+		marker.update_display()
+
 
 # === 内部类：需求标记 ===
 class DemandMarker extends Control:
 	var house_id: String = ""
 	var demands: Dictionary = {}
 	var is_satisfied: bool = false
+	var skin = null
 
 	var _background: ColorRect
 	var _icons_container: HBoxContainer
-
-	const PRODUCT_ICONS: Dictionary = {
-		"burger": "🍔",
-		"pizza": "🍕",
-		"drink": "🥤",
-		"lemonade": "🍋",
-		"beer": "🍺",
-	}
 
 	func _ready() -> void:
 		_build_ui()
@@ -159,21 +176,32 @@ class DemandMarker extends Control:
 			child.queue_free()
 
 		# 添加新图标
-		for prod_type in demands.keys():
-			var count: int = int(demands[prod_type])
+		var keys := demands.keys()
+		keys.sort()
+		for prod_type in keys:
+			var count: int = int(demands.get(prod_type, 0))
 			if count <= 0:
 				continue
 
-			var icon_label := Label.new()
-			icon_label.add_theme_font_size_override("font_size", 12)
-			var icon: String = PRODUCT_ICONS.get(prod_type, "?")
+			var pid := str(prod_type)
+			if pid == "cola":
+				pid = "soda"
+
+			var tex: Texture2D = null
+			if skin != null and skin.has_method("get_product_icon_texture"):
+				tex = skin.get_product_icon_texture(pid)
+
+			var icon_rect := TextureRect.new()
+			icon_rect.custom_minimum_size = Vector2(16, 16)
+			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon_rect.texture = tex
+			_icons_container.add_child(icon_rect)
 
 			if count > 1:
-				icon_label.text = "%s×%d" % [icon, count]
-			else:
-				icon_label.text = icon
-
-			_icons_container.add_child(icon_label)
+				var count_label := Label.new()
+				count_label.add_theme_font_size_override("font_size", 12)
+				count_label.text = "×%d" % count
+				_icons_container.add_child(count_label)
 
 		# 更新背景颜色
 		if _background != null:

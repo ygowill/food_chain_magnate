@@ -23,6 +23,7 @@ signal closed()
 @onready var resolution_option: OptionButton = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/ResolutionRow/ResolutionOption
 @onready var ui_scale_slider: HSlider = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/UIScaleRow/UIScaleSlider
 @onready var ui_layout_option: OptionButton = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/UILayoutRow/UILayoutOption
+@onready var show_tile_ids_check: CheckBox = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/ShowTileIdsCheck
 
 # 游戏选项
 @onready var auto_save_check: CheckBox = $MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer/AutoSaveCheck
@@ -54,6 +55,7 @@ var _default_settings: Dictionary = {
 	"resolution": Vector2i(1920, 1080),
 	"ui_scale": 1.0,
 	"ui_layout_version": 2,
+	"show_tile_ids": false,
 	"auto_save": true,
 	"confirm_actions": true,
 	"show_hints": true,
@@ -101,6 +103,7 @@ func _load_settings() -> void:
 			"resolution": config.get_value("display", "resolution", _default_settings.resolution),
 			"ui_scale": config.get_value("display", "ui_scale", _default_settings.ui_scale),
 			"ui_layout_version": clampi(int(config.get_value("display", "ui_layout_version", _default_settings.ui_layout_version)), 1, 2),
+			"show_tile_ids": bool(config.get_value("display", "show_tile_ids", _default_settings.show_tile_ids)),
 			"auto_save": config.get_value("game", "auto_save", _default_settings.auto_save),
 			"confirm_actions": config.get_value("game", "confirm_actions", _default_settings.confirm_actions),
 			"show_hints": config.get_value("game", "show_hints", _default_settings.show_hints),
@@ -123,6 +126,7 @@ func _save_settings() -> void:
 	config.set_value("display", "resolution", _current_settings.resolution)
 	config.set_value("display", "ui_scale", _current_settings.ui_scale)
 	config.set_value("display", "ui_layout_version", int(_current_settings.get("ui_layout_version", 1)))
+	config.set_value("display", "show_tile_ids", bool(_current_settings.get("show_tile_ids", false)))
 
 	config.set_value("game", "auto_save", _current_settings.auto_save)
 	config.set_value("game", "confirm_actions", _current_settings.confirm_actions)
@@ -159,6 +163,8 @@ func _update_ui_from_settings() -> void:
 	if ui_layout_option != null:
 		var v := clampi(int(_current_settings.get("ui_layout_version", 1)), 1, 2)
 		ui_layout_option.select(v - 1)
+	if show_tile_ids_check != null:
+		show_tile_ids_check.button_pressed = bool(_current_settings.get("show_tile_ids", false))
 
 	# 游戏
 	if auto_save_check != null:
@@ -194,6 +200,8 @@ func _update_settings_from_ui() -> void:
 		_current_settings.ui_scale = ui_scale_slider.value / 100.0
 	if ui_layout_option != null:
 		_current_settings.ui_layout_version = clampi(int(ui_layout_option.selected) + 1, 1, 2)
+	if show_tile_ids_check != null:
+		_current_settings.show_tile_ids = show_tile_ids_check.button_pressed
 
 	# 游戏
 	if auto_save_check != null:
@@ -359,6 +367,7 @@ func _sync_globals_runtime_settings() -> void:
 
 	Globals.ui_scale = float(_current_settings.ui_scale)
 	Globals.ui_layout_version = clampi(int(_current_settings.get("ui_layout_version", 1)), 1, 2)
+	Globals.show_tile_ids = bool(_current_settings.get("show_tile_ids", false))
 	Globals.confirm_actions = bool(_current_settings.confirm_actions)
 	Globals.show_hints = bool(_current_settings.show_hints)
 	Globals.animation_speed = float(_current_settings.animation_speed)

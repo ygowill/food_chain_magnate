@@ -91,7 +91,7 @@ func initialize() -> void:
 
 	# 初始化游戏日志面板（但不显示）
 	if is_instance_valid(_game_log_panel):
-		_game_log_panel.visible = true
+		_game_log_panel.visible = false
 
 	_setup_milestone_toasts()
 

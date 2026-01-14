@@ -59,6 +59,29 @@ const ROLE_COLOR_MARKETING := "#94c1c7"
 const ROLE_COLOR_NEW_SHOP := "#aa3c34"
 const ROLE_COLOR_SPECIAL := "#ae94c0"
 
+# 将“职责 role”映射为颜色（hex 字符串），供 UI 与规则复用。
+static func role_to_color_hex(role_in: String) -> String:
+	var role: String = str(role_in).strip_edges()
+	match role:
+		"manager":
+			return ROLE_COLOR_MANAGER
+		"recruit_train":
+			return ROLE_COLOR_RECRUIT_TRAIN
+		"produce_food":
+			return ROLE_COLOR_PRODUCE_FOOD
+		"procure_drink":
+			return ROLE_COLOR_PROCURE_DRINK
+		"price":
+			return ROLE_COLOR_PRICE
+		"marketing":
+			return ROLE_COLOR_MARKETING
+		"new_shop":
+			return ROLE_COLOR_NEW_SHOP
+		"special":
+			return ROLE_COLOR_SPECIAL
+		_:
+			return ROLE_COLOR_SPECIAL
+
 # === 供应池（路线B）===
 # 用于“从内容元数据推导 Pools”，替代 GameConfig.employee_pool.base/one_x_employee_ids 等硬编码列表。
 # - fixed: 固定张数（count）
@@ -144,26 +167,7 @@ func get_role() -> String:
 
 # 获取“职责颜色”（用于 UI 与“同色培训”规则）
 func get_role_color() -> String:
-	var r := get_role()
-	match r:
-		"manager":
-			return ROLE_COLOR_MANAGER
-		"recruit_train":
-			return ROLE_COLOR_RECRUIT_TRAIN
-		"produce_food":
-			return ROLE_COLOR_PRODUCE_FOOD
-		"procure_drink":
-			return ROLE_COLOR_PROCURE_DRINK
-		"price":
-			return ROLE_COLOR_PRICE
-		"marketing":
-			return ROLE_COLOR_MARKETING
-		"new_shop":
-			return ROLE_COLOR_NEW_SHOP
-		"special":
-			return ROLE_COLOR_SPECIAL
-		_:
-			return ROLE_COLOR_SPECIAL
+	return role_to_color_hex(get_role())
 
 # 获取生产信息（返回 null 如果不能生产）
 func get_production_info() -> Dictionary:

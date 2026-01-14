@@ -6,6 +6,8 @@ extends Control
 signal order_confirmed(restaurant_id: String, house_id: String, products: Dictionary)
 signal phase_completed()
 
+const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+
 @onready var title_label: Label = $Layout/TopBarMargin/TopBar/TitleLabel
 @onready var progress_label: Label = $Layout/TopBarMargin/TopBar/ProgressLabel
 @onready var orders_container: VBoxContainer = $Layout/CenterMargin/CenterPanel/MarginContainer/VBoxContainer/ScrollContainer/OrdersContainer
@@ -19,6 +21,8 @@ var _current_order_idx: int = 0
 var _order_items: Array[OrderItem] = []
 
 var _auto_mode: bool = false
+var _visual_modules: Array[String] = []
+var _skin = null
 
 func _ready() -> void:
 	if next_btn != null:
@@ -37,6 +41,12 @@ func set_pending_orders(orders: Array[Dictionary]) -> void:
 	_current_order_idx = 0
 	_rebuild_order_list()
 	_update_progress()
+
+func set_visual_modules(modules: Array[String]) -> void:
+	_visual_modules = Array(modules, TYPE_STRING, "", null)
+	_skin = null
+	_ensure_skin()
+	_update_item_skins()
 
 func show_overlay() -> void:
 	visible = true
@@ -78,6 +88,8 @@ func _rebuild_order_list() -> void:
 	if orders_container == null:
 		return
 
+	_ensure_skin()
+
 	for i in range(_pending_orders.size()):
 		var order: Dictionary = _pending_orders[i]
 
@@ -86,6 +98,7 @@ func _rebuild_order_list() -> void:
 		item.order_data = order
 		item.is_current = (i == _current_order_idx)
 		item.is_completed = (i < _current_order_idx)
+		item.skin = _skin
 		item.order_selected.connect(_on_order_selected)
 		orders_container.add_child(item)
 		_order_items.append(item)
@@ -149,6 +162,27 @@ func _on_auto_pressed() -> void:
 	if _auto_mode:
 		_on_next_pressed()
 
+func _ensure_skin() -> void:
+	if _skin != null:
+		return
+
+	var base_dir := "res://modules"
+	if Globals != null:
+		base_dir = str(Globals.modules_v2_base_dir)
+
+	var mods := _visual_modules
+	if mods.is_empty() and Globals != null and (Globals.enabled_modules_v2 is Array):
+		mods = Array(Globals.enabled_modules_v2, TYPE_STRING, "", null)
+
+	_skin = UiSkinCacheClass.get_skin_for_modules(base_dir, mods, 40)
+
+func _update_item_skins() -> void:
+	for item in _order_items:
+		if not is_instance_valid(item):
+			continue
+		item.skin = _skin
+		item.update_display()
+
 
 # === 内部类：订单项 ===
 class OrderItem extends PanelContainer:
@@ -158,19 +192,13 @@ class OrderItem extends PanelContainer:
 	var order_data: Dictionary = {}
 	var is_current: bool = false
 	var is_completed: bool = false
+	var skin = null
 
 	var _house_label: Label
 	var _restaurant_label: Label
-	var _products_label: Label
 	var _status_icon: Label
-
-	const PRODUCT_ICONS: Dictionary = {
-		"burger": "🍔",
-		"pizza": "🍕",
-		"drink": "🥤",
-		"lemonade": "🍋",
-		"beer": "🍺",
-	}
+	var _demands_container: HBoxContainer
+	var _products_container: HBoxContainer
 
 	func _ready() -> void:
 		_build_ui()
@@ -197,10 +225,19 @@ class OrderItem extends PanelContainer:
 		info_box.add_theme_constant_override("separation", 2)
 		hbox.add_child(info_box)
 
-		# 房屋信息
+		# 房屋信息 + 需求图标
+		var house_row := HBoxContainer.new()
+		house_row.add_theme_constant_override("separation", 6)
+		info_box.add_child(house_row)
+
 		_house_label = Label.new()
 		_house_label.add_theme_font_size_override("font_size", 14)
-		info_box.add_child(_house_label)
+		house_row.add_child(_house_label)
+
+		_demands_container = HBoxContainer.new()
+		_demands_container.add_theme_constant_override("separation", 2)
+		_demands_container.alignment = BoxContainer.ALIGNMENT_BEGIN
+		house_row.add_child(_demands_container)
 
 		# 餐厅信息
 		_restaurant_label = Label.new()
@@ -208,10 +245,11 @@ class OrderItem extends PanelContainer:
 		_restaurant_label.add_theme_color_override("font_color", Color(0.6, 0.7, 0.8, 1))
 		info_box.add_child(_restaurant_label)
 
-		# 产品列表
-		_products_label = Label.new()
-		_products_label.add_theme_font_size_override("font_size", 14)
-		hbox.add_child(_products_label)
+		# 产品列表（实际售出）
+		_products_container = HBoxContainer.new()
+		_products_container.add_theme_constant_override("separation", 2)
+		_products_container.alignment = BoxContainer.ALIGNMENT_CENTER
+		hbox.add_child(_products_container)
 
 		update_display()
 		_update_style()
@@ -229,12 +267,19 @@ class OrderItem extends PanelContainer:
 		var demands: Dictionary = order_data.get("demands", {})
 
 		if _house_label != null:
-			var demand_str := ""
-			for prod_type in demands.keys():
-				var count: int = int(demands[prod_type])
-				var icon: String = PRODUCT_ICONS.get(prod_type, "?")
-				demand_str += "%s×%d " % [icon, count]
-			_house_label.text = "房屋 %s: %s" % [house_id, demand_str]
+			_house_label.text = "房屋 %s:" % house_id
+
+		if _demands_container != null:
+			for child in _demands_container.get_children():
+				child.queue_free()
+
+			var dkeys := demands.keys()
+			dkeys.sort()
+			for prod_type in dkeys:
+				var count: int = int(demands.get(prod_type, 0))
+				if count <= 0:
+					continue
+				_add_product_icon_with_count(_demands_container, str(prod_type), count, 16)
 
 		if _restaurant_label != null:
 			if restaurant_id.is_empty():
@@ -243,13 +288,23 @@ class OrderItem extends PanelContainer:
 			else:
 				_restaurant_label.text = "餐厅: %s" % restaurant_id
 
-		if _products_label != null:
-			var prod_str := ""
-			for prod_type in products.keys():
-				var count: int = int(products[prod_type])
-				var icon: String = PRODUCT_ICONS.get(prod_type, "?")
-				prod_str += "%s×%d " % [icon, count]
-			_products_label.text = prod_str if not prod_str.is_empty() else "-"
+		if _products_container != null:
+			for child in _products_container.get_children():
+				child.queue_free()
+
+			var pkeys := products.keys()
+			pkeys.sort()
+			for prod_type in pkeys:
+				var count: int = int(products.get(prod_type, 0))
+				if count <= 0:
+					continue
+				_add_product_icon_with_count(_products_container, str(prod_type), count, 16)
+
+			if _products_container.get_child_count() <= 0:
+				var dash := Label.new()
+				dash.add_theme_font_size_override("font_size", 14)
+				dash.text = "-"
+				_products_container.add_child(dash)
 
 		if _status_icon != null:
 			if is_completed:
@@ -263,6 +318,30 @@ class OrderItem extends PanelContainer:
 				_status_icon.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1))
 
 		_update_style()
+
+	func _add_product_icon_with_count(parent: HBoxContainer, product_id: String, count: int, size_px: int) -> void:
+		if parent == null:
+			return
+
+		var pid := str(product_id)
+		if pid == "cola":
+			pid = "soda"
+
+		var tex: Texture2D = null
+		if skin != null and skin.has_method("get_product_icon_texture"):
+			tex = skin.get_product_icon_texture(pid)
+
+		var icon_rect := TextureRect.new()
+		icon_rect.custom_minimum_size = Vector2(float(size_px), float(size_px))
+		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon_rect.texture = tex
+		parent.add_child(icon_rect)
+
+		if count > 1:
+			var count_label := Label.new()
+			count_label.add_theme_font_size_override("font_size", 14)
+			count_label.text = "×%d" % count
+			parent.add_child(count_label)
 
 	func _update_style() -> void:
 		var style := StyleBoxFlat.new()

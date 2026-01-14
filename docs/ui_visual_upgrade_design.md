@@ -10,6 +10,7 @@
 - 员工配色：保持项目现有职责色（以 `core/data/employee_def.gd` / `EmployeeDef.get_role_color()` 为准）。
 - SVG → PNG：安装并使用 `inkscape`（命令行）进行批量转换。
 - 餐厅 Logo：进入游戏前随机分配一次，并按 `player_id` 固定绑定（保证回放/联机确定性）。
+- 旧存档兼容：若 `players[*].restaurant_logo_id` 缺失，UI 侧用 `state.seed + player_id` 推导确定性兜底（不写回存档）。
 
 ### 0.2 任务状态
 
@@ -18,9 +19,30 @@
 | 0 | 文档与项目对齐 | Done | 修正 VisualCatalog schema / footprint 描述 / 转换脚本路径 |
 | 5.1 | 资源准备（安装 & 转换） | Done | 已安装 Inkscape（App 路径）；已实现并执行 `tools/convert_assets.sh` |
 | 5.2 | 员工卡片升级 | In Progress | 已实现 FULL/COMPACT 框架（占位头像/底部信息行）；待补齐图标/员工图片与细节调优 |
-| 5.3 | 公司结构树升级 | TODO | 连接线/缩放/拖拽 |
-| 5.4 | 地图渲染升级 | In Progress | 已修复图标拉伸（按宽高比绘制）；已实现需求图标散落（确定性）/房屋花园底色/餐厅 Logo 叠加；待手动验收与测试 |
-| 5.5 | 集成测试 | In Progress | 已跑 headless：`GameSmokeTest` / `AllTests` PASS；待手动检查 |
+| 3 | 员工升级路线树 | In Progress | 已实现 MVP：顶栏按钮入口；Layered 布局（barycenter 排序减少交叉）；悬停高亮路径；滚轮缩放/拖拽平移/双击适配窗口；点击节点弹出详情 |
+| 5.3 | 公司结构树升级 | Deferred | 本轮暂不升级公司结构树（Q12）；后续如需再单独排期 |
+| 5.4 | 地图渲染升级 | In Progress | 已修复图标拉伸（按宽高比绘制）；已实现需求图标散落（确定性）/房屋花园底色/餐厅 Logo 叠加；UI：库存/晚餐订单/需求指示器/营销面板/范围 overlay 已切换至贴图图标；待手动验收与测试 |
+| 5.5 | 集成测试 | In Progress | 已跑 headless：`check_compile.gd (ui+core)` / `AllTests (77/77)` PASS；待手动检查 |
+
+### 0.3 验收反馈修复（进行中）
+
+| ID | 内容 | 状态 | 备注 |
+|---|---|---|---|
+| F1 | 房屋渲染：底色 `#733651`；房屋图底部留空隙；显示 `house_id`（右上角）；文本框透明无白底 | Done | 已改：`ui/scenes/game/map_canvas_drawer.gd`（用 `house_id`，去白底；房屋贴图 bottom gap）待验收 |
+| F2 | 缩略员工卡：显示员工名字；顶部整行底色为员工类别色 | Done | 已改：`ui/components/employee_card/employee_card.gd`（COMPACT 顶部整行底色+居中名字）待验收 |
+| F3 | 升级路线树：全屏弹窗；唯一路线同一水平线；不显示 CEO；卡片间距 | Done | 已改：`ui/scenes/game/game_panel_controller.gd`（全屏覆盖）；`ui/components/employee_tree/*`（排除 CEO、增大间距、唯一路线对齐）待验收 |
+| F4 | 左侧玩家 Tab & 顶部回合顺位：数字改餐厅 icon | Done | 已改：`ui/components/left_panel/left_panel.gd`、`ui/components/turn_order/turn_order_display.gd`、`ui/scenes/game/game_panel_controller.gd`（加载 player logo 并显示）待验收 |
+| F5 | 地图餐厅：去掉旧餐厅图片；餐厅 icon 充满 2x2 区域 | Done | 已改：`ui/scenes/game/map_canvas_drawer.gd`（logo 以 aspect-fill 绘制到 2x2）待验收 |
+| F6 | 载入存档：餐厅 icon 全部一样（logo_id 映射/读取） | Done | 已改：`ui/scenes/game/map_canvas.gd`（兜底 logo 分配改为 seed 洗牌，避免重复；且处理 null）；并同步到 `ui/components/left_panel/left_panel.gd`、`ui/components/turn_order/turn_order_display.gd` 待验收 |
+| F7 | 地图 tile：绘制向内黑色粗边框；可选显示旋转的 tile_id（设置可关闭） | Done | 已改：`ui/scenes/game/map_canvas_drawer.gd`（tile 内描边+按 rotation 选择角落显示 tile_id）；`ui/dialogs/settings_dialog.gd`、`ui/dialogs/settings_dialog.tscn`、`autoload/globals.gd`（新增设置 `show_tile_ids`）待验收 |
+| F8 | 调试面板：修复失效命令；新增“给某房屋增加需求”的营销命令 | Done | 已修复 `place_restaurant/place_house/move_restaurant/marketing` 的 position 参数格式；“查看营销”改为 `marketing_list`；已新增 `add_house_demand`（内部 action: `debug_add_house_demand`）；验证：`check_compile.gd` + `AllTests` PASS |
+| F9 | 回合顺位指示器：logo 不应按原始尺寸撑开 | Done | 已改：`ui/components/turn_order/turn_order_display.gd`（TextureRect 设为 ignore min size） |
+| F10 | 左侧信息面板/日志面板：启动时日志默认隐藏；左侧信息面板宽度覆盖完整区域避免露底 | Done | 已改：`ui/scenes/game/game.tscn`（LeftPanel full-rect；GameLogPanel 默认隐藏）、`ui/scenes/game/game_overlay_controller.gd`（initialize 不再强制显示日志） |
+| F11 | 房屋标号：字体调大 & 增加边距（右上角） | Done | 已改：`ui/scenes/game/map_canvas_drawer.gd`（house_id 字号/边距调优） |
+| F12 | Tile 边框：向内黑边框厚度调细 | Done | 已改：`ui/scenes/game/map_canvas_drawer.gd`（降低边框 thickness） |
+| F13 | 房屋需求图标：调大；散落更靠中心（非角落随机） | Done | 已改：`ui/scenes/game/map_canvas_drawer.gd`（icon_size 调大；中心偏置采样；收缩散落区域） |
+| F14 | 餐厅渲染：logo 居中；底色 `#f4edd1`；入口格 L 形标记；logo 去背景 | Done | 已改：`ui/scenes/game/map_canvas_drawer.gd`（居中+入口 L）；`ui/visual/map_skin.gd`（logo flood-fill 去背景） |
+| F15 | 放置预览：显示半透明房屋/餐厅图片（所见即所得） | Done | 已改：`ui/scenes/game/map_canvas.gd`、`ui/scenes/game/map_canvas_drawer.gd`、`ui/components/house_placement/house_placement_overlay.gd`、`ui/scenes/game/game_panel_placement_overlays.gd`、`ui/scenes/game/game_map_interaction_controller.gd`；验证：`check_compile.gd` + `AllTests` PASS |
 
 ## 1. 概述
 

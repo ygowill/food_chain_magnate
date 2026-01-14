@@ -5,6 +5,8 @@ extends Control
 
 signal product_clicked(product_id: String)
 
+const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var items_container: GridContainer = $MarginContainer/VBoxContainer/ItemsContainer
 
@@ -13,12 +15,21 @@ var _fridge_capacity: int = -1   # -1 表示无冰箱
 var _product_items: Dictionary = {}  # product_id -> ProductItem
 var _prev_inventory: Dictionary = {}
 
+var _visual_modules: Array[String] = []
+var _skin = null
+
 func _ready() -> void:
 	_build_ui()
 
 func _build_ui() -> void:
 	if items_container != null:
 		items_container.columns = 3
+
+func set_visual_modules(modules: Array[String]) -> void:
+	_visual_modules = Array(modules, TYPE_STRING, "", null)
+	_skin = null
+	_ensure_skin()
+	_rebuild_items()
 
 func set_inventory(inventory: Dictionary) -> void:
 	_prev_inventory = _inventory.duplicate(true)
@@ -41,6 +52,8 @@ func _rebuild_items() -> void:
 		child.queue_free()
 	_product_items.clear()
 
+	_ensure_skin()
+
 	# 创建新项
 	var sorted_ids: Array = _inventory.keys()
 	sorted_ids.sort()
@@ -56,6 +69,7 @@ func _rebuild_items() -> void:
 		var item := ProductItem.new()
 		item.product_id = str(product_id)
 		item.count = count
+		item.icon_texture = _get_product_icon_texture(item.product_id)
 		item.item_clicked.connect(_on_product_clicked)
 		items_container.add_child(item)
 		_product_items[str(product_id)] = item
@@ -73,6 +87,29 @@ func _update_capacity_display() -> void:
 func _on_product_clicked(product_id: String) -> void:
 	product_clicked.emit(product_id)
 
+func _ensure_skin() -> void:
+	if _skin != null:
+		return
+
+	var base_dir := "res://modules"
+	if Globals != null:
+		base_dir = str(Globals.modules_v2_base_dir)
+
+	var mods := _visual_modules
+	if mods.is_empty() and Globals != null and (Globals.enabled_modules_v2 is Array):
+		mods = Array(Globals.enabled_modules_v2, TYPE_STRING, "", null)
+
+	_skin = UiSkinCacheClass.get_skin_for_modules(base_dir, mods, 40)
+
+func _get_product_icon_texture(product_id: String) -> Texture2D:
+	_ensure_skin()
+	if _skin == null or not _skin.has_method("get_product_icon_texture"):
+		return null
+	var pid := str(product_id)
+	if pid == "cola":
+		pid = "soda"
+	return _skin.get_product_icon_texture(pid)
+
 
 # === 内部类：单个产品项 ===
 class ProductItem extends PanelContainer:
@@ -80,7 +117,9 @@ class ProductItem extends PanelContainer:
 
 	var product_id: String = ""
 	var count: int = 0
+	var icon_texture: Texture2D = null
 
+	var _icon: TextureRect
 	var _count_label: Label
 	var _highlighted: bool = false
 
@@ -88,18 +127,9 @@ class ProductItem extends PanelContainer:
 	const PRODUCT_NAMES: Dictionary = {
 		"burger": "汉堡",
 		"pizza": "披萨",
-		"cola": "可乐",
 		"lemonade": "柠檬水",
 		"beer": "啤酒",
-	}
-
-	# 产品颜色映射
-	const PRODUCT_COLORS: Dictionary = {
-		"burger": Color(0.8, 0.6, 0.3, 1),
-		"pizza": Color(0.9, 0.5, 0.3, 1),
-		"cola": Color(0.3, 0.3, 0.8, 1),
-		"lemonade": Color(0.9, 0.9, 0.3, 1),
-		"beer": Color(0.7, 0.5, 0.2, 1),
+		"soda": "苏打",
 	}
 
 	func _ready() -> void:
@@ -114,11 +144,12 @@ class ProductItem extends PanelContainer:
 		vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 		add_child(vbox)
 
-		# 颜色指示
-		var color_rect := ColorRect.new()
-		color_rect.custom_minimum_size = Vector2(32, 32)
-		color_rect.color = PRODUCT_COLORS.get(product_id, Color(0.5, 0.5, 0.5, 1))
-		vbox.add_child(color_rect)
+		# 产品图标
+		_icon = TextureRect.new()
+		_icon.custom_minimum_size = Vector2(32, 32)
+		_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		_icon.texture = icon_texture
+		vbox.add_child(_icon)
 
 		# 数量标签
 		_count_label = Label.new()
@@ -133,6 +164,8 @@ class ProductItem extends PanelContainer:
 		if _count_label != null:
 			var name: String = PRODUCT_NAMES.get(product_id, product_id)
 			_count_label.text = "%s\n×%d" % [name, count]
+		if _icon != null:
+			_icon.texture = icon_texture
 
 	func set_highlighted(highlighted: bool) -> void:
 		_highlighted = highlighted

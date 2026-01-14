@@ -8,9 +8,11 @@ var type_def: Dictionary = {}
 var is_available: bool = false
 var marketer_count: int = 0
 var board_count: int = 0
+var icon_texture: Texture2D = null
 
 var _selected: bool = false
 var _icon_label: Label
+var _icon_rect: TextureRect
 var _name_label: Label
 var _count_label: Label
 
@@ -26,11 +28,24 @@ func _build_ui() -> void:
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	add_child(vbox)
 
-	# 图标
+	# 图标（贴图优先，缺失则回退文字）
+	var icon_slot := Control.new()
+	icon_slot.custom_minimum_size = Vector2(36, 36)
+	vbox.add_child(icon_slot)
+
+	_icon_rect = TextureRect.new()
+	_icon_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon_slot.add_child(_icon_rect)
+
 	_icon_label = Label.new()
+	_icon_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_icon_label.add_theme_font_size_override("font_size", 28)
 	_icon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(_icon_label)
+	_icon_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_icon_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon_slot.add_child(_icon_label)
 
 	# 名称
 	_name_label = Label.new()
@@ -54,10 +69,20 @@ func _gui_input(event: InputEvent) -> void:
 				type_selected.emit(type_id)
 
 func update_display() -> void:
+	if _icon_rect != null:
+		_icon_rect.texture = icon_texture
+
 	if _icon_label != null:
 		_icon_label.text = str(type_def.get("icon", "?"))
 		var color: Color = type_def.get("color", Color.WHITE)
 		_icon_label.add_theme_color_override("font_color", color)
+
+		if icon_texture != null:
+			_icon_rect.visible = true
+			_icon_label.visible = false
+		else:
+			_icon_rect.visible = false
+			_icon_label.visible = true
 
 	if _name_label != null:
 		_name_label.text = str(type_def.get("name", type_id))
@@ -93,4 +118,3 @@ func _update_style() -> void:
 	add_theme_stylebox_override("panel", style)
 
 	modulate = Color(1, 1, 1, 1) if is_available else Color(0.6, 0.6, 0.6, 0.8)
-

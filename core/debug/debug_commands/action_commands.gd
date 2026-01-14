@@ -26,6 +26,7 @@ static func register_all(registry: DebugCommandRegistry) -> void:
 
 	# 营销系统
 	registry.register("marketing", _cmd_marketing.bind(registry), "发起营销", "marketing <employee_type> <board_number> <product> <x> <y>", ["employee_type", "board_number", "product", "x", "y"])
+	registry.register("add_house_demand", _cmd_add_house_demand.bind(registry), "给房屋增加需求", "add_house_demand <house_id> <product> [amount] [from_player] [marketing_type] [board_number]", ["house_id", "product", "amount", "from_player", "marketing_type", "board_number"])
 
 	# 价格设定
 	registry.register("set_price", _cmd_set_price.bind(registry), "设定价格（-$1）", "set_price")
@@ -211,7 +212,7 @@ static func _cmd_place_restaurant(args: Array, registry: DebugCommandRegistry) -
 
 	var state := engine.get_state()
 	var cmd := Command.create("place_restaurant", state.get_current_player_id(), {
-		"position": {"x": x, "y": y},
+		"position": [x, y],
 		"rotation": rotation
 	})
 	_mark_debug_force(cmd)
@@ -236,7 +237,7 @@ static func _cmd_place_house(args: Array, registry: DebugCommandRegistry) -> Res
 
 	var state := engine.get_state()
 	var cmd := Command.create("place_house", state.get_current_player_id(), {
-		"position": {"x": x, "y": y},
+		"position": [x, y],
 		"rotation": rotation
 	})
 	_mark_debug_force(cmd)
@@ -263,7 +264,7 @@ static func _cmd_move_restaurant(args: Array, registry: DebugCommandRegistry) ->
 	var state := engine.get_state()
 	var cmd := Command.create("move_restaurant", state.get_current_player_id(), {
 		"restaurant_id": restaurant_id,
-		"position": {"x": x, "y": y},
+		"position": [x, y],
 		"rotation": rotation
 	})
 	_mark_debug_force(cmd)
@@ -319,7 +320,7 @@ static func _cmd_marketing(args: Array, registry: DebugCommandRegistry) -> Resul
 		"employee_type": employee_type,
 		"board_number": board_number,
 		"product": product,
-		"position": {"x": x, "y": y}
+		"position": [x, y]
 	})
 	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
@@ -328,6 +329,51 @@ static func _cmd_marketing(args: Array, registry: DebugCommandRegistry) -> Resul
 		return result
 
 	return Result.success("已发起营销: %s 在 (%d, %d)" % [product, x, y])
+
+static func _cmd_add_house_demand(args: Array, registry: DebugCommandRegistry) -> Result:
+	var engine := registry.get_game_engine()
+	if engine == null:
+		return Result.failure("游戏引擎未初始化")
+
+	if args.size() < 2:
+		return Result.failure("用法: add_house_demand <house_id> <product> [amount] [from_player] [marketing_type] [board_number]")
+
+	var house_id := str(args[0])
+	var product := str(args[1])
+
+	var amount := 1
+	if args.size() > 2 and not str(args[2]).is_empty():
+		amount = int(args[2])
+
+	var state := engine.get_state()
+	var from_player := state.get_current_player_id()
+	if args.size() > 3 and not str(args[3]).is_empty():
+		from_player = int(args[3])
+
+	var marketing_type := "debug"
+	if args.size() > 4 and not str(args[4]).is_empty():
+		marketing_type = str(args[4])
+
+	var board_number := 0
+	if args.size() > 5 and not str(args[5]).is_empty():
+		board_number = int(args[5])
+
+	var cmd := Command.create_system("debug_add_house_demand", {
+		"house_id": house_id,
+		"product": product,
+		"amount": amount,
+		"from_player": from_player,
+		"marketing_type": marketing_type,
+		"board_number": board_number,
+	})
+	_mark_debug_force(cmd)
+	var result := engine.execute_command(cmd)
+
+	if not result.ok:
+		return result
+
+	var added := int(result.value) if (result.value is int or result.value is float) else 0
+	return Result.success("已为房屋 %s 增加需求: %s x%d (added=%d, from_player=%d, type=%s, board=%d)" % [house_id, product, amount, added, from_player, marketing_type, board_number])
 
 # === 价格设定 ===
 

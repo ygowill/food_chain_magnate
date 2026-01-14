@@ -22,6 +22,7 @@ signal right_panel_footer_changed()
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const MarketingTypeButtonClass = preload("res://ui/components/marketing_panel/marketing_type_button.gd")
+const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 
 # 营销类型定义（用于 UI 文案与范围提示；具体可用性由外部传入）
 const MARKETING_TYPES: Array[Dictionary] = [
@@ -48,6 +49,15 @@ var _type_buttons: Dictionary = {}  # type_id -> marketing_type_button instance
 var _marketer_max_duration_by_id: Dictionary = {}  # employee_type -> max_duration
 
 var _map_callback: Callable  # 用于请求地图选择
+var _visual_modules: Array[String] = []
+var _skin = null
+
+func set_visual_modules(modules: Array[String]) -> void:
+	_visual_modules = Array(modules, TYPE_STRING, "", null)
+	_skin = null
+	_ensure_skin()
+	_rebuild_type_buttons()
+	_rebuild_product_options()
 
 func set_embedded_in_right_panel(embedded: bool) -> void:
 	var row = get_node_or_null("MarginContainer/VBoxContainer/ButtonRow")
@@ -155,6 +165,8 @@ func _rebuild_type_buttons() -> void:
 	if type_container == null:
 		return
 
+	_ensure_skin()
+
 	var marketers_by_type: Dictionary = {}
 	for marketer in _available_marketers:
 		var m_type: String = str(marketer.get("type", ""))
@@ -171,6 +183,7 @@ func _rebuild_type_buttons() -> void:
 		var btn = MarketingTypeButtonClass.new()
 		btn.type_id = type_id
 		btn.type_def = type_def
+		btn.icon_texture = _get_marketing_icon_texture(type_id)
 		btn.is_available = is_available
 		btn.marketer_count = marketer_count
 		btn.board_count = board_count
@@ -325,6 +338,8 @@ func _rebuild_product_options() -> void:
 		product_option.disabled = true
 		return
 
+	_ensure_skin()
+
 	for pid in ProductRegistryClass.get_all_ids():
 		var def_val = ProductRegistryClass.get_def(pid)
 		if def_val != null and def_val.has_method("has_tag") and def_val.has_tag("no_marketing"):
@@ -338,7 +353,11 @@ func _rebuild_product_options() -> void:
 			# 兜底：ProductDef 有字段 name
 			name = str(def_val.name)
 
-		product_option.add_item(name)
+		var tex := _get_product_icon_texture(pid)
+		if tex != null:
+			product_option.add_icon_item(tex, name)
+		else:
+			product_option.add_item(name)
 		var idx := product_option.get_item_count() - 1
 		product_option.set_item_metadata(idx, pid)
 
@@ -349,6 +368,36 @@ func _rebuild_product_options() -> void:
 		_selected_product = str(meta)
 	else:
 		product_option.disabled = true
+
+func _ensure_skin() -> void:
+	if _skin != null:
+		return
+
+	var base_dir := "res://modules"
+	if Globals != null:
+		base_dir = str(Globals.modules_v2_base_dir)
+
+	var mods := _visual_modules
+	if mods.is_empty() and Globals != null and (Globals.enabled_modules_v2 is Array):
+		mods = Array(Globals.enabled_modules_v2, TYPE_STRING, "", null)
+
+	_skin = UiSkinCacheClass.get_skin_for_modules(base_dir, mods, 40)
+
+func _get_product_icon_texture(product_id: String) -> Texture2D:
+	if _skin == null or not _skin.has_method("get_product_icon_texture"):
+		return null
+	var pid := str(product_id)
+	if pid == "cola":
+		pid = "soda"
+	return _skin.get_product_icon_texture(pid)
+
+func _get_marketing_icon_texture(type_id: String) -> Texture2D:
+	if _skin == null or not _skin.has_method("get_marketing_texture"):
+		return null
+	var key := str(type_id)
+	if key.is_empty():
+		key = "default"
+	return _skin.get_marketing_texture(key)
 
 func _on_marketer_selected(index: int) -> void:
 	_apply_selected_marketer(index)

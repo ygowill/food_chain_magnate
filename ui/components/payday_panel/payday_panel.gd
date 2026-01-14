@@ -241,16 +241,7 @@ class SalaryItem extends PanelContainer:
 	var _salary_label: Label
 	var _status_label: Label
 
-	const ROLE_COLORS: Dictionary = {
-		"manager": Color("#000000"),
-		"recruit_train": Color("#bdb6b5"),
-		"produce_food": Color("#94a869"),
-		"procure_drink": Color("#adce91"),
-		"price": Color("#eba791"),
-		"marketing": Color("#94c1c7"),
-		"new_shop": Color("#aa3c34"),
-		"special": Color("#ae94c0"),
-	}
+	const EmployeeDefClass = preload("res://core/data/employee_def.gd")
 
 	func _ready() -> void:
 		_build_ui()
@@ -276,7 +267,7 @@ class SalaryItem extends PanelContainer:
 		var role_color := ColorRect.new()
 		role_color.custom_minimum_size = Vector2(6, 30)
 		var role: String = str(employee_def.get("role", "special"))
-		role_color.color = ROLE_COLORS.get(role, Color(0.5, 0.5, 0.5, 1))
+		role_color.color = Color(EmployeeDefClass.role_to_color_hex(role))
 		hbox.add_child(role_color)
 
 		# 员工名称

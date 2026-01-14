@@ -34,6 +34,7 @@ var _structures_by_anchor: Dictionary = {} # Vector2i -> {piece_id, owner, rotat
 
 var _structure_preview_cells: Array[Vector2i] = []
 var _structure_preview_valid: bool = true
+var _structure_preview_info: Dictionary = {}
 
 var _highlighted_cells: Dictionary = {} # Vector2i -> true
 
@@ -50,16 +51,63 @@ func set_game_state(state: GameState) -> void:
 		return
 	_state_seed = int(state.seed)
 	_player_restaurant_logo_ids.clear()
-	for p_val in state.players:
+	var logo_count := MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS.size()
+	var fallback_logo_ids: Array[int] = _build_fallback_logo_ids(logo_count)
+	for i in range(state.players.size()):
+		var p_val = state.players[i]
 		if not (p_val is Dictionary):
 			continue
 		var p: Dictionary = p_val
-		var pid := int(p.get("id", -1))
-		var logo_id := int(p.get("restaurant_logo_id", -1))
-		if pid >= 0 and logo_id >= 0:
+		var pid := int(p.get("id", i))
+		if pid < 0:
+			continue
+
+		var logo_id := _read_logo_id(p.get("restaurant_logo_id", null), logo_count)
+		if logo_id >= 0:
 			_player_restaurant_logo_ids[pid] = logo_id
+		else:
+			_player_restaurant_logo_ids[pid] = _fallback_logo_id_for_player(pid, fallback_logo_ids)
 	_ensure_skin(Array(state.modules, TYPE_STRING, "", null))
 	set_map_data(state.map)
+
+func _read_logo_id(value, logo_count: int) -> int:
+	if logo_count <= 0:
+		return -1
+	var logo_id := -1
+	if value is int:
+		logo_id = int(value)
+	elif value is float:
+		var f: float = float(value)
+		if f == floor(f):
+			logo_id = int(f)
+	if logo_id < 0 or logo_id >= logo_count:
+		return -1
+	return logo_id
+
+func _build_fallback_logo_ids(logo_count: int) -> Array[int]:
+	if logo_count <= 0:
+		return []
+	var ids: Array[int] = []
+	for i in range(logo_count):
+		ids.append(i)
+
+	var rng := RandomNumberGenerator.new()
+	var logo_seed := int(_state_seed) ^ int(0x4C4F474F) # 'LOGO'
+	rng.seed = int(logo_seed)
+	rng.state = int(logo_seed)
+	for i in range(ids.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp := ids[i]
+		ids[i] = ids[j]
+		ids[j] = tmp
+
+	return ids
+
+func _fallback_logo_id_for_player(player_id: int, fallback_logo_ids: Array[int]) -> int:
+	if fallback_logo_ids.is_empty():
+		return -1
+	var pid := maxi(0, int(player_id))
+	return int(fallback_logo_ids[pid % fallback_logo_ids.size()])
 
 func set_map_data(map_data: Dictionary) -> void:
 	if map_data.is_empty():
@@ -102,6 +150,7 @@ func clear() -> void:
 	_hover_pos = Vector2i(-1, -1)
 	_structure_preview_cells.clear()
 	_structure_preview_valid = true
+	_structure_preview_info.clear()
 	_highlighted_cells.clear()
 	custom_minimum_size = Vector2.ZERO
 	queue_redraw()
@@ -121,9 +170,10 @@ func set_zoom(zoom: float) -> void:
 func get_world_origin() -> Vector2i:
 	return _world_origin
 
-func set_structure_preview(cells: Array[Vector2i], valid: bool) -> void:
+func set_structure_preview(cells: Array[Vector2i], valid: bool, preview_info: Dictionary = {}) -> void:
 	_structure_preview_cells = cells.duplicate()
 	_structure_preview_valid = valid
+	_structure_preview_info = preview_info.duplicate(true)
 	queue_redraw()
 
 func clear_structure_preview() -> void:
@@ -131,6 +181,7 @@ func clear_structure_preview() -> void:
 		return
 	_structure_preview_cells.clear()
 	_structure_preview_valid = true
+	_structure_preview_info.clear()
 	queue_redraw()
 
 func set_cell_highlights(cells: Array[Vector2i]) -> void:

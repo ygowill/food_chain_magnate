@@ -34,6 +34,9 @@ func sync_demand_indicator(state: GameState) -> void:
 
 	_sync_demand_indicator_transform()
 
+	if demand_indicator.has_method("set_visual_modules") and (state.modules is Array):
+		demand_indicator.set_visual_modules(Array(state.modules, TYPE_STRING, "", null))
+
 	if demand_indicator.has_method("set_house_demands"):
 		demand_indicator.set_house_demands(_build_dinnertime_demand_indicator_data(state))
 
@@ -116,4 +119,3 @@ func _build_dinnertime_demand_indicator_data(state: GameState) -> Dictionary:
 			}
 
 	return out
-

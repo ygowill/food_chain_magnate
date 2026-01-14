@@ -254,16 +254,7 @@ class PoolCard extends PanelContainer:
 	var _recruit_btn: Button
 	var _role_color: ColorRect
 
-	const ROLE_COLORS: Dictionary = {
-		"manager": Color("#000000"),
-		"recruit_train": Color("#bdb6b5"),
-		"produce_food": Color("#94a869"),
-		"procure_drink": Color("#adce91"),
-		"price": Color("#eba791"),
-		"marketing": Color("#94c1c7"),
-		"new_shop": Color("#aa3c34"),
-		"special": Color("#ae94c0"),
-	}
+	const EmployeeDefClass = preload("res://core/data/employee_def.gd")
 
 	func _ready() -> void:
 		_build_ui()
@@ -312,7 +303,7 @@ class PoolCard extends PanelContainer:
 
 		if _role_color != null:
 			var role: String = str(employee_def.get("role", "special"))
-			_role_color.color = ROLE_COLORS.get(role, Color(0.5, 0.5, 0.5, 1))
+			_role_color.color = Color(EmployeeDefClass.role_to_color_hex(role))
 
 		if _count_label != null:
 			_count_label.text = "库存: %d" % pool_count

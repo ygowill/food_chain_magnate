@@ -104,6 +104,10 @@ text = "调试"
 layout_mode = 2
 size_flags_horizontal = 3
 
+[node name="EmployeeTreeButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+layout_mode = 2
+text = "升级路线"
+
 [node name="LogButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
 layout_mode = 2
 text = "日志"
@@ -143,6 +147,7 @@ custom_minimum_size = Vector2(360, 0)
 layout_mode = 2
 
 [node name="GameLogPanel" parent="UIRoot/MainContent/LeftArea" instance=ExtResource("10_game_log_panel")]
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -153,6 +158,11 @@ grow_vertical = 2
 [node name="LeftPanel" parent="UIRoot/MainContent/LeftArea" instance=ExtResource("13_left_panel")]
 visible = false
 layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="CenterSplit" type="HSplitContainer" parent="UIRoot/MainContent"]
 layout_mode = 2
@@ -362,6 +372,7 @@ editable = false
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/AdvanceSubPhaseButton" to="." method="_on_advance_sub_phase_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/SkipButton" to="." method="_on_skip_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/DebugButton" to="." method="_on_debug_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/EmployeeTreeButton" to="." method="_on_employee_tree_button_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/LogButton" to="." method="_on_log_button_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/MilestonesButton" to="." method="_on_milestones_button_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/DistanceToolButton" to="." method="_on_distance_tool_button_pressed"]

@@ -5,6 +5,8 @@ extends Control
 
 signal range_clicked(position: Vector2i)
 
+const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+
 var _tile_size: Vector2 = Vector2(64, 64)
 var _map_offset: Vector2 = Vector2.ZERO
 
@@ -12,23 +14,21 @@ var _marketing_campaigns: Array[Dictionary] = []  # [{position, range, type, pla
 var _range_rects: Array[ColorRect] = []
 var _center_markers: Array[Control] = []
 
-# 营销类型颜色
-const MARKETING_COLORS: Dictionary = {
-	"billboard": Color(0.4, 0.7, 0.9, 0.3),
-	"mailbox": Color(0.5, 0.8, 0.5, 0.3),
-	"airplane": Color(0.9, 0.7, 0.4, 0.3),
-	"radio": Color(0.8, 0.5, 0.8, 0.2),
-}
+const RANGE_BASE_COLOR := Color("#4A90D9")
 
-const MARKETING_BORDER_COLORS: Dictionary = {
-	"billboard": Color(0.4, 0.7, 0.9, 0.8),
-	"mailbox": Color(0.5, 0.8, 0.5, 0.8),
-	"airplane": Color(0.9, 0.7, 0.4, 0.8),
-	"radio": Color(0.8, 0.5, 0.8, 0.6),
-}
+var _visual_modules: Array[String] = []
+var _skin = null
+var _pulse_tween: Tween = null
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_start_pulse()
+
+func set_visual_modules(modules: Array[String]) -> void:
+	_visual_modules = Array(modules, TYPE_STRING, "", null)
+	_skin = null
+	_ensure_skin()
+	_rebuild_visuals()
 
 func set_tile_size(size: Vector2) -> void:
 	_tile_size = size
@@ -82,8 +82,10 @@ func _add_campaign_visual(campaign: Dictionary) -> void:
 	var range_val: int = campaign.range
 	var m_type: String = campaign.type
 
-	var fill_color: Color = MARKETING_COLORS.get(m_type, Color(0.5, 0.5, 0.5, 0.3))
-	var border_color: Color = MARKETING_BORDER_COLORS.get(m_type, Color(0.5, 0.5, 0.5, 0.6))
+	var fill_color := RANGE_BASE_COLOR
+	fill_color.a = 0.3
+	var border_color := RANGE_BASE_COLOR
+	border_color.a = 0.8
 
 	# 指定格子（例如：按规则计算的“受影响房屋”集合）
 	var tiles_val = campaign.get("tiles", null)
@@ -165,28 +167,16 @@ func _create_center_marker(position: Vector2i, m_type: String, color: Color) -> 
 	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	marker.add_child(border)
 
-	# 中心图标
-	var icon_label := Label.new()
-	icon_label.set_anchors_preset(Control.PRESET_CENTER)
-	icon_label.add_theme_font_size_override("font_size", 20)
-	icon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	icon_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	icon_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	match m_type:
-		"billboard":
-			icon_label.text = "B"
-		"mailbox":
-			icon_label.text = "M"
-		"airplane":
-			icon_label.text = "A"
-		"radio":
-			icon_label.text = "R"
-		_:
-			icon_label.text = "?"
-
-	icon_label.add_theme_color_override("font_color", color)
-	marker.add_child(icon_label)
+	# 中心图标（营销贴图）
+	_ensure_skin()
+	var icon_rect := TextureRect.new()
+	icon_rect.set_anchors_preset(Control.PRESET_CENTER)
+	icon_rect.custom_minimum_size = Vector2(24, 24)
+	icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if _skin != null and _skin.has_method("get_marketing_texture"):
+		icon_rect.texture = _skin.get_marketing_texture(m_type)
+	marker.add_child(icon_rect)
 
 	# 范围圈（使用自定义绘制）
 	var range_circle := RangeCircle.new()
@@ -205,12 +195,41 @@ func _rebuild_visuals() -> void:
 	for campaign in _marketing_campaigns:
 		_add_campaign_visual(campaign)
 
+func _ensure_skin() -> void:
+	if _skin != null:
+		return
+
+	var base_dir := "res://modules"
+	if Globals != null:
+		base_dir = str(Globals.modules_v2_base_dir)
+	var mods := _visual_modules
+	if mods.is_empty() and Globals != null and (Globals.enabled_modules_v2 is Array):
+		mods = Array(Globals.enabled_modules_v2, TYPE_STRING, "", null)
+	_skin = UiSkinCacheClass.get_skin_for_modules(base_dir, mods, 40)
+
+func _start_pulse() -> void:
+	if OS.has_feature("headless"):
+		return
+	if _pulse_tween != null:
+		_pulse_tween.kill()
+	_pulse_tween = create_tween()
+	_pulse_tween.set_loops()
+	_pulse_tween.tween_property(self, "modulate", Color(1, 1, 1, 0.85), 0.65).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_pulse_tween.tween_property(self, "modulate", Color(1, 1, 1, 1), 0.65).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 # === 内部类：范围圈绘制 ===
 class RangeCircle extends Control:
 	var color: Color = Color.WHITE
 
 	func _draw() -> void:
-		var center := size / 2
-		var radius = min(size.x, size.y) / 2 - 2
-		draw_arc(center, radius, 0, TAU, 32, color, 2.0)
+		var center: Vector2 = size * 0.5
+		var radius: float = minf(size.x, size.y) * 0.5 - 2.0
+		var dash_count: int = 24
+		var step: float = TAU / float(dash_count)
+		var dash: float = step * 0.65
+		for i in range(dash_count):
+			var a1: float = float(i) * step
+			var a2: float = a1 + dash
+			var p1: Vector2 = center + Vector2(cos(a1), sin(a1)) * radius
+			var p2: Vector2 = center + Vector2(cos(a2), sin(a2)) * radius
+			draw_line(p1, p2, color, 2.0)

@@ -22,6 +22,15 @@ func show_marketing_range_overlay(campaigns: Array[Dictionary]) -> void:
 		if not is_instance_valid(marketing_range_overlay):
 			return
 
+		if marketing_range_overlay.has_method("set_visual_modules"):
+			var state2: GameState = null
+			if _scene != null and (_scene.has_method("get") and _scene.get("game_engine") != null):
+				var engine2 = _scene.get("game_engine")
+				if engine2 != null and (engine2 is GameEngine):
+					state2 = engine2.get_state()
+			if state2 != null and (state2.modules is Array):
+				marketing_range_overlay.set_visual_modules(Array(state2.modules, TYPE_STRING, "", null))
+
 		var normalized: Array[Dictionary] = []
 		for c_val in campaigns:
 			if not (c_val is Dictionary):
@@ -80,6 +89,15 @@ func preview_marketing_range(position: Vector2i, range_val: int, marketing_type:
 	_ensure_marketing_range_overlay()
 	if not is_instance_valid(marketing_range_overlay):
 		return
+
+	if marketing_range_overlay.has_method("set_visual_modules"):
+		var state3: GameState = null
+		if _scene != null and (_scene.has_method("get") and _scene.get("game_engine") != null):
+			var engine3 = _scene.get("game_engine")
+			if engine3 != null and (engine3 is GameEngine):
+				state3 = engine3.get_state()
+		if state3 != null and (state3.modules is Array):
+			marketing_range_overlay.set_visual_modules(Array(state3.modules, TYPE_STRING, "", null))
 
 	var tiles: Array[Vector2i] = _compute_preview_tiles(position, marketing_type, extra)
 

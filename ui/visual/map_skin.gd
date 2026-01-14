@@ -17,6 +17,7 @@ var piece_offsets_px: Dictionary = {}      # piece_id -> Vector2i
 var piece_scales: Dictionary = {}          # piece_id -> Vector2
 
 var _placeholders: Dictionary = {}         # kind -> Texture2D
+var _logo_textures_transparent_bg: Dictionary = {} # piece_id -> Texture2D
 
 func apply_visual_catalog(catalog, warnings: Array[String]) -> void:
 	if catalog == null:
@@ -50,7 +51,8 @@ func apply_visual_catalog(catalog, warnings: Array[String]) -> void:
 			continue
 		var entry3: Dictionary = entry_val3
 		var texture_path3: String = str(entry3.get("texture", ""))
-		piece_textures[piece_id] = _load_texture_or_placeholder(texture_path3, "piece", warnings, "piece:%s" % piece_id)
+		var base_tex := _load_texture_or_placeholder(texture_path3, "piece", warnings, "piece:%s" % piece_id)
+		piece_textures[piece_id] = _maybe_make_transparent_logo_texture(piece_id, base_tex, warnings)
 		var offset_val = entry3.get("offset_px", Vector2i.ZERO)
 		if offset_val is Vector2i:
 			piece_offsets_px[piece_id] = offset_val
@@ -147,6 +149,120 @@ func _load_texture_or_placeholder(path: String, kind: String, warnings: Array[St
 		return res
 	warnings.append("MapSkin: 贴图类型错误，使用占位: %s (%s)" % [label, path])
 	return _get_placeholder(kind)
+
+func _maybe_make_transparent_logo_texture(piece_id: String, base_tex: Texture2D, warnings: Array[String]) -> Texture2D:
+	if base_tex == null:
+		return base_tex
+	var id := str(piece_id)
+	if not id.begins_with("restaurant_logo_"):
+		return base_tex
+	if _logo_textures_transparent_bg.has(id):
+		var cached = _logo_textures_transparent_bg.get(id, null)
+		return cached if cached is Texture2D else base_tex
+
+	var converted := _convert_texture_edge_bg_to_transparent(base_tex)
+	if converted != null:
+		_logo_textures_transparent_bg[id] = converted
+		return converted
+
+	if warnings != null:
+		warnings.append("MapSkin: logo 去背景失败，使用原贴图: %s" % id)
+	return base_tex
+
+func _convert_texture_edge_bg_to_transparent(tex: Texture2D) -> Texture2D:
+	if tex == null:
+		return null
+
+	var img := tex.get_image()
+	if img == null:
+		return null
+	if img.is_empty():
+		return null
+
+	var w := img.get_width()
+	var h := img.get_height()
+	if w <= 1 or h <= 1:
+		return null
+
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+
+	var bg := _average_corner_color(img)
+	var threshold := 0.18
+
+	var visited := PackedByteArray()
+	visited.resize(w * h)
+
+	var queue: Array[int] = []
+	var head := 0
+
+	for x in range(w):
+		_try_enqueue_bg(img, visited, queue, w, h, x, 0, bg, threshold)
+		_try_enqueue_bg(img, visited, queue, w, h, x, h - 1, bg, threshold)
+	for y in range(1, h - 1):
+		_try_enqueue_bg(img, visited, queue, w, h, 0, y, bg, threshold)
+		_try_enqueue_bg(img, visited, queue, w, h, w - 1, y, bg, threshold)
+
+	while head < queue.size():
+		var idx: int = queue[head]
+		head += 1
+		var x := idx % w
+		var y := int(idx / w)
+
+		if x > 0:
+			_try_enqueue_bg(img, visited, queue, w, h, x - 1, y, bg, threshold)
+		if x + 1 < w:
+			_try_enqueue_bg(img, visited, queue, w, h, x + 1, y, bg, threshold)
+		if y > 0:
+			_try_enqueue_bg(img, visited, queue, w, h, x, y - 1, bg, threshold)
+		if y + 1 < h:
+			_try_enqueue_bg(img, visited, queue, w, h, x, y + 1, bg, threshold)
+
+	for idx in queue:
+		var x := int(idx) % w
+		var y := int(int(idx) / w)
+		var c := img.get_pixel(x, y)
+		c.a = 0.0
+		img.set_pixel(x, y, c)
+
+	return ImageTexture.create_from_image(img)
+
+func _try_enqueue_bg(img: Image, visited: PackedByteArray, queue: Array[int], w: int, h: int, x: int, y: int, bg: Color, threshold: float) -> void:
+	if x < 0 or x >= w or y < 0 or y >= h:
+		return
+	var idx := y * w + x
+	if idx < 0 or idx >= visited.size():
+		return
+	if visited[idx] != 0:
+		return
+
+	var c := img.get_pixel(x, y)
+	if c.a <= 0.001:
+		visited[idx] = 1
+		queue.append(idx)
+		return
+
+	var diff := absf(c.r - bg.r) + absf(c.g - bg.g) + absf(c.b - bg.b)
+	if diff <= threshold:
+		visited[idx] = 1
+		queue.append(idx)
+
+func _average_corner_color(img: Image) -> Color:
+	var w := img.get_width()
+	var h := img.get_height()
+	if w <= 0 or h <= 0:
+		return Color(1, 1, 1, 1)
+	var c1 := img.get_pixel(0, 0)
+	var c2 := img.get_pixel(w - 1, 0)
+	var c3 := img.get_pixel(0, h - 1)
+	var c4 := img.get_pixel(w - 1, h - 1)
+	var c := Color(
+		(c1.r + c2.r + c3.r + c4.r) * 0.25,
+		(c1.g + c2.g + c3.g + c4.g) * 0.25,
+		(c1.b + c2.b + c3.b + c4.b) * 0.25,
+		(c1.a + c2.a + c3.a + c4.a) * 0.25
+	)
+	return c
 
 static func _make_checker_texture(size: Vector2i, a: Color, b: Color, cell: int = 6) -> Texture2D:
 	var w: int = max(size.x, 1)

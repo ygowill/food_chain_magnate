@@ -43,6 +43,7 @@ var ui_layout_version: int = 2 # 1=经典布局；2=新布局（默认，可回�
 var confirm_actions: bool = true
 var show_hints: bool = true
 var animation_speed: float = 1.0
+var show_tile_ids: bool = false
 
 func get_version() -> String:
 	var v = ProjectSettings.get_setting("application/config/version", "")
@@ -65,6 +66,7 @@ func _load_settings() -> void:
 		language = config.get_value("game", "language", "zh")
 		ui_scale = float(config.get_value("display", "ui_scale", 1.0))
 		ui_layout_version = clampi(int(config.get_value("display", "ui_layout_version", 2)), 1, 2)
+		show_tile_ids = bool(config.get_value("display", "show_tile_ids", false))
 		confirm_actions = bool(config.get_value("game", "confirm_actions", true))
 		show_hints = bool(config.get_value("game", "show_hints", true))
 		animation_speed = float(config.get_value("game", "animation_speed", 1.0))

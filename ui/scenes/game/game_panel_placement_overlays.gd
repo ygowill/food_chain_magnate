@@ -120,6 +120,10 @@ func show_house_placement(action_id: String, params: Dictionary) -> void:
 			house_placement_overlay.garden_confirmed.connect(_on_garden_confirmed)
 		if house_placement_overlay.has_signal("cancelled"):
 			house_placement_overlay.cancelled.connect(_on_overlay_cancelled)
+		if house_placement_overlay.has_signal("preview_requested") and _map_controller != null:
+			house_placement_overlay.preview_requested.connect(Callable(_map_controller, "on_house_preview_requested"))
+		if house_placement_overlay.has_signal("preview_cleared") and _map_controller != null:
+			house_placement_overlay.preview_cleared.connect(Callable(_map_controller, "on_house_preview_cleared"))
 		if house_placement_overlay.has_signal("highlight_requested") and _map_controller != null:
 			house_placement_overlay.highlight_requested.connect(Callable(_map_controller, "on_house_highlight_requested"))
 		_scene.add_child(house_placement_overlay)
@@ -137,6 +141,8 @@ func show_house_placement(action_id: String, params: Dictionary) -> void:
 		house_placement_overlay.set_mode(action_id)
 	if house_placement_overlay.has_method("set_map_data"):
 		house_placement_overlay.set_map_data(state.map)
+	if _map_controller != null:
+		_map_controller.on_house_preview_cleared()
 
 func _on_restaurant_placement_confirmed(position: Vector2i, rotation: int, restaurant_id: String) -> void:
 	if _scene == null or _scene.game_engine == null:

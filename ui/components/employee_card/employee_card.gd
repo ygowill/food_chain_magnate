@@ -3,6 +3,8 @@
 class_name EmployeeCard
 extends PanelContainer
 
+const EmployeeDefClass = preload("res://core/data/employee_def.gd")
+
 signal card_clicked(employee_id: String)
 signal card_drag_started(employee_id: String)
 signal card_drag_ended(employee_id: String, drop_position: Vector2)
@@ -17,18 +19,6 @@ enum CardVariant {
 @export var draggable: bool = true
 @export var variant: CardVariant = CardVariant.COMPACT
 
-# 职责颜色映射（与 EmployeeDef 保持一致）
-const ROLE_COLORS: Dictionary = {
-	"manager": Color("#000000"),
-	"recruit_train": Color("#bdb6b5"),
-	"produce_food": Color("#94a869"),
-	"procure_drink": Color("#adce91"),
-	"price": Color("#eba791"),
-	"marketing": Color("#94c1c7"),
-	"new_shop": Color("#aa3c34"),
-	"special": Color("#ae94c0"),
-}
-
 var _employee_def: Dictionary = {}
 var _selected: bool = false
 var _busy: bool = false
@@ -41,12 +31,15 @@ var _name_label: Label
 var _salary_indicator: Label
 var _description_label: Label
 var _level_label: Label
-var _entry_label: Label
 var _range_label: Label
 var _salary_label: Label
 
 var _portrait_texture: TextureRect
-var _portrait_fallback_label: Label
+var _portrait_placeholder_rect: ColorRect
+
+var _entry_icon_rect: ColorRect
+var _range_icon_rect: ColorRect
+var _salary_icon_rect: ColorRect
 
 const COMPACT_SIZE := Vector2(130, 90)
 const FULL_SIZE := Vector2(180, 252)
@@ -68,19 +61,22 @@ func _build_ui() -> void:
 	_salary_indicator = null
 	_description_label = null
 	_level_label = null
-	_entry_label = null
 	_range_label = null
 	_salary_label = null
 	_portrait_texture = null
-	_portrait_fallback_label = null
+	_portrait_placeholder_rect = null
+	_entry_icon_rect = null
+	_range_icon_rect = null
+	_salary_icon_rect = null
 
 	custom_minimum_size = FULL_SIZE if variant == CardVariant.FULL else COMPACT_SIZE
 
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12 if variant == CardVariant.FULL else 8)
-	margin.add_theme_constant_override("margin_top", 12 if variant == CardVariant.FULL else 8)
-	margin.add_theme_constant_override("margin_right", 12 if variant == CardVariant.FULL else 8)
-	margin.add_theme_constant_override("margin_bottom", 12 if variant == CardVariant.FULL else 8)
+	var pad := 12 if variant == CardVariant.FULL else 6
+	margin.add_theme_constant_override("margin_left", pad)
+	margin.add_theme_constant_override("margin_top", pad)
+	margin.add_theme_constant_override("margin_right", pad)
+	margin.add_theme_constant_override("margin_bottom", pad)
 	add_child(margin)
 
 	var vbox := VBoxContainer.new()
@@ -96,55 +92,74 @@ func _build_ui() -> void:
 	queue_redraw()
 
 func _build_compact_layout(vbox: VBoxContainer) -> void:
-	# 顶部：角色颜色条 + 名称
-	var top_hbox := HBoxContainer.new()
-	top_hbox.add_theme_constant_override("separation", 4)
-	vbox.add_child(top_hbox)
-
+	# 顶部：类别色整行底色 + 名称
 	_role_color_rect = ColorRect.new()
-	_role_color_rect.custom_minimum_size = Vector2(6, 20)
-	top_hbox.add_child(_role_color_rect)
+	_role_color_rect.custom_minimum_size = Vector2(0, 20)
+	_role_color_rect.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_role_color_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(_role_color_rect)
+
+	var top_margin := MarginContainer.new()
+	top_margin.anchors_preset = Control.PRESET_FULL_RECT
+	top_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_margin.add_theme_constant_override("margin_left", 6)
+	top_margin.add_theme_constant_override("margin_right", 6)
+	_role_color_rect.add_child(top_margin)
 
 	_name_label = Label.new()
 	_name_label.add_theme_font_size_override("font_size", 14)
+	_name_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_hbox.add_child(_name_label)
-
-	# 中部：等级指示
-	_level_label = Label.new()
-	_level_label.add_theme_font_size_override("font_size", 12)
-	_level_label.add_theme_color_override("font_color", Color(0.65, 0.65, 0.7, 1))
-	vbox.add_child(_level_label)
+	_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_margin.add_child(_name_label)
 
 	# 底部：简短描述
 	_description_label = Label.new()
 	_description_label.add_theme_font_size_override("font_size", 11)
 	_description_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75, 1))
 	_description_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_description_label.custom_minimum_size = Vector2(0, 30)
+	_description_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(_description_label)
 
-	# 底部图标行（暂用文本占位：E / 距离 / $）
+	# 底部图标行（暂用色块占位：Entry / 路程 / 工资）
 	var bottom := HBoxContainer.new()
 	bottom.add_theme_constant_override("separation", 6)
 	vbox.add_child(bottom)
 
-	_entry_label = Label.new()
-	_entry_label.add_theme_font_size_override("font_size", 11)
-	_entry_label.custom_minimum_size = Vector2(16, 0)
-	bottom.add_child(_entry_label)
+	_entry_icon_rect = ColorRect.new()
+	_entry_icon_rect.custom_minimum_size = Vector2(16, 16)
+	bottom.add_child(_entry_icon_rect)
+
+	var range_box := HBoxContainer.new()
+	range_box.add_theme_constant_override("separation", 4)
+	range_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	range_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	bottom.add_child(range_box)
+
+	_range_icon_rect = ColorRect.new()
+	_range_icon_rect.custom_minimum_size = Vector2(16, 16)
+	range_box.add_child(_range_icon_rect)
 
 	_range_label = Label.new()
 	_range_label.add_theme_font_size_override("font_size", 11)
-	_range_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_range_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	bottom.add_child(_range_label)
+	range_box.add_child(_range_label)
+
+	var salary_box := HBoxContainer.new()
+	salary_box.add_theme_constant_override("separation", 4)
+	salary_box.alignment = BoxContainer.ALIGNMENT_END
+	bottom.add_child(salary_box)
+
+	_salary_icon_rect = ColorRect.new()
+	_salary_icon_rect.custom_minimum_size = Vector2(16, 16)
+	salary_box.add_child(_salary_icon_rect)
 
 	_salary_label = Label.new()
 	_salary_label.add_theme_font_size_override("font_size", 11)
-	_salary_label.custom_minimum_size = Vector2(16, 0)
 	_salary_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	bottom.add_child(_salary_label)
+	salary_box.add_child(_salary_label)
 
 func _build_full_layout(vbox: VBoxContainer) -> void:
 	_name_label = Label.new()
@@ -161,17 +176,15 @@ func _build_full_layout(vbox: VBoxContainer) -> void:
 	portrait_root.custom_minimum_size = Vector2(120, 120)
 	portrait_box.add_child(portrait_root)
 
+	_portrait_placeholder_rect = ColorRect.new()
+	_portrait_placeholder_rect.anchors_preset = Control.PRESET_FULL_RECT
+	_portrait_placeholder_rect.color = Color(0.2, 0.2, 0.22, 1)
+	portrait_root.add_child(_portrait_placeholder_rect)
+
 	_portrait_texture = TextureRect.new()
 	_portrait_texture.anchors_preset = Control.PRESET_FULL_RECT
 	_portrait_texture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	portrait_root.add_child(_portrait_texture)
-
-	_portrait_fallback_label = Label.new()
-	_portrait_fallback_label.anchors_preset = Control.PRESET_FULL_RECT
-	_portrait_fallback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_portrait_fallback_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_portrait_fallback_label.add_theme_font_size_override("font_size", 42)
-	portrait_root.add_child(_portrait_fallback_label)
 
 	_level_label = Label.new()
 	_level_label.add_theme_font_size_override("font_size", 12)
@@ -196,22 +209,38 @@ func _build_full_layout(vbox: VBoxContainer) -> void:
 	bottom.add_theme_constant_override("separation", 8)
 	vbox.add_child(bottom)
 
-	_entry_label = Label.new()
-	_entry_label.add_theme_font_size_override("font_size", 12)
-	_entry_label.custom_minimum_size = Vector2(20, 0)
-	bottom.add_child(_entry_label)
+	_entry_icon_rect = ColorRect.new()
+	_entry_icon_rect.custom_minimum_size = Vector2(18, 18)
+	bottom.add_child(_entry_icon_rect)
+
+	var range_box := HBoxContainer.new()
+	range_box.add_theme_constant_override("separation", 6)
+	range_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	range_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	bottom.add_child(range_box)
+
+	_range_icon_rect = ColorRect.new()
+	_range_icon_rect.custom_minimum_size = Vector2(18, 18)
+	range_box.add_child(_range_icon_rect)
 
 	_range_label = Label.new()
 	_range_label.add_theme_font_size_override("font_size", 12)
-	_range_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_range_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	bottom.add_child(_range_label)
+	range_box.add_child(_range_label)
+
+	var salary_box := HBoxContainer.new()
+	salary_box.add_theme_constant_override("separation", 6)
+	salary_box.alignment = BoxContainer.ALIGNMENT_END
+	bottom.add_child(salary_box)
+
+	_salary_icon_rect = ColorRect.new()
+	_salary_icon_rect.custom_minimum_size = Vector2(18, 18)
+	salary_box.add_child(_salary_icon_rect)
 
 	_salary_label = Label.new()
 	_salary_label.add_theme_font_size_override("font_size", 12)
-	_salary_label.custom_minimum_size = Vector2(20, 0)
 	_salary_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	bottom.add_child(_salary_label)
+	salary_box.add_child(_salary_label)
 
 func setup(employee_def: Dictionary) -> void:
 	_employee_def = employee_def
@@ -234,7 +263,7 @@ func _update_display() -> void:
 	_name_label.text = name
 
 	var role: String = str(_employee_def.get("role", "special"))
-	var color: Color = ROLE_COLORS.get(role, Color(0.5, 0.5, 0.5, 1))
+	var color: Color = Color(EmployeeDefClass.role_to_color_hex(role))
 	if _role_color_rect != null:
 		_role_color_rect.color = color
 
@@ -248,14 +277,15 @@ func _update_display() -> void:
 	# 等级：根据是否可培训推断
 	var train_to: Array = Array(_employee_def.get("train_to", []))
 	var is_entry = _employee_def.get("tags", []).has("entry_level") if _employee_def.has("tags") else false
-	if _entry_label != null:
-		_entry_label.text = "E" if is_entry else ""
-	if is_entry:
-		_level_label.text = "Lv.1 (入门级)"
-	elif train_to.is_empty():
-		_level_label.text = "Lv.3 (高级)"
-	else:
-		_level_label.text = "Lv.2 (中级)"
+	if _entry_icon_rect != null:
+		_entry_icon_rect.visible = is_entry
+	if _level_label != null:
+		if is_entry:
+			_level_label.text = "Lv.1 (入门级)"
+		elif train_to.is_empty():
+			_level_label.text = "Lv.3 (高级)"
+		else:
+			_level_label.text = "Lv.2 (中级)"
 
 	var desc: String = str(_employee_def.get("description", ""))
 	var max_len := 120 if variant == CardVariant.FULL else 40
@@ -274,14 +304,30 @@ func _update_display() -> void:
 		if range_type.is_empty() or range_value <= 0:
 			_range_label.text = ""
 		else:
-			_range_label.text = "%s%d" % ["R" if range_type == "road" else "", range_value]
+			if range_type == "global":
+				_range_label.text = "∞"
+			else:
+				_range_label.text = "%s%d" % ["R" if range_type == "road" else "", range_value]
 
-	# 头像占位（资源待补齐时用首字母）
-	if _portrait_fallback_label != null:
-		var ch := "?"
-		if not name.is_empty():
-			ch = name.substr(0, 1)
-		_portrait_fallback_label.text = ch
+	# 头像占位（资源待补齐：使用空白色块）
+	if _portrait_placeholder_rect != null:
+		var ph := Color(color.r, color.g, color.b, 0.22)
+		ph.a = 1.0
+		_portrait_placeholder_rect.color = ph
+
+	if _portrait_texture != null:
+		_portrait_texture.visible = _portrait_texture.texture != null
+	if _portrait_placeholder_rect != null:
+		_portrait_placeholder_rect.visible = (_portrait_texture == null) or (_portrait_texture.texture == null)
+
+	# 图标占位色块（后续替换为 png）
+	var icon_placeholder := Color(0.82, 0.82, 0.86, 0.35)
+	if _entry_icon_rect != null:
+		_entry_icon_rect.color = Color(color.r, color.g, color.b, 0.75)
+	if _range_icon_rect != null:
+		_range_icon_rect.color = icon_placeholder
+	if _salary_icon_rect != null:
+		_salary_icon_rect.color = icon_placeholder
 
 	_update_style()
 	queue_redraw()
@@ -290,7 +336,7 @@ func _update_style() -> void:
 	var style := StyleBoxFlat.new()
 
 	var role: String = str(_employee_def.get("role", "special"))
-	var base_color: Color = ROLE_COLORS.get(role, Color(0.5, 0.5, 0.5, 1))
+	var base_color: Color = Color(EmployeeDefClass.role_to_color_hex(role))
 
 	if _busy:
 		style.bg_color = Color(0.3, 0.3, 0.35, 0.55)
@@ -318,8 +364,6 @@ func _update_style() -> void:
 	add_theme_stylebox_override("panel", style)
 
 func _draw() -> void:
-	if variant != CardVariant.FULL:
-		return
 	if _employee_def.is_empty():
 		return
 	var tags_val = _employee_def.get("tags", null)
@@ -327,9 +371,9 @@ func _draw() -> void:
 		return
 
 	var role: String = str(_employee_def.get("role", "special"))
-	var base_color: Color = ROLE_COLORS.get(role, Color(0.5, 0.5, 0.5, 1))
+	var base_color: Color = Color(EmployeeDefClass.role_to_color_hex(role))
 
-	var tri := 24.0
+	var tri := 24.0 if variant == CardVariant.FULL else 18.0
 	var points := PackedVector2Array([Vector2(0, 0), Vector2(tri, 0), Vector2(0, tri)])
 	draw_colored_polygon(points, base_color)
 

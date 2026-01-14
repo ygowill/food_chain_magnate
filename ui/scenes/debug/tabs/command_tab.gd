@@ -110,6 +110,11 @@ func _build_ui() -> void:
 			{"name": "x", "label": "X坐标", "hint": "0-14"},
 			{"name": "y", "label": "Y坐标", "hint": "0-14"}
 		]},
+		{"text": "给房屋加需求...", "command": "add_house_demand", "params": [
+			{"name": "house_id", "label": "房屋ID", "hint": "如: house_1"},
+			{"name": "product", "label": "产品", "hint": "如: burger, pizza"},
+			{"name": "amount", "label": "数量", "hint": "1, 2, 3...", "default": "1"},
+		]},
 	])
 
 	# 价格设定
@@ -131,7 +136,7 @@ func _build_ui() -> void:
 		{"text": "查看状态", "command": "state"},
 		{"text": "查看玩家", "command": "players"},
 		{"text": "查看地图", "command": "map"},
-		{"text": "查看营销", "command": "marketing"},
+		{"text": "查看营销", "command": "marketing_list"},
 	])
 
 	# 状态操作

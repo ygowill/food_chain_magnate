@@ -60,6 +60,9 @@ func show_marketing_panel() -> void:
 	var state = _scene.game_engine.get_state()
 	var current_player: Dictionary = state.get_current_player()
 
+	if marketing_panel.has_method("set_visual_modules") and (state.modules is Array):
+		marketing_panel.set_visual_modules(Array(state.modules, TYPE_STRING, "", null))
+
 	if _map_controller != null:
 		_map_controller.clear_selection()
 

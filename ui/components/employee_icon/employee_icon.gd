@@ -7,18 +7,6 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 @export var employee_id: String = ""
 @export var is_busy: bool = false
 
-# 职责颜色映射（与 EmployeeDef 保持一致）
-const ROLE_COLORS: Dictionary = {
-	"manager": Color("#000000"),
-	"recruit_train": Color("#bdb6b5"),
-	"produce_food": Color("#94a869"),
-	"procure_drink": Color("#adce91"),
-	"price": Color("#eba791"),
-	"marketing": Color("#94c1c7"),
-	"new_shop": Color("#aa3c34"),
-	"special": Color("#ae94c0"),
-}
-
 @onready var icon_texture: TextureRect = $IconTexture
 @onready var fallback_label: Label = $FallbackLabel
 
@@ -81,7 +69,7 @@ func _update_style() -> void:
 		var r := str(_employee_def.get_role()).strip_edges()
 		if not r.is_empty():
 			role = r
-	var base_color: Color = ROLE_COLORS.get(role, Color(0.5, 0.5, 0.5, 1))
+	var base_color: Color = Color(_employee_def.get_role_color()) if _employee_def != null else Color("#ae94c0")
 
 	var style := StyleBoxFlat.new()
 	style.set_corner_radius_all(4)
@@ -167,4 +155,3 @@ func _on_mouse_exited() -> void:
 		return
 	if mgr.has_method("hide_tooltip"):
 		mgr.hide_tooltip()
-

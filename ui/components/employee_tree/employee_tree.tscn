@@ -1,0 +1,72 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ui/components/employee_tree/employee_tree.gd" id="1_employee_tree"]
+[ext_resource type="Script" path="res://ui/components/employee_tree/employee_tree_graph.gd" id="2_employee_tree_graph"]
+
+[node name="EmployeeTree" type="Control"]
+custom_minimum_size = Vector2(900, 620)
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_employee_tree")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.12, 0.14, 0.16, 0.96)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="HeaderRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+text = "员工升级路线"
+
+[node name="FitButton" type="Button" parent="MarginContainer/VBoxContainer/HeaderRow"]
+layout_mode = 2
+text = "适应窗口"
+
+[node name="CloseButton" type="Button" parent="MarginContainer/VBoxContainer/HeaderRow"]
+layout_mode = 2
+text = "关闭"
+
+[node name="Viewport" type="Control" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+clip_contents = true
+
+[node name="PanBackground" type="ColorRect" parent="MarginContainer/VBoxContainer/Viewport"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0)
+
+[node name="Graph" type="Control" parent="MarginContainer/VBoxContainer/Viewport"]
+layout_mode = 0
+script = ExtResource("2_employee_tree_graph")

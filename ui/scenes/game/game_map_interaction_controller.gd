@@ -712,6 +712,10 @@ func on_house_highlight_requested(action_id: String, rotation: int) -> void:
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("set_cell_highlights"):
 		_map_canvas.call("set_cell_highlights", anchors)
 
+func on_house_preview_cleared() -> void:
+	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_structure_preview"):
+		_map_canvas.call("clear_structure_preview")
+
 func on_restaurant_preview_requested(mode: String, position: Vector2i, rotation: int, restaurant_id: String) -> void:
 	if _scene == null:
 		return
@@ -778,6 +782,69 @@ func on_restaurant_preview_requested(mode: String, position: Vector2i, rotation:
 			message = ex_r.error
 
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("set_structure_preview"):
-		_map_canvas.call("set_structure_preview", footprint_cells, valid)
+		_map_canvas.call("set_structure_preview", footprint_cells, valid, {
+			"piece_id": "restaurant",
+			"anchor": position,
+			"rotation": rotation,
+			"owner": actor,
+		})
 	if is_instance_valid(restaurant_placement_overlay) and restaurant_placement_overlay.has_method("set_validation"):
 		restaurant_placement_overlay.set_validation(valid, message)
+
+func on_house_preview_requested(action_id: String, position: Vector2i, rotation: int) -> void:
+	if _scene == null:
+		return
+	var engine = _scene.game_engine
+	if engine == null:
+		return
+	var state = engine.get_state()
+	if state == null:
+		return
+
+	var actor: int = state.get_current_player_id()
+
+	var piece_registry: Dictionary = engine.game_data.pieces if engine.game_data != null else {}
+	if not piece_registry.has("house") or not (piece_registry["house"] is PieceDef):
+		piece_registry["house"] = PieceDefClass.create_house()
+	var piece_def_val = piece_registry.get("house", null)
+	var piece_def: PieceDef = piece_def_val if piece_def_val is PieceDef else PieceDefClass.create_house()
+	var footprint_cells: Array[Vector2i] = piece_def.get_world_cells(position, rotation)
+
+	var ctx := {
+		"cells": state.map.cells,
+		"grid_size": state.map.grid_size,
+		"map_origin": state.map.get("map_origin", Vector2i.ZERO),
+		"houses": state.map.houses,
+		"restaurants": state.map.restaurants,
+		"drink_sources": state.map.get("drink_sources", []),
+	}
+
+	var validate_r: Result = PlacementValidatorClass.validate_house_placement(
+		ctx,
+		position,
+		rotation,
+		piece_registry,
+		actor,
+		{}
+	)
+	var valid := validate_r.ok
+	var message := "" if valid else validate_r.error
+
+	var cmd := Command.create("place_house", actor, {"position": [position.x, position.y], "rotation": rotation})
+	cmd.phase = state.phase
+	cmd.sub_phase = state.sub_phase
+	var executor = engine.get_action_registry().get_executor("place_house")
+	if executor != null:
+		var ex_r: Result = executor.validate(state, cmd)
+		if not ex_r.ok:
+			valid = false
+			message = ex_r.error
+
+	if is_instance_valid(_map_canvas) and _map_canvas.has_method("set_structure_preview"):
+		_map_canvas.call("set_structure_preview", footprint_cells, valid, {
+			"piece_id": "house",
+			"anchor": position,
+			"rotation": rotation,
+		})
+
+	# HousePlacementOverlay 目前没有 validation UI（只做预览与确认）

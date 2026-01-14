@@ -8,6 +8,9 @@ extends Control
 signal player_selected(player_id: int)
 signal logs_requested()
 
+const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
+
 @onready var player_tabs: VBoxContainer = $MarginContainer/HBoxContainer/PlayerTabs
 @onready var summary_row: Control = $MarginContainer/HBoxContainer/Content/SummaryRow
 @onready var summary_label: Label = $MarginContainer/HBoxContainer/Content/SummaryRow/SummaryLabel
@@ -46,15 +49,15 @@ const TAB_MILESTONES := 2
 const PRODUCT_NAMES: Dictionary = {
 	"burger": "汉堡",
 	"pizza": "披萨",
-	"cola": "可乐",
 	"lemonade": "柠檬水",
 	"beer": "啤酒",
+	"soda": "苏打",
 }
 
 const PRODUCT_EMOJI: Dictionary = {
 	"burger": "🍔",
 	"pizza": "🍕",
-	"cola": "🥤",
+	"soda": "🥤",
 	"lemonade": "🥤",
 	"beer": "🍺",
 }
@@ -71,6 +74,12 @@ var _game_state: GameState = null
 var _player_count: int = 0
 var _current_player_id: int = -1
 var _view_player_id: int = -1
+
+var _skin = null
+var _skin_modules_key: String = ""
+var _state_seed: int = 0
+var _player_restaurant_logo_ids: Dictionary = {} # player_id -> logo_id
+var _fallback_logo_ids: Array[int] = []
 
 var _tab_buttons: Array[Button] = []
 var _attached_log_panel: Node = null
@@ -104,12 +113,16 @@ func _init_tab_titles() -> void:
 
 func set_game_state(state: GameState) -> void:
 	_game_state = state
+	_rebuild_player_logo_ids()
+	_ensure_skin()
 	var count := 0
 	if state != null and state.players is Array:
 		count = state.players.size()
 	if count != _player_count:
 		_player_count = count
 		_rebuild_player_tabs()
+	else:
+		_update_player_tab_icons()
 	_refresh_milestones()
 	_maybe_auto_select_tab_for_phase()
 	_refresh()
@@ -224,12 +237,123 @@ func _rebuild_player_tabs() -> void:
 		btn.toggle_mode = true
 		btn.button_group = group
 		btn.custom_minimum_size = Vector2(44, 44)
-		btn.text = str(i + 1)
+		_apply_player_tab_icon(btn, i)
 		btn.toggled.connect(_on_player_tab_toggled.bind(i))
 		player_tabs.add_child(btn)
 		_tab_buttons.append(btn)
 
 	_update_tab_styles()
+
+func _ensure_skin() -> void:
+	if _game_state == null:
+		_skin = null
+		_skin_modules_key = ""
+		return
+
+	var mods: Array[String] = Array(_game_state.modules, TYPE_STRING, "", null)
+	var key: String = str(mods)
+	if _skin != null and key == _skin_modules_key:
+		return
+	_skin_modules_key = key
+	_skin = UiSkinCacheClass.get_skin_for_modules(Globals.modules_v2_base_dir, mods, 40)
+
+func _read_logo_id(value, logo_count: int) -> int:
+	if logo_count <= 0:
+		return -1
+	var logo_id := -1
+	if value is int:
+		logo_id = int(value)
+	elif value is float:
+		var f: float = float(value)
+		if f == floor(f):
+			logo_id = int(f)
+	if logo_id < 0 or logo_id >= logo_count:
+		return -1
+	return logo_id
+
+func _build_fallback_logo_ids(logo_count: int) -> Array[int]:
+	if logo_count <= 0:
+		return []
+	var ids: Array[int] = []
+	for i in range(logo_count):
+		ids.append(i)
+
+	var rng := RandomNumberGenerator.new()
+	var logo_seed := int(_state_seed) ^ int(0x4C4F474F) # 'LOGO'
+	rng.seed = int(logo_seed)
+	rng.state = int(logo_seed)
+	for i in range(ids.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp := ids[i]
+		ids[i] = ids[j]
+		ids[j] = tmp
+
+	return ids
+
+func _fallback_logo_id_for_player(player_id: int, fallback_logo_ids: Array[int]) -> int:
+	if fallback_logo_ids.is_empty():
+		return -1
+	var pid := maxi(0, int(player_id))
+	return int(fallback_logo_ids[pid % fallback_logo_ids.size()])
+
+func _rebuild_player_logo_ids() -> void:
+	_player_restaurant_logo_ids.clear()
+	_fallback_logo_ids.clear()
+	_state_seed = 0
+	if _game_state == null:
+		return
+	_state_seed = int(_game_state.seed)
+
+	var logo_count := MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS.size()
+	_fallback_logo_ids = _build_fallback_logo_ids(logo_count)
+	for i in range(_game_state.players.size()):
+		var p_val = _game_state.players[i]
+		if not (p_val is Dictionary):
+			continue
+		var p: Dictionary = p_val
+		var pid := int(p.get("id", i))
+		if pid < 0:
+			continue
+
+		var logo_id := _read_logo_id(p.get("restaurant_logo_id", null), logo_count)
+		if logo_id >= 0:
+			_player_restaurant_logo_ids[pid] = logo_id
+		else:
+			_player_restaurant_logo_ids[pid] = _fallback_logo_id_for_player(pid, _fallback_logo_ids)
+
+func _get_player_restaurant_logo_texture(player_id: int) -> Texture2D:
+	if _skin == null:
+		return null
+	if not (_skin.has_method("get_piece_texture")):
+		return null
+	var logo_count := MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS.size()
+	if logo_count <= 0:
+		return null
+	var logo_id := int(_player_restaurant_logo_ids.get(player_id, -1))
+	if logo_id < 0 or logo_id >= logo_count:
+		logo_id = _fallback_logo_id_for_player(player_id, _fallback_logo_ids)
+	var key: String = MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS[logo_id]
+	return _skin.get_piece_texture(key)
+
+func _apply_player_tab_icon(btn: Button, player_id: int) -> void:
+	if btn == null or not is_instance_valid(btn):
+		return
+	var tex := _get_player_restaurant_logo_texture(player_id)
+	if tex != null:
+		btn.text = ""
+		btn.icon = tex
+		btn.expand_icon = true
+		btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	else:
+		btn.icon = null
+		btn.text = str(player_id + 1)
+
+func _update_player_tab_icons() -> void:
+	for i in range(_tab_buttons.size()):
+		var btn := _tab_buttons[i]
+		if not is_instance_valid(btn):
+			continue
+		_apply_player_tab_icon(btn, i)
 
 func _update_tab_styles() -> void:
 	for i in range(_tab_buttons.size()):

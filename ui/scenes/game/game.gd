@@ -1018,6 +1018,10 @@ func _on_left_panel_logs_requested() -> void:
 func _on_milestones_button_pressed() -> void:
 	show_milestone_panel()
 
+func _on_employee_tree_button_pressed() -> void:
+	if _panel_controller != null and _panel_controller.has_method("toggle_employee_tree"):
+		_panel_controller.toggle_employee_tree()
+
 func _on_distance_tool_button_pressed() -> void:
 	toggle_distance_tool()
 

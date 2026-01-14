@@ -10,7 +10,7 @@ static func register_all(registry: DebugCommandRegistry) -> void:
 	registry.register("player", _cmd_player.bind(registry), "显示指定玩家信息", "player <id>", ["player_id"])
 	registry.register("bank", _cmd_bank.bind(registry), "显示银行状态", "bank")
 	registry.register("map", _cmd_map.bind(registry), "显示地图状态", "map")
-	registry.register("marketing", _cmd_marketing.bind(registry), "显示营销实例", "marketing")
+	registry.register("marketing_list", _cmd_marketing.bind(registry), "显示营销实例", "marketing_list")
 
 static func _cmd_state(args: Array, registry: DebugCommandRegistry) -> Result:
 	var engine := registry.get_game_engine()
@@ -93,15 +93,27 @@ static func _cmd_player(args: Array, registry: DebugCommandRegistry) -> Result:
 		"现金: $%d" % int(player.get("cash", 0)),
 	]
 
-	var employees = player.get("employees", [])
-	if employees is Array:
-		lines.append("员工数: %d" % employees.size())
+	var employees_val = player.get("employees", [])
+	if employees_val is Array:
+		var employees: Array = employees_val
+		lines.append("在职员工数: %d" % employees.size())
 		for emp in employees:
-			if emp is Dictionary:
-				var emp_id := str(emp.get("employee_id", "?"))
-				var trained := bool(emp.get("trained", false))
-				var acted := bool(emp.get("acted_this_round", false))
-				lines.append("  - %s (训练: %s, 已行动: %s)" % [emp_id, str(trained), str(acted)])
+			if emp is String:
+				lines.append("  - %s" % str(emp))
+			elif emp is Dictionary:
+				# 兼容旧格式
+				var emp_id := str(Dictionary(emp).get("employee_id", "?"))
+				lines.append("  - %s" % emp_id)
+
+	var reserve_val = player.get("reserve_employees", [])
+	if reserve_val is Array:
+		var reserve: Array = reserve_val
+		lines.append("手牌/储备: %d" % reserve.size())
+
+	var busy_val = player.get("busy_marketers", [])
+	if busy_val is Array:
+		var busy: Array = busy_val
+		lines.append("忙碌营销员: %d" % busy.size())
 
 	return Result.success("\n".join(lines))
 
@@ -143,22 +155,49 @@ static func _cmd_map(args: Array, registry: DebugCommandRegistry) -> Result:
 	if not (map_data is Dictionary):
 		return Result.failure("地图数据无效")
 
-	var buildings = map_data.get("buildings", [])
-	var building_count: int = buildings.size() if buildings is Array else 0
+	var grid_size_val = map_data.get("grid_size", null)
+	var grid_size_str := str(grid_size_val) if (grid_size_val is Vector2i) else str(grid_size_val)
+
+	var tile_placements_val = map_data.get("tile_placements", [])
+	var tile_count: int = tile_placements_val.size() if tile_placements_val is Array else 0
+
+	var houses_val = map_data.get("houses", {})
+	var house_count: int = houses_val.size() if houses_val is Dictionary else 0
+
+	var restaurants_val = map_data.get("restaurants", {})
+	var restaurant_count: int = restaurants_val.size() if restaurants_val is Dictionary else 0
+
+	var marketing_places_val = map_data.get("marketing_placements", {})
+	var marketing_place_count: int = marketing_places_val.size() if marketing_places_val is Dictionary else 0
 
 	var lines: Array[String] = [
 		"=== 地图状态 ===",
-		"建筑数: %d" % building_count,
+		"grid_size: %s" % grid_size_str,
+		"tile_placements: %d" % tile_count,
+		"houses: %d" % house_count,
+		"restaurants: %d" % restaurant_count,
+		"marketing_placements: %d" % marketing_place_count,
 	]
 
-	if buildings is Array:
-		for b in buildings:
-			if b is Dictionary:
-				var pos = b.get("position", {})
-				var pos_str := "(%d,%d)" % [int(pos.get("x", 0)), int(pos.get("y", 0))] if pos is Dictionary else "?"
-				var type_str := str(b.get("type", "?"))
-				var owner_id = b.get("owner_id", -1)
-				lines.append("  %s @ %s (玩家 %s)" % [type_str, pos_str, str(owner_id)])
+	if restaurants_val is Dictionary and not Dictionary(restaurants_val).is_empty():
+		lines.append("餐厅（最多显示 8 个）:")
+		var ids: Array = Dictionary(restaurants_val).keys()
+		ids.sort()
+		var shown := 0
+		for rid_val in ids:
+			if shown >= 8:
+				break
+			var rid := str(rid_val).strip_edges()
+			if rid.is_empty():
+				continue
+			var r_val = Dictionary(restaurants_val).get(rid, null)
+			if not (r_val is Dictionary):
+				continue
+			var r: Dictionary = r_val
+			var owner := int(r.get("owner", -1))
+			var anchor = r.get("anchor_pos", null)
+			lines.append("  - %s owner=%d anchor=%s" % [rid, owner, str(anchor)])
+			shown += 1
 
 	return Result.success("\n".join(lines))
 
@@ -183,10 +222,12 @@ static func _cmd_marketing(args: Array, registry: DebugCommandRegistry) -> Resul
 	for inst in instances:
 		if inst is Dictionary:
 			var type_str := str(inst.get("type", "?"))
-			var owner := int(inst.get("owner_id", -1))
-			var pos = inst.get("position", {})
-			var pos_str := "(%d,%d)" % [int(pos.get("x", 0)), int(pos.get("y", 0))] if pos is Dictionary else "?"
-			var range_val := int(inst.get("range", 0))
-			lines.append("  %s @ %s (玩家 %d, 范围 %d)" % [type_str, pos_str, owner, range_val])
+			var owner := int(inst.get("owner", -1))
+			var product := str(inst.get("product", ""))
+			var wp = inst.get("world_pos", null)
+			var pos_str := "(%d,%d)" % [wp.x, wp.y] if (wp is Vector2i) else str(wp)
+			var bn := int(inst.get("board_number", -1))
+			var rem := int(inst.get("remaining_duration", 0))
+			lines.append("  %s #%d %s @ %s (玩家 %d, 剩余 %d)" % [type_str, bn, product, pos_str, owner, rem])
 
 	return Result.success("\n".join(lines))

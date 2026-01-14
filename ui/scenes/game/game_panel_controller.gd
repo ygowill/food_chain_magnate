@@ -13,6 +13,7 @@ const EndPanelsClass = preload("res://ui/scenes/game/game_panel_end_panels.gd")
 
 const RestructuringModalScene = preload("res://ui/components/modal_panel/restructuring_modal.tscn")
 const TurnOrderSelectionModalScene = preload("res://ui/components/modal_panel/turn_order_selection_modal.tscn")
+const EmployeeTreeScene = preload("res://ui/components/employee_tree/employee_tree.tscn")
 
 const POPUP_LAYOUT_META_KEY := "popup_layout"
 const POPUP_LAYOUT_DOCK_RIGHT := "dock_right"
@@ -30,6 +31,7 @@ var _end_panels = null
 
 var _restructuring_modal = null
 var _turn_order_modal = null
+var _employee_tree_panel = null
 
 var _view_player_id: int = -1
 
@@ -95,6 +97,34 @@ func show_payday_panel() -> void:
 	if _end_panels != null:
 		_end_panels.show_payday_panel()
 
+func toggle_employee_tree() -> void:
+	if _scene == null:
+		return
+
+	if is_instance_valid(_employee_tree_panel) and _employee_tree_panel.visible:
+		_employee_tree_panel.visible = false
+		return
+
+	_hide_all_phase_panels(true)
+	_ensure_employee_tree_panel()
+	if not is_instance_valid(_employee_tree_panel):
+		return
+
+	if _employee_tree_panel.has_method("open"):
+		_employee_tree_panel.call("open")
+
+	# 覆盖全屏（不使用居中弹窗布局）
+	if _employee_tree_panel is Control:
+		var p: Control = _employee_tree_panel
+		p.set_anchors_preset(Control.PRESET_FULL_RECT)
+		p.offset_left = 0.0
+		p.offset_top = 0.0
+		p.offset_right = 0.0
+		p.offset_bottom = 0.0
+		p.position = Vector2.ZERO
+		p.size = _scene.get_viewport_rect().size
+	_employee_tree_panel.visible = true
+
 func get_view_player_id() -> int:
 	return _view_player_id
 
@@ -126,6 +156,10 @@ func dispose() -> void:
 		_turn_order_modal.queue_free()
 	_turn_order_modal = null
 
+	if is_instance_valid(_employee_tree_panel):
+		_employee_tree_panel.queue_free()
+	_employee_tree_panel = null
+
 	_scene = null
 	_map_controller = null
 	_overlay_controller = null
@@ -135,11 +169,14 @@ func has_open_modal_ui() -> bool:
 		return true
 	if is_instance_valid(_turn_order_modal) and _turn_order_modal.visible:
 		return true
+	if is_instance_valid(_employee_tree_panel) and _employee_tree_panel.visible:
+		return true
 	return false
 
 func hide_modal_ui() -> void:
 	_hide_turn_order_modal()
 	_hide_restructuring_modal()
+	_hide_employee_tree()
 
 func has_open_phase_ui() -> bool:
 	if has_open_modal_ui():
@@ -313,6 +350,8 @@ func _update_ui_components(state: GameState) -> void:
 
 		# 顶部顺序显示（展示用）
 	if is_instance_valid(_scene.turn_order_display):
+		if _scene.turn_order_display.has_method("set_game_state"):
+			_scene.turn_order_display.set_game_state(state)
 		if _scene.turn_order_display.has_method("set_player_count"):
 			_scene.turn_order_display.set_player_count(state.players.size())
 		if _scene.turn_order_display.has_method("set_current_selections"):
@@ -324,6 +363,8 @@ func _update_ui_components(state: GameState) -> void:
 	if is_instance_valid(_scene.inventory_panel) and _scene.inventory_panel.has_method("set_inventory"):
 		var inventory: Dictionary = view_player.get("inventory", {})
 		_scene.inventory_panel.set_inventory(inventory)
+		if _scene.inventory_panel.has_method("set_visual_modules") and (state.modules is Array):
+			_scene.inventory_panel.set_visual_modules(Array(state.modules, TYPE_STRING, "", null))
 		if _scene.inventory_panel.has_method("set_fridge_capacity"):
 			_scene.inventory_panel.set_fridge_capacity(_get_fridge_capacity_for_player(view_player))
 
@@ -985,6 +1026,27 @@ func _hide_restructuring_modal() -> void:
 		(_restructuring_modal as Control).visible = false
 
 	_restore_info_panels_after_restructuring()
+
+func _ensure_employee_tree_panel() -> void:
+	if _scene == null:
+		return
+	if is_instance_valid(_employee_tree_panel):
+		return
+
+	_employee_tree_panel = EmployeeTreeScene.instantiate()
+	if not is_instance_valid(_employee_tree_panel):
+		return
+	_employee_tree_panel.visible = false
+	_scene.add_child(_employee_tree_panel)
+	if _employee_tree_panel is Control:
+		(_employee_tree_panel as Control).z_index = 900
+	if _employee_tree_panel.has_signal("closed"):
+		if not _employee_tree_panel.closed.is_connected(_hide_employee_tree):
+			_employee_tree_panel.closed.connect(_hide_employee_tree)
+
+func _hide_employee_tree() -> void:
+	if is_instance_valid(_employee_tree_panel):
+		_employee_tree_panel.visible = false
 
 func _restore_info_panels_after_restructuring() -> void:
 	if _scene == null:

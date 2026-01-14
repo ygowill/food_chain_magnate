@@ -154,6 +154,10 @@ text = "UI布局"
 layout_mode = 2
 size_flags_horizontal = 3
 
+[node name="ShowTileIdsCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
+layout_mode = 2
+text = "显示板块ID（调试）"
+
 [node name="Game" type="Control" parent="MarginContainer/VBoxContainer/TabContainer"]
 visible = false
 layout_mode = 2
