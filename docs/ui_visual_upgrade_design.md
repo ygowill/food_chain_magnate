@@ -43,6 +43,8 @@
 | F13 | 房屋需求图标：调大；散落更靠中心（非角落随机） | Done | 已改：`ui/scenes/game/map_canvas_drawer.gd`（icon_size 调大；中心偏置采样；收缩散落区域） |
 | F14 | 餐厅渲染：logo 居中；底色 `#f4edd1`；入口格 L 形标记；logo 去背景 | Done | 已改：`ui/scenes/game/map_canvas_drawer.gd`（居中+入口 L）；`ui/visual/map_skin.gd`（logo flood-fill 去背景） |
 | F15 | 放置预览：显示半透明房屋/餐厅图片（所见即所得） | Done | 已改：`ui/scenes/game/map_canvas.gd`、`ui/scenes/game/map_canvas_drawer.gd`、`ui/components/house_placement/house_placement_overlay.gd`、`ui/scenes/game/game_panel_placement_overlays.gd`、`ui/scenes/game/game_map_interaction_controller.gd`；验证：`check_compile.gd` + `AllTests` PASS |
+| F16 | 缩略员工卡：升级路线树等场景顶部名字偶发为空（setup/_ready 时序） | Pending (Review) | 方案与根因分析：`docs/employee_defs_alignment_review.md`（需你点头后再改代码） |
+| F17 | 员工定义对齐：按 PDF + `road_map.png` 校准 name/id/train_to（含对照表） | Pending (Review) | 已生成对照表与改动清单：`docs/employee_defs_alignment_review.md`（需你点头后再改数据） |
 
 ## 1. 概述
 
