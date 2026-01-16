@@ -43,44 +43,8 @@ var can_be_fired: bool = true  # 是否可被解雇（避免硬编码 employee_i
 var marketing_max_duration: int = 0  # 可选：营销活动最大持续回合数（仅营销员使用）
 
 # === UI/规则中的“职责角色” ===
-# - 角色是稳定枚举；颜色由角色映射。
+# - 角色是稳定枚举；UI 展示颜色由 UI 层映射（core 不持有颜色语义）。
 var role: String = ""  # manager | recruit_train | produce_food | procure_drink | price | marketing | new_shop | special
-
-# === UI/规则中的“员工颜色” ===
-# 说明：
-# - 用于 UI 展示与部分规则（例如 New Milestones: FIRST LEMONADE SOLD 的“颜色不变”）。
-# - 当前按职责从现有字段推导，不依赖 JSON 显式字段，避免硬编码名单扩散。
-const ROLE_COLOR_MANAGER := "#000000"
-const ROLE_COLOR_RECRUIT_TRAIN := "#bdb6b5"
-const ROLE_COLOR_PRODUCE_FOOD := "#94a869"
-const ROLE_COLOR_PROCURE_DRINK := "#adce91"
-const ROLE_COLOR_PRICE := "#eba791"
-const ROLE_COLOR_MARKETING := "#94c1c7"
-const ROLE_COLOR_NEW_SHOP := "#aa3c34"
-const ROLE_COLOR_SPECIAL := "#ae94c0"
-
-# 将“职责 role”映射为颜色（hex 字符串），供 UI 与规则复用。
-static func role_to_color_hex(role_in: String) -> String:
-	var role: String = str(role_in).strip_edges()
-	match role:
-		"manager":
-			return ROLE_COLOR_MANAGER
-		"recruit_train":
-			return ROLE_COLOR_RECRUIT_TRAIN
-		"produce_food":
-			return ROLE_COLOR_PRODUCE_FOOD
-		"procure_drink":
-			return ROLE_COLOR_PROCURE_DRINK
-		"price":
-			return ROLE_COLOR_PRICE
-		"marketing":
-			return ROLE_COLOR_MARKETING
-		"new_shop":
-			return ROLE_COLOR_NEW_SHOP
-		"special":
-			return ROLE_COLOR_SPECIAL
-		_:
-			return ROLE_COLOR_SPECIAL
 
 # === 供应池（路线B）===
 # 用于“从内容元数据推导 Pools”，替代 GameConfig.employee_pool.base/one_x_employee_ids 等硬编码列表。
@@ -164,10 +128,6 @@ func can_procure() -> bool:
 # 获取“职责角色”（用于 UI 与“同色培训”规则）
 func get_role() -> String:
 	return role
-
-# 获取“职责颜色”（用于 UI 与“同色培训”规则）
-func get_role_color() -> String:
-	return role_to_color_hex(get_role())
 
 # 获取生产信息（返回 null 如果不能生产）
 func get_production_info() -> Dictionary:

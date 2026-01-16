@@ -23,6 +23,8 @@ const DinnertimeRoutePurchaseRegistryClass = preload("res://core/rules/dinnertim
 const MarketingInitiationRegistryClass = preload("res://core/rules/marketing_initiation_registry.gd")
 const EmployeePoolPatchRegistryClass = preload("res://core/rules/employee_pool_patch_registry.gd")
 const MilestoneEffectRegistryClass = preload("res://core/rules/milestone_effect_registry.gd")
+const PlacementConflictRegistryClass = preload("res://core/rules/placement_conflict_registry.gd")
+const StateSchemaRegistryClass = preload("res://core/state/state_schema_registry.gd")
 
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
@@ -47,6 +49,8 @@ static func reset(engine) -> void:
 	DinnertimeRoutePurchaseRegistryClass.reset()
 	MarketingInitiationRegistryClass.reset()
 	EmployeePoolPatchRegistryClass.reset()
+	PlacementConflictRegistryClass.reset()
+	StateSchemaRegistryClass.reset()
 	MilestoneRegistryClass.reset()
 	MilestoneEffectRegistryClass.reset_current()
 	TileRegistryClass.reset()
@@ -125,6 +129,16 @@ static func apply(engine, module_ids: Array[String], base_dir: String) -> Result
 	var mk_init_apply := MarketingInitiationRegistryClass.configure_from_ruleset(engine.ruleset_v2)
 	if not mk_init_apply.ok:
 		return Result.failure("模块系统 V2：%s" % mk_init_apply.error)
+
+	# V2：模块注册的放置冲突查询 provider（用于跨模块冲突检测，避免窥探 state key）
+	var conflict_apply := PlacementConflictRegistryClass.configure_from_ruleset(engine.ruleset_v2)
+	if not conflict_apply.ok:
+		return Result.failure("模块系统 V2：%s" % conflict_apply.error)
+
+	# V2：模块注册的 state schema（用于反序列化归一化与契约检查）
+	var schema_apply := StateSchemaRegistryClass.configure_from_ruleset(engine.ruleset_v2)
+	if not schema_apply.ok:
+		return Result.failure("模块系统 V2：%s" % schema_apply.error)
 
 	# V2：允许模块对已加载内容做受控 patch（例如跨模块培训链）
 	var emp_patch_apply: Result = engine.ruleset_v2.apply_employee_patches(engine.content_catalog_v2)

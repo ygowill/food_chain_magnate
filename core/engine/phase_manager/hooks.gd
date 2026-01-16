@@ -121,19 +121,28 @@ func unregister_hook(phase: int, hook_type: int, callback: Callable) -> bool:
 func run_phase_hooks(phase: int, hook_type: int, state: GameState) -> Result:
 	if not _phase_hooks.has(phase):
 		return Result.success()
-	return _run_hooks(_phase_hooks[phase][hook_type], state)
+	var ctx := "phase=%s hook=%s" % [
+		str(DefsClass.PHASE_NAMES.get(phase, "?")),
+		_hook_type_name(hook_type),
+	]
+	return _run_hooks(_phase_hooks[phase][hook_type], state, ctx)
 
 func run_sub_phase_hooks(sub_phase: int, hook_type: int, state: GameState) -> Result:
 	if not _sub_phase_hooks.has(sub_phase):
 		return Result.success()
-	return _run_hooks(_sub_phase_hooks[sub_phase][hook_type], state)
+	var ctx := "sub_phase=%s hook=%s" % [
+		str(DefsClass.SUB_PHASE_NAMES.get(sub_phase, "?")),
+		_hook_type_name(hook_type),
+	]
+	return _run_hooks(_sub_phase_hooks[sub_phase][hook_type], state, ctx)
 
 func run_sub_phase_hooks_by_name(sub_phase_name: String, hook_type: int, state: GameState) -> Result:
 	if sub_phase_name.is_empty():
 		return Result.success()
 	if not _sub_phase_hooks_by_name.has(sub_phase_name):
 		return Result.success()
-	return _run_hooks(_sub_phase_hooks_by_name[sub_phase_name][hook_type], state)
+	var ctx := "sub_phase_name=%s hook=%s" % [sub_phase_name, _hook_type_name(hook_type)]
+	return _run_hooks(_sub_phase_hooks_by_name[sub_phase_name][hook_type], state, ctx)
 
 func dump() -> String:
 	var output := "=== PhaseManager ===\n"
@@ -178,7 +187,7 @@ func dump() -> String:
 
 	return output
 
-static func _run_hooks(hooks: Array, state: GameState) -> Result:
+static func _run_hooks(hooks: Array, state: GameState, ctx: String = "") -> Result:
 	var warnings: Array[String] = []
 	for hook in hooks:
 		var result = hook.callback.call(state)
@@ -186,6 +195,19 @@ static func _run_hooks(hooks: Array, state: GameState) -> Result:
 			if not result.ok:
 				return result
 			warnings.append_array(result.warnings)
+		else:
+			var source: String = str(hook.get("source", ""))
+			var cb: Callable = hook.get("callback", Callable())
+			var msg := "PhaseManager: hook callback 必须返回 Result（got=%s ctx=%s source=%s cb=%s）" % [
+				str(typeof(result)),
+				ctx,
+				source,
+				str(cb),
+			]
+			warnings.append(msg)
+			GameLog.warn("PhaseManager", msg)
+			if DebugFlags.is_debug_mode():
+				return Result.failure(msg).with_warnings(warnings)
 	return Result.success().with_warnings(warnings)
 
 static func _hook_type_name(hook_type: int) -> String:

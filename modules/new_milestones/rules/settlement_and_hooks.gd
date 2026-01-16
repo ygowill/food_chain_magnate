@@ -8,6 +8,7 @@ const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
 const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 
 const Phase = PhaseDefsClass.Phase
@@ -194,7 +195,7 @@ func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -
 
 	# “FIRST BURGER SOLD”：从此 CEO 卡槽固定至少 4（不受储备卡影响）
 	for player_id in range(state.players.size()):
-		if not UtilsClass.player_has_milestone(state, player_id, MILESTONE_ID_BURGER_SOLD):
+		if not StateUpdater.player_has_milestone(state, player_id, MILESTONE_ID_BURGER_SOLD):
 			continue
 		var p_val = state.players[player_id]
 		if not (p_val is Dictionary):
@@ -246,19 +247,11 @@ func _is_legal_radio_position(state: GameState, world_pos: Vector2i) -> bool:
 		return false
 	if not MapRuntimeClass.is_world_pos_in_grid(state, world_pos):
 		return false
-
-	if not state.map.has("marketing_placements") or not (state.map["marketing_placements"] is Dictionary):
+	var occupied_read := MarketingPlacementQueryClass.has_any_at_world_pos(state, world_pos)
+	if not occupied_read.ok:
 		return false
-	var placements: Dictionary = state.map["marketing_placements"]
-	for k in placements.keys():
-		var p_val = placements[k]
-		if not (p_val is Dictionary):
-			return false
-		var p: Dictionary = p_val
-		if not p.has("world_pos") or not (p["world_pos"] is Vector2i):
-			return false
-		if p["world_pos"] == world_pos:
-			return false
+	if bool(occupied_read.value):
+		return false
 
 	var cell := MapRuntimeClass.get_cell(state, world_pos)
 	if cell.is_empty():
@@ -281,4 +274,3 @@ func _is_legal_radio_position(state: GameState, world_pos: Vector2i) -> bool:
 		return false
 	var adjacent_roads: Array = adjacent_roads_result.value
 	return not adjacent_roads.is_empty()
-

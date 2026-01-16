@@ -3,7 +3,7 @@ extends ScrollContainer
 
 signal zoom_changed(zoom_level: float)
 
-@onready var canvas: Control = $Canvas
+@onready var canvas: Control = $Content/Canvas
 
 # 缩放配置
 const ZOOM_MIN: float = 0.25
@@ -25,7 +25,7 @@ var _auto_fit_done_for_base_size: bool = false
 var _auto_fit_scheduled: bool = false
 
 func _ready() -> void:
-	# 缩放/拖拽使用 _gui_input（依赖 MapCanvas.mouse_filter=PASS 冒泡到 MapView）
+	# 缩放/拖拽使用 _gui_input（依赖 MapCanvas/Content.mouse_filter=PASS 冒泡到 MapView）
 	set_process(false)
 
 func _gui_input(event: InputEvent) -> void:

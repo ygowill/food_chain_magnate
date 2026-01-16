@@ -28,7 +28,8 @@ static func apply_initial_state(
 	state.seed = rng_seed
 	state.round_number = 0
 	state.phase = "Setup"
-	state.sub_phase = ""
+	# Setup 的第一步：所有玩家秘密选择银行储备卡；完成后才进入起始餐厅放置。
+	state.sub_phase = "ReserveCards"
 	state.current_player_index = 0
 	state.selection_order.clear()
 
@@ -85,8 +86,8 @@ static func apply_initial_state(
 	for i in range(player_count):
 		state.turn_order.append(i)
 	rng_manager.shuffle(state.turn_order)
-	# 规则：初始餐厅放置从“顺序轨最后一位”开始逆序进行。
-	state.current_player_index = state.turn_order.size() - 1
+	# Setup/ReserveCards：按 turn_order 顺序让玩家依次选择储备卡；完成后再把 current_player_index 切到最后一位开始餐厅放置。
+	state.current_player_index = 0
 
 	var employees: Dictionary = {}
 	for emp_id in EmployeeRegistryClass.get_all_ids():
@@ -140,7 +141,8 @@ static func _create_player_from_config(id: int, cfg) -> Dictionary:
 		for pid in ProductRegistryClass.get_all_ids():
 			var def = ProductRegistryClass.get_def(pid)
 			var v := 0
-			if def != null and def.has_method("starting_inventory"):
+			if def != null:
+				assert(def is ProductDef, "GameStateFactory: ProductRegistry[%s] 类型错误（期望 ProductDef）" % pid)
 				v = int(def.starting_inventory)
 			inventory[pid] = v
 
@@ -159,7 +161,8 @@ static func _create_player_from_config(id: int, cfg) -> Dictionary:
 		"multi_trainer_on_one": false,
 		"ceo_cfo_ability_start_round": -1,
 		"reserve_cards": cfg.build_reserve_cards(),
-		"reserve_card_selected": int(cfg.player_reserve_card_selected),
+		# 银行储备卡在进入游戏后由玩家秘密选择；未选择用 -1 表示（进入餐厅放置前必须全部选完）。
+		"reserve_card_selected": -1,
 		"reserve_card_revealed": false,
 		"inventory": inventory,
 		"restaurants": [],

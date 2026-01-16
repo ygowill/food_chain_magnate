@@ -124,7 +124,7 @@
 
 你提到失败员工为“营销实习生”、类型为“广告牌广告”，这一组合在规则层是**允许**的，但放置失败通常来自以下硬性条件：
 
-- 员工卡（`modules/base_employees/content/employees/marketer.json`）的可放置距离是 `road 2`，因此需要满足：
+- 员工卡（`modules/base_employees/content/employees/marketing_trainee.json`）的可放置距离是 `road 2`，因此需要满足：
 	- 你至少有 1 家餐厅（否则距离判定无法通过）
 	- 放置点在公路距离 2 以内
 - 广告牌放置点还必须：

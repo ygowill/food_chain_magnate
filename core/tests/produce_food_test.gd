@@ -118,10 +118,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 
 	# 12) 测试无效的员工类型
 	state.sub_phase = "GetFood"
-	var invalid_cmd := Command.create("produce_food", current_player_id, {"employee_type": "recruiter"})
+	var invalid_cmd := Command.create("produce_food", current_player_id, {"employee_type": "recruiting_girl"})
 	var invalid_result := engine.execute_command(invalid_cmd)
 	if invalid_result.ok:
-		return Result.failure("recruiter 不应该能生产食物")
+		return Result.failure("recruiting_girl 不应该能生产食物")
 
 	# 13) 测试玩家没有的厨师类型
 	state.sub_phase = "GetFood"

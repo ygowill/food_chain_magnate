@@ -55,7 +55,9 @@ var _scroll_to_bottom_requested: bool = false
 var _max_entries: int = 500
 var _player_count: int = 0
 
-const FullLogWindowScene = preload("res://ui/components/game_log/full_log_window.tscn")
+const FULL_LOG_WINDOW_SCENE_PATH := "res://ui/components/game_log/full_log_window.tscn"
+
+var _full_log_window_scene: PackedScene = null
 
 func _ready() -> void:
 	if clear_btn != null:
@@ -313,9 +315,10 @@ func _on_clear_pressed() -> void:
 func _on_expand_pressed() -> void:
 	if OS.has_feature("headless"):
 		return
-	if FullLogWindowScene == null:
+	var scene := _get_full_log_window_scene()
+	if scene == null:
 		return
-	var win = FullLogWindowScene.instantiate()
+	var win = scene.instantiate()
 	if win == null:
 		return
 	get_tree().root.add_child(win)
@@ -323,6 +326,15 @@ func _on_expand_pressed() -> void:
 		win.open_for(self)
 	else:
 		win.show()
+
+func _get_full_log_window_scene() -> PackedScene:
+	if _full_log_window_scene != null:
+		return _full_log_window_scene
+	var res = load(FULL_LOG_WINDOW_SCENE_PATH)
+	if res is PackedScene:
+		_full_log_window_scene = res
+		return _full_log_window_scene
+	return null
 
 func _on_entry_clicked(entry_id: int) -> void:
 	log_entry_clicked.emit(entry_id)

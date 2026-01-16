@@ -1,6 +1,6 @@
 {
   "id": "cfo",
-  "name": "cfo",
+  "name": "首席财务官",
   "description": "本回合收入增加50%",
   "salary": true,
   "unique": true,

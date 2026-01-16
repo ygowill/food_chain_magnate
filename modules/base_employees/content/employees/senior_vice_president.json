@@ -12,11 +12,15 @@
   },
   "train_to": [
     "cfo",
-    "executive_vp",
+    "executive_vice_president",
     "hr_director"
   ],
   "train_capacity": 0,
   "tags": [],
   "usage_tags": [],
-  "mandatory": false
+  "mandatory": false,
+  "pool": {
+    "type": "fixed",
+    "count": 6
+  }
 }

@@ -57,6 +57,53 @@ static func apply_state_initializers(ruleset, state: GameState, rng_manager = nu
 		warnings.append_array(rr.warnings)
 	return Result.success().with_warnings(warnings)
 
+static func register_state_int_key_dict_schema(
+	ruleset,
+	schema_id: String,
+	root: String,
+	path: Array,
+	priority: int = 100,
+	source_module_id: String = ""
+) -> Result:
+	if schema_id.is_empty():
+		return Result.failure("RulesetV2: state schema_id 不能为空")
+	if root != "map" and root != "round_state":
+		return Result.failure("RulesetV2: state schema root 不支持: %s" % root)
+	if path == null or not (path is Array) or path.is_empty():
+		return Result.failure("RulesetV2: state schema path 类型错误或为空（期望 Array[String]）")
+	var norm_path: Array[String] = []
+	for i in range(path.size()):
+		var seg_val = path[i]
+		if not (seg_val is String):
+			return Result.failure("RulesetV2: state schema path[%d] 类型错误（期望 String）" % i)
+		var seg: String = str(seg_val)
+		if seg.is_empty():
+			return Result.failure("RulesetV2: state schema path[%d] 不能为空" % i)
+		norm_path.append(seg)
+
+	for item_val in ruleset.state_int_key_dict_schemas:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if str(item.get("id", "")) == schema_id:
+			return Result.failure("RulesetV2: state schema 重复注册: %s (module:%s)" % [schema_id, source_module_id])
+
+	ruleset.state_int_key_dict_schemas.append({
+		"id": schema_id,
+		"root": root,
+		"path": norm_path,
+		"priority": int(priority),
+		"source": source_module_id,
+	})
+	ruleset.state_int_key_dict_schemas.sort_custom(func(a, b) -> bool:
+		if int(a.priority) != int(b.priority):
+			return int(a.priority) < int(b.priority)
+		if str(a.id) != str(b.id):
+			return str(a.id) < str(b.id)
+		return str(a.source) < str(b.source)
+	)
+	return Result.success()
+
 static func register_employee_pool_patch(
 	ruleset,
 	patch_id: String,
@@ -219,4 +266,3 @@ static func register_phase_sub_phase_order_override(
 		return int(a.get("priority", 100)) > int(b.get("priority", 100))
 	)
 	return Result.success()
-

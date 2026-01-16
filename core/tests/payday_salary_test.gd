@@ -71,7 +71,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		return Result.failure("Payday 数组长度不匹配")
 
 	# 根据员工 JSON 定义：
-	# - recruiter: salary=false（不需要薪水）
+	# - recruiting_girl: salary=false（不需要薪水）
 	# - trainer: salary=false（不需要薪水）
 	# - burger_cook: salary=true（需要薪水）
 	# 所以只有 burger_cook 需要薪水 = 1 人 * $5 = $5

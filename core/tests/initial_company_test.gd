@@ -28,9 +28,9 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if ceo_requires_salary:
 		return Result.failure("EmployeeRules.requires_salary('ceo') 应返回 false")
 
-	var recruiter_requires_salary := EmployeeRules.requires_salary("recruiter")
+	var recruiter_requires_salary := EmployeeRules.requires_salary("recruiting_girl")
 	if recruiter_requires_salary:
-		return Result.failure("EmployeeRules.requires_salary('recruiter') 应返回 false（recruiter.salary=false）")
+		return Result.failure("EmployeeRules.requires_salary('recruiting_girl') 应返回 false（recruiting_girl.salary=false）")
 
 	# 4) 验证每个玩家初始有 CEO
 	for i in range(player_count):

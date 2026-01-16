@@ -196,7 +196,8 @@ func _build_map_context(state: GameState) -> Dictionary:
 		"grid_size": state.map.grid_size,
 		"map_origin": MapRuntimeClass.get_map_origin(state),
 		"houses": state.map.houses,
-		"restaurants": state.map.restaurants
+		"restaurants": state.map.restaurants,
+		"marketing_placements": state.map.get("marketing_placements", {}),
 	}
 
 func _get_piece_registry() -> Dictionary:

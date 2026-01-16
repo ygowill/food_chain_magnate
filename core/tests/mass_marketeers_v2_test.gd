@@ -37,7 +37,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 			"board_number": board_number,
 			"type": "billboard",
 			"owner": 0,
-			"employee_type": "marketer",
+			"employee_type": "marketing_trainee",
 			"product": "burger",
 			"world_pos": pos,
 			"remaining_duration": 2,

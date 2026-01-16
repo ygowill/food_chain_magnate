@@ -2,6 +2,7 @@
   "id": "radio_3",
   "board_number": 3,
   "type": "radio",
+  "footprint_size": [1, 1],
   "min_players": 2,
   "max_players": null
 }

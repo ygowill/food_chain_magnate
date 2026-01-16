@@ -1,5 +1,6 @@
 # 事件总线
 # 全局事件订阅/发射系统，支持事件历史记录
+# 注意：作为 autoload Node，脚本放在 autoload/（core 避免 Node 依赖）。
 extends Node
 
 # 事件类型常量

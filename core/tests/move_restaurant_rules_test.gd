@@ -113,7 +113,16 @@ static func _place_initial_restaurants(engine: GameEngine) -> Result:
 		if safety > 60:
 			return Result.failure("Setup 放置餐厅循环超出安全上限")
 
-		var current_player := engine.get_state().get_current_player_id()
+		var state := engine.get_state()
+		var current_player := state.get_current_player_id()
+
+		# Setup 第一步：先秘密选择储备卡（不能 skip）
+		if str(state.sub_phase) == "ReserveCards":
+			var pick := engine.execute_command(Command.create("select_reserve_card", current_player, {"selected_index": 0}))
+			if not pick.ok:
+				return Result.failure("选择储备卡失败: %s" % pick.error)
+			continue
+
 		if not placed[current_player]:
 			var cmd_place := _find_first_valid_placement(engine, "place_restaurant", current_player)
 			if cmd_place == null:

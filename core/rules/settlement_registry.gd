@@ -89,6 +89,19 @@ func run(phase: int, point: int, state: GameState, phase_manager) -> Result:
 			if not rr.ok:
 				return Result.failure("SettlementRegistry: extension settlement 失败: %s" % rr.error)
 			all_warnings.append_array(rr.warnings)
+		else:
+			var src: String = str(ext.get("source", ""))
+			var msg := "SettlementRegistry: callback 必须返回 Result（slot=%s kind=extension prio=%d source=%s cb=%s got=%s）" % [
+				key,
+				prio,
+				src,
+				str(cb),
+				str(typeof(r)),
+			]
+			all_warnings.append(msg)
+			GameLog.warn("SettlementRegistry", msg)
+			if DebugFlags.is_debug_mode():
+				return Result.failure(msg).with_warnings(all_warnings)
 
 	# primary
 	var primary_cb: Callable = primary.get("callback", Callable())
@@ -98,6 +111,18 @@ func run(phase: int, point: int, state: GameState, phase_manager) -> Result:
 		if not pr.ok:
 			return Result.failure("SettlementRegistry: primary settlement 失败: %s" % pr.error)
 		all_warnings.append_array(pr.warnings)
+	else:
+		var primary_src: String = str(primary.get("source", ""))
+		var msg2 := "SettlementRegistry: callback 必须返回 Result（slot=%s kind=primary source=%s cb=%s got=%s）" % [
+			key,
+			primary_src,
+			str(primary_cb),
+			str(typeof(primary_result)),
+		]
+		all_warnings.append(msg2)
+		GameLog.warn("SettlementRegistry", msg2)
+		if DebugFlags.is_debug_mode():
+			return Result.failure(msg2).with_warnings(all_warnings)
 
 	# priority >= 100：primary 之后
 	for ext_val in extensions:
@@ -112,9 +137,21 @@ func run(phase: int, point: int, state: GameState, phase_manager) -> Result:
 			if not rr.ok:
 				return Result.failure("SettlementRegistry: extension settlement 失败: %s" % rr.error)
 			all_warnings.append_array(rr.warnings)
+		else:
+			var src: String = str(ext.get("source", ""))
+			var msg := "SettlementRegistry: callback 必须返回 Result（slot=%s kind=extension prio=%d source=%s cb=%s got=%s）" % [
+				key,
+				prio,
+				src,
+				str(cb),
+				str(typeof(r)),
+			]
+			all_warnings.append(msg)
+			GameLog.warn("SettlementRegistry", msg)
+			if DebugFlags.is_debug_mode():
+				return Result.failure(msg).with_warnings(all_warnings)
 
 	return Result.success().with_warnings(all_warnings)
 
 static func _slot_key(phase: int, point: int) -> String:
 	return "%d:%d" % [phase, point]
-

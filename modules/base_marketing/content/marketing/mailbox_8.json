@@ -2,6 +2,7 @@
   "id": "mailbox_8",
   "board_number": 8,
   "type": "mailbox",
+  "footprint_size": [2, 2],
   "min_players": 2,
   "max_players": null
 }

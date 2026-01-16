@@ -55,8 +55,40 @@ static func rebuild_overlay_indexes(canvas) -> void:
 				continue
 			var p: Dictionary = p_val
 			var pos_val = p.get("world_pos", null)
-			if pos_val is Vector2i:
-				canvas._marketing_by_pos[pos_val] = p
+			if not (pos_val is Vector2i):
+				continue
+			var anchor: Vector2i = pos_val
+
+			# footprint_size/rotation are optional (backward compatible); when missing treat as 1x1 / rotation=0.
+			var base_size := Vector2i.ONE
+			var fs_val = p.get("footprint_size", null)
+			if fs_val is Vector2i:
+				base_size = Vector2i(fs_val)
+			elif fs_val is Array:
+				var arr: Array = fs_val
+				if arr.size() == 2:
+					base_size = Vector2i(int(arr[0]), int(arr[1]))
+			if base_size.x <= 0 or base_size.y <= 0:
+				base_size = Vector2i.ONE
+
+			var rot := 0
+			var rot_val = p.get("rotation", null)
+			if rot_val is int:
+				rot = int(rot_val)
+			elif rot_val is float:
+				var f: float = float(rot_val)
+				if f == floor(f):
+					rot = int(f)
+			if not rot in [0, 90, 180, 270]:
+				rot = 0
+
+			var size := base_size
+			if rot == 90 or rot == 270:
+				size = Vector2i(base_size.y, base_size.x)
+
+			for dy in range(size.y):
+				for dx in range(size.x):
+					canvas._marketing_by_pos[anchor + Vector2i(dx, dy)] = p
 
 	# structures by anchor (scan all cells once)
 	for y in range(canvas._base_grid_size.y):

@@ -1,5 +1,5 @@
 {
-  "id": "new_business_dev",
+  "id": "new_business_developer",
   "name": "新业务拓展经理",
   "description": "放置房屋或花园",
   "salary": true,
@@ -22,6 +22,6 @@
   "mandatory": false,
   "pool": {
     "type": "fixed",
-    "count": 12
+    "count": 6
   }
 }

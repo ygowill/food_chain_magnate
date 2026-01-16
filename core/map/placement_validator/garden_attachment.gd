@@ -1,6 +1,7 @@
 extends RefCounted
 
 const MapAccess = preload("res://core/map/placement_validator/map_access.gd")
+const Validators = preload("res://core/map/placement_validator/validators.gd")
 
 # 验证花园添加
 static func validate_garden_attachment(
@@ -78,10 +79,14 @@ static func validate_garden_attachment(
 		if bool(cell["blocked"]):
 			return Result.failure("花园位置被阻塞: %s" % str(cell_pos))
 
+	# 花园扩建也不能与营销板件重叠（营销板件为阻挡物）
+	var mk_r := Validators.validate_no_marketing_overlap(map_ctx, null, garden_cells, _context)
+	if not mk_r.ok:
+		return mk_r
+
 	return Result.success({
 		"house_id": house_id,
 		"garden_direction": garden_direction,
 		"garden_cells": garden_cells,
 		"merged_cells": house_cells + garden_cells,
 	})
-

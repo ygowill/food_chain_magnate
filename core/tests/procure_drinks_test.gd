@@ -169,10 +169,10 @@ static func _run_once(player_count: int, seed_val: int) -> Result:
 		return Result.failure("卡车采购后饮料总库存应至少增加 2，实际增量: %d" % (drinks_after_road - drinks_before_road))
 
 	# 14) 测试无效的员工类型
-	var invalid_cmd := Command.create("procure_drinks", road_player_id, {"employee_type": "recruiter"})
+	var invalid_cmd := Command.create("procure_drinks", road_player_id, {"employee_type": "recruiting_girl"})
 	var invalid_result := engine.execute_command(invalid_cmd)
 	if invalid_result.ok:
-		return Result.failure("recruiter 不应该能采购饮料")
+		return Result.failure("recruiting_girl 不应该能采购饮料")
 
 	# 15) 测试玩家没有的员工类型
 	state.sub_phase = "GetDrinks"
@@ -228,7 +228,16 @@ static func _place_initial_restaurants(engine: GameEngine) -> Result:
 		if safety > 50:
 			return Result.failure("Setup 放置餐厅循环超出安全上限")
 
-		var current_player := engine.get_state().get_current_player_id()
+		var state := engine.get_state()
+		var current_player := state.get_current_player_id()
+
+		# Setup 第一步：先秘密选择储备卡（不能 skip）
+		if str(state.sub_phase) == "ReserveCards":
+			var pick := engine.execute_command(Command.create("select_reserve_card", current_player, {"selected_index": 0}))
+			if not pick.ok:
+				return Result.failure("选择储备卡失败: %s" % pick.error)
+			continue
+
 		if not placed[current_player]:
 			var cmd_place: Command = null
 			if ensured_air_player == -1:

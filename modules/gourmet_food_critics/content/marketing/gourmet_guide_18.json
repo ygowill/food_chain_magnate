@@ -2,6 +2,7 @@
   "id": "gourmet_guide_18",
   "board_number": 18,
   "type": "gourmet_guide",
+  "footprint_size": [5, 1],
   "min_players": 2,
   "max_players": null
 }

@@ -192,12 +192,12 @@ static func _count_food_drink_tokens(inventory: Dictionary) -> int:
 	var total := 0
 	for k in inventory.keys():
 		var product_id: String = str(k)
-		if product_id == "coffee":
-			continue
 		var def = ProductRegistryClass.get_def(product_id)
 		if def == null or not (def is ProductDef):
 			continue
 		var p: ProductDef = def
+		if p.has_tag("salary_token_ineligible"):
+			continue
 		if not (p.has_tag("food") or p.has_tag("drink")):
 			continue
 		var v = inventory.get(k, 0)
@@ -243,12 +243,12 @@ static func _pay_with_tokens(state: GameState, player_id: int, tokens_needed: in
 	for pid in ids:
 		if remaining <= 0:
 			break
-		if pid == "coffee":
-			continue
 		var def = ProductRegistryClass.get_def(pid)
 		if def == null or not (def is ProductDef):
 			continue
 		var p: ProductDef = def
+		if p.has_tag("salary_token_ineligible"):
+			continue
 		if not (p.has_tag("food") or p.has_tag("drink")):
 			continue
 		var cur_val = inventory.get(pid, 0)

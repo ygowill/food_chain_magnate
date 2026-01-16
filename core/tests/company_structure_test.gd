@@ -71,16 +71,16 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("cfo 在忙碌区时，validator 应该拒绝再次添加")
 
 	# 5) 非唯一员工应该可以重复添加
-	validator_state.players[current_player_id]["employees"].append("recruiter")
-	var non_unique_result: Result = validator.validate(validator_state, current_player_id, {"employee_id": "recruiter", "to_reserve": false})
+	validator_state.players[current_player_id]["employees"].append("recruiting_girl")
+	var non_unique_result: Result = validator.validate(validator_state, current_player_id, {"employee_id": "recruiting_girl", "to_reserve": false})
 	if not non_unique_result.ok:
 		return Result.failure("非唯一员工应该可以重复添加: %s" % non_unique_result.error)
 
 	# === 测试 CEO 卡槽容量 ===
 
-	# 6) 设置 CEO 卡槽为 3，当前员工数 = 2 (cfo, recruiter)
+	# 6) 设置 CEO 卡槽为 3，当前员工数 = 2 (cfo, recruiting_girl)
 	validator_state.players[current_player_id]["company_structure"] = {"ceo_slots": 3}
-	validator_state.players[current_player_id]["employees"] = ["recruiter", "recruiter", "recruiter"]
+	validator_state.players[current_player_id]["employees"] = ["recruiting_girl", "recruiting_girl", "recruiting_girl"]
 
 	# 7) 尝试添加第 4 个员工（应该失败 - 公司结构卡槽已满）
 	# 备注：这里选用一个非“经理卡槽提供者”的员工，避免新增经理导致总卡槽数增加而误判。
@@ -92,7 +92,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("错误消息应该包含'卡槽已满'，实际: %s" % slot_full_result.error)
 
 	# 8) 减少员工数量，应该可以添加
-	validator_state.players[current_player_id]["employees"] = ["recruiter", "recruiter"]
+	validator_state.players[current_player_id]["employees"] = ["recruiting_girl", "recruiting_girl"]
 	var slot_ok_result: Result = validator.validate(validator_state, current_player_id, {"employee_id": "management_trainee", "to_reserve": false})
 	if not slot_ok_result.ok:
 		return Result.failure("卡槽有空位时，validator 应该允许添加: %s" % slot_ok_result.error)

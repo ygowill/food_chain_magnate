@@ -73,11 +73,11 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	# 使用确定性小地图构造“同街区可放置点”，避免依赖随机地图的空格分布
 	_apply_simple_map_with_restaurant(state, actor)
 
-	# 放置永久 mailbox（占用 #5..#10），固定放在 (1,2)：与餐厅同 block 且邻接道路
+	# 放置永久 mailbox（占用 #5..#10），固定放在 (0,2)：与餐厅同 block 且邻接道路
 	var cmd_mailbox := Command.create(ACTION_ID, actor, {
 		"board_number": 5,
 		"product": "burger",
-		"position": [1, 2],
+		"position": [0, 2],
 	})
 	var exec_mailbox := engine.execute_command(cmd_mailbox)
 	if not exec_mailbox.ok:
@@ -157,14 +157,14 @@ static func _find_first_valid_mailbox_placement(engine: GameEngine, actor: int, 
 	return null
 
 static func _apply_simple_map_with_restaurant(state: GameState, owner: int) -> void:
-	# 5x5：x=2 为纵向道路，将地图分成左右两个 block
+	# 5x5：x=3 为纵向道路，将地图分成左右两个 block
 	var grid_size := Vector2i(5, 5)
 	var cells: Array = []
 	for y in range(grid_size.y):
 		var row: Array = []
 		for x in range(grid_size.x):
 			var road_segments: Array = []
-			if x == 2:
+			if x == 3:
 				var dirs: Array = []
 				if y > 0:
 					dirs.append("N")

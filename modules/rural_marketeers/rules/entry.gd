@@ -8,6 +8,7 @@ const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const ParseHelpers = preload("res://core/state/serialization/parse_helpers.gd")
 
 const PlaceGiantBillboardActionClass = preload("res://modules/rural_marketeers/actions/place_giant_billboard_action.gd")
 const PlaceHighwayOfframpActionClass = preload("res://modules/rural_marketeers/actions/place_highway_offramp_action.gd")
@@ -31,8 +32,12 @@ const BILLBOARD_BOARD_NUMBER_BY_SIDE := {
 	"W": 5003,
 }
 
+const PLACEMENT_CONFLICT_PROVIDER_ID := "%s:placement_conflicts" % MODULE_ID
+const CONFLICT_ID_OFFRAMP_CONNECTION := "%s:offramp_connection" % MODULE_ID
+const STATE_SCHEMA_ID_OFFRAMP_PENDING := "rural_marketeers:round_state_int_keys:rural_marketeers_offramp_pending"
+
 func register(registrar) -> Result:
-	var r = registrar.register_employee_patch("marketer", {"add_train_to": ["rural_marketeer"]})
+	var r = registrar.register_employee_patch("marketing_trainee", {"add_train_to": ["rural_marketeer"]})
 	if not r.ok:
 		return r
 
@@ -73,7 +78,41 @@ func register(registrar) -> Result:
 	if not r.ok:
 		return r
 
+	# 对外暴露“占用/冲突查询”：其他模块不应直接读取本模块的 state.map 字段结构。
+	r = registrar.register_placement_conflict_provider(PLACEMENT_CONFLICT_PROVIDER_ID, Callable(self, "_get_placement_conflicts_at_world_pos"), 100)
+	if not r.ok:
+		return r
+
+	# round_state.<player_id(int) -> ...> 字典：读档后需要把 "0"/"1" 转回 0/1
+	r = registrar.register_round_state_int_key_dict_schema(STATE_SCHEMA_ID_OFFRAMP_PENDING, [OFFRAMP_PENDING_KEY], 100)
+	if not r.ok:
+		return r
+
 	return Result.success()
+
+func _get_placement_conflicts_at_world_pos(state: GameState, world_pos: Vector2i, _ctx: Dictionary) -> Result:
+	if state == null:
+		return Result.failure("%s: placement_conflicts: state 为空" % MODULE_ID)
+	if not (state.map is Dictionary):
+		return Result.failure("%s: placement_conflicts: state.map 类型错误（期望 Dictionary）" % MODULE_ID)
+	if not state.map.has("rural_marketeers_offramps"):
+		return Result.success([])
+	var offramps_val = state.map.get("rural_marketeers_offramps", null)
+	if not (offramps_val is Array):
+		return Result.failure("%s: placement_conflicts: state.map.rural_marketeers_offramps 类型错误（期望 Array）" % MODULE_ID)
+	var offramps: Array = offramps_val
+	for i in range(offramps.size()):
+		var o_val = offramps[i]
+		if not (o_val is Dictionary):
+			return Result.failure("%s: placement_conflicts: offramps[%d] 类型错误（期望 Dictionary）" % [MODULE_ID, i])
+		var o: Dictionary = o_val
+		var p = o.get("pos", null)
+		if not (p is Vector2i):
+			return Result.failure("%s: placement_conflicts: offramps[%d].pos 类型错误（期望 Vector2i）" % [MODULE_ID, i])
+		if p == world_pos:
+			return Result.success([CONFLICT_ID_OFFRAMP_CONNECTION])
+
+	return Result.success([])
 
 func _on_restructuring_before_enter(state: GameState) -> Result:
 	if state == null:
@@ -305,7 +344,7 @@ func _validate_airplane_offramp_conflict(state: GameState, command: Command) -> 
 		return Result.success()
 	if not command.params.has("board_number"):
 		return Result.success()
-	var board_number_read := _parse_int_value(command.params.get("board_number", null), "board_number")
+	var board_number_read := ParseHelpers.parse_int(command.params.get("board_number", null), "board_number")
 	if not board_number_read.ok:
 		return board_number_read
 	var board_number: int = int(board_number_read.value)
@@ -329,10 +368,10 @@ func _validate_airplane_offramp_conflict(state: GameState, command: Command) -> 
 	if not (pos_val is Array) or (pos_val as Array).size() != 2:
 		return Result.failure("%s: initiate_marketing.position 格式错误（期望 [x,y]）" % MODULE_ID)
 	var arr: Array = pos_val
-	var x_read := _parse_int_value(arr[0], "position[0]")
+	var x_read := ParseHelpers.parse_int(arr[0], "position[0]")
 	if not x_read.ok:
 		return x_read
-	var y_read := _parse_int_value(arr[1], "position[1]")
+	var y_read := ParseHelpers.parse_int(arr[1], "position[1]")
 	if not y_read.ok:
 		return y_read
 	var world_pos := Vector2i(int(x_read.value), int(y_read.value))
@@ -340,13 +379,3 @@ func _validate_airplane_offramp_conflict(state: GameState, command: Command) -> 
 		return Result.failure("飞机不能放置在已有高速公路出口的格子: %s" % str(world_pos))
 
 	return Result.success()
-
-static func _parse_int_value(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
-		return Result.success(int(f))
-	return Result.failure("%s 类型错误（期望整数）" % path)

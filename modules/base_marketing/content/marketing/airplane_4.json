@@ -2,6 +2,7 @@
   "id": "airplane_4",
   "board_number": 4,
   "type": "airplane",
+  "footprint_size": [2, 1],
   "min_players": 2,
   "max_players": null
 }

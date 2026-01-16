@@ -7,6 +7,7 @@ const JsonSafe = preload("res://core/state/serialization/json_safe.gd")
 const ParseHelpers = preload("res://core/state/serialization/parse_helpers.gd")
 const ValueDecoder = preload("res://core/state/serialization/value_decoder.gd")
 const RoundStateParser = preload("res://core/state/serialization/round_state_parser.gd")
+const StateSchemaRegistryClass = preload("res://core/state/state_schema_registry.gd")
 
 static func to_dict(state, schema_version: int) -> Dictionary:
 	return {
@@ -36,6 +37,8 @@ static func _to_json_safe(value):
 static func apply_from_dict(state, data: Dictionary, expected_schema_version: int) -> Result:
 	if not (data is Dictionary):
 		return Result.failure("GameState.from_dict: data 类型错误（期望 Dictionary）")
+
+	var all_warnings: Array[String] = []
 
 	var schema_read := _parse_int(data.get("schema_version", null), "GameState.schema_version")
 	if not schema_read.ok:
@@ -158,7 +161,12 @@ static func apply_from_dict(state, data: Dictionary, expected_schema_version: in
 	var map_read := _decode_map(map_val)
 	if not map_read.ok:
 		return map_read
-	state.map = map_read.value
+	all_warnings.append_array(map_read.warnings)
+	var map_schema_norm := StateSchemaRegistryClass.normalize_int_key_dicts_in_container("map", map_read.value, "GameState.map")
+	if not map_schema_norm.ok:
+		return map_schema_norm
+	all_warnings.append_array(map_schema_norm.warnings)
+	state.map = map_schema_norm.value
 
 	var employee_pool_val = data.get("employee_pool", null)
 	if not (employee_pool_val is Dictionary):
@@ -205,13 +213,28 @@ static func apply_from_dict(state, data: Dictionary, expected_schema_version: in
 	if not round_state_read.ok:
 		return round_state_read
 	state.round_state = round_state_read.value
+	all_warnings.append_array(round_state_read.warnings)
 
 	var seed_read := _parse_non_negative_int(data.get("seed", null), "GameState.seed")
 	if not seed_read.ok:
 		return seed_read
 	state.seed = int(seed_read.value)
 
-	return Result.success(state)
+	# 读档后：若模块自有字段仍携带 "0"/"1"... 这类字符串玩家 key，则提示缺少 schema 注册
+	var rs_warn := StateSchemaRegistryClass.warn_if_module_owned_has_string_player_keys(
+		state.modules, "round_state", state.round_state, state.players.size(), "GameState.round_state"
+	)
+	if not rs_warn.ok:
+		return rs_warn
+	all_warnings.append_array(rs_warn.warnings)
+	var map_warn := StateSchemaRegistryClass.warn_if_module_owned_has_string_player_keys(
+		state.modules, "map", state.map, state.players.size(), "GameState.map"
+	)
+	if not map_warn.ok:
+		return map_warn
+	all_warnings.append_array(map_warn.warnings)
+
+	return Result.success(state).with_warnings(all_warnings)
 
 # 反序列化地图：将 [x,y] 转回 Vector2i，并递归处理嵌套结构
 static func _decode_map(value: Dictionary) -> Result:

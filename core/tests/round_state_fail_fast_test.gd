@@ -17,7 +17,7 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 		"action_counts": {0: {"recruit": 2}, 1: {}},
 		"sub_phase_passed": {0: true, 1: false},
 		"price_modifiers": {0: {"pricing_manager": -1}, 1: {"discount_manager": -2}},
-		"immediate_train_pending": {0: {"recruiter": 1}},
+		"immediate_train_pending": {0: {"recruiting_girl": 1}},
 		"recruit_used": {0: 1, 1: 0},
 		"house_placement_counts": {0: 2, 1: 0},
 		"production_counts": {0: {"burger_cook": 1}},
@@ -182,4 +182,3 @@ static func _case_reject_negative_recruit_used(base: Dictionary) -> Result:
 	if err.find("recruit_used") < 0 or err.find("不能为负数") < 0:
 		return Result.failure("错误信息应包含 recruit_used 与 不能为负数，实际: %s" % err)
 	return Result.success()
-

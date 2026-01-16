@@ -21,6 +21,8 @@ var _highlight_restaurant: String = ""
 
 const PATH_COLOR := Color(0.4, 0.7, 0.9, 0.6)
 const PATH_HIGHLIGHT_COLOR := Color(0.5, 0.9, 0.5, 0.8)
+const PATH_UNREACHABLE_COLOR := Color(0.9, 0.35, 0.35, 0.75)
+const LABEL_UNREACHABLE_COLOR := Color(1, 0.55, 0.55, 1)
 const PATH_WIDTH := 3.0
 const PATH_HIGHLIGHT_WIDTH := 5.0
 
@@ -146,15 +148,13 @@ func clear_all() -> void:
 func _calculate_distance(house_pos: Vector2i, restaurant_pos: Vector2i, path_points: Array[Vector2i]) -> int:
 	# 使用 RoadGraph 计算
 	if _road_graph != null and _road_graph.has_method("get_distance"):
-		var d: int = int(_road_graph.get_distance(house_pos, restaurant_pos))
-		if d >= 0:
-			return d
+		return int(_road_graph.get_distance(house_pos, restaurant_pos))
 
 	if path_points.size() > 1:
 		return path_points.size() - 1
 
-	# 备用：曼哈顿距离
-	return absi(house_pos.x - restaurant_pos.x) + absi(house_pos.y - restaurant_pos.y)
+	# 距离工具：不做“曼哈顿兜底”，避免给出误导性结果；无法连接时返回 -1。
+	return -1
 
 func _add_path_visual(path_data: Dictionary) -> void:
 	var house_pos: Vector2i = path_data.house_pos
@@ -186,13 +186,18 @@ func _add_path_visual(path_data: Dictionary) -> void:
 	var mid_point := (_grid_to_pixel(house_pos) + _grid_to_pixel(restaurant_pos)) / 2
 
 	var label := Label.new()
-	label.text = str(distance)
+	if distance < 0:
+		label.text = "无法连接"
+		line.default_color = PATH_UNREACHABLE_COLOR
+		label.add_theme_color_override("font_color", LABEL_UNREACHABLE_COLOR)
+	else:
+		label.text = str(distance)
+		label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	label.add_theme_font_size_override("font_size", 14)
-	label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
 	label.add_theme_constant_override("outline_size", 2)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.position = mid_point - Vector2(10, 10)
+	label.position = mid_point - (label.get_minimum_size() * 0.5)
 	add_child(label)
 	_distance_labels.append(label)
 
@@ -216,9 +221,17 @@ func _update_path_styles() -> void:
 		if not is_instance_valid(line):
 			continue
 
+		var is_unreachable := false
 		var is_highlighted := false
 		if i < _paths.size():
 			var path_data: Dictionary = _paths[i]
+			var d_val = path_data.get("distance", null)
+			if d_val is int:
+				is_unreachable = int(d_val) < 0
+			elif d_val is float:
+				var f: float = float(d_val)
+				if f == floor(f):
+					is_unreachable = int(f) < 0
 			var house_id: String = str(path_data.get("house_id", ""))
 			var restaurant_id: String = str(path_data.get("restaurant_id", ""))
 			var house_pos: Vector2i = path_data.get("house_pos", Vector2i(-1, -1))
@@ -245,13 +258,16 @@ func _update_path_styles() -> void:
 			line.default_color = PATH_HIGHLIGHT_COLOR
 		else:
 			line.width = PATH_WIDTH
-			line.default_color = PATH_COLOR
+			line.default_color = PATH_UNREACHABLE_COLOR if is_unreachable else PATH_COLOR
 
 		if i < _distance_labels.size():
 			var label: Label = _distance_labels[i]
 			if is_instance_valid(label):
 				label.add_theme_font_size_override("font_size", 16 if is_highlighted else 14)
-				label.add_theme_color_override("font_color", Color(0.6, 1, 0.6, 1) if is_highlighted else Color(1, 1, 1, 1))
+				if is_highlighted:
+					label.add_theme_color_override("font_color", Color(0.6, 1, 0.6, 1))
+				else:
+					label.add_theme_color_override("font_color", LABEL_UNREACHABLE_COLOR if is_unreachable else Color(1, 1, 1, 1))
 
 func _get_house_pos_for_highlight() -> Vector2i:
 	if _highlight_house.is_empty():

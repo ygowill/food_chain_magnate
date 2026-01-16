@@ -4,6 +4,7 @@ extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
+const GlobalEffectListClass = preload("res://core/rules/global_effect_list.gd")
 
 static func apply_employee_effects_by_segment(
 	state: GameState,
@@ -131,27 +132,21 @@ static func apply_global_effects_by_segment(
 
 	var warnings: Array[String] = []
 
-	var sources: Array = []
-	sources.append(state.round_state.get("global_effect_ids", null))
-	sources.append(state.map.get("global_effect_ids", null))
-	for src in sources:
-		if src == null:
+	var ids_read := GlobalEffectListClass.get_all_effect_ids(state)
+	if not ids_read.ok:
+		return ids_read
+	warnings.append_array(ids_read.warnings)
+	var ids_any: Array = ids_read.value
+	for i in range(ids_any.size()):
+		var effect_id_val = ids_any[i]
+		if not (effect_id_val is String):
+			return Result.failure("晚餐结算失败：global_effect_ids[%d] 类型错误（期望 String）" % i)
+		var effect_id: String = str(effect_id_val)
+		if effect_id.find(segment) == -1:
 			continue
-		if not (src is Array):
-			return Result.failure("晚餐结算失败：global_effect_ids 类型错误（期望 Array[String]）")
-		var ids: Array = src
-		for i in range(ids.size()):
-			var v = ids[i]
-			if not (v is String):
-				return Result.failure("晚餐结算失败：global_effect_ids[%d] 类型错误（期望 String）" % i)
-			var effect_id: String = str(v)
-			if effect_id.is_empty():
-				return Result.failure("晚餐结算失败：global_effect_ids[%d] 不能为空" % i)
-			if effect_id.find(segment) == -1:
-				continue
-			var r = effect_registry.invoke(effect_id, [state, player_id_for_ctx, ctx])
-			if not r.ok:
-				return r
-			warnings.append_array(r.warnings)
+		var r = effect_registry.invoke(effect_id, [state, player_id_for_ctx, ctx])
+		if not r.ok:
+			return r
+		warnings.append_array(r.warnings)
 
 	return Result.success().with_warnings(warnings)

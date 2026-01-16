@@ -30,10 +30,10 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	p0["company_structure"]["ceo_slots"] = 1
 	state.players[0] = p0
 
-	var take1 := StateUpdaterClass.take_from_pool(state, "recruiter", 1)
+	var take1 := StateUpdaterClass.take_from_pool(state, "recruiting_girl", 1)
 	if not take1.ok:
 		return take1
-	var add1 := StateUpdaterClass.add_employee(state, 0, "recruiter", false)
+	var add1 := StateUpdaterClass.add_employee(state, 0, "recruiting_girl", false)
 	if not add1.ok:
 		return add1
 
@@ -62,8 +62,8 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 
 	if active.size() != 1 or str(active[0]) != "ceo":
 		return Result.failure("超限惩罚后在岗应仅剩 CEO，实际: %s" % str(active))
-	if not reserve.has("recruiter") or not reserve.has("trainer"):
-		return Result.failure("超限惩罚后 recruiter/trainer 应在待命区，实际: %s" % str(reserve))
+	if not reserve.has("recruiting_girl") or not reserve.has("trainer"):
+		return Result.failure("超限惩罚后 recruiting_girl/trainer 应在待命区，实际: %s" % str(reserve))
 
 	return Result.success({
 		"player_count": player_count,

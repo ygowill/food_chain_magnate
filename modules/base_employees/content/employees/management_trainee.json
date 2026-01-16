@@ -11,7 +11,7 @@
     "value": 0
   },
   "train_to": [
-    "new_business_dev",
+    "new_business_developer",
     "junior_vice_president",
     "luxury_manager"
   ],
@@ -23,6 +23,6 @@
   "mandatory": false,
   "pool": {
     "type": "fixed",
-    "count": 8
+    "count": 18
   }
 }

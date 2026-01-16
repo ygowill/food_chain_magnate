@@ -126,6 +126,82 @@ static func validate_no_structure_overlap(
 
 	return Result.success()
 
+# 验证不能与营销板件占地重叠
+static func validate_no_marketing_overlap(
+	map_ctx: Dictionary,
+	_piece_def: PieceDef,
+	footprint_cells: Array[Vector2i],
+	_context: Dictionary
+) -> Result:
+	var placements_val = map_ctx.get("marketing_placements", null)
+	if placements_val == null:
+		return Result.success()
+
+	assert(placements_val is Dictionary, "PlacementValidator: map_ctx.marketing_placements 类型错误（期望 Dictionary）")
+	var placements: Dictionary = placements_val
+	if placements.is_empty():
+		return Result.success()
+
+	for k in placements.keys():
+		var p_val = placements[k]
+		assert(p_val is Dictionary, "PlacementValidator: marketing_placements[%s] 类型错误（期望 Dictionary）" % str(k))
+		var p: Dictionary = p_val
+
+		assert(p.has("world_pos") and (p["world_pos"] is Vector2i), "PlacementValidator: marketing_placements[%s].world_pos 缺失或类型错误（期望 Vector2i）" % str(k))
+		var anchor: Vector2i = p["world_pos"]
+
+		# footprint_size/rotation 为新增字段；缺失则按 1x1/rotation=0 兜底（兼容旧存档/测试）。
+		var base_size := Vector2i.ONE
+		if p.has("footprint_size"):
+			var fs_val = p.get("footprint_size", null)
+			if fs_val is Vector2i:
+				base_size = Vector2i(fs_val)
+			elif fs_val is Array:
+				var arr: Array = fs_val
+				assert(arr.size() == 2, "PlacementValidator: marketing_placements[%s].footprint_size 长度错误（期望 2）" % str(k))
+				var w_val = arr[0]
+				var h_val = arr[1]
+				assert(w_val is int or w_val is float, "PlacementValidator: marketing_placements[%s].footprint_size[0] 类型错误" % str(k))
+				assert(h_val is int or h_val is float, "PlacementValidator: marketing_placements[%s].footprint_size[1] 类型错误" % str(k))
+				base_size = Vector2i(int(w_val), int(h_val))
+			else:
+				assert(false, "PlacementValidator: marketing_placements[%s].footprint_size 类型错误（期望 Vector2i 或 [w,h] Array）" % str(k))
+
+		var rotation := 0
+		if p.has("rotation"):
+			var rot_val = p.get("rotation", null)
+			if rot_val is int:
+				rotation = int(rot_val)
+			elif rot_val is float:
+				var f: float = float(rot_val)
+				assert(f == floor(f), "PlacementValidator: marketing_placements[%s].rotation 必须为整数" % str(k))
+				rotation = int(f)
+			else:
+				assert(false, "PlacementValidator: marketing_placements[%s].rotation 类型错误（期望 int）" % str(k))
+		assert(rotation in [0, 90, 180, 270], "PlacementValidator: marketing_placements[%s].rotation 非法: %s" % [str(k), str(rotation)])
+
+		if base_size.x <= 0 or base_size.y <= 0:
+			return Result.failure("营销板件占地非法: %s" % str(base_size))
+
+		var size := base_size
+		if rotation == 90 or rotation == 270:
+			size = Vector2i(base_size.y, base_size.x)
+
+		var left := anchor.x
+		var right := anchor.x + size.x - 1
+		var top := anchor.y
+		var bottom := anchor.y + size.y - 1
+
+		for cell_pos in footprint_cells:
+			if cell_pos.x < left or cell_pos.x > right or cell_pos.y < top or cell_pos.y > bottom:
+				continue
+
+			var bn_val = p.get("board_number", null)
+			var board_number := str(bn_val) if bn_val != null else str(k)
+			return Result.failure("位置 %s 与营销板件重叠: #%s" % [str(cell_pos), board_number])
+
+	return Result.success()
+
 # 验证邻接道路
 static func validate_road_adjacency(
 	map_ctx: Dictionary,
@@ -165,4 +241,3 @@ static func validate_road_adjacency(
 				return Result.success()
 
 	return Result.failure("放置位置必须邻接道路")
-

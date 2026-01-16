@@ -103,6 +103,9 @@ class RulesetRegistrarV2:
 	func register_dinnertime_route_purchase_provider(provider_id: String, callback: Callable, priority: int = 100) -> Result:
 		return _ruleset.register_dinnertime_route_purchase_provider(provider_id, callback, priority, _module_id)
 
+	func register_placement_conflict_provider(provider_id: String, callback: Callable, priority: int = 100) -> Result:
+		return _ruleset.register_placement_conflict_provider(provider_id, callback, priority, _module_id)
+
 	func register_employee_pool_patch(patch_id: String, employee_id: String, delta: int) -> Result:
 		return _ruleset.register_employee_pool_patch(patch_id, employee_id, delta, _module_id)
 
@@ -111,3 +114,9 @@ class RulesetRegistrarV2:
 
 	func register_state_initializer(initializer_id: String, callback: Callable, priority: int = 100) -> Result:
 		return _ruleset.register_state_initializer(initializer_id, callback, priority, _module_id)
+
+	func register_round_state_int_key_dict_schema(schema_id: String, path: Array, priority: int = 100) -> Result:
+		return _ruleset.register_state_int_key_dict_schema(schema_id, "round_state", path, priority, _module_id)
+
+	func register_map_int_key_dict_schema(schema_id: String, path: Array, priority: int = 100) -> Result:
+		return _ruleset.register_state_int_key_dict_schema(schema_id, "map", path, priority, _module_id)

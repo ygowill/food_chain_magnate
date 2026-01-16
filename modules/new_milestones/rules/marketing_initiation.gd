@@ -2,6 +2,8 @@ extends RefCounted
 
 const UtilsClass = preload("res://modules/new_milestones/rules/utils.gd")
 
+const MODULE_ID := "new_milestones"
+
 const CM_PROVIDER_ID := "new_milestones:campaign_manager:pending_second_tile"
 const CM_PENDING_KEY := "new_milestones_campaign_manager_pending"
 const CM_USED_KEY := "new_milestones_campaign_manager_used_this_turn"
@@ -16,6 +18,11 @@ const BM_USED_KEY := "new_milestones_brand_manager_airplane_used_this_turn"
 
 const BD_PROVIDER_ID := "new_milestones:brand_director:radio_permanent_and_busy_forever"
 
+const STATE_SCHEMA_ID_CM_PENDING := "new_milestones:round_state_int_keys:new_milestones_campaign_manager_pending"
+const STATE_SCHEMA_ID_CM_USED := "new_milestones:round_state_int_keys:new_milestones_campaign_manager_used_this_turn"
+const STATE_SCHEMA_ID_BM_PENDING := "new_milestones:round_state_int_keys:new_milestones_brand_manager_airplane_pending"
+const STATE_SCHEMA_ID_BM_USED := "new_milestones:round_state_int_keys:new_milestones_brand_manager_airplane_used_this_turn"
+
 func register(registrar) -> Result:
 	var r = registrar.register_marketing_initiation_provider(CM_PROVIDER_ID, Callable(self, "_on_marketing_initiated_campaign_manager"), 120)
 	if not r.ok:
@@ -26,6 +33,21 @@ func register(registrar) -> Result:
 	r = registrar.register_marketing_initiation_provider(BD_PROVIDER_ID, Callable(self, "_on_marketing_initiated_brand_director"), 122)
 	if not r.ok:
 		return r
+
+	# round_state.<player_id(int) -> ...> 字典：读档后需要把 "0"/"1" 转回 0/1
+	r = registrar.register_round_state_int_key_dict_schema(STATE_SCHEMA_ID_CM_PENDING, [CM_PENDING_KEY], 100)
+	if not r.ok:
+		return r
+	r = registrar.register_round_state_int_key_dict_schema(STATE_SCHEMA_ID_CM_USED, [CM_USED_KEY], 100)
+	if not r.ok:
+		return r
+	r = registrar.register_round_state_int_key_dict_schema(STATE_SCHEMA_ID_BM_PENDING, [BM_PENDING_KEY], 100)
+	if not r.ok:
+		return r
+	r = registrar.register_round_state_int_key_dict_schema(STATE_SCHEMA_ID_BM_USED, [BM_USED_KEY], 100)
+	if not r.ok:
+		return r
+
 	return Result.success()
 
 func _on_marketing_initiated_campaign_manager(state: GameState, command: Command, marketing_instance: Dictionary) -> Result:
@@ -184,7 +206,7 @@ func _on_marketing_initiated_brand_director(state: GameState, command: Command, 
 		return Result.failure("new_milestones:brand_director: marketing_instance 类型错误（期望 Dictionary）")
 
 	# 里程碑获得后：玩家放置的 radio 永久（duration=-1）
-	if UtilsClass.player_has_milestone(state, int(command.actor), MILESTONE_ID_BRAND_DIRECTOR):
+	if StateUpdater.player_has_milestone(state, int(command.actor), MILESTONE_ID_BRAND_DIRECTOR):
 		if str(marketing_instance.get("type", "")) == "radio":
 			marketing_instance["remaining_duration"] = -1
 			if state.map is Dictionary and state.map.has("marketing_placements") and state.map["marketing_placements"] is Dictionary:
@@ -198,8 +220,7 @@ func _on_marketing_initiated_brand_director(state: GameState, command: Command, 
 
 	# 品牌总监：忙碌到游戏结束（即使本次不是 radio）
 	if str(marketing_instance.get("employee_type", "")) == "brand_director":
-		if UtilsClass.player_has_milestone(state, int(command.actor), MILESTONE_ID_BRAND_DIRECTOR):
+		if StateUpdater.player_has_milestone(state, int(command.actor), MILESTONE_ID_BRAND_DIRECTOR):
 			marketing_instance["no_release"] = true
 
 	return Result.success()
-

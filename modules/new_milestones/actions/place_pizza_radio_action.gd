@@ -5,6 +5,7 @@ const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
 const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
+const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
 
 const PENDING_KEY := "new_milestones_pizza_radios_pending"
 
@@ -82,56 +83,98 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not pos_read.ok:
 		return pos_read
 	var world_pos: Vector2i = pos_read.value
-	if world_pos.x < tile_min.x or world_pos.x > tile_max.x or world_pos.y < tile_min.y or world_pos.y > tile_max.y:
-		return Result.failure("position 必须在目标 tile 内: %s" % str(world_pos))
 
-	# 放置校验：位置/空格/邻路
-	if not MapRuntimeClass.is_world_pos_in_grid(state, world_pos):
-		return Result.failure("position 越界: %s" % str(world_pos))
+	var rotation_read := optional_int_param(command, "rotation", 0)
+	if not rotation_read.ok:
+		return rotation_read
+	var rotation: int = int(rotation_read.value)
+	if not rotation in [0, 90, 180, 270]:
+		return Result.failure("rotation 非法（期望 0/90/180/270），实际: %d" % rotation)
 
-	var cell := MapRuntimeClass.get_cell(state, world_pos)
-	if cell.is_empty():
-		return Result.failure("position 无效: %s" % str(world_pos))
-	if not cell.has("structure") or not (cell["structure"] is Dictionary):
-		return Result.failure("cell.structure 缺失或类型错误: %s" % str(world_pos))
-	var structure: Dictionary = cell["structure"]
-	if not structure.is_empty():
-		return Result.failure("该位置已有建筑，无法放置营销: %s" % str(world_pos))
+	# === 放置校验：占地/边界/阻塞/道路/边缘/重叠（对齐 initiate_marketing）===
+	var base_size := Vector2i.ONE
+	if def is MarketingDef:
+		base_size = (def as MarketingDef).footprint_size
+	elif def.has_method("get"):
+		var fs = def.get("footprint_size")
+		if fs is Vector2i:
+			base_size = fs
+	if base_size.x <= 0 or base_size.y <= 0:
+		return Result.failure("营销板件占地非法: %s" % str(base_size))
 
-	if MarketingTypeRegistryClass.requires_edge("radio"):
-		if not MapRuntimeClass.is_on_map_edge(state, world_pos):
-			return Result.failure("该营销必须放置在地图边缘: %s" % str(world_pos))
+	var size := base_size
+	if rotation == 90 or rotation == 270:
+		size = Vector2i(base_size.y, base_size.x)
+
+	var footprint_cells: Array[Vector2i] = []
+	for dy in range(size.y):
+		for dx in range(size.x):
+			footprint_cells.append(world_pos + Vector2i(dx, dy))
+
+	# tile 约束：占地必须完全在 tile 内
+	for p0 in footprint_cells:
+		if p0.x < tile_min.x or p0.x > tile_max.x or p0.y < tile_min.y or p0.y > tile_max.y:
+			return Result.failure("营销占地必须在目标 tile 内: %s (anchor=%s)" % [str(p0), str(world_pos)])
+
+	# 1) 越界/建筑占用检查（所有占地格）
+	for p in footprint_cells:
+		if not MapRuntimeClass.is_world_pos_in_grid(state, p):
+			return Result.failure("position 越界: %s" % str(p))
+		var cell := MapRuntimeClass.get_cell(state, p)
+		if cell.is_empty():
+			return Result.failure("position 无效: %s" % str(p))
+		if not cell.has("structure") or not (cell["structure"] is Dictionary):
+			return Result.failure("cell.structure 缺失或类型错误: %s" % str(p))
+		var structure: Dictionary = cell["structure"]
+		if not structure.is_empty():
+			return Result.failure("该位置已有建筑，无法放置营销: %s" % str(p))
+
+	var requires_edge := MarketingTypeRegistryClass.requires_edge("radio")
+
+	# 2) 边缘营销：要求“整条边贴边”（不能超出）
+	if requires_edge:
+		var minp := MapRuntimeClass.get_world_min(state)
+		var maxp := MapRuntimeClass.get_world_max(state)
+		var left := world_pos.x
+		var right := world_pos.x + size.x - 1
+		var top := world_pos.y
+		var bottom := world_pos.y + size.y - 1
+		var flush := (left == minp.x) or (right == maxp.x) or (top == minp.y) or (bottom == maxp.y)
+		if not flush:
+			return Result.failure("该营销必须有一条边完全贴地图边缘: %s" % str(world_pos))
 	else:
-		if not cell.has("blocked") or not (cell["blocked"] is bool):
-			return Result.failure("cell.blocked 缺失或类型错误: %s" % str(world_pos))
-		if bool(cell["blocked"]):
-			return Result.failure("该位置被阻塞: %s" % str(world_pos))
-		if not cell.has("road_segments") or not (cell["road_segments"] is Array):
-			return Result.failure("cell.road_segments 缺失或类型错误: %s" % str(world_pos))
-		var road_segments: Array = cell["road_segments"]
-		if not road_segments.is_empty():
-			return Result.failure("营销必须放置在空格（非道路）上: %s" % str(world_pos))
-		var adjacent_roads_result := RangeUtilsClass.get_adjacent_road_cells(state, world_pos)
+		# 3) 非边缘营销：所有占地格必须在空地（非道路/非阻塞），且占地整体需邻接道路
+		for p2 in footprint_cells:
+			var cell2 := MapRuntimeClass.get_cell(state, p2)
+			if not cell2.has("blocked") or not (cell2["blocked"] is bool):
+				return Result.failure("cell.blocked 缺失或类型错误: %s" % str(p2))
+			if bool(cell2["blocked"]):
+				return Result.failure("该位置被阻塞: %s" % str(p2))
+			if not cell2.has("road_segments") or not (cell2["road_segments"] is Array):
+				return Result.failure("cell.road_segments 缺失或类型错误: %s" % str(p2))
+			var road_segments: Array = cell2["road_segments"]
+			if not road_segments.is_empty():
+				return Result.failure("营销必须放置在空格（非道路）上: %s (anchor=%s board=#%d)" % [str(p2), str(world_pos), board_number])
+
+		var adjacent_roads_result := RangeUtilsClass.get_adjacent_road_cells_for_positions(state, footprint_cells)
 		if not adjacent_roads_result.ok:
 			return adjacent_roads_result
-		var adjacent_roads: Array = adjacent_roads_result.value
+		var adjacent_roads: Array[Vector2i] = adjacent_roads_result.value
 		if adjacent_roads.is_empty():
 			return Result.failure("营销必须邻接道路: %s" % str(world_pos))
 
-	# 同一位置不能放多个营销板件
-	for key in placements.keys():
-		var p_val = placements[key]
-		if not (p_val is Dictionary):
-			return Result.failure("marketing_placements[%s] 类型错误（期望 Dictionary）" % str(key))
-		var p: Dictionary = p_val
-		if not p.has("world_pos") or not (p["world_pos"] is Vector2i):
-			return Result.failure("marketing_placements[%s].world_pos 缺失或类型错误" % str(key))
-		if p["world_pos"] == world_pos:
-			return Result.failure("该位置已放置其他营销板件: %s" % str(world_pos))
+	# 4) 不允许与其他营销板件占地重叠
+	var occupied_read := MarketingPlacementQueryClass.has_any_in_world_positions(state, footprint_cells)
+	if not occupied_read.ok:
+		return occupied_read
+	if bool(occupied_read.value):
+		return Result.failure("营销占地与其他营销板件重叠: %s" % str(world_pos))
 
 	return Result.success({
 		"board_number": board_number,
 		"world_pos": world_pos,
+		"rotation": rotation,
+		"footprint_size": base_size,
 		"product": str(first.get("product", "pizza")),
 		"duration": int(first.get("duration", 2)),
 	})
@@ -144,6 +187,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 	var board_number: int = int(info["board_number"])
 	var world_pos: Vector2i = info["world_pos"]
+	var rotation: int = int(info.get("rotation", 0))
+	var footprint_size: Vector2i = info.get("footprint_size", Vector2i.ONE)
 	var product: String = str(info["product"])
 	var duration: int = int(info["duration"])
 
@@ -154,6 +199,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"employee_type": "__milestone__",
 		"product": product,
 		"world_pos": world_pos,
+		"rotation": rotation,
+		"footprint_size": footprint_size,
 		"remaining_duration": duration,
 		"axis": "",
 		"tile_index": -1,
@@ -167,6 +214,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"owner": command.actor,
 		"product": product,
 		"world_pos": world_pos,
+		"rotation": rotation,
+		"footprint_size": footprint_size,
 		"remaining_duration": duration,
 		"axis": "",
 		"tile_index": -1,

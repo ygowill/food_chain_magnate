@@ -104,7 +104,7 @@ static func from_dict(data: Dictionary) -> Result:
 	var apply_result = SerializationClass.apply_from_dict(state, data, SCHEMA_VERSION)
 	if not apply_result.ok:
 		return apply_result
-	return Result.success(state)
+	return Result.success(state).with_warnings(apply_result.warnings)
 
 # === 状态哈希（用于校验点） ===
 func compute_hash() -> String:

@@ -13,6 +13,7 @@ const EndPanelsClass = preload("res://ui/scenes/game/game_panel_end_panels.gd")
 
 const RestructuringModalScene = preload("res://ui/components/modal_panel/restructuring_modal.tscn")
 const TurnOrderSelectionModalScene = preload("res://ui/components/modal_panel/turn_order_selection_modal.tscn")
+const ReserveCardSelectionModalScene = preload("res://ui/components/modal_panel/reserve_card_selection_modal.tscn")
 const EmployeeTreeScene = preload("res://ui/components/employee_tree/employee_tree.tscn")
 
 const POPUP_LAYOUT_META_KEY := "popup_layout"
@@ -31,9 +32,13 @@ var _end_panels = null
 
 var _restructuring_modal = null
 var _turn_order_modal = null
+var _reserve_card_modal = null
 var _employee_tree_panel = null
 
 var _view_player_id: int = -1
+var _pending_reserve_card_open_player_id: int = -1
+var _pending_reserve_card_open_attempts: int = 0
+var _reserve_card_open_routine_running: bool = false
 
 func _init(scene, map_controller, overlay_controller, execute_command: Callable, refresh_ui: Callable) -> void:
 	_scene = scene
@@ -156,6 +161,10 @@ func dispose() -> void:
 		_turn_order_modal.queue_free()
 	_turn_order_modal = null
 
+	if is_instance_valid(_reserve_card_modal):
+		_reserve_card_modal.queue_free()
+	_reserve_card_modal = null
+
 	if is_instance_valid(_employee_tree_panel):
 		_employee_tree_panel.queue_free()
 	_employee_tree_panel = null
@@ -169,6 +178,8 @@ func has_open_modal_ui() -> bool:
 		return true
 	if is_instance_valid(_turn_order_modal) and _turn_order_modal.visible:
 		return true
+	if is_instance_valid(_reserve_card_modal) and _reserve_card_modal.visible:
+		return true
 	if is_instance_valid(_employee_tree_panel) and _employee_tree_panel.visible:
 		return true
 	return false
@@ -176,6 +187,7 @@ func has_open_modal_ui() -> bool:
 func hide_modal_ui() -> void:
 	_hide_turn_order_modal()
 	_hide_restructuring_modal()
+	_hide_reserve_card_modal()
 	_hide_employee_tree()
 
 func has_open_phase_ui() -> bool:
@@ -795,13 +807,20 @@ func _sync_modals(state: GameState) -> void:
 		return
 
 	var layout_version := int(Globals.ui_layout_version) if Globals != null else 1
+	var current_player_id := state.get_current_player_id()
+	var covered := _get_modal_cover_rect()
+
+	# 储备卡选择（Setup/ReserveCards）
+	if state.phase == "Setup" and str(state.sub_phase) == "ReserveCards" and current_player_id >= 0:
+		_show_reserve_card_modal(state, current_player_id, covered)
+	else:
+		_hide_reserve_card_modal()
+
+	# 旧布局：不使用顺序/重组的遮罩面板；但储备卡选择仍必须强制弹窗。
 	if layout_version != 2:
 		_hide_turn_order_modal()
 		_hide_restructuring_modal()
 		return
-
-	var current_player_id := state.get_current_player_id()
-	var covered := _get_modal_cover_rect()
 
 	# 顺序选择（OrderOfBusiness）
 	var selections := {}
@@ -977,6 +996,158 @@ func _on_turn_order_modal_completed(result: Dictionary) -> void:
 
 func _on_turn_order_modal_cancelled() -> void:
 	_hide_turn_order_modal()
+
+func _show_reserve_card_modal(state: GameState, current_player_id: int, covered: Rect2) -> void:
+	if _scene == null:
+		return
+	if state == null:
+		return
+
+	if not is_instance_valid(_reserve_card_modal):
+		_reserve_card_modal = ReserveCardSelectionModalScene.instantiate()
+		if is_instance_valid(_reserve_card_modal):
+			_scene.add_child(_reserve_card_modal)
+			if _reserve_card_modal is Control:
+				(_reserve_card_modal as Control).z_index = 900
+			if _reserve_card_modal.has_signal("completed"):
+				if not _reserve_card_modal.completed.is_connected(_on_reserve_card_modal_completed):
+					_reserve_card_modal.completed.connect(_on_reserve_card_modal_completed)
+
+	if not is_instance_valid(_reserve_card_modal):
+		return
+
+	if _reserve_card_modal.has_method("setup"):
+		_reserve_card_modal.call("setup", state, current_player_id)
+	if _reserve_card_modal.has_method("open"):
+		# 首次打开时 UI 布局可能尚未完成，CenterSplit 的 rect 会错误导致遮罩落在左上角；
+		# 延迟一帧再重新计算覆盖区域并打开，确保首位玩家显示正常。
+		if not _reserve_card_modal.visible:
+			if _pending_reserve_card_open_player_id != current_player_id:
+				_pending_reserve_card_open_player_id = current_player_id
+				_pending_reserve_card_open_attempts = 0
+			if not _reserve_card_open_routine_running:
+				_reserve_card_open_routine_running = true
+				call_deferred("_deferred_open_reserve_card_modal")
+			return
+
+		_reserve_card_modal.call("open", covered)
+	elif _reserve_card_modal is Control:
+		var c: Control = _reserve_card_modal
+		c.position = covered.position
+		c.size = covered.size
+		c.visible = true
+
+func _deferred_open_reserve_card_modal() -> void:
+	# 注意：call_deferred 只保证“当前调用栈之后”，不保证已完成容器布局；
+	# 因此这里按帧等待并重算覆盖区域，避免首位玩家第一次弹窗落在左上角。
+	while true:
+		var expected_player_id := _pending_reserve_card_open_player_id
+		if expected_player_id < 0:
+			_reserve_card_open_routine_running = false
+			return
+		if _scene == null or _scene.game_engine == null:
+			_reserve_card_open_routine_running = false
+			return
+		if not is_instance_valid(_reserve_card_modal):
+			_reserve_card_open_routine_running = false
+			return
+
+		# 等待至少一帧，让 VBox/SplitContainer 等容器完成布局（位置/尺寸）。
+		await _scene.get_tree().process_frame
+
+		# 过程中可能发生状态变化，重新校验
+		if _pending_reserve_card_open_player_id != expected_player_id:
+			_pending_reserve_card_open_attempts = 0
+			continue
+
+		var state: GameState = _scene.game_engine.get_state()
+		if state == null:
+			_reserve_card_open_routine_running = false
+			return
+		if str(state.phase) != "Setup" or str(state.sub_phase) != "ReserveCards":
+			_pending_reserve_card_open_player_id = -1
+			_pending_reserve_card_open_attempts = 0
+			_reserve_card_open_routine_running = false
+			return
+
+		var current_player_id := state.get_current_player_id()
+		if current_player_id != expected_player_id:
+			_reserve_card_open_routine_running = false
+			return
+
+		var covered := _get_modal_cover_rect()
+
+		# UI 布局刚完成前的一两帧，CenterSplit 的 rect 可能异常偏小（但非 0），导致遮罩落在左上角；
+		# 这里最多等待几帧，直到覆盖区域尺寸接近 viewport（再打开）。
+		var viewport_size = _scene.get_viewport_rect().size
+		var should_retry := false
+		if viewport_size.x > 1.0 and viewport_size.y > 1.0:
+			if covered.size.x < viewport_size.x * 0.4 or covered.size.y < viewport_size.y * 0.4:
+				should_retry = true
+		else:
+			should_retry = covered.size.x <= 1.0 or covered.size.y <= 1.0
+
+		if should_retry and _pending_reserve_card_open_attempts < 8:
+			_pending_reserve_card_open_attempts += 1
+			continue
+
+		_pending_reserve_card_open_player_id = -1
+		_pending_reserve_card_open_attempts = 0
+		_reserve_card_open_routine_running = false
+
+		# 进入储备卡选择时再隐藏加载遮罩，避免“先闪一帧游戏 UI 再弹窗”的体验。
+		if SceneManager != null and SceneManager.has_method("hide_loading"):
+			SceneManager.hide_loading()
+
+		if _reserve_card_modal.has_method("setup"):
+			_reserve_card_modal.call("setup", state, current_player_id)
+		if _reserve_card_modal.has_method("open"):
+			_reserve_card_modal.call("open", covered)
+		elif _reserve_card_modal is Control:
+			var c: Control = _reserve_card_modal
+			c.position = covered.position
+			c.size = covered.size
+			c.visible = true
+		return
+
+func _hide_reserve_card_modal() -> void:
+	_pending_reserve_card_open_player_id = -1
+	_pending_reserve_card_open_attempts = 0
+	if not is_instance_valid(_reserve_card_modal):
+		return
+	if _reserve_card_modal.has_method("close"):
+		_reserve_card_modal.call("close")
+	elif _reserve_card_modal is Control:
+		(_reserve_card_modal as Control).visible = false
+
+func _on_reserve_card_modal_completed(result: Dictionary) -> void:
+	if _scene == null or _scene.game_engine == null:
+		return
+	if not is_instance_valid(_reserve_card_modal):
+		return
+
+	var idx_val = result.get("selected_index", null)
+	var selected_index := -1
+	if idx_val is int:
+		selected_index = int(idx_val)
+	elif idx_val is float:
+		var f: float = float(idx_val)
+		if f == floor(f):
+			selected_index = int(f)
+	if selected_index < 0:
+		return
+
+	if _reserve_card_modal.has_method("set_confirm_enabled"):
+		_reserve_card_modal.call("set_confirm_enabled", false)
+
+	var state: GameState = _scene.game_engine.get_state()
+	if state == null:
+		return
+	var current_player_id := state.get_current_player_id()
+	if current_player_id < 0:
+		return
+
+	_execute_command.call(Command.create("select_reserve_card", current_player_id, {"selected_index": selected_index}))
 
 func _show_restructuring_modal(covered: Rect2) -> void:
 	if _scene == null:

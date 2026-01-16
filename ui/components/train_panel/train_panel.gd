@@ -319,7 +319,7 @@ class TrainableCard extends PanelContainer:
 	var _count_label: Label
 	var _badge_label: Label
 
-	const EmployeeDefClass = preload("res://core/data/employee_def.gd")
+	const EmployeeRoleColorsClass = preload("res://ui/visual/employee_role_colors.gd")
 
 	func _ready() -> void:
 		_build_ui()
@@ -391,7 +391,7 @@ class TrainableCard extends PanelContainer:
 
 		if _role_color != null:
 			var role: String = str(employee_def.get("role", "special"))
-			_role_color.color = Color(EmployeeDefClass.role_to_color_hex(role))
+			_role_color.color = Color(EmployeeRoleColorsClass.role_to_color_hex(role))
 
 	func set_enabled(enabled: bool) -> void:
 		_enabled = enabled

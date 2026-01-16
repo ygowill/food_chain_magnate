@@ -13,16 +13,19 @@ RE_TRAILING_COMMA = re.compile(r",\s*([}\]])")
 
 
 EMPLOYEE_ID_MAP: dict[str, str] = {
-    "new_business_developer": "new_business_dev",
-    "recruiting_girl": "recruiter",
-    "marketing_trainee": "marketer",
+    "recruiter": "recruiting_girl",
+    "marketer": "marketing_trainee",
+    "new_business_dev": "new_business_developer",
     "vice_precident": "vice_president",
     "junior_vice_precident": "junior_vice_president",
     "senior_vice_precident": "senior_vice_president",
-    "executive_vice_precident": "executive_vp",
+    "executive_vp": "executive_vice_president",
+    "executive_vice_precident": "executive_vice_president",
     "recuriting_manager": "recruiting_manager",
     "zippelin_pilot": "zeppelin_pilot",
     "zeppeliner": "zeppelin_pilot",
+    "noodles_cook": "noodle_cook",
+    "noodles_chef": "noodle_chef",
     "CFO": "cfo",
 }
 

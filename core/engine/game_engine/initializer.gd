@@ -58,6 +58,10 @@ static func initialize_new_game(
 	var reserve_apply := _apply_reserve_card_selections(state, reserve_card_selected_by_player)
 	if not reserve_apply.ok:
 		return Result.failure("创建初始状态失败：%s" % reserve_apply.error)
+	# 若初始化时已注入每位玩家的储备卡选择，则跳过 Setup/ReserveCards，直接进入起始餐厅放置流程。
+	if reserve_card_selected_by_player != null and not reserve_card_selected_by_player.is_empty():
+		state.sub_phase = ""
+		state.current_player_index = max(0, state.turn_order.size() - 1)
 	state.modules = Array(engine.module_plan_v2, TYPE_STRING, "", null)
 	state.round_state["phase_order"] = engine.phase_manager.get_phase_order_names()
 

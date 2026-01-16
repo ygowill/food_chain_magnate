@@ -8,6 +8,9 @@ extends Control
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
 
+const BADGE_SIZE := 78 # 26 * 3 (triple height for better logo readability)
+const BADGE_ICON_MARGIN := 6
+
 var _game_state: GameState = null
 var _skin = null
 var _skin_modules_key: String = ""
@@ -175,21 +178,21 @@ class OrderBadge extends PanelContainer:
 	var _logo_texture: Texture2D = null
 
 	func _ready() -> void:
-		custom_minimum_size = Vector2(26, 26)
+		custom_minimum_size = Vector2(BADGE_SIZE, BADGE_SIZE)
 		_icon = TextureRect.new()
 		_icon.anchors_preset = Control.PRESET_FULL_RECT
 		_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		_icon.offset_left = 3
-		_icon.offset_top = 3
-		_icon.offset_right = -3
-		_icon.offset_bottom = -3
+		_icon.offset_left = BADGE_ICON_MARGIN
+		_icon.offset_top = BADGE_ICON_MARGIN
+		_icon.offset_right = -BADGE_ICON_MARGIN
+		_icon.offset_bottom = -BADGE_ICON_MARGIN
 		_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(_icon)
 		_label = Label.new()
 		_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		_label.add_theme_font_size_override("font_size", 12)
+		_label.add_theme_font_size_override("font_size", 24)
 		_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(_label)
 		_update()
@@ -221,7 +224,7 @@ class OrderBadge extends PanelContainer:
 		style.bg_color = Color(_player_color.r, _player_color.g, _player_color.b, 0.28) if _occupied else Color(0.15, 0.15, 0.18, 0.8)
 		style.border_color = Color(0.95, 0.95, 0.95, 0.95) if _is_current else (_player_color if _occupied else Color(0.3, 0.3, 0.35, 0.6))
 		style.set_border_width_all(2 if _is_current else 1)
-		style.set_corner_radius_all(13)
+		style.set_corner_radius_all(int(BADGE_SIZE / 2))
 		add_theme_stylebox_override("panel", style)
 
 		if _occupied:

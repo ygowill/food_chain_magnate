@@ -60,10 +60,10 @@ static func _test_billboard_mailbox_and_expiry(player_count: int, seed_val: int)
 	state.players[actor]["restaurants"] = ["rest_0"]
 
 	# 准备员工（直接从池取卡，保持守恒）
-	if int(state.employee_pool.get("marketer", 0)) <= 0:
-		return Result.failure("员工池中没有 marketer")
-	state.employee_pool["marketer"] = int(state.employee_pool.get("marketer", 0)) - 1
-	state.players[actor]["employees"].append("marketer")
+	if int(state.employee_pool.get("marketing_trainee", 0)) <= 0:
+		return Result.failure("员工池中没有 marketing_trainee")
+	state.employee_pool["marketing_trainee"] = int(state.employee_pool.get("marketing_trainee", 0)) - 1
+	state.players[actor]["employees"].append("marketing_trainee")
 
 	if int(state.employee_pool.get("campaign_manager", 0)) <= 0:
 		return Result.failure("员工池中没有 campaign_manager")
@@ -74,9 +74,17 @@ static func _test_billboard_mailbox_and_expiry(player_count: int, seed_val: int)
 	state.phase = "Working"
 	state.sub_phase = "Marketing"
 
+	# 该测试使用固定的板件占地尺寸（用于验证“多格板件不会错误覆盖道路格”）
+	var b11_val = MarketingRegistryClass.get_def(11)
+	if b11_val == null or not (b11_val is MarketingDef):
+		return Result.failure("MarketingDef #11 未加载或类型错误")
+	var b11: MarketingDef = b11_val
+	if b11.footprint_size != Vector2i(3, 2):
+		return Result.failure("MarketingDef #11 footprint_size 应为 (3,2)，实际: %s" % str(b11.footprint_size))
+
 	# 1) 2 人局：#12/#15/#16 被移除
 	var invalid := engine.execute_command(Command.create("initiate_marketing", actor, {
-		"employee_type": "marketer",
+		"employee_type": "marketing_trainee",
 		"board_number": 12,
 		"product": "burger",
 		"duration": 1,
@@ -104,26 +112,38 @@ static func _test_billboard_mailbox_and_expiry(player_count: int, seed_val: int)
 		"board_number": 7,
 		"product": "pizza",
 		"duration": 1,
-		"position": [3, 2],
+		"position": [4, 2],
 	}))
 	if not mailbox.ok:
 		return Result.failure("发起 mailbox 营销失败: %s" % mailbox.error)
 
+	# Pre-check：#11 占地不应覆盖道路格（避免测试地图/占地尺寸不匹配导致误判）
+	var b11_anchor := Vector2i(0, 2)
+	var b11_cells: Array[Vector2i] = []
+	for dy in range(b11.footprint_size.y):
+		for dx in range(b11.footprint_size.x):
+			b11_cells.append(b11_anchor + Vector2i(dx, dy))
+	for p in b11_cells:
+		var c := MapRuntimeClass.get_cell(state, p)
+		var rs_val = c.get("road_segments", null)
+		if rs_val is Array and not (rs_val as Array).is_empty():
+			return Result.failure("测试地图不匹配：#11 预期占地包含道路格: %s" % str(p))
+
 	var billboard := engine.execute_command(Command.create("initiate_marketing", actor, {
-		"employee_type": "marketer",
+		"employee_type": "marketing_trainee",
 		"board_number": 11,
 		"product": "burger",
 		"duration": 1,
-		"position": [1, 2],
+		"position": [0, 2],
 	}))
 	if not billboard.ok:
 		return Result.failure("发起 billboard 营销失败: %s" % billboard.error)
 
 	state = engine.get_state()
 	var busy: Array = state.players[actor].get("busy_marketers", [])
-	if not busy.has("campaign_manager") or not busy.has("marketer"):
+	if not busy.has("campaign_manager") or not busy.has("marketing_trainee"):
 		return Result.failure("营销员应进入忙碌区，实际: %s" % str(busy))
-	if state.players[actor].get("employees", []).has("campaign_manager") or state.players[actor].get("employees", []).has("marketer"):
+	if state.players[actor].get("employees", []).has("campaign_manager") or state.players[actor].get("employees", []).has("marketing_trainee"):
 		return Result.failure("营销员不应仍留在在岗 employees")
 
 	# 3) 进入 Marketing 阶段：结算需求并使持续时间 -1（duration=1 => 到期）
@@ -171,9 +191,9 @@ static func _test_billboard_mailbox_and_expiry(player_count: int, seed_val: int)
 
 	var reserve: Array = state.players[actor].get("reserve_employees", [])
 	busy = state.players[actor].get("busy_marketers", [])
-	if busy.has("marketer") or busy.has("campaign_manager"):
+	if busy.has("marketing_trainee") or busy.has("campaign_manager"):
 		return Result.failure("到期后不应仍忙碌，busy=%s" % str(busy))
-	if not reserve.has("marketer") or not reserve.has("campaign_manager"):
+	if not reserve.has("marketing_trainee") or not reserve.has("campaign_manager"):
 		return Result.failure("到期后员工应回到 reserve_employees，实际: %s" % str(reserve))
 
 	var marketing_round: Dictionary = state.round_state.get("marketing", {})
@@ -311,12 +331,12 @@ static func _test_first_billboard_permanent_and_no_salary(player_count: int, see
 	state.players[actor]["restaurants"] = ["rest_0"]
 
 	# 准备员工（从池取卡，保持守恒）：
-	# - marketer：发起 billboard（触发 first_billboard）
+	# - marketing_trainee：发起 billboard（触发 first_billboard）
 	# - campaign_manager：里程碑后发起 mailbox（应永久），且其薪资应被豁免
-	if int(state.employee_pool.get("marketer", 0)) <= 0:
-		return Result.failure("员工池中没有 marketer")
-	state.employee_pool["marketer"] = int(state.employee_pool.get("marketer", 0)) - 1
-	state.players[actor]["employees"].append("marketer")
+	if int(state.employee_pool.get("marketing_trainee", 0)) <= 0:
+		return Result.failure("员工池中没有 marketing_trainee")
+	state.employee_pool["marketing_trainee"] = int(state.employee_pool.get("marketing_trainee", 0)) - 1
+	state.players[actor]["employees"].append("marketing_trainee")
 
 	if int(state.employee_pool.get("campaign_manager", 0)) <= 0:
 		return Result.failure("员工池中没有 campaign_manager")
@@ -331,11 +351,11 @@ static func _test_first_billboard_permanent_and_no_salary(player_count: int, see
 		return Result.failure("获得 first_billboard 前应支付 1 名员工薪资（campaign_manager），实际: %d" % paid_before)
 
 	var billboard := engine.execute_command(Command.create("initiate_marketing", actor, {
-		"employee_type": "marketer",
+		"employee_type": "marketing_trainee",
 		"board_number": 11,
 		"product": "burger",
 		"duration": 1,
-		"position": [1, 2],
+		"position": [0, 2],
 	}))
 	if not billboard.ok:
 		return Result.failure("发起 billboard 营销失败: %s" % billboard.error)
@@ -355,7 +375,7 @@ static func _test_first_billboard_permanent_and_no_salary(player_count: int, see
 		"board_number": 7,
 		"product": "pizza",
 		"duration": 1,
-		"position": [3, 2],
+		"position": [4, 2],
 	}))
 	if not mailbox.ok:
 		return Result.failure("发起 mailbox 营销失败: %s" % mailbox.error)
@@ -402,12 +422,12 @@ static func _test_first_billboard_permanent_and_no_salary(player_count: int, see
 
 	var busy: Array = state.players[actor].get("busy_marketers", [])
 	var reserve: Array = state.players[actor].get("reserve_employees", [])
-	if busy.has("marketer"):
-		return Result.failure("billboard 到期后 marketer 不应仍忙碌，busy=%s" % str(busy))
+	if busy.has("marketing_trainee"):
+		return Result.failure("billboard 到期后 marketing_trainee 不应仍忙碌，busy=%s" % str(busy))
 	if not busy.has("campaign_manager"):
 		return Result.failure("mailbox 永久后 campaign_manager 应保持忙碌，busy=%s" % str(busy))
-	if not reserve.has("marketer"):
-		return Result.failure("billboard 到期后 marketer 应回到 reserve_employees，reserve=%s" % str(reserve))
+	if not reserve.has("marketing_trainee"):
+		return Result.failure("billboard 到期后 marketing_trainee 应回到 reserve_employees，reserve=%s" % str(reserve))
 	if reserve.has("campaign_manager"):
 		return Result.failure("mailbox 永久后 campaign_manager 不应回到 reserve_employees，reserve=%s" % str(reserve))
 
@@ -539,15 +559,15 @@ static func _set_house(cells: Array, house_id: String, house_number: int, footpr
 		}
 
 static func _build_test_map(owner: int) -> Result:
-	var grid_size := Vector2i(5, 5)
+	var grid_size := Vector2i(6, 5)
 	var cells := _build_empty_cells(grid_size)
 
-	# 垂直道路（x=2），用于分割街区并提供邻路放置
-	_set_road(cells, Vector2i(2, 0), ["S"])
-	_set_road(cells, Vector2i(2, 1), ["N", "S"])
-	_set_road(cells, Vector2i(2, 2), ["N", "S"])
-	_set_road(cells, Vector2i(2, 3), ["N", "S"])
-	_set_road(cells, Vector2i(2, 4), ["N"])
+	# 垂直道路（x=3），用于分割街区并提供邻路放置
+	_set_road(cells, Vector2i(3, 0), ["S"])
+	_set_road(cells, Vector2i(3, 1), ["N", "S"])
+	_set_road(cells, Vector2i(3, 2), ["N", "S"])
+	_set_road(cells, Vector2i(3, 3), ["N", "S"])
+	_set_road(cells, Vector2i(3, 4), ["N"])
 
 	# 左侧房屋（用于 billboard）
 	var left_cells: Array[Vector2i] = [
@@ -558,8 +578,8 @@ static func _build_test_map(owner: int) -> Result:
 
 	# 右侧房屋（用于 mailbox）
 	var right_cells: Array[Vector2i] = [
-		Vector2i(3, 0), Vector2i(4, 0),
-		Vector2i(3, 1), Vector2i(4, 1),
+		Vector2i(4, 0), Vector2i(5, 0),
+		Vector2i(4, 1), Vector2i(5, 1),
 	]
 	_set_house(cells, "house_right", 2, right_cells)
 
@@ -578,7 +598,7 @@ static func _build_test_map(owner: int) -> Result:
 		"house_right": {
 			"house_id": "house_right",
 			"house_number": 2,
-			"anchor_pos": Vector2i(3, 0),
+			"anchor_pos": Vector2i(4, 0),
 			"cells": right_cells,
 			"has_garden": false,
 			"is_apartment": false,
@@ -593,7 +613,8 @@ static func _build_test_map(owner: int) -> Result:
 			"restaurant_id": "rest_0",
 			"owner": owner,
 			"anchor_pos": Vector2i(0, 4),
-			"entrance_pos": Vector2i(1, 4),
+			# 入口需邻接道路（用于 road range 计算）
+			"entrance_pos": Vector2i(2, 4),
 		}
 	}
 

@@ -43,16 +43,16 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	state.players[0]["employees"].append("burger_cook")
 
 	# 放入一个忙碌营销员 + 一张待结算的 billboard 营销实例（duration=1）
-	var take_marketer := StateUpdaterClass.take_from_pool(state, "marketer", 1)
+	var take_marketer := StateUpdaterClass.take_from_pool(state, "marketing_trainee", 1)
 	if not take_marketer.ok:
-		return Result.failure("从员工池取出 marketer 失败: %s" % take_marketer.error)
-	state.players[0]["busy_marketers"] = ["marketer"]
+		return Result.failure("从员工池取出 marketing_trainee 失败: %s" % take_marketer.error)
+	state.players[0]["busy_marketers"] = ["marketing_trainee"]
 
 	state.marketing_instances = [{
 		"board_number": 11,
 		"type": "billboard",
 		"owner": 0,
-		"employee_type": "marketer",
+		"employee_type": "marketing_trainee",
 		"product": "burger",
 		"world_pos": Vector2i(2, 1),
 		"remaining_duration": 1,

@@ -2,7 +2,7 @@
 	"id": "house_with_garden",
 	"display_name": "带花园房屋",
 	"category": "structure",
-	"footprint_mask": [[1, 1, 1], [1, 1, 1]],
+	"footprint_mask": [[1, 1], [1, 1], [1, 1]],
 	"anchor": [0, 0],
 	"allowed_rotations": [0, 90, 180, 270],
 	"mirror_allowed": false,

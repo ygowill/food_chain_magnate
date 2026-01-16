@@ -30,7 +30,7 @@
 |---|---|---|---|
 | F1 | 房屋渲染：底色 `#733651`；房屋图底部留空隙；显示 `house_id`（右上角）；文本框透明无白底 | Done | 已改：`ui/scenes/game/map_canvas_drawer.gd`（用 `house_id`，去白底；房屋贴图 bottom gap）待验收 |
 | F2 | 缩略员工卡：显示员工名字；顶部整行底色为员工类别色 | Done | 已改：`ui/components/employee_card/employee_card.gd`（COMPACT 顶部整行底色+居中名字）待验收 |
-| F3 | 升级路线树：全屏弹窗；唯一路线同一水平线；不显示 CEO；卡片间距 | Done | 已改：`ui/scenes/game/game_panel_controller.gd`（全屏覆盖）；`ui/components/employee_tree/*`（排除 CEO、增大间距、唯一路线对齐）待验收 |
+| F3 | 升级路线树：全屏弹窗；同色尽量同行（允许空格）；不显示 CEO；卡片间距 | Done | 已改：`ui/scenes/game/game_panel_controller.gd`（全屏覆盖）；`ui/components/employee_tree/*`（Lane 布局：special/new_shop/manager/price/recruit_train/marketing/procure_drink/produce_food；汇合点作为链起点避免弯曲；修复 Layout 编译错误）待验收 |
 | F4 | 左侧玩家 Tab & 顶部回合顺位：数字改餐厅 icon | Done | 已改：`ui/components/left_panel/left_panel.gd`、`ui/components/turn_order/turn_order_display.gd`、`ui/scenes/game/game_panel_controller.gd`（加载 player logo 并显示）待验收 |
 | F5 | 地图餐厅：去掉旧餐厅图片；餐厅 icon 充满 2x2 区域 | Done | 已改：`ui/scenes/game/map_canvas_drawer.gd`（logo 以 aspect-fill 绘制到 2x2）待验收 |
 | F6 | 载入存档：餐厅 icon 全部一样（logo_id 映射/读取） | Done | 已改：`ui/scenes/game/map_canvas.gd`（兜底 logo 分配改为 seed 洗牌，避免重复；且处理 null）；并同步到 `ui/components/left_panel/left_panel.gd`、`ui/components/turn_order/turn_order_display.gd` 待验收 |
@@ -43,8 +43,9 @@
 | F13 | 房屋需求图标：调大；散落更靠中心（非角落随机） | Done | 已改：`ui/scenes/game/map_canvas_drawer.gd`（icon_size 调大；中心偏置采样；收缩散落区域） |
 | F14 | 餐厅渲染：logo 居中；底色 `#f4edd1`；入口格 L 形标记；logo 去背景 | Done | 已改：`ui/scenes/game/map_canvas_drawer.gd`（居中+入口 L）；`ui/visual/map_skin.gd`（logo flood-fill 去背景） |
 | F15 | 放置预览：显示半透明房屋/餐厅图片（所见即所得） | Done | 已改：`ui/scenes/game/map_canvas.gd`、`ui/scenes/game/map_canvas_drawer.gd`、`ui/components/house_placement/house_placement_overlay.gd`、`ui/scenes/game/game_panel_placement_overlays.gd`、`ui/scenes/game/game_map_interaction_controller.gd`；验证：`check_compile.gd` + `AllTests` PASS |
-| F16 | 缩略员工卡：升级路线树等场景顶部名字偶发为空（setup/_ready 时序） | Pending (Review) | 方案与根因分析：`docs/employee_defs_alignment_review.md`（需你点头后再改代码） |
-| F17 | 员工定义对齐：按 PDF + `road_map.png` 校准 name/id/train_to（含对照表） | Pending (Review) | 已生成对照表与改动清单：`docs/employee_defs_alignment_review.md`（需你点头后再改数据） |
+| F16 | 缩略员工卡：升级路线树等场景顶部名字偶发为空（setup/_ready 时序） | Done | 已修复：`ui/components/employee_card/employee_card.gd` 在 `_build_ui()` 后补一次 `_update_display()`；验证：`check_compile.gd` + `AllTests` PASS |
+| F17 | 员工定义对齐：按 PDF + `road_map.png` 校准 name/id/train_to（含对照表） | Done | 已落地：employee ids 重命名 + 中文名修正 + fixed pool.count 对齐；同步更新模块 patch/milestones/tests，并在 `core/engine/game_engine/loader.gd` 做旧存档/回放迁移；验证：`AllTests` PASS |
+| F18 | 升级路线树布局：同色员工尽量同一水平线；允许列间留空避免“弯曲路线” | Done | 已实现 lanes+tracks 布局（按 role 固定车道顺序；汇合点作为链起点）；验证：`check_compile.gd` + `AllTests` PASS；待验收 |
 
 ## 1. 概述
 

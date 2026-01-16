@@ -13,12 +13,16 @@ const SCENE_GAME := "res://ui/scenes/game/game.tscn"
 const SCENE_TILE_EDITOR := "res://ui/scenes/tools/tile_editor.tscn"
 const SCENE_REPLAY_TEST := "res://ui/scenes/tests/replay_test.tscn"
 
+const LoadingOverlayScene := preload("res://ui/components/loading/loading_overlay.tscn")
+
 # 当前场景
 var current_scene: Node = null
 var current_scene_path: String = ""
 
 # 场景栈（用于返回）
 var scene_stack: Array[String] = []
+
+var _loading_overlay: Node = null
 
 func _ready() -> void:
 	# 获取当前场景
@@ -41,17 +45,24 @@ func goto_scene(path: String, push_to_stack: bool = true) -> void:
 	call_deferred("_deferred_goto_scene", path)
 
 func _deferred_goto_scene(path: String) -> void:
-	# 释放当前场景
-	if current_scene:
-		current_scene.free()
-
 	# 加载新场景
 	var packed_scene := ResourceLoader.load(path) as PackedScene
 	if packed_scene == null:
 		GameLog.error("SceneManager", "无法加载场景: %s" % path)
+		hide_loading()
 		return
 
-	current_scene = packed_scene.instantiate()
+	var next_scene := packed_scene.instantiate()
+	if next_scene == null:
+		GameLog.error("SceneManager", "无法实例化场景: %s" % path)
+		hide_loading()
+		return
+
+	# 释放当前场景（在确认新场景可用后再释放，避免切换失败导致黑屏）
+	if current_scene:
+		current_scene.free()
+
+	current_scene = next_scene
 	current_scene_path = path
 
 	# 添加到场景树
@@ -105,3 +116,29 @@ func get_current_scene_name() -> String:
 # 检查是否可以返回
 func can_go_back() -> bool:
 	return not scene_stack.is_empty()
+
+func _ensure_loading_overlay() -> void:
+	if _loading_overlay != null and is_instance_valid(_loading_overlay):
+		return
+	_loading_overlay = LoadingOverlayScene.instantiate()
+	add_child(_loading_overlay)
+
+func show_loading(message: String = "加载中...") -> void:
+	_ensure_loading_overlay()
+	if _loading_overlay == null or not is_instance_valid(_loading_overlay):
+		return
+	if _loading_overlay.has_method("show_loading"):
+		_loading_overlay.call("show_loading", message)
+	else:
+		_loading_overlay.visible = true
+
+func hide_loading() -> void:
+	if _loading_overlay == null or not is_instance_valid(_loading_overlay):
+		return
+	if _loading_overlay.has_method("hide_loading"):
+		_loading_overlay.call("hide_loading")
+	else:
+		_loading_overlay.visible = false
+
+func is_loading_visible() -> bool:
+	return _loading_overlay != null and is_instance_valid(_loading_overlay) and _loading_overlay.visible

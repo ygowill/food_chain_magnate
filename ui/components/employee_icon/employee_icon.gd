@@ -3,6 +3,7 @@ class_name EmployeeIcon
 extends PanelContainer
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const EmployeeRoleColorsClass = preload("res://ui/visual/employee_role_colors.gd")
 
 @export var employee_id: String = ""
 @export var is_busy: bool = false
@@ -69,7 +70,7 @@ func _update_style() -> void:
 		var r := str(_employee_def.get_role()).strip_edges()
 		if not r.is_empty():
 			role = r
-	var base_color: Color = Color(_employee_def.get_role_color()) if _employee_def != null else Color("#ae94c0")
+	var base_color: Color = Color(EmployeeRoleColorsClass.role_to_color_hex(role))
 
 	var style := StyleBoxFlat.new()
 	style.set_corner_radius_all(4)

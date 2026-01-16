@@ -2,6 +2,7 @@
   "id": "airplane_dual_5101",
   "board_number": 5101,
   "type": "airplane",
+  "footprint_size": [3, 2],
   "min_players": 2,
   "max_players": null
 }

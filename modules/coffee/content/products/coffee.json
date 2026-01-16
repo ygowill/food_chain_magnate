@@ -2,6 +2,6 @@
   "id": "coffee",
   "name": "咖啡",
   "description": "咖啡（不可营销；用于路上购买）",
-  "tags": ["food", "no_marketing"],
+  "tags": ["food", "no_marketing", "salary_token_ineligible"],
   "starting_inventory": 0
 }

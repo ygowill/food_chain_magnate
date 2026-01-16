@@ -58,6 +58,13 @@
             "S"
           ],
           "bridge": true
+        },
+        {
+          "dirs": [
+            "W",
+            "E"
+          ],
+          "bridge": false
         }
       ],
       [

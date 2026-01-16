@@ -550,10 +550,45 @@ static func _draw_marketing(canvas, cell_size: int) -> void:
 		if not (pos_val is Vector2i):
 			continue
 		var world_pos: Vector2i = pos_val
-		if not canvas._is_valid_world_pos(world_pos):
-			continue
 		var p: Dictionary = canvas._marketing_by_pos[world_pos]
-		var pos = canvas._world_to_view(world_pos)
+
+		# _marketing_by_pos indexes all occupied cells; draw each placement only once (at its anchor).
+		var anchor_val = p.get("world_pos", null)
+		if not (anchor_val is Vector2i):
+			continue
+		var anchor: Vector2i = anchor_val
+		if anchor != world_pos:
+			continue
+		if not canvas._is_valid_world_pos(anchor):
+			continue
+
+		var base_size := Vector2i.ONE
+		var fs_val = p.get("footprint_size", null)
+		if fs_val is Vector2i:
+			base_size = Vector2i(fs_val)
+		elif fs_val is Array:
+			var arr: Array = fs_val
+			if arr.size() == 2:
+				base_size = Vector2i(int(arr[0]), int(arr[1]))
+		if base_size.x <= 0 or base_size.y <= 0:
+			base_size = Vector2i.ONE
+
+		var rot := 0
+		var rot_val = p.get("rotation", null)
+		if rot_val is int:
+			rot = int(rot_val)
+		elif rot_val is float:
+			var f: float = float(rot_val)
+			if f == floor(f):
+				rot = int(f)
+		if not rot in [0, 90, 180, 270]:
+			rot = 0
+
+		var size := base_size
+		if rot == 90 or rot == 270:
+			size = Vector2i(base_size.y, base_size.x)
+
+		var pos = canvas._world_to_view(anchor)
 
 		var key: String = "default"
 		var type_val = p.get("type", null)
@@ -561,17 +596,32 @@ static func _draw_marketing(canvas, cell_size: int) -> void:
 			key = str(type_val)
 		var tex: Texture2D = canvas._skin.get_marketing_texture(key)
 
-		var rect := Rect2(Vector2(pos.x * cell_size, pos.y * cell_size), Vector2(cell_size, cell_size))
-		var icon_size := rect.size * 0.7
-		var icon_pos := rect.position + (rect.size - icon_size) * 0.5
-		_draw_texture_aspect_fit(canvas, tex, Rect2(icon_pos, icon_size), Color(1, 1, 1, 0.8))
+		var rect := Rect2(
+			Vector2(pos.x * cell_size, pos.y * cell_size),
+			Vector2(size.x * cell_size, size.y * cell_size)
+		)
+
+		# Footprint background (subtle) + border so multi-cell boards are visible.
+		canvas.draw_rect(rect, Color(0.18, 0.22, 0.26, 0.28), true)
+		var border := maxf(1.0, float(cell_size) * 0.06)
+		canvas.draw_rect(rect, Color(0.55, 0.65, 0.75, 0.30), false, border)
+
+		# Marketing type texture as a faint background.
+		var icon_rect := rect.grow(-float(cell_size) * 0.10)
+		_draw_texture_aspect_fit(canvas, tex, icon_rect, Color(1, 1, 1, 0.35))
 
 		var product_id: String = str(p.get("product", ""))
 		if not product_id.is_empty():
-			var product_tex: Texture2D = canvas._skin.get_product_icon_texture(product_id)
-			var badge_size := rect.size * 0.35
-			var badge_pos := rect.position + Vector2(rect.size.x - badge_size.x - 2.0, 2.0)
-			_draw_texture_aspect_fit(canvas, product_tex, Rect2(badge_pos, badge_size))
+			var pid := product_id
+			if pid == "cola":
+				pid = "soda"
+			var product_tex: Texture2D = canvas._skin.get_product_icon_texture(pid)
+
+			# Product icon centered on the board area (matches “product slot centered” requirement).
+			var s := minf(rect.size.x, rect.size.y) * 0.60
+			var icon_size2 := Vector2(s, s)
+			var icon_pos2 := rect.position + (rect.size - icon_size2) * 0.5
+			_draw_texture_aspect_fit(canvas, product_tex, Rect2(icon_pos2, icon_size2), Color(1, 1, 1, 0.95))
 
 static func _draw_house_demands(canvas, cell_size: int) -> void:
 	if canvas._map_data.is_empty():

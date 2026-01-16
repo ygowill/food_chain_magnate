@@ -1,13 +1,41 @@
-# 员工升级路线树：Layered 布局（MVP）
-# - Layer assignment：entry_level 为 0，其它按最长路径推导
-# - Node ordering：barycenter 双向迭代，尽量减少连线交叉（Q20）
+# 员工升级路线树：Layered + Lanes 布局
+# - X：layer（entry_level 为 0，其它按最长路径推导）
+# - Y：按职责 role 固定“车道”(lane)，同色员工尽量同一水平线（允许列内留空）
+# - lane 内：多轨道(track)防重叠；同 role 的 1->1 链尽量保持同 track（直线更清晰）
 class_name EmployeeTreeLayout
 extends RefCounted
+
+const EmployeeDefClass = preload("res://core/data/employee_def.gd")
+
+# 你确认的顺序（从上到下）：
+# - special / new_shop（new_shop 优先并入 special 的空位；否则落在 special 下方 track）
+# - manager
+# - price
+# - recruit_train
+# - marketing
+# - procure_drink
+# - produce_food
+const ROLE_TO_LANE_GROUP := {
+	"special": 0,
+	"new_shop": 0,
+	"manager": 1,
+	"price": 2,
+	"recruit_train": 3,
+	"marketing": 4,
+	"procure_drink": 5,
+	"produce_food": 6,
+}
+
+const ROLE_SUB_PRIORITY_IN_GROUP_0 := {
+	"special": 0,
+	"new_shop": 1,
+}
 
 static func layout(
 	node_ids: Array[String],
 	edges_out: Dictionary,
 	entry_ids: Array[String],
+	role_by_id: Dictionary,
 	node_size: Vector2,
 	layer_spacing: float,
 	node_spacing_y: float,
@@ -22,10 +50,11 @@ static func layout(
 	var layers: Array = _build_layers(ids, layer_by_id)
 	var edges_in: Dictionary = _build_edges_in(edges_out)
 
-	_order_layers(layers, layer_by_id, edges_out, edges_in, iterations)
+	# Keep `iterations` for backwards compatibility (previous barycenter layout); currently unused.
+	# (GDScript doesn't support discard assignment like `_ = iterations`.)
 
-	var positions: Dictionary = _assign_positions(layers, node_size, layer_spacing, node_spacing_y)
-	positions = _align_unique_chains(layers, layer_by_id, edges_out, edges_in, positions, node_size, node_spacing_y)
+	var roles: Dictionary = _normalize_roles(ids, role_by_id)
+	var positions: Dictionary = _assign_positions_lanes(ids, roles, layer_by_id, layers, edges_out, edges_in, node_size, layer_spacing, node_spacing_y)
 	var bounds: Rect2 = _compute_bounds(ids, positions, node_size, padding)
 	var shifted_positions: Dictionary = _shift_positions(ids, positions, bounds.position)
 
@@ -36,152 +65,384 @@ static func layout(
 		"layer_by_id": layer_by_id,
 	}
 
-static func _align_unique_chains(
-	layers: Array,
-	layer_by_id: Dictionary,
-	edges_out: Dictionary,
-	edges_in: Dictionary,
-	positions: Dictionary,
-	node_size: Vector2,
-	node_spacing_y: float
-) -> Dictionary:
-	if layers.is_empty():
-		return positions
-	if positions.is_empty():
-		return positions
-
-	var out_degree: Dictionary = {}
-	for id_val in edges_out.keys():
+static func _normalize_roles(node_ids: Array[String], role_by_id: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for id_val in node_ids:
 		var id := str(id_val).strip_edges()
 		if id.is_empty():
 			continue
-		var arr_val = edges_out.get(id_val, [])
-		var arr: Array = arr_val if arr_val is Array else []
-		out_degree[id] = arr.size()
+		var r := ""
+		var v = role_by_id.get(id, null)
+		if v is String:
+			r = str(v).strip_edges()
+		if r.is_empty():
+			# 兜底：未知 role 归到 special（保证可显示）
+			r = "special"
+		out[id] = r
+	return out
 
-	var in_degree: Dictionary = {}
-	for id_val2 in edges_in.keys():
-		var id2 := str(id_val2).strip_edges()
-		if id2.is_empty():
+static func _assign_positions_lanes(
+	node_ids: Array[String],
+	role_by_id: Dictionary,
+	layer_by_id: Dictionary,
+	layers: Array,
+	edges_out: Dictionary,
+	edges_in: Dictionary,
+	node_size: Vector2,
+	layer_spacing: float,
+	node_spacing_y: float
+) -> Dictionary:
+	var out: Dictionary = {}
+	if node_ids.is_empty():
+		return out
+
+	var group_by_id: Dictionary = {}
+	var ids_by_group: Dictionary = {}
+	for id in node_ids:
+		var role: String = str(role_by_id.get(id, "special"))
+		var gi := int(ROLE_TO_LANE_GROUP.get(role, 0))
+		group_by_id[id] = gi
+		if not ids_by_group.has(gi):
+			ids_by_group[gi] = []
+		var arr: Array = ids_by_group[gi]
+		arr.append(id)
+		ids_by_group[gi] = arr
+
+	var track_by_id: Dictionary = {}
+	var track_count_by_group: Dictionary = {}
+	var group_count: int = int(ROLE_TO_LANE_GROUP.values().max()) + 1
+	for gi2 in range(group_count):
+		var group_ids_val = ids_by_group.get(gi2, [])
+		var group_ids: Array = group_ids_val if group_ids_val is Array else []
+		if group_ids.is_empty():
+			track_count_by_group[gi2] = 0
 			continue
-		var arr_val2 = edges_in.get(id_val2, [])
-		var arr2: Array = arr_val2 if arr_val2 is Array else []
-		in_degree[id2] = arr2.size()
+		var entities := _build_group_entities(group_ids, role_by_id, layer_by_id, edges_out, edges_in, gi2)
+		var tracks_used_by_layer: Dictionary = {} # layer_index -> {track: true}
+		var max_track := -1
+		for e_val in entities:
+			if not (e_val is Dictionary):
+				continue
+			var e: Dictionary = e_val
+			var ids_val = e.get("ids", [])
+			var e_ids: Array = ids_val if ids_val is Array else []
+			if e_ids.is_empty():
+				continue
+			var layers_val = e.get("layers", [])
+			var e_layers: Array = layers_val if layers_val is Array else []
+
+			var track := 0
+			var safety := 0
+			while safety < 256:
+				safety += 1
+				if _entity_fits_track(e_layers, track, tracks_used_by_layer):
+					_mark_entity_track(e_layers, track, tracks_used_by_layer)
+					max_track = maxi(max_track, track)
+					for nid_val in e_ids:
+						var nid := str(nid_val).strip_edges()
+						if nid.is_empty():
+							continue
+						track_by_id[nid] = track
+					break
+				track += 1
+		track_count_by_group[gi2] = maxi(0, max_track + 1)
+
+	var base_y_by_group: Array[float] = []
+	base_y_by_group.resize(group_count)
+
+	var lane_gap := float(node_spacing_y) * 2.0
+	var y_cursor := 0.0
+	for gi3 in range(group_count):
+		base_y_by_group[gi3] = y_cursor
+		var tc := int(track_count_by_group.get(gi3, 0))
+		if tc <= 0:
+			continue
+		var lane_height := float(tc) * float(node_size.y) + float(maxi(0, tc - 1)) * float(node_spacing_y)
+		y_cursor += lane_height
+
+		# 仅在后续仍有内容时添加间距
+		var has_later := false
+		for gi4 in range(gi3 + 1, group_count):
+			if int(track_count_by_group.get(gi4, 0)) > 0:
+				has_later = true
+				break
+		if has_later:
+			y_cursor += lane_gap
+
+	for id2 in node_ids:
+		var li := int(layer_by_id.get(id2, 0))
+		var x := float(li) * float(layer_spacing)
+		var gi5 := int(group_by_id.get(id2, 0))
+		var base_y := float(base_y_by_group[gi5])
+		var track2 := int(track_by_id.get(id2, 0))
+		var y := base_y + float(track2) * (float(node_size.y) + float(node_spacing_y))
+		out[id2] = Vector2(x, y)
+
+	return out
+
+static func _build_group_entities(
+	group_ids: Array,
+	role_by_id: Dictionary,
+	layer_by_id: Dictionary,
+	edges_out: Dictionary,
+	edges_in: Dictionary,
+	group_index: int
+) -> Array:
+	var out: Array = []
+	var used: Dictionary = {}
+
+	var roles_in_group: Array[String] = []
+	for id_val in group_ids:
+		var id := str(id_val).strip_edges()
+		if id.is_empty():
+			continue
+		var role := str(role_by_id.get(id, "special")).strip_edges()
+		if roles_in_group.has(role):
+			continue
+		roles_in_group.append(role)
+
+	# group 0：special 在上，new_shop 可并入空位
+	roles_in_group.sort_custom(func(a, b) -> bool:
+		var pa := int(ROLE_SUB_PRIORITY_IN_GROUP_0.get(str(a), 0)) if group_index == 0 else 0
+		var pb := int(ROLE_SUB_PRIORITY_IN_GROUP_0.get(str(b), 0)) if group_index == 0 else 0
+		if pa == pb:
+			return str(a) < str(b)
+		return pa < pb
+	)
+
+	for role in roles_in_group:
+		var ids_in_role: Array[String] = []
+		for id2_val in group_ids:
+			var id2 := str(id2_val).strip_edges()
+			if id2.is_empty():
+				continue
+			if str(role_by_id.get(id2, "")) == role:
+				ids_in_role.append(id2)
+		if ids_in_role.is_empty():
+			continue
+
+		var chains := _extract_role_chains(ids_in_role, role_by_id, layer_by_id, edges_out, edges_in)
+		for ch_val in chains:
+			if not (ch_val is Array):
+				continue
+			var ch: Array = ch_val
+			if ch.size() < 2:
+				continue
+			var layers_used: Array[int] = []
+			var seen_layers: Dictionary = {}
+			for nid_val in ch:
+				var nid := str(nid_val).strip_edges()
+				if nid.is_empty():
+					continue
+				used[nid] = true
+				var li := int(layer_by_id.get(nid, 0))
+				if not seen_layers.has(li):
+					seen_layers[li] = true
+					layers_used.append(li)
+			layers_used.sort()
+			out.append({
+				"ids": ch.duplicate(),
+				"layers": layers_used,
+				"role": role,
+				"is_chain": true,
+			})
+
+	for id3_val in group_ids:
+		var id3 := str(id3_val).strip_edges()
+		if id3.is_empty():
+			continue
+		if used.has(id3):
+			continue
+		var role3 := str(role_by_id.get(id3, "special")).strip_edges()
+		out.append({
+			"ids": [id3],
+			"layers": [int(layer_by_id.get(id3, 0))],
+			"role": role3,
+			"is_chain": false,
+		})
+
+	out.sort_custom(func(a, b) -> bool:
+		if not (a is Dictionary) or not (b is Dictionary):
+			return false
+		var da: Dictionary = a
+		var db: Dictionary = b
+		var ra := str(da.get("role", ""))
+		var rb := str(db.get("role", ""))
+		var pa := int(ROLE_SUB_PRIORITY_IN_GROUP_0.get(ra, 0)) if group_index == 0 else 0
+		var pb := int(ROLE_SUB_PRIORITY_IN_GROUP_0.get(rb, 0)) if group_index == 0 else 0
+		if pa != pb:
+			return pa < pb
+
+		var ca := bool(da.get("is_chain", false))
+		var cb := bool(db.get("is_chain", false))
+		if ca != cb:
+			return ca and not cb
+
+		var a_ids: Array = da.get("ids", [])
+		var b_ids: Array = db.get("ids", [])
+		if a_ids.size() != b_ids.size():
+			return a_ids.size() > b_ids.size()
+
+		var la: Array = da.get("layers", [])
+		var lb: Array = db.get("layers", [])
+		var mina := int(la[0]) if la.size() > 0 else 0
+		var minb := int(lb[0]) if lb.size() > 0 else 0
+		if mina != minb:
+			return mina < minb
+
+		return str(a_ids[0]) < str(b_ids[0])
+	)
+
+	return out
+
+static func _extract_role_chains(
+	ids_in_role: Array[String],
+	role_by_id: Dictionary,
+	layer_by_id: Dictionary,
+	edges_out: Dictionary,
+	edges_in: Dictionary
+) -> Array:
+	# 基于“同 role 的 1->1 链”抽取：尽量在同一 track，视觉上更直。
+	var in_deg: Dictionary = {}
+	var out_next: Dictionary = {} # id -> next_id (仅在 outdeg==1 时提供)
+	var out_deg: Dictionary = {}
+
+	var role := ""
+	if not ids_in_role.is_empty():
+		role = str(role_by_id.get(ids_in_role[0], ""))
+
+	var id_set: Dictionary = {}
+	for id in ids_in_role:
+		id_set[id] = true
+
+	for id2 in ids_in_role:
+		var outs_val = edges_out.get(id2, [])
+		var outs: Array = outs_val if outs_val is Array else []
+		var nexts: Array[String] = []
+		for v_val in outs:
+			var v := str(v_val).strip_edges()
+			if v.is_empty():
+				continue
+			if not id_set.has(v):
+				continue
+			if str(role_by_id.get(v, "")) != role:
+				continue
+			nexts.append(v)
+		out_deg[id2] = nexts.size()
+		if nexts.size() == 1:
+			out_next[id2] = nexts[0]
+
+	for id3 in ids_in_role:
+		var indeg := 0
+		var ins_val = edges_in.get(id3, [])
+		var ins: Array = ins_val if ins_val is Array else []
+		for u_val in ins:
+			var u := str(u_val).strip_edges()
+			if u.is_empty():
+				continue
+			if not id_set.has(u):
+				continue
+			if str(role_by_id.get(u, "")) != role:
+				continue
+			indeg += 1
+		in_deg[id3] = indeg
+
+	var starts: Array[String] = []
+	for id4 in ids_in_role:
+		if int(out_deg.get(id4, 0)) != 1:
+			continue
+		var indeg2 := int(in_deg.get(id4, 0))
+		# Allow merge nodes (in_deg>1) as chain starts to keep post-merge paths horizontal.
+		if indeg2 != 1:
+			starts.append(id4)
+			continue
+		# indeg==1：若父节点不是 1->1，则从这里开始一条新链（避免分叉后的链被拧弯）
+		var pred := ""
+		var ins2_val = edges_in.get(id4, [])
+		var ins2: Array = ins2_val if ins2_val is Array else []
+		for u2_val in ins2:
+			var u2 := str(u2_val).strip_edges()
+			if u2.is_empty():
+				continue
+			if not id_set.has(u2):
+				continue
+			if str(role_by_id.get(u2, "")) != role:
+				continue
+			pred = u2
+			break
+		if pred.is_empty():
+			starts.append(id4)
+			continue
+		if int(out_deg.get(pred, 0)) != 1:
+			starts.append(id4)
+
+	# 同一 role 内：按 layer 从左到右抽取（更稳定）
+	starts.sort_custom(func(a, b) -> bool:
+		var la := int(layer_by_id.get(str(a), 0))
+		var lb := int(layer_by_id.get(str(b), 0))
+		if la == lb:
+			return str(a) < str(b)
+		return la < lb
+	)
 
 	var chains: Array = []
 	var visited: Dictionary = {}
-
-	for id3_val in out_degree.keys():
-		var start := str(id3_val).strip_edges()
-		if start.is_empty():
+	for s_val in starts:
+		var s := str(s_val).strip_edges()
+		if s.is_empty():
 			continue
-		if visited.has(start):
+		if visited.has(s):
 			continue
-		var indeg := int(in_degree.get(start, 0))
-		var outdeg := int(out_degree.get(start, 0))
-		if indeg != 0 or outdeg != 1:
-			continue
-
-		var chain: Array[String] = [start]
-		var current := start
+		var chain: Array[String] = [s]
+		var current := s
 		var safety := 0
 		while safety < 256:
 			safety += 1
-			var next_val = edges_out.get(current, [])
-			var nexts: Array = next_val if next_val is Array else []
-			if nexts.size() != 1:
+			if int(out_deg.get(current, 0)) != 1:
 				break
-			var nxt := str(nexts[0]).strip_edges()
+			var nxt := str(out_next.get(current, "")).strip_edges()
 			if nxt.is_empty():
 				break
-			if int(in_degree.get(nxt, 0)) != 1:
+			if int(in_deg.get(nxt, 0)) != 1:
 				break
 			if chain.has(nxt):
 				break
 			chain.append(nxt)
 			current = nxt
-
-		if chain.size() >= 4:
+		if chain.size() >= 2:
 			chains.append(chain)
-			for c in chain:
-				visited[c] = true
+			for id5 in chain:
+				visited[id5] = true
 
-	if chains.is_empty():
-		return positions
-
+	# 长链优先（更值得对齐）
 	chains.sort_custom(func(a, b) -> bool:
 		var aa: Array = a if a is Array else []
 		var bb: Array = b if b is Array else []
-		return aa.size() > bb.size()
+		if aa.size() != bb.size():
+			return aa.size() > bb.size()
+		return str(aa[0]) < str(bb[0])
 	)
+	return chains
 
-	var layer_offsets: Dictionary = {}
+static func _entity_fits_track(layers: Array, track: int, used_by_layer: Dictionary) -> bool:
+	for li_val in layers:
+		var li := int(li_val)
+		var used_val = used_by_layer.get(li, null)
+		if used_val is Dictionary:
+			var used: Dictionary = used_val
+			if used.has(track):
+				return false
+	return true
 
-	for chain_val in chains:
-		if not (chain_val is Array):
-			continue
-		var chain2: Array = chain_val
-		if chain2.is_empty():
-			continue
-		var start2 := str(chain2[0]).strip_edges()
-		var start_pos_val = positions.get(start2, null)
-		if not (start_pos_val is Vector2):
-			continue
-		var target_y := float(Vector2(start_pos_val).y)
-
-		var desired_offsets: Dictionary = {}
-		var conflict := false
-
-		for node_val in chain2:
-			var node := str(node_val).strip_edges()
-			if node.is_empty():
-				continue
-			if not layer_by_id.has(node):
-				continue
-			var li := int(layer_by_id.get(node, 0))
-			var p_val = positions.get(node, null)
-			if not (p_val is Vector2):
-				continue
-			var delta := target_y - float(Vector2(p_val).y)
-			if absf(delta) <= 0.001:
-				continue
-
-			if layer_offsets.has(li):
-				if absf(float(layer_offsets[li]) - delta) > 0.001:
-					conflict = true
-					break
-			if desired_offsets.has(li):
-				if absf(float(desired_offsets[li]) - delta) > 0.001:
-					conflict = true
-					break
-			desired_offsets[li] = delta
-
-		if conflict:
-			continue
-
-		for li_val in desired_offsets.keys():
-			layer_offsets[li_val] = desired_offsets[li_val]
-
-	# 应用 layer offsets：整体平移该层，确保链条节点对齐
-	for li_val2 in layer_offsets.keys():
-		var li2 := int(li_val2)
-		if li2 < 0 or li2 >= layers.size():
-			continue
-		var delta2 := float(layer_offsets[li_val2])
-		if absf(delta2) <= 0.001:
-			continue
-		var layer_val = layers[li2]
-		var layer: Array = layer_val if layer_val is Array else []
-		for id4_val in layer:
-			var id4 := str(id4_val).strip_edges()
-			if id4.is_empty():
-				continue
-			var p_val2 = positions.get(id4, null)
-			if p_val2 is Vector2:
-				var p: Vector2 = p_val2
-				positions[id4] = Vector2(p.x, p.y + delta2)
-
-	return positions
+static func _mark_entity_track(layers: Array, track: int, used_by_layer: Dictionary) -> void:
+	for li_val in layers:
+		var li := int(li_val)
+		var used_val = used_by_layer.get(li, null)
+		var used: Dictionary = {}
+		if used_val is Dictionary:
+			used = used_val
+		used[track] = true
+		used_by_layer[li] = used
 
 static func _assign_layers(node_ids: Array[String], edges_out: Dictionary, entry_ids: Array[String]) -> Dictionary:
 	var layer_by_id: Dictionary = {}
@@ -262,102 +523,6 @@ static func _build_edges_in(edges_out: Dictionary) -> Dictionary:
 			a.append(src)
 			edges_in[dst] = a
 	return edges_in
-
-static func _order_layers(
-	layers: Array,
-	layer_by_id: Dictionary,
-	edges_out: Dictionary,
-	edges_in: Dictionary,
-	iterations: int
-) -> void:
-	if layers.size() <= 1:
-		return
-	var iters := maxi(0, int(iterations))
-	if iters <= 0:
-		return
-
-	for _iter in range(iters):
-		# forward: layer 1..N
-		for li in range(1, layers.size()):
-			_sort_layer_by_neighbor_barycenter(layers[li], edges_in, layer_by_id, li - 1, layers[li - 1])
-		# backward: layer N-1..0
-		for li2 in range(layers.size() - 2, -1, -1):
-			_sort_layer_by_neighbor_barycenter(layers[li2], edges_out, layer_by_id, li2 + 1, layers[li2 + 1])
-
-static func _sort_layer_by_neighbor_barycenter(
-	layer: Array,
-	neighbor_map: Dictionary,
-	layer_by_id: Dictionary,
-	neighbor_layer_index: int,
-	neighbor_layer: Array
-) -> void:
-	if layer.is_empty():
-		return
-
-	var neighbor_pos: Dictionary = {}
-	for i in range(neighbor_layer.size()):
-		neighbor_pos[neighbor_layer[i]] = i
-
-	var bary: Dictionary = {}
-	for i2 in range(layer.size()):
-		var id := str(layer[i2])
-		var arr_val = neighbor_map.get(id, [])
-		var arr: Array = arr_val if arr_val is Array else []
-		var sum := 0.0
-		var cnt := 0
-		for n_val in arr:
-			var n := str(n_val)
-			if int(layer_by_id.get(n, -999)) != neighbor_layer_index:
-				continue
-			if neighbor_pos.has(n):
-				sum += float(neighbor_pos[n])
-				cnt += 1
-		if cnt > 0:
-			bary[id] = sum / float(cnt)
-		else:
-			# 无邻居：保持原相对顺序
-			bary[id] = float(i2)
-
-	layer.sort_custom(func(a, b) -> bool:
-		var sa := str(a)
-		var sb := str(b)
-		var aa := float(bary.get(sa, 0.0))
-		var bb := float(bary.get(sb, 0.0))
-		if aa == bb:
-			return sa < sb
-		return aa < bb
-	)
-
-static func _assign_positions(
-	layers: Array,
-	node_size: Vector2,
-	layer_spacing: float,
-	node_spacing_y: float
-) -> Dictionary:
-	var positions: Dictionary = {}
-	var h := float(node_size.y)
-
-	var max_layer_height := 0.0
-	var layer_heights: Array[float] = []
-	for layer in layers:
-		var n: int = 0
-		if layer is Array:
-			n = (layer as Array).size()
-		var height := float(n) * h + float(maxi(0, n - 1)) * float(node_spacing_y)
-		layer_heights.append(height)
-		max_layer_height = maxf(max_layer_height, height)
-
-	for li in range(layers.size()):
-		var layer2_val = layers[li]
-		var layer2: Array = layer2_val if layer2_val is Array else []
-		var x := float(li) * float(layer_spacing)
-		var start_y := (max_layer_height - layer_heights[li]) * 0.5
-		for i in range(layer2.size()):
-			var id := str(layer2[i])
-			var y := start_y + float(i) * (h + float(node_spacing_y))
-			positions[id] = Vector2(x, y)
-
-	return positions
 
 static func _compute_bounds(
 	node_ids: Array[String],

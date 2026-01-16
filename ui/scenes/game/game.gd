@@ -5,7 +5,7 @@ extends Control
 # UI 节点引用
 @onready var round_label: Label = $UIRoot/TopBar/InfoRow/RoundLabel
 @onready var phase_label: Label = $UIRoot/TopBar/InfoRow/PhaseLabel
-@onready var turn_order_display: Control = $UIRoot/TopBar/InfoRow/TurnOrderDisplay
+@onready var turn_order_display: Control = $UIRoot/MainContent/CenterSplit/GameArea/TurnOrderOverlay/TurnOrderDisplay
 @onready var bank_label: Label = $UIRoot/TopBar/InfoRow/BankLabel
 @onready var current_player_label: Label = $UIRoot/TopBar/InfoRow/CurrentPlayerLabel
 @onready var toggle_left_panel_button: Button = $UIRoot/TopBar/ButtonRow/ToggleLeftPanelButton
@@ -19,7 +19,7 @@ extends Control
 @onready var main_content: Control = $UIRoot/MainContent
 @onready var center_split: HSplitContainer = $UIRoot/MainContent/CenterSplit
 @onready var map_view: ScrollContainer = $UIRoot/MainContent/CenterSplit/GameArea/MapView
-@onready var map_canvas: Control = $UIRoot/MainContent/CenterSplit/GameArea/MapView/Canvas
+@onready var map_canvas: Control = $UIRoot/MainContent/CenterSplit/GameArea/MapView/Content/Canvas
 @onready var map_mode_bar = $UIRoot/MainContent/CenterSplit/GameArea/MapModeBar
 @onready var left_area: Control = $UIRoot/MainContent/LeftArea
 @onready var game_log_panel: GameLogPanel = $UIRoot/MainContent/LeftArea/GameLogPanel
@@ -98,6 +98,16 @@ var _right_panel_footer_source: Object = null
 func _ready() -> void:
 	GameLog.info("Game", "游戏场景已加载")
 
+	# 初始化/读档可能耗时：确保加载遮罩至少绘制一帧，避免“卡住”的观感。
+	var need_show_loading := true
+	if SceneManager != null and SceneManager.has_method("is_loading_visible"):
+		need_show_loading = not SceneManager.is_loading_visible()
+	if need_show_loading and SceneManager != null and SceneManager.has_method("show_loading"):
+		SceneManager.show_loading("正在进入游戏...")
+	await get_tree().process_frame
+	if not is_instance_valid(self):
+		return
+
 	var should_restore_log_history := false
 	if Globals.current_game_engine != null and Globals.current_game_engine is GameEngine:
 		var existing_engine: GameEngine = Globals.current_game_engine
@@ -151,6 +161,17 @@ func _ready() -> void:
 			resized.connect(_on_root_resized)
 	_update_ui()
 	_on_map_mode_changed("", {})
+
+	# 若开局需要强制弹出“储备卡选择”，则保留加载遮罩直到弹窗真正打开，
+	# 避免先露出一帧游戏 UI 再弹窗导致的闪烁体验。
+	var keep_loading_until_reserve_modal := false
+	if game_engine != null:
+		var s := game_engine.get_state()
+		if s != null and str(s.phase) == "Setup" and str(s.sub_phase) == "ReserveCards":
+			keep_loading_until_reserve_modal = true
+	if not keep_loading_until_reserve_modal:
+		if SceneManager != null and SceneManager.has_method("hide_loading"):
+			SceneManager.hide_loading()
 
 func _exit_tree() -> void:
 	_dispose_runtime()
@@ -675,7 +696,8 @@ func _initialize_game() -> void:
 		Globals.is_game_active = false
 
 	game_engine = GameEngine.new()
-	var init_result := game_engine.initialize(Globals.player_count, Globals.random_seed, Globals.enabled_modules_v2, Globals.modules_v2_base_dir, Globals.reserve_card_selected_by_player)
+	# 银行储备卡在进入游戏后由玩家秘密选择（Setup/ReserveCards），这里不从游戏设置注入选择结果。
+	var init_result := game_engine.initialize(Globals.player_count, Globals.random_seed, Globals.enabled_modules_v2, Globals.modules_v2_base_dir, [])
 	if not init_result.ok:
 		GameLog.error("Game", "游戏初始化失败: %s" % init_result.error)
 		return

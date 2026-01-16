@@ -42,11 +42,11 @@ static func _test_registration_and_range(seed_val: int) -> Result:
 	if not MarketingTypeRegistryClass.requires_edge("gourmet_guide"):
 		return Result.failure("gourmet_guide 应要求边缘放置（requires_edge=true）")
 
-	var marketer = EmployeeRegistryClass.get_def("marketer")
+	var marketer = EmployeeRegistryClass.get_def("marketing_trainee")
 	if marketer == null:
-		return Result.failure("缺少员工定义: marketer")
+		return Result.failure("缺少员工定义: marketing_trainee")
 	if not marketer.train_to.has("gourmet_food_critic"):
-		return Result.failure("marketer.train_to 应包含 gourmet_food_critic（模块 patch 未生效）")
+		return Result.failure("marketing_trainee.train_to 应包含 gourmet_food_critic（模块 patch 未生效）")
 
 	# 构造最小 houses（不依赖结构格）：仅验证 range handler 选中 has_garden 的房屋
 	if not (s.map is Dictionary):
@@ -84,6 +84,7 @@ static func _test_global_limit_and_offramp_conflict(seed_val: int) -> Result:
 		"base_milestones",
 		"base_marketing",
 		"gourmet_food_critics",
+		"rural_marketeers",
 	]
 	var init := e.initialize(2, seed_val, enabled_modules)
 	if not init.ok:
@@ -111,7 +112,7 @@ static func _test_global_limit_and_offramp_conflict(seed_val: int) -> Result:
 	if r1.ok:
 		return Result.failure("超过全局 3 个 gourmet_guide 时应被拒绝")
 
-	# 冲突：同格已有 offramp 时应拒绝（通过 state.map.rural_marketeers_offramps 检测）
+	# 冲突：同格已有 offramp 时应拒绝（通过 PlacementConflictRegistry 查询）
 	s.marketing_instances = []
 	s.map["rural_marketeers_offramps"] = [{"pos": Vector2i(0, 0)}]
 	var r2: Result = entry._validate_initiate_marketing(s, cmd)
@@ -134,4 +135,3 @@ static func _test_global_limit_and_offramp_conflict(seed_val: int) -> Result:
 			return Result.failure("营销板件 #%d type 应为 gourmet_guide，实际: %s" % [bn, str(def.type)])
 
 	return Result.success()
-

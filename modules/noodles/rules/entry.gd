@@ -13,9 +13,9 @@ func register(registrar) -> Result:
 	if not r.ok:
 		return r
 
-	# 受控 patch：kitchen_trainee -> noodles_cook（对齐 pizza_cook 等基础训练链）
+	# 受控 patch：kitchen_trainee -> noodle_cook（对齐 pizza_cook 等基础训练链）
 	r = registrar.register_employee_patch("kitchen_trainee", {
-		"add_train_to": ["noodles_cook"]
+		"add_train_to": ["noodle_cook"]
 	})
 	if not r.ok:
 		return r

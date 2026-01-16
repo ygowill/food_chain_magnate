@@ -64,9 +64,6 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "阶段: Setup"
 
-[node name="TurnOrderDisplay" parent="UIRoot/TopBar/InfoRow" instance=ExtResource("14_turn_order_display")]
-layout_mode = 2
-
 [node name="BankLabel" type="Label" parent="UIRoot/TopBar/InfoRow"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
@@ -158,11 +155,6 @@ grow_vertical = 2
 [node name="LeftPanel" parent="UIRoot/MainContent/LeftArea" instance=ExtResource("13_left_panel")]
 visible = false
 layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
 
 [node name="CenterSplit" type="HSplitContainer" parent="UIRoot/MainContent"]
 layout_mode = 2
@@ -178,17 +170,33 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_top = 120.0
 offset_bottom = -5.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("2_map_view")
 
-[node name="Canvas" type="Control" parent="UIRoot/MainContent/CenterSplit/GameArea/MapView"]
+[node name="Content" type="CenterContainer" parent="UIRoot/MainContent/CenterSplit/GameArea/MapView"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 2
+
+[node name="Canvas" type="Control" parent="UIRoot/MainContent/CenterSplit/GameArea/MapView/Content"]
 layout_mode = 2
 script = ExtResource("3_map_canvas")
 
 [node name="MapModeBar" parent="UIRoot/MainContent/CenterSplit/GameArea" instance=ExtResource("11_map_mode_bar")]
 layout_mode = 1
+
+[node name="TurnOrderOverlay" type="CenterContainer" parent="UIRoot/MainContent/CenterSplit/GameArea"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 120.0
+
+[node name="TurnOrderDisplay" parent="UIRoot/MainContent/CenterSplit/GameArea/TurnOrderOverlay" instance=ExtResource("14_turn_order_display")]
+layout_mode = 2
 
 [node name="RightPanel" type="VBoxContainer" parent="UIRoot/MainContent/CenterSplit"]
 custom_minimum_size = Vector2(320, 0)

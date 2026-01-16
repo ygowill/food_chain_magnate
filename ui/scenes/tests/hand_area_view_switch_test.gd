@@ -26,9 +26,9 @@ static func run() -> Result:
 	hand_area.add_child(hand_area.busy_section)
 
 	# 玩家 A：含重复员工类型
-	hand_area.set_employees(["ceo", "recruiter", "recruiter"], [], [])
+	hand_area.set_employees(["ceo", "recruiting_girl", "recruiting_girl"], [], [])
 	var a_ids := _collect_child_employee_ids(hand_area.active_container)
-	if a_ids != ["ceo", "recruiter", "recruiter"]:
+	if a_ids != ["ceo", "recruiting_girl", "recruiting_girl"]:
 		var fail := Result.failure("HandArea active_container 首次构建不符合预期: %s" % str(a_ids))
 		_safe_free(hand_area)
 		return fail
@@ -42,7 +42,7 @@ static func run() -> Result:
 		return fail2
 
 	var ok := Result.success({
-		"player_a": ["ceo", "recruiter", "recruiter"],
+		"player_a": ["ceo", "recruiting_girl", "recruiting_girl"],
 		"player_b": ["ceo", "cfo"],
 	})
 	_safe_free(hand_area)

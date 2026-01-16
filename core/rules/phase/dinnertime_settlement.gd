@@ -116,6 +116,7 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 		var variants_read := DinnertimeDemandRegistryClass.get_variants(state, house_id, house, base_required)
 		if not variants_read.ok:
 			return Result.failure("晚餐结算失败：%s" % variants_read.error)
+		warnings.append_array(variants_read.warnings)
 		var variants: Array[Dictionary] = variants_read.value
 		variants.append({
 			"id": "base",

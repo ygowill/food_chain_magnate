@@ -260,6 +260,7 @@ func _build_map_context(state: GameState) -> Dictionary:
 		"houses": state.map.houses,
 		"restaurants": state.map.restaurants,
 		"drink_sources": state.map.get("drink_sources", []),
+		"marketing_placements": state.map.get("marketing_placements", {}),
 	}
 
 func _is_adjacent_to_reachable_road(state: GameState, actor: int, piece_cells: Array[Vector2i], max_range: int) -> Result:

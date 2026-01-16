@@ -5,6 +5,7 @@ const PhaseManagerClass = preload("res://core/engine/phase_manager.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const GlobalEffectListClass = preload("res://core/rules/global_effect_list.gd")
 
 const PlaceLobbyistsRoadActionClass = preload("res://modules/lobbyists/actions/place_lobbyists_road_action.gd")
 const PlaceLobbyistsParkActionClass = preload("res://modules/lobbyists/actions/place_lobbyists_park_action.gd")
@@ -25,9 +26,10 @@ const PENDING_ROADS_KEY := "lobbyists_pending_roads"
 const ROADWORK_MARKERS_KEY := "lobbyists_roadworks_markers"
 const EXTRA_TILE_PENDING_KEY := "lobbyists_extra_tile_pending"
 
-const GLOBAL_EFFECT_IDS_KEY := "global_effect_ids"
 const EFFECT_ID_ROADWORKS_DISTANCE := "%s:dinnertime:distance_delta:roadworks" % MODULE_ID
 const EFFECT_ID_PARK_BONUS := "%s:dinnertime:sale_house_bonus:park" % MODULE_ID
+
+const STATE_SCHEMA_ID_EXTRA_TILE_PENDING := "lobbyists:round_state_int_keys:lobbyists_extra_tile_pending"
 
 func register(registrar) -> Result:
 	var r: Result = registrar.register_working_sub_phase_insertion("Lobbyists", "PlaceHouses", "PlaceRestaurants", 100)
@@ -69,6 +71,11 @@ func register(registrar) -> Result:
 	if not r.ok:
 		return r
 
+	# round_state.<player_id(int) -> ...> 字典：读档后需要把 "0"/"1" 转回 0/1
+	r = registrar.register_round_state_int_key_dict_schema(STATE_SCHEMA_ID_EXTRA_TILE_PENDING, [EXTRA_TILE_PENDING_KEY], 100)
+	if not r.ok:
+		return r
+
 	return Result.success()
 
 func _on_restructuring_before_enter(state: GameState) -> Result:
@@ -87,16 +94,12 @@ func _on_restructuring_before_enter(state: GameState) -> Result:
 		state.map[ROADWORK_MARKERS_KEY] = {}
 
 	# 全局效果：roadworks 距离惩罚 + park 单价加成
-	if not state.map.has(GLOBAL_EFFECT_IDS_KEY):
-		state.map[GLOBAL_EFFECT_IDS_KEY] = []
-	if not (state.map[GLOBAL_EFFECT_IDS_KEY] is Array):
-		return Result.failure("%s: state.map.%s 类型错误（期望 Array）" % [MODULE_ID, GLOBAL_EFFECT_IDS_KEY])
-	var ids: Array = state.map[GLOBAL_EFFECT_IDS_KEY]
-	if ids.find(EFFECT_ID_ROADWORKS_DISTANCE) == -1:
-		ids.append(EFFECT_ID_ROADWORKS_DISTANCE)
-	if ids.find(EFFECT_ID_PARK_BONUS) == -1:
-		ids.append(EFFECT_ID_PARK_BONUS)
-	state.map[GLOBAL_EFFECT_IDS_KEY] = ids
+	var add_roadworks := GlobalEffectListClass.add_to_map(state, EFFECT_ID_ROADWORKS_DISTANCE)
+	if not add_roadworks.ok:
+		return add_roadworks
+	var add_park := GlobalEffectListClass.add_to_map(state, EFFECT_ID_PARK_BONUS)
+	if not add_park.ok:
+		return add_park
 
 	# 每回合 pending（同回合内可能被多个玩家获取里程碑；离开子阶段前必须消化）
 	if not (state.round_state is Dictionary):

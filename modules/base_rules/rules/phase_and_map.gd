@@ -19,6 +19,8 @@ const Phase = PhaseDefsClass.Phase
 const WorkingSubPhase = PhaseDefsClass.WorkingSubPhase
 const HookType = PhaseManagerClass.HookType
 
+const STATE_SCHEMA_ID_RESTRUCTURING_SUBMITTED := "base_rules:round_state_int_keys:restructuring.submitted"
+
 func register(registrar) -> Result:
 	var r = registrar.register_primary_settlement(Phase.DINNERTIME, SettlementRegistryClass.Point.ENTER, Callable(self, "_on_dinnertime_enter"))
 	if not r.ok:
@@ -56,6 +58,11 @@ func register(registrar) -> Result:
 	if not r.ok:
 		return r
 	r = registrar.register_phase_hook(Phase.DINNERTIME, HookType.BEFORE_EXIT, Callable(self, "_on_dinnertime_before_exit"))
+	if not r.ok:
+		return r
+
+	# round_state.restructuring.submitted: <player_id(int) -> bool>（读档后需要把 "0"/"1" 转回 0/1）
+	r = registrar.register_round_state_int_key_dict_schema(STATE_SCHEMA_ID_RESTRUCTURING_SUBMITTED, ["restructuring", "submitted"], 100)
 	if not r.ok:
 		return r
 

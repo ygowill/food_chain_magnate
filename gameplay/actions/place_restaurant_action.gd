@@ -27,6 +27,8 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 		return false
 
 	if state.phase == "Setup":
+		if str(state.sub_phase) == "ReserveCards":
+			return false
 		var player_restaurants := MapRuntimeClass.get_player_restaurants(state, player_id)
 		return player_restaurants.size() < 1
 
@@ -49,6 +51,8 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	# 规则：Working/PlaceRestaurants 需要在岗的本地经理或区域经理（docs/rules.md 子阶段 6）
 	var is_initial := state.phase == "Setup"
+	if is_initial and str(state.sub_phase) == "ReserveCards":
+		return Result.failure("请先选择银行储备卡（所有玩家选择后才能放置餐厅）")
 
 	# Setup 阶段：每位玩家只能放置一个餐厅（无需 position/rotation）
 	if is_initial:
@@ -228,6 +232,7 @@ func _build_map_context(state: GameState) -> Dictionary:
 		"houses": state.map.houses,
 		"restaurants": state.map.restaurants,
 		"drink_sources": state.map.get("drink_sources", []),
+		"marketing_placements": state.map.get("marketing_placements", {}),
 	}
 
 # 辅助方法：获取建筑件注册表（优先使用注入的 modules/*/content/pieces）

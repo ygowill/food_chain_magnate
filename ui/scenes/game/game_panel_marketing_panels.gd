@@ -216,7 +216,7 @@ func _build_available_marketing_boards_by_type(state: GameState) -> Dictionary:
 
 	return out
 
-func _on_marketing_requested(employee_type: String, board_number: int, position: Vector2i, product: String, duration: int, axis: String) -> void:
+func _on_marketing_requested(employee_type: String, board_number: int, position: Vector2i, product: String, duration: int, rotation: int, axis: String) -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
 	if not _execute_command.is_valid():
@@ -229,6 +229,8 @@ func _on_marketing_requested(employee_type: String, board_number: int, position:
 		"product": product,
 		"duration": duration
 	}
+	if rotation != 0:
+		params["rotation"] = rotation
 	if not axis.is_empty():
 		params["axis"] = axis
 	var result: Result = _execute_command.call(Command.create("initiate_marketing", current_player_id, params))

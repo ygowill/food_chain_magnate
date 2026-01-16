@@ -1,20 +1,20 @@
 {
   "id": "first_recruiting_girl_used",
-  "name": "首个使用招聘专员",
+  "name": "首个使用人力资源专员",
   "trigger": {
     "event": "UseEmployee",
     "filter": {
-      "id": "recruiter"
+      "id": "recruiting_girl"
     }
   },
   "effects": [
     {
       "type": "gain_card",
-      "value": "executive_vp"
+      "value": "executive_vice_president"
     },
     {
       "type": "employee_no_salary",
-      "target": "executive_vp"
+      "target": "executive_vice_president"
     }
   ],
   "exclusive_type": "first_recruiting_girl_used",

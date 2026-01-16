@@ -25,7 +25,7 @@ static func run(player_count: int = 3, seed: int = 12345) -> Result:
 
 	# 构造不同的空余卡槽数：
 	# - P0: CEO + 3 名在岗员工，占满卡槽 => 0 空位
-	# - P1: CEO + 1 名经理（executive_vp，提供 10 个经理卡槽） => 空位最大
+	# - P1: CEO + 1 名经理（executive_vice_president，提供 10 个经理卡槽） => 空位最大
 	# - P2: 仅 CEO => 3 空位
 	state = engine.get_state()
 	# 说明：这里直接改写 employees 用于构造局面，需要同步 employee_pool，
@@ -37,8 +37,8 @@ static func run(player_count: int = 3, seed: int = 12345) -> Result:
 				state.employee_pool[emp] = int(state.employee_pool.get(emp, 0)) + 1
 
 	var new_emps := {
-		0: ["ceo", "recruiter", "trainer", "burger_cook"],
-		1: ["ceo", "executive_vp"],
+		0: ["ceo", "recruiting_girl", "trainer", "burger_cook"],
+		1: ["ceo", "executive_vice_president"],
 		2: ["ceo"]
 	}
 	for pid1 in new_emps:

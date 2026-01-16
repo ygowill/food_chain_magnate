@@ -141,18 +141,28 @@ static func complete_working_phase(engine: GameEngine, safety_limit: int = 200) 
 	return Result.success()
 
 static func complete_setup(engine: GameEngine, scan_limit: int = 4000) -> Result:
-	# Setup 阶段：每位玩家必须先放置 1 个餐厅才能确认结束
+	# Setup 阶段：
+	# 1) 所有玩家秘密选择银行储备卡（ReserveCards）
+	# 2) 每位玩家放置 1 个起始餐厅后才能确认结束
 	if engine.get_state().phase != "Setup":
 		return Result.success()
 
 	var safety := 0
 	while engine.get_state().phase == "Setup":
 		safety += 1
-		if safety > engine.get_state().players.size() + 5:
+		if safety > engine.get_state().players.size() * 2 + 8:
 			return Result.failure("Setup 结束循环超出安全上限")
 
 		var state := engine.get_state()
 		var pid := state.get_current_player_id()
+
+		# 1) ReserveCards：依次为每位玩家选择一张储备卡
+		if str(state.sub_phase) == "ReserveCards":
+			var pick := engine.execute_command(Command.create("select_reserve_card", pid, {"selected_index": 0}))
+			if not pick.ok:
+				return Result.failure("Setup：选择储备卡失败: %s" % pick.error)
+			continue
+
 		var placed := false
 
 		var world_min := MapRuntimeClass.get_world_min(state)

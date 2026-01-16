@@ -9,6 +9,7 @@ signal procure_drinks_source_selected(world_pos: Vector2i)
 const PlacementValidatorClass = preload("res://core/map/placement_validator.gd")
 const PieceDefClass = preload("res://core/map/piece_def.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
 const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
@@ -127,7 +128,7 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 					procure_drinks_source_selected.emit(world_pos)
 					return
 		"marketing":
-			if not _marketing_valid_anchors.is_empty() and not _marketing_valid_anchors.has(world_pos):
+			if not _marketing_valid_anchors.has(world_pos):
 				if is_instance_valid(marketing_panel) and marketing_panel.visible and marketing_panel.has_method("set_error"):
 					marketing_panel.set_error("该位置不可放置，请选择绿色高亮的可放置格")
 				return
@@ -141,7 +142,7 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 					if _overlay_controller != null:
 						_overlay_controller.hide_marketing_range_overlay()
 					if is_instance_valid(marketing_panel) and marketing_panel.visible and marketing_panel.has_method("set_error"):
-						marketing_panel.set_error("飞机必须放置在地图边缘")
+						marketing_panel.set_error("飞机必须有一条边完全贴地图边缘")
 					return
 
 				if _is_airplane_corner(world_pos):
@@ -260,6 +261,11 @@ func _on_map_cell_hovered(world_pos: Vector2i) -> void:
 	if mt.is_empty():
 		return
 
+	if not _marketing_valid_anchors.has(world_pos):
+		if _overlay_controller != null:
+			_overlay_controller.hide_marketing_range_overlay()
+		return
+
 	if _overlay_controller != null:
 		if mt == "airplane":
 			var axis := _infer_airplane_axis_for_pos(world_pos)
@@ -276,10 +282,12 @@ func _on_map_cell_hovered(world_pos: Vector2i) -> void:
 		else:
 			_overlay_controller.preview_marketing_range(world_pos, 0, mt)
 
-func on_marketing_map_selection_requested(marketing_type: String, employee_type: String = "") -> void:
+func on_marketing_map_selection_requested(marketing_type: String, employee_type: String = "", board_number: int = 0, rotation: int = 0) -> void:
 	begin_selection("marketing", {
 		"marketing_type": marketing_type,
 		"employee_type": employee_type,
+		"board_number": board_number,
+		"rotation": rotation,
 	})
 	if _overlay_controller != null:
 		_overlay_controller.hide_marketing_range_overlay()
@@ -297,8 +305,12 @@ func _sync_marketing_highlights() -> void:
 
 	var mt := str(_payload.get("marketing_type", ""))
 	var employee_type := str(_payload.get("employee_type", ""))
-	if mt.is_empty() or employee_type.is_empty():
+	var board_number := int(_payload.get("board_number", 0))
+	var rotation := int(_payload.get("rotation", 0))
+	if mt.is_empty() or employee_type.is_empty() or board_number <= 0:
 		return
+	if not rotation in [0, 90, 180, 270]:
+		rotation = 0
 	if not MarketingTypeRegistryClass.is_loaded() or not MarketingTypeRegistryClass.has_type(mt):
 		return
 	if not EmployeeRegistryClass.is_loaded():
@@ -324,7 +336,59 @@ func _sync_marketing_highlights() -> void:
 	var actor: int = int(state.get_current_player_id())
 	var restaurant_ids := MapRuntimeClass.get_player_restaurants(state, actor)
 
-	var occupied_positions := {}
+	# 选中板件占地（用于高亮可放置 anchor）
+	var base_size := Vector2i.ONE
+	if MarketingRegistryClass.is_loaded():
+		var def = MarketingRegistryClass.get_def(board_number)
+		if def != null:
+			if def is MarketingDef:
+				base_size = (def as MarketingDef).footprint_size
+			elif def.has_method("get"):
+				var fs = def.get("footprint_size")
+				if fs is Vector2i:
+					base_size = fs
+	if base_size.x <= 0 or base_size.y <= 0:
+		return
+
+	var size := base_size
+	if rotation == 90 or rotation == 270:
+		size = Vector2i(base_size.y, base_size.x)
+
+	var requires_edge := MarketingTypeRegistryClass.requires_edge(mt)
+	var range_type := str(emp_def.range_type)
+	var range_value := int(emp_def.range_value)
+	var range_required := range_value >= 0 and not range_type.is_empty()
+	var range_error := ""
+	var has_any_road := false
+	var empty_structure_cells_total := 0
+	var base_candidates := 0
+	var out_of_range_candidates := 0
+
+	# 若员工存在距离限制：没有餐厅则必定无可放置格（提示原因，避免误解为 UI bug）
+	if range_required and restaurant_ids.is_empty():
+		if is_instance_valid(marketing_panel) and marketing_panel.visible and marketing_panel.has_method("set_error"):
+			var rt := range_type
+			var rv := range_value
+			marketing_panel.set_error("没有可放置格：你还没有餐厅（距离限制：%s %d）" % [rt, rv])
+		return
+
+	# 统计：是否存在道路 / 空地（用于错误提示）
+	for y2 in range(grid_size.y):
+		for x2 in range(grid_size.x):
+			var wp2 := MapRuntimeClass.index_to_world(state, Vector2i(x2, y2))
+			var cell2 := MapRuntimeClass.get_cell(state, wp2)
+			if cell2.is_empty():
+				continue
+			if not requires_edge and not has_any_road:
+				var rs_val = cell2.get("road_segments", null)
+				if rs_val is Array and not (rs_val as Array).is_empty():
+					has_any_road = true
+			var structure_val = cell2.get("structure", null)
+			if structure_val is Dictionary and (structure_val as Dictionary).is_empty():
+				empty_structure_cells_total += 1
+
+	# 营销占地：预先构建占用集合（考虑 footprint + rotation），避免每个候选点重复遍历
+	var occupied_cells := {}
 	if state.map.has("marketing_placements") and (state.map["marketing_placements"] is Dictionary):
 		var placements: Dictionary = state.map["marketing_placements"]
 		for k in placements.keys():
@@ -333,132 +397,185 @@ func _sync_marketing_highlights() -> void:
 				continue
 			var p: Dictionary = p_val
 			var pos_val = p.get("world_pos", null)
-			if pos_val is Vector2i:
-				occupied_positions[pos_val] = true
+			if not (pos_val is Vector2i):
+				continue
+			var anchor: Vector2i = pos_val
 
-		var requires_edge := MarketingTypeRegistryClass.requires_edge(mt)
-		var range_type := str(emp_def.range_type)
-		var range_value := int(emp_def.range_value)
-		var range_required := range_value >= 0 and not range_type.is_empty()
-		var range_error := ""
-		var has_any_road := false
-		var empty_structure_cells_total := 0
-		var base_candidates := 0
-		var out_of_range_candidates := 0
+			# footprint_size/rotation 为新增字段；缺失则按 1x1/rotation=0 兜底（兼容旧存档/测试）。
+			var p_base_size := Vector2i.ONE
+			var fs_val = p.get("footprint_size", null)
+			if fs_val is Vector2i:
+				p_base_size = Vector2i(fs_val)
+			elif fs_val is Array:
+				var arr: Array = fs_val
+				if arr.size() == 2:
+					p_base_size = Vector2i(int(arr[0]), int(arr[1]))
 
-		# 若员工存在距离限制：没有餐厅则必定无可放置格（提示原因，避免误解为 UI bug）
-		if range_required and restaurant_ids.is_empty():
-			if is_instance_valid(marketing_panel) and marketing_panel.visible and marketing_panel.has_method("set_error"):
-				var rt := range_type
-				var rv := range_value
-				marketing_panel.set_error("没有可放置格：你还没有餐厅（距离限制：%s %d）" % [rt, rv])
-			return
+			var p_rot := 0
+			var rot_val = p.get("rotation", null)
+			if rot_val is int:
+				p_rot = int(rot_val)
+			elif rot_val is float:
+				var f: float = float(rot_val)
+				if f == floor(f):
+					p_rot = int(f)
+			if not p_rot in [0, 90, 180, 270]:
+				p_rot = 0
 
-		var valid: Array[Vector2i] = []
-		for y in range(grid_size.y):
-			for x in range(grid_size.x):
-				var world_pos := MapRuntimeClass.index_to_world(state, Vector2i(x, y))
+			var p_size := p_base_size
+			if p_rot == 90 or p_rot == 270:
+				p_size = Vector2i(p_base_size.y, p_base_size.x)
 
-				var cell := MapRuntimeClass.get_cell(state, world_pos)
-				if cell.is_empty():
+			for dy in range(p_size.y):
+				for dx in range(p_size.x):
+					occupied_cells[anchor + Vector2i(dx, dy)] = true
+
+	var minp := MapRuntimeClass.get_world_min(state)
+	var maxp := MapRuntimeClass.get_world_max(state)
+
+	var valid: Array[Vector2i] = []
+	for y in range(grid_size.y):
+		for x in range(grid_size.x):
+			var anchor_pos := MapRuntimeClass.index_to_world(state, Vector2i(x, y))
+
+			# 占地 cells：top-left anchor + rotated size
+			var footprint_cells: Array[Vector2i] = []
+			var footprint_ok := true
+			for dy2 in range(size.y):
+				for dx2 in range(size.x):
+					var p2 := anchor_pos + Vector2i(dx2, dy2)
+					footprint_cells.append(p2)
+
+					# 越界/占用
+					if not MapRuntimeClass.is_world_pos_in_grid(state, p2):
+						footprint_ok = false
+						break
+					if occupied_cells.has(p2):
+						footprint_ok = false
+						break
+
+					var cell3 := MapRuntimeClass.get_cell(state, p2)
+					if cell3.is_empty():
+						footprint_ok = false
+						break
+
+					var structure_val2 = cell3.get("structure", null)
+					if not (structure_val2 is Dictionary):
+						footprint_ok = false
+						break
+					if not (structure_val2 as Dictionary).is_empty():
+						footprint_ok = false
+						break
+
+					# 非边缘营销：占地必须是空地（非道路/非阻塞）
+					if not requires_edge:
+						var blocked_val2 = cell3.get("blocked", null)
+						if not (blocked_val2 is bool) or bool(blocked_val2):
+							footprint_ok = false
+							break
+						var road_segments_val2 = cell3.get("road_segments", null)
+						if not (road_segments_val2 is Array):
+							footprint_ok = false
+							break
+						if not (road_segments_val2 as Array).is_empty():
+							footprint_ok = false
+							break
+				if not footprint_ok:
+					break
+
+			if not footprint_ok:
+				continue
+
+			# 边缘营销：要求“整条边贴边”（不能超出）
+			if requires_edge:
+				var left := anchor_pos.x
+				var right := anchor_pos.x + size.x - 1
+				var top := anchor_pos.y
+				var bottom := anchor_pos.y + size.y - 1
+				var flush := (left == minp.x) or (right == maxp.x) or (top == minp.y) or (bottom == maxp.y)
+				if not flush:
 					continue
-
-				# 统计：是否存在道路（用于“必须邻路”类营销的失败原因提示）
-				if not requires_edge and not has_any_road:
-					var rs_val = cell.get("road_segments", null)
-					if rs_val is Array and not (rs_val as Array).is_empty():
-						has_any_road = true
-
-				var structure_val = cell.get("structure", null)
-				if not (structure_val is Dictionary):
-					continue
-				if not (structure_val as Dictionary).is_empty():
-					continue
-				empty_structure_cells_total += 1
-
-				if occupied_positions.has(world_pos):
-					continue
-				if requires_edge and not MapRuntimeClass.is_on_map_edge(state, world_pos):
-					continue
-
-				if not requires_edge:
-					var blocked_val = cell.get("blocked", null)
-					if not (blocked_val is bool) or bool(blocked_val):
-						continue
-				var road_segments_val = cell.get("road_segments", null)
-				if not (road_segments_val is Array):
-					continue
-				if not (road_segments_val as Array).is_empty():
-					continue
-				var adjacent_roads_r := RangeUtilsClass.get_adjacent_road_cells(state, world_pos)
+			else:
+				# 非边缘营销：占地整体需邻接道路
+				var adjacent_roads_r := RangeUtilsClass.get_adjacent_road_cells_for_positions(state, footprint_cells)
 				if not adjacent_roads_r.ok:
 					continue
-					var adjacent_roads: Array = adjacent_roads_r.value
-					if adjacent_roads.is_empty():
-						continue
+				var adjacent_roads: Array[Vector2i] = adjacent_roads_r.value
+				if adjacent_roads.is_empty():
+					continue
 
-				# 统计：通过“结构/邻路/边缘”等基础约束的候选点数量
-				base_candidates += 1
+			# 统计：通过“结构/邻路/边缘”等基础约束的候选点数量
+			base_candidates += 1
 
-				# 距离校验（对齐 InitiateMarketingAction.validate）
-				if range_required:
-					if range_type == "road":
-						var ok_r := RangeUtilsClass.is_within_road_range(state, actor, restaurant_ids, world_pos, range_value)
-						if not ok_r.ok:
-							if range_error.is_empty():
-								range_error = str(ok_r.error)
-							continue
-						if not bool(ok_r.value):
-							out_of_range_candidates += 1
-							continue
-					elif range_type == "air":
-						var ok_r := RangeUtilsClass.is_within_air_range(state, actor, restaurant_ids, world_pos, range_value)
-						if not ok_r.ok:
-							if range_error.is_empty():
-								range_error = str(ok_r.error)
-							continue
-						if not bool(ok_r.value):
-							out_of_range_candidates += 1
-							continue
-					else:
+			# 距离校验（对齐 InitiateMarketingAction.validate）
+			if range_required:
+				if range_type == "road":
+					var target_roads_r := RangeUtilsClass.get_adjacent_road_cells_for_positions(state, footprint_cells)
+					if not target_roads_r.ok:
 						if range_error.is_empty():
-							range_error = "未知的 range_type: %s" % range_type
+							range_error = str(target_roads_r.error)
 						continue
-
-				_marketing_valid_anchors[world_pos] = true
-				valid.append(world_pos)
-
-		if _map_canvas.has_method("set_cell_highlights"):
-			_map_canvas.call("set_cell_highlights", valid)
-
-		# 无可放置格：在面板中给出可理解的原因提示
-		if valid.is_empty():
-			var msg := ""
-			if not range_error.is_empty():
-				msg = "无法计算可放置范围：%s" % range_error
-			elif empty_structure_cells_total <= 0:
-				msg = "没有可放置格：地图上没有空地（所有格子都有建筑）"
-			elif requires_edge:
-				if base_candidates <= 0:
-					msg = "没有可放置格：该营销必须放在地图边缘的空地"
-				elif range_required and out_of_range_candidates >= base_candidates:
-					msg = "没有可放置格：全部边缘候选点超出距离范围（%s %d）" % [range_type, range_value]
+					var target_road_cells: Array[Vector2i] = target_roads_r.value
+					var ok_r := RangeUtilsClass.is_within_road_range_to_any_road_cells(
+						state, actor, restaurant_ids, target_road_cells, range_value
+					)
+					if not ok_r.ok:
+						if range_error.is_empty():
+							range_error = str(ok_r.error)
+						continue
+					if not bool(ok_r.value):
+						out_of_range_candidates += 1
+						continue
+				elif range_type == "air":
+					var ok_r := RangeUtilsClass.is_within_air_range_to_any_cells(
+						state, actor, restaurant_ids, footprint_cells, range_value
+					)
+					if not ok_r.ok:
+						if range_error.is_empty():
+							range_error = str(ok_r.error)
+						continue
+					if not bool(ok_r.value):
+						out_of_range_candidates += 1
+						continue
 				else:
-					msg = "没有可放置格：没有满足规则的边缘空地"
+					if range_error.is_empty():
+						range_error = "未知的 range_type: %s" % range_type
+					continue
+
+			_marketing_valid_anchors[anchor_pos] = true
+			valid.append(anchor_pos)
+
+	if _map_canvas.has_method("set_cell_highlights"):
+		_map_canvas.call("set_cell_highlights", valid)
+
+	# 无可放置格：在面板中给出可理解的原因提示
+	if valid.is_empty():
+		var msg := ""
+		if not range_error.is_empty():
+			msg = "无法计算可放置范围：%s" % range_error
+		elif empty_structure_cells_total <= 0:
+			msg = "没有可放置格：地图上没有空地（所有格子都有建筑）"
+		elif requires_edge:
+			if base_candidates <= 0:
+				msg = "没有可放置格：该营销必须有一条边完全贴地图边缘"
+			elif range_required and out_of_range_candidates >= base_candidates:
+				msg = "没有可放置格：全部候选点超出距离范围（%s %d）" % [range_type, range_value]
 			else:
-				if base_candidates <= 0:
-					if not has_any_road:
-						msg = "没有可放置格：地图上没有道路（该营销必须邻接道路的空地）"
-					else:
-						msg = "没有可放置格：没有邻接道路的空地（且不能占用道路/阻塞格/有建筑格）"
-				elif range_required and out_of_range_candidates >= base_candidates:
-					msg = "没有可放置格：全部候选点超出距离范围（%s %d）" % [range_type, range_value]
+				msg = "没有可放置格：没有满足规则的边缘空地"
+		else:
+			if base_candidates <= 0:
+				if not has_any_road:
+					msg = "没有可放置格：地图上没有道路（该营销必须邻接道路的空地）"
 				else:
-					msg = "没有可放置格：没有满足规则的空地"
+					msg = "没有可放置格：没有邻接道路的空地（且不能占用道路/阻塞格/有建筑格）"
+			elif range_required and out_of_range_candidates >= base_candidates:
+				msg = "没有可放置格：全部候选点超出距离范围（%s %d）" % [range_type, range_value]
+			else:
+				msg = "没有可放置格：没有满足规则的空地"
 
-			if not msg.is_empty():
-				if is_instance_valid(marketing_panel) and marketing_panel.visible and marketing_panel.has_method("set_error"):
-					marketing_panel.set_error(msg)
+		if not msg.is_empty():
+			if is_instance_valid(marketing_panel) and marketing_panel.visible and marketing_panel.has_method("set_error"):
+				marketing_panel.set_error(msg)
 
 func _is_airplane_corner(world_pos: Vector2i) -> bool:
 	if _scene == null or _scene.game_engine == null:
@@ -466,10 +583,17 @@ func _is_airplane_corner(world_pos: Vector2i) -> bool:
 	var state: GameState = _scene.game_engine.get_state()
 	if state == null:
 		return false
+	var size := _get_selected_marketing_board_rotated_size()
+	if size.x <= 0 or size.y <= 0:
+		return false
 	var minp := MapRuntimeClass.get_world_min(state)
 	var maxp := MapRuntimeClass.get_world_max(state)
-	var on_x_edge := world_pos.x == minp.x or world_pos.x == maxp.x
-	var on_y_edge := world_pos.y == minp.y or world_pos.y == maxp.y
+	var left := world_pos.x
+	var right := world_pos.x + size.x - 1
+	var top := world_pos.y
+	var bottom := world_pos.y + size.y - 1
+	var on_x_edge := left == minp.x or right == maxp.x
+	var on_y_edge := top == minp.y or bottom == maxp.y
 	return on_x_edge and on_y_edge
 
 func _infer_airplane_axis_for_pos(world_pos: Vector2i) -> String:
@@ -478,13 +602,45 @@ func _infer_airplane_axis_for_pos(world_pos: Vector2i) -> String:
 	var state: GameState = _scene.game_engine.get_state()
 	if state == null:
 		return ""
+	var size := _get_selected_marketing_board_rotated_size()
+	if size.x <= 0 or size.y <= 0:
+		return ""
 	var minp := MapRuntimeClass.get_world_min(state)
 	var maxp := MapRuntimeClass.get_world_max(state)
-	if world_pos.x == minp.x or world_pos.x == maxp.x:
+	var left := world_pos.x
+	var right := world_pos.x + size.x - 1
+	var top := world_pos.y
+	var bottom := world_pos.y + size.y - 1
+	if left == minp.x or right == maxp.x:
 		return "row"
-	if world_pos.y == minp.y or world_pos.y == maxp.y:
+	if top == minp.y or bottom == maxp.y:
 		return "col"
 	return ""
+
+func _get_selected_marketing_board_rotated_size() -> Vector2i:
+	var board_number := int(_payload.get("board_number", 0))
+	var rotation := int(_payload.get("rotation", 0))
+	if not rotation in [0, 90, 180, 270]:
+		rotation = 0
+
+	var base_size := Vector2i.ONE
+	if MarketingRegistryClass.is_loaded() and board_number > 0:
+		var def = MarketingRegistryClass.get_def(board_number)
+		if def != null:
+			if def is MarketingDef:
+				base_size = (def as MarketingDef).footprint_size
+			elif def.has_method("get"):
+				var fs = def.get("footprint_size")
+				if fs is Vector2i:
+					base_size = fs
+
+	if base_size.x <= 0 or base_size.y <= 0:
+		base_size = Vector2i.ONE
+
+	var size := base_size
+	if rotation == 90 or rotation == 270:
+		size = Vector2i(base_size.y, base_size.x)
+	return size
 
 func _show_airplane_axis_dialog(on_selected: Callable, on_cancel: Callable = Callable()) -> void:
 	if _scene == null:
@@ -744,6 +900,7 @@ func on_restaurant_preview_requested(mode: String, position: Vector2i, rotation:
 		"map_origin": state.map.get("map_origin", Vector2i.ZERO),
 		"houses": state.map.houses,
 		"restaurants": state.map.restaurants,
+		"marketing_placements": state.map.get("marketing_placements", {}),
 	}
 
 	var extra := {}
@@ -817,6 +974,7 @@ func on_house_preview_requested(action_id: String, position: Vector2i, rotation:
 		"houses": state.map.houses,
 		"restaurants": state.map.restaurants,
 		"drink_sources": state.map.get("drink_sources", []),
+		"marketing_placements": state.map.get("marketing_placements", {}),
 	}
 
 	var validate_r: Result = PlacementValidatorClass.validate_house_placement(

@@ -4,7 +4,7 @@
   "trigger": {
     "event": "InitiateMarketing",
     "filter": {
-      "employee_type": "marketer"
+      "employee_type": "marketing_trainee"
     }
   },
   "effects": [
@@ -22,4 +22,3 @@
     "enabled": true
   }
 }
-

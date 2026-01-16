@@ -1,6 +1,6 @@
 # 模块3：全新里程碑（New Milestones）
 # 覆盖：FIRST MARKETING TRAINEE USED
-# - 触发：使用 marketer 发起营销
+# - 触发：使用 marketing_trainee 发起营销
 # - 效果：获得 kitchen_trainee 与 errand_boy 各 1 张（进入 reserve_employees）
 class_name NewMilestonesMarketingTraineeV2Test
 extends RefCounted
@@ -35,18 +35,19 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	state.phase = "Working"
 	state.sub_phase = "Marketing"
 
-	# 给玩家0 添加 1 张在岗 marketer（从池取卡，保持守恒）
-	if int(state.employee_pool.get("marketer", 0)) <= 0:
-		return Result.failure("employee_pool 中没有 marketer")
-	state.employee_pool["marketer"] = int(state.employee_pool.get("marketer", 0)) - 1
-	state.players[0]["employees"].append("marketer")
+	# 给玩家0 添加 1 张在岗 marketing_trainee（从池取卡，保持守恒）
+	if int(state.employee_pool.get("marketing_trainee", 0)) <= 0:
+		return Result.failure("employee_pool 中没有 marketing_trainee")
+	state.employee_pool["marketing_trainee"] = int(state.employee_pool.get("marketing_trainee", 0)) - 1
+	state.players[0]["employees"].append("marketing_trainee")
 
 	var cmd := Command.create("initiate_marketing", 0, {
-		"employee_type": "marketer",
+		"employee_type": "marketing_trainee",
 		"board_number": 11,
 		"product": "burger",
 		"duration": 1,
-		"position": [2, 1],
+		# board #11 is 3x2, so anchor must not overlap the road row (y=2)
+		"position": [2, 0],
 	})
 	var r := engine.execute_command(cmd)
 	if not r.ok:
@@ -138,4 +139,3 @@ static func _apply_test_map(state: GameState) -> void:
 
 	state.players[0]["restaurants"] = ["rest_0"]
 	MapRuntimeClass.invalidate_road_graph(state)
-

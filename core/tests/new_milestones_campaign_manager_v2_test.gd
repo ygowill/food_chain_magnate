@@ -43,13 +43,13 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	state.employee_pool["campaign_manager"] = int(state.employee_pool.get("campaign_manager", 0)) - 1
 	state.players[0]["employees"].append("campaign_manager")
 
-	# 发起 mailbox #5（duration=1，方便验证到期释放时机；2P 下 mailbox 有多张可用）
+	# 发起 mailbox #7（duration=1，方便验证到期释放时机；2P 下 mailbox 有多张可用）
 	var cmd := Command.create("initiate_marketing", 0, {
 		"employee_type": "campaign_manager",
-		"board_number": 5,
+		"board_number": 7,
 		"product": "burger",
 		"duration": 1,
-		"position": [3, 2],
+		"position": [0, 1],
 	})
 	var r := engine.execute_command(cmd)
 	if not r.ok:
@@ -60,10 +60,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not milestones0.has(MILESTONE_ID):
 		return Result.failure("玩家0 应获得里程碑 %s，实际: %s" % [MILESTONE_ID, str(milestones0)])
 
-	# 追加放置第二张 mailbox #6（同商品/同持续时间）
+	# 追加放置第二张 mailbox #8（同商品/同持续时间）
 	var cmd2 := Command.create("place_campaign_manager_second_tile", 0, {
-		"board_number": 6,
-		"position": [1, 2],
+		"board_number": 8,
+		"position": [3, 1],
 	})
 	var r2 := engine.execute_command(cmd2)
 	if not r2.ok:
@@ -79,17 +79,17 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		if not (inst_val is Dictionary):
 			continue
 		var inst: Dictionary = inst_val
-		if int(inst.get("board_number", -1)) == 5:
+		if int(inst.get("board_number", -1)) == 7:
 			link = str(inst.get("link_id", ""))
 			break
 	if link.is_empty():
-		return Result.failure("board #5 应存在 link_id")
+		return Result.failure("board #7 应存在 link_id")
 	var link2 := ""
 	for inst_val2 in state.marketing_instances:
 		if not (inst_val2 is Dictionary):
 			continue
 		var inst2: Dictionary = inst_val2
-		if int(inst2.get("board_number", -1)) == 6:
+		if int(inst2.get("board_number", -1)) == 8:
 			link2 = str(inst2.get("link_id", ""))
 			break
 	if link2 != link:
@@ -167,14 +167,12 @@ static func _apply_test_map(state: GameState) -> void:
 	var grid_size := Vector2i(5, 5)
 	var cells := _build_empty_cells(grid_size)
 
-	# y=3 为横向道路
-	for x in range(grid_size.x):
-		var dirs: Array = []
-		if x > 0:
-			dirs.append("W")
-		if x < grid_size.x - 1:
-			dirs.append("E")
-		_set_road_segment(cells, Vector2i(x, 3), dirs)
+	# x=2 为纵向道路（给左右两侧提供“邻接道路”的空地）
+	_set_road_segment(cells, Vector2i(2, 0), ["S"])
+	_set_road_segment(cells, Vector2i(2, 1), ["N", "S"])
+	_set_road_segment(cells, Vector2i(2, 2), ["N", "S"])
+	_set_road_segment(cells, Vector2i(2, 3), ["N", "S"])
+	_set_road_segment(cells, Vector2i(2, 4), ["N"])
 
 	# 餐厅在底部 2x2，并有入口邻接道路
 	var rest_cells: Array[Vector2i] = [

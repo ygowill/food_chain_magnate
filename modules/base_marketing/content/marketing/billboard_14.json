@@ -2,6 +2,7 @@
   "id": "billboard_14",
   "board_number": 14,
   "type": "billboard",
+  "footprint_size": [2, 1],
   "min_players": 2,
   "max_players": null
 }

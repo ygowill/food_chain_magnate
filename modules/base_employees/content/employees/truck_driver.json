@@ -1,6 +1,6 @@
 {
   "id": "truck_driver",
-  "name": "卡车司机",
+  "name": "货车驾驶员",
   "description": "从路线上的每个进货点获取2瓶饮料",
   "salary": true,
   "unique": false,
@@ -23,6 +23,6 @@
   "mandatory": false,
   "pool": {
     "type": "fixed",
-    "count": 4
+    "count": 6
   }
 }

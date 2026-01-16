@@ -6,6 +6,9 @@ const InvariantsClass = preload("res://core/engine/game_engine/invariants.gd")
 
 static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result:
 	engine._reset_modules_v2()
+
+	var all_warnings: Array[String] = []
+
 	# 验证存档格式
 	if not archive.has("initial_state") or not archive.has("commands"):
 		return Result.failure("无效的存档格式")
@@ -22,26 +25,26 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result
 	var initial_state_val = archive.get("initial_state", null)
 	if initial_state_val == null or not (initial_state_val is Dictionary):
 		return Result.failure("无效的存档格式: initial_state")
-	var initial_data: Dictionary = initial_state_val
-	var state_result := GameState.from_dict(initial_data)
-	if not state_result.ok:
-		return Result.failure("无效的 initial_state: %s" % state_result.error)
-	engine.state = state_result.value
+	var initial_data: Dictionary = (initial_state_val as Dictionary).duplicate(true)
 
-	var rng_val = archive.get("rng", null)
-	if not (rng_val is Dictionary):
-		return Result.failure("无效的存档格式: rng")
-	var rng_data: Dictionary = rng_val
-	if rng_data.is_empty():
-		return Result.failure("无效的存档格式: rng 不能为空")
-	var rng_result := RandomManager.from_dict(rng_data)
-	if not rng_result.ok:
-		return Result.failure("无效的存档 rng: %s" % rng_result.error)
-	engine.random_manager = rng_result.value
-
-	# V2 strict：必须从存档 state.modules 装配当前对局内容（employees/milestones）与 ruleset
-	if not (engine.state.modules is Array) or engine.state.modules.is_empty():
+	# V2 strict：必须先按存档 initial_state.modules 装配 ruleset/state schema，再解析 GameState（否则 round_state 的 int-key dict 会在读档后变成 string-key）
+	var modules_val = initial_data.get("modules", null)
+	if not (modules_val is Array) or (modules_val as Array).is_empty():
 		return Result.failure("无效的 initial_state：modules 不能为空（需要模块系统 V2 装配）")
+	var modules_any: Array = modules_val
+	var enabled_modules: Array[String] = []
+	var module_seen := {}
+	for i in range(modules_any.size()):
+		var m_val = modules_any[i]
+		if not (m_val is String):
+			return Result.failure("无效的 initial_state：modules[%d] 类型错误（期望 String）" % i)
+		var mid: String = str(m_val)
+		if mid.is_empty():
+			return Result.failure("无效的 initial_state：modules[%d] 不能为空" % i)
+		if module_seen.has(mid):
+			return Result.failure("无效的 initial_state：modules 出现重复 id: %s" % mid)
+		module_seen[mid] = true
+		enabled_modules.append(mid)
 
 	var base_dir := GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
 	if archive.has("modules_v2_base_dir"):
@@ -53,12 +56,30 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result
 			return Result.failure("无效的存档格式: modules_v2_base_dir 不能为空")
 		base_dir = base_dir_read
 
-	var modules_v2_read := engine._apply_modules_v2(Array(engine.state.modules, TYPE_STRING, "", null), base_dir)
+	var modules_v2_read := engine._apply_modules_v2(enabled_modules, base_dir)
 	if not modules_v2_read.ok:
 		return Result.failure("存档加载失败：模块系统 V2 装配失败: %s" % modules_v2_read.error)
-	var expected_plan := Array(engine.state.modules, TYPE_STRING, "", null)
+	all_warnings.append_array(modules_v2_read.warnings)
+	var expected_plan := Array(enabled_modules, TYPE_STRING, "", null)
 	if engine.module_plan_v2 != expected_plan:
 		return Result.failure("存档加载失败：模块计划不一致: archive=%s current=%s" % [str(expected_plan), str(engine.module_plan_v2)])
+
+	var state_result := GameState.from_dict(initial_data)
+	if not state_result.ok:
+		return Result.failure("无效的 initial_state: %s" % state_result.error)
+	engine.state = state_result.value
+	all_warnings.append_array(state_result.warnings)
+
+	var rng_val = archive.get("rng", null)
+	if not (rng_val is Dictionary):
+		return Result.failure("无效的存档格式: rng")
+	var rng_data: Dictionary = rng_val
+	if rng_data.is_empty():
+		return Result.failure("无效的存档格式: rng 不能为空")
+	var rng_result := RandomManager.from_dict(rng_data)
+	if not rng_result.ok:
+		return Result.failure("无效的存档 rng: %s" % rng_result.error)
+	engine.random_manager = rng_result.value
 
 	var data_result := GameData.from_catalog(engine.content_catalog_v2)
 	if not data_result.ok:
@@ -127,7 +148,7 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result
 	GameLog.info("GameEngine", "存档加载完成 - 回放 %d 条命令 (current: %d)" % [
 		engine.command_history.size(), engine.current_command_index
 	])
-	return Result.success(engine.state)
+	return Result.success(engine.state).with_warnings(all_warnings)
 
 # 解析“应为整数”的值：允许 JSON 数字用 float 表示，但必须是整值；不允许小数与字符串等容错。
 static func _parse_int_value(value, path: String) -> Result:

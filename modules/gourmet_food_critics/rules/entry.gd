@@ -1,13 +1,16 @@
 extends RefCounted
 
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
+const PlacementConflictRegistryClass = preload("res://core/rules/placement_conflict_registry.gd")
+const ParseHelpers = preload("res://core/state/serialization/parse_helpers.gd")
 
 const MODULE_ID := "gourmet_food_critics"
 const MARKETING_TYPE := "gourmet_guide"
 const GLOBAL_MAX_ACTIVE := 3
+const CONFLICT_ID_OFFRAMP_CONNECTION := "rural_marketeers:offramp_connection"
 
 func register(registrar) -> Result:
-	var r = registrar.register_employee_patch("marketer", {"add_train_to": ["gourmet_food_critic"]})
+	var r = registrar.register_employee_patch("marketing_trainee", {"add_train_to": ["gourmet_food_critic"]})
 	if not r.ok:
 		return r
 
@@ -66,7 +69,7 @@ func _validate_initiate_marketing(state: GameState, command: Command) -> Result:
 
 	if not command.params.has("board_number"):
 		return Result.success()
-	var bn_read := _parse_int_value(command.params.get("board_number", null), "board_number")
+	var bn_read := ParseHelpers.parse_int(command.params.get("board_number", null), "board_number")
 	if not bn_read.ok:
 		return bn_read
 	var board_number: int = int(bn_read.value)
@@ -94,34 +97,19 @@ func _validate_initiate_marketing(state: GameState, command: Command) -> Result:
 	if not (pos_val is Array) or (pos_val as Array).size() != 2:
 		return Result.failure("%s: position 格式错误（期望 [x,y]）" % MODULE_ID)
 	var arr: Array = pos_val
-	var x_read := _parse_int_value(arr[0], "position[0]")
+	var x_read := ParseHelpers.parse_int(arr[0], "position[0]")
 	if not x_read.ok:
 		return x_read
-	var y_read := _parse_int_value(arr[1], "position[1]")
+	var y_read := ParseHelpers.parse_int(arr[1], "position[1]")
 	if not y_read.ok:
 		return y_read
 	var world_pos := Vector2i(int(x_read.value), int(y_read.value))
 
-	if state.map is Dictionary and state.map.has("rural_marketeers_offramps") and (state.map["rural_marketeers_offramps"] is Array):
-		var offramps: Array = state.map["rural_marketeers_offramps"]
-		for i in range(offramps.size()):
-			var o_val = offramps[i]
-			if not (o_val is Dictionary):
-				continue
-			var o: Dictionary = o_val
-			var p = o.get("pos", null)
-			if p is Vector2i and p == world_pos:
-				return Result.failure("美食指南不能放置在已有高速公路出口的格子: %s" % str(world_pos))
+	var conflicts_read := PlacementConflictRegistryClass.get_conflicts_at_world_pos(state, world_pos, {"action": "initiate_marketing", "marketing_type": MARKETING_TYPE})
+	if not conflicts_read.ok:
+		return conflicts_read
+	var conflicts: Array = conflicts_read.value
+	if conflicts.has(CONFLICT_ID_OFFRAMP_CONNECTION):
+		return Result.failure("美食指南不能放置在已有高速公路出口的格子: %s" % str(world_pos))
 
 	return Result.success()
-
-static func _parse_int_value(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
-		return Result.success(int(f))
-	return Result.failure("%s 类型错误（期望整数）" % path)
-

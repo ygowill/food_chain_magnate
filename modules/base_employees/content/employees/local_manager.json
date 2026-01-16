@@ -1,6 +1,6 @@
 {
   "id": "local_manager",
-  "name": "本地经理",
+  "name": "区域经理",
   "description": "放置新餐厅，并设置为即将开业。提供免下车服务",
   "salary": true,
   "unique": false,
@@ -22,6 +22,6 @@
   "mandatory": false,
   "pool": {
     "type": "fixed",
-    "count": 12
+    "count": 6
   }
 }

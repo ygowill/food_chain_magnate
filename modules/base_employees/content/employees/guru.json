@@ -1,6 +1,6 @@
 {
   "id": "guru",
-  "name": "培训导师",
+  "name": "培训专家",
   "description": "三次培训机会。可最多培训同一名员工三次",
   "salary": true,
   "unique": true,
@@ -19,6 +19,6 @@
   "mandatory": false,
   "pool": {
     "type": "fixed",
-    "count": 4
+    "count": 1
   }
 }

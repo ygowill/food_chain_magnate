@@ -7,6 +7,10 @@ var id: String = ""
 var board_number: int = 0
 var type: String = ""  # strict：具体 type 是否可用由模块注册的 MarketingTypeRegistry 决定
 
+## 板件占地尺寸（未旋转时，单位：world grid cells）
+## 旋转 90/270 时宽高互换；锚点语义由放置规则层定义（本项目为“左上角”）。
+var footprint_size: Vector2i = Vector2i.ONE
+
 var min_players: int = 2
 var max_players = null  # int | null
 
@@ -29,6 +33,16 @@ static func from_dict(data: Dictionary) -> Result:
 	if not type_read.ok:
 		return type_read
 	def.type = type_read.value
+
+	# 占地尺寸（Strict Mode：缺字段直接失败）
+	if not data.has("footprint_size"):
+		return Result.failure("MarketingDef 缺少 footprint_size")
+	var size_read := _parse_vec2i(data.get("footprint_size", null), "MarketingDef.footprint_size")
+	if not size_read.ok:
+		return size_read
+	def.footprint_size = size_read.value
+	if def.footprint_size.x <= 0 or def.footprint_size.y <= 0:
+		return Result.failure("MarketingDef.footprint_size 必须为正数，实际: %s" % str(def.footprint_size))
 
 	# 按玩家数可用性（Strict Mode：缺字段直接失败）
 	if not data.has("min_players"):
@@ -90,11 +104,26 @@ static func _parse_int(value, path: String) -> Result:
 		return Result.success(int(f))
 	return Result.failure("%s 类型错误（期望整数）" % path)
 
+static func _parse_vec2i(value, path: String) -> Result:
+	if not (value is Array):
+		return Result.failure("%s 类型错误（期望 [x,y] Array）" % path)
+	var arr: Array = value
+	if arr.size() != 2:
+		return Result.failure("%s 长度错误（期望 2），实际: %d" % [path, arr.size()])
+	var x_read := _parse_int(arr[0], "%s[0]" % path)
+	if not x_read.ok:
+		return x_read
+	var y_read := _parse_int(arr[1], "%s[1]" % path)
+	if not y_read.ok:
+		return y_read
+	return Result.success(Vector2i(int(x_read.value), int(y_read.value)))
+
 func to_dict() -> Dictionary:
 	return {
 		"id": id,
 		"board_number": board_number,
 		"type": type,
+		"footprint_size": [footprint_size.x, footprint_size.y],
 		"min_players": min_players,
 		"max_players": max_players,
 	}

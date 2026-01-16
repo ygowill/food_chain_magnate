@@ -19,6 +19,6 @@
   "mandatory": false,
   "pool": {
     "type": "fixed",
-    "count": 4
+    "count": 6
   }
 }

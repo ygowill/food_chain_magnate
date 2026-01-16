@@ -1,6 +1,6 @@
 # 模块3：全新里程碑（New Milestones）
 # 覆盖：
-# - FIRST RECRUITING GIRL USED：使用 recruiter 的 recruit -> 获得 executive_vp，且其永久免薪
+# - FIRST RECRUITING GIRL USED：使用 recruiting_girl 的 recruit -> 获得 executive_vice_president，且其永久免薪
 # - FIRST WAITRESS USED：薪水变为每人 $3（仅对获得者）
 class_name NewMilestonesRecruiterWaitressV2Test
 extends RefCounted
@@ -31,15 +31,15 @@ static func run(player_count: int = 2, seed_val: int = 993311) -> Result:
 	var state := engine.get_state()
 	_force_turn_order(state)
 
-	# recruiter 在岗，执行 2 次招聘：第二次必然用到 recruiter 的容量 -> 触发里程碑
+	# recruiting_girl 在岗，执行 2 次招聘：第二次必然用到 recruiting_girl 的容量 -> 触发里程碑
 	state.phase = "Working"
 	state.sub_phase = "Recruit"
-	var take := StateUpdaterClass.take_from_pool(state, "recruiter", 1)
+	var take := StateUpdaterClass.take_from_pool(state, "recruiting_girl", 1)
 	if not take.ok:
-		return Result.failure("从员工池取出 recruiter 失败: %s" % take.error)
-	var add := StateUpdaterClass.add_employee(state, 0, "recruiter", false)
+		return Result.failure("从员工池取出 recruiting_girl 失败: %s" % take.error)
+	var add := StateUpdaterClass.add_employee(state, 0, "recruiting_girl", false)
 	if not add.ok:
-		return Result.failure("添加 recruiter 失败: %s" % add.error)
+		return Result.failure("添加 recruiting_girl 失败: %s" % add.error)
 
 	var r1 := engine.execute_command(Command.create("recruit", 0, {"employee_type": "waitress"}))
 	if not r1.ok:
@@ -51,10 +51,10 @@ static func run(player_count: int = 2, seed_val: int = 993311) -> Result:
 	state = engine.get_state()
 	if not Array(state.players[0].get("milestones", [])).has("first_recruiting_girl_used"):
 		return Result.failure("玩家0 应获得里程碑 first_recruiting_girl_used")
-	if not Array(state.players[0].get("reserve_employees", [])).has("executive_vp"):
-		return Result.failure("应获得 executive_vp 到 reserve_employees")
-	if EmployeeRulesClass.requires_salary("executive_vp", state.players[0]):
-		return Result.failure("executive_vp 应永久免薪（EmployeeRules.requires_salary 应为 false）")
+	if not Array(state.players[0].get("reserve_employees", [])).has("executive_vice_president"):
+		return Result.failure("应获得 executive_vice_president 到 reserve_employees")
+	if EmployeeRulesClass.requires_salary("executive_vice_president", state.players[0]):
+		return Result.failure("executive_vice_president 应永久免薪（EmployeeRules.requires_salary 应为 false）")
 
 	# 直接触发 first_waitress_used（waitress 的 UseEmployee 在本项目来自晚餐结算；此处用事件模拟）
 	var ms := MilestoneSystemClass.process_event(state, "UseEmployee", {"player_id": 0, "id": "waitress"})

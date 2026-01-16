@@ -32,6 +32,7 @@ var global_action_validators: Array[Dictionary] = []  # [{validator_id, callback
 var action_availability_overrides: Array[Dictionary] = []  # [{action_id, points, priority, source}]
 var marketing_type_registrations: Array[Dictionary] = []  # [{type_id, requires_edge, range_handler, source}]
 var marketing_initiation_providers: Array[Dictionary] = []  # [{id, callback, priority, source}]
+var placement_conflict_providers: Array[Dictionary] = []  # [{id, callback, priority, source}]
 var bankruptcy_handlers: Array[Dictionary] = []  # [{kind, callback, source}]
 var dinnertime_demand_providers: Array[Dictionary] = []  # [{id, callback, priority, source}]
 var dinnertime_route_purchase_providers: Array[Dictionary] = []  # [{id, callback, priority, source}]
@@ -46,6 +47,7 @@ var cleanup_sub_phase_order_override = null  # {order:Array[String], priority:in
 var settlement_triggers_override: Array[Dictionary] = []  # [{phase, timing, points, source}]
 var phase_sub_phase_order_overrides: Array[Dictionary] = []  # [{phase, order, priority, source}]
 var state_initializers: Array[Dictionary] = []  # [{id, callback, priority, source}]
+var state_int_key_dict_schemas: Array[Dictionary] = []  # [{id, root, path, priority, source}]
 var _entry_instances: Array = []
 
 func retain_entry_instance(inst) -> void:
@@ -202,11 +204,17 @@ func register_dinnertime_demand_provider(provider_id: String, callback: Callable
 func register_dinnertime_route_purchase_provider(provider_id: String, callback: Callable, priority: int = 100, source_module_id: String = "") -> Result:
 	return ProviderRegistrationHelperClass.register_dinnertime_route_purchase_provider(self, provider_id, callback, priority, source_module_id)
 
+func register_placement_conflict_provider(provider_id: String, callback: Callable, priority: int = 100, source_module_id: String = "") -> Result:
+	return ProviderRegistrationHelperClass.register_placement_conflict_provider(self, provider_id, callback, priority, source_module_id)
+
 func register_state_initializer(initializer_id: String, callback: Callable, priority: int = 100, source_module_id: String = "") -> Result:
 	return StateAndOrderHelperClass.register_state_initializer(self, initializer_id, callback, priority, source_module_id)
 
 func apply_state_initializers(state: GameState, rng_manager = null) -> Result:
 	return StateAndOrderHelperClass.apply_state_initializers(self, state, rng_manager)
+
+func register_state_int_key_dict_schema(schema_id: String, root: String, path: Array, priority: int = 100, source_module_id: String = "") -> Result:
+	return StateAndOrderHelperClass.register_state_int_key_dict_schema(self, schema_id, root, path, priority, source_module_id)
 
 func register_employee_pool_patch(patch_id: String, employee_id: String, delta: int, source_module_id: String = "") -> Result:
 	return StateAndOrderHelperClass.register_employee_pool_patch(self, patch_id, employee_id, delta, source_module_id)
@@ -234,4 +242,3 @@ func validate_content_effect_handlers(catalog) -> Result:
 
 func validate_content_milestone_effect_handlers(catalog) -> Result:
 	return ContentValidationHelperClass.validate_milestone_effect_handlers(self, catalog)
-

@@ -46,6 +46,9 @@ static func validate_placement(
 	result = Validators.validate_no_structure_overlap(map_ctx, piece_def, footprint_cells, context)
 	if not result.ok:
 		return result
+	result = Validators.validate_no_marketing_overlap(map_ctx, piece_def, footprint_cells, context)
+	if not result.ok:
+		return result
 	result = Validators.validate_road_adjacency(map_ctx, piece_def, footprint_cells, context)
 	if not result.ok:
 		return result
@@ -86,4 +89,3 @@ static func get_valid_placements(
 					})
 
 	return valid_placements
-

@@ -1,6 +1,6 @@
 {
   "id": "waitress",
-  "name": "女服务员",
+  "name": "服务员",
   "description": "获得3$。在平局时拥有更多服务员的餐厅获得胜利",
   "salary": false,
   "unique": false,

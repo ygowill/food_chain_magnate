@@ -29,7 +29,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	state.marketing_instances.append({
 		"type": "billboard",
 		"owner": 0,
-		"employee_type": "marketer",
+		"employee_type": "marketing_trainee",
 		"product": "burger",
 		"world_pos": Vector2i(0, 0),
 		"remaining_duration": 1,
@@ -62,7 +62,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		"board_number": 1,
 		"type": "unknown_type",
 		"owner": 0,
-		"employee_type": "marketer",
+		"employee_type": "marketing_trainee",
 		"product": "burger",
 		"world_pos": Vector2i(0, 0),
 		"remaining_duration": 1,

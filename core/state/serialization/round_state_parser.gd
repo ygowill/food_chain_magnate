@@ -1,6 +1,7 @@
 extends RefCounted
 
 const ParseHelpers = preload("res://core/state/serialization/parse_helpers.gd")
+const StateSchemaRegistryClass = preload("res://core/state/state_schema_registry.gd")
 
 static func parse_round_state(value) -> Result:
 	if not (value is Dictionary):
@@ -198,5 +199,10 @@ static func parse_round_state(value) -> Result:
 			norm[pid] = per_norm
 		out[counter_key] = norm
 
-	return Result.success(out)
+	# 模块扩展字段：按 StateSchemaRegistry 声明，对指定路径的 Dict 执行 int-key 归一化
+	var schema_norm := StateSchemaRegistryClass.normalize_int_key_dicts_in_container("round_state", out, "GameState.round_state")
+	if not schema_norm.ok:
+		return schema_norm
+	out = schema_norm.value
 
+	return Result.success(out)

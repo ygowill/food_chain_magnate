@@ -7,17 +7,6 @@ static var _loaded: bool = false
 static func reset() -> void:
 	_types.clear()
 	_loaded = true
-	_register_builtin("billboard", false)
-	_register_builtin("mailbox", false)
-	_register_builtin("radio", false)
-	_register_builtin("airplane", true)
-
-static func _register_builtin(type_id: String, requires_edge: bool) -> void:
-	_types[type_id] = {
-		"requires_edge": requires_edge,
-		"range_handler": Callable(),
-		"source": "builtin",
-	}
 
 static func is_loaded() -> bool:
 	return _loaded

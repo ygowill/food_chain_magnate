@@ -16,20 +16,20 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	return Result.success()
 
 static func _test_recruit_limit_doubled(seed_val: int) -> Result:
-	# 对照组：未启用 night_shift_managers -> limit = ceo(1) + recruiter(1) = 2
+	# 对照组：未启用 night_shift_managers -> limit = ceo(1) + recruiting_girl(1) = 2
 	var e0 := GameEngine.new()
 	var init0 := e0.initialize(2, seed_val)
 	if not init0.ok:
 		return Result.failure("初始化失败: %s" % init0.error)
 	var s0 := e0.get_state()
 	_force_player0_ready_for_working(s0)
-	_take_to_active(s0, 0, "recruiter")
+	_take_to_active(s0, 0, "recruiting_girl")
 
 	var base_limit := EmployeeRulesClass.get_recruit_limit_for_working(s0, 0)
 	if base_limit != 2:
 		return Result.failure("未启用 night_shift_managers 时招聘上限应为 2，实际: %d" % base_limit)
 
-	# 实验组：启用 night_shift_managers -> limit = ceo(1) + recruiter(1*2) = 3（CEO 排除夜班）
+	# 实验组：启用 night_shift_managers -> limit = ceo(1) + recruiting_girl(1*2) = 3（CEO 排除夜班）
 	var e1 := GameEngine.new()
 	var enabled_modules: Array[String] = [
 		"base_rules",
@@ -48,7 +48,7 @@ static func _test_recruit_limit_doubled(seed_val: int) -> Result:
 	var s1 := e1.get_state()
 	_force_player0_ready_for_working(s1)
 	_take_to_active(s1, 0, "night_shift_manager")
-	_take_to_active(s1, 0, "recruiter")
+	_take_to_active(s1, 0, "recruiting_girl")
 
 	# 触发进入 Working（执行 phase hooks）
 	var adv := e1.execute_command(Command.create_system("advance_phase"))
@@ -63,7 +63,7 @@ static func _test_recruit_limit_doubled(seed_val: int) -> Result:
 	if limit != 3:
 		return Result.failure("启用 night_shift_managers 时招聘上限应为 3，实际: %d" % limit)
 
-	# 校验 multipliers：recruiter=2，ceo 不应被设置
+	# 校验 multipliers：recruiting_girl=2，ceo 不应被设置
 	var wem_val = s1.round_state.get("working_employee_multipliers", null)
 	if not (wem_val is Dictionary):
 		return Result.failure("working_employee_multipliers 缺失或类型错误（期望 Dictionary）")
@@ -74,8 +74,8 @@ static func _test_recruit_limit_doubled(seed_val: int) -> Result:
 	if not (per_val is Dictionary):
 		return Result.failure("working_employee_multipliers[0] 类型错误（期望 Dictionary）")
 	var per: Dictionary = per_val
-	if int(per.get("recruiter", 0)) != 2:
-		return Result.failure("recruiter multiplier 应为 2，实际: %s" % str(per.get("recruiter", null)))
+	if int(per.get("recruiting_girl", 0)) != 2:
+		return Result.failure("recruiting_girl multiplier 应为 2，实际: %s" % str(per.get("recruiting_girl", null)))
 	if per.has("ceo"):
 		return Result.failure("CEO 不参与夜班，working_employee_multipliers 不应包含 ceo")
 
@@ -99,4 +99,3 @@ static func _take_to_active(state: GameState, player_id: int, employee_id: Strin
 		state.employee_pool[employee_id] = 0
 	state.employee_pool[employee_id] = int(state.employee_pool.get(employee_id, 0)) - 1
 	state.players[player_id]["employees"].append(employee_id)
-

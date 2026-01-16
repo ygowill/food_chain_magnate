@@ -38,13 +38,13 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 
 	# 2) 给玩家添加 2 名在岗员工（便于在同一子阶段内完成“放置房屋 + 添加花园”）
 	state = engine.get_state()
-	var take := StateUpdaterClass.take_from_pool(state, "new_business_dev", 2)
+	var take := StateUpdaterClass.take_from_pool(state, "new_business_developer", 2)
 	if not take.ok:
-		return Result.failure("从员工池取出 new_business_dev 失败: %s" % take.error)
+		return Result.failure("从员工池取出 new_business_developer 失败: %s" % take.error)
 	for _i in range(2):
-		var add := StateUpdaterClass.add_employee(state, actor, "new_business_dev", false)
+		var add := StateUpdaterClass.add_employee(state, actor, "new_business_developer", false)
 		if not add.ok:
-			return Result.failure("添加 new_business_dev 失败: %s" % add.error)
+			return Result.failure("添加 new_business_developer 失败: %s" % add.error)
 
 	# 3) 寻找一个可行的“放置房屋 -> 添加花园”组合并执行
 	var plan := _find_place_house_then_garden_plan(engine, actor)

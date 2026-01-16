@@ -20,8 +20,8 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 
 	var first_actor := engine.get_state().get_current_player_id()
 
-	# 1) 无招聘员：CEO 仅 1 次招聘
-	var r1 := engine.execute_command(Command.create("recruit", first_actor, {"employee_type": "recruiter"}))
+	# 1) 无人力资源专员：CEO 仅 1 次招聘
+	var r1 := engine.execute_command(Command.create("recruit", first_actor, {"employee_type": "recruiting_girl"}))
 	if not r1.ok:
 		return Result.failure("首次招聘失败: %s" % r1.error)
 
@@ -47,19 +47,19 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		if engine.get_state().phase != "Restructuring":
 			return Result.failure("轮转玩家时不应离开 Restructuring")
 
-	var activate := engine.execute_command(Command.create("restructure_employee", first_actor, {"employee_id": "recruiter", "to_reserve": false}))
+	var activate := engine.execute_command(Command.create("restructure_employee", first_actor, {"employee_id": "recruiting_girl", "to_reserve": false}))
 	if not activate.ok:
-		return Result.failure("重组激活 recruiter 失败: %s" % activate.error)
+		return Result.failure("重组激活 recruiting_girl 失败: %s" % activate.error)
 
 	var p := engine.get_state().get_player(first_actor)
 	var active: Array = p.get("employees", [])
 	var reserve: Array = p.get("reserve_employees", [])
-	if not active.has("recruiter"):
-		return Result.failure("重组后应激活待命员工 recruiter")
-	if reserve.has("recruiter"):
-		return Result.failure("重组后 recruiter 不应仍在待命区")
+	if not active.has("recruiting_girl"):
+		return Result.failure("重组后应激活待命员工 recruiting_girl")
+	if reserve.has("recruiting_girl"):
+		return Result.failure("重组后 recruiting_girl 不应仍在待命区")
 
-	# 3) 推进到下一次 Working / Recruit：招聘员应提供额外次数（共 2 次）
+	# 3) 推进到下一次 Working / Recruit：人力资源专员应提供额外次数（共 2 次）
 	var to_working2 := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 50)
 	if not to_working2.ok:
 		return to_working2
@@ -80,7 +80,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if not rr1.ok:
 		return Result.failure("有招聘员时第一次招聘失败: %s" % rr1.error)
 
-	var rr2 := engine.execute_command(Command.create("recruit", first_actor, {"employee_type": "marketer"}))
+	var rr2 := engine.execute_command(Command.create("recruit", first_actor, {"employee_type": "marketing_trainee"}))
 	if not rr2.ok:
 		return Result.failure("有招聘员时第二次招聘失败: %s" % rr2.error)
 

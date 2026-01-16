@@ -1,0 +1,236 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/components/modal_panel/reserve_card_selection_modal.gd" id="1_reserve_modal"]
+
+[node name="ReserveCardSelectionModal" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+visible = false
+mouse_filter = 0
+script = ExtResource("1_reserve_modal")
+
+[node name="Overlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0, 0, 0, 0.72)
+
+[node name="Panel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(720, 440)
+layout_mode = 0
+mouse_filter = 0
+
+[node name="MarginContainer" type="MarginContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/TitleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+text = "选择银行储备卡"
+horizontal_alignment = 1
+
+[node name="ContentHost" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="SelectionLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "请选择一张储备卡（其他玩家不应看到）"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="CardsRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="CardButton0" type="Button" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow"]
+custom_minimum_size = Vector2(0, 260)
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+text = ""
+
+[node name="Content" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0/Content"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="ImagePlaceholder" type="ColorRect" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0/Content/VBoxContainer"]
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+color = Color(0, 0, 0, 0.08)
+
+[node name="CardTitle" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0/Content/VBoxContainer"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 14
+text = "储备卡"
+horizontal_alignment = 1
+
+[node name="CardDesc" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0/Content/VBoxContainer"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 12
+text = "图片占位\n起始现金：+$0\nCEO 卡槽：0"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="CardButton1" type="Button" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow"]
+custom_minimum_size = Vector2(0, 260)
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+text = ""
+
+[node name="Content" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1/Content"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="ImagePlaceholder" type="ColorRect" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1/Content/VBoxContainer"]
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+color = Color(0, 0, 0, 0.08)
+
+[node name="CardTitle" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1/Content/VBoxContainer"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 14
+text = "储备卡"
+horizontal_alignment = 1
+
+[node name="CardDesc" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1/Content/VBoxContainer"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 12
+text = "图片占位\n起始现金：+$0\nCEO 卡槽：0"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="CardButton2" type="Button" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow"]
+custom_minimum_size = Vector2(0, 260)
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+text = ""
+
+[node name="Content" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2/Content"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="ImagePlaceholder" type="ColorRect" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2/Content/VBoxContainer"]
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+color = Color(0, 0, 0, 0.08)
+
+[node name="CardTitle" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2/Content/VBoxContainer"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 14
+text = "储备卡"
+horizontal_alignment = 1
+
+[node name="CardDesc" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2/Content/VBoxContainer"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 12
+text = "图片占位\n起始现金：+$0\nCEO 卡槽：0"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="ButtonRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 10
+
+[node name="CancelButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ButtonRow"]
+custom_minimum_size = Vector2(120, 38)
+layout_mode = 2
+text = "关闭"
+
+[node name="ConfirmButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ButtonRow"]
+custom_minimum_size = Vector2(120, 38)
+layout_mode = 2
+text = "确认选择"
+
+[node name="HintLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.7, 0.7, 0.75, 1)
+text = "确认后不可更改"
+horizontal_alignment = 1
+autowrap_mode = 2

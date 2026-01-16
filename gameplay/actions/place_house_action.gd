@@ -218,6 +218,7 @@ func _build_map_context(state: GameState) -> Dictionary:
 		"houses": state.map.houses,
 		"restaurants": state.map.restaurants,
 		"drink_sources": state.map.get("drink_sources", []),
+		"marketing_placements": state.map.get("marketing_placements", {}),
 	}
 
 # 辅助方法：获取建筑件注册表（优先使用注入的 modules/*/content/pieces）

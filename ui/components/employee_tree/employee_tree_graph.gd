@@ -54,11 +54,13 @@ func rebuild_from_registry() -> void:
 		id_set[id] = true
 
 	var entry_ids: Array[String] = []
+	var role_by_id: Dictionary = {}
 	for id in ids:
 		var def_val = EmployeeRegistryClass.get_def(id)
 		if not (def_val is EmployeeDefClass):
 			continue
 		var def: EmployeeDef = def_val
+		role_by_id[id] = str(def.get_role())
 		if def.is_entry_level():
 			entry_ids.append(id)
 
@@ -76,7 +78,7 @@ func rebuild_from_registry() -> void:
 
 	_edges_in = _build_edges_in(_edges_out)
 
-	var layout: Dictionary = LayoutClass.layout(ids, _edges_out, entry_ids, NODE_SIZE, LAYER_SPACING, NODE_SPACING_Y)
+	var layout: Dictionary = LayoutClass.layout(ids, _edges_out, entry_ids, role_by_id, NODE_SIZE, LAYER_SPACING, NODE_SPACING_Y)
 	_positions = layout.get("positions", {}) if layout.get("positions", {}) is Dictionary else {}
 
 	var bounds_val = layout.get("bounds", null)

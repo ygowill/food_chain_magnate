@@ -35,12 +35,12 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 
 	# 2) 给玩家添加 1 名在岗员工（从池取卡，保持守恒）
 	state = engine.get_state()
-	var take := StateUpdaterClass.take_from_pool(state, "new_business_dev", 1)
+	var take := StateUpdaterClass.take_from_pool(state, "new_business_developer", 1)
 	if not take.ok:
-		return Result.failure("从员工池取出 new_business_dev 失败: %s" % take.error)
-	var add := StateUpdaterClass.add_employee(state, actor, "new_business_dev", false)
+		return Result.failure("从员工池取出 new_business_developer 失败: %s" % take.error)
+	var add := StateUpdaterClass.add_employee(state, actor, "new_business_developer", false)
 	if not add.ok:
-		return Result.failure("添加 new_business_dev 失败: %s" % add.error)
+		return Result.failure("添加 new_business_developer 失败: %s" % add.error)
 
 	# 2.1) 不允许覆盖饮品进货点
 	var sources_val = state.map.get("drink_sources", null)

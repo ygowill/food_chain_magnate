@@ -20,7 +20,6 @@ var _info_label: Label = null
 var _module_checkboxes: Dictionary = {}  # module_id -> CheckBox
 var _player_name_edits: Array[LineEdit] = []
 var _player_color_options: Array[OptionButton] = []
-var _reserve_card_options: Array[OptionButton] = []
 
 var _available_modules: Dictionary = {}  # module_id -> ModuleManifest
 var _game_config: GameConfig = null
@@ -66,13 +65,17 @@ func _on_start_pressed() -> void:
 
 	_apply_module_selection_to_globals()
 	_apply_player_profiles_to_globals()
-	_apply_reserve_card_selection_to_globals()
 	Globals.save_settings()
 
 	GameLog.info("GameSetup", "开始游戏 - 玩家数: %d, 种子: %d" % [
 		Globals.player_count,
 		Globals.random_seed
 	])
+
+	# 初始化新游戏（生成地图/模块装配）可能耗时：提前显示加载遮罩
+	if SceneManager != null and SceneManager.has_method("show_loading"):
+		SceneManager.show_loading("正在开始新游戏...")
+		await get_tree().process_frame
 
 	# 进入游戏场景
 	Globals.set_current_game_engine(null)
@@ -119,7 +122,7 @@ func _ensure_extra_tabs() -> void:
 	reserve_page.name = "ReservePage"
 	_extra_tabs.add_child(reserve_page)
 	_extra_tabs.set_tab_title(_extra_tabs.get_tab_count() - 1, "储备卡")
-	_reserve_container = _build_scroll_section(reserve_page, "每位玩家选择一张银行储备卡（规则：秘密选择；此处为同屏配置）")
+	_reserve_container = _build_scroll_section(reserve_page, "银行储备卡将在进入游戏后由每位玩家秘密选择（全员完成后才进入起始餐厅放置）")
 
 	_info_label = Label.new()
 	_info_label.name = "InfoLabel"
@@ -254,50 +257,27 @@ func _rebuild_reserve_rows() -> void:
 
 	for child in _reserve_container.get_children():
 		child.queue_free()
-	_reserve_card_options.clear()
 
 	var cards: Array[Dictionary] = []
-	var default_selected := 0
 	if _game_config != null:
 		cards = _game_config.build_reserve_cards()
-		default_selected = int(_game_config.player_reserve_card_selected)
 	else:
 		cards = [
 			{"type": 5, "cash": 50, "ceo_slots": 2},
 			{"type": 10, "cash": 100, "ceo_slots": 3},
 			{"type": 20, "cash": 150, "ceo_slots": 4},
 		]
-		default_selected = 1
 
-	var count := int(player_count_spinbox.value)
-	for pid in range(count):
-		var row := HBoxContainer.new()
-		row.alignment = BoxContainer.ALIGNMENT_CENTER
-		row.add_theme_constant_override("separation", 10)
-		_reserve_container.add_child(row)
-
+	# 设置界面仅展示“有哪些储备卡”，实际选择在进入游戏后通过强制弹窗完成（秘密选择）。
+	for i in range(cards.size()):
+		var c: Dictionary = cards[i]
+		var t: int = int(c.get("type", 0))
+		var cash: int = int(c.get("cash", 0))
+		var slots: int = int(c.get("ceo_slots", 0))
 		var label := Label.new()
-		label.text = "玩家 %d" % (pid + 1)
-		label.custom_minimum_size = Vector2(70, 0)
-		row.add_child(label)
-
-		var opt := OptionButton.new()
-		opt.custom_minimum_size = Vector2(360, 0)
-		for i in range(cards.size()):
-			var c: Dictionary = cards[i]
-			var t: int = int(c.get("type", 0))
-			var cash: int = int(c.get("cash", 0))
-			var slots: int = int(c.get("ceo_slots", 0))
-			opt.add_item("类型 %d：+$%d，CEO 卡槽=%d" % [t, cash, slots])
-
-		var selected := default_selected
-		if Globals.reserve_card_selected_by_player.size() == count:
-			selected = int(Globals.reserve_card_selected_by_player[pid])
-		selected = clamp(selected, 0, max(0, cards.size() - 1))
-		opt.select(selected)
-
-		row.add_child(opt)
-		_reserve_card_options.append(opt)
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD
+		label.text = "类型 %d：+$%d，CEO 卡槽=%d" % [t, cash, slots]
+		_reserve_container.add_child(label)
 
 func _apply_module_selection_to_globals() -> void:
 	var requested: Array[String] = GameDefaultsClass.build_default_enabled_modules_v2()
@@ -314,13 +294,3 @@ func _apply_player_profiles_to_globals() -> void:
 			Globals.set_player_name(pid, str(_player_name_edits[pid].text))
 		if pid < _player_color_options.size() and is_instance_valid(_player_color_options[pid]):
 			Globals.set_player_color_index(pid, int(_player_color_options[pid].selected))
-
-func _apply_reserve_card_selection_to_globals() -> void:
-	var count := int(player_count_spinbox.value)
-	var out: Array[int] = []
-	for pid in range(count):
-		if pid < _reserve_card_options.size() and is_instance_valid(_reserve_card_options[pid]):
-			out.append(int(_reserve_card_options[pid].selected))
-		else:
-			out.append(0)
-	Globals.reserve_card_selected_by_player = out

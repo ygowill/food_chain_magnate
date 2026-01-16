@@ -91,7 +91,8 @@ static func run(player_count: int = 2, seed_val: int = 334455) -> Result:
 		"board_number": 5,
 		"product": "soda",
 		"duration": 1,
-		"position": [2, 2],
+		# board #5 is 3x2; avoid overlapping the road cell at (2,3)
+		"position": [2, 1],
 	})
 	var r2 := engine2.execute_command(cmd2)
 	if not r2.ok:

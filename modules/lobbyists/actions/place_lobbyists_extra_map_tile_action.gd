@@ -5,9 +5,12 @@ const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
+const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
+const PlacementConflictRegistryClass = preload("res://core/rules/placement_conflict_registry.gd")
 
 const MODULE_ID := "lobbyists"
 const EXTRA_TILE_PENDING_KEY := "lobbyists_extra_tile_pending"
+const CONFLICT_ID_OFFRAMP_CONNECTION := "rural_marketeers:offramp_connection"
 
 func _init() -> void:
 	action_id = "place_lobbyists_extra_map_tile"
@@ -172,34 +175,22 @@ func _check_edge_conflicts(state: GameState, attach_board_pos: Vector2i, side: S
 				edge_cells.append(attach_board_pos * MapUtilsClass.TILE_SIZE + Vector2i(MapUtilsClass.TILE_SIZE - 1, ly))
 
 	# airplane
-	if state.map.has("marketing_placements") and (state.map["marketing_placements"] is Dictionary):
-		var mp: Dictionary = state.map["marketing_placements"]
-		for k in mp.keys():
-			var v = mp.get(k, null)
-			if not (v is Dictionary):
-				continue
-			var d: Dictionary = v
-			if str(d.get("type", "")) != "airplane":
-				continue
-			var wp = d.get("world_pos", null)
-			if not (wp is Vector2i):
-				continue
-			if edge_cells.has(wp):
-				return Result.failure("该边缘包含 airplane，禁止扩边: %s" % str(side))
+	var airplane_conflict := MarketingPlacementQueryClass.has_type_in_world_positions(state, "airplane", edge_cells)
+	if not airplane_conflict.ok:
+		return airplane_conflict
+	if bool(airplane_conflict.value):
+		return Result.failure("该边缘包含 airplane，禁止扩边: %s" % str(side))
 
 	# offramp（若 rural_marketeers 模块存在，则其 connection cell 在 map 中）
-	if state.map.has("rural_marketeers_offramps") and (state.map["rural_marketeers_offramps"] is Array):
-		var arr: Array = state.map["rural_marketeers_offramps"]
-		for i in range(arr.size()):
-			var p_val = arr[i]
-			if not (p_val is Dictionary):
-				continue
-			var p: Dictionary = p_val
-			var pos_val = p.get("pos", null)
-			if not (pos_val is Vector2i):
-				continue
-			if edge_cells.has(pos_val):
-				return Result.failure("该边缘包含 offramp，禁止扩边: %s" % str(side))
+	for wp in edge_cells:
+		if not (wp is Vector2i):
+			continue
+		var conflicts_read := PlacementConflictRegistryClass.get_conflicts_at_world_pos(state, wp, {"action": action_id, "purpose": "expand_edge"})
+		if not conflicts_read.ok:
+			return conflicts_read
+		var conflicts: Array = conflicts_read.value
+		if conflicts.has(CONFLICT_ID_OFFRAMP_CONNECTION):
+			return Result.failure("该边缘包含 offramp，禁止扩边: %s" % str(side))
 
 	return Result.success()
 
@@ -211,4 +202,3 @@ func _offset_for_side(side: String) -> Vector2i:
 	if side == "W":
 		return Vector2i(-1, 0)
 	return Vector2i(1, 0)
-

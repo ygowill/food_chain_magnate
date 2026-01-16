@@ -38,17 +38,18 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	state.sub_phase = "Marketing"
 
 	# 给玩家0 添加一张在岗营销员
-	if int(state.employee_pool.get("marketer", 0)) <= 0:
-		return Result.failure("employee_pool 中没有 marketer")
-	state.employee_pool["marketer"] = int(state.employee_pool.get("marketer", 0)) - 1
-	state.players[0]["employees"].append("marketer")
+	if int(state.employee_pool.get("marketing_trainee", 0)) <= 0:
+		return Result.failure("employee_pool 中没有 marketing_trainee")
+	state.employee_pool["marketing_trainee"] = int(state.employee_pool.get("marketing_trainee", 0)) - 1
+	state.players[0]["employees"].append("marketing_trainee")
 
 	var cmd := Command.create("initiate_marketing", 0, {
-		"employee_type": "marketer",
+		"employee_type": "marketing_trainee",
 		"board_number": 11,
 		"product": "burger",
 		"duration": 1,
-		"position": [2, 1],
+		# board #11 is 3x2, so anchor must not overlap the road row (y=2)
+		"position": [2, 0],
 	})
 	var r := engine.execute_command(cmd)
 	if not r.ok:

@@ -70,6 +70,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		"houses": state.map.houses,
 		"restaurants": state.map.restaurants,
 		"drink_sources": state.map.get("drink_sources", []),
+		"marketing_placements": state.map.get("marketing_placements", {}),
 	}
 	var piece_registry := PieceRegistryClass.get_all_defs()
 	var validate := PlacementValidatorClass.validate_placement(map_ctx, "park", anchor_pos, rotation, piece_registry, {})

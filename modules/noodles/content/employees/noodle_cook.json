@@ -1,5 +1,5 @@
 {
-  "id": "noodles_cook",
+  "id": "noodle_cook",
   "name": "面条厨师",
   "description": "生产6个面条",
   "salary": true,
@@ -11,7 +11,7 @@
     "value": 0
   },
   "train_to": [
-    "noodles_chef"
+    "noodle_chef"
   ],
   "train_capacity": 0,
   "tags": [

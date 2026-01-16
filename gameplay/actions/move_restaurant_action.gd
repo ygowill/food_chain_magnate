@@ -234,6 +234,7 @@ func _build_map_context(state: GameState) -> Dictionary:
 		"houses": state.map.houses,
 		"restaurants": state.map.restaurants,
 		"drink_sources": state.map.get("drink_sources", []),
+		"marketing_placements": state.map.get("marketing_placements", {}),
 	}
 
 func _get_piece_registry() -> Dictionary:

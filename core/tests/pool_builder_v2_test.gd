@@ -23,8 +23,8 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("2p state.rules.one_x_employee_copies 缺失或类型错误（期望 int）")
 	if int(state2.rules["one_x_employee_copies"]) != 1:
 		return Result.failure("2p one_x_employee_copies 应为 1，实际: %d" % int(state2.rules["one_x_employee_copies"]))
-	if int(state2.employee_pool.get("recruiter", 0)) != 12:
-		return Result.failure("2p recruiter 池数量应为 12，实际: %d" % int(state2.employee_pool.get("recruiter", 0)))
+	if int(state2.employee_pool.get("recruiting_girl", 0)) != 12:
+		return Result.failure("2p recruiting_girl 池数量应为 12，实际: %d" % int(state2.employee_pool.get("recruiting_girl", 0)))
 	if int(state2.employee_pool.get("cfo", 0)) != 1:
 		return Result.failure("2p cfo(one_x) 池数量应为 1，实际: %d" % int(state2.employee_pool.get("cfo", 0)))
 	if state2.employee_pool.has("ceo"):

@@ -23,7 +23,7 @@
   "mandatory": false,
   "pool": {
     "type": "fixed",
-    "count": 12
+    "count": 6
   },
   "produces": {
     "food_type": "burger",

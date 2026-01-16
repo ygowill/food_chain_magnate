@@ -1,6 +1,6 @@
 {
-  "id": "recruiter",
-  "name": "招聘专员",
+  "id": "recruiting_girl",
+  "name": "人力资源专员",
   "description": "招聘一名员工",
   "salary": false,
   "unique": false,

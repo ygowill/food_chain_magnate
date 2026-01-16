@@ -9,6 +9,7 @@ const MilestoneDefClass = preload("res://core/data/milestone_def.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
+const MapUtilsClass = preload("res://core/map/map_utils.gd")
 
 static func apply(action: ActionExecutor, state: GameState, command: Command) -> Result:
 	var player_id: int = command.actor
@@ -32,10 +33,29 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 		return world_pos_result
 	var world_pos: Vector2i = world_pos_result.value
 
+	var rotation_result := action.optional_int_param(command, "rotation", 0)
+	if not rotation_result.ok:
+		return rotation_result
+	var rotation: int = int(rotation_result.value)
+	if not MapUtilsClass.VALID_ROTATIONS.has(rotation):
+		return Result.failure("rotation 非法（期望 0/90/180/270），实际: %d" % rotation)
+
 	var def = MarketingRegistryClass.get_def(board_number)
 	if def == null:
 		return Result.failure("未知的营销板件编号: %d" % board_number)
 	var marketing_type := str(def.type)
+
+	var footprint_size := Vector2i.ONE
+	if def is MarketingDef:
+		footprint_size = (def as MarketingDef).footprint_size
+	elif def.has_method("get"):
+		var fs = def.get("footprint_size")
+		if fs is Vector2i:
+			footprint_size = fs
+
+	var rotated_size := footprint_size
+	if rotation == 90 or rotation == 270:
+		rotated_size = Vector2i(footprint_size.y, footprint_size.x)
 
 	var emp_def = EmployeeRegistryClass.get_def(employee_type)
 	if emp_def == null:
@@ -117,7 +137,7 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 			return axis_result
 		axis = axis_result.value
 		if axis.is_empty():
-			axis = _infer_airplane_axis(state, world_pos)
+			axis = _infer_airplane_axis(state, world_pos, rotated_size)
 		if axis != "row" and axis != "col":
 			return Result.failure("飞机缺少 axis（row/col）")
 		var tile_pos: Vector2i = MapUtils.world_to_tile(world_pos).board_pos
@@ -131,6 +151,8 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 		"employee_type": employee_type,
 		"product": product,
 		"world_pos": world_pos,
+		"rotation": rotation,
+		"footprint_size": footprint_size,
 		"remaining_duration": effective_duration,
 		"axis": axis,
 		"tile_index": tile_index,
@@ -147,6 +169,8 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 		"owner": player_id,
 		"product": product,
 		"world_pos": world_pos,
+		"rotation": rotation,
+		"footprint_size": footprint_size,
 		"remaining_duration": effective_duration,
 		"axis": axis,
 		"tile_index": tile_index,
@@ -171,7 +195,8 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 		"product": product,
 		"duration": duration,
 		"remaining_duration": effective_duration,
-		"world_pos": world_pos
+		"world_pos": world_pos,
+		"rotation": rotation,
 	})
 	if not ms.ok:
 		result.with_warning("里程碑触发失败(InitiateMarketing): %s" % ms.error)
@@ -179,13 +204,18 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 	result.with_warnings(warnings)
 	return result
 
-static func _infer_airplane_axis(state: GameState, pos: Vector2i) -> String:
+static func _infer_airplane_axis(state: GameState, pos: Vector2i, size: Vector2i) -> String:
 	# 默认：左右边缘 -> row（横飞），上下边缘 -> col（竖飞）
+	# 语义：基于“整条边贴边”判断；若同时贴两条边（角落），保持旧优先级：先 row 后 col。
 	var minp := MapRuntimeClass.get_world_min(state)
 	var maxp := MapRuntimeClass.get_world_max(state)
-	if pos.x == minp.x or pos.x == maxp.x:
+	var left := pos.x
+	var right := pos.x + size.x - 1
+	var top := pos.y
+	var bottom := pos.y + size.y - 1
+	if left == minp.x or right == maxp.x:
 		return "row"
-	if pos.y == minp.y or pos.y == maxp.y:
+	if top == minp.y or bottom == maxp.y:
 		return "col"
 	return ""
 
@@ -198,3 +228,4 @@ static func _is_employee_marketeer(emp_def: EmployeeDef) -> bool:
 		if t is String and str(t).begins_with("use:marketing:"):
 			return true
 	return false
+

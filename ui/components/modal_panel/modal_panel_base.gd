@@ -57,10 +57,18 @@ func set_confirm_enabled(enabled: bool) -> void:
 		confirm_button.disabled = not enabled
 
 func open(covered_rect: Rect2) -> void:
-	position = covered_rect.position
-	size = covered_rect.size
+	# 兼容：首次进入场景时部分 UI 节点尺寸尚未布局完成，可能传入 size=0 的 rect；
+	# 此时使用 viewport 尺寸兜底，避免遮罩显示在左上角且无法覆盖。
+	var rect := covered_rect
+	if rect.size.x <= 1.0 or rect.size.y <= 1.0:
+		rect = Rect2(Vector2.ZERO, get_viewport_rect().size)
+
+	position = rect.position
+	size = rect.size
 	visible = true
 	_set_peek(false)
+	# 首次打开时尽量立即居中（避免“第一帧在左上角”），再用 deferred 做二次校正（确保布局完成）。
+	_center_panel()
 	call_deferred("_center_panel")
 
 func close() -> void:
@@ -68,14 +76,19 @@ func close() -> void:
 	visible = false
 
 func _center_panel() -> void:
-	if not is_instance_valid(panel):
+	var p: Control = panel
+	if not is_instance_valid(p):
+		var n = get_node_or_null("Panel")
+		if n is Control:
+			p = n
+	if not is_instance_valid(p):
 		return
 
-	var panel_size := panel.size
+	var panel_size := p.size
 	if panel_size == Vector2.ZERO:
-		panel_size = panel.get_combined_minimum_size()
+		panel_size = p.get_combined_minimum_size()
 	if panel_size == Vector2.ZERO:
-		panel_size = panel.custom_minimum_size
+		panel_size = p.custom_minimum_size
 	if panel_size == Vector2.ZERO:
 		panel_size = Vector2(720, 520)
 
@@ -86,13 +99,13 @@ func _center_panel() -> void:
 		var clamped := Vector2(min(panel_size.x, max_w), min(panel_size.y, max_h))
 		if clamped != panel_size:
 			panel_size = clamped
-			panel.size = panel_size
+			p.size = panel_size
 
 	var x := (size.x - panel_size.x) / 2.0
 	var y := (size.y - panel_size.y) / 2.0
 	x = clampf(x, 12.0, maxf(12.0, size.x - panel_size.x - 12.0))
 	y = clampf(y, 12.0, maxf(12.0, size.y - panel_size.y - 12.0))
-	panel.position = Vector2(x, y)
+	p.position = Vector2(x, y)
 
 func _input(event: InputEvent) -> void:
 	if not visible:

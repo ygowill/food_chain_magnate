@@ -32,6 +32,8 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	# Setup：必须先放置至少 1 个餐厅才能确认结束
 	if state.phase == "Setup":
+		if str(state.sub_phase) == "ReserveCards":
+			return Result.failure("请先选择银行储备卡")
 		var player := state.get_player(command.actor)
 		if not player.has("restaurants") or not (player["restaurants"] is Array):
 			return Result.failure("Setup: player.restaurants 缺失或类型错误（期望 Array）")

@@ -8,14 +8,24 @@ const Phase = PhaseDefsClass.Phase
 const HookType = PhaseManagerClass.HookType
 
 const NIGHT_SHIFT_MANAGER_ID := "night_shift_manager"
+const WORKING_EMPLOYEE_MULTIPLIERS_KEY := "working_employee_multipliers"
+const STATE_SCHEMA_ID_WORKING_EMPLOYEE_MULTIPLIERS := "night_shift_managers:round_state_int_keys:working_employee_multipliers"
 
 func register(registrar) -> Result:
-	return registrar.register_phase_hook(
+	var r: Result = registrar.register_phase_hook(
 		Phase.WORKING,
 		HookType.BEFORE_ENTER,
 		Callable(self, "_on_working_before_enter"),
 		100
 	)
+	if not r.ok:
+		return r
+
+	r = registrar.register_round_state_int_key_dict_schema(STATE_SCHEMA_ID_WORKING_EMPLOYEE_MULTIPLIERS, [WORKING_EMPLOYEE_MULTIPLIERS_KEY], 100)
+	if not r.ok:
+		return r
+
+	return Result.success()
 
 func _on_working_before_enter(state: GameState) -> Result:
 	if state == null:
@@ -68,5 +78,5 @@ func _on_working_before_enter(state: GameState) -> Result:
 		if not per_player.is_empty():
 			all[pid] = per_player
 
-	state.round_state["working_employee_multipliers"] = all
+	state.round_state[WORKING_EMPLOYEE_MULTIPLIERS_KEY] = all
 	return Result.success()

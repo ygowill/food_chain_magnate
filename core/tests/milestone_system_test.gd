@@ -123,15 +123,15 @@ static func _test_train_triggers_first_train(seed_val: int) -> Result:
 		return Result.failure("添加 trainer 失败: %s" % add_trainer.error)
 
 	# 准备待命员工（from_employee）
-	var take_from := StateUpdaterClass.take_from_pool(state, "recruiter", 1)
+	var take_from := StateUpdaterClass.take_from_pool(state, "recruiting_girl", 1)
 	if not take_from.ok:
-		return Result.failure("从员工池取出 recruiter 失败: %s" % take_from.error)
-	var add_from := StateUpdaterClass.add_employee(state, 0, "recruiter", true)
+		return Result.failure("从员工池取出 recruiting_girl 失败: %s" % take_from.error)
+	var add_from := StateUpdaterClass.add_employee(state, 0, "recruiting_girl", true)
 	if not add_from.ok:
-		return Result.failure("添加 recruiter 到待命区失败: %s" % add_from.error)
+		return Result.failure("添加 recruiting_girl 到待命区失败: %s" % add_from.error)
 
 	var cmd := Command.create("train", 0, {
-		"from_employee": "recruiter",
+		"from_employee": "recruiting_girl",
 		"to_employee": "trainer",
 	})
 	var r := engine.execute_command(cmd)
@@ -220,7 +220,7 @@ static func _test_demand_marked_triggers_first_burger_marketed(seed_val: int) ->
 		"board_number": 11,
 		"type": "billboard",
 		"owner": 0,
-		"employee_type": "marketer",
+		"employee_type": "marketing_trainee",
 		"product": "burger",
 		"world_pos": Vector2i(1, 2),
 		"remaining_duration": 1,
@@ -238,10 +238,10 @@ static func _test_demand_marked_triggers_first_burger_marketed(seed_val: int) ->
 		"axis": "",
 		"tile_index": -1,
 	}
-	var take := StateUpdaterClass.take_from_pool(state, "marketer", 1)
+	var take := StateUpdaterClass.take_from_pool(state, "marketing_trainee", 1)
 	if not take.ok:
-		return Result.failure("从员工池取出 marketer 失败: %s" % take.error)
-	state.players[0]["busy_marketers"] = ["marketer"]
+		return Result.failure("从员工池取出 marketing_trainee 失败: %s" % take.error)
+	state.players[0]["busy_marketers"] = ["marketing_trainee"]
 
 	state.phase = "Payday"
 	state.sub_phase = ""
@@ -276,7 +276,7 @@ static func _test_recruit_triggers_first_hire_3(seed_val: int) -> Result:
 	if not add_hr.ok:
 		return Result.failure("添加 hr_director 失败: %s" % add_hr.error)
 
-	var r1 := engine.execute_command(Command.create("recruit", 0, {"employee_type": "recruiter"}))
+	var r1 := engine.execute_command(Command.create("recruit", 0, {"employee_type": "recruiting_girl"}))
 	if not r1.ok:
 		return Result.failure("recruit #1 失败: %s" % r1.error)
 	var r2 := engine.execute_command(Command.create("recruit", 0, {"employee_type": "trainer"}))
@@ -345,6 +345,11 @@ static func _test_cash_reached_triggers_first_have_20_and_100(seed_val: int) -> 
 
 	var state := engine.get_state()
 	_force_turn_order(state)
+
+	# 测试中可能触发“银行第一次破产”（例如 pay100 超过初始银行余额），需先伪造储备卡选择。
+	for pid in range(state.players.size()):
+		state.players[pid]["reserve_card_selected"] = 0
+		state.players[pid]["reserve_card_revealed"] = false
 
 	# 先给玩家0一个 CFO，验证 first_have_100 的 ban_card 会自动移除
 	var take_cfo := StateUpdaterClass.take_from_pool(state, "cfo", 1)
@@ -436,22 +441,22 @@ static func _test_chain_train_restricted_without_milestone(seed_val: int) -> Res
 		if not add_trainer.ok:
 			return Result.failure("添加 trainer 失败: %s" % add_trainer.error)
 
-	# 待命 recruiter
-	var take_from := StateUpdaterClass.take_from_pool(state, "recruiter", 1)
+	# 待命 recruiting_girl
+	var take_from := StateUpdaterClass.take_from_pool(state, "recruiting_girl", 1)
 	if not take_from.ok:
-		return Result.failure("从员工池取出 recruiter 失败: %s" % take_from.error)
-	var add_from := StateUpdaterClass.add_employee(state, 0, "recruiter", true)
+		return Result.failure("从员工池取出 recruiting_girl 失败: %s" % take_from.error)
+	var add_from := StateUpdaterClass.add_employee(state, 0, "recruiting_girl", true)
 	if not add_from.ok:
-		return Result.failure("添加 recruiter 到待命区失败: %s" % add_from.error)
+		return Result.failure("添加 recruiting_girl 到待命区失败: %s" % add_from.error)
 
-	var t1 := engine.execute_command(Command.create("train", 0, {"from_employee": "recruiter", "to_employee": "trainer"}))
+	var t1 := engine.execute_command(Command.create("train", 0, {"from_employee": "recruiting_girl", "to_employee": "trainer"}))
 	if not t1.ok:
 		return Result.failure("train #1 失败: %s" % t1.error)
 
 	# 默认：不能继续培训本子阶段新培训得到的员工（trainer）
-	var t2 := engine.execute_command(Command.create("train", 0, {"from_employee": "trainer", "to_employee": "recruiter"}))
+	var t2 := engine.execute_command(Command.create("train", 0, {"from_employee": "trainer", "to_employee": "recruiting_girl"}))
 	if t2.ok:
-		return Result.failure("默认规则下不应允许链式培训（trainer -> recruiter）")
+		return Result.failure("默认规则下不应允许链式培训（trainer -> recruiting_girl）")
 
 	return Result.success()
 
@@ -475,17 +480,17 @@ static func _test_chain_train_allowed_with_milestone(seed_val: int) -> Result:
 		if not add_trainer.ok:
 			return Result.failure("添加 trainer 失败: %s" % add_trainer.error)
 
-	var take_from := StateUpdaterClass.take_from_pool(state, "recruiter", 1)
+	var take_from := StateUpdaterClass.take_from_pool(state, "recruiting_girl", 1)
 	if not take_from.ok:
-		return Result.failure("从员工池取出 recruiter 失败: %s" % take_from.error)
-	var add_from := StateUpdaterClass.add_employee(state, 0, "recruiter", true)
+		return Result.failure("从员工池取出 recruiting_girl 失败: %s" % take_from.error)
+	var add_from := StateUpdaterClass.add_employee(state, 0, "recruiting_girl", true)
 	if not add_from.ok:
-		return Result.failure("添加 recruiter 到待命区失败: %s" % add_from.error)
+		return Result.failure("添加 recruiting_girl 到待命区失败: %s" % add_from.error)
 
-	var t1 := engine.execute_command(Command.create("train", 0, {"from_employee": "recruiter", "to_employee": "trainer"}))
+	var t1 := engine.execute_command(Command.create("train", 0, {"from_employee": "recruiting_girl", "to_employee": "trainer"}))
 	if not t1.ok:
 		return Result.failure("train #1 失败: %s" % t1.error)
-	var t2 := engine.execute_command(Command.create("train", 0, {"from_employee": "trainer", "to_employee": "recruiter"}))
+	var t2 := engine.execute_command(Command.create("train", 0, {"from_employee": "trainer", "to_employee": "recruiting_girl"}))
 	if not t2.ok:
 		return Result.failure("multi_trainer_on_one=true 时应允许链式培训，实际: %s" % t2.error)
 

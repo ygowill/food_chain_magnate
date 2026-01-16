@@ -6,6 +6,9 @@ const EmployeeActionTestClass = preload("res://core/tests/employee_action_test.g
 const RestructuringOverflowPenaltyTestClass = preload("res://core/tests/restructuring_overflow_penalty_test.gd")
 const RecruitOnCreditRulesTestClass = preload("res://core/tests/recruit_on_credit_rules_test.gd")
 const PaydaySalaryTestClass = preload("res://core/tests/payday_salary_test.gd")
+const GameStateFactoryStartingInventoryTestClass = preload("res://core/tests/game_state_factory_starting_inventory_test.gd")
+const PaydaySalaryTokenEligibilityTestClass = preload("res://core/tests/payday_salary_token_eligibility_test.gd")
+const CallbackResultContractTestClass = preload("res://core/tests/callback_result_contract_test.gd")
 const InitialCompanyTestClass = preload("res://core/tests/initial_company_test.gd")
 const MandatoryActionsTestClass = preload("res://core/tests/mandatory_actions_test.gd")
 const ProduceFoodTestClass = preload("res://core/tests/produce_food_test.gd")
@@ -18,6 +21,8 @@ const MoveRestaurantRulesTestClass = preload("res://core/tests/move_restaurant_r
 const FailFastParsingTestClass = preload("res://core/tests/fail_fast_parsing_test.gd")
 const ArchiveFailFastTestClass = preload("res://core/tests/archive_fail_fast_test.gd")
 const ArchiveFileRoundtripTestClass = preload("res://core/tests/archive_file_roundtrip_test.gd")
+const StateSchemaArchiveLoadTestClass = preload("res://core/tests/state_schema_archive_load_test.gd")
+const StateSchemaUnregisteredModuleKeyWarningTestClass = preload("res://core/tests/state_schema_unregistered_module_key_warning_test.gd")
 const InvariantsFailFastTestClass = preload("res://core/tests/invariants_fail_fast_test.gd")
 const RoundStateFailFastTestClass = preload("res://core/tests/round_state_fail_fast_test.gd")
 const CleanupInventoryTestClass = preload("res://core/tests/cleanup_inventory_test.gd")
@@ -35,6 +40,7 @@ const VisualCatalogLoaderV2TestClass = preload("res://core/tests/visual_catalog_
 const ModulePlanBuilderV2TestClass = preload("res://core/tests/module_plan_builder_v2_test.gd")
 const ModuleSystemV2BootstrapTestClass = preload("res://core/tests/module_system_v2_bootstrap_test.gd")
 const SettlementRegistryV2TestClass = preload("res://core/tests/settlement_registry_v2_test.gd")
+const DinnertimeDemandRegistryV2TestClass = preload("res://core/tests/dinnertime_demand_registry_v2_test.gd")
 const DinnertimeRoutePurchaseRegistryV2TestClass = preload("res://core/tests/dinnertime_route_purchase_registry_v2_test.gd")
 const EffectRegistryV2TestClass = preload("res://core/tests/effect_registry_v2_test.gd")
 const PoolBuilderV2TestClass = preload("res://core/tests/pool_builder_v2_test.gd")
@@ -128,6 +134,18 @@ func _run_all() -> int:
 			"fn": func() -> Result: return PaydaySalaryTestClass.run(2, 12345),
 		},
 		{
+			"name": "GameStateFactoryStartingInventoryTest",
+			"fn": func() -> Result: return GameStateFactoryStartingInventoryTestClass.run(),
+		},
+		{
+			"name": "PaydaySalaryTokenEligibilityTest",
+			"fn": func() -> Result: return PaydaySalaryTokenEligibilityTestClass.run(),
+		},
+		{
+			"name": "CallbackResultContractTest",
+			"fn": func() -> Result: return CallbackResultContractTestClass.run(),
+		},
+		{
 			"name": "InitialCompanyTest",
 			"fn": func() -> Result: return InitialCompanyTestClass.run(2, 12345),
 		},
@@ -174,6 +192,14 @@ func _run_all() -> int:
 		{
 			"name": "ArchiveFileRoundtripTest",
 			"fn": func() -> Result: return ArchiveFileRoundtripTestClass.run(2, 12345),
+		},
+		{
+			"name": "StateSchemaArchiveLoadTest",
+			"fn": func() -> Result: return StateSchemaArchiveLoadTestClass.run(2, 12345),
+		},
+		{
+			"name": "StateSchemaUnregisteredModuleKeyWarningTest",
+			"fn": func() -> Result: return StateSchemaUnregisteredModuleKeyWarningTestClass.run(2, 12345),
 		},
 		{
 			"name": "InvariantsFailFastTest",
@@ -242,6 +268,10 @@ func _run_all() -> int:
 				{
 					"name": "SettlementRegistryV2Test",
 					"fn": func() -> Result: return SettlementRegistryV2TestClass.run(2, 12345),
+				},
+				{
+					"name": "DinnertimeDemandRegistryV2Test",
+					"fn": func() -> Result: return DinnertimeDemandRegistryV2TestClass.run(2, 12345),
 				},
 				{
 					"name": "DinnertimeRoutePurchaseRegistryV2Test",

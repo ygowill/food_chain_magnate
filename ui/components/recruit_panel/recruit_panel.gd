@@ -254,7 +254,7 @@ class PoolCard extends PanelContainer:
 	var _recruit_btn: Button
 	var _role_color: ColorRect
 
-	const EmployeeDefClass = preload("res://core/data/employee_def.gd")
+	const EmployeeRoleColorsClass = preload("res://ui/visual/employee_role_colors.gd")
 
 	func _ready() -> void:
 		_build_ui()
@@ -303,7 +303,7 @@ class PoolCard extends PanelContainer:
 
 		if _role_color != null:
 			var role: String = str(employee_def.get("role", "special"))
-			_role_color.color = Color(EmployeeDefClass.role_to_color_hex(role))
+			_role_color.color = Color(EmployeeRoleColorsClass.role_to_color_hex(role))
 
 		if _count_label != null:
 			_count_label.text = "库存: %d" % pool_count

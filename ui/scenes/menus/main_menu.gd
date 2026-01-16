@@ -68,9 +68,16 @@ func _on_save_load_selected(path: String) -> void:
 	if EventBus != null:
 		EventBus.clear_history()
 
+	# 存档读取可能耗时：先显示加载遮罩，避免“卡住”的观感
+	if SceneManager != null and SceneManager.has_method("show_loading"):
+		SceneManager.show_loading("正在载入存档...")
+		await get_tree().process_frame
+
 	var engine := GameEngine.new()
 	var load_result: Result = engine.load_from_file(path)
 	if not load_result.ok:
+		if SceneManager != null and SceneManager.has_method("hide_loading"):
+			SceneManager.hide_loading()
 		_show_message("载入失败", "存档读取失败：\n%s" % load_result.error)
 		return
 

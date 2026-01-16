@@ -167,6 +167,7 @@ func _validate_coffee_shop_placement(state: GameState, world_anchor: Vector2i) -
 		"houses": state.map.houses,
 		"restaurants": state.map.restaurants,
 		"drink_sources": state.map.get("drink_sources", []),
+		"marketing_placements": state.map.get("marketing_placements", {}),
 	}
 
 	var r := PlacementValidatorClass.validate_placement(map_ctx, PIECE_ID, world_anchor, 0, piece_defs, {})

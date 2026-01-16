@@ -3,26 +3,37 @@
 class_name MarketingPanel
 extends Control
 
-signal marketing_requested(employee_type: String, board_number: int, position: Vector2i, product: String, duration: int, axis: String)
+signal marketing_requested(employee_type: String, board_number: int, position: Vector2i, product: String, duration: int, rotation: int, axis: String)
 signal cancelled()
 signal right_panel_footer_changed()
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
-@onready var type_container: HFlowContainer = $MarginContainer/VBoxContainer/TypeSection/TypeContainer
-@onready var marketer_option: OptionButton = $MarginContainer/VBoxContainer/MarketerSection/MarketerOption
-@onready var board_option: OptionButton = $MarginContainer/VBoxContainer/BoardSection/BoardOption
-@onready var product_option: OptionButton = $MarginContainer/VBoxContainer/ProductSection/ProductOption
-@onready var duration_spin: SpinBox = $MarginContainer/VBoxContainer/DurationSection/DurationSpin
-@onready var target_label: Label = $MarginContainer/VBoxContainer/TargetSection/TargetLabel
-@onready var range_info_label: Label = $MarginContainer/VBoxContainer/TargetSection/RangeInfoLabel
-@onready var error_label: Label = $MarginContainer/VBoxContainer/TargetSection/ErrorLabel
+@onready var type_container: Container = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TypeSection/TypeContainer
+@onready var marketer_option: OptionButton = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/MarketerSection/MarketerOption
+@onready var board_flow: Container = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/BoardSection/BoardFlow
+@onready var product_flow: Container = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ProductSection/ProductFlow
+@onready var duration_flow: Container = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/DurationSection/DurationFlow
+@onready var rot0_btn: Button = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow/Rot0Button
+@onready var rot90_btn: Button = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow/Rot90Button
+@onready var rot180_btn: Button = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow/Rot180Button
+@onready var rot270_btn: Button = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow/Rot270Button
+@onready var target_label: Label = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TargetSection/TargetLabel
+@onready var range_info_label: Label = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TargetSection/RangeInfoLabel
+@onready var error_label: Label = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TargetSection/ErrorLabel
 @onready var confirm_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/ConfirmButton
 @onready var cancel_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/CancelButton
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const MarketingBoardButtonClass = preload("res://ui/components/marketing_panel/marketing_board_button.gd")
 const MarketingTypeButtonClass = preload("res://ui/components/marketing_panel/marketing_type_button.gd")
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+
+# 营销面板内的产品图标目标尺寸（方形，居中）。
+const PRODUCT_ICON_SIZE := Vector2i(32, 32)
+# 营销类型按钮中的图标（板件图）使用统一的方形尺寸，避免不同贴图尺寸导致布局/观感异常。
+const MARKETING_TYPE_ICON_SIZE := Vector2i(36, 36)
 
 # 营销类型定义（用于 UI 文案与范围提示；具体可用性由外部传入）
 const MARKETING_TYPES: Array[Dictionary] = [
@@ -43,6 +54,7 @@ var _selected_employee_type: String = ""
 var _selected_board_number: int = 0
 var _selected_product: String = ""
 var _selected_duration: int = 1
+var _selected_rotation: int = 0
 var _selected_axis: String = ""
 
 var _type_buttons: Dictionary = {}  # type_id -> marketing_type_button instance
@@ -51,13 +63,27 @@ var _marketer_max_duration_by_id: Dictionary = {}  # employee_type -> max_durati
 var _map_callback: Callable  # 用于请求地图选择
 var _visual_modules: Array[String] = []
 var _skin = null
+var _product_icon_cache: Dictionary = {} # product_id -> Texture2D
+var _marketing_type_icon_cache: Dictionary = {} # marketing_type -> Texture2D
+
+var _board_button_group: ButtonGroup = ButtonGroup.new()
+var _product_button_group: ButtonGroup = ButtonGroup.new()
+var _duration_button_group: ButtonGroup = ButtonGroup.new()
+var _rotation_button_group: ButtonGroup = ButtonGroup.new()
+
+var _board_button_by_number: Dictionary = {} # int -> MarketingBoardButton
+var _product_button_by_id: Dictionary = {} # String -> Button
+var _duration_button_by_value: Dictionary = {} # int -> Button
 
 func set_visual_modules(modules: Array[String]) -> void:
 	_visual_modules = Array(modules, TYPE_STRING, "", null)
 	_skin = null
+	_product_icon_cache.clear()
+	_marketing_type_icon_cache.clear()
 	_ensure_skin()
 	_rebuild_type_buttons()
-	_rebuild_product_options()
+	_rebuild_product_buttons()
+	_rebuild_board_buttons()
 
 func set_embedded_in_right_panel(embedded: bool) -> void:
 	var row = get_node_or_null("MarginContainer/VBoxContainer/ButtonRow")
@@ -89,17 +115,15 @@ func _ready() -> void:
 
 	if marketer_option != null:
 		marketer_option.item_selected.connect(_on_marketer_selected)
-	if board_option != null:
-		board_option.item_selected.connect(_on_board_selected)
-	if product_option != null:
-		product_option.item_selected.connect(_on_product_selected)
-	if duration_spin != null:
-		duration_spin.value_changed.connect(_on_duration_changed)
 
-	_rebuild_product_options()
+	_board_button_group.allow_unpress = false
+	_product_button_group.allow_unpress = false
+
+	_setup_rotation_buttons()
+	_rebuild_product_buttons()
 	_rebuild_type_buttons()
 	_rebuild_marketer_options()
-	_rebuild_board_options()
+	_rebuild_board_buttons()
 	_update_target_display()
 	_update_confirm_state()
 
@@ -112,7 +136,7 @@ func set_available_marketers(marketers: Array[Dictionary]) -> void:
 func set_available_boards(boards_by_type: Dictionary) -> void:
 	_available_boards_by_type = boards_by_type.duplicate(true)
 	_rebuild_type_buttons()
-	_rebuild_board_options()
+	_rebuild_board_buttons()
 	_update_confirm_state()
 
 func set_map_selection_callback(callback: Callable) -> void:
@@ -132,6 +156,7 @@ func clear_selection() -> void:
 	_selected_employee_type = ""
 	_selected_board_number = 0
 	_selected_duration = 1
+	_selected_rotation = 0
 	_selected_axis = ""
 	_marketer_max_duration_by_id.clear()
 	clear_error()
@@ -144,14 +169,9 @@ func clear_selection() -> void:
 		marketer_option.clear()
 		marketer_option.disabled = true
 
-	if board_option != null:
-		board_option.clear()
-		board_option.disabled = true
-
-	if duration_spin != null:
-		duration_spin.min_value = 1
-		duration_spin.max_value = 1
-		duration_spin.value = 1
+	_clear_board_buttons()
+	_clear_duration_buttons()
+	_sync_rotation_buttons()
 
 	_update_target_display()
 	_update_confirm_state()
@@ -206,13 +226,12 @@ func _on_type_selected(type_id: String) -> void:
 			btn.set_selected(tid == type_id)
 
 	_rebuild_marketer_options()
-	_rebuild_board_options()
+	_rebuild_board_buttons()
 	_update_target_display()
 	_update_confirm_state()
 
 	# 请求地图选择
-	if _map_callback.is_valid():
-		_map_callback.call(_selected_type, _selected_employee_type)
+	_request_map_selection_refresh()
 
 func _rebuild_marketer_options() -> void:
 	_selected_employee_type = ""
@@ -225,6 +244,7 @@ func _rebuild_marketer_options() -> void:
 
 	if _selected_type.is_empty():
 		marketer_option.disabled = true
+		_clear_duration_buttons()
 		return
 
 	var counts := {}
@@ -260,6 +280,7 @@ func _rebuild_marketer_options() -> void:
 		_apply_selected_marketer(0)
 	else:
 		marketer_option.disabled = true
+		_clear_duration_buttons()
 
 func _apply_selected_marketer(index: int) -> void:
 	if marketer_option == null:
@@ -274,23 +295,197 @@ func _apply_selected_marketer(index: int) -> void:
 	if max_duration <= 0:
 		max_duration = 1
 
-	if duration_spin != null:
-		duration_spin.min_value = 1
-		duration_spin.max_value = max_duration
-		duration_spin.value = float(max_duration)
-
 	_selected_duration = max_duration
+	_rebuild_duration_buttons(max_duration)
 
-func _rebuild_board_options() -> void:
-	_selected_board_number = 0
+func _setup_rotation_buttons() -> void:
+	_rotation_button_group.allow_unpress = false
 
-	if board_option == null:
+	var pairs := [
+		{"btn": rot0_btn, "rot": 0},
+		{"btn": rot90_btn, "rot": 90},
+		{"btn": rot180_btn, "rot": 180},
+		{"btn": rot270_btn, "rot": 270},
+	]
+
+	for item in pairs:
+		var btn = item.get("btn", null)
+		if not (btn is Button):
+			continue
+		var b: Button = btn
+		b.toggle_mode = true
+		b.button_group = _rotation_button_group
+		b.focus_mode = Control.FOCUS_NONE
+		var rot := int(item.get("rot", 0))
+		b.pressed.connect(func():
+			_on_rotation_selected(rot)
+		)
+
+	_sync_rotation_buttons()
+
+func _sync_rotation_buttons() -> void:
+	# Rotation buttons are optional in tests/older scenes; guard everything.
+	var rot := _selected_rotation
+	if rot == 0 and rot0_btn != null:
+		rot0_btn.button_pressed = true
+	elif rot == 90 and rot90_btn != null:
+		rot90_btn.button_pressed = true
+	elif rot == 180 and rot180_btn != null:
+		rot180_btn.button_pressed = true
+	elif rot == 270 and rot270_btn != null:
+		rot270_btn.button_pressed = true
+	elif rot0_btn != null:
+		_selected_rotation = 0
+		rot0_btn.button_pressed = true
+
+func _on_rotation_selected(rotation: int) -> void:
+	var rot := int(rotation)
+	if not rot in [0, 90, 180, 270]:
+		rot = 0
+	if _selected_rotation == rot:
 		return
 
-	board_option.clear()
+	_selected_rotation = rot
+	_selected_target = Vector2i(-1, -1)
+	_selected_axis = ""
+	_update_target_display()
+	clear_error()
+
+	for bn in _board_button_by_number.keys():
+		var b = _board_button_by_number.get(bn, null)
+		if is_instance_valid(b) and b.has_method("set_board_rotation"):
+			b.call("set_board_rotation", _selected_rotation)
+		elif is_instance_valid(b) and b is Control:
+			(b as Control).queue_redraw()
+
+	_sync_board_button_previews()
+	_update_confirm_state()
+	_request_map_selection_refresh()
+
+func _request_map_selection_refresh() -> void:
+	if not _map_callback.is_valid():
+		return
+	if _selected_type.is_empty():
+		return
+	_map_callback.call(_selected_type, _selected_employee_type, _selected_board_number, _selected_rotation)
+
+func _get_board_base_size(board_number: int) -> Vector2i:
+	if board_number <= 0:
+		return Vector2i.ONE
+	if not MarketingRegistryClass.is_loaded():
+		return Vector2i.ONE
+	var def = MarketingRegistryClass.get_def(board_number)
+	if def == null:
+		return Vector2i.ONE
+	if def is MarketingDef:
+		var fs: Vector2i = (def as MarketingDef).footprint_size
+		return fs if fs != Vector2i.ZERO else Vector2i.ONE
+	if def.has_method("get"):
+		var fs_val = def.get("footprint_size")
+		if fs_val is Vector2i:
+			var v: Vector2i = fs_val
+			return v if v != Vector2i.ZERO else Vector2i.ONE
+	return Vector2i.ONE
+
+func _set_selected_board_number(board_number: int) -> void:
+	var bn := int(board_number)
+	if bn <= 0:
+		return
+	_selected_board_number = bn
+
+	_selected_target = Vector2i(-1, -1)
+	_selected_axis = ""
+	_update_target_display()
+	clear_error()
+
+	# Ensure the corresponding button is pressed (rebuild/select paths both use this).
+	if _board_button_by_number.has(bn):
+		var btn = _board_button_by_number[bn]
+		if is_instance_valid(btn) and btn is Button:
+			(btn as Button).button_pressed = true
+
+	_sync_board_button_previews()
+	_update_confirm_state()
+	_request_map_selection_refresh()
+
+func _sync_board_button_previews() -> void:
+	var product_tex := _get_product_icon_texture(_selected_product)
+	for bn in _board_button_by_number.keys():
+		var btn = _board_button_by_number.get(bn, null)
+		if not is_instance_valid(btn):
+			continue
+		if btn.has_method("set_preview"):
+			btn.call("set_preview", _selected_rotation, product_tex, int(bn) == _selected_board_number)
+		else:
+			# Fallback for earlier versions of the button script.
+			if btn is Object:
+				btn.set("board_rotation", _selected_rotation)
+				btn.set("product_texture", product_tex)
+				btn.set("show_product", int(bn) == _selected_board_number)
+			if btn is Control:
+				(btn as Control).queue_redraw()
+
+func _clear_board_buttons() -> void:
+	_board_button_by_number.clear()
+	if board_flow == null:
+		return
+	for ch in board_flow.get_children():
+		if is_instance_valid(ch):
+			ch.queue_free()
+
+func _clear_product_buttons() -> void:
+	_product_button_by_id.clear()
+	if product_flow == null:
+		return
+	for ch in product_flow.get_children():
+		if is_instance_valid(ch):
+			ch.queue_free()
+
+func _clear_duration_buttons() -> void:
+	_duration_button_by_value.clear()
+	if duration_flow == null:
+		return
+	for ch in duration_flow.get_children():
+		if is_instance_valid(ch):
+			ch.queue_free()
+
+func _rebuild_duration_buttons(max_duration: int) -> void:
+	_clear_duration_buttons()
+
+	if duration_flow == null:
+		return
+
+	var max_d := maxi(1, int(max_duration))
+	_duration_button_group.allow_unpress = false
+
+	for d in range(1, max_d + 1):
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(40, 32)
+		btn.toggle_mode = true
+		btn.button_group = _duration_button_group
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.text = str(d)
+		btn.pressed.connect(func():
+			_on_duration_button_pressed(d)
+		)
+		duration_flow.add_child(btn)
+		_duration_button_by_value[d] = btn
+
+	var to_select := clampi(_selected_duration, 1, max_d)
+	_selected_duration = to_select
+	if _duration_button_by_value.has(to_select):
+		var b: Button = _duration_button_by_value[to_select]
+		b.button_pressed = true
+		_on_duration_button_pressed(to_select)
+
+func _rebuild_board_buttons() -> void:
+	_clear_board_buttons()
+	_selected_board_number = 0
+
+	if board_flow == null:
+		return
 
 	if _selected_type.is_empty():
-		board_option.disabled = true
 		return
 
 	var boards_any = _available_boards_by_type.get(_selected_type, [])
@@ -305,42 +500,50 @@ func _rebuild_board_options() -> void:
 					boards.append(int(f))
 	boards.sort()
 
+	_ensure_skin()
+	var type_tex: Texture2D = null
+	if _skin != null and _skin.has_method("get_marketing_texture"):
+		type_tex = _skin.get_marketing_texture(_selected_type)
+
 	for bn in boards:
-		board_option.add_item("#%d" % bn)
-		var idx := board_option.get_item_count() - 1
-		board_option.set_item_metadata(idx, bn)
+		var btn = MarketingBoardButtonClass.new()
+		btn.custom_minimum_size = Vector2(108, 84)
+		btn.toggle_mode = true
+		btn.button_group = _board_button_group
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.board_number = bn
+		btn.base_size = _get_board_base_size(bn)
+		btn.board_rotation = _selected_rotation
+		btn.marketing_texture = type_tex
+		btn.product_texture = _get_product_icon_texture(_selected_product)
+		btn.show_product = false
+		btn.tooltip_text = "#%d  %dx%d" % [bn, btn.get_rotated_size().x, btn.get_rotated_size().y]
+		btn.pressed.connect(func():
+			_on_board_button_pressed(bn)
+		)
+		board_flow.add_child(btn)
+		_board_button_by_number[bn] = btn
 
-	if board_option.get_item_count() > 0:
-		board_option.disabled = false
-		board_option.select(0)
-		_apply_selected_board(0)
-	else:
-		board_option.disabled = true
+	if not boards.is_empty():
+		_set_selected_board_number(boards[0])
 
-func _apply_selected_board(index: int) -> void:
-	if board_option == null:
+func _rebuild_product_buttons() -> void:
+	_clear_product_buttons()
+
+	if product_flow == null:
 		return
-	if index < 0 or index >= board_option.get_item_count():
-		return
-
-	var meta = board_option.get_item_metadata(index)
-	_selected_board_number = int(meta)
-
-func _rebuild_product_options() -> void:
-	_selected_product = ""
-
-	if product_option == null:
-		return
-
-	product_option.clear()
-
 	if not ProductRegistryClass.is_loaded():
-		product_option.disabled = true
 		return
 
 	_ensure_skin()
 
-	for pid in ProductRegistryClass.get_all_ids():
+	var ids: Array[String] = []
+	for pid_val in ProductRegistryClass.get_all_ids():
+		ids.append(str(pid_val))
+	ids.sort()
+
+	var first_pid := ""
+	for pid in ids:
 		var def_val = ProductRegistryClass.get_def(pid)
 		if def_val != null and def_val.has_method("has_tag") and def_val.has_tag("no_marketing"):
 			continue
@@ -353,21 +556,32 @@ func _rebuild_product_options() -> void:
 			# 兜底：ProductDef 有字段 name
 			name = str(def_val.name)
 
-		var tex := _get_product_icon_texture(pid)
-		if tex != null:
-			product_option.add_icon_item(tex, name)
-		else:
-			product_option.add_item(name)
-		var idx := product_option.get_item_count() - 1
-		product_option.set_item_metadata(idx, pid)
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(44, 44)
+		btn.toggle_mode = true
+		btn.button_group = _product_button_group
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.icon = _get_product_icon_texture_scaled(pid)
+		btn.expand_icon = true
+		btn.text = ""
+		btn.tooltip_text = name
+		btn.set_meta("product_id", pid)
+		btn.pressed.connect(func():
+			_on_product_button_pressed(pid)
+		)
+		product_flow.add_child(btn)
+		_product_button_by_id[pid] = btn
+		if first_pid.is_empty():
+			first_pid = pid
 
-	if product_option.get_item_count() > 0:
-		product_option.disabled = false
-		product_option.select(0)
-		var meta = product_option.get_item_metadata(0)
-		_selected_product = str(meta)
-	else:
-		product_option.disabled = true
+	var to_select := _selected_product
+	if to_select.is_empty() or not _product_button_by_id.has(to_select):
+		to_select = first_pid
+	_selected_product = to_select
+	if not to_select.is_empty() and _product_button_by_id.has(to_select):
+		var b: Button = _product_button_by_id[to_select]
+		b.button_pressed = true
+		_on_product_button_pressed(to_select)
 
 func _ensure_skin() -> void:
 	if _skin != null:
@@ -391,13 +605,116 @@ func _get_product_icon_texture(product_id: String) -> Texture2D:
 		pid = "soda"
 	return _skin.get_product_icon_texture(pid)
 
-func _get_marketing_icon_texture(type_id: String) -> Texture2D:
-	if _skin == null or not _skin.has_method("get_marketing_texture"):
+func _get_product_icon_texture_scaled(product_id: String) -> Texture2D:
+	var pid := str(product_id)
+	if pid.is_empty():
 		return null
+
+	if _product_icon_cache.has(pid):
+		var cached = _product_icon_cache.get(pid, null)
+		return cached if cached is Texture2D else null
+
+	var base_tex := _get_product_icon_texture(pid)
+	var scaled := _scale_texture_to_square(base_tex, PRODUCT_ICON_SIZE)
+	_product_icon_cache[pid] = scaled
+	return scaled
+
+func _scale_texture_to_square(tex: Texture2D, target_size: Vector2i) -> Texture2D:
+	if tex == null:
+		return null
+
+	var tw := maxi(1, int(target_size.x))
+	var th := maxi(1, int(target_size.y))
+
+	var src_size: Vector2i = tex.get_size()
+	var sw := int(src_size.x)
+	var sh := int(src_size.y)
+	if sw <= 0 or sh <= 0:
+		return tex
+
+	# 只做缩小；避免小图被放大后发糊。
+	if sw <= tw and sh <= th:
+		return tex
+
+	var img := tex.get_image()
+	if img == null or img.is_empty():
+		return tex
+
+	if img.is_compressed():
+		# 修改像素前需解压，否则 resize 会失败。
+		img.decompress()
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+
+	var scale := minf(float(tw) / float(sw), float(th) / float(sh))
+	var new_w := maxi(1, int(round(float(sw) * scale)))
+	var new_h := maxi(1, int(round(float(sh) * scale)))
+
+	img.resize(new_w, new_h, Image.INTERPOLATE_LANCZOS)
+
+	var out := Image.create(tw, th, false, Image.FORMAT_RGBA8)
+	out.fill(Color(0, 0, 0, 0))
+	var dst := Vector2i(int((tw - new_w) / 2), int((th - new_h) / 2))
+	out.blit_rect(img, Rect2i(Vector2i.ZERO, Vector2i(new_w, new_h)), dst)
+
+	return ImageTexture.create_from_image(out)
+
+func _get_marketing_icon_texture(type_id: String) -> Texture2D:
 	var key := str(type_id)
 	if key.is_empty():
 		key = "default"
-	return _skin.get_marketing_texture(key)
+
+	if _marketing_type_icon_cache.has(key):
+		var cached = _marketing_type_icon_cache.get(key, null)
+		return cached if cached is Texture2D else null
+
+	if _skin == null or not _skin.has_method("get_marketing_texture"):
+		return null
+
+	var base_tex = _skin.get_marketing_texture(key)
+	var scaled := _scale_texture_to_square_cover(base_tex, MARKETING_TYPE_ICON_SIZE)
+	_marketing_type_icon_cache[key] = scaled
+	return scaled
+
+func _scale_texture_to_square_cover(tex: Texture2D, target_size: Vector2i) -> Texture2D:
+	if tex == null:
+		return null
+
+	var tw := maxi(1, int(target_size.x))
+	var th := maxi(1, int(target_size.y))
+
+	var src_size: Vector2i = tex.get_size()
+	var sw := int(src_size.x)
+	var sh := int(src_size.y)
+	if sw <= 0 or sh <= 0:
+		return tex
+
+	# 只做缩小；避免把小图放大后发糊（TextureRect 会在必要时自行放大）。
+	if sw <= tw and sh <= th:
+		return tex
+
+	var img := tex.get_image()
+	if img == null or img.is_empty():
+		return tex
+
+	if img.is_compressed():
+		img.decompress()
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+
+	# Cover：按较大的缩放比放大到至少覆盖目标尺寸，再居中裁切。
+	var scale := maxf(float(tw) / float(sw), float(th) / float(sh))
+	var new_w := maxi(tw, int(ceil(float(sw) * scale)))
+	var new_h := maxi(th, int(ceil(float(sh) * scale)))
+
+	img.resize(new_w, new_h, Image.INTERPOLATE_LANCZOS)
+
+	var x0 := maxi(0, int((new_w - tw) / 2))
+	var y0 := maxi(0, int((new_h - th) / 2))
+	var out := Image.create(tw, th, false, Image.FORMAT_RGBA8)
+	out.fill(Color(0, 0, 0, 0))
+	out.blit_rect(img, Rect2i(Vector2i(x0, y0), Vector2i(tw, th)), Vector2i.ZERO)
+	return ImageTexture.create_from_image(out)
 
 func _on_marketer_selected(index: int) -> void:
 	_apply_selected_marketer(index)
@@ -406,24 +723,19 @@ func _on_marketer_selected(index: int) -> void:
 	_update_target_display()
 	_update_confirm_state()
 	clear_error()
-	if _map_callback.is_valid() and not _selected_type.is_empty():
-		_map_callback.call(_selected_type, _selected_employee_type)
+	_request_map_selection_refresh()
 
-func _on_board_selected(index: int) -> void:
-	_apply_selected_board(index)
+func _on_board_button_pressed(board_number: int) -> void:
+	_set_selected_board_number(board_number)
+
+func _on_product_button_pressed(product_id: String) -> void:
+	_selected_product = str(product_id)
+	_sync_board_button_previews()
 	_update_confirm_state()
 	clear_error()
 
-func _on_product_selected(index: int) -> void:
-	if product_option == null:
-		return
-	var meta = product_option.get_item_metadata(index)
-	_selected_product = str(meta)
-	_update_confirm_state()
-	clear_error()
-
-func _on_duration_changed(value: float) -> void:
-	_selected_duration = int(value)
+func _on_duration_button_pressed(duration: int) -> void:
+	_selected_duration = int(duration)
 	_update_confirm_state()
 	clear_error()
 
@@ -559,6 +871,7 @@ func _on_confirm_pressed() -> void:
 		_selected_target,
 		_selected_product,
 		_selected_duration,
+		_selected_rotation,
 		_selected_axis
 	)
 

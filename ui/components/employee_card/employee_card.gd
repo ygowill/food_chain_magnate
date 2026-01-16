@@ -3,7 +3,7 @@
 class_name EmployeeCard
 extends PanelContainer
 
-const EmployeeDefClass = preload("res://core/data/employee_def.gd")
+const EmployeeRoleColorsClass = preload("res://ui/visual/employee_role_colors.gd")
 
 signal card_clicked(employee_id: String)
 signal card_drag_started(employee_id: String)
@@ -89,6 +89,10 @@ func _build_ui() -> void:
 		_build_compact_layout(vbox)
 
 	_update_style()
+	# setup() 可能在节点入树前被调用（例如升级路线树的节点构建），此时 _ready 尚未执行，
+	# _update_display() 会因 _name_label 为空而提前 return。这里在 UI 组件创建完后补一次刷新。
+	if not _employee_def.is_empty():
+		_update_display()
 	queue_redraw()
 
 func _build_compact_layout(vbox: VBoxContainer) -> void:
@@ -263,7 +267,7 @@ func _update_display() -> void:
 	_name_label.text = name
 
 	var role: String = str(_employee_def.get("role", "special"))
-	var color: Color = Color(EmployeeDefClass.role_to_color_hex(role))
+	var color: Color = Color(EmployeeRoleColorsClass.role_to_color_hex(role))
 	if _role_color_rect != null:
 		_role_color_rect.color = color
 
@@ -336,7 +340,7 @@ func _update_style() -> void:
 	var style := StyleBoxFlat.new()
 
 	var role: String = str(_employee_def.get("role", "special"))
-	var base_color: Color = Color(EmployeeDefClass.role_to_color_hex(role))
+	var base_color: Color = Color(EmployeeRoleColorsClass.role_to_color_hex(role))
 
 	if _busy:
 		style.bg_color = Color(0.3, 0.3, 0.35, 0.55)
@@ -371,7 +375,7 @@ func _draw() -> void:
 		return
 
 	var role: String = str(_employee_def.get("role", "special"))
-	var base_color: Color = Color(EmployeeDefClass.role_to_color_hex(role))
+	var base_color: Color = Color(EmployeeRoleColorsClass.role_to_color_hex(role))
 
 	var tri := 24.0 if variant == CardVariant.FULL else 18.0
 	var points := PackedVector2Array([Vector2(0, 0), Vector2(tri, 0), Vector2(0, tri)])

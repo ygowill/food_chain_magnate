@@ -1,6 +1,6 @@
 {
   "id": "junior_vice_president",
-  "name": "初级副总裁",
+  "name": "总经理助理",
   "description": "",
   "salary": true,
   "unique": false,
@@ -14,7 +14,8 @@
     "local_manager",
     "vice_president",
     "discount_manager",
-    "recruiting_manager"
+    "recruiting_manager",
+    "coach"
   ],
   "train_capacity": 0,
   "tags": [],

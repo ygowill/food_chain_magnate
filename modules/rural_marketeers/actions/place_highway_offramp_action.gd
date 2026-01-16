@@ -4,6 +4,8 @@ extends ActionExecutor
 const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
+const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
+const ParseHelpers = preload("res://core/state/serialization/parse_helpers.gd")
 
 const MODULE_ID := "rural_marketeers"
 const OFFRAMP_PENDING_KEY := "rural_marketeers_offramp_pending"
@@ -54,10 +56,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not (pos_val is Array) or (pos_val as Array).size() != 2:
 		return Result.failure("position 格式错误（期望 [x,y]）")
 	var arr: Array = pos_val
-	var x_read := _parse_int_value(arr[0], "position[0]")
+	var x_read := ParseHelpers.parse_int(arr[0], "position[0]")
 	if not x_read.ok:
 		return x_read
-	var y_read := _parse_int_value(arr[1], "position[1]")
+	var y_read := ParseHelpers.parse_int(arr[1], "position[1]")
 	if not y_read.ok:
 		return y_read
 	var connect_pos := Vector2i(int(x_read.value), int(y_read.value))
@@ -77,7 +79,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("该边缘格子已存在 offramp: %s" % str(connect_pos))
 
 	# 与 airplane 冲突：同一边缘格子不可同时放置
-	if _has_airplane_at_pos(state, connect_pos):
+	var airplane_read := _has_airplane_at_pos(state, connect_pos)
+	if not airplane_read.ok:
+		return airplane_read
+	if bool(airplane_read.value):
 		return Result.failure("offramp 不能放置在已有飞机营销的格子: %s" % str(connect_pos))
 
 	# 必须连接到地图内道路：连接格子必须存在“朝外”的道路段
@@ -216,16 +221,6 @@ static func _create_empty_cell(tile_origin: Vector2i) -> Dictionary:
 		"blocked": false
 	}
 
-static func _parse_int_value(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
-		return Result.success(int(f))
-	return Result.failure("%s 类型错误（期望整数）" % path)
-
 static func _infer_side_from_edge_and_road(state: GameState, pos: Vector2i) -> Result:
 	var candidates: Array[String] = []
 	var minp := MapRuntimeClass.get_world_min(state)
@@ -307,23 +302,8 @@ static func _get_road_dirs_at(state: GameState, pos: Vector2i) -> Array[String]:
 	out.sort()
 	return out
 
-static func _has_airplane_at_pos(state: GameState, pos: Vector2i) -> bool:
-	if state == null or not (state.map is Dictionary):
-		return false
-	if not state.map.has("marketing_placements") or not (state.map["marketing_placements"] is Dictionary):
-		return false
-	var placements: Dictionary = state.map["marketing_placements"]
-	for k in placements.keys():
-		var p_val = placements[k]
-		if not (p_val is Dictionary):
-			continue
-		var p: Dictionary = p_val
-		if str(p.get("type", "")) != "airplane":
-			continue
-		var wp = p.get("world_pos", null)
-		if wp is Vector2i and wp == pos:
-			return true
-	return false
+static func _has_airplane_at_pos(state: GameState, pos: Vector2i) -> Result:
+	return MarketingPlacementQueryClass.has_type_at_world_pos(state, "airplane", pos)
 
 static func has_offramp_at_pos(state: GameState, pos: Vector2i) -> bool:
 	if state == null or not (state.map is Dictionary):
