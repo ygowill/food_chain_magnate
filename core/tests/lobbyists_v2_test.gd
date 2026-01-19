@@ -6,7 +6,9 @@ extends RefCounted
 
 const ModuleEntryClass = preload("res://modules/lobbyists/rules/entry.gd")
 const DinnertimeSettlementClass = preload("res://core/rules/phase/dinnertime_settlement.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count != 2:
@@ -178,7 +180,7 @@ static func _test_roadworks_distance_penalty_is_invoked(seed_val: int) -> Result
 		return Result.failure("初始化 Lobbyists 失败: %s" % init_r.error)
 
 	# 找到一段 >=3 的道路路径，并在路径中间放置一个 roadworks marker
-	var road_graph = MapRuntimeClass.get_road_graph(s)
+	var road_graph = RoadGraphCacheClass.get_road_graph(s)
 	if road_graph == null:
 		return Result.failure("道路图未初始化")
 	var pick := _pick_connected_road_path(s, road_graph)
@@ -304,7 +306,7 @@ static func _pick_connected_road_path(state: GameState, road_graph) -> Result:
 			var cell: Dictionary = cell_val
 			var segs = cell.get("road_segments", null)
 			if segs is Array and not (segs as Array).is_empty():
-				road_cells.append(MapRuntimeClass.index_to_world(state, Vector2i(ix, iy)))
+				road_cells.append(CoordsClass.index_to_world(state, Vector2i(ix, iy)))
 
 	for i in range(road_cells.size()):
 		var from_pos: Vector2i = road_cells[i]
@@ -357,9 +359,9 @@ static func _find_house_with_empty_neighbor(state: GameState) -> Result:
 			var pos: Vector2i = c
 			for off in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
 				var npos = pos + off
-				if not MapRuntimeClass.is_world_pos_in_grid(state, npos):
+				if not CoordsClass.is_world_pos_in_grid(state, npos):
 					continue
-				var cell: Dictionary = MapRuntimeClass.get_cell(state, npos)
+				var cell: Dictionary = CellsClass.get_cell(state, npos)
 				if bool(cell.get("blocked", false)):
 					continue
 				var s_val = cell.get("structure", null)
@@ -377,7 +379,7 @@ static func _inject_park_at_world_pos(state: GameState, pos: Vector2i) -> void:
 		return
 	if not state.map.has("cells") or not (state.map["cells"] is Array):
 		return
-	var idx := MapRuntimeClass.world_to_index(state, pos)
+	var idx := CoordsClass.world_to_index(state, pos)
 	var cells: Array = state.map["cells"]
 	if idx.y < 0 or idx.y >= cells.size():
 		return

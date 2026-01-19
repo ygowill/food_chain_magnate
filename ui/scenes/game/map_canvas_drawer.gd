@@ -61,11 +61,14 @@ static func draw(canvas) -> void:
 
 	_draw_ground_and_blocked(canvas, cell_size)
 	_draw_roads(canvas, cell_size)
+	# 先画板块边框（底层），避免盖住上层 piece（房屋/餐厅/营销等）。
+	_draw_tile_borders(canvas, cell_size)
 	_draw_drink_sources(canvas, cell_size)
 	_draw_structures(canvas, cell_size)
 	_draw_house_demands(canvas, cell_size)
 	_draw_marketing(canvas, cell_size)
-	_draw_tile_borders(canvas, cell_size)
+	# tile_id 文本属于调试信息，允许覆盖上层内容。
+	_draw_tile_id_labels(canvas, cell_size)
 	_draw_cell_highlights(canvas, cell_size)
 	_draw_structure_preview(canvas, cell_size)
 	_draw_selection(canvas, cell_size)
@@ -98,15 +101,20 @@ static func _is_scatter_rect_free(candidate: Rect2, taken: Array[Rect2], min_spa
 			return false
 	return true
 
-static func _find_scatter_rect(
-	rng: RandomNumberGenerator,
-	taken: Array[Rect2],
+static func _shuffle_rect2_array(rng: RandomNumberGenerator, arr: Array[Rect2]) -> void:
+	for i in range(arr.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp := arr[i]
+		arr[i] = arr[j]
+		arr[j] = tmp
+
+static func _build_demand_token_slots(
 	area: Rect2,
 	icon_size: float,
 	min_spacing: float,
-	fallback_index: int
-) -> Rect2:
-	var margin := maxf(2.0, min_spacing)
+	reserved: Array[Rect2]
+) -> Array[Rect2]:
+	var margin := maxf(1.0, min_spacing)
 	var min_x := area.position.x + margin
 	var min_y := area.position.y + margin
 	var max_x := area.position.x + area.size.x - icon_size - margin
@@ -116,24 +124,21 @@ static func _find_scatter_rect(
 	if max_y < min_y:
 		max_y = min_y
 
-	for _attempt in range(32):
-		# Center-biased sampling: triangular distribution peaks at 0.5.
-		var tx := (rng.randf() + rng.randf()) * 0.5
-		var ty := (rng.randf() + rng.randf()) * 0.5
-		var x := lerpf(min_x, max_x, tx)
-		var y := lerpf(min_y, max_y, ty)
-		var rect := Rect2(Vector2(x, y), Vector2(icon_size, icon_size))
-		if _is_scatter_rect_free(rect, taken, min_spacing):
-			return rect
+	var step := maxf(icon_size + min_spacing, 1.0)
+	var cols := maxi(1, int(floor(maxf(0.0, max_x - min_x) / step)) + 1)
+	var rows := maxi(1, int(floor(maxf(0.0, max_y - min_y) / step)) + 1)
 
-	var cols := maxi(1, int(floor(area.size.x / maxf(icon_size + min_spacing, 1.0))))
-	var col := int(fallback_index % cols)
-	var row := int(fallback_index / cols)
-	var x2 := min_x + float(col) * (icon_size + min_spacing)
-	var y2 := min_y + float(row) * (icon_size + min_spacing)
-	x2 = clampf(x2, min_x, max_x)
-	y2 = clampf(y2, min_y, max_y)
-	return Rect2(Vector2(x2, y2), Vector2(icon_size, icon_size))
+	var slots: Array[Rect2] = []
+	for row in range(rows):
+		for col in range(cols):
+			var x := min_x + float(col) * step
+			var y := min_y + float(row) * step
+			x = clampf(x, min_x, max_x)
+			y = clampf(y, min_y, max_y)
+			var rect := Rect2(Vector2(x, y), Vector2(icon_size, icon_size))
+			if _is_scatter_rect_free(rect, reserved, min_spacing):
+				slots.append(rect)
+	return slots
 
 static func _draw_cell_highlights(canvas, cell_size: int) -> void:
 	if canvas._highlighted_cells.is_empty():
@@ -245,11 +250,25 @@ static func _draw_roads(canvas, cell_size: int) -> void:
 			if segments.is_empty():
 				continue
 
+			# Bridge crossing tiles may store multiple independent segments in one cell.
+			# For visuals, if a bridge segment exists, only render bridge=True segments to avoid overlapping artifacts.
+			var has_bridge := false
+			for s_val in segments:
+				if s_val is Dictionary and bool(Dictionary(s_val).get("bridge", false)):
+					has_bridge = true
+					break
+			var segments_to_draw: Array = segments
+			if has_bridge:
+				segments_to_draw = []
+				for s_val in segments:
+					if s_val is Dictionary and bool(Dictionary(s_val).get("bridge", false)):
+						segments_to_draw.append(s_val)
+
 			var rect := Rect2(Vector2(x * cell_size, y * cell_size), Vector2(cell_size, cell_size))
 			var center := rect.position + rect.size * 0.5
 
-			for seg_index in range(segments.size()):
-				var seg_val = segments[seg_index]
+			for seg_index in range(segments_to_draw.size()):
+				var seg_val = segments_to_draw[seg_index]
 				if not (seg_val is Dictionary):
 					continue
 				var seg: Dictionary = seg_val
@@ -526,7 +545,16 @@ static func _draw_house_and_garden(canvas, cell_size: int, anchor: Vector2i, inf
 
 	# 贴图：花园围栏
 	if has_garden and garden_rect.size != Vector2.ZERO:
-		_draw_texture_aspect_fit(canvas, garden_tex, garden_rect, Color(1, 1, 1, 0.9 * alpha))
+		var mod := Color(1, 1, 1, 0.9 * alpha)
+		# garden_large.png is authored as a horizontal strip; rotate for vertical gardens (E/W).
+		if garden_rect.size.y > garden_rect.size.x:
+			var center := garden_rect.position + garden_rect.size * 0.5
+			var draw_size := Vector2(garden_rect.size.y, garden_rect.size.x)
+			canvas.draw_set_transform(center, deg_to_rad(90.0), Vector2.ONE)
+			_draw_texture_aspect_fit(canvas, garden_tex, Rect2(-draw_size * 0.5, draw_size), mod)
+			canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		else:
+			_draw_texture_aspect_fit(canvas, garden_tex, garden_rect, mod)
 
 	# 房屋 ID：右上角（仅房屋 2x2 区域）
 	var house_id: String = str(info.get("house_id", ""))
@@ -629,8 +657,9 @@ static func _draw_house_demands(canvas, cell_size: int) -> void:
 	if not canvas._map_data.has("houses") or not (canvas._map_data["houses"] is Dictionary):
 		return
 
-	var icon_size := float(cell_size) * 0.40
-	var min_spacing := float(cell_size) * 0.08
+	# Demand tokens: fixed size (no per-house shrinking); when demands change, we re-layout all tokens.
+	var icon_size := float(cell_size) * 0.90
+	var min_spacing := maxf(1.0, float(cell_size) * 0.04)
 
 	for anchor_val in canvas._structures_by_anchor.keys():
 		if not (anchor_val is Vector2i):
@@ -691,29 +720,35 @@ static func _draw_house_demands(canvas, cell_size: int) -> void:
 		if product_ids.is_empty():
 			continue
 		product_ids.sort()
-		var count: int = min(product_ids.size(), 6)
+		var draw_count: int = min(product_ids.size(), 6)
+		var draw_product_ids: Array[String] = product_ids.slice(0, draw_count)
 
+		# Seed depends on demand content so adding/removing demands repositions all tokens.
+		var demand_key := ",".join(product_ids)
 		var seed := _compute_demand_scatter_seed(canvas, house_id)
+		seed = int((seed ^ _hash_string_32(demand_key)) & 0x7FFFFFFF)
+
+		var reserved: Array[Rect2] = []
+		reserved.append(_compute_house_id_rect(cell_size, demand_area_rect))
+
+		var scatter_area_rect := demand_area_rect.grow(-float(cell_size) * 0.05)
+		var slots := _build_demand_token_slots(scatter_area_rect, icon_size, min_spacing, reserved)
+		if slots.size() < draw_count:
+			slots = _build_demand_token_slots(demand_area_rect, icon_size, min_spacing, reserved)
+		if slots.size() < draw_count:
+			continue
+
 		var rng := RandomNumberGenerator.new()
 		rng.seed = seed
 		rng.state = int(seed)
+		_shuffle_rect2_array(rng, slots)
 
-		var scatter_area_rect := demand_area_rect.grow(-float(cell_size) * 0.15)
-		if scatter_area_rect.size.x < icon_size or scatter_area_rect.size.y < icon_size:
-			scatter_area_rect = demand_area_rect
-
-		var taken: Array[Rect2] = []
-		if not house_id.is_empty():
-			taken.append(_compute_house_id_rect(cell_size, demand_area_rect))
-
-		for i in range(count):
-			var product_id: String = product_ids[i]
+		for i in range(draw_count):
+			var product_id: String = draw_product_ids[i]
 			if product_id.is_empty():
 				continue
 			var tex: Texture2D = canvas._skin.get_product_icon_texture(product_id)
-			var icon_rect := _find_scatter_rect(rng, taken, scatter_area_rect, icon_size, min_spacing, i)
-			taken.append(icon_rect)
-			_draw_texture_aspect_fit(canvas, tex, icon_rect, Color(1, 1, 1, 0.95))
+			_draw_texture_aspect_fit(canvas, tex, slots[i], Color(1, 1, 1, 0.95))
 
 static func _draw_selection(canvas, cell_size: int) -> void:
 	if canvas._is_valid_world_pos(canvas._selected_pos):
@@ -721,6 +756,11 @@ static func _draw_selection(canvas, cell_size: int) -> void:
 		var rect := Rect2(Vector2(v.x * cell_size, v.y * cell_size), Vector2(cell_size, cell_size))
 		canvas.draw_rect(rect, Color(0.2, 0.8, 1.0, 0.9), false, 2.0)
 	if canvas._is_valid_world_pos(canvas._hover_pos):
+		var show_hover := false
+		if Globals != null:
+			show_hover = bool(Globals.show_cell_hover_tooltip)
+		if not show_hover:
+			return
 		var v2 = canvas._world_to_view(canvas._hover_pos)
 		var rect2 := Rect2(Vector2(v2.x * cell_size, v2.y * cell_size), Vector2(cell_size, cell_size))
 		canvas.draw_rect(rect2, Color(1.0, 1.0, 1.0, 0.35), false, 1.0)
@@ -743,9 +783,46 @@ static func _draw_tile_borders(canvas, cell_size: int) -> void:
 	thickness = minf(thickness, float(cell_size))
 	var col := Color(0, 0, 0, 0.9)
 
+	for tp_val in tps:
+		if not (tp_val is Dictionary):
+			continue
+		var tp: Dictionary = tp_val
+		var board_pos_val = tp.get("board_pos", null)
+		if not (board_pos_val is Vector2i):
+			continue
+		var board_pos: Vector2i = board_pos_val
+		var world_min := board_pos * tile_size
+		var vmin = canvas._world_to_view(world_min)
+		var rect := Rect2(
+			Vector2(vmin.x * cell_size, vmin.y * cell_size),
+			Vector2(tile_size * cell_size, tile_size * cell_size)
+		)
+
+		# 向内黑边框（不应盖住上层 piece）
+		canvas.draw_rect(Rect2(rect.position, Vector2(rect.size.x, thickness)), col, true)
+		canvas.draw_rect(Rect2(rect.position + Vector2(0, rect.size.y - thickness), Vector2(rect.size.x, thickness)), col, true)
+		canvas.draw_rect(Rect2(rect.position, Vector2(thickness, rect.size.y)), col, true)
+		canvas.draw_rect(Rect2(rect.position + Vector2(rect.size.x - thickness, 0), Vector2(thickness, rect.size.y)), col, true)
+
+static func _draw_tile_id_labels(canvas, cell_size: int) -> void:
+	if canvas._map_data.is_empty():
+		return
+	var tps_val = canvas._map_data.get("tile_placements", null)
+	if not (tps_val is Array):
+		return
+	var tps: Array = tps_val
+	if tps.is_empty():
+		return
+
 	var show_tile_ids := false
 	if Globals != null:
 		show_tile_ids = bool(Globals.show_tile_ids)
+	if not show_tile_ids:
+		return
+
+	var tile_size := int(MapUtils.TILE_SIZE)
+	if tile_size <= 0:
+		return
 
 	var font: Font = ThemeDB.fallback_font
 	var font_size := maxi(10, int(round(float(cell_size) * 0.28)))
@@ -766,14 +843,6 @@ static func _draw_tile_borders(canvas, cell_size: int) -> void:
 			Vector2(tile_size * cell_size, tile_size * cell_size)
 		)
 
-		# 向内黑边框（允许覆盖道路/建筑）
-		canvas.draw_rect(Rect2(rect.position, Vector2(rect.size.x, thickness)), col, true)
-		canvas.draw_rect(Rect2(rect.position + Vector2(0, rect.size.y - thickness), Vector2(rect.size.x, thickness)), col, true)
-		canvas.draw_rect(Rect2(rect.position, Vector2(thickness, rect.size.y)), col, true)
-		canvas.draw_rect(Rect2(rect.position + Vector2(rect.size.x - thickness, 0), Vector2(thickness, rect.size.y)), col, true)
-
-		if not show_tile_ids:
-			continue
 		var tile_id := str(tp.get("tile_id", "")).strip_edges()
 		if tile_id.is_empty():
 			continue

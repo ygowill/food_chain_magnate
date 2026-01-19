@@ -7,7 +7,7 @@ class_name NewMilestonesCampaignManagerV2Test
 extends RefCounted
 
 const MarketingSettlementClass = preload("res://core/rules/phase/marketing_settlement.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 
 const MILESTONE_ID := "first_campaign_manager_used"
 
@@ -203,4 +203,4 @@ static func _apply_test_map(state: GameState) -> void:
 	}
 
 	state.players[0]["restaurants"] = ["rest_0"]
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)

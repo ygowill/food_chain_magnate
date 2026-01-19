@@ -85,7 +85,7 @@ static func rewind_to_command(
 		replay_state = step_result.value
 		all_warnings.append_array(step_result.warnings)
 
-		var auto_r := AutoAdvanceClass.drain(replay_state, phase_manager, action_registry)
+		var auto_r: Result = AutoAdvanceClass.drain(replay_state, phase_manager, action_registry)
 		if not auto_r.ok:
 			return Result.failure("回放命令 #%d 失败: %s" % [i, auto_r.error])
 		all_warnings.append_array(auto_r.warnings)
@@ -149,7 +149,7 @@ static func full_replay(
 		replay_state = step_result.value
 		all_warnings.append_array(step_result.warnings)
 
-		var auto_r := AutoAdvanceClass.drain(replay_state, phase_manager, action_registry)
+		var auto_r: Result = AutoAdvanceClass.drain(replay_state, phase_manager, action_registry)
 		if not auto_r.ok:
 			return Result.failure("重放命令 #%d 失败: %s" % [i, auto_r.error])
 		all_warnings.append_array(auto_r.warnings)

@@ -4,7 +4,8 @@ extends RefCounted
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const DrinksProcurementClass = preload("res://core/rules/drinks_procurement.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
 
 const RecruitPanelScene = preload("res://ui/components/recruit_panel/recruit_panel.tscn")
@@ -406,12 +407,15 @@ func show_milestone_panel() -> void:
 		_scene.add_child(milestone_panel)
 
 	var state = _scene.game_engine.get_state()
-	var current_player: Dictionary = state.get_current_player()
 
 	if milestone_panel.has_method("set_milestone_pool"):
 		milestone_panel.set_milestone_pool(state.milestone_pool)
-	if milestone_panel.has_method("set_player_milestones"):
-		milestone_panel.set_player_milestones(current_player.get("milestones", []))
+	if milestone_panel.has_method("set_players"):
+		milestone_panel.set_players(state.players)
+	if milestone_panel.has_method("set_global_view"):
+		milestone_panel.set_global_view(true)
+	if milestone_panel.has_method("set_rules"):
+		milestone_panel.set_rules(state.rules)
 
 	if _center_popup.is_valid():
 		_center_popup.call(milestone_panel)
@@ -562,7 +566,7 @@ func _preview_procurement_route(state: GameState, employee_type: String) -> void
 		return
 
 	var player_id := state.get_current_player_id()
-	var restaurant_ids := MapRuntimeClass.get_player_restaurants(state, player_id)
+	var restaurant_ids := StructuresClass.get_player_restaurants(state, player_id)
 	if restaurant_ids.is_empty():
 		_hide_procurement_route_overlay()
 		return
@@ -706,7 +710,7 @@ func _recompute_procurement_plan(state: GameState) -> void:
 	var emp_def: EmployeeDef = def_val
 
 	var player_id := state.get_current_player_id()
-	var restaurant_ids := MapRuntimeClass.get_player_restaurants(state, player_id)
+	var restaurant_ids := StructuresClass.get_player_restaurants(state, player_id)
 	if restaurant_ids.is_empty():
 		_procure_error = "你没有餐厅，无法采购饮料"
 		_hide_procurement_route_overlay()
@@ -829,7 +833,7 @@ func _append_air_segment(route: Array[Vector2i], from_pos: Vector2i, to_pos: Vec
 		route.append(Vector2i(x, y))
 
 func _build_road_route(state: GameState, entrance_pos: Vector2i, sources: Array[Vector2i]) -> Result:
-	var road_graph = MapRuntimeClass.get_road_graph(state)
+	var road_graph = RoadGraphCacheClass.get_road_graph(state)
 	if road_graph == null:
 		return Result.failure("道路图未初始化")
 

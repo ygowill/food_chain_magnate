@@ -1,14 +1,11 @@
 # 距离覆盖层组件
 # 在地图上显示房屋到餐厅的距离路径
 class_name DistanceOverlay
-extends Control
+extends BaseTileOverlay
 
 signal path_selected(house_id: String, restaurant_id: String)
 
 const RoadGraphClass = preload("res://core/map/road_graph.gd")
-
-var _tile_size: Vector2 = Vector2(64, 64)
-var _map_offset: Vector2 = Vector2.ZERO
 var _road_graph = null  # RoadGraph 引用
 var _map_data: Dictionary = {}
 
@@ -29,12 +26,7 @@ const PATH_HIGHLIGHT_WIDTH := 5.0
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-func set_tile_size(size: Vector2) -> void:
-	_tile_size = size
-	_rebuild_paths()
-
-func set_map_offset(offset: Vector2) -> void:
-	_map_offset = offset
+func _on_layout_changed() -> void:
 	_rebuild_paths()
 
 func set_road_graph(graph) -> void:
@@ -134,16 +126,8 @@ func clear_highlight() -> void:
 
 func clear_all() -> void:
 	_paths.clear()
-
-	for line in _path_lines:
-		if is_instance_valid(line):
-			line.queue_free()
-	_path_lines.clear()
-
-	for label in _distance_labels:
-		if is_instance_valid(label):
-			label.queue_free()
-	_distance_labels.clear()
+	_free_nodes(_path_lines)
+	_free_nodes(_distance_labels)
 
 func _calculate_distance(house_pos: Vector2i, restaurant_pos: Vector2i, path_points: Array[Vector2i]) -> int:
 	# 使用 RoadGraph 计算
@@ -232,26 +216,7 @@ func _update_path_styles() -> void:
 				var f: float = float(d_val)
 				if f == floor(f):
 					is_unreachable = int(f) < 0
-			var house_id: String = str(path_data.get("house_id", ""))
-			var restaurant_id: String = str(path_data.get("restaurant_id", ""))
-			var house_pos: Vector2i = path_data.get("house_pos", Vector2i(-1, -1))
-			var restaurant_pos: Vector2i = path_data.get("restaurant_pos", Vector2i(-1, -1))
-
-			if not _highlight_house.is_empty() and not _highlight_restaurant.is_empty():
-				if not house_id.is_empty() or not restaurant_id.is_empty():
-					is_highlighted = (house_id == _highlight_house and restaurant_id == _highlight_restaurant)
-				elif highlight_house_pos != Vector2i(-1, -1) and highlight_restaurant_pos != Vector2i(-1, -1):
-					is_highlighted = (house_pos == highlight_house_pos and restaurant_pos == highlight_restaurant_pos)
-			elif not _highlight_house.is_empty():
-				if not house_id.is_empty():
-					is_highlighted = (house_id == _highlight_house)
-				elif highlight_house_pos != Vector2i(-1, -1):
-					is_highlighted = (house_pos == highlight_house_pos)
-			elif not _highlight_restaurant.is_empty():
-				if not restaurant_id.is_empty():
-					is_highlighted = (restaurant_id == _highlight_restaurant)
-				elif highlight_restaurant_pos != Vector2i(-1, -1):
-					is_highlighted = (restaurant_pos == highlight_restaurant_pos)
+			is_highlighted = _is_path_highlighted(path_data, highlight_house_pos, highlight_restaurant_pos)
 
 		if is_highlighted:
 			line.width = PATH_HIGHLIGHT_WIDTH
@@ -263,11 +228,40 @@ func _update_path_styles() -> void:
 		if i < _distance_labels.size():
 			var label: Label = _distance_labels[i]
 			if is_instance_valid(label):
-				label.add_theme_font_size_override("font_size", 16 if is_highlighted else 14)
-				if is_highlighted:
-					label.add_theme_color_override("font_color", Color(0.6, 1, 0.6, 1))
-				else:
-					label.add_theme_color_override("font_color", LABEL_UNREACHABLE_COLOR if is_unreachable else Color(1, 1, 1, 1))
+					label.add_theme_font_size_override("font_size", 16 if is_highlighted else 14)
+					if is_highlighted:
+						label.add_theme_color_override("font_color", Color(0.6, 1, 0.6, 1))
+					else:
+						label.add_theme_color_override("font_color", LABEL_UNREACHABLE_COLOR if is_unreachable else Color(1, 1, 1, 1))
+
+func _is_path_highlighted(path_data: Dictionary, highlight_house_pos: Vector2i, highlight_restaurant_pos: Vector2i) -> bool:
+	var house_id: String = str(path_data.get("house_id", ""))
+	var restaurant_id: String = str(path_data.get("restaurant_id", ""))
+	var house_pos: Vector2i = path_data.get("house_pos", Vector2i(-1, -1))
+	var restaurant_pos: Vector2i = path_data.get("restaurant_pos", Vector2i(-1, -1))
+
+	# 兼容：若 path_data 没有 house_id/restaurant_id，则回落到坐标匹配（仅在两个 id 都为空时）
+	if not _highlight_house.is_empty() and not _highlight_restaurant.is_empty():
+		if not house_id.is_empty() or not restaurant_id.is_empty():
+			return house_id == _highlight_house and restaurant_id == _highlight_restaurant
+		return (
+			highlight_house_pos != Vector2i(-1, -1)
+			and highlight_restaurant_pos != Vector2i(-1, -1)
+			and house_pos == highlight_house_pos
+			and restaurant_pos == highlight_restaurant_pos
+		)
+
+	if not _highlight_house.is_empty():
+		if not house_id.is_empty():
+			return house_id == _highlight_house
+		return highlight_house_pos != Vector2i(-1, -1) and house_pos == highlight_house_pos
+
+	if not _highlight_restaurant.is_empty():
+		if not restaurant_id.is_empty():
+			return restaurant_id == _highlight_restaurant
+		return highlight_restaurant_pos != Vector2i(-1, -1) and restaurant_pos == highlight_restaurant_pos
+
+	return false
 
 func _get_house_pos_for_highlight() -> Vector2i:
 	if _highlight_house.is_empty():

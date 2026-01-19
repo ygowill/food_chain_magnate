@@ -6,7 +6,7 @@ class_name AddGardenRulesTest
 extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
@@ -46,33 +46,15 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		if not add.ok:
 			return Result.failure("添加 new_business_developer 失败: %s" % add.error)
 
-	# 3) 寻找一个可行的“放置房屋 -> 添加花园”组合并执行
-	var plan := _find_place_house_then_garden_plan(engine, actor)
+	# 3) 寻找一个可行的“对印刷房屋添加花园”的组合并执行
+	var plan := _find_add_garden_plan(engine, actor)
 	if plan.is_empty():
-		return Result.failure("找不到可行的“放置房屋 -> 添加花园”组合（可能是地图数据异常）")
+		return Result.failure("找不到可行的“添加花园”目标（可能是地图数据异常）")
 
-	var old_house_ids := {}
-	for hid in engine.get_state().map.get("houses", {}).keys():
-		old_house_ids[str(hid)] = true
-
-	var place_cmd: Command = plan.get("place_cmd", null)
+	var target_house_id := str(plan.get("house_id", ""))
 	var direction := str(plan.get("direction", ""))
-	if place_cmd == null or direction.is_empty():
+	if target_house_id.is_empty() or direction.is_empty():
 		return Result.failure("测试计划结构无效")
-
-	var exec_place := engine.execute_command(place_cmd)
-	if not exec_place.ok:
-		return Result.failure("放置房屋失败: %s (%s)" % [exec_place.error, str(place_cmd)])
-
-	# 找到新创建的 house_id（与 PlaceHouseAction 的事件逻辑一致）
-	var target_house_id := ""
-	for hid in engine.get_state().map.get("houses", {}).keys():
-		var id := str(hid)
-		if not old_house_ids.has(id):
-			target_house_id = id
-			break
-	if target_house_id.is_empty():
-		return Result.failure("未能找到新创建的 house_id")
 
 	var garden_cmd := Command.create("add_garden", actor, {"house_id": target_house_id, "direction": direction})
 	var exec_ok := engine.execute_command(garden_cmd)
@@ -87,17 +69,32 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("添加花园后 house.has_garden 应为 true")
 
 	var anchor_pos: Vector2i = house.get("anchor_pos", Vector2i.ZERO)
-	var cell := MapRuntimeClass.get_cell(state, anchor_pos)
+	var cell := CellsClass.get_cell(state, anchor_pos)
 	var structure: Dictionary = cell.get("structure", {})
 	if str(structure.get("piece_id", "")) != "house_with_garden":
 		return Result.failure("房屋锚点格应为 house_with_garden，实际: %s" % str(structure.get("piece_id", "")))
 
 	# 4) 与 place_house 共享次数：只有 2 名员工时，执行 2 次后不应再允许放置房屋
+	state = engine.get_state()
+	var hn1 := _pick_house_number(state)
+	if hn1 <= 0:
+		return Result.failure("无法获取可用房屋编号（用于 place_house）")
+	var place_cmd_ok := _find_first_valid_house_placement(engine, actor, hn1)
+	if place_cmd_ok == null:
+		return Result.failure("找不到合法的房屋放置点（可能是地图数据异常）")
+	var exec_place := engine.execute_command(place_cmd_ok)
+	if not exec_place.ok:
+		return Result.failure("放置房屋应成功，但失败: %s (%s)" % [exec_place.error, str(place_cmd_ok)])
+
+	state = engine.get_state()
+	var hn2 := _pick_house_number(state)
+	if hn2 <= 0:
+		return Result.failure("无法获取剩余房屋编号（用于验证次数耗尽）")
 	state.sub_phase = "PlaceHouses"
-	var cmd_house := Command.create("place_house", actor, {"position": [0, 0], "rotation": 0})
+	var cmd_house := Command.create("place_house", actor, {"position": [0, 0], "rotation": 0, "house_number": hn2})
 	var exec_house := engine.execute_command(cmd_house)
 	if exec_house.ok:
-		return Result.failure("同一子阶段不应允许在添加花园后继续放置房屋（次数应耗尽）")
+		return Result.failure("同一子阶段不应允许在执行 2 次后继续放置房屋（次数应耗尽）")
 	if str(exec_house.error).find("已用完") < 0:
 		return Result.failure("放置房屋被拒绝应提示次数已用完，实际: %s" % exec_house.error)
 
@@ -108,53 +105,70 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		"house_id": target_house_id,
 	})
 
-static func _find_place_house_then_garden_plan(engine: GameEngine, actor: int) -> Dictionary:
+static func _find_add_garden_plan(engine: GameEngine, actor: int) -> Dictionary:
 	var state := engine.get_state()
-	var place_exec := engine.action_registry.get_executor("place_house")
 	var garden_exec := engine.action_registry.get_executor("add_garden")
-	if place_exec == null or garden_exec == null:
+	if garden_exec == null:
 		return {}
 
-	var old_house_ids := {}
-	for hid in state.map.get("houses", {}).keys():
-		old_house_ids[str(hid)] = true
-
-	var grid_size: Vector2i = state.map.get("grid_size", Vector2i.ZERO)
-	var rotations := [0, 90, 180, 270]
 	var directions := ["N", "E", "S", "W"]
 
-	for y in range(grid_size.y):
-		for x in range(grid_size.x):
-			for rot in rotations:
-				var place_cmd := Command.create("place_house", actor, {"position": [x, y], "rotation": rot})
-				var vr := place_exec.validate(state, place_cmd)
-				if not vr.ok:
-					continue
+	var houses_val = state.map.get("houses", null)
+	if not (houses_val is Dictionary):
+		return {}
+	var houses: Dictionary = houses_val
+	for hid_val in houses.keys():
+		var hid := str(hid_val).strip_edges()
+		if hid.is_empty():
+			continue
+		var house_val = houses.get(hid_val, null)
+		if not (house_val is Dictionary):
+			continue
+		var house: Dictionary = house_val
+		if bool(house.get("has_garden", false)):
+			continue
 
-				# 预演放置，找出新 house_id
-				var preview := place_exec.compute_new_state(state, place_cmd)
-				if not preview.ok:
-					continue
-				var preview_state: GameState = preview.value
-
-				var new_house_id := ""
-				for hid in preview_state.map.get("houses", {}).keys():
-					var id := str(hid)
-					if not old_house_ids.has(id):
-						new_house_id = id
-						break
-				if new_house_id.is_empty():
-					continue
-
-				# 在预演状态下尝试添加花园
-				for d in directions:
-					var garden_cmd := Command.create("add_garden", actor, {"house_id": new_house_id, "direction": d})
-					var vr2 := garden_exec.validate(preview_state, garden_cmd)
-					if vr2.ok:
-						return {
-							"place_cmd": place_cmd,
-							"house_id": new_house_id,
-							"direction": d,
-						}
+		for d in directions:
+			var garden_cmd := Command.create("add_garden", actor, {"house_id": hid, "direction": d})
+			var vr2 := garden_exec.validate(state, garden_cmd)
+			if vr2.ok:
+				return {"house_id": hid, "direction": d}
 
 	return {}
+
+static func _find_first_valid_house_placement(engine: GameEngine, actor: int, house_number: int) -> Command:
+	var state := engine.get_state()
+	var executor := engine.action_registry.get_executor("place_house")
+	if executor == null:
+		return null
+
+	var grid: Vector2i = state.map.get("grid_size", Vector2i.ZERO)
+	var rotations := [0, 90, 180, 270]
+
+	for y in range(grid.y):
+		for x in range(grid.x):
+			for r in rotations:
+				var cmd := Command.create("place_house", actor, {"position": [x, y], "rotation": r, "house_number": int(house_number)})
+				var vr := executor.validate(state, cmd)
+				if vr.ok:
+					return cmd
+
+	return null
+
+static func _pick_house_number(state: GameState) -> int:
+	if state == null or not (state.map is Dictionary):
+		return -1
+	var supply_val = state.map.get("house_number_supply_remaining", null)
+	if supply_val is Array:
+		var nums: Array[int] = []
+		for v in Array(supply_val):
+			if v is int:
+				nums.append(int(v))
+			elif v is float:
+				var f: float = float(v)
+				if f == floor(f):
+					nums.append(int(f))
+		nums.sort()
+		return int(nums[0]) if not nums.is_empty() else -1
+	# Fallback
+	return 1

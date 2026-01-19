@@ -14,7 +14,8 @@ static func apply_initial_state(
 	player_count: int,
 	rng_seed: int,
 	rng_manager,
-	config
+	config,
+	restaurant_logo_choices_by_player: Array[int] = []
 ) -> Result:
 	if player_count < GameConstantsClass.MIN_PLAYERS or player_count > GameConstantsClass.MAX_PLAYERS:
 		return Result.failure("玩家数量超出范围: %d" % player_count)
@@ -63,24 +64,59 @@ static func apply_initial_state(
 	for i in range(player_count):
 		state.players.append(_create_player_from_config(i, cfg))
 
-	# 餐厅 Logo：进入游戏前随机分配一次，并写入存档以保证回放/联机确定性。
+	# 餐厅 Logo：进入游戏前分配一次，并写入存档以保证回放/联机确定性。
+	# - 默认：按 seed 确定性洗牌后分配（等价于旧逻辑）
+	# - 若提供 restaurant_logo_choices_by_player：尊重显式选择（0..4），其余用洗牌后的剩余值填充；始终唯一。
 	# 注意：这里使用独立 RNG（仅依赖 seed），避免影响 engine.random_manager 的调用序列。
-	var logo_ids: Array[int] = []
-	for i in range(5):
-		logo_ids.append(i)
+	var logo_count := 5
+	var remaining: Array[int] = []
+	for i in range(logo_count):
+		remaining.append(i)
+
+	var fixed := {} # logo_id -> true（防重复）
+	var needs_random: Array[bool] = []
+	for pid in range(player_count):
+		needs_random.append(true)
+
+	for pid in range(player_count):
+		if pid < 0 or pid >= state.players.size():
+			continue
+		var choice := -1
+		if restaurant_logo_choices_by_player != null and pid < restaurant_logo_choices_by_player.size():
+			var v = restaurant_logo_choices_by_player[pid]
+			if v is int:
+				choice = int(v)
+			elif v is float:
+				var f: float = float(v)
+				if f == floor(f):
+					choice = int(f)
+		if choice >= 0 and choice < logo_count and not fixed.has(choice):
+			fixed[choice] = true
+			needs_random[pid] = false
+			state.players[pid]["restaurant_logo_id"] = choice
+			remaining.erase(choice)
+
 	var logo_rng := RandomNumberGenerator.new()
 	var logo_seed := int(rng_seed) ^ int(0x4C4F474F) # 'LOGO'
 	logo_rng.seed = logo_seed
 	logo_rng.state = int(logo_seed)
-	for i in range(logo_ids.size() - 1, 0, -1):
+	for i in range(remaining.size() - 1, 0, -1):
 		var j := logo_rng.randi_range(0, i)
-		var tmp = logo_ids[i]
-		logo_ids[i] = logo_ids[j]
-		logo_ids[j] = tmp
+		var tmp = remaining[i]
+		remaining[i] = remaining[j]
+		remaining[j] = tmp
+
+	var next_idx := 0
 	for pid in range(player_count):
 		if pid < 0 or pid >= state.players.size():
 			continue
-		state.players[pid]["restaurant_logo_id"] = int(logo_ids[pid % logo_ids.size()])
+		if not needs_random[pid]:
+			continue
+		if next_idx < remaining.size():
+			state.players[pid]["restaurant_logo_id"] = int(remaining[next_idx])
+			next_idx += 1
+		else:
+			state.players[pid]["restaurant_logo_id"] = int(pid % logo_count)
 
 	state.turn_order.clear()
 	for i in range(player_count):

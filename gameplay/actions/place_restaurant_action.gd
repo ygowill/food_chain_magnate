@@ -3,8 +3,11 @@
 class_name PlaceRestaurantAction
 extends ActionExecutor
 
-const PlacementValidatorClass = preload("res://core/map/placement_validator.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const RestaurantPlacementClass = preload("res://core/map/placement_validator/restaurant_placement.gd")
+const MapContextBuilderClass = preload("res://core/map/map_context_builder.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 
@@ -29,7 +32,7 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 	if state.phase == "Setup":
 		if str(state.sub_phase) == "ReserveCards":
 			return false
-		var player_restaurants := MapRuntimeClass.get_player_restaurants(state, player_id)
+		var player_restaurants := StructuresClass.get_player_restaurants(state, player_id)
 		return player_restaurants.size() < 1
 
 	if state.phase != "Working":
@@ -42,6 +45,22 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 	var used_place := EmployeeRulesClass.get_action_count(state, player_id, "place_restaurant")
 	var used_move := EmployeeRulesClass.get_action_count(state, player_id, "move_restaurant")
 	return (used_place + used_move) < eligible
+
+func _parse_params(command: Command) -> Result:
+	var pos_result := require_vector2i_param(command, "position")
+	if not pos_result.ok:
+		return pos_result
+	var world_anchor: Vector2i = pos_result.value
+
+	var rotation_result := require_int_param(command, "rotation")
+	if not rotation_result.ok:
+		return rotation_result
+	var rotation: int = rotation_result.value
+
+	return Result.success({
+		"world_anchor": world_anchor,
+		"rotation": rotation,
+	})
 
 func _validate_specific(state: GameState, command: Command) -> Result:
 	# 检查是否是当前玩家的回合
@@ -56,7 +75,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	# Setup 阶段：每位玩家只能放置一个餐厅（无需 position/rotation）
 	if is_initial:
-		var player_restaurants := MapRuntimeClass.get_player_restaurants(state, command.actor)
+		var player_restaurants := StructuresClass.get_player_restaurants(state, command.actor)
 		if player_restaurants.size() >= 1:
 			return Result.failure("设置阶段每位玩家只能放置一个餐厅")
 
@@ -72,24 +91,21 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 			return Result.failure("本地/大区经理本子阶段已用完: %d/%d" % [used_total, eligible])
 
 	# 检查必需参数
-	var pos_result := require_vector2i_param(command, "position")
-	if not pos_result.ok:
-		return pos_result
-	var world_anchor: Vector2i = pos_result.value
-
-	var rotation_result := require_int_param(command, "rotation")
-	if not rotation_result.ok:
-		return rotation_result
-	var rotation: int = rotation_result.value
+	var params_result := _parse_params(command)
+	if not params_result.ok:
+		return params_result
+	var params: Dictionary = params_result.value
+	var world_anchor: Vector2i = params["world_anchor"]
+	var rotation: int = int(params["rotation"])
 
 	# 构建地图上下文
-	var map_ctx := _build_map_context(state)
+	var map_ctx := MapContextBuilderClass.build_context(state)
 
 	# 构建建筑件注册表
 	var piece_registry := _get_piece_registry()
 
 	# 验证放置
-	var validate_result := PlacementValidatorClass.validate_restaurant_placement(
+	var validate_result := RestaurantPlacementClass.validate_restaurant_placement(
 		map_ctx, world_anchor, rotation, piece_registry,
 		command.actor, is_initial, {}
 	)
@@ -100,24 +116,21 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	return Result.success()
 
 func _apply_changes(state: GameState, command: Command) -> Result:
-	var pos_result := require_vector2i_param(command, "position")
-	if not pos_result.ok:
-		return pos_result
-	var world_anchor: Vector2i = pos_result.value
-
-	var rotation_result := require_int_param(command, "rotation")
-	if not rotation_result.ok:
-		return rotation_result
-	var rotation: int = rotation_result.value
+	var params_result := _parse_params(command)
+	if not params_result.ok:
+		return params_result
+	var params: Dictionary = params_result.value
+	var world_anchor: Vector2i = params["world_anchor"]
+	var rotation: int = int(params["rotation"])
 	var player_id: int = command.actor
 
 	# 构建地图上下文和建筑件注册表
-	var map_ctx := _build_map_context(state)
+	var map_ctx := MapContextBuilderClass.build_context(state)
 	var piece_registry := _get_piece_registry()
 	var is_initial := state.phase == "Setup"
 
 	# 获取验证结果 (包含 footprint_cells)
-	var validate_result := PlacementValidatorClass.validate_restaurant_placement(
+	var validate_result := RestaurantPlacementClass.validate_restaurant_placement(
 		map_ctx, world_anchor, rotation, piece_registry,
 		player_id, is_initial, {}
 	)
@@ -139,7 +152,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	# 写入格子
 	for cell_pos in footprint_cells:
 		var is_anchor = (cell_pos == world_anchor)
-		var idx := MapRuntimeClass.world_to_index(state, cell_pos)
+		var idx := CoordsClass.world_to_index(state, cell_pos)
 		state.map.cells[idx.y][idx.x]["structure"] = {
 			"piece_id": "restaurant",
 			"owner": player_id,
@@ -169,7 +182,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	state.players[player_id]["restaurants"] = restaurants
 
 	# 使道路图缓存失效
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)
 
 	# Working 阶段：使用本地/大区经理放置餐厅会启用本回合的免下车能力
 	if state.phase == "Working":
@@ -223,29 +236,9 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 
 	return events
 
-# 辅助方法：构建地图上下文
-func _build_map_context(state: GameState) -> Dictionary:
-	return {
-		"cells": state.map.cells,
-		"grid_size": state.map.grid_size,
-		"map_origin": MapRuntimeClass.get_map_origin(state),
-		"houses": state.map.houses,
-		"restaurants": state.map.restaurants,
-		"drink_sources": state.map.get("drink_sources", []),
-		"marketing_placements": state.map.get("marketing_placements", {}),
-	}
-
 # 辅助方法：获取建筑件注册表（优先使用注入的 modules/*/content/pieces）
 func _get_piece_registry() -> Dictionary:
 	if _piece_registry.is_empty():
-		_piece_registry = _build_default_piece_registry()
+		const PieceDefClass = preload("res://core/map/piece_def.gd")
+		_piece_registry = PieceDefClass.create_default_registry()
 	return _piece_registry
-
-func _build_default_piece_registry() -> Dictionary:
-	# 从 PieceDef 类创建默认定义
-	const PieceDefClass = preload("res://core/map/piece_def.gd")
-	return {
-		"restaurant": PieceDefClass.create_restaurant(),
-		"house": PieceDefClass.create_house(),
-		"house_with_garden": PieceDefClass.create_house_with_garden()
-	}

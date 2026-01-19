@@ -7,6 +7,7 @@ const ParamDialogScene = preload("res://ui/scenes/debug/components/param_dialog.
 var _registry: DebugCommandRegistry = null
 var _execute_callback: Callable
 var _param_dialog: Window = null
+var _player_option: OptionButton = null
 
 @onready var command_content: VBoxContainer = $ScrollContainer/CommandContent
 
@@ -15,8 +16,11 @@ func init(registry: DebugCommandRegistry, execute_callback: Callable) -> void:
 	_execute_callback = execute_callback
 
 func _ready() -> void:
-	_build_ui()
 	_setup_param_dialog()
+	refresh()
+
+func refresh() -> void:
+	_build_ui()
 
 func _setup_param_dialog() -> void:
 	_param_dialog = ParamDialogScene.instantiate()
@@ -24,7 +28,11 @@ func _setup_param_dialog() -> void:
 	_param_dialog.hide()
 	_param_dialog.command_submitted.connect(_on_param_dialog_submitted)
 
-func _on_param_dialog_submitted(command: String) -> void:
+func _on_param_dialog_submitted(command: String, selected_player_id: int) -> void:
+	# 让弹窗内的玩家选择与顶部“目标玩家”保持一致（并影响后续命令）。
+	if _registry != null and _registry.has_method("set_selected_player_id"):
+		_registry.set_selected_player_id(int(selected_player_id))
+		_sync_player_selector_ui(int(selected_player_id))
 	if _execute_callback.is_valid():
 		_execute_callback.call(command)
 
@@ -35,6 +43,8 @@ func _build_ui() -> void:
 	# 清空现有内容
 	for child in command_content.get_children():
 		child.queue_free()
+
+	_create_player_selector()
 
 	# 阶段控制
 	_create_section("阶段控制", [
@@ -54,13 +64,14 @@ func _build_ui() -> void:
 	])
 
 	# 员工管理
+	var employee_options := _get_employee_options()
 	_create_section("员工管理", [
 		{"text": "招聘...", "command": "recruit", "params": [
-			{"name": "employee_type", "label": "员工类型", "hint": "如: management_trainee"}
+			{"name": "employee_type", "label": "员工类型", "hint": "如: management_trainee", "options": employee_options}
 		]},
 		{"text": "培训...", "command": "train", "params": [
-			{"name": "from_type", "label": "源类型", "hint": "如: management_trainee"},
-			{"name": "to_type", "label": "目标类型", "hint": "如: ceo"}
+			{"name": "from_type", "label": "源类型", "hint": "如: management_trainee", "options": employee_options},
+			{"name": "to_type", "label": "目标类型", "hint": "如: ceo", "options": employee_options}
 		]},
 		{"text": "解雇...", "command": "fire", "params": [
 			{"name": "employee_id", "label": "员工ID", "hint": "员工的唯一标识"}
@@ -68,51 +79,58 @@ func _build_ui() -> void:
 	])
 
 	# 资源生产
+	var food_options := _get_food_product_options()
+	var drink_options := _get_drink_product_options()
 	_create_section("资源生产", [
 		{"text": "生产食物...", "command": "produce", "params": [
-			{"name": "employee_type", "label": "员工类型", "hint": "如: cook, chef"}
+			{"name": "product", "label": "食物", "hint": "如: burger, pizza", "options": food_options},
+			{"name": "amount", "label": "数量", "hint": "1, 2, 3...", "default": "1"},
 		]},
 		{"text": "采购饮料...", "command": "procure", "params": [
-			{"name": "employee_type", "label": "员工类型", "hint": "如: cart_operator"}
+			{"name": "product", "label": "饮料", "hint": "如: soda, beer", "options": drink_options},
+			{"name": "amount", "label": "数量", "hint": "1, 2, 3...", "default": "1"},
 		]},
 	])
 
 	# 地图操作
+	var rotation_options: Array[String] = ["0", "90", "180", "270"]
+	var dir_options: Array[String] = ["N", "E", "S", "W"]
 	_create_section("地图操作", [
 		{"text": "放置餐厅...", "command": "place_restaurant", "params": [
 			{"name": "x", "label": "X坐标", "hint": "0-14"},
 			{"name": "y", "label": "Y坐标", "hint": "0-14"},
-			{"name": "rotation", "label": "旋转", "hint": "0, 90, 180, 270", "default": "0"}
+			{"name": "rotation", "label": "旋转", "hint": "0, 90, 180, 270", "default": "0", "options": rotation_options}
 		]},
 		{"text": "放置房屋...", "command": "place_house", "params": [
 			{"name": "x", "label": "X坐标", "hint": "0-14"},
 			{"name": "y", "label": "Y坐标", "hint": "0-14"},
-			{"name": "rotation", "label": "旋转", "hint": "0, 90, 180, 270", "default": "0"}
+			{"name": "rotation", "label": "旋转", "hint": "0, 90, 180, 270", "default": "0", "options": rotation_options}
 		]},
 		{"text": "移动餐厅...", "command": "move_restaurant", "params": [
 			{"name": "restaurant_id", "label": "餐厅ID", "hint": "餐厅的唯一标识"},
 			{"name": "x", "label": "X坐标", "hint": "0-14"},
 			{"name": "y", "label": "Y坐标", "hint": "0-14"},
-			{"name": "rotation", "label": "旋转", "hint": "0, 90, 180, 270", "default": "0"}
+			{"name": "rotation", "label": "旋转", "hint": "0, 90, 180, 270", "default": "0", "options": rotation_options}
 		]},
 		{"text": "添加花园...", "command": "add_garden", "params": [
 			{"name": "house_id", "label": "房屋ID", "hint": "房屋的唯一标识"},
-			{"name": "direction", "label": "方向", "hint": "N, E, S, W"}
+			{"name": "direction", "label": "方向", "hint": "N, E, S, W", "options": dir_options}
 		]},
 	])
 
 	# 营销系统
+	var product_options := _get_product_options()
 	_create_section("营销系统", [
 		{"text": "发起营销...", "command": "marketing", "params": [
-			{"name": "employee_type", "label": "员工类型", "hint": "如: billboard_guy"},
+			{"name": "employee_type", "label": "员工类型", "hint": "如: billboard_guy", "options": employee_options},
 			{"name": "board_number", "label": "板件编号", "hint": "1, 2, 3..."},
-			{"name": "product", "label": "产品", "hint": "如: burger, pizza"},
+			{"name": "product", "label": "产品", "hint": "如: burger, pizza", "options": product_options},
 			{"name": "x", "label": "X坐标", "hint": "0-14"},
 			{"name": "y", "label": "Y坐标", "hint": "0-14"}
 		]},
 		{"text": "给房屋加需求...", "command": "add_house_demand", "params": [
 			{"name": "house_id", "label": "房屋ID", "hint": "如: house_1"},
-			{"name": "product", "label": "产品", "hint": "如: burger, pizza"},
+			{"name": "product", "label": "产品", "hint": "如: burger, pizza", "options": product_options},
 			{"name": "amount", "label": "数量", "hint": "1, 2, 3...", "default": "1"},
 		]},
 	])
@@ -209,4 +227,109 @@ func _on_param_button_pressed(title: String, command: String, params: Array) -> 
 		var typed_params: Array[Dictionary] = []
 		for p in params:
 			typed_params.append(p)
-		_param_dialog.show_dialog(title, command, typed_params)
+		_param_dialog.show_dialog(title, command, typed_params, _build_player_items(), _get_selected_player_id())
+
+func _get_selected_player_id() -> int:
+	if _registry != null and _registry.has_method("get_selected_player_id"):
+		return int(_registry.get_selected_player_id())
+	return -1
+
+func _build_player_items() -> Array[Dictionary]:
+	var state: GameState = _get_state()
+	var player_count := Globals.player_count
+	if state != null:
+		player_count = state.players.size()
+
+	var items: Array[Dictionary] = []
+	items.append({"text": "当前玩家", "id": -1})
+	for pid in range(player_count):
+		var name := Globals.get_player_name(pid)
+		items.append({"text": "玩家%d: %s" % [pid + 1, name], "id": pid})
+	return items
+
+func _sync_player_selector_ui(selected_player_id: int) -> void:
+	if _player_option == null:
+		return
+	for i in range(_player_option.item_count):
+		if int(_player_option.get_item_id(i)) == selected_player_id:
+			_player_option.select(i)
+			return
+
+func _create_player_selector() -> void:
+	var state: GameState = _get_state()
+	var player_count := Globals.player_count
+	if state != null:
+		player_count = state.players.size()
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	command_content.add_child(row)
+
+	var lbl := Label.new()
+	lbl.text = "目标玩家:"
+	lbl.custom_minimum_size = Vector2(80, 0)
+	row.add_child(lbl)
+
+	_player_option = OptionButton.new()
+	_player_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_player_option.add_item("当前玩家", -1)
+	for pid in range(player_count):
+		var name := Globals.get_player_name(pid)
+		_player_option.add_item("玩家%d: %s" % [pid + 1, name], pid)
+	_player_option.item_selected.connect(_on_player_option_selected)
+	row.add_child(_player_option)
+
+	var selected_id := -1
+	if _registry != null and _registry.has_method("get_selected_player_id"):
+		selected_id = int(_registry.get_selected_player_id())
+
+	var select_index := 0
+	for i in range(_player_option.item_count):
+		if int(_player_option.get_item_id(i)) == selected_id:
+			select_index = i
+			break
+	_player_option.select(select_index)
+
+func _on_player_option_selected(index: int) -> void:
+	if _registry == null:
+		return
+	if not _registry.has_method("set_selected_player_id"):
+		return
+	var pid := int(_player_option.get_item_id(index)) if _player_option != null else -1
+	_registry.set_selected_player_id(pid)
+
+func _get_state() -> GameState:
+	if _registry == null:
+		return null
+	var engine := _registry.get_game_engine()
+	if engine == null:
+		return null
+	return engine.get_state()
+
+func _get_employee_options() -> Array[String]:
+	if not EmployeeRegistry.is_loaded():
+		return []
+	return EmployeeRegistry.get_all_ids()
+
+func _get_product_options() -> Array[String]:
+	if not ProductRegistry.is_loaded():
+		return []
+	return ProductRegistry.get_all_ids()
+
+func _get_food_product_options() -> Array[String]:
+	if not ProductRegistry.is_loaded():
+		return []
+	var out: Array[String] = []
+	for pid in ProductRegistry.get_all_ids():
+		if not ProductRegistry.is_drink(pid):
+			out.append(pid)
+	return out
+
+func _get_drink_product_options() -> Array[String]:
+	if not ProductRegistry.is_loaded():
+		return []
+	var out: Array[String] = []
+	for pid in ProductRegistry.get_all_ids():
+		if ProductRegistry.is_drink(pid):
+			out.append(pid)
+	return out

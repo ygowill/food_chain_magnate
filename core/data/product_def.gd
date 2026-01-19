@@ -66,7 +66,8 @@ func to_dict() -> Dictionary:
 static func _parse_string(value, path: String, allow_empty: bool) -> Result:
 	if not (value is String):
 		return Result.failure("%s 类型错误（期望 String）" % path)
-	var s: String = value
+	# 在数据加载阶段做规范化：去掉首尾空白，避免 UI/规则层反复 strip_edges().
+	var s: String = str(value).strip_edges()
 	if not allow_empty and s.is_empty():
 		return Result.failure("%s 不能为空" % path)
 	return Result.success(s)

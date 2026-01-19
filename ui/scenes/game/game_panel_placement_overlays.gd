@@ -171,7 +171,7 @@ func _on_restaurant_placement_confirmed(position: Vector2i, rotation: int, resta
 		if is_instance_valid(restaurant_placement_overlay) and restaurant_placement_overlay.has_method("set_validation"):
 			restaurant_placement_overlay.set_validation(false, result.error)
 
-func _on_house_placement_confirmed(position: Vector2i, rotation: int) -> void:
+func _on_house_placement_confirmed(position: Vector2i, rotation: int, house_number: int) -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
 	if not _execute_command.is_valid():
@@ -180,7 +180,8 @@ func _on_house_placement_confirmed(position: Vector2i, rotation: int) -> void:
 
 	var result: Result = _execute_command.call(Command.create("place_house", current_player_id, {
 		"position": [position.x, position.y],
-		"rotation": rotation
+		"rotation": rotation,
+		"house_number": int(house_number)
 	}))
 	if result.ok:
 		if is_instance_valid(house_placement_overlay):

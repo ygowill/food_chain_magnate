@@ -163,10 +163,11 @@ static func create_initial_state_with_rng(
 	player_count: int,
 	rng_seed: int,
 	rng_manager,
-	config
+	config,
+	restaurant_logo_choices_by_player: Array[int] = []
 ) -> Result:
 	var state := GameState.new()
-	return FactoryClass.apply_initial_state(state, player_count, rng_seed, rng_manager, config)
+	return FactoryClass.apply_initial_state(state, player_count, rng_seed, rng_manager, config, restaurant_logo_choices_by_player)
 
 # === 便捷访问方法 ===
 func get_player(player_id: int) -> Dictionary:

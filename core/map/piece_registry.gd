@@ -6,6 +6,7 @@ class_name PieceRegistry
 extends RefCounted
 
 const PieceDefClass = preload("res://core/map/piece_def.gd")
+const CatalogRegistryHelpersClass = preload("res://core/utils/catalog_registry_helpers.gd")
 
 static var _pieces: Dictionary = {}  # piece_id -> PieceDef
 static var _loaded: bool = false
@@ -22,24 +23,17 @@ static func configure_from_catalog(catalog) -> Result:
 	if not (catalog.pieces is Dictionary):
 		return Result.failure("PieceRegistry.configure_from_catalog: catalog.pieces 类型错误（期望 Dictionary）")
 
-	var out: Dictionary = {}
-	for piece_id_val in catalog.pieces.keys():
-		if not (piece_id_val is String):
-			return Result.failure("PieceRegistry.configure_from_catalog: pieces key 类型错误（期望 String）")
-		var piece_id: String = str(piece_id_val)
-		if piece_id.is_empty():
-			return Result.failure("PieceRegistry.configure_from_catalog: pieces key 不能为空")
-		var def_val = catalog.pieces.get(piece_id, null)
-		if def_val == null:
-			return Result.failure("PieceRegistry.configure_from_catalog: pieces[%s] 为空" % piece_id)
-		if not (def_val is PieceDefClass):
-			return Result.failure("PieceRegistry.configure_from_catalog: pieces[%s] 类型错误（期望 PieceDef）" % piece_id)
-		var def: PieceDef = def_val
-		if def.id != piece_id:
-			return Result.failure("PieceRegistry.configure_from_catalog: pieces[%s].id 不一致: %s" % [piece_id, def.id])
-		out[piece_id] = def
+	var out_read := CatalogRegistryHelpersClass.build_string_keyed_defs(
+		catalog.pieces,
+		PieceDefClass,
+		"PieceRegistry.configure_from_catalog",
+		"pieces",
+		"PieceDef"
+	)
+	if not out_read.ok:
+		return out_read
 
-	_pieces = out
+	_pieces = out_read.value
 	_loaded = true
 	return Result.success(_pieces.size())
 
@@ -70,4 +64,3 @@ static func get_count() -> int:
 static func reset() -> void:
 	_pieces.clear()
 	_loaded = false
-

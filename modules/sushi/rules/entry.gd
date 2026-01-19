@@ -1,5 +1,7 @@
 extends RefCounted
 
+const DemandVariantHelpersClass = preload("res://modules/dinnertime_demand_variant_helpers.gd")
+
 const MODULE_ID := "sushi"
 const PRODUCT_ID := "sushi"
 const EXTRA_LUXURY_MANAGER_PATCH_ID := "extra_luxury_manager"
@@ -28,23 +30,21 @@ func register(registrar) -> Result:
 	return Result.success()
 
 func _get_demand_variants(_state: GameState, _house_id: String, house: Dictionary, base_required: Dictionary) -> Array[Dictionary]:
+	var variants: Array[Dictionary] = []
 	if base_required == null or not (base_required is Dictionary):
-		return []
+		return variants
 	if house == null or not (house is Dictionary):
-		return []
+		return variants
 	if not bool(house.get("has_garden", false)):
-		return []
+		return variants
 	if base_required.has("coffee"):
-		return []
+		return variants
 
-	var total := 0
-	for k in base_required.keys():
-		total += int(base_required.get(k, 0))
+	var total := DemandVariantHelpersClass.sum_required_counts(base_required)
 	if total <= 0:
-		return []
+		return variants
 
-	return [{
-		"id": "%s:replace_all" % MODULE_ID,
-		"rank": 30,
-		"required": {PRODUCT_ID: total},
-	}]
+	var v := DemandVariantHelpersClass.build_replace_all_variant(MODULE_ID, PRODUCT_ID, total, 30)
+	if not v.is_empty():
+		variants.append(v)
+	return variants

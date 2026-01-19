@@ -8,7 +8,7 @@ extends RefCounted
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 
 const Phase = PhaseDefsClass.Phase
 
@@ -172,5 +172,4 @@ static func _apply_test_map(state: GameState) -> void:
 	}
 
 	state.players[0]["restaurants"] = ["rest_0"]
-	MapRuntimeClass.invalidate_road_graph(state)
-
+	RoadGraphCacheClass.invalidate_road_graph(state)

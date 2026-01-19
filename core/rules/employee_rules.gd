@@ -3,9 +3,6 @@
 class_name EmployeeRules
 extends RefCounted
 
-const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
-const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
-const MilestoneDefClass = preload("res://core/data/milestone_def.gd")
 const Salary = preload("res://core/rules/employee_rules/salary.gd")
 const Counts = preload("res://core/rules/employee_rules/counts.gd")
 const WorkingMultiplier = preload("res://core/rules/employee_rules/working_multiplier.gd")

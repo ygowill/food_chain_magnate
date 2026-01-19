@@ -32,6 +32,7 @@ class EventType:
 	const FOOD_SOLD := "food_sold"
 	const FOOD_DISCARDED := "food_discarded"
 	const DRINKS_PROCURED := "drinks_procured"
+	const DINNERTIME_REPORT := "dinnertime_report"
 
 	# 营销相关
 	const MARKETING_PLACED := "marketing_placed"
@@ -214,6 +215,31 @@ func get_history_by_type(event_type: String, count: int = -1) -> Array[Dictionar
 func clear_history() -> void:
 	_event_history.clear()
 	GameLog.info("EventBus", "事件历史已清空")
+
+# 清空历史并可选重置序列号（用于“时间线回退/重建历史”场景）。
+func clear_history_and_reset_sequence() -> void:
+	_event_history.clear()
+	_event_sequence = 0
+	GameLog.info("EventBus", "事件历史已清空（序列号已重置）")
+
+# 仅记录到历史（不通知订阅者）。
+# 用于：回退/重放时重建 EventBus.history，使 UI 日志可从 history 恢复且不触发运行时副作用。
+func record_event(event_type: String, data: Dictionary = {}) -> void:
+	_event_sequence += 1
+
+	var event := {
+		"type": event_type,
+		"data": data,
+		"sequence": _event_sequence,
+		# 与 emit_event 保持一致：使用确定性的序号作为“事件时间戳”
+		"timestamp": _event_sequence
+	}
+	# 仅用于调试展示（非确定性）
+	if DebugFlags.debug_mode:
+		event["real_time_msec"] = Time.get_ticks_msec()
+
+	if _history_enabled:
+		_add_to_history(event)
 
 # 启用/禁用历史记录
 func set_history_enabled(enabled: bool) -> void:

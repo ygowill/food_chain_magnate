@@ -3,25 +3,26 @@
 class_name RangeUtils
 extends RefCounted
 
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 
 static func get_adjacent_road_cells(state: GameState, anchor: Vector2i) -> Result:
 	if not (state.map is Dictionary):
 		return Result.failure("state.map 类型错误（期望 Dictionary）")
 	# NOTE: RoadGraph 支持 external_cells（地图外道路）；因此这里用 has_cell_any/has_road_at_any，
 	# 以保证“贴边/高速”等外部道路在 range/邻接计算中可用。
-	if not MapRuntimeClass.has_cell_any(state, anchor):
+	if not CellsClass.has_cell_any(state, anchor):
 		return Result.failure("anchor 不存在: %s" % str(anchor))
 
 	var cells: Array[Vector2i] = []
-	if MapRuntimeClass.has_road_at_any(state, anchor):
+	if CellsClass.has_road_at_any(state, anchor):
 		cells.append(anchor)
 
 	for dir in MapUtils.DIRECTIONS:
 		var neighbor := MapUtils.get_neighbor_pos(anchor, dir)
-		if not MapRuntimeClass.has_cell_any(state, neighbor):
+		if not CellsClass.has_cell_any(state, neighbor):
 			continue
-		if MapRuntimeClass.has_road_at_any(state, neighbor) and not cells.has(neighbor):
+		if CellsClass.has_road_at_any(state, neighbor) and not cells.has(neighbor):
 			cells.append(neighbor)
 
 	return Result.success(cells)
@@ -94,7 +95,7 @@ static func get_min_road_distance_to_any_road_cells(
 	if target_road_cells.is_empty():
 		return Result.success(-1)
 
-	var road_graph = MapRuntimeClass.get_road_graph(state)
+	var road_graph = RoadGraphCacheClass.get_road_graph(state)
 	if road_graph == null:
 		return Result.failure("道路图未初始化")
 
@@ -114,9 +115,9 @@ static func get_min_road_distance_to_any_road_cells(
 		if target_set.has(p):
 			continue
 		target_set[p] = true
-		if not MapRuntimeClass.has_cell_any(state, p):
+		if not CellsClass.has_cell_any(state, p):
 			continue
-		if not MapRuntimeClass.has_road_at_any(state, p):
+		if not CellsClass.has_road_at_any(state, p):
 			continue
 		targets.append(p)
 	if targets.is_empty():
@@ -269,7 +270,7 @@ static func is_within_road_range(
 	if max_distance < 0:
 		return Result.failure("max_distance 必须 >= 0")
 
-	var road_graph = MapRuntimeClass.get_road_graph(state)
+	var road_graph = RoadGraphCacheClass.get_road_graph(state)
 	if road_graph == null:
 		return Result.failure("道路图未初始化")
 

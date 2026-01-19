@@ -5,6 +5,9 @@ extends Control
 
 signal action_requested(action_id: String, params: Dictionary)
 
+const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
+const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
+
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var items_container: VBoxContainer = $MarginContainer/VBoxContainer/ItemsContainer
 @onready var context_panel: Control = $MarginContainer/VBoxContainer/ContextPanel
@@ -14,10 +17,13 @@ signal action_requested(action_id: String, params: Dictionary)
 @onready var restaurant_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RestaurantRow/RestaurantOption
 @onready var rotation_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow
 @onready var rotation_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationOption
+@onready var house_number_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/HouseNumberRow
+@onready var house_number_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/HouseNumberRow/HouseNumberOption
 @onready var direction_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/DirectionRow
 @onready var direction_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/DirectionRow/DirectionOption
 @onready var cancel_context_button: Button = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/ButtonsRow/CancelContextButton
 @onready var confirm_context_button: Button = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/ButtonsRow/ConfirmContextButton
+@onready var rewind_phase_button: Button = $MarginContainer/VBoxContainer/UtilityRow/RewindPhaseButton
 
 var _action_registry = null  # ActionRegistry
 var _game_state: GameState = null
@@ -31,6 +37,10 @@ var _context_syncing: bool = false
 const HIDDEN_ACTION_IDS := {
 	"end_turn": true,
 	"advance_phase": true,
+	# 定价类强制动作改为“准备离开 Working 时自动执行”，不在面板中展示。
+	"set_price": true,
+	"set_discount": true,
+	"set_luxury_price": true,
 }
 
 # 若动作对“当前玩家”不可启动，则不展示（避免按钮常驻但永远灰掉）
@@ -92,23 +102,24 @@ func _build_ui() -> void:
 	if items_container != null:
 		items_container.add_theme_constant_override("separation", 4)
 	_setup_context_ui()
+	_setup_utility_ui()
+
+func _setup_utility_ui() -> void:
+	if not is_instance_valid(rewind_phase_button):
+		return
+	UiSignalHelpersClass.safe_connect(rewind_phase_button, "pressed", _on_rewind_phase_pressed)
 
 func _setup_context_ui() -> void:
 	if not is_instance_valid(context_panel):
 		return
 	context_panel.visible = false
 
-	if is_instance_valid(cancel_context_button) and not cancel_context_button.pressed.is_connected(_on_cancel_context_pressed):
-		cancel_context_button.pressed.connect(_on_cancel_context_pressed)
-	if is_instance_valid(confirm_context_button) and not confirm_context_button.pressed.is_connected(_on_confirm_context_pressed):
-		confirm_context_button.pressed.connect(_on_confirm_context_pressed)
-
-	if is_instance_valid(restaurant_option) and not restaurant_option.item_selected.is_connected(_on_restaurant_option_selected):
-		restaurant_option.item_selected.connect(_on_restaurant_option_selected)
-	if is_instance_valid(rotation_option) and not rotation_option.item_selected.is_connected(_on_rotation_option_selected):
-		rotation_option.item_selected.connect(_on_rotation_option_selected)
-	if is_instance_valid(direction_option) and not direction_option.item_selected.is_connected(_on_direction_option_selected):
-		direction_option.item_selected.connect(_on_direction_option_selected)
+	UiSignalHelpersClass.safe_connect(cancel_context_button, "pressed", _on_cancel_context_pressed)
+	UiSignalHelpersClass.safe_connect(confirm_context_button, "pressed", _on_confirm_context_pressed)
+	UiSignalHelpersClass.safe_connect(restaurant_option, "item_selected", _on_restaurant_option_selected)
+	UiSignalHelpersClass.safe_connect(rotation_option, "item_selected", _on_rotation_option_selected)
+	UiSignalHelpersClass.safe_connect(house_number_option, "item_selected", _on_house_number_option_selected)
+	UiSignalHelpersClass.safe_connect(direction_option, "item_selected", _on_direction_option_selected)
 
 func bind_context_overlay(overlay: Node) -> void:
 	if overlay == null or not is_instance_valid(overlay):
@@ -132,18 +143,16 @@ func clear_context_overlay() -> void:
 func _attach_overlay_signals() -> void:
 	if _context_overlay == null or not is_instance_valid(_context_overlay):
 		return
-	if _context_overlay.has_signal("ui_state_changed"):
-		var sig = _context_overlay.ui_state_changed
-		if sig is Signal and not sig.is_connected(_on_overlay_ui_state_changed):
-			sig.connect(_on_overlay_ui_state_changed)
+	UiSignalHelpersClass.safe_connect(_context_overlay, "ui_state_changed", _on_overlay_ui_state_changed)
 
 func _detach_overlay_signals() -> void:
 	if _context_overlay == null or not is_instance_valid(_context_overlay):
 		return
-	if _context_overlay.has_signal("ui_state_changed"):
-		var sig = _context_overlay.ui_state_changed
-		if sig is Signal and sig.is_connected(_on_overlay_ui_state_changed):
-			sig.disconnect(_on_overlay_ui_state_changed)
+	var sig := StringName("ui_state_changed")
+	if not _context_overlay.has_signal(sig):
+		return
+	if _context_overlay.is_connected(sig, _on_overlay_ui_state_changed):
+		_context_overlay.disconnect(sig, _on_overlay_ui_state_changed)
 
 func _on_overlay_ui_state_changed() -> void:
 	_refresh_context_from_overlay()
@@ -181,24 +190,25 @@ func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) 
 	_context_syncing = true
 	_show_context_panel()
 
-	var mode := overlay.get_mode() if overlay.has_method("get_mode") else ""
+	var mode := overlay.get_mode()
 	context_title_label.text = "🏪 放置餐厅" if mode != "move_restaurant" else "🏪 移动餐厅"
-	context_hint_label.text = overlay.get_hint_text() if overlay.has_method("get_hint_text") else ""
+	context_hint_label.text = overlay.get_hint_text()
 
 	restaurant_row.visible = (mode == "move_restaurant")
 	direction_row.visible = false
 	rotation_row.visible = true
+	house_number_row.visible = false
 
-	_rebuild_rotation_option(overlay.get_selected_rotation() if overlay.has_method("get_selected_rotation") else 0)
+	_rebuild_rotation_option(overlay.get_selected_rotation())
 
 	if mode == "move_restaurant":
 		_rebuild_restaurant_option(
-			overlay.get_available_restaurants() if overlay.has_method("get_available_restaurants") else [],
-			overlay.get_selected_restaurant() if overlay.has_method("get_selected_restaurant") else ""
+			overlay.get_available_restaurants(),
+			overlay.get_selected_restaurant()
 		)
 
 	confirm_context_button.text = "确认移动" if mode == "move_restaurant" else "确认放置"
-	confirm_context_button.disabled = not (overlay.can_confirm() if overlay.has_method("can_confirm") else false)
+	confirm_context_button.disabled = not overlay.can_confirm()
 
 	_context_syncing = false
 
@@ -210,21 +220,26 @@ func _refresh_house_placement_context(overlay: HousePlacementOverlay) -> void:
 	_context_syncing = true
 	_show_context_panel()
 
-	var mode := overlay.get_mode() if overlay.has_method("get_mode") else ""
+	var mode := overlay.get_mode()
 	context_title_label.text = "🌳 添加花园" if mode == "add_garden" else "🏠 放置房屋"
-	context_hint_label.text = overlay.get_hint_text() if overlay.has_method("get_hint_text") else ""
+	context_hint_label.text = overlay.get_hint_text()
 
 	restaurant_row.visible = false
 	rotation_row.visible = (mode == "place_house")
+	house_number_row.visible = (mode == "place_house")
 	direction_row.visible = (mode == "add_garden")
 
 	if mode == "place_house":
-		_rebuild_rotation_option(overlay.get_selected_rotation() if overlay.has_method("get_selected_rotation") else 0)
+		_rebuild_rotation_option(overlay.get_selected_rotation())
+		_rebuild_house_number_option(
+			overlay.get_available_house_numbers(),
+			overlay.get_selected_house_number()
+		)
 	if mode == "add_garden":
-		_rebuild_direction_option(overlay.get_selected_direction() if overlay.has_method("get_selected_direction") else "E")
+		_rebuild_direction_option(overlay.get_selected_direction())
 
 	confirm_context_button.text = "确认添加花园" if mode == "add_garden" else "确认放置"
-	confirm_context_button.disabled = not (overlay.can_confirm() if overlay.has_method("can_confirm") else false)
+	confirm_context_button.disabled = not overlay.can_confirm()
 
 	_context_syncing = false
 
@@ -237,6 +252,22 @@ func _rebuild_rotation_option(selected_rotation: int) -> void:
 		var idx := rotation_option.get_item_count() - 1
 		rotation_option.set_item_metadata(idx, rot)
 	_select_option_by_metadata_int(rotation_option, selected_rotation)
+
+func _rebuild_house_number_option(available_numbers: Array[int], selected_house_number: int) -> void:
+	if not is_instance_valid(house_number_option):
+		return
+	house_number_option.clear()
+	house_number_option.add_item("请选择...")
+	house_number_option.set_item_metadata(0, -1)
+	var nums: Array[int] = []
+	for n_val in available_numbers:
+		nums.append(int(n_val))
+	nums.sort()
+	for n in nums:
+		house_number_option.add_item(str(n))
+		var idx := house_number_option.get_item_count() - 1
+		house_number_option.set_item_metadata(idx, int(n))
+	_select_option_by_metadata_int(house_number_option, int(selected_house_number))
 
 func _rebuild_direction_option(selected_direction: String) -> void:
 	if not is_instance_valid(direction_option):
@@ -285,12 +316,18 @@ func _select_option_by_metadata_string(option: OptionButton, desired: String) ->
 	if option.get_item_count() > 0:
 		option.select(0)
 
-func _on_cancel_context_pressed() -> void:
+func _call_context_overlay_method(method: StringName, args: Array = []) -> bool:
 	if _context_overlay == null or not is_instance_valid(_context_overlay):
+		return false
+	if not _context_overlay.has_method(method):
+		return false
+	_context_overlay.callv(method, args)
+	return true
+
+func _on_cancel_context_pressed() -> void:
+	if not _call_context_overlay_method("request_cancel"):
 		clear_context_overlay()
 		return
-	if _context_overlay.has_method("request_cancel"):
-		_context_overlay.call("request_cancel")
 	clear_context_overlay()
 
 func _on_confirm_context_pressed() -> void:
@@ -299,43 +336,41 @@ func _on_confirm_context_pressed() -> void:
 		return
 	if confirm_context_button != null and confirm_context_button.disabled:
 		return
-	if _context_overlay.has_method("request_confirm"):
-		_context_overlay.call("request_confirm")
+	_call_context_overlay_method("request_confirm")
 	if confirm_context_button != null:
 		confirm_context_button.disabled = true
 
 func _on_restaurant_option_selected(index: int) -> void:
 	if _context_syncing:
 		return
-	if _context_overlay == null or not is_instance_valid(_context_overlay):
-		return
 	if not is_instance_valid(restaurant_option):
 		return
 	var rid := str(restaurant_option.get_item_metadata(index))
-	if _context_overlay.has_method("set_selected_restaurant"):
-		_context_overlay.call("set_selected_restaurant", rid)
+	_call_context_overlay_method("set_selected_restaurant", [rid])
 
 func _on_rotation_option_selected(index: int) -> void:
 	if _context_syncing:
 		return
-	if _context_overlay == null or not is_instance_valid(_context_overlay):
-		return
 	if not is_instance_valid(rotation_option):
 		return
 	var rot := int(rotation_option.get_item_metadata(index))
-	if _context_overlay.has_method("set_selected_rotation"):
-		_context_overlay.call("set_selected_rotation", rot)
+	_call_context_overlay_method("set_selected_rotation", [rot])
+
+func _on_house_number_option_selected(index: int) -> void:
+	if _context_syncing:
+		return
+	if not is_instance_valid(house_number_option):
+		return
+	var n := int(house_number_option.get_item_metadata(index))
+	_call_context_overlay_method("set_selected_house_number", [n])
 
 func _on_direction_option_selected(index: int) -> void:
 	if _context_syncing:
 		return
-	if _context_overlay == null or not is_instance_valid(_context_overlay):
-		return
 	if not is_instance_valid(direction_option):
 		return
 	var d := str(direction_option.get_item_metadata(index))
-	if _context_overlay.has_method("set_selected_direction"):
-		_context_overlay.call("set_selected_direction", d)
+	_call_context_overlay_method("set_selected_direction", [d])
 
 func set_action_registry(registry) -> void:
 	_action_registry = registry
@@ -379,6 +414,8 @@ func set_action_disabled_reason(action_id: String, reason: String) -> void:
 			btn.set_disabled_reason(reason)
 
 func refresh() -> void:
+	if is_instance_valid(rewind_phase_button):
+		rewind_phase_button.disabled = (_game_state == null)
 	if _game_state == null:
 		_rebuild_action_buttons([])
 		return
@@ -483,6 +520,11 @@ func refresh() -> void:
 			set_action_enabled(aid4, true)
 			set_action_disabled_reason(aid4, "")
 
+func _on_rewind_phase_pressed() -> void:
+	# 作为“面板工具”而非游戏动作：由 GamePanelController 接管该 action_id，并触发时间线回退。
+	clear_context_overlay()
+	action_requested.emit("rewind_to_phase_start", {})
+
 func _get_fallback_actions(phase: String, sub_phase: String) -> Array[String]:
 	var result: Array[String] = ["skip"]
 
@@ -516,10 +558,7 @@ func _get_fallback_actions(phase: String, sub_phase: String) -> Array[String]:
 
 func _rebuild_action_buttons(action_ids: Array[String]) -> void:
 	# 清除旧按钮
-	for btn in _action_buttons.values():
-		if is_instance_valid(btn):
-			btn.queue_free()
-	_action_buttons.clear()
+	UiRebuildHelpersClass.free_nodes_dict(_action_buttons)
 
 	if items_container == null:
 		return
@@ -559,7 +598,10 @@ class ActionButton extends Button:
 		custom_minimum_size = Vector2(180, 36)
 		var base := display_name if not display_name.is_empty() else action_id
 		text = ("【强制】%s" % base) if is_mandatory else base
-		add_theme_font_size_override("font_size", 14)
+		var fs := 14
+		if Globals != null:
+			fs = int(Globals.get_scaled_font_size(14))
+		add_theme_font_size_override("font_size", fs)
 
 	func set_enabled(enabled: bool) -> void:
 		disabled = not enabled

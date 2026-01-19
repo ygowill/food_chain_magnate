@@ -5,7 +5,9 @@ extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DrinksProcurementClass = preload("res://core/rules/drinks_procurement.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
@@ -346,7 +348,7 @@ static func _find_restaurant_placement_with_road_access(engine: GameEngine, acto
 	if executor == null:
 		return null
 
-	var road_graph = MapRuntimeClass.get_road_graph(state)
+	var road_graph = RoadGraphCacheClass.get_road_graph(state)
 	if road_graph == null:
 		return null
 
@@ -410,7 +412,7 @@ static func _find_player_with_air_reachable_source(state: GameState, range_value
 	var restaurants: Dictionary = state.map.get("restaurants", {})
 
 	for pid in range(state.players.size()):
-		var rest_ids := MapRuntimeClass.get_player_restaurants(state, pid)
+		var rest_ids := StructuresClass.get_player_restaurants(state, pid)
 		for rest_id in rest_ids:
 				var rest: Dictionary = restaurants.get(rest_id, {})
 				if rest.is_empty():
@@ -433,7 +435,7 @@ static func _find_player_with_air_reachable_source(state: GameState, range_value
 	return -1
 
 static func _find_player_with_road_reachable_source(state: GameState, range_value: int) -> int:
-	var road_graph = MapRuntimeClass.get_road_graph(state)
+	var road_graph = RoadGraphCacheClass.get_road_graph(state)
 	if road_graph == null:
 		return -1
 
@@ -441,7 +443,7 @@ static func _find_player_with_road_reachable_source(state: GameState, range_valu
 	var restaurants: Dictionary = state.map.get("restaurants", {})
 
 	for pid in range(state.players.size()):
-		var rest_ids := MapRuntimeClass.get_player_restaurants(state, pid)
+		var rest_ids := StructuresClass.get_player_restaurants(state, pid)
 		for rest_id in rest_ids:
 			var rest: Dictionary = restaurants.get(rest_id, {})
 			if rest.is_empty():
@@ -481,7 +483,7 @@ static func _pick_air_target_for_player(state: GameState, player_id: int, range_
 	var sources: Array = state.map.get("drink_sources", [])
 	var restaurants: Dictionary = state.map.get("restaurants", {})
 
-	var rest_ids := MapRuntimeClass.get_player_restaurants(state, player_id)
+	var rest_ids := StructuresClass.get_player_restaurants(state, player_id)
 	for rest_id in rest_ids:
 		var rest: Dictionary = restaurants.get(rest_id, {})
 		if rest.is_empty():
@@ -519,14 +521,14 @@ static func _build_air_route(from_pos: Vector2i, to_pos: Vector2i) -> Array[Vect
 	return route
 
 static func _pick_road_target_and_route_for_player(state: GameState, player_id: int, range_value: int) -> Dictionary:
-	var road_graph = MapRuntimeClass.get_road_graph(state)
+	var road_graph = RoadGraphCacheClass.get_road_graph(state)
 	if road_graph == null:
 		return {}
 
 	var sources: Array = state.map.get("drink_sources", [])
 	var restaurants: Dictionary = state.map.get("restaurants", {})
 
-	var rest_ids := MapRuntimeClass.get_player_restaurants(state, player_id)
+	var rest_ids := StructuresClass.get_player_restaurants(state, player_id)
 	for rest_id in rest_ids:
 		var rest: Dictionary = restaurants.get(rest_id, {})
 		if rest.is_empty():
@@ -609,13 +611,13 @@ static func _adjacent_road_cells(state: GameState, anchor: Vector2i) -> Array[Ve
 	var grid_size: Vector2i = state.map.get("grid_size", Vector2i.ZERO)
 	if not _is_in_bounds(grid_size, anchor):
 		return cells
-	if MapRuntimeClass.has_road_at(state, anchor):
+	if CellsClass.has_road_at(state, anchor):
 		cells.append(anchor)
 	for dir in MapUtils.DIRECTIONS:
 		var neighbor := MapUtils.get_neighbor_pos(anchor, dir)
 		if not _is_in_bounds(grid_size, neighbor):
 			continue
-		if MapRuntimeClass.has_road_at(state, neighbor) and not cells.has(neighbor):
+		if CellsClass.has_road_at(state, neighbor) and not cells.has(neighbor):
 			cells.append(neighbor)
 	return cells
 

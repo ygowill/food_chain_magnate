@@ -108,6 +108,22 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, _comm
 
 	# 若本动作触发了自动推进阶段，则补齐 phase/sub_phase 事件（原先由手动 advance_phase 触发）
 	if old_state.phase != new_state.phase:
+		if str(old_state.phase) == "Dinnertime":
+			var report: Dictionary = {}
+			if old_state.round_state is Dictionary:
+				var v = Dictionary(old_state.round_state).get("dinnertime", null)
+				if v is Dictionary:
+					report = Dictionary(v).duplicate(true)
+			events.append({
+				"type": EventBus.EventType.DINNERTIME_REPORT,
+				"data": {
+					"round": old_state.round_number,
+					"from_phase": str(old_state.phase),
+					"to_phase": str(new_state.phase),
+					"report": report,
+				}
+			})
+
 		events.append({
 			"type": EventBus.EventType.PHASE_CHANGED,
 			"data": {

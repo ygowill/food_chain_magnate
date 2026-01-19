@@ -14,6 +14,33 @@ enum HookType {
 	AFTER_EXIT
 }
 
+static func _restore_state(state: GameState, snapshot: GameState) -> void:
+	state.round_number = snapshot.round_number
+	state.phase = snapshot.phase
+	state.sub_phase = snapshot.sub_phase
+	state.turn_order = snapshot.turn_order
+	state.current_player_index = snapshot.current_player_index
+	state.selection_order = snapshot.selection_order
+	state.bank = snapshot.bank
+	state.rules = snapshot.rules
+	state.modules = snapshot.modules
+	state.players = snapshot.players
+	state.map = snapshot.map
+	state.employee_pool = snapshot.employee_pool
+	state.milestone_pool = snapshot.milestone_pool
+	state.marketing_instances = snapshot.marketing_instances
+	state.round_state = snapshot.round_state
+	state.seed = snapshot.seed
+	# 运行时缓存：恢复到旧状态后强制重新计算
+	state._road_graph = null
+
+static func _rollback_and_return(state: GameState, snapshot: GameState, r: Result) -> Result:
+	_restore_state(state, snapshot)
+	return r
+
+static func _rollback_and_fail(state: GameState, snapshot: GameState, error: String) -> Result:
+	return _rollback_and_return(state, snapshot, Result.failure(error))
+
 # 推进到下一阶段
 static func advance_phase(pm, state: GameState) -> Result:
 	var current_phase := DefsClass.get_phase_enum(state.phase)
@@ -38,33 +65,20 @@ static func advance_phase(pm, state: GameState) -> Result:
 				return Result.failure("当前阶段仍有待处理动作，无法推进：%s" % key)
 
 	var all_warnings: Array[String] = []
-	var old_phase := state.phase
-	var old_sub_phase := state.sub_phase
-	var old_round_number := state.round_number
-	var old_map_snapshot: Dictionary = state.map.duplicate(true)
-	var old_marketing_instances_snapshot: Array = state.marketing_instances.duplicate(true)
-	var old_bank_snapshot: Dictionary = state.bank.duplicate(true)
-	var old_round_state_snapshot: Dictionary = state.round_state.duplicate(true)
-	var old_players_snapshot: Array = state.players.duplicate(true)
+	var snapshot: GameState = state.duplicate_state()
+	var old_phase := snapshot.phase
+	var old_sub_phase := snapshot.sub_phase
 
 	# 执行当前阶段退出钩子
 	var exit_result = pm._hooks.run_phase_hooks(current_phase, HookType.BEFORE_EXIT, state)
 	if not exit_result.ok:
-		return exit_result
+		return _rollback_and_return(state, snapshot, exit_result)
 	all_warnings.append_array(exit_result.warnings)
 
 	# 阶段离开时结算（可由模块覆盖触发点映射）
 	var exit_settlements = pm._run_settlement_triggers("exit", current_phase, state)
 	if not exit_settlements.ok:
-		state.phase = old_phase
-		state.sub_phase = old_sub_phase
-		state.round_number = old_round_number
-		state.map = old_map_snapshot
-		state.marketing_instances = old_marketing_instances_snapshot
-		state.bank = old_bank_snapshot
-		state.round_state = old_round_state_snapshot
-		state.players = old_players_snapshot
-		return exit_settlements
+		return _rollback_and_return(state, snapshot, exit_settlements)
 	all_warnings.append_array(exit_settlements.warnings)
 
 	# 确定下一阶段
@@ -92,13 +106,13 @@ static func advance_phase(pm, state: GameState) -> Result:
 	if state.round_state is Dictionary and state.round_state.has("force_next_phase"):
 		var f_val = state.round_state.get("force_next_phase", null)
 		if not (f_val is String):
-			return Result.failure("round_state.force_next_phase 类型错误（期望 String）")
+			return _rollback_and_fail(state, snapshot, "round_state.force_next_phase 类型错误（期望 String）")
 		var f_name: String = str(f_val)
 		if f_name.is_empty():
-			return Result.failure("round_state.force_next_phase 不能为空")
+			return _rollback_and_fail(state, snapshot, "round_state.force_next_phase 不能为空")
 		var f_enum := DefsClass.get_phase_enum(f_name)
 		if f_enum == -1:
-			return Result.failure("round_state.force_next_phase 未知阶段: %s" % f_name)
+			return _rollback_and_fail(state, snapshot, "round_state.force_next_phase 未知阶段: %s" % f_name)
 		next_phase = f_enum
 		state.round_state.erase("force_next_phase")
 
@@ -114,44 +128,20 @@ static func advance_phase(pm, state: GameState) -> Result:
 	# 执行退出后钩子
 	var after_exit_result = pm._hooks.run_phase_hooks(current_phase, HookType.AFTER_EXIT, state)
 	if not after_exit_result.ok:
-		state.phase = old_phase
-		state.sub_phase = old_sub_phase
-		state.round_number = old_round_number
-		state.map = old_map_snapshot
-		state.marketing_instances = old_marketing_instances_snapshot
-		state.bank = old_bank_snapshot
-		state.round_state = old_round_state_snapshot
-		state.players = old_players_snapshot
-		return after_exit_result
+		return _rollback_and_return(state, snapshot, after_exit_result)
 	all_warnings.append_array(after_exit_result.warnings)
 
 	# 执行新阶段进入钩子
 	var before_enter_result = pm._hooks.run_phase_hooks(next_phase, HookType.BEFORE_ENTER, state)
 	if not before_enter_result.ok:
-		state.phase = old_phase
-		state.sub_phase = old_sub_phase
-		state.round_number = old_round_number
-		state.map = old_map_snapshot
-		state.marketing_instances = old_marketing_instances_snapshot
-		state.bank = old_bank_snapshot
-		state.round_state = old_round_state_snapshot
-		state.players = old_players_snapshot
-		return before_enter_result
+		return _rollback_and_return(state, snapshot, before_enter_result)
 	all_warnings.append_array(before_enter_result.warnings)
 
 	# Marketing 结算：必须在 BEFORE_ENTER hooks 之后执行，便于模块注入结算轮次数等参数。
 	# 阶段进入时结算（BEFORE_ENTER hooks 已执行；可由模块覆盖触发点映射）
 	var enter_settlements = pm._run_settlement_triggers("enter", next_phase, state)
 	if not enter_settlements.ok:
-		state.phase = old_phase
-		state.sub_phase = old_sub_phase
-		state.round_number = old_round_number
-		state.map = old_map_snapshot
-		state.marketing_instances = old_marketing_instances_snapshot
-		state.bank = old_bank_snapshot
-		state.round_state = old_round_state_snapshot
-		state.players = old_players_snapshot
-		return enter_settlements
+		return _rollback_and_return(state, snapshot, enter_settlements)
 	all_warnings.append_array(enter_settlements.warnings)
 
 	# Cleanup 阶段：若存在模块注入的子阶段，自动进入第一个子阶段
@@ -164,28 +154,12 @@ static func advance_phase(pm, state: GameState) -> Result:
 
 		var sub_before_cleanup = pm._run_named_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
 		if not sub_before_cleanup.ok:
-			state.phase = old_phase
-			state.sub_phase = old_sub_phase
-			state.round_number = old_round_number
-			state.map = old_map_snapshot
-			state.marketing_instances = old_marketing_instances_snapshot
-			state.bank = old_bank_snapshot
-			state.round_state = old_round_state_snapshot
-			state.players = old_players_snapshot
-			return sub_before_cleanup
+			return _rollback_and_return(state, snapshot, sub_before_cleanup)
 		all_warnings.append_array(sub_before_cleanup.warnings)
 
 		var sub_after_cleanup = pm._run_named_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
 		if not sub_after_cleanup.ok:
-			state.phase = old_phase
-			state.sub_phase = old_sub_phase
-			state.round_number = old_round_number
-			state.map = old_map_snapshot
-			state.marketing_instances = old_marketing_instances_snapshot
-			state.bank = old_bank_snapshot
-			state.round_state = old_round_state_snapshot
-			state.players = old_players_snapshot
-			return sub_after_cleanup
+			return _rollback_and_return(state, snapshot, sub_after_cleanup)
 		all_warnings.append_array(sub_after_cleanup.warnings)
 
 	# 如果是工作阶段，自动进入第一个子阶段
@@ -195,35 +169,19 @@ static func advance_phase(pm, state: GameState) -> Result:
 
 		var sub_before = pm._run_working_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
 		if not sub_before.ok:
-			state.phase = old_phase
-			state.sub_phase = old_sub_phase
-			state.round_number = old_round_number
-			state.map = old_map_snapshot
-			state.marketing_instances = old_marketing_instances_snapshot
-			state.bank = old_bank_snapshot
-			state.round_state = old_round_state_snapshot
-			state.players = old_players_snapshot
-			return sub_before
+			return _rollback_and_return(state, snapshot, sub_before)
 		all_warnings.append_array(sub_before.warnings)
 
 		var sub_after = pm._run_working_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
 		if not sub_after.ok:
-			state.phase = old_phase
-			state.sub_phase = old_sub_phase
-			state.round_number = old_round_number
-			state.map = old_map_snapshot
-			state.marketing_instances = old_marketing_instances_snapshot
-			state.bank = old_bank_snapshot
-			state.round_state = old_round_state_snapshot
-			state.players = old_players_snapshot
-			return sub_after
+			return _rollback_and_return(state, snapshot, sub_after)
 		all_warnings.append_array(sub_after.warnings)
 
 	# 其它阶段：若模块为该阶段配置了子阶段顺序，则自动进入第一个子阶段
 	if next_phase != Phase.WORKING and next_phase != Phase.CLEANUP and pm._phase_sub_phase_orders.has(next_phase):
 		var order_val = pm._phase_sub_phase_orders.get(next_phase, null)
 		if not (order_val is Array):
-			return Result.failure("phase_sub_phase_order 内部类型错误: %s" % str(PHASE_NAMES.get(next_phase, next_phase)))
+			return _rollback_and_fail(state, snapshot, "phase_sub_phase_order 内部类型错误: %s" % str(PHASE_NAMES.get(next_phase, next_phase)))
 		var order: Array = order_val
 		if not order.is_empty():
 			state.sub_phase = str(order[0])
@@ -238,42 +196,18 @@ static func advance_phase(pm, state: GameState) -> Result:
 
 			var sub_before_generic = pm._run_named_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
 			if not sub_before_generic.ok:
-				state.phase = old_phase
-				state.sub_phase = old_sub_phase
-				state.round_number = old_round_number
-				state.map = old_map_snapshot
-				state.marketing_instances = old_marketing_instances_snapshot
-				state.bank = old_bank_snapshot
-				state.round_state = old_round_state_snapshot
-				state.players = old_players_snapshot
-				return sub_before_generic
+				return _rollback_and_return(state, snapshot, sub_before_generic)
 			all_warnings.append_array(sub_before_generic.warnings)
 
 			var sub_after_generic = pm._run_named_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
 			if not sub_after_generic.ok:
-				state.phase = old_phase
-				state.sub_phase = old_sub_phase
-				state.round_number = old_round_number
-				state.map = old_map_snapshot
-				state.marketing_instances = old_marketing_instances_snapshot
-				state.bank = old_bank_snapshot
-				state.round_state = old_round_state_snapshot
-				state.players = old_players_snapshot
-				return sub_after_generic
+				return _rollback_and_return(state, snapshot, sub_after_generic)
 			all_warnings.append_array(sub_after_generic.warnings)
 
 	# 执行进入后钩子
 	var after_enter_result = pm._hooks.run_phase_hooks(next_phase, HookType.AFTER_ENTER, state)
 	if not after_enter_result.ok:
-		state.phase = old_phase
-		state.sub_phase = old_sub_phase
-		state.round_number = old_round_number
-		state.map = old_map_snapshot
-		state.marketing_instances = old_marketing_instances_snapshot
-		state.bank = old_bank_snapshot
-		state.round_state = old_round_state_snapshot
-		state.players = old_players_snapshot
-		return after_enter_result
+		return _rollback_and_return(state, snapshot, after_enter_result)
 	all_warnings.append_array(after_enter_result.warnings)
 
 	GameLog.info("PhaseManager", "阶段推进: %s -> %s (回合 %d)" % [

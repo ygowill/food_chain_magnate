@@ -3,6 +3,7 @@ extends RefCounted
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const ProductRegistry = preload("res://core/data/product_registry.gd")
+const DemandVariantHelpersClass = preload("res://modules/dinnertime_demand_variant_helpers.gd")
 
 const MODULE_ID := "kimchi"
 const PRODUCT_ID := "kimchi"
@@ -62,9 +63,7 @@ func _get_demand_variants(_state: GameState, _house_id: String, house: Dictionar
 
 	# 2) Kimchi + noodles（仅当 base 无法成交时才会走到这里，所以 rank 必须在 base 之后、noodles 之前）
 	# 说明：面条是 fallback 规则，不应在 base 可成交时被优先。
-	var total := 0
-	for k in base_required.keys():
-		total += int(base_required.get(k, 0))
+	var total := DemandVariantHelpersClass.sum_required_counts(base_required)
 	if total > 0 and ProductRegistry.has("noodles"):
 		out.append({
 			"id": "%s:kimchi_plus_noodles" % MODULE_ID,

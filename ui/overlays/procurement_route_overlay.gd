@@ -1,7 +1,7 @@
 # 采购路线覆盖层组件
 # 在地图上显示饮料采购的自动规划路线（仅可视化，不改变规则）。
 class_name ProcurementRouteOverlay
-extends Control
+extends BaseTileOverlay
 
 const ROUTE_COLOR := Color(0.35, 0.8, 1.0, 0.8)
 const ROUTE_WIDTH := 4.0
@@ -9,9 +9,6 @@ const ROUTE_WIDTH := 4.0
 const START_COLOR := Color(0.35, 0.9, 0.55, 0.95)
 const SOURCE_COLOR := Color(1.0, 0.75, 0.2, 0.95)
 const MARKER_SIZE := 10.0
-
-var _tile_size: Vector2 = Vector2(64, 64)
-var _map_offset: Vector2 = Vector2.ZERO
 
 var _entrance_pos: Vector2i = Vector2i(-1, -1)
 var _route: Array[Vector2i] = []
@@ -24,12 +21,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ensure_line()
 
-func set_tile_size(size: Vector2) -> void:
-	_tile_size = size
-	_rebuild_visuals()
-
-func set_map_offset(offset: Vector2) -> void:
-	_map_offset = offset
+func _on_layout_changed() -> void:
 	_rebuild_visuals()
 
 func show_plan(entrance_pos: Vector2i, route: Array[Vector2i], picked_sources: Array[Vector2i] = []) -> void:
@@ -42,7 +34,7 @@ func clear_all() -> void:
 	_entrance_pos = Vector2i(-1, -1)
 	_route.clear()
 	_picked_sources.clear()
-	_clear_markers()
+	_free_nodes(_markers)
 	if _route_line != null and is_instance_valid(_route_line):
 		_route_line.clear_points()
 
@@ -61,7 +53,7 @@ func _ensure_line() -> void:
 
 func _rebuild_visuals() -> void:
 	_ensure_line()
-	_clear_markers()
+	_free_nodes(_markers)
 
 	if _route_line == null or not is_instance_valid(_route_line):
 		return
@@ -93,10 +85,3 @@ func _add_marker(grid_pos: Vector2i, color: Color, size: float = MARKER_SIZE) ->
 	rect.z_index = 11
 	add_child(rect)
 	_markers.append(rect)
-
-func _clear_markers() -> void:
-	for m in _markers:
-		if is_instance_valid(m):
-			m.queue_free()
-	_markers.clear()
-

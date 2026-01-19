@@ -4,7 +4,8 @@ class_name MarketingCampaignsTest
 extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingSettlementClass = preload("res://core/rules/phase/marketing_settlement.gd")
@@ -56,7 +57,7 @@ static func _test_billboard_mailbox_and_expiry(player_count: int, seed_val: int)
 	if not map_result.ok:
 		return map_result
 	state.map = map_result.value
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)
 	state.players[actor]["restaurants"] = ["rest_0"]
 
 	# 准备员工（直接从池取卡，保持守恒）
@@ -124,7 +125,7 @@ static func _test_billboard_mailbox_and_expiry(player_count: int, seed_val: int)
 		for dx in range(b11.footprint_size.x):
 			b11_cells.append(b11_anchor + Vector2i(dx, dy))
 	for p in b11_cells:
-		var c := MapRuntimeClass.get_cell(state, p)
+		var c := CellsClass.get_cell(state, p)
 		var rs_val = c.get("road_segments", null)
 		if rs_val is Array and not (rs_val as Array).is_empty():
 			return Result.failure("测试地图不匹配：#11 预期占地包含道路格: %s" % str(p))
@@ -222,7 +223,7 @@ static func _test_radio_and_airplane_ranges(player_count: int, seed_val: int) ->
 	if not map_result.ok:
 		return map_result
 	state.map = map_result.value
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)
 	state.players[actor]["restaurants"] = ["rest_0"]
 
 	# 准备员工：
@@ -327,7 +328,7 @@ static func _test_first_billboard_permanent_and_no_salary(player_count: int, see
 	if not map_result.ok:
 		return map_result
 	state.map = map_result.value
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)
 	state.players[actor]["restaurants"] = ["rest_0"]
 
 	# 准备员工（从池取卡，保持守恒）：
@@ -453,7 +454,7 @@ static func _test_effect_registry_first_radio_demand_amount(player_count: int, s
 	if not map_result.ok:
 		return map_result
 	state.map = map_result.value
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)
 	state.players[actor]["restaurants"] = ["rest_0"]
 
 	# 准备员工：brand_director 可放置 radio（在池中，按守恒取用）

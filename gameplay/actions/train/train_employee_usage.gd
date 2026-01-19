@@ -3,6 +3,7 @@ extends RefCounted
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 
 const ACTION_ID := "train"
@@ -140,8 +141,6 @@ static func apply_inferred_use_employee_train(state: GameState, player_id: int) 
 			return inc
 
 		for _k in range(delta):
-			var use_r := MilestoneSystemClass.process_event(state, "UseEmployee", {"player_id": player_id, "id": emp_id})
-			if not use_r.ok:
-				warnings.append("里程碑触发失败(UseEmployee/%s): %s" % [emp_id, use_r.error])
+			EmployeeUsageHelperClass.append_use_employee_warning(warnings, state, player_id, emp_id)
 
 	return Result.success().with_warnings(warnings)

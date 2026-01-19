@@ -11,6 +11,7 @@ const InvariantsClass = preload("res://core/engine/game_engine/invariants.gd")
 const LoaderClass = preload("res://core/engine/game_engine/loader.gd")
 const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
 const ReplayClass = preload("res://core/engine/game_engine/replay.gd")
+const EventHistoryRebuildClass = preload("res://core/engine/game_engine/event_history_rebuild.gd")
 const DiagnosticsClass = preload("res://core/engine/game_engine/diagnostics.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModulesV2Class = preload("res://core/engine/game_engine/modules_v2.gd")
@@ -93,9 +94,10 @@ func initialize(
 	seed_value: int,
 	enabled_modules_v2: Array[String] = [],
 	modules_v2_base_dir: String = "",
-	reserve_card_selected_by_player: Array[int] = []
+	reserve_card_selected_by_player: Array[int] = [],
+	restaurant_logo_choices_by_player: Array[int] = []
 ) -> Result:
-	return InitializerClass.initialize_new_game(self, player_count, seed_value, enabled_modules_v2, modules_v2_base_dir, reserve_card_selected_by_player)
+	return InitializerClass.initialize_new_game(self, player_count, seed_value, enabled_modules_v2, modules_v2_base_dir, reserve_card_selected_by_player, restaurant_logo_choices_by_player)
 
 # 从存档恢复
 func load_from_archive(archive: Dictionary) -> Result:
@@ -131,7 +133,7 @@ func rewind_to_command(target_index: int) -> Result:
 	if not init_check.ok:
 		return init_check
 
-	var replay_result := ReplayClass.rewind_to_command(command_history, checkpoints, action_registry, phase_manager, target_index)
+	var replay_result: Result = ReplayClass.rewind_to_command(command_history, checkpoints, action_registry, phase_manager, target_index)
 	if not replay_result.ok:
 		return replay_result
 
@@ -146,7 +148,28 @@ func rewind_to_command(target_index: int) -> Result:
 	state = data["state"]
 	random_manager = data["random_manager"]
 	current_command_index = data["current_command_index"]
-	return Result.success(state)
+
+	# 重要：回退会改变“当前时间线指针”，需要同步重建 EventBus.history，
+	# 否则 UI 日志/回放验证会残留未来事件（undo/redo 视觉上不会真的回到过去）。
+	if EventBus != null and EventBus.has_method("clear_history_and_reset_sequence") and EventBus.has_method("record_event"):
+		var history_r: Result = EventHistoryRebuildClass.build(self, target_index)
+		if not history_r.ok:
+			return Result.failure("回退成功，但重建事件历史失败: %s" % history_r.error).with_warnings(replay_result.warnings)
+		var events: Array = history_r.value if (history_r.value is Array) else []
+		EventBus.clear_history_and_reset_sequence()
+		for ev_val in events:
+			if not (ev_val is Dictionary):
+				continue
+			var ev: Dictionary = ev_val
+			var t: String = str(ev.get("type", "")).strip_edges()
+			if t.is_empty():
+				continue
+			var d_val = ev.get("data", {})
+			var d: Dictionary = d_val if (d_val is Dictionary) else {}
+			EventBus.record_event(t, d)
+		return Result.success(state).with_warnings(replay_result.warnings).with_warnings(history_r.warnings)
+
+	return Result.success(state).with_warnings(replay_result.warnings)
 
 # 完整重放（从头开始）
 func full_replay() -> Result:
@@ -157,7 +180,7 @@ func full_replay() -> Result:
 	if command_history.is_empty():
 		return Result.success(state)
 
-	var replay_result := ReplayClass.full_replay(command_history, checkpoints, action_registry, phase_manager)
+	var replay_result: Result = ReplayClass.full_replay(command_history, checkpoints, action_registry, phase_manager)
 	if not replay_result.ok:
 		return replay_result
 
@@ -235,6 +258,45 @@ func get_content_catalog_v2():
 # 获取命令历史
 func get_command_history() -> Array[Command]:
 	return command_history
+
+func get_checkpoints() -> Array[Dictionary]:
+	return checkpoints
+
+# 查找“当前阶段开始”对应的命令索引（用于 UI 的“一键回退本阶段”）。
+# 语义：返回 target_index，用于 rewind_to_command(target_index)。
+# - 若当前阶段尚未执行任何命令，则返回 current_command_index（回退为 no-op）。
+# - 若本局尚未执行任何命令，则返回 -1。
+func find_phase_start_command_index() -> Result:
+	var init_check := _ensure_initialized()
+	if not init_check.ok:
+		return init_check
+	if state == null:
+		return Result.failure("游戏状态为空")
+
+	if current_command_index < 0:
+		return Result.success(-1)
+
+	var phase_name := str(state.phase)
+	var round_num := int(state.round_number)
+
+	var first_in_phase := -1
+	for i in range(current_command_index + 1):
+		var cmd: Command = command_history[i]
+		if cmd == null:
+			continue
+		if str(cmd.phase) != phase_name:
+			continue
+		# timestamp = round*1000 + ...（CommandRunner 写入），用于区分不同回合的同名阶段
+		if int(cmd.timestamp) >= 0 and int(int(cmd.timestamp) / 1000) != round_num:
+			continue
+		first_in_phase = i
+		break
+
+	if first_in_phase < 0:
+		# 当前阶段还没有命令：已经位于阶段开始
+		return Result.success(current_command_index)
+
+	return Result.success(first_in_phase - 1)
 
 # 获取特定范围的命令
 func get_commands_range(from: int, to: int) -> Array[Command]:

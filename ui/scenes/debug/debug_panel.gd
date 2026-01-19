@@ -96,18 +96,20 @@ func _init_tab_titles() -> void:
 		if titles.has(key):
 			tab_container.set_tab_title(i, str(titles[key]))
 
+func _call_tab_method(tab, method_name: String, args: Array = []) -> void:
+	if tab == null:
+		return
+	if not tab.has_method(method_name):
+		return
+	tab.callv(method_name, args)
+
 func _init_tabs() -> void:
 	# 初始化各标签页
-	if state_tab and state_tab.has_method("init"):
-		state_tab.init(_command_registry)
-	if command_tab and command_tab.has_method("init"):
-		command_tab.init(_command_registry, Callable(self, "execute_command"))
-	if entity_tab and entity_tab.has_method("init"):
-		entity_tab.init(_command_registry)
-	if history_tab and history_tab.has_method("init"):
-		history_tab.init(_command_registry)
-	if settings_tab and settings_tab.has_method("init"):
-		settings_tab.init(_command_registry)
+	_call_tab_method(state_tab, "init", [_command_registry])
+	_call_tab_method(command_tab, "init", [_command_registry, Callable(self, "execute_command")])
+	_call_tab_method(entity_tab, "init", [_command_registry])
+	_call_tab_method(history_tab, "init", [_command_registry])
+	_call_tab_method(settings_tab, "init", [_command_registry])
 
 func _register_builtin_commands() -> void:
 	# 注册内置命令
@@ -127,12 +129,9 @@ func get_game_engine() -> GameEngine:
 
 func refresh_state() -> void:
 	# 刷新所有标签页
-	if state_tab and state_tab.has_method("refresh"):
-		state_tab.refresh()
-	if entity_tab and entity_tab.has_method("refresh"):
-		entity_tab.refresh()
-	if history_tab and history_tab.has_method("refresh"):
-		history_tab.refresh()
+	_call_tab_method(state_tab, "refresh")
+	_call_tab_method(entity_tab, "refresh")
+	_call_tab_method(history_tab, "refresh")
 
 	_update_status()
 
@@ -219,7 +218,11 @@ func _update_status() -> void:
 	# 命令数
 	if _game_engine != null:
 		var cmd_count := _game_engine.get_command_history().size()
-		status_parts.append("命令数: %d" % cmd_count)
+		var cur := int(_game_engine.current_command_index)
+		if cur >= 0:
+			status_parts.append("命令: %d (当前: #%d)" % [cmd_count, cur])
+		else:
+			status_parts.append("命令: %d (当前: -)" % cmd_count)
 
 		# 状态哈希
 		var state := _game_engine.get_state()

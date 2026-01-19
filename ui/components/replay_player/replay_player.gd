@@ -308,7 +308,10 @@ func load_from_engine(engine: GameEngine) -> Result:
 
 	_game_engine = engine
 	_command_history = engine.get_command_history()
-	_checkpoints = engine.get_checkpoints()
+	# 兼容：旧版本 GameEngine 可能没有暴露 get_checkpoints()（当前 ReplayPlayer 也不依赖该数据）。
+	_checkpoints = []
+	if engine.has_method("get_checkpoints"):
+		_checkpoints = engine.get_checkpoints()
 	_total_commands = _command_history.size()
 	_current_index = -1  # 从初始状态开始
 

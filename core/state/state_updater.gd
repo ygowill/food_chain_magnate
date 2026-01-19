@@ -1,5 +1,5 @@
-# 状态更新辅助类
-# 提供安全的状态修改方法，支持事务性更新和变更跟踪
+# 状态更新便捷入口（Facade）
+# 说明：保留统一入口，具体实现分散在 state_updater/*（CashOps/InventoryOps/PeopleOps/...）。
 class_name StateUpdater
 extends RefCounted
 
@@ -8,10 +8,6 @@ const Collections = preload("res://core/state/state_updater/collections.gd")
 const InventoryOps = preload("res://core/state/state_updater/inventory.gd")
 const PeopleOps = preload("res://core/state/state_updater/employees_and_milestones.gd")
 const BatchOps = preload("res://core/state/state_updater/batch.gd")
-
-# 变更记录
-var _changes: Array[Dictionary] = []
-var _track_changes: bool = false
 
 # === 现金操作 ===
 
@@ -104,4 +100,3 @@ static func player_has_milestone(state: GameState, player_id: int, milestone_id:
 
 static func apply_batch(state: GameState, updates: Array[Dictionary]) -> Result:
 	return BatchOps.apply_batch(state, updates)
-

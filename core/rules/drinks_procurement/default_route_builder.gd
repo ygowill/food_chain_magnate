@@ -2,7 +2,7 @@
 extends RefCounted
 
 const InputsClass = preload("res://core/rules/drinks_procurement/inputs.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
 
 static func build_default_route(
@@ -83,7 +83,7 @@ static func build_default_road_route(
 	drink_sources: Array,
 	range_value: int
 ) -> Result:
-	var road_graph = MapRuntimeClass.get_road_graph(state)
+	var road_graph = RoadGraphCacheClass.get_road_graph(state)
 	if road_graph == null:
 		return Result.failure("道路图未初始化")
 

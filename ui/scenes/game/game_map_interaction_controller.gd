@@ -6,12 +6,15 @@ extends RefCounted
 signal mode_changed(mode: String, payload: Dictionary)
 signal procure_drinks_source_selected(world_pos: Vector2i)
 
-const PlacementValidatorClass = preload("res://core/map/placement_validator.gd")
+const PlacementClass = preload("res://core/map/placement_validator/placement.gd")
+const RestaurantPlacementClass = preload("res://core/map/placement_validator/restaurant_placement.gd")
 const PieceDefClass = preload("res://core/map/piece_def.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
+const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
 const ChoiceDialogScene = preload("res://ui/dialogs/choice_dialog.tscn")
 
@@ -46,6 +49,17 @@ func connect_signals() -> void:
 
 func set_marketing_panel(panel) -> void:
 	marketing_panel = panel
+
+func _call_marketing_panel_method(method: String, args: Array = []) -> bool:
+	if marketing_panel == null or not is_instance_valid(marketing_panel):
+		return false
+	if not (marketing_panel is CanvasItem) or not (marketing_panel as CanvasItem).visible:
+		return false
+	var m := StringName(method)
+	if not marketing_panel.has_method(m):
+		return false
+	marketing_panel.callv(m, args)
+	return true
 
 func set_restaurant_placement_overlay(overlay) -> void:
 	restaurant_placement_overlay = overlay
@@ -129,8 +143,7 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 					return
 		"marketing":
 			if not _marketing_valid_anchors.has(world_pos):
-				if is_instance_valid(marketing_panel) and marketing_panel.visible and marketing_panel.has_method("set_error"):
-					marketing_panel.set_error("该位置不可放置，请选择绿色高亮的可放置格")
+				_call_marketing_panel_method("set_error", ["该位置不可放置，请选择绿色高亮的可放置格"])
 				return
 			var mt := str(_payload.get("marketing_type", ""))
 			if mt.is_empty():
@@ -141,8 +154,7 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 				if axis.is_empty():
 					if _overlay_controller != null:
 						_overlay_controller.hide_marketing_range_overlay()
-					if is_instance_valid(marketing_panel) and marketing_panel.visible and marketing_panel.has_method("set_error"):
-						marketing_panel.set_error("飞机必须有一条边完全贴地图边缘")
+					_call_marketing_panel_method("set_error", ["飞机必须有一条边完全贴地图边缘"])
 					return
 
 				if _is_airplane_corner(world_pos):
@@ -152,16 +164,14 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 
 				_payload["axis"] = axis
 				_payload["selected_target"] = world_pos
-				if is_instance_valid(marketing_panel) and marketing_panel.visible and marketing_panel.has_method("set_selected_target"):
-					marketing_panel.set_selected_target(world_pos, axis)
+				_call_marketing_panel_method("set_selected_target", [world_pos, axis])
 				if _overlay_controller != null:
 					_overlay_controller.preview_marketing_range(world_pos, 0, mt, {"axis": axis})
 				return
 
 			_payload.erase("axis")
 			_payload.erase("selected_target")
-			if is_instance_valid(marketing_panel) and marketing_panel.visible and marketing_panel.has_method("set_selected_target"):
-				marketing_panel.set_selected_target(world_pos)
+			_call_marketing_panel_method("set_selected_target", [world_pos])
 			if _overlay_controller != null:
 				_overlay_controller.preview_marketing_range(world_pos, 0, mt)
 		"restaurant_placement":
@@ -334,7 +344,7 @@ func _sync_marketing_highlights() -> void:
 		return
 
 	var actor: int = int(state.get_current_player_id())
-	var restaurant_ids := MapRuntimeClass.get_player_restaurants(state, actor)
+	var restaurant_ids := StructuresClass.get_player_restaurants(state, actor)
 
 	# 选中板件占地（用于高亮可放置 anchor）
 	var base_size := Vector2i.ONE
@@ -366,17 +376,16 @@ func _sync_marketing_highlights() -> void:
 
 	# 若员工存在距离限制：没有餐厅则必定无可放置格（提示原因，避免误解为 UI bug）
 	if range_required and restaurant_ids.is_empty():
-		if is_instance_valid(marketing_panel) and marketing_panel.visible and marketing_panel.has_method("set_error"):
-			var rt := range_type
-			var rv := range_value
-			marketing_panel.set_error("没有可放置格：你还没有餐厅（距离限制：%s %d）" % [rt, rv])
+		var rt := range_type
+		var rv := range_value
+		_call_marketing_panel_method("set_error", ["没有可放置格：你还没有餐厅（距离限制：%s %d）" % [rt, rv]])
 		return
 
 	# 统计：是否存在道路 / 空地（用于错误提示）
 	for y2 in range(grid_size.y):
 		for x2 in range(grid_size.x):
-			var wp2 := MapRuntimeClass.index_to_world(state, Vector2i(x2, y2))
-			var cell2 := MapRuntimeClass.get_cell(state, wp2)
+			var wp2 := CoordsClass.index_to_world(state, Vector2i(x2, y2))
+			var cell2 := CellsClass.get_cell(state, wp2)
 			if cell2.is_empty():
 				continue
 			if not requires_edge and not has_any_road:
@@ -430,13 +439,13 @@ func _sync_marketing_highlights() -> void:
 				for dx in range(p_size.x):
 					occupied_cells[anchor + Vector2i(dx, dy)] = true
 
-	var minp := MapRuntimeClass.get_world_min(state)
-	var maxp := MapRuntimeClass.get_world_max(state)
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
 
 	var valid: Array[Vector2i] = []
 	for y in range(grid_size.y):
 		for x in range(grid_size.x):
-			var anchor_pos := MapRuntimeClass.index_to_world(state, Vector2i(x, y))
+			var anchor_pos := CoordsClass.index_to_world(state, Vector2i(x, y))
 
 			# 占地 cells：top-left anchor + rotated size
 			var footprint_cells: Array[Vector2i] = []
@@ -447,14 +456,14 @@ func _sync_marketing_highlights() -> void:
 					footprint_cells.append(p2)
 
 					# 越界/占用
-					if not MapRuntimeClass.is_world_pos_in_grid(state, p2):
+					if not CoordsClass.is_world_pos_in_grid(state, p2):
 						footprint_ok = false
 						break
 					if occupied_cells.has(p2):
 						footprint_ok = false
 						break
 
-					var cell3 := MapRuntimeClass.get_cell(state, p2)
+					var cell3 := CellsClass.get_cell(state, p2)
 					if cell3.is_empty():
 						footprint_ok = false
 						break
@@ -573,9 +582,8 @@ func _sync_marketing_highlights() -> void:
 			else:
 				msg = "没有可放置格：没有满足规则的空地"
 
-		if not msg.is_empty():
-			if is_instance_valid(marketing_panel) and marketing_panel.visible and marketing_panel.has_method("set_error"):
-				marketing_panel.set_error(msg)
+			if not msg.is_empty():
+				_call_marketing_panel_method("set_error", [msg])
 
 func _is_airplane_corner(world_pos: Vector2i) -> bool:
 	if _scene == null or _scene.game_engine == null:
@@ -586,8 +594,8 @@ func _is_airplane_corner(world_pos: Vector2i) -> bool:
 	var size := _get_selected_marketing_board_rotated_size()
 	if size.x <= 0 or size.y <= 0:
 		return false
-	var minp := MapRuntimeClass.get_world_min(state)
-	var maxp := MapRuntimeClass.get_world_max(state)
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
 	var left := world_pos.x
 	var right := world_pos.x + size.x - 1
 	var top := world_pos.y
@@ -605,8 +613,8 @@ func _infer_airplane_axis_for_pos(world_pos: Vector2i) -> String:
 	var size := _get_selected_marketing_board_rotated_size()
 	if size.x <= 0 or size.y <= 0:
 		return ""
-	var minp := MapRuntimeClass.get_world_min(state)
-	var maxp := MapRuntimeClass.get_world_max(state)
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
 	var left := world_pos.x
 	var right := world_pos.x + size.x - 1
 	var top := world_pos.y
@@ -705,15 +713,13 @@ func _on_airplane_axis_selected(axis: String) -> void:
 	_payload["axis"] = axis
 	_payload["selected_target"] = pos
 
-	if is_instance_valid(marketing_panel) and marketing_panel.visible and marketing_panel.has_method("set_selected_target"):
-		marketing_panel.set_selected_target(pos, axis)
+	_call_marketing_panel_method("set_selected_target", [pos, axis])
 	if _overlay_controller != null:
 		_overlay_controller.preview_marketing_range(pos, 0, mt, {"axis": axis})
 
 func _on_airplane_axis_cancelled() -> void:
 	_pending_airplane_corner_pos = Vector2i(-1, -1)
-	if is_instance_valid(marketing_panel) and marketing_panel.visible and marketing_panel.has_method("set_error"):
-		marketing_panel.set_error("未选择飞行方向")
+	_call_marketing_panel_method("set_error", ["未选择飞行方向"])
 
 func on_restaurant_preview_cleared() -> void:
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_structure_preview"):
@@ -781,7 +787,7 @@ func on_restaurant_highlight_requested(mode: String, rotation: int, restaurant_i
 	for y in range(grid_size.y):
 		for x in range(grid_size.x):
 			var world_anchor: Vector2i = Vector2i(x, y) - map_origin
-			var r: Result = PlacementValidatorClass.validate_restaurant_placement(
+			var r: Result = RestaurantPlacementClass.validate_restaurant_placement(
 				ctx,
 				world_anchor,
 				rotation,
@@ -832,8 +838,8 @@ func on_house_highlight_requested(action_id: String, rotation: int) -> void:
 
 	var actor: int = state.get_current_player_id()
 	var piece_registry: Dictionary = engine.game_data.pieces if engine.game_data != null else {}
-	if not piece_registry.has("house") or not (piece_registry["house"] is PieceDef):
-		piece_registry["house"] = PieceDefClass.create_house()
+	if not piece_registry.has("house_with_garden") or not (piece_registry["house_with_garden"] is PieceDef):
+		piece_registry["house_with_garden"] = PieceDefClass.create_house_with_garden()
 
 	var ctx := {
 		"cells": state.map.cells,
@@ -842,6 +848,7 @@ func on_house_highlight_requested(action_id: String, rotation: int) -> void:
 		"houses": state.map.houses,
 		"restaurants": state.map.restaurants,
 		"drink_sources": state.map.get("drink_sources", []),
+		"marketing_placements": state.map.get("marketing_placements", {}),
 	}
 
 	var anchors: Array[Vector2i] = []
@@ -849,14 +856,7 @@ func on_house_highlight_requested(action_id: String, rotation: int) -> void:
 	for y in range(grid_size.y):
 		for x in range(grid_size.x):
 			var world_anchor: Vector2i = Vector2i(x, y) - map_origin
-			var r: Result = PlacementValidatorClass.validate_house_placement(
-				ctx,
-				world_anchor,
-				rotation,
-				piece_registry,
-				actor,
-				{}
-			)
+			var r: Result = PlacementClass.validate_placement(ctx, "house_with_garden", world_anchor, rotation, piece_registry, {})
 			if not r.ok:
 				continue
 			if anchor_set.has(world_anchor):
@@ -910,7 +910,7 @@ func on_restaurant_preview_requested(mode: String, position: Vector2i, rotation:
 			if rest.has("cells") and (rest["cells"] is Array):
 				extra["ignore_structure_cells"] = rest["cells"]
 
-	var validate_r: Result = PlacementValidatorClass.validate_restaurant_placement(
+	var validate_r: Result = RestaurantPlacementClass.validate_restaurant_placement(
 		ctx,
 		position,
 		rotation,
@@ -961,10 +961,10 @@ func on_house_preview_requested(action_id: String, position: Vector2i, rotation:
 	var actor: int = state.get_current_player_id()
 
 	var piece_registry: Dictionary = engine.game_data.pieces if engine.game_data != null else {}
-	if not piece_registry.has("house") or not (piece_registry["house"] is PieceDef):
-		piece_registry["house"] = PieceDefClass.create_house()
-	var piece_def_val = piece_registry.get("house", null)
-	var piece_def: PieceDef = piece_def_val if piece_def_val is PieceDef else PieceDefClass.create_house()
+	if not piece_registry.has("house_with_garden") or not (piece_registry["house_with_garden"] is PieceDef):
+		piece_registry["house_with_garden"] = PieceDefClass.create_house_with_garden()
+	var piece_def_val = piece_registry.get("house_with_garden", null)
+	var piece_def: PieceDef = piece_def_val if piece_def_val is PieceDef else PieceDefClass.create_house_with_garden()
 	var footprint_cells: Array[Vector2i] = piece_def.get_world_cells(position, rotation)
 
 	var ctx := {
@@ -977,18 +977,14 @@ func on_house_preview_requested(action_id: String, position: Vector2i, rotation:
 		"marketing_placements": state.map.get("marketing_placements", {}),
 	}
 
-	var validate_r: Result = PlacementValidatorClass.validate_house_placement(
-		ctx,
-		position,
-		rotation,
-		piece_registry,
-		actor,
-		{}
-	)
+	var validate_r: Result = PlacementClass.validate_placement(ctx, "house_with_garden", position, rotation, piece_registry, {})
 	var valid := validate_r.ok
 	var message := "" if valid else validate_r.error
 
-	var cmd := Command.create("place_house", actor, {"position": [position.x, position.y], "rotation": rotation})
+	var house_number := -1
+	if is_instance_valid(house_placement_overlay) and house_placement_overlay.has_method("get_selected_house_number"):
+		house_number = int(house_placement_overlay.get_selected_house_number())
+	var cmd := Command.create("place_house", actor, {"position": [position.x, position.y], "rotation": rotation, "house_number": house_number})
 	cmd.phase = state.phase
 	cmd.sub_phase = state.sub_phase
 	var executor = engine.get_action_registry().get_executor("place_house")
@@ -1000,7 +996,7 @@ func on_house_preview_requested(action_id: String, position: Vector2i, rotation:
 
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("set_structure_preview"):
 		_map_canvas.call("set_structure_preview", footprint_cells, valid, {
-			"piece_id": "house",
+			"piece_id": "house_with_garden",
 			"anchor": position,
 			"rotation": rotation,
 		})

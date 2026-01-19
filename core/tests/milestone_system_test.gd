@@ -6,7 +6,7 @@ extends RefCounted
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
 const PaydaySettlementClass = preload("res://core/rules/phase/payday_settlement.gd")
 const BankruptcyRulesClass = preload("res://core/rules/economy/bankruptcy_rules.gd")
@@ -213,7 +213,7 @@ static func _test_demand_marked_triggers_first_burger_marketed(seed_val: int) ->
 	_force_turn_order(state)
 
 	state.map = _build_billboard_map()
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)
 
 	# 直接注入一个 billboard 营销实例（避免依赖发起动作与员工卡），验证 Marketing 阶段 DemandMarked 触发。
 	state.marketing_instances = [{

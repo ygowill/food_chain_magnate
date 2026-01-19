@@ -5,7 +5,7 @@ class_name FryChefsV2Test
 extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count != 2:
@@ -37,7 +37,7 @@ static func _test_train_to_patched(seed_val: int) -> Result:
 	if (b0.train_to as Array).has("fry_chef"):
 		return Result.failure("未启用 fry_chefs 时 burger_cook.train_to 不应包含 fry_chef")
 
-	# 实验组：启用 fry_chefs -> 自动包含 noodles/sushi；并注入 train_to
+	# 实验组：启用 fry_chefs -> 不应强依赖 noodles/sushi；并注入 train_to（汉堡/披萨厨师）。
 	var e1 := GameEngine.new()
 	var enabled_modules: Array[String] = [
 		"base_rules",
@@ -55,8 +55,8 @@ static func _test_train_to_patched(seed_val: int) -> Result:
 		return Result.failure("初始化失败: %s" % init1.error)
 
 	var plan: Array = e1.get_module_plan_v2()
-	if not plan.has("noodles") or not plan.has("sushi"):
-		return Result.failure("启用 fry_chefs 时应自动包含 noodles/sushi 依赖，实际 plan=%s" % str(plan))
+	if plan.has("noodles") or plan.has("sushi"):
+		return Result.failure("fry_chefs 不应强依赖 noodles/sushi，实际 plan=%s" % str(plan))
 
 	var b1 = EmployeeRegistryClass.get_def("burger_cook")
 	if b1 == null:
@@ -65,6 +65,31 @@ static func _test_train_to_patched(seed_val: int) -> Result:
 		return Result.failure("启用 fry_chefs 后 burger_cook.train_to 应包含 fry_chef，实际: %s" % str(b1.train_to))
 	if EmployeeRegistryClass.get_def("fry_chef") == null:
 		return Result.failure("启用 fry_chefs 后应存在 fry_chef 定义")
+
+	# 可选 patch：若同时启用 noodles/sushi，应允许从对应厨师培训为 fry_chef
+	var e2 := GameEngine.new()
+	var enabled_modules2: Array[String] = Array(enabled_modules, TYPE_STRING, "", null)
+	enabled_modules2.append("noodles")
+	var init2 := e2.initialize(2, seed_val, enabled_modules2)
+	if not init2.ok:
+		return Result.failure("初始化失败（fry_chefs+noodles）: %s" % init2.error)
+	var n2 = EmployeeRegistryClass.get_def("noodle_cook")
+	if n2 == null:
+		return Result.failure("缺少 noodle_cook 定义（启用 noodles 后）")
+	if not (n2.train_to as Array).has("fry_chef"):
+		return Result.failure("启用 fry_chefs+noodles 后 noodle_cook.train_to 应包含 fry_chef，实际: %s" % str(n2.train_to))
+
+	var e3 := GameEngine.new()
+	var enabled_modules3: Array[String] = Array(enabled_modules, TYPE_STRING, "", null)
+	enabled_modules3.append("sushi")
+	var init3 := e3.initialize(2, seed_val, enabled_modules3)
+	if not init3.ok:
+		return Result.failure("初始化失败（fry_chefs+sushi）: %s" % init3.error)
+	var s3 = EmployeeRegistryClass.get_def("sushi_cook")
+	if s3 == null:
+		return Result.failure("缺少 sushi_cook 定义（启用 sushi 后）")
+	if not (s3.train_to as Array).has("fry_chef"):
+		return Result.failure("启用 fry_chefs+sushi 后 sushi_cook.train_to 应包含 fry_chef，实际: %s" % str(s3.train_to))
 
 	return Result.success()
 
@@ -279,7 +304,7 @@ static func _apply_test_map(state: GameState) -> void:
 
 	state.players[0]["restaurants"] = ["rest_0"]
 	state.players[1]["restaurants"] = ["rest_1"]
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)
 
 static func _set_house_demands(state: GameState, house_id: String, demands: Array) -> void:
 	var houses: Dictionary = state.map.get("houses", {})
@@ -293,4 +318,3 @@ static func _take_to_active(state: GameState, player_id: int, employee_id: Strin
 		state.employee_pool[employee_id] = 0
 	state.employee_pool[employee_id] = int(state.employee_pool.get(employee_id, 0)) - 1
 	state.players[player_id]["employees"].append(employee_id)
-

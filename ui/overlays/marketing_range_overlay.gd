@@ -1,14 +1,11 @@
 # 营销范围覆盖层组件
 # 显示营销活动的影响范围
 class_name MarketingRangeOverlay
-extends Control
+extends BaseTileOverlay
 
 signal range_clicked(position: Vector2i)
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
-
-var _tile_size: Vector2 = Vector2(64, 64)
-var _map_offset: Vector2 = Vector2.ZERO
 
 var _marketing_campaigns: Array[Dictionary] = []  # [{position, range, type, player_id, tiles?}]
 var _range_rects: Array[ColorRect] = []
@@ -24,18 +21,13 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_start_pulse()
 
+func _on_layout_changed() -> void:
+	_rebuild_visuals()
+
 func set_visual_modules(modules: Array[String]) -> void:
 	_visual_modules = Array(modules, TYPE_STRING, "", null)
 	_skin = null
 	_ensure_skin()
-	_rebuild_visuals()
-
-func set_tile_size(size: Vector2) -> void:
-	_tile_size = size
-	_rebuild_visuals()
-
-func set_map_offset(offset: Vector2) -> void:
-	_map_offset = offset
 	_rebuild_visuals()
 
 func add_campaign(position: Vector2i, range_val: int, marketing_type: String, player_id: int = -1, tiles: Array[Vector2i] = []) -> void:
@@ -66,16 +58,8 @@ func set_campaigns(campaigns: Array[Dictionary]) -> void:
 
 func clear_all() -> void:
 	_marketing_campaigns.clear()
-
-	for rect in _range_rects:
-		if is_instance_valid(rect):
-			rect.queue_free()
-	_range_rects.clear()
-
-	for marker in _center_markers:
-		if is_instance_valid(marker):
-			marker.queue_free()
-	_center_markers.clear()
+	_free_nodes(_range_rects)
+	_free_nodes(_center_markers)
 
 func _add_campaign_visual(campaign: Dictionary) -> void:
 	var center: Vector2i = campaign.position

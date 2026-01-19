@@ -199,11 +199,12 @@ static func _validate_force_execute(state: GameState, command: Command, executor
 	if executor == null:
 		return Result.failure("force_execute: executor 为空")
 
-	# 强制模式：仍禁止“非当前玩家”执行（避免 hotseat 语义被破坏）
+	# 强制模式：用于调试/回放，可允许“非当前玩家”执行；但仍需保证 actor 合法。
 	if executor.requires_actor:
-		var current_player_id := state.get_current_player_id()
-		if command.actor != current_player_id:
-			return Result.failure("强制执行仅允许当前玩家执行: actor=%d current=%d" % [command.actor, current_player_id])
+		# 强制模式下允许指定任意玩家（用于调试面板的“目标玩家”），但仍需保证 actor 合法。
+		var count := state.players.size()
+		if command.actor < 0 or command.actor >= count:
+			return Result.failure("force_execute: actor 超出范围: actor=%d players=%d" % [command.actor, count])
 
 	return Result.success()
 
@@ -218,7 +219,7 @@ static func _drain_auto_advances(engine: GameEngine, state_in: GameState) -> Res
 	while safety < 32:
 		safety += 1
 		var before := state_in.duplicate_state()
-		var step := AutoAdvanceClass.try_advance_one(state_in, engine.phase_manager, engine.action_registry)
+		var step: Result = AutoAdvanceClass.try_advance_one(state_in, engine.phase_manager, engine.action_registry)
 		if not step.ok:
 			return step
 		all_warnings.append_array(step.warnings)
@@ -243,6 +244,23 @@ static func _build_phase_change_events(old_state: GameState, new_state: GameStat
 
 	# 阶段变化事件
 	if old_state.phase != new_state.phase:
+		# Dinnertime 结算报告：在离开 Dinnertime 时发射（便于 UI/日志按事件历史恢复，且不依赖当前 state）。
+		if str(old_state.phase) == "Dinnertime":
+			var report: Dictionary = {}
+			if old_state.round_state is Dictionary:
+				var v = Dictionary(old_state.round_state).get("dinnertime", null)
+				if v is Dictionary:
+					report = Dictionary(v).duplicate(true)
+			events.append({
+				"type": EventBus.EventType.DINNERTIME_REPORT,
+				"data": {
+					"round": old_state.round_number,
+					"from_phase": str(old_state.phase),
+					"to_phase": str(new_state.phase),
+					"report": report,
+				}
+			})
+
 		events.append({
 			"type": EventBus.EventType.PHASE_CHANGED,
 			"data": {

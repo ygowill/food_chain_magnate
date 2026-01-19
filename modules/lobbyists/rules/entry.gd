@@ -3,7 +3,8 @@ extends RefCounted
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const PhaseManagerClass = preload("res://core/engine/phase_manager.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const GlobalEffectListClass = preload("res://core/rules/global_effect_list.gd")
 
@@ -32,50 +33,25 @@ const EFFECT_ID_PARK_BONUS := "%s:dinnertime:sale_house_bonus:park" % MODULE_ID
 const STATE_SCHEMA_ID_EXTRA_TILE_PENDING := "lobbyists:round_state_int_keys:lobbyists_extra_tile_pending"
 
 func register(registrar) -> Result:
-	var r: Result = registrar.register_working_sub_phase_insertion("Lobbyists", "PlaceHouses", "PlaceRestaurants", 100)
-	if not r.ok:
-		return r
-	r = registrar.register_working_sub_phase_hook("Lobbyists", HookType.BEFORE_EXIT, Callable(self, "_on_lobbyists_before_exit"), 0)
-	if not r.ok:
-		return r
-
-	r = registrar.register_phase_hook(Phase.RESTRUCTURING, HookType.BEFORE_ENTER, Callable(self, "_on_restructuring_before_enter"), 0)
-	if not r.ok:
-		return r
-
-	r = registrar.register_extension_settlement(Phase.CLEANUP, SettlementRegistryClass.Point.ENTER, Callable(self, "_on_cleanup_enter_extension"), 100)
-	if not r.ok:
-		return r
-
-	r = registrar.register_effect(EFFECT_ID_ROADWORKS_DISTANCE, Callable(self, "_effect_dinnertime_distance_delta_roadworks"))
-	if not r.ok:
-		return r
-	r = registrar.register_effect(EFFECT_ID_PARK_BONUS, Callable(self, "_effect_dinnertime_sale_house_bonus_park"))
-	if not r.ok:
-		return r
-
-	r = registrar.register_milestone_effect("lobbyists_grant_extra_map_tile", Callable(self, "_milestone_effect_grant_extra_map_tile"))
-	if not r.ok:
-		return r
-
-	r = registrar.register_action_executor(PlaceLobbyistsRoadActionClass.new())
-	if not r.ok:
-		return r
-	r = registrar.register_action_executor(PlaceLobbyistsParkActionClass.new())
-	if not r.ok:
-		return r
-	r = registrar.register_action_executor(PlaceLobbyistsExtraMapTileActionClass.new())
-	if not r.ok:
-		return r
-	r = registrar.register_action_executor(SkipLobbyistsExtraMapTileActionClass.new())
-	if not r.ok:
-		return r
-
-	# round_state.<player_id(int) -> ...> 字典：读档后需要把 "0"/"1" 转回 0/1
-	r = registrar.register_round_state_int_key_dict_schema(STATE_SCHEMA_ID_EXTRA_TILE_PENDING, [EXTRA_TILE_PENDING_KEY], 100)
-	if not r.ok:
-		return r
-
+	var steps: Array[Callable] = [
+		Callable(registrar, "register_working_sub_phase_insertion").bind("Lobbyists", "PlaceHouses", "PlaceRestaurants", 100),
+		Callable(registrar, "register_working_sub_phase_hook").bind("Lobbyists", HookType.BEFORE_EXIT, Callable(self, "_on_lobbyists_before_exit"), 0),
+		Callable(registrar, "register_phase_hook").bind(Phase.RESTRUCTURING, HookType.BEFORE_ENTER, Callable(self, "_on_restructuring_before_enter"), 0),
+		Callable(registrar, "register_extension_settlement").bind(Phase.CLEANUP, SettlementRegistryClass.Point.ENTER, Callable(self, "_on_cleanup_enter_extension"), 100),
+		Callable(registrar, "register_effect").bind(EFFECT_ID_ROADWORKS_DISTANCE, Callable(self, "_effect_dinnertime_distance_delta_roadworks")),
+		Callable(registrar, "register_effect").bind(EFFECT_ID_PARK_BONUS, Callable(self, "_effect_dinnertime_sale_house_bonus_park")),
+		Callable(registrar, "register_milestone_effect").bind("lobbyists_grant_extra_map_tile", Callable(self, "_milestone_effect_grant_extra_map_tile")),
+		Callable(registrar, "register_action_executor").bind(PlaceLobbyistsRoadActionClass.new()),
+		Callable(registrar, "register_action_executor").bind(PlaceLobbyistsParkActionClass.new()),
+		Callable(registrar, "register_action_executor").bind(PlaceLobbyistsExtraMapTileActionClass.new()),
+		Callable(registrar, "register_action_executor").bind(SkipLobbyistsExtraMapTileActionClass.new()),
+		# round_state.<player_id(int) -> ...> 字典：读档后需要把 "0"/"1" 转回 0/1
+		Callable(registrar, "register_round_state_int_key_dict_schema").bind(STATE_SCHEMA_ID_EXTRA_TILE_PENDING, [EXTRA_TILE_PENDING_KEY], 100),
+	]
+	for step in steps:
+		var r: Result = step.call()
+		if not r.ok:
+			return r
 	return Result.success()
 
 func _on_restructuring_before_enter(state: GameState) -> Result:
@@ -112,6 +88,36 @@ func _on_restructuring_before_enter(state: GameState) -> Result:
 
 	return Result.success()
 
+func _parse_segments_by_pos_key(key) -> Result:
+	if not (key is String):
+		return Result.failure("%s: segments_by_pos key 类型错误（期望 String）" % MODULE_ID)
+	var parts := str(key).split(",")
+	if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
+		return Result.failure("%s: segments_by_pos key 格式错误: %s" % [MODULE_ID, str(key)])
+	var wx := int(parts[0])
+	var wy := int(parts[1])
+	return Result.success(Vector2i(wx, wy))
+
+func _require_row_at_world_pos(state: GameState, cells: Array, world_pos: Vector2i) -> Result:
+	var idx := CoordsClass.world_to_index(state, world_pos)
+	if idx.x < 0 or idx.y < 0 or idx.y >= cells.size():
+		return Result.failure("%s: segments_by_pos 越界: %s" % [MODULE_ID, str(world_pos)])
+	var row_val = cells[idx.y]
+	if not (row_val is Array) or idx.x >= (row_val as Array).size():
+		return Result.failure("%s: segments_by_pos 越界: %s" % [MODULE_ID, str(world_pos)])
+	return Result.success({"idx": idx, "row": row_val})
+
+func _require_cell_dict(row: Array, idx: Vector2i) -> Result:
+	var cell_val = row[idx.x]
+	if not (cell_val is Dictionary):
+		return Result.failure("%s: cells[%d][%d] 类型错误（期望 Dictionary）" % [MODULE_ID, idx.y, idx.x])
+	return Result.success(cell_val)
+
+func _require_cell_road_segments(cell: Dictionary, world_pos: Vector2i) -> Result:
+	if not cell.has("road_segments") or not (cell["road_segments"] is Array):
+		return Result.failure("%s: cell.road_segments 缺失或类型错误（期望 Array）: %s" % [MODULE_ID, str(world_pos)])
+	return Result.success(cell["road_segments"])
+
 func _on_cleanup_enter_extension(state: GameState, _phase_manager) -> Result:
 	if state == null or not (state.map is Dictionary):
 		return Result.failure("%s: Cleanup 扩展失败：state.map 类型错误" % MODULE_ID)
@@ -146,28 +152,27 @@ func _on_cleanup_enter_extension(state: GameState, _phase_manager) -> Result:
 			return Result.failure("%s: pending_roads[%d].segments_by_pos 类型错误（期望 Dictionary）" % [MODULE_ID, i])
 		var segments_by_pos: Dictionary = segments_val
 		for k in segments_by_pos.keys():
-			if not (k is String):
-				return Result.failure("%s: segments_by_pos key 类型错误（期望 String）" % MODULE_ID)
-			var parts := str(k).split(",")
-			if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
-				return Result.failure("%s: segments_by_pos key 格式错误: %s" % [MODULE_ID, str(k)])
-			var wx := int(parts[0])
-			var wy := int(parts[1])
-			var world_pos := Vector2i(wx, wy)
-			var idx := MapRuntimeClass.world_to_index(state, world_pos)
-			if idx.x < 0 or idx.y < 0 or idx.y >= cells.size():
-				return Result.failure("%s: segments_by_pos 越界: %s" % [MODULE_ID, str(world_pos)])
-			var row_val = cells[idx.y]
-			if not (row_val is Array) or idx.x >= (row_val as Array).size():
-				return Result.failure("%s: segments_by_pos 越界: %s" % [MODULE_ID, str(world_pos)])
-			var row: Array = row_val
-			var cell_val = row[idx.x]
-			if not (cell_val is Dictionary):
-				return Result.failure("%s: cells[%d][%d] 类型错误（期望 Dictionary）" % [MODULE_ID, idx.y, idx.x])
-			var cell: Dictionary = cell_val
-			if not cell.has("road_segments") or not (cell["road_segments"] is Array):
-				return Result.failure("%s: cell.road_segments 缺失或类型错误（期望 Array）: %s" % [MODULE_ID, str(world_pos)])
-			var segs: Array = cell["road_segments"]
+			var world_read := _parse_segments_by_pos_key(k)
+			if not world_read.ok:
+				return world_read
+			var world_pos: Vector2i = world_read.value
+
+			var row_read := _require_row_at_world_pos(state, cells, world_pos)
+			if not row_read.ok:
+				return row_read
+			var idx: Vector2i = row_read.value["idx"]
+			var row: Array = row_read.value["row"]
+
+			var cell_read := _require_cell_dict(row, idx)
+			if not cell_read.ok:
+				return cell_read
+			var cell: Dictionary = cell_read.value
+
+			var segs_read := _require_cell_road_segments(cell, world_pos)
+			if not segs_read.ok:
+				return segs_read
+			var segs: Array = segs_read.value
+
 			var add_val = segments_by_pos[k]
 			if not (add_val is Array):
 				return Result.failure("%s: segments_by_pos[%s] 类型错误（期望 Array）" % [MODULE_ID, str(k)])
@@ -178,7 +183,7 @@ func _on_cleanup_enter_extension(state: GameState, _phase_manager) -> Result:
 
 	state.map["cells"] = cells
 	state.map[PENDING_ROADS_KEY] = []
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)
 	return Result.success()
 
 func _on_lobbyists_before_exit(state: GameState) -> Result:
@@ -310,10 +315,10 @@ func _house_has_adjacent_park(state: GameState, cells_any: Array) -> Result:
 					npos = pos + Vector2i(0, 1)
 				"W":
 					npos = pos + Vector2i(-1, 0)
-			if not MapRuntimeClass.is_world_pos_in_grid(state, npos):
+			if not CoordsClass.is_world_pos_in_grid(state, npos):
 				continue
 
-			var idx: Vector2i = MapRuntimeClass.world_to_index(state, npos)
+			var idx: Vector2i = CoordsClass.world_to_index(state, npos)
 			var row_val = grid_cells[idx.y]
 			if not (row_val is Array):
 				continue

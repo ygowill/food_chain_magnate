@@ -153,7 +153,10 @@ static func _cmd_exec(args: Array, registry: DebugCommandRegistry) -> Result:
 		params = json.data
 
 	var state := engine.get_state()
-	var cmd := Command.create(action_id, state.get_current_player_id(), params)
+	var actor_id := state.get_current_player_id()
+	if registry != null and registry.has_method("resolve_selected_player_id"):
+		actor_id = int(registry.resolve_selected_player_id(state))
+	var cmd := Command.create(action_id, actor_id, params)
 	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 

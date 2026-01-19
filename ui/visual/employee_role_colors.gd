@@ -21,6 +21,10 @@ static func role_to_color_hex(role_in: String) -> String:
 			return ROLE_COLOR_MANAGER
 		"recruit_train":
 			return ROLE_COLOR_RECRUIT_TRAIN
+		"recruit":
+			return ROLE_COLOR_RECRUIT_TRAIN
+		"train":
+			return ROLE_COLOR_RECRUIT_TRAIN
 		"produce_food":
 			return ROLE_COLOR_PRODUCE_FOOD
 		"procure_drink":
@@ -38,4 +42,3 @@ static func role_to_color_hex(role_in: String) -> String:
 
 static func role_to_color(role_in: String) -> Color:
 	return Color(role_to_color_hex(role_in))
-

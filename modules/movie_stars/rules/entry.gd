@@ -20,33 +20,21 @@ const EFFECT_ID_TIEBREAK_C := "movie_stars:dinnertime:tiebreaker:movie_star_c"
 const EFFECT_ID_TIEBREAK_D := "movie_stars:dinnertime:tiebreaker:movie_star_d"
 
 func register(registrar) -> Result:
-	var r = registrar.register_effect(EFFECT_ID_TIEBREAK_B, Callable(self, "_effect_dinnertime_tiebreaker_movie_star_b"))
-	if not r.ok:
-		return r
-	r = registrar.register_effect(EFFECT_ID_TIEBREAK_C, Callable(self, "_effect_dinnertime_tiebreaker_movie_star_c"))
-	if not r.ok:
-		return r
-	r = registrar.register_effect(EFFECT_ID_TIEBREAK_D, Callable(self, "_effect_dinnertime_tiebreaker_movie_star_d"))
-	if not r.ok:
-		return r
-
-	# 受控 patch：将 waitress.train_to 追加 movie_star_b/c/d（Strict Mode：目标员工不存在则 init fail）
-	r = registrar.register_employee_patch("waitress", {
-		"add_train_to": STAR_IDS
-	})
-	if not r.ok:
-		return r
-
-	# OrderOfBusiness：由模块在 AFTER_ENTER 重排 selection_order（避免 core 硬编码）。
-	r = registrar.register_phase_hook(Phase.ORDER_OF_BUSINESS, HookType.AFTER_ENTER, Callable(self, "_on_order_of_business_after_enter"), 0)
-	if not r.ok:
-		return r
-
-	# 训练限制：每位玩家最多拥有 1 张电影明星（B/C/D 任意其一）
-	r = registrar.register_action_validator("train", "%s:movie_star_exclusive" % MODULE_ID, Callable(self, "_validate_train_movie_star_exclusive"), 0)
-	if not r.ok:
-		return r
-
+	var steps: Array[Callable] = [
+		Callable(registrar, "register_effect").bind(EFFECT_ID_TIEBREAK_B, Callable(self, "_effect_dinnertime_tiebreaker_movie_star_b")),
+		Callable(registrar, "register_effect").bind(EFFECT_ID_TIEBREAK_C, Callable(self, "_effect_dinnertime_tiebreaker_movie_star_c")),
+		Callable(registrar, "register_effect").bind(EFFECT_ID_TIEBREAK_D, Callable(self, "_effect_dinnertime_tiebreaker_movie_star_d")),
+		# 受控 patch：将 waitress.train_to 追加 movie_star_b/c/d（Strict Mode：目标员工不存在则 init fail）
+		Callable(registrar, "register_employee_patch").bind("waitress", {"add_train_to": STAR_IDS}),
+		# OrderOfBusiness：由模块在 AFTER_ENTER 重排 selection_order（避免 core 硬编码）。
+		Callable(registrar, "register_phase_hook").bind(Phase.ORDER_OF_BUSINESS, HookType.AFTER_ENTER, Callable(self, "_on_order_of_business_after_enter"), 0),
+		# 训练限制：每位玩家最多拥有 1 张电影明星（B/C/D 任意其一）
+		Callable(registrar, "register_action_validator").bind("train", "%s:movie_star_exclusive" % MODULE_ID, Callable(self, "_validate_train_movie_star_exclusive"), 0),
+	]
+	for step in steps:
+		var r: Result = step.call()
+		if not r.ok:
+			return r
 	return Result.success()
 
 func _effect_dinnertime_tiebreaker_movie_star_b(_state: GameState, _player_id: int, ctx: Dictionary) -> Result:

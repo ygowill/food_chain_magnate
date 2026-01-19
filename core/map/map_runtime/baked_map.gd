@@ -1,28 +1,31 @@
 extends RefCounted
 
 const RoadGraphCache = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const MapParseHelpersClass = preload("res://core/map/parse_helpers.gd")
 
 const _EXTERNAL_CELLS_KEY := "external_cells"
 const _EXTERNAL_TILE_PLACEMENTS_KEY := "external_tile_placements"
 const _MAP_ORIGIN_KEY := "map_origin"
 
-static func apply_baked_map(state, baked_data: Dictionary) -> Result:
-	if state == null:
-		return Result.failure("state 为空")
-	if not (state.map is Dictionary):
-		return Result.failure("state.map 类型错误（期望 Dictionary）")
-	if not (baked_data is Dictionary):
-		return Result.failure("baked_data 类型错误（期望 Dictionary）")
+const _DEFAULT_HOUSE_NUMBER_SUPPLY := [1, 3, 6, 9, 11, 14, 17, 19]
+const _DEFAULT_GARDEN_SUPPLY := 8
 
-	if not baked_data.has("cells") or not (baked_data["cells"] is Array):
-		return Result.failure("baked_data.cells 缺失或类型错误（期望 Array）")
-	var cells: Array = baked_data["cells"]
-	if cells.is_empty():
-		return Result.failure("baked_data.cells 不能为空")
+static func _require_array_field(data: Dictionary, key: String, path: String) -> Result:
+	if not data.has(key) or not (data[key] is Array):
+		return Result.failure("%s 缺失或类型错误（期望 Array）" % path)
+	return Result.success(data[key])
 
-	if not baked_data.has("grid_size") or not (baked_data["grid_size"] is Vector2i):
-		return Result.failure("baked_data.grid_size 缺失或类型错误（期望 Vector2i）")
-	var grid_size: Vector2i = baked_data["grid_size"]
+static func _require_dict_field(data: Dictionary, key: String, path: String) -> Result:
+	if not data.has(key) or not (data[key] is Dictionary):
+		return Result.failure("%s 缺失或类型错误（期望 Dictionary）" % path)
+	return Result.success(data[key])
+
+static func _require_vec2i_field(data: Dictionary, key: String, path: String) -> Result:
+	if not data.has(key) or not (data[key] is Vector2i):
+		return Result.failure("%s 缺失或类型错误（期望 Vector2i）" % path)
+	return Result.success(data[key])
+
+static func _validate_baked_cells(cells: Array, grid_size: Vector2i) -> Result:
 	if grid_size.x <= 0 or grid_size.y <= 0:
 		return Result.failure("baked_data.grid_size 非法: %s" % str(grid_size))
 	if cells.size() != grid_size.y:
@@ -37,10 +40,9 @@ static func apply_baked_map(state, baked_data: Dictionary) -> Result:
 		for x in range(grid_size.x):
 			if not (row[x] is Dictionary):
 				return Result.failure("baked_data.cells[%d][%d] 类型错误（期望 Dictionary）" % [y, x])
+	return Result.success()
 
-	if not baked_data.has("tile_placements") or not (baked_data["tile_placements"] is Array):
-		return Result.failure("baked_data.tile_placements 缺失或类型错误（期望 Array）")
-	var tile_placements: Array = baked_data["tile_placements"]
+static func _validate_tile_placements(tile_placements: Array) -> Result:
 	for i in range(tile_placements.size()):
 		var tp_val = tile_placements[i]
 		if not (tp_val is Dictionary):
@@ -55,22 +57,58 @@ static func apply_baked_map(state, baked_data: Dictionary) -> Result:
 			return Result.failure("baked_data.tile_placements[%d].board_pos 类型错误（期望 Vector2i）" % i)
 		if not (tp["rotation"] is int):
 			return Result.failure("baked_data.tile_placements[%d].rotation 类型错误（期望 int）" % i)
+	return Result.success()
 
-	if not baked_data.has("houses") or not (baked_data["houses"] is Dictionary):
-		return Result.failure("baked_data.houses 缺失或类型错误（期望 Dictionary）")
-	var houses: Dictionary = baked_data["houses"]
+static func apply_baked_map(state, baked_data: Dictionary) -> Result:
+	if state == null:
+		return Result.failure("state 为空")
+	if not (state.map is Dictionary):
+		return Result.failure("state.map 类型错误（期望 Dictionary）")
+	if not (baked_data is Dictionary):
+		return Result.failure("baked_data 类型错误（期望 Dictionary）")
 
-	if not baked_data.has("restaurants") or not (baked_data["restaurants"] is Dictionary):
-		return Result.failure("baked_data.restaurants 缺失或类型错误（期望 Dictionary）")
-	var restaurants: Dictionary = baked_data["restaurants"]
+	var cells_read := _require_array_field(baked_data, "cells", "baked_data.cells")
+	if not cells_read.ok:
+		return cells_read
+	var cells: Array = cells_read.value
+	if cells.is_empty():
+		return Result.failure("baked_data.cells 不能为空")
 
-	if not baked_data.has("drink_sources") or not (baked_data["drink_sources"] is Array):
-		return Result.failure("baked_data.drink_sources 缺失或类型错误（期望 Array）")
-	var drink_sources: Array = baked_data["drink_sources"]
+	var grid_read := _require_vec2i_field(baked_data, "grid_size", "baked_data.grid_size")
+	if not grid_read.ok:
+		return grid_read
+	var grid_size: Vector2i = grid_read.value
+	var cells_validate := _validate_baked_cells(cells, grid_size)
+	if not cells_validate.ok:
+		return cells_validate
 
-	if not baked_data.has("boundary_index") or not (baked_data["boundary_index"] is Dictionary):
-		return Result.failure("baked_data.boundary_index 缺失或类型错误（期望 Dictionary）")
-	var boundary_index: Dictionary = baked_data["boundary_index"]
+	var tile_placements_read := _require_array_field(baked_data, "tile_placements", "baked_data.tile_placements")
+	if not tile_placements_read.ok:
+		return tile_placements_read
+	var tile_placements: Array = tile_placements_read.value
+	var placements_validate := _validate_tile_placements(tile_placements)
+	if not placements_validate.ok:
+		return placements_validate
+
+	var houses_read := _require_dict_field(baked_data, "houses", "baked_data.houses")
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
+
+	var restaurants_read := _require_dict_field(baked_data, "restaurants", "baked_data.restaurants")
+	if not restaurants_read.ok:
+		return restaurants_read
+	var restaurants: Dictionary = restaurants_read.value
+
+	var drink_sources_read := _require_array_field(baked_data, "drink_sources", "baked_data.drink_sources")
+	if not drink_sources_read.ok:
+		return drink_sources_read
+	var drink_sources: Array = drink_sources_read.value
+
+	var boundary_index_read := _require_dict_field(baked_data, "boundary_index", "baked_data.boundary_index")
+	if not boundary_index_read.ok:
+		return boundary_index_read
+	var boundary_index: Dictionary = boundary_index_read.value
 
 	if not baked_data.has("next_house_number"):
 		return Result.failure("baked_data.next_house_number 缺失")
@@ -102,6 +140,11 @@ static func apply_baked_map(state, baked_data: Dictionary) -> Result:
 	state.map["marketing_placements"] = {}
 	state.map[_EXTERNAL_CELLS_KEY] = {}
 	state.map[_EXTERNAL_TILE_PLACEMENTS_KEY] = []
+	# Piece supplies (rules/UI). Stored in map for deterministic saves/replays.
+	if not state.map.has("house_number_supply_remaining"):
+		state.map["house_number_supply_remaining"] = _DEFAULT_HOUSE_NUMBER_SUPPLY.duplicate()
+	if not state.map.has("garden_supply_remaining"):
+		state.map["garden_supply_remaining"] = int(_DEFAULT_GARDEN_SUPPLY)
 
 	# RoadGraph 是运行时派生缓存，必须失效
 	RoadGraphCache.invalidate_road_graph(state)
@@ -109,20 +152,7 @@ static func apply_baked_map(state, baked_data: Dictionary) -> Result:
 	return Result.success()
 
 static func _parse_int(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
-		return Result.success(int(f))
-	return Result.failure("%s 类型错误（期望整数）" % path)
+	return MapParseHelpersClass.parse_int(value, path)
 
 static func _parse_non_negative_int(value, path: String) -> Result:
-	var r := _parse_int(value, path)
-	if not r.ok:
-		return r
-	if int(r.value) < 0:
-		return Result.failure("%s 不能为负数: %d" % [path, int(r.value)])
-	return r
-
+	return MapParseHelpersClass.parse_non_negative_int(value, path)

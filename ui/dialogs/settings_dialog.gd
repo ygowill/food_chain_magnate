@@ -22,8 +22,11 @@ signal closed()
 @onready var vsync_check: CheckBox = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/VsyncCheck
 @onready var resolution_option: OptionButton = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/ResolutionRow/ResolutionOption
 @onready var ui_scale_slider: HSlider = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/UIScaleRow/UIScaleSlider
+@onready var font_scale_slider: HSlider = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/FontScaleRow/FontScaleSlider
+@onready var log_font_scale_slider: HSlider = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/LogFontScaleRow/LogFontScaleSlider
 @onready var ui_layout_option: OptionButton = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/UILayoutRow/UILayoutOption
 @onready var show_tile_ids_check: CheckBox = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/ShowTileIdsCheck
+@onready var show_cell_hover_tooltip_check: CheckBox = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/ShowCellHoverTooltipCheck
 
 # 游戏选项
 @onready var auto_save_check: CheckBox = $MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer/AutoSaveCheck
@@ -54,8 +57,11 @@ var _default_settings: Dictionary = {
 	"vsync": true,
 	"resolution": Vector2i(1920, 1080),
 	"ui_scale": 1.0,
+	"font_scale": 1.1,
+	"log_font_scale": 1.35,
 	"ui_layout_version": 2,
 	"show_tile_ids": false,
+	"show_cell_hover_tooltip": false,
 	"auto_save": true,
 	"confirm_actions": true,
 	"show_hints": true,
@@ -102,8 +108,11 @@ func _load_settings() -> void:
 			"vsync": config.get_value("display", "vsync", _default_settings.vsync),
 			"resolution": config.get_value("display", "resolution", _default_settings.resolution),
 			"ui_scale": config.get_value("display", "ui_scale", _default_settings.ui_scale),
+			"font_scale": float(config.get_value("display", "font_scale", _default_settings.font_scale)),
+			"log_font_scale": float(config.get_value("display", "log_font_scale", _default_settings.log_font_scale)),
 			"ui_layout_version": clampi(int(config.get_value("display", "ui_layout_version", _default_settings.ui_layout_version)), 1, 2),
 			"show_tile_ids": bool(config.get_value("display", "show_tile_ids", _default_settings.show_tile_ids)),
+			"show_cell_hover_tooltip": bool(config.get_value("display", "show_cell_hover_tooltip", _default_settings.show_cell_hover_tooltip)),
 			"auto_save": config.get_value("game", "auto_save", _default_settings.auto_save),
 			"confirm_actions": config.get_value("game", "confirm_actions", _default_settings.confirm_actions),
 			"show_hints": config.get_value("game", "show_hints", _default_settings.show_hints),
@@ -125,8 +134,11 @@ func _save_settings() -> void:
 	config.set_value("display", "vsync", _current_settings.vsync)
 	config.set_value("display", "resolution", _current_settings.resolution)
 	config.set_value("display", "ui_scale", _current_settings.ui_scale)
+	config.set_value("display", "font_scale", float(_current_settings.get("font_scale", 1.0)))
+	config.set_value("display", "log_font_scale", float(_current_settings.get("log_font_scale", 1.0)))
 	config.set_value("display", "ui_layout_version", int(_current_settings.get("ui_layout_version", 1)))
 	config.set_value("display", "show_tile_ids", bool(_current_settings.get("show_tile_ids", false)))
+	config.set_value("display", "show_cell_hover_tooltip", bool(_current_settings.get("show_cell_hover_tooltip", false)))
 
 	config.set_value("game", "auto_save", _current_settings.auto_save)
 	config.set_value("game", "confirm_actions", _current_settings.confirm_actions)
@@ -136,82 +148,92 @@ func _save_settings() -> void:
 	config.save("user://settings.cfg")
 	_save_audio_settings()
 
+func _set_slider_percent(slider: HSlider, value_0_1: float) -> void:
+	if slider == null:
+		return
+	slider.value = clampf(float(value_0_1), 0.0, 1.0) * 100.0
+
+func _read_slider_percent(slider: HSlider, fallback_0_1: float) -> float:
+	if slider == null:
+		return float(fallback_0_1)
+	return clampf(float(slider.value) / 100.0, 0.0, 1.0)
+
+func _set_checkbox(check: CheckBox, value: bool) -> void:
+	if check == null:
+		return
+	check.button_pressed = bool(value)
+
+func _read_checkbox(check: CheckBox, fallback: bool) -> bool:
+	if check == null:
+		return bool(fallback)
+	return bool(check.button_pressed)
+
 func _update_ui_from_settings() -> void:
 	# 音频
-	if master_volume != null:
-		master_volume.value = float(_current_settings.master_volume) * 100
-	if music_volume != null:
-		music_volume.value = float(_current_settings.music_volume) * 100
-	if sfx_volume != null:
-		sfx_volume.value = float(_current_settings.sfx_volume) * 100
-	if mute_check != null:
-		mute_check.button_pressed = bool(_current_settings.mute)
+	_set_slider_percent(master_volume, float(_current_settings.get("master_volume", _default_settings.master_volume)))
+	_set_slider_percent(music_volume, float(_current_settings.get("music_volume", _default_settings.music_volume)))
+	_set_slider_percent(sfx_volume, float(_current_settings.get("sfx_volume", _default_settings.sfx_volume)))
+	_set_checkbox(mute_check, bool(_current_settings.get("mute", _default_settings.mute)))
 
 	# 显示
-	if fullscreen_check != null:
-		fullscreen_check.button_pressed = bool(_current_settings.fullscreen)
-	if vsync_check != null:
-		vsync_check.button_pressed = bool(_current_settings.vsync)
+	_set_checkbox(fullscreen_check, bool(_current_settings.get("fullscreen", _default_settings.fullscreen)))
+	_set_checkbox(vsync_check, bool(_current_settings.get("vsync", _default_settings.vsync)))
 	if resolution_option != null:
-		var res: Vector2i = _current_settings.resolution
+		var res: Vector2i = _current_settings.get("resolution", _default_settings.resolution)
 		for i in range(RESOLUTIONS.size()):
 			if RESOLUTIONS[i] == res:
 				resolution_option.select(i)
 				break
 	if ui_scale_slider != null:
-		ui_scale_slider.value = float(_current_settings.ui_scale) * 100
+		ui_scale_slider.value = float(_current_settings.get("ui_scale", _default_settings.ui_scale)) * 100
+	if font_scale_slider != null:
+		font_scale_slider.value = float(_current_settings.get("font_scale", 1.0)) * 100
+	if log_font_scale_slider != null:
+		log_font_scale_slider.value = float(_current_settings.get("log_font_scale", 1.0)) * 100
 	if ui_layout_option != null:
 		var v := clampi(int(_current_settings.get("ui_layout_version", 1)), 1, 2)
 		ui_layout_option.select(v - 1)
-	if show_tile_ids_check != null:
-		show_tile_ids_check.button_pressed = bool(_current_settings.get("show_tile_ids", false))
+	_set_checkbox(show_tile_ids_check, bool(_current_settings.get("show_tile_ids", false)))
+	_set_checkbox(show_cell_hover_tooltip_check, bool(_current_settings.get("show_cell_hover_tooltip", false)))
 
 	# 游戏
-	if auto_save_check != null:
-		auto_save_check.button_pressed = bool(_current_settings.auto_save)
-	if confirm_actions_check != null:
-		confirm_actions_check.button_pressed = bool(_current_settings.confirm_actions)
-	if show_hints_check != null:
-		show_hints_check.button_pressed = bool(_current_settings.show_hints)
+	_set_checkbox(auto_save_check, bool(_current_settings.get("auto_save", _default_settings.auto_save)))
+	_set_checkbox(confirm_actions_check, bool(_current_settings.get("confirm_actions", _default_settings.confirm_actions)))
+	_set_checkbox(show_hints_check, bool(_current_settings.get("show_hints", _default_settings.show_hints)))
 	if animation_speed_slider != null:
-		animation_speed_slider.value = float(_current_settings.animation_speed) * 100
+		animation_speed_slider.value = float(_current_settings.get("animation_speed", _default_settings.animation_speed)) * 100
 
 func _update_settings_from_ui() -> void:
 	# 音频
-	if master_volume != null:
-		_current_settings.master_volume = master_volume.value / 100.0
-	if music_volume != null:
-		_current_settings.music_volume = music_volume.value / 100.0
-	if sfx_volume != null:
-		_current_settings.sfx_volume = sfx_volume.value / 100.0
-	if mute_check != null:
-		_current_settings.mute = mute_check.button_pressed
+	_current_settings["master_volume"] = _read_slider_percent(master_volume, float(_current_settings.get("master_volume", _default_settings.master_volume)))
+	_current_settings["music_volume"] = _read_slider_percent(music_volume, float(_current_settings.get("music_volume", _default_settings.music_volume)))
+	_current_settings["sfx_volume"] = _read_slider_percent(sfx_volume, float(_current_settings.get("sfx_volume", _default_settings.sfx_volume)))
+	_current_settings["mute"] = _read_checkbox(mute_check, bool(_current_settings.get("mute", _default_settings.mute)))
 
 	# 显示
-	if fullscreen_check != null:
-		_current_settings.fullscreen = fullscreen_check.button_pressed
-	if vsync_check != null:
-		_current_settings.vsync = vsync_check.button_pressed
+	_current_settings["fullscreen"] = _read_checkbox(fullscreen_check, bool(_current_settings.get("fullscreen", _default_settings.fullscreen)))
+	_current_settings["vsync"] = _read_checkbox(vsync_check, bool(_current_settings.get("vsync", _default_settings.vsync)))
 	if resolution_option != null:
 		var idx := resolution_option.selected
 		if idx >= 0 and idx < RESOLUTIONS.size():
-			_current_settings.resolution = RESOLUTIONS[idx]
+			_current_settings["resolution"] = RESOLUTIONS[idx]
 	if ui_scale_slider != null:
-		_current_settings.ui_scale = ui_scale_slider.value / 100.0
+		_current_settings["ui_scale"] = float(ui_scale_slider.value) / 100.0
+	if font_scale_slider != null:
+		_current_settings["font_scale"] = float(font_scale_slider.value) / 100.0
+	if log_font_scale_slider != null:
+		_current_settings["log_font_scale"] = float(log_font_scale_slider.value) / 100.0
 	if ui_layout_option != null:
-		_current_settings.ui_layout_version = clampi(int(ui_layout_option.selected) + 1, 1, 2)
-	if show_tile_ids_check != null:
-		_current_settings.show_tile_ids = show_tile_ids_check.button_pressed
+		_current_settings["ui_layout_version"] = clampi(int(ui_layout_option.selected) + 1, 1, 2)
+	_current_settings["show_tile_ids"] = _read_checkbox(show_tile_ids_check, bool(_current_settings.get("show_tile_ids", false)))
+	_current_settings["show_cell_hover_tooltip"] = _read_checkbox(show_cell_hover_tooltip_check, bool(_current_settings.get("show_cell_hover_tooltip", false)))
 
 	# 游戏
-	if auto_save_check != null:
-		_current_settings.auto_save = auto_save_check.button_pressed
-	if confirm_actions_check != null:
-		_current_settings.confirm_actions = confirm_actions_check.button_pressed
-	if show_hints_check != null:
-		_current_settings.show_hints = show_hints_check.button_pressed
+	_current_settings["auto_save"] = _read_checkbox(auto_save_check, bool(_current_settings.get("auto_save", _default_settings.auto_save)))
+	_current_settings["confirm_actions"] = _read_checkbox(confirm_actions_check, bool(_current_settings.get("confirm_actions", _default_settings.confirm_actions)))
+	_current_settings["show_hints"] = _read_checkbox(show_hints_check, bool(_current_settings.get("show_hints", _default_settings.show_hints)))
 	if animation_speed_slider != null:
-		_current_settings.animation_speed = animation_speed_slider.value / 100.0
+		_current_settings["animation_speed"] = float(animation_speed_slider.value) / 100.0
 
 func _apply_settings() -> void:
 	# 应用全屏
@@ -368,6 +390,11 @@ func _sync_globals_runtime_settings() -> void:
 	Globals.ui_scale = float(_current_settings.ui_scale)
 	Globals.ui_layout_version = clampi(int(_current_settings.get("ui_layout_version", 1)), 1, 2)
 	Globals.show_tile_ids = bool(_current_settings.get("show_tile_ids", false))
+	Globals.show_cell_hover_tooltip = bool(_current_settings.get("show_cell_hover_tooltip", false))
+	Globals.font_scale = clampf(float(_current_settings.get("font_scale", Globals.font_scale)), 0.5, 2.0)
+	Globals.log_font_scale = clampf(float(_current_settings.get("log_font_scale", Globals.log_font_scale)), 0.5, 3.0)
 	Globals.confirm_actions = bool(_current_settings.confirm_actions)
 	Globals.show_hints = bool(_current_settings.show_hints)
 	Globals.animation_speed = float(_current_settings.animation_speed)
+	if Globals.has_method("apply_font_scale"):
+		Globals.apply_font_scale()

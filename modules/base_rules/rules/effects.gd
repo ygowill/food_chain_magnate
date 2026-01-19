@@ -144,7 +144,7 @@ func _effect_dinnertime_income_bonus_ceo_get_cfo(state: GameState, player_id: in
 	ctx["once"] = once
 	return Result.success()
 
-func _effect_payday_salary_discount_recruiting_manager(_state: GameState, _player_id: int, ctx: Dictionary, employee_id: String) -> Result:
+func _effect_payday_salary_discount_common(_state: GameState, _player_id: int, ctx: Dictionary, employee_id: String) -> Result:
 	if not ctx.has("salary_discount_recruit_capacity") or not (ctx["salary_discount_recruit_capacity"] is int):
 		return Result.failure("base_rules:payday:salary_discount: ctx.salary_discount_recruit_capacity 缺失或类型错误（期望 int）")
 	if employee_id.is_empty():
@@ -161,22 +161,11 @@ func _effect_payday_salary_discount_recruiting_manager(_state: GameState, _playe
 	ctx["salary_discount_recruit_capacity"] = int(ctx["salary_discount_recruit_capacity"]) + cap
 	return Result.success()
 
+func _effect_payday_salary_discount_recruiting_manager(_state: GameState, _player_id: int, ctx: Dictionary, employee_id: String) -> Result:
+	return _effect_payday_salary_discount_common(_state, _player_id, ctx, employee_id)
+
 func _effect_payday_salary_discount_hr_director(_state: GameState, _player_id: int, ctx: Dictionary, employee_id: String) -> Result:
-	if not ctx.has("salary_discount_recruit_capacity") or not (ctx["salary_discount_recruit_capacity"] is int):
-		return Result.failure("base_rules:payday:salary_discount: ctx.salary_discount_recruit_capacity 缺失或类型错误（期望 int）")
-	if employee_id.is_empty():
-		return Result.failure("base_rules:payday:salary_discount: employee_id 不能为空")
-	var def_val = EmployeeRegistryClass.get_def(employee_id)
-	if def_val == null:
-		return Result.failure("base_rules:payday:salary_discount: 未知员工定义: %s" % employee_id)
-	if not (def_val is EmployeeDef):
-		return Result.failure("base_rules:payday:salary_discount: 员工定义类型错误（期望 EmployeeDef）: %s" % employee_id)
-	var def: EmployeeDef = def_val
-	var cap := int(def.recruit_capacity)
-	if cap <= 0:
-		return Result.failure("base_rules:payday:salary_discount: %s.recruit_capacity 必须 > 0" % employee_id)
-	ctx["salary_discount_recruit_capacity"] = int(ctx["salary_discount_recruit_capacity"]) + cap
-	return Result.success()
+	return _effect_payday_salary_discount_common(_state, _player_id, ctx, employee_id)
 
 func _effect_marketing_demand_amount_first_radio(_state: GameState, _player_id: int, ctx: Dictionary) -> Result:
 	if not ctx.has("marketing_type") or not (ctx["marketing_type"] is String):
@@ -249,4 +238,3 @@ func _parse_non_negative_int_value(value, path: String) -> Result:
 			return Result.success(i)
 		return Result.failure("%s 必须为整数（不允许小数）" % path)
 	return Result.failure("%s 必须为非负整数" % path)
-

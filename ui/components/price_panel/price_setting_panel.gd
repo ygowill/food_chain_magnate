@@ -7,6 +7,11 @@ signal price_confirmed(action_id: String)
 signal cancelled()
 signal right_panel_footer_changed()
 
+const UiNodeAccessClass = preload("res://ui/utils/node_access.gd")
+const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
+
+const _BUTTON_ROW_PATH := NodePath("MarginContainer/VBoxContainer/ButtonRow")
+
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var products_container: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/ProductsContainer
 @onready var confirm_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/ConfirmButton
@@ -17,9 +22,7 @@ var _mode: String = "price"  # price | discount | luxury
 var _action_id: String = "set_price"
 
 func set_embedded_in_right_panel(embedded: bool) -> void:
-	var row = get_node_or_null("MarginContainer/VBoxContainer/ButtonRow")
-	if row is Control:
-		(row as Control).visible = not embedded
+	UiNodeAccessClass.set_control_visible(self, _BUTTON_ROW_PATH, not embedded)
 	right_panel_footer_changed.emit()
 
 func right_panel_get_footer_config() -> Dictionary:
@@ -72,9 +75,7 @@ func _rebuild_content() -> void:
 	if products_container == null:
 		return
 
-	for child in products_container.get_children():
-		if is_instance_valid(child):
-			child.queue_free()
+	UiRebuildHelpersClass.free_children(products_container)
 
 	var info := Label.new()
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD

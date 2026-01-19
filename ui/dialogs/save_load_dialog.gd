@@ -286,21 +286,9 @@ func _build_slot_label(file_name: String, path: String) -> String:
 	return "  |  ".join(parts)
 
 func _read_archive_metadata(path: String) -> Dictionary:
-	if path.is_empty():
+	var d := _read_json_dict(path)
+	if d.is_empty():
 		return {}
-	if not FileAccess.file_exists(path):
-		return {}
-
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null:
-		return {}
-	var json := file.get_as_text()
-	file.close()
-
-	var parsed = JSON.parse_string(json)
-	if parsed == null or not (parsed is Dictionary):
-		return {}
-	var d: Dictionary = parsed
 
 	var cmd_count := 0
 	var commands_val = d.get("commands", null)
@@ -321,6 +309,19 @@ func _read_archive_metadata(path: String) -> Dictionary:
 		"command_count": cmd_count,
 		"player_count": player_count,
 	}
+
+func _read_json_dict(path: String) -> Dictionary:
+	if path.is_empty():
+		return {}
+	if not FileAccess.file_exists(path):
+		return {}
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return {}
+	var json := file.get_as_text()
+	file.close()
+	var parsed = JSON.parse_string(json)
+	return parsed if (parsed is Dictionary) else {}
 
 func _ensure_saves_dir() -> void:
 	var abs_dir := ProjectSettings.globalize_path(SAVES_DIR)

@@ -178,6 +178,12 @@ func clear_logs() -> void:
 	_clear_display()
 	_update_entry_count()
 
+func apply_font_settings() -> void:
+	# 允许 SettingsDialog 在运行时调整日志可读性（例如字体倍率）。
+	for item in _log_items:
+		if is_instance_valid(item) and item.has_method("apply_font_settings"):
+			item.apply_font_settings()
+
 func set_player_count(count: int) -> void:
 	_player_count = maxi(0, count)
 	if player_filter == null:
@@ -349,7 +355,7 @@ class LogItem extends PanelContainer:
 
 	var _time_label: Label
 	var _type_label: Label
-	var _message_label: Label
+	var _message_label: RichTextLabel
 
 	const LOG_TYPE_COLORS: Dictionary = {
 		0: Color(0.6, 0.6, 0.6, 1),  # SYSTEM
@@ -371,7 +377,11 @@ class LogItem extends PanelContainer:
 		_build_ui()
 
 	func _build_ui() -> void:
-		custom_minimum_size = Vector2(350, 28)
+		var scale := 1.0
+		if Globals != null:
+			scale = clampf(float(Globals.log_font_scale), 0.5, 3.0)
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		custom_minimum_size = Vector2(0, float(maxi(28, int(round(28.0 * scale)))))
 		mouse_filter = Control.MOUSE_FILTER_STOP
 
 		var style := StyleBoxFlat.new()
@@ -380,30 +390,47 @@ class LogItem extends PanelContainer:
 		add_theme_stylebox_override("panel", style)
 
 		var hbox := HBoxContainer.new()
+		hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hbox.add_theme_constant_override("separation", 8)
 		add_child(hbox)
 
 		# 时间
 		_time_label = Label.new()
 		_time_label.custom_minimum_size = Vector2(50, 0)
-		_time_label.add_theme_font_size_override("font_size", 10)
+		_time_label.add_theme_font_size_override("font_size", maxi(8, int(round(10.0 * scale))))
 		_time_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1))
 		hbox.add_child(_time_label)
 
 		# 类型
 		_type_label = Label.new()
 		_type_label.custom_minimum_size = Vector2(40, 0)
-		_type_label.add_theme_font_size_override("font_size", 11)
+		_type_label.add_theme_font_size_override("font_size", maxi(9, int(round(11.0 * scale))))
 		hbox.add_child(_type_label)
 
 		# 消息
-		_message_label = Label.new()
+		_message_label = RichTextLabel.new()
 		_message_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		_message_label.add_theme_font_size_override("font_size", 12)
-		_message_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		_message_label.add_theme_font_size_override("normal_font_size", maxi(10, int(round(12.0 * scale))))
+		_message_label.bbcode_enabled = false
+		_message_label.fit_content = true
+		_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_message_label.scroll_active = false
+		_message_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		hbox.add_child(_message_label)
 
 		update_display()
+
+	func apply_font_settings() -> void:
+		var scale := 1.0
+		if Globals != null:
+			scale = clampf(float(Globals.log_font_scale), 0.5, 3.0)
+		custom_minimum_size = Vector2(0, float(maxi(28, int(round(28.0 * scale)))))
+		if _time_label != null:
+			_time_label.add_theme_font_size_override("font_size", maxi(8, int(round(10.0 * scale))))
+		if _type_label != null:
+			_type_label.add_theme_font_size_override("font_size", maxi(9, int(round(11.0 * scale))))
+		if _message_label != null:
+			_message_label.add_theme_font_size_override("normal_font_size", maxi(10, int(round(12.0 * scale))))
 
 	func _gui_input(event: InputEvent) -> void:
 		if event is InputEventMouseButton:

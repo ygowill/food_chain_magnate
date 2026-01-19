@@ -1,7 +1,9 @@
 class_name PlaceHighwayOfframpAction
 extends ActionExecutor
 
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
@@ -63,9 +65,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not y_read.ok:
 		return y_read
 	var connect_pos := Vector2i(int(x_read.value), int(y_read.value))
-	if not MapRuntimeClass.is_world_pos_in_grid(state, connect_pos):
+	if not CoordsClass.is_world_pos_in_grid(state, connect_pos):
 		return Result.failure("position 越界: %s" % str(connect_pos))
-	if not MapRuntimeClass.is_on_map_edge(state, connect_pos):
+	if not CoordsClass.is_on_map_edge(state, connect_pos):
 		return Result.failure("offramp 必须放置在地图边缘格子: %s" % str(connect_pos))
 
 	# 根据边缘位置与“向外道路段”推断 side（角落若有多个 outward dirs 则判定为歧义）
@@ -99,7 +101,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var occupied := _get_external_cells_for_piece(connect_pos, side)
 	for i in range(occupied.size()):
 		var p: Vector2i = occupied[i]
-		if MapRuntimeClass.is_world_pos_in_grid(state, p):
+		if CoordsClass.is_world_pos_in_grid(state, p):
 			return Result.failure("内部错误：offramp 外部格计算错误（不应落在棋盘内）: %s" % str(p))
 		if state.map.has("external_cells") and (state.map["external_cells"] is Dictionary):
 			var key := "%d,%d" % [p.x, p.y]
@@ -128,7 +130,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	pending[command.actor] = false
 	state.round_state[OFFRAMP_PENDING_KEY] = pending
 
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)
 
 	return Result.success({
 		"player_id": int(command.actor),
@@ -223,8 +225,8 @@ static func _create_empty_cell(tile_origin: Vector2i) -> Dictionary:
 
 static func _infer_side_from_edge_and_road(state: GameState, pos: Vector2i) -> Result:
 	var candidates: Array[String] = []
-	var minp := MapRuntimeClass.get_world_min(state)
-	var maxp := MapRuntimeClass.get_world_max(state)
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
 	if pos.y == minp.y:
 		candidates.append("N")
 	if pos.y == maxp.y:
@@ -280,9 +282,9 @@ static func _get_external_cells_for_piece(connect_pos: Vector2i, side: String) -
 static func _get_road_dirs_at(state: GameState, pos: Vector2i) -> Array[String]:
 	if state == null or not (state.map is Dictionary):
 		return []
-	if not MapRuntimeClass.is_world_pos_in_grid(state, pos):
+	if not CoordsClass.is_world_pos_in_grid(state, pos):
 		return []
-	var cell: Dictionary = MapRuntimeClass.get_cell(state, pos)
+	var cell: Dictionary = CellsClass.get_cell(state, pos)
 	var segs: Array = cell.get("road_segments", [])
 	if segs.is_empty():
 		return []

@@ -2,7 +2,7 @@
 class_name DinnertimeDistance
 extends RefCounted
 
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 
 static func get_restaurant_to_house_distance(
 	road_graph,
@@ -42,6 +42,13 @@ static func get_restaurant_to_house_distance(
 	if rest_roads.is_empty():
 		return Result.success({})
 
+	# RoadGraph 的 distance 只统计“道路格 -> 道路格”移动时跨越的板块边界次数。
+	# 但规则距离定义是“从餐厅入口到房屋服务边（相邻道路）”，因此：
+	# - 若入口格与相邻道路格跨越板块边界，需要额外 +1。
+	# - 若房屋格与相邻道路格跨越板块边界，需要额外 +1（终点板块计入）。
+	var rest_entry_cost_by_road := _build_structure_to_road_boundary_cost(entrance_points, rest_roads)
+	var house_entry_cost_by_road := _build_structure_to_road_boundary_cost(house_cells, house_roads)
+
 	var best_distance := INF
 	var best_steps := INF
 	var best_path: Array[Vector2i] = []
@@ -56,6 +63,8 @@ static func get_restaurant_to_house_distance(
 			assert(sp_val.has("steps") and sp_val["steps"] is int, "RoadGraph.find_shortest_path: 缺少/错误 steps（期望 int）")
 			assert(sp_val.has("path") and sp_val["path"] is Array, "RoadGraph.find_shortest_path: 缺少/错误 path（期望 Array）")
 			var d: int = int(sp_val["distance"])
+			d += int(rest_entry_cost_by_road.get(s, 0))
+			d += int(house_entry_cost_by_road.get(t, 0))
 			var steps: int = int(sp_val["steps"])
 			var path_any: Array = sp_val["path"]
 			var path: Array[Vector2i] = []
@@ -76,6 +85,26 @@ static func get_restaurant_to_house_distance(
 		"steps": int(best_steps),
 		"path": best_path,
 	})
+
+static func _build_structure_to_road_boundary_cost(
+	structure_cells: Array[Vector2i],
+	road_cells: Array[Vector2i]
+) -> Dictionary:
+	var out := {}
+	for r in road_cells:
+		var best := INF
+		for c in structure_cells:
+			if c == r:
+				best = 0
+				break
+			if not MapUtils.are_adjacent(c, r):
+				continue
+			best = min(best, 1 if MapUtils.crosses_tile_boundary(c, r) else 0)
+		if best == INF:
+			# 理论上不会发生：road_cells 来源于 structure_cells 的相邻道路枚举。
+			best = 0
+		out[r] = int(best)
+	return out
 
 static func get_restaurant_entrance_points(state: GameState, restaurant_id: String, rest: Dictionary) -> Result:
 	if not rest.has("entrance_pos") or not (rest["entrance_pos"] is Vector2i):
@@ -130,13 +159,13 @@ static func get_structure_adjacent_roads(state: GameState, grid_size: Vector2i, 
 	var set := {}
 	for cell in structure_cells:
 		# 若结构自身在道路格上（例如棋盘外道路入口），也应视为入口道路。
-		if MapRuntimeClass.has_cell_any(state, cell) and MapRuntimeClass.has_road_at_any(state, cell):
+		if CellsClass.has_cell_any(state, cell) and CellsClass.has_road_at_any(state, cell):
 			set[cell] = true
 		for dir in MapUtils.DIRECTIONS:
 			var n := MapUtils.get_neighbor_pos(cell, dir)
-			if not MapRuntimeClass.has_cell_any(state, n):
+			if not CellsClass.has_cell_any(state, n):
 				continue
-			if MapRuntimeClass.has_road_at_any(state, n):
+			if CellsClass.has_road_at_any(state, n):
 				set[n] = true
 
 	var result: Array[Vector2i] = []

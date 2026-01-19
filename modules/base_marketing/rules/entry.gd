@@ -1,30 +1,42 @@
 extends RefCounted
 
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 
 const MODULE_ID := "base_marketing"
 
 func register(registrar) -> Result:
-	var r: Result = registrar.register_marketing_type("billboard", {"requires_edge": false}, Callable(self, "_get_billboard_house_ids"))
-	if not r.ok:
-		return r
-	r = registrar.register_marketing_type("mailbox", {"requires_edge": false}, Callable(self, "_get_mailbox_house_ids"))
-	if not r.ok:
-		return r
-	r = registrar.register_marketing_type("radio", {"requires_edge": false}, Callable(self, "_get_radio_house_ids"))
-	if not r.ok:
-		return r
-	r = registrar.register_marketing_type("airplane", {"requires_edge": true}, Callable(self, "_get_airplane_house_ids"))
-	if not r.ok:
-		return r
-
+	var types := [
+		{"marketing_type": "billboard", "cfg": {"requires_edge": false}, "fn": Callable(self, "_get_billboard_house_ids")},
+		{"marketing_type": "mailbox", "cfg": {"requires_edge": false}, "fn": Callable(self, "_get_mailbox_house_ids")},
+		{"marketing_type": "radio", "cfg": {"requires_edge": false}, "fn": Callable(self, "_get_radio_house_ids")},
+		{"marketing_type": "airplane", "cfg": {"requires_edge": true}, "fn": Callable(self, "_get_airplane_house_ids")},
+	]
+	for t_val in types:
+		assert(t_val is Dictionary, "%s: marketing types 元素类型错误（期望 Dictionary）" % MODULE_ID)
+		var t: Dictionary = t_val
+		var mt := str(t.get("marketing_type", ""))
+		var cfg := Dictionary(t.get("cfg", {}))
+		var fn_val = t.get("fn", null)
+		assert(fn_val is Callable, "%s: marketing types fn 类型错误（期望 Callable）" % MODULE_ID)
+		var fn: Callable = fn_val
+		var r: Result = registrar.register_marketing_type(mt, cfg, fn)
+		if not r.ok:
+			return r
 	return Result.success()
 
-func _get_billboard_house_ids(state: GameState, marketing_instance: Dictionary) -> Result:
+func _require_state_map(state: GameState, label: String) -> Result:
 	if state == null:
-		return Result.failure("%s: billboard range: state 为空" % MODULE_ID)
+		return Result.failure("%s: %s: state 为空" % [MODULE_ID, label])
 	if not (state.map is Dictionary):
-		return Result.failure("%s: billboard range: state.map 类型错误（期望 Dictionary）" % MODULE_ID)
+		return Result.failure("%s: %s: state.map 类型错误（期望 Dictionary）" % [MODULE_ID, label])
+	return Result.success(state.map)
+
+func _get_billboard_house_ids(state: GameState, marketing_instance: Dictionary) -> Result:
+	var map_read := _require_state_map(state, "billboard range")
+	if not map_read.ok:
+		return map_read
 	var world_pos_read := _require_world_pos(marketing_instance, "billboard")
 	if not world_pos_read.ok:
 		return world_pos_read
@@ -42,9 +54,9 @@ func _get_billboard_house_ids(state: GameState, marketing_instance: Dictionary) 
 	var set := {}
 	for dir in MapUtils.DIRECTIONS:
 		var n := MapUtils.get_neighbor_pos(world_pos, dir)
-		if not MapRuntimeClass.is_world_pos_in_grid(state, n):
+		if not CoordsClass.is_world_pos_in_grid(state, n):
 			continue
-		var cell := MapRuntimeClass.get_cell(state, n)
+		var cell := CellsClass.get_cell(state, n)
 		if not cell.has("structure") or not (cell["structure"] is Dictionary):
 			return Result.failure("%s: billboard range: cell.structure 缺失或类型错误: %s" % [MODULE_ID, str(n)])
 		var structure: Dictionary = cell["structure"]
@@ -58,10 +70,9 @@ func _get_billboard_house_ids(state: GameState, marketing_instance: Dictionary) 
 	return Result.success(_dict_keys_to_string_array(set))
 
 func _get_mailbox_house_ids(state: GameState, marketing_instance: Dictionary) -> Result:
-	if state == null:
-		return Result.failure("%s: mailbox range: state 为空" % MODULE_ID)
-	if not (state.map is Dictionary):
-		return Result.failure("%s: mailbox range: state.map 类型错误（期望 Dictionary）" % MODULE_ID)
+	var map_read := _require_state_map(state, "mailbox range")
+	if not map_read.ok:
+		return map_read
 	var world_pos_read := _require_world_pos(marketing_instance, "mailbox")
 	if not world_pos_read.ok:
 		return world_pos_read
@@ -75,7 +86,7 @@ func _get_mailbox_house_ids(state: GameState, marketing_instance: Dictionary) ->
 	if not state.map.has("boundary_index") or not (state.map["boundary_index"] is Dictionary):
 		return Result.failure("%s: mailbox range: state.map.boundary_index 缺失或类型错误（期望 Dictionary）" % MODULE_ID)
 
-	var road_graph = MapRuntimeClass.get_road_graph(state)
+	var road_graph = RoadGraphCacheClass.get_road_graph(state)
 	var block_cells: Array[Vector2i] = road_graph.get_block_cells(world_pos)
 	if block_cells.is_empty():
 		var empty: Array[String] = []
@@ -83,7 +94,7 @@ func _get_mailbox_house_ids(state: GameState, marketing_instance: Dictionary) ->
 
 	var set := {}
 	for c in block_cells:
-		var cell := MapRuntimeClass.get_cell(state, c)
+		var cell := CellsClass.get_cell(state, c)
 		if not cell.has("structure") or not (cell["structure"] is Dictionary):
 			return Result.failure("%s: mailbox range: cell.structure 缺失或类型错误: %s" % [MODULE_ID, str(c)])
 		var structure: Dictionary = cell["structure"]
@@ -98,10 +109,9 @@ func _get_mailbox_house_ids(state: GameState, marketing_instance: Dictionary) ->
 	return Result.success(_dict_keys_to_string_array(set))
 
 func _get_radio_house_ids(state: GameState, marketing_instance: Dictionary) -> Result:
-	if state == null:
-		return Result.failure("%s: radio range: state 为空" % MODULE_ID)
-	if not (state.map is Dictionary):
-		return Result.failure("%s: radio range: state.map 类型错误（期望 Dictionary）" % MODULE_ID)
+	var map_read := _require_state_map(state, "radio range")
+	if not map_read.ok:
+		return map_read
 	var world_pos_read := _require_world_pos(marketing_instance, "radio")
 	if not world_pos_read.ok:
 		return world_pos_read
@@ -123,8 +133,8 @@ func _get_radio_house_ids(state: GameState, marketing_instance: Dictionary) -> R
 	if not state.map.has("cells") or not (state.map["cells"] is Array):
 		return Result.failure("%s: radio range: state.map.cells 缺失或类型错误（期望 Array）" % MODULE_ID)
 
-	var min_tile: Vector2i = MapUtils.world_to_tile(MapRuntimeClass.get_world_min(state)).board_pos
-	var max_tile: Vector2i = MapUtils.world_to_tile(MapRuntimeClass.get_world_max(state)).board_pos
+	var min_tile: Vector2i = MapUtils.world_to_tile(CoordsClass.get_world_min(state)).board_pos
+	var max_tile: Vector2i = MapUtils.world_to_tile(CoordsClass.get_world_max(state)).board_pos
 	var tile_pos: Vector2i = MapUtils.world_to_tile(world_pos).board_pos
 
 	var min_tx := maxi(min_tile.x, tile_pos.x - 1)
@@ -139,9 +149,9 @@ func _get_radio_house_ids(state: GameState, marketing_instance: Dictionary) -> R
 			for y in range(base.y, base.y + MapUtils.TILE_SIZE):
 				for x in range(base.x, base.x + MapUtils.TILE_SIZE):
 					var p := Vector2i(x, y)
-					if not MapRuntimeClass.is_world_pos_in_grid(state, p):
+					if not CoordsClass.is_world_pos_in_grid(state, p):
 						continue
-					var cell := MapRuntimeClass.get_cell(state, p)
+					var cell := CellsClass.get_cell(state, p)
 					if not cell.has("structure") or not (cell["structure"] is Dictionary):
 						return Result.failure("%s: radio range: cell.structure 缺失或类型错误: %s" % [MODULE_ID, str(p)])
 					var structure: Dictionary = cell["structure"]
@@ -156,10 +166,9 @@ func _get_radio_house_ids(state: GameState, marketing_instance: Dictionary) -> R
 	return Result.success(_dict_keys_to_string_array(set))
 
 func _get_airplane_house_ids(state: GameState, marketing_instance: Dictionary) -> Result:
-	if state == null:
-		return Result.failure("%s: airplane range: state 为空" % MODULE_ID)
-	if not (state.map is Dictionary):
-		return Result.failure("%s: airplane range: state.map 类型错误（期望 Dictionary）" % MODULE_ID)
+	var map_read := _require_state_map(state, "airplane range")
+	if not map_read.ok:
+		return map_read
 	var world_pos_read := _require_world_pos(marketing_instance, "airplane")
 	if not world_pos_read.ok:
 		return world_pos_read
@@ -190,8 +199,8 @@ func _get_airplane_house_ids(state: GameState, marketing_instance: Dictionary) -
 		return Result.failure("%s: airplane range: marketing_instance.tile_index 缺失或类型错误（期望 int）" % MODULE_ID)
 	var tile_index: int = marketing_instance["tile_index"]
 
-	var min_tile: Vector2i = MapUtils.world_to_tile(MapRuntimeClass.get_world_min(state)).board_pos
-	var max_tile: Vector2i = MapUtils.world_to_tile(MapRuntimeClass.get_world_max(state)).board_pos
+	var min_tile: Vector2i = MapUtils.world_to_tile(CoordsClass.get_world_min(state)).board_pos
+	var max_tile: Vector2i = MapUtils.world_to_tile(CoordsClass.get_world_max(state)).board_pos
 
 	if axis == "row":
 		if tile_index < min_tile.y or tile_index > max_tile.y:
@@ -210,9 +219,9 @@ func _collect_houses_in_tile_row(state: GameState, tile_grid_size: Vector2i, min
 		for y in range(base.y, base.y + MapUtils.TILE_SIZE):
 			for x in range(base.x, base.x + MapUtils.TILE_SIZE):
 				var p := Vector2i(x, y)
-				if not MapRuntimeClass.is_world_pos_in_grid(state, p):
+				if not CoordsClass.is_world_pos_in_grid(state, p):
 					continue
-				var cell := MapRuntimeClass.get_cell(state, p)
+				var cell := CellsClass.get_cell(state, p)
 				if not cell.has("structure") or not (cell["structure"] is Dictionary):
 					return Result.failure("%s: airplane range: cell.structure 缺失或类型错误: %s" % [MODULE_ID, str(p)])
 				var structure: Dictionary = cell["structure"]
@@ -233,9 +242,9 @@ func _collect_houses_in_tile_col(state: GameState, tile_grid_size: Vector2i, min
 		for y in range(base.y, base.y + MapUtils.TILE_SIZE):
 			for x in range(base.x, base.x + MapUtils.TILE_SIZE):
 				var p := Vector2i(x, y)
-				if not MapRuntimeClass.is_world_pos_in_grid(state, p):
+				if not CoordsClass.is_world_pos_in_grid(state, p):
 					continue
-				var cell := MapRuntimeClass.get_cell(state, p)
+				var cell := CellsClass.get_cell(state, p)
 				if not cell.has("structure") or not (cell["structure"] is Dictionary):
 					return Result.failure("%s: airplane range: cell.structure 缺失或类型错误: %s" % [MODULE_ID, str(p)])
 				var structure: Dictionary = cell["structure"]
@@ -260,4 +269,3 @@ static func _require_world_pos(marketing_instance: Dictionary, type_id: String) 
 	if not marketing_instance.has("world_pos") or not (marketing_instance["world_pos"] is Vector2i):
 		return Result.failure("%s: %s range: marketing_instance.world_pos 缺失或类型错误（期望 Vector2i）" % [MODULE_ID, type_id])
 	return Result.success(marketing_instance["world_pos"])
-

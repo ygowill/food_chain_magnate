@@ -72,8 +72,11 @@ static func get_valid_placements(
 	if piece_def == null:
 		return valid_placements
 
-	assert(map_ctx.has("grid_size") and (map_ctx["grid_size"] is Vector2i), "PlacementValidator: map_ctx.grid_size 缺失或类型错误（期望 Vector2i）")
+	if not map_ctx.has("grid_size") or not (map_ctx["grid_size"] is Vector2i):
+		return valid_placements
 	var grid_size: Vector2i = map_ctx["grid_size"]
+	if grid_size.x <= 0 or grid_size.y <= 0:
+		return valid_placements
 
 	# 遍历所有可能的位置和旋转
 	for y in grid_size.y:

@@ -7,7 +7,8 @@ const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 
@@ -245,15 +246,16 @@ func _has_any_legal_radio_position_in_tile(state: GameState, tile_min: Vector2i,
 func _is_legal_radio_position(state: GameState, world_pos: Vector2i) -> bool:
 	if state == null or not (state.map is Dictionary):
 		return false
-	if not MapRuntimeClass.is_world_pos_in_grid(state, world_pos):
+	if not CoordsClass.is_world_pos_in_grid(state, world_pos):
 		return false
+
 	var occupied_read := MarketingPlacementQueryClass.has_any_at_world_pos(state, world_pos)
 	if not occupied_read.ok:
 		return false
 	if bool(occupied_read.value):
 		return false
 
-	var cell := MapRuntimeClass.get_cell(state, world_pos)
+	var cell := CellsClass.get_cell(state, world_pos)
 	if cell.is_empty():
 		return false
 	if not cell.has("structure") or not (cell["structure"] is Dictionary):

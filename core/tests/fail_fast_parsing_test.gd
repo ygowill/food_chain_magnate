@@ -8,8 +8,8 @@ extends RefCounted
 
 const GameDataClass = preload("res://core/data/game_data.gd")
 const GameStateClass = preload("res://core/state/game_state.gd")
-const MapBakerClass = preload("res://core/map/map_baker.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const MapBakeClass = preload("res://core/map/map_baker/bake.gd")
+const BakedMapClass = preload("res://core/map/map_runtime/baked_map.gd")
 const ContentCatalogLoaderV2Class = preload("res://core/modules/v2/content_catalog_loader.gd")
 
 static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
@@ -54,7 +54,7 @@ static func _test_map_runtime_apply_baked_map_validation() -> Result:
 	}
 
 	var state_ok := GameStateClass.new()
-	var ok_apply := MapRuntimeClass.apply_baked_map(state_ok, baked_ok)
+	var ok_apply := BakedMapClass.apply_baked_map(state_ok, baked_ok)
 	if not ok_apply.ok:
 		return Result.failure("MapRuntime.apply_baked_map 不应拒绝合法 baked_data: %s" % ok_apply.error)
 
@@ -66,7 +66,7 @@ static func _test_map_runtime_apply_baked_map_validation() -> Result:
 
 	var bad_grid_size := baked_ok.duplicate(true)
 	bad_grid_size["grid_size"] = [grid_size.x, grid_size.y]
-	var r1 := MapRuntimeClass.apply_baked_map(GameStateClass.new(), bad_grid_size)
+	var r1 := BakedMapClass.apply_baked_map(GameStateClass.new(), bad_grid_size)
 	if r1.ok:
 		return Result.failure("grid_size 非 Vector2i 时应失败，但返回 ok")
 	if str(r1.error).find("grid_size") < 0:
@@ -74,7 +74,7 @@ static func _test_map_runtime_apply_baked_map_validation() -> Result:
 
 	var bad_cells := baked_ok.duplicate(true)
 	bad_cells["cells"] = [[]]
-	var r2 := MapRuntimeClass.apply_baked_map(GameStateClass.new(), bad_cells)
+	var r2 := BakedMapClass.apply_baked_map(GameStateClass.new(), bad_cells)
 	if r2.ok:
 		return Result.failure("cells 维度不匹配时应失败，但返回 ok")
 	if str(r2.error).find("cells") < 0:
@@ -82,7 +82,7 @@ static func _test_map_runtime_apply_baked_map_validation() -> Result:
 
 	var bad_next_house := baked_ok.duplicate(true)
 	bad_next_house["next_house_number"] = 0
-	var r3 := MapRuntimeClass.apply_baked_map(GameStateClass.new(), bad_next_house)
+	var r3 := BakedMapClass.apply_baked_map(GameStateClass.new(), bad_next_house)
 	if r3.ok:
 		return Result.failure("next_house_number<=0 时应失败，但返回 ok")
 	if str(r3.error).find("next_house_number") < 0:
@@ -150,7 +150,7 @@ static func _test_map_baker_requires_piece_registry() -> Result:
 	}])
 
 	# piece_registry 省略（使用默认 {}）时，遇到印刷建筑必须失败
-	var baked := MapBakerClass.bake(map_def, data.tiles)
+	var baked := MapBakeClass.bake(map_def, data.tiles)
 	if baked.ok:
 		return Result.failure("MapBaker.bake 在缺失 piece_registry 时不应成功（必须 fail-fast）")
 	if str(baked.error).find("未找到建筑件定义") < 0:

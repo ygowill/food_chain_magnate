@@ -6,6 +6,7 @@ extends Control
 signal product_clicked(product_id: String)
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var items_container: GridContainer = $MarginContainer/VBoxContainer/ItemsContainer
@@ -48,8 +49,7 @@ func highlight_product(product_id: String) -> void:
 
 func _rebuild_items() -> void:
 	# 清除旧项
-	for child in items_container.get_children():
-		child.queue_free()
+	UiRebuildHelpersClass.free_children(items_container)
 	_product_items.clear()
 
 	_ensure_skin()
@@ -86,6 +86,12 @@ func _update_capacity_display() -> void:
 
 func _on_product_clicked(product_id: String) -> void:
 	product_clicked.emit(product_id)
+
+func apply_font_settings() -> void:
+	for pid in _product_items.keys():
+		var item = _product_items.get(pid, null)
+		if is_instance_valid(item) and item.has_method("apply_font_settings"):
+			item.apply_font_settings()
 
 func _ensure_skin() -> void:
 	if _skin != null:
@@ -154,11 +160,18 @@ class ProductItem extends PanelContainer:
 		# 数量标签
 		_count_label = Label.new()
 		_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_count_label.add_theme_font_size_override("font_size", 12)
 		vbox.add_child(_count_label)
 
+		apply_font_settings()
 		_update_display()
 		_update_style()
+
+	func apply_font_settings() -> void:
+		var fs := 12
+		if Globals != null:
+			fs = int(Globals.get_scaled_font_size(12))
+		if _count_label != null:
+			_count_label.add_theme_font_size_override("font_size", fs)
 
 	func _update_display() -> void:
 		if _count_label != null:

@@ -2,7 +2,8 @@ extends RefCounted
 
 const PricingPipelineClass = preload("res://core/rules/pricing_pipeline.gd")
 const BankruptcyRulesClass = preload("res://core/rules/economy/bankruptcy_rules.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
+const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 
 const MODULE_ID := "coffee"
@@ -46,7 +47,7 @@ func _dinnertime_route_coffee(state: GameState, ctx: Dictionary) -> Result:
 	if house_roads.is_empty():
 		return Result.success({"purchases": [], "income_by_player": {}})
 
-	var rest := MapRuntimeClass.get_restaurant(state, winner_restaurant_id)
+	var rest := StructuresClass.get_restaurant(state, winner_restaurant_id)
 	var entrance_points_read := _get_restaurant_entrance_points(state, rest)
 	if not entrance_points_read.ok:
 		return entrance_points_read
@@ -360,13 +361,13 @@ static func _get_restaurant_entrance_points(state: GameState, rest: Dictionary) 
 static func _get_structure_adjacent_roads(state: GameState, structure_cells: Array[Vector2i]) -> Array[Vector2i]:
 	var set := {}
 	for cell in structure_cells:
-		if MapRuntimeClass.has_cell_any(state, cell) and MapRuntimeClass.has_road_at_any(state, cell):
+		if CellsClass.has_cell_any(state, cell) and CellsClass.has_road_at_any(state, cell):
 			set[_pos_key(cell)] = cell
 		for dir in MapUtilsClass.DIRECTIONS:
 			var n := MapUtilsClass.get_neighbor_pos(cell, dir)
-			if not MapRuntimeClass.has_cell_any(state, n):
+			if not CellsClass.has_cell_any(state, n):
 				continue
-			if MapRuntimeClass.has_road_at_any(state, n):
+			if CellsClass.has_road_at_any(state, n):
 				set[_pos_key(n)] = n
 	var result: Array[Vector2i] = []
 	for k in set.keys():

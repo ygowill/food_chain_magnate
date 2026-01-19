@@ -3,7 +3,7 @@
 class_name TestPhaseUtils
 extends RefCounted
 
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 
 static func _is_transient_auto_skipped_phase(phase_name: String) -> bool:
 	match phase_name:
@@ -165,8 +165,8 @@ static func complete_setup(engine: GameEngine, scan_limit: int = 4000) -> Result
 
 		var placed := false
 
-		var world_min := MapRuntimeClass.get_world_min(state)
-		var world_max := MapRuntimeClass.get_world_max(state)
+		var world_min := CoordsClass.get_world_min(state)
+		var world_max := CoordsClass.get_world_max(state)
 		var tries := 0
 
 		for y in range(world_min.y, world_max.y + 1):

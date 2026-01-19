@@ -7,7 +7,8 @@ const MarketingInitiationRegistryClass = preload("res://core/rules/marketing_ini
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const MilestoneDefClass = preload("res://core/data/milestone_def.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 
@@ -124,9 +125,7 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 	var warnings: Array[String] = []
 
 	# 使用员工：用于“first_marketeer_used”等里程碑
-	var ms_use := MilestoneSystemClass.process_event(state, "UseEmployee", {"player_id": player_id, "id": employee_type})
-	if not ms_use.ok:
-		warnings.append("里程碑触发失败(UseEmployee/%s): %s" % [employee_type, ms_use.error])
+	EmployeeUsageHelperClass.append_use_employee_warning(warnings, state, player_id, employee_type)
 
 	# 飞机轴与 tile 索引
 	var axis := ""
@@ -207,8 +206,8 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 static func _infer_airplane_axis(state: GameState, pos: Vector2i, size: Vector2i) -> String:
 	# 默认：左右边缘 -> row（横飞），上下边缘 -> col（竖飞）
 	# 语义：基于“整条边贴边”判断；若同时贴两条边（角落），保持旧优先级：先 row 后 col。
-	var minp := MapRuntimeClass.get_world_min(state)
-	var maxp := MapRuntimeClass.get_world_max(state)
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
 	var left := pos.x
 	var right := pos.x + size.x - 1
 	var top := pos.y
@@ -228,4 +227,3 @@ static func _is_employee_marketeer(emp_def: EmployeeDef) -> bool:
 		if t is String and str(t).begins_with("use:marketing:"):
 			return true
 	return false
-

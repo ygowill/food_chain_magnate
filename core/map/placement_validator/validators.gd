@@ -11,8 +11,11 @@ static func validate_bounds(
 	footprint_cells: Array[Vector2i],
 	_context: Dictionary
 ) -> Result:
-	assert(map_ctx.has("grid_size") and (map_ctx["grid_size"] is Vector2i), "PlacementValidator: map_ctx.grid_size 缺失或类型错误（期望 Vector2i）")
+	if not map_ctx.has("grid_size") or not (map_ctx["grid_size"] is Vector2i):
+		return Result.failure("PlacementValidator: map_ctx.grid_size 缺失或类型错误（期望 Vector2i）")
 	var grid_size: Vector2i = map_ctx["grid_size"]
+	if grid_size.x <= 0 or grid_size.y <= 0:
+		return Result.failure("PlacementValidator: map_ctx.grid_size 非法: %s" % str(grid_size))
 
 	for cell_pos in footprint_cells:
 		var idx := MapAccess.world_to_index(map_ctx, cell_pos)
@@ -31,11 +34,16 @@ static func validate_cells_empty(
 	if not piece_def.must_be_on_empty:
 		return Result.success()
 
-	assert(map_ctx.has("cells") and (map_ctx["cells"] is Array), "PlacementValidator: map_ctx.cells 缺失或类型错误（期望 Array）")
+	if not map_ctx.has("cells") or not (map_ctx["cells"] is Array):
+		return Result.failure("PlacementValidator: map_ctx.cells 缺失或类型错误（期望 Array）")
 	for cell_pos in footprint_cells:
 		var cell: Dictionary = MapAccess.get_world_cell(map_ctx, cell_pos)
-		assert(cell.has("road_segments") and (cell["road_segments"] is Array), "PlacementValidator: cell.road_segments 缺失或类型错误（期望 Array）: %s" % str(cell_pos))
-		var road_segments: Array = cell["road_segments"]
+		if cell.is_empty():
+			return Result.failure("PlacementValidator: 无法读取地图格子: %s" % str(cell_pos))
+		var rs_val = cell.get("road_segments", null)
+		if not (rs_val is Array):
+			return Result.failure("PlacementValidator: cell.road_segments 缺失或类型错误（期望 Array）: %s" % str(cell_pos))
+		var road_segments: Array = rs_val
 		if not road_segments.is_empty():
 			return Result.failure("位置 %s 有道路，无法放置" % str(cell_pos))
 
@@ -48,11 +56,16 @@ static func validate_not_blocked(
 	footprint_cells: Array[Vector2i],
 	_context: Dictionary
 ) -> Result:
-	assert(map_ctx.has("cells") and (map_ctx["cells"] is Array), "PlacementValidator: map_ctx.cells 缺失或类型错误（期望 Array）")
+	if not map_ctx.has("cells") or not (map_ctx["cells"] is Array):
+		return Result.failure("PlacementValidator: map_ctx.cells 缺失或类型错误（期望 Array）")
 	for cell_pos in footprint_cells:
 		var cell: Dictionary = MapAccess.get_world_cell(map_ctx, cell_pos)
-		assert(cell.has("blocked") and (cell["blocked"] is bool), "PlacementValidator: cell.blocked 缺失或类型错误（期望 bool）: %s" % str(cell_pos))
-		if bool(cell["blocked"]):
+		if cell.is_empty():
+			return Result.failure("PlacementValidator: 无法读取地图格子: %s" % str(cell_pos))
+		var blocked_val = cell.get("blocked", null)
+		if not (blocked_val is bool):
+			return Result.failure("PlacementValidator: cell.blocked 缺失或类型错误（期望 bool）: %s" % str(cell_pos))
+		if bool(blocked_val):
 			return Result.failure("位置 %s 被阻塞" % str(cell_pos))
 
 	return Result.success()
@@ -64,8 +77,6 @@ static func validate_no_drink_source(
 	footprint_cells: Array[Vector2i],
 	_context: Dictionary
 ) -> Result:
-	assert(map_ctx.has("cells") and (map_ctx["cells"] is Array), "PlacementValidator: map_ctx.cells 缺失或类型错误（期望 Array）")
-
 	# 优先使用 map.drink_sources（规则层使用的“进货点列表”），避免依赖 cells 是否包含 drink_source 字段。
 	var drink_source_pos_set := {}
 	var sources_val = map_ctx.get("drink_sources", null)
@@ -85,6 +96,8 @@ static func validate_no_drink_source(
 			return Result.failure("位置 %s 是饮品进货点，无法放置" % str(cell_pos))
 
 		var cell: Dictionary = MapAccess.get_world_cell(map_ctx, cell_pos)
+		if cell.is_empty():
+			return Result.failure("PlacementValidator: 无法读取地图格子: %s" % str(cell_pos))
 		var ds = cell.get("drink_source", null)
 		if ds == null:
 			continue
@@ -101,14 +114,17 @@ static func validate_no_structure_overlap(
 	footprint_cells: Array[Vector2i],
 	context: Dictionary
 ) -> Result:
-	assert(map_ctx.has("cells") and (map_ctx["cells"] is Array), "PlacementValidator: map_ctx.cells 缺失或类型错误（期望 Array）")
+	if not map_ctx.has("cells") or not (map_ctx["cells"] is Array):
+		return Result.failure("PlacementValidator: map_ctx.cells 缺失或类型错误（期望 Array）")
 	var ignore_set := {}
 	if context.has("ignore_structure_cells"):
 		var ignore_cells_val = context["ignore_structure_cells"]
-		assert(ignore_cells_val is Array, "PlacementValidator: context.ignore_structure_cells 类型错误（期望 Array[Vector2i]）")
+		if not (ignore_cells_val is Array):
+			return Result.failure("PlacementValidator: context.ignore_structure_cells 类型错误（期望 Array[Vector2i]）")
 		var ignore_cells: Array = ignore_cells_val
 		for v in ignore_cells:
-			assert(v is Vector2i, "PlacementValidator: ignore_structure_cells 元素类型错误（期望 Vector2i）")
+			if not (v is Vector2i):
+				return Result.failure("PlacementValidator: ignore_structure_cells 元素类型错误（期望 Vector2i）")
 			ignore_set[v] = true
 
 	for cell_pos in footprint_cells:
@@ -116,12 +132,18 @@ static func validate_no_structure_overlap(
 			continue
 
 		var cell: Dictionary = MapAccess.get_world_cell(map_ctx, cell_pos)
-		assert(cell.has("structure") and (cell["structure"] is Dictionary), "PlacementValidator: cell.structure 缺失或类型错误（期望 Dictionary）: %s" % str(cell_pos))
-		var structure: Dictionary = cell["structure"]
+		if cell.is_empty():
+			return Result.failure("PlacementValidator: 无法读取地图格子: %s" % str(cell_pos))
+		var structure_val = cell.get("structure", null)
+		if not (structure_val is Dictionary):
+			return Result.failure("PlacementValidator: cell.structure 缺失或类型错误（期望 Dictionary）: %s" % str(cell_pos))
+		var structure: Dictionary = structure_val
 
 		if not structure.is_empty():
-			assert(structure.has("piece_id") and (structure["piece_id"] is String), "PlacementValidator: structure.piece_id 缺失或类型错误（期望 String）: %s" % str(cell_pos))
-			var existing_piece: String = str(structure["piece_id"])
+			var piece_id_val = structure.get("piece_id", null)
+			if not (piece_id_val is String):
+				return Result.failure("PlacementValidator: structure.piece_id 缺失或类型错误（期望 String）: %s" % str(cell_pos))
+			var existing_piece: String = str(piece_id_val)
 			return Result.failure("位置 %s 已有建筑: %s" % [str(cell_pos), existing_piece])
 
 	return Result.success()
@@ -137,17 +159,20 @@ static func validate_no_marketing_overlap(
 	if placements_val == null:
 		return Result.success()
 
-	assert(placements_val is Dictionary, "PlacementValidator: map_ctx.marketing_placements 类型错误（期望 Dictionary）")
+	if not (placements_val is Dictionary):
+		return Result.failure("PlacementValidator: map_ctx.marketing_placements 类型错误（期望 Dictionary）")
 	var placements: Dictionary = placements_val
 	if placements.is_empty():
 		return Result.success()
 
 	for k in placements.keys():
 		var p_val = placements[k]
-		assert(p_val is Dictionary, "PlacementValidator: marketing_placements[%s] 类型错误（期望 Dictionary）" % str(k))
+		if not (p_val is Dictionary):
+			return Result.failure("PlacementValidator: marketing_placements[%s] 类型错误（期望 Dictionary）" % str(k))
 		var p: Dictionary = p_val
 
-		assert(p.has("world_pos") and (p["world_pos"] is Vector2i), "PlacementValidator: marketing_placements[%s].world_pos 缺失或类型错误（期望 Vector2i）" % str(k))
+		if not p.has("world_pos") or not (p["world_pos"] is Vector2i):
+			return Result.failure("PlacementValidator: marketing_placements[%s].world_pos 缺失或类型错误（期望 Vector2i）" % str(k))
 		var anchor: Vector2i = p["world_pos"]
 
 		# footprint_size/rotation 为新增字段；缺失则按 1x1/rotation=0 兜底（兼容旧存档/测试）。
@@ -158,14 +183,17 @@ static func validate_no_marketing_overlap(
 				base_size = Vector2i(fs_val)
 			elif fs_val is Array:
 				var arr: Array = fs_val
-				assert(arr.size() == 2, "PlacementValidator: marketing_placements[%s].footprint_size 长度错误（期望 2）" % str(k))
+				if arr.size() != 2:
+					return Result.failure("PlacementValidator: marketing_placements[%s].footprint_size 长度错误（期望 2）" % str(k))
 				var w_val = arr[0]
 				var h_val = arr[1]
-				assert(w_val is int or w_val is float, "PlacementValidator: marketing_placements[%s].footprint_size[0] 类型错误" % str(k))
-				assert(h_val is int or h_val is float, "PlacementValidator: marketing_placements[%s].footprint_size[1] 类型错误" % str(k))
+				if not (w_val is int or w_val is float):
+					return Result.failure("PlacementValidator: marketing_placements[%s].footprint_size[0] 类型错误" % str(k))
+				if not (h_val is int or h_val is float):
+					return Result.failure("PlacementValidator: marketing_placements[%s].footprint_size[1] 类型错误" % str(k))
 				base_size = Vector2i(int(w_val), int(h_val))
 			else:
-				assert(false, "PlacementValidator: marketing_placements[%s].footprint_size 类型错误（期望 Vector2i 或 [w,h] Array）" % str(k))
+				return Result.failure("PlacementValidator: marketing_placements[%s].footprint_size 类型错误（期望 Vector2i 或 [w,h] Array）" % str(k))
 
 		var rotation := 0
 		if p.has("rotation"):
@@ -174,11 +202,13 @@ static func validate_no_marketing_overlap(
 				rotation = int(rot_val)
 			elif rot_val is float:
 				var f: float = float(rot_val)
-				assert(f == floor(f), "PlacementValidator: marketing_placements[%s].rotation 必须为整数" % str(k))
+				if f != floor(f):
+					return Result.failure("PlacementValidator: marketing_placements[%s].rotation 必须为整数" % str(k))
 				rotation = int(f)
 			else:
-				assert(false, "PlacementValidator: marketing_placements[%s].rotation 类型错误（期望 int）" % str(k))
-		assert(rotation in [0, 90, 180, 270], "PlacementValidator: marketing_placements[%s].rotation 非法: %s" % [str(k), str(rotation)])
+				return Result.failure("PlacementValidator: marketing_placements[%s].rotation 类型错误（期望 int）" % str(k))
+		if not rotation in [0, 90, 180, 270]:
+			return Result.failure("PlacementValidator: marketing_placements[%s].rotation 非法: %s" % [str(k), str(rotation)])
 
 		if base_size.x <= 0 or base_size.y <= 0:
 			return Result.failure("营销板件占地非法: %s" % str(base_size))
@@ -212,9 +242,13 @@ static func validate_road_adjacency(
 	if not piece_def.must_touch_road:
 		return Result.success()
 
-	assert(map_ctx.has("cells") and (map_ctx["cells"] is Array), "PlacementValidator: map_ctx.cells 缺失或类型错误（期望 Array）")
-	assert(map_ctx.has("grid_size") and (map_ctx["grid_size"] is Vector2i), "PlacementValidator: map_ctx.grid_size 缺失或类型错误（期望 Vector2i）")
+	if not map_ctx.has("cells") or not (map_ctx["cells"] is Array):
+		return Result.failure("PlacementValidator: map_ctx.cells 缺失或类型错误（期望 Array）")
+	if not map_ctx.has("grid_size") or not (map_ctx["grid_size"] is Vector2i):
+		return Result.failure("PlacementValidator: map_ctx.grid_size 缺失或类型错误（期望 Vector2i）")
 	var grid_size: Vector2i = map_ctx["grid_size"]
+	if grid_size.x <= 0 or grid_size.y <= 0:
+		return Result.failure("PlacementValidator: map_ctx.grid_size 非法: %s" % str(grid_size))
 
 	# 创建占地集合
 	var footprint_set := {}
@@ -235,8 +269,12 @@ static func validate_road_adjacency(
 				continue
 
 			var neighbor_cell: Dictionary = MapAccess.get_world_cell(map_ctx, neighbor)
-			assert(neighbor_cell.has("road_segments") and (neighbor_cell["road_segments"] is Array), "PlacementValidator: cell.road_segments 缺失或类型错误（期望 Array）: %s" % str(neighbor))
-			var road_segments: Array = neighbor_cell["road_segments"]
+			if neighbor_cell.is_empty():
+				return Result.failure("PlacementValidator: 无法读取地图格子: %s" % str(neighbor))
+			var rs_val = neighbor_cell.get("road_segments", null)
+			if not (rs_val is Array):
+				return Result.failure("PlacementValidator: cell.road_segments 缺失或类型错误（期望 Array）: %s" % str(neighbor))
+			var road_segments: Array = rs_val
 			if not road_segments.is_empty():
 				return Result.success()
 

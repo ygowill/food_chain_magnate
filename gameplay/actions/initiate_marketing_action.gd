@@ -6,7 +6,7 @@ extends ActionExecutor
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 
 const ValidationClass = preload("res://gameplay/actions/initiate_marketing/validation.gd")
 const ApplyClass = preload("res://gameplay/actions/initiate_marketing/apply.gd")
@@ -159,8 +159,8 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 
 func _infer_airplane_axis(state: GameState, pos: Vector2i) -> String:
 	# 默认：左右边缘 -> row（横飞），上下边缘 -> col（竖飞）
-	var minp := MapRuntimeClass.get_world_min(state)
-	var maxp := MapRuntimeClass.get_world_max(state)
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
 	if pos.x == minp.x or pos.x == maxp.x:
 		return "row"
 	if pos.y == minp.y or pos.y == maxp.y:

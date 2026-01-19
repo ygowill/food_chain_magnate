@@ -11,7 +11,8 @@ const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const PricingPipelineClass = preload("res://core/rules/pricing_pipeline.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const BankruptcyRulesClass = preload("res://core/rules/economy/bankruptcy_rules.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const DinnertimeDemandRegistryClass = preload("res://core/rules/dinnertime_demand_registry.gd")
 const DinnertimeRoutePurchaseRegistryClass = preload("res://core/rules/dinnertime_route_purchase_registry.gd")
 const DinnertimeEventsClass = preload("res://core/rules/phase/dinnertime/dinnertime_events.gd")
@@ -25,14 +26,7 @@ const EFFECT_SEG_DINNERTIME_INCOME_BONUS := ":dinnertime:income_bonus:"
 const EFFECT_SEG_DINNERTIME_DISTANCE_DELTA := ":dinnertime:distance_delta:"
 const EFFECT_SEG_DINNERTIME_SALE_HOUSE_BONUS := ":dinnertime:sale_house_bonus:"
 
-static func apply(state: GameState, phase_manager = null) -> Result:
-	# 对齐 docs/rules.md：
-	# 1) 按房屋编号升序处理有需求的房屋
-	# 2) 候选餐厅：道路连通 + 库存满足全部需求
-	# 3) 选择：最小（单价 + 距离），平局：女服务员数量多者胜，再平：回合顺序靠前者胜
-	# 4) 结算：扣库存 + 入账；花园翻倍“单价部分”；奖励不翻倍；最终收入下限 0
-	# 5) 女服务员：所有房屋处理完后，每位在岗女服务员赚取 3/5（里程碑）
-	# 6) CFO：拥有在岗 CFO（或“拥有$100”里程碑）者，本回合收入（含女服务员）+50% 向上取整
+static func _validate_apply_inputs(state: GameState, phase_manager) -> Result:
 	if state == null:
 		return Result.failure("DinnertimeSettlement: state 为空")
 	if not (state.map is Dictionary):
@@ -44,14 +38,13 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 	if not (state.bank is Dictionary):
 		return Result.failure("DinnertimeSettlement: state.bank 类型错误（期望 Dictionary）")
 
-	var warnings: Array[String] = []
 	var effect_registry = null
 	if phase_manager != null and phase_manager.has_method("get_effect_registry"):
 		effect_registry = phase_manager.get_effect_registry()
 	if effect_registry == null:
 		return Result.failure("晚餐结算失败：EffectRegistry 未设置")
 
-	var road_graph = MapRuntimeClass.get_road_graph(state)
+	var road_graph = RoadGraphCacheClass.get_road_graph(state)
 	if road_graph == null:
 		return Result.failure("晚餐结算失败：RoadGraph 未初始化")
 
@@ -66,6 +59,34 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 	if not state.map.has("restaurants") or not (state.map["restaurants"] is Dictionary):
 		return Result.failure("晚餐结算失败：state.map.restaurants 缺失或类型错误（期望 Dictionary）")
 	var restaurants: Dictionary = state.map["restaurants"]
+
+	return Result.success({
+		"effect_registry": effect_registry,
+		"road_graph": road_graph,
+		"grid_size": grid_size,
+		"houses": houses,
+		"restaurants": restaurants,
+	})
+
+static func apply(state: GameState, phase_manager = null) -> Result:
+	# 对齐 docs/rules.md：
+	# 1) 按房屋编号升序处理有需求的房屋
+	# 2) 候选餐厅：道路连通 + 库存满足全部需求
+	# 3) 选择：最小（单价 + 距离），平局：女服务员数量多者胜，再平：回合顺序靠前者胜
+	# 4) 结算：扣库存 + 入账；花园翻倍“单价部分”；奖励不翻倍；最终收入下限 0
+	# 5) 女服务员：所有房屋处理完后，每位在岗女服务员赚取 3/5（里程碑）
+	# 6) CFO：拥有在岗 CFO（或“拥有$100”里程碑）者，本回合收入（含女服务员）+50% 向上取整
+	var env_read := _validate_apply_inputs(state, phase_manager)
+	if not env_read.ok:
+		return env_read
+	var env: Dictionary = env_read.value
+
+	var warnings: Array[String] = []
+	var effect_registry = env.get("effect_registry", null)
+	var road_graph = env.get("road_graph", null)
+	var grid_size: Vector2i = env.get("grid_size", Vector2i.ZERO)
+	var houses: Dictionary = env.get("houses", {})
+	var restaurants: Dictionary = env.get("restaurants", {})
 
 	var income_sales: Array[int] = []
 	var income_tips: Array[int] = []
@@ -85,7 +106,7 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 	var skipped: Array[Dictionary] = []
 	var sold_marketed_demand_events: Array[Dictionary] = []
 
-	var ordered_house_ids: Array[String] = MapRuntimeClass.get_sorted_house_ids(state)
+	var ordered_house_ids: Array[String] = StructuresClass.get_sorted_house_ids(state)
 	for house_id in ordered_house_ids:
 		if not houses.has(house_id):
 			continue

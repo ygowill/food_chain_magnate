@@ -16,6 +16,7 @@ const MarketingRangeOverlayControllerClass = preload("res://ui/scenes/game/game_
 const ProcurementRouteOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_procurement_route.gd")
 const DinnertimeOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_dinnertime.gd")
 const DemandIndicatorControllerClass = preload("res://ui/scenes/game/game_overlay_demand_indicator.gd")
+const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 
 const TOAST_DESIRED_WIDTH := 520.0
 const TOAST_MIN_MARGIN := 12.0
@@ -144,8 +145,7 @@ func show_settings_dialog() -> void:
 	if settings_dialog == null:
 		settings_dialog = SettingsDialogScene.instantiate()
 		_scene.add_child(settings_dialog)
-		if settings_dialog.has_signal("settings_changed") and not settings_dialog.settings_changed.is_connected(_on_settings_changed):
-			settings_dialog.settings_changed.connect(_on_settings_changed)
+		UiSignalHelpersClass.safe_connect(settings_dialog, "settings_changed", _on_settings_changed)
 
 	if settings_dialog.has_method("show_dialog"):
 		settings_dialog.show_dialog()
@@ -177,6 +177,28 @@ func _on_settings_changed(settings: Dictionary) -> void:
 	Globals.confirm_actions = bool(settings.get("confirm_actions", Globals.confirm_actions))
 	Globals.show_hints = bool(settings.get("show_hints", Globals.show_hints))
 	Globals.animation_speed = float(settings.get("animation_speed", Globals.animation_speed))
+
+	# 字体倍率：允许在运行时立即生效（主要用于调试可读性）。
+	if settings.has("font_scale") and Globals != null:
+		Globals.font_scale = clampf(float(settings.get("font_scale", Globals.font_scale)), 0.5, 2.0)
+		if Globals.has_method("apply_font_scale"):
+			Globals.apply_font_scale()
+		if settings.has("log_font_scale") and Globals != null:
+			Globals.log_font_scale = clampf(float(settings.get("log_font_scale", Globals.log_font_scale)), 0.5, 3.0)
+		if is_instance_valid(_game_log_panel) and _game_log_panel.has_method("apply_font_settings"):
+			_game_log_panel.apply_font_settings()
+		if _scene != null and is_instance_valid(_scene):
+			var player_panel = _scene.get("player_panel")
+			if is_instance_valid(player_panel) and player_panel.has_method("apply_font_settings"):
+				player_panel.apply_font_settings()
+			var inventory_panel = _scene.get("inventory_panel")
+			if is_instance_valid(inventory_panel) and inventory_panel.has_method("apply_font_settings"):
+				inventory_panel.apply_font_settings()
+			var left_panel = _scene.get("left_panel")
+			if is_instance_valid(left_panel) and left_panel.has_method("apply_font_settings"):
+				left_panel.apply_font_settings()
+		if _scene != null and is_instance_valid(_scene) and _scene.has_method("_apply_responsive_layout"):
+			_scene.call_deferred("_apply_responsive_layout")
 
 func _setup_help_tooltips() -> void:
 	if _help_tooltips_initialized:

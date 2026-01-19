@@ -6,6 +6,7 @@ class_name MapOptionDef
 extends RefCounted
 
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
+const MapParseHelpersClass = preload("res://core/map/parse_helpers.gd")
 
 const _VALID_LAYOUT_MODES: Array[String] = ["random_all_tiles", "fixed"]
 const _VALID_ROTATIONS = MapUtilsClass.VALID_ROTATIONS
@@ -61,10 +62,10 @@ static func from_dict(data: Dictionary) -> Result:
 			return Result.failure("MapOptionDef 缺少字段: %s" % key)
 
 	var id_val = data.get("id", null)
-	if not (id_val is String) or str(id_val).is_empty():
+	if not (id_val is String) or str(id_val).strip_edges().is_empty():
 		return Result.failure("MapOptionDef.id 类型错误或为空（期望非空 String）")
 	var display_name_val = data.get("display_name", null)
-	if not (display_name_val is String) or str(display_name_val).is_empty():
+	if not (display_name_val is String) or str(display_name_val).strip_edges().is_empty():
 		return Result.failure("MapOptionDef.display_name 类型错误或为空（期望非空 String）")
 
 	var min_players_read := _parse_non_negative_int(data.get("min_players", null), "MapOptionDef.min_players")
@@ -79,9 +80,9 @@ static func from_dict(data: Dictionary) -> Result:
 		return Result.failure("MapOptionDef 玩家数范围无效: min=%d max=%d" % [min_players, max_players])
 
 	var layout_mode_val = data.get("layout_mode", null)
-	if not (layout_mode_val is String) or str(layout_mode_val).is_empty():
+	if not (layout_mode_val is String) or str(layout_mode_val).strip_edges().is_empty():
 		return Result.failure("MapOptionDef.layout_mode 类型错误或为空（期望非空 String）")
-	var layout_mode: String = str(layout_mode_val)
+	var layout_mode: String = str(layout_mode_val).strip_edges()
 	if not _VALID_LAYOUT_MODES.has(layout_mode):
 		return Result.failure("MapOptionDef.layout_mode 非法: %s" % layout_mode)
 
@@ -105,8 +106,8 @@ static func from_dict(data: Dictionary) -> Result:
 			return Result.failure("MapOptionDef.tiles 不能为空（layout_mode=fixed）")
 
 	var opt := _SELF_SCRIPT.new()
-	opt.id = str(id_val)
-	opt.display_name = str(display_name_val)
+	opt.id = str(id_val).strip_edges()
+	opt.display_name = str(display_name_val).strip_edges()
 	opt.min_players = min_players
 	opt.max_players = max_players
 	opt.layout_mode = layout_mode
@@ -130,50 +131,16 @@ static func load_from_file(path: String) -> Result:
 	return from_json(json)
 
 static func _parse_int(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
-		return Result.success(int(f))
-	return Result.failure("%s 类型错误（期望整数）" % path)
+	return MapParseHelpersClass.parse_int(value, path)
 
 static func _parse_non_negative_int(value, path: String) -> Result:
-	var r := _parse_int(value, path)
-	if not r.ok:
-		return r
-	var n: int = int(r.value)
-	if n < 0:
-		return Result.failure("%s 不能为负数: %d" % [path, n])
-	return Result.success(n)
+	return MapParseHelpersClass.parse_non_negative_int(value, path)
 
 static func _parse_vec2i(value, path: String) -> Result:
-	if not (value is Array) or value.size() != 2:
-		return Result.failure("%s 类型错误（期望 [x,y]）" % path)
-	var x_read := _parse_int(value[0], "%s[0]" % path)
-	if not x_read.ok:
-		return x_read
-	var y_read := _parse_int(value[1], "%s[1]" % path)
-	if not y_read.ok:
-		return y_read
-	return Result.success(Vector2i(int(x_read.value), int(y_read.value)))
+	return MapParseHelpersClass.parse_vec2i(value, path)
 
 static func _parse_string_array(value, path: String, require_non_empty: bool) -> Result:
-	if not (value is Array):
-		return Result.failure("%s 类型错误（期望 Array[String]）" % path)
-	var out: Array[String] = []
-	for i in range(value.size()):
-		var item = value[i]
-		if not (item is String):
-			return Result.failure("%s[%d] 类型错误（期望 String）" % [path, i])
-		var s := str(item)
-		if s.is_empty():
-			return Result.failure("%s[%d] 不能为空字符串" % [path, i])
-		out.append(s)
-	if require_non_empty and out.is_empty():
-		return Result.failure("%s 不能为空" % path)
-	return Result.success(out)
+	return MapParseHelpersClass.parse_string_array(value, path, require_non_empty)
 
 static func _parse_tiles(value, path: String) -> Result:
 	if not (value is Array):
@@ -189,7 +156,7 @@ static func _parse_tiles(value, path: String) -> Result:
 				return Result.failure("%s[%d] 缺少字段: %s" % [path, i, k])
 
 		var tile_id_val = tile.get("tile_id", null)
-		if not (tile_id_val is String) or str(tile_id_val).is_empty():
+		if not (tile_id_val is String) or str(tile_id_val).strip_edges().is_empty():
 			return Result.failure("%s[%d].tile_id 类型错误或为空（期望非空 String）" % [path, i])
 		var board_pos_read := _parse_vec2i(tile.get("board_pos", null), "%s[%d].board_pos" % [path, i])
 		if not board_pos_read.ok:
@@ -202,7 +169,7 @@ static func _parse_tiles(value, path: String) -> Result:
 			return Result.failure("%s[%d].rotation 非法: %d" % [path, i, rot])
 
 		out.append({
-			"tile_id": str(tile_id_val),
+			"tile_id": str(tile_id_val).strip_edges(),
 			"board_pos": board_pos_read.value,
 			"rotation": rot,
 		})

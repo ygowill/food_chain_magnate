@@ -53,6 +53,8 @@ const DebugPanelScene = preload("res://ui/scenes/debug/debug_panel.tscn")
 const ConfirmDialogScene = preload("res://ui/dialogs/confirm_dialog.tscn")
 const ReplayPlayerScene = preload("res://ui/components/replay_player/replay_player.tscn")
 const SaveLoadDialogScript = preload("res://ui/dialogs/save_load_dialog.gd")
+const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
+const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 
 # 游戏状态
 var game_engine: GameEngine = null
@@ -78,6 +80,12 @@ var _replay_mode_active: bool = false
 var _replay_original_engine: GameEngine = null
 var _replay_file_path: String = ""
 
+const AUTO_MANDATORY_ACTION_IDS := {
+	"set_price": true,
+	"set_discount": true,
+	"set_luxury_price": true,
+}
+
 # 存档管理（多槽 + 文件选择）
 var _save_load_dialog = null
 var _save_load_context: String = ""
@@ -93,6 +101,7 @@ var _right_panel_visible: bool = true
 var _center_split_default_split_offset: int = -340
 
 var _responsive_mode: String = ""
+var _responsive_font_scale: float = -1.0
 var _right_panel_footer_source: Object = null
 
 func _ready() -> void:
@@ -127,8 +136,7 @@ func _ready() -> void:
 
 	_map_controller = GameMapInteractionControllerClass.new(self, map_canvas, _overlay_controller)
 	_map_controller.connect_signals()
-	if _map_controller.has_signal("mode_changed") and not _map_controller.mode_changed.is_connected(_on_map_mode_changed):
-		_map_controller.mode_changed.connect(_on_map_mode_changed)
+	UiSignalHelpersClass.safe_connect(_map_controller, "mode_changed", _on_map_mode_changed)
 
 	_panel_controller = GamePanelControllerClass.new(
 		self,
@@ -156,9 +164,7 @@ func _ready() -> void:
 	_init_bottom_panel_toggle()
 	_init_left_area_resize()
 	_apply_responsive_layout()
-	if is_instance_valid(self) and has_signal("resized"):
-		if not resized.is_connected(_on_root_resized):
-			resized.connect(_on_root_resized)
+	UiSignalHelpersClass.safe_connect(self, "resized", _on_root_resized)
 	_update_ui()
 	_on_map_mode_changed("", {})
 
@@ -620,9 +626,14 @@ func _apply_responsive_layout() -> void:
 	elif width > 1920:
 		mode = "wide"
 
-	if mode == _responsive_mode:
+	var current_font_scale := 1.0
+	if Globals != null:
+		current_font_scale = float(Globals.font_scale)
+
+	if mode == _responsive_mode and is_equal_approx(current_font_scale, _responsive_font_scale):
 		return
 	_responsive_mode = mode
+	_responsive_font_scale = current_font_scale
 
 	var left_width := 360
 	var right_width := 340
@@ -675,14 +686,18 @@ func _apply_responsive_layout() -> void:
 	elif top_bar is HBoxContainer:
 		(top_bar as HBoxContainer).add_theme_constant_override("separation", separation)
 
+	var scaled_font_size := font_size
+	if Globals != null:
+		scaled_font_size = int(Globals.get_scaled_font_size(font_size))
+
 	if is_instance_valid(round_label):
-		round_label.add_theme_font_size_override("font_size", font_size)
+		round_label.add_theme_font_size_override("font_size", scaled_font_size)
 	if is_instance_valid(phase_label):
-		phase_label.add_theme_font_size_override("font_size", font_size)
+		phase_label.add_theme_font_size_override("font_size", scaled_font_size)
 	if is_instance_valid(bank_label):
-		bank_label.add_theme_font_size_override("font_size", font_size)
+		bank_label.add_theme_font_size_override("font_size", scaled_font_size)
 	if is_instance_valid(current_player_label):
-		current_player_label.add_theme_font_size_override("font_size", font_size)
+		current_player_label.add_theme_font_size_override("font_size", scaled_font_size)
 
 func _initialize_game() -> void:
 	# 载入游戏：主菜单可能已在 Globals 中准备好 GameEngine。
@@ -697,7 +712,10 @@ func _initialize_game() -> void:
 
 	game_engine = GameEngine.new()
 	# 银行储备卡在进入游戏后由玩家秘密选择（Setup/ReserveCards），这里不从游戏设置注入选择结果。
-	var init_result := game_engine.initialize(Globals.player_count, Globals.random_seed, Globals.enabled_modules_v2, Globals.modules_v2_base_dir, [])
+	var logo_choices: Array[int] = []
+	for pid in range(Globals.player_count):
+		logo_choices.append(Globals.get_player_restaurant_logo_choice(pid))
+	var init_result := game_engine.initialize(Globals.player_count, Globals.random_seed, Globals.enabled_modules_v2, Globals.modules_v2_base_dir, [], logo_choices)
 	if not init_result.ok:
 		GameLog.error("Game", "游戏初始化失败: %s" % init_result.error)
 		return
@@ -783,7 +801,9 @@ func _update_ui() -> void:
 	state_hash_label.text = "Hash: %s..." % full_hash.substr(0, 8)
 
 	# 命令计数
-	command_count_label.text = "命令: %d" % game_engine.get_command_history().size()
+	var total_cmds := game_engine.get_command_history().size()
+	var current_cmd := int(game_engine.current_command_index)
+	command_count_label.text = "命令: %d (当前: #%d)" % [total_cmds, current_cmd] if current_cmd >= 0 else ("命令: %d (当前: -)" % total_cmds)
 
 	if is_instance_valid(game_log_panel) and game_log_panel.has_method("set_player_count"):
 		game_log_panel.set_player_count(state.players.size())
@@ -807,15 +827,80 @@ func _update_ui() -> void:
 	if _debug_panel != null and _debug_panel.visible:
 		_debug_panel.refresh_state()
 
-func _on_debug_command_executed(_command: String, _result: String) -> void:
+func _on_debug_command_executed(command: String, _result: String) -> void:
+	# undo/redo/restore/load 会“改写时间线”，GameEngine 会重建 EventBus.history；
+	# UI 日志面板需要从新的 history 重新恢复，否则会残留旧时间线的日志。
+	var cmd := str(command).strip_edges()
+	var head := cmd.split(" ", false, 1)[0] if not cmd.is_empty() else ""
+	var is_timeline_change := (head == "undo" or head == "redo" or head == "restore" or head == "load")
+
+	# 避免时间线变化后仍停留在旧面板/选点上下文导致“看起来没回退”；
+	# 先 hide，再走 _update_ui 的 sync，让必要的强制弹窗可按新 state 重新打开。
+	if is_timeline_change:
+		if _panel_controller != null and _panel_controller.has_method("hide_all"):
+			_panel_controller.hide_all()
+
 	# 调试命令执行后刷新游戏 UI
 	_update_ui()
+
+	if is_timeline_change:
+		if _event_log_controller != null and _event_log_controller.has_method("rebuild_from_history"):
+			_event_log_controller.rebuild_from_history()
+
+func rewind_to_phase_start() -> void:
+	if game_engine == null:
+		return
+	if _replay_mode_active:
+		GameLog.warn("Game", "回放模式下无法回退阶段")
+		return
+
+	var idx_r: Result = game_engine.find_phase_start_command_index()
+	if not idx_r.ok:
+		GameLog.warn("Game", "计算阶段开始索引失败: %s" % idx_r.error)
+		return
+
+	var target_index := int(idx_r.value)
+	var current_index := int(game_engine.current_command_index)
+	if target_index >= current_index:
+		return
+
+	var state := game_engine.get_state()
+	var phase_name := str(state.phase)
+	var steps := current_index - target_index
+
+	_show_confirm(
+		"回退到阶段开始",
+		"确定要回退到【%s】阶段开始吗？\n将撤销本阶段的 %d 步操作。" % [phase_name, steps],
+		Callable(self, "_confirm_rewind_to_phase_start").bind(target_index),
+		Callable(),
+		"回退",
+		"取消"
+	)
+
+func _confirm_rewind_to_phase_start(target_index: int) -> void:
+	if game_engine == null:
+		return
+	if _panel_controller != null and _panel_controller.has_method("hide_all"):
+		_panel_controller.hide_all()
+
+	var result := game_engine.rewind_to_command(target_index)
+	if not result.ok:
+		GameLog.warn("Game", "回退到阶段开始失败: %s" % result.error)
+	_update_ui()
+	if result.ok and _event_log_controller != null and _event_log_controller.has_method("rebuild_from_history"):
+		_event_log_controller.rebuild_from_history()
 
 func _execute_command(command: Command) -> Result:
 	if game_engine == null:
 		return Result.failure("游戏引擎未初始化")
 	if _replay_mode_active:
 		return Result.failure("回放模式下无法执行命令")
+
+	var auto := _maybe_auto_complete_mandatory_actions_before_skip(command)
+	if auto is Result and not auto.ok:
+		GameLog.warn("Game", "自动完成强制动作失败: %s" % auto.error)
+		_update_ui()
+		return auto
 
 	var result := game_engine.execute_command(command)
 	if not result.ok:
@@ -826,6 +911,73 @@ func _execute_command(command: Command) -> Result:
 
 	_update_ui()
 	return result
+
+func _get_last_working_sub_phase_name() -> String:
+	var last_sub_phase := "PlaceRestaurants"
+	if game_engine != null and game_engine.phase_manager != null and game_engine.phase_manager.has_method("get_working_sub_phase_order_names"):
+		var order = game_engine.phase_manager.get_working_sub_phase_order_names()
+		if order is Array and not order.is_empty():
+			last_sub_phase = str(order[order.size() - 1])
+	return last_sub_phase
+
+func _maybe_auto_complete_mandatory_actions_before_skip(command: Command) -> Result:
+	if command == null:
+		return Result.failure("command 为空")
+	if command.action_id != "skip":
+		return Result.success()
+	if game_engine == null:
+		return Result.failure("游戏引擎未初始化")
+
+	var state: GameState = game_engine.get_state()
+	if state == null:
+		return Result.failure("游戏状态为空")
+	if str(state.phase) != "Working":
+		return Result.success()
+	if str(state.sub_phase) != _get_last_working_sub_phase_name():
+		return Result.success()
+
+	var current_player_id := state.get_current_player_id()
+	if int(command.actor) != int(current_player_id):
+		return Result.success()
+
+	var player := state.get_player(current_player_id)
+	var required := MandatoryActionsRulesClass.get_required_mandatory_actions(player)
+	if required.is_empty():
+		return Result.success()
+
+	if not (state.round_state is Dictionary):
+		return Result.failure("round_state 类型错误（期望 Dictionary）")
+	if not state.round_state.has("mandatory_actions_completed"):
+		return Result.failure("round_state.mandatory_actions_completed 缺失")
+	var mac_val = state.round_state["mandatory_actions_completed"]
+	if not (mac_val is Dictionary):
+		return Result.failure("round_state.mandatory_actions_completed 类型错误（期望 Dictionary）")
+	var mac: Dictionary = mac_val
+	if not mac.has(current_player_id):
+		return Result.failure("mandatory_actions_completed 缺少玩家 key: %d" % current_player_id)
+	var completed_val = mac[current_player_id]
+	if not (completed_val is Array):
+		return Result.failure("mandatory_actions_completed[%d] 类型错误（期望 Array）" % current_player_id)
+	var completed: Array = completed_val
+
+	var missing: Array[String] = []
+	for action_id in required:
+		var aid := str(action_id).strip_edges()
+		if aid.is_empty():
+			continue
+		if not AUTO_MANDATORY_ACTION_IDS.has(aid):
+			continue
+		if completed.has(aid):
+			continue
+		missing.append(aid)
+
+	for aid2 in missing:
+		var cmd := Command.create(str(aid2), current_player_id, {"auto": true})
+		var r := game_engine.execute_command(cmd)
+		if not r.ok:
+			return Result.failure("自动执行强制动作失败(%s): %s" % [aid2, r.error])
+
+	return Result.success()
 
 func _maybe_show_payday_blocker_prompt(_command: Command, result: Result) -> void:
 	if result == null or result.ok:
@@ -1167,6 +1319,9 @@ func _cancel_quit_to_menu() -> void:
 		menu_dialog.show()
 
 # === P2 工具方法（对外 API）===
+
+func is_replay_mode_active() -> bool:
+	return _replay_mode_active
 
 func _ensure_save_load_dialog() -> void:
 	if _save_load_dialog != null and is_instance_valid(_save_load_dialog):

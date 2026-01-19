@@ -1,8 +1,10 @@
 class_name PlaceLobbyistsRoadAction
 extends ActionExecutor
 
-const PlacementValidatorClass = preload("res://core/map/placement_validator.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const PlacementClass = preload("res://core/map/placement_validator/placement.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
@@ -107,7 +109,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var map_ctx := _build_map_context(state)
 	var piece_registry := PieceRegistryClass.get_all_defs()
 
-	var validate := PlacementValidatorClass.validate_placement(map_ctx, piece_id, anchor_pos, rotation, piece_registry, {})
+	var validate := PlacementClass.validate_placement(map_ctx, piece_id, anchor_pos, rotation, piece_registry, {})
 	if not validate.ok:
 		return validate
 	assert(validate.value is Dictionary, "place_lobbyists_road: validate_placement 返回值类型错误（期望 Dictionary）")
@@ -168,9 +170,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		var dir: String = str(a["dir"])
 		var world_from := anchor_pos + MapUtilsClass.rotate_offset(offset, rotation)
 		var world_to: Vector2i = world_from + MapUtilsClass.DIR_OFFSETS[MapUtilsClass.rotate_dir(dir, rotation)]
-		if not MapRuntimeClass.is_world_pos_in_grid(state, world_to):
+		if not CoordsClass.is_world_pos_in_grid(state, world_to):
 			continue
-		var cell_to: Dictionary = MapRuntimeClass.get_cell(state, world_to)
+		var cell_to: Dictionary = CellsClass.get_cell(state, world_to)
 		var segs: Array = cell_to.get("road_segments", [])
 		if not (segs is Array):
 			continue
@@ -191,7 +193,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		segments_by_pos["%d,%d" % [world_pos.x, world_pos.y]] = [{"dirs": dirs, "bridge": false}]
 
 	for pos in piece_cells:
-		var idx := MapRuntimeClass.world_to_index(state, pos)
+		var idx := CoordsClass.world_to_index(state, pos)
 		state.map.cells[idx.y][idx.x]["structure"] = {
 			"piece_id": piece_id,
 			"owner": player_id,
@@ -256,7 +258,7 @@ func _build_map_context(state: GameState) -> Dictionary:
 	return {
 		"cells": state.map.cells,
 		"grid_size": state.map.grid_size,
-		"map_origin": MapRuntimeClass.get_map_origin(state),
+		"map_origin": CoordsClass.get_map_origin(state),
 		"houses": state.map.houses,
 		"restaurants": state.map.restaurants,
 		"drink_sources": state.map.get("drink_sources", []),
@@ -266,7 +268,7 @@ func _build_map_context(state: GameState) -> Dictionary:
 func _is_adjacent_to_reachable_road(state: GameState, actor: int, piece_cells: Array[Vector2i], max_range: int) -> Result:
 	if max_range < 0:
 		return Result.failure("max_range 必须 >= 0")
-	var road_graph = MapRuntimeClass.get_road_graph(state)
+	var road_graph = RoadGraphCacheClass.get_road_graph(state)
 	if road_graph == null:
 		return Result.failure("道路图未初始化")
 	if not (state.map is Dictionary) or not state.map.has("restaurants") or not (state.map["restaurants"] is Dictionary):
@@ -297,9 +299,9 @@ func _is_adjacent_to_reachable_road(state: GameState, actor: int, piece_cells: A
 	for pos in piece_cells:
 		for dir in MapUtilsClass.DIRECTIONS:
 			var npos := MapUtilsClass.get_neighbor_pos(pos, dir)
-			if not MapRuntimeClass.is_world_pos_in_grid(state, npos):
+			if not CoordsClass.is_world_pos_in_grid(state, npos):
 				continue
-			var cell: Dictionary = MapRuntimeClass.get_cell(state, npos)
+			var cell: Dictionary = CellsClass.get_cell(state, npos)
 			var segs: Array = cell.get("road_segments", [])
 			if segs is Array and not segs.is_empty():
 				if not targets.has(npos):
@@ -318,9 +320,9 @@ func _get_adjacent_road_cells(state: GameState, pos: Vector2i) -> Result:
 	var out: Array[Vector2i] = []
 	for dir in MapUtilsClass.DIRECTIONS:
 		var npos := MapUtilsClass.get_neighbor_pos(pos, dir)
-		if not MapRuntimeClass.is_world_pos_in_grid(state, npos):
+		if not CoordsClass.is_world_pos_in_grid(state, npos):
 			continue
-		var cell: Dictionary = MapRuntimeClass.get_cell(state, npos)
+		var cell: Dictionary = CellsClass.get_cell(state, npos)
 		var segs: Array = cell.get("road_segments", [])
 		if segs is Array and not segs.is_empty():
 			out.append(npos)
@@ -355,10 +357,10 @@ func _validate_arrows_have_connection(
 
 		var world_from := anchor_pos + MapUtilsClass.rotate_offset(offset, rotation)
 		var world_to: Vector2i = world_from + MapUtilsClass.DIR_OFFSETS[MapUtilsClass.rotate_dir(dir, rotation)]
-		if not MapRuntimeClass.is_world_pos_in_grid(state, world_to):
+		if not CoordsClass.is_world_pos_in_grid(state, world_to):
 			continue
 
-		var cell: Dictionary = MapRuntimeClass.get_cell(state, world_to)
+		var cell: Dictionary = CellsClass.get_cell(state, world_to)
 		var segs: Array = cell.get("road_segments", [])
 		if segs is Array and not segs.is_empty():
 			has_connection = true

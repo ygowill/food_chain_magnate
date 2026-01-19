@@ -48,12 +48,11 @@ static func _cmd_skip(args: Array, registry: DebugCommandRegistry) -> Result:
 
 	var state := engine.get_state()
 	var player_id := state.get_current_player_id()
+	if registry != null and registry.has_method("resolve_selected_player_id"):
+		player_id = int(registry.resolve_selected_player_id(state))
 
 	if not args.is_empty():
 		player_id = int(args[0])
-
-	if DebugFlags.is_debug_mode() and DebugFlags.force_execute_commands and player_id != state.get_current_player_id():
-		return Result.failure("强制执行模式下不允许指定非当前玩家")
 
 	var cmd := Command.create("skip", player_id)
 	_mark_debug_force(cmd)

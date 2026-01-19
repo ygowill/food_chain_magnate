@@ -7,7 +7,7 @@ const InputsClass = preload("res://core/rules/drinks_procurement/inputs.gd")
 const StartRestaurantResolverClass = preload("res://core/rules/drinks_procurement/start_restaurant_resolver.gd")
 const RouteValidatorClass = preload("res://core/rules/drinks_procurement/route_validator.gd")
 const PickedSourcesFinderClass = preload("res://core/rules/drinks_procurement/picked_sources_finder.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 
 static func resolve_procurement_plan(
@@ -59,7 +59,7 @@ static func resolve_procurement_plan(
 		if not entrance_check.ok:
 			return entrance_check
 
-	if range_type != "air" and MapRuntimeClass.get_road_graph(state) == null:
+	if range_type != "air" and RoadGraphCacheClass.get_road_graph(state) == null:
 		return Result.failure("道路图未初始化")
 
 	var route: Array[Vector2i] = []

@@ -52,15 +52,15 @@ static func apply_from_dict(state, data: Dictionary, expected_schema_version: in
 		return round_read
 	state.round_number = int(round_read.value)
 
-	var phase_val = data.get("phase", null)
-	if not (phase_val is String):
-		return Result.failure("GameState.phase 缺失或类型错误（期望 String）")
-	state.phase = str(phase_val)
+	var phase_read := _parse_string(data.get("phase", null), "GameState.phase")
+	if not phase_read.ok:
+		return phase_read
+	state.phase = str(phase_read.value)
 
-	var sub_phase_val = data.get("sub_phase", null)
-	if not (sub_phase_val is String):
-		return Result.failure("GameState.sub_phase 缺失或类型错误（期望 String）")
-	state.sub_phase = str(sub_phase_val)
+	var sub_phase_read := _parse_string(data.get("sub_phase", null), "GameState.sub_phase")
+	if not sub_phase_read.ok:
+		return sub_phase_read
+	state.sub_phase = str(sub_phase_read.value)
 
 	var turn_order_read := _parse_int_array(data.get("turn_order", null), "GameState.turn_order")
 	if not turn_order_read.ok:
@@ -124,23 +124,15 @@ static func apply_from_dict(state, data: Dictionary, expected_schema_version: in
 		parsed_rules[key] = int(v_read.value)
 	state.rules = parsed_rules
 
-	var modules_val = data.get("modules", null)
-	if not (modules_val is Array):
-		return Result.failure("GameState.modules 缺失或类型错误（期望 Array[String]）")
-	var modules_any: Array = modules_val
-	var modules_out: Array[String] = []
+	var modules_read := _parse_string_array(data.get("modules", null), "GameState.modules", false)
+	if not modules_read.ok:
+		return modules_read
+	var modules_out: Array[String] = modules_read.value
 	var module_seen := {}
-	for i in range(modules_any.size()):
-		var m_val = modules_any[i]
-		if not (m_val is String):
-			return Result.failure("GameState.modules[%d] 类型错误（期望 String）" % i)
-		var mid: String = str(m_val)
-		if mid.is_empty():
-			return Result.failure("GameState.modules[%d] 不能为空" % i)
+	for mid in modules_out:
 		if module_seen.has(mid):
 			return Result.failure("GameState.modules 出现重复 id: %s" % mid)
 		module_seen[mid] = true
-		modules_out.append(mid)
 	state.modules = modules_out
 
 	var players_val = data.get("players", null)
@@ -176,20 +168,10 @@ static func apply_from_dict(state, data: Dictionary, expected_schema_version: in
 		return pool_read
 	state.employee_pool = pool_read.value
 
-	var milestone_pool_val = data.get("milestone_pool", null)
-	if not (milestone_pool_val is Array):
-		return Result.failure("GameState.milestone_pool 缺失或类型错误（期望 Array[String]）")
-	var milestone_any: Array = milestone_pool_val
-	var milestone_out: Array[String] = []
-	for i in range(milestone_any.size()):
-		var m_val = milestone_any[i]
-		if not (m_val is String):
-			return Result.failure("GameState.milestone_pool[%d] 类型错误（期望 String）" % i)
-		var mid: String = str(m_val)
-		if mid.is_empty():
-			return Result.failure("GameState.milestone_pool[%d] 不能为空" % i)
-		milestone_out.append(mid)
-	state.milestone_pool = milestone_out
+	var milestone_read := _parse_string_array(data.get("milestone_pool", null), "GameState.milestone_pool", false)
+	if not milestone_read.ok:
+		return milestone_read
+	state.milestone_pool = milestone_read.value
 
 	var marketing_instances_val = data.get("marketing_instances", null)
 	if not (marketing_instances_val is Array):
@@ -246,11 +228,17 @@ static func _decode_value(value, key_hint: String, path: String) -> Result:
 static func _parse_int(value, path: String) -> Result:
 	return ParseHelpers.parse_int(value, path)
 
+static func _parse_string(value, path: String, require_non_empty: bool = false) -> Result:
+	return ParseHelpers.parse_string(value, path, require_non_empty)
+
 static func _parse_non_negative_int(value, path: String) -> Result:
 	return ParseHelpers.parse_non_negative_int(value, path)
 
 static func _parse_int_array(value, path: String) -> Result:
 	return ParseHelpers.parse_int_array(value, path)
+
+static func _parse_string_array(value, path: String, require_non_empty: bool) -> Result:
+	return ParseHelpers.parse_string_array(value, path, require_non_empty)
 
 static func _parse_non_negative_int_dict(value, path: String) -> Result:
 	return ParseHelpers.parse_non_negative_int_dict(value, path)

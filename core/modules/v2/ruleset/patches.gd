@@ -49,18 +49,30 @@ static func apply_employee_patches(ruleset, catalog) -> Result:
 		var target_id: String = str(target_val)
 		if target_id.is_empty():
 			return Result.failure("RulesetV2: employee_patches[%d].target_id 不能为空" % i)
+		var patch_val = item.get("patch", null)
+		if not (patch_val is Dictionary):
+			return Result.failure("RulesetV2: employee_patches[%d].patch 类型错误（期望 Dictionary）" % i)
+		var patch_dict: Dictionary = patch_val
+		var optional := false
+		if patch_dict.has("optional"):
+			var opt_val = patch_dict.get("optional", null)
+			if not (opt_val is bool):
+				return Result.failure("RulesetV2: employee patch %s.optional 类型错误（期望 bool）" % target_id)
+			optional = bool(opt_val)
+
 		if not catalog.employees.has(target_id):
+			# 可选 patch：用于“模块不依赖目标员工，但若启用则追加 train_to”等场景。
+			# 默认仍保持 Fail Fast：避免静默吞掉拼写错误/缺失依赖。
+			if optional:
+				var src: String = str(item.get("source", ""))
+				warnings.append("RulesetV2: employee patch 目标员工不存在，已跳过: %s (source=%s)" % [target_id, src])
+				continue
 			return Result.failure("RulesetV2: employee patch 目标员工不存在: %s" % target_id)
 
 		var def_val = catalog.employees.get(target_id, null)
 		if def_val == null or not (def_val is EmployeeDefClass):
 			return Result.failure("RulesetV2: catalog.employees[%s] 类型错误（期望 EmployeeDef）" % target_id)
 		var def: EmployeeDef = def_val
-
-		var patch_val = item.get("patch", null)
-		if not (patch_val is Dictionary):
-			return Result.failure("RulesetV2: employee_patches[%d].patch 类型错误（期望 Dictionary）" % i)
-		var patch_dict: Dictionary = patch_val
 
 		var apply_r := _apply_employee_patch(def, patch_dict, target_id)
 		if not apply_r.ok:
@@ -151,4 +163,3 @@ static func _apply_milestone_patch(def: MilestoneDef, patch: Dictionary, target_
 			def.expires_at = exp
 
 	return Result.success()
-

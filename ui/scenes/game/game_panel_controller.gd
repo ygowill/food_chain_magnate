@@ -15,6 +15,7 @@ const RestructuringModalScene = preload("res://ui/components/modal_panel/restruc
 const TurnOrderSelectionModalScene = preload("res://ui/components/modal_panel/turn_order_selection_modal.tscn")
 const ReserveCardSelectionModalScene = preload("res://ui/components/modal_panel/reserve_card_selection_modal.tscn")
 const EmployeeTreeScene = preload("res://ui/components/employee_tree/employee_tree.tscn")
+const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 
 const POPUP_LAYOUT_META_KEY := "popup_layout"
 const POPUP_LAYOUT_DOCK_RIGHT := "dock_right"
@@ -56,39 +57,18 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 	_end_panels = EndPanelsClass.new(_scene, _overlay_controller, _execute_command, hide_all, center_popup, _refresh_ui)
 
 func connect_signals(action_panel, turn_order_track, hand_area, company_structure) -> void:
-	if is_instance_valid(action_panel) and action_panel.has_signal("action_requested"):
-		if not action_panel.action_requested.is_connected(on_action_requested):
-			action_panel.action_requested.connect(on_action_requested)
-
-	if is_instance_valid(turn_order_track) and turn_order_track.has_signal("position_selected"):
-		if not turn_order_track.position_selected.is_connected(_on_turn_order_position_selected):
-			turn_order_track.position_selected.connect(_on_turn_order_position_selected)
-
-	if is_instance_valid(hand_area) and hand_area.has_signal("cards_selected"):
-		if not hand_area.cards_selected.is_connected(_on_hand_cards_selected):
-			hand_area.cards_selected.connect(_on_hand_cards_selected)
-	if is_instance_valid(hand_area) and hand_area.has_signal("card_dropped"):
-		if not hand_area.card_dropped.is_connected(_on_hand_card_dropped):
-			hand_area.card_dropped.connect(_on_hand_card_dropped)
-
-	if is_instance_valid(company_structure) and company_structure.has_signal("structure_changed"):
-		if not company_structure.structure_changed.is_connected(_on_company_structure_changed):
-			company_structure.structure_changed.connect(_on_company_structure_changed)
-	if is_instance_valid(company_structure) and company_structure.has_signal("card_dropped"):
-		if not company_structure.card_dropped.is_connected(_on_hand_card_dropped):
-			company_structure.card_dropped.connect(_on_hand_card_dropped)
+	UiSignalHelpersClass.safe_connect(action_panel, "action_requested", on_action_requested)
+	UiSignalHelpersClass.safe_connect(turn_order_track, "position_selected", _on_turn_order_position_selected)
+	UiSignalHelpersClass.safe_connect(hand_area, "cards_selected", _on_hand_cards_selected)
+	UiSignalHelpersClass.safe_connect(hand_area, "card_dropped", _on_hand_card_dropped)
+	UiSignalHelpersClass.safe_connect(company_structure, "structure_changed", _on_company_structure_changed)
+	UiSignalHelpersClass.safe_connect(company_structure, "card_dropped", _on_hand_card_dropped)
 
 	# 查看玩家（view_player）
-	if _scene != null and is_instance_valid(_scene.player_panel) and _scene.player_panel.has_signal("player_selected"):
-		if not _scene.player_panel.player_selected.is_connected(_on_view_player_selected):
-			_scene.player_panel.player_selected.connect(_on_view_player_selected)
-	if _scene != null and is_instance_valid(_scene.left_panel):
-		if _scene.left_panel.has_signal("player_selected"):
-			if not _scene.left_panel.player_selected.is_connected(_on_view_player_selected):
-				_scene.left_panel.player_selected.connect(_on_view_player_selected)
-		if _scene.left_panel.has_signal("milestones_requested"):
-			if not _scene.left_panel.milestones_requested.is_connected(show_milestone_panel):
-				_scene.left_panel.milestones_requested.connect(show_milestone_panel)
+	if _scene != null:
+		UiSignalHelpersClass.safe_connect(_scene.player_panel, "player_selected", _on_view_player_selected)
+		UiSignalHelpersClass.safe_connect(_scene.left_panel, "player_selected", _on_view_player_selected)
+		UiSignalHelpersClass.safe_connect(_scene.left_panel, "milestones_requested", show_milestone_panel)
 
 func reset_bank_break_tracking(state: GameState) -> void:
 	if _end_panels != null:
@@ -132,6 +112,13 @@ func toggle_employee_tree() -> void:
 
 func get_view_player_id() -> int:
 	return _view_player_id
+
+func _get_effective_view_player_id(state: GameState, requested_view_id: int) -> int:
+	if state == null:
+		return requested_view_id
+	if requested_view_id >= 0 and requested_view_id < state.players.size():
+		return requested_view_id
+	return state.get_current_player_id()
 
 func _on_view_player_selected(player_id: int) -> void:
 	_view_player_id = player_id
@@ -266,11 +253,9 @@ func _update_ui_components(state: GameState) -> void:
 	var current_player_id := state.get_current_player_id()
 	var current_player: Dictionary = state.get_current_player()
 
-	var view_player_id := _view_player_id
-	var using_default_view := false
-	if view_player_id < 0 or view_player_id >= state.players.size():
-		view_player_id = current_player_id
-		using_default_view = true
+	var requested_view_player_id := _view_player_id
+	var view_player_id := _get_effective_view_player_id(state, requested_view_player_id)
+	var using_default_view := view_player_id != requested_view_player_id
 
 	# Restructuring：若当前默认视图玩家已提交，自动切到第一位未提交玩家（避免“看起来无法拖拽”）。
 	if using_default_view and state.phase == "Restructuring" and (state.round_state is Dictionary):
@@ -485,6 +470,12 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 	var layout_version := int(Globals.ui_layout_version) if Globals != null else 1
 
 	match action_id:
+		# UI 工具：时间线回退
+		"rewind_to_phase_start":
+			if _scene != null and _scene.has_method("rewind_to_phase_start"):
+				_scene.call("rewind_to_phase_start")
+			return
+
 		# 系统动作
 		"advance_phase":
 			_execute_command.call(Command.create_system("advance_phase", params))
@@ -559,10 +550,7 @@ func _on_hand_card_dropped(employee_id: String, target: Control) -> void:
 	if state.phase != "Restructuring":
 		return
 
-	var current_player_id := state.get_current_player_id()
-	var actor_id := _view_player_id
-	if actor_id < 0 or actor_id >= state.players.size():
-		actor_id = current_player_id
+	var actor_id := _get_effective_view_player_id(state, _view_player_id)
 	if actor_id < 0:
 		return
 	if state.round_state is Dictionary:
@@ -806,12 +794,25 @@ func _sync_modals(state: GameState) -> void:
 	if _scene == null or state == null:
 		return
 
+	var is_replay_mode := false
+	if _scene.has_method("is_replay_mode_active"):
+		var v = _scene.call("is_replay_mode_active")
+		if v is bool:
+			is_replay_mode = bool(v)
+
+	# 回放模式：禁止强制交互弹窗（否则会遮挡并吞掉 ReplayPlayer 的输入）
+	if is_replay_mode:
+		_hide_reserve_card_modal()
+		_hide_turn_order_modal()
+		_hide_restructuring_modal()
+		return
+
 	var layout_version := int(Globals.ui_layout_version) if Globals != null else 1
 	var current_player_id := state.get_current_player_id()
 	var covered := _get_modal_cover_rect()
 
 	# 储备卡选择（Setup/ReserveCards）
-	if state.phase == "Setup" and str(state.sub_phase) == "ReserveCards" and current_player_id >= 0:
+	if (not is_replay_mode) and state.phase == "Setup" and str(state.sub_phase) == "ReserveCards" and current_player_id >= 0:
 		_show_reserve_card_modal(state, current_player_id, covered)
 	else:
 		_hide_reserve_card_modal()
@@ -875,9 +876,7 @@ func _sync_modals(state: GameState) -> void:
 
 	if should_show_restructuring:
 		_show_restructuring_modal(covered)
-		var view_player_id := _view_player_id
-		if view_player_id < 0 or view_player_id >= state.players.size():
-			view_player_id = current_player_id
+		var view_player_id := _get_effective_view_player_id(state, _view_player_id)
 		_sync_restructuring_modal_ui(state, view_player_id)
 	else:
 		_hide_restructuring_modal()
@@ -896,6 +895,27 @@ func _get_modal_cover_rect() -> Rect2:
 		return Rect2(gr.position - scene_global, gr.size)
 
 	return Rect2(Vector2.ZERO, _scene.get_viewport_rect().size)
+
+func _initialize_modal(modal_ref, scene: PackedScene, signal_map: Dictionary):
+	if _scene == null:
+		return modal_ref
+	if is_instance_valid(modal_ref):
+		return modal_ref
+
+	var inst = scene.instantiate()
+	if not is_instance_valid(inst):
+		return inst
+
+	_scene.add_child(inst)
+	if inst is Control:
+		(inst as Control).z_index = 900
+
+	for sig_name in signal_map.keys():
+		var cb = signal_map.get(sig_name, null)
+		if cb is Callable:
+			UiSignalHelpersClass.safe_connect(inst, sig_name, cb)
+
+	return inst
 
 func _show_turn_order_modal_for_state(state: GameState) -> void:
 	var layout_version := int(Globals.ui_layout_version) if Globals != null else 1
@@ -931,18 +951,10 @@ func _show_turn_order_modal(state: GameState, current_player_id: int, selections
 	if state == null:
 		return
 
-	if not is_instance_valid(_turn_order_modal):
-		_turn_order_modal = TurnOrderSelectionModalScene.instantiate()
-		if is_instance_valid(_turn_order_modal):
-			_scene.add_child(_turn_order_modal)
-			if _turn_order_modal is Control:
-				(_turn_order_modal as Control).z_index = 900
-			if _turn_order_modal.has_signal("completed"):
-				if not _turn_order_modal.completed.is_connected(_on_turn_order_modal_completed):
-					_turn_order_modal.completed.connect(_on_turn_order_modal_completed)
-			if _turn_order_modal.has_signal("cancelled"):
-				if not _turn_order_modal.cancelled.is_connected(_on_turn_order_modal_cancelled):
-					_turn_order_modal.cancelled.connect(_on_turn_order_modal_cancelled)
+	_turn_order_modal = _initialize_modal(_turn_order_modal, TurnOrderSelectionModalScene, {
+		"completed": _on_turn_order_modal_completed,
+		"cancelled": _on_turn_order_modal_cancelled,
+	})
 
 	if not is_instance_valid(_turn_order_modal):
 		return
@@ -1003,15 +1015,9 @@ func _show_reserve_card_modal(state: GameState, current_player_id: int, covered:
 	if state == null:
 		return
 
-	if not is_instance_valid(_reserve_card_modal):
-		_reserve_card_modal = ReserveCardSelectionModalScene.instantiate()
-		if is_instance_valid(_reserve_card_modal):
-			_scene.add_child(_reserve_card_modal)
-			if _reserve_card_modal is Control:
-				(_reserve_card_modal as Control).z_index = 900
-			if _reserve_card_modal.has_signal("completed"):
-				if not _reserve_card_modal.completed.is_connected(_on_reserve_card_modal_completed):
-					_reserve_card_modal.completed.connect(_on_reserve_card_modal_completed)
+	_reserve_card_modal = _initialize_modal(_reserve_card_modal, ReserveCardSelectionModalScene, {
+		"completed": _on_reserve_card_modal_completed,
+	})
 
 	if not is_instance_valid(_reserve_card_modal):
 		return
@@ -1153,24 +1159,13 @@ func _show_restructuring_modal(covered: Rect2) -> void:
 	if _scene == null:
 		return
 
+	_restructuring_modal = _initialize_modal(_restructuring_modal, RestructuringModalScene, {
+		"completed": _on_restructuring_modal_completed,
+		"cancelled": _on_restructuring_modal_cancelled,
+		"player_selected": _on_view_player_selected,
+	})
 	if not is_instance_valid(_restructuring_modal):
-		_restructuring_modal = RestructuringModalScene.instantiate()
-		if is_instance_valid(_restructuring_modal):
-			_scene.add_child(_restructuring_modal)
-			if _restructuring_modal is Control:
-				(_restructuring_modal as Control).z_index = 900
-			if _restructuring_modal.has_signal("completed"):
-				if not _restructuring_modal.completed.is_connected(_on_restructuring_modal_completed):
-					_restructuring_modal.completed.connect(_on_restructuring_modal_completed)
-				if _restructuring_modal.has_signal("cancelled"):
-					if not _restructuring_modal.cancelled.is_connected(_on_restructuring_modal_cancelled):
-						_restructuring_modal.cancelled.connect(_on_restructuring_modal_cancelled)
-				if _restructuring_modal.has_signal("player_selected"):
-					if not _restructuring_modal.player_selected.is_connected(_on_view_player_selected):
-						_restructuring_modal.player_selected.connect(_on_view_player_selected)
-
-		if not is_instance_valid(_restructuring_modal):
-			return
+		return
 
 	var hand_area = _scene.get("hand_area")
 	if is_instance_valid(hand_area) and _restructuring_modal.has_method("attach_hand_area"):
@@ -1263,10 +1258,8 @@ func _on_restructuring_modal_completed(result: Dictionary) -> void:
 		if is_instance_valid(_restructuring_modal) and _restructuring_modal.has_method("set_confirm_enabled"):
 			_restructuring_modal.call("set_confirm_enabled", true)
 		return
-	var current_player_id := state.get_current_player_id()
-	var actor_id := _view_player_id
-	if actor_id < 0 or actor_id >= state.players.size():
-		actor_id = current_player_id
+
+	var actor_id := _get_effective_view_player_id(state, _view_player_id)
 	if actor_id < 0:
 		if is_instance_valid(_restructuring_modal) and _restructuring_modal.has_method("set_confirm_enabled"):
 			_restructuring_modal.call("set_confirm_enabled", true)

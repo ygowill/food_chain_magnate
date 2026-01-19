@@ -1,8 +1,8 @@
 class_name PlaceOrMoveCoffeeShopAction
 extends ActionExecutor
 
-const PlacementValidatorClass = preload("res://core/map/placement_validator.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const PlacementClass = preload("res://core/map/placement_validator/placement.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 
 const MODULE_ID := "coffee"
@@ -163,20 +163,20 @@ func _validate_coffee_shop_placement(state: GameState, world_anchor: Vector2i) -
 	var map_ctx := {
 		"cells": state.map.cells,
 		"grid_size": state.map.grid_size,
-		"map_origin": MapRuntimeClass.get_map_origin(state),
+		"map_origin": CoordsClass.get_map_origin(state),
 		"houses": state.map.houses,
 		"restaurants": state.map.restaurants,
 		"drink_sources": state.map.get("drink_sources", []),
 		"marketing_placements": state.map.get("marketing_placements", {}),
 	}
 
-	var r := PlacementValidatorClass.validate_placement(map_ctx, PIECE_ID, world_anchor, 0, piece_defs, {})
+	var r := PlacementClass.validate_placement(map_ctx, PIECE_ID, world_anchor, 0, piece_defs, {})
 	if not r.ok:
 		return r
 	return Result.success()
 
 func _write_structure_cell(state: GameState, world_anchor: Vector2i, owner: int, shop_id: String) -> void:
-	var idx := MapRuntimeClass.world_to_index(state, world_anchor)
+	var idx := CoordsClass.world_to_index(state, world_anchor)
 	state.map.cells[idx.y][idx.x]["structure"] = {
 		"piece_id": PIECE_ID,
 		"owner": owner,
@@ -188,7 +188,7 @@ func _write_structure_cell(state: GameState, world_anchor: Vector2i, owner: int,
 	}
 
 func _clear_structure_cell(state: GameState, world_anchor: Vector2i) -> void:
-	var idx := MapRuntimeClass.world_to_index(state, world_anchor)
+	var idx := CoordsClass.world_to_index(state, world_anchor)
 	state.map.cells[idx.y][idx.x]["structure"] = {}
 
 static func _count_triggers_from_train_events(round_state: Dictionary, player_id: int) -> Result:

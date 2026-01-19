@@ -4,6 +4,7 @@ class_name TileDef
 extends RefCounted
 
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
+const MapParseHelpersClass = preload("res://core/map/parse_helpers.gd")
 
 # 板块标准大小
 const TILE_SIZE := MapUtilsClass.TILE_SIZE
@@ -103,10 +104,10 @@ static func from_dict(data: Dictionary) -> Result:
 			return Result.failure("TileDef 缺少字段: %s" % key)
 
 	var id_val = data.get("id", null)
-	if not (id_val is String) or str(id_val).is_empty():
+	if not (id_val is String) or str(id_val).strip_edges().is_empty():
 		return Result.failure("TileDef.id 类型错误或为空（期望非空 String）")
 	var display_name_val = data.get("display_name", null)
-	if not (display_name_val is String) or str(display_name_val).is_empty():
+	if not (display_name_val is String) or str(display_name_val).strip_edges().is_empty():
 		return Result.failure("TileDef.display_name 类型错误或为空（期望非空 String）")
 
 	var rotations_val = data.get("allowed_rotations", null)
@@ -135,8 +136,8 @@ static func from_dict(data: Dictionary) -> Result:
 		return printed_read
 
 	var tile := TileDef.new()
-	tile.id = str(id_val)
-	tile.display_name = str(display_name_val)
+	tile.id = str(id_val).strip_edges()
+	tile.display_name = str(display_name_val).strip_edges()
 	tile.allowed_rotations = rotations_read.value
 	tile.road_segments = road_segments_read.value
 	tile.blocked_cells = blocked_read.value
@@ -214,25 +215,10 @@ func add_road_segment(local_pos: Vector2i, dirs: Array, is_bridge: bool = false)
 # === 严格解析辅助 ===
 
 static func _parse_int(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
-		return Result.success(int(f))
-	return Result.failure("%s 类型错误（期望整数）" % path)
+	return MapParseHelpersClass.parse_int(value, path)
 
 static func _parse_vec2i(value, path: String) -> Result:
-	if not (value is Array) or value.size() != 2:
-		return Result.failure("%s 类型错误（期望 [x,y]）" % path)
-	var x_read := _parse_int(value[0], "%s[0]" % path)
-	if not x_read.ok:
-		return x_read
-	var y_read := _parse_int(value[1], "%s[1]" % path)
-	if not y_read.ok:
-		return y_read
-	return Result.success(Vector2i(int(x_read.value), int(y_read.value)))
+	return MapParseHelpersClass.parse_vec2i(value, path)
 
 static func _parse_vec2i_array(value, path: String) -> Result:
 	if not (value is Array):
@@ -299,9 +285,9 @@ static func _parse_drink_sources(value, path: String) -> Result:
 		if not pos_read.ok:
 			return pos_read
 		var t = item.get("type", null)
-		if not (t is String) or str(t).is_empty():
+		if not (t is String) or str(t).strip_edges().is_empty():
 			return Result.failure("%s[%d].type 类型错误或为空（期望非空 String）" % [path, i])
-		out.append({"pos": pos_read.value, "type": str(t)})
+		out.append({"pos": pos_read.value, "type": str(t).strip_edges()})
 	return Result.success(out)
 
 static func _parse_printed_structures(value, path: String) -> Result:
@@ -315,7 +301,7 @@ static func _parse_printed_structures(value, path: String) -> Result:
 		if not item.has("piece_id") or not item.has("anchor") or not item.has("rotation"):
 			return Result.failure("%s[%d] 缺少字段 piece_id/anchor/rotation" % [path, i])
 		var pid = item.get("piece_id", null)
-		if not (pid is String) or str(pid).is_empty():
+		if not (pid is String) or str(pid).strip_edges().is_empty():
 			return Result.failure("%s[%d].piece_id 类型错误或为空（期望非空 String）" % [path, i])
 		var anchor_read := _parse_vec2i(item.get("anchor", null), "%s[%d].anchor" % [path, i])
 		if not anchor_read.ok:
@@ -327,7 +313,7 @@ static func _parse_printed_structures(value, path: String) -> Result:
 		if not _VALID_ROTATIONS.has(rot):
 			return Result.failure("%s[%d].rotation 旋转角非法: %d" % [path, i, rot])
 		var struct_dict: Dictionary = item.duplicate(true)
-		struct_dict["piece_id"] = str(pid)
+		struct_dict["piece_id"] = str(pid).strip_edges()
 		struct_dict["anchor"] = anchor_read.value
 		struct_dict["rotation"] = rot
 		out.append(struct_dict)

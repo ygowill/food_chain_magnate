@@ -4,7 +4,7 @@
   "description": "每张在岗的大众营销员使营销阶段额外结算 1 轮（模块：Mass Marketeers）",
   "salary": true,
   "unique": false,
-  "role": "special",
+  "role": "marketing",
   "manager_slots": 0,
   "range": {
     "type": null,

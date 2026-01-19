@@ -2,7 +2,8 @@
 class_name CoffeeV2Test
 extends RefCounted
 
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const CoffeeRulesEntryClass = preload("res://modules/coffee/rules/entry.gd")
@@ -164,8 +165,8 @@ static func _test_dinnertime_route_buys_multiple_coffee(seed_val: int) -> Result
 	if not stop_index.has(k_rest) or not stop_index.has(k_shop):
 		var seg_2_4 = state.map.get("cells", [])[4][2].get("road_segments", null) if state.map.get("cells", []) is Array else null
 		var seg_6_4 = state.map.get("cells", [])[4][6].get("road_segments", null) if state.map.get("cells", []) is Array else null
-		var has_2_4 := MapRuntimeClass.has_road_at_any(state, Vector2i(2, 4))
-		var has_6_4 := MapRuntimeClass.has_road_at_any(state, Vector2i(6, 4))
+		var has_2_4 := CellsClass.has_road_at_any(state, Vector2i(2, 4))
+		var has_6_4 := CellsClass.has_road_at_any(state, Vector2i(6, 4))
 		return Result.failure("coffee stop_index 未覆盖预期路点: has_rest=%s has_shop=%s keys=%s road@2,4=%s seg@2,4=%s road@6,4=%s seg@6,4=%s" % [str(stop_index.has(k_rest)), str(stop_index.has(k_shop)), str(stop_index.keys()), str(has_2_4), str(seg_2_4), str(has_6_4), str(seg_6_4)])
 
 	var adv := _advance_to_dinnertime(e)
@@ -311,7 +312,7 @@ static func _apply_train_test_map(state: GameState) -> void:
 		"boundary_index": {},
 		"marketing_placements": {}
 	}
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)
 
 static func _apply_route_test_map(state: GameState) -> void:
 	# 图形：两条同 boundary_crossings 的路径；下方绕行路过更多 coffee 点
@@ -407,7 +408,7 @@ static func _apply_route_test_map(state: GameState) -> void:
 	state.players[0]["restaurants"] = ["rest_dest"]
 	state.players[1]["restaurants"] = ["rest_side"]
 	state.players[2]["restaurants"] = []
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)
 
 	var shops: Dictionary = {
 		"coffee_shop_side": {

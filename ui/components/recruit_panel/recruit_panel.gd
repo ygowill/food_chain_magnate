@@ -1,14 +1,14 @@
 # 招聘面板组件
 # 显示可招聘的入门级员工，支持招聘操作
 class_name RecruitPanel
-extends Control
+extends "res://ui/components/common/right_panel_embeddable_panel.gd"
 
 signal recruit_requested(employee_type: String)
 signal cancelled()
-signal right_panel_footer_changed()
 
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 
 @onready var counter_label: Label = $MarginContainer/VBoxContainer/CounterRow/CounterLabel
 @onready var items_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ItemsContainer
@@ -21,50 +21,21 @@ var _recruit_remaining: int = 0
 var _recruit_total: int = 0
 var _pool_cards: Dictionary = {}  # employee_type -> PoolCard
 var _selected_employee_type: String = ""
-var _relayout_scheduled: bool = false
-var _embedded_in_right_panel: bool = false
-var _base_custom_minimum_size: Vector2 = Vector2.ZERO
 
-func _ready() -> void:
-	if _base_custom_minimum_size == Vector2.ZERO:
-		_base_custom_minimum_size = custom_minimum_size
-	if confirm_btn != null:
-		confirm_btn.pressed.connect(_on_confirm_pressed)
-		confirm_btn.disabled = true
-	if cancel_btn != null:
-		cancel_btn.pressed.connect(_on_cancel_pressed)
-	if has_signal("resized"):
-		resized.connect(_request_relayout)
-	if has_signal("visibility_changed"):
-		visibility_changed.connect(_request_relayout)
-	right_panel_footer_changed.emit()
-	_request_relayout()
+func _get_confirm_button() -> Button:
+	return confirm_btn
 
-func set_embedded_in_right_panel(embedded: bool) -> void:
-	_embedded_in_right_panel = embedded
-	if _base_custom_minimum_size == Vector2.ZERO:
-		_base_custom_minimum_size = custom_minimum_size
-	custom_minimum_size = Vector2.ZERO if embedded else _base_custom_minimum_size
-	var row = get_node_or_null("MarginContainer/VBoxContainer/ButtonRow")
-	if row is Control:
-		(row as Control).visible = not embedded
-	right_panel_footer_changed.emit()
-	_request_relayout()
+func _get_cancel_button() -> Button:
+	return cancel_btn
 
-func right_panel_get_footer_config() -> Dictionary:
-	if confirm_btn == null:
-		return {}
-	return {
-		"show_cancel": true,
-		"cancel_text": "取消",
-		"cancel_enabled": true,
-		"show_primary": true,
-		"primary_text": str(confirm_btn.text),
-		"primary_enabled": not confirm_btn.disabled,
-	}
+func _get_relayout_delay_frames() -> int:
+	# HFlowContainer 在首次嵌入 RightPanel/首次显示时，可能在 size 还未稳定时完成布局；
+	# 延迟到布局稳定后强制重排一次。
+	return 2
 
-func right_panel_footer_primary() -> void:
-	_on_confirm_pressed()
+func _on_relayout() -> void:
+	if items_container != null and is_instance_valid(items_container):
+		items_container.queue_sort()
 
 func set_employee_registry(registry) -> void:
 	_employee_registry = registry
@@ -96,10 +67,7 @@ func clear_selection() -> void:
 
 func _rebuild_pool_cards() -> void:
 	# 清除旧卡牌
-	for card in _pool_cards.values():
-		if is_instance_valid(card):
-			card.queue_free()
-	_pool_cards.clear()
+	UiRebuildHelpersClass.free_nodes_dict(_pool_cards)
 
 	if items_container == null:
 		return
@@ -121,25 +89,6 @@ func _rebuild_pool_cards() -> void:
 
 	_update_card_states()
 	_request_relayout()
-
-func _request_relayout() -> void:
-	if _relayout_scheduled:
-		return
-	_relayout_scheduled = true
-	call_deferred("_apply_relayout")
-
-func _apply_relayout() -> void:
-	_relayout_scheduled = false
-	if not is_inside_tree():
-		return
-	if items_container == null or not is_instance_valid(items_container):
-		return
-	# HFlowContainer 在首次嵌入 RightPanel/首次显示时，可能在 size 还未稳定时完成布局，
-	# 导致卡片不换行并溢出到右侧；延迟到布局稳定后强制重排一次。
-	await get_tree().process_frame
-	await get_tree().process_frame
-	if items_container != null and is_instance_valid(items_container):
-		items_container.queue_sort()
 
 func _get_entry_level_employee_ids() -> Array[String]:
 	var result: Array[String] = []

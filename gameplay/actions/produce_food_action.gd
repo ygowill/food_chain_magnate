@@ -7,6 +7,7 @@ extends ActionExecutor
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 
 func _init() -> void:
@@ -176,9 +177,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return inc_result
 
 	# 使用员工：用于“first_*_used”等里程碑
-	var ms_use := MilestoneSystemClass.process_event(state, "UseEmployee", {"player_id": player_id, "id": employee_type})
-	if not ms_use.ok:
-		warnings.append("里程碑触发失败(UseEmployee/%s): %s" % [employee_type, ms_use.error])
+	EmployeeUsageHelperClass.append_use_employee_warning(warnings, state, player_id, employee_type)
 
 	var ms := MilestoneSystemClass.process_event(state, "Produce", {
 		"player_id": player_id,

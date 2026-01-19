@@ -1,7 +1,7 @@
 # 左侧信息面板（P3/P4：渐进式落地）
 # - 玩家纵向 Tab：切换 view_player
 # - 摘要区：展示查看玩家的关键信息
-# - Tab：手牌/公司结构/里程碑（日志为独立面板，由 Game 负责切换）
+# - Tab：员工（在职在上、手牌在下）/里程碑（日志为独立面板，由 Game 负责切换）
 class_name LeftPanel
 extends Control
 
@@ -14,37 +14,38 @@ const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd"
 @onready var player_tabs: VBoxContainer = $MarginContainer/HBoxContainer/PlayerTabs
 @onready var summary_row: Control = $MarginContainer/HBoxContainer/Content/SummaryRow
 @onready var summary_label: Label = $MarginContainer/HBoxContainer/Content/SummaryRow/SummaryLabel
+@onready var inventory_title_label: Label = $MarginContainer/HBoxContainer/Content/SummaryRow/InventoryTitleLabel
+@onready var inventory_tokens: HFlowContainer = $MarginContainer/HBoxContainer/Content/SummaryRow/InventoryTokens
 @onready var tab_container: TabContainer = $MarginContainer/HBoxContainer/Content/TabContainer
-@onready var hand_host: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost
-@onready var company_host: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost
+@onready var hand_host: Control = get_node_or_null("MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/HandSection")
+@onready var company_host: Control = get_node_or_null("MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/CompanySection")
 @onready var milestone_panel: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Milestones/MilestonePanel
 
-@onready var hand_management_row: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups/HandManagementRow
-@onready var hand_kitchen_row: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups/HandKitchenRow
-@onready var hand_marketing_row: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups/HandMarketingRow
-@onready var hand_other_row: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups/HandOtherRow
-@onready var hand_management_icons: VBoxContainer = $MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups/HandManagementRow/Icons
-@onready var hand_kitchen_icons: VBoxContainer = $MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups/HandKitchenRow/Icons
-@onready var hand_marketing_icons: VBoxContainer = $MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups/HandMarketingRow/Icons
-@onready var hand_other_icons: VBoxContainer = $MarginContainer/HBoxContainer/Content/TabContainer/Hand/HandHost/HandIconScroll/HandIconGroups/HandOtherRow/Icons
+@onready var hand_management_row: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/HandSection/HandIconGroups/HandManagementRow
+@onready var hand_kitchen_row: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/HandSection/HandIconGroups/HandKitchenRow
+@onready var hand_marketing_row: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/HandSection/HandIconGroups/HandMarketingRow
+@onready var hand_other_row: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/HandSection/HandIconGroups/HandOtherRow
+@onready var hand_management_icons: VBoxContainer = $MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/HandSection/HandIconGroups/HandManagementRow/Icons
+@onready var hand_kitchen_icons: VBoxContainer = $MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/HandSection/HandIconGroups/HandKitchenRow/Icons
+@onready var hand_marketing_icons: VBoxContainer = $MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/HandSection/HandIconGroups/HandMarketingRow/Icons
+@onready var hand_other_icons: VBoxContainer = $MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/HandSection/HandIconGroups/HandOtherRow/Icons
 
-@onready var company_management_row: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups/CompanyManagementRow
-@onready var company_kitchen_row: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups/CompanyKitchenRow
-@onready var company_marketing_row: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups/CompanyMarketingRow
-@onready var company_other_row: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups/CompanyOtherRow
-@onready var company_management_icons: VBoxContainer = $MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups/CompanyManagementRow/Icons
-@onready var company_kitchen_icons: VBoxContainer = $MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups/CompanyKitchenRow/Icons
-@onready var company_marketing_icons: VBoxContainer = $MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups/CompanyMarketingRow/Icons
-@onready var company_other_icons: VBoxContainer = $MarginContainer/HBoxContainer/Content/TabContainer/Company/CompanyHost/CompanyIconScroll/CompanyIconGroups/CompanyOtherRow/Icons
+@onready var company_management_row: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/CompanySection/CompanyIconGroups/CompanyManagementRow
+@onready var company_kitchen_row: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/CompanySection/CompanyIconGroups/CompanyKitchenRow
+@onready var company_marketing_row: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/CompanySection/CompanyIconGroups/CompanyMarketingRow
+@onready var company_other_row: Control = $MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/CompanySection/CompanyIconGroups/CompanyOtherRow
+@onready var company_management_icons: VBoxContainer = $MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/CompanySection/CompanyIconGroups/CompanyManagementRow/Icons
+@onready var company_kitchen_icons: VBoxContainer = $MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/CompanySection/CompanyIconGroups/CompanyKitchenRow/Icons
+@onready var company_marketing_icons: VBoxContainer = $MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/CompanySection/CompanyIconGroups/CompanyMarketingRow/Icons
+@onready var company_other_icons: VBoxContainer = $MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/CompanySection/CompanyIconGroups/CompanyOtherRow/Icons
 
 @onready var turn_log_section: Control = $MarginContainer/HBoxContainer/Content/TurnLogSection
 @onready var turn_log_toggle_button: Button = $MarginContainer/HBoxContainer/Content/TurnLogSection/MarginContainer/VBoxContainer/HeaderRow/ToggleButton
 @onready var turn_log_to_logs_button: Button = $MarginContainer/HBoxContainer/Content/TurnLogSection/MarginContainer/VBoxContainer/HeaderRow/ToLogsButton
 @onready var turn_log_lines: VBoxContainer = $MarginContainer/HBoxContainer/Content/TurnLogSection/MarginContainer/VBoxContainer/LogLines
 
-const TAB_HAND := 0
-const TAB_COMPANY := 1
-const TAB_MILESTONES := 2
+const TAB_EMPLOYEES := 0
+const TAB_MILESTONES := 1
 
 const PRODUCT_NAMES: Dictionary = {
 	"burger": "汉堡",
@@ -52,14 +53,6 @@ const PRODUCT_NAMES: Dictionary = {
 	"lemonade": "柠檬水",
 	"beer": "啤酒",
 	"soda": "苏打",
-}
-
-const PRODUCT_EMOJI: Dictionary = {
-	"burger": "🍔",
-	"pizza": "🍕",
-	"soda": "🥤",
-	"lemonade": "🥤",
-	"beer": "🍺",
 }
 
 const EMPLOYEE_CATEGORY_ORDER := ["管理", "厨房", "营销", "其他"]
@@ -98,18 +91,29 @@ func _ready() -> void:
 	if is_instance_valid(turn_log_to_logs_button):
 		turn_log_to_logs_button.pressed.connect(_on_turn_log_to_logs_pressed)
 	_rebuild_player_tabs()
+	apply_font_settings()
 	_refresh()
 
 func _init_tab_titles() -> void:
 	if not is_instance_valid(tab_container):
 		return
-	# 依赖节点顺序：Hand / Company / Milestones
+	# 依赖节点顺序：Employees / Milestones
 	if tab_container.get_tab_count() >= 1:
-		tab_container.set_tab_title(TAB_HAND, "手牌")
+		tab_container.set_tab_title(TAB_EMPLOYEES, "员工")
 	if tab_container.get_tab_count() >= 2:
-		tab_container.set_tab_title(TAB_COMPANY, "在职")
-	if tab_container.get_tab_count() >= 3:
 		tab_container.set_tab_title(TAB_MILESTONES, "里程碑")
+
+func apply_font_settings() -> void:
+	var fs_summary := 16
+	var fs_sub := 14
+	if Globals != null:
+		fs_summary = int(Globals.get_scaled_font_size(16))
+		fs_sub = int(Globals.get_scaled_font_size(14))
+
+	if is_instance_valid(summary_label):
+		summary_label.add_theme_font_size_override("font_size", fs_summary)
+	if is_instance_valid(inventory_title_label):
+		inventory_title_label.add_theme_font_size_override("font_size", fs_sub)
 
 func set_game_state(state: GameState) -> void:
 	_game_state = state
@@ -144,9 +148,9 @@ func select_tab(tab_id: String) -> void:
 		return
 	match tab_id:
 		"hand":
-			tab_container.current_tab = TAB_HAND
+			tab_container.current_tab = TAB_EMPLOYEES
 		"company":
-			tab_container.current_tab = TAB_COMPANY
+			tab_container.current_tab = TAB_EMPLOYEES
 		"milestones":
 			tab_container.current_tab = TAB_MILESTONES
 		"logs":
@@ -494,7 +498,10 @@ func _add_employee_entry_to_category(container: VBoxContainer, employee_id: Stri
 	var line := Label.new()
 	line.text = label_text
 	line.autowrap_mode = TextServer.AUTOWRAP_WORD
-	line.add_theme_font_size_override("font_size", 14)
+	var fs := 16
+	if Globals != null:
+		fs = int(Globals.get_scaled_font_size(16))
+	line.add_theme_font_size_override("font_size", fs)
 	if busy:
 		line.add_theme_color_override("font_color", Color(0.9, 0.8, 0.5, 1))
 	else:
@@ -573,58 +580,150 @@ func _refresh_summary() -> void:
 		return
 	if _game_state == null:
 		summary_label.text = "查看: -"
+		_refresh_inventory_ui({}, -1)
 		return
 
-	var view_id := _view_player_id
-	if view_id < 0 or view_id >= _game_state.players.size():
-		view_id = _current_player_id
-	if view_id < 0 or view_id >= _game_state.players.size():
-		view_id = 0
+	var view_id := _resolve_view_player_id()
 	if view_id < 0 or view_id >= _game_state.players.size():
 		summary_label.text = "查看: -"
+		_refresh_inventory_ui({}, -1)
 		return
 
 	var player_val = _game_state.players[view_id]
 	var player: Dictionary = player_val if player_val is Dictionary else {}
 
 	var cash := int(player.get("cash", 0))
-	var inv_val = player.get("inventory", {})
-	var inv: Dictionary = inv_val if inv_val is Dictionary else {}
 
 	var line1_parts: Array[String] = []
 	line1_parts.append("查看: %s" % Globals.get_player_name(view_id))
 	line1_parts.append("💰 $%d" % cash)
-
-	var inv_parts: Array[String] = []
-	var keys := inv.keys()
-	keys.sort()
-	for k in keys:
-		var pid := str(k)
-		var count := int(inv.get(pid, 0))
-		if count <= 0:
-			continue
-		var emoji := str(PRODUCT_EMOJI.get(pid, ""))
-		if not emoji.is_empty():
-			inv_parts.append("%s×%d" % [emoji, count])
-		else:
-			var name := str(PRODUCT_NAMES.get(pid, pid))
-			inv_parts.append("%s×%d" % [name, count])
-		if inv_parts.size() >= 4:
-			break
-	var inv_text := "库存: 无"
-	if not inv_parts.is_empty():
-		inv_text = "库存: %s" % " ".join(inv_parts)
 
 	var emp_parts := _build_employee_summary_parts(player)
 	var emp_text := "员工: 0"
 	if not emp_parts.is_empty():
 		emp_text = "员工: %s" % " ".join(emp_parts)
 
-	summary_label.text = "%s\n%s | %s" % [
-		" | ".join(line1_parts),
-		inv_text,
-		emp_text
-	]
+	summary_label.text = "%s\n%s" % [" | ".join(line1_parts), emp_text]
+
+	var inv_val = player.get("inventory", {})
+	var inv: Dictionary = inv_val if inv_val is Dictionary else {}
+	_refresh_inventory_ui(inv, _get_fridge_capacity_for_player(player))
+
+func _refresh_inventory_ui(inv: Dictionary, fridge_capacity: int) -> void:
+	if not is_instance_valid(inventory_title_label) or not is_instance_valid(inventory_tokens):
+		return
+
+	if fridge_capacity < 0:
+		inventory_title_label.text = "库存（无冰箱）"
+	else:
+		inventory_title_label.text = "库存（冰箱：每种≤%d）" % fridge_capacity
+
+	for c in inventory_tokens.get_children():
+		if is_instance_valid(c):
+			c.queue_free()
+
+	_ensure_skin()
+
+	var keys := inv.keys()
+	keys.sort()
+
+	var added := 0
+	for k in keys:
+		var product_id := str(k)
+		var count := int(inv.get(product_id, 0))
+		if count <= 0:
+			continue
+		inventory_tokens.add_child(_build_inventory_token_item(product_id, count))
+		added += 1
+
+	if added <= 0:
+		var empty := Label.new()
+		empty.text = "无"
+		empty.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.9))
+		var fs := 14
+		if Globals != null:
+			fs = int(Globals.get_scaled_font_size(14))
+		empty.add_theme_font_size_override("font_size", fs)
+		inventory_tokens.add_child(empty)
+
+func _build_inventory_token_item(product_id: String, count: int) -> Control:
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 2)
+
+	var icon := TextureRect.new()
+	icon.custom_minimum_size = Vector2(18, 18)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture = _get_product_icon_texture(product_id)
+	hbox.add_child(icon)
+
+	var label := Label.new()
+	label.text = "×%d" % count
+	var fs := 14
+	if Globals != null:
+		fs = int(Globals.get_scaled_font_size(14))
+	label.add_theme_font_size_override("font_size", fs)
+	label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95, 1))
+	hbox.add_child(label)
+
+	var name := str(PRODUCT_NAMES.get(product_id, product_id))
+	hbox.tooltip_text = "%s ×%d" % [name, count]
+	return hbox
+
+func _get_product_icon_texture(product_id: String) -> Texture2D:
+	_ensure_skin()
+	if _skin == null or not _skin.has_method("get_product_icon_texture"):
+		return null
+	var pid := str(product_id)
+	if pid == "cola":
+		pid = "soda"
+	return _skin.get_product_icon_texture(pid)
+
+func _get_fridge_capacity_for_player(player: Dictionary) -> int:
+	if player == null:
+		return -1
+	var milestones_val = player.get("milestones", null)
+	if not (milestones_val is Array):
+		return -1
+	if not MilestoneRegistry.is_loaded():
+		return -1
+
+	var milestones: Array = milestones_val
+	var has_fridge := false
+	var capacity := 0
+
+	for i in range(milestones.size()):
+		var mid_val = milestones[i]
+		if not (mid_val is String):
+			continue
+		var mid: String = str(mid_val)
+		if mid.is_empty():
+			continue
+		var def_val = MilestoneRegistry.get_def(mid)
+		if not (def_val is MilestoneDef):
+			continue
+		var def: MilestoneDef = def_val
+		for e_i in range(def.effects.size()):
+			var eff_val = def.effects[e_i]
+			if not (eff_val is Dictionary):
+				continue
+			var eff: Dictionary = eff_val
+			var type_val = eff.get("type", null)
+			if not (type_val is String):
+				continue
+			if str(type_val) != "gain_fridge":
+				continue
+			var value_val = eff.get("value", null)
+			if value_val is int:
+				has_fridge = true
+				capacity = maxi(capacity, int(value_val))
+			elif value_val is float:
+				var f: float = float(value_val)
+				if f == int(f):
+					has_fridge = true
+					capacity = maxi(capacity, int(f))
+
+	return capacity if has_fridge else -1
 
 func _build_employee_summary_parts(player: Dictionary) -> Array[String]:
 	if player == null:
@@ -689,6 +788,10 @@ func _refresh_milestones() -> void:
 		milestone_panel.call("set_milestone_pool", _game_state.milestone_pool)
 	if milestone_panel.has_method("set_player_milestones"):
 		milestone_panel.call("set_player_milestones", player.get("milestones", []))
+	if milestone_panel.has_method("set_global_view"):
+		milestone_panel.call("set_global_view", false)
+	if milestone_panel.has_method("set_rules"):
+		milestone_panel.call("set_rules", _game_state.rules if (_game_state.rules is Dictionary) else {})
 	if milestone_panel.has_method("refresh"):
 		milestone_panel.call("refresh")
 
@@ -704,7 +807,7 @@ func _maybe_auto_select_tab_for_phase() -> void:
 	_last_phase = phase
 
 	if phase == "Restructuring":
-		tab_container.current_tab = TAB_COMPANY
+		tab_container.current_tab = TAB_EMPLOYEES
 
 func _resolve_view_player_id() -> int:
 	if _game_state == null:

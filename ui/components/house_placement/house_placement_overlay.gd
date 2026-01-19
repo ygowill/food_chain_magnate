@@ -5,7 +5,7 @@
 class_name HousePlacementOverlay
 extends Control
 
-signal house_placement_confirmed(position: Vector2i, rotation: int)
+signal house_placement_confirmed(position: Vector2i, rotation: int, house_number: int)
 signal garden_confirmed(house_id: String, direction: String)
 signal cancelled()
 signal preview_requested(action_id: String, position: Vector2i, rotation: int)
@@ -20,8 +20,12 @@ var _selected_position: Vector2i = Vector2i(-1, -1)
 var _selected_rotation: int = 0
 var _selected_house_id: String = ""
 var _selected_direction: String = "E"
+var _selected_house_number: int = -1
 
 var _house_id_by_cell: Dictionary = {}  # Vector2i -> house_id
+var _available_house_numbers: Array[int] = []
+
+const DEFAULT_HOUSE_NUMBER_SUPPLY := [1, 3, 6, 9, 11, 14, 17, 19]
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -42,6 +46,14 @@ func get_selected_rotation() -> int:
 func get_selected_direction() -> String:
 	return _selected_direction
 
+func get_selected_house_number() -> int:
+	return _selected_house_number
+
+func get_available_house_numbers() -> Array[int]:
+	var out: Array[int] = []
+	out.append_array(_available_house_numbers)
+	return out
+
 func set_mode(action_id: String) -> void:
 	_mode = str(action_id)
 	clear_selection()
@@ -51,6 +63,7 @@ func set_mode(action_id: String) -> void:
 
 func set_map_data(map_data: Dictionary) -> void:
 	_rebuild_house_index(map_data)
+	_rebuild_house_number_supply(map_data)
 	_update_ui()
 	ui_state_changed.emit()
 
@@ -82,11 +95,23 @@ func set_selected_direction(direction: String) -> void:
 	_update_ui()
 	ui_state_changed.emit()
 
+func set_selected_house_number(house_number: int) -> void:
+	if _mode != "place_house":
+		return
+	var n := int(house_number)
+	if n <= 0:
+		_selected_house_number = -1
+	else:
+		_selected_house_number = n
+	_update_ui()
+	ui_state_changed.emit()
+
 func clear_selection() -> void:
 	_selected_position = Vector2i(-1, -1)
 	_selected_rotation = 0
 	_selected_house_id = ""
 	_selected_direction = "E"
+	_selected_house_number = -1
 	_emit_preview()
 	_update_ui()
 	_emit_highlight_request()
@@ -116,10 +141,28 @@ func _rebuild_house_index(map_data: Dictionary) -> void:
 			if p is Vector2i:
 				_house_id_by_cell[p] = hid
 
+func _rebuild_house_number_supply(map_data: Dictionary) -> void:
+	_available_house_numbers.clear()
+
+	var supply_val = map_data.get("house_number_supply_remaining", null)
+	if supply_val is Array:
+		for v in Array(supply_val):
+			if v is int:
+				_available_house_numbers.append(int(v))
+			elif v is float:
+				var f: float = float(v)
+				if f == floor(f):
+					_available_house_numbers.append(int(f))
+	else:
+		for n in DEFAULT_HOUSE_NUMBER_SUPPLY:
+			_available_house_numbers.append(int(n))
+
+	_available_house_numbers.sort()
+
 func can_confirm() -> bool:
 	if _mode == "add_garden":
 		return not _selected_house_id.is_empty() and not _selected_direction.is_empty()
-	return _selected_position != Vector2i(-1, -1)
+	return _selected_position != Vector2i(-1, -1) and _selected_house_number > 0
 
 func request_confirm() -> void:
 	if not can_confirm():
@@ -129,7 +172,7 @@ func request_confirm() -> void:
 		garden_confirmed.emit(_selected_house_id, _selected_direction)
 		return
 
-	house_placement_confirmed.emit(_selected_position, _selected_rotation)
+	house_placement_confirmed.emit(_selected_position, _selected_rotation, _selected_house_number)
 
 func request_cancel() -> void:
 	cancelled.emit()
@@ -161,10 +204,15 @@ func _update_hint() -> void:
 		return
 
 	# place_house
+	if _selected_house_number <= 0:
+		hint_label.text = "请选择房屋编号，并在地图上点击放置位置"
+		return
 	if _selected_position == Vector2i(-1, -1):
-		hint_label.text = "请在地图上点击放置位置"
+		hint_label.text = "房屋编号: %d（请在地图上点击放置位置）" % _selected_house_number
 	else:
-		hint_label.text = "放置位置: (%d,%d) 旋转:%d°" % [_selected_position.x, _selected_position.y, _selected_rotation]
+		hint_label.text = "房屋编号: %d | 位置:(%d,%d) | 旋转:%d°" % [
+			_selected_house_number, _selected_position.x, _selected_position.y, _selected_rotation
+		]
 
 func _emit_highlight_request() -> void:
 	if _mode != "place_house":

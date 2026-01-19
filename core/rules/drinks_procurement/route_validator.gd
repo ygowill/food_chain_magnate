@@ -1,8 +1,10 @@
 # 饮料采购：路线校验（Fail Fast）
 extends RefCounted
 
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
 
 static func validate_route(
 	state: GameState,
@@ -35,7 +37,7 @@ static func validate_air_route(
 
 	for i in range(route.size()):
 		var pos: Vector2i = route[i]
-		if not MapRuntimeClass.is_world_pos_in_grid(state, pos):
+		if not CoordsClass.is_world_pos_in_grid(state, pos):
 			return Result.failure("route 越界: %s" % str(pos))
 		if i > 0:
 			var prev: Vector2i = route[i - 1]
@@ -60,7 +62,7 @@ static func validate_road_route(
 	if not restaurants.has(restaurant_id):
 		return Result.failure("餐厅不存在: %s" % restaurant_id)
 
-	var road_graph = MapRuntimeClass.get_road_graph(state)
+	var road_graph = RoadGraphCacheClass.get_road_graph(state)
 	if road_graph == null:
 		return Result.failure("道路图未初始化")
 
@@ -75,9 +77,9 @@ static func validate_road_route(
 
 	for i in range(route.size()):
 		var pos: Vector2i = route[i]
-		if not MapRuntimeClass.is_world_pos_in_grid(state, pos):
+		if not CoordsClass.is_world_pos_in_grid(state, pos):
 			return Result.failure("route 越界: %s" % str(pos))
-		if not MapRuntimeClass.has_road_at(state, pos):
+		if not CellsClass.has_road_at(state, pos):
 			return Result.failure("卡车路线必须沿道路移动: %s" % str(pos))
 		if i > 0:
 			var prev: Vector2i = route[i - 1]

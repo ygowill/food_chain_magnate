@@ -9,6 +9,10 @@ signal right_panel_footer_changed()
 
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const UiNodeAccessClass = preload("res://ui/utils/node_access.gd")
+const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
+
+const _BUTTON_ROW_PATH := NodePath("MarginContainer/VBoxContainer/ButtonRow")
 
 @onready var salary_list_container: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/SalaryListContainer
 @onready var scroll_container: ScrollContainer = $MarginContainer/VBoxContainer/ScrollContainer
@@ -36,9 +40,7 @@ func set_embedded_in_right_panel(embedded: bool) -> void:
 		_base_custom_minimum_size = custom_minimum_size
 	custom_minimum_size = Vector2.ZERO if embedded else _base_custom_minimum_size
 
-	var row = get_node_or_null("MarginContainer/VBoxContainer/ButtonRow")
-	if row is Control:
-		(row as Control).visible = not embedded
+	UiNodeAccessClass.set_control_visible(self, _BUTTON_ROW_PATH, not embedded)
 
 	_apply_embedding_layout()
 	right_panel_footer_changed.emit()
@@ -116,10 +118,7 @@ func _apply_embedding_layout() -> void:
 
 func _rebuild_salary_list() -> void:
 	# 清除旧列表
-	for item in _salary_items.values():
-		if is_instance_valid(item):
-			item.queue_free()
-	_salary_items.clear()
+	UiRebuildHelpersClass.free_nodes_dict(_salary_items)
 
 	if salary_list_container == null:
 		return

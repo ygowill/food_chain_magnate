@@ -3,7 +3,7 @@
 class_name ProcureDrinksRouteRulesTest
 extends RefCounted
 
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var action := ProcureDrinksAction.new()
@@ -45,7 +45,7 @@ static func _run_truck_route_rules(action: ProcureDrinksAction, player_count: in
 	if not map_result.ok:
 		return map_result
 	state.map = map_result.value
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)
 
 	# 1) 禁 U 型转弯：A -> B -> A
 	var uturn_route := [[1, 1], [2, 1], [1, 1]]
@@ -129,7 +129,7 @@ static func _run_truck_distance_plus_one(action: ProcureDrinksAction, player_cou
 	if not map_result.ok:
 		return map_result
 	state.map = map_result.value
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)
 
 	var route: Array = []
 	for x in range(25):
@@ -187,7 +187,7 @@ static func _run_air_route_rules(action: ProcureDrinksAction, player_count: int,
 	if not map_result.ok:
 		return map_result
 	state.map = map_result.value
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)
 
 	# 1) 禁 U 型转弯：A -> B -> A
 	var uturn_route := [[1, 1], [2, 1], [1, 1]]

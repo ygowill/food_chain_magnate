@@ -7,6 +7,7 @@ const RestructuringOverflowPenaltyTestClass = preload("res://core/tests/restruct
 const RecruitOnCreditRulesTestClass = preload("res://core/tests/recruit_on_credit_rules_test.gd")
 const PaydaySalaryTestClass = preload("res://core/tests/payday_salary_test.gd")
 const GameStateFactoryStartingInventoryTestClass = preload("res://core/tests/game_state_factory_starting_inventory_test.gd")
+const RestaurantLogoAssignmentTestClass = preload("res://core/tests/restaurant_logo_assignment_test.gd")
 const PaydaySalaryTokenEligibilityTestClass = preload("res://core/tests/payday_salary_token_eligibility_test.gd")
 const CallbackResultContractTestClass = preload("res://core/tests/callback_result_contract_test.gd")
 const InitialCompanyTestClass = preload("res://core/tests/initial_company_test.gd")
@@ -32,6 +33,8 @@ const HandAreaViewSwitchTestClass = preload("res://ui/scenes/tests/hand_area_vie
 const UiRegressionPropertyTestClass = preload("res://ui/scenes/tests/ui_regression_property_test.gd")
 const MapZoomPropertyTestClass = preload("res://ui/scenes/tests/map_zoom_property_test.gd")
 const LogRestoreAfterLoadTestClass = preload("res://ui/scenes/tests/log_restore_after_load_test.gd")
+const EventHistoryRewindTestClass = preload("res://core/tests/event_history_rewind_test.gd")
+const ReplayPlayerSmokeTestClass = preload("res://ui/scenes/tests/replay_player_smoke_test.gd")
 const OrderOfBusinessTestClass = preload("res://core/tests/order_of_business_test.gd")
 const MilestoneSystemTestClass = preload("res://core/tests/milestone_system_test.gd")
 const ModulePackageLoaderV2TestClass = preload("res://core/tests/module_package_loader_v2_test.gd")
@@ -83,6 +86,7 @@ const MarketingDinnertimeGoldenReplayTestClass = preload("res://core/tests/marke
 const MilestoneEffectValuesTestClass = preload("res://core/tests/milestone_effect_values_test.gd")
 const RandomMapGenerationTestClass = preload("res://core/tests/random_map_generation_test.gd")
 const DinnertimeSettlementTestClass = preload("res://core/tests/dinnertime_settlement_test.gd")
+const DinnertimeDistanceEntryBoundaryTestClass = preload("res://core/tests/dinnertime_distance_entry_boundary_test.gd")
 const BankruptcyTestClass = preload("res://core/tests/bankruptcy_test.gd")
 
 @onready var output: RichTextLabel = $Root/Output
@@ -133,14 +137,18 @@ func _run_all() -> int:
 			"name": "PaydaySalaryTest",
 			"fn": func() -> Result: return PaydaySalaryTestClass.run(2, 12345),
 		},
-		{
-			"name": "GameStateFactoryStartingInventoryTest",
-			"fn": func() -> Result: return GameStateFactoryStartingInventoryTestClass.run(),
-		},
-		{
-			"name": "PaydaySalaryTokenEligibilityTest",
-			"fn": func() -> Result: return PaydaySalaryTokenEligibilityTestClass.run(),
-		},
+			{
+				"name": "GameStateFactoryStartingInventoryTest",
+				"fn": func() -> Result: return GameStateFactoryStartingInventoryTestClass.run(),
+			},
+			{
+				"name": "RestaurantLogoAssignmentTest",
+				"fn": func() -> Result: return RestaurantLogoAssignmentTestClass.run(3, 12345),
+			},
+			{
+				"name": "PaydaySalaryTokenEligibilityTest",
+				"fn": func() -> Result: return PaydaySalaryTokenEligibilityTestClass.run(),
+			},
 		{
 			"name": "CallbackResultContractTest",
 			"fn": func() -> Result: return CallbackResultContractTestClass.run(),
@@ -236,6 +244,14 @@ func _run_all() -> int:
 			{
 				"name": "LogRestoreAfterLoadTest",
 				"fn": func() -> Result: return LogRestoreAfterLoadTestClass.run(),
+			},
+			{
+				"name": "EventHistoryRewindTest",
+				"fn": func() -> Result: return EventHistoryRewindTestClass.run(2, 12345),
+			},
+			{
+				"name": "ReplayPlayerSmokeTest",
+				"fn": func() -> Result: return ReplayPlayerSmokeTestClass.run(),
 			},
 			{
 				"name": "OrderOfBusinessTest",
@@ -440,6 +456,10 @@ func _run_all() -> int:
 			{
 				"name": "DinnertimeSettlementTest",
 				"fn": func() -> Result: return DinnertimeSettlementTestClass.run(2, 12345),
+			},
+			{
+				"name": "DinnertimeDistanceEntryBoundaryTest",
+				"fn": func() -> Result: return DinnertimeDistanceEntryBoundaryTestClass.run(2, 12345),
 			},
 			{
 				"name": "BankruptcyTest",

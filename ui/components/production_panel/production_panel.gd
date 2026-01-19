@@ -1,14 +1,13 @@
 # 生产面板组件
 # 对齐 gameplay：`produce_food` 仅需 `employee_type`；`procure_drinks`：`errand_boy` 需 `drink_type`，其它员工需 `route/selected_sources`（由上层组装下发）
 class_name ProductionPanel
-extends Control
+extends "res://ui/components/common/right_panel_embeddable_panel.gd"
 
 signal production_requested(employee_type: String, production_type: String)
 signal cancelled()
 signal producer_changed(employee_type: String, production_type: String)
 signal drinks_clear_requested()
 signal drinks_undo_requested()
-signal right_panel_footer_changed()
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var mode_label: Label = $MarginContainer/VBoxContainer/ModeLabel
@@ -20,6 +19,7 @@ signal right_panel_footer_changed()
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 
 var _production_type: String = "food"  # food | drinks
 var _available_producers: Array[String] = []
@@ -45,46 +45,19 @@ var _available_drink_types: Array[String] = []
 var _selected_drink_type: String = ""
 var _drinks_selected_sources_count: int = 0
 var _drinks_confirm_ready: bool = false
-var _embedded_in_right_panel: bool = false
-var _base_custom_minimum_size: Vector2 = Vector2.ZERO
 
-func set_embedded_in_right_panel(embedded: bool) -> void:
-	_embedded_in_right_panel = embedded
-	if _base_custom_minimum_size == Vector2.ZERO:
-		_base_custom_minimum_size = custom_minimum_size
-	custom_minimum_size = Vector2.ZERO if embedded else _base_custom_minimum_size
+func _get_confirm_button() -> Button:
+	return confirm_btn
 
-	var row = get_node_or_null("MarginContainer/VBoxContainer/ButtonRow")
-	if row is Control:
-		(row as Control).visible = not embedded
+func _get_cancel_button() -> Button:
+	return cancel_btn
 
-	_apply_embedding_layout()
-	right_panel_footer_changed.emit()
-
-func right_panel_get_footer_config() -> Dictionary:
-	if confirm_btn == null:
-		return {}
-	return {
-		"show_cancel": true,
-		"cancel_text": "取消",
-		"cancel_enabled": true,
-		"show_primary": true,
-		"primary_text": str(confirm_btn.text),
-		"primary_enabled": not confirm_btn.disabled,
-	}
-
-func right_panel_footer_primary() -> void:
-	_on_confirm_pressed()
-
-func _ready() -> void:
-	if _base_custom_minimum_size == Vector2.ZERO:
-		_base_custom_minimum_size = custom_minimum_size
-	if confirm_btn != null:
-		confirm_btn.pressed.connect(_on_confirm_pressed)
-	if cancel_btn != null:
-		cancel_btn.pressed.connect(_on_cancel_pressed)
-
+func _on_panel_ready() -> void:
 	_rebuild()
+	_apply_embedding_layout()
+
+func _apply_embedding(embedded: bool) -> void:
+	super._apply_embedding(embedded)
 	_apply_embedding_layout()
 
 func set_production_type(production_type: String) -> void:
@@ -101,8 +74,7 @@ func set_current_inventory(inventory: Dictionary) -> void:
 
 func set_available_drink_types(types: Array[String]) -> void:
 	_available_drink_types.clear()
-	for v in types:
-		var t := str(v).strip_edges()
+	for t in types:
 		if t.is_empty():
 			continue
 		if _available_drink_types.has(t):
@@ -148,13 +120,12 @@ func _rebuild_content() -> void:
 	if products_container == null:
 		return
 
-	for child in products_container.get_children():
-		if is_instance_valid(child):
-			child.queue_free()
+	UiRebuildHelpersClass.free_children(products_container)
 
+	var embedded := is_embedded_in_right_panel()
 	_employee_option = OptionButton.new()
 	_employee_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_employee_option.custom_minimum_size = Vector2.ZERO if _embedded_in_right_panel else Vector2(380, 0)
+	_employee_option.custom_minimum_size = Vector2.ZERO if embedded else Vector2(380, 0)
 	_employee_option.item_selected.connect(_on_employee_selected)
 	products_container.add_child(_employee_option)
 
@@ -193,14 +164,15 @@ func _rebuild_content() -> void:
 	_apply_embedding_layout()
 
 func _apply_embedding_layout() -> void:
+	var embedded := is_embedded_in_right_panel()
 	if scroll_container != null:
-		scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if _embedded_in_right_panel else ScrollContainer.SCROLL_MODE_DISABLED
+		scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if embedded else ScrollContainer.SCROLL_MODE_DISABLED
 	if _employee_option != null:
-		_employee_option.custom_minimum_size = Vector2.ZERO if _embedded_in_right_panel else Vector2(380, 0)
+		_employee_option.custom_minimum_size = Vector2.ZERO if embedded else Vector2(380, 0)
 	if _food_type_option != null:
-		_food_type_option.custom_minimum_size = Vector2.ZERO if _embedded_in_right_panel else Vector2(380, 0)
+		_food_type_option.custom_minimum_size = Vector2.ZERO if embedded else Vector2(380, 0)
 	if _drink_type_option != null:
-		_drink_type_option.custom_minimum_size = Vector2.ZERO if _embedded_in_right_panel else Vector2(380, 0)
+		_drink_type_option.custom_minimum_size = Vector2.ZERO if embedded else Vector2(380, 0)
 
 func _rebuild_employee_options() -> void:
 	_selected_employee_type = ""
@@ -358,7 +330,7 @@ func _build_drinks_controls(parent: VBoxContainer) -> void:
 
 	_drink_type_option = OptionButton.new()
 	_drink_type_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_drink_type_option.custom_minimum_size = Vector2.ZERO if _embedded_in_right_panel else Vector2(380, 0)
+	_drink_type_option.custom_minimum_size = Vector2.ZERO if is_embedded_in_right_panel() else Vector2(380, 0)
 	_drink_type_option.item_selected.connect(_on_drink_type_selected)
 	parent.add_child(_drink_type_option)
 
@@ -399,7 +371,7 @@ func _build_food_controls(parent: VBoxContainer) -> void:
 
 	_food_type_option = OptionButton.new()
 	_food_type_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_food_type_option.custom_minimum_size = Vector2.ZERO if _embedded_in_right_panel else Vector2(380, 0)
+	_food_type_option.custom_minimum_size = Vector2.ZERO if is_embedded_in_right_panel() else Vector2(380, 0)
 	_food_type_option.item_selected.connect(_on_food_type_selected)
 	parent.add_child(_food_type_option)
 
@@ -421,7 +393,7 @@ func _rebuild_food_type_options() -> void:
 		_apply_selected_food_type(0)
 
 func _get_food_options_for_employee(employee_type: String) -> Array[String]:
-	var emp_id := str(employee_type).strip_edges()
+	var emp_id := str(employee_type)
 	if emp_id.is_empty():
 		return []
 	if not EmployeeRegistryClass.is_loaded():
@@ -438,7 +410,7 @@ func _get_food_options_for_employee(employee_type: String) -> Array[String]:
 	var out: Array[String] = []
 	var opts: Array = opts_val
 	for v in opts:
-		var pid := str(v).strip_edges()
+		var pid := str(v)
 		if pid.is_empty():
 			continue
 		if out.has(pid):
@@ -453,7 +425,7 @@ func _apply_selected_food_type(index: int) -> void:
 	if index < 0 or index >= _food_type_option.get_item_count():
 		return
 	var meta = _food_type_option.get_item_metadata(index)
-	_selected_food_type = str(meta).strip_edges()
+	_selected_food_type = str(meta)
 
 func _on_food_type_selected(index: int) -> void:
 	_apply_selected_food_type(index)
@@ -488,7 +460,7 @@ func _apply_selected_drink_type(index: int) -> void:
 	if index < 0 or index >= _drink_type_option.get_item_count():
 		return
 	var meta = _drink_type_option.get_item_metadata(index)
-	_selected_drink_type = str(meta).strip_edges()
+	_selected_drink_type = str(meta)
 
 func _on_drink_type_selected(index: int) -> void:
 	_apply_selected_drink_type(index)
@@ -516,7 +488,7 @@ func _update_drinks_controls_visibility() -> void:
 	if _drinks_clear_btn != null:
 		_drinks_clear_btn.visible = not is_errand
 	if _drinks_error_label != null:
-		_drinks_error_label.visible = (not is_errand) and (not str(_drinks_error_label.text).strip_edges().is_empty())
+		_drinks_error_label.visible = (not is_errand) and (not _drinks_error_label.text.is_empty())
 
 func _update_drinks_selection_label() -> void:
 	if _drinks_selection_label == null:
@@ -528,7 +500,7 @@ func _update_drinks_selection_label() -> void:
 		_drinks_clear_btn.disabled = _drinks_selected_sources_count <= 0
 
 func _get_product_display_name(product_id: String) -> String:
-	var pid := str(product_id).strip_edges()
+	var pid := str(product_id)
 	if pid.is_empty():
 		return ""
 	if not ProductRegistryClass.is_loaded():
@@ -536,6 +508,6 @@ func _get_product_display_name(product_id: String) -> String:
 	var def_val = ProductRegistryClass.get_def(pid)
 	if def_val != null and (def_val is ProductDef):
 		var def: ProductDef = def_val
-		if not str(def.name).strip_edges().is_empty():
-			return str(def.name)
+		if not def.name.is_empty():
+			return def.name
 	return pid

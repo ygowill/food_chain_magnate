@@ -6,9 +6,10 @@ extends ActionExecutor
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DrinksProcurementClass = preload("res://core/rules/drinks_procurement.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 
 # 每个饮料源提供的饮料数量
 const DRINKS_PER_SOURCE := 2
@@ -28,7 +29,7 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 	if state.get_current_player_id() != player_id:
 		return false
 
-	var restaurant_ids := MapRuntimeClass.get_player_restaurants(state, player_id)
+	var restaurant_ids := StructuresClass.get_player_restaurants(state, player_id)
 	if restaurant_ids.is_empty():
 		return false
 
@@ -112,7 +113,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("所有 %s 本子阶段已采购完毕: %d/%d" % [employee_type, used, active_count])
 
 	# 检查玩家是否有餐厅（采购需要从餐厅入口计算范围）
-	var restaurant_ids := MapRuntimeClass.get_player_restaurants(state, command.actor)
+	var restaurant_ids := StructuresClass.get_player_restaurants(state, command.actor)
 	if restaurant_ids.is_empty():
 		return Result.failure("你没有餐厅，无法采购饮料")
 
@@ -177,14 +178,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if emp_def == null or not emp_def.can_procure():
 		return Result.failure("无法获取 %s 的采购信息" % employee_type)
 
-	var restaurant_ids := MapRuntimeClass.get_player_restaurants(state, player_id)
+	var restaurant_ids := StructuresClass.get_player_restaurants(state, player_id)
 	if restaurant_ids.is_empty():
 		return Result.failure("你没有餐厅，无法采购饮料")
 
 	# 使用员工：用于“first_cart_operator_used”等里程碑（要求首个 haul 也生效）
-	var ms_use := MilestoneSystemClass.process_event(state, "UseEmployee", {"player_id": player_id, "id": employee_type})
-	if not ms_use.ok:
-		warnings.append("里程碑触发失败(UseEmployee/%s): %s" % [employee_type, ms_use.error])
+	EmployeeUsageHelperClass.append_use_employee_warning(warnings, state, player_id, employee_type)
 
 	# 特殊：跑腿伙计（直接获得 1 瓶指定饮料）
 	if employee_type == "errand_boy":

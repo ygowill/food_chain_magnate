@@ -9,6 +9,7 @@ var display_name: String = ""
 var category: String = "structure"  # "structure", "marketing", "terrain"
 
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
+const MapParseHelpersClass = preload("res://core/map/parse_helpers.gd")
 const _VALID_ROTATIONS = MapUtilsClass.VALID_ROTATIONS
 
 # === 占地定义 ===
@@ -86,6 +87,13 @@ static func create_restaurant() -> PieceDef:
 	piece.entrance_points = [Vector2i(0, 0)]
 	return piece
 
+static func create_default_registry() -> Dictionary:
+	return {
+		"restaurant": create_restaurant(),
+		"house": create_house(),
+		"house_with_garden": create_house_with_garden(),
+	}
+
 # === 序列化 ===
 
 func to_dict() -> Dictionary:
@@ -139,13 +147,13 @@ static func from_dict(data: Dictionary) -> Result:
 			return Result.failure("PieceDef 缺少字段: %s" % key)
 
 	var id_val = data.get("id", null)
-	if not (id_val is String) or str(id_val).is_empty():
+	if not (id_val is String) or str(id_val).strip_edges().is_empty():
 		return Result.failure("PieceDef.id 类型错误或为空（期望非空 String）")
 	var display_name_val = data.get("display_name", null)
-	if not (display_name_val is String) or str(display_name_val).is_empty():
+	if not (display_name_val is String) or str(display_name_val).strip_edges().is_empty():
 		return Result.failure("PieceDef.display_name 类型错误或为空（期望非空 String）")
 	var category_val = data.get("category", null)
-	if not (category_val is String) or str(category_val).is_empty():
+	if not (category_val is String) or str(category_val).strip_edges().is_empty():
 		return Result.failure("PieceDef.category 类型错误或为空（期望非空 String）")
 
 	var footprint_val = data.get("footprint_mask", null)
@@ -179,7 +187,7 @@ static func from_dict(data: Dictionary) -> Result:
 		return forbidden_layers_read
 
 	var entrance_type_val = data.get("entrance_type", null)
-	if not (entrance_type_val is String) or str(entrance_type_val).is_empty():
+	if not (entrance_type_val is String) or str(entrance_type_val).strip_edges().is_empty():
 		return Result.failure("PieceDef.entrance_type 类型错误或为空（期望非空 String）")
 
 	var entrance_points_read := _parse_vec2i_list(data.get("entrance_points", null), "PieceDef.entrance_points")
@@ -198,9 +206,9 @@ static func from_dict(data: Dictionary) -> Result:
 		return garden_size_read
 
 	var piece := PieceDef.new()
-	piece.id = str(id_val)
-	piece.display_name = str(display_name_val)
-	piece.category = str(category_val)
+	piece.id = str(id_val).strip_edges()
+	piece.display_name = str(display_name_val).strip_edges()
+	piece.category = str(category_val).strip_edges()
 	piece.footprint_mask = footprint_read.value
 	piece.anchor = anchor_read.value
 	piece.allowed_rotations = rotations_read.value
@@ -209,7 +217,7 @@ static func from_dict(data: Dictionary) -> Result:
 	piece.must_touch_road = bool(must_touch_road_val)
 	piece.allowed_on = allowed_on_read.value
 	piece.forbidden_layers = forbidden_layers_read.value
-	piece.entrance_type = str(entrance_type_val)
+	piece.entrance_type = str(entrance_type_val).strip_edges()
 	piece.entrance_points = entrance_points_read.value
 	piece.is_house = bool(is_house_val)
 	piece.can_have_garden = bool(can_have_garden_val)
@@ -234,25 +242,10 @@ static func load_from_file(path: String) -> Result:
 # === 严格解析辅助 ===
 
 static func _parse_int(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
-		return Result.success(int(f))
-	return Result.failure("%s 类型错误（期望整数）" % path)
+	return MapParseHelpersClass.parse_int(value, path)
 
 static func _parse_vec2i(value, path: String) -> Result:
-	if not (value is Array) or value.size() != 2:
-		return Result.failure("%s 类型错误（期望 [x,y]）" % path)
-	var x_read := _parse_int(value[0], "%s[0]" % path)
-	if not x_read.ok:
-		return x_read
-	var y_read := _parse_int(value[1], "%s[1]" % path)
-	if not y_read.ok:
-		return y_read
-	return Result.success(Vector2i(int(x_read.value), int(y_read.value)))
+	return MapParseHelpersClass.parse_vec2i(value, path)
 
 static func _parse_rotation_array(value, path: String) -> Result:
 	if not (value is Array):
@@ -271,20 +264,7 @@ static func _parse_rotation_array(value, path: String) -> Result:
 	return Result.success(out)
 
 static func _parse_string_array(value, path: String, require_non_empty: bool) -> Result:
-	if not (value is Array):
-		return Result.failure("%s 类型错误（期望 Array[String]）" % path)
-	var out: Array[String] = []
-	for i in range(value.size()):
-		var item = value[i]
-		if not (item is String):
-			return Result.failure("%s[%d] 类型错误（期望 String）" % [path, i])
-		var s := str(item)
-		if s.is_empty():
-			return Result.failure("%s[%d] 不能为空字符串" % [path, i])
-		out.append(s)
-	if require_non_empty and out.is_empty():
-		return Result.failure("%s 不能为空" % path)
-	return Result.success(out)
+	return MapParseHelpersClass.parse_string_array(value, path, require_non_empty)
 
 static func _parse_vec2i_list(value, path: String) -> Result:
 	if not (value is Array):

@@ -4,14 +4,17 @@ class_name GameEventLogController
 extends RefCounted
 
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
+const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 
 const EVENT_TYPES_TO_LOG: Array[String] = [
 	EventBus.EventType.PHASE_CHANGED,
 	EventBus.EventType.SUB_PHASE_CHANGED,
 	EventBus.EventType.ROUND_STARTED,
+	EventBus.EventType.DINNERTIME_REPORT,
 	EventBus.EventType.PLAYER_TURN_STARTED,
 	EventBus.EventType.PLAYER_TURN_ENDED,
 	EventBus.EventType.PLAYER_CASH_CHANGED,
+	EventBus.EventType.COMMAND_EXECUTED, # 仅筛选少量需要展示的动作（避免日志过噪）
 	EventBus.EventType.EMPLOYEE_RECRUITED,
 	EventBus.EventType.EMPLOYEE_TRAINED,
 	EventBus.EventType.EMPLOYEE_FIRED,
@@ -23,6 +26,12 @@ const EVENT_TYPES_TO_LOG: Array[String] = [
 	EventBus.EventType.DRINKS_PROCURED,
 	EventBus.EventType.MILESTONE_ACHIEVED,
 ]
+
+const PRICE_ACTION_LOG_TEXT: Dictionary = {
+	"set_price": "设定价格（-$1）",
+	"set_discount": "设定折扣（-$3）",
+	"set_luxury_price": "设定奢侈品价格（+$10）",
+}
 
 var _game_log_panel = null
 var _eventbus_source: String = ""
@@ -49,6 +58,21 @@ func setup(game_log_panel, restore_history: bool = true) -> void:
 	for t in EVENT_TYPES_TO_LOG:
 		EventBus.subscribe(t, Callable(self, "_on_eventbus_event"), 100, _eventbus_source)
 
+func rebuild_from_history() -> void:
+	# 用于 undo/redo/时间线回退：EventBus.history 已被重建，但 UI 面板需要重新从 history 恢复显示。
+	if not is_instance_valid(_game_log_panel):
+		return
+
+	_game_log_panel.clear_logs()
+	var history_events: Array[Dictionary] = _collect_history_events()
+	var restored_count := history_events.size()
+	if restored_count > 0:
+		_game_log_panel.add_system_log("事件日志已更新（已恢复 %d 条历史日志）" % restored_count)
+		for event in history_events:
+			_on_eventbus_event(event)
+	else:
+		_game_log_panel.add_system_log("事件日志已更新")
+
 func dispose() -> void:
 	if not _eventbus_source.is_empty():
 		EventBus.unsubscribe_all_from_source(_eventbus_source)
@@ -74,6 +98,16 @@ func _collect_history_events() -> Array[Dictionary]:
 			continue
 		if not type_set.has(t):
 			continue
+		if t == EventBus.EventType.COMMAND_EXECUTED:
+			var data_val = ev.get("data", null)
+			if not (data_val is Dictionary):
+				continue
+			var data: Dictionary = data_val
+			if not data.has("price_modifier"):
+				continue
+			var action_id := str(data.get("action_id", "")).strip_edges()
+			if not PRICE_ACTION_LOG_TEXT.has(action_id):
+				continue
 		result.append(ev)
 
 	return result
@@ -115,6 +149,17 @@ func _on_eventbus_event(event: Dictionary) -> void:
 				int(data.get("new_cash", 0)),
 				int(data.get("delta", 0)),
 			], data)
+		EventBus.EventType.COMMAND_EXECUTED:
+			# CommandRunner 会为每条命令广播 COMMAND_EXECUTED；这里仅记录定价类强制动作（用于“自动完成”可见性）。
+			if not data.has("price_modifier"):
+				return
+			var action_id := str(data.get("action_id", "")).strip_edges()
+			if not PRICE_ACTION_LOG_TEXT.has(action_id):
+				return
+			var player_id := int(data.get("player_id", -1))
+			if player_id < 0:
+				return
+			_game_log_panel.add_player_log(player_id, str(PRICE_ACTION_LOG_TEXT[action_id]), data)
 		EventBus.EventType.EMPLOYEE_RECRUITED:
 			_game_log_panel.add_player_log(int(data.get("player_id", -1)), "招聘 %s" % str(data.get("employee_type", "")), data)
 		EventBus.EventType.EMPLOYEE_TRAINED:
@@ -149,5 +194,199 @@ func _on_eventbus_event(event: Dictionary) -> void:
 			if not milestone_id.is_empty() and name != milestone_id:
 				text += " (%s)" % milestone_id
 			_game_log_panel.add_event_log(text, data)
+		EventBus.EventType.DINNERTIME_REPORT:
+			_log_dinnertime_report(data)
 		_:
 			_game_log_panel.add_debug_log("%s: %s" % [t, str(data)], data)
+
+func _product_name(product_id: String) -> String:
+	var pid := str(product_id).strip_edges()
+	if pid.is_empty():
+		return ""
+	if ProductRegistryClass.is_loaded():
+		var def_val = ProductRegistryClass.get_def(pid)
+		if def_val != null and def_val is ProductDef:
+			var n := str((def_val as ProductDef).name).strip_edges()
+			if not n.is_empty():
+				return n
+	return pid
+
+func _format_required_short(required: Dictionary, max_items: int = 3) -> String:
+	if required == null or not (required is Dictionary) or required.is_empty():
+		return ""
+	var keys := required.keys()
+	keys.sort()
+	var parts: Array[String] = []
+	var shown := 0
+	for k_val in keys:
+		if shown >= max_items:
+			break
+		var pid := str(k_val).strip_edges()
+		if pid.is_empty():
+			continue
+		var c := int(required.get(k_val, 0))
+		if c <= 0:
+			continue
+		parts.append("%s x%d" % [_product_name(pid), c])
+		shown += 1
+	var suffix := ""
+	if keys.size() > shown:
+		suffix = " ..."
+	return " + ".join(parts) + suffix
+
+func _log_dinnertime_report(data: Dictionary) -> void:
+	if not is_instance_valid(_game_log_panel):
+		return
+	var round := int(data.get("round", -1))
+	var report_val = data.get("report", null)
+	if not (report_val is Dictionary):
+		_game_log_panel.add_event_log("晚餐结算报告缺失（回合 %d）" % round, data)
+		return
+	var report: Dictionary = report_val
+
+	var sales_val = report.get("sales", null)
+	var skipped_val = report.get("skipped", null)
+	var income_sales_val = report.get("income_sales", null)
+	var income_house_bonus_val = report.get("income_sale_house_bonus", null)
+	var income_tips_val = report.get("income_tips", null)
+	var income_cfo_val = report.get("income_cfo_bonus", null)
+	var total_income_val = report.get("total_income", null)
+
+	var sales: Array = sales_val if (sales_val is Array) else []
+	var skipped: Array = skipped_val if (skipped_val is Array) else []
+
+	_game_log_panel.add_event_log("晚餐结算（回合 %d）：售出 %d，未满足 %d" % [round, sales.size(), skipped.size()], data)
+
+	# 1) 每个房屋消费记录
+	var sale_revenue_sum_by_player: Dictionary = {} # player_id -> revenue sum
+	var marketing_bonus_sum_by_player: Dictionary = {} # player_id -> bonus sum
+	var price_part_by_product: Dictionary = {} # product_id -> price_part sum (unit_price * count * garden_mult)
+	var price_part_food_total := 0
+	var price_part_drink_total := 0
+
+	for s_val in sales:
+		if not (s_val is Dictionary):
+			continue
+		var s: Dictionary = s_val
+		var owner := int(s.get("winner_owner", -1))
+		var house_number := str(s.get("house_number", "")).strip_edges()
+		var required_val = s.get("required", null)
+		var required: Dictionary = required_val if (required_val is Dictionary) else {}
+		var revenue := int(s.get("revenue", 0))
+		var price_part := int(s.get("price_part", 0))
+		var bonus := int(s.get("bonus", 0))
+		var house_bonus := int(s.get("house_bonus", 0))
+
+		if owner >= 0:
+			sale_revenue_sum_by_player[owner] = int(sale_revenue_sum_by_player.get(owner, 0)) + revenue
+			marketing_bonus_sum_by_player[owner] = int(marketing_bonus_sum_by_player.get(owner, 0)) + bonus
+
+		# 尽量把“单价部分”按产品拆分（营销奖励单列）。
+		var unit_price := int(s.get("unit_price", 0))
+		var mult := 2 if bool(s.get("has_garden", false)) else 1
+		var per_unit := unit_price * mult
+		if per_unit > 0 and not required.is_empty():
+			for pid_val in required.keys():
+				var pid := str(pid_val).strip_edges()
+				if pid.is_empty():
+					continue
+				var c := int(required.get(pid_val, 0))
+				if c <= 0:
+					continue
+				var amt := per_unit * c
+				price_part_by_product[pid] = int(price_part_by_product.get(pid, 0)) + amt
+				if ProductRegistryClass.is_loaded() and ProductRegistryClass.is_drink(pid):
+					price_part_drink_total += amt
+				else:
+					price_part_food_total += amt
+
+		var items := _format_required_short(required, 3)
+		var msg := "晚餐：房屋#%s 消费 %s 收入 $%d" % [house_number, items, revenue]
+		if bonus != 0 or house_bonus != 0:
+			msg += " (奖励 $%d, 房屋奖 $%d)" % [bonus, house_bonus]
+		if owner >= 0:
+			_game_log_panel.add_player_log(owner, msg, s)
+		else:
+			_game_log_panel.add_event_log(msg, s)
+
+		# 兜底：若拆分计算不到（例如 required 为空），仍确保 price_part 不丢（记入食物总计）
+		if required.is_empty() and price_part > 0:
+			price_part_food_total += price_part
+
+	for sk_val in skipped:
+		if not (sk_val is Dictionary):
+			continue
+		var sk: Dictionary = sk_val
+		var hn := str(sk.get("house_number", "")).strip_edges()
+		var dcnt := int(sk.get("demands", 0))
+		_game_log_panel.add_event_log("晚餐：房屋#%s 未满足（需求 %d）" % [hn, dcnt], sk)
+
+	# 2) 总结报告（按玩家/按分类）
+	var income_sales: Array = income_sales_val if (income_sales_val is Array) else []
+	var income_house_bonus: Array = income_house_bonus_val if (income_house_bonus_val is Array) else []
+	var income_tips: Array = income_tips_val if (income_tips_val is Array) else []
+	var income_cfo: Array = income_cfo_val if (income_cfo_val is Array) else []
+	var total_income: Array = total_income_val if (total_income_val is Array) else []
+
+	var player_count := maxi(income_sales.size(), total_income.size())
+	var total_sales_sum := 0
+	var total_house_bonus_sum := 0
+	var total_tips_sum := 0
+	var total_cfo_sum := 0
+	var total_income_sum := 0
+
+	# route purchases（可插拔）：从 income_sales 中扣除“房屋售卖收入”剩余部分推导
+	var route_income_sum := 0
+	for pid in range(player_count):
+		var s_amt := int(income_sales[pid]) if pid < income_sales.size() else 0
+		var hb_amt := int(income_house_bonus[pid]) if pid < income_house_bonus.size() else 0
+		var tips_amt := int(income_tips[pid]) if pid < income_tips.size() else 0
+		var cfo_amt := int(income_cfo[pid]) if pid < income_cfo.size() else 0
+		var tot_amt := int(total_income[pid]) if pid < total_income.size() else (s_amt + hb_amt + tips_amt + cfo_amt)
+
+		total_sales_sum += s_amt
+		total_house_bonus_sum += hb_amt
+		total_tips_sum += tips_amt
+		total_cfo_sum += cfo_amt
+		total_income_sum += tot_amt
+
+		var sale_sum := int(sale_revenue_sum_by_player.get(pid, 0))
+		var route_amt := maxi(0, s_amt - sale_sum)
+		route_income_sum += route_amt
+
+		_game_log_panel.add_event_log("晚餐总结 玩家%d: 总 $%d (售卖 $%d, 房屋奖 $%d, 服务员 $%d, CFO $%d)" % [
+			pid + 1, tot_amt, s_amt, hb_amt, tips_amt, cfo_amt
+		], {"round": round, "player_id": pid})
+
+	var marketing_bonus_sum := 0
+	for pid_val in marketing_bonus_sum_by_player.keys():
+		marketing_bonus_sum += int(marketing_bonus_sum_by_player.get(pid_val, 0))
+
+	_game_log_panel.add_event_log("晚餐总计: $%d (售卖 $%d, 房屋奖 $%d, 服务员 $%d, CFO $%d)" % [
+		total_income_sum, total_sales_sum, total_house_bonus_sum, total_tips_sum, total_cfo_sum
+	], {"round": round})
+
+	_game_log_panel.add_event_log("售卖拆分: 食物 $%d + 饮料 $%d + 营销奖励 $%d + 路上购买 $%d" % [
+		price_part_food_total, price_part_drink_total, marketing_bonus_sum, route_income_sum
+	], {"round": round})
+
+	# 3) 每种食物/饮料的收入（按“单价部分”拆分；营销奖励单列）
+	if not price_part_by_product.is_empty():
+		var pairs: Array[Dictionary] = []
+		for pid in price_part_by_product.keys():
+			pairs.append({"id": str(pid), "amt": int(price_part_by_product[pid])})
+		pairs.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			var aa := int(a.get("amt", 0))
+			var bb := int(b.get("amt", 0))
+			if aa != bb:
+				return aa > bb
+			return str(a.get("id", "")) < str(b.get("id", ""))
+		)
+
+		for p in pairs:
+			var pid2 := str(p.get("id", "")).strip_edges()
+			var amt2 := int(p.get("amt", 0))
+			if amt2 <= 0:
+				continue
+			var kind := "饮料" if (ProductRegistryClass.is_loaded() and ProductRegistryClass.is_drink(pid2)) else "食物"
+			_game_log_panel.add_event_log("晚餐%s: %s $%d" % [kind, _product_name(pid2), amt2], {"round": round, "product": pid2})

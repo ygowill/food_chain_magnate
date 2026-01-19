@@ -7,7 +7,7 @@ extends RefCounted
 
 const MarketingSettlementClass = preload("res://core/rules/phase/marketing_settlement.gd")
 const DinnertimeSettlementClass = preload("res://core/rules/phase/dinnertime_settlement.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 
 const MILESTONE_ID := "first_marketeer_used"
 
@@ -179,7 +179,7 @@ static func _apply_test_map(state: GameState) -> void:
 	_set_house_demands(state, "house_0", [])
 
 	state.players[0]["restaurants"] = ["rest_0"]
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)
 
 static func _set_house_demands(state: GameState, house_id: String, demands: Array) -> void:
 	var houses: Dictionary = state.map.get("houses", {})

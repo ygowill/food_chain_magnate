@@ -2,7 +2,7 @@
 class_name NoodlesSushiV2Test
 extends RefCounted
 
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count != 2:
@@ -337,7 +337,7 @@ static func _apply_test_map(state: GameState) -> void:
 
 	state.players[0]["restaurants"] = ["rest_0"]
 	state.players[1]["restaurants"] = ["rest_1"]
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)
 
 static func _set_house_demands(state: GameState, house_id: String, demands: Array) -> void:
 	var houses: Dictionary = state.map.get("houses", {})

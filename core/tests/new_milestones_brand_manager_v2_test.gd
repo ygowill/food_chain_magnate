@@ -6,7 +6,7 @@ class_name NewMilestonesBrandManagerV2Test
 extends RefCounted
 
 const MarketingSettlementClass = preload("res://core/rules/phase/marketing_settlement.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 
 const MILESTONE_ID := "first_brand_manager_used"
 
@@ -166,4 +166,4 @@ static func _apply_test_map(state: GameState) -> void:
 		"boundary_index": {},
 		"marketing_placements": {}
 	}
-	MapRuntimeClass.invalidate_road_graph(state)
+	RoadGraphCacheClass.invalidate_road_graph(state)

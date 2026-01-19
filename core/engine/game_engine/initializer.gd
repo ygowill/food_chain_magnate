@@ -1,8 +1,8 @@
 # GameEngine 初始化流程（抽离自 core/engine/game_engine.gd）
 extends RefCounted
 
-const MapBakerClass = preload("res://core/map/map_baker.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const MapBakeClass = preload("res://core/map/map_baker/bake.gd")
+const BakedMapClass = preload("res://core/map/map_runtime/baked_map.gd")
 const GameConfigClass = preload("res://core/data/game_config.gd")
 const InvariantsClass = preload("res://core/engine/game_engine/invariants.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
@@ -16,7 +16,8 @@ static func initialize_new_game(
 	seed_value: int,
 	enabled_modules_v2: Array[String],
 	modules_v2_base_dir: String,
-	reserve_card_selected_by_player: Array[int] = []
+	reserve_card_selected_by_player: Array[int] = [],
+	restaurant_logo_choices_by_player: Array[int] = []
 ) -> Result:
 	engine._reset_modules_v2()
 	var init_warnings: Array[String] = []
@@ -50,7 +51,7 @@ static func initialize_new_game(
 	if not setup_actions.ok:
 		return Result.failure("初始化失败：ActionRegistry 设置失败: %s" % setup_actions.error)
 
-	var state_result := GameState.create_initial_state_with_rng(player_count, seed_value, engine.random_manager, config_result.value)
+	var state_result := GameState.create_initial_state_with_rng(player_count, seed_value, engine.random_manager, config_result.value, restaurant_logo_choices_by_player)
 	if not state_result.ok:
 		return Result.failure("创建初始状态失败: %s" % state_result.error)
 	engine.state = state_result.value
@@ -92,10 +93,10 @@ static func initialize_new_game(
 		return Result.failure("生成地图失败: %s" % map_def_read.error)
 	var map_def: MapDef = map_def_read.value
 
-	var bake_result := MapBakerClass.bake(map_def, engine.game_data.tiles, engine.game_data.pieces)
+	var bake_result := MapBakeClass.bake(map_def, engine.game_data.tiles, engine.game_data.pieces)
 	if not bake_result.ok:
 		return Result.failure("地图烘焙失败: %s" % bake_result.error)
-	var apply_map_result := MapRuntimeClass.apply_baked_map(state, bake_result.value)
+	var apply_map_result := BakedMapClass.apply_baked_map(state, bake_result.value)
 	if not apply_map_result.ok:
 		return Result.failure("写入地图失败: %s" % apply_map_result.error)
 	var tile_supply_init := _initialize_tile_supply_remaining(state)

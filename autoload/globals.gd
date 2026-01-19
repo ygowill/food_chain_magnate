@@ -33,9 +33,11 @@ const PLAYER_COLOR_PALETTE: Array[Color] = [
 	Color(0.9, 0.7, 0.2, 1),  # 黄
 	Color(0.7, 0.4, 0.9, 1),  # 紫
 ]
+const DEFAULT_RESTAURANT_LOGO_COUNT := 5
 
 var player_names: Array[String] = []
 var player_color_indices: Array[int] = []  # player_id -> palette index
+var player_restaurant_logo_choices: Array[int] = []  # player_id -> logo_id（-1=随机）
 
 # UI/游戏设置（SettingsDialog）
 var ui_scale: float = 1.0
@@ -44,6 +46,11 @@ var confirm_actions: bool = true
 var show_hints: bool = true
 var animation_speed: float = 1.0
 var show_tile_ids: bool = false
+var show_cell_hover_tooltip: bool = false
+var font_scale: float = 1.1
+var log_font_scale: float = 1.35
+
+var _base_fallback_font_size: int = 16
 
 func get_version() -> String:
 	var v = ProjectSettings.get_setting("application/config/version", "")
@@ -53,10 +60,12 @@ func get_version() -> String:
 	return s
 
 func _ready() -> void:
+	_base_fallback_font_size = int(ThemeDB.fallback_font_size)
 	GameLog.info("Globals", "全局配置初始化 v%s" % get_version())
 	_load_settings()
 	_ensure_player_profiles()
 	_apply_ui_scale()
+	_apply_font_scale()
 
 # 加载用户设置
 func _load_settings() -> void:
@@ -67,6 +76,9 @@ func _load_settings() -> void:
 		ui_scale = float(config.get_value("display", "ui_scale", 1.0))
 		ui_layout_version = clampi(int(config.get_value("display", "ui_layout_version", 2)), 1, 2)
 		show_tile_ids = bool(config.get_value("display", "show_tile_ids", false))
+		show_cell_hover_tooltip = bool(config.get_value("display", "show_cell_hover_tooltip", false))
+		font_scale = clampf(float(config.get_value("display", "font_scale", font_scale)), 0.5, 2.0)
+		log_font_scale = clampf(float(config.get_value("display", "log_font_scale", log_font_scale)), 0.5, 3.0)
 		confirm_actions = bool(config.get_value("game", "confirm_actions", true))
 		show_hints = bool(config.get_value("game", "show_hints", true))
 		animation_speed = float(config.get_value("game", "animation_speed", 1.0))
@@ -89,6 +101,14 @@ func _load_settings() -> void:
 				if v is int or v is float:
 					player_color_indices.append(int(v))
 
+		var logos_val = config.get_value("players", "restaurant_logo_choices", null)
+		if logos_val is Array:
+			player_restaurant_logo_choices = []
+			for i in range(min(Array(logos_val).size(), MAX_PLAYERS)):
+				var v = Array(logos_val)[i]
+				if v is int or v is float:
+					player_restaurant_logo_choices.append(int(v))
+
 		GameLog.info("Globals", "已加载用户设置")
 
 func _apply_ui_scale() -> void:
@@ -97,6 +117,19 @@ func _apply_ui_scale() -> void:
 	if get_tree().root is Window:
 		var w: Window = get_tree().root
 		w.content_scale_factor = clampf(ui_scale, 0.5, 2.0)
+
+func _apply_font_scale() -> void:
+	var s := clampf(font_scale, 0.5, 2.0)
+	ThemeDB.fallback_font_size = maxi(1, int(round(float(_base_fallback_font_size) * s)))
+
+func apply_font_scale() -> void:
+	_apply_font_scale()
+
+func get_scaled_font_size(base_size: int) -> int:
+	return maxi(1, int(round(float(base_size) * clampf(font_scale, 0.5, 2.0))))
+
+func get_log_font_size(base_size: int) -> int:
+	return maxi(1, int(round(float(base_size) * clampf(log_font_scale, 0.5, 3.0))))
 
 # 保存用户设置
 func save_settings() -> void:
@@ -107,6 +140,7 @@ func save_settings() -> void:
 	config.set_value("game", "modules_v2_base_dir", modules_v2_base_dir)
 	config.set_value("players", "names", player_names)
 	config.set_value("players", "color_indices", player_color_indices)
+	config.set_value("players", "restaurant_logo_choices", player_restaurant_logo_choices)
 	config.save("user://settings.cfg")
 	GameLog.info("Globals", "用户设置已保存")
 
@@ -181,6 +215,17 @@ func _ensure_player_profiles() -> void:
 	elif player_color_indices.size() > MAX_PLAYERS:
 		player_color_indices = player_color_indices.slice(0, MAX_PLAYERS)
 
+	# 补齐餐厅 Logo 选择（-1=随机）
+	if player_restaurant_logo_choices.size() < MAX_PLAYERS:
+		for i in range(player_restaurant_logo_choices.size(), MAX_PLAYERS):
+			player_restaurant_logo_choices.append(-1)
+	elif player_restaurant_logo_choices.size() > MAX_PLAYERS:
+		player_restaurant_logo_choices = player_restaurant_logo_choices.slice(0, MAX_PLAYERS)
+	for i in range(player_restaurant_logo_choices.size()):
+		var v := int(player_restaurant_logo_choices[i])
+		if v < -1 or v >= DEFAULT_RESTAURANT_LOGO_COUNT:
+			player_restaurant_logo_choices[i] = -1
+
 func set_player_name(player_id: int, name: String) -> void:
 	_ensure_player_profiles()
 	if player_id < 0 or player_id >= MAX_PLAYERS:
@@ -201,6 +246,21 @@ func get_player_color_index(player_id: int) -> int:
 	if player_id < 0 or player_id >= player_color_indices.size():
 		return 0
 	return int(player_color_indices[player_id])
+
+func set_player_restaurant_logo_choice(player_id: int, logo_choice: int) -> void:
+	_ensure_player_profiles()
+	if player_id < 0 or player_id >= MAX_PLAYERS:
+		return
+	var v := int(logo_choice)
+	if v < -1 or v >= DEFAULT_RESTAURANT_LOGO_COUNT:
+		v = -1
+	player_restaurant_logo_choices[player_id] = v
+
+func get_player_restaurant_logo_choice(player_id: int) -> int:
+	_ensure_player_profiles()
+	if player_id < 0 or player_id >= player_restaurant_logo_choices.size():
+		return -1
+	return int(player_restaurant_logo_choices[player_id])
 
 # 获取玩家颜色
 func get_player_color(player_id: int) -> Color:

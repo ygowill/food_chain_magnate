@@ -1,10 +1,10 @@
 {
   "id": "fry_chef",
   "name": "薯条厨师",
-  "description": "晚餐每成功售卖一个房屋：每个薯条厨师+$10（仅对非饮品 food）",
+  "description": "晚餐每成功售卖一个房屋：每个薯条厨师+$10",
   "salary": true,
   "unique": false,
-  "role": "special",
+  "role": "produce_food",
   "manager_slots": 0,
   "range": {
     "type": null,

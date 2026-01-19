@@ -7,9 +7,13 @@ func register(registrar) -> Result:
 	if not r.ok:
 		return r
 
-	# 培训：可从任何厨师（汉堡、披萨、寿司、面条）培训而来
-	for target_id in ["burger_cook", "burger_chef", "pizza_cook", "pizza_chef", "noodle_cook", "sushi_cook"]:
+	# 培训：可从任何厨师培训而来；其中寿司/面条厨师为可选（不作为模块依赖）。
+	for target_id in ["burger_cook", "pizza_cook"]:
 		r = registrar.register_employee_patch(target_id, {"add_train_to": ["fry_chef"]})
+		if not r.ok:
+			return r
+	for target_id in ["noodle_cook", "sushi_cook"]:
+		r = registrar.register_employee_patch(target_id, {"add_train_to": ["fry_chef"], "optional": true})
 		if not r.ok:
 			return r
 

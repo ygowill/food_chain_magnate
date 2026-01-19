@@ -1,7 +1,7 @@
 {
   "id": "barista_trainee",
   "name": "咖啡学徒",
-  "description": "生产1个咖啡；可培训为咖啡师",
+  "description": "生产1个咖啡",
   "salary": false,
   "unique": false,
   "role": "produce_food",

@@ -5,6 +5,52 @@ extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
+# 查找提供某个强制动作的员工（用于 gameplay/actions 的强制动作执行器）
+static func find_provider_employee_id(player: Dictionary, mandatory_action_id: String) -> String:
+	if mandatory_action_id.is_empty():
+		return ""
+
+	assert(player.has("employees") and (player["employees"] is Array), "MandatoryActionsRules.find_provider_employee_id: player.employees 缺失或类型错误（期望 Array[String]）")
+	var employees: Array = player["employees"]
+	for i in range(employees.size()):
+		var emp_val = employees[i]
+		assert(emp_val is String, "MandatoryActionsRules.find_provider_employee_id: player.employees[%d] 类型错误（期望 String）" % i)
+		var emp_id: String = emp_val
+		assert(not emp_id.is_empty(), "MandatoryActionsRules.find_provider_employee_id: player.employees[%d] 不应为空字符串" % i)
+
+		var def = EmployeeRegistryClass.get_def(emp_id)
+		if def != null and def is EmployeeDef:
+			var emp_def: EmployeeDef = def
+			if emp_def.mandatory_action_id == mandatory_action_id:
+				return emp_id
+
+	return ""
+
+static func has_completed_this_round(state: GameState, player_id: int, mandatory_action_id: String) -> bool:
+	assert(state.round_state is Dictionary, "MandatoryActionsRules.has_completed_this_round: state.round_state 类型错误（期望 Dictionary）")
+	assert(state.round_state.has("mandatory_actions_completed"), "MandatoryActionsRules.has_completed_this_round: round_state 缺少 mandatory_actions_completed")
+	var mac_val = state.round_state["mandatory_actions_completed"]
+	assert(mac_val is Dictionary, "MandatoryActionsRules.has_completed_this_round: round_state.mandatory_actions_completed 类型错误（期望 Dictionary）")
+	var mac: Dictionary = mac_val
+	assert(mac.has(player_id), "MandatoryActionsRules.has_completed_this_round: mandatory_actions_completed 缺少玩家 key: %d" % player_id)
+	var completed_val = mac[player_id]
+	assert(completed_val is Array, "MandatoryActionsRules.has_completed_this_round: mandatory_actions_completed[%d] 类型错误（期望 Array）" % player_id)
+	var completed: Array = completed_val
+	return completed.has(mandatory_action_id)
+
+static func mark_completed(state: GameState, player_id: int, mandatory_action_id: String) -> void:
+	assert(state.round_state is Dictionary, "MandatoryActionsRules.mark_completed: state.round_state 类型错误（期望 Dictionary）")
+	assert(state.round_state.has("mandatory_actions_completed"), "MandatoryActionsRules.mark_completed: round_state 缺少 mandatory_actions_completed")
+	var mac_val = state.round_state["mandatory_actions_completed"]
+	assert(mac_val is Dictionary, "MandatoryActionsRules.mark_completed: round_state.mandatory_actions_completed 类型错误（期望 Dictionary）")
+	var mac: Dictionary = mac_val
+	assert(mac.has(player_id), "MandatoryActionsRules.mark_completed: mandatory_actions_completed 缺少玩家 key: %d" % player_id)
+	var completed_val = mac[player_id]
+	assert(completed_val is Array, "MandatoryActionsRules.mark_completed: mandatory_actions_completed[%d] 类型错误（期望 Array）" % player_id)
+	var completed: Array = completed_val
+	if not completed.has(mandatory_action_id):
+		completed.append(mandatory_action_id)
+
 # 检查所有玩家是否完成了必须的强制动作
 static func check_mandatory_actions_completed(state: GameState) -> Result:
 	if state == null:

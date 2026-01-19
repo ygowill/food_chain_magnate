@@ -46,6 +46,11 @@ func refresh() -> void:
 
 	_update_highlight()
 
+func apply_font_settings() -> void:
+	for item in _player_items:
+		if is_instance_valid(item) and item.has_method("apply_font_settings"):
+			item.apply_font_settings()
+
 func _rebuild_player_items() -> void:
 	# 清除旧项
 	for item in _player_items:

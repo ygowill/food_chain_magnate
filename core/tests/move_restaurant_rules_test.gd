@@ -6,7 +6,7 @@ class_name MoveRestaurantRulesTest
 extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
@@ -37,7 +37,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if actor < 0:
 		return Result.failure("无法获取当前玩家")
 
-	var rest_ids := MapRuntimeClass.get_player_restaurants(state, actor)
+	var rest_ids := StructuresClass.get_player_restaurants(state, actor)
 	if rest_ids.is_empty():
 		return Result.failure("玩家应至少拥有 1 个餐厅")
 	var rest_id := str(rest_ids[0])

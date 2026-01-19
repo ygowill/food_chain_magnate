@@ -2,6 +2,8 @@
 # 负责：集中实现引擎级 invariants 检查（现金/库存/银行/员工守恒等）。
 extends RefCounted
 
+const TypeHelpersClass = preload("res://core/utils/type_helpers.gd")
+
 static func check_invariants(
 	state: GameState,
 	initial_total_cash: int,
@@ -18,10 +20,10 @@ static func check_invariants(
 
 	# 1. 现金非负
 	for i in range(state.players.size()):
-		var player_val = state.players[i]
-		if not (player_val is Dictionary):
-			return Result.failure("GameState.players[%d] 类型错误（期望 Dictionary）" % i)
-		var player: Dictionary = player_val
+		var player_read := TypeHelpersClass.require_dict(state.players[i], "GameState.players[%d]" % i)
+		if not player_read.ok:
+			return player_read
+		var player: Dictionary = player_read.value
 		var cash_read := _require_int_field(player, "cash", "GameState.players[%d].cash" % i)
 		if not cash_read.ok:
 			return cash_read
@@ -31,10 +33,10 @@ static func check_invariants(
 
 	# 2. 库存非负
 	for i in range(state.players.size()):
-		var player_val = state.players[i]
-		if not (player_val is Dictionary):
-			return Result.failure("GameState.players[%d] 类型错误（期望 Dictionary）" % i)
-		var player: Dictionary = player_val
+		var player_read := TypeHelpersClass.require_dict(state.players[i], "GameState.players[%d]" % i)
+		if not player_read.ok:
+			return player_read
+		var player: Dictionary = player_read.value
 		var inv_read := _require_dict_field(player, "inventory", "GameState.players[%d].inventory" % i)
 		if not inv_read.ok:
 			return inv_read
@@ -139,10 +141,10 @@ static func compute_total_cash(game_state: GameState) -> Result:
 	if not (game_state.players is Array):
 		return Result.failure("GameState.players 类型错误（期望 Array）")
 	for i in range(game_state.players.size()):
-		var player_val = game_state.players[i]
-		if not (player_val is Dictionary):
-			return Result.failure("GameState.players[%d] 类型错误（期望 Dictionary）" % i)
-		var player: Dictionary = player_val
+		var player_read := TypeHelpersClass.require_dict(game_state.players[i], "GameState.players[%d]" % i)
+		if not player_read.ok:
+			return player_read
+		var player: Dictionary = player_read.value
 		var cash_read := _require_int_field(player, "cash", "GameState.players[%d].cash" % i)
 		if not cash_read.ok:
 			return cash_read
@@ -179,10 +181,10 @@ static func _count_employees_in_players(game_state: GameState, employee_type: St
 		return Result.failure("employee_type 不能为空")
 	var total := 0
 	for i in range(game_state.players.size()):
-		var player_val = game_state.players[i]
-		if not (player_val is Dictionary):
-			return Result.failure("GameState.players[%d] 类型错误（期望 Dictionary）" % i)
-		var player: Dictionary = player_val
+		var player_read := TypeHelpersClass.require_dict(game_state.players[i], "GameState.players[%d]" % i)
+		if not player_read.ok:
+			return player_read
+		var player: Dictionary = player_read.value
 
 		var employees_read := _require_array_field(player, "employees", "GameState.players[%d].employees" % i)
 		if not employees_read.ok:

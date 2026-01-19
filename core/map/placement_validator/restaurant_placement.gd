@@ -22,9 +22,11 @@ static func validate_restaurant_placement(
 
 	# 获取餐厅入口
 	var piece_def: PieceDef = piece_registry.get("restaurant")
-	assert(piece_def != null, "PlacementValidator: piece_registry 缺少 restaurant PieceDef")
+	if piece_def == null:
+		return Result.failure("PlacementValidator: piece_registry 缺少 restaurant PieceDef")
 	var entrance_points := piece_def.get_world_entrance_points(world_anchor, rotation)
-	assert(not entrance_points.is_empty(), "PlacementValidator: restaurant entrance_points 不能为空")
+	if entrance_points.is_empty():
+		return Result.failure("PlacementValidator: restaurant entrance_points 不能为空")
 
 	# 验证入口邻接道路
 	var has_road_access := false
@@ -34,8 +36,12 @@ static func validate_restaurant_placement(
 			if not MapAccess.has_world_cell(map_ctx, neighbor):
 				continue
 			var neighbor_cell: Dictionary = MapAccess.get_world_cell(map_ctx, neighbor)
-			assert(neighbor_cell.has("road_segments") and (neighbor_cell["road_segments"] is Array), "PlacementValidator: cell.road_segments 缺失或类型错误（期望 Array）: %s" % str(neighbor))
-			var road_segments: Array = neighbor_cell["road_segments"]
+			if neighbor_cell.is_empty():
+				return Result.failure("PlacementValidator: 无法读取地图格子: %s" % str(neighbor))
+			var rs_val = neighbor_cell.get("road_segments", null)
+			if not (rs_val is Array):
+				return Result.failure("PlacementValidator: cell.road_segments 缺失或类型错误（期望 Array）: %s" % str(neighbor))
+			var road_segments: Array = rs_val
 			if not road_segments.is_empty():
 				has_road_access = true
 				break
@@ -49,13 +55,16 @@ static func validate_restaurant_placement(
 	if is_initial_placement:
 		var entrance_tile: Vector2i = MapUtils.world_to_tile(entrance_points[0]).board_pos
 
-		assert(map_ctx.has("restaurants") and (map_ctx["restaurants"] is Dictionary), "PlacementValidator: map_ctx.restaurants 缺失或类型错误（期望 Dictionary）")
+		if not map_ctx.has("restaurants") or not (map_ctx["restaurants"] is Dictionary):
+			return Result.failure("PlacementValidator: map_ctx.restaurants 缺失或类型错误（期望 Dictionary）")
 		var restaurants: Dictionary = map_ctx["restaurants"]
 		for rest_id in restaurants:
 			var rest_val = restaurants[rest_id]
-			assert(rest_val is Dictionary, "PlacementValidator: restaurants[%s] 类型错误（期望 Dictionary）" % str(rest_id))
+			if not (rest_val is Dictionary):
+				return Result.failure("PlacementValidator: restaurants[%s] 类型错误（期望 Dictionary）" % str(rest_id))
 			var rest: Dictionary = rest_val
-			assert(rest.has("entrance_pos") and (rest["entrance_pos"] is Vector2i), "PlacementValidator: restaurants[%s].entrance_pos 缺失或类型错误（期望 Vector2i）" % str(rest_id))
+			if not rest.has("entrance_pos") or not (rest["entrance_pos"] is Vector2i):
+				return Result.failure("PlacementValidator: restaurants[%s].entrance_pos 缺失或类型错误（期望 Vector2i）" % str(rest_id))
 			var rest_entrance: Vector2i = rest["entrance_pos"]
 			var rest_tile: Vector2i = MapUtils.world_to_tile(rest_entrance).board_pos
 			if rest_tile == entrance_tile:
@@ -67,4 +76,3 @@ static func validate_restaurant_placement(
 	result_value["entrance_points"] = entrance_points
 
 	return Result.success(result_value)
-

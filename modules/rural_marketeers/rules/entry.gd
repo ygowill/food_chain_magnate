@@ -6,7 +6,6 @@ const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const ParseHelpers = preload("res://core/state/serialization/parse_helpers.gd")
 
@@ -37,57 +36,31 @@ const CONFLICT_ID_OFFRAMP_CONNECTION := "%s:offramp_connection" % MODULE_ID
 const STATE_SCHEMA_ID_OFFRAMP_PENDING := "rural_marketeers:round_state_int_keys:rural_marketeers_offramp_pending"
 
 func register(registrar) -> Result:
-	var r = registrar.register_employee_patch("marketing_trainee", {"add_train_to": ["rural_marketeer"]})
-	if not r.ok:
-		return r
-
-	r = registrar.register_milestone_effect("rural_marketeers:grant_offramp_placement", Callable(self, "_milestone_effect_grant_offramp_placement"))
-	if not r.ok:
-		return r
-
-	# 初始化：确保 rural_area 与 offramp supply 存在
-	r = registrar.register_phase_hook(Phase.RESTRUCTURING, HookType.BEFORE_ENTER, Callable(self, "_on_restructuring_before_enter"), 0)
-	if not r.ok:
-		return r
-
-	# 乡村地区需求：在 Marketing 阶段按轮次添加（巨型广告牌每轮 +2）
-	r = registrar.register_extension_settlement(Phase.MARKETING, SettlementRegistryClass.Point.ENTER, Callable(self, "_on_marketing_enter_extension"), 200)
-	if not r.ok:
-		return r
-
-	# 晚餐前：将 rural_area 的“入口 road cells”更新为当前 offramp 的入口道路
-	r = registrar.register_extension_settlement(Phase.DINNERTIME, SettlementRegistryClass.Point.ENTER, Callable(self, "_on_dinnertime_enter_before_primary"), 0)
-	if not r.ok:
-		return r
-
-	# 必须立即放置 offramp（不允许带着 pending 离开 Marketing 子阶段）
-	r = registrar.register_sub_phase_hook(WorkingSubPhase.MARKETING, HookType.BEFORE_EXIT, Callable(self, "_on_working_marketing_before_exit"), 0)
-	if not r.ok:
-		return r
-
-	# 模块动作
-	r = registrar.register_action_executor(PlaceGiantBillboardActionClass.new())
-	if not r.ok:
-		return r
-	r = registrar.register_action_executor(PlaceHighwayOfframpActionClass.new())
-	if not r.ok:
-		return r
-
-	# 飞机与 offramp 互斥（仅在启用本模块时生效）
-	r = registrar.register_action_validator("initiate_marketing", "%s:airplane_offramp_conflict" % MODULE_ID, Callable(self, "_validate_airplane_offramp_conflict"), 10)
-	if not r.ok:
-		return r
-
-	# 对外暴露“占用/冲突查询”：其他模块不应直接读取本模块的 state.map 字段结构。
-	r = registrar.register_placement_conflict_provider(PLACEMENT_CONFLICT_PROVIDER_ID, Callable(self, "_get_placement_conflicts_at_world_pos"), 100)
-	if not r.ok:
-		return r
-
-	# round_state.<player_id(int) -> ...> 字典：读档后需要把 "0"/"1" 转回 0/1
-	r = registrar.register_round_state_int_key_dict_schema(STATE_SCHEMA_ID_OFFRAMP_PENDING, [OFFRAMP_PENDING_KEY], 100)
-	if not r.ok:
-		return r
-
+	var steps: Array[Callable] = [
+		Callable(registrar, "register_employee_patch").bind("marketing_trainee", {"add_train_to": ["rural_marketeer"]}),
+		Callable(registrar, "register_milestone_effect").bind("rural_marketeers:grant_offramp_placement", Callable(self, "_milestone_effect_grant_offramp_placement")),
+		# 初始化：确保 rural_area 与 offramp supply 存在
+		Callable(registrar, "register_phase_hook").bind(Phase.RESTRUCTURING, HookType.BEFORE_ENTER, Callable(self, "_on_restructuring_before_enter"), 0),
+		# 乡村地区需求：在 Marketing 阶段按轮次添加（巨型广告牌每轮 +2）
+		Callable(registrar, "register_extension_settlement").bind(Phase.MARKETING, SettlementRegistryClass.Point.ENTER, Callable(self, "_on_marketing_enter_extension"), 200),
+		# 晚餐前：将 rural_area 的“入口 road cells”更新为当前 offramp 的入口道路
+		Callable(registrar, "register_extension_settlement").bind(Phase.DINNERTIME, SettlementRegistryClass.Point.ENTER, Callable(self, "_on_dinnertime_enter_before_primary"), 0),
+		# 必须立即放置 offramp（不允许带着 pending 离开 Marketing 子阶段）
+		Callable(registrar, "register_sub_phase_hook").bind(WorkingSubPhase.MARKETING, HookType.BEFORE_EXIT, Callable(self, "_on_working_marketing_before_exit"), 0),
+		# 模块动作
+		Callable(registrar, "register_action_executor").bind(PlaceGiantBillboardActionClass.new()),
+		Callable(registrar, "register_action_executor").bind(PlaceHighwayOfframpActionClass.new()),
+		# 飞机与 offramp 互斥（仅在启用本模块时生效）
+		Callable(registrar, "register_action_validator").bind("initiate_marketing", "%s:airplane_offramp_conflict" % MODULE_ID, Callable(self, "_validate_airplane_offramp_conflict"), 10),
+		# 对外暴露“占用/冲突查询”：其他模块不应直接读取本模块的 state.map 字段结构。
+		Callable(registrar, "register_placement_conflict_provider").bind(PLACEMENT_CONFLICT_PROVIDER_ID, Callable(self, "_get_placement_conflicts_at_world_pos"), 100),
+		# round_state.<player_id(int) -> ...> 字典：读档后需要把 "0"/"1" 转回 0/1
+		Callable(registrar, "register_round_state_int_key_dict_schema").bind(STATE_SCHEMA_ID_OFFRAMP_PENDING, [OFFRAMP_PENDING_KEY], 100),
+	]
+	for step in steps:
+		var r: Result = step.call()
+		if not r.ok:
+			return r
 	return Result.success()
 
 func _get_placement_conflicts_at_world_pos(state: GameState, world_pos: Vector2i, _ctx: Dictionary) -> Result:

@@ -3,7 +3,7 @@ extends RefCounted
 
 const MarketingRangeOverlayScene = preload("res://ui/overlays/marketing_range_overlay.tscn")
 const MarketingRangeCalculatorClass = preload("res://core/rules/marketing_range_calculator.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const OverlayUtils = preload("res://ui/scenes/game/game_overlay_utils.gd")
 
 var _scene = null
@@ -171,8 +171,8 @@ func _compute_preview_tiles(position: Vector2i, marketing_type: String, extra: D
 	return out
 
 func _infer_airplane_axis(state: GameState, pos: Vector2i) -> String:
-	var minp := MapRuntimeClass.get_world_min(state)
-	var maxp := MapRuntimeClass.get_world_max(state)
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
 	if pos.x == minp.x or pos.x == maxp.x:
 		return "row"
 	if pos.y == minp.y or pos.y == maxp.y:

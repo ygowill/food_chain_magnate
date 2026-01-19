@@ -3,8 +3,9 @@
 class_name MoveRestaurantAction
 extends ActionExecutor
 
-const PlacementValidatorClass = preload("res://core/map/placement_validator.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const RestaurantPlacementClass = preload("res://core/map/placement_validator/restaurant_placement.gd")
+const MapContextBuilderClass = preload("res://core/map/map_context_builder.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 
 var _piece_registry: Dictionary = {}
@@ -50,6 +51,28 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 
 	return true
 
+func _parse_params(command: Command) -> Result:
+	var rest_id_result := require_string_param(command, "restaurant_id")
+	if not rest_id_result.ok:
+		return rest_id_result
+	var rest_id: String = rest_id_result.value
+
+	var pos_result := require_vector2i_param(command, "position")
+	if not pos_result.ok:
+		return pos_result
+	var world_anchor: Vector2i = pos_result.value
+
+	var rotation_result := require_int_param(command, "rotation")
+	if not rotation_result.ok:
+		return rotation_result
+	var rotation: int = rotation_result.value
+
+	return Result.success({
+		"restaurant_id": rest_id,
+		"world_anchor": world_anchor,
+		"rotation": rotation,
+	})
+
 func _validate_specific(state: GameState, command: Command) -> Result:
 	# 检查是否是当前玩家的回合
 	var current_player_id := state.get_current_player_id()
@@ -83,10 +106,13 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if used_move >= move_eligible:
 		return Result.failure("区域经理本子阶段已用完: %d/%d" % [used_move, move_eligible])
 
-	var rest_id_result := require_string_param(command, "restaurant_id")
-	if not rest_id_result.ok:
-		return rest_id_result
-	var rest_id: String = rest_id_result.value
+	var params_result := _parse_params(command)
+	if not params_result.ok:
+		return params_result
+	var params: Dictionary = params_result.value
+	var rest_id: String = params["restaurant_id"]
+	var world_anchor: Vector2i = params["world_anchor"]
+	var rotation: int = int(params["rotation"])
 
 	if not restaurants.has(rest_id):
 		return Result.failure("餐厅不存在: %s" % rest_id)
@@ -97,22 +123,12 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if int(rest["owner"]) != command.actor:
 		return Result.failure("只能移动自己的餐厅")
 
-	var pos_result := require_vector2i_param(command, "position")
-	if not pos_result.ok:
-		return pos_result
-	var world_anchor: Vector2i = pos_result.value
-
-	var rotation_result := require_int_param(command, "rotation")
-	if not rotation_result.ok:
-		return rotation_result
-	var rotation: int = rotation_result.value
-
-	var map_ctx := _build_map_context(state)
+	var map_ctx := MapContextBuilderClass.build_context(state)
 	var piece_registry := _get_piece_registry()
 
 	assert(rest.has("cells") and (rest["cells"] is Array), "move_restaurant: restaurants[%s].cells 缺失或类型错误（期望 Array）" % rest_id)
 	var ignore_cells: Array = rest["cells"]
-	var validate_result := PlacementValidatorClass.validate_restaurant_placement(
+	var validate_result := RestaurantPlacementClass.validate_restaurant_placement(
 		map_ctx, world_anchor, rotation, piece_registry,
 		command.actor, false, {"ignore_structure_cells": ignore_cells}
 	)
@@ -122,21 +138,14 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	return Result.success()
 
 func _apply_changes(state: GameState, command: Command) -> Result:
+	var params_result := _parse_params(command)
+	if not params_result.ok:
+		return params_result
+	var params: Dictionary = params_result.value
 	var player_id: int = command.actor
-	var rest_id_result := require_string_param(command, "restaurant_id")
-	if not rest_id_result.ok:
-		return rest_id_result
-	var rest_id: String = rest_id_result.value
-
-	var pos_result := require_vector2i_param(command, "position")
-	if not pos_result.ok:
-		return pos_result
-	var world_anchor: Vector2i = pos_result.value
-
-	var rotation_result := require_int_param(command, "rotation")
-	if not rotation_result.ok:
-		return rotation_result
-	var rotation: int = rotation_result.value
+	var rest_id: String = params["restaurant_id"]
+	var world_anchor: Vector2i = params["world_anchor"]
+	var rotation: int = int(params["rotation"])
 
 	assert(state.map is Dictionary, "move_restaurant: state.map 类型错误（期望 Dictionary）")
 	assert(state.map.has("restaurants") and (state.map["restaurants"] is Dictionary), "move_restaurant: state.map.restaurants 缺失或类型错误（期望 Dictionary）")
@@ -147,12 +156,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	assert(rest_val is Dictionary, "move_restaurant: restaurants[%s] 类型错误（期望 Dictionary）" % rest_id)
 	var rest: Dictionary = rest_val
 
-	var map_ctx := _build_map_context(state)
+	var map_ctx := MapContextBuilderClass.build_context(state)
 	var piece_registry := _get_piece_registry()
 
 	assert(rest.has("cells") and (rest["cells"] is Array), "move_restaurant: restaurants[%s].cells 缺失或类型错误（期望 Array）" % rest_id)
 	var ignore_cells: Array = rest["cells"]
-	var validate_result := PlacementValidatorClass.validate_restaurant_placement(
+	var validate_result := RestaurantPlacementClass.validate_restaurant_placement(
 		map_ctx, world_anchor, rotation, piece_registry,
 		player_id, false, {"ignore_structure_cells": ignore_cells}
 	)
@@ -169,13 +178,13 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	# 清空旧格
 	for cell_pos in ignore_cells:
 		assert(cell_pos is Vector2i, "move_restaurant: ignore_cells 元素类型错误（期望 Vector2i）")
-		var idx_old := MapRuntimeClass.world_to_index(state, cell_pos)
+		var idx_old := CoordsClass.world_to_index(state, cell_pos)
 		state.map.cells[idx_old.y][idx_old.x]["structure"] = {}
 
 	# 写入新格
 	for cell_pos in new_cells:
 		var is_anchor: bool = (cell_pos == world_anchor)
-		var idx_new := MapRuntimeClass.world_to_index(state, cell_pos)
+		var idx_new := CoordsClass.world_to_index(state, cell_pos)
 		state.map.cells[idx_new.y][idx_new.x]["structure"] = {
 			"piece_id": "restaurant",
 			"owner": player_id,
@@ -226,26 +235,8 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 		}
 	}]
 
-func _build_map_context(state: GameState) -> Dictionary:
-	return {
-		"cells": state.map.cells,
-		"grid_size": state.map.grid_size,
-		"map_origin": MapRuntimeClass.get_map_origin(state),
-		"houses": state.map.houses,
-		"restaurants": state.map.restaurants,
-		"drink_sources": state.map.get("drink_sources", []),
-		"marketing_placements": state.map.get("marketing_placements", {}),
-	}
-
 func _get_piece_registry() -> Dictionary:
 	if _piece_registry.is_empty():
-		_piece_registry = _build_default_piece_registry()
+		const PieceDefClass = preload("res://core/map/piece_def.gd")
+		_piece_registry = PieceDefClass.create_default_registry()
 	return _piece_registry
-
-func _build_default_piece_registry() -> Dictionary:
-	const PieceDefClass = preload("res://core/map/piece_def.gd")
-	return {
-		"restaurant": PieceDefClass.create_restaurant(),
-		"house": PieceDefClass.create_house(),
-		"house_with_garden": PieceDefClass.create_house_with_garden()
-	}

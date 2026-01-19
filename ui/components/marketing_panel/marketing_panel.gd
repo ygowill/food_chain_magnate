@@ -1,11 +1,10 @@
 # 营销面板组件
 # 发起营销：选择营销类型/员工/板件/产品/持续时间，并在地图上选点
 class_name MarketingPanel
-extends Control
+extends "res://ui/components/common/right_panel_embeddable_panel.gd"
 
 signal marketing_requested(employee_type: String, board_number: int, position: Vector2i, product: String, duration: int, rotation: int, axis: String)
 signal cancelled()
-signal right_panel_footer_changed()
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var type_container: Container = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TypeSection/TypeContainer
@@ -29,6 +28,7 @@ const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const MarketingBoardButtonClass = preload("res://ui/components/marketing_panel/marketing_board_button.gd")
 const MarketingTypeButtonClass = preload("res://ui/components/marketing_panel/marketing_type_button.gd")
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 
 # 营销面板内的产品图标目标尺寸（方形，居中）。
 const PRODUCT_ICON_SIZE := Vector2i(32, 32)
@@ -85,34 +85,13 @@ func set_visual_modules(modules: Array[String]) -> void:
 	_rebuild_product_buttons()
 	_rebuild_board_buttons()
 
-func set_embedded_in_right_panel(embedded: bool) -> void:
-	var row = get_node_or_null("MarginContainer/VBoxContainer/ButtonRow")
-	if row is Control:
-		(row as Control).visible = not embedded
-	right_panel_footer_changed.emit()
+func _get_confirm_button() -> Button:
+	return confirm_btn
 
-func right_panel_get_footer_config() -> Dictionary:
-	if confirm_btn == null:
-		return {}
-	return {
-		"show_cancel": true,
-		"cancel_text": "取消",
-		"cancel_enabled": true,
-		"show_primary": true,
-		"primary_text": str(confirm_btn.text),
-		"primary_enabled": not confirm_btn.disabled,
-	}
+func _get_cancel_button() -> Button:
+	return cancel_btn
 
-func right_panel_footer_primary() -> void:
-	_on_confirm_pressed()
-
-func _ready() -> void:
-	if confirm_btn != null:
-		confirm_btn.pressed.connect(_on_confirm_pressed)
-		confirm_btn.disabled = true
-	if cancel_btn != null:
-		cancel_btn.pressed.connect(_on_cancel_pressed)
-
+func _on_panel_ready() -> void:
 	if marketer_option != null:
 		marketer_option.item_selected.connect(_on_marketer_selected)
 
@@ -177,10 +156,7 @@ func clear_selection() -> void:
 	_update_confirm_state()
 
 func _rebuild_type_buttons() -> void:
-	for btn in _type_buttons.values():
-		if is_instance_valid(btn):
-			btn.queue_free()
-	_type_buttons.clear()
+	UiRebuildHelpersClass.free_nodes_dict(_type_buttons)
 
 	if type_container == null:
 		return
@@ -427,27 +403,15 @@ func _sync_board_button_previews() -> void:
 
 func _clear_board_buttons() -> void:
 	_board_button_by_number.clear()
-	if board_flow == null:
-		return
-	for ch in board_flow.get_children():
-		if is_instance_valid(ch):
-			ch.queue_free()
+	UiRebuildHelpersClass.free_children(board_flow)
 
 func _clear_product_buttons() -> void:
 	_product_button_by_id.clear()
-	if product_flow == null:
-		return
-	for ch in product_flow.get_children():
-		if is_instance_valid(ch):
-			ch.queue_free()
+	UiRebuildHelpersClass.free_children(product_flow)
 
 func _clear_duration_buttons() -> void:
 	_duration_button_by_value.clear()
-	if duration_flow == null:
-		return
-	for ch in duration_flow.get_children():
-		if is_instance_valid(ch):
-			ch.queue_free()
+	UiRebuildHelpersClass.free_children(duration_flow)
 
 func _rebuild_duration_buttons(max_duration: int) -> void:
 	_clear_duration_buttons()

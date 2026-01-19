@@ -1,6 +1,6 @@
 {
   "id": "lobbyist",
-  "name": "说客",
+  "name": "提案人",
   "description": "在工作时间放置一块道路（建设中）或一块公园",
   "salary": true,
   "unique": false,

@@ -8,10 +8,13 @@ static func is_adjacent_to_road(cells: Array, pos: Vector2i, grid_size: Vector2i
 			continue
 
 		var cell_val = cells[neighbor.y][neighbor.x]
-		assert(cell_val is Dictionary, "PlacementValidator: cells[%d][%d] 类型错误（期望 Dictionary）" % [neighbor.y, neighbor.x])
+		if not (cell_val is Dictionary):
+			continue
 		var cell: Dictionary = cell_val
-		assert(cell.has("road_segments") and (cell["road_segments"] is Array), "PlacementValidator: cell.road_segments 缺失或类型错误（期望 Array）: %s" % str(neighbor))
-		var road_segments: Array = cell["road_segments"]
+		var rs_val = cell.get("road_segments", null)
+		if not (rs_val is Array):
+			continue
+		var road_segments: Array = rs_val
 		if not road_segments.is_empty():
 			return true
 
@@ -33,13 +36,15 @@ static func get_adjacent_road_cells(cells: Array, positions: Array[Vector2i], gr
 				continue
 
 			var cell_val = cells[neighbor.y][neighbor.x]
-			assert(cell_val is Dictionary, "PlacementValidator: cells[%d][%d] 类型错误（期望 Dictionary）" % [neighbor.y, neighbor.x])
+			if not (cell_val is Dictionary):
+				continue
 			var cell: Dictionary = cell_val
-			assert(cell.has("road_segments") and (cell["road_segments"] is Array), "PlacementValidator: cell.road_segments 缺失或类型错误（期望 Array）: %s" % str(neighbor))
-			var road_segments: Array = cell["road_segments"]
+			var rs_val = cell.get("road_segments", null)
+			if not (rs_val is Array):
+				continue
+			var road_segments: Array = rs_val
 
 			if not road_segments.is_empty() and not road_cells.has(neighbor):
 				road_cells.append(neighbor)
 
 	return road_cells
-

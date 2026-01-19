@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="5.1800461mm"
+   height="5.1786699mm"
+   viewBox="0 0 5.1800461 5.1786699"
+   version="1.1"
+   id="svg41210"
+   inkscape:version="1.2.2 (b0a8486541, 2022-12-01)"
+   sodipodi:docname="Arrow in Black Circle.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview41212"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     showgrid="false"
+     inkscape:zoom="0.2102413"
+     inkscape:cx="-708.70946"
+     inkscape:cy="-195.01401"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs41207" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-54.041333,-200.02507)">
+    <path
+       fill-rule="nonzero"
+       fill="#231f20"
+       fill-opacity="1"
+       d="m 56.630667,205.20374 c 1.430404,0 2.590712,-1.15893 2.590712,-2.58933 0,-1.43041 -1.160308,-2.58934 -2.590712,-2.58934 -1.430404,0 -2.589334,1.15893 -2.589334,2.58934 0,1.4304 1.15893,2.58933 2.589334,2.58933"
+       id="path4628"
+       style="stroke-width:0.352778" />
+    <path
+       fill-rule="nonzero"
+       fill="#fff1d4"
+       fill-opacity="1"
+       d="m 56.102878,201.25566 c 0.02205,-0.0124 0.04685,-0.0193 0.07166,-0.0193 0.0248,0 0.04823,0.007 0.07028,0.0193 l 1.480013,1.23473 c 0.0441,0.0262 0.07166,0.073 0.07166,0.12402 0,0.051 -0.02756,0.0978 -0.07166,0.12264 l -1.480013,1.2361 c -0.0441,0.0248 -0.09784,0.0248 -0.141938,0 -0.0441,-0.0262 -0.07166,-0.073 -0.07166,-0.12402 v -2.46944 c 0,-0.051 0.02756,-0.0979 0.07166,-0.12403"
+       id="path4630"
+       style="stroke-width:0.352778" />
+  </g>
+</svg>

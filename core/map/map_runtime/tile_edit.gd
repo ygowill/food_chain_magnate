@@ -1,10 +1,32 @@
 extends RefCounted
 
-const MapBakerClass = preload("res://core/map/map_baker.gd")
+const TileBakingClass = preload("res://core/map/map_baker/tile_baking.gd")
 const Coords = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCache = preload("res://core/map/map_runtime/road_graph_cache.gd")
 
 const _EXTERNAL_TILE_PLACEMENTS_KEY := "external_tile_placements"
+
+static func _require_state_map_dict(state, prefix: String) -> Result:
+	if state == null:
+		return Result.failure("%s: state 为空" % prefix)
+	if not (state.map is Dictionary):
+		return Result.failure("%s: state.map 类型错误（期望 Dictionary）" % prefix)
+	return Result.success(state.map)
+
+static func _require_map_vec2i(map: Dictionary, key: String, path: String) -> Result:
+	if not map.has(key) or not (map[key] is Vector2i):
+		return Result.failure("%s 缺失或类型错误（期望 Vector2i）" % path)
+	return Result.success(map[key])
+
+static func _require_map_array(map: Dictionary, key: String, path: String) -> Result:
+	if not map.has(key) or not (map[key] is Array):
+		return Result.failure("%s 缺失或类型错误（期望 Array）" % path)
+	return Result.success(map[key])
+
+static func _require_map_dict_field(map: Dictionary, key: String, path: String) -> Result:
+	if not map.has(key) or not (map[key] is Dictionary):
+		return Result.failure("%s 缺失或类型错误（期望 Dictionary）" % path)
+	return Result.success(map[key])
 
 static func add_map_tile(
 	state,
@@ -13,26 +35,46 @@ static func add_map_tile(
 	board_pos: Vector2i,
 	rotation: int
 ) -> Result:
+	var prefix := "MapRuntime.add_map_tile"
 	if state == null:
-		return Result.failure("MapRuntime.add_map_tile: state 为空")
+		return Result.failure("%s: state 为空" % prefix)
 	if tile_def == null:
-		return Result.failure("MapRuntime.add_map_tile: tile_def 为空")
-	if not (state.map is Dictionary):
-		return Result.failure("MapRuntime.add_map_tile: state.map 类型错误（期望 Dictionary）")
+		return Result.failure("%s: tile_def 为空" % prefix)
+
+	var map_read := _require_state_map_dict(state, prefix)
+	if not map_read.ok:
+		return map_read
+	var map: Dictionary = map_read.value
+
 	if not (piece_registry is Dictionary):
-		return Result.failure("MapRuntime.add_map_tile: piece_registry 类型错误（期望 Dictionary）")
-	if not state.map.has("grid_size") or not (state.map["grid_size"] is Vector2i):
-		return Result.failure("MapRuntime.add_map_tile: state.map.grid_size 缺失或类型错误（期望 Vector2i）")
-	if not state.map.has("cells") or not (state.map["cells"] is Array):
-		return Result.failure("MapRuntime.add_map_tile: state.map.cells 缺失或类型错误（期望 Array）")
-	if not state.map.has("houses") or not (state.map["houses"] is Dictionary):
-		return Result.failure("MapRuntime.add_map_tile: state.map.houses 缺失或类型错误（期望 Dictionary）")
-	if not state.map.has("drink_sources") or not (state.map["drink_sources"] is Array):
-		return Result.failure("MapRuntime.add_map_tile: state.map.drink_sources 缺失或类型错误（期望 Array）")
-	if not state.map.has("next_house_number"):
-		return Result.failure("MapRuntime.add_map_tile: state.map.next_house_number 缺失")
-	if not state.map.has(_EXTERNAL_TILE_PLACEMENTS_KEY) or not (state.map[_EXTERNAL_TILE_PLACEMENTS_KEY] is Array):
-		return Result.failure("MapRuntime.add_map_tile: state.map.external_tile_placements 缺失或类型错误（期望 Array）")
+		return Result.failure("%s: piece_registry 类型错误（期望 Dictionary）" % prefix)
+
+	var grid_read := _require_map_vec2i(map, "grid_size", "%s: state.map.grid_size" % prefix)
+	if not grid_read.ok:
+		return grid_read
+	var grid_size: Vector2i = grid_read.value
+
+	var cells_read := _require_map_array(map, "cells", "%s: state.map.cells" % prefix)
+	if not cells_read.ok:
+		return cells_read
+	var cells: Array = cells_read.value
+
+	var houses_read := _require_map_dict_field(map, "houses", "%s: state.map.houses" % prefix)
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
+
+	var drink_sources_read := _require_map_array(map, "drink_sources", "%s: state.map.drink_sources" % prefix)
+	if not drink_sources_read.ok:
+		return drink_sources_read
+	var drink_sources: Array = drink_sources_read.value
+
+	if not map.has("next_house_number"):
+		return Result.failure("%s: state.map.next_house_number 缺失" % prefix)
+
+	var ext_read := _require_map_array(map, _EXTERNAL_TILE_PLACEMENTS_KEY, "%s: state.map.external_tile_placements" % prefix)
+	if not ext_read.ok:
+		return ext_read
 
 	var tile_size := int(MapUtils.TILE_SIZE)
 	var tile_world_min := board_pos * tile_size
@@ -47,13 +89,10 @@ static func add_map_tile(
 	if not ensure.ok:
 		return ensure
 
-	var grid_size: Vector2i = state.map["grid_size"]
 	var origin := Coords.get_map_origin(state)
-	var houses: Dictionary = state.map["houses"]
-	var drink_sources: Array = state.map["drink_sources"]
-	var cells: Array = state.map["cells"]
+	# 这里不再重复读取/校验：上方已通过 helper 拿到 grid_size/cells/houses/drink_sources。
 
-	var bake := MapBakerClass.bake_tile_into_cells(
+	var bake := TileBakingClass.bake_tile_into_cells(
 		cells, grid_size, origin, tile_def, board_pos, rotation, piece_registry, houses, drink_sources
 	)
 	if not bake.ok:
@@ -63,8 +102,9 @@ static func add_map_tile(
 	state.map["houses"] = houses
 	state.map["drink_sources"] = drink_sources
 
-	assert(bake.value is Dictionary and bake.value.has("max_house_number"), "MapRuntime.add_map_tile: bake.value 缺少 max_house_number")
-	var max_house_number: int = int(bake.value["max_house_number"])
+	if not (bake.value is Dictionary) or not (bake.value as Dictionary).has("max_house_number"):
+		return Result.failure("MapRuntime.add_map_tile: bake.value 缺少 max_house_number")
+	var max_house_number: int = int((bake.value as Dictionary)["max_house_number"])
 	var next_house_number: int = int(state.map["next_house_number"])
 	state.map["next_house_number"] = max(next_house_number, max_house_number + 1)
 
@@ -80,18 +120,23 @@ static func add_map_tile(
 	return Result.success()
 
 static func ensure_world_rect(state, desired_min: Vector2i, desired_max: Vector2i) -> Result:
-	if state == null:
-		return Result.failure("MapRuntime.ensure_world_rect: state 为空")
-	if not (state.map is Dictionary):
-		return Result.failure("MapRuntime.ensure_world_rect: state.map 类型错误（期望 Dictionary）")
-	if not state.map.has("grid_size") or not (state.map["grid_size"] is Vector2i):
-		return Result.failure("MapRuntime.ensure_world_rect: state.map.grid_size 缺失或类型错误（期望 Vector2i）")
-	if not state.map.has("cells") or not (state.map["cells"] is Array):
-		return Result.failure("MapRuntime.ensure_world_rect: state.map.cells 缺失或类型错误（期望 Array）")
+	var prefix := "MapRuntime.ensure_world_rect"
+	var map_read := _require_state_map_dict(state, prefix)
+	if not map_read.ok:
+		return map_read
+	var map: Dictionary = map_read.value
 
-	var old_grid: Vector2i = state.map["grid_size"]
+	var grid_read := _require_map_vec2i(map, "grid_size", "%s: state.map.grid_size" % prefix)
+	if not grid_read.ok:
+		return grid_read
+
+	var cells_read := _require_map_array(map, "cells", "%s: state.map.cells" % prefix)
+	if not cells_read.ok:
+		return cells_read
+
+	var old_grid: Vector2i = grid_read.value
 	var old_origin := Coords.get_map_origin(state)
-	var old_cells: Array = state.map["cells"]
+	var old_cells: Array = cells_read.value
 
 	var old_min := -old_origin
 	var old_max := Vector2i(old_grid.x - old_origin.x - 1, old_grid.y - old_origin.y - 1)
@@ -119,9 +164,11 @@ static func ensure_world_rect(state, desired_min: Vector2i, desired_max: Vector2
 	var new_cells := _create_void_cells(new_grid)
 	for y in range(old_grid.y):
 		var row_val = old_cells[y]
-		assert(row_val is Array, "MapRuntime.ensure_world_rect: old_cells[%d] 类型错误（期望 Array）" % y)
+		if not (row_val is Array):
+			return Result.failure("MapRuntime.ensure_world_rect: old_cells[%d] 类型错误（期望 Array）" % y)
 		var row: Array = row_val
-		assert(row.size() == old_grid.x, "MapRuntime.ensure_world_rect: old_cells[%d] 长度不匹配" % y)
+		if row.size() != old_grid.x:
+			return Result.failure("MapRuntime.ensure_world_rect: old_cells[%d] 长度不匹配" % y)
 		for x in range(old_grid.x):
 			new_cells[y + shift.y][x + shift.x] = row[x]
 
@@ -165,4 +212,3 @@ static func _build_boundary_index(tile_grid_size: Vector2i) -> Dictionary:
 		"vertical": vertical_boundaries,
 		"tile_size": MapUtils.TILE_SIZE
 	}
-

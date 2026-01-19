@@ -1,7 +1,7 @@
 class_name PlaceLobbyistsExtraMapTileAction
 extends ActionExecutor
 
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const TileEditClass = preload("res://core/map/map_runtime/tile_edit.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
@@ -96,7 +96,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 	var tile_def: TileDef = TileRegistryClass.get_def(tile_id)
 	var piece_registry := PieceRegistryClass.get_all_defs()
-	var add := MapRuntimeClass.add_map_tile(state, tile_def, piece_registry, new_board_pos, rotation)
+	var add := TileEditClass.add_map_tile(state, tile_def, piece_registry, new_board_pos, rotation)
 	if not add.ok:
 		return add
 

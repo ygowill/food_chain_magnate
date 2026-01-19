@@ -43,7 +43,6 @@ func _build_ui() -> void:
 	name_label = Label.new()
 	name_label.name = "NameLabel"
 	name_label.custom_minimum_size = Vector2(60, 0)
-	name_label.add_theme_font_size_override("font_size", 14)
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(name_label)
 
@@ -51,7 +50,6 @@ func _build_ui() -> void:
 	cash_label = Label.new()
 	cash_label.name = "CashLabel"
 	cash_label.custom_minimum_size = Vector2(60, 0)
-	cash_label.add_theme_font_size_override("font_size", 14)
 	cash_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	cash_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(cash_label)
@@ -60,7 +58,6 @@ func _build_ui() -> void:
 	employee_label = Label.new()
 	employee_label.name = "EmployeeLabel"
 	employee_label.custom_minimum_size = Vector2(40, 0)
-	employee_label.add_theme_font_size_override("font_size", 12)
 	employee_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
 	employee_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	employee_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -70,11 +67,33 @@ func _build_ui() -> void:
 	restaurant_label = Label.new()
 	restaurant_label.name = "RestaurantLabel"
 	restaurant_label.custom_minimum_size = Vector2(40, 0)
-	restaurant_label.add_theme_font_size_override("font_size", 12)
 	restaurant_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
 	restaurant_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	restaurant_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(restaurant_label)
+
+	apply_font_settings()
+
+func apply_font_settings() -> void:
+	var scale := 1.0
+	if Globals != null:
+		scale = clampf(float(Globals.font_scale), 0.5, 2.0)
+	custom_minimum_size = Vector2(240, float(maxi(36, int(round(36.0 * scale)))))
+
+	var fs_main := 14
+	var fs_small := 12
+	if Globals != null:
+		fs_main = int(Globals.get_scaled_font_size(14))
+		fs_small = int(Globals.get_scaled_font_size(12))
+
+	if is_instance_valid(name_label):
+		name_label.add_theme_font_size_override("font_size", fs_main)
+	if is_instance_valid(cash_label):
+		cash_label.add_theme_font_size_override("font_size", fs_main)
+	if is_instance_valid(employee_label):
+		employee_label.add_theme_font_size_override("font_size", fs_small)
+	if is_instance_valid(restaurant_label):
+		restaurant_label.add_theme_font_size_override("font_size", fs_small)
 
 func update_data(player: Dictionary) -> void:
 	if not is_instance_valid(color_rect):

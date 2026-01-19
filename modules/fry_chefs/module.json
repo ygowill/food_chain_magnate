@@ -4,7 +4,7 @@
 	"name": "Fry Chefs",
 	"version": "0.1.0",
 	"priority": 80,
-	"dependencies": ["base_rules", "base_employees", "base_products", "noodles", "sushi"],
+	"dependencies": ["base_rules", "base_employees", "base_products"],
 	"conflicts": [],
 	"entry_script": "res://modules/fry_chefs/rules/entry.gd",
 	"provides": {
@@ -14,4 +14,3 @@
 		]
 	}
 }
-

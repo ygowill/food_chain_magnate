@@ -28,6 +28,9 @@ func _ready() -> void:
 	# 获取当前场景
 	var root := get_tree().root
 	current_scene = root.get_child(root.get_child_count() - 1)
+	# 关键：初始化 current_scene_path，确保首次从主菜单进入其它场景时能正确入栈，从而支持 go_back()。
+	if current_scene != null and is_instance_valid(current_scene):
+		current_scene_path = str(current_scene.scene_file_path)
 	GameLog.info("SceneManager", "场景管理器初始化完成")
 
 # 切换场景

@@ -25,8 +25,12 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if actor < 0:
 		return Result.failure("无法获取当前玩家")
 
+	var house_number := _pick_house_number(state)
+	if house_number <= 0:
+		return Result.failure("无法获取可用房屋编号")
+
 	# 1) 没有可放置房屋员工：应拒绝放置
-	var cmd_fail := Command.create("place_house", actor, {"position": [0, 0], "rotation": 0})
+	var cmd_fail := Command.create("place_house", actor, {"position": [0, 0], "rotation": 0, "house_number": house_number})
 	var exec_fail := engine.execute_command(cmd_fail)
 	if exec_fail.ok:
 		return Result.failure("没有可放置房屋员工时不应允许放置房屋")
@@ -53,7 +57,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 				var wp_val = s0.get("world_pos", null)
 				if wp_val is Vector2i:
 					var wp: Vector2i = wp_val
-					var cmd_ds := Command.create("place_house", actor, {"position": [wp.x, wp.y], "rotation": 0})
+					var cmd_ds := Command.create("place_house", actor, {"position": [wp.x, wp.y], "rotation": 0, "house_number": house_number})
 					var exec_ds := engine.execute_command(cmd_ds)
 					if exec_ds.ok:
 						return Result.failure("不应允许在饮品进货点上放置房屋: %s" % str(wp))
@@ -62,7 +66,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 						return Result.failure("拒绝原因应包含饮品/饮料提示，实际: %s" % err)
 
 	# 找一个合法的放置点
-	var cmd_ok := _find_first_valid_house_placement(engine, actor)
+	var cmd_ok := _find_first_valid_house_placement(engine, actor, house_number)
 	if cmd_ok == null:
 		return Result.failure("找不到合法的房屋放置点（可能是地图数据异常）")
 
@@ -81,7 +85,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		"actor": actor,
 	})
 
-static func _find_first_valid_house_placement(engine: GameEngine, actor: int) -> Command:
+static func _find_first_valid_house_placement(engine: GameEngine, actor: int, house_number: int) -> Command:
 	var state := engine.get_state()
 	var executor := engine.action_registry.get_executor("place_house")
 	if executor == null:
@@ -93,9 +97,27 @@ static func _find_first_valid_house_placement(engine: GameEngine, actor: int) ->
 	for y in range(grid.y):
 		for x in range(grid.x):
 			for r in rotations:
-				var cmd := Command.create("place_house", actor, {"position": [x, y], "rotation": r})
+				var cmd := Command.create("place_house", actor, {"position": [x, y], "rotation": r, "house_number": int(house_number)})
 				var vr := executor.validate(state, cmd)
 				if vr.ok:
 					return cmd
 
 	return null
+
+static func _pick_house_number(state: GameState) -> int:
+	if state == null or not (state.map is Dictionary):
+		return -1
+	var supply_val = state.map.get("house_number_supply_remaining", null)
+	if supply_val is Array:
+		var nums: Array[int] = []
+		for v in Array(supply_val):
+			if v is int:
+				nums.append(int(v))
+			elif v is float:
+				var f: float = float(v)
+				if f == floor(f):
+					nums.append(int(f))
+		nums.sort()
+		return int(nums[0]) if not nums.is_empty() else -1
+	# Fallback
+	return 1

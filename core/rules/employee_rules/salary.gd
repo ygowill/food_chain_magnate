@@ -1,8 +1,19 @@
 extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const EmployeeArrayHelpers = preload("res://core/rules/employee_rules/employee_array_helpers.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const MilestoneDefClass = preload("res://core/data/milestone_def.gd")
+
+static func _milestone_def_has_effect_type(ms_def: MilestoneDefClass, effect_type: String) -> bool:
+	for e_i in range(ms_def.effects.size()):
+		var eff_val = ms_def.effects[e_i]
+		assert(eff_val is Dictionary, "EmployeeRules.requires_salary: effects[%d] 类型错误（期望 Dictionary）" % e_i)
+		var eff: Dictionary = eff_val
+		assert(eff.has("type") and (eff["type"] is String), "EmployeeRules.requires_salary: effects[%d].type 缺失或类型错误（期望 String）" % e_i)
+		if str(eff["type"]) == effect_type:
+			return true
+	return false
 
 static func requires_salary(employee_id: String, player: Dictionary = {}) -> bool:
 	# 从 EmployeeRegistry 读取 salary 字段，并叠加里程碑效果。
@@ -23,26 +34,16 @@ static func requires_salary(employee_id: String, player: Dictionary = {}) -> boo
 	# 里程碑效果：marketing_no_salary -> 营销员不再需要支付薪水（避免硬编码 first_billboard）
 	var milestones_val = player.get("milestones", null)
 	if milestones_val is Array:
-		var milestones: Array = milestones_val
+		var milestones := EmployeeArrayHelpers.require_string_array_field(player, "milestones", "player")
 		var def_val = EmployeeRegistryClass.get_def(employee_id)
-		if def_val != null and is_marketing_employee_def(def_val):
-			for i in range(milestones.size()):
-				var mid_val = milestones[i]
-				assert(mid_val is String, "EmployeeRules.requires_salary: player.milestones[%d] 类型错误（期望 String）" % i)
-				var mid: String = str(mid_val)
-				assert(not mid.is_empty(), "EmployeeRules.requires_salary: player.milestones 不应包含空字符串")
+		if def_val != null and (def_val is EmployeeDef) and is_marketing_employee_def(def_val):
+			for mid in milestones:
 				var ms_def_val = MilestoneRegistryClass.get_def(mid)
 				assert(ms_def_val != null, "EmployeeRules.requires_salary: 未知里程碑定义: %s" % mid)
 				assert(ms_def_val is MilestoneDefClass, "EmployeeRules.requires_salary: 里程碑定义类型错误（期望 MilestoneDef）: %s" % mid)
-				var ms_def = ms_def_val
-
-				for e_i in range(ms_def.effects.size()):
-					var eff_val = ms_def.effects[e_i]
-					assert(eff_val is Dictionary, "EmployeeRules.requires_salary: %s.effects[%d] 类型错误（期望 Dictionary）" % [mid, e_i])
-					var eff: Dictionary = eff_val
-					assert(eff.has("type") and (eff["type"] is String), "EmployeeRules.requires_salary: %s.effects[%d].type 缺失或类型错误（期望 String）" % [mid, e_i])
-					if str(eff["type"]) == "marketing_no_salary":
-						return false
+				var ms_def: MilestoneDefClass = ms_def_val
+				if _milestone_def_has_effect_type(ms_def, "marketing_no_salary"):
+					return false
 
 	return true
 
@@ -54,35 +55,10 @@ static func is_marketing_employee_def(def: EmployeeDef) -> bool:
 	return false
 
 static func count_paid_employees(player: Dictionary) -> int:
-	assert(player.has("employees"), "player 缺少 employees")
-	assert(player.has("reserve_employees"), "player 缺少 reserve_employees")
-	assert(player.has("busy_marketers"), "player 缺少 busy_marketers")
-	assert(player["employees"] is Array, "player.employees 类型错误（期望 Array）")
-	assert(player["reserve_employees"] is Array, "player.reserve_employees 类型错误（期望 Array）")
-	assert(player["busy_marketers"] is Array, "player.busy_marketers 类型错误（期望 Array）")
-
-	var active: Array = player["employees"]
-	var reserve: Array = player["reserve_employees"]
-	var busy: Array = player["busy_marketers"]
-
 	var count := 0
-	for emp in active:
-		assert(emp is String, "player.employees 元素类型错误（期望 String）")
-		var emp_id: String = emp
-		assert(not emp_id.is_empty(), "player.employees 不应包含空字符串")
-		if requires_salary(emp_id, player):
-			count += 1
-	for emp in reserve:
-		assert(emp is String, "player.reserve_employees 元素类型错误（期望 String）")
-		var emp_id: String = emp
-		assert(not emp_id.is_empty(), "player.reserve_employees 不应包含空字符串")
-		if requires_salary(emp_id, player):
-			count += 1
-	for emp in busy:
-		assert(emp is String, "player.busy_marketers 元素类型错误（期望 String）")
-		var emp_id: String = emp
-		assert(not emp_id.is_empty(), "player.busy_marketers 不应包含空字符串")
-		if requires_salary(emp_id, player):
-			count += 1
+	for key in ["employees", "reserve_employees", "busy_marketers"]:
+		var employees := EmployeeArrayHelpers.require_string_array_field(player, key, "player")
+		for emp_id in employees:
+			if requires_salary(emp_id, player):
+				count += 1
 	return count
-

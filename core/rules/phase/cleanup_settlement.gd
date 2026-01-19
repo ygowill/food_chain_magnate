@@ -4,12 +4,15 @@ class_name CleanupSettlement
 extends RefCounted
 
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
+const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 
 static func apply(state: GameState) -> Result:
 	if not (state.round_state is Dictionary):
 		return Result.failure("CleanupSettlement: state.round_state 类型错误（期望 Dictionary）")
 	if not (state.players is Array):
 		return Result.failure("CleanupSettlement: state.players 类型错误（期望 Array）")
+
+	var warnings: Array[String] = []
 
 	# M3 最小实现（对齐 docs/design.md）：
 	# - 无冰箱：清空所有库存
@@ -63,6 +66,17 @@ static func apply(state: GameState) -> Result:
 			"discarded": discarded
 		})
 
+		# 里程碑：首次丢弃（first_throw_away）依赖该事件触发点。
+		if not discarded.is_empty():
+			var ms := MilestoneSystemClass.process_event(state, "CleanupDiscard", {
+				"player_id": i,
+				"discarded": discarded,
+			})
+			if not ms.ok:
+				warnings.append("里程碑触发失败(CleanupDiscard): 玩家 %d: %s" % [i, ms.error])
+			else:
+				warnings.append_array(ms.warnings)
+
 	state.round_state["cleanup"] = {
 		"inventory_discarded": inventory_discarded
 	}
@@ -71,7 +85,8 @@ static func apply(state: GameState) -> Result:
 	if not milestone_cleanup.ok:
 		return milestone_cleanup
 
-	return Result.success().with_warnings(milestone_cleanup.warnings)
+	warnings.append_array(milestone_cleanup.warnings)
+	return Result.success().with_warnings(warnings)
 
 static func _get_fridge_capacity_from_milestones(milestones: Array) -> Result:
 	var has_fridge := false

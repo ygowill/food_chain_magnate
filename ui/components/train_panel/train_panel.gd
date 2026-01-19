@@ -1,13 +1,13 @@
 # 培训面板组件
 # 显示待命区可培训员工，支持选择培训目标
 class_name TrainPanel
-extends Control
+extends "res://ui/components/common/right_panel_embeddable_panel.gd"
 
 signal train_requested(from_employee: String, to_employee: String)
-signal right_panel_footer_changed()
 
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 
 @onready var counter_label: Label = $MarginContainer/VBoxContainer/CounterRow/CounterLabel
 @onready var trainable_section_label: Label = $MarginContainer/VBoxContainer/TrainableSection/SectionLabel
@@ -28,61 +28,20 @@ var _trainable_cards: Dictionary = {}  # employee_type -> TrainableCard
 var _requires_same_color_by_source: Dictionary = {}  # employee_type -> bool
 var _badge_text_by_source: Dictionary = {}  # employee_type -> String
 var _selected_requires_same_color: bool = false
-var _embedded_in_right_panel: bool = false
-var _base_custom_minimum_size: Vector2 = Vector2.ZERO
-var _relayout_scheduled: bool = false
 
-func set_embedded_in_right_panel(embedded: bool) -> void:
-	_embedded_in_right_panel = embedded
-	if _base_custom_minimum_size == Vector2.ZERO:
-		_base_custom_minimum_size = custom_minimum_size
-	custom_minimum_size = Vector2.ZERO if embedded else _base_custom_minimum_size
+func _get_confirm_button() -> Button:
+	return confirm_btn
+
+func _apply_embedding(embedded: bool) -> void:
+	# TrainPanel 的确认按钮不在 ButtonRow 内：嵌入 RightPanel 后由右侧 footer 承担确认动作。
 	if confirm_btn != null:
 		confirm_btn.visible = not embedded
-	right_panel_footer_changed.emit()
-	_request_relayout()
 
-func right_panel_get_footer_config() -> Dictionary:
-	if confirm_btn == null:
-		return {}
-	return {
-		"show_cancel": true,
-		"cancel_text": "取消",
-		"cancel_enabled": true,
-		"show_primary": true,
-		"primary_text": str(confirm_btn.text),
-		"primary_enabled": not confirm_btn.disabled,
-	}
-
-func right_panel_footer_primary() -> void:
-	_on_confirm_pressed()
-
-func _ready() -> void:
-	if _base_custom_minimum_size == Vector2.ZERO:
-		_base_custom_minimum_size = custom_minimum_size
-	if confirm_btn != null:
-		confirm_btn.pressed.connect(_on_confirm_pressed)
-		confirm_btn.disabled = true
-	if has_signal("resized"):
-		resized.connect(_request_relayout)
-	if has_signal("visibility_changed"):
-		visibility_changed.connect(_request_relayout)
-	right_panel_footer_changed.emit()
-	_request_relayout()
-
-func _request_relayout() -> void:
-	if _relayout_scheduled:
-		return
-	_relayout_scheduled = true
-	call_deferred("_apply_relayout")
-
-func _apply_relayout() -> void:
-	_relayout_scheduled = false
-	if not is_inside_tree():
-		return
+func _get_relayout_delay_frames() -> int:
 	# 训练源卡牌使用 HFlowContainer：在首次嵌入 RightPanel/首次显示时可能未拿到稳定宽度导致不换行。
-	await get_tree().process_frame
-	await get_tree().process_frame
+	return 2
+
+func _on_relayout() -> void:
 	if trainable_container != null and is_instance_valid(trainable_container):
 		trainable_container.queue_sort()
 
@@ -147,10 +106,7 @@ func refresh() -> void:
 
 func _rebuild_trainable_list() -> void:
 	# 清除旧卡牌
-	for card in _trainable_cards.values():
-		if is_instance_valid(card):
-			card.queue_free()
-	_trainable_cards.clear()
+	UiRebuildHelpersClass.free_nodes_dict(_trainable_cards)
 
 	if trainable_container == null:
 		return
@@ -218,9 +174,7 @@ func _on_trainable_clicked(employee_type: String) -> void:
 
 func _show_train_path(employee_type: String) -> void:
 	# 清除旧路径
-	if path_container != null:
-		for child in path_container.get_children():
-			child.queue_free()
+	UiRebuildHelpersClass.free_children(path_container)
 
 	var emp_def := _get_employee_def(employee_type)
 	var from_role := str(emp_def.get("role", ""))
@@ -293,9 +247,7 @@ func _clear_selection() -> void:
 		if is_instance_valid(card):
 			card.set_selected(false)
 
-	if path_container != null:
-		for child in path_container.get_children():
-			child.queue_free()
+	UiRebuildHelpersClass.free_children(path_container)
 
 	if confirm_btn != null:
 		confirm_btn.disabled = true

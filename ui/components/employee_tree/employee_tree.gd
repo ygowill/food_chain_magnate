@@ -9,9 +9,10 @@ const EmployeeDefClass = preload("res://core/data/employee_def.gd")
 
 @onready var close_button: Button = $MarginContainer/VBoxContainer/HeaderRow/CloseButton
 @onready var fit_button: Button = $MarginContainer/VBoxContainer/HeaderRow/FitButton
+@onready var fit_width_button: Button = $MarginContainer/VBoxContainer/HeaderRow/FitWidthButton
 @onready var viewport: Control = $MarginContainer/VBoxContainer/Viewport
 @onready var pan_background: Control = $MarginContainer/VBoxContainer/Viewport/PanBackground
-@onready var graph: Control = $MarginContainer/VBoxContainer/Viewport/Graph
+@onready var graph: EmployeeTreeGraph = $MarginContainer/VBoxContainer/Viewport/Graph
 
 var _zoom: float = 1.0
 var _dragging: bool = false
@@ -25,17 +26,20 @@ func _ready() -> void:
 		close_button.pressed.connect(_on_close_pressed)
 	if is_instance_valid(fit_button):
 		fit_button.pressed.connect(_fit_to_view)
+	if is_instance_valid(fit_width_button):
+		fit_width_button.pressed.connect(_fit_to_width)
 	if is_instance_valid(pan_background):
 		pan_background.gui_input.connect(_on_background_gui_input)
-	if is_instance_valid(graph) and graph.has_signal("employee_clicked"):
+	if is_instance_valid(graph):
 		graph.employee_clicked.connect(_on_employee_clicked)
 
 	# 初次打开时构建；由外部 toggle 时也可调用 open() 重新布局。
 	open()
 
 func open() -> void:
-	if is_instance_valid(graph) and graph.has_method("rebuild_from_registry"):
-		graph.call("rebuild_from_registry")
+	if is_instance_valid(graph):
+		graph.scale = Vector2.ONE
+		graph.rebuild_from_registry(1.0)
 	_fit_to_view()
 
 func _on_close_pressed() -> void:
@@ -96,8 +100,10 @@ func _set_zoom_at(target_zoom: float, viewport_local: Vector2) -> void:
 	# 保持鼠标指向的“世界点”不动
 	var world := (viewport_local - graph.position) / _zoom
 	_zoom = new_zoom
-	graph.scale = Vector2(_zoom, _zoom)
+	graph.scale = Vector2.ONE
+	graph.rebuild_from_registry(_zoom)
 	graph.position = viewport_local - world * _zoom
+	graph.position = Vector2(round(graph.position.x), round(graph.position.y))
 
 func _fit_to_view() -> void:
 	if not is_instance_valid(viewport) or not is_instance_valid(graph):
@@ -109,17 +115,66 @@ func _fit_to_view() -> void:
 	if vp_size.x <= 0.0 or vp_size.y <= 0.0:
 		return
 
+	graph.scale = Vector2.ONE
+	graph.rebuild_from_registry(1.0)
+
+	await get_tree().process_frame
+
+	var base_size := graph.get_combined_minimum_size()
+	if base_size == Vector2.ZERO:
+		base_size = graph.custom_minimum_size
+	if base_size.x <= 0.0 or base_size.y <= 0.0:
+		return
+
+	var s := minf(vp_size.x / base_size.x, vp_size.y / base_size.y)
+	s = clampf(s, 0.5, 2.0)
+	_zoom = s
+	graph.rebuild_from_registry(_zoom)
+
+	await get_tree().process_frame
+
 	var content_size := graph.get_combined_minimum_size()
 	if content_size == Vector2.ZERO:
 		content_size = graph.custom_minimum_size
-	if content_size.x <= 0.0 or content_size.y <= 0.0:
+	graph.position = (vp_size - content_size) * 0.5
+	graph.position = Vector2(round(graph.position.x), round(graph.position.y))
+
+func _fit_to_width() -> void:
+	if not is_instance_valid(viewport) or not is_instance_valid(graph):
 		return
 
-	var s := minf(vp_size.x / content_size.x, vp_size.y / content_size.y)
+	await get_tree().process_frame
+
+	var vp_size := viewport.size
+	if vp_size.x <= 0.0:
+		return
+
+	graph.scale = Vector2.ONE
+	graph.rebuild_from_registry(1.0)
+
+	await get_tree().process_frame
+
+	var base_size := graph.get_combined_minimum_size()
+	if base_size == Vector2.ZERO:
+		base_size = graph.custom_minimum_size
+	if base_size.x <= 0.0:
+		return
+
+	var s := vp_size.x / base_size.x
 	s = clampf(s, 0.5, 2.0)
 	_zoom = s
-	graph.scale = Vector2(_zoom, _zoom)
-	graph.position = (vp_size - (content_size * _zoom)) * 0.5
+	graph.rebuild_from_registry(_zoom)
+
+	await get_tree().process_frame
+
+	var content_size := graph.get_combined_minimum_size()
+	if content_size == Vector2.ZERO:
+		content_size = graph.custom_minimum_size
+
+	var pos := Vector2((vp_size.x - content_size.x) * 0.5, (vp_size.y - content_size.y) * 0.5)
+	if content_size.y > vp_size.y:
+		pos.y = 0.0
+	graph.position = Vector2(round(pos.x), round(pos.y))
 
 func _ensure_detail_dialog() -> void:
 	if _detail_dialog != null and is_instance_valid(_detail_dialog):
@@ -143,16 +198,16 @@ func _on_employee_clicked(employee_id: String) -> void:
 		if def_val is EmployeeDefClass:
 			var def: EmployeeDef = def_val
 			lines.append("名称: %s" % str(def.name))
-			if not str(def.description).strip_edges().is_empty():
+			if not def.description.is_empty():
 				lines.append("")
-				lines.append(str(def.description))
+				lines.append(def.description)
 			lines.append("")
 			lines.append("职责: %s" % str(def.get_role()))
 			lines.append("薪资: %s" % ("有" if bool(def.salary) else "无"))
 			if not def.train_to.is_empty():
 				var tt: Array[String] = []
 				for t in def.train_to:
-					var s := str(t).strip_edges()
+					var s := str(t)
 					if not s.is_empty():
 						tt.append(s)
 				tt.sort()
@@ -160,4 +215,3 @@ func _on_employee_clicked(employee_id: String) -> void:
 
 	_detail_dialog.dialog_text = "\n".join(lines)
 	_detail_dialog.popup_centered(Vector2i(520, 360))
-

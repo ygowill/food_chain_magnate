@@ -4,8 +4,8 @@ class_name NewDistrictsV2Test
 extends RefCounted
 
 const MapDefClass = preload("res://core/map/map_def.gd")
-const MapBakerClass = preload("res://core/map/map_baker.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const MapBakeClass = preload("res://core/map/map_baker/bake.gd")
+const BakedMapClass = preload("res://core/map/map_runtime/baked_map.gd")
 const MarketingSettlementClass = preload("res://core/rules/phase/marketing_settlement.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
@@ -33,10 +33,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var map_def := MapDefClass.create_fixed("new_districts_test_map", [
 		{"tile_id": "tile_x", "board_pos": Vector2i(0, 0), "rotation": 0},
 	])
-	var bake := MapBakerClass.bake(map_def, engine.game_data.tiles, engine.game_data.pieces)
+	var bake := MapBakeClass.bake(map_def, engine.game_data.tiles, engine.game_data.pieces)
 	if not bake.ok:
 		return Result.failure("地图烘焙失败: %s" % bake.error)
-	var apply := MapRuntimeClass.apply_baked_map(state, bake.value)
+	var apply := BakedMapClass.apply_baked_map(state, bake.value)
 	if not apply.ok:
 		return Result.failure("写入地图失败: %s" % apply.error)
 
@@ -93,4 +93,3 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("公寓应生成 20 个需求（10 * 2），实际: %d" % demands.size())
 
 	return Result.success()
-

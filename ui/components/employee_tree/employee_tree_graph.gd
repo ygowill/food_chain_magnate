@@ -8,15 +8,24 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeDefClass = preload("res://core/data/employee_def.gd")
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const LayoutClass = preload("res://ui/components/employee_tree/employee_tree_layout.gd")
+const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 
-const NODE_SIZE := Vector2(130, 90)
-const NODE_SPACING_Y := 32.0
-const LAYER_SPACING := 200.0
+const BASE_NODE_SIZE := Vector2(130, 90)
+const BASE_NODE_SPACING_Y := 32.0
+const BASE_LAYER_SPACING := 200.0
+const BASE_PADDING := Vector2(40, 40)
 
 const EDGE_COLOR := Color("#666666")
 const EDGE_HIGHLIGHT_COLOR := Color("#4A90D9")
-const EDGE_WIDTH := 2.0
-const ARROW_SIZE := 8.0
+const BASE_EDGE_WIDTH := 2.0
+const BASE_ARROW_SIZE := 8.0
+
+var _display_scale: float = 1.0
+var _node_size: Vector2 = BASE_NODE_SIZE
+var _node_spacing_y: float = BASE_NODE_SPACING_Y
+var _layer_spacing: float = BASE_LAYER_SPACING
+var _edge_width: float = BASE_EDGE_WIDTH
+var _arrow_size: float = BASE_ARROW_SIZE
 
 var _nodes: Dictionary = {} # employee_id -> EmployeeCard
 var _positions: Dictionary = {} # employee_id -> Vector2 (top-left)
@@ -31,8 +40,14 @@ var _hover_id: String = ""
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-func rebuild_from_registry() -> void:
+func rebuild_from_registry(display_scale: float = 1.0) -> void:
 	_clear_all()
+	_display_scale = clampf(float(display_scale), 0.5, 2.0)
+	_node_size = Vector2(round(BASE_NODE_SIZE.x * _display_scale), round(BASE_NODE_SIZE.y * _display_scale))
+	_node_spacing_y = float(round(BASE_NODE_SPACING_Y * _display_scale))
+	_layer_spacing = float(round(BASE_LAYER_SPACING * _display_scale))
+	_edge_width = maxf(1.0, float(round(BASE_EDGE_WIDTH * _display_scale)))
+	_arrow_size = maxf(4.0, float(round(BASE_ARROW_SIZE * _display_scale)))
 
 	if not EmployeeRegistryClass.is_loaded():
 		_show_placeholder("EmployeeRegistry 未初始化")
@@ -40,8 +55,7 @@ func rebuild_from_registry() -> void:
 
 	var raw_ids: Array[String] = EmployeeRegistryClass.get_all_ids()
 	var ids: Array[String] = []
-	for id in raw_ids:
-		var eid := str(id).strip_edges()
+	for eid in raw_ids:
 		if eid.is_empty() or eid == "ceo":
 			continue
 		ids.append(eid)
@@ -60,13 +74,21 @@ func rebuild_from_registry() -> void:
 		if not (def_val is EmployeeDefClass):
 			continue
 		var def: EmployeeDef = def_val
-		role_by_id[id] = str(def.get_role())
+		# Layout lane role: split recruit/train for stable EmployeeTree layout while keeping UI colors unchanged.
+		var lane_role := str(def.get_role())
+		if lane_role == "recruit_train":
+			var is_recruit := def.recruit_capacity > 0 or def.has_tag("recruit") or def.has_usage_tag("use:recruit")
+			var is_train := def.is_trainer() or def.has_usage_tag("use:train")
+			if is_recruit and not is_train:
+				lane_role = "recruit"
+			elif is_train and not is_recruit:
+				lane_role = "train"
+		role_by_id[id] = lane_role
 		if def.is_entry_level():
 			entry_ids.append(id)
 
 		_edges_out[id] = []
-		for t in def.train_to:
-			var tid := str(t).strip_edges()
+		for tid in def.train_to:
 			if tid.is_empty():
 				continue
 			if not id_set.has(tid):
@@ -78,7 +100,8 @@ func rebuild_from_registry() -> void:
 
 	_edges_in = _build_edges_in(_edges_out)
 
-	var layout: Dictionary = LayoutClass.layout(ids, _edges_out, entry_ids, role_by_id, NODE_SIZE, LAYER_SPACING, NODE_SPACING_Y)
+	var padding := BASE_PADDING * _display_scale
+	var layout: Dictionary = LayoutClass.layout(ids, _edges_out, entry_ids, role_by_id, _node_size, _layer_spacing, _node_spacing_y, padding)
 	_positions = layout.get("positions", {}) if layout.get("positions", {}) is Dictionary else {}
 
 	var bounds_val = layout.get("bounds", null)
@@ -122,12 +145,12 @@ func _draw() -> void:
 		var from_pos := from_card.position
 		var to_pos := to_card.position
 
-		var p1 := from_pos + Vector2(NODE_SIZE.x, NODE_SIZE.y * 0.5)
-		var p2 := to_pos + Vector2(0, NODE_SIZE.y * 0.5)
+		var p1 := from_pos + Vector2(_node_size.x, _node_size.y * 0.5)
+		var p2 := to_pos + Vector2(0, _node_size.y * 0.5)
 		if p2.x <= p1.x:
 			continue
 
-		var dx := maxf(40.0, (p2.x - p1.x) * 0.5)
+		var dx := maxf(40.0 * _display_scale, (p2.x - p1.x) * 0.5)
 		var c1 := p1 + Vector2(dx, 0)
 		var c2 := p2 - Vector2(dx, 0)
 
@@ -135,7 +158,7 @@ func _draw() -> void:
 		var highlight := _highlight_edges.has(key)
 		var col := EDGE_HIGHLIGHT_COLOR if highlight else EDGE_COLOR
 
-		_draw_cubic_bezier(p1, c1, c2, p2, col, EDGE_WIDTH)
+		_draw_cubic_bezier(p1, c1, c2, p2, col, _edge_width)
 		_draw_arrow(p2, (p2 - c2).normalized(), col)
 
 func _draw_cubic_bezier(p0: Vector2, c1: Vector2, c2: Vector2, p3: Vector2, col: Color, width: float) -> void:
@@ -156,9 +179,9 @@ func _draw_arrow(tip: Vector2, dir: Vector2, col: Color) -> void:
 		dir = Vector2.RIGHT
 	var d := dir.normalized()
 	var perp := Vector2(-d.y, d.x)
-	var base := tip - d * ARROW_SIZE
-	var p_left := base + perp * (ARROW_SIZE * 0.55)
-	var p_right := base - perp * (ARROW_SIZE * 0.55)
+	var base := tip - d * _arrow_size
+	var p_left := base + perp * (_arrow_size * 0.55)
+	var p_right := base - perp * (_arrow_size * 0.55)
 	draw_colored_polygon(PackedVector2Array([tip, p_left, p_right]), col)
 
 func _build_edges(ids: Array[String]) -> void:
@@ -167,7 +190,7 @@ func _build_edges(ids: Array[String]) -> void:
 		var arr_val = _edges_out.get(src, [])
 		var arr: Array = arr_val if arr_val is Array else []
 		for dst_val in arr:
-			var dst := str(dst_val).strip_edges()
+			var dst := str(dst_val)
 			if dst.is_empty():
 				continue
 			if not _positions.has(src) or not _positions.has(dst):
@@ -184,10 +207,13 @@ func _build_nodes(ids: Array[String]) -> void:
 		var card := EmployeeCardClass.new()
 		card.variant = EmployeeCardClass.CardVariant.COMPACT
 		card.draggable = false
-		card.setup(def.to_dict())
+		if card.has_method("set_display_scale"):
+			card.set_display_scale(_display_scale)
+			card.setup(def.to_dict())
 
-		var pos_val = _positions.get(id, Vector2.ZERO)
-		card.position = pos_val if pos_val is Vector2 else Vector2.ZERO
+			var pos_val = _positions.get(id, Vector2.ZERO)
+			var p: Vector2 = pos_val if pos_val is Vector2 else Vector2.ZERO
+			card.position = Vector2(round(p.x), round(p.y))
 
 		add_child(card)
 		_nodes[id] = card
@@ -199,13 +225,13 @@ func _build_nodes(ids: Array[String]) -> void:
 func _build_edges_in(edges_out: Dictionary) -> Dictionary:
 	var edges_in: Dictionary = {}
 	for src_val in edges_out.keys():
-		var src := str(src_val).strip_edges()
+		var src := str(src_val)
 		if src.is_empty():
 			continue
 		var arr_val = edges_out.get(src_val, [])
 		var arr: Array = arr_val if arr_val is Array else []
 		for dst_val in arr:
-			var dst := str(dst_val).strip_edges()
+			var dst := str(dst_val)
 			if dst.is_empty():
 				continue
 			if not edges_in.has(dst):
@@ -216,7 +242,7 @@ func _build_edges_in(edges_out: Dictionary) -> Dictionary:
 	return edges_in
 
 func _set_hover(employee_id: String) -> void:
-	var start := str(employee_id).strip_edges()
+	var start := employee_id
 	if start.is_empty():
 		clear_highlight()
 		return
@@ -231,11 +257,11 @@ func _set_hover(employee_id: String) -> void:
 	var stack_f: Array[String] = [start]
 	var visited_f: Dictionary = {start: true}
 	while not stack_f.is_empty():
-		var u: String = str(stack_f.pop_back())
+		var u := str(stack_f.pop_back())
 		var next_val = _edges_out.get(u, [])
 		var nexts: Array = next_val if next_val is Array else []
 		for v_val in nexts:
-			var v := str(v_val).strip_edges()
+			var v := str(v_val)
 			if v.is_empty():
 				continue
 			_highlight_nodes[v] = true
@@ -249,11 +275,11 @@ func _set_hover(employee_id: String) -> void:
 	var stack_b: Array[String] = [start]
 	var visited_b: Dictionary = {start: true}
 	while not stack_b.is_empty():
-		var u2: String = str(stack_b.pop_back())
+		var u2 := str(stack_b.pop_back())
 		var prev_val = _edges_in.get(u2, [])
 		var prevs: Array = prev_val if prev_val is Array else []
 		for p_val in prevs:
-			var p := str(p_val).strip_edges()
+			var p := str(p_val)
 			if p.is_empty():
 				continue
 			_highlight_nodes[p] = true
@@ -266,7 +292,7 @@ func _set_hover(employee_id: String) -> void:
 	for id in _nodes.keys():
 		var card: EmployeeCard = _nodes[id]
 		if is_instance_valid(card):
-			card.set_selected(_highlight_nodes.has(str(id)))
+			card.set_selected(_highlight_nodes.has(id))
 
 	queue_redraw()
 
@@ -274,20 +300,18 @@ func _edge_key(from_id: String, to_id: String) -> String:
 	return "%s->%s" % [from_id, to_id]
 
 func _on_card_clicked(employee_id: String) -> void:
-	employee_clicked.emit(str(employee_id))
+	employee_clicked.emit(employee_id)
 
 func _on_card_mouse_entered(employee_id: String) -> void:
 	_set_hover(employee_id)
 
 func _on_card_mouse_exited(employee_id: String) -> void:
-	if str(employee_id) == _hover_id:
+	if employee_id == _hover_id:
 		clear_highlight()
 
 func _clear_all() -> void:
 	clear_highlight()
-	for child in get_children():
-		if is_instance_valid(child):
-			child.queue_free()
+	UiRebuildHelpersClass.free_children(self)
 	_nodes.clear()
 	_positions.clear()
 	_edges.clear()

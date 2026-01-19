@@ -6,7 +6,9 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
+const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
@@ -100,7 +102,7 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 		return Result.failure("持续时间超出上限: %d > %d" % [duration, max_duration])
 
 	# 玩家必须有餐厅
-	var restaurant_ids := MapRuntimeClass.get_player_restaurants(state, command.actor)
+	var restaurant_ids := StructuresClass.get_player_restaurants(state, command.actor)
 	if restaurant_ids.is_empty():
 		return Result.failure("你没有餐厅，无法发起营销")
 
@@ -140,9 +142,9 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 
 	# 1) 越界/建筑占用检查（所有占地格）
 	for p in footprint_cells:
-		if not MapRuntimeClass.is_world_pos_in_grid(state, p):
+		if not CoordsClass.is_world_pos_in_grid(state, p):
 			return Result.failure("position 越界: %s" % str(p))
-		var cell := MapRuntimeClass.get_cell(state, p)
+		var cell := CellsClass.get_cell(state, p)
 		if cell.is_empty():
 			return Result.failure("position 无效: %s" % str(p))
 		if not cell.has("structure") or not (cell["structure"] is Dictionary):
@@ -155,8 +157,8 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 
 	# 2) 边缘营销：要求“整条边贴边”（不能超出）
 	if requires_edge:
-		var minp := MapRuntimeClass.get_world_min(state)
-		var maxp := MapRuntimeClass.get_world_max(state)
+		var minp := CoordsClass.get_world_min(state)
+		var maxp := CoordsClass.get_world_max(state)
 		var left := world_pos.x
 		var right := world_pos.x + size.x - 1
 		var top := world_pos.y
@@ -167,7 +169,7 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 	else:
 		# 3) 非边缘营销：所有占地格必须在空地（非道路/非阻塞），且占地整体需邻接道路
 		for p2 in footprint_cells:
-			var cell2 := MapRuntimeClass.get_cell(state, p2)
+			var cell2 := CellsClass.get_cell(state, p2)
 			if not cell2.has("blocked") or not (cell2["blocked"] is bool):
 				return Result.failure("cell.blocked 缺失或类型错误: %s" % str(p2))
 			if bool(cell2["blocked"]):
@@ -187,9 +189,9 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 				var n := MapUtilsClass.get_neighbor_pos(p4, dir)
 				if footprint_set.has(n):
 					continue
-				if not MapRuntimeClass.is_world_pos_in_grid(state, n):
+				if not CoordsClass.is_world_pos_in_grid(state, n):
 					continue
-				if MapRuntimeClass.has_road_at(state, n):
+				if CellsClass.has_road_at(state, n):
 					has_adjacent_road = true
 					break
 			if has_adjacent_road:
@@ -251,8 +253,8 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 static func _infer_airplane_axis(state: GameState, pos: Vector2i, size: Vector2i) -> String:
 	# 默认：左右边缘 -> row（横飞），上下边缘 -> col（竖飞）
 	# 语义：基于“整条边贴边”判断；若同时贴两条边（角落），保持旧优先级：先 row 后 col。
-	var minp := MapRuntimeClass.get_world_min(state)
-	var maxp := MapRuntimeClass.get_world_max(state)
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
 	var left := pos.x
 	var right := pos.x + size.x - 1
 	var top := pos.y

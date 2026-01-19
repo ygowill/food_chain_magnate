@@ -167,6 +167,9 @@ func _get_player_restaurant_logo_texture(player_id: int) -> Texture2D:
 
 
 class OrderBadge extends PanelContainer:
+	const RESTAURANT_BG_COLOR := Color("#f4edd1")
+	const CURRENT_BORDER_COLOR := Color("#e74c3c")
+
 	var slot_position: int = 0
 
 	var _icon: TextureRect
@@ -221,9 +224,14 @@ class OrderBadge extends PanelContainer:
 			_label.text = "" if (_occupied and _logo_texture != null) else (str(_player_id + 1) if _occupied else "")
 
 		var style := StyleBoxFlat.new()
-		style.bg_color = Color(_player_color.r, _player_color.g, _player_color.b, 0.28) if _occupied else Color(0.15, 0.15, 0.18, 0.8)
-		style.border_color = Color(0.95, 0.95, 0.95, 0.95) if _is_current else (_player_color if _occupied else Color(0.3, 0.3, 0.35, 0.6))
-		style.set_border_width_all(2 if _is_current else 1)
+		if _occupied:
+			var bg := RESTAURANT_BG_COLOR
+			bg.a = 0.95
+			style.bg_color = bg
+		else:
+			style.bg_color = Color(0.15, 0.15, 0.18, 0.8)
+		style.border_color = CURRENT_BORDER_COLOR if _is_current else (_player_color if _occupied else Color(0.3, 0.3, 0.35, 0.6))
+		style.set_border_width_all(3 if _is_current else 1)
 		style.set_corner_radius_all(int(BADGE_SIZE / 2))
 		add_theme_stylebox_override("panel", style)
 

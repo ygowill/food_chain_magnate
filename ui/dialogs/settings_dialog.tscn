@@ -141,6 +141,38 @@ min_value = 50.0
 max_value = 150.0
 value = 100.0
 
+[node name="FontScaleRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/FontScaleRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "字体倍率"
+
+[node name="FontScaleSlider" type="HSlider" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/FontScaleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 80.0
+max_value = 200.0
+value = 110.0
+
+[node name="LogFontScaleRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/LogFontScaleRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "日志字体倍率"
+
+[node name="LogFontScaleSlider" type="HSlider" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/LogFontScaleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 80.0
+max_value = 200.0
+value = 135.0
+
 [node name="UILayoutRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/separation = 10
@@ -157,6 +189,10 @@ size_flags_horizontal = 3
 [node name="ShowTileIdsCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
 layout_mode = 2
 text = "显示板块ID（调试）"
+
+[node name="ShowCellHoverTooltipCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
+layout_mode = 2
+text = "显示格子悬停信息（调试）"
 
 [node name="Game" type="Control" parent="MarginContainer/VBoxContainer/TabContainer"]
 visible = false

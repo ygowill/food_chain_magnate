@@ -1,5 +1,13 @@
 extends RefCounted
 
+static func parse_string(value, path: String, require_non_empty: bool = false) -> Result:
+	if not (value is String):
+		return Result.failure("%s 缺失或类型错误（期望 String）" % path)
+	var s := str(value)
+	if require_non_empty and s.is_empty():
+		return Result.failure("%s 不能为空字符串" % path)
+	return Result.success(s)
+
 static func parse_int(value, path: String) -> Result:
 	if value is int:
 		return Result.success(int(value))
@@ -30,6 +38,22 @@ static func parse_int_array(value, path: String) -> Result:
 		out.append(int(item_read.value))
 	return Result.success(out)
 
+static func parse_string_array(value, path: String, require_non_empty: bool) -> Result:
+	if not (value is Array):
+		return Result.failure("%s 缺失或类型错误（期望 Array[String]）" % path)
+	var out: Array[String] = []
+	for i in range(value.size()):
+		var item = value[i]
+		if not (item is String):
+			return Result.failure("%s[%d] 类型错误（期望 String）" % [path, i])
+		var s := str(item)
+		if s.is_empty():
+			return Result.failure("%s[%d] 不能为空字符串" % [path, i])
+		out.append(s)
+	if require_non_empty and out.is_empty():
+		return Result.failure("%s 不能为空" % path)
+	return Result.success(out)
+
 static func parse_non_negative_int_dict(value, path: String) -> Result:
 	if not (value is Dictionary):
 		return Result.failure("%s 缺失或类型错误（期望 Dictionary）" % path)
@@ -43,4 +67,3 @@ static func parse_non_negative_int_dict(value, path: String) -> Result:
 			return v_read
 		out[key] = int(v_read.value)
 	return Result.success(out)
-

@@ -245,6 +245,13 @@ func _gui_input(event: InputEvent) -> void:
 		return
 
 func _update_tooltip_for_hover() -> void:
+	var enabled := false
+	if Globals != null:
+		enabled = bool(Globals.show_cell_hover_tooltip)
+	if not enabled:
+		tooltip_text = ""
+		return
+
 	if not _is_valid_world_pos(_hover_pos):
 		tooltip_text = ""
 		return

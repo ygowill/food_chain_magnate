@@ -2,7 +2,8 @@ class_name PlacePizzaRadioAction
 extends ActionExecutor
 
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
-const MapRuntimeClass = preload("res://core/map/map_runtime.gd")
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
 const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
@@ -118,9 +119,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	# 1) 越界/建筑占用检查（所有占地格）
 	for p in footprint_cells:
-		if not MapRuntimeClass.is_world_pos_in_grid(state, p):
+		if not CoordsClass.is_world_pos_in_grid(state, p):
 			return Result.failure("position 越界: %s" % str(p))
-		var cell := MapRuntimeClass.get_cell(state, p)
+		var cell := CellsClass.get_cell(state, p)
 		if cell.is_empty():
 			return Result.failure("position 无效: %s" % str(p))
 		if not cell.has("structure") or not (cell["structure"] is Dictionary):
@@ -133,8 +134,8 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	# 2) 边缘营销：要求“整条边贴边”（不能超出）
 	if requires_edge:
-		var minp := MapRuntimeClass.get_world_min(state)
-		var maxp := MapRuntimeClass.get_world_max(state)
+		var minp := CoordsClass.get_world_min(state)
+		var maxp := CoordsClass.get_world_max(state)
 		var left := world_pos.x
 		var right := world_pos.x + size.x - 1
 		var top := world_pos.y
@@ -145,7 +146,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	else:
 		# 3) 非边缘营销：所有占地格必须在空地（非道路/非阻塞），且占地整体需邻接道路
 		for p2 in footprint_cells:
-			var cell2 := MapRuntimeClass.get_cell(state, p2)
+			var cell2 := CellsClass.get_cell(state, p2)
 			if not cell2.has("blocked") or not (cell2["blocked"] is bool):
 				return Result.failure("cell.blocked 缺失或类型错误: %s" % str(p2))
 			if bool(cell2["blocked"]):

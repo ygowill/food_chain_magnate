@@ -4,6 +4,7 @@ class_name MapDef
 extends RefCounted
 
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
+const MapParseHelpersClass = preload("res://core/map/parse_helpers.gd")
 
 # === 基础信息 ===
 var id: String = ""
@@ -100,10 +101,10 @@ static func from_dict(data: Dictionary) -> Result:
 			return Result.failure("MapDef 缺少字段: %s" % key)
 
 	var id_val = data.get("id", null)
-	if not (id_val is String) or str(id_val).is_empty():
+	if not (id_val is String) or str(id_val).strip_edges().is_empty():
 		return Result.failure("MapDef.id 类型错误或为空（期望非空 String）")
 	var display_name_val = data.get("display_name", null)
-	if not (display_name_val is String) or str(display_name_val).is_empty():
+	if not (display_name_val is String) or str(display_name_val).strip_edges().is_empty():
 		return Result.failure("MapDef.display_name 类型错误或为空（期望非空 String）")
 
 	var grid_size_read := _parse_vec2i(data.get("grid_size", null), "MapDef.grid_size")
@@ -138,8 +139,8 @@ static func from_dict(data: Dictionary) -> Result:
 		return tiles_read
 
 	var map_def := MapDef.new()
-	map_def.id = str(id_val)
-	map_def.display_name = str(display_name_val)
+	map_def.id = str(id_val).strip_edges()
+	map_def.display_name = str(display_name_val).strip_edges()
 	map_def.grid_size = gs
 	map_def.min_players = int(min_players_read.value)
 	map_def.max_players = int(max_players_read.value)
@@ -167,50 +168,16 @@ static func load_from_file(path: String) -> Result:
 # === 严格解析辅助 ===
 
 static func _parse_int(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
-		return Result.success(int(f))
-	return Result.failure("%s 类型错误（期望整数）" % path)
+	return MapParseHelpersClass.parse_int(value, path)
 
 static func _parse_non_negative_int(value, path: String) -> Result:
-	var r := _parse_int(value, path)
-	if not r.ok:
-		return r
-	var n: int = int(r.value)
-	if n < 0:
-		return Result.failure("%s 不能为负数: %d" % [path, n])
-	return Result.success(n)
+	return MapParseHelpersClass.parse_non_negative_int(value, path)
 
 static func _parse_vec2i(value, path: String) -> Result:
-	if not (value is Array) or value.size() != 2:
-		return Result.failure("%s 类型错误（期望 [x,y]）" % path)
-	var x_read := _parse_int(value[0], "%s[0]" % path)
-	if not x_read.ok:
-		return x_read
-	var y_read := _parse_int(value[1], "%s[1]" % path)
-	if not y_read.ok:
-		return y_read
-	return Result.success(Vector2i(int(x_read.value), int(y_read.value)))
+	return MapParseHelpersClass.parse_vec2i(value, path)
 
 static func _parse_string_array(value, path: String, require_non_empty: bool) -> Result:
-	if not (value is Array):
-		return Result.failure("%s 类型错误（期望 Array[String]）" % path)
-	var out: Array[String] = []
-	for i in range(value.size()):
-		var item = value[i]
-		if not (item is String):
-			return Result.failure("%s[%d] 类型错误（期望 String）" % [path, i])
-		var s := str(item)
-		if s.is_empty():
-			return Result.failure("%s[%d] 不能为空字符串" % [path, i])
-		out.append(s)
-	if require_non_empty and out.is_empty():
-		return Result.failure("%s 不能为空" % path)
-	return Result.success(out)
+	return MapParseHelpersClass.parse_string_array(value, path, require_non_empty)
 
 static func _parse_tiles(value, path: String) -> Result:
 	if not (value is Array):
@@ -225,7 +192,7 @@ static func _parse_tiles(value, path: String) -> Result:
 			if not tile.has(k):
 				return Result.failure("%s[%d] 缺少字段: %s" % [path, i, k])
 		var tile_id_val = tile.get("tile_id", null)
-		if not (tile_id_val is String) or str(tile_id_val).is_empty():
+		if not (tile_id_val is String) or str(tile_id_val).strip_edges().is_empty():
 			return Result.failure("%s[%d].tile_id 类型错误或为空（期望非空 String）" % [path, i])
 		var board_pos_read := _parse_vec2i(tile.get("board_pos", null), "%s[%d].board_pos" % [path, i])
 		if not board_pos_read.ok:
@@ -234,7 +201,7 @@ static func _parse_tiles(value, path: String) -> Result:
 		if not rotation_read.ok:
 			return rotation_read
 		out.append({
-			"tile_id": str(tile_id_val),
+			"tile_id": str(tile_id_val).strip_edges(),
 			"board_pos": board_pos_read.value,
 			"rotation": int(rotation_read.value),
 		})

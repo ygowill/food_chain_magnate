@@ -22,6 +22,11 @@ class RulesetRegistrarV2:
 		_ruleset = ruleset_in
 		_module_id = module_id_in
 
+	func retain_entry_instance(inst) -> void:
+		# Callables don't keep objects alive; retain module-owned instances so registered callbacks stay valid.
+		if _ruleset != null and _ruleset.has_method("retain_entry_instance"):
+			_ruleset.retain_entry_instance(inst)
+
 	func register_primary_settlement(phase: int, point: int, callback: Callable) -> Result:
 		return _ruleset.settlement_registry.register_primary(phase, point, callback, _module_id)
 

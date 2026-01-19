@@ -11,7 +11,7 @@ const EmployeeDefClass = preload("res://core/data/employee_def.gd")
 # - special / new_shop（new_shop 优先并入 special 的空位；否则落在 special 下方 track）
 # - manager
 # - price
-# - recruit_train
+# - recruit / train（颜色相同，但为避免路线图布局混淆，分到两条 lane）
 # - marketing
 # - procure_drink
 # - produce_food
@@ -20,10 +20,12 @@ const ROLE_TO_LANE_GROUP := {
 	"new_shop": 0,
 	"manager": 1,
 	"price": 2,
-	"recruit_train": 3,
-	"marketing": 4,
-	"procure_drink": 5,
-	"produce_food": 6,
+	"recruit_train": 3, # 兼容旧数据：未细分时仍落在 recruit 车道
+	"recruit": 3,
+	"train": 4,
+	"marketing": 5,
+	"procure_drink": 6,
+	"produce_food": 7,
 }
 
 const ROLE_SUB_PRIORITY_IN_GROUP_0 := {
@@ -67,14 +69,13 @@ static func layout(
 
 static func _normalize_roles(node_ids: Array[String], role_by_id: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
-	for id_val in node_ids:
-		var id := str(id_val).strip_edges()
+	for id in node_ids:
 		if id.is_empty():
 			continue
 		var r := ""
 		var v = role_by_id.get(id, null)
 		if v is String:
-			r = str(v).strip_edges()
+			r = str(v)
 		if r.is_empty():
 			# 兜底：未知 role 归到 special（保证可显示）
 			r = "special"
@@ -139,7 +140,7 @@ static func _assign_positions_lanes(
 					_mark_entity_track(e_layers, track, tracks_used_by_layer)
 					max_track = maxi(max_track, track)
 					for nid_val in e_ids:
-						var nid := str(nid_val).strip_edges()
+						var nid := str(nid_val)
 						if nid.is_empty():
 							continue
 						track_by_id[nid] = track
@@ -193,10 +194,10 @@ static func _build_group_entities(
 
 	var roles_in_group: Array[String] = []
 	for id_val in group_ids:
-		var id := str(id_val).strip_edges()
+		var id := str(id_val)
 		if id.is_empty():
 			continue
-		var role := str(role_by_id.get(id, "special")).strip_edges()
+		var role := str(role_by_id.get(id, "special"))
 		if roles_in_group.has(role):
 			continue
 		roles_in_group.append(role)
@@ -213,7 +214,7 @@ static func _build_group_entities(
 	for role in roles_in_group:
 		var ids_in_role: Array[String] = []
 		for id2_val in group_ids:
-			var id2 := str(id2_val).strip_edges()
+			var id2 := str(id2_val)
 			if id2.is_empty():
 				continue
 			if str(role_by_id.get(id2, "")) == role:
@@ -231,7 +232,7 @@ static func _build_group_entities(
 			var layers_used: Array[int] = []
 			var seen_layers: Dictionary = {}
 			for nid_val in ch:
-				var nid := str(nid_val).strip_edges()
+				var nid := str(nid_val)
 				if nid.is_empty():
 					continue
 				used[nid] = true
@@ -248,12 +249,12 @@ static func _build_group_entities(
 			})
 
 	for id3_val in group_ids:
-		var id3 := str(id3_val).strip_edges()
+		var id3 := str(id3_val)
 		if id3.is_empty():
 			continue
 		if used.has(id3):
 			continue
-		var role3 := str(role_by_id.get(id3, "special")).strip_edges()
+		var role3 := str(role_by_id.get(id3, "special"))
 		out.append({
 			"ids": [id3],
 			"layers": [int(layer_by_id.get(id3, 0))],
@@ -320,7 +321,7 @@ static func _extract_role_chains(
 		var outs: Array = outs_val if outs_val is Array else []
 		var nexts: Array[String] = []
 		for v_val in outs:
-			var v := str(v_val).strip_edges()
+			var v := str(v_val)
 			if v.is_empty():
 				continue
 			if not id_set.has(v):
@@ -337,7 +338,7 @@ static func _extract_role_chains(
 		var ins_val = edges_in.get(id3, [])
 		var ins: Array = ins_val if ins_val is Array else []
 		for u_val in ins:
-			var u := str(u_val).strip_edges()
+			var u := str(u_val)
 			if u.is_empty():
 				continue
 			if not id_set.has(u):
@@ -361,7 +362,7 @@ static func _extract_role_chains(
 		var ins2_val = edges_in.get(id4, [])
 		var ins2: Array = ins2_val if ins2_val is Array else []
 		for u2_val in ins2:
-			var u2 := str(u2_val).strip_edges()
+			var u2 := str(u2_val)
 			if u2.is_empty():
 				continue
 			if not id_set.has(u2):
@@ -388,7 +389,7 @@ static func _extract_role_chains(
 	var chains: Array = []
 	var visited: Dictionary = {}
 	for s_val in starts:
-		var s := str(s_val).strip_edges()
+		var s := str(s_val)
 		if s.is_empty():
 			continue
 		if visited.has(s):
@@ -400,7 +401,7 @@ static func _extract_role_chains(
 			safety += 1
 			if int(out_deg.get(current, 0)) != 1:
 				break
-			var nxt := str(out_next.get(current, "")).strip_edges()
+			var nxt := str(out_next.get(current, ""))
 			if nxt.is_empty():
 				break
 			if int(in_deg.get(nxt, 0)) != 1:
@@ -449,7 +450,7 @@ static func _assign_layers(node_ids: Array[String], edges_out: Dictionary, entry
 
 	# Layer 0：entry_level
 	for id in entry_ids:
-		var eid := str(id).strip_edges()
+		var eid := str(id)
 		if eid.is_empty():
 			continue
 		layer_by_id[eid] = 0
@@ -464,7 +465,7 @@ static func _assign_layers(node_ids: Array[String], edges_out: Dictionary, entry
 		var next_val = edges_out.get(u, [])
 		var nexts: Array = next_val if next_val is Array else []
 		for v_val in nexts:
-			var v := str(v_val).strip_edges()
+			var v := str(v_val)
 			if v.is_empty():
 				continue
 			var cand := u_layer + 1
@@ -508,13 +509,13 @@ static func _build_layers(node_ids: Array[String], layer_by_id: Dictionary) -> A
 static func _build_edges_in(edges_out: Dictionary) -> Dictionary:
 	var edges_in: Dictionary = {}
 	for src_val in edges_out.keys():
-		var src := str(src_val).strip_edges()
+		var src := str(src_val)
 		if src.is_empty():
 			continue
 		var arr_val = edges_out.get(src_val, [])
 		var arr: Array = arr_val if arr_val is Array else []
 		for dst_val in arr:
-			var dst := str(dst_val).strip_edges()
+			var dst := str(dst_val)
 			if dst.is_empty():
 				continue
 			if not edges_in.has(dst):

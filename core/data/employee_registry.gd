@@ -6,6 +6,7 @@ class_name EmployeeRegistry
 extends RefCounted
 
 const EmployeeDefClass = preload("res://core/data/employee_def.gd")
+const CatalogRegistryHelpersClass = preload("res://core/utils/catalog_registry_helpers.gd")
 
 # === 静态缓存 ===
 static var _employees: Dictionary = {}  # employee_id -> EmployeeDef
@@ -25,24 +26,17 @@ static func configure_from_catalog(catalog) -> Result:
 	if not (catalog.employees is Dictionary):
 		return Result.failure("EmployeeRegistry.configure_from_catalog: catalog.employees 类型错误（期望 Dictionary）")
 
-	var out: Dictionary = {}
-	for emp_id_val in catalog.employees.keys():
-		if not (emp_id_val is String):
-			return Result.failure("EmployeeRegistry.configure_from_catalog: employees key 类型错误（期望 String）")
-		var emp_id: String = str(emp_id_val)
-		if emp_id.is_empty():
-			return Result.failure("EmployeeRegistry.configure_from_catalog: employees key 不能为空")
-		var def_val = catalog.employees.get(emp_id, null)
-		if def_val == null:
-			return Result.failure("EmployeeRegistry.configure_from_catalog: employees[%s] 为空" % emp_id)
-		if not (def_val is EmployeeDefClass):
-			return Result.failure("EmployeeRegistry.configure_from_catalog: employees[%s] 类型错误（期望 EmployeeDef）" % emp_id)
-		var def: EmployeeDef = def_val
-		if def.id != emp_id:
-			return Result.failure("EmployeeRegistry.configure_from_catalog: employees[%s].id 不一致: %s" % [emp_id, def.id])
-		out[emp_id] = def
+	var out_read := CatalogRegistryHelpersClass.build_string_keyed_defs(
+		catalog.employees,
+		EmployeeDefClass,
+		"EmployeeRegistry.configure_from_catalog",
+		"employees",
+		"EmployeeDef"
+	)
+	if not out_read.ok:
+		return out_read
 
-	_employees = out
+	_employees = out_read.value
 	_loaded = true
 	return Result.success(_employees.size())
 

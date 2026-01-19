@@ -4,6 +4,20 @@ const Collections = preload("res://core/state/state_updater/collections.gd")
 
 # === 员工操作 ===
 
+static func _get_employee_pool_count(state: GameState, employee_type: String, caller: String) -> Result:
+	if state == null:
+		return Result.failure("%s: state 为空" % caller)
+	if not (state.employee_pool is Dictionary):
+		return Result.failure("%s: state.employee_pool 类型错误（期望 Dictionary）" % caller)
+	if employee_type.is_empty():
+		return Result.failure("employee_type 不能为空")
+	var current := 0
+	if state.employee_pool.has(employee_type):
+		if not (state.employee_pool[employee_type] is int):
+			return Result.failure("%s: employee_pool[%s] 类型错误（期望 int）" % [caller, employee_type])
+		current = int(state.employee_pool[employee_type])
+	return Result.success(current)
+
 # 添加员工到玩家
 static func add_employee(state: GameState, player_id: int, employee_id: String, to_reserve: bool = false) -> Result:
 	if state == null:
@@ -22,19 +36,12 @@ static func add_employee(state: GameState, player_id: int, employee_id: String, 
 
 # 从员工池取出员工
 static func take_from_pool(state: GameState, employee_type: String, count: int = 1) -> Result:
-	if state == null:
-		return Result.failure("take_from_pool: state 为空")
-	if not (state.employee_pool is Dictionary):
-		return Result.failure("take_from_pool: state.employee_pool 类型错误（期望 Dictionary）")
-	if employee_type.is_empty():
-		return Result.failure("employee_type 不能为空")
 	if count <= 0:
 		return Result.failure("count 必须 > 0，实际: %d" % count)
-	var available := 0
-	if state.employee_pool.has(employee_type):
-		if not (state.employee_pool[employee_type] is int):
-			return Result.failure("take_from_pool: employee_pool[%s] 类型错误（期望 int）" % employee_type)
-		available = int(state.employee_pool[employee_type])
+	var available_read := _get_employee_pool_count(state, employee_type, "take_from_pool")
+	if not available_read.ok:
+		return available_read
+	var available: int = int(available_read.value)
 	if available < count:
 		return Result.failure("员工池不足: %s 需要 %d, 只有 %d" % [employee_type, count, available])
 
@@ -43,19 +50,12 @@ static func take_from_pool(state: GameState, employee_type: String, count: int =
 
 # 归还员工到池
 static func return_to_pool(state: GameState, employee_type: String, count: int = 1) -> Result:
-	if state == null:
-		return Result.failure("return_to_pool: state 为空")
-	if not (state.employee_pool is Dictionary):
-		return Result.failure("return_to_pool: state.employee_pool 类型错误（期望 Dictionary）")
-	if employee_type.is_empty():
-		return Result.failure("employee_type 不能为空")
 	if count <= 0:
 		return Result.failure("count 必须 > 0，实际: %d" % count)
-	var current := 0
-	if state.employee_pool.has(employee_type):
-		if not (state.employee_pool[employee_type] is int):
-			return Result.failure("return_to_pool: employee_pool[%s] 类型错误（期望 int）" % employee_type)
-		current = int(state.employee_pool[employee_type])
+	var current_read := _get_employee_pool_count(state, employee_type, "return_to_pool")
+	if not current_read.ok:
+		return current_read
+	var current: int = int(current_read.value)
 	state.employee_pool[employee_type] = current + count
 	return Result.success({"employee_type": employee_type, "returned": count, "total": current + count})
 
@@ -115,4 +115,3 @@ static func player_has_milestone(state: GameState, player_id: int, milestone_id:
 	assert(player.has("milestones") and (player["milestones"] is Array), "player_has_milestone: players[%d].milestones 缺失或类型错误（期望 Array）" % player_id)
 	var milestones: Array = player["milestones"]
 	return milestones.has(milestone_id)
-

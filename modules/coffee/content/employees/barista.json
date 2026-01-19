@@ -1,7 +1,7 @@
 {
   "id": "barista",
   "name": "咖啡师",
-  "description": "生产2个咖啡；可培训为首席咖啡师",
+  "description": "生产2个咖啡",
   "salary": true,
   "unique": false,
   "role": "produce_food",

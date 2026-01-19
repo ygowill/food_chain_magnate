@@ -6,25 +6,36 @@ const Coords = preload("res://core/map/map_runtime/coords.gd")
 const _EXTERNAL_CELLS_KEY := "external_cells"
 
 static func get_road_graph(state) -> RefCounted:
-	assert(state != null, "MapRuntime.get_road_graph: state 为空")
+	if state == null:
+		return null
 	if state._road_graph == null:
-		assert(state.map is Dictionary, "MapRuntime.get_road_graph: state.map 类型错误（期望 Dictionary）")
-		assert(state.map.has("cells") and (state.map["cells"] is Array), "MapRuntime.get_road_graph: state.map.cells 缺失或类型错误（期望 Array）")
-		assert(state.map.has("grid_size") and (state.map["grid_size"] is Vector2i), "MapRuntime.get_road_graph: state.map.grid_size 缺失或类型错误（期望 Vector2i）")
-		var cells: Array = state.map["cells"]
-		assert(not cells.is_empty(), "MapRuntime.get_road_graph: state.map.cells 不能为空")
-		var grid_size: Vector2i = state.map["grid_size"]
-		assert(state.map.has("boundary_index") and (state.map["boundary_index"] is Dictionary), "MapRuntime.get_road_graph: state.map.boundary_index 缺失或类型错误（期望 Dictionary）")
-		var boundary_index: Dictionary = state.map["boundary_index"]
+		if not (state.map is Dictionary):
+			return null
+		var map: Dictionary = state.map
+		var cells_val = map.get("cells", null)
+		if not (cells_val is Array):
+			return null
+		var cells: Array = cells_val
+		if cells.is_empty():
+			return null
+		var grid_size_val = map.get("grid_size", null)
+		if not (grid_size_val is Vector2i):
+			return null
+		var grid_size: Vector2i = grid_size_val
+		var boundary_index_val = map.get("boundary_index", null)
+		if not (boundary_index_val is Dictionary):
+			return null
+		var boundary_index: Dictionary = boundary_index_val
+
 		var external_cells: Dictionary = {}
-		if state.map.has(_EXTERNAL_CELLS_KEY):
-			assert(state.map[_EXTERNAL_CELLS_KEY] is Dictionary, "MapRuntime.get_road_graph: state.map.external_cells 类型错误（期望 Dictionary）")
-			external_cells = state.map[_EXTERNAL_CELLS_KEY]
+		var external_cells_val = map.get(_EXTERNAL_CELLS_KEY, null)
+		if external_cells_val is Dictionary:
+			external_cells = external_cells_val
 		var origin := Coords.get_map_origin(state)
 		state._road_graph = RoadGraphClass.build_from_cells_with_external(cells, grid_size, origin, external_cells, boundary_index)
 	return state._road_graph
 
 static func invalidate_road_graph(state) -> void:
-	assert(state != null, "MapRuntime.invalidate_road_graph: state 为空")
+	if state == null:
+		return
 	state._road_graph = null
-
