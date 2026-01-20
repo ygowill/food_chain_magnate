@@ -762,10 +762,7 @@ static func _draw_house_demands(canvas, cell_size: int) -> void:
 			_draw_texture_aspect_fit(canvas, tex, slots[i], Color(1, 1, 1, 0.95))
 
 static func _draw_selection(canvas, cell_size: int) -> void:
-	if canvas._is_valid_world_pos(canvas._selected_pos):
-		var v = canvas._world_to_view(canvas._selected_pos)
-		var rect := Rect2(Vector2(v.x * cell_size, v.y * cell_size), Vector2(cell_size, cell_size))
-		canvas.draw_rect(rect, Color(0.2, 0.8, 1.0, 0.9), false, 2.0)
+	# 关闭“点击格子选中框”视觉（issue_tracker #31）：保留 cell_selected 信号用于交互逻辑。
 	if canvas._is_valid_world_pos(canvas._hover_pos):
 		var show_hover := false
 		if Globals != null:

@@ -45,7 +45,7 @@
 | 28 | 移动餐厅：餐厅选项改为可阅读；切换时高亮当前餐厅 | UI/交互 | move_restaurant 下拉框仅显示 `rest_0` 等 id；地图餐厅无 id/编号标记；现高亮逻辑只显示“可放置锚点”，未高亮被选餐厅 | Planned |
 | 29 | 营销面板遮挡；营销放置缺少形状预览；营销图标大小需适配 piece | UI/布局+渲染 | 右侧抽屉嵌入时布局/裁剪导致左侧内容被遮挡；地图交互仅高亮 anchor 未显示 footprint；地图渲染中营销图标缩放策略不匹配多格 board | Planned |
 | 30 | 飞机营销板件：应贴地图外侧边缘且不在地图内；可用宽度仅 1/3/5 | UI/规则+渲染 | 当前飞机按普通营销板件在地图内绘制/占地，且尺寸来自现有 `footprint_size`（含 2x1/3x2/5x2 等），与目标规则不一致 | Planned |
-| 31 | 关闭“点击地图格高亮” | UI/一致性 | `MapCanvas` 记录 `_selected_pos` 且 `MapCanvasDrawer._draw_selection()` 绘制蓝色选中框 | Planned |
+| 31 | 关闭“点击地图格高亮” | UI/一致性 | `MapCanvas` 记录 `_selected_pos` 且 `MapCanvasDrawer._draw_selection()` 绘制蓝色选中框 | Implemented（待手动验收） |
 | 32 | 地图渲染：tile 内部细分网格线（细线）与 tile 外边缘粗线一起绘制 | UI/渲染 | `MapCanvasDrawer._draw_tile_borders()` 目前仅绘制 tile 外边缘粗线，未绘制 tile 内部单元格分割线 | Reported（待澄清） |
 
 ---
@@ -1523,20 +1523,29 @@
 
 **确认（来自你的说明 #31）**
 
-- 点击地图格不需要高亮；hover 白色框也不需要保留。
+- 点击地图格不需要高亮；hover 白色框保留（仍由 `Globals.show_cell_hover_tooltip` 控制）。
 
-**修复方案（提案，需你点头后实施）**
+**修复方案**
 
 - 保留 `cell_selected`/`cell_hovered` 信号用于交互逻辑，但移除 `_selected_pos` 的视觉渲染。
-- 同时移除 hover 白色框的绘制，避免出现“格子高亮”的第二套机制。
+- hover 白色框保持现状（便于查看 tooltip）。
 
 **验收**
 
 - 点击地图格不再出现蓝色高亮框；其它选点/预览/高亮机制不受影响。
 
+**实施记录**
+
+- 已修改：`ui/scenes/game/map_canvas_drawer.gd`：`_draw_selection()` 移除蓝色选中框绘制，仅保留 hover 白框逻辑。
+
+**验证**
+
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（91/91，`.godot/AllTests.log`）
+
 **状态**
 
-- Planned
+- Implemented（待手动验收）
 
 ---
 
