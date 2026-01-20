@@ -144,6 +144,12 @@ static func _draw_cell_highlights(canvas, cell_size: int) -> void:
 	if canvas._highlighted_cells.is_empty():
 		return
 
+	var base := Color("#f5b9a6")
+	var fill := base
+	fill.a = 0.12
+	var border := base
+	border.a = 0.35
+
 	for pos_val in canvas._highlighted_cells.keys():
 		if not (pos_val is Vector2i):
 			continue
@@ -152,8 +158,8 @@ static func _draw_cell_highlights(canvas, cell_size: int) -> void:
 			continue
 		var v = canvas._world_to_view(world_pos)
 		var rect := Rect2(Vector2(v.x * cell_size, v.y * cell_size), Vector2(cell_size, cell_size))
-		canvas.draw_rect(rect, Color(0.2, 0.9, 0.35, 0.12), true)
-		canvas.draw_rect(rect, Color(0.2, 0.9, 0.35, 0.35), false, 1.0)
+		canvas.draw_rect(rect, fill, true)
+		canvas.draw_rect(rect, border, false, 1.0)
 
 static func _draw_structure_preview(canvas, cell_size: int) -> void:
 	if canvas._structure_preview_cells.is_empty():
@@ -226,13 +232,13 @@ static func _draw_structure_preview_piece(canvas, cell_size: int, preview_info: 
 		_draw_house_and_garden(canvas, cell_size, anchor, info, alpha)
 
 static func _draw_ground_and_blocked(canvas, cell_size: int) -> void:
-	var ground_tex: Texture2D = canvas._skin.get_ground_texture()
 	var blocked_tex: Texture2D = canvas._skin.get_blocked_overlay_texture()
+	var ground_col := Color("#faf4e0")
 
 	for y in range(canvas._grid_size.y):
 		for x in range(canvas._grid_size.x):
 			var rect := Rect2(Vector2(x * cell_size, y * cell_size), Vector2(cell_size, cell_size))
-			canvas.draw_texture_rect(ground_tex, rect, false)
+			canvas.draw_rect(rect, ground_col, true)
 
 			var cell: Dictionary = canvas._get_cell_world(canvas._world_origin + Vector2i(x, y))
 			if bool(cell.get("blocked", false)):
@@ -630,9 +636,14 @@ static func _draw_marketing(canvas, cell_size: int) -> void:
 		)
 
 		# Footprint background (subtle) + border so multi-cell boards are visible.
-		canvas.draw_rect(rect, Color(0.18, 0.22, 0.26, 0.28), true)
+		var base := Color("#98a295")
+		var fill := base
+		fill.a = 0.85
+		canvas.draw_rect(rect, fill, true)
 		var border := maxf(1.0, float(cell_size) * 0.06)
-		canvas.draw_rect(rect, Color(0.55, 0.65, 0.75, 0.30), false, border)
+		var outline := base.darkened(0.25)
+		outline.a = 0.75
+		canvas.draw_rect(rect, outline, false, border)
 
 		# Marketing type texture as a faint background.
 		var icon_rect := rect.grow(-float(cell_size) * 0.10)

@@ -72,13 +72,19 @@ func _draw() -> void:
 	var board_pos := preview_rect.position + (preview_rect.size - board_px) * 0.5
 	var board_rect := Rect2(board_pos, board_px)
 
-	var fill := Color(0.18, 0.22, 0.26, 0.35)
-	var border := Color(0.55, 0.65, 0.75, 0.25)
+	var base := Color("#98a295")
+	var fill := base
+	fill.a = 0.55
+	var border := base.darkened(0.25)
+	border.a = 0.70
 	if button_pressed:
-		fill = Color(0.22, 0.32, 0.42, 0.45)
-		border = Color(0.40, 0.70, 0.90, 0.55)
+		fill = base.darkened(0.15)
+		fill.a = 0.75
+		border = base.darkened(0.45)
+		border.a = 0.95
 	elif is_hovered():
-		fill = Color(0.20, 0.26, 0.32, 0.38)
+		fill = base
+		fill.a = 0.62
 
 	draw_rect(board_rect, fill, true)
 	draw_rect(board_rect, border, false, 1.0)
