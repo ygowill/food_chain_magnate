@@ -309,9 +309,61 @@ func _on_map_cell_hovered(world_pos: Vector2i) -> void:
 	var size := _get_selected_marketing_board_rotated_size()
 	if size.x > 0 and size.y > 0:
 		var cells: Array[Vector2i] = []
+		var offset := Vector2i.ZERO
+		if mt == "airplane":
+			# 飞机营销：视觉占地应贴在地图外侧边缘（issue_tracker #30）。
+			var axis2 := _infer_airplane_axis_for_pos(world_pos)
+			if axis2.is_empty():
+				axis2 = "row"
+			if _is_airplane_corner(world_pos):
+				var selected_pos_val2 = _payload.get("selected_target", null)
+				if selected_pos_val2 is Vector2i and Vector2i(selected_pos_val2) == world_pos:
+					var chosen2 := str(_payload.get("axis", ""))
+					if chosen2 == "row" or chosen2 == "col":
+						axis2 = chosen2
+
+			if _scene != null and _scene.game_engine != null:
+				var state2: GameState = _scene.game_engine.get_state()
+				if state2 != null:
+					var minp2 := CoordsClass.get_world_min(state2)
+					var maxp2 := CoordsClass.get_world_max(state2)
+					var left2 := world_pos.x
+					var right2 := world_pos.x + size.x - 1
+					var top2 := world_pos.y
+					var bottom2 := world_pos.y + size.y - 1
+
+					var attach2 := ""
+					if axis2 == "col":
+						if top2 == minp2.y:
+							attach2 = "top"
+						elif bottom2 == maxp2.y:
+							attach2 = "bottom"
+						elif left2 == minp2.x:
+							attach2 = "left"
+						elif right2 == maxp2.x:
+							attach2 = "right"
+					else:
+						if left2 == minp2.x:
+							attach2 = "left"
+						elif right2 == maxp2.x:
+							attach2 = "right"
+						elif top2 == minp2.y:
+							attach2 = "top"
+						elif bottom2 == maxp2.y:
+							attach2 = "bottom"
+
+					if attach2 == "left":
+						offset = Vector2i(-size.x, 0)
+					elif attach2 == "right":
+						offset = Vector2i(size.x, 0)
+					elif attach2 == "top":
+						offset = Vector2i(0, -size.y)
+					elif attach2 == "bottom":
+						offset = Vector2i(0, size.y)
+
 		for dy in range(size.y):
 			for dx in range(size.x):
-				cells.append(world_pos + Vector2i(dx, dy))
+				cells.append(world_pos + offset + Vector2i(dx, dy))
 		if is_instance_valid(_map_canvas) and _map_canvas.has_method("set_structure_preview"):
 			_map_canvas.call("set_structure_preview", cells, true)
 

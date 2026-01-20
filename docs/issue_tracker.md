@@ -1521,20 +1521,30 @@
 - mailbox 使用 id 7-10，尺寸依次为 `[2,2]`、`[2,2]`、`[1,1]`、`[1,1]`
 - billboard 使用 id 11-16，尺寸依次为 `[3,2]`、`[2,2]`、`[3,1]`、`[2,1]`、`[1,1]`、`[1,1]`
 
-**修复方案（提案，需你点头后实施）**
+**修复方案**
 
 - 前置：先修复营销板件数据定义（见 #33），确保 airplane 的 `footprint_size` 为 `[1,2]/[3,2]/[5,2]`。
-- 若仅视觉（按你确认）：保持现有逻辑 world_pos 作为锚点（仍选地图边缘的 anchor），渲染时对 airplane 特判：
-	- 将 `footprint_size` 中“等于 2 的那一维”作为向外厚度、另一维作为边缘长度；
-	- 视觉上把矩形底色/图标绘制到地图外侧边缘（与地图格对齐），且不侵入地图内。
+- 保持 core 的 world_pos/rotation 作为“锚点与占地规则”，仅做视觉偏移：airplane 渲染时将整块板件绘制到地图外侧边缘（与格子对齐），且不侵入地图内；角落位置用 `axis(row/col)` 决定贴哪条边。
 
 **验收**
 
 - 飞机营销板件视觉上贴地图外侧且不侵入地图内；尺寸/可用宽度符合 1/3/5 的规则；放置/预览/结算一致。
 
+**实施记录**
+
+- 已修改：`ui/scenes/game/map_canvas_drawer.gd`：`_draw_marketing()` 对 `airplane` 特判，计算 base map 的像素边界并将 rect 平移到地图外侧（角落用 `axis` 选择贴边方向）。
+- 已修改：`ui/scenes/game/game_map_interaction_controller.gd`：marketing hover 的 footprint 预览在 `airplane` 时也做同样的“贴边外移”，使预览位置与最终渲染一致。
+- 新增：`ui/scenes/tests/airplane_marketing_outside_render_test.gd`（`AirplaneMarketingOutsideRenderTest`）：断言飞机营销的 rect 会按 left/right/top/bottom/corner 规则绘制到地图外侧。
+- 已修改：`ui/scenes/tests/all_tests.gd`：纳入 `AirplaneMarketingOutsideRenderTest`。
+
+**验证**
+
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（94/94，`.godot/AllTests.log`）
+
 **状态**
 
-- Planned
+- Implemented（待手动验收）
 
 ---
 

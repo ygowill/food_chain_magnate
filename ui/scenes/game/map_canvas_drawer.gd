@@ -643,6 +643,63 @@ static func _draw_marketing(canvas, cell_size: int) -> void:
 			Vector2(size.x * cell_size, size.y * cell_size)
 		)
 
+		# airplane：视觉上贴地图外侧边缘（不在地图内），并与格子对齐（issue_tracker #30）。
+		if key == "airplane":
+			var map_origin: Vector2i = canvas._map_data.get("map_origin", Vector2i.ZERO)
+			var base_grid_size: Vector2i = canvas._base_grid_size
+			if base_grid_size == Vector2i.ZERO:
+				var gs_val = canvas._map_data.get("grid_size", null)
+				if gs_val is Vector2i:
+					base_grid_size = gs_val
+
+			var minp := -map_origin
+			var maxp := Vector2i(base_grid_size.x - map_origin.x - 1, base_grid_size.y - map_origin.y - 1)
+
+			var left := anchor.x
+			var right := anchor.x + size.x - 1
+			var top := anchor.y
+			var bottom := anchor.y + size.y - 1
+
+			var axis := str(p.get("axis", ""))
+			var attach := ""
+			if axis == "col":
+				if top == minp.y:
+					attach = "top"
+				elif bottom == maxp.y:
+					attach = "bottom"
+				elif left == minp.x:
+					attach = "left"
+				elif right == maxp.x:
+					attach = "right"
+			else:
+				# default: row
+				if left == minp.x:
+					attach = "left"
+				elif right == maxp.x:
+					attach = "right"
+				elif top == minp.y:
+					attach = "top"
+				elif bottom == maxp.y:
+					attach = "bottom"
+
+			# Base map rect in view-space pixels (excludes external cells).
+			var vmin = canvas._world_to_view(minp)
+			var map_pos := Vector2(float(vmin.x * cell_size), float(vmin.y * cell_size))
+			var map_size := Vector2(float(base_grid_size.x * cell_size), float(base_grid_size.y * cell_size))
+			var map_left := map_pos.x
+			var map_top := map_pos.y
+			var map_right := map_pos.x + map_size.x
+			var map_bottom := map_pos.y + map_size.y
+
+			if attach == "left":
+				rect.position.x = map_left - rect.size.x
+			elif attach == "right":
+				rect.position.x = map_right
+			elif attach == "top":
+				rect.position.y = map_top - rect.size.y
+			elif attach == "bottom":
+				rect.position.y = map_bottom
+
 		# Footprint background (subtle) + border so multi-cell boards are visible.
 		var base := Color("#98a295")
 		var fill := base
