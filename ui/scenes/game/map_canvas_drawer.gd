@@ -791,6 +791,11 @@ static func _draw_tile_borders(canvas, cell_size: int) -> void:
 	thickness = minf(thickness, float(cell_size))
 	var col := Color(0, 0, 0, 0.9)
 
+	# tile 内部细分网格线（细线）：黑色 alpha≈0.25，线宽随 zoom 缩放为 max(1, cell_size*0.02)
+	var inner_thickness := maxf(1.0, float(cell_size) * 0.02)
+	inner_thickness = minf(inner_thickness, float(cell_size))
+	var inner_col := Color(0, 0, 0, 0.25)
+
 	for tp_val in tps:
 		if not (tp_val is Dictionary):
 			continue
@@ -805,6 +810,13 @@ static func _draw_tile_borders(canvas, cell_size: int) -> void:
 			Vector2(vmin.x * cell_size, vmin.y * cell_size),
 			Vector2(tile_size * cell_size, tile_size * cell_size)
 		)
+
+		# 内部细线先画，外边缘粗线后画（避免细线盖住外边缘）
+		for i in range(1, tile_size):
+			var x := rect.position.x + float(i * cell_size) - inner_thickness * 0.5
+			canvas.draw_rect(Rect2(Vector2(x, rect.position.y), Vector2(inner_thickness, rect.size.y)), inner_col, true)
+			var y := rect.position.y + float(i * cell_size) - inner_thickness * 0.5
+			canvas.draw_rect(Rect2(Vector2(rect.position.x, y), Vector2(rect.size.x, inner_thickness)), inner_col, true)
 
 		# 向内黑边框（不应盖住上层 piece）
 		canvas.draw_rect(Rect2(rect.position, Vector2(rect.size.x, thickness)), col, true)

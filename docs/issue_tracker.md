@@ -46,7 +46,7 @@
 | 29 | 营销面板遮挡；营销放置缺少形状预览；营销图标大小需适配 piece | UI/布局+渲染 | 右侧抽屉嵌入时布局/裁剪导致左侧内容被遮挡；地图交互仅高亮 anchor 未显示 footprint；地图渲染中营销图标缩放策略不匹配多格 board | Planned |
 | 30 | 飞机营销板件：应贴地图外侧边缘且不在地图内；可用宽度仅 1/3/5 | UI/规则+渲染 | 当前飞机按普通营销板件在地图内绘制/占地，且尺寸来自现有 `footprint_size`（含 2x1/3x2/5x2 等），与目标规则不一致 | Planned |
 | 31 | 关闭“点击地图格高亮” | UI/一致性 | `MapCanvas` 记录 `_selected_pos` 且 `MapCanvasDrawer._draw_selection()` 绘制蓝色选中框 | Implemented（待手动验收） |
-| 32 | 地图渲染：tile 内部细分网格线（细线）与 tile 外边缘粗线一起绘制 | UI/渲染 | `MapCanvasDrawer._draw_tile_borders()` 目前仅绘制 tile 外边缘粗线，未绘制 tile 内部单元格分割线 | Reported（待澄清） |
+| 32 | 地图渲染：tile 内部细分网格线（细线）与 tile 外边缘粗线一起绘制 | UI/渲染 | `MapCanvasDrawer._draw_tile_borders()` 目前仅绘制 tile 外边缘粗线，未绘制 tile 内部单元格分割线 | Implemented（待手动验收） |
 
 ---
 
@@ -1560,7 +1560,7 @@
 
 - `ui/scenes/game/map_canvas_drawer.gd`：`_draw_tile_borders()`（目前只绘制 tile 外边缘粗线）
 
-**修复方案（提案，需你点头后实施）**
+**修复方案**
 
 - 扩展 `_draw_tile_borders()`：
 	- 保留现有外边缘粗线绘制；
@@ -1578,6 +1578,17 @@
 
 - 增加 headless 回归测试：对给定 `tile_placements` 的 map_data，断言 MapCanvasDrawer 的 tile 分割线生成逻辑会输出“每 tile 8 条内部线”（4 竖 + 4 横），并覆盖 zoom 下线宽策略不出错。
 
+**实施记录**
+
+- 已修改：`ui/scenes/game/map_canvas_drawer.gd`：`_draw_tile_borders()` 追加 tile 内部细线（黑色 alpha≈0.25，线宽 `max(1, cell_size*0.02)`），并保证外边缘粗线在细线之后绘制。
+- 新增：`ui/scenes/tests/tile_internal_grid_lines_test.gd`（`TileInternalGridLinesTest`）：断言每 tile 输出 8 条内部线，并覆盖 40/100 两种 `cell_size` 下线宽缩放。
+- 已修改：`ui/scenes/tests/all_tests.gd`：纳入 `TileInternalGridLinesTest`。
+
+**验证**
+
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（见 `.godot/AllTests.log`）
+
 **状态**
 
-- Planned
+- Implemented（待手动验收）

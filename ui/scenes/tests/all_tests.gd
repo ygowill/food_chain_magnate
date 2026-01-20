@@ -35,6 +35,7 @@ const DragPreviewVisualTestClass = preload("res://ui/scenes/tests/drag_preview_v
 const RestructuringLayoutTestClass = preload("res://ui/scenes/tests/restructuring_layout_test.gd")
 const UiRegressionPropertyTestClass = preload("res://ui/scenes/tests/ui_regression_property_test.gd")
 const MapZoomPropertyTestClass = preload("res://ui/scenes/tests/map_zoom_property_test.gd")
+const TileInternalGridLinesTestClass = preload("res://ui/scenes/tests/tile_internal_grid_lines_test.gd")
 const LogRestoreAfterLoadTestClass = preload("res://ui/scenes/tests/log_restore_after_load_test.gd")
 const EventHistoryRewindTestClass = preload("res://core/tests/event_history_rewind_test.gd")
 const ReplayPlayerSmokeTestClass = preload("res://ui/scenes/tests/replay_player_smoke_test.gd")
@@ -256,6 +257,10 @@ func _run_all() -> int:
 			{
 				"name": "MapZoomPropertyTest",
 				"fn": func() -> Result: return MapZoomPropertyTestClass.run(),
+			},
+			{
+				"name": "TileInternalGridLinesTest",
+				"fn": func() -> Result: return TileInternalGridLinesTestClass.run(),
 			},
 			{
 				"name": "LogRestoreAfterLoadTest",
