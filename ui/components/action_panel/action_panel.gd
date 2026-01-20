@@ -300,7 +300,13 @@ func _rebuild_restaurant_option(restaurant_ids: Array[String], selected_restaura
 		var s := str(rid).strip_edges()
 		if s.is_empty():
 			continue
-		restaurant_option.add_item(s)
+		var label := s
+		if _context_overlay != null and is_instance_valid(_context_overlay) and _context_overlay.has_method("get_restaurant_display_label"):
+			var v = _context_overlay.call("get_restaurant_display_label", s)
+			var t := str(v).strip_edges()
+			if not t.is_empty():
+				label = t
+		restaurant_option.add_item(label)
 		var idx := restaurant_option.get_item_count() - 1
 		restaurant_option.set_item_metadata(idx, s)
 	_select_option_by_metadata_string(restaurant_option, selected_restaurant_id)

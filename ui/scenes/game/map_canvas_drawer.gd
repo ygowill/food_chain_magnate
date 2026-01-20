@@ -446,6 +446,14 @@ static func _draw_restaurant(canvas, cell_size: int, anchor: Vector2i, info: Dic
 
 	_draw_restaurant_entrance_marker(canvas, cell_size, anchor, info, alpha)
 
+	# move_restaurant：高亮当前选中的餐厅（入口 anchor 匹配）。
+	var selected_anchor_val = canvas.get("_move_restaurant_selected_anchor") if canvas != null else null
+	if selected_anchor_val is Vector2i and Vector2i(selected_anchor_val) == anchor:
+		var outline_w := maxf(2.0, float(cell_size) * 0.08)
+		outline_w = minf(outline_w, float(cell_size))
+		var outline_col := Color(0.2, 0.8, 1.0, 0.9 * clampf(alpha, 0.0, 1.0))
+		canvas.draw_rect(structure_rect, outline_col, false, outline_w)
+
 static func _draw_restaurant_entrance_marker(canvas, cell_size: int, anchor: Vector2i, info: Dictionary, alpha: float = 1.0) -> void:
 	var min_pos_val = info.get("min", null)
 	var max_pos_val = info.get("max", null)

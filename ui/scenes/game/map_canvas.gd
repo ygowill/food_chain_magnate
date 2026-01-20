@@ -38,6 +38,9 @@ var _structure_preview_info: Dictionary = {}
 
 var _highlighted_cells: Dictionary = {} # Vector2i -> true
 
+# move_restaurant 模式：用于高亮“当前被移动的餐厅”（入口 anchor）。
+var _move_restaurant_selected_anchor: Vector2i = Vector2i(-1, -1) # world_pos
+
 var _skin = null
 var _skin_modules_key: String = ""
 
@@ -152,6 +155,7 @@ func clear() -> void:
 	_structure_preview_valid = true
 	_structure_preview_info.clear()
 	_highlighted_cells.clear()
+	_move_restaurant_selected_anchor = Vector2i(-1, -1)
 	custom_minimum_size = Vector2.ZERO
 	queue_redraw()
 
@@ -195,6 +199,16 @@ func clear_cell_highlights() -> void:
 	if _highlighted_cells.is_empty():
 		return
 	_highlighted_cells.clear()
+	queue_redraw()
+
+func set_move_restaurant_selected_restaurant(anchor_world_pos: Vector2i) -> void:
+	_move_restaurant_selected_anchor = anchor_world_pos
+	queue_redraw()
+
+func clear_move_restaurant_selected_restaurant() -> void:
+	if _move_restaurant_selected_anchor == Vector2i(-1, -1):
+		return
+	_move_restaurant_selected_anchor = Vector2i(-1, -1)
 	queue_redraw()
 
 func is_cell_highlighted(world_pos: Vector2i) -> bool:

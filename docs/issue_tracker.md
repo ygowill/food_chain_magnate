@@ -42,7 +42,7 @@
 | 25 | 重组界面：全屏覆盖；左侧仅待命卡；三列滚动；右侧公司树满宽；多管理槽下属卡槽改为网格 | UI/重构 | `ModalPanelBase` 设计为“不遮挡左侧信息区”；`HandArea` 默认显示在岗/待命/忙碌；`CompanyStructure` 下属槽位纵向堆叠导致高度溢出 | Planned |
 | 26 | 招聘/培训等面板统一复用员工缩略卡（EmployeeCard） | UI/一致性 | Recruit/Train 等面板各自实现了 PoolCard/TrainableCard/OptionButton 文本，导致表现不一致、维护分散 | Implemented（待手动验收） |
 | 27 | 地图高亮/覆盖机制统一：边框 + 透明层覆盖完整 piece | UI/渲染 | 当前存在多套：cell 选中框、cell_highlights、structure_preview、MarketingRangeOverlay 等；且房屋“被覆盖”只高亮锚点格 | Planned |
-| 28 | 移动餐厅：餐厅选项改为可阅读；切换时高亮当前餐厅 | UI/交互 | move_restaurant 下拉框仅显示 `rest_0` 等 id；地图餐厅无 id/编号标记；现高亮逻辑只显示“可放置锚点”，未高亮被选餐厅 | Planned |
+| 28 | 移动餐厅：餐厅选项改为可阅读；切换时高亮当前餐厅 | UI/交互 | move_restaurant 下拉框仅显示 `rest_0` 等 id；地图餐厅无 id/编号标记；现高亮逻辑只显示“可放置锚点”，未高亮被选餐厅 | Implemented（待手动验收） |
 | 29 | 营销面板遮挡；营销放置缺少形状预览；营销图标大小需适配 piece | UI/布局+渲染 | 右侧抽屉嵌入时布局/裁剪导致左侧内容被遮挡；地图交互仅高亮 anchor 未显示 footprint；地图渲染中营销图标缩放策略不匹配多格 board | Planned |
 | 30 | 飞机营销板件：应贴地图外侧边缘且不在地图内；可用宽度仅 1/3/5 | UI/规则+渲染 | 当前飞机按普通营销板件在地图内绘制/占地，且尺寸来自现有 `footprint_size`（含 2x1/3x2/5x2 等），与目标规则不一致 | Planned |
 | 31 | 关闭“点击地图格高亮” | UI/一致性 | `MapCanvas` 记录 `_selected_pos` 且 `MapCanvasDrawer._draw_selection()` 绘制蓝色选中框 | Implemented（待手动验收） |
@@ -1413,18 +1413,35 @@
 - 餐厅显示格式选 C：`餐厅 1 @ (x,y)`（隐藏内部 id）。
 - 地图上的餐厅标记仅在 move_restaurant 模式显示。
 
-**修复方案（提案，需你点头后实施）**
+**修复方案**
 
 - ActionPanel 的餐厅 OptionButton 使用“可读 label + metadata=restaurant_id”模式。
-- move_restaurant 模式下在地图上渲染餐厅编号/坐标标记；并在切换选中餐厅时对该餐厅 footprint 做高亮（复用 #27 的统一高亮机制）。
+- move_restaurant 模式下在地图上高亮当前选中的餐厅（入口 anchor 匹配）。
+
+**实施记录**
+
+- 已修改：`ui/components/restaurant_placement/restaurant_placement_overlay.gd`：
+	- `set_map_data()` 记录 map_data；
+	- 新增 `get_restaurant_display_label()`（`餐厅 N @ (x,y)`）用于 UI 展示；
+	- move_restaurant 提示文案改用可读 label（隐藏内部 id）。
+- 已修改：`ui/components/action_panel/action_panel.gd`：`_rebuild_restaurant_option()` 通过 overlay 的 `get_restaurant_display_label()` 展示可读 label（metadata 保持为 restaurant_id）。
+- 已修改：`ui/scenes/game/map_canvas.gd`：新增 move_restaurant 的选中餐厅 anchor 状态与 set/clear 方法。
+- 已修改：`ui/scenes/game/game_map_interaction_controller.gd`：`on_restaurant_highlight_requested()` 在 move_restaurant 时将选中餐厅 entrance_pos 写入 MapCanvas，用于渲染高亮；并在切换/退出模式时清理。
+- 已修改：`ui/scenes/game/map_canvas_drawer.gd`：`_draw_restaurant()` 在入口 anchor 匹配时绘制高亮边框。
+- 新增：`ui/scenes/tests/move_restaurant_display_label_test.gd`（`MoveRestaurantDisplayLabelTest`）；并在 `ui/scenes/tests/all_tests.gd` 纳入 AllTests。
 
 **验收**
 
 - 玩家可直观识别下拉框中的餐厅对应地图哪个实体；切换选择时地图明确高亮当前餐厅。
 
+**验证**
+
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（见 `.godot/AllTests.log`）
+
 **状态**
 
-- Planned
+- Implemented（待手动验收）
 
 ---
 

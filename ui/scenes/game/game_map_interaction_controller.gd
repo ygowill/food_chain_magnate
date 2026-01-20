@@ -75,6 +75,8 @@ func begin_selection(mode: String, payload: Dictionary = {}) -> void:
 	_marketing_valid_anchors.clear()
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_cell_highlights"):
 		_map_canvas.call("clear_cell_highlights")
+	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_move_restaurant_selected_restaurant"):
+		_map_canvas.call("clear_move_restaurant_selected_restaurant")
 	_emit_mode_changed()
 	if _mode == "procure_drinks":
 		_sync_procure_drinks_highlights()
@@ -87,6 +89,8 @@ func clear_selection() -> void:
 		_map_canvas.call("clear_structure_preview")
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_cell_highlights"):
 		_map_canvas.call("clear_cell_highlights")
+	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_move_restaurant_selected_restaurant"):
+		_map_canvas.call("clear_move_restaurant_selected_restaurant")
 	_restaurant_valid_anchors.clear()
 	_house_valid_anchors.clear()
 	_marketing_valid_anchors.clear()
@@ -768,7 +772,28 @@ func on_restaurant_highlight_requested(mode: String, rotation: int, restaurant_i
 		_restaurant_valid_anchors.clear()
 		if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_cell_highlights"):
 			_map_canvas.call("clear_cell_highlights")
+		if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_move_restaurant_selected_restaurant"):
+			_map_canvas.call("clear_move_restaurant_selected_restaurant")
 		return
+
+	# 非 move_restaurant：确保清理“被移动餐厅”的高亮
+	if action_id != "move_restaurant":
+		if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_move_restaurant_selected_restaurant"):
+			_map_canvas.call("clear_move_restaurant_selected_restaurant")
+	else:
+		# move_restaurant：高亮当前选中餐厅（入口 anchor）
+		var anchor_world := Vector2i(-1, -1)
+		if not restaurant_id.is_empty() and (state.map is Dictionary) and state.map.has("restaurants") and (state.map["restaurants"] is Dictionary):
+			var rests: Dictionary = state.map["restaurants"]
+			if rests.has(restaurant_id):
+				var rest_val = rests[restaurant_id]
+				if rest_val is Dictionary:
+					var rest: Dictionary = rest_val
+					var ep_val = rest.get("entrance_pos", null)
+					if ep_val is Vector2i:
+						anchor_world = Vector2i(ep_val)
+		if is_instance_valid(_map_canvas) and _map_canvas.has_method("set_move_restaurant_selected_restaurant"):
+			_map_canvas.call("set_move_restaurant_selected_restaurant", anchor_world)
 
 	if not (state.map is Dictionary):
 		return

@@ -21,6 +21,9 @@ var _selected_restaurant_id: String = ""
 var _available_employees: Array[String] = []
 var _selected_employee_type: String = ""
 
+var _map_data: Dictionary = {}
+var _restaurant_index_by_id: Dictionary = {} # restaurant_id -> 1-based index (stable for current list)
+
 var _validation_ok: bool = true
 var _validation_message: String = ""
 
@@ -62,9 +65,9 @@ func set_mode(action_id: String) -> void:
 	_emit_highlight_request()
 	ui_state_changed.emit()
 
-func set_map_data(_map_data: Dictionary) -> void:
-	# 预留：后续可根据 PlacementValidator 扫描可放置位置并高亮
-	pass
+func set_map_data(map_data: Dictionary) -> void:
+	_map_data = map_data
+	_update_ui()
 
 func set_available_restaurants(restaurant_ids: Array[String]) -> void:
 	var ids: Array[String] = []
@@ -74,6 +77,7 @@ func set_available_restaurants(restaurant_ids: Array[String]) -> void:
 			ids.append(s)
 	ids.sort()
 	_available_restaurants = ids
+	_rebuild_restaurant_indices()
 
 	if _mode == "move_restaurant":
 		if ids.is_empty():
@@ -85,6 +89,49 @@ func set_available_restaurants(restaurant_ids: Array[String]) -> void:
 	_emit_highlight_request()
 	_update_ui()
 	ui_state_changed.emit()
+
+func get_restaurant_display_label(restaurant_id: String) -> String:
+	var rid := str(restaurant_id).strip_edges()
+	if rid.is_empty():
+		return ""
+
+	var idx := int(_restaurant_index_by_id.get(rid, 0))
+	if idx <= 0 and not _available_restaurants.is_empty():
+		var i := _available_restaurants.find(rid)
+		idx = i + 1 if i >= 0 else 0
+
+	var entrance := _get_restaurant_entrance_pos(rid)
+	if entrance != Vector2i(-1, -1):
+		if idx > 0:
+			return "餐厅 %d @ (%d,%d)" % [idx, entrance.x, entrance.y]
+		return "餐厅 @ (%d,%d)" % [entrance.x, entrance.y]
+
+	return "餐厅 %d" % idx if idx > 0 else rid
+
+func _rebuild_restaurant_indices() -> void:
+	_restaurant_index_by_id.clear()
+	for i in range(_available_restaurants.size()):
+		var rid := str(_available_restaurants[i]).strip_edges()
+		if rid.is_empty():
+			continue
+		_restaurant_index_by_id[rid] = i + 1
+
+func _get_restaurant_entrance_pos(restaurant_id: String) -> Vector2i:
+	if _map_data.is_empty():
+		return Vector2i(-1, -1)
+	if not _map_data.has("restaurants") or not (_map_data["restaurants"] is Dictionary):
+		return Vector2i(-1, -1)
+	var restaurants: Dictionary = _map_data["restaurants"]
+	if not restaurants.has(restaurant_id):
+		return Vector2i(-1, -1)
+	var rest_val = restaurants[restaurant_id]
+	if not (rest_val is Dictionary):
+		return Vector2i(-1, -1)
+	var rest: Dictionary = rest_val
+	var ep_val = rest.get("entrance_pos", null)
+	if ep_val is Vector2i:
+		return Vector2i(ep_val)
+	return Vector2i(-1, -1)
 
 func set_available_employees(employee_types: Array[String]) -> void:
 	var ids: Array[String] = []
@@ -212,11 +259,12 @@ func _update_hint() -> void:
 		if _selected_restaurant_id.is_empty():
 			hint_label.text = "请选择要移动的餐厅，并在地图上点击目标位置"
 			return
+		var label := get_restaurant_display_label(_selected_restaurant_id)
 		if _selected_position == Vector2i(-1, -1):
-			hint_label.text = "已选择餐厅: %s，请在地图上点击目标位置" % _selected_restaurant_id
+			hint_label.text = "已选择: %s，请在地图上点击目标位置" % label
 			return
-		hint_label.text = "餐厅 %s → (%d,%d) 旋转:%d°" % [
-			_selected_restaurant_id,
+		hint_label.text = "%s → (%d,%d) 旋转:%d°" % [
+			label,
 			_selected_position.x,
 			_selected_position.y,
 			_selected_rotation
