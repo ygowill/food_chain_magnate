@@ -288,16 +288,32 @@ func _on_map_cell_hovered(world_pos: Vector2i) -> void:
 	if world_pos == Vector2i(-1, -1):
 		if _overlay_controller != null:
 			_overlay_controller.hide_marketing_range_overlay()
+		if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_structure_preview"):
+			_map_canvas.call("clear_structure_preview")
 		return
 
 	var mt := str(_payload.get("marketing_type", ""))
 	if mt.is_empty():
+		if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_structure_preview"):
+			_map_canvas.call("clear_structure_preview")
 		return
 
 	if not _marketing_valid_anchors.has(world_pos):
 		if _overlay_controller != null:
 			_overlay_controller.hide_marketing_range_overlay()
+		if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_structure_preview"):
+			_map_canvas.call("clear_structure_preview")
 		return
+
+	# footprint 预览：hover 到合法 anchor 时展示 marketing board 的占地形状（允许透明）。
+	var size := _get_selected_marketing_board_rotated_size()
+	if size.x > 0 and size.y > 0:
+		var cells: Array[Vector2i] = []
+		for dy in range(size.y):
+			for dx in range(size.x):
+				cells.append(world_pos + Vector2i(dx, dy))
+		if is_instance_valid(_map_canvas) and _map_canvas.has_method("set_structure_preview"):
+			_map_canvas.call("set_structure_preview", cells, true)
 
 	if _overlay_controller != null:
 		if mt == "airplane":

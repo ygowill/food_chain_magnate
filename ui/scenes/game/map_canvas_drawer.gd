@@ -665,7 +665,9 @@ static func _draw_marketing(canvas, cell_size: int) -> void:
 			var product_tex: Texture2D = canvas._skin.get_product_icon_texture(pid)
 
 			# Product icon centered on the board area (matches “product slot centered” requirement).
-			var s := minf(rect.size.x, rect.size.y) * 0.60
+			var pad := maxf(2.0, float(cell_size) * 0.12)
+			var avail := rect.size - Vector2(pad * 2.0, pad * 2.0)
+			var s := minf(avail.x, avail.y) * 0.85
 			var icon_size2 := Vector2(s, s)
 			var icon_pos2 := rect.position + (rect.size - icon_size2) * 0.5
 			_draw_texture_aspect_fit(canvas, product_tex, Rect2(icon_pos2, icon_size2), Color(1, 1, 1, 0.95))

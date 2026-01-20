@@ -43,7 +43,7 @@
 | 26 | 招聘/培训等面板统一复用员工缩略卡（EmployeeCard） | UI/一致性 | Recruit/Train 等面板各自实现了 PoolCard/TrainableCard/OptionButton 文本，导致表现不一致、维护分散 | Implemented（待手动验收） |
 | 27 | 地图高亮/覆盖机制统一：边框 + 透明层覆盖完整 piece | UI/渲染 | 当前存在多套：cell 选中框、cell_highlights、structure_preview、MarketingRangeOverlay 等；且房屋“被覆盖”只高亮锚点格 | Planned |
 | 28 | 移动餐厅：餐厅选项改为可阅读；切换时高亮当前餐厅 | UI/交互 | move_restaurant 下拉框仅显示 `rest_0` 等 id；地图餐厅无 id/编号标记；现高亮逻辑只显示“可放置锚点”，未高亮被选餐厅 | Implemented（待手动验收） |
-| 29 | 营销面板遮挡；营销放置缺少形状预览；营销图标大小需适配 piece | UI/布局+渲染 | 右侧抽屉嵌入时布局/裁剪导致左侧内容被遮挡；地图交互仅高亮 anchor 未显示 footprint；地图渲染中营销图标缩放策略不匹配多格 board | Planned |
+| 29 | 营销面板遮挡；营销放置缺少形状预览；营销图标大小需适配 piece | UI/布局+渲染 | 右侧抽屉嵌入时布局/裁剪导致左侧内容被遮挡；地图交互仅高亮 anchor 未显示 footprint；地图渲染中营销图标缩放策略不匹配多格 board | Implemented（待手动验收） |
 | 30 | 飞机营销板件：应贴地图外侧边缘且不在地图内；可用宽度仅 1/3/5 | UI/规则+渲染 | 当前飞机按普通营销板件在地图内绘制/占地，且尺寸来自现有 `footprint_size`（含 2x1/3x2/5x2 等），与目标规则不一致 | Planned |
 | 31 | 关闭“点击地图格高亮” | UI/一致性 | `MapCanvas` 记录 `_selected_pos` 且 `MapCanvasDrawer._draw_selection()` 绘制蓝色选中框 | Implemented（待手动验收） |
 | 32 | 地图渲染：tile 内部细分网格线（细线）与 tile 外边缘粗线一起绘制 | UI/渲染 | `MapCanvasDrawer._draw_tile_borders()` 目前仅绘制 tile 外边缘粗线，未绘制 tile 内部单元格分割线 | Implemented（待手动验收） |
@@ -1468,7 +1468,7 @@
 - 遮挡表现：一些按钮与下拉框最左侧有一小部分被边框遮住。
 - 营销 footprint 预览：希望 hover 就显示（预览允许加透明度）。
 
-**修复方案（提案，需你点头后实施）**
+**修复方案**
 
 - 修复面板遮挡：调整 MarketingPanel 内部容器的 margin/padding 或 RightPanel dock host 的裁剪/偏移，确保左侧内容不被盖住。
 - 增加营销 footprint 预览：当 hover 到合法 anchor 时，计算该 board 的 rotated footprint cells，并调用 `MapCanvas.set_structure_preview()` 显示占地预览。
@@ -1478,9 +1478,20 @@
 
 - 营销面板无遮挡；营销选点时地图能看到 footprint 预览；营销图标与 piece 占地匹配，不显得过大/过小。
 
+**实施记录**
+
+- 已修改：`ui/components/marketing_panel/marketing_panel.tscn`：增加左侧 margin，避免按钮/下拉框左侧被边框遮挡。
+- 已修改：`ui/scenes/game/game_map_interaction_controller.gd`：marketing hover 到合法 anchor 时调用 `MapCanvas.set_structure_preview()` 显示 footprint 预览；离开合法 anchor 时清理预览。
+- 已修改：`ui/scenes/game/map_canvas_drawer.gd`：营销 product 图标大小改为基于 board 可用区域自适应缩放，使不同 footprint 的板件视觉更匹配。
+
+**验证**
+
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（见 `.godot/AllTests.log`）
+
 **状态**
 
-- Planned
+- Implemented（待手动验收）
 
 ---
 
