@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://ui/components/train_panel/train_panel.gd" id="1_train_panel"]
+[ext_resource type="Script" path="res://ui/components/employee_picker/employee_picker.gd" id="2_employee_picker"]
 
 [node name="TrainPanel" type="Control"]
 custom_minimum_size = Vector2(450, 280)
@@ -64,6 +65,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 8
+script = ExtResource("2_employee_picker")
 
 [node name="PathSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -82,10 +84,12 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 horizontal_scroll_mode = 1
 
-[node name="PathContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/PathSection/ScrollContainer"]
+[node name="PathContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/PathSection/ScrollContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 6
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+script = ExtResource("2_employee_picker")
 
 [node name="ConfirmButton" type="Button" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2

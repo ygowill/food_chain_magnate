@@ -8,7 +8,7 @@ signal cancelled()
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var type_container: Container = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TypeSection/TypeContainer
-@onready var marketer_option: OptionButton = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/MarketerSection/MarketerOption
+@onready var marketer_option: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/MarketerSection/MarketerOption
 @onready var board_flow: Container = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/BoardSection/BoardFlow
 @onready var product_flow: Container = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ProductSection/ProductFlow
 @onready var duration_flow: Container = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/DurationSection/DurationFlow
@@ -93,7 +93,8 @@ func _get_cancel_button() -> Button:
 
 func _on_panel_ready() -> void:
 	if marketer_option != null:
-		marketer_option.item_selected.connect(_on_marketer_selected)
+		if marketer_option.has_signal("employee_selected"):
+			marketer_option.employee_selected.connect(_on_marketer_selected)
 
 	_board_button_group.allow_unpress = false
 	_product_button_group.allow_unpress = false
@@ -146,7 +147,6 @@ func clear_selection() -> void:
 
 	if marketer_option != null:
 		marketer_option.clear()
-		marketer_option.disabled = true
 
 	_clear_board_buttons()
 	_clear_duration_buttons()
@@ -216,10 +216,8 @@ func _rebuild_marketer_options() -> void:
 	if marketer_option == null:
 		return
 
-	marketer_option.clear()
-
 	if _selected_type.is_empty():
-		marketer_option.disabled = true
+		marketer_option.clear()
 		_clear_duration_buttons()
 		return
 
@@ -243,29 +241,26 @@ func _rebuild_marketer_options() -> void:
 		ids.append(str(k))
 	ids.sort()
 
+	var items: Array[Dictionary] = []
 	for emp_id in ids:
 		var count: int = int(counts.get(emp_id, 0))
-		var label := "%s ×%d" % [_get_employee_display_name(emp_id), count]
-		marketer_option.add_item(label)
-		var idx := marketer_option.get_item_count() - 1
-		marketer_option.set_item_metadata(idx, emp_id)
+		items.append({
+			"id": emp_id,
+			"employee_def": _get_employee_def_for_card(emp_id),
+			"badge_text": str(count),
+			"enabled": true,
+		})
 
-	if marketer_option.get_item_count() > 0:
-		marketer_option.disabled = false
-		marketer_option.select(0)
-		_apply_selected_marketer(0)
+	if ids.size() > 0:
+		var first := str(ids[0])
+		marketer_option.set_items(items, first)
+		_apply_selected_marketer(first)
 	else:
-		marketer_option.disabled = true
+		marketer_option.clear()
 		_clear_duration_buttons()
 
-func _apply_selected_marketer(index: int) -> void:
-	if marketer_option == null:
-		return
-	if index < 0 or index >= marketer_option.get_item_count():
-		return
-
-	var meta = marketer_option.get_item_metadata(index)
-	_selected_employee_type = str(meta)
+func _apply_selected_marketer(employee_type: String) -> void:
+	_selected_employee_type = str(employee_type).strip_edges()
 
 	var max_duration := int(_marketer_max_duration_by_id.get(_selected_employee_type, 1))
 	if max_duration <= 0:
@@ -680,14 +675,25 @@ func _scale_texture_to_square_cover(tex: Texture2D, target_size: Vector2i) -> Te
 	out.blit_rect(img, Rect2i(Vector2i(x0, y0), Vector2i(tw, th)), Vector2i.ZERO)
 	return ImageTexture.create_from_image(out)
 
-func _on_marketer_selected(index: int) -> void:
-	_apply_selected_marketer(index)
+func _on_marketer_selected(employee_type: String) -> void:
+	_apply_selected_marketer(employee_type)
 	_selected_target = Vector2i(-1, -1)
 	_selected_axis = ""
 	_update_target_display()
 	_update_confirm_state()
 	clear_error()
 	_request_map_selection_refresh()
+
+func _get_employee_def_for_card(employee_type: String) -> Dictionary:
+	var emp_id := str(employee_type).strip_edges()
+	if emp_id.is_empty():
+		return {"id": emp_id, "name": emp_id}
+	if not EmployeeRegistryClass.is_loaded():
+		return {"id": emp_id, "name": emp_id}
+	var def_val = EmployeeRegistryClass.get_def(emp_id)
+	if def_val != null and def_val.has_method("to_dict"):
+		return def_val.to_dict()
+	return {"id": emp_id, "name": emp_id}
 
 func _on_board_button_pressed(board_number: int) -> void:
 	_set_selected_board_number(board_number)

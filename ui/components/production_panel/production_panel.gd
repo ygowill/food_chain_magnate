@@ -20,12 +20,13 @@ signal drinks_undo_requested()
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
+const EmployeePickerClass = preload("res://ui/components/employee_picker/employee_picker.gd")
 
 var _production_type: String = "food"  # food | drinks
 var _available_producers: Array[String] = []
 var _current_inventory: Dictionary = {}
 
-var _employee_option: OptionButton = null
+var _employee_picker = null
 var _info_label: Label = null
 var _selected_employee_type: String = ""
 
@@ -122,12 +123,12 @@ func _rebuild_content() -> void:
 
 	UiRebuildHelpersClass.free_children(products_container)
 
-	var embedded := is_embedded_in_right_panel()
-	_employee_option = OptionButton.new()
-	_employee_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_employee_option.custom_minimum_size = Vector2.ZERO if embedded else Vector2(380, 0)
-	_employee_option.item_selected.connect(_on_employee_selected)
-	products_container.add_child(_employee_option)
+	_employee_picker = EmployeePickerClass.new()
+	_employee_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_employee_picker.add_theme_constant_override("h_separation", 10)
+	_employee_picker.add_theme_constant_override("v_separation", 10)
+	_employee_picker.employee_selected.connect(_on_employee_selected)
+	products_container.add_child(_employee_picker)
 
 	_info_label = Label.new()
 	_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD
@@ -167,8 +168,6 @@ func _apply_embedding_layout() -> void:
 	var embedded := is_embedded_in_right_panel()
 	if scroll_container != null:
 		scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if embedded else ScrollContainer.SCROLL_MODE_DISABLED
-	if _employee_option != null:
-		_employee_option.custom_minimum_size = Vector2.ZERO if embedded else Vector2(380, 0)
 	if _food_type_option != null:
 		_food_type_option.custom_minimum_size = Vector2.ZERO if embedded else Vector2(380, 0)
 	if _drink_type_option != null:
@@ -176,10 +175,8 @@ func _apply_embedding_layout() -> void:
 
 func _rebuild_employee_options() -> void:
 	_selected_employee_type = ""
-	if _employee_option == null:
+	if _employee_picker == null:
 		return
-
-	_employee_option.clear()
 
 	var counts: Dictionary = {}
 	for v in _available_producers:
@@ -193,37 +190,46 @@ func _rebuild_employee_options() -> void:
 		ids.append(str(k))
 	ids.sort()
 
+	var items: Array[Dictionary] = []
 	for emp_id2 in ids:
 		var count: int = int(counts.get(emp_id2, 0))
-		var label := "%s ×%d" % [_get_employee_display_name(emp_id2), count]
-		_employee_option.add_item(label)
-		var idx := _employee_option.get_item_count() - 1
-		_employee_option.set_item_metadata(idx, emp_id2)
+		items.append({
+			"id": emp_id2,
+			"employee_def": _get_employee_def_for_card(emp_id2),
+			"badge_text": str(count),
+			"enabled": true,
+		})
 
-	if _employee_option.get_item_count() > 0:
-		_employee_option.disabled = false
-		_employee_option.select(0)
-		_apply_selected_employee(0)
+	if ids.size() > 0:
+		var first := str(ids[0])
+		_employee_picker.set_items(items, first)
+		_apply_selected_employee(first)
 	else:
-		_employee_option.disabled = true
+		_employee_picker.clear()
 	_selected_changed()
 
-func _apply_selected_employee(index: int) -> void:
-	if _employee_option == null:
-		return
-	if index < 0 or index >= _employee_option.get_item_count():
-		return
-	var meta = _employee_option.get_item_metadata(index)
-	_selected_employee_type = str(meta)
+func _apply_selected_employee(employee_type: String) -> void:
+	_selected_employee_type = str(employee_type).strip_edges()
 
-func _on_employee_selected(index: int) -> void:
-	_apply_selected_employee(index)
+func _on_employee_selected(employee_type: String) -> void:
+	_apply_selected_employee(employee_type)
 	_selected_changed()
 	_rebuild_food_type_options()
 	_update_food_controls_visibility()
 	_update_drinks_controls_visibility()
 	_update_confirm_state()
 	_update_info()
+
+func _get_employee_def_for_card(employee_type: String) -> Dictionary:
+	var emp_id := str(employee_type).strip_edges()
+	if emp_id.is_empty():
+		return {"id": emp_id, "name": emp_id}
+	if not EmployeeRegistryClass.is_loaded():
+		return {"id": emp_id, "name": emp_id}
+	var def_val = EmployeeRegistryClass.get_def(emp_id)
+	if def_val != null and def_val.has_method("to_dict"):
+		return def_val.to_dict()
+	return {"id": emp_id, "name": emp_id}
 
 func _selected_changed() -> void:
 	producer_changed.emit(_selected_employee_type, _production_type)

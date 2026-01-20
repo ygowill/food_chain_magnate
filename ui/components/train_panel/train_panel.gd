@@ -1,18 +1,16 @@
 # 培训面板组件
-# 显示待命区可培训员工，支持选择培训目标
+# 显示可培训员工（来源）并选择培训目标
 class_name TrainPanel
 extends "res://ui/components/common/right_panel_embeddable_panel.gd"
 
 signal train_requested(from_employee: String, to_employee: String)
 
-const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
-const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 
 @onready var counter_label: Label = $MarginContainer/VBoxContainer/CounterRow/CounterLabel
 @onready var trainable_section_label: Label = $MarginContainer/VBoxContainer/TrainableSection/SectionLabel
 @onready var trainable_container: HFlowContainer = $MarginContainer/VBoxContainer/TrainableSection/TrainableContainer
-@onready var path_container: VBoxContainer = $MarginContainer/VBoxContainer/PathSection/ScrollContainer/PathContainer
+@onready var path_container: HFlowContainer = $MarginContainer/VBoxContainer/PathSection/ScrollContainer/PathContainer
 @onready var confirm_btn: Button = $MarginContainer/VBoxContainer/ConfirmButton
 
 var _employee_pool: Dictionary = {}  # employee_type -> count
@@ -26,9 +24,9 @@ var _max_steps_one_employee: int = 1
 var _selected_source: String = ""
 var _selected_target: String = ""
 var _selected_steps_required: int = 0
-var _trainable_cards: Dictionary = {}  # employee_type -> TrainableCard
+
 var _requires_same_color_by_source: Dictionary = {}  # employee_type -> bool
-var _badge_text_by_source: Dictionary = {}  # employee_type -> String
+var _badge_text_by_source: Dictionary = {}  # employee_type -> String (e.g. "预支")
 var _selected_requires_same_color: bool = false
 var _steps_by_target: Dictionary = {}  # target_type -> steps_required
 
@@ -41,18 +39,29 @@ func _apply_embedding(embedded: bool) -> void:
 		confirm_btn.visible = not embedded
 
 func _get_relayout_delay_frames() -> int:
-	# 训练源卡牌使用 HFlowContainer：在首次嵌入 RightPanel/首次显示时可能未拿到稳定宽度导致不换行。
+	# HFlowContainer(选卡) 在首次嵌入/首次显示时可能未拿到稳定宽度导致不换行。
 	return 2
+
+func _on_panel_ready() -> void:
+	if trainable_container != null and is_instance_valid(trainable_container):
+		if trainable_container.has_signal("employee_selected"):
+			trainable_container.employee_selected.connect(_on_source_selected)
+	if path_container != null and is_instance_valid(path_container):
+		if path_container.has_signal("employee_selected"):
+			path_container.employee_selected.connect(_on_target_selected)
 
 func _on_relayout() -> void:
 	if trainable_container != null and is_instance_valid(trainable_container):
 		trainable_container.queue_sort()
+	if path_container != null and is_instance_valid(path_container):
+		path_container.queue_sort()
 
 func set_employee_registry(registry) -> void:
 	_employee_registry = registry
 
 func set_employee_pool(pool: Dictionary) -> void:
-	_employee_pool = pool.duplicate()
+	_employee_pool = pool.duplicate(true)
+	_update_states()
 
 func set_trainable_employees(employees: Array[String]) -> void:
 	var sources := {}
@@ -89,13 +98,15 @@ func set_trainable_sources(sources: Dictionary, section_label_text: String = "")
 	_trainable_order.sort()
 	if trainable_section_label != null and not section_label_text.is_empty():
 		trainable_section_label.text = section_label_text
-	_rebuild_trainable_list()
+	_update_states()
 
 func set_source_requires_same_color(map: Dictionary) -> void:
 	_requires_same_color_by_source = map.duplicate(true)
+	_update_states()
 
 func set_source_badges(map: Dictionary) -> void:
 	_badge_text_by_source = map.duplicate(true)
+	_update_states()
 
 func set_train_count(remaining: int, total: int) -> void:
 	_train_remaining = remaining
@@ -105,38 +116,12 @@ func set_train_count(remaining: int, total: int) -> void:
 
 func set_max_steps_one_employee(max_steps: int) -> void:
 	_max_steps_one_employee = maxi(0, max_steps)
-	# 若当前已选中来源，则重新构建可达目标列表（例如 coach/guru slot 被消耗后最大步数下降）
-	if not _selected_source.is_empty():
-		_show_train_path(_selected_source)
+	_update_states()
 
 func refresh() -> void:
-	_rebuild_trainable_list()
 	_update_counter()
-
-func _rebuild_trainable_list() -> void:
-	# 清除旧卡牌
-	UiRebuildHelpersClass.free_nodes_dict(_trainable_cards)
-
-	if trainable_container == null:
-		return
-
-	for emp_type in _trainable_order:
-		var emp_def := _get_employee_def(emp_type)
-		var count: int = int(_trainable_sources.get(emp_type, 1))
-		var requires_same_color := bool(_requires_same_color_by_source.get(emp_type, false))
-		var badge_text := str(_badge_text_by_source.get(emp_type, ""))
-
-		var card := TrainableCard.new()
-		card.employee_type = emp_type
-		card.employee_def = emp_def
-		card.source_count = count
-		card.badge_text = badge_text
-		card.requires_same_color = requires_same_color
-		card.card_clicked.connect(_on_trainable_clicked)
-		trainable_container.add_child(card)
-		_trainable_cards[emp_type] = card
-
-	_clear_selection()
+	_update_states()
+	_request_relayout()
 
 func _get_employee_def(employee_type: String) -> Dictionary:
 	if _employee_registry != null and _employee_registry.has_method("get_employee"):
@@ -158,58 +143,139 @@ func _update_counter() -> void:
 func _update_states() -> void:
 	var can_train := _train_remaining > 0
 
-	for emp_type in _trainable_cards.keys():
-		var card: TrainableCard = _trainable_cards[emp_type]
-		if is_instance_valid(card):
-			card.set_enabled(can_train)
+	# 若剩余次数为 0，则清空选择，避免出现“已选但无法确认”的误导。
+	if not can_train:
+		_clear_selection(true)
 
-	# TrainTargetItem 的“可选”状态也依赖剩余培训次数
-	if path_container != null:
-		for child in path_container.get_children():
-			if child is TrainTargetItem:
-				child.train_remaining = _train_remaining
-				child.update_display()
+	_refresh_trainable_picker()
+	_refresh_target_picker()
 
 	if confirm_btn != null:
-		var ok := can_train and not _selected_source.is_empty() and not _selected_target.is_empty() and _selected_steps_required > 0 and _selected_steps_required <= _train_remaining
+		var ok := can_train and not _selected_source.is_empty() and not _selected_target.is_empty()
+		ok = ok and _selected_steps_required > 0 and _selected_steps_required <= _train_remaining
 		confirm_btn.disabled = not ok
 	right_panel_footer_changed.emit()
 
-func _on_trainable_clicked(employee_type: String) -> void:
-	_selected_source = employee_type
-	_selected_target = ""
-	_selected_steps_required = 0
-	_selected_requires_same_color = bool(_requires_same_color_by_source.get(employee_type, false))
+func _refresh_trainable_picker() -> void:
+	if trainable_container == null:
+		return
 
-	# 高亮选中
-	for emp_type in _trainable_cards.keys():
-		var card: TrainableCard = _trainable_cards[emp_type]
-		if is_instance_valid(card):
-			card.set_selected(emp_type == employee_type)
+	var can_train := _train_remaining > 0
 
-	_show_train_path(employee_type)
-	_update_states()
+	# 若来源不再可用（例如模式切换/数量变更），清空选择与路径。
+	if not _selected_source.is_empty() and not _trainable_sources.has(_selected_source):
+		_clear_selection(true)
 
-func _show_train_path(employee_type: String) -> void:
-	# 清除旧路径/选择
-	if path_container != null:
-		UiRebuildHelpersClass.free_children(path_container)
+	var items: Array[Dictionary] = []
+	for emp_type in _trainable_order:
+		var emp_def := _get_employee_def(emp_type)
+		var count: int = int(_trainable_sources.get(emp_type, 1))
 
-	if confirm_btn != null:
-		confirm_btn.disabled = true
-	right_panel_footer_changed.emit()
+		var tag_text := str(_badge_text_by_source.get(emp_type, "")).strip_edges()
+		if tag_text.is_empty() and bool(_requires_same_color_by_source.get(emp_type, false)):
+			tag_text = "在岗"
+
+		items.append({
+			"id": emp_type,
+			"employee_def": emp_def,
+			"badge_text": str(count), # 数量角标
+			"tag_text": tag_text,
+			"enabled": can_train and count > 0,
+		})
+
+	if trainable_container.has_method("set_items"):
+		trainable_container.set_items(items, _selected_source)
+	_request_relayout()
+
+func _refresh_target_picker() -> void:
+	if path_container == null:
+		return
+
+	_recompute_steps_by_target()
+
+	# 无来源时：清空并提示
+	if _selected_source.is_empty():
+		if path_container.has_method("clear"):
+			path_container.clear()
+		var label := Label.new()
+		label.text = "请选择培训来源"
+		label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+		path_container.add_child(label)
+		_selected_target = ""
+		_selected_steps_required = 0
+		return
+
+	if _steps_by_target.is_empty():
+		if path_container.has_method("clear"):
+			path_container.clear()
+		var label2 := Label.new()
+		label2.text = "无可培训目标"
+		label2.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+		path_container.add_child(label2)
+		_selected_target = ""
+		_selected_steps_required = 0
+		return
+
+	# 校验当前目标是否仍可用
+	if not _selected_target.is_empty():
+		var steps_required: int = int(_steps_by_target.get(_selected_target, 0))
+		var pool_count: int = int(_employee_pool.get(_selected_target, 0))
+		if steps_required <= 0 or steps_required > _train_remaining or pool_count <= 0:
+			_selected_target = ""
+			_selected_steps_required = 0
+
+	# 创建培训目标列表（按步数、再按 id 排序）
+	var targets: Array[String] = []
+	for k in _steps_by_target.keys():
+		if not (k is String):
+			continue
+		var tid := str(k)
+		if tid.is_empty():
+			continue
+		targets.append(tid)
+	targets.sort_custom(func(a: String, b: String) -> bool:
+		var sa := int(_steps_by_target.get(a, 0))
+		var sb := int(_steps_by_target.get(b, 0))
+		if sa != sb:
+			return sa < sb
+		return a < b
+	)
+
+	var items: Array[Dictionary] = []
+	for target_type in targets:
+		var target_def := _get_employee_def(target_type)
+		var pool_count: int = int(_employee_pool.get(target_type, 0))
+		var steps_required: int = int(_steps_by_target.get(target_type, 1))
+		var enabled := _train_remaining > 0 and pool_count > 0 and steps_required > 0 and steps_required <= _train_remaining
+
+		items.append({
+			"id": target_type,
+			"employee_def": target_def,
+			"badge_text": str(pool_count), # 数量角标（库存）
+			"tag_text": "%d步" % steps_required,
+			"enabled": enabled,
+		})
+
+	if path_container.has_method("set_items"):
+		path_container.set_items(items, _selected_target)
+
+	_selected_steps_required = int(_steps_by_target.get(_selected_target, 0)) if not _selected_target.is_empty() else 0
+	_request_relayout()
+
+func _recompute_steps_by_target() -> void:
 	_steps_by_target.clear()
-	_selected_target = ""
-	_selected_steps_required = 0
 
-	var emp_def := _get_employee_def(employee_type)
+	if _selected_source.is_empty():
+		return
+
+	var emp_def := _get_employee_def(_selected_source)
 	var from_role := str(emp_def.get("role", ""))
 	var max_steps := maxi(0, _max_steps_one_employee)
 
 	# BFS：计算在 max_steps 内可达的最终目标（最短步数）
 	var visited := {}
-	visited[employee_type] = 0
-	var queue: Array[String] = [employee_type]
+	visited[_selected_source] = 0
+	var queue: Array[String] = [_selected_source]
 	var qi := 0
 
 	while qi < queue.size():
@@ -245,57 +311,21 @@ func _show_train_path(employee_type: String) -> void:
 			if not _steps_by_target.has(nxt):
 				_steps_by_target[nxt] = ndist
 
-	if _steps_by_target.is_empty():
-		var no_path_label := Label.new()
-		no_path_label.text = "无可培训目标"
-		no_path_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
-		path_container.add_child(no_path_label)
-		return
-
-	# 创建培训目标选项（按步数、再按 id 排序）
-	var targets: Array[String] = []
-	for k in _steps_by_target.keys():
-		if not (k is String):
-			continue
-		var tid := str(k)
-		if tid.is_empty():
-			continue
-		targets.append(tid)
-	targets.sort_custom(func(a: String, b: String) -> bool:
-		var sa := int(_steps_by_target.get(a, 0))
-		var sb := int(_steps_by_target.get(b, 0))
-		if sa != sb:
-			return sa < sb
-		return a < b
-	)
-
-	for target_type in targets:
-		var target_def := _get_employee_def(target_type)
-		var pool_count: int = int(_employee_pool.get(target_type, 0))
-		var steps_required: int = int(_steps_by_target.get(target_type, 1))
-
-		var target_item := TrainTargetItem.new()
-		target_item.target_type = target_type
-		target_item.target_def = target_def
-		target_item.pool_count = pool_count
-		target_item.steps_required = steps_required
-		target_item.train_remaining = _train_remaining
-		target_item.target_selected.connect(_on_target_selected)
-		path_container.add_child(target_item)
-
-func _on_target_selected(target_type: String) -> void:
-	_selected_target = target_type
-	_selected_steps_required = int(_steps_by_target.get(target_type, 1))
-
-	# 高亮选中的目标
-	if path_container != null:
-		for child in path_container.get_children():
-			if child is TrainTargetItem:
-				child.set_selected(child.target_type == target_type)
+func _on_source_selected(employee_type: String) -> void:
+	_selected_source = str(employee_type).strip_edges()
+	_selected_target = ""
+	_selected_steps_required = 0
+	_selected_requires_same_color = bool(_requires_same_color_by_source.get(_selected_source, false))
 
 	_update_states()
 
+func _on_target_selected(target_type: String) -> void:
+	_selected_target = str(target_type).strip_edges()
+	_update_states()
+
 func _on_confirm_pressed() -> void:
+	if confirm_btn != null and confirm_btn.disabled:
+		return
 	if _selected_source.is_empty() or _selected_target.is_empty():
 		return
 	if _train_remaining <= 0:
@@ -304,217 +334,14 @@ func _on_confirm_pressed() -> void:
 		return
 
 	train_requested.emit(_selected_source, _selected_target)
-	_clear_selection()
+	_clear_selection(true)
 	_update_states()
 
-func _clear_selection() -> void:
-	_selected_source = ""
+func _clear_selection(clear_source: bool) -> void:
+	if clear_source:
+		_selected_source = ""
 	_selected_target = ""
 	_selected_steps_required = 0
 	_steps_by_target.clear()
-
-	for card in _trainable_cards.values():
-		if is_instance_valid(card):
-			card.set_selected(false)
-
-	UiRebuildHelpersClass.free_children(path_container)
-
-
-# === 内部类：可培训员工卡牌 ===
-class TrainableCard extends PanelContainer:
-	signal card_clicked(employee_type: String)
-
-	var employee_type: String = ""
-	var employee_def: Dictionary = {}
-	var source_count: int = 1
-	var badge_text: String = ""
-	var requires_same_color: bool = false
-
-	var _enabled: bool = true
-	var _selected: bool = false
-	var _name_label: Label
-	var _role_color: ColorRect
-	var _count_label: Label
-	var _badge_label: Label
-
-	const EmployeeRoleColorsClass = preload("res://ui/visual/employee_role_colors.gd")
-
-	func _ready() -> void:
-		_build_ui()
-
-	func _build_ui() -> void:
-		custom_minimum_size = Vector2(100, 60)
-		mouse_filter = Control.MOUSE_FILTER_STOP
-
-		var vbox := VBoxContainer.new()
-		vbox.add_theme_constant_override("separation", 4)
-		add_child(vbox)
-
-		# 顶部：角色颜色 + 名称
-		var top_hbox := HBoxContainer.new()
-		top_hbox.add_theme_constant_override("separation", 4)
-		vbox.add_child(top_hbox)
-
-		_role_color = ColorRect.new()
-		_role_color.custom_minimum_size = Vector2(6, 20)
-		top_hbox.add_child(_role_color)
-
-		_name_label = Label.new()
-		_name_label.add_theme_font_size_override("font_size", 13)
-		_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		top_hbox.add_child(_name_label)
-
-		_count_label = Label.new()
-		_count_label.add_theme_font_size_override("font_size", 12)
-		_count_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85, 1))
-		top_hbox.add_child(_count_label)
-
-		_badge_label = Label.new()
-		_badge_label.add_theme_font_size_override("font_size", 11)
-		_badge_label.add_theme_color_override("font_color", Color(0.9, 0.8, 0.6, 1))
-		top_hbox.add_child(_badge_label)
-
-		update_display()
-		_update_style()
-
-	func _gui_input(event: InputEvent) -> void:
-		if event is InputEventMouseButton:
-			if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-				if _enabled:
-					card_clicked.emit(employee_type)
-
-	func update_display() -> void:
-		if _name_label != null:
-			var name: String = str(employee_def.get("name", employee_type))
-			_name_label.text = name
-
-		if _count_label != null:
-			if source_count > 1:
-				_count_label.text = "×%d" % source_count
-				_count_label.visible = true
-			else:
-				_count_label.text = ""
-				_count_label.visible = false
-
-		if _badge_label != null:
-			if not badge_text.is_empty():
-				_badge_label.text = badge_text
-				_badge_label.visible = true
-			elif requires_same_color:
-				_badge_label.text = "在岗"
-				_badge_label.visible = true
-			else:
-				_badge_label.text = ""
-				_badge_label.visible = false
-
-		if _role_color != null:
-			var role: String = str(employee_def.get("role", "special"))
-			_role_color.color = Color(EmployeeRoleColorsClass.role_to_color_hex(role))
-
-	func set_enabled(enabled: bool) -> void:
-		_enabled = enabled
-		_update_style()
-
-	func set_selected(selected: bool) -> void:
-		_selected = selected
-		_update_style()
-
-	func _update_style() -> void:
-		var style := StyleBoxFlat.new()
-		if _selected:
-			style.bg_color = Color(0.25, 0.35, 0.45, 0.95)
-			style.border_color = Color(0.4, 0.6, 0.8, 1)
-			style.set_border_width_all(2)
-		elif _enabled:
-			style.bg_color = Color(0.18, 0.2, 0.22, 0.9)
-		else:
-			style.bg_color = Color(0.15, 0.15, 0.18, 0.6)
-		style.set_corner_radius_all(4)
-		add_theme_stylebox_override("panel", style)
-
-
-# === 内部类：培训目标选项 ===
-class TrainTargetItem extends PanelContainer:
-	signal target_selected(target_type: String)
-
-	var target_type: String = ""
-	var target_def: Dictionary = {}
-	var pool_count: int = 0
-	var steps_required: int = 1
-	var train_remaining: int = 0
-
-	var _selected: bool = false
-	var _name_label: Label
-	var _count_label: Label
-	var _select_btn: Button
-
-	func _ready() -> void:
-		_build_ui()
-
-	func _build_ui() -> void:
-		custom_minimum_size = Vector2(200, 50)
-
-		var hbox := HBoxContainer.new()
-		hbox.add_theme_constant_override("separation", 10)
-		add_child(hbox)
-
-		# 目标名称
-		_name_label = Label.new()
-		_name_label.add_theme_font_size_override("font_size", 14)
-		_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		hbox.add_child(_name_label)
-
-		# 库存数量
-		_count_label = Label.new()
-		_count_label.add_theme_font_size_override("font_size", 12)
-		hbox.add_child(_count_label)
-
-		# 选择按钮
-		_select_btn = Button.new()
-		_select_btn.text = "选择"
-		_select_btn.add_theme_font_size_override("font_size", 12)
-		_select_btn.pressed.connect(_on_select_pressed)
-		hbox.add_child(_select_btn)
-
-		update_display()
-		_update_style()
-
-	func update_display() -> void:
-		if _name_label != null:
-			var name: String = str(target_def.get("name", target_type))
-			if steps_required > 1:
-				_name_label.text = "→ (%d步) %s" % [steps_required, name]
-			else:
-				_name_label.text = "→ %s" % name
-
-		if _count_label != null:
-			_count_label.text = "库存: %d" % pool_count
-			if pool_count <= 0:
-				_count_label.add_theme_color_override("font_color", Color(0.8, 0.4, 0.4, 1))
-			else:
-				_count_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
-
-		if _select_btn != null:
-			_select_btn.disabled = pool_count <= 0 or steps_required <= 0 or steps_required > train_remaining
-
-	func set_selected(selected: bool) -> void:
-		_selected = selected
-		_update_style()
-
-	func _update_style() -> void:
-		var style := StyleBoxFlat.new()
-		if _selected:
-			style.bg_color = Color(0.2, 0.3, 0.4, 0.9)
-			style.border_color = Color(0.4, 0.6, 0.8, 1)
-			style.set_border_width_all(1)
-		else:
-			style.bg_color = Color(0.15, 0.17, 0.2, 0.8)
-		style.set_corner_radius_all(4)
-		add_theme_stylebox_override("panel", style)
-
-	func _on_select_pressed() -> void:
-		if pool_count <= 0:
-			return
-		if steps_required <= 0 or steps_required > train_remaining:
-			return
-		target_selected.emit(target_type)
+	if clear_source:
+		_selected_requires_same_color = false

@@ -19,7 +19,6 @@ var _employee_pool: Dictionary = {}  # employee_type -> count
 var _employee_registry = null
 var _recruit_remaining: int = 0
 var _recruit_total: int = 0
-var _pool_cards: Dictionary = {}  # employee_type -> PoolCard
 var _selected_employee_type: String = ""
 
 func _get_confirm_button() -> Button:
@@ -37,13 +36,18 @@ func _on_relayout() -> void:
 	if items_container != null and is_instance_valid(items_container):
 		items_container.queue_sort()
 
+func _on_panel_ready() -> void:
+	if items_container != null and is_instance_valid(items_container):
+		if items_container.has_signal("employee_selected"):
+			items_container.employee_selected.connect(_on_card_selected)
+
 func set_employee_registry(registry) -> void:
 	_employee_registry = registry
-	_rebuild_pool_cards()
+	_refresh_picker()
 
 func set_employee_pool(pool: Dictionary) -> void:
 	_employee_pool = pool.duplicate()
-	_rebuild_pool_cards()
+	_refresh_picker()
 	_update_confirm_state()
 	_request_relayout()
 
@@ -51,43 +55,63 @@ func set_recruit_count(remaining: int, total: int) -> void:
 	_recruit_remaining = remaining
 	_recruit_total = total
 	_update_counter()
-	_update_card_states()
+	_refresh_picker()
 	_update_confirm_state()
 
 func refresh() -> void:
-	_rebuild_pool_cards()
+	_refresh_picker()
 	_update_counter()
 	_update_confirm_state()
 	_request_relayout()
 
 func clear_selection() -> void:
 	_selected_employee_type = ""
-	_update_card_states()
+	_refresh_picker()
 	_update_confirm_state()
 
-func _rebuild_pool_cards() -> void:
-	# 清除旧卡牌
-	UiRebuildHelpersClass.free_nodes_dict(_pool_cards)
-
+func _refresh_picker() -> void:
 	if items_container == null:
 		return
 
 	# 获取入门级员工列表
 	var entry_level_ids := _get_entry_level_employee_ids()
 
+	var can_recruit := _recruit_remaining > 0
+	if not can_recruit:
+		_selected_employee_type = ""
+	elif not _selected_employee_type.is_empty():
+		var selected_count: int = int(_employee_pool.get(_selected_employee_type, 0))
+		if selected_count <= 0:
+			_selected_employee_type = ""
+
+	var items: Array[Dictionary] = []
 	for emp_type in entry_level_ids:
 		var count: int = int(_employee_pool.get(emp_type, 0))
 		var emp_def := _get_employee_def(emp_type)
+		items.append({
+			"id": emp_type,
+			"employee_def": emp_def,
+			"badge_text": str(count),
+			"enabled": can_recruit and count > 0,
+		})
 
-		var card := PoolCard.new()
-		card.employee_type = emp_type
-		card.pool_count = count
-		card.employee_def = emp_def
-		card.selected.connect(_on_card_selected)
-		items_container.add_child(card)
-		_pool_cards[emp_type] = card
+	if items_container.has_method("set_items"):
+		items_container.set_items(items, _selected_employee_type)
+	else:
+		# 兜底：脚本缺失时仍能显示基础卡，避免 UI 空白。
+		UiRebuildHelpersClass.free_children(items_container)
+		for item in items:
+			var emp_id := str(item.get("id", ""))
+			var c := EmployeeCardClass.new()
+			c.variant = EmployeeCard.CardVariant.COMPACT
+			c.draggable = false
+			c.employee_id = emp_id
+			var d_val = item.get("employee_def", {})
+			if d_val is Dictionary:
+				c.setup(Dictionary(d_val))
+			items_container.add_child(c)
 
-	_update_card_states()
+	right_panel_footer_changed.emit()
 	_request_relayout()
 
 func _get_entry_level_employee_ids() -> Array[String]:
@@ -134,29 +158,9 @@ func _update_counter() -> void:
 	if counter_label != null:
 		counter_label.text = "招聘次数: %d / %d" % [_recruit_remaining, _recruit_total]
 
-func _update_card_states() -> void:
-	var can_recruit := _recruit_remaining > 0
-
-	if not can_recruit:
-		_selected_employee_type = ""
-	elif not _selected_employee_type.is_empty():
-		var selected_count: int = int(_employee_pool.get(_selected_employee_type, 0))
-		if selected_count <= 0:
-			_selected_employee_type = ""
-
-	for emp_type in _pool_cards.keys():
-		var card: PoolCard = _pool_cards[emp_type]
-		if is_instance_valid(card):
-			var count: int = int(_employee_pool.get(emp_type, 0))
-			card.pool_count = count
-			card.set_enabled(can_recruit and count > 0)
-			card.set_selected(emp_type == _selected_employee_type)
-			card.update_display()
-	right_panel_footer_changed.emit()
-
 func _on_card_selected(employee_type: String) -> void:
 	_selected_employee_type = employee_type
-	_update_card_states()
+	_refresh_picker()
 	_update_confirm_state()
 
 func _update_confirm_state() -> void:
@@ -186,108 +190,3 @@ func _on_confirm_pressed() -> void:
 func _on_cancel_pressed() -> void:
 	clear_selection()
 	cancelled.emit()
-
-
-# === 内部类：供应池卡牌 ===
-class PoolCard extends PanelContainer:
-	signal selected(employee_type: String)
-
-	var employee_type: String = ""
-	var pool_count: int = 0
-	var employee_def: Dictionary = {}
-
-	var _enabled: bool = true
-	var _selected: bool = false
-	var _name_label: Label
-	var _count_label: Label
-	var _recruit_btn: Button
-	var _role_color: ColorRect
-
-	const EmployeeRoleColorsClass = preload("res://ui/visual/employee_role_colors.gd")
-
-	func _ready() -> void:
-		_build_ui()
-
-	func _build_ui() -> void:
-		custom_minimum_size = Vector2(140, 100)
-
-		var vbox := VBoxContainer.new()
-		vbox.add_theme_constant_override("separation", 4)
-		add_child(vbox)
-
-		# 顶部：角色颜色 + 名称
-		var top_hbox := HBoxContainer.new()
-		top_hbox.add_theme_constant_override("separation", 4)
-		vbox.add_child(top_hbox)
-
-		_role_color = ColorRect.new()
-		_role_color.custom_minimum_size = Vector2(6, 20)
-		top_hbox.add_child(_role_color)
-
-		_name_label = Label.new()
-		_name_label.add_theme_font_size_override("font_size", 13)
-		_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		top_hbox.add_child(_name_label)
-
-		# 库存数量
-		_count_label = Label.new()
-		_count_label.add_theme_font_size_override("font_size", 14)
-		_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(_count_label)
-
-		# 招聘按钮
-		_recruit_btn = Button.new()
-		_recruit_btn.text = "选择"
-		_recruit_btn.add_theme_font_size_override("font_size", 12)
-		_recruit_btn.pressed.connect(_on_select_pressed)
-		vbox.add_child(_recruit_btn)
-
-		update_display()
-		_update_style()
-
-	func update_display() -> void:
-		if _name_label != null:
-			var name: String = str(employee_def.get("name", employee_type))
-			_name_label.text = name
-
-		if _role_color != null:
-			var role: String = str(employee_def.get("role", "special"))
-			_role_color.color = Color(EmployeeRoleColorsClass.role_to_color_hex(role))
-
-		if _count_label != null:
-			_count_label.text = "库存: %d" % pool_count
-			if pool_count <= 0:
-				_count_label.add_theme_color_override("font_color", Color(0.8, 0.4, 0.4, 1))
-			else:
-				_count_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
-
-		if _recruit_btn != null:
-			_recruit_btn.text = "已选择" if _selected else "选择"
-			_recruit_btn.disabled = not _enabled or pool_count <= 0
-
-	func set_enabled(enabled: bool) -> void:
-		_enabled = enabled
-		if _recruit_btn != null:
-			_recruit_btn.disabled = not _enabled or pool_count <= 0
-		_update_style()
-
-	func set_selected(selected: bool) -> void:
-		_selected = selected
-		update_display()
-		_update_style()
-
-	func _update_style() -> void:
-		var style := StyleBoxFlat.new()
-		if _enabled and pool_count > 0:
-			style.bg_color = Color(0.18, 0.2, 0.22, 0.9)
-		else:
-			style.bg_color = Color(0.15, 0.15, 0.18, 0.6)
-		style.set_corner_radius_all(4)
-		if _selected:
-			style.border_color = Color(0.4, 0.7, 1.0, 0.9)
-			style.set_border_width_all(2)
-		add_theme_stylebox_override("panel", style)
-
-	func _on_select_pressed() -> void:
-		if _enabled and pool_count > 0:
-			selected.emit(employee_type)

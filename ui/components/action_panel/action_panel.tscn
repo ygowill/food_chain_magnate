@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://ui/components/action_panel/action_panel.gd" id="1_panel"]
+[ext_resource type="Script" path="res://ui/components/employee_picker/employee_picker.gd" id="2_employee_picker"]
 
 [node name="ActionPanel" type="Control"]
 custom_minimum_size = Vector2(200, 0)
@@ -93,10 +94,12 @@ custom_minimum_size = Vector2(42, 0)
 layout_mode = 2
 text = "员工"
 
-[node name="EmployeeOption" type="OptionButton" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/EmployeeRow"]
-custom_minimum_size = Vector2(140, 0)
+[node name="EmployeeOption" type="HFlowContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/EmployeeRow"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 10
+script = ExtResource("2_employee_picker")
 
 [node name="RotationRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer"]
 layout_mode = 2

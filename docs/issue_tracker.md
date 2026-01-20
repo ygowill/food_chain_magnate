@@ -40,7 +40,7 @@
 | 23 | UI 配色：营销板背景/空地背景/可用点提示色 | UI/视觉 | 多处硬编码颜色/贴图：营销板使用深色占位；地图地面使用纹理；可用点高亮使用绿色，需统一替换 | Implemented（待手动验收） |
 | 24 | 重组阶段拖拽员工卡：拖拽预览会变形 | UI/交互 | 拖拽预览卡用 `EmployeeCard.new()` 重建，未复制源卡的缩放/变体；且 `setup()` 会重置 `custom_minimum_size`，导致预览尺寸与缩略卡不一致 | Implemented（待手动验收） |
 | 25 | 重组界面：全屏覆盖；左侧仅待命卡；三列滚动；右侧公司树满宽；多管理槽下属卡槽改为网格 | UI/重构 | `ModalPanelBase` 设计为“不遮挡左侧信息区”；`HandArea` 默认显示在岗/待命/忙碌；`CompanyStructure` 下属槽位纵向堆叠导致高度溢出 | Planned |
-| 26 | 招聘/培训等面板统一复用员工缩略卡（EmployeeCard） | UI/一致性 | Recruit/Train 等面板各自实现了 PoolCard/TrainableCard/OptionButton 文本，导致表现不一致、维护分散 | Planned |
+| 26 | 招聘/培训等面板统一复用员工缩略卡（EmployeeCard） | UI/一致性 | Recruit/Train 等面板各自实现了 PoolCard/TrainableCard/OptionButton 文本，导致表现不一致、维护分散 | Implemented（待手动验收） |
 | 27 | 地图高亮/覆盖机制统一：边框 + 透明层覆盖完整 piece | UI/渲染 | 当前存在多套：cell 选中框、cell_highlights、structure_preview、MarketingRangeOverlay 等；且房屋“被覆盖”只高亮锚点格 | Planned |
 | 28 | 移动餐厅：餐厅选项改为可阅读；切换时高亮当前餐厅 | UI/交互 | move_restaurant 下拉框仅显示 `rest_0` 等 id；地图餐厅无 id/编号标记；现高亮逻辑只显示“可放置锚点”，未高亮被选餐厅 | Planned |
 | 29 | 营销面板遮挡；营销放置缺少形状预览；营销图标大小需适配 piece | UI/布局+渲染 | 右侧抽屉嵌入时布局/裁剪导致左侧内容被遮挡；地图交互仅高亮 anchor 未显示 footprint；地图渲染中营销图标缩放策略不匹配多格 board | Planned |
@@ -1323,18 +1323,32 @@
 - 统一范围：所有“选员工”的面板都统一复用员工缩略卡片。
 - 招聘与培训面板需要显示“数量角标”（例如池中数量/可训练数量）。
 
-**修复方案（提案，需你点头后实施）**
+**修复方案**
 
-- 抽出一个可复用的“员工选择器”组件（内部以 `EmployeeCard` compact 渲染，支持选中态/禁用态/数量角标）。
-- RecruitPanel/TrainPanel 等逐步替换为该组件，保留现有信号与业务流程不变（减少规则层影响）。
+- 抽出一个可复用的“员工选择器”组件（内部以 `EmployeeCard` compact 渲染，支持选中态/禁用态/数量角标/标签）。
+- RecruitPanel/TrainPanel/MarketingPanel/ProductionPanel/ActionPanel 等统一复用该组件，保留现有信号与业务流程不变（减少规则层影响）。
+
+**实施记录**
+
+- 新增：`ui/components/employee_picker/employee_picker.gd`：`EmployeePicker`（`EmployeeCard` compact + `badge_text/tag_text`）。
+- 已修改：`ui/components/recruit_panel/recruit_panel.gd` / `ui/components/recruit_panel/recruit_panel.tscn`：招聘池改用缩略卡；右上角数量角标显示可招聘数量。
+- 已修改：`ui/components/train_panel/train_panel.gd` / `ui/components/train_panel/train_panel.tscn`：培训来源/目标改用缩略卡；数量角标显示数量/库存；tag 显示“预支/在岗/步数”。
+- 已修改：`ui/components/marketing_panel/marketing_panel.gd` / `ui/components/marketing_panel/marketing_panel.tscn`：营销员选择改用缩略卡（数量角标显示可用人数）。
+- 已修改：`ui/components/production_panel/production_panel.gd`：生产/采购员工选择改用缩略卡（数量角标显示可用人数）。
+- 已修改：`ui/components/action_panel/action_panel.gd` / `ui/components/action_panel/action_panel.tscn`：放置房屋/餐厅等上下文员工选择改用缩略卡。
 
 **验收**
 
 - 招聘/培训等面板中员工展示统一为缩略卡片风格；选中/禁用/数量提示一致；功能不回归。
 
+**验证**
+
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（91/91，`.godot/AllTests.log`）
+
 **状态**
 
-- Planned
+- Implemented（待手动验收）
 
 ---
 

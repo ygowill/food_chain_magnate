@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://ui/components/marketing_panel/marketing_panel.gd" id="1_marketing"]
+[ext_resource type="Script" path="res://ui/components/employee_picker/employee_picker.gd" id="2_employee_picker"]
 
 [node name="MarketingPanel" type="Control"]
 layout_mode = 3
@@ -72,9 +73,11 @@ theme_override_font_sizes/font_size = 14
 theme_override_colors/font_color = Color(0.6, 0.7, 0.8, 1)
 text = "选择营销员"
 
-[node name="MarketerOption" type="OptionButton" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/MarketerSection"]
-custom_minimum_size = Vector2(0, 32)
+[node name="MarketerOption" type="HFlowContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/MarketerSection"]
 layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 10
+script = ExtResource("2_employee_picker")
 
 [node name="BoardSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox"]
 layout_mode = 2
@@ -198,4 +201,3 @@ text = "取消"
 custom_minimum_size = Vector2(100, 36)
 layout_mode = 2
 text = "确认"
-

@@ -17,7 +17,7 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 @onready var restaurant_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RestaurantRow
 @onready var restaurant_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RestaurantRow/RestaurantOption
 @onready var employee_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/EmployeeRow
-@onready var employee_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/EmployeeRow/EmployeeOption
+@onready var employee_option: HFlowContainer = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/EmployeeRow/EmployeeOption
 @onready var rotation_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow
 @onready var rotation_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationOption
 @onready var house_number_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/HouseNumberRow
@@ -120,7 +120,7 @@ func _setup_context_ui() -> void:
 	UiSignalHelpersClass.safe_connect(cancel_context_button, "pressed", _on_cancel_context_pressed)
 	UiSignalHelpersClass.safe_connect(confirm_context_button, "pressed", _on_confirm_context_pressed)
 	UiSignalHelpersClass.safe_connect(restaurant_option, "item_selected", _on_restaurant_option_selected)
-	UiSignalHelpersClass.safe_connect(employee_option, "item_selected", _on_employee_option_selected)
+	UiSignalHelpersClass.safe_connect(employee_option, "employee_selected", _on_employee_option_selected)
 	UiSignalHelpersClass.safe_connect(rotation_option, "item_selected", _on_rotation_option_selected)
 	UiSignalHelpersClass.safe_connect(house_number_option, "item_selected", _on_house_number_option_selected)
 	UiSignalHelpersClass.safe_connect(direction_option, "item_selected", _on_direction_option_selected)
@@ -308,32 +308,30 @@ func _rebuild_restaurant_option(restaurant_ids: Array[String], selected_restaura
 func _rebuild_employee_option(employee_ids: Array[String], selected_employee_id: String) -> void:
 	if not is_instance_valid(employee_option):
 		return
-	employee_option.clear()
 	var ids: Array[String] = []
 	var seen := {}
 	for v in employee_ids:
 		var s := str(v).strip_edges()
 		if s.is_empty():
 			continue
-		if seen.has(s):
-			continue
-		seen[s] = true
-		ids.append(s)
+		if not seen.has(s):
+			ids.append(s)
+		seen[s] = int(seen.get(s, 0)) + 1
 	ids.sort()
+
+	var items: Array[Dictionary] = []
 	for emp_id in ids:
-		var label := emp_id
-		if EmployeeRegistryClass.is_loaded():
-			var def_val = EmployeeRegistryClass.get_def(emp_id)
-			if def_val != null and def_val is EmployeeDef:
-				var name := str((def_val as EmployeeDef).name).strip_edges()
-				if not name.is_empty() and name != emp_id:
-					label = "%s (%s)" % [name, emp_id]
-				elif not name.is_empty():
-					label = name
-		employee_option.add_item(label)
-		var idx := employee_option.get_item_count() - 1
-		employee_option.set_item_metadata(idx, emp_id)
-	_select_option_by_metadata_string(employee_option, selected_employee_id)
+		items.append({
+			"id": emp_id,
+			"employee_def": _get_employee_def_for_card(emp_id),
+			"badge_text": "",
+			"enabled": true,
+		})
+
+	var selected := str(selected_employee_id).strip_edges()
+	if selected.is_empty() and not ids.is_empty():
+		selected = str(ids[0])
+	employee_option.set_items(items, selected)
 
 func _select_option_by_metadata_int(option: OptionButton, desired: int) -> void:
 	if option == null or not is_instance_valid(option):
@@ -389,13 +387,22 @@ func _on_restaurant_option_selected(index: int) -> void:
 	var rid := str(restaurant_option.get_item_metadata(index))
 	_call_context_overlay_method("set_selected_restaurant", [rid])
 
-func _on_employee_option_selected(index: int) -> void:
+func _on_employee_option_selected(employee_type: String) -> void:
 	if _context_syncing:
 		return
-	if not is_instance_valid(employee_option):
-		return
-	var emp_id := str(employee_option.get_item_metadata(index))
+	var emp_id := str(employee_type).strip_edges()
 	_call_context_overlay_method("set_selected_employee", [emp_id])
+
+func _get_employee_def_for_card(employee_type: String) -> Dictionary:
+	var emp_id := str(employee_type).strip_edges()
+	if emp_id.is_empty():
+		return {"id": emp_id, "name": emp_id}
+	if not EmployeeRegistryClass.is_loaded():
+		return {"id": emp_id, "name": emp_id}
+	var def_val = EmployeeRegistryClass.get_def(emp_id)
+	if def_val != null and def_val.has_method("to_dict"):
+		return def_val.to_dict()
+	return {"id": emp_id, "name": emp_id}
 
 func _on_rotation_option_selected(index: int) -> void:
 	if _context_syncing:
