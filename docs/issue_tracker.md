@@ -36,16 +36,17 @@
 | 19 | 存档加载提示“无效的 initial_state” | 存档/回放 | JSON.parse_string 将所有数字读成 float，导致玩家字段（cash 等）类型不匹配；同时整值 float/int 的表现差异会导致 hash 不稳定 | Implemented（待手动验收） |
 | 20 | 重组阶段公司结构需展示为树（管理岗像 CEO，有槽位） | UI/重构 | 现 UI 仅 CEO 使用卡槽、管理岗用列表，无法表达树；大量槽位时缺少折叠/滚动策略导致易溢出 | Implemented（待手动验收） |
 | 21 | 加载存档后日志面板为空/消失 | UI/存档 | 存档回放发生在进入 GameScene 之前，UI 未订阅导致日志未捕获；且 setup 清空日志但未从 EventBus.history 恢复 | Implemented（待手动验收） |
-| 22 | 多餐厅：飞艇驾驶员采购饮料起点应由玩家选择 | UI/流程+规则 | UI 侧 `_resolve_procure_restaurant_and_entrance()` 固定取排序后的首家餐厅；且 `_auto_select_air_start_tile()` 会强制把“第一格”设为该餐厅板块 | Reported（待澄清） |
-| 23 | UI 配色：营销板背景/空地背景/可用点提示色 | UI/视觉 | 多处硬编码颜色/贴图：营销板使用深色占位；地图地面使用纹理；可用点高亮使用绿色，需统一替换 | Planned（待澄清） |
-| 24 | 重组阶段拖拽员工卡：拖拽预览会变形 | UI/交互 | 拖拽预览卡用 `EmployeeCard.new()` 重建，未复制源卡的缩放/变体；且 `setup()` 会重置 `custom_minimum_size`，导致预览尺寸与缩略卡不一致 | Planned（待澄清） |
-| 25 | 重组界面：全屏覆盖；左侧仅待命卡；三列滚动；右侧公司树满宽；多管理槽下属卡槽改为网格 | UI/重构 | `ModalPanelBase` 设计为“不遮挡左侧信息区”；`HandArea` 默认显示在岗/待命/忙碌；`CompanyStructure` 下属槽位纵向堆叠导致高度溢出 | Reported（待澄清） |
-| 26 | 招聘/培训等面板统一复用员工缩略卡（EmployeeCard） | UI/一致性 | Recruit/Train 等面板各自实现了 PoolCard/TrainableCard/OptionButton 文本，导致表现不一致、维护分散 | Reported（待澄清） |
-| 27 | 地图高亮/覆盖机制统一：边框 + 透明层覆盖完整 piece | UI/渲染 | 当前存在多套：cell 选中框、cell_highlights、structure_preview、MarketingRangeOverlay 等；且房屋“被覆盖”只高亮锚点格 | Reported（待澄清） |
-| 28 | 移动餐厅：餐厅选项改为可阅读；切换时高亮当前餐厅 | UI/交互 | move_restaurant 下拉框仅显示 `rest_0` 等 id；地图餐厅无 id/编号标记；现高亮逻辑只显示“可放置锚点”，未高亮被选餐厅 | Planned（待澄清） |
-| 29 | 营销面板遮挡；营销放置缺少形状预览；营销图标大小需适配 piece | UI/布局+渲染 | 右侧抽屉嵌入时布局/裁剪导致左侧内容被遮挡；地图交互仅高亮 anchor 未显示 footprint；地图渲染中营销图标缩放策略不匹配多格 board | Reported（待复现/待澄清） |
-| 30 | 飞机营销板件：应贴地图外侧边缘且不在地图内；可用宽度仅 1/3/5 | UI/规则+渲染 | 当前飞机按普通营销板件在地图内绘制/占地，且尺寸来自现有 `footprint_size`（含 2x1/3x2/5x2 等），与目标规则不一致 | Reported（需先澄清） |
+| 22 | 多餐厅：飞艇驾驶员采购饮料起点应由玩家选择 | UI/流程+规则 | UI 侧 `_resolve_procure_restaurant_and_entrance()` 固定取排序后的首家餐厅；且 `_auto_select_air_start_tile()` 会强制把“第一格”设为该餐厅板块 | Planned |
+| 23 | UI 配色：营销板背景/空地背景/可用点提示色 | UI/视觉 | 多处硬编码颜色/贴图：营销板使用深色占位；地图地面使用纹理；可用点高亮使用绿色，需统一替换 | Planned |
+| 24 | 重组阶段拖拽员工卡：拖拽预览会变形 | UI/交互 | 拖拽预览卡用 `EmployeeCard.new()` 重建，未复制源卡的缩放/变体；且 `setup()` 会重置 `custom_minimum_size`，导致预览尺寸与缩略卡不一致 | Planned |
+| 25 | 重组界面：全屏覆盖；左侧仅待命卡；三列滚动；右侧公司树满宽；多管理槽下属卡槽改为网格 | UI/重构 | `ModalPanelBase` 设计为“不遮挡左侧信息区”；`HandArea` 默认显示在岗/待命/忙碌；`CompanyStructure` 下属槽位纵向堆叠导致高度溢出 | Planned |
+| 26 | 招聘/培训等面板统一复用员工缩略卡（EmployeeCard） | UI/一致性 | Recruit/Train 等面板各自实现了 PoolCard/TrainableCard/OptionButton 文本，导致表现不一致、维护分散 | Planned |
+| 27 | 地图高亮/覆盖机制统一：边框 + 透明层覆盖完整 piece | UI/渲染 | 当前存在多套：cell 选中框、cell_highlights、structure_preview、MarketingRangeOverlay 等；且房屋“被覆盖”只高亮锚点格 | Planned |
+| 28 | 移动餐厅：餐厅选项改为可阅读；切换时高亮当前餐厅 | UI/交互 | move_restaurant 下拉框仅显示 `rest_0` 等 id；地图餐厅无 id/编号标记；现高亮逻辑只显示“可放置锚点”，未高亮被选餐厅 | Planned |
+| 29 | 营销面板遮挡；营销放置缺少形状预览；营销图标大小需适配 piece | UI/布局+渲染 | 右侧抽屉嵌入时布局/裁剪导致左侧内容被遮挡；地图交互仅高亮 anchor 未显示 footprint；地图渲染中营销图标缩放策略不匹配多格 board | Planned |
+| 30 | 飞机营销板件：应贴地图外侧边缘且不在地图内；可用宽度仅 1/3/5 | UI/规则+渲染 | 当前飞机按普通营销板件在地图内绘制/占地，且尺寸来自现有 `footprint_size`（含 2x1/3x2/5x2 等），与目标规则不一致 | Planned |
 | 31 | 关闭“点击地图格高亮” | UI/一致性 | `MapCanvas` 记录 `_selected_pos` 且 `MapCanvasDrawer._draw_selection()` 绘制蓝色选中框 | Planned |
+| 32 | 地图渲染：tile 内部细分网格线（细线）与 tile 外边缘粗线一起绘制 | UI/渲染 | `MapCanvasDrawer._draw_tile_borders()` 目前仅绘制 tile 外边缘粗线，未绘制 tile 内部单元格分割线 | Reported（待澄清） |
 
 ---
 
@@ -1038,13 +1039,10 @@
 - UI 为了确定性，直接对 `restaurant_ids.sort()` 后取第一家作为 `chosen_restaurant_id`，并在飞艇模式下自动把 `_procure_selected_tiles[0]` 设为该餐厅的 `entrance_tile`。
 - 这在“多餐厅”场景下等价于把起点写死，违背“玩家应选择从哪家店出发”的交互预期。
 
-**待澄清**
+**确认（来自你的说明 #22）**
 
-- 你希望“选择起点餐厅”的交互是哪一种？
-	- A) 玩家在地图上**先点击某一家餐厅所在板块**作为第一格（起点），再继续选相邻板块；
-	- B) 在面板里加一个“餐厅下拉框/按钮组”先选餐厅，然后自动填充第一格；
-	- C) 其它（请描述）。
-- 该需求是否也应覆盖道路采购（手推车/卡车司机），还是仅飞艇驾驶员？
+- 交互选择 A：玩家在地图上先点击某一家餐厅所在板块作为第一格（起点），再继续选相邻板块。
+- 仅覆盖飞艇驾驶员（不需要覆盖手推车/卡车采购）。
 
 **修复方案（提案，需你点头后实施）**
 
@@ -1058,7 +1056,7 @@
 
 **状态**
 
-- Reported（待澄清）
+- Planned
 
 ---
 
@@ -1080,14 +1078,12 @@
 - “可用点提示”（当前为绿色 cell_highlights）：
 	- `ui/scenes/game/map_canvas_drawer.gd`：`_draw_cell_highlights()`
 
-**待澄清**
+**确认（来自你的说明 #23）**
 
-- “营销板背景色”指的是：
-	- A) 地图上已放置营销板的占地底色 + 选择面板预览；
-	- B) 右侧营销面板（MarketingPanel）的背景；
-	- C) 两者都要。
-- “空地背景”是否包含棋盘外的 external_cells 区域（例如 offramp 相关外部格），还是仅地图主区域？
-- “可用点提示色”仅指 `set_cell_highlights()` 的提示，还是也包含建筑预览合法/非法（structure_preview 的绿/红）？
+- 指的是地图上的营销板 piece（以及板件按钮里的占地预览），不改 MarketingPanel 面板背景。
+- “空地纯色”包含 external_cells。
+- “可用点提示色”只需要替换 `cell_highlights`（不要求改 structure_preview 的绿/红）。
+- 营销板的预览允许加透明度（alpha）。
 
 **修复方案（提案，需你点头后实施）**
 
@@ -1101,7 +1097,7 @@
 
 **状态**
 
-- Planned（待澄清）
+- Planned
 
 ---
 
@@ -1123,12 +1119,9 @@
 	- 未复制源卡的 `variant/display_scale`（或其它视觉参数）；
 	- 且在 `preview.setup()` 过程中会重建 UI 并重置 `custom_minimum_size`，覆盖了预先设置的 `size_guess`，导致预览尺寸与源缩略卡不一致。
 
-**待澄清**
+**确认（来自你的说明 #24）**
 
-- 你看到的“变形”是：
-	- A) 鼠标旁的拖拽预览卡变大/变宽；
-	- B) 原位置的卡牌在拖拽中被拉伸；
-	- C) 两者都有。
+- 发生在“鼠标跟随的预览卡”（原位置的卡牌不需要处理）。
 
 **修复方案（提案，需你点头后实施）**
 
@@ -1143,7 +1136,7 @@
 
 **状态**
 
-- Planned（待澄清）
+- Planned
 
 ---
 
@@ -1177,11 +1170,11 @@
 - `HandArea` 目前把在岗员工也展示出来，且布局为 HFlow（未限制三列）。
 - `CompanyStructure` 的“下属槽”纵向增长，遇到大 `manager_slots` 时高度溢出；同时列宽固定，难以在横向充分利用空间。
 
-**待澄清**
+**确认（来自你的说明 #25）**
 
-- 左侧“仅待命卡”是否还需要显示忙碌营销员（busy_marketers）？
-- 左侧 3 列缩略卡的目标尺寸/缩放比例是否有偏好（例如与当前 HandArea 的 compact 尺寸一致即可）？
-- 右侧“公司树”希望是“列式树（每个 CEO 直属一列）”还是“更像组织结构图的树形（节点居中、连线）”？
+- 左侧不显示忙碌营销员（busy_marketers）。
+- 左侧卡牌维持当前 compact 尺寸。
+- 右侧公司树希望使用“组织结构图式”的树形展示。
 
 **修复方案（提案，需你点头后实施）**
 
@@ -1195,7 +1188,7 @@
 
 **状态**
 
-- Reported（待澄清）
+- Planned
 
 ---
 
@@ -1213,13 +1206,10 @@
 - `ui/components/action_panel/action_panel.gd`：部分动作使用 `OptionButton` 文本展示员工/餐厅等
 - `ui/components/marketing_panel/marketing_panel.gd`：营销员选择目前为 `OptionButton`（文本）
 
-**待澄清**
+**确认（来自你的说明 #26）**
 
-- 你希望统一的范围是：
-	- A) 仅招聘 + 培训；
-	- B) 再加上营销员选择（MarketingPanel）；
-	- C) 所有涉及“选员工”的面板都统一（可能包含采购/生产/放置等）。
-- 统一后的交互：点击卡片即选中；是否需要显示库存/数量（例如 pool_count/source_count）？显示在哪（角标/小字）？
+- 统一范围：所有“选员工”的面板都统一复用员工缩略卡片。
+- 招聘与培训面板需要显示“数量角标”（例如池中数量/可训练数量）。
 
 **修复方案（提案，需你点头后实施）**
 
@@ -1232,7 +1222,7 @@
 
 **状态**
 
-- Reported（待澄清）
+- Planned
 
 ---
 
@@ -1253,13 +1243,11 @@
 	- `ui/scenes/game/game_overlay_marketing_range.gd`：将受影响房屋转成 anchor world_pos 列表（导致只覆盖锚点）
 	- `ui/overlays/marketing_range_overlay.gd`：按 tile_size 绘制每格 ColorRect
 
-**待澄清**
+**确认（来自你的说明 #27）**
 
-- 统一机制覆盖哪些情况？
-	- A) 仅“可放置点/覆盖范围/选中目标”等地图上的提示；
-	- B) 包含“鼠标 hover 的格子/点击选中格”的视觉（与 #31 相关）；
-	- C) 还包含放置预览的合法/非法（绿/红）。
-- 统一后不同语义的颜色是否已有固定方案（例如：可放置=粉色、非法=红色、覆盖范围=蓝色等）？
+- “可放置点提示”已在 #23 处理（`cell_highlights`），此处主要统一：覆盖范围 / hover / 选中。
+- 颜色暂无固定映射：我会先用 placeholder 颜色；后续你可手动修改。
+- 颜色的配置位置需要补充记录到本文件。
 
 **修复方案（提案，需你点头后实施）**
 
@@ -1274,7 +1262,7 @@
 
 **状态**
 
-- Reported（待澄清）
+- Planned
 
 ---
 
@@ -1294,14 +1282,10 @@
 - `ui/scenes/game/game_map_interaction_controller.gd`：`on_restaurant_highlight_requested()`（当前只高亮“可放置锚点”，未高亮被选餐厅）
 - `ui/scenes/game/map_canvas_drawer.gd`：`_draw_restaurant()`（当前绘制 logo，无 id/编号）
 
-**待澄清**
+**确认（来自你的说明 #28）**
 
-- “可阅读”的餐厅显示格式你更偏好哪种？
-	- A) `餐厅 1（rest_0）`（按 id 数字 + 保留原 id）
-	- B) `rest_0 @ (x,y)`（带坐标）
-	- C) `餐厅 1 @ (x,y)`（隐藏内部 id）
-	- D) 其它（请描述）。
-- 地图上的餐厅标记希望“始终显示”，还是“仅在 move_restaurant 模式显示”？
+- 餐厅显示格式选 C：`餐厅 1 @ (x,y)`（隐藏内部 id）。
+- 地图上的餐厅标记仅在 move_restaurant 模式显示。
 
 **修复方案（提案，需你点头后实施）**
 
@@ -1314,7 +1298,7 @@
 
 **状态**
 
-- Planned（待澄清）
+- Planned
 
 ---
 
@@ -1336,9 +1320,10 @@
 - 地图营销渲染：
 	- `ui/scenes/game/map_canvas_drawer.gd`：`_draw_marketing()`（图标绘制与缩放策略）
 
-**待澄清**
+**确认（来自你的说明 #29）**
 
-- “左侧被遮挡”的具体位置是：营销类型按钮？板件选择？产品图标？（你若能截图/描述更快定位）
+- 遮挡表现：一些按钮与下拉框最左侧有一小部分被边框遮住。
+- 营销 footprint 预览：希望 hover 就显示（预览允许加透明度）。
 
 **修复方案（提案，需你点头后实施）**
 
@@ -1352,7 +1337,7 @@
 
 **状态**
 
-- Reported（待复现/待澄清）
+- Planned
 
 ---
 
@@ -1369,14 +1354,11 @@
 - 飞机目前按普通营销板件处理：在地图内占地、按 `footprint_size` 绘制矩形底色（`ui/scenes/game/map_canvas_drawer.gd:_draw_marketing()`）。
 - 现有 marketing 数据中 airplane 的 `footprint_size` 存在 `2x1/3x2/5x2` 等（例如 `modules/base_marketing/content/marketing/airplane_4.json` 为 `[2,1]`），与“仅 1/3/5”不一致。
 
-**待澄清（必须）**
+**确认（来自你的说明 #30）**
 
-- 你期望的“1/3/5”对应的是：
-	- A) 沿着地图边缘的长度（横幅长度），厚度恒为 1；
-	- B) 垂直于边缘向外的厚度；
-	- C) 其它（请明确）。
-- 这是“纯视觉摆放”还是“规则建模也要改”（例如 airplane 不应占用世界格、应登记为 edge/outside piece，并影响放置冲突判断）？
-- 具体哪些 board_number 属于飞机？它们分别应对应 1/3/5 的哪一种？
+- 这是纯视觉摆放：需要在外边缘对齐地图格子。
+- “向外厚度”统一为 2。
+- 飞机广告 piece 的尺寸以定义为准（每个编号的 piece 都已定义尺寸）；可用长度为 1/3/5。
 
 **修复方案（提案，需你点头后实施）**
 
@@ -1390,7 +1372,7 @@
 
 **状态**
 
-- Reported（需先澄清）
+- Planned
 
 ---
 
@@ -1405,10 +1387,14 @@
 - `ui/scenes/game/map_canvas.gd`：`_gui_input()` 中点击写入 `_selected_pos`
 - `ui/scenes/game/map_canvas_drawer.gd`：`_draw_selection()` 绘制蓝色边框
 
+**确认（来自你的说明 #31）**
+
+- 点击地图格不需要高亮；hover 白色框也不需要保留。
+
 **修复方案（提案，需你点头后实施）**
 
-- 保留 `cell_selected` 信号用于交互逻辑，但移除/禁用 `_selected_pos` 的视觉渲染（或不再记录 `_selected_pos`）。
-- 同时确认 hover 的白色框是否保留（目前仅在 `Globals.show_cell_hover_tooltip` 时显示）。
+- 保留 `cell_selected`/`cell_hovered` 信号用于交互逻辑，但移除 `_selected_pos` 的视觉渲染。
+- 同时移除 hover 白色框的绘制，避免出现“格子高亮”的第二套机制。
 
 **验收**
 
@@ -1417,3 +1403,37 @@
 **状态**
 
 - Planned
+
+---
+
+## 32. 地图渲染：tile 内部细分网格线（细线）与 tile 外边缘粗线一起绘制
+
+**需求**
+
+- 每个 tile 内部需要有细线分割每个小单元格；视觉上类似 tile 外边缘的粗线，但内部使用细线。
+- 内部细线与 tile 外边缘粗线应一起绘制。
+
+**涉及代码（初步定位）**
+
+- `ui/scenes/game/map_canvas_drawer.gd`：`_draw_tile_borders()`（目前只绘制 tile 外边缘粗线）
+
+**修复方案（提案，需你点头后实施）**
+
+- 扩展 `_draw_tile_borders()`：
+	- 保留现有外边缘粗线绘制；
+	- 在 tile 内部按 `cell_size` 间距绘制 4 条竖线 + 4 条横线（tile_size=5），线宽更细、alpha 更低；
+	- 确保内部线不盖住上层 piece（仍在 draw 顺序中位于 roads 与 structures 之间）。
+
+**待澄清**
+
+- 内部细线的视觉参数是否接受：
+	- 颜色=黑色；alpha 低于外边缘（例如 0.25）；
+	- 线宽固定 1px，或按 zoom 随 `cell_size` 缩放（例如 `max(1.0, cell_size * 0.02)`）？
+
+**测试计划**
+
+- 增加 headless 回归测试：对给定 `tile_placements` 的 map_data，断言 MapCanvasDrawer 的 tile 分割线生成逻辑会输出“每 tile 8 条内部线”（4 竖 + 4 横），并覆盖 zoom 下线宽策略不出错。
+
+**状态**
+
+- Reported（待澄清）
