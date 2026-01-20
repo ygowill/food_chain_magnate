@@ -5,10 +5,10 @@ extends ActionExecutor
 
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const DrinksProcurementClass = preload("res://core/rules/drinks_procurement.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
-const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 
 # 每个饮料源提供的饮料数量
@@ -126,20 +126,11 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		if drink_type.is_empty():
 			return Result.failure("drink_type 不能为空")
 
-		var map_data: Dictionary = state.map
-		if not map_data.has("drink_sources") or not (map_data["drink_sources"] is Array):
-			return Result.failure("state.map.drink_sources 缺失或类型错误")
-		var drink_sources: Array = map_data["drink_sources"]
-		var found := false
-		for src_val in drink_sources:
-			if not (src_val is Dictionary):
-				continue
-			var src: Dictionary = src_val
-			if str(src.get("type", "")) == drink_type:
-				found = true
-				break
-		if not found:
-			return Result.failure("地图上不存在该饮料源类型: %s" % drink_type)
+		# 跑腿伙计直接“获得饮料”，不要求地图上存在对应饮料源；但仍需是已注册的饮品类型。
+		if not ProductRegistryClass.is_loaded():
+			return Result.failure("ProductRegistry 未初始化，无法校验 drink_type")
+		if not ProductRegistryClass.is_drink(drink_type):
+			return Result.failure("未知或非饮品的 drink_type: %s" % drink_type)
 
 		return Result.success()
 
@@ -193,6 +184,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		var drink_type: String = str(drink_type_r.value).strip_edges()
 		if drink_type.is_empty():
 			return Result.failure("drink_type 不能为空")
+
+		# 防御：避免绕过 validate 直接执行时写入非法产品 id。
+		if not ProductRegistryClass.is_loaded():
+			return Result.failure("ProductRegistry 未初始化，无法校验 drink_type")
+		if not ProductRegistryClass.is_drink(drink_type):
+			return Result.failure("未知或非饮品的 drink_type: %s" % drink_type)
 
 		var add_result := StateUpdater.add_inventory(state, player_id, drink_type, 1)
 		if not add_result.ok:

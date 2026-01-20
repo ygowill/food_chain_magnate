@@ -2,6 +2,7 @@
 extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const DrinksProcurementClass = preload("res://core/rules/drinks_procurement.gd")
 const TileRouteUtilsClass = preload("res://core/rules/drinks_procurement/tile_route_utils.gd")
@@ -380,7 +381,7 @@ func show_production_panel(production_type: String) -> void:
 
 	if production_type == "drinks":
 		if is_instance_valid(production_panel) and production_panel.has_method("set_available_drink_types"):
-			production_panel.set_available_drink_types(_get_drink_types_from_map(state))
+			production_panel.set_available_drink_types(_get_all_drink_types())
 		if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
 			production_panel.set_drinks_procurement_state(0, false, "")
 
@@ -651,26 +652,13 @@ func _reset_procurement_selection_state(clear_employee: bool = true) -> void:
 	_procure_route.clear()
 	_procure_error = ""
 
-func _get_drink_types_from_map(state: GameState) -> Array[String]:
-	var set := {}
-	if state == null:
-		return []
-	var sources_val = state.map.get("drink_sources", null)
-	if sources_val is Array:
-		var sources: Array = sources_val
-		for s_val in sources:
-			if not (s_val is Dictionary):
-				continue
-			var s: Dictionary = s_val
-			var t := str(s.get("type", "")).strip_edges()
-			if t.is_empty():
-				continue
-			set[t] = true
-
+func _get_all_drink_types() -> Array[String]:
 	var out: Array[String] = []
-	for k in set.keys():
-		out.append(str(k))
-	out.sort()
+	if not ProductRegistryClass.is_loaded():
+		return out
+	for pid in ProductRegistryClass.get_all_ids():
+		if ProductRegistryClass.is_drink(pid):
+			out.append(pid)
 	return out
 
 func _on_drinks_clear_requested() -> void:

@@ -20,12 +20,17 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not air_result.ok:
 		return air_result
 
+	var errand_result := _run_errand_boy_any_drink(action, player_count, seed_val)
+	if not errand_result.ok:
+		return errand_result
+
 	return Result.success({
 		"player_count": player_count,
 		"seed": seed_val,
 		"truck": truck_result.value,
 		"truck_distance_plus_one": truck_distance_plus_one.value,
 		"air": air_result.value,
+		"errand_boy": errand_result.value,
 	})
 
 static func _run_truck_route_rules(action: ProcureDrinksAction, player_count: int, seed_val: int) -> Result:
@@ -247,6 +252,61 @@ static func _run_air_route_rules(action: ProcureDrinksAction, player_count: int,
 		"dup_error": vr_dup.error,
 		"loop_drinks_delta": after - before,
 		"inventory": inv
+	})
+
+static func _run_errand_boy_any_drink(action: ProcureDrinksAction, player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+	var state: GameState = engine.get_state().duplicate_state()
+	_force_turn_order(state, player_count)
+	state.phase = "Working"
+	state.sub_phase = "GetDrinks"
+
+	var actor := state.get_current_player_id()
+	state.players[actor]["employees"].append("errand_boy")
+
+	var map_result := _build_truck_test_map(actor)
+	if not map_result.ok:
+		return map_result
+	state.map = map_result.value
+	RoadGraphCacheClass.invalidate_road_graph(state)
+
+	# 跑腿伙计：允许获取“地图上不存在来源”的饮料（例如 lemonade）
+	var cmd := Command.create("procure_drinks", actor, {
+		"employee_type": "errand_boy",
+		"drink_type": "lemonade",
+	})
+	var vr := action.validate(state, cmd)
+	if not vr.ok:
+		return Result.failure("跑腿伙计应允许获取地图上不存在的饮料（lemonade），但失败: %s" % vr.error)
+
+	var before := _sum_drinks(state.players[actor].get("inventory", {}))
+	var exec := action.compute_new_state(state, cmd)
+	if not exec.ok:
+		return Result.failure("跑腿伙计采购应成功，但失败: %s" % exec.error)
+	var new_state: GameState = exec.value
+	var after := _sum_drinks(new_state.players[actor].get("inventory", {}))
+	if after != before + 1:
+		return Result.failure("跑腿伙计应获得 1 瓶饮料，实际增量: %d" % (after - before))
+	if int(new_state.players[actor].get("inventory", {}).get("lemonade", 0)) != 1:
+		return Result.failure("跑腿伙计应获得 1 瓶 lemonade，实际: %d" % int(new_state.players[actor].get("inventory", {}).get("lemonade", 0)))
+
+	# 跑腿伙计：不允许选择非饮品（例如 burger）
+	var cmd2 := Command.create("procure_drinks", actor, {
+		"employee_type": "errand_boy",
+		"drink_type": "burger",
+	})
+	var vr2 := action.validate(state, cmd2)
+	if vr2.ok:
+		return Result.failure("跑腿伙计不应允许获取非饮品 burger")
+	if str(vr2.error).find("非饮品") < 0:
+		return Result.failure("跑腿伙计非饮品拒绝原因应包含'非饮品'，实际: %s" % vr2.error)
+
+	return Result.success({
+		"ok_drink": "lemonade",
+		"reject_non_drink_error": vr2.error,
 	})
 
 static func _force_turn_order(state: GameState, player_count: int) -> void:
