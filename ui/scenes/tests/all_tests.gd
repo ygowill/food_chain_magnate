@@ -31,6 +31,7 @@ const CleanupInventoryTestClass = preload("res://core/tests/cleanup_inventory_te
 const FireActionTestClass = preload("res://core/tests/fire_action_test.gd")
 const CompanyStructureTestClass = preload("res://core/tests/company_structure_test.gd")
 const HandAreaViewSwitchTestClass = preload("res://ui/scenes/tests/hand_area_view_switch_test.gd")
+const DragPreviewVisualTestClass = preload("res://ui/scenes/tests/drag_preview_visual_test.gd")
 const UiRegressionPropertyTestClass = preload("res://ui/scenes/tests/ui_regression_property_test.gd")
 const MapZoomPropertyTestClass = preload("res://ui/scenes/tests/map_zoom_property_test.gd")
 const LogRestoreAfterLoadTestClass = preload("res://ui/scenes/tests/log_restore_after_load_test.gd")
@@ -237,6 +238,10 @@ func _run_all() -> int:
 		{
 			"name": "HandAreaViewSwitchTest",
 			"fn": func() -> Result: return HandAreaViewSwitchTestClass.run(),
+		},
+		{
+			"name": "DragPreviewVisualTest",
+			"fn": func() -> Result: return DragPreviewVisualTestClass.run(),
 		},
 		{
 			"name": "UiRegressionPropertyTest",

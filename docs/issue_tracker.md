@@ -38,7 +38,7 @@
 | 21 | 加载存档后日志面板为空/消失 | UI/存档 | 存档回放发生在进入 GameScene 之前，UI 未订阅导致日志未捕获；且 setup 清空日志但未从 EventBus.history 恢复 | Implemented（待手动验收） |
 | 22 | 多餐厅：飞艇驾驶员采购饮料起点应由玩家选择 | UI/流程+规则 | UI 侧 `_resolve_procure_restaurant_and_entrance()` 固定取排序后的首家餐厅；且 `_auto_select_air_start_tile()` 会强制把“第一格”设为该餐厅板块 | Implemented（待手动验收） |
 | 23 | UI 配色：营销板背景/空地背景/可用点提示色 | UI/视觉 | 多处硬编码颜色/贴图：营销板使用深色占位；地图地面使用纹理；可用点高亮使用绿色，需统一替换 | Implemented（待手动验收） |
-| 24 | 重组阶段拖拽员工卡：拖拽预览会变形 | UI/交互 | 拖拽预览卡用 `EmployeeCard.new()` 重建，未复制源卡的缩放/变体；且 `setup()` 会重置 `custom_minimum_size`，导致预览尺寸与缩略卡不一致 | Planned |
+| 24 | 重组阶段拖拽员工卡：拖拽预览会变形 | UI/交互 | 拖拽预览卡用 `EmployeeCard.new()` 重建，未复制源卡的缩放/变体；且 `setup()` 会重置 `custom_minimum_size`，导致预览尺寸与缩略卡不一致 | Implemented（待手动验收） |
 | 25 | 重组界面：全屏覆盖；左侧仅待命卡；三列滚动；右侧公司树满宽；多管理槽下属卡槽改为网格 | UI/重构 | `ModalPanelBase` 设计为“不遮挡左侧信息区”；`HandArea` 默认显示在岗/待命/忙碌；`CompanyStructure` 下属槽位纵向堆叠导致高度溢出 | Planned |
 | 26 | 招聘/培训等面板统一复用员工缩略卡（EmployeeCard） | UI/一致性 | Recruit/Train 等面板各自实现了 PoolCard/TrainableCard/OptionButton 文本，导致表现不一致、维护分散 | Planned |
 | 27 | 地图高亮/覆盖机制统一：边框 + 透明层覆盖完整 piece | UI/渲染 | 当前存在多套：cell 选中框、cell_highlights、structure_preview、MarketingRangeOverlay 等；且房屋“被覆盖”只高亮锚点格 | Planned |
@@ -1147,7 +1147,7 @@
 
 - 发生在“鼠标跟随的预览卡”（原位置的卡牌不需要处理）。
 
-**修复方案（提案，需你点头后实施）**
+**修复方案**
 
 - 拖拽预览卡改为“复制源卡视觉参数”：
 	- 复制 `variant`、`display_scale`（以及必要的 theme/大小策略）；
@@ -1158,9 +1158,24 @@
 
 - 重组阶段拖拽时，预览卡与原缩略卡在尺寸/比例上保持一致（仅允许透明度/高亮等轻量差异）。
 
+**实施记录**
+
+- 已修改：`ui/components/hand_area/hand_area.gd`、`ui/components/company_structure/company_structure.gd`：
+	- 拖拽预览卡复制源卡的 `variant/display_scale`；
+	- 取消预览卡 `scale=1.05`（保持 `Vector2.ONE`）；
+	- 预览卡入树后强制回写 `custom_minimum_size/size`，避免 `_ready()` 重建 UI 时覆盖尺寸；
+	- 额外兜底：viewport 为空时不再访问 `get_mouse_position()`（避免 headless/测试时脚本报错）。
+- 新增：`ui/scenes/tests/drag_preview_visual_test.gd`（`DragPreviewVisualTest`）；
+- 已修改：`ui/scenes/tests/all_tests.gd`：加入 `DragPreviewVisualTest`。
+
+**验证**
+
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（89/89，`.godot/AllTests.log`）
+
 **状态**
 
-- Planned
+- Implemented（待手动验收）
 
 ---
 

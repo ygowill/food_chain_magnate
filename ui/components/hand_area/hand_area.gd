@@ -203,7 +203,10 @@ func _process(_delta: float) -> void:
 		set_process(false)
 		return
 
-	var mouse_pos := get_viewport().get_mouse_position()
+	var viewport := get_viewport()
+	if viewport == null:
+		return
+	var mouse_pos := viewport.get_mouse_position()
 	_drag_preview.position = mouse_pos - _drag_preview_offset
 
 	var target := _find_drop_target(mouse_pos)
@@ -236,22 +239,33 @@ func _start_drag_visuals(employee_id: String, source: EmployeeCard) -> void:
 		return
 
 	var preview := EmployeeCardClass.new()
+	preview.variant = source.variant
+	preview.display_scale = source.display_scale
+	preview.show_salary_indicator = source.show_salary_indicator
 	preview.employee_id = employee_id
 	preview.draggable = false
 	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.scale = Vector2.ONE
+	preview.modulate = Color(1, 1, 1, 0.85)
+
+	_drag_layer.add_child(preview)
 	preview.custom_minimum_size = size_guess
 	preview.size = size_guess
-	preview.scale = Vector2(1.05, 1.05)
-	preview.modulate = Color(1, 1, 1, 0.85)
+	# _ready() 会在入树时重建 UI 并重置 custom_minimum_size；这里再 deferred 一次确保预览尺寸稳定。
+	preview.set_deferred("custom_minimum_size", size_guess)
+	preview.set_deferred("size", size_guess)
 
 	var emp_def := _get_employee_def(employee_id)
 	if not emp_def.is_empty():
 		preview.setup(emp_def)
 
-	_drag_layer.add_child(preview)
 	_drag_preview = preview
 
-	_drag_preview.position = get_viewport().get_mouse_position() - _drag_preview_offset
+	var viewport := get_viewport()
+	if viewport != null:
+		_drag_preview.position = viewport.get_mouse_position() - _drag_preview_offset
+	else:
+		_drag_preview.position = -_drag_preview_offset
 	set_process(true)
 
 func _end_drag_visuals() -> void:
