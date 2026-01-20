@@ -36,7 +36,7 @@
 | 19 | 存档加载提示“无效的 initial_state” | 存档/回放 | JSON.parse_string 将所有数字读成 float，导致玩家字段（cash 等）类型不匹配；同时整值 float/int 的表现差异会导致 hash 不稳定 | Implemented（待手动验收） |
 | 20 | 重组阶段公司结构需展示为树（管理岗像 CEO，有槽位） | UI/重构 | 现 UI 仅 CEO 使用卡槽、管理岗用列表，无法表达树；大量槽位时缺少折叠/滚动策略导致易溢出 | Implemented（待手动验收） |
 | 21 | 加载存档后日志面板为空/消失 | UI/存档 | 存档回放发生在进入 GameScene 之前，UI 未订阅导致日志未捕获；且 setup 清空日志但未从 EventBus.history 恢复 | Implemented（待手动验收） |
-| 22 | 多餐厅：飞艇驾驶员采购饮料起点应由玩家选择 | UI/流程+规则 | UI 侧 `_resolve_procure_restaurant_and_entrance()` 固定取排序后的首家餐厅；且 `_auto_select_air_start_tile()` 会强制把“第一格”设为该餐厅板块 | Planned |
+| 22 | 多餐厅：飞艇驾驶员采购饮料起点应由玩家选择 | UI/流程+规则 | UI 侧 `_resolve_procure_restaurant_and_entrance()` 固定取排序后的首家餐厅；且 `_auto_select_air_start_tile()` 会强制把“第一格”设为该餐厅板块 | Implemented（待手动验收） |
 | 23 | UI 配色：营销板背景/空地背景/可用点提示色 | UI/视觉 | 多处硬编码颜色/贴图：营销板使用深色占位；地图地面使用纹理；可用点高亮使用绿色，需统一替换 | Planned |
 | 24 | 重组阶段拖拽员工卡：拖拽预览会变形 | UI/交互 | 拖拽预览卡用 `EmployeeCard.new()` 重建，未复制源卡的缩放/变体；且 `setup()` 会重置 `custom_minimum_size`，导致预览尺寸与缩略卡不一致 | Planned |
 | 25 | 重组界面：全屏覆盖；左侧仅待命卡；三列滚动；右侧公司树满宽；多管理槽下属卡槽改为网格 | UI/重构 | `ModalPanelBase` 设计为“不遮挡左侧信息区”；`HandArea` 默认显示在岗/待命/忙碌；`CompanyStructure` 下属槽位纵向堆叠导致高度溢出 | Planned |
@@ -1044,7 +1044,7 @@
 - 交互选择 A：玩家在地图上先点击某一家餐厅所在板块作为第一格（起点），再继续选相邻板块。
 - 仅覆盖飞艇驾驶员（不需要覆盖手推车/卡车采购）。
 
-**修复方案（提案，需你点头后实施）**
+**修复方案**
 
 - 改为“起点由玩家选择”：当处于飞艇采购且 `_procure_selected_tiles` 为空时，允许玩家选择任意属于自己的餐厅板块作为第一格，并据此解析 `restaurant_id/entrance_pos`。
 - 仅当玩家只有 1 家餐厅时，才允许保留当前的自动起点行为（减少操作）。
@@ -1054,9 +1054,20 @@
 
 - 多餐厅时，飞艇采购的第一格不再被强制固定；玩家可明确选择从哪家餐厅出发，且后续校验/预览/执行一致。
 
+**实施记录**
+
+- 已修改：`ui/scenes/game/game_panel_working_panels.gd`：飞艇采购在“未选第一格”时改为高亮“所有自有餐厅所在 tile”作为合法起点；只有 1 家餐厅时才自动选起点。
+- 已新增：`ui/scenes/tests/air_procure_start_tile_choice_test.gd`：覆盖“多餐厅不自动锁定起点，且起点 tiles 列表正确”。
+- 已修改：`ui/scenes/tests/all_tests.gd`：加入 `AirProcureStartTileChoiceTest`。
+
+**验证**
+
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（88/88，`.godot/AllTests.log`）
+
 **状态**
 
-- Planned
+- Implemented（待手动验收）
 
 ---
 

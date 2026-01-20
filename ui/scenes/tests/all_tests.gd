@@ -15,6 +15,7 @@ const MandatoryActionsTestClass = preload("res://core/tests/mandatory_actions_te
 const ProduceFoodTestClass = preload("res://core/tests/produce_food_test.gd")
 const ProcureDrinksTestClass = preload("res://core/tests/procure_drinks_test.gd")
 const ProcureDrinksRouteRulesTestClass = preload("res://core/tests/procure_drinks_route_rules_test.gd")
+const AirProcureStartTileChoiceTestClass = preload("res://ui/scenes/tests/air_procure_start_tile_choice_test.gd")
 const PlaceHouseRulesTestClass = preload("res://core/tests/place_house_rules_test.gd")
 const AddGardenRulesTestClass = preload("res://core/tests/add_garden_rules_test.gd")
 const PlaceRestaurantRulesTestClass = preload("res://core/tests/place_restaurant_rules_test.gd")
@@ -172,6 +173,10 @@ func _run_all() -> int:
 		{
 			"name": "ProcureDrinksRouteRulesTest",
 			"fn": func() -> Result: return ProcureDrinksRouteRulesTestClass.run(2, 12345),
+		},
+		{
+			"name": "AirProcureStartTileChoiceTest",
+			"fn": func() -> Result: return AirProcureStartTileChoiceTestClass.run(),
 		},
 		{
 			"name": "PlaceHouseRulesTest",

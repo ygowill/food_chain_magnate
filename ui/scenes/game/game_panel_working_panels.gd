@@ -32,6 +32,7 @@ var milestone_panel = null
 var _procure_selected_employee_type: String = ""
 var _procure_selected_sources: Array[Vector2i] = []
 var _procure_selected_tiles: Array[Vector2i] = []
+var _procure_air_start_restaurant_id: String = "" # only for air procure (zeppelin): chosen by first tile selection
 var _procure_restaurant_id: String = ""
 var _procure_route: Array[Vector2i] = []
 var _procure_error: String = ""
@@ -562,7 +563,8 @@ func _on_producer_changed(employee_type: String, product_type: String) -> void:
 	if _map_controller != null and _map_controller.has_method("begin_selection"):
 		_map_controller.begin_selection("procure_drinks", {"employee_type": employee_type})
 	if _is_air_procure_employee_type(employee_type):
-		_auto_select_air_start_tile(state)
+		if not _try_auto_select_air_start_tile(state):
+			_show_air_procure_start_tiles_overlay(state)
 	else:
 		if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
 			production_panel.set_drinks_procurement_state(0, false, "")
@@ -648,6 +650,7 @@ func _reset_procurement_selection_state(clear_employee: bool = true) -> void:
 		_procure_selected_employee_type = ""
 	_procure_selected_sources.clear()
 	_procure_selected_tiles.clear()
+	_procure_air_start_restaurant_id = ""
 	_procure_restaurant_id = ""
 	_procure_route.clear()
 	_procure_error = ""
@@ -666,7 +669,8 @@ func _on_drinks_clear_requested() -> void:
 	_reset_procurement_selection_state(false)
 	if _is_air_procure_employee_type(_procure_selected_employee_type):
 		if state != null:
-			_auto_select_air_start_tile(state)
+			if not _try_auto_select_air_start_tile(state):
+				_show_air_procure_start_tiles_overlay(state)
 			return
 	_hide_procurement_route_overlay()
 	if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
@@ -677,9 +681,11 @@ func _on_drinks_undo_requested() -> void:
 	if state == null:
 		return
 	if _is_air_procure_employee_type(_procure_selected_employee_type):
-		if _procure_selected_tiles.size() <= 1:
+		if _procure_selected_tiles.is_empty():
 			return
 		_procure_selected_tiles.pop_back()
+		if _procure_selected_tiles.is_empty():
+			_procure_air_start_restaurant_id = ""
 	else:
 		if _procure_selected_sources.is_empty():
 			return
@@ -704,16 +710,12 @@ func _on_procure_drinks_source_selected(world_pos: Vector2i) -> void:
 	var emp_def: EmployeeDef = _get_procure_employee_def(_procure_selected_employee_type)
 	var is_air := (emp_def != null and str(emp_def.range_type) == "air") or _procure_selected_employee_type == "zeppelin_pilot"
 	if is_air:
-		var rest_read := _resolve_procure_restaurant_and_entrance(state)
-		if not rest_read.ok:
-			_procure_error = rest_read.error
-			_hide_procurement_route_overlay()
-			if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
-				production_panel.set_drinks_procurement_state(_procure_selected_tiles.size(), false, _procure_error)
-			return
-		var entrance_pos: Vector2i = rest_read.value.get("entrance_pos", Vector2i(-1, -1))
-		var entrance_tile: Vector2i = MapUtils.world_to_tile(entrance_pos).board_pos
-		var tile_pos: Vector2i = MapUtils.world_to_tile(world_pos).board_pos
+		var tile_pos := Vector2i.ZERO
+		var tile_read := TileRouteUtilsClass.world_to_tile_pos(state, world_pos)
+		if tile_read.ok:
+			tile_pos = tile_read.value
+		else:
+			tile_pos = MapUtils.world_to_tile(world_pos).board_pos
 		var tile_positions_set := TileRouteUtilsClass.get_tile_positions_set(state)
 		var bounds := _get_air_tile_bounds(state, tile_positions_set)
 		if not _is_air_tile_valid(tile_pos, tile_positions_set, bounds):
@@ -723,23 +725,29 @@ func _on_procure_drinks_source_selected(world_pos: Vector2i) -> void:
 			return
 
 		if _procure_selected_tiles.is_empty():
-			if tile_pos != entrance_tile:
-				_procure_error = "飞艇路线必须从餐厅所在板块开始"
+			var rest_pick := _resolve_air_procure_restaurant_and_entrance_from_start_tile(state, tile_pos)
+			if not rest_pick.ok:
+				_procure_error = rest_pick.error
 				if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
-					production_panel.set_drinks_procurement_state(_procure_selected_tiles.size(), false, _procure_error)
+					production_panel.set_drinks_procurement_state(0, false, _procure_error)
+				_show_air_procure_start_tiles_overlay(state)
 				return
-		else:
-			if _procure_selected_tiles.has(tile_pos):
-				_procure_error = "不允许重复板块"
-				if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
-					production_panel.set_drinks_procurement_state(_procure_selected_tiles.size(), false, _procure_error)
-				return
-			var last_tile: Vector2i = _procure_selected_tiles[_procure_selected_tiles.size() - 1]
-			if not MapUtils.are_adjacent(last_tile, tile_pos):
-				_procure_error = "必须选择相邻板块"
-				if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
-					production_panel.set_drinks_procurement_state(_procure_selected_tiles.size(), false, _procure_error)
-				return
+			_procure_air_start_restaurant_id = str(rest_pick.value.get("restaurant_id", ""))
+			_procure_selected_tiles.append(tile_pos)
+			_recompute_procurement_plan(state)
+			return
+
+		if _procure_selected_tiles.has(tile_pos):
+			_procure_error = "不允许重复板块"
+			if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
+				production_panel.set_drinks_procurement_state(_procure_selected_tiles.size(), false, _procure_error)
+			return
+		var last_tile: Vector2i = _procure_selected_tiles[_procure_selected_tiles.size() - 1]
+		if not MapUtils.are_adjacent(last_tile, tile_pos):
+			_procure_error = "必须选择相邻板块"
+			if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
+				production_panel.set_drinks_procurement_state(_procure_selected_tiles.size(), false, _procure_error)
+			return
 
 		var max_tiles := _get_air_procure_max_tiles(state, emp_def)
 		if max_tiles > 0 and _procure_selected_tiles.size() + 1 > max_tiles:
@@ -770,7 +778,8 @@ func _recompute_procurement_plan(state: GameState) -> void:
 	var selected_count := _procure_selected_tiles.size() if is_air else _procure_selected_sources.size()
 
 	if is_air and _procure_selected_tiles.is_empty():
-		_hide_procurement_route_overlay()
+		_procure_air_start_restaurant_id = ""
+		_show_air_procure_start_tiles_overlay(state)
 		if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
 			production_panel.set_drinks_procurement_state(0, false, "")
 		return
@@ -818,18 +827,35 @@ func _recompute_procurement_plan(state: GameState) -> void:
 
 	var chosen_restaurant_id := ""
 	var entrance_pos: Vector2i = Vector2i(-1, -1)
-	for rest_id in restaurant_ids:
-		if not restaurants.has(rest_id):
-			continue
-		var rest_val = restaurants[rest_id]
-		if not (rest_val is Dictionary):
-			continue
-		var rest: Dictionary = rest_val
-		var ep = rest.get("entrance_pos", null)
-		if ep is Vector2i:
-			chosen_restaurant_id = str(rest_id)
-			entrance_pos = Vector2i(ep)
-			break
+	if str(emp_def.range_type) == "air":
+		var start_tile := _procure_selected_tiles[0] if not _procure_selected_tiles.is_empty() else Vector2i(-1, -1)
+		if not _procure_air_start_restaurant_id.is_empty():
+			var rid := _procure_air_start_restaurant_id
+			if restaurants.has(rid) and (restaurants[rid] is Dictionary):
+				var rest: Dictionary = restaurants[rid]
+				var ep = rest.get("entrance_pos", null)
+				if ep is Vector2i:
+					chosen_restaurant_id = rid
+					entrance_pos = Vector2i(ep)
+		if chosen_restaurant_id.is_empty() and start_tile != Vector2i(-1, -1):
+			var pick := _resolve_air_procure_restaurant_and_entrance_from_start_tile(state, start_tile)
+			if pick.ok:
+				chosen_restaurant_id = str(pick.value.get("restaurant_id", ""))
+				entrance_pos = pick.value.get("entrance_pos", Vector2i(-1, -1))
+				_procure_air_start_restaurant_id = chosen_restaurant_id
+	else:
+		for rest_id in restaurant_ids:
+			if not restaurants.has(rest_id):
+				continue
+			var rest_val = restaurants[rest_id]
+			if not (rest_val is Dictionary):
+				continue
+			var rest: Dictionary = rest_val
+			var ep = rest.get("entrance_pos", null)
+			if ep is Vector2i:
+				chosen_restaurant_id = str(rest_id)
+				entrance_pos = Vector2i(ep)
+				break
 
 	if chosen_restaurant_id.is_empty():
 		_procure_error = "无法解析餐厅入口位置"
@@ -1103,17 +1129,9 @@ func _get_air_procure_legal_tiles(state: GameState, emp_def: EmployeeDef, entran
 	var bounds := _get_air_tile_bounds(state, tile_positions_set)
 
 	if _procure_selected_tiles.is_empty():
-		var start_tile := entrance_tile
-		if start_tile == Vector2i(-1, -1):
-			var rest_read := _resolve_procure_restaurant_and_entrance(state)
-			if not rest_read.ok:
-				return out
-			var entrance_pos: Vector2i = rest_read.value.get("entrance_pos", Vector2i(-1, -1))
-			if entrance_pos == Vector2i(-1, -1):
-				return out
-			start_tile = MapUtils.world_to_tile(entrance_pos).board_pos
-		if _is_air_tile_valid(start_tile, tile_positions_set, bounds):
-			out.append(start_tile)
+		for start_tile in _get_air_procure_start_tiles(state):
+			if _is_air_tile_valid(start_tile, tile_positions_set, bounds):
+				out.append(start_tile)
 		return out
 
 	if _procure_selected_tiles.size() >= max_tiles:
@@ -1141,6 +1159,31 @@ func _build_air_procure_overlay_options(state: GameState, emp_def: EmployeeDef, 
 		"legal_tiles": _get_air_procure_legal_tiles(state, emp_def, entrance_tile)
 	}
 
+func _show_air_procure_start_tiles_overlay(state: GameState) -> void:
+	if state == null:
+		return
+	if not _is_air_procure_employee_type(_procure_selected_employee_type):
+		return
+	if _overlay_controller == null or not _overlay_controller.has_method("show_procurement_route_overlay"):
+		return
+
+	var start_tiles: Array[Vector2i] = _get_air_procure_start_tiles(state)
+	if start_tiles.is_empty():
+		_hide_procurement_route_overlay()
+		return
+
+	var tile_size_cells := _get_air_tile_size_cells(state)
+	var empty_tiles: Array[Vector2i] = []
+	var empty_route: Array[Vector2i] = []
+	var empty_sources: Array[Vector2i] = []
+	var opts := {
+		"tile_mode": true,
+		"tile_size_cells": tile_size_cells,
+		"selected_tiles": empty_tiles,
+		"legal_tiles": start_tiles
+	}
+	_overlay_controller.call("show_procurement_route_overlay", Vector2i(-1, -1), empty_route, empty_sources, opts)
+
 func _show_air_procure_overlay(state: GameState, emp_def: EmployeeDef, entrance_pos: Vector2i, picked_sources: Array[Vector2i]) -> void:
 	if _overlay_controller == null or not _overlay_controller.has_method("show_procurement_route_overlay"):
 		return
@@ -1151,30 +1194,43 @@ func _show_air_procure_overlay(state: GameState, emp_def: EmployeeDef, entrance_
 	var overlay_options := _build_air_procure_overlay_options(state, emp_def, entrance_tile)
 	_overlay_controller.call("show_procurement_route_overlay", overlay_entrance, overlay_route, picked_sources, overlay_options)
 
-func _auto_select_air_start_tile(state: GameState) -> void:
+func _try_auto_select_air_start_tile(state: GameState) -> bool:
 	if state == null:
-		return
+		return false
 	var emp_def: EmployeeDef = _get_procure_employee_def(_procure_selected_employee_type)
 	if emp_def == null or str(emp_def.range_type) != "air":
-		return
-	var rest_read := _resolve_procure_restaurant_and_entrance(state)
-	if not rest_read.ok:
-		_procure_error = rest_read.error
-		_hide_procurement_route_overlay()
-		if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
-			production_panel.set_drinks_procurement_state(0, false, _procure_error)
-		return
-	var entrance_pos: Vector2i = rest_read.value.get("entrance_pos", Vector2i(-1, -1))
-	if entrance_pos == Vector2i(-1, -1):
-		_procure_error = "无法解析餐厅入口位置"
-		_hide_procurement_route_overlay()
-		if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
-			production_panel.set_drinks_procurement_state(0, false, _procure_error)
-		return
-	var entrance_tile: Vector2i = MapUtils.world_to_tile(entrance_pos).board_pos
+		return false
+
+	var player_id := state.get_current_player_id()
+	var restaurant_ids := StructuresClass.get_player_restaurants(state, player_id)
+	if restaurant_ids.size() != 1:
+		return false
+	var pick_id: String = restaurant_ids[0]
+
+	var restaurants_val = state.map.get("restaurants", null)
+	if not (restaurants_val is Dictionary):
+		return false
+	var restaurants: Dictionary = restaurants_val
+	if not restaurants.has(pick_id) or not (restaurants[pick_id] is Dictionary):
+		return false
+	var rest: Dictionary = restaurants[pick_id]
+	var ep = rest.get("entrance_pos", null)
+	if not (ep is Vector2i):
+		return false
+	var entrance_pos: Vector2i = Vector2i(ep)
+
+	var entrance_tile := Vector2i.ZERO
+	var tile_read := TileRouteUtilsClass.world_to_tile_pos(state, entrance_pos)
+	if tile_read.ok:
+		entrance_tile = tile_read.value
+	else:
+		entrance_tile = MapUtils.world_to_tile(entrance_pos).board_pos
+
+	_procure_air_start_restaurant_id = pick_id
 	_procure_selected_tiles.clear()
 	_procure_selected_tiles.append(entrance_tile)
 	_recompute_procurement_plan(state)
+	return true
 
 func _get_procure_employee_def(employee_type: String) -> EmployeeDef:
 	if employee_type.is_empty():
@@ -1204,6 +1260,105 @@ func _get_air_procure_max_tiles(state: GameState, emp_def: EmployeeDef) -> int:
 	if bonus_read.ok:
 		max_tiles += int(bonus_read.value)
 	return max_tiles
+
+func _get_air_procure_start_tiles(state: GameState) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if state == null:
+		return out
+	var player_id := state.get_current_player_id()
+	var restaurant_ids := StructuresClass.get_player_restaurants(state, player_id)
+	if restaurant_ids.is_empty():
+		return out
+	var restaurants_val = state.map.get("restaurants", null)
+	if not (restaurants_val is Dictionary):
+		return out
+	var restaurants: Dictionary = restaurants_val
+
+	var seen := {}
+	for rest_id in restaurant_ids:
+		if not restaurants.has(rest_id):
+			continue
+		var rest_val = restaurants[rest_id]
+		if not (rest_val is Dictionary):
+			continue
+		var rest: Dictionary = rest_val
+		var ep = rest.get("entrance_pos", null)
+		if not (ep is Vector2i):
+			continue
+		var entrance_pos: Vector2i = Vector2i(ep)
+
+		var tile_pos := Vector2i.ZERO
+		var tile_read := TileRouteUtilsClass.world_to_tile_pos(state, entrance_pos)
+		if tile_read.ok:
+			tile_pos = tile_read.value
+		else:
+			tile_pos = MapUtils.world_to_tile(entrance_pos).board_pos
+
+		if seen.has(tile_pos):
+			continue
+		seen[tile_pos] = true
+		out.append(tile_pos)
+
+	out.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		if a.y != b.y:
+			return a.y < b.y
+		return a.x < b.x
+	)
+	return out
+
+func _resolve_air_procure_restaurant_and_entrance_from_start_tile(state: GameState, start_tile: Vector2i) -> Result:
+	if state == null:
+		return Result.failure("state 为空")
+	if start_tile == Vector2i(-1, -1):
+		return Result.failure("未选择起点板块")
+
+	var player_id := state.get_current_player_id()
+	var restaurant_ids := StructuresClass.get_player_restaurants(state, player_id)
+	if restaurant_ids.is_empty():
+		return Result.failure("你没有餐厅，无法采购饮料")
+
+	var restaurants_val = state.map.get("restaurants", null)
+	if not (restaurants_val is Dictionary):
+		return Result.failure("state.map.restaurants 缺失或类型错误")
+	var restaurants: Dictionary = restaurants_val
+
+	var matches: Array[String] = []
+	for rest_id in restaurant_ids:
+		if not restaurants.has(rest_id):
+			continue
+		var rest_val = restaurants[rest_id]
+		if not (rest_val is Dictionary):
+			continue
+		var rest: Dictionary = rest_val
+		var ep = rest.get("entrance_pos", null)
+		if not (ep is Vector2i):
+			continue
+		var entrance_pos: Vector2i = Vector2i(ep)
+
+		var entrance_tile := Vector2i.ZERO
+		var tile_read := TileRouteUtilsClass.world_to_tile_pos(state, entrance_pos)
+		if tile_read.ok:
+			entrance_tile = tile_read.value
+		else:
+			entrance_tile = MapUtils.world_to_tile(entrance_pos).board_pos
+
+		if entrance_tile == start_tile:
+			matches.append(str(rest_id))
+
+	if matches.is_empty():
+		return Result.failure("第一格必须选择餐厅所在板块")
+
+	matches.sort()
+	var chosen_id: String = matches[0]
+	var chosen: Dictionary = restaurants.get(chosen_id, {})
+	var ep2 = chosen.get("entrance_pos", null)
+	if not (ep2 is Vector2i):
+		return Result.failure("无法解析餐厅入口位置: %s" % chosen_id)
+
+	return Result.success({
+		"restaurant_id": chosen_id,
+		"entrance_pos": Vector2i(ep2),
+	})
 
 func _resolve_procure_restaurant_and_entrance(state: GameState) -> Result:
 	if state == null:
