@@ -37,6 +37,7 @@ const UiRegressionPropertyTestClass = preload("res://ui/scenes/tests/ui_regressi
 const MapZoomPropertyTestClass = preload("res://ui/scenes/tests/map_zoom_property_test.gd")
 const TileInternalGridLinesTestClass = preload("res://ui/scenes/tests/tile_internal_grid_lines_test.gd")
 const AirplaneMarketingOutsideRenderTestClass = preload("res://ui/scenes/tests/airplane_marketing_outside_render_test.gd")
+const MarketingRangeFullFootprintTestClass = preload("res://ui/scenes/tests/marketing_range_full_footprint_test.gd")
 const MoveRestaurantDisplayLabelTestClass = preload("res://ui/scenes/tests/move_restaurant_display_label_test.gd")
 const LogRestoreAfterLoadTestClass = preload("res://ui/scenes/tests/log_restore_after_load_test.gd")
 const EventHistoryRewindTestClass = preload("res://core/tests/event_history_rewind_test.gd")
@@ -267,6 +268,10 @@ func _run_all() -> int:
 			{
 				"name": "AirplaneMarketingOutsideRenderTest",
 				"fn": func() -> Result: return AirplaneMarketingOutsideRenderTestClass.run(),
+			},
+			{
+				"name": "MarketingRangeFullFootprintTest",
+				"fn": func() -> Result: return MarketingRangeFullFootprintTestClass.run(),
 			},
 			{
 				"name": "MoveRestaurantDisplayLabelTest",

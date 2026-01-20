@@ -1,7 +1,6 @@
 # Game scene：营销范围覆盖层
 extends RefCounted
 
-const MarketingRangeOverlayScene = preload("res://ui/overlays/marketing_range_overlay.tscn")
 const MarketingRangeCalculatorClass = preload("res://core/rules/marketing_range_calculator.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const OverlayUtils = preload("res://ui/scenes/game/game_overlay_utils.gd")
@@ -9,8 +8,16 @@ const OverlayUtils = preload("res://ui/scenes/game/game_overlay_utils.gd")
 var _scene = null
 var _map_canvas = null
 
+# Compatibility alias (older code may still read this directly).
 var marketing_range_overlay = null
 var _calculator = null
+
+# Placeholder colors for unified highlight mechanism (issue_tracker #27).
+# If you want to tweak visuals later, start here.
+const OVERLAY_ID := "marketing_range"
+const RANGE_FILL_COLOR := Color(0.29, 0.58, 0.98, 0.18)
+const RANGE_BORDER_COLOR := Color(0.29, 0.58, 0.98, 0.55)
+const RANGE_BORDER_WIDTH := 2.0
 
 func _init(scene, map_canvas) -> void:
 	_scene = scene
@@ -18,95 +25,75 @@ func _init(scene, map_canvas) -> void:
 	_calculator = MarketingRangeCalculatorClass.new()
 
 func show_marketing_range_overlay(campaigns: Array[Dictionary]) -> void:
-		_ensure_marketing_range_overlay()
-		if not is_instance_valid(marketing_range_overlay):
-			return
+	var cells_set := {}
+	var cells: Array[Vector2i] = []
 
-		if marketing_range_overlay.has_method("set_visual_modules"):
-			var state2: GameState = null
-			if _scene != null and (_scene.has_method("get") and _scene.get("game_engine") != null):
-				var engine2 = _scene.get("game_engine")
-				if engine2 != null and (engine2 is GameEngine):
-					state2 = engine2.get_state()
-			if state2 != null and (state2.modules is Array):
-				marketing_range_overlay.set_visual_modules(Array(state2.modules, TYPE_STRING, "", null))
+	for c_val in campaigns:
+		if not (c_val is Dictionary):
+			continue
+		var c: Dictionary = c_val
 
-		var normalized: Array[Dictionary] = []
-		for c_val in campaigns:
-			if not (c_val is Dictionary):
-				continue
-			var c: Dictionary = (c_val as Dictionary).duplicate(true)
+		# 兼容输入字段：position / world_pos
+		var pos := Vector2i(-1, -1)
+		var pos_val = c.get("position", null)
+		if pos_val is Vector2i:
+			pos = pos_val
+		else:
+			var wp = c.get("world_pos", null)
+			if wp is Vector2i:
+				pos = wp
+		if pos == Vector2i(-1, -1):
+			continue
 
-			# 兼容输入字段：position / world_pos
-			if not c.has("position") or not (c["position"] is Vector2i):
-				var wp = c.get("world_pos", null)
-				if wp is Vector2i:
-					c["position"] = wp
-			if not c.has("position") or not (c["position"] is Vector2i):
-				continue
+		# 兼容输入字段：type / marketing_type
+		var type_id := ""
+		var type_val = c.get("type", null)
+		if type_val is String:
+			type_id = str(type_val)
+		else:
+			var mt = c.get("marketing_type", null)
+			if mt is String:
+				type_id = str(mt)
+		type_id = type_id.strip_edges()
+		if type_id.is_empty():
+			continue
 
-			# 兼容输入字段：type / marketing_type
-			if not c.has("type") or not (c["type"] is String):
-				var mt = c.get("marketing_type", null)
-				if mt is String:
-					c["type"] = mt
-			var type_id := str(c.get("type", ""))
-			if type_id.is_empty():
-				continue
+		# 若提供了 tiles（视为“需要覆盖的 world cells”），直接使用；否则按核心算法推导。
+		var tiles_val = c.get("tiles", null)
+		if tiles_val is Array and not (tiles_val as Array).is_empty():
+			for t in (tiles_val as Array):
+				if t is Vector2i:
+					cells_set[t] = true
+			continue
 
-			# 若未提供 tiles，则用核心算法推导（与预览保持一致）
-			var tiles_val = c.get("tiles", null)
-			if not (tiles_val is Array) or (tiles_val as Array).is_empty():
-				var extra := {}
-				if type_id == "airplane":
-					var axis := str(c.get("axis", ""))
-					if axis == "row" or axis == "col":
-						extra["axis"] = axis
-				var tiles: Array[Vector2i] = _compute_preview_tiles(Vector2i(c["position"]), type_id, extra)
-				if not tiles.is_empty():
-					c["tiles"] = tiles
-					if not c.has("range"):
-						c["range"] = 0
+		var extra := {}
+		if type_id == "airplane":
+			var axis := str(c.get("axis", ""))
+			if axis == "row" or axis == "col":
+				extra["axis"] = axis
 
-			normalized.append(c)
+		var computed: Array[Vector2i] = _compute_preview_cells(pos, type_id, extra)
+		for p in computed:
+			cells_set[p] = true
 
-		if marketing_range_overlay.has_method("set_campaigns"):
-			marketing_range_overlay.set_campaigns(normalized)
+	for k in cells_set.keys():
+		if k is Vector2i:
+			cells.append(k)
 
-		marketing_range_overlay.visible = true
+	_set_overlay_cells(cells)
 
 func hide_marketing_range_overlay() -> void:
-	if is_instance_valid(marketing_range_overlay):
-		marketing_range_overlay.visible = false
-		if marketing_range_overlay.has_method("clear_all"):
-			marketing_range_overlay.clear_all()
+	_clear_overlay()
 
 func preview_marketing_range(position: Vector2i, range_val: int, marketing_type: String, extra: Dictionary = {}) -> void:
 	if marketing_type.is_empty():
 		hide_marketing_range_overlay()
 		return
 
-	_ensure_marketing_range_overlay()
-	if not is_instance_valid(marketing_range_overlay):
-		return
+	var cells: Array[Vector2i] = _compute_preview_cells(position, marketing_type, extra)
+	_set_overlay_cells(cells)
 
-	if marketing_range_overlay.has_method("set_visual_modules"):
-		var state3: GameState = null
-		if _scene != null and (_scene.has_method("get") and _scene.get("game_engine") != null):
-			var engine3 = _scene.get("game_engine")
-			if engine3 != null and (engine3 is GameEngine):
-				state3 = engine3.get_state()
-		if state3 != null and (state3.modules is Array):
-			marketing_range_overlay.set_visual_modules(Array(state3.modules, TYPE_STRING, "", null))
-
-	var tiles: Array[Vector2i] = _compute_preview_tiles(position, marketing_type, extra)
-
-	if marketing_range_overlay.has_method("show_preview"):
-		marketing_range_overlay.show_preview(position, range_val, marketing_type, tiles)
-
-	marketing_range_overlay.visible = true
-
-func _compute_preview_tiles(position: Vector2i, marketing_type: String, extra: Dictionary) -> Array[Vector2i]:
+func _compute_preview_cells(position: Vector2i, marketing_type: String, extra: Dictionary) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	if _scene == null:
 		return out
@@ -155,10 +142,10 @@ func _compute_preview_tiles(position: Vector2i, marketing_type: String, extra: D
 		var house_id: String = str(hid_val)
 		if house_id.is_empty():
 			continue
-		var pos := OverlayUtils.get_house_anchor_world_pos(state, house_id)
-		if pos == Vector2i(-1, -1):
-			continue
-		set[pos] = true
+		var cells: Array[Vector2i] = OverlayUtils.get_house_footprint_cells(state, house_id)
+		for p2 in cells:
+			if p2 is Vector2i:
+				set[p2] = true
 
 	for k in set.keys():
 		if k is Vector2i:
@@ -179,39 +166,19 @@ func _infer_airplane_axis(state: GameState, pos: Vector2i) -> String:
 		return "col"
 	return ""
 
-func _ensure_marketing_range_overlay() -> void:
-	if _scene == null:
-		return
-
-	if marketing_range_overlay == null or not is_instance_valid(marketing_range_overlay):
-		marketing_range_overlay = MarketingRangeOverlayScene.instantiate()
-
-	var parent: Node = _map_canvas if is_instance_valid(_map_canvas) else _scene
-	if is_instance_valid(marketing_range_overlay) and marketing_range_overlay.get_parent() != parent:
-		var old_parent = marketing_range_overlay.get_parent()
-		if old_parent != null:
-			old_parent.remove_child(marketing_range_overlay)
-		parent.add_child(marketing_range_overlay)
-
-	_sync_marketing_range_overlay_transform()
-
-func _sync_marketing_range_overlay_transform() -> void:
-	if not is_instance_valid(marketing_range_overlay):
-		return
+func _set_overlay_cells(cells: Array[Vector2i]) -> void:
 	if not is_instance_valid(_map_canvas):
 		return
+	if not _map_canvas.has_method("set_piece_overlay"):
+		return
+	_map_canvas.call("set_piece_overlay", OVERLAY_ID, cells, {
+		"fill": RANGE_FILL_COLOR,
+		"border": RANGE_BORDER_COLOR,
+		"border_width": RANGE_BORDER_WIDTH,
+	})
 
-	var cell_size := 40
-	if _map_canvas.has_method("get_cell_size"):
-		cell_size = int(_map_canvas.call("get_cell_size"))
-
-	var world_origin := Vector2i.ZERO
-	if _map_canvas.has_method("get_world_origin"):
-		var wo = _map_canvas.call("get_world_origin")
-		if wo is Vector2i:
-			world_origin = wo
-
-	if marketing_range_overlay.has_method("set_tile_size"):
-		marketing_range_overlay.call("set_tile_size", Vector2(float(cell_size), float(cell_size)))
-	if marketing_range_overlay.has_method("set_map_offset"):
-		marketing_range_overlay.call("set_map_offset", Vector2(float(-world_origin.x * cell_size), float(-world_origin.y * cell_size)))
+func _clear_overlay() -> void:
+	if not is_instance_valid(_map_canvas):
+		return
+	if _map_canvas.has_method("clear_piece_overlay"):
+		_map_canvas.call("clear_piece_overlay", OVERLAY_ID)

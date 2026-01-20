@@ -38,6 +38,10 @@ var _structure_preview_info: Dictionary = {}
 
 var _highlighted_cells: Dictionary = {} # Vector2i -> true
 
+# 通用的 piece overlay（用于“覆盖范围/选中/hover”等统一高亮机制）。
+# id -> {cells:Array[Vector2i], fill:Color, border:Color, border_width:float}
+var _piece_overlays: Dictionary = {}
+
 # move_restaurant 模式：用于高亮“当前被移动的餐厅”（入口 anchor）。
 var _move_restaurant_selected_anchor: Vector2i = Vector2i(-1, -1) # world_pos
 
@@ -155,6 +159,7 @@ func clear() -> void:
 	_structure_preview_valid = true
 	_structure_preview_info.clear()
 	_highlighted_cells.clear()
+	_piece_overlays.clear()
 	_move_restaurant_selected_anchor = Vector2i(-1, -1)
 	custom_minimum_size = Vector2.ZERO
 	queue_redraw()
@@ -200,6 +205,49 @@ func clear_cell_highlights() -> void:
 		return
 	_highlighted_cells.clear()
 	queue_redraw()
+
+func set_piece_overlay(id: String, cells: Array[Vector2i], style: Dictionary) -> void:
+	var key := str(id).strip_edges()
+	if key.is_empty():
+		return
+
+	var fill := Color(1, 1, 1, 0)
+	var border := Color(1, 1, 1, 0)
+	var border_width := 2.0
+
+	var fill_val = style.get("fill", null)
+	if fill_val is Color:
+		fill = fill_val
+	var border_val = style.get("border", null)
+	if border_val is Color:
+		border = border_val
+	var bw_val = style.get("border_width", null)
+	if bw_val is float:
+		border_width = float(bw_val)
+	elif bw_val is int:
+		border_width = float(int(bw_val))
+	if border_width < 0.0:
+		border_width = 0.0
+
+	var out_cells: Array[Vector2i] = []
+	for v in cells:
+		if v is Vector2i:
+			out_cells.append(v)
+
+	_piece_overlays[key] = {
+		"cells": out_cells,
+		"fill": fill,
+		"border": border,
+		"border_width": border_width,
+	}
+	queue_redraw()
+
+func clear_piece_overlay(id: String) -> void:
+	var key := str(id).strip_edges()
+	if key.is_empty():
+		return
+	if _piece_overlays.erase(key):
+		queue_redraw()
 
 func set_move_restaurant_selected_restaurant(anchor_world_pos: Vector2i) -> void:
 	_move_restaurant_selected_anchor = anchor_world_pos

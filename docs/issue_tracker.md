@@ -1375,20 +1375,40 @@
 - 颜色暂无固定映射：我会先用 placeholder 颜色；后续你可手动修改。
 - 颜色的配置位置需要补充记录到本文件。
 
-**修复方案（提案，需你点头后实施）**
+**修复方案**
 
-- 引入“piece 高亮”数据结构（以 footprint cells 或 min/max rect 为单位）并由 MapCanvasDrawer 统一渲染：fill + border。
-- 将现有 `cell_highlights/structure_preview/marketing_range_overlay` 逐步收敛到该机制：
-	- 先修复房屋覆盖：营销范围计算输出房屋占地 cells（而非 anchor）。
-	- 再统一其他高亮来源，减少重复绘制逻辑。
+- 引入 MapCanvas 的“piece overlay”数据结构（按 footprint cells），并由 MapCanvasDrawer 统一渲染：透明 fill + 高亮 border（只绘制外轮廓，不画内部网格线）。
+- 将营销范围覆盖从独立 `MarketingRangeOverlay(ColorRect)` 收敛到 MapCanvas 的 overlay 机制；同时将“受影响房屋”从 anchor 单格改为房屋完整占地 cells。
 
 **验收**
 
 - 地图上所有高亮/覆盖提示采用同一视觉风格，且覆盖到 piece 的完整占地；房屋覆盖不再只显示锚点格。
 
+**颜色配置位置**
+
+- 营销范围覆盖（placeholder 颜色）：`ui/scenes/game/game_overlay_marketing_range.gd`：`RANGE_FILL_COLOR` / `RANGE_BORDER_COLOR` / `RANGE_BORDER_WIDTH`
+- 可放置点提示（已在 #23 固定为 `#f5b9a6`）：`ui/scenes/game/map_canvas_drawer.gd`：`_draw_cell_highlights()`
+- 结构/footprint 预览（默认绿/红）：`ui/scenes/game/map_canvas_drawer.gd`：`_draw_structure_preview()`（也支持在 `preview_info` 里用 `highlight_fill/highlight_border/highlight_border_width` 覆盖）
+
+**实施记录**
+
+- 已修改：`ui/scenes/game/map_canvas.gd`：新增 `_piece_overlays` + `set_piece_overlay()/clear_piece_overlay()`，作为统一高亮数据入口。
+- 已修改：`ui/scenes/game/map_canvas_drawer.gd`：
+	- 新增 `_draw_cells_overlay()`：按 cells 绘制透明 fill + 外轮廓 border；
+	- 新增 `_draw_piece_overlays()`：绘制 MapCanvas 上的通用 overlay；
+	- `cell_highlights/structure_preview` 改为复用同一绘制机制（减少重复渲染代码）。
+- 已修改：`ui/scenes/game/game_overlay_marketing_range.gd`：不再实例化 `MarketingRangeOverlay`，改为写入 MapCanvas 的 `piece overlay`（保持行为不变，仅统一渲染路径）。
+- 已修改：`ui/scenes/game/game_overlay_utils.gd`：新增 `get_house_footprint_cells()`，用于把“受影响房屋”展开为完整占地 cells（修复只高亮锚点格）。
+- 新增：`ui/scenes/tests/marketing_range_full_footprint_test.gd`（`MarketingRangeFullFootprintTest`）并纳入 `ui/scenes/tests/all_tests.gd`。
+
+**验证**
+
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（95/95，`.godot/AllTests.log`）
+
 **状态**
 
-- Planned
+- Implemented（待手动验收）
 
 ---
 

@@ -70,6 +70,7 @@ static func draw(canvas) -> void:
 	# tile_id 文本属于调试信息，允许覆盖上层内容。
 	_draw_tile_id_labels(canvas, cell_size)
 	_draw_cell_highlights(canvas, cell_size)
+	_draw_piece_overlays(canvas, cell_size)
 	_draw_structure_preview(canvas, cell_size)
 	_draw_selection(canvas, cell_size)
 
@@ -140,6 +141,52 @@ static func _build_demand_token_slots(
 				slots.append(rect)
 	return slots
 
+static func _draw_cells_overlay(canvas, cell_size: int, world_cells: Array, fill: Color, border: Color, border_width: float) -> void:
+	if world_cells.is_empty():
+		return
+	if fill.a <= 0.0 and border.a <= 0.0:
+		return
+
+	var bw := clampf(border_width, 0.0, float(cell_size))
+
+	# Convert to view cells and dedupe.
+	var view_set := {}
+	var view_cells: Array[Vector2i] = []
+	for cell_val in world_cells:
+		if not (cell_val is Vector2i):
+			continue
+		var wpos: Vector2i = cell_val
+		if not canvas._is_valid_world_pos(wpos):
+			continue
+		var vpos_val = canvas._world_to_view(wpos)
+		if not (vpos_val is Vector2i):
+			continue
+		var vpos: Vector2i = vpos_val
+		if view_set.has(vpos):
+			continue
+		view_set[vpos] = true
+		view_cells.append(vpos)
+
+		if fill.a > 0.0:
+			var rect := Rect2(Vector2(vpos.x * cell_size, vpos.y * cell_size), Vector2(cell_size, cell_size))
+			canvas.draw_rect(rect, fill, true)
+
+	# Draw border only on the outer perimeter (no internal grid lines).
+	if border.a <= 0.0 or bw <= 0.0:
+		return
+
+	for vpos in view_cells:
+		var base := Vector2(float(vpos.x * cell_size), float(vpos.y * cell_size))
+
+		if not view_set.has(vpos + Vector2i(-1, 0)):
+			canvas.draw_rect(Rect2(base, Vector2(bw, float(cell_size))), border, true)
+		if not view_set.has(vpos + Vector2i(1, 0)):
+			canvas.draw_rect(Rect2(base + Vector2(float(cell_size) - bw, 0.0), Vector2(bw, float(cell_size))), border, true)
+		if not view_set.has(vpos + Vector2i(0, -1)):
+			canvas.draw_rect(Rect2(base, Vector2(float(cell_size), bw)), border, true)
+		if not view_set.has(vpos + Vector2i(0, 1)):
+			canvas.draw_rect(Rect2(base + Vector2(0.0, float(cell_size) - bw), Vector2(float(cell_size), bw)), border, true)
+
 static func _draw_cell_highlights(canvas, cell_size: int) -> void:
 	if canvas._highlighted_cells.is_empty():
 		return
@@ -150,16 +197,46 @@ static func _draw_cell_highlights(canvas, cell_size: int) -> void:
 	var border := base
 	border.a = 0.35
 
+	var cells: Array[Vector2i] = []
 	for pos_val in canvas._highlighted_cells.keys():
-		if not (pos_val is Vector2i):
+		if pos_val is Vector2i:
+			cells.append(pos_val)
+	_draw_cells_overlay(canvas, cell_size, cells, fill, border, 1.0)
+
+static func _draw_piece_overlays(canvas, cell_size: int) -> void:
+	var overlays_val = canvas.get("_piece_overlays") if canvas != null else null
+	if not (overlays_val is Dictionary):
+		return
+	var overlays: Dictionary = overlays_val
+	if overlays.is_empty():
+		return
+
+	var keys: Array[String] = []
+	for k in overlays.keys():
+		keys.append(str(k))
+	keys.sort()
+
+	for key in keys:
+		var ov_val = overlays.get(key, null)
+		if not (ov_val is Dictionary):
 			continue
-		var world_pos: Vector2i = pos_val
-		if not canvas._is_valid_world_pos(world_pos):
+		var ov: Dictionary = ov_val
+		var cells_val = ov.get("cells", null)
+		if not (cells_val is Array):
 			continue
-		var v = canvas._world_to_view(world_pos)
-		var rect := Rect2(Vector2(v.x * cell_size, v.y * cell_size), Vector2(cell_size, cell_size))
-		canvas.draw_rect(rect, fill, true)
-		canvas.draw_rect(rect, border, false, 1.0)
+		var fill_val = ov.get("fill", null)
+		var border_val = ov.get("border", null)
+		var bw_val = ov.get("border_width", null)
+
+		var fill = fill_val if fill_val is Color else Color(1, 1, 1, 0)
+		var border = border_val if border_val is Color else Color(1, 1, 1, 0)
+		var bw := 2.0
+		if bw_val is float:
+			bw = float(bw_val)
+		elif bw_val is int:
+			bw = float(int(bw_val))
+
+		_draw_cells_overlay(canvas, cell_size, cells_val, fill, border, bw)
 
 static func _draw_structure_preview(canvas, cell_size: int) -> void:
 	if canvas._structure_preview_cells.is_empty():
@@ -171,17 +248,24 @@ static func _draw_structure_preview(canvas, cell_size: int) -> void:
 
 	var fill := Color(0.2, 0.9, 0.35, 0.28) if canvas._structure_preview_valid else Color(0.95, 0.25, 0.25, 0.25)
 	var border := Color(0.2, 0.9, 0.35, 0.75) if canvas._structure_preview_valid else Color(0.95, 0.25, 0.25, 0.75)
+	var border_w := 2.0
 
-	for world_pos in canvas._structure_preview_cells:
-		if not (world_pos is Vector2i):
-			continue
-		var p: Vector2i = world_pos
-		if not canvas._is_valid_world_pos(p):
-			continue
-		var v = canvas._world_to_view(p)
-		var rect := Rect2(Vector2(v.x * cell_size, v.y * cell_size), Vector2(cell_size, cell_size))
-		canvas.draw_rect(rect, fill, true)
-		canvas.draw_rect(rect, border, false, 2.0)
+	# Allow preview_info to override highlight style (used by generic overlays).
+	if preview_info_val is Dictionary:
+		var d: Dictionary = preview_info_val
+		var fill_val = d.get("highlight_fill", null)
+		if fill_val is Color:
+			fill = fill_val
+		var border_val = d.get("highlight_border", null)
+		if border_val is Color:
+			border = border_val
+		var bw_val = d.get("highlight_border_width", null)
+		if bw_val is float:
+			border_w = float(bw_val)
+		elif bw_val is int:
+			border_w = float(int(bw_val))
+
+	_draw_cells_overlay(canvas, cell_size, canvas._structure_preview_cells, fill, border, border_w)
 
 static func _draw_structure_preview_piece(canvas, cell_size: int, preview_info: Dictionary) -> void:
 	if canvas._skin == null:

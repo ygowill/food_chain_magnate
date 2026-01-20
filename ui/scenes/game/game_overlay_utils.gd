@@ -48,6 +48,35 @@ static func get_house_anchor_world_pos(state: GameState, house_id: String) -> Ve
 			return first
 	return Vector2i(-1, -1)
 
+static func get_house_footprint_cells(state: GameState, house_id: String) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if state == null:
+		return out
+	if house_id.is_empty():
+		return out
+	if not (state.map is Dictionary):
+		return out
+	var houses_val = (state.map as Dictionary).get("houses", null)
+	if not (houses_val is Dictionary):
+		return out
+	var house_val = (houses_val as Dictionary).get(house_id, null)
+	if not (house_val is Dictionary):
+		return out
+	var house: Dictionary = house_val
+
+	var cells_val = house.get("cells", null)
+	if cells_val is Array:
+		for v in (cells_val as Array):
+			if v is Vector2i:
+				out.append(v)
+	if not out.is_empty():
+		return out
+
+	var anchor_val = house.get("anchor_pos", null)
+	if anchor_val is Vector2i:
+		out.append(anchor_val)
+	return out
+
 static func build_house_demand_counts_from_map(state: GameState, house_id: String) -> Dictionary:
 	var out: Dictionary = {}
 	if state == null:
@@ -76,4 +105,3 @@ static func build_house_demand_counts_from_map(state: GameState, house_id: Strin
 		out[product_id] = int(out.get(product_id, 0)) + 1
 
 	return out
-
