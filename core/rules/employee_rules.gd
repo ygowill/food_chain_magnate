@@ -82,8 +82,23 @@ static func consume_immediate_train_pending(state: GameState, player_id: int, em
 static func get_max_train_steps_for_single_employee_for_working(state: GameState, player_id: int) -> int:
 	return TrainSlotUsage.get_max_train_steps_for_single_employee_for_working(state, player_id)
 
-static func allocate_train_slots_for_working(state: GameState, player_id: int, slots_needed: int) -> Result:
-	return TrainSlotUsage.allocate_train_slots_for_working(state, player_id, slots_needed)
+static func can_allocate_train_slots_for_working(
+	state: GameState,
+	player_id: int,
+	slots_needed: int,
+	preferred_trainer_id: String = "",
+	preferred_instance_idx: int = -1
+) -> Result:
+	return TrainSlotUsage.can_allocate_train_slots_for_working(state, player_id, slots_needed, preferred_trainer_id, preferred_instance_idx)
+
+static func allocate_train_slots_for_working(
+	state: GameState,
+	player_id: int,
+	slots_needed: int,
+	preferred_trainer_id: String = "",
+	preferred_instance_idx: int = -1
+) -> Result:
+	return TrainSlotUsage.allocate_train_slots_for_working(state, player_id, slots_needed, preferred_trainer_id, preferred_instance_idx)
 
 static func get_train_slot_usage_round_state_key() -> String:
 	return TrainSlotUsage.get_train_slot_usage_round_state_key()

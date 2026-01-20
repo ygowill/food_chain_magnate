@@ -7,10 +7,9 @@ const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const CompanyStructureValidatorClass = preload("res://gameplay/validators/company_structure_validator.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
-const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
-const TrainPhaseStartCountsClass = preload("res://gameplay/actions/train/train_phase_start_counts.gd")
 const TrainCompanyValidationClass = preload("res://gameplay/actions/train/train_company_validation.gd")
 const TrainEmployeeUsageClass = preload("res://gameplay/actions/train/train_employee_usage.gd")
+const TrainEmployeeLocksClass = preload("res://gameplay/actions/train/train_employee_locks.gd")
 
 static func _compute_train_steps_within_limit(from_employee: String, to_employee: String, max_steps: int) -> int:
 	# 规则：培训必须沿 employee_def.train_to 的路径逐步进行。
@@ -160,31 +159,15 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if used + steps_required > limit:
 		return Result.failure("本子阶段培训次数不足: %d/%d（需要 %d）" % [used, limit, steps_required])
 
-	# 默认：不能在同一 Train 子阶段连续培训“本子阶段新培训得到”的员工（里程碑允许例外）
 	var multi_val = player.get("multi_trainer_on_one", false)
 	if not (multi_val is bool):
 		return Result.failure("train: player.multi_trainer_on_one 类型错误（期望 bool）")
 	var multi: bool = bool(multi_val)
-	if not multi:
-		# 默认：不能使用“本子阶段通过培训获得的职位”继续培训（由于按 employee_type 选择，无法区分具体卡，保守禁止链式培训）
-		var gained_read := RoundStateCountersClass.get_player_key_count(state.round_state, "train_to_gained", command.actor, from_employee)
-		if not gained_read.ok:
-			return gained_read
-		if int(gained_read.value) > 0:
-			return Result.failure("默认规则下不应允许链式培训（%s -> %s）" % [from_employee, to_employee])
-
-		var start_count_read := TrainPhaseStartCountsClass._get_train_phase_start_count(state, command.actor, reserve, from_employee)
-		if not start_count_read.ok:
-			return start_count_read
-		var start_count: int = int(start_count_read.value)
-
-		var used_from_read := RoundStateCountersClass.get_player_key_count(state.round_state, "train_from_used", command.actor, from_employee)
-		if not used_from_read.ok:
-			return used_from_read
-		var used_from: int = int(used_from_read.value)
-
-		if used_from >= start_count:
-			return Result.failure("本子阶段不能连续培训同一员工（需要里程碑允许）: %s" % from_employee)
+	var lock_check := TrainEmployeeLocksClass.plan_training(
+		state, command.actor, from_employee, steps_required, multi, reserve, false
+	)
+	if not lock_check.ok:
+		return lock_check
 
 	# 目标职位必须有卡可用（当前仅检查最终职位堆）
 	var available: int = state.employee_pool.get(to_employee, 0)
@@ -245,7 +228,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return Result.failure("train: player.multi_trainer_on_one 类型错误（期望 bool）")
 	var multi: bool = bool(multi_val)
 
-	var reserve_read := TrainPhaseStartCountsClass._require_player_string_array(player, "reserve_employees", "train: player.reserve_employees")
+	var reserve_read := TrainEmployeeLocksClass._require_player_string_array(player, "reserve_employees", "train: player.reserve_employees")
 	if not reserve_read.ok:
 		return reserve_read
 	var reserve: Array = reserve_read.value
@@ -255,8 +238,21 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var has_active := EmployeeRulesClass.count_active(player, from_employee) > 0
 	var can_train_from_active := bool(player.get("train_from_active_same_color", false))
 
-	# 记录并消耗“培训员 slots”（用于 coach/guru 多步培训约束）
-	var alloc := EmployeeRulesClass.allocate_train_slots_for_working(state, player_id, steps_required)
+	var lock_plan_read := TrainEmployeeLocksClass.plan_training(
+		state, player_id, from_employee, steps_required, multi, reserve, true
+	)
+	if not lock_plan_read.ok:
+		return lock_plan_read
+	var lock_plan: Dictionary = lock_plan_read.value
+
+	# 记录并消耗“培训员 slots”（用于 coach/guru 多步培训约束 + “同一名员工必须由同一名培训员继续培训”）
+	var alloc := EmployeeRulesClass.allocate_train_slots_for_working(
+		state,
+		player_id,
+		steps_required,
+		str(lock_plan.get("trainer_id", "")),
+		int(lock_plan.get("instance_idx", 0))
+	)
 	if not alloc.ok:
 		return alloc
 
@@ -264,14 +260,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var target_to_reserve := true
 	if can_train_from_active and has_active and not has_reserve and not use_pending:
 		target_to_reserve = from_used_before
-	if not multi:
-		var write_start := TrainPhaseStartCountsClass._ensure_train_phase_start_counts(state, player_id, reserve)
-		if not write_start.ok:
-			return write_start
-
-		var inc_used := RoundStateCountersClass.increment_player_key_count(state.round_state, "train_from_used", player_id, from_employee, 1)
-		if not inc_used.ok:
-			return inc_used
 
 	if use_pending:
 		var consumed := EmployeeRulesClass.consume_immediate_train_pending(state, player_id, from_employee)
@@ -299,10 +287,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if not add_result.ok:
 		return add_result
 
-	# 记录“本子阶段通过培训获得的职位类型”，用于默认禁止链式培训（multi_trainer_on_one 例外）
-	var gained_write := RoundStateCountersClass.increment_player_key_count(state.round_state, "train_to_gained", player_id, to_employee, 1)
-	if not gained_write.ok:
-		return gained_write
+	# 同步“培训锁 token”：培训成功后，将 token 从 from_employee 移动到 to_employee，并在需要时锁定到具体培训员实例。
+	var lock_apply := TrainEmployeeLocksClass.apply_move_token_and_lock(
+		state, player_id, from_employee, to_employee, lock_plan, multi, reserve
+	)
+	if not lock_apply.ok:
+		return lock_apply
 
 	for _i in range(steps_required):
 		EmployeeRulesClass.increment_action_count(state, player_id, action_id)

@@ -199,6 +199,93 @@ static func parse_round_state(value) -> Result:
 			norm[pid] = per_norm
 		out[counter_key] = norm
 
+	# train_slot_usage_instances: per-player {trainer_id -> Array[int]}
+	if rs.has("train_slot_usage_instances"):
+		var tsui_val = rs.get("train_slot_usage_instances", null)
+		if not (tsui_val is Dictionary):
+			return Result.failure("GameState.round_state.train_slot_usage_instances 类型错误（期望 Dictionary）")
+		var tsui_all: Dictionary = tsui_val
+		var tsui_norm := {}
+		for k in tsui_all.keys():
+			if not (k is String) or not str(k).is_valid_int():
+				return Result.failure("GameState.round_state.train_slot_usage_instances key 必须为数字字符串，实际: %s" % str(k))
+			var pid: int = str(k).to_int()
+			if pid < 0:
+				return Result.failure("GameState.round_state.train_slot_usage_instances key 不能为负数: %d" % pid)
+			var per_val = tsui_all.get(k, null)
+			if not (per_val is Dictionary):
+				return Result.failure("GameState.round_state.train_slot_usage_instances[%s] 类型错误（期望 Dictionary）" % str(k))
+			var per: Dictionary = per_val
+			var per_norm := {}
+			for trainer_key in per.keys():
+				if not (trainer_key is String):
+					return Result.failure("GameState.round_state.train_slot_usage_instances[%s] key 类型错误（期望 String）" % str(k))
+				var tid: String = str(trainer_key)
+				if tid.is_empty():
+					return Result.failure("GameState.round_state.train_slot_usage_instances[%s] key 不能为空" % str(k))
+				var arr_val = per.get(trainer_key, null)
+				if not (arr_val is Array):
+					return Result.failure("GameState.round_state.train_slot_usage_instances[%s].%s 类型错误（期望 Array[int]）" % [str(k), tid])
+				var arr_any: Array = arr_val
+				var arr_norm: Array[int] = []
+				for i in range(arr_any.size()):
+					var v_read := ParseHelpers.parse_non_negative_int(arr_any[i], "GameState.round_state.train_slot_usage_instances[%s].%s[%d]" % [str(k), tid, i])
+					if not v_read.ok:
+						return v_read
+					arr_norm.append(int(v_read.value))
+				per_norm[tid] = arr_norm
+			tsui_norm[pid] = per_norm
+		out["train_slot_usage_instances"] = tsui_norm
+
+	# train_employee_locks: per-player {employee_type -> Array[{trainer_id, instance_idx}]}
+	if rs.has("train_employee_locks"):
+		var tel_val = rs.get("train_employee_locks", null)
+		if not (tel_val is Dictionary):
+			return Result.failure("GameState.round_state.train_employee_locks 类型错误（期望 Dictionary）")
+		var tel_all: Dictionary = tel_val
+		var tel_norm := {}
+		for k in tel_all.keys():
+			if not (k is String) or not str(k).is_valid_int():
+				return Result.failure("GameState.round_state.train_employee_locks key 必须为数字字符串，实际: %s" % str(k))
+			var pid: int = str(k).to_int()
+			if pid < 0:
+				return Result.failure("GameState.round_state.train_employee_locks key 不能为负数: %d" % pid)
+			var per_val = tel_all.get(k, null)
+			if not (per_val is Dictionary):
+				return Result.failure("GameState.round_state.train_employee_locks[%s] 类型错误（期望 Dictionary）" % str(k))
+			var per: Dictionary = per_val
+			var per_norm := {}
+			for emp_key in per.keys():
+				if not (emp_key is String):
+					return Result.failure("GameState.round_state.train_employee_locks[%s] key 类型错误（期望 String）" % str(k))
+				var emp_id: String = str(emp_key)
+				if emp_id.is_empty():
+					return Result.failure("GameState.round_state.train_employee_locks[%s] key 不能为空" % str(k))
+				var tokens_val = per.get(emp_key, null)
+				if not (tokens_val is Array):
+					return Result.failure("GameState.round_state.train_employee_locks[%s].%s 类型错误（期望 Array）" % [str(k), emp_id])
+				var tokens_any: Array = tokens_val
+				var tokens_norm: Array = []
+				for i in range(tokens_any.size()):
+					var t_val = tokens_any[i]
+					if not (t_val is Dictionary):
+						return Result.failure("GameState.round_state.train_employee_locks[%s].%s[%d] 类型错误（期望 Dictionary）" % [str(k), emp_id, i])
+					var t: Dictionary = t_val
+					var trainer_id_val = t.get("trainer_id", "")
+					if not (trainer_id_val is String):
+						return Result.failure("GameState.round_state.train_employee_locks[%s].%s[%d].trainer_id 类型错误（期望 String）" % [str(k), emp_id, i])
+					var trainer_id: String = str(trainer_id_val)
+					var idx_read := ParseHelpers.parse_non_negative_int(t.get("instance_idx", 0), "GameState.round_state.train_employee_locks[%s].%s[%d].instance_idx" % [str(k), emp_id, i])
+					if not idx_read.ok:
+						return idx_read
+					tokens_norm.append({
+						"trainer_id": trainer_id,
+						"instance_idx": int(idx_read.value),
+					})
+				per_norm[emp_id] = tokens_norm
+			tel_norm[pid] = per_norm
+		out["train_employee_locks"] = tel_norm
+
 	# 模块扩展字段：按 StateSchemaRegistry 声明，对指定路径的 Dict 执行 int-key 归一化
 	var schema_norm := StateSchemaRegistryClass.normalize_int_key_dicts_in_container("round_state", out, "GameState.round_state")
 	if not schema_norm.ok:

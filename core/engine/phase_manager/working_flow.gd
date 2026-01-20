@@ -72,6 +72,9 @@ static func reset_working_sub_phase_state(state: GameState) -> void:
 		state.round_state["action_counts"] = {}
 		# Train 子阶段：记录“培训员 slot 使用情况”（用于 coach/guru 多步培训）也需随子阶段重置。
 		state.round_state["train_slot_usage"] = {}
+		state.round_state["train_slot_usage_instances"] = {}
+		# Train 子阶段：记录“员工培训锁”（同一员工不可更换培训员继续培训，除非里程碑允许）。
+		state.round_state["train_employee_locks"] = {}
 
 static func reset_sub_phase_passed(state: GameState) -> void:
 	if state == null:
