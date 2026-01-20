@@ -9,6 +9,7 @@ const WorkingMultiplier = preload("res://core/rules/employee_rules/working_multi
 const Limits = preload("res://core/rules/employee_rules/limits.gd")
 const ActionCounts = preload("res://core/rules/employee_rules/action_counts.gd")
 const ImmediateTrainPending = preload("res://core/rules/employee_rules/immediate_train_pending.gd")
+const TrainSlotUsage = preload("res://core/rules/employee_rules/train_slot_usage.gd")
 
 static func is_entry_level(employee_id: String) -> bool:
 	return Counts.is_entry_level(employee_id)
@@ -58,6 +59,9 @@ static func increment_action_count(state: GameState, player_id: int, action_id: 
 static func reset_action_counts(state: GameState) -> void:
 	ActionCounts.reset_action_counts(state)
 
+static func reset_train_slot_usage(state: GameState) -> void:
+	TrainSlotUsage.reset_train_slot_usage(state)
+
 # === Recruit 缺货预支 / 紧接培训约束（docs/design.md）===
 
 static func get_immediate_train_pending_count(state: GameState, player_id: int, employee_type: String) -> int:
@@ -74,3 +78,12 @@ static func add_immediate_train_pending(state: GameState, player_id: int, employ
 
 static func consume_immediate_train_pending(state: GameState, player_id: int, employee_type: String) -> bool:
 	return ImmediateTrainPending.consume_immediate_train_pending(state, player_id, employee_type)
+
+static func get_max_train_steps_for_single_employee_for_working(state: GameState, player_id: int) -> int:
+	return TrainSlotUsage.get_max_train_steps_for_single_employee_for_working(state, player_id)
+
+static func allocate_train_slots_for_working(state: GameState, player_id: int, slots_needed: int) -> Result:
+	return TrainSlotUsage.allocate_train_slots_for_working(state, player_id, slots_needed)
+
+static func get_train_slot_usage_round_state_key() -> String:
+	return TrainSlotUsage.get_train_slot_usage_round_state_key()

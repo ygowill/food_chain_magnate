@@ -4,12 +4,58 @@ class_name TrainAction
 extends ActionExecutor
 
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
+const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const CompanyStructureValidatorClass = preload("res://gameplay/validators/company_structure_validator.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 const TrainPhaseStartCountsClass = preload("res://gameplay/actions/train/train_phase_start_counts.gd")
 const TrainCompanyValidationClass = preload("res://gameplay/actions/train/train_company_validation.gd")
 const TrainEmployeeUsageClass = preload("res://gameplay/actions/train/train_employee_usage.gd")
+
+static func _compute_train_steps_within_limit(from_employee: String, to_employee: String, max_steps: int) -> int:
+	# 规则：培训必须沿 employee_def.train_to 的路径逐步进行。
+	# - 返回最短步数（1..max_steps），找不到则返回 -1。
+	if from_employee.is_empty() or to_employee.is_empty():
+		return -1
+	if from_employee == to_employee:
+		return -1
+	if max_steps <= 0:
+		return -1
+	if not EmployeeRegistryClass.is_loaded():
+		return -1
+
+	var visited := {}
+	visited[from_employee] = 0
+	var queue: Array[String] = [from_employee]
+	var qi := 0
+
+	while qi < queue.size():
+		var cur := queue[qi]
+		qi += 1
+		var dist := int(visited.get(cur, 0))
+		if dist >= max_steps:
+			continue
+
+		var def_val = EmployeeRegistryClass.get_def(cur)
+		if def_val == null or not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+
+		for nxt_val in def.train_to:
+			var nxt := str(nxt_val)
+			if nxt.is_empty():
+				continue
+			if visited.has(nxt):
+				continue
+			var ndist := dist + 1
+			if ndist > max_steps:
+				continue
+			if nxt == to_employee:
+				return ndist
+			visited[nxt] = ndist
+			queue.append(nxt)
+
+	return -1
 
 func _init() -> void:
 	action_id = "train"
@@ -82,8 +128,6 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if limit <= 0:
 		return Result.failure("没有可用的培训员")
 	var used := EmployeeRulesClass.get_action_count(state, command.actor, action_id)
-	if used >= limit:
-		return Result.failure("本子阶段培训次数已用完: %d/%d" % [used, limit])
 
 	# 仅允许培训“待命”员工
 	assert(player.has("reserve_employees") and (player["reserve_employees"] is Array), "train: player.reserve_employees 缺失或类型错误（期望 Array[String]）")
@@ -105,6 +149,16 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("待命区不存在员工: %s" % from_employee)
 	if has_active and not has_reserve and not has_pending and not can_train_from_active:
 		return Result.failure("该员工在岗，且未启用“在岗同色培训”能力: %s" % from_employee)
+
+	# 培训路径 + 多步培训（coach/guru）：
+	# - 默认 max_steps 为 1；coach=2、guru=3
+	# - max_steps 会随本子阶段已消耗的 trainer slots 下降（例如 coach 用掉 1 slot 后，本次最多只能 1 步）
+	var max_steps_one := EmployeeRulesClass.get_max_train_steps_for_single_employee_for_working(state, command.actor)
+	var steps_required := _compute_train_steps_within_limit(from_employee, to_employee, maxi(1, max_steps_one))
+	if steps_required <= 0:
+		return Result.failure("无法按培训路径培训: %s -> %s（本次最多 %d 步）" % [from_employee, to_employee, maxi(1, max_steps_one)])
+	if used + steps_required > limit:
+		return Result.failure("本子阶段培训次数不足: %d/%d（需要 %d）" % [used, limit, steps_required])
 
 	# 默认：不能在同一 Train 子阶段连续培训“本子阶段新培训得到”的员工（里程碑允许例外）
 	var multi_val = player.get("multi_trainer_on_one", false)
@@ -182,20 +236,35 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return Result.failure("train: player 类型错误: players[%d]（期望 Dictionary）" % player_id)
 	var player: Dictionary = player_val
 
+	var steps_required := _compute_train_steps_within_limit(from_employee, to_employee, 50)
+	if steps_required <= 0:
+		return Result.failure("train: 无法按培训路径培训: %s -> %s" % [from_employee, to_employee])
+
 	var multi_val = player.get("multi_trainer_on_one", false)
 	if not (multi_val is bool):
 		return Result.failure("train: player.multi_trainer_on_one 类型错误（期望 bool）")
 	var multi: bool = bool(multi_val)
+
+	var reserve_read := TrainPhaseStartCountsClass._require_player_string_array(player, "reserve_employees", "train: player.reserve_employees")
+	if not reserve_read.ok:
+		return reserve_read
+	var reserve: Array = reserve_read.value
+
+	var use_pending := EmployeeRulesClass.get_immediate_train_pending_count(state, player_id, from_employee) > 0
+	var has_reserve := reserve.find(from_employee) >= 0
+	var has_active := EmployeeRulesClass.count_active(player, from_employee) > 0
 	var can_train_from_active := bool(player.get("train_from_active_same_color", false))
+
+	# 记录并消耗“培训员 slots”（用于 coach/guru 多步培训约束）
+	var alloc := EmployeeRulesClass.allocate_train_slots_for_working(state, player_id, steps_required)
+	if not alloc.ok:
+		return alloc
+
 	var from_used_before := TrainEmployeeUsageClass._is_employee_used_before_training(state, player_id, from_employee)
 	var target_to_reserve := true
-	if can_train_from_active and EmployeeRulesClass.count_active(player, from_employee) > 0 and int(EmployeeRulesClass.get_immediate_train_pending_count(state, player_id, from_employee)) <= 0:
+	if can_train_from_active and has_active and not has_reserve and not use_pending:
 		target_to_reserve = from_used_before
 	if not multi:
-		var reserve_read := TrainPhaseStartCountsClass._require_player_string_array(player, "reserve_employees", "train: player.reserve_employees")
-		if not reserve_read.ok:
-			return reserve_read
-		var reserve: Array = reserve_read.value
 		var write_start := TrainPhaseStartCountsClass._ensure_train_phase_start_counts(state, player_id, reserve)
 		if not write_start.ok:
 			return write_start
@@ -204,7 +273,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		if not inc_used.ok:
 			return inc_used
 
-	var use_pending := EmployeeRulesClass.get_immediate_train_pending_count(state, player_id, from_employee) > 0
 	if use_pending:
 		var consumed := EmployeeRulesClass.consume_immediate_train_pending(state, player_id, from_employee)
 		if not consumed:
@@ -236,7 +304,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if not gained_write.ok:
 		return gained_write
 
-	EmployeeRulesClass.increment_action_count(state, player_id, action_id)
+	for _i in range(steps_required):
+		EmployeeRulesClass.increment_action_count(state, player_id, action_id)
 
 	# 记录训练事件（供模块在 Train 子阶段注入“训练后可选动作窗口”等逻辑使用）
 	if state.round_state is Dictionary:
@@ -251,6 +320,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			"from_employee": from_employee,
 			"to_employee": to_employee,
 			"from_pending": use_pending,
+			"steps": steps_required,
 		})
 		state.round_state["train_events"] = train_events
 

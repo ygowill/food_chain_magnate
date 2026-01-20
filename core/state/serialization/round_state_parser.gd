@@ -167,7 +167,7 @@ static func parse_round_state(value) -> Result:
 			norm[pid] = int(v_read.value)
 		out[counter_key] = norm
 
-	var per_player_key_int_keys := ["production_counts", "procurement_counts", "marketing_used"]
+	var per_player_key_int_keys := ["production_counts", "procurement_counts", "marketing_used", "train_slot_usage"]
 	for counter_key in per_player_key_int_keys:
 		if not rs.has(counter_key):
 			continue

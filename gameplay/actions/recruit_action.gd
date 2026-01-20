@@ -10,6 +10,57 @@ const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
+static func _compute_min_steps_to_any_in_stock_target(
+	from_employee: String,
+	max_steps: int,
+	employee_pool: Dictionary,
+	banned: Array
+) -> int:
+	if from_employee.is_empty():
+		return -1
+	if max_steps <= 0:
+		return -1
+	if not EmployeeRegistryClass.is_loaded():
+		return -1
+
+	var visited := {}
+	visited[from_employee] = 0
+	var queue: Array[String] = [from_employee]
+	var qi := 0
+
+	while qi < queue.size():
+		var cur := queue[qi]
+		qi += 1
+		var dist := int(visited.get(cur, 0))
+		if dist >= max_steps:
+			continue
+
+		var def_val = EmployeeRegistryClass.get_def(cur)
+		if def_val == null or not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+		for nxt_val in def.train_to:
+			var nxt := str(nxt_val)
+			if nxt.is_empty():
+				continue
+			if visited.has(nxt):
+				continue
+			var ndist := dist + 1
+			if ndist > max_steps:
+				continue
+			visited[nxt] = ndist
+
+			# 目标职位必须有卡可用；中间卡不要求有库存（multi-step/hire+immediately train 规则）
+			if not banned.is_empty() and banned.find(nxt) >= 0:
+				queue.append(nxt)
+				continue
+			if int(employee_pool.get(nxt, 0)) > 0:
+				return ndist
+
+			queue.append(nxt)
+
+	return -1
+
 func _init() -> void:
 	action_id = "recruit"
 	display_name = "招聘"
@@ -53,8 +104,11 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 		var available := int(state.employee_pool.get(emp_id, 0))
 		if available > 0:
 			return true
-		if train_limit > 0 and pending_total < train_limit:
-			return true
+		if train_limit > 0:
+			var max_steps_one := EmployeeRulesClass.get_max_train_steps_for_single_employee_for_working(state, player_id)
+			var steps_min := _compute_min_steps_to_any_in_stock_target(emp_id, maxi(1, max_steps_one), state.employee_pool, banned)
+			if steps_min > 0 and pending_total + steps_min <= train_limit:
+				return true
 
 	return false
 
@@ -73,6 +127,12 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not state.employee_pool.has(employee_type):
 		return Result.failure("该员工不在本局员工池中: %s" % employee_type)
 
+	var player := state.get_player(command.actor)
+	var banned: Array = []
+	var banned_val = player.get("banned_employee_ids", [])
+	if banned_val is Array:
+		banned = banned_val
+
 	# 检查员工池是否有库存
 	var available: int = state.employee_pool.get(employee_type, 0)
 	if available <= 0:
@@ -81,8 +141,12 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		var train_limit := EmployeeRulesClass.get_train_limit_for_working(state, command.actor)
 		if train_limit <= 0:
 			return Result.failure("员工池中没有 %s，且没有可用的培训员进行缺货预支" % employee_type)
+		var max_steps_one := EmployeeRulesClass.get_max_train_steps_for_single_employee_for_working(state, command.actor)
+		var steps_min := _compute_min_steps_to_any_in_stock_target(employee_type, maxi(1, max_steps_one), state.employee_pool, banned)
+		if steps_min <= 0:
+			return Result.failure("员工池中没有 %s，且无法找到可用培训目标用于缺货预支" % employee_type)
 		var pending_total := EmployeeRulesClass.get_immediate_train_pending_total(state, command.actor)
-		if pending_total >= train_limit:
+		if pending_total + steps_min > train_limit:
 			return Result.failure("员工池中没有 %s，且缺货预支数量已达可培训上限 (%d)" % [employee_type, train_limit])
 
 	# 检查是否是当前玩家的回合
@@ -91,14 +155,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("不是你的回合")
 
 	# 检查本子阶段招聘次数（CEO 1 次 + 招聘员加成）
-	var player := state.get_player(command.actor)
-
 	# 禁用员工（ban_card）：不能再招聘该员工
-	var banned_val = player.get("banned_employee_ids", [])
-	if banned_val is Array:
-		var banned: Array = banned_val
-		if banned.find(employee_type) >= 0:
-			return Result.failure("该员工已被禁用，不能招聘: %s" % employee_type)
+	if banned.find(employee_type) >= 0:
+		return Result.failure("该员工已被禁用，不能招聘: %s" % employee_type)
 
 	var limit := EmployeeRulesClass.get_recruit_limit_for_working(state, command.actor)
 	var used := EmployeeRulesClass.get_action_count(state, command.actor, action_id)

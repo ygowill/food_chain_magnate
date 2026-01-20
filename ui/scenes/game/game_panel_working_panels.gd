@@ -238,10 +238,14 @@ func show_train_panel() -> void:
 			reserve.sort()
 			train_panel.set_trainable_employees(reserve)
 
-	if train_panel.has_method("set_train_count"):
-		var actor: int = int(state.get_current_player_id())
-		var counts := _compute_train_counts(state, actor)
-		train_panel.set_train_count(int(counts.remaining), int(counts.total))
+		if train_panel.has_method("set_train_count"):
+			var actor: int = int(state.get_current_player_id())
+			var counts := _compute_train_counts(state, actor)
+			train_panel.set_train_count(int(counts.remaining), int(counts.total))
+		if train_panel.has_method("set_max_steps_one_employee"):
+			var actor2: int = int(state.get_current_player_id())
+			var max_steps := int(EmployeeRulesClass.get_max_train_steps_for_single_employee_for_working(state, actor2))
+			train_panel.set_max_steps_one_employee(max_steps)
 
 	if _center_popup.is_valid():
 		_center_popup.call(train_panel)
@@ -255,10 +259,14 @@ func _sync_train_panel(state: GameState) -> void:
 	if state.phase != "Working" or state.sub_phase != "Train":
 		train_panel.visible = false
 		return
-	if train_panel.has_method("set_train_count"):
-		var actor: int = int(state.get_current_player_id())
-		var counts := _compute_train_counts(state, actor)
-		train_panel.set_train_count(int(counts.remaining), int(counts.total))
+		if train_panel.has_method("set_train_count"):
+			var actor: int = int(state.get_current_player_id())
+			var counts := _compute_train_counts(state, actor)
+			train_panel.set_train_count(int(counts.remaining), int(counts.total))
+		if train_panel.has_method("set_max_steps_one_employee"):
+			var actor2: int = int(state.get_current_player_id())
+			var max_steps := int(EmployeeRulesClass.get_max_train_steps_for_single_employee_for_working(state, actor2))
+			train_panel.set_max_steps_one_employee(max_steps)
 
 func show_price_panel(action_id: String) -> void:
 	if _scene == null or _scene.game_engine == null:

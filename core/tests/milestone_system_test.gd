@@ -4,6 +4,7 @@ class_name MilestoneSystemTest
 extends RefCounted
 
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
@@ -58,10 +59,22 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r10.ok:
 		return r10
 
+	var r11 := _test_multi_step_train_disallowed_without_coach_or_guru(seed_val)
+	if not r11.ok:
+		return r11
+
+	var r12 := _test_multi_step_train_allowed_with_coach(seed_val)
+	if not r12.ok:
+		return r12
+
+	var r13 := _test_multi_step_train_allowed_with_guru(seed_val)
+	if not r13.ok:
+		return r13
+
 	return Result.success({
 		"player_count": player_count,
 		"seed": seed_val,
-		"cases": 10,
+		"cases": 13,
 	})
 
 static func _test_multi_claim_and_cleanup(seed_val: int) -> Result:
@@ -123,16 +136,16 @@ static func _test_train_triggers_first_train(seed_val: int) -> Result:
 		return Result.failure("添加 trainer 失败: %s" % add_trainer.error)
 
 	# 准备待命员工（from_employee）
-	var take_from := StateUpdaterClass.take_from_pool(state, "recruiting_girl", 1)
+	var take_from := StateUpdaterClass.take_from_pool(state, "management_trainee", 1)
 	if not take_from.ok:
-		return Result.failure("从员工池取出 recruiting_girl 失败: %s" % take_from.error)
-	var add_from := StateUpdaterClass.add_employee(state, 0, "recruiting_girl", true)
+		return Result.failure("从员工池取出 management_trainee 失败: %s" % take_from.error)
+	var add_from := StateUpdaterClass.add_employee(state, 0, "management_trainee", true)
 	if not add_from.ok:
-		return Result.failure("添加 recruiting_girl 到待命区失败: %s" % add_from.error)
+		return Result.failure("添加 management_trainee 到待命区失败: %s" % add_from.error)
 
 	var cmd := Command.create("train", 0, {
-		"from_employee": "recruiting_girl",
-		"to_employee": "trainer",
+		"from_employee": "management_trainee",
+		"to_employee": "new_business_developer",
 	})
 	var r := engine.execute_command(cmd)
 	if not r.ok:
@@ -441,22 +454,22 @@ static func _test_chain_train_restricted_without_milestone(seed_val: int) -> Res
 		if not add_trainer.ok:
 			return Result.failure("添加 trainer 失败: %s" % add_trainer.error)
 
-	# 待命 recruiting_girl
-	var take_from := StateUpdaterClass.take_from_pool(state, "recruiting_girl", 1)
+	# 待命 marketing_trainee（可链式培训的测试来源）
+	var take_from := StateUpdaterClass.take_from_pool(state, "marketing_trainee", 1)
 	if not take_from.ok:
-		return Result.failure("从员工池取出 recruiting_girl 失败: %s" % take_from.error)
-	var add_from := StateUpdaterClass.add_employee(state, 0, "recruiting_girl", true)
+		return Result.failure("从员工池取出 marketing_trainee 失败: %s" % take_from.error)
+	var add_from := StateUpdaterClass.add_employee(state, 0, "marketing_trainee", true)
 	if not add_from.ok:
-		return Result.failure("添加 recruiting_girl 到待命区失败: %s" % add_from.error)
+		return Result.failure("添加 marketing_trainee 到待命区失败: %s" % add_from.error)
 
-	var t1 := engine.execute_command(Command.create("train", 0, {"from_employee": "recruiting_girl", "to_employee": "trainer"}))
+	var t1 := engine.execute_command(Command.create("train", 0, {"from_employee": "marketing_trainee", "to_employee": "campaign_manager"}))
 	if not t1.ok:
 		return Result.failure("train #1 失败: %s" % t1.error)
 
-	# 默认：不能继续培训本子阶段新培训得到的员工（trainer）
-	var t2 := engine.execute_command(Command.create("train", 0, {"from_employee": "trainer", "to_employee": "recruiting_girl"}))
+	# 默认：不能继续培训本子阶段新培训得到的员工（campaign_manager）
+	var t2 := engine.execute_command(Command.create("train", 0, {"from_employee": "campaign_manager", "to_employee": "brand_manager"}))
 	if t2.ok:
-		return Result.failure("默认规则下不应允许链式培训（trainer -> recruiting_girl）")
+		return Result.failure("默认规则下不应允许链式培训（campaign_manager -> brand_manager）")
 
 	return Result.success()
 
@@ -480,19 +493,144 @@ static func _test_chain_train_allowed_with_milestone(seed_val: int) -> Result:
 		if not add_trainer.ok:
 			return Result.failure("添加 trainer 失败: %s" % add_trainer.error)
 
-	var take_from := StateUpdaterClass.take_from_pool(state, "recruiting_girl", 1)
+	var take_from := StateUpdaterClass.take_from_pool(state, "marketing_trainee", 1)
 	if not take_from.ok:
-		return Result.failure("从员工池取出 recruiting_girl 失败: %s" % take_from.error)
-	var add_from := StateUpdaterClass.add_employee(state, 0, "recruiting_girl", true)
+		return Result.failure("从员工池取出 marketing_trainee 失败: %s" % take_from.error)
+	var add_from := StateUpdaterClass.add_employee(state, 0, "marketing_trainee", true)
 	if not add_from.ok:
-		return Result.failure("添加 recruiting_girl 到待命区失败: %s" % add_from.error)
+		return Result.failure("添加 marketing_trainee 到待命区失败: %s" % add_from.error)
 
-	var t1 := engine.execute_command(Command.create("train", 0, {"from_employee": "recruiting_girl", "to_employee": "trainer"}))
+	var t1 := engine.execute_command(Command.create("train", 0, {"from_employee": "marketing_trainee", "to_employee": "campaign_manager"}))
 	if not t1.ok:
 		return Result.failure("train #1 失败: %s" % t1.error)
-	var t2 := engine.execute_command(Command.create("train", 0, {"from_employee": "trainer", "to_employee": "recruiting_girl"}))
+	var t2 := engine.execute_command(Command.create("train", 0, {"from_employee": "campaign_manager", "to_employee": "brand_manager"}))
 	if not t2.ok:
 		return Result.failure("multi_trainer_on_one=true 时应允许链式培训，实际: %s" % t2.error)
+
+	return Result.success()
+
+static func _test_multi_step_train_disallowed_without_coach_or_guru(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := engine.get_state()
+	_force_turn_order(state)
+	state.phase = "Working"
+	state.sub_phase = "Train"
+
+	# 2 名 trainer => 2 次培训，但单次最多 1 步（不能拼成 2 步培训同一人）
+	for _i in range(2):
+		var take_trainer := StateUpdaterClass.take_from_pool(state, "trainer", 1)
+		if not take_trainer.ok:
+			return Result.failure("从员工池取出 trainer 失败: %s" % take_trainer.error)
+		var add_trainer := StateUpdaterClass.add_employee(state, 0, "trainer", false)
+		if not add_trainer.ok:
+			return Result.failure("添加 trainer 失败: %s" % add_trainer.error)
+
+	var take_from := StateUpdaterClass.take_from_pool(state, "marketing_trainee", 1)
+	if not take_from.ok:
+		return Result.failure("从员工池取出 marketing_trainee 失败: %s" % take_from.error)
+	var add_from := StateUpdaterClass.add_employee(state, 0, "marketing_trainee", true)
+	if not add_from.ok:
+		return Result.failure("添加 marketing_trainee 到待命区失败: %s" % add_from.error)
+
+	# 2 步目标：marketing_trainee -> campaign_manager -> brand_manager
+	var t := engine.execute_command(Command.create("train", 0, {"from_employee": "marketing_trainee", "to_employee": "brand_manager"}))
+	if t.ok:
+		return Result.failure("无 coach/guru 时不应允许 2 步培训（marketing_trainee -> brand_manager）")
+
+	return Result.success()
+
+static func _test_multi_step_train_allowed_with_coach(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := engine.get_state()
+	_force_turn_order(state)
+	state.phase = "Working"
+	state.sub_phase = "Train"
+
+	# coach => 2 次培训，可对同一人 2 步
+	var take_coach := StateUpdaterClass.take_from_pool(state, "coach", 1)
+	if not take_coach.ok:
+		return Result.failure("从员工池取出 coach 失败: %s" % take_coach.error)
+	var add_coach := StateUpdaterClass.add_employee(state, 0, "coach", false)
+	if not add_coach.ok:
+		return Result.failure("添加 coach 失败: %s" % add_coach.error)
+
+	# 防止自动跳过 Train 子阶段：保证 train_limit > 本次消耗（使 train 仍为 initiatable action）
+	var take_trainer := StateUpdaterClass.take_from_pool(state, "trainer", 1)
+	if not take_trainer.ok:
+		return Result.failure("从员工池取出 trainer 失败: %s" % take_trainer.error)
+	var add_trainer := StateUpdaterClass.add_employee(state, 0, "trainer", false)
+	if not add_trainer.ok:
+		return Result.failure("添加 trainer 失败: %s" % add_trainer.error)
+
+	var take_from := StateUpdaterClass.take_from_pool(state, "marketing_trainee", 1)
+	if not take_from.ok:
+		return Result.failure("从员工池取出 marketing_trainee 失败: %s" % take_from.error)
+	var add_from := StateUpdaterClass.add_employee(state, 0, "marketing_trainee", true)
+	if not add_from.ok:
+		return Result.failure("添加 marketing_trainee 到待命区失败: %s" % add_from.error)
+
+	var t := engine.execute_command(Command.create("train", 0, {"from_employee": "marketing_trainee", "to_employee": "brand_manager"}))
+	if not t.ok:
+		return Result.failure("coach 应允许 2 步培训（marketing_trainee -> brand_manager），实际: %s" % t.error)
+
+	state = engine.get_state()
+	var used := EmployeeRulesClass.get_action_count(state, 0, "train")
+	if used != 2:
+		return Result.failure("2 步培训后 train used 应为 2，实际: %d" % used)
+
+	return Result.success()
+
+static func _test_multi_step_train_allowed_with_guru(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := engine.get_state()
+	_force_turn_order(state)
+	state.phase = "Working"
+	state.sub_phase = "Train"
+
+	# guru => 3 次培训，可对同一人 3 步
+	var take_guru := StateUpdaterClass.take_from_pool(state, "guru", 1)
+	if not take_guru.ok:
+		return Result.failure("从员工池取出 guru 失败: %s" % take_guru.error)
+	var add_guru := StateUpdaterClass.add_employee(state, 0, "guru", false)
+	if not add_guru.ok:
+		return Result.failure("添加 guru 失败: %s" % add_guru.error)
+
+	# 防止自动跳过 Train 子阶段：保证 train_limit > 本次消耗（使 train 仍为 initiatable action）
+	var take_trainer := StateUpdaterClass.take_from_pool(state, "trainer", 1)
+	if not take_trainer.ok:
+		return Result.failure("从员工池取出 trainer 失败: %s" % take_trainer.error)
+	var add_trainer := StateUpdaterClass.add_employee(state, 0, "trainer", false)
+	if not add_trainer.ok:
+		return Result.failure("添加 trainer 失败: %s" % add_trainer.error)
+
+	var take_from := StateUpdaterClass.take_from_pool(state, "management_trainee", 1)
+	if not take_from.ok:
+		return Result.failure("从员工池取出 management_trainee 失败: %s" % take_from.error)
+	var add_from := StateUpdaterClass.add_employee(state, 0, "management_trainee", true)
+	if not add_from.ok:
+		return Result.failure("添加 management_trainee 到待命区失败: %s" % add_from.error)
+
+	# 3 步目标：management_trainee -> junior_vice_president -> vice_president -> senior_vice_president
+	var t := engine.execute_command(Command.create("train", 0, {"from_employee": "management_trainee", "to_employee": "senior_vice_president"}))
+	if not t.ok:
+		return Result.failure("guru 应允许 3 步培训（management_trainee -> senior_vice_president），实际: %s" % t.error)
+
+	state = engine.get_state()
+	var used := EmployeeRulesClass.get_action_count(state, 0, "train")
+	if used != 3:
+		return Result.failure("3 步培训后 train used 应为 3，实际: %d" % used)
 
 	return Result.success()
 

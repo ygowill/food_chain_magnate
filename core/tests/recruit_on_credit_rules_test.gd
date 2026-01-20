@@ -31,28 +31,28 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if not add_trainer.ok:
 		return Result.failure("添加 trainer 失败: %s" % add_trainer.error)
 
-	# 清空 recruiting_girl 堆：将所有 recruiting_girl 移到 P1 待命区，保持供应池守恒不变量
-	var recruiter_total := int(state.employee_pool.get("recruiting_girl", 0))
-	var take_all := StateUpdaterClass.take_from_pool(state, "recruiting_girl", recruiter_total)
+	# 清空 management_trainee 堆：将所有 management_trainee 移到 P1 待命区，保持供应池守恒不变量
+	var recruiter_total := int(state.employee_pool.get("management_trainee", 0))
+	var take_all := StateUpdaterClass.take_from_pool(state, "management_trainee", recruiter_total)
 	if not take_all.ok:
-		return Result.failure("清空 recruiting_girl 堆失败: %s" % take_all.error)
+		return Result.failure("清空 management_trainee 堆失败: %s" % take_all.error)
 	for _i in range(recruiter_total):
-		var add_to_p1 := StateUpdaterClass.add_employee(state, 1, "recruiting_girl", true)
+		var add_to_p1 := StateUpdaterClass.add_employee(state, 1, "management_trainee", true)
 		if not add_to_p1.ok:
-			return Result.failure("向 P1 待命区添加 recruiting_girl 失败: %s" % add_to_p1.error)
+			return Result.failure("向 P1 待命区添加 management_trainee 失败: %s" % add_to_p1.error)
 
-	if int(state.employee_pool.get("recruiting_girl", 0)) != 0:
-		return Result.failure("recruiting_girl 堆应已清空")
+	if int(state.employee_pool.get("management_trainee", 0)) != 0:
+		return Result.failure("management_trainee 堆应已清空")
 
 	# 1) Recruit 子阶段：允许缺货预支招聘（不加入待命区，只登记待培训）
-	var r := engine.execute_command(Command.create("recruit", 0, {"employee_type": "recruiting_girl"}))
+	var r := engine.execute_command(Command.create("recruit", 0, {"employee_type": "management_trainee"}))
 	if not r.ok:
 		return Result.failure("缺货预支 recruit 失败: %s" % r.error)
 
 	state = engine.get_state()
 	var p0 := state.get_player(0)
-	if Array(p0.get("reserve_employees", [])).has("recruiting_girl"):
-		return Result.failure("缺货预支不应把 recruiting_girl 加入待命区（应仅登记待培训）")
+	if Array(p0.get("reserve_employees", [])).has("management_trainee"):
+		return Result.failure("缺货预支不应把 management_trainee 加入待命区（应仅登记待培训）")
 
 	var pending_val = state.round_state.get("immediate_train_pending", null)
 	if pending_val == null:
@@ -68,7 +68,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if not (pending_p0_val is Dictionary):
 		return Result.failure("immediate_train_pending[0] 类型错误（期望 Dictionary）")
 	var pending_p0: Dictionary = pending_p0_val
-	if int(pending_p0.get("recruiting_girl", 0)) != 1:
+	if int(pending_p0.get("management_trainee", 0)) != 1:
 		return Result.failure("缺货预支登记不正确: %s" % str(pending_all))
 
 	# 2) 禁止跳过 Working 阶段
@@ -95,10 +95,10 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if cannot_skip_train.ok:
 		return Result.failure("存在缺货预支待培训时不应允许确认结束 Train 子阶段")
 
-	# 5) Train：用“预支的 recruiting_girl”直接培训为 trainer（不会归还 recruiting_girl 卡）
+	# 5) Train：用“预支的 management_trainee”直接培训为 new_business_developer（不会归还 management_trainee 卡）
 	var train := engine.execute_command(Command.create("train", 0, {
-		"from_employee": "recruiting_girl",
-		"to_employee": "trainer",
+		"from_employee": "management_trainee",
+		"to_employee": "new_business_developer",
 	}))
 	if not train.ok:
 		return Result.failure("Train(缺货预支) 执行失败: %s" % train.error)
@@ -113,7 +113,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		if not (per_val is Dictionary):
 			return Result.failure("immediate_train_pending[0] 类型错误（期望 Dictionary）")
 		pending_p0_after = per_val
-	if int(pending_p0_after.get("recruiting_girl", 0)) != 0:
+	if int(pending_p0_after.get("management_trainee", 0)) != 0:
 		return Result.failure("Train 后缺货预支应清账完毕，实际: %s" % str(pending_all_after))
 
 	# 6) 清账后允许离开 Train
