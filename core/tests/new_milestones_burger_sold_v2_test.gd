@@ -1,4 +1,4 @@
-# 模块3：全新里程碑（New Milestones）
+# 模块3：全新里程碑
 # 覆盖：FIRST BURGER SOLD
 # - 触发：Dinnertime 售卖包含 burger
 # - 效果：CEO 卡槽至少为 4（不受储备卡影响，至少本实现保证不会低于 4）

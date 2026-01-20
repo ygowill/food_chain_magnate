@@ -47,7 +47,7 @@ static func run() -> Result:
 			has_restore_summary = true
 		if msg.contains("Setup -> Restructuring"):
 			has_phase = true
-		if msg.contains("玩家1: 招聘 ceo"):
+		if msg.contains("玩家1:") and msg.contains("招聘") and (msg.contains("ceo") or msg.contains("CEO")):
 			has_recruit = true
 		if msg.contains("command_executed"):
 			_safe_free(panel)

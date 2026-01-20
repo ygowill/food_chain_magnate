@@ -1,4 +1,4 @@
-# 模块3：全新里程碑（New Milestones）
+# 模块3：全新里程碑
 # 覆盖：FIRST BRAND DIRECTOR USED
 # - 触发：使用 brand_director 发起营销（任意类型）
 # - 效果：

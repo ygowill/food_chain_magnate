@@ -1,4 +1,4 @@
-# 模块3：全新里程碑（New Milestones）
+# 模块3：全新里程碑
 # 覆盖：
 # - FIRST RECRUITING GIRL USED：使用 recruiting_girl 的 recruit -> 获得 executive_vice_president，且其永久免薪
 # - FIRST WAITRESS USED：薪水变为每人 $3（仅对获得者）

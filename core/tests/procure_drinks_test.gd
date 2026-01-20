@@ -307,8 +307,10 @@ static func _find_restaurant_placement_with_air_access(engine: GameEngine, actor
 					else:
 						continue
 
-					var dist: int = abs(source_pos.x - entrance_pos.x) + abs(source_pos.y - entrance_pos.y)
-					if dist <= range_value:
+					var entrance_tile: Vector2i = MapUtils.world_to_tile(entrance_pos).board_pos
+					var source_tile: Vector2i = MapUtils.world_to_tile(source_pos).board_pos
+					var dist: int = abs(source_tile.x - entrance_tile.x) + abs(source_tile.y - entrance_tile.y)
+					if dist + 1 <= range_value:
 						reachable = true
 						break
 
@@ -428,8 +430,10 @@ static func _find_player_with_air_reachable_source(state: GameState, range_value
 					else:
 						continue
 
-					var dist: int = abs(source_pos.x - entrance_pos.x) + abs(source_pos.y - entrance_pos.y)
-					if dist <= range_value:
+					var entrance_tile: Vector2i = MapUtils.world_to_tile(entrance_pos).board_pos
+					var source_tile: Vector2i = MapUtils.world_to_tile(source_pos).board_pos
+					var dist: int = abs(source_tile.x - entrance_tile.x) + abs(source_tile.y - entrance_tile.y)
+					if dist + 1 <= range_value:
 						return pid
 
 	return -1
@@ -500,22 +504,26 @@ static func _pick_air_target_for_player(state: GameState, player_id: int, range_
 			else:
 				continue
 
-			var dist: int = abs(source_pos.x - entrance_pos.x) + abs(source_pos.y - entrance_pos.y)
-			if dist <= range_value:
+			var entrance_tile: Vector2i = MapUtils.world_to_tile(entrance_pos).board_pos
+			var source_tile: Vector2i = MapUtils.world_to_tile(source_pos).board_pos
+			var dist: int = abs(source_tile.x - entrance_tile.x) + abs(source_tile.y - entrance_tile.y)
+			if dist + 1 <= range_value:
 				return {"restaurant_id": str(rest_id), "entrance_pos": entrance_pos, "source_pos": source_pos}
 
 	return {}
 
 static func _build_air_route(from_pos: Vector2i, to_pos: Vector2i) -> Array[Vector2i]:
 	var route: Array[Vector2i] = []
-	route.append(from_pos)
+	var from_tile: Vector2i = MapUtils.world_to_tile(from_pos).board_pos
+	var to_tile: Vector2i = MapUtils.world_to_tile(to_pos).board_pos
+	route.append(from_tile)
 
-	var cur := from_pos
-	while cur.x != to_pos.x:
-		cur = Vector2i(cur.x + (1 if to_pos.x > cur.x else -1), cur.y)
+	var cur := from_tile
+	while cur.x != to_tile.x:
+		cur = Vector2i(cur.x + (1 if to_tile.x > cur.x else -1), cur.y)
 		route.append(cur)
-	while cur.y != to_pos.y:
-		cur = Vector2i(cur.x, cur.y + (1 if to_pos.y > cur.y else -1))
+	while cur.y != to_tile.y:
+		cur = Vector2i(cur.x, cur.y + (1 if to_tile.y > cur.y else -1))
 		route.append(cur)
 
 	return route

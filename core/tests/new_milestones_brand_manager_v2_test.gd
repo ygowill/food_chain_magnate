@@ -1,4 +1,4 @@
-# 模块3：全新里程碑（New Milestones）
+# 模块3：全新里程碑
 # 覆盖：FIRST BRAND MANAGER USED
 # - 触发：brand_manager 放置 airplane
 # - 效果：本回合可为该 airplane 追加第二种商品（A→B 顺序结算），不可叠加/不可保存

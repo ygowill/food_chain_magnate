@@ -126,9 +126,9 @@ func preview_marketing_range(position: Vector2i, range_val: int, marketing_type:
 		_marketing_range_controller.preview_marketing_range(position, range_val, marketing_type, extra)
 		marketing_range_overlay = _marketing_range_controller.marketing_range_overlay
 
-func show_procurement_route_overlay(entrance_pos: Vector2i, route: Array[Vector2i], picked_sources: Array[Vector2i] = []) -> void:
+func show_procurement_route_overlay(entrance_pos: Vector2i, route: Array[Vector2i], picked_sources: Array[Vector2i] = [], options: Dictionary = {}) -> void:
 	if _procurement_route_controller != null:
-		_procurement_route_controller.show_procurement_route_overlay(entrance_pos, route, picked_sources)
+		_procurement_route_controller.show_procurement_route_overlay(entrance_pos, route, picked_sources, options)
 		procurement_route_overlay = _procurement_route_controller.procurement_route_overlay
 
 func hide_procurement_route_overlay() -> void:

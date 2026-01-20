@@ -10,6 +10,7 @@ const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 
 var _piece_registry: Dictionary = {}
 
@@ -68,6 +69,12 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if command.actor != current_player_id:
 		return Result.failure("不是你的回合")
 
+	var employee_type := ""
+	var employee_type_result := optional_string_param(command, "employee_type", "")
+	if not employee_type_result.ok:
+		return employee_type_result
+	employee_type = employee_type_result.value
+
 	# 规则：Working/PlaceRestaurants 需要在岗的本地经理或区域经理（docs/rules.md 子阶段 6）
 	var is_initial := state.phase == "Setup"
 	if is_initial and str(state.sub_phase) == "ReserveCards":
@@ -84,6 +91,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		var eligible := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, command.actor, "use:place_restaurant")
 		if eligible <= 0:
 			return Result.failure("需要在岗的本地经理或区域经理才能放置餐厅")
+		if not employee_type.is_empty():
+			if not EmployeeUsageHelperClass.has_active_employee_with_usage_tag(state, command.actor, employee_type, "use:place_restaurant"):
+				return Result.failure("该员工不能放置餐厅或未在岗: %s" % employee_type)
 		var used_place := EmployeeRulesClass.get_action_count(state, command.actor, "place_restaurant")
 		var used_move := EmployeeRulesClass.get_action_count(state, command.actor, "move_restaurant")
 		var used_total := used_place + used_move
@@ -209,6 +219,17 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 func _generate_specific_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
+	var employee_type := ""
+	if command.params.has("employee_type"):
+		var employee_type_result := require_string_param(command, "employee_type")
+		assert(employee_type_result.ok, "place_restaurant 缺少/错误参数: employee_type")
+		employee_type = employee_type_result.value
+	if employee_type.is_empty() and old_state.phase == "Working":
+		var candidates := EmployeeUsageHelperClass.get_active_employee_types_for_usage_tag(
+			old_state, command.actor, "use:place_restaurant"
+		)
+		if not candidates.is_empty():
+			employee_type = candidates[0]
 
 	# 找到新创建的餐厅
 	var new_restaurants = new_state.map.restaurants.keys()
@@ -230,7 +251,8 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 		"data": {
 			"player_id": command.actor,
 			"restaurant_id": restaurant_id,
-			"position": [world_anchor.x, world_anchor.y]
+			"position": [world_anchor.x, world_anchor.y],
+			"employee_type": employee_type
 		}
 	})
 

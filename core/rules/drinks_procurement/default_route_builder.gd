@@ -4,6 +4,7 @@ extends RefCounted
 const InputsClass = preload("res://core/rules/drinks_procurement/inputs.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
+const TileRouteUtilsClass = preload("res://core/rules/drinks_procurement/tile_route_utils.gd")
 
 static func build_default_route(
 	state: GameState,
@@ -41,33 +42,43 @@ static func build_default_route_for_restaurant(
 	range_value: int
 ) -> Result:
 	if range_type == "air":
-		return build_default_air_route(entrance_pos, drink_sources, range_value)
+		return build_default_air_route(state, entrance_pos, drink_sources, range_value)
 	return build_default_road_route(state, entrance_pos, drink_sources, range_value)
 
 static func build_default_air_route(
+	state: GameState,
 	entrance_pos: Vector2i,
 	drink_sources: Array,
 	range_value: int
 ) -> Result:
+	var entrance_tile_read := TileRouteUtilsClass.world_to_tile_pos(state, entrance_pos)
+	if not entrance_tile_read.ok:
+		return entrance_tile_read
+	var entrance_tile: Vector2i = entrance_tile_read.value
+
 	var best_source: Vector2i = Vector2i(-1, -1)
 	var best_dist := INF
 
 	for source in drink_sources:
 		var src: Vector2i = source["world_pos"]
-		var d: int = abs(src.x - entrance_pos.x) + abs(src.y - entrance_pos.y)
-		if d > range_value:
+		var src_tile_read := TileRouteUtilsClass.world_to_tile_pos(state, src)
+		if not src_tile_read.ok:
+			return src_tile_read
+		var src_tile: Vector2i = src_tile_read.value
+		var d: int = abs(src_tile.x - entrance_tile.x) + abs(src_tile.y - entrance_tile.y)
+		if d + 1 > range_value:
 			continue
-		if d < best_dist or (d == best_dist and (src.y < best_source.y or (src.y == best_source.y and src.x < best_source.x))):
+		if d < best_dist or (d == best_dist and (src_tile.y < best_source.y or (src_tile.y == best_source.y and src_tile.x < best_source.x))):
 			best_dist = d
-			best_source = src
+			best_source = src_tile
 
 	if best_dist == INF:
 		return Result.failure("飞艇范围内没有可采购的饮料源")
 
 	# 默认路径：先走 x 再走 y（确定性）
-	var route: Array[Vector2i] = [entrance_pos]
-	var x := entrance_pos.x
-	var y := entrance_pos.y
+	var route: Array[Vector2i] = [entrance_tile]
+	var x := entrance_tile.x
+	var y := entrance_tile.y
 	while x != best_source.x:
 		x += 1 if best_source.x > x else -1
 		route.append(Vector2i(x, y))

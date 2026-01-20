@@ -124,6 +124,10 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 
 	match _mode:
 		"procure_drinks":
+			var emp_type := str(_payload.get("employee_type", ""))
+			if _is_air_procure_employee(emp_type):
+				procure_drinks_source_selected.emit(world_pos)
+				return
 			if _scene == null or _scene.game_engine == null:
 				return
 			var state: GameState = _scene.game_engine.get_state()
@@ -217,6 +221,11 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 func _sync_procure_drinks_highlights() -> void:
 	if not is_instance_valid(_map_canvas):
 		return
+	var emp_type := str(_payload.get("employee_type", ""))
+	if _is_air_procure_employee(emp_type):
+		if _map_canvas.has_method("clear_cell_highlights"):
+			_map_canvas.call("clear_cell_highlights")
+		return
 	if _scene == null or _scene.game_engine == null:
 		return
 	var state: GameState = _scene.game_engine.get_state()
@@ -239,6 +248,16 @@ func _sync_procure_drinks_highlights() -> void:
 
 	if _map_canvas.has_method("set_cell_highlights"):
 		_map_canvas.call("set_cell_highlights", cells)
+
+func _is_air_procure_employee(employee_type: String) -> bool:
+	if employee_type.is_empty():
+		return false
+	if EmployeeRegistryClass.is_loaded():
+		var def_val = EmployeeRegistryClass.get_def(employee_type)
+		if def_val != null and (def_val is EmployeeDef):
+			var def: EmployeeDef = def_val
+			return str(def.range_type) == "air"
+	return employee_type == "zeppelin_pilot"
 
 func _should_auto_confirm_placement() -> bool:
 	# confirm_actions=false：进入“快速模式”，点击合法目标即可直接执行（不需要右侧确认按钮）
@@ -928,6 +947,10 @@ func on_restaurant_preview_requested(mode: String, position: Vector2i, rotation:
 	var cmd_params := {"position": [position.x, position.y], "rotation": rotation}
 	if action_id == "move_restaurant" and not restaurant_id.is_empty():
 		cmd_params["restaurant_id"] = restaurant_id
+	if is_instance_valid(restaurant_placement_overlay) and restaurant_placement_overlay.has_method("get_selected_employee"):
+		var employee_type := str(restaurant_placement_overlay.get_selected_employee()).strip_edges()
+		if not employee_type.is_empty():
+			cmd_params["employee_type"] = employee_type
 	var cmd := Command.create(action_id, actor, cmd_params)
 	cmd.phase = state.phase
 	cmd.sub_phase = state.sub_phase
@@ -984,7 +1007,12 @@ func on_house_preview_requested(action_id: String, position: Vector2i, rotation:
 	var house_number := -1
 	if is_instance_valid(house_placement_overlay) and house_placement_overlay.has_method("get_selected_house_number"):
 		house_number = int(house_placement_overlay.get_selected_house_number())
-	var cmd := Command.create("place_house", actor, {"position": [position.x, position.y], "rotation": rotation, "house_number": house_number})
+	var cmd_params := {"position": [position.x, position.y], "rotation": rotation, "house_number": house_number}
+	if is_instance_valid(house_placement_overlay) and house_placement_overlay.has_method("get_selected_employee"):
+		var employee_type := str(house_placement_overlay.get_selected_employee()).strip_edges()
+		if not employee_type.is_empty():
+			cmd_params["employee_type"] = employee_type
+	var cmd := Command.create("place_house", actor, cmd_params)
 	cmd.phase = state.phase
 	cmd.sub_phase = state.sub_phase
 	var executor = engine.get_action_registry().get_executor("place_house")

@@ -1,7 +1,7 @@
 {
 	"schema_version": 1,
 	"id": "new_milestones",
-	"name": "全新里程碑 (New Milestones)",
+	"name": "全新里程碑",
 	"version": "0.1.0",
 	"priority": 130,
 	"dependencies": ["base_rules", "base_employees", "base_products", "base_marketing"],

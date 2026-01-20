@@ -1,4 +1,4 @@
-# 模块3：全新里程碑（New Milestones）
+# 模块3：全新里程碑
 # 覆盖：
 # - FIRST BEER SOLD：允许用 food/drink token 支付薪水
 # - FIRST TRAINER USED：无法支付时不再强制解雇（允许欠薪离开 Payday）

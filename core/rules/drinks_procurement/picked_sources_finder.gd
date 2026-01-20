@@ -2,6 +2,7 @@
 extends RefCounted
 
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
+const TileRouteUtilsClass = preload("res://core/rules/drinks_procurement/tile_route_utils.gd")
 
 static func find_picked_sources_along_route(
 	state: GameState,
@@ -18,7 +19,11 @@ static func find_picked_sources_along_route(
 		var src: Vector2i = source["world_pos"]
 		var ok := false
 		if range_type == "air":
-			ok = route_set.has(src)
+			var tile_read := TileRouteUtilsClass.world_to_tile_pos(state, src)
+			if not tile_read.ok:
+				return tile_read
+			var tile_pos: Vector2i = tile_read.value
+			ok = route_set.has(tile_pos)
 		else:
 			var cells_result := RangeUtilsClass.get_adjacent_road_cells(state, src)
 			if not cells_result.ok:
@@ -37,4 +42,3 @@ static func find_picked_sources_along_route(
 			})
 
 	return Result.success(picked)
-

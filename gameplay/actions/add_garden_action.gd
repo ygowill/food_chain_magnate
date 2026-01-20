@@ -9,6 +9,7 @@ const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
+const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 
 const GARDEN_SUPPLY_KEY := "garden_supply_remaining"
 const DEFAULT_GARDEN_SUPPLY := 8
@@ -66,11 +67,20 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if command.actor != current_player_id:
 		return Result.failure("不是你的回合")
 
+	var employee_type := ""
+	var employee_type_result := optional_string_param(command, "employee_type", "")
+	if not employee_type_result.ok:
+		return employee_type_result
+	employee_type = employee_type_result.value
+
 	# 规则：PlaceHouses 子阶段需要“可添加花园”的在岗员工（数据驱动：员工 usage_tags）
 	var player := state.get_player(command.actor)
 	var capacity := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, command.actor, "use:add_garden")
 	if capacity <= 0:
 		return Result.failure("需要在岗的可添加花园员工才能添加花园")
+	if not employee_type.is_empty():
+		if not EmployeeUsageHelperClass.has_active_employee_with_usage_tag(state, command.actor, employee_type, "use:add_garden"):
+			return Result.failure("该员工不能添加花园或未在岗: %s" % employee_type)
 
 	# 与 place_house 共享“每子阶段次数=可放置房屋/花园员工数量”的限制
 	var used_result := RoundStateCountersClass.get_player_count(
@@ -205,13 +215,50 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 	assert(house_id_result.ok, "add_garden 缺少/错误参数: house_id")
 	var direction_result := require_string_param(command, "direction")
 	assert(direction_result.ok, "add_garden 缺少/错误参数: direction")
+
+	var house_id: String = house_id_result.value
+	var employee_type := ""
+	if command.params.has("employee_type"):
+		var employee_type_result := require_string_param(command, "employee_type")
+		assert(employee_type_result.ok, "add_garden 缺少/错误参数: employee_type")
+		employee_type = employee_type_result.value
+	if employee_type.is_empty():
+		var candidates := EmployeeUsageHelperClass.get_active_employee_types_for_usage_tag(
+			_old_state, command.actor, "use:add_garden"
+		)
+		if not candidates.is_empty():
+			employee_type = candidates[0]
+	var house_number := -1
+	var position: Array = []
+	if _new_state != null and _new_state.map != null and _new_state.map.houses.has(house_id):
+		var house_val = _new_state.map.houses[house_id]
+		if house_val is Dictionary:
+			var house: Dictionary = house_val
+			var num_val = house.get("house_number", null)
+			if num_val is int:
+				house_number = int(num_val)
+			elif num_val is float:
+				var f: float = float(num_val)
+				if f == floor(f):
+					house_number = int(f)
+			var pos_val = house.get("anchor_pos", null)
+			if pos_val is Vector2i:
+				var p: Vector2i = pos_val
+				position = [p.x, p.y]
+
+	var data := {
+		"player_id": command.actor,
+		"house_id": house_id,
+		"direction": direction_result.value,
+		"employee_type": employee_type,
+	}
+	if house_number > 0:
+		data["house_number"] = house_number
+	if position.size() >= 2:
+		data["position"] = position
 	return [{
 		"type": EventBus.EventType.GARDEN_ADDED,
-		"data": {
-			"player_id": command.actor,
-			"house_id": house_id_result.value,
-			"direction": direction_result.value,
-		}
+		"data": data
 	}]
 
 func _get_piece_registry() -> Dictionary:

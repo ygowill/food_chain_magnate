@@ -18,6 +18,8 @@ var _selected_position: Vector2i = Vector2i(-1, -1)
 var _selected_rotation: int = 0
 var _available_restaurants: Array[String] = []
 var _selected_restaurant_id: String = ""
+var _available_employees: Array[String] = []
+var _selected_employee_type: String = ""
 
 var _validation_ok: bool = true
 var _validation_message: String = ""
@@ -47,6 +49,12 @@ func get_available_restaurants() -> Array[String]:
 func get_selected_restaurant() -> String:
 	return _selected_restaurant_id
 
+func get_available_employees() -> Array[String]:
+	return _available_employees.duplicate()
+
+func get_selected_employee() -> String:
+	return _selected_employee_type
+
 func set_mode(action_id: String) -> void:
 	_mode = str(action_id)
 	clear_selection()
@@ -75,6 +83,40 @@ func set_available_restaurants(restaurant_ids: Array[String]) -> void:
 
 	_emit_preview()
 	_emit_highlight_request()
+	_update_ui()
+	ui_state_changed.emit()
+
+func set_available_employees(employee_types: Array[String]) -> void:
+	var ids: Array[String] = []
+	var seen := {}
+	for emp_val in employee_types:
+		var s := str(emp_val).strip_edges()
+		if s.is_empty():
+			continue
+		if seen.has(s):
+			continue
+		seen[s] = true
+		ids.append(s)
+	ids.sort()
+	_available_employees = ids
+
+	if _available_employees.is_empty():
+		_selected_employee_type = ""
+	elif _selected_employee_type.is_empty() or not _available_employees.has(_selected_employee_type):
+		_selected_employee_type = _available_employees[0]
+
+	_update_ui()
+	ui_state_changed.emit()
+
+func set_selected_employee(employee_type: String) -> void:
+	var emp_id := str(employee_type).strip_edges()
+	if emp_id.is_empty():
+		_selected_employee_type = "" if _available_employees.is_empty() else _available_employees[0]
+	elif not _available_employees.is_empty() and not _available_employees.has(emp_id):
+		_selected_employee_type = _available_employees[0]
+	else:
+		_selected_employee_type = emp_id
+
 	_update_ui()
 	ui_state_changed.emit()
 
@@ -115,6 +157,7 @@ func clear_selection() -> void:
 	_selected_position = Vector2i(-1, -1)
 	_selected_rotation = 0
 	_selected_restaurant_id = ""
+	_selected_employee_type = "" if _available_employees.is_empty() else _available_employees[0]
 	_validation_ok = true
 	_validation_message = ""
 	_emit_preview()

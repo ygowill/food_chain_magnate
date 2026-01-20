@@ -5,6 +5,7 @@ const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
+const TileRouteUtilsClass = preload("res://core/rules/drinks_procurement/tile_route_utils.gd")
 
 static func validate_route(
 	state: GameState,
@@ -32,22 +33,42 @@ static func validate_air_route(
 ) -> Result:
 	if not restaurants.has(restaurant_id):
 		return Result.failure("餐厅不存在: %s" % restaurant_id)
-	if route[0] != entrance_pos:
-		return Result.failure("飞艇路线必须从餐厅入口出发")
+	var tile_bounds_read := TileRouteUtilsClass.get_tile_bounds(state)
+	if not tile_bounds_read.ok:
+		return tile_bounds_read
+	var tile_bounds: Dictionary = tile_bounds_read.value
+	var min_tile: Vector2i = tile_bounds.get("min", Vector2i.ZERO)
+	var max_tile: Vector2i = tile_bounds.get("max", Vector2i.ZERO)
+	var tiles_set := TileRouteUtilsClass.get_tile_positions_set(state)
 
+	var entrance_tile_read := TileRouteUtilsClass.world_to_tile_pos(state, entrance_pos)
+	if not entrance_tile_read.ok:
+		return entrance_tile_read
+	var entrance_tile: Vector2i = entrance_tile_read.value
+	if route[0] != entrance_tile:
+		return Result.failure("飞艇路线必须从餐厅所在板块出发")
+
+	var visited := {}
 	for i in range(route.size()):
 		var pos: Vector2i = route[i]
-		if not CoordsClass.is_world_pos_in_grid(state, pos):
-			return Result.failure("route 越界: %s" % str(pos))
+		if not tiles_set.is_empty():
+			if not tiles_set.has(pos):
+				return Result.failure("route 板块不存在: %s" % str(pos))
+		else:
+			if pos.x < min_tile.x or pos.x > max_tile.x or pos.y < min_tile.y or pos.y > max_tile.y:
+				return Result.failure("route 越界: %s" % str(pos))
 		if i > 0:
 			var prev: Vector2i = route[i - 1]
 			if not MapUtils.are_adjacent(prev, pos):
-				return Result.failure("飞艇路线必须按四向相邻移动: %s -> %s" % [str(prev), str(pos)])
+				return Result.failure("飞艇路线必须按四向相邻板块移动: %s -> %s" % [str(prev), str(pos)])
 		if i >= 2 and route[i] == route[i - 2]:
 			return Result.failure("不允许U型转弯")
+		if visited.has(pos):
+			return Result.failure("不允许重复板块: %s" % str(pos))
+		visited[pos] = true
 
-	if route.size() - 1 > max_steps:
-		return Result.failure("超出飞艇范围: steps=%d > %d" % [route.size() - 1, max_steps])
+	if route.size() > max_steps:
+		return Result.failure("超出飞艇范围: tiles=%d > %d" % [route.size(), max_steps])
 
 	return Result.success()
 

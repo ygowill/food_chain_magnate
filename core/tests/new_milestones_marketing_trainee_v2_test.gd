@@ -1,4 +1,4 @@
-# 模块3：全新里程碑（New Milestones）
+# 模块3：全新里程碑
 # 覆盖：FIRST MARKETING TRAINEE USED
 # - 触发：使用 marketing_trainee 发起营销
 # - 效果：获得 kitchen_trainee 与 errand_boy 各 1 张（进入 reserve_employees）

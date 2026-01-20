@@ -1,4 +1,4 @@
-# 模块3：全新里程碑（New Milestones）
+# 模块3：全新里程碑
 # 当前覆盖：FIRST MARKETEER USED
 # - Marketing：每放置 1 个需求 +$5（仅由营销员放置的营销板件）
 # - Dinnertime：distance -2，且允许为负

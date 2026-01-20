@@ -1,4 +1,4 @@
-# 模块3：全新里程碑（New Milestones）
+# 模块3：全新里程碑
 # 覆盖：FIRST NEW RESTAURANT
 # - 触发：首次在 Working 阶段放置新餐厅
 # - 效果：允许占用 mailbox(#5-#10) 放置一个永久邮箱（同街区=mailbox block，且必须是自家餐厅街区）

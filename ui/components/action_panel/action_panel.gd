@@ -7,6 +7,7 @@ signal action_requested(action_id: String, params: Dictionary)
 
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
+const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var items_container: VBoxContainer = $MarginContainer/VBoxContainer/ItemsContainer
@@ -15,6 +16,8 @@ const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 @onready var context_hint_label: Label = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/ContextHintLabel
 @onready var restaurant_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RestaurantRow
 @onready var restaurant_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RestaurantRow/RestaurantOption
+@onready var employee_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/EmployeeRow
+@onready var employee_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/EmployeeRow/EmployeeOption
 @onready var rotation_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow
 @onready var rotation_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationOption
 @onready var house_number_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/HouseNumberRow
@@ -117,6 +120,7 @@ func _setup_context_ui() -> void:
 	UiSignalHelpersClass.safe_connect(cancel_context_button, "pressed", _on_cancel_context_pressed)
 	UiSignalHelpersClass.safe_connect(confirm_context_button, "pressed", _on_confirm_context_pressed)
 	UiSignalHelpersClass.safe_connect(restaurant_option, "item_selected", _on_restaurant_option_selected)
+	UiSignalHelpersClass.safe_connect(employee_option, "item_selected", _on_employee_option_selected)
 	UiSignalHelpersClass.safe_connect(rotation_option, "item_selected", _on_rotation_option_selected)
 	UiSignalHelpersClass.safe_connect(house_number_option, "item_selected", _on_house_number_option_selected)
 	UiSignalHelpersClass.safe_connect(direction_option, "item_selected", _on_direction_option_selected)
@@ -195,11 +199,14 @@ func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) 
 	context_hint_label.text = overlay.get_hint_text()
 
 	restaurant_row.visible = (mode == "move_restaurant")
+	employee_row.visible = false
 	direction_row.visible = false
 	rotation_row.visible = true
 	house_number_row.visible = false
 
 	_rebuild_rotation_option(overlay.get_selected_rotation())
+	_rebuild_employee_option(overlay.get_available_employees(), overlay.get_selected_employee())
+	employee_row.visible = not overlay.get_available_employees().is_empty()
 
 	if mode == "move_restaurant":
 		_rebuild_restaurant_option(
@@ -225,9 +232,13 @@ func _refresh_house_placement_context(overlay: HousePlacementOverlay) -> void:
 	context_hint_label.text = overlay.get_hint_text()
 
 	restaurant_row.visible = false
+	employee_row.visible = false
 	rotation_row.visible = (mode == "place_house")
 	house_number_row.visible = (mode == "place_house")
 	direction_row.visible = (mode == "add_garden")
+
+	_rebuild_employee_option(overlay.get_available_employees(), overlay.get_selected_employee())
+	employee_row.visible = not overlay.get_available_employees().is_empty()
 
 	if mode == "place_house":
 		_rebuild_rotation_option(overlay.get_selected_rotation())
@@ -294,6 +305,36 @@ func _rebuild_restaurant_option(restaurant_ids: Array[String], selected_restaura
 		restaurant_option.set_item_metadata(idx, s)
 	_select_option_by_metadata_string(restaurant_option, selected_restaurant_id)
 
+func _rebuild_employee_option(employee_ids: Array[String], selected_employee_id: String) -> void:
+	if not is_instance_valid(employee_option):
+		return
+	employee_option.clear()
+	var ids: Array[String] = []
+	var seen := {}
+	for v in employee_ids:
+		var s := str(v).strip_edges()
+		if s.is_empty():
+			continue
+		if seen.has(s):
+			continue
+		seen[s] = true
+		ids.append(s)
+	ids.sort()
+	for emp_id in ids:
+		var label := emp_id
+		if EmployeeRegistryClass.is_loaded():
+			var def_val = EmployeeRegistryClass.get_def(emp_id)
+			if def_val != null and def_val is EmployeeDef:
+				var name := str((def_val as EmployeeDef).name).strip_edges()
+				if not name.is_empty() and name != emp_id:
+					label = "%s (%s)" % [name, emp_id]
+				elif not name.is_empty():
+					label = name
+		employee_option.add_item(label)
+		var idx := employee_option.get_item_count() - 1
+		employee_option.set_item_metadata(idx, emp_id)
+	_select_option_by_metadata_string(employee_option, selected_employee_id)
+
 func _select_option_by_metadata_int(option: OptionButton, desired: int) -> void:
 	if option == null or not is_instance_valid(option):
 		return
@@ -347,6 +388,14 @@ func _on_restaurant_option_selected(index: int) -> void:
 		return
 	var rid := str(restaurant_option.get_item_metadata(index))
 	_call_context_overlay_method("set_selected_restaurant", [rid])
+
+func _on_employee_option_selected(index: int) -> void:
+	if _context_syncing:
+		return
+	if not is_instance_valid(employee_option):
+		return
+	var emp_id := str(employee_option.get_item_metadata(index))
+	_call_context_overlay_method("set_selected_employee", [emp_id])
 
 func _on_rotation_option_selected(index: int) -> void:
 	if _context_syncing:

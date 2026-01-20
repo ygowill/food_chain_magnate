@@ -84,6 +84,20 @@ custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 
+[node name="EmployeeRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="EmployeeLabel" type="Label" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/EmployeeRow"]
+custom_minimum_size = Vector2(42, 0)
+layout_mode = 2
+text = "员工"
+
+[node name="EmployeeOption" type="OptionButton" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/EmployeeRow"]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+
 [node name="RotationRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer"]
 layout_mode = 2
 theme_override_constants/separation = 8

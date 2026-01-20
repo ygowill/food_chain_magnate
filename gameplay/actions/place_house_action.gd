@@ -10,6 +10,7 @@ const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 
 const HOUSE_PIECE_ID := "house_with_garden"
 const HOUSE_NUMBER_SUPPLY_KEY := "house_number_supply_remaining"
@@ -89,6 +90,12 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if command.actor != current_player_id:
 		return Result.failure("不是你的回合")
 
+	var employee_type := ""
+	var employee_type_result := optional_string_param(command, "employee_type", "")
+	if not employee_type_result.ok:
+		return employee_type_result
+	employee_type = employee_type_result.value
+
 	# 规则：仅允许从“剩余编号池”中选择（用完即无）
 	var remaining_numbers := _get_remaining_house_numbers(state.map)
 	if remaining_numbers.is_empty():
@@ -101,6 +108,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var capacity := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, command.actor, "use:place_house")
 	if capacity <= 0:
 		return Result.failure("需要在岗的可放置房屋员工才能放置房屋")
+	if not employee_type.is_empty():
+		if not EmployeeUsageHelperClass.has_active_employee_with_usage_tag(state, command.actor, employee_type, "use:place_house"):
+			return Result.failure("该员工不能放置房屋或未在岗: %s" % employee_type)
 	var used_result := RoundStateCountersClass.get_player_count(
 		state.round_state, "house_placement_counts", command.actor
 	)
@@ -214,6 +224,17 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 func _generate_specific_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
+	var employee_type := ""
+	if command.params.has("employee_type"):
+		var employee_type_result := require_string_param(command, "employee_type")
+		assert(employee_type_result.ok, "place_house 缺少/错误参数: employee_type")
+		employee_type = employee_type_result.value
+	if employee_type.is_empty():
+		var candidates := EmployeeUsageHelperClass.get_active_employee_types_for_usage_tag(
+			old_state, command.actor, "use:place_house"
+		)
+		if not candidates.is_empty():
+			employee_type = candidates[0]
 
 	# 找到新创建的房屋
 	var new_houses = new_state.map.houses.keys()
@@ -244,7 +265,8 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 			"house_id": house_id,
 			"house_number": house_number,
 			"position": [world_anchor.x, world_anchor.y],
-			"has_garden": true
+			"has_garden": true,
+			"employee_type": employee_type,
 		}
 	})
 

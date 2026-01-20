@@ -287,12 +287,44 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 	var employee_type: String = command.params["employee_type"]
 	assert(not employee_type.is_empty(), "procure_drinks employee_type 不能为空")
 
+	var data := {
+		"player_id": command.actor,
+		"employee_type": employee_type
+	}
+
+	var drinks_procured: Dictionary = {}
+	if employee_type == "errand_boy":
+		var drink_type_val = command.params.get("drink_type", null)
+		if drink_type_val is String and not str(drink_type_val).strip_edges().is_empty():
+			drinks_procured[str(drink_type_val).strip_edges()] = 1
+	else:
+		var emp_def = EmployeeRegistryClass.get_def(employee_type)
+		var restaurant_ids := StructuresClass.get_player_restaurants(_old_state, command.actor)
+		if emp_def != null and (emp_def is EmployeeDef) and not restaurant_ids.is_empty():
+			var plan_r := DrinksProcurementClass.resolve_procurement_plan(_old_state, command, restaurant_ids, emp_def)
+			if plan_r.ok and plan_r.value is Dictionary:
+				var plan: Dictionary = plan_r.value
+				var picked_sources_val = plan.get("picked_sources", null)
+				if picked_sources_val is Array:
+					var bonus_read := DrinksProcurementClass.get_drinks_per_source_bonus_from_milestones(_old_state, command.actor)
+					var delta_read := DrinksProcurementClass.get_drinks_per_source_delta_for_employee_from_milestones(_old_state, command.actor, employee_type)
+					if bonus_read.ok and delta_read.ok:
+						var drinks_per_source := DRINKS_PER_SOURCE + int(bonus_read.value) + int(delta_read.value)
+						for src_val in picked_sources_val:
+							if not (src_val is Dictionary):
+								continue
+							var src: Dictionary = src_val
+							var drink_type := str(src.get("type", "")).strip_edges()
+							if drink_type.is_empty():
+								continue
+							drinks_procured[drink_type] = int(drinks_procured.get(drink_type, 0)) + drinks_per_source
+
+	if not drinks_procured.is_empty():
+		data["drinks_procured"] = drinks_procured
+
 	events.append({
 		"type": EventBus.EventType.DRINKS_PROCURED,
-		"data": {
-			"player_id": command.actor,
-			"employee_type": employee_type
-		}
+		"data": data
 	})
 
 	return events

@@ -7,6 +7,7 @@ const RestaurantPlacementClass = preload("res://core/map/placement_validator/res
 const MapContextBuilderClass = preload("res://core/map/map_context_builder.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
+const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 
 var _piece_registry: Dictionary = {}
 
@@ -79,6 +80,12 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if command.actor != current_player_id:
 		return Result.failure("不是你的回合")
 
+	var employee_type := ""
+	var employee_type_result := optional_string_param(command, "employee_type", "")
+	if not employee_type_result.ok:
+		return employee_type_result
+	employee_type = employee_type_result.value
+
 	# 需要至少有一个自己的餐厅（无需 restaurant_id）
 	var player0 := state.get_player(command.actor)
 	if player0.has("restaurants") and (player0["restaurants"] is Array):
@@ -95,6 +102,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var move_eligible := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, command.actor, "use:move_restaurant")
 	if move_eligible <= 0:
 		return Result.failure("需要在岗的区域经理才能移动餐厅")
+	if not employee_type.is_empty():
+		if not EmployeeUsageHelperClass.has_active_employee_with_usage_tag(state, command.actor, employee_type, "use:move_restaurant"):
+			return Result.failure("该员工不能移动餐厅或未在岗: %s" % employee_type)
 
 	# PlaceRestaurants 子阶段：place/move 共享次数上限 = 可用的本地/大区经理总数
 	var total_eligible := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, command.actor, "use:place_restaurant")
@@ -215,6 +225,17 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	})
 
 func _generate_specific_events(_old_state: GameState, _new_state: GameState, command: Command) -> Array[Dictionary]:
+	var employee_type := ""
+	if command.params.has("employee_type"):
+		var employee_type_result := require_string_param(command, "employee_type")
+		assert(employee_type_result.ok, "move_restaurant 缺少/错误参数: employee_type")
+		employee_type = employee_type_result.value
+	if employee_type.is_empty():
+		var candidates := EmployeeUsageHelperClass.get_active_employee_types_for_usage_tag(
+			_old_state, command.actor, "use:move_restaurant"
+		)
+		if not candidates.is_empty():
+			employee_type = candidates[0]
 	var rest_id_result := require_string_param(command, "restaurant_id")
 	assert(rest_id_result.ok, "move_restaurant 缺少/错误参数: restaurant_id")
 	var rest_id: String = rest_id_result.value
@@ -232,6 +253,7 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 			"restaurant_id": rest_id,
 			"position": p,
 			"rotation": rotation,
+			"employee_type": employee_type,
 		}
 	}]
 

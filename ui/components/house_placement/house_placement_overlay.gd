@@ -21,6 +21,8 @@ var _selected_rotation: int = 0
 var _selected_house_id: String = ""
 var _selected_direction: String = "E"
 var _selected_house_number: int = -1
+var _available_employees: Array[String] = []
+var _selected_employee_type: String = ""
 
 var _house_id_by_cell: Dictionary = {}  # Vector2i -> house_id
 var _available_house_numbers: Array[int] = []
@@ -49,6 +51,12 @@ func get_selected_direction() -> String:
 func get_selected_house_number() -> int:
 	return _selected_house_number
 
+func get_available_employees() -> Array[String]:
+	return _available_employees.duplicate()
+
+func get_selected_employee() -> String:
+	return _selected_employee_type
+
 func get_available_house_numbers() -> Array[int]:
 	var out: Array[int] = []
 	out.append_array(_available_house_numbers)
@@ -64,6 +72,40 @@ func set_mode(action_id: String) -> void:
 func set_map_data(map_data: Dictionary) -> void:
 	_rebuild_house_index(map_data)
 	_rebuild_house_number_supply(map_data)
+	_update_ui()
+	ui_state_changed.emit()
+
+func set_available_employees(employee_types: Array[String]) -> void:
+	var ids: Array[String] = []
+	var seen := {}
+	for emp_val in employee_types:
+		var s := str(emp_val).strip_edges()
+		if s.is_empty():
+			continue
+		if seen.has(s):
+			continue
+		seen[s] = true
+		ids.append(s)
+	ids.sort()
+	_available_employees = ids
+
+	if _available_employees.is_empty():
+		_selected_employee_type = ""
+	elif _selected_employee_type.is_empty() or not _available_employees.has(_selected_employee_type):
+		_selected_employee_type = _available_employees[0]
+
+	_update_ui()
+	ui_state_changed.emit()
+
+func set_selected_employee(employee_type: String) -> void:
+	var emp_id := str(employee_type).strip_edges()
+	if emp_id.is_empty():
+		_selected_employee_type = "" if _available_employees.is_empty() else _available_employees[0]
+	elif not _available_employees.is_empty() and not _available_employees.has(emp_id):
+		_selected_employee_type = _available_employees[0]
+	else:
+		_selected_employee_type = emp_id
+
 	_update_ui()
 	ui_state_changed.emit()
 
@@ -112,6 +154,7 @@ func clear_selection() -> void:
 	_selected_house_id = ""
 	_selected_direction = "E"
 	_selected_house_number = -1
+	_selected_employee_type = "" if _available_employees.is_empty() else _available_employees[0]
 	_emit_preview()
 	_update_ui()
 	_emit_highlight_request()

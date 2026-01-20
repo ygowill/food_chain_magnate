@@ -1,4 +1,4 @@
-# 模块3：全新里程碑（New Milestones）
+# 模块3：全新里程碑
 # 覆盖：FIRST CAMPAIGN MANAGER USED
 # - 触发：使用 campaign_manager 发起营销
 # - 效果：同回合可额外放置第二张同类型板件（同商品/同持续时间）

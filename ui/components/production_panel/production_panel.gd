@@ -258,10 +258,17 @@ func _update_info() -> void:
 			var drink_text := _selected_drink_type if not _selected_drink_type.is_empty() else "（请选择）"
 			_info_label.text = "%s：选择 1 种饮料并直接获得 1 瓶（%s）。" % [emp_name, drink_text]
 		else:
+			var is_air := _is_air_procure_employee_type(_selected_employee_type)
 			var suffix := "（请点击地图上的饮料点）"
-			if _drinks_selected_sources_count > 0:
-				suffix = "（已选进货点: %d）" % _drinks_selected_sources_count
-			_info_label.text = "%s：点击地图饮料点逐个选择 → 系统生成路线 → 确认后开始采购%s" % [emp_name, suffix]
+			if is_air:
+				suffix = "（从餐厅开始选择相连板块）"
+				if _drinks_selected_sources_count > 0:
+					suffix = "（已选板块: %d）" % _drinks_selected_sources_count
+				_info_label.text = "%s：从餐厅所在板块开始，连续选择相连板块 → 系统生成路线 → 确认后开始采购%s" % [emp_name, suffix]
+			else:
+				if _drinks_selected_sources_count > 0:
+					suffix = "（已选进货点: %d）" % _drinks_selected_sources_count
+				_info_label.text = "%s：点击地图饮料点逐个选择 → 系统生成路线 → 确认后开始采购%s" % [emp_name, suffix]
 		return
 
 	# food
@@ -493,11 +500,27 @@ func _update_drinks_controls_visibility() -> void:
 func _update_drinks_selection_label() -> void:
 	if _drinks_selection_label == null:
 		return
-	_drinks_selection_label.text = "进货点: %d（点击地图选择）" % _drinks_selected_sources_count
+	if _is_air_procure_employee_type(_selected_employee_type):
+		_drinks_selection_label.text = "板块: %d（从餐厅开始选择）" % _drinks_selected_sources_count
+	else:
+		_drinks_selection_label.text = "进货点: %d（点击地图选择）" % _drinks_selected_sources_count
 	if _drinks_undo_btn != null:
-		_drinks_undo_btn.disabled = _drinks_selected_sources_count <= 0
+		if _is_air_procure_employee_type(_selected_employee_type):
+			_drinks_undo_btn.disabled = _drinks_selected_sources_count <= 1
+		else:
+			_drinks_undo_btn.disabled = _drinks_selected_sources_count <= 0
 	if _drinks_clear_btn != null:
 		_drinks_clear_btn.disabled = _drinks_selected_sources_count <= 0
+
+func _is_air_procure_employee_type(employee_type: String) -> bool:
+	if employee_type.is_empty():
+		return false
+	if EmployeeRegistryClass.is_loaded():
+		var def_val = EmployeeRegistryClass.get_def(employee_type)
+		if def_val != null and (def_val is EmployeeDef):
+			var def: EmployeeDef = def_val
+			return str(def.range_type) == "air"
+	return employee_type == "zeppelin_pilot"
 
 func _get_product_display_name(product_id: String) -> String:
 	var pid := str(product_id)

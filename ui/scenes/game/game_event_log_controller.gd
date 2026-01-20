@@ -5,6 +5,7 @@ extends RefCounted
 
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
 const EVENT_TYPES_TO_LOG: Array[String] = [
 	EventBus.EventType.PHASE_CHANGED,
@@ -24,6 +25,7 @@ const EVENT_TYPES_TO_LOG: Array[String] = [
 	EventBus.EventType.GARDEN_ADDED,
 	EventBus.EventType.FOOD_PRODUCED,
 	EventBus.EventType.DRINKS_PROCURED,
+	EventBus.EventType.MARKETING_PLACED,
 	EventBus.EventType.MILESTONE_ACHIEVED,
 ]
 
@@ -161,26 +163,160 @@ func _on_eventbus_event(event: Dictionary) -> void:
 				return
 			_game_log_panel.add_player_log(player_id, str(PRICE_ACTION_LOG_TEXT[action_id]), data)
 		EventBus.EventType.EMPLOYEE_RECRUITED:
-			_game_log_panel.add_player_log(int(data.get("player_id", -1)), "招聘 %s" % str(data.get("employee_type", "")), data)
+			var player_id := int(data.get("player_id", -1))
+			var employee_type := str(data.get("employee_type", "")).strip_edges()
+			var employee_name := _employee_name(employee_type)
+			var text := "招聘 %s" % (employee_name if not employee_name.is_empty() else employee_type)
+			var flags: Array[String] = []
+			var to_reserve_val = data.get("to_reserve", null)
+			if to_reserve_val is bool:
+				flags.append("待命" if bool(to_reserve_val) else "在岗")
+			if bool(data.get("on_credit", false)):
+				flags.append("缺货预支")
+			if not flags.is_empty():
+				text += "（%s）" % "，".join(flags)
+			_game_log_panel.add_player_log(player_id, text, data)
 		EventBus.EventType.EMPLOYEE_TRAINED:
-			_game_log_panel.add_player_log(int(data.get("player_id", -1)), "培训 %s -> %s" % [
-				str(data.get("from_employee", "")),
-				str(data.get("to_employee", "")),
-			], data)
+			var player_id := int(data.get("player_id", -1))
+			var from_employee := str(data.get("from_employee", "")).strip_edges()
+			var to_employee := str(data.get("to_employee", "")).strip_edges()
+			var from_name := _employee_name(from_employee)
+			var to_name := _employee_name(to_employee)
+			var text := "培训 %s -> %s" % [
+				from_name if not from_name.is_empty() else from_employee,
+				to_name if not to_name.is_empty() else to_employee,
+			]
+			if bool(data.get("from_pending", false)):
+				text += "（预支清账）"
+			_game_log_panel.add_player_log(player_id, text, data)
 		EventBus.EventType.EMPLOYEE_FIRED:
-			_game_log_panel.add_player_log(int(data.get("player_id", -1)), "解雇 %s" % str(data.get("employee_id", "")), data)
+			var player_id := int(data.get("player_id", -1))
+			var employee_id := str(data.get("employee_id", "")).strip_edges()
+			var employee_name := _employee_name(employee_id)
+			var location := _format_employee_location(str(data.get("location", "")).strip_edges())
+			var text := "解雇 %s" % (employee_name if not employee_name.is_empty() else employee_id)
+			if not location.is_empty():
+				text += "（%s）" % location
+			_game_log_panel.add_player_log(player_id, text, data)
 		EventBus.EventType.RESTAURANT_PLACED:
-			_game_log_panel.add_player_log(int(data.get("player_id", -1)), "放置餐厅", data)
+			var player_id := int(data.get("player_id", -1))
+			var employee_type := str(data.get("employee_type", "")).strip_edges()
+			var employee_name := _employee_name(employee_type)
+			var pos_text := _format_position(data.get("position", null))
+			var text := "放置餐厅"
+			if not employee_name.is_empty():
+				text += "（%s）" % employee_name
+			if not pos_text.is_empty():
+				text += " %s" % pos_text
+			_game_log_panel.add_player_log(player_id, text, data)
 		EventBus.EventType.RESTAURANT_MOVED:
-			_game_log_panel.add_player_log(int(data.get("player_id", -1)), "移动餐厅", data)
+			var player_id := int(data.get("player_id", -1))
+			var employee_type := str(data.get("employee_type", "")).strip_edges()
+			var employee_name := _employee_name(employee_type)
+			var pos_text := _format_position(data.get("position", null))
+			var rotation := int(data.get("rotation", 0))
+			var text := "移动餐厅"
+			if not employee_name.is_empty():
+				text += "（%s）" % employee_name
+			if not pos_text.is_empty():
+				text += " %s" % pos_text
+			if rotation != 0:
+				text += " 旋转%d°" % rotation
+			_game_log_panel.add_player_log(player_id, text, data)
 		EventBus.EventType.HOUSE_PLACED:
-			_game_log_panel.add_player_log(int(data.get("player_id", -1)), "放置房屋", data)
+			var player_id := int(data.get("player_id", -1))
+			var employee_type := str(data.get("employee_type", "")).strip_edges()
+			var employee_name := _employee_name(employee_type)
+			var house_number := int(data.get("house_number", -1))
+			var pos_text := _format_position(data.get("position", null))
+			var text := "放置房屋"
+			if not employee_name.is_empty():
+				text += "（%s）" % employee_name
+			if house_number > 0:
+				text += " #%d" % house_number
+			if not pos_text.is_empty():
+				text += " %s" % pos_text
+			if bool(data.get("has_garden", false)):
+				text += "（含花园）"
+			_game_log_panel.add_player_log(player_id, text, data)
 		EventBus.EventType.GARDEN_ADDED:
-			_game_log_panel.add_player_log(int(data.get("player_id", -1)), "添加花园", data)
+			var player_id := int(data.get("player_id", -1))
+			var employee_type := str(data.get("employee_type", "")).strip_edges()
+			var employee_name := _employee_name(employee_type)
+			var house_number := int(data.get("house_number", -1))
+			var house_id := str(data.get("house_id", "")).strip_edges()
+			var direction := _format_direction(str(data.get("direction", "")).strip_edges())
+			var pos_text := _format_position(data.get("position", null))
+			var details: Array[String] = []
+			if house_number > 0:
+				details.append("房屋#%d" % house_number)
+			elif not house_id.is_empty():
+				details.append("房屋%s" % house_id)
+			if not direction.is_empty():
+				details.append(direction)
+			if not pos_text.is_empty():
+				details.append(pos_text)
+			var text := "添加花园"
+			if not employee_name.is_empty():
+				text += "（%s）" % employee_name
+			if not details.is_empty():
+				text += "：" + " ".join(details)
+			_game_log_panel.add_player_log(player_id, text, data)
 		EventBus.EventType.FOOD_PRODUCED:
-			_game_log_panel.add_player_log(int(data.get("player_id", -1)), "生产 %s" % str(data.get("product", "")), data)
+			var player_id := int(data.get("player_id", -1))
+			var employee_type := str(data.get("employee_type", "")).strip_edges()
+			var employee_name := _employee_name(employee_type)
+			var food_type := str(data.get("food_type", "")).strip_edges()
+			if food_type.is_empty():
+				food_type = str(data.get("product", "")).strip_edges()
+			var food_name := _product_name(food_type)
+			var amount := int(data.get("amount", 0))
+			var text := "生产食物"
+			if not employee_name.is_empty():
+				text += "（%s）" % employee_name
+			if not food_name.is_empty():
+				if amount > 0:
+					text += "：" + "%s x%d" % [food_name, amount]
+				else:
+					text += "：" + food_name
+			_game_log_panel.add_player_log(player_id, text, data)
 		EventBus.EventType.DRINKS_PROCURED:
-			_game_log_panel.add_player_log(int(data.get("player_id", -1)), "采购饮料", data)
+			var player_id := int(data.get("player_id", -1))
+			var employee_type := str(data.get("employee_type", "")).strip_edges()
+			var employee_name := _employee_name(employee_type)
+			var drinks_text := _format_drinks_procured(data.get("drinks_procured", {}))
+			var text := "采购饮料"
+			if not employee_name.is_empty():
+				text += "（%s）" % employee_name
+			if not drinks_text.is_empty():
+				text += "：" + drinks_text
+			_game_log_panel.add_player_log(player_id, text, data)
+		EventBus.EventType.MARKETING_PLACED:
+			var player_id := int(data.get("player_id", -1))
+			var employee_type := str(data.get("employee_type", "")).strip_edges()
+			var employee_name := _employee_name(employee_type)
+			var product_name := _product_name(str(data.get("product", "")).strip_edges())
+			var board_number := int(data.get("board_number", 0))
+			var duration := int(data.get("duration", 0))
+			var axis := _format_marketing_axis(str(data.get("axis", "")).strip_edges())
+			var pos_text := _format_position(data.get("position", null))
+			var parts: Array[String] = []
+			if board_number > 0:
+				parts.append("板#%d" % board_number)
+			if not product_name.is_empty():
+				parts.append(product_name)
+			if duration > 0:
+				parts.append("%d回合" % duration)
+			if not axis.is_empty():
+				parts.append(axis)
+			if not pos_text.is_empty():
+				parts.append(pos_text)
+			var text := "发起营销"
+			if not employee_name.is_empty():
+				text += "（%s）" % employee_name
+			if not parts.is_empty():
+				text += "：" + " ".join(parts)
+			_game_log_panel.add_player_log(player_id, text, data)
 		EventBus.EventType.MILESTONE_ACHIEVED:
 			var milestone_id := str(data.get("milestone_id", ""))
 			var player_id := int(data.get("player_id", -1))
@@ -210,6 +346,85 @@ func _product_name(product_id: String) -> String:
 			if not n.is_empty():
 				return n
 	return pid
+
+func _employee_name(employee_type: String) -> String:
+	var eid := str(employee_type).strip_edges()
+	if eid.is_empty():
+		return ""
+	if EmployeeRegistryClass.is_loaded():
+		var def_val = EmployeeRegistryClass.get_def(eid)
+		if def_val != null and def_val is EmployeeDef:
+			var name := str((def_val as EmployeeDef).name).strip_edges()
+			if not name.is_empty():
+				return name
+	return eid
+
+func _format_position(pos_val) -> String:
+	if pos_val == null:
+		return ""
+	if pos_val is Vector2i:
+		var p: Vector2i = pos_val
+		return "(%d,%d)" % [p.x, p.y]
+	if pos_val is Array:
+		var arr: Array = pos_val
+		if arr.size() >= 2:
+			var x_val = arr[0]
+			var y_val = arr[1]
+			if (x_val is int or x_val is float) and (y_val is int or y_val is float):
+				return "(%d,%d)" % [int(x_val), int(y_val)]
+	return ""
+
+func _format_employee_location(location: String) -> String:
+	match str(location).strip_edges():
+		"active":
+			return "在岗"
+		"reserve":
+			return "待命"
+		"busy":
+			return "忙碌营销"
+		_:
+			return ""
+
+func _format_direction(direction: String) -> String:
+	match str(direction).strip_edges():
+		"N":
+			return "北"
+		"E":
+			return "东"
+		"S":
+			return "南"
+		"W":
+			return "西"
+		_:
+			return ""
+
+func _format_marketing_axis(axis: String) -> String:
+	match str(axis).strip_edges():
+		"row":
+			return "横向"
+		"col":
+			return "纵向"
+		_:
+			return ""
+
+func _format_drinks_procured(drinks_procured_val) -> String:
+	if drinks_procured_val == null or not (drinks_procured_val is Dictionary):
+		return ""
+	var drinks_procured: Dictionary = drinks_procured_val
+	if drinks_procured.is_empty():
+		return ""
+	var keys := drinks_procured.keys()
+	keys.sort()
+	var parts: Array[String] = []
+	for k_val in keys:
+		var pid := str(k_val).strip_edges()
+		if pid.is_empty():
+			continue
+		var amount := int(drinks_procured.get(k_val, 0))
+		if amount <= 0:
+			continue
+		parts.append("%s x%d" % [_product_name(pid), amount])
+	return " + ".join(parts)
 
 func _format_required_short(required: Dictionary, max_items: int = 3) -> String:
 	if required == null or not (required is Dictionary) or required.is_empty():

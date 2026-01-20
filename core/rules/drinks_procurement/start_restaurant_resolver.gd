@@ -3,6 +3,7 @@ extends RefCounted
 
 const InputsClass = preload("res://core/rules/drinks_procurement/inputs.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
+const TileRouteUtilsClass = preload("res://core/rules/drinks_procurement/tile_route_utils.gd")
 
 static func resolve_start_restaurant(
 	state: GameState,
@@ -35,14 +36,18 @@ static func resolve_start_restaurant(
 	if not route.is_empty():
 		var matches: Array[String] = []
 		if range_type == "air":
-			var start_pos: Vector2i = route[0]
+			var start_tile: Vector2i = route[0]
 			for rest_id in restaurant_ids:
 				var rest: Dictionary = restaurants[rest_id]
 				var entrance_pos_result := InputsClass.require_restaurant_entrance_pos(rest, rest_id)
 				if not entrance_pos_result.ok:
 					return entrance_pos_result
 				var entrance_pos: Vector2i = entrance_pos_result.value
-				if entrance_pos == start_pos:
+				var tile_read := TileRouteUtilsClass.world_to_tile_pos(state, entrance_pos)
+				if not tile_read.ok:
+					return tile_read
+				var entrance_tile: Vector2i = tile_read.value
+				if entrance_tile == start_tile:
 					matches.append(rest_id)
 		else:
 			var start_road: Vector2i = route[0]

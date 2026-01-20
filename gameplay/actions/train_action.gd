@@ -280,12 +280,14 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 	assert(from_result.ok, "train 缺少/错误参数: from_employee")
 	var to_result := require_string_param(command, "to_employee")
 	assert(to_result.ok, "train 缺少/错误参数: to_employee")
+	var from_pending := EmployeeRulesClass.get_immediate_train_pending_count(old_state, command.actor, from_result.value) > 0
 	events.append({
 		"type": EventBus.EventType.EMPLOYEE_TRAINED,
 		"data": {
 			"player_id": command.actor,
 			"from_employee": from_result.value,
-			"to_employee": to_result.value
+			"to_employee": to_result.value,
+			"from_pending": from_pending
 		}
 	})
 	return events

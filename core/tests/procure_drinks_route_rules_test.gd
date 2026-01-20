@@ -190,12 +190,12 @@ static func _run_air_route_rules(action: ProcureDrinksAction, player_count: int,
 	RoadGraphCacheClass.invalidate_road_graph(state)
 
 	# 1) 禁 U 型转弯：A -> B -> A
-	var uturn_route := [[1, 1], [2, 1], [1, 1]]
+	var uturn_route := [[0, 0], [1, 0], [0, 0]]
 	var cmd_uturn := Command.create("procure_drinks", actor, {
 		"employee_type": "zeppelin_pilot",
 		"restaurant_id": "rest_0",
 		"route": uturn_route,
-		"selected_sources": [[1, 1]]
+		"selected_sources": [[2, 2]]
 	})
 	var vr := action.validate(state, cmd_uturn)
 	if vr.ok:
@@ -203,13 +203,27 @@ static func _run_air_route_rules(action: ProcureDrinksAction, player_count: int,
 	if str(vr.error).find("U型") < 0:
 		return Result.failure("飞艇 U 型拒绝原因应包含'U型'，实际: %s" % vr.error)
 
-	# 2) 按路线拾取 + 同来源仅一次：绕圈回到同一来源格，仍只获得 2 瓶；且不经过的来源不应获得
-	var loop_route := [[1, 1], [2, 1], [2, 2], [1, 2], [1, 1]]  # 4 步闭环
+	# 2) 禁重复板块：绕圈回到已访问板块应被拒绝
+	var dup_route := [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]
+	var cmd_dup := Command.create("procure_drinks", actor, {
+		"employee_type": "zeppelin_pilot",
+		"restaurant_id": "rest_0",
+		"route": dup_route,
+		"selected_sources": [[2, 2]]
+	})
+	var vr_dup := action.validate(state, cmd_dup)
+	if vr_dup.ok:
+		return Result.failure("飞艇重复板块路线应被拒绝")
+	if str(vr_dup.error).find("重复") < 0:
+		return Result.failure("飞艇重复板块拒绝原因应包含'重复'，实际: %s" % vr_dup.error)
+
+	# 3) 按路线拾取：路线内来源应获得，未经过的来源不应获得
+	var route_ok := [[0, 0], [1, 0], [1, 1]]
 	var cmd_loop := Command.create("procure_drinks", actor, {
 		"employee_type": "zeppelin_pilot",
 		"restaurant_id": "rest_0",
-		"route": loop_route,
-		"selected_sources": [[1, 1]]
+		"route": route_ok,
+		"selected_sources": [[2, 2]]
 	})
 
 	var before := _sum_drinks(state.players[actor].get("inventory", {}))
@@ -221,7 +235,7 @@ static func _run_air_route_rules(action: ProcureDrinksAction, player_count: int,
 	var inv: Dictionary = new_state.players[actor].get("inventory", {})
 	var after := _sum_drinks(inv)
 	if after != before + 2:
-		return Result.failure("飞艇绕圈后饮品总量应只增加 2（同一来源仅一次），实际增量: %d" % (after - before))
+		return Result.failure("飞艇路线后饮品总量应只增加 2（路线内来源），实际增量: %d" % (after - before))
 
 	if int(inv.get("lemonade", 0)) != 2:
 		return Result.failure("飞艇绕圈应只获得 2 瓶 lemonade，实际: %d" % int(inv.get("lemonade", 0)))
@@ -230,6 +244,7 @@ static func _run_air_route_rules(action: ProcureDrinksAction, player_count: int,
 
 	return Result.success({
 		"uturn_error": vr.error,
+		"dup_error": vr_dup.error,
 		"loop_drinks_delta": after - before,
 		"inventory": inv
 	})
@@ -338,27 +353,37 @@ static func _build_truck_distance_plus_one_test_map(owner: int) -> Result:
 	})
 
 static func _build_air_test_map(owner: int) -> Result:
-	var grid_size := Vector2i(3, 3)
+	var grid_size := Vector2i(15, 10) # 3x2 tiles（TILE_SIZE=5）
 	var cells := _build_empty_cells(grid_size)
+
+	var tile_placements: Array[Dictionary] = []
+	for ty in range(2):
+		for tx in range(3):
+			tile_placements.append({
+				"tile_id": "T_%d_%d" % [tx, ty],
+				"board_pos": Vector2i(tx, ty),
+				"rotation": 0
+			})
 
 	var restaurants := {
 		"rest_0": {
 			"restaurant_id": "rest_0",
 			"owner": owner,
-			"anchor_pos": Vector2i(1, 1),
-			"entrance_pos": Vector2i(1, 1)
+			"anchor_pos": Vector2i(2, 2),
+			"entrance_pos": Vector2i(2, 2)
 		}
 	}
 
 	var drink_sources := [
-		{"world_pos": Vector2i(1, 1), "type": "lemonade", "tile_id": "C"},  # 起点：会被重复经过，但只计一次
-		{"world_pos": Vector2i(0, 1), "type": "beer", "tile_id": "D"},      # 在范围内但不在路线
+		{"world_pos": Vector2i(2, 2), "type": "lemonade", "tile_id": "C"},  # 起点：路线内来源
+		{"world_pos": Vector2i(12, 2), "type": "beer", "tile_id": "D"},     # 不在路线内
 	]
 
 	return Result.success({
 		"grid_size": grid_size,
-		"tile_grid_size": Vector2i(1, 1),
+		"tile_grid_size": Vector2i(3, 2),
 		"cells": cells,
+		"tile_placements": tile_placements,
 		"houses": {},
 		"restaurants": restaurants,
 		"drink_sources": drink_sources,

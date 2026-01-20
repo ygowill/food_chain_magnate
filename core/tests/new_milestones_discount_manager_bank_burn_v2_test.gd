@@ -1,4 +1,4 @@
-# 模块3：全新里程碑（New Milestones）
+# 模块3：全新里程碑
 # 覆盖：FIRST DISCOUNT MANAGER USED
 # - 触发：使用 discount_manager 的 set_discount
 # - 效果：下回合 Restructuring 结束移除银行 $100（可多玩家叠加）

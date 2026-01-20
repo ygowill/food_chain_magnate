@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/scenes/tests/procure_drinks_map_click_test.gd" id="1_procure"]
+
+[node name="ProcureDrinksMapClickTest" type="Node"]
+script = ExtResource("1_procure")
+

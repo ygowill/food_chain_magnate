@@ -12,10 +12,12 @@ func _init(scene, map_canvas = null) -> void:
 	_scene = scene
 	_map_canvas = map_canvas
 
-func show_procurement_route_overlay(entrance_pos: Vector2i, route: Array[Vector2i], picked_sources: Array[Vector2i] = []) -> void:
+func show_procurement_route_overlay(entrance_pos: Vector2i, route: Array[Vector2i], picked_sources: Array[Vector2i] = [], options: Dictionary = {}) -> void:
 	if _scene == null:
 		return
-	if route.is_empty():
+	var opts := options if options is Dictionary else {}
+	var tile_mode := bool(opts.get("tile_mode", false)) or str(opts.get("mode", "")) == "air"
+	if route.is_empty() and not tile_mode:
 		hide_procurement_route_overlay()
 		return
 
@@ -26,7 +28,7 @@ func show_procurement_route_overlay(entrance_pos: Vector2i, route: Array[Vector2
 	_sync_procurement_route_overlay_transform()
 
 	if procurement_route_overlay.has_method("show_plan"):
-		procurement_route_overlay.call("show_plan", entrance_pos, route, picked_sources)
+		procurement_route_overlay.call("show_plan", entrance_pos, route, picked_sources, opts)
 
 	procurement_route_overlay.visible = true
 
@@ -70,4 +72,3 @@ func _sync_procurement_route_overlay_transform() -> void:
 		procurement_route_overlay.call("set_tile_size", Vector2(float(cell_size), float(cell_size)))
 	if procurement_route_overlay.has_method("set_map_offset"):
 		procurement_route_overlay.call("set_map_offset", Vector2(float(-world_origin.x * cell_size), float(-world_origin.y * cell_size)))
-

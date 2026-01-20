@@ -1,0 +1,460 @@
+{
+	"checkpoints": [
+		{
+			"hash": "6f60ee5597763348f1b94c6ec42fcba6",
+			"index": 0,
+			"rng_calls": 29
+		}
+	],
+	"commands": [],
+	"created_at": "2026-01-20T03:45:26",
+	"current_index": -1,
+	"final_hash": "6f60ee5597763348f1b94c6ec42fcba6",
+	"game_version": "0.1.0",
+	"initial_state": {
+		"bank": {
+			"broke_count": 0,
+			"ceo_slots_after_first_break": -1,
+			"removed_total": 0,
+			"reserve_added_total": 0,
+			"total": 100
+		},
+		"current_player_index": 0,
+		"employee_pool": {
+			"brand_director": 1,
+			"brand_manager": 6,
+			"burger_chef": 1,
+			"burger_cook": 6,
+			"campaign_manager": 6,
+			"cart_operator": 6,
+			"cfo": 1,
+			"coach": 6,
+			"discount_manager": 1,
+			"errand_boy": 12,
+			"executive_vice_president": 1,
+			"guru": 1,
+			"hr_director": 1,
+			"junior_vice_president": 1,
+			"kitchen_trainee": 12,
+			"local_manager": 6,
+			"luxury_manager": 1,
+			"management_trainee": 18,
+			"marketing_trainee": 10,
+			"new_business_developer": 6,
+			"pizza_chef": 1,
+			"pizza_cook": 6,
+			"pricing_manager": 1,
+			"recruiting_girl": 12,
+			"recruiting_manager": 6,
+			"regional_manager": 1,
+			"senior_vice_president": 6,
+			"trainer": 11,
+			"truck_driver": 6,
+			"vice_president": 1,
+			"waitress": 12,
+			"zeppelin_pilot": 1
+		},
+		"map": {
+			"boundary_index": {
+
+			},
+			"cells": [
+				[
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": "empty"
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+							"dynamic": true,
+							"has_garden": false,
+							"house_id": "house_1",
+							"house_number": 1,
+							"piece_id": "house"
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": "empty"
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": "empty"
+					}
+				]
+			],
+			"drink_sources": [],
+			"grid_size": [
+				3,
+				3
+			],
+			"houses": {
+				"house_1": {
+					"anchor_pos": [
+						1,
+						1
+					],
+					"cells": [
+						[
+							1,
+							1
+						]
+					],
+					"demands": [],
+					"has_garden": false,
+					"house_id": "house_1",
+					"house_number": 1,
+					"is_apartment": false,
+					"owner": -1,
+					"printed": false
+				}
+			},
+			"marketing_placements": {
+				"14": {
+					"axis": "",
+					"board_number": 14,
+					"footprint_size": [
+						2,
+						1
+					],
+					"owner": 0,
+					"product": "pizza",
+					"remaining_duration": 1,
+					"rotation": 0,
+					"tile_index": -1,
+					"type": "billboard",
+					"world_pos": [
+						1,
+						2
+					]
+				}
+			},
+			"next_house_number": 2,
+			"next_restaurant_id": 1,
+			"restaurants": {
+
+			},
+			"tile_grid_size": [
+				1,
+				1
+			]
+		},
+		"marketing_instances": [
+			{
+				"axis": "",
+				"board_number": 14,
+				"created_round": 1,
+				"employee_type": "marketing_trainee",
+				"footprint_size": "(2, 1)",
+				"owner": 0,
+				"product": "pizza",
+				"remaining_duration": 1,
+				"rotation": 0,
+				"tile_index": -1,
+				"type": "billboard",
+				"world_pos": "(1, 2)"
+			}
+		],
+		"milestone_pool": [
+			"first_airplane",
+			"first_billboard",
+			"first_burger_marketed",
+			"first_burger_produced",
+			"first_cart_operator",
+			"first_drink_marketed",
+			"first_errand_boy",
+			"first_have_100",
+			"first_have_20",
+			"first_hire_3",
+			"first_lower_prices",
+			"first_pay_20_salaries",
+			"first_pizza_marketed",
+			"first_pizza_produced",
+			"first_radio",
+			"first_throw_away",
+			"first_train",
+			"first_waitress"
+		],
+		"modules": [
+			"base_products",
+			"base_rules",
+			"base_employees",
+			"base_marketing",
+			"base_milestones",
+			"base_pieces",
+			"base_tiles",
+			"base_maps"
+		],
+		"phase": "Payday",
+		"players": [
+			{
+				"banned_employee_ids": [],
+				"busy_marketers": [
+					"marketing_trainee"
+				],
+				"can_peek_all_reserve_cards": false,
+				"cash": 0,
+				"ceo_cfo_ability_start_round": -1,
+				"company_structure": {
+					"ceo_slots": 3.0,
+					"structure": []
+				},
+				"drive_thru_active": false,
+				"employees": [
+					"ceo"
+				],
+				"id": 0,
+				"inventory": {
+					"beer": 0,
+					"burger": 0,
+					"lemonade": 0,
+					"pizza": 0,
+					"soda": 0
+				},
+				"milestones": [],
+				"multi_trainer_on_one": false,
+				"reserve_card_revealed": false,
+				"reserve_card_selected": 0,
+				"reserve_cards": [
+					{
+						"cash": 50,
+						"ceo_slots": 2,
+						"type": 5
+					},
+					{
+						"cash": 100,
+						"ceo_slots": 3,
+						"type": 10
+					},
+					{
+						"cash": 150,
+						"ceo_slots": 4,
+						"type": 20
+					}
+				],
+				"reserve_employees": [],
+				"restaurant_logo_id": 2,
+				"restaurants": [
+					"rest_1"
+				]
+			},
+			{
+				"banned_employee_ids": [],
+				"busy_marketers": [],
+				"can_peek_all_reserve_cards": false,
+				"cash": 0,
+				"ceo_cfo_ability_start_round": -1,
+				"company_structure": {
+					"ceo_slots": 3.0,
+					"structure": []
+				},
+				"drive_thru_active": false,
+				"employees": [
+					"ceo"
+				],
+				"id": 1,
+				"inventory": {
+					"beer": 0,
+					"burger": 0,
+					"lemonade": 0,
+					"pizza": 0,
+					"soda": 0
+				},
+				"milestones": [],
+				"multi_trainer_on_one": false,
+				"reserve_card_revealed": false,
+				"reserve_card_selected": 0,
+				"reserve_cards": [
+					{
+						"cash": 50,
+						"ceo_slots": 2,
+						"type": 5
+					},
+					{
+						"cash": 100,
+						"ceo_slots": 3,
+						"type": 10
+					},
+					{
+						"cash": 150,
+						"ceo_slots": 4,
+						"type": 20
+					}
+				],
+				"reserve_employees": [],
+				"restaurant_logo_id": 3,
+				"restaurants": [
+					"rest_2"
+				]
+			}
+		],
+		"round_number": 1,
+		"round_state": {
+			"action_counts": {
+
+			},
+			"actions_this_round": [],
+			"dinnertime": {
+				"income_cfo_bonus": [
+					0,
+					0
+				],
+				"income_sale_house_bonus": [
+					0,
+					0
+				],
+				"income_sales": [
+					0,
+					0
+				],
+				"income_tips": [
+					0,
+					0
+				],
+				"sales": [],
+				"skipped": [],
+				"sold_marketed_demand_events": [],
+				"total_income": [
+					0,
+					0
+				]
+			},
+			"mandatory_actions_completed": {
+				"0": [],
+				"1": []
+			},
+			"order_of_business": {
+				"finalized": true,
+				"picks": [
+					1,
+					0
+				],
+				"previous_turn_order": [
+					1,
+					0
+				],
+				"selection_order": [
+					1,
+					0
+				]
+			},
+			"phase_order": [
+				"Restructuring",
+				"OrderOfBusiness",
+				"Working",
+				"Dinnertime",
+				"Payday",
+				"Marketing",
+				"Cleanup"
+			],
+			"prev_phase": "Dinnertime",
+			"prev_sub_phase": "",
+			"restructuring": {
+				"finalized": false,
+				"submitted": {
+					"0": false,
+					"1": false
+				}
+			},
+			"sub_phase_passed": {
+				"0": false,
+				"1": false
+			},
+			"working_sub_phase_order": [
+				"Recruit",
+				"Train",
+				"Marketing",
+				"GetFood",
+				"GetDrinks",
+				"PlaceHouses",
+				"PlaceRestaurants"
+			]
+		},
+		"rules": {
+			"base_unit_price": 10,
+			"cfo_bonus_percent": 50,
+			"demand_cap_normal": 3,
+			"demand_cap_with_garden": 5,
+			"fridge_capacity_per_product": 10,
+			"one_x_employee_copies": 1,
+			"salary_cost": 5,
+			"waitress_tips": 3
+		},
+		"schema_version": 3,
+		"seed": 12345,
+		"selection_order": [
+			1,
+			0
+		],
+		"sub_phase": "",
+		"turn_order": [
+			0,
+			1
+		]
+	},
+	"modules_v2_base_dir": "res://modules",
+	"rng": {
+		"call_count": 29,
+		"initial_seed": 12345
+	},
+	"schema_version": 3
+}

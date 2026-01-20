@@ -1,4 +1,4 @@
-# 模块3：全新里程碑（New Milestones）
+# 模块3：全新里程碑
 # 覆盖：FIRST COKE SOLD
 # - 触发：Dinnertime 售卖包含 soda（规则原文 coke，对应本项目 product_id=soda）
 # - 效果：获得 freezer（复用 gain_fridge=10），Cleanup 后 soda 库存应保留到 10
