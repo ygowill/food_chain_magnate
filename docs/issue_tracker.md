@@ -1231,6 +1231,61 @@
 
 ---
 
+## 33. 营销板件数据修复：piece 命名/类型/尺寸对齐真实数据
+
+**现象/需求**
+
+- 当前 `modules/base_marketing/content/marketing/*.json` 中存在 piece 命名与数据错位（例如 mailbox_5/6 实为 airplane；缺失 billboard_15；airplane_4 footprint 维度错误）。
+- 需要按你提供的“真实数据”修复：确保 board_number 1-16 的 type/id/footprint_size 对齐，且文件命名与 `id` 一致，避免 UI/规则/存档出现混乱。
+
+**涉及代码（初步定位）**
+
+- 数据文件：`modules/base_marketing/content/marketing/*.json`
+- 加载：`core/modules/v2/content_catalog_loader.gd`（MarketingDef.load_from_file）
+- 使用：
+	- `core/data/marketing_registry.gd` / `core/data/marketing_def.gd`
+	- `ui/scenes/game/map_canvas_drawer.gd`（营销绘制）
+	- `ui/scenes/game/game_map_interaction_controller.gd`（营销放置可用点与预览）
+	- `gameplay/actions/initiate_marketing/*`（规则校验/执行）
+
+**修复方案**
+
+- 修复/重命名 JSON：
+	- `airplane_4.json` footprint 改为 `[1,2]`
+	- 将现有 `mailbox_5.json` / `mailbox_6.json` 改为 `airplane_5.json` / `airplane_6.json`（并同步 `id/type/board_number/footprint_size`）
+	- 将现有 `airplane_15.json` 改为 `billboard_15.json`（并同步 `id/type/board_number/footprint_size`）
+	- 确保 mailbox 仅为 7-10，billboard 为 11-16（含 15）
+- 增加回归测试：断言 MarketingRegistry 中 1-16 的 `type/footprint_size` 与规则一致（至少覆盖 airplane/mailbox/billboard 的关键尺寸）。
+
+**验收**
+
+- MarketingRegistry 加载后，board_number 1-16 的营销板件数据与“真实数据”一致；营销放置/渲染/结算不因命名错位而出错。
+
+**实施记录**
+
+- 已修改：`modules/base_marketing/content/marketing/airplane_4.json`：`footprint_size` 修正为 `[1,2]`。
+- 已重命名并修正：`modules/base_marketing/content/marketing/airplane_5.json`、`modules/base_marketing/content/marketing/airplane_6.json`（原 `mailbox_5/6.json`）：同步 `id/type/footprint_size` 为 airplane。
+- 已重命名并修正：`modules/base_marketing/content/marketing/billboard_15.json`（原 `airplane_15.json`）：同步 `id/type/footprint_size` 为 billboard。
+- 已修正依赖 mailbox 编号范围的“全新里程碑”描述与校验（#7-#10）：
+	- `modules/new_milestones/actions/place_new_restaurant_mailbox_action.gd`
+	- `modules/new_milestones/README.md`
+	- `ui/components/milestone_panel/milestone_panel.gd`
+	- `core/tests/new_milestones_new_restaurant_v2_test.gd`
+	- `core/tests/new_milestones_brand_director_v2_test.gd`
+- 新增：`core/tests/marketing_board_data_test.gd`（MarketingBoardDataTest）；并在 `ui/scenes/tests/all_tests.gd` 纳入 AllTests。
+- 更新：`tools/generate_manual_test_saves_manifest.gd`：注释同步 board_number=15 现为 billboard（仍 4P 可用）。
+
+**验证**
+
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（90/90，`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）
+
+---
+
 ## 26. 招聘/培训等面板统一复用员工缩略卡（EmployeeCard）
 
 **现象/需求**
@@ -1391,7 +1446,7 @@
 **现状（初步定位）**
 
 - 飞机目前按普通营销板件处理：在地图内占地、按 `footprint_size` 绘制矩形底色（`ui/scenes/game/map_canvas_drawer.gd:_draw_marketing()`）。
-- 现有 marketing 数据中 airplane 的 `footprint_size` 存在 `2x1/3x2/5x2` 等（例如 `modules/base_marketing/content/marketing/airplane_4.json` 为 `[2,1]`），与“仅 1/3/5”不一致。
+- 现有 marketing 数据存在明显错误/命名错位（例如 `airplane_4.json` 为 `[2,1]`；且 `mailbox_5.json/mailbox_6.json` 实为飞机尺寸），导致 UI 无法正确按规则渲染与预览。
 
 **确认（来自你的说明 #30）**
 
@@ -1399,11 +1454,19 @@
 - “向外厚度”统一为 2。
 - 飞机广告 piece 的尺寸以定义为准（每个编号的 piece 都已定义尺寸）；可用长度为 1/3/5。
 
+**确认补充（来自你的说明 #2：真实营销板件数据）**
+
+- radio 使用 id 1-3，尺寸均为 `[1,1]`
+- airplane 使用 id 4-6，尺寸依次为 `[1,2]`、`[3,2]`、`[5,2]`
+- mailbox 使用 id 7-10，尺寸依次为 `[2,2]`、`[2,2]`、`[1,1]`、`[1,1]`
+- billboard 使用 id 11-16，尺寸依次为 `[3,2]`、`[2,2]`、`[3,1]`、`[2,1]`、`[1,1]`、`[1,1]`
+
 **修复方案（提案，需你点头后实施）**
 
-- 在你确认规则/尺寸后：
-	- 若仅视觉：保持现有逻辑 world_pos 作为锚点，渲染时对 airplane 特判，将其绘制到地图外侧边缘位置，并按 1/3/5 的长度渲染；
-	- 若规则也改：将 airplane 从“占地在 map.cells 内”迁移为“棋盘外 placement（external/outside）”模型，更新验证/冲突/渲染/预览与存档兼容。
+- 前置：先修复营销板件数据定义（见 #33），确保 airplane 的 `footprint_size` 为 `[1,2]/[3,2]/[5,2]`。
+- 若仅视觉（按你确认）：保持现有逻辑 world_pos 作为锚点（仍选地图边缘的 anchor），渲染时对 airplane 特判：
+	- 将 `footprint_size` 中“等于 2 的那一维”作为向外厚度、另一维作为边缘长度；
+	- 视觉上把矩形底色/图标绘制到地图外侧边缘（与地图格对齐），且不侵入地图内。
 
 **验收**
 
@@ -1463,11 +1526,12 @@
 	- 在 tile 内部按 `cell_size` 间距绘制 4 条竖线 + 4 条横线（tile_size=5），线宽更细、alpha 更低；
 	- 确保内部线不盖住上层 piece（仍在 draw 顺序中位于 roads 与 structures 之间）。
 
-**待澄清**
+**确认（来自你的说明 #3）**
 
-- 内部细线的视觉参数是否接受：
-	- 颜色=黑色；alpha 低于外边缘（例如 0.25）；
-	- 线宽固定 1px，或按 zoom 随 `cell_size` 缩放（例如 `max(1.0, cell_size * 0.02)`）？
+- 内部细线参数：
+	- 颜色：黑色
+	- alpha：≈0.25
+	- 线宽随 zoom 缩放：`max(1, cell_size*0.02)`
 
 **测试计划**
 
@@ -1475,4 +1539,4 @@
 
 **状态**
 
-- Reported（待澄清）
+- Planned

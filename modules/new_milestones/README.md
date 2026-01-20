@@ -9,7 +9,7 @@
 ## 已实现
 
 - `first_marketeer_used`：Marketing 每放置 1 个需求 +$5（仅由营销员放置的营销板件）；Dinnertime 距离 -2 且允许为负（可与番茄酱叠加）。
-- `first_new_restaurant`：首次在 Working 阶段放置新餐厅后，可在 Working/PlaceRestaurants 放置一个“免费永久 mailbox”（占用 mailbox #5-#10，不绑定营销员，必须与自家餐厅在同一 mailbox block）。
+- `first_new_restaurant`：首次在 Working 阶段放置新餐厅后，可在 Working/PlaceRestaurants 放置一个“免费永久 mailbox”（占用 mailbox #7-#10，不绑定营销员，必须与自家餐厅在同一 mailbox block）。
 - `first_marketing_trainee_used`：获得 `kitchen_trainee` 与 `errand_boy` 各 1 张（进入储备区，无法立刻培训）。
 - `first_campaign_manager_used`：获得里程碑的同回合内可额外放置第二张同类型（billboard/mailbox）板件（同商品/同持续时间）；第二张通过动作 `place_campaign_manager_second_tile` 放置；营销员在两张板件都到期后才返回。
 - `first_brand_manager_used`：获得里程碑的同回合内，若 brand_manager 放置 airplane，可通过动作 `set_brand_manager_airplane_second_good` 为该飞机追加第二种商品（A→B 顺序结算，不可叠加/不可保存）。

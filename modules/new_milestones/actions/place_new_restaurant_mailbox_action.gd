@@ -17,7 +17,7 @@ const EMPLOYEE_TYPE_SENTINEL := "__milestone_mailbox__"
 func _init() -> void:
 	action_id = "place_new_restaurant_mailbox"
 	display_name = "放置永久邮箱（首个新餐厅）"
-	description = "占用一个 mailbox(#5-#10)，在自家餐厅所在街区免费放置一个永久邮箱营销（不绑定营销员）"
+	description = "占用一个 mailbox(#7-#10)，在自家餐厅所在街区免费放置一个永久邮箱营销（不绑定营销员）"
 	requires_actor = true
 	is_mandatory = false
 	allowed_phases = ["Working"]
@@ -57,8 +57,8 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not board_number_result.ok:
 		return board_number_result
 	var board_number: int = board_number_result.value
-	if board_number < 5 or board_number > 10:
-		return Result.failure("board_number 必须在 5..10（mailbox）范围内")
+	if board_number < 7 or board_number > 10:
+		return Result.failure("board_number 必须在 7..10（mailbox）范围内")
 
 	var product_result := require_string_param(command, "product")
 	if not product_result.ok:

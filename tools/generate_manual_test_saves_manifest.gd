@@ -922,7 +922,7 @@ static func get_cases() -> Array[Dictionary]:
 
 	# === 员工：营销 ===
 	cases.append(_employee_initiate_marketing("campaign_manager", 10, ["core/tests/marketing_campaigns_test.gd"]))
-	# airplane_15 仅 4 人局可用；这里用 2 人局也可放置的 airplane_4（board_number=4）来复核 brand_manager。
+	# board_number=15（billboard_15）仅 4 人局可用；这里用 2 人局也可放置的 airplane_4（board_number=4）来复核 brand_manager。
 	cases.append(_employee_initiate_marketing("brand_manager", 4, ["core/tests/marketing_campaigns_test.gd"]))
 	cases.append(_employee_initiate_marketing("brand_director", 1, ["core/tests/marketing_campaigns_test.gd"]))
 	cases.append(_employee_initiate_marketing("gourmet_food_critic", 17, ["core/tests/gourmet_food_critics_v2_test.gd"], ["gourmet_food_critics"]))

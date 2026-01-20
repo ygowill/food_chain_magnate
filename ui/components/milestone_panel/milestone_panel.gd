@@ -245,7 +245,7 @@ func _describe_milestone_id(milestone_id: String) -> Array[String]:
 				"品牌总监（brand_director）忙碌到游戏结束",
 			]
 		"first_new_restaurant":
-			return ["解锁动作：放置餐厅阶段可免费放置1个永久邮箱（mailbox#5-#10，不绑定营销员，需与自家餐厅同街区）"]
+			return ["解锁动作：放置餐厅阶段可免费放置1个永久邮箱（mailbox#7-#10，不绑定营销员，需与自家餐厅同街区）"]
 		"first_burger_sold":
 			return ["CEO 卡槽至少为 4（永久）"]
 		"first_pizza_sold":

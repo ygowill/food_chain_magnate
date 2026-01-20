@@ -1,7 +1,7 @@
 # 模块3：全新里程碑
 # 覆盖：FIRST NEW RESTAURANT
 # - 触发：首次在 Working 阶段放置新餐厅
-# - 效果：允许占用 mailbox(#5-#10) 放置一个永久邮箱（同街区=mailbox block，且必须是自家餐厅街区）
+# - 效果：允许占用 mailbox(#7-#10) 放置一个永久邮箱（同街区=mailbox block，且必须是自家餐厅街区）
 class_name NewMilestonesNewRestaurantV2Test
 extends RefCounted
 
@@ -73,11 +73,11 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	# 使用确定性小地图构造“同街区可放置点”，避免依赖随机地图的空格分布
 	_apply_simple_map_with_restaurant(state, actor)
 
-	# 放置永久 mailbox（占用 #5..#10），固定放在 (0,2)：与餐厅同 block 且邻接道路
+	# 放置永久 mailbox（占用 #7..#10），固定放在 (1,2)：与餐厅同 block 且邻接道路
 	var cmd_mailbox := Command.create(ACTION_ID, actor, {
-		"board_number": 5,
+		"board_number": 7,
 		"product": "burger",
-		"position": [0, 2],
+		"position": [1, 2],
 	})
 	var exec_mailbox := engine.execute_command(cmd_mailbox)
 	if not exec_mailbox.ok:
@@ -87,9 +87,9 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not (state.map is Dictionary) or not (state.map.get("marketing_placements", null) is Dictionary):
 		return Result.failure("state.map.marketing_placements 缺失或类型错误")
 	var placements: Dictionary = state.map["marketing_placements"]
-	if not placements.has("5"):
-		return Result.failure("应占用 mailbox #5（marketing_placements[\"5\"] 缺失）")
-	var p: Dictionary = placements["5"]
+	if not placements.has("7"):
+		return Result.failure("应占用 mailbox #7（marketing_placements[\"7\"] 缺失）")
+	var p: Dictionary = placements["7"]
 	if int(p.get("remaining_duration", 0)) != -1:
 		return Result.failure("永久 mailbox remaining_duration 应为 -1，实际: %s" % str(p.get("remaining_duration", null)))
 
@@ -98,7 +98,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		if not (inst_val is Dictionary):
 			continue
 		var inst: Dictionary = inst_val
-		if int(inst.get("board_number", -1)) != 5:
+		if int(inst.get("board_number", -1)) != 7:
 			continue
 		if int(inst.get("remaining_duration", 0)) != -1:
 			return Result.failure("marketing_instance.remaining_duration 应为 -1，实际: %s" % str(inst.get("remaining_duration", null)))
@@ -107,7 +107,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		found = true
 		break
 	if not found:
-		return Result.failure("marketing_instances 中缺少 board_number=5 的实例")
+		return Result.failure("marketing_instances 中缺少 board_number=7 的实例")
 
 	var used_val = state.players[actor].get(USED_KEY, null)
 	if not (used_val is bool) or not bool(used_val):

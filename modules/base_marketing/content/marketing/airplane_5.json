@@ -1,7 +1,7 @@
 {
-  "id": "mailbox_5",
+  "id": "airplane_5",
   "board_number": 5,
-  "type": "mailbox",
+  "type": "airplane",
   "footprint_size": [3, 2],
   "min_players": 2,
   "max_players": null

@@ -49,6 +49,7 @@ const DinnertimeDemandRegistryV2TestClass = preload("res://core/tests/dinnertime
 const DinnertimeRoutePurchaseRegistryV2TestClass = preload("res://core/tests/dinnertime_route_purchase_registry_v2_test.gd")
 const EffectRegistryV2TestClass = preload("res://core/tests/effect_registry_v2_test.gd")
 const PoolBuilderV2TestClass = preload("res://core/tests/pool_builder_v2_test.gd")
+const MarketingBoardDataTestClass = preload("res://core/tests/marketing_board_data_test.gd")
 const MarketingCampaignsTestClass = preload("res://core/tests/marketing_campaigns_test.gd")
 const MassMarketeersV2TestClass = preload("res://core/tests/mass_marketeers_v2_test.gd")
 const KetchupMechanismV2TestClass = preload("res://core/tests/ketchup_mechanism_v2_test.gd")
@@ -310,6 +311,10 @@ func _run_all() -> int:
 			{
 				"name": "PoolBuilderV2Test",
 				"fn": func() -> Result: return PoolBuilderV2TestClass.run(2, 12345),
+			},
+			{
+				"name": "MarketingBoardDataTest",
+				"fn": func() -> Result: return MarketingBoardDataTestClass.run(2, 12345),
 			},
 					{
 						"name": "MarketingCampaignsTest",

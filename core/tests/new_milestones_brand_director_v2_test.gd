@@ -88,10 +88,10 @@ static func run(player_count: int = 2, seed_val: int = 334455) -> Result:
 
 	var cmd2 := Command.create("initiate_marketing", 0, {
 		"employee_type": "brand_director",
-		"board_number": 5,
+		"board_number": 7,
 		"product": "soda",
 		"duration": 1,
-		# board #5 is 3x2; avoid overlapping the road cell at (2,3)
+		# board #7 is 2x2; avoid overlapping the road cell at (2,3)
 		"position": [2, 1],
 	})
 	var r2 := engine2.execute_command(cmd2)
