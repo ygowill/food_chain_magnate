@@ -12,6 +12,7 @@ signal player_selected(player_id: int)
 
 var _hand_area: Node = null
 var _company_structure: Node = null
+var _hand_area_prev_display_mode: String = "default"
 var _player_button_group: ButtonGroup = null
 var _player_buttons: Array[Button] = []
 
@@ -21,6 +22,31 @@ func _ready() -> void:
 	set_confirm_text("确认重组")
 	set_cancel_text("关闭")
 	set_confirm_enabled(true)
+
+func open(_covered_rect: Rect2) -> void:
+	# Restructuring needs a full-screen modal (covers left info panel as well).
+	var size_guess := Vector2.ZERO
+	if is_inside_tree():
+		size_guess = get_viewport_rect().size
+	if size_guess.x <= 1.0 or size_guess.y <= 1.0:
+		# Fallback for headless/tests before layout: use a reasonable size.
+		size_guess = Vector2(1280, 720)
+	var rect := Rect2(Vector2.ZERO, size_guess)
+	super.open(rect)
+
+func _center_panel() -> void:
+	# Restructuring modal is not a centered popup; panel fills the whole covered area.
+	if not is_instance_valid(panel):
+		return
+	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.offset_left = 0
+	panel.offset_top = 0
+	panel.offset_right = 0
+	panel.offset_bottom = 0
+
+func close() -> void:
+	_restore_hand_area_display_mode()
+	super.close()
 
 func set_status_text(text: String) -> void:
 	if not is_instance_valid(status_label):
@@ -73,6 +99,7 @@ func _on_player_button_pressed(player_id: int) -> void:
 
 func attach_hand_area(panel: Node) -> void:
 	_hand_area = panel
+	_apply_hand_area_display_mode()
 	_attach_panel_to_host(panel, hand_host)
 
 func attach_company_structure(panel: Node) -> void:
@@ -81,9 +108,30 @@ func attach_company_structure(panel: Node) -> void:
 
 func detach_to_parent(target_parent: Node) -> void:
 	if _hand_area != null and is_instance_valid(_hand_area):
+		_restore_hand_area_display_mode()
 		_detach_panel_to_parent(_hand_area, target_parent)
 	if _company_structure != null and is_instance_valid(_company_structure):
 		_detach_panel_to_parent(_company_structure, target_parent)
+
+func _apply_hand_area_display_mode() -> void:
+	if not is_instance_valid(_hand_area):
+		return
+	if _hand_area.has_method("get_display_mode"):
+		_hand_area_prev_display_mode = str(_hand_area.call("get_display_mode")).strip_edges()
+		if _hand_area_prev_display_mode.is_empty():
+			_hand_area_prev_display_mode = "default"
+	if _hand_area.has_method("set_display_mode"):
+		_hand_area.call("set_display_mode", "restructuring")
+
+func _restore_hand_area_display_mode() -> void:
+	if not is_instance_valid(_hand_area):
+		return
+	if not _hand_area.has_method("set_display_mode"):
+		return
+	var m := str(_hand_area_prev_display_mode).strip_edges()
+	if m.is_empty():
+		m = "default"
+	_hand_area.call("set_display_mode", m)
 
 func _attach_panel_to_host(panel: Node, host: Node) -> void:
 	if panel == null or not is_instance_valid(panel):

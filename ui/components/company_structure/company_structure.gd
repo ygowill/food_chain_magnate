@@ -238,6 +238,13 @@ func _fill_existing_structure(structure: Array) -> void:
 		header.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
 		reports_box.add_child(header)
 
+		# 下属槽：单个管理岗下方每行最多 4 个，可多行；避免“纵向堆叠过高看不全”。
+		var grid := GridContainer.new()
+		grid.columns = 4
+		grid.add_theme_constant_override("h_separation", 6)
+		grid.add_theme_constant_override("v_separation", 6)
+		reports_box.add_child(grid)
+
 		for r_i in range(cap):
 			var report_slot := CardSlot.new()
 			report_slot.add_to_group("employee_card_drop_target")
@@ -245,7 +252,7 @@ func _fill_existing_structure(structure: Array) -> void:
 			report_slot.set_meta("manager_slot_index", i)
 			report_slot.set_meta("manager_employee_id", direct_id)
 			report_slot.set_meta("report_slot_index", r_i)
-			reports_box.add_child(report_slot)
+			grid.add_child(report_slot)
 
 			if r_i < reports.size():
 				var rep_id2: String = reports[r_i]

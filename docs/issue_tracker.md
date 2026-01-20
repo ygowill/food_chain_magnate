@@ -1225,9 +1225,27 @@
 
 - 重组遮罩全屏覆盖；左侧不再显示在岗员工；左侧卡牌三列可滚动；右侧公司结构在大管理槽时仍可完整展示/可滚动且无重叠。
 
+**实施记录**
+
+- 已修改：`ui/components/modal_panel/restructuring_modal.gd`：
+	- `open()` 改为全屏覆盖（忽略传入的 `covered_rect`）；
+	- 覆写 `_center_panel()`：面板填满覆盖区域（不再居中弹窗）；
+	- 关闭时恢复 HandArea 的显示模式（避免回到底部面板后仍隐藏在岗员工）。
+- 已修改：`ui/components/hand_area/hand_area.gd`：
+	- 新增 `display_mode`（`default|restructuring`）；
+	- 重组模式下仅渲染 reserve 卡牌，隐藏 active/busy 区块（busy_marketers 不再显示）。
+- 已修改：`ui/components/company_structure/company_structure.gd`：经理下属卡槽由纵向堆叠改为 `GridContainer(columns=4)`（多行）。
+- 已修改：`ui/components/company_structure/company_structure.tscn`：ManagerScroll 启用垂直滚动（AUTO）并允许纵向扩展。
+- 新增：`ui/scenes/tests/restructuring_layout_test.gd`（`RestructuringLayoutTest`）；并在 `ui/scenes/tests/all_tests.gd` 纳入 AllTests。
+
+**验证**
+
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（91/91，`.godot/AllTests.log`）
+
 **状态**
 
-- Planned
+- Implemented（待手动验收）
 
 ---
 

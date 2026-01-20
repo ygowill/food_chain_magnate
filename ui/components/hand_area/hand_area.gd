@@ -26,6 +26,7 @@ var _selected_ids: Array[String] = []
 var _cards: Array[EmployeeCard] = []  # 所有卡牌（包含重复 employee_id）
 
 var _multi_select: bool = false  # 是否支持多选
+var _display_mode: String = "default" # default | restructuring
 
 var _drag_layer: CanvasLayer = null
 var _drag_preview: EmployeeCard = null
@@ -61,6 +62,20 @@ func set_employees(employees: Array[String], reserve: Array[String], busy_market
 	_busy_marketers = busy_marketers.duplicate()
 	_rebuild_cards()
 
+func get_display_mode() -> String:
+	return _display_mode
+
+func set_display_mode(mode: String) -> void:
+	var m := str(mode).strip_edges()
+	if m.is_empty():
+		m = "default"
+	if m != "default" and m != "restructuring":
+		m = "default"
+	if _display_mode == m:
+		return
+	_display_mode = m
+	_rebuild_cards()
+
 func get_selected_employees() -> Array[String]:
 	return _selected_ids.duplicate()
 
@@ -77,23 +92,30 @@ func _rebuild_cards() -> void:
 	_clear_container_children(busy_container)
 	_cards.clear()
 
+	var show_active := (_display_mode != "restructuring")
+	var show_reserve := true
+	var show_busy := (_display_mode != "restructuring")
+
 	# 创建在岗员工卡牌
-	_build_cards_for_container(_active_employees, active_container, false)
+	if show_active:
+		_build_cards_for_container(_active_employees, active_container, false)
 
 	# 创建待命区员工卡牌
-	_build_cards_for_container(_reserve_employees, reserve_container, false)
+	if show_reserve:
+		_build_cards_for_container(_reserve_employees, reserve_container, false)
 
 	# 创建忙碌营销员卡牌
-	_build_cards_for_container(_busy_marketers, busy_container, true)
+	if show_busy:
+		_build_cards_for_container(_busy_marketers, busy_container, true)
 
 	# 更新区域可见性
 	var show_empty_drop_targets := _drag_enabled
 	if active_section != null:
-		active_section.visible = (not _active_employees.is_empty()) or show_empty_drop_targets
+		active_section.visible = show_active and ((not _active_employees.is_empty()) or show_empty_drop_targets)
 	if reserve_section != null:
-		reserve_section.visible = (not _reserve_employees.is_empty()) or show_empty_drop_targets
+		reserve_section.visible = show_reserve and ((not _reserve_employees.is_empty()) or show_empty_drop_targets)
 	if busy_section != null:
-		busy_section.visible = not _busy_marketers.is_empty()
+		busy_section.visible = show_busy and (not _busy_marketers.is_empty())
 
 func _clear_container_children(container: Node) -> void:
 	if container == null or not is_instance_valid(container):
