@@ -1071,6 +1071,255 @@
 
 ---
 
+## 34. 营销面板：选择员工的缩略卡高度不足，导致与下方板件区重叠
+
+**现象/需求**
+
+- 在营销动作面板中，选择员工时显示的员工缩略卡高度不够，视觉上会与下方“营销板件选择区”发生重叠。
+
+**涉及代码（初步定位）**
+
+- `ui/components/marketing_panel/marketing_panel.tscn`：`MarketerOption`（员工选择容器，已切到 `EmployeePicker`）
+- `ui/components/employee_picker/employee_picker.gd`：`EmployeePickerItem`（内部把 `EmployeeCard` 设为 FullRect）
+- `ui/components/employee_card/employee_card.gd`：compact 卡片最小尺寸（`COMPACT_SIZE=130×90`）
+
+**初步根因假设**
+
+- `EmployeePickerItem`（父容器）未显式设置 `custom_minimum_size`，导致 `HFlowContainer` 计算行高偏小；而 `EmployeeCard` 仍按自身绘制/最小尺寸呈现，造成下方布局未被正确“顶开”从而出现视觉重叠。
+
+**待澄清**
+
+- 该重叠是“卡片被裁切/遮挡”还是“卡片绘制溢出并盖住下方内容”？
+- 你希望的行为是：提高员工卡的最小高度（更大卡）还是仅保证布局留出足够间距（卡尺寸不变）？
+
+**修复方案（提案，需你点头后实施）**
+
+- 在 `EmployeePickerItem` 内设置稳定的 `custom_minimum_size`（至少覆盖 compact 卡高度 + badge 空间），确保 `HFlowContainer` 布局行高正确。
+- 如仍存在重叠，则在 `marketing_panel.tscn` 中对 `MarketerSection` 增加下边距/分隔，或开启局部 `clip_contents`（仅在确认不影响交互的前提下）。
+
+**测试计划**
+
+- 新增 headless UI 属性测试：断言 `EmployeePickerItem.custom_minimum_size.y >= EmployeeCard.COMPACT_SIZE.y`，且 `MarketerSection` 与 `BoardSection` 的 global rect 不交叠（仅做几何断言）。
+
+**验收**
+
+- 营销面板中员工缩略卡不再与下方营销板件区重叠；滚动/点击选择不受影响。
+
+**状态**
+
+- Planned
+
+---
+
+## 35. 营销板件：禁止覆盖饮料进货点；可选点高亮需剔除
+
+**现象/需求**
+
+- 营销 piece 不能覆盖地图上的饮料进货点（`drink_source`）。
+- 在显示可选点（绿色高亮）时就需要剔除会覆盖进货点的放置位置。
+
+**涉及代码（初步定位）**
+
+- UI 可选点计算：
+	- `ui/scenes/game/game_map_interaction_controller.gd`：`_sync_marketing_highlights()`（构建 `_marketing_valid_anchors` 与 `set_cell_highlights`）
+- Core 规则校验：
+	- `gameplay/actions/initiate_marketing/validation.gd`：遍历 footprint cells 的合法性校验
+- 地图数据字段：
+	- `ui/scenes/game/map_canvas_drawer.gd`：`_draw_drink_sources()` 读取 `cell["drink_source"]`
+
+**初步根因假设**
+
+- 现有“营销可放置格”校验只排除了：建筑占用、越界、营销重叠（非边缘营销额外排除了 road/blocked）；但未将 `drink_source` 视为不可占用对象，导致 UI 高亮与 core 校验均允许覆盖。
+
+**待澄清**
+
+- 该规则是否对所有营销类型都生效（radio/mailbox/billboard/airplane）？我当前理解是“全部营销板件都不能盖住 drink_source”。
+
+**修复方案（提案，需你点头后实施）**
+
+- UI：在 `_sync_marketing_highlights()` 的 footprint 遍历中，若任一占地格 `cell["drink_source"]` 非空则判定该 anchor 不可用（不加入高亮）。
+- Core：在 `InitiateMarketingAction.validate`（`gameplay/actions/initiate_marketing/validation.gd`）中加入相同校验，确保最终执行也会拒绝覆盖（避免仅 UI 过滤导致回放/脚本绕过）。
+
+**测试计划**
+
+- Core 逻辑测试：构造带 `drink_source` 的 cell，断言 `initiate_marketing` 对覆盖该 cell 的放置返回 failure。
+- UI 测试：构造 state/map 含 `drink_source`，断言 `_sync_marketing_highlights()` 产出的 anchors 不包含会覆盖该点的 anchor。
+
+**验收**
+
+- 任何营销板件均无法放置到覆盖饮料进货点的位置；绿色可选点中不会出现此类 anchor。
+
+**状态**
+
+- Planned
+
+---
+
+## 36. 营销板件：点击选点时地图显示半透明预览；放置后不透明；去掉边框
+
+**现象/需求**
+
+- 营销 piece 在“点击选择放置点”后，地图上应显示半透明预览（直到确认）。
+- 放置后（实际落地的营销 piece）背景色不应带透明度。
+- 营销 piece 不需要边框。
+
+**涉及代码（初步定位）**
+
+- 营销落地渲染：
+	- `ui/scenes/game/map_canvas_drawer.gd`：`_draw_marketing()`（目前 fill 有 alpha，且绘制 outline 边框）
+- 营销选点交互：
+	- `ui/scenes/game/game_map_interaction_controller.gd`：`_on_map_cell_selected()`（点击选点后目前只更新面板与 range overlay）
+	- `ui/scenes/game/game_map_interaction_controller.gd`：`_on_map_cell_hovered()`（目前 hover 仅做 footprint 高亮）
+- 预览渲染入口：
+	- `ui/scenes/game/map_canvas.gd`：`set_structure_preview()`（已有）
+	- `ui/scenes/game/map_canvas_drawer.gd`：`_draw_structure_preview_piece()`（目前仅支持 restaurant/house）
+
+**待澄清**
+
+- 你希望“半透明预览”出现的时机：
+	- A. hover 即显示板件半透明预览；
+	- B. 仅点击选中 anchor 后显示（当前你描述更像 B）。
+- 预览是否需要显示产品图标/类型图标，还是只显示板件背景块？
+
+**修复方案（提案，需你点头后实施）**
+
+- 落地渲染：`_draw_marketing()` 将营销板件背景改为不透明（alpha=1.0），并移除边框绘制。
+- 选点预览：点击合法 anchor 后，通过 `MapCanvas.set_structure_preview(..., preview_info)` 提供 `piece_id="marketing"`（含 type/product/board_number/rotation/axis 等），在 `_draw_structure_preview_piece()` 中新增 marketing 分支，复用 `_draw_marketing()` 的绘制逻辑但使用较低 alpha（半透明）。
+- 预览期间将结构预览的“格子高亮层”设为透明（`highlight_fill/highlight_border` alpha=0），避免出现“格子高亮 + 板件预览”双重叠加。
+
+**测试计划**
+
+- 新增 drawer 回归测试：验证 `_draw_marketing()` 不再绘制边框且 fill 为不透明。
+- 新增交互/属性测试：点击选中营销目标后会设置 structure_preview_info 为 marketing 且 alpha 低于落地状态（只做参数与 draw 调用断言）。
+
+**验收**
+
+- 点击选择营销位置后能看到半透明板件预览；确认放置后板件背景不透明且无边框；交互不回归。
+
+**状态**
+
+- Planned
+
+---
+
+## 37. 营销板件：地图上显示序号徽标（右上角白底圆+黑色编号）
+
+**现象/需求**
+
+- 营销 piece 目前没有显示序号（board_number）。
+- 需要参考房屋序号的显示方式：在右上角绘制白色底的圆，内部为黑色数字编号。
+
+**涉及代码（初步定位）**
+
+- `ui/scenes/game/map_canvas_drawer.gd`：`_draw_marketing()`（可读取 placement 中的 `board_number`）
+- 参考实现：
+	- `ui/scenes/game/map_canvas_drawer.gd`：`_draw_house_id()`（文字渲染风格参考）
+
+**待澄清**
+
+- 该序号仅要求显示在地图上的“已放置营销板件”，还是也要显示在 `MarketingPanel` 的板件选择按钮预览里？
+
+**修复方案（提案，需你点头后实施）**
+
+- 在 `_draw_marketing()` 中，对每个 marketing rect 的右上角绘制：
+	- `draw_circle` 白底圆（不透明）；
+	- `draw_string` 黑色序号（居中排版，字体大小随 cell_size 缩放）。
+
+**测试计划**
+
+- 新增 drawer 回归测试：对含 `board_number` 的 placement，断言存在一次 `draw_circle(white)` 与一次 `draw_string(text=board_number)` 的调用（用 FakeCanvas 捕获）。
+
+**验收**
+
+- 地图上所有营销板件右上角显示白底圆形序号；缩放后仍清晰可读。
+
+**状态**
+
+- Planned
+
+---
+
+## 38. 飞机营销：可选点应显示为地图外一圈（与外侧摆放一致）
+
+**现象/需求**
+
+- 飞机营销板件视觉上摆放在地图外侧（已在 #30 修复渲染）。
+- 当前“可选点”高亮仍在地图内边缘，与你期望的“地图外一圈可选点”不一致。
+
+**涉及代码（初步定位）**
+
+- `ui/scenes/game/game_map_interaction_controller.gd`：`_sync_marketing_highlights()`（生成绿色可选点）
+- `ui/scenes/game/game_map_interaction_controller.gd`：`_on_map_cell_selected()`（点击选点）
+- `ui/scenes/game/map_canvas.gd`：点击位置来源为 world_pos（包含 external_cells bounds）
+
+**待澄清（关键）**
+
+- 你希望玩家实际点击的位置是：
+	- A. 仍点击地图内边缘格（只是高亮显示在外侧作为“视觉提示”）；
+	- B. 直接点击地图外侧一圈格子来选点（更直观，但需要 UI 做“外侧格 -> 内侧 anchor”的映射再执行 core 命令）。
+- 地图外圈厚度是否固定为 2（与 #30 一致），且飞机板件始终完整落在这 2 格厚的外圈区域内？
+
+**修复方案（提案，需你点头后实施）**
+
+- 若选 B（推荐一致性更强）：
+	- `_sync_marketing_highlights()` 针对 airplane，把合法 anchor 的高亮 cells 平移到外圈区域；
+	- 同时维护 `outside_pos -> inside_anchor` 映射：点击外圈格时转回 inside anchor 走现有 core 规则（不改 core 坐标体系）。
+- 若选 A：
+	- 仅把高亮 cells 外移（点击仍使用内侧 anchor），但会产生“高亮与可点击不一致”的风险，不建议。
+
+**测试计划**
+
+- 新增 UI 测试：对 airplane 生成的 highlights 应落在外圈坐标范围，并能映射回对应 inside anchor（若选 B）。
+
+**验收**
+
+- 飞机营销在选点时，可选点高亮位于地图外侧一圈；点击选点体验与实际摆放位置一致。
+
+**状态**
+
+- Planned（等待你确认 A/B）
+
+---
+
+## 39. 重组：CEO 下方员工槽不可见
+
+**现象/需求**
+
+- 在重组结构界面中，CEO 下方的员工槽看不到（无法用于拖拽分配）。
+
+**涉及代码（初步定位）**
+
+- `ui/components/company_structure/company_structure.tscn`：`ManagerRow/ManagerScroll/ManagerContainer`（CEO 直属卡槽区域）
+- `ui/components/company_structure/company_structure.gd`：`_rebuild_structure()`（创建 CEO 直属槽与下属槽）
+- `ui/components/modal_panel/restructuring_modal.gd`：将 `CompanyStructure` reparent 到全屏遮罩右侧
+
+**待澄清**
+
+- “看不到”是指：
+	- A. 该区域完全没有生成（DOM/节点缺失）；
+	- B. 生成了但被滚动/裁切到屏幕外（例如 `ManagerScroll` 的 scroll 偏移不为 0，或布局高度不足）；
+	- C. 生成了但透明/被遮罩盖住（样式/层级问题）。
+- 你期望 CEO 的直属卡槽“始终固定在 CEO 下方可见”，还是允许在该区域内滚动查看？
+
+**修复方案（提案，需你点头后实施）**
+
+- 若是滚动偏移导致（B）：在进入重组模式或重建结构后，将 `ManagerScroll.scroll_vertical/horizontal` 重置为 0，并确保 `ManagerRow` 的最小高度能容纳直属槽行。
+- 若是布局/裁切导致：考虑将“直属卡槽行”从 `ManagerScroll` 中拆出固定显示，仅让“经理下属槽网格”区域滚动（避免 CEO 槽被滚走）。
+
+**测试计划**
+
+- 扩展 `RestructuringLayoutTest`：断言 `CompanyStructure` 中 CEO 直属槽控件存在且在可视区域内（基于最小尺寸/rect 关系的几何断言）。
+
+**验收**
+
+- 重组界面中 CEO 下方直属员工槽稳定可见，可正常拖拽放置员工。
+
+**状态**
+
+- Planned（等待你补充 A/B/C 现象）
+
+---
+
 ## 23. UI 配色：营销板背景/空地背景/可用点提示色
 
 **需求**
