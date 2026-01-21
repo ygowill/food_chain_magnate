@@ -325,13 +325,25 @@ static func _draw_structure_preview_piece(canvas, cell_size: int, preview_info: 
 static func _draw_ground_and_blocked(canvas, cell_size: int) -> void:
 	var blocked_tex: Texture2D = canvas._skin.get_blocked_overlay_texture()
 	var ground_col := Color("#faf4e0")
+	# Only paint ground for the base map cells.
+	# external_cells and the UI-only outside ring (used by airplane marketing) must stay transparent (issue_tracker #40).
+	var map_origin: Vector2i = canvas._map_data.get("map_origin", Vector2i.ZERO)
+	var base_grid_size: Vector2i = canvas._base_grid_size
+	if base_grid_size == Vector2i.ZERO:
+		var gs_val = canvas._map_data.get("grid_size", null)
+		if gs_val is Vector2i:
+			base_grid_size = gs_val
+	var base_min := -map_origin
+	var base_max := Vector2i(base_grid_size.x - map_origin.x - 1, base_grid_size.y - map_origin.y - 1)
 
 	for y in range(canvas._grid_size.y):
 		for x in range(canvas._grid_size.x):
 			var rect := Rect2(Vector2(x * cell_size, y * cell_size), Vector2(cell_size, cell_size))
-			canvas.draw_rect(rect, ground_col, true)
+			var world_pos: Vector2i = canvas._world_origin + Vector2i(x, y)
+			if world_pos.x >= base_min.x and world_pos.x <= base_max.x and world_pos.y >= base_min.y and world_pos.y <= base_max.y:
+				canvas.draw_rect(rect, ground_col, true)
 
-			var cell: Dictionary = canvas._get_cell_world(canvas._world_origin + Vector2i(x, y))
+			var cell: Dictionary = canvas._get_cell_world(world_pos)
 			if bool(cell.get("blocked", false)):
 				canvas.draw_texture_rect(blocked_tex, rect, false, Color(1, 1, 1, 0.85))
 
@@ -728,6 +740,42 @@ static func _draw_marketing(canvas, cell_size: int) -> void:
 		if type_val is String and not str(type_val).is_empty():
 			key = str(type_val)
 		var tex: Texture2D = canvas._skin.get_marketing_texture(key)
+
+		# airplane: rotation has no meaning; treat footprint_size where one dimension==2 as outward thickness,
+		# and orient it based on the attached edge (issue_tracker #40).
+		if key == "airplane":
+			var thickness := 2
+			var length := 0
+			if base_size.x == 2 and base_size.y != 2:
+				length = base_size.y
+			elif base_size.y == 2 and base_size.x != 2:
+				length = base_size.x
+			else:
+				thickness = mini(base_size.x, base_size.y)
+				length = maxi(base_size.x, base_size.y)
+			var horizontal := Vector2i(maxi(1, length), maxi(1, thickness)) # top/bottom
+			var vertical := Vector2i(maxi(1, thickness), maxi(1, length))   # left/right
+
+			var map_origin2: Vector2i = canvas._map_data.get("map_origin", Vector2i.ZERO)
+			var base_grid_size2: Vector2i = canvas._base_grid_size
+			if base_grid_size2 == Vector2i.ZERO:
+				var gs_val2 = canvas._map_data.get("grid_size", null)
+				if gs_val2 is Vector2i:
+					base_grid_size2 = gs_val2
+			var minp2 := -map_origin2
+			var maxp2 := Vector2i(base_grid_size2.x - map_origin2.x - 1, base_grid_size2.y - map_origin2.y - 1)
+
+			var axis2 := str(p.get("axis", ""))
+			if axis2 == "col":
+				if anchor.y == minp2.y or (anchor.y + horizontal.y - 1) == maxp2.y:
+					size = horizontal
+				else:
+					size = vertical
+			else:
+				if anchor.x == minp2.x or (anchor.x + vertical.x - 1) == maxp2.x:
+					size = vertical
+				else:
+					size = horizontal
 
 		var rect := Rect2(
 			Vector2(pos.x * cell_size, pos.y * cell_size),

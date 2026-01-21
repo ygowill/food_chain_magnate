@@ -50,7 +50,7 @@ static func run() -> Result:
 		"name": "left",
 		"anchor": Vector2i(0, 2),
 		"footprint_size": Vector2i(3, 2),
-		"rotation": 90,
+		"rotation": 0,
 		"axis": "row",
 		"expected_pos": Vector2(-20, 20),
 		"expected_size": Vector2(20, 30),
@@ -62,7 +62,7 @@ static func run() -> Result:
 		"name": "right",
 		"anchor": Vector2i(8, 2),
 		"footprint_size": Vector2i(3, 2),
-		"rotation": 90,
+		"rotation": 0,
 		"axis": "row",
 		"expected_pos": Vector2(100, 20),
 		"expected_size": Vector2(20, 30),
@@ -98,7 +98,7 @@ static func run() -> Result:
 		"name": "corner_row_prefers_left",
 		"anchor": Vector2i(0, 0),
 		"footprint_size": Vector2i(3, 2),
-		"rotation": 90,
+		"rotation": 0,
 		"axis": "row",
 		"expected_pos": Vector2(-20, 0),
 		"expected_size": Vector2(20, 30),
@@ -110,10 +110,10 @@ static func run() -> Result:
 		"name": "corner_col_prefers_top",
 		"anchor": Vector2i(0, 0),
 		"footprint_size": Vector2i(3, 2),
-		"rotation": 90,
+		"rotation": 0,
 		"axis": "col",
-		"expected_pos": Vector2(0, -30),
-		"expected_size": Vector2(20, 30),
+		"expected_pos": Vector2(0, -20),
+		"expected_size": Vector2(30, 20),
 	})
 
 static func _assert_airplane_rect(map_data: Dictionary, grid_size: Vector2i, cell_size: int, spec: Dictionary) -> Result:
@@ -147,4 +147,3 @@ static func _assert_airplane_rect(map_data: Dictionary, grid_size: Vector2i, cel
 		return Result.failure("%s: rect.size=%s expected=%s" % [name, str(rect.size), str(expected_size)])
 
 	return Result.success({"case": name})
-

@@ -53,6 +53,15 @@ static func rebuild_overlay_indexes(canvas) -> void:
 	canvas._structures_by_anchor.clear()
 
 	# marketing placements
+	var map_origin: Vector2i = canvas._map_data.get("map_origin", Vector2i.ZERO)
+	var base_grid_size: Vector2i = canvas._base_grid_size
+	if base_grid_size == Vector2i.ZERO:
+		var gs_val = canvas._map_data.get("grid_size", null)
+		if gs_val is Vector2i:
+			base_grid_size = gs_val
+	var minp := -map_origin
+	var maxp := Vector2i(base_grid_size.x - map_origin.x - 1, base_grid_size.y - map_origin.y - 1)
+
 	if canvas._map_data.has("marketing_placements") and (canvas._map_data["marketing_placements"] is Dictionary):
 		var placements: Dictionary = canvas._map_data["marketing_placements"]
 		for k in placements.keys():
@@ -89,7 +98,33 @@ static func rebuild_overlay_indexes(canvas) -> void:
 				rot = 0
 
 			var size := base_size
-			if rot == 90 or rot == 270:
+			var key: String = str(p.get("type", ""))
+			if key == "airplane":
+				# airplane rotation has no meaning; orientation comes from the edge it is attached to (issue_tracker #40).
+				var thickness := 2
+				var length := 0
+				if base_size.x == 2 and base_size.y != 2:
+					length = base_size.y
+				elif base_size.y == 2 and base_size.x != 2:
+					length = base_size.x
+				else:
+					thickness = mini(base_size.x, base_size.y)
+					length = maxi(base_size.x, base_size.y)
+				var horizontal := Vector2i(maxi(1, length), maxi(1, thickness))
+				var vertical := Vector2i(maxi(1, thickness), maxi(1, length))
+
+				var axis := str(p.get("axis", ""))
+				if axis == "col":
+					if anchor.y == minp.y or (anchor.y + horizontal.y - 1) == maxp.y:
+						size = horizontal
+					else:
+						size = vertical
+				else:
+					if anchor.x == minp.x or (anchor.x + vertical.x - 1) == maxp.x:
+						size = vertical
+					else:
+						size = horizontal
+			elif rot == 90 or rot == 270:
 				size = Vector2i(base_size.y, base_size.x)
 
 			for dy in range(size.y):

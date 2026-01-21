@@ -1419,32 +1419,38 @@
 - 可用点渲染：airplane 的可用点虽已尝试外移，但高亮/点击映射与“外圈”定义仍可能存在偏移或覆盖范围不一致。
 - 外圈背景：MapCanvas 目前会对“视图 bounds 内的所有 cell”填充地面底色；即使外圈只是 UI margin，也会被填色，从而违背“外圈无背景”要求。
 
-**待澄清**
+**确认（来自你在 #40 的补充）**
 
-- 飞机广告的 rotation：你希望在 UI 上仍可旋转吗？
-	- A. 不允许旋转（由 board 定义决定：厚度永远向外，长度贴边）；
-	- B. 允许旋转，但只允许“保持厚度=2 向外”的两种合法姿态（沿边方向切换/角落 axis 选择）。
-- “外圈无背景”是否只针对“隐式外圈（用于飞机放置的 ring）”，还是也包括其它模块产生的 `external_cells`（如 offramp 外部道路）？
+- 飞机广告的 rotation 没有意义：每条边上的方向固定（UI 不提供旋转）。
+- “外圈无背景”也包括真实 `external_cells`（如 offramp），不仅是 UI 隐式外圈。
 
-**修复方案（提案，需你点头后实施）**
+**修复方案（已实施）**
 
-- 规则/UI 对齐：
-	- airplane 的 rotated size 始终以“厚度=2 向外、长度=1/3/5 贴边”为约束，过滤掉不合法 rotation；
-	- 可用点只在 airplane 放置模式计算并显示在地图外圈，其他模式不显示外圈可用点。
+- 规则/UI：
+	- 飞机广告忽略 rotation：`footprint_size` 中“等于 2 的那一维”为向外厚度，另一维为边缘长度；由“贴哪条边”决定朝向（长度沿边、厚度向外）。
+	- `ui/components/marketing_panel/marketing_panel.gd`：飞机类型隐藏旋转区并强制 rotation=0。
+	- `ui/scenes/game/game_map_interaction_controller.gd`：
+		- 飞机高亮候选点按四条边分别生成（top/bottom 使用 horizontal size，left/right 使用 vertical size），并把可点格映射到“地图外一圈（+/-1）”；
+		- 修正 bottom/right 的 outside 映射：outside 需使用 `anchor + size.(x|y)`，确保落在 `max+1` 的外圈（不再落回地图内）。
+		- 兼容测试场景：当 `_scene` 不是 Node 或 headless 时，角落方向选择弹窗自动选择默认方向，避免调用 `add_child`。
+	- `ui/scenes/game/map_canvas_indexer.gd`：marketing placement 的占地索引对 airplane 按贴边方向决定占地朝向（不再依赖 rotation），避免占用集合/点击索引错误。
 - 渲染：
-	- MapCanvas ground 绘制仅覆盖“地图本体 bounds”（不对隐式外圈填色），从而外圈保持透明；
-	- airplane 的 hover 预览/落地渲染仍保持贴边对齐（不回归）。
+	- `ui/scenes/game/map_canvas_drawer.gd`：
+		- `_draw_ground_and_blocked()` 只对“地图本体 base cells”画底色 `#faf4e0`；UI 外圈与 `external_cells` 保持透明（无背景）；
+		- `_draw_marketing()` 对 airplane 按贴边方向确定渲染 rect 尺寸（厚度向外、长度沿边），并贴到地图外侧边缘。
 
-**测试计划**
+**验证**
 
-- 新增/扩展 headless 测试：
-	- airplane 可用点仅在 airplane 模式出现，且全部位于外圈坐标范围；
-	- airplane rotation 过滤：不产生“长度=2 贴边”的候选点；
-	- 外圈背景不绘制：drawer 在 ground 阶段对外圈不再 draw_rect 填充（FakeCanvas 断言）。
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（101/101，`.godot/AllTests.log`）
+- 新增/更新测试：
+	- `ui/scenes/tests/map_ground_skips_outside_ring_test.gd`：断言 ground 不绘制到外圈与 external_cells
+	- 更新 `ui/scenes/tests/airplane_marketing_outside_render_test.gd`：rotation 不影响渲染朝向；角落 col 贴上边时尺寸为 length×thickness
+	- 更新 `ui/scenes/tests/airplane_marketing_outside_selection_test.gd`：覆盖右/下外圈点击映射与角落选择路径
 
 **状态**
 
-- Planned（等待你确认待澄清项）
+- Implemented（待你手动验收视觉/交互细节）
 
 ---
 

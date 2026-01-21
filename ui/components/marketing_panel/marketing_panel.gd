@@ -12,6 +12,7 @@ signal cancelled()
 @onready var board_flow: Container = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/BoardSection/BoardFlow
 @onready var product_flow: Container = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ProductSection/ProductFlow
 @onready var duration_flow: Container = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/DurationSection/DurationFlow
+@onready var rotation_section: Control = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection
 @onready var rot0_btn: Button = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow/Rot0Button
 @onready var rot90_btn: Button = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow/Rot90Button
 @onready var rot180_btn: Button = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow/Rot180Button
@@ -100,6 +101,7 @@ func _on_panel_ready() -> void:
 	_product_button_group.allow_unpress = false
 
 	_setup_rotation_buttons()
+	_update_rotation_section()
 	_rebuild_product_buttons()
 	_rebuild_type_buttons()
 	_rebuild_marketer_options()
@@ -194,6 +196,7 @@ func _on_type_selected(type_id: String) -> void:
 	_selected_board_number = 0
 	_selected_duration = 1
 	_selected_axis = ""
+	_update_rotation_section()
 	clear_error()
 
 	for tid in _type_buttons.keys():
@@ -309,7 +312,18 @@ func _sync_rotation_buttons() -> void:
 		_selected_rotation = 0
 		rot0_btn.button_pressed = true
 
+func _update_rotation_section() -> void:
+	# airplane rotation has no meaning; orientation is determined by the attached edge (issue_tracker #40).
+	var is_airplane := _selected_type == "airplane"
+	if rotation_section != null:
+		rotation_section.visible = not is_airplane
+	if is_airplane and _selected_rotation != 0:
+		_selected_rotation = 0
+		_sync_rotation_buttons()
+
 func _on_rotation_selected(rotation: int) -> void:
+	if _selected_type == "airplane":
+		return
 	var rot := int(rotation)
 	if not rot in [0, 90, 180, 270]:
 		rot = 0
@@ -363,6 +377,7 @@ func _set_selected_board_number(board_number: int) -> void:
 	if bn <= 0:
 		return
 	_selected_board_number = bn
+	_update_rotation_section()
 
 	_selected_target = Vector2i(-1, -1)
 	_selected_axis = ""

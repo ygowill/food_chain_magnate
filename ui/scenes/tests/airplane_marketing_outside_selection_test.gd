@@ -58,9 +58,18 @@ static func run() -> Result:
 	# Begin airplane selection. Highlights should be outside (e.g. x=-1 on left edge).
 	controller.on_marketing_map_selection_requested("airplane", "brand_manager", 4, 0)
 
+	var state: GameState = engine.get_state()
+	if state == null or not (state.map is Dictionary):
+		_safe_free(panel)
+		return Result.failure("expected non-null GameState with map")
+	var map_origin: Vector2i = state.map.get("map_origin", Vector2i.ZERO)
+	var grid_size: Vector2i = state.map.get("grid_size", Vector2i.ZERO)
+	var minp := -map_origin
+	var maxp := Vector2i(grid_size.x - map_origin.x - 1, grid_size.y - map_origin.y - 1)
+
 	var has_outside := false
 	for v in map_canvas.highlighted:
-		if v.x == -1 or v.y == -1:
+		if v.x == minp.x - 1 or v.y == minp.y - 1 or v.x == maxp.x + 1 or v.y == maxp.y + 1:
 			has_outside = true
 			break
 	if not has_outside:
@@ -85,6 +94,19 @@ static func run() -> Result:
 				if inside != Vector2i(0, 0):
 					pick = v
 					break
+
+	# Prefer a right/bottom outside selection if present (regression for issue_tracker #40).
+	for v in map_canvas.highlighted:
+		if not (v is Vector2i):
+			continue
+		if not (v.x == maxp.x + 1 or v.y == maxp.y + 1):
+			continue
+		var map_val2 = controller.get("_marketing_outside_to_anchor")
+		if map_val2 is Dictionary and (map_val2 as Dictionary).has(v):
+			var inside_val2 = (map_val2 as Dictionary).get(v, null)
+			if inside_val2 is Vector2i:
+				pick = v
+				break
 
 	controller.call("_on_map_cell_selected", pick)
 

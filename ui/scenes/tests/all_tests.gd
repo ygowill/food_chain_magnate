@@ -38,6 +38,7 @@ const RestructuringLayoutTestClass = preload("res://ui/scenes/tests/restructurin
 const UiRegressionPropertyTestClass = preload("res://ui/scenes/tests/ui_regression_property_test.gd")
 const MapZoomPropertyTestClass = preload("res://ui/scenes/tests/map_zoom_property_test.gd")
 const TileInternalGridLinesTestClass = preload("res://ui/scenes/tests/tile_internal_grid_lines_test.gd")
+const MapGroundSkipsOutsideRingTestClass = preload("res://ui/scenes/tests/map_ground_skips_outside_ring_test.gd")
 const AirplaneMarketingOutsideRenderTestClass = preload("res://ui/scenes/tests/airplane_marketing_outside_render_test.gd")
 const MarketingRangeFullFootprintTestClass = preload("res://ui/scenes/tests/marketing_range_full_footprint_test.gd")
 const MarketingHighlightsNoDrinkSourceTestClass = preload("res://ui/scenes/tests/marketing_highlights_no_drink_source_test.gd")
@@ -274,14 +275,18 @@ func _run_all() -> int:
 				"name": "MapZoomPropertyTest",
 				"fn": func() -> Result: return MapZoomPropertyTestClass.run(),
 			},
-			{
-				"name": "TileInternalGridLinesTest",
-				"fn": func() -> Result: return TileInternalGridLinesTestClass.run(),
-			},
-			{
-				"name": "AirplaneMarketingOutsideRenderTest",
-				"fn": func() -> Result: return AirplaneMarketingOutsideRenderTestClass.run(),
-			},
+				{
+					"name": "TileInternalGridLinesTest",
+					"fn": func() -> Result: return TileInternalGridLinesTestClass.run(),
+				},
+				{
+					"name": "MapGroundSkipsOutsideRingTest",
+					"fn": func() -> Result: return MapGroundSkipsOutsideRingTestClass.run(),
+				},
+				{
+					"name": "AirplaneMarketingOutsideRenderTest",
+					"fn": func() -> Result: return AirplaneMarketingOutsideRenderTestClass.run(),
+				},
 			{
 				"name": "MarketingRangeFullFootprintTest",
 				"fn": func() -> Result: return MarketingRangeFullFootprintTestClass.run(),
