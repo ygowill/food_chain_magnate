@@ -876,6 +876,42 @@ static func _draw_marketing_placement(canvas, cell_size: int, placement: Diction
 		var icon_pos2 := rect.position + (rect.size - icon_size2) * 0.5
 		_draw_texture_aspect_fit(canvas, product_tex, Rect2(icon_pos2, icon_size2), Color(1, 1, 1, 0.95 * a))
 
+	# Board number badge (top-right): white circle + black number (issue_tracker #37).
+	var bn := 0
+	var bn_val = placement.get("board_number", null)
+	if bn_val is int:
+		bn = int(bn_val)
+	elif bn_val is float:
+		var f2: float = float(bn_val)
+		if f2 == floor(f2):
+			bn = int(f2)
+	if bn > 0:
+		_draw_marketing_board_number_badge(canvas, rect, bn, cell_size, a)
+
+static func _draw_marketing_board_number_badge(canvas, rect: Rect2, board_number: int, cell_size: int, alpha: float) -> void:
+	var text := str(board_number).strip_edges()
+	if text.is_empty():
+		return
+
+	var a := clampf(float(alpha), 0.0, 1.0)
+	if a <= 0.001:
+		return
+
+	var r := maxf(9.0, float(cell_size) * 0.28)
+	var pad := maxf(2.0, float(cell_size) * 0.06)
+	var center := rect.position + Vector2(rect.size.x - pad - r, pad + r)
+
+	var bg := Color(1, 1, 1, 1)
+	bg.a = a
+	canvas.draw_circle(center, r, bg)
+
+	var font: Font = ThemeDB.fallback_font
+	var font_size := maxi(10, int(round(r * 0.95)))
+	var box := Rect2(center - Vector2(r, r), Vector2(r * 2.0, r * 2.0))
+	# draw_string uses baseline; this places it close to vertical center for fallback font.
+	var baseline := Vector2(box.position.x, box.position.y + box.size.y * 0.5 + float(font_size) * 0.35)
+	canvas.draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_CENTER, box.size.x, font_size, Color(0, 0, 0, a))
+
 static func _draw_house_demands(canvas, cell_size: int) -> void:
 	if canvas._map_data.is_empty():
 		return

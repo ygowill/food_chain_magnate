@@ -106,6 +106,10 @@ func _draw() -> void:
 		var icon_rect := Rect2(board_rect.position + (board_rect.size - Vector2(icon_s, icon_s)) * 0.5, Vector2(icon_s, icon_s))
 		_draw_texture_aspect_fit(product_texture, icon_rect, Color(1, 1, 1, 0.95))
 
+	# Board number badge (top-right): white circle + black number (issue_tracker #37).
+	if board_number > 0:
+		_draw_board_number_badge(board_rect, board_number, cell_px)
+
 	# Label line: "#11  3x2"
 	var font: Font = ThemeDB.fallback_font
 	var font_size := maxi(11, int(round(minf(r.size.x, r.size.y) * 0.17)))
@@ -130,3 +134,20 @@ func _draw_texture_aspect_fit(tex: Texture2D, rect: Rect2, color: Color) -> void
 	var dst_size := Vector2(float(ts.x) * scale, float(ts.y) * scale)
 	var dst_pos := rect.position + (rect.size - dst_size) * 0.5
 	draw_texture_rect(tex, Rect2(dst_pos, dst_size), false, color)
+
+func _draw_board_number_badge(board_rect: Rect2, number: int, cell_px: float) -> void:
+	var text := str(number).strip_edges()
+	if text.is_empty():
+		return
+
+	var r := maxf(8.0, float(cell_px) * 0.55)
+	var pad := maxf(2.0, float(cell_px) * 0.20)
+	var center := board_rect.position + Vector2(board_rect.size.x - pad - r, pad + r)
+
+	draw_circle(center, r, Color(1, 1, 1, 1))
+
+	var font: Font = ThemeDB.fallback_font
+	var font_size := maxi(10, int(round(r * 0.95)))
+	var box := Rect2(center - Vector2(r, r), Vector2(r * 2.0, r * 2.0))
+	var baseline := Vector2(box.position.x, box.position.y + box.size.y * 0.5 + float(font_size) * 0.35)
+	draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_CENTER, box.size.x, font_size, Color(0, 0, 0, 1))

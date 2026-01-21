@@ -1233,15 +1233,25 @@
 
 - 该序号仅要求显示在地图上的“已放置营销板件”，还是也要显示在 `MarketingPanel` 的板件选择按钮预览里？
 
-**修复方案（提案，需你点头后实施）**
+**修复方案**
 
-- 在 `_draw_marketing()` 中，对每个 marketing rect 的右上角绘制：
-	- `draw_circle` 白底圆（不透明）；
-	- `draw_string` 黑色序号（居中排版，字体大小随 cell_size 缩放）。
+- 地图上的已放置营销板件与 MarketingPanel 的板件选择按钮都显示同样的序号徽标：
+	- 右上角白底圆（不透明）
+	- 圆内黑色序号（居中）
 
-**测试计划**
+**实施记录**
 
-- 新增 drawer 回归测试：对含 `board_number` 的 placement，断言存在一次 `draw_circle(white)` 与一次 `draw_string(text=board_number)` 的调用（用 FakeCanvas 捕获）。
+- 已修改：`ui/scenes/game/map_canvas_drawer.gd`：
+	- 营销板件绘制时追加 `board_number` 徽标（白圆+黑字）。
+- 已修改：`ui/components/marketing_panel/marketing_board_button.gd`：
+	- 板件选择按钮的占地预览中追加同样的 `board_number` 徽标。
+- 已新增：`ui/scenes/tests/marketing_board_number_badge_test.gd`：验证地图营销绘制会触发徽标 draw 调用。
+- 已修改：`ui/scenes/tests/all_tests.gd`：加入 `MarketingBoardNumberBadgeTest`。
+
+**验证**
+
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（98/98，`.godot/AllTests.log`）
 
 **验收**
 
@@ -1249,7 +1259,7 @@
 
 **状态**
 
-- Planned
+- Implemented（待手动验收）
 
 ---
 
