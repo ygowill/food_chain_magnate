@@ -1132,19 +1132,24 @@
 
 - 现有“营销可放置格”校验只排除了：建筑占用、越界、营销重叠（非边缘营销额外排除了 road/blocked）；但未将 `drink_source` 视为不可占用对象，导致 UI 高亮与 core 校验均允许覆盖。
 
-**待澄清**
+**修复方案**
 
-- 该规则是否对所有营销类型都生效（radio/mailbox/billboard/airplane）？我当前理解是“全部营销板件都不能盖住 drink_source”。
+- 规则对所有营销类型生效（radio/mailbox/billboard/airplane 均不可覆盖 `drink_source`）。
+- UI：在 `_sync_marketing_highlights()` 的 footprint 遍历中，若任一占地格为 `drink_source` 则判定该 anchor 不可用（不加入高亮）。
+- Core：在 `InitiateMarketingAction.validate`（`gameplay/actions/initiate_marketing/validation.gd`）中加入同样校验，确保回放/脚本绕过也会被拒绝。
 
-**修复方案（提案，需你点头后实施）**
+**实施记录**
 
-- UI：在 `_sync_marketing_highlights()` 的 footprint 遍历中，若任一占地格 `cell["drink_source"]` 非空则判定该 anchor 不可用（不加入高亮）。
-- Core：在 `InitiateMarketingAction.validate`（`gameplay/actions/initiate_marketing/validation.gd`）中加入相同校验，确保最终执行也会拒绝覆盖（避免仅 UI 过滤导致回放/脚本绕过）。
+- 已修改：`ui/scenes/game/game_map_interaction_controller.gd`：营销可放置 anchor 扫描时剔除覆盖 `drink_source` 的候选点。
+- 已修改：`gameplay/actions/initiate_marketing/validation.gd`：执行前验证中禁止占地覆盖 `drink_source`。
+- 已修改：`core/tests/marketing_campaigns_test.gd`：新增用例 `_test_marketing_rejects_drink_source_overlap`。
+- 已新增：`ui/scenes/tests/marketing_highlights_no_drink_source_test.gd`：验证“可选点高亮”不包含覆盖饮品进货点的 anchor。
+- 已修改：`ui/scenes/tests/all_tests.gd`：加入 `MarketingHighlightsNoDrinkSourceTest`。
 
-**测试计划**
+**验证**
 
-- Core 逻辑测试：构造带 `drink_source` 的 cell，断言 `initiate_marketing` 对覆盖该 cell 的放置返回 failure。
-- UI 测试：构造 state/map 含 `drink_source`，断言 `_sync_marketing_highlights()` 产出的 anchors 不包含会覆盖该点的 anchor。
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（97/97，`.godot/AllTests.log`）
 
 **验收**
 
@@ -1152,7 +1157,7 @@
 
 **状态**
 
-- Planned
+- Implemented（待手动验收）
 
 ---
 

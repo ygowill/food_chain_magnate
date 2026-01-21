@@ -140,6 +140,19 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 		for dx in range(size.x):
 			footprint_cells.append(world_pos + Vector2i(dx, dy))
 
+	# 饮品进货点集合（用于“禁止覆盖 drink_source”校验，issue_tracker #35）。
+	var drink_source_pos_set := {}
+	var sources_val = state.map.get("drink_sources", null)
+	if sources_val is Array:
+		var sources: Array = sources_val
+		for s_val in sources:
+			if not (s_val is Dictionary):
+				continue
+			var s: Dictionary = s_val
+			var wp_val = s.get("world_pos", null)
+			if wp_val is Vector2i:
+				drink_source_pos_set[Vector2i(wp_val)] = true
+
 	# 1) 越界/建筑占用检查（所有占地格）
 	for p in footprint_cells:
 		if not CoordsClass.is_world_pos_in_grid(state, p):
@@ -152,6 +165,15 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 		var structure: Dictionary = cell["structure"]
 		if not structure.is_empty():
 			return Result.failure("该位置已有建筑，无法放置营销: %s" % str(p))
+		# 禁止覆盖饮品进货点
+		if not drink_source_pos_set.is_empty() and drink_source_pos_set.has(p):
+			return Result.failure("该位置是饮品进货点，无法放置营销: %s" % str(p))
+		var ds = cell.get("drink_source", null)
+		if ds != null:
+			if ds is Dictionary and (ds as Dictionary).is_empty():
+				pass
+			else:
+				return Result.failure("该位置是饮品进货点，无法放置营销: %s" % str(p))
 
 	var requires_edge := MarketingTypeRegistryClass.requires_edge(marketing_type)
 

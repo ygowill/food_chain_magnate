@@ -530,6 +530,19 @@ func _sync_marketing_highlights() -> void:
 				for dx in range(p_size.x):
 					occupied_cells[anchor + Vector2i(dx, dy)] = true
 
+	# 饮品进货点集合（用于“营销板件不可覆盖 drink_source”，issue_tracker #35）
+	var drink_source_pos_set := {}
+	var sources_val = state.map.get("drink_sources", null)
+	if sources_val is Array:
+		var sources: Array = sources_val
+		for s_val in sources:
+			if not (s_val is Dictionary):
+				continue
+			var s: Dictionary = s_val
+			var wp_val = s.get("world_pos", null)
+			if wp_val is Vector2i:
+				drink_source_pos_set[Vector2i(wp_val)] = true
+
 	var minp := CoordsClass.get_world_min(state)
 	var maxp := CoordsClass.get_world_max(state)
 
@@ -566,6 +579,18 @@ func _sync_marketing_highlights() -> void:
 					if not (structure_val2 as Dictionary).is_empty():
 						footprint_ok = false
 						break
+
+					# 营销板件不可覆盖饮品进货点（drink_source）
+					if not drink_source_pos_set.is_empty() and drink_source_pos_set.has(p2):
+						footprint_ok = false
+						break
+					var ds = cell3.get("drink_source", null)
+					if ds != null:
+						if ds is Dictionary and (ds as Dictionary).is_empty():
+							pass
+						else:
+							footprint_ok = false
+							break
 
 					# 非边缘营销：占地必须是空地（非道路/非阻塞）
 					if not requires_edge:

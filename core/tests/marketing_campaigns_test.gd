@@ -35,10 +35,14 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r4.ok:
 		return r4
 
+	var r5 := _test_marketing_rejects_drink_source_overlap(player_count, seed_val)
+	if not r5.ok:
+		return r5
+
 	return Result.success({
 		"player_count": player_count,
 		"seed": seed_val,
-		"cases": 4,
+		"cases": 5,
 	})
 
 static func _test_billboard_mailbox_and_expiry(player_count: int, seed_val: int) -> Result:
@@ -525,6 +529,63 @@ static func _test_effect_registry_first_radio_demand_amount(player_count: int, s
 	return Result.success({
 		"actor": actor,
 	})
+
+static func _test_marketing_rejects_drink_source_overlap(player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := engine.get_state()
+	_force_turn_order(state, player_count)
+	var actor := state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("无法获取当前玩家")
+
+	var map_result := _build_test_map(actor)
+	if not map_result.ok:
+		return map_result
+	state.map = map_result.value
+	RoadGraphCacheClass.invalidate_road_graph(state)
+	state.players[actor]["restaurants"] = ["rest_0"]
+
+	# 准备员工：brand_manager（range=air -1，无距离限制，便于聚焦于放置规则）
+	if int(state.employee_pool.get("brand_manager", 0)) <= 0:
+		return Result.failure("员工池中没有 brand_manager")
+	state.employee_pool["brand_manager"] = int(state.employee_pool.get("brand_manager", 0)) - 1
+	state.players[actor]["employees"].append("brand_manager")
+
+	# 固定到 Working / Marketing 子阶段
+	state.phase = "Working"
+	state.sub_phase = "Marketing"
+
+	# 在 billboard(#11) 的占地内放置一个饮品进货点，营销应被拒绝（issue_tracker #35）
+	var ds_pos := Vector2i(1, 2)
+	state.map["drink_sources"] = [{"world_pos": ds_pos, "type": "soda"}]
+	# 同步 cell 字段（UI 绘制依赖 cell.drink_source；规则层仍以 map.drink_sources 为主）
+	var cells_val = state.map.get("cells", null)
+	if cells_val is Array and ds_pos.y >= 0 and ds_pos.y < (cells_val as Array).size():
+		var row_val = (cells_val as Array)[ds_pos.y]
+		if row_val is Array and ds_pos.x >= 0 and ds_pos.x < (row_val as Array).size():
+			var cell_val = (row_val as Array)[ds_pos.x]
+			if cell_val is Dictionary:
+				var cell: Dictionary = cell_val
+				cell["drink_source"] = {"type": "soda"}
+				(row_val as Array)[ds_pos.x] = cell
+
+	var attempt := engine.execute_command(Command.create("initiate_marketing", actor, {
+		"employee_type": "brand_manager",
+		"board_number": 11,
+		"product": "burger",
+		"duration": 1,
+		"position": [0, 2],
+	}))
+	if attempt.ok:
+		return Result.failure("覆盖饮品进货点的营销放置应失败，但成功了")
+	if str(attempt.error).find("进货点") < 0 and str(attempt.error).find("饮品") < 0:
+		return Result.failure("错误原因应包含饮品进货点提示，实际: %s" % str(attempt.error))
+
+	return Result.success({})
 
 static func _force_turn_order(state: GameState, player_count: int) -> void:
 	state.turn_order.clear()
