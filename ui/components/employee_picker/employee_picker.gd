@@ -118,6 +118,9 @@ class EmployeePickerItem extends Control:
 
 	func _build_ui() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# FlowContainer 布局依赖子控件的 minimum size。EmployeeCard 的 min size 不会自动上推到父 Control，
+		# 若不设置会导致父容器高度偏小，卡片绘制溢出并覆盖下方内容（issue_tracker #34）。
+		custom_minimum_size = EmployeeCard.COMPACT_SIZE
 
 		_card = EmployeeCardClass.new()
 		_card.variant = EmployeeCard.CardVariant.COMPACT

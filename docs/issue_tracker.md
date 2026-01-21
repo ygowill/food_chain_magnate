@@ -1087,19 +1087,20 @@
 
 - `EmployeePickerItem`（父容器）未显式设置 `custom_minimum_size`，导致 `HFlowContainer` 计算行高偏小；而 `EmployeeCard` 仍按自身绘制/最小尺寸呈现，造成下方布局未被正确“顶开”从而出现视觉重叠。
 
-**待澄清**
+**修复方案**
 
-- 该重叠是“卡片被裁切/遮挡”还是“卡片绘制溢出并盖住下方内容”？
-- 你希望的行为是：提高员工卡的最小高度（更大卡）还是仅保证布局留出足够间距（卡尺寸不变）？
+- 保持 compact 卡尺寸不变，仅修复布局：在 `EmployeePickerItem` 内显式设置 `custom_minimum_size = EmployeeCard.COMPACT_SIZE`，让 `FlowContainer` 的行高/换行高度计算稳定，从而为下方板件区留足间距。
 
-**修复方案（提案，需你点头后实施）**
+**实施记录**
 
-- 在 `EmployeePickerItem` 内设置稳定的 `custom_minimum_size`（至少覆盖 compact 卡高度 + badge 空间），确保 `HFlowContainer` 布局行高正确。
-- 如仍存在重叠，则在 `marketing_panel.tscn` 中对 `MarketerSection` 增加下边距/分隔，或开启局部 `clip_contents`（仅在确认不影响交互的前提下）。
+- 已修改：`ui/components/employee_picker/employee_picker.gd`：`EmployeePickerItem` 设置稳定 `custom_minimum_size`，避免卡片绘制溢出覆盖下方内容。
+- 已新增：`ui/scenes/tests/employee_picker_min_size_test.gd`：断言 `EmployeePickerItem.custom_minimum_size.y >= EmployeeCard.COMPACT_SIZE.y` 防回归。
+- 已修改：`ui/scenes/tests/all_tests.gd`：加入 `EmployeePickerMinSizeTest`。
 
-**测试计划**
+**验证**
 
-- 新增 headless UI 属性测试：断言 `EmployeePickerItem.custom_minimum_size.y >= EmployeeCard.COMPACT_SIZE.y`，且 `MarketerSection` 与 `BoardSection` 的 global rect 不交叠（仅做几何断言）。
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（96/96，`.godot/AllTests.log`）
 
 **验收**
 
@@ -1107,7 +1108,7 @@
 
 **状态**
 
-- Planned
+- Implemented（待手动验收）
 
 ---
 
