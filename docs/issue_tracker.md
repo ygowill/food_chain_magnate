@@ -1390,6 +1390,114 @@
 
 ---
 
+## 40. 飞机营销：仅允许 1/3/5 长度贴边；可用点仅在飞机模式显示于地图外圈；外圈无背景
+
+**现象/需求**
+
+- 飞机营销广告仍不符合规则：
+	- 飞机营销只要求“紧贴地图外边缘”（不在地图内），且只能使用“长度为 1/3/5 的边”贴边。
+	- 飞机广告的“可用点”应渲染在地图外的一圈（outside ring）。
+	- 地图外圈的可用点只应在“放置飞机广告”时出现；其他营销/其他模式应隐藏。
+	- 地图外圈本身不应有背景色（不应被填充为地面底色），请去掉外圈背景。
+
+**涉及代码（初步定位）**
+
+- 飞机广告数据（长度/厚度）与占地旋转：
+	- `core/data/marketing_registry.gd` / marketing defs（已在早前修正 #4-#6 board 数据）
+	- `ui/components/marketing_panel/marketing_panel.gd`：rotation 选择与 board 尺寸展示
+- 飞机广告落地渲染（地图外贴边）：
+	- `ui/scenes/game/map_canvas_drawer.gd`：`_draw_marketing()`（airplane attach + rect 外移）
+- 飞机广告“可用点”计算/高亮与点击映射：
+	- `ui/scenes/game/game_map_interaction_controller.gd`：`_sync_marketing_highlights()`、`_on_map_cell_selected()`、`_on_map_cell_hovered()`
+- 地图外圈背景（ground 填充）：
+	- `ui/scenes/game/map_canvas_drawer.gd`：`_draw_ground_and_blocked()`（当前对整个 view bounds 都填充地面色）
+	- `ui/scenes/game/map_canvas_indexer.gd`：`compute_bounds()`（当前存在 UI-only 的 implicit margin）
+
+**初步根因假设**
+
+- 旋转/尺寸约束：目前 airplane 的 `rotation` 仍允许将“厚度=2 的那一维”旋到贴边方向，导致可用点/占地不符合“仅长度 1/3/5 贴边”的限制（应把 `footprint_size` 中等于 2 的那维当作向外厚度）。
+- 可用点渲染：airplane 的可用点虽已尝试外移，但高亮/点击映射与“外圈”定义仍可能存在偏移或覆盖范围不一致。
+- 外圈背景：MapCanvas 目前会对“视图 bounds 内的所有 cell”填充地面底色；即使外圈只是 UI margin，也会被填色，从而违背“外圈无背景”要求。
+
+**待澄清**
+
+- 飞机广告的 rotation：你希望在 UI 上仍可旋转吗？
+	- A. 不允许旋转（由 board 定义决定：厚度永远向外，长度贴边）；
+	- B. 允许旋转，但只允许“保持厚度=2 向外”的两种合法姿态（沿边方向切换/角落 axis 选择）。
+- “外圈无背景”是否只针对“隐式外圈（用于飞机放置的 ring）”，还是也包括其它模块产生的 `external_cells`（如 offramp 外部道路）？
+
+**修复方案（提案，需你点头后实施）**
+
+- 规则/UI 对齐：
+	- airplane 的 rotated size 始终以“厚度=2 向外、长度=1/3/5 贴边”为约束，过滤掉不合法 rotation；
+	- 可用点只在 airplane 放置模式计算并显示在地图外圈，其他模式不显示外圈可用点。
+- 渲染：
+	- MapCanvas ground 绘制仅覆盖“地图本体 bounds”（不对隐式外圈填色），从而外圈保持透明；
+	- airplane 的 hover 预览/落地渲染仍保持贴边对齐（不回归）。
+
+**测试计划**
+
+- 新增/扩展 headless 测试：
+	- airplane 可用点仅在 airplane 模式出现，且全部位于外圈坐标范围；
+	- airplane rotation 过滤：不产生“长度=2 贴边”的候选点；
+	- 外圈背景不绘制：drawer 在 ground 阶段对外圈不再 draw_rect 填充（FakeCanvas 断言）。
+
+**状态**
+
+- Planned（等待你确认待澄清项）
+
+---
+
+## 41. 重组：左侧员工面板过宽；仍看不到 CEO 下属槽（需定位根因）
+
+**现象/需求**
+
+- 重组结构阶段左侧员工卡牌面板过宽。
+- 目前仍无法看见 CEO 下方的员工槽（CEO 直属卡槽）。
+
+**涉及代码（初步定位）**
+
+- 重组全屏面板与左右分栏：
+	- `ui/components/modal_panel/restructuring_modal.tscn`：`Split(HSplitContainer)` / `split_offset`
+- 左侧员工卡牌区（HandArea）：
+	- `ui/components/hand_area/hand_area.tscn` / `ui/components/hand_area/hand_area.gd`
+- 右侧公司结构（CompanyStructure）：
+	- `ui/components/company_structure/company_structure.tscn`：`ManagerRow/ManagerScroll/ManagerContainer`
+	- `ui/components/company_structure/company_structure.gd`：`_rebuild_structure()`（构建 CEO 直属槽）
+
+**初步根因假设**
+
+- 左侧过宽：`HSplitContainer.split_offset` 固定值偏大（420）+ HandArea 宽度策略导致左侧占用过多。
+- CEO 槽不可见：更可能是“布局高度为 0/被折叠”问题，而非未创建：
+	- `CompanyStructure` 内部 `VBoxContainer/ManagerRow/ManagerScroll` 的 size_flags / custom_minimum_size 不足，导致在实际场景树尺寸计算后该区域高度趋近 0，从而槽位看不到；
+	- 或者重组面板/滚动容器导致 CEO 槽被挤出可视区域。
+
+**待澄清**
+
+- 你在重组界面里是否能看到 CEO 卡（顶部那张 CEO 卡）？
+	- A. 能看到 CEO 卡，但看不到 CEO 直属槽（下方“空卡槽”区域）；
+	- B. CEO 卡也看不到（CompanyStructure 整块可能没显示/被遮挡）。
+- 你期望左侧员工区宽度大约是多少（或你更希望“右侧尽可能宽，左侧只要够 3 列卡牌滚动即可”）？
+
+**修复方案（提案，需你点头后实施）**
+
+- 左侧宽度：
+	- 调整 `HSplitContainer.split_offset` 的默认值（更窄），并确保 HandArea 内 3 列卡牌仍可滚动显示。
+- CEO 槽可见性：
+	- 在 `CompanyStructure` 的布局节点上补齐 `size_flags_vertical=EXPAND_FILL` 与合理的 `custom_minimum_size`，确保 `ManagerScroll` 有稳定高度；
+	- 若必要，将 CEO 直属槽区域从可滚动区域拆出为固定可见区域（只让下属网格滚动）。
+
+**测试计划**
+
+- 扩展/新增 headless UI 测试：
+	- 实例化 RestructuringModal + CompanyStructure 加入场景树（有真实尺寸），断言 `ManagerContainer` 的 rect 高度 > 0 且 child slots 可见。
+
+**状态**
+
+- Planned（等待你确认待澄清项）
+
+---
+
 ## 23. UI 配色：营销板背景/空地背景/可用点提示色
 
 **需求**
