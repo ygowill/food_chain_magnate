@@ -1478,29 +1478,34 @@
 	- `CompanyStructure` 内部 `VBoxContainer/ManagerRow/ManagerScroll` 的 size_flags / custom_minimum_size 不足，导致在实际场景树尺寸计算后该区域高度趋近 0，从而槽位看不到；
 	- 或者重组面板/滚动容器导致 CEO 槽被挤出可视区域。
 
-**待澄清**
+**确认（来自你在 #41 的补充）**
 
-- 你在重组界面里是否能看到 CEO 卡（顶部那张 CEO 卡）？
-	- A. 能看到 CEO 卡，但看不到 CEO 直属槽（下方“空卡槽”区域）；
-	- B. CEO 卡也看不到（CompanyStructure 整块可能没显示/被遮挡）。
-- 你期望左侧员工区宽度大约是多少（或你更希望“右侧尽可能宽，左侧只要够 3 列卡牌滚动即可”）？
+- 能看到顶部 CEO 卡，但看不到下方卡槽（CEO 直属槽）。
+- 左侧可以更窄：右侧尽可能宽，左侧只要够 3 列卡牌滚动即可。
 
-**修复方案（提案，需你点头后实施）**
+**修复方案（已实施）**
 
-- 左侧宽度：
-	- 调整 `HSplitContainer.split_offset` 的默认值（更窄），并确保 HandArea 内 3 列卡牌仍可滚动显示。
-- CEO 槽可见性：
-	- 在 `CompanyStructure` 的布局节点上补齐 `size_flags_vertical=EXPAND_FILL` 与合理的 `custom_minimum_size`，确保 `ManagerScroll` 有稳定高度；
-	- 若必要，将 CEO 直属槽区域从可滚动区域拆出为固定可见区域（只让下属网格滚动）。
+- 左侧过宽：
+	- `ui/components/modal_panel/restructuring_modal.tscn`：将 `Split.split_offset` 从 420 调整为 320。
+	- `ui/components/hand_area/hand_area.gd`：进入 `restructuring` display_mode 时将 `HandArea.custom_minimum_size.x` 限制到 `<=320`，退出后恢复默认值（仅影响重组面板）。
+- CEO 直属槽不可见：
+	- 根因是 `CompanyStructure` 的 `ManagerScroll` 缺少稳定高度（在某些布局组合下会被压到接近 0），导致“槽位实际上已构建但不可见”。
+	- `ui/components/company_structure/company_structure.tscn`：
+		- 为根 `VBoxContainer` 增加 `size_flags_vertical=EXPAND_FILL`；
+		- 为 `ManagerRow` 增加 `size_flags_vertical=EXPAND_FILL`；
+		- 为 `ManagerScroll` 增加 `custom_minimum_size.y`（确保卡槽区域始终有可见高度）。
 
-**测试计划**
+**验证**
 
-- 扩展/新增 headless UI 测试：
-	- 实例化 RestructuringModal + CompanyStructure 加入场景树（有真实尺寸），断言 `ManagerContainer` 的 rect 高度 > 0 且 child slots 可见。
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（101/101，`.godot/AllTests.log`）
+- 扩展测试：`ui/scenes/tests/restructuring_layout_test.gd` 增加断言：
+	- 重组模式 HandArea 最小宽度 <= 320
+	- CompanyStructure.ManagerScroll 有正的最小高度
 
 **状态**
 
-- Planned（等待你确认待澄清项）
+- Implemented（待你手动验收：左侧更窄/CEO 直属槽可见）
 
 ---
 

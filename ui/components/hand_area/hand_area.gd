@@ -27,6 +27,7 @@ var _cards: Array[EmployeeCard] = []  # 所有卡牌（包含重复 employee_id�
 
 var _multi_select: bool = false  # 是否支持多选
 var _display_mode: String = "default" # default | restructuring
+var _default_custom_minimum_size: Vector2 = Vector2.ZERO
 
 var _drag_layer: CanvasLayer = null
 var _drag_preview: EmployeeCard = null
@@ -38,6 +39,7 @@ var _hover_drop_target: Control = null
 var _drag_enabled: bool = true
 
 func _ready() -> void:
+	_default_custom_minimum_size = custom_minimum_size
 	set_process(false)
 	if active_container != null:
 		active_container.add_to_group("employee_card_drop_target")
@@ -74,6 +76,14 @@ func set_display_mode(mode: String) -> void:
 	if _display_mode == m:
 		return
 	_display_mode = m
+	if _default_custom_minimum_size == Vector2.ZERO:
+		_default_custom_minimum_size = custom_minimum_size
+	# Narrow the left panel in restructuring mode; keep the default min size elsewhere (issue_tracker #41).
+	if _display_mode == "restructuring":
+		var w := minf(float(_default_custom_minimum_size.x), 320.0)
+		custom_minimum_size = Vector2(w, _default_custom_minimum_size.y)
+	else:
+		custom_minimum_size = _default_custom_minimum_size
 	_rebuild_cards()
 
 func get_selected_employees() -> Array[String]:

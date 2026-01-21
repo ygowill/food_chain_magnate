@@ -71,6 +71,13 @@ static func run() -> Result:
 		_safe_free(company)
 		return Result.failure("HandArea attach 后 display_mode=%s (期望 restructuring)" % str(hand.call("get_display_mode")))
 
+	# Restructuring: left panel should be narrower (issue_tracker #41).
+	if (hand as Control).custom_minimum_size.x > 320.0:
+		_safe_free(modal)
+		_safe_free(hand)
+		_safe_free(company)
+		return Result.failure("HandArea.custom_minimum_size.x=%s (重组模式期望 <= 320)" % str((hand as Control).custom_minimum_size.x))
+
 	var ha: HandArea = hand
 	if is_instance_valid(ha.active_section) and ha.active_section.visible:
 		_safe_free(modal)
@@ -100,6 +107,19 @@ static func run() -> Result:
 		return Result.failure("测试所选员工 cap=%d (期望>4)" % cap)
 
 	modal.attach_company_structure(company)
+	# CompanyStructure: CEO direct slots area should reserve height (issue_tracker #41).
+	var manager_scroll := (company as CompanyStructure).get_node_or_null("MarginContainer/VBoxContainer/ManagerRow/ManagerScroll")
+	if manager_scroll == null:
+		_safe_free(modal)
+		_safe_free(hand)
+		_safe_free(company)
+		return Result.failure("CompanyStructure.ManagerScroll 节点缺失")
+	if (manager_scroll as ScrollContainer).custom_minimum_size.y <= 0.0:
+		_safe_free(modal)
+		_safe_free(hand)
+		_safe_free(company)
+		return Result.failure("CompanyStructure.ManagerScroll.custom_minimum_size.y=%s (期望 > 0)" % str((manager_scroll as ScrollContainer).custom_minimum_size.y))
+
 	var player := {
 		"employees": [manager_id],
 		"company_structure": {"ceo_slots": 1},

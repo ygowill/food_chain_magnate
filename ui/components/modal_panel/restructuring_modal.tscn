@@ -80,7 +80,7 @@ autowrap_mode = 2
 [node name="Split" type="HSplitContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
-split_offset = 420
+split_offset = 320
 
 [node name="HandHost" type="Control" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split"]
 layout_mode = 2
