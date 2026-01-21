@@ -365,7 +365,17 @@ func _on_map_cell_hovered(world_pos: Vector2i) -> void:
 			for dx in range(size.x):
 				cells.append(world_pos + offset + Vector2i(dx, dy))
 		if is_instance_valid(_map_canvas) and _map_canvas.has_method("set_structure_preview"):
-			_map_canvas.call("set_structure_preview", cells, true)
+			var preview_info := {
+				"piece_id": "marketing",
+				"anchor": world_pos,
+				"rotation": int(_payload.get("rotation", 0)),
+				"type": mt,
+				# Hide the default green/red cell overlay; marketing preview should be a semi-transparent piece.
+				"highlight_fill": Color(0, 0, 0, 0),
+				"highlight_border": Color(0, 0, 0, 0),
+				"highlight_border_width": 0.0,
+			}
+			_map_canvas.call("set_structure_preview", cells, true, preview_info)
 
 	if _overlay_controller != null:
 		if mt == "airplane":

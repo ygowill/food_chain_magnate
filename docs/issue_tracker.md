@@ -1187,16 +1187,24 @@
 	- B. 仅点击选中 anchor 后显示（当前你描述更像 B）。
 - 预览是否需要显示产品图标/类型图标，还是只显示板件背景块？
 
-**修复方案（提案，需你点头后实施）**
+**修复方案**
 
-- 落地渲染：`_draw_marketing()` 将营销板件背景改为不透明（alpha=1.0），并移除边框绘制。
-- 选点预览：点击合法 anchor 后，通过 `MapCanvas.set_structure_preview(..., preview_info)` 提供 `piece_id="marketing"`（含 type/product/board_number/rotation/axis 等），在 `_draw_structure_preview_piece()` 中新增 marketing 分支，复用 `_draw_marketing()` 的绘制逻辑但使用较低 alpha（半透明）。
-- 预览期间将结构预览的“格子高亮层”设为透明（`highlight_fill/highlight_border` alpha=0），避免出现“格子高亮 + 板件预览”双重叠加。
+- 预览时机：按 A（hover 即显示）。
+- 落地渲染：`_draw_marketing()` 背景改为不透明（alpha=1.0），并移除边框绘制。
+- hover 预览：对合法 anchor 调用 `MapCanvas.set_structure_preview(cells, true, preview_info)`，并在 `_draw_structure_preview_piece()` 支持 `piece_id="marketing"`，以半透明 alpha 绘制营销板件；同时将默认“格子高亮层”设为透明（避免双重叠加）。
 
-**测试计划**
+**实施记录**
 
-- 新增 drawer 回归测试：验证 `_draw_marketing()` 不再绘制边框且 fill 为不透明。
-- 新增交互/属性测试：点击选中营销目标后会设置 structure_preview_info 为 marketing 且 alpha 低于落地状态（只做参数与 draw 调用断言）。
+- 已修改：`ui/scenes/game/map_canvas_drawer.gd`：
+	- `marketing` 落地渲染改为不透明背景、无边框；
+	- 新增 `_draw_marketing_placement(...)` 统一绘制入口；
+	- 结构预览支持 `piece_id="marketing"`（半透明预览）。
+- 已修改：`ui/scenes/game/game_map_interaction_controller.gd`：hover 到合法 anchor 时传入 `preview_info(piece_id=marketing)`，并隐藏默认格子高亮层。
+
+**验证**
+
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（97/97，`.godot/AllTests.log`）
 
 **验收**
 
@@ -1204,7 +1212,7 @@
 
 **状态**
 
-- Planned
+- Implemented（待手动验收）
 
 ---
 
