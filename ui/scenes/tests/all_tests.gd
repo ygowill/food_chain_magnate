@@ -33,6 +33,7 @@ const CompanyStructureTestClass = preload("res://core/tests/company_structure_te
 const HandAreaViewSwitchTestClass = preload("res://ui/scenes/tests/hand_area_view_switch_test.gd")
 const DragPreviewVisualTestClass = preload("res://ui/scenes/tests/drag_preview_visual_test.gd")
 const EmployeePickerMinSizeTestClass = preload("res://ui/scenes/tests/employee_picker_min_size_test.gd")
+const CompanyStructureDeferredRebuildTestClass = preload("res://ui/scenes/tests/company_structure_deferred_rebuild_test.gd")
 const RestructuringLayoutTestClass = preload("res://ui/scenes/tests/restructuring_layout_test.gd")
 const UiRegressionPropertyTestClass = preload("res://ui/scenes/tests/ui_regression_property_test.gd")
 const MapZoomPropertyTestClass = preload("res://ui/scenes/tests/map_zoom_property_test.gd")
@@ -256,6 +257,10 @@ func _run_all() -> int:
 		{
 			"name": "EmployeePickerMinSizeTest",
 			"fn": func() -> Result: return EmployeePickerMinSizeTestClass.run(),
+		},
+		{
+			"name": "CompanyStructureDeferredRebuildTest",
+			"fn": func() -> Result: return CompanyStructureDeferredRebuildTestClass.run(),
 		},
 		{
 			"name": "RestructuringLayoutTest",

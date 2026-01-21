@@ -35,10 +35,16 @@ var _drag_source_card: EmployeeCard = null
 var _drag_source_modulate: Color = Color(1, 1, 1, 1)
 var _drag_preview_offset: Vector2 = Vector2.ZERO
 var _hover_drop_target: Control = null
+var _pending_rebuild: bool = false
 
 func _ready() -> void:
 	set_process(false)
 	_build_initial_slots()
+	# set_player_data() may be called before the node becomes ready (onready refs are null then),
+	# so we rebuild once we are ready to ensure CEO slots render (issue_tracker #39).
+	if _pending_rebuild or not _player_data.is_empty():
+		_pending_rebuild = false
+		_rebuild_structure()
 
 func _build_initial_slots() -> void:
 	# 初始构建时创建基础卡槽
@@ -54,7 +60,10 @@ func set_player_data(player: Dictionary) -> void:
 	var company_struct: Dictionary = player.get("company_structure", {})
 	_ceo_slots = int(company_struct.get("ceo_slots", 3))
 
-	# 重建结构
+	# 重建结构：若尚未 ready（onready 引用未就绪），延后到 _ready() 再构建。
+	if ceo_slot == null or manager_container == null:
+		_pending_rebuild = true
+		return
 	_rebuild_structure()
 
 func set_drag_enabled(enabled: bool) -> void:

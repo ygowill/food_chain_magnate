@@ -1363,7 +1363,30 @@
 
 **状态**
 
-- Planned（等待你补充 A/B/C 现象）
+- Implemented（待手动验收）
+
+**根因**
+
+- `CompanyStructure.set_player_data()` 可能在节点尚未 `_ready()` 前被调用（onready 引用仍为 null），导致 `_rebuild_structure()` 早退，CEO 直属卡槽未构建，最终表现为“CEO 下方看不到任何槽位”。
+
+**修复方案**
+
+- 若 set_player_data 发生在未 ready 阶段：记录 `_pending_rebuild=true`；在 `_ready()` 中检查并补一次 `_rebuild_structure()`，确保卡槽必定生成。
+
+**实施记录**
+
+- 已修改：`ui/components/company_structure/company_structure.gd`：支持“set_player_data 早于 _ready”场景的延迟重建。
+- 已新增：`ui/scenes/tests/company_structure_deferred_rebuild_test.gd`：覆盖“set_player_data before _ready 仍能构建 CEO 直属槽”。
+- 已修改：`ui/scenes/tests/all_tests.gd`：加入 `CompanyStructureDeferredRebuildTest`。
+
+**验证**
+
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（100/100，`.godot/AllTests.log`）
+
+**验收**
+
+- 进入重组界面后，CEO 下方始终可见 CEO 直属卡槽，可用于拖拽分配员工。
 
 ---
 
