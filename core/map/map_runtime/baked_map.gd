@@ -138,6 +138,7 @@ static func apply_baked_map(state, baked_data: Dictionary) -> Result:
 	state.map["next_restaurant_id"] = 1
 	state.map[_MAP_ORIGIN_KEY] = Vector2i.ZERO
 	state.map["marketing_placements"] = {}
+	# external_cells 存储真实的“棋盘外组件”（例如模块额外道路/匝道），不应被 UI 占位格污染。
 	state.map[_EXTERNAL_CELLS_KEY] = {}
 	state.map[_EXTERNAL_TILE_PLACEMENTS_KEY] = []
 	# Piece supplies (rules/UI). Stored in map for deterministic saves/replays.

@@ -48,10 +48,12 @@ static func run() -> Result:
 	for v in map_canvas.highlighted:
 		set[v] = true
 
-	if set.has(Vector2i(0, 0)):
-		return Result.failure("highlights should exclude anchors that cover drink_source (found (0,0))")
-	if not set.has(Vector2i(0, 1)):
-		return Result.failure("expected at least one valid anchor (e.g. (0,1))")
+	# Airplane selectable points are outside the map (issue_tracker #38). For left edge anchors the clickable
+	# positions are on x=-1. Anchor (0,0) would overlap drink_source -> should be excluded.
+	if set.has(Vector2i(-1, 0)):
+		return Result.failure("highlights should exclude anchors that cover drink_source (found outside (-1,0))")
+	if not set.has(Vector2i(-1, 1)):
+		return Result.failure("expected at least one valid outside anchor (e.g. (-1,1))")
 
 	return Result.success({})
 
@@ -89,4 +91,3 @@ static func _build_empty_map_with_drink_source(grid_size: Vector2i, drink_pos: V
 		"external_cells": {},
 		"external_tile_placements": [],
 	}
-

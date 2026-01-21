@@ -27,6 +27,7 @@ var _payload: Dictionary = {}
 var _restaurant_valid_anchors: Dictionary = {} # Vector2i -> true
 var _house_valid_anchors: Dictionary = {} # Vector2i -> true
 var _marketing_valid_anchors: Dictionary = {} # Vector2i -> true
+var _marketing_outside_to_anchor: Dictionary = {} # outside_world_pos(Vector2i) -> inside_anchor(Vector2i) (airplane only)
 var _distance_tool_from: Vector2i = Vector2i(-1, -1)
 var _pending_airplane_corner_pos: Vector2i = Vector2i(-1, -1)
 
@@ -73,6 +74,7 @@ func begin_selection(mode: String, payload: Dictionary = {}) -> void:
 	_restaurant_valid_anchors.clear()
 	_house_valid_anchors.clear()
 	_marketing_valid_anchors.clear()
+	_marketing_outside_to_anchor.clear()
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_cell_highlights"):
 		_map_canvas.call("clear_cell_highlights")
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_move_restaurant_selected_restaurant"):
@@ -94,6 +96,7 @@ func clear_selection() -> void:
 	_restaurant_valid_anchors.clear()
 	_house_valid_anchors.clear()
 	_marketing_valid_anchors.clear()
+	_marketing_outside_to_anchor.clear()
 	if old_mode == "distance_tool":
 		_distance_tool_from = Vector2i(-1, -1)
 		if _overlay_controller != null:
@@ -150,38 +153,45 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 					procure_drinks_source_selected.emit(world_pos)
 					return
 		"marketing":
+			var mt0 := str(_payload.get("marketing_type", ""))
+			var mapped_anchor := world_pos
+			if mt0 == "airplane" and not _marketing_outside_to_anchor.is_empty() and _marketing_outside_to_anchor.has(world_pos):
+				var inside_val = _marketing_outside_to_anchor.get(world_pos, null)
+				if inside_val is Vector2i:
+					mapped_anchor = Vector2i(inside_val)
+
 			if not _marketing_valid_anchors.has(world_pos):
 				_call_marketing_panel_method("set_error", ["该位置不可放置，请选择绿色高亮的可放置格"])
 				return
-			var mt := str(_payload.get("marketing_type", ""))
+			var mt := mt0
 			if mt.is_empty():
 				return
 
 			if mt == "airplane":
-				var axis := _infer_airplane_axis_for_pos(world_pos)
+				var axis := _infer_airplane_axis_for_pos(mapped_anchor)
 				if axis.is_empty():
 					if _overlay_controller != null:
 						_overlay_controller.hide_marketing_range_overlay()
 					_call_marketing_panel_method("set_error", ["飞机必须有一条边完全贴地图边缘"])
 					return
 
-				if _is_airplane_corner(world_pos):
-					_pending_airplane_corner_pos = world_pos
+				if _is_airplane_corner(mapped_anchor):
+					_pending_airplane_corner_pos = mapped_anchor
 					_show_airplane_axis_dialog(Callable(self, "_on_airplane_axis_selected"), Callable(self, "_on_airplane_axis_cancelled"))
 					return
 
 				_payload["axis"] = axis
-				_payload["selected_target"] = world_pos
-				_call_marketing_panel_method("set_selected_target", [world_pos, axis])
+				_payload["selected_target"] = mapped_anchor
+				_call_marketing_panel_method("set_selected_target", [mapped_anchor, axis])
 				if _overlay_controller != null:
-					_overlay_controller.preview_marketing_range(world_pos, 0, mt, {"axis": axis})
+					_overlay_controller.preview_marketing_range(mapped_anchor, 0, mt, {"axis": axis})
 				return
 
 			_payload.erase("axis")
 			_payload.erase("selected_target")
-			_call_marketing_panel_method("set_selected_target", [world_pos])
+			_call_marketing_panel_method("set_selected_target", [mapped_anchor])
 			if _overlay_controller != null:
-				_overlay_controller.preview_marketing_range(world_pos, 0, mt)
+				_overlay_controller.preview_marketing_range(mapped_anchor, 0, mt)
 		"restaurant_placement":
 			# 仅允许点击“高亮的合法格”
 			if _restaurant_valid_anchors.is_empty() or not _restaurant_valid_anchors.has(world_pos):
@@ -306,18 +316,23 @@ func _on_map_cell_hovered(world_pos: Vector2i) -> void:
 		return
 
 	# footprint 预览：hover 到合法 anchor 时展示 marketing board 的占地形状（允许透明）。
+	var preview_anchor := world_pos
+	if mt == "airplane" and not _marketing_outside_to_anchor.is_empty() and _marketing_outside_to_anchor.has(world_pos):
+		var inside_val = _marketing_outside_to_anchor.get(world_pos, null)
+		if inside_val is Vector2i:
+			preview_anchor = Vector2i(inside_val)
 	var size := _get_selected_marketing_board_rotated_size()
 	if size.x > 0 and size.y > 0:
 		var cells: Array[Vector2i] = []
 		var offset := Vector2i.ZERO
 		if mt == "airplane":
 			# 飞机营销：视觉占地应贴在地图外侧边缘（issue_tracker #30）。
-			var axis2 := _infer_airplane_axis_for_pos(world_pos)
+			var axis2 := _infer_airplane_axis_for_pos(preview_anchor)
 			if axis2.is_empty():
 				axis2 = "row"
-			if _is_airplane_corner(world_pos):
+			if _is_airplane_corner(preview_anchor):
 				var selected_pos_val2 = _payload.get("selected_target", null)
-				if selected_pos_val2 is Vector2i and Vector2i(selected_pos_val2) == world_pos:
+				if selected_pos_val2 is Vector2i and Vector2i(selected_pos_val2) == preview_anchor:
 					var chosen2 := str(_payload.get("axis", ""))
 					if chosen2 == "row" or chosen2 == "col":
 						axis2 = chosen2
@@ -327,10 +342,10 @@ func _on_map_cell_hovered(world_pos: Vector2i) -> void:
 				if state2 != null:
 					var minp2 := CoordsClass.get_world_min(state2)
 					var maxp2 := CoordsClass.get_world_max(state2)
-					var left2 := world_pos.x
-					var right2 := world_pos.x + size.x - 1
-					var top2 := world_pos.y
-					var bottom2 := world_pos.y + size.y - 1
+					var left2 := preview_anchor.x
+					var right2 := preview_anchor.x + size.x - 1
+					var top2 := preview_anchor.y
+					var bottom2 := preview_anchor.y + size.y - 1
 
 					var attach2 := ""
 					if axis2 == "col":
@@ -363,11 +378,11 @@ func _on_map_cell_hovered(world_pos: Vector2i) -> void:
 
 		for dy in range(size.y):
 			for dx in range(size.x):
-				cells.append(world_pos + offset + Vector2i(dx, dy))
+				cells.append(preview_anchor + offset + Vector2i(dx, dy))
 		if is_instance_valid(_map_canvas) and _map_canvas.has_method("set_structure_preview"):
 			var preview_info := {
 				"piece_id": "marketing",
-				"anchor": world_pos,
+				"anchor": preview_anchor,
 				"rotation": int(_payload.get("rotation", 0)),
 				"type": mt,
 				# Hide the default green/red cell overlay; marketing preview should be a semi-transparent piece.
@@ -379,19 +394,19 @@ func _on_map_cell_hovered(world_pos: Vector2i) -> void:
 
 	if _overlay_controller != null:
 		if mt == "airplane":
-			var axis := _infer_airplane_axis_for_pos(world_pos)
+			var axis := _infer_airplane_axis_for_pos(preview_anchor)
 			if axis.is_empty():
 				_overlay_controller.hide_marketing_range_overlay()
 				return
-			if _is_airplane_corner(world_pos):
+			if _is_airplane_corner(preview_anchor):
 				var selected_pos_val = _payload.get("selected_target", null)
-				if selected_pos_val is Vector2i and Vector2i(selected_pos_val) == world_pos:
+				if selected_pos_val is Vector2i and Vector2i(selected_pos_val) == preview_anchor:
 					var chosen := str(_payload.get("axis", ""))
 					if chosen == "row" or chosen == "col":
 						axis = chosen
-			_overlay_controller.preview_marketing_range(world_pos, 0, mt, {"axis": axis})
+			_overlay_controller.preview_marketing_range(preview_anchor, 0, mt, {"axis": axis})
 		else:
-			_overlay_controller.preview_marketing_range(world_pos, 0, mt)
+			_overlay_controller.preview_marketing_range(preview_anchor, 0, mt)
 
 func on_marketing_map_selection_requested(marketing_type: String, employee_type: String = "", board_number: int = 0, rotation: int = 0) -> void:
 	begin_selection("marketing", {
@@ -677,8 +692,59 @@ func _sync_marketing_highlights() -> void:
 						range_error = "未知的 range_type: %s" % range_type
 					continue
 
-			_marketing_valid_anchors[anchor_pos] = true
-			valid.append(anchor_pos)
+			# airplane：可选点应显示为地图外一圈，且直接点击外圈格子选点（issue_tracker #38）。
+			if mt == "airplane":
+				# Default to axis inference ("row" on left/right edges, "col" on top/bottom edges).
+				var axis := _infer_airplane_axis_for_pos(anchor_pos)
+				if axis.is_empty():
+					# Shouldn't happen because requires_edge check passed, but keep it safe.
+					continue
+
+				var left := anchor_pos.x
+				var right := anchor_pos.x + size.x - 1
+				var top := anchor_pos.y
+				var bottom := anchor_pos.y + size.y - 1
+
+				var attach := ""
+				if axis == "col":
+					if top == minp.y:
+						attach = "top"
+					elif bottom == maxp.y:
+						attach = "bottom"
+					elif left == minp.x:
+						attach = "left"
+					elif right == maxp.x:
+						attach = "right"
+				else:
+					if left == minp.x:
+						attach = "left"
+					elif right == maxp.x:
+						attach = "right"
+					elif top == minp.y:
+						attach = "top"
+					elif bottom == maxp.y:
+						attach = "bottom"
+
+				# Outside ring cell (1 cell outside) used as the clickable/selectable anchor for the UI.
+				# The actual piece preview occupies a 2-cell-thick external band; click mapping converts back.
+				var outside := anchor_pos
+				if attach == "left":
+					outside = anchor_pos + Vector2i(-1, 0)
+				elif attach == "right":
+					outside = anchor_pos + Vector2i(1, 0)
+				elif attach == "top":
+					outside = anchor_pos + Vector2i(0, -1)
+				elif attach == "bottom":
+					outside = anchor_pos + Vector2i(0, 1)
+				else:
+					continue
+
+				_marketing_outside_to_anchor[outside] = anchor_pos
+				_marketing_valid_anchors[outside] = true
+				valid.append(outside)
+			else:
+				_marketing_valid_anchors[anchor_pos] = true
+				valid.append(anchor_pos)
 
 	if _map_canvas.has_method("set_cell_highlights"):
 		_map_canvas.call("set_cell_highlights", valid)

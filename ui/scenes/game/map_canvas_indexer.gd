@@ -39,6 +39,12 @@ static func compute_bounds(base_grid_size: Vector2i, map_origin: Vector2i, exter
 		min_pos.y = min(min_pos.y, p.y)
 		max_pos.x = max(max_pos.x, p.x)
 		max_pos.y = max(max_pos.y, p.y)
+
+	# UI-only: provide a small implicit margin so outside-the-map pieces (e.g. airplane marketing)
+	# can be displayed and interacted with, without polluting core map.external_cells.
+	var margin := 2
+	min_pos -= Vector2i(margin, margin)
+	max_pos += Vector2i(margin, margin)
 	var size := max_pos - min_pos + Vector2i.ONE
 	return {"min": min_pos, "max": max_pos, "size": size}
 

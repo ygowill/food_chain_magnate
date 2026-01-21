@@ -1301,7 +1301,30 @@
 
 **状态**
 
-- Planned（等待你确认 A/B）
+- Implemented（待手动验收）
+
+**修复方案**
+
+- 选 B：飞机营销在选点时使用“地图外一圈格子”作为可点击/可高亮位置；点击后映射回地图内的 anchor 以执行现有 core 规则与 range 计算。
+- UI 侧引入“隐式外边距（margin=2）”，用于让地图外区域可被 hover/click（不写入 `state.map.external_cells`，避免污染规则层的真实棋盘外组件）。
+
+**实施记录**
+
+- 已修改：`ui/scenes/game/map_canvas_indexer.gd`：bounds 计算增加 UI-only 隐式外边距 `margin=2`（覆盖飞机外侧交互）。
+- 已修改：`ui/scenes/game/game_map_interaction_controller.gd`：
+	- airplane 营销高亮点落在外圈格子；
+	- 维护 `outside_pos -> inside_anchor` 映射；hover/click 时自动映射回 inside anchor（预览/范围/确认均一致）。
+- 已新增：`ui/scenes/tests/airplane_marketing_outside_selection_test.gd`：验证 airplane highlights 在外圈且点击能映射回 inside anchor。
+- 已更新：`ui/scenes/tests/marketing_highlights_no_drink_source_test.gd`：适配 airplane 外圈可选点机制。
+
+**验证**
+
+- `GameSmokeTest`：PASS（`.godot/GameSmokeTest.log`）
+- `AllTests`：PASS（99/99，`.godot/AllTests.log`）
+
+**验收**
+
+- 飞机营销选点高亮显示在地图外一圈；直接点击外圈格子即可选中目标并预览/确认。
 
 ---
 
