@@ -48,7 +48,7 @@ static func run(player_count: int = 2, seed_val: int = 223344) -> Result:
 		"board_number": 4,
 		"product": "beer",
 		"duration": 1,
-		"position": [0, 11],
+		"position": [0, 10],
 	})
 	var r := engine.execute_command(cmd)
 	if not r.ok:

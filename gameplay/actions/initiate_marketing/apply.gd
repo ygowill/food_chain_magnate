@@ -45,6 +45,9 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 	if def == null:
 		return Result.failure("未知的营销板件编号: %d" % board_number)
 	var marketing_type := str(def.type)
+	# Airplane rotation has no meaning; orientation is determined by the attached edge (issue_tracker #40).
+	if marketing_type == "airplane":
+		rotation = 0
 
 	var footprint_size := Vector2i.ONE
 	if def is MarketingDef:
@@ -136,11 +139,12 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 			return axis_result
 		axis = axis_result.value
 		if axis.is_empty():
-			axis = _infer_airplane_axis(state, world_pos, rotated_size)
+			axis = _infer_airplane_axis(state, world_pos, Vector2i.ONE)
 		if axis != "row" and axis != "col":
 			return Result.failure("飞机缺少 axis（row/col）")
-		var tile_pos: Vector2i = MapUtils.world_to_tile(world_pos).board_pos
-		tile_index = tile_pos.y if axis == "row" else tile_pos.x
+		# Keep a stable index for debugging/replays. Semantics: start row/col index (cell-level, not tile-level).
+		var idx := CoordsClass.world_to_index(state, world_pos)
+		tile_index = idx.y if axis == "row" else idx.x
 
 	# 创建营销实例（按 board_number 唯一）
 	var instance := {

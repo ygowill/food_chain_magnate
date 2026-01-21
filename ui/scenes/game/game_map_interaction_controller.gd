@@ -155,10 +155,21 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 		"marketing":
 			var mt0 := str(_payload.get("marketing_type", ""))
 			var mapped_anchor := world_pos
+			var airplane_axis := ""
+			var airplane_attach := ""
 			if mt0 == "airplane" and not _marketing_outside_to_anchor.is_empty() and _marketing_outside_to_anchor.has(world_pos):
-				var inside_val = _marketing_outside_to_anchor.get(world_pos, null)
-				if inside_val is Vector2i:
-					mapped_anchor = Vector2i(inside_val)
+				var info_val = _marketing_outside_to_anchor.get(world_pos, null)
+				if info_val is Dictionary:
+					var info: Dictionary = info_val
+					var inside_val = info.get("anchor", null)
+					if inside_val is Vector2i:
+						mapped_anchor = Vector2i(inside_val)
+					var axis_val = info.get("axis", null)
+					if axis_val is String:
+						airplane_axis = str(axis_val)
+					var attach_val = info.get("attach", null)
+					if attach_val is String:
+						airplane_attach = str(attach_val)
 
 			if not _marketing_valid_anchors.has(world_pos):
 				_call_marketing_panel_method("set_error", ["该位置不可放置，请选择绿色高亮的可放置格"])
@@ -168,12 +179,9 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 				return
 
 			if mt == "airplane":
-				if _is_airplane_corner(mapped_anchor):
-					_pending_airplane_corner_pos = mapped_anchor
-					_show_airplane_axis_dialog(Callable(self, "_on_airplane_axis_selected"), Callable(self, "_on_airplane_axis_cancelled"))
-					return
-
-				var axis := _infer_airplane_axis_for_pos(mapped_anchor)
+				var axis := airplane_axis
+				if axis.is_empty():
+					axis = _infer_airplane_axis_for_pos(mapped_anchor)
 				if axis.is_empty():
 					if _overlay_controller != null:
 						_overlay_controller.hide_marketing_range_overlay()
@@ -181,10 +189,12 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 					return
 
 				_payload["axis"] = axis
+				_payload["attach"] = airplane_attach
 				_payload["selected_target"] = mapped_anchor
 				_call_marketing_panel_method("set_selected_target", [mapped_anchor, axis])
 				if _overlay_controller != null:
-					_overlay_controller.preview_marketing_range(mapped_anchor, 0, mt, {"axis": axis})
+					var fs := _get_selected_marketing_board_base_size()
+					_overlay_controller.preview_marketing_range(mapped_anchor, 0, mt, {"axis": axis, "footprint_size": fs})
 				return
 
 			_payload.erase("axis")
@@ -317,16 +327,27 @@ func _on_map_cell_hovered(world_pos: Vector2i) -> void:
 
 	# footprint 预览：hover 到合法 anchor 时展示 marketing board 的占地形状（允许透明）。
 	var preview_anchor := world_pos
+	var airplane_axis := ""
+	var airplane_attach := ""
 	if mt == "airplane" and not _marketing_outside_to_anchor.is_empty() and _marketing_outside_to_anchor.has(world_pos):
-		var inside_val = _marketing_outside_to_anchor.get(world_pos, null)
-		if inside_val is Vector2i:
-			preview_anchor = Vector2i(inside_val)
+		var info_val = _marketing_outside_to_anchor.get(world_pos, null)
+		if info_val is Dictionary:
+			var info: Dictionary = info_val
+			var inside_val = info.get("anchor", null)
+			if inside_val is Vector2i:
+				preview_anchor = Vector2i(inside_val)
+			var axis_val = info.get("axis", null)
+			if axis_val is String:
+				airplane_axis = str(axis_val)
+			var attach_val = info.get("attach", null)
+			if attach_val is String:
+				airplane_attach = str(attach_val)
 
 	var size := _get_selected_marketing_board_rotated_size()
 	var offset := Vector2i.ZERO
 
 	if mt == "airplane":
-		# 飞机营销：rotation 无意义；由贴边位置决定朝向（issue_tracker #30/#40）。
+		# 飞机营销：rotation 无意义；由贴边位置决定朝向（issue_tracker #40/#42）。
 		var base_size := _get_selected_marketing_board_base_size()
 		var thickness := 2
 		var length := 0
@@ -337,63 +358,36 @@ func _on_map_cell_hovered(world_pos: Vector2i) -> void:
 		else:
 			thickness = mini(base_size.x, base_size.y)
 			length = maxi(base_size.x, base_size.y)
-		var horizontal := Vector2i(maxi(1, length), maxi(1, thickness)) # top/bottom
-		var vertical := Vector2i(maxi(1, thickness), maxi(1, length))   # left/right
-
-		var axis2 := _infer_airplane_axis_for_pos(preview_anchor)
+		var axis2 := airplane_axis
 		if axis2.is_empty():
-			axis2 = "row"
-		if _is_airplane_corner(preview_anchor):
-			var selected_pos_val2 = _payload.get("selected_target", null)
-			if selected_pos_val2 is Vector2i and Vector2i(selected_pos_val2) == preview_anchor:
-				var chosen2 := str(_payload.get("axis", ""))
-				if chosen2 == "row" or chosen2 == "col":
-					axis2 = chosen2
-
-		if _scene != null and _scene.game_engine != null:
+			axis2 = _infer_airplane_axis_for_pos(preview_anchor)
+		var attach2 := airplane_attach
+		if attach2.is_empty() and _scene != null and _scene.game_engine != null:
 			var state2: GameState = _scene.game_engine.get_state()
 			if state2 != null:
 				var minp2 := CoordsClass.get_world_min(state2)
 				var maxp2 := CoordsClass.get_world_max(state2)
+				if axis2 == "row":
+					attach2 = "left" if preview_anchor.x == minp2.x else "right" if preview_anchor.x == maxp2.x else ""
+				elif axis2 == "col":
+					attach2 = "top" if preview_anchor.y == minp2.y else "bottom" if preview_anchor.y == maxp2.y else ""
 
-				var attach2 := ""
-				if axis2 == "col":
-					if preview_anchor.y == minp2.y:
-						attach2 = "top"
-						size = horizontal
-					elif preview_anchor.y + horizontal.y - 1 == maxp2.y:
-						attach2 = "bottom"
-						size = horizontal
-					elif preview_anchor.x == minp2.x:
-						attach2 = "left"
-						size = vertical
-					elif preview_anchor.x + vertical.x - 1 == maxp2.x:
-						attach2 = "right"
-						size = vertical
-				else:
-					# default: row (prefer left/right edges)
-					if preview_anchor.x == minp2.x:
-						attach2 = "left"
-						size = vertical
-					elif preview_anchor.x + vertical.x - 1 == maxp2.x:
-						attach2 = "right"
-						size = vertical
-					elif preview_anchor.y == minp2.y:
-						attach2 = "top"
-						size = horizontal
-					elif preview_anchor.y + horizontal.y - 1 == maxp2.y:
-						attach2 = "bottom"
-						size = horizontal
+		# Axis determines oriented size (length along edge, thickness outward).
+		if axis2 == "row":
+			size = Vector2i(maxi(1, thickness), maxi(1, length))
+		else:
+			size = Vector2i(maxi(1, length), maxi(1, thickness))
 
-				match attach2:
-					"left":
-						offset = Vector2i(-size.x, 0)
-					"right":
-						offset = Vector2i(size.x, 0)
-					"top":
-						offset = Vector2i(0, -size.y)
-					"bottom":
-						offset = Vector2i(0, size.y)
+		# Offset to outside cells: left/top uses -size, right/bottom starts at +1 from the edge cell.
+		match attach2:
+			"left":
+				offset = Vector2i(-size.x, 0)
+			"right":
+				offset = Vector2i(1, 0)
+			"top":
+				offset = Vector2i(0, -size.y)
+			"bottom":
+				offset = Vector2i(0, 1)
 
 	if size.x > 0 and size.y > 0:
 		var cells: Array[Vector2i] = []
@@ -415,17 +409,14 @@ func _on_map_cell_hovered(world_pos: Vector2i) -> void:
 
 	if _overlay_controller != null:
 		if mt == "airplane":
-			var axis := _infer_airplane_axis_for_pos(preview_anchor)
+			var axis := airplane_axis
+			if axis.is_empty():
+				axis = _infer_airplane_axis_for_pos(preview_anchor)
 			if axis.is_empty():
 				_overlay_controller.hide_marketing_range_overlay()
 				return
-			if _is_airplane_corner(preview_anchor):
-				var selected_pos_val = _payload.get("selected_target", null)
-				if selected_pos_val is Vector2i and Vector2i(selected_pos_val) == preview_anchor:
-					var chosen := str(_payload.get("axis", ""))
-					if chosen == "row" or chosen == "col":
-						axis = chosen
-			_overlay_controller.preview_marketing_range(preview_anchor, 0, mt, {"axis": axis})
+			var fs := _get_selected_marketing_board_base_size()
+			_overlay_controller.preview_marketing_range(preview_anchor, 0, mt, {"axis": axis, "footprint_size": fs})
 		else:
 			_overlay_controller.preview_marketing_range(preview_anchor, 0, mt)
 
@@ -447,6 +438,7 @@ func _sync_marketing_highlights() -> void:
 		return
 
 	_marketing_valid_anchors.clear()
+	_marketing_outside_to_anchor.clear()
 	if _map_canvas.has_method("clear_cell_highlights"):
 		_map_canvas.call("clear_cell_highlights")
 
@@ -502,25 +494,16 @@ func _sync_marketing_highlights() -> void:
 	if base_size.x <= 0 or base_size.y <= 0:
 		return
 
+	# Airplane marketing is placed outside the board and is not blocked by structures/roads/range.
+	# Its available anchors are edge start-cells whose length(1/3/5) stripe stays within the board.
+	# (issue_tracker #42)
+	if mt == "airplane":
+		_sync_airplane_marketing_highlights(state, base_size)
+		return
+
 	var size := base_size
 	if rotation == 90 or rotation == 270:
 		size = Vector2i(base_size.y, base_size.x)
-
-	# airplane: interpret footprint_size where one dimension==2 as outward thickness; the other is edge length.
-	var airplane_thickness := 2
-	var airplane_length := 0
-	var airplane_horizontal := Vector2i.ONE
-	var airplane_vertical := Vector2i.ONE
-	if mt == "airplane":
-		if base_size.x == 2 and base_size.y != 2:
-			airplane_length = base_size.y
-		elif base_size.y == 2 and base_size.x != 2:
-			airplane_length = base_size.x
-		else:
-			airplane_thickness = mini(base_size.x, base_size.y)
-			airplane_length = maxi(base_size.x, base_size.y)
-		airplane_horizontal = Vector2i(maxi(1, airplane_length), maxi(1, airplane_thickness)) # top/bottom
-		airplane_vertical = Vector2i(maxi(1, airplane_thickness), maxi(1, airplane_length))   # left/right
 
 	var requires_edge := MarketingTypeRegistryClass.requires_edge(mt)
 	var range_type := str(emp_def.range_type)
@@ -554,7 +537,8 @@ func _sync_marketing_highlights() -> void:
 			if structure_val is Dictionary and (structure_val as Dictionary).is_empty():
 				empty_structure_cells_total += 1
 
-	# 营销占地：预先构建占用集合（考虑 footprint + rotation），避免每个候选点重复遍历
+	# 营销占地：预先构建占用集合（考虑 footprint + rotation），避免每个候选点重复遍历。
+	# airplane 放在棋盘外，不应阻塞其它“棋盘内营销”的放置（issue_tracker #42）。
 	var occupied_cells := {}
 	if state.map.has("marketing_placements") and (state.map["marketing_placements"] is Dictionary):
 		var placements: Dictionary = state.map["marketing_placements"]
@@ -563,65 +547,44 @@ func _sync_marketing_highlights() -> void:
 			if not (p_val is Dictionary):
 				continue
 			var p: Dictionary = p_val
-			var pos_val = p.get("world_pos", null)
-			if not (pos_val is Vector2i):
+			var p_type := str(p.get("type", ""))
+			if p_type == "airplane":
 				continue
-				var anchor: Vector2i = pos_val
+			var anchor_val = p.get("world_pos", null)
+			if not (anchor_val is Vector2i):
+				continue
+			var anchor: Vector2i = anchor_val
 
-				# footprint_size/rotation 为新增字段；缺失则按 1x1/rotation=0 兜底（兼容旧存档/测试）。
-				var p_base_size := Vector2i.ONE
-				var fs_val = p.get("footprint_size", null)
-				if fs_val is Vector2i:
-					p_base_size = Vector2i(fs_val)
-				elif fs_val is Array:
-					var arr: Array = fs_val
-					if arr.size() == 2:
-						p_base_size = Vector2i(int(arr[0]), int(arr[1]))
+			# footprint_size/rotation 为新增字段；缺失则按 1x1/rotation=0 兜底（兼容旧存档/测试）。
+			var p_base_size := Vector2i.ONE
+			var fs_val = p.get("footprint_size", null)
+			if fs_val is Vector2i:
+				p_base_size = Vector2i(fs_val)
+			elif fs_val is Array:
+				var arr: Array = fs_val
+				if arr.size() == 2:
+					p_base_size = Vector2i(int(arr[0]), int(arr[1]))
+			if p_base_size.x <= 0 or p_base_size.y <= 0:
+				p_base_size = Vector2i.ONE
 
-				var p_type := str(p.get("type", ""))
-				var p_rot := 0
-				var rot_val = p.get("rotation", null)
-				if rot_val is int:
-					p_rot = int(rot_val)
-				elif rot_val is float:
-					var f: float = float(rot_val)
-					if f == floor(f):
-						p_rot = int(f)
-				if not p_rot in [0, 90, 180, 270]:
-					p_rot = 0
+			var p_rot := 0
+			var rot_val = p.get("rotation", null)
+			if rot_val is int:
+				p_rot = int(rot_val)
+			elif rot_val is float:
+				var f: float = float(rot_val)
+				if f == floor(f):
+					p_rot = int(f)
+			if not p_rot in [0, 90, 180, 270]:
+				p_rot = 0
 
-				var p_size := p_base_size
-				if p_type == "airplane":
-					# airplane rotation has no meaning; orientation comes from the edge it is attached to (issue_tracker #40).
-					var thickness2 := 2
-					var length2 := 0
-					if p_base_size.x == 2 and p_base_size.y != 2:
-						length2 = p_base_size.y
-					elif p_base_size.y == 2 and p_base_size.x != 2:
-						length2 = p_base_size.x
-					else:
-						thickness2 = mini(p_base_size.x, p_base_size.y)
-						length2 = maxi(p_base_size.x, p_base_size.y)
-					var horizontal2 := Vector2i(maxi(1, length2), maxi(1, thickness2))
-					var vertical2 := Vector2i(maxi(1, thickness2), maxi(1, length2))
+			var p_size := p_base_size
+			if p_rot == 90 or p_rot == 270:
+				p_size = Vector2i(p_base_size.y, p_base_size.x)
 
-					var axis2 := str(p.get("axis", ""))
-					if axis2 == "col":
-						if anchor.y == minp.y or (anchor.y + horizontal2.y - 1) == maxp.y:
-							p_size = horizontal2
-						else:
-							p_size = vertical2
-					else:
-						if anchor.x == minp.x or (anchor.x + vertical2.x - 1) == maxp.x:
-							p_size = vertical2
-						else:
-							p_size = horizontal2
-				elif p_rot == 90 or p_rot == 270:
-					p_size = Vector2i(p_base_size.y, p_base_size.x)
-
-				for dy in range(p_size.y):
-					for dx in range(p_size.x):
-						occupied_cells[anchor + Vector2i(dx, dy)] = true
+			for dy in range(p_size.y):
+				for dx in range(p_size.x):
+					occupied_cells[anchor + Vector2i(dx, dy)] = true
 
 	# 饮品进货点集合（用于“营销板件不可覆盖 drink_source”，issue_tracker #35）
 	var drink_source_pos_set := {}
@@ -641,168 +604,124 @@ func _sync_marketing_highlights() -> void:
 		for x in range(grid_size.x):
 			var anchor_pos := CoordsClass.index_to_world(state, Vector2i(x, y))
 
-			var candidates: Array[Dictionary] = []
-			if mt == "airplane":
-				# Airplane candidates are determined by edge, not rotation (issue_tracker #40).
-				if anchor_pos.y == minp.y:
-					candidates.append({"attach": "top", "size": airplane_horizontal})
-				if anchor_pos.y + airplane_horizontal.y - 1 == maxp.y:
-					candidates.append({"attach": "bottom", "size": airplane_horizontal})
-				if anchor_pos.x == minp.x:
-					candidates.append({"attach": "left", "size": airplane_vertical})
-				if anchor_pos.x + airplane_vertical.x - 1 == maxp.x:
-					candidates.append({"attach": "right", "size": airplane_vertical})
-			else:
-				candidates.append({"attach": "", "size": size})
+			# 占地 cells：top-left anchor + oriented size
+			var footprint_cells: Array[Vector2i] = []
+			var footprint_ok := true
+			for dy2 in range(size.y):
+				for dx2 in range(size.x):
+					var p2 := anchor_pos + Vector2i(dx2, dy2)
+					footprint_cells.append(p2)
 
-			for c_val in candidates:
-				if not (c_val is Dictionary):
-					continue
-				var c: Dictionary = c_val
-				var c_size: Vector2i = c.get("size", Vector2i.ONE)
-				if c_size.x <= 0 or c_size.y <= 0:
-					continue
-
-				# 占地 cells：top-left anchor + oriented size
-				var footprint_cells: Array[Vector2i] = []
-				var footprint_ok := true
-				for dy2 in range(c_size.y):
-					for dx2 in range(c_size.x):
-						var p2 := anchor_pos + Vector2i(dx2, dy2)
-						footprint_cells.append(p2)
-
-						# 越界/占用
-						if not CoordsClass.is_world_pos_in_grid(state, p2):
-							footprint_ok = false
-							break
-						if occupied_cells.has(p2):
-							footprint_ok = false
-							break
-
-						var cell3 := CellsClass.get_cell(state, p2)
-						if cell3.is_empty():
-							footprint_ok = false
-							break
-
-						var structure_val2 = cell3.get("structure", null)
-						if not (structure_val2 is Dictionary):
-							footprint_ok = false
-							break
-						if not (structure_val2 as Dictionary).is_empty():
-							footprint_ok = false
-							break
-
-						# 营销板件不可覆盖饮品进货点（drink_source）
-						if not drink_source_pos_set.is_empty() and drink_source_pos_set.has(p2):
-							footprint_ok = false
-							break
-						var ds = cell3.get("drink_source", null)
-						if ds != null:
-							if ds is Dictionary and (ds as Dictionary).is_empty():
-								pass
-							else:
-								footprint_ok = false
-								break
-
-						# 非边缘营销：占地必须是空地（非道路/非阻塞）
-						if not requires_edge:
-							var blocked_val2 = cell3.get("blocked", null)
-							if not (blocked_val2 is bool) or bool(blocked_val2):
-								footprint_ok = false
-								break
-							var road_segments_val2 = cell3.get("road_segments", null)
-							if not (road_segments_val2 is Array):
-								footprint_ok = false
-								break
-							if not (road_segments_val2 as Array).is_empty():
-								footprint_ok = false
-								break
-					if not footprint_ok:
+					# 越界/占用
+					if not CoordsClass.is_world_pos_in_grid(state, p2):
+						footprint_ok = false
+						break
+					if occupied_cells.has(p2):
+						footprint_ok = false
 						break
 
+					var cell3 := CellsClass.get_cell(state, p2)
+					if cell3.is_empty():
+						footprint_ok = false
+						break
+
+					var structure_val2 = cell3.get("structure", null)
+					if not (structure_val2 is Dictionary):
+						footprint_ok = false
+						break
+					if not (structure_val2 as Dictionary).is_empty():
+						footprint_ok = false
+						break
+
+					# 营销板件不可覆盖饮品进货点（drink_source）
+					if not drink_source_pos_set.is_empty() and drink_source_pos_set.has(p2):
+						footprint_ok = false
+						break
+					var ds = cell3.get("drink_source", null)
+					if ds != null:
+						if ds is Dictionary and (ds as Dictionary).is_empty():
+							pass
+						else:
+							footprint_ok = false
+							break
+
+					# 非边缘营销：占地必须是空地（非道路/非阻塞）
+					if not requires_edge:
+						var blocked_val2 = cell3.get("blocked", null)
+						if not (blocked_val2 is bool) or bool(blocked_val2):
+							footprint_ok = false
+							break
+						var road_segments_val2 = cell3.get("road_segments", null)
+						if not (road_segments_val2 is Array):
+							footprint_ok = false
+							break
+						if not (road_segments_val2 as Array).is_empty():
+							footprint_ok = false
+							break
 				if not footprint_ok:
+					break
+
+			if not footprint_ok:
+				continue
+
+			# 边缘营销：要求“整条边贴边”（不能超出）
+			if requires_edge:
+				var left := anchor_pos.x
+				var right := anchor_pos.x + size.x - 1
+				var top := anchor_pos.y
+				var bottom := anchor_pos.y + size.y - 1
+				var flush := (left == minp.x) or (right == maxp.x) or (top == minp.y) or (bottom == maxp.y)
+				if not flush:
+					continue
+			else:
+				# 非边缘营销：占地整体需邻接道路
+				var adjacent_roads_r := RangeUtilsClass.get_adjacent_road_cells_for_positions(state, footprint_cells)
+				if not adjacent_roads_r.ok:
+					continue
+				var adjacent_roads: Array[Vector2i] = adjacent_roads_r.value
+				if adjacent_roads.is_empty():
 					continue
 
-				# 边缘营销：要求“整条边贴边”（不能超出）
-				if requires_edge and mt != "airplane":
-					var left := anchor_pos.x
-					var right := anchor_pos.x + c_size.x - 1
-					var top := anchor_pos.y
-					var bottom := anchor_pos.y + c_size.y - 1
-					var flush := (left == minp.x) or (right == maxp.x) or (top == minp.y) or (bottom == maxp.y)
-					if not flush:
-						continue
-				elif not requires_edge:
-					# 非边缘营销：占地整体需邻接道路
-					var adjacent_roads_r := RangeUtilsClass.get_adjacent_road_cells_for_positions(state, footprint_cells)
-					if not adjacent_roads_r.ok:
-						continue
-					var adjacent_roads: Array[Vector2i] = adjacent_roads_r.value
-					if adjacent_roads.is_empty():
-						continue
+			# 统计：通过“结构/邻路/边缘”等基础约束的候选点数量
+			base_candidates += 1
 
-				# 统计：通过“结构/邻路/边缘”等基础约束的候选点数量
-				base_candidates += 1
-
-				# 距离校验（对齐 InitiateMarketingAction.validate）
-				if range_required:
-					if range_type == "road":
-						var target_roads_r := RangeUtilsClass.get_adjacent_road_cells_for_positions(state, footprint_cells)
-						if not target_roads_r.ok:
-							if range_error.is_empty():
-								range_error = str(target_roads_r.error)
-							continue
-						var target_road_cells: Array[Vector2i] = target_roads_r.value
-						var ok_r := RangeUtilsClass.is_within_road_range_to_any_road_cells(
-							state, actor, restaurant_ids, target_road_cells, range_value
-						)
-						if not ok_r.ok:
-							if range_error.is_empty():
-								range_error = str(ok_r.error)
-							continue
-						if not bool(ok_r.value):
-							out_of_range_candidates += 1
-							continue
-					elif range_type == "air":
-						var ok_r := RangeUtilsClass.is_within_air_range_to_any_cells(
-							state, actor, restaurant_ids, footprint_cells, range_value
-						)
-						if not ok_r.ok:
-							if range_error.is_empty():
-								range_error = str(ok_r.error)
-							continue
-						if not bool(ok_r.value):
-							out_of_range_candidates += 1
-							continue
-					else:
+			# 距离校验（对齐 InitiateMarketingAction.validate）
+			if range_required:
+				if range_type == "road":
+					var target_roads_r := RangeUtilsClass.get_adjacent_road_cells_for_positions(state, footprint_cells)
+					if not target_roads_r.ok:
 						if range_error.is_empty():
-							range_error = "未知的 range_type: %s" % range_type
+							range_error = str(target_roads_r.error)
 						continue
-
-				if mt == "airplane":
-					# 可选点应显示为地图外一圈（issue_tracker #38/#40）。
-					var attach := str(c.get("attach", ""))
-					if attach.is_empty():
+					var target_road_cells: Array[Vector2i] = target_roads_r.value
+					var ok_r := RangeUtilsClass.is_within_road_range_to_any_road_cells(
+						state, actor, restaurant_ids, target_road_cells, range_value
+					)
+					if not ok_r.ok:
+						if range_error.is_empty():
+							range_error = str(ok_r.error)
 						continue
-
-					var outside := anchor_pos
-					if attach == "left":
-						outside = anchor_pos + Vector2i(-1, 0)
-					elif attach == "right":
-						outside = anchor_pos + Vector2i(c_size.x, 0)
-					elif attach == "top":
-						outside = anchor_pos + Vector2i(0, -1)
-					elif attach == "bottom":
-						outside = anchor_pos + Vector2i(0, c_size.y)
-					else:
+					if not bool(ok_r.value):
+						out_of_range_candidates += 1
 						continue
-
-					_marketing_outside_to_anchor[outside] = anchor_pos
-					_marketing_valid_anchors[outside] = true
-					valid.append(outside)
+				elif range_type == "air":
+					var ok_r := RangeUtilsClass.is_within_air_range_to_any_cells(
+						state, actor, restaurant_ids, footprint_cells, range_value
+					)
+					if not ok_r.ok:
+						if range_error.is_empty():
+							range_error = str(ok_r.error)
+						continue
+					if not bool(ok_r.value):
+						out_of_range_candidates += 1
+						continue
 				else:
-					_marketing_valid_anchors[anchor_pos] = true
-					valid.append(anchor_pos)
+					if range_error.is_empty():
+						range_error = "未知的 range_type: %s" % range_type
+					continue
+
+			_marketing_valid_anchors[anchor_pos] = true
+			valid.append(anchor_pos)
 
 	if _map_canvas.has_method("set_cell_highlights"):
 		_map_canvas.call("set_cell_highlights", valid)
@@ -832,8 +751,151 @@ func _sync_marketing_highlights() -> void:
 			else:
 				msg = "没有可放置格：没有满足规则的空地"
 
-			if not msg.is_empty():
-				_call_marketing_panel_method("set_error", [msg])
+				if not msg.is_empty():
+					_call_marketing_panel_method("set_error", [msg])
+
+func _sync_airplane_marketing_highlights(state: GameState, base_size: Vector2i) -> void:
+	if not is_instance_valid(_map_canvas):
+		return
+	if state == null:
+		return
+
+	# Airplane footprint: one dimension is outward thickness(=2), the other is edge length(=1/3/5).
+	var thickness := 2
+	var length := 0
+	if base_size.x == 2 and base_size.y != 2:
+		length = base_size.y
+	elif base_size.y == 2 and base_size.x != 2:
+		length = base_size.x
+	else:
+		thickness = mini(base_size.x, base_size.y)
+		length = maxi(base_size.x, base_size.y)
+	if length <= 0:
+		return
+
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
+
+	# Existing airplane segments on each side (to prevent overlap in outside area).
+	# side -> Array[Vector2i(start,end)] where start/end are inclusive indexes along the varying axis.
+	var occupied := {"N": [], "S": [], "W": [], "E": []}
+	var placements_val = state.map.get("marketing_placements", null)
+	if placements_val is Dictionary:
+		var placements: Dictionary = placements_val
+		for k in placements.keys():
+			var pv = placements[k]
+			if not (pv is Dictionary):
+				continue
+			var p: Dictionary = pv
+			if str(p.get("type", "")) != "airplane":
+				continue
+			var wp_val = p.get("world_pos", null)
+			if not (wp_val is Vector2i):
+				continue
+			var wp: Vector2i = wp_val
+
+			var axis := str(p.get("axis", "")).strip_edges()
+			if axis != "row" and axis != "col":
+				# Fallback inference for older data.
+				if wp.x == minp.x or wp.x == maxp.x:
+					axis = "row"
+				elif wp.y == minp.y or wp.y == maxp.y:
+					axis = "col"
+				else:
+					continue
+
+			var fs := Vector2i.ONE
+			var fs_val = p.get("footprint_size", null)
+			if fs_val is Vector2i:
+				fs = Vector2i(fs_val)
+			elif fs_val is Array:
+				var arr: Array = fs_val
+				if arr.size() == 2:
+					fs = Vector2i(int(arr[0]), int(arr[1]))
+			if fs.x <= 0 or fs.y <= 0:
+				fs = Vector2i.ONE
+
+			var length2 := 0
+			if fs.x == 2 and fs.y != 2:
+				length2 = fs.y
+			elif fs.y == 2 and fs.x != 2:
+				length2 = fs.x
+			else:
+				length2 = maxi(fs.x, fs.y)
+			if length2 <= 0:
+				continue
+
+			if axis == "row":
+				var side := "W" if wp.x == minp.x else "E" if wp.x == maxp.x else ""
+				if side.is_empty():
+					continue
+				occupied[side].append(Vector2i(wp.y, wp.y + length2 - 1))
+			else:
+				var side2 := "N" if wp.y == minp.y else "S" if wp.y == maxp.y else ""
+				if side2.is_empty():
+					continue
+				occupied[side2].append(Vector2i(wp.x, wp.x + length2 - 1))
+
+	var overlaps := func(segments: Array, start: int, end: int) -> bool:
+		for seg_val in segments:
+			if not (seg_val is Vector2i):
+				continue
+			var seg: Vector2i = seg_val
+			if not (end < seg.x or start > seg.y):
+				return true
+		return false
+
+	var valid: Array[Vector2i] = []
+
+	# Top/Bottom edges: axis=col (flies vertically across the board), segment varies along X.
+	var max_start_x := maxp.x - length + 1
+	for x in range(minp.x, max_start_x + 1):
+		var start_x := x
+		var end_x := x + length - 1
+
+		# Top
+		if not overlaps.call(occupied["N"], start_x, end_x):
+			var anchor_top := Vector2i(x, minp.y)
+			var outside_top := anchor_top + Vector2i(0, -1)
+			_marketing_outside_to_anchor[outside_top] = {"anchor": anchor_top, "axis": "col", "attach": "top"}
+			_marketing_valid_anchors[outside_top] = true
+			valid.append(outside_top)
+
+		# Bottom
+		if not overlaps.call(occupied["S"], start_x, end_x):
+			var anchor_bottom := Vector2i(x, maxp.y)
+			var outside_bottom := anchor_bottom + Vector2i(0, 1)
+			_marketing_outside_to_anchor[outside_bottom] = {"anchor": anchor_bottom, "axis": "col", "attach": "bottom"}
+			_marketing_valid_anchors[outside_bottom] = true
+			valid.append(outside_bottom)
+
+	# Left/Right edges: axis=row (flies horizontally across the board), segment varies along Y.
+	var max_start_y := maxp.y - length + 1
+	for y in range(minp.y, max_start_y + 1):
+		var start_y := y
+		var end_y := y + length - 1
+
+		# Left
+		if not overlaps.call(occupied["W"], start_y, end_y):
+			var anchor_left := Vector2i(minp.x, y)
+			var outside_left := anchor_left + Vector2i(-1, 0)
+			_marketing_outside_to_anchor[outside_left] = {"anchor": anchor_left, "axis": "row", "attach": "left"}
+			_marketing_valid_anchors[outside_left] = true
+			valid.append(outside_left)
+
+		# Right
+		if not overlaps.call(occupied["E"], start_y, end_y):
+			var anchor_right := Vector2i(maxp.x, y)
+			var outside_right := anchor_right + Vector2i(1, 0)
+			_marketing_outside_to_anchor[outside_right] = {"anchor": anchor_right, "axis": "row", "attach": "right"}
+			_marketing_valid_anchors[outside_right] = true
+			valid.append(outside_right)
+
+	if _map_canvas.has_method("set_cell_highlights"):
+		_map_canvas.call("set_cell_highlights", valid)
+
+	if valid.is_empty():
+		_call_marketing_panel_method("set_error", ["没有可放置格：飞机必须贴边且不能与已有飞机重叠"])
 
 func _is_airplane_corner(world_pos: Vector2i) -> bool:
 	if _scene == null or _scene.game_engine == null:

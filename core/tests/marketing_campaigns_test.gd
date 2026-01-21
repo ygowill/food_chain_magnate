@@ -258,13 +258,13 @@ static func _test_radio_and_airplane_ranges(player_count: int, seed_val: int) ->
 	if not radio.ok:
 		return Result.failure("发起 radio 营销失败: %s" % radio.error)
 
-	# 2) Airplane（board #4）：放在左边缘，落在 tile row=2，应影响该行所有 tiles 内的房屋
+	# 2) Airplane（board #4，length=1）：放在左边缘，飞过 y=10 这一行，应影响该行所有房屋
 	var airplane := engine.execute_command(Command.create("initiate_marketing", actor, {
 		"employee_type": "brand_manager",
 		"board_number": 4,
 		"product": "beer",
 		"duration": 1,
-		"position": [0, 11],
+		"position": [0, 10],
 	}))
 	if not airplane.ok:
 		return Result.failure("发起 airplane 营销失败: %s" % airplane.error)

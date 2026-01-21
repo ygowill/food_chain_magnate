@@ -170,6 +170,10 @@ static func validate_no_marketing_overlap(
 		if not (p_val is Dictionary):
 			return Result.failure("PlacementValidator: marketing_placements[%s] 类型错误（期望 Dictionary）" % str(k))
 		var p: Dictionary = p_val
+		# Airplane marketing is placed outside the board; it must not block on-board structure placement.
+		# (issue_tracker #42)
+		if str(p.get("type", "")) == "airplane":
+			continue
 
 		if not p.has("world_pos") or not (p["world_pos"] is Vector2i):
 			return Result.failure("PlacementValidator: marketing_placements[%s].world_pos 缺失或类型错误（期望 Vector2i）" % str(k))

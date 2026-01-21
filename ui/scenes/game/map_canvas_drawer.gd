@@ -753,29 +753,12 @@ static func _draw_marketing(canvas, cell_size: int) -> void:
 			else:
 				thickness = mini(base_size.x, base_size.y)
 				length = maxi(base_size.x, base_size.y)
-			var horizontal := Vector2i(maxi(1, length), maxi(1, thickness)) # top/bottom
-			var vertical := Vector2i(maxi(1, thickness), maxi(1, length))   # left/right
-
-			var map_origin2: Vector2i = canvas._map_data.get("map_origin", Vector2i.ZERO)
-			var base_grid_size2: Vector2i = canvas._base_grid_size
-			if base_grid_size2 == Vector2i.ZERO:
-				var gs_val2 = canvas._map_data.get("grid_size", null)
-				if gs_val2 is Vector2i:
-					base_grid_size2 = gs_val2
-			var minp2 := -map_origin2
-			var maxp2 := Vector2i(base_grid_size2.x - map_origin2.x - 1, base_grid_size2.y - map_origin2.y - 1)
-
 			var axis2 := str(p.get("axis", ""))
-			if axis2 == "col":
-				if anchor.y == minp2.y or (anchor.y + horizontal.y - 1) == maxp2.y:
-					size = horizontal
-				else:
-					size = vertical
+			# New semantics: axis decides orientation directly (issue_tracker #42).
+			if axis2 == "row":
+				size = Vector2i(maxi(1, thickness), maxi(1, length)) # left/right
 			else:
-				if anchor.x == minp2.x or (anchor.x + vertical.x - 1) == maxp2.x:
-					size = vertical
-				else:
-					size = horizontal
+				size = Vector2i(maxi(1, length), maxi(1, thickness)) # top/bottom
 
 		var rect := Rect2(
 			Vector2(pos.x * cell_size, pos.y * cell_size),
@@ -794,32 +777,12 @@ static func _draw_marketing(canvas, cell_size: int) -> void:
 			var minp := -map_origin
 			var maxp := Vector2i(base_grid_size.x - map_origin.x - 1, base_grid_size.y - map_origin.y - 1)
 
-			var left := anchor.x
-			var right := anchor.x + size.x - 1
-			var top := anchor.y
-			var bottom := anchor.y + size.y - 1
-
 			var axis := str(p.get("axis", ""))
 			var attach := ""
-			if axis == "col":
-				if top == minp.y:
-					attach = "top"
-				elif bottom == maxp.y:
-					attach = "bottom"
-				elif left == minp.x:
-					attach = "left"
-				elif right == maxp.x:
-					attach = "right"
+			if axis == "row":
+				attach = "left" if anchor.x == minp.x else "right" if anchor.x >= maxp.x - 1 else ""
 			else:
-				# default: row
-				if left == minp.x:
-					attach = "left"
-				elif right == maxp.x:
-					attach = "right"
-				elif top == minp.y:
-					attach = "top"
-				elif bottom == maxp.y:
-					attach = "bottom"
+				attach = "top" if anchor.y == minp.y else "bottom" if anchor.y >= maxp.y - 1 else ""
 
 			# Base map rect in view-space pixels (excludes external cells).
 			var vmin = canvas._world_to_view(minp)

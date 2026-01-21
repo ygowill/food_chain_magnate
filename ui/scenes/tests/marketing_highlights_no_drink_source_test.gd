@@ -34,6 +34,13 @@ static func run() -> Result:
 		return Result.failure("无法获取 GameState")
 
 	state.map = _build_empty_map_with_drink_source(Vector2i(3, 3), Vector2i(0, 0))
+	# Provide a road so non-edge marketing (e.g. radio) has at least one valid adjacent-to-road anchor.
+	var cells: Array = state.map.get("cells", [])
+	if cells is Array and cells.size() >= 1 and cells[0] is Array and (cells[0] as Array).size() >= 2:
+		var road_cell: Dictionary = cells[0][1]
+		road_cell["road_segments"] = [{"dirs": ["N", "S"], "bridge": false}]
+		(cells[0] as Array)[1] = road_cell
+		state.map["cells"] = cells
 
 	var scene := FakeScene.new()
 	scene.game_engine = engine
@@ -41,19 +48,17 @@ static func run() -> Result:
 	var map_canvas := FakeMapCanvas.new()
 	var controller := GameMapInteractionControllerClass.new(scene, map_canvas, null)
 
-	# airplane(#4) footprint is 1x2; anchor at (0,0) would cover the drink_source at (0,0).
-	controller.on_marketing_map_selection_requested("airplane", "brand_manager", 4, 0)
+	# radio(#1) footprint is 1x1; anchor at (0,0) would cover the drink_source at (0,0) and must be excluded.
+	controller.on_marketing_map_selection_requested("radio", "brand_director", 1, 0)
 
 	var set := {}
 	for v in map_canvas.highlighted:
 		set[v] = true
 
-	# Airplane selectable points are outside the map (issue_tracker #38). For left edge anchors the clickable
-	# positions are on x=-1. Anchor (0,0) would overlap drink_source -> should be excluded.
-	if set.has(Vector2i(-1, 0)):
-		return Result.failure("highlights should exclude anchors that cover drink_source (found outside (-1,0))")
-	if not set.has(Vector2i(-1, 1)):
-		return Result.failure("expected at least one valid outside anchor (e.g. (-1,1))")
+	if set.has(Vector2i(0, 0)):
+		return Result.failure("highlights should exclude anchors that cover drink_source (found (0,0))")
+	if not set.has(Vector2i(1, 1)):
+		return Result.failure("expected at least one valid anchor (e.g. (1,1))")
 
 	return Result.success({})
 

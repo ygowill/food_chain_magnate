@@ -1509,6 +1509,78 @@
 
 ---
 
+## 42. 飞机营销：放置不受道路/距离影响；可用点全边可选；影响范围为跨全图条带（宽=1/3/5）
+
+**现象/需求**
+
+- 飞机广告的可用点不需要考虑道路等因素；且不受员工距离限制影响。
+- 飞机广告的影响范围计算错误：应覆盖“飞机飞过整张地图”的条带区域，条带宽度等于飞机长度（1/3/5），并横跨整张地图。
+- 目前实现导致边缘大量点不可用、影响房屋集合不正确。
+
+**涉及代码（定位）**
+
+- 放置验证：
+	- `gameplay/actions/initiate_marketing/validation.gd`（airplane 的占地/距离/边缘校验）
+- 放置应用（写入 marketing_instances / marketing_placements）：
+	- `gameplay/actions/initiate_marketing/apply.gd`
+- 影响范围计算（结算时计算受影响房屋）：
+	- `modules/base_marketing/rules/entry.gd`：`_get_airplane_house_ids`
+- UI 可用点/映射/预览：
+	- `ui/scenes/game/game_map_interaction_controller.gd`：`_sync_marketing_highlights()` / `_on_map_cell_selected()` / `_on_map_cell_hovered()`
+	- `ui/scenes/game/game_overlay_marketing_range.gd`（范围预览）
+	- `ui/scenes/game/map_canvas_drawer.gd`（飞机营销贴边渲染）
+- 其它放置校验（房屋/餐厅不应被 airplane 阻塞）：
+	- `core/map/placement_validator/validators.gd`
+
+**根因**
+
+- 原实现将飞机板件当作“占用棋盘格”的营销板件：会被 `structure/drink_source/road` 等棋盘内因素阻塞，导致边缘大面积不可放置。
+- 飞机范围计算基于 `tile_index`（tile 行/列）+ `TILE_SIZE=5`，忽略飞机长度（1/3/5），导致影响区宽度与规则不一致。
+- UI 的可用点计算亦按“占地格必须为空”过滤，进一步放大不可用点的问题。
+
+**修复方案**
+
+- 规则对齐：
+	- airplane 放在棋盘外：放置时不检查棋盘内 `structure/road/blocked/drink_source`，且不受员工 `range` 限制；
+	- 仅校验：必须贴边、且飞机长度（1/3/5）对应的条带不得越出棋盘；
+	- 同一边不允许飞机板件条带重叠（避免外侧区域物理重叠）。
+- 影响范围：
+	- `axis=row`：条带按 `start_y=world_pos.y`，覆盖 `length` 行，横跨全图 `x=min..max`；
+	- `axis=col`：条带按 `start_x=world_pos.x`，覆盖 `length` 列，横跨全图 `y=min..max`；
+	- `length` 从 `footprint_size` 中“非 2 的那一维”推导（厚度=2）。
+- UI：
+	- 飞机可用点在地图外一圈显示；点击外圈格映射到棋盘边缘起点，并携带 axis/attach（不再弹角落方向选择）。
+	- 范围预览额外传入 `footprint_size`，确保预览条带宽度正确。
+	- 飞机贴边渲染按 axis 直接决定朝向（row→左右，col→上下）。
+- 结构放置：
+	- `PlacementValidator.validate_no_marketing_overlap` 忽略 airplane，避免飞机营销阻塞房屋/餐厅等棋盘内放置。
+
+**实施记录**
+
+- 已修改：`gameplay/actions/initiate_marketing/validation.gd`：airplane 专用校验（忽略棋盘内占用/距离；校验贴边与条带越界；同边飞机段重叠拒绝）。
+- 已修改：`gameplay/actions/initiate_marketing/apply.gd`：airplane 强制 `rotation=0`；`tile_index` 改为 cell 级 start index（用于调试/回放稳定）。
+- 已修改：`modules/base_marketing/rules/entry.gd`：airplane 影响范围改为“跨全图条带”，宽度由 `footprint_size` 推导。
+- 已修改：`core/map/placement_validator/validators.gd`：airplane 不参与结构放置的 marketing overlap。
+- 已修改：`ui/scenes/game/game_overlay_marketing_range.gd`：airplane 预览使用 `footprint_size`（不再依赖 tile_index）。
+- 已修改：`ui/scenes/game/game_map_interaction_controller.gd`：
+	- airplane highlights 改为按边缘生成 outside ring 可用点，并维护 outside→{anchor,axis,attach} 映射；
+	- 修复 non-airplane marketing highlights 的缩进问题与占用集合构建（并忽略 airplane 占用）。
+- 已修改：`ui/scenes/game/map_canvas_drawer.gd`：airplane 贴边渲染由 axis 决定朝向（兼容旧 anchor=right/bottom-1 的存档数据）。
+- 已更新测试：
+	- `ui/scenes/tests/marketing_highlights_no_drink_source_test.gd`：改用 radio 覆盖 drink_source 剔除逻辑（airplane 不再视为覆盖棋盘格）。
+	- `core/tests/marketing_campaigns_test.gd` / `core/tests/new_milestones_brand_manager_v2_test.gd`：更新 airplane 放置坐标以匹配“条带起点=world_pos”语义。
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（101/101，`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待你手动验收：飞机可用点/条带范围是否符合规则书视觉预期）
+
+---
+
 ## 23. UI 配色：营销板背景/空地背景/可用点提示色
 
 **需求**

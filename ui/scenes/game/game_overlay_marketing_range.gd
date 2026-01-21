@@ -122,10 +122,16 @@ func _compute_preview_cells(position: Vector2i, marketing_type: String, extra: D
 		if axis != "row" and axis != "col":
 			return out
 
-		var tile_pos: Vector2i = MapUtils.world_to_tile(position).board_pos
-		var tile_index := tile_pos.y if axis == "row" else tile_pos.x
 		inst["axis"] = axis
-		inst["tile_index"] = tile_index
+		# airplane range depends on its board footprint size (length 1/3/5, thickness=2).
+		if extra != null:
+			var fs_val = extra.get("footprint_size", null)
+			if fs_val is Vector2i:
+				inst["footprint_size"] = Vector2i(fs_val)
+			elif fs_val is Array:
+				var arr: Array = fs_val
+				if arr.size() == 2:
+					inst["footprint_size"] = [int(arr[0]), int(arr[1])]
 
 	if _calculator == null:
 		_calculator = MarketingRangeCalculatorClass.new()

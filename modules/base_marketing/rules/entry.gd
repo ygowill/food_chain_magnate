@@ -172,19 +172,17 @@ func _get_airplane_house_ids(state: GameState, marketing_instance: Dictionary) -
 	var world_pos_read := _require_world_pos(marketing_instance, "airplane")
 	if not world_pos_read.ok:
 		return world_pos_read
+	var world_pos: Vector2i = world_pos_read.value
 
-	# 等同 core/MarketingRangeCalculator._get_airplane_house_ids
+	# Airplane range (issue_tracker #42):
+	# - Airplanes are placed outside the board.
+	# - Their length (1/3/5) indicates how many rows/cols they fly over ON the board.
+	# - The affected area is a stripe spanning the entire board width/height.
 	if not state.map.has("grid_size") or not (state.map["grid_size"] is Vector2i):
 		return Result.failure("%s: airplane range: state.map.grid_size 缺失或类型错误（期望 Vector2i）" % MODULE_ID)
 	var grid_size: Vector2i = state.map["grid_size"]
 	if grid_size.x <= 0 or grid_size.y <= 0:
 		return Result.failure("%s: airplane range: state.map.grid_size 非法: %s" % [MODULE_ID, str(grid_size)])
-
-	if not state.map.has("tile_grid_size") or not (state.map["tile_grid_size"] is Vector2i):
-		return Result.failure("%s: airplane range: state.map.tile_grid_size 缺失或类型错误（期望 Vector2i）" % MODULE_ID)
-	var tile_grid_size: Vector2i = state.map["tile_grid_size"]
-	if tile_grid_size.x <= 0 or tile_grid_size.y <= 0:
-		return Result.failure("%s: airplane range: state.map.tile_grid_size 非法: %s" % [MODULE_ID, str(tile_grid_size)])
 
 	if not state.map.has("cells") or not (state.map["cells"] is Array):
 		return Result.failure("%s: airplane range: state.map.cells 缺失或类型错误（期望 Array）" % MODULE_ID)
@@ -195,21 +193,84 @@ func _get_airplane_house_ids(state: GameState, marketing_instance: Dictionary) -
 	if axis != "row" and axis != "col":
 		return Result.failure("%s: airplane range: marketing_instance.axis 非法（期望 row/col）: %s" % [MODULE_ID, axis])
 
-	if not marketing_instance.has("tile_index") or not (marketing_instance["tile_index"] is int):
-		return Result.failure("%s: airplane range: marketing_instance.tile_index 缺失或类型错误（期望 int）" % MODULE_ID)
-	var tile_index: int = marketing_instance["tile_index"]
+	# footprint_size is stored by initiate_marketing.apply; allow fallback to 1x1 for older data.
+	var fs := Vector2i.ONE
+	var fs_val = marketing_instance.get("footprint_size", null)
+	if fs_val is Vector2i:
+		fs = Vector2i(fs_val)
+	elif fs_val is Array:
+		var arr: Array = fs_val
+		if arr.size() == 2:
+			fs = Vector2i(int(arr[0]), int(arr[1]))
+	if fs.x <= 0 or fs.y <= 0:
+		fs = Vector2i.ONE
 
-	var min_tile: Vector2i = MapUtils.world_to_tile(CoordsClass.get_world_min(state)).board_pos
-	var max_tile: Vector2i = MapUtils.world_to_tile(CoordsClass.get_world_max(state)).board_pos
+	var thickness := 2
+	var length := 0
+	if fs.x == 2 and fs.y != 2:
+		length = fs.y
+	elif fs.y == 2 and fs.x != 2:
+		length = fs.x
+	else:
+		thickness = mini(fs.x, fs.y)
+		length = maxi(fs.x, fs.y)
 
+	if length <= 0:
+		return Result.failure("%s: airplane range: footprint_size 非法: %s" % [MODULE_ID, str(fs)])
+
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
+
+	# Validate stripe stays inside the board (do not clamp silently; fail fast in strict mode).
 	if axis == "row":
-		if tile_index < min_tile.y or tile_index > max_tile.y:
-			return Result.failure("%s: airplane range: marketing_instance.tile_index 越界: %d (min=%d max=%d)" % [MODULE_ID, tile_index, min_tile.y, max_tile.y])
-		return _collect_houses_in_tile_row(state, tile_grid_size, min_tile, tile_index)
+		var start_y := world_pos.y
+		if start_y < minp.y or (start_y + length - 1) > maxp.y:
+			return Result.failure("%s: airplane range: 飞行区越界: start_y=%d len=%d (min=%d max=%d)" % [MODULE_ID, start_y, length, minp.y, maxp.y])
+	else:
+		var start_x := world_pos.x
+		if start_x < minp.x or (start_x + length - 1) > maxp.x:
+			return Result.failure("%s: airplane range: 飞行区越界: start_x=%d len=%d (min=%d max=%d)" % [MODULE_ID, start_x, length, minp.x, maxp.x])
 
-	if tile_index < min_tile.x or tile_index > max_tile.x:
-		return Result.failure("%s: airplane range: marketing_instance.tile_index 越界: %d (min=%d max=%d)" % [MODULE_ID, tile_index, min_tile.x, max_tile.x])
-	return _collect_houses_in_tile_col(state, tile_grid_size, min_tile, tile_index)
+	var set := {}
+	if axis == "row":
+		for dy in range(length):
+			var y := world_pos.y + dy
+			for x in range(minp.x, maxp.x + 1):
+				var p := Vector2i(x, y)
+				if not CoordsClass.is_world_pos_in_grid(state, p):
+					continue
+				var cell := CellsClass.get_cell(state, p)
+				if not cell.has("structure") or not (cell["structure"] is Dictionary):
+					return Result.failure("%s: airplane range: cell.structure 缺失或类型错误: %s" % [MODULE_ID, str(p)])
+				var structure: Dictionary = cell["structure"]
+				if not structure.has("house_id"):
+					continue
+				if not (structure["house_id"] is String):
+					return Result.failure("%s: airplane range: structure.house_id 类型错误（期望 String）: %s" % [MODULE_ID, str(p)])
+				var house_id: String = structure["house_id"]
+				if not house_id.is_empty():
+					set[house_id] = true
+		return Result.success(_dict_keys_to_string_array(set))
+
+	for dx in range(length):
+		var x2 := world_pos.x + dx
+		for y2 in range(minp.y, maxp.y + 1):
+			var p2 := Vector2i(x2, y2)
+			if not CoordsClass.is_world_pos_in_grid(state, p2):
+				continue
+			var cell2 := CellsClass.get_cell(state, p2)
+			if not cell2.has("structure") or not (cell2["structure"] is Dictionary):
+				return Result.failure("%s: airplane range: cell.structure 缺失或类型错误: %s" % [MODULE_ID, str(p2)])
+			var structure2: Dictionary = cell2["structure"]
+			if not structure2.has("house_id"):
+				continue
+			if not (structure2["house_id"] is String):
+				return Result.failure("%s: airplane range: structure.house_id 类型错误（期望 String）: %s" % [MODULE_ID, str(p2)])
+			var house_id2: String = structure2["house_id"]
+			if not house_id2.is_empty():
+				set[house_id2] = true
+
+	return Result.success(_dict_keys_to_string_array(set))
 
 func _collect_houses_in_tile_row(state: GameState, tile_grid_size: Vector2i, min_tile: Vector2i, tile_y: int) -> Result:
 	var set := {}

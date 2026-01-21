@@ -131,6 +131,139 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 	if base_size.x <= 0 or base_size.y <= 0:
 		return Result.failure("营销板件占地非法: %s" % str(base_size))
 
+	# Airplane is placed outside the board:
+	# - It is NOT blocked by structures/roads/drink_sources.
+	# - It is NOT affected by employee range.
+	# - The only constraint is that its length (1/3/5) flies over that many rows/cols ON the board.
+	# (issue_tracker #42)
+	if marketing_type == "airplane":
+		# length is the dimension that isn't the outward thickness(=2)
+		var thickness := 2
+		var length := 0
+		if base_size.x == 2 and base_size.y != 2:
+			length = base_size.y
+		elif base_size.y == 2 and base_size.x != 2:
+			length = base_size.x
+		else:
+			thickness = mini(base_size.x, base_size.y)
+			length = maxi(base_size.x, base_size.y)
+
+		if length <= 0:
+			return Result.failure("飞机营销板件长度非法: %s" % str(base_size))
+
+		# World pos must be a valid edge cell.
+		if not CoordsClass.is_world_pos_in_grid(state, world_pos):
+			return Result.failure("position 越界: %s" % str(world_pos))
+		if not CoordsClass.is_on_map_edge(state, world_pos):
+			return Result.failure("飞机必须放置在地图边缘格子: %s" % str(world_pos))
+
+		var axis_result := action.optional_string_param(command, "axis", "")
+		if not axis_result.ok:
+			return axis_result
+		var axis: String = axis_result.value
+		if axis.is_empty():
+			axis = _infer_airplane_axis(state, world_pos, Vector2i.ONE)
+
+		if axis != "row" and axis != "col":
+			return Result.failure("飞机缺少 axis（row/col）")
+
+		var minp2 := CoordsClass.get_world_min(state)
+		var maxp2 := CoordsClass.get_world_max(state)
+
+		# Axis must match the attached edge: left/right -> row (flies horizontally), top/bottom -> col (flies vertically).
+		if axis == "row":
+			if world_pos.x != minp2.x and world_pos.x != maxp2.x and world_pos.x != (maxp2.x - (thickness - 1)):
+				return Result.failure("飞机 axis=row 时必须贴左右边缘: %s" % str(world_pos))
+			var start_y := world_pos.y
+			if start_y < minp2.y or (start_y + length - 1) > maxp2.y:
+				return Result.failure("飞机不能飞出棋盘：长度=%d start_y=%d (min=%d max=%d)" % [length, start_y, minp2.y, maxp2.y])
+		else:
+			if world_pos.y != minp2.y and world_pos.y != maxp2.y and world_pos.y != (maxp2.y - (thickness - 1)):
+				return Result.failure("飞机 axis=col 时必须贴上下边缘: %s" % str(world_pos))
+			var start_x := world_pos.x
+			if start_x < minp2.x or (start_x + length - 1) > maxp2.x:
+				return Result.failure("飞机不能飞出棋盘：长度=%d start_x=%d (min=%d max=%d)" % [length, start_x, minp2.x, maxp2.x])
+
+		# Prevent airplane vs airplane overlap on the same side (outside area).
+		var placements2: Dictionary = state.map.get("marketing_placements", {})
+		if placements2 is Dictionary and not placements2.is_empty():
+			var side := ""
+			var seg_start := 0
+			var seg_end := 0
+			if axis == "row":
+				side = "W" if world_pos.x == minp2.x else "E"
+				seg_start = world_pos.y
+				seg_end = world_pos.y + length - 1
+			else:
+				side = "N" if world_pos.y == minp2.y else "S"
+				seg_start = world_pos.x
+				seg_end = world_pos.x + length - 1
+
+			for k2 in placements2.keys():
+				var pv = placements2[k2]
+				if not (pv is Dictionary):
+					continue
+				var p2: Dictionary = pv
+				if str(p2.get("type", "")) != "airplane":
+					continue
+				var wp2_val = p2.get("world_pos", null)
+				if not (wp2_val is Vector2i):
+					continue
+				var wp2: Vector2i = wp2_val
+				var axis2 := str(p2.get("axis", "")).strip_edges()
+				if axis2 != "row" and axis2 != "col":
+					axis2 = _infer_airplane_axis(state, wp2, Vector2i.ONE)
+				if axis2 != axis:
+					continue
+
+				var fs2_val = p2.get("footprint_size", null)
+				var fs2 := Vector2i.ONE
+				if fs2_val is Vector2i:
+					fs2 = Vector2i(fs2_val)
+				elif fs2_val is Array:
+					var a2: Array = fs2_val
+					if a2.size() == 2:
+						fs2 = Vector2i(int(a2[0]), int(a2[1]))
+				var len2 := 0
+				if fs2.x == 2 and fs2.y != 2:
+					len2 = fs2.y
+				elif fs2.y == 2 and fs2.x != 2:
+					len2 = fs2.x
+				else:
+					len2 = maxi(fs2.x, fs2.y)
+				if len2 <= 0:
+					continue
+
+				var side2 := ""
+				var start2 := 0
+				var end2 := 0
+				if axis2 == "row":
+					if wp2.x == minp2.x:
+						side2 = "W"
+					elif wp2.x == maxp2.x or wp2.x == (maxp2.x - (thickness - 1)):
+						side2 = "E"
+					else:
+						continue
+					start2 = wp2.y
+					end2 = wp2.y + len2 - 1
+				else:
+					if wp2.y == minp2.y:
+						side2 = "N"
+					elif wp2.y == maxp2.y or wp2.y == (maxp2.y - (thickness - 1)):
+						side2 = "S"
+					else:
+						continue
+					start2 = wp2.x
+					end2 = wp2.x + len2 - 1
+
+				if side2 != side:
+					continue
+				var overlaps := not (seg_end < start2 or seg_start > end2)
+				if overlaps:
+					return Result.failure("飞机与已有飞机占用同一边并重叠: %s" % side)
+
+		return Result.success()
+
 	var size := base_size
 	if rotation == 90 or rotation == 270:
 		size = Vector2i(base_size.y, base_size.x)
@@ -222,7 +355,7 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 			return Result.failure("营销必须邻接道路: %s" % str(world_pos))
 
 	# 4) 不允许与其他营销板件占地重叠
-	var occupied_read := MarketingPlacementQueryClass.has_any_in_world_positions(state, footprint_cells)
+	var occupied_read := _has_marketing_overlap_excluding_airplane(state, footprint_cells)
 	if not occupied_read.ok:
 		return occupied_read
 	if bool(occupied_read.value):
@@ -232,6 +365,9 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 	var range_type := str(emp_def.range_type)
 	var range_value := int(emp_def.range_value)
 	if range_value >= 0 and not range_type.is_empty():
+		# Airplane is NOT affected by range (validated above).
+		if marketing_type == "airplane":
+			return Result.success()
 		if range_type == "road":
 			# 对多格营销板件：距离应基于“占地邻接的道路格”，而不是仅用 anchor。
 			var target_roads_r := RangeUtilsClass.get_adjacent_road_cells_for_positions(state, footprint_cells)
@@ -286,3 +422,67 @@ static func _infer_airplane_axis(state: GameState, pos: Vector2i, size: Vector2i
 	if top == minp.y or bottom == maxp.y:
 		return "col"
 	return ""
+
+static func _has_marketing_overlap_excluding_airplane(state: GameState, footprint_cells: Array[Vector2i]) -> Result:
+	# Keep UI/core rules consistent: airplane marketing is outside the board and should not block on-board marketing.
+	if state == null or not (state.map is Dictionary):
+		return Result.failure("marketing overlap: state.map 类型错误")
+	var placements_val = state.map.get("marketing_placements", null)
+	if placements_val == null:
+		return Result.success(false)
+	if not (placements_val is Dictionary):
+		return Result.failure("marketing overlap: state.map.marketing_placements 类型错误（期望 Dictionary）")
+	var placements: Dictionary = placements_val
+	if placements.is_empty():
+		return Result.success(false)
+
+	for k in placements.keys():
+		var p_val = placements[k]
+		if not (p_val is Dictionary):
+			return Result.failure("marketing overlap: marketing_placements[%s] 类型错误（期望 Dictionary）" % str(k))
+		var p: Dictionary = p_val
+		if str(p.get("type", "")) == "airplane":
+			continue
+
+		var wp_val = p.get("world_pos", null)
+		if not (wp_val is Vector2i):
+			return Result.failure("marketing overlap: marketing_placements[%s].world_pos 缺失或类型错误（期望 Vector2i）" % str(k))
+		var anchor: Vector2i = wp_val
+
+		var base_size := Vector2i.ONE
+		var fs_val = p.get("footprint_size", null)
+		if fs_val is Vector2i:
+			base_size = Vector2i(fs_val)
+		elif fs_val is Array:
+			var arr: Array = fs_val
+			if arr.size() == 2:
+				base_size = Vector2i(int(arr[0]), int(arr[1]))
+		if base_size.x <= 0 or base_size.y <= 0:
+			base_size = Vector2i.ONE
+
+		var rotation := 0
+		var rot_val = p.get("rotation", null)
+		if rot_val is int:
+			rotation = int(rot_val)
+		elif rot_val is float:
+			var f: float = float(rot_val)
+			if f == floor(f):
+				rotation = int(f)
+		if not rotation in [0, 90, 180, 270]:
+			rotation = 0
+
+		var size := base_size
+		if rotation == 90 or rotation == 270:
+			size = Vector2i(base_size.y, base_size.x)
+
+		var left := anchor.x
+		var right := anchor.x + size.x - 1
+		var top := anchor.y
+		var bottom := anchor.y + size.y - 1
+
+		for c in footprint_cells:
+			if c.x < left or c.x > right or c.y < top or c.y > bottom:
+				continue
+			return Result.success(true)
+
+	return Result.success(false)
