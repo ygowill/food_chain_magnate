@@ -431,6 +431,16 @@ func _run_builder(engine: GameEngine, c: Dictionary) -> Result:
 			return _build_milestone_first_pizza_sold(engine, c)
 		"logs_event_review":
 			return _build_logs_event_review(engine, c)
+		"logs_employee_recruit_train":
+			return _build_logs_employee_recruit_train(engine, c)
+		"logs_employee_fire":
+			return _build_logs_employee_fire(engine, c)
+		"logs_build_and_move":
+			return _build_logs_build_and_move(engine, c)
+		"logs_produce_and_cleanup":
+			return _build_logs_produce_and_cleanup(engine, c)
+		"logs_dinnertime_sale":
+			return _build_logs_dinnertime_sale(engine, c)
 		_:
 			return Result.failure("unknown builder: %s" % name)
 
@@ -999,7 +1009,8 @@ func _build_logs_event_review(engine: GameEngine, _c: Dictionary) -> Result:
 		return Result.failure("cannot resolve current player")
 
 	# Ensure employees needed for pre-setup (place_house) and log-generating commands.
-	var ensure_house := _ensure_employee(state, actor, "new_business_developer", false, 1)
+	# place_house 与 add_garden 共享 house_placement_counts，需 >=2 次数才能在同一 PlaceHouses 子阶段做两步。
+	var ensure_house := _ensure_employee(state, actor, "new_business_developer", false, 2)
 	if not ensure_house.ok:
 		return ensure_house
 	var ensure_marketer := _ensure_employee(state, actor, "brand_director", false, 1)
@@ -1126,6 +1137,229 @@ func _build_logs_event_review(engine: GameEngine, _c: Dictionary) -> Result:
 	return Result.success({
 		"placed_house_numbers": placed_house_numbers,
 	})
+
+func _build_logs_employee_recruit_train(engine: GameEngine, _c: Dictionary) -> Result:
+	var adv := _advance_to_working_sub_phase(engine, "Recruit")
+	if not adv.ok:
+		return adv
+
+	var state := engine.get_state()
+	_force_turn_order(state)
+	var actor := state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("cannot resolve current player")
+
+	var ensure_recruit := _ensure_employee(state, actor, "recruiting_girl", false, 1)
+	if not ensure_recruit.ok:
+		return ensure_recruit
+	var ensure_trainer := _ensure_employee(state, actor, "trainer", false, 1)
+	if not ensure_trainer.ok:
+		return ensure_trainer
+	var ensure_pricing := _ensure_employee(state, actor, "pricing_manager", false, 1)
+	if not ensure_pricing.ok:
+		return ensure_pricing
+
+	# Ensure enough cash so the replayed commands won't fail due to economy constraints.
+	for pid in range(state.players.size()):
+		var give := engine.execute_command(Command.create_system("debug_give_money", {"player_id": pid, "amount": 50}))
+		if not give.ok:
+			return Result.failure("debug_give_money failed: %s" % give.error)
+
+	_freeze_engine_as_initial(engine)
+
+	var set_price := engine.execute_command(Command.create("set_price", actor, {}))
+	if not set_price.ok:
+		return Result.failure("set_price failed: %s" % set_price.error)
+
+	var recruit := engine.execute_command(Command.create("recruit", actor, {"employee_type": "management_trainee"}))
+	if not recruit.ok:
+		return Result.failure("recruit failed: %s" % recruit.error)
+
+	var to_train := TestPhaseUtils.advance_until_working_sub_phase(engine, "Train", 20)
+	if not to_train.ok:
+		return to_train
+
+	var train := engine.execute_command(Command.create("train", actor, {
+		"from_employee": "management_trainee",
+		"to_employee": "new_business_developer",
+	}))
+	if not train.ok:
+		return Result.failure("train failed: %s" % train.error)
+
+	return Result.success()
+
+func _build_logs_employee_fire(engine: GameEngine, _c: Dictionary) -> Result:
+	var adv := _advance_to_phase(engine, "Payday")
+	if not adv.ok:
+		return adv
+
+	var state := engine.get_state()
+	_force_turn_order(state)
+	var actor := state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("cannot resolve current player")
+
+	var ensure := _ensure_employee(state, actor, "burger_cook", true, 1)
+	if not ensure.ok:
+		return ensure
+
+	_freeze_engine_as_initial(engine)
+
+	var fire := engine.execute_command(Command.create("fire", actor, {"employee_id": "burger_cook", "location": "reserve"}))
+	if not fire.ok:
+		return Result.failure("fire failed: %s" % fire.error)
+
+	return Result.success()
+
+func _build_logs_build_and_move(engine: GameEngine, _c: Dictionary) -> Result:
+	var adv := _advance_to_working_sub_phase(engine, "PlaceHouses")
+	if not adv.ok:
+		return adv
+
+	var state := engine.get_state()
+	_force_turn_order(state)
+	var actor := state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("cannot resolve current player")
+
+	# place_house 与 add_garden 共享 house_placement_counts，需 >=2 次数才能在同一 PlaceHouses 子阶段做两步。
+	var ensure_house := _ensure_employee(state, actor, "new_business_developer", false, 2)
+	if not ensure_house.ok:
+		return ensure_house
+	# Need >=2 eligible actions to do "place + move" in one Working/PlaceRestaurants.
+	var ensure_place := _ensure_employee(state, actor, "local_manager", false, 1)
+	if not ensure_place.ok:
+		return ensure_place
+	var ensure_move := _ensure_employee(state, actor, "regional_manager", false, 1)
+	if not ensure_move.ok:
+		return ensure_move
+
+	var give := engine.execute_command(Command.create_system("debug_give_money", {"player_id": actor, "amount": 50}))
+	if not give.ok:
+		return Result.failure("debug_give_money failed: %s" % give.error)
+
+	_freeze_engine_as_initial(engine)
+
+	# 1) Place a house + add a garden (find a combo that doesn't block itself).
+	var numbers := _get_remaining_house_numbers_from_state(engine.get_state())
+	if numbers.is_empty():
+		return Result.failure("no remaining house numbers")
+	var house_number := int(numbers[0])
+	var plan_r := _find_first_valid_place_house_then_add_garden(engine, actor, house_number)
+	if not plan_r.ok:
+		return plan_r
+	var plan: Dictionary = plan_r.value if (plan_r.value is Dictionary) else {}
+
+	var house_params: Dictionary = plan.get("place_house_params", {}) if (plan.get("place_house_params", null) is Dictionary) else {}
+	house_params["employee_type"] = "new_business_developer"
+	var place_house := engine.execute_command(Command.create("place_house", actor, house_params))
+	if not place_house.ok:
+		return Result.failure("place_house failed: %s" % place_house.error)
+
+	var garden_params: Dictionary = plan.get("add_garden_params", {}) if (plan.get("add_garden_params", null) is Dictionary) else {}
+	garden_params["employee_type"] = "new_business_developer"
+	var add_garden := engine.execute_command(Command.create("add_garden", actor, garden_params))
+	if not add_garden.ok:
+		return Result.failure("add_garden failed: %s" % add_garden.error)
+
+	# 3) Move to PlaceRestaurants and place+move a restaurant.
+	var to_place_restaurants := TestPhaseUtils.advance_until_working_sub_phase(engine, "PlaceRestaurants", 10)
+	if not to_place_restaurants.ok:
+		return to_place_restaurants
+
+	var find_place_rest := _find_first_valid_place_restaurant(engine, actor)
+	if not find_place_rest.ok:
+		return find_place_rest
+	var place_rest_info: Dictionary = find_place_rest.value if (find_place_rest.value is Dictionary) else {}
+	var place_rest_params: Dictionary = place_rest_info.get("params", {}) if (place_rest_info.get("params", null) is Dictionary) else {}
+	place_rest_params["employee_type"] = "local_manager"
+	var place_rest := engine.execute_command(Command.create("place_restaurant", actor, place_rest_params))
+	if not place_rest.ok:
+		return Result.failure("place_restaurant failed: %s" % place_rest.error)
+
+	var rest_ids_val = engine.get_state().get_player(actor).get("restaurants", [])
+	var rest_ids: Array = rest_ids_val if (rest_ids_val is Array) else []
+	if rest_ids.is_empty():
+		return Result.failure("player has no restaurants after place_restaurant")
+	var restaurant_id := str(rest_ids[0]).strip_edges()
+	if restaurant_id.is_empty():
+		return Result.failure("invalid restaurant_id")
+
+	var find_move := _find_first_valid_move_restaurant(engine, actor, restaurant_id)
+	if not find_move.ok:
+		return find_move
+	var move_info: Dictionary = find_move.value if (find_move.value is Dictionary) else {}
+	var move_params: Dictionary = move_info.get("params", {}) if (move_info.get("params", null) is Dictionary) else {}
+	move_params["employee_type"] = "regional_manager"
+	var move_rest := engine.execute_command(Command.create("move_restaurant", actor, move_params))
+	if not move_rest.ok:
+		return Result.failure("move_restaurant failed: %s" % move_rest.error)
+
+	return Result.success()
+
+func _build_logs_produce_and_cleanup(engine: GameEngine, _c: Dictionary) -> Result:
+	var adv := _advance_to_working_sub_phase(engine, "GetFood")
+	if not adv.ok:
+		return adv
+
+	var state := engine.get_state()
+	_force_turn_order(state)
+	var actor := state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("cannot resolve current player")
+
+	var ensure := _ensure_employee(state, actor, "burger_cook", false, 1)
+	if not ensure.ok:
+		return ensure
+
+	# 进入 Payday 需要支付薪水；为避免“薪水不足需要解雇”打断本日志用例，提前补足现金并冻结为 initial_state。
+	var give := engine.execute_command(Command.create_system("debug_give_money", {"player_id": actor, "amount": 50}))
+	if not give.ok:
+		return Result.failure("debug_give_money failed: %s" % give.error)
+
+	_freeze_engine_as_initial(engine)
+
+	var prod := engine.execute_command(Command.create("produce_food", actor, {"employee_type": "burger_cook", "food_type": "burger"}))
+	if not prod.ok:
+		return Result.failure("produce_food failed: %s" % prod.error)
+
+	var done := TestPhaseUtils.complete_working_phase(engine, 200)
+	if not done.ok:
+		return done
+	var to_restructuring := TestPhaseUtils.advance_until_phase(engine, "Restructuring", 200)
+	if not to_restructuring.ok:
+		return to_restructuring
+
+	return Result.success()
+
+func _build_logs_dinnertime_sale(engine: GameEngine, _c: Dictionary) -> Result:
+	var adv := _advance_to_working_sub_phase(engine, "PlaceRestaurants")
+	if not adv.ok:
+		return adv
+
+	var state := engine.get_state()
+	_force_turn_order(state)
+	_apply_test_map_single_sale(state)
+	if state.players.size() > 1:
+		state.players[1]["restaurants"] = []
+
+	var houses: Dictionary = state.map.get("houses", {}) if (state.map is Dictionary) else {}
+	if not houses.has("h0") or not (houses["h0"] is Dictionary):
+		return Result.failure("logs_dinnertime_sale: test house missing (h0)")
+	var h: Dictionary = houses["h0"]
+	h["demands"] = [{"product": "burger"}]
+	houses["h0"] = h
+	state.map["houses"] = houses
+	state.players[0]["inventory"]["burger"] = 1
+
+	_freeze_engine_as_initial(engine)
+
+	# Advance to Payday: Dinnertime is auto-skipped, and FOOD_SOLD events are emitted when leaving Dinnertime.
+	var to_payday := TestPhaseUtils.advance_until_phase(engine, "Payday", 60)
+	if not to_payday.ok:
+		return to_payday
+
+	return Result.success()
 
 func _logs_find_radio_marketing_command_affecting_houses(
 	engine: GameEngine,
@@ -2521,6 +2755,53 @@ func _find_first_valid_place_house(engine: GameEngine, actor: int, house_number:
 					})
 	return Result.failure("no valid place_house placement found (house_number=%d)" % house_number)
 
+func _find_first_valid_place_house_then_add_garden(engine: GameEngine, actor: int, house_number: int) -> Result:
+	# 用于 logs 构造：寻找一个“放房屋后仍能添加花园”的组合，避免二者互相占位导致生成失败。
+	if engine == null:
+		return Result.failure("engine is null")
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("state is null")
+
+	var ex_house := engine.action_registry.get_executor("place_house")
+	if ex_house == null:
+		return Result.failure("cannot find executor: place_house")
+	var ex_garden := engine.action_registry.get_executor("add_garden")
+	if ex_garden == null:
+		return Result.failure("cannot find executor: add_garden")
+
+	var coords_script = _get_coords_script()
+	if coords_script == null:
+		return Result.failure("cannot load Coords: %s" % CoordsScriptPath)
+	var minp: Vector2i = coords_script.get_world_min(state)
+	var maxp: Vector2i = coords_script.get_world_max(state)
+
+	for y in range(minp.y, maxp.y + 1):
+		for x in range(minp.x, maxp.x + 1):
+			for rot in MapUtils.VALID_ROTATIONS:
+				var place_cmd := Command.create("place_house", actor, {
+					"position": [x, y],
+					"rotation": int(rot),
+					"house_number": int(house_number),
+				})
+				var next_r := ex_house.compute_new_state(state, place_cmd)
+				if not next_r.ok:
+					continue
+				var next_state: GameState = next_r.value
+
+				var garden_r := _find_first_valid_add_garden_on_state(ex_garden, next_state, actor)
+				if not garden_r.ok:
+					continue
+				var garden_cmd: Dictionary = garden_r.value if (garden_r.value is Dictionary) else {}
+				var garden_params: Dictionary = garden_cmd.get("params", {}) if (garden_cmd.get("params", null) is Dictionary) else {}
+
+				return Result.success({
+					"place_house_params": place_cmd.params.duplicate(true),
+					"add_garden_params": garden_params.duplicate(true),
+				})
+
+	return Result.failure("no valid (place_house -> add_garden) combo found (house_number=%d)" % house_number)
+
 func _build_employee_place_house(engine: GameEngine, c: Dictionary) -> Result:
 	var adv := _advance_to_working_sub_phase(engine, "PlaceHouses")
 	if not adv.ok:
@@ -2565,6 +2846,13 @@ func _find_first_valid_add_garden(engine: GameEngine, actor: int) -> Result:
 	var ex := engine.action_registry.get_executor("add_garden")
 	if ex == null:
 		return Result.failure("cannot find executor: add_garden")
+	return _find_first_valid_add_garden_on_state(ex, state, actor)
+
+func _find_first_valid_add_garden_on_state(ex: ActionExecutor, state: GameState, actor: int) -> Result:
+	if ex == null:
+		return Result.failure("executor is null: add_garden")
+	if state == null:
+		return Result.failure("state is null")
 
 	var houses_val = state.map.get("houses", null) if (state.map is Dictionary) else null
 	if not (houses_val is Dictionary):

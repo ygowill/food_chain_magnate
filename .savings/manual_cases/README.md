@@ -119,10 +119,15 @@ godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- 
 - `first_throw_away`: `milestones/first_throw_away.json` + `milestones/first_throw_away.md`
 - `first_train`: `milestones/first_train.json` + `milestones/first_train.md`
 - `first_trainer_used`: `milestones/first_trainer_used.json` + `milestones/first_trainer_used.md`
-
-## 日志（1）
-
-- `event_log_review`: `logs/event_log_review.json` + `logs/event_log_review.md`
 - `first_waitress_used`: `milestones/first_waitress_used.json` + `milestones/first_waitress_used.md`
 - `first_waitress`: `milestones/first_waitress.json` + `milestones/first_waitress.md`
 - `ketchup_sold_your_demand`: `milestones/ketchup_sold_your_demand.json` + `milestones/ketchup_sold_your_demand.md`
+
+## 日志（6）
+
+- `event_log_review`: `logs/event_log_review.json` + `logs/event_log_review.md`
+- `event_log_employee_recruit_train`: `logs/event_log_employee_recruit_train.json` + `logs/event_log_employee_recruit_train.md`
+- `event_log_employee_fire`: `logs/event_log_employee_fire.json` + `logs/event_log_employee_fire.md`
+- `event_log_build_and_move`: `logs/event_log_build_and_move.json` + `logs/event_log_build_and_move.md`
+- `event_log_produce_and_cleanup`: `logs/event_log_produce_and_cleanup.json` + `logs/event_log_produce_and_cleanup.md`
+- `event_log_dinnertime_sale`: `logs/event_log_dinnertime_sale.json` + `logs/event_log_dinnertime_sale.md`

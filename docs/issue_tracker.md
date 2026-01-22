@@ -2570,37 +2570,48 @@
 	- `tools/generate_manual_test_saves.gd` / `tools/generate_manual_test_saves_manifest.gd`
 	- `res://.savings/manual_cases/logs/`
 
-**待澄清**
+**确认（来自你对 #50 的补充）**
 
-- “完整事件”覆盖范围：
-	- A. 仅覆盖 `GameEventLogController.EVENT_TYPES_TO_LOG` 当前会显示的事件类型；
-	- B. 也要覆盖 EventBus 中存在但目前未显示的事件（如 `FOOD_SOLD/FOOD_DISCARDED/PLAYER_BROKE/MARKETING_EXPIRED/...`）。若选 B，需要同时扩展 `EVENT_TYPES_TO_LOG`，否则存档回放也不会在 UI 中出现这些条目。
-- 存档组织形式：
-	- A. 单一“超覆盖”存档（一次性覆盖全部类型，但日志更长）；
-	- B. 多个分主题存档（每个存档覆盖 3-6 类事件，更易读）。
-- 是否仍固定：`2 人 + base map`？是否需要覆盖“失败/极端”场景（例如欠薪/破产/动作失败）？
+- 覆盖范围：B（也要覆盖 EventBus 中存在但目前未显示的事件类型，因此需要扩展 `EVENT_TYPES_TO_LOG`）
+- 存档组织形式：B（多个分主题存档）
+- 固定：`2 人 + base map`；同时希望尽可能覆盖“失败/极端”场景
 
-**方案（候选）**
+**实施方案（最终）**
 
-- 方案 A（单档，最大覆盖）：
-	- 新增 `logs/event_log_full_coverage`：通过一段确定性的 command_history，在回放中依次触发：
-		- 招聘（`EMPLOYEE_RECRUITED`）
-		- 培训（`EMPLOYEE_TRAINED`）
-		- 强制定价动作（`COMMAND_EXECUTED`）+ 触发里程碑（`MILESTONE_ACHIEVED`）
-		- 放置/移动餐厅（`RESTAURANT_PLACED/RESTAURANT_MOVED`）
-		- 放房屋/加花园（`HOUSE_PLACED/GARDEN_ADDED`）
-		- 生产食物（`FOOD_PRODUCED`）
-		- 采购饮料（`DRINKS_PROCURED`）
-		- 发起营销 + 结算生成需求（`MARKETING_PLACED/DEMAND_GENERATED`）
-		- 推进到 Dinnertime 生成报告（`DINNERTIME_REPORT`），并自然覆盖 `PHASE_CHANGED/SUB_PHASE_CHANGED/ROUND_STARTED/PLAYER_TURN_STARTED/ENDED/PLAYER_CASH_CHANGED` 等。
-- 方案 B（多档，推荐可读性）：
-	- 新增 3-5 个 logs 用例，分别覆盖：员工（招聘/培训/解雇）、餐厅/地图建造（放/移餐厅、放房屋/花园）、生产/采购、营销/结算、里程碑/强制动作等。
-	- 好处：单档日志不至于过长，便于你逐类审查与回归定位。
+- 扩展 `GameEventLogController.EVENT_TYPES_TO_LOG`，并补齐对应事件的可读日志渲染。
+- 对“阶段离开时才能从 state 推导”的事件补齐发射（确保读档回放时能从 `EventBus.history` 恢复）：
+	- 离开 `Dinnertime`：从 `round_state.dinnertime.sales` 拆出 `FOOD_SOLD`
+	- 离开 `Marketing`：从 `round_state.marketing.processed` 拆出 `MARKETING_EXPIRED`
+	- 离开 `Cleanup`：从 `round_state.cleanup.inventory_discarded` 拆出 `FOOD_DISCARDED`
+	- 回合变更：补齐 `ROUND_ENDED`
+	- 覆盖路径：`auto_advance` + 手动推进（`advance_phase/skip/skip_sub_phase`）
+- 新增多个 logs 存档（每档覆盖 1 主题，便于你逐类审查日志）。
 
-**测试计划**
+**实施记录**
 
-- 新增/扩展回归测试：加载对应 logs 存档后，断言 `EventBus.history` 至少包含目标事件类型（每类至少 1 条），并纳入 AllTests。
+- 已修改：`ui/scenes/game/game_event_log_controller.gd`
+	- 扩展 `EVENT_TYPES_TO_LOG`（包含 `ROUND_ENDED/FOOD_SOLD/FOOD_DISCARDED/MARKETING_EXPIRED/GAME_STARTED/GAME_ENDED/...`）
+	- 新增对应事件的日志文本（摘要 + details）
+- 已修改：`core/engine/game_engine/command_runner.gd`
+	- `_build_phase_change_events`：补齐 `ROUND_ENDED`；离开 `Dinnertime/Marketing/Cleanup` 时分别生成 `FOOD_SOLD/MARKETING_EXPIRED/FOOD_DISCARDED`
+	- 新增 helper：`_build_food_sold_events_from_dinnertime_report` / `_build_marketing_expired_events` / `_build_cleanup_inventory_discarded_events`
+- 已修改：`gameplay/actions/advance_phase_action.gd` / `gameplay/actions/skip_action.gd` / `gameplay/actions/skip_sub_phase_action.gd`
+	- 在“非 auto_advance 的阶段推进路径”同样补齐上述事件生成（避免遗漏）
+- 已修改：`tools/generate_manual_test_saves_manifest.gd`：新增 logs 用例清单（分主题）
+- 已修改：`tools/generate_manual_test_saves.gd`：实现对应 builder（并修复 `PlaceHouses` 中 `place_house/add_garden` 互相占位与 Payday 薪资不足导致的生成失败）
+- 已新增：`res://.savings/manual_cases/logs/` 下 5 个新存档 + 说明：
+	- `event_log_employee_recruit_train`
+	- `event_log_employee_fire`
+	- `event_log_build_and_move`
+	- `event_log_produce_and_cleanup`
+	- `event_log_dinnertime_sale`
+- 已修改：`.savings/manual_cases/README.md`：更新 logs 索引
+- 已新增：`core/tests/manual_log_saves_coverage_test.gd` 并纳入 `ui/scenes/tests/all_tests.gd`
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：PASS（107/107，`.godot/AllTests.log`）
 
 **状态**
 
-- 待澄清（方案确认后实施）
+- Implemented（待手动验收）

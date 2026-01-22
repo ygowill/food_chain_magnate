@@ -11,11 +11,14 @@ const EVENT_TYPES_TO_LOG: Array[String] = [
 	EventBus.EventType.PHASE_CHANGED,
 	EventBus.EventType.SUB_PHASE_CHANGED,
 	EventBus.EventType.ROUND_STARTED,
+	EventBus.EventType.ROUND_ENDED,
 	EventBus.EventType.DINNERTIME_REPORT,
 	EventBus.EventType.PLAYER_TURN_STARTED,
 	EventBus.EventType.PLAYER_TURN_ENDED,
 	EventBus.EventType.PLAYER_CASH_CHANGED,
+	EventBus.EventType.PLAYER_BROKE,
 	EventBus.EventType.COMMAND_EXECUTED, # 仅筛选少量需要展示的动作（避免日志过噪）
+	EventBus.EventType.EMPLOYEE_ACTIVATED,
 	EventBus.EventType.EMPLOYEE_RECRUITED,
 	EventBus.EventType.EMPLOYEE_TRAINED,
 	EventBus.EventType.EMPLOYEE_FIRED,
@@ -24,10 +27,15 @@ const EVENT_TYPES_TO_LOG: Array[String] = [
 	EventBus.EventType.HOUSE_PLACED,
 	EventBus.EventType.GARDEN_ADDED,
 	EventBus.EventType.FOOD_PRODUCED,
+	EventBus.EventType.FOOD_SOLD,
+	EventBus.EventType.FOOD_DISCARDED,
 	EventBus.EventType.DRINKS_PROCURED,
 	EventBus.EventType.MARKETING_PLACED,
+	EventBus.EventType.MARKETING_EXPIRED,
 	EventBus.EventType.DEMAND_GENERATED,
 	EventBus.EventType.MILESTONE_ACHIEVED,
+	EventBus.EventType.GAME_STARTED,
+	EventBus.EventType.GAME_ENDED,
 ]
 
 const PRICE_ACTION_LOG_TEXT: Dictionary = {
@@ -138,6 +146,13 @@ func _on_eventbus_event(event: Dictionary) -> void:
 			], data)
 		EventBus.EventType.ROUND_STARTED:
 			_game_log_panel.add_phase_log("回合开始: %d" % int(data.get("round", -1)), data)
+		EventBus.EventType.ROUND_ENDED:
+			var round := int(data.get("round", -1))
+			var next_round := int(data.get("next_round", -1))
+			var text := "回合结束: %d" % round
+			if next_round > 0 and next_round != round:
+				text += " -> %d" % next_round
+			_game_log_panel.add_phase_log(text, data)
 		EventBus.EventType.PLAYER_TURN_STARTED:
 			_game_log_panel.add_phase_log("玩家 %d 开始回合" % (int(data.get("player_id", -1)) + 1), data)
 		EventBus.EventType.PLAYER_TURN_ENDED:
@@ -152,6 +167,14 @@ func _on_eventbus_event(event: Dictionary) -> void:
 				int(data.get("new_cash", 0)),
 				int(data.get("delta", 0)),
 			], data)
+		EventBus.EventType.PLAYER_BROKE:
+			var player_id := int(data.get("player_id", -1))
+			var reason := str(data.get("reason", "")).strip_edges()
+			var cash := int(data.get("cash", 0))
+			var text := "玩家 %d 破产（现金: %d）" % [player_id + 1, cash]
+			if not reason.is_empty():
+				text += "：" + reason
+			_game_log_panel.add_event_log(text, data)
 		EventBus.EventType.COMMAND_EXECUTED:
 			# CommandRunner 会为每条命令广播 COMMAND_EXECUTED；这里仅记录定价类强制动作（用于“自动完成”可见性）。
 			if not data.has("price_modifier"):
@@ -163,6 +186,15 @@ func _on_eventbus_event(event: Dictionary) -> void:
 			if player_id < 0:
 				return
 			_game_log_panel.add_player_log(player_id, str(PRICE_ACTION_LOG_TEXT[action_id]), data)
+		EventBus.EventType.EMPLOYEE_ACTIVATED:
+			var player_id := int(data.get("player_id", -1))
+			var employee_id := str(data.get("employee_id", "")).strip_edges()
+			var location := _format_employee_location(str(data.get("location", "")).strip_edges())
+			var employee_name := _employee_name(employee_id)
+			var text := "员工启用：%s" % (employee_name if not employee_name.is_empty() else employee_id)
+			if not location.is_empty():
+				text += "（%s）" % location
+			_game_log_panel.add_player_log(player_id, text, data)
 		EventBus.EventType.EMPLOYEE_RECRUITED:
 			var player_id := int(data.get("player_id", -1))
 			var employee_type := str(data.get("employee_type", "")).strip_edges()
@@ -281,6 +313,45 @@ func _on_eventbus_event(event: Dictionary) -> void:
 				else:
 					text += "：" + food_name
 			_game_log_panel.add_player_log(player_id, text, data)
+		EventBus.EventType.FOOD_SOLD:
+			var player_id := int(data.get("player_id", -1))
+			var house_number := str(data.get("house_number", "")).strip_edges()
+			var rest_text := _format_restaurant_id_short(str(data.get("restaurant_id", "")).strip_edges())
+			var required_val = data.get("required", null)
+			var required: Dictionary = required_val if (required_val is Dictionary) else {}
+			var req_text := _format_required_short(required, 4)
+			var revenue := int(data.get("revenue", 0))
+			var bonus := int(data.get("bonus", 0))
+			var house_bonus := int(data.get("house_bonus", 0))
+
+			var text := "售出"
+			if not house_number.is_empty():
+				text += "：房屋#%s" % house_number
+			if not rest_text.is_empty():
+				text += " -> %s" % rest_text
+			var meta: Array[String] = []
+			if not req_text.is_empty():
+				meta.append("需求: %s" % req_text)
+			if revenue != 0:
+				meta.append("收入: %d" % revenue)
+			if bonus != 0:
+				meta.append("营销奖励: %+d" % bonus)
+			if house_bonus != 0:
+				meta.append("房屋奖励: %+d" % house_bonus)
+			if not meta.is_empty():
+				text += "（%s）" % "；".join(meta)
+			_game_log_panel.add_player_log(player_id, text, data)
+		EventBus.EventType.FOOD_DISCARDED:
+			var player_id := int(data.get("player_id", -1))
+			var discarded_val = data.get("discarded", null)
+			var discarded: Dictionary = discarded_val if (discarded_val is Dictionary) else {}
+			var disc_text := _format_required_short(discarded, 5)
+			var has_fridge := bool(data.get("has_fridge", false))
+			var text := "清理库存"
+			if not disc_text.is_empty():
+				text += "：丢弃 %s" % disc_text
+			text += "（%s）" % ("有冰箱" if has_fridge else "无冰箱")
+			_game_log_panel.add_player_log(player_id, text, data)
 		EventBus.EventType.DRINKS_PROCURED:
 			var player_id := int(data.get("player_id", -1))
 			var employee_type := str(data.get("employee_type", "")).strip_edges()
@@ -325,6 +396,32 @@ func _on_eventbus_event(event: Dictionary) -> void:
 			if not parts.is_empty():
 				text += "：" + " ".join(parts)
 			_game_log_panel.add_player_log(player_id, text, data)
+		EventBus.EventType.MARKETING_EXPIRED:
+			var player_id := int(data.get("player_id", -1))
+			var board_number := int(data.get("board_number", 0))
+			var marketing_type := _format_marketing_type_short(str(data.get("marketing_type", "")).strip_edges())
+			var product_name := _product_name(str(data.get("product", "")).strip_edges())
+			var employee_type := str(data.get("employee_type", "")).strip_edges()
+			var employee_name := _employee_name(employee_type)
+			var duration_before := int(data.get("duration_before", 0))
+			var duration_after := int(data.get("duration_after", 0))
+
+			var parts: Array[String] = []
+			if board_number > 0:
+				parts.append("板#%d" % board_number)
+			if not product_name.is_empty():
+				parts.append(product_name)
+			if not marketing_type.is_empty():
+				parts.append(marketing_type)
+			if not employee_name.is_empty():
+				parts.append(employee_name)
+			if duration_before > 0 or duration_after > 0:
+				parts.append("%d->%d" % [duration_before, duration_after])
+
+			var text := "营销到期"
+			if not parts.is_empty():
+				text += "：" + " ".join(parts)
+			_game_log_panel.add_player_log(player_id, text, data)
 		EventBus.EventType.MARKETING_PLACED:
 			var player_id := int(data.get("player_id", -1))
 			var employee_type := str(data.get("employee_type", "")).strip_edges()
@@ -364,6 +461,14 @@ func _on_eventbus_event(event: Dictionary) -> void:
 			if not milestone_id.is_empty() and name != milestone_id:
 				text += " (%s)" % milestone_id
 			_game_log_panel.add_event_log(text, data)
+		EventBus.EventType.GAME_STARTED:
+			_game_log_panel.add_system_log("游戏开始", data)
+		EventBus.EventType.GAME_ENDED:
+			var reason := str(data.get("reason", "")).strip_edges()
+			var text := "游戏结束"
+			if not reason.is_empty():
+				text += "：" + reason
+			_game_log_panel.add_system_log(text, data)
 		EventBus.EventType.DINNERTIME_REPORT:
 			_log_dinnertime_report(data)
 		_:

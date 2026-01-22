@@ -260,11 +260,18 @@ static func _build_phase_change_events(old_state: GameState, new_state: GameStat
 					"report": report,
 				}
 			})
+			# 细粒度售卖事件：从 dinnertime 报告中拆分出来（便于 UI 日志筛选/回放核对）。
+			events.append_array(_build_food_sold_events_from_dinnertime_report(old_state, report))
 
 		# Marketing 结算摘要：在离开 Marketing 时发射（便于 UI 日志从 EventBus.history 恢复）。
 		# issue_tracker #48: per board 1 log entry, with details in event data.
 		if str(old_state.phase) == "Marketing":
 			events.append_array(_build_marketing_demand_generated_events(old_state))
+			events.append_array(_build_marketing_expired_events(old_state))
+
+		# Cleanup 库存丢弃：在离开 Cleanup 时发射（便于 UI 日志恢复/回放核对）。
+		if str(old_state.phase) == "Cleanup":
+			events.append_array(_build_cleanup_inventory_discarded_events(old_state))
 
 		events.append({
 			"type": EventBus.EventType.PHASE_CHANGED,
@@ -275,8 +282,15 @@ static func _build_phase_change_events(old_state: GameState, new_state: GameStat
 			}
 		})
 
-		# 回合开始事件
+		# 回合开始/结束事件
 		if old_state.round_number != new_state.round_number:
+			events.append({
+				"type": EventBus.EventType.ROUND_ENDED,
+				"data": {
+					"round": old_state.round_number,
+					"next_round": new_state.round_number,
+				}
+			})
 			events.append({
 				"type": EventBus.EventType.ROUND_STARTED,
 				"data": {
@@ -295,6 +309,48 @@ static func _build_phase_change_events(old_state: GameState, new_state: GameStat
 		})
 
 	return events
+
+static func _build_food_sold_events_from_dinnertime_report(dinnertime_state: GameState, report: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if dinnertime_state == null:
+		return out
+	if report == null or not (report is Dictionary):
+		return out
+
+	var sales_val = Dictionary(report).get("sales", null)
+	if not (sales_val is Array):
+		return out
+	var round := int(dinnertime_state.round_number)
+
+	for s_val in Array(sales_val):
+		if not (s_val is Dictionary):
+			continue
+		var s: Dictionary = s_val
+		var player_id := int(s.get("winner_owner", -1))
+		if player_id < 0:
+			continue
+
+		var required: Dictionary = {}
+		var required_val = s.get("required", null)
+		if required_val is Dictionary:
+			required = Dictionary(required_val).duplicate(true)
+
+		out.append({
+			"type": EventBus.EventType.FOOD_SOLD,
+			"data": {
+				"round": round,
+				"player_id": player_id,
+				"house_id": str(s.get("house_id", "")).strip_edges(),
+				"house_number": s.get("house_number", null),
+				"restaurant_id": str(s.get("winner_restaurant_id", "")).strip_edges(),
+				"required": required,
+				"revenue": int(s.get("revenue", 0)),
+				"bonus": int(s.get("bonus", 0)),
+				"house_bonus": int(s.get("house_bonus", 0)),
+			}
+		})
+
+	return out
 
 static func _build_marketing_demand_generated_events(marketing_state: GameState) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -363,6 +419,106 @@ static func _build_marketing_demand_generated_events(marketing_state: GameState)
 				"affected_houses": affected_ids,
 				"affected_house_numbers": affected_numbers,
 				"position": pos_arr,
+			}
+		})
+
+	return out
+
+static func _build_marketing_expired_events(marketing_state: GameState) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if marketing_state == null:
+		return out
+	if not (marketing_state.round_state is Dictionary):
+		return out
+
+	var marketing_val = Dictionary(marketing_state.round_state).get("marketing", null)
+	if not (marketing_val is Dictionary):
+		return out
+	var marketing: Dictionary = marketing_val
+	var processed_val = marketing.get("processed", null)
+	if not (processed_val is Array):
+		return out
+
+	var round := int(marketing_state.round_number)
+
+	for p_val in Array(processed_val):
+		if not (p_val is Dictionary):
+			continue
+		var p: Dictionary = p_val
+		if not bool(p.get("expired", false)):
+			continue
+
+		var board_number := int(p.get("board_number", 0))
+		var owner := int(p.get("owner", -1))
+		if owner < 0:
+			continue
+		var marketing_type := str(p.get("type", "")).strip_edges()
+		var employee_type := str(p.get("employee_type", "")).strip_edges()
+		var product := str(p.get("product", "")).strip_edges()
+
+		var pos_arr: Array = []
+		var wp_val = p.get("world_pos", null)
+		if wp_val is Vector2i:
+			var wp: Vector2i = wp_val
+			pos_arr = [wp.x, wp.y]
+		elif wp_val is Array:
+			pos_arr = Array(wp_val)
+
+		out.append({
+			"type": EventBus.EventType.MARKETING_EXPIRED,
+			"data": {
+				"round": round,
+				"player_id": owner,
+				"board_number": board_number,
+				"marketing_type": marketing_type,
+				"employee_type": employee_type,
+				"product": product,
+				"position": pos_arr,
+				"duration_before": int(p.get("duration_before", 0)),
+				"duration_after": int(p.get("duration_after", 0)),
+			}
+		})
+
+	return out
+
+static func _build_cleanup_inventory_discarded_events(cleanup_state: GameState) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if cleanup_state == null:
+		return out
+	if not (cleanup_state.round_state is Dictionary):
+		return out
+
+	var cleanup_val = Dictionary(cleanup_state.round_state).get("cleanup", null)
+	if not (cleanup_val is Dictionary):
+		return out
+	var cleanup: Dictionary = cleanup_val
+	var inv_val = cleanup.get("inventory_discarded", null)
+	if not (inv_val is Array):
+		return out
+	var round := int(cleanup_state.round_number)
+
+	for item_val in Array(inv_val):
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		var player_id := int(item.get("player_id", -1))
+		if player_id < 0:
+			continue
+
+		var discarded_val = item.get("discarded", null)
+		if not (discarded_val is Dictionary):
+			continue
+		var discarded: Dictionary = Dictionary(discarded_val).duplicate(true)
+		if discarded.is_empty():
+			continue
+
+		out.append({
+			"type": EventBus.EventType.FOOD_DISCARDED,
+			"data": {
+				"round": round,
+				"player_id": player_id,
+				"has_fridge": bool(item.get("has_fridge", false)),
+				"discarded": discarded,
 			}
 		})
 

@@ -1,151 +1,103 @@
 {
 	"checkpoints": [
 		{
-			"hash": "7655f0ebfc299d6a8b8da4938e282abd",
+			"hash": "c0921ee5cebc3f2771fa40dd035e8f55",
 			"index": 0,
 			"rng_calls": 29
 		}
 	],
 	"commands": [
 		{
-			"action_id": "initiate_marketing",
+			"action_id": "place_house",
 			"actor": 0,
 			"index": 0,
 			"metadata": {
 
 			},
 			"params": {
-				"board_number": 1,
-				"duration": 1,
-				"employee_type": "brand_director",
+				"employee_type": "new_business_developer",
+				"house_number": 1,
 				"position": [
-					7,
-					1
+					10,
+					2
 				],
-				"product": "burger",
 				"rotation": 0
 			},
 			"phase": "Working",
-			"sub_phase": "Marketing",
-			"timestamp": 1302
+			"sub_phase": "PlaceHouses",
+			"timestamp": 1305
 		},
 		{
-			"action_id": "procure_drinks",
+			"action_id": "add_garden",
 			"actor": 0,
 			"index": 1,
 			"metadata": {
 
 			},
 			"params": {
-				"employee_type": "zeppelin_pilot",
-				"restaurant_id": "rest_1",
-				"route": [
-					[
-						0,
-						0
-					],
-					[
-						1,
-						0
-					]
-				],
-				"selected_sources": [
-					[
-						6,
-						1
-					]
-				]
+				"direction": "E",
+				"employee_type": "new_business_developer",
+				"house_id": "12"
 			},
 			"phase": "Working",
-			"sub_phase": "GetDrinks",
-			"timestamp": 1304
+			"sub_phase": "PlaceHouses",
+			"timestamp": 1305
 		},
 		{
-			"action_id": "skip",
+			"action_id": "place_restaurant",
 			"actor": 0,
 			"index": 2,
 			"metadata": {
 
 			},
 			"params": {
-
+				"employee_type": "local_manager",
+				"position": [
+					13,
+					0
+				],
+				"rotation": 0
 			},
 			"phase": "Working",
 			"sub_phase": "PlaceRestaurants",
 			"timestamp": 1306
 		},
 		{
-			"action_id": "skip_sub_phase",
-			"actor": 1,
+			"action_id": "move_restaurant",
+			"actor": 0,
 			"index": 3,
 			"metadata": {
 
 			},
 			"params": {
-
-			},
-			"phase": "Working",
-			"sub_phase": "Recruit",
-			"timestamp": 1300
-		},
-		{
-			"action_id": "skip",
-			"actor": 1,
-			"index": 4,
-			"metadata": {
-
-			},
-			"params": {
-
+				"employee_type": "regional_manager",
+				"position": [
+					3,
+					0
+				],
+				"restaurant_id": "rest_1",
+				"rotation": 0
 			},
 			"phase": "Working",
 			"sub_phase": "PlaceRestaurants",
 			"timestamp": 1306
-		},
-		{
-			"action_id": "skip",
-			"actor": 1,
-			"index": 5,
-			"metadata": {
-
-			},
-			"params": {
-
-			},
-			"phase": "Payday",
-			"sub_phase": "",
-			"timestamp": 1500
-		},
-		{
-			"action_id": "skip",
-			"actor": 0,
-			"index": 6,
-			"metadata": {
-
-			},
-			"params": {
-
-			},
-			"phase": "Payday",
-			"sub_phase": "",
-			"timestamp": 1500
 		}
 	],
-	"created_at": "2026-01-22T20:46:20",
-	"current_index": 6,
-	"final_hash": "ad70e58133c37ac170a63687574e55be",
+	"created_at": "2026-01-22T20:48:40",
+	"current_index": 3,
+	"final_hash": "95c702f99f34099f206cac9e178ee226",
 	"game_version": "0.1.0",
 	"initial_state": {
 		"bank": {
 			"broke_count": 0,
 			"ceo_slots_after_first_break": -1,
 			"removed_total": 0,
-			"reserve_added_total": 100,
+			"reserve_added_total": 50,
 			"total": 100
 		},
 		"current_player_index": 0,
 		"employee_pool": {
-			"brand_director": 0,
+			"brand_director": 1,
 			"brand_manager": 6,
 			"burger_chef": 1,
 			"burger_cook": 6,
@@ -160,7 +112,7 @@
 			"hr_director": 1,
 			"junior_vice_president": 1,
 			"kitchen_trainee": 12,
-			"local_manager": 6,
+			"local_manager": 5,
 			"luxury_manager": 1,
 			"management_trainee": 18,
 			"marketing_trainee": 11,
@@ -170,13 +122,13 @@
 			"pricing_manager": 1,
 			"recruiting_girl": 12,
 			"recruiting_manager": 6,
-			"regional_manager": 1,
+			"regional_manager": 0,
 			"senior_vice_president": 6,
 			"trainer": 11,
 			"truck_driver": 6,
 			"vice_president": 1,
 			"waitress": 12,
-			"zeppelin_pilot": 0
+			"zeppelin_pilot": 1
 		},
 		"map": {
 			"boundary_index": {
@@ -963,18 +915,7 @@
 						"drink_source": null,
 						"road_segments": [],
 						"structure": {
-							"anchor_cell": true,
-							"dynamic": true,
-							"has_garden": true,
-							"house_id": "1",
-							"house_number": 1,
-							"owner": 0,
-							"parent_anchor": [
-								10,
-								2
-							],
-							"piece_id": "house_with_garden",
-							"rotation": 0
+
 						},
 						"terrain_type": null,
 						"tile_origin": [
@@ -987,18 +928,7 @@
 						"drink_source": null,
 						"road_segments": [],
 						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"has_garden": true,
-							"house_id": "1",
-							"house_number": 1,
-							"owner": 0,
-							"parent_anchor": [
-								10,
-								2
-							],
-							"piece_id": "house_with_garden",
-							"rotation": 0
+
 						},
 						"terrain_type": null,
 						"tile_origin": [
@@ -1077,18 +1007,7 @@
 						"drink_source": null,
 						"road_segments": [],
 						"structure": {
-							"anchor_cell": true,
-							"dynamic": true,
-							"has_garden": true,
-							"house_id": "3",
-							"house_number": 3,
-							"owner": 0,
-							"parent_anchor": [
-								0,
-								3
-							],
-							"piece_id": "house_with_garden",
-							"rotation": 0
+
 						},
 						"terrain_type": null,
 						"tile_origin": [
@@ -1101,18 +1020,7 @@
 						"drink_source": null,
 						"road_segments": [],
 						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"has_garden": true,
-							"house_id": "3",
-							"house_number": 3,
-							"owner": 0,
-							"parent_anchor": [
-								0,
-								3
-							],
-							"piece_id": "house_with_garden",
-							"rotation": 0
+
 						},
 						"terrain_type": null,
 						"tile_origin": [
@@ -1247,18 +1155,7 @@
 						"drink_source": null,
 						"road_segments": [],
 						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"has_garden": true,
-							"house_id": "1",
-							"house_number": 1,
-							"owner": 0,
-							"parent_anchor": [
-								10,
-								2
-							],
-							"piece_id": "house_with_garden",
-							"rotation": 0
+
 						},
 						"terrain_type": null,
 						"tile_origin": [
@@ -1271,18 +1168,7 @@
 						"drink_source": null,
 						"road_segments": [],
 						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"has_garden": true,
-							"house_id": "1",
-							"house_number": 1,
-							"owner": 0,
-							"parent_anchor": [
-								10,
-								2
-							],
-							"piece_id": "house_with_garden",
-							"rotation": 0
+
 						},
 						"terrain_type": null,
 						"tile_origin": [
@@ -1344,18 +1230,7 @@
 						"drink_source": null,
 						"road_segments": [],
 						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"has_garden": true,
-							"house_id": "3",
-							"house_number": 3,
-							"owner": 0,
-							"parent_anchor": [
-								0,
-								3
-							],
-							"piece_id": "house_with_garden",
-							"rotation": 0
+
 						},
 						"terrain_type": null,
 						"tile_origin": [
@@ -1368,18 +1243,7 @@
 						"drink_source": null,
 						"road_segments": [],
 						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"has_garden": true,
-							"house_id": "3",
-							"house_number": 3,
-							"owner": 0,
-							"parent_anchor": [
-								0,
-								3
-							],
-							"piece_id": "house_with_garden",
-							"rotation": 0
+
 						},
 						"terrain_type": null,
 						"tile_origin": [
@@ -1528,18 +1392,7 @@
 						"drink_source": null,
 						"road_segments": [],
 						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"has_garden": true,
-							"house_id": "1",
-							"house_number": 1,
-							"owner": 0,
-							"parent_anchor": [
-								10,
-								2
-							],
-							"piece_id": "house_with_garden",
-							"rotation": 0
+
 						},
 						"terrain_type": null,
 						"tile_origin": [
@@ -1552,18 +1405,7 @@
 						"drink_source": null,
 						"road_segments": [],
 						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"has_garden": true,
-							"house_id": "1",
-							"house_number": 1,
-							"owner": 0,
-							"parent_anchor": [
-								10,
-								2
-							],
-							"piece_id": "house_with_garden",
-							"rotation": 0
+
 						},
 						"terrain_type": null,
 						"tile_origin": [
@@ -1625,18 +1467,7 @@
 						"drink_source": null,
 						"road_segments": [],
 						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"has_garden": true,
-							"house_id": "3",
-							"house_number": 3,
-							"owner": 0,
-							"parent_anchor": [
-								0,
-								3
-							],
-							"piece_id": "house_with_garden",
-							"rotation": 0
+
 						},
 						"terrain_type": null,
 						"tile_origin": [
@@ -1649,18 +1480,7 @@
 						"drink_source": null,
 						"road_segments": [],
 						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"has_garden": true,
-							"house_id": "3",
-							"house_number": 3,
-							"owner": 0,
-							"parent_anchor": [
-								0,
-								3
-							],
-							"piece_id": "house_with_garden",
-							"rotation": 0
+
 						},
 						"terrain_type": null,
 						"tile_origin": [
@@ -4317,6 +4137,8 @@
 				15
 			],
 			"house_number_supply_remaining": [
+				1,
+				3,
 				6,
 				9,
 				11,
@@ -4325,45 +4147,6 @@
 				19
 			],
 			"houses": {
-				"1": {
-					"anchor_pos": [
-						10,
-						2
-					],
-					"cells": [
-						[
-							10,
-							2
-						],
-						[
-							11,
-							2
-						],
-						[
-							10,
-							3
-						],
-						[
-							11,
-							3
-						],
-						[
-							10,
-							4
-						],
-						[
-							11,
-							4
-						]
-					],
-					"demands": [],
-					"has_garden": true,
-					"house_id": "1",
-					"house_number": 1,
-					"is_apartment": false,
-					"owner": 0,
-					"printed": false
-				},
 				"12": {
 					"anchor_pos": [
 						9,
@@ -4453,45 +4236,6 @@
 					"house_number": 2.0,
 					"is_apartment": false,
 					"printed": true
-				},
-				"3": {
-					"anchor_pos": [
-						0,
-						3
-					],
-					"cells": [
-						[
-							0,
-							3
-						],
-						[
-							1,
-							3
-						],
-						[
-							0,
-							4
-						],
-						[
-							1,
-							4
-						],
-						[
-							0,
-							5
-						],
-						[
-							1,
-							5
-						]
-					],
-					"demands": [],
-					"has_garden": true,
-					"house_id": "3",
-					"house_number": 3,
-					"is_apartment": false,
-					"owner": 0,
-					"printed": false
 				},
 				"4": {
 					"anchor_pos": [
@@ -4767,8 +4511,8 @@
 					"ceo",
 					"new_business_developer",
 					"new_business_developer",
-					"brand_director",
-					"zeppelin_pilot"
+					"local_manager",
+					"regional_manager"
 				],
 				"id": 0,
 				"inventory": {
@@ -4809,7 +4553,7 @@
 				"banned_employee_ids": [],
 				"busy_marketers": [],
 				"can_peek_all_reserve_cards": false,
-				"cash": 50,
+				"cash": 0,
 				"ceo_cfo_ability_start_round": -1,
 				"company_structure": {
 					"ceo_slots": 3.0,
@@ -4861,9 +4605,6 @@
 
 			},
 			"actions_this_round": [],
-			"house_placement_counts": {
-				"0": 2
-			},
 			"mandatory_actions_completed": {
 				"0": [],
 				"1": []
@@ -4940,7 +4681,7 @@
 			1,
 			0
 		],
-		"sub_phase": "Marketing",
+		"sub_phase": "PlaceHouses",
 		"turn_order": [
 			0,
 			1
