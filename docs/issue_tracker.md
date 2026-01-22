@@ -64,6 +64,7 @@
 | 47 | 飞机营销：图标需随摆放方向旋转（长边为底） | UI/渲染 | `_draw_marketing_placement()` 始终按轴对齐绘制纹理，导致左右边贴时飞机图标横向被压缩 | Implemented（待手动验收） |
 | 48 | 游戏日志：房屋被打上广告缺日志；采购日志缺路线；需要可读性方案 | UI/信息架构 | 缺少 MarketingSettlement/路线等结构化事件；现有日志仅平铺文本，难在“不刷屏”和“可追溯细节”间平衡 | Implemented（待手动验收） |
 | 49 | 提供“日志验证”测试存档（便于手工审查日志改动） | 测试/工具 | 现有 manual_cases 会冻结命令历史，无法承载“回放产生事件→复核日志”的场景 | Implemented（待手动验收） |
+| 50 | 日志验证存档：尽可能覆盖更多日志事件类型（便于集中审查） | 测试/工具 | 现有 `logs/event_log_review` 覆盖面有限，难以一次性审查招聘/培训/解雇/餐厅/花园/生产/里程碑等日志 | 待澄清 |
 
 ---
 
@@ -2551,3 +2552,55 @@
 **状态**
 
 - Implemented（待手动验收）
+
+---
+
+## 50. 日志验证存档：尽可能覆盖更多日志事件类型（便于集中审查）
+
+**现象/需求**
+
+- 现有 `logs/event_log_review` 会在读档回放后产生 `MARKETING_PLACED/DRINKS_PROCURED/DEMAND_GENERATED` 等日志，便于验证“营销结算/采购路线/详情展开”。
+- 你希望“尽可能覆盖完整游戏中的事件”，以便集中审查其它日志（例如：招聘/培训/解雇、餐厅放置/移动、放房屋/加花园、生产食物、里程碑、阶段/回合/现金变化等）。
+
+**涉及代码（初步定位）**
+
+- 日志显示范围：
+	- `ui/scenes/game/game_event_log_controller.gd`：`EVENT_TYPES_TO_LOG`
+- 测试存档生成/回放：
+	- `tools/generate_manual_test_saves.gd` / `tools/generate_manual_test_saves_manifest.gd`
+	- `res://.savings/manual_cases/logs/`
+
+**待澄清**
+
+- “完整事件”覆盖范围：
+	- A. 仅覆盖 `GameEventLogController.EVENT_TYPES_TO_LOG` 当前会显示的事件类型；
+	- B. 也要覆盖 EventBus 中存在但目前未显示的事件（如 `FOOD_SOLD/FOOD_DISCARDED/PLAYER_BROKE/MARKETING_EXPIRED/...`）。若选 B，需要同时扩展 `EVENT_TYPES_TO_LOG`，否则存档回放也不会在 UI 中出现这些条目。
+- 存档组织形式：
+	- A. 单一“超覆盖”存档（一次性覆盖全部类型，但日志更长）；
+	- B. 多个分主题存档（每个存档覆盖 3-6 类事件，更易读）。
+- 是否仍固定：`2 人 + base map`？是否需要覆盖“失败/极端”场景（例如欠薪/破产/动作失败）？
+
+**方案（候选）**
+
+- 方案 A（单档，最大覆盖）：
+	- 新增 `logs/event_log_full_coverage`：通过一段确定性的 command_history，在回放中依次触发：
+		- 招聘（`EMPLOYEE_RECRUITED`）
+		- 培训（`EMPLOYEE_TRAINED`）
+		- 强制定价动作（`COMMAND_EXECUTED`）+ 触发里程碑（`MILESTONE_ACHIEVED`）
+		- 放置/移动餐厅（`RESTAURANT_PLACED/RESTAURANT_MOVED`）
+		- 放房屋/加花园（`HOUSE_PLACED/GARDEN_ADDED`）
+		- 生产食物（`FOOD_PRODUCED`）
+		- 采购饮料（`DRINKS_PROCURED`）
+		- 发起营销 + 结算生成需求（`MARKETING_PLACED/DEMAND_GENERATED`）
+		- 推进到 Dinnertime 生成报告（`DINNERTIME_REPORT`），并自然覆盖 `PHASE_CHANGED/SUB_PHASE_CHANGED/ROUND_STARTED/PLAYER_TURN_STARTED/ENDED/PLAYER_CASH_CHANGED` 等。
+- 方案 B（多档，推荐可读性）：
+	- 新增 3-5 个 logs 用例，分别覆盖：员工（招聘/培训/解雇）、餐厅/地图建造（放/移餐厅、放房屋/花园）、生产/采购、营销/结算、里程碑/强制动作等。
+	- 好处：单档日志不至于过长，便于你逐类审查与回归定位。
+
+**测试计划**
+
+- 新增/扩展回归测试：加载对应 logs 存档后，断言 `EventBus.history` 至少包含目标事件类型（每类至少 1 条），并纳入 AllTests。
+
+**状态**
+
+- 待澄清（方案确认后实施）
