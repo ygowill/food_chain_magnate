@@ -47,6 +47,23 @@
 | 30 | 飞机营销板件：应贴地图外侧边缘且不在地图内；可用宽度仅 1/3/5 | UI/规则+渲染 | 当前飞机按普通营销板件在地图内绘制/占地，且尺寸来自现有 `footprint_size`（含 2x1/3x2/5x2 等），与目标规则不一致 | Implemented（待手动验收） |
 | 31 | 关闭“点击地图格高亮” | UI/一致性 | `MapCanvas` 记录 `_selected_pos` 且 `MapCanvasDrawer._draw_selection()` 绘制蓝色选中框 | Implemented（待手动验收） |
 | 32 | 地图渲染：tile 内部细分网格线（细线）与 tile 外边缘粗线一起绘制 | UI/渲染 | `MapCanvasDrawer._draw_tile_borders()` 目前仅绘制 tile 外边缘粗线，未绘制 tile 内部单元格分割线 | Implemented（待手动验收） |
+| 33 | 营销板件数据修复：piece 命名/类型/尺寸对齐真实数据 | 数据/规则 | `base_marketing` 的板件定义与真实数据不一致（radio/airplane/mailbox/billboard 的编号与 footprint_size 错配） | Implemented（待手动验收） |
+| 34 | 营销面板：选择员工的缩略卡高度不足，导致与下方板件区重叠 | UI/布局 | `EmployeePickerItem` 未提供稳定最小高度，FlowContainer 行高计算偏小导致下方区被覆盖 | Implemented（待手动验收） |
+| 35 | 营销板件：禁止覆盖饮料进货点；可选点高亮需剔除 | 规则+UI | 可选点计算未排除覆盖 `drink_source` 的 anchors | Implemented（待手动验收） |
+| 36 | 营销板件：点击选点时地图显示半透明预览；放置后不透明；去掉边框 | UI/交互+渲染 | 仅高亮 anchor，未走 structure_preview；营销板件绘制仍带边框/透明度不一致 | Implemented（待手动验收） |
+| 37 | 营销板件：地图/按钮预览显示序号徽标（白底圆+黑字） | UI/渲染 | 营销板件未复用房屋编号徽标绘制；MarketingBoardButton 预览未显示编号 | Implemented（待手动验收） |
+| 38 | 飞机营销：可选点应显示为地图外一圈（且仅在飞机模式显示） | UI/交互 | highlights 仍使用地图内 anchor；外圈映射与显示模式未区分 | Implemented（待手动验收） |
+| 39 | 重组：CEO 下方员工槽不可见 | UI/布局 | CompanyStructure 纵向布局/最小高度不足导致 CEO slots 被裁剪 | Implemented（待手动验收） |
+| 40 | 飞机营销：仅允许 1/3/5 长度贴边；外圈仅飞机模式显示且无背景；外圈包含 external_cells | 规则+UI | airplane 规则/外圈渲染与外部格处理不一致；外圈背景被误填充 | Implemented（待手动验收） |
+| 41 | 重组：左侧员工面板过宽；仍看不到 CEO 下属槽（需定位根因） | UI/布局 | SplitContainer/HandArea 最小宽度与 split_offset 语义误用导致左侧过宽；CEO slots 与裁剪叠加 | Implemented（待手动验收） |
+| 42 | 飞机营销：放置不受道路/距离影响；可用点全边可选；影响范围为跨全图条带（宽=1/3/5） | 规则+UI | airplane 被错误套用“道路连接/距离/range”校验；影响范围未按条带覆盖整图 | Implemented（待手动验收） |
+| 43 | 营销放置：点击选点后预览固定，不再跟随鼠标，直到确认/取消 | UI/交互 | 放置流程把“hover anchor”当作最终目标，点击后仍持续更新 preview | Implemented（待手动验收） |
+| 44 | 重组结构：CEO 直属槽可见；管理岗员工卡不随下属槽拉宽（保持 compact 且居中） | UI/布局 | 右侧树布局用 `HFlowContainer` 导致卡片被拉伸；CEO slots 未正确参与布局 | Implemented（待手动验收） |
+| 45 | 重组结构：左侧员工卡牌区域宽度收敛到“三列 compact 卡”所需宽度 | UI/布局 | `HSplitContainer.split_offset` + HandArea 最小宽度导致左侧偏宽 | Implemented（待手动验收） |
+| 46 | 重组结构：拖回待命区 drop 区域过小（仅左上角可成功） | UI/交互 | drop target 仅覆盖 reserve_container 的一部分；ScrollContainer 空白区域不命中 | Implemented（待手动验收） |
+| 47 | 飞机营销：图标需随摆放方向旋转（长边为底） | UI/渲染 | `_draw_marketing_placement()` 始终按轴对齐绘制纹理，导致左右边贴时飞机图标横向被压缩 | Planned |
+| 48 | 游戏日志：房屋被打上广告缺日志；采购日志缺路线；需要可读性方案 | UI/信息架构 | 缺少 MarketingSettlement/路线等结构化事件；现有日志仅平铺文本，难在“不刷屏”和“可追溯细节”间平衡 | Planned（需方案评审） |
+| 49 | 提供“日志验证”测试存档（便于手工审查日志改动） | 测试/工具 | 现有 manual_cases 会冻结命令历史，无法承载“回放产生事件→复核日志”的场景 | Planned（需需求确认） |
 
 ---
 
@@ -2365,3 +2382,136 @@
 **状态**
 
 - Implemented（待手动验收）
+
+---
+
+## 47. 飞机营销：图标需随摆放方向旋转（长边为底）
+
+**现象/需求**
+
+- 飞机营销板件在地图左右两侧（贴左/贴右）时，飞机“图标/背景纹理”仍为横向，导致在竖向 rect 中被压缩。
+- 期望：飞机图标随摆放方向旋转，使其长边与板件长边一致（“长边为底”），避免压缩与方向不一致。
+
+**涉及代码（初步定位）**
+
+- `ui/scenes/game/map_canvas_drawer.gd`：`_draw_marketing_placement()` 当前使用 `_draw_texture_aspect_fit()` 绘制营销 type texture，但未做旋转；airplane 的方向由 `axis(row/col)` 决定。
+
+**初步根因**
+
+- airplane 营销板件本身通过 `axis` 决定了渲染 rect 的方向（横/竖），但绘制图标时始终轴对齐，导致在竖向 rect 内缩放不符合预期。
+
+**修复方案**
+
+- 仅对 `type == "airplane"` 的“营销 type texture”做旋转绘制：
+	- `axis == "row"`（贴左/贴右，竖向板件）：将飞机图标旋转 90° 后再做 aspect-fit；
+	- `axis == "col"`（贴上/贴下，横向板件）：保持不旋转；
+	- 产品 icon（居中）与 board_number 徽标（右上角）保持不旋转（仍按屏幕坐标）。
+- 实现方式：在 `_draw_marketing_placement()` 内对飞机图标绘制包一层 `draw_set_transform(center, rot, Vector2.ONE)`，绘制完成后恢复 transform。
+
+**测试计划**
+
+- 新增 headless 渲染行为测试：
+	- 构造 airplane placement（axis=row/col），调用 `_draw_marketing_placement()`；
+	- `axis=row` 期望触发 `draw_set_transform`（旋转）调用；`axis=col` 期望不触发。
+
+**状态**
+
+- Planned
+
+---
+
+## 48. 游戏日志：房屋被打上广告缺日志；采购日志缺路线；需要可读性方案
+
+**现象/需求**
+
+- 当前日志中：
+	- 房屋因营销被“打上广告/产生需求”的过程缺少可读的日志（只有“发起营销”一条，无法追溯覆盖了哪些房屋/新增了多少需求）。
+	- 采购（饮料）日志过于简略：看不到玩家选择的采购路线（从哪家餐厅出发、经过哪些饮料点/路径）。
+- 同时需要避免日志过度刷屏（与玩家/事件日志混在一起会变得冗长难读）。
+- 需要先提出改进方案供你审查；你点头后再实施。
+
+**涉及代码（初步定位）**
+
+- 日志写入：
+	- `ui/scenes/game/game_event_log_controller.gd`：订阅 EventBus 并生成日志文本
+	- `ui/components/game_log/game_log_panel.gd`：日志 UI（目前仅平铺列表；entries 支持 `details` 但 UI 不展示）
+- 事件来源：
+	- 营销结算：`core/rules/phase/marketing_settlement.gd`（产出 `round_state.marketing.processed`，包含 `affected_houses/demands_added`）
+	- 阶段推进事件：`gameplay/actions/advance_phase_action.gd`
+	- 饮料采购事件：`gameplay/actions/procure_drinks_action.gd`（DRINKS_PROCURED 事件未携带 route/selected_sources）
+
+**初步根因**
+
+- EventBus 事件缺少“可读的结构化信息”（营销结算摘要/受影响房屋列表、采购路线/来源等），导致 UI 只能输出简略文本或被迫刷大量日志。
+- GameLogPanel 虽保存 `details`，但缺少“展开/查看详情”的通用交互，导致无法把“短摘要 + 可展开细节”作为统一机制。
+
+**方案提案（需你确认后实施）**
+
+- A. 统一“短摘要 + 可展开详情”机制（推荐）：
+	- GameLogPanel：双击日志条目弹出一个轻量详情窗口（显示 message + pretty-printed details JSON）。
+	- 营销结算：进入 Marketing 阶段时（`advance_phase`），追加一个事件（或扩展现有事件 data）携带 `round_state.marketing.processed` 的摘要（每块板：board_number、owner、type、affected_house_numbers、demands_added 等）。
+	- 饮料采购：扩展 `DRINKS_PROCURED` 事件 data，包含 `restaurant_id`（若有）、`route`（序列化坐标）、`selected_sources`（或 picked_sources 简表）；日志摘要仍保持简短，路线细节放入 details。
+- B. “细节日志”独立分类（可选叠加）：
+	- 新增 LogType（例如 `DETAIL`），默认不勾选；把“每个房屋/每一步路线”的日志放入 DETAIL，避免默认刷屏。
+
+**待澄清**
+
+- 你希望营销相关日志的颗粒度是：
+	- A. 每块营销板 1 条摘要（可展开显示覆盖房屋列表/新增需求）；
+	- B. 每个被影响房屋 1 条日志（更直观但更刷屏，可能需要 DETAIL 分类）。
+- 采购路线日志你更关心：
+	- A. 起点餐厅 + 选中的饮料点（不必展示每一步格子）；
+	- B. 完整路径坐标（可展开）。
+
+**测试计划**
+
+- 新增 headless 测试覆盖：
+	- `advance_phase` 进入 Marketing 时会产生“营销结算事件”，且 data 中包含 `processed` 摘要字段；
+	- `procure_drinks` 的 DRINKS_PROCURED 事件 data 中包含 route/restaurant_id/selected_sources（按你的选择最小化字段）；
+	- GameLogPanel 详情窗口逻辑（至少覆盖：entry.details 能被正确传递/展示的最小单测）。
+
+**状态**
+
+- Planned（需方案评审）
+
+---
+
+## 49. 提供“日志验证”测试存档（便于手工审查日志改动）
+
+**现象/需求**
+
+- 需要一个测试存档，用于手工复核“日志事件/格式/详情展开”等改动是否生效。
+- 目标：加载后即可在日志里看到一组覆盖关键场景的日志（营销结算影响房屋、采购路线等），减少手动搭建局面的成本。
+
+**涉及代码（初步定位）**
+
+- 手工复核存档生成：
+	- `tools/generate_manual_test_saves.gd`
+	- `tools/generate_manual_test_saves_manifest.gd`
+	- 输出目录：`res://.savings/manual_cases/...`
+
+**初步根因**
+
+- 现有 manual_cases 生成逻辑会把当前状态“冻结”为 initial_state（清空 `command_history`），以减少噪音；但这会导致“加载时回放产生事件 → 复核日志”的场景无法覆盖（没有命令可回放就没有事件）。
+
+**修复方案（提案，需你点头后实施）**
+
+- 在 manual_cases 体系中新增一个 `logs` 用例：
+	- 生成时保留少量命令历史（不冻结），确保读档回放能恢复 EventBus.history，并让日志面板可复核。
+	- 存档说明 MD 里写清：打开日志、筛选、双击查看详情，检查营销结算/采购路线等条目。
+
+**待澄清**
+
+- 你希望该存档更偏向：
+	- A. “加载后即可看到历史日志”（用于检查恢复/筛选/详情展示）；
+	- B. “加载后处在某个子阶段，玩家点几步即可触发新日志”（用于检查实时追加）。
+- 你希望玩家数/地图规模是否固定（例如 2 人、基础地图即可）？
+
+**测试计划**
+
+- 新增一个 headless 验证（最小化）：
+	- 生成脚本产物可 load（已有验证），并且回放后 EventBus.history 至少包含预期事件类型（例如 MARKETING/DRINKS 相关）。
+
+**状态**
+
+- Planned（需需求确认）
