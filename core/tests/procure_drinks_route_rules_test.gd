@@ -247,6 +247,29 @@ static func _run_air_route_rules(action: ProcureDrinksAction, player_count: int,
 	if int(inv.get("beer", 0)) != 0:
 		return Result.failure("飞艇路线未经过 beer 来源，不应获得 beer，实际: %d" % int(inv.get("beer", 0)))
 
+	# 事件 payload：应包含起点餐厅与选中的进货点信息（issue_tracker #48）。
+	var events := action.generate_events(state, new_state, cmd_loop)
+	var found := false
+	for e_val in events:
+		if not (e_val is Dictionary):
+			continue
+		var e: Dictionary = e_val
+		if str(e.get("type", "")) != EventBus.EventType.DRINKS_PROCURED:
+			continue
+		var data_val = e.get("data", null)
+		if not (data_val is Dictionary):
+			return Result.failure("drinks_procured.data 类型错误（期望 Dictionary）")
+		var data: Dictionary = data_val
+		if str(data.get("restaurant_id", "")).strip_edges() != "rest_0":
+			return Result.failure("drinks_procured.restaurant_id 缺失或不匹配: %s" % str(data))
+		var picked_val = data.get("picked_sources", null)
+		if not (picked_val is Array) or (picked_val as Array).is_empty():
+			return Result.failure("drinks_procured.picked_sources 缺失或为空: %s" % str(data))
+		found = true
+		break
+	if not found:
+		return Result.failure("应生成 DRINKS_PROCURED 事件")
+
 	return Result.success({
 		"uturn_error": vr.error,
 		"dup_error": vr_dup.error,

@@ -26,6 +26,7 @@ const EVENT_TYPES_TO_LOG: Array[String] = [
 	EventBus.EventType.FOOD_PRODUCED,
 	EventBus.EventType.DRINKS_PROCURED,
 	EventBus.EventType.MARKETING_PLACED,
+	EventBus.EventType.DEMAND_GENERATED,
 	EventBus.EventType.MILESTONE_ACHIEVED,
 ]
 
@@ -285,11 +286,44 @@ func _on_eventbus_event(event: Dictionary) -> void:
 			var employee_type := str(data.get("employee_type", "")).strip_edges()
 			var employee_name := _employee_name(employee_type)
 			var drinks_text := _format_drinks_procured(data.get("drinks_procured", {}))
+			var rest_text := _format_restaurant_id_short(str(data.get("restaurant_id", "")).strip_edges())
+			var sources_text := _format_picked_drink_sources_short(data.get("picked_sources", null), 3)
 			var text := "采购饮料"
 			if not employee_name.is_empty():
 				text += "（%s）" % employee_name
 			if not drinks_text.is_empty():
 				text += "：" + drinks_text
+			var meta: Array[String] = []
+			if not rest_text.is_empty():
+				meta.append("起点: %s" % rest_text)
+			if not sources_text.is_empty():
+				meta.append("进货点: %s" % sources_text)
+			if not meta.is_empty():
+				text += "（%s）" % "；".join(meta)
+			_game_log_panel.add_player_log(player_id, text, data)
+		EventBus.EventType.DEMAND_GENERATED:
+			var player_id := int(data.get("player_id", -1))
+			var board_number := int(data.get("board_number", 0))
+			var marketing_type := _format_marketing_type_short(str(data.get("marketing_type", "")).strip_edges())
+			var product_name := _product_name(str(data.get("product", "")).strip_edges())
+			var demands_added := int(data.get("demands_added", 0))
+			var houses_text := _format_house_numbers_short(data.get("affected_house_numbers", null), 4)
+
+			var parts: Array[String] = []
+			if board_number > 0:
+				parts.append("板#%d" % board_number)
+			if not product_name.is_empty():
+				parts.append(product_name)
+			if not marketing_type.is_empty():
+				parts.append(marketing_type)
+			if not houses_text.is_empty():
+				parts.append("覆盖%s" % houses_text)
+			if demands_added != 0:
+				parts.append("%+d需求" % demands_added)
+
+			var text := "营销生效"
+			if not parts.is_empty():
+				text += "：" + " ".join(parts)
 			_game_log_panel.add_player_log(player_id, text, data)
 		EventBus.EventType.MARKETING_PLACED:
 			var player_id := int(data.get("player_id", -1))
@@ -406,6 +440,102 @@ func _format_marketing_axis(axis: String) -> String:
 			return "纵向"
 		_:
 			return ""
+
+func _format_marketing_type_short(marketing_type: String) -> String:
+	match str(marketing_type).strip_edges():
+		"billboard":
+			return "广告牌"
+		"mailbox":
+			return "邮箱"
+		"radio":
+			return "电台"
+		"airplane":
+			return "飞机"
+		_:
+			return str(marketing_type).strip_edges()
+
+func _format_restaurant_id_short(restaurant_id: String) -> String:
+	var rid := str(restaurant_id).strip_edges()
+	if rid.is_empty():
+		return ""
+	if rid.begins_with("rest_"):
+		var tail := rid.substr(5)
+		if tail.is_valid_int():
+			return "餐厅#%d" % (int(tail) + 1)
+	return rid
+
+func _format_picked_drink_sources_short(picked_sources_val, max_items: int = 3) -> String:
+	if picked_sources_val == null or not (picked_sources_val is Array):
+		return ""
+	var picked_sources: Array = picked_sources_val
+	if picked_sources.is_empty():
+		return ""
+
+	# product_id -> count
+	var counts: Dictionary = {}
+	for src_val in picked_sources:
+		if not (src_val is Dictionary):
+			continue
+		var src: Dictionary = src_val
+		var pid := str(src.get("type", "")).strip_edges()
+		if pid.is_empty():
+			continue
+		counts[pid] = int(counts.get(pid, 0)) + 1
+
+	if counts.is_empty():
+		return ""
+
+	var keys := counts.keys()
+	keys.sort()
+	var parts: Array[String] = []
+	var shown := 0
+	for k_val in keys:
+		if shown >= max_items:
+			break
+		var pid2 := str(k_val).strip_edges()
+		if pid2.is_empty():
+			continue
+		var c := int(counts.get(k_val, 0))
+		if c <= 0:
+			continue
+		if c > 1:
+			parts.append("%s x%d" % [_product_name(pid2), c])
+		else:
+			parts.append(_product_name(pid2))
+		shown += 1
+
+	var suffix := ""
+	if keys.size() > shown:
+		suffix = " ..."
+	return "，".join(parts) + suffix
+
+func _format_house_numbers_short(house_numbers_val, max_items: int = 4) -> String:
+	if house_numbers_val == null or not (house_numbers_val is Array):
+		return ""
+	var arr: Array = house_numbers_val
+	if arr.is_empty():
+		return ""
+	var nums: Array[int] = []
+	for v in arr:
+		if v is int:
+			if int(v) > 0:
+				nums.append(int(v))
+		elif v is float:
+			var f: float = float(v)
+			if f == floor(f) and int(f) > 0:
+				nums.append(int(f))
+	if nums.is_empty():
+		return ""
+	nums.sort()
+
+	var shown := mini(nums.size(), maxi(1, max_items))
+	var parts: Array[String] = []
+	for i in range(shown):
+		parts.append("#%d" % nums[i])
+	var text := "房屋" + ",".join(parts)
+	if nums.size() > shown:
+		text += "…(共%d)" % nums.size()
+	return text
 
 func _format_drinks_procured(drinks_procured_val) -> String:
 	if drinks_procured_val == null or not (drinks_procured_val is Dictionary):

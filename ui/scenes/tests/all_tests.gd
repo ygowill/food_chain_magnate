@@ -99,6 +99,7 @@ const NewMilestonesDiscountManagerBankBurnV2TestClass = preload("res://core/test
 const LobbyistsV2TestClass = preload("res://core/tests/lobbyists_v2_test.gd")
 const NoodlesSushiV2TestClass = preload("res://core/tests/noodles_sushi_v2_test.gd")
 const MarketingSettlementFailFastTestClass = preload("res://core/tests/marketing_settlement_fail_fast_test.gd")
+const MarketingDemandGeneratedEventTestClass = preload("res://core/tests/marketing_demand_generated_event_test.gd")
 const MarketingDinnertimeGoldenReplayTestClass = preload("res://core/tests/marketing_dinnertime_golden_replay_test.gd")
 const MilestoneEffectValuesTestClass = preload("res://core/tests/milestone_effect_values_test.gd")
 const RandomMapGenerationTestClass = preload("res://core/tests/random_map_generation_test.gd")
@@ -525,6 +526,10 @@ func _run_all() -> int:
 					{
 						"name": "MarketingSettlementFailFastTest",
 						"fn": func() -> Result: return MarketingSettlementFailFastTestClass.run(2, 12345),
+					},
+					{
+						"name": "MarketingDemandGeneratedEventTest",
+						"fn": func() -> Result: return MarketingDemandGeneratedEventTestClass.run(),
 					},
 			{
 				"name": "MarketingDinnertimeGoldenReplayTest",

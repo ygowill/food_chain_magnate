@@ -301,6 +301,41 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 			var plan_r := DrinksProcurementClass.resolve_procurement_plan(_old_state, command, restaurant_ids, emp_def)
 			if plan_r.ok and plan_r.value is Dictionary:
 				var plan: Dictionary = plan_r.value
+				var rest_id := str(plan.get("restaurant_id", "")).strip_edges()
+				if not rest_id.is_empty():
+					data["restaurant_id"] = rest_id
+
+				# issue_tracker #48: include chosen drink sources for log readability (route A: start restaurant + sources).
+				var picked_val = plan.get("picked_sources", null)
+				if picked_val is Array:
+					var picked_sources_out: Array[Dictionary] = []
+					for src_val in Array(picked_val):
+						if not (src_val is Dictionary):
+							continue
+						var src: Dictionary = src_val
+						var drink_type := str(src.get("type", "")).strip_edges()
+						var pos_out: Array = []
+						var wp_val = src.get("world_pos", null)
+						if wp_val is Vector2i:
+							var wp: Vector2i = wp_val
+							pos_out = [wp.x, wp.y]
+						elif wp_val is Array:
+							pos_out = Array(wp_val)
+
+						var item := {}
+						if not drink_type.is_empty():
+							item["type"] = drink_type
+						if not pos_out.is_empty():
+							item["world_pos"] = pos_out
+						if not item.is_empty():
+							picked_sources_out.append(item)
+					if not picked_sources_out.is_empty():
+						data["picked_sources"] = picked_sources_out
+
+				var selected_val = command.params.get("selected_sources", null)
+				if selected_val is Array and not Array(selected_val).is_empty():
+					data["selected_sources"] = Array(selected_val)
+
 				var picked_sources_val = plan.get("picked_sources", null)
 				if picked_sources_val is Array:
 					var bonus_read := DrinksProcurementClass.get_drinks_per_source_bonus_from_milestones(_old_state, command.actor)

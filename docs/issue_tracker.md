@@ -62,7 +62,7 @@
 | 45 | 重组结构：左侧员工卡牌区域宽度收敛到“三列 compact 卡”所需宽度 | UI/布局 | `HSplitContainer.split_offset` + HandArea 最小宽度导致左侧偏宽 | Implemented（待手动验收） |
 | 46 | 重组结构：拖回待命区 drop 区域过小（仅左上角可成功） | UI/交互 | drop target 仅覆盖 reserve_container 的一部分；ScrollContainer 空白区域不命中 | Implemented（待手动验收） |
 | 47 | 飞机营销：图标需随摆放方向旋转（长边为底） | UI/渲染 | `_draw_marketing_placement()` 始终按轴对齐绘制纹理，导致左右边贴时飞机图标横向被压缩 | Implemented（待手动验收） |
-| 48 | 游戏日志：房屋被打上广告缺日志；采购日志缺路线；需要可读性方案 | UI/信息架构 | 缺少 MarketingSettlement/路线等结构化事件；现有日志仅平铺文本，难在“不刷屏”和“可追溯细节”间平衡 | Planned（需方案评审） |
+| 48 | 游戏日志：房屋被打上广告缺日志；采购日志缺路线；需要可读性方案 | UI/信息架构 | 缺少 MarketingSettlement/路线等结构化事件；现有日志仅平铺文本，难在“不刷屏”和“可追溯细节”间平衡 | Implemented（待手动验收） |
 | 49 | 提供“日志验证”测试存档（便于手工审查日志改动） | 测试/工具 | 现有 manual_cases 会冻结命令历史，无法承载“回放产生事件→复核日志”的场景 | Planned（需需求确认） |
 
 ---
@@ -2457,34 +2457,48 @@
 - EventBus 事件缺少“可读的结构化信息”（营销结算摘要/受影响房屋列表、采购路线/来源等），导致 UI 只能输出简略文本或被迫刷大量日志。
 - GameLogPanel 虽保存 `details`，但缺少“展开/查看详情”的通用交互，导致无法把“短摘要 + 可展开细节”作为统一机制。
 
-**方案提案（需你确认后实施）**
+**确认**
 
-- A. 统一“短摘要 + 可展开详情”机制（推荐）：
-	- GameLogPanel：双击日志条目弹出一个轻量详情窗口（显示 message + pretty-printed details JSON）。
-	- 营销结算：进入 Marketing 阶段时（`advance_phase`），追加一个事件（或扩展现有事件 data）携带 `round_state.marketing.processed` 的摘要（每块板：board_number、owner、type、affected_house_numbers、demands_added 等）。
-	- 饮料采购：扩展 `DRINKS_PROCURED` 事件 data，包含 `restaurant_id`（若有）、`route`（序列化坐标）、`selected_sources`（或 picked_sources 简表）；日志摘要仍保持简短，路线细节放入 details。
-- B. “细节日志”独立分类（可选叠加）：
-	- 新增 LogType（例如 `DETAIL`），默认不勾选；把“每个房屋/每一步路线”的日志放入 DETAIL，避免默认刷屏。
+- 你选择了：
+	- 营销日志颗粒度：A（每块营销板 1 条摘要，可展开详情）
+	- 采购路线日志：A（起点餐厅 + 选中的饮料点）
 
-**待澄清**
+**修复方案**
 
-- 你希望营销相关日志的颗粒度是：
-	- A. 每块营销板 1 条摘要（可展开显示覆盖房屋列表/新增需求）；
-	- B. 每个被影响房屋 1 条日志（更直观但更刷屏，可能需要 DETAIL 分类）。
-- 采购路线日志你更关心：
-	- A. 起点餐厅 + 选中的饮料点（不必展示每一步格子）；
-	- B. 完整路径坐标（可展开）。
+- 统一“短摘要 + 可展开详情”机制：
+	- `GameLogPanel`：双击日志条目弹出详情窗口（显示 message + details）。
+- 营销结算日志（房屋被打上广告/产生需求）：
+	- 在“离开 Marketing 阶段”时，从 `round_state.marketing.processed` 生成 `demand_generated` 事件（每块板 1 条），携带 `player_id/board_number/product/demands_added/affected_house_numbers` 等（详情可展开）。
+	- 同时覆盖四条路径（避免自动跳过阶段时丢事件）：
+		- `gameplay/actions/advance_phase_action.gd`
+		- `gameplay/actions/skip_action.gd`
+		- `gameplay/actions/skip_sub_phase_action.gd`
+		- `core/engine/game_engine/command_runner.gd`（auto_advance 的阶段变更事件生成）
+- 饮料采购日志：
+	- `DRINKS_PROCURED` 事件补充 `restaurant_id + picked_sources + selected_sources`；
+	- UI 日志摘要追加“起点餐厅 + 进货点”信息（不展示完整路径坐标，详见 details）。
 
-**测试计划**
+**实施记录**
 
-- 新增 headless 测试覆盖：
-	- `advance_phase` 进入 Marketing 时会产生“营销结算事件”，且 data 中包含 `processed` 摘要字段；
-	- `procure_drinks` 的 DRINKS_PROCURED 事件 data 中包含 route/restaurant_id/selected_sources（按你的选择最小化字段）；
-	- GameLogPanel 详情窗口逻辑（至少覆盖：entry.details 能被正确传递/展示的最小单测）。
+- 已修改：`ui/components/game_log/game_log_panel.gd`：双击日志条目打开详情窗口（message + details）。
+- 已修改：`ui/scenes/game/game_event_log_controller.gd`：
+	- 订阅并渲染 `DEMAND_GENERATED`；
+	- `DRINKS_PROCURED` 日志追加起点/进货点摘要。
+- 已修改：
+	- `core/engine/game_engine/command_runner.gd`：离开 Marketing 时生成 `DEMAND_GENERATED` 事件（auto_advance 路径）。
+	- `gameplay/actions/advance_phase_action.gd` / `skip_action.gd` / `skip_sub_phase_action.gd`：离开 Marketing 时同样生成 `DEMAND_GENERATED`（非 auto_advance 路径）。
+- 已修改：`gameplay/actions/procure_drinks_action.gd`：`DRINKS_PROCURED` 事件 data 扩展为包含起点餐厅与选定来源信息。
+- 已新增：`core/tests/marketing_demand_generated_event_test.gd` 并纳入 `ui/scenes/tests/all_tests.gd`。
+- 已修改：`core/tests/procure_drinks_route_rules_test.gd`：断言 `DRINKS_PROCURED` 事件包含 `restaurant_id/picked_sources`（回归保护）。
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（`.godot/AllTests.log`）
 
 **状态**
 
-- Planned（需方案评审）
+- Implemented（待手动验收）
 
 ---
 
