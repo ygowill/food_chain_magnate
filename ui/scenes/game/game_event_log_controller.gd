@@ -219,8 +219,17 @@ func _on_eventbus_event(event: Dictionary) -> void:
 				from_name if not from_name.is_empty() else from_employee,
 				to_name if not to_name.is_empty() else to_employee,
 			]
+			var parts: Array[String] = []
+			var steps := maxi(1, int(data.get("steps", 1)))
+			parts.append("%d步" % steps)
+			var trainer_id := str(data.get("trainer_id", "")).strip_edges()
+			if not trainer_id.is_empty():
+				var trainer_name := _employee_name(trainer_id)
+				parts.append("培训员：%s" % (trainer_name if not trainer_name.is_empty() else trainer_id))
 			if bool(data.get("from_pending", false)):
-				text += "（预支清账）"
+				parts.append("预支清账")
+			if not parts.is_empty():
+				text += "（%s）" % "，".join(parts)
 			_game_log_panel.add_player_log(player_id, text, data)
 		EventBus.EventType.EMPLOYEE_FIRED:
 			var player_id := int(data.get("player_id", -1))

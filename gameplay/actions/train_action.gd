@@ -255,6 +255,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	)
 	if not alloc.ok:
 		return alloc
+	var alloc_info: Dictionary = alloc.value if (alloc.value is Dictionary) else {}
+	var trainer_id := str(alloc_info.get("trainer_id", "")).strip_edges()
+	var trainer_instance_idx := int(alloc_info.get("instance_idx", -1))
 
 	var from_used_before := TrainEmployeeUsageClass._is_employee_used_before_training(state, player_id, from_employee)
 	var target_to_reserve := true
@@ -311,6 +314,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			"to_employee": to_employee,
 			"from_pending": use_pending,
 			"steps": steps_required,
+			"trainer_id": trainer_id,
+			"trainer_instance_idx": trainer_instance_idx,
 		})
 		state.round_state["train_events"] = train_events
 
@@ -340,14 +345,61 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 	assert(from_result.ok, "train 缺少/错误参数: from_employee")
 	var to_result := require_string_param(command, "to_employee")
 	assert(to_result.ok, "train 缺少/错误参数: to_employee")
-	var from_pending := EmployeeRulesClass.get_immediate_train_pending_count(old_state, command.actor, from_result.value) > 0
+
+	var from_employee: String = from_result.value
+	var to_employee: String = to_result.value
+
+	# 优先从 new_state.round_state.train_events 中读取本次训练的细节（trainer/steps）。
+	var old_train_events: Array = []
+	if old_state != null and (old_state.round_state is Dictionary):
+		var old_val = Dictionary(old_state.round_state).get("train_events", null)
+		if old_val is Array:
+			old_train_events = Array(old_val)
+
+	var new_train_events: Array = []
+	if new_state != null and (new_state.round_state is Dictionary):
+		var new_val = Dictionary(new_state.round_state).get("train_events", null)
+		if new_val is Array:
+			new_train_events = Array(new_val)
+
+	var start := old_train_events.size()
+	for i in range(start, new_train_events.size()):
+		var item_val = new_train_events[i]
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if int(item.get("player_id", -1)) != command.actor:
+			continue
+		if str(item.get("from_employee", "")) != from_employee:
+			continue
+		if str(item.get("to_employee", "")) != to_employee:
+			continue
+
+		events.append({
+			"type": EventBus.EventType.EMPLOYEE_TRAINED,
+			"data": {
+				"player_id": command.actor,
+				"from_employee": from_employee,
+				"to_employee": to_employee,
+				"from_pending": bool(item.get("from_pending", false)),
+				"steps": maxi(1, int(item.get("steps", 1))),
+				"trainer_id": str(item.get("trainer_id", "")).strip_edges(),
+				"trainer_instance_idx": int(item.get("trainer_instance_idx", -1)),
+			}
+		})
+		return events
+
+	# 兜底：旧状态/异常情况下仍发射基础事件（不阻断日志）。
+	var from_pending := EmployeeRulesClass.get_immediate_train_pending_count(old_state, command.actor, from_employee) > 0
+	var steps := _compute_train_steps_within_limit(from_employee, to_employee, 50)
 	events.append({
 		"type": EventBus.EventType.EMPLOYEE_TRAINED,
 		"data": {
 			"player_id": command.actor,
-			"from_employee": from_result.value,
-			"to_employee": to_result.value,
-			"from_pending": from_pending
+			"from_employee": from_employee,
+			"to_employee": to_employee,
+			"from_pending": from_pending,
+			"steps": maxi(1, steps),
 		}
 	})
 	return events

@@ -66,7 +66,7 @@
 | 49 | 提供“日志验证”测试存档（便于手工审查日志改动） | 测试/工具 | 现有 manual_cases 会冻结命令历史，无法承载“回放产生事件→复核日志”的场景 | Implemented（待手动验收） |
 | 50 | 日志验证存档：尽可能覆盖更多日志事件类型（便于集中审查） | 测试/工具 | 现有 `logs/event_log_review` 覆盖面有限，难以一次性审查招聘/培训/解雇/餐厅/花园/生产/里程碑等日志 | 待澄清 |
 | 51 | 晚餐结算日志过噪：包含冗余统计/拆分信息 | UI/日志 | `_log_dinnertime_report` 中为诊断添加的“总计/拆分/按产品”日志已不需要；用户已临时注释，需移除冗余代码并清理无用计算 | Implemented（待手动验收） |
-| 52 | 培训日志缺少“培训员来源”（trainer/coach/guru） | UI/日志 | `EMPLOYEE_TRAINED` 事件数据未携带 trainer_id/instance/steps，日志只能显示 from->to | 待澄清 |
+| 52 | 培训日志缺少“培训员来源”（trainer/coach/guru） | UI/日志 | `EMPLOYEE_TRAINED` 事件数据未携带 trainer_id/instance/steps，日志只能显示 from->to | Implemented（待手动验收） |
 | 53 | 决定顺序阶段缺少最终顺序结果日志 | UI/日志 | OrderOfBusiness 完成后未发射“最终 turn_order”事件；日志仅能看到阶段推进 | 待确认 |
 | 54 | 游戏日志默认应隐藏阶段信息 | UI/日志 | `GameLogPanel` 默认 `_filter_types` 包含 `PHASE`，导致 phase/subphase/回合等信息默认刷屏 | 待确认 |
 | 55 | Payday 阶段缺少结算日志（仅现金变化） | UI/日志 | `PaydaySettlement` 写入 `round_state.payday`，但未发射类似 `DINNERTIME_REPORT` 的汇总事件；日志只看到 `PLAYER_CASH_CHANGED` | 待澄清 |
@@ -1139,20 +1139,22 @@
 
 - `EMPLOYEE_TRAINED` 事件 data 当前仅包含 `from_employee/to_employee/from_pending`，没有 trainer 信息，因此 UI 无法展示。
 
-**修复方案（待你点头后实施）**
+**实施记录**
 
-- 在 `train` 执行时把 `trainer_id/instance_idx/steps` 记录到可从 `new_state` 派生的位置（例如扩展 `round_state.train_events`）。
-- `TrainAction._generate_specific_events()` 基于 old/new state 差异，发射包含 trainer 信息的培训事件（沿用 `EMPLOYEE_TRAINED` 或新增语义化事件）。
-- `GameEventLogController` 日志格式示例：`培训 A -> B（培训员：Coach）`（具体格式以你确认的展示需求为准）。
+- 已修改：`gameplay/actions/train_action.gd`
+	- 扩展 `round_state.train_events`：记录 `trainer_id/trainer_instance_idx/steps`
+	- `TrainAction._generate_specific_events()` 从 `train_events` 读取并发射 `EMPLOYEE_TRAINED`（包含培训员与步数）
+- 已修改：`ui/scenes/game/game_event_log_controller.gd`
+	- 培训日志追加展示：`N步` + `培训员：X`（并保留 `预支清账` 标记）
 
-**待澄清**
+**验证**
 
-- 这里的“来源”是指“培训路径的 from_employee”，还是指“消耗的培训员（trainer/coach/guru）”？（当前日志已包含 from_employee）
-- 是否需要展示多步培训的步数（coach/guru）？是否需要展示具体实例（同一玩家多张 trainer 时）？
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（107/107，`.godot/AllTests.log`）
 
 **状态**
 
-- 待澄清
+- Implemented（待手动验收）
 
 ## 53. 决定顺序阶段缺少最终顺序结果日志
 
