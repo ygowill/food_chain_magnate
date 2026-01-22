@@ -9,12 +9,18 @@ signal player_selected(player_id: int)
 @onready var company_host: Control = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split/CompanyHost
 @onready var status_label: Label = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Hint
 @onready var player_buttons_host: HBoxContainer = $Panel/MarginContainer/VBoxContainer/PlayerRow/PlayerButtons
+@onready var split: HSplitContainer = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split
+
+const RESTRUCTURING_HAND_TARGET_WIDTH := 440.0 # fits 3 compact cards/row (issue_tracker #45)
+const _MAX_SPLIT_ADJUST_ATTEMPTS := 6
 
 var _hand_area: Node = null
 var _company_structure: Node = null
 var _hand_area_prev_display_mode: String = "default"
 var _player_button_group: ButtonGroup = null
 var _player_buttons: Array[Button] = []
+var _split_adjust_attempts: int = 0
+var _split_adjusted: bool = false
 
 func _ready() -> void:
 	super._ready()
@@ -33,6 +39,7 @@ func open(_covered_rect: Rect2) -> void:
 		size_guess = Vector2(1280, 720)
 	var rect := Rect2(Vector2.ZERO, size_guess)
 	super.open(rect)
+	_queue_apply_split_target_width()
 
 func _center_panel() -> void:
 	# Restructuring modal is not a centered popup; panel fills the whole covered area.
@@ -96,6 +103,37 @@ func set_player_switcher(player_count: int, view_player_id: int, submitted: Dict
 
 func _on_player_button_pressed(player_id: int) -> void:
 	player_selected.emit(player_id)
+
+func _queue_apply_split_target_width() -> void:
+	_split_adjust_attempts = 0
+	_split_adjusted = false
+	call_deferred("_apply_split_target_width")
+
+func _apply_split_target_width() -> void:
+	if _split_adjusted:
+		return
+	if not is_instance_valid(split) or not is_instance_valid(hand_host):
+		return
+
+	_split_adjust_attempts += 1
+	if _split_adjust_attempts > _MAX_SPLIT_ADJUST_ATTEMPTS:
+		_split_adjusted = true
+		return
+
+	# Wait until layout has produced a non-zero size.
+	if split.size.x <= 1.0 or hand_host.size.x <= 1.0:
+		call_deferred("_apply_split_target_width")
+		return
+
+	# split_offset semantics can be non-obvious; adjust using measured left width so it works across viewports.
+	var delta := RESTRUCTURING_HAND_TARGET_WIDTH - float(hand_host.size.x)
+	if absf(delta) >= 1.0:
+		split.split_offset = int(round(float(split.split_offset) + delta))
+		split.clamp_split_offset()
+		call_deferred("_apply_split_target_width")
+		return
+
+	_split_adjusted = true
 
 func attach_hand_area(panel: Node) -> void:
 	_hand_area = panel

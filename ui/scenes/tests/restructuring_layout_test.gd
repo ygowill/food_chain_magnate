@@ -96,12 +96,13 @@ static func run() -> Result:
 		_safe_free(company)
 		return Result.failure("HandArea attach 后 display_mode=%s (期望 restructuring)" % str(hand.call("get_display_mode")))
 
-	# Restructuring: left panel should be narrower (issue_tracker #41).
-	if (hand as Control).custom_minimum_size.x > 320.0:
+	# Restructuring: left panel should fit 3 compact cards per row (issue_tracker #45).
+	var hand_min_w := float((hand as Control).custom_minimum_size.x)
+	if hand_min_w < 420.0 or hand_min_w > 460.0:
 		_safe_free(modal)
 		_safe_free(hand)
 		_safe_free(company)
-		return Result.failure("HandArea.custom_minimum_size.x=%s (重组模式期望 <= 320)" % str((hand as Control).custom_minimum_size.x))
+		return Result.failure("HandArea.custom_minimum_size.x=%s (重组模式期望 3 列≈440)" % str((hand as Control).custom_minimum_size.x))
 
 	var ha: HandArea = hand
 	if is_instance_valid(ha.active_section) and ha.active_section.visible:

@@ -2260,3 +2260,48 @@
 **状态**
 
 - Implemented（待手动验收）
+
+---
+
+## 45. 重组结构：左侧员工卡牌区域宽度收敛到“三列 compact 卡”所需宽度
+
+**现象/需求**
+
+- 你选择了“2”：左侧员工卡牌区需要一行展示 3 名员工（compact 卡尺寸不变），并允许滚动。
+- 当前左侧区域仍然过宽（远不止 3 张卡宽），右侧公司树可用空间被挤压。
+
+**涉及代码（初步定位）**
+
+- `ui/components/modal_panel/restructuring_modal.tscn`：`Split(HSplitContainer).split_offset` 影响左右区域宽度。
+- `ui/components/hand_area/hand_area.gd`：重组模式下 `HandArea.custom_minimum_size.x` 影响 SplitContainer 的最小分配宽度。
+
+**根因**
+
+- `HSplitContainer.split_offset` 的含义不是“左侧固定宽度”，而是对分割条位置的偏移；此前将其设为 `320` 会导致左侧在大屏下仍然偏宽。
+- HandArea 在重组模式下最小宽度被限制为 `<=320`，与“三列 compact 卡”的需求不匹配。
+
+**修复方案**
+
+- RestructuringModal：在 `open()` 后按当前 viewport 宽度动态设置 split，使左侧默认宽度≈3列所需（目标约 440px），右侧尽可能宽。
+- HandArea：重组模式下将 `custom_minimum_size.x` 调整为“三列 compact 卡”所需宽度（约 440px），保证布局稳定且不会出现 2 列/过窄。
+
+**测试计划**
+
+- 更新 `ui/scenes/tests/restructuring_layout_test.gd`：
+	- 断言重组模式 HandArea 的 `custom_minimum_size.x` 落在 3 列目标宽度范围内（避免回归到 2 列或过宽）。
+
+**实施记录**
+
+- 已修改：`ui/components/hand_area/hand_area.gd`：重组模式 `HandArea.custom_minimum_size.x` 固定为约 440（3 列 compact 卡所需）。
+- 已修改：`ui/components/modal_panel/restructuring_modal.tscn`：`Split.split_offset` 回到 0（避免在大屏下偏移过大）。
+- 已修改：`ui/components/modal_panel/restructuring_modal.gd`：`open()` 后按实际布局测量并迭代调整 split，使左侧默认宽度≈440，右侧尽可能宽。
+- 已修改：`ui/scenes/tests/restructuring_layout_test.gd`：更新断言，确保重组模式 HandArea 最小宽度处于 3 列目标范围内。
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）

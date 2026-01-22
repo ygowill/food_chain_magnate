@@ -9,6 +9,8 @@ signal card_dropped(employee_id: String, target: Control)
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
+const RESTRUCTURING_TARGET_WIDTH := 440.0 # ~3x compact cards + spacing (issue_tracker #45)
+
 @onready var active_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ActiveSection/ActiveContainer
 @onready var reserve_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ReserveSection/ReserveContainer
 @onready var busy_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/BusySection/BusyContainer
@@ -78,10 +80,9 @@ func set_display_mode(mode: String) -> void:
 	_display_mode = m
 	if _default_custom_minimum_size == Vector2.ZERO:
 		_default_custom_minimum_size = custom_minimum_size
-	# Narrow the left panel in restructuring mode; keep the default min size elsewhere (issue_tracker #41).
+	# In restructuring, keep the left panel just wide enough for 3 compact cards per row (issue_tracker #45).
 	if _display_mode == "restructuring":
-		var w := minf(float(_default_custom_minimum_size.x), 320.0)
-		custom_minimum_size = Vector2(w, _default_custom_minimum_size.y)
+		custom_minimum_size = Vector2(RESTRUCTURING_TARGET_WIDTH, _default_custom_minimum_size.y)
 	else:
 		custom_minimum_size = _default_custom_minimum_size
 	_rebuild_cards()
