@@ -13,6 +13,7 @@ const EVENT_TYPES_TO_LOG: Array[String] = [
 	EventBus.EventType.ROUND_STARTED,
 	EventBus.EventType.ROUND_ENDED,
 	EventBus.EventType.TURN_ORDER_FINALIZED,
+	EventBus.EventType.PAYDAY_REPORT,
 	EventBus.EventType.DINNERTIME_REPORT,
 	EventBus.EventType.PLAYER_TURN_STARTED,
 	EventBus.EventType.PLAYER_TURN_ENDED,
@@ -493,6 +494,8 @@ func _on_eventbus_event(event: Dictionary) -> void:
 			if not reason.is_empty():
 				text += "：" + reason
 			_game_log_panel.add_system_log(text, data)
+		EventBus.EventType.PAYDAY_REPORT:
+			_log_payday_report(data)
 		EventBus.EventType.DINNERTIME_REPORT:
 			_log_dinnertime_report(data)
 		_:
@@ -707,6 +710,75 @@ func _format_required_short(required: Dictionary, max_items: int = 3) -> String:
 	if keys.size() > shown:
 		suffix = " ..."
 	return " + ".join(parts) + suffix
+
+func _log_payday_report(data: Dictionary) -> void:
+	if not is_instance_valid(_game_log_panel):
+		return
+	var round := int(data.get("round", -1))
+	var report_val = data.get("report", null)
+	if not (report_val is Dictionary):
+		_game_log_panel.add_event_log("发薪日结算报告缺失（回合 %d）" % round, data)
+		return
+	var report: Dictionary = report_val
+
+	var details_val = report.get("details", null)
+	if not (details_val is Array):
+		_game_log_panel.add_event_log("发薪日结算报告缺失明细（回合 %d）" % round, report)
+		return
+	var details: Array = details_val
+
+	for item_val in details:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		var player_id := int(item.get("player_id", -1))
+		if player_id < 0:
+			continue
+
+		var due := int(item.get("due", 0))
+		var paid_cash := int(item.get("paid", 0))
+		var unpaid := int(item.get("unpaid", 0))
+		var discount := int(item.get("salary_discount", 0))
+		var delta := int(item.get("milestone_delta", 0))
+
+		var token_total := 0
+		var paid_tokens_val = item.get("paid_with_tokens", null)
+		if paid_tokens_val is Dictionary:
+			var paid_tokens: Dictionary = paid_tokens_val
+			for k in paid_tokens.keys():
+				token_total += int(paid_tokens.get(k, 0))
+
+		var extra_parts: Array[String] = []
+		if discount > 0:
+			extra_parts.append("折扣-$%d" % discount)
+		if delta != 0:
+			extra_parts.append("里程碑%+d" % delta)
+
+		var text := "发薪日"
+		if due == 0 and paid_cash == 0 and unpaid == 0 and token_total == 0:
+			text += "：无需支付"
+			if not extra_parts.is_empty():
+				text += "（%s）" % "，".join(extra_parts)
+		else:
+			text += "：应付$%d" % due
+
+			var pay_parts: Array[String] = []
+			if paid_cash > 0:
+				pay_parts.append("现金$%d" % paid_cash)
+			if token_total > 0:
+				pay_parts.append("代币x%d" % token_total)
+			if not pay_parts.is_empty():
+				text += "，支付：" + " + ".join(pay_parts)
+
+			if unpaid > 0:
+				text += "，欠薪$%d" % unpaid
+
+			if not extra_parts.is_empty():
+				text += "（%s）" % "，".join(extra_parts)
+
+		var d := item.duplicate(true)
+		d["round"] = round
+		_game_log_panel.add_player_log(player_id, text, d)
 
 func _log_dinnertime_report(data: Dictionary) -> void:
 	if not is_instance_valid(_game_log_panel):

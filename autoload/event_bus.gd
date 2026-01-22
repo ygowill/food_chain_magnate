@@ -11,6 +11,7 @@ class EventType:
 	const ROUND_STARTED := "round_started"
 	const ROUND_ENDED := "round_ended"
 	const TURN_ORDER_FINALIZED := "turn_order_finalized"
+	const PAYDAY_REPORT := "payday_report"
 
 	# 玩家相关
 	const PLAYER_TURN_STARTED := "player_turn_started"

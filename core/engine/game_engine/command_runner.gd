@@ -291,6 +291,23 @@ static func _build_phase_change_events(old_state: GameState, new_state: GameStat
 			# 细粒度售卖事件：从 dinnertime 报告中拆分出来（便于 UI 日志筛选/回放核对）。
 			events.append_array(_build_food_sold_events_from_dinnertime_report(old_state, report))
 
+		# Payday 结算报告：在离开 Payday 时发射（PaydaySettlement 在 exit hook 运行，报告写入 new_state.round_state.payday）。
+		if str(old_state.phase) == "Payday":
+			var report_payday: Dictionary = {}
+			if new_state.round_state is Dictionary:
+				var v2 = Dictionary(new_state.round_state).get("payday", null)
+				if v2 is Dictionary:
+					report_payday = Dictionary(v2).duplicate(true)
+			events.append({
+				"type": EventBus.EventType.PAYDAY_REPORT,
+				"data": {
+					"round": old_state.round_number,
+					"from_phase": str(old_state.phase),
+					"to_phase": str(new_state.phase),
+					"report": report_payday,
+				}
+			})
+
 		# Marketing 结算摘要：在离开 Marketing 时发射（便于 UI 日志从 EventBus.history 恢复）。
 		# issue_tracker #48: per board 1 log entry, with details in event data.
 		if str(old_state.phase) == "Marketing":

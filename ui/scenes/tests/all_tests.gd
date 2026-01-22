@@ -6,6 +6,7 @@ const EmployeeActionTestClass = preload("res://core/tests/employee_action_test.g
 const RestructuringOverflowPenaltyTestClass = preload("res://core/tests/restructuring_overflow_penalty_test.gd")
 const RecruitOnCreditRulesTestClass = preload("res://core/tests/recruit_on_credit_rules_test.gd")
 const PaydaySalaryTestClass = preload("res://core/tests/payday_salary_test.gd")
+const PaydayReportEventTestClass = preload("res://core/tests/payday_report_event_test.gd")
 const GameStateFactoryStartingInventoryTestClass = preload("res://core/tests/game_state_factory_starting_inventory_test.gd")
 const RestaurantLogoAssignmentTestClass = preload("res://core/tests/restaurant_logo_assignment_test.gd")
 const PaydaySalaryTokenEligibilityTestClass = preload("res://core/tests/payday_salary_token_eligibility_test.gd")
@@ -156,6 +157,10 @@ func _run_all() -> int:
 		{
 			"name": "PaydaySalaryTest",
 			"fn": func() -> Result: return PaydaySalaryTestClass.run(2, 12345),
+		},
+		{
+			"name": "PaydayReportEventTest",
+			"fn": func() -> Result: return PaydayReportEventTestClass.run(2, 12345),
 		},
 			{
 				"name": "GameStateFactoryStartingInventoryTest",

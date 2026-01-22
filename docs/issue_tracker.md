@@ -69,7 +69,7 @@
 | 52 | 培训日志缺少“培训员来源”（trainer/coach/guru） | UI/日志 | `EMPLOYEE_TRAINED` 事件数据未携带 trainer_id/instance/steps，日志只能显示 from->to | Implemented（待手动验收） |
 | 53 | 决定顺序阶段缺少最终顺序结果日志 | UI/日志 | OrderOfBusiness 完成后未发射“最终 turn_order”事件；日志仅能看到阶段推进 | Implemented（待手动验收） |
 | 54 | 游戏日志默认应隐藏阶段信息 | UI/日志 | `GameLogPanel` 默认 `_filter_types` 包含 `PHASE`，导致 phase/subphase/回合等信息默认刷屏 | Implemented（待手动验收） |
-| 55 | Payday 阶段缺少结算日志（仅现金变化） | UI/日志 | `PaydaySettlement` 写入 `round_state.payday`，但未发射类似 `DINNERTIME_REPORT` 的汇总事件；日志只看到 `PLAYER_CASH_CHANGED` | 待澄清 |
+| 55 | Payday 阶段缺少结算日志（仅现金变化） | UI/日志 | `PaydaySettlement` 写入 `round_state.payday`，但未发射类似 `DINNERTIME_REPORT` 的汇总事件；日志只看到 `PLAYER_CASH_CHANGED` | Implemented（待手动验收） |
 | 56 | 冰箱容量规则错误（应总量 10）+ Cleanup 冰箱选择流程缺失 | 规则+UI+测试 | `CleanupSettlement` 当前“每种各自限幅”；且 Cleanup 被 auto-skip，无法弹窗让玩家选择保留哪些食物/饮料 | 待澄清 |
 
 ---
@@ -1239,21 +1239,24 @@
 
 - 事件体系对 Dinnertime 有 `DINNERTIME_REPORT`，但 Payday 没有同类 report event，导致日志不可从 `EventBus.history` 可靠恢复，也缺少可读摘要。
 
-**修复方案（待你点头后实施）**
+**实施记录**
 
-- 新增事件类型（例如 `PAYDAY_REPORT`），在离开 Payday 时发射，并携带 `round_state.payday` 的快照（便于 UI/日志恢复）。
-- `GameEventLogController` 渲染至少一条汇总日志：
-	- 每玩家：应付/折扣/里程碑修正/实付/欠薪/（可选）token 支付明细。
-- 覆盖两条路径：手动推进（`advance_phase/skip/skip_sub_phase`）与 auto_advance（若将来 Payday 也可能 auto-skip）。
+- 已修改：`autoload/event_bus.gd`：新增 `EventBus.EventType.PAYDAY_REPORT`
+- 已修改：`core/engine/game_engine/command_runner.gd`：离开 Payday 时生成 `PAYDAY_REPORT`（用于潜在 auto-advance 路径）
+- 已修改：`gameplay/actions/advance_phase_action.gd` / `gameplay/actions/skip_action.gd`：离开 Payday 时发射 `PAYDAY_REPORT`（覆盖手动推进/确认结束）
+- 已修改：`ui/scenes/game/game_event_log_controller.gd`
+	- 订阅 `PAYDAY_REPORT`
+	- 每玩家 1 条汇总日志：默认短文本，仅在“有值”时追加 `支付(现金/代币)`、`欠薪`、`折扣/里程碑` 信息
+- 已新增：`core/tests/payday_report_event_test.gd` 并纳入 `ui/scenes/tests/all_tests.gd`
 
-**待澄清**
+**验证**
 
-- 需要的日志粒度：每玩家 1 条即可，还是需要“折扣来源/逐员工工资”级别？
-- 若启用 token 支付，日志是否需要列出具体 token 消耗的产品/数量？
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 150`：PASS（108/108，`.godot/AllTests.log`）
 
 **状态**
 
-- 待澄清
+- Implemented（待手动验收）
 
 ## 56. 冰箱容量规则错误（应总量 10）+ Cleanup 冰箱选择流程缺失
 
