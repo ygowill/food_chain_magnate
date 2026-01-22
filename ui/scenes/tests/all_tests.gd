@@ -35,6 +35,7 @@ const DragPreviewVisualTestClass = preload("res://ui/scenes/tests/drag_preview_v
 const EmployeePickerMinSizeTestClass = preload("res://ui/scenes/tests/employee_picker_min_size_test.gd")
 const CompanyStructureDeferredRebuildTestClass = preload("res://ui/scenes/tests/company_structure_deferred_rebuild_test.gd")
 const RestructuringLayoutTestClass = preload("res://ui/scenes/tests/restructuring_layout_test.gd")
+const RestructuringReserveDropTargetTestClass = preload("res://ui/scenes/tests/restructuring_reserve_drop_target_test.gd")
 const UiRegressionPropertyTestClass = preload("res://ui/scenes/tests/ui_regression_property_test.gd")
 const MapZoomPropertyTestClass = preload("res://ui/scenes/tests/map_zoom_property_test.gd")
 const TileInternalGridLinesTestClass = preload("res://ui/scenes/tests/tile_internal_grid_lines_test.gd")
@@ -267,6 +268,10 @@ func _run_all() -> int:
 		{
 			"name": "RestructuringLayoutTest",
 			"fn": func() -> Result: return RestructuringLayoutTestClass.run(),
+		},
+		{
+			"name": "RestructuringReserveDropTargetTest",
+			"fn": func() -> Result: return RestructuringReserveDropTargetTestClass.run(),
 		},
 		{
 			"name": "UiRegressionPropertyTest",

@@ -651,10 +651,23 @@ func _on_hand_card_dropped(employee_id: String, target: Control) -> void:
 
 	var to_reserve := false
 	if is_instance_valid(_scene.hand_area):
-		if target == _scene.hand_area.reserve_container:
-			to_reserve = true
-		elif target == _scene.hand_area.active_container:
-			to_reserve = false
+		var ha: HandArea = _scene.hand_area
+		var mode := ""
+		if ha.has_method("get_display_mode"):
+			mode = str(ha.call("get_display_mode"))
+
+		# In restructuring, allow dropping anywhere within the reserve scroll area (issue_tracker #46).
+		if mode == "restructuring":
+			if target.is_in_group("hand_area_reserve_drop_target"):
+				to_reserve = true
+			elif is_instance_valid(ha.reserve_container):
+				to_reserve = (target == ha.reserve_container) or ha.reserve_container.is_ancestor_of(target) or target.is_ancestor_of(ha.reserve_container)
+		else:
+			if is_instance_valid(ha.reserve_container):
+				to_reserve = (target == ha.reserve_container) or ha.reserve_container.is_ancestor_of(target) or target.is_ancestor_of(ha.reserve_container)
+			if is_instance_valid(ha.active_container):
+				if (target == ha.active_container) or ha.active_container.is_ancestor_of(target) or target.is_ancestor_of(ha.active_container):
+					to_reserve = false
 
 	var move_r: Result = _execute_command.call(Command.create("restructure_employee", actor_id, {
 		"employee_id": employee_id,

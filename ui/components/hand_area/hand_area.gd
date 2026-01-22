@@ -14,6 +14,7 @@ const RESTRUCTURING_TARGET_WIDTH := 440.0 # ~3x compact cards + spacing (issue_t
 @onready var active_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ActiveSection/ActiveContainer
 @onready var reserve_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ReserveSection/ReserveContainer
 @onready var busy_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/BusySection/BusyContainer
+@onready var scroll_container: ScrollContainer = get_node_or_null("MarginContainer/VBoxContainer/ScrollContainer") as ScrollContainer
 
 @onready var active_section: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ActiveSection
 @onready var reserve_section: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ReserveSection
@@ -43,10 +44,7 @@ var _drag_enabled: bool = true
 func _ready() -> void:
 	_default_custom_minimum_size = custom_minimum_size
 	set_process(false)
-	if active_container != null:
-		active_container.add_to_group("employee_card_drop_target")
-	if reserve_container != null:
-		reserve_container.add_to_group("employee_card_drop_target")
+	_sync_drop_target_groups()
 
 func set_employee_registry(registry) -> void:
 	_employee_registry = registry
@@ -85,7 +83,28 @@ func set_display_mode(mode: String) -> void:
 		custom_minimum_size = Vector2(RESTRUCTURING_TARGET_WIDTH, _default_custom_minimum_size.y)
 	else:
 		custom_minimum_size = _default_custom_minimum_size
+	_sync_drop_target_groups()
 	_rebuild_cards()
+
+func _sync_drop_target_groups() -> void:
+	# Drop targets are used by both HandArea and CompanyStructure drag logic via the shared group name.
+	# In restructuring mode, allow dropping anywhere within the reserve scroll area to send employees to reserve.
+	if reserve_container != null:
+		reserve_container.add_to_group("employee_card_drop_target")
+
+	if active_container != null:
+		if _display_mode == "restructuring":
+			active_container.remove_from_group("employee_card_drop_target")
+		else:
+			active_container.add_to_group("employee_card_drop_target")
+
+	if scroll_container != null:
+		if _display_mode == "restructuring":
+			scroll_container.add_to_group("employee_card_drop_target")
+			scroll_container.add_to_group("hand_area_reserve_drop_target")
+		else:
+			scroll_container.remove_from_group("employee_card_drop_target")
+			scroll_container.remove_from_group("hand_area_reserve_drop_target")
 
 func get_selected_employees() -> Array[String]:
 	return _selected_ids.duplicate()

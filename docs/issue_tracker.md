@@ -2328,16 +2328,17 @@
 - “待命区任意位置”里有一部分区域不属于 `reserve_container` 的 `global_rect`（例如下方空白区域/滚动容器的空白区域），导致 `_find_drop_target()` 找不到任何 target，从而 drop 无效。
 - 另一个潜在因素：`_find_drop_target()` 过滤使用 `c.visible` 而不是 `c.is_visible_in_tree()`；在重组模式下 `active_section` 虽隐藏，但 `active_container.visible` 仍为 true，可能导致“命中到不可见的 drop target”从而映射错误。
 
-**修复方案（提案）**
+**确认**
 
-- 在重组模式下，为“待命区”提供一个覆盖整个可见区域的 drop 目标：
-	- A. 最稳妥：在 `HandArea` 内增加一个 `ReserveDropArea(Control)`，anchors=FULL_RECT 覆盖待命区滚动内容区域，并加入 `employee_card_drop_target` group；  
-		- 然后在 `_on_hand_card_dropped()` 中把 `target == reserve_container` 扩展为“target 落在 reserve 区域”（例如 `target == reserve_container` 或 `target.is_ancestor_of(reserve_container)` 或 `reserve_container.is_ancestor_of(target)` 或 `target.is_in_group(\"hand_area_reserve_drop_target\")`）。
-	- B. 若你希望严格限定在“待命区滚动区域”内：将 `reserve_container`/其父容器的 `size_flags_vertical=EXPAND_FILL`，让其 `global_rect` 覆盖空白区域；并同步把过滤改为 `is_visible_in_tree()`。
+- 你的要求是：只要在“待命卡牌滚动区域（ScrollContainer）”内即可（不包含标题/边缘空白）。
 
-**待澄清（你点头前确认一下）**
+**修复方案**
 
-- 这里的“待命区任意位置”是否包含：左侧面板的标题/边缘空白，还是只要在待命卡牌滚动区域内即可？
+- 重组模式下，把 HandArea 的 `ScrollContainer` 也作为 drop target：
+	- `ScrollContainer` 覆盖整个“待命卡牌滚动区域”，加入 group=`employee_card_drop_target`；
+	- 同时加入标记 group=`hand_area_reserve_drop_target`，便于 action 映射为 `to_reserve=true`。
+- 同时在重组模式下移除 `active_container` 的 drop target group，避免“隐藏的 active 区域”误命中。
+- `GamePanelController._on_hand_card_dropped()`：将 `hand_area_reserve_drop_target`（以及 reserve_container 的祖先/后代关系）统一判定为 `to_reserve=true`。
 
 **测试计划**
 
@@ -2347,4 +2348,20 @@
 
 **状态**
 
-- Planned（待你澄清 + 点头后实施）
+**实施记录**
+
+- 已修改：`ui/components/hand_area/hand_area.gd`：
+	- 新增 `scroll_container` 引用；
+	- 重组模式下：`scroll_container` 加入 `employee_card_drop_target` + `hand_area_reserve_drop_target`；
+	- 重组模式下：`active_container` 移出 `employee_card_drop_target`，避免隐藏区域误命中。
+- 已修改：`ui/scenes/game/game_panel_controller.gd`：重组模式下，drop 到 `hand_area_reserve_drop_target`（或 reserve_container 的祖先/后代）统一解析为 `to_reserve=true`。
+- 新增：`ui/scenes/tests/restructuring_reserve_drop_target_test.gd`（`RestructuringReserveDropTargetTest`）并纳入 `ui/scenes/tests/all_tests.gd`。
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）
