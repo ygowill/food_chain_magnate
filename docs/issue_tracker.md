@@ -68,7 +68,7 @@
 | 51 | 晚餐结算日志过噪：包含冗余统计/拆分信息 | UI/日志 | `_log_dinnertime_report` 中为诊断添加的“总计/拆分/按产品”日志已不需要；用户已临时注释，需移除冗余代码并清理无用计算 | Implemented（待手动验收） |
 | 52 | 培训日志缺少“培训员来源”（trainer/coach/guru） | UI/日志 | `EMPLOYEE_TRAINED` 事件数据未携带 trainer_id/instance/steps，日志只能显示 from->to | Implemented（待手动验收） |
 | 53 | 决定顺序阶段缺少最终顺序结果日志 | UI/日志 | OrderOfBusiness 完成后未发射“最终 turn_order”事件；日志仅能看到阶段推进 | Implemented（待手动验收） |
-| 54 | 游戏日志默认应隐藏阶段信息 | UI/日志 | `GameLogPanel` 默认 `_filter_types` 包含 `PHASE`，导致 phase/subphase/回合等信息默认刷屏 | 待确认 |
+| 54 | 游戏日志默认应隐藏阶段信息 | UI/日志 | `GameLogPanel` 默认 `_filter_types` 包含 `PHASE`，导致 phase/subphase/回合等信息默认刷屏 | Implemented（待手动验收） |
 | 55 | Payday 阶段缺少结算日志（仅现金变化） | UI/日志 | `PaydaySettlement` 写入 `round_state.payday`，但未发射类似 `DINNERTIME_REPORT` 的汇总事件；日志只看到 `PLAYER_CASH_CHANGED` | 待澄清 |
 | 56 | 冰箱容量规则错误（应总量 10）+ Cleanup 冰箱选择流程缺失 | 规则+UI+测试 | `CleanupSettlement` 当前“每种各自限幅”；且 Cleanup 被 auto-skip，无法弹窗让玩家选择保留哪些食物/饮料 | 待澄清 |
 
@@ -1209,13 +1209,19 @@
 - 默认 `_filter_types` 移除 `LogType.PHASE`（仍保留在筛选菜单中可手动开启）。
 - 若存在持久化设置（需确认），保证用户自定义偏好不会被重置。
 
-**待确认**
+**实施记录**
 
-- “阶段信息”是否包含 `玩家 X 开始/结束回合`？（当前也属于 `PHASE` 类型）
+- 已修改：`ui/components/game_log/game_log_panel.gd`
+	- 默认过滤移除 `PHASE`（阶段/子阶段/回合/玩家回合开始结束默认不显示，可在筛选菜单手动开启）
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（107/107，`.godot/AllTests.log`）
 
 **状态**
 
-- 待确认
+- Implemented（待手动验收）
 
 ## 55. Payday 阶段缺少结算日志（仅现金变化）
 
