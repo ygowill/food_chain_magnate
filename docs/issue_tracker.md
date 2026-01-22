@@ -65,6 +65,12 @@
 | 48 | 游戏日志：房屋被打上广告缺日志；采购日志缺路线；需要可读性方案 | UI/信息架构 | 缺少 MarketingSettlement/路线等结构化事件；现有日志仅平铺文本，难在“不刷屏”和“可追溯细节”间平衡 | Implemented（待手动验收） |
 | 49 | 提供“日志验证”测试存档（便于手工审查日志改动） | 测试/工具 | 现有 manual_cases 会冻结命令历史，无法承载“回放产生事件→复核日志”的场景 | Implemented（待手动验收） |
 | 50 | 日志验证存档：尽可能覆盖更多日志事件类型（便于集中审查） | 测试/工具 | 现有 `logs/event_log_review` 覆盖面有限，难以一次性审查招聘/培训/解雇/餐厅/花园/生产/里程碑等日志 | 待澄清 |
+| 51 | 晚餐结算日志过噪：包含冗余统计/拆分信息 | UI/日志 | `_log_dinnertime_report` 中为诊断添加的“总计/拆分/按产品”日志已不需要；用户已临时注释，需移除冗余代码并清理无用计算 | Implemented（待手动验收） |
+| 52 | 培训日志缺少“培训员来源”（trainer/coach/guru） | UI/日志 | `EMPLOYEE_TRAINED` 事件数据未携带 trainer_id/instance/steps，日志只能显示 from->to | 待澄清 |
+| 53 | 决定顺序阶段缺少最终顺序结果日志 | UI/日志 | OrderOfBusiness 完成后未发射“最终 turn_order”事件；日志仅能看到阶段推进 | 待确认 |
+| 54 | 游戏日志默认应隐藏阶段信息 | UI/日志 | `GameLogPanel` 默认 `_filter_types` 包含 `PHASE`，导致 phase/subphase/回合等信息默认刷屏 | 待确认 |
+| 55 | Payday 阶段缺少结算日志（仅现金变化） | UI/日志 | `PaydaySettlement` 写入 `round_state.payday`，但未发射类似 `DINNERTIME_REPORT` 的汇总事件；日志只看到 `PLAYER_CASH_CHANGED` | 待澄清 |
+| 56 | 冰箱容量规则错误（应总量 10）+ Cleanup 冰箱选择流程缺失 | 规则+UI+测试 | `CleanupSettlement` 当前“每种各自限幅”；且 Cleanup 被 auto-skip，无法弹窗让玩家选择保留哪些食物/饮料 | 待澄清 |
 
 ---
 
@@ -1086,6 +1092,211 @@
 **状态**
 
 - Implemented（待手动验收）
+
+## 51. 晚餐结算日志过噪：包含冗余统计/拆分信息
+
+**现象**
+
+- 晚餐结算日志包含额外的“总计/拆分/按产品收入”信息，影响可读性（过噪）。
+- 你已在 `_log_dinnertime_report()` 中将这些日志临时注释，但代码仍保留（死代码/冗余计算）。
+
+**涉及代码**
+
+- `ui/scenes/game/game_event_log_controller.gd`
+
+**初步根因**
+
+- `_log_dinnertime_report()` 里为诊断/分析加入的细分统计（总计/拆分/按产品）当前不再需要。
+- 注释掉日志后，对应的中间统计仍在计算，后续维护成本变高且容易误导。
+
+**实施记录**
+
+- 已修改：`ui/scenes/game/game_event_log_controller.gd`
+	- 移除晚餐“总计/拆分/按产品收入”的冗余日志与相关无用统计计算（保留逐房屋消费 + 晚餐总结 玩家X）。
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（107/107，`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）
+
+## 52. 培训日志缺少“培训员来源”（trainer/coach/guru）
+
+**现象**
+
+- 玩家培训日志只显示 “培训 A -> B”，未体现“本次培训消耗了哪名培训员/哪种培训员（trainer/coach/guru）”。
+
+**涉及代码（初步定位）**
+
+- `gameplay/actions/train_action.gd`：分配培训 slots（`allocate_train_slots_for_working`）与记录 `round_state.train_events`
+- `core/rules/employee_rules/train_slot_usage.gd`：选择 `trainer_id/instance_idx` 并写入 round_state 计数
+- `ui/scenes/game/game_event_log_controller.gd`：渲染 `EMPLOYEE_TRAINED`
+
+**初步根因**
+
+- `EMPLOYEE_TRAINED` 事件 data 当前仅包含 `from_employee/to_employee/from_pending`，没有 trainer 信息，因此 UI 无法展示。
+
+**修复方案（待你点头后实施）**
+
+- 在 `train` 执行时把 `trainer_id/instance_idx/steps` 记录到可从 `new_state` 派生的位置（例如扩展 `round_state.train_events`）。
+- `TrainAction._generate_specific_events()` 基于 old/new state 差异，发射包含 trainer 信息的培训事件（沿用 `EMPLOYEE_TRAINED` 或新增语义化事件）。
+- `GameEventLogController` 日志格式示例：`培训 A -> B（培训员：Coach）`（具体格式以你确认的展示需求为准）。
+
+**待澄清**
+
+- 这里的“来源”是指“培训路径的 from_employee”，还是指“消耗的培训员（trainer/coach/guru）”？（当前日志已包含 from_employee）
+- 是否需要展示多步培训的步数（coach/guru）？是否需要展示具体实例（同一玩家多张 trainer 时）？
+
+**状态**
+
+- 待澄清
+
+## 53. 决定顺序阶段缺少最终顺序结果日志
+
+**现象**
+
+- 在 OrderOfBusiness（决定顺序/挑选顺序）阶段，所有玩家选完位置后，最终 `turn_order` 未体现在日志中。
+
+**涉及代码（初步定位）**
+
+- `gameplay/actions/choose_turn_order_action.gd`：落地 `state.turn_order` 并 auto-advance
+- `core/engine/game_engine/auto_advance.gd`：首轮 OrderOfBusiness auto finalize（直接写 turn_order）
+- `autoload/event_bus.gd` / `ui/scenes/game/game_event_log_controller.gd`：缺少对应事件类型/渲染
+
+**初步根因**
+
+- 当前没有发射“turn_order 最终确定”的 EventBus 事件，因此日志只能看到阶段推进（`PHASE_CHANGED`），看不到最终顺序结果。
+
+**修复方案（待你点头后实施）**
+
+- 新增 EventBus 事件类型（例如 `TURN_ORDER_FINALIZED`），在：
+	- `choose_turn_order` 的最后一次选择完成时（`finalized=true`）
+	- 首轮 auto finalize 时
+  发射事件并携带 `{round, final_turn_order, previous_turn_order?}`。
+- `GameEventLogController` 增加渲染：一条系统/事件日志列出位置->玩家。
+
+**待确认**
+
+- 是否仅需“最终顺序”一条日志，还是每次 pick 也需要日志？
+- 日志格式是否需要同时展示“选择顺序(selection_order)”与“最终行动顺序(turn_order)”？
+
+**状态**
+
+- 待确认
+
+## 54. 游戏日志默认应隐藏阶段信息
+
+**现象**
+
+- 游戏日志默认显示阶段信息（阶段/子阶段/回合开始结束/玩家回合开始结束）。
+- 需求：默认不显示这些“阶段类”日志（用户需要时再手动开启筛选）。
+
+**涉及代码（初步定位）**
+
+- `ui/components/game_log/game_log_panel.gd`：`_filter_types` 默认值包含 `LogType.PHASE`
+
+**初步根因**
+
+- `GameLogPanel` 默认筛选包含 `PHASE`，Filter 菜单初始化时据此默认勾选。
+
+**修复方案（待你点头后实施）**
+
+- 默认 `_filter_types` 移除 `LogType.PHASE`（仍保留在筛选菜单中可手动开启）。
+- 若存在持久化设置（需确认），保证用户自定义偏好不会被重置。
+
+**待确认**
+
+- “阶段信息”是否包含 `玩家 X 开始/结束回合`？（当前也属于 `PHASE` 类型）
+
+**状态**
+
+- 待确认
+
+## 55. Payday 阶段缺少结算日志（仅现金变化）
+
+**现象**
+
+- Payday 结算时，日志目前只能看到玩家现金减少（`PLAYER_CASH_CHANGED`），缺少“为什么扣钱/扣了什么”的可读汇总。
+
+**涉及代码（初步定位）**
+
+- `core/rules/phase/payday_settlement.gd`：计算薪资并写入 `round_state.payday.details`
+- `core/engine/game_engine/command_runner.gd` + `gameplay/actions/*`：离开 Payday 时缺少“结算报告事件”的发射路径
+- `ui/scenes/game/game_event_log_controller.gd`：无对应事件渲染
+
+**初步根因**
+
+- 事件体系对 Dinnertime 有 `DINNERTIME_REPORT`，但 Payday 没有同类 report event，导致日志不可从 `EventBus.history` 可靠恢复，也缺少可读摘要。
+
+**修复方案（待你点头后实施）**
+
+- 新增事件类型（例如 `PAYDAY_REPORT`），在离开 Payday 时发射，并携带 `round_state.payday` 的快照（便于 UI/日志恢复）。
+- `GameEventLogController` 渲染至少一条汇总日志：
+	- 每玩家：应付/折扣/里程碑修正/实付/欠薪/（可选）token 支付明细。
+- 覆盖两条路径：手动推进（`advance_phase/skip/skip_sub_phase`）与 auto_advance（若将来 Payday 也可能 auto-skip）。
+
+**待澄清**
+
+- 需要的日志粒度：每玩家 1 条即可，还是需要“折扣来源/逐员工工资”级别？
+- 若启用 token 支付，日志是否需要列出具体 token 消耗的产品/数量？
+
+**状态**
+
+- 待澄清
+
+## 56. 冰箱容量规则错误（应总量 10）+ Cleanup 冰箱选择流程缺失
+
+**现象**
+
+- 冰箱目前的效果是“每种产品各自最多保留 10”（按产品限幅），而不是“食物+饮料总量最多保留 10”。
+- Cleanup 阶段目前自动结算并 auto-skip；即使有冰箱也不会弹窗让玩家选择保留哪些食物/饮料。
+
+**涉及代码（初步定位）**
+
+- 规则：
+	- `core/rules/phase/cleanup_settlement.gd`：库存清理逻辑（文件注释也标注了“后续可升级为总容量分配”）
+- 测试：
+	- `core/tests/cleanup_inventory_test.gd`：当前断言为“每种各自限幅”
+- UI 文案：
+	- `ui/components/left_panel/left_panel.gd`
+	- `ui/components/inventory_panel/inventory_panel.gd`
+	- `ui/components/milestone_panel/milestone_panel.gd`
+- 自动推进：
+	- `core/engine/game_engine/auto_advance.gd`：默认 auto-skip `Cleanup`
+	- `core/engine/phase_manager/advance_phase.gd`：`pending_phase_actions` 可用于阻断推进
+
+**初步根因**
+
+- `CleanupSettlement.apply()` 采用了简化实现：对每个 product clamp 到 fridge_cap。
+- `Cleanup` 被视为“无玩家交互结算阶段”而 auto-skip，缺少 `pending_phase_actions` 门禁与可执行动作，无法实现“弹窗选择保留”。
+
+**修复方案（候选，待你点头后实施）**
+
+- 规则修复（总量容量）：
+	- 更新 Cleanup 的冰箱容量逻辑：对食物+饮料按“总量 <= cap”约束，而不是逐产品限幅。
+- 交互流程（弹窗选择保留）：
+	- 当进入 Cleanup 且玩家有冰箱且库存总量 > cap 时：
+		- 写入 `round_state.pending_phase_actions["Cleanup"]` 以阻断 auto-advance
+		- 记录“待选择的库存快照/容量”到 round_state（供 UI 展示与回放一致性）
+	- 新增一个仅 Cleanup 可用的动作（例如 `choose_fridge_keep`）：提交“各产品保留数量”，应用到 inventory，计算 discarded，写入 `round_state.cleanup.inventory_discarded` 并触发 `CleanupDiscard` 里程碑，然后清空 pending。
+	- UI 在 Cleanup 阶段检测到 pending 时弹出 modal（展示可保留数量与剩余容量），确认后发送 `choose_fridge_keep` 命令。
+- 测试：
+	- 更新 `CleanupInventoryTest`：覆盖“总量 10”规则（多产品相加超过 cap）。
+	- 新增针对 `choose_fridge_keep` 的纯逻辑测试：校验容量约束、discarded 计算与 round_state 写入。
+
+**待澄清**
+
+- “总量 10”是否只统计 food+drink？库存中若存在其它 product（非食物/饮料）是否应排除？
+- Cleanup 的选择顺序：玩家是否按 `turn_order` 逐个选择，还是本地 hotseat 依次弹窗即可？
+- 弹窗触发条件：仅当总量 > cap 才弹，还是“只要有冰箱每次都弹”？
+- 玩家是否允许“保留少于 cap”主动丢弃（策略/触发里程碑）？
+
+**状态**
+
+- 待澄清
 
 ---
 
