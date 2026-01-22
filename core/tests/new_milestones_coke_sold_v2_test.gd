@@ -1,7 +1,7 @@
 # 模块3：全新里程碑
 # 覆盖：FIRST COKE SOLD
 # - 触发：Dinnertime 售卖包含 soda（规则原文 coke，对应本项目 product_id=soda）
-# - 效果：获得 freezer（复用 gain_fridge=10），Cleanup 后 soda 库存应保留到 10
+# - 效果：获得 freezer（复用 gain_fridge=10），Cleanup 冰箱容量为 food+drink 总量 10（超出则需选择保留）
 class_name NewMilestonesCokeSoldV2Test
 extends RefCounted
 
@@ -63,16 +63,36 @@ static func run(player_count: int = 2, seed_val: int = 889900) -> Result:
 	if not milestones0.has(MILESTONE_ID):
 		return Result.failure("玩家0 应获得里程碑 %s，实际: %s" % [MILESTONE_ID, str(milestones0)])
 
-	# Cleanup：有 freezer 后库存不清空（soda 限幅到 10）
+	# Cleanup：有 freezer 后 food+drink 总量 cap=10；超出则进入 pending 并允许玩家选择保留
+	state.phase = "Cleanup"
+	state.sub_phase = ""
+	state.round_number = 1
+
 	var inv2: Dictionary = state.players[0]["inventory"]
 	inv2["soda"] = 12
 	state.players[0]["inventory"] = inv2
 	var cl := CleanupSettlementClass.apply(state)
 	if not cl.ok:
 		return Result.failure("CleanupSettlement 失败: %s" % cl.error)
-	var after: int = int(state.players[0]["inventory"].get("soda", -1))
+
+	# pending：需要玩家选择（按 turn_order 顺序）
+	var ppa_val = state.round_state.get("pending_phase_actions", null)
+	if not (ppa_val is Dictionary):
+		return Result.failure("缺少 pending_phase_actions")
+	var ppa: Dictionary = ppa_val
+	var pending_val = ppa.get("Cleanup", null)
+	if not (pending_val is Array):
+		return Result.failure("pending_phase_actions[Cleanup] 类型错误（期望 Array）")
+	var pending: Array = pending_val
+	if pending.size() != 1 or int(pending[0]) != 0:
+		return Result.failure("pending_phase_actions[Cleanup] 应为 [0]，实际: %s" % str(pending))
+
+	var choose := engine.execute_command(Command.create("choose_fridge_keep", 0, {"keep": {"soda": 10}}))
+	if not choose.ok:
+		return Result.failure("choose_fridge_keep 失败: %s" % choose.error)
+	var after: int = int(engine.get_state().players[0]["inventory"].get("soda", -1))
 	if after != 10:
-		return Result.failure("有 freezer 时 soda 应限幅为 10，实际: %d" % after)
+		return Result.failure("有 freezer 时选择保留 soda=10 应成功，实际: %d" % after)
 
 	return Result.success()
 

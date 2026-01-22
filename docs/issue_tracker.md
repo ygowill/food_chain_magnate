@@ -70,7 +70,15 @@
 | 53 | 决定顺序阶段缺少最终顺序结果日志 | UI/日志 | OrderOfBusiness 完成后未发射“最终 turn_order”事件；日志仅能看到阶段推进 | Implemented（待手动验收） |
 | 54 | 游戏日志默认应隐藏阶段信息 | UI/日志 | `GameLogPanel` 默认 `_filter_types` 包含 `PHASE`，导致 phase/subphase/回合等信息默认刷屏 | Implemented（待手动验收） |
 | 55 | Payday 阶段缺少结算日志（仅现金变化） | UI/日志 | `PaydaySettlement` 写入 `round_state.payday`，但未发射类似 `DINNERTIME_REPORT` 的汇总事件；日志只看到 `PLAYER_CASH_CHANGED` | Implemented（待手动验收） |
-| 56 | 冰箱容量规则错误（应总量 10）+ Cleanup 冰箱选择流程缺失 | 规则+UI+测试 | `CleanupSettlement` 当前“每种各自限幅”；且 Cleanup 被 auto-skip，无法弹窗让玩家选择保留哪些食物/饮料 | 待澄清 |
+| 56 | 冰箱容量规则错误（应总量 10）+ Cleanup 冰箱选择流程缺失 | 规则+UI+测试 | `CleanupSettlement` 当前“每种各自限幅”；且 Cleanup 被 auto-skip，无法弹窗让玩家选择保留哪些食物/饮料 | Implemented（待手动验收） |
+| 57 | 员工行动用尽后：员工卡应灰显且不可点击（多次行动员工例外） | UI/交互 | UI 未按子阶段用量（`production_counts/procurement_counts/...`）刷新卡片 enabled；且 `EmployeeCard.set_busy()` 仅改样式不阻止输入 | 待实施（已澄清） |
+| 58 | 玩家数据面板：里程碑 tab 样式不统一且左右溢出 | UI/布局 | `MilestonePanel` 作为独立面板自带 Background/Margin/custom_minimum_size，嵌入 `LeftPanel.TabContainer` 后出现双层背景/最小宽度推高/溢出 | 待澄清 |
+| 59 | 距离工具：提示/结果与顺位重叠；交互需优化（点任意道路格重开；结果放终点上方；起点高亮） | UI/交互 | `DistanceOverlay` 结果用 Label 无背景且定位在中点；`distance_tool` 状态机需点起点才能重置；未对起点做高亮提示 | 待实施（已澄清） |
+| 60 | 设置：移除经典 UI 布局选择，只保留新布局并清理旧布局代码 | UI/架构 | `ui_layout_version` 贯穿 Settings/Game/GamePanelController 等大量分支；旧布局入口与节点仍存在 | 待实施（已确认） |
+| 61 | 左侧玩家信息面板拖拽调整宽度卡住（无法缩小/到达上限后无法再调） | UI/布局 | `Game` 对 split_offset 做 `[MIN,MAX]` clamp 且把 `LeftArea.custom_minimum_size.x` 设为当前宽度，导致最小宽度被抬高 + MAX=400 限制拉伸 | 待确认 |
+| 62 | 折扣经理：无法结束回合（疑似强制动作未自动触发/Skip 在动作面板被禁用） | 规则+UI 流程 | `ActionRegistry.get_player_initiatable_actions()` 以 `SkipAction.validate` 判定可点；强制动作未完成时 skip 校验失败导致按钮灰；而 `set_discount` 又被隐藏且仅 UI 层尝试 auto-run -> 形成死锁 | 待实施（已复现） |
+| 63 | 上方工具栏移除“确认结束/调试”按钮 | UI/清理 | `Game.tscn` TopBar 仍保留旧入口；功能与 ActionPanel/DebugPanel 重复 | 待确认 |
+| 64 | 地图外圈不可见格导致地图缩小：外圈为空时应放大，只有需要/已有外圈 piece 才完整显示 | UI/交互+渲染 | `MapCanvasIndexer.compute_bounds()` 无条件添加 UI-only margin=2 外圈；`MapView.fit_to_view()` 基于 `_grid_size` 导致整体缩小；需可切换 bounds/margin 并与现有缩放/auto-fit 协同 | 待实施（已澄清） |
 
 ---
 
@@ -1093,6 +1101,293 @@
 
 - Implemented（待手动验收）
 
+---
+
+## 57.（用户反馈 1）员工行动用尽后：员工卡应灰显且不可点击（多次行动员工例外）
+
+**现象**
+
+- 员工执行完本回合/本子阶段的可用行动后，相关 UI 上的“员工卡牌”仍保持可点状态；继续点击会走到校验失败（或产生误导）。
+- 例：厨师生产完食物后，卡牌应变灰并不可点击。
+- 例：guru 等一回合可多次行动的员工，在行动次数用完前应保持可用状态。
+
+**当前实现观察（可定位的事实）**
+
+- `ui/components/employee_card/employee_card.gd`：`set_busy()` 仅改变 style/modulate；`_on_gui_input()` 不检查 `_busy`，仍会发射 `card_clicked`。
+- `ui/components/production_panel/production_panel.gd`：生产/采购面板的员工选择用 `EmployeePicker` 展示，但 `enabled` 始终为 true、角标为“员工数量”，未扣除已用次数。
+- gameplay 侧已有“子阶段用量”数据：
+	- `state.round_state.production_counts`（`produce_food`）
+	- `state.round_state.procurement_counts`（`procure_drinks`）
+	- `state.round_state.marketing_used` / `players[*].busy_marketers`（营销发起）
+	- `state.round_state.train_slot_usage_instances`（trainer/coach/guru 多步培训 slot 使用）
+
+**初步根因**
+
+- UI 没有把“剩余可用次数”作为一等数据源来驱动 `EmployeePickerItem.enabled` / `EmployeeCard` 灰显；并且上游（如 `show_production_panel()`）传入的 `available_producers` 只是“拥有该员工”的列表，不包含“已用/剩余”的扣减信息。
+- `EmployeeCard` 的 busy/disabled 仅做视觉，不做交互禁用。
+
+**建议方案（偏保守，先做可验证的最小闭环）**
+
+- 需求包含“同类型多张卡逐张消耗/灰显”，因此员工选择 UI 不能仅按 `employee_type -> count` 聚合；需要支持“按实例渲染/选择”，并在动作执行成功后把“本次选中并使用的那一张”标记为已用。
+- 我倾向优先覆盖动作面板中会“选择员工”的面板：
+	- `ProductionPanel`（生产/采购）：执行成功后灰显并禁用本次选中的那一张；若仍有同类型未用卡则仍可继续。
+	- `RecruitPanel` / 其它类似“选择员工/来源”的面板：同理（若存在多张同类型候选卡）。
+- 交互禁用落地两种选择：
+	- A）仅在 `EmployeePickerItem` 层禁用（通过 mouse_filter + modulate），避免动 `EmployeeCard` 的基础行为；
+	- B）给 `EmployeeCard` 增加“disabled”语义（busy/disabled 分离），统一处理 hover/cursor/click/drag（改动面更大）。
+
+**澄清（来自用户）**
+
+- 范围：动作面板中使用“招聘/生产食物/采购饮料”等动作时，在对应面板里用于“选择员工”的卡牌。
+- 重复员工：若有 2 个厨师，生产一次后应灰显并禁用“本次选中并使用的那一张”。
+
+**验收标准**
+
+- 在动作面板的员工选择卡中：每次执行成功后，只灰显并禁用“本次选中并使用的那一张”；若同类型仍有未用卡则保持可用。
+- 多次行动员工：在行动次数用尽前保持可用；用尽后灰显禁用。
+
+---
+
+## 58.（用户反馈 2）玩家数据面板：里程碑 tab 样式不统一且左右溢出
+
+**现象**
+
+- 玩家数据面板中的“里程碑”tab 样式与“员工”tab 不统一。
+- 里程碑内容在左右两侧会超出玩家面板边界。
+
+**涉及代码**
+
+- `ui/components/left_panel/left_panel.tscn`：`TabContainer/Milestones/MilestonePanel`（嵌入式展示）
+- `ui/components/milestone_panel/milestone_panel.tscn` / `ui/components/milestone_panel/milestone_panel.gd`
+
+**初步根因**
+
+- `MilestonePanel` 作为独立弹窗/右侧面板组件自带：
+	- `Background(ColorRect)` + `MarginContainer(16px)` + `TitleLabel` + `custom_minimum_size=Vector2(280,260)`
+	- `ScrollContainer.horizontal_scroll_mode=DISABLED`
+- 当它被直接嵌入 `LeftPanel.TabContainer` 时，会出现“与 LeftPanel 自身背景/边距叠加”的样式不一致，并可能因 `custom_minimum_size` / horizontal_scroll_mode 策略导致横向溢出。
+
+**建议方案**
+
+- 为 `MilestonePanel` 增加明确的“嵌入 LeftPanel 模式”（类似右侧嵌入的处理）：
+	- 关闭/隐藏自身 Background/Title、将 margin 收敛到与 Employees tab 一致；
+	- 嵌入时将 `custom_minimum_size` 归零，并确保 `ScrollContainer.horizontal_scroll_mode=AUTO`（至少不要为了禁止横向滚动而强行撑宽）。
+
+**待澄清**
+
+- 里程碑 tab 的目标样式：是否应完全复用 LeftPanel 的背景（里程碑面板自身不再画背景），并去掉 “里程碑”标题行？
+- 你更偏好：允许出现横向滚动条（极端小屏）还是强制换行/截断？
+
+**验收标准**
+
+- 里程碑 tab 的背景/边距/标题风格与员工 tab 统一；内容不再左右溢出玩家面板。
+
+---
+
+## 59.（用户反馈 3）距离工具：提示/结果与顺位重叠；交互需优化（点任意道路格重开；结果放终点上方；起点高亮）
+
+**现象**
+
+- 测距结果/提示信息可能与玩家顺位（顶部顺序轨/信息）重叠，叠加后难以看清；需要背景提升可读性。
+- 当前需要重新点击起点取消起点，才能开始下一次测距；你希望“测距结束后点击任意道路格即可重新开始”。
+- 测距结果目前显示在起点与终点中心，难以寻找；应显示在终点上方，并增加背景与地图区分。
+- 起点选中后道路格无视觉变化，玩家难以确认是否已选中；需高亮提示。
+
+**涉及代码**
+
+- `ui/scenes/game/game_map_interaction_controller.gd`：`distance_tool` 状态机（`_distance_tool_from`）
+- `ui/overlays/distance_overlay.gd`：结果 label 的生成与定位（目前用中心点 + outline）
+- `ui/scenes/game/map_canvas.gd` / `ui/scenes/game/map_canvas_drawer.gd`：cell_highlights 绘制能力（可用于起点高亮）
+
+**初步根因**
+
+- `DistanceOverlay` 仅使用 Label 的 outline，缺少背景容器；且定位逻辑固定为“起点+终点的中点”。
+- `distance_tool` 交互状态只支持“再次点击起点清除”，不支持“完成后任意点击重置为新起点”。
+- 起点未通过 `MapCanvas.set_cell_highlights()` 或 overlay 表达，因此缺少反馈。
+
+**建议方案**
+
+- 结果 label 改为“带背景的控件”（例如 PanelContainer+Label），并改定位到终点上方（必要时做屏幕边缘避让）。
+- `distance_tool` 状态机改为三态：未选起点 -> 已选起点 -> 已测距完成；在“已测距完成”态下点击任意道路格将其设为新起点并清空旧 overlay。
+- 起点选中后立刻高亮（例如对起点 cell 设置 highlights 或单独的 piece_overlay id）。
+- 起点/终点选择限制为“道路格”：非道路格点击无效（不产生“无法连接”结果）。
+
+**澄清（来自用户）**
+
+- 只允许点道路格。
+- 每次只测一段；测完后点击任意道路格就会重新开始测距。
+
+**验收标准**
+
+- 测距结果与提示信息在任何位置都可读（有背景，不被顺位/地图背景吞没）。
+- 测距完成后点击任意道路格能立即开始下一次测距（无需先点回起点取消）。
+- 起点选中后有明显高亮提示；结果显示在终点上方。
+
+---
+
+## 60.（用户反馈 4）设置：移除经典 UI 布局选择，只保留新布局并清理旧布局代码
+
+**现象**
+
+- 设置中仍可选择“经典 UI 布局”（`ui_layout_version`），你希望去掉该选择，仅保留新布局，并清理旧布局相关代码。
+
+**涉及代码（初步）**
+
+- `ui/dialogs/settings_dialog.gd` / `ui/dialogs/settings_dialog.tscn`：`ui_layout_version` 的读写与选项 UI
+- `ui/scenes/game/game.gd`：`Globals.ui_layout_version` 分支（布局装配/面板挂载）
+- `ui/scenes/game/game_panel_controller.gd`：多处 `layout_version != 2` 的兼容分支
+- 其它按 `rg "ui_layout_version"` 继续收敛
+
+**初步根因**
+
+- 新旧布局并行导致大量 if/else 分支与“旧入口节点”（例如 TopBar 的按钮、旧面板挂载逻辑）长期共存。
+
+**建议方案**
+
+- 先把“新布局=唯一入口”定为硬约束：
+	- Settings 中移除 UI 布局选择项；启动时强制 `Globals.ui_layout_version=2`（并忽略/清理旧配置）。
+- 再逐步删除旧布局专用节点/分支（以可运行/可测试为前提，小步提交）。
+
+**澄清（来自用户）**
+
+- 不需要兼容：强制切到 2，并清理旧值相关的代码/配置读写逻辑。
+
+**验收标准**
+
+- 设置中不再出现 UI 布局选择；游戏始终使用新布局；旧布局相关代码/入口被清理且不影响现有功能。
+
+---
+
+## 61.（用户反馈 5）左侧玩家信息面板拖拽调整宽度卡住（仅希望设置最小宽度）
+
+**现象**
+
+- 左侧玩家信息面板无法缩小；可以向右拉伸，但拉伸到一定距离后无法继续拉长或缩窄。
+- 你只希望设置一个最小宽度。
+
+**涉及代码**
+
+- `ui/scenes/game/game.gd`：`_on_main_content_dragged()` / `LEFT_AREA_MIN_WIDTH/LEFT_AREA_MAX_WIDTH`
+- `ui/scenes/game/game.tscn`：`UIRoot/MainContent(HSplitContainer)` 与 `LeftArea.custom_minimum_size`
+
+**初步根因（可从代码直接解释现象）**
+
+- `_on_main_content_dragged()` 将 split_offset clamp 到 `[LEFT_AREA_MIN_WIDTH, LEFT_AREA_MAX_WIDTH]`（当前 MAX=400），导致“拉到一定距离后无法再拉长”。
+- 同时它把 `LeftArea.custom_minimum_size.x` 设置为当前 clamped 值，等价于“把最小宽度抬到当前宽度”，因此一旦拉宽就无法再缩回去。
+
+**建议方案**
+
+- 仅保留最小宽度约束：去掉 MAX clamp；并且不要把 `LeftArea.custom_minimum_size.x` 设置为当前宽度，而是保持为固定的 `LEFT_AREA_MIN_WIDTH`（或不强设，交给子控件的 min size）。
+
+**验收标准**
+
+- 左侧面板可自由拖拽变宽/变窄；不会在某个宽度后“卡死”；且最小宽度符合预期。
+
+---
+
+## 62.（用户反馈 6）折扣经理：无法结束回合（疑似强制动作未自动触发/Skip 在动作面板被禁用）
+
+**现象**
+
+- 玩家拥有/使用折扣经理时，无法结束回合（推进 Working 回合/阶段）。
+- 你怀疑折扣经理的强制行动未自动触发，导致阶段无法推进。
+
+**涉及代码（初步）**
+
+- `gameplay/actions/skip_action.gd`：Working 最后子阶段会校验强制动作（未完成则拒绝 skip）
+- `gameplay/actions/set_discount_action.gd`：折扣经理强制动作（`set_discount`）
+- `ui/scenes/game/game.gd`：`_maybe_auto_complete_mandatory_actions_before_skip()`（仅 UI 层在执行 skip 前自动补齐强制动作）
+- `core/actions/action_registry.gd`：`get_player_initiatable_actions()`（ActionPanel 是否可点由 validate 决定）
+- `ui/components/action_panel/action_panel.gd`：按钮 enabled 依赖 “initiable actions”
+
+**初步根因（高概率）**
+
+- `ActionPanel` 通过 `ActionRegistry.get_player_initiatable_actions()` 计算按钮是否可点；该逻辑会直接 `validate(skip)`。
+- `SkipAction.validate()` 在 Working 最后子阶段若存在未完成强制动作会返回 failure（例如缺少 `set_discount`）。
+- 同时 `set_discount` 又被 `ActionPanel` 隐藏（不展示给玩家点），且目前“自动执行强制动作”仅发生在 UI 的 `_execute_command(skip)` 前。
+- 结果：当玩家依赖 ActionPanel 来点“确认结束”时，skip 被置灰，玩家无法触发 UI 的 auto-run，从而形成软锁。
+
+**建议修复方向（需你确认偏好）**
+
+- A）更稳健：把“自动完成可无参执行的强制动作（`set_price/set_discount/set_luxury_price`）”下沉到引擎/动作层（例如在 GameEngine 执行 skip 前自动补齐），让 `skip` 在 ActionRegistry 判定中也可 initiatable。
+- B）仅修 UI：让 ActionRegistry/ActionPanel 对 `skip` 做特判——当缺少的强制动作全部属于“可自动执行集合”时，仍把 `skip` 视为可启动（按钮可点），并由现有 UI auto-run 补齐。
+
+**澄清（来自用户）**
+
+- 右侧动作面板的“确认结束”无法点击（按钮为 disabled）。
+- 顶部工具栏的“确认结束”点击无反应（无弹窗/无提示文案）。
+- 没有任何提示文案。
+
+**验收标准**
+
+- 拥有折扣经理（mandatory）时，玩家仍可正常结束 Working 回合并推进阶段；强制动作会被自动补齐，不会软锁。
+
+---
+
+## 63.（用户反馈 7）上方工具栏移除“确认结束/调试”按钮
+
+**现象**
+
+- 上方工具栏存在“确认结束”和“调试”按钮。
+- 你希望移除它们：确认结束已在动作面板提供；调试面板有更完善版本。
+
+**涉及代码**
+
+- `ui/scenes/game/game.tscn`：`UIRoot/TopBar/ButtonRow/SkipButton`、`DebugButton` 及其信号连接
+- `ui/scenes/game/game.gd`：`_on_skip_pressed()`、`_on_debug_pressed()`、DebugDialog 相关逻辑
+
+**注意事项**
+
+- 该清理与 #62 有依赖：若 ActionPanel 的 skip 仍可能被置灰（强制动作问题未完全修复），移除顶部 skip 入口会放大软锁风险。建议先解决 #62，再做本项清理。
+
+**验收标准**
+
+- TopBar 不再显示这两个按钮；主要流程仍可通过 ActionPanel/新 DebugPanel 完成。
+
+---
+
+## 64.（用户反馈 8）地图外圈不可见格导致地图缩小：外圈为空时应放大，只有需要/已有外圈 piece 才完整显示
+
+**现象**
+
+- 为支持飞机广告等需要在地图外围不可见区放置 piece 的特性，地图外围增加了一圈不可见格子，导致地图整体缩小显示。
+- 你希望：当外围不可见区没有任何 piece 时，地图“看起来”没有外圈空格（更大、更贴合）；只有在需要放置（例如飞机广告模式）或已经放置了这类 piece 时，地图才缩小并完整显示外圈。
+- 额外约束：不希望地图放大后出现滚动条等；并需考虑对现有地图缩放/fit 机制的影响。
+
+**涉及代码（初步）**
+
+- `ui/scenes/game/map_canvas_indexer.gd`：`compute_bounds()` 无条件 `margin := 2`（UI-only outside ring）
+- `ui/scenes/game/map_canvas.gd`：`set_map_data()` 用 bounds 计算 `_world_origin/_grid_size/custom_minimum_size`；`get_base_size()` 被 MapView 用于 fit
+- `ui/scenes/game/map_view.gd`：auto-fit 基于 `canvas.get_base_size()`（随 `_grid_size` 变化会触发重新 fit）
+- `ui/scenes/game/map_canvas_drawer.gd`：airplane 营销板件“视觉贴地图外侧”绘制，需要画布 bounds 留出外圈空间
+- `ui/scenes/game/game_map_interaction_controller.gd`：airplane 的可选点/高亮使用 outside cells（依赖外圈 cell 在 bounds 内）
+
+**初步根因**
+
+- UI-only outside ring（`compute_bounds` 的固定 margin）始终参与 `_grid_size`，导致 `MapView.fit_to_view()` 用更大的 base_size 计算缩放，从而把地图整体缩小。
+- 由于该 margin 是“为了飞机等外圈交互/绘制”的支持，但在不需要外圈时也始终开启，因此产生不必要的缩小。
+
+**建议方案（方向）**
+
+- 让 UI-only margin 成为“可切换”的 bounds 策略，而不是固定常开：
+	- 默认：margin=0（外圈不占版面，地图更大，且 fit 后不出现额外滚动范围）。
+	- 需要外圈时（进入飞机广告放置/预览，或地图上已存在外圈展示的 piece）：margin=2（完整显示外圈并允许交互）。
+- 需要一个清晰的“何时需要外圈”的判定来源：
+	- A）UI 模式驱动：当进入 airplane 营销选点/放置模式时临时开启；退出则关闭；
+	- B）地图内容驱动：当 `marketing_placements` 中存在 airplane（或未来其它 outside piece）时保持开启；
+	- 实际可能需要 A+B 组合。
+- 与缩放的交互：bounds 切换会改变 `get_base_size()`，从而触发 MapView 的 auto-fit；允许覆盖玩家当前手动缩放（见澄清）。
+
+**澄清（来自用户）**
+
+- 未来还有别的外圈 piece（不仅 airplane）。
+- 进入/退出外圈模式时允许系统自动重新 fit。
+
+**验收标准**
+
+- 外圈为空且不在外圈放置模式时：地图自动显示为“无外圈空格”的观感（更大、更贴合），且不会引入额外滚动条/滚动范围。
+- 进入外圈放置模式或已有外圈 piece 时：地图自动缩小并完整显示外圈，交互/高亮/绘制正常。
+
 ## 51. 晚餐结算日志过噪：包含冗余统计/拆分信息
 
 **现象**
@@ -1284,30 +1579,43 @@
 - `CleanupSettlement.apply()` 采用了简化实现：对每个 product clamp 到 fridge_cap。
 - `Cleanup` 被视为“无玩家交互结算阶段”而 auto-skip，缺少 `pending_phase_actions` 门禁与可执行动作，无法实现“弹窗选择保留”。
 
-**修复方案（候选，待你点头后实施）**
+**澄清（来自用户）**
 
-- 规则修复（总量容量）：
-	- 更新 Cleanup 的冰箱容量逻辑：对食物+饮料按“总量 <= cap”约束，而不是逐产品限幅。
-- 交互流程（弹窗选择保留）：
-	- 当进入 Cleanup 且玩家有冰箱且库存总量 > cap 时：
-		- 写入 `round_state.pending_phase_actions["Cleanup"]` 以阻断 auto-advance
-		- 记录“待选择的库存快照/容量”到 round_state（供 UI 展示与回放一致性）
-	- 新增一个仅 Cleanup 可用的动作（例如 `choose_fridge_keep`）：提交“各产品保留数量”，应用到 inventory，计算 discarded，写入 `round_state.cleanup.inventory_discarded` 并触发 `CleanupDiscard` 里程碑，然后清空 pending。
-	- UI 在 Cleanup 阶段检测到 pending 时弹出 modal（展示可保留数量与剩余容量），确认后发送 `choose_fridge_keep` 命令。
-- 测试：
-	- 更新 `CleanupInventoryTest`：覆盖“总量 10”规则（多产品相加超过 cap）。
-	- 新增针对 `choose_fridge_keep` 的纯逻辑测试：校验容量约束、discarded 计算与 round_state 写入。
+- 只统计 food+drink。
+- 仅在 `total > cap` 时出现弹窗；按玩家顺序（`turn_order`）逐个弹窗；允许主动保留少于 `cap`。
 
-**待澄清**
+**修复方案（最终）**
 
-- “总量 10”是否只统计 food+drink？库存中若存在其它 product（非食物/饮料）是否应排除？
-- Cleanup 的选择顺序：玩家是否按 `turn_order` 逐个选择，还是本地 hotseat 依次弹窗即可？
-- 弹窗触发条件：仅当总量 > cap 才弹，还是“只要有冰箱每次都弹”？
-- 玩家是否允许“保留少于 cap”主动丢弃（策略/触发里程碑）？
+- 规则：冰箱容量按 food+drink 总量限制（`sum(food+drink) <= cap`），不再逐产品限幅。
+- 交互：进入 Cleanup 时若玩家有冰箱且总量 > cap：
+	- 写入 `round_state.pending_phase_actions["Cleanup"]` 阻断 auto-advance（避免 Cleanup 被自动跳过）
+	- 将 `current_player_index` 对齐到待处理的第一位玩家（按 `turn_order`）
+	- UI 弹出“冰箱保留选择”遮罩面板；确认后执行 `choose_fridge_keep`
+- 动作：`choose_fridge_keep` 提交“各产品保留数量”，应用到 inventory，计算 discarded，写入 `round_state.cleanup.inventory_discarded` 并触发 `CleanupDiscard` 里程碑；当全部玩家完成后执行“里程碑池清理”。
+- 文案：库存/里程碑效果描述改为“总量≤cap”。
+
+**实施记录**
+
+- 已修改：`core/rules/phase/cleanup_settlement.gd`
+	- 冰箱容量改为 food+drink 总量限制；总量 > cap 时进入 pending（不自动丢弃）
+	- 写入 `round_state.pending_phase_actions["Cleanup"]` 并按 `turn_order` 排序；对齐 `current_player_index`
+	- pending 存在时暂缓 `apply_cleanup_milestones`（避免 CleanupDiscard 触发的里程碑残留在 pool 中）
+- 已新增：`gameplay/actions/choose_fridge_keep_action.gd`（并注册到 `core/engine/game_engine/action_setup.gd`）
+	- 校验 keep 总量 <= cap、且不超过现有库存；允许保留少于 cap
+	- 应用库存变更、更新 `round_state.cleanup.inventory_discarded`、触发 `CleanupDiscard`；全部完成后补跑 `apply_cleanup_milestones`
+- 已新增：`ui/components/modal_panel/fridge_keep_modal.tscn` / `ui/components/modal_panel/fridge_keep_modal.gd`
+- 已修改：`ui/scenes/game/game_panel_controller.gd`：Cleanup pending 时按玩家顺序弹出冰箱选择弹窗，并发送 `choose_fridge_keep`
+- 已修改：`ui/components/left_panel/left_panel.gd` / `ui/components/inventory_panel/inventory_panel.gd` / `ui/components/milestone_panel/milestone_panel.gd`：更新冰箱容量文案为“总量≤cap”
+- 已修改：`core/tests/cleanup_inventory_test.gd` / `core/tests/new_milestones_coke_sold_v2_test.gd`：更新断言以覆盖新规则与选择动作
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：PASS（108/108，`.godot/AllTests.log`）
 
 **状态**
 
-- 待澄清
+- Implemented（待手动验收）
 
 ---
 

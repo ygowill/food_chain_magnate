@@ -5,19 +5,23 @@ extends RefCounted
 
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 
 static func apply(state: GameState) -> Result:
 	if not (state.round_state is Dictionary):
 		return Result.failure("CleanupSettlement: state.round_state 类型错误（期望 Dictionary）")
 	if not (state.players is Array):
 		return Result.failure("CleanupSettlement: state.players 类型错误（期望 Array）")
+	if not ProductRegistryClass.is_loaded():
+		return Result.failure("CleanupSettlement: ProductRegistry 未初始化")
 
 	var warnings: Array[String] = []
 
 	# M3 最小实现（对齐 docs/design.md）：
 	# - 无冰箱：清空所有库存
-	# - 有冰箱：每种产品各自限幅到容量（简化策略，后续可升级为“总容量”分配）
+	# - 有冰箱：仅对 food+drink 生效，且总量 <= 容量；若超出则需要玩家在 Cleanup 阶段选择保留哪些商品
 	var inventory_discarded: Array[Dictionary] = []
+	var needs_fridge_choice := {}  # player_id -> true
 
 	for i in range(state.players.size()):
 		var player_val = state.players[i]
@@ -29,7 +33,7 @@ static func apply(state: GameState) -> Result:
 		if not (milestones_val is Array):
 			return Result.failure("CleanupSettlement: player[%d].milestones 类型错误（期望 Array）" % i)
 		var milestones: Array = milestones_val
-		var fridge_read := _get_fridge_capacity_from_milestones(milestones)
+		var fridge_read := get_fridge_capacity_from_milestones(milestones)
 		if not fridge_read.ok:
 			return fridge_read
 		var fridge: Dictionary = fridge_read.value
@@ -41,14 +45,33 @@ static func apply(state: GameState) -> Result:
 			return Result.failure("CleanupSettlement: player[%d].inventory 类型错误（期望 Dictionary）" % i)
 		var inventory: Dictionary = inventory_val
 
+		# food+drink 总量（用于判断是否需要弹窗选择）
+		var total_food_drink := 0
+		for product_key in inventory.keys():
+			var pid: String = str(product_key)
+			if pid.is_empty():
+				continue
+			if not _is_food_or_drink(pid):
+				continue
+			total_food_drink += maxi(0, int(inventory.get(pid, 0)))
+
+		var need_choice := has_fridge and total_food_drink > fridge_cap and fridge_cap > 0
+		if need_choice:
+			needs_fridge_choice[i] = true
+
 		var discarded: Dictionary = {}
-		for product in inventory:
-			var before: int = int(inventory.get(product, 0))
+		for product in inventory.keys():
+			var before: int = maxi(0, int(inventory.get(product, 0)))
 			var after := before
-			if has_fridge:
-				after = clampi(before, 0, fridge_cap)
-			else:
+			if not has_fridge:
 				after = 0
+			elif need_choice:
+				# 需要玩家选择：先不改动库存，等待 choose_fridge_keep 动作落地
+				after = before
+			else:
+				# 有冰箱且不需要选择：保留全部（总量未超 cap）
+				after = before
+
 			inventory[product] = after
 
 			var delta := before - after
@@ -78,17 +101,45 @@ static func apply(state: GameState) -> Result:
 				warnings.append_array(ms.warnings)
 
 	state.round_state["cleanup"] = {
-		"inventory_discarded": inventory_discarded
+		"inventory_discarded": inventory_discarded,
+		"fridge_choice_pending": not needs_fridge_choice.is_empty(),
 	}
 
-	var milestone_cleanup := _apply_cleanup_milestones(state)
+	# 若需要玩家在 Cleanup 选择保留库存，则暂缓“里程碑池清理”，
+	# 否则 CleanupDiscard 触发的里程碑可能发生在清理之后而残留在 pool 中。
+	if not needs_fridge_choice.is_empty():
+		if not state.round_state.has("pending_phase_actions"):
+			state.round_state["pending_phase_actions"] = {}
+		var ppa_val = state.round_state.get("pending_phase_actions", null)
+		if not (ppa_val is Dictionary):
+			return Result.failure("CleanupSettlement: round_state.pending_phase_actions 类型错误（期望 Dictionary）")
+		var ppa: Dictionary = ppa_val
+
+		# 按 turn_order 顺序依次弹窗（hotseat）
+		var pending: Array[int] = []
+		for pid_val in state.turn_order:
+			var pid: int = int(pid_val)
+			if needs_fridge_choice.has(pid):
+				pending.append(pid)
+		ppa["Cleanup"] = pending
+		state.round_state["pending_phase_actions"] = ppa
+
+		# 将 current_player_index 对齐到第一位待处理玩家，保证 UI/命令执行一致
+		if not pending.is_empty():
+			for idx in range(state.turn_order.size()):
+				if int(state.turn_order[idx]) == int(pending[0]):
+					state.current_player_index = idx
+					break
+
+		return Result.success().with_warnings(warnings)
+
+	var milestone_cleanup := apply_cleanup_milestones(state)
 	if not milestone_cleanup.ok:
 		return milestone_cleanup
-
 	warnings.append_array(milestone_cleanup.warnings)
 	return Result.success().with_warnings(warnings)
 
-static func _get_fridge_capacity_from_milestones(milestones: Array) -> Result:
+static func get_fridge_capacity_from_milestones(milestones: Array) -> Result:
 	var has_fridge := false
 	var capacity := 0
 
@@ -131,7 +182,7 @@ static func _get_fridge_capacity_from_milestones(milestones: Array) -> Result:
 		"capacity": capacity,
 	})
 
-static func _apply_cleanup_milestones(state: GameState) -> Result:
+static func apply_cleanup_milestones(state: GameState) -> Result:
 	# 对齐 docs/design.md：同回合获得的里程碑类型在 Cleanup 统一从 supply 移除；
 	# 同时移除已过期的里程碑（expires_at）。
 	var warnings: Array[String] = []
@@ -188,6 +239,17 @@ static func _apply_cleanup_milestones(state: GameState) -> Result:
 	}
 
 	return Result.success().with_warnings(warnings)
+
+static func _is_food_or_drink(product_id: String) -> bool:
+	if product_id.is_empty():
+		return false
+	if not ProductRegistryClass.is_loaded():
+		return false
+	var def_val = ProductRegistryClass.get_def(product_id)
+	if def_val == null or not (def_val is ProductDef):
+		return false
+	var def: ProductDef = def_val
+	return def.has_tag("food") or def.has_tag("drink")
 
 static func _parse_non_negative_int_value(value, path: String) -> Result:
 	if value is int:

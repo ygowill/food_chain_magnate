@@ -82,7 +82,7 @@ func _update_capacity_display() -> void:
 	if _fridge_capacity < 0:
 		title_label.text = "库存（无冰箱）"
 	else:
-		title_label.text = "库存（冰箱：每种≤%d）" % _fridge_capacity
+		title_label.text = "库存（冰箱：总量≤%d）" % _fridge_capacity
 
 func _on_product_clicked(product_id: String) -> void:
 	product_clicked.emit(product_id)

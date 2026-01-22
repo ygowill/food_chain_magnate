@@ -297,7 +297,7 @@ func _describe_effect_dict(effect_type: String, effect: Dictionary) -> String:
 			return "发薪总额%s" % v if not v.is_empty() else "发薪总额调整"
 		"gain_fridge":
 			var cap := _format_positive_int(effect.get("value", null))
-			return "获得冰箱：清理阶段每种库存最多保留%s" % cap if not cap.is_empty() else "获得冰箱"
+			return "获得冰箱：清理阶段食物+饮料总量最多保留%s" % cap if not cap.is_empty() else "获得冰箱"
 		"waitress_tips":
 			var v := _format_positive_int(effect.get("value", null))
 			return "晚餐：每位女服务员小费%s" % v if not v.is_empty() else "晚餐：女服务员小费提升"

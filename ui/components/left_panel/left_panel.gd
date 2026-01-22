@@ -616,7 +616,7 @@ func _refresh_inventory_ui(inv: Dictionary, fridge_capacity: int) -> void:
 	if fridge_capacity < 0:
 		inventory_title_label.text = "库存（无冰箱）"
 	else:
-		inventory_title_label.text = "库存（冰箱：每种≤%d）" % fridge_capacity
+		inventory_title_label.text = "库存（冰箱：总量≤%d）" % fridge_capacity
 
 	for c in inventory_tokens.get_children():
 		if is_instance_valid(c):

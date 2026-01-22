@@ -14,6 +14,7 @@ const EndPanelsClass = preload("res://ui/scenes/game/game_panel_end_panels.gd")
 const RestructuringModalScene = preload("res://ui/components/modal_panel/restructuring_modal.tscn")
 const TurnOrderSelectionModalScene = preload("res://ui/components/modal_panel/turn_order_selection_modal.tscn")
 const ReserveCardSelectionModalScene = preload("res://ui/components/modal_panel/reserve_card_selection_modal.tscn")
+const FridgeKeepModalScene = preload("res://ui/components/modal_panel/fridge_keep_modal.tscn")
 const EmployeeTreeScene = preload("res://ui/components/employee_tree/employee_tree.tscn")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 
@@ -34,6 +35,7 @@ var _end_panels = null
 var _restructuring_modal = null
 var _turn_order_modal = null
 var _reserve_card_modal = null
+var _fridge_keep_modal = null
 var _employee_tree_panel = null
 
 var _view_player_id: int = -1
@@ -152,6 +154,10 @@ func dispose() -> void:
 		_reserve_card_modal.queue_free()
 	_reserve_card_modal = null
 
+	if is_instance_valid(_fridge_keep_modal):
+		_fridge_keep_modal.queue_free()
+	_fridge_keep_modal = null
+
 	if is_instance_valid(_employee_tree_panel):
 		_employee_tree_panel.queue_free()
 	_employee_tree_panel = null
@@ -167,6 +173,8 @@ func has_open_modal_ui() -> bool:
 		return true
 	if is_instance_valid(_reserve_card_modal) and _reserve_card_modal.visible:
 		return true
+	if is_instance_valid(_fridge_keep_modal) and _fridge_keep_modal.visible:
+		return true
 	if is_instance_valid(_employee_tree_panel) and _employee_tree_panel.visible:
 		return true
 	return false
@@ -175,6 +183,7 @@ func hide_modal_ui() -> void:
 	_hide_turn_order_modal()
 	_hide_restructuring_modal()
 	_hide_reserve_card_modal()
+	_hide_fridge_keep_modal()
 	_hide_employee_tree()
 
 func has_open_phase_ui() -> bool:
@@ -830,6 +839,24 @@ func _sync_modals(state: GameState) -> void:
 	else:
 		_hide_reserve_card_modal()
 
+	# 冰箱保留选择（Cleanup）
+	var should_show_fridge_keep := false
+	if state.phase == "Cleanup" and (state.round_state is Dictionary) and current_player_id >= 0:
+		var rs: Dictionary = state.round_state
+		var ppa_val = rs.get("pending_phase_actions", null)
+		if ppa_val is Dictionary:
+			var ppa: Dictionary = ppa_val
+			var list_val = ppa.get("Cleanup", null)
+			if list_val is Array:
+				var list: Array = list_val
+				if not list.is_empty() and int(list[0]) == current_player_id:
+					should_show_fridge_keep = true
+
+	if should_show_fridge_keep:
+		_show_fridge_keep_modal(state, current_player_id, covered)
+	else:
+		_hide_fridge_keep_modal()
+
 	# 旧布局：不使用顺序/重组的遮罩面板；但储备卡选择仍必须强制弹窗。
 	if layout_version != 2:
 		_hide_turn_order_modal()
@@ -1167,6 +1194,57 @@ func _on_reserve_card_modal_completed(result: Dictionary) -> void:
 		return
 
 	_execute_command.call(Command.create("select_reserve_card", current_player_id, {"selected_index": selected_index}))
+
+func _show_fridge_keep_modal(state: GameState, current_player_id: int, covered: Rect2) -> void:
+	if _scene == null:
+		return
+	if state == null:
+		return
+
+	_fridge_keep_modal = _initialize_modal(_fridge_keep_modal, FridgeKeepModalScene, {
+		"completed": _on_fridge_keep_modal_completed,
+	})
+	if not is_instance_valid(_fridge_keep_modal):
+		return
+
+	if _fridge_keep_modal.has_method("setup"):
+		_fridge_keep_modal.call("setup", state, current_player_id)
+	if _fridge_keep_modal.has_method("open"):
+		_fridge_keep_modal.call("open", covered)
+	elif _fridge_keep_modal is Control:
+		var c: Control = _fridge_keep_modal
+		c.position = covered.position
+		c.size = covered.size
+		c.visible = true
+
+func _hide_fridge_keep_modal() -> void:
+	if not is_instance_valid(_fridge_keep_modal):
+		return
+	if _fridge_keep_modal.has_method("close"):
+		_fridge_keep_modal.call("close")
+	elif _fridge_keep_modal is Control:
+		(_fridge_keep_modal as Control).visible = false
+
+func _on_fridge_keep_modal_completed(result: Dictionary) -> void:
+	if _scene == null or _scene.game_engine == null:
+		return
+	if not is_instance_valid(_fridge_keep_modal):
+		return
+
+	var keep_val = result.get("keep", {})
+	var keep: Dictionary = keep_val if keep_val is Dictionary else {}
+
+	if _fridge_keep_modal.has_method("set_confirm_enabled"):
+		_fridge_keep_modal.call("set_confirm_enabled", false)
+
+	var state: GameState = _scene.game_engine.get_state()
+	if state == null:
+		return
+	var current_player_id := state.get_current_player_id()
+	if current_player_id < 0:
+		return
+
+	_execute_command.call(Command.create("choose_fridge_keep", current_player_id, {"keep": keep}))
 
 func _show_restructuring_modal(covered: Rect2) -> void:
 	if _scene == null:
