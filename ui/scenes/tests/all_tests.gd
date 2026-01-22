@@ -43,6 +43,7 @@ const AirplaneMarketingOutsideRenderTestClass = preload("res://ui/scenes/tests/a
 const MarketingRangeFullFootprintTestClass = preload("res://ui/scenes/tests/marketing_range_full_footprint_test.gd")
 const MarketingHighlightsNoDrinkSourceTestClass = preload("res://ui/scenes/tests/marketing_highlights_no_drink_source_test.gd")
 const MarketingBoardNumberBadgeTestClass = preload("res://ui/scenes/tests/marketing_board_number_badge_test.gd")
+const MarketingSelectionFreezeTestClass = preload("res://ui/scenes/tests/marketing_selection_freeze_test.gd")
 const AirplaneMarketingOutsideSelectionTestClass = preload("res://ui/scenes/tests/airplane_marketing_outside_selection_test.gd")
 const MoveRestaurantDisplayLabelTestClass = preload("res://ui/scenes/tests/move_restaurant_display_label_test.gd")
 const LogRestoreAfterLoadTestClass = preload("res://ui/scenes/tests/log_restore_after_load_test.gd")
@@ -298,6 +299,10 @@ func _run_all() -> int:
 			{
 				"name": "MarketingBoardNumberBadgeTest",
 				"fn": func() -> Result: return MarketingBoardNumberBadgeTestClass.run(),
+			},
+			{
+				"name": "MarketingSelectionFreezeTest",
+				"fn": func() -> Result: return MarketingSelectionFreezeTestClass.run(),
 			},
 			{
 				"name": "AirplaneMarketingOutsideSelectionTest",

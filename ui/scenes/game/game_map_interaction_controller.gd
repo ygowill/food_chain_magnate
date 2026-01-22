@@ -178,6 +178,11 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 			if mt.is_empty():
 				return
 
+			# Clicking a valid target should "lock" the preview/range at that location.
+			# Refresh the preview for this click even if a previous target was already selected.
+			_payload.erase("selected_target")
+			_on_map_cell_hovered(world_pos)
+
 			if mt == "airplane":
 				var axis := airplane_axis
 				if axis.is_empty():
@@ -198,7 +203,8 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 				return
 
 			_payload.erase("axis")
-			_payload.erase("selected_target")
+			_payload.erase("attach")
+			_payload["selected_target"] = mapped_anchor
 			_call_marketing_panel_method("set_selected_target", [mapped_anchor])
 			if _overlay_controller != null:
 				_overlay_controller.preview_marketing_range(mapped_anchor, 0, mt)
@@ -304,6 +310,11 @@ func _maybe_auto_confirm_placement(overlay: Node) -> void:
 
 func _on_map_cell_hovered(world_pos: Vector2i) -> void:
 	if _mode != "marketing":
+		return
+	# Once the player has clicked a valid target, keep the preview fixed at that location
+	# until confirm/cancel (issue_tracker #43).
+	var selected_val = _payload.get("selected_target", null)
+	if selected_val is Vector2i and Vector2i(selected_val) != Vector2i(-1, -1):
 		return
 	if world_pos == Vector2i(-1, -1):
 		if _overlay_controller != null:

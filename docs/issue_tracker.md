@@ -2160,3 +2160,54 @@
 **状态**
 
 - Implemented（待手动验收）
+
+---
+
+## 43. 营销放置：点击选点后预览固定，不再跟随鼠标，直到确认/取消
+
+**现象/需求**
+
+- 营销板件在地图上选择放置点时，hover 会显示占地与范围预览（这是对的）。
+- 但玩家点击选中一个可用点后，预览仍会随鼠标 hover 移动；你希望改为：点击后预览固定在该位置，直到玩家确认或取消。
+
+**涉及代码**
+
+- `ui/scenes/game/game_map_interaction_controller.gd`
+	- `_on_map_cell_hovered()`：hover 时刷新占地预览与范围 overlay
+	- `_on_map_cell_selected()`：点击时写入 MarketingPanel 选中目标
+
+**根因**
+
+- 当前“预览/范围”的刷新完全绑在 hover：
+	- 点击只更新了 `MarketingPanel` 的 `_selected_target`，但 `GameMapInteractionController` 对非 airplane 类型没有记录“已选中目标”；
+	- hover 事件持续触发 `set_structure_preview` / `preview_marketing_range`，导致预览一直移动。
+
+**修复方案**
+
+- 在地图点击合法放置点时（所有营销类型），写入 `_payload["selected_target"]` 作为“已固定”的标志。
+- `_on_map_cell_hovered()` 检测到 `selected_target != (-1,-1)` 时直接 return，停止 hover 刷新（直到 confirm/cancel 或重新进入选点）。
+- 为了允许确认前改选：再次点击新的合法点时，先临时清除 `selected_target` 刷新一次预览，再写入新的 `selected_target`。
+
+**测试计划**
+
+- 新增 headless 回归测试：用 fake `map_canvas`/`overlay_controller` 驱动 `GameMapInteractionController`：
+	- 点击后 hover 到其它点不应再触发 `set_structure_preview` / `preview_marketing_range`；
+	- 再次点击新点仍可更新预览（允许改选）。
+
+**实施记录**
+
+- 已修改：`ui/scenes/game/game_map_interaction_controller.gd`：
+	- 点击合法营销点时写入 `_payload["selected_target"]`（所有营销类型）；
+	- `_on_map_cell_hovered()` 在已选 target 时停止 hover 刷新，从而锁定预览直到确认/取消；
+	- 再次点击时会先清掉 `selected_target`，确保点击可以刷新预览（允许改选）。
+- 新增：`ui/scenes/tests/marketing_selection_freeze_test.gd`（`MarketingSelectionFreezeTest`）：覆盖“点击锁定/hover 不再移动/再次点击可改选”。
+- 已修改：`ui/scenes/tests/all_tests.gd`：纳入 `MarketingSelectionFreezeTest`。
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）
