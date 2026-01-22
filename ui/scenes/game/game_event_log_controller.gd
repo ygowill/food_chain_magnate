@@ -29,7 +29,6 @@ const EVENT_TYPES_TO_LOG: Array[String] = [
 	EventBus.EventType.HOUSE_PLACED,
 	EventBus.EventType.GARDEN_ADDED,
 	EventBus.EventType.FOOD_PRODUCED,
-	EventBus.EventType.FOOD_SOLD,
 	EventBus.EventType.FOOD_DISCARDED,
 	EventBus.EventType.DRINKS_PROCURED,
 	EventBus.EventType.MARKETING_PLACED,
@@ -337,34 +336,6 @@ func _on_eventbus_event(event: Dictionary) -> void:
 					text += "：" + "%s x%d" % [food_name, amount]
 				else:
 					text += "：" + food_name
-			_game_log_panel.add_player_log(player_id, text, data)
-		EventBus.EventType.FOOD_SOLD:
-			var player_id := int(data.get("player_id", -1))
-			var house_number := str(data.get("house_number", "")).strip_edges()
-			var rest_text := _format_restaurant_id_short(str(data.get("restaurant_id", "")).strip_edges())
-			var required_val = data.get("required", null)
-			var required: Dictionary = required_val if (required_val is Dictionary) else {}
-			var req_text := _format_required_short(required, 4)
-			var revenue := int(data.get("revenue", 0))
-			var bonus := int(data.get("bonus", 0))
-			var house_bonus := int(data.get("house_bonus", 0))
-
-			var text := "售出"
-			if not house_number.is_empty():
-				text += "：房屋#%s" % house_number
-			if not rest_text.is_empty():
-				text += " -> %s" % rest_text
-			var meta: Array[String] = []
-			if not req_text.is_empty():
-				meta.append("需求: %s" % req_text)
-			if revenue != 0:
-				meta.append("收入: %d" % revenue)
-			if bonus != 0:
-				meta.append("营销奖励: %+d" % bonus)
-			if house_bonus != 0:
-				meta.append("房屋奖励: %+d" % house_bonus)
-			if not meta.is_empty():
-				text += "（%s）" % "；".join(meta)
 			_game_log_panel.add_player_log(player_id, text, data)
 		EventBus.EventType.FOOD_DISCARDED:
 			var player_id := int(data.get("player_id", -1))
@@ -810,6 +781,7 @@ func _log_dinnertime_report(data: Dictionary) -> void:
 		var s: Dictionary = s_val
 		var owner := int(s.get("winner_owner", -1))
 		var house_number := str(s.get("house_number", "")).strip_edges()
+		var rest_text := _format_restaurant_id_short(str(s.get("winner_restaurant_id", "")).strip_edges())
 		var required_val = s.get("required", null)
 		var required: Dictionary = required_val if (required_val is Dictionary) else {}
 		var revenue := int(s.get("revenue", 0))
@@ -817,7 +789,10 @@ func _log_dinnertime_report(data: Dictionary) -> void:
 		var house_bonus := int(s.get("house_bonus", 0))
 
 		var items := _format_required_short(required, 3)
-		var msg := "晚餐：房屋#%s 消费 %s 收入 $%d" % [house_number, items, revenue]
+		var msg := "晚餐：房屋#%s 消费 %s" % [house_number, items]
+		if not rest_text.is_empty():
+			msg += " -> %s" % rest_text
+		msg += " 收入 $%d" % revenue
 		if bonus != 0 or house_bonus != 0:
 			msg += " (奖励 $%d, 房屋奖 $%d)" % [bonus, house_bonus]
 		if owner >= 0:
