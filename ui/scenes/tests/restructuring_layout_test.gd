@@ -52,6 +52,31 @@ static func run() -> Result:
 		_safe_free(company)
 		return Result.failure("RestructuringModal.size=%s (不应等于 covered.size=%s)" % [str(modal.size), str(covered.size)])
 
+	# Split children should expand vertically, otherwise CompanyStructure.ManagerScroll may be squeezed to 0 height.
+	# (issue_tracker #44)
+	var hand_host = modal.get_node_or_null("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split/HandHost")
+	var company_host = modal.get_node_or_null("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split/CompanyHost")
+	if hand_host == null or not (hand_host is Control):
+		_safe_free(modal)
+		_safe_free(hand)
+		_safe_free(company)
+		return Result.failure("RestructuringModal.HandHost 节点缺失")
+	if company_host == null or not (company_host is Control):
+		_safe_free(modal)
+		_safe_free(hand)
+		_safe_free(company)
+		return Result.failure("RestructuringModal.CompanyHost 节点缺失")
+	if int((hand_host as Control).size_flags_vertical) != 3:
+		_safe_free(modal)
+		_safe_free(hand)
+		_safe_free(company)
+		return Result.failure("HandHost.size_flags_vertical=%d (期望 3=EXPAND_FILL)" % int((hand_host as Control).size_flags_vertical))
+	if int((company_host as Control).size_flags_vertical) != 3:
+		_safe_free(modal)
+		_safe_free(hand)
+		_safe_free(company)
+		return Result.failure("CompanyHost.size_flags_vertical=%d (期望 3=EXPAND_FILL)" % int((company_host as Control).size_flags_vertical))
+
 	# attach HandArea：应切换到 restructuring 展示模式（仅 reserve）
 	if not hand.has_method("get_display_mode") or not hand.has_method("set_display_mode"):
 		_safe_free(modal)
@@ -143,6 +168,13 @@ static func run() -> Result:
 		_safe_free(hand)
 		_safe_free(company)
 		return Result.failure("CompanyStructure slot[0] 列结构不符合预期")
+	# Direct slot should be centered and not stretched by the reports grid below (issue_tracker #44).
+	var direct_host = col0.get_child(0)
+	if not (direct_host is CenterContainer) or direct_host.get_child_count() < 1:
+		_safe_free(modal)
+		_safe_free(hand)
+		_safe_free(company)
+		return Result.failure("CompanyStructure direct slot host 不是 CenterContainer（用于居中直属槽）")
 	var reports_box = col0.get_child(1)
 	if not (reports_box is VBoxContainer) or reports_box.get_child_count() < 2:
 		_safe_free(modal)

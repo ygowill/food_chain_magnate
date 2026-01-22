@@ -2211,3 +2211,52 @@
 **状态**
 
 - Implemented（待手动验收）
+
+---
+
+## 44. 重组结构：CEO 直属槽可见；管理岗员工卡不随下属槽拉宽（保持 compact 且居中）
+
+**现象/需求**
+
+- 你仍然看不到 CEO 下方的直属员工槽（只能看到顶部 CEO 卡）。
+- 右侧公司树中，带有多个下属槽位的管理员工会被拉宽（例如执行副总裁被拉到 4 张卡宽）；你希望管理员工卡片保持 compact 尺寸不变，并在其下属槽位区域上方居中。
+
+**涉及代码（初步定位）**
+
+- `ui/components/modal_panel/restructuring_modal.tscn`：Split 子区（HandHost/CompanyHost）的 size_flags 可能导致右侧在垂直方向被挤压，从而 ManagerScroll 高度不足。
+- `ui/components/company_structure/company_structure.gd`：CEO 直属槽（CardSlot）与下属槽（GridContainer）位于同一列 VBox 中，VBox 会让上方 CardSlot 横向填满列宽，导致 EmployeeCard 被拉伸。
+
+**根因假设**
+
+- CEO 直属槽不可见：RestructuringModal 的 `HandHost/CompanyHost` 未设置 `size_flags_vertical=EXPAND_FILL` 时，Split 在某些尺寸下会给子区过小高度，导致 CompanyStructure 内的 `ManagerScroll` 被压缩到接近 0。
+- 管理岗卡片被拉宽：直属槽（CardSlot）被 VBoxContainer 横向强制填满，而该列宽度由下方“4 列下属槽网格”的宽度决定，导致直属卡随列宽拉伸。
+
+**修复方案**
+
+- RestructuringModal：为 `HandHost/CompanyHost` 设置 `size_flags_vertical=EXPAND_FILL`，确保右侧 CompanyStructure 有稳定高度展示 CEO 直属槽区域。
+- CompanyStructure：用 `CenterContainer` 包裹 CEO 直属 `CardSlot`，让直属槽保持 `custom_minimum_size=130×90` 并在列宽中水平居中，从而不随下属槽网格拉宽。
+
+**测试计划**
+
+- 扩展 headless 回归覆盖：
+	- UI 属性测试：RestructuringModal 的 HandHost/CompanyHost 在场景中具备 `size_flags_vertical=EXPAND_FILL`。
+	- UI 属性测试：CompanyStructure 直属槽外层为 CenterContainer（或等价“水平居中且不拉伸”的容器），并保持 CardSlot 的 `custom_minimum_size.x == 130`。
+
+**实施记录**
+
+- 已修改：`ui/components/modal_panel/restructuring_modal.tscn`：
+	- `HandHost/CompanyHost.size_flags_vertical=EXPAND_FILL`，避免右侧高度被挤压导致 CEO 直属槽不可见。
+- 已修改：`ui/components/company_structure/company_structure.gd`：
+	- CEO 直属槽使用 `CenterContainer` 包裹 `CardSlot`，使直属员工卡保持 compact 尺寸并在下属槽网格上方居中（不随列宽拉伸）。
+- 已修改：`ui/scenes/tests/restructuring_layout_test.gd`：
+	- 增加断言：HandHost/CompanyHost vertical flags 为 EXPAND_FILL；
+	- 增加断言：CompanyStructure 直属槽外层为 CenterContainer（用于居中防拉伸）。
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）

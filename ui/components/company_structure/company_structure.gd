@@ -159,13 +159,19 @@ func _rebuild_structure() -> void:
 			col.add_theme_constant_override("separation", 4)
 			manager_container.add_child(col)
 
+			# Keep the direct card compact and centered even if the reports grid below is wide.
+			# (issue_tracker #44)
+			var direct_slot_host := CenterContainer.new()
+			direct_slot_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			col.add_child(direct_slot_host)
+
 			var slot := CardSlot.new()
 			slot.slot_index = i
 			slot.add_to_group("employee_card_drop_target")
 			slot.add_to_group("company_structure_direct_slot")
 			slot.card_placed.connect(_on_card_placed)
 			slot.card_removed.connect(_on_card_removed)
-			col.add_child(slot)
+			direct_slot_host.add_child(slot)
 			_slot_nodes.append(slot)
 			_direct_cards_by_slot.append(null)
 
