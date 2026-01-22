@@ -63,7 +63,7 @@
 | 46 | 重组结构：拖回待命区 drop 区域过小（仅左上角可成功） | UI/交互 | drop target 仅覆盖 reserve_container 的一部分；ScrollContainer 空白区域不命中 | Implemented（待手动验收） |
 | 47 | 飞机营销：图标需随摆放方向旋转（长边为底） | UI/渲染 | `_draw_marketing_placement()` 始终按轴对齐绘制纹理，导致左右边贴时飞机图标横向被压缩 | Implemented（待手动验收） |
 | 48 | 游戏日志：房屋被打上广告缺日志；采购日志缺路线；需要可读性方案 | UI/信息架构 | 缺少 MarketingSettlement/路线等结构化事件；现有日志仅平铺文本，难在“不刷屏”和“可追溯细节”间平衡 | Implemented（待手动验收） |
-| 49 | 提供“日志验证”测试存档（便于手工审查日志改动） | 测试/工具 | 现有 manual_cases 会冻结命令历史，无法承载“回放产生事件→复核日志”的场景 | Planned（需需求确认） |
+| 49 | 提供“日志验证”测试存档（便于手工审查日志改动） | 测试/工具 | 现有 manual_cases 会冻结命令历史，无法承载“回放产生事件→复核日志”的场景 | Implemented（待手动验收） |
 
 ---
 
@@ -2526,18 +2526,28 @@
 	- 生成时保留少量命令历史（不冻结），确保读档回放能恢复 EventBus.history，并让日志面板可复核。
 	- 存档说明 MD 里写清：打开日志、筛选、双击查看详情，检查营销结算/采购路线等条目。
 
-**待澄清**
+**确认（来自你在 #48 的补充）**
 
-- 你希望该存档更偏向：
-	- A. “加载后即可看到历史日志”（用于检查恢复/筛选/详情展示）；
-	- B. “加载后处在某个子阶段，玩家点几步即可触发新日志”（用于检查实时追加）。
-- 你希望玩家数/地图规模是否固定（例如 2 人、基础地图即可）？
+- A：加载后即可看到历史日志（用于检查恢复/筛选/详情展示）。
+- 固定为 2 人 + 基础地图。
 
-**测试计划**
+**实施记录**
 
-- 新增一个 headless 验证（最小化）：
-	- 生成脚本产物可 load（已有验证），并且回放后 EventBus.history 至少包含预期事件类型（例如 MARKETING/DRINKS 相关）。
+- 已修改：`tools/generate_manual_test_saves.gd`：
+	- 支持 `case.freeze_as_initial=false`（允许某些用例保留命令历史用于回放）。
+	- 支持 `kind=="logs"` 输出到 `res://.savings/manual_cases/logs/`。
+	- 新增 builder `logs_event_review`：构造 2 人基础局面并保留命令历史，使读档回放后自动产生日志事件（营销结算需求 + 采购路线摘要）。
+- 已修改：`tools/generate_manual_test_saves_manifest.gd`：新增 case `logs/event_log_review`（并设置 `freeze_as_initial=false`）。
+- 已新增：`res://.savings/manual_cases/logs/event_log_review.json` + `res://.savings/manual_cases/logs/event_log_review.md`（用于手工验收）。
+- 已修改：`.savings/manual_cases/README.md`：补充 logs 分类与入口。
+- 已新增：`core/tests/manual_log_save_test.gd`：加载 `event_log_review.json` 后断言 EventBus.history 至少包含 `MARKETING_PLACED` / `DRINKS_PROCURED` / `DEMAND_GENERATED`，用于回归保护。
+- 已修改：`ui/scenes/tests/all_tests.gd`：纳入 `ManualLogSaveTest`。
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（106/106，`.godot/AllTests.log`）
 
 **状态**
 
-- Planned（需需求确认）
+- Implemented（待手动验收）

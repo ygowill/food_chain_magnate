@@ -975,6 +975,32 @@ static func get_cases() -> Array[Dictionary]:
 	cases.append(_employee_fry_chef())
 	cases.append(_employee_kimchi_master())
 
+	# === 日志：回放验证（用于审查日志改动是否生效） ===
+	cases.append(_case({
+		"kind": "logs",
+		"id": "event_log_review",
+		"title": "日志回放验证（营销结算 + 采购路线）",
+		"enabled_modules": [],
+		"freeze_as_initial": false,
+		"builder": "logs_event_review",
+		"purpose": "用于手工复核日志：营销结算产生需求（DEMAND_GENERATED）与采购路线（DRINKS_PROCURED）的摘要/详情展示。",
+		"steps": [
+			"载入后打开日志视图（左侧「日志」按钮）。",
+			"确认存在「采购饮料」日志（摘要含起点餐厅与选定进货点）。",
+			"确认存在「产生需求/打上广告」日志（摘要含 board_number/新增需求数/房屋编号）。",
+			"双击上述日志条目打开详情窗口，核对 details 中的 picked_sources / affected_house_numbers 等字段。",
+		],
+		"expected": [
+			"日志可筛选玩家；「全部」可显示全体日志。",
+			"双击条目可打开详情窗口。",
+		],
+		"related_tests": [
+			"core/tests/marketing_demand_generated_event_test.gd",
+			"core/tests/procure_drinks_route_rules_test.gd",
+			"ui/scenes/tests/log_restore_after_load_test.gd",
+		],
+	}))
+
 	return cases
 
 static func _case(overrides: Dictionary) -> Dictionary:

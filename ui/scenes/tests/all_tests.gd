@@ -49,6 +49,7 @@ const MarketingSelectionFreezeTestClass = preload("res://ui/scenes/tests/marketi
 const AirplaneMarketingOutsideSelectionTestClass = preload("res://ui/scenes/tests/airplane_marketing_outside_selection_test.gd")
 const MoveRestaurantDisplayLabelTestClass = preload("res://ui/scenes/tests/move_restaurant_display_label_test.gd")
 const LogRestoreAfterLoadTestClass = preload("res://ui/scenes/tests/log_restore_after_load_test.gd")
+const ManualLogSaveTestClass = preload("res://core/tests/manual_log_save_test.gd")
 const EventHistoryRewindTestClass = preload("res://core/tests/event_history_rewind_test.gd")
 const ReplayPlayerSmokeTestClass = preload("res://ui/scenes/tests/replay_player_smoke_test.gd")
 const OrderOfBusinessTestClass = preload("res://core/tests/order_of_business_test.gd")
@@ -323,14 +324,18 @@ func _run_all() -> int:
 				"name": "MoveRestaurantDisplayLabelTest",
 				"fn": func() -> Result: return MoveRestaurantDisplayLabelTestClass.run(),
 			},
-			{
-				"name": "LogRestoreAfterLoadTest",
-				"fn": func() -> Result: return LogRestoreAfterLoadTestClass.run(),
-			},
-			{
-				"name": "EventHistoryRewindTest",
-				"fn": func() -> Result: return EventHistoryRewindTestClass.run(2, 12345),
-			},
+				{
+					"name": "LogRestoreAfterLoadTest",
+					"fn": func() -> Result: return LogRestoreAfterLoadTestClass.run(),
+				},
+				{
+					"name": "ManualLogSaveTest",
+					"fn": func() -> Result: return ManualLogSaveTestClass.run(),
+				},
+				{
+					"name": "EventHistoryRewindTest",
+					"fn": func() -> Result: return EventHistoryRewindTestClass.run(2, 12345),
+				},
 			{
 				"name": "ReplayPlayerSmokeTest",
 				"fn": func() -> Result: return ReplayPlayerSmokeTestClass.run(),

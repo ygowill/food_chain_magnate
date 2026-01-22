@@ -122,8 +122,14 @@ func _generate_case(c: Dictionary) -> Result:
 		return build
 	var build_ctx: Dictionary = build.value if (build.value is Dictionary) else {}
 
-	# 把当前状态“冻结”为 archive.initial_state（减少命令历史噪音，便于手工复核）
-	_freeze_engine_as_initial(engine)
+	# 把当前状态“冻结”为 archive.initial_state（减少命令历史噪音，便于手工复核）。
+	# 部分用例（如日志回放）需要保留命令历史；可通过 case.freeze_as_initial=false 禁用（由 builder 自行控制冻结点）。
+	var freeze_as_initial := true
+	var freeze_val = c.get("freeze_as_initial", true)
+	if freeze_val is bool:
+		freeze_as_initial = bool(freeze_val)
+	if freeze_as_initial:
+		_freeze_engine_as_initial(engine)
 
 	var dir_name := _kind_to_dir(kind)
 	if dir_name.is_empty():
@@ -201,6 +207,8 @@ func _kind_to_dir(kind: String) -> String:
 			return "employees"
 		"milestone":
 			return "milestones"
+		"logs":
+			return "logs"
 		_:
 			return ""
 
@@ -421,6 +429,8 @@ func _run_builder(engine: GameEngine, c: Dictionary) -> Result:
 			return _build_milestone_first_burger_sold(engine, c)
 		"milestone_first_pizza_sold":
 			return _build_milestone_first_pizza_sold(engine, c)
+		"logs_event_review":
+			return _build_logs_event_review(engine, c)
 		_:
 			return Result.failure("unknown builder: %s" % name)
 
@@ -972,6 +982,490 @@ func _build_employee_procure_drinks_route(engine: GameEngine, c: Dictionary) -> 
 
 	# 采购路线/来源由 UI 交互生成（route/selected_sources），这里不强行指定参数，避免误导。
 	return Result.success()
+
+func _build_logs_event_review(engine: GameEngine, _c: Dictionary) -> Result:
+	# Logs review case:
+	# - Build a small "ready-to-run" initial state (restaurants/houses/employees), then freeze as initial_state.
+	# - Execute a short command history to generate EventBus.history (marketing demand + drinks procure route),
+	#   so loading the archive replays and populates the log panel for manual inspection.
+	var adv := _advance_to_working_sub_phase(engine, "PlaceHouses")
+	if not adv.ok:
+		return adv
+
+	var state := engine.get_state()
+	_force_turn_order(state)
+	var actor := state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("cannot resolve current player")
+
+	# Ensure employees needed for pre-setup (place_house) and log-generating commands.
+	var ensure_house := _ensure_employee(state, actor, "new_business_developer", false, 1)
+	if not ensure_house.ok:
+		return ensure_house
+	var ensure_marketer := _ensure_employee(state, actor, "brand_director", false, 1)
+	if not ensure_marketer.ok:
+		return ensure_marketer
+	var ensure_procure := _ensure_employee(state, actor, "zeppelin_pilot", false, 1)
+	if not ensure_procure.ok:
+		return ensure_procure
+
+	# Ensure Payday can resolve even with salary employees in this scenario.
+	# Use the debug system command to inject reserve (keeps cash invariants via reserve_added_total).
+	for pid in range(state.players.size()):
+		var give := engine.execute_command(Command.create_system("debug_give_money", {"player_id": pid, "amount": 50}))
+		if not give.ok:
+			return Result.failure("debug_give_money failed: %s" % give.error)
+
+	# Place at least one house so marketing settlement will generate demand + affected house numbers.
+	var numbers := _get_remaining_house_numbers_from_state(state)
+	if numbers.is_empty():
+		return Result.failure("no remaining house numbers")
+
+	var placed_house_numbers: Array[int] = []
+	var want := mini(2, numbers.size())
+	for i in range(want):
+		var house_number := int(numbers[i])
+		var find := _find_first_valid_place_house(engine, actor, house_number)
+		if not find.ok:
+			continue
+		var info: Dictionary = find.value if (find.value is Dictionary) else {}
+		var params: Dictionary = info.get("params", {}) if (info.get("params", null) is Dictionary) else {}
+		params["employee_type"] = "new_business_developer"
+		var exec := engine.execute_command(Command.create("place_house", actor, params))
+		if not exec.ok:
+			return Result.failure("place_house failed: %s" % exec.error)
+		placed_house_numbers.append(house_number)
+
+	if placed_house_numbers.is_empty():
+		return Result.failure("failed to place any house for logs review")
+
+	# Prepare initial state at Working/Marketing (so replay starts from a meaningful interactive moment).
+	state = engine.get_state()
+	_force_turn_order(state)
+	state.sub_phase = "Marketing"
+
+	# Freeze here: we want houses/restaurants/employees in archive.initial_state,
+	# but we want to keep the upcoming command history for replay/log verification.
+	_freeze_engine_as_initial(engine)
+
+	# === Commands to generate logs ===
+	# 1) Place a radio marketing that affects at least one of the placed houses.
+	var mk_cmd_r := _logs_find_radio_marketing_command_affecting_houses(
+		engine, actor, "brand_director", 1, "burger", 1
+	)
+	if not mk_cmd_r.ok:
+		return mk_cmd_r
+	var mk_cmd: Command = mk_cmd_r.value
+	var mk_exec := engine.execute_command(mk_cmd)
+	if not mk_exec.ok:
+		return Result.failure("initiate_marketing failed: %s" % mk_exec.error)
+
+	# 2) Advance to GetDrinks and procure drinks with an explicit route + selected_sources.
+	var to_get_drinks := TestPhaseUtils.advance_until_working_sub_phase(engine, "GetDrinks", 40)
+	if not to_get_drinks.ok:
+		return to_get_drinks
+
+	var procure_cmd_r := _logs_find_zeppelin_procure_drinks_command(engine, actor)
+	if not procure_cmd_r.ok:
+		return procure_cmd_r
+	var procure_cmd: Command = procure_cmd_r.value
+	var procure_exec := engine.execute_command(procure_cmd)
+	if not procure_exec.ok:
+		return Result.failure("procure_drinks failed: %s" % procure_exec.error)
+
+	# Sanity (before Dinnertime might consume inventory): procure_drinks should add at least one drink.
+	var state_after_procure := engine.get_state()
+	var player_after := state_after_procure.get_player(actor)
+	var inv_after_val = player_after.get("inventory", null)
+	if not (inv_after_val is Dictionary):
+		return Result.failure("procure_drinks succeeded but player.inventory is missing/invalid")
+	var inv_after: Dictionary = inv_after_val
+	var has_drink_after := false
+	for k_after in inv_after.keys():
+		if not (k_after is String):
+			continue
+		var amount_after_val = inv_after.get(k_after, null)
+		if not (amount_after_val is int):
+			continue
+		var amount_after: int = int(amount_after_val)
+		if amount_after <= 0:
+			continue
+		if ProductRegistry.is_drink(str(k_after)):
+			has_drink_after = true
+			break
+	if not has_drink_after:
+		return Result.failure("procure_drinks did not add any drinks (inventory still has no drinks)")
+
+	# 3) Complete Working to trigger Marketing settlement (auto-skipped) and DEMAND_GENERATED events.
+	var done := TestPhaseUtils.complete_working_phase(engine, 200)
+	if not done.ok:
+		return done
+	# Marketing happens after Payday (phase order: ... -> Payday -> Marketing -> Cleanup -> Restructuring).
+	# Advance to the next stable phase so the settlement actually runs during replay.
+	var to_restructuring := TestPhaseUtils.advance_until_phase(engine, "Restructuring", 200)
+	if not to_restructuring.ok:
+		return to_restructuring
+
+	# Sanity (no autoload singletons in `--script` mode): ensure marketing created at least one demand
+	# and procure_drinks actually added some inventory.
+	state = engine.get_state()
+	var any_demand := false
+	var houses_val2 = state.map.get("houses", null) if (state.map is Dictionary) else null
+	if houses_val2 is Dictionary:
+		for h2_val in (houses_val2 as Dictionary).values():
+			if not (h2_val is Dictionary):
+				continue
+			var h2: Dictionary = h2_val
+			var demands_val = h2.get("demands", null)
+			if demands_val is Array and not (demands_val as Array).is_empty():
+				any_demand = true
+				break
+	if not any_demand:
+		return Result.failure("logs case did not generate any house demands (marketing settlement may not have run)")
+
+	return Result.success({
+		"placed_house_numbers": placed_house_numbers,
+	})
+
+func _logs_find_radio_marketing_command_affecting_houses(
+	engine: GameEngine,
+	actor: int,
+	employee_type: String,
+	board_number: int,
+	product: String,
+	duration: int
+) -> Result:
+	if engine == null:
+		return Result.failure("engine is null")
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("state is null")
+
+	var ex := engine.action_registry.get_executor("initiate_marketing")
+	if ex == null:
+		return Result.failure("cannot find executor: initiate_marketing")
+
+	var houses_val = state.map.get("houses", null) if (state.map is Dictionary) else null
+	if not (houses_val is Dictionary) or (houses_val as Dictionary).is_empty():
+		return Result.failure("state.map.houses missing or empty")
+	var houses: Dictionary = houses_val
+
+	# Pick one reference house anchor to focus the search.
+	var house_ids: Array[String] = []
+	for hid in houses.keys():
+		if hid is String and not str(hid).is_empty():
+			house_ids.append(str(hid))
+	house_ids.sort()
+	if house_ids.is_empty():
+		return Result.failure("no house ids")
+	var h_val = houses.get(house_ids[0], null)
+	if not (h_val is Dictionary):
+		return Result.failure("house entry invalid: %s" % house_ids[0])
+	var h: Dictionary = h_val
+	if not h.has("anchor_pos") or not (h["anchor_pos"] is Vector2i):
+		return Result.failure("house.anchor_pos missing or invalid: %s" % house_ids[0])
+	var anchor_pos: Vector2i = h["anchor_pos"]
+
+	var coords_script = _get_coords_script()
+	if coords_script == null:
+		return Result.failure("cannot load Coords: %s" % CoordsScriptPath)
+	var minp: Vector2i = coords_script.get_world_min(state)
+	var maxp: Vector2i = coords_script.get_world_max(state)
+
+	var tile: Vector2i = MapUtils.world_to_tile(anchor_pos).board_pos
+	var candidate_tiles: Array[Vector2i] = []
+	for ty in range(tile.y - 1, tile.y + 2):
+		for tx in range(tile.x - 1, tile.x + 2):
+			candidate_tiles.append(Vector2i(tx, ty))
+
+	var calc := MarketingRangeCalculator.new()
+
+	# Prefer nearby tiles to ensure affected houses are non-empty (radio covers 3x3 tiles).
+	for t in candidate_tiles:
+		var base := Vector2i(t.x * MapUtils.TILE_SIZE, t.y * MapUtils.TILE_SIZE)
+		for y in range(base.y, base.y + MapUtils.TILE_SIZE):
+			for x in range(base.x, base.x + MapUtils.TILE_SIZE):
+				var wp := Vector2i(x, y)
+				if wp.x < minp.x or wp.x > maxp.x or wp.y < minp.y or wp.y > maxp.y:
+					continue
+				var cmd := Command.create("initiate_marketing", actor, {
+					"employee_type": employee_type,
+					"board_number": int(board_number),
+					"product": product,
+					"duration": int(duration),
+					"position": [wp.x, wp.y],
+					"rotation": 0,
+				})
+				var vr := ex.validate(state, cmd)
+				if not vr.ok:
+					continue
+				var affected_r := calc.get_affected_house_ids(state, {"type": "radio", "world_pos": wp})
+				if not affected_r.ok:
+					continue
+				var affected_val = affected_r.value
+				if affected_val is Array and not (affected_val as Array).is_empty():
+					return Result.success(cmd)
+
+	# Fallback: scan the whole map.
+	for y2 in range(minp.y, maxp.y + 1):
+		for x2 in range(minp.x, maxp.x + 1):
+			var wp2 := Vector2i(x2, y2)
+			var cmd2 := Command.create("initiate_marketing", actor, {
+				"employee_type": employee_type,
+				"board_number": int(board_number),
+				"product": product,
+				"duration": int(duration),
+				"position": [wp2.x, wp2.y],
+				"rotation": 0,
+			})
+			var vr2 := ex.validate(state, cmd2)
+			if not vr2.ok:
+				continue
+			var affected_r2 := calc.get_affected_house_ids(state, {"type": "radio", "world_pos": wp2})
+			if not affected_r2.ok:
+				continue
+			var affected_val2 = affected_r2.value
+			if affected_val2 is Array and not (affected_val2 as Array).is_empty():
+				return Result.success(cmd2)
+
+	return Result.failure("no valid radio marketing placement found that affects houses")
+
+func _logs_find_zeppelin_procure_drinks_command(engine: GameEngine, actor: int) -> Result:
+	if engine == null:
+		return Result.failure("engine is null")
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("state is null")
+	if str(state.phase) != "Working" or str(state.sub_phase) != "GetDrinks":
+		return Result.failure("expected Working/GetDrinks, got: %s/%s" % [str(state.phase), str(state.sub_phase)])
+
+	var ex := engine.action_registry.get_executor("procure_drinks")
+	if ex == null:
+		return Result.failure("cannot find executor: procure_drinks")
+
+	var rest_ids := _logs_get_player_restaurant_ids(state, actor)
+	if rest_ids.is_empty():
+		return Result.failure("player has no restaurants")
+	var restaurant_id := rest_ids[0]
+	var entrance_r := _logs_get_restaurant_entrance_pos(state, restaurant_id)
+	if not entrance_r.ok:
+		return entrance_r
+	var entrance_pos: Vector2i = entrance_r.value
+
+	var tile_size_r := _logs_get_tile_size(state)
+	if not tile_size_r.ok:
+		return tile_size_r
+	var tile_size: int = int(tile_size_r.value)
+
+	var start_tile := _logs_world_to_tile_pos(tile_size, entrance_pos)
+	var tiles_set := _logs_get_tile_positions_set(state)
+
+	var bounds := {}
+	if tiles_set.is_empty():
+		var coords_script = _get_coords_script()
+		if coords_script == null:
+			return Result.failure("cannot load Coords: %s" % CoordsScriptPath)
+		var minp: Vector2i = coords_script.get_world_min(state)
+		var maxp: Vector2i = coords_script.get_world_max(state)
+		bounds["min"] = Vector2i(_logs_floor_div(minp.x, tile_size), _logs_floor_div(minp.y, tile_size))
+		bounds["max"] = Vector2i(_logs_floor_div(maxp.x, tile_size), _logs_floor_div(maxp.y, tile_size))
+
+	var sources_val = state.map.get("drink_sources", null) if (state.map is Dictionary) else null
+	if not (sources_val is Array) or (sources_val as Array).is_empty():
+		return Result.failure("state.map.drink_sources missing or empty")
+	var sources: Array = sources_val
+
+	var sources_by_tile := {}
+	for s_val in sources:
+		if not (s_val is Dictionary):
+			continue
+		var s: Dictionary = s_val
+		var wp_val = s.get("world_pos", null)
+		if not (wp_val is Vector2i):
+			continue
+		var wp: Vector2i = wp_val
+		var tp := _logs_world_to_tile_pos(tile_size, wp)
+		if not sources_by_tile.has(tp):
+			sources_by_tile[tp] = []
+		(sources_by_tile[tp] as Array).append(wp)
+
+	# Zeppelin pilot: air route on tiles, max_steps=4.
+	var max_steps := 4
+	var route_find := _logs_bfs_find_route_to_any_source_tile(start_tile, sources_by_tile, tiles_set, bounds, max_steps)
+	if not route_find.ok:
+		return route_find
+	var rf: Dictionary = route_find.value
+	var route: Array[Vector2i] = rf.get("route", []) if rf.get("route", null) is Array else []
+	var picked_source_pos: Vector2i = rf.get("source_world_pos", Vector2i.ZERO)
+	if route.is_empty():
+		return Result.failure("internal error: route is empty")
+
+	var cmd := Command.create("procure_drinks", actor, {
+		"employee_type": "zeppelin_pilot",
+		"restaurant_id": restaurant_id,
+		"route": _logs_serialize_vec2i_array(route),
+		"selected_sources": _logs_serialize_vec2i_array([picked_source_pos]),
+	})
+	var vr := ex.validate(state, cmd)
+	if not vr.ok:
+		return Result.failure("generated procure_drinks command is invalid: %s" % vr.error)
+	return Result.success(cmd)
+
+func _logs_get_player_restaurant_ids(state: GameState, player_id: int) -> Array[String]:
+	var out: Array[String] = []
+	if state == null or not (state.map is Dictionary):
+		return out
+	var restaurants_val = state.map.get("restaurants", null)
+	if not (restaurants_val is Dictionary):
+		return out
+	var restaurants: Dictionary = restaurants_val
+	for rid_val in restaurants.keys():
+		if not (rid_val is String):
+			continue
+		var rid := str(rid_val).strip_edges()
+		if rid.is_empty():
+			continue
+		var rest_val = restaurants.get(rid, null)
+		if not (rest_val is Dictionary):
+			continue
+		var rest: Dictionary = rest_val
+		var owner_val = rest.get("owner", null)
+		if owner_val is int and int(owner_val) == player_id:
+			out.append(rid)
+	out.sort()
+	return out
+
+func _logs_get_restaurant_entrance_pos(state: GameState, restaurant_id: String) -> Result:
+	if state == null or not (state.map is Dictionary):
+		return Result.failure("state.map missing")
+	if restaurant_id.is_empty():
+		return Result.failure("restaurant_id is empty")
+	var restaurants_val = state.map.get("restaurants", null)
+	if not (restaurants_val is Dictionary):
+		return Result.failure("state.map.restaurants missing or invalid")
+	var restaurants: Dictionary = restaurants_val
+	if not restaurants.has(restaurant_id):
+		return Result.failure("restaurant not found: %s" % restaurant_id)
+	var rest_val = restaurants.get(restaurant_id, null)
+	if not (rest_val is Dictionary):
+		return Result.failure("restaurant invalid: %s" % restaurant_id)
+	var rest: Dictionary = rest_val
+	var ep_val = rest.get("entrance_pos", null)
+	if not (ep_val is Vector2i):
+		return Result.failure("restaurant.entrance_pos missing or invalid: %s" % restaurant_id)
+	return Result.success(Vector2i(ep_val))
+
+func _logs_get_tile_size(state: GameState) -> Result:
+	if state == null or not (state.map is Dictionary):
+		return Result.failure("state.map missing or invalid")
+	var map: Dictionary = state.map
+	var grid_val = map.get("grid_size", null)
+	var tile_grid_val = map.get("tile_grid_size", null)
+	if not (grid_val is Vector2i) or not (tile_grid_val is Vector2i):
+		return Result.failure("grid_size/tile_grid_size missing or invalid")
+	var grid: Vector2i = grid_val
+	var tile_grid: Vector2i = tile_grid_val
+	if tile_grid.x <= 0 or tile_grid.y <= 0:
+		return Result.failure("tile_grid_size invalid: %s" % str(tile_grid))
+	if grid.x % tile_grid.x != 0 or grid.y % tile_grid.y != 0:
+		return Result.failure("grid_size not divisible by tile_grid_size: %s/%s" % [str(grid), str(tile_grid)])
+	var sx := grid.x / tile_grid.x
+	var sy := grid.y / tile_grid.y
+	if sx != sy or sx <= 0:
+		return Result.failure("tile_size invalid: %d/%d" % [sx, sy])
+	return Result.success(int(sx))
+
+func _logs_world_to_tile_pos(tile_size: int, world_pos: Vector2i) -> Vector2i:
+	return Vector2i(_logs_floor_div(world_pos.x, tile_size), _logs_floor_div(world_pos.y, tile_size))
+
+func _logs_floor_div(a: int, b: int) -> int:
+	if b == 0:
+		return 0
+	return int(floor(float(a) / float(b)))
+
+func _logs_get_tile_positions_set(state: GameState) -> Dictionary:
+	var out := {}
+	if state == null or not (state.map is Dictionary):
+		return out
+	var map: Dictionary = state.map
+	var placements_val = map.get("tile_placements", null)
+	if placements_val is Array:
+		for p_val in Array(placements_val):
+			if not (p_val is Dictionary):
+				continue
+			var p: Dictionary = p_val
+			var bp = p.get("board_pos", null)
+			if bp is Vector2i:
+				out[Vector2i(bp)] = true
+	var ext_val = map.get("external_tile_placements", null)
+	if ext_val is Array:
+		for p_val2 in Array(ext_val):
+			if not (p_val2 is Dictionary):
+				continue
+			var p2: Dictionary = p_val2
+			var bp2 = p2.get("board_pos", null)
+			if bp2 is Vector2i:
+				out[Vector2i(bp2)] = true
+	return out
+
+func _logs_bfs_find_route_to_any_source_tile(
+	start_tile: Vector2i,
+	sources_by_tile: Dictionary,
+	tiles_set: Dictionary,
+	bounds: Dictionary,
+	max_steps: int
+) -> Result:
+	var visited := {}
+	var queue: Array[Dictionary] = []
+	queue.append({"pos": start_tile, "route": [start_tile]})
+	visited[start_tile] = true
+
+	while not queue.is_empty():
+		var item: Dictionary = queue.pop_front()
+		var pos: Vector2i = item.get("pos", Vector2i.ZERO)
+		var route: Array = item.get("route", [])
+		if sources_by_tile.has(pos):
+			var arr = sources_by_tile.get(pos, null)
+			if arr is Array and not (arr as Array).is_empty():
+				var wp: Vector2i = (arr as Array)[0]
+				return Result.success({
+					"route": route,
+					"source_world_pos": wp,
+				})
+
+		if route.size() >= max_steps:
+			continue
+
+		for dir in MapUtils.DIRECTIONS:
+			var next: Vector2i = MapUtils.get_neighbor_pos(pos, dir)
+			if visited.has(next):
+				continue
+			if not tiles_set.is_empty():
+				if not tiles_set.has(next):
+					continue
+			else:
+				var min_t: Vector2i = bounds.get("min", Vector2i.ZERO)
+				var max_t: Vector2i = bounds.get("max", Vector2i.ZERO)
+				if next.x < min_t.x or next.x > max_t.x or next.y < min_t.y or next.y > max_t.y:
+					continue
+
+			visited[next] = true
+			var new_route: Array[Vector2i] = []
+			for v in route:
+				if v is Vector2i:
+					new_route.append(Vector2i(v))
+			new_route.append(next)
+			queue.append({"pos": next, "route": new_route})
+
+	return Result.failure("no reachable drink source tile within steps=%d" % max_steps)
+
+func _logs_serialize_vec2i_array(points: Array) -> Array:
+	var out: Array = []
+	for p in points:
+		if p is Vector2i:
+			var v: Vector2i = p
+			out.append([v.x, v.y])
+	return out
 
 func _build_employee_initiate_marketing(engine: GameEngine, c: Dictionary) -> Result:
 	var adv := _advance_to_working_sub_phase(engine, "Marketing")

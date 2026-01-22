@@ -1,4 +1,4 @@
-# 手工复核用存档索引（employees / milestones）
+# 手工复核用存档索引（employees / milestones / logs）
 
 本目录包含用于**手工复核**的存档（archive JSON）与同名说明文件（Markdown）。
 
@@ -21,6 +21,7 @@ godot --headless --path . --script res://tools/generate_manual_test_saves.gd
 ```bash
 godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- --kind employee
 godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- --kind milestone
+godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- --kind logs
 godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- --id kitchen_trainee
 ```
 
@@ -118,7 +119,10 @@ godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- 
 - `first_throw_away`: `milestones/first_throw_away.json` + `milestones/first_throw_away.md`
 - `first_train`: `milestones/first_train.json` + `milestones/first_train.md`
 - `first_trainer_used`: `milestones/first_trainer_used.json` + `milestones/first_trainer_used.md`
+
+## 日志（1）
+
+- `event_log_review`: `logs/event_log_review.json` + `logs/event_log_review.md`
 - `first_waitress_used`: `milestones/first_waitress_used.json` + `milestones/first_waitress_used.md`
 - `first_waitress`: `milestones/first_waitress.json` + `milestones/first_waitress.md`
 - `ketchup_sold_your_demand`: `milestones/ketchup_sold_your_demand.json` + `milestones/ketchup_sold_your_demand.md`
-
