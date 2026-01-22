@@ -41,6 +41,7 @@ const MapZoomPropertyTestClass = preload("res://ui/scenes/tests/map_zoom_propert
 const TileInternalGridLinesTestClass = preload("res://ui/scenes/tests/tile_internal_grid_lines_test.gd")
 const MapGroundSkipsOutsideRingTestClass = preload("res://ui/scenes/tests/map_ground_skips_outside_ring_test.gd")
 const AirplaneMarketingOutsideRenderTestClass = preload("res://ui/scenes/tests/airplane_marketing_outside_render_test.gd")
+const AirplaneMarketingIconRotationTestClass = preload("res://ui/scenes/tests/airplane_marketing_icon_rotation_test.gd")
 const MarketingRangeFullFootprintTestClass = preload("res://ui/scenes/tests/marketing_range_full_footprint_test.gd")
 const MarketingHighlightsNoDrinkSourceTestClass = preload("res://ui/scenes/tests/marketing_highlights_no_drink_source_test.gd")
 const MarketingBoardNumberBadgeTestClass = preload("res://ui/scenes/tests/marketing_board_number_badge_test.gd")
@@ -289,14 +290,18 @@ func _run_all() -> int:
 					"name": "MapGroundSkipsOutsideRingTest",
 					"fn": func() -> Result: return MapGroundSkipsOutsideRingTestClass.run(),
 				},
-				{
-					"name": "AirplaneMarketingOutsideRenderTest",
-					"fn": func() -> Result: return AirplaneMarketingOutsideRenderTestClass.run(),
-				},
-			{
-				"name": "MarketingRangeFullFootprintTest",
-				"fn": func() -> Result: return MarketingRangeFullFootprintTestClass.run(),
-			},
+		{
+			"name": "AirplaneMarketingOutsideRenderTest",
+			"fn": func() -> Result: return AirplaneMarketingOutsideRenderTestClass.run(),
+		},
+		{
+			"name": "AirplaneMarketingIconRotationTest",
+			"fn": func() -> Result: return AirplaneMarketingIconRotationTestClass.run(),
+		},
+		{
+			"name": "MarketingRangeFullFootprintTest",
+			"fn": func() -> Result: return MarketingRangeFullFootprintTestClass.run(),
+		},
 			{
 				"name": "MarketingHighlightsNoDrinkSourceTest",
 				"fn": func() -> Result: return MarketingHighlightsNoDrinkSourceTestClass.run(),

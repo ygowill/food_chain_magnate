@@ -38,6 +38,10 @@ class FakeCanvas extends RefCounted:
 		if filled:
 			filled_rects.append(rect)
 
+	func draw_set_transform(_origin: Vector2, _rotation: float, _scale: Vector2) -> void:
+		# No-op for geometry-only tests; MapCanvasDrawer may rotate airplane textures.
+		pass
+
 static func run() -> Result:
 	var map_data := {
 		"map_origin": Vector2i.ZERO,

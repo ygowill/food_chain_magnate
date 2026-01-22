@@ -61,7 +61,7 @@
 | 44 | 重组结构：CEO 直属槽可见；管理岗员工卡不随下属槽拉宽（保持 compact 且居中） | UI/布局 | 右侧树布局用 `HFlowContainer` 导致卡片被拉伸；CEO slots 未正确参与布局 | Implemented（待手动验收） |
 | 45 | 重组结构：左侧员工卡牌区域宽度收敛到“三列 compact 卡”所需宽度 | UI/布局 | `HSplitContainer.split_offset` + HandArea 最小宽度导致左侧偏宽 | Implemented（待手动验收） |
 | 46 | 重组结构：拖回待命区 drop 区域过小（仅左上角可成功） | UI/交互 | drop target 仅覆盖 reserve_container 的一部分；ScrollContainer 空白区域不命中 | Implemented（待手动验收） |
-| 47 | 飞机营销：图标需随摆放方向旋转（长边为底） | UI/渲染 | `_draw_marketing_placement()` 始终按轴对齐绘制纹理，导致左右边贴时飞机图标横向被压缩 | Planned |
+| 47 | 飞机营销：图标需随摆放方向旋转（长边为底） | UI/渲染 | `_draw_marketing_placement()` 始终按轴对齐绘制纹理，导致左右边贴时飞机图标横向被压缩 | Implemented（待手动验收） |
 | 48 | 游戏日志：房屋被打上广告缺日志；采购日志缺路线；需要可读性方案 | UI/信息架构 | 缺少 MarketingSettlement/路线等结构化事件；现有日志仅平铺文本，难在“不刷屏”和“可追溯细节”间平衡 | Planned（需方案评审） |
 | 49 | 提供“日志验证”测试存档（便于手工审查日志改动） | 测试/工具 | 现有 manual_cases 会冻结命令历史，无法承载“回放产生事件→复核日志”的场景 | Planned（需需求确认） |
 
@@ -2403,20 +2403,32 @@
 **修复方案**
 
 - 仅对 `type == "airplane"` 的“营销 type texture”做旋转绘制：
-	- `axis == "row"`（贴左/贴右，竖向板件）：将飞机图标旋转 90° 后再做 aspect-fit；
-	- `axis == "col"`（贴上/贴下，横向板件）：保持不旋转；
+	- 当板件渲染 rect 为“竖向（height > width）”时，将飞机图标旋转 90° 后再做 aspect-fit（避免被压扁）。
 	- 产品 icon（居中）与 board_number 徽标（右上角）保持不旋转（仍按屏幕坐标）。
-- 实现方式：在 `_draw_marketing_placement()` 内对飞机图标绘制包一层 `draw_set_transform(center, rot, Vector2.ONE)`，绘制完成后恢复 transform。
+- 实现方式：在 `_draw_marketing_placement()` 内对飞机图标绘制包一层 `draw_set_transform(center, rot, Vector2.ONE)`，绘制完成后恢复 transform，并使用 `draw_size=(h,w)` 交换尺寸以匹配旋转后的包围盒。
 
-**测试计划**
+**测试计划（已落实）**
 
 - 新增 headless 渲染行为测试：
-	- 构造 airplane placement（axis=row/col），调用 `_draw_marketing_placement()`；
-	- `axis=row` 期望触发 `draw_set_transform`（旋转）调用；`axis=col` 期望不触发。
+	- 构造 airplane placement，调用 `_draw_marketing_placement()`；
+	- “竖向 rect”应触发 `draw_set_transform`（旋转）调用；“横向 rect”不触发。
 
 **状态**
 
-- Planned
+**实施记录**
+
+- 已修改：`ui/scenes/game/map_canvas_drawer.gd`：airplane 的 type texture 在竖向 rect 下旋转 90° 绘制。
+- 已新增：`ui/scenes/tests/airplane_marketing_icon_rotation_test.gd` 并纳入 `ui/scenes/tests/all_tests.gd`。
+- 已修改：`ui/scenes/tests/airplane_marketing_outside_render_test.gd`：补齐 `draw_set_transform()` stub（避免 FakeCanvas 缺方法）。
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）
 
 ---
 

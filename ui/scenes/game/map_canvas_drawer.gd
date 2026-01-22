@@ -871,7 +871,16 @@ static func _draw_marketing_placement(canvas, cell_size: int, placement: Diction
 	# Marketing type texture as a faint background.
 	var icon_pad := float(cell_size) * 0.08
 	var icon_rect := rect.grow(-icon_pad)
-	_draw_texture_aspect_fit(canvas, tex, icon_rect, Color(1, 1, 1, 0.45 * a))
+	var type_mod := Color(1, 1, 1, 0.45 * a)
+	# airplane texture is authored horizontal; rotate it when the board is vertically oriented (issue_tracker #47).
+	if key == "airplane" and icon_rect.size.y > icon_rect.size.x:
+		var center := icon_rect.position + icon_rect.size * 0.5
+		var draw_size := Vector2(icon_rect.size.y, icon_rect.size.x)
+		canvas.draw_set_transform(center, deg_to_rad(90.0), Vector2.ONE)
+		_draw_texture_aspect_fit(canvas, tex, Rect2(-draw_size * 0.5, draw_size), type_mod)
+		canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	else:
+		_draw_texture_aspect_fit(canvas, tex, icon_rect, type_mod)
 
 	# Product icon centered on the board area (matches “product slot centered” requirement).
 	var product_id: String = str(placement.get("product", ""))
