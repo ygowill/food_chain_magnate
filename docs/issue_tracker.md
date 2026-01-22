@@ -2305,3 +2305,46 @@
 **状态**
 
 - Implemented（待手动验收）
+
+---
+
+## 46. 重组结构：从公司结构拖回待命区时，drop 区域过小（只有左上角能成功）
+
+**现象/需求**
+
+- 重组结构阶段，从右侧公司结构中将员工卡拖回左侧待命区时，只有拖到待命区左上角才能成功。
+- 期望：拖到待命区的任意位置都能成功（更符合直觉）。
+
+**涉及代码（初步定位）**
+
+- 拖拽目标命中：
+	- `ui/components/company_structure/company_structure.gd`：`_find_drop_target()`（从公司结构开始拖拽时，用 group=`employee_card_drop_target` 判断 drop target）
+	- `ui/components/hand_area/hand_area.gd`：`_ready()`（将 `reserve_container/active_container` 加入 `employee_card_drop_target` group）
+- 放下后的动作映射（reserve/active）：
+	- `ui/scenes/game/game_panel_controller.gd`：`_on_hand_card_dropped()`（当前仅当 `target == hand_area.reserve_container` 才认为是“拖回待命区”）
+
+**初步根因假设**
+
+- “待命区任意位置”里有一部分区域不属于 `reserve_container` 的 `global_rect`（例如下方空白区域/滚动容器的空白区域），导致 `_find_drop_target()` 找不到任何 target，从而 drop 无效。
+- 另一个潜在因素：`_find_drop_target()` 过滤使用 `c.visible` 而不是 `c.is_visible_in_tree()`；在重组模式下 `active_section` 虽隐藏，但 `active_container.visible` 仍为 true，可能导致“命中到不可见的 drop target”从而映射错误。
+
+**修复方案（提案）**
+
+- 在重组模式下，为“待命区”提供一个覆盖整个可见区域的 drop 目标：
+	- A. 最稳妥：在 `HandArea` 内增加一个 `ReserveDropArea(Control)`，anchors=FULL_RECT 覆盖待命区滚动内容区域，并加入 `employee_card_drop_target` group；  
+		- 然后在 `_on_hand_card_dropped()` 中把 `target == reserve_container` 扩展为“target 落在 reserve 区域”（例如 `target == reserve_container` 或 `target.is_ancestor_of(reserve_container)` 或 `reserve_container.is_ancestor_of(target)` 或 `target.is_in_group(\"hand_area_reserve_drop_target\")`）。
+	- B. 若你希望严格限定在“待命区滚动区域”内：将 `reserve_container`/其父容器的 `size_flags_vertical=EXPAND_FILL`，让其 `global_rect` 覆盖空白区域；并同步把过滤改为 `is_visible_in_tree()`。
+
+**待澄清（你点头前确认一下）**
+
+- 这里的“待命区任意位置”是否包含：左侧面板的标题/边缘空白，还是只要在待命卡牌滚动区域内即可？
+
+**测试计划**
+
+- 新增/扩展 headless 回归测试（UI 属性测试为主）：
+	- 断言重组模式下存在稳定的“待命区 drop target”（例如 `ReserveDropArea` 或 reserve_container 被拉伸为 EXPAND_FILL）；
+	- 断言 `_on_hand_card_dropped()` 能将 drop 到该目标解析为 `to_reserve=true`（可通过抽取一个纯函数/小 helper 来做单元测试，避免依赖完整 GameScene）。
+
+**状态**
+
+- Planned（待你澄清 + 点头后实施）
