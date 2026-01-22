@@ -244,6 +244,34 @@ static func _build_phase_change_events(old_state: GameState, new_state: GameStat
 
 	# 阶段变化事件
 	if old_state.phase != new_state.phase:
+		# 最终行动顺序落地事件（首轮 OrderOfBusiness auto finalize 依赖此事件用于日志显示/回放恢复）。
+		if str(old_state.phase) == "OrderOfBusiness":
+			var old_finalized := false
+			var new_finalized := false
+			if old_state.round_state is Dictionary:
+				var oob_old_val = Dictionary(old_state.round_state).get("order_of_business", null)
+				if oob_old_val is Dictionary:
+					var oob_old: Dictionary = oob_old_val
+					if oob_old.has("finalized") and (oob_old["finalized"] is bool):
+						old_finalized = bool(oob_old["finalized"])
+			if new_state.round_state is Dictionary:
+				var oob_new_val = Dictionary(new_state.round_state).get("order_of_business", null)
+				if oob_new_val is Dictionary:
+					var oob_new: Dictionary = oob_new_val
+					if oob_new.has("finalized") and (oob_new["finalized"] is bool):
+						new_finalized = bool(oob_new["finalized"])
+			if (not old_finalized) and new_finalized:
+				var final_order: Array[int] = []
+				for pid in new_state.turn_order:
+					final_order.append(int(pid))
+				events.append({
+					"type": EventBus.EventType.TURN_ORDER_FINALIZED,
+					"data": {
+						"round": int(new_state.round_number),
+						"turn_order": final_order,
+					}
+				})
+
 		# Dinnertime 结算报告：在离开 Dinnertime 时发射（便于 UI/日志按事件历史恢复，且不依赖当前 state）。
 		if str(old_state.phase) == "Dinnertime":
 			var report: Dictionary = {}

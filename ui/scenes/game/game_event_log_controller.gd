@@ -12,6 +12,7 @@ const EVENT_TYPES_TO_LOG: Array[String] = [
 	EventBus.EventType.SUB_PHASE_CHANGED,
 	EventBus.EventType.ROUND_STARTED,
 	EventBus.EventType.ROUND_ENDED,
+	EventBus.EventType.TURN_ORDER_FINALIZED,
 	EventBus.EventType.DINNERTIME_REPORT,
 	EventBus.EventType.PLAYER_TURN_STARTED,
 	EventBus.EventType.PLAYER_TURN_ENDED,
@@ -153,6 +154,20 @@ func _on_eventbus_event(event: Dictionary) -> void:
 			if next_round > 0 and next_round != round:
 				text += " -> %d" % next_round
 			_game_log_panel.add_phase_log(text, data)
+		EventBus.EventType.TURN_ORDER_FINALIZED:
+			var round := int(data.get("round", -1))
+			var order_val = data.get("turn_order", null)
+			var order: Array = order_val if (order_val is Array) else []
+			var parts: Array[String] = []
+			for pid_val in order:
+				var pid := int(pid_val)
+				parts.append("玩家%d" % (pid + 1))
+			var text := "行动顺序"
+			if round >= 0:
+				text += "（回合 %d）" % round
+			if not parts.is_empty():
+				text += "：" + " -> ".join(parts)
+			_game_log_panel.add_event_log(text, data)
 		EventBus.EventType.PLAYER_TURN_STARTED:
 			_game_log_panel.add_phase_log("玩家 %d 开始回合" % (int(data.get("player_id", -1)) + 1), data)
 		EventBus.EventType.PLAYER_TURN_ENDED:

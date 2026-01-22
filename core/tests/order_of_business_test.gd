@@ -3,6 +3,11 @@ class_name OrderOfBusinessTest
 extends RefCounted
 
 static func run(player_count: int = 3, seed: int = 12345) -> Result:
+	if EventBus == null:
+		return Result.failure("EventBus is not available")
+
+	var turn_order_event_count_before := EventBus.get_history_by_type(EventBus.EventType.TURN_ORDER_FINALIZED).size()
+
 	var engine := GameEngine.new()
 	var init := engine.initialize(player_count, seed)
 	if not init.ok:
@@ -95,6 +100,60 @@ static func run(player_count: int = 3, seed: int = 12345) -> Result:
 		return Result.failure("OrderOfBusiness 完成后应自动进入 Working，实际: %s" % state.phase)
 	if state.get_current_player_id() != 1:
 		return Result.failure("Working 首位玩家应为 1，实际: %d" % state.get_current_player_id())
+
+	var turn_order_events: Array = EventBus.get_history_by_type(EventBus.EventType.TURN_ORDER_FINALIZED)
+	if turn_order_events.size() != turn_order_event_count_before + 1:
+		return Result.failure("应新增 1 条 TURN_ORDER_FINALIZED 事件，实际新增: %d" % (turn_order_events.size() - turn_order_event_count_before))
+	var last_ev_val = turn_order_events[turn_order_events.size() - 1]
+	if not (last_ev_val is Dictionary):
+		return Result.failure("TURN_ORDER_FINALIZED 事件格式错误")
+	var last_ev: Dictionary = last_ev_val
+	var last_data_val = last_ev.get("data", null)
+	if not (last_data_val is Dictionary):
+		return Result.failure("TURN_ORDER_FINALIZED.data 格式错误")
+	var last_data: Dictionary = last_data_val
+	var got_order_val = last_data.get("turn_order", null)
+	if not (got_order_val is Array):
+		return Result.failure("TURN_ORDER_FINALIZED.turn_order 缺失或类型错误")
+	var got_order: Array[int] = []
+	for pid_val in Array(got_order_val):
+		got_order.append(int(pid_val))
+	if got_order != expected:
+		return Result.failure("TURN_ORDER_FINALIZED.turn_order 不匹配: %s != %s" % [str(got_order), str(expected)])
+
+	# 首轮（round=1）OrderOfBusiness auto finalize：也应发射 TURN_ORDER_FINALIZED（用于日志记录首轮顺序）。
+	var engine2 := GameEngine.new()
+	var init2 := engine2.initialize(2, seed)
+	if not init2.ok:
+		return Result.failure("初始化失败(2): %s" % init2.error)
+	var s2 := engine2.get_state()
+	s2.turn_order = [0, 1]
+	s2.current_player_index = 0
+
+	var before2 := EventBus.get_history_by_type(EventBus.EventType.TURN_ORDER_FINALIZED).size()
+	var adv2 := engine2.execute_command(Command.create_system("advance_phase"))
+	if not adv2.ok:
+		return Result.failure("首轮推进失败: %s" % adv2.error)
+
+	var after2_events: Array = EventBus.get_history_by_type(EventBus.EventType.TURN_ORDER_FINALIZED)
+	if after2_events.size() != before2 + 1:
+		return Result.failure("首轮应新增 1 条 TURN_ORDER_FINALIZED 事件，实际新增: %d" % (after2_events.size() - before2))
+	var last2_val = after2_events[after2_events.size() - 1]
+	if not (last2_val is Dictionary):
+		return Result.failure("首轮 TURN_ORDER_FINALIZED 事件格式错误")
+	var last2: Dictionary = last2_val
+	var last2_data_val = last2.get("data", null)
+	if not (last2_data_val is Dictionary):
+		return Result.failure("首轮 TURN_ORDER_FINALIZED.data 格式错误")
+	var last2_data: Dictionary = last2_data_val
+	var got2_val = last2_data.get("turn_order", null)
+	if not (got2_val is Array):
+		return Result.failure("首轮 TURN_ORDER_FINALIZED.turn_order 缺失或类型错误")
+	var got2: Array[int] = []
+	for pid_val in Array(got2_val):
+		got2.append(int(pid_val))
+	if got2 != [0, 1]:
+		return Result.failure("首轮 TURN_ORDER_FINALIZED.turn_order 不匹配: %s != %s" % [str(got2), str([0, 1])])
 
 	return Result.success({
 		"player_count": player_count,

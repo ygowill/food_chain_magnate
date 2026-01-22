@@ -10,6 +10,7 @@ class EventType:
 	const SUB_PHASE_CHANGED := "sub_phase_changed"
 	const ROUND_STARTED := "round_started"
 	const ROUND_ENDED := "round_ended"
+	const TURN_ORDER_FINALIZED := "turn_order_finalized"
 
 	# 玩家相关
 	const PLAYER_TURN_STARTED := "player_turn_started"

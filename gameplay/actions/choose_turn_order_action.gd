@@ -106,6 +106,34 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 func _generate_specific_events(old_state: GameState, new_state: GameState, _command: Command) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 
+	# 最终行动顺序落地事件（用于日志显示/回放恢复）。
+	var old_finalized := false
+	var new_finalized := false
+	if old_state != null and (old_state.round_state is Dictionary):
+		var oob_old_val = Dictionary(old_state.round_state).get("order_of_business", null)
+		if oob_old_val is Dictionary:
+			var oob_old: Dictionary = oob_old_val
+			if oob_old.has("finalized") and (oob_old["finalized"] is bool):
+				old_finalized = bool(oob_old["finalized"])
+	if new_state != null and (new_state.round_state is Dictionary):
+		var oob_new_val = Dictionary(new_state.round_state).get("order_of_business", null)
+		if oob_new_val is Dictionary:
+			var oob_new: Dictionary = oob_new_val
+			if oob_new.has("finalized") and (oob_new["finalized"] is bool):
+				new_finalized = bool(oob_new["finalized"])
+
+	if (not old_finalized) and new_finalized:
+		var final_order: Array[int] = []
+		for pid in new_state.turn_order:
+			final_order.append(int(pid))
+		events.append({
+			"type": EventBus.EventType.TURN_ORDER_FINALIZED,
+			"data": {
+				"round": int(new_state.round_number),
+				"turn_order": final_order,
+			}
+		})
+
 	# 若本动作触发了自动推进阶段，则补齐 phase/sub_phase 事件（原先由手动 advance_phase 触发）
 	if old_state.phase != new_state.phase:
 		if str(old_state.phase) == "Dinnertime":

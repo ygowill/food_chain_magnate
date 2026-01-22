@@ -67,7 +67,7 @@
 | 50 | 日志验证存档：尽可能覆盖更多日志事件类型（便于集中审查） | 测试/工具 | 现有 `logs/event_log_review` 覆盖面有限，难以一次性审查招聘/培训/解雇/餐厅/花园/生产/里程碑等日志 | 待澄清 |
 | 51 | 晚餐结算日志过噪：包含冗余统计/拆分信息 | UI/日志 | `_log_dinnertime_report` 中为诊断添加的“总计/拆分/按产品”日志已不需要；用户已临时注释，需移除冗余代码并清理无用计算 | Implemented（待手动验收） |
 | 52 | 培训日志缺少“培训员来源”（trainer/coach/guru） | UI/日志 | `EMPLOYEE_TRAINED` 事件数据未携带 trainer_id/instance/steps，日志只能显示 from->to | Implemented（待手动验收） |
-| 53 | 决定顺序阶段缺少最终顺序结果日志 | UI/日志 | OrderOfBusiness 完成后未发射“最终 turn_order”事件；日志仅能看到阶段推进 | 待确认 |
+| 53 | 决定顺序阶段缺少最终顺序结果日志 | UI/日志 | OrderOfBusiness 完成后未发射“最终 turn_order”事件；日志仅能看到阶段推进 | Implemented（待手动验收） |
 | 54 | 游戏日志默认应隐藏阶段信息 | UI/日志 | `GameLogPanel` 默认 `_filter_types` 包含 `PHASE`，导致 phase/subphase/回合等信息默认刷屏 | 待确认 |
 | 55 | Payday 阶段缺少结算日志（仅现金变化） | UI/日志 | `PaydaySettlement` 写入 `round_state.payday`，但未发射类似 `DINNERTIME_REPORT` 的汇总事件；日志只看到 `PLAYER_CASH_CHANGED` | 待澄清 |
 | 56 | 冰箱容量规则错误（应总量 10）+ Cleanup 冰箱选择流程缺失 | 规则+UI+测试 | `CleanupSettlement` 当前“每种各自限幅”；且 Cleanup 被 auto-skip，无法弹窗让玩家选择保留哪些食物/饮料 | 待澄清 |
@@ -1172,22 +1172,22 @@
 
 - 当前没有发射“turn_order 最终确定”的 EventBus 事件，因此日志只能看到阶段推进（`PHASE_CHANGED`），看不到最终顺序结果。
 
-**修复方案（待你点头后实施）**
+**实施记录**
 
-- 新增 EventBus 事件类型（例如 `TURN_ORDER_FINALIZED`），在：
-	- `choose_turn_order` 的最后一次选择完成时（`finalized=true`）
-	- 首轮 auto finalize 时
-  发射事件并携带 `{round, final_turn_order, previous_turn_order?}`。
-- `GameEventLogController` 增加渲染：一条系统/事件日志列出位置->玩家。
+- 已修改：`autoload/event_bus.gd`：新增 `EventBus.EventType.TURN_ORDER_FINALIZED`
+- 已修改：`gameplay/actions/choose_turn_order_action.gd`：当 `finalized` 从 `false -> true` 时发射 `TURN_ORDER_FINALIZED`（只发射一次）
+- 已修改：`core/engine/game_engine/command_runner.gd`：首轮 OrderOfBusiness auto finalize（auto_advance）离开阶段时同样发射 `TURN_ORDER_FINALIZED`
+- 已修改：`ui/scenes/game/game_event_log_controller.gd`：订阅并渲染“行动顺序（回合 X）：玩家A -> 玩家B ...”
+- 已修改：`core/tests/order_of_business_test.gd`：覆盖“常规选择完成/首轮 auto finalize”两条路径的事件发射
 
-**待确认**
+**验证**
 
-- 是否仅需“最终顺序”一条日志，还是每次 pick 也需要日志？
-- 日志格式是否需要同时展示“选择顺序(selection_order)”与“最终行动顺序(turn_order)”？
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（107/107，`.godot/AllTests.log`）
 
 **状态**
 
-- 待确认
+- Implemented（待手动验收）
 
 ## 54. 游戏日志默认应隐藏阶段信息
 
