@@ -90,6 +90,7 @@
 | 73 | 菜单清理：移除主菜单“板块编辑器/回放测试”；游戏菜单移除“日志/里程碑/距离/回放”；回放播放器入口移到开始页面 | UI/信息架构 | 开发/测试入口暴露在主流程；游戏菜单存在与 TopBar 重复的功能入口；回放入口位置不符合使用场景 | Implemented（待手动验收） |
 | 74 | 游戏顶部栏：工具栏与回合信息合并到一行 | UI/布局 | `TopBar` 使用 VBoxContainer 分两行（InfoRow/ButtonRow），需要改为单行布局并同步脚本节点路径 | Implemented（待手动验收） |
 | 75 | 游戏日志面板：移除“清空”入口 | UI/交互 | `GameLogPanel` 顶部包含 ClearButton（清空），不符合期望的日志可回溯性 | Implemented（待手动验收） |
+| 76 | 里程碑面板：状态分层（可获得/不可获得/已获得）+ 拥有者图标 + 过期提示 + 5列卡片 + 测试存档 | UI/信息+数据绑定 | 当前全屏里程碑仅区分“已获得/未获得”且展示为 3 列；未展示“不可获得/过期”等状态；缺少用于手工验收的全状态存档 | 待实施（已澄清） |
 
 ---
 
@@ -1812,6 +1813,69 @@
 **状态**
 
 - Implemented（待手动验收）
+
+---
+
+## 76. 里程碑面板：状态分层（可获得/不可获得/已获得）+ 拥有者图标 + 过期提示 + 5列卡片 + 测试存档
+
+**现象/需求**
+
+- 查看里程碑面板时，里程碑卡片的状态需要分为三类：
+	- 可获得
+	- 不可获得
+	- 已获得
+- 对于有人拥有的里程碑：卡片右下角需要显示拥有玩家对应的图标（若多人拥有则显示多个）。
+- 视觉规范：
+	- 可获得：浅绿色边框
+	- 已获得：浅绿色背景
+	- 不可获得：保持目前的颜色状态
+- 布局：里程碑卡片适当缩小；每行显示 5 个。
+- 模组中存在会在一定回合数后过期的里程碑：相关信息与“是否已过期/不可获得”等状态需要写在里程碑卡片中。
+- 完成改动后，需要生成一个包含各个状态里程碑的测试存档，组织方式类似 `.savings/manual_cases/logs/*`，便于手工验收 UI。
+
+**涉及代码（初步定位）**
+
+- 里程碑全屏视图：
+	- `ui/components/milestone_panel/milestone_full_screen_view.tscn`
+	- `ui/components/milestone_panel/milestone_full_screen_view.gd`
+- 里程碑定义与过期字段：
+	- `core/data/milestone_def.gd`（`expires_at`）
+	- `core/data/milestone_registry.gd`（`get_all_ids()`）
+	- `core/rules/phase/cleanup_settlement.gd`（移除过期里程碑）
+- 手工复核存档生成：
+	- `tools/generate_manual_test_saves.gd`
+	- `tools/generate_manual_test_saves_manifest.gd`
+	- `res://.savings/manual_cases/`
+
+**初步根因**
+
+- 当前 `MilestoneFullScreenView` 的卡片仅基于 owners 判断“已获得/未获得”，未区分“在池中可获得 / 不在池中不可获得（含过期）”。
+- UI 仅展示当前 pool/已获得集合的里程碑；对“已过期且未获得”的里程碑（已从 pool 移除）可能不会出现在面板中，导致无法展示“不可获得/过期”状态。
+- Grid 默认 3 列，卡片尺寸偏大，无法满足 5 列展示需求。
+- 缺少一份“同时覆盖三种状态 + 过期”的手工验收存档。
+
+**澄清（来自用户 #76）**
+
+- “可获得/不可获得”按 `milestone_pool` 是否仍有剩余来划分（`pool_count>0` 视为可获得）。
+- 若“同一里程碑可多人获得且池中仍有剩余”：显示为“可获得”（同时仍显示已拥有玩家图标）。
+- 拥有者图标：可沿用当前餐厅 logo；多人拥有允许显示多个图标。
+- 过期信息：采用 B（“剩余 X 回合/已过期”）。
+- 5 列布局：采用 B（默认 5 列；窄屏放不下允许自动降列/换行）。
+
+**实施方案（待确认后）**
+
+- `MilestoneFullScreenView`：
+	- 展示的里程碑集合改为以 `MilestoneRegistry.get_all_ids()` 为主（并兼容 pool/已获得中出现但 registry 缺失的 id）。
+	- 基于 `pool_count/owners/expires_at` 计算状态（可获得/不可获得/已获得），并更新卡片样式与状态文案。
+	- Grid 调整为 5 列，并下调卡片尺寸/字体/图标尺寸。
+- 新增手工复核存档：
+	- 在 `tools/generate_manual_test_saves_manifest.gd` 增加 1 个 case（例如 `milestones/status_matrix`）
+	- 在 `tools/generate_manual_test_saves.gd` 增加 builder：构造一份包含（至少）1 个可获得、1 个已获得、1 个已过期不可获得的局面（可通过启用 `hard_choices` 让部分里程碑 `expires_at` 生效）。
+	- 生成到 `res://.savings/manual_cases/milestones/`（或你指定的目录）并附带 `.md` 验收步骤。
+
+**状态**
+
+- 待实施（已澄清）
 
 ## 57. Working：生产/采购员工选择应按“实例”消耗（用过的那张变灰且不可点）
 
