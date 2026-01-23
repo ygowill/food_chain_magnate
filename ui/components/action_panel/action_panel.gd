@@ -36,6 +36,8 @@ var _action_buttons: Dictionary = {}  # action_id -> ActionButton
 var _mandatory_action_ids: Dictionary = {}  # action_id -> true
 var _context_overlay: Node = null
 var _context_syncing: bool = false
+var _globally_disabled: bool = false
+var _globally_disabled_reason: String = ""
 
 # 不在 UI 中展示的内部动作
 const HIDDEN_ACTION_IDS := {
@@ -462,12 +464,13 @@ func _update_title() -> void:
 		return
 
 	var base := "可用动作"
+	var suffix := ("（%s）" % _globally_disabled_reason) if _globally_disabled and not _globally_disabled_reason.is_empty() else ""
 	if _game_state == null or _current_player_id < 0:
-		title_label.text = base
+		title_label.text = base + suffix
 		return
 
 	var name := Globals.get_player_name(_current_player_id) if Globals != null else ("玩家%d" % (_current_player_id + 1))
-	title_label.text = "%s（行动: %s）" % [base, name]
+	title_label.text = "%s（行动: %s）%s" % [base, name, suffix]
 
 func set_available_actions(action_ids: Array[String]) -> void:
 	_rebuild_action_buttons(action_ids)
@@ -483,6 +486,44 @@ func set_action_disabled_reason(action_id: String, reason: String) -> void:
 		var btn: ActionButton = _action_buttons[action_id]
 		if is_instance_valid(btn) and btn.has_method("set_disabled_reason"):
 			btn.set_disabled_reason(reason)
+
+func set_globally_disabled(reason: String) -> void:
+	var r := str(reason).strip_edges()
+	_globally_disabled = not r.is_empty()
+	_globally_disabled_reason = r
+	_update_title()
+	_apply_global_disabled_state()
+
+func _apply_global_disabled_state() -> void:
+	# 全局禁用用于“回放/查看历史”态，避免误操作产生时间线分支。
+	if is_instance_valid(rewind_phase_button):
+		rewind_phase_button.disabled = (_game_state == null) or _globally_disabled
+	if is_instance_valid(confirm_context_button):
+		confirm_context_button.disabled = _globally_disabled
+	if is_instance_valid(cancel_context_button):
+		cancel_context_button.disabled = _globally_disabled
+	if is_instance_valid(restaurant_option):
+		restaurant_option.disabled = _globally_disabled
+	if is_instance_valid(rotation_option):
+		rotation_option.disabled = _globally_disabled
+	if is_instance_valid(house_number_option):
+		house_number_option.disabled = _globally_disabled
+	if is_instance_valid(direction_option):
+		direction_option.disabled = _globally_disabled
+	if is_instance_valid(employee_option) and employee_option.has_method("set_disabled"):
+		employee_option.call("set_disabled", _globally_disabled)
+
+	for aid in _action_buttons.keys():
+		var btn_val = _action_buttons[aid]
+		if not is_instance_valid(btn_val):
+			continue
+		var btn: ActionButton = btn_val
+		if _globally_disabled:
+			btn.set_enabled(false)
+			btn.set_disabled_reason(_globally_disabled_reason)
+		else:
+			# 恢复由 refresh() 决定的 enabled 状态（这里不强行改回 true）。
+			btn.set_disabled_reason("")
 
 func refresh() -> void:
 	if is_instance_valid(rewind_phase_button):
@@ -579,6 +620,8 @@ func refresh() -> void:
 		for aid4 in visible_ids:
 			set_action_enabled(aid4, true)
 			set_action_disabled_reason(aid4, "")
+
+	_apply_global_disabled_state()
 
 func _on_rewind_phase_pressed() -> void:
 	# 作为“面板工具”而非游戏动作：由 GamePanelController 接管该 action_id，并触发时间线回退。
