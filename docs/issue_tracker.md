@@ -1331,6 +1331,77 @@
 
 ---
 
+## 69. 顶部工具栏：里程碑/保留区首次打开加载慢（卡顿）
+
+**现象**
+
+- 点击 TopBar “里程碑”或“保留区”后，需要等待一段时间才能显示全屏面板（体感卡顿/延迟）。
+
+**涉及代码**
+
+- `ui/components/milestone_panel/milestone_full_screen_view.gd`：`open_with_state()` / `_ensure_skin_for_state()` / `_rebuild_from_state()`
+- `ui/components/reserve_area/reserve_area_full_screen_view.gd`：`open_with_state()` / `_ensure_skin_for_state()` / `_rebuild_from_state()`
+- `ui/visual/map_skin_builder.gd`：`build_for_modules()`（可能触发同步加载/解析）
+
+**初步根因**
+
+- 里程碑/保留区面板在首次打开时各自调用 `MapSkinBuilder.build_for_modules(...)` 构建 `MapSkin`，与 `MapCanvas` 已构建的皮肤重复，导致额外的同步资源加载与 JSON 解析。
+- 面板打开时会一次性创建较多 UI 节点（卡片/token），在低配机器上可能放大卡顿体感。
+
+**修复方案（草案）**
+
+- 皮肤复用/缓存：
+	- 优先复用 `MapCanvas` 当前使用的 `MapSkin`（避免重复 build）；
+	- 或统一改用 `UiSkinCache.get_skin_for_modules(...)`，并在游戏初始化阶段预热一次（把耗时移到加载阶段，点击立即打开）。
+- 打开体验：
+	- 面板节点可在 `GamePanelController` 初始化时提前 instantiate 并隐藏（避免首次点击解析 PackedScene/脚本）。
+	- 如仍有卡顿，可考虑分帧构建内容（先显示空壳 + “加载中”，再 `call_deferred` 填充）。
+
+**待澄清**
+
+- 你更偏好哪种取舍？
+	- A) 游戏启动稍慢一点，但点击“里程碑/保留区”几乎瞬开
+	- B) 游戏启动不变，点击后显示“加载中”并异步填充
+
+**状态**
+
+- 待澄清
+
+---
+
+## 70. 保留区：房屋/花园渲染不一致；内容需居中并尽可能 fit screen
+
+**现象**
+
+- 保留区中的“房屋编号 token / 花园 token”与地图上实际放置的 piece 风格不一致。
+- 保留区整体内容目前偏左，未居中；视觉上没有尽可能利用屏幕宽度（fit screen）。
+
+**涉及代码**
+
+- `ui/components/reserve_area/reserve_area_full_screen_view.gd`：`HouseNumberToken` / `_add_garden_section()` / `_add_section()`
+- `ui/scenes/game/map_canvas_drawer.gd`：`_draw_house_and_garden()`（地图上的真实绘制风格）
+
+**初步根因**
+
+- 当前 token 仅使用 piece 贴图 + 简单角标（`IconToken`），缺少地图绘制中的底色/贴图对齐/编号文字样式等规则。
+- 布局使用 `HFlowContainer` 默认左对齐；未在 ScrollContainer 内做水平居中约束。
+
+**修复方案（草案）**
+
+- 房屋编号 token：改为自绘（单节点）以复用地图绘制规则（底色 `#733651`、房屋贴图 bottom 对齐、右上角编号文字样式接近 `_draw_house_id()`）。
+- 花园 token：按地图风格绘制“2x1 花园扩展”预览（绿底 + `garden_large` 围栏贴图），并用 `×count` 标注剩余数量。
+- 布局：在 ScrollContainer 下增加 `CenterContainer`（或为每个 section 的 flow 增加居中包裹），并把 flow 对齐改为 center；必要时限制最大内容宽度以提升观感（同时尽可能占满可用宽度）。
+
+**待澄清**
+
+- 花园 token 期望展示哪种外形？
+	- A) 仅展示“2x1 花园扩展”预览（推荐，最贴近地图花园样式）
+	- B) 直接展示 `house_with_garden` 的整体预览（2x3/3x2），用于表达“花园最终长什么样”
+
+**状态**
+
+- 待澄清
+
 ## 57. Working：生产/采购员工选择应按“实例”消耗（用过的那张变灰且不可点）
 
 **现象**
