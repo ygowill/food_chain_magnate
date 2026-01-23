@@ -6,6 +6,7 @@ extends RefCounted
 
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
 const MapSkinClass = preload("res://ui/visual/map_skin.gd")
+const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 
 static var _skins: Dictionary = {} # key -> MapSkin
 
@@ -13,12 +14,15 @@ static func get_skin_for_modules(base_dir: String, modules: Array[String], desir
 	var mods: Array[String] = []
 	if modules is Array and not modules.is_empty():
 		mods = Array(modules, TYPE_STRING, "", null)
-	mods.sort()
+	# 保持 modules 顺序（模块计划顺序决定 visuals 覆盖优先级；排序会改变最终贴图）。
 
-	var key := "%s|%s|%d" % [str(base_dir), str(mods), int(desired_cell_size_px)]
+	var mods_key := ",".join(mods)
+	var key := "%s|%s|%d" % [str(base_dir).strip_edges(), mods_key, int(desired_cell_size_px)]
 	var cached = _skins.get(key, null)
 	if cached != null and cached is MapSkin:
 		return cached
+	if PerfTraceClass.enabled():
+		print("[StartupProfile] UiSkinCache MISS key=%s mods=%s cell=%d" % [key, str(mods), int(desired_cell_size_px)])
 
 	var read := MapSkinBuilderClass.build_for_modules(str(base_dir), mods, int(desired_cell_size_px))
 	var skin: MapSkin = null
@@ -32,4 +36,3 @@ static func get_skin_for_modules(base_dir: String, modules: Array[String], desir
 
 	_skins[key] = skin
 	return skin
-

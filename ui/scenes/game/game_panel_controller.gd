@@ -438,9 +438,9 @@ func _update_ui_components(state: GameState) -> void:
 	# 库存面板
 	if is_instance_valid(_scene.inventory_panel) and _scene.inventory_panel.has_method("set_inventory"):
 		var inventory: Dictionary = view_player.get("inventory", {})
-		_scene.inventory_panel.set_inventory(inventory)
 		if _scene.inventory_panel.has_method("set_visual_modules") and (state.modules is Array):
 			_scene.inventory_panel.set_visual_modules(Array(state.modules, TYPE_STRING, "", null))
+		_scene.inventory_panel.set_inventory(inventory)
 		if _scene.inventory_panel.has_method("set_fridge_capacity"):
 			_scene.inventory_panel.set_fridge_capacity(_get_fridge_capacity_for_player(view_player))
 

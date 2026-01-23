@@ -1580,16 +1580,38 @@
 	- 第 1 次：地图渲染（`MapCanvas._ensure_skin`）
 	- 第 2 次：UI 组件通过 `UiSkinCache.get_skin_for_modules()` 获取 icon/marketing 贴图时，会再次走 `MapSkinBuilder.build_for_modules()`（但 UI 其实不需要 piece_visuals，更不需要 logo 去背景）
 
-**整改计划（待你点头后实施）**
+**实施记录（Step 1：消除 UI 二次构建完整 MapSkin）**
 
-1. 先消除“UI 二次构建完整 MapSkin”（预计节省 ~1.6s）
-	- 方案 A（推荐）：为 `UiSkinCache` 引入“轻量 IconSkin”（只加载 product_icons / marketing_visuals；跳过 cell/road/piece 与 logo 去背景），避免触发 `skin:apply.piece_visuals`。
-	- 方案 B：让 UI 组件复用 `MapCanvas.get_skin()`（由 `Game/PanelController` 注入），彻底避免重复 build；但需要改动多个依赖 `UiSkinCache` 的组件。
-2. 再解决“logo 去背景”耗时（预计再节省 ~1.0~1.6s，取决于玩家/是否需要全部 logo）
+- 已修改：`ui/scenes/game/map_canvas.gd`
+	- 地图皮肤改为复用 `UiSkinCache.get_skin_for_modules(...)` 的全局缓存，避免 MapCanvas 自己 build 一份、UI 再 build 一份
+- 已修改：`ui/visual/ui_skin_cache.gd`
+	- 缓存 key 改为稳定的 `",".join(mods)`（避免 `str(Array)` 表示差异导致 cache miss）
+	- 保持 modules 顺序（模块计划顺序决定 visuals 覆盖优先级；不再 sort）
+	- 仅在 `--profile_startup` 下输出 `UiSkinCache MISS ...`（用于确认是否仍有重复构建）
+- 已修改：`ui/scenes/game/game_panel_controller.gd`
+	- 库存面板同步顺序调整为：先 `set_visual_modules(state.modules)` 再 `set_inventory(...)`
+	- 修复开局首次 sync 时 `set_inventory()` 触发 `Globals.enabled_modules_v2` 路径，导致额外 build 一整套 MapSkin（含 logo 去背景）的卡顿
+
+**跑数命令（基准数据 2 / Step 1 后）**
+
+- 命令：  
+	`HOME=.tmp_home godot --headless --path . --scene res://ui/scenes/tests/game_smoke_test.tscn -- --autorun --profile_startup > .godot/StartupProfile_step1.log 2>&1`
+- 参考日志：`.godot/StartupProfile_step1.log`（示例：本机对应 `.godot/StartupProfile_step1d.log`）
+
+**数据结论（基准数据 2）**
+
+- `game:_ready` ≈ 1992ms（原 ≈ 3606ms）
+	- `ui:map_view.set_game_state` ≈ 1630ms（仍为 MapSkin 首次构建成本）
+	- `ui:panel_controller.sync` ≈ 11ms（原 ≈ 1622ms，已消除重复 MapSkin build）
+- 剩余主要瓶颈仍是 `skin:logo_transparentize`（≈ 1.6s/次）
+
+**整改计划（下一步，待你点头后实施）**
+
+1. 解决“logo 去背景”耗时（预计再节省 ~1.0~1.6s，取决于玩家/是否需要全部 logo）
 	- 方案 A（推荐，视觉最稳）：把 `assets/` 中的 restaurant logo 贴图改为带 alpha 的透明底版本，移除/禁用运行时像素转换。
 	- 方案 B：改为“按需延迟转换 + 跨 MapSkin 实例缓存”（只转换实际用到的 logo，并且第二次不会重复）；仍会有首次转换卡顿，但总量下降。
 	- 方案 C：保留转换但用 `Image.get_data()` 批处理字节数组实现（替换 per-pixel get/set），加速单张转换。
-3. 若你仍希望“进入对局后立刻可点储备卡”且不被地图贴图加载阻塞：
+2. 若你仍希望“进入对局后立刻可点储备卡”且不被地图贴图加载阻塞：
 	- 调整进入对局时的 UI 顺序：优先显示 ReserveCards modal；地图区域保持 loading/隐藏，待 MapSkin 构建完成后一次性显示（不使用 placeholder 贴图）。
 
 **候选优化方案（待用户确认取舍后实施）**

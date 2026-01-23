@@ -6,8 +6,7 @@ extends Control
 signal cell_hovered(world_pos: Vector2i)
 signal cell_selected(world_pos: Vector2i)
 
-const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
-const MapSkinClass = preload("res://ui/visual/map_skin.gd")
+const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const MapCanvasIndexerClass = preload("res://ui/scenes/game/map_canvas_indexer.gd")
 const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
 const MapCanvasTooltipClass = preload("res://ui/scenes/game/map_canvas_tooltip.gd")
@@ -281,16 +280,8 @@ func _ensure_skin(modules: Array[String]) -> void:
 		return
 	_skin_modules_key = key
 
-	var read := MapSkinBuilderClass.build_for_modules(Globals.modules_v2_base_dir, modules, BASE_CELL_SIZE)
-	if read.ok and read.value != null:
-		_skin = read.value
-		return
-
-	push_error("MapCanvas: MapSkin 构建失败，将使用占位皮肤: %s" % str(read.error))
-	var fallback = MapSkinClass.new()
-	fallback.cell_size_px = BASE_CELL_SIZE
-	fallback._init_placeholders()
-	_skin = fallback
+	# 复用 UI 全局 MapSkin 缓存，避免开局/首帧重复 build_for_modules 带来的卡顿（issue_tracker #72）。
+	_skin = UiSkinCacheClass.get_skin_for_modules(Globals.modules_v2_base_dir, modules, BASE_CELL_SIZE)
 
 func get_skin():
 	# 供其它 UI（例如 TopBar 全屏面板）复用当前对局 MapSkin，避免重复构建/加载导致卡顿。
