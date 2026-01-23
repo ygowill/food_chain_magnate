@@ -70,14 +70,21 @@ static func build(engine: GameEngine, target_index: int) -> Result:
 
 		events.append_array(CommandRunnerClass._build_milestone_achieved_events(replay_state, new_state, cmd))
 
-		for e in events:
+		for e_val in events:
+			if not (e_val is Dictionary):
+				continue
+			var e: Dictionary = e_val
+			var d_val = e.get("data", {})
+			var d: Dictionary = d_val if (d_val is Dictionary) else {}
+			d["command_index"] = i
+			e["data"] = d
 			all_events.append(e)
 
 		# 额外的“命令已执行”事件（便于回放验证与 UI 过滤/恢复）
 		all_events.append({
 			"type": EventBus.EventType.COMMAND_EXECUTED,
 			"data": {
-				"command_index": int(cmd.index),
+				"command_index": i,
 				"action_id": str(cmd.action_id),
 				"actor": int(cmd.actor),
 			}
@@ -95,4 +102,3 @@ static func _should_force_execute_in_replay(command: Command) -> bool:
 	if not (command.metadata is Dictionary):
 		return false
 	return bool(Dictionary(command.metadata).get("debug_force", false))
-

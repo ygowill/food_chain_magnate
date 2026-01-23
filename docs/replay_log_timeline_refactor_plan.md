@@ -178,13 +178,9 @@ ActionPanel 禁用策略：
 
 工作项：
 
-- 新增构建器（建议位置之一）：
-  - `core/engine/game_engine/event_timeline_build.gd`（或扩展 `event_history_rebuild.gd`），提供：
-    - `build_full(engine: GameEngine) -> Result(events)`（包含每条事件的 `command_index`）。
-- 抽离日志格式化：
-  - 新增 `ui/scenes/game/game_event_log_formatter.gd`：`format(event: Dictionary) -> Array[LogEntry]`（复用现有 match 分支）。
-  - `GameEventLogController` 变为“订阅者 + 调用 formatter”，避免 formatter 逻辑散落。
-- `GameLogPanel` 改为持有 `_entries_all`，并能根据 `cursor/head` 更新每条 `LogItem` 的“未来置灰”样式。
+- [x] 新增构建器 `core/engine/game_engine/event_timeline_build.gd`：`build_full(engine: GameEngine) -> Result(events)`（包含每条事件的 `command_index`，并补齐 `GAME_STARTED` 等初始化事件）。
+- [ ] 抽离日志格式化：新增 `ui/scenes/game/game_event_log_formatter.gd`，并让 `GameEventLogController` 变为“订阅者 + 调用 formatter”。
+- [ ] `GameLogPanel` 改为持有 `_entries_all`，并能根据 `cursor/head` 更新每条 `LogItem` 的“未来置灰”样式。
 
 验收：
 
