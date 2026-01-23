@@ -89,7 +89,7 @@
 | 72 | 性能：开局加载仍慢（定位主要耗时并进一步优化） | 性能 | MapSkin 构建（logo 去背景）+ UI 二次构建导致 3s 级阻塞 | Implemented（已完成 Step1+Step2） |
 | 73 | 菜单清理：移除主菜单“板块编辑器/回放测试”；游戏菜单移除“日志/里程碑/距离/回放”；回放播放器入口移到开始页面 | UI/信息架构 | 开发/测试入口暴露在主流程；游戏菜单存在与 TopBar 重复的功能入口；回放入口位置不符合使用场景 | Implemented（待手动验收） |
 | 74 | 游戏顶部栏：工具栏与回合信息合并到一行 | UI/布局 | `TopBar` 使用 VBoxContainer 分两行（InfoRow/ButtonRow），需要改为单行布局并同步脚本节点路径 | Implemented（待手动验收） |
-| 75 | 游戏日志面板：移除“清空”入口 | UI/交互 | `GameLogPanel` 顶部包含 ClearButton（清空），不符合期望的日志可回溯性 | 待确认 |
+| 75 | 游戏日志面板：移除“清空”入口 | UI/交互 | `GameLogPanel` 顶部包含 ClearButton（清空），不符合期望的日志可回溯性 | Implemented（待手动验收） |
 
 ---
 
@@ -1792,14 +1792,26 @@
 
 - 该按钮更偏向调试用途；对正常玩家会削弱日志回溯性，且容易误触。
 
-**实施方案（待确认后）**
+**实施记录**
 
-- 移除 UI 上的 ClearButton，并删除对应脚本绑定/信号连接；保留 `clear_logs()` 供内部流程（如 `GameEventLogController.setup/rebuild_from_history`）调用。
-- 跑回归：`GameSmokeTest` + `AllTests`。
+- 已修改：`ui/components/game_log/game_log_panel.tscn`
+	- 移除 `ClearButton(清空)`
+- 已修改：`ui/components/game_log/game_log_panel.gd`
+	- 删除 `clear_btn` 绑定与 `_on_clear_pressed` 回调
+	- 保留 `clear_logs()` 供内部流程（如 `GameEventLogController.setup/rebuild_from_history`）调用
+
+**验收**
+
+- 日志面板不再提供“清空”按钮。
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（109/109，`.godot/AllTests.log`）
 
 **状态**
 
-- 待确认
+- Implemented（待手动验收）
 
 ## 57. Working：生产/采购员工选择应按“实例”消耗（用过的那张变灰且不可点）
 

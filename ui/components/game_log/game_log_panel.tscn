@@ -51,10 +51,6 @@ text = "游戏日志"
 layout_mode = 2
 text = "全屏"
 
-[node name="ClearButton" type="Button" parent="MarginContainer/VBoxContainer/TitleRow/TopRow"]
-layout_mode = 2
-text = "清空"
-
 [node name="CloseButton" type="Button" parent="MarginContainer/VBoxContainer/TitleRow/TopRow"]
 layout_mode = 2
 text = "×"

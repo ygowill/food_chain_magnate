@@ -12,7 +12,6 @@ signal log_added(entry: Dictionary)
 @onready var search_input: LineEdit = $MarginContainer/VBoxContainer/TitleRow/FilterRow/SearchInput
 @onready var filter_btn: MenuButton = $MarginContainer/VBoxContainer/TitleRow/FilterRow/FilterButton
 @onready var expand_btn: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/ExpandButton
-@onready var clear_btn: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/ClearButton
 @onready var close_btn: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/CloseButton
 @onready var scroll_container: ScrollContainer = $MarginContainer/VBoxContainer/ScrollContainer
 @onready var log_container: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/LogContainer
@@ -65,8 +64,6 @@ var _details_message_label: Label = null
 var _details_text: TextEdit = null
 
 func _ready() -> void:
-	if clear_btn != null:
-		clear_btn.pressed.connect(_on_clear_pressed)
 	if auto_scroll_check != null:
 		auto_scroll_check.toggled.connect(_on_auto_scroll_toggled)
 		auto_scroll_check.button_pressed = _auto_scroll
@@ -321,9 +318,6 @@ func _entry_passes_filters(entry: Dictionary) -> bool:
 
 func _on_auto_scroll_toggled(toggled: bool) -> void:
 	_auto_scroll = toggled
-
-func _on_clear_pressed() -> void:
-	clear_logs()
 
 func _on_close_pressed() -> void:
 	close_requested.emit()
