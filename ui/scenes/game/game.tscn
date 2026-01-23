@@ -107,7 +107,7 @@ text = "里程碑"
 
 [node name="ReserveAreaButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
 layout_mode = 2
-text = "保留区"
+text = "供应堆"
 
 [node name="DistanceToolButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
 layout_mode = 2

@@ -81,7 +81,7 @@
 | 64 | 地图外圈不可见格导致地图缩小：外圈为空时应放大，只有需要/已有外圈 piece 才完整显示 | UI/交互+渲染 | `MapCanvasIndexer.compute_bounds()` 无条件添加 UI-only margin=2 外圈；`MapView.fit_to_view()` 基于 `_grid_size` 导致整体缩小；需可切换 bounds/margin 并与现有缩放/auto-fit 协同 | 待实施（已澄清） |
 | 65 | 动作面板：跳过子阶段/确认结束按钮顺序错误（未固定到底部） | UI/交互 | ActionPanel 直接使用 ActionRegistry 提供的 action_id 列表顺序（仅把 mandatory 前置），未对 skip_sub_phase/skip 做末尾固定排序 | Implemented（待手动验收） |
 | 66 | 顶部工具栏：里程碑面板应全屏网格展示（3列居中）并同步获得状态 | UI/布局+信息 | 复用 `MilestonePanel` 以 `dock_right` 布局打开；当前为竖向列表且缺少“卡片式网格/全屏/已获得餐厅 icon”等展示 | Implemented（待手动验收） |
-| 67 | 顶部工具栏：新增“保留区”按钮，分类展示未使用 piece（房屋/花园/广告牌等） | UI/信息+功能 | 目前缺少统一的“供给/剩余 piece”视图；剩余数量分散在 `state.map.*_supply_remaining` 与各系统（marketing boards 等） | Implemented（待手动验收） |
+| 67 | 顶部工具栏：新增“供应堆”按钮，分类展示未使用 piece（房屋/花园/广告牌等） | UI/信息+功能 | 目前缺少统一的“供给/剩余 piece”视图；剩余数量分散在 `state.map.*_supply_remaining` 与各系统（marketing boards 等） | Implemented（待手动验收） |
 | 68 | 日志面板缺少“隐藏/关闭”按钮 | UI/交互 | `GameLogPanel` 仅提供“全屏/清空/过滤”，没有 close；用户只能再次点 TopBar 的“日志”进行隐藏 | Implemented（待手动验收） |
 
 ---
@@ -1220,11 +1220,11 @@
 
 ---
 
-## 67. 顶部工具栏：新增“保留区”按钮（未使用 piece 总览）
+## 67. 顶部工具栏：新增“供应堆”按钮（未使用 piece 总览）
 
 **现象**
 
-- TopBar 需要新增一个“保留区”入口，用于分类展示当前游戏中“尚未被使用/尚未放置”的所有 piece（例如未放置房屋、花园、广告牌等），并且以“实际放置的 piece 样式”渲染。
+- TopBar 需要新增一个“供应堆”入口，用于分类展示当前游戏中“尚未被使用/尚未放置”的所有 piece（例如未放置房屋、花园、广告牌等），并且以“实际放置的 piece 样式”渲染。
 
 **涉及代码（供给/剩余数据来源）**
 
@@ -1241,7 +1241,7 @@
 
 **修复方案**
 
-- TopBar 增加按钮“保留区”，打开一个全屏面板（或与里程碑一致的全屏浏览模式）。
+- TopBar 增加按钮“供应堆”，打开一个全屏面板（或与里程碑一致的全屏浏览模式）。
 - 面板内按类别分组展示（建议：房屋编号、花园、营销板件…），每个条目使用贴图/角标模拟地图上实际渲染效果：
 	- 房屋：显示 house 贴图 + 右上角编号（来自 `house_number_supply_remaining` 列表）。
 	- 花园：显示 garden 贴图 + 剩余数量（来自 `garden_supply_remaining`）。
@@ -1271,7 +1271,7 @@
 
 **验收**
 
-- 点击 TopBar “保留区”打开全屏面板；分类展示未使用 piece，整体布局可滚动
+- 点击 TopBar “供应堆”打开全屏面板；分类展示未使用 piece，整体布局可滚动
 - 不展示地图扩展 tile、餐厅相关条目；模块引入的新 piece 若有供给/剩余字段可被展示
 - 房屋编号按 token 列表逐个展示
 - `ESC` / 点击“×”关闭：关闭后左/右侧面板显示状态保持原样
@@ -1331,11 +1331,11 @@
 
 ---
 
-## 69. 顶部工具栏：里程碑/保留区首次打开加载慢（卡顿）
+## 69. 顶部工具栏：里程碑/供应堆首次打开加载慢（卡顿）
 
 **现象**
 
-- 点击 TopBar “里程碑”或“保留区”后，需要等待一段时间才能显示全屏面板（体感卡顿/延迟）。
+- 点击 TopBar “里程碑”或“供应堆”后，需要等待一段时间才能显示全屏面板（体感卡顿/延迟）。
 
 **涉及代码**
 
@@ -1346,18 +1346,18 @@
 
 **初步根因**
 
-- 里程碑/保留区面板在首次打开时各自调用 `MapSkinBuilder.build_for_modules(...)` 构建 `MapSkin`，与 `MapCanvas` 已构建的皮肤重复，导致额外的同步资源加载与 JSON 解析。
+- 里程碑/供应堆面板在首次打开时各自调用 `MapSkinBuilder.build_for_modules(...)` 构建 `MapSkin`，与 `MapCanvas` 已构建的皮肤重复，导致额外的同步资源加载与 JSON 解析。
 - 面板打开时会一次性创建较多 UI 节点（卡片/token），在低配机器上可能放大卡顿体感。
 
 **修复方案**
 
- - 复用 `MapCanvas` 当前使用的 `MapSkin`：打开面板时由 `GamePanelController` 注入，避免里程碑/保留区各自重复 `build_for_modules()`。
- - 在 `GamePanelController` 初始化时提前 instantiate 里程碑/保留区全屏覆盖层并隐藏，减少首次点击开销。
+ - 复用 `MapCanvas` 当前使用的 `MapSkin`：打开面板时由 `GamePanelController` 注入，避免里程碑/供应堆各自重复 `build_for_modules()`。
+ - 在 `GamePanelController` 初始化时提前 instantiate 里程碑/供应堆全屏覆盖层并隐藏，减少首次点击开销。
  - 里程碑文案格式化所需 rules 不做 deep duplicate：避免首次打开里程碑面板卡顿。
 
 **已澄清**
 
-- 选择 A：允许游戏启动稍慢一点，但点击“里程碑/保留区”几乎瞬开。
+- 选择 A：允许游戏启动稍慢一点，但点击“里程碑/供应堆”几乎瞬开。
 
 **实施记录**
 
@@ -1370,13 +1370,13 @@
 - 已修改：`ui/components/reserve_area/reserve_area_full_screen_view.gd`
 	- 新增 `set_skin()`；`open_with_state(state, skin_override)` 支持外部注入 `MapSkin`
 - 已修改：`ui/scenes/game/game_panel_controller.gd`
-	- `_init()` 预先创建里程碑/保留区全屏覆盖层并隐藏
+	- `_init()` 预先创建里程碑/供应堆全屏覆盖层并隐藏
 	- 打开面板时调用 `open_with_state(state, map_canvas.get_skin())`，避免重复 build
 	- `sync()` 中预热 `MilestoneFullScreenView.prime_with_state()`，把首次构建成本移到加载阶段
 
 **验收**
 
-- 点击 TopBar “里程碑/保留区”面板立即打开，无明显卡顿（不再等待资源加载）。
+- 点击 TopBar “里程碑/供应堆”面板立即打开，无明显卡顿（不再等待资源加载）。
 
 **验证**
 
@@ -1389,12 +1389,12 @@
 
 ---
 
-## 70. 保留区：房屋/花园渲染不一致；内容需居中并尽可能 fit screen
+## 70. 供应堆：房屋/花园渲染不一致；内容需居中并尽可能 fit screen
 
 **现象**
 
-- 保留区中的“房屋编号 token / 花园 token”与地图上实际放置的 piece 风格不一致。
-- 保留区整体内容目前偏左，未居中；视觉上没有尽可能利用屏幕宽度（fit screen）。
+- 供应堆中的“房屋编号 token / 花园 token”与地图上实际放置的 piece 风格不一致。
+- 供应堆整体内容目前偏左，未居中；视觉上没有尽可能利用屏幕宽度（fit screen）。
 
 **涉及代码**
 
@@ -1415,7 +1415,7 @@
 **已澄清**
 
 - 花园展示：选择 A（2x1 花园扩展预览）
-- 房屋：保留区中的房屋外观统一按 `house_with_garden` 渲染（不是普通 `house`）
+- 房屋：供应堆中的房屋外观统一按 `house_with_garden` 渲染（不是普通 `house`）
 
 **实施记录**
 
@@ -1423,10 +1423,11 @@
 	- 用 `HouseWithGardenNumberToken` 替换旧 `HouseNumberToken`：复用 `MapCanvasDrawer._draw_house_and_garden()` 绘制 `house_with_garden`，并显示房屋编号
 	- 新增 `GardenExtensionToken`：绘制 2x1 花园扩展预览，并复用 `MapCanvasDrawer._draw_marketing_board_number_badge()` 显示剩余数量角标
 	- `_add_section()`：section 标题居中；`HFlowContainer` 子项改为居中排列以尽可能 fit screen
+	- 将预览 cell_size 调整为 40（与地图默认格尺寸一致；且不再缩小）：`HouseWithGardenNumberToken` / `GardenExtensionToken` / `MarketingBoardToken`
 
 **验收**
 
-- 保留区房屋/花园的视觉风格与地图放置效果一致
+- 供应堆房屋/花园的视觉风格与地图放置效果一致
 - 面板内容居中展示，随屏幕宽度自动换行，整体尽可能 fit
 
 **验证**

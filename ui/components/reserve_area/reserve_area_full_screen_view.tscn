@@ -41,7 +41,7 @@ theme_override_constants/separation = 12
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 22
-text = "保留区"
+text = "供应堆"
 
 [node name="HintLabel" type="Label" parent="MarginContainer/VBoxContainer/HeaderRow"]
 layout_mode = 2

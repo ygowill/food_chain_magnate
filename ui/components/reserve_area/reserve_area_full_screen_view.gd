@@ -475,7 +475,7 @@ class HouseWithGardenNumberToken extends Control:
 	var house_number: int = -1
 
 	var _skin = null
-	var _cell_size: int = 22
+	var _cell_size: int = 40
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_PASS
@@ -512,7 +512,7 @@ class GardenExtensionToken extends Control:
 	var count: int = 0
 
 	var _skin = null
-	var _cell_size: int = 22
+	var _cell_size: int = 40
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_PASS
@@ -557,14 +557,14 @@ class MarketingBoardToken extends Control:
 		queue_redraw()
 
 	func _update_min_size() -> void:
-		var cell_size := 22
+		var cell_size := 40
 		var size := Vector2(maxi(1, footprint_size.x) * cell_size, maxi(1, footprint_size.y) * cell_size)
 		custom_minimum_size = size
 
 	func _draw() -> void:
 		if _skin == null:
 			return
-		var cell_size := 22
+		var cell_size := 40
 		var placement := {
 			"type": marketing_type,
 			"board_number": board_number,
