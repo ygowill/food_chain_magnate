@@ -21,8 +21,8 @@ const PATH_COLOR := Color(0.4, 0.7, 0.9, 0.6)
 const PATH_HIGHLIGHT_COLOR := Color(0.5, 0.9, 0.5, 0.8)
 const PATH_UNREACHABLE_COLOR := Color(0.9, 0.35, 0.35, 0.75)
 const LABEL_UNREACHABLE_COLOR := Color(1, 0.55, 0.55, 1)
-const PATH_WIDTH := 3.0
-const PATH_HIGHLIGHT_WIDTH := 5.0
+const PATH_WIDTH := 6.0
+const PATH_HIGHLIGHT_WIDTH := 9.0
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -189,13 +189,13 @@ func _add_path_visual(path_data: Dictionary) -> void:
 	else:
 		label.text = str(distance)
 		label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
-	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_font_size_override("font_size", 18)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label_panel.add_child(label)
 
-	var pad_x := 6
-	var pad_y := 4
+	var pad_x := 8
+	var pad_y := 6
 	label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	label.offset_left = pad_x
 	label.offset_top = pad_y
@@ -208,7 +208,7 @@ func _add_path_visual(path_data: Dictionary) -> void:
 
 	# 终点上方：以格子中心点为锚，向上偏移半格。
 	var end_center := _grid_to_pixel(restaurant_pos)
-	var target := end_center + Vector2(0, -_tile_size.y * 0.75)
+	var target := end_center + Vector2(0, -_tile_size.y * 0.95)
 	label_panel.position = target - (panel_size * 0.5)
 	_distance_labels.append(label)
 
@@ -255,7 +255,7 @@ func _update_path_styles() -> void:
 		if i < _distance_labels.size():
 			var label: Label = _distance_labels[i]
 			if is_instance_valid(label):
-				label.add_theme_font_size_override("font_size", 16 if is_highlighted else 14)
+				label.add_theme_font_size_override("font_size", 22 if is_highlighted else 18)
 				if is_highlighted:
 					label.add_theme_color_override("font_color", Color(0.6, 1, 0.6, 1))
 				else:
@@ -265,8 +265,8 @@ func _update_path_styles() -> void:
 				if i < _distance_label_panels.size():
 					var panel: PanelContainer = _distance_label_panels[i]
 					if is_instance_valid(panel):
-						var pad_x := 6
-						var pad_y := 4
+						var pad_x := 8
+						var pad_y := 6
 						var panel_size := label.get_minimum_size() + Vector2(float(pad_x * 2), float(pad_y * 2))
 						panel.size = panel_size
 						panel.custom_minimum_size = panel_size
@@ -274,7 +274,7 @@ func _update_path_styles() -> void:
 						var rp_val = _paths[i].get("restaurant_pos", null) if i < _paths.size() else null
 						if rp_val is Vector2i:
 							var end_center := _grid_to_pixel(Vector2i(rp_val))
-							var target := end_center + Vector2(0, -_tile_size.y * 0.75)
+							var target := end_center + Vector2(0, -_tile_size.y * 0.95)
 							panel.position = target - (panel_size * 0.5)
 
 func _is_path_highlighted(path_data: Dictionary, highlight_house_pos: Vector2i, highlight_restaurant_pos: Vector2i) -> bool:

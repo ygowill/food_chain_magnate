@@ -35,7 +35,7 @@ var marketing_panel = null
 var restaurant_placement_overlay = null
 var house_placement_overlay = null
 
-const _DISTANCE_TOOL_START_OVERLAY_ID := "distance_tool_start"
+const _DISTANCE_TOOL_POINTS_OVERLAY_ID := "distance_tool_points"
 
 func _init(scene, map_canvas, overlay_controller) -> void:
 	_scene = scene
@@ -82,7 +82,7 @@ func begin_selection(mode: String, payload: Dictionary = {}) -> void:
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_move_restaurant_selected_restaurant"):
 		_map_canvas.call("clear_move_restaurant_selected_restaurant")
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_piece_overlay"):
-		_map_canvas.call("clear_piece_overlay", _DISTANCE_TOOL_START_OVERLAY_ID)
+		_map_canvas.call("clear_piece_overlay", _DISTANCE_TOOL_POINTS_OVERLAY_ID)
 
 	# 动态控制“地图外围 UI-only 空圈”：仅在需要放置/显示外围 piece 时开启（issue_tracker #64）。
 	_update_map_outside_margin_for_mode()
@@ -102,7 +102,7 @@ func clear_selection() -> void:
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_move_restaurant_selected_restaurant"):
 		_map_canvas.call("clear_move_restaurant_selected_restaurant")
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_piece_overlay"):
-		_map_canvas.call("clear_piece_overlay", _DISTANCE_TOOL_START_OVERLAY_ID)
+		_map_canvas.call("clear_piece_overlay", _DISTANCE_TOOL_POINTS_OVERLAY_ID)
 
 	# 退出任何选点模式后，如果不再需要外围空圈则恢复（issue_tracker #64）。
 	_update_map_outside_margin_for_mode()
@@ -255,7 +255,7 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 			if _distance_tool_from == Vector2i(-1, -1):
 				_distance_tool_from = world_pos
 				_overlay_controller.hide_distance_overlay()
-				_show_distance_tool_start_highlight(world_pos)
+				_show_distance_tool_points_highlight([world_pos])
 				GameLog.info("Game", "距离工具：起点=%s，请选择终点" % str(world_pos))
 				return
 
@@ -263,7 +263,7 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 			if world_pos == _distance_tool_from:
 				_distance_tool_from = Vector2i(-1, -1)
 				_overlay_controller.hide_distance_overlay()
-				_hide_distance_tool_start_highlight()
+				_clear_distance_tool_points_highlight()
 				GameLog.info("Game", "距离工具：已清除起点，请重新选择起点")
 				return
 
@@ -271,30 +271,34 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 			to_positions.append(world_pos)
 			_overlay_controller.show_distance_overlay(_distance_tool_from, to_positions)
 			# 每次只测一段：测完后清空起点；下一次点击任意道路格会重新开始（issue_tracker #59）。
+			# 起点/终点高亮保持到下一次测距开始（issue_tracker #59：可见性增强）。
+			_show_distance_tool_points_highlight([_distance_tool_from, world_pos])
 			_distance_tool_from = Vector2i(-1, -1)
-			_hide_distance_tool_start_highlight()
 		_:
 			pass
 
-func _show_distance_tool_start_highlight(world_pos: Vector2i) -> void:
+func _show_distance_tool_points_highlight(cells_in: Array[Vector2i]) -> void:
 	if not is_instance_valid(_map_canvas):
 		return
 	if not _map_canvas.has_method("set_piece_overlay"):
 		return
 	# NOTE: set_piece_overlay expects Array[Vector2i]; passing an untyped Array via call() will error.
 	var cells: Array[Vector2i] = []
-	cells.append(world_pos)
-	_map_canvas.call("set_piece_overlay", _DISTANCE_TOOL_START_OVERLAY_ID, cells, {
+	for v in cells_in:
+		cells.append(v)
+	if cells.is_empty():
+		return
+	_map_canvas.call("set_piece_overlay", _DISTANCE_TOOL_POINTS_OVERLAY_ID, cells, {
 		"fill": Color(1, 0.9, 0.15, 0.12),
 		"border": Color(1, 0.9, 0.15, 0.95),
 		"border_width": 3.0,
 	})
 
-func _hide_distance_tool_start_highlight() -> void:
+func _clear_distance_tool_points_highlight() -> void:
 	if not is_instance_valid(_map_canvas):
 		return
 	if _map_canvas.has_method("clear_piece_overlay"):
-		_map_canvas.call("clear_piece_overlay", _DISTANCE_TOOL_START_OVERLAY_ID)
+		_map_canvas.call("clear_piece_overlay", _DISTANCE_TOOL_POINTS_OVERLAY_ID)
 
 func _update_map_outside_margin_for_mode() -> void:
 	if not is_instance_valid(_map_canvas):

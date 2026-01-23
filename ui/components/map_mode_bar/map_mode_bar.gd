@@ -6,6 +6,11 @@ extends Control
 @onready var title_label: Label = $Bar/MarginContainer/VBoxContainer/TitleLabel
 @onready var hint_label: Label = $Bar/MarginContainer/VBoxContainer/HintLabel
 
+func _ready() -> void:
+	# Ensure the hint bar is always readable (draw above turn order overlay, etc.).
+	z_as_relative = false
+	z_index = 1000
+
 func show_mode(title: String, hint: String) -> void:
 	if title_label != null:
 		title_label.text = title
@@ -15,4 +20,3 @@ func show_mode(title: String, hint: String) -> void:
 
 func hide_mode() -> void:
 	visible = false
-
