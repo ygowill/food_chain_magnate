@@ -10,6 +10,7 @@ const SaveLoadDialogScript = preload("res://ui/dialogs/save_load_dialog.gd")
 var _settings_dialog: Window = null
 var _message_dialog: Window = null
 var _save_load_dialog = null
+var _save_load_context: String = ""
 
 func _ready() -> void:
 	GameLog.info("MainMenu", "主菜单已加载")
@@ -22,6 +23,7 @@ func _on_new_game_pressed() -> void:
 func _on_load_game_pressed() -> void:
 	GameLog.info("MainMenu", "点击载入游戏")
 	_ensure_save_load_dialog()
+	_save_load_context = "load"
 	_save_load_dialog.open_for_load()
 
 func _on_settings_pressed() -> void:
@@ -32,13 +34,11 @@ func _on_settings_pressed() -> void:
 	else:
 		_settings_dialog.show()
 
-func _on_tile_editor_pressed() -> void:
-	GameLog.info("MainMenu", "打开板块编辑器")
-	SceneManager.goto_tile_editor()
-
-func _on_replay_test_pressed() -> void:
-	GameLog.info("MainMenu", "打开回放测试")
-	SceneManager.goto_replay_test()
+func _on_replay_player_pressed() -> void:
+	GameLog.info("MainMenu", "打开回放播放器")
+	_ensure_save_load_dialog()
+	_save_load_context = "replay"
+	_save_load_dialog.open_for_replay()
 
 func _on_quit_pressed() -> void:
 	GameLog.info("MainMenu", "退出游戏")
@@ -65,6 +65,23 @@ func _ensure_save_load_dialog() -> void:
 func _on_save_load_selected(path: String) -> void:
 	if path.is_empty():
 		return
+	if _save_load_context == "replay":
+		if EventBus != null:
+			EventBus.clear_history()
+		if Globals != null:
+			Globals.current_game_engine = null
+			Globals.is_game_active = false
+			Globals.pending_replay_file_path = path
+
+		# 存档读取可能耗时：先显示加载遮罩，避免“卡住”的观感
+		if SceneManager != null and SceneManager.has_method("show_loading"):
+			SceneManager.show_loading("正在进入回放...")
+			await get_tree().process_frame
+
+		GameLog.info("MainMenu", "进入回放: %s" % path)
+		SceneManager.goto_game()
+		return
+
 	if EventBus != null:
 		EventBus.clear_history()
 

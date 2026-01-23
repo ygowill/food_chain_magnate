@@ -50,8 +50,8 @@ class FakeCanvas extends RefCounted:
 	func draw_rect(rect: Rect2, color: Color, filled: bool = true, _width: float = -1.0) -> void:
 		if not filled:
 			return
-		# Ground fill uses #faf4e0; only record those.
-		if not color.is_equal_approx(Color("#faf4e0")):
+		# Ground fill uses solid white; only record those.
+		if not color.is_equal_approx(Color("#ffffff")):
 			return
 		var cell_size := rect.size.x
 		var vx := int(round(rect.position.x / cell_size))
@@ -95,4 +95,3 @@ static func run() -> Result:
 			return Result.failure("ground should not be painted outside base map; got painted at %s" % str(p))
 
 	return Result.success({})
-

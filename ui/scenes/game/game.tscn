@@ -305,25 +305,9 @@ text = "保存游戏"
 layout_mode = 2
 text = "设置"
 
-[node name="ToggleLogButton" type="Button" parent="MenuDialog/VBoxContainer"]
-layout_mode = 2
-text = "显示/隐藏日志"
-
 [node name="ToggleBottomPanelButton" type="Button" parent="MenuDialog/VBoxContainer"]
 layout_mode = 2
 text = "显示/隐藏底部面板"
-
-[node name="MilestonesButton" type="Button" parent="MenuDialog/VBoxContainer"]
-layout_mode = 2
-text = "里程碑"
-
-[node name="DistanceToolButton" type="Button" parent="MenuDialog/VBoxContainer"]
-layout_mode = 2
-text = "距离工具"
-
-[node name="ReplayButton" type="Button" parent="MenuDialog/VBoxContainer"]
-layout_mode = 2
-text = "回放播放器"
 
 [node name="QuitToMenuButton" type="Button" parent="MenuDialog/VBoxContainer"]
 layout_mode = 2
@@ -344,9 +328,5 @@ text = "返回主菜单"
 [connection signal="pressed" from="MenuDialog/VBoxContainer/ResumeButton" to="." method="_on_resume_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/SaveButton" to="." method="_on_save_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
-[connection signal="pressed" from="MenuDialog/VBoxContainer/ToggleLogButton" to="." method="_on_toggle_log_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/ToggleBottomPanelButton" to="." method="_on_toggle_bottom_panel_pressed"]
-[connection signal="pressed" from="MenuDialog/VBoxContainer/MilestonesButton" to="." method="_on_milestones_pressed"]
-[connection signal="pressed" from="MenuDialog/VBoxContainer/DistanceToolButton" to="." method="_on_distance_tool_pressed"]
-[connection signal="pressed" from="MenuDialog/VBoxContainer/ReplayButton" to="." method="_on_replay_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/QuitToMenuButton" to="." method="_on_quit_to_menu_pressed"]

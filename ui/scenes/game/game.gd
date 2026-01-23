@@ -76,6 +76,8 @@ var _replay_player: ReplayPlayer = null
 var _replay_mode_active: bool = false
 var _replay_original_engine: GameEngine = null
 var _replay_file_path: String = ""
+var _startup_replay_from_main_menu: bool = false
+var _startup_replay_file_path: String = ""
 
 var _background_ui_warmup_started: bool = false
 var _startup_profile_reported: bool = false
@@ -116,6 +118,14 @@ func _ready() -> void:
 	await get_tree().process_frame
 	if not is_instance_valid(self):
 		return
+
+	# 主菜单入口：选择回放文件后，进入 Game 并自动打开回放播放器。
+	if Globals != null:
+		var p := str(Globals.pending_replay_file_path).strip_edges()
+		if not p.is_empty():
+			_startup_replay_from_main_menu = true
+			_startup_replay_file_path = p
+			Globals.pending_replay_file_path = ""
 
 	var should_restore_log_history := false
 	if Globals.current_game_engine != null and Globals.current_game_engine is GameEngine:
@@ -170,24 +180,28 @@ func _ready() -> void:
 	_init_left_area_resize()
 	_apply_responsive_layout()
 	UiSignalHelpersClass.safe_connect(self, "resized", _on_root_resized)
-	var span_update_ui := PerfTraceClass.begin_span("game:_update_ui(first)")
-	_update_ui()
-	PerfTraceClass.end_span(span_update_ui)
-	_on_map_mode_changed("", {})
+	if _startup_replay_from_main_menu and not _startup_replay_file_path.is_empty():
+		# 回放入口：保持加载遮罩，避免先渲染“新开局”的 UI 再切换到回放造成闪烁。
+		show_replay_player(_startup_replay_file_path)
+	else:
+		var span_update_ui := PerfTraceClass.begin_span("game:_update_ui(first)")
+		_update_ui()
+		PerfTraceClass.end_span(span_update_ui)
+		_on_map_mode_changed("", {})
 
-	# 若开局需要强制弹出“储备卡选择”，则保留加载遮罩直到弹窗真正打开，
-	# 避免先露出一帧游戏 UI 再弹窗导致的闪烁体验。
-	var keep_loading_until_reserve_modal := false
-	if game_engine != null:
-		var s := game_engine.get_state()
-		if s != null and str(s.phase) == "Setup" and str(s.sub_phase) == "ReserveCards":
-			keep_loading_until_reserve_modal = true
-	if not keep_loading_until_reserve_modal:
-		if SceneManager != null and SceneManager.has_method("hide_loading"):
-			SceneManager.hide_loading()
+		# 若开局需要强制弹出“储备卡选择”，则保留加载遮罩直到弹窗真正打开，
+		# 避免先露出一帧游戏 UI 再弹窗导致的闪烁体验。
+		var keep_loading_until_reserve_modal := false
+		if game_engine != null:
+			var s := game_engine.get_state()
+			if s != null and str(s.phase) == "Setup" and str(s.sub_phase) == "ReserveCards":
+				keep_loading_until_reserve_modal = true
+		if not keep_loading_until_reserve_modal:
+			if SceneManager != null and SceneManager.has_method("hide_loading"):
+				SceneManager.hide_loading()
 
-	# 非关键面板后台预热（issue_tracker #71）：不阻塞首帧交互；未完成时打开面板显示“加载中...”。
-	call_deferred("_start_background_ui_warmup")
+		# 非关键面板后台预热（issue_tracker #71）：不阻塞首帧交互；未完成时打开面板显示“加载中...”。
+		call_deferred("_start_background_ui_warmup")
 
 	PerfTraceClass.end_span(span_ready)
 	if PerfTraceClass.enabled() and not _startup_profile_reported:
@@ -1458,16 +1472,29 @@ func _load_replay_from_file() -> void:
 	var load_result: Result = _replay_player.load_from_file(_replay_file_path)
 	if not load_result.ok:
 		GameLog.error("Game", "回放加载失败: %s" % load_result.error)
+		if _startup_replay_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
+			SceneManager.hide_loading()
 		_show_confirm("回放加载失败", load_result.error, Callable(), Callable())
 		return
 
 	var replay_engine: GameEngine = _replay_player.get_game_engine()
 	if replay_engine == null:
 		GameLog.error("Game", "回放加载失败: GameEngine 为空")
+		if _startup_replay_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
+			SceneManager.hide_loading()
 		_show_confirm("回放加载失败", "内部错误: GameEngine 为空", Callable(), Callable())
 		return
 
+	if _startup_replay_from_main_menu and Globals != null and Globals.has_method("sync_runtime_config_from_engine"):
+		Globals.sync_runtime_config_from_engine(replay_engine)
+
 	_enter_replay_mode(replay_engine)
+	if _startup_replay_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
+		SceneManager.hide_loading()
+	if _startup_replay_from_main_menu and _event_log_controller != null and _event_log_controller.has_method("rebuild_from_history"):
+		_event_log_controller.rebuild_from_history()
+	if _startup_replay_from_main_menu:
+		call_deferred("_start_background_ui_warmup")
 
 func _enter_replay_mode(engine: GameEngine) -> void:
 	if engine == null:
@@ -1529,6 +1556,10 @@ func _on_replay_error(message: String) -> void:
 	GameLog.warn("ReplayPlayer", message)
 
 func _on_replay_close_requested() -> void:
+	if _startup_replay_from_main_menu:
+		Globals.reset_game_config()
+		SceneManager.goto_main_menu()
+		return
 	hide_replay_player()
 
 func show_distance_overlay(from_position: Vector2i, to_positions: Array[Vector2i]) -> void:

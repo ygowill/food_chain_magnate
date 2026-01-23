@@ -20,6 +20,7 @@ var reserve_card_selected_by_player: Array[int] = []
 # 运行时状态
 var current_game_engine = null  # GameEngine 实例
 var is_game_active: bool = false
+var pending_replay_file_path: String = "" # 主菜单选择回放文件后，用于进入 Game 场景自动打开回放播放器
 
 # 玩家数范围
 const MIN_PLAYERS := GameConstantsClass.MIN_PLAYERS

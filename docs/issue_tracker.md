@@ -83,6 +83,13 @@
 | 66 | 顶部工具栏：里程碑面板应全屏网格展示（3列居中）并同步获得状态 | UI/布局+信息 | 复用 `MilestonePanel` 以 `dock_right` 布局打开；当前为竖向列表且缺少“卡片式网格/全屏/已获得餐厅 icon”等展示 | Implemented（待手动验收） |
 | 67 | 顶部工具栏：新增“供应堆”按钮，分类展示未使用 piece（房屋/花园/广告牌等） | UI/信息+功能 | 目前缺少统一的“供给/剩余 piece”视图；剩余数量分散在 `state.map.*_supply_remaining` 与各系统（marketing boards 等） | Implemented（待手动验收） |
 | 68 | 日志面板缺少“隐藏/关闭”按钮 | UI/交互 | `GameLogPanel` 仅提供“全屏/清空/过滤”，没有 close；用户只能再次点 TopBar 的“日志”进行隐藏 | Implemented（待手动验收） |
+| 69 | 顶部工具栏：里程碑/供应堆首次打开加载慢（卡顿） | 性能/UI | 首次打开会重复构建 `MapSkin` + 批量创建 UI 节点，导致主线程卡顿 | Implemented（待手动验收） |
+| 70 | 供应堆：房屋/花园渲染不一致；内容需居中并尽可能 fit screen | UI/渲染+布局 | 供应堆全屏视图的渲染/缩放/居中策略与地图皮肤不一致，且缺少稳定的 fit screen 约束 | Implemented（待手动验收） |
+| 71 | 性能：开局加载过重（将非关键 UI 预热移到进入对局后的后台） | 性能 | 开局同步预热多个复杂面板/资源构建，阻塞首帧交互 | Implemented（待手动验收） |
+| 72 | 性能：开局加载仍慢（定位主要耗时并进一步优化） | 性能 | MapSkin 构建（logo 去背景）+ UI 二次构建导致 3s 级阻塞 | Implemented（已完成 Step1+Step2） |
+| 73 | 菜单清理：移除主菜单“板块编辑器/回放测试”；游戏菜单移除“日志/里程碑/距离/回放”；回放播放器入口移到开始页面 | UI/信息架构 | 开发/测试入口暴露在主流程；游戏菜单存在与 TopBar 重复的功能入口；回放入口位置不符合使用场景 | Implemented（待手动验收） |
+| 74 | 游戏顶部栏：工具栏与回合信息合并到一行 | UI/布局 | `TopBar` 使用 VBoxContainer 分两行（InfoRow/ButtonRow），需要改为单行布局并同步脚本节点路径 | 待澄清 |
+| 75 | 游戏日志面板：移除“清空”入口 | UI/交互 | `GameLogPanel` 顶部包含 ClearButton（清空），不符合期望的日志可回溯性 | 待确认 |
 
 ---
 
@@ -1653,6 +1660,133 @@
 **状态**
 
 - Implemented（已完成 Step1+Step2；开局 MapSkin 构建与 UI 同步不再造成明显卡顿）
+
+---
+
+## 73. 菜单清理：移除主菜单“板块编辑器/回放测试”；游戏菜单移除“日志/里程碑/距离/回放”；回放播放器入口移到开始页面
+
+**现象/需求**
+
+- 主菜单（开始页面）中的“板块编辑器”“回放测试”两个按钮需要去掉。
+- 游戏内菜单（菜单按钮弹窗）中不需要显示：显示/隐藏日志、里程碑、距离工具、回放播放器。
+- 回放播放器入口应放到开始页面中。
+
+**涉及代码（初步定位）**
+
+- 主菜单：
+	- `ui/scenes/main_menu.tscn`
+	- `ui/scenes/menus/main_menu.gd`
+	- `autoload/scene_manager.gd`（`goto_tile_editor/goto_replay_test`）
+- 游戏内菜单：
+	- `ui/scenes/game/game.tscn`（`MenuDialog` 下的各按钮与连接）
+	- `ui/scenes/game/game.gd`（`_on_toggle_log_pressed/_on_milestones_pressed/_on_distance_tool_pressed/_on_replay_pressed`）
+- 回放播放器：
+	- `ui/components/replay_player/replay_player.tscn`
+	- `ui/components/replay_player/replay_player.gd`
+	- `ui/dialogs/save_load_dialog.gd`（若继续复用“选择回放文件”的文件选择逻辑）
+
+**初步根因**
+
+- 主菜单仍暴露开发/测试入口（板块编辑器、回放测试），影响正式用户的入口简洁性。
+- 游戏内菜单包含与 TopBar 重复的功能入口（日志/里程碑/距离工具），且回放播放器更符合“从开始页面进入”的使用场景。
+
+**已澄清**
+
+- 回放入口选择 A：主菜单选择回放文件后进入 `Game` 场景，并自动弹出回放播放器（回放模式）。
+- 板块编辑器/回放测试：仅从主菜单移除入口（保留场景与 SceneManager 跳转供开发使用）。
+- 游戏内菜单保留：继续游戏/保存游戏/设置/显示/隐藏底部面板/返回主菜单。
+
+**实施记录**
+
+- 已修改：`ui/scenes/main_menu.tscn`
+	- 移除按钮：“板块编辑器”“回放测试”
+	- 新增按钮：“回放播放器”
+- 已修改：`ui/scenes/menus/main_menu.gd`
+	- 新增回放入口：通过 `SaveLoadDialog.open_for_replay()` 选择文件
+	- 选择后写入 `Globals.pending_replay_file_path` 并进入 `Game` 场景
+- 已修改：`autoload/globals.gd`
+	- 新增 `pending_replay_file_path`（主菜单 -> Game 的回放启动参数）
+- 已修改：`ui/scenes/game/game.gd`
+	- `_ready()` 检测 `Globals.pending_replay_file_path`，保持加载遮罩并自动 `show_replay_player(path)`
+	- 回放加载成功后：同步 runtime config、隐藏加载遮罩、从 EventBus.history 重建日志
+	- 回放从主菜单启动时：关闭回放播放器将返回主菜单
+- 已修改：`ui/scenes/game/game.tscn`
+	- 游戏内菜单移除按钮：“显示/隐藏日志”“里程碑”“距离工具”“回放播放器”
+
+**验收**
+
+- 主菜单不再显示“板块编辑器”“回放测试”；新增“回放播放器”按钮。
+- 游戏内菜单不再显示：显示/隐藏日志、里程碑、距离工具、回放播放器。
+- 主菜单点击“回放播放器”选择存档后，会进入 `Game` 场景并自动弹出回放播放器（回放模式）。
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（109/109，`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）
+
+---
+
+## 74. 游戏顶部栏：工具栏与回合信息合并到一行
+
+**现象/需求**
+
+- 当前 `Game` 顶部栏分两行：`InfoRow(回合/阶段/银行/玩家)` + `ButtonRow(工具按钮)`。
+- 需要把工具栏与回合信息合并到一行。
+
+**涉及代码（初步定位）**
+
+- `ui/scenes/game/game.tscn`（`UIRoot/TopBar/InfoRow` 与 `UIRoot/TopBar/ButtonRow`）
+- `ui/scenes/game/game.gd`（`@onready` 节点路径绑定）
+- `ui/scenes/game/game_overlay_controller.gd`（通过节点路径绑定 TopBar 按钮的帮助 tooltip）
+
+**初步根因**
+
+- `TopBar` 使用 `VBoxContainer`，天然分行展示；合并为一行需要改为单行布局并更新引用路径。
+
+**待澄清（需要你点头确认）**
+
+- 合并后是否按“信息在左、工具按钮在右”的形式排布？（通常通过一个 `Spacer(size_flags_horizontal=EXPAND_FILL)` 把按钮推到右侧）
+- 在小分辨率/窄窗口下，如果一行放不下：你希望“强制单行挤压”（可能变得很拥挤），还是允许自动换行/折叠部分按钮进菜单？
+
+**实施方案（待确认后）**
+
+- 调整 `ui/scenes/game/game.tscn` 的 TopBar 布局为单行，并同步更新 `game.gd` / `game_overlay_controller.gd` 对应节点路径。
+- 跑回归：`GameSmokeTest` + `AllTests`。
+
+**状态**
+
+- 待澄清
+
+---
+
+## 75. 游戏日志面板：移除“清空”入口
+
+**现象/需求**
+
+- `GameLogPanel` 顶部存在“清空”按钮。
+- 需求：游戏日志面板中不应该有清空的选项。
+
+**涉及代码（初步定位）**
+
+- `ui/components/game_log/game_log_panel.tscn`（`ClearButton`）
+- `ui/components/game_log/game_log_panel.gd`（`clear_btn` / `_on_clear_pressed`）
+
+**初步根因**
+
+- 该按钮更偏向调试用途；对正常玩家会削弱日志回溯性，且容易误触。
+
+**实施方案（待确认后）**
+
+- 移除 UI 上的 ClearButton，并删除对应脚本绑定/信号连接；保留 `clear_logs()` 供内部流程（如 `GameEventLogController.setup/rebuild_from_history`）调用。
+- 跑回归：`GameSmokeTest` + `AllTests`。
+
+**状态**
+
+- 待确认
 
 ## 57. Working：生产/采购员工选择应按“实例”消耗（用过的那张变灰且不可点）
 
