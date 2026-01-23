@@ -56,6 +56,9 @@ var _scroll_to_bottom_requested: bool = false
 var _max_entries: int = 500
 var _player_count: int = 0
 
+# 时间线（回放/查看历史）预留：在 M1 引入“完整日志”前仅存储指针，不改变渲染。
+var _timeline_head_index: int = -1
+
 const FULL_LOG_WINDOW_SCENE_PATH := "res://ui/components/game_log/full_log_window.tscn"
 
 var _full_log_window_scene: PackedScene = null
@@ -160,6 +163,9 @@ func load_entries(entries: Array[Dictionary]) -> void:
 func set_expand_enabled(enabled: bool) -> void:
 	if expand_btn != null:
 		expand_btn.visible = enabled
+
+func set_timeline_head(head_index: int) -> void:
+	_timeline_head_index = int(head_index)
 
 func add_system_log(message: String, details: Dictionary = {}) -> int:
 	return add_log(LogType.SYSTEM, message, details)
