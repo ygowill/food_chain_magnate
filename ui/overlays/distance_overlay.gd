@@ -11,6 +11,7 @@ var _map_data: Dictionary = {}
 
 var _paths: Array[Dictionary] = []  # [{house_pos, restaurant_pos, distance, path_points}]
 var _path_lines: Array[Line2D] = []
+var _distance_label_panels: Array[PanelContainer] = []
 var _distance_labels: Array[Label] = []
 
 var _highlight_house: String = ""
@@ -127,6 +128,7 @@ func clear_highlight() -> void:
 func clear_all() -> void:
 	_paths.clear()
 	_free_nodes(_path_lines)
+	_free_nodes(_distance_label_panels)
 	_free_nodes(_distance_labels)
 
 func _calculate_distance(house_pos: Vector2i, restaurant_pos: Vector2i, path_points: Array[Vector2i]) -> int:
@@ -166,10 +168,20 @@ func _add_path_visual(path_data: Dictionary) -> void:
 	add_child(line)
 	_path_lines.append(line)
 
-	# 创建距离标签
-	var mid_point := (_grid_to_pixel(house_pos) + _grid_to_pixel(restaurant_pos)) / 2
+	# 创建距离标签（显示在终点上方，且增加背景以便阅读：issue_tracker #59）。
+	var label_panel := PanelContainer.new()
+	label_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0, 0, 0, 0.7)
+	bg.border_color = Color(1, 1, 1, 0.2)
+	bg.set_border_width_all(1)
+	bg.set_corner_radius_all(6)
+	label_panel.add_theme_stylebox_override("panel", bg)
+	add_child(label_panel)
+	_distance_label_panels.append(label_panel)
 
 	var label := Label.new()
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if distance < 0:
 		label.text = "无法连接"
 		line.default_color = PATH_UNREACHABLE_COLOR
@@ -178,11 +190,26 @@ func _add_path_visual(path_data: Dictionary) -> void:
 		label.text = str(distance)
 		label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	label.add_theme_font_size_override("font_size", 14)
-	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
-	label.add_theme_constant_override("outline_size", 2)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.position = mid_point - (label.get_minimum_size() * 0.5)
-	add_child(label)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label_panel.add_child(label)
+
+	var pad_x := 6
+	var pad_y := 4
+	label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	label.offset_left = pad_x
+	label.offset_top = pad_y
+	label.offset_right = -pad_x
+	label.offset_bottom = -pad_y
+
+	var panel_size := label.get_minimum_size() + Vector2(float(pad_x * 2), float(pad_y * 2))
+	label_panel.size = panel_size
+	label_panel.custom_minimum_size = panel_size
+
+	# 终点上方：以格子中心点为锚，向上偏移半格。
+	var end_center := _grid_to_pixel(restaurant_pos)
+	var target := end_center + Vector2(0, -_tile_size.y * 0.75)
+	label_panel.position = target - (panel_size * 0.5)
 	_distance_labels.append(label)
 
 func _grid_to_pixel(grid_pos: Vector2i) -> Vector2:
@@ -228,11 +255,27 @@ func _update_path_styles() -> void:
 		if i < _distance_labels.size():
 			var label: Label = _distance_labels[i]
 			if is_instance_valid(label):
-					label.add_theme_font_size_override("font_size", 16 if is_highlighted else 14)
-					if is_highlighted:
-						label.add_theme_color_override("font_color", Color(0.6, 1, 0.6, 1))
-					else:
-						label.add_theme_color_override("font_color", LABEL_UNREACHABLE_COLOR if is_unreachable else Color(1, 1, 1, 1))
+				label.add_theme_font_size_override("font_size", 16 if is_highlighted else 14)
+				if is_highlighted:
+					label.add_theme_color_override("font_color", Color(0.6, 1, 0.6, 1))
+				else:
+					label.add_theme_color_override("font_color", LABEL_UNREACHABLE_COLOR if is_unreachable else Color(1, 1, 1, 1))
+
+				# 重新计算面板尺寸/位置，避免高亮时字号变化导致裁剪。
+				if i < _distance_label_panels.size():
+					var panel: PanelContainer = _distance_label_panels[i]
+					if is_instance_valid(panel):
+						var pad_x := 6
+						var pad_y := 4
+						var panel_size := label.get_minimum_size() + Vector2(float(pad_x * 2), float(pad_y * 2))
+						panel.size = panel_size
+						panel.custom_minimum_size = panel_size
+
+						var rp_val = _paths[i].get("restaurant_pos", null) if i < _paths.size() else null
+						if rp_val is Vector2i:
+							var end_center := _grid_to_pixel(Vector2i(rp_val))
+							var target := end_center + Vector2(0, -_tile_size.y * 0.75)
+							panel.position = target - (panel_size * 0.5)
 
 func _is_path_highlighted(path_data: Dictionary, highlight_house_pos: Vector2i, highlight_restaurant_pos: Vector2i) -> bool:
 	var house_id: String = str(path_data.get("house_id", ""))

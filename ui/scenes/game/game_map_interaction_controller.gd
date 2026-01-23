@@ -35,6 +35,8 @@ var marketing_panel = null
 var restaurant_placement_overlay = null
 var house_placement_overlay = null
 
+const _DISTANCE_TOOL_START_OVERLAY_ID := "distance_tool_start"
+
 func _init(scene, map_canvas, overlay_controller) -> void:
 	_scene = scene
 	_map_canvas = map_canvas
@@ -79,6 +81,12 @@ func begin_selection(mode: String, payload: Dictionary = {}) -> void:
 		_map_canvas.call("clear_cell_highlights")
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_move_restaurant_selected_restaurant"):
 		_map_canvas.call("clear_move_restaurant_selected_restaurant")
+	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_piece_overlay"):
+		_map_canvas.call("clear_piece_overlay", _DISTANCE_TOOL_START_OVERLAY_ID)
+
+	# 动态控制“地图外围 UI-only 空圈”：仅在需要放置/显示外围 piece 时开启（issue_tracker #64）。
+	_update_map_outside_margin_for_mode()
+
 	_emit_mode_changed()
 	if _mode == "procure_drinks":
 		_sync_procure_drinks_highlights()
@@ -93,6 +101,12 @@ func clear_selection() -> void:
 		_map_canvas.call("clear_cell_highlights")
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_move_restaurant_selected_restaurant"):
 		_map_canvas.call("clear_move_restaurant_selected_restaurant")
+	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_piece_overlay"):
+		_map_canvas.call("clear_piece_overlay", _DISTANCE_TOOL_START_OVERLAY_ID)
+
+	# 退出任何选点模式后，如果不再需要外围空圈则恢复（issue_tracker #64）。
+	_update_map_outside_margin_for_mode()
+
 	_restaurant_valid_anchors.clear()
 	_house_valid_anchors.clear()
 	_marketing_valid_anchors.clear()
@@ -229,24 +243,92 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 			if _overlay_controller == null:
 				return
 
+			if _scene == null or _scene.game_engine == null:
+				return
+			var state: GameState = _scene.game_engine.get_state()
+			if state == null:
+				return
+			# 只允许点道路格（issue_tracker #59）。
+			if not CellsClass.has_road_at_any(state, world_pos):
+				return
+
 			if _distance_tool_from == Vector2i(-1, -1):
 				_distance_tool_from = world_pos
 				_overlay_controller.hide_distance_overlay()
+				_show_distance_tool_start_highlight(world_pos)
 				GameLog.info("Game", "距离工具：起点=%s，请选择终点" % str(world_pos))
 				return
 
-			# 再次点击起点视为重置
+			# 再次点击起点视为重置（仅影响“起点已选但尚未测距完成”的阶段）
 			if world_pos == _distance_tool_from:
 				_distance_tool_from = Vector2i(-1, -1)
 				_overlay_controller.hide_distance_overlay()
+				_hide_distance_tool_start_highlight()
 				GameLog.info("Game", "距离工具：已清除起点，请重新选择起点")
 				return
 
 			var to_positions: Array[Vector2i] = []
 			to_positions.append(world_pos)
 			_overlay_controller.show_distance_overlay(_distance_tool_from, to_positions)
+			# 每次只测一段：测完后清空起点；下一次点击任意道路格会重新开始（issue_tracker #59）。
+			_distance_tool_from = Vector2i(-1, -1)
+			_hide_distance_tool_start_highlight()
 		_:
 			pass
+
+func _show_distance_tool_start_highlight(world_pos: Vector2i) -> void:
+	if not is_instance_valid(_map_canvas):
+		return
+	if not _map_canvas.has_method("set_piece_overlay"):
+		return
+	# NOTE: set_piece_overlay expects Array[Vector2i]; passing an untyped Array via call() will error.
+	var cells: Array[Vector2i] = []
+	cells.append(world_pos)
+	_map_canvas.call("set_piece_overlay", _DISTANCE_TOOL_START_OVERLAY_ID, cells, {
+		"fill": Color(1, 0.9, 0.15, 0.12),
+		"border": Color(1, 0.9, 0.15, 0.95),
+		"border_width": 3.0,
+	})
+
+func _hide_distance_tool_start_highlight() -> void:
+	if not is_instance_valid(_map_canvas):
+		return
+	if _map_canvas.has_method("clear_piece_overlay"):
+		_map_canvas.call("clear_piece_overlay", _DISTANCE_TOOL_START_OVERLAY_ID)
+
+func _update_map_outside_margin_for_mode() -> void:
+	if not is_instance_valid(_map_canvas):
+		return
+	if not _map_canvas.has_method("set_ui_outside_margin_override"):
+		return
+
+	var requested := 0
+	if _mode == "marketing":
+		var mt := str(_payload.get("marketing_type", "")).strip_edges()
+		if mt == "airplane":
+			requested = 2
+
+	var changed := bool(_map_canvas.call("set_ui_outside_margin_override", requested))
+	if changed:
+		_request_map_view_fit()
+
+func _request_map_view_fit() -> void:
+	# MapCanvas 位于 MapView(Content/Canvas) 之下：向上查找带有 fit_to_view() 的父节点并触发。
+	if not is_instance_valid(_map_canvas):
+		return
+	var state: GameState = null
+	if _scene != null and _scene.game_engine != null:
+		state = _scene.game_engine.get_state()
+	var n: Node = _map_canvas.get_parent()
+	while is_instance_valid(n):
+		# 优先走 MapView.set_game_state：可同步 MapView 的 auto-fit 缓存，避免后续 _update_ui 时重复触发 auto-fit。
+		if state != null and n.has_method("set_game_state"):
+			n.call_deferred("set_game_state", state)
+			return
+		if n.has_method("fit_to_view"):
+			n.call_deferred("fit_to_view")
+			return
+		n = n.get_parent()
 
 func _sync_procure_drinks_highlights() -> void:
 	if not is_instance_valid(_map_canvas):

@@ -13,6 +13,7 @@ const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd"
 const MapCanvasTooltipClass = preload("res://ui/scenes/game/map_canvas_tooltip.gd")
 
 const BASE_CELL_SIZE := 40
+const UI_OUTSIDE_RING_MARGIN := 2
 
 var _zoom: float = 1.0
 
@@ -25,6 +26,10 @@ var _player_restaurant_logo_ids: Dictionary = {} # player_id -> logo_id
 var _base_grid_size: Vector2i = Vector2i.ZERO
 var _world_origin: Vector2i = Vector2i.ZERO # view(0,0) 对应的 world_pos
 var _external_cells_by_pos: Dictionary = {} # Vector2i -> cell dict
+
+var _ui_outside_margin_override: int = 0 # 由 UI 模式请求的额外边距（例如飞机营销选点）
+var _ui_outside_margin_required: int = 0 # 由当前地图内容决定的边距（例如已放置飞机营销）
+var _ui_outside_margin_applied: int = 0
 
 var _selected_pos: Vector2i = Vector2i(-1, -1) # world_pos
 var _hover_pos: Vector2i = Vector2i(-1, -1) # world_pos
@@ -131,15 +136,9 @@ func set_map_data(map_data: Dictionary) -> void:
 	_base_grid_size = grid_size
 	_cells = cells
 	_external_cells_by_pos = MapCanvasIndexerClass.parse_external_cells(map_data)
+	_ui_outside_margin_required = _compute_required_ui_outside_margin(map_data)
 
-	var map_origin: Vector2i = map_data.get("map_origin", Vector2i.ZERO)
-	var bounds := MapCanvasIndexerClass.compute_bounds(_base_grid_size, map_origin, _external_cells_by_pos)
-	_world_origin = bounds.get("min", Vector2i.ZERO)
-	_grid_size = bounds.get("size", _base_grid_size)
-
-	custom_minimum_size = Vector2(float(_grid_size.x * get_cell_size()), float(_grid_size.y * get_cell_size()))
-
-	MapCanvasIndexerClass.rebuild_overlay_indexes(self)
+	_apply_bounds_for_current_margin(true)
 	queue_redraw()
 
 func clear() -> void:
@@ -151,6 +150,9 @@ func clear() -> void:
 	_base_grid_size = Vector2i.ZERO
 	_world_origin = Vector2i.ZERO
 	_external_cells_by_pos.clear()
+	_ui_outside_margin_override = 0
+	_ui_outside_margin_required = 0
+	_ui_outside_margin_applied = 0
 	_marketing_by_pos.clear()
 	_structures_by_anchor.clear()
 	_selected_pos = Vector2i(-1, -1)
@@ -175,6 +177,17 @@ func set_zoom(zoom: float) -> void:
 	if _grid_size != Vector2i.ZERO:
 		custom_minimum_size = Vector2(float(_grid_size.x * get_cell_size()), float(_grid_size.y * get_cell_size()))
 	queue_redraw()
+
+func set_ui_outside_margin_override(margin: int) -> bool:
+	# 用于动态控制“地图外围 UI-only 空圈”的显示与交互区域（issue_tracker #64）。
+	var m := maxi(0, int(margin))
+	if _ui_outside_margin_override == m:
+		return false
+	_ui_outside_margin_override = m
+	return _apply_bounds_for_current_margin()
+
+func get_ui_outside_margin_applied() -> int:
+	return _ui_outside_margin_applied
 
 func get_world_origin() -> Vector2i:
 	return _world_origin
@@ -373,3 +386,42 @@ func get_base_size() -> Vector2:
 
 func get_grid_size() -> Vector2i:
 	return _grid_size
+
+func _get_effective_ui_outside_margin() -> int:
+	return maxi(int(_ui_outside_margin_override), int(_ui_outside_margin_required))
+
+func _compute_required_ui_outside_margin(map_data: Dictionary) -> int:
+	# 目前仅飞机营销需要绘制到棋盘外侧；未来其它外围 piece 可在此扩展（issue_tracker #64）。
+	if map_data.is_empty():
+		return 0
+	var placements_val = map_data.get("marketing_placements", null)
+	if not (placements_val is Dictionary):
+		return 0
+	var placements: Dictionary = placements_val
+	for k in placements.keys():
+		var pv = placements.get(k, null)
+		if not (pv is Dictionary):
+			continue
+		var p: Dictionary = pv
+		if str(p.get("type", "")).strip_edges() == "airplane":
+			return UI_OUTSIDE_RING_MARGIN
+	return 0
+
+func _apply_bounds_for_current_margin(force_rebuild: bool = false) -> bool:
+	if _map_data.is_empty() or _base_grid_size == Vector2i.ZERO:
+		return false
+
+	var eff := _get_effective_ui_outside_margin()
+	if not force_rebuild and eff == _ui_outside_margin_applied:
+		return false
+
+	var map_origin: Vector2i = _map_data.get("map_origin", Vector2i.ZERO)
+	var bounds := MapCanvasIndexerClass.compute_bounds(_base_grid_size, map_origin, _external_cells_by_pos, eff)
+	_world_origin = bounds.get("min", Vector2i.ZERO)
+	_grid_size = bounds.get("size", _base_grid_size)
+	_ui_outside_margin_applied = eff
+
+	custom_minimum_size = Vector2(float(_grid_size.x * get_cell_size()), float(_grid_size.y * get_cell_size()))
+	MapCanvasIndexerClass.rebuild_overlay_indexes(self)
+	queue_redraw()
+	return true

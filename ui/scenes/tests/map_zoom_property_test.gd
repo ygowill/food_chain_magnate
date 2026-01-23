@@ -40,10 +40,17 @@ static func run() -> Result:
 		_safe_free(canvas)
 		return Result.failure("MapCanvas base cell_size=%d (期望 40)" % base_cell_size)
 
-	# With implicit external margin=2, view size becomes (2+4)x(2+4)=6x6.
-	var expected_cells := 6
-	if canvas.custom_minimum_size != Vector2(float(expected_cells * base_cell_size), float(expected_cells * base_cell_size)):
-		var expected_min := Vector2(float(expected_cells * base_cell_size), float(expected_cells * base_cell_size))
+	# 视图尺寸会包含“UI 外圈边距”（用于飞机营销等棋盘外 piece）。
+	# - 默认情况下可能为 0（issue_tracker #64：无外围 piece 时不展示空圈）
+	# - 需要时可能为 2（飞机营销 thickness=2）
+	var applied_margin := 0
+	if canvas.has_method("get_ui_outside_margin_applied"):
+		applied_margin = int(canvas.call("get_ui_outside_margin_applied"))
+
+	var expected_cells_x := 2 + applied_margin * 2
+	var expected_cells_y := 2 + applied_margin * 2
+	var expected_min := Vector2(float(expected_cells_x * base_cell_size), float(expected_cells_y * base_cell_size))
+	if canvas.custom_minimum_size != expected_min:
 		var actual_min = canvas.custom_minimum_size
 		_safe_free(canvas)
 		return Result.failure("MapCanvas.custom_minimum_size=%s (期望 %s)" % [str(actual_min), str(expected_min)])
@@ -54,7 +61,7 @@ static func run() -> Result:
 		_safe_free(canvas)
 		return Result.failure("MapCanvas zoom(1.5) cell_size=%d (期望 60)" % zoom_cell_size)
 
-	var expected_min2 := Vector2(float(expected_cells * zoom_cell_size), float(expected_cells * zoom_cell_size))
+	var expected_min2 := Vector2(float(expected_cells_x * zoom_cell_size), float(expected_cells_y * zoom_cell_size))
 	if not canvas.custom_minimum_size.is_equal_approx(expected_min2):
 		var actual_min2 = canvas.custom_minimum_size
 		_safe_free(canvas)

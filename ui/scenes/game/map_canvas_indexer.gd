@@ -22,7 +22,7 @@ static func parse_external_cells(map_data: Dictionary) -> Dictionary:
 			out[pos] = cell_val
 	return out
 
-static func compute_bounds(base_grid_size: Vector2i, map_origin: Vector2i, external_cells: Dictionary) -> Dictionary:
+static func compute_bounds(base_grid_size: Vector2i, map_origin: Vector2i, external_cells: Dictionary, ui_margin: int = 0) -> Dictionary:
 	var min_pos := Vector2i.ZERO
 	var max_pos := Vector2i(max(0, base_grid_size.x - 1), max(0, base_grid_size.y - 1))
 	if base_grid_size != Vector2i.ZERO:
@@ -40,11 +40,12 @@ static func compute_bounds(base_grid_size: Vector2i, map_origin: Vector2i, exter
 		max_pos.x = max(max_pos.x, p.x)
 		max_pos.y = max(max_pos.y, p.y)
 
-	# UI-only: provide a small implicit margin so outside-the-map pieces (e.g. airplane marketing)
+	# UI-only: optionally provide an implicit margin so outside-the-map pieces (e.g. airplane marketing)
 	# can be displayed and interacted with, without polluting core map.external_cells.
-	var margin := 2
-	min_pos -= Vector2i(margin, margin)
-	max_pos += Vector2i(margin, margin)
+	var margin := maxi(0, int(ui_margin))
+	if margin > 0:
+		min_pos -= Vector2i(margin, margin)
+		max_pos += Vector2i(margin, margin)
 	var size := max_pos - min_pos + Vector2i.ONE
 	return {"min": min_pos, "max": max_pos, "size": size}
 
