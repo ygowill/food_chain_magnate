@@ -80,7 +80,7 @@
 | 63 | 上方工具栏移除“确认结束/调试”按钮 | UI/清理 | `Game.tscn` TopBar 仍保留旧入口；功能与 ActionPanel/DebugPanel 重复 | 待确认 |
 | 64 | 地图外圈不可见格导致地图缩小：外圈为空时应放大，只有需要/已有外圈 piece 才完整显示 | UI/交互+渲染 | `MapCanvasIndexer.compute_bounds()` 无条件添加 UI-only margin=2 外圈；`MapView.fit_to_view()` 基于 `_grid_size` 导致整体缩小；需可切换 bounds/margin 并与现有缩放/auto-fit 协同 | 待实施（已澄清） |
 | 65 | 动作面板：跳过子阶段/确认结束按钮顺序错误（未固定到底部） | UI/交互 | ActionPanel 直接使用 ActionRegistry 提供的 action_id 列表顺序（仅把 mandatory 前置），未对 skip_sub_phase/skip 做末尾固定排序 | Implemented（待手动验收） |
-| 66 | 顶部工具栏：里程碑面板应全屏网格展示（3列居中）并同步获得状态 | UI/布局+信息 | 复用 `MilestonePanel` 以 `dock_right` 布局打开；当前为竖向列表且缺少“卡片式网格/全屏/已获得餐厅 icon”等展示 | 待实施（已澄清） |
+| 66 | 顶部工具栏：里程碑面板应全屏网格展示（3列居中）并同步获得状态 | UI/布局+信息 | 复用 `MilestonePanel` 以 `dock_right` 布局打开；当前为竖向列表且缺少“卡片式网格/全屏/已获得餐厅 icon”等展示 | Implemented（待手动验收） |
 | 67 | 顶部工具栏：新增“保留区”按钮，分类展示未使用 piece（房屋/花园/广告牌等） | UI/信息+功能 | 目前缺少统一的“供给/剩余 piece”视图；剩余数量分散在 `state.map.*_supply_remaining` 与各系统（marketing boards 等） | 待实施（已澄清） |
 | 68 | 日志面板缺少“隐藏/关闭”按钮 | UI/交互 | `GameLogPanel` 仅提供“全屏/清空/过滤”，没有 close；用户只能再次点 TopBar 的“日志”进行隐藏 | 待实施 |
 
@@ -1176,14 +1176,12 @@
 - TopBar 的里程碑入口复用了 `MilestonePanel`（列表型组件）并设置为 `dock_right` 弹窗布局；因此它天然会占用右侧抽屉区域，且视觉结构与“卡片式全屏浏览”目标不一致。
 - `MilestonePanel.MilestoneItem` 在 global_view 下仅输出“已获得：玩家名…”，没有餐厅/玩家 icon 的渲染能力。
 
-**修复方案（草案）**
+**修复方案**
 
-- 新增一个全屏容器面板（例如 `MilestoneFullScreenView`），打开方式参考 `GamePanelController.toggle_employee_tree()`：
-	- 全屏 anchors + 覆盖显示；提供关闭按钮与（可选）ESC 关闭；
-	- 内部使用 `GridContainer(columns=3)` 或 `FlowContainer` 实现“每行 3 列 + 居中”；
-	- 复用 `MilestonePanel` 的数据处理逻辑（milestone_pool + players.milestones）但改为“卡片式 item UI”。
-- 全局视图中，将“获得者”展示由文字改为 icon（优先用玩家餐厅 logo）：
-	- icon 数据来源：`players[*].restaurant_logo_id`（已存在于 state），贴图来源复用 `MapSkin.get_piece_texture(MapCanvasDrawer.RESTAURANT_LOGO_PIECE_IDS[logo_id])`。
+- 新增全屏容器面板 `MilestoneFullScreenView`（TopBar 打开，不占用右侧动作面板区域）：
+	- 全屏覆盖显示（3 列网格 + 居中 + 可滚动）
+	- `ESC` 关闭，关闭只隐藏该视图，不影响底层左/右侧面板显示状态
+	- 卡片右下角显示“已获得该里程碑的玩家”的餐厅 logo（每玩家 1 个 icon）
 
 **已澄清**
 
@@ -1192,9 +1190,33 @@
 - 不展示供应池剩余数量。
 - 支持 `ESC` 关闭；关闭后左/右侧面板的显示状态保持原样。
 
+**实施记录**
+
+- 已新增：`ui/components/milestone_panel/milestone_full_screen_view.tscn`
+- 已新增：`ui/components/milestone_panel/milestone_full_screen_view.gd`
+	- 里程碑卡片：每行 3 列（GridContainer）并居中展示
+	- 同步 state：基于 `state.milestone_pool` + `players[*].milestones` 构建展示列表与获得者
+	- 获得者 icon：读取 `players[*].restaurant_logo_id`，用 `MapSkin.get_piece_texture(MapCanvasDrawer.RESTAURANT_LOGO_PIECE_IDS[logo_id])` 渲染
+	- `ESC` / 关闭按钮隐藏视图
+- 已修改：`ui/scenes/game/game_panel_controller.gd`
+	- `show_milestone_panel()` 改为打开全屏视图（不再 dock_right）
+	- 新增 `hide_top_overlays_if_open()`：供 `ESC` 优先关闭全屏浏览视图（避免误触发 hide_all 影响底层面板）
+- 已修改：`ui/scenes/game/game.gd`：`ESC` 处理增加 `hide_top_overlays_if_open()` 优先级
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：PASS（109/109，`.godot/AllTests.log`）
+
+**验收**
+
+- 点击 TopBar “里程碑”：打开全屏视图（每行 3 列、居中、可滚动），不占用右侧动作面板区域
+- 卡片同步显示“已获得/未获得”，右下角显示获得者玩家餐厅 logo（每玩家 1 个 icon）
+- `ESC` / 点击“×”关闭：关闭后左/右侧面板显示状态保持原样
+
 **状态**
 
-- 待澄清
+- Implemented（待手动验收）
 
 ---
 

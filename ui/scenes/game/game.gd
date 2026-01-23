@@ -1068,6 +1068,12 @@ func _handle_escape() -> bool:
 			dlg.hide()
 			return true
 
+	# 关闭全屏浏览视图（例如里程碑/保留区），避免影响底层面板/选中状态。
+	if _panel_controller != null and _panel_controller.has_method("hide_top_overlays_if_open"):
+		var closed = _panel_controller.call("hide_top_overlays_if_open")
+		if closed is bool and bool(closed):
+			return true
+
 	# 关闭阶段面板/取消地图模式
 	if _panel_controller != null:
 		var map_mode_active := (_map_controller != null and not str(_map_controller.get_mode()).is_empty())
