@@ -146,6 +146,7 @@ func _ready() -> void:
 
 	_event_log_controller = GameEventLogControllerClass.new()
 	_event_log_controller.setup(game_log_panel, should_restore_log_history)
+	UiSignalHelpersClass.safe_connect(game_log_panel, "close_requested", toggle_game_log)
 
 	_initialize_game()
 	if game_engine != null:

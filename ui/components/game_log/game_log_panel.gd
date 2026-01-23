@@ -3,6 +3,7 @@
 class_name GameLogPanel
 extends Control
 
+signal close_requested()
 signal log_entry_clicked(entry_id: int)
 signal log_added(entry: Dictionary)
 
@@ -12,6 +13,7 @@ signal log_added(entry: Dictionary)
 @onready var filter_btn: MenuButton = $MarginContainer/VBoxContainer/TitleRow/FilterRow/FilterButton
 @onready var expand_btn: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/ExpandButton
 @onready var clear_btn: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/ClearButton
+@onready var close_btn: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/CloseButton
 @onready var scroll_container: ScrollContainer = $MarginContainer/VBoxContainer/ScrollContainer
 @onready var log_container: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/LogContainer
 @onready var auto_scroll_check: CheckBox = $MarginContainer/VBoxContainer/BottomRow/AutoScrollCheck
@@ -71,6 +73,8 @@ func _ready() -> void:
 
 	if expand_btn != null:
 		expand_btn.pressed.connect(_on_expand_pressed)
+	if close_btn != null:
+		close_btn.pressed.connect(_on_close_pressed)
 
 	if player_filter != null:
 		player_filter.item_selected.connect(_on_player_filter_selected)
@@ -320,6 +324,9 @@ func _on_auto_scroll_toggled(toggled: bool) -> void:
 
 func _on_clear_pressed() -> void:
 	clear_logs()
+
+func _on_close_pressed() -> void:
+	close_requested.emit()
 
 func _on_expand_pressed() -> void:
 	if OS.has_feature("headless"):

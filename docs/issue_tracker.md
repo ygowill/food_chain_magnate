@@ -1308,15 +1308,26 @@
 - 在 `GameLogPanel` 顶部按钮行增加“隐藏/×”按钮，并新增信号（例如 `close_requested`）。
 - `Game` 在初始化时连接该信号，调用 `toggle_game_log()` 以恢复 LeftPanel/关闭日志面板（保持现有切换逻辑一致）。
 
+**实施记录**
+
+- 已修改：`ui/components/game_log/game_log_panel.tscn`：在顶部按钮行增加 `CloseButton(×)`
+- 已修改：`ui/components/game_log/game_log_panel.gd`：新增 `signal close_requested()`，并在按钮点击时 emit
+- 已修改：`ui/scenes/game/game.gd`：连接 `game_log_panel.close_requested` -> `toggle_game_log()`
+
 **验收**
 
 - 日志面板右上角（或顶部按钮行）存在“隐藏/×”按钮；
 - 点击后日志面板关闭，左侧玩家信息面板恢复显示；
 - 现有 TopBar “日志”按钮仍可正常开关。
 
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：PASS（`.godot/AllTests.log`）
+
 **状态**
 
-- 待实施
+- Implemented（待手动验收）
 
 ---
 
