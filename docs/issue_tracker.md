@@ -1177,6 +1177,7 @@
 
 - 距离工具提示与玩家顺位区域重叠导致难以阅读。
 - 需要重新点击起点才能取消/重新测距；测距结果显示在中点难以定位；起点无高亮提示。
+- 路径线较细、距离数字偏小；测距完成后起点/终点高亮会消失。
 
 **澄清（来自用户 #59）**
 
@@ -1191,15 +1192,21 @@
 **修复方案**
 
 - `distance_tool`：仅接受道路格；起点选中后高亮；终点选定后立即清空起点（下一次点任意道路格即重新开始）。
+- 测距完成后保留“起点+终点”高亮，直到下一次测距开始。
 - `DistanceOverlay`：结果标签改为终点上方，并增加背景面板。
+- `DistanceOverlay`：加粗路径线，并放大距离数字。
 - `MapModeBar`：Bar 增加半透明背景，并更新提示文案。
+- `MapModeBar`：提高 z_index，确保提示文本不会被回合顺位覆盖。
 
 **实施记录**
 
 - 已修改：`ui/scenes/game/game_map_interaction_controller.gd`
 - 已修改：`ui/scenes/game/game_map_interaction_controller.gd`：修复 `set_piece_overlay` 通过 `call()` 传参时必须使用 `Array[Vector2i]`（避免距离工具点击报错）
+- 已修改：`ui/scenes/game/game_map_interaction_controller.gd`：测距完成后保留起点/终点高亮
 - 已修改：`ui/overlays/distance_overlay.gd`
+- 已修改：`ui/overlays/distance_overlay.gd`：加粗路径线、放大距离数字
 - 已修改：`ui/components/map_mode_bar/map_mode_bar.tscn`
+- 已修改：`ui/components/map_mode_bar/map_mode_bar.gd`：提高 z_index，确保提示条显示在最上层
 - 已修改：`ui/scenes/game/game.gd`：更新距离工具提示文案
 
 **验证**
@@ -1285,15 +1292,19 @@
 
 - `skip` 被“未完成强制动作”阻断；其中定价/折扣/奢侈品等强制动作属于可自动补完，但 UI 层仍将 `skip` 置灰导致软锁。
 - Working 的某些子阶段（例如 Train）可能出现“无任何可执行动作”；此时 `skip` 会因“非最后子阶段”被 validate 拒绝，而 UI 又错误隐藏了 `skip_sub_phase`，导致无法推进子阶段。
+- 更深层：`ActionRegistry.get_player_initiatable_actions` 会把 `set_discount/set_price/set_luxury_price` 视为“可启动动作”，从而阻止引擎侧 `AutoAdvance` 自动跳过空子阶段（玩家只能手动一路 skip_sub_phase）。
 
 **修复方案**
 
 - 当 `skip` 仅因缺少这些“可自动补完”的强制动作而不可用时，ActionPanel 允许点击 `skip`；由 Game 在 `skip` 前自动补完对应强制动作。
 - Working 阶段始终保留“跳过子阶段（skip_sub_phase）”按钮（即使当前子阶段无任何可执行动作），避免软锁。
+- 引擎侧：在 `AutoAdvance` 中自动补完上述“可无参执行”的强制动作（等价于回合开始时自动触发），避免其阻断空子阶段的自动推进。
 
 **实施记录**
 
 - 已修改：`ui/components/action_panel/action_panel.gd`
+- 已修改：`core/engine/game_engine/auto_advance.gd`：自动执行 `set_price/set_discount/set_luxury_price`（使空子阶段可被 AutoAdvance 自动跳过）
+- 已修改：`core/tests/mandatory_actions_test.gd`：更新断言以适配“强制动作自动补完”的新行为
 
 **验证**
 
