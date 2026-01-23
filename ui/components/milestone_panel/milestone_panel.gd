@@ -5,6 +5,8 @@ extends Control
 
 signal cancelled()
 
+@onready var background: ColorRect = $Background
+@onready var margin_container: MarginContainer = $MarginContainer
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var milestones_container: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/MilestonesContainer
 @onready var button_row: Control = $MarginContainer/VBoxContainer/ButtonRow
@@ -15,6 +17,8 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 
 @export var show_close_button: bool = true
+# LeftPanel 的 “里程碑” Tab 复用同一面板：需要去掉自身背景/边距与最小尺寸，避免与 LeftPanel 风格不一致且产生溢出（issue_tracker #58）。
+@export var embedded_in_player_panel: bool = false
 
 var _milestone_pool: Array[String] = []
 var _player_milestones: Array[String] = []
@@ -23,10 +27,14 @@ var _global_view: bool = false
 var _rules: Dictionary = {}
 var _milestone_items: Dictionary = {}  # milestone_id -> MilestoneItem
 var _embedded_in_right_panel: bool = false
+var _base_custom_minimum_size: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
+	if _base_custom_minimum_size == Vector2.ZERO:
+		_base_custom_minimum_size = custom_minimum_size
 	if close_btn != null:
 		close_btn.pressed.connect(_on_close_pressed)
+	_apply_embedded_layout()
 	_update_close_visibility()
 	_rebuild_milestones()
 
@@ -45,6 +53,7 @@ func set_rules(rules: Dictionary) -> void:
 
 func set_embedded_in_right_panel(embedded: bool) -> void:
 	_embedded_in_right_panel = embedded
+	_apply_embedded_layout()
 	_update_close_visibility()
 
 func set_milestone_pool(pool: Array) -> void:
@@ -66,6 +75,37 @@ func _update_close_visibility() -> void:
 	if not is_instance_valid(button_row):
 		return
 	button_row.visible = show_close_button and not _embedded_in_right_panel
+
+func _apply_embedded_layout() -> void:
+	# 尺寸：嵌入布局时不要用自己的 custom_minimum_size 把父容器撑爆。
+	if _base_custom_minimum_size == Vector2.ZERO:
+		_base_custom_minimum_size = custom_minimum_size
+	if _embedded_in_right_panel or embedded_in_player_panel:
+		custom_minimum_size = Vector2.ZERO
+	else:
+		custom_minimum_size = _base_custom_minimum_size
+
+	# 样式：PlayerPanel(Tab) 里由 LeftPanel 负责背景与外边距。
+	if embedded_in_player_panel:
+		if is_instance_valid(background):
+			background.visible = false
+		if is_instance_valid(title_label):
+			title_label.visible = false
+		if is_instance_valid(margin_container):
+			margin_container.add_theme_constant_override("margin_left", 0)
+			margin_container.add_theme_constant_override("margin_top", 0)
+			margin_container.add_theme_constant_override("margin_right", 0)
+			margin_container.add_theme_constant_override("margin_bottom", 0)
+	else:
+		if is_instance_valid(background):
+			background.visible = true
+		if is_instance_valid(title_label):
+			title_label.visible = true
+		if is_instance_valid(margin_container):
+			margin_container.add_theme_constant_override("margin_left", 16)
+			margin_container.add_theme_constant_override("margin_top", 16)
+			margin_container.add_theme_constant_override("margin_right", 16)
+			margin_container.add_theme_constant_override("margin_bottom", 16)
 
 func _rebuild_milestones() -> void:
 	if milestones_container == null:

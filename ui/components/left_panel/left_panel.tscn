@@ -256,6 +256,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 show_close_button = false
+embedded_in_player_panel = true
 
 [node name="TurnLogSection" type="PanelContainer" parent="MarginContainer/HBoxContainer/Content"]
 layout_mode = 2
