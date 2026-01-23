@@ -616,6 +616,28 @@ func _get_fallback_actions(phase: String, sub_phase: String) -> Array[String]:
 
 	return result
 
+func _sort_action_ids_for_display(action_ids: Array[String]) -> Array[String]:
+	# 固定 UI 顺序：把“跳过子阶段/确认结束”放在列表底部，并保持 skip_sub_phase 在 skip 上方。
+	# 其它动作保持相对顺序不变（避免无关面板顺序抖动）。
+	var out: Array[String] = []
+	var has_skip_sub := false
+	var has_skip := false
+	for v in action_ids:
+		var aid := str(v)
+		if aid == "skip_sub_phase":
+			has_skip_sub = true
+			continue
+		if aid == "skip":
+			has_skip = true
+			continue
+		out.append(aid)
+
+	if has_skip_sub:
+		out.append("skip_sub_phase")
+	if has_skip:
+		out.append("skip")
+	return out
+
 func _rebuild_action_buttons(action_ids: Array[String]) -> void:
 	# 清除旧按钮
 	UiRebuildHelpersClass.free_nodes_dict(_action_buttons)
@@ -623,8 +645,10 @@ func _rebuild_action_buttons(action_ids: Array[String]) -> void:
 	if items_container == null:
 		return
 
+	var ids := _sort_action_ids_for_display(action_ids)
+
 	# 创建新按钮
-	for action_id in action_ids:
+	for action_id in ids:
 		var btn := ActionButton.new()
 		btn.action_id = action_id
 		btn.display_name = ACTION_DISPLAY_NAMES.get(action_id, action_id)

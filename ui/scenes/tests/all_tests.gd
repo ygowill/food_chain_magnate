@@ -31,6 +31,7 @@ const RoundStateFailFastTestClass = preload("res://core/tests/round_state_fail_f
 const CleanupInventoryTestClass = preload("res://core/tests/cleanup_inventory_test.gd")
 const FireActionTestClass = preload("res://core/tests/fire_action_test.gd")
 const CompanyStructureTestClass = preload("res://core/tests/company_structure_test.gd")
+const ActionPanelEndButtonsOrderTestClass = preload("res://ui/scenes/tests/action_panel_end_buttons_order_test.gd")
 const HandAreaViewSwitchTestClass = preload("res://ui/scenes/tests/hand_area_view_switch_test.gd")
 const DragPreviewVisualTestClass = preload("res://ui/scenes/tests/drag_preview_visual_test.gd")
 const EmployeePickerMinSizeTestClass = preload("res://ui/scenes/tests/employee_picker_min_size_test.gd")
@@ -257,6 +258,10 @@ func _run_all() -> int:
 		{
 			"name": "CompanyStructureTest",
 			"fn": func() -> Result: return CompanyStructureTestClass.run(2, 12345),
+		},
+		{
+			"name": "ActionPanelEndButtonsOrderTest",
+			"fn": func() -> Result: return ActionPanelEndButtonsOrderTestClass.run(),
 		},
 		{
 			"name": "HandAreaViewSwitchTest",

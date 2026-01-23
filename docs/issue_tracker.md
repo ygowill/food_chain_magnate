@@ -79,7 +79,7 @@
 | 62 | 折扣经理：无法结束回合（疑似强制动作未自动触发/Skip 在动作面板被禁用） | 规则+UI 流程 | `ActionRegistry.get_player_initiatable_actions()` 以 `SkipAction.validate` 判定可点；强制动作未完成时 skip 校验失败导致按钮灰；而 `set_discount` 又被隐藏且仅 UI 层尝试 auto-run -> 形成死锁 | 待实施（已复现） |
 | 63 | 上方工具栏移除“确认结束/调试”按钮 | UI/清理 | `Game.tscn` TopBar 仍保留旧入口；功能与 ActionPanel/DebugPanel 重复 | 待确认 |
 | 64 | 地图外圈不可见格导致地图缩小：外圈为空时应放大，只有需要/已有外圈 piece 才完整显示 | UI/交互+渲染 | `MapCanvasIndexer.compute_bounds()` 无条件添加 UI-only margin=2 外圈；`MapView.fit_to_view()` 基于 `_grid_size` 导致整体缩小；需可切换 bounds/margin 并与现有缩放/auto-fit 协同 | 待实施（已澄清） |
-| 65 | 动作面板：跳过子阶段/确认结束按钮顺序错误（未固定到底部） | UI/交互 | ActionPanel 直接使用 ActionRegistry 提供的 action_id 列表顺序（仅把 mandatory 前置），未对 skip_sub_phase/skip 做末尾固定排序 | 待实施 |
+| 65 | 动作面板：跳过子阶段/确认结束按钮顺序错误（未固定到底部） | UI/交互 | ActionPanel 直接使用 ActionRegistry 提供的 action_id 列表顺序（仅把 mandatory 前置），未对 skip_sub_phase/skip 做末尾固定排序 | Implemented（待手动验收） |
 | 66 | 顶部工具栏：里程碑面板应全屏网格展示（3列居中）并同步获得状态 | UI/布局+信息 | 复用 `MilestonePanel` 以 `dock_right` 布局打开；当前为竖向列表且缺少“卡片式网格/全屏/已获得餐厅 icon”等展示 | 待实施（已澄清） |
 | 67 | 顶部工具栏：新增“保留区”按钮，分类展示未使用 piece（房屋/花园/广告牌等） | UI/信息+功能 | 目前缺少统一的“供给/剩余 piece”视图；剩余数量分散在 `state.map.*_supply_remaining` 与各系统（marketing boards 等） | 待实施（已澄清） |
 | 68 | 日志面板缺少“隐藏/关闭”按钮 | UI/交互 | `GameLogPanel` 仅提供“全屏/清空/过滤”，没有 close；用户只能再次点 TopBar 的“日志”进行隐藏 | 待实施 |
@@ -1135,9 +1135,22 @@
 	- 若存在 `skip_sub_phase/skip`：两者出现在列表底部且顺序固定；
 	- 若只存在其中一个：该按钮出现在列表底部。
 
+**实施记录**
+
+- 已修改：`ui/components/action_panel/action_panel.gd`
+	- 新增 `_sort_action_ids_for_display()`：将 `skip_sub_phase/skip` 固定追加到列表末尾，且顺序固定为 `skip_sub_phase` → `skip`
+	- `_rebuild_action_buttons()` 在创建按钮前应用该排序（覆盖 `refresh()` 与 `set_available_actions()` 两条路径）
+- 已新增：`ui/scenes/tests/action_panel_end_buttons_order_test.gd`（覆盖 #65）
+- 已修改：`ui/scenes/tests/all_tests.gd`：纳入 `ActionPanelEndButtonsOrderTest`
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：PASS（109/109，`.godot/AllTests.log`）
+
 **状态**
 
-- 待实施
+- Implemented（待手动验收）
 
 ---
 
