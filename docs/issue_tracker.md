@@ -1528,6 +1528,48 @@
 
 - Implemented（待手动验收）
 
+---
+
+## 72. 性能：开局加载仍慢（定位主要耗时并进一步优化）
+
+**现象**
+
+- 经过 #71 的“非关键面板后台预热”后，进入对局的开局加载体感仍偏慢。
+
+**初步根因假设（待定位验证）**
+
+- 主线程阻塞点仍主要集中在“开局必须完成”的同步工作：
+	- `GameEngine.initialize_new_game()`：模块系统 V2 装配（ContentCatalog/Ruleset/Registry）、地图生成+烘焙、以及初始化后的若干统计/校验步骤；
+	- `MapSkinBuilder.build_for_modules()`：加载 VisualCatalog 并同步 `load()` 大量 Texture2D（贴图解码/IO），属于开局地图渲染必需（当前在 `Game._update_ui -> map_view.set_game_state -> map_canvas._ensure_skin` 路径触发）。
+- `Game._update_ui()` 当前先刷新地图（触发 MapSkin 构建）再 `panel_controller.sync()`；若开局处于 Setup/ReserveCards，玩家真正需要的第一个交互是“储备卡选择”，但它可能被“地图贴图加载”阻塞而延后显示。
+- 初始化期 INFO 日志较多（例如 ActionRegistry 注册大量执行器/校验器时逐条 `GameLog.info`），在某些环境下可能放大 IO/字符串格式化成本。
+
+**定位方案（先做，输出可量化数据）**
+
+- 增加“启动性能打点日志”（毫秒级）：
+	- `ui/scenes/game/game.gd`：`_ready()` 内分段记录：controllers 初始化、`game_engine.initialize`、`_update_ui`、`map_view.set_game_state`、`panel_controller.sync` 等耗时；
+	- `core/engine/game_engine/initializer.gd`：分段记录：modules_v2 apply、GameData.from_catalog、state/create、map_generate/bake/apply、invariants/compute_hash 等；
+	- `ui/visual/map_skin_builder.gd` / `ui/visual/map_skin.gd`：记录 VisualCatalog 加载耗时、贴图 load 数量与总耗时。
+- 打点仅在 debug 或显式开关下启用（避免污染正式体验）。
+- 基于日志输出在本 issue 内记录“Top N 耗时段”，再选择最有效的优化手段。
+
+**候选优化方案（待用户确认取舍后实施）**
+
+1. 优先交互（Setup/ReserveCards）：优先弹出储备卡选择，再异步/延后地图贴图加载
+	- 在 `Game._update_ui()` 调整顺序：先 `panel_controller.sync(state)`（确保 ReserveCard modal 尽快出现）；
+	- MapSkin 构建延后到弹窗出现后再开始（或在弹窗显示期间后台加载，但不允许显示 placeholder：地图区域可先隐藏/保持 loading）。
+2. 缓存/复用开局重资源（同一模块集合下多次开局显著加速）
+	- 缓存 `ContentCatalog/RulesetV2/GameData`（按 base_dir + modules key）；新局复用，避免重复 JSON 解析与 Registry 构建；
+	- 缓存 `MapSkin`（按 base_dir + modules key），避免重复贴图加载；内存换时间。
+3. 减少初始化期的非必要重计算
+	- `GAME_STARTED` 事件中的 `state_hash` 可延后或仅 debug 计算（避免初始化阶段 `state.compute_hash()` 的 JSON stringify + md5 成本）。
+4. 降低初始化日志 IO
+	- 将 `ActionRegistry.register_executor` 等初始化期的逐条 INFO 日志降级为 DEBUG 或聚合输出（例如只打印总数/耗时）。
+
+**状态**
+
+- Planned（待用户确认先做定位打点，或直接选一条优化路径）
+
 ## 57. Working：生产/采购员工选择应按“实例”消耗（用过的那张变灰且不可点）
 
 **现象**
