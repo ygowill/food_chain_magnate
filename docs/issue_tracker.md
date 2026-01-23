@@ -1103,6 +1103,279 @@
 
 ---
 
+## 57. Working：生产/采购员工选择应按“实例”消耗（用过的那张变灰且不可点）
+
+**现象**
+
+- 在 Working 的“生产食物/采购饮料”动作中，若同类型员工有多张卡（例如 2 个厨师），执行一次后无法只灰掉“本次实际使用的那一张”，玩家难以判断剩余可用实例。
+
+**澄清（来自用户 #57）**
+
+- 若有 2 个厨师，生产一次后应灰掉“我选中并使用”的那张卡。
+
+**根因**
+
+- UI 选择器以 `employee_id` 作为唯一 key，重复类型会被合并，无法追踪“哪一张实例被消耗”。
+- 面板关闭/重开后缺少“本子阶段已用实例”的持久状态。
+
+**修复方案**
+
+- `EmployeePicker` 支持 per-item `key`（同类型多实例用不同 key），并在 `ProductionPanel` 内按实例 key 追踪“已使用”并禁用。
+- 使用 `usage_token(player_id|round|phase|sub_phase)` 在切换玩家/回合/子阶段时自动清空 used 状态。
+
+**实施记录**
+
+- 已修改：`ui/components/employee_picker/employee_picker.gd`：支持 `item.key`、内部追踪 `selected_item_key`，并提供 `get_selected_key()/get_selected_employee_id()`
+- 已修改：`ui/components/employee_picker/employee_picker.gd`：禁用态由 `EmployeePickerItem` 自身 `modulate` 灰显（避免 `EmployeeCard.set_selected()` 重置 modulate 导致“不可点但不变灰”）
+- 已修改：`ui/components/production_panel/production_panel.gd`：按实例渲染员工卡并在成功执行后仅灰掉被选中的实例
+- 已修改：`ui/scenes/game/game_panel_working_panels.gd`：为 ProductionPanel 注入 `usage_token`，并在动作成功后调用 `mark_selected_employee_used()`
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（108/108，`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）
+
+---
+
+## 58. 玩家数据面板：里程碑 Tab 样式不统一且左右溢出
+
+**现象**
+
+- LeftPanel 的里程碑 Tab 与员工 Tab 风格不一致（重复背景/标题/边距），且内容在左右两侧会溢出玩家面板。
+
+**根因**
+
+- `MilestonePanel` 作为独立弹窗面板设计：自带 Background、Title、较大 margin 与非零 `custom_minimum_size`；嵌入 LeftPanel(Tab) 时把父容器最小宽度撑大。
+
+**修复方案**
+
+- 为 `MilestonePanel` 增加 `embedded_in_player_panel` 模式：隐藏自身背景/标题、去掉边距与最小尺寸；由 LeftPanel 统一提供外观。
+
+**实施记录**
+
+- 已修改：`ui/components/milestone_panel/milestone_panel.gd`
+- 已修改：`ui/components/left_panel/left_panel.tscn`：MilestonePanel 实例设置 `embedded_in_player_panel=true`
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（108/108，`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）
+
+---
+
+## 59. 距离工具：交互限制、可见性与提示信息
+
+**现象**
+
+- 距离工具提示与玩家顺位区域重叠导致难以阅读。
+- 需要重新点击起点才能取消/重新测距；测距结果显示在中点难以定位；起点无高亮提示。
+
+**澄清（来自用户 #59）**
+
+- 只允许点道路格。
+- 每次只测一段；测完点任意道路格就重开。
+
+**根因**
+
+- `distance_tool` 逻辑未校验道路格，且仅通过“再次点起点”重置。
+- `DistanceOverlay` 标签无背景且放在起终点中点；`MapModeBar` 默认 PanelContainer 无背景；起点无任何地图高亮。
+
+**修复方案**
+
+- `distance_tool`：仅接受道路格；起点选中后高亮；终点选定后立即清空起点（下一次点任意道路格即重新开始）。
+- `DistanceOverlay`：结果标签改为终点上方，并增加背景面板。
+- `MapModeBar`：Bar 增加半透明背景，并更新提示文案。
+
+**实施记录**
+
+- 已修改：`ui/scenes/game/game_map_interaction_controller.gd`
+- 已修改：`ui/scenes/game/game_map_interaction_controller.gd`：修复 `set_piece_overlay` 通过 `call()` 传参时必须使用 `Array[Vector2i]`（避免距离工具点击报错）
+- 已修改：`ui/overlays/distance_overlay.gd`
+- 已修改：`ui/components/map_mode_bar/map_mode_bar.tscn`
+- 已修改：`ui/scenes/game/game.gd`：更新距离工具提示文案
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（108/108，`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）
+
+---
+
+## 60. 设置：移除 UI 布局选择，强制新布局
+
+**澄清（来自用户 #60）**
+
+- 不需要兼容；强制切到布局版本 2，并清理旧值相关代码。
+
+**实施记录**
+
+- 已修改：`autoload/globals.gd`：强制 `ui_layout_version=2`（忽略旧保存值）
+- 已修改：`ui/dialogs/settings_dialog.gd` / `ui/dialogs/settings_dialog.tscn`：移除 UI 布局选择与保存
+- 已修改：`ui/scenes/game/game_overlay_controller.gd` / `ui/scenes/game/game_panel_controller.gd` / `ui/scenes/game/game.gd`：移除旧布局切换相关逻辑
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（108/108，`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）
+
+---
+
+## 61. 左侧玩家信息面板：拖拽调整宽度卡住（仅希望设置最小宽度）
+
+**现象**
+
+- 左侧玩家信息面板无法缩小；可以向右拉伸，但拉伸到一定距离后无法继续拉长或缩窄。
+
+**澄清（来自用户 #61）**
+
+- 仅希望设置一个最小宽度。
+
+**根因**
+
+- `LEFT_AREA_MAX_WIDTH` 将 split_offset clamp 到上限，导致“拉到一定距离后无法再拉长”。
+- `_on_main_content_dragged()` 把 `LeftArea.custom_minimum_size.x` 写成“当前宽度”，等价于把最小宽度抬高，导致拉宽后无法缩回去。
+
+**修复方案**
+
+- 仅保留最小宽度约束：移除 MAX clamp；并保持 `LeftArea.custom_minimum_size.x = LEFT_AREA_MIN_WIDTH`（不再写成当前宽度）。
+
+**实施记录**
+
+- 已修改：`ui/scenes/game/game.gd`：移除 `LEFT_AREA_MAX_WIDTH`；修正 `_on_main_content_dragged()` / `_apply_responsive_layout()` 的 clamp 与 `custom_minimum_size` 赋值方式
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（108/108，`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）
+
+---
+
+## 62. 折扣经理：无法结束回合（确认结束按钮无效/无提示）
+
+**现象**
+
+- 使用折扣经理后无法结束回合（右侧确认结束不可点/顶部确认结束无反应），且没有提示文案。
+- 补充复现（`res://.savings/manual_cases/employees/discount_manager.json`）：Recruit 结束进入 Train 后，若无法培训，动作面板仅剩灰色“培训”与灰色“确认结束”，玩家无法推进流程。
+
+**澄清（来自用户 #62）**
+
+- 右侧的确认结束无法点击，顶部的确认结束点击后无反应；无任何提示文案。
+
+**根因**
+
+- `skip` 被“未完成强制动作”阻断；其中定价/折扣/奢侈品等强制动作属于可自动补完，但 UI 层仍将 `skip` 置灰导致软锁。
+- Working 的某些子阶段（例如 Train）可能出现“无任何可执行动作”；此时 `skip` 会因“非最后子阶段”被 validate 拒绝，而 UI 又错误隐藏了 `skip_sub_phase`，导致无法推进子阶段。
+
+**修复方案**
+
+- 当 `skip` 仅因缺少这些“可自动补完”的强制动作而不可用时，ActionPanel 允许点击 `skip`；由 Game 在 `skip` 前自动补完对应强制动作。
+- Working 阶段始终保留“跳过子阶段（skip_sub_phase）”按钮（即使当前子阶段无任何可执行动作），避免软锁。
+
+**实施记录**
+
+- 已修改：`ui/components/action_panel/action_panel.gd`
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（108/108，`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）
+
+---
+
+## 63. 顶部工具栏：移除“确认结束/调试”按钮
+
+**现象/需求**
+
+- 顶部工具栏右上角存在“确认结束”和“调试”按钮：确认结束在动作面板已有；调试面板已有更完善版本。
+
+**修复方案**
+
+- 移除 TopBar 中对应按钮及其旧调试对话框逻辑。
+
+**实施记录**
+
+- 已修改：`ui/scenes/game/game.tscn`
+- 已修改：`ui/scenes/game/game.gd`
+- 已修改：`ui/scenes/game/game_menu_debug_controller.gd`
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（108/108，`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）
+
+---
+
+## 64. 地图外围动态 fit：无外围 piece 时不显示外圈空格
+
+**现象**
+
+- 为支持飞机广告等在棋盘外放置 piece 的需求，UI 侧引入了“外围不可见区（外圈格）”，导致地图默认缩小显示。
+- 期望：外围不可见区没有任何 piece 时，地图应放大到看起来没有外圈空格；只有在需要放置或已经存在外围 piece 时，才缩小完整显示；进入/退出允许系统自动重新 fit。
+
+**澄清（来自用户 #64）**
+
+- 未来还有别的外圈 piece。
+- 进入/退出时允许系统自动重新 fit。
+
+**根因**
+
+- `MapCanvasIndexer.compute_bounds` 固定添加 UI-only `margin=2`，导致地图永远包含外圈，从而影响 fit/缩放。
+- MapView 的 auto-fit 仅在 `set_game_state/map_size` 变化时触发，无法覆盖“仅切换工具/选点模式”的场景。
+
+**修复方案**
+
+- 将 bounds 的 UI 外圈边距改为可配置；MapCanvas 根据：
+	- 已放置的棋盘外 piece（当前：airplane marketing）决定 required margin
+	- 当前选点模式是否需要棋盘外交互决定 override margin
+	取二者最大值作为实际 margin。
+- 模式进入/退出导致 margin 变化时，触发 MapView auto-fit（通过调用 `MapView.set_game_state` 走其延迟 fit 逻辑），避免出现滚动条/空白区域。
+
+**实施记录**
+
+- 已修改：`ui/scenes/game/map_canvas_indexer.gd`：`compute_bounds` 增加 `ui_margin` 参数（不再默认固定 2）
+- 已修改：`ui/scenes/game/map_canvas.gd`：新增 required/override/applied margin 逻辑并在变更时重算 bounds
+- 已修改：`ui/scenes/game/game_map_interaction_controller.gd`：在 airplane 营销选点模式启用外圈，退出后恢复，并触发 MapView auto-fit
+- 已修改：`ui/scenes/tests/map_zoom_property_test.gd`：更新断言以兼容“外圈边距按需启用”的新行为
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`：PASS（108/108，`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）
+
+---
+
 ## 57.（用户反馈 1）员工行动用尽后：员工卡应灰显且不可点击（多次行动员工例外）
 
 **现象**
