@@ -28,21 +28,34 @@ func _ready() -> void:
 		close_button.pressed.connect(_on_close_pressed)
 	visible = false
 
+func _exit_tree() -> void:
+	# _formatter 不入树（仅用于复用文案格式化逻辑）；需要显式释放，避免 headless 测试退出时报 “resources still in use”。
+	if _formatter != null and is_instance_valid(_formatter):
+		_formatter.free()
+	_formatter = null
+
 func set_skin(skin) -> void:
 	# 允许外部（例如 MapCanvas）注入已构建的 MapSkin，避免重复 build 导致卡顿。
 	_skin = skin
 
-func open_with_state(state: GameState, skin_override = null) -> void:
+func prime_with_state(state: GameState, skin_override = null) -> void:
 	if state == null:
 		return
-	_rules = state.rules.duplicate(true) if (state.rules is Dictionary) else {}
+	# 仅用于格式化少量文案（例如 CFO 加成百分比），不需要 deep duplicate；避免首次打开里程碑面板卡顿。
+	_rules = state.rules if (state.rules is Dictionary) else {}
 	if skin_override != null:
 		set_skin(skin_override)
 	else:
 		_ensure_skin_for_state(state)
 	_ensure_formatter()
-	_formatter.set_rules(_rules)
+	# 复用 MilestonePanel 的文案格式化逻辑，但跳过其 set_rules()（内部 deep duplicate 可能很重）。
+	# 这里直接注入引用即可；该 formatter 实例不入树，且不会修改 rules。
+	if _formatter != null:
+		_formatter._rules = _rules
 	_rebuild_from_state(state)
+
+func open_with_state(state: GameState, skin_override = null) -> void:
+	prime_with_state(state, skin_override)
 	visible = true
 
 func request_close() -> void:
