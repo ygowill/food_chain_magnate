@@ -45,7 +45,7 @@ const LOG_TYPE_COLORS: Dictionary = {
 
 const PLAYER_FILTER_ALL_ITEM_ID := 9999
 
-var _entries: Array[Dictionary] = []  # [{id, type, message, timestamp, details}]
+var _entries_all: Array[Dictionary] = []  # [{id, type, message, timestamp, details, command_index?}]
 var _entry_id_counter: int = 0
 var _log_items: Array[LogItem] = []
 var _filter_types: Array[LogType] = [LogType.SYSTEM, LogType.PLAYER, LogType.GAME_EVENT]
@@ -53,7 +53,7 @@ var _filter_player_id: int = -1
 var _filter_keyword: String = ""
 var _auto_scroll: bool = true
 var _scroll_to_bottom_requested: bool = false
-var _max_entries: int = 500
+var _max_entries: int = 0 # 0 表示不截断（完整时间线需要保留未来日志）
 var _player_count: int = 0
 
 # 时间线（回放/查看历史）预留：在 M1 引入“完整日志”前仅存储指针，不改变渲染。
@@ -112,12 +112,11 @@ func add_log(log_type: LogType, message: String, details: Dictionary = {}) -> in
 		"details": details,
 	}
 
-	_entries.append(entry)
+	_entries_all.append(entry)
 	log_added.emit(entry)
 
 	# 限制最大条目数
-	while _entries.size() > _max_entries:
-		_entries.pop_front()
+	_enforce_max_entries()
 
 	# 过滤通过则显示
 	if _entry_passes_filters(entry):
@@ -127,29 +126,34 @@ func add_log(log_type: LogType, message: String, details: Dictionary = {}) -> in
 
 	return entry_id
 
+func _enforce_max_entries() -> void:
+	if _max_entries <= 0:
+		return
+	while _entries_all.size() > _max_entries:
+		_entries_all.pop_front()
+
 func append_entry(entry: Dictionary) -> void:
 	if entry == null or entry.is_empty():
 		return
-	_entries.append(entry.duplicate(true))
-	while _entries.size() > _max_entries:
-		_entries.pop_front()
+	_entries_all.append(entry.duplicate(true))
+	_enforce_max_entries()
 
 	if _entry_passes_filters(entry):
 		_add_log_item(entry)
 	_update_entry_count()
 
 func get_entries() -> Array[Dictionary]:
-	return _entries.duplicate(true)
+	return _entries_all.duplicate(true)
 
 func load_entries(entries: Array[Dictionary]) -> void:
-	_entries.clear()
+	_entries_all.clear()
 	_entry_id_counter = 0
 
 	for e in entries:
 		if not (e is Dictionary):
 			continue
 		var d: Dictionary = e
-		_entries.append(d.duplicate(true))
+		_entries_all.append(d.duplicate(true))
 		var id_val = d.get("id", null)
 		if id_val is int:
 			_entry_id_counter = maxi(_entry_id_counter, int(id_val) + 1)
@@ -159,6 +163,7 @@ func load_entries(entries: Array[Dictionary]) -> void:
 				_entry_id_counter = maxi(_entry_id_counter, int(f) + 1)
 
 	_rebuild_display()
+	_apply_timeline_state_to_items(true)
 	_update_entry_count()
 
 func set_expand_enabled(enabled: bool) -> void:
@@ -167,14 +172,16 @@ func set_expand_enabled(enabled: bool) -> void:
 
 func set_timeline_head(head_index: int) -> void:
 	_timeline_head_index = int(head_index)
+	_apply_timeline_state_to_items()
 
 func set_timeline_cursor(cursor_index: int) -> void:
 	_timeline_cursor_index = int(cursor_index)
+	_apply_timeline_state_to_items(true)
 
 func set_entry_command_index(entry_id: int, command_index: int) -> void:
 	var cmd := int(command_index)
-	for i in range(_entries.size()):
-		var e_val = _entries[i]
+	for i in range(_entries_all.size()):
+		var e_val = _entries_all[i]
 		if not (e_val is Dictionary):
 			continue
 		var e: Dictionary = e_val
@@ -186,7 +193,7 @@ func set_entry_command_index(entry_id: int, command_index: int) -> void:
 		var details: Dictionary = details_val if (details_val is Dictionary) else {}
 		details["command_index"] = cmd
 		e["details"] = details
-		_entries[i] = e
+		_entries_all[i] = e
 		break
 
 func add_system_log(message: String, details: Dictionary = {}) -> int:
@@ -206,7 +213,7 @@ func add_debug_log(message: String, details: Dictionary = {}) -> int:
 	return add_log(LogType.DEBUG, message, details)
 
 func clear_logs() -> void:
-	_entries.clear()
+	_entries_all.clear()
 	_clear_display()
 	_update_entry_count()
 
@@ -248,6 +255,7 @@ func _add_log_item(entry: Dictionary) -> void:
 	item.entry_clicked.connect(_on_entry_clicked)
 	log_container.add_child(item)
 	_log_items.append(item)
+	item.apply_timeline_state(_timeline_cursor_index, _timeline_head_index)
 
 	_request_scroll_to_bottom()
 
@@ -274,17 +282,67 @@ func _clear_display() -> void:
 func _rebuild_display() -> void:
 	_clear_display()
 
-	for entry in _entries:
+	for entry in _entries_all:
 		if _entry_passes_filters(entry):
 			_add_log_item(entry)
+
+	_apply_timeline_state_to_items()
 
 func _update_entry_count() -> void:
 	if entry_count_label != null:
 		var visible_count := 0
-		for entry in _entries:
+		for entry in _entries_all:
 			if _entry_passes_filters(entry):
 				visible_count += 1
-		entry_count_label.text = "显示 %d / %d" % [visible_count, _entries.size()]
+		entry_count_label.text = "显示 %d / %d" % [visible_count, _entries_all.size()]
+
+func _get_entry_command_index(entry: Dictionary) -> int:
+	if entry == null or entry.is_empty():
+		return -999
+	var ci_val = entry.get("command_index", null)
+	if ci_val is int:
+		return int(ci_val)
+	if ci_val is float:
+		var f: float = float(ci_val)
+		if f == floor(f):
+			return int(f)
+	var details_val = entry.get("details", null)
+	if details_val is Dictionary:
+		var details: Dictionary = details_val
+		var ci2_val = details.get("command_index", null)
+		if ci2_val is int:
+			return int(ci2_val)
+		if ci2_val is float:
+			var f2: float = float(ci2_val)
+			if f2 == floor(f2):
+				return int(f2)
+	return -999
+
+func _apply_timeline_state_to_items(scroll_to_cursor: bool = false) -> void:
+	for item in _log_items:
+		if not is_instance_valid(item):
+			continue
+		if item.has_method("apply_timeline_state"):
+			item.apply_timeline_state(_timeline_cursor_index, _timeline_head_index)
+
+	if not scroll_to_cursor:
+		return
+	if OS.has_feature("headless"):
+		return
+	if scroll_container == null:
+		return
+	if not scroll_container.has_method("ensure_control_visible"):
+		return
+
+	# 定位到当前 cursor 对应的第一条可见日志（过滤后可能不存在）。
+	for item in _log_items:
+		if not is_instance_valid(item):
+			continue
+		var entry: Dictionary = item.entry_data
+		if _get_entry_command_index(entry) != _timeline_cursor_index:
+			continue
+		scroll_container.call("ensure_control_visible", item)
+		break
 
 func _on_filter_item_pressed(id: int) -> void:
 	var log_type: LogType = id as LogType
@@ -403,7 +461,7 @@ func _open_entry_details(entry_id: int) -> void:
 		_details_window.show()
 
 func _find_entry_by_id(entry_id: int) -> Dictionary:
-	for e_val in _entries:
+	for e_val in _entries_all:
 		if not (e_val is Dictionary):
 			continue
 		var e: Dictionary = e_val
@@ -474,6 +532,9 @@ class LogItem extends PanelContainer:
 	var _time_label: Label
 	var _type_label: Label
 	var _message_label: RichTextLabel
+	var _panel_style: StyleBoxFlat = null
+	var _timeline_is_future: bool = false
+	var _timeline_is_cursor: bool = false
 
 	const LOG_TYPE_COLORS: Dictionary = {
 		0: Color(0.6, 0.6, 0.6, 1),  # SYSTEM
@@ -506,6 +567,7 @@ class LogItem extends PanelContainer:
 		style.bg_color = Color(0.12, 0.12, 0.14, 0.6)
 		style.set_corner_radius_all(2)
 		add_theme_stylebox_override("panel", style)
+		_panel_style = style
 
 		var hbox := HBoxContainer.new()
 		hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -537,6 +599,44 @@ class LogItem extends PanelContainer:
 		hbox.add_child(_message_label)
 
 		update_display()
+		_apply_timeline_visuals()
+
+	func apply_timeline_state(cursor_index: int, head_index: int) -> void:
+		var cmd_index := _get_entry_command_index()
+		_timeline_is_future = (cursor_index < head_index and cmd_index >= 0 and cmd_index > cursor_index)
+		_timeline_is_cursor = (cmd_index == cursor_index)
+		_apply_timeline_visuals()
+
+	func _get_entry_command_index() -> int:
+		var ci_val = entry_data.get("command_index", null)
+		if ci_val is int:
+			return int(ci_val)
+		if ci_val is float:
+			var f: float = float(ci_val)
+			if f == floor(f):
+				return int(f)
+		var details_val = entry_data.get("details", null)
+		if details_val is Dictionary:
+			var details: Dictionary = details_val
+			var ci2_val = details.get("command_index", null)
+			if ci2_val is int:
+				return int(ci2_val)
+			if ci2_val is float:
+				var f2: float = float(ci2_val)
+				if f2 == floor(f2):
+					return int(f2)
+		return -999
+
+	func _apply_timeline_visuals() -> void:
+		if _panel_style != null:
+			_panel_style.bg_color = Color(0.20, 0.20, 0.28, 0.85) if _timeline_is_cursor else Color(0.12, 0.12, 0.14, 0.6)
+
+		if _timeline_is_cursor:
+			modulate = Color(1, 1, 1, 1)
+		elif _timeline_is_future:
+			modulate = Color(0.85, 0.85, 0.85, 0.55)
+		else:
+			modulate = Color(1, 1, 1, 1)
 
 	func apply_font_settings() -> void:
 		var scale := 1.0
