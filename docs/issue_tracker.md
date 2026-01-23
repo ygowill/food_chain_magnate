@@ -1544,14 +1544,53 @@
 - `Game._update_ui()` 当前先刷新地图（触发 MapSkin 构建）再 `panel_controller.sync()`；若开局处于 Setup/ReserveCards，玩家真正需要的第一个交互是“储备卡选择”，但它可能被“地图贴图加载”阻塞而延后显示。
 - 初始化期 INFO 日志较多（例如 ActionRegistry 注册大量执行器/校验器时逐条 `GameLog.info`），在某些环境下可能放大 IO/字符串格式化成本。
 
-**定位方案（先做，输出可量化数据）**
+**定位方案（已实施：启动性能打点日志）**
 
-- 增加“启动性能打点日志”（毫秒级）：
-	- `ui/scenes/game/game.gd`：`_ready()` 内分段记录：controllers 初始化、`game_engine.initialize`、`_update_ui`、`map_view.set_game_state`、`panel_controller.sync` 等耗时；
-	- `core/engine/game_engine/initializer.gd`：分段记录：modules_v2 apply、GameData.from_catalog、state/create、map_generate/bake/apply、invariants/compute_hash 等；
-	- `ui/visual/map_skin_builder.gd` / `ui/visual/map_skin.gd`：记录 VisualCatalog 加载耗时、贴图 load 数量与总耗时。
-- 打点仅在 debug 或显式开关下启用（避免污染正式体验）。
-- 基于日志输出在本 issue 内记录“Top N 耗时段”，再选择最有效的优化手段。
+- 新增轻量打点工具：`core/debug/perf_trace.gd`
+	- 默认关闭；通过命令行 user args 启用：`-- --profile_startup`
+	- 日志前缀：`[StartupProfile]`（便于 grep/机器解析）
+- 已在以下路径加入分段打点：
+	- `ui/scenes/game/game.gd`：`_ready()`、`_initialize_game()`、`_update_ui()`（拆分 map_view/panel_controller/overlay_controller）
+	- `core/engine/game_engine/initializer.gd`：initialize_new_game 全流程（modules/map/bake/invariants/checkpoint/hash/emit）
+	- `core/engine/game_engine/modules_v2.gd`：modules_v2.apply（manifests/catalog/ruleset/registries）
+	- `ui/visual/map_skin_builder.gd` / `ui/visual/map_skin.gd`：VisualCatalog 加载、apply 各分段、logo 去背景耗时
+	- `core/modules/v2/visual_catalog_loader.gd`：visuals JSON 枚举/读取耗时
+	- `autoload/scene_manager.gd`：ResourceLoader.load/instantiate/free 的耗时（用于真实 UI 切场景分析）
+
+**跑数命令（基准数据 1）**
+
+- 场景：`res://ui/scenes/tests/game_smoke_test.tscn`（cold start）
+- 命令（生成日志）：  
+	`HOME=.tmp_home godot --headless --path . --scene res://ui/scenes/tests/game_smoke_test.tscn -- --autorun --profile_startup > .godot/StartupProfile.log 2>&1`
+- 日志：`.godot/StartupProfile.log`
+
+**数据结论（Top 耗时段）**
+
+- `game:_ready` ≈ 3606ms
+	- `game:_update_ui(first)` ≈ 3266ms
+		- `ui:map_view.set_game_state` ≈ 1644ms（触发 MapCanvas 首次 `MapSkinBuilder.build_for_modules`）
+		- `ui:panel_controller.sync` ≈ 1622ms（内部再次触发一次 `MapSkinBuilder.build_for_modules`，重复构建）
+- `init:GameEngine.initialize_new_game` ≈ 229ms（其中 `modules_v2:apply` ≈ 210ms，`modules_v2:build_ruleset` ≈ 184ms）
+- MapSkin 构建的绝对主要耗时在 `skin:apply.piece_visuals`（≈ 1.6s/次），且几乎全部来自 `skin:logo_transparentize`（每个 logo 约 200~440ms；默认 5 个 logo 一次就会吃掉 ~1.6s）。
+
+**主要根因（已定位）**
+
+1. `MapSkin.apply_visual_catalog()` 在加载 piece_visuals 时，会对所有 `restaurant_logo_*` 贴图做“边缘背景转透明”的 CPU 像素级转换；该转换在 GDScript 中非常慢（本机基准：每张 200~440ms）。
+2. 开局首帧会重复构建 2 次“完整 MapSkin”：
+	- 第 1 次：地图渲染（`MapCanvas._ensure_skin`）
+	- 第 2 次：UI 组件通过 `UiSkinCache.get_skin_for_modules()` 获取 icon/marketing 贴图时，会再次走 `MapSkinBuilder.build_for_modules()`（但 UI 其实不需要 piece_visuals，更不需要 logo 去背景）
+
+**整改计划（待你点头后实施）**
+
+1. 先消除“UI 二次构建完整 MapSkin”（预计节省 ~1.6s）
+	- 方案 A（推荐）：为 `UiSkinCache` 引入“轻量 IconSkin”（只加载 product_icons / marketing_visuals；跳过 cell/road/piece 与 logo 去背景），避免触发 `skin:apply.piece_visuals`。
+	- 方案 B：让 UI 组件复用 `MapCanvas.get_skin()`（由 `Game/PanelController` 注入），彻底避免重复 build；但需要改动多个依赖 `UiSkinCache` 的组件。
+2. 再解决“logo 去背景”耗时（预计再节省 ~1.0~1.6s，取决于玩家/是否需要全部 logo）
+	- 方案 A（推荐，视觉最稳）：把 `assets/` 中的 restaurant logo 贴图改为带 alpha 的透明底版本，移除/禁用运行时像素转换。
+	- 方案 B：改为“按需延迟转换 + 跨 MapSkin 实例缓存”（只转换实际用到的 logo，并且第二次不会重复）；仍会有首次转换卡顿，但总量下降。
+	- 方案 C：保留转换但用 `Image.get_data()` 批处理字节数组实现（替换 per-pixel get/set），加速单张转换。
+3. 若你仍希望“进入对局后立刻可点储备卡”且不被地图贴图加载阻塞：
+	- 调整进入对局时的 UI 顺序：优先显示 ReserveCards modal；地图区域保持 loading/隐藏，待 MapSkin 构建完成后一次性显示（不使用 placeholder 贴图）。
 
 **候选优化方案（待用户确认取舍后实施）**
 
@@ -1568,7 +1607,7 @@
 
 **状态**
 
-- Planned（待用户确认先做定位打点，或直接选一条优化路径）
+- Investigated（已完成打点与跑数；待确认整改方案后实施）
 
 ## 57. Working：生产/采购员工选择应按“实例”消耗（用过的那张变灰且不可点）
 

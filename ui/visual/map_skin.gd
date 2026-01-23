@@ -5,6 +5,8 @@
 class_name MapSkin
 extends RefCounted
 
+const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
+
 var cell_size_px: int = 40
 
 var cell_textures: Dictionary = {}         # key -> Texture2D
@@ -24,6 +26,7 @@ func apply_visual_catalog(catalog, warnings: Array[String]) -> void:
 		return
 
 	# cell_visuals
+	var span_cell := PerfTraceClass.begin_span("skin:apply.cell_visuals")
 	for k in catalog.cell_visuals.keys():
 		var key: String = str(k)
 		var entry_val = catalog.cell_visuals.get(k, null)
@@ -32,8 +35,10 @@ func apply_visual_catalog(catalog, warnings: Array[String]) -> void:
 		var entry: Dictionary = entry_val
 		var texture_path: String = str(entry.get("texture", ""))
 		cell_textures[key] = _load_texture_or_placeholder(texture_path, "cell", warnings, "cell:%s" % key)
+	PerfTraceClass.end_span(span_cell)
 
 	# road_visuals
+	var span_road := PerfTraceClass.begin_span("skin:apply.road_visuals")
 	for k in catalog.road_visuals.keys():
 		var key2: String = str(k)
 		var entry_val2 = catalog.road_visuals.get(k, null)
@@ -42,8 +47,10 @@ func apply_visual_catalog(catalog, warnings: Array[String]) -> void:
 		var entry2: Dictionary = entry_val2
 		var texture_path2: String = str(entry2.get("texture", ""))
 		road_textures[key2] = _load_texture_or_placeholder(texture_path2, "road", warnings, "road:%s" % key2)
+	PerfTraceClass.end_span(span_road)
 
 	# piece_visuals
+	var span_piece := PerfTraceClass.begin_span("skin:apply.piece_visuals")
 	for k in catalog.piece_visuals.keys():
 		var piece_id: String = str(k)
 		var entry_val3 = catalog.piece_visuals.get(k, null)
@@ -59,8 +66,10 @@ func apply_visual_catalog(catalog, warnings: Array[String]) -> void:
 		var scale_val = entry3.get("scale", Vector2.ONE)
 		if scale_val is Vector2:
 			piece_scales[piece_id] = scale_val
+	PerfTraceClass.end_span(span_piece)
 
 	# product_icons
+	var span_icons := PerfTraceClass.begin_span("skin:apply.product_icons")
 	for k in catalog.product_icons.keys():
 		var product_id: String = str(k)
 		var entry_val4 = catalog.product_icons.get(k, null)
@@ -69,8 +78,10 @@ func apply_visual_catalog(catalog, warnings: Array[String]) -> void:
 		var entry4: Dictionary = entry_val4
 		var texture_path4: String = str(entry4.get("texture", ""))
 		product_icon_textures[product_id] = _load_texture_or_placeholder(texture_path4, "icon", warnings, "product:%s" % product_id)
+	PerfTraceClass.end_span(span_icons)
 
 	# marketing_visuals
+	var span_marketing := PerfTraceClass.begin_span("skin:apply.marketing_visuals")
 	for k in catalog.marketing_visuals.keys():
 		var key3: String = str(k)
 		var entry_val5 = catalog.marketing_visuals.get(k, null)
@@ -79,6 +90,7 @@ func apply_visual_catalog(catalog, warnings: Array[String]) -> void:
 		var entry5: Dictionary = entry_val5
 		var texture_path5: String = str(entry5.get("texture", ""))
 		marketing_textures[key3] = _load_texture_or_placeholder(texture_path5, "marketing", warnings, "marketing:%s" % key3)
+	PerfTraceClass.end_span(span_marketing)
 
 func get_cell_texture(key: String) -> Texture2D:
 	if cell_textures.has(key):
@@ -142,11 +154,15 @@ func _load_texture_or_placeholder(path: String, kind: String, warnings: Array[St
 	if path.is_empty():
 		return _get_placeholder(kind)
 	if not ResourceLoader.exists(path):
+		PerfTraceClass.counter_add("skin:texture_missing", 1)
 		warnings.append("MapSkin: 贴图不存在，使用占位: %s (%s)" % [label, path])
 		return _get_placeholder(kind)
+	PerfTraceClass.counter_add("skin:texture_load_attempt", 1)
 	var res = load(path)
 	if res is Texture2D:
+		PerfTraceClass.counter_add("skin:texture_load_ok", 1)
 		return res
+	PerfTraceClass.counter_add("skin:texture_load_bad_type", 1)
 	warnings.append("MapSkin: 贴图类型错误，使用占位: %s (%s)" % [label, path])
 	return _get_placeholder(kind)
 
@@ -160,8 +176,12 @@ func _maybe_make_transparent_logo_texture(piece_id: String, base_tex: Texture2D,
 		var cached = _logo_textures_transparent_bg.get(id, null)
 		return cached if cached is Texture2D else base_tex
 
+	PerfTraceClass.counter_add("skin:logo_transparentize_attempt", 1)
+	var span_logo := PerfTraceClass.begin_span("skin:logo_transparentize")
 	var converted := _convert_texture_edge_bg_to_transparent(base_tex)
+	PerfTraceClass.end_span(span_logo)
 	if converted != null:
+		PerfTraceClass.counter_add("skin:logo_transparentize_ok", 1)
 		_logo_textures_transparent_bg[id] = converted
 		return converted
 

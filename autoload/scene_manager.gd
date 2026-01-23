@@ -14,6 +14,7 @@ const SCENE_TILE_EDITOR := "res://ui/scenes/tools/tile_editor.tscn"
 const SCENE_REPLAY_TEST := "res://ui/scenes/tests/replay_test.tscn"
 
 const LoadingOverlayScene := preload("res://ui/components/loading/loading_overlay.tscn")
+const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 
 # 当前场景
 var current_scene: Node = null
@@ -48,22 +49,31 @@ func goto_scene(path: String, push_to_stack: bool = true) -> void:
 	call_deferred("_deferred_goto_scene", path)
 
 func _deferred_goto_scene(path: String) -> void:
+	var span_total := PerfTraceClass.begin_span("scene:goto_scene")
 	# 加载新场景
+	var span_load := PerfTraceClass.begin_span("scene:ResourceLoader.load")
 	var packed_scene := ResourceLoader.load(path) as PackedScene
+	PerfTraceClass.end_span(span_load)
 	if packed_scene == null:
 		GameLog.error("SceneManager", "无法加载场景: %s" % path)
 		hide_loading()
+		PerfTraceClass.end_span(span_total)
 		return
 
+	var span_inst := PerfTraceClass.begin_span("scene:PackedScene.instantiate")
 	var next_scene := packed_scene.instantiate()
+	PerfTraceClass.end_span(span_inst)
 	if next_scene == null:
 		GameLog.error("SceneManager", "无法实例化场景: %s" % path)
 		hide_loading()
+		PerfTraceClass.end_span(span_total)
 		return
 
 	# 释放当前场景（在确认新场景可用后再释放，避免切换失败导致黑屏）
 	if current_scene:
+		var span_free := PerfTraceClass.begin_span("scene:free_current_scene")
 		current_scene.free()
+		PerfTraceClass.end_span(span_free)
 
 	current_scene = next_scene
 	current_scene_path = path
@@ -75,6 +85,7 @@ func _deferred_goto_scene(path: String) -> void:
 	# 发射信号
 	scene_changed.emit(path)
 	GameLog.info("SceneManager", "场景加载完成: %s" % path)
+	PerfTraceClass.end_span(span_total)
 
 # 返回上一个场景
 func go_back() -> bool:

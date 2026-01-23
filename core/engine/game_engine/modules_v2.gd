@@ -28,6 +28,7 @@ const StateSchemaRegistryClass = preload("res://core/state/state_schema_registry
 
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
+const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 
 static func reset(engine) -> void:
 	if engine == null:
@@ -65,6 +66,7 @@ static func apply(engine, module_ids: Array[String], base_dir: String) -> Result
 	if engine == null:
 		return Result.failure("内部错误：GameEngine 为空")
 
+	var span_total := PerfTraceClass.begin_span("modules_v2:apply")
 	engine.modules_v2_base_dir = base_dir
 	var empty_plan: Array[String] = []
 	engine.module_plan_v2 = empty_plan
@@ -74,32 +76,43 @@ static func apply(engine, module_ids: Array[String], base_dir: String) -> Result
 
 	if module_ids.is_empty():
 		return Result.failure("模块系统 V2：enabled_modules_v2 不能为空（严格模式）")
+	var span_base_dirs := PerfTraceClass.begin_span("modules_v2:parse_base_dirs")
 	var base_dirs_read := ModuleDirSpecClass.parse_base_dirs(base_dir)
+	PerfTraceClass.end_span(span_base_dirs)
 	if not base_dirs_read.ok:
 		return Result.failure("模块系统 V2：modules_v2_base_dir 不能为空")
 	var base_dirs: Array[String] = base_dirs_read.value
 
+	var span_manifests := PerfTraceClass.begin_span("modules_v2:load_all_manifests")
 	var manifests_read := ModulePackageLoaderV2Class.load_all_from_dirs(base_dirs)
+	PerfTraceClass.end_span(span_manifests)
 	if not manifests_read.ok:
 		return Result.failure("模块系统 V2：加载模块包失败: %s" % manifests_read.error)
 	var manifests: Dictionary = manifests_read.value
 	engine.module_manifests_v2 = manifests
 
+	var span_plan := PerfTraceClass.begin_span("modules_v2:build_plan")
 	var plan_read := ModulePlanBuilderV2Class.build_plan(manifests, module_ids)
+	PerfTraceClass.end_span(span_plan)
 	if not plan_read.ok:
 		return Result.failure("模块系统 V2：构建模块启用计划失败: %s" % plan_read.error)
 	engine.module_plan_v2 = Array(plan_read.value, TYPE_STRING, "", null)
 
+	var span_catalog := PerfTraceClass.begin_span("modules_v2:load_content_catalog")
 	var catalog_read := ContentCatalogLoaderV2Class.load_for_modules_from_dirs(base_dirs, engine.module_plan_v2)
+	PerfTraceClass.end_span(span_catalog)
 	if not catalog_read.ok:
 		return Result.failure("模块系统 V2：加载模块内容失败: %s" % catalog_read.error)
 	engine.content_catalog_v2 = catalog_read.value
 
+	var span_ruleset := PerfTraceClass.begin_span("modules_v2:build_ruleset")
 	var ruleset_read := RulesetLoaderV2Class.build_for_plan(engine.module_manifests_v2, engine.module_plan_v2)
+	PerfTraceClass.end_span(span_ruleset)
 	if not ruleset_read.ok:
 		return Result.failure("模块系统 V2：加载模块规则失败: %s" % ruleset_read.error)
 	engine.ruleset_v2 = ruleset_read.value
 
+	var span_ruleset_apply := PerfTraceClass.begin_span("modules_v2:apply_ruleset_registries")
 	# V2：模块注册的营销类型（供 MarketingRange/Placement 插拔）
 	var mk_types_apply := MarketingTypeRegistryClass.configure_from_ruleset(engine.ruleset_v2)
 	if not mk_types_apply.ok:
@@ -176,7 +189,9 @@ static func apply(engine, module_ids: Array[String], base_dir: String) -> Result
 		return Result.failure("模块系统 V2：%s" % ms_effect_check.error)
 
 	MilestoneEffectRegistryClass.set_current(engine.ruleset_v2.milestone_effect_registry)
+	PerfTraceClass.end_span(span_ruleset_apply)
 
+	var span_catalog_registries := PerfTraceClass.begin_span("modules_v2:configure_registries_from_catalog")
 	var prod_reg := ProductRegistryClass.configure_from_catalog(engine.content_catalog_v2)
 	if not prod_reg.ok:
 		return Result.failure("模块系统 V2：配置 ProductRegistry 失败: %s" % prod_reg.error)
@@ -207,6 +222,8 @@ static func apply(engine, module_ids: Array[String], base_dir: String) -> Result
 	if not piece_reg.ok:
 		return Result.failure("模块系统 V2：配置 PieceRegistry 失败: %s" % piece_reg.error)
 
+	PerfTraceClass.end_span(span_catalog_registries)
+	PerfTraceClass.end_span(span_total)
 	return Result.success().with_warnings(ruleset_read.warnings)
 
 static func validate_starting_inventory_products(cfg) -> Result:

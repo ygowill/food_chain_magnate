@@ -51,6 +51,7 @@ const ReplayPlayerScene = preload("res://ui/components/replay_player/replay_play
 const SaveLoadDialogScript = preload("res://ui/dialogs/save_load_dialog.gd")
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
+const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 
 # 游戏状态
 var game_engine: GameEngine = null
@@ -77,6 +78,7 @@ var _replay_original_engine: GameEngine = null
 var _replay_file_path: String = ""
 
 var _background_ui_warmup_started: bool = false
+var _startup_profile_reported: bool = false
 
 const AUTO_MANDATORY_ACTION_IDS := {
 	"set_price": true,
@@ -102,6 +104,7 @@ var _responsive_font_scale: float = -1.0
 var _right_panel_footer_source: Object = null
 
 func _ready() -> void:
+	var span_ready := PerfTraceClass.begin_span("game:_ready")
 	GameLog.info("Game", "游戏场景已加载")
 
 	# 初始化/读档可能耗时：确保加载遮罩至少绘制一帧，避免“卡住”的观感。
@@ -122,6 +125,7 @@ func _ready() -> void:
 	if not should_restore_log_history and EventBus != null:
 		EventBus.clear_history()
 
+	var span_layout := PerfTraceClass.begin_span("game:layout+controllers_init")
 	_apply_ui_layout()
 	_init_left_panel_toggle()
 	_init_right_panel_toggle()
@@ -149,8 +153,11 @@ func _ready() -> void:
 	_event_log_controller = GameEventLogControllerClass.new()
 	_event_log_controller.setup(game_log_panel, should_restore_log_history)
 	UiSignalHelpersClass.safe_connect(game_log_panel, "close_requested", toggle_game_log)
+	PerfTraceClass.end_span(span_layout)
 
+	var span_init_game := PerfTraceClass.begin_span("game:_initialize_game")
 	_initialize_game()
+	PerfTraceClass.end_span(span_init_game)
 	if game_engine != null:
 		_panel_controller.reset_bank_break_tracking(game_engine.get_state())
 
@@ -163,7 +170,9 @@ func _ready() -> void:
 	_init_left_area_resize()
 	_apply_responsive_layout()
 	UiSignalHelpersClass.safe_connect(self, "resized", _on_root_resized)
+	var span_update_ui := PerfTraceClass.begin_span("game:_update_ui(first)")
 	_update_ui()
+	PerfTraceClass.end_span(span_update_ui)
 	_on_map_mode_changed("", {})
 
 	# 若开局需要强制弹出“储备卡选择”，则保留加载遮罩直到弹窗真正打开，
@@ -180,11 +189,23 @@ func _ready() -> void:
 	# 非关键面板后台预热（issue_tracker #71）：不阻塞首帧交互；未完成时打开面板显示“加载中...”。
 	call_deferred("_start_background_ui_warmup")
 
+	PerfTraceClass.end_span(span_ready)
+	if PerfTraceClass.enabled() and not _startup_profile_reported:
+		_startup_profile_reported = true
+		call_deferred("_report_startup_profile")
+
+func _report_startup_profile() -> void:
+	# 让首帧/次帧的 deferred/UI queue 跑完，避免漏掉 MapSkin 构建等同步耗时的尾部。
+	await get_tree().process_frame
+	await get_tree().process_frame
+	PerfTraceClass.report(20)
+
 func _start_background_ui_warmup() -> void:
 	if _background_ui_warmup_started:
 		return
 	_background_ui_warmup_started = true
 
+	var span_warmup := PerfTraceClass.begin_span("game:background_ui_warmup")
 	# 让游戏 UI 先进入可交互状态，再开始后台构建。
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -205,9 +226,11 @@ func _start_background_ui_warmup() -> void:
 	# 1) 升级路线（EmployeeTree）
 	var tree = _panel_controller.call("get_employee_tree_panel") if _panel_controller.has_method("get_employee_tree_panel") else null
 	if is_instance_valid(tree) and tree.has_method("begin_background_build"):
+		var span_tree := PerfTraceClass.begin_span("warmup:employee_tree")
 		tree.call("begin_background_build")
 		if tree.has_signal("build_finished"):
 			await tree.build_finished
+		PerfTraceClass.end_span(span_tree)
 	await get_tree().process_frame
 	if not is_instance_valid(self):
 		return
@@ -216,9 +239,11 @@ func _start_background_ui_warmup() -> void:
 	if skin != null:
 		var ms = _panel_controller.call("get_milestone_full_screen_view") if _panel_controller.has_method("get_milestone_full_screen_view") else null
 		if is_instance_valid(ms) and ms.has_method("begin_background_build"):
+			var span_ms := PerfTraceClass.begin_span("warmup:milestones")
 			ms.call("begin_background_build", state, skin)
 			if ms.has_signal("build_finished"):
 				await ms.build_finished
+			PerfTraceClass.end_span(span_ms)
 	await get_tree().process_frame
 	if not is_instance_valid(self):
 		return
@@ -227,9 +252,13 @@ func _start_background_ui_warmup() -> void:
 	if skin != null:
 		var supply = _panel_controller.call("get_reserve_area_full_screen_view") if _panel_controller.has_method("get_reserve_area_full_screen_view") else null
 		if is_instance_valid(supply) and supply.has_method("begin_background_build"):
+			var span_supply := PerfTraceClass.begin_span("warmup:supply_pile")
 			supply.call("begin_background_build", state, skin)
 			if supply.has_signal("build_finished"):
 				await supply.build_finished
+			PerfTraceClass.end_span(span_supply)
+
+	PerfTraceClass.end_span(span_warmup)
 
 func _exit_tree() -> void:
 	_dispose_runtime()
@@ -762,7 +791,11 @@ func _initialize_game() -> void:
 		Globals.player_count,
 		Globals.random_seed
 	])
-	GameLog.info("Game", "初始状态:\n%s" % game_engine.get_state().dump())
+	var dump_span := PerfTraceClass.begin_span("game:GameState.dump") if PerfTraceClass.enabled() else -1
+	var state_dump := game_engine.get_state().dump()
+	if PerfTraceClass.enabled():
+		PerfTraceClass.end_span(dump_span)
+	GameLog.info("Game", "初始状态:\n%s" % state_dump)
 
 func _setup_debug_panel() -> void:
 	if not DebugFlags.is_debug_mode():
@@ -784,6 +817,7 @@ func _update_ui() -> void:
 		return
 
 	var state := game_engine.get_state()
+	var do_profile := PerfTraceClass.enabled() and not _startup_profile_reported
 	round_label.text = "回合: %d" % state.round_number
 	phase_label.text = "阶段: %s%s" % [
 		state.phase,
@@ -836,15 +870,24 @@ func _update_ui() -> void:
 
 	# 地图渲染（M2 接入）
 	if is_instance_valid(map_view) and map_view.has_method("set_game_state"):
+		var span_map := PerfTraceClass.begin_span("ui:map_view.set_game_state") if do_profile else -1
 		map_view.call("set_game_state", state)
+		if do_profile:
+			PerfTraceClass.end_span(span_map)
 
 	# UI 同步（面板/覆盖层）
 	if _panel_controller != null:
+		var span_panels := PerfTraceClass.begin_span("ui:panel_controller.sync") if do_profile else -1
 		_panel_controller.sync(state)
 		_sync_right_panel_docked_view()
+		if do_profile:
+			PerfTraceClass.end_span(span_panels)
 	if _overlay_controller != null:
+		var span_overlays := PerfTraceClass.begin_span("ui:overlay_controller.sync") if do_profile else -1
 		_overlay_controller.sync_dinnertime_overlay(state)
 		_overlay_controller.sync_demand_indicator(state)
+		if do_profile:
+			PerfTraceClass.end_span(span_overlays)
 
 	# 同步调试面板
 	if _debug_panel != null and _debug_panel.visible:

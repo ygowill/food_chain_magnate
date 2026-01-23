@@ -6,13 +6,17 @@ extends RefCounted
 
 const MapSkinClass = preload("res://ui/visual/map_skin.gd")
 const VisualCatalogLoaderClass = preload("res://core/modules/v2/visual_catalog_loader.gd")
+const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 
 static func build_for_modules(base_dir: String, module_ids: Array[String], desired_cell_size_px: int = 40) -> Result:
+	var span_total := PerfTraceClass.begin_span("skin:build_for_modules")
 	var skin = MapSkinClass.new()
 	skin.cell_size_px = max(desired_cell_size_px, 1)
 	skin._init_placeholders()
 
+	var span_catalog := PerfTraceClass.begin_span("skin:VisualCatalogLoader.load_for_modules")
 	var cat_read := VisualCatalogLoaderClass.load_for_modules(base_dir, module_ids)
+	PerfTraceClass.end_span(span_catalog)
 	if not cat_read.ok:
 		return Result.failure("MapSkinBuilder: 视觉目录加载失败: %s" % cat_read.error).with_warnings(cat_read.warnings)
 
@@ -22,7 +26,9 @@ static func build_for_modules(base_dir: String, module_ids: Array[String], desir
 
 	var warnings: Array[String] = []
 	warnings.append_array(cat_read.warnings)
+	var span_apply := PerfTraceClass.begin_span("skin:MapSkin.apply_visual_catalog")
 	skin.apply_visual_catalog(catalog, warnings)
+	PerfTraceClass.end_span(span_apply)
 
+	PerfTraceClass.end_span(span_total)
 	return Result.success(skin).with_warnings(warnings)
-

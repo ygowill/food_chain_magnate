@@ -9,6 +9,7 @@ extends RefCounted
 const VisualCatalogClass = preload("res://core/modules/v2/visual_catalog.gd")
 const ModulePackageLoaderClass = preload("res://core/modules/v2/module_package_loader.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
+const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 
 static func load_for_modules(base_dir: String, module_ids: Array[String]) -> Result:
 	if base_dir.is_empty():
@@ -27,6 +28,7 @@ static func load_for_modules_from_dirs(base_dirs: Array, module_ids: Array[Strin
 	if base_dirs.is_empty():
 		return Result.failure("VisualCatalogLoader: base_dirs 不能为空")
 
+	var span_total := PerfTraceClass.begin_span("visuals:load_for_modules_from_dirs")
 	var catalog := VisualCatalogClass.new()
 	var warnings: Array[String] = []
 
@@ -48,13 +50,18 @@ static func load_for_modules_from_dirs(base_dirs: Array, module_ids: Array[Strin
 		if dir == null:
 			continue
 
+		var span_list := PerfTraceClass.begin_span("visuals:list_json_files")
 		var files_read := _list_json_files(visuals_root)
+		PerfTraceClass.end_span(span_list)
 		if not files_read.ok:
 			return files_read
 
 		for file_name in files_read.value:
+			PerfTraceClass.counter_add("visuals:json_files", 1)
 			var path := visuals_root.path_join(file_name)
+			var span_read := PerfTraceClass.begin_span("visuals:read_json_file")
 			var file_read := _read_json_file(path)
+			PerfTraceClass.end_span(span_read)
 			if not file_read.ok:
 				return Result.failure("加载 visuals 失败: %s (%s)" % [path, file_read.error])
 			var data: Dictionary = file_read.value
@@ -62,6 +69,7 @@ static func load_for_modules_from_dirs(base_dirs: Array, module_ids: Array[Strin
 			if not apply.ok:
 				return apply
 
+	PerfTraceClass.end_span(span_total)
 	return Result.success(catalog).with_warnings(warnings)
 
 static func _apply_visuals_dict(catalog, data: Dictionary, module_id: String,

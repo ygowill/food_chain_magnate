@@ -9,6 +9,7 @@ const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModulesV2Class = preload("res://core/engine/game_engine/modules_v2.gd")
 const EmployeePoolPatchRegistryClass = preload("res://core/rules/employee_pool_patch_registry.gd")
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
+const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 
 static func initialize_new_game(
 	engine: GameEngine,
@@ -19,6 +20,7 @@ static func initialize_new_game(
 	reserve_card_selected_by_player: Array[int] = [],
 	restaurant_logo_choices_by_player: Array[int] = []
 ) -> Result:
+	var span_total := PerfTraceClass.begin_span("init:GameEngine.initialize_new_game")
 	engine._reset_modules_v2()
 	var init_warnings: Array[String] = []
 
@@ -27,31 +29,43 @@ static func initialize_new_game(
 	if modules_v2_base_dir.is_empty():
 		modules_v2_base_dir = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
 
+	var span_cfg := PerfTraceClass.begin_span("init:GameConfig.load_default")
 	var config_result := GameConfigClass.load_default()
+	PerfTraceClass.end_span(span_cfg)
 	if not config_result.ok:
 		return Result.failure("加载 GameConfig 失败: %s" % config_result.error)
 
 	engine.random_manager = RandomManager.new(seed_value)
 
+	var span_modules := PerfTraceClass.begin_span("init:ModulesV2.apply")
 	var modules_v2_result := engine._apply_modules_v2(enabled_modules_v2, modules_v2_base_dir)
+	PerfTraceClass.end_span(span_modules)
 	if not modules_v2_result.ok:
 		return modules_v2_result
 	init_warnings.append_array(modules_v2_result.warnings)
 
 	var cfg = config_result.value
+	var span_inv := PerfTraceClass.begin_span("init:ModulesV2.validate_starting_inventory_products")
 	var inv_check := ModulesV2Class.validate_starting_inventory_products(cfg)
+	PerfTraceClass.end_span(span_inv)
 	if not inv_check.ok:
 		return inv_check
 
+	var span_data := PerfTraceClass.begin_span("init:GameData.from_catalog")
 	var data_result := GameData.from_catalog(engine.content_catalog_v2)
+	PerfTraceClass.end_span(span_data)
 	if not data_result.ok:
 		return Result.failure("加载数据失败: %s" % data_result.error)
 	engine.game_data = data_result.value
+	var span_actions := PerfTraceClass.begin_span("init:ActionRegistry.setup_action_registry")
 	var setup_actions := engine._setup_action_registry(engine.game_data.pieces)
+	PerfTraceClass.end_span(span_actions)
 	if not setup_actions.ok:
 		return Result.failure("初始化失败：ActionRegistry 设置失败: %s" % setup_actions.error)
 
+	var span_state := PerfTraceClass.begin_span("init:GameState.create_initial_state_with_rng")
 	var state_result := GameState.create_initial_state_with_rng(player_count, seed_value, engine.random_manager, config_result.value, restaurant_logo_choices_by_player)
+	PerfTraceClass.end_span(span_state)
 	if not state_result.ok:
 		return Result.failure("创建初始状态失败: %s" % state_result.error)
 	engine.state = state_result.value
@@ -66,11 +80,15 @@ static func initialize_new_game(
 	state.modules = Array(engine.module_plan_v2, TYPE_STRING, "", null)
 	state.round_state["phase_order"] = engine.phase_manager.get_phase_order_names()
 
+	var span_pool_patch := PerfTraceClass.begin_span("init:EmployeePoolPatchRegistry.apply_to_state")
 	var pool_patch_state := EmployeePoolPatchRegistryClass.apply_to_state(state)
+	PerfTraceClass.end_span(span_pool_patch)
 	if not pool_patch_state.ok:
 		return Result.failure("初始化失败：employee_pool patch 应用失败: %s" % pool_patch_state.error)
 
+	var span_map_opt := PerfTraceClass.begin_span("init:GameData.get_map_for_player_count")
 	var map_opt_result := engine.game_data.get_map_for_player_count(player_count)
+	PerfTraceClass.end_span(span_map_opt)
 	if not map_opt_result.ok:
 		return Result.failure("选择地图失败: %s" % map_opt_result.error)
 	var map_option = map_opt_result.value
@@ -88,28 +106,40 @@ static func initialize_new_game(
 	if engine.ruleset_v2 == null or engine.ruleset_v2.map_generation_registry == null or not engine.ruleset_v2.map_generation_registry.has_primary():
 		return Result.failure("模块系统 V2：缺少 primary map generator（地图生成器）")
 
+	var span_map_gen := PerfTraceClass.begin_span("init:MapGenerationRegistry.generate_map_def")
 	var map_def_read: Result = engine.ruleset_v2.map_generation_registry.generate_map_def(player_count, engine.content_catalog_v2, map_option, engine.random_manager)
+	PerfTraceClass.end_span(span_map_gen)
 	if not map_def_read.ok:
 		return Result.failure("生成地图失败: %s" % map_def_read.error)
 	var map_def: MapDef = map_def_read.value
 
+	var span_bake := PerfTraceClass.begin_span("init:MapBake.bake")
 	var bake_result := MapBakeClass.bake(map_def, engine.game_data.tiles, engine.game_data.pieces)
+	PerfTraceClass.end_span(span_bake)
 	if not bake_result.ok:
 		return Result.failure("地图烘焙失败: %s" % bake_result.error)
+	var span_apply_map := PerfTraceClass.begin_span("init:BakedMap.apply_baked_map")
 	var apply_map_result := BakedMapClass.apply_baked_map(state, bake_result.value)
+	PerfTraceClass.end_span(span_apply_map)
 	if not apply_map_result.ok:
 		return Result.failure("写入地图失败: %s" % apply_map_result.error)
+	var span_tile_supply := PerfTraceClass.begin_span("init:tile_supply_remaining")
 	var tile_supply_init := _initialize_tile_supply_remaining(state)
+	PerfTraceClass.end_span(span_tile_supply)
 	if not tile_supply_init.ok:
 		return Result.failure("初始化失败：%s" % tile_supply_init.error)
 
 	if engine.ruleset_v2 != null and engine.ruleset_v2.has_method("apply_state_initializers"):
+		var span_init_state := PerfTraceClass.begin_span("init:RulesetV2.apply_state_initializers")
 		var init_state_r: Result = engine.ruleset_v2.apply_state_initializers(state, engine.random_manager)
+		PerfTraceClass.end_span(span_init_state)
 		if not init_state_r.ok:
 			return Result.failure("初始化失败：state initializer 失败: %s" % init_state_r.error)
 		init_warnings.append_array(init_state_r.warnings)
 
+	var span_cash := PerfTraceClass.begin_span("init:Invariants.compute_total_cash")
 	var total_cash_read := InvariantsClass.compute_total_cash(state)
+	PerfTraceClass.end_span(span_cash)
 	if not total_cash_read.ok:
 		return Result.failure("初始化失败：无法计算初始现金总额: %s" % total_cash_read.error)
 	if not (state.bank is Dictionary):
@@ -120,7 +150,9 @@ static func initialize_new_game(
 		return Result.failure("初始化失败：state.bank.removed_total 缺失或类型错误（期望 int）")
 	engine._initial_total_cash = int(total_cash_read.value) - int(state.bank["reserve_added_total"]) + int(state.bank["removed_total"])
 
+	var span_emp_totals := PerfTraceClass.begin_span("init:Invariants.compute_employee_totals")
 	var employee_totals_read := InvariantsClass.compute_employee_totals(state)
+	PerfTraceClass.end_span(span_emp_totals)
 	if not employee_totals_read.ok:
 		return Result.failure("初始化失败：无法计算初始员工总量: %s" % employee_totals_read.error)
 	engine._initial_employee_totals = employee_totals_read.value
@@ -129,15 +161,25 @@ static func initialize_new_game(
 	engine.checkpoints.clear()
 	engine.current_command_index = -1
 
+	var span_checkpoint := PerfTraceClass.begin_span("init:GameEngine._create_checkpoint")
 	engine._create_checkpoint(0)
+	PerfTraceClass.end_span(span_checkpoint)
 
 	GameLog.info("GameEngine", "游戏初始化完成 - 玩家: %d, 种子: %d" % [player_count, seed_value])
 
+	var span_state_hash := PerfTraceClass.begin_span("init:GameState.compute_hash")
+	var state_hash := state.compute_hash()
+	PerfTraceClass.end_span(span_state_hash)
+
+	var span_emit := PerfTraceClass.begin_span("init:EventBus.emit_event(GAME_STARTED)")
 	EventBus.emit_event(EventBus.EventType.GAME_STARTED, {
 		"player_count": player_count,
 		"seed": seed_value,
-		"state_hash": state.compute_hash()
+		"state_hash": state_hash
 	})
+	PerfTraceClass.end_span(span_emit)
+
+	PerfTraceClass.end_span(span_total)
 
 	return Result.success(state).with_warnings(init_warnings)
 
