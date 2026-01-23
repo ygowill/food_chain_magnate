@@ -17,6 +17,7 @@ const ReserveCardSelectionModalScene = preload("res://ui/components/modal_panel/
 const FridgeKeepModalScene = preload("res://ui/components/modal_panel/fridge_keep_modal.tscn")
 const EmployeeTreeScene = preload("res://ui/components/employee_tree/employee_tree.tscn")
 const MilestoneFullScreenViewScene = preload("res://ui/components/milestone_panel/milestone_full_screen_view.tscn")
+const ReserveAreaFullScreenViewScene = preload("res://ui/components/reserve_area/reserve_area_full_screen_view.tscn")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 
 const POPUP_LAYOUT_META_KEY := "popup_layout"
@@ -39,6 +40,7 @@ var _reserve_card_modal = null
 var _fridge_keep_modal = null
 var _employee_tree_panel = null
 var _milestone_full_screen_view = null
+var _reserve_area_full_screen_view = null
 
 var _view_player_id: int = -1
 var _pending_reserve_card_open_player_id: int = -1
@@ -95,6 +97,24 @@ func show_milestone_panel() -> void:
 	if _milestone_full_screen_view.has_method("open_with_state"):
 		_milestone_full_screen_view.call("open_with_state", state)
 	_milestone_full_screen_view.visible = true
+
+func show_reserve_area_panel() -> void:
+	if _scene == null:
+		return
+	var engine = _scene.get("game_engine")
+	if engine == null or not (engine is GameEngine):
+		return
+	var state: GameState = engine.get_state()
+	if state == null:
+		return
+
+	_ensure_reserve_area_full_screen_view()
+	if not is_instance_valid(_reserve_area_full_screen_view):
+		return
+
+	if _reserve_area_full_screen_view.has_method("open_with_state"):
+		_reserve_area_full_screen_view.call("open_with_state", state)
+	_reserve_area_full_screen_view.visible = true
 
 func show_payday_panel() -> void:
 	if _end_panels != null:
@@ -182,6 +202,10 @@ func dispose() -> void:
 		_milestone_full_screen_view.queue_free()
 		_milestone_full_screen_view = null
 
+	if is_instance_valid(_reserve_area_full_screen_view):
+		_reserve_area_full_screen_view.queue_free()
+		_reserve_area_full_screen_view = null
+
 	_scene = null
 	_map_controller = null
 	_overlay_controller = null
@@ -199,6 +223,8 @@ func has_open_modal_ui() -> bool:
 		return true
 	if is_instance_valid(_milestone_full_screen_view) and _milestone_full_screen_view.visible:
 		return true
+	if is_instance_valid(_reserve_area_full_screen_view) and _reserve_area_full_screen_view.visible:
+		return true
 	return false
 
 func hide_modal_ui() -> void:
@@ -208,9 +234,13 @@ func hide_modal_ui() -> void:
 	_hide_fridge_keep_modal()
 	_hide_employee_tree()
 	_hide_milestone_full_screen_view()
+	_hide_reserve_area_full_screen_view()
 
 func hide_top_overlays_if_open() -> bool:
 	# 仅关闭“覆盖全屏的浏览视图”（例如里程碑/保留区），避免 ESC 误触发 hide_all() 影响底层面板状态。
+	if is_instance_valid(_reserve_area_full_screen_view) and _reserve_area_full_screen_view.visible:
+		_hide_reserve_area_full_screen_view()
+		return true
 	if is_instance_valid(_milestone_full_screen_view) and _milestone_full_screen_view.visible:
 		_hide_milestone_full_screen_view()
 		return true
@@ -1344,6 +1374,33 @@ func _ensure_milestone_full_screen_view() -> void:
 func _hide_milestone_full_screen_view() -> void:
 	if is_instance_valid(_milestone_full_screen_view):
 		_milestone_full_screen_view.visible = false
+
+func _ensure_reserve_area_full_screen_view() -> void:
+	if _scene == null:
+		return
+	if is_instance_valid(_reserve_area_full_screen_view):
+		return
+
+	_reserve_area_full_screen_view = ReserveAreaFullScreenViewScene.instantiate()
+	if not is_instance_valid(_reserve_area_full_screen_view):
+		return
+	_reserve_area_full_screen_view.visible = false
+	_scene.add_child(_reserve_area_full_screen_view)
+
+	if _reserve_area_full_screen_view is Control:
+		var c: Control = _reserve_area_full_screen_view
+		c.z_index = 900
+		c.set_anchors_preset(Control.PRESET_FULL_RECT)
+		c.offset_left = 0.0
+		c.offset_top = 0.0
+		c.offset_right = 0.0
+		c.offset_bottom = 0.0
+
+	UiSignalHelpersClass.safe_connect(_reserve_area_full_screen_view, "close_requested", _hide_reserve_area_full_screen_view)
+
+func _hide_reserve_area_full_screen_view() -> void:
+	if is_instance_valid(_reserve_area_full_screen_view):
+		_reserve_area_full_screen_view.visible = false
 
 func _restore_info_panels_after_restructuring() -> void:
 	if _scene == null:

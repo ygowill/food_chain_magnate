@@ -1239,7 +1239,7 @@
 
 - 目前 UI 没有统一的“供给/剩余 piece”总览；相关数据分散在 map supply（房屋编号/花园）、营销放置（marketing_placements）、以及可能的模块自定义 supply 结构里，导致玩家无法快速判断“还有什么可用”。
 
-**修复方案（草案）**
+**修复方案**
 
 - TopBar 增加按钮“保留区”，打开一个全屏面板（或与里程碑一致的全屏浏览模式）。
 - 面板内按类别分组展示（建议：房屋编号、花园、营销板件…），每个条目使用贴图/角标模拟地图上实际渲染效果：
@@ -1254,9 +1254,36 @@
 - 房屋编号：逐个编号展示（像 token 列表）。
 - 交互：纯展示（不需要点击联动/跳转）。
 
+**实施记录**
+
+- 已新增：`ui/components/reserve_area/reserve_area_full_screen_view.tscn` / `ui/components/reserve_area/reserve_area_full_screen_view.gd`
+	- 全屏覆盖层（ScrollContainer），按类别分组展示未使用 piece：
+		- 房屋编号：读取 `state.map.house_number_supply_remaining`，逐个编号 token 展示
+		- 花园：读取 `state.map.garden_supply_remaining`，展示剩余数量
+		- 营销板件：`MarketingRegistry.get_all_board_numbers()` 减去 `state.map.marketing_placements.keys()`，并按玩家数过滤可用，复用 `MapCanvasDrawer._draw_marketing_placement()` 绘制
+		- 模块全局供给：扫描 `state.map.*_supply_remaining`（排除 house/garden/tile），并排除 restaurant/tile 类条目
+		- 玩家供给：扫描 `players[*].*_tokens_remaining` 且在 `PieceRegistry` 中存在对应 `piece_id` 的条目，并排除 restaurant/tile 类条目
+- 已修改：`ui/scenes/game/game.tscn`：TopBar 增加 `ReserveAreaButton` 并连接到 `_on_reserve_area_button_pressed`
+- 已修改：`ui/scenes/game/game.gd`：新增 `_on_reserve_area_button_pressed()` 调用 `GamePanelController.show_reserve_area_panel()`
+- 已修改：`ui/scenes/game/game_panel_controller.gd`
+	- 新增 `show_reserve_area_panel()`，并按需实例化/显示 `ReserveAreaFullScreenView`
+	- 集成到 `has_open_modal_ui()` / `hide_modal_ui()` / `hide_top_overlays_if_open()`（ESC 优先关闭全屏覆盖层，不影响底层面板状态）
+
+**验收**
+
+- 点击 TopBar “保留区”打开全屏面板；分类展示未使用 piece，整体布局可滚动
+- 不展示地图扩展 tile、餐厅相关条目；模块引入的新 piece 若有供给/剩余字段可被展示
+- 房屋编号按 token 列表逐个展示
+- `ESC` / 点击“×”关闭：关闭后左/右侧面板显示状态保持原样
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：PASS（109/109，`.godot/AllTests.log`）
+
 **状态**
 
-- 待澄清
+- Implemented（待手动验收）
 
 ---
 

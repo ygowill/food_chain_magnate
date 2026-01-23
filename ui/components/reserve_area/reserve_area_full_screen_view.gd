@@ -1,0 +1,509 @@
+# 保留区全屏视图（TopBar）
+# - 分类展示当前对局“未使用/未放置”的 piece（包含模块引入的新 piece）
+# - 纯展示（不提供点击联动）
+# - ESC 关闭；关闭只隐藏自身，不影响底层面板显示状态
+class_name ReserveAreaFullScreenView
+extends Control
+
+signal close_requested()
+
+@onready var sections: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/Sections
+@onready var close_button: Button = $MarginContainer/VBoxContainer/HeaderRow/CloseButton
+
+const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
+const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
+const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
+const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
+
+var _skin = null
+var _skin_key: String = ""
+
+func _ready() -> void:
+	set_process_unhandled_input(true)
+	if is_instance_valid(close_button):
+		close_button.pressed.connect(_on_close_pressed)
+	visible = false
+
+func open_with_state(state: GameState) -> void:
+	if state == null:
+		return
+	_ensure_skin_for_state(state)
+	_rebuild_from_state(state)
+	visible = true
+
+func request_close() -> void:
+	if not visible:
+		return
+	visible = false
+	close_requested.emit()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event != null and event.is_action_pressed("ui_cancel"):
+		accept_event()
+		request_close()
+
+func _on_close_pressed() -> void:
+	request_close()
+
+func _ensure_skin_for_state(state: GameState) -> void:
+	var modules: Array[String] = []
+	if state.modules is Array:
+		modules = Array(state.modules, TYPE_STRING, "", null)
+	var base_dir := Globals.modules_v2_base_dir if Globals != null else "res://modules"
+	var key := "%s|%s" % [base_dir, ",".join(modules)]
+	if _skin != null and key == _skin_key:
+		return
+
+	var build := MapSkinBuilderClass.build_for_modules(base_dir, modules, 40)
+	if build.ok:
+		_skin = build.value
+		_skin_key = key
+	else:
+		_skin = null
+		_skin_key = ""
+
+func _rebuild_from_state(state: GameState) -> void:
+	if sections == null:
+		return
+	for c in sections.get_children():
+		if is_instance_valid(c):
+			c.queue_free()
+
+	_add_house_numbers_section(state)
+	_add_garden_section(state)
+	_add_marketing_boards_section(state)
+	_add_module_supplies_section(state)
+	_add_player_token_supplies_section(state)
+
+func _add_section(title: String) -> HFlowContainer:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	sections.add_child(box)
+
+	var label := Label.new()
+	label.text = title
+	label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(16) if Globals != null else 16)
+	box.add_child(label)
+
+	var flow := HFlowContainer.new()
+	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	flow.add_theme_constant_override("h_separation", 10)
+	flow.add_theme_constant_override("v_separation", 10)
+	box.add_child(flow)
+	return flow
+
+func _add_house_numbers_section(state: GameState) -> void:
+	if state == null or not (state.map is Dictionary):
+		return
+	var supply_val = state.map.get("house_number_supply_remaining", null)
+	if not (supply_val is Array):
+		return
+	var supply: Array = supply_val
+	if supply.is_empty():
+		return
+
+	var nums: Array[int] = []
+	for v in supply:
+		if v is int:
+			nums.append(int(v))
+		elif v is float:
+			var f: float = float(v)
+			if f == floor(f):
+				nums.append(int(f))
+	nums.sort()
+
+	var flow := _add_section("房屋编号（未使用 %d）" % nums.size())
+	var house_tex: Texture2D = _skin.get_piece_texture("house") if _skin != null else null
+	for n in nums:
+		var token := HouseNumberToken.new()
+		token.house_number = n
+		token.house_texture = house_tex
+		flow.add_child(token)
+
+func _add_garden_section(state: GameState) -> void:
+	if state == null or not (state.map is Dictionary):
+		return
+	var v = state.map.get("garden_supply_remaining", null)
+	if not (v is int or v is float):
+		return
+	var count := int(v)
+	if count <= 0:
+		return
+	var flow := _add_section("花园（剩余 %d）" % count)
+	var tex: Texture2D = _skin.get_piece_texture("garden_large") if _skin != null else null
+	var token := IconToken.new()
+	token.texture = tex
+	token.badge_text = "×%d" % count
+	token.tooltip_text = "花园 ×%d" % count
+	flow.add_child(token)
+
+func _add_marketing_boards_section(state: GameState) -> void:
+	if state == null:
+		return
+	if not MarketingRegistryClass.is_loaded():
+		return
+
+	var used := {}
+	if state.map is Dictionary and state.map.has("marketing_placements") and (state.map["marketing_placements"] is Dictionary):
+		var placements: Dictionary = state.map["marketing_placements"]
+		for k in placements.keys():
+			used[str(k)] = true
+
+	var player_count := state.players.size()
+
+	var by_type: Dictionary = {} # type -> Array[Dictionary{bn,def}]
+	for bn in MarketingRegistryClass.get_all_board_numbers():
+		var def_val = MarketingRegistryClass.get_def(bn)
+		if def_val == null or not (def_val is MarketingDef):
+			continue
+		var def: MarketingDef = def_val
+		if def.has_method("is_available_for_player_count") and not def.is_available_for_player_count(player_count):
+			continue
+		if used.has(str(bn)):
+			continue
+		var t := str(def.type).strip_edges()
+		if t.is_empty():
+			t = "default"
+		if not by_type.has(t):
+			by_type[t] = []
+		var arr: Array = by_type[t]
+		arr.append({"bn": bn, "def": def})
+		by_type[t] = arr
+
+	if by_type.is_empty():
+		return
+
+	var order := ["billboard", "mailbox", "radio", "airplane"]
+	for t in order:
+		if not by_type.has(t):
+			continue
+		_add_marketing_type_section(t, Array(by_type[t]))
+
+	# 未知/扩展类型
+	for t2 in by_type.keys():
+		var type_id := str(t2)
+		if order.has(type_id):
+			continue
+		_add_marketing_type_section(type_id, Array(by_type[t2]))
+
+func _add_marketing_type_section(type_id: String, entries: Array) -> void:
+	if entries.is_empty():
+		return
+	var title := "营销板件：%s（未使用 %d）" % [_get_marketing_type_name(type_id), entries.size()]
+	var flow := _add_section(title)
+	for e in entries:
+		if not (e is Dictionary):
+			continue
+		var d: Dictionary = e
+		var bn := int(d.get("bn", 0))
+		var def_val = d.get("def", null)
+		if bn <= 0 or not (def_val is MarketingDef):
+			continue
+		var def: MarketingDef = def_val
+		var token := MarketingBoardToken.new()
+		token.set_skin(_skin)
+		token.board_number = bn
+		token.marketing_type = type_id
+		token.footprint_size = def.footprint_size
+		flow.add_child(token)
+
+func _get_marketing_type_name(type_id: String) -> String:
+	match str(type_id):
+		"billboard":
+			return "广告牌"
+		"mailbox":
+			return "邮箱"
+		"radio":
+			return "电波"
+		"airplane":
+			return "飞机"
+		_:
+			return str(type_id)
+
+func _add_module_supplies_section(state: GameState) -> void:
+	if state == null or not (state.map is Dictionary):
+		return
+
+	# 收集模块 supply：state.map.*_supply_remaining（排除 base 与 tile）
+	var entries: Array[Dictionary] = []
+	for k in state.map.keys():
+		var key := str(k)
+		if not key.ends_with("_supply_remaining"):
+			continue
+		if key == "house_number_supply_remaining" or key == "garden_supply_remaining" or key == "tile_supply_remaining":
+			continue
+		var v = state.map.get(k, null)
+		if v is int:
+			if int(v) > 0:
+				entries.append({"key": key, "count": int(v)})
+		elif v is float:
+			var f: float = float(v)
+			if f == floor(f) and int(f) > 0:
+				entries.append({"key": key, "count": int(f)})
+
+	if entries.is_empty():
+		return
+
+	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return str(a.get("key", "")) < str(b.get("key", ""))
+	)
+
+	var module_ids: Array[String] = []
+	if state.modules is Array:
+		module_ids = Array(state.modules, TYPE_STRING, "", null)
+
+	var piece_ids: Array[String] = []
+	if PieceRegistryClass.is_loaded():
+		piece_ids = PieceRegistryClass.get_all_ids()
+
+	var flow := _add_section("模块板件（全局供给）")
+	for e in entries:
+		var key: String = str(e.get("key", ""))
+		var count := int(e.get("count", 0))
+		if key.is_empty() or count <= 0:
+			continue
+		var base := key.trim_suffix("_supply_remaining")
+		if _is_excluded_piece_id(base):
+			continue
+		var piece_id := _guess_piece_id_for_supply(base, module_ids, piece_ids)
+		if _is_excluded_piece_id(piece_id):
+			continue
+		var tex: Texture2D = _skin.get_piece_texture(piece_id) if _skin != null else null
+
+		var token := IconToken.new()
+		token.texture = tex
+		token.badge_text = "×%d" % count
+		token.tooltip_text = "%s ×%d" % [base, count]
+		flow.add_child(token)
+
+func _is_excluded_piece_id(id_str: String) -> bool:
+	# 用户已澄清：不展示地图扩展 tile 与餐厅（但模块引入的新 piece 需要展示）。
+	var s := str(id_str).strip_edges()
+	if s.is_empty():
+		return false
+	var l := s.to_lower()
+	if l == "tile" or l.begins_with("tile_"):
+		return true
+	if l == "restaurant" or l.begins_with("restaurant_"):
+		return true
+	return false
+
+func _guess_piece_id_for_supply(base: String, module_ids: Array[String], piece_ids: Array[String]) -> String:
+	var b := str(base).strip_edges()
+	if b.is_empty():
+		return b
+	if not piece_ids.is_empty():
+		if piece_ids.has(b):
+			return b
+		for pid in piece_ids:
+			if pid.begins_with(b + "_"):
+				return pid
+		for mid in module_ids:
+			var prefix := str(mid) + "_"
+			if b.begins_with(prefix):
+				var rem := b.substr(prefix.length())
+				if rem.is_empty():
+					continue
+				if piece_ids.has(rem):
+					return rem
+				for pid2 in piece_ids:
+					if pid2.find(rem) >= 0:
+						return pid2
+		var parts := b.split("_")
+		if parts.size() > 0:
+			var needle := str(parts[parts.size() - 1])
+			if piece_ids.has(needle):
+				return needle
+			for pid3 in piece_ids:
+				if pid3.find(needle) >= 0:
+					return pid3
+	return b
+
+func _add_player_token_supplies_section(state: GameState) -> void:
+	# 玩家侧 tokens_remaining：仅展示存在对应 piece_id 的条目（例如 coffee_shop_tokens_remaining -> coffee_shop）
+	if state == null:
+		return
+	if not PieceRegistryClass.is_loaded():
+		return
+
+	var any := false
+	for pid in range(state.players.size()):
+		var p_val = state.players[pid]
+		if not (p_val is Dictionary):
+			continue
+		var p: Dictionary = p_val
+		for k in p.keys():
+			var key := str(k)
+			if not key.ends_with("_tokens_remaining"):
+				continue
+			var v = p.get(k, null)
+			if not (v is int or v is float):
+				continue
+			var count := int(v)
+			if count <= 0:
+				continue
+			var piece_id := key.trim_suffix("_tokens_remaining")
+			if piece_id.is_empty():
+				continue
+			if _is_excluded_piece_id(piece_id):
+				continue
+			if not PieceRegistryClass.has(piece_id):
+				continue
+			any = true
+			break
+		if any:
+			break
+
+	if not any:
+		return
+
+	for pid2 in range(state.players.size()):
+		var p_val2 = state.players[pid2]
+		if not (p_val2 is Dictionary):
+			continue
+		var p2: Dictionary = p_val2
+		var items: Array[Dictionary] = []
+		for k2 in p2.keys():
+			var key2 := str(k2)
+			if not key2.ends_with("_tokens_remaining"):
+				continue
+			var v2 = p2.get(k2, null)
+			if not (v2 is int or v2 is float):
+				continue
+			var count2 := int(v2)
+			if count2 <= 0:
+				continue
+			var piece_id2 := key2.trim_suffix("_tokens_remaining")
+			if piece_id2.is_empty():
+				continue
+			if _is_excluded_piece_id(piece_id2):
+				continue
+			if not PieceRegistryClass.has(piece_id2):
+				continue
+			items.append({"piece_id": piece_id2, "count": count2})
+
+		if items.is_empty():
+			continue
+		items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return str(a.get("piece_id", "")) < str(b.get("piece_id", ""))
+		)
+
+		var name := Globals.get_player_name(pid2) if Globals != null else ("玩家%d" % (pid2 + 1))
+		var flow := _add_section("%s（玩家板件）" % name)
+		for it in items:
+			var pid_str := str(it.get("piece_id", ""))
+			var cnt := int(it.get("count", 0))
+			if pid_str.is_empty() or cnt <= 0:
+				continue
+			var tex: Texture2D = _skin.get_piece_texture(pid_str) if _skin != null else null
+			var token := IconToken.new()
+			token.texture = tex
+			token.badge_text = "×%d" % cnt
+			token.tooltip_text = "%s ×%d" % [pid_str, cnt]
+			flow.add_child(token)
+
+
+# === 内部类：通用 token（贴图 + badge）===
+class IconToken extends PanelContainer:
+	var texture: Texture2D = null
+	var badge_text: String = ""
+
+	var _tex_rect: TextureRect
+	var _badge_label: Label
+
+	func _ready() -> void:
+		_build_ui()
+		_update_ui()
+
+	func _build_ui() -> void:
+		mouse_filter = Control.MOUSE_FILTER_PASS
+		custom_minimum_size = Vector2(80, 80)
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.12, 0.12, 0.14, 0.92)
+		style.border_color = Color(0.25, 0.25, 0.3, 0.6)
+		style.set_border_width_all(1)
+		style.set_corner_radius_all(10)
+		add_theme_stylebox_override("panel", style)
+
+		var container := Control.new()
+		container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(container)
+		container.set_anchors_preset(Control.PRESET_FULL_RECT)
+
+		_tex_rect = TextureRect.new()
+		_tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		_tex_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_tex_rect.offset_left = 10
+		_tex_rect.offset_top = 10
+		_tex_rect.offset_right = -10
+		_tex_rect.offset_bottom = -10
+		container.add_child(_tex_rect)
+
+		_badge_label = Label.new()
+		_badge_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(12) if Globals != null else 12)
+		_badge_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+		_badge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_badge_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+		_badge_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_badge_label.offset_left = 8
+		_badge_label.offset_top = 6
+		_badge_label.offset_right = -8
+		_badge_label.offset_bottom = -6
+		container.add_child(_badge_label)
+
+	func _update_ui() -> void:
+		if _tex_rect != null:
+			_tex_rect.texture = texture
+		if _badge_label != null:
+			_badge_label.text = badge_text
+
+
+# === 房屋编号 token（房屋贴图 + 编号角标）===
+class HouseNumberToken extends IconToken:
+	var house_number: int = -1
+	var house_texture: Texture2D = null
+
+	func _ready() -> void:
+		texture = house_texture
+		badge_text = str(house_number) if house_number > 0 else ""
+		tooltip_text = "房屋 %s" % badge_text if not badge_text.is_empty() else "房屋"
+		super._ready()
+
+
+# === 营销板件 token（复用 MapCanvasDrawer 的绘制风格）===
+class MarketingBoardToken extends Control:
+	var board_number: int = 0
+	var marketing_type: String = ""
+	var footprint_size: Vector2i = Vector2i.ONE
+
+	var _skin = null
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_PASS
+		_update_min_size()
+
+	func set_skin(skin) -> void:
+		_skin = skin
+		queue_redraw()
+
+	func _update_min_size() -> void:
+		var cell_size := 22
+		var size := Vector2(maxi(1, footprint_size.x) * cell_size, maxi(1, footprint_size.y) * cell_size)
+		custom_minimum_size = size
+
+	func _draw() -> void:
+		if _skin == null:
+			return
+		var cell_size := 22
+		var placement := {
+			"type": marketing_type,
+			"board_number": board_number,
+			"footprint_size": footprint_size,
+			"rotation": 0,
+		}
+		# MapCanvasDrawer._draw_marketing_placement 依赖 canvas._skin
+		self._skin = _skin
+		MapCanvasDrawerClass._draw_marketing_placement(self, cell_size, placement, 1.0, Rect2(Vector2.ZERO, custom_minimum_size))

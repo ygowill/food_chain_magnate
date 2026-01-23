@@ -1159,6 +1159,10 @@ func _on_left_panel_logs_requested() -> void:
 func _on_milestones_button_pressed() -> void:
 	show_milestone_panel()
 
+func _on_reserve_area_button_pressed() -> void:
+	if _panel_controller != null and _panel_controller.has_method("show_reserve_area_panel"):
+		_panel_controller.call("show_reserve_area_panel")
+
 func _on_employee_tree_button_pressed() -> void:
 	if _panel_controller != null and _panel_controller.has_method("toggle_employee_tree"):
 		_panel_controller.toggle_employee_tree()

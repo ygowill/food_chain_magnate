@@ -105,6 +105,10 @@ text = "日志"
 layout_mode = 2
 text = "里程碑"
 
+[node name="ReserveAreaButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+layout_mode = 2
+text = "保留区"
+
 [node name="DistanceToolButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
 layout_mode = 2
 text = "距离"
@@ -330,6 +334,7 @@ text = "返回主菜单"
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/EmployeeTreeButton" to="." method="_on_employee_tree_button_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/LogButton" to="." method="_on_log_button_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/MilestonesButton" to="." method="_on_milestones_button_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/ReserveAreaButton" to="." method="_on_reserve_area_button_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/DistanceToolButton" to="." method="_on_distance_tool_button_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/SettingsButton" to="." method="_on_settings_button_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/ToggleLeftPanelButton" to="." method="_on_toggle_left_panel_pressed"]
