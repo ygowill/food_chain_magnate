@@ -87,15 +87,19 @@ func _rebuild_from_state(state: GameState) -> void:
 func _add_section(title: String) -> HFlowContainer:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sections.add_child(box)
 
 	var label := Label.new()
 	label.text = title
 	label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(16) if Globals != null else 16)
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(label)
 
 	var flow := HFlowContainer.new()
 	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	flow.alignment = FlowContainer.ALIGNMENT_CENTER
 	flow.add_theme_constant_override("h_separation", 10)
 	flow.add_theme_constant_override("v_separation", 10)
 	box.add_child(flow)
@@ -122,11 +126,10 @@ func _add_house_numbers_section(state: GameState) -> void:
 	nums.sort()
 
 	var flow := _add_section("房屋编号（未使用 %d）" % nums.size())
-	var house_tex: Texture2D = _skin.get_piece_texture("house") if _skin != null else null
 	for n in nums:
-		var token := HouseNumberToken.new()
+		var token := HouseWithGardenNumberToken.new()
 		token.house_number = n
-		token.house_texture = house_tex
+		token.set_skin(_skin)
 		flow.add_child(token)
 
 func _add_garden_section(state: GameState) -> void:
@@ -139,10 +142,9 @@ func _add_garden_section(state: GameState) -> void:
 	if count <= 0:
 		return
 	var flow := _add_section("花园（剩余 %d）" % count)
-	var tex: Texture2D = _skin.get_piece_texture("garden_large") if _skin != null else null
-	var token := IconToken.new()
-	token.texture = tex
-	token.badge_text = "×%d" % count
+	var token := GardenExtensionToken.new()
+	token.count = count
+	token.set_skin(_skin)
 	token.tooltip_text = "花园 ×%d" % count
 	flow.add_child(token)
 
@@ -468,16 +470,74 @@ class IconToken extends PanelContainer:
 			_badge_label.text = badge_text
 
 
-# === 房屋编号 token（房屋贴图 + 编号角标）===
-class HouseNumberToken extends IconToken:
+# === 房屋编号 token（按地图真实风格绘制：house_with_garden）===
+class HouseWithGardenNumberToken extends Control:
 	var house_number: int = -1
-	var house_texture: Texture2D = null
+
+	var _skin = null
+	var _cell_size: int = 22
 
 	func _ready() -> void:
-		texture = house_texture
-		badge_text = str(house_number) if house_number > 0 else ""
-		tooltip_text = "房屋 %s" % badge_text if not badge_text.is_empty() else "房屋"
-		super._ready()
+		mouse_filter = Control.MOUSE_FILTER_PASS
+		custom_minimum_size = Vector2(float(_cell_size * 2), float(_cell_size * 3))
+		var t := str(house_number) if house_number > 0 else ""
+		tooltip_text = "房屋 %s" % t if not t.is_empty() else "房屋"
+		queue_redraw()
+
+	func set_skin(skin) -> void:
+		_skin = skin
+		queue_redraw()
+
+	func _world_to_view(world_pos: Vector2i) -> Vector2i:
+		# 该 token 内部使用“局部网格”（world==view），以复用 MapCanvasDrawer 的绘制逻辑。
+		return world_pos
+
+	func _draw() -> void:
+		if _skin == null:
+			return
+		# MapCanvasDrawer._draw_house_and_garden 依赖 canvas._skin / canvas._world_to_view()
+		self._skin = _skin
+		var info := {
+			"piece_id": "house_with_garden",
+			"rotation": 0,
+			"house_id": str(house_number) if house_number > 0 else "",
+			"min": Vector2i(0, 0),
+			"max": Vector2i(1, 2), # 2x3（house 2x2 + garden 2x1）
+		}
+		MapCanvasDrawerClass._draw_house_and_garden(self, _cell_size, Vector2i.ZERO, info, 1.0)
+
+
+# === 花园 token（按地图风格绘制 2x1 花园扩展 + 数量角标）===
+class GardenExtensionToken extends Control:
+	var count: int = 0
+
+	var _skin = null
+	var _cell_size: int = 22
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_PASS
+		custom_minimum_size = Vector2(float(_cell_size * 2), float(_cell_size))
+		queue_redraw()
+
+	func set_skin(skin) -> void:
+		_skin = skin
+		queue_redraw()
+
+	func _draw() -> void:
+		var rect := Rect2(Vector2.ZERO, custom_minimum_size)
+		var bg := Color("#22C55E")
+		bg.a = 0.30
+		draw_rect(rect, bg, true)
+
+		if _skin != null:
+			var tex: Texture2D = _skin.get_piece_texture("garden_large")
+			var pad := maxf(2.0, float(_cell_size) * 0.10)
+			var inner := rect.grow(-pad)
+			MapCanvasDrawerClass._draw_texture_aspect_fit(self, tex, inner, Color(1, 1, 1, 0.9), "center")
+
+		if count > 0:
+			# 复用营销板件的编号角标样式（白底圆 + 黑字），用于展示剩余数量。
+			MapCanvasDrawerClass._draw_marketing_board_number_badge(self, rect, int(count), _cell_size, 1.0)
 
 
 # === 营销板件 token（复用 MapCanvasDrawer 的绘制风格）===

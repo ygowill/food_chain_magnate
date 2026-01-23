@@ -1392,7 +1392,7 @@
 
 **涉及代码**
 
-- `ui/components/reserve_area/reserve_area_full_screen_view.gd`：`HouseNumberToken` / `_add_garden_section()` / `_add_section()`
+- `ui/components/reserve_area/reserve_area_full_screen_view.gd`：房屋/花园 token 绘制与布局（`HouseWithGardenNumberToken` / `GardenExtensionToken` / `_add_section()`）
 - `ui/scenes/game/map_canvas_drawer.gd`：`_draw_house_and_garden()`（地图上的真实绘制风格）
 
 **初步根因**
@@ -1400,21 +1400,37 @@
 - 当前 token 仅使用 piece 贴图 + 简单角标（`IconToken`），缺少地图绘制中的底色/贴图对齐/编号文字样式等规则。
 - 布局使用 `HFlowContainer` 默认左对齐；未在 ScrollContainer 内做水平居中约束。
 
-**修复方案（草案）**
+**修复方案**
 
-- 房屋编号 token：改为自绘（单节点）以复用地图绘制规则（底色 `#733651`、房屋贴图 bottom 对齐、右上角编号文字样式接近 `_draw_house_id()`）。
-- 花园 token：按地图风格绘制“2x1 花园扩展”预览（绿底 + `garden_large` 围栏贴图），并用 `×count` 标注剩余数量。
-- 布局：在 ScrollContainer 下增加 `CenterContainer`（或为每个 section 的 flow 增加居中包裹），并把 flow 对齐改为 center；必要时限制最大内容宽度以提升观感（同时尽可能占满可用宽度）。
+- 房屋编号 token：改为自绘（单节点）并直接复用 `MapCanvasDrawer._draw_house_and_garden()` 的地图绘制风格；并按你的说明，统一按 `house_with_garden` 的外观渲染。
+- 花园 token：按地图风格绘制“2x1 花园扩展”预览（绿底 + `garden_large` 围栏贴图），并显示剩余数量角标。
+- 布局：section 标题居中；各 section 的 `HFlowContainer` 子项改为居中排列，并在屏幕宽度内自动换行以尽可能 fit。
 
-**待澄清**
+**已澄清**
 
-- 花园 token 期望展示哪种外形？
-	- A) 仅展示“2x1 花园扩展”预览（推荐，最贴近地图花园样式）
-	- B) 直接展示 `house_with_garden` 的整体预览（2x3/3x2），用于表达“花园最终长什么样”
+- 花园展示：选择 A（2x1 花园扩展预览）
+- 房屋：保留区中的房屋外观统一按 `house_with_garden` 渲染（不是普通 `house`）
+
+**实施记录**
+
+- 已修改：`ui/components/reserve_area/reserve_area_full_screen_view.gd`
+	- 用 `HouseWithGardenNumberToken` 替换旧 `HouseNumberToken`：复用 `MapCanvasDrawer._draw_house_and_garden()` 绘制 `house_with_garden`，并显示房屋编号
+	- 新增 `GardenExtensionToken`：绘制 2x1 花园扩展预览，并复用 `MapCanvasDrawer._draw_marketing_board_number_badge()` 显示剩余数量角标
+	- `_add_section()`：section 标题居中；`HFlowContainer` 子项改为居中排列以尽可能 fit screen
+
+**验收**
+
+- 保留区房屋/花园的视觉风格与地图放置效果一致
+- 面板内容居中展示，随屏幕宽度自动换行，整体尽可能 fit
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：PASS（109/109，`.godot/AllTests.log`）
 
 **状态**
 
-- 待澄清
+- Implemented（待手动验收）
 
 ## 57. Working：生产/采购员工选择应按“实例”消耗（用过的那张变灰且不可点）
 
