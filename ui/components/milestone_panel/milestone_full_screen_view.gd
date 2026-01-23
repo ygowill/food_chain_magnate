@@ -21,6 +21,9 @@ var _rules: Dictionary = {}
 
 var _cards: Dictionary = {} # milestone_id -> MilestoneCard
 var _formatter: MilestonePanel = null
+var _built_milestone_ids_key: String = ""
+var _last_sync_key: String = ""
+var _last_skin_ref = null
 
 func _ready() -> void:
 	set_process_unhandled_input(true)
@@ -39,23 +42,46 @@ func set_skin(skin) -> void:
 	_skin = skin
 
 func prime_with_state(state: GameState, skin_override = null) -> void:
+	# 用于把“首次构建成本”移到加载阶段（用户点击时几乎瞬开）。
+	sync_from_state(state, skin_override, true)
+
+func sync_from_state(state: GameState, skin_override = null, force_rebuild: bool = false) -> void:
 	if state == null:
 		return
+
 	# 仅用于格式化少量文案（例如 CFO 加成百分比），不需要 deep duplicate；避免首次打开里程碑面板卡顿。
 	_rules = state.rules if (state.rules is Dictionary) else {}
+
 	if skin_override != null:
 		set_skin(skin_override)
 	else:
 		_ensure_skin_for_state(state)
+
+	var skin_changed: bool = (_last_skin_ref != _skin)
+	_last_skin_ref = _skin
+
 	_ensure_formatter()
 	# 复用 MilestonePanel 的文案格式化逻辑，但跳过其 set_rules()（内部 deep duplicate 可能很重）。
 	# 这里直接注入引用即可；该 formatter 实例不入树，且不会修改 rules。
 	if _formatter != null:
 		_formatter._rules = _rules
-	_rebuild_from_state(state)
+
+	var sync_key := _compute_sync_key(state)
+	if not force_rebuild and not skin_changed and sync_key == _last_sync_key:
+		return
+	_last_sync_key = sync_key
+
+	var milestone_ids := _get_all_milestone_ids(state)
+	var ids_key := ",".join(milestone_ids)
+	if force_rebuild or ids_key != _built_milestone_ids_key:
+		_built_milestone_ids_key = ids_key
+		_rebuild_from_state(state)
+		return
+
+	_update_from_state(state)
 
 func open_with_state(state: GameState, skin_override = null) -> void:
-	prime_with_state(state, skin_override)
+	sync_from_state(state, skin_override, false)
 	visible = true
 
 func request_close() -> void:
@@ -96,6 +122,36 @@ func _ensure_skin_for_state(state: GameState) -> void:
 	else:
 		_skin = null
 		_skin_key = ""
+
+func _compute_sync_key(state: GameState) -> String:
+	# 仅用于避免重复刷新（打开时不再重复 rebuild）。
+	var modules_key := ""
+	if state.modules is Array:
+		modules_key = ",".join(Array(state.modules, TYPE_STRING, "", null))
+
+	var pool_key := ""
+	if state.milestone_pool is Array:
+		pool_key = ",".join(Array(state.milestone_pool, TYPE_STRING, "", null))
+
+	var players_parts: Array[String] = []
+	for pid in range(state.players.size()):
+		var logo_str := ""
+		var milestones_key := ""
+		var p_val = state.players[pid]
+		if p_val is Dictionary:
+			var p: Dictionary = p_val
+			var logo_val = p.get("restaurant_logo_id", null)
+			if logo_val is int or logo_val is float:
+				logo_str = str(int(logo_val))
+			var ms_list: Array[String] = []
+			for m in Array(p.get("milestones", [])):
+				var mid := str(m).strip_edges()
+				if not mid.is_empty():
+					ms_list.append(mid)
+			milestones_key = ",".join(ms_list)
+		players_parts.append("%s:%s" % [logo_str, milestones_key])
+
+	return "%s|%s|%s" % [modules_key, pool_key, "|".join(players_parts)]
 
 func _rebuild_from_state(state: GameState) -> void:
 	if grid == null:
@@ -140,6 +196,27 @@ func _rebuild_from_state(state: GameState) -> void:
 		card.set_owners(owners)
 		grid.add_child(card)
 		_cards[ms_id] = card
+
+func _update_from_state(state: GameState) -> void:
+	if _cards.is_empty():
+		return
+	var claimed_by := _build_claimed_by(state)
+	var logo_textures := _build_player_logo_textures(state)
+
+	for k in _cards.keys():
+		var ms_id := str(k)
+		var card_val = _cards.get(k, null)
+		if not (card_val is MilestoneCard):
+			continue
+		var card: MilestoneCard = card_val
+
+		var owners: Array[int] = []
+		if claimed_by.has(ms_id):
+			for v in Array(claimed_by[ms_id]):
+				if v is int:
+					owners.append(int(v))
+		owners.sort()
+		card.update_from_state(owners, logo_textures)
 
 func _get_all_milestone_ids(state: GameState) -> Array[String]:
 	var set := {}
@@ -228,11 +305,47 @@ class MilestoneCard extends PanelContainer:
 		_update_display()
 
 	func set_owners(owners: Array[int]) -> void:
-		_owners = []
+		var normalized: Array[int] = []
 		for v in Array(owners):
 			if v is int:
-				_owners.append(int(v))
-		_owners.sort()
+				normalized.append(int(v))
+		normalized.sort()
+
+		if _owners.size() == normalized.size():
+			var same := true
+			for i in range(normalized.size()):
+				if _owners[i] != normalized[i]:
+					same = false
+					break
+			if same:
+				return
+
+		_owners = normalized
+		_update_display()
+
+	func update_from_state(owners: Array[int], logo_textures: Dictionary) -> void:
+		# 仅在必要时刷新（避免每次 open/sync 都重建 icons 节点）。
+		var textures_changed := (player_logo_textures != logo_textures)
+		if textures_changed:
+			player_logo_textures = logo_textures
+
+		var normalized: Array[int] = []
+		for v in Array(owners):
+			if v is int:
+				normalized.append(int(v))
+		normalized.sort()
+
+		var owners_changed := true
+		if _owners.size() == normalized.size():
+			owners_changed = false
+			for i in range(normalized.size()):
+				if _owners[i] != normalized[i]:
+					owners_changed = true
+					break
+
+		if not owners_changed and not textures_changed:
+			return
+		_owners = normalized
 		_update_display()
 
 	func _build_ui() -> void:

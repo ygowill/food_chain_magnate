@@ -1336,6 +1336,7 @@
 **现象**
 
 - 点击 TopBar “里程碑”或“供应堆”后，需要等待一段时间才能显示全屏面板（体感卡顿/延迟）。
+- 用户后续反馈：供应堆已明显改善，但“里程碑”面板打开仍有一小段卡顿。
 
 **涉及代码**
 
@@ -1348,6 +1349,7 @@
 
 - 里程碑/供应堆面板在首次打开时各自调用 `MapSkinBuilder.build_for_modules(...)` 构建 `MapSkin`，与 `MapCanvas` 已构建的皮肤重复，导致额外的同步资源加载与 JSON 解析。
 - 面板打开时会一次性创建较多 UI 节点（卡片/token），在低配机器上可能放大卡顿体感。
+- 里程碑面板每次点击打开都会触发 `open_with_state()->prime_with_state()->_rebuild_from_state()`，导致反复清空/重建卡片与内部 icon 节点（即使 state 未变化）。
 
 **修复方案**
 
@@ -1367,6 +1369,11 @@
 	- 新增 `prime_with_state()`：可在加载阶段预热构建，点击时直接 show
 	- 避免调用 `MilestonePanel.set_rules()`（内部 deep duplicate）：改为直接注入 `_formatter._rules = state.rules`
 	- `_exit_tree()` 释放不入树的 `_formatter`（避免 headless 退出时报资源未释放）
+- 追加优化：`ui/components/milestone_panel/milestone_full_screen_view.gd`
+	- 新增 `sync_from_state()`：以 `state(milestone_pool + players[*].milestones + logo_id)` 生成 key，避免重复刷新
+	- `open_with_state()` 改为仅 `sync_from_state()`（必要时增量更新/重建）+ `visible=true`，不再每次点击都强制 rebuild
+	- 新增 `_update_from_state()`：仅更新获得者 icon（不清空重建整张卡片）
+	- `MilestoneCard.update_from_state()`：owners/logo 未变化时不重建 icons 节点，进一步降低打开瞬间的 UI 负载
 - 已修改：`ui/components/reserve_area/reserve_area_full_screen_view.gd`
 	- 新增 `set_skin()`；`open_with_state(state, skin_override)` 支持外部注入 `MapSkin`
 - 已修改：`ui/scenes/game/game_panel_controller.gd`
