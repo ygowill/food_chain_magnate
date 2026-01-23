@@ -1605,14 +1605,32 @@
 	- `ui:panel_controller.sync` ≈ 11ms（原 ≈ 1622ms，已消除重复 MapSkin build）
 - 剩余主要瓶颈仍是 `skin:logo_transparentize`（≈ 1.6s/次）
 
-**整改计划（下一步，待你点头后实施）**
+**实施记录（Step 2：移除 logo 运行时去背景）**
 
-1. 解决“logo 去背景”耗时（预计再节省 ~1.0~1.6s，取决于玩家/是否需要全部 logo）
-	- 方案 A（推荐，视觉最稳）：把 `assets/` 中的 restaurant logo 贴图改为带 alpha 的透明底版本，移除/禁用运行时像素转换。
-	- 方案 B：改为“按需延迟转换 + 跨 MapSkin 实例缓存”（只转换实际用到的 logo，并且第二次不会重复）；仍会有首次转换卡顿，但总量下降。
-	- 方案 C：保留转换但用 `Image.get_data()` 批处理字节数组实现（替换 per-pixel get/set），加速单张转换。
-2. 若你仍希望“进入对局后立刻可点储备卡”且不被地图贴图加载阻塞：
+- 已修改资源：`modules/base_pieces/assets/map/logos/*.png`
+	- 预处理为透明底（alpha=0/255），移除运行时像素级 flood-fill 去背景的 CPU 开销
+- 已修改：`ui/visual/map_skin.gd`
+	- `restaurant_logo_*` 不再做 `_convert_texture_edge_bg_to_transparent()`；直接使用资源贴图
+
+**跑数命令（基准数据 3 / Step 2 后）**
+
+- 命令：  
+	`HOME=.tmp_home godot --headless --path . --scene res://ui/scenes/tests/game_smoke_test.tscn -- --autorun --profile_startup > .godot/StartupProfile_step2.log 2>&1`
+- 参考日志：`.godot/StartupProfile_step2.log`
+
+**数据结论（基准数据 3）**
+
+- `game:_ready` ≈ 401ms（原 ≈ 3606ms）
+	- `ui:map_view.set_game_state` ≈ 31ms（原 ≈ 1644ms）
+	- `skin:build_for_modules` ≈ 30ms（原 ≈ 1644ms）
+	- `skin:apply.piece_visuals` ≈ 15ms（原 ≈ 1600ms，主要来自 logo 去背景）
+
+**整改计划（下一步，可选）**
+
+1. 若你仍希望“进入对局后立刻可点储备卡”且不被地图贴图加载阻塞：
 	- 调整进入对局时的 UI 顺序：优先显示 ReserveCards modal；地图区域保持 loading/隐藏，待 MapSkin 构建完成后一次性显示（不使用 placeholder 贴图）。
+2. 若希望“重复开局/多次开局”更快：可缓存 modules_v2 重资源
+	- 缓存 `ContentCatalog/RulesetV2/GameData`（按 base_dir + modules key），避免重复 JSON 解析与 Registry 装配（当前约 200ms 级别）
 
 **候选优化方案（待用户确认取舍后实施）**
 
@@ -1629,7 +1647,7 @@
 
 **状态**
 
-- Investigated（已完成打点与跑数；待确认整改方案后实施）
+- Implemented（已完成 Step1+Step2；开局 MapSkin 构建与 UI 同步不再造成明显卡顿）
 
 ## 57. Working：生产/采购员工选择应按“实例”消耗（用过的那张变灰且不可点）
 

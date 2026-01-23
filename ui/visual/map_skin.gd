@@ -172,21 +172,7 @@ func _maybe_make_transparent_logo_texture(piece_id: String, base_tex: Texture2D,
 	var id := str(piece_id)
 	if not id.begins_with("restaurant_logo_"):
 		return base_tex
-	if _logo_textures_transparent_bg.has(id):
-		var cached = _logo_textures_transparent_bg.get(id, null)
-		return cached if cached is Texture2D else base_tex
-
-	PerfTraceClass.counter_add("skin:logo_transparentize_attempt", 1)
-	var span_logo := PerfTraceClass.begin_span("skin:logo_transparentize")
-	var converted := _convert_texture_edge_bg_to_transparent(base_tex)
-	PerfTraceClass.end_span(span_logo)
-	if converted != null:
-		PerfTraceClass.counter_add("skin:logo_transparentize_ok", 1)
-		_logo_textures_transparent_bg[id] = converted
-		return converted
-
-	if warnings != null:
-		warnings.append("MapSkin: logo 去背景失败，使用原贴图: %s" % id)
+	# restaurant logos 贴图已在 assets 中预处理为透明底；无需运行时像素级去背景（issue_tracker #72）。
 	return base_tex
 
 func _convert_texture_edge_bg_to_transparent(tex: Texture2D) -> Texture2D:
