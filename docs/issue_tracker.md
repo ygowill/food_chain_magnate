@@ -1348,24 +1348,38 @@
 - 里程碑/保留区面板在首次打开时各自调用 `MapSkinBuilder.build_for_modules(...)` 构建 `MapSkin`，与 `MapCanvas` 已构建的皮肤重复，导致额外的同步资源加载与 JSON 解析。
 - 面板打开时会一次性创建较多 UI 节点（卡片/token），在低配机器上可能放大卡顿体感。
 
-**修复方案（草案）**
+**修复方案**
 
-- 皮肤复用/缓存：
-	- 优先复用 `MapCanvas` 当前使用的 `MapSkin`（避免重复 build）；
-	- 或统一改用 `UiSkinCache.get_skin_for_modules(...)`，并在游戏初始化阶段预热一次（把耗时移到加载阶段，点击立即打开）。
-- 打开体验：
-	- 面板节点可在 `GamePanelController` 初始化时提前 instantiate 并隐藏（避免首次点击解析 PackedScene/脚本）。
-	- 如仍有卡顿，可考虑分帧构建内容（先显示空壳 + “加载中”，再 `call_deferred` 填充）。
+ - 复用 `MapCanvas` 当前使用的 `MapSkin`：打开面板时由 `GamePanelController` 注入，避免里程碑/保留区各自重复 `build_for_modules()`。
+ - 在 `GamePanelController` 初始化时提前 instantiate 里程碑/保留区全屏覆盖层并隐藏，减少首次点击开销。
 
-**待澄清**
+**已澄清**
 
-- 你更偏好哪种取舍？
-	- A) 游戏启动稍慢一点，但点击“里程碑/保留区”几乎瞬开
-	- B) 游戏启动不变，点击后显示“加载中”并异步填充
+- 选择 A：允许游戏启动稍慢一点，但点击“里程碑/保留区”几乎瞬开。
+
+**实施记录**
+
+- 已修改：`ui/scenes/game/map_canvas.gd`：新增 `get_skin()` 供其它 UI 复用当前 `MapSkin`
+- 已修改：`ui/components/milestone_panel/milestone_full_screen_view.gd`
+	- 新增 `set_skin()`；`open_with_state(state, skin_override)` 支持外部注入 `MapSkin`
+- 已修改：`ui/components/reserve_area/reserve_area_full_screen_view.gd`
+	- 新增 `set_skin()`；`open_with_state(state, skin_override)` 支持外部注入 `MapSkin`
+- 已修改：`ui/scenes/game/game_panel_controller.gd`
+	- `_init()` 预先创建里程碑/保留区全屏覆盖层并隐藏
+	- 打开面板时调用 `open_with_state(state, map_canvas.get_skin())`，避免重复 build
+
+**验收**
+
+- 点击 TopBar “里程碑/保留区”面板立即打开，无明显卡顿（不再等待资源加载）。
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：PASS（109/109，`.godot/AllTests.log`）
 
 **状态**
 
-- 待澄清
+- Implemented（待手动验收）
 
 ---
 

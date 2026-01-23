@@ -292,6 +292,10 @@ func _ensure_skin(modules: Array[String]) -> void:
 	fallback._init_placeholders()
 	_skin = fallback
 
+func get_skin():
+	# 供其它 UI（例如 TopBar 全屏面板）复用当前对局 MapSkin，避免重复构建/加载导致卡顿。
+	return _skin
+
 func _gui_input(event: InputEvent) -> void:
 	if _grid_size == Vector2i.ZERO:
 		return

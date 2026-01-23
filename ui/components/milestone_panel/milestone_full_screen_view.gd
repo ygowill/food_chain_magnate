@@ -28,11 +28,18 @@ func _ready() -> void:
 		close_button.pressed.connect(_on_close_pressed)
 	visible = false
 
-func open_with_state(state: GameState) -> void:
+func set_skin(skin) -> void:
+	# 允许外部（例如 MapCanvas）注入已构建的 MapSkin，避免重复 build 导致卡顿。
+	_skin = skin
+
+func open_with_state(state: GameState, skin_override = null) -> void:
 	if state == null:
 		return
 	_rules = state.rules.duplicate(true) if (state.rules is Dictionary) else {}
-	_ensure_skin_for_state(state)
+	if skin_override != null:
+		set_skin(skin_override)
+	else:
+		_ensure_skin_for_state(state)
 	_ensure_formatter()
 	_formatter.set_rules(_rules)
 	_rebuild_from_state(state)

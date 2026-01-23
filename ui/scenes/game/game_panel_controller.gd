@@ -62,6 +62,11 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 	_placement_overlays = PlacementOverlaysClass.new(_scene, _map_controller, _overlay_controller, _execute_command, hide_all)
 	_end_panels = EndPanelsClass.new(_scene, _overlay_controller, _execute_command, hide_all, center_popup, _refresh_ui)
 
+	# 预先创建全屏覆盖层（里程碑/保留区），避免首次点击时 instantiate + 皮肤构建带来的卡顿。
+	# 皮肤在打开时从 MapCanvas 注入，确保与地图一致且无需重复 build。
+	_ensure_milestone_full_screen_view()
+	_ensure_reserve_area_full_screen_view()
+
 func connect_signals(action_panel, turn_order_track, hand_area, company_structure) -> void:
 	UiSignalHelpersClass.safe_connect(action_panel, "action_requested", on_action_requested)
 	UiSignalHelpersClass.safe_connect(turn_order_track, "position_selected", _on_turn_order_position_selected)
@@ -95,7 +100,7 @@ func show_milestone_panel() -> void:
 		return
 
 	if _milestone_full_screen_view.has_method("open_with_state"):
-		_milestone_full_screen_view.call("open_with_state", state)
+		_milestone_full_screen_view.call("open_with_state", state, _get_current_map_skin())
 	_milestone_full_screen_view.visible = true
 
 func show_reserve_area_panel() -> void:
@@ -113,7 +118,7 @@ func show_reserve_area_panel() -> void:
 		return
 
 	if _reserve_area_full_screen_view.has_method("open_with_state"):
-		_reserve_area_full_screen_view.call("open_with_state", state)
+		_reserve_area_full_screen_view.call("open_with_state", state, _get_current_map_skin())
 	_reserve_area_full_screen_view.visible = true
 
 func show_payday_panel() -> void:
@@ -1347,6 +1352,14 @@ func _ensure_employee_tree_panel() -> void:
 func _hide_employee_tree() -> void:
 	if is_instance_valid(_employee_tree_panel):
 		_employee_tree_panel.visible = false
+
+func _get_current_map_skin():
+	if _scene == null:
+		return null
+	var canvas = _scene.get("map_canvas")
+	if is_instance_valid(canvas) and canvas.has_method("get_skin"):
+		return canvas.call("get_skin")
+	return null
 
 func _ensure_milestone_full_screen_view() -> void:
 	if _scene == null:
