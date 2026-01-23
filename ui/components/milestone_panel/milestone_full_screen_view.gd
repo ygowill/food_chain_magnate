@@ -499,6 +499,7 @@ class MilestoneCard extends PanelContainer:
 	var _pool_count: int = 0
 	var _round_number: int = 0
 
+	var _panel_style: StyleBoxFlat = null
 	var _name_label: Label
 	var _desc_label: Label
 	var _status_label: Label
@@ -553,10 +554,8 @@ class MilestoneCard extends PanelContainer:
 	func _build_ui() -> void:
 		custom_minimum_size = Vector2(220, 150)
 
-		var style := StyleBoxFlat.new()
-		style.set_corner_radius_all(10)
-		style.set_border_width_all(1)
-		add_theme_stylebox_override("panel", style)
+		# IMPORTANT: never mutate a theme-shared StyleBox (would affect unrelated UI).
+		_ensure_panel_style()
 
 		var margin := MarginContainer.new()
 		margin.add_theme_constant_override("margin_left", 10)
@@ -669,11 +668,15 @@ class MilestoneCard extends PanelContainer:
 
 		_update_style(status)
 
+	func _ensure_panel_style() -> void:
+		if _panel_style == null:
+			_panel_style = StyleBoxFlat.new()
+			_panel_style.set_corner_radius_all(10)
+		add_theme_stylebox_override("panel", _panel_style)
+
 	func _update_style(status: int) -> void:
-		var style_val = get_theme_stylebox("panel") if has_theme_stylebox("panel") else null
-		if not (style_val is StyleBoxFlat):
-			style_val = StyleBoxFlat.new()
-		var style: StyleBoxFlat = style_val
+		_ensure_panel_style()
+		var style: StyleBoxFlat = _panel_style
 
 		match status:
 			CardStatus.OBTAINABLE:
