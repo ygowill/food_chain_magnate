@@ -1725,12 +1725,6 @@
 - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
 - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（109/109，`.godot/AllTests.log`）
 
-**回归修复**
-
-- 用户反馈：打开里程碑面板后“很多组件边框都变成浅绿色”。
-- 根因：里程碑卡片在入树前（`_ready` 之前）会调用 `_update_style()`；当时 `get_theme_stylebox("panel")` 返回的是 theme 共享 StyleBox，导致对其进行颜色修改会污染全局 UI。
-- 修复：里程碑卡片改为始终使用自身私有的 `StyleBoxFlat`（`_panel_style`），禁止修改 theme-shared StyleBox。
-
 **状态**
 
 - Implemented（待手动验收）
@@ -1896,6 +1890,12 @@
 
 - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
 - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（109/109，`.godot/AllTests.log`）
+
+**回归修复**
+
+- 用户反馈：打开里程碑面板后“很多组件边框都变成浅绿色”。
+- 根因：里程碑卡片在入树前（`_ready` 之前）会调用 `_update_style()`；当时 `get_theme_stylebox("panel")` 返回的是 theme 共享 StyleBox，导致对其进行颜色修改会污染全局 UI。
+- 修复：里程碑卡片改为始终使用自身私有的 `StyleBoxFlat`（`_panel_style`），禁止修改 theme-shared StyleBox。
 
 **状态**
 
