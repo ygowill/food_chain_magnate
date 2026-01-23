@@ -52,6 +52,8 @@ const SaveLoadDialogScript = preload("res://ui/dialogs/save_load_dialog.gd")
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
+const EventTimelineBuildClass = preload("res://core/engine/game_engine/event_timeline_build.gd")
+const GameEventLogFormatterClass = preload("res://ui/scenes/game/game_event_log_formatter.gd")
 
 # 游戏状态
 var game_engine: GameEngine = null
@@ -75,6 +77,7 @@ var _confirm_dialog_on_cancel: Callable = Callable()
 var _replay_player: ReplayPlayer = null
 var _replay_mode_active: bool = false
 var _replay_original_engine: GameEngine = null
+var _replay_original_log_entries: Array[Dictionary] = []
 var _replay_file_path: String = ""
 var _startup_replay_from_main_menu: bool = false
 var _startup_replay_file_path: String = ""
@@ -163,6 +166,7 @@ func _ready() -> void:
 	_event_log_controller = GameEventLogControllerClass.new()
 	_event_log_controller.setup(game_log_panel, should_restore_log_history)
 	UiSignalHelpersClass.safe_connect(game_log_panel, "close_requested", toggle_game_log)
+	_init_replay_bar()
 	PerfTraceClass.end_span(span_layout)
 
 	var span_init_game := PerfTraceClass.begin_span("game:_initialize_game")
@@ -182,7 +186,7 @@ func _ready() -> void:
 	UiSignalHelpersClass.safe_connect(self, "resized", _on_root_resized)
 	if _startup_replay_from_main_menu and not _startup_replay_file_path.is_empty():
 		# 回放入口：保持加载遮罩，避免先渲染“新开局”的 UI 再切换到回放造成闪烁。
-		show_replay_player(_startup_replay_file_path)
+		_start_replay_from_file(_startup_replay_file_path)
 	else:
 		var span_update_ui := PerfTraceClass.begin_span("game:_update_ui(first)")
 		_update_ui()
@@ -1424,7 +1428,7 @@ func _on_save_load_selected(path: String) -> void:
 	if path.is_empty():
 		return
 	if _save_load_context == "replay":
-		show_replay_player(path)
+		_start_replay_from_file(path)
 		return
 
 	# 预留：未来可支持“游戏内载入存档”
@@ -1434,6 +1438,200 @@ func _on_save_completed(path: String) -> void:
 	if path.is_empty():
 		return
 	GameLog.info("Game", "存档已保存: %s" % path)
+
+func _init_replay_bar() -> void:
+	if game_log_panel == null or not is_instance_valid(game_log_panel):
+		return
+	if not game_log_panel.has_method("get_replay_bar"):
+		return
+	var rb = game_log_panel.call("get_replay_bar")
+	if rb == null or not is_instance_valid(rb):
+		return
+
+	if rb.has_signal("seek_requested"):
+		UiSignalHelpersClass.safe_connect(rb, "seek_requested", _on_replay_bar_seek_requested)
+	if rb.has_signal("return_latest_requested"):
+		UiSignalHelpersClass.safe_connect(rb, "return_latest_requested", _on_replay_bar_return_latest_requested)
+	if rb.has_signal("load_requested"):
+		UiSignalHelpersClass.safe_connect(rb, "load_requested", _on_replay_bar_load_requested)
+	if rb.has_signal("close_requested"):
+		UiSignalHelpersClass.safe_connect(rb, "close_requested", _on_replay_bar_close_requested)
+
+	if rb.has_method("set_active"):
+		rb.call("set_active", false)
+
+func _set_replay_bar_state(head_index: int, cursor_index: int, read_only: bool) -> void:
+	if game_log_panel == null or not is_instance_valid(game_log_panel):
+		return
+	if not game_log_panel.has_method("get_replay_bar"):
+		return
+	var rb = game_log_panel.call("get_replay_bar")
+	if rb == null or not is_instance_valid(rb):
+		return
+
+	if rb.has_method("set_active"):
+		rb.call("set_active", true)
+	if rb.has_method("set_timeline"):
+		rb.call("set_timeline", head_index, cursor_index, read_only)
+
+func _hide_replay_bar() -> void:
+	if game_log_panel == null or not is_instance_valid(game_log_panel):
+		return
+	if not game_log_panel.has_method("get_replay_bar"):
+		return
+	var rb = game_log_panel.call("get_replay_bar")
+	if rb == null or not is_instance_valid(rb):
+		return
+	if rb.has_method("set_active"):
+		rb.call("set_active", false)
+
+func _start_replay_from_file(file_path: String) -> void:
+	if file_path.is_empty():
+		return
+	_replay_file_path = file_path
+
+	# 若是从对局中进入回放：保留原日志，退出回放时可恢复。
+	if not _replay_mode_active and is_instance_valid(game_log_panel) and game_log_panel.has_method("get_entries"):
+		_replay_original_log_entries = game_log_panel.get_entries()
+
+	var engine := GameEngine.new()
+	var load_result: Result = engine.load_from_file(file_path)
+	if not load_result.ok:
+		GameLog.error("Game", "回放加载失败: %s" % load_result.error)
+		if _startup_replay_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
+			SceneManager.hide_loading()
+		_show_confirm("回放加载失败", load_result.error, Callable(), Callable())
+		return
+
+	if _startup_replay_from_main_menu and Globals != null and Globals.has_method("sync_runtime_config_from_engine"):
+		Globals.sync_runtime_config_from_engine(engine)
+
+	_enter_replay_mode(engine)
+	_apply_full_replay_log_timeline(engine)
+
+	if _startup_replay_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
+		SceneManager.hide_loading()
+	if _startup_replay_from_main_menu:
+		call_deferred("_start_background_ui_warmup")
+
+func _apply_full_replay_log_timeline(engine: GameEngine) -> void:
+	if engine == null or not is_instance_valid(engine):
+		return
+	if not is_instance_valid(game_log_panel):
+		return
+
+	var build_r: Result = EventTimelineBuildClass.build_full(engine)
+	if not build_r.ok:
+		GameLog.error("Game", "构建完整事件时间线失败: %s" % build_r.error)
+		_show_confirm("回放加载失败", "构建完整事件时间线失败: %s" % build_r.error, Callable(), Callable())
+		return
+
+	var events_val = build_r.value
+	var events: Array = events_val if (events_val is Array) else []
+	var entries := _build_log_entries_from_timeline_events(events)
+	game_log_panel.load_entries(entries)
+
+	var head_index := engine.command_history.size() - 1
+	var cursor_index := int(engine.current_command_index)
+	game_log_panel.set_timeline_head(head_index)
+	game_log_panel.set_timeline_cursor(cursor_index)
+	_set_replay_bar_state(head_index, cursor_index, true)
+
+func _build_log_entries_from_timeline_events(events: Array) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if events == null or events.is_empty():
+		return out
+
+	var formatter = GameEventLogFormatterClass.new()
+	var entry_id := 0
+
+	for ev_val in events:
+		if not (ev_val is Dictionary):
+			continue
+		var ev: Dictionary = ev_val
+		var cmd_index := int(ev.get("command_index", -1))
+		var event_seq := int(ev.get("sequence", entry_id))
+
+		var formatted: Array = formatter.format(ev) if (formatter != null and is_instance_valid(formatter) and formatter.has_method("format")) else []
+		for f_val in formatted:
+			if not (f_val is Dictionary):
+				continue
+			var f: Dictionary = f_val
+			var log_type := int(f.get("type", GameLogPanel.LogType.DEBUG))
+			var msg := str(f.get("message", ""))
+			var details_val = f.get("details", {})
+			var details: Dictionary = details_val if (details_val is Dictionary) else {}
+			if not details.has("command_index"):
+				details["command_index"] = cmd_index
+
+			out.append({
+				"id": entry_id,
+				"type": log_type,
+				"message": msg,
+				"timestamp": str(event_seq),
+				"details": details,
+				"command_index": cmd_index,
+				"event_seq": event_seq,
+			})
+			entry_id += 1
+
+	return out
+
+func _on_replay_bar_seek_requested(target_index: int) -> void:
+	if not _replay_mode_active:
+		return
+	if game_engine == null:
+		return
+
+	var head_index := game_engine.command_history.size() - 1
+	var target := clampi(int(target_index), -1, head_index)
+	if target == int(game_engine.current_command_index):
+		game_log_panel.set_timeline_head(head_index)
+		game_log_panel.set_timeline_cursor(target)
+		_set_replay_bar_state(head_index, target, true)
+		return
+
+	var r := game_engine.rewind_to_command(target)
+	if not r.ok:
+		GameLog.warn("Game", "回放 seek 失败: %s" % r.error)
+		return
+
+	_update_ui()
+	game_log_panel.set_timeline_head(head_index)
+	game_log_panel.set_timeline_cursor(target)
+	_set_replay_bar_state(head_index, target, true)
+
+func _on_replay_bar_return_latest_requested() -> void:
+	if not _replay_mode_active:
+		return
+	if game_engine == null:
+		return
+	_on_replay_bar_seek_requested(game_engine.command_history.size() - 1)
+
+func _on_replay_bar_load_requested() -> void:
+	_ensure_save_load_dialog()
+	_save_load_context = "replay"
+	_save_load_dialog.open_for_replay()
+
+func _on_replay_bar_close_requested() -> void:
+	if _startup_replay_from_main_menu:
+		Globals.reset_game_config()
+		SceneManager.goto_main_menu()
+		return
+
+	_hide_replay_bar()
+	_exit_replay_mode()
+
+	# 恢复对局内进入回放前的日志（避免依赖已被回放覆盖的 EventBus.history）。
+	if not _replay_original_log_entries.is_empty() and is_instance_valid(game_log_panel):
+		game_log_panel.load_entries(_replay_original_log_entries)
+	_replay_original_log_entries.clear()
+
+	if game_engine != null and is_instance_valid(game_log_panel):
+		var head_index := game_engine.command_history.size() - 1
+		var cursor_index := int(game_engine.current_command_index)
+		game_log_panel.set_timeline_head(head_index)
+		game_log_panel.set_timeline_cursor(cursor_index)
 
 func show_replay_player(file_path: String) -> void:
 	if file_path.is_empty():
