@@ -160,11 +160,10 @@ ActionPanel 禁用策略：
 
 工作项：
 
-- 在 `ui/scenes/game/game.gd` 的回放 seek 回调中补齐日志刷新调用（短期止血）。
-- 为 `GameLogPanel` 增加：
-  - `set_timeline_head(head_index: int)`
-  - `set_timeline_cursor(cursor_index: int)`
-  - `set_entry_command_index(entry_id, command_index)`（或通过 details 写入并在 LogItem 渲染时读取）
+- [x] 在 `ui/scenes/game/game.gd` 的回放 seek 回调中补齐日志刷新调用（短期止血）。
+- [ ] `GameLogPanel`：增加 `set_timeline_head(head_index: int)`
+- [ ] `GameLogPanel`：增加 `set_timeline_cursor(cursor_index: int)`
+- [ ] `GameLogPanel`：增加 `set_entry_command_index(entry_id, command_index)`（或通过 details 写入并在 LogItem 渲染时读取）
 
 验收：
 
@@ -272,4 +271,3 @@ ActionPanel 禁用策略：
 1) “回放态”的定义：仅对“从存档加载的回放引擎”生效，还是对局内也允许把 cursor 拉回历史进行复盘？
 2) 点击“未来日志”时的行为：是否允许直接跳到该日志所属命令（即快进），还是仅提示“未来内容”？
 3) 宏步骤（命令）的人类可读文本来源：先用 `action_id` + params 生成简易文案，还是引入 `ActionExecutor.display_name`/本地化表来生成？
-

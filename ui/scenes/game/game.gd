@@ -1562,6 +1562,11 @@ func _on_replay_state_changed(_command_index: int, _state: GameState) -> void:
 	else:
 		_update_ui()
 
+	# 回放 seek 会重建 EventBus.history（record_event，不会通知订阅者），
+	# 因此 UI 日志需显式从 history 重建，避免残留旧时间线日志。
+	if _event_log_controller != null and _event_log_controller.has_method("rebuild_from_history"):
+		_event_log_controller.rebuild_from_history()
+
 func _on_replay_error(message: String) -> void:
 	GameLog.warn("ReplayPlayer", message)
 
