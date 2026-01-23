@@ -79,6 +79,10 @@
 | 62 | 折扣经理：无法结束回合（疑似强制动作未自动触发/Skip 在动作面板被禁用） | 规则+UI 流程 | `ActionRegistry.get_player_initiatable_actions()` 以 `SkipAction.validate` 判定可点；强制动作未完成时 skip 校验失败导致按钮灰；而 `set_discount` 又被隐藏且仅 UI 层尝试 auto-run -> 形成死锁 | 待实施（已复现） |
 | 63 | 上方工具栏移除“确认结束/调试”按钮 | UI/清理 | `Game.tscn` TopBar 仍保留旧入口；功能与 ActionPanel/DebugPanel 重复 | 待确认 |
 | 64 | 地图外圈不可见格导致地图缩小：外圈为空时应放大，只有需要/已有外圈 piece 才完整显示 | UI/交互+渲染 | `MapCanvasIndexer.compute_bounds()` 无条件添加 UI-only margin=2 外圈；`MapView.fit_to_view()` 基于 `_grid_size` 导致整体缩小；需可切换 bounds/margin 并与现有缩放/auto-fit 协同 | 待实施（已澄清） |
+| 65 | 动作面板：跳过子阶段/确认结束按钮顺序错误（未固定到底部） | UI/交互 | ActionPanel 直接使用 ActionRegistry 提供的 action_id 列表顺序（仅把 mandatory 前置），未对 skip_sub_phase/skip 做末尾固定排序 | 待实施 |
+| 66 | 顶部工具栏：里程碑面板应全屏网格展示（3列居中）并同步获得状态 | UI/布局+信息 | 复用 `MilestonePanel` 以 `dock_right` 布局打开；当前为竖向列表且缺少“卡片式网格/全屏/已获得餐厅 icon”等展示 | 待实施（已澄清） |
+| 67 | 顶部工具栏：新增“保留区”按钮，分类展示未使用 piece（房屋/花园/广告牌等） | UI/信息+功能 | 目前缺少统一的“供给/剩余 piece”视图；剩余数量分散在 `state.map.*_supply_remaining` 与各系统（marketing boards 等） | 待实施（已澄清） |
+| 68 | 日志面板缺少“隐藏/关闭”按钮 | UI/交互 | `GameLogPanel` 仅提供“全屏/清空/过滤”，没有 close；用户只能再次点 TopBar 的“日志”进行隐藏 | 待实施 |
 
 ---
 
@@ -1100,6 +1104,157 @@
 **状态**
 
 - Implemented（待手动验收）
+
+---
+
+## 65. 动作面板：固定“跳过子阶段/确认结束”到底部
+
+**现象**
+
+- 玩家动作面板中，部分情况下“跳过子阶段（skip_sub_phase）”与“确认结束（skip）”按钮不在列表底部，且两者相对顺序可能颠倒。
+- 期望：两者始终位于动作列表最下方，并且“跳过子阶段”在“确认结束”上方。
+
+**涉及代码**
+
+- `ui/components/action_panel/action_panel.gd`
+
+**初步根因**
+
+- `ActionPanel.refresh()` 直接按 `ActionRegistry.get_available_actions()` 返回的顺序生成按钮，仅在“强制动作”存在时做一次“mandatory 前置”，没有对 `skip_sub_phase/skip` 做稳定的末尾排序规则，因此不同面板/阶段会出现顺序不一致。
+
+**修复方案**
+
+- 在 `ActionPanel.refresh()` 中对 `visible_ids` 做一次“固定排序”：
+	- 先按既有逻辑处理强制动作优先；
+	- 再把 `skip_sub_phase` 与 `skip` 从列表中剔除并追加到末尾（若存在），顺序固定为：`skip_sub_phase` → `skip`。
+- 保持其它动作相对顺序不变（避免无关 UI 变动）。
+
+**验收**
+
+- 任意阶段/子阶段打开右侧 ActionPanel：
+	- 若存在 `skip_sub_phase/skip`：两者出现在列表底部且顺序固定；
+	- 若只存在其中一个：该按钮出现在列表底部。
+
+**状态**
+
+- 待实施
+
+---
+
+## 66. 顶部工具栏：里程碑面板改为全屏网格（3列居中）并同步获得状态
+
+**现象**
+
+- 点击 TopBar 的“里程碑”后，当前里程碑面板会以右侧抽屉/右侧面板形式出现（占用动作面板区域），不符合预期。
+- 期望：类似“升级路线”一样打开全屏视图；里程碑卡片以网格展示（每行 3 列、整体居中）；并同步展示“已获得/未获得/供应”等信息。
+- 期望补充：每张里程碑卡片上可显示获得该里程碑的餐厅 icon（例如右下角一排 icon）。
+
+**涉及代码**
+
+- `ui/scenes/game/game.tscn`：TopBar `MilestonesButton`
+- `ui/scenes/game/game.gd`：`show_milestone_panel()`
+- `ui/scenes/game/game_panel_controller.gd`：`_center_popup()` / `POPUP_LAYOUT_DOCK_RIGHT`
+- `ui/scenes/game/game_panel_working_panels.gd`：`show_milestone_panel()`（当前强制 `popup_layout=dock_right`）
+- `ui/components/milestone_panel/milestone_panel.tscn`
+- `ui/components/milestone_panel/milestone_panel.gd`（目前为“竖向列表项”，global_view 用文字显示玩家名）
+
+**初步根因**
+
+- TopBar 的里程碑入口复用了 `MilestonePanel`（列表型组件）并设置为 `dock_right` 弹窗布局；因此它天然会占用右侧抽屉区域，且视觉结构与“卡片式全屏浏览”目标不一致。
+- `MilestonePanel.MilestoneItem` 在 global_view 下仅输出“已获得：玩家名…”，没有餐厅/玩家 icon 的渲染能力。
+
+**修复方案（草案）**
+
+- 新增一个全屏容器面板（例如 `MilestoneFullScreenView`），打开方式参考 `GamePanelController.toggle_employee_tree()`：
+	- 全屏 anchors + 覆盖显示；提供关闭按钮与（可选）ESC 关闭；
+	- 内部使用 `GridContainer(columns=3)` 或 `FlowContainer` 实现“每行 3 列 + 居中”；
+	- 复用 `MilestonePanel` 的数据处理逻辑（milestone_pool + players.milestones）但改为“卡片式 item UI”。
+- 全局视图中，将“获得者”展示由文字改为 icon（优先用玩家餐厅 logo）：
+	- icon 数据来源：`players[*].restaurant_logo_id`（已存在于 state），贴图来源复用 `MapSkin.get_piece_texture(MapCanvasDrawer.RESTAURANT_LOGO_PIECE_IDS[logo_id])`。
+
+**已澄清**
+
+- 布局：每行 3 列（可多行）。
+- 获得者 icon：按“获得该里程碑的玩家”显示玩家餐厅 logo（每玩家 1 个 icon）。
+- 不展示供应池剩余数量。
+- 支持 `ESC` 关闭；关闭后左/右侧面板的显示状态保持原样。
+
+**状态**
+
+- 待澄清
+
+---
+
+## 67. 顶部工具栏：新增“保留区”按钮（未使用 piece 总览）
+
+**现象**
+
+- TopBar 需要新增一个“保留区”入口，用于分类展示当前游戏中“尚未被使用/尚未放置”的所有 piece（例如未放置房屋、花园、广告牌等），并且以“实际放置的 piece 样式”渲染。
+
+**涉及代码（供给/剩余数据来源）**
+
+- `core/map/map_runtime/baked_map.gd`：`state.map.house_number_supply_remaining` / `state.map.garden_supply_remaining`
+- `gameplay/actions/place_house_action.gd`：消耗房屋编号供给
+- `gameplay/actions/add_garden_action.gd`：消耗花园供给
+- `gameplay/actions/initiate_marketing_action.gd`：营销板件占用情况（`state.map.marketing_placements` / `state.marketing_instances`）
+- `ui/scenes/game/map_canvas_drawer.gd`：piece/marketing 的实际渲染风格（贴图/底色/编号角标等）
+- `ui/visual/map_skin.gd`：贴图加载入口
+
+**初步根因**
+
+- 目前 UI 没有统一的“供给/剩余 piece”总览；相关数据分散在 map supply（房屋编号/花园）、营销放置（marketing_placements）、以及可能的模块自定义 supply 结构里，导致玩家无法快速判断“还有什么可用”。
+
+**修复方案（草案）**
+
+- TopBar 增加按钮“保留区”，打开一个全屏面板（或与里程碑一致的全屏浏览模式）。
+- 面板内按类别分组展示（建议：房屋编号、花园、营销板件…），每个条目使用贴图/角标模拟地图上实际渲染效果：
+	- 房屋：显示 house 贴图 + 右上角编号（来自 `house_number_supply_remaining` 列表）。
+	- 花园：显示 garden 贴图 + 剩余数量（来自 `garden_supply_remaining`）。
+	- 营销板件：按 board_number 列出未占用的 board（来自 `MarketingRegistry.get_all_board_numbers()` 减去 `state.map.marketing_placements.keys()`），用营销板件的矩形底 + 类型 icon + 编号角标渲染（不绑定产品时可不画产品 icon 或画空槽）。
+
+**已澄清**
+
+- piece 范围：不包含地图扩展 tile、餐厅；但模块引入的新 piece 需要展示。
+- 营销板件“未使用”：只要当前不在 `state.map.marketing_placements` 即算可用（含到期/回收）。
+- 房屋编号：逐个编号展示（像 token 列表）。
+- 交互：纯展示（不需要点击联动/跳转）。
+
+**状态**
+
+- 待澄清
+
+---
+
+## 68. 日志面板：增加“隐藏/关闭”按钮
+
+**现象**
+
+- 当前 `GameLogPanel` 缺少“隐藏/关闭”入口；玩家需要再次点击 TopBar 的“日志”按钮才能隐藏日志面板，容易造成困惑。
+
+**涉及代码**
+
+- `ui/components/game_log/game_log_panel.tscn`
+- `ui/components/game_log/game_log_panel.gd`
+- `ui/scenes/game/game.gd`：`toggle_game_log()`
+
+**初步根因**
+
+- 日志面板 UI 仅提供“全屏/清空/过滤”等功能按钮，没有 `close/hide` 按钮与对应信号；`Game` 侧只能通过 TopBar toggle 显隐。
+
+**修复方案**
+
+- 在 `GameLogPanel` 顶部按钮行增加“隐藏/×”按钮，并新增信号（例如 `close_requested`）。
+- `Game` 在初始化时连接该信号，调用 `toggle_game_log()` 以恢复 LeftPanel/关闭日志面板（保持现有切换逻辑一致）。
+
+**验收**
+
+- 日志面板右上角（或顶部按钮行）存在“隐藏/×”按钮；
+- 点击后日志面板关闭，左侧玩家信息面板恢复显示；
+- 现有 TopBar “日志”按钮仍可正常开关。
+
+**状态**
+
+- 待实施
 
 ---
 
