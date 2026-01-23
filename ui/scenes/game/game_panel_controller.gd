@@ -881,24 +881,30 @@ func _sync_modals(state: GameState) -> void:
 	if _scene == null or state == null:
 		return
 
-	var is_replay_mode := false
-	if _scene.has_method("is_replay_mode_active"):
-		var v = _scene.call("is_replay_mode_active")
+	var is_timeline_read_only := false
+	if _scene.has_method("is_timeline_read_only_active"):
+		var v = _scene.call("is_timeline_read_only_active")
 		if v is bool:
-			is_replay_mode = bool(v)
+			is_timeline_read_only = bool(v)
+	elif _scene.has_method("is_replay_mode_active"):
+		# Backwards-compat fallback.
+		var v2 = _scene.call("is_replay_mode_active")
+		if v2 is bool:
+			is_timeline_read_only = bool(v2)
 
-	# 回放模式：禁止强制交互弹窗（否则会遮挡并吞掉 ReplayPlayer 的输入）
-	if is_replay_mode:
+	# 回放/复盘（只读时间线）：禁止强制交互弹窗（否则会遮挡并吞掉时间线输入）
+	if is_timeline_read_only:
 		_hide_reserve_card_modal()
 		_hide_turn_order_modal()
 		_hide_restructuring_modal()
+		_hide_fridge_keep_modal()
 		return
 
 	var current_player_id := state.get_current_player_id()
 	var covered := _get_modal_cover_rect()
 
 	# 储备卡选择（Setup/ReserveCards）
-	if (not is_replay_mode) and state.phase == "Setup" and str(state.sub_phase) == "ReserveCards" and current_player_id >= 0:
+	if state.phase == "Setup" and str(state.sub_phase) == "ReserveCards" and current_player_id >= 0:
 		_show_reserve_card_modal(state, current_player_id, covered)
 	else:
 		_hide_reserve_card_modal()

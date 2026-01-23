@@ -215,6 +215,7 @@ ActionPanel 禁用策略：
 
 - [x] ActionPanel 增加公共 API（例如 `set_globally_disabled(reason: String)`），由 Game 在回放态/查看历史态调用。
 - [x] 顶部/右侧增加“回放中”提示条（复用 TopBar 文案：回放 `（回放）` / 复盘 `（复盘）`）。
+- [x] 回放/复盘（只读时间线）时：禁止强制交互弹窗与强提示面板（Restructuring/TurnOrder/ReserveCards/FridgeKeep/BankBreak/GameOver），避免阻塞时间线回放。
 
 验收：
 
@@ -266,3 +267,7 @@ ActionPanel 禁用策略：
 1) “回放态”的定义：对局内也允许把 cursor 拉回历史进行复盘（并禁用 ActionPanel）。
 2) 点击“未来日志”时的行为：允许直接跳到该日志所属命令（快进）。
 3) 宏步骤（命令）的人类可读文本来源：使用 `ActionExecutor.display_name`/本地化表。
+4) 计划需包含 M2（嵌入式 ReplayBar）以及后续增量项（M3/M4）。
+5) 以“每个 work item 子条目”为粒度更新计划与提交 commit。
+6) 取消日志 `max_entries` 上限（完整时间线可能很长）。
+7) 完整时间线需纳入 `GAME_STARTED` 等初始化事件。

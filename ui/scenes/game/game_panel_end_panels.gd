@@ -43,6 +43,32 @@ func reset_bank_break_tracking(state: GameState) -> void:
 
 func sync(state: GameState) -> void:
 	_sync_payday_panel(state)
+
+	var is_timeline_read_only := false
+	if _scene != null and _scene.has_method("is_timeline_read_only_active"):
+		var v = _scene.call("is_timeline_read_only_active")
+		if v is bool:
+			is_timeline_read_only = bool(v)
+	elif _scene != null and _scene.has_method("is_replay_mode_active"):
+		# Backwards-compat fallback.
+		var v2 = _scene.call("is_replay_mode_active")
+		if v2 is bool:
+			is_timeline_read_only = bool(v2)
+
+	# 回放/复盘（只读时间线）：不要弹出 BankBreak/GameOver 这类“强提示”面板，避免阻塞时间线回放；
+	# 但仍保持 tracking 同步，防止返回最新后错误触发弹窗。
+	if is_timeline_read_only:
+		if state != null and (state.bank is Dictionary):
+			var bank: Dictionary = state.bank
+			_last_bank_total = int(bank.get("total", 0))
+			_last_bank_broke_count = int(bank.get("broke_count", 0))
+
+		if is_instance_valid(bank_break_panel):
+			bank_break_panel.visible = false
+		if is_instance_valid(game_over_panel):
+			game_over_panel.visible = false
+		return
+
 	_check_bank_break(state)
 	if state != null and state.phase == "GameOver":
 		_show_game_over()

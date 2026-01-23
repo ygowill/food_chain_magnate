@@ -1423,6 +1423,16 @@ func _cancel_quit_to_menu() -> void:
 func is_replay_mode_active() -> bool:
 	return _replay_mode_active
 
+func is_timeline_read_only_active() -> bool:
+	# Read-only whenever we're using a replay engine, or when the local engine cursor is behind head (reviewing history).
+	if _replay_mode_active:
+		return true
+	if game_engine == null:
+		return false
+	var head_index := game_engine.command_history.size() - 1
+	var cursor_index := int(game_engine.current_command_index)
+	return cursor_index < head_index
+
 func _ensure_save_load_dialog() -> void:
 	if _save_load_dialog != null and is_instance_valid(_save_load_dialog):
 		return
