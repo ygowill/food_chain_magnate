@@ -24,7 +24,6 @@ signal closed()
 @onready var ui_scale_slider: HSlider = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/UIScaleRow/UIScaleSlider
 @onready var font_scale_slider: HSlider = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/FontScaleRow/FontScaleSlider
 @onready var log_font_scale_slider: HSlider = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/LogFontScaleRow/LogFontScaleSlider
-@onready var ui_layout_option: OptionButton = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/UILayoutRow/UILayoutOption
 @onready var show_tile_ids_check: CheckBox = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/ShowTileIdsCheck
 @onready var show_cell_hover_tooltip_check: CheckBox = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/ShowCellHoverTooltipCheck
 
@@ -42,11 +41,6 @@ const RESOLUTIONS: Array[Vector2i] = [
 	Vector2i(2560, 1440),
 ]
 
-const UI_LAYOUT_OPTIONS: Array[String] = [
-	"经典布局（v1）",
-	"新布局（v2，试验）",
-]
-
 var _current_settings: Dictionary = {}
 var _default_settings: Dictionary = {
 	"master_volume": 0.8,
@@ -59,7 +53,6 @@ var _default_settings: Dictionary = {
 	"ui_scale": 1.0,
 	"font_scale": 1.1,
 	"log_font_scale": 1.35,
-	"ui_layout_version": 2,
 	"show_tile_ids": false,
 	"show_cell_hover_tooltip": false,
 	"auto_save": true,
@@ -79,7 +72,6 @@ func _ready() -> void:
 	close_requested.connect(_on_close_pressed)
 
 	_setup_resolution_options()
-	_setup_ui_layout_options()
 	_load_settings()
 
 func _setup_resolution_options() -> void:
@@ -89,13 +81,6 @@ func _setup_resolution_options() -> void:
 	resolution_option.clear()
 	for res in RESOLUTIONS:
 		resolution_option.add_item("%dx%d" % [res.x, res.y])
-
-func _setup_ui_layout_options() -> void:
-	if ui_layout_option == null:
-		return
-	ui_layout_option.clear()
-	for title in UI_LAYOUT_OPTIONS:
-		ui_layout_option.add_item(title)
 
 func _load_settings() -> void:
 	# 尝试从配置文件加载
@@ -110,7 +95,6 @@ func _load_settings() -> void:
 			"ui_scale": config.get_value("display", "ui_scale", _default_settings.ui_scale),
 			"font_scale": float(config.get_value("display", "font_scale", _default_settings.font_scale)),
 			"log_font_scale": float(config.get_value("display", "log_font_scale", _default_settings.log_font_scale)),
-			"ui_layout_version": clampi(int(config.get_value("display", "ui_layout_version", _default_settings.ui_layout_version)), 1, 2),
 			"show_tile_ids": bool(config.get_value("display", "show_tile_ids", _default_settings.show_tile_ids)),
 			"show_cell_hover_tooltip": bool(config.get_value("display", "show_cell_hover_tooltip", _default_settings.show_cell_hover_tooltip)),
 			"auto_save": config.get_value("game", "auto_save", _default_settings.auto_save),
@@ -136,7 +120,6 @@ func _save_settings() -> void:
 	config.set_value("display", "ui_scale", _current_settings.ui_scale)
 	config.set_value("display", "font_scale", float(_current_settings.get("font_scale", 1.0)))
 	config.set_value("display", "log_font_scale", float(_current_settings.get("log_font_scale", 1.0)))
-	config.set_value("display", "ui_layout_version", int(_current_settings.get("ui_layout_version", 1)))
 	config.set_value("display", "show_tile_ids", bool(_current_settings.get("show_tile_ids", false)))
 	config.set_value("display", "show_cell_hover_tooltip", bool(_current_settings.get("show_cell_hover_tooltip", false)))
 
@@ -190,9 +173,6 @@ func _update_ui_from_settings() -> void:
 		font_scale_slider.value = float(_current_settings.get("font_scale", 1.0)) * 100
 	if log_font_scale_slider != null:
 		log_font_scale_slider.value = float(_current_settings.get("log_font_scale", 1.0)) * 100
-	if ui_layout_option != null:
-		var v := clampi(int(_current_settings.get("ui_layout_version", 1)), 1, 2)
-		ui_layout_option.select(v - 1)
 	_set_checkbox(show_tile_ids_check, bool(_current_settings.get("show_tile_ids", false)))
 	_set_checkbox(show_cell_hover_tooltip_check, bool(_current_settings.get("show_cell_hover_tooltip", false)))
 
@@ -223,8 +203,6 @@ func _update_settings_from_ui() -> void:
 		_current_settings["font_scale"] = float(font_scale_slider.value) / 100.0
 	if log_font_scale_slider != null:
 		_current_settings["log_font_scale"] = float(log_font_scale_slider.value) / 100.0
-	if ui_layout_option != null:
-		_current_settings["ui_layout_version"] = clampi(int(ui_layout_option.selected) + 1, 1, 2)
 	_current_settings["show_tile_ids"] = _read_checkbox(show_tile_ids_check, bool(_current_settings.get("show_tile_ids", false)))
 	_current_settings["show_cell_hover_tooltip"] = _read_checkbox(show_cell_hover_tooltip_check, bool(_current_settings.get("show_cell_hover_tooltip", false)))
 
@@ -388,7 +366,6 @@ func _sync_globals_runtime_settings() -> void:
 		return
 
 	Globals.ui_scale = float(_current_settings.ui_scale)
-	Globals.ui_layout_version = clampi(int(_current_settings.get("ui_layout_version", 1)), 1, 2)
 	Globals.show_tile_ids = bool(_current_settings.get("show_tile_ids", false))
 	Globals.show_cell_hover_tooltip = bool(_current_settings.get("show_cell_hover_tooltip", false))
 	Globals.font_scale = clampf(float(_current_settings.get("font_scale", Globals.font_scale)), 0.5, 2.0)

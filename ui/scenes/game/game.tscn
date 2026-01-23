@@ -89,14 +89,6 @@ visible = false
 layout_mode = 2
 text = "推进子阶段"
 
-[node name="SkipButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
-layout_mode = 2
-text = "确认结束"
-
-[node name="DebugButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
-layout_mode = 2
-text = "调试"
-
 [node name="Spacer" type="Control" parent="UIRoot/TopBar/ButtonRow"]
 layout_mode = 2
 size_flags_horizontal = 3
@@ -333,53 +325,8 @@ text = "回放播放器"
 layout_mode = 2
 text = "返回主菜单"
 
-[node name="DebugDialog" type="Window" parent="."]
-title = "调试"
-initial_position = 2
-size = Vector2i(700, 500)
-visible = false
-
-[node name="VBoxContainer" type="VBoxContainer" parent="DebugDialog"]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 12.0
-offset_top = 12.0
-offset_right = -12.0
-offset_bottom = -12.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="StatusRow" type="HBoxContainer" parent="DebugDialog/VBoxContainer"]
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="StateHashLabel" type="Label" parent="DebugDialog/VBoxContainer/StatusRow"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
-theme_override_font_sizes/font_size = 12
-text = "Hash: ..."
-
-[node name="Spacer" type="Control" parent="DebugDialog/VBoxContainer/StatusRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="CommandCountLabel" type="Label" parent="DebugDialog/VBoxContainer/StatusRow"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
-theme_override_font_sizes/font_size = 12
-text = "命令: 0"
-
-[node name="DebugText" type="TextEdit" parent="DebugDialog/VBoxContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-editable = false
-
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/AdvancePhaseButton" to="." method="_on_advance_phase_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/AdvanceSubPhaseButton" to="." method="_on_advance_sub_phase_pressed"]
-[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/SkipButton" to="." method="_on_skip_pressed"]
-[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/DebugButton" to="." method="_on_debug_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/EmployeeTreeButton" to="." method="_on_employee_tree_button_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/LogButton" to="." method="_on_log_button_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ButtonRow/MilestonesButton" to="." method="_on_milestones_button_pressed"]
@@ -398,4 +345,3 @@ editable = false
 [connection signal="pressed" from="MenuDialog/VBoxContainer/DistanceToolButton" to="." method="_on_distance_tool_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/ReplayButton" to="." method="_on_replay_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/QuitToMenuButton" to="." method="_on_quit_to_menu_pressed"]
-[connection signal="close_requested" from="DebugDialog" to="." method="_on_debug_dialog_close_requested"]

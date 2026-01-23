@@ -163,17 +163,6 @@ func _on_settings_changed(settings: Dictionary) -> void:
 	if ui_animation_manager != null and ui_animation_manager.has_method("set_animation_speed"):
 		ui_animation_manager.set_animation_speed(float(settings.get("animation_speed", Globals.animation_speed)))
 
-	# UI 布局版本：切换后直接在运行时应用（不需要重启）
-	var prev_layout := int(Globals.ui_layout_version) if Globals != null else 1
-	var next_layout := prev_layout
-	if settings.has("ui_layout_version"):
-		next_layout = clampi(int(settings.get("ui_layout_version", prev_layout)), 1, 2)
-	if Globals != null:
-		Globals.ui_layout_version = next_layout
-	if next_layout != prev_layout and _scene != null and is_instance_valid(_scene):
-		if _scene.has_method("_apply_ui_layout"):
-			_scene.call_deferred("_apply_ui_layout")
-
 	Globals.confirm_actions = bool(settings.get("confirm_actions", Globals.confirm_actions))
 	Globals.show_hints = bool(settings.get("show_hints", Globals.show_hints))
 	Globals.animation_speed = float(settings.get("animation_speed", Globals.animation_speed))

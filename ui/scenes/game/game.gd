@@ -10,12 +10,8 @@ extends Control
 @onready var current_player_label: Label = $UIRoot/TopBar/InfoRow/CurrentPlayerLabel
 @onready var toggle_left_panel_button: Button = $UIRoot/TopBar/ButtonRow/ToggleLeftPanelButton
 @onready var toggle_right_panel_button: Button = $UIRoot/TopBar/ButtonRow/ToggleRightPanelButton
-@onready var state_hash_label: Label = $DebugDialog/VBoxContainer/StatusRow/StateHashLabel
-@onready var command_count_label: Label = $DebugDialog/VBoxContainer/StatusRow/CommandCountLabel
 @onready var toggle_bottom_panel_button: Button = $MenuDialog/VBoxContainer/ToggleBottomPanelButton
 @onready var menu_dialog: Window = $MenuDialog
-@onready var debug_dialog: Window = $DebugDialog
-@onready var debug_text: TextEdit = $DebugDialog/VBoxContainer/DebugText
 @onready var main_content: Control = $UIRoot/MainContent
 @onready var center_split: HSplitContainer = $UIRoot/MainContent/CenterSplit
 @onready var map_view: ScrollContainer = $UIRoot/MainContent/CenterSplit/GameArea/MapView
@@ -94,7 +90,6 @@ var _left_area_visible: bool = true
 var _main_content_default_split_offset: int = 360
 var _left_area_user_resized: bool = false
 const LEFT_AREA_MIN_WIDTH := 200
-const LEFT_AREA_MAX_WIDTH := 400
 
 var _bottom_panel_visible: bool = true
 var _right_panel_visible: bool = true
@@ -147,7 +142,7 @@ func _ready() -> void:
 	)
 	_panel_controller.connect_signals(action_panel, turn_order_track, hand_area, company_structure)
 
-	_menu_debug_controller = GameMenuDebugControllerClass.new(self, menu_dialog, debug_dialog, debug_text)
+	_menu_debug_controller = GameMenuDebugControllerClass.new(self, menu_dialog)
 
 	_event_log_controller = GameEventLogControllerClass.new()
 	_event_log_controller.setup(game_log_panel, should_restore_log_history)
@@ -229,16 +224,17 @@ func _on_main_content_dragged(offset: int) -> void:
 	if not _left_area_visible:
 		return
 	_left_area_user_resized = true
-	var clamped := clampi(int(offset), LEFT_AREA_MIN_WIDTH, LEFT_AREA_MAX_WIDTH)
+	# 只限制最小宽度（issue_tracker #61）：避免把“用户拖到的宽度”写回 custom_minimum_size 导致无法再缩小。
+	var clamped := maxi(int(offset), LEFT_AREA_MIN_WIDTH)
 	_main_content_default_split_offset = clamped
 	if is_instance_valid(main_content):
 		main_content.split_offset = clamped
 	if is_instance_valid(left_area):
-		left_area.custom_minimum_size.x = clamped
+		left_area.custom_minimum_size.x = LEFT_AREA_MIN_WIDTH
 
 func _init_left_panel_toggle() -> void:
 	if is_instance_valid(main_content):
-		_main_content_default_split_offset = clampi(int(main_content.split_offset), LEFT_AREA_MIN_WIDTH, LEFT_AREA_MAX_WIDTH)
+		_main_content_default_split_offset = maxi(int(main_content.split_offset), LEFT_AREA_MIN_WIDTH)
 	_left_area_visible = is_instance_valid(left_area) and left_area.visible
 	_update_left_panel_toggle_button()
 
@@ -558,51 +554,33 @@ func _finish_hide_right_panel(right_panel: Control, original_pos: Vector2) -> vo
 	right_panel.position = original_pos
 
 func _apply_ui_layout() -> void:
-	var version := int(Globals.ui_layout_version) if Globals != null else 2
-
-	if version == 2:
-		if is_instance_valid(player_panel):
-			player_panel.visible = false
-		if is_instance_valid(inventory_panel):
-			inventory_panel.visible = false
-		if is_instance_valid(left_panel):
-			left_panel.visible = true
-			if is_instance_valid(game_log_panel):
-				game_log_panel.visible = false
-				if left_panel.has_method("bind_game_log_panel"):
-					left_panel.call("bind_game_log_panel", game_log_panel)
-				elif left_panel.has_method("attach_game_log_panel"):
-					left_panel.call("attach_game_log_panel", game_log_panel)
-			if left_panel.has_signal("logs_requested"):
-				var sig := Signal(left_panel, &"logs_requested")
-				var cb := Callable(self, "_on_left_panel_logs_requested")
-				if not sig.is_connected(cb):
-					sig.connect(cb)
-
-		if is_instance_valid(bottom_panel):
-			bottom_panel.visible = false
-		_bottom_panel_visible = false
-		if is_instance_valid(toggle_bottom_panel_button):
-			toggle_bottom_panel_button.visible = false
-	else:
-		if is_instance_valid(player_panel):
-			player_panel.visible = true
-		if is_instance_valid(inventory_panel):
-			inventory_panel.visible = true
-		if is_instance_valid(left_panel):
-			left_panel.visible = false
+	# 强制新布局（v2），不再支持 v1（issue_tracker #60）。
+	if is_instance_valid(player_panel):
+		player_panel.visible = false
+	if is_instance_valid(inventory_panel):
+		inventory_panel.visible = false
+	if is_instance_valid(left_panel):
+		left_panel.visible = true
 		if is_instance_valid(game_log_panel):
-			game_log_panel.visible = true
+			game_log_panel.visible = false
+			if left_panel.has_method("bind_game_log_panel"):
+				left_panel.call("bind_game_log_panel", game_log_panel)
+			elif left_panel.has_method("attach_game_log_panel"):
+				left_panel.call("attach_game_log_panel", game_log_panel)
+		if left_panel.has_signal("logs_requested"):
+			var sig := Signal(left_panel, &"logs_requested")
+			var cb := Callable(self, "_on_left_panel_logs_requested")
+			if not sig.is_connected(cb):
+				sig.connect(cb)
 
-		if is_instance_valid(bottom_panel):
-			bottom_panel.visible = _bottom_panel_visible
-		if is_instance_valid(toggle_bottom_panel_button):
-			toggle_bottom_panel_button.visible = true
-			_update_bottom_panel_toggle_button()
+	if is_instance_valid(bottom_panel):
+		bottom_panel.visible = false
+	_bottom_panel_visible = false
+	if is_instance_valid(toggle_bottom_panel_button):
+		toggle_bottom_panel_button.visible = false
 
 func _init_bottom_panel_toggle() -> void:
-	var version := int(Globals.ui_layout_version) if Globals != null else 2
-	_bottom_panel_visible = false if version == 2 else (is_instance_valid(bottom_panel) and bottom_panel.visible)
+	_bottom_panel_visible = false
 	_update_bottom_panel_toggle_button()
 
 func _update_bottom_panel_toggle_button() -> void:
@@ -658,12 +636,12 @@ func _apply_responsive_layout() -> void:
 			separation = 20
 
 	if _left_area_user_resized:
-		left_width = clampi(int(_main_content_default_split_offset), LEFT_AREA_MIN_WIDTH, LEFT_AREA_MAX_WIDTH)
+		left_width = maxi(int(_main_content_default_split_offset), LEFT_AREA_MIN_WIDTH)
 	else:
-		left_width = clampi(int(left_width), LEFT_AREA_MIN_WIDTH, LEFT_AREA_MAX_WIDTH)
+		left_width = maxi(int(left_width), LEFT_AREA_MIN_WIDTH)
 
 	if is_instance_valid(left_area):
-		left_area.custom_minimum_size.x = left_width
+		left_area.custom_minimum_size.x = LEFT_AREA_MIN_WIDTH
 	_main_content_default_split_offset = left_width
 	if _left_area_visible:
 		main_content.split_offset = left_width
@@ -796,15 +774,6 @@ func _update_ui() -> void:
 		]
 	bank_label.text = "银行: $%d" % state.bank.get("total", 0)
 
-	# 计算状态哈希（截断显示）
-	var full_hash := state.compute_hash()
-	state_hash_label.text = "Hash: %s..." % full_hash.substr(0, 8)
-
-	# 命令计数
-	var total_cmds := game_engine.get_command_history().size()
-	var current_cmd := int(game_engine.current_command_index)
-	command_count_label.text = "命令: %d (当前: #%d)" % [total_cmds, current_cmd] if current_cmd >= 0 else ("命令: %d (当前: -)" % total_cmds)
-
 	if is_instance_valid(game_log_panel) and game_log_panel.has_method("set_player_count"):
 		game_log_panel.set_player_count(state.players.size())
 
@@ -819,9 +788,6 @@ func _update_ui() -> void:
 	if _overlay_controller != null:
 		_overlay_controller.sync_dinnertime_overlay(state)
 		_overlay_controller.sync_demand_indicator(state)
-
-	if _menu_debug_controller != null:
-		_menu_debug_controller.sync_debug_text_if_visible()
 
 	# 同步调试面板
 	if _debug_panel != null and _debug_panel.visible:
@@ -1092,9 +1058,6 @@ func _handle_escape() -> bool:
 	if is_instance_valid(menu_dialog) and menu_dialog.visible:
 		_on_menu_dialog_close_requested()
 		return true
-	if is_instance_valid(debug_dialog) and debug_dialog.visible:
-		_on_debug_dialog_close_requested()
-		return true
 	if _confirm_dialog != null and is_instance_valid(_confirm_dialog) and _confirm_dialog.visible:
 		_confirm_dialog.hide()
 		return true
@@ -1123,8 +1086,6 @@ func _handle_escape() -> bool:
 func _try_rotate_placement() -> bool:
 	# 若有顶层对话框，优先不处理
 	if is_instance_valid(menu_dialog) and menu_dialog.visible:
-		return false
-	if is_instance_valid(debug_dialog) and debug_dialog.visible:
 		return false
 	if _confirm_dialog != null and is_instance_valid(_confirm_dialog) and _confirm_dialog.visible:
 		return false
@@ -1179,7 +1140,7 @@ func _on_map_mode_changed(mode: String, payload: Dictionary) -> void:
 			else:
 				map_mode_bar.show_mode(title3, "点击地图选择位置｜R 旋转｜右侧确认/取消｜ESC 取消")
 		"distance_tool":
-			map_mode_bar.show_mode("📏 距离工具", "点击起点，再点击终点｜再次点起点重置｜D/ESC 关闭")
+			map_mode_bar.show_mode("📏 距离工具", "只允许点道路格｜点起点再点终点｜测完点任意道路格重开｜D/ESC 关闭")
 		_:
 			map_mode_bar.show_mode("模式：%s" % m, "ESC 取消")
 
@@ -1264,18 +1225,6 @@ func _on_quit_to_menu_pressed() -> void:
 		Callable(self, "_confirm_quit_to_menu"),
 		Callable(self, "_cancel_quit_to_menu")
 	)
-
-func _on_debug_pressed() -> void:
-	if _menu_debug_controller != null:
-		_menu_debug_controller.open_debug()
-	else:
-		debug_dialog.show()
-
-func _on_debug_dialog_close_requested() -> void:
-	if _menu_debug_controller != null:
-		_menu_debug_controller.close_debug()
-	else:
-		debug_dialog.hide()
 
 # === 确认弹窗（P2）===
 
@@ -1497,15 +1446,11 @@ func show_milestone_panel() -> void:
 		_panel_controller.show_milestone_panel()
 
 func toggle_game_log() -> void:
-	var layout_version := int(Globals.ui_layout_version) if Globals != null else 2
-	if layout_version == 2 and is_instance_valid(left_panel) and is_instance_valid(game_log_panel):
+	if is_instance_valid(left_panel) and is_instance_valid(game_log_panel):
 		_ensure_left_area_visible()
 		var show_logs := not game_log_panel.visible
 		game_log_panel.visible = show_logs
 		left_panel.visible = not show_logs
-		return
-	if _overlay_controller != null:
-		_overlay_controller.toggle_game_log()
 
 func show_settings_dialog() -> void:
 	if _overlay_controller != null:

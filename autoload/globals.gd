@@ -41,7 +41,7 @@ var player_restaurant_logo_choices: Array[int] = []  # player_id -> logo_id（-1
 
 # UI/游戏设置（SettingsDialog）
 var ui_scale: float = 1.0
-var ui_layout_version: int = 2 # 1=经典布局；2=新布局（默认，可回滚）
+var ui_layout_version: int = 2 # 仅支持新布局（v2）
 var confirm_actions: bool = true
 var show_hints: bool = true
 var animation_speed: float = 1.0
@@ -74,7 +74,6 @@ func _load_settings() -> void:
 	if err == OK:
 		language = config.get_value("game", "language", "zh")
 		ui_scale = float(config.get_value("display", "ui_scale", 1.0))
-		ui_layout_version = clampi(int(config.get_value("display", "ui_layout_version", 2)), 1, 2)
 		show_tile_ids = bool(config.get_value("display", "show_tile_ids", false))
 		show_cell_hover_tooltip = bool(config.get_value("display", "show_cell_hover_tooltip", false))
 		font_scale = clampf(float(config.get_value("display", "font_scale", font_scale)), 0.5, 2.0)
@@ -110,6 +109,8 @@ func _load_settings() -> void:
 					player_restaurant_logo_choices.append(int(v))
 
 		GameLog.info("Globals", "已加载用户设置")
+	# 强制新布局（v2），忽略历史配置值（issue_tracker #60）。
+	ui_layout_version = 2
 
 func _apply_ui_scale() -> void:
 	if get_tree() == null or get_tree().root == null:

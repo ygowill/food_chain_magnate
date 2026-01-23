@@ -347,12 +347,10 @@ func _update_ui_components(state: GameState) -> void:
 			if _scene.turn_order_track.has_method("set_current_selections"):
 				_scene.turn_order_track.set_current_selections(selections)
 			if _scene.turn_order_track.has_method("set_selectable"):
-				var layout_version := int(Globals.ui_layout_version) if Globals != null else 1
-				var use_modal := (layout_version == 2)
-				var can_select := (state.phase == "OrderOfBusiness") and not use_modal
-				_scene.turn_order_track.set_selectable(can_select, current_player_id)
+				# 新布局(v2)：顺序选择使用遮罩面板；右侧 TurnOrderTrack 不再承担交互入口。
+				_scene.turn_order_track.set_selectable(false, current_player_id)
 				if _scene.turn_order_track is Control:
-					(_scene.turn_order_track as Control).visible = (state.phase == "OrderOfBusiness") and not use_modal
+					(_scene.turn_order_track as Control).visible = false
 
 		# 顶部顺序显示（展示用）
 	if is_instance_valid(_scene.turn_order_display):
@@ -476,7 +474,6 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 		return
 
 	var current_player_id = _scene.game_engine.get_state().get_current_player_id()
-	var layout_version := int(Globals.ui_layout_version) if Globals != null else 1
 
 	match action_id:
 		# UI 工具：时间线回退
@@ -491,13 +488,9 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 		"skip":
 			_execute_command.call(Command.create("skip", current_player_id, params))
 		"choose_turn_order":
-			if layout_version == 2:
-				var state: GameState = _scene.game_engine.get_state()
-				if state != null:
-					_show_turn_order_modal_for_state(state)
-			else:
-				if is_instance_valid(_scene.turn_order_track) and _scene.turn_order_track.has_method("highlight_available_positions"):
-					_scene.turn_order_track.highlight_available_positions()
+			var state: GameState = _scene.game_engine.get_state()
+			if state != null:
+				_show_turn_order_modal_for_state(state)
 
 		# P0 动作 - 需要弹出面板
 		"recruit":
@@ -829,7 +822,6 @@ func _sync_modals(state: GameState) -> void:
 		_hide_restructuring_modal()
 		return
 
-	var layout_version := int(Globals.ui_layout_version) if Globals != null else 1
 	var current_player_id := state.get_current_player_id()
 	var covered := _get_modal_cover_rect()
 
@@ -856,12 +848,6 @@ func _sync_modals(state: GameState) -> void:
 		_show_fridge_keep_modal(state, current_player_id, covered)
 	else:
 		_hide_fridge_keep_modal()
-
-	# 旧布局：不使用顺序/重组的遮罩面板；但储备卡选择仍必须强制弹窗。
-	if layout_version != 2:
-		_hide_turn_order_modal()
-		_hide_restructuring_modal()
-		return
 
 	# 顺序选择（OrderOfBusiness）
 	var selections := {}
@@ -958,9 +944,6 @@ func _initialize_modal(modal_ref, scene: PackedScene, signal_map: Dictionary):
 	return inst
 
 func _show_turn_order_modal_for_state(state: GameState) -> void:
-	var layout_version := int(Globals.ui_layout_version) if Globals != null else 1
-	if layout_version != 2:
-		return
 	if state == null:
 		return
 	var current_player_id := state.get_current_player_id()
