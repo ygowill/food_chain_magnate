@@ -7,6 +7,15 @@ extends RefCounted
 
 const TypeHelpersClass = preload("res://core/utils/type_helpers.gd")
 
+# 可自动补完的强制动作（定价/折扣/奢侈品）：
+# - 这些动作无参数，且允许在 Working 任意子阶段执行。
+# - 若不自动补完，会被 ActionRegistry 视为“可启动动作”，从而阻止 Working 子阶段的 auto-advance（造成软锁/需要手动跳过）。
+const AUTO_MANDATORY_ACTION_IDS: Array[String] = [
+	"set_price",
+	"set_discount",
+	"set_luxury_price",
+]
+
 static func drain(state_in: GameState, phase_manager: PhaseManager, action_registry: ActionRegistry, max_steps: int = 32) -> Result:
 	if state_in == null:
 		return Result.failure("auto_advance: state 为空")
@@ -91,6 +100,13 @@ static func try_advance_one(state_in: GameState, phase_manager: PhaseManager, ac
 
 	# Working：若当前玩家在当前子阶段无可做动作，则自动推进到下一子阶段
 	if state_in.phase == "Working":
+		# 先自动执行“可无参补完”的强制动作（避免其阻断子阶段 auto-advance：issue #62/#discount_manager）。
+		var mandatory_r := _try_auto_complete_working_mandatory_actions(state_in, action_registry)
+		if not mandatory_r.ok:
+			return mandatory_r
+		if bool(mandatory_r.value):
+			return Result.success(true).with_warnings(mandatory_r.warnings)
+
 		var order_names := phase_manager.get_working_sub_phase_order_names()
 		if order_names.is_empty():
 			return Result.failure("auto_advance: working_sub_phase_order 未初始化")
@@ -114,6 +130,48 @@ static func try_advance_one(state_in: GameState, phase_manager: PhaseManager, ac
 				if not adv4.ok:
 					return adv4
 				return Result.success(true).with_warnings(adv4.warnings)
+
+	return Result.success(false)
+
+static func _try_auto_complete_working_mandatory_actions(state_in: GameState, action_registry: ActionRegistry) -> Result:
+	if state_in == null:
+		return Result.failure("auto_mandatory: state 为空")
+	if action_registry == null:
+		return Result.failure("auto_mandatory: action_registry 为空")
+	if state_in.phase != "Working":
+		return Result.success(false)
+
+	var pid := state_in.get_current_player_id()
+	if pid < 0:
+		return Result.failure("auto_mandatory: Working 当前玩家无效")
+
+	for aid in AUTO_MANDATORY_ACTION_IDS:
+		var action_id := str(aid).strip_edges()
+		if action_id.is_empty():
+			continue
+
+		var executor := action_registry.get_executor(action_id)
+		if executor == null:
+			continue
+
+		var cmd := Command.create(action_id, pid, {"auto": true})
+		cmd.phase = state_in.phase
+		cmd.sub_phase = state_in.sub_phase
+
+		var gate := action_registry.run_validators(state_in, cmd)
+		if not gate.ok:
+			continue
+
+		var vr := executor.validate(state_in, cmd)
+		if not vr.ok:
+			continue
+
+		# IMPORTANT: 执行器的 _apply_changes 设计为“对 duplicate_state 的变更”，这里直接对 state_in 应用，
+		# 以保持 AutoAdvance 的 in-place 语义（CommandRunner/Replay 依赖此行为）。
+		var ar := executor._apply_changes(state_in, cmd)
+		if not ar.ok:
+			return ar
+		return Result.success(true).with_warnings(ar.warnings)
 
 	return Result.success(false)
 

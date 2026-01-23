@@ -71,51 +71,32 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not check_result.error.contains("set_price"):
 		return Result.failure("错误消息应该包含 'set_price'，实际: %s" % check_result.error)
 
-	# 8) 推进到最后一个子阶段 PlaceRestaurants
-	var to_place_restaurants := TestPhaseUtilsClass.advance_until_working_sub_phase(engine, "PlaceRestaurants", 20)
-	if not to_place_restaurants.ok:
-		return to_place_restaurants
-
-	state = engine.get_state()
-	if state.sub_phase != "PlaceRestaurants":
-		return Result.failure("当前子阶段应该是 PlaceRestaurants，实际: %s" % state.sub_phase)
-
-	# 9) 强制动作未完成时，不应允许“确认结束”最后子阶段（否则会软锁）
-	var idx := state.turn_order.find(current_player_id)
-	if idx >= 0:
-		state.current_player_index = idx
-	var confirm_end := engine.execute_command(Command.create("skip", current_player_id))
-	if confirm_end.ok:
-		return Result.failure("存在未完成强制动作时，不应允许确认结束 PlaceRestaurants 子阶段")
-	if not str(confirm_end.error).contains("set_price"):
-		return Result.failure("错误消息应该包含 'set_price'，实际: %s" % str(confirm_end.error))
-
-	# 10) 执行 set_price 动作（使用当前玩家 ID）
-	var set_price_cmd := Command.create("set_price", current_player_id, {})
-	var set_price_result := engine.execute_command(set_price_cmd)
-	if not set_price_result.ok:
-		return Result.failure("执行 set_price 失败: %s" % set_price_result.error)
+	# 8) 触发一次命令执行，使 auto_advance 有机会自动补完强制动作（set_price）
+	# - 这里不直接执行 set_price（玩家无感知自动执行）
+	var auto_trigger := engine.execute_command(Command.create("skip_sub_phase", current_player_id))
+	if not auto_trigger.ok:
+		return Result.failure("skip_sub_phase 失败: %s" % auto_trigger.error)
 
 	state = engine.get_state()
 
-	# 11) 验证强制动作已完成
+	# 9) 验证强制动作已完成（应被 auto_advance 自动补完）
 	assert(state.round_state.mandatory_actions_completed.has(current_player_id), "round_state.mandatory_actions_completed 缺少玩家 key")
 	var completed: Array = state.round_state.mandatory_actions_completed[current_player_id]
 	if not completed.has("set_price"):
-		return Result.failure("set_price 应该在已完成列表中")
+		return Result.failure("set_price 应该被自动执行并写入已完成列表")
 
-	# 12) 再次检查，应该通过
+	# 10) 再次检查，应该通过
 	var check_result2 := MandatoryActionsRulesClass.check_mandatory_actions_completed(state)
 	if not check_result2.ok:
 		return Result.failure("强制动作完成后检查应该通过: %s" % check_result2.error)
 
-	# 13) 验证价格修正已设置
+	# 11) 验证价格修正已设置
 	var price_modifiers: Dictionary = state.round_state.get("price_modifiers", {})
 	var player_modifiers: Dictionary = price_modifiers.get(current_player_id, {})
 	if player_modifiers.get("pricing_manager", 0) != -1:
 		return Result.failure("pricing_manager 价格修正应该是 -1，实际: %s" % str(player_modifiers))
 
-	# 14) 现在可以离开 Working 阶段（全员结束 Working 回合）
+	# 12) 现在可以离开 Working 阶段（全员结束 Working 回合）
 	var leave_working := TestPhaseUtilsClass.complete_working_phase(engine, 200)
 	if not leave_working.ok:
 		return leave_working
