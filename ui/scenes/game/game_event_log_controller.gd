@@ -39,7 +39,7 @@ const EVENT_TYPES_TO_LOG: Array[String] = [
 
 var _game_log_panel = null
 var _eventbus_source: String = ""
-var _formatter: GameEventLogFormatter = null
+var _formatter = null # GameEventLogFormatter（避免 class_name cache 未更新导致的类型解析失败）
 
 func setup(game_log_panel, restore_history: bool = true) -> void:
 	if not is_instance_valid(game_log_panel):
@@ -128,7 +128,7 @@ func _on_eventbus_event(event: Dictionary) -> void:
 	if _formatter == null:
 		_formatter = GameEventLogFormatterClass.new()
 
-	var entries := _formatter.format(event)
+	var entries: Array = _formatter.format(event)
 	for e_val in entries:
 		if not (e_val is Dictionary):
 			continue

@@ -248,9 +248,9 @@ ActionPanel 禁用策略：
 
 建议新增：
 
-- `core/tests/event_timeline_build_test.gd`：
+- [x] `core/tests/event_timeline_build_test.gd`：
   - 构造 20+ 命令的确定性用例，build_full() 返回 events 不为空且每条含 `command_index`（单调不减），并与命令数量一致性可验。
-- `ui/scenes/tests/replay_log_future_visibility_test.gd`（无需渲染）：
+- [x] `ui/scenes/tests/replay_log_future_visibility_test.gd`（无需渲染）：
   - 加载回放并构建完整日志后，seek 到较早 cursor：
     - `GameLogPanel.get_entries()` 数量不变（仍包含未来）。
     - `GameLogPanel` 的内部（或暴露测试 API）能区分 future/past（例如 `get_future_entry_count(cursor)`）。
