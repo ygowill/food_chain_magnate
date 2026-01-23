@@ -8,6 +8,7 @@ signal action_requested(action_id: String, params: Dictionary)
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var items_container: VBoxContainer = $MarginContainer/VBoxContainer/ItemsContainer
@@ -49,6 +50,14 @@ const HIDDEN_ACTION_IDS := {
 # 若动作对“当前玩家”不可启动，则不展示（避免按钮常驻但永远灰掉）
 # 目前主要用于“员工驱动的强制动作”（定价/折扣/奢侈品），这些动作是否可用完全取决于玩家是否拥有对应员工/本回合是否已完成。
 const AUTO_HIDE_IF_NOT_INITIATABLE_ACTION_IDS := {
+	"set_price": true,
+	"set_discount": true,
+	"set_luxury_price": true,
+}
+
+# 定价类强制动作在 UI 中隐藏，并在执行 skip 前由 Game 自动补完（见 Game._maybe_auto_complete_mandatory_actions_before_skip）。
+# 为避免软锁：当 skip 仅因“缺少这些可自动补完的强制动作”而不可用时，ActionPanel 仍应允许点击 skip。
+const AUTO_MANDATORY_ACTION_IDS := {
 	"set_price": true,
 	"set_discount": true,
 	"set_luxury_price": true,
@@ -534,21 +543,8 @@ func refresh() -> void:
 			filtered_executable.append(aid_skip2)
 		visible_executable = filtered_executable
 
-	# Working：仅当当前子阶段存在可做动作时，才显示“跳过子阶段”
-	if _game_state.phase == "Working" and visible_ids.has("skip_sub_phase"):
-		var has_real_actions := false
-		for aidx in visible_executable:
-			if aidx == "skip" or aidx == "skip_sub_phase":
-				continue
-			has_real_actions = true
-			break
-		if not has_real_actions:
-			var filtered: Array[String] = []
-			for aid4 in visible_ids:
-				if aid4 == "skip_sub_phase":
-					continue
-				filtered.append(aid4)
-			visible_ids = filtered
+	# Working：即使当前子阶段无任何可执行动作，也必须保留“跳过子阶段”，否则会造成软锁
+	# （例如 Train 子阶段没有可培训来源/次数时，skip 被 validate 拒绝，只能用 skip_sub_phase 推进）。
 
 	# P1：不再自动隐藏“玩家依赖动作”，改为灰显 + 原因（提升发现性）
 
@@ -569,6 +565,8 @@ func refresh() -> void:
 	if has_player_executable_info:
 		for aid3 in visible_ids:
 			var enabled := visible_executable.has(aid3)
+			if (not enabled) and aid3 == "skip" and _should_enable_skip_via_auto_mandatory_actions():
+				enabled = true
 			# 保留调试用强制推进按钮
 			if aid3 == "advance_phase":
 				enabled = true
@@ -686,6 +684,74 @@ class ActionButton extends Button:
 
 func _is_missing_params_error(err: String) -> bool:
 	return err.begins_with("缺少参数:") or err.begins_with("缺少必需参数:")
+
+func _get_missing_mandatory_actions_for_current_player() -> Array[String]:
+	if _game_state == null:
+		return []
+	if _current_player_id < 0:
+		return []
+
+	var player := _game_state.get_player(_current_player_id)
+	var required: Array[String] = MandatoryActionsRulesClass.get_required_mandatory_actions(player)
+	if required.is_empty():
+		return []
+
+	if not (_game_state.round_state is Dictionary):
+		return []
+	var mac_val = _game_state.round_state.get("mandatory_actions_completed", null)
+	if not (mac_val is Dictionary):
+		return []
+	var mac: Dictionary = mac_val
+
+	var completed_val = mac.get(_current_player_id, null)
+	if completed_val == null and mac.has(str(_current_player_id)):
+		completed_val = mac.get(str(_current_player_id), null)
+	if not (completed_val is Array):
+		return []
+	var completed: Array = completed_val
+
+	var missing: Array[String] = []
+	for action_id in required:
+		var aid := str(action_id).strip_edges()
+		if aid.is_empty():
+			continue
+		if completed.has(aid):
+			continue
+		missing.append(aid)
+
+	return missing
+
+func _should_enable_skip_via_auto_mandatory_actions() -> bool:
+	if _action_registry == null or _game_state == null:
+		return false
+	if _current_player_id < 0:
+		return false
+	if not _action_registry.has_method("get_executor"):
+		return false
+
+	# 仅当 skip 的失败原因是“缺少强制动作”时才考虑启用；其他原因（例如未到 Working 最后子阶段）不应放行。
+	var skip_exec = _action_registry.get_executor("skip")
+	if skip_exec == null:
+		return false
+	var test_command := Command.create("skip", _current_player_id)
+	test_command.phase = _game_state.phase
+	test_command.sub_phase = _game_state.sub_phase
+	var r = skip_exec.validate(_game_state, test_command)
+	if not (r is Result) or r.ok:
+		return false
+
+	var err := str(r.error).strip_edges()
+	if err.find("强制动作") == -1:
+		return false
+
+	var missing := _get_missing_mandatory_actions_for_current_player()
+	if missing.is_empty():
+		return false
+	for aid in missing:
+		if not AUTO_MANDATORY_ACTION_IDS.has(aid):
+			return false
+
+	return true
 
 func _compute_disabled_reason(action_id: String) -> String:
 	if _action_registry == null or _game_state == null:
