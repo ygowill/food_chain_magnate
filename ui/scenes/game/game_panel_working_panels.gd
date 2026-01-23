@@ -343,6 +343,17 @@ func show_production_panel(production_type: String) -> void:
 	var state = _scene.game_engine.get_state()
 	var current_player: Dictionary = state.get_current_player()
 
+	# 记录“回合/子阶段/玩家”上下文：用于 ProductionPanel 跨关闭/重开保持“本次用了哪张卡”的禁用态；
+	# 当上下文变化（换人/换回合/换子阶段）时自动清空。
+	if is_instance_valid(production_panel) and production_panel.has_method("set_usage_token"):
+		var token := "%d|%d|%s|%s" % [
+			int(state.get_current_player_id()),
+			int(state.round_number),
+			str(state.phase),
+			str(state.sub_phase),
+		]
+		production_panel.set_usage_token(token)
+
 	if production_panel.has_method("set_production_type"):
 		production_panel.set_production_type(production_type)
 	if is_instance_valid(production_panel):
@@ -516,6 +527,9 @@ func _on_production_requested(employee_type: String, product_type: String) -> vo
 				_map_controller.clear_selection()
 			if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
 				production_panel.set_drinks_procurement_state(0, false, "")
+
+		if is_instance_valid(production_panel) and production_panel.has_method("mark_selected_employee_used"):
+			production_panel.call("mark_selected_employee_used")
 
 		if is_instance_valid(production_panel):
 			var state = _scene.game_engine.get_state()

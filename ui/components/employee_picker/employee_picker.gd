@@ -10,18 +10,22 @@ const EmployeeCardClass = preload("res://ui/components/employee_card/employee_ca
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
 var selected_employee_id: String = ""
-var _items: Dictionary = {} # employee_id -> EmployeePickerItem
+var selected_item_key: String = ""
+var _items_by_key: Dictionary = {} # item_key -> EmployeePickerItem
+var _item_keys_in_order: Array[String] = []
 
 func clear() -> void:
 	for child in get_children():
 		if is_instance_valid(child):
 			child.queue_free()
-	_items.clear()
+	_items_by_key.clear()
+	_item_keys_in_order.clear()
 	selected_employee_id = ""
+	selected_item_key = ""
 
 func set_items(items: Array[Dictionary], selected_id: String = "") -> void:
 	clear()
-	selected_employee_id = str(selected_id).strip_edges()
+	var desired := str(selected_id).strip_edges()
 
 	for item_val in items:
 		if not (item_val is Dictionary):
@@ -30,6 +34,16 @@ func set_items(items: Array[Dictionary], selected_id: String = "") -> void:
 		var emp_id := str(item.get("id", "")).strip_edges()
 		if emp_id.is_empty():
 			continue
+
+		var item_key := str(item.get("key", emp_id)).strip_edges()
+		if item_key.is_empty():
+			item_key = emp_id
+		# 允许同类型多张卡：若 key 冲突则自动加后缀，确保唯一性。
+		if _items_by_key.has(item_key):
+			var i := 2
+			while _items_by_key.has("%s#%d" % [item_key, i]):
+				i += 1
+			item_key = "%s#%d" % [item_key, i]
 
 		var enabled := true
 		var enabled_val = item.get("enabled", null)
@@ -59,47 +73,124 @@ func set_items(items: Array[Dictionary], selected_id: String = "") -> void:
 
 		var picker_item := EmployeePickerItem.new()
 		picker_item.employee_id = emp_id
+		picker_item.item_key = item_key
 		picker_item.employee_def = emp_def
 		picker_item.badge_text = badge_text
 		picker_item.tag_text = tag_text
 		picker_item.pressed.connect(_on_item_pressed)
 		picker_item.set_enabled(enabled)
 		add_child(picker_item)
-		_items[emp_id] = picker_item
+		_items_by_key[item_key] = picker_item
+		_item_keys_in_order.append(item_key)
+
+	# 选中逻辑：兼容旧调用（selected_id 可能是 employee_id），也允许直接传 item_key。
+	if not desired.is_empty():
+		if _items_by_key.has(desired):
+			selected_item_key = desired
+			selected_employee_id = _items_by_key[desired].employee_id
+		else:
+			# 按 employee_id 选中第一个可用实例
+			selected_item_key = _find_first_enabled_key_for_employee(desired)
+			if selected_item_key.is_empty():
+				selected_item_key = _find_first_key_for_employee(desired)
+			selected_employee_id = desired if not selected_item_key.is_empty() else ""
 
 	_apply_selection()
 
 func set_selected(employee_id: String) -> void:
-	selected_employee_id = str(employee_id).strip_edges()
+	var desired := str(employee_id).strip_edges()
+	if desired.is_empty():
+		selected_employee_id = ""
+		selected_item_key = ""
+		_apply_selection()
+		return
+
+	# 允许直接按 item_key 选中
+	if _items_by_key.has(desired):
+		selected_item_key = desired
+		selected_employee_id = _items_by_key[desired].employee_id
+		_apply_selection()
+		return
+
+	# 兼容：按 employee_id 选中第一个可用实例
+	selected_item_key = _find_first_enabled_key_for_employee(desired)
+	if selected_item_key.is_empty():
+		selected_item_key = _find_first_key_for_employee(desired)
+	selected_employee_id = desired if not selected_item_key.is_empty() else ""
 	_apply_selection()
 
 func _apply_selection() -> void:
-	for k in _items.keys():
-		var id := str(k)
-		var item_val = _items[k]
+	for key in _item_keys_in_order:
+		var item_val = _items_by_key.get(key, null)
 		if not (item_val is EmployeePickerItem):
 			continue
 		var item: EmployeePickerItem = item_val
 		if is_instance_valid(item):
-			item.set_selected(id == selected_employee_id and not id.is_empty())
+			item.set_selected(key == selected_item_key and not key.is_empty())
 
-func _on_item_pressed(employee_id: String) -> void:
-	var id := str(employee_id).strip_edges()
+func _on_item_pressed(item_key: String) -> void:
+	var key := str(item_key).strip_edges()
+	if key.is_empty():
+		return
+	if not _items_by_key.has(key):
+		return
+
+	var item: EmployeePickerItem = _items_by_key[key]
+	var id := str(item.employee_id).strip_edges()
 	if id.is_empty():
 		return
-	if selected_employee_id == id:
+	if selected_item_key == key:
 		# 不做 toggle：再次点击保持选中（由外部 clear_selection 控制）
 		employee_selected.emit(id)
 		return
+
+	selected_item_key = key
 	selected_employee_id = id
 	_apply_selection()
 	employee_selected.emit(id)
 
+func get_selected_key() -> String:
+	return selected_item_key
+
+func get_selected_employee_id() -> String:
+	return selected_employee_id
+
+func _find_first_key_for_employee(employee_id: String) -> String:
+	var emp_id := str(employee_id).strip_edges()
+	if emp_id.is_empty():
+		return ""
+	for key in _item_keys_in_order:
+		var item_val = _items_by_key.get(key, null)
+		if item_val is EmployeePickerItem and str((item_val as EmployeePickerItem).employee_id) == emp_id:
+			return key
+	return ""
+
+func _find_first_enabled_key_for_employee(employee_id: String) -> String:
+	var emp_id := str(employee_id).strip_edges()
+	if emp_id.is_empty():
+		return ""
+	for key in _item_keys_in_order:
+		var item_val = _items_by_key.get(key, null)
+		if not (item_val is EmployeePickerItem):
+			continue
+		var item: EmployeePickerItem = item_val
+		if str(item.employee_id) == emp_id and item.is_enabled():
+			return key
+	return ""
+
+func _find_first_enabled_key() -> String:
+	for key in _item_keys_in_order:
+		var item_val = _items_by_key.get(key, null)
+		if item_val is EmployeePickerItem and (item_val as EmployeePickerItem).is_enabled():
+			return key
+	return ""
+
 
 class EmployeePickerItem extends Control:
-	signal pressed(employee_id: String)
+	signal pressed(item_key: String)
 
 	var employee_id: String = ""
+	var item_key: String = ""
 	var employee_def: Dictionary = {}
 	var badge_text: String = ""
 	var tag_text: String = ""
@@ -192,6 +283,9 @@ class EmployeePickerItem extends Control:
 		_enabled = enabled
 		_update_display()
 
+	func is_enabled() -> bool:
+		return _enabled
+
 	func set_selected(selected: bool) -> void:
 		_selected = selected
 		if _card != null and is_instance_valid(_card):
@@ -200,8 +294,10 @@ class EmployeePickerItem extends Control:
 	func _update_display() -> void:
 		if _card != null and is_instance_valid(_card):
 			_card.mouse_filter = Control.MOUSE_FILTER_STOP if _enabled else Control.MOUSE_FILTER_IGNORE
-			_card.modulate = Color(1, 1, 1, 1) if _enabled else Color(0.75, 0.75, 0.8, 0.65)
 			_card.set_selected(_selected)
+		# Disabled state should visually gray out even when EmployeeCard updates its own modulate
+		# (e.g. selection toggles call EmployeeCard.set_selected which resets modulate).
+		modulate = Color(1, 1, 1, 1) if _enabled else Color(0.75, 0.75, 0.8, 0.65)
 
 		if _tag_panel != null and is_instance_valid(_tag_panel):
 			var show_tag := not tag_text.is_empty()
@@ -218,4 +314,4 @@ class EmployeePickerItem extends Control:
 	func _on_card_clicked(_id: String) -> void:
 		if not _enabled:
 			return
-		pressed.emit(employee_id)
+		pressed.emit(item_key if not item_key.is_empty() else employee_id)

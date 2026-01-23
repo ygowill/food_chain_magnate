@@ -29,6 +29,14 @@ var _current_inventory: Dictionary = {}
 var _employee_picker = null
 var _info_label: Label = null
 var _selected_employee_type: String = ""
+var _selected_employee_key: String = ""
+var _has_any_enabled_employee: bool = false
+
+var _usage_token: String = ""
+var _used_employee_keys_by_mode: Dictionary = {
+	"food": {},
+	"drinks": {},
+}
 
 var _food_type_option: OptionButton = null
 var _food_type_label: Label = null
@@ -64,6 +72,16 @@ func _apply_embedding(embedded: bool) -> void:
 func set_production_type(production_type: String) -> void:
 	_production_type = production_type
 	_rebuild()
+
+func set_usage_token(token: String) -> void:
+	# 用于跨关闭/重开面板保持“本次用了哪张卡”的禁用态；当 token 变化（换玩家/换回合/换子阶段）时清空。
+	var t := str(token).strip_edges()
+	if t == _usage_token:
+		return
+	_usage_token = t
+	_used_employee_keys_by_mode["food"] = {}
+	_used_employee_keys_by_mode["drinks"] = {}
+	_selected_employee_key = ""
 
 func set_available_producers(producers: Array[String]) -> void:
 	_available_producers = producers.duplicate()
@@ -174,9 +192,10 @@ func _apply_embedding_layout() -> void:
 		_drink_type_option.custom_minimum_size = Vector2.ZERO if embedded else Vector2(380, 0)
 
 func _rebuild_employee_options() -> void:
-	_selected_employee_type = ""
 	if _employee_picker == null:
 		return
+
+	var prev_type := _selected_employee_type
 
 	var counts: Dictionary = {}
 	for v in _available_producers:
@@ -190,29 +209,67 @@ func _rebuild_employee_options() -> void:
 		ids.append(str(k))
 	ids.sort()
 
+	var used_set: Dictionary = {}
+	if _used_employee_keys_by_mode.has(_production_type) and (_used_employee_keys_by_mode[_production_type] is Dictionary):
+		used_set = _used_employee_keys_by_mode[_production_type]
+
 	var items: Array[Dictionary] = []
+	_has_any_enabled_employee = false
 	for emp_id2 in ids:
 		var count: int = int(counts.get(emp_id2, 0))
-		items.append({
-			"id": emp_id2,
-			"employee_def": _get_employee_def_for_card(emp_id2),
-			"badge_text": str(count),
-			"enabled": true,
-		})
+		for idx in range(1, count + 1):
+			var key := "%s#%d" % [emp_id2, idx]
+			var enabled := not used_set.has(key)
+			if enabled:
+				_has_any_enabled_employee = true
+			items.append({
+				"id": emp_id2,
+				"key": key,
+				"employee_def": _get_employee_def_for_card(emp_id2),
+				"badge_text": "",
+				"enabled": enabled,
+			})
 
-	if ids.size() > 0:
-		var first := str(ids[0])
-		_employee_picker.set_items(items, first)
-		_apply_selected_employee(first)
+	# 尽量保持原来的 employee_type 选择；若该类型已无可用实例，则清空选择（由玩家重新选择其它员工）。
+	var selected_key := ""
+	if not _selected_employee_type.is_empty():
+		if not _selected_employee_key.is_empty() and not used_set.has(_selected_employee_key):
+			selected_key = _selected_employee_key
+		else:
+			var count2: int = int(counts.get(_selected_employee_type, 0))
+			for idx2 in range(1, count2 + 1):
+				var k2 := "%s#%d" % [_selected_employee_type, idx2]
+				if not used_set.has(k2):
+					selected_key = k2
+					break
 	else:
-		_employee_picker.clear()
-	_selected_changed()
+		for it_val in items:
+			if not (it_val is Dictionary):
+				continue
+			var it: Dictionary = it_val
+			if bool(it.get("enabled", false)):
+				selected_key = str(it.get("key", "")).strip_edges()
+				break
+
+	_employee_picker.set_items(items, selected_key)
+
+	_selected_employee_type = ""
+	_selected_employee_key = ""
+	if _employee_picker.has_method("get_selected_employee_id"):
+		_selected_employee_type = str(_employee_picker.call("get_selected_employee_id")).strip_edges()
+	if _employee_picker.has_method("get_selected_key"):
+		_selected_employee_key = str(_employee_picker.call("get_selected_key")).strip_edges()
+
+	if prev_type != _selected_employee_type:
+		_selected_changed()
 
 func _apply_selected_employee(employee_type: String) -> void:
 	_selected_employee_type = str(employee_type).strip_edges()
 
 func _on_employee_selected(employee_type: String) -> void:
 	_apply_selected_employee(employee_type)
+	if _employee_picker != null and _employee_picker.has_method("get_selected_key"):
+		_selected_employee_key = str(_employee_picker.call("get_selected_key")).strip_edges()
 	_selected_changed()
 	_rebuild_food_type_options()
 	_update_food_controls_visibility()
@@ -255,7 +312,7 @@ func _update_info() -> void:
 	if _info_label == null:
 		return
 	if _selected_employee_type.is_empty():
-		_info_label.text = "没有可用员工"
+		_info_label.text = "请选择员工" if _has_any_enabled_employee else "没有可用员工"
 		return
 
 	var emp_name := _get_employee_display_name(_selected_employee_type)
@@ -331,6 +388,32 @@ func _on_confirm_pressed() -> void:
 	if _selected_employee_type.is_empty():
 		return
 	production_requested.emit(_selected_employee_type, _production_type)
+
+func mark_selected_employee_used() -> void:
+	if _employee_picker == null:
+		return
+
+	var prev_type := _selected_employee_type
+	var key := _selected_employee_key
+	if key.is_empty() and _employee_picker.has_method("get_selected_key"):
+		key = str(_employee_picker.call("get_selected_key")).strip_edges()
+	if key.is_empty():
+		return
+
+	if not _used_employee_keys_by_mode.has(_production_type) or not (_used_employee_keys_by_mode[_production_type] is Dictionary):
+		_used_employee_keys_by_mode[_production_type] = {}
+	var used_set: Dictionary = _used_employee_keys_by_mode[_production_type]
+	used_set[key] = true
+	_used_employee_keys_by_mode[_production_type] = used_set
+
+	# 重新生成 items，以刷新 enabled/灰显，并尽量选中同类型的下一个可用实例。
+	_rebuild_employee_options()
+	if prev_type != _selected_employee_type:
+		_rebuild_food_type_options()
+		_update_food_controls_visibility()
+		_update_drinks_controls_visibility()
+	_update_confirm_state()
+	_update_info()
 
 func _on_cancel_pressed() -> void:
 	cancelled.emit()
