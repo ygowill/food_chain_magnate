@@ -1634,6 +1634,8 @@ func _on_replay_bar_close_requested() -> void:
 		game_log_panel.set_timeline_cursor(cursor_index)
 
 func show_replay_player(file_path: String) -> void:
+	# Debug-only 工具：覆盖式 ReplayPlayer（旧入口）
+	# 说明：主流程已切换为日志面板顶部的 ReplayBar；保留该面板用于开发期排查/对照。
 	if file_path.is_empty():
 		return
 	_replay_file_path = file_path

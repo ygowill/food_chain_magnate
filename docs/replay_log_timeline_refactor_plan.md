@@ -198,7 +198,7 @@ ActionPanel 禁用策略：
 
 - [x] 新增 `ui/components/game_log/replay_bar.*`。
 - [x] `Game` 场景接线：从菜单/开始页面进入回放：加载存档 -> 进入 GameScene -> 进入 replay engine -> 构建完整日志 -> 显示 ReplayBar。
-- [ ] `ReplayPlayer` 保留为开发工具/临时入口（可隐藏/标记为 debug-only），避免一次性删掉导致测试/工作流中断。
+- [x] `ReplayPlayer` 保留为开发工具/临时入口（可隐藏/标记为 debug-only），避免一次性删掉导致测试/工作流中断。
 
 验收：
 
