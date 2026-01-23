@@ -18,6 +18,9 @@ const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd"
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const MilestonePanelClass = preload("res://ui/components/milestone_panel/milestone_panel.gd")
 
+const MAX_COLUMNS := 5
+const CARD_MIN_WIDTH := 220
+
 var _skin = null
 var _skin_key: String = ""
 var _rules: Dictionary = {}
@@ -36,12 +39,19 @@ func _ready() -> void:
 		close_button.pressed.connect(_on_close_pressed)
 	_set_loading_visible(false)
 	visible = false
+	_apply_responsive_grid_columns()
 
 func _exit_tree() -> void:
 	# _formatter 不入树（仅用于复用文案格式化逻辑）；需要显式释放，避免 headless 测试退出时报 “resources still in use”。
 	if _formatter != null and is_instance_valid(_formatter):
 		_formatter.free()
 	_formatter = null
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED:
+		_apply_responsive_grid_columns()
+	if what == NOTIFICATION_VISIBILITY_CHANGED and visible:
+		_apply_responsive_grid_columns()
 
 func set_skin(skin) -> void:
 	# 允许外部（例如 MapCanvas）注入已构建的 MapSkin，避免重复 build 导致卡顿。
@@ -87,9 +97,11 @@ func begin_background_build(state: GameState, skin_override = null) -> void:
 	_set_loading_visible(true)
 
 	var claimed_by := _build_claimed_by(state)
+	var pool_counts := _build_pool_counts(state)
 	var logo_textures := _build_player_logo_textures(state)
+	var round_number := int(state.round_number)
 
-	call_deferred("_run_background_rebuild", milestone_ids, claimed_by, logo_textures, ids_key, sync_key)
+	call_deferred("_run_background_rebuild", milestone_ids, claimed_by, pool_counts, logo_textures, round_number, ids_key, sync_key)
 
 func sync_from_state(state: GameState, skin_override = null, force_rebuild: bool = false) -> void:
 	if state == null:
@@ -151,6 +163,8 @@ func _set_loading_visible(loading: bool) -> void:
 		loading_center.visible = loading
 	if is_instance_valid(scroll_container):
 		scroll_container.visible = not loading
+	if not loading:
+		_apply_responsive_grid_columns()
 
 func _ensure_formatter() -> void:
 	if _formatter != null and is_instance_valid(_formatter):
@@ -175,7 +189,7 @@ func _ensure_skin_for_state(state: GameState) -> void:
 		_skin = null
 		_skin_key = ""
 
-func _run_background_rebuild(milestone_ids: Array[String], claimed_by: Dictionary, logo_textures: Dictionary, ids_key: String, sync_key: String) -> void:
+func _run_background_rebuild(milestone_ids: Array[String], claimed_by: Dictionary, pool_counts: Dictionary, logo_textures: Dictionary, round_number: int, ids_key: String, sync_key: String) -> void:
 	# 先让“加载中...”有机会显示出来（避免 open 同帧就做重建导致看不到占位）。
 	await get_tree().process_frame
 	if not is_instance_valid(self):
@@ -219,12 +233,14 @@ func _run_background_rebuild(milestone_ids: Array[String], claimed_by: Dictionar
 					owners.append(int(v))
 		owners.sort()
 
+		var pool_count := int(pool_counts.get(ms_id, 0))
+
 		var card := MilestoneCard.new()
 		card.milestone_id = ms_id
 		card.milestone_def = def
 		card.effect_text = effect_text
 		card.player_logo_textures = logo_textures
-		card.set_owners(owners)
+		card.set_state(owners, pool_count, round_number)
 		grid.add_child(card)
 		_cards[ms_id] = card
 
@@ -250,6 +266,8 @@ func _run_background_rebuild(milestone_ids: Array[String], claimed_by: Dictionar
 
 func _compute_sync_key(state: GameState) -> String:
 	# 仅用于避免重复刷新（打开时不再重复 rebuild）。
+	var round_key := str(int(state.round_number))
+
 	var modules_key := ""
 	if state.modules is Array:
 		modules_key = ",".join(Array(state.modules, TYPE_STRING, "", null))
@@ -276,7 +294,7 @@ func _compute_sync_key(state: GameState) -> String:
 			milestones_key = ",".join(ms_list)
 		players_parts.append("%s:%s" % [logo_str, milestones_key])
 
-	return "%s|%s|%s" % [modules_key, pool_key, "|".join(players_parts)]
+	return "%s|%s|%s|%s" % [round_key, modules_key, pool_key, "|".join(players_parts)]
 
 func _rebuild_from_state(state: GameState) -> void:
 	if grid == null:
@@ -297,7 +315,9 @@ func _rebuild_from_state(state: GameState) -> void:
 		return
 
 	var claimed_by := _build_claimed_by(state)
+	var pool_counts := _build_pool_counts(state)
 	var logo_textures := _build_player_logo_textures(state)
+	var round_number := int(state.round_number)
 
 	for ms_id in milestone_ids:
 		var def = MilestoneRegistryClass.get_def(ms_id) if MilestoneRegistryClass.is_loaded() else null
@@ -313,12 +333,14 @@ func _rebuild_from_state(state: GameState) -> void:
 					owners.append(int(v))
 		owners.sort()
 
+		var pool_count := int(pool_counts.get(ms_id, 0))
+
 		var card := MilestoneCard.new()
 		card.milestone_id = ms_id
 		card.milestone_def = def
 		card.effect_text = effect_text
 		card.player_logo_textures = logo_textures
-		card.set_owners(owners)
+		card.set_state(owners, pool_count, round_number)
 		grid.add_child(card)
 		_cards[ms_id] = card
 
@@ -326,7 +348,9 @@ func _update_from_state(state: GameState) -> void:
 	if _cards.is_empty():
 		return
 	var claimed_by := _build_claimed_by(state)
+	var pool_counts := _build_pool_counts(state)
 	var logo_textures := _build_player_logo_textures(state)
+	var round_number := int(state.round_number)
 
 	for k in _cards.keys():
 		var ms_id := str(k)
@@ -341,10 +365,19 @@ func _update_from_state(state: GameState) -> void:
 				if v is int:
 					owners.append(int(v))
 		owners.sort()
-		card.update_from_state(owners, logo_textures)
+		var pool_count := int(pool_counts.get(ms_id, 0))
+		card.update_from_state(owners, pool_count, round_number, logo_textures)
 
 func _get_all_milestone_ids(state: GameState) -> Array[String]:
 	var set := {}
+
+	# 展示“本局模块可用的全部里程碑”，并兼容存档中出现但 registry 缺失的 id。
+	if MilestoneRegistryClass.is_loaded():
+		for mid0 in MilestoneRegistryClass.get_all_ids():
+			var mid3 := str(mid0).strip_edges()
+			if mid3.is_empty():
+				continue
+			set[mid3] = true
 
 	for v in Array(state.milestone_pool):
 		var mid := str(v).strip_edges()
@@ -368,6 +401,17 @@ func _get_all_milestone_ids(state: GameState) -> Array[String]:
 		ids.append(str(k))
 	ids.sort()
 	return ids
+
+func _build_pool_counts(state: GameState) -> Dictionary:
+	var pool_counts := {}
+	if state == null:
+		return pool_counts
+	for v in Array(state.milestone_pool):
+		var mid := str(v).strip_edges()
+		if mid.is_empty():
+			continue
+		pool_counts[mid] = int(pool_counts.get(mid, 0)) + 1
+	return pool_counts
 
 func _build_claimed_by(state: GameState) -> Dictionary:
 	var claimed_by: Dictionary = {} # milestone_id -> Array[int]
@@ -410,15 +454,50 @@ func _build_player_logo_textures(state: GameState) -> Dictionary:
 
 	return out
 
+func _apply_responsive_grid_columns() -> void:
+	if grid == null or not is_instance_valid(grid):
+		return
+	if scroll_container == null or not is_instance_valid(scroll_container):
+		return
+
+	var available := float(scroll_container.size.x)
+	if available <= 0.0:
+		return
+
+	# 预留滚动条与边距的安全空间，避免窄屏下出现横向溢出。
+	var vbar := scroll_container.get_v_scroll_bar()
+	if is_instance_valid(vbar) and vbar.visible:
+		available -= float(vbar.size.x)
+	available -= 8.0
+	if available <= 0.0:
+		return
+
+	var sep := int(grid.get_theme_constant("h_separation"))
+	var denom := float(CARD_MIN_WIDTH + sep)
+	if denom <= 0.0:
+		return
+	var fit := int(floor((available + float(sep)) / denom))
+	var columns := clampi(fit, 1, MAX_COLUMNS)
+	if grid.columns != columns:
+		grid.columns = columns
+
 
 # === 内部类：里程碑卡片 ===
 class MilestoneCard extends PanelContainer:
+	enum CardStatus {
+		OBTAINABLE,
+		UNOBTAINABLE,
+		CLAIMED,
+	}
+
 	var milestone_id: String = ""
 	var milestone_def = null # MilestoneDef | null
 	var effect_text: String = ""
 	var player_logo_textures: Dictionary = {} # player_id -> Texture2D
 
 	var _owners: Array[int] = []
+	var _pool_count: int = 0
+	var _round_number: int = 0
 
 	var _name_label: Label
 	var _desc_label: Label
@@ -429,26 +508,19 @@ class MilestoneCard extends PanelContainer:
 		_build_ui()
 		_update_display()
 
-	func set_owners(owners: Array[int]) -> void:
+	func set_state(owners: Array[int], pool_count: int, round_number: int) -> void:
 		var normalized: Array[int] = []
 		for v in Array(owners):
 			if v is int:
 				normalized.append(int(v))
 		normalized.sort()
 
-		if _owners.size() == normalized.size():
-			var same := true
-			for i in range(normalized.size()):
-				if _owners[i] != normalized[i]:
-					same = false
-					break
-			if same:
-				return
-
 		_owners = normalized
+		_pool_count = maxi(0, int(pool_count))
+		_round_number = maxi(0, int(round_number))
 		_update_display()
 
-	func update_from_state(owners: Array[int], logo_textures: Dictionary) -> void:
+	func update_from_state(owners: Array[int], pool_count: int, round_number: int, logo_textures: Dictionary) -> void:
 		# 仅在必要时刷新（避免每次 open/sync 都重建 icons 节点）。
 		var textures_changed := (player_logo_textures != logo_textures)
 		if textures_changed:
@@ -468,13 +540,18 @@ class MilestoneCard extends PanelContainer:
 					owners_changed = true
 					break
 
-		if not owners_changed and not textures_changed:
+		var pool_changed := (_pool_count != maxi(0, int(pool_count)))
+		var round_changed := (_round_number != maxi(0, int(round_number)))
+
+		if not owners_changed and not textures_changed and not pool_changed and not round_changed:
 			return
 		_owners = normalized
+		_pool_count = maxi(0, int(pool_count))
+		_round_number = maxi(0, int(round_number))
 		_update_display()
 
 	func _build_ui() -> void:
-		custom_minimum_size = Vector2(280, 170)
+		custom_minimum_size = Vector2(220, 150)
 
 		var style := StyleBoxFlat.new()
 		style.set_corner_radius_all(10)
@@ -482,26 +559,28 @@ class MilestoneCard extends PanelContainer:
 		add_theme_stylebox_override("panel", style)
 
 		var margin := MarginContainer.new()
-		margin.add_theme_constant_override("margin_left", 12)
-		margin.add_theme_constant_override("margin_top", 12)
-		margin.add_theme_constant_override("margin_right", 12)
-		margin.add_theme_constant_override("margin_bottom", 12)
+		margin.add_theme_constant_override("margin_left", 10)
+		margin.add_theme_constant_override("margin_top", 10)
+		margin.add_theme_constant_override("margin_right", 10)
+		margin.add_theme_constant_override("margin_bottom", 10)
 		add_child(margin)
 
 		var vbox := VBoxContainer.new()
-		vbox.add_theme_constant_override("separation", 8)
+		vbox.add_theme_constant_override("separation", 6)
 		vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		margin.add_child(vbox)
 
 		_name_label = Label.new()
 		_name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_name_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(16) if Globals != null else 16)
+		_name_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(14) if Globals != null else 14)
 		vbox.add_child(_name_label)
 
 		_desc_label = Label.new()
 		_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_desc_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(12) if Globals != null else 12)
+		_desc_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(11) if Globals != null else 11)
 		_desc_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75, 0.95))
+		_desc_label.max_lines_visible = 4
+		_desc_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		_desc_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		vbox.add_child(_desc_label)
 
@@ -512,7 +591,8 @@ class MilestoneCard extends PanelContainer:
 		vbox.add_child(bottom)
 
 		_status_label = Label.new()
-		_status_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(12) if Globals != null else 12)
+		_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_status_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(11) if Globals != null else 11)
 		_status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		bottom.add_child(_status_label)
 
@@ -531,10 +611,44 @@ class MilestoneCard extends PanelContainer:
 		if _desc_label != null:
 			_desc_label.text = effect_text if not effect_text.is_empty() else milestone_id
 
-		var claimed := not _owners.is_empty()
+		var expires_text := ""
+		var expired := false
+		if milestone_def != null and milestone_def is MilestoneDef:
+			var def: MilestoneDef = milestone_def
+			if def.expires_at != null:
+				var exp_round := int(def.expires_at)
+				var remaining := exp_round - int(_round_number)
+				if remaining < 0:
+					expires_text = "已过期"
+					expired = true
+				else:
+					expires_text = "剩余 %d 回合" % remaining
+
+		var status := CardStatus.UNOBTAINABLE
+		if _pool_count > 0 and not expired:
+			status = CardStatus.OBTAINABLE
+		elif not _owners.is_empty():
+			status = CardStatus.CLAIMED
+		else:
+			status = CardStatus.UNOBTAINABLE
+
+		var status_text := ""
+		match status:
+			CardStatus.OBTAINABLE:
+				status_text = "可获得"
+			CardStatus.CLAIMED:
+				status_text = "已获得"
+			_:
+				status_text = "不可获得"
+
 		if _status_label != null:
-			_status_label.text = "已获得" if claimed else "未获得"
-			_status_label.add_theme_color_override("font_color", Color(0.5, 0.85, 0.55, 1) if claimed else Color(0.7, 0.7, 0.7, 1))
+			_status_label.text = status_text + ("\n" + expires_text if not expires_text.is_empty() else "")
+			var c := Color(0.7, 0.7, 0.7, 1)
+			if status == CardStatus.OBTAINABLE:
+				c = Color(0.55, 0.9, 0.6, 1)
+			elif status == CardStatus.CLAIMED:
+				c = Color(0.5, 0.85, 0.55, 1)
+			_status_label.add_theme_color_override("font_color", c)
 
 		if _icons_row != null:
 			for c in _icons_row.get_children():
@@ -546,27 +660,36 @@ class MilestoneCard extends PanelContainer:
 				var tex: Texture2D = tex_val if tex_val is Texture2D else null
 
 				var icon := TextureRect.new()
-				icon.custom_minimum_size = Vector2(28, 28)
+				icon.custom_minimum_size = Vector2(24, 24)
 				icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 				icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 				icon.texture = tex
 				icon.tooltip_text = Globals.get_player_name(pid) if Globals != null else ("玩家%d" % (pid + 1))
 				_icons_row.add_child(icon)
 
-		_update_style(claimed)
+		_update_style(status)
 
-	func _update_style(claimed: bool) -> void:
+	func _update_style(status: int) -> void:
 		var style_val = get_theme_stylebox("panel") if has_theme_stylebox("panel") else null
 		if not (style_val is StyleBoxFlat):
 			style_val = StyleBoxFlat.new()
 		var style: StyleBoxFlat = style_val
 
-		if claimed:
-			style.bg_color = Color(0.14, 0.18, 0.14, 0.96)
-			style.border_color = Color(0.35, 0.55, 0.35, 0.65)
-		else:
-			style.bg_color = Color(0.12, 0.12, 0.14, 0.92)
-			style.border_color = Color(0.25, 0.25, 0.3, 0.6)
-		style.set_border_width_all(1)
+		match status:
+			CardStatus.OBTAINABLE:
+				# 可获得：浅绿色边框
+				style.bg_color = Color(0.12, 0.12, 0.14, 0.92)
+				style.border_color = Color(0.55, 0.9, 0.6, 0.8)
+				style.set_border_width_all(2)
+			CardStatus.CLAIMED:
+				# 已获得：浅绿色背景
+				style.bg_color = Color(0.18, 0.28, 0.18, 0.92)
+				style.border_color = Color(0.55, 0.9, 0.6, 0.75)
+				style.set_border_width_all(1)
+			_:
+				# 不可获得：保持默认颜色状态
+				style.bg_color = Color(0.12, 0.12, 0.14, 0.92)
+				style.border_color = Color(0.25, 0.25, 0.3, 0.6)
+				style.set_border_width_all(1)
 		style.set_corner_radius_all(10)
 		add_theme_stylebox_override("panel", style)

@@ -90,7 +90,7 @@
 | 73 | 菜单清理：移除主菜单“板块编辑器/回放测试”；游戏菜单移除“日志/里程碑/距离/回放”；回放播放器入口移到开始页面 | UI/信息架构 | 开发/测试入口暴露在主流程；游戏菜单存在与 TopBar 重复的功能入口；回放入口位置不符合使用场景 | Implemented（待手动验收） |
 | 74 | 游戏顶部栏：工具栏与回合信息合并到一行 | UI/布局 | `TopBar` 使用 VBoxContainer 分两行（InfoRow/ButtonRow），需要改为单行布局并同步脚本节点路径 | Implemented（待手动验收） |
 | 75 | 游戏日志面板：移除“清空”入口 | UI/交互 | `GameLogPanel` 顶部包含 ClearButton（清空），不符合期望的日志可回溯性 | Implemented（待手动验收） |
-| 76 | 里程碑面板：状态分层（可获得/不可获得/已获得）+ 拥有者图标 + 过期提示 + 5列卡片 + 测试存档 | UI/信息+数据绑定 | 当前全屏里程碑仅区分“已获得/未获得”且展示为 3 列；未展示“不可获得/过期”等状态；缺少用于手工验收的全状态存档 | 待实施（已澄清） |
+| 76 | 里程碑面板：状态分层（可获得/不可获得/已获得）+ 拥有者图标 + 过期提示 + 5列卡片 + 测试存档 | UI/信息+数据绑定 | 当前全屏里程碑仅区分“已获得/未获得”且展示为 3 列；未展示“不可获得/过期”等状态；缺少用于手工验收的全状态存档 | Implemented（待手动验收） |
 
 ---
 
@@ -1862,20 +1862,38 @@
 - 过期信息：采用 B（“剩余 X 回合/已过期”）。
 - 5 列布局：采用 B（默认 5 列；窄屏放不下允许自动降列/换行）。
 
-**实施方案（待确认后）**
+**实施记录**
 
 - `MilestoneFullScreenView`：
-	- 展示的里程碑集合改为以 `MilestoneRegistry.get_all_ids()` 为主（并兼容 pool/已获得中出现但 registry 缺失的 id）。
-	- 基于 `pool_count/owners/expires_at` 计算状态（可获得/不可获得/已获得），并更新卡片样式与状态文案。
-	- Grid 调整为 5 列，并下调卡片尺寸/字体/图标尺寸。
+	- 展示集合：改为以 `MilestoneRegistry.get_all_ids()` 为主（并兼容 pool/已获得中出现但 registry 缺失的 id），确保“不可获得/已过期”也能展示出来。
+	- 三态判定（按用户澄清口径）：
+		- `pool_count>0` 且未过期：可获得（即使已经有人拥有，仍显示为可获得）
+		- `pool_count==0` 且 owners 非空：已获得
+		- `pool_count==0` 且 owners 为空：不可获得（含已过期）
+	- 过期信息：在卡片状态文案中显示 `剩余 X 回合 / 已过期`（基于 `MilestoneDef.expires_at` 与 `state.round_number`）。
+	- 样式：
+		- 可获得：浅绿色边框
+		- 已获得：浅绿色背景
+		- 不可获得：保持默认颜色
+	- 布局：
+		- Grid 默认 5 列；
+		- 窄屏时按可用宽度自动降列（避免横向溢出/允许换行）；
+		- 卡片缩小（含字号与拥有者 icon 尺寸）。
+	- 同步：将 `round_number` 纳入 sync_key，保证回合变化时“剩余回合/已过期”可刷新。
 - 新增手工复核存档：
-	- 在 `tools/generate_manual_test_saves_manifest.gd` 增加 1 个 case（例如 `milestones/status_matrix`）
-	- 在 `tools/generate_manual_test_saves.gd` 增加 builder：构造一份包含（至少）1 个可获得、1 个已获得、1 个已过期不可获得的局面（可通过启用 `hard_choices` 让部分里程碑 `expires_at` 生效）。
-	- 生成到 `res://.savings/manual_cases/milestones/`（或你指定的目录）并附带 `.md` 验收步骤。
+	- 增加 case：`milestone/status_matrix`（启用 `hard_choices` 注入 expires_at）。
+	- Builder：`milestone_status_matrix` 构造三态+过期提示局面，并生成：
+		- `res://.savings/manual_cases/milestones/status_matrix.json`
+		- `res://.savings/manual_cases/milestones/status_matrix.md`
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（109/109，`.godot/AllTests.log`）
 
 **状态**
 
-- 待实施（已澄清）
+- Implemented（待手动验收）
 
 ## 57. Working：生产/采购员工选择应按“实例”消耗（用过的那张变灰且不可点）
 

@@ -357,6 +357,8 @@ func _run_builder(engine: GameEngine, c: Dictionary) -> Result:
 			return _build_milestone_first_lower_prices(engine, c)
 		"milestone_first_train":
 			return _build_milestone_first_train(engine, c)
+		"milestone_status_matrix":
+			return _build_milestone_status_matrix(engine, c)
 		"milestone_first_airplane":
 			return _build_milestone_first_airplane(engine, c)
 		"milestone_first_billboard":
@@ -3161,3 +3163,91 @@ func _build_milestone_first_train(engine: GameEngine, c: Dictionary) -> Result:
 			},
 		}
 	})
+
+func _build_milestone_status_matrix(engine: GameEngine, _c: Dictionary) -> Result:
+	# 目标：一次存档覆盖三态（可获得/不可获得/已获得）+ 拥有者图标 + 过期提示。
+	# - 使用 hard_choices：为部分里程碑注入 expires_at
+	# - 设置 round=3：expires_at=2 的里程碑应显示“已过期”，expires_at=3 的里程碑显示“剩余 0 回合”
+	var adv := _advance_to_working(engine)
+	if not adv.ok:
+		return adv
+
+	if not MilestoneRegistry.is_loaded():
+		return Result.failure("MilestoneRegistry is not loaded (module setup failed?)")
+
+	var state := engine.get_state()
+	_force_turn_order(state)
+	state.sub_phase = "Recruit"
+	state.round_number = 3
+
+	if state.players.size() < 2:
+		return Result.failure("milestone_status_matrix requires at least 2 players")
+
+	var obtained_id := "first_billboard"
+	var owned_but_obtainable_id := "first_burger_produced"
+	var expiring_id := "first_hire_3" # hard_choices: expires_at=3
+	var expired_ids: Array[String] = [
+		"first_burger_marketed",
+		"first_pizza_marketed",
+		"first_drink_marketed",
+		"first_train",
+	]
+
+	var must_exist: Array[String] = []
+	must_exist.append_array(expired_ids)
+	must_exist.append_array([obtained_id, owned_but_obtainable_id, expiring_id])
+	for mid in must_exist:
+		if not MilestoneRegistry.has(mid):
+			return Result.failure("milestone id not found in registry: %s" % mid)
+
+	# 1) 过期且不可获得：从池中移除这些里程碑，且不授予任何玩家。
+	var remove_set := {}
+	for mid2 in expired_ids:
+		remove_set[mid2] = true
+
+	var remaining_pool: Array[String] = []
+	for v in Array(state.milestone_pool):
+		var mid3 := str(v).strip_edges()
+		if mid3.is_empty():
+			continue
+		if remove_set.has(mid3):
+			continue
+		remaining_pool.append(mid3)
+	state.milestone_pool = remaining_pool
+
+	# 2) 已获得：玩家0 拥有，且从池中移除 -> “已获得（浅绿色背景）”
+	var p0 := state.get_player(0)
+	if not (p0.get("milestones", []) is Array):
+		p0["milestones"] = []
+	var p0_ms: Array = p0.get("milestones", [])
+	if not p0_ms.has(obtained_id):
+		p0_ms.append(obtained_id)
+	p0["milestones"] = p0_ms
+	state.players[0] = p0
+
+	var pool2: Array[String] = []
+	for v2 in Array(state.milestone_pool):
+		var mid4 := str(v2).strip_edges()
+		if mid4.is_empty():
+			continue
+		if mid4 == obtained_id:
+			continue
+		pool2.append(mid4)
+	state.milestone_pool = pool2
+
+	# 3) 可获得但已有拥有者：玩家1 拥有，但池中保留 -> “可获得（浅绿色边框）” + 右下角 icon
+	var p1 := state.get_player(1)
+	if not (p1.get("milestones", []) is Array):
+		p1["milestones"] = []
+	var p1_ms: Array = p1.get("milestones", [])
+	if not p1_ms.has(owned_but_obtainable_id):
+		p1_ms.append(owned_but_obtainable_id)
+	p1["milestones"] = p1_ms
+	state.players[1] = p1
+
+	# 4) 过期提示（非过期）：hard_choices 的 first_hire_3 在 round=3 应显示 “剩余 0 回合”
+	#	确保仍在池中（若缺失则追加 1 个以便验收）。
+	if not state.milestone_pool.has(expiring_id):
+		state.milestone_pool.append(expiring_id)
+
+	return Result.success()
