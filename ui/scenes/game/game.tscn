@@ -44,14 +44,14 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 5
 
-[node name="TopBar" type="VBoxContainer" parent="UIRoot"]
+[node name="TopBar" type="HFlowContainer" parent="UIRoot"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 6
+theme_override_constants/h_separation = 20
+theme_override_constants/v_separation = 6
 
 [node name="InfoRow" type="HBoxContainer" parent="UIRoot/TopBar"]
 layout_mode = 2
-size_flags_horizontal = 3
 theme_override_constants/separation = 20
 
 [node name="RoundLabel" type="Label" parent="UIRoot/TopBar/InfoRow"]

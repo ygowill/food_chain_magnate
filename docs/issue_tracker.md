@@ -88,7 +88,7 @@
 | 71 | 性能：开局加载过重（将非关键 UI 预热移到进入对局后的后台） | 性能 | 开局同步预热多个复杂面板/资源构建，阻塞首帧交互 | Implemented（待手动验收） |
 | 72 | 性能：开局加载仍慢（定位主要耗时并进一步优化） | 性能 | MapSkin 构建（logo 去背景）+ UI 二次构建导致 3s 级阻塞 | Implemented（已完成 Step1+Step2） |
 | 73 | 菜单清理：移除主菜单“板块编辑器/回放测试”；游戏菜单移除“日志/里程碑/距离/回放”；回放播放器入口移到开始页面 | UI/信息架构 | 开发/测试入口暴露在主流程；游戏菜单存在与 TopBar 重复的功能入口；回放入口位置不符合使用场景 | Implemented（待手动验收） |
-| 74 | 游戏顶部栏：工具栏与回合信息合并到一行 | UI/布局 | `TopBar` 使用 VBoxContainer 分两行（InfoRow/ButtonRow），需要改为单行布局并同步脚本节点路径 | 待澄清 |
+| 74 | 游戏顶部栏：工具栏与回合信息合并到一行 | UI/布局 | `TopBar` 使用 VBoxContainer 分两行（InfoRow/ButtonRow），需要改为单行布局并同步脚本节点路径 | Implemented（待手动验收） |
 | 75 | 游戏日志面板：移除“清空”入口 | UI/交互 | `GameLogPanel` 顶部包含 ClearButton（清空），不符合期望的日志可回溯性 | 待确认 |
 
 ---
@@ -1747,19 +1747,32 @@
 
 - `TopBar` 使用 `VBoxContainer`，天然分行展示；合并为一行需要改为单行布局并更新引用路径。
 
-**待澄清（需要你点头确认）**
+**已澄清**
 
-- 合并后是否按“信息在左、工具按钮在右”的形式排布？（通常通过一个 `Spacer(size_flags_horizontal=EXPAND_FILL)` 把按钮推到右侧）
-- 在小分辨率/窄窗口下，如果一行放不下：你希望“强制单行挤压”（可能变得很拥挤），还是允许自动换行/折叠部分按钮进菜单？
+- 布局：信息在左、工具按钮在右。
+- 窄屏：允许自动换行。
 
-**实施方案（待确认后）**
+**实施记录**
 
-- 调整 `ui/scenes/game/game.tscn` 的 TopBar 布局为单行，并同步更新 `game.gd` / `game_overlay_controller.gd` 对应节点路径。
-- 跑回归：`GameSmokeTest` + `AllTests`。
+- 已修改：`ui/scenes/game/game.tscn`
+	- `TopBar` 从 `VBoxContainer` 改为 `HFlowContainer`，实现单行展示且宽度不足时自动换行
+	- `InfoRow` 取消 `size_flags_horizontal=EXPAND_FILL`，避免占满整行导致按钮行被强制换到下一行
+- 已修改：`ui/scenes/game/game.gd`
+	- `_apply_responsive_layout()` 增加 `FlowContainer` 分支，动态设置 `h_separation/v_separation` 与 `InfoRow/ButtonRow` 的间距
+
+**验收**
+
+- 顶部栏默认显示为一行：左侧回合/阶段/银行/玩家信息，右侧工具按钮。
+- 窄屏时顶部栏可自动换行，且不出现布局错乱/脚本报错。
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（109/109，`.godot/AllTests.log`）
 
 **状态**
 
-- 待澄清
+- Implemented（待手动验收）
 
 ---
 
