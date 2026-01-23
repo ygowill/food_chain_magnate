@@ -1645,6 +1645,11 @@
 4. 降低初始化日志 IO
 	- 将 `ActionRegistry.register_executor` 等初始化期的逐条 INFO 日志降级为 DEBUG 或聚合输出（例如只打印总数/耗时）。
 
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 90`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：PASS（`.godot/AllTests.log`）
+
 **状态**
 
 - Implemented（已完成 Step1+Step2；开局 MapSkin 构建与 UI 同步不再造成明显卡顿）
