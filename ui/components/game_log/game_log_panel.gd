@@ -171,6 +171,24 @@ func set_timeline_head(head_index: int) -> void:
 func set_timeline_cursor(cursor_index: int) -> void:
 	_timeline_cursor_index = int(cursor_index)
 
+func set_entry_command_index(entry_id: int, command_index: int) -> void:
+	var cmd := int(command_index)
+	for i in range(_entries.size()):
+		var e_val = _entries[i]
+		if not (e_val is Dictionary):
+			continue
+		var e: Dictionary = e_val
+		if int(e.get("id", -1)) != int(entry_id):
+			continue
+
+		e["command_index"] = cmd
+		var details_val = e.get("details", {})
+		var details: Dictionary = details_val if (details_val is Dictionary) else {}
+		details["command_index"] = cmd
+		e["details"] = details
+		_entries[i] = e
+		break
+
 func add_system_log(message: String, details: Dictionary = {}) -> int:
 	return add_log(LogType.SYSTEM, message, details)
 
