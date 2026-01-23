@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://ui/components/game_log/game_log_panel.gd" id="1_log"]
+[ext_resource type="PackedScene" path="res://ui/components/game_log/replay_bar.tscn" id="2_replay_bar"]
 
 [node name="GameLogPanel" type="Control"]
 custom_minimum_size = Vector2(0, 240)
@@ -54,6 +55,9 @@ text = "全屏"
 [node name="CloseButton" type="Button" parent="MarginContainer/VBoxContainer/TitleRow/TopRow"]
 layout_mode = 2
 text = "×"
+
+[node name="ReplayBar" parent="MarginContainer/VBoxContainer/TitleRow" instance=ExtResource("2_replay_bar")]
+layout_mode = 2
 
 [node name="FilterRow" type="HFlowContainer" parent="MarginContainer/VBoxContainer/TitleRow"]
 layout_mode = 2

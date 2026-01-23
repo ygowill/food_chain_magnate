@@ -13,6 +13,7 @@ signal log_added(entry: Dictionary)
 @onready var filter_btn: MenuButton = $MarginContainer/VBoxContainer/TitleRow/FilterRow/FilterButton
 @onready var expand_btn: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/ExpandButton
 @onready var close_btn: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/CloseButton
+@onready var replay_bar: Control = $MarginContainer/VBoxContainer/TitleRow/ReplayBar
 @onready var scroll_container: ScrollContainer = $MarginContainer/VBoxContainer/ScrollContainer
 @onready var log_container: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/LogContainer
 @onready var auto_scroll_check: CheckBox = $MarginContainer/VBoxContainer/BottomRow/AutoScrollCheck
@@ -216,6 +217,9 @@ func clear_logs() -> void:
 	_entries_all.clear()
 	_clear_display()
 	_update_entry_count()
+
+func get_replay_bar() -> Control:
+	return replay_bar
 
 func apply_font_settings() -> void:
 	# 允许 SettingsDialog 在运行时调整日志可读性（例如字体倍率）。
