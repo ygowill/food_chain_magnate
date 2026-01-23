@@ -1402,6 +1402,7 @@
 
 - 供应堆中的“房屋编号 token / 花园 token”与地图上实际放置的 piece 风格不一致。
 - 供应堆整体内容目前偏左，未居中；视觉上没有尽可能利用屏幕宽度（fit screen）。
+- 用户后续需求：供应堆增加缩放控制；所有 piece 预览需严格按 PieceRegistry 的 footprint 1:1（不再用统一 icon 方块）。
 
 **涉及代码**
 
@@ -1418,6 +1419,7 @@
 - 房屋编号 token：改为自绘（单节点）并直接复用 `MapCanvasDrawer._draw_house_and_garden()` 的地图绘制风格；并按你的说明，统一按 `house_with_garden` 的外观渲染。
 - 花园 token：按地图风格绘制“2x1 花园扩展”预览（绿底 + `garden_large` 围栏贴图），并显示剩余数量角标。
 - 布局：section 标题居中；各 section 的 `HFlowContainer` 子项改为居中排列，并在屏幕宽度内自动换行以尽可能 fit。
+- 追加：供应堆缩放（`-/slider/+`），缩放只改变“每格像素”以放大/缩小预览；所有板件按 PieceRegistry footprint 1:1 生成 token（模块供给/玩家 tokens 不再使用固定 80x80 icon）。
 
 **已澄清**
 
@@ -1431,6 +1433,10 @@
 	- 新增 `GardenExtensionToken`：绘制 2x1 花园扩展预览，并复用 `MapCanvasDrawer._draw_marketing_board_number_badge()` 显示剩余数量角标
 	- `_add_section()`：section 标题居中；`HFlowContainer` 子项改为居中排列以尽可能 fit screen
 	- 将预览 cell_size 调整为 40（与地图默认格尺寸一致；且不再缩小）：`HouseWithGardenNumberToken` / `GardenExtensionToken` / `MarketingBoardToken`
+- 追加：`ui/components/reserve_area/reserve_area_full_screen_view.tscn` / `ui/components/reserve_area/reserve_area_full_screen_view.gd`
+	- HeaderRow 增加缩放控件：`ZoomOutButton(-)` / `ZoomSlider(50%~200%)` / `ZoomInButton(+)` / `ZoomLabel`
+	- `ReserveAreaFullScreenView` 新增 `_cell_size`（BASE=40）并在缩放变化时递归调用子 token 的 `set_cell_size()`
+	- 模块供给/玩家 tokens：用 `PieceFootprintToken` 替代 `IconToken`，按 `PieceRegistry.get_def(piece_id).footprint_mask/anchor` 计算占地并以 `MapSkin` 的贴图/offset/scale 按地图风格绘制（footprint 1:1）
 
 **验收**
 

@@ -1,4 +1,4 @@
-# 保留区全屏视图（TopBar）
+# 供应堆全屏视图（TopBar）
 # - 分类展示当前对局“未使用/未放置”的 piece（包含模块引入的新 piece）
 # - 纯展示（不提供点击联动）
 # - ESC 关闭；关闭只隐藏自身，不影响底层面板显示状态
@@ -9,19 +9,41 @@ signal close_requested()
 
 @onready var sections: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/Sections
 @onready var close_button: Button = $MarginContainer/VBoxContainer/HeaderRow/CloseButton
+@onready var zoom_out_button: Button = $MarginContainer/VBoxContainer/HeaderRow/ZoomOutButton
+@onready var zoom_slider: HSlider = $MarginContainer/VBoxContainer/HeaderRow/ZoomSlider
+@onready var zoom_in_button: Button = $MarginContainer/VBoxContainer/HeaderRow/ZoomInButton
+@onready var zoom_label: Label = $MarginContainer/VBoxContainer/HeaderRow/ZoomLabel
 
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
 const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
+const MapUtilsClass = preload("res://core/map/map_utils.gd")
 
 var _skin = null
 var _skin_key: String = ""
+
+const BASE_CELL_SIZE := 40
+const ZOOM_MIN_PERCENT := 50
+const ZOOM_MAX_PERCENT := 200
+const ZOOM_STEP_PERCENT := 10
+
+var _zoom_percent: int = 100
+var _cell_size: int = BASE_CELL_SIZE
 
 func _ready() -> void:
 	set_process_unhandled_input(true)
 	if is_instance_valid(close_button):
 		close_button.pressed.connect(_on_close_pressed)
+	if is_instance_valid(zoom_out_button):
+		zoom_out_button.pressed.connect(_on_zoom_out_pressed)
+	if is_instance_valid(zoom_in_button):
+		zoom_in_button.pressed.connect(_on_zoom_in_pressed)
+	if is_instance_valid(zoom_slider):
+		zoom_slider.value_changed.connect(_on_zoom_slider_changed)
+		_apply_zoom_percent(int(round(zoom_slider.value)), false)
+	else:
+		_apply_zoom_percent(_zoom_percent, false)
 	visible = false
 
 func set_skin(skin) -> void:
@@ -37,6 +59,43 @@ func open_with_state(state: GameState, skin_override = null) -> void:
 		_ensure_skin_for_state(state)
 	_rebuild_from_state(state)
 	visible = true
+
+func _apply_zoom_percent(pct: int, update_slider: bool = true) -> void:
+	var p := clampi(int(pct), ZOOM_MIN_PERCENT, ZOOM_MAX_PERCENT)
+	if _zoom_percent == p and not update_slider:
+		return
+	_zoom_percent = p
+	_cell_size = maxi(1, int(round(float(BASE_CELL_SIZE) * float(_zoom_percent) / 100.0)))
+
+	if is_instance_valid(zoom_label):
+		zoom_label.text = "%d%%" % _zoom_percent
+	if update_slider and is_instance_valid(zoom_slider):
+		zoom_slider.value = float(_zoom_percent)
+
+	_apply_cell_size_to_existing_tokens()
+
+func _apply_cell_size_to_existing_tokens() -> void:
+	if sections == null:
+		return
+	_apply_cell_size_recursive(sections)
+
+func _apply_cell_size_recursive(node: Node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if node.has_method("set_cell_size"):
+		node.call("set_cell_size", _cell_size)
+	for c in node.get_children():
+		if c is Node:
+			_apply_cell_size_recursive(c)
+
+func _on_zoom_out_pressed() -> void:
+	_apply_zoom_percent(_zoom_percent - ZOOM_STEP_PERCENT, true)
+
+func _on_zoom_in_pressed() -> void:
+	_apply_zoom_percent(_zoom_percent + ZOOM_STEP_PERCENT, true)
+
+func _on_zoom_slider_changed(value: float) -> void:
+	_apply_zoom_percent(int(round(value)), false)
 
 func request_close() -> void:
 	if not visible:
@@ -130,6 +189,7 @@ func _add_house_numbers_section(state: GameState) -> void:
 		var token := HouseWithGardenNumberToken.new()
 		token.house_number = n
 		token.set_skin(_skin)
+		token.set_cell_size(_cell_size)
 		flow.add_child(token)
 
 func _add_garden_section(state: GameState) -> void:
@@ -145,6 +205,7 @@ func _add_garden_section(state: GameState) -> void:
 	var token := GardenExtensionToken.new()
 	token.count = count
 	token.set_skin(_skin)
+	token.set_cell_size(_cell_size)
 	token.tooltip_text = "花园 ×%d" % count
 	flow.add_child(token)
 
@@ -213,6 +274,7 @@ func _add_marketing_type_section(type_id: String, entries: Array) -> void:
 		var def: MarketingDef = def_val
 		var token := MarketingBoardToken.new()
 		token.set_skin(_skin)
+		token.set_cell_size(_cell_size)
 		token.board_number = bn
 		token.marketing_type = type_id
 		token.footprint_size = def.footprint_size
@@ -279,11 +341,11 @@ func _add_module_supplies_section(state: GameState) -> void:
 		var piece_id := _guess_piece_id_for_supply(base, module_ids, piece_ids)
 		if _is_excluded_piece_id(piece_id):
 			continue
-		var tex: Texture2D = _skin.get_piece_texture(piece_id) if _skin != null else null
-
-		var token := IconToken.new()
-		token.texture = tex
-		token.badge_text = "×%d" % count
+		var token := PieceFootprintToken.new()
+		token.piece_id = piece_id
+		token.count = count
+		token.set_skin(_skin)
+		token.set_cell_size(_cell_size)
 		token.tooltip_text = "%s ×%d" % [base, count]
 		flow.add_child(token)
 
@@ -406,10 +468,11 @@ func _add_player_token_supplies_section(state: GameState) -> void:
 			var cnt := int(it.get("count", 0))
 			if pid_str.is_empty() or cnt <= 0:
 				continue
-			var tex: Texture2D = _skin.get_piece_texture(pid_str) if _skin != null else null
-			var token := IconToken.new()
-			token.texture = tex
-			token.badge_text = "×%d" % cnt
+			var token := PieceFootprintToken.new()
+			token.piece_id = pid_str
+			token.count = cnt
+			token.set_skin(_skin)
+			token.set_cell_size(_cell_size)
 			token.tooltip_text = "%s ×%d" % [pid_str, cnt]
 			flow.add_child(token)
 
@@ -488,6 +551,11 @@ class HouseWithGardenNumberToken extends Control:
 		_skin = skin
 		queue_redraw()
 
+	func set_cell_size(cell_size: int) -> void:
+		_cell_size = maxi(1, int(cell_size))
+		custom_minimum_size = Vector2(float(_cell_size * 2), float(_cell_size * 3))
+		queue_redraw()
+
 	func _world_to_view(world_pos: Vector2i) -> Vector2i:
 		# 该 token 内部使用“局部网格”（world==view），以复用 MapCanvasDrawer 的绘制逻辑。
 		return world_pos
@@ -523,6 +591,11 @@ class GardenExtensionToken extends Control:
 		_skin = skin
 		queue_redraw()
 
+	func set_cell_size(cell_size: int) -> void:
+		_cell_size = maxi(1, int(cell_size))
+		custom_minimum_size = Vector2(float(_cell_size * 2), float(_cell_size))
+		queue_redraw()
+
 	func _draw() -> void:
 		var rect := Rect2(Vector2.ZERO, custom_minimum_size)
 		var bg := Color("#22C55E")
@@ -547,6 +620,7 @@ class MarketingBoardToken extends Control:
 	var footprint_size: Vector2i = Vector2i.ONE
 
 	var _skin = null
+	var _cell_size: int = 40
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_PASS
@@ -556,15 +630,18 @@ class MarketingBoardToken extends Control:
 		_skin = skin
 		queue_redraw()
 
+	func set_cell_size(cell_size: int) -> void:
+		_cell_size = maxi(1, int(cell_size))
+		_update_min_size()
+		queue_redraw()
+
 	func _update_min_size() -> void:
-		var cell_size := 40
-		var size := Vector2(maxi(1, footprint_size.x) * cell_size, maxi(1, footprint_size.y) * cell_size)
+		var size := Vector2(maxi(1, footprint_size.x) * _cell_size, maxi(1, footprint_size.y) * _cell_size)
 		custom_minimum_size = size
 
 	func _draw() -> void:
 		if _skin == null:
 			return
-		var cell_size := 40
 		var placement := {
 			"type": marketing_type,
 			"board_number": board_number,
@@ -573,4 +650,80 @@ class MarketingBoardToken extends Control:
 		}
 		# MapCanvasDrawer._draw_marketing_placement 依赖 canvas._skin
 		self._skin = _skin
-		MapCanvasDrawerClass._draw_marketing_placement(self, cell_size, placement, 1.0, Rect2(Vector2.ZERO, custom_minimum_size))
+		MapCanvasDrawerClass._draw_marketing_placement(self, _cell_size, placement, 1.0, Rect2(Vector2.ZERO, custom_minimum_size))
+
+
+# === 通用 piece token：按 PieceRegistry footprint 1:1 预览 + 数量角标 ===
+class PieceFootprintToken extends Control:
+	var piece_id: String = ""
+	var count: int = 0
+
+	var _skin = null
+	var _cell_size: int = 40
+	var _size_cells: Vector2i = Vector2i.ONE
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_PASS
+		_recompute_footprint()
+		_update_min_size()
+		queue_redraw()
+
+	func set_skin(skin) -> void:
+		_skin = skin
+		queue_redraw()
+
+	func set_cell_size(cell_size: int) -> void:
+		_cell_size = maxi(1, int(cell_size))
+		_update_min_size()
+		queue_redraw()
+
+	func _recompute_footprint() -> void:
+		_size_cells = Vector2i.ONE
+		if piece_id.is_empty():
+			return
+		if not PieceRegistryClass.is_loaded():
+			return
+		var def_val = PieceRegistryClass.get_def(piece_id) if PieceRegistryClass.has(piece_id) else null
+		if not (def_val is PieceDef):
+			return
+		var def: PieceDef = def_val
+		var cells: Array[Vector2i] = MapUtilsClass.get_footprint_cells(def.footprint_mask, def.anchor, Vector2i.ZERO, 0)
+		var bounds: Dictionary = MapUtilsClass.get_footprint_bounds(cells)
+		var size_val = bounds.get("size", Vector2i.ONE)
+		if size_val is Vector2i:
+			var s: Vector2i = size_val
+			if s.x > 0 and s.y > 0:
+				_size_cells = s
+
+	func _update_min_size() -> void:
+		custom_minimum_size = Vector2(float(maxi(1, _size_cells.x) * _cell_size), float(maxi(1, _size_cells.y) * _cell_size))
+
+	func _draw() -> void:
+		var rect := Rect2(Vector2.ZERO, custom_minimum_size)
+		var bg := Color(0.12, 0.12, 0.14, 0.92)
+		draw_rect(rect, bg, true)
+		draw_rect(rect, Color(0.25, 0.25, 0.3, 0.6), false, 1.0)
+
+		if _skin != null and not piece_id.is_empty():
+			var tex: Texture2D = _skin.get_piece_texture(piece_id)
+			var offset_px: Vector2i = _skin.get_piece_offset_px(piece_id)
+			var scale: Vector2 = _skin.get_piece_scale(piece_id)
+			var pos_px := Vector2(float(offset_px.x), float(offset_px.y))
+			var size_px := Vector2(float(_size_cells.x * _cell_size), float(_size_cells.y * _cell_size)) * scale
+			draw_texture_rect(tex, Rect2(pos_px, size_px), false, Color(1, 1, 1, 0.85))
+
+		if count > 0:
+			_draw_count_badge(rect, count)
+
+	func _draw_count_badge(rect: Rect2, c: int) -> void:
+		var text := "×%d" % int(c)
+		var pad := maxf(2.0, float(_cell_size) * 0.06)
+		var font: Font = ThemeDB.fallback_font
+		var font_size := maxi(10, int(round(float(_cell_size) * 0.32)))
+		var est_char_w := float(font_size) * 0.6
+		var w := maxf(float(font_size), est_char_w * float(text.length()) + pad * 2.0)
+		var h := float(font_size) + pad * 2.0
+		var box := Rect2(Vector2(rect.size.x - w - pad, pad), Vector2(w, h))
+		draw_rect(box, Color(0, 0, 0, 0.55), true)
+		var baseline := Vector2(box.position.x, box.position.y + box.size.y * 0.5 + float(font_size) * 0.35)
+		draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_CENTER, box.size.x, font_size, Color(1, 1, 1, 0.95))
