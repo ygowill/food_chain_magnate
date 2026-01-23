@@ -193,7 +193,7 @@ static func _draw_cell_highlights(canvas, cell_size: int) -> void:
 
 	var base := Color("#f5b9a6")
 	var fill := base
-	fill.a = 0.12
+	fill.a = 0.66
 	var border := base
 	border.a = 0.35
 
@@ -324,7 +324,7 @@ static func _draw_structure_preview_piece(canvas, cell_size: int, preview_info: 
 
 static func _draw_ground_and_blocked(canvas, cell_size: int) -> void:
 	var blocked_tex: Texture2D = canvas._skin.get_blocked_overlay_texture()
-	var ground_col := Color("#faf4e0")
+	var ground_col := Color("#ffffff")
 	# Only paint ground for the base map cells.
 	# external_cells and the UI-only outside ring (used by airplane marketing) must stay transparent (issue_tracker #40).
 	var map_origin: Vector2i = canvas._map_data.get("map_origin", Vector2i.ZERO)

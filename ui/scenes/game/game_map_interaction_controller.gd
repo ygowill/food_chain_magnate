@@ -186,7 +186,7 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 						airplane_attach = str(attach_val)
 
 			if not _marketing_valid_anchors.has(world_pos):
-				_call_marketing_panel_method("set_error", ["该位置不可放置，请选择绿色高亮的可放置格"])
+				_call_marketing_panel_method("set_error", ["该位置不可放置，请选择高亮的可放置格"])
 				return
 			var mt := mt0
 			if mt.is_empty():
@@ -226,7 +226,7 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 			# 仅允许点击“高亮的合法格”
 			if _restaurant_valid_anchors.is_empty() or not _restaurant_valid_anchors.has(world_pos):
 				if is_instance_valid(restaurant_placement_overlay) and restaurant_placement_overlay.visible and restaurant_placement_overlay.has_method("set_validation"):
-					restaurant_placement_overlay.set_validation(false, "请选择绿色高亮的可放置格")
+					restaurant_placement_overlay.set_validation(false, "请选择高亮的可放置格")
 				return
 			if is_instance_valid(restaurant_placement_overlay) and restaurant_placement_overlay.visible and restaurant_placement_overlay.has_method("set_selected_position"):
 				restaurant_placement_overlay.set_selected_position(world_pos)
