@@ -47,8 +47,6 @@ var _pending_reserve_card_open_player_id: int = -1
 var _pending_reserve_card_open_attempts: int = 0
 var _reserve_card_open_routine_running: bool = false
 
-var _milestone_full_screen_view_primed: bool = false
-
 func _init(scene, map_controller, overlay_controller, execute_command: Callable, refresh_ui: Callable) -> void:
 	_scene = scene
 	_map_controller = map_controller
@@ -63,11 +61,6 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 	_marketing_panels = MarketingPanelsClass.new(_scene, _map_controller, _overlay_controller, _execute_command, hide_all, center_popup)
 	_placement_overlays = PlacementOverlaysClass.new(_scene, _map_controller, _overlay_controller, _execute_command, hide_all)
 	_end_panels = EndPanelsClass.new(_scene, _overlay_controller, _execute_command, hide_all, center_popup, _refresh_ui)
-
-	# 预先创建全屏覆盖层（里程碑/保留区），避免首次点击时 instantiate + 皮肤构建带来的卡顿。
-	# 皮肤在打开时从 MapCanvas 注入，确保与地图一致且无需重复 build。
-	_ensure_milestone_full_screen_view()
-	_ensure_reserve_area_full_screen_view()
 
 func connect_signals(action_panel, turn_order_track, hand_area, company_structure) -> void:
 	UiSignalHelpersClass.safe_connect(action_panel, "action_requested", on_action_requested)
@@ -301,26 +294,18 @@ func sync(state: GameState) -> void:
 		_end_panels.sync(state)
 	_sync_modals(state)
 	_sync_action_panel_context()
-	_prime_top_overlays_if_needed(state)
 
-func _prime_top_overlays_if_needed(state: GameState) -> void:
-	# 用户选择了“启动稍慢但点击几乎瞬开”的取舍：
-	# 把里程碑等浏览面板的重建成本移到 UI 首次 sync（加载阶段）完成，点击时直接 show。
-	if state == null:
-		return
-	if _scene == null:
-		return
-	if _milestone_full_screen_view_primed:
-		return
+func get_milestone_full_screen_view():
 	_ensure_milestone_full_screen_view()
-	if not is_instance_valid(_milestone_full_screen_view):
-		return
-	var skin = _get_current_map_skin()
-	if skin == null:
-		return
-	if _milestone_full_screen_view.has_method("prime_with_state"):
-		_milestone_full_screen_view.call("prime_with_state", state, skin)
-		_milestone_full_screen_view_primed = true
+	return _milestone_full_screen_view
+
+func get_reserve_area_full_screen_view():
+	_ensure_reserve_area_full_screen_view()
+	return _reserve_area_full_screen_view
+
+func get_employee_tree_panel():
+	_ensure_employee_tree_panel()
+	return _employee_tree_panel
 
 func _sync_action_panel_context() -> void:
 	if _scene == null:

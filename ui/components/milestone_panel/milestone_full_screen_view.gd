@@ -6,8 +6,11 @@ class_name MilestoneFullScreenView
 extends Control
 
 signal close_requested()
+signal build_finished()
 
 @onready var grid: GridContainer = $MarginContainer/VBoxContainer/ScrollContainer/CenterContainer/Grid
+@onready var scroll_container: ScrollContainer = $MarginContainer/VBoxContainer/ScrollContainer
+@onready var loading_center: Control = $MarginContainer/VBoxContainer/LoadingCenter
 @onready var close_button: Button = $MarginContainer/VBoxContainer/HeaderRow/CloseButton
 
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
@@ -24,11 +27,14 @@ var _formatter: MilestonePanel = null
 var _built_milestone_ids_key: String = ""
 var _last_sync_key: String = ""
 var _last_skin_ref = null
+var _build_in_progress: bool = false
+var _pending_state = null
 
 func _ready() -> void:
 	set_process_unhandled_input(true)
 	if is_instance_valid(close_button):
 		close_button.pressed.connect(_on_close_pressed)
+	_set_loading_visible(false)
 	visible = false
 
 func _exit_tree() -> void:
@@ -42,8 +48,48 @@ func set_skin(skin) -> void:
 	_skin = skin
 
 func prime_with_state(state: GameState, skin_override = null) -> void:
-	# 用于把“首次构建成本”移到加载阶段（用户点击时几乎瞬开）。
-	sync_from_state(state, skin_override, true)
+	# 进入对局后后台预热；不会阻塞首帧交互。
+	begin_background_build(state, skin_override)
+
+func begin_background_build(state: GameState, skin_override = null) -> void:
+	if state == null:
+		return
+	_pending_state = state
+
+	if skin_override != null:
+		set_skin(skin_override)
+	else:
+		_ensure_skin_for_state(state)
+
+	# 仅用于格式化少量文案（例如 CFO 加成百分比），不需要 deep duplicate。
+	_rules = state.rules if (state.rules is Dictionary) else {}
+	_ensure_formatter()
+	if _formatter != null:
+		_formatter._rules = _rules
+
+	var sync_key := _compute_sync_key(state)
+	var milestone_ids := _get_all_milestone_ids(state)
+	var ids_key := ",".join(milestone_ids)
+
+	# 若卡片集合未变化，则仅做轻量更新（不进入后台构建）。
+	if not _cards.is_empty() and ids_key == _built_milestone_ids_key:
+		if sync_key != _last_sync_key:
+			_last_sync_key = sync_key
+			_update_from_state(state)
+		_set_loading_visible(false)
+		build_finished.emit()
+		return
+
+	if _build_in_progress:
+		return
+
+	_build_in_progress = true
+	_set_loading_visible(true)
+
+	var claimed_by := _build_claimed_by(state)
+	var logo_textures := _build_player_logo_textures(state)
+
+	call_deferred("_run_background_rebuild", milestone_ids, claimed_by, logo_textures, ids_key, sync_key)
 
 func sync_from_state(state: GameState, skin_override = null, force_rebuild: bool = false) -> void:
 	if state == null:
@@ -81,8 +127,8 @@ func sync_from_state(state: GameState, skin_override = null, force_rebuild: bool
 	_update_from_state(state)
 
 func open_with_state(state: GameState, skin_override = null) -> void:
-	sync_from_state(state, skin_override, false)
 	visible = true
+	begin_background_build(state, skin_override)
 
 func request_close() -> void:
 	if not visible:
@@ -99,6 +145,12 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_close_pressed() -> void:
 	request_close()
+
+func _set_loading_visible(loading: bool) -> void:
+	if is_instance_valid(loading_center):
+		loading_center.visible = loading
+	if is_instance_valid(scroll_container):
+		scroll_container.visible = not loading
 
 func _ensure_formatter() -> void:
 	if _formatter != null and is_instance_valid(_formatter):
@@ -122,6 +174,79 @@ func _ensure_skin_for_state(state: GameState) -> void:
 	else:
 		_skin = null
 		_skin_key = ""
+
+func _run_background_rebuild(milestone_ids: Array[String], claimed_by: Dictionary, logo_textures: Dictionary, ids_key: String, sync_key: String) -> void:
+	# 先让“加载中...”有机会显示出来（避免 open 同帧就做重建导致看不到占位）。
+	await get_tree().process_frame
+	if not is_instance_valid(self):
+		return
+	if grid == null or not is_instance_valid(grid):
+		_build_in_progress = false
+		return
+
+	# 清空旧 UI
+	for c in grid.get_children():
+		if is_instance_valid(c):
+			c.queue_free()
+	_cards.clear()
+
+	if milestone_ids.is_empty():
+		var empty := Label.new()
+		empty.text = "暂无里程碑"
+		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		empty.add_theme_font_size_override("font_size", 14)
+		empty.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.95))
+		grid.add_child(empty)
+		_built_milestone_ids_key = ids_key
+		_last_sync_key = sync_key
+		_build_in_progress = false
+		_set_loading_visible(false)
+		build_finished.emit()
+		return
+
+	var batch := 0
+	for ms_id in milestone_ids:
+		var def = MilestoneRegistryClass.get_def(ms_id) if MilestoneRegistryClass.is_loaded() else null
+
+		var effect_text := ms_id
+		if def != null and def is MilestoneDef and _formatter != null:
+			effect_text = _formatter._format_milestone_effect_text(def)
+
+		var owners: Array[int] = []
+		if claimed_by.has(ms_id):
+			for v in Array(claimed_by[ms_id]):
+				if v is int:
+					owners.append(int(v))
+		owners.sort()
+
+		var card := MilestoneCard.new()
+		card.milestone_id = ms_id
+		card.milestone_def = def
+		card.effect_text = effect_text
+		card.player_logo_textures = logo_textures
+		card.set_owners(owners)
+		grid.add_child(card)
+		_cards[ms_id] = card
+
+		batch += 1
+		if batch >= 6:
+			batch = 0
+			await get_tree().process_frame
+			if not is_instance_valid(self):
+				return
+
+	_built_milestone_ids_key = ids_key
+	_last_sync_key = sync_key
+	_build_in_progress = false
+	_set_loading_visible(false)
+	build_finished.emit()
+
+	# 若构建期间 state 发生变化（例如有人刚获得里程碑），在不重建的前提下做一次轻量更新。
+	if _pending_state != null and is_instance_valid(self) and not _cards.is_empty():
+		var pending_key := _compute_sync_key(_pending_state)
+		if pending_key != _last_sync_key:
+			_last_sync_key = pending_key
+			_update_from_state(_pending_state)
 
 func _compute_sync_key(state: GameState) -> String:
 	# 仅用于避免重复刷新（打开时不再重复 rebuild）。

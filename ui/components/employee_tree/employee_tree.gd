@@ -3,6 +3,7 @@ class_name EmployeeTree
 extends Control
 
 signal closed()
+signal build_finished()
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeDefClass = preload("res://core/data/employee_def.gd")
@@ -10,6 +11,7 @@ const EmployeeDefClass = preload("res://core/data/employee_def.gd")
 @onready var close_button: Button = $MarginContainer/VBoxContainer/HeaderRow/CloseButton
 @onready var fit_button: Button = $MarginContainer/VBoxContainer/HeaderRow/FitButton
 @onready var fit_width_button: Button = $MarginContainer/VBoxContainer/HeaderRow/FitWidthButton
+@onready var loading_center: Control = $MarginContainer/VBoxContainer/LoadingCenter
 @onready var viewport: Control = $MarginContainer/VBoxContainer/Viewport
 @onready var pan_background: Control = $MarginContainer/VBoxContainer/Viewport/PanBackground
 @onready var graph: EmployeeTreeGraph = $MarginContainer/VBoxContainer/Viewport/Graph
@@ -20,6 +22,8 @@ var _drag_start_mouse: Vector2 = Vector2.ZERO
 var _drag_start_pos: Vector2 = Vector2.ZERO
 
 var _detail_dialog: AcceptDialog = null
+var _built: bool = false
+var _build_in_progress: bool = false
 
 func _ready() -> void:
 	if is_instance_valid(close_button):
@@ -33,18 +37,52 @@ func _ready() -> void:
 	if is_instance_valid(graph):
 		graph.employee_clicked.connect(_on_employee_clicked)
 
-	# 初次打开时构建；由外部 toggle 时也可调用 open() 重新布局。
-	open()
+	_set_loading_visible(true)
 
 func open() -> void:
-	if is_instance_valid(graph):
-		graph.scale = Vector2.ONE
-		graph.rebuild_from_registry(1.0)
-	_fit_to_view()
+	if _built:
+		_set_loading_visible(false)
+		return
+	_set_loading_visible(true)
+	begin_background_build()
+
+func begin_background_build() -> void:
+	if _built or _build_in_progress:
+		return
+	_build_in_progress = true
+	call_deferred("_run_background_build")
+
+func _run_background_build() -> void:
+	# 先让“加载中...”有机会显示出来（避免 open 同帧就做重建导致看不到占位）。
+	await get_tree().process_frame
+	if not is_instance_valid(self):
+		return
+	if not is_instance_valid(graph):
+		_build_in_progress = false
+		return
+
+	graph.scale = Vector2.ONE
+	graph.rebuild_from_registry(1.0)
+	await _fit_to_view()
+
+	_built = true
+	_build_in_progress = false
+	_set_loading_visible(false)
+	build_finished.emit()
 
 func _on_close_pressed() -> void:
 	visible = false
 	closed.emit()
+
+func _set_loading_visible(loading: bool) -> void:
+	if is_instance_valid(loading_center):
+		loading_center.visible = loading
+	if is_instance_valid(viewport):
+		viewport.visible = not loading
+	if is_instance_valid(fit_button):
+		fit_button.disabled = loading
+	if is_instance_valid(fit_width_button):
+		fit_width_button.disabled = loading
 
 func _on_background_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
@@ -69,6 +107,8 @@ func _on_background_gui_input(event: InputEvent) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
+		return
+	if not _built:
 		return
 	if not is_instance_valid(viewport) or not is_instance_valid(graph):
 		return

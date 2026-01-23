@@ -1452,6 +1452,82 @@
 
 - Implemented（待手动验收）
 
+---
+
+## 71. 性能：开局加载过重（将非关键 UI 预热移到进入对局后的后台）
+
+**现象**
+
+- 进入对局后，开局阶段需要加载/构建的内容过多，导致“可交互”变慢。
+- 希望把不影响开局可玩的内容挪到进入对局后后台加载；允许玩家首次打开对应面板时看到“加载中”。
+
+**已澄清**
+
+- 更在意“开局可交互更快”，可接受首次打开时出现“加载中”。
+- 后台加载从进入对局立刻开始（但不应阻塞首帧交互）。
+- 不允许通过“占位贴图/延迟贴图替换”的方式处理地图/贴图资源（即：不做会让地图或 token 先显示 placeholder 再替换的贴图异步方案）。
+- 范围：除里程碑/供应堆外，其它“非关键面板/视图”也纳入后台加载（例如升级路线/员工树等由 TopBar 打开的浏览视图）。
+- 打开行为：若后台构建未完成，面板只显示“加载中…”，待构建完成后一次性切换到完整内容（不做边建边显示的渐进填充）。
+
+**初步根因**
+
+- 当前为追求“点击里程碑几乎瞬开”，把里程碑面板的构建/同步（卡片节点创建）提前到了 `GamePanelController.sync()` 的首次执行路径，导致开局阶段承担了额外 UI 构建成本（与玩家“先尽快开始操作”的目标冲突）。
+- 供应堆/里程碑面板节点也在 `GamePanelController._init()` 预先 instantiate 并加入场景树；虽然比构建卡片轻，但仍属于“开局非关键”开销。
+
+**拟定方案（已确认）**
+
+- 调整策略：从“开局预热，点击瞬开”切换为“开局尽快可交互，面板后台分帧构建；打开未完成时显示加载中，完成后一次性显示”。
+- `GamePanelController`：
+	- 移除/关闭 `sync()` 内的里程碑强制预热（`_prime_top_overlays_if_needed`），避免开局同步时构建里程碑卡片。
+	- 改为进入对局后 `call_deferred()` 启动后台任务：分帧构建（每帧处理少量卡片/token，`await get_tree().process_frame()`），降低单帧卡顿风险。
+	- 视情况把“里程碑/供应堆”全屏视图的 instantiate 也延后到后台任务中（而非 `_init()` 即创建）。
+- `MilestoneFullScreenView` / `ReserveAreaFullScreenView`：
+	- 新增“后台构建/预热”入口（例如 `begin_background_build(state, skin)`），内部用分帧循环创建/更新 UI。
+	- `open_with_state()`：若后台构建未完成，面板立即打开但只显示“加载中…”占位文案；构建完成后一次性替换为完整内容。
+	- 后台任务应可取消（退出对局/场景释放时停止），避免泄漏与 headless 测试不退出。
+- 其它非关键面板（例如 `EmployeeTree`）：
+	- 避免在实例化 `_ready()` 中做重建；改为显式触发后台构建（同样分帧）。
+	- 若玩家在构建前打开：显示“加载中…”，构建完成后一次性展示完整视图。
+
+**验收标准（预期）**
+
+- 进入对局后，首帧/前几帧更快达到“可操作”（不因里程碑/供应堆预构建而卡住）。
+- 玩家首次打开“里程碑/供应堆”时：
+	- 面板立即显示（允许显示“加载中…”），不会长时间黑屏/无响应；
+	- 构建过程中 UI 可持续响应 ESC/关闭；
+	- 构建完成后展示完整内容。
+- 玩家首次打开其它纳入后台加载的非关键面板（例如升级路线）时遵循同样行为。
+- 不引入“贴图先 placeholder 再替换”的行为（地图与 token 贴图不做异步替换）。
+
+**实施记录**
+
+- 已修改：`ui/scenes/game/game_panel_controller.gd`
+	- 移除开局阶段的里程碑强制预热（不再在 `sync()` 首次执行时构建里程碑卡片）
+	- 移除 `_init()` 中对“里程碑/供应堆”全屏视图的预先实例化（开局更快进入可交互）
+	- 新增 `get_employee_tree_panel()/get_milestone_full_screen_view()/get_reserve_area_full_screen_view()` 供后台预热调度器调用
+- 已修改：`ui/scenes/game/game.gd`
+	- 新增 `_start_background_ui_warmup()`：进入对局后 `call_deferred` 启动后台预热，分帧/顺序构建非关键面板（升级路线 → 里程碑 → 供应堆）
+	- 后台预热复用 `map_canvas.get_skin()`，避免触发 `MapSkinBuilder` 重复加载（满足“不允许 placeholder 贴图替换”的约束）
+- 已修改：`ui/components/milestone_panel/milestone_full_screen_view.tscn` / `ui/components/milestone_panel/milestone_full_screen_view.gd`
+	- 增加 `LoadingCenter/LoadingLabel`；`open_with_state()` 未完成构建时仅显示“加载中...”
+	- 新增 `begin_background_build()` + `build_finished`：后台分批（每帧创建少量卡片）构建 UI，完成后一次性切换显示
+- 已修改：`ui/components/reserve_area/reserve_area_full_screen_view.tscn` / `ui/components/reserve_area/reserve_area_full_screen_view.gd`
+	- 增加 `LoadingCenter/LoadingLabel`；`open_with_state()` 未完成构建时仅显示“加载中...”
+	- 新增 `begin_background_build()` + `build_finished`：后台分帧构建（按 section 分步），完成后一次性切换显示
+- 已修改：`ui/components/employee_tree/employee_tree.tscn` / `ui/components/employee_tree/employee_tree.gd`
+	- 增加 `LoadingCenter/LoadingLabel`
+	- 移除 `_ready()` 中的自动 `open()`（避免实例化即重建导致卡顿）
+	- 新增 `begin_background_build()` + `build_finished`：后台构建升级路线；打开未完成时显示“加载中...”，完成后一次性展示
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：PASS（109/109，`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）
+
 ## 57. Working：生产/采购员工选择应按“实例”消耗（用过的那张变灰且不可点）
 
 **现象**

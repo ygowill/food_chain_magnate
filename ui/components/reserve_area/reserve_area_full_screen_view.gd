@@ -6,8 +6,11 @@ class_name ReserveAreaFullScreenView
 extends Control
 
 signal close_requested()
+signal build_finished()
 
 @onready var sections: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/Sections
+@onready var scroll_container: ScrollContainer = $MarginContainer/VBoxContainer/ScrollContainer
+@onready var loading_center: Control = $MarginContainer/VBoxContainer/LoadingCenter
 @onready var close_button: Button = $MarginContainer/VBoxContainer/HeaderRow/CloseButton
 @onready var zoom_out_button: Button = $MarginContainer/VBoxContainer/HeaderRow/ZoomOutButton
 @onready var zoom_slider: HSlider = $MarginContainer/VBoxContainer/HeaderRow/ZoomSlider
@@ -22,6 +25,9 @@ const MapUtilsClass = preload("res://core/map/map_utils.gd")
 
 var _skin = null
 var _skin_key: String = ""
+var _build_in_progress: bool = false
+var _last_build_key: String = ""
+var _pending_state = null
 
 const BASE_CELL_SIZE := 40
 const ZOOM_MIN_PERCENT := 50
@@ -44,6 +50,7 @@ func _ready() -> void:
 		_apply_zoom_percent(int(round(zoom_slider.value)), false)
 	else:
 		_apply_zoom_percent(_zoom_percent, false)
+	_set_loading_visible(false)
 	visible = false
 
 func set_skin(skin) -> void:
@@ -51,14 +58,37 @@ func set_skin(skin) -> void:
 	_skin = skin
 
 func open_with_state(state: GameState, skin_override = null) -> void:
+	visible = true
+	begin_background_build(state, skin_override)
+
+func begin_background_build(state: GameState, skin_override = null) -> void:
 	if state == null:
 		return
+	_pending_state = state
+
 	if skin_override != null:
 		set_skin(skin_override)
 	else:
 		_ensure_skin_for_state(state)
-	_rebuild_from_state(state)
-	visible = true
+
+	var build_key := _compute_build_key(state)
+	if not _build_in_progress and not _last_build_key.is_empty() and build_key == _last_build_key:
+		_set_loading_visible(false)
+		build_finished.emit()
+		return
+
+	if _build_in_progress:
+		return
+
+	_build_in_progress = true
+	_set_loading_visible(true)
+	call_deferred("_run_background_rebuild", state, build_key)
+
+func _set_loading_visible(loading: bool) -> void:
+	if is_instance_valid(loading_center):
+		loading_center.visible = loading
+	if is_instance_valid(scroll_container):
+		scroll_container.visible = not loading
 
 func _apply_zoom_percent(pct: int, update_slider: bool = true) -> void:
 	var p := clampi(int(pct), ZOOM_MIN_PERCENT, ZOOM_MAX_PERCENT)
@@ -142,6 +172,135 @@ func _rebuild_from_state(state: GameState) -> void:
 	_add_marketing_boards_section(state)
 	_add_module_supplies_section(state)
 	_add_player_token_supplies_section(state)
+
+func _run_background_rebuild(state: GameState, build_key: String) -> void:
+	# 先让“加载中...”有机会显示出来（避免 open 同帧就做重建导致看不到占位）。
+	await get_tree().process_frame
+	if not is_instance_valid(self):
+		return
+	if state == null:
+		_build_in_progress = false
+		_set_loading_visible(false)
+		build_finished.emit()
+		return
+
+	if sections == null or not is_instance_valid(sections):
+		_build_in_progress = false
+		return
+
+	for c in sections.get_children():
+		if is_instance_valid(c):
+			c.queue_free()
+
+	_add_house_numbers_section(state)
+	await get_tree().process_frame
+	if not is_instance_valid(self):
+		return
+
+	_add_garden_section(state)
+	await get_tree().process_frame
+	if not is_instance_valid(self):
+		return
+
+	_add_marketing_boards_section(state)
+	await get_tree().process_frame
+	if not is_instance_valid(self):
+		return
+
+	_add_module_supplies_section(state)
+	await get_tree().process_frame
+	if not is_instance_valid(self):
+		return
+
+	_add_player_token_supplies_section(state)
+
+	_last_build_key = build_key
+	_build_in_progress = false
+	_set_loading_visible(false)
+	build_finished.emit()
+
+	# 若构建期间 state 发生变化，则按新的 key 再次触发后台重建。
+	if _pending_state != null and is_instance_valid(self):
+		var pending_key := _compute_build_key(_pending_state)
+		if pending_key != _last_build_key:
+			begin_background_build(_pending_state, _skin)
+
+func _compute_build_key(state: GameState) -> String:
+	if state == null:
+		return ""
+	var modules_key := ""
+	if state.modules is Array:
+		modules_key = ",".join(Array(state.modules, TYPE_STRING, "", null))
+
+	var map_key := ""
+	if state.map is Dictionary:
+		var m: Dictionary = state.map
+		var hn_val = m.get("house_number_supply_remaining", [])
+		if hn_val is Array:
+			var nums: Array[int] = []
+			for v in Array(hn_val):
+				if v is int:
+					nums.append(int(v))
+				elif v is float:
+					var f: float = float(v)
+					if f == floor(f):
+						nums.append(int(f))
+			nums.sort()
+			var num_strs: Array[String] = []
+			for n in nums:
+				num_strs.append(str(n))
+			map_key += "hn=" + ",".join(num_strs)
+
+		var g = m.get("garden_supply_remaining", 0)
+		if g is int or g is float:
+			map_key += "|g=" + str(int(g))
+
+		var mk := ""
+		var placements_val = m.get("marketing_placements", null)
+		if placements_val is Dictionary:
+			var ks: Array[String] = []
+			for k in Dictionary(placements_val).keys():
+				ks.append(str(k))
+			ks.sort()
+			mk = ",".join(ks)
+		map_key += "|mp=" + mk
+
+		var supply_parts: Array[String] = []
+		for k2 in m.keys():
+			var key2 := str(k2)
+			if not key2.ends_with("_supply_remaining"):
+				continue
+			if key2 == "house_number_supply_remaining" or key2 == "garden_supply_remaining" or key2 == "tile_supply_remaining":
+				continue
+			var v2 = m.get(k2, null)
+			if v2 is int or v2 is float:
+				var c2 := int(v2)
+				if c2 > 0:
+					supply_parts.append("%s=%d" % [key2, c2])
+		supply_parts.sort()
+		map_key += "|sup=" + ";".join(supply_parts)
+
+	var player_parts: Array[String] = []
+	for pid in range(state.players.size()):
+		var p_val = state.players[pid]
+		if not (p_val is Dictionary):
+			player_parts.append("")
+			continue
+		var p: Dictionary = p_val
+		var items: Array[String] = []
+		for k3 in p.keys():
+			var key3 := str(k3)
+			if not key3.ends_with("_tokens_remaining"):
+				continue
+			var v3 = p.get(k3, null)
+			if v3 is int or v3 is float:
+				var c3 := int(v3)
+				if c3 > 0:
+					items.append("%s=%d" % [key3, c3])
+		items.sort()
+		player_parts.append(";".join(items))
+
+	return "%s|%s|%s" % [modules_key, map_key, "|".join(player_parts)]
 
 func _add_section(title: String) -> HFlowContainer:
 	var box := VBoxContainer.new()

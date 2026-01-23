@@ -76,6 +76,8 @@ var _replay_mode_active: bool = false
 var _replay_original_engine: GameEngine = null
 var _replay_file_path: String = ""
 
+var _background_ui_warmup_started: bool = false
+
 const AUTO_MANDATORY_ACTION_IDS := {
 	"set_price": true,
 	"set_discount": true,
@@ -174,6 +176,60 @@ func _ready() -> void:
 	if not keep_loading_until_reserve_modal:
 		if SceneManager != null and SceneManager.has_method("hide_loading"):
 			SceneManager.hide_loading()
+
+	# 非关键面板后台预热（issue_tracker #71）：不阻塞首帧交互；未完成时打开面板显示“加载中...”。
+	call_deferred("_start_background_ui_warmup")
+
+func _start_background_ui_warmup() -> void:
+	if _background_ui_warmup_started:
+		return
+	_background_ui_warmup_started = true
+
+	# 让游戏 UI 先进入可交互状态，再开始后台构建。
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if not is_instance_valid(self):
+		return
+
+	if game_engine == null or _panel_controller == null:
+		return
+	var state := game_engine.get_state()
+	if state == null:
+		return
+
+	# 复用 MapCanvas 的 MapSkin；避免后台预热时触发 MapSkinBuilder 重复加载。
+	var skin = null
+	if is_instance_valid(map_canvas) and map_canvas.has_method("get_skin"):
+		skin = map_canvas.call("get_skin")
+
+	# 1) 升级路线（EmployeeTree）
+	var tree = _panel_controller.call("get_employee_tree_panel") if _panel_controller.has_method("get_employee_tree_panel") else null
+	if is_instance_valid(tree) and tree.has_method("begin_background_build"):
+		tree.call("begin_background_build")
+		if tree.has_signal("build_finished"):
+			await tree.build_finished
+	await get_tree().process_frame
+	if not is_instance_valid(self):
+		return
+
+	# 2) 里程碑全屏视图
+	if skin != null:
+		var ms = _panel_controller.call("get_milestone_full_screen_view") if _panel_controller.has_method("get_milestone_full_screen_view") else null
+		if is_instance_valid(ms) and ms.has_method("begin_background_build"):
+			ms.call("begin_background_build", state, skin)
+			if ms.has_signal("build_finished"):
+				await ms.build_finished
+	await get_tree().process_frame
+	if not is_instance_valid(self):
+		return
+
+	# 3) 供应堆全屏视图
+	if skin != null:
+		var supply = _panel_controller.call("get_reserve_area_full_screen_view") if _panel_controller.has_method("get_reserve_area_full_screen_view") else null
+		if is_instance_valid(supply) and supply.has_method("begin_background_build"):
+			supply.call("begin_background_build", state, skin)
+			if supply.has_signal("build_finished"):
+				await supply.build_finished
 
 func _exit_tree() -> void:
 	_dispose_runtime()
