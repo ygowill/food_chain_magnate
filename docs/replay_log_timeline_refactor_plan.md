@@ -214,7 +214,7 @@ ActionPanel 禁用策略：
 工作项：
 
 - [x] ActionPanel 增加公共 API（例如 `set_globally_disabled(reason: String)`），由 Game 在回放态/查看历史态调用。
-- [ ] 顶部/右侧增加“回放中”提示条（可复用现有 UI 体系）。
+- [x] 顶部/右侧增加“回放中”提示条（复用 TopBar 文案：回放 `（回放）` / 复盘 `（复盘）`）。
 
 验收：
 

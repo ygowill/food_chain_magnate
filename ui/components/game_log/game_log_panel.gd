@@ -172,12 +172,18 @@ func set_expand_enabled(enabled: bool) -> void:
 		expand_btn.visible = enabled
 
 func set_timeline_head(head_index: int) -> void:
-	_timeline_head_index = int(head_index)
+	var h := int(head_index)
+	if h == _timeline_head_index:
+		return
+	_timeline_head_index = h
 	_apply_timeline_state_to_items()
 
 func set_timeline_cursor(cursor_index: int) -> void:
-	_timeline_cursor_index = int(cursor_index)
-	_apply_timeline_state_to_items(true)
+	var c := int(cursor_index)
+	if c == _timeline_cursor_index:
+		return
+	_timeline_cursor_index = c
+	_apply_timeline_state_to_items(_timeline_cursor_index < _timeline_head_index)
 
 func set_entry_command_index(entry_id: int, command_index: int) -> void:
 	var cmd := int(command_index)
@@ -257,6 +263,7 @@ func _add_log_item(entry: Dictionary) -> void:
 	item.entry_data = entry
 	item.log_type = entry.type
 	item.entry_clicked.connect(_on_entry_clicked)
+	item.entry_double_clicked.connect(_on_entry_double_clicked)
 	log_container.add_child(item)
 	_log_items.append(item)
 	item.apply_timeline_state(_timeline_cursor_index, _timeline_head_index)
@@ -438,7 +445,17 @@ func _get_full_log_window_scene() -> PackedScene:
 
 func _on_entry_clicked(entry_id: int) -> void:
 	log_entry_clicked.emit(entry_id)
+
+func _on_entry_double_clicked(entry_id: int) -> void:
 	_open_entry_details(entry_id)
+
+func get_entry_by_id(entry_id: int) -> Dictionary:
+	var e := _find_entry_by_id(entry_id)
+	return e.duplicate(true) if not e.is_empty() else {}
+
+func get_entry_command_index(entry_id: int) -> int:
+	var e := _find_entry_by_id(entry_id)
+	return _get_entry_command_index(e) if not e.is_empty() else -999
 
 func _open_entry_details(entry_id: int) -> void:
 	if OS.has_feature("headless"):
@@ -529,6 +546,7 @@ func _ensure_details_window() -> void:
 # === 内部类：日志条目 ===
 class LogItem extends PanelContainer:
 	signal entry_clicked(entry_id: int)
+	signal entry_double_clicked(entry_id: int)
 
 	var entry_data: Dictionary = {}
 	var log_type: int = 0
@@ -657,8 +675,12 @@ class LogItem extends PanelContainer:
 	func _gui_input(event: InputEvent) -> void:
 		if event is InputEventMouseButton:
 			if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+				var entry_id: int = int(entry_data.get("id", -1))
+				if entry_id < 0:
+					return
 				if event.double_click:
-					var entry_id: int = int(entry_data.get("id", -1))
+					entry_double_clicked.emit(entry_id)
+				else:
 					entry_clicked.emit(entry_id)
 
 	func update_display() -> void:

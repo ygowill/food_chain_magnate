@@ -166,6 +166,7 @@ func _ready() -> void:
 	_event_log_controller = GameEventLogControllerClass.new()
 	_event_log_controller.setup(game_log_panel, should_restore_log_history)
 	UiSignalHelpersClass.safe_connect(game_log_panel, "close_requested", toggle_game_log)
+	UiSignalHelpersClass.safe_connect(game_log_panel, "log_entry_clicked", _on_log_entry_clicked)
 	_init_replay_bar()
 	PerfTraceClass.end_span(span_layout)
 
@@ -860,7 +861,13 @@ func _update_ui() -> void:
 			view_id = v
 	var view_name := Globals.get_player_name(view_id) if view_id >= 0 else "-"
 
-	var replay_suffix := "（回放）" if _replay_mode_active else ""
+	var head_index := game_engine.command_history.size() - 1
+	var cursor_index := int(game_engine.current_command_index)
+	var replay_suffix := ""
+	if _replay_mode_active:
+		replay_suffix = "（回放）"
+	elif cursor_index < head_index:
+		replay_suffix = "（复盘）"
 
 	if state.phase == "Restructuring":
 		var submitted_count := 0
@@ -916,6 +923,9 @@ func _update_ui() -> void:
 		_overlay_controller.sync_demand_indicator(state)
 		if do_profile:
 			PerfTraceClass.end_span(span_overlays)
+
+	# 回放/复盘：日志时间线指针 + ReplayBar 显示 + ActionPanel 禁用
+	_sync_timeline_ui(head_index, cursor_index)
 
 	# 同步调试面板
 	if _debug_panel != null and _debug_panel.visible:
@@ -989,6 +999,9 @@ func _execute_command(command: Command) -> Result:
 		return Result.failure("游戏引擎未初始化")
 	if _replay_mode_active:
 		return Result.failure("回放模式下无法执行命令")
+	var head_index := game_engine.command_history.size() - 1
+	if int(game_engine.current_command_index) < head_index:
+		return Result.failure("查看历史中无法执行命令（请先返回最新）")
 
 	var auto := _maybe_auto_complete_mandatory_actions_before_skip(command)
 	if auto is Result and not auto.ok:
@@ -1485,6 +1498,26 @@ func _hide_replay_bar() -> void:
 	if rb.has_method("set_active"):
 		rb.call("set_active", false)
 
+func _sync_timeline_ui(head_index: int, cursor_index: int) -> void:
+	if is_instance_valid(game_log_panel):
+		game_log_panel.set_timeline_head(head_index)
+		game_log_panel.set_timeline_cursor(cursor_index)
+
+	var show_bar := _replay_mode_active or cursor_index < head_index
+	if show_bar:
+		_set_replay_bar_state(head_index, cursor_index, _replay_mode_active)
+	else:
+		_hide_replay_bar()
+
+	# 回放/查看历史：禁用 ActionPanel（避免时间线分支与误操作）。
+	if is_instance_valid(action_panel) and action_panel.has_method("set_globally_disabled"):
+		var reason := ""
+		if _replay_mode_active:
+			reason = "回放中不可操作"
+		elif cursor_index < head_index:
+			reason = "查看历史中不可操作"
+		action_panel.set_globally_disabled(reason)
+
 func _start_replay_from_file(file_path: String) -> void:
 	if file_path.is_empty():
 		return
@@ -1577,33 +1610,36 @@ func _build_log_entries_from_timeline_events(events: Array) -> Array[Dictionary]
 
 	return out
 
-func _on_replay_bar_seek_requested(target_index: int) -> void:
-	if not _replay_mode_active:
+func _on_log_entry_clicked(entry_id: int) -> void:
+	if game_engine == null:
 		return
+	if game_log_panel == null or not is_instance_valid(game_log_panel):
+		return
+	if not game_log_panel.has_method("get_entry_command_index"):
+		return
+	var cmd_index := int(game_log_panel.call("get_entry_command_index", entry_id))
+	if cmd_index < -1:
+		return
+	_on_replay_bar_seek_requested(cmd_index)
+
+func _on_replay_bar_seek_requested(target_index: int) -> void:
 	if game_engine == null:
 		return
 
 	var head_index := game_engine.command_history.size() - 1
 	var target := clampi(int(target_index), -1, head_index)
 	if target == int(game_engine.current_command_index):
-		game_log_panel.set_timeline_head(head_index)
-		game_log_panel.set_timeline_cursor(target)
-		_set_replay_bar_state(head_index, target, true)
+		_update_ui()
 		return
 
 	var r := game_engine.rewind_to_command(target)
 	if not r.ok:
-		GameLog.warn("Game", "回放 seek 失败: %s" % r.error)
+		GameLog.warn("Game", "时间线 seek 失败: %s" % r.error)
 		return
 
 	_update_ui()
-	game_log_panel.set_timeline_head(head_index)
-	game_log_panel.set_timeline_cursor(target)
-	_set_replay_bar_state(head_index, target, true)
 
 func _on_replay_bar_return_latest_requested() -> void:
-	if not _replay_mode_active:
-		return
 	if game_engine == null:
 		return
 	_on_replay_bar_seek_requested(game_engine.command_history.size() - 1)
@@ -1617,6 +1653,11 @@ func _on_replay_bar_close_requested() -> void:
 	if _startup_replay_from_main_menu:
 		Globals.reset_game_config()
 		SceneManager.goto_main_menu()
+		return
+
+	# 对局内“查看历史”态：关闭等价于“返回最新”。
+	if not _replay_mode_active:
+		_on_replay_bar_return_latest_requested()
 		return
 
 	_hide_replay_bar()

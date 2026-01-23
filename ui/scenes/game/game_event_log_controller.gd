@@ -128,6 +128,7 @@ func _on_eventbus_event(event: Dictionary) -> void:
 	if _formatter == null:
 		_formatter = GameEventLogFormatterClass.new()
 
+	var cmd_index := _infer_command_index(event)
 	var entries: Array = _formatter.format(event)
 	for e_val in entries:
 		if not (e_val is Dictionary):
@@ -139,4 +140,25 @@ func _on_eventbus_event(event: Dictionary) -> void:
 			continue
 		var details_val = e.get("details", {})
 		var details: Dictionary = details_val if (details_val is Dictionary) else {}
-		_game_log_panel.add_log(int(type_val), msg, details)
+		var entry_id: int = _game_log_panel.add_log(int(type_val), msg, details)
+		if _game_log_panel.has_method("set_entry_command_index"):
+			_game_log_panel.set_entry_command_index(entry_id, cmd_index)
+
+func _infer_command_index(event: Dictionary) -> int:
+	if event == null or not (event is Dictionary):
+		return -1
+	var data_val = event.get("data", null)
+	if data_val is Dictionary:
+		var data: Dictionary = data_val
+		var ci_val = data.get("command_index", null)
+		if ci_val is int:
+			return int(ci_val)
+		if ci_val is float:
+			var f: float = float(ci_val)
+			if f == floor(f):
+				return int(f)
+
+	# 运行时事件通常不携带 command_index：用当前引擎指针兜底。
+	if Globals != null and Globals.current_game_engine != null:
+		return int(Globals.current_game_engine.current_command_index)
+	return -1
