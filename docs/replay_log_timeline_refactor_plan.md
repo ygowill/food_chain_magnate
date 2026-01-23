@@ -162,7 +162,7 @@ ActionPanel 禁用策略：
 
 - [x] 在 `ui/scenes/game/game.gd` 的回放 seek 回调中补齐日志刷新调用（短期止血）。
 - [x] `GameLogPanel`：增加 `set_timeline_head(head_index: int)`
-- [ ] `GameLogPanel`：增加 `set_timeline_cursor(cursor_index: int)`
+- [x] `GameLogPanel`：增加 `set_timeline_cursor(cursor_index: int)`
 - [ ] `GameLogPanel`：增加 `set_entry_command_index(entry_id, command_index)`（或通过 details 写入并在 LogItem 渲染时读取）
 
 验收：

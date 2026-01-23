@@ -58,6 +58,7 @@ var _player_count: int = 0
 
 # 时间线（回放/查看历史）预留：在 M1 引入“完整日志”前仅存储指针，不改变渲染。
 var _timeline_head_index: int = -1
+var _timeline_cursor_index: int = -1
 
 const FULL_LOG_WINDOW_SCENE_PATH := "res://ui/components/game_log/full_log_window.tscn"
 
@@ -166,6 +167,9 @@ func set_expand_enabled(enabled: bool) -> void:
 
 func set_timeline_head(head_index: int) -> void:
 	_timeline_head_index = int(head_index)
+
+func set_timeline_cursor(cursor_index: int) -> void:
+	_timeline_cursor_index = int(cursor_index)
 
 func add_system_log(message: String, details: Dictionary = {}) -> int:
 	return add_log(LogType.SYSTEM, message, details)
