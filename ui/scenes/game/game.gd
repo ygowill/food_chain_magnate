@@ -53,6 +53,7 @@ const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_a
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 const EventTimelineBuildClass = preload("res://core/engine/game_engine/event_timeline_build.gd")
+const StepTimelineBuildClass = preload("res://core/engine/game_engine/step_timeline_build.gd")
 const GameEventLogFormatterClass = preload("res://ui/scenes/game/game_event_log_formatter.gd")
 
 # 游戏状态
@@ -79,6 +80,9 @@ var _replay_mode_active: bool = false
 var _replay_original_engine: GameEngine = null
 var _replay_original_log_entries: Array[Dictionary] = []
 var _replay_file_path: String = ""
+var _replay_step_timeline: Dictionary = {} # {initial_state_dict, steps, events}
+var _replay_head_step_index: int = -1
+var _replay_cursor_step_index: int = -1
 var _startup_replay_from_main_menu: bool = false
 var _startup_replay_file_path: String = ""
 
@@ -867,6 +871,9 @@ func _update_ui() -> void:
 
 	var head_index := game_engine.command_history.size() - 1
 	var cursor_index := int(game_engine.current_command_index)
+	if _replay_mode_active and _replay_step_timeline.has("steps"):
+		head_index = _replay_head_step_index
+		cursor_index = _replay_cursor_step_index
 	var replay_suffix := ""
 	if _replay_mode_active:
 		replay_suffix = "（回放）"
@@ -1499,7 +1506,37 @@ func _set_replay_bar_state(head_index: int, cursor_index: int, read_only: bool) 
 	if rb.has_method("set_active"):
 		rb.call("set_active", true)
 	if rb.has_method("set_timeline"):
-		rb.call("set_timeline", head_index, cursor_index, read_only)
+		var extra := _build_replay_bar_status_extra(cursor_index) if _replay_mode_active and _replay_step_timeline.has("steps") else ""
+		rb.call("set_timeline", head_index, cursor_index, read_only, extra)
+
+func _build_replay_bar_status_extra(step_index: int) -> String:
+	# 仅在 M4.2 step 时间线可用时用于辅助展示：kind/cmd/phase。
+	var idx := int(step_index)
+	if idx < 0:
+		return "初始"
+
+	var steps_val = _replay_step_timeline.get("steps", null)
+	if not (steps_val is Array):
+		return ""
+	var steps: Array = steps_val
+	if idx >= steps.size():
+		return ""
+	var s_val = steps[idx]
+	if not (s_val is Dictionary):
+		return ""
+	var s: Dictionary = s_val
+
+	var kind := str(s.get("kind", "")).strip_edges()
+	var kind_text := "动作" if kind == "command" else ("阶段" if kind == "phase" else kind)
+	var anchor_cmd := int(s.get("anchor_command_index", -1))
+	var cmd_text := "cmd %d" % anchor_cmd
+	var phase := str(s.get("phase", "")).strip_edges()
+	var sub := str(s.get("sub_phase", "")).strip_edges()
+	var phase_text := phase
+	if not sub.is_empty():
+		phase_text += "/%s" % sub
+
+	return "%s｜%s｜%s" % [kind_text, cmd_text, phase_text]
 
 func _hide_replay_bar() -> void:
 	if game_log_panel == null or not is_instance_valid(game_log_panel):
@@ -1567,22 +1604,33 @@ func _apply_full_replay_log_timeline(engine: GameEngine) -> void:
 	if not is_instance_valid(game_log_panel):
 		return
 
-	var build_r: Result = EventTimelineBuildClass.build_full(engine)
+	# M4.2：构建 step_index 时间线（阶段切分点 + 状态快照），用于回放步进与日志高亮。
+	var build_r: Result = StepTimelineBuildClass.build_full(engine)
 	if not build_r.ok:
-		GameLog.error("Game", "构建完整事件时间线失败: %s" % build_r.error)
-		_show_confirm("回放加载失败", "构建完整事件时间线失败: %s" % build_r.error, Callable(), Callable())
+		GameLog.error("Game", "构建 step 时间线失败: %s" % build_r.error)
+		_show_confirm("回放加载失败", "构建 step 时间线失败: %s" % build_r.error, Callable(), Callable())
 		return
 
-	var events_val = build_r.value
+	var timeline_val = build_r.value
+	if not (timeline_val is Dictionary):
+		_show_confirm("回放加载失败", "构建 step 时间线失败: 内部错误（返回类型错误）", Callable(), Callable())
+		return
+
+	_replay_step_timeline = Dictionary(timeline_val).duplicate(true)
+
+	var events_val = _replay_step_timeline.get("events", [])
 	var events: Array = events_val if (events_val is Array) else []
 	var entries := _build_log_entries_from_timeline_events(events)
 	game_log_panel.load_entries(entries)
 
-	var head_index := engine.command_history.size() - 1
-	var cursor_index := int(engine.current_command_index)
-	game_log_panel.set_timeline_head(head_index)
-	game_log_panel.set_timeline_cursor(cursor_index)
-	_set_replay_bar_state(head_index, cursor_index, true)
+	var steps_val = _replay_step_timeline.get("steps", [])
+	var steps: Array = steps_val if (steps_val is Array) else []
+	_replay_head_step_index = steps.size() - 1
+	_replay_cursor_step_index = _replay_head_step_index
+
+	game_log_panel.set_timeline_head(_replay_head_step_index)
+	game_log_panel.set_timeline_cursor(_replay_cursor_step_index)
+	_set_replay_bar_state(_replay_head_step_index, _replay_cursor_step_index, true)
 
 func _build_log_entries_from_timeline_events(events: Array) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -1597,6 +1645,8 @@ func _build_log_entries_from_timeline_events(events: Array) -> Array[Dictionary]
 			continue
 		var ev: Dictionary = ev_val
 		var cmd_index := int(ev.get("command_index", -1))
+		var step_index := int(ev.get("step_index", cmd_index))
+		var phase_segment := str(ev.get("phase_segment", "")).strip_edges()
 		var event_seq := int(ev.get("sequence", entry_id))
 
 		var formatted: Array = formatter.format(ev) if (formatter != null and is_instance_valid(formatter) and formatter.has_method("format")) else []
@@ -1610,6 +1660,10 @@ func _build_log_entries_from_timeline_events(events: Array) -> Array[Dictionary]
 			var details: Dictionary = details_val if (details_val is Dictionary) else {}
 			if not details.has("command_index"):
 				details["command_index"] = cmd_index
+			if not details.has("step_index"):
+				details["step_index"] = step_index
+			if not phase_segment.is_empty() and not details.has("phase_segment"):
+				details["phase_segment"] = phase_segment
 
 			out.append({
 				"id": entry_id,
@@ -1618,6 +1672,8 @@ func _build_log_entries_from_timeline_events(events: Array) -> Array[Dictionary]
 				"timestamp": str(event_seq),
 				"details": details,
 				"command_index": cmd_index,
+				"step_index": step_index,
+				"phase_segment": phase_segment,
 				"event_seq": event_seq,
 			})
 			entry_id += 1
@@ -1629,15 +1685,20 @@ func _on_log_entry_clicked(entry_id: int) -> void:
 		return
 	if game_log_panel == null or not is_instance_valid(game_log_panel):
 		return
-	if not game_log_panel.has_method("get_entry_command_index"):
+	if not game_log_panel.has_method("get_entry_timeline_index"):
 		return
-	var cmd_index := int(game_log_panel.call("get_entry_command_index", entry_id))
-	if cmd_index < -1:
+	var idx := int(game_log_panel.call("get_entry_timeline_index", entry_id))
+	if idx < -1:
 		return
-	_on_replay_bar_seek_requested(cmd_index)
+	_on_replay_bar_seek_requested(idx)
 
 func _on_replay_bar_seek_requested(target_index: int) -> void:
 	if game_engine == null:
+		return
+
+	# M4.2：回放模式采用 step_index（阶段切分点）seek，直接用快照覆盖 game_engine.state（只读）。
+	if _replay_mode_active and _replay_step_timeline.has("steps"):
+		_seek_to_replay_step(int(target_index))
 		return
 
 	var head_index := game_engine.command_history.size() - 1
@@ -1653,8 +1714,65 @@ func _on_replay_bar_seek_requested(target_index: int) -> void:
 
 	_update_ui()
 
+func _seek_to_replay_step(target_step_index: int) -> void:
+	if game_engine == null:
+		return
+	if not _replay_step_timeline.has("steps"):
+		return
+
+	var steps_val = _replay_step_timeline.get("steps", null)
+	if not (steps_val is Array):
+		return
+	var steps: Array = steps_val
+
+	_replay_head_step_index = steps.size() - 1
+	var target := clampi(int(target_step_index), -1, _replay_head_step_index)
+	if target == _replay_cursor_step_index:
+		_update_ui()
+		return
+
+	var state_dict: Dictionary = {}
+	var anchor_cmd := -1
+	if target < 0:
+		var init_val = _replay_step_timeline.get("initial_state_dict", null)
+		if init_val is Dictionary:
+			state_dict = Dictionary(init_val)
+	else:
+		if target >= steps.size():
+			return
+		var step_val = steps[target]
+		if step_val is Dictionary:
+			var step: Dictionary = step_val
+			anchor_cmd = int(step.get("anchor_command_index", -1))
+			var sd_val = step.get("state_dict", null)
+			if sd_val is Dictionary:
+				state_dict = Dictionary(sd_val)
+
+	if state_dict.is_empty():
+		GameLog.warn("Game", "回放 step seek 失败：缺少 state 快照: step=%d" % target)
+		return
+
+	var restore_r := GameState.from_dict(state_dict)
+	if not restore_r.ok:
+		GameLog.warn("Game", "回放 step seek 失败：恢复 state 失败: %s" % restore_r.error)
+		return
+	var restored: GameState = restore_r.value
+	if restored == null:
+		GameLog.warn("Game", "回放 step seek 失败：恢复 state 为空")
+		return
+
+	# 只读回放：允许直接覆盖 state（不改写 command_history/checkpoints）。
+	game_engine.state = restored
+	game_engine.current_command_index = anchor_cmd
+	_replay_cursor_step_index = target
+
+	_update_ui()
+
 func _on_replay_bar_return_latest_requested() -> void:
 	if game_engine == null:
+		return
+	if _replay_mode_active and _replay_step_timeline.has("steps"):
+		_on_replay_bar_seek_requested(_replay_head_step_index)
 		return
 	_on_replay_bar_seek_requested(game_engine.command_history.size() - 1)
 
@@ -1785,6 +1903,9 @@ func _exit_replay_mode() -> void:
 		return
 
 	_replay_mode_active = false
+	_replay_step_timeline.clear()
+	_replay_head_step_index = -1
+	_replay_cursor_step_index = -1
 
 	var restore_engine := _replay_original_engine
 	_replay_original_engine = null

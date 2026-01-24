@@ -20,16 +20,18 @@ signal return_latest_requested()
 var _head_index: int = -1
 var _cursor_index: int = -1
 var _read_only: bool = false
+var _status_extra: String = ""
 var _suppress_slider_signal: bool = false
 
 func _ready() -> void:
 	_connect_signals()
 	_update_ui()
 
-func set_timeline(head_index: int, cursor_index: int, read_only: bool) -> void:
+func set_timeline(head_index: int, cursor_index: int, read_only: bool, status_extra: String = "") -> void:
 	_head_index = int(head_index)
 	_cursor_index = int(cursor_index)
 	_read_only = bool(read_only)
+	_status_extra = str(status_extra).strip_edges()
 	_update_ui()
 
 func set_active(visible_active: bool) -> void:
@@ -75,7 +77,8 @@ func _on_slider_value_changed(value: float) -> void:
 func _update_ui() -> void:
 	if status_label != null:
 		var mode := "只读回放" if _read_only else "时间线"
-		status_label.text = "%s：%d / %d" % [mode, _cursor_index, _head_index]
+		var extra := ("｜%s" % _status_extra) if not _status_extra.is_empty() else ""
+		status_label.text = "%s：%d / %d%s" % [mode, _cursor_index, _head_index, extra]
 
 	if slider != null:
 		_suppress_slider_signal = true

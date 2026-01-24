@@ -374,14 +374,14 @@ ActionPanel 禁用策略：
 
 工作项（核心是“在 command 粒度之外补一个 step 粒度”）：
 
-- [ ] 新增 step 时间线构建器（建议放在 `core/engine/game_engine/` 或 `ui/` 的 replay 子模块中）：
+- [x] 新增 step 时间线构建器（`core/engine/game_engine/step_timeline_build.gd`）：
   - 从初始 checkpoint state 起，按命令重放；
   - 对每条命令：应用命令 -> 记录“玩家行动 step”；
   - 对 auto-advance：逐步执行 `AutoAdvance.try_advance_one`，仅当 `phase` 变化时记录“阶段切换 step”，并且快照取 `advance_phase()` 之后的 state（已包含 enter settlement / enter hooks / 自动进入首个子阶段等）；`sub_phase` 变化仅更新当前 step 的状态与日志归属；
   - 为每个 step 保存 `state_dict`（或 `GameState` 深拷贝）作为快照，并保存 `anchor_command_index`。
-- [ ] ReplayBar 改为 step 粒度：滑块范围改为 `[-1, head_step]`；状态栏同时显示 `step` 与锚点命令信息（例如 `step 42 (cmd 18) / head 99`）。
-- [ ] Seek 实现：回放 seek 不再只调用 `rewind_to_command(command_index)`；而是从 step 快照直接恢复 UI 所需状态（只读回放中允许使用 step 快照直接覆盖 `game_engine.state`，并同步 `cursor_step/cursor_index` 显示）。
-- [ ] 日志高亮/置灰改为 step 粒度：为每条日志条目补充 `step_index`（构建时写入），置灰/高亮按 `step_index` 判断；保留 `command_index` 作为详情追溯与“按命令过滤”的基础字段。
+- [x] ReplayBar 改为 step 粒度：滑块范围改为 `[-1, head_step]`；状态栏显示 `step` 且附带锚点信息（`ui/components/game_log/replay_bar.gd` + `ui/scenes/game/game.gd`）。
+- [x] Seek 实现：回放 seek 不再只调用 `rewind_to_command(command_index)`；而是从 step 快照直接恢复 UI 所需状态（只读回放中允许使用 step 快照直接覆盖 `game_engine.state`，并同步 `cursor_step/cursor_index` 显示）（`ui/scenes/game/game.gd:_seek_to_replay_step`）。
+- [x] 日志高亮/置灰改为 step 粒度：为每条日志条目补充 `step_index`（构建时写入），置灰/高亮按 `step_index` 判断；保留 `command_index` 作为详情追溯与“按命令过滤”的基础字段（`ui/components/game_log/game_log_panel.gd` + `ui/scenes/game/game.gd`）。
   - 事件归属规则补充：`*_REPORT`（在离开阶段时发射）归属到“离开前阶段”（即旧阶段的最后一个 step/段），避免被显示在新阶段段落里。
 
 验收（建议用用户提供的复现场景手验）：
@@ -402,6 +402,8 @@ ActionPanel 禁用策略：
 
 - [x] `core/tests/event_timeline_build_test.gd`：
   - 构造 20+ 命令的确定性用例，build_full() 返回 events 不为空且每条含 `command_index`（单调不减），并与命令数量一致性可验。
+- [x] `core/tests/step_timeline_build_test.gd`：
+  - 载入 `res://.savings/manual_cases/logs/event_log_review.json`，build_full() 返回 steps/events 且 events.step_index 单调不减，并包含至少一个 `phase` step（验证阶段切分）。
 - [x] `ui/scenes/tests/replay_log_future_visibility_test.gd`（无需渲染）：
   - 加载回放并构建完整日志后，seek 到较早 cursor：
     - `GameLogPanel.get_entries()` 数量不变（仍包含未来）。

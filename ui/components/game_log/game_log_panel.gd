@@ -329,6 +329,33 @@ func _get_entry_command_index(entry: Dictionary) -> int:
 				return int(f2)
 	return -999
 
+func _get_entry_step_index(entry: Dictionary) -> int:
+	if entry == null or entry.is_empty():
+		return -999
+	var si_val = entry.get("step_index", null)
+	if si_val is int:
+		return int(si_val)
+	if si_val is float:
+		var f: float = float(si_val)
+		if f == floor(f):
+			return int(f)
+	var details_val = entry.get("details", null)
+	if details_val is Dictionary:
+		var details: Dictionary = details_val
+		var si2_val = details.get("step_index", null)
+		if si2_val is int:
+			return int(si2_val)
+		if si2_val is float:
+			var f2: float = float(si2_val)
+			if f2 == floor(f2):
+				return int(f2)
+	return -999
+
+func _get_entry_timeline_index(entry: Dictionary) -> int:
+	# 优先 step_index（M4.2：大阶段可步进），否则回退到 command_index（旧命令时间线）。
+	var si := _get_entry_step_index(entry)
+	return si if si != -999 else _get_entry_command_index(entry)
+
 func _apply_timeline_state_to_items(scroll_to_cursor: bool = false) -> void:
 	for item in _log_items:
 		if not is_instance_valid(item):
@@ -350,7 +377,7 @@ func _apply_timeline_state_to_items(scroll_to_cursor: bool = false) -> void:
 		if not is_instance_valid(item):
 			continue
 		var entry: Dictionary = item.entry_data
-		if _get_entry_command_index(entry) != _timeline_cursor_index:
+		if _get_entry_timeline_index(entry) != _timeline_cursor_index:
 			continue
 		scroll_container.call("ensure_control_visible", item)
 		break
@@ -456,6 +483,10 @@ func get_entry_by_id(entry_id: int) -> Dictionary:
 func get_entry_command_index(entry_id: int) -> int:
 	var e := _find_entry_by_id(entry_id)
 	return _get_entry_command_index(e) if not e.is_empty() else -999
+
+func get_entry_timeline_index(entry_id: int) -> int:
+	var e := _find_entry_by_id(entry_id)
+	return _get_entry_timeline_index(e) if not e.is_empty() else -999
 
 func _open_entry_details(entry_id: int) -> void:
 	if OS.has_feature("headless"):
@@ -630,6 +661,15 @@ class LogItem extends PanelContainer:
 		_apply_timeline_visuals()
 
 	func _get_entry_command_index() -> int:
+		# timeline index: prefer step_index (M4.2), fallback to command_index.
+		var si_val = entry_data.get("step_index", null)
+		if si_val is int:
+			return int(si_val)
+		if si_val is float:
+			var sf: float = float(si_val)
+			if sf == floor(sf):
+				return int(sf)
+
 		var ci_val = entry_data.get("command_index", null)
 		if ci_val is int:
 			return int(ci_val)
@@ -640,6 +680,13 @@ class LogItem extends PanelContainer:
 		var details_val = entry_data.get("details", null)
 		if details_val is Dictionary:
 			var details: Dictionary = details_val
+			var si2_val = details.get("step_index", null)
+			if si2_val is int:
+				return int(si2_val)
+			if si2_val is float:
+				var sf2: float = float(si2_val)
+				if sf2 == floor(sf2):
+					return int(sf2)
 			var ci2_val = details.get("command_index", null)
 			if ci2_val is int:
 				return int(ci2_val)

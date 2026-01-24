@@ -55,6 +55,7 @@ const ManualLogSaveTestClass = preload("res://core/tests/manual_log_save_test.gd
 const ManualLogSavesCoverageTestClass = preload("res://core/tests/manual_log_saves_coverage_test.gd")
 const EventHistoryRewindTestClass = preload("res://core/tests/event_history_rewind_test.gd")
 const EventTimelineBuildTestClass = preload("res://core/tests/event_timeline_build_test.gd")
+const StepTimelineBuildTestClass = preload("res://core/tests/step_timeline_build_test.gd")
 const ReplayLogFutureVisibilityTestClass = preload("res://ui/scenes/tests/replay_log_future_visibility_test.gd")
 const ReplayPlayerSmokeTestClass = preload("res://ui/scenes/tests/replay_player_smoke_test.gd")
 const OrderOfBusinessTestClass = preload("res://core/tests/order_of_business_test.gd")
@@ -356,6 +357,10 @@ func _run_all() -> int:
 						{
 							"name": "EventTimelineBuildTest",
 							"fn": func() -> Result: return EventTimelineBuildTestClass.run(2, 12345, 20),
+						},
+						{
+							"name": "StepTimelineBuildTest",
+							"fn": func() -> Result: return StepTimelineBuildTestClass.run(),
 						},
 						{
 							"name": "ReplayLogFutureVisibilityTest",
