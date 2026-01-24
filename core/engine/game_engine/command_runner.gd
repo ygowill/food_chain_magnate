@@ -94,8 +94,22 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 		engine._create_checkpoint(engine.command_history.size())
 
 	# 发送事件
-	for event in events:
-		EventBus.emit_event(event.type, event.get("data", {}))
+	# 重要：为每条事件补齐 command_index，确保读档后从 EventBus.history 恢复日志时不会把整段历史压扁到同一个索引。
+	var cmd_index := int(command.index)
+	for event_val in events:
+		if not (event_val is Dictionary):
+			continue
+		var event: Dictionary = event_val
+		var t: String = str(event.get("type", "")).strip_edges()
+		if t.is_empty():
+			continue
+
+		var data_val = event.get("data", null)
+		var data: Dictionary = data_val if (data_val is Dictionary) else {}
+		data["command_index"] = cmd_index
+		event["data"] = data
+
+		EventBus.emit_event(t, data)
 
 	EventBus.emit_event(EventBus.EventType.COMMAND_EXECUTED, {
 		"command_index": command.index,

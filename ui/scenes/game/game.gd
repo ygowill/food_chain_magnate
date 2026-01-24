@@ -587,6 +587,10 @@ func _on_right_panel_footer_secondary_pressed() -> void:
 		return
 
 func _on_right_panel_back_pressed() -> void:
+	# 日志面板作为 RightPanel 抽屉视图时：返回键应关闭日志，而不是走“取消当前动作/面板”的逻辑。
+	if is_instance_valid(game_log_panel) and game_log_panel.visible and is_instance_valid(right_panel_dock_host) and game_log_panel.get_parent() == right_panel_dock_host:
+		toggle_game_log()
+		return
 	_on_right_panel_footer_cancel_pressed()
 
 func _on_right_panel_close_pressed() -> void:
@@ -1853,11 +1857,35 @@ func show_milestone_panel() -> void:
 		_panel_controller.show_milestone_panel()
 
 func toggle_game_log() -> void:
-	if is_instance_valid(left_panel) and is_instance_valid(game_log_panel):
+	if not is_instance_valid(game_log_panel):
+		return
+
+	var show_logs := not game_log_panel.visible
+	if show_logs:
+		# 玩家信息与日志需要同屏：确保左侧信息区可见，同时确保右侧面板可见以承载日志。
 		_ensure_left_area_visible()
-		var show_logs := not game_log_panel.visible
-		game_log_panel.visible = show_logs
-		left_panel.visible = not show_logs
+		_ensure_right_panel_visible()
+
+		# 若右侧已有 docked 操作面板/弹窗，先关闭它们，避免日志被遮挡或出现多个 docked 视图竞争焦点。
+		var has_other_docked := false
+		if is_instance_valid(right_panel_dock_host):
+			for ch in right_panel_dock_host.get_children():
+				if ch == game_log_panel:
+					continue
+				if ch is Control and (ch as Control).visible:
+					has_other_docked = true
+					break
+		if has_other_docked:
+			_cancel_right_panel_docked_panel()
+			_sync_right_panel_docked_view()
+
+		# 将日志面板嵌入到 RightPanel 抽屉区域（覆盖 ActionPanel），并显示。
+		game_log_panel.set_meta("popup_title", "日志")
+		dock_popup_into_right_panel(game_log_panel)
+	else:
+		# 关闭日志：返回默认右侧动作区。
+		game_log_panel.visible = false
+		_sync_right_panel_docked_view()
 
 func show_settings_dialog() -> void:
 	if _overlay_controller != null:
