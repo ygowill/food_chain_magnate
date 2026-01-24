@@ -610,7 +610,7 @@ ActionPanel 禁用策略：
   - 回放/复盘（step_timeline）日志加载路径切换为 `GameLogPanel.load_step_timeline(...)`。
   - `_build_log_entries_from_timeline_events` 补充 `event_type`/`is_stage_event` 字段，供 M4.3 的“阶段事件开关”判断使用。
   - ReplayBar 的状态 extra 调整为仅显示“阶段：xxx”（不再展示 step/cmd/kind）。
-- 备注：正常对局实时模式的“每次命令后重建 step_timeline 并刷新日志视图”仍待接入（下一步实施项）。
+- 备注：正常对局实时模式的“每次命令后重建 step_timeline 并刷新日志视图”已在 2026-01-25 接入（见下条记录）。
 
 ### 2026-01-24：M4.3 实施中遇到的 GDScript 编译约束（已修复，SmokeTest 通过）
 
@@ -621,4 +621,15 @@ ActionPanel 禁用策略：
   - 修正 `PhaseHeaderItem._update_text()` 的缩进层级，确保不是嵌套函数。
   - 将 `:=` 推导写法改为普通赋值（避免 Variant 推导警告）。
   - ReplayBar extra 文案已按 M4.3 收敛为“阶段：xxx”（不再暴露 step/cmd）。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过。
+
+### 2026-01-25：M4.3 接入“实时对局” step_timeline 日志刷新（SmokeTest 通过）
+
+- 目标对齐：按 M4.3.4 让“正常对局实时日志”也使用同一套 Round/Phase/Action/Event 结构（不再依赖 EventBus 订阅追加日志）。
+- 实现：在 `ui/scenes/game/game.gd` 增加 `_apply_live_log_timeline_from_engine()`，用 `StepTimelineBuild.build_full(game_engine)` 全量重建 step_timeline，并 `GameLogPanel.load_step_timeline(...)` 刷新列表。
+- 触发时机（尽量减少开销）：
+  - 打开日志面板时强制刷新（保证首次打开可见完整结构）。
+  - 命令执行成功后，仅在日志面板可见时刷新（避免后台每步全量回放）。
+  - undo/redo/restore/load、回退到阶段开始成功后刷新（时间线被改写时必须同步）。
+- cursor 定位策略：以 `current_command_index` 对应的 `anchor_command_index` 的“最后一个 step”作为稳定落点；在最新时 cursor=head_step。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过。

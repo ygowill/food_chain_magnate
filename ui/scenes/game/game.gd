@@ -956,8 +956,8 @@ func _update_ui() -> void:
 		_debug_panel.refresh_state()
 
 func _on_debug_command_executed(command: String, _result: String) -> void:
-	# undo/redo/restore/load 会“改写时间线”，GameEngine 会重建 EventBus.history；
-	# UI 日志面板需要从新的 history 重新恢复，否则会残留旧时间线的日志。
+	# undo/redo/restore/load 会“改写时间线”；
+	# M4.3：日志面板统一使用 step_timeline，因此时间线变化后需要重建 step_timeline 视图。
 	var cmd := str(command).strip_edges()
 	var head := cmd.split(" ", false, 1)[0] if not cmd.is_empty() else ""
 	var is_timeline_change := (head == "undo" or head == "redo" or head == "restore" or head == "load")
@@ -967,13 +967,10 @@ func _on_debug_command_executed(command: String, _result: String) -> void:
 	if is_timeline_change:
 		if _panel_controller != null and _panel_controller.has_method("hide_all"):
 			_panel_controller.hide_all()
+		_apply_live_log_timeline_from_engine()
 
 	# 调试命令执行后刷新游戏 UI
 	_update_ui()
-
-	if is_timeline_change:
-		if _event_log_controller != null and _event_log_controller.has_method("rebuild_from_history"):
-			_event_log_controller.rebuild_from_history()
 
 func rewind_to_phase_start() -> void:
 	if game_engine == null:
@@ -1014,9 +1011,9 @@ func _confirm_rewind_to_phase_start(target_index: int) -> void:
 	var result := game_engine.rewind_to_command(target_index)
 	if not result.ok:
 		GameLog.warn("Game", "回退到阶段开始失败: %s" % result.error)
+	else:
+		_apply_live_log_timeline_from_engine()
 	_update_ui()
-	if result.ok and _event_log_controller != null and _event_log_controller.has_method("rebuild_from_history"):
-		_event_log_controller.rebuild_from_history()
 
 func _execute_command(command: Command) -> Result:
 	if game_engine == null:
@@ -1039,6 +1036,9 @@ func _execute_command(command: Command) -> Result:
 		_maybe_show_payday_blocker_prompt(command, result)
 	else:
 		GameLog.info("Game", "命令执行成功: %s" % command.action_id)
+		# 实时日志：仅在日志面板可见时重建（降低每步全量回放开销）。
+		if is_instance_valid(game_log_panel) and game_log_panel.visible:
+			_apply_live_log_timeline_from_engine()
 
 	_update_ui()
 	return result
@@ -1651,6 +1651,77 @@ func _apply_full_replay_log_timeline(engine: GameEngine) -> void:
 	game_log_panel.set_timeline_cursor(_replay_cursor_step_index)
 	_set_replay_bar_state(_replay_head_step_index, _replay_cursor_step_index, true)
 
+func _apply_live_log_timeline_from_engine() -> void:
+	# M4.3：正常对局（实时）也使用 step_timeline 来渲染日志结构。
+	# - 仅在本地 engine 下使用（回放模式由 _apply_full_replay_log_timeline 负责）。
+	# - timeline 的结构来自 steps，内容来自 formatter(entries)。
+	if _replay_mode_active:
+		return
+	if game_engine == null:
+		return
+	if not is_instance_valid(game_log_panel):
+		return
+
+	var build_r: Result = StepTimelineBuildClass.build_full(game_engine)
+	if not build_r.ok:
+		GameLog.warn("Game", "构建 step 时间线失败（实时日志将为空/不更新）: %s" % build_r.error)
+		return
+	if not (build_r.value is Dictionary):
+		GameLog.warn("Game", "构建 step 时间线失败（返回类型错误）")
+		return
+
+	_history_step_timeline = Dictionary(build_r.value).duplicate(true)
+	_history_step_timeline_active = true
+
+	var events_val = _history_step_timeline.get("events", [])
+	var events: Array = events_val if (events_val is Array) else []
+	var entries := _build_log_entries_from_timeline_events(events)
+	if game_log_panel.has_method("load_step_timeline"):
+		# 保留 UI-only 日志（例如动作失败提示），避免 rebuild 覆盖用户可见反馈。
+		game_log_panel.load_step_timeline(_history_step_timeline, entries, false)
+	else:
+		game_log_panel.load_entries(entries)
+
+	var steps_val = _history_step_timeline.get("steps", [])
+	var steps: Array = steps_val if (steps_val is Array) else []
+	_history_head_step_index = steps.size() - 1
+
+	# 默认定位到“当前引擎指针”的稳定落点：
+	# - 若在最新：cursor=head_step；
+	# - 若在历史：cursor=该 command_index 对应的最后一个 step（通常是该命令链路结束后的稳定状态）。
+	var head_cmd := game_engine.command_history.size() - 1
+	var cursor_cmd := int(game_engine.current_command_index)
+	if cursor_cmd < 0:
+		_history_cursor_step_index = -1
+	elif cursor_cmd >= head_cmd:
+		_history_cursor_step_index = _history_head_step_index
+	else:
+		_history_cursor_step_index = _command_index_to_last_step_index(cursor_cmd, _history_step_timeline)
+		if _history_cursor_step_index < -1:
+			_history_cursor_step_index = _history_head_step_index
+
+	game_log_panel.set_timeline_head(_history_head_step_index)
+	game_log_panel.set_timeline_cursor(_history_cursor_step_index)
+
+func _command_index_to_last_step_index(command_index: int, timeline: Dictionary) -> int:
+	var cmd := int(command_index)
+	if cmd < 0:
+		return -1
+	if timeline == null or timeline.is_empty():
+		return -1
+	var steps_val = timeline.get("steps", null)
+	if not (steps_val is Array):
+		return -1
+	var steps: Array = steps_val
+	for idx in range(steps.size() - 1, -1, -1):
+		var s_val = steps[idx]
+		if not (s_val is Dictionary):
+			continue
+		var s: Dictionary = s_val
+		if int(s.get("anchor_command_index", -999)) == cmd:
+			return idx
+	return -1
+
 func _build_log_entries_from_timeline_events(events: Array) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if events == null or events.is_empty():
@@ -2158,11 +2229,14 @@ func toggle_game_log() -> void:
 	if not is_instance_valid(game_log_panel):
 		return
 
-	var show_logs := not game_log_panel.visible
+	var show_logs: bool = not bool(game_log_panel.visible)
 	if show_logs:
 		# 玩家信息与日志需要同屏：确保左侧信息区可见，同时确保右侧面板可见以承载日志。
 		_ensure_left_area_visible()
 		_ensure_right_panel_visible()
+
+		# M4.3：打开日志时，按当前引擎状态重建 step 时间线视图（保证实时/回放一致）。
+		_apply_live_log_timeline_from_engine()
 
 		# 若右侧已有 docked 操作面板/弹窗，先关闭它们，避免日志被遮挡或出现多个 docked 视图竞争焦点。
 		var has_other_docked := false
