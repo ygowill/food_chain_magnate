@@ -1608,6 +1608,7 @@ func _start_replay_from_file(file_path: String) -> void:
 
 	_enter_replay_mode(engine)
 	_apply_full_replay_log_timeline(engine)
+	_show_game_log_panel_in_right_panel()
 
 	if _startup_replay_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
 		SceneManager.hide_loading()
@@ -1740,6 +1741,8 @@ func _build_log_entries_from_timeline_events(events: Array) -> Array[Dictionary]
 			or event_type == EventBus.EventType.SUB_PHASE_CHANGED
 			or event_type == EventBus.EventType.ROUND_STARTED
 			or event_type == EventBus.EventType.ROUND_ENDED
+			or event_type == EventBus.EventType.PLAYER_TURN_STARTED
+			or event_type == EventBus.EventType.PLAYER_TURN_ENDED
 			or event_type.ends_with("_report")
 		)
 		var cmd_index := int(ev.get("command_index", -1))
@@ -1874,6 +1877,7 @@ func _enter_history_step_timeline_for_command(target_command_index: int) -> int:
 	game_log_panel.set_timeline_head(_history_head_step_index)
 	game_log_panel.set_timeline_cursor(_history_cursor_step_index)
 	_set_replay_bar_state(_history_head_step_index, _history_cursor_step_index, false)
+	_show_game_log_panel_in_right_panel()
 
 	return _history_command_index_to_step_index(int(target_command_index))
 
@@ -2258,6 +2262,34 @@ func toggle_game_log() -> void:
 		# 关闭日志：返回默认右侧动作区。
 		game_log_panel.visible = false
 		_sync_right_panel_docked_view()
+
+func _show_game_log_panel_in_right_panel() -> void:
+	# 回放/复盘默认显示日志：避免 ReplayBar/时间线功能“藏在被关闭的面板里”。
+	if not is_instance_valid(game_log_panel):
+		return
+
+	# 已在 RightPanel 抽屉中显示
+	if game_log_panel.visible and is_instance_valid(right_panel_dock_host) and game_log_panel.get_parent() == right_panel_dock_host:
+		return
+
+	_ensure_left_area_visible()
+	_ensure_right_panel_visible()
+
+	# 若右侧已有 docked 操作面板/弹窗，先关闭它们，避免多个 docked 视图竞争焦点。
+	var has_other_docked := false
+	if is_instance_valid(right_panel_dock_host):
+		for ch in right_panel_dock_host.get_children():
+			if ch == game_log_panel:
+				continue
+			if ch is Control and (ch as Control).visible:
+				has_other_docked = true
+				break
+	if has_other_docked:
+		_cancel_right_panel_docked_panel()
+		_sync_right_panel_docked_view()
+
+	game_log_panel.set_meta("popup_title", "日志")
+	dock_popup_into_right_panel(game_log_panel)
 
 func show_settings_dialog() -> void:
 	if _overlay_controller != null:

@@ -432,8 +432,9 @@ func _build_unified_timeline_display() -> void:
 
 	# -1: 初始状态
 	var phase_header: PhaseHeaderItem = _add_phase_header_item(prev_phase, -1)
-	_add_action_group_header_item(-1, _build_action_group_summary(-1, {}, entries_by_step.get(-1, [])))
-	_add_event_items_for_step(-1, entries_by_step)
+	var init_header := _build_action_group_header_data(-1, {}, entries_by_step.get(-1, []))
+	_add_action_group_header_item(-1, str(init_header.get("summary", "")), int(init_header.get("primary_entry_id", -1)))
+	_add_event_items_for_step(-1, entries_by_step, 2, int(init_header.get("primary_entry_id", -1)))
 
 	for idx in range(steps.size()):
 		var step_val = steps[idx]
@@ -454,8 +455,14 @@ func _build_unified_timeline_display() -> void:
 				phase_header.end_step_index = idx - 1
 			phase_header = _add_phase_header_item(phase_seg, idx)
 
-		_add_action_group_header_item(idx, _build_action_group_summary(idx, step, entries_by_step.get(idx, [])))
-		_add_event_items_for_step(idx, entries_by_step)
+		var kind := str(step.get("kind", "")).strip_edges()
+		if kind == "phase":
+			# phase step：不再渲染“进入X”类 ActionGroup 行；阶段标题已足够承载该锚点。
+			_add_event_items_for_step(idx, entries_by_step, 1)
+		else:
+			var header := _build_action_group_header_data(idx, step, entries_by_step.get(idx, []))
+			_add_action_group_header_item(idx, str(header.get("summary", "")), int(header.get("primary_entry_id", -1)))
+			_add_event_items_for_step(idx, entries_by_step, 2, int(header.get("primary_entry_id", -1)))
 
 		prev_round = round_num
 		prev_phase = phase_seg
@@ -522,8 +529,24 @@ func _should_show_event_item(entry: Dictionary) -> bool:
 		return true
 	return not _entry_is_stage_event(entry)
 
-func _build_action_group_summary(step_index: int, step: Dictionary, entries: Array) -> String:
-	# 优先：动作组内第一条“玩家动作”（排除阶段事件子项）
+func _build_action_group_header_data(step_index: int, step: Dictionary, entries: Array) -> Dictionary:
+	# 统一视图：ActionGroupHeader 的摘要优先取“第一条玩家动作”，并把该条作为 primary 以避免在子项中重复展示。
+	var primary := _pick_primary_entry_for_action_group(entries)
+	if primary != null and not primary.is_empty():
+		var msg := str(primary.get("message", "")).strip_edges()
+		if not msg.is_empty():
+			return {
+				"summary": msg,
+				"primary_entry_id": int(primary.get("id", -1)),
+			}
+	return {
+		"summary": _build_action_group_fallback_summary(step_index, step),
+		"primary_entry_id": -1,
+	}
+
+func _pick_primary_entry_for_action_group(entries: Array) -> Dictionary:
+	if entries == null or entries.is_empty():
+		return {}
 	for e_val in entries:
 		if not (e_val is Dictionary):
 			continue
@@ -533,19 +556,23 @@ func _build_action_group_summary(step_index: int, step: Dictionary, entries: Arr
 		if int(e.get("type", -1)) == LogType.PLAYER:
 			var msg := str(e.get("message", "")).strip_edges()
 			if not msg.is_empty():
-				return msg
+				return e
+	return {}
 
-	# 兜底：系统摘要
+func _is_flow_command_action_id(action_id: String) -> bool:
+	var aid := str(action_id).strip_edges()
+	return aid == "skip" or aid == "end_turn" or aid == "skip_sub_phase"
+
+func _build_action_group_fallback_summary(step_index: int, step: Dictionary) -> String:
+	# 兜底：系统摘要/命令元信息（用于“无可见事件 step”的可读性）
 	if step_index < 0:
 		return "初始状态"
 
 	var kind := str(step.get("kind", "")).strip_edges()
-	var phase_seg := str(step.get("phase", "")).strip_edges()
-	if kind == "phase" and not phase_seg.is_empty():
-		return "进入%s" % _get_phase_display_name(phase_seg)
-
-	# 当该 step 没有可见事件时，仍尽量展示“玩家做了什么”（例如重组阶段的一些命令只改状态、不发事件）。
 	if kind == "command":
+		# 去噪：skip/end_turn/skip_sub_phase 不再以“玩家X:确认结束/结束回合”作为摘要。
+		if _is_flow_command_action_id(str(step.get("action_id", ""))):
+			return "系统推进"
 		var action_name := str(step.get("action_display_name", "")).strip_edges()
 		if action_name.is_empty():
 			action_name = str(step.get("action_id", "")).strip_edges()
@@ -583,18 +610,20 @@ func _add_phase_header_item(phase_segment: String, start_step: int) -> PhaseHead
 	item.apply_timeline_state(_timeline_cursor_index, _timeline_head_index)
 	return item
 
-func _add_action_group_header_item(step_index: int, summary: String) -> void:
+func _add_action_group_header_item(step_index: int, summary: String, primary_entry_id: int = -1) -> void:
 	if log_container == null:
 		return
 	var item := ActionGroupHeaderItem.new()
 	item.step_index = int(step_index)
 	item.summary = str(summary)
+	item.primary_entry_id = int(primary_entry_id)
 	item.clicked.connect(_on_timeline_header_clicked)
+	item.primary_entry_double_clicked.connect(_on_entry_double_clicked)
 	log_container.add_child(item)
 	_log_items.append(item)
 	item.apply_timeline_state(_timeline_cursor_index, _timeline_head_index)
 
-func _add_event_items_for_step(step_index: int, entries_by_step: Dictionary) -> void:
+func _add_event_items_for_step(step_index: int, entries_by_step: Dictionary, indent_level: int = 2, skip_entry_id: int = -1) -> void:
 	if log_container == null:
 		return
 	var idx := int(step_index)
@@ -602,13 +631,16 @@ func _add_event_items_for_step(step_index: int, entries_by_step: Dictionary) -> 
 	if not (list_val is Array):
 		return
 	var list: Array = list_val
+	var skip_id := int(skip_entry_id)
 	for entry_val in list:
 		if not (entry_val is Dictionary):
 			continue
 		var entry: Dictionary = entry_val
+		if skip_id >= 0 and int(entry.get("id", -1)) == skip_id:
+			continue
 		if not _should_show_event_item(entry):
 			continue
-		_add_event_item(entry, 2)
+		_add_event_item(entry, int(indent_level))
 
 func _add_event_item(entry: Dictionary, indent_level: int = 0) -> void:
 	if log_container == null:
@@ -936,6 +968,7 @@ class PhaseHeaderItem extends PanelContainer:
 	var _panel_style: StyleBoxFlat = null
 	var _timeline_is_future: bool = false
 	var _timeline_is_cursor: bool = false
+	var _timeline_is_phase_start: bool = false
 
 	func _ready() -> void:
 		_build_ui()
@@ -983,6 +1016,7 @@ class PhaseHeaderItem extends PanelContainer:
 		var cursor := int(cursor_index)
 		var head := int(head_index)
 		_timeline_is_future = (cursor < head and start_step_index >= 0 and start_step_index > cursor)
+		_timeline_is_phase_start = (cursor == start_step_index)
 		if end_step_index >= start_step_index:
 			_timeline_is_cursor = (cursor >= start_step_index and cursor <= end_step_index)
 		else:
@@ -991,7 +1025,12 @@ class PhaseHeaderItem extends PanelContainer:
 
 	func _apply_timeline_visuals() -> void:
 		if _panel_style != null:
-			_panel_style.bg_color = Color(0.16, 0.16, 0.22, 0.90) if _timeline_is_cursor else Color(0.10, 0.10, 0.12, 0.85)
+			if _timeline_is_phase_start:
+				_panel_style.bg_color = Color(0.22, 0.22, 0.30, 0.92)
+			elif _timeline_is_cursor:
+				_panel_style.bg_color = Color(0.16, 0.16, 0.22, 0.90)
+			else:
+				_panel_style.bg_color = Color(0.10, 0.10, 0.12, 0.85)
 		modulate = Color(0.85, 0.85, 0.85, 0.55) if _timeline_is_future else Color(1, 1, 1, 1)
 
 	func apply_font_settings() -> void:
@@ -1008,9 +1047,11 @@ class PhaseHeaderItem extends PanelContainer:
 
 class ActionGroupHeaderItem extends PanelContainer:
 	signal clicked(timeline_index: int)
+	signal primary_entry_double_clicked(entry_id: int)
 
 	var step_index: int = -1
 	var summary: String = ""
+	var primary_entry_id: int = -1
 
 	var _label: Label
 	var _panel_style: StyleBoxFlat = null
@@ -1086,8 +1127,16 @@ class ActionGroupHeaderItem extends PanelContainer:
 		_update_text()
 
 	func _gui_input(event: InputEvent) -> void:
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			clicked.emit(get_timeline_index())
+		if not (event is InputEventMouseButton):
+			return
+		var mb: InputEventMouseButton = event
+		if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
+			return
+		if mb.double_click:
+			if primary_entry_id >= 0:
+				primary_entry_double_clicked.emit(primary_entry_id)
+				return
+		clicked.emit(get_timeline_index())
 
 class EventItem extends PanelContainer:
 	signal entry_clicked(entry_id: int)
