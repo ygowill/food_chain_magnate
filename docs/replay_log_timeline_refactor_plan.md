@@ -434,3 +434,29 @@ ActionPanel 禁用策略：
 10) 大阶段切分的 step 语义：阶段 step 以“进入该阶段后的状态（含 enter settlement）”为准；日志中 `*_REPORT`（在离开阶段时发射）归属到“离开前阶段”。
 11) step seek 的实现方式：只读回放下允许用 step 快照直接覆盖 `game_engine.state`（不要求扩展引擎 `rewind_to_step(...)`）。
 12) 复盘（非回放）同样允许用 step 快照直接覆盖 `game_engine.state`；退出复盘/返回最新后恢复实时日志与可操作状态。
+
+## 9. 实施过程记录（发现/问题定位）
+
+### 2026-01-24：event_log_review 复现与阶段切分定位
+
+- 复现存档：`.savings/manual_cases/logs/event_log_review.json`（archive schema_version=3，commands=7，current_index=6）。
+- 现象（用户反馈）：点击“玩家1 放置营销”时整回合日志同时高亮，且状态跳到整回合行动之后；可单步后退到正确状态，但日志高亮不同步。
+- 根因归类：日志条目缺少稳定的时间线索引（`command_index/step_index`），或 step 事件归属未在 phase 边界处拆分，导致多个阶段/整段 auto-advance 被压到同一个时间线点。
+- 额外观察（截图 `demo_image/log_demo.png`）：发薪日/广告/清理等大阶段在日志高亮上被“打包到一个 step”，提示 phase 边界仍存在归属/拆分缺口（需要用该截图持续回归验证）。
+
+### 2026-01-24：StepTimelineBuild 的关键补强点
+
+- `core/engine/game_engine/step_timeline_build.gd`：
+  - Working 内“被跳过子阶段”的 `skip_sub_phase` 命令，若不是最后子阶段且上一 step 存在，则合并到上一 step（避免出现“单步推进无变化”的空感）。
+  - 引入 `_update_step_snapshot(step, state)`：sub_phase 变化/合并 step 时只更新快照字段（round/phase/sub_phase/state_dict），保留 step 的元信息（kind/from_phase/to_phase/anchor_command_index）。
+  - 仍保持约定：`*_REPORT` 归属离开前阶段；phase step 的快照以“进入该阶段后的 state（含 enter settlement）”为准。
+
+### 2026-01-24：回放中“晚餐时间结束弹出面板”的来源（待处理）
+
+- 该面板来自 `DinnerTimeOverlay`（`ui/components/dinner_time/dinner_time_overlay.tscn` / `ui/scenes/game/game_overlay_dinnertime.gd`），其显示条件是 `state.phase == "Dinnertime"`。
+- 用户需求：回放/复盘（只读时间线）时不需要该面板；后续实现应在只读时间线激活时抑制该覆盖层（避免干扰回放步进与观察）。
+
+### 2026-01-24：重组（Restructuring）阶段“单步推进无效果”的风险点（待补齐验证）
+
+- 用户反馈：重组结构阶段缺少必要日志，导致对应 step 单步推进看起来没有效果。
+- 初步判断：可能是“进入/离开 Restructuring”缺少可视化日志事件，或该阶段的关键 state 变化未映射成日志条目；需要在 formatter 与事件发射点两侧核对覆盖面，并补齐最少必要的事件/日志（在保证回放确定性的前提下）。

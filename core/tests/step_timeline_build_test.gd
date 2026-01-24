@@ -41,15 +41,27 @@ static func run() -> Result:
 
 	# 至少应有一个 phase step（对应“阶段切分点”）
 	var has_phase_step := false
+	var has_cleanup_phase_step := false
+	var has_restructuring_phase_step := false
 	for s_val in steps:
 		if not (s_val is Dictionary):
 			continue
 		var s: Dictionary = s_val
-		if str(s.get("kind", "")).strip_edges() == "phase":
+		var kind := str(s.get("kind", "")).strip_edges()
+		if kind == "phase":
 			has_phase_step = true
-			break
+			var phase := str(s.get("phase", "")).strip_edges()
+			if phase == "Cleanup":
+				has_cleanup_phase_step = true
+			if phase == "Restructuring":
+				has_restructuring_phase_step = true
 	if not has_phase_step:
 		return Result.failure("expected at least one phase step in %s" % SAVE_RES_PATH)
+	# event_log_review 覆盖了 Marketing/Cleanup 的 auto-advance，应该能切出至少 Cleanup/Restructuring 两个大阶段步进点。
+	if not has_cleanup_phase_step:
+		return Result.failure("expected at least one Cleanup phase step in %s" % SAVE_RES_PATH)
+	if not has_restructuring_phase_step:
+		return Result.failure("expected at least one Restructuring phase step in %s" % SAVE_RES_PATH)
 
 	# 每条命令至少一个 step
 	if steps.size() < engine.command_history.size():
@@ -57,6 +69,7 @@ static func run() -> Result:
 
 	# step_index 单调不减，且 data.* 映射一致
 	var prev_step := -999999
+	var seen_phase_segments := {}
 	for ev_val in events:
 		if not (ev_val is Dictionary):
 			return Result.failure("event type error (expected Dictionary): %s" % str(ev_val))
@@ -83,9 +96,16 @@ static func run() -> Result:
 		if int(d.get("step_index", -999999)) != si:
 			return Result.failure("data.step_index mismatch: si=%d data=%s" % [si, str(d.get("step_index", null))])
 
+		var seg := str(ev.get("phase_segment", "")).strip_edges()
+		if not seg.is_empty():
+			seen_phase_segments[seg] = true
+
+	# 至少应出现 Marketing/Cleanup/Payday 三段（验证“离开阶段事件归属 + auto-advance 分段”）
+	if not (seen_phase_segments.has("Payday") and seen_phase_segments.has("Marketing") and seen_phase_segments.has("Cleanup")):
+		return Result.failure("expected phase segments to include Payday/Marketing/Cleanup in %s (seen=%s)" % [SAVE_RES_PATH, str(seen_phase_segments.keys())])
+
 	return Result.success({
 		"commands": engine.command_history.size(),
 		"steps": steps.size(),
 		"events": events.size(),
 	})
-

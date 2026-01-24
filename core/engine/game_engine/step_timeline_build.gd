@@ -99,9 +99,24 @@ static func build_full(engine: GameEngine) -> Result:
 		# - 用于把离开阶段时发射的 *_REPORT 归属到旧阶段（避免被压到新阶段/同一个 step 里）。
 		var prev_step_index := steps.size() - 1
 
-		# 新建“玩家行动 step”（一定存在）
-		var command_step_index := steps.size()
-		steps.append(_build_step_dict("command", i, state_in))
+		# Working：跳过“被跳过子阶段”的冗余步进（例如 skip_sub_phase 非最后子阶段），避免出现“单步推进无变化”。
+		# 这些命令的效果会被合并到上一条可见 step（anchor_command_index 保持不变）。
+		var merge_into_prev_step := false
+		if str(cmd.action_id).strip_edges() == "skip_sub_phase" and str(old_state.phase) == "Working":
+			var order_names := engine.phase_manager.get_working_sub_phase_order_names()
+			if not order_names.is_empty():
+				var last_sub_phase: String = str(order_names[order_names.size() - 1])
+				if str(old_state.sub_phase) != last_sub_phase and prev_step_index >= 0:
+					merge_into_prev_step = true
+
+		# 新建“玩家行动 step”（默认存在）；若 merge，则复用上一 step 并更新其快照。
+		var command_step_index := -1
+		if merge_into_prev_step:
+			command_step_index = prev_step_index
+			steps[command_step_index] = _update_step_snapshot(steps[command_step_index], state_in)
+		else:
+			command_step_index = steps.size()
+			steps.append(_build_step_dict("command", i, state_in))
 
 		# 命令本体事件（归属到 command step）
 		var command_events := executor.generate_events(old_state, state_in, cmd)
@@ -157,7 +172,7 @@ static func build_full(engine: GameEngine) -> Result:
 
 			if phase_changed:
 				# 冻结旧 step 的快照：停在“离开前阶段”的最后稳定状态
-				steps[current_step_index] = _build_step_dict(steps[current_step_index].get("kind", "command"), i, before, steps[current_step_index])
+				steps[current_step_index] = _update_step_snapshot(steps[current_step_index], before)
 
 				# 新建“阶段切换 step”：状态为进入新阶段后的 state（含 enter settlement/enter hooks）
 				var phase_step_index := steps.size()
@@ -191,7 +206,7 @@ static func build_full(engine: GameEngine) -> Result:
 				current_step_index = phase_step_index
 			else:
 				# sub_phase 等变化：打包在当前 step，并更新快照到最新稳定状态
-				steps[current_step_index] = _build_step_dict(steps[current_step_index].get("kind", "command"), i, state_in, steps[current_step_index])
+				steps[current_step_index] = _update_step_snapshot(steps[current_step_index], state_in)
 				_append_events(events_out, phase_events, i, current_step_index, str(state_in.phase), seq)
 				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 				_append_events(events_out, cash_events, i, current_step_index, str(state_in.phase), seq)
@@ -247,6 +262,17 @@ static func _build_step_dict(kind: String, anchor_command_index: int, state: Gam
 	var out: Dictionary = extra.duplicate(true) if (extra is Dictionary) else {}
 	out["kind"] = str(kind).strip_edges()
 	out["anchor_command_index"] = int(anchor_command_index)
+	out["round"] = int(state.round_number) if state != null else -1
+	out["phase"] = str(state.phase) if state != null else ""
+	out["sub_phase"] = str(state.sub_phase) if state != null else ""
+	out["state_dict"] = state.to_dict() if state != null else {}
+	return out
+
+static func _update_step_snapshot(step: Dictionary, state: GameState) -> Dictionary:
+	# 更新 step 的状态快照，但保留 anchor_command_index / kind / from_phase 等元信息。
+	if step == null or not (step is Dictionary):
+		return _build_step_dict("command", -1, state)
+	var out: Dictionary = step.duplicate(true)
 	out["round"] = int(state.round_number) if state != null else -1
 	out["phase"] = str(state.phase) if state != null else ""
 	out["sub_phase"] = str(state.sub_phase) if state != null else ""
