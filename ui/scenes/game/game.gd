@@ -1549,7 +1549,7 @@ func _build_replay_bar_status_extra(step_index: int, timeline: Dictionary) -> St
 			return ""
 		phase = str(Dictionary(s_val).get("phase", "")).strip_edges()
 
-	var display_name := GameLogPanel.PHASE_DISPLAY_NAMES.get(phase, phase)
+	var display_name = GameLogPanel.PHASE_DISPLAY_NAMES.get(phase, phase)
 	if str(display_name).strip_edges().is_empty():
 		return "初始"
 	return "阶段：%s" % str(display_name)

@@ -964,7 +964,7 @@ class PhaseHeaderItem extends PanelContainer:
 		var phase := str(phase_segment).strip_edges()
 		if phase.is_empty():
 			phase = "?"
-		var display_name := GameLogPanel.PHASE_DISPLAY_NAMES.get(phase, phase)
+		var display_name = GameLogPanel.PHASE_DISPLAY_NAMES.get(phase, phase)
 		_label.text = str(display_name)
 
 	func get_timeline_index() -> int:

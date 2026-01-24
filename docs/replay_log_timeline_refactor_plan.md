@@ -610,4 +610,15 @@ ActionPanel 禁用策略：
   - 回放/复盘（step_timeline）日志加载路径切换为 `GameLogPanel.load_step_timeline(...)`。
   - `_build_log_entries_from_timeline_events` 补充 `event_type`/`is_stage_event` 字段，供 M4.3 的“阶段事件开关”判断使用。
   - ReplayBar 的状态 extra 调整为仅显示“阶段：xxx”（不再展示 step/cmd/kind）。
-  - 备注：正常对局实时模式的“每次命令后重建 step_timeline 并刷新日志视图”仍待接入（下一步实施项）。
+- 备注：正常对局实时模式的“每次命令后重建 step_timeline 并刷新日志视图”仍待接入（下一步实施项）。
+
+### 2026-01-24：M4.3 实施中遇到的 GDScript 编译约束（已修复，SmokeTest 通过）
+
+- 现象：headless 运行 `ui/scenes/tests/game_smoke_test.tscn` 时报 `Parse error`，导致 `GameLogPanel` 全局类无法加载，`game.gd` 也连带无法解析。
+- 根因 1：`ui/components/game_log/game_log_panel.gd` 的 `PhaseHeaderItem` 里因缩进错误把 `func _update_text()` 写成了嵌套函数（编译直接失败）。
+- 根因 2：Godot 4.5 的“Warning treated as error”模式下，`var x := dict.get(...)` 这种从 Variant 推导类型的写法会触发编译错误；需要改为 `var x = ...` 或显式类型注解。
+- 修复：
+  - 修正 `PhaseHeaderItem._update_text()` 的缩进层级，确保不是嵌套函数。
+  - 将 `:=` 推导写法改为普通赋值（避免 Variant 推导警告）。
+  - ReplayBar extra 文案已按 M4.3 收敛为“阶段：xxx”（不再暴露 step/cmd）。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过。
