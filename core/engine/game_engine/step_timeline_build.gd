@@ -95,6 +95,10 @@ static func build_full(engine: GameEngine) -> Result:
 		if state_in == null:
 			return Result.failure("StepTimelineBuild: 回放命令 #%d 失败: state 为空" % i).with_warnings(warnings)
 
+		# 在创建新 step 前记录“命令执行前”的 step_index：
+		# - 用于把离开阶段时发射的 *_REPORT 归属到旧阶段（避免被压到新阶段/同一个 step 里）。
+		var prev_step_index := steps.size() - 1
+
 		# 新建“玩家行动 step”（一定存在）
 		var command_step_index := steps.size()
 		steps.append(_build_step_dict("command", i, state_in))
@@ -102,8 +106,35 @@ static func build_full(engine: GameEngine) -> Result:
 		# 命令本体事件（归属到 command step）
 		var command_events := executor.generate_events(old_state, state_in, cmd)
 		command_events.append_array(CommandRunnerClass._build_player_cash_changed_events(old_state, state_in, cmd))
-		_append_events(events_out, command_events, i, command_step_index, str(state_in.phase), seq)
-		seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+		# 若命令本身发生了 phase 切换（如 advance_phase），则：
+		# - PHASE_CHANGED 之前的事件（含 *_REPORT）归属到“命令前”的 step（旧阶段）
+		# - PHASE_CHANGED 及之后的事件归属到“玩家行动 step”（新阶段）
+		# 这能避免 Payday/Marketing/Cleanup 等阶段被压到同一个 step。
+		if str(old_state.phase) != str(state_in.phase) and prev_step_index >= -1:
+			var before_phase_events: Array[Dictionary] = []
+			var after_phase_events: Array[Dictionary] = []
+			var seen_phase_changed := false
+			for ev_val in command_events:
+				if not (ev_val is Dictionary):
+					continue
+				var ev: Dictionary = ev_val
+				var t: String = str(ev.get("type", "")).strip_edges()
+				if t == EventBus.EventType.PHASE_CHANGED:
+					seen_phase_changed = true
+				if seen_phase_changed:
+					after_phase_events.append(ev)
+				else:
+					before_phase_events.append(ev)
+
+			if not before_phase_events.is_empty():
+				_append_events(events_out, before_phase_events, i, prev_step_index, str(old_state.phase), seq)
+				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+			if not after_phase_events.is_empty():
+				_append_events(events_out, after_phase_events, i, command_step_index, str(state_in.phase), seq)
+				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+		else:
+			_append_events(events_out, command_events, i, command_step_index, str(state_in.phase), seq)
+			seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 
 		# auto-advance：逐步执行。sub_phase 变化打包在当前 step；phase 变化插入新 step。
 		var current_step_index := command_step_index

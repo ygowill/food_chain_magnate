@@ -377,10 +377,14 @@ ActionPanel 禁用策略：
 - [x] 新增 step 时间线构建器（`core/engine/game_engine/step_timeline_build.gd`）：
   - 从初始 checkpoint state 起，按命令重放；
   - 对每条命令：应用命令 -> 记录“玩家行动 step”；
+  - 若命令本身触发 `phase` 切换（例如 `advance_phase`），则以 `PHASE_CHANGED` 为边界拆分事件归属：
+    - `PHASE_CHANGED` 之前（含 `*_REPORT`）归属到旧阶段的最后一个 step（避免 Payday/Marketing/Cleanup 被压到同一步）
+    - `PHASE_CHANGED` 及之后归属到新阶段（玩家行动 step）
   - 对 auto-advance：逐步执行 `AutoAdvance.try_advance_one`，仅当 `phase` 变化时记录“阶段切换 step”，并且快照取 `advance_phase()` 之后的 state（已包含 enter settlement / enter hooks / 自动进入首个子阶段等）；`sub_phase` 变化仅更新当前 step 的状态与日志归属；
   - 为每个 step 保存 `state_dict`（或 `GameState` 深拷贝）作为快照，并保存 `anchor_command_index`。
 - [x] ReplayBar 改为 step 粒度：滑块范围改为 `[-1, head_step]`；状态栏显示 `step` 且附带锚点信息（`ui/components/game_log/replay_bar.gd` + `ui/scenes/game/game.gd`）。
 - [x] Seek 实现：回放 seek 不再只调用 `rewind_to_command(command_index)`；而是从 step 快照直接恢复 UI 所需状态（只读回放中允许使用 step 快照直接覆盖 `game_engine.state`，并同步 `cursor_step/cursor_index` 显示）（`ui/scenes/game/game.gd:_seek_to_replay_step`）。
+- [x] 复盘（非回放）同样使用 step 时间线：首次 seek 到历史命令时构建 step_timeline 并替换日志为“完整时间线日志”，seek 使用 step 快照覆盖 `game_engine.state`；返回最新时恢复实时日志（`ui/scenes/game/game.gd:_enter_history_step_timeline_for_command/_exit_history_step_timeline`）。
 - [x] 日志高亮/置灰改为 step 粒度：为每条日志条目补充 `step_index`（构建时写入），置灰/高亮按 `step_index` 判断；保留 `command_index` 作为详情追溯与“按命令过滤”的基础字段（`ui/components/game_log/game_log_panel.gd` + `ui/scenes/game/game.gd`）。
   - 事件归属规则补充：`*_REPORT`（在离开阶段时发射）归属到“离开前阶段”（即旧阶段的最后一个 step/段），避免被显示在新阶段段落里。
 
@@ -429,3 +433,4 @@ ActionPanel 禁用策略：
 9) “读档后日志高亮/跳转异常”的修复方向：采用方案 A（在事件源头补齐 `command_index`）。
 10) 大阶段切分的 step 语义：阶段 step 以“进入该阶段后的状态（含 enter settlement）”为准；日志中 `*_REPORT`（在离开阶段时发射）归属到“离开前阶段”。
 11) step seek 的实现方式：只读回放下允许用 step 快照直接覆盖 `game_engine.state`（不要求扩展引擎 `rewind_to_step(...)`）。
+12) 复盘（非回放）同样允许用 step 快照直接覆盖 `game_engine.state`；退出复盘/返回最新后恢复实时日志与可操作状态。
