@@ -426,12 +426,13 @@ ActionPanel 禁用策略：
 
 - `Working` -> `工作时间`
 - `Dinnertime` -> `晚餐时间`
+- `Setup` -> `开局设置`
 - `Payday` -> `发薪日`
 - `Marketing` -> `广告行动`
 - `Cleanup` -> `清理阶段`
 - `Restructuring` -> `重组结构`
 - `OrderOfBusiness` -> `商业秩序`
-- 其它阶段（例如 `Setup`/`GameOver`）文案待确认
+- `GameOver` -> `游戏结束`
 
 #### M4.3.4 对正常对局（实时）如何做到“同一视图”
 
