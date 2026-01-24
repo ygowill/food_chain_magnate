@@ -346,6 +346,108 @@ ActionPanel 禁用策略：
 
 - 回合结算大量事件时日志仍可读，不淹没关键信息。
 
+### M4.3：合并“回放控制 + 日志”为统一时间线视图（缩进展示动作/事件；不折叠）
+
+用户确认的目标（本里程碑的设计约束）：
+
+- **统一展示**：日志面板本身就是“时间线视图”，顶部 ReplayBar 仅负责导航；不再让用户感知为两个系统。
+- **统一适用范围**：不仅回放/复盘，**正常对局实时日志也使用同一种展示结构**。
+- **阶段可见**：列表按“大阶段（phase）”展示分段标题（Working/晚餐/发薪日/广告/清理/重组…），且阶段切分必须与 M4.2 的 step 语义一致。
+- **回合分隔**：不需要在阶段标题显示回合号；但两回合之间必须插入一个“回合分隔标题块”。
+- **层级缩进**：阶段内按“玩家动作/系统动作”分组；组内事件以缩进子项展示；不需要折叠/展开（默认全部展开）。
+- **不暴露内部索引**：UI 不显示 `step xx`、`cmd xx`；内部仍保留稳定索引用于 seek/highlight。
+- **去掉 PlayerFilter**：日志面板默认展示完整日志（不提供按玩家过滤）。
+- **阶段事件默认不显示**：`PHASE_CHANGED/ROUND_*/*_REPORT` 等“阶段/回合事件”作为结构依据即可，不作为子项默认展示。
+- **阶段标题点击跳转**：点击阶段标题 seek 到该阶段段落的开始。
+
+#### M4.3.1 统一视图结构（UI 规格）
+
+列表结构（从上到下）：
+
+1) RoundHeaderItem（回合分隔标题块）
+   - 触发：当时间线检测到 `round` 发生变化时，在两段日志之间插入一条分隔标题。
+   - 文案：不显示回合号；使用稳定文案即可（例如“进入新回合”/“回合切换”）。
+   - 点击行为（可选）：seek 到该回合的第一条 ActionGroup（若实现简单可先不做）。
+2) PhaseHeaderItem（阶段标题行）
+   - 文案：仅显示阶段名（建议做本地化映射：Payday->发薪日，Marketing->广告阶段等）。
+   - 高亮规则：当 cursor 落在该阶段段落范围内时，高亮该标题行。
+   - 点击行为：seek 到该阶段段落的开始 timeline_index。
+3) ActionGroupHeaderItem（动作组标题行）
+   - 文案：优先使用“玩家动作摘要”（例如“玩家1：放置营销 ……”）；若该组没有玩家动作，则显示系统摘要（例如“进入发薪日”“进入广告阶段”“进入清理阶段”“进入重组阶段”）。
+   - 高亮规则：当 cursor == 该组 timeline_index 时高亮。
+   - 点击行为：seek 到该组 timeline_index。
+4) EventItem（动作组子项，缩进显示）
+   - 文案：事件摘要（沿用 formatter 文案）。
+   - 视觉：缩进 + 更小字号/更淡颜色，明确“属于上一条动作组”。
+   - 点击行为：seek 到所属动作组 timeline_index（本里程碑不做事件级 seek）。
+
+#### M4.3.2 统一数据映射规则（round/phase/action 三层切分）
+
+核心原则：**结构来自 steps，内容来自 events**（避免“某个 step 没有可见事件就消失”导致单步无效果）。
+
+输入数据源（所有模式统一）：
+
+- 统一以 step 时间线为主（M4.2 的 `StepTimelineBuild.build_full()` 输出）：
+  - `steps[]`：提供每个 timeline_index 的快照字段（至少包含 round/phase/sub_phase/state_dict）。
+  - `events[]`：提供每条事件归属（至少包含 step_index/phase_segment/command_index/type/data）。
+
+结构构建算法（概念描述）：
+
+1) 遍历 timeline 的 step（`-1` 初始 + `0..head_step`）：
+   - 若与上一个 step 的 `round` 不同：插入 RoundHeaderItem。
+   - 若与上一个 step 的 `phase` 不同（或 round 刚变）：插入 PhaseHeaderItem，并记录该阶段段落的 `start_step_index`。
+   - 为每个 step 创建一个 ActionGroupHeaderItem（保证“每步都可见可点”）。
+2) 将 events 按 `step_index` 挂到对应 ActionGroup 下，作为 EventItem 子项：
+   - 默认过滤掉“阶段事件子项”（`PHASE_CHANGED/SUB_PHASE_CHANGED/ROUND_STARTED/ROUND_ENDED/*_REPORT` 等），但这些事件仍可用于调试详情窗口。
+   - 其余事件作为缩进子项展示（例如营销产生需求、采购路线、现金变化、丢弃库存、里程碑等）。
+
+动作组摘要（ActionGroupHeaderItem.text）决策：
+
+- 优先：从该 step 的“非阶段事件子项”里找第一条 `LogType.PLAYER` 的 formatted message 作为摘要。
+- 否则：用 step 快照生成系统摘要：
+  - phase step：`进入{phase_display_name}`（不显示 from/to 内部字段也可；若你更偏好 from/to 文案可替换）。
+  - command step：`系统结算/系统推进`（仅在确实没有玩家动作时兜底）。
+
+#### M4.3.3 ReplayBar 状态显示（不展示 step/cmd）
+
+保留 `cursor / head` 的数字（滑块位置），但 extra 仅显示“当前阶段”：
+
+- `阶段：{phase_display_name}`（Working 内 sub_phase 默认不显示，避免噪声）。
+- 不显示 `step xx`、`cmd xx`。
+
+#### M4.3.4 对正常对局（实时）如何做到“同一视图”
+
+建议实现路径（计划）：
+
+1) **日志面板渲染统一走“时间线视图”组件**（Round/Phase/Action/Event 四类行）。
+2) **实时数据源也走同一套 step_timeline 构建**：
+   - 在打开日志面板、或每次命令执行后（可做 debounce/throttle）调用 `StepTimelineBuild.build_full(engine)`，用其输出重建列表（结构稳定且阶段切分一致）。
+   - 进入“查看历史”时仍复用同一份 step_timeline（只移动 cursor）。
+3) 性能风险与缓解（先写入计划，后续实现时再按需要落地）：
+   - 若全量重建成本过高：增量扩展 step_timeline（只追加最新命令链路）作为优化项，不影响首版正确性目标。
+
+#### M4.3.5 验收标准（对用户可见）
+
+- 载入 `.savings/manual_cases/logs/event_log_review.json`：
+  - 能看到“回合分隔标题块”出现在回合切换处。
+  - 能看到“晚餐时间/发薪日/广告/清理/重组”等阶段标题分段（不再揉成一段）。
+  - 阶段标题点击会跳到该阶段段落的开始（状态与日志高亮一致）。
+  - “阶段事件子项”默认不显示，但阶段标题与系统摘要能让用户看懂阶段推进。
+- 正常对局实时进行中：
+  - 日志以同样的 Round/Phase/Action/Event 结构增长（不再是另一套扁平日志视图）。
+
+#### M4.3.6 实施步骤（仅计划；未获允许不改代码）
+
+1) UI：移除 PlayerFilter（日志默认完整展示）
+2) UI：将现有 grouped view 重塑为“缩进层级视图”
+   - StepHeaderItem -> ActionGroupHeaderItem（不显示 step/cmd）
+   - LogItem 作为 EventItem（缩进）
+   - 新增 RoundHeaderItem（回合分隔）
+3) 事件显示策略：阶段事件子项默认隐藏（但仍可在详情窗口查看）
+4) PhaseHeader 点击跳转：seek 到该阶段段落 start_step_index
+5) 实时模式统一：打开日志/命令执行后用 StepTimelineBuild 重建时间线视图（必要时加 debounce）
+6) 回归验证：`event_log_review.json` + `demo_image/log_demo.png` + `AllTests`
+
 ### M4.1：Phase 视觉切分 + Working 打包展示（不改 seek 粒度）
 
 目标：
