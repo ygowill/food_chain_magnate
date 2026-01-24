@@ -515,9 +515,23 @@ func _show_toast(message: String) -> void:
 # === Dinnertime 可视化（只读）===
 
 func sync_dinnertime_overlay(state: GameState) -> void:
-	if _dinnertime_overlay_controller != null:
-		_dinnertime_overlay_controller.sync_dinnertime_overlay(state)
+	if _dinnertime_overlay_controller == null:
+		return
+
+	# 回放/复盘（只读时间线）时不显示晚餐时间覆盖层（用户反馈：回放步进时会干扰观察）。
+	var timeline_read_only := false
+	if _scene != null and _scene.has_method("is_timeline_read_only_active"):
+		var v = _scene.call("is_timeline_read_only_active")
+		if v is bool:
+			timeline_read_only = bool(v)
+	if timeline_read_only:
+		if _dinnertime_overlay_controller.has_method("hide"):
+			_dinnertime_overlay_controller.hide()
 		dinner_time_overlay = _dinnertime_overlay_controller.dinner_time_overlay
+		return
+
+	_dinnertime_overlay_controller.sync_dinnertime_overlay(state)
+	dinner_time_overlay = _dinnertime_overlay_controller.dinner_time_overlay
 
 # === 需求指示器 ===
 

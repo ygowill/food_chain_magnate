@@ -1732,6 +1732,13 @@ func _on_replay_bar_seek_requested(target_index: int) -> void:
 	var head_index := game_engine.command_history.size() - 1
 	var target := clampi(int(target_index), -1, head_index)
 	if target == int(game_engine.current_command_index):
+		# 若已经通过其它路径回退到历史命令（cursor<head），也允许“原地切换”为 step 时间线，
+		# 以便把该命令链路中的 auto-advance 大阶段拆分成可步进点（避免看起来仍被打包在一个位置）。
+		if not _history_step_timeline_active and target < head_index:
+			var step_target2 := _enter_history_step_timeline_for_command(target)
+			if step_target2 >= -1:
+				_seek_to_history_step(step_target2)
+				return
 		_update_ui()
 		return
 

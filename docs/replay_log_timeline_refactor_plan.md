@@ -451,12 +451,24 @@ ActionPanel 禁用策略：
   - 引入 `_update_step_snapshot(step, state)`：sub_phase 变化/合并 step 时只更新快照字段（round/phase/sub_phase/state_dict），保留 step 的元信息（kind/from_phase/to_phase/anchor_command_index）。
   - 仍保持约定：`*_REPORT` 归属离开前阶段；phase step 的快照以“进入该阶段后的 state（含 enter settlement）”为准。
 
-### 2026-01-24：回放中“晚餐时间结束弹出面板”的来源（待处理）
+### 2026-01-24：回放中“晚餐时间结束弹出面板”的来源（已修复）
 
 - 该面板来自 `DinnerTimeOverlay`（`ui/components/dinner_time/dinner_time_overlay.tscn` / `ui/scenes/game/game_overlay_dinnertime.gd`），其显示条件是 `state.phase == "Dinnertime"`。
-- 用户需求：回放/复盘（只读时间线）时不需要该面板；后续实现应在只读时间线激活时抑制该覆盖层（避免干扰回放步进与观察）。
+- 用户需求：回放/复盘（只读时间线）时不需要该面板，会干扰回放步进与观察。
+- 修复：只读时间线激活时由 `GameOverlayController.sync_dinnertime_overlay()` 直接 `hide()`（`ui/scenes/game/game_overlay_controller.gd`）。
 
 ### 2026-01-24：重组（Restructuring）阶段“单步推进无效果”的风险点（待补齐验证）
 
 - 用户反馈：重组结构阶段缺少必要日志，导致对应 step 单步推进看起来没有效果。
 - 初步判断：可能是“进入/离开 Restructuring”缺少可视化日志事件，或该阶段的关键 state 变化未映射成日志条目；需要在 formatter 与事件发射点两侧核对覆盖面，并补齐最少必要的事件/日志（在保证回放确定性的前提下）。
+
+### 2026-01-24：step 时间线未激活导致“大阶段仍被打包”的触发条件（已修复）
+
+- 复现触发条件（来自截图/行为推断）：当对局已处于历史态（`cursor < head`，ReplayBar 显示“时间线：x / y”），且用户点击/seek 的目标命令索引恰好等于当前 `current_command_index` 时，旧逻辑会直接 `_update_ui()` 并 return，导致不会切换到 step 时间线；于是 Payday/Marketing/Cleanup 等 auto-advance 大阶段仍以“命令粒度”被打包在一个位置。
+- 修复：在 `_on_replay_bar_seek_requested()` 中，即使 `target == current_command_index`，只要 `target < head_index` 且尚未激活 step 时间线，也会触发 `_enter_history_step_timeline_for_command(target)` 并切换到 step 视图（`ui/scenes/game/game.gd`）。
+
+### 2026-01-24：过滤器导致 step “看起来无效果”的 UI 根因（已修复）
+
+- 用户反馈：部分 step 单步推进时“看起来没有效果”（尤其是只包含 PHASE 类型日志的阶段切分点）。
+- 根因：`GameLogPanel` 的 grouped view 之前完全基于“过滤后的可见 entries”构建；当某个 step 的所有事件都被过滤器隐藏时，StepHeader/PhaseHeader 也会消失，导致该 step 视觉上不存在。
+- 修复：grouped view 的结构（PhaseHeader/StepHeader）基于 `_entries_all` 构建，子项（LogItem）再按过滤器决定是否渲染；从而 step 作为“可步进点”始终可见（`ui/components/game_log/game_log_panel.gd`）。

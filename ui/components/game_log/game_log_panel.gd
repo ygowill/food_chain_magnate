@@ -306,6 +306,12 @@ func _clear_display() -> void:
 func _rebuild_display() -> void:
 	_clear_display()
 
+	var all_entries: Array[Dictionary] = []
+	for entry_val_all in _entries_all:
+		if not (entry_val_all is Dictionary):
+			continue
+		all_entries.append(Dictionary(entry_val_all))
+
 	var visible_entries: Array[Dictionary] = []
 	for entry_val in _entries_all:
 		if not (entry_val is Dictionary):
@@ -314,8 +320,9 @@ func _rebuild_display() -> void:
 		if _entry_passes_filters(entry):
 			visible_entries.append(entry)
 
-	if _should_use_grouped_view(visible_entries):
-		_build_grouped_display(visible_entries)
+	if _should_use_grouped_view(all_entries):
+		# 分组视图的“结构/步进点”不应受过滤器影响，否则会出现“单步推进无效果”（该 step 被过滤器完全隐藏）。
+		_build_grouped_display(all_entries)
 	else:
 		for entry in visible_entries:
 			_add_log_item(entry)
@@ -342,12 +349,12 @@ func _should_use_grouped_view(visible_entries: Array[Dictionary]) -> bool:
 			return true
 	return false
 
-func _build_grouped_display(visible_entries: Array[Dictionary]) -> void:
+func _build_grouped_display(all_entries: Array[Dictionary]) -> void:
 	# 结构：PhaseHeader -> StepHeader -> LogItems（可折叠）
 	var phase_order: Array[String] = []
 	var phase_buckets: Dictionary = {} # phase_segment -> {order:Array[int], entries_by_step:Dictionary}
 
-	for e in visible_entries:
+	for e in all_entries:
 		var phase_seg := str(e.get("phase_segment", "")).strip_edges()
 		if phase_seg.is_empty():
 			phase_seg = "?"
@@ -413,6 +420,15 @@ func _build_grouped_display(visible_entries: Array[Dictionary]) -> void:
 
 			var cmd_index := int(Dictionary(entries[0]).get("command_index", -1))
 
+			# 子项按过滤器决定是否渲染；但 StepHeader 总是显示（否则 step 会被完全隐藏）。
+			var visible_children: Array[Dictionary] = []
+			for child_entry_val0 in entries:
+				if not (child_entry_val0 is Dictionary):
+					continue
+				var child_entry0: Dictionary = child_entry_val0
+				if _entry_passes_filters(child_entry0):
+					visible_children.append(child_entry0)
+
 			var collapsed := false
 			if phase_seg == "Working":
 				# Working 默认折叠（满足“尽可能打包”）；当前 cursor 所在 step 自动展开以便高亮可见。
@@ -426,10 +442,8 @@ func _build_grouped_display(visible_entries: Array[Dictionary]) -> void:
 
 			if collapsed:
 				continue
-			for child_entry_val in entries:
-				if not (child_entry_val is Dictionary):
-					continue
-				_add_log_item(Dictionary(child_entry_val))
+			for child_entry in visible_children:
+				_add_log_item(Dictionary(child_entry))
 
 func _add_phase_header_item(phase_segment: String, start_step: int, end_step: int) -> void:
 	if log_container == null:
