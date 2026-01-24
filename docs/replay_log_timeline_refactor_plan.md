@@ -356,9 +356,9 @@ ActionPanel 禁用策略：
 
 工作项：
 
-- [ ] UI 分组：从完整事件流/日志条目中识别 `PHASE_CHANGED` 作为段落分隔，渲染“阶段标题行”（包含回合号/阶段名）。
-- [ ] Working 打包：以 `command_index` 为动作块主键；`SUB_PHASE_CHANGED/PLAYER_CASH_CHANGED/...` 等作为块内微项，默认折叠（或只展示关键几条）。
-- [ ] 点击交互：点击阶段标题默认跳到该段第一条动作（或最近的命令），并将该段滚动定位；点击微项仍跳到其所属动作块（不尝试微态 seek）。
+- [x] UI 分组：按 `phase_segment` 渲染“阶段标题行”（`ui/components/game_log/game_log_panel.gd`：PhaseHeaderItem）。
+- [x] Working 打包：按 `step_index`（fallback `command_index`）分组；Working 段默认折叠，仅展开当前 cursor step（`ui/components/game_log/game_log_panel.gd`：StepHeaderItem + _collapsed_step_groups）。
+- [x] 点击交互：点击阶段/step 标题触发 seek（`timeline_seek_requested`）；step 标题在 Working 内点击可展开/折叠（展开时同时 seek）。
 
 验收：
 

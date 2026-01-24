@@ -171,6 +171,8 @@ func _ready() -> void:
 	_event_log_controller.setup(game_log_panel, should_restore_log_history)
 	UiSignalHelpersClass.safe_connect(game_log_panel, "close_requested", toggle_game_log)
 	UiSignalHelpersClass.safe_connect(game_log_panel, "log_entry_clicked", _on_log_entry_clicked)
+	if game_log_panel.has_signal("timeline_seek_requested"):
+		UiSignalHelpersClass.safe_connect(game_log_panel, "timeline_seek_requested", _on_timeline_seek_requested)
 	_init_replay_bar()
 	PerfTraceClass.end_span(span_layout)
 
@@ -1691,6 +1693,9 @@ func _on_log_entry_clicked(entry_id: int) -> void:
 	if idx < -1:
 		return
 	_on_replay_bar_seek_requested(idx)
+
+func _on_timeline_seek_requested(timeline_index: int) -> void:
+	_on_replay_bar_seek_requested(int(timeline_index))
 
 func _on_replay_bar_seek_requested(target_index: int) -> void:
 	if game_engine == null:

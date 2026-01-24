@@ -5,6 +5,7 @@ extends Control
 
 signal close_requested()
 signal log_entry_clicked(entry_id: int)
+signal timeline_seek_requested(timeline_index: int)
 signal log_added(entry: Dictionary)
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleRow/TopRow/TitleLabel
@@ -48,7 +49,7 @@ const PLAYER_FILTER_ALL_ITEM_ID := 9999
 
 var _entries_all: Array[Dictionary] = []  # [{id, type, message, timestamp, details, command_index?}]
 var _entry_id_counter: int = 0
-var _log_items: Array[LogItem] = []
+var _log_items: Array[Control] = [] # LogItem / PhaseHeaderItem / StepHeaderItem
 var _filter_types: Array[LogType] = [LogType.SYSTEM, LogType.PLAYER, LogType.GAME_EVENT]
 var _filter_player_id: int = -1
 var _filter_keyword: String = ""
@@ -60,6 +61,9 @@ var _player_count: int = 0
 # 时间线（回放/查看历史）预留：在 M1 引入“完整日志”前仅存储指针，不改变渲染。
 var _timeline_head_index: int = -1
 var _timeline_cursor_index: int = -1
+
+# 分组折叠（M4.1）：按 step_index（或 command_index）打包展示
+var _collapsed_step_groups: Dictionary = {} # timeline_index -> bool
 
 const FULL_LOG_WINDOW_SCENE_PATH := "res://ui/components/game_log/full_log_window.tscn"
 
@@ -183,7 +187,16 @@ func set_timeline_cursor(cursor_index: int) -> void:
 	if c == _timeline_cursor_index:
 		return
 	_timeline_cursor_index = c
-	_apply_timeline_state_to_items(_timeline_cursor_index < _timeline_head_index)
+	var should_scroll := _timeline_cursor_index < _timeline_head_index
+
+	# M4.1：若当前 cursor 落在被折叠的 Working step 中，自动展开以便高亮可见。
+	if _collapsed_step_groups.has(_timeline_cursor_index) and bool(_collapsed_step_groups.get(_timeline_cursor_index, false)):
+		_collapsed_step_groups[_timeline_cursor_index] = false
+		_rebuild_display()
+		_apply_timeline_state_to_items(should_scroll)
+		return
+
+	_apply_timeline_state_to_items(should_scroll)
 
 func set_entry_command_index(entry_id: int, command_index: int) -> void:
 	var cmd := int(command_index)
@@ -293,11 +306,177 @@ func _clear_display() -> void:
 func _rebuild_display() -> void:
 	_clear_display()
 
-	for entry in _entries_all:
+	var visible_entries: Array[Dictionary] = []
+	for entry_val in _entries_all:
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
 		if _entry_passes_filters(entry):
+			visible_entries.append(entry)
+
+	if _should_use_grouped_view(visible_entries):
+		_build_grouped_display(visible_entries)
+	else:
+		for entry in visible_entries:
 			_add_log_item(entry)
 
 	_apply_timeline_state_to_items()
+
+func _should_use_grouped_view(visible_entries: Array[Dictionary]) -> bool:
+	# M4.1：仅在“完整时间线/回放”条目具备 phase_segment + timeline_index 时启用分组视图；
+	# 对局实时追加日志保持旧的扁平列表（避免影响现有交互与性能）。
+	if visible_entries == null or visible_entries.is_empty():
+		return false
+
+	var has_phase_segment := false
+	var has_timeline_index := false
+	for e in visible_entries:
+		if not (e is Dictionary):
+			continue
+		var phase_seg := str(e.get("phase_segment", "")).strip_edges()
+		if not phase_seg.is_empty():
+			has_phase_segment = true
+		if _get_entry_timeline_index(e) != -999:
+			has_timeline_index = true
+		if has_phase_segment and has_timeline_index:
+			return true
+	return false
+
+func _build_grouped_display(visible_entries: Array[Dictionary]) -> void:
+	# 结构：PhaseHeader -> StepHeader -> LogItems（可折叠）
+	var phase_order: Array[String] = []
+	var phase_buckets: Dictionary = {} # phase_segment -> {order:Array[int], entries_by_step:Dictionary}
+
+	for e in visible_entries:
+		var phase_seg := str(e.get("phase_segment", "")).strip_edges()
+		if phase_seg.is_empty():
+			phase_seg = "?"
+
+		if not phase_buckets.has(phase_seg):
+			phase_order.append(phase_seg)
+			phase_buckets[phase_seg] = {
+				"order": [],
+				"entries_by_step": {},
+			}
+
+		var idx := _get_entry_timeline_index(e)
+		var bucket: Dictionary = phase_buckets[phase_seg]
+		var order: Array = bucket.get("order", [])
+		var by_step: Dictionary = bucket.get("entries_by_step", {})
+		if not by_step.has(idx):
+			by_step[idx] = []
+			order.append(idx)
+		(by_step[idx] as Array).append(e)
+
+		bucket["order"] = order
+		bucket["entries_by_step"] = by_step
+		phase_buckets[phase_seg] = bucket
+
+	for phase_seg in phase_order:
+		var bucket: Dictionary = phase_buckets.get(phase_seg, {})
+		var order: Array = bucket.get("order", [])
+		var by_step: Dictionary = bucket.get("entries_by_step", {})
+
+		var start_step := -1
+		var end_step := -1
+		for idx_val in order:
+			if not (idx_val is int):
+				continue
+			var idx: int = int(idx_val)
+			if idx < 0:
+				continue
+			if start_step < 0 or idx < start_step:
+				start_step = idx
+			if end_step < 0 or idx > end_step:
+				end_step = idx
+
+		_add_phase_header_item(phase_seg, start_step, end_step)
+
+		for idx_val in order:
+			var idx2 := int(idx_val)
+			var entries_val = by_step.get(idx2, [])
+			var entries: Array = entries_val if (entries_val is Array) else []
+			if entries.is_empty():
+				continue
+
+			# 计算动作摘要：优先选择第一条玩家日志，否则用第一条事件日志。
+			var summary := ""
+			for ev_entry_val in entries:
+				if not (ev_entry_val is Dictionary):
+					continue
+				var ev_entry: Dictionary = ev_entry_val
+				if int(ev_entry.get("type", -1)) == LogType.PLAYER:
+					summary = str(ev_entry.get("message", "")).strip_edges()
+					break
+			if summary.is_empty():
+				summary = str(Dictionary(entries[0]).get("message", "")).strip_edges()
+
+			var cmd_index := int(Dictionary(entries[0]).get("command_index", -1))
+
+			var collapsed := false
+			if phase_seg == "Working":
+				# Working 默认折叠（满足“尽可能打包”）；当前 cursor 所在 step 自动展开以便高亮可见。
+				var default_collapsed := true
+				collapsed = bool(_collapsed_step_groups.get(idx2, default_collapsed))
+				if idx2 == _timeline_cursor_index:
+					collapsed = false
+				_collapsed_step_groups[idx2] = collapsed
+
+			_add_step_header_item(idx2, cmd_index, summary, entries.size(), collapsed)
+
+			if collapsed:
+				continue
+			for child_entry_val in entries:
+				if not (child_entry_val is Dictionary):
+					continue
+				_add_log_item(Dictionary(child_entry_val))
+
+func _add_phase_header_item(phase_segment: String, start_step: int, end_step: int) -> void:
+	if log_container == null:
+		return
+	var item := PhaseHeaderItem.new()
+	item.phase_segment = str(phase_segment)
+	item.start_step_index = int(start_step)
+	item.end_step_index = int(end_step)
+	item.clicked.connect(_on_phase_header_clicked)
+	log_container.add_child(item)
+	_log_items.append(item)
+	item.apply_timeline_state(_timeline_cursor_index, _timeline_head_index)
+
+func _add_step_header_item(step_index: int, command_index: int, summary: String, count: int, collapsed: bool) -> void:
+	if log_container == null:
+		return
+	var item := StepHeaderItem.new()
+	item.step_index = int(step_index)
+	item.command_index = int(command_index)
+	item.summary = str(summary)
+	item.event_count = int(count)
+	item.collapsed = bool(collapsed)
+	item.clicked.connect(_on_step_header_clicked)
+	log_container.add_child(item)
+	_log_items.append(item)
+	item.apply_timeline_state(_timeline_cursor_index, _timeline_head_index)
+
+func _on_phase_header_clicked(timeline_index: int) -> void:
+	timeline_seek_requested.emit(int(timeline_index))
+
+func _on_step_header_clicked(timeline_index: int) -> void:
+	var idx := int(timeline_index)
+	if idx < -1:
+		return
+
+	# Working：支持折叠；其它阶段：仅 seek。
+	if _collapsed_step_groups.has(idx):
+		var was_collapsed := bool(_collapsed_step_groups.get(idx, false))
+		if was_collapsed:
+			_collapsed_step_groups[idx] = false
+			timeline_seek_requested.emit(idx)
+		else:
+			_collapsed_step_groups[idx] = true
+		_rebuild_display()
+		return
+
+	timeline_seek_requested.emit(idx)
 
 func _update_entry_count() -> void:
 	if entry_count_label != null:
@@ -376,8 +555,9 @@ func _apply_timeline_state_to_items(scroll_to_cursor: bool = false) -> void:
 	for item in _log_items:
 		if not is_instance_valid(item):
 			continue
-		var entry: Dictionary = item.entry_data
-		if _get_entry_timeline_index(entry) != _timeline_cursor_index:
+		if not item.has_method("get_timeline_index"):
+			continue
+		if int(item.call("get_timeline_index")) != _timeline_cursor_index:
 			continue
 		scroll_container.call("ensure_control_visible", item)
 		break
@@ -575,6 +755,178 @@ func _ensure_details_window() -> void:
 
 
 # === 内部类：日志条目 ===
+
+# === 分组头（M4.1）===
+class PhaseHeaderItem extends PanelContainer:
+	signal clicked(timeline_index: int)
+
+	var phase_segment: String = ""
+	var start_step_index: int = -1
+	var end_step_index: int = -1
+
+	var _label: Label
+	var _panel_style: StyleBoxFlat = null
+	var _timeline_is_future: bool = false
+	var _timeline_is_cursor: bool = false
+
+	func _ready() -> void:
+		_build_ui()
+
+	func _build_ui() -> void:
+		var scale := 1.0
+		if Globals != null:
+			scale = clampf(float(Globals.log_font_scale), 0.5, 3.0)
+
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		custom_minimum_size = Vector2(0, float(maxi(26, int(round(26.0 * scale)))))
+		mouse_filter = Control.MOUSE_FILTER_STOP
+
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.10, 0.10, 0.12, 0.85)
+		style.set_corner_radius_all(2)
+		add_theme_stylebox_override("panel", style)
+		_panel_style = style
+
+		var hbox := HBoxContainer.new()
+		hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hbox.add_theme_constant_override("separation", 8)
+		add_child(hbox)
+
+		_label = Label.new()
+		_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_label.add_theme_font_size_override("font_size", maxi(10, int(round(12.0 * scale))))
+		_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9, 1))
+		hbox.add_child(_label)
+
+		_update_text()
+		_apply_timeline_visuals()
+
+	func _update_text() -> void:
+		var phase := str(phase_segment).strip_edges()
+		if phase.is_empty():
+			phase = "?"
+		var range := ""
+		if start_step_index >= 0 and end_step_index >= 0:
+			if start_step_index == end_step_index:
+				range = "（step %d）" % start_step_index
+			else:
+				range = "（step %d..%d）" % [start_step_index, end_step_index]
+		_label.text = "阶段: %s%s" % [phase, range]
+
+	func get_timeline_index() -> int:
+		return int(start_step_index)
+
+	func apply_timeline_state(cursor_index: int, head_index: int) -> void:
+		var cursor := int(cursor_index)
+		var head := int(head_index)
+		_timeline_is_future = (cursor < head and start_step_index >= 0 and start_step_index > cursor)
+		if start_step_index >= 0 and end_step_index >= start_step_index:
+			_timeline_is_cursor = (cursor >= start_step_index and cursor <= end_step_index)
+		else:
+			_timeline_is_cursor = (cursor == start_step_index)
+		_apply_timeline_visuals()
+
+	func _apply_timeline_visuals() -> void:
+		if _panel_style != null:
+			_panel_style.bg_color = Color(0.16, 0.16, 0.22, 0.90) if _timeline_is_cursor else Color(0.10, 0.10, 0.12, 0.85)
+		modulate = Color(0.85, 0.85, 0.85, 0.55) if _timeline_is_future else Color(1, 1, 1, 1)
+
+	func apply_font_settings() -> void:
+		var scale := 1.0
+		if Globals != null:
+			scale = clampf(float(Globals.log_font_scale), 0.5, 3.0)
+		custom_minimum_size = Vector2(0, float(maxi(26, int(round(26.0 * scale)))))
+		if _label != null:
+			_label.add_theme_font_size_override("font_size", maxi(10, int(round(12.0 * scale))))
+
+	func _gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			clicked.emit(get_timeline_index())
+
+class StepHeaderItem extends PanelContainer:
+	signal clicked(timeline_index: int)
+
+	var step_index: int = -1
+	var command_index: int = -1
+	var summary: String = ""
+	var event_count: int = 0
+	var collapsed: bool = false
+
+	var _label: Label
+	var _panel_style: StyleBoxFlat = null
+	var _timeline_is_future: bool = false
+	var _timeline_is_cursor: bool = false
+
+	func _ready() -> void:
+		_build_ui()
+
+	func _build_ui() -> void:
+		var scale := 1.0
+		if Globals != null:
+			scale = clampf(float(Globals.log_font_scale), 0.5, 3.0)
+
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		custom_minimum_size = Vector2(0, float(maxi(26, int(round(26.0 * scale)))))
+		mouse_filter = Control.MOUSE_FILTER_STOP
+
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.12, 0.12, 0.14, 0.75)
+		style.set_corner_radius_all(2)
+		add_theme_stylebox_override("panel", style)
+		_panel_style = style
+
+		var hbox := HBoxContainer.new()
+		hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hbox.add_theme_constant_override("separation", 8)
+		add_child(hbox)
+
+		_label = Label.new()
+		_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_label.add_theme_font_size_override("font_size", maxi(9, int(round(11.0 * scale))))
+		_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.78, 1))
+		hbox.add_child(_label)
+
+		_update_text()
+		_apply_timeline_visuals()
+
+	func _update_text() -> void:
+		var arrow := ">" if collapsed else "v"
+		var si := int(step_index)
+		var ci := int(command_index)
+		var sum := str(summary).strip_edges()
+		if sum.is_empty():
+			sum = "(无摘要)"
+		var tail := "（%d 条）" % int(event_count) if int(event_count) > 1 else ""
+		_label.text = "%s step %d（cmd %d） %s%s" % [arrow, si, ci, sum, tail]
+
+	func get_timeline_index() -> int:
+		return int(step_index)
+
+	func apply_timeline_state(cursor_index: int, head_index: int) -> void:
+		var cursor := int(cursor_index)
+		var head := int(head_index)
+		_timeline_is_future = (cursor < head and step_index >= 0 and step_index > cursor)
+		_timeline_is_cursor = (step_index == cursor)
+		_apply_timeline_visuals()
+
+	func _apply_timeline_visuals() -> void:
+		if _panel_style != null:
+			_panel_style.bg_color = Color(0.20, 0.20, 0.28, 0.85) if _timeline_is_cursor else Color(0.12, 0.12, 0.14, 0.75)
+		modulate = Color(0.85, 0.85, 0.85, 0.55) if _timeline_is_future else Color(1, 1, 1, 1)
+
+	func apply_font_settings() -> void:
+		var scale := 1.0
+		if Globals != null:
+			scale = clampf(float(Globals.log_font_scale), 0.5, 3.0)
+		custom_minimum_size = Vector2(0, float(maxi(26, int(round(26.0 * scale)))))
+		if _label != null:
+			_label.add_theme_font_size_override("font_size", maxi(9, int(round(11.0 * scale))))
+		_update_text()
+
+	func _gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			clicked.emit(get_timeline_index())
+
 class LogItem extends PanelContainer:
 	signal entry_clicked(entry_id: int)
 	signal entry_double_clicked(entry_id: int)
@@ -659,6 +1011,9 @@ class LogItem extends PanelContainer:
 		_timeline_is_future = (cursor_index < head_index and cmd_index >= 0 and cmd_index > cursor_index)
 		_timeline_is_cursor = (cmd_index == cursor_index)
 		_apply_timeline_visuals()
+
+	func get_timeline_index() -> int:
+		return _get_entry_command_index()
 
 	func _get_entry_command_index() -> int:
 		# timeline index: prefer step_index (M4.2), fallback to command_index.
