@@ -360,6 +360,9 @@ ActionPanel 禁用策略：
 - **阶段事件默认不显示**：`PHASE_CHANGED/ROUND_*/*_REPORT` 等“阶段/回合事件”作为结构依据即可，不作为子项默认展示。
 - **阶段事件开关**：允许通过一个简单开关“显示/隐藏阶段事件子项”（默认关闭）。
 - **阶段标题点击跳转**：点击阶段标题 seek 到该阶段段落的开始。
+- **去噪（新增）**：不展示“确认结束/玩家开始回合/玩家结束回合”等流程性日志（这类信息在统一时间线下噪声远大于收益）。
+- **去重（新增）**：同一条“玩家动作摘要”不应在动作组标题与子项中重复出现。
+- **事件归属正确（新增）**：事件应归属到其实际发生的阶段段落中（典型：里程碑获得应出现在 Payday/Cleanup 等真实触发阶段，而不是被推迟到 Restructuring）。
 
 #### M4.3.1 统一视图结构（UI 规格）
 
@@ -452,6 +455,9 @@ ActionPanel 禁用策略：
   - 能看到“晚餐时间/发薪日/广告/清理/重组”等阶段标题分段（不再揉成一段）。
   - 阶段标题点击会跳到该阶段段落的开始（状态与日志高亮一致）。
   - “阶段事件子项”默认不显示，但阶段标题与系统摘要能让用户看懂阶段推进。
+  - 不出现“玩家X: 确认结束 / 玩家X 开始回合 / 玩家X 结束回合(skip)”等流程性日志。
+  - 同一条玩家动作不重复出现（动作组标题与子项不应是同一句话的重复）。
+  - 里程碑获得出现在正确阶段段落（例如发薪里程碑在 Payday、丢弃里程碑在 Cleanup，而不是 Restructuring）。
 - 正常对局实时进行中：
   - 日志以同样的 Round/Phase/Action/Event 结构增长（不再是另一套扁平日志视图）。
 
@@ -642,3 +648,111 @@ ActionPanel 禁用策略：
   - `core/engine/game_engine/step_timeline_build.gd`：对 `kind=="command"` 的 step 写入 `action_id/actor/action_display_name`。
   - `ui/components/game_log/game_log_panel.gd`：当一个 step 没有任何可见事件子项时，`ActionGroupHeaderItem` 的摘要从 step 元信息兜底为 `玩家X: {action_display_name}`，避免回退到“系统推进”。
 - 备注：若后续仍需要更细粒度的重组日志（例如“移动了哪个员工/调整到哪个槽位”），再考虑在对应 action 的 `_generate_specific_events()` 增加专用事件并由 formatter 映射成子项。
+
+### 2026-01-25：event_log_review 日志手验（log_screenshot1/2）发现的问题与根因（需整改，未实施）
+
+复现材料：
+
+- 存档：`res://.savings/manual_cases/logs/event_log_review.json`
+- 截图：`demo_image/log_screenshot1.png`、`demo_image/log_screenshot2.png`
+
+用户反馈问题（概括）：
+
+- 不需要展示“玩家确认结束 / 玩家开始回合 / 玩家结束回合”等流程性日志。
+- 多条“玩家动作”在列表中出现两次（例如“玩家1：采购饮料”“玩家1：放置营销”“玩家1：清理库存”）。
+- 部分事件出现的阶段顺序不正确：
+  - Working 结束应在所有玩家结束后才进入 Dinnertime，但日志显示为“玩家1结束 -> 进入晚餐 -> 玩家2才结束”（顺序不合理）。
+  - 里程碑获得出现在 Restructuring，但语义上应在更早阶段触发（Payday/Cleanup/Marketing 等）。
+- 阶段已有标题，因此“进入发薪日/进入重组结构/进入广告行动”等“进入X”类行不需要展示。
+
+根因定位（当前实现的结构性原因）：
+
+1) 重复动作的根因：统一视图中 `ActionGroupHeaderItem` 的摘要直接复用该 step 的第一条玩家日志（formatted message），但该条日志同时又作为 `EventItem` 子项渲染一次，导致“同一句话在标题与子项重复出现”。该重复是 UI 渲染策略造成的，不一定意味着底层事件重复发射。
+2) “确认结束/回合开始结束”噪声的根因：
+   - `skip/end_turn/skip_sub_phase` 等流程性命令会生成 `PLAYER_TURN_STARTED/PLAYER_TURN_ENDED` 事件（见 `gameplay/actions/skip_action.gd` 等）。
+   - `GameEventLogFormatter` 当前会把这些事件格式化为可见日志（`ui/scenes/game/game_event_log_formatter.gd`），且 `GameLogPanel` 的“阶段事件隐藏”规则并未将其识别为阶段/结构事件，因此默认会显示。
+   - 同时，command step 的兜底摘要会显示 `action_display_name`，从而把 `skip` 命令以“玩家X：确认结束”暴露出来。
+3) 阶段顺序/归属不匹配的根因（两类）：
+   - **事件分段规则过于机械**：当前 step_timeline 在“命令触发 phase 切换”时按 `PHASE_CHANGED` 将事件一刀切分为“旧阶段事件/新阶段事件”；但部分事件在 action 内的追加顺序与用户语义不一致（例如 `PLAYER_TURN_ENDED/STARTED` 在某些实现中出现在 `PHASE_CHANGED` 之后），会被归到新阶段，从而产生“先进入晚餐时间再结束回合”的观感。
+   - **里程碑事件生成时机偏晚**：`MILESTONE_ACHIEVED` 当前通过对比“命令前 old_state”与“命令链路结束后的 final_state”一次性 diff 生成，因此事件自带的 `phase/sub_phase` 与 step_timeline 的 `phase_segment` 都会落在链路末端阶段（常见为 Restructuring），导致里程碑在日志中被“推迟”到错误阶段。
+4) “进入X”类行的根因：phase step 会创建一个动作组标题行，并使用 `kind=="phase"` 的兜底摘要 `进入{phase}`；但此信息已由 `PhaseHeaderItem` 提供，属于重复展示。
+
+整改目标（与用户反馈逐条对齐）：
+
+- 默认不展示流程性日志（确认结束/回合开始结束等）。
+- 去掉“标题与子项重复的玩家动作”。
+- 修正事件归属：阶段顺序与里程碑出现阶段应符合实际发生时机。
+- 移除“进入X”类行（阶段标题已足够）。
+
+#### 待审整改计划（不实施；待用户确认后再改代码）
+
+范围：同时覆盖“只读回放 + 复盘 + 实时对局”，保持同一套视图规则（M4.3 的核心要求）。
+
+1) 去掉流程性日志（问题 1）
+
+- 目标：列表中不再出现：
+  - “玩家X: 确认结束”
+  - “玩家X 开始回合”
+  - “玩家X 结束回合(skip/end_turn/...)”
+- 拟采取的策略（建议）：
+  - 将 `PLAYER_TURN_STARTED/PLAYER_TURN_ENDED` 归类为“结构/噪声事件”，默认隐藏。
+  - `skip/end_turn/skip_sub_phase` 这类命令作为 ActionGroupHeader 的摘要也默认不展示（避免“玩家X:确认结束”重新出现）。
+- 影响面评估：
+  - 优点：Working/Dinnertime 等阶段的日志噪声显著下降，阶段推进的可读性更强。
+  - 风险：当某阶段只有“确认结束”而无其它事件时，该阶段段落可能变得“更空”；但阶段标题仍在，并可通过后续里程碑/结算事件补足可见性（见第 3 点）。
+
+2) 消除“同一玩家动作重复两次”（问题 2）
+
+- 根因：同一句 formatted message 同时被用作 ActionGroupHeader 摘要 + EventItem 子项。
+- 目标：每个 step 的“动作摘要”只出现一次。
+- 拟实现（建议）：
+  - 为每个 step 在构建视图结构时选定一个 `primary_entry_id`（通常是该 step 的第一条“玩家动作/可见动作”日志）。
+  - `ActionGroupHeaderItem` 显示 primary 的 message；
+  - 子项 `EventItem` 列表渲染时跳过该 primary entry（避免重复）。
+  - 为避免“跳过后无法查看详情”，ActionGroupHeaderItem 需要支持双击打开 primary 的 details（等价于原来双击 EventItem）。
+
+3) 修正“事件归属/阶段顺序不匹配”（问题 3，重点）
+
+3.1 里程碑归属修正（强相关：log_screenshot2）
+
+- 根因：里程碑事件目前在“命令链路结束后”一次性 diff 生成，phase/sub_phase 取 final_state（经常是 Restructuring），导致里程碑被推迟到错误阶段。
+- 拟实现（建议，偏底层但可控）：
+  - 在 `StepTimelineBuild.build_full()` 内改为“增量 diff”：
+    - 命令执行后：对 `old_state -> state_in` diff 里程碑，归属到该命令的 command step。
+    - auto-advance 循环内：对每次 `before -> state_in` diff 里程碑，归属到当次推进后的 step（phase 变化时归属到新建的 phase step；否则归属到当前 step）。
+  - 移除/禁用 build_full() 末尾的“最终一次性里程碑 diff”，避免重复发射。
+  - 同步修正里程碑事件 data 中的 `phase/sub_phase/round` 字段：使用触发当刻的 state，而不是 final_state。
+- 验收点：
+  - `first_pay_*` 这类里程碑应出现在 Payday 段落；
+  - `first_throw_away` 应出现在 Cleanup 段落；
+  - `first_*_marketed` 应出现在 Marketing 结算相关段落（通常在离开 Marketing 时）。
+
+3.2 阶段切分顺序修正（强相关：log_screenshot1）
+
+- 根因：当前按 `PHASE_CHANGED` 在“事件数组顺序”上做一刀切分；但部分事件在 action 内追加顺序与用户语义不一致（例如回合结束事件在 `PHASE_CHANGED` 之后追加）。
+- 拟实现（建议）：
+  - 将 `PLAYER_TURN_STARTED/ENDED` 视为结构噪声事件并隐藏后，该类“顺序不合理”的可见问题会显著降低（但底层归属仍建议修正以保证一致性）。
+  - 对 phase-change 命令的事件归属改为“按事件类型语义归属”，而不是仅依赖 `PHASE_CHANGED` 在数组中的出现位置：
+    - `*_REPORT`、Marketing 结算（`DEMAND_GENERATED/MARKETING_EXPIRED`）、Cleanup 丢弃等：归属到离开前阶段；
+    - 进入新阶段的 `PHASE_CHANGED/ROUND_*`：归属到新阶段；
+    - `PLAYER_TURN_*`：隐藏（或强制归属到旧阶段，二选一）。
+
+4) 移除“进入X”类行（问题 4）
+
+- 根因：phase step 的 ActionGroupHeader 使用兜底摘要 `进入{phase}`。
+- 拟实现（建议）：
+  - phase step 不再渲染 ActionGroupHeaderItem（阶段标题 PhaseHeaderItem 已足够承载“阶段开始的可点击锚点”）。
+  - 若需要在 cursor 恰好落在 phase start step 时仍有明确高亮，可增强 PhaseHeader 的视觉：当 `cursor == start_step_index` 时使用更强的高亮样式（不新增文案）。
+
+5) 回归验证与自动化保护
+
+- 手工回归（必做）：
+  - 主菜单载入 `res://.savings/manual_cases/logs/event_log_review.json`，对照 `demo_image/log_screenshot1.png/2.png` 逐条确认 4 项问题消失且阶段切分正确。
+- 自动化回归（建议新增/调整）：
+  - `core/tests/step_timeline_build_test.gd`：补充对 `MILESTONE_ACHIEVED` 的 phase_segment 断言（至少覆盖 Payday/Cleanup/Marketing 三类）。
+  - （可选）为 unified view 增加“无重复 primary message”逻辑测试：针对 event_log_review 的 formatter 输出，确保同一 step 的 primary entry 不同时出现在 header 与 child。
+
+#### 待你确认的问题（否则整改策略可能偏离预期）
+
+1) `PLAYER_TURN_STARTED/PLAYER_TURN_ENDED` 这类日志是“永远隐藏”，还是仅在“显示阶段事件”打开时显示？
+2) `skip(确认结束)` 这类命令在时间线里是否需要保留为可点的 step（但不显示日志），还是可以直接在 step_timeline 构建时合并到相邻 step 以减少步数？
