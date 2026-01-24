@@ -543,6 +543,15 @@ func _build_action_group_summary(step_index: int, step: Dictionary, entries: Arr
 	var phase_seg := str(step.get("phase", "")).strip_edges()
 	if kind == "phase" and not phase_seg.is_empty():
 		return "进入%s" % _get_phase_display_name(phase_seg)
+
+	# 当该 step 没有可见事件时，仍尽量展示“玩家做了什么”（例如重组阶段的一些命令只改状态、不发事件）。
+	if kind == "command":
+		var action_name := str(step.get("action_display_name", "")).strip_edges()
+		if action_name.is_empty():
+			action_name = str(step.get("action_id", "")).strip_edges()
+		var actor := int(step.get("actor", -1))
+		if not action_name.is_empty():
+			return ("玩家%d: %s" % [actor + 1, action_name]) if actor >= 0 else action_name
 	return "系统推进"
 
 func _get_phase_display_name(phase_segment: String) -> String:

@@ -633,3 +633,12 @@ ActionPanel 禁用策略：
   - undo/redo/restore/load、回退到阶段开始成功后刷新（时间线被改写时必须同步）。
 - cursor 定位策略：以 `current_command_index` 对应的 `anchor_command_index` 的“最后一个 step”作为稳定落点；在最新时 cursor=head_step。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过。
+
+### 2026-01-25：补强“无可见事件 step”的动作摘要（缓解重组阶段看起来无效果）
+
+- 现象回顾：用户反馈重组（Restructuring）阶段缺少必要日志，导致某些 step 单步推进时列表中几乎没有可见信息，观感像“没发生任何事”。
+- 策略选择（保守）：不强行在 core 侧新增事件类型，而是在 step_timeline 的 step 快照里补齐最少的“命令元信息”，用于 UI 摘要兜底展示。
+- 实现：
+  - `core/engine/game_engine/step_timeline_build.gd`：对 `kind=="command"` 的 step 写入 `action_id/actor/action_display_name`。
+  - `ui/components/game_log/game_log_panel.gd`：当一个 step 没有任何可见事件子项时，`ActionGroupHeaderItem` 的摘要从 step 元信息兜底为 `玩家X: {action_display_name}`，避免回退到“系统推进”。
+- 备注：若后续仍需要更细粒度的重组日志（例如“移动了哪个员工/调整到哪个槽位”），再考虑在对应 action 的 `_generate_specific_events()` 增加专用事件并由 formatter 映射成子项。

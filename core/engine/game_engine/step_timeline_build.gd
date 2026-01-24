@@ -116,7 +116,12 @@ static func build_full(engine: GameEngine) -> Result:
 			steps[command_step_index] = _update_step_snapshot(steps[command_step_index], state_in)
 		else:
 			command_step_index = steps.size()
-			steps.append(_build_step_dict("command", i, state_in))
+			# 为 UI 摘要提供最少的“玩家行动”信息：当该 step 没有可见事件时，仍可显示玩家做了什么（例如重组阶段）。
+			steps.append(_build_step_dict("command", i, state_in, {
+				"action_id": str(cmd.action_id),
+				"actor": int(cmd.actor),
+				"action_display_name": str(executor.display_name),
+			}))
 
 		# 命令本体事件（归属到 command step）
 		var command_events := executor.generate_events(old_state, state_in, cmd)
