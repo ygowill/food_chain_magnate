@@ -675,6 +675,7 @@ ActionPanel 禁用策略：
 3) 阶段顺序/归属不匹配的根因（两类）：
    - **事件分段规则过于机械**：当前 step_timeline 在“命令触发 phase 切换”时按 `PHASE_CHANGED` 将事件一刀切分为“旧阶段事件/新阶段事件”；但部分事件在 action 内的追加顺序与用户语义不一致（例如 `PLAYER_TURN_ENDED/STARTED` 在某些实现中出现在 `PHASE_CHANGED` 之后），会被归到新阶段，从而产生“先进入晚餐时间再结束回合”的观感。
    - **里程碑事件生成时机偏晚**：`MILESTONE_ACHIEVED` 当前通过对比“命令前 old_state”与“命令链路结束后的 final_state”一次性 diff 生成，因此事件自带的 `phase/sub_phase` 与 step_timeline 的 `phase_segment` 都会落在链路末端阶段（常见为 Restructuring），导致里程碑在日志中被“推迟”到错误阶段。
+   - **现金变化也可能被归到错误阶段**：例如 Payday 的“支付薪水”结算发生在 `Payday EXIT settlement`（见 `modules/base_rules/rules/phase_and_map.gd` 注册点），但 step_timeline 目前在 `phase_changed` 分支里把 `PLAYER_CASH_CHANGED` 一律归到“新阶段 step”，会导致“薪水支付/银行变化”出现在 Marketing 段落而非 Payday。
 4) “进入X”类行的根因：phase step 会创建一个动作组标题行，并使用 `kind=="phase"` 的兜底摘要 `进入{phase}`；但此信息已由 `PhaseHeaderItem` 提供，属于重复展示。
 
 整改目标（与用户反馈逐条对齐）：
@@ -722,6 +723,11 @@ ActionPanel 禁用策略：
     - auto-advance 循环内：对每次 `before -> state_in` diff 里程碑，归属到当次推进后的 step（phase 变化时归属到新建的 phase step；否则归属到当前 step）。
   - 移除/禁用 build_full() 末尾的“最终一次性里程碑 diff”，避免重复发射。
   - 同步修正里程碑事件 data 中的 `phase/sub_phase/round` 字段：使用触发当刻的 state，而不是 final_state。
+- 关键细节（避免把 Payday 里程碑推到 Marketing）：
+  - 对于 **phase 变化的 auto-advance**，里程碑与现金变化需要按“结算发生点”归属：
+    - 若旧阶段存在 `EXIT settlement`（当前 base_rules 的典型是 `Payday`）：把 `MILESTONE_ACHIEVED/PLAYER_CASH_CHANGED` 归属到旧阶段段落（`phase_segment=before.phase`）。
+    - 若新阶段存在 `ENTER settlement`（当前 base_rules 的典型是 `Dinnertime/Marketing/Cleanup`）：把上述事件归属到新阶段段落（`phase_segment=state_in.phase`）。
+  - 该归属规则应同时影响：事件显示段落（phase_segment）与事件 data 里的 `phase` 字段，确保详情与列表一致。
 - 验收点：
   - `first_pay_*` 这类里程碑应出现在 Payday 段落；
   - `first_throw_away` 应出现在 Cleanup 段落；
