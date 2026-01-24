@@ -356,20 +356,27 @@ ActionPanel 禁用策略：
 - **回合分隔**：不需要在阶段标题显示回合号；但两回合之间必须插入一个“回合分隔标题块”。
 - **层级缩进**：阶段内按“玩家动作/系统动作”分组；组内事件以缩进子项展示；不需要折叠/展开（默认全部展开）。
 - **不暴露内部索引**：UI 不显示 `step xx`、`cmd xx`；内部仍保留稳定索引用于 seek/highlight。
-- **去掉 PlayerFilter**：日志面板默认展示完整日志（不提供按玩家过滤）。
+- **去掉过滤/搜索**：移除 PlayerFilter/搜索框/类型过滤（日志面板默认展示完整日志）。
 - **阶段事件默认不显示**：`PHASE_CHANGED/ROUND_*/*_REPORT` 等“阶段/回合事件”作为结构依据即可，不作为子项默认展示。
+- **阶段事件开关**：允许通过一个简单开关“显示/隐藏阶段事件子项”（默认关闭）。
 - **阶段标题点击跳转**：点击阶段标题 seek 到该阶段段落的开始。
 
 #### M4.3.1 统一视图结构（UI 规格）
+
+顶栏控件：
+
+- ReplayBar 保留（加载回放 + 前后步进 + 滑条）。
+- 移除 PlayerFilter/搜索框/类型过滤。
+- 新增开关：`显示阶段事件`（默认关闭；开=显示阶段/回合事件子项；关=隐藏）。
 
 列表结构（从上到下）：
 
 1) RoundHeaderItem（回合分隔标题块）
    - 触发：当时间线检测到 `round` 发生变化时，在两段日志之间插入一条分隔标题。
    - 文案：不显示回合号；使用稳定文案即可（例如“进入新回合”/“回合切换”）。
-   - 点击行为（可选）：seek 到该回合的第一条 ActionGroup（若实现简单可先不做）。
+   - 点击行为：seek 到该回合的第一条 ActionGroup。
 2) PhaseHeaderItem（阶段标题行）
-   - 文案：仅显示阶段名（建议做本地化映射：Payday->发薪日，Marketing->广告阶段等）。
+   - 文案：仅显示阶段名（使用本地化映射，不显示回合号）。
    - 高亮规则：当 cursor 落在该阶段段落范围内时，高亮该标题行。
    - 点击行为：seek 到该阶段段落的开始 timeline_index。
 3) ActionGroupHeaderItem（动作组标题行）
@@ -398,7 +405,7 @@ ActionPanel 禁用策略：
    - 若与上一个 step 的 `phase` 不同（或 round 刚变）：插入 PhaseHeaderItem，并记录该阶段段落的 `start_step_index`。
    - 为每个 step 创建一个 ActionGroupHeaderItem（保证“每步都可见可点”）。
 2) 将 events 按 `step_index` 挂到对应 ActionGroup 下，作为 EventItem 子项：
-   - 默认过滤掉“阶段事件子项”（`PHASE_CHANGED/SUB_PHASE_CHANGED/ROUND_STARTED/ROUND_ENDED/*_REPORT` 等），但这些事件仍可用于调试详情窗口。
+   - 默认隐藏“阶段事件子项”（`PHASE_CHANGED/SUB_PHASE_CHANGED/ROUND_STARTED/ROUND_ENDED/*_REPORT` 等），由 `显示阶段事件` 开关控制是否展示；但这些事件始终可用于调试详情窗口。
    - 其余事件作为缩进子项展示（例如营销产生需求、采购路线、现金变化、丢弃库存、里程碑等）。
 
 动作组摘要（ActionGroupHeaderItem.text）决策：
@@ -414,6 +421,17 @@ ActionPanel 禁用策略：
 
 - `阶段：{phase_display_name}`（Working 内 sub_phase 默认不显示，避免噪声）。
 - 不显示 `step xx`、`cmd xx`。
+
+阶段本地化映射（用户确认）：
+
+- `Working` -> `工作时间`
+- `Dinnertime` -> `晚餐时间`
+- `Payday` -> `发薪日`
+- `Marketing` -> `广告行动`
+- `Cleanup` -> `清理阶段`
+- `Restructuring` -> `重组结构`
+- `OrderOfBusiness` -> `商业秩序`
+- 其它阶段（例如 `Setup`/`GameOver`）文案待确认
 
 #### M4.3.4 对正常对局（实时）如何做到“同一视图”
 
@@ -438,15 +456,16 @@ ActionPanel 禁用策略：
 
 #### M4.3.6 实施步骤（仅计划；未获允许不改代码）
 
-1) UI：移除 PlayerFilter（日志默认完整展示）
+1) UI：移除过滤/搜索（PlayerFilter/搜索框/类型过滤）
 2) UI：将现有 grouped view 重塑为“缩进层级视图”
    - StepHeaderItem -> ActionGroupHeaderItem（不显示 step/cmd）
    - LogItem 作为 EventItem（缩进）
    - 新增 RoundHeaderItem（回合分隔）
-3) 事件显示策略：阶段事件子项默认隐藏（但仍可在详情窗口查看）
+3) 事件显示策略：阶段事件子项默认隐藏；增加 `显示阶段事件` 开关
 4) PhaseHeader 点击跳转：seek 到该阶段段落 start_step_index
-5) 实时模式统一：打开日志/命令执行后用 StepTimelineBuild 重建时间线视图（必要时加 debounce）
-6) 回归验证：`event_log_review.json` + `demo_image/log_demo.png` + `AllTests`
+5) RoundHeader 点击跳转：seek 到该回合段落的第一条 ActionGroup
+6) 实时模式统一：打开日志/命令执行后用 StepTimelineBuild 重建时间线视图（必要时加 debounce）
+7) 回归验证：`event_log_review.json` + `demo_image/log_demo.png` + `AllTests`
 
 ### M4.1：Phase 视觉切分 + Working 打包展示（不改 seek 粒度）
 
