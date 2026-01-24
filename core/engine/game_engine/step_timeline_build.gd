@@ -12,6 +12,8 @@ extends RefCounted
 
 const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
+const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 
 static func build_full(engine: GameEngine) -> Result:
 	if engine == null:
@@ -125,12 +127,14 @@ static func build_full(engine: GameEngine) -> Result:
 
 		# 命令本体事件（归属到 command step）
 		var command_events := executor.generate_events(old_state, state_in, cmd)
-		command_events.append_array(CommandRunnerClass._build_player_cash_changed_events(old_state, state_in, cmd))
+		var cash_events_cmd := CommandRunnerClass._build_player_cash_changed_events(old_state, state_in, cmd)
+		var milestone_events_cmd := CommandRunnerClass._build_milestone_achieved_events(old_state, state_in, cmd)
 		# 若命令本身发生了 phase 切换（如 advance_phase），则：
 		# - PHASE_CHANGED 之前的事件（含 *_REPORT）归属到“命令前”的 step（旧阶段）
 		# - PHASE_CHANGED 及之后的事件归属到“玩家行动 step”（新阶段）
 		# 这能避免 Payday/Marketing/Cleanup 等阶段被压到同一个 step。
-		if str(old_state.phase) != str(state_in.phase) and prev_step_index >= -1:
+		var phase_changed_in_command := (str(old_state.phase) != str(state_in.phase))
+		if phase_changed_in_command and prev_step_index >= -1:
 			var before_phase_events: Array[Dictionary] = []
 			var after_phase_events: Array[Dictionary] = []
 			var seen_phase_changed := false
@@ -146,15 +150,39 @@ static func build_full(engine: GameEngine) -> Result:
 				else:
 					before_phase_events.append(ev)
 
+			# 结算/里程碑/现金变化：按结算触发点归属（避免 Payday exit settlement 被推到 Marketing 段落）。
+			var to_old_segment := _should_attribute_settlement_effects_to_old_phase(engine, str(old_state.phase), str(state_in.phase))
+
 			if not before_phase_events.is_empty():
 				_append_events(events_out, before_phase_events, i, prev_step_index, str(old_state.phase), seq)
 				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+			if to_old_segment:
+				if not cash_events_cmd.is_empty():
+					_append_events(events_out, _override_events_phase_fields(cash_events_cmd, old_state), i, prev_step_index, str(old_state.phase), seq)
+					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+				if not milestone_events_cmd.is_empty():
+					_append_events(events_out, _override_events_phase_fields(milestone_events_cmd, old_state), i, prev_step_index, str(old_state.phase), seq)
+					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+
 			if not after_phase_events.is_empty():
 				_append_events(events_out, after_phase_events, i, command_step_index, str(state_in.phase), seq)
 				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+			if not to_old_segment:
+				if not cash_events_cmd.is_empty():
+					_append_events(events_out, _override_events_phase_fields(cash_events_cmd, state_in), i, command_step_index, str(state_in.phase), seq)
+					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+				if not milestone_events_cmd.is_empty():
+					_append_events(events_out, _override_events_phase_fields(milestone_events_cmd, state_in), i, command_step_index, str(state_in.phase), seq)
+					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 		else:
 			_append_events(events_out, command_events, i, command_step_index, str(state_in.phase), seq)
 			seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+			if not cash_events_cmd.is_empty():
+				_append_events(events_out, cash_events_cmd, i, command_step_index, str(state_in.phase), seq)
+				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+			if not milestone_events_cmd.is_empty():
+				_append_events(events_out, milestone_events_cmd, i, command_step_index, str(state_in.phase), seq)
+				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 
 		# auto-advance：逐步执行。sub_phase 变化打包在当前 step；phase 变化插入新 step。
 		var current_step_index := command_step_index
@@ -174,6 +202,7 @@ static func build_full(engine: GameEngine) -> Result:
 			# 构建阶段/子阶段变化事件（与 CommandRunner._drain_auto_advances 对齐）
 			var phase_events := CommandRunnerClass._build_phase_change_events(before, state_in)
 			var cash_events := CommandRunnerClass._build_player_cash_changed_events(before, state_in, Command.create_system("auto_advance"))
+			var milestone_events := CommandRunnerClass._build_milestone_achieved_events(before, state_in, cmd)
 
 			if phase_changed:
 				# 冻结旧 step 的快照：停在“离开前阶段”的最后稳定状态
@@ -189,6 +218,9 @@ static func build_full(engine: GameEngine) -> Result:
 				# 事件归属：
 				# - `*_REPORT` 等离开阶段事件：归属到旧阶段（old_phase）
 				# - PHASE_CHANGED/ROUND_* 等：归属到新阶段（new_phase）
+				# 同时：现金/里程碑按结算触发点归属，避免 Payday exit settlement 被推到 Marketing 段落。
+				var before_phase_events: Array[Dictionary] = []
+				var after_phase_events: Array[Dictionary] = []
 				var seen_phase_changed := false
 				for ev_val in phase_events:
 					if not (ev_val is Dictionary):
@@ -197,16 +229,35 @@ static func build_full(engine: GameEngine) -> Result:
 					var t: String = str(ev.get("type", "")).strip_edges()
 					if t == EventBus.EventType.PHASE_CHANGED:
 						seen_phase_changed = true
-					var target_step := phase_step_index if seen_phase_changed else current_step_index
-					var segment_phase := str(state_in.phase) if seen_phase_changed else str(before.phase)
-					_append_single_event(events_out, ev, i, target_step, segment_phase, seq)
-					seq += 1
+					if seen_phase_changed:
+						after_phase_events.append(ev)
+					else:
+						before_phase_events.append(ev)
 
-				for ev_val2 in cash_events:
-					if not (ev_val2 is Dictionary):
-						continue
-					_append_single_event(events_out, Dictionary(ev_val2), i, phase_step_index, str(state_in.phase), seq)
-					seq += 1
+				if not before_phase_events.is_empty():
+					_append_events(events_out, before_phase_events, i, current_step_index, str(before.phase), seq)
+					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+
+				var to_old_segment := _should_attribute_settlement_effects_to_old_phase(engine, str(before.phase), str(state_in.phase))
+				if to_old_segment:
+					if not cash_events.is_empty():
+						_append_events(events_out, _override_events_phase_fields(cash_events, before), i, current_step_index, str(before.phase), seq)
+						seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+					if not milestone_events.is_empty():
+						_append_events(events_out, _override_events_phase_fields(milestone_events, before), i, current_step_index, str(before.phase), seq)
+						seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+
+				if not after_phase_events.is_empty():
+					_append_events(events_out, after_phase_events, i, phase_step_index, str(state_in.phase), seq)
+					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+
+				if not to_old_segment:
+					if not cash_events.is_empty():
+						_append_events(events_out, _override_events_phase_fields(cash_events, state_in), i, phase_step_index, str(state_in.phase), seq)
+						seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+					if not milestone_events.is_empty():
+						_append_events(events_out, _override_events_phase_fields(milestone_events, state_in), i, phase_step_index, str(state_in.phase), seq)
+						seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 
 				current_step_index = phase_step_index
 			else:
@@ -216,14 +267,11 @@ static func build_full(engine: GameEngine) -> Result:
 				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 				_append_events(events_out, cash_events, i, current_step_index, str(state_in.phase), seq)
 				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+				_append_events(events_out, milestone_events, i, current_step_index, str(state_in.phase), seq)
+				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 
 		if safety >= 32:
 			return Result.failure("StepTimelineBuild: auto_advance exceeded max steps (possible loop)").with_warnings(warnings)
-
-		# 里程碑事件：以“命令前 state”和“最终 state”差异推导（对齐 CommandRunner.execute_command）
-		var milestone_events := CommandRunnerClass._build_milestone_achieved_events(old_state, state_in, cmd)
-		_append_events(events_out, milestone_events, i, current_step_index, str(state_in.phase), seq)
-		seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 
 		# 命令已执行（便于回放验证与旧逻辑兼容；默认归属到玩家行动 step）
 		seq += 1
@@ -325,3 +373,42 @@ static func _append_single_event(
 		"step_index": int(step_index),
 		"phase_segment": str(phase_segment),
 	})
+
+static func _should_attribute_settlement_effects_to_old_phase(engine: GameEngine, old_phase: String, new_phase: String) -> bool:
+	# 目的：避免“离开 Payday 的 EXIT settlement”产生的现金/里程碑被归到新阶段（典型：Marketing）。
+	# 规则（保守）：
+	# - 若旧阶段配置了 EXIT settlement：归属旧阶段
+	# - 否则若新阶段配置了 ENTER settlement：归属新阶段
+	# - 默认归属新阶段
+	if engine == null or engine.phase_manager == null:
+		return false
+	var pm = engine.phase_manager
+
+	var old_enum := PhaseDefsClass.get_phase_enum(str(old_phase).strip_edges())
+	if old_enum != -1 and pm._is_settlement_scheduled(old_enum, SettlementRegistryClass.Point.EXIT):
+		return true
+
+	var new_enum := PhaseDefsClass.get_phase_enum(str(new_phase).strip_edges())
+	if new_enum != -1 and pm._is_settlement_scheduled(new_enum, SettlementRegistryClass.Point.ENTER):
+		return false
+
+	return false
+
+static func _override_events_phase_fields(events: Array[Dictionary], state: GameState) -> Array[Dictionary]:
+	# 用于：现金/里程碑等事件在跨阶段时需要“按实际发生点”的 phase/sub_phase/round 字段，而不是 final_state。
+	var out: Array[Dictionary] = []
+	if events == null or events.is_empty():
+		return out
+	for ev_val in events:
+		if not (ev_val is Dictionary):
+			continue
+		var ev: Dictionary = Dictionary(ev_val).duplicate(true)
+		var d_val = ev.get("data", {})
+		var d: Dictionary = d_val if (d_val is Dictionary) else {}
+		if state != null:
+			d["phase"] = str(state.phase)
+			d["sub_phase"] = str(state.sub_phase)
+			d["round"] = int(state.round_number)
+		ev["data"] = d
+		out.append(ev)
+	return out

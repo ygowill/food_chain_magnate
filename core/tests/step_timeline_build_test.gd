@@ -104,6 +104,42 @@ static func run() -> Result:
 	if not (seen_phase_segments.has("Payday") and seen_phase_segments.has("Marketing") and seen_phase_segments.has("Cleanup")):
 		return Result.failure("expected phase segments to include Payday/Marketing/Cleanup in %s (seen=%s)" % [SAVE_RES_PATH, str(seen_phase_segments.keys())])
 
+	# 现金变化：Payday 的薪资结算应归属到 Payday 段落（避免被推到 Marketing）。
+	var has_payday_report := false
+	var cash_segments := {}
+	for ev_val2 in events:
+		if not (ev_val2 is Dictionary):
+			continue
+		var ev2: Dictionary = ev_val2
+		var t2 := str(ev2.get("type", "")).strip_edges()
+		if t2 == EventBus.EventType.PAYDAY_REPORT:
+			has_payday_report = true
+		if t2 != EventBus.EventType.PLAYER_CASH_CHANGED:
+			continue
+		var seg2 := str(ev2.get("phase_segment", "")).strip_edges()
+		if seg2.is_empty():
+			continue
+		cash_segments[seg2] = true
+
+	if has_payday_report and not cash_segments.has("Payday"):
+		return Result.failure("expected at least one PLAYER_CASH_CHANGED in Payday segment (cash_segments=%s)" % str(cash_segments.keys()))
+
+	# 里程碑：若该存档触发里程碑，则不应全部被推迟到 Restructuring 段落。
+	var milestone_count := 0
+	var non_restructuring_milestone := false
+	for ev_val3 in events:
+		if not (ev_val3 is Dictionary):
+			continue
+		var ev3: Dictionary = ev_val3
+		if str(ev3.get("type", "")).strip_edges() != EventBus.EventType.MILESTONE_ACHIEVED:
+			continue
+		milestone_count += 1
+		if str(ev3.get("phase_segment", "")).strip_edges() != "Restructuring":
+			non_restructuring_milestone = true
+
+	if milestone_count > 0 and not non_restructuring_milestone:
+		return Result.failure("expected at least one MILESTONE_ACHIEVED not in Restructuring (count=%d)" % milestone_count)
+
 	return Result.success({
 		"commands": engine.command_history.size(),
 		"steps": steps.size(),
