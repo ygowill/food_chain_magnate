@@ -594,3 +594,20 @@ ActionPanel 禁用策略：
 - 用户反馈：部分 step 单步推进时“看起来没有效果”（尤其是只包含 PHASE 类型日志的阶段切分点）。
 - 根因：`GameLogPanel` 的 grouped view 之前完全基于“过滤后的可见 entries”构建；当某个 step 的所有事件都被过滤器隐藏时，StepHeader/PhaseHeader 也会消失，导致该 step 视觉上不存在。
 - 修复：grouped view 的结构（PhaseHeader/StepHeader）基于 `_entries_all` 构建，子项（LogItem）再按过滤器决定是否渲染；从而 step 作为“可步进点”始终可见（`ui/components/game_log/game_log_panel.gd`）。
+
+### 2026-01-24：开始实施 M4.3（统一时间线视图骨架：去过滤/加阶段事件开关/缩进层级）
+
+- UI（`ui/components/game_log/game_log_panel.tscn`）：
+  - 移除 PlayerFilter / 搜索框 / 类型过滤按钮。
+  - 新增 `显示阶段事件` 开关（默认关闭），用于控制是否展示 `PHASE_CHANGED/ROUND_*/*_REPORT` 等阶段/回合事件子项。
+- GameLogPanel（`ui/components/game_log/game_log_panel.gd`）：
+  - 新增 `load_step_timeline(timeline, entries)`：由 step_timeline（结构）+ formatter entries（内容）驱动渲染。
+  - 新增统一层级渲染：`RoundHeaderItem -> PhaseHeaderItem -> ActionGroupHeaderItem -> EventItem`（缩进展示，不做折叠/展开；UI 不显示 step/cmd 内部索引）。
+  - 阶段名使用本地化映射（Working/Setup/... -> 中文）。
+  - “阶段事件子项”默认隐藏（开关打开后显示），结构仍然始终基于 steps 构建，避免“某步只有阶段事件导致看起来无效果”。
+  - UI-only 日志（例如动作失败提示）在 step_timeline 模式下会自动挂到当前 cursor step（避免丢失/无法定位）。
+- GameScene（`ui/scenes/game/game.gd`）：
+  - 回放/复盘（step_timeline）日志加载路径切换为 `GameLogPanel.load_step_timeline(...)`。
+  - `_build_log_entries_from_timeline_events` 补充 `event_type`/`is_stage_event` 字段，供 M4.3 的“阶段事件开关”判断使用。
+  - ReplayBar 的状态 extra 调整为仅显示“阶段：xxx”（不再展示 step/cmd/kind）。
+  - 备注：正常对局实时模式的“每次命令后重建 step_timeline 并刷新日志视图”仍待接入（下一步实施项）。

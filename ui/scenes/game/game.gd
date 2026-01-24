@@ -174,9 +174,9 @@ func _ready() -> void:
 	_panel_controller.connect_signals(action_panel, turn_order_track, hand_area, company_structure)
 
 	_menu_debug_controller = GameMenuDebugControllerClass.new(self, menu_dialog)
-
-	_event_log_controller = GameEventLogControllerClass.new()
-	_event_log_controller.setup(game_log_panel, should_restore_log_history)
+	# M4.3：日志面板统一使用 step 时间线视图（由 StepTimelineBuild.build_full 重建），
+	# 不再依赖 EventBus 订阅追加日志。
+	_event_log_controller = null
 	UiSignalHelpersClass.safe_connect(game_log_panel, "close_requested", toggle_game_log)
 	UiSignalHelpersClass.safe_connect(game_log_panel, "log_entry_clicked", _on_log_entry_clicked)
 	if game_log_panel.has_signal("timeline_seek_requested"):
@@ -1527,36 +1527,32 @@ func _set_replay_bar_state(head_index: int, cursor_index: int, read_only: bool) 
 		rb.call("set_timeline", head_index, cursor_index, read_only, extra)
 
 func _build_replay_bar_status_extra(step_index: int, timeline: Dictionary) -> String:
-	# 仅在 M4.2 step 时间线可用时用于辅助展示：kind/cmd/phase。
-	var idx := int(step_index)
-	if idx < 0:
-		return "初始"
-
+	# M4.3：不展示 step/cmd，仅展示“当前阶段”。
 	if timeline == null or timeline.is_empty():
 		return ""
 
-	var steps_val = timeline.get("steps", null)
-	if not (steps_val is Array):
-		return ""
-	var steps: Array = steps_val
-	if idx >= steps.size():
-		return ""
-	var s_val = steps[idx]
-	if not (s_val is Dictionary):
-		return ""
-	var s: Dictionary = s_val
+	var idx := int(step_index)
+	var phase := ""
+	if idx < 0:
+		var init_val = timeline.get("initial_state_dict", null)
+		if init_val is Dictionary:
+			phase = str(Dictionary(init_val).get("phase", "")).strip_edges()
+	else:
+		var steps_val = timeline.get("steps", null)
+		if not (steps_val is Array):
+			return ""
+		var steps: Array = steps_val
+		if idx >= steps.size():
+			return ""
+		var s_val = steps[idx]
+		if not (s_val is Dictionary):
+			return ""
+		phase = str(Dictionary(s_val).get("phase", "")).strip_edges()
 
-	var kind := str(s.get("kind", "")).strip_edges()
-	var kind_text := "动作" if kind == "command" else ("阶段" if kind == "phase" else kind)
-	var anchor_cmd := int(s.get("anchor_command_index", -1))
-	var cmd_text := "cmd %d" % anchor_cmd
-	var phase := str(s.get("phase", "")).strip_edges()
-	var sub := str(s.get("sub_phase", "")).strip_edges()
-	var phase_text := phase
-	if not sub.is_empty():
-		phase_text += "/%s" % sub
-
-	return "%s｜%s｜%s" % [kind_text, cmd_text, phase_text]
+	var display_name := GameLogPanel.PHASE_DISPLAY_NAMES.get(phase, phase)
+	if str(display_name).strip_edges().is_empty():
+		return "初始"
+	return "阶段：%s" % str(display_name)
 
 func _hide_replay_bar() -> void:
 	if game_log_panel == null or not is_instance_valid(game_log_panel):
@@ -1641,7 +1637,10 @@ func _apply_full_replay_log_timeline(engine: GameEngine) -> void:
 	var events_val = _replay_step_timeline.get("events", [])
 	var events: Array = events_val if (events_val is Array) else []
 	var entries := _build_log_entries_from_timeline_events(events)
-	game_log_panel.load_entries(entries)
+	if game_log_panel.has_method("load_step_timeline"):
+		game_log_panel.load_step_timeline(_replay_step_timeline, entries, true)
+	else:
+		game_log_panel.load_entries(entries)
 
 	var steps_val = _replay_step_timeline.get("steps", [])
 	var steps: Array = steps_val if (steps_val is Array) else []
@@ -1664,6 +1663,14 @@ func _build_log_entries_from_timeline_events(events: Array) -> Array[Dictionary]
 		if not (ev_val is Dictionary):
 			continue
 		var ev: Dictionary = ev_val
+		var event_type := str(ev.get("type", "")).strip_edges()
+		var is_stage_event := (
+			event_type == EventBus.EventType.PHASE_CHANGED
+			or event_type == EventBus.EventType.SUB_PHASE_CHANGED
+			or event_type == EventBus.EventType.ROUND_STARTED
+			or event_type == EventBus.EventType.ROUND_ENDED
+			or event_type.ends_with("_report")
+		)
 		var cmd_index := int(ev.get("command_index", -1))
 		var step_index := int(ev.get("step_index", cmd_index))
 		var phase_segment := str(ev.get("phase_segment", "")).strip_edges()
@@ -1684,9 +1691,12 @@ func _build_log_entries_from_timeline_events(events: Array) -> Array[Dictionary]
 				details["step_index"] = step_index
 			if not phase_segment.is_empty() and not details.has("phase_segment"):
 				details["phase_segment"] = phase_segment
+			if not event_type.is_empty() and not details.has("event_type"):
+				details["event_type"] = event_type
+			if not details.has("is_stage_event"):
+				details["is_stage_event"] = is_stage_event
 
 			out.append({
-				"id": entry_id,
 				"type": log_type,
 				"message": msg,
 				"timestamp": str(event_seq),
@@ -1695,6 +1705,8 @@ func _build_log_entries_from_timeline_events(events: Array) -> Array[Dictionary]
 				"step_index": step_index,
 				"phase_segment": phase_segment,
 				"event_seq": event_seq,
+				"event_type": event_type,
+				"is_stage_event": is_stage_event,
 			})
 			entry_id += 1
 
@@ -1764,15 +1776,6 @@ func _enter_history_step_timeline_for_command(target_command_index: int) -> int:
 	if not is_instance_valid(game_log_panel):
 		return -999
 
-	# 保存“实时日志”以便返回最新后恢复
-	if _history_original_log_entries.is_empty() and game_log_panel.has_method("get_entries"):
-		_history_original_log_entries = game_log_panel.get_entries()
-
-	# 保存“最新状态”快照：退出复盘时可恢复到对局继续点
-	_history_latest_state_dict = {}
-	if game_engine.state != null:
-		_history_latest_state_dict = game_engine.state.to_dict()
-
 	var build_r: Result = StepTimelineBuildClass.build_full(game_engine)
 	if not build_r.ok:
 		GameLog.warn("Game", "构建 step 时间线失败（复盘模式将回退到命令时间线）: %s" % build_r.error)
@@ -1787,7 +1790,10 @@ func _enter_history_step_timeline_for_command(target_command_index: int) -> int:
 	var events_val = _history_step_timeline.get("events", [])
 	var events: Array = events_val if (events_val is Array) else []
 	var entries := _build_log_entries_from_timeline_events(events)
-	game_log_panel.load_entries(entries)
+	if game_log_panel.has_method("load_step_timeline"):
+		game_log_panel.load_step_timeline(_history_step_timeline, entries, false)
+	else:
+		game_log_panel.load_entries(entries)
 
 	var steps_val = _history_step_timeline.get("steps", [])
 	var steps: Array = steps_val if (steps_val is Array) else []
@@ -1873,37 +1879,14 @@ func _seek_to_history_step(target_step_index: int) -> void:
 	game_engine.current_command_index = anchor_cmd
 	_history_cursor_step_index = target
 
-	# 返回最新：退出复盘并恢复实时日志与最新状态。
-	if _history_cursor_step_index >= 0 and _history_cursor_step_index == _history_head_step_index:
-		_exit_history_step_timeline()
-		return
-
 	_update_ui()
 
 func _exit_history_step_timeline() -> void:
-	if not _history_step_timeline_active:
-		_update_ui()
+	# M4.3：正常对局也使用 step 时间线视图；“退出复盘”仅意味着跳回最新 step。
+	if not _history_step_timeline_active or not _history_step_timeline.has("steps"):
+		_on_replay_bar_seek_requested(game_engine.command_history.size() - 1)
 		return
-
-	# 恢复最新状态（避免依赖 rewind_to_command 重放/重建 EventBus.history）。
-	if game_engine != null and not _history_latest_state_dict.is_empty():
-		var restore_r := GameState.from_dict(_history_latest_state_dict)
-		if restore_r.ok and restore_r.value is GameState:
-			game_engine.state = restore_r.value
-			game_engine.current_command_index = game_engine.command_history.size() - 1
-
-	_history_step_timeline_active = false
-	_history_step_timeline.clear()
-	_history_head_step_index = -1
-	_history_cursor_step_index = -1
-	_history_latest_state_dict = {}
-
-	# 恢复实时日志
-	if not _history_original_log_entries.is_empty() and is_instance_valid(game_log_panel):
-		game_log_panel.load_entries(_history_original_log_entries)
-	_history_original_log_entries.clear()
-
-	_update_ui()
+	_seek_to_history_step(_history_head_step_index)
 
 func _seek_to_replay_step(target_step_index: int) -> void:
 	if game_engine == null:

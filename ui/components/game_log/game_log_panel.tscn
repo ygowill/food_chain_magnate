@@ -59,26 +59,15 @@ text = "×"
 [node name="ReplayBar" parent="MarginContainer/VBoxContainer/TitleRow" instance=ExtResource("2_replay_bar")]
 layout_mode = 2
 
-[node name="FilterRow" type="HFlowContainer" parent="MarginContainer/VBoxContainer/TitleRow"]
+[node name="OptionsRow" type="HFlowContainer" parent="MarginContainer/VBoxContainer/TitleRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 6
 
-[node name="PlayerFilter" type="OptionButton" parent="MarginContainer/VBoxContainer/TitleRow/FilterRow"]
-custom_minimum_size = Vector2(110, 0)
+[node name="ShowPhaseEventsCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TitleRow/OptionsRow"]
 layout_mode = 2
-
-[node name="SearchInput" type="LineEdit" parent="MarginContainer/VBoxContainer/TitleRow/FilterRow"]
-custom_minimum_size = Vector2(160, 0)
-layout_mode = 2
-size_flags_horizontal = 3
-placeholder_text = "搜索..."
-clear_button_enabled = true
-
-[node name="FilterButton" type="MenuButton" parent="MarginContainer/VBoxContainer/TitleRow/FilterRow"]
-layout_mode = 2
-text = "过滤"
+text = "显示阶段事件"
 
 [node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
