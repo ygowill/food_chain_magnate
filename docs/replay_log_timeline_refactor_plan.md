@@ -304,7 +304,7 @@ ActionPanel 禁用策略：
 
 - [x] 调整 GameScene 布局：通过 `dock_popup_into_right_panel()` 将 `GameLogPanel` 嵌入 RightPanel 抽屉区域显示（覆盖 ActionPanel）。
 - [x] 更新“日志”入口：从“左侧二选一切换”改为“右侧显示/关闭日志面板”（左侧信息保持可见）。
-- [ ] 回放/复盘态：右侧默认显示日志面板（并保持 ReplayBar 可用），ActionPanel 隐藏或置灰。
+- [x] 回放/复盘态：右侧默认显示日志面板（并保持 ReplayBar 可用），ActionPanel 隐藏或置灰。
 - [x] 退出日志视图：关闭日志后恢复默认右侧动作区；保持时间线 cursor/head 不丢失（关闭方式：日志面板自身 Close 或 RightPanel Back）。
 
 验收：
@@ -649,7 +649,7 @@ ActionPanel 禁用策略：
   - `ui/components/game_log/game_log_panel.gd`：当一个 step 没有任何可见事件子项时，`ActionGroupHeaderItem` 的摘要从 step 元信息兜底为 `玩家X: {action_display_name}`，避免回退到“系统推进”。
 - 备注：若后续仍需要更细粒度的重组日志（例如“移动了哪个员工/调整到哪个槽位”），再考虑在对应 action 的 `_generate_specific_events()` 增加专用事件并由 formatter 映射成子项。
 
-### 2026-01-25：event_log_review 日志手验（log_screenshot1/2）发现的问题与根因（需整改，未实施）
+### 2026-01-25：event_log_review 日志手验（log_screenshot1/2）发现的问题与根因（已整改）
 
 复现材料：
 
@@ -685,7 +685,15 @@ ActionPanel 禁用策略：
 - 修正事件归属：阶段顺序与里程碑出现阶段应符合实际发生时机。
 - 移除“进入X”类行（阶段标题已足够）。
 
-#### 待审整改计划（不实施；待用户确认后再改代码）
+#### 已实施整改（对应问题 1-4；已落地）
+
+已实施（按用户确认执行）：
+
+- UI：默认隐藏 `PLAYER_TURN_STARTED/PLAYER_TURN_ENDED` 等流程性事件；`skip/end_turn/skip_sub_phase` 不再以“玩家X:确认结束/结束回合”作为兜底摘要（`ui/scenes/game/game.gd`、`ui/components/game_log/game_log_panel.gd`）。
+- UI：`ActionGroupHeaderItem` 选定 `primary_entry_id` 并在子项中跳过该条，消除“同一句话标题+子项重复”；Header 双击可打开 primary 的详情（`ui/components/game_log/game_log_panel.gd`）。
+- UI：phase step 不再渲染“进入X”类 ActionGroup 行；PhaseHeader 在 `cursor==start_step_index` 时更强高亮（`ui/components/game_log/game_log_panel.gd`）。
+- Core：`StepTimelineBuild` 对 `PLAYER_CASH_CHANGED/MILESTONE_ACHIEVED` 改为增量 diff，并按 settlement trigger 把 `Payday EXIT settlement` 的变化归属到 Payday 段落，同时同步 `data.phase/sub_phase/round`（`core/engine/game_engine/step_timeline_build.gd`）。
+- Tests：`core/tests/step_timeline_build_test.gd` 增加 Payday 段落现金变化断言，并补充 milestone 的非 Restructuring 兜底断言；`AllTests` 通过。
 
 范围：同时覆盖“只读回放 + 复盘 + 实时对局”，保持同一套视图规则（M4.3 的核心要求）。
 
@@ -758,7 +766,7 @@ ActionPanel 禁用策略：
   - `core/tests/step_timeline_build_test.gd`：补充对 `MILESTONE_ACHIEVED` 的 phase_segment 断言（至少覆盖 Payday/Cleanup/Marketing 三类）。
   - （可选）为 unified view 增加“无重复 primary message”逻辑测试：针对 event_log_review 的 formatter 输出，确保同一 step 的 primary entry 不同时出现在 header 与 child。
 
-#### 待你确认的问题（否则整改策略可能偏离预期）
+#### 当前实现选择（已落地；后续如需调整可再迭代）
 
-1) `PLAYER_TURN_STARTED/PLAYER_TURN_ENDED` 这类日志是“永远隐藏”，还是仅在“显示阶段事件”打开时显示？
-2) `skip(确认结束)` 这类命令在时间线里是否需要保留为可点的 step（但不显示日志），还是可以直接在 step_timeline 构建时合并到相邻 step 以减少步数？
+1) `PLAYER_TURN_STARTED/PLAYER_TURN_ENDED`：归类为“结构/噪声事件”，默认隐藏；仅在“显示阶段事件”打开时显示。
+2) `skip(确认结束)`：时间线仍保留为可点 step（保证 ReplayBar 单步有落点）；其中 `skip_sub_phase` 在 Working 且非最后子阶段时会合并进上一 step，减少空步数。
