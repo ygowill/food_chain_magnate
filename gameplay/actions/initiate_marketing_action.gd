@@ -142,14 +142,34 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 			axis = _infer_airplane_axis(_new_state, world_pos)
 		assert(axis == "row" or axis == "col", "initiate_marketing 飞机缺少 axis（row/col）")
 
+	# 真实持续时间：可能被里程碑效果改为永久（remaining_duration=-1）。
+	var remaining_duration := duration
+	if _new_state != null and (_new_state.marketing_instances is Array):
+		for inst_val in _new_state.marketing_instances:
+			if not (inst_val is Dictionary):
+				continue
+			var inst: Dictionary = inst_val
+			if int(inst.get("board_number", 0)) != board_number:
+				continue
+			var rd_val = inst.get("remaining_duration", null)
+			if rd_val is int:
+				remaining_duration = int(rd_val)
+			elif rd_val is float:
+				var f: float = float(rd_val)
+				if f == floor(f):
+					remaining_duration = int(f)
+			break
+
 	return [{
 		"type": EventBus.EventType.MARKETING_PLACED,
 		"data": {
 			"player_id": command.actor,
 			"employee_type": employee_type,
 			"board_number": board_number,
+			"marketing_type": marketing_type,
 			"product": product,
 			"duration": duration,
+			"remaining_duration": remaining_duration,
 			"axis": axis,
 			"position": p,
 		}

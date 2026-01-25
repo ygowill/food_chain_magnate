@@ -1,6 +1,6 @@
 # 回放与游戏日志融合（完整时间线）报告与重构开发计划
 
-状态：已实施（M0..M4.3 + M4 可选折叠）；0.1.1/0.1.2/0.1.4/0.1.5 已修复｜最后更新：2026-01-25
+状态：已实施（M0..M4.3 + M4 可选折叠）；0.1.1/0.1.2/0.1.4/0.1.5/0.1.6 已修复｜最后更新：2026-01-25
 
 ## 0. 当前进度（2026-01-25）
 
@@ -149,6 +149,32 @@
   - 若进入 Cleanup 时无 pending（无 `choose_fridge_keep`），则在该 Cleanup phase step 末尾输出（确保在所有 `FOOD_DISCARDED` 之后）。
   - 若存在 pending（有 `choose_fridge_keep`），则延后到最后一次 `choose_fridge_keep` 命令 step 输出（确保在所有“清理库存”之后）。
 - core：新增 `core/tests/step_timeline_cleanup_discard_order_test.gd` 回归覆盖，并接入 `ui/scenes/tests/all_tests.gd`。
+
+### 0.1.6 玩家行动日志缺少关键细节（营销/餐厅/售出等）
+
+现象（来自日志面板截图与复核）：
+
+- 玩家放置营销时，仅显示员工与点位，缺少营销类型/品类/持续时间等关键信息。
+- `DEMAND_GENERATED` 显示缺少影响房屋/品类/新增数量（字段读取不一致导致）。
+- `RESTAURANT_PLACED/RESTAURANT_MOVED` 未显示餐厅编号（多餐厅时会产生歧义）。
+- `FOOD_SOLD` 事件未格式化，导致面板出现 debug 噪音行。
+
+根因（确定）：
+
+- `GameEventLogFormatter` 与事件数据字段不一致：
+  - `MARKETING_PLACED` 事件不包含 `marketing_type/remaining_duration`，formatter 也在读取不存在的字段（如 `range/houses`）。
+  - `DEMAND_GENERATED` 实际字段为 `affected_house_numbers/product/demands_added/...`，但 formatter 读取 `houses/required`。
+- 少数事件缺少专用格式化分支（如 `FOOD_SOLD`），回退到 debug 输出。
+
+已实施（覆盖全部已发射的事件类型）：
+
+- `gameplay/actions/initiate_marketing_action.gd`：为 `MARKETING_PLACED` 补齐 `marketing_type` 与 `remaining_duration`（里程碑导致的永久营销可正确显示为“永久”）。
+- `ui/scenes/game/game_event_log_formatter.gd`：
+  - `MARKETING_PLACED`：显示营销类型 + 品类（product）+ 持续时间（含永久）+ 点位（含飞机轴向）。
+  - `DEMAND_GENERATED`：显示营销类型 + 品类 + 新增需求数量 + 影响房屋号（兼容旧字段）。
+  - `MARKETING_EXPIRED`：补齐品类与剩余持续时间变化。
+  - `RESTAURANT_PLACED/RESTAURANT_MOVED`：显示餐厅编号（`餐厅#n`）。
+  - `FOOD_SOLD`：增加格式化输出，避免 debug 噪音。
 
 ## 1. 背景与目标
 

@@ -6,6 +6,7 @@ extends RefCounted
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 
 const PRICE_ACTION_LOG_TEXT: Dictionary = {
 	"set_price": "设定价格（-$1）",
@@ -148,26 +149,38 @@ func format(event: Dictionary) -> Array[Dictionary]:
 			var player_id := int(data.get("player_id", -1))
 			var employee_type := str(data.get("employee_type", "")).strip_edges()
 			var employee_name := _employee_name(employee_type)
+			var rest_text := _format_restaurant_id_short(str(data.get("restaurant_id", "")).strip_edges())
 			var pos_text := _format_position(data.get("position", null))
 			var text := "放置餐厅"
 			if not employee_name.is_empty():
 				text += "（%s）" % employee_name
+			var parts2: Array[String] = []
+			if not rest_text.is_empty():
+				parts2.append(rest_text)
 			if not pos_text.is_empty():
-				text += " %s" % pos_text
+				parts2.append(pos_text)
+			if not parts2.is_empty():
+				text += "：" + " ".join(parts2)
 			out.append(_player(player_id, text, data))
 		EventBus.EventType.RESTAURANT_MOVED:
 			var player_id := int(data.get("player_id", -1))
 			var employee_type := str(data.get("employee_type", "")).strip_edges()
 			var employee_name := _employee_name(employee_type)
+			var rest_text2 := _format_restaurant_id_short(str(data.get("restaurant_id", "")).strip_edges())
 			var pos_text := _format_position(data.get("position", null))
 			var rotation := int(data.get("rotation", 0))
 			var text := "移动餐厅"
 			if not employee_name.is_empty():
 				text += "（%s）" % employee_name
+			var parts3: Array[String] = []
+			if not rest_text2.is_empty():
+				parts3.append(rest_text2)
 			if not pos_text.is_empty():
-				text += " %s" % pos_text
+				parts3.append(pos_text)
 			if rotation != 0:
-				text += " 旋转%d°" % rotation
+				parts3.append("旋转%d°" % rotation)
+			if not parts3.is_empty():
+				text += "：" + " ".join(parts3)
 			out.append(_player(player_id, text, data))
 		EventBus.EventType.HOUSE_PLACED:
 			var player_id := int(data.get("player_id", -1))
@@ -226,6 +239,27 @@ func format(event: Dictionary) -> Array[Dictionary]:
 				else:
 					text += "：" + food_name
 			out.append(_player(player_id, text, data))
+		EventBus.EventType.FOOD_SOLD:
+			var player_id := int(data.get("player_id", -1))
+			var house_number := str(data.get("house_number", "")).strip_edges()
+			var rest_text := _format_restaurant_id_short(str(data.get("restaurant_id", "")).strip_edges())
+			var required_val = data.get("required", null)
+			var required: Dictionary = required_val if (required_val is Dictionary) else {}
+			var items := _format_required_short(required, 4)
+			var revenue := int(data.get("revenue", 0))
+			var bonus := int(data.get("bonus", 0))
+			var house_bonus := int(data.get("house_bonus", 0))
+			var msg := "售出"
+			if not house_number.is_empty():
+				msg += "：房屋#%s" % house_number
+			if not items.is_empty():
+				msg += " 消费 %s" % items
+			if not rest_text.is_empty():
+				msg += " -> %s" % rest_text
+			msg += " 收入 $%d" % revenue
+			if bonus != 0 or house_bonus != 0:
+				msg += " (奖励 $%d, 房屋奖 $%d)" % [bonus, house_bonus]
+			out.append(_player(player_id, msg, data))
 		EventBus.EventType.FOOD_DISCARDED:
 			var player_id := int(data.get("player_id", -1))
 			var discarded_val = data.get("discarded", null)
@@ -261,22 +295,34 @@ func format(event: Dictionary) -> Array[Dictionary]:
 			var player_id := int(data.get("player_id", -1))
 			var employee_type := str(data.get("employee_type", "")).strip_edges()
 			var employee_name := _employee_name(employee_type)
-			var mtype := _format_marketing_type_short(str(data.get("marketing_type", "")).strip_edges())
+			var board_number := int(data.get("board_number", 0))
+			var marketing_type := str(data.get("marketing_type", "")).strip_edges()
+			if marketing_type.is_empty() and board_number > 0 and MarketingRegistryClass.is_loaded():
+				var def_val = MarketingRegistryClass.get_def(board_number)
+				if def_val != null and def_val is MarketingDef:
+					marketing_type = str((def_val as MarketingDef).type).strip_edges()
+			var mtype := _format_marketing_type_short(marketing_type)
+			var product_id := str(data.get("product", "")).strip_edges()
+			var product_name := _product_name(product_id)
+			var remaining_duration := int(data.get("remaining_duration", int(data.get("duration", 0))))
+			var duration_text := ""
+			if remaining_duration == -1:
+				duration_text = "永久"
+			elif remaining_duration > 0:
+				duration_text = "持续%d回合" % remaining_duration
 			var axis := _format_marketing_axis(str(data.get("axis", "")).strip_edges())
-			var range_val := int(data.get("range", 0))
-			var house_numbers_text := _format_house_numbers_short(data.get("houses", null), 4)
 			var pos_text := _format_position(data.get("position", null))
 			var parts: Array[String] = []
 			if not mtype.is_empty():
 				parts.append(mtype)
+			if not product_name.is_empty():
+				parts.append(product_name)
+			if not duration_text.is_empty():
+				parts.append(duration_text)
 			if not axis.is_empty():
 				parts.append(axis)
-			if range_val > 0:
-				parts.append("范围%d" % range_val)
 			if not pos_text.is_empty():
 				parts.append(pos_text)
-			if not house_numbers_text.is_empty():
-				parts.append(house_numbers_text)
 			var text := "放置营销"
 			if not employee_name.is_empty():
 				text += "（%s）" % employee_name
@@ -287,12 +333,20 @@ func format(event: Dictionary) -> Array[Dictionary]:
 			var player_id := int(data.get("player_id", -1))
 			var mtype2 := _format_marketing_type_short(str(data.get("marketing_type", "")).strip_edges())
 			var axis2 := _format_marketing_axis(str(data.get("axis", "")).strip_edges())
+			var product_id2 := str(data.get("product", "")).strip_edges()
+			var product_name2 := _product_name(product_id2)
 			var pos_text2 := _format_position(data.get("position", null))
+			var before_duration := int(data.get("duration_before", 0))
+			var after_duration := int(data.get("duration_after", 0))
 			var parts2: Array[String] = []
 			if not mtype2.is_empty():
 				parts2.append(mtype2)
+			if not product_name2.is_empty():
+				parts2.append(product_name2)
 			if not axis2.is_empty():
 				parts2.append(axis2)
+			if before_duration > 0 or after_duration > 0:
+				parts2.append("剩余%d→%d" % [before_duration, after_duration])
 			if not pos_text2.is_empty():
 				parts2.append(pos_text2)
 			var text := "营销到期"
@@ -301,16 +355,24 @@ func format(event: Dictionary) -> Array[Dictionary]:
 			out.append(_player(player_id, text, data))
 		EventBus.EventType.DEMAND_GENERATED:
 			var player_id := int(data.get("player_id", -1))
-			var house_numbers_text2 := _format_house_numbers_short(data.get("houses", null), 6)
-			var required_val = data.get("required", null)
-			var required: Dictionary = required_val if (required_val is Dictionary) else {}
-			var required_text := _format_required_short(required, 4)
+			var mtype3 := _format_marketing_type_short(str(data.get("marketing_type", "")).strip_edges())
+			var product_id3 := str(data.get("product", "")).strip_edges()
+			var product_name3 := _product_name(product_id3)
+			var demands_added := int(data.get("demands_added", 0))
+			var hn_val = data.get("affected_house_numbers", null)
+			if hn_val == null:
+				hn_val = data.get("houses", null)
+			var house_numbers_text2 := _format_house_numbers_short(hn_val, 6)
 			var text := "生成需求"
 			var parts3: Array[String] = []
+			if not mtype3.is_empty():
+				parts3.append(mtype3)
+			if not product_name3.is_empty():
+				parts3.append(product_name3)
+			if demands_added > 0:
+				parts3.append("新增需求x%d" % demands_added)
 			if not house_numbers_text2.is_empty():
 				parts3.append(house_numbers_text2)
-			if not required_text.is_empty():
-				parts3.append(required_text)
 			if not parts3.is_empty():
 				text += "：" + " ".join(parts3)
 			out.append(_player(player_id, text, data))
