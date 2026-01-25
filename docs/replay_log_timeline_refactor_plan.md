@@ -1,6 +1,30 @@
 # 回放与游戏日志融合（完整时间线）报告与重构开发计划
 
-状态：提案 / 开发计划（基于当前仓库实现盘点）
+状态：已实施（M0..M4.3 + M4 可选折叠）｜最后更新：2026-01-25
+
+## 0. 当前进度（2026-01-25）
+
+已落地（核心体验）：
+
+- 完整时间线（含未来日志）：回放/复盘 seek 仅移动 cursor，高亮/置灰随 cursor 更新
+- 大阶段可步进：时间线以 `step_index` 为粒度（phase 切分点可停留），并保留 `anchor_command_index` 追溯来源
+- 统一时间线视图：`RoundHeader -> PhaseHeader -> ActionGroupHeader -> EventItem`（缩进展示；不暴露 step/cmd）
+- 阶段/回合事件默认隐藏：提供 `显示阶段事件` 开关用于调试/查看
+- 去噪/去重：隐藏流程性日志（回合开始/结束等），避免“标题与子项重复同一句动作摘要”
+- 事件归属修正：`PLAYER_CASH_CHANGED` / `MILESTONE_ACHIEVED` 按触发时刻与结算点归属到正确 `phase_segment`
+- 日志面板右侧化：覆盖 ActionPanel，左侧玩家信息保持可见；回放/复盘态默认打开日志
+- M4（宏/微折叠）：新增 `折叠细节` 开关（默认关闭），可按动作组展开/收起微事件子项
+
+仍待处理（非阻塞 / 可选）：
+
+- M0.5：方案 B/C 未采用（方案 A 已解决读档历史 `command_index` 丢失问题）
+- ReplayBar：倍速/自动播放（未实现）
+- 性能优化：step_timeline 增量构建 / 虚拟列表（未实现；目前通过“折叠细节”缓解节点数爆炸）
+- Restructuring 阶段更细粒度日志：按需求评估是否需要新增专用事件（当前已用摘要兜底缓解“看起来无效果”）
+
+测试：
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`
 
 ## 1. 背景与目标
 
@@ -36,22 +60,25 @@
 
 ### 2.2 UI 日志系统
 
-- `ui/scenes/game/game_event_log_controller.gd`
-  - 订阅 EventBus 的白名单事件类型，把事件转成 `GameLogPanel.add_*_log(...)`。
-  - 支持 `setup(..., restore_history=true)`：从 `EventBus.history` 恢复日志（修复了“读档回放发生在进入 GameScene 之前导致日志为空”的问题）。
-  - 支持 `rebuild_from_history()`：用于 undo/redo/rewind 后重建 UI 日志显示。
+当前主路径（M4.3）：
 
+- `ui/scenes/game/game_event_log_formatter.gd`
+  - 将 step_timeline 的 `events[]` 格式化为 UI entries（message/details/type）。
 - `ui/components/game_log/game_log_panel.gd`
-  - 在内存中维护 `_entries_all`（`[{id,type,message,timestamp,details,command_index?}]`），并将通过筛选的 entries 渲染为一组 `LogItem` 节点。
-  - `timestamp`：运行时默认使用 `Time.get_datetime_string_from_system()`（非确定性，仅用于 UI 展示）；回放/时间线模式建议用确定性的 `event_seq`/`command.timestamp`。
-  - 双击条目弹出 details（`details` 会以 JSON 形式展示）。
+  - 持有 `{steps[], events[]}` + formatter entries，并渲染统一时间线视图：
+    - `RoundHeader -> PhaseHeader -> ActionGroupHeader -> EventItem`
+  - 支持 future 置灰 / cursor 高亮（以 `step_index` 为主索引）。
+  - 支持 `显示阶段事件` 与 `折叠细节`（默认关闭折叠，符合 M4.3）。
 
-### 2.3 回放播放器（导致“覆盖主界面”的直接原因）
+保留的兜底/测试路径：
 
-- `ui/components/replay_player/replay_player.gd`：可加载存档并 `seek_to(command_index)`（内部调用 `GameEngine.rewind_to_command`）。
-- `ui/scenes/game/game.gd`：
-  - `show_replay_player()`：实例化 `ReplayPlayer`，`z_index = 1000` 并居中显示（覆盖式）。
-  - `_enter_replay_mode(engine)`：把 `game_engine` 指向回放引擎，更新 UI；并通过 `_replay_mode_active` 阻止执行命令。
+- `ui/scenes/game/game_event_log_controller.gd`
+  - 仍支持从 `EventBus.history` 恢复日志（用于兜底与 `log_restore_after_load_test` 覆盖）。
+
+### 2.3 回放控件（ReplayBar）与旧 ReplayPlayer
+
+- `ui/components/game_log/replay_bar.*`：嵌入日志面板顶部的回放条（加载/步进/滑条/返回最新/退出）。
+- `ui/components/replay_player/replay_player.gd`：保留为开发工具/临时入口（不再作为主用户路径，避免覆盖式体验割裂）。
 
 ### 2.4 “回放时日志不跟着变”的根因（旧 ReplayPlayer 路径）
 
@@ -62,8 +89,8 @@
 
 现状更新：
 
-- 仓库已在 `ui/scenes/game/game.gd` 的 `_on_replay_state_changed()` 中补齐 `rebuild_from_history()`，可解决“seek 后日志不变”的短期问题。
-- 但该路径本质仍只能得到“截至 cursor 的历史日志”，无法满足“看到未来日志”的产品目标（因为 `EventBus.history` 会被重建为截至 cursor 的子集）。
+- 旧路径已补齐 `rebuild_from_history()`，可解决“seek 后日志不变”的短期问题。
+- 当前主路径（ReplayBar + step_timeline）不再依赖 `EventBus.history` 作为日志数据源：加载时一次性构建完整时间线，seek 仅移动 cursor 并应用 step 快照，因此该问题在主路径下不再出现。
 
 结论：要支持“未来日志可见”，必须把“完整日志”作为独立数据源持久持有，而不是每次 seek 都从 `EventBus.history` 重建。
 
@@ -90,15 +117,15 @@
 
 - 时间线（点击跳转/高亮/置灰）必须依赖“每条日志稳定绑定到正确的 `command_index`”；不能在恢复历史时用 `Globals.current_game_engine.current_command_index` 兜底，否则会把整段历史压扁成一个点。
 
-修复方向（采用方案 A；已实施）：
+修复方向（已实施：方案 A；备选：方案 B/C）：
 
 1) 在事件产生源头补齐（已实施）：`CommandRunner.execute_command()` 在发射每条事件前把 `command_index` 写入 event `data`（additive 字段）。
    - 优点：`EventBus.history` 天然可用于恢复日志与时间线；读档/运行时一致；不会引入二次回放成本。
    - 风险：会改变事件 payload（增加字段）；若有测试/逻辑对 event data 做严格相等断言，需要同步调整。
-2) 在读档后重建 EventBus.history：`Loader.load_from_archive()` 结束时用 `EventHistoryRebuild.build(engine, engine.current_command_index)` 重新生成事件并用 `EventBus.record_event()` 回填（替换掉 load 时 emit 产生的 history）。
+2) 备选（未采用）：在读档后重建 EventBus.history：`Loader.load_from_archive()` 结束时用 `EventHistoryRebuild.build(engine, engine.current_command_index)` 重新生成事件并用 `EventBus.record_event()` 回填（替换掉 load 时 emit 产生的 history）。
    - 优点：改动集中在读档路径；不改运行时事件 payload。
    - 风险：读档成本增加（再跑一遍事件构建）；若未来支持“游戏内读档”且当时已有订阅者，需要确保不会触发重复副作用（应使用 record + clear）。
-3) UI 恢复时推导：`GameEventLogController` 在 restore_history 时以 `COMMAND_EXECUTED` 为边界进行两段式映射（缓存直到遇到该命令的 `COMMAND_EXECUTED` 再回填 `command_index`）。
+3) 备选（未采用）：UI 恢复时推导：`GameEventLogController` 在 restore_history 时以 `COMMAND_EXECUTED` 为边界进行两段式映射（缓存直到遇到该命令的 `COMMAND_EXECUTED` 再回填 `command_index`）。
    - 优点：不改引擎/事件 payload。
    - 风险：实现复杂且依赖事件顺序假设；当 `COMMAND_EXECUTED` 被过滤或未来有“跨命令事件”时容易出错。
 
@@ -108,14 +135,18 @@
 
 引入两个概念（UI 层）：
 
-- `head_index`：该时间线已知的“最新命令索引”（回放：存档末尾；对局中：当前已执行末尾）。
-- `cursor_index`：当前正在查看/回放的命令索引（-1 表示初始状态）。
+- `head_index`：该时间线已知的“最新时间线索引”（M4.2 后为 `step_index`；-1 表示初始状态）。
+- `cursor_index`：当前正在查看/回放的时间线索引（同为 `step_index`）。
+
+补充约定：
+
+- 每条日志 entry 同时保留 `step_index`（用于 seek/highlight）与 `command_index`（用于详情追溯/兼容旧逻辑）。
 
 渲染规则：
 
-- `command_index <= cursor_index`：正常亮度（已发生，相对 cursor）。
-- `command_index > cursor_index`：未来日志置灰。
-- `command_index == cursor_index`：高亮“当前指针”对应的宏步骤块，并可滚动定位。
+- `step_index <= cursor_index`：正常亮度（已发生，相对 cursor）。
+- `step_index > cursor_index`：未来日志置灰。
+- `step_index == cursor_index`：高亮“当前指针”对应的动作组（并可滚动定位）。
 
 模式规则：
 
@@ -126,10 +157,10 @@
 
 推荐的展示层级：
 
-- 宏：命令（Command）。每条命令显示：`#index actor action_id` + 可选 human-readable 文案。
-- 微：该命令引发的事件序列（EventBus 事件、结算摘要事件等）。
+- 宏：动作组（step）。通常一条玩家命令对应一个 command step；auto-advance 的大阶段切分点对应 phase step（在 UI 中由 PhaseHeader 承担锚点）。
+- 微：该 step 归属的事件序列（EventBus 事件、结算摘要事件等）。
 
-注意：由于引擎只有“命令边界状态”，点击微步骤默认跳转到其所属命令的状态，并在日志中定位/高亮该微步骤（不尝试显示事件中间态）。
+注意：本实现不追求“事件级中间态”。点击微步骤会跳转到其所属 step 的快照状态，并在日志中定位/高亮（不尝试显示事件执行过程中的中间状态）。
 
 ### 3.3 大阶段切分 + Working 打包（新增整改目标）
 
@@ -177,31 +208,30 @@
 回放（从存档加载）推荐流程：
 
 1. 加载存档得到 replay engine（已存在：`GameEngine.load_from_file()`）。
-2. 构建“完整事件流”（一次性）：
-   - 复用 `core/engine/game_engine/event_history_rebuild.gd` 的逻辑，但目标是“构建到最后一条命令”，并为每条事件补齐 `command_index`。
-   - 关键点：不要依赖 `EventBus.history`，而是直接拿到 events 数组作为“完整日志源”。
-3. 用一个“事件→日志”格式化器（从 `GameEventLogController._on_eventbus_event` 抽出来）把 events 转为 `LogEntry` 列表写入 `GameLogPanel`。
-4. seek 时：
-   - 只调用 replay engine `rewind_to_command(cursor_index)` 来更新地图/面板。
-   - 只更新 `GameLogPanel.cursor_index` 来刷新置灰/高亮；不清空、不重建完整日志。
+2. 构建 “step 时间线”（一次性）：`StepTimelineBuild.build_full(engine)` 输出 `{initial_state_dict, steps[], events[]}`。
+   - `steps[]` 提供 `step_index` 级别的阶段切分点与状态快照（用于 seek 与 UI 高亮）。
+   - `events[]` 提供每条事件的 `step_index/phase_segment/command_index` 等归属信息（用于渲染内容）。
+3. 用统一 formatter 把 `events[]` 转为日志 entries：
+   - 当前实现：`ui/scenes/game/game_event_log_formatter.gd` + `ui/scenes/game/game.gd:_build_log_entries_from_timeline_events()`。
+4. `GameLogPanel.load_step_timeline(timeline, entries)` 写入完整日志（包含未来）。
+5. seek 时：
+   - 只更新 cursor（`GameLogPanel.set_timeline_cursor`），并用对应 step 的 `state_dict` 快照覆盖 UI 所需状态（只读回放/复盘允许直接覆盖 `game_engine.state`）。
+   - 不清空、不重建完整日志（除非 head/cursor 被改写，例如执行新命令导致未来被截断）。
 
 对局内（非存档回放）推荐流程：
 
-- 继续订阅 EventBus.emit_event 来追加新日志（自然增长）。
-- 当玩家把 cursor 拉回历史时：
-  - 允许进入“查看历史”态：禁用 ActionPanel，日志出现未来置灰。
-- 若玩家在历史态执行新命令（当前引擎会截断 future command_history）：
-  - 同步截断 `_entries_all` 中 `command_index > new_head_index` 的 entries，避免“显示不存在的未来”。
+- 当前实现（M4.3）：实时对局也统一用 `StepTimelineBuild.build_full(engine)` 全量重建时间线视图（在日志面板可见/打开时触发），确保与回放/复盘保持同一套结构与归属规则。
+- `GameEventLogController` 仍保留为“从 EventBus.history 恢复日志”的兜底机制与测试覆盖（例如读档进入 GameScene 前的历史恢复）。
 
 ### 4.3 UI 结构建议（不再弹出覆盖式 ReplayPlayer）
 
 把回放控件做成日志面板顶部的“ReplayBar”：
 
-- 文件：加载/刷新/浏览（可复用现有 SaveLoadDialog 或 ReplayPlayer 的文件枚举逻辑）。
-- 控件：`<< < > >>`、`返回最新`、（可选）倍速、（可选）自动播放。
-- 状态提示：`回放中：#cursor / #head`，以及“只读回放”提示。
+- 文件：加载（可复用现有 SaveLoadDialog 或 ReplayPlayer 的文件枚举逻辑）。
+- 控件：`<< < > >>`、滑条、`返回最新`、`退出`（可选：倍速/自动播放）。
+- 状态提示：`只读回放：cursor / head` 或 `时间线：cursor / head`，extra 仅显示“阶段：xxx”（不展示 step/cmd）。
 
-回放条在 `cursor_index < head_index` 时自动显现（或始终显现但弱化）。
+回放条在 `cursor_index < head_index` 或处于回放态时自动显现。
 
 日志面板位置（布局调整建议）：
 
@@ -213,322 +243,146 @@ ActionPanel 禁用策略：
 - 进入回放态时，ActionPanel 所有按钮 disabled，并显示固定提示（例如“回放中不可操作”）。
 - 保留“退出回放/返回最新”的入口在 ReplayBar。
 
-## 5. 增量重构开发计划（可执行、可回滚）
+## 5. 增量重构开发计划（里程碑进度）
 
-### M0：最小可用（修复同步与铺路）
+说明：
+
+- 本节按“里程碑”汇总当前仓库已落地内容，并标注仍保留的可选项/备选方案。
+- 从 M4.2 起，时间线主索引为 `step_index`；UI 仍保留 `command_index` 作为追溯字段。
+
+### M0：最小可用（已完成）
 
 目标：
 
-- 回放 seek 时 UI 不再“日志不变”。
-- 引入 cursor/head 概念，并为未来日志置灰预留接口（先不做完整日志）。
+- seek 后日志/高亮能同步更新（先止血）。
 
-工作项：
+已实施：
 
-- [x] 在 `ui/scenes/game/game.gd` 的回放 seek 回调中补齐日志刷新调用（短期止血）。
-- [x] `GameLogPanel`：增加 `set_timeline_head(head_index: int)`
-- [x] `GameLogPanel`：增加 `set_timeline_cursor(cursor_index: int)`
-- [x] `GameLogPanel`：增加 `set_entry_command_index(entry_id, command_index)`（或通过 details 写入并在 LogItem 渲染时读取）
+- [x] seek 时补齐 `rebuild_from_history()`（旧 ReplayPlayer 路径止血）
+- [x] `GameLogPanel.set_timeline_head/set_timeline_cursor`
+- [x] `GameLogPanel.set_entry_command_index`
+
+### M0.5：读档后 `command_index` 丢失导致跳转/高亮异常（已完成：方案 A）
+
+已实施（方案 A）：
+
+- [x] 在事件发射源头补齐 `event.data.command_index`（运行/回放/读档一致）
+- [x] 自动化覆盖：`core/tests/manual_log_save_test.gd`
+
+备选方案（未采用；保留文档记录）：
+
+- 方案 B：读档结束后用 `EventHistoryRebuild.build()` 重建带 `command_index` 的事件，再 `EventBus.record_event()` 覆盖 history
+- 方案 C：UI 恢复时以 `COMMAND_EXECUTED` 为边界做两段式推导回填
+
+### M1：完整日志数据源（已完成）
+
+已实施：
+
+- [x] `core/engine/game_engine/event_timeline_build.gd`（用于逻辑/测试：构建完整事件流并补齐 `command_index`）
+- [x] `ui/scenes/game/game_event_log_formatter.gd`（统一 event -> entries）
+- [x] `GameLogPanel` 取消 `max_entries` 上限，并支持 future 置灰/当前高亮
+
+备注：
+
+- UI 主路径目前以 `StepTimelineBuild.build_full()` 为数据源（结构与归属更完整）；`EventTimelineBuild` 主要用于测试与独立校验。
+
+### M2：替换覆盖式 ReplayPlayer 为嵌入式 ReplayBar（已完成）
+
+已实施：
+
+- [x] 新增 `ui/components/game_log/replay_bar.*`
+- [x] `GameScene` 接线：加载存档 -> 进入回放引擎 -> 构建时间线 -> 展示 ReplayBar
+- [x] `ReplayPlayer` 保留为开发工具/临时入口（避免一次性删除导致测试/工作流中断）
+
+### M2.5：日志面板右侧化（与玩家信息同屏）（已完成）
+
+已实施：
+
+- [x] `dock_popup_into_right_panel()` 将 `GameLogPanel` 覆盖到 RightPanel（ActionPanel 区域）
+- [x] 回放/复盘态默认打开日志；关闭日志可恢复默认动作区
+
+### M3：回放态 UI 约束完善（已完成）
+
+已实施：
+
+- [x] 回放/查看历史态禁用 ActionPanel（并给出原因文案）
+- [x] 顶部提示条明确 “回放/复盘”
+- [x] 回放/复盘态屏蔽强制弹窗/强提示面板，避免阻塞步进
+
+### M4.1：Phase 视觉切分 + Working 打包展示（里程碑已演化 / 被 M4.3 取代）
+
+说明：
+
+- 原里程碑曾尝试用 `StepHeaderItem` 做 Working 段折叠，但在 M4.3 “统一时间线视图（默认全展开）” 约束下，该实现已被移除/替代。
+- 当前 phase 分段由 `PhaseHeaderItem` 承担；“折叠细节/宏微可读性”由 M4 提供可选开关实现。
+
+### M4.2：大阶段可步进（step_index + 阶段边界快照）（已完成）
+
+已实施：
+
+- [x] `core/engine/game_engine/step_timeline_build.gd` 构建 `step_index` 时间线（phase step + command step）与 `state_dict` 快照
+- [x] 回放/复盘 seek 使用 step 快照覆盖 `game_engine.state`（只读允许），并同步日志高亮/置灰
+- [x] `*_REPORT` 等离开阶段事件归属到离开前阶段（避免显示到新阶段段落）
+- [x] ReplayBar 滑条范围：`[-1, head_step]`；状态 extra 仅显示“阶段：xxx”（不展示 step/cmd）
+
+### M4.3：统一时间线视图（已完成；默认不折叠）
+
+核心约束（用户确认；已落地）：
+
+- 统一展示：日志面板即时间线视图；ReplayBar 仅负责导航
+- 统一适用范围：回放/复盘/实时对局共用同一结构
+- 阶段可见 + 回合分隔：RoundHeader + PhaseHeader
+- 默认不展示阶段/回合事件子项：提供 `显示阶段事件` 开关
+- 去噪/去重：隐藏流程性日志；避免标题与子项重复同一句动作摘要
+- 事件归属正确：里程碑/现金变化等归属到实际触发阶段段落
+
+#### M4.3.1 视图结构（落地实现）
+
+- `RoundHeaderItem`：回合分隔（点击跳转到该回合的第一条 ActionGroup）
+- `PhaseHeaderItem`：阶段标题（点击跳转到该阶段 start_step；cursor 落在范围内高亮）
+- `ActionGroupHeaderItem`：动作组标题（command step；点击 seek；双击打开 primary 详情）
+- `EventItem`：动作组子项（缩进；点击 seek 到所属 step；双击看详情）
+
+#### M4.3.2 数据映射规则（落地实现）
+
+- 结构来自 `steps[]`（phase/round 变化也必须可见、可点）
+- 内容来自 `events[]` 经 formatter 生成 entries，并按 `step_index` 归属到动作组
+- phase step 不再渲染 “进入X” ActionGroup（PhaseHeader 已承担锚点）
+
+#### M4.3.3 实时对局统一（已落地）
+
+- 日志面板打开/可见时，全量 `StepTimelineBuild.build_full(engine)` 重建时间线视图（避免后台无意义重建）
+- undo/redo/restore/load 等会改写时间线的操作，触发刷新
+
+#### M4.3.4 验收要点（对用户可见）
+
+- 载入 `res://.savings/manual_cases/logs/event_log_review.json`：
+  - 可见 round/phase 分隔；阶段标题点击跳转正确；日志高亮与状态一致
+  - 默认不出现“确认结束/开始回合/结束回合”等流程性噪声
+  - 同一条玩家动作摘要不重复出现
+  - 里程碑/现金变化出现在正确阶段段落
+
+#### M4.3.5 关键代码位置
+
+- `ui/components/game_log/game_log_panel.gd`
+- `ui/components/game_log/game_log_panel.tscn`
+- `ui/scenes/game/game.gd`（回放/复盘/实时刷新与 seek 接线）
+- `core/engine/game_engine/step_timeline_build.gd`
+
+### M4：宏/微分组与折叠（已完成；默认关闭）
+
+目标：
+
+- 在大量微事件（结算链路较长）时提高可读性，并缓解节点数爆炸风险。
+
+已实施（路径 2：扁平列表折叠）：
+
+- [x] `GameLogPanel` 新增 `折叠细节` 开关（默认关闭；开启后可按动作组展开/收起微事件子项）
+- [x] ActionGroupHeader 左侧 `>`/`v` 折叠按钮；折叠时以 `(+N)` 提示隐藏条目数
 
 验收：
 
-- 回放步进时日志能跟着变化（即使暂时只有“截至 cursor 的历史”）。
-
-### M0.5：修复“读档后日志跳转/高亮异常”（command_index 丢失）
-
-目标：
-
-- 加载存档后（尤其是 `.savings/manual_cases/logs/event_log_review.json` 这类用于复核日志的存档），日志条目的 `command_index` 能正确映射到各自命令。
-- 点击日志跳转只高亮该命令对应的日志块，且状态停在该命令执行后的时间点；单步前进/后退时高亮同步更新。
-
-工作项（与 2.5 的修复方向对应）：
-
-- [x] 方案 A（已实施）：在 `CommandRunner.execute_command()` 发射事件前为每条事件 `data` 补齐 `command_index`（并评估是否同时补齐 `command_timestamp`）。
-- [ ] 方案 B：读档完成后用 `EventHistoryRebuild.build()` 生成带 `command_index` 的事件，并用 `EventBus.record_event()` 覆盖 history（避免 UI 从“无 command_index 的 history”恢复）。
-- [ ] 方案 C：在 `GameEventLogController` 的 restore_history 路径做两段式推导（以 `COMMAND_EXECUTED` 为边界回填）。
-
-验收（建议按手工步骤验证）：
-
-- 载入 `res://.savings/manual_cases/logs/event_log_review.json`，打开日志并点击“玩家1 放置营销”：
-  - 只高亮该动作所属命令的日志（不应整回合同时高亮）。
-  - 画面状态停在该命令执行后（可从地图/阶段/玩家状态验证）。
-- 使用 ReplayBar 单步后退/前进：日志高亮与状态一致。
-
-自动化回归：
-
-- `core/tests/manual_log_save_test.gd`：载入 `event_log_review.json` 后，断言关键事件存在且具备 `data.command_index`（避免回归到“整段历史压扁为一个索引”）。
-
-### M1：完整日志数据源（支持“未来日志可见”）
-
-目标：
-
-- 回放加载时一次性生成“完整日志”，seek 仅移动 cursor，不重建日志。
-- 日志面板在回放态能看到未来日志并置灰。
-
-工作项：
-
-- [x] 新增构建器 `core/engine/game_engine/event_timeline_build.gd`：`build_full(engine: GameEngine) -> Result(events)`（包含每条事件的 `command_index`，并补齐 `GAME_STARTED` 等初始化事件）。
-- [x] 抽离日志格式化：新增 `ui/scenes/game/game_event_log_formatter.gd`，并让 `GameEventLogController` 变为“订阅者 + 调用 formatter”。
-- [x] `GameLogPanel` 改为持有 `_entries_all`，并能根据 `cursor/head` 更新每条 `LogItem` 的“未来置灰/当前高亮”样式（取消 `max_entries` 上限）。
-
-验收：
-
-- 回放加载后，日志总条目数固定不变；seek 到过去时未来日志仍在、但置灰。
-- 点击“返回最新”后全部恢复正常亮度。
-
-### M2：替换覆盖式 ReplayPlayer 为嵌入式 ReplayBar
-
-目标：
-
-- 不再显示覆盖主界面的 `ReplayPlayer` 面板。
-- 回放控制与日志面板融合。
-
-工作项：
-
-- [x] 新增 `ui/components/game_log/replay_bar.*`。
-- [x] `Game` 场景接线：从菜单/开始页面进入回放：加载存档 -> 进入 GameScene -> 进入 replay engine -> 构建完整日志 -> 显示 ReplayBar。
-- [x] `ReplayPlayer` 保留为开发工具/临时入口（可隐藏/标记为 debug-only），避免一次性删掉导致测试/工作流中断。
-
-验收：
-
-- 不出现遮挡主界面的回放窗口。
-- ReplayBar 在日志面板顶部可用，步进/跳转/返回最新可用。
-
-### M2.5：日志面板右侧化（与玩家信息同屏）
-
-目标：
-
-- 查看日志时不再隐藏左侧玩家信息面板。
-- 日志面板占用右侧动作面板区域（可覆盖/替换 ActionPanel），符合“看日志时通常不操作”的使用习惯。
-
-工作项：
-
-- [x] 调整 GameScene 布局：通过 `dock_popup_into_right_panel()` 将 `GameLogPanel` 嵌入 RightPanel 抽屉区域显示（覆盖 ActionPanel）。
-- [x] 更新“日志”入口：从“左侧二选一切换”改为“右侧显示/关闭日志面板”（左侧信息保持可见）。
-- [x] 回放/复盘态：右侧默认显示日志面板（并保持 ReplayBar 可用），ActionPanel 隐藏或置灰。
-- [x] 退出日志视图：关闭日志后恢复默认右侧动作区；保持时间线 cursor/head 不丢失（关闭方式：日志面板自身 Close 或 RightPanel Back）。
-
-验收：
-
-- 左侧玩家信息 + 右侧日志可同时显示。
-- 打开日志会覆盖右侧动作区；若已有其它 docked 面板则先关闭以避免焦点竞争；关闭日志后回到默认动作区，RightPanel Back/日志 Close 行为符合预期。
-
-### M3：回放态 UI 约束完善（动作面板禁用 + 明确信号）
-
-目标：
-
-- 回放态不会误操作，玩家一眼能理解“只读回放/查看历史”。
-
-工作项：
-
-- [x] ActionPanel 增加公共 API（例如 `set_globally_disabled(reason: String)`），由 Game 在回放态/查看历史态调用。
-- [x] 顶部/右侧增加“回放中”提示条（复用 TopBar 文案：回放 `（回放）` / 复盘 `（复盘）`）。
-- [x] 回放/复盘（只读时间线）时：禁止强制交互弹窗与强提示面板（Restructuring/TurnOrder/ReserveCards/FridgeKeep/BankBreak/GameOver），避免阻塞时间线回放。
-
-验收：
-
-- 回放态 ActionPanel 不可点击且有明确提示。
-- 退出回放/返回最新后恢复可操作。
-
-### M4：宏/微分组与折叠（应对“自动连锁步骤很多”）
-
-目标：
-
-- 日志默认以“命令块”展示，每块可展开查看自动连锁细节。
-
-工作项（两种实现路径二选一；已选用路径 2）：
-
-1) Tree/List 结构：
-   - 改用 `Tree` 或自定义虚拟列表，节点结构：CommandHeader -> EventItems。
-2) 仍用扁平列表但加折叠行：
-   - 插入“折叠摘要行”（例如“该动作包含 7 条结算，点击展开”），展开后插入/显示子项。
-
-当前实现（2026-01-25）：
-
-- [x] 路径 2：扁平列表折叠（UI 不改 seek 粒度）
-  - 新增开关：`折叠细节`（默认关闭；开=只显示 ActionGroupHeader，子项按需展开；关=完全展开，符合 M4.3 约束）。
-  - ActionGroupHeader 左侧提供折叠按钮（`>` / `v`），用于展开/收起该动作组的微事件子项。
-  - 结构仍保持 `RoundHeader -> PhaseHeader -> ActionGroupHeader -> EventItem`，不改变“阶段可见/回合分隔/点击跳转”的规则。
-
-验收：
-
-- 回合结算大量事件时日志仍可读，不淹没关键信息。
-
-### M4.3：合并“回放控制 + 日志”为统一时间线视图（缩进展示动作/事件；不折叠）
-
-用户确认的目标（本里程碑的设计约束）：
-
-- **统一展示**：日志面板本身就是“时间线视图”，顶部 ReplayBar 仅负责导航；不再让用户感知为两个系统。
-- **统一适用范围**：不仅回放/复盘，**正常对局实时日志也使用同一种展示结构**。
-- **阶段可见**：列表按“大阶段（phase）”展示分段标题（Working/晚餐/发薪日/广告/清理/重组…），且阶段切分必须与 M4.2 的 step 语义一致。
-- **回合分隔**：不需要在阶段标题显示回合号；但两回合之间必须插入一个“回合分隔标题块”。
-- **层级缩进**：阶段内按“玩家动作/系统动作”分组；组内事件以缩进子项展示；不需要折叠/展开（默认全部展开）。
-- **不暴露内部索引**：UI 不显示 `step xx`、`cmd xx`；内部仍保留稳定索引用于 seek/highlight。
-- **去掉过滤/搜索**：移除 PlayerFilter/搜索框/类型过滤（日志面板默认展示完整日志）。
-- **阶段事件默认不显示**：`PHASE_CHANGED/ROUND_*/*_REPORT` 等“阶段/回合事件”作为结构依据即可，不作为子项默认展示。
-- **阶段事件开关**：允许通过一个简单开关“显示/隐藏阶段事件子项”（默认关闭）。
-- **阶段标题点击跳转**：点击阶段标题 seek 到该阶段段落的开始。
-- **去噪（新增）**：不展示“确认结束/玩家开始回合/玩家结束回合”等流程性日志（这类信息在统一时间线下噪声远大于收益）。
-- **去重（新增）**：同一条“玩家动作摘要”不应在动作组标题与子项中重复出现。
-- **事件归属正确（新增）**：事件应归属到其实际发生的阶段段落中（典型：里程碑获得应出现在 Payday/Cleanup 等真实触发阶段，而不是被推迟到 Restructuring）。
-
-#### M4.3.1 统一视图结构（UI 规格）
-
-顶栏控件：
-
-- ReplayBar 保留（加载回放 + 前后步进 + 滑条）。
-- 移除 PlayerFilter/搜索框/类型过滤。
-- 新增开关：`显示阶段事件`（默认关闭；开=显示阶段/回合事件子项；关=隐藏）。
-
-列表结构（从上到下）：
-
-1) RoundHeaderItem（回合分隔标题块）
-   - 触发：当时间线检测到 `round` 发生变化时，在两段日志之间插入一条分隔标题。
-   - 文案：不显示回合号；使用稳定文案即可（例如“进入新回合”/“回合切换”）。
-   - 点击行为：seek 到该回合的第一条 ActionGroup。
-2) PhaseHeaderItem（阶段标题行）
-   - 文案：仅显示阶段名（使用本地化映射，不显示回合号）。
-   - 高亮规则：当 cursor 落在该阶段段落范围内时，高亮该标题行。
-   - 点击行为：seek 到该阶段段落的开始 timeline_index。
-3) ActionGroupHeaderItem（动作组标题行）
-   - 文案：优先使用“玩家动作摘要”（例如“玩家1：放置营销 ……”）；若该组没有玩家动作，则显示系统摘要（例如“系统推进”或 `玩家X: {action_display_name}`），避免“无可见事件 step 看起来无效果”。
-   - 高亮规则：当 cursor == 该组 timeline_index 时高亮。
-   - 点击行为：seek 到该组 timeline_index。
-   - 备注：`kind=="phase"` 的 phase step 不再渲染 ActionGroupHeaderItem（避免重复“进入X”）；阶段标题 PhaseHeaderItem 已足够作为可点击锚点。
-4) EventItem（动作组子项，缩进显示）
-   - 文案：事件摘要（沿用 formatter 文案）。
-   - 视觉：缩进 + 更小字号/更淡颜色，明确“属于上一条动作组”。
-   - 点击行为：seek 到所属动作组 timeline_index（本里程碑不做事件级 seek）。
-
-#### M4.3.2 统一数据映射规则（round/phase/action 三层切分）
-
-核心原则：**结构来自 steps，内容来自 events**（避免“某个 step 没有可见事件就消失”导致单步无效果）。
-
-输入数据源（所有模式统一）：
-
-- 统一以 step 时间线为主（M4.2 的 `StepTimelineBuild.build_full()` 输出）：
-  - `steps[]`：提供每个 timeline_index 的快照字段（至少包含 round/phase/sub_phase/state_dict）。
-  - `events[]`：提供每条事件归属（至少包含 step_index/phase_segment/command_index/type/data）。
-
-结构构建算法（概念描述）：
-
-1) 遍历 timeline 的 step（`-1` 初始 + `0..head_step`）：
-   - 若与上一个 step 的 `round` 不同：插入 RoundHeaderItem。
-   - 若与上一个 step 的 `phase` 不同（或 round 刚变）：插入 PhaseHeaderItem，并记录该阶段段落的 `start_step_index`。
-   - 为每个 **command step** 创建一个 ActionGroupHeaderItem（保证“每步都可见可点”）；phase step 的锚点由 PhaseHeaderItem 承担。
-2) 将 events 按 `step_index` 挂到对应 ActionGroup 下，作为 EventItem 子项：
-   - 默认隐藏“阶段事件子项”（`PHASE_CHANGED/SUB_PHASE_CHANGED/ROUND_STARTED/ROUND_ENDED/*_REPORT` 等），由 `显示阶段事件` 开关控制是否展示；但这些事件始终可用于调试详情窗口。
-   - 其余事件作为缩进子项展示（例如营销产生需求、采购路线、现金变化、丢弃库存、里程碑等）。
-
-动作组摘要（ActionGroupHeaderItem.text）决策：
-
-- 优先：从该 step 的“非阶段事件子项”里找第一条 `LogType.PLAYER` 的 formatted message 作为摘要。
-- 否则：用 step 快照生成系统摘要：
-  - command step：`系统结算/系统推进`（仅在确实没有玩家动作时兜底）。
-
-#### M4.3.3 ReplayBar 状态显示（不展示 step/cmd）
-
-保留 `cursor / head` 的数字（滑块位置），但 extra 仅显示“当前阶段”：
-
-- `阶段：{phase_display_name}`（Working 内 sub_phase 默认不显示，避免噪声）。
-- 不显示 `step xx`、`cmd xx`。
-
-阶段本地化映射（用户确认）：
-
-- `Working` -> `工作时间`
-- `Dinnertime` -> `晚餐时间`
-- `Setup` -> `开局设置`
-- `Payday` -> `发薪日`
-- `Marketing` -> `广告行动`
-- `Cleanup` -> `清理阶段`
-- `Restructuring` -> `重组结构`
-- `OrderOfBusiness` -> `商业秩序`
-- `GameOver` -> `游戏结束`
-
-#### M4.3.4 对正常对局（实时）如何做到“同一视图”
-
-建议实现路径（计划）：
-
-1) **日志面板渲染统一走“时间线视图”组件**（Round/Phase/Action/Event 四类行）。
-2) **实时数据源也走同一套 step_timeline 构建**：
-   - 在打开日志面板、或每次命令执行后（可做 debounce/throttle）调用 `StepTimelineBuild.build_full(engine)`，用其输出重建列表（结构稳定且阶段切分一致）。
-   - 进入“查看历史”时仍复用同一份 step_timeline（只移动 cursor）。
-3) 性能风险与缓解（先写入计划，后续实现时再按需要落地）：
-   - 若全量重建成本过高：增量扩展 step_timeline（只追加最新命令链路）作为优化项，不影响首版正确性目标。
-
-#### M4.3.5 验收标准（对用户可见）
-
-- 载入 `.savings/manual_cases/logs/event_log_review.json`：
-  - 能看到“回合分隔标题块”出现在回合切换处。
-  - 能看到“晚餐时间/发薪日/广告/清理/重组”等阶段标题分段（不再揉成一段）。
-  - 阶段标题点击会跳到该阶段段落的开始（状态与日志高亮一致）。
-  - “阶段事件子项”默认不显示，但阶段标题与系统摘要能让用户看懂阶段推进。
-  - 不出现“玩家X: 确认结束 / 玩家X 开始回合 / 玩家X 结束回合(skip)”等流程性日志。
-  - 同一条玩家动作不重复出现（动作组标题与子项不应是同一句话的重复）。
-  - 里程碑获得出现在正确阶段段落（例如发薪里程碑在 Payday、丢弃里程碑在 Cleanup，而不是 Restructuring）。
-- 正常对局实时进行中：
-  - 日志以同样的 Round/Phase/Action/Event 结构增长（不再是另一套扁平日志视图）。
-
-#### M4.3.6 实施步骤（仅计划；未获允许不改代码）
-
-1) UI：移除过滤/搜索（PlayerFilter/搜索框/类型过滤）
-2) UI：将现有 grouped view 重塑为“缩进层级视图”
-   - StepHeaderItem -> ActionGroupHeaderItem（不显示 step/cmd）
-   - LogItem 作为 EventItem（缩进）
-   - 新增 RoundHeaderItem（回合分隔）
-3) 事件显示策略：阶段事件子项默认隐藏；增加 `显示阶段事件` 开关
-4) PhaseHeader 点击跳转：seek 到该阶段段落 start_step_index
-5) RoundHeader 点击跳转：seek 到该回合段落的第一条 ActionGroup
-6) 实时模式统一：打开日志/命令执行后用 StepTimelineBuild 重建时间线视图（必要时加 debounce）
-7) 回归验证：`event_log_review.json` + `demo_image/log_demo.png` + `AllTests`
-
-### M4.1：Phase 视觉切分 + Working 打包展示（不改 seek 粒度）
-
-目标：
-
-- 日志视图按“大阶段（phase）”做明显的分段（Working / Dinnertime / Payday / Marketing / Cleanup…），便于扫读。
-- Working 段内以“玩家行动（命令）”为分割进行打包；子阶段（sub_phase）变化与自动连锁事件作为微项归入动作块（默认可折叠）。
-- 该里程碑仅改变“如何展示/折叠”，不改变回放 seek 的粒度（仍以 command_index 为主）。
-
-工作项：
-
-- [x] UI 分组：按 `phase_segment` 渲染“阶段标题行”（`ui/components/game_log/game_log_panel.gd`：PhaseHeaderItem）。
-- [x] Working 打包：按 `step_index`（fallback `command_index`）分组；Working 段默认折叠，仅展开当前 cursor step（`ui/components/game_log/game_log_panel.gd`：StepHeaderItem + _collapsed_step_groups）。
-- [x] 点击交互：点击阶段/step 标题触发 seek（`timeline_seek_requested`）；step 标题在 Working 内点击可展开/折叠（展开时同时 seek）。
-
-验收：
-
-- 回放中从 Working 进入 Dinnertime/Payday 等阶段时，日志列表视觉上不会“揉成一团”，用户可明显看到阶段分段。
-- Working 内 sub_phase 连续变化不会把日志切得过碎；默认视图以玩家行动为主。
-
-### M4.2：大阶段可步进（step_index + 阶段边界快照）
-
-目标：
-
-- 回放时间线可以停在每一次大阶段切换处（Working/Dinnertime/Payday/Marketing/Cleanup…），即使该切换由 auto-advance 触发且发生在同一条命令内部。
-- Working 内的小阶段仍保持“尽可能打包”：`sub_phase` 变化不额外生成 step（只作为动作块的微事件）。
-
-工作项（核心是“在 command 粒度之外补一个 step 粒度”）：
-
-- [x] 新增 step 时间线构建器（`core/engine/game_engine/step_timeline_build.gd`）：
-  - 从初始 checkpoint state 起，按命令重放；
-  - 对每条命令：应用命令 -> 记录“玩家行动 step”；
-  - 若命令本身触发 `phase` 切换（例如 `advance_phase`），则以 `PHASE_CHANGED` 为边界拆分事件归属：
-    - `PHASE_CHANGED` 之前（含 `*_REPORT`）归属到旧阶段的最后一个 step（避免 Payday/Marketing/Cleanup 被压到同一步）
-    - `PHASE_CHANGED` 及之后归属到新阶段（玩家行动 step）
-  - 对 auto-advance：逐步执行 `AutoAdvance.try_advance_one`，仅当 `phase` 变化时记录“阶段切换 step”，并且快照取 `advance_phase()` 之后的 state（已包含 enter settlement / enter hooks / 自动进入首个子阶段等）；`sub_phase` 变化仅更新当前 step 的状态与日志归属；
-  - 为每个 step 保存 `state_dict`（或 `GameState` 深拷贝）作为快照，并保存 `anchor_command_index`。
-- [x] ReplayBar 改为 step 粒度：滑块范围改为 `[-1, head_step]`；状态栏显示 `step` 且附带锚点信息（`ui/components/game_log/replay_bar.gd` + `ui/scenes/game/game.gd`）。
-- [x] Seek 实现：回放 seek 不再只调用 `rewind_to_command(command_index)`；而是从 step 快照直接恢复 UI 所需状态（只读回放中允许使用 step 快照直接覆盖 `game_engine.state`，并同步 `cursor_step/cursor_index` 显示）（`ui/scenes/game/game.gd:_seek_to_replay_step`）。
-- [x] 复盘（非回放）同样使用 step 时间线：首次 seek 到历史命令时构建 step_timeline 并替换日志为“完整时间线日志”，seek 使用 step 快照覆盖 `game_engine.state`；返回最新时恢复实时日志（`ui/scenes/game/game.gd:_enter_history_step_timeline_for_command/_exit_history_step_timeline`）。
-- [x] 日志高亮/置灰改为 step 粒度：为每条日志条目补充 `step_index`（构建时写入），置灰/高亮按 `step_index` 判断；保留 `command_index` 作为详情追溯与“按命令过滤”的基础字段（`ui/components/game_log/game_log_panel.gd` + `ui/scenes/game/game.gd`）。
-  - 事件归属规则补充：`*_REPORT`（在离开阶段时发射）归属到“离开前阶段”（即旧阶段的最后一个 step/段），避免被显示在新阶段段落里。
-
-验收（建议用用户提供的复现场景手验）：
-
-- 回放中当一个命令触发 auto-advance 连续跨越多个大阶段时（例如 Working -> Dinnertime -> Payday -> ...）：
-  - 时间线滑块/步进可以逐个停在这些大阶段上（不再被合并成一个位置）。
-  - 每一步对应的日志高亮与画面状态一致。
-- Working 内的小阶段（sub_phase）切换不会导致时间线产生大量额外 step；默认步进以“玩家行动”为主。
+- 大量事件回合时仍可扫读，且不影响 seek/highlight 语义。
 
 ## 6. 测试与验收计划（建议新增/调整）
 
@@ -537,7 +391,7 @@ ActionPanel 禁用策略：
 - `ui/scenes/tests/log_restore_after_load_test.gd`：验证从 `EventBus.history` 恢复日志（仍应保留，作为“订阅缺失时的兜底机制”）。
 - `ui/scenes/tests/replay_player_smoke_test.gd`：验证 ReplayPlayer 能加载并 seek（若 M2 后 ReplayPlayer 降级为工具，可调整测试目标或新增 ReplayBar 测试）。
 
-建议新增：
+已新增（覆盖关键能力）：
 
 - [x] `core/tests/event_timeline_build_test.gd`：
   - 构造 20+ 命令的确定性用例，build_full() 返回 events 不为空且每条含 `command_index`（单调不减），并与命令数量一致性可验。
@@ -550,8 +404,8 @@ ActionPanel 禁用策略：
 
 ## 7. 风险与注意事项
 
-- 性能：当前 `GameLogPanel` 用 `VBoxContainer + 大量 LogItem 节点`，完整时间线可能变得很长；需要尽早规划虚拟列表/分组折叠，避免节点爆炸。
-- 确定性/排序：UI 展示时间不要依赖系统时间；建议用 `command.timestamp`（游戏内确定性时间）或 `event_seq` 作为排序/展示主依据。
+- 性能：当前 `GameLogPanel` 用 `VBoxContainer + 大量节点`，完整时间线可能很长；已通过 `折叠细节` 开关缓解，但长期仍需考虑虚拟列表/增量构建。
+- 确定性/排序：UI 展示时间不要依赖系统时间；当前统一视图以 `event_seq` 作为稳定序号（UI-only 日志仍可能使用系统时间）。
 - 兼容现有“从 EventBus.history 恢复日志”的逻辑：它仍有价值（读档进入 GameScene 前的事件回放），但在“完整日志”方案落地后，应明确其定位为兜底，而不是 replay seek 的数据源。
 - 微步骤中间态：本计划拟在 M4.2 支持“按大阶段切分”的 step 粒度（阶段边界快照），但仍不追求“任意事件级步进回放”；若要做到真正的事件级中间态，需要更细粒度的状态快照/重放点（超出本计划范围）。
 
@@ -592,10 +446,11 @@ ActionPanel 禁用策略：
 - 用户需求：回放/复盘（只读时间线）时不需要该面板，会干扰回放步进与观察。
 - 修复：只读时间线激活时由 `GameOverlayController.sync_dinnertime_overlay()` 直接 `hide()`（`ui/scenes/game/game_overlay_controller.gd`）。
 
-### 2026-01-24：重组（Restructuring）阶段“单步推进无效果”的风险点（待补齐验证）
+### 2026-01-24：重组（Restructuring）阶段“单步推进无效果”的风险点（已缓解；按需补强）
 
 - 用户反馈：重组结构阶段缺少必要日志，导致对应 step 单步推进看起来没有效果。
-- 初步判断：可能是“进入/离开 Restructuring”缺少可视化日志事件，或该阶段的关键 state 变化未映射成日志条目；需要在 formatter 与事件发射点两侧核对覆盖面，并补齐最少必要的事件/日志（在保证回放确定性的前提下）。
+- 缓解现状：已通过“无可见事件 step 的动作摘要兜底”（显示 `玩家X: {action_display_name}`）降低“看起来没发生任何事”的空感。
+- 后续按需补强：若仍需要更细粒度的重组日志（例如员工移动/槽位调整细节），再考虑在对应 action 发射专用事件并由 formatter 映射成 EventItem 子项。
 
 ### 2026-01-24：step 时间线未激活导致“大阶段仍被打包”的触发条件（已修复）
 
@@ -716,74 +571,11 @@ ActionPanel 禁用策略：
 
 范围：同时覆盖“只读回放 + 复盘 + 实时对局”，保持同一套视图规则（M4.3 的核心要求）。
 
-1) 去掉流程性日志（问题 1）
+回归验证（建议）：
 
-- 目标：列表中不再出现：
-  - “玩家X: 确认结束”
-  - “玩家X 开始回合”
-  - “玩家X 结束回合(skip/end_turn/...)”
-- 拟采取的策略（建议）：
-  - 将 `PLAYER_TURN_STARTED/PLAYER_TURN_ENDED` 归类为“结构/噪声事件”，默认隐藏。
-  - `skip/end_turn/skip_sub_phase` 这类命令作为 ActionGroupHeader 的摘要也默认不展示（避免“玩家X:确认结束”重新出现）。
-- 影响面评估：
-  - 优点：Working/Dinnertime 等阶段的日志噪声显著下降，阶段推进的可读性更强。
-  - 风险：当某阶段只有“确认结束”而无其它事件时，该阶段段落可能变得“更空”；但阶段标题仍在，并可通过后续里程碑/结算事件补足可见性（见第 3 点）。
-
-2) 消除“同一玩家动作重复两次”（问题 2）
-
-- 根因：同一句 formatted message 同时被用作 ActionGroupHeader 摘要 + EventItem 子项。
-- 目标：每个 step 的“动作摘要”只出现一次。
-- 拟实现（建议）：
-  - 为每个 step 在构建视图结构时选定一个 `primary_entry_id`（通常是该 step 的第一条“玩家动作/可见动作”日志）。
-  - `ActionGroupHeaderItem` 显示 primary 的 message；
-  - 子项 `EventItem` 列表渲染时跳过该 primary entry（避免重复）。
-  - 为避免“跳过后无法查看详情”，ActionGroupHeaderItem 需要支持双击打开 primary 的 details（等价于原来双击 EventItem）。
-
-3) 修正“事件归属/阶段顺序不匹配”（问题 3，重点）
-
-3.1 里程碑归属修正（强相关：log_screenshot2）
-
-- 根因：里程碑事件目前在“命令链路结束后”一次性 diff 生成，phase/sub_phase 取 final_state（经常是 Restructuring），导致里程碑被推迟到错误阶段。
-- 拟实现（建议，偏底层但可控）：
-  - 在 `StepTimelineBuild.build_full()` 内改为“增量 diff”：
-    - 命令执行后：对 `old_state -> state_in` diff 里程碑，归属到该命令的 command step。
-    - auto-advance 循环内：对每次 `before -> state_in` diff 里程碑，归属到当次推进后的 step（phase 变化时归属到新建的 phase step；否则归属到当前 step）。
-  - 移除/禁用 build_full() 末尾的“最终一次性里程碑 diff”，避免重复发射。
-  - 同步修正里程碑事件 data 中的 `phase/sub_phase/round` 字段：使用触发当刻的 state，而不是 final_state。
-- 关键细节（避免把 Payday 里程碑推到 Marketing）：
-  - 对于 **phase 变化的 auto-advance**，里程碑与现金变化需要按“结算发生点”归属：
-    - 若旧阶段存在 `EXIT settlement`（当前 base_rules 的典型是 `Payday`）：把 `MILESTONE_ACHIEVED/PLAYER_CASH_CHANGED` 归属到旧阶段段落（`phase_segment=before.phase`）。
-    - 若新阶段存在 `ENTER settlement`（当前 base_rules 的典型是 `Dinnertime/Marketing/Cleanup`）：把上述事件归属到新阶段段落（`phase_segment=state_in.phase`）。
-  - 该归属规则应同时影响：事件显示段落（phase_segment）与事件 data 里的 `phase` 字段，确保详情与列表一致。
-- 验收点：
-  - `first_pay_*` 这类里程碑应出现在 Payday 段落；
-  - `first_throw_away` 应出现在 Cleanup 段落；
-  - `first_*_marketed` 应出现在 Marketing 结算相关段落（通常在离开 Marketing 时）。
-
-3.2 阶段切分顺序修正（强相关：log_screenshot1）
-
-- 根因：当前按 `PHASE_CHANGED` 在“事件数组顺序”上做一刀切分；但部分事件在 action 内追加顺序与用户语义不一致（例如回合结束事件在 `PHASE_CHANGED` 之后追加）。
-- 拟实现（建议）：
-  - 将 `PLAYER_TURN_STARTED/ENDED` 视为结构噪声事件并隐藏后，该类“顺序不合理”的可见问题会显著降低（但底层归属仍建议修正以保证一致性）。
-  - 对 phase-change 命令的事件归属改为“按事件类型语义归属”，而不是仅依赖 `PHASE_CHANGED` 在数组中的出现位置：
-    - `*_REPORT`、Marketing 结算（`DEMAND_GENERATED/MARKETING_EXPIRED`）、Cleanup 丢弃等：归属到离开前阶段；
-    - 进入新阶段的 `PHASE_CHANGED/ROUND_*`：归属到新阶段；
-    - `PLAYER_TURN_*`：隐藏（或强制归属到旧阶段，二选一）。
-
-4) 移除“进入X”类行（问题 4）
-
-- 根因：phase step 的 ActionGroupHeader 使用兜底摘要 `进入{phase}`。
-- 拟实现（建议）：
-  - phase step 不再渲染 ActionGroupHeaderItem（阶段标题 PhaseHeaderItem 已足够承载“阶段开始的可点击锚点”）。
-  - 若需要在 cursor 恰好落在 phase start step 时仍有明确高亮，可增强 PhaseHeader 的视觉：当 `cursor == start_step_index` 时使用更强的高亮样式（不新增文案）。
-
-5) 回归验证与自动化保护
-
-- 手工回归（必做）：
-  - 主菜单载入 `res://.savings/manual_cases/logs/event_log_review.json`，对照 `demo_image/log_screenshot1.png/2.png` 逐条确认 4 项问题消失且阶段切分正确。
-- 自动化回归（建议新增/调整）：
-  - `core/tests/step_timeline_build_test.gd`：补充对 `MILESTONE_ACHIEVED` 的 phase_segment 断言（至少覆盖 Payday/Cleanup/Marketing 三类）。
-  - （可选）为 unified view 增加“无重复 primary message”逻辑测试：针对 event_log_review 的 formatter 输出，确保同一 step 的 primary entry 不同时出现在 header 与 child。
+- 手工回归：主菜单载入 `res://.savings/manual_cases/logs/event_log_review.json`，对照 `demo_image/log_screenshot1.png/2.png` 确认 4 项问题消失且阶段切分正确。
+- 自动化保护（现状）：`core/tests/step_timeline_build_test.gd`、`core/tests/manual_log_save_test.gd`、`ui/scenes/tests/replay_log_future_visibility_test.gd`，以及 `AllTests`。
+- 自动化增强（可选）：补充一个“确定性触发 MILESTONE_ACHIEVED 并断言 phase_segment”的核心测试用例（Payday/Cleanup/Marketing 至少覆盖 1 个）。
 
 #### 当前实现选择（已落地；后续如需调整可再迭代）
 
