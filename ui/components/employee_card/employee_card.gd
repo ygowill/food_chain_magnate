@@ -43,7 +43,7 @@ var _entry_icon_rect: TextureRect
 var _range_icon_rect: TextureRect
 var _salary_icon_rect: TextureRect
 
-const COMPACT_SIZE := Vector2(130, 90)
+const COMPACT_SIZE := Vector2(130, 104)
 const FULL_SIZE := Vector2(180, 252)
 
 static var _icon_texture_cache: Dictionary = {} # path -> Texture2D|nil

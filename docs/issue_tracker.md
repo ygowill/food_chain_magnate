@@ -4257,6 +4257,7 @@
 		- `_description_label.max_lines_visible = 3`
 		- `_description_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS`
 	- `CardVariant.COMPACT` 不再使用字符数截断（之前 compact=40 字符截断）；改由“3 行 + 省略号”保证卡片高度不随文本变化。
+	- 将 `EmployeeCard.COMPACT_SIZE.y` 从 `90` 调整到 `104`：确保在当前主题字体的行高/行距下，compact 描述区能真实显示 **3 行**（原高度只能显示 2 行）。
 	- `CardVariant.FULL` 仍保留 `max_len=120` 字符截断（避免 full 描述过长影响可读性/布局）。
 
 **需要你手工缩短描述的员工清单（compact 3 行无法完整展示）**
@@ -4270,7 +4271,7 @@
 **验证**
 
 - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
-- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（115/115，`.godot/AllTests.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（116/116，`.godot/AllTests.log`）
 
 **状态**
 
