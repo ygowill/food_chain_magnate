@@ -69,6 +69,10 @@ theme_override_constants/v_separation = 6
 layout_mode = 2
 text = "显示阶段事件"
 
+[node name="FoldDetailsCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TitleRow/OptionsRow"]
+layout_mode = 2
+text = "折叠细节"
+
 [node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3

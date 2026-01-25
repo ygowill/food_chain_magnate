@@ -10,6 +10,7 @@ signal log_added(entry: Dictionary)
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleRow/TopRow/TitleLabel
 @onready var show_phase_events_check: CheckBox = $MarginContainer/VBoxContainer/TitleRow/OptionsRow/ShowPhaseEventsCheck
+@onready var fold_details_check: CheckBox = $MarginContainer/VBoxContainer/TitleRow/OptionsRow/FoldDetailsCheck
 @onready var expand_btn: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/ExpandButton
 @onready var close_btn: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/CloseButton
 @onready var replay_bar: Control = $MarginContainer/VBoxContainer/TitleRow/ReplayBar
@@ -66,6 +67,8 @@ var _scroll_to_bottom_requested: bool = false
 var _max_entries: int = 0 # 0 表示不截断（完整时间线需要保留未来日志）
 var _player_count: int = 0
 var _show_phase_events: bool = false
+var _fold_details_enabled: bool = false
+var _expanded_action_groups: Dictionary = {} # step_index -> true（当启用折叠时仅展开少量动作组）
 
 # 时间线（回放/查看历史）预留：在 M1 引入“完整日志”前仅存储指针，不改变渲染。
 var _timeline_head_index: int = -1
@@ -91,6 +94,10 @@ func _ready() -> void:
 	if show_phase_events_check != null:
 		show_phase_events_check.toggled.connect(_on_show_phase_events_toggled)
 		show_phase_events_check.button_pressed = _show_phase_events
+
+	if fold_details_check != null:
+		fold_details_check.toggled.connect(_on_fold_details_toggled)
+		fold_details_check.button_pressed = _fold_details_enabled
 
 func add_log(log_type: LogType, message: String, details: Dictionary = {}) -> int:
 	var entry_id := _entry_id_counter
@@ -164,6 +171,10 @@ func load_entries(entries: Array[Dictionary]) -> void:
 	_extra_entries.clear()
 	_entries_all.clear()
 	_entry_id_counter = 0
+	_fold_details_enabled = false
+	_expanded_action_groups.clear()
+	if fold_details_check != null:
+		fold_details_check.button_pressed = _fold_details_enabled
 
 	for e in entries:
 		if not (e is Dictionary):
@@ -196,6 +207,10 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 
 	if reset_extra_entries:
 		_extra_entries.clear()
+
+	_prune_expanded_action_groups()
+	if fold_details_check != null:
+		fold_details_check.button_pressed = _fold_details_enabled
 
 	_rebuild_entries_all()
 	_rebuild_display()
@@ -261,6 +276,10 @@ func clear_logs() -> void:
 	_timeline_entries.clear()
 	_extra_entries.clear()
 	_entries_all.clear()
+	_fold_details_enabled = false
+	_expanded_action_groups.clear()
+	if fold_details_check != null:
+		fold_details_check.button_pressed = _fold_details_enabled
 	_clear_display()
 	_update_entry_count()
 
@@ -281,6 +300,28 @@ func _is_step_timeline_loaded() -> bool:
 		return false
 	var steps_val = _step_timeline.get("steps", null)
 	return (steps_val is Array)
+
+func _is_action_group_expanded(step_index: int) -> bool:
+	if not _fold_details_enabled:
+		return true
+	return bool(_expanded_action_groups.get(int(step_index), false))
+
+func _prune_expanded_action_groups() -> void:
+	if _expanded_action_groups == null or _expanded_action_groups.is_empty():
+		return
+
+	var max_step := int(_timeline_head_index)
+	var steps_val = _step_timeline.get("steps", null)
+	if steps_val is Array:
+		max_step = (steps_val as Array).size() - 1
+
+	for k in _expanded_action_groups.keys():
+		if not (k is int or k is float):
+			_expanded_action_groups.erase(k)
+			continue
+		var idx := int(k)
+		if idx < -1 or idx > max_step:
+			_expanded_action_groups.erase(k)
 
 func _rebuild_entries_all() -> void:
 	_entries_all.clear()
@@ -432,9 +473,14 @@ func _build_unified_timeline_display() -> void:
 
 	# -1: 初始状态
 	var phase_header: PhaseHeaderItem = _add_phase_header_item(prev_phase, -1)
-	var init_header := _build_action_group_header_data(-1, {}, entries_by_step.get(-1, []))
-	_add_action_group_header_item(-1, str(init_header.get("summary", "")), int(init_header.get("primary_entry_id", -1)))
-	_add_event_items_for_step(-1, entries_by_step, 2, int(init_header.get("primary_entry_id", -1)))
+	var init_entries: Array = entries_by_step.get(-1, [])
+	var init_header := _build_action_group_header_data(-1, {}, init_entries)
+	var init_primary_id := int(init_header.get("primary_entry_id", -1))
+	var init_child_count := _count_event_items_for_action_group(init_entries, init_primary_id)
+	var init_expanded := _is_action_group_expanded(-1)
+	_add_action_group_header_item(-1, str(init_header.get("summary", "")), init_primary_id, _fold_details_enabled, init_expanded, init_child_count)
+	if init_expanded:
+		_add_event_items_for_step(-1, entries_by_step, 2, init_primary_id)
 
 	for idx in range(steps.size()):
 		var step_val = steps[idx]
@@ -460,9 +506,14 @@ func _build_unified_timeline_display() -> void:
 			# phase step：不再渲染“进入X”类 ActionGroup 行；阶段标题已足够承载该锚点。
 			_add_event_items_for_step(idx, entries_by_step, 1)
 		else:
-			var header := _build_action_group_header_data(idx, step, entries_by_step.get(idx, []))
-			_add_action_group_header_item(idx, str(header.get("summary", "")), int(header.get("primary_entry_id", -1)))
-			_add_event_items_for_step(idx, entries_by_step, 2, int(header.get("primary_entry_id", -1)))
+			var step_entries: Array = entries_by_step.get(idx, [])
+			var header := _build_action_group_header_data(idx, step, step_entries)
+			var primary_id := int(header.get("primary_entry_id", -1))
+			var child_count := _count_event_items_for_action_group(step_entries, primary_id)
+			var expanded := _is_action_group_expanded(idx)
+			_add_action_group_header_item(idx, str(header.get("summary", "")), primary_id, _fold_details_enabled, expanded, child_count)
+			if expanded:
+				_add_event_items_for_step(idx, entries_by_step, 2, primary_id)
 
 		prev_round = round_num
 		prev_phase = phase_seg
@@ -610,18 +661,38 @@ func _add_phase_header_item(phase_segment: String, start_step: int) -> PhaseHead
 	item.apply_timeline_state(_timeline_cursor_index, _timeline_head_index)
 	return item
 
-func _add_action_group_header_item(step_index: int, summary: String, primary_entry_id: int = -1) -> void:
+func _add_action_group_header_item(step_index: int, summary: String, primary_entry_id: int = -1, fold_enabled: bool = false, expanded: bool = true, child_event_count: int = 0) -> void:
 	if log_container == null:
 		return
 	var item := ActionGroupHeaderItem.new()
 	item.step_index = int(step_index)
 	item.summary = str(summary)
 	item.primary_entry_id = int(primary_entry_id)
+	item.fold_enabled = bool(fold_enabled)
+	item.expanded = bool(expanded)
+	item.child_event_count = int(child_event_count)
 	item.clicked.connect(_on_timeline_header_clicked)
 	item.primary_entry_double_clicked.connect(_on_entry_double_clicked)
+	item.fold_toggled.connect(_on_action_group_fold_toggled)
 	log_container.add_child(item)
 	_log_items.append(item)
 	item.apply_timeline_state(_timeline_cursor_index, _timeline_head_index)
+
+func _count_event_items_for_action_group(entries: Array, skip_entry_id: int = -1) -> int:
+	if entries == null or entries.is_empty():
+		return 0
+	var count := 0
+	var skip_id := int(skip_entry_id)
+	for entry_val in entries:
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		if skip_id >= 0 and int(entry.get("id", -1)) == skip_id:
+			continue
+		if not _should_show_event_item(entry):
+			continue
+		count += 1
+	return count
 
 func _add_event_items_for_step(step_index: int, entries_by_step: Dictionary, indent_level: int = 2, skip_entry_id: int = -1) -> void:
 	if log_container == null:
@@ -657,17 +728,72 @@ func _add_event_item(entry: Dictionary, indent_level: int = 0) -> void:
 func _on_timeline_header_clicked(timeline_index: int) -> void:
 	timeline_seek_requested.emit(int(timeline_index))
 
+func _on_action_group_fold_toggled(step_index: int, expanded: bool) -> void:
+	if not _fold_details_enabled:
+		return
+	var idx := int(step_index)
+	if idx < -1:
+		return
+	if expanded:
+		_expanded_action_groups[idx] = true
+	else:
+		if _expanded_action_groups.has(idx):
+			_expanded_action_groups.erase(idx)
+
+	_rebuild_display()
+	_apply_timeline_state_to_items()
+	_update_entry_count()
+
+func _compute_unified_visible_entry_count() -> int:
+	if not _is_step_timeline_loaded():
+		return _entries_all.size()
+
+	var steps_val = _step_timeline.get("steps", null)
+	if not (steps_val is Array):
+		return _entries_all.size()
+	var steps: Array = steps_val
+
+	var entries_by_step := _build_entries_by_step()
+	var visible := 0
+
+	# -1 初始动作组：默认也计入（若有 primary 则计 1，否则仅计子项）
+	var init_entries: Array = entries_by_step.get(-1, [])
+	var init_primary := _pick_primary_entry_for_action_group(init_entries)
+	var init_primary_id := int(init_primary.get("id", -1)) if (init_primary != null and not init_primary.is_empty()) else -1
+	if init_primary_id >= 0:
+		visible += 1
+	if _is_action_group_expanded(-1):
+		visible += _count_event_items_for_action_group(init_entries, init_primary_id)
+
+	for idx in range(steps.size()):
+		var step_val = steps[idx]
+		if not (step_val is Dictionary):
+			continue
+		var step: Dictionary = step_val
+		var kind := str(step.get("kind", "")).strip_edges()
+		var step_entries: Array = entries_by_step.get(idx, [])
+		if kind == "phase":
+			# phase step 没有 ActionGroupHeader：只计可见子项（仍受“显示阶段事件”开关影响）。
+			visible += _count_event_items_for_action_group(step_entries, -1)
+			continue
+
+		var primary := _pick_primary_entry_for_action_group(step_entries)
+		var primary_id := int(primary.get("id", -1)) if (primary != null and not primary.is_empty()) else -1
+		if primary_id >= 0:
+			visible += 1
+		if _is_action_group_expanded(idx):
+			visible += _count_event_items_for_action_group(step_entries, primary_id)
+
+	return visible
+
 func _update_entry_count() -> void:
 	if entry_count_label == null:
 		return
 
 	var total := _entries_all.size()
 	var visible := total
-	if _is_step_timeline_loaded() and not _show_phase_events:
-		visible = 0
-		for entry_val in _entries_all:
-			if entry_val is Dictionary and _should_show_event_item(Dictionary(entry_val)):
-				visible += 1
+	if _is_step_timeline_loaded():
+		visible = _compute_unified_visible_entry_count()
 	entry_count_label.text = "显示 %d / %d" % [visible, total]
 
 func _get_entry_command_index(entry: Dictionary) -> int:
@@ -748,6 +874,37 @@ func _apply_timeline_state_to_items(scroll_to_cursor: bool = false) -> void:
 
 func _on_show_phase_events_toggled(toggled: bool) -> void:
 	_show_phase_events = bool(toggled)
+	_rebuild_display()
+	_apply_timeline_state_to_items()
+	_update_entry_count()
+
+func _on_fold_details_toggled(toggled: bool) -> void:
+	set_fold_details_enabled(bool(toggled), false)
+
+func set_fold_details_enabled(enabled: bool, update_checkbox: bool = true) -> void:
+	var en := bool(enabled)
+	if en == _fold_details_enabled:
+		if update_checkbox and fold_details_check != null:
+			fold_details_check.button_pressed = _fold_details_enabled
+		return
+
+	_fold_details_enabled = en
+	_expanded_action_groups.clear()
+
+	# 默认只展开当前 cursor 的动作组，避免一次性展开导致列表过长。
+	if _fold_details_enabled:
+		var idx := int(_timeline_cursor_index)
+		if idx < -1:
+			idx = -1
+		if _timeline_head_index >= -1:
+			idx = clampi(idx, -1, int(_timeline_head_index))
+		_expanded_action_groups[idx] = true
+
+	_prune_expanded_action_groups()
+
+	if update_checkbox and fold_details_check != null:
+		fold_details_check.button_pressed = _fold_details_enabled
+
 	_rebuild_display()
 	_apply_timeline_state_to_items()
 	_update_entry_count()
@@ -1048,12 +1205,17 @@ class PhaseHeaderItem extends PanelContainer:
 class ActionGroupHeaderItem extends PanelContainer:
 	signal clicked(timeline_index: int)
 	signal primary_entry_double_clicked(entry_id: int)
+	signal fold_toggled(step_index: int, expanded: bool)
 
 	var step_index: int = -1
 	var summary: String = ""
 	var primary_entry_id: int = -1
+	var fold_enabled: bool = false
+	var expanded: bool = true
+	var child_event_count: int = 0
 
 	var _label: Label
+	var _toggle_btn: Button
 	var _panel_style: StyleBoxFlat = null
 	var _timeline_is_future: bool = false
 	var _timeline_is_cursor: bool = false
@@ -1086,6 +1248,14 @@ class ActionGroupHeaderItem extends PanelContainer:
 		spacer.custom_minimum_size = Vector2(14, 0)
 		hbox.add_child(spacer)
 
+		_toggle_btn = Button.new()
+		_toggle_btn.flat = true
+		_toggle_btn.focus_mode = Control.FOCUS_NONE
+		_toggle_btn.custom_minimum_size = Vector2(18, 0)
+		_toggle_btn.add_theme_font_size_override("font_size", maxi(9, int(round(11.0 * scale))))
+		_toggle_btn.pressed.connect(_on_toggle_pressed)
+		hbox.add_child(_toggle_btn)
+
 		_label = Label.new()
 		_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_label.add_theme_font_size_override("font_size", maxi(9, int(round(11.0 * scale))))
@@ -1100,7 +1270,28 @@ class ActionGroupHeaderItem extends PanelContainer:
 		var sum := str(summary).strip_edges()
 		if sum.is_empty():
 			sum = "(无摘要)"
-		_label.text = sum
+		if fold_enabled and child_event_count > 0 and not expanded:
+			_label.text = "%s (+%d)" % [sum, child_event_count]
+		else:
+			_label.text = sum
+		_update_fold_button()
+
+	func _update_fold_button() -> void:
+		if _toggle_btn == null:
+			return
+		var can_fold := fold_enabled and child_event_count > 0
+		_toggle_btn.visible = can_fold
+		if not can_fold:
+			return
+		_toggle_btn.text = "v" if expanded else ">"
+
+	func _on_toggle_pressed() -> void:
+		if not fold_enabled:
+			return
+		if child_event_count <= 0:
+			return
+		expanded = not expanded
+		fold_toggled.emit(step_index, expanded)
 
 	func get_timeline_index() -> int:
 		return int(step_index)
@@ -1122,6 +1313,8 @@ class ActionGroupHeaderItem extends PanelContainer:
 		if Globals != null:
 			scale = clampf(float(Globals.log_font_scale), 0.5, 3.0)
 		custom_minimum_size = Vector2(0, float(maxi(26, int(round(26.0 * scale)))))
+		if _toggle_btn != null:
+			_toggle_btn.add_theme_font_size_override("font_size", maxi(9, int(round(11.0 * scale))))
 		if _label != null:
 			_label.add_theme_font_size_override("font_size", maxi(9, int(round(11.0 * scale))))
 		_update_text()

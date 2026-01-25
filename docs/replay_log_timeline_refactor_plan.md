@@ -335,12 +335,19 @@ ActionPanel 禁用策略：
 
 - 日志默认以“命令块”展示，每块可展开查看自动连锁细节。
 
-工作项（两种实现路径二选一）：
+工作项（两种实现路径二选一；已选用路径 2）：
 
 1) Tree/List 结构：
    - 改用 `Tree` 或自定义虚拟列表，节点结构：CommandHeader -> EventItems。
 2) 仍用扁平列表但加折叠行：
    - 插入“折叠摘要行”（例如“该动作包含 7 条结算，点击展开”），展开后插入/显示子项。
+
+当前实现（2026-01-25）：
+
+- [x] 路径 2：扁平列表折叠（UI 不改 seek 粒度）
+  - 新增开关：`折叠细节`（默认关闭；开=只显示 ActionGroupHeader，子项按需展开；关=完全展开，符合 M4.3 约束）。
+  - ActionGroupHeader 左侧提供折叠按钮（`>` / `v`），用于展开/收起该动作组的微事件子项。
+  - 结构仍保持 `RoundHeader -> PhaseHeader -> ActionGroupHeader -> EventItem`，不改变“阶段可见/回合分隔/点击跳转”的规则。
 
 验收：
 
@@ -648,6 +655,18 @@ ActionPanel 禁用策略：
   - `core/engine/game_engine/step_timeline_build.gd`：对 `kind=="command"` 的 step 写入 `action_id/actor/action_display_name`。
   - `ui/components/game_log/game_log_panel.gd`：当一个 step 没有任何可见事件子项时，`ActionGroupHeaderItem` 的摘要从 step 元信息兜底为 `玩家X: {action_display_name}`，避免回退到“系统推进”。
 - 备注：若后续仍需要更细粒度的重组日志（例如“移动了哪个员工/调整到哪个槽位”），再考虑在对应 action 的 `_generate_specific_events()` 增加专用事件并由 formatter 映射成子项。
+
+### 2026-01-25：实现 M4 “宏/微折叠”（可选开关；默认保持 M4.3 全展开）
+
+- 背景：完整时间线在结算链路较长时会产生大量 EventItem，影响扫读与性能（节点数爆炸风险）。
+- 实现（路径 2：扁平列表折叠）：
+  - `GameLogPanel` 顶部新增 `折叠细节` 开关；默认关闭（符合 M4.3 的“不折叠/默认全展开”约束）。
+  - 开启后：ActionGroup 默认仅显示标题行，微事件子项可按动作组逐个展开/收起（标题行左侧 `>` / `v`）。
+  - 折叠状态仅影响渲染，不改变时间线 seek/highlight 语义与事件归属规则。
+- 代码位置：
+  - `ui/components/game_log/game_log_panel.tscn`
+  - `ui/components/game_log/game_log_panel.gd`
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` 通过。
 
 ### 2026-01-25：event_log_review 日志手验（log_screenshot1/2）发现的问题与根因（已整改）
 
