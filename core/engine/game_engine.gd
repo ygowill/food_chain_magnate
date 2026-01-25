@@ -4,6 +4,7 @@ class_name GameEngine
 extends RefCounted
 
 const ActionWiringClass = preload("res://core/engine/game_engine/action_wiring.gd")
+const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
 const CheckpointsClass = preload("res://core/engine/game_engine/checkpoints.gd")
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
 const InitializerClass = preload("res://core/engine/game_engine/initializer.gd")
@@ -359,7 +360,84 @@ func find_current_player_turn_start_command_index() -> Result:
 
 				return Result.success(idx)
 
-	return Result.success(-1)
+	# EventBus.history 可能被清空/截断（例如 UI 日志重建、单测隔离、未来的性能优化），
+	# 此时回退按钮仍需要可用：回退到“该玩家成为当前玩家”的那条命令索引。
+	var inferred := _infer_current_player_turn_start_command_index_by_replay(pid, int(current_command_index))
+	if inferred.ok:
+		return inferred
+
+	return Result.success(-1).with_warnings(inferred.warnings)
+
+func _infer_current_player_turn_start_command_index_by_replay(player_id: int, target_index: int) -> Result:
+	if target_index < 0:
+		return Result.success(-1)
+	if checkpoints.is_empty():
+		return Result.failure("缺少初始校验点")
+
+	var initial_checkpoint := checkpoints[0]
+	if not (initial_checkpoint is Dictionary):
+		return Result.failure("checkpoints[0] 类型错误（期望 Dictionary）")
+	var state_dict_val = Dictionary(initial_checkpoint).get("state_dict", null)
+	if not (state_dict_val is Dictionary):
+		return Result.failure("checkpoints[0].state_dict 缺失或类型错误（期望 Dictionary）")
+
+	var restore_result := GameState.from_dict(state_dict_val)
+	if not restore_result.ok:
+		return Result.failure("恢复初始 state 失败: %s" % restore_result.error)
+	var replay_state: GameState = restore_result.value
+	if replay_state == null:
+		return Result.failure("恢复初始 state 失败: state 为空")
+
+	var last_turn_start := -1
+	var prev_pid := replay_state.get_current_player_id()
+	if prev_pid == player_id:
+		last_turn_start = -1
+
+	var warnings: Array[String] = []
+	for i in range(mini(target_index, command_history.size() - 1) + 1):
+		var cmd: Command = command_history[i]
+		if cmd == null:
+			return Result.failure("command_history[%d] 为空" % i).with_warnings(warnings)
+		var executor := action_registry.get_executor(cmd.action_id)
+		if executor == null:
+			return Result.failure("回放时找不到执行器: %s" % str(cmd.action_id)).with_warnings(warnings)
+
+		var force_execute := _should_force_execute_in_replay(cmd)
+		if force_execute and executor.requires_actor:
+			var current_player_id := replay_state.get_current_player_id()
+			if cmd.actor != current_player_id:
+				return Result.failure("回放强制命令 #%d actor 非当前玩家: actor=%d current=%d" % [i, cmd.actor, current_player_id]).with_warnings(warnings)
+
+		var step_result := executor.compute_new_state_force(replay_state, cmd) if force_execute else executor.compute_new_state(replay_state, cmd)
+		if not step_result.ok:
+			return Result.failure("回放命令 #%d 失败: %s" % [i, step_result.error]).with_warnings(warnings)
+		warnings.append_array(step_result.warnings)
+
+		var new_state: GameState = step_result.value
+		if new_state == null:
+			return Result.failure("回放命令 #%d 失败: state 为空" % i).with_warnings(warnings)
+
+		var auto_r: Result = AutoAdvanceClass.drain(new_state, phase_manager, action_registry)
+		if not auto_r.ok:
+			return Result.failure("回放命令 #%d auto_advance 失败: %s" % [i, auto_r.error]).with_warnings(warnings)
+		warnings.append_array(auto_r.warnings)
+
+		var now_pid := new_state.get_current_player_id()
+		if now_pid != prev_pid and now_pid == player_id:
+			last_turn_start = i
+		prev_pid = now_pid
+		replay_state = new_state
+
+	return Result.success(last_turn_start).with_warnings(warnings)
+
+func _should_force_execute_in_replay(command: Command) -> bool:
+	if command == null:
+		return false
+	if OS.has_feature("release"):
+		return false
+	if not (command.metadata is Dictionary):
+		return false
+	return bool(Dictionary(command.metadata).get("debug_force", false))
 
 # 获取特定范围的命令
 func get_commands_range(from: int, to: int) -> Array[Command]:
