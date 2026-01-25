@@ -81,6 +81,52 @@ static func try_advance_one(state_in: GameState, phase_manager: PhaseManager, ac
 		warnings2.append_array(adv2.warnings)
 		return Result.success(true).with_warnings(warnings2)
 
+	# Restructuring：所有玩家都确认后，自动进入下一阶段（避免动作内 advance_phase 导致日志归属错乱）。
+	if state_in.phase == "Restructuring":
+		var blocked_r4 := _is_phase_blocked_by_pending_actions(state_in, "Restructuring")
+		if not blocked_r4.ok:
+			return blocked_r4
+		if bool(blocked_r4.value):
+			return Result.success(false)
+
+		var finalized_r := false
+		if state_in.round_state is Dictionary:
+			var r_val = Dictionary(state_in.round_state).get("restructuring", null)
+			if r_val is Dictionary:
+				var r: Dictionary = r_val
+				if r.has("finalized") and (r["finalized"] is bool):
+					finalized_r = bool(r["finalized"])
+		if not finalized_r:
+			return Result.success(false)
+
+		var adv_r4 := phase_manager.advance_phase(state_in)
+		if not adv_r4.ok:
+			return adv_r4
+		return Result.success(true).with_warnings(adv_r4.warnings)
+
+	# OrderOfBusiness：行动顺序落地后，自动进入 Working（保证日志顺序为“选择顺序 -> 进入 Working”）。
+	if state_in.phase == "OrderOfBusiness":
+		var blocked_r5 := _is_phase_blocked_by_pending_actions(state_in, "OrderOfBusiness")
+		if not blocked_r5.ok:
+			return blocked_r5
+		if bool(blocked_r5.value):
+			return Result.success(false)
+
+		var finalized_oob := false
+		if state_in.round_state is Dictionary:
+			var oob_val = Dictionary(state_in.round_state).get("order_of_business", null)
+			if oob_val is Dictionary:
+				var oob: Dictionary = oob_val
+				if oob.has("finalized") and (oob["finalized"] is bool):
+					finalized_oob = bool(oob["finalized"])
+		if not finalized_oob:
+			return Result.success(false)
+
+		var adv_r5 := phase_manager.advance_phase(state_in)
+		if not adv_r5.ok:
+			return adv_r5
+		return Result.success(true).with_warnings(adv_r5.warnings)
+
 	# 结算阶段默认自动跳过（无玩家交互）
 	if _is_auto_skip_settlement_phase(state_in.phase):
 		var blocked_r3 := _is_phase_blocked_by_pending_actions(state_in, str(state_in.phase))

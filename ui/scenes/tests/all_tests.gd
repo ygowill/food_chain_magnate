@@ -57,6 +57,7 @@ const EventHistoryRewindTestClass = preload("res://core/tests/event_history_rewi
 const EventTimelineBuildTestClass = preload("res://core/tests/event_timeline_build_test.gd")
 const StepTimelineBuildTestClass = preload("res://core/tests/step_timeline_build_test.gd")
 const StepTimelineMarketingMilestoneOrderTestClass = preload("res://core/tests/step_timeline_marketing_milestone_order_test.gd")
+const StepTimelinePhaseBoundaryOrderTestClass = preload("res://core/tests/step_timeline_phase_boundary_order_test.gd")
 const ReplayLogFutureVisibilityTestClass = preload("res://ui/scenes/tests/replay_log_future_visibility_test.gd")
 const ReplayPlayerSmokeTestClass = preload("res://ui/scenes/tests/replay_player_smoke_test.gd")
 const OrderOfBusinessTestClass = preload("res://core/tests/order_of_business_test.gd")
@@ -363,14 +364,18 @@ func _run_all() -> int:
 							"name": "StepTimelineBuildTest",
 							"fn": func() -> Result: return StepTimelineBuildTestClass.run(),
 						},
-						{
-							"name": "StepTimelineMarketingMilestoneOrderTest",
-							"fn": func() -> Result: return StepTimelineMarketingMilestoneOrderTestClass.run(12345),
-						},
-						{
-							"name": "ReplayLogFutureVisibilityTest",
-							"fn": func() -> Result: return ReplayLogFutureVisibilityTestClass.run(2, 12345, 12),
-						},
+							{
+								"name": "StepTimelineMarketingMilestoneOrderTest",
+								"fn": func() -> Result: return StepTimelineMarketingMilestoneOrderTestClass.run(12345),
+							},
+							{
+								"name": "StepTimelinePhaseBoundaryOrderTest",
+								"fn": func() -> Result: return StepTimelinePhaseBoundaryOrderTestClass.run(12345),
+							},
+							{
+								"name": "ReplayLogFutureVisibilityTest",
+								"fn": func() -> Result: return ReplayLogFutureVisibilityTestClass.run(2, 12345, 12),
+							},
 			{
 				"name": "ReplayPlayerSmokeTest",
 				"fn": func() -> Result: return ReplayPlayerSmokeTestClass.run(),

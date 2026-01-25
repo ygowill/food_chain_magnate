@@ -1,6 +1,6 @@
 # 回放与游戏日志融合（完整时间线）报告与重构开发计划
 
-状态：已实施（M0..M4.3 + M4 可选折叠）；0.1.1/0.1.2 已修复；仍有 UI 展示回归待修复（见 0.1.4）｜最后更新：2026-01-25
+状态：已实施（M0..M4.3 + M4 可选折叠）；0.1.1/0.1.2/0.1.4 已修复｜最后更新：2026-01-25
 
 ## 0. 当前进度（2026-01-25）
 
@@ -117,10 +117,17 @@
 
 ### 0.1.4 UI 展示回归（回合标题/重组阶段顺序）
 
-来自日志面板截图的展示问题（待修复）：
+来自日志面板截图的展示问题（已修复）：
 
 1) 回合切换标题应显示具体回合号（例如“回合 2”），并且第 1 回合开头也应显示一次。
 2) Restructuring 阶段日志顺序：应在玩家1/玩家2都“确认重组”之后，才进入 OrderOfBusiness（避免“阶段标题先跳转、确认日志后出现”的错序观感）。
+
+实施要点：
+
+- `ui/components/game_log/game_log_panel.gd`：RoundHeader 显示为“回合 N”，并在第一个可见回合（round>=1）的开头插入一次 RoundHeader。
+- `gameplay/actions/submit_restructuring_action.gd` / `gameplay/actions/choose_turn_order_action.gd`：移除动作内的 `advance_phase()`，避免动作组被归到新阶段段落。
+- `core/engine/game_engine/auto_advance.gd`：在 Restructuring finalized / OrderOfBusiness finalized 后自动推进到下一阶段，形成独立 phase step，保证日志顺序为“玩家动作 -> 阶段切换”。
+- core：新增 `core/tests/step_timeline_phase_boundary_order_test.gd` 回归覆盖，并接入 `ui/scenes/tests/all_tests.gd`。
 
 ## 1. 背景与目标
 

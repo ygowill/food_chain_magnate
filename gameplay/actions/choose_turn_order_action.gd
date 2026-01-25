@@ -89,12 +89,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		state.current_player_index = 0
 		oob["finalized"] = true
 
-		# 自动进入 Working（替代手动推进阶段）
-		if phase_manager != null:
-			var adv := phase_manager.advance_phase(state)
-			if not adv.ok:
-				return adv
-			warnings.append_array(adv.warnings)
+		# NOTE: 阶段推进由 AutoAdvance 负责（保证“选择顺序”日志归属 OrderOfBusiness，再进入 Working）。
 
 	state.round_state["order_of_business"] = oob
 

@@ -431,11 +431,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		# Restructuring 为“同时进行”：不推进 current_player_index（避免隐式顺序/误导 UI）。
 
 	# 所有人都提交后，自动进入下一阶段
-	if all_submitted and phase_manager != null:
-		var adv := phase_manager.advance_phase(state)
-		if not adv.ok:
-			return adv
-		warnings.append_array(adv.warnings)
+	# NOTE: 阶段推进由 AutoAdvance 负责（确保“确认重组”日志先出现，再出现阶段标题切换）。
 
 	return Result.success({
 		"player_id": player_id,

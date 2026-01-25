@@ -471,6 +471,10 @@ func _build_unified_timeline_display() -> void:
 	if prev_phase.is_empty():
 		prev_phase = "?"
 
+	# RoundHeader：默认仅显示 1..n 回合（Setup 的 round=0 不显示）
+	if prev_round >= 1:
+		_add_round_header_item(prev_round, -1)
+
 	# -1: 初始状态
 	var phase_header: PhaseHeaderItem = _add_phase_header_item(prev_phase, -1)
 	var init_entries: Array = entries_by_step.get(-1, [])
@@ -492,9 +496,9 @@ func _build_unified_timeline_display() -> void:
 		if phase_seg.is_empty():
 			phase_seg = "?"
 
-		var round_changed := (idx > 0 and round_num != prev_round)
-		if round_changed:
-			_add_round_header_item(idx)
+		var round_changed := (round_num != prev_round)
+		if round_changed and round_num >= 1:
+			_add_round_header_item(round_num, idx)
 
 		if round_changed or phase_seg != prev_phase:
 			if phase_header != null and is_instance_valid(phase_header):
@@ -638,10 +642,11 @@ func _get_phase_display_name(phase_segment: String) -> String:
 		return str(PHASE_DISPLAY_NAMES[key])
 	return key if not key.is_empty() else "?"
 
-func _add_round_header_item(start_step_index: int) -> void:
+func _add_round_header_item(round_number: int, start_step_index: int) -> void:
 	if log_container == null:
 		return
 	var item := RoundHeaderItem.new()
+	item.round_number = int(round_number)
 	item.start_step_index = int(start_step_index)
 	item.clicked.connect(_on_timeline_header_clicked)
 	log_container.add_child(item)
@@ -1051,6 +1056,7 @@ class RoundHeaderItem extends PanelContainer:
 	signal clicked(timeline_index: int)
 
 	# 点击跳转到该回合段落的第一条 ActionGroup（即 start_step_index）
+	var round_number: int = -1
 	var start_step_index: int = -1
 
 	var _label: Label
@@ -1087,7 +1093,8 @@ class RoundHeaderItem extends PanelContainer:
 		_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		hbox.add_child(_label)
 
-		_label.text = "回合切换"
+		var rn := int(round_number)
+		_label.text = ("回合 %d" % rn) if rn > 0 else "回合 ?"
 		_apply_timeline_visuals()
 
 	func get_timeline_index() -> int:
