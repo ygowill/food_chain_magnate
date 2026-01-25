@@ -203,6 +203,8 @@ func _build_compact_layout(vbox: VBoxContainer) -> void:
 	_description_label.add_theme_font_size_override("font_size", _scaled(11.0, 1))
 	_description_label.add_theme_color_override("font_color", Color(0.18, 0.18, 0.2, 1))
 	_description_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_description_label.max_lines_visible = 3
+	_description_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_description_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(_description_label)
 
@@ -435,9 +437,12 @@ func _update_display() -> void:
 			var ms_val = _employee_def.get("manager_slots", null)
 			if ms_val is int or ms_val is float:
 				desc = "管理名额: %d" % int(ms_val)
-		var max_len := 120 if variant == CardVariant.FULL else 40
-		if desc.length() > max_len:
-			desc = desc.substr(0, max_len) + "..."
+		# Compact 卡片：使用固定 3 行（max_lines_visible）+ 省略号截断，避免因文本高度变化导致卡片尺寸不一致（issue_tracker #77）。
+		# Full 卡片仍保留长度截断，避免描述过长影响布局与可读性。
+		if variant == CardVariant.FULL:
+			var max_len := 120
+			if desc.length() > max_len:
+				desc = desc.substr(0, max_len) + "..."
 		_description_label.text = desc
 
 	# 距离/范围（暂用 range.value；未来可用图标替代）

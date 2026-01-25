@@ -4250,31 +4250,31 @@
 - `EmployeeCard` 的 `PanelContainer` 最小尺寸为 `max(custom_minimum_size, children_minimum_size)`。
 - `_description_label` 在自动换行时会根据文本内容产生可变的 minimum height；当文本需要 4+ 行时，会把整张卡的 minimum height 顶高，从而出现“卡片大小不一”，并在流式/自定义布局更新不及时的场景下出现重叠。
 
-**拟定修复/整改方案（需你确认后实施）**
+**实施记录**
 
-- 在 `EmployeeCard` 的描述 Label 上：
-	- 固定为 3 行显示：`max_lines_visible = 3`；
-	- 溢出使用省略号：`text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS`；
-	-（可选）将 `autowrap_mode` 从 `AUTOWRAP_WORD` 调整为 `AUTOWRAP_WORD_SMART`，以获得更稳定的断行。
-- 移除/弱化基于字符数的截断（`max_len`），改为“行数限制 + 省略号”，使规则与 UI 表现一致。
-- 增加一个“描述行数扫描”工具（或一次性脚本），在当前卡宽/字号下输出超出 3 行的员工清单，便于你手工缩短描述。
+- 已修改：`ui/components/employee_card/employee_card.gd`
+	- 仅对 `CardVariant.COMPACT`：描述区域固定为 3 行：
+		- `_description_label.max_lines_visible = 3`
+		- `_description_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS`
+	- `CardVariant.COMPACT` 不再使用字符数截断（之前 compact=40 字符截断）；改由“3 行 + 省略号”保证卡片高度不随文本变化。
+	- `CardVariant.FULL` 仍保留 `max_len=120` 字符截断（避免 full 描述过长影响可读性/布局）。
 
-**超出 3 行的员工清单（按当前实现测算）**
+**需要你手工缩短描述的员工清单（compact 3 行无法完整展示）**
 
-- 假设：compact 卡描述区宽度约 `118px`（130 - 左右 margin 6），字号 `11`，`Label.autowrap_mode=AUTOWRAP_WORD`。
-- 超出 3 行：
-	- `movie_star_b` / `movie_star_c` / `movie_star_d`
-	- `mass_marketeer`
-	- `night_shift_manager`
+- `modules/movie_stars/content/employees/movie_star_b.json`
+- `modules/movie_stars/content/employees/movie_star_c.json`
+- `modules/movie_stars/content/employees/movie_star_d.json`
+- `modules/mass_marketeers/content/employees/mass_marketeer.json`
+- `modules/night_shift_managers/content/employees/night_shift_manager.json`
 
-**验证计划（修复后）**
+**验证**
 
-- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`
-- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（115/115，`.godot/AllTests.log`）
 
 **状态**
 
-- Planned（等待你确认后实施）
+- Implemented（待你手动验收 UI）
 
 ---
 
