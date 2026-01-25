@@ -1,7 +1,7 @@
 {
   "id": "mass_marketeer",
   "name": "大众营销员",
-  "description": "每张在岗的大众营销员使营销阶段额外结算 1 轮（模块：Mass Marketeers）",
+  "description": "每张在岗的大众营销员使营销阶段额外结算 1 轮",
   "salary": true,
   "unique": false,
   "role": "marketing",

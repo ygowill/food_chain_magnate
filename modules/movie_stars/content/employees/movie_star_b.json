@@ -1,7 +1,7 @@
 {
   "id": "movie_star_b",
   "name": "电影明星B",
-  "description": "决定顺序阶段优先选择顺序（优先级B>C>D）；晚餐时自动赢得女服务员平局链路（模块：Movie Stars）",
+  "description": "决定顺序阶段优先选择顺序（优先级B>C>D）；晚餐时自动赢得平局。",
   "salary": true,
   "unique": true,
   "role": "special",
