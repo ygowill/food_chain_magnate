@@ -1115,6 +1115,139 @@
 
 ---
 
+## 51. 员工卡片大小不统一（描述区需固定 3 行）
+
+**现象**
+
+- 员工卡片在布局（例如手牌区/选择器的 `HFlowContainer`）中出现大小不一致，进而出现互相重叠/挤压。
+- 期望：员工卡中间的描述区域始终固定为 **3 行**（不多不少），以固定卡片尺寸。
+- 若某些员工描述无法在 3 行内完整显示，需要提供清单供手工调整描述。
+
+**涉及代码（初步定位）**
+
+- `ui/components/employee_card/employee_card.gd`
+	- `_build_compact_layout()` / `_build_full_layout()`：`_description_label` 使用 `Label` + `autowrap_mode`，但未限制行数。
+	- `_update_display()`：使用字符长度 `max_len`（compact=40/full=120）截断，无法保证“3 行”要求。
+- `ui/components/hand_area/hand_area.gd`：`HFlowContainer` 依赖子控件的 minimum size；卡片 minimum size 变化会影响流式布局。
+
+**根因**
+
+- `EmployeeCard` 的 `PanelContainer` 最小尺寸为 `max(custom_minimum_size, children_minimum_size)`。
+- `_description_label` 在自动换行时会根据文本内容产生可变的 minimum height；当文本需要 4+ 行时，会把整张卡的 minimum height 顶高，从而出现“卡片大小不一”，并在流式/自定义布局更新不及时的场景下出现重叠。
+
+**拟定修复/整改方案（需你确认后实施）**
+
+- 在 `EmployeeCard` 的描述 Label 上：
+	- 固定为 3 行显示：`max_lines_visible = 3`；
+	- 溢出使用省略号：`text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS`；
+	-（可选）将 `autowrap_mode` 从 `AUTOWRAP_WORD` 调整为 `AUTOWRAP_WORD_SMART`，以获得更稳定的断行。
+- 移除/弱化基于字符数的截断（`max_len`），改为“行数限制 + 省略号”，使规则与 UI 表现一致。
+- 增加一个“描述行数扫描”工具（或一次性脚本），在当前卡宽/字号下输出超出 3 行的员工清单，便于你手工缩短描述。
+
+**超出 3 行的员工清单（按当前实现测算）**
+
+- 假设：compact 卡描述区宽度约 `118px`（130 - 左右 margin 6），字号 `11`，`Label.autowrap_mode=AUTOWRAP_WORD`。
+- 超出 3 行：
+	- `movie_star_b` / `movie_star_c` / `movie_star_d`
+	- `mass_marketeer`
+	- `night_shift_manager`
+
+**验证计划（修复后）**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`
+
+**状态**
+
+- Planned（等待你确认后实施）
+
+---
+
+## 52. `place_giant_billboard` / `place_highway_offramp` 无条件显示且阻塞 auto-advance
+
+**现象**
+
+- 在没有对应员工/里程碑时，ActionPanel 仍显示：
+	- `place_giant_billboard`（放置巨型广告牌）
+	- `place_highway_offramp`（放置高速公路出口）
+- 且会导致 Working/Marketing 子阶段的 auto-advance（自动子阶段推进）卡住。
+
+**涉及代码（初步定位）**
+
+- 动作可用性与“可启动”：
+	- `core/actions/action_registry.gd`：`get_available_actions()` / `get_player_initiatable_actions()`
+	- `core/engine/game_engine/auto_advance.gd`：`try_advance_one()` 使用 `get_player_initiatable_actions()` 判断是否存在“真实可做动作”
+	- `ui/components/action_panel/action_panel.gd`：`refresh()`（可用动作全量展示 + 仅灰显不可启动）
+- 模块动作：
+	- `modules/rural_marketeers/actions/place_giant_billboard_action.gd`
+	- `modules/rural_marketeers/actions/place_highway_offramp_action.gd`
+
+**根因**
+
+- ActionPanel 会展示当前 phase/sub_phase 下的所有 action（`get_available_actions()` 只做阶段 gating），即使对当前玩家不可用也会显示（通常灰显）。
+- auto-advance 依赖 `get_player_initiatable_actions()`：只要某动作 “validate 失败原因仅为缺少参数”，就会被视为“可启动”，从而阻止自动推进。
+- `PlaceGiantBillboardAction._validate_specific()` 先 `require_*` 参数（`side/product`），后检查玩家是否有 `rural_marketeer`；因此在 **无员工** 时，测试命令会先报 “缺少参数”，被误判为“可启动动作”，从而：
+	- ActionPanel 中该动作被视为可点（或至少被纳入“可启动”集合）；
+	- auto-advance 认为存在真实动作而停止推进，造成软锁。
+- `PlaceHighwayOfframpAction` 本身会先检查 `round_state.rural_marketeers_offramp_pending`；理论上无里程碑时不会进入 “缺少参数” 分支，但仍会被 ActionPanel 作为“可用动作”展示（灰显）。
+
+**拟定修复/整改方案（需你确认后实施）**
+
+- 对 `place_giant_billboard`：
+	- 调整 validate 顺序：先检查“是否拥有/激活 rural_marketeer”，再检查参数缺失；
+	- 或实现 `can_initiate(state, player_id)` 并在缺参时额外 gate（更通用，但需要为其它类似动作补齐约定）。
+- 对 `place_highway_offramp`（展示策略二选一，需要你确认）：
+	- A) 保留显示但灰显，并确保禁用原因明确（“当前没有可放置的 offramp”）；
+	- B) 仅在 `offramp_pending[player]=true` 时才在 ActionPanel 出现（需要 UI 侧过滤或引入“动态可用性”机制）。
+
+**验证计划（修复后）**
+
+- 新增/补齐回归测试（建议）：
+	- 在 Working/Marketing 且玩家没有 `rural_marketeer` 时，`AutoAdvance` 应能自动推进到下一子阶段（不应被 `place_giant_billboard` 阻塞）。
+- 运行：
+	- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`
+	- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`
+
+**状态**
+
+- Planned（等待你确认后实施）
+
+---
+
+## 53. “回退到阶段开始”在多玩家轮转下的预期/实现不一致
+
+**现象**
+
+- 复现描述（来自你）：玩家1结束回合 → 玩家2执行一次“跳过” → 点击“回退到阶段开始”，看起来回到了玩家1回合开始。
+- 你怀疑与最近的日志/时间线修改相关。
+
+**涉及代码（初步定位）**
+
+- UI 入口：
+	- `ui/components/action_panel/action_panel.tscn`：`RewindPhaseButton` 文案/tooltip
+	- `ui/scenes/game/game.gd`：`rewind_to_phase_start()` → `game_engine.find_phase_start_command_index()`
+- 引擎计算：
+	- `core/engine/game_engine.gd`：`find_phase_start_command_index()`
+
+**根因（基于现有实现）**
+
+- 当前按钮语义是“撤销本阶段所有操作并回到阶段开始”（tooltip），实现上按 **“当前回合的 phase 起点”** 计算：
+	- `find_phase_start_command_index()` 只根据 `state.phase` + `command.phase` + `command.timestamp(round)` 查找“本回合该阶段的第一条命令”；
+	- 不区分“玩家回合/轮转边界”，因此在 Working 阶段里点击该按钮通常会回到该阶段开始时的玩家（通常是玩家1），表现为“跳回玩家1回合开始”。
+
+**拟定整改方案（需要你确认按钮语义）**
+
+- A) 若你希望保持现有语义（回到本回合该阶段开始）：只需把按钮文案/tooltip/确认弹窗文案说清楚（例如“回退到本回合【阶段】开始（可能回到玩家1）”），避免误解。
+- B) 若你期望“回退到当前玩家本阶段（或本回合）开始”（即回到玩家2开始操作的点位）：
+	- 需要新增引擎辅助：例如 `find_current_player_turn_start_command_index()`（按 `PLAYER_TURN_STARTED` 事件或按命令造成的 current_player 变更来定位）；
+	- UI 上将按钮改为“回退到当前玩家回合开始”，或提供两个按钮分别对应 A/B 语义。
+
+**状态**
+
+- Needs Clarification（请你确认期望语义后再实施）
+
+---
+
 ## 65. 动作面板：固定“跳过子阶段/确认结束”到底部
 
 **现象**
