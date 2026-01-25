@@ -972,16 +972,16 @@ func _on_debug_command_executed(command: String, _result: String) -> void:
 	# 调试命令执行后刷新游戏 UI
 	_update_ui()
 
-func rewind_to_phase_start() -> void:
+func rewind_to_turn_start() -> void:
 	if game_engine == null:
 		return
 	if _replay_mode_active:
-		GameLog.warn("Game", "回放模式下无法回退阶段")
+		GameLog.warn("Game", "回放模式下无法回退回合")
 		return
 
-	var idx_r: Result = game_engine.find_phase_start_command_index()
+	var idx_r: Result = game_engine.find_current_player_turn_start_command_index()
 	if not idx_r.ok:
-		GameLog.warn("Game", "计算阶段开始索引失败: %s" % idx_r.error)
+		GameLog.warn("Game", "计算回合开始索引失败: %s" % idx_r.error)
 		return
 
 	var target_index := int(idx_r.value)
@@ -990,19 +990,20 @@ func rewind_to_phase_start() -> void:
 		return
 
 	var state := game_engine.get_state()
+	var pid := state.get_current_player_id()
 	var phase_name := str(state.phase)
 	var steps := current_index - target_index
 
 	_show_confirm(
-		"回退到阶段开始",
-		"确定要回退到【%s】阶段开始吗？\n将撤销本阶段的 %d 步操作。" % [phase_name, steps],
-		Callable(self, "_confirm_rewind_to_phase_start").bind(target_index),
+		"回退到回合开始",
+		"确定要回退到当前玩家（P%d）的回合开始吗？\n将撤销从该回合开始以来的 %d 步操作。\n（阶段：%s）" % [pid + 1, steps, phase_name],
+		Callable(self, "_confirm_rewind_to_turn_start").bind(target_index),
 		Callable(),
 		"回退",
 		"取消"
 	)
 
-func _confirm_rewind_to_phase_start(target_index: int) -> void:
+func _confirm_rewind_to_turn_start(target_index: int) -> void:
 	if game_engine == null:
 		return
 	if _panel_controller != null and _panel_controller.has_method("hide_all"):
@@ -1010,7 +1011,7 @@ func _confirm_rewind_to_phase_start(target_index: int) -> void:
 
 	var result := game_engine.rewind_to_command(target_index)
 	if not result.ok:
-		GameLog.warn("Game", "回退到阶段开始失败: %s" % result.error)
+		GameLog.warn("Game", "回退到回合开始失败: %s" % result.error)
 	else:
 		_apply_live_log_timeline_from_engine()
 	_update_ui()

@@ -638,7 +638,7 @@ func refresh() -> void:
 func _on_rewind_phase_pressed() -> void:
 	# 作为“面板工具”而非游戏动作：由 GamePanelController 接管该 action_id，并触发时间线回退。
 	clear_context_overlay()
-	action_requested.emit("rewind_to_phase_start", {})
+	action_requested.emit("rewind_to_turn_start", {})
 
 func _get_fallback_actions(phase: String, sub_phase: String) -> Array[String]:
 	var result: Array[String] = ["skip"]

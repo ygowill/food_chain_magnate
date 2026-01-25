@@ -549,9 +549,9 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 
 	match action_id:
 		# UI 工具：时间线回退
-		"rewind_to_phase_start":
-			if _scene != null and _scene.has_method("rewind_to_phase_start"):
-				_scene.call("rewind_to_phase_start")
+		"rewind_to_turn_start":
+			if _scene != null and _scene.has_method("rewind_to_turn_start"):
+				_scene.call("rewind_to_turn_start")
 			return
 
 		# 系统动作

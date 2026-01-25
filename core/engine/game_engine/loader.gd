@@ -9,6 +9,13 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result
 
 	var all_warnings: Array[String] = []
 
+	# EventBus.history 为“单局”语义：加载存档视为进入一局新对局时间线，应清空历史，避免跨对局混入。
+	if EventBus != null:
+		if EventBus.has_method("clear_history_and_reset_sequence"):
+			EventBus.clear_history_and_reset_sequence()
+		elif EventBus.has_method("clear_history"):
+			EventBus.clear_history()
+
 	# 验证存档格式
 	if not archive.has("initial_state") or not archive.has("commands"):
 		return Result.failure("无效的存档格式")

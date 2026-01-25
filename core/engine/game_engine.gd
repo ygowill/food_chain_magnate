@@ -298,6 +298,69 @@ func find_phase_start_command_index() -> Result:
 
 	return Result.success(first_in_phase - 1)
 
+# 查找“当前玩家回合开始”对应的命令索引（用于 UI 的“一键回退当前玩家回合”）。
+# 语义：返回 target_index，用于 rewind_to_command(target_index)。
+# - 若能在 EventBus.history 找到 PLAYER_TURN_STARTED 事件，则返回该事件所在命令索引（该命令执行后即为回合开始状态）。
+# - 若找不到（例如首回合/阶段不发射 turn_started），则回退到 -1（视为对局开始）。
+func find_current_player_turn_start_command_index() -> Result:
+	var init_check := _ensure_initialized()
+	if not init_check.ok:
+		return init_check
+	if state == null:
+		return Result.failure("游戏状态为空")
+
+	var pid := state.get_current_player_id()
+	if pid < 0:
+		return Result.failure("当前玩家无效")
+
+	if current_command_index < 0:
+		return Result.success(-1)
+
+	# 优先使用 EventBus.history（运行时与回退后均会补齐 command_index）
+	if EventBus != null and EventBus.has_method("get_history_by_type"):
+		var evs_val = EventBus.get_history_by_type(EventBus.EventType.PLAYER_TURN_STARTED)
+		if evs_val is Array:
+			var evs: Array = evs_val
+			for i in range(evs.size() - 1, -1, -1):
+				var e_val = evs[i]
+				if not (e_val is Dictionary):
+					continue
+				var e: Dictionary = e_val
+				var data_val = e.get("data", null)
+				if not (data_val is Dictionary):
+					continue
+				var data: Dictionary = data_val
+
+				var pid_val = data.get("player_id", null)
+				var ev_pid := -1
+				if pid_val is int:
+					ev_pid = int(pid_val)
+				elif pid_val is float:
+					var f: float = float(pid_val)
+					if f == int(f):
+						ev_pid = int(f)
+				elif pid_val is String and str(pid_val).is_valid_int():
+					ev_pid = int(str(pid_val))
+				if ev_pid != pid:
+					continue
+
+				var idx_val = data.get("command_index", null)
+				var idx := -999
+				if idx_val is int:
+					idx = int(idx_val)
+				elif idx_val is float:
+					var f2: float = float(idx_val)
+					if f2 == int(f2):
+						idx = int(f2)
+				elif idx_val is String and str(idx_val).is_valid_int():
+					idx = int(str(idx_val))
+				if idx < -1 or idx > int(current_command_index):
+					continue
+
+				return Result.success(idx)
+
+	return Result.success(-1)
+
 # 获取特定范围的命令
 func get_commands_range(from: int, to: int) -> Array[Command]:
 	var result: Array[Command] = []

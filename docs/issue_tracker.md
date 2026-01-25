@@ -4340,9 +4340,9 @@
 
 - UI 入口：
 	- `ui/components/action_panel/action_panel.tscn`：`RewindPhaseButton` 文案/tooltip
-	- `ui/scenes/game/game.gd`：`rewind_to_phase_start()` → `game_engine.find_phase_start_command_index()`
+	- `ui/scenes/game/game.gd`：`rewind_to_turn_start()` → `game_engine.find_current_player_turn_start_command_index()`
 - 引擎计算：
-	- `core/engine/game_engine.gd`：`find_phase_start_command_index()`
+	- `core/engine/game_engine.gd`：`find_current_player_turn_start_command_index()`
 
 **根因（基于现有实现）**
 
@@ -4350,13 +4350,28 @@
 	- `find_phase_start_command_index()` 只根据 `state.phase` + `command.phase` + `command.timestamp(round)` 查找“本回合该阶段的第一条命令”；
 	- 不区分“玩家回合/轮转边界”，因此在 Working 阶段里点击该按钮通常会回到该阶段开始时的玩家（通常是玩家1），表现为“跳回玩家1回合开始”。
 
-**拟定整改方案（需要你确认按钮语义）**
+**整改方案（已按你的确认实施）**
 
-- A) 若你希望保持现有语义（回到本回合该阶段开始）：只需把按钮文案/tooltip/确认弹窗文案说清楚（例如“回退到本回合【阶段】开始（可能回到玩家1）”），避免误解。
-- B) 若你期望“回退到当前玩家本阶段（或本回合）开始”（即回到玩家2开始操作的点位）：
-	- 需要新增引擎辅助：例如 `find_current_player_turn_start_command_index()`（按 `PLAYER_TURN_STARTED` 事件或按命令造成的 current_player 变更来定位）；
-	- UI 上将按钮改为“回退到当前玩家回合开始”，或提供两个按钮分别对应 A/B 语义。
+- 目标语义：**回退到当前玩家回合开始**
+- 具体实现：
+	- 新增：`core/engine/game_engine.gd` → `find_current_player_turn_start_command_index()`
+		- 基于 `EventBus.history` 的 `PLAYER_TURN_STARTED`（事件 data 中带 `command_index`）定位当前玩家回合开始所在命令索引；
+		- 找不到时回退到 `-1`（视为对局开始）。
+	- 更新 UI：
+		- `ui/components/action_panel/action_panel.tscn`：按钮文案/tooltip 改为“回退到当前玩家回合开始”
+		- `ui/components/action_panel/action_panel.gd`：action_id 改为 `rewind_to_turn_start`
+		- `ui/scenes/game/game_panel_controller.gd`：路由到 `Game.rewind_to_turn_start()`
+		- `ui/scenes/game/game.gd`：使用 `find_current_player_turn_start_command_index()` 并确认回退
+	- 兼容性/稳定性：
+		- `EventBus.history` 明确为“单局”语义：在新开局/读档时清空（避免跨对局事件混入导致定位错误）
+			- `core/engine/game_engine/initializer.gd`
+			- `core/engine/game_engine/loader.gd`
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（116/116，`.godot/AllTests.log`）
 
 **状态**
 
-- Needs Clarification（请你确认期望语义后再实施）
+- Implemented（待你按复现步骤手动验收）
