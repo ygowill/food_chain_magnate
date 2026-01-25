@@ -1,6 +1,6 @@
 # 回放与游戏日志融合（完整时间线）报告与重构开发计划
 
-状态：已实施（M0..M4.3 + M4 可选折叠）；0.1.1/0.1.2/0.1.4 已修复｜最后更新：2026-01-25
+状态：已实施（M0..M4.3 + M4 可选折叠）；0.1.1/0.1.2/0.1.4/0.1.5 已修复｜最后更新：2026-01-25
 
 ## 0. 当前进度（2026-01-25）
 
@@ -128,6 +128,27 @@
 - `gameplay/actions/submit_restructuring_action.gd` / `gameplay/actions/choose_turn_order_action.gd`：移除动作内的 `advance_phase()`，避免动作组被归到新阶段段落。
 - `core/engine/game_engine/auto_advance.gd`：在 Restructuring finalized / OrderOfBusiness finalized 后自动推进到下一阶段，形成独立 phase step，保证日志顺序为“玩家动作 -> 阶段切换”。
 - core：新增 `core/tests/step_timeline_phase_boundary_order_test.gd` 回归覆盖，并接入 `ui/scenes/tests/all_tests.gd`。
+
+### 0.1.5 Cleanup 丢弃日志与里程碑顺序（first_throw_away / FOOD_DISCARDED）
+
+来自日志面板截图的展示问题（已修复）：
+
+1) Cleanup 阶段首个丢弃里程碑 `first_throw_away` 显示在“清理库存: 丢弃...”之前，且可能脱离动作组。
+2) `choose_fridge_keep` 每次应输出一条 `FOOD_DISCARDED`（“清理库存: 丢弃...”）；但此前只在离开 Cleanup 时汇总输出，导致错序与重复。
+
+根因（确定）：
+
+- `FOOD_DISCARDED` 之前由 `CommandRunner._build_phase_change_events()` / `AdvancePhaseAction._generate_specific_events()` 在离开 Cleanup 时从 `round_state.cleanup.inventory_discarded` 汇总生成；而 `first_throw_away` 在 Cleanup:enter 或 `choose_fridge_keep` 时即时领取。
+- 因为事件生成时刻不同，step_timeline 中会出现“里程碑先出现、丢弃日志后出现”的错序；并且离开 Cleanup 的汇总可能造成重复输出。
+
+实施要点：
+
+- `gameplay/actions/choose_fridge_keep_action.gd`：在 `_generate_specific_events()` 中对当前玩家输出 `FOOD_DISCARDED`（按丢弃发生时刻），保证每次 `choose_fridge_keep` 都有“清理库存: 丢弃...”。
+- `core/engine/game_engine/command_runner.gd` + `gameplay/actions/advance_phase_action.gd`：把 `FOOD_DISCARDED` 的汇总输出点从“离开 Cleanup”改为“进入 Cleanup”（对应 Cleanup:enter 结算产生的自动丢弃），避免离开 Cleanup 时重复。
+- `core/engine/game_engine/step_timeline_build.gd`：对 `first_throw_away` 延后输出：
+  - 若进入 Cleanup 时无 pending（无 `choose_fridge_keep`），则在该 Cleanup phase step 末尾输出（确保在所有 `FOOD_DISCARDED` 之后）。
+  - 若存在 pending（有 `choose_fridge_keep`），则延后到最后一次 `choose_fridge_keep` 命令 step 输出（确保在所有“清理库存”之后）。
+- core：新增 `core/tests/step_timeline_cleanup_discard_order_test.gd` 回归覆盖，并接入 `ui/scenes/tests/all_tests.gd`。
 
 ## 1. 背景与目标
 

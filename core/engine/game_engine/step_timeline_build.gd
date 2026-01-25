@@ -62,6 +62,7 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 	var warnings: Array[String] = []
 	var pending_marketing_enter_effect_events: Array[Dictionary] = []
 	var pending_marketing_enter_anchor_command_index := -1
+	var pending_cleanup_throw_away_milestone_events: Array[Dictionary] = []
 	var seq := 0
 
 	# 初始化事件（step=-1）
@@ -148,6 +149,7 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 		var command_events := executor.generate_events(old_state, state_in, cmd)
 		var cash_events_cmd := CommandRunnerClass._build_player_cash_changed_events(old_state, state_in, cmd)
 		var milestone_events_cmd := CommandRunnerClass._build_milestone_achieved_events(old_state, state_in, cmd)
+		milestone_events_cmd = _filter_out_first_throw_away_milestone_events(milestone_events_cmd, pending_cleanup_throw_away_milestone_events)
 		# 若命令本身发生了 phase 切换（如 advance_phase），则：
 		# - PHASE_CHANGED 之前的事件（含 *_REPORT）归属到“命令前”的 step（旧阶段）
 		# - PHASE_CHANGED 及之后的事件归属到“玩家行动 step”（新阶段）
@@ -211,6 +213,9 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 					cash_events_new = cash_events_cmd
 					milestone_events_new = milestone_events_cmd
 
+			milestone_events_old = _filter_out_first_throw_away_milestone_events(milestone_events_old, pending_cleanup_throw_away_milestone_events)
+			milestone_events_new = _filter_out_first_throw_away_milestone_events(milestone_events_new, pending_cleanup_throw_away_milestone_events)
+
 			if not before_phase_events.is_empty():
 				_append_events(events_out, before_phase_events, i, prev_step_index, str(old_state.phase), seq)
 				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
@@ -247,6 +252,12 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 					if not milestone_events_new.is_empty():
 						_append_events(events_out, _override_events_phase_fields(milestone_events_new, state_in), i, command_step_index, str(state_in.phase), seq)
 						seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+
+			# CleanupDiscard: first_throw_away 延后到“清理库存动作完成后”再显示（避免出现在清理库存之前）。
+			if new_phase_name == "Cleanup" and (not _has_pending_cleanup_actions(state_in)) and not pending_cleanup_throw_away_milestone_events.is_empty():
+				_append_events(events_out, pending_cleanup_throw_away_milestone_events, i, command_step_index, "Cleanup", seq)
+				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+				pending_cleanup_throw_away_milestone_events = []
 		else:
 			_append_events(events_out, command_events, i, command_step_index, str(state_in.phase), seq)
 			seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
@@ -256,6 +267,12 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 			if not milestone_events_cmd.is_empty():
 				_append_events(events_out, milestone_events_cmd, i, command_step_index, str(state_in.phase), seq)
 				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+
+			# CleanupDiscard: first_throw_away 必须在所有 choose_fridge_keep（清理库存）之后出现。
+			if str(cmd.action_id).strip_edges() == "choose_fridge_keep" and (not _has_pending_cleanup_actions(state_in)) and not pending_cleanup_throw_away_milestone_events.is_empty():
+				_append_events(events_out, pending_cleanup_throw_away_milestone_events, i, command_step_index, str(state_in.phase), seq)
+				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+				pending_cleanup_throw_away_milestone_events = []
 
 		# auto-advance：逐步执行。sub_phase 变化打包在当前 step；phase 变化插入新 step。
 		var current_step_index := command_step_index
@@ -276,6 +293,7 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 			var phase_events := CommandRunnerClass._build_phase_change_events(before, state_in)
 			var cash_events := CommandRunnerClass._build_player_cash_changed_events(before, state_in, Command.create_system("auto_advance"))
 			var milestone_events := CommandRunnerClass._build_milestone_achieved_events(before, state_in, cmd)
+			milestone_events = _filter_out_first_throw_away_milestone_events(milestone_events, pending_cleanup_throw_away_milestone_events)
 
 			if phase_changed:
 				# 冻结旧 step 的快照：停在“离开前阶段”的最后稳定状态
@@ -360,6 +378,9 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 						cash_events_new = cash_events
 						milestone_events_new = milestone_events
 
+				milestone_events_old = _filter_out_first_throw_away_milestone_events(milestone_events_old, pending_cleanup_throw_away_milestone_events)
+				milestone_events_new = _filter_out_first_throw_away_milestone_events(milestone_events_new, pending_cleanup_throw_away_milestone_events)
+
 				if not cash_events_old.is_empty():
 					_append_events(events_out, _override_events_phase_fields(cash_events_old, before), i, current_step_index, str(before.phase), seq)
 					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
@@ -385,6 +406,12 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 						if not milestone_events_new.is_empty():
 							_append_events(events_out, _override_events_phase_fields(milestone_events_new, state_in), i, phase_step_index, str(state_in.phase), seq)
 							seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+
+				# CleanupDiscard: 若进入 Cleanup 时无需 pending（无 choose_fridge_keep），则在该 phase step 末尾刷出 first_throw_away。
+				if new_phase_name == "Cleanup" and (not _has_pending_cleanup_actions(state_in)) and not pending_cleanup_throw_away_milestone_events.is_empty():
+					_append_events(events_out, pending_cleanup_throw_away_milestone_events, i, phase_step_index, "Cleanup", seq)
+					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+					pending_cleanup_throw_away_milestone_events = []
 
 				current_step_index = phase_step_index
 			else:
@@ -434,6 +461,15 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 			seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 		pending_marketing_enter_effect_events = []
 		pending_marketing_enter_anchor_command_index = -1
+
+	# 兜底：避免丢失被延后的 cleanup 里程碑（理论上应在最后一次 choose_fridge_keep 或 Cleanup:enter 时刷出）。
+	if not pending_cleanup_throw_away_milestone_events.is_empty():
+		var flush_step_index2 := steps.size() - 1
+		if flush_step_index2 >= 0:
+			var flush_ci2 := engine.command_history.size() - 1
+			_append_events(events_out, pending_cleanup_throw_away_milestone_events, flush_ci2, flush_step_index2, "Cleanup", seq)
+			seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+		pending_cleanup_throw_away_milestone_events = []
 
 	return Result.success({
 		"initial_state_dict": state_dict_val.duplicate(true),
@@ -551,3 +587,44 @@ static func _override_events_phase_fields(events: Array[Dictionary], state: Game
 		ev["data"] = d
 		out.append(ev)
 	return out
+
+static func _filter_out_first_throw_away_milestone_events(events: Array[Dictionary], pending: Array[Dictionary]) -> Array[Dictionary]:
+	# 目的：首个丢弃里程碑（first_throw_away）显示顺序应在“清理库存”之后，避免出现在清理动作之前。
+	var out: Array[Dictionary] = []
+	if events == null or events.is_empty():
+		return out
+	for ev_val in events:
+		if not (ev_val is Dictionary):
+			continue
+		var ev: Dictionary = ev_val
+		if str(ev.get("type", "")).strip_edges() != EventBus.EventType.MILESTONE_ACHIEVED:
+			out.append(ev)
+			continue
+		var d_val = ev.get("data", null)
+		if not (d_val is Dictionary):
+			out.append(ev)
+			continue
+		var d: Dictionary = d_val
+		var mid := str(d.get("milestone_id", "")).strip_edges()
+		if mid == "first_throw_away":
+			if pending != null:
+				pending.append(ev)
+			continue
+		out.append(ev)
+	return out
+
+static func _has_pending_cleanup_actions(state: GameState) -> bool:
+	if state == null:
+		return false
+	if not (state.round_state is Dictionary):
+		return false
+	var ppa_val = Dictionary(state.round_state).get("pending_phase_actions", null)
+	if not (ppa_val is Dictionary):
+		return false
+	var ppa: Dictionary = ppa_val
+	if not ppa.has("Cleanup"):
+		return false
+	var list_val = ppa.get("Cleanup", null)
+	if not (list_val is Array):
+		return false
+	return not Array(list_val).is_empty()
