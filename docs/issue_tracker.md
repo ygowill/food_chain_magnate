@@ -4306,26 +4306,26 @@
 	- auto-advance 认为存在真实动作而停止推进，造成软锁。
 - `PlaceHighwayOfframpAction` 本身会先检查 `round_state.rural_marketeers_offramp_pending`；理论上无里程碑时不会进入 “缺少参数” 分支，但仍会被 ActionPanel 作为“可用动作”展示（灰显）。
 
-**拟定修复/整改方案（需你确认后实施）**
+**实施记录**
 
-- 对 `place_giant_billboard`：
-	- 调整 validate 顺序：先检查“是否拥有/激活 rural_marketeer”，再检查参数缺失；
-	- 或实现 `can_initiate(state, player_id)` 并在缺参时额外 gate（更通用，但需要为其它类似动作补齐约定）。
-- 对 `place_highway_offramp`（展示策略二选一，需要你确认）：
-	- A) 保留显示但灰显，并确保禁用原因明确（“当前没有可放置的 offramp”）；
-	- B) 仅在 `offramp_pending[player]=true` 时才在 ActionPanel 出现（需要 UI 侧过滤或引入“动态可用性”机制）。
+- 已修改：`modules/rural_marketeers/actions/place_giant_billboard_action.gd`
+	- 新增 `can_initiate(state, player_id)`：当玩家没有激活 `rural_marketeer`（或无可放置边）时，即使缺少参数也不会被判定为“可启动动作”，从根源上避免阻塞 `AutoAdvance`。
+- 已修改：`ui/components/action_panel/action_panel.gd`
+	- 对 `place_giant_billboard` / `place_highway_offramp`：若对当前玩家不可启动则直接隐藏（按你的要求“隐藏”，避免面板噪音/误导）。
 
-**验证计划（修复后）**
+**回归测试**
 
-- 新增/补齐回归测试（建议）：
-	- 在 Working/Marketing 且玩家没有 `rural_marketeer` 时，`AutoAdvance` 应能自动推进到下一子阶段（不应被 `place_giant_billboard` 阻塞）。
-- 运行：
-	- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`
-	- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`
+- 已新增：`core/tests/rural_marketeers_auto_advance_unblocked_test.gd`
+- 已纳入：`ui/scenes/tests/all_tests.gd`
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`：PASS（`.godot/GameSmokeTest.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（116/116，`.godot/AllTests.log`）
 
 **状态**
 
-- Planned（等待你确认后实施）
+- Implemented（待你手动验收 UI）
 
 ---
 

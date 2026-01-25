@@ -13,6 +13,7 @@ const PaydaySalaryTokenEligibilityTestClass = preload("res://core/tests/payday_s
 const CallbackResultContractTestClass = preload("res://core/tests/callback_result_contract_test.gd")
 const InitialCompanyTestClass = preload("res://core/tests/initial_company_test.gd")
 const MandatoryActionsTestClass = preload("res://core/tests/mandatory_actions_test.gd")
+const RuralMarketeersAutoAdvanceUnblockedTestClass = preload("res://core/tests/rural_marketeers_auto_advance_unblocked_test.gd")
 const ProduceFoodTestClass = preload("res://core/tests/produce_food_test.gd")
 const ProcureDrinksTestClass = preload("res://core/tests/procure_drinks_test.gd")
 const ProcureDrinksRouteRulesTestClass = preload("res://core/tests/procure_drinks_route_rules_test.gd")
@@ -192,6 +193,10 @@ func _run_all() -> int:
 		{
 			"name": "MandatoryActionsTest",
 			"fn": func() -> Result: return MandatoryActionsTestClass.run(2, 12345),
+		},
+		{
+			"name": "RuralMarketeersAutoAdvanceUnblockedTest",
+			"fn": func() -> Result: return RuralMarketeersAutoAdvanceUnblockedTestClass.run(2, 12345),
 		},
 		{
 			"name": "ProduceFoodTest",

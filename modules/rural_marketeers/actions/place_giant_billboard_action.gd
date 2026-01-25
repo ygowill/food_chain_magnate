@@ -26,6 +26,49 @@ func _init() -> void:
 	allowed_phases = ["Working"]
 	allowed_sub_phases = ["Marketing"]
 
+func can_initiate(state: GameState, player_id: int) -> bool:
+	if state == null:
+		return true
+	if state.get_current_player_id() != player_id:
+		return false
+
+	var player := state.get_player(player_id)
+	if player.is_empty():
+		return false
+
+	var employees_val = player.get("employees", null)
+	if not (employees_val is Array):
+		return false
+	var employees: Array = employees_val
+
+	var has_emp := false
+	for v in employees:
+		if v is String and str(v) == EMPLOYEE_ID:
+			has_emp = true
+			break
+	if not has_emp:
+		return false
+
+	if not (state.map is Dictionary):
+		return false
+	var houses_val = state.map.get("houses", null)
+	if not (houses_val is Dictionary):
+		return false
+	var rural_val = houses_val.get(RURAL_HOUSE_ID, null)
+	if not (rural_val is Dictionary):
+		return false
+	var boards_val = rural_val.get("giant_billboards", null)
+	if not (boards_val is Dictionary):
+		return false
+	var boards: Dictionary = boards_val
+
+	# 至少存在一个未占用的边，才允许“启动”该动作（缺参状态也算可启动）。
+	for side in BILLBOARD_SIDES:
+		if not boards.has(side):
+			return true
+
+	return false
+
 func _validate_specific(state: GameState, command: Command) -> Result:
 	var current_player_id := state.get_current_player_id()
 	if command.actor != current_player_id:
@@ -122,4 +165,3 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if not ms.ok:
 		result.with_warning("里程碑触发失败(UseEmployee/%s): %s" % [EMPLOYEE_ID, ms.error])
 	return result
-

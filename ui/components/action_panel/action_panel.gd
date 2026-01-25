@@ -50,11 +50,15 @@ const HIDDEN_ACTION_IDS := {
 }
 
 # 若动作对“当前玩家”不可启动，则不展示（避免按钮常驻但永远灰掉）
-# 目前主要用于“员工驱动的强制动作”（定价/折扣/奢侈品），这些动作是否可用完全取决于玩家是否拥有对应员工/本回合是否已完成。
+# 目前用于：
+# - “模块/里程碑驱动动作”：未满足前置条件时隐藏（避免在行动面板中产生噪音/误导）
+# -（历史兼容）部分员工驱动动作
 const AUTO_HIDE_IF_NOT_INITIATABLE_ACTION_IDS := {
 	"set_price": true,
 	"set_discount": true,
 	"set_luxury_price": true,
+	"place_giant_billboard": true,
+	"place_highway_offramp": true,
 }
 
 # 定价类强制动作在 UI 中隐藏，并在执行 skip 前由 Game 自动补完（见 Game._maybe_auto_complete_mandatory_actions_before_skip）。
@@ -587,7 +591,15 @@ func refresh() -> void:
 	# Working：即使当前子阶段无任何可执行动作，也必须保留“跳过子阶段”，否则会造成软锁
 	# （例如 Train 子阶段没有可培训来源/次数时，skip 被 validate 拒绝，只能用 skip_sub_phase 推进）。
 
-	# P1：不再自动隐藏“玩家依赖动作”，改为灰显 + 原因（提升发现性）
+	# P1：默认不再自动隐藏“玩家依赖动作”，改为灰显 + 原因（提升发现性）。
+	# 但对少数“模块/里程碑动作”，若对当前玩家不可启动则直接隐藏（issue_tracker #78）。
+	if has_player_executable_info and not AUTO_HIDE_IF_NOT_INITIATABLE_ACTION_IDS.is_empty():
+		var filtered_visible: Array[String] = []
+		for aid_hide in visible_ids:
+			if AUTO_HIDE_IF_NOT_INITIATABLE_ACTION_IDS.has(aid_hide) and not visible_executable.has(aid_hide):
+				continue
+			filtered_visible.append(aid_hide)
+		visible_ids = filtered_visible
 
 	# 强制动作优先显示
 	if not _mandatory_action_ids.is_empty():
