@@ -19,6 +19,23 @@ static func build_full(engine: GameEngine) -> Result:
 	if engine == null:
 		return Result.failure("StepTimelineBuild: engine 为空")
 
+	var pm = engine.phase_manager
+	var trace_was_enabled := false
+	if pm != null:
+		trace_was_enabled = pm.is_timeline_trace_enabled()
+		pm.set_timeline_trace_enabled(true)
+
+	var r := _build_full_impl(engine)
+
+	if pm != null:
+		pm.set_timeline_trace_enabled(trace_was_enabled)
+
+	return r
+
+static func _build_full_impl(engine: GameEngine) -> Result:
+	if engine == null:
+		return Result.failure("StepTimelineBuild: engine 为空")
+
 	var init_check := engine._ensure_initialized()
 	if not init_check.ok:
 		return init_check
@@ -43,6 +60,8 @@ static func build_full(engine: GameEngine) -> Result:
 	var steps: Array[Dictionary] = []
 	var events_out: Array[Dictionary] = []
 	var warnings: Array[String] = []
+	var pending_marketing_enter_effect_events: Array[Dictionary] = []
+	var pending_marketing_enter_anchor_command_index := -1
 	var seq := 0
 
 	# 初始化事件（step=-1）
@@ -150,30 +169,84 @@ static func build_full(engine: GameEngine) -> Result:
 				else:
 					before_phase_events.append(ev)
 
-			# 结算/里程碑/现金变化：按结算触发点归属（避免 Payday exit settlement 被推到 Marketing 段落）。
-			var to_old_segment := _should_attribute_settlement_effects_to_old_phase(engine, str(old_state.phase), str(state_in.phase))
+			# 结算/里程碑/现金变化：按结算触发点归属。
+			# - 兼容 Payday->Marketing 的 exit+enter 叠加：拆分 exit/enter 的差异，避免 Marketing:enter 被误归到 Payday。
+			# - Marketing:enter 的 cash/milestone 需延后到离开 Marketing 后（在 DEMAND_GENERATED 等汇总事件之后）再输出。
+			var trace: Dictionary = engine.phase_manager.consume_timeline_last_advance_trace() if engine.phase_manager != null else {}
+			var old_phase_name := str(old_state.phase)
+			var new_phase_name := str(state_in.phase)
+
+			var old_exit_scheduled := false
+			var new_enter_scheduled := false
+			if engine.phase_manager != null:
+				var old_enum := PhaseDefsClass.get_phase_enum(old_phase_name.strip_edges())
+				if old_enum != -1 and engine.phase_manager._is_settlement_scheduled(old_enum, SettlementRegistryClass.Point.EXIT):
+					old_exit_scheduled = true
+				var new_enum := PhaseDefsClass.get_phase_enum(new_phase_name.strip_edges())
+				if new_enum != -1 and engine.phase_manager._is_settlement_scheduled(new_enum, SettlementRegistryClass.Point.ENTER):
+					new_enter_scheduled = true
+
+			var after_exit_settlements: GameState = null
+			if old_exit_scheduled and new_enter_scheduled and (trace is Dictionary):
+				var v = trace.get("after_exit_settlements", null)
+				if v is GameState:
+					after_exit_settlements = v
+
+			var cash_events_old: Array[Dictionary] = []
+			var milestone_events_old: Array[Dictionary] = []
+			var cash_events_new: Array[Dictionary] = []
+			var milestone_events_new: Array[Dictionary] = []
+
+			if after_exit_settlements != null:
+				cash_events_old = CommandRunnerClass._build_player_cash_changed_events(old_state, after_exit_settlements, cmd)
+				milestone_events_old = CommandRunnerClass._build_milestone_achieved_events(old_state, after_exit_settlements, cmd)
+				cash_events_new = CommandRunnerClass._build_player_cash_changed_events(after_exit_settlements, state_in, cmd)
+				milestone_events_new = CommandRunnerClass._build_milestone_achieved_events(after_exit_settlements, state_in, cmd)
+			else:
+				var to_old_segment := _should_attribute_settlement_effects_to_old_phase(engine, old_phase_name, new_phase_name)
+				if to_old_segment:
+					cash_events_old = cash_events_cmd
+					milestone_events_old = milestone_events_cmd
+				else:
+					cash_events_new = cash_events_cmd
+					milestone_events_new = milestone_events_cmd
 
 			if not before_phase_events.is_empty():
 				_append_events(events_out, before_phase_events, i, prev_step_index, str(old_state.phase), seq)
 				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-			if to_old_segment:
-				if not cash_events_cmd.is_empty():
-					_append_events(events_out, _override_events_phase_fields(cash_events_cmd, old_state), i, prev_step_index, str(old_state.phase), seq)
-					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-				if not milestone_events_cmd.is_empty():
-					_append_events(events_out, _override_events_phase_fields(milestone_events_cmd, old_state), i, prev_step_index, str(old_state.phase), seq)
-					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+
+			# Marketing: 先输出汇总事件（如 DEMAND_GENERATED），再输出进入 Marketing 时产生的 cash/milestone。
+			if str(old_state.phase) == "Marketing" and not pending_marketing_enter_effect_events.is_empty():
+				_append_events(events_out, pending_marketing_enter_effect_events, i, prev_step_index, "Marketing", seq)
+				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+				pending_marketing_enter_effect_events = []
+				pending_marketing_enter_anchor_command_index = -1
+
+			if not cash_events_old.is_empty():
+				_append_events(events_out, _override_events_phase_fields(cash_events_old, old_state), i, prev_step_index, str(old_state.phase), seq)
+				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+			if not milestone_events_old.is_empty():
+				_append_events(events_out, _override_events_phase_fields(milestone_events_old, old_state), i, prev_step_index, str(old_state.phase), seq)
+				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 
 			if not after_phase_events.is_empty():
 				_append_events(events_out, after_phase_events, i, command_step_index, str(state_in.phase), seq)
 				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-			if not to_old_segment:
-				if not cash_events_cmd.is_empty():
-					_append_events(events_out, _override_events_phase_fields(cash_events_cmd, state_in), i, command_step_index, str(state_in.phase), seq)
-					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-				if not milestone_events_cmd.is_empty():
-					_append_events(events_out, _override_events_phase_fields(milestone_events_cmd, state_in), i, command_step_index, str(state_in.phase), seq)
-					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+
+			if not cash_events_new.is_empty() or not milestone_events_new.is_empty():
+				if new_phase_name == "Marketing":
+					pending_marketing_enter_anchor_command_index = i
+					if not cash_events_new.is_empty():
+						pending_marketing_enter_effect_events.append_array(_override_events_phase_fields(cash_events_new, state_in))
+					if not milestone_events_new.is_empty():
+						pending_marketing_enter_effect_events.append_array(_override_events_phase_fields(milestone_events_new, state_in))
+				else:
+					if not cash_events_new.is_empty():
+						_append_events(events_out, _override_events_phase_fields(cash_events_new, state_in), i, command_step_index, str(state_in.phase), seq)
+						seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+					if not milestone_events_new.is_empty():
+						_append_events(events_out, _override_events_phase_fields(milestone_events_new, state_in), i, command_step_index, str(state_in.phase), seq)
+						seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 		else:
 			_append_events(events_out, command_events, i, command_step_index, str(state_in.phase), seq)
 			seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
@@ -238,26 +311,80 @@ static func build_full(engine: GameEngine) -> Result:
 					_append_events(events_out, before_phase_events, i, current_step_index, str(before.phase), seq)
 					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 
-				var to_old_segment := _should_attribute_settlement_effects_to_old_phase(engine, str(before.phase), str(state_in.phase))
-				if to_old_segment:
-					if not cash_events.is_empty():
-						_append_events(events_out, _override_events_phase_fields(cash_events, before), i, current_step_index, str(before.phase), seq)
-						seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-					if not milestone_events.is_empty():
-						_append_events(events_out, _override_events_phase_fields(milestone_events, before), i, current_step_index, str(before.phase), seq)
-						seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+				# Marketing: 先输出汇总事件（如 DEMAND_GENERATED），再输出进入 Marketing 时产生的 cash/milestone。
+				if str(before.phase) == "Marketing" and not pending_marketing_enter_effect_events.is_empty():
+					_append_events(events_out, pending_marketing_enter_effect_events, i, current_step_index, "Marketing", seq)
+					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+					pending_marketing_enter_effect_events = []
+					pending_marketing_enter_anchor_command_index = -1
+
+				# 结算/里程碑/现金变化：按结算触发点归属。
+				# - 兼容 Payday->Marketing 的 exit+enter 叠加：拆分 exit/enter 的差异，避免 Marketing:enter 被误归到 Payday。
+				var trace: Dictionary = engine.phase_manager.consume_timeline_last_advance_trace() if engine.phase_manager != null else {}
+				var old_phase_name := str(before.phase)
+				var new_phase_name := str(state_in.phase)
+
+				var old_exit_scheduled := false
+				var new_enter_scheduled := false
+				if engine.phase_manager != null:
+					var old_enum := PhaseDefsClass.get_phase_enum(old_phase_name.strip_edges())
+					if old_enum != -1 and engine.phase_manager._is_settlement_scheduled(old_enum, SettlementRegistryClass.Point.EXIT):
+						old_exit_scheduled = true
+					var new_enum := PhaseDefsClass.get_phase_enum(new_phase_name.strip_edges())
+					if new_enum != -1 and engine.phase_manager._is_settlement_scheduled(new_enum, SettlementRegistryClass.Point.ENTER):
+						new_enter_scheduled = true
+
+				var after_exit_settlements: GameState = null
+				if old_exit_scheduled and new_enter_scheduled and (trace is Dictionary):
+					var v = trace.get("after_exit_settlements", null)
+					if v is GameState:
+						after_exit_settlements = v
+
+				var cash_events_old: Array[Dictionary] = []
+				var milestone_events_old: Array[Dictionary] = []
+				var cash_events_new: Array[Dictionary] = []
+				var milestone_events_new: Array[Dictionary] = []
+
+				if after_exit_settlements != null:
+					var auto_cmd := Command.create_system("auto_advance")
+					cash_events_old = CommandRunnerClass._build_player_cash_changed_events(before, after_exit_settlements, auto_cmd)
+					milestone_events_old = CommandRunnerClass._build_milestone_achieved_events(before, after_exit_settlements, cmd)
+					cash_events_new = CommandRunnerClass._build_player_cash_changed_events(after_exit_settlements, state_in, auto_cmd)
+					milestone_events_new = CommandRunnerClass._build_milestone_achieved_events(after_exit_settlements, state_in, cmd)
+				else:
+					var to_old_segment := _should_attribute_settlement_effects_to_old_phase(engine, old_phase_name, new_phase_name)
+					if to_old_segment:
+						cash_events_old = cash_events
+						milestone_events_old = milestone_events
+					else:
+						cash_events_new = cash_events
+						milestone_events_new = milestone_events
+
+				if not cash_events_old.is_empty():
+					_append_events(events_out, _override_events_phase_fields(cash_events_old, before), i, current_step_index, str(before.phase), seq)
+					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+				if not milestone_events_old.is_empty():
+					_append_events(events_out, _override_events_phase_fields(milestone_events_old, before), i, current_step_index, str(before.phase), seq)
+					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 
 				if not after_phase_events.is_empty():
 					_append_events(events_out, after_phase_events, i, phase_step_index, str(state_in.phase), seq)
 					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 
-				if not to_old_segment:
-					if not cash_events.is_empty():
-						_append_events(events_out, _override_events_phase_fields(cash_events, state_in), i, phase_step_index, str(state_in.phase), seq)
-						seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-					if not milestone_events.is_empty():
-						_append_events(events_out, _override_events_phase_fields(milestone_events, state_in), i, phase_step_index, str(state_in.phase), seq)
-						seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+				if not cash_events_new.is_empty() or not milestone_events_new.is_empty():
+					if new_phase_name == "Marketing":
+						pending_marketing_enter_anchor_command_index = i
+						if not cash_events_new.is_empty():
+							pending_marketing_enter_effect_events.append_array(_override_events_phase_fields(cash_events_new, state_in))
+						if not milestone_events_new.is_empty():
+							pending_marketing_enter_effect_events.append_array(_override_events_phase_fields(milestone_events_new, state_in))
+					else:
+						if not cash_events_new.is_empty():
+							_append_events(events_out, _override_events_phase_fields(cash_events_new, state_in), i, phase_step_index, str(state_in.phase), seq)
+							seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+						if not milestone_events_new.is_empty():
+							_append_events(events_out, _override_events_phase_fields(milestone_events_new, state_in), i, phase_step_index, str(state_in.phase), seq)
+							seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 
 				current_step_index = phase_step_index
 			else:
@@ -295,6 +422,18 @@ static func build_full(engine: GameEngine) -> Result:
 
 		# 下一条命令的起点 state（应为“执行该命令并完成所有 auto-advance”的稳定状态）
 		replay_state = state_in
+
+	# 兜底：若时间线构建结束仍处于 Marketing，且存在未刷出的 enter effects，则追加到最后一个 step（避免丢日志）。
+	if not pending_marketing_enter_effect_events.is_empty():
+		var flush_step_index := steps.size() - 1
+		if flush_step_index >= 0:
+			var flush_ci := pending_marketing_enter_anchor_command_index
+			if flush_ci < 0:
+				flush_ci = engine.command_history.size() - 1
+			_append_events(events_out, pending_marketing_enter_effect_events, flush_ci, flush_step_index, "Marketing", seq)
+			seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+		pending_marketing_enter_effect_events = []
+		pending_marketing_enter_anchor_command_index = -1
 
 	return Result.success({
 		"initial_state_dict": state_dict_val.duplicate(true),

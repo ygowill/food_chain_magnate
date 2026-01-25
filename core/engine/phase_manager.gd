@@ -48,6 +48,10 @@ var _working_sub_phase_order_names: Array[String] = []
 var _cleanup_sub_phase_order_names: Array[String] = []
 var _phase_sub_phase_orders: Dictionary = {}  # phase_enum -> Array[String]
 
+# === TimeLine Trace（仅用于 StepTimelineBuild/调试）===
+var _timeline_trace_enabled: bool = false
+var _timeline_last_advance_trace: Dictionary = {}
+
 # === 初始化 ===
 
 func _init() -> void:
@@ -181,6 +185,23 @@ func get_marketing_rounds(state: GameState) -> Result:
 		if marketing_rounds <= 0:
 			return Result.failure("round_state.marketing_rounds 必须 > 0，实际: %d" % marketing_rounds)
 	return Result.success(marketing_rounds)
+
+# StepTimelineBuild 使用：开启/关闭 PhaseManager 内部的“阶段推进 trace”记录。
+# - 默认关闭，避免正常对局阶段推进产生额外 deep copy 开销。
+func set_timeline_trace_enabled(enabled: bool) -> void:
+	_timeline_trace_enabled = bool(enabled)
+	if not _timeline_trace_enabled:
+		_timeline_last_advance_trace = {}
+
+func is_timeline_trace_enabled() -> bool:
+	return _timeline_trace_enabled
+
+func consume_timeline_last_advance_trace() -> Dictionary:
+	var out: Dictionary = {}
+	if _timeline_last_advance_trace is Dictionary:
+		out = _timeline_last_advance_trace
+	_timeline_last_advance_trace = {}
+	return out
 
 # === 阶段推进 ===
 

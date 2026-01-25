@@ -1,6 +1,6 @@
 # 回放与游戏日志融合（完整时间线）报告与重构开发计划
 
-状态：已实施（M0..M4.3 + M4 可选折叠），但发现时间线“顺序/归属”回归待修复（见 0.1）｜最后更新：2026-01-25
+状态：已实施（M0..M4.3 + M4 可选折叠）；0.1.1/0.1.2 已修复；仍有 UI 展示回归待修复（见 0.1.4）｜最后更新：2026-01-25
 
 ## 0. 当前进度（2026-01-25）
 
@@ -11,7 +11,7 @@
 - 统一时间线视图：`RoundHeader -> PhaseHeader -> ActionGroupHeader -> EventItem`（缩进展示；不暴露 step/cmd）
 - 阶段/回合事件默认隐藏：提供 `显示阶段事件` 开关用于调试/查看
 - 去噪/去重：隐藏流程性日志（回合开始/结束等），避免“标题与子项重复同一句动作摘要”
-- 事件归属修正（大多数 case）：`PLAYER_CASH_CHANGED` / `MILESTONE_ACHIEVED` 按触发时刻与结算点归属到正确 `phase_segment`（仍有特例：Payday->Marketing 的 exit+enter 结算叠加，见 0.1.2）
+- 事件归属修正（含 Payday->Marketing exit+enter 结算叠加）：`PLAYER_CASH_CHANGED` / `MILESTONE_ACHIEVED` 按触发时刻与结算点归属到正确 `phase_segment`（见 0.1.2）
 - 日志面板右侧化：覆盖 ActionPanel，左侧玩家信息保持可见；回放/复盘态默认打开日志
 - M4（宏/微折叠）：新增 `折叠细节` 开关（默认关闭），可按动作组展开/收起微事件子项
 
@@ -92,28 +92,35 @@
 - 针对 `Payday -> Marketing` 特判：从 `PAYDAY_REPORT` 推导“薪资导致的现金变化”，剩余现金变化视为 Marketing:enter；里程碑按 milestone_id 白名单归属到 Marketing（`*_marketed`/`*_demand_*` 等）。
 - 风险：模块/规则变化后容易失效；现金变化可能无法完全解释（例如同时存在其他奖励/惩罚）。
 
-### 0.1.3 计划与验收（提案，待确认后实施）
+### 0.1.3 实施结果与回归（已完成）
 
-计划（分两步，先修顺序，再修归因）：
+确认结果（来自截图问题澄清）：
 
-1) 修复 `skip`/`skip_sub_phase` 的事件顺序（见 0.1.1）
-   - 产出：turn_ended/start 与 phase/sub_phase/round/report 的顺序符合语义；日志阶段标题与事件顺序不再错位。
-   - 覆盖：Working 最后子阶段、非 Working、以及模块注入子阶段（若存在）。
-2) 修复 `Payday -> Marketing` 的 exit+enter 结算归因与里程碑顺序（见 0.1.2）
-   - 产出：`first_burger_marketed/first_pizza_marketed/first_drink_marketed` 等 DemandMarked 触发里程碑归属 Marketing 且显示在 `DEMAND_GENERATED` 之后。
-   - 同时检查：Marketing 需求奖金导致的 `PLAYER_CASH_CHANGED` 是否仍被错误归属到 Payday（若存在，应一并修复）。
+1) “无玩家操作阶段”需要抑制 `PLAYER_TURN_STARTED`（避免误导）。
+2) Marketing 相关里程碑必须归属 Marketing 段内，且需出现在对应 `DEMAND_GENERATED` 之后（明确因果关系）。
 
-测试计划（新增覆盖）：
+已实施（核心改动）：
 
-- core：新增/扩展 `core/tests/step_timeline_build_test.gd` 或新增专用测试：
-  - 断言：当 `skip` 触发跨阶段时，`PLAYER_TURN_ENDED` 的 `event_seq` 必须早于 `PHASE_CHANGED`，且 `phase_segment` 为旧阶段。
-  - 断言：在包含营销需求结算的存档/构造场景中，`first_burger_marketed` 的 `phase_segment == Marketing`，且其 `event_seq` 大于对应 `DEMAND_GENERATED`。
-- ui：补充可视化回归（可选）：使用 `ui/scenes/tests` 增加一个“阶段事件顺序”断言场景（仅打印机器可读 START/PASS/FAIL）。
+1) 修复 `skip`/`skip_sub_phase` 的事件顺序与“无玩家阶段抑制 turn_started”（见 0.1.1）：
+   - `gameplay/actions/skip_action.gd`：先发射 `PLAYER_TURN_ENDED`，再发射 `SUB_PHASE_CHANGED/PHASE_CHANGED`；并在 `Dinnertime/Marketing/Cleanup/GameOver` 抑制 `PLAYER_TURN_STARTED`。
+   - `gameplay/actions/skip_sub_phase_action.gd`：当从 Working 最后子阶段跳过时，同样保证 `PLAYER_TURN_ENDED` 先于 `SUB_PHASE_CHANGED/PHASE_CHANGED`；并抑制非玩家阶段 `PLAYER_TURN_STARTED`。
+2) 修复 `Payday -> Marketing` 的 exit+enter 叠加归因 + Marketing 内里程碑顺序（见 0.1.2）：
+   - `core/engine/phase_manager.gd`：增加 timeline trace 开关与快照存储（仅供时间线构建使用，默认关闭）。
+   - `core/engine/phase_manager/advance_phase.gd`：在 trace 打开时记录 `after_exit_settlements` 快照，用于拆分 exit/enter 结算影响。
+   - `core/engine/game_engine/step_timeline_build.gd`：当检测到旧阶段 `EXIT` + 新阶段 `ENTER` 同时存在时，基于快照差异分别生成 old/new 的 cash/milestone；并将 Marketing:enter 的 cash/milestone 延后到离开 Marketing 时、在 `DEMAND_GENERATED` 之后输出。
 
-需要你确认的问题（点头后我才开始改代码）：
+测试覆盖（已新增/扩展）：
 
-1) 对于 `skip` 触发的推进，你希望日志呈现顺序严格为：`玩家结束回合/确认结束` -> `子阶段变化（如有）` -> `阶段变化（如有）` -> `下一玩家开始回合（如有）` 吗？
-2) `first_burger_marketed` 的日志：你希望它严格出现在同一阶段内且“紧跟在生成需求（DEMAND_GENERATED）之后”，还是只要在 Marketing 阶段内即可？
+- core：扩展 `core/tests/step_timeline_build_test.gd`（覆盖 skip 跨阶段/子阶段的顺序与归属）
+- core：新增 `core/tests/step_timeline_marketing_milestone_order_test.gd`（断言 `first_burger_marketed` 归属 Marketing 且出现在对应 `DEMAND_GENERATED` 之后）
+- ui：`ui/scenes/tests/all_tests.gd` 已接入上述测试
+
+### 0.1.4 UI 展示回归（回合标题/重组阶段顺序）
+
+来自日志面板截图的展示问题（待修复）：
+
+1) 回合切换标题应显示具体回合号（例如“回合 2”），并且第 1 回合开头也应显示一次。
+2) Restructuring 阶段日志顺序：应在玩家1/玩家2都“确认重组”之后，才进入 OrderOfBusiness（避免“阶段标题先跳转、确认日志后出现”的错序观感）。
 
 ## 1. 背景与目标
 

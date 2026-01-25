@@ -140,6 +140,47 @@ static func run() -> Result:
 	if milestone_count > 0 and not non_restructuring_milestone:
 		return Result.failure("expected at least one MILESTONE_ACHIEVED not in Restructuring (count=%d)" % milestone_count)
 
+	# 0.1.1 回归保护：skip/skip_sub_phase 的事件顺序必须符合语义
+	# - 玩家先结束回合，再发生子阶段/阶段推进（避免 turn_ended 被归到新阶段/新子阶段）。
+	var cmd2_turn_ended_seq := -1
+	var cmd2_sub_phase_seq := -1
+	var cmd6_turn_ended_seq := -1
+	var cmd6_phase_changed_seq := -1
+	var cmd6_turn_ended_seg := ""
+
+	for ev_val4 in events:
+		if not (ev_val4 is Dictionary):
+			continue
+		var ev4: Dictionary = ev_val4
+		var ci4 := int(ev4.get("command_index", -999999))
+		var t4 := str(ev4.get("type", "")).strip_edges()
+		var seq4 := int(ev4.get("sequence", -1))
+
+		if ci4 == 2:
+			if t4 == EventBus.EventType.PLAYER_TURN_ENDED and cmd2_turn_ended_seq < 0:
+				cmd2_turn_ended_seq = seq4
+			elif t4 == EventBus.EventType.SUB_PHASE_CHANGED and cmd2_sub_phase_seq < 0:
+				cmd2_sub_phase_seq = seq4
+
+		if ci4 == 6:
+			if t4 == EventBus.EventType.PLAYER_TURN_ENDED and cmd6_turn_ended_seq < 0:
+				cmd6_turn_ended_seq = seq4
+				cmd6_turn_ended_seg = str(ev4.get("phase_segment", "")).strip_edges()
+			elif t4 == EventBus.EventType.PHASE_CHANGED and cmd6_phase_changed_seq < 0:
+				cmd6_phase_changed_seq = seq4
+
+	if cmd2_turn_ended_seq < 0 or cmd2_sub_phase_seq < 0:
+		return Result.failure("expected PLAYER_TURN_ENDED and SUB_PHASE_CHANGED for command_index=2 in %s" % SAVE_RES_PATH)
+	if cmd2_turn_ended_seq > cmd2_sub_phase_seq:
+		return Result.failure("expected PLAYER_TURN_ENDED before SUB_PHASE_CHANGED for command_index=2 (turn_ended_seq=%d sub_phase_seq=%d)" % [cmd2_turn_ended_seq, cmd2_sub_phase_seq])
+
+	if cmd6_turn_ended_seq < 0 or cmd6_phase_changed_seq < 0:
+		return Result.failure("expected PLAYER_TURN_ENDED and PHASE_CHANGED for command_index=6 in %s" % SAVE_RES_PATH)
+	if cmd6_turn_ended_seq > cmd6_phase_changed_seq:
+		return Result.failure("expected PLAYER_TURN_ENDED before PHASE_CHANGED for command_index=6 (turn_ended_seq=%d phase_changed_seq=%d)" % [cmd6_turn_ended_seq, cmd6_phase_changed_seq])
+	if cmd6_turn_ended_seg != "Payday":
+		return Result.failure("expected command_index=6 PLAYER_TURN_ENDED in Payday segment, got: %s" % cmd6_turn_ended_seg)
+
 	return Result.success({
 		"commands": engine.command_history.size(),
 		"steps": steps.size(),

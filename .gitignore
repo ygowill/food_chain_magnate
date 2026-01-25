@@ -16,3 +16,5 @@ tools/migration/out_legacy_json/
 .DS_Store
 
 .claude/
+
+demo_image/

@@ -68,6 +68,12 @@ static func advance_phase(pm, state: GameState) -> Result:
 	var snapshot: GameState = state.duplicate_state()
 	var old_phase := snapshot.phase
 	var old_sub_phase := snapshot.sub_phase
+	var trace_enabled: bool = false
+	if pm != null and pm.is_timeline_trace_enabled():
+		trace_enabled = true
+	var trace_after_exit_settlements: GameState = null
+	if trace_enabled:
+		pm._timeline_last_advance_trace = {}
 
 	# 执行当前阶段退出钩子
 	var exit_result = pm._hooks.run_phase_hooks(current_phase, HookType.BEFORE_EXIT, state)
@@ -80,6 +86,8 @@ static func advance_phase(pm, state: GameState) -> Result:
 	if not exit_settlements.ok:
 		return _rollback_and_return(state, snapshot, exit_settlements)
 	all_warnings.append_array(exit_settlements.warnings)
+	if trace_enabled:
+		trace_after_exit_settlements = state.duplicate_state()
 
 	# 确定下一阶段
 	var next_phase: int
@@ -209,6 +217,16 @@ static func advance_phase(pm, state: GameState) -> Result:
 	if not after_enter_result.ok:
 		return _rollback_and_return(state, snapshot, after_enter_result)
 	all_warnings.append_array(after_enter_result.warnings)
+
+	if trace_enabled:
+		pm._timeline_last_advance_trace = {
+			"kind": "advance_phase",
+			"old_phase": str(old_phase),
+			"new_phase": str(state.phase),
+			"round_before": int(snapshot.round_number),
+			"round_after": int(state.round_number),
+			"after_exit_settlements": trace_after_exit_settlements,
+		}
 
 	GameLog.info("PhaseManager", "阶段推进: %s -> %s (回合 %d)" % [
 		old_phase, state.phase, state.round_number

@@ -168,6 +168,26 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 func _generate_specific_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 
+	# 先记录“玩家确认结束/结束回合”，再记录子阶段/阶段推进事件。
+	# 这样可保证日志时间线符合语义顺序（玩家先结束 -> 系统推进）。
+	events.append({
+		"type": EventBus.EventType.PLAYER_TURN_ENDED,
+		"data": {
+			"player_id": command.actor,
+			"action": "skip"
+		}
+	})
+
+	# 子阶段变化事件（Working：PlaceRestaurants -> Recruit 等）
+	if old_state.sub_phase != new_state.sub_phase and not new_state.sub_phase.is_empty():
+		events.append({
+			"type": EventBus.EventType.SUB_PHASE_CHANGED,
+			"data": {
+				"old_sub_phase": old_state.sub_phase,
+				"new_sub_phase": new_state.sub_phase
+			}
+		})
+
 	# 阶段变化事件（当“全员确认结束”触发自动推进时）
 	if old_state.phase != new_state.phase:
 		if str(old_state.phase) == "Dinnertime":
@@ -237,28 +257,9 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 				}
 			})
 
-	# 子阶段变化事件
-	if old_state.sub_phase != new_state.sub_phase and not new_state.sub_phase.is_empty():
-		events.append({
-			"type": EventBus.EventType.SUB_PHASE_CHANGED,
-			"data": {
-				"old_sub_phase": old_state.sub_phase,
-				"new_sub_phase": new_state.sub_phase
-			}
-		})
-
-	# 玩家回合结束
-	events.append({
-		"type": EventBus.EventType.PLAYER_TURN_ENDED,
-		"data": {
-			"player_id": command.actor,
-			"action": "skip"
-		}
-	})
-
 	# 下一个玩家回合开始
 	var next_player_id := new_state.get_current_player_id()
-	if next_player_id != command.actor:
+	if next_player_id != command.actor and _should_emit_player_turn_started(str(new_state.phase)):
 		events.append({
 			"type": EventBus.EventType.PLAYER_TURN_STARTED,
 			"data": {
@@ -267,3 +268,16 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 		})
 
 	return events
+
+static func _should_emit_player_turn_started(phase_name: String) -> bool:
+	match str(phase_name).strip_edges():
+		"Dinnertime":
+			return false
+		"Marketing":
+			return false
+		"Cleanup":
+			return false
+		"GameOver":
+			return false
+		_:
+			return true

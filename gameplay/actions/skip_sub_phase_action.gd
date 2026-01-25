@@ -93,6 +93,32 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 func _generate_specific_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 
+	# 若从最后子阶段跳过，则视为结束该玩家的 Working 回合（玩家先结束 -> 系统推进）。
+	var ended_turn := false
+	if old_state.phase == "Working" and phase_manager != null:
+		var order := phase_manager.get_working_sub_phase_order_names()
+		if not order.is_empty():
+			var last_sub_phase: String = str(order[order.size() - 1])
+			if old_state.sub_phase == last_sub_phase:
+				ended_turn = true
+				events.append({
+					"type": EventBus.EventType.PLAYER_TURN_ENDED,
+					"data": {
+						"player_id": command.actor,
+						"action": "skip_sub_phase"
+					}
+				})
+
+	# 子阶段变化事件
+	if old_state.sub_phase != new_state.sub_phase and not new_state.sub_phase.is_empty():
+		events.append({
+			"type": EventBus.EventType.SUB_PHASE_CHANGED,
+			"data": {
+				"old_sub_phase": old_state.sub_phase,
+				"new_sub_phase": new_state.sub_phase
+			}
+		})
+
 	# 阶段变化事件
 	if old_state.phase != new_state.phase:
 		if str(old_state.phase) == "Dinnertime":
@@ -128,7 +154,7 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 				"new_phase": new_state.phase,
 				"round": new_state.round_number
 			}
-		})
+			})
 
 		# 回合开始事件
 		if old_state.round_number != new_state.round_number:
@@ -146,37 +172,28 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 				}
 			})
 
-	# 子阶段变化事件
-	if old_state.sub_phase != new_state.sub_phase and not new_state.sub_phase.is_empty():
-		events.append({
-			"type": EventBus.EventType.SUB_PHASE_CHANGED,
-			"data": {
-				"old_sub_phase": old_state.sub_phase,
-				"new_sub_phase": new_state.sub_phase
-			}
-		})
-
-	# 若从最后子阶段跳过，则视为结束该玩家的 Working 回合
-	if old_state.phase == "Working" and phase_manager != null:
-		var order := phase_manager.get_working_sub_phase_order_names()
-		if not order.is_empty():
-			var last_sub_phase: String = str(order[order.size() - 1])
-			if old_state.sub_phase == last_sub_phase:
-				events.append({
-					"type": EventBus.EventType.PLAYER_TURN_ENDED,
-					"data": {
-						"player_id": command.actor,
-						"action": "skip_sub_phase"
-					}
-				})
-
-				var next_player_id := new_state.get_current_player_id()
-				if next_player_id != command.actor:
-					events.append({
-						"type": EventBus.EventType.PLAYER_TURN_STARTED,
-						"data": {
-							"player_id": next_player_id
-						}
-					})
+	# 下一个玩家回合开始（无玩家操作阶段应抑制，避免误导）
+	if ended_turn:
+		var next_player_id := new_state.get_current_player_id()
+		if next_player_id != command.actor and _should_emit_player_turn_started(str(new_state.phase)):
+			events.append({
+				"type": EventBus.EventType.PLAYER_TURN_STARTED,
+				"data": {
+					"player_id": next_player_id
+				}
+			})
 
 	return events
+
+static func _should_emit_player_turn_started(phase_name: String) -> bool:
+	match str(phase_name).strip_edges():
+		"Dinnertime":
+			return false
+		"Marketing":
+			return false
+		"Cleanup":
+			return false
+		"GameOver":
+			return false
+		_:
+			return true
