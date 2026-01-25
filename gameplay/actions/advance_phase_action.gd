@@ -139,9 +139,6 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, _comm
 			events.append_array(CommandRunnerClass._build_marketing_demand_generated_events(old_state))
 			events.append_array(CommandRunnerClass._build_marketing_expired_events(old_state))
 
-		if str(old_state.phase) == "Cleanup":
-			events.append_array(CommandRunnerClass._build_cleanup_inventory_discarded_events(old_state))
-
 		events.append({
 			"type": EventBus.EventType.PHASE_CHANGED,
 			"data": {
@@ -150,6 +147,10 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, _comm
 				"round": new_state.round_number
 			}
 		})
+
+		# Cleanup 库存丢弃：在进入 Cleanup 时发射（清理结算在 Cleanup:enter 运行）。
+		if str(new_state.phase) == "Cleanup":
+			events.append_array(CommandRunnerClass._build_cleanup_inventory_discarded_events(new_state))
 
 		# 回合开始事件
 		if old_state.round_number != new_state.round_number:

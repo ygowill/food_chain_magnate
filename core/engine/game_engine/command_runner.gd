@@ -328,10 +328,6 @@ static func _build_phase_change_events(old_state: GameState, new_state: GameStat
 			events.append_array(_build_marketing_demand_generated_events(old_state))
 			events.append_array(_build_marketing_expired_events(old_state))
 
-		# Cleanup 库存丢弃：在离开 Cleanup 时发射（便于 UI 日志恢复/回放核对）。
-		if str(old_state.phase) == "Cleanup":
-			events.append_array(_build_cleanup_inventory_discarded_events(old_state))
-
 		events.append({
 			"type": EventBus.EventType.PHASE_CHANGED,
 			"data": {
@@ -340,6 +336,10 @@ static func _build_phase_change_events(old_state: GameState, new_state: GameStat
 				"round": new_state.round_number
 			}
 		})
+
+		# Cleanup 库存丢弃：在进入 Cleanup 时发射（清理结算在 Cleanup:enter 运行）。
+		if str(new_state.phase) == "Cleanup":
+			events.append_array(_build_cleanup_inventory_discarded_events(new_state))
 
 		# 回合开始/结束事件
 		if old_state.round_number != new_state.round_number:

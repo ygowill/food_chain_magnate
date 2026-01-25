@@ -160,7 +160,47 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	return Result.success().with_warnings(warnings)
 
 func _generate_specific_events(_old_state: GameState, _new_state: GameState, _command: Command) -> Array[Dictionary]:
-	return []
+	var out: Array[Dictionary] = []
+	if _new_state == null or _command == null:
+		return out
+	if not (_new_state.round_state is Dictionary):
+		return out
+
+	var cleanup_val = Dictionary(_new_state.round_state).get("cleanup", null)
+	if not (cleanup_val is Dictionary):
+		return out
+	var cleanup: Dictionary = cleanup_val
+	var inv_val = cleanup.get("inventory_discarded", null)
+	if not (inv_val is Array):
+		return out
+
+	var actor := int(_command.actor)
+	for item_val in Array(inv_val):
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if int(item.get("player_id", -1)) != actor:
+			continue
+
+		var discarded_val = item.get("discarded", null)
+		if not (discarded_val is Dictionary):
+			return out
+		var discarded: Dictionary = Dictionary(discarded_val).duplicate(true)
+		if discarded.is_empty():
+			return out
+
+		out.append({
+			"type": EventBus.EventType.FOOD_DISCARDED,
+			"data": {
+				"round": int(_new_state.round_number),
+				"player_id": actor,
+				"has_fridge": bool(item.get("has_fridge", true)),
+				"discarded": discarded,
+			}
+		})
+		break
+
+	return out
 
 static func _is_food_or_drink(product_id: String) -> bool:
 	if product_id.is_empty():
@@ -297,4 +337,3 @@ static func _upsert_cleanup_inventory_discarded(state: GameState, player_id: int
 	})
 	cleanup["inventory_discarded"] = inv
 	state.round_state["cleanup"] = cleanup
-
