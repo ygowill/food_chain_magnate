@@ -390,9 +390,10 @@ ActionPanel 禁用策略：
    - 高亮规则：当 cursor 落在该阶段段落范围内时，高亮该标题行。
    - 点击行为：seek 到该阶段段落的开始 timeline_index。
 3) ActionGroupHeaderItem（动作组标题行）
-   - 文案：优先使用“玩家动作摘要”（例如“玩家1：放置营销 ……”）；若该组没有玩家动作，则显示系统摘要（例如“进入发薪日”“进入广告阶段”“进入清理阶段”“进入重组阶段”）。
+   - 文案：优先使用“玩家动作摘要”（例如“玩家1：放置营销 ……”）；若该组没有玩家动作，则显示系统摘要（例如“系统推进”或 `玩家X: {action_display_name}`），避免“无可见事件 step 看起来无效果”。
    - 高亮规则：当 cursor == 该组 timeline_index 时高亮。
    - 点击行为：seek 到该组 timeline_index。
+   - 备注：`kind=="phase"` 的 phase step 不再渲染 ActionGroupHeaderItem（避免重复“进入X”）；阶段标题 PhaseHeaderItem 已足够作为可点击锚点。
 4) EventItem（动作组子项，缩进显示）
    - 文案：事件摘要（沿用 formatter 文案）。
    - 视觉：缩进 + 更小字号/更淡颜色，明确“属于上一条动作组”。
@@ -413,7 +414,7 @@ ActionPanel 禁用策略：
 1) 遍历 timeline 的 step（`-1` 初始 + `0..head_step`）：
    - 若与上一个 step 的 `round` 不同：插入 RoundHeaderItem。
    - 若与上一个 step 的 `phase` 不同（或 round 刚变）：插入 PhaseHeaderItem，并记录该阶段段落的 `start_step_index`。
-   - 为每个 step 创建一个 ActionGroupHeaderItem（保证“每步都可见可点”）。
+   - 为每个 **command step** 创建一个 ActionGroupHeaderItem（保证“每步都可见可点”）；phase step 的锚点由 PhaseHeaderItem 承担。
 2) 将 events 按 `step_index` 挂到对应 ActionGroup 下，作为 EventItem 子项：
    - 默认隐藏“阶段事件子项”（`PHASE_CHANGED/SUB_PHASE_CHANGED/ROUND_STARTED/ROUND_ENDED/*_REPORT` 等），由 `显示阶段事件` 开关控制是否展示；但这些事件始终可用于调试详情窗口。
    - 其余事件作为缩进子项展示（例如营销产生需求、采购路线、现金变化、丢弃库存、里程碑等）。
@@ -422,7 +423,6 @@ ActionPanel 禁用策略：
 
 - 优先：从该 step 的“非阶段事件子项”里找第一条 `LogType.PLAYER` 的 formatted message 作为摘要。
 - 否则：用 step 快照生成系统摘要：
-  - phase step：`进入{phase_display_name}`（不显示 from/to 内部字段也可；若你更偏好 from/to 文案可替换）。
   - command step：`系统结算/系统推进`（仅在确实没有玩家动作时兜底）。
 
 #### M4.3.3 ReplayBar 状态显示（不展示 step/cmd）
