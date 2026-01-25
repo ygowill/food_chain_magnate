@@ -777,14 +777,14 @@ class CardSlot extends PanelContainer:
 	var slot_index: int = 0
 	var _card: EmployeeCard = null
 	var _drop_highlighted: bool = false
-
+	
 	func _ready() -> void:
 		_build_ui()
-
+	
 	func _build_ui() -> void:
-		custom_minimum_size = Vector2(130, 90)
+		custom_minimum_size = EmployeeCardClass.COMPACT_SIZE
 		_apply_style()
-
+	
 		# 空卡槽提示
 		var hint := Label.new()
 		hint.text = "空卡槽"

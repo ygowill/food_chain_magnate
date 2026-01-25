@@ -2711,7 +2711,7 @@
 
 - `ui/components/marketing_panel/marketing_panel.tscn`：`MarketerOption`（员工选择容器，已切到 `EmployeePicker`）
 - `ui/components/employee_picker/employee_picker.gd`：`EmployeePickerItem`（内部把 `EmployeeCard` 设为 FullRect）
-- `ui/components/employee_card/employee_card.gd`：compact 卡片最小尺寸（`COMPACT_SIZE=130×90`）
+- `ui/components/employee_card/employee_card.gd`：compact 卡片最小尺寸（`COMPACT_SIZE=130×116`）
 
 **初步根因假设**
 
@@ -3864,7 +3864,7 @@
 **修复方案**
 
 - RestructuringModal：为 `HandHost/CompanyHost` 设置 `size_flags_vertical=EXPAND_FILL`，确保右侧 CompanyStructure 有稳定高度展示 CEO 直属槽区域。
-- CompanyStructure：用 `CenterContainer` 包裹 CEO 直属 `CardSlot`，让直属槽保持 `custom_minimum_size=130×90` 并在列宽中水平居中，从而不随下属槽网格拉宽。
+- CompanyStructure：用 `CenterContainer` 包裹 CEO 直属 `CardSlot`，让直属槽保持 `custom_minimum_size=130×116` 并在列宽中水平居中，从而不随下属槽网格拉宽。
 
 **测试计划**
 
@@ -4257,7 +4257,7 @@
 		- `_description_label.max_lines_visible = 3`
 		- `_description_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS`
 	- `CardVariant.COMPACT` 不再使用字符数截断（之前 compact=40 字符截断）；改由“3 行 + 省略号”保证卡片高度不随文本变化。
-	- 将 `EmployeeCard.COMPACT_SIZE.y` 从 `90` 调整到 `104`：确保在当前主题字体的行高/行距下，compact 描述区能真实显示 **3 行**（原高度只能显示 2 行）。
+		- 将 `EmployeeCard.COMPACT_SIZE.y` 从 `90` 调整到 `116`：为字体行高/缩放留足余量，确保 compact 描述区稳定显示 **3 行**（避免部分环境/缩放下只显示 2 行）。
 	- `CardVariant.FULL` 仍保留 `max_len=120` 字符截断（避免 full 描述过长影响可读性/布局）。
 
 **需要你手工缩短描述的员工清单（compact 3 行无法完整展示）**

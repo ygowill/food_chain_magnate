@@ -46,7 +46,7 @@ layout_mode = 2
 alignment = 1
 
 [node name="CEOSlot" type="Control" parent="MarginContainer/VBoxContainer/CEORow"]
-custom_minimum_size = Vector2(130, 90)
+custom_minimum_size = Vector2(130, 116)
 layout_mode = 2
 
 [node name="ManagerRow" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]

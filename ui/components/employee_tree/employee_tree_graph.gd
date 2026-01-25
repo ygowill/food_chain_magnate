@@ -10,7 +10,7 @@ const EmployeeCardClass = preload("res://ui/components/employee_card/employee_ca
 const LayoutClass = preload("res://ui/components/employee_tree/employee_tree_layout.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 
-const BASE_NODE_SIZE := Vector2(130, 90)
+const BASE_NODE_SIZE := EmployeeCardClass.COMPACT_SIZE
 const BASE_NODE_SPACING_Y := 32.0
 const BASE_LAYER_SPACING := 200.0
 const BASE_PADDING := Vector2(40, 40)

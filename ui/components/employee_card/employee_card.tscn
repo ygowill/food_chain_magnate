@@ -3,5 +3,5 @@
 [ext_resource type="Script" uid="uid://cjlskq7jnmb2d" path="res://ui/components/employee_card/employee_card.gd" id="1_card"]
 
 [node name="EmployeeCard" type="PanelContainer"]
-custom_minimum_size = Vector2(130, 90)
+custom_minimum_size = Vector2(130, 116)
 script = ExtResource("1_card")
