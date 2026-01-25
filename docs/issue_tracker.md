@@ -4262,11 +4262,13 @@
 
 **需要你手工缩短描述的员工清单（compact 3 行无法完整展示）**
 
-- `modules/movie_stars/content/employees/movie_star_b.json`
-- `modules/movie_stars/content/employees/movie_star_c.json`
-- `modules/movie_stars/content/employees/movie_star_d.json`
-- `modules/mass_marketeers/content/employees/mass_marketeer.json`
-- `modules/night_shift_managers/content/employees/night_shift_manager.json`
+- 仍超出 3 行（会出现省略号）：
+	- `modules/movie_stars/content/employees/movie_star_b.json`
+	- `modules/movie_stars/content/employees/movie_star_c.json`
+	- `modules/movie_stars/content/employees/movie_star_d.json`
+	- `modules/night_shift_managers/content/employees/night_shift_manager.json`
+- 已调整后可在 3 行内完整展示：
+	- `modules/mass_marketeers/content/employees/mass_marketeer.json`
 
 **验证**
 
