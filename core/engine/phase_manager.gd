@@ -7,15 +7,11 @@ extends RefCounted
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const HooksClass = preload("res://core/engine/phase_manager/hooks.gd")
-const WorkingFlowClass = preload("res://core/engine/phase_manager/working_flow.gd")
 const AdvancementClass = preload("res://core/engine/phase_manager/advancement.gd")
 const OrderConfigClass = preload("res://core/engine/phase_manager/order_config.gd")
 const SettlementTriggersClass = preload("res://core/engine/phase_manager/settlement_triggers.gd")
 
-const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
-const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const MarketingRangeCalculatorClass = preload("res://core/rules/marketing_range_calculator.gd")
-const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 
 const Phase = DefsClass.Phase
 const WorkingSubPhase = DefsClass.WorkingSubPhase
@@ -175,9 +171,6 @@ func validate_required_primary_settlements() -> Result:
 	return SettlementTriggersClass.validate_required_primary_settlements(self)
 
 func is_settlement_scheduled(phase: int, point: int) -> bool:
-	return SettlementTriggersClass.is_settlement_scheduled(self, phase, point)
-
-func _is_settlement_scheduled(phase: int, point: int) -> bool:
 	return SettlementTriggersClass.is_settlement_scheduled(self, phase, point)
 
 func get_marketing_rounds(state: GameState) -> Result:
