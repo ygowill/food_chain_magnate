@@ -9,6 +9,7 @@ const RouteValidatorClass = preload("res://core/rules/drinks_procurement/route_v
 const PickedSourcesFinderClass = preload("res://core/rules/drinks_procurement/picked_sources_finder.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
+const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 
 static func resolve_procurement_plan(
 	state: GameState,
@@ -354,16 +355,4 @@ static func _get_distance_range_bonus_from_milestones(state: GameState, player_i
 	return Result.success(bonus)
 
 static func _parse_positive_int_value(value, path: String) -> Result:
-	if value is int:
-		if int(value) <= 0:
-			return Result.failure("%s 必须 > 0，实际: %d" % [path, int(value)])
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f == int(f):
-			var i: int = int(f)
-			if i <= 0:
-				return Result.failure("%s 必须 > 0，实际: %d" % [path, i])
-			return Result.success(i)
-		return Result.failure("%s 必须为整数（不允许小数）" % path)
-	return Result.failure("%s 必须为正整数" % path)
+	return IntValueParseHelpersClass.parse_positive_int_value(value, path)

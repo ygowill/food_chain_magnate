@@ -40,6 +40,7 @@
 - 2026-01-26：将 `PoolBuilder` 的 `_parse_non_negative_int` 改为复用 `DataParseHelpers.parse_non_negative_int(...)`，并移除自带解析函数；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `ModuleManifest` 的 `_parse_*` 改为复用 `DataParseHelpers`（减少 manifest 解析样板代码）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `VisualCatalogLoader` 的整数解析改为复用 `DataParseHelpers.parse_int(...)`，并移除自带 `_parse_int_required`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：扩展 `IntValueParseHelpers`（新增 `parse_positive_int_value`），并用于 `DrinksProcurement` 的正整数解析（移除自带实现、改为 wrapper 调用）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -337,7 +338,7 @@
 | `core/rules/drinks_procurement/route_validator.gd` | 121 | 5 | 0 |  |
 | `core/rules/drinks_procurement/start_restaurant_resolver.gd` | 89 | 3 | 0 |  |
 | `core/rules/drinks_procurement/tile_route_utils.gd` | 83 | 1 | 0 |  |
-| `core/rules/drinks_procurement.gd` | 370 | 6 | 0 | defines:_parse_* |
+| `core/rules/drinks_procurement.gd` | 358 | 7 | 0 | uses:IntValueParseHelpers |
 | `core/rules/economy/bankruptcy_rules.gd` | 270 | 3 | 0 |  |
 | `core/rules/effect_registry.gd` | 67 | 0 | 0 |  |
 | `core/rules/employee_pool_patch_registry.gd` | 113 | 0 | 0 |  |
@@ -389,7 +390,7 @@
 | `core/types/command.gd` | 184 | 1 | 0 | uses:JsonValueParseHelpers |
 | `core/types/result.gd` | 131 | 0 | 0 |  |
 | `core/utils/catalog_registry_helpers.gd` | 40 | 0 | 0 |  |
-| `core/utils/int_value_parse_helpers.gd` | 25 | 0 | 0 |  |
+| `core/utils/int_value_parse_helpers.gd` | 37 | 0 | 0 |  |
 | `core/utils/json_value_parse_helpers.gd` | 23 | 0 | 0 |  |
 | `core/utils/range_utils.gd` | 352 | 2 | 0 |  |
 | `core/utils/round_state_counters.gd` | 146 | 0 | 0 |  |
@@ -531,7 +532,7 @@
 - `core/rules/company_structure_rules.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/dinnertime_demand_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/dinnertime_route_purchase_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/drinks_procurement.gd`：规则编排较大；与 inputs/validator/finder 等已拆分但主流程仍偏重；偏长脚本；建议关注职责边界/可读性；存在一定数量的 preload 依赖；自带 _parse_* 解析函数（重复实现可收敛）
+- `core/rules/drinks_procurement.gd`：规则编排较大；与 inputs/validator/finder 等已拆分但主流程仍偏重；偏长脚本；建议关注职责边界/可读性；存在一定数量的 preload 依赖；（已部分整改 2026-01-26）`_parse_positive_int_value` 改为复用 `IntValueParseHelpers`
 - `core/rules/drinks_procurement/default_route_builder.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/drinks_procurement/inputs.gd`：（已整改 2026-01-26）移除自带 `_parse_int`，改用 `JsonValueParseHelpers`
 - `core/rules/drinks_procurement/picked_sources_finder.gd`：未发现明显结构问题（小文件/职责相对单一）

@@ -23,3 +23,15 @@ static func parse_non_negative_int_value(value, path: String) -> Result:
 	if int(r.value) < 0:
 		return Result.failure("%s 必须 >= 0，实际: %d" % [path, int(r.value)])
 	return r
+
+static func parse_positive_int_value(value, path: String) -> Result:
+	var r := parse_int_value(value, path)
+	if not r.ok:
+		# float 的失败仅可能是“非整值小数”，保留更具体的错误信息；否则收敛到“正整数”语义。
+		if value is float:
+			return r
+		return Result.failure("%s 必须为正整数" % path)
+	var n: int = int(r.value)
+	if n <= 0:
+		return Result.failure("%s 必须 > 0，实际: %d" % [path, n])
+	return r
