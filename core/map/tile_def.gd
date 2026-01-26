@@ -116,7 +116,7 @@ static func from_dict(data: Dictionary) -> Result:
 		return rotations_read
 
 	var road_segments_val = data.get("road_segments", null)
-	var road_segments_read := _parse_road_grid(road_segments_val, "TileDef.road_segments")
+	var road_segments_read := MapParseHelpersClass.parse_road_grid(road_segments_val, "TileDef.road_segments", int(TILE_SIZE), _VALID_DIRS)
 	if not road_segments_read.ok:
 		return road_segments_read
 
@@ -126,12 +126,12 @@ static func from_dict(data: Dictionary) -> Result:
 		return blocked_read
 
 	var drink_sources_val = data.get("drink_sources", null)
-	var drink_sources_read := _parse_drink_sources(drink_sources_val, "TileDef.drink_sources")
+	var drink_sources_read := MapParseHelpersClass.parse_drink_sources(drink_sources_val, "TileDef.drink_sources")
 	if not drink_sources_read.ok:
 		return drink_sources_read
 
 	var printed_val = data.get("printed_structures", null)
-	var printed_read := _parse_printed_structures(printed_val, "TileDef.printed_structures")
+	var printed_read := MapParseHelpersClass.parse_printed_structures(printed_val, "TileDef.printed_structures", _VALID_ROTATIONS)
 	if not printed_read.ok:
 		return printed_read
 
@@ -211,23 +211,6 @@ func add_road_segment(local_pos: Vector2i, dirs: Array, is_bridge: bool = false)
 		"dirs": dirs,
 		"bridge": is_bridge
 	})
-
-# === 严格解析辅助 ===
-
-static func _parse_int(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_int(value, path)
-
-static func _parse_vec2i(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_vec2i(value, path)
-
-static func _parse_road_grid(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_road_grid(value, path, int(TILE_SIZE), _VALID_DIRS)
-
-static func _parse_drink_sources(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_drink_sources(value, path)
-
-static func _parse_printed_structures(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_printed_structures(value, path, _VALID_ROTATIONS)
 
 # 清除指定位置的所有道路段
 func clear_road_segments(local_pos: Vector2i) -> void:
