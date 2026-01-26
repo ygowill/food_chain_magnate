@@ -6,9 +6,9 @@
 
 ## 快速指标（非测试脚本）
 
-- 非测试脚本：176 个，约 26,405 行（`wc -l`）
+- 非测试脚本：177 个，约 26,421 行（`wc -l`）
 - 其中：
-  - `core/rules/`：46 文件 / 6,389 行
+  - `core/rules/`：47 文件 / 6,405 行
   - `core/engine/`：30 文件 / 5,777 行
   - `core/map/`：35 文件 / 4,521 行
   - `core/modules/`：19 文件 / 2,731 行
@@ -66,6 +66,7 @@
 - 2026-01-26：新增 `core/rules/milestone_effect_queries.gd`（`MilestoneEffectQueries`）收敛“遍历 milestones -> MilestoneDef.effects -> effects.type”样板，并用于 `PricingPipeline`/`DrinksProcurement`/`WorkingFlow`/`PaydaySettlement`/`CleanupSettlement`/`DinnertimeSettlement`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `CommandRunner` 的事件构建（report 拆分/marketing 到期/cleanup 丢弃等）抽离到 `core/engine/game_engine/command_runner_event_build.gd`，并为 `CommandRunner` 增加公开 `build_*` wrapper，替换 gameplay phase/skip actions 与 `MarketingDemandGeneratedEventTest` 中对私有 `_build_*` 的直接调用；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：新增 `core/engine/game_engine/timeline_event_helpers.gd` 收敛时间线事件 envelope（`sequence`/`timestamp`/`command_index`/`step_index`/`phase_segment`）；`event_timeline_build.gd`/`step_timeline_build.gd` 复用该 helper（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：将 `MarketingSettlement` 内的 marketing_instances 校验/归一化逻辑抽离到 `core/rules/phase/marketing/marketing_instances_validation.gd`（减少单文件职责/缩短脚本）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -88,7 +89,7 @@
 - `core/map/piece_def.gd`（~354 LOC）、`core/map/tile_def.gd`（~309 LOC）、`core/map/map_def.gd`（~311 LOC）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
 - 其他超过 ~300 行的文件：
-  - `core/engine/game_engine/modules_v2.gd`、`core/rules/phase/payday_settlement.gd`、`core/rules/drinks_procurement.gd`、`core/utils/range_utils.gd`、`core/rules/phase/marketing/settlement_helpers.gd`、`core/rules/employee_rules/train_slot_usage.gd`、`core/actions/action_registry.gd`、`core/rules/phase/marketing_settlement.gd`、`core/engine/game_engine/auto_advance.gd`
+  - `core/engine/game_engine/modules_v2.gd`、`core/rules/phase/payday_settlement.gd`、`core/rules/drinks_procurement.gd`、`core/utils/range_utils.gd`、`core/rules/phase/marketing/settlement_helpers.gd`、`core/rules/employee_rules/train_slot_usage.gd`、`core/actions/action_registry.gd`、`core/engine/game_engine/auto_advance.gd`
 
 建议记录（后续重构方向）：
 - 先从“职责剥离”入手，而不是单纯按行数拆文件：
@@ -409,8 +410,9 @@
 | `core/rules/phase/dinnertime/dinnertime_inventory.gd` | 81 | 1 | 0 |  |
 | `core/rules/phase/dinnertime/dinnertime_selection.gd` | 202 | 4 | 0 |  |
 | `core/rules/phase/dinnertime_settlement.gd` | 510 | 16 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
-| `core/rules/phase/marketing/settlement_helpers.gd` | 338 | 4 | 0 |  |
-| `core/rules/phase/marketing_settlement.gd` | 309 | 4 | 0 |  |
+| `core/rules/phase/marketing/marketing_instances_validation.gd` | 96 | 1 | 0 |  |
+| `core/rules/phase/marketing/settlement_helpers.gd` | 337 | 4 | 0 |  |
+| `core/rules/phase/marketing_settlement.gd` | 228 | 4 | 0 |  |
 | `core/rules/phase/payday_settlement.gd` | 350 | 7 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
 | `core/rules/placement_conflict_registry.gd` | 133 | 0 | 0 |  |
 | `core/rules/pricing_pipeline.gd` | 180 | 3 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
@@ -613,8 +615,9 @@
 - `core/rules/phase/dinnertime/dinnertime_inventory.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/phase/dinnertime/dinnertime_selection.gd`：中等体量；后续可按重构优先级处理；存在较多 assert；注意与 Result/fail-fast 策略一致性
 - `core/rules/phase/dinnertime_settlement.gd`：（已部分整改 2026-01-26）移除自带 `_parse_non_negative_int_value`，改用 `IntValueParseHelpers`；（已部分整改 2026-01-26）里程碑 effects 遍历改为复用 `MilestoneEffectQueries`；晚餐结算 orchestrator 过大；可进一步把“选择/计价/结算写入/报告生成”分层；超长脚本（维护成本高）；建议按职责拆分；preload 依赖较多（耦合偏高）
+- `core/rules/phase/marketing/marketing_instances_validation.gd`：（已新增 2026-01-26）抽离 MarketingSettlement 的 marketing_instances 校验/归一化逻辑（减少单文件职责/缩短脚本）
 - `core/rules/phase/marketing/settlement_helpers.gd`：偏长脚本；建议关注职责边界/可读性；存在较多 assert；注意与 Result/fail-fast 策略一致性
-- `core/rules/phase/marketing_settlement.gd`：偏长脚本；建议关注职责边界/可读性
+- `core/rules/phase/marketing_settlement.gd`：（已整改 2026-01-26）将 marketing_instances 校验/归一化抽离到 `marketing_instances_validation.gd`（减少单文件职责/缩短脚本）；其余结算/需求生成/到期清理仍可按职责继续拆分
 - `core/rules/phase/payday_settlement.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `IntValueParseHelpers`；（已部分整改 2026-01-26）里程碑 effects 遍历改为复用 `MilestoneEffectQueries`；结算逻辑较大；包含 token 支付/折扣/报告写入等多职责，可分层；偏长脚本；建议关注职责边界/可读性；存在一定数量的 preload 依赖
 - `core/rules/placement_conflict_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/pricing_pipeline.gd`：（已部分整改 2026-01-26）移除自带 `_parse_*`，改用 `IntValueParseHelpers`；（已部分整改 2026-01-26）里程碑 effects 遍历改为复用 `MilestoneEffectQueries`；中等体量；后续可按重构优先级处理
