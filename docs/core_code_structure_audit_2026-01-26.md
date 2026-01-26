@@ -81,6 +81,7 @@
 - 2026-01-27：将 `ModulesV2` 的 catalog/config 校验逻辑抽离到 `core/engine/game_engine/modules_v2_validations.gd`（降低 `modules_v2.gd` 单文件职责与体积）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：移除 `PhaseManager` 中未使用的 preload 依赖，并删除未被使用的私有 wrapper（降低耦合与噪音）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：拆分 `RangeUtils`：`core/utils/range_utils.gd` 保留对外 API wrapper，road/air 实现分别落在 `range_utils_road.gd`/`range_utils_air.gd`（降低单文件体积，便于后续进一步拆分/维护）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：拆分 `TrainSlotUsage`：`core/rules/employee_rules/train_slot_usage.gd` 保留对外 API wrapper，完整实现移至 `train_slot_usage_impl.gd`（降低单文件体积，便于按“round_state 存储/培训员选择/slot 分配”继续拆分）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -103,7 +104,7 @@
 - `core/map/piece_def.gd`（~354 LOC）、`core/map/tile_def.gd`（~262 LOC）、`core/map/map_def.gd`（~311 LOC）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
 - 其他超过 ~300 行的文件：
-  - `core/engine/game_engine/modules_v2.gd`、`core/rules/phase/payday_settlement.gd`、`core/rules/drinks_procurement.gd`、`core/rules/phase/marketing/settlement_helpers.gd`、`core/rules/employee_rules/train_slot_usage.gd`、`core/actions/action_registry.gd`、`core/engine/game_engine/auto_advance.gd`
+  - `core/engine/game_engine/modules_v2.gd`、`core/rules/phase/payday_settlement.gd`、`core/rules/drinks_procurement.gd`、`core/rules/phase/marketing/settlement_helpers.gd`、`core/rules/employee_rules/train_slot_usage_impl.gd`、`core/actions/action_registry.gd`、`core/engine/game_engine/auto_advance.gd`
 
 建议记录（后续重构方向）：
 - 先从“职责剥离”入手，而不是单纯按行数拆文件：
@@ -405,7 +406,8 @@
 | `core/rules/employee_rules/immediate_train_pending.gd` | 149 | 0 | 0 |  |
 | `core/rules/employee_rules/limits.gd` | 46 | 2 | 0 |  |
 | `core/rules/employee_rules/salary.gd` | 65 | 4 | 0 |  |
-| `core/rules/employee_rules/train_slot_usage.gd` | 326 | 3 | 0 |  |
+| `core/rules/employee_rules/train_slot_usage.gd` | 30 | 1 | 0 |  |
+| `core/rules/employee_rules/train_slot_usage_impl.gd` | 325 | 3 | 0 |  |
 | `core/rules/employee_rules/working_multiplier.gd` | 29 | 0 | 0 |  |
 | `core/rules/employee_rules.gd` | 105 | 7 | 0 |  |
 | `core/rules/global_effect_list.gd` | 112 | 0 | 0 |  |
@@ -616,7 +618,8 @@
 - `core/rules/employee_rules/immediate_train_pending.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/employee_rules/limits.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/employee_rules/salary.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/employee_rules/train_slot_usage.gd`：偏长脚本；建议关注职责边界/可读性
+- `core/rules/employee_rules/train_slot_usage.gd`：（已整改 2026-01-27）对外 API wrapper；完整实现移至 `train_slot_usage_impl.gd`（降低单文件体积，便于维护/进一步拆分）
+- `core/rules/employee_rules/train_slot_usage_impl.gd`：（已新增 2026-01-27）TrainSlotUsage 完整实现（round_state 存储 + 培训员选择 + slot 分配）；仍偏长，后续可按“存储层/选择策略/分配策略”继续拆分
 - `core/rules/employee_rules/working_multiplier.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/global_effect_list.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/map_generation_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
