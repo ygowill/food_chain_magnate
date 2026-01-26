@@ -6,11 +6,11 @@
 
 ## 快速指标（非测试脚本）
 
-- 非测试脚本：175 个，约 26,431 行（`wc -l`）
+- 非测试脚本：175 个，约 26,406 行（`wc -l`）
 - 其中：
   - `core/rules/`：46 文件 / 6,392 行
   - `core/engine/`：29 文件 / 5,673 行
-  - `core/map/`：35 文件 / 4,614 行
+  - `core/map/`：35 文件 / 4,589 行
   - `core/modules/`：19 文件 / 2,750 行
   - `core/state/`：14 文件 / 2,063 行
   - `core/data/`：14 文件 / 1,534 行
@@ -29,6 +29,7 @@
 - 2026-01-26：为 `GameEngine` 增加公开 wrapper（`ensure_initialized`/`truncate_future_history`），并替换 `CommandRunner`/`EventHistoryRebuild`/`EventTimelineBuild`/`StepTimelineBuild` 中跨文件调用私有 `_ensure_initialized`/`_truncate_future_history`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：移除 `MapOptionDef` 的自 preload 创建实例（`_SELF_SCRIPT.new()`），改为直接 `MapOptionDef.new()`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `debug_force` 的回放强制执行判定统一收敛到 `Replay.should_force_execute_in_replay(...)`，并用于 `StepTimelineBuild`/`EventHistoryRebuild`（移除重复 `_should_force_execute_in_replay`）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：扩展 `MapParseHelpers`（新增 `parse_vec2i_array`/`parse_rotation_array`），并用于 `TileDef`/`PieceDef`（移除重复 `_parse_vec2i_list`/`_parse_vec2i_array`/`_parse_rotation_array`）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将“内建动作注册”从 `core/engine/game_engine/action_setup.gd` 迁移到 `gameplay/action_setup.gd`；core `ActionSetup` 改为委托 provider（移除 core 内对 `gameplay/actions/*.gd` 的 preload）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：为 core `ActionSetup` 增加显式注入点 `set_provider_path(...)`，允许在不修改 core 的情况下替换动作注册 provider；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：引入 `Result.error_code`（含 `MISSING_PARAMS`），并在 `ActionExecutor.require_*`/`ActionRegistry.get_player_initiatable_actions` 中使用（保留旧字符串前缀兼容）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
@@ -304,8 +305,8 @@
 | `core/map/map_runtime/tile_edit.gd` | 215 | 3 | 0 |  |
 | `core/map/map_utils.gd` | 239 | 0 | 0 |  |
 | `core/map/marketing_placement_query.gd` | 250 | 1 | 0 |  |
-| `core/map/parse_helpers.gd` | 52 | 0 | 0 |  |
-| `core/map/piece_def.gd` | 418 | 2 | 0 | defines:_parse_* |
+| `core/map/parse_helpers.gd` | 80 | 0 | 0 |  |
+| `core/map/piece_def.gd` | 390 | 2 | 0 | defines:_parse_* |
 | `core/map/piece_registry.gd` | 67 | 2 | 0 |  |
 | `core/map/placement_validator/garden_attachment.gd` | 124 | 2 | 0 |  |
 | `core/map/placement_validator/map_access.gd` | 40 | 0 | 0 |  |
@@ -319,7 +320,7 @@
 | `core/map/road_graph/pathfinding.gd` | 158 | 1 | 0 |  |
 | `core/map/road_graph/range_query.gd` | 47 | 2 | 0 |  |
 | `core/map/road_graph.gd` | 147 | 4 | 0 |  |
-| `core/map/tile_def.gd` | 417 | 2 | 0 | defines:_parse_* |
+| `core/map/tile_def.gd` | 389 | 2 | 0 | defines:_parse_* |
 | `core/map/tile_registry.gd` | 63 | 2 | 0 |  |
 | `core/modules/v2/content_catalog.gd` | 68 | 0 | 0 |  |
 | `core/modules/v2/content_catalog_loader.gd` | 274 | 9 | 0 |  |
@@ -498,8 +499,8 @@
 - `core/map/map_runtime/tile_edit.gd`：中等体量；后续可按重构优先级处理
 - `core/map/map_utils.gd`：中等体量；后续可按重构优先级处理
 - `core/map/marketing_placement_query.gd`：中等体量；后续可按重构优先级处理
-- `core/map/parse_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/map/piece_def.gd`：超长脚本（维护成本高）；建议按职责拆分；自带 _parse_* 解析函数（重复实现可收敛）
+- `core/map/parse_helpers.gd`：（已部分整改 2026-01-26）扩展 `parse_vec2i_array`/`parse_rotation_array` 并用于 `TileDef`/`PieceDef`，用于收敛地图相关解析样板代码
+- `core/map/piece_def.gd`：（已部分整改 2026-01-26）旋转数组/入口点解析已改为复用 `MapParseHelpers`（减少重复 helper）；仍为超长脚本（维护成本高）；建议按职责拆分；仍含部分自带 _parse_* 解析函数（可继续收敛）
 - `core/map/piece_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/placement_validator/garden_attachment.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/placement_validator/map_access.gd`：未发现明显结构问题（小文件/职责相对单一）
@@ -513,7 +514,7 @@
 - `core/map/road_graph/node_keys.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/road_graph/pathfinding.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/road_graph/range_query.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/map/tile_def.gd`：超长脚本（维护成本高）；建议按职责拆分；自带 _parse_* 解析函数（重复实现可收敛）
+- `core/map/tile_def.gd`：（已部分整改 2026-01-26）blocked_cells/allowed_rotations 解析已改为复用 `MapParseHelpers`（减少重复 helper）；仍为超长脚本（维护成本高）；建议按职责拆分；仍含部分自带 _parse_* 解析函数（可继续收敛）
 - `core/map/tile_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 
 ### modules/

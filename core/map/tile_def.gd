@@ -111,7 +111,7 @@ static func from_dict(data: Dictionary) -> Result:
 		return Result.failure("TileDef.display_name 类型错误或为空（期望非空 String）")
 
 	var rotations_val = data.get("allowed_rotations", null)
-	var rotations_read := _parse_rotation_array(rotations_val, "TileDef.allowed_rotations")
+	var rotations_read := MapParseHelpersClass.parse_rotation_array(rotations_val, "TileDef.allowed_rotations", _VALID_ROTATIONS)
 	if not rotations_read.ok:
 		return rotations_read
 
@@ -121,7 +121,7 @@ static func from_dict(data: Dictionary) -> Result:
 		return road_segments_read
 
 	var blocked_cells_val = data.get("blocked_cells", null)
-	var blocked_read := _parse_vec2i_array(blocked_cells_val, "TileDef.blocked_cells")
+	var blocked_read := MapParseHelpersClass.parse_vec2i_array(blocked_cells_val, "TileDef.blocked_cells")
 	if not blocked_read.ok:
 		return blocked_read
 
@@ -220,33 +220,6 @@ static func _parse_int(value, path: String) -> Result:
 static func _parse_vec2i(value, path: String) -> Result:
 	return MapParseHelpersClass.parse_vec2i(value, path)
 
-static func _parse_vec2i_array(value, path: String) -> Result:
-	if not (value is Array):
-		return Result.failure("%s 类型错误（期望 Array[[x,y],...]）" % path)
-	var out: Array[Vector2i] = []
-	for i in range(value.size()):
-		var v_read := _parse_vec2i(value[i], "%s[%d]" % [path, i])
-		if not v_read.ok:
-			return v_read
-		out.append(v_read.value)
-	return Result.success(out)
-
-static func _parse_rotation_array(value, path: String) -> Result:
-	if not (value is Array):
-		return Result.failure("%s 类型错误（期望 Array[int]）" % path)
-	var out: Array[int] = []
-	for i in range(value.size()):
-		var v_read := _parse_int(value[i], "%s[%d]" % [path, i])
-		if not v_read.ok:
-			return v_read
-		var rot: int = int(v_read.value)
-		if not _VALID_ROTATIONS.has(rot):
-			return Result.failure("%s[%d] 旋转角非法: %d" % [path, i, rot])
-		out.append(rot)
-	if out.is_empty():
-		return Result.failure("%s 不能为空" % path)
-	return Result.success(out)
-
 static func _parse_road_grid(value, path: String) -> Result:
 	if not (value is Array) or value.size() != TILE_SIZE:
 		return Result.failure("%s 类型错误（期望 %dx%d 数组）" % [path, TILE_SIZE, TILE_SIZE])
@@ -329,7 +302,7 @@ func clear_road_segments(local_pos: Vector2i) -> void:
 
 # 添加印刷建筑
 func add_printed_structure(piece_id: String, anchor: Vector2i, rotation: int = 0,
-						   house_id: String = "", house_number = null) -> void:
+	house_id: String = "", house_number = null) -> void:
 	var struct := {
 		"piece_id": piece_id,
 		"anchor": anchor,

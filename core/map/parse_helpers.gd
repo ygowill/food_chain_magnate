@@ -33,6 +33,35 @@ static func parse_vec2i(value, path: String) -> Result:
 		return y_read
 	return Result.success(Vector2i(int(x_read.value), int(y_read.value)))
 
+static func parse_vec2i_array(value, path: String) -> Result:
+	if not (value is Array):
+		return Result.failure("%s 类型错误（期望 Array[[x,y],...]）" % path)
+	var out: Array[Vector2i] = []
+	for i in range(value.size()):
+		var v_read := parse_vec2i(value[i], "%s[%d]" % [path, i])
+		if not v_read.ok:
+			return v_read
+		out.append(v_read.value)
+	return Result.success(out)
+
+static func parse_rotation_array(value, path: String, valid_rotations: Array) -> Result:
+	if not (value is Array):
+		return Result.failure("%s 类型错误（期望 Array[int]）" % path)
+	if not (valid_rotations is Array):
+		return Result.failure("%s 的旋转校验配置类型错误（期望 Array[int]）" % path)
+	var out: Array[int] = []
+	for i in range(value.size()):
+		var v_read := parse_int(value[i], "%s[%d]" % [path, i])
+		if not v_read.ok:
+			return v_read
+		var rot: int = int(v_read.value)
+		if not valid_rotations.has(rot):
+			return Result.failure("%s[%d] 旋转角非法: %d" % [path, i, rot])
+		out.append(rot)
+	if out.is_empty():
+		return Result.failure("%s 不能为空" % path)
+	return Result.success(out)
+
 static func parse_string_array(value, path: String, require_non_empty: bool) -> Result:
 	if not (value is Array):
 		return Result.failure("%s 类型错误（期望 Array[String]）" % path)

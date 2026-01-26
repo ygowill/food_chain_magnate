@@ -165,7 +165,7 @@ static func from_dict(data: Dictionary) -> Result:
 	if not anchor_read.ok:
 		return anchor_read
 
-	var rotations_read := _parse_rotation_array(data.get("allowed_rotations", null), "PieceDef.allowed_rotations")
+	var rotations_read := MapParseHelpersClass.parse_rotation_array(data.get("allowed_rotations", null), "PieceDef.allowed_rotations", _VALID_ROTATIONS)
 	if not rotations_read.ok:
 		return rotations_read
 
@@ -190,7 +190,7 @@ static func from_dict(data: Dictionary) -> Result:
 	if not (entrance_type_val is String) or str(entrance_type_val).strip_edges().is_empty():
 		return Result.failure("PieceDef.entrance_type 类型错误或为空（期望非空 String）")
 
-	var entrance_points_read := _parse_vec2i_list(data.get("entrance_points", null), "PieceDef.entrance_points")
+	var entrance_points_read := MapParseHelpersClass.parse_vec2i_array(data.get("entrance_points", null), "PieceDef.entrance_points")
 	if not entrance_points_read.ok:
 		return entrance_points_read
 
@@ -247,35 +247,8 @@ static func _parse_int(value, path: String) -> Result:
 static func _parse_vec2i(value, path: String) -> Result:
 	return MapParseHelpersClass.parse_vec2i(value, path)
 
-static func _parse_rotation_array(value, path: String) -> Result:
-	if not (value is Array):
-		return Result.failure("%s 类型错误（期望 Array[int]）" % path)
-	var out: Array[int] = []
-	for i in range(value.size()):
-		var v_read := _parse_int(value[i], "%s[%d]" % [path, i])
-		if not v_read.ok:
-			return v_read
-		var rot: int = int(v_read.value)
-		if not _VALID_ROTATIONS.has(rot):
-			return Result.failure("%s[%d] 旋转角非法: %d" % [path, i, rot])
-		out.append(rot)
-	if out.is_empty():
-		return Result.failure("%s 不能为空" % path)
-	return Result.success(out)
-
 static func _parse_string_array(value, path: String, require_non_empty: bool) -> Result:
 	return MapParseHelpersClass.parse_string_array(value, path, require_non_empty)
-
-static func _parse_vec2i_list(value, path: String) -> Result:
-	if not (value is Array):
-		return Result.failure("%s 类型错误（期望 Array[[x,y],...]）" % path)
-	var out: Array[Vector2i] = []
-	for i in range(value.size()):
-		var v_read := _parse_vec2i(value[i], "%s[%d]" % [path, i])
-		if not v_read.ok:
-			return v_read
-		out.append(v_read.value)
-	return Result.success(out)
 
 static func _parse_footprint_mask(value, path: String) -> Result:
 	if not (value is Array) or value.is_empty():
