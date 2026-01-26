@@ -3,6 +3,8 @@
 class_name ActionRegistry
 extends RefCounted
 
+const QueriesClass = preload("res://core/actions/action_registry_queries.gd")
+
 # 注册的执行器
 # action_id -> ActionExecutor
 var _executors: Dictionary = {}
@@ -167,89 +169,16 @@ func run_validators(state: GameState, command: Command) -> Result:
 
 # 获取当前阶段可用的动作
 func get_available_actions(state: GameState) -> Array[String]:
-	if _availability_registry != null and _availability_registry.has_method("get_available_action_ids"):
-		var ids: Array[String] = _availability_registry.get_available_action_ids(str(state.phase), str(state.sub_phase))
-		var filtered: Array[String] = []
-		for aid in ids:
-			var ex := get_executor(aid)
-			if ex != null and ex.is_internal:
-				continue
-			filtered.append(aid)
-		return filtered
-
-	var result: Array[String] = []
-
-	for action_id in _executors:
-		var executor: ActionExecutor = _executors[action_id]
-		if executor.is_internal:
-			continue
-
-		# 检查阶段限制
-		if executor.allowed_phases.size() > 0:
-			if not executor.allowed_phases.has(state.phase):
-				continue
-
-		# 检查子阶段限制
-		if executor.allowed_sub_phases.size() > 0 and not state.sub_phase.is_empty():
-			if not executor.allowed_sub_phases.has(state.sub_phase):
-				continue
-
-		result.append(action_id)
-
-	return result
+	return QueriesClass.get_available_actions(self, state)
 
 # 获取玩家可执行的动作
 func get_player_available_actions(state: GameState, player_id: int) -> Array[String]:
-	var available := get_available_actions(state)
-	var result: Array[String] = []
-
-	for action_id in available:
-		var executor := get_executor(action_id)
-		if executor == null:
-			continue
-
-		# 创建测试命令
-		var test_command := Command.create(action_id, player_id)
-		test_command.phase = state.phase
-		test_command.sub_phase = state.sub_phase
-
-		# 基础校验
-		var validate_result := executor.validate(state, test_command)
-		if validate_result.ok:
-			result.append(action_id)
-
-	return result
+	return QueriesClass.get_player_available_actions(self, state, player_id)
 
 # 获取玩家“可启动”的动作（用于 UI：允许先点击进入选点/面板，再补齐参数执行）
 # - 若完整 validate 失败的原因仅为“缺少参数”，则仍视为可启动
 func get_player_initiatable_actions(state: GameState, player_id: int) -> Array[String]:
-	var available := get_available_actions(state)
-	var result: Array[String] = []
-
-	for action_id in available:
-		var executor := get_executor(action_id)
-		if executor == null:
-			continue
-
-		var test_command := Command.create(action_id, player_id)
-		test_command.phase = state.phase
-		test_command.sub_phase = state.sub_phase
-
-		var validate_result := executor.validate(state, test_command)
-		if validate_result.ok:
-			result.append(action_id)
-			continue
-
-		if _is_missing_params_error(validate_result):
-			var can_initiate := true
-			if executor.has_method("can_initiate"):
-				var v = executor.can_initiate(state, player_id)
-				if v is bool:
-					can_initiate = bool(v)
-			if can_initiate:
-				result.append(action_id)
-
-	return result
+	return QueriesClass.get_player_initiatable_actions(self, state, player_id)
 
 static func _is_missing_params_error(r: Result) -> bool:
 	if r == null or r.ok:
@@ -258,22 +187,7 @@ static func _is_missing_params_error(r: Result) -> bool:
 
 # 获取强制动作
 func get_mandatory_actions(state: GameState) -> Array[String]:
-	var result: Array[String] = []
-
-	for action_id in _executors:
-		var executor: ActionExecutor = _executors[action_id]
-		if executor.is_mandatory:
-			# 检查阶段/子阶段
-			if _availability_registry != null and _availability_registry.has_method("is_action_available"):
-				if not _availability_registry.is_action_available(action_id, str(state.phase), str(state.sub_phase)):
-					continue
-			else:
-				if executor.allowed_phases.size() > 0:
-					if not executor.allowed_phases.has(state.phase):
-						continue
-			result.append(action_id)
-
-	return result
+	return QueriesClass.get_mandatory_actions(self, state)
 
 # === 调试 ===
 

@@ -76,6 +76,7 @@
 - 2026-01-26：将 `GameStateFactory` 的餐厅 Logo 分配逻辑外移到 `gameplay/setup/restaurant_logo_assignment.gd`，并通过 `ProjectSettings.fcm/restaurant_logo_assignment_provider_path` 动态加载（减少 core/state 的 UI/setup 语义）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：扩展 `MilestoneEffectQueries`（新增 sum/max helpers）并用于 `PricingPipeline`/`DrinksProcurement`/`WorkingFlow`/`PaydaySettlement`/`CleanupSettlement`/`DinnertimeSettlement` 收敛“entries->value 解析/累加/取最大”样板；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `PerfTrace` 实现移至 `tools/perf_trace.gd`，core/debug 保留 shim（减少 core/debug 的工具逻辑负担）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：将 `ActionRegistry` 的“按阶段/玩家查询动作”逻辑抽离到 `core/actions/action_registry_queries.gd`，`ActionRegistry` 仅保留轻量 wrapper（降低单文件职责与体积）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -458,7 +459,8 @@
 
 - `core/actions/action_availability_registry.gd`：中等体量；后续可按重构优先级处理
 - `core/actions/action_executor.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `IntValueParseHelpers`；中等体量；后续可按重构优先级处理
-- `core/actions/action_registry.gd`：包含 UI 语义：`get_player_initiatable_actions(...)` 判定“可启动动作”（隐式契约）；（已整改 2026-01-26）缺参判定统一走 `Result.ErrorCode.MISSING_PARAMS`（避免错误文案做控制流）；偏长脚本；建议关注职责边界/可读性；依赖 GameLog 全局单例（耦合）
+- `core/actions/action_registry.gd`：包含 UI 语义：`get_player_initiatable_actions(...)` 判定“可启动动作”（隐式契约）；（已整改 2026-01-26）缺参判定统一走 `Result.ErrorCode.MISSING_PARAMS`（避免错误文案做控制流）；（已整改 2026-01-27）查询/过滤逻辑已抽离到 `action_registry_queries.gd`（ActionRegistry 主体更聚焦于注册/校验器）；依赖 GameLog 全局单例（耦合）
+- `core/actions/action_registry_queries.gd`：（已新增 2026-01-27）ActionRegistry 查询/过滤辅助（按 phase/player 过滤动作），用于降低 `ActionRegistry` 单文件职责与体积
 
 ### data/
 
