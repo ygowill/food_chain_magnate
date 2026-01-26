@@ -39,6 +39,7 @@
 - 2026-01-26：将 `WorkingFlow` 的 `_parse_non_negative_int_value` 改为复用 `IntValueParseHelpers.parse_non_negative_int_value(...)`（保留 assert-based fail fast 语义）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `PoolBuilder` 的 `_parse_non_negative_int` 改为复用 `DataParseHelpers.parse_non_negative_int(...)`，并移除自带解析函数；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `ModuleManifest` 的 `_parse_*` 改为复用 `DataParseHelpers`（减少 manifest 解析样板代码）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：将 `VisualCatalogLoader` 的整数解析改为复用 `DataParseHelpers.parse_int(...)`，并移除自带 `_parse_int_required`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -324,7 +325,7 @@
 | `core/modules/v2/ruleset_builder.gd` | 128 | 1 | 0 |  |
 | `core/modules/v2/ruleset_loader.gd` | 48 | 1 | 1 |  |
 | `core/modules/v2/visual_catalog.gd` | 20 | 0 | 0 |  |
-| `core/modules/v2/visual_catalog_loader.gd` | 276 | 4 | 0 | defines:_parse_* |
+| `core/modules/v2/visual_catalog_loader.gd` | 266 | 5 | 0 | uses:DataParseHelpers |
 | `core/random/random_manager.gd` | 235 | 0 | 0 |  |
 | `core/rules/bankruptcy_registry.gd` | 69 | 0 | 0 |  |
 | `core/rules/company_structure_rules.gd` | 137 | 1 | 0 |  |
@@ -518,7 +519,7 @@
 - `core/modules/v2/ruleset_builder.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/modules/v2/ruleset_loader.gd`：使用动态 load（可能影响静态分析/可替换性）
 - `core/modules/v2/visual_catalog.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/modules/v2/visual_catalog_loader.gd`：中等体量；后续可按重构优先级处理；自带 _parse_* 解析函数（重复实现可收敛）
+- `core/modules/v2/visual_catalog_loader.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_required`，改用 `DataParseHelpers`；中等体量；后续可按重构优先级处理
 
 ### random/
 

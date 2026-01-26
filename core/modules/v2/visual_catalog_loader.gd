@@ -10,6 +10,7 @@ const VisualCatalogClass = preload("res://core/modules/v2/visual_catalog.gd")
 const ModulePackageLoaderClass = preload("res://core/modules/v2/module_package_loader.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
+const DataParseHelpersClass = preload("res://core/data/parse_helpers.gd")
 
 static func load_for_modules(base_dir: String, module_ids: Array[String]) -> Result:
 	if base_dir.is_empty():
@@ -78,7 +79,7 @@ static func _apply_visuals_dict(catalog, data: Dictionary, module_id: String,
 		return Result.failure("VisualCatalog 为空")
 
 	var schema_val = data.get("schema_version", null)
-	var schema_read := _parse_int_required(schema_val, "%s.schema_version" % source_path)
+	var schema_read := DataParseHelpersClass.parse_int(schema_val, "%s.schema_version" % source_path)
 	if not schema_read.ok:
 		return schema_read
 	var schema_version: int = int(schema_read.value)
@@ -173,16 +174,6 @@ static func _list_json_files(dir_path: String) -> Result:
 	json_files.sort()
 	return Result.success(json_files)
 
-static func _parse_int_required(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
-		return Result.success(int(f))
-	return Result.failure("%s 类型错误（期望整数）" % path)
-
 static func _parse_visual_map_simple(value, path: String) -> Result:
 	if value == null:
 		return Result.success({})
@@ -216,10 +207,10 @@ static func _parse_vec2i(value, path: String) -> Result:
 		return Result.success(Vector2i.ZERO)
 	if not (value is Array) or value.size() != 2:
 		return Result.failure("%s 类型错误（期望 [x,y]）" % path)
-	var x_read := _parse_int_required(value[0], "%s[0]" % path)
+	var x_read := DataParseHelpersClass.parse_int(value[0], "%s[0]" % path)
 	if not x_read.ok:
 		return x_read
-	var y_read := _parse_int_required(value[1], "%s[1]" % path)
+	var y_read := DataParseHelpersClass.parse_int(value[1], "%s[1]" % path)
 	if not y_read.ok:
 		return y_read
 	return Result.success(Vector2i(int(x_read.value), int(y_read.value)))
