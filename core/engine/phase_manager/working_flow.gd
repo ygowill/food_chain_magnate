@@ -5,6 +5,7 @@ extends RefCounted
 const CompanyStructureRulesClass = preload("res://core/rules/company_structure_rules.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const MilestoneDefClass = preload("res://core/data/milestone_def.gd")
+const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 
 static func start_new_round(state: GameState) -> void:
 	# 重建回合状态（避免残留旧回合的计数/完成记录）
@@ -148,18 +149,9 @@ static func _get_turnorder_empty_slots_bonus_from_milestones(milestones: Array) 
 	return bonus
 
 static func _parse_non_negative_int_value(value, path: String) -> int:
-	if value is int:
-		var i: int = int(value)
-		assert(i >= 0, "%s 必须 >= 0，实际: %d" % [path, i])
-		return i
-	if value is float:
-		var f: float = float(value)
-		assert(f == int(f), "%s 必须为整数（不允许小数）" % path)
-		var i2: int = int(f)
-		assert(i2 >= 0, "%s 必须 >= 0，实际: %d" % [path, i2])
-		return i2
-	assert(false, "%s 必须为非负整数" % path)
-	return 0
+	var r := IntValueParseHelpersClass.parse_non_negative_int_value(value, path)
+	assert(r.ok, str(r.error))
+	return int(r.value)
 
 static func _enforce_company_capacity(player: Dictionary) -> void:
 	CompanyStructureRulesClass.enforce_capacity(player)

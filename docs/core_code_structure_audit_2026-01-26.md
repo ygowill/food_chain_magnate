@@ -36,6 +36,7 @@
 - 2026-01-26：将 `CleanupSettlement`/`DinnertimeSettlement` 的非负整数解析改为复用 `IntValueParseHelpers.parse_non_negative_int_value(...)`，并移除自带 `_parse_non_negative_int_value`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `ActionExecutor` 的整数参数解析改为复用 `IntValueParseHelpers.parse_int_value(...)`，并移除自带 `_parse_int_value`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `GameConfig` 的通用 `_parse_*` 改为复用 `core/state/serialization/parse_helpers.gd`，并仅保留业务专用 `_parse_reserve_cards`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：将 `WorkingFlow` 的 `_parse_non_negative_int_value` 改为复用 `IntValueParseHelpers.parse_non_negative_int_value(...)`（保留 assert-based fail fast 语义）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -266,7 +267,7 @@
 | `core/engine/phase_manager/hooks.gd` | 220 | 1 | 0 | uses:GameLog,uses:DebugFlags |
 | `core/engine/phase_manager/order_config.gd` | 152 | 1 | 0 |  |
 | `core/engine/phase_manager/settlement_triggers.gd` | 127 | 2 | 0 |  |
-| `core/engine/phase_manager/working_flow.gd` | 166 | 3 | 0 | defines:_parse_* |
+| `core/engine/phase_manager/working_flow.gd` | 157 | 4 | 0 | uses:IntValueParseHelpers |
 | `core/engine/phase_manager.gd` | 301 | 10 | 0 |  |
 | `core/map/house_number_manager.gd` | 233 | 0 | 0 |  |
 | `core/map/map_baker/bake.gd` | 80 | 3 | 0 |  |
@@ -455,7 +456,7 @@
 - `core/engine/phase_manager/hooks.gd`：中等体量；后续可按重构优先级处理；依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
 - `core/engine/phase_manager/order_config.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/phase_manager/settlement_triggers.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/engine/phase_manager/working_flow.gd`：自带 _parse_* 解析函数（重复实现可收敛）
+- `core/engine/phase_manager/working_flow.gd`：（已部分整改 2026-01-26）`_parse_non_negative_int_value` 改为复用 `IntValueParseHelpers`；仍大量使用 assert 做 fail-fast（需注意 release 下 assert 行为）
 
 ### map/
 
