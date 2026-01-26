@@ -61,6 +61,11 @@ func compute_new_state_force(state: GameState, command: Command) -> Result:
 
 	return Result.success(new_state).with_warnings(apply_result.warnings)
 
+func apply_changes_in_place(state: GameState, command: Command) -> Result:
+	# 允许调用方对“现有 state”就地应用变更（不做 duplicate_state）。
+	# 典型用途：AutoAdvance 的 in-place 语义。
+	return _apply_changes(state, command)
+
 # 生成事件
 # 返回事件数组，用于通知其他系统
 func generate_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:

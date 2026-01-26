@@ -23,6 +23,7 @@
 ## 整改日志
 
 - 2026-01-26：移除 `ProductDef`/`ModuleManifest` 的“自 load 创建实例”写法，改为直接 `new()`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：新增 `ActionExecutor.apply_changes_in_place(...)` 并用于 `AutoAdvance`（避免跨文件调用私有 `_apply_changes`）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -143,7 +144,7 @@
   - `CommandRunnerClass._build_player_cash_changed_events(...)`、`CommandRunnerClass._build_milestone_achieved_events(...)`
   - `engine.phase_manager._is_settlement_scheduled(...)`
 - `core/engine/game_engine/auto_advance.gd` 调用：
-  - `executor._apply_changes(...)`（ActionExecutor 的私有实现细节）
+  - （已整改 2026-01-26）原先调用 `executor._apply_changes(...)`；已改为 `executor.apply_changes_in_place(...)`（行为不变，但避免跨文件访问私有方法）
 
 风险：
 - 后续想重构接口时，无法在不改调用方的情况下替换内部实现。
@@ -416,7 +417,7 @@
 - `core/engine/game_engine/action_setup.gd`：core 反向依赖 gameplay/actions（分层反转）；动作注册建议外移或注入；preload 依赖较多（耦合偏高）；依赖 gameplay（core 分层反转风险）；依赖 GameLog 全局单例（耦合）
 - `core/engine/game_engine/action_wiring.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/game_engine/archive.gd`：依赖 GameLog 全局单例（耦合）
-- `core/engine/game_engine/auto_advance.gd`：通过调用 executor._apply_changes 直接 in-place 改 state（依赖私有实现细节）；偏长脚本；建议关注职责边界/可读性
+- `core/engine/game_engine/auto_advance.gd`：通过 `ActionExecutor.apply_changes_in_place` 直接 in-place 改 state（需明确该 API 的契约/适用范围）；偏长脚本；建议关注职责边界/可读性
 - `core/engine/game_engine/checkpoints.gd`：依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
 - `core/engine/game_engine/command_runner.gd`：命令执行 + 事件构建/投递 + auto-advance + checkpoint + 不变量校验混在一起，职责过载；包含大量 phase 特例事件（偏日志/展示语义），建议抽离；超长脚本（维护成本高）；建议按职责拆分；依赖 EventBus（引擎与日志/UI 耦合）
 - `core/engine/game_engine/diagnostics.gd`：未发现明显结构问题（小文件/职责相对单一）

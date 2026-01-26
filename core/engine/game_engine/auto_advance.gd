@@ -214,7 +214,7 @@ static func _try_auto_complete_working_mandatory_actions(state_in: GameState, ac
 
 		# IMPORTANT: 执行器的 _apply_changes 设计为“对 duplicate_state 的变更”，这里直接对 state_in 应用，
 		# 以保持 AutoAdvance 的 in-place 语义（CommandRunner/Replay 依赖此行为）。
-		var ar := executor._apply_changes(state_in, cmd)
+		var ar := executor.apply_changes_in_place(state_in, cmd)
 		if not ar.ok:
 			return ar
 		return Result.success(true).with_warnings(ar.warnings)
