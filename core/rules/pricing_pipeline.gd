@@ -3,8 +3,7 @@
 class_name PricingPipeline
 extends RefCounted
 
-const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
-const MilestoneDefClass = preload("res://core/data/milestone_def.gd")
+const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 
@@ -119,90 +118,63 @@ static func calculate_sale_breakdown(state: GameState, player_id: int, house: Di
 	})
 
 static func _get_base_price_delta_from_milestones(milestones: Array) -> Result:
-	if not MilestoneRegistryClass.is_loaded():
-		return Result.failure("PricingPipeline: MilestoneRegistry 未初始化")
-
 	var delta := 0
-	for i in range(milestones.size()):
-		var mid_val = milestones[i]
-		if not (mid_val is String):
-			return Result.failure("PricingPipeline: milestones[%d] 类型错误（期望 String）" % i)
-		var mid: String = str(mid_val)
-		if mid.is_empty():
-			return Result.failure("PricingPipeline: milestones 不应包含空字符串")
+	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
+		milestones,
+		"base_price_delta",
+		"PricingPipeline: ",
+		"milestones"
+	)
+	if not entries_read.ok:
+		return entries_read
+	var entries: Array = entries_read.value
+	for entry_val in entries:
+		var entry: Dictionary = entry_val
+		var mid: String = str(entry.get("milestone_id", ""))
+		var e_i: int = int(entry.get("effect_index", -1))
+		var eff_val = entry.get("effect", null)
+		var eff: Dictionary = eff_val
 
-		var def_val = MilestoneRegistryClass.get_def(mid)
-		if def_val == null:
-			return Result.failure("PricingPipeline: 未知里程碑定义: %s" % mid)
-		if not (def_val is MilestoneDefClass):
-			return Result.failure("PricingPipeline: 里程碑定义类型错误（期望 MilestoneDef）: %s" % mid)
-		var def: MilestoneDef = def_val
-
-		for e_i in range(def.effects.size()):
-			var eff_val = def.effects[e_i]
-			if not (eff_val is Dictionary):
-				return Result.failure("PricingPipeline: %s.effects[%d] 类型错误（期望 Dictionary）" % [mid, e_i])
-			var eff: Dictionary = eff_val
-			var type_val = eff.get("type", null)
-			if not (type_val is String):
-				return Result.failure("PricingPipeline: %s.effects[%d].type 类型错误（期望 String）" % [mid, e_i])
-			var t: String = str(type_val)
-			if t != "base_price_delta":
-				continue
-
-			var value_val = eff.get("value", null)
-			var v_read := IntValueParseHelpersClass.parse_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
-			if not v_read.ok:
-				return Result.failure("PricingPipeline: %s" % v_read.error)
-			delta += int(v_read.value)
+		var value_val = eff.get("value", null)
+		var v_read := IntValueParseHelpersClass.parse_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+		if not v_read.ok:
+			return Result.failure("PricingPipeline: %s" % v_read.error)
+		delta += int(v_read.value)
 
 	return Result.success(delta)
 
 static func _get_sell_bonus_by_category_from_milestones(milestones: Array) -> Result:
-	if not MilestoneRegistryClass.is_loaded():
-		return Result.failure("PricingPipeline: MilestoneRegistry 未初始化")
-
 	var out: Dictionary = {}
 
-	for i in range(milestones.size()):
-		var mid_val = milestones[i]
-		if not (mid_val is String):
-			return Result.failure("PricingPipeline: milestones[%d] 类型错误（期望 String）" % i)
-		var mid: String = str(mid_val)
-		if mid.is_empty():
-			return Result.failure("PricingPipeline: milestones 不应包含空字符串")
+	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
+		milestones,
+		"sell_bonus",
+		"PricingPipeline: ",
+		"milestones"
+	)
+	if not entries_read.ok:
+		return entries_read
+	var entries: Array = entries_read.value
 
-		var def_val = MilestoneRegistryClass.get_def(mid)
-		if def_val == null:
-			return Result.failure("PricingPipeline: 未知里程碑定义: %s" % mid)
-		if not (def_val is MilestoneDefClass):
-			return Result.failure("PricingPipeline: 里程碑定义类型错误（期望 MilestoneDef）: %s" % mid)
-		var def: MilestoneDef = def_val
+	for entry_val in entries:
+		var entry: Dictionary = entry_val
+		var mid: String = str(entry.get("milestone_id", ""))
+		var e_i: int = int(entry.get("effect_index", -1))
+		var eff_val = entry.get("effect", null)
+		var eff: Dictionary = eff_val
 
-		for e_i in range(def.effects.size()):
-			var eff_val = def.effects[e_i]
-			if not (eff_val is Dictionary):
-				return Result.failure("PricingPipeline: %s.effects[%d] 类型错误（期望 Dictionary）" % [mid, e_i])
-			var eff: Dictionary = eff_val
-			var type_val = eff.get("type", null)
-			if not (type_val is String):
-				return Result.failure("PricingPipeline: %s.effects[%d].type 类型错误（期望 String）" % [mid, e_i])
-			var t: String = str(type_val)
-			if t != "sell_bonus":
-				continue
+		var product_val = eff.get("product", null)
+		if not (product_val is String):
+			return Result.failure("PricingPipeline: %s.effects[%d].product 类型错误（期望 String）" % [mid, e_i])
+		var product: String = str(product_val)
+		if product.is_empty():
+			return Result.failure("PricingPipeline: %s.effects[%d].product 不能为空" % [mid, e_i])
 
-			var product_val = eff.get("product", null)
-			if not (product_val is String):
-				return Result.failure("PricingPipeline: %s.effects[%d].product 类型错误（期望 String）" % [mid, e_i])
-			var product: String = str(product_val)
-			if product.is_empty():
-				return Result.failure("PricingPipeline: %s.effects[%d].product 不能为空" % [mid, e_i])
+		var value_val = eff.get("value", null)
+		var v_read := IntValueParseHelpersClass.parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+		if not v_read.ok:
+			return Result.failure("PricingPipeline: %s" % v_read.error)
 
-			var value_val = eff.get("value", null)
-			var v_read := IntValueParseHelpersClass.parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
-			if not v_read.ok:
-				return Result.failure("PricingPipeline: %s" % v_read.error)
-
-			out[product] = int(out.get(product, 0)) + int(v_read.value)
+		out[product] = int(out.get(product, 0)) + int(v_read.value)
 
 	return Result.success(out)

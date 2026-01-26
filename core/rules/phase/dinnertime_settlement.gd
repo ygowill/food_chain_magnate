@@ -4,13 +4,13 @@ class_name DinnertimeSettlement
 extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
-const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const PricingPipelineClass = preload("res://core/rules/pricing_pipeline.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const BankruptcyRulesClass = preload("res://core/rules/economy/bankruptcy_rules.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
@@ -481,39 +481,28 @@ static func _get_waitress_tips_override_from_milestones(milestones: Array) -> Re
 	var found := false
 	var best := 0
 
-	for i in range(milestones.size()):
-		var mid_val = milestones[i]
-		if not (mid_val is String):
-			return Result.failure("晚餐结算失败：milestones[%d] 类型错误（期望 String）" % i)
-		var mid: String = str(mid_val)
-		if mid.is_empty():
-			return Result.failure("晚餐结算失败：milestones 不应包含空字符串")
+	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
+		milestones,
+		"waitress_tips",
+		"晚餐结算失败：",
+		"milestones"
+	)
+	if not entries_read.ok:
+		return entries_read
+	var entries: Array = entries_read.value
+	for entry_val in entries:
+		var entry: Dictionary = entry_val
+		var mid: String = str(entry.get("milestone_id", ""))
+		var e_i: int = int(entry.get("effect_index", -1))
+		var eff_val = entry.get("effect", null)
+		var eff: Dictionary = eff_val
 
-		var def_val = MilestoneRegistryClass.get_def(mid)
-		if def_val == null:
-			return Result.failure("晚餐结算失败：未知里程碑定义: %s" % mid)
-		if not (def_val is MilestoneDef):
-			return Result.failure("晚餐结算失败：里程碑定义类型错误（期望 MilestoneDef）: %s" % mid)
-		var def: MilestoneDef = def_val
-
-		for e_i in range(def.effects.size()):
-			var eff_val = def.effects[e_i]
-			if not (eff_val is Dictionary):
-				return Result.failure("晚餐结算失败：%s.effects[%d] 类型错误（期望 Dictionary）" % [mid, e_i])
-			var eff: Dictionary = eff_val
-			var type_val = eff.get("type", null)
-			if not (type_val is String):
-				return Result.failure("晚餐结算失败：%s.effects[%d].type 类型错误（期望 String）" % [mid, e_i])
-			var t: String = str(type_val)
-			if t != "waitress_tips":
-				continue
-
-			var value_val = eff.get("value", null)
-			var v_read := IntValueParseHelpersClass.parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
-			if not v_read.ok:
-				return Result.failure("晚餐结算失败：%s" % v_read.error)
-			found = true
-			best = maxi(best, int(v_read.value))
+		var value_val = eff.get("value", null)
+		var v_read := IntValueParseHelpersClass.parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+		if not v_read.ok:
+			return Result.failure("晚餐结算失败：%s" % v_read.error)
+		found = true
+		best = maxi(best, int(v_read.value))
 
 	return Result.success({
 		"found": found,

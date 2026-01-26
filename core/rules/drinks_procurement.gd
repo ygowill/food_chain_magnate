@@ -8,7 +8,7 @@ const StartRestaurantResolverClass = preload("res://core/rules/drinks_procuremen
 const RouteValidatorClass = preload("res://core/rules/drinks_procurement/route_validator.gd")
 const PickedSourcesFinderClass = preload("res://core/rules/drinks_procurement/picked_sources_finder.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
-const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
+const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 
 static func resolve_procurement_plan(
@@ -189,38 +189,27 @@ static func get_drinks_per_source_bonus_from_milestones(state: GameState, player
 	var milestones: Array = player["milestones"]
 
 	var bonus := 0
-	for i in range(milestones.size()):
-		var mid_val = milestones[i]
-		if not (mid_val is String):
-			return Result.failure("DrinksProcurement: milestones[%d] 类型错误（期望 String）" % i)
-		var mid: String = str(mid_val)
-		if mid.is_empty():
-			return Result.failure("DrinksProcurement: milestones 不应包含空字符串")
+	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
+		milestones,
+		"procure_plus_one",
+		"DrinksProcurement: ",
+		"milestones"
+	)
+	if not entries_read.ok:
+		return entries_read
+	var entries: Array = entries_read.value
+	for entry_val in entries:
+		var entry: Dictionary = entry_val
+		var mid: String = str(entry.get("milestone_id", ""))
+		var e_i: int = int(entry.get("effect_index", -1))
+		var eff_val = entry.get("effect", null)
+		var eff: Dictionary = eff_val
 
-		var def_val = MilestoneRegistryClass.get_def(mid)
-		if def_val == null:
-			return Result.failure("DrinksProcurement: 未知里程碑定义: %s" % mid)
-		if not (def_val is MilestoneDef):
-			return Result.failure("DrinksProcurement: 里程碑定义类型错误（期望 MilestoneDef）: %s" % mid)
-		var def: MilestoneDef = def_val
-
-		for e_i in range(def.effects.size()):
-			var eff_val = def.effects[e_i]
-			if not (eff_val is Dictionary):
-				return Result.failure("DrinksProcurement: %s.effects[%d] 类型错误（期望 Dictionary）" % [mid, e_i])
-			var eff: Dictionary = eff_val
-			var type_val = eff.get("type", null)
-			if not (type_val is String):
-				return Result.failure("DrinksProcurement: %s.effects[%d].type 类型错误（期望 String）" % [mid, e_i])
-			var t: String = str(type_val)
-			if t != "procure_plus_one":
-				continue
-
-			var value_val = eff.get("value", null)
-			var v_read := _parse_positive_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
-			if not v_read.ok:
-				return Result.failure("DrinksProcurement: %s" % v_read.error)
-			bonus += int(v_read.value)
+		var value_val = eff.get("value", null)
+		var v_read := _parse_positive_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+		if not v_read.ok:
+			return Result.failure("DrinksProcurement: %s" % v_read.error)
+		bonus += int(v_read.value)
 
 	return Result.success(bonus)
 
@@ -243,52 +232,41 @@ static func get_drinks_per_source_delta_for_employee_from_milestones(state: Game
 	var milestones: Array = player["milestones"]
 
 	var bonus := 0
-	for i in range(milestones.size()):
-		var mid_val = milestones[i]
-		if not (mid_val is String):
-			return Result.failure("DrinksProcurement: milestones[%d] 类型错误（期望 String）" % i)
-		var mid: String = str(mid_val)
-		if mid.is_empty():
-			return Result.failure("DrinksProcurement: milestones 不应包含空字符串")
+	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
+		milestones,
+		"drinks_per_source_delta",
+		"DrinksProcurement: ",
+		"milestones"
+	)
+	if not entries_read.ok:
+		return entries_read
+	var entries: Array = entries_read.value
+	for entry_val in entries:
+		var entry: Dictionary = entry_val
+		var mid: String = str(entry.get("milestone_id", ""))
+		var e_i: int = int(entry.get("effect_index", -1))
+		var eff_val = entry.get("effect", null)
+		var eff: Dictionary = eff_val
 
-		var def_val = MilestoneRegistryClass.get_def(mid)
-		if def_val == null:
-			return Result.failure("DrinksProcurement: 未知里程碑定义: %s" % mid)
-		if not (def_val is MilestoneDef):
-			return Result.failure("DrinksProcurement: 里程碑定义类型错误（期望 MilestoneDef）: %s" % mid)
-		var def: MilestoneDef = def_val
+		if not eff.has("targets") or not (eff["targets"] is Array):
+			return Result.failure("DrinksProcurement: %s.effects[%d].targets 缺失或类型错误（期望 Array）" % [mid, e_i])
+		var targets: Array = eff["targets"]
+		var hit := false
+		for j in range(targets.size()):
+			var target_val = targets[j]
+			if not (target_val is String):
+				return Result.failure("DrinksProcurement: %s.effects[%d].targets[%d] 类型错误（期望 String）" % [mid, e_i, j])
+			if str(target_val) == employee_id:
+				hit = true
+				break
+		if not hit:
+			continue
 
-		for e_i in range(def.effects.size()):
-			var eff_val = def.effects[e_i]
-			if not (eff_val is Dictionary):
-				return Result.failure("DrinksProcurement: %s.effects[%d] 类型错误（期望 Dictionary）" % [mid, e_i])
-			var eff: Dictionary = eff_val
-			var type_val = eff.get("type", null)
-			if not (type_val is String):
-				return Result.failure("DrinksProcurement: %s.effects[%d].type 类型错误（期望 String）" % [mid, e_i])
-			var t: String = str(type_val)
-			if t != "drinks_per_source_delta":
-				continue
-
-			if not eff.has("targets") or not (eff["targets"] is Array):
-				return Result.failure("DrinksProcurement: %s.effects[%d].targets 缺失或类型错误（期望 Array）" % [mid, e_i])
-			var targets: Array = eff["targets"]
-			var hit := false
-			for j in range(targets.size()):
-				var target_val = targets[j]
-				if not (target_val is String):
-					return Result.failure("DrinksProcurement: %s.effects[%d].targets[%d] 类型错误（期望 String）" % [mid, e_i, j])
-				if str(target_val) == employee_id:
-					hit = true
-					break
-			if not hit:
-				continue
-
-			var value_val = eff.get("value", null)
-			var v_read := _parse_positive_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
-			if not v_read.ok:
-				return Result.failure("DrinksProcurement: %s" % v_read.error)
-			bonus += int(v_read.value)
+		var value_val = eff.get("value", null)
+		var v_read := _parse_positive_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+		if not v_read.ok:
+			return Result.failure("DrinksProcurement: %s" % v_read.error)
+		bonus += int(v_read.value)
 
 	return Result.success(bonus)
 
@@ -311,46 +289,35 @@ static func _get_distance_range_bonus_from_milestones(state: GameState, player_i
 	var milestones: Array = player["milestones"]
 
 	var bonus := 0
-	for i in range(milestones.size()):
-		var mid_val = milestones[i]
-		if not (mid_val is String):
-			return Result.failure("DrinksProcurement: milestones[%d] 类型错误（期望 String）" % i)
-		var mid: String = str(mid_val)
-		if mid.is_empty():
-			return Result.failure("DrinksProcurement: milestones 不应包含空字符串")
+	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
+		milestones,
+		"distance_plus_one",
+		"DrinksProcurement: ",
+		"milestones"
+	)
+	if not entries_read.ok:
+		return entries_read
+	var entries: Array = entries_read.value
+	for entry_val in entries:
+		var entry: Dictionary = entry_val
+		var mid: String = str(entry.get("milestone_id", ""))
+		var e_i: int = int(entry.get("effect_index", -1))
+		var eff_val = entry.get("effect", null)
+		var eff: Dictionary = eff_val
 
-		var def_val = MilestoneRegistryClass.get_def(mid)
-		if def_val == null:
-			return Result.failure("DrinksProcurement: 未知里程碑定义: %s" % mid)
-		if not (def_val is MilestoneDef):
-			return Result.failure("DrinksProcurement: 里程碑定义类型错误（期望 MilestoneDef）: %s" % mid)
-		var def: MilestoneDef = def_val
-
-		for e_i in range(def.effects.size()):
-			var eff_val = def.effects[e_i]
-			if not (eff_val is Dictionary):
-				return Result.failure("DrinksProcurement: %s.effects[%d] 类型错误（期望 Dictionary）" % [mid, e_i])
-			var eff: Dictionary = eff_val
-			var type_val = eff.get("type", null)
-			if not (type_val is String):
-				return Result.failure("DrinksProcurement: %s.effects[%d].type 类型错误（期望 String）" % [mid, e_i])
-			var t: String = str(type_val)
-			if t != "distance_plus_one":
-				continue
-
-			if not eff.has("targets") or not (eff["targets"] is Array):
-				return Result.failure("DrinksProcurement: %s.effects[%d].targets 缺失或类型错误（期望 Array）" % [mid, e_i])
-			var targets: Array = eff["targets"]
-			for j in range(targets.size()):
-				var target_val = targets[j]
-				if not (target_val is String):
-					return Result.failure("DrinksProcurement: %s.effects[%d].targets[%d] 类型错误（期望 String）" % [mid, e_i, j])
-				var target: String = str(target_val)
-				if target.is_empty():
-					return Result.failure("DrinksProcurement: %s.effects[%d].targets[%d] 不能为空" % [mid, e_i, j])
-				if target == employee_id:
-					bonus += 1
-					break
+		if not eff.has("targets") or not (eff["targets"] is Array):
+			return Result.failure("DrinksProcurement: %s.effects[%d].targets 缺失或类型错误（期望 Array）" % [mid, e_i])
+		var targets: Array = eff["targets"]
+		for j in range(targets.size()):
+			var target_val = targets[j]
+			if not (target_val is String):
+				return Result.failure("DrinksProcurement: %s.effects[%d].targets[%d] 类型错误（期望 String）" % [mid, e_i, j])
+			var target: String = str(target_val)
+			if target.is_empty():
+				return Result.failure("DrinksProcurement: %s.effects[%d].targets[%d] 不能为空" % [mid, e_i, j])
+			if target == employee_id:
+				bonus += 1
+				break
 
 	return Result.success(bonus)
 

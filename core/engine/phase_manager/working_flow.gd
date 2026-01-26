@@ -3,8 +3,7 @@
 extends RefCounted
 
 const CompanyStructureRulesClass = preload("res://core/rules/company_structure_rules.gd")
-const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
-const MilestoneDefClass = preload("res://core/data/milestone_def.gd")
+const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 
 static func start_new_round(state: GameState) -> void:
@@ -118,33 +117,26 @@ static func _compute_order_of_business_empty_slots(state: GameState, player: Dic
 	return empty_slots
 
 static func _get_turnorder_empty_slots_bonus_from_milestones(milestones: Array) -> int:
-	assert(MilestoneRegistryClass.is_loaded(), "WorkingFlow: MilestoneRegistry 未初始化")
-
 	var bonus := 0
 
-	for i in range(milestones.size()):
-		var mid_val = milestones[i]
-		assert(mid_val is String, "WorkingFlow: milestones[%d] 类型错误（期望 String）" % i)
-		var mid: String = str(mid_val)
-		assert(not mid.is_empty(), "WorkingFlow: milestones 不应包含空字符串")
+	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
+		milestones,
+		"turnorder_empty_slots",
+		"WorkingFlow: ",
+		"milestones"
+	)
+	assert(entries_read.ok, str(entries_read.error))
+	var entries: Array = entries_read.value
+	for entry_val in entries:
+		var entry: Dictionary = entry_val
+		var mid: String = str(entry.get("milestone_id", ""))
+		var e_i: int = int(entry.get("effect_index", -1))
+		var eff_val = entry.get("effect", null)
+		var eff: Dictionary = eff_val
 
-		var def_val = MilestoneRegistryClass.get_def(mid)
-		assert(def_val != null, "WorkingFlow: 未知里程碑定义: %s" % mid)
-		assert(def_val is MilestoneDefClass, "WorkingFlow: 里程碑定义类型错误（期望 MilestoneDef）: %s" % mid)
-		var def: MilestoneDef = def_val
-
-		for e_i in range(def.effects.size()):
-			var eff_val = def.effects[e_i]
-			assert(eff_val is Dictionary, "WorkingFlow: %s.effects[%d] 类型错误（期望 Dictionary）" % [mid, e_i])
-			var eff: Dictionary = eff_val
-			assert(eff.has("type") and (eff["type"] is String), "WorkingFlow: %s.effects[%d].type 缺失或类型错误（期望 String）" % [mid, e_i])
-			var t: String = str(eff["type"])
-			if t != "turnorder_empty_slots":
-				continue
-
-			var value_val = eff.get("value", null)
-			var v := _parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
-			bonus += v
+		var value_val = eff.get("value", null)
+		var v := _parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+		bonus += v
 
 	return bonus
 

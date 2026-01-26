@@ -5,10 +5,10 @@ extends RefCounted
 
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
-const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 
 const EFFECT_SEG_PAYDAY_SALARY_DISCOUNT := ":payday:salary_discount:"
@@ -316,38 +316,27 @@ static func _get_salary_total_delta(_state: GameState, player: Dictionary) -> Re
 	var milestones: Array = player["milestones"]
 
 	var delta := 0
-	for i in range(milestones.size()):
-		var mid_val = milestones[i]
-		if not (mid_val is String):
-			return Result.failure("PaydaySettlement: player.milestones[%d] 类型错误（期望 String）" % i)
-		var mid: String = str(mid_val)
-		if mid.is_empty():
-			return Result.failure("PaydaySettlement: player.milestones 不应包含空字符串")
+	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
+		milestones,
+		"salary_total_delta",
+		"PaydaySettlement: ",
+		"player.milestones"
+	)
+	if not entries_read.ok:
+		return entries_read
+	var entries: Array = entries_read.value
+	for entry_val in entries:
+		var entry: Dictionary = entry_val
+		var mid: String = str(entry.get("milestone_id", ""))
+		var e_i: int = int(entry.get("effect_index", -1))
+		var eff_val = entry.get("effect", null)
+		var eff: Dictionary = eff_val
 
-		var def_val = MilestoneRegistryClass.get_def(mid)
-		if def_val == null:
-			return Result.failure("PaydaySettlement: 未知里程碑定义: %s" % mid)
-		if not (def_val is MilestoneDef):
-			return Result.failure("PaydaySettlement: 里程碑定义类型错误（期望 MilestoneDef）: %s" % mid)
-		var def: MilestoneDef = def_val
-
-		for e_i in range(def.effects.size()):
-			var eff_val = def.effects[e_i]
-			if not (eff_val is Dictionary):
-				return Result.failure("PaydaySettlement: %s.effects[%d] 类型错误（期望 Dictionary）" % [mid, e_i])
-			var eff: Dictionary = eff_val
-			var type_val = eff.get("type", null)
-			if not (type_val is String):
-				return Result.failure("PaydaySettlement: %s.effects[%d].type 类型错误（期望 String）" % [mid, e_i])
-			var t: String = str(type_val)
-			if t != "salary_total_delta":
-				continue
-
-			var value_val = eff.get("value", null)
-			var v_read := IntValueParseHelpersClass.parse_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
-			if not v_read.ok:
-				return Result.failure("PaydaySettlement: %s" % v_read.error)
-			delta += int(v_read.value)
+		var value_val = eff.get("value", null)
+		var v_read := IntValueParseHelpersClass.parse_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+		if not v_read.ok:
+			return Result.failure("PaydaySettlement: %s" % v_read.error)
+		delta += int(v_read.value)
 
 	return Result.success(delta)
 
