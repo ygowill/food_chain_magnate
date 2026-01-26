@@ -6,10 +6,10 @@
 
 ## 快速指标（非测试脚本）
 
-- 非测试脚本：175 个，约 26,447 行（`wc -l`）
+- 非测试脚本：175 个，约 26,431 行（`wc -l`）
 - 其中：
   - `core/rules/`：46 文件 / 6,392 行
-  - `core/engine/`：29 文件 / 5,689 行
+  - `core/engine/`：29 文件 / 5,673 行
   - `core/map/`：35 文件 / 4,614 行
   - `core/modules/`：19 文件 / 2,750 行
   - `core/state/`：14 文件 / 2,063 行
@@ -28,6 +28,7 @@
 - 2026-01-26：新增 `GameStartedEventBuild`，统一 `initializer`/`event_timeline_build`/`step_timeline_build` 构建 `GAME_STARTED` 的字段与 state_hash 计算方式（并在缺少初始 checkpoint 时降级为 warning）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：为 `GameEngine` 增加公开 wrapper（`ensure_initialized`/`truncate_future_history`），并替换 `CommandRunner`/`EventHistoryRebuild`/`EventTimelineBuild`/`StepTimelineBuild` 中跨文件调用私有 `_ensure_initialized`/`_truncate_future_history`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：移除 `MapOptionDef` 的自 preload 创建实例（`_SELF_SCRIPT.new()`），改为直接 `MapOptionDef.new()`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：将 `debug_force` 的回放强制执行判定统一收敛到 `Replay.should_force_execute_in_replay(...)`，并用于 `StepTimelineBuild`/`EventHistoryRebuild`（移除重复 `_should_force_execute_in_replay`）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将“内建动作注册”从 `core/engine/game_engine/action_setup.gd` 迁移到 `gameplay/action_setup.gd`；core `ActionSetup` 改为委托 provider（移除 core 内对 `gameplay/actions/*.gd` 的 preload）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：为 core `ActionSetup` 增加显式注入点 `set_provider_path(...)`，允许在不修改 core 的情况下替换动作注册 provider；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：引入 `Result.error_code`（含 `MISSING_PARAMS`），并在 `ActionExecutor.require_*`/`ActionRegistry.get_player_initiatable_actions` 中使用（保留旧字符串前缀兼容）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
@@ -266,7 +267,7 @@
 | `core/engine/game_engine/command_runner.gd` | 215 | 2 | 0 | uses:EventBus,uses:GameLog,uses:DebugFlags,uses:OS.has_feature |
 | `core/engine/game_engine/command_runner_event_build.gd` | 464 | 0 | 0 | uses:EventBus |
 | `core/engine/game_engine/diagnostics.gd` | 48 | 0 | 0 |  |
-| `core/engine/game_engine/event_history_rebuild.gd` | 104 | 1 | 0 | uses:EventBus,uses:OS.has_feature |
+| `core/engine/game_engine/event_history_rebuild.gd` | 96 | 2 | 0 | uses:EventBus |
 | `core/engine/game_engine/event_timeline_build.gd` | 112 | 1 | 0 | uses:EventBus |
 | `core/engine/game_engine/game_started_event_build.gd` | 34 | 0 | 0 |  |
 | `core/engine/game_engine/initializer.gd` | 266 | 9 | 0 | uses:EventBus,uses:GameLog |
@@ -274,7 +275,7 @@
 | `core/engine/game_engine/loader.gd` | 159 | 3 | 0 | uses:EventBus,uses:GameLog,uses:JsonValueParseHelpers |
 | `core/engine/game_engine/modules_v2.gd` | 413 | 22 | 0 |  |
 | `core/engine/game_engine/replay.gd` | 188 | 2 | 0 | uses:GameLog,uses:OS.has_feature,uses:JsonValueParseHelpers |
-| `core/engine/game_engine/step_timeline_build.gd` | 632 | 4 | 0 | uses:EventBus,uses:OS.has_feature |
+| `core/engine/game_engine/step_timeline_build.gd` | 624 | 6 | 0 | uses:EventBus |
 | `core/engine/game_engine.gd` | 470 | 13 | 0 | uses:EventBus,uses:OS.has_feature |
 | `core/engine/phase_manager/advance_phase.gd` | 240 | 2 | 0 | uses:GameLog |
 | `core/engine/phase_manager/advance_sub_phase.gd` | 279 | 2 | 0 | uses:GameLog |
@@ -458,7 +459,7 @@
 - `core/engine/game_engine/command_runner.gd`：（已部分整改 2026-01-26）事件构建已下沉到 `command_runner_event_build.gd`，主流程更聚焦于命令执行/auto-advance/invariants/checkpoint/emit；仍依赖 EventBus（引擎与日志/UI 耦合）；依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
 - `core/engine/game_engine/command_runner_event_build.gd`：（已新增 2026-01-26）从 `CommandRunner` 抽离的事件构建（report/拆分事件/marketing 到期/cleanup 丢弃等，偏日志/展示语义）；偏长脚本；后续可按 phase 拆分
 - `core/engine/game_engine/diagnostics.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/engine/game_engine/event_history_rebuild.gd`：依赖 EventBus（引擎与日志/UI 耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
+- `core/engine/game_engine/event_history_rebuild.gd`：依赖 EventBus（引擎与日志/UI 耦合）；（已部分整改 2026-01-26）debug_force 判定统一复用 `Replay.should_force_execute_in_replay(...)`（移除本文件内重复/分支判断）
 - `core/engine/game_engine/event_timeline_build.gd`：（已部分整改 2026-01-26）`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建（缺少初始 checkpoint 时仅 warning，不阻塞时间线构建）；依赖 EventBus（引擎与日志/UI 耦合）
 - `core/engine/game_engine/game_started_event_build.gd`：（已新增 2026-01-26）抽离 `GAME_STARTED` 事件字段构建（initializer/event_timeline_build/step_timeline_build 共用），避免字段/计算方式漂移
 - `core/engine/game_engine/initializer.gd`：（已部分整改 2026-01-26）`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建；中等体量；存在一定数量的 preload 依赖；依赖 EventBus（引擎与日志/UI 耦合）
@@ -466,7 +467,7 @@
 - `core/engine/game_engine/loader.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `JsonValueParseHelpers`；依赖 EventBus（引擎与日志/UI 耦合）；依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
 - `core/engine/game_engine/modules_v2.gd`：超长脚本（维护成本高）；建议按职责拆分；preload 依赖较多（耦合偏高）；函数数量较多，可能包含多职责/可考虑拆 helper
 - `core/engine/game_engine/replay.gd`：中等体量；后续可按重构优先级处理；含调试/发布差异分支（OS.has_feature）；（已部分整改 2026-01-26）checkpoint.rng_calls 解析共用 `JsonValueParseHelpers`
-- `core/engine/game_engine/step_timeline_build.gd`：（已部分整改 2026-01-26）`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建；时间线/日志“派生视图”构建逻辑很重；超长脚本（维护成本高）；建议按职责拆分；依赖 EventBus（引擎与日志/UI 耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）；（已整改 2026-01-26：不再跨文件调用 CommandRunner/PhaseManager 的私有 `_` 前缀方法）
+- `core/engine/game_engine/step_timeline_build.gd`：（已部分整改 2026-01-26）`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建；debug_force 判定统一复用 `Replay.should_force_execute_in_replay(...)`；时间线/日志“派生视图”构建逻辑很重；超长脚本（维护成本高）；建议按职责拆分；依赖 EventBus（引擎与日志/UI 耦合）；（已整改 2026-01-26：不再跨文件调用 CommandRunner/PhaseManager 的私有 `_` 前缀方法）
 - `core/engine/phase_manager.gd`：偏长脚本；建议关注职责边界/可读性；preload 依赖较多（耦合偏高）；函数数量较多，可能包含多职责/可考虑拆 helper
 - `core/engine/phase_manager/advance_phase.gd`：中等体量；后续可按重构优先级处理；依赖 GameLog 全局单例（耦合）
 - `core/engine/phase_manager/advance_sub_phase.gd`：中等体量；后续可按重构优先级处理；依赖 GameLog 全局单例（耦合）

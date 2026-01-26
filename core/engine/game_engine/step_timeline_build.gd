@@ -13,6 +13,7 @@ extends RefCounted
 const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
 const GameStartedEventBuildClass = preload("res://core/engine/game_engine/game_started_event_build.gd")
+const ReplayClass = preload("res://core/engine/game_engine/replay.gd")
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 
@@ -102,7 +103,7 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 		if executor == null:
 			return Result.failure("StepTimelineBuild: 回放时找不到执行器: %s" % str(cmd.action_id)).with_warnings(warnings)
 
-		var force_execute := _should_force_execute_in_replay(cmd)
+		var force_execute := ReplayClass.should_force_execute_in_replay(cmd)
 		if force_execute and executor.requires_actor:
 			# 与 ReplayClass/EventHistoryRebuild 保持一致：强制命令仍要求 actor 为当前玩家，避免破坏时间线一致性。
 			var current_player_id := replay_state.get_current_player_id()
@@ -478,15 +479,6 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 		"steps": steps,
 		"events": events_out,
 	}).with_warnings(warnings)
-
-static func _should_force_execute_in_replay(command: Command) -> bool:
-	if command == null:
-		return false
-	if OS.has_feature("release"):
-		return false
-	if not (command.metadata is Dictionary):
-		return false
-	return bool(Dictionary(command.metadata).get("debug_force", false))
 
 static func _build_step_dict(kind: String, anchor_command_index: int, state: GameState, extra: Dictionary = {}) -> Dictionary:
 	var out: Dictionary = extra.duplicate(true) if (extra is Dictionary) else {}

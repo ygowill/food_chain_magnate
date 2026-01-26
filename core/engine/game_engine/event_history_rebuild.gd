@@ -3,6 +3,7 @@
 extends RefCounted
 
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
+const ReplayClass = preload("res://core/engine/game_engine/replay.gd")
 
 static func build(engine: GameEngine, target_index: int) -> Result:
 	if engine == null:
@@ -36,7 +37,7 @@ static func build(engine: GameEngine, target_index: int) -> Result:
 		if executor == null:
 			return Result.failure("EventHistoryRebuild: 回放时找不到执行器: %s" % cmd.action_id)
 
-		var force_execute := _should_force_execute_in_replay(cmd)
+		var force_execute := ReplayClass.should_force_execute_in_replay(cmd)
 		if force_execute and executor.requires_actor:
 			# 与 ReplayClass 保持一致：强制命令仍要求 actor 为当前玩家，避免破坏时间线一致性。
 			var current_player_id := replay_state.get_current_player_id()
@@ -93,12 +94,3 @@ static func build(engine: GameEngine, target_index: int) -> Result:
 		replay_state = new_state
 
 	return Result.success(all_events).with_warnings(all_warnings)
-
-static func _should_force_execute_in_replay(command: Command) -> bool:
-	if command == null:
-		return false
-	if OS.has_feature("release"):
-		return false
-	if not (command.metadata is Dictionary):
-		return false
-	return bool(Dictionary(command.metadata).get("debug_force", false))

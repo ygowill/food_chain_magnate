@@ -74,7 +74,7 @@ static func rewind_to_command(
 		if executor == null:
 			return Result.failure("回放时找不到执行器: %s" % cmd.action_id)
 
-		var force_execute := _should_force_execute_in_replay(cmd)
+		var force_execute := should_force_execute_in_replay(cmd)
 		if force_execute and executor.requires_actor:
 			var current_player_id := replay_state.get_current_player_id()
 			if cmd.actor != current_player_id:
@@ -138,7 +138,7 @@ static func full_replay(
 		if executor == null:
 			return Result.failure("重放时找不到执行器: %s" % cmd.action_id)
 
-		var force_execute := _should_force_execute_in_replay(cmd)
+		var force_execute := should_force_execute_in_replay(cmd)
 		if force_execute and executor.requires_actor:
 			var current_player_id := replay_state.get_current_player_id()
 			if cmd.actor != current_player_id:
@@ -163,7 +163,7 @@ static func full_replay(
 		"current_command_index": command_history.size() - 1
 	}).with_warnings(all_warnings)
 
-static func _should_force_execute_in_replay(command: Command) -> bool:
+static func should_force_execute_in_replay(command: Command) -> bool:
 	if command == null:
 		return false
 	if OS.has_feature("release"):
