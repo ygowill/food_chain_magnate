@@ -150,7 +150,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		var food_type_val = command.params.get("food_type", "")
 		food_type = str(food_type_val).strip_edges()
 		if food_type.is_empty():
-			return Result.failure("缺少参数: food_type")
+			return Result.failure("缺少参数: food_type", Result.ErrorCode.MISSING_PARAMS)
 		var options: Array[String] = []
 		if emp_def is EmployeeDef:
 			options = (emp_def as EmployeeDef).get_production_food_options()

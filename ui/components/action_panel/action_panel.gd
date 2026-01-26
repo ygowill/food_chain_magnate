@@ -761,7 +761,12 @@ class ActionButton extends Button:
 	func _on_mouse_exited() -> void:
 		tooltip_text = ""
 
-func _is_missing_params_error(err: String) -> bool:
+func _is_missing_params_error(r: Result) -> bool:
+	if r == null or r.ok:
+		return false
+	if int(r.error_code) == Result.ErrorCode.MISSING_PARAMS:
+		return true
+	var err: String = str(r.error)
 	return err.begins_with("缺少参数:") or err.begins_with("缺少必需参数:")
 
 func _get_missing_mandatory_actions_for_current_player() -> Array[String]:
@@ -851,7 +856,7 @@ func _compute_disabled_reason(action_id: String) -> String:
 	var r = executor.validate(_game_state, test_command)
 	if r is Result and not r.ok:
 		var msg := str(r.error)
-		if _is_missing_params_error(msg) and executor.has_method("can_initiate"):
+		if _is_missing_params_error(r) and executor.has_method("can_initiate"):
 			var can = executor.can_initiate(_game_state, _current_player_id)
 			if can is bool and not bool(can):
 				return "条件不足，无法启动该动作"

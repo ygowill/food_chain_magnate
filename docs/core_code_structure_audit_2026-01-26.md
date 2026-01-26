@@ -28,6 +28,7 @@
 - 2026-01-26：将“内建动作注册”从 `core/engine/game_engine/action_setup.gd` 迁移到 `gameplay/action_setup.gd`；core `ActionSetup` 改为委托 provider（移除 core 内对 `gameplay/actions/*.gd` 的 preload）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：为 core `ActionSetup` 增加显式注入点 `set_provider_path(...)`，允许在不修改 core 的情况下替换动作注册 provider；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：引入 `Result.error_code`（含 `MISSING_PARAMS`），并在 `ActionExecutor.require_*`/`ActionRegistry.get_player_initiatable_actions` 中使用（保留旧字符串前缀兼容）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：将 `MISSING_PARAMS` 错误码扩展到部分 gameplay actions/validators 以及 `core/rules/drinks_procurement.gd`，并让 UI 的缺参判断优先使用 `Result.error_code`（仍保留旧字符串前缀兼容）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -132,7 +133,7 @@
 ### 3.3 ActionRegistry 混入 UI 语义 + 字符串错误消息作为控制流
 
 - `core/actions/action_registry.gd`
-  - （已部分整改 2026-01-26）`get_player_initiatable_actions(...)` 优先判断 `Result.error_code == Result.ErrorCode.MISSING_PARAMS`，并保留旧字符串前缀兼容（避免文案变更破坏行为）。
+  - （已部分整改 2026-01-26）`get_player_initiatable_actions(...)` 优先判断 `Result.error_code == Result.ErrorCode.MISSING_PARAMS`，并保留旧字符串前缀兼容；并同步在常见 gameplay actions/validators 与 UI 缺参判断处逐步推广 error_code（减少对文案的依赖）。
 
 风险：
 - 错误文案变更会破坏行为（隐式契约）；也会让 i18n/重构变难。
@@ -386,7 +387,7 @@
 
 - `core/actions/action_availability_registry.gd`：中等体量；后续可按重构优先级处理
 - `core/actions/action_executor.gd`：中等体量；后续可按重构优先级处理；自带 _parse_* 解析函数（重复实现可收敛）
-- `core/actions/action_registry.gd`：包含 UI 语义：`get_player_initiatable_actions(...)` 判定“可启动动作”（隐式契约）；（已部分整改 2026-01-26）引入 `Result.error_code` 并优先按错误码判断，保留旧前缀兼容；偏长脚本；建议关注职责边界/可读性；依赖 GameLog 全局单例（耦合）
+- `core/actions/action_registry.gd`：包含 UI 语义：`get_player_initiatable_actions(...)` 判定“可启动动作”（隐式契约）；（已部分整改 2026-01-26）引入 `Result.error_code` 并优先按错误码判断、保留旧前缀兼容，并开始向常见调用链（含部分 gameplay 与 UI）扩散；偏长脚本；建议关注职责边界/可读性；依赖 GameLog 全局单例（耦合）
 
 ### data/
 

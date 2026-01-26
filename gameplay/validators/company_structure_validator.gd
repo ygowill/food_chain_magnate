@@ -50,7 +50,7 @@ func validate(state: GameState, player_id: int, params: Dictionary) -> Result:
 # 严格参数解析（Fail Fast）
 static func _require_string_param(params: Dictionary, key: String) -> Result:
 	if not params.has(key):
-		return Result.failure("缺少参数: %s" % key)
+		return Result.failure("缺少参数: %s" % key, Result.ErrorCode.MISSING_PARAMS)
 	var value = params[key]
 	if not (value is String):
 		return Result.failure("%s 必须为字符串" % key)
@@ -61,7 +61,7 @@ static func _require_string_param(params: Dictionary, key: String) -> Result:
 
 static func _require_bool_param(params: Dictionary, key: String) -> Result:
 	if not params.has(key):
-		return Result.failure("缺少参数: %s" % key)
+		return Result.failure("缺少参数: %s" % key, Result.ErrorCode.MISSING_PARAMS)
 	var value = params[key]
 	if not (value is bool):
 		return Result.failure("%s 必须为 bool" % key)

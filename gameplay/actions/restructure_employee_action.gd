@@ -37,7 +37,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("CEO 不能被移动到待命区")
 
 	if not command.params.has("to_reserve"):
-		return Result.failure("缺少参数: to_reserve")
+		return Result.failure("缺少参数: to_reserve", Result.ErrorCode.MISSING_PARAMS)
 	var to_reserve_val = command.params["to_reserve"]
 	if not (to_reserve_val is bool):
 		return Result.failure("to_reserve 必须为 bool")

@@ -74,7 +74,7 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 func _validate_specific(state: GameState, command: Command) -> Result:
 	# 检查必需参数
 	if not command.params.has("employee_type"):
-		return Result.failure("缺少参数: employee_type")
+		return Result.failure("缺少参数: employee_type", Result.ErrorCode.MISSING_PARAMS)
 	var employee_type_val = command.params["employee_type"]
 	if not (employee_type_val is String):
 		return Result.failure("employee_type 必须为字符串")
@@ -136,9 +136,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	# 其它采购员工：必须由玩家手动选点生成路线后才能执行（不允许系统自动选路）
 	if not command.params.has("route"):
-		return Result.failure("缺少参数: route（请先在地图上选择进货点生成路线）")
+		return Result.failure("缺少参数: route（请先在地图上选择进货点生成路线）", Result.ErrorCode.MISSING_PARAMS)
 	if not command.params.has("selected_sources"):
-		return Result.failure("缺少参数: selected_sources（请先选择饮料点）")
+		return Result.failure("缺少参数: selected_sources（请先选择饮料点）", Result.ErrorCode.MISSING_PARAMS)
 
 	# 校验路线合法性与可拾取来源
 	var plan_result := DrinksProcurementClass.resolve_procurement_plan(state, command, restaurant_ids, emp_def)
@@ -154,7 +154,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 func _apply_changes(state: GameState, command: Command) -> Result:
 	if not command.params.has("employee_type"):
-		return Result.failure("缺少参数: employee_type")
+		return Result.failure("缺少参数: employee_type", Result.ErrorCode.MISSING_PARAMS)
 	var employee_type_val = command.params["employee_type"]
 	if not (employee_type_val is String):
 		return Result.failure("employee_type 必须为字符串")

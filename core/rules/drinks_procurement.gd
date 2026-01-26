@@ -71,7 +71,7 @@ static func resolve_procurement_plan(
 		route = parse_result.value
 
 	if not command.params.has("selected_sources"):
-		return Result.failure("缺少参数: selected_sources")
+		return Result.failure("缺少参数: selected_sources", Result.ErrorCode.MISSING_PARAMS)
 	var selected_sources_val = command.params["selected_sources"]
 	var selected_parse := InputsClass.parse_route_positions(selected_sources_val)
 	if not selected_parse.ok:
