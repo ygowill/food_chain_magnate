@@ -40,39 +40,39 @@ static func apply_from_dict(state, data: Dictionary, expected_schema_version: in
 
 	var all_warnings: Array[String] = []
 
-	var schema_read := _parse_int(data.get("schema_version", null), "GameState.schema_version")
+	var schema_read := ParseHelpers.parse_int(data.get("schema_version", null), "GameState.schema_version")
 	if not schema_read.ok:
 		return schema_read
 	var schema_version: int = int(schema_read.value)
 	if schema_version != expected_schema_version:
 		return Result.failure("不支持的 GameState.schema_version: %d (期望: %d)" % [schema_version, expected_schema_version])
 
-	var round_read := _parse_non_negative_int(data.get("round_number", null), "GameState.round_number")
+	var round_read := ParseHelpers.parse_non_negative_int(data.get("round_number", null), "GameState.round_number")
 	if not round_read.ok:
 		return round_read
 	state.round_number = int(round_read.value)
 
-	var phase_read := _parse_string(data.get("phase", null), "GameState.phase")
+	var phase_read := ParseHelpers.parse_string(data.get("phase", null), "GameState.phase")
 	if not phase_read.ok:
 		return phase_read
 	state.phase = str(phase_read.value)
 
-	var sub_phase_read := _parse_string(data.get("sub_phase", null), "GameState.sub_phase")
+	var sub_phase_read := ParseHelpers.parse_string(data.get("sub_phase", null), "GameState.sub_phase")
 	if not sub_phase_read.ok:
 		return sub_phase_read
 	state.sub_phase = str(sub_phase_read.value)
 
-	var turn_order_read := _parse_int_array(data.get("turn_order", null), "GameState.turn_order")
+	var turn_order_read := ParseHelpers.parse_int_array(data.get("turn_order", null), "GameState.turn_order")
 	if not turn_order_read.ok:
 		return turn_order_read
 	state.turn_order = turn_order_read.value
 
-	var cpi_read := _parse_non_negative_int(data.get("current_player_index", null), "GameState.current_player_index")
+	var cpi_read := ParseHelpers.parse_non_negative_int(data.get("current_player_index", null), "GameState.current_player_index")
 	if not cpi_read.ok:
 		return cpi_read
 	state.current_player_index = int(cpi_read.value)
 
-	var selection_order_read := _parse_int_array(data.get("selection_order", null), "GameState.selection_order")
+	var selection_order_read := ParseHelpers.parse_int_array(data.get("selection_order", null), "GameState.selection_order")
 	if not selection_order_read.ok:
 		return selection_order_read
 	state.selection_order = selection_order_read.value
@@ -84,19 +84,19 @@ static func apply_from_dict(state, data: Dictionary, expected_schema_version: in
 	for k in ["total", "broke_count", "ceo_slots_after_first_break", "reserve_added_total", "removed_total"]:
 		if not bank.has(k):
 			return Result.failure("GameState.bank 缺少字段: %s" % k)
-	var bank_total_read := _parse_int(bank.get("total", null), "GameState.bank.total")
+	var bank_total_read := ParseHelpers.parse_int(bank.get("total", null), "GameState.bank.total")
 	if not bank_total_read.ok:
 		return bank_total_read
-	var broke_count_read := _parse_non_negative_int(bank.get("broke_count", null), "GameState.bank.broke_count")
+	var broke_count_read := ParseHelpers.parse_non_negative_int(bank.get("broke_count", null), "GameState.bank.broke_count")
 	if not broke_count_read.ok:
 		return broke_count_read
-	var ceo_slots_after_read := _parse_int(bank.get("ceo_slots_after_first_break", null), "GameState.bank.ceo_slots_after_first_break")
+	var ceo_slots_after_read := ParseHelpers.parse_int(bank.get("ceo_slots_after_first_break", null), "GameState.bank.ceo_slots_after_first_break")
 	if not ceo_slots_after_read.ok:
 		return ceo_slots_after_read
-	var reserve_added_total_read := _parse_non_negative_int(bank.get("reserve_added_total", null), "GameState.bank.reserve_added_total")
+	var reserve_added_total_read := ParseHelpers.parse_non_negative_int(bank.get("reserve_added_total", null), "GameState.bank.reserve_added_total")
 	if not reserve_added_total_read.ok:
 		return reserve_added_total_read
-	var removed_total_read := _parse_non_negative_int(bank.get("removed_total", null), "GameState.bank.removed_total")
+	var removed_total_read := ParseHelpers.parse_non_negative_int(bank.get("removed_total", null), "GameState.bank.removed_total")
 	if not removed_total_read.ok:
 		return removed_total_read
 	state.bank = {
@@ -118,13 +118,13 @@ static func apply_from_dict(state, data: Dictionary, expected_schema_version: in
 		if not (k is String):
 			return Result.failure("GameState.rules key 类型错误（期望 String）")
 		var key := str(k)
-		var v_read := _parse_int(rules.get(k, null), "GameState.rules.%s" % key)
+		var v_read := ParseHelpers.parse_int(rules.get(k, null), "GameState.rules.%s" % key)
 		if not v_read.ok:
 			return v_read
 		parsed_rules[key] = int(v_read.value)
 	state.rules = parsed_rules
 
-	var modules_read := _parse_string_array(data.get("modules", null), "GameState.modules", false)
+	var modules_read := ParseHelpers.parse_string_array(data.get("modules", null), "GameState.modules", false)
 	if not modules_read.ok:
 		return modules_read
 	var modules_out: Array[String] = modules_read.value
@@ -163,12 +163,12 @@ static func apply_from_dict(state, data: Dictionary, expected_schema_version: in
 	var employee_pool_val = data.get("employee_pool", null)
 	if not (employee_pool_val is Dictionary):
 		return Result.failure("GameState.employee_pool 缺失或类型错误（期望 Dictionary）")
-	var pool_read := _parse_non_negative_int_dict(employee_pool_val, "GameState.employee_pool")
+	var pool_read := ParseHelpers.parse_non_negative_int_dict(employee_pool_val, "GameState.employee_pool")
 	if not pool_read.ok:
 		return pool_read
 	state.employee_pool = pool_read.value
 
-	var milestone_read := _parse_string_array(data.get("milestone_pool", null), "GameState.milestone_pool", false)
+	var milestone_read := ParseHelpers.parse_string_array(data.get("milestone_pool", null), "GameState.milestone_pool", false)
 	if not milestone_read.ok:
 		return milestone_read
 	state.milestone_pool = milestone_read.value
@@ -191,13 +191,13 @@ static func apply_from_dict(state, data: Dictionary, expected_schema_version: in
 		instances_out.append(decoded_val)
 	state.marketing_instances = instances_out
 
-	var round_state_read := _parse_round_state(data.get("round_state", null))
+	var round_state_read := RoundStateParser.parse_round_state(data.get("round_state", null))
 	if not round_state_read.ok:
 		return round_state_read
 	state.round_state = round_state_read.value
 	all_warnings.append_array(round_state_read.warnings)
 
-	var seed_read := _parse_non_negative_int(data.get("seed", null), "GameState.seed")
+	var seed_read := ParseHelpers.parse_non_negative_int(data.get("seed", null), "GameState.seed")
 	if not seed_read.ok:
 		return seed_read
 	state.seed = int(seed_read.value)
@@ -224,24 +224,3 @@ static func _decode_map(value: Dictionary) -> Result:
 
 static func _decode_value(value, key_hint: String, path: String) -> Result:
 	return ValueDecoder.decode_value(value, key_hint, path)
-
-static func _parse_int(value, path: String) -> Result:
-	return ParseHelpers.parse_int(value, path)
-
-static func _parse_string(value, path: String, require_non_empty: bool = false) -> Result:
-	return ParseHelpers.parse_string(value, path, require_non_empty)
-
-static func _parse_non_negative_int(value, path: String) -> Result:
-	return ParseHelpers.parse_non_negative_int(value, path)
-
-static func _parse_int_array(value, path: String) -> Result:
-	return ParseHelpers.parse_int_array(value, path)
-
-static func _parse_string_array(value, path: String, require_non_empty: bool) -> Result:
-	return ParseHelpers.parse_string_array(value, path, require_non_empty)
-
-static func _parse_non_negative_int_dict(value, path: String) -> Result:
-	return ParseHelpers.parse_non_negative_int_dict(value, path)
-
-static func _parse_round_state(value) -> Result:
-	return RoundStateParser.parse_round_state(value)

@@ -6,13 +6,13 @@
 
 ## 快速指标（非测试脚本）
 
-- 非测试脚本：175 个，约 26,396 行（`wc -l`）
+- 非测试脚本：175 个，约 26,375 行（`wc -l`）
 - 其中：
   - `core/rules/`：46 文件 / 6,392 行
   - `core/engine/`：29 文件 / 5,730 行
   - `core/map/`：35 文件 / 4,516 行
   - `core/modules/`：19 文件 / 2,750 行
-  - `core/state/`：14 文件 / 2,069 行
+  - `core/state/`：14 文件 / 2,048 行
   - `core/data/`：14 文件 / 1,534 行
   - `core/debug/`：6 文件 / 1,439 行
 
@@ -22,6 +22,7 @@
 
 ## 整改日志
 
+- 2026-01-26：`GameStateSerialization` 移除自带 `_parse_*` wrapper，改为直接调用 `ParseHelpers`/`RoundStateParser`（收敛 state 解析样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：`BakedMap` 移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：`MapDef`/`MapOptionDef` 移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（减少重复解析样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：`TileDef` 移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（进一步收敛解析样板、缩短 TileDef）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
@@ -413,7 +414,7 @@
 | `core/rules/working/mandatory_actions_rules.gd` | 169 | 1 | 0 |  |
 | `core/state/game_state.gd` | 230 | 2 | 0 |  |
 | `core/state/game_state_factory.gd` | 209 | 5 | 0 |  |
-| `core/state/game_state_serialization.gd` | 248 | 5 | 0 | defines:_parse_* |
+| `core/state/game_state_serialization.gd` | 226 | 5 | 0 |  |
 | `core/state/serialization/json_safe.gd` | 25 | 0 | 0 |  |
 | `core/state/serialization/parse_helpers.gd` | 70 | 0 | 0 |  |
 | `core/state/serialization/round_state_parser.gd` | 296 | 2 | 0 |  |
@@ -619,7 +620,7 @@
 
 - `core/state/game_state.gd`：中等体量；后续可按重构优先级处理
 - `core/state/game_state_factory.gd`：含 UI/setup 语义的 logo 分配落盘逻辑；若目标是更纯的 core，可考虑外移到上层；中等体量；后续可按重构优先级处理；存在一定数量的 preload 依赖
-- `core/state/game_state_serialization.gd`：中等体量；后续可按重构优先级处理；存在一定数量的 preload 依赖；自带 _parse_* 解析函数（重复实现可收敛）
+- `core/state/game_state_serialization.gd`：（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `ParseHelpers`/`RoundStateParser`（收敛 state 解析样板）；中等体量；后续可按重构优先级处理；存在一定数量的 preload 依赖
 - `core/state/serialization/json_safe.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/serialization/parse_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/serialization/round_state_parser.gd`：中等体量；后续可按重构优先级处理
