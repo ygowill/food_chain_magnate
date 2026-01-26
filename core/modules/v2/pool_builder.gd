@@ -7,6 +7,7 @@ extends RefCounted
 const EmployeeDefClass = preload("res://core/data/employee_def.gd")
 const MilestoneDefClass = preload("res://core/data/milestone_def.gd")
 const GameConstantsClass = preload("res://core/engine/game_constants.gd")
+const DataParseHelpersClass = preload("res://core/data/parse_helpers.gd")
 
 static func build_employee_pool(player_count: int, rules: Dictionary, employees: Dictionary) -> Result:
 	if player_count < GameConstantsClass.MIN_PLAYERS or player_count > GameConstantsClass.MAX_PLAYERS:
@@ -18,7 +19,7 @@ static func build_employee_pool(player_count: int, rules: Dictionary, employees:
 
 	if not rules.has("one_x_employee_copies"):
 		return Result.failure("PoolBuilder.build_employee_pool: rules 缺少 one_x_employee_copies")
-	var copies_read := _parse_non_negative_int(rules.get("one_x_employee_copies", null), "rules.one_x_employee_copies")
+	var copies_read := DataParseHelpersClass.parse_non_negative_int(rules.get("one_x_employee_copies", null), "rules.one_x_employee_copies")
 	if not copies_read.ok:
 		return copies_read
 	var one_x_copies: int = int(copies_read.value)
@@ -83,18 +84,3 @@ static func build_milestone_pool(milestones: Dictionary) -> Result:
 
 	out.sort()
 	return Result.success(out)
-
-static func _parse_non_negative_int(value, path: String) -> Result:
-	if value is int:
-		if int(value) < 0:
-			return Result.failure("%s 必须 >= 0，实际: %d" % [path, int(value)])
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
-		var i: int = int(f)
-		if i < 0:
-			return Result.failure("%s 必须 >= 0，实际: %d" % [path, i])
-		return Result.success(i)
-	return Result.failure("%s 类型错误（期望整数）" % path)

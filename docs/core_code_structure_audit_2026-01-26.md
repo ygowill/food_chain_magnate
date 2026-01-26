@@ -37,6 +37,7 @@
 - 2026-01-26：将 `ActionExecutor` 的整数参数解析改为复用 `IntValueParseHelpers.parse_int_value(...)`，并移除自带 `_parse_int_value`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `GameConfig` 的通用 `_parse_*` 改为复用 `core/state/serialization/parse_helpers.gd`，并仅保留业务专用 `_parse_reserve_cards`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `WorkingFlow` 的 `_parse_non_negative_int_value` 改为复用 `IntValueParseHelpers.parse_non_negative_int_value(...)`（保留 assert-based fail fast 语义）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：将 `PoolBuilder` 的 `_parse_non_negative_int` 改为复用 `DataParseHelpers.parse_non_negative_int(...)`，并移除自带解析函数；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -310,7 +311,7 @@
 | `core/modules/v2/module_manifest.gd` | 152 | 0 | 0 | defines:_parse_* |
 | `core/modules/v2/module_package_loader.gd` | 82 | 1 | 0 |  |
 | `core/modules/v2/module_plan_builder.gd` | 124 | 0 | 0 |  |
-| `core/modules/v2/pool_builder.gd` | 101 | 3 | 0 | defines:_parse_* |
+| `core/modules/v2/pool_builder.gd` | 86 | 4 | 0 | uses:DataParseHelpers |
 | `core/modules/v2/ruleset/action_registration.gd` | 146 | 0 | 0 |  |
 | `core/modules/v2/ruleset/content_validation.gd` | 141 | 2 | 0 |  |
 | `core/modules/v2/ruleset/patches.gd` | 166 | 2 | 0 |  |
@@ -504,7 +505,7 @@
 - `core/modules/v2/module_manifest.gd`：自带 _parse_* 解析函数（重复实现可收敛）
 - `core/modules/v2/module_package_loader.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/modules/v2/module_plan_builder.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/modules/v2/pool_builder.gd`：自带 _parse_* 解析函数（重复实现可收敛）
+- `core/modules/v2/pool_builder.gd`：（已部分整改 2026-01-26）移除自带 `_parse_non_negative_int`，改用 `DataParseHelpers`
 - `core/modules/v2/ruleset.gd`：中等体量；后续可按重构优先级处理；preload 依赖较多（耦合偏高）；函数数量较多，可能包含多职责/可考虑拆 helper
 - `core/modules/v2/ruleset/action_registration.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/modules/v2/ruleset/content_validation.gd`：未发现明显结构问题（小文件/职责相对单一）
