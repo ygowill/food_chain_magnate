@@ -54,13 +54,13 @@ static func _advance_generic_sub_phase(pm, state: GameState, order_names: Array[
 	var snapshot := _make_snapshot(state)
 	var old_sub: String = str(snapshot.get("sub_phase", ""))
 
-	var before_exit = pm._run_named_sub_phase_hooks(current_name, HookType.BEFORE_EXIT, state)
+	var before_exit = pm.run_named_sub_phase_hooks(current_name, HookType.BEFORE_EXIT, state)
 	if not before_exit.ok:
 		return _rollback_and_return(state, snapshot, before_exit)
 	all_warnings.append_array(before_exit.warnings)
 
 	if current_index >= order_names.size() - 1:
-		var after_exit_last = pm._run_named_sub_phase_hooks(current_name, HookType.AFTER_EXIT, state)
+		var after_exit_last = pm.run_named_sub_phase_hooks(current_name, HookType.AFTER_EXIT, state)
 		if not after_exit_last.ok:
 			return _rollback_and_return(state, snapshot, after_exit_last)
 		all_warnings.append_array(after_exit_last.warnings)
@@ -78,17 +78,17 @@ static func _advance_generic_sub_phase(pm, state: GameState, order_names: Array[
 	phase_orders[state.phase] = order_names.duplicate()
 	state.round_state["phase_sub_phase_orders"] = phase_orders
 
-	var after_exit = pm._run_named_sub_phase_hooks(current_name, HookType.AFTER_EXIT, state)
+	var after_exit = pm.run_named_sub_phase_hooks(current_name, HookType.AFTER_EXIT, state)
 	if not after_exit.ok:
 		return _rollback_and_return(state, snapshot, after_exit)
 	all_warnings.append_array(after_exit.warnings)
 
-	var sub_before_enter = pm._run_named_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
+	var sub_before_enter = pm.run_named_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
 	if not sub_before_enter.ok:
 		return _rollback_and_return(state, snapshot, sub_before_enter)
 	all_warnings.append_array(sub_before_enter.warnings)
 
-	var sub_after_enter = pm._run_named_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
+	var sub_after_enter = pm.run_named_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
 	if not sub_after_enter.ok:
 		return _rollback_and_return(state, snapshot, sub_after_enter)
 	all_warnings.append_array(sub_after_enter.warnings)
@@ -112,7 +112,7 @@ static func _advance_working_sub_phase(pm, state: GameState) -> Result:
 	var old_sub: String = str(snapshot.get("sub_phase", ""))
 
 	# 执行当前子阶段退出钩子
-	var before_exit = pm._run_working_sub_phase_hooks(current_name, HookType.BEFORE_EXIT, state)
+	var before_exit = pm.run_working_sub_phase_hooks(current_name, HookType.BEFORE_EXIT, state)
 	if not before_exit.ok:
 		return _rollback_and_return(state, snapshot, before_exit)
 	all_warnings.append_array(before_exit.warnings)
@@ -121,7 +121,7 @@ static func _advance_working_sub_phase(pm, state: GameState) -> Result:
 	if current_index >= pm._working_sub_phase_order_names.size() - 1:
 		# 最后一个子阶段：结束当前玩家的 Working 回合 -> 下一位玩家从第一个子阶段开始；
 		# 若所有玩家都已确认结束，则离开 Working 进入下一主阶段。
-		var after_exit_last = pm._run_working_sub_phase_hooks(current_name, HookType.AFTER_EXIT, state)
+		var after_exit_last = pm.run_working_sub_phase_hooks(current_name, HookType.AFTER_EXIT, state)
 		if not after_exit_last.ok:
 			return _rollback_and_return(state, snapshot, after_exit_last)
 		all_warnings.append_array(after_exit_last.warnings)
@@ -173,12 +173,12 @@ static func _advance_working_sub_phase(pm, state: GameState) -> Result:
 		WorkingFlowClass.reset_working_sub_phase_state(state)
 		state.round_state["working_sub_phase_order"] = pm._working_sub_phase_order_names.duplicate()
 
-		var sub_before_enter0 = pm._run_working_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
+		var sub_before_enter0 = pm.run_working_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
 		if not sub_before_enter0.ok:
 			return _rollback_and_return(state, snapshot, sub_before_enter0)
 		all_warnings.append_array(sub_before_enter0.warnings)
 
-		var sub_after_enter0 = pm._run_working_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
+		var sub_after_enter0 = pm.run_working_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
 		if not sub_after_enter0.ok:
 			return _rollback_and_return(state, snapshot, sub_after_enter0)
 		all_warnings.append_array(sub_after_enter0.warnings)
@@ -198,18 +198,18 @@ static func _advance_working_sub_phase(pm, state: GameState) -> Result:
 	state.round_state["working_sub_phase_order"] = pm._working_sub_phase_order_names.duplicate()
 
 	# 执行退出后钩子
-	var after_exit = pm._run_working_sub_phase_hooks(current_name, HookType.AFTER_EXIT, state)
+	var after_exit = pm.run_working_sub_phase_hooks(current_name, HookType.AFTER_EXIT, state)
 	if not after_exit.ok:
 		return _rollback_and_return(state, snapshot, after_exit)
 	all_warnings.append_array(after_exit.warnings)
 
 	# 执行新子阶段进入钩子
-	var sub_before_enter = pm._run_working_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
+	var sub_before_enter = pm.run_working_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
 	if not sub_before_enter.ok:
 		return _rollback_and_return(state, snapshot, sub_before_enter)
 	all_warnings.append_array(sub_before_enter.warnings)
 
-	var sub_after_enter = pm._run_working_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
+	var sub_after_enter = pm.run_working_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
 	if not sub_after_enter.ok:
 		return _rollback_and_return(state, snapshot, sub_after_enter)
 	all_warnings.append_array(sub_after_enter.warnings)
@@ -233,13 +233,13 @@ static func _advance_cleanup_sub_phase(pm, state: GameState) -> Result:
 	var snapshot := _make_snapshot(state)
 	var old_sub: String = str(snapshot.get("sub_phase", ""))
 
-	var before_exit = pm._run_named_sub_phase_hooks(current_name, HookType.BEFORE_EXIT, state)
+	var before_exit = pm.run_named_sub_phase_hooks(current_name, HookType.BEFORE_EXIT, state)
 	if not before_exit.ok:
 		return _rollback_and_return(state, snapshot, before_exit)
 	all_warnings.append_array(before_exit.warnings)
 
 	if current_index >= pm._cleanup_sub_phase_order_names.size() - 1:
-		var after_exit_last = pm._run_named_sub_phase_hooks(current_name, HookType.AFTER_EXIT, state)
+		var after_exit_last = pm.run_named_sub_phase_hooks(current_name, HookType.AFTER_EXIT, state)
 		if not after_exit_last.ok:
 			return _rollback_and_return(state, snapshot, after_exit_last)
 		all_warnings.append_array(after_exit_last.warnings)
@@ -255,17 +255,17 @@ static func _advance_cleanup_sub_phase(pm, state: GameState) -> Result:
 		WorkingFlowClass.reset_sub_phase_passed(state)
 	state.current_player_index = 0
 
-	var after_exit = pm._run_named_sub_phase_hooks(current_name, HookType.AFTER_EXIT, state)
+	var after_exit = pm.run_named_sub_phase_hooks(current_name, HookType.AFTER_EXIT, state)
 	if not after_exit.ok:
 		return _rollback_and_return(state, snapshot, after_exit)
 	all_warnings.append_array(after_exit.warnings)
 
-	var sub_before_enter = pm._run_named_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
+	var sub_before_enter = pm.run_named_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
 	if not sub_before_enter.ok:
 		return _rollback_and_return(state, snapshot, sub_before_enter)
 	all_warnings.append_array(sub_before_enter.warnings)
 
-	var sub_after_enter = pm._run_named_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
+	var sub_after_enter = pm.run_named_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
 	if not sub_after_enter.ok:
 		return _rollback_and_return(state, snapshot, sub_after_enter)
 	all_warnings.append_array(sub_after_enter.warnings)

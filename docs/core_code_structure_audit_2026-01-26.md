@@ -6,10 +6,10 @@
 
 ## 快速指标（非测试脚本）
 
-- 非测试脚本：175 个，约 26,421 行（`wc -l`）
+- 非测试脚本：175 个，约 26,430 行（`wc -l`）
 - 其中：
   - `core/rules/`：46 文件 / 6,392 行
-  - `core/engine/`：29 文件 / 5,688 行
+  - `core/engine/`：29 文件 / 5,697 行
   - `core/map/`：35 文件 / 4,589 行
   - `core/modules/`：19 文件 / 2,750 行
   - `core/state/`：14 文件 / 2,063 行
@@ -28,6 +28,7 @@
 - 2026-01-26：新增 `GameStartedEventBuild`，统一 `initializer`/`event_timeline_build`/`step_timeline_build` 构建 `GAME_STARTED` 的字段与 state_hash 计算方式（并在缺少初始 checkpoint 时降级为 warning）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：为 `GameEngine` 增加公开 wrapper（`ensure_initialized`/`truncate_future_history`），并替换 `CommandRunner`/`EventHistoryRebuild`/`EventTimelineBuild`/`StepTimelineBuild` 中跨文件调用私有 `_ensure_initialized`/`_truncate_future_history`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：为 `GameEngine` 增加公开 wrapper（`reset_modules_v2`/`apply_modules_v2`/`setup_action_registry`/`create_checkpoint`/`check_invariants`），并替换 `Initializer`/`Loader`/`CommandRunner` 中跨文件调用对应私有 `_` 前缀方法；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：为 `PhaseManager` 增加公开 wrapper（`run_settlement_triggers`/`run_working_sub_phase_hooks`/`run_named_sub_phase_hooks`），并替换 `advance_phase`/`advance_sub_phase` 中跨文件调用私有 `_run_*`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：移除 `MapOptionDef` 的自 preload 创建实例（`_SELF_SCRIPT.new()`），改为直接 `MapOptionDef.new()`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `debug_force` 的回放强制执行判定统一收敛到 `Replay.should_force_execute_in_replay(...)`，并用于 `StepTimelineBuild`/`EventHistoryRebuild`（移除重复 `_should_force_execute_in_replay`）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：扩展 `MapParseHelpers`（新增 `parse_vec2i_array`/`parse_rotation_array`），并用于 `TileDef`/`PieceDef`（移除重复 `_parse_vec2i_list`/`_parse_vec2i_array`/`_parse_rotation_array`）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
@@ -175,6 +176,8 @@
   - （已整改 2026-01-26）改用 `engine.ensure_initialized()` / `engine.truncate_future_history()` 公开 wrapper，避免跨文件调用 `GameEngine._ensure_initialized` / `GameEngine._truncate_future_history`。
 - `core/engine/game_engine/initializer.gd` / `core/engine/game_engine/loader.gd` / `core/engine/game_engine/command_runner.gd`：
   - （已整改 2026-01-26）改用 `engine.reset_modules_v2()` / `engine.apply_modules_v2(...)` / `engine.setup_action_registry(...)` / `engine.create_checkpoint(...)` / `engine.check_invariants()` 公开 wrapper，避免跨文件调用对应 `GameEngine._*` 私有方法。
+- `core/engine/phase_manager/advance_phase.gd` / `core/engine/phase_manager/advance_sub_phase.gd`：
+  - （已整改 2026-01-26）改用 `PhaseManager.run_settlement_triggers(...)` / `PhaseManager.run_*_sub_phase_hooks(...)` 公开 wrapper，避免跨文件调用 `PhaseManager._run_settlement_triggers` / `PhaseManager._run_*_sub_phase_hooks`。
 - gameplay phase/skip actions 与相关测试：
   - （已整改 2026-01-26）不再调用 `CommandRunnerClass._build_*` 私有静态方法，改为调用 `CommandRunnerClass.build_*` wrapper。
 - `core/engine/game_engine/auto_advance.gd` 调用：
@@ -281,15 +284,15 @@
 | `core/engine/game_engine/replay.gd` | 188 | 2 | 0 | uses:GameLog,uses:OS.has_feature,uses:JsonValueParseHelpers |
 | `core/engine/game_engine/step_timeline_build.gd` | 624 | 6 | 0 | uses:EventBus |
 | `core/engine/game_engine.gd` | 485 | 13 | 0 | uses:EventBus,uses:OS.has_feature |
-| `core/engine/phase_manager/advance_phase.gd` | 240 | 2 | 0 | uses:GameLog |
-| `core/engine/phase_manager/advance_sub_phase.gd` | 279 | 2 | 0 | uses:GameLog |
+| `core/engine/phase_manager/advance_phase.gd` | 239 | 2 | 0 | uses:GameLog |
+| `core/engine/phase_manager/advance_sub_phase.gd` | 278 | 2 | 0 | uses:GameLog |
 | `core/engine/phase_manager/advancement.gd` | 13 | 2 | 0 |  |
 | `core/engine/phase_manager/definitions.gd` | 218 | 0 | 0 |  |
 | `core/engine/phase_manager/hooks.gd` | 220 | 1 | 0 | uses:GameLog,uses:DebugFlags |
 | `core/engine/phase_manager/order_config.gd` | 152 | 1 | 0 |  |
 | `core/engine/phase_manager/settlement_triggers.gd` | 127 | 2 | 0 |  |
 | `core/engine/phase_manager/working_flow.gd` | 149 | 3 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
-| `core/engine/phase_manager.gd` | 301 | 10 | 0 |  |
+| `core/engine/phase_manager.gd` | 310 | 10 | 0 |  |
 | `core/map/house_number_manager.gd` | 233 | 0 | 0 |  |
 | `core/map/map_baker/bake.gd` | 80 | 3 | 0 |  |
 | `core/map/map_baker/boundary_index.gd` | 22 | 0 | 0 |  |

@@ -82,7 +82,7 @@ static func advance_phase(pm, state: GameState) -> Result:
 	all_warnings.append_array(exit_result.warnings)
 
 	# 阶段离开时结算（可由模块覆盖触发点映射）
-	var exit_settlements = pm._run_settlement_triggers("exit", current_phase, state)
+	var exit_settlements = pm.run_settlement_triggers("exit", current_phase, state)
 	if not exit_settlements.ok:
 		return _rollback_and_return(state, snapshot, exit_settlements)
 	all_warnings.append_array(exit_settlements.warnings)
@@ -147,7 +147,7 @@ static func advance_phase(pm, state: GameState) -> Result:
 
 	# Marketing 结算：必须在 BEFORE_ENTER hooks 之后执行，便于模块注入结算轮次数等参数。
 	# 阶段进入时结算（BEFORE_ENTER hooks 已执行；可由模块覆盖触发点映射）
-	var enter_settlements = pm._run_settlement_triggers("enter", next_phase, state)
+	var enter_settlements = pm.run_settlement_triggers("enter", next_phase, state)
 	if not enter_settlements.ok:
 		return _rollback_and_return(state, snapshot, enter_settlements)
 	all_warnings.append_array(enter_settlements.warnings)
@@ -160,12 +160,12 @@ static func advance_phase(pm, state: GameState) -> Result:
 			WorkingFlowClass.reset_sub_phase_passed(state)
 		state.current_player_index = 0
 
-		var sub_before_cleanup = pm._run_named_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
+		var sub_before_cleanup = pm.run_named_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
 		if not sub_before_cleanup.ok:
 			return _rollback_and_return(state, snapshot, sub_before_cleanup)
 		all_warnings.append_array(sub_before_cleanup.warnings)
 
-		var sub_after_cleanup = pm._run_named_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
+		var sub_after_cleanup = pm.run_named_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
 		if not sub_after_cleanup.ok:
 			return _rollback_and_return(state, snapshot, sub_after_cleanup)
 		all_warnings.append_array(sub_after_cleanup.warnings)
@@ -175,12 +175,12 @@ static func advance_phase(pm, state: GameState) -> Result:
 		state.sub_phase = pm._working_sub_phase_order_names[0]
 		state.round_state["working_sub_phase_order"] = pm._working_sub_phase_order_names.duplicate()
 
-		var sub_before = pm._run_working_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
+		var sub_before = pm.run_working_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
 		if not sub_before.ok:
 			return _rollback_and_return(state, snapshot, sub_before)
 		all_warnings.append_array(sub_before.warnings)
 
-		var sub_after = pm._run_working_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
+		var sub_after = pm.run_working_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
 		if not sub_after.ok:
 			return _rollback_and_return(state, snapshot, sub_after)
 		all_warnings.append_array(sub_after.warnings)
@@ -202,12 +202,12 @@ static func advance_phase(pm, state: GameState) -> Result:
 				WorkingFlowClass.reset_sub_phase_passed(state)
 			state.current_player_index = 0
 
-			var sub_before_generic = pm._run_named_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
+			var sub_before_generic = pm.run_named_sub_phase_hooks(state.sub_phase, HookType.BEFORE_ENTER, state)
 			if not sub_before_generic.ok:
 				return _rollback_and_return(state, snapshot, sub_before_generic)
 			all_warnings.append_array(sub_before_generic.warnings)
 
-			var sub_after_generic = pm._run_named_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
+			var sub_after_generic = pm.run_named_sub_phase_hooks(state.sub_phase, HookType.AFTER_ENTER, state)
 			if not sub_after_generic.ok:
 				return _rollback_and_return(state, snapshot, sub_after_generic)
 			all_warnings.append_array(sub_after_generic.warnings)

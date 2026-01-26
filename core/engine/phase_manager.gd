@@ -87,6 +87,9 @@ func _set_settlement_triggers(phase: int, timing: String, points: Array) -> Resu
 func _run_settlement_triggers(timing: String, phase: int, state: GameState) -> Result:
 	return SettlementTriggersClass.run_settlement_triggers(self, timing, phase, state)
 
+func run_settlement_triggers(timing: String, phase: int, state: GameState) -> Result:
+	return _run_settlement_triggers(timing, phase, state)
+
 func _build_phase_order_names(order_enums: Array[int]) -> Array[String]:
 	return OrderConfigClass.build_phase_order_names(order_enums)
 
@@ -135,11 +138,17 @@ func _run_working_sub_phase_hooks(sub_phase_name: String, hook_type: int, state:
 	warnings.append_array(r2.warnings)
 	return Result.success().with_warnings(warnings)
 
+func run_working_sub_phase_hooks(sub_phase_name: String, hook_type: int, state: GameState) -> Result:
+	return _run_working_sub_phase_hooks(sub_phase_name, hook_type, state)
+
 func _run_named_sub_phase_hooks(sub_phase_name: String, hook_type: int, state: GameState) -> Result:
 	var r: Result = _hooks.run_sub_phase_hooks_by_name(sub_phase_name, hook_type, state)
 	if not r.ok:
 		return r
 	return Result.success().with_warnings(r.warnings)
+
+func run_named_sub_phase_hooks(sub_phase_name: String, hook_type: int, state: GameState) -> Result:
+	return _run_named_sub_phase_hooks(sub_phase_name, hook_type, state)
 
 func set_marketing_range_calculator(calculator) -> void:
 	if calculator == null:
