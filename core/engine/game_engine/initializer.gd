@@ -26,11 +26,7 @@ static func initialize_new_game(
 	var init_warnings: Array[String] = []
 
 	# EventBus.history 为“单局”语义：新开一局时应清空，避免跨对局的事件混入（影响日志/回退定位等功能）。
-	if EventBus != null:
-		if EventBus.has_method("clear_history_and_reset_sequence"):
-			EventBus.clear_history_and_reset_sequence()
-		elif EventBus.has_method("clear_history"):
-			EventBus.clear_history()
+	engine.clear_event_history_for_new_session()
 
 	if enabled_modules_v2.is_empty():
 		enabled_modules_v2 = GameDefaultsClass.build_default_enabled_modules_v2()

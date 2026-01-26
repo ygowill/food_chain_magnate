@@ -85,6 +85,14 @@ func _truncate_future_history() -> void:
 func truncate_future_history() -> void:
 	_truncate_future_history()
 
+func clear_event_history_for_new_session() -> void:
+	if EventBus == null:
+		return
+	if EventBus.has_method("clear_history_and_reset_sequence"):
+		EventBus.clear_history_and_reset_sequence()
+	elif EventBus.has_method("clear_history"):
+		EventBus.clear_history()
+
 # === 初始化 ===
 
 func _init() -> void:
