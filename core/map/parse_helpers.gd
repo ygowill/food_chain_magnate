@@ -79,6 +79,31 @@ static func parse_string_array(value, path: String, require_non_empty: bool) -> 
 		return Result.failure("%s 不能为空" % path)
 	return Result.success(out)
 
+static func parse_footprint_mask(value, path: String) -> Result:
+	if not (value is Array) or value.is_empty():
+		return Result.failure("%s 类型错误或为空（期望二维 Array）" % path)
+	var out: Array = []
+	var expected_width := -1
+	for y in range(value.size()):
+		var row = value[y]
+		if not (row is Array) or row.is_empty():
+			return Result.failure("%s[%d] 类型错误或为空（期望 Array[int]）" % [path, y])
+		if expected_width == -1:
+			expected_width = row.size()
+		elif row.size() != expected_width:
+			return Result.failure("%s[%d] 长度不一致（期望 %d，实际 %d）" % [path, y, expected_width, row.size()])
+		var out_row: Array = []
+		for x in range(row.size()):
+			var cell_read := parse_int(row[x], "%s[%d][%d]" % [path, y, x])
+			if not cell_read.ok:
+				return cell_read
+			var v: int = int(cell_read.value)
+			if v != 0 and v != 1:
+				return Result.failure("%s[%d][%d] 仅允许 0/1，实际 %d" % [path, y, x, v])
+			out_row.append(v)
+		out.append(out_row)
+	return Result.success(out)
+
 static func parse_tile_placements(value, path: String, valid_rotations: Array = []) -> Result:
 	if not (value is Array):
 		return Result.failure("%s 类型错误（期望 Array[Dictionary]）" % path)

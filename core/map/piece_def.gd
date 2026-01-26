@@ -157,11 +157,11 @@ static func from_dict(data: Dictionary) -> Result:
 		return Result.failure("PieceDef.category 类型错误或为空（期望非空 String）")
 
 	var footprint_val = data.get("footprint_mask", null)
-	var footprint_read := _parse_footprint_mask(footprint_val, "PieceDef.footprint_mask")
+	var footprint_read := MapParseHelpersClass.parse_footprint_mask(footprint_val, "PieceDef.footprint_mask")
 	if not footprint_read.ok:
 		return footprint_read
 
-	var anchor_read := _parse_vec2i(data.get("anchor", null), "PieceDef.anchor")
+	var anchor_read := MapParseHelpersClass.parse_vec2i(data.get("anchor", null), "PieceDef.anchor")
 	if not anchor_read.ok:
 		return anchor_read
 
@@ -179,10 +179,10 @@ static func from_dict(data: Dictionary) -> Result:
 	if not (must_touch_road_val is bool):
 		return Result.failure("PieceDef.must_touch_road 类型错误（期望 bool）")
 
-	var allowed_on_read := _parse_string_array(data.get("allowed_on", null), "PieceDef.allowed_on", true)
+	var allowed_on_read := MapParseHelpersClass.parse_string_array(data.get("allowed_on", null), "PieceDef.allowed_on", true)
 	if not allowed_on_read.ok:
 		return allowed_on_read
-	var forbidden_layers_read := _parse_string_array(data.get("forbidden_layers", null), "PieceDef.forbidden_layers", false)
+	var forbidden_layers_read := MapParseHelpersClass.parse_string_array(data.get("forbidden_layers", null), "PieceDef.forbidden_layers", false)
 	if not forbidden_layers_read.ok:
 		return forbidden_layers_read
 
@@ -201,7 +201,7 @@ static func from_dict(data: Dictionary) -> Result:
 	if not (can_have_garden_val is bool):
 		return Result.failure("PieceDef.can_have_garden 类型错误（期望 bool）")
 
-	var garden_size_read := _parse_vec2i(data.get("garden_extension_size", null), "PieceDef.garden_extension_size")
+	var garden_size_read := MapParseHelpersClass.parse_vec2i(data.get("garden_extension_size", null), "PieceDef.garden_extension_size")
 	if not garden_size_read.ok:
 		return garden_size_read
 
@@ -238,42 +238,6 @@ static func load_from_file(path: String) -> Result:
 	var json := file.get_as_text()
 	file.close()
 	return from_json(json)
-
-# === 严格解析辅助 ===
-
-static func _parse_int(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_int(value, path)
-
-static func _parse_vec2i(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_vec2i(value, path)
-
-static func _parse_string_array(value, path: String, require_non_empty: bool) -> Result:
-	return MapParseHelpersClass.parse_string_array(value, path, require_non_empty)
-
-static func _parse_footprint_mask(value, path: String) -> Result:
-	if not (value is Array) or value.is_empty():
-		return Result.failure("%s 类型错误或为空（期望二维 Array）" % path)
-	var out: Array = []
-	var expected_width := -1
-	for y in range(value.size()):
-		var row = value[y]
-		if not (row is Array) or row.is_empty():
-			return Result.failure("%s[%d] 类型错误或为空（期望 Array[int]）" % [path, y])
-		if expected_width == -1:
-			expected_width = row.size()
-		elif row.size() != expected_width:
-			return Result.failure("%s[%d] 长度不一致（期望 %d，实际 %d）" % [path, y, expected_width, row.size()])
-		var out_row: Array = []
-		for x in range(row.size()):
-			var cell_read := _parse_int(row[x], "%s[%d][%d]" % [path, y, x])
-			if not cell_read.ok:
-				return cell_read
-			var v: int = int(cell_read.value)
-			if v != 0 and v != 1:
-				return Result.failure("%s[%d][%d] 仅允许 0/1，实际 %d" % [path, y, x, v])
-			out_row.append(v)
-		out.append(out_row)
-	return Result.success(out)
 
 # === 查询方法 ===
 
