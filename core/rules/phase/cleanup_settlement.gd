@@ -6,6 +6,7 @@ extends RefCounted
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 
 static func apply(state: GameState) -> Result:
 	if not (state.round_state is Dictionary):
@@ -171,7 +172,7 @@ static func get_fridge_capacity_from_milestones(milestones: Array) -> Result:
 				continue
 
 			var value_val = eff.get("value", null)
-			var v_read := _parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+			var v_read := IntValueParseHelpersClass.parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
 			if not v_read.ok:
 				return Result.failure("CleanupSettlement: %s" % v_read.error)
 			has_fridge = true
@@ -250,18 +251,3 @@ static func _is_food_or_drink(product_id: String) -> bool:
 		return false
 	var def: ProductDef = def_val
 	return def.has_tag("food") or def.has_tag("drink")
-
-static func _parse_non_negative_int_value(value, path: String) -> Result:
-	if value is int:
-		if int(value) < 0:
-			return Result.failure("%s 必须 >= 0，实际: %d" % [path, int(value)])
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f == int(f):
-			var i: int = int(f)
-			if i < 0:
-				return Result.failure("%s 必须 >= 0，实际: %d" % [path, i])
-			return Result.success(i)
-		return Result.failure("%s 必须为整数（不允许小数）" % path)
-	return Result.failure("%s 必须为非负整数" % path)

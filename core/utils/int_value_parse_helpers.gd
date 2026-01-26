@@ -16,8 +16,10 @@ static func parse_int_value(value, path: String) -> Result:
 static func parse_non_negative_int_value(value, path: String) -> Result:
 	var r := parse_int_value(value, path)
 	if not r.ok:
-		return r
+		# float 的失败仅可能是“非整值小数”，保留更具体的错误信息；否则收敛到“非负整数”语义。
+		if value is float:
+			return r
+		return Result.failure("%s 必须为非负整数" % path)
 	if int(r.value) < 0:
 		return Result.failure("%s 必须 >= 0，实际: %d" % [path, int(r.value)])
 	return r
-

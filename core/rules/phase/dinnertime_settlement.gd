@@ -6,6 +6,7 @@ extends RefCounted
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const PricingPipelineClass = preload("res://core/rules/pricing_pipeline.gd")
@@ -508,7 +509,7 @@ static func _get_waitress_tips_override_from_milestones(milestones: Array) -> Re
 				continue
 
 			var value_val = eff.get("value", null)
-			var v_read := _parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+			var v_read := IntValueParseHelpersClass.parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
 			if not v_read.ok:
 				return Result.failure("晚餐结算失败：%s" % v_read.error)
 			found = true
@@ -518,18 +519,3 @@ static func _get_waitress_tips_override_from_milestones(milestones: Array) -> Re
 		"found": found,
 		"value": best,
 	})
-
-static func _parse_non_negative_int_value(value, path: String) -> Result:
-	if value is int:
-		if int(value) < 0:
-			return Result.failure("%s 必须 >= 0，实际: %d" % [path, int(value)])
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f == int(f):
-			var i: int = int(f)
-			if i < 0:
-				return Result.failure("%s 必须 >= 0，实际: %d" % [path, i])
-			return Result.success(i)
-		return Result.failure("%s 必须为整数（不允许小数）" % path)
-	return Result.failure("%s 必须为非负整数" % path)
