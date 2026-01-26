@@ -58,6 +58,9 @@ func _ensure_initialized() -> Result:
 		return Result.failure("RandomManager 未初始化")
 	return Result.success()
 
+func ensure_initialized() -> Result:
+	return _ensure_initialized()
+
 # 若曾 rewind 到历史中的某个位置，再执行新命令会产生“分支”。
 # 当前实现选择丢弃未来命令与未来校验点，保持线性时间线。
 func _truncate_future_history() -> void:
@@ -78,6 +81,9 @@ func _truncate_future_history() -> void:
 		var checkpoint_index: int = int(checkpoint["index"])
 		if checkpoint_index > target_size:
 			checkpoints.remove_at(i)
+
+func truncate_future_history() -> void:
+	_truncate_future_history()
 
 # === 初始化 ===
 

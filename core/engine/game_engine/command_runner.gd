@@ -5,13 +5,13 @@ const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd"
 const CommandRunnerEventBuildClass = preload("res://core/engine/game_engine/command_runner_event_build.gd")
 
 static func execute_command(engine: GameEngine, command: Command, is_replay: bool = false) -> Result:
-	var init_check := engine._ensure_initialized()
+	var init_check := engine.ensure_initialized()
 	if not init_check.ok:
 		return init_check
 
 	# 若不在命令末尾执行新命令，则视为开始新分支：丢弃未来命令/校验点
 	if not is_replay and engine.current_command_index < engine.command_history.size() - 1:
-		engine._truncate_future_history()
+		engine.truncate_future_history()
 
 	# 获取执行器
 	var executor := engine.action_registry.get_executor(command.action_id)

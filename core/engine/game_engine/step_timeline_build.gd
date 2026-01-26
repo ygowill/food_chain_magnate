@@ -37,7 +37,7 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 	if engine == null:
 		return Result.failure("StepTimelineBuild: engine 为空")
 
-	var init_check := engine._ensure_initialized()
+	var init_check := engine.ensure_initialized()
 	if not init_check.ok:
 		return init_check
 	if engine.checkpoints.is_empty():

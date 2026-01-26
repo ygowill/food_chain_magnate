@@ -8,7 +8,7 @@ static func build(engine: GameEngine, target_index: int) -> Result:
 	if engine == null:
 		return Result.failure("EventHistoryRebuild: engine 为空")
 
-	var init_check := engine._ensure_initialized()
+	var init_check := engine.ensure_initialized()
 	if not init_check.ok:
 		return init_check
 

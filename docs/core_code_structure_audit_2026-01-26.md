@@ -6,10 +6,10 @@
 
 ## 快速指标（非测试脚本）
 
-- 非测试脚本：175 个，约 26,442 行（`wc -l`）
+- 非测试脚本：175 个，约 26,448 行（`wc -l`）
 - 其中：
   - `core/rules/`：46 文件 / 6,392 行
-  - `core/engine/`：29 文件 / 5,683 行
+  - `core/engine/`：29 文件 / 5,689 行
   - `core/map/`：35 文件 / 4,615 行
   - `core/modules/`：19 文件 / 2,750 行
   - `core/state/`：14 文件 / 2,063 行
@@ -26,6 +26,7 @@
 - 2026-01-26：新增 `ActionExecutor.apply_changes_in_place(...)` 并用于 `AutoAdvance`（避免跨文件调用私有 `_apply_changes`）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：为 `CommandRunner`/`PhaseManager` 增加公开 wrapper（`build_*`/`drain_auto_advances`/`is_settlement_scheduled`），并替换 `StepTimelineBuild`/`EventHistoryRebuild` 中跨文件调用私有 `_` 前缀方法；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：新增 `GameStartedEventBuild`，统一 `initializer`/`event_timeline_build`/`step_timeline_build` 构建 `GAME_STARTED` 的字段与 state_hash 计算方式（并在缺少初始 checkpoint 时降级为 warning）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：为 `GameEngine` 增加公开 wrapper（`ensure_initialized`/`truncate_future_history`），并替换 `CommandRunner`/`EventHistoryRebuild`/`EventTimelineBuild`/`StepTimelineBuild` 中跨文件调用私有 `_ensure_initialized`/`_truncate_future_history`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将“内建动作注册”从 `core/engine/game_engine/action_setup.gd` 迁移到 `gameplay/action_setup.gd`；core `ActionSetup` 改为委托 provider（移除 core 内对 `gameplay/actions/*.gd` 的 preload）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：为 core `ActionSetup` 增加显式注入点 `set_provider_path(...)`，允许在不修改 core 的情况下替换动作注册 provider；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：引入 `Result.error_code`（含 `MISSING_PARAMS`），并在 `ActionExecutor.require_*`/`ActionRegistry.get_player_initiatable_actions` 中使用（保留旧字符串前缀兼容）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
@@ -166,6 +167,8 @@
 - `core/engine/game_engine/step_timeline_build.gd` / `core/engine/game_engine/event_history_rebuild.gd`：
   - （已整改 2026-01-26）已改用 `CommandRunnerClass.build_*` / `CommandRunnerClass.drain_auto_advances(...)` 等公开 wrapper，不再跨文件调用 `_build_*` / `_drain_auto_advances`。
   - （已整改 2026-01-26）已改用 `PhaseManager.is_settlement_scheduled(...)`，不再跨文件调用 `_is_settlement_scheduled`。
+- `core/engine/game_engine/command_runner.gd` / `core/engine/game_engine/event_history_rebuild.gd` / `core/engine/game_engine/event_timeline_build.gd` / `core/engine/game_engine/step_timeline_build.gd`：
+  - （已整改 2026-01-26）改用 `engine.ensure_initialized()` / `engine.truncate_future_history()` 公开 wrapper，避免跨文件调用 `GameEngine._ensure_initialized` / `GameEngine._truncate_future_history`。
 - gameplay phase/skip actions 与相关测试：
   - （已整改 2026-01-26）不再调用 `CommandRunnerClass._build_*` 私有静态方法，改为调用 `CommandRunnerClass.build_*` wrapper。
 - `core/engine/game_engine/auto_advance.gd` 调用：
@@ -263,15 +266,15 @@
 | `core/engine/game_engine/command_runner_event_build.gd` | 464 | 0 | 0 | uses:EventBus |
 | `core/engine/game_engine/diagnostics.gd` | 48 | 0 | 0 |  |
 | `core/engine/game_engine/event_history_rebuild.gd` | 104 | 1 | 0 | uses:EventBus,uses:OS.has_feature |
-| `core/engine/game_engine/event_timeline_build.gd` | 113 | 1 | 0 | uses:EventBus |
+| `core/engine/game_engine/event_timeline_build.gd` | 112 | 1 | 0 | uses:EventBus |
 | `core/engine/game_engine/game_started_event_build.gd` | 34 | 0 | 0 |  |
 | `core/engine/game_engine/initializer.gd` | 266 | 9 | 0 | uses:EventBus,uses:GameLog |
 | `core/engine/game_engine/invariants.gd` | 259 | 1 | 0 |  |
 | `core/engine/game_engine/loader.gd` | 159 | 3 | 0 | uses:EventBus,uses:GameLog,uses:JsonValueParseHelpers |
 | `core/engine/game_engine/modules_v2.gd` | 413 | 22 | 0 |  |
 | `core/engine/game_engine/replay.gd` | 188 | 2 | 0 | uses:GameLog,uses:OS.has_feature,uses:JsonValueParseHelpers |
-| `core/engine/game_engine/step_timeline_build.gd` | 630 | 4 | 0 | uses:EventBus,uses:OS.has_feature |
-| `core/engine/game_engine.gd` | 465 | 13 | 0 | uses:EventBus,uses:OS.has_feature |
+| `core/engine/game_engine/step_timeline_build.gd` | 632 | 4 | 0 | uses:EventBus,uses:OS.has_feature |
+| `core/engine/game_engine.gd` | 470 | 13 | 0 | uses:EventBus,uses:OS.has_feature |
 | `core/engine/phase_manager/advance_phase.gd` | 240 | 2 | 0 | uses:GameLog |
 | `core/engine/phase_manager/advance_sub_phase.gd` | 279 | 2 | 0 | uses:GameLog |
 | `core/engine/phase_manager/advancement.gd` | 13 | 2 | 0 |  |
