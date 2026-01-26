@@ -71,6 +71,7 @@
 - 2026-01-26：将 `CommandRunner` 的派生事件构建移出 core（`gameplay/replay/command_runner_event_build.gd`），并通过 `ProjectSettings.fcm/command_runner_event_build_provider_path` 动态加载（减少 core 边界膨胀）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `EventTimelineBuild`/`StepTimelineBuild`/`TimelineEventHelpers` 移出 core 至 `gameplay/replay/`（回放/日志派生视图构建不再占用 core/engine）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：`GameEngine.clear_event_history_for_new_session()` 与 `rewind_to_command()` 在可用时优先调用注入的 `event_sink`（`clear_history_and_reset_sequence`/`record_event`），再回退到 EventBus（进一步降低硬依赖）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：将 debug command registry/commands 的实现移至 `ui/debug/`，core/debug 仅保留 class_name 兼容 shim（用于 global_script_class_cache/旧路径）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -86,7 +87,7 @@
   - 这类逻辑更像 UI/回放子系统的“派生视图构建”，放在 core/engine 内会让 engine 边界持续被拉宽。
 - `core/rules/phase/dinnertime_settlement.gd`（~536 LOC）
   - 规则编排（房屋遍历/候选餐厅/胜负判定/库存扣减/收入/里程碑/破产）集中在一个文件里，虽然拆了一些子 helper（`dinnertime_*`），但“主 orchestrator”仍然较大。
-- `core/debug/debug_commands/action_commands.gd`（~478 LOC）
+- `ui/debug/debug_commands/action_commands.gd`（~476 LOC）（已整改 2026-01-26：实现移出 core；core/debug 为 shim）
   - 将大量 debug 命令串在一个文件中；后续继续加 debug 命令时容易进一步膨胀。
 - `core/engine/game_engine.gd`（~512 LOC）
   - 引擎主体 + rewind 辅助查询 + EventBus.history 重建桥接逻辑都在一起。
@@ -222,7 +223,7 @@
   - （已整改 2026-01-26）原 `command_runner_event_build.gd` 已移至 `gameplay/replay/command_runner_event_build.gd`（由 `ProjectSettings.fcm/command_runner_event_build_provider_path` 提供）。
   - （已整改 2026-01-26）`gameplay/replay/step_timeline_build.gd` 的 step_index/phase_segment 偏“展示/回放定位”，不像“引擎最小内核”。
 - Debug 命令系统在 core：
-  - `core/debug/debug_commands/*.gd` 是应用层调试工具逻辑；如果未来希望 core 作为纯规则库，这一层建议外移或至少隔离成可选模块。
+  - （已整改 2026-01-26）实现已移至 `ui/debug/`，core/debug 仅保留 class_name 兼容 shim（用于 global_script_class_cache/旧路径）。
 - GameStateFactory 含“Logo 分配”等偏展示/前端选择的确定性逻辑：
   - `core/state/game_state_factory.gd` 中 `restaurant_logo_id` 分配策略（含随机/显式选择合并）更像 game setup/前端选择的结果落盘；放在 core 会让 core 牵涉 UI 资源/规则变化。
 - MapDef/TileDef/PieceDef 内含“编辑方法/调试 dump”：
@@ -284,11 +285,11 @@
 | `core/data/parse_helpers.gd` | 65 | 0 | 0 |  |
 | `core/data/product_def.gd` | 66 | 0 | 0 | uses:DataParseHelpers |
 | `core/data/product_registry.gd` | 82 | 2 | 0 |  |
-| `core/debug/debug_command_registry.gd` | 181 | 0 | 0 | uses:GameLog |
-| `core/debug/debug_commands/action_commands.gd` | 478 | 0 | 0 | uses:DebugFlags |
-| `core/debug/debug_commands/game_commands.gd` | 186 | 0 | 0 | uses:DebugFlags |
-| `core/debug/debug_commands/state_commands.gd` | 234 | 0 | 0 |  |
-| `core/debug/debug_commands/util_commands.gd` | 220 | 0 | 0 | uses:DebugFlags |
+| `core/debug/debug_command_registry.gd` | 6 | 0 | 0 | shim->ui |
+| `core/debug/debug_commands/action_commands.gd` | 10 | 0 | 0 | shim->ui |
+| `core/debug/debug_commands/game_commands.gd` | 10 | 0 | 0 | shim->ui |
+| `core/debug/debug_commands/state_commands.gd` | 10 | 0 | 0 | shim->ui |
+| `core/debug/debug_commands/util_commands.gd` | 10 | 0 | 0 | shim->ui |
 | `core/debug/perf_trace.gd` | 146 | 0 | 0 |  |
 | `core/engine/game_constants.gd` | 9 | 0 | 0 |  |
 | `core/engine/game_defaults.gd` | 22 | 0 | 0 |  |
@@ -474,11 +475,11 @@
 
 ### debug/
 
-- `core/debug/debug_command_registry.gd`：依赖 GameLog 全局单例（耦合）；调试/开发工具逻辑；若 core 目标更纯，可考虑外移或作为可选层
-- `core/debug/debug_commands/action_commands.gd`：超长脚本（维护成本高）；建议按职责拆分；含调试/发布差异分支（DebugFlags/OS.has_feature）；调试/开发工具逻辑；若 core 目标更纯，可考虑外移或作为可选层
-- `core/debug/debug_commands/game_commands.gd`：含调试/发布差异分支（DebugFlags/OS.has_feature）；调试/开发工具逻辑；若 core 目标更纯，可考虑外移或作为可选层
-- `core/debug/debug_commands/state_commands.gd`：中等体量；后续可按重构优先级处理；调试/开发工具逻辑；若 core 目标更纯，可考虑外移或作为可选层
-- `core/debug/debug_commands/util_commands.gd`：中等体量；后续可按重构优先级处理；含调试/发布差异分支（DebugFlags/OS.has_feature）；调试/开发工具逻辑；若 core 目标更纯，可考虑外移或作为可选层
+- `core/debug/debug_command_registry.gd`：（已整改 2026-01-26）class_name 兼容 shim（用于 global_script_class_cache/旧路径）；实际实现位于 `ui/debug/debug_command_registry.gd`
+- `core/debug/debug_commands/action_commands.gd`：（已整改 2026-01-26）兼容 shim；实际实现位于 `ui/debug/debug_commands/action_commands.gd`
+- `core/debug/debug_commands/game_commands.gd`：（已整改 2026-01-26）兼容 shim；实际实现位于 `ui/debug/debug_commands/game_commands.gd`
+- `core/debug/debug_commands/state_commands.gd`：（已整改 2026-01-26）兼容 shim；实际实现位于 `ui/debug/debug_commands/state_commands.gd`
+- `core/debug/debug_commands/util_commands.gd`：（已整改 2026-01-26）兼容 shim；实际实现位于 `ui/debug/debug_commands/util_commands.gd`
 - `core/debug/perf_trace.gd`：调试/开发工具逻辑；若 core 目标更纯，可考虑外移或作为可选层
 
 ### engine/

@@ -5,10 +5,11 @@ extends Window
 
 signal command_executed(command: String, result_text: String)
 
-const StateCommandsClass = preload("res://core/debug/debug_commands/state_commands.gd")
-const GameCommandsClass = preload("res://core/debug/debug_commands/game_commands.gd")
-const UtilCommandsClass = preload("res://core/debug/debug_commands/util_commands.gd")
-const ActionCommandsClass = preload("res://core/debug/debug_commands/action_commands.gd")
+const DebugCommandRegistryClass = preload("res://core/debug/debug_command_registry.gd")
+const StateCommandsClass = preload("res://ui/debug/debug_commands/state_commands.gd")
+const GameCommandsClass = preload("res://ui/debug/debug_commands/game_commands.gd")
+const UtilCommandsClass = preload("res://ui/debug/debug_commands/util_commands.gd")
+const ActionCommandsClass = preload("res://ui/debug/debug_commands/action_commands.gd")
 
 # UI 颜色方案
 const COLORS = {
@@ -48,7 +49,7 @@ var _history_index: int = -1
 
 func _ready() -> void:
 	# 初始化命令注册表
-	_command_registry = DebugCommandRegistry.new()
+	_command_registry = DebugCommandRegistryClass.new()
 	_register_builtin_commands()
 
 	# 连接信号
