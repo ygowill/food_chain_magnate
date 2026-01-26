@@ -89,6 +89,13 @@ func truncate_future_history() -> void:
 	_truncate_future_history()
 
 func clear_event_history_for_new_session() -> void:
+	if event_sink != null:
+		if event_sink.has_method("clear_history_and_reset_sequence"):
+			event_sink.clear_history_and_reset_sequence()
+			return
+		if event_sink.has_method("clear_history"):
+			event_sink.clear_history()
+			return
 	if EventBus == null:
 		return
 	if EventBus.has_method("clear_history_and_reset_sequence"):
@@ -188,12 +195,15 @@ func rewind_to_command(target_index: int) -> Result:
 
 	# 重要：回退会改变“当前时间线指针”，需要同步重建 EventBus.history，
 	# 否则 UI 日志/回放验证会残留未来事件（undo/redo 视觉上不会真的回到过去）。
-	if EventBus != null and EventBus.has_method("clear_history_and_reset_sequence") and EventBus.has_method("record_event"):
+	var sink = event_sink
+	if sink == null or (not sink.has_method("clear_history_and_reset_sequence")) or (not sink.has_method("record_event")):
+		sink = EventBus if (EventBus != null) else null
+	if sink != null and sink.has_method("clear_history_and_reset_sequence") and sink.has_method("record_event"):
 		var history_r: Result = EventHistoryRebuildClass.build(self, target_index)
 		if not history_r.ok:
 			return Result.failure("回退成功，但重建事件历史失败: %s" % history_r.error).with_warnings(replay_result.warnings)
 		var events: Array = history_r.value if (history_r.value is Array) else []
-		EventBus.clear_history_and_reset_sequence()
+		sink.clear_history_and_reset_sequence()
 		for ev_val in events:
 			if not (ev_val is Dictionary):
 				continue
@@ -203,7 +213,7 @@ func rewind_to_command(target_index: int) -> Result:
 				continue
 			var d_val = ev.get("data", {})
 			var d: Dictionary = d_val if (d_val is Dictionary) else {}
-			EventBus.record_event(t, d)
+			sink.record_event(t, d)
 		return Result.success(state).with_warnings(replay_result.warnings).with_warnings(history_r.warnings)
 
 	return Result.success(state).with_warnings(replay_result.warnings)

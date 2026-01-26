@@ -70,6 +70,7 @@
 - 2026-01-26：统一“缺少参数”判定走 `Result.error_code == Result.ErrorCode.MISSING_PARAMS`（`ActionRegistry`/UI 移除对旧字符串前缀的兼容），并为 `modules/rural_marketeers/actions/place_highway_offramp_action.gd` 补齐缺参 error_code；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `CommandRunner` 的派生事件构建移出 core（`gameplay/replay/command_runner_event_build.gd`），并通过 `ProjectSettings.fcm/command_runner_event_build_provider_path` 动态加载（减少 core 边界膨胀）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `EventTimelineBuild`/`StepTimelineBuild`/`TimelineEventHelpers` 移出 core 至 `gameplay/replay/`（回放/日志派生视图构建不再占用 core/engine）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：`GameEngine.clear_event_history_for_new_session()` 与 `rewind_to_command()` 在可用时优先调用注入的 `event_sink`（`clear_history_and_reset_sequence`/`record_event`），再回退到 EventBus（进一步降低硬依赖）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -170,7 +171,7 @@
 涉及文件（集中在 engine）：
 - `core/engine/game_engine/command_runner.gd`（DebugFlags/OS.has_feature；事件发射经 `engine.emit_event(...)` wrapper）
 - `core/engine/game_engine/loader.gd`、`core/engine/game_engine/initializer.gd`（清空 EventBus.history 经 `engine.clear_event_history_for_new_session()` wrapper）
-- `core/engine/game_engine.gd`（仍负责 EventBus.history 重建桥接；（已部分整改 2026-01-26）增加 `event_sink` 注入点，降低对 EventBus 的硬依赖）
+- `core/engine/game_engine.gd`（仍负责 EventBus.history 重建桥接；（已整改 2026-01-26）增加 `event_sink` 注入点，并让 history clear/rebuild 也优先走 sink，降低对 EventBus 的硬依赖）
 
 风险：
 - 引擎逻辑与 UI/日志系统绑死；做“纯逻辑回放”或“服务器侧模拟”会更难。
@@ -484,7 +485,7 @@
 
 - `core/engine/game_constants.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/game_defaults.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/engine/game_engine.gd`：超长脚本（维护成本高）；建议按职责拆分；preload 依赖较多（耦合偏高）；依赖 EventBus（引擎与日志/UI 耦合）；（已整改 2026-01-26）为不变量 baseline 增加公开 setter，避免外部直接写私有 `_initial_*`；（已整改 2026-01-26）提供 `clear_event_history_for_new_session()` 收敛“新对局清空 EventBus.history”样板；（已整改 2026-01-26）提供 `emit_event(...)` wrapper 收敛 `EventBus.emit_event(...)` 直连；（已整改 2026-01-26）增加可注入 `event_sink`，降低对 EventBus 的硬依赖
+- `core/engine/game_engine.gd`：超长脚本（维护成本高）；建议按职责拆分；preload 依赖较多（耦合偏高）；依赖 EventBus（引擎与日志/UI 耦合）；（已整改 2026-01-26）为不变量 baseline 增加公开 setter，避免外部直接写私有 `_initial_*`；（已整改 2026-01-26）提供 `clear_event_history_for_new_session()` 收敛“新对局清空 EventBus.history”样板；（已整改 2026-01-26）提供 `emit_event(...)` wrapper 收敛 `EventBus.emit_event(...)` 直连；（已整改 2026-01-26）增加可注入 `event_sink`，并让 history clear/rebuild 也优先走 sink，降低对 EventBus 的硬依赖
 - `core/engine/game_engine/action_setup.gd`：已改为委托 `gameplay/action_setup.gd`（移除 core 内对 gameplay/actions 的 preload）；（已整改 2026-01-26）provider 来源改为 `ProjectSettings.fcm/action_setup_provider_path`（仍可用 `ActionSetup.set_provider_path(...)` 覆盖），避免 core 内硬编码 gameplay 路径
 - `core/engine/game_engine/action_wiring.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/game_engine/archive.gd`：依赖 GameLog 全局单例（耦合）
