@@ -1,6 +1,7 @@
 extends RefCounted
 
 const NodeKeys = preload("res://core/map/road_graph/node_keys.gd")
+const Cells = preload("res://core/map/map_runtime/cells.gd")
 
 static func populate_nodes_and_edges(graph, cells: Array, external_cells: Dictionary) -> void:
 	graph._nodes.clear()
@@ -23,9 +24,9 @@ static func populate_nodes_and_edges(graph, cells: Array, external_cells: Dictio
 				graph._edges[node_key] = []
 
 	# 创建节点（外部格子）
-	var external_positions: Array[Vector2i] = _parse_external_positions(external_cells)
+	var external_positions: Array[Vector2i] = Cells.sorted_positions_from_external_cells(external_cells)
 	for pos in external_positions:
-		var cell_val = external_cells.get("%d,%d" % [pos.x, pos.y], null)
+		var cell_val = external_cells.get(Cells.pos_key(pos), null)
 		if not (cell_val is Dictionary):
 			continue
 		var cell: Dictionary = cell_val
@@ -40,25 +41,6 @@ static func populate_nodes_and_edges(graph, cells: Array, external_cells: Dictio
 			graph._edges[node_key] = []
 
 	_build_edges_with_external(graph, cells, external_cells)
-
-static func _parse_external_positions(external_cells: Dictionary) -> Array[Vector2i]:
-	var external_positions: Array[Vector2i] = []
-	for k in external_cells.keys():
-		if not (k is String):
-			continue
-		var parts := str(k).split(",")
-		if parts.size() != 2:
-			continue
-		if not parts[0].is_valid_int() or not parts[1].is_valid_int():
-			continue
-		external_positions.append(Vector2i(int(parts[0]), int(parts[1])))
-
-	external_positions.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
-		if a.y != b.y:
-			return a.y < b.y
-		return a.x < b.x
-	)
-	return external_positions
 
 static func _build_edges_with_external(graph, cells: Array, external_cells: Dictionary) -> void:
 	var node_keys: Array = graph._nodes.keys()
@@ -102,7 +84,7 @@ static func _has_cell_any(graph, pos: Vector2i, external_cells: Dictionary) -> b
 	var idx = pos + graph._map_origin
 	if idx.x >= 0 and idx.y >= 0 and idx.x < graph._grid_size.x and idx.y < graph._grid_size.y:
 		return true
-	return external_cells.has("%d,%d" % [pos.x, pos.y])
+	return external_cells.has(Cells.pos_key(pos))
 
 static func _get_cell_any(graph, pos: Vector2i, cells: Array, external_cells: Dictionary) -> Dictionary:
 	var idx = pos + graph._map_origin
@@ -113,6 +95,6 @@ static func _get_cell_any(graph, pos: Vector2i, cells: Array, external_cells: Di
 		var row: Array = row_val
 		var cell_val = row[idx.x]
 		return cell_val if cell_val is Dictionary else {}
-	var key := "%d,%d" % [pos.x, pos.y]
+	var key := Cells.pos_key(pos)
 	var cell_val = external_cells.get(key, null)
 	return cell_val if cell_val is Dictionary else {}

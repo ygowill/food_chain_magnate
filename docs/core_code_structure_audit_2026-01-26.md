@@ -6,11 +6,11 @@
 
 ## 快速指标（非测试脚本）
 
-- 非测试脚本：175 个，约 26,375 行（`wc -l`）
+- 非测试脚本：175 个，约 26,380 行（`wc -l`）
 - 其中：
   - `core/rules/`：46 文件 / 6,392 行
   - `core/engine/`：29 文件 / 5,730 行
-  - `core/map/`：35 文件 / 4,516 行
+  - `core/map/`：35 文件 / 4,521 行
   - `core/modules/`：19 文件 / 2,750 行
   - `core/state/`：14 文件 / 2,048 行
   - `core/data/`：14 文件 / 1,534 行
@@ -22,6 +22,7 @@
 
 ## 整改日志
 
+- 2026-01-26：`RoadGraphBuilder` 的 external_cells 位置解析改为复用 `core/map/map_runtime/cells.gd`（新增 `sorted_positions_from_external_cells(...)`），并移除 builder 内自带 `_parse_*`（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：`GameStateSerialization` 移除自带 `_parse_*` wrapper，改为直接调用 `ParseHelpers`/`RoundStateParser`（收敛 state 解析样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：`BakedMap` 移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：`MapDef`/`MapOptionDef` 移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（减少重复解析样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
@@ -322,7 +323,7 @@
 | `core/map/map_def.gd` | 311 | 2 | 0 |  |
 | `core/map/map_option_def.gd` | 130 | 3 | 0 |  |
 | `core/map/map_runtime/baked_map.gd` | 153 | 2 | 0 |  |
-| `core/map/map_runtime/cells.gd` | 95 | 1 | 0 |  |
+| `core/map/map_runtime/cells.gd` | 117 | 1 | 0 |  |
 | `core/map/map_runtime/coords.gd` | 59 | 0 | 0 |  |
 | `core/map/map_runtime/road_graph_cache.gd` | 42 | 2 | 0 |  |
 | `core/map/map_runtime/structures.gd` | 61 | 1 | 0 |  |
@@ -339,7 +340,7 @@
 | `core/map/placement_validator/road_utils.gd` | 51 | 0 | 0 |  |
 | `core/map/placement_validator/validators.gd` | 286 | 1 | 0 |  |
 | `core/map/road_graph/blocks.gd` | 75 | 0 | 0 |  |
-| `core/map/road_graph/builder.gd` | 119 | 1 | 0 | defines:_parse_* |
+| `core/map/road_graph/builder.gd` | 100 | 2 | 0 |  |
 | `core/map/road_graph/node_keys.gd` | 18 | 0 | 0 |  |
 | `core/map/road_graph/pathfinding.gd` | 159 | 1 | 0 |  |
 | `core/map/road_graph/range_query.gd` | 45 | 2 | 0 |  |
@@ -516,7 +517,7 @@
 - `core/map/map_def.gd`：偏长脚本；建议关注职责边界/可读性；（已整改 2026-01-26）tiles placements 解析改为复用 `MapParseHelpers.parse_tile_placements(...)`（减少重复解析样板）；（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）
 - `core/map/map_option_def.gd`：（已部分整改 2026-01-26）移除 `_SELF_SCRIPT.new()` 自 preload 创建实例，改为直接 `MapOptionDef.new()`；（已整改 2026-01-26）tiles placements 解析改为复用 `MapParseHelpers.parse_tile_placements(...)`（减少重复解析样板）；（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）
 - `core/map/map_runtime/baked_map.gd`：（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）
-- `core/map/map_runtime/cells.gd`：未发现明显结构问题（小文件/职责相对单一）
+- `core/map/map_runtime/cells.gd`：（已整改 2026-01-26）补充 `try_parse_pos_key(...)`/`sorted_positions_from_external_cells(...)`，用于收敛 external_cells 的 key->pos 解析；小文件/职责相对单一
 - `core/map/map_runtime/coords.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/map_runtime/road_graph_cache.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/map_runtime/structures.gd`：未发现明显结构问题（小文件/职责相对单一）
@@ -534,7 +535,7 @@
 - `core/map/placement_validator/validators.gd`：中等体量；后续可按重构优先级处理
 - `core/map/road_graph.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/road_graph/blocks.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/map/road_graph/builder.gd`：自带 _parse_* 解析函数（重复实现可收敛）
+- `core/map/road_graph/builder.gd`：（已整改 2026-01-26）external_cells 的 key->pos 解析下沉至 `core/map/map_runtime/cells.gd`，本文件不再自带 `_parse_*`
 - `core/map/road_graph/node_keys.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/road_graph/pathfinding.gd`：（已整改 2026-01-26）补充 `get_nodes_at_pos(...)` 公开 wrapper，用于避免外部调用私有 `_get_nodes_at_pos(...)`
 - `core/map/road_graph/range_query.gd`：（已整改 2026-01-26）改用 `Pathfinding.get_nodes_at_pos(...)`，避免跨文件调用私有 `_get_nodes_at_pos(...)`

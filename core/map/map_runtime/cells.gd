@@ -61,6 +61,29 @@ static func get_cell_any(state, pos: Vector2i) -> Dictionary:
 static func pos_key(pos: Vector2i) -> String:
 	return "%d,%d" % [pos.x, pos.y]
 
+static func try_parse_pos_key(key: String):
+	var parts := key.split(",")
+	if parts.size() != 2:
+		return null
+	if not parts[0].is_valid_int() or not parts[1].is_valid_int():
+		return null
+	return Vector2i(int(parts[0]), int(parts[1]))
+
+static func sorted_positions_from_external_cells(external_cells: Dictionary) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for k in external_cells.keys():
+		if not (k is String):
+			continue
+		var pos_val = try_parse_pos_key(str(k))
+		if pos_val is Vector2i:
+			out.append(pos_val)
+	out.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		if a.y != b.y:
+			return a.y < b.y
+		return a.x < b.x
+	)
+	return out
+
 static func has_road_at(state, pos: Vector2i) -> bool:
 	var cell := get_cell(state, pos)
 	if cell.is_empty():
