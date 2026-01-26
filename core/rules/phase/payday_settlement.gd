@@ -9,6 +9,7 @@ const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 
 const EFFECT_SEG_PAYDAY_SALARY_DISCOUNT := ":payday:salary_discount:"
 
@@ -343,7 +344,7 @@ static func _get_salary_total_delta(_state: GameState, player: Dictionary) -> Re
 				continue
 
 			var value_val = eff.get("value", null)
-			var v_read := _parse_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+			var v_read := IntValueParseHelpersClass.parse_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
 			if not v_read.ok:
 				return Result.failure("PaydaySettlement: %s" % v_read.error)
 			delta += int(v_read.value)
@@ -358,13 +359,3 @@ static func _count_employee_in_list(list: Array, employee_id: String) -> int:
 		if id == employee_id:
 			count += 1
 	return count
-
-static func _parse_int_value(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f == int(f):
-			return Result.success(int(f))
-		return Result.failure("%s 必须为整数（不允许小数）" % path)
-	return Result.failure("%s 必须为整数" % path)

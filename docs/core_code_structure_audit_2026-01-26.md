@@ -32,6 +32,7 @@
 - 2026-01-26：新增 `core/data/parse_helpers.gd`（`DataParseHelpers`）收敛 data JSON 解析样板代码，并替换 `ProductDef`/`MarketingDef`/`MilestoneDef`/`EmployeeDef.parser` 内自带 `_parse_*`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：新增 `core/utils/json_value_parse_helpers.gd`（`JsonValueParseHelpers`）收敛“JSON int 允许用整值 float 表示”的重复校验，并用于 `core/types/command.gd`/`core/engine/game_engine/loader.gd`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：扩展 `JsonValueParseHelpers`（新增 `parse_non_negative_int_value`），并用于 `core/engine/game_engine/replay.gd` 的 checkpoint.rng_calls 与 `core/rules/drinks_procurement/inputs.gd` 的 route 坐标解析；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：新增 `core/utils/int_value_parse_helpers.gd`（`IntValueParseHelpers`）收敛 rules/milestone effects 的整值解析，并替换 `core/rules/pricing_pipeline.gd`/`core/rules/phase/payday_settlement.gd` 内自带 `_parse_*`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -359,9 +360,9 @@
 | `core/rules/phase/dinnertime_settlement.gd` | 536 | 15 | 0 | defines:_parse_* |
 | `core/rules/phase/marketing/settlement_helpers.gd` | 338 | 4 | 0 |  |
 | `core/rules/phase/marketing_settlement.gd` | 309 | 4 | 0 |  |
-| `core/rules/phase/payday_settlement.gd` | 371 | 6 | 0 | defines:_parse_* |
+| `core/rules/phase/payday_settlement.gd` | 361 | 7 | 0 | uses:IntValueParseHelpers |
 | `core/rules/placement_conflict_registry.gd` | 133 | 0 | 0 |  |
-| `core/rules/pricing_pipeline.gd` | 226 | 3 | 0 | defines:_parse_* |
+| `core/rules/pricing_pipeline.gd` | 208 | 4 | 0 | uses:IntValueParseHelpers |
 | `core/rules/settlement_registry.gd` | 158 | 0 | 0 | uses:GameLog,uses:DebugFlags |
 | `core/rules/working/mandatory_actions_rules.gd` | 169 | 1 | 0 |  |
 | `core/state/game_state.gd` | 230 | 2 | 0 |  |
@@ -381,6 +382,7 @@
 | `core/types/command.gd` | 184 | 1 | 0 | uses:JsonValueParseHelpers |
 | `core/types/result.gd` | 131 | 0 | 0 |  |
 | `core/utils/catalog_registry_helpers.gd` | 40 | 0 | 0 |  |
+| `core/utils/int_value_parse_helpers.gd` | 23 | 0 | 0 |  |
 | `core/utils/json_value_parse_helpers.gd` | 23 | 0 | 0 |  |
 | `core/utils/range_utils.gd` | 352 | 2 | 0 |  |
 | `core/utils/round_state_counters.gd` | 146 | 0 | 0 |  |
@@ -558,9 +560,9 @@
 - `core/rules/phase/dinnertime_settlement.gd`：晚餐结算 orchestrator 过大；可进一步把“选择/计价/结算写入/报告生成”分层；超长脚本（维护成本高）；建议按职责拆分；preload 依赖较多（耦合偏高）；自带 _parse_* 解析函数（重复实现可收敛）
 - `core/rules/phase/marketing/settlement_helpers.gd`：偏长脚本；建议关注职责边界/可读性；存在较多 assert；注意与 Result/fail-fast 策略一致性
 - `core/rules/phase/marketing_settlement.gd`：偏长脚本；建议关注职责边界/可读性
-- `core/rules/phase/payday_settlement.gd`：结算逻辑较大；包含 token 支付/折扣/报告写入等多职责，可分层；偏长脚本；建议关注职责边界/可读性；存在一定数量的 preload 依赖；自带 _parse_* 解析函数（重复实现可收敛）
+- `core/rules/phase/payday_settlement.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `IntValueParseHelpers`；结算逻辑较大；包含 token 支付/折扣/报告写入等多职责，可分层；偏长脚本；建议关注职责边界/可读性；存在一定数量的 preload 依赖
 - `core/rules/placement_conflict_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/pricing_pipeline.gd`：中等体量；后续可按重构优先级处理；自带 _parse_* 解析函数（重复实现可收敛）
+- `core/rules/pricing_pipeline.gd`：（已部分整改 2026-01-26）移除自带 `_parse_*`，改用 `IntValueParseHelpers`；中等体量；后续可按重构优先级处理
 - `core/rules/settlement_registry.gd`：依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
 - `core/rules/working/mandatory_actions_rules.gd`：未发现明显结构问题（小文件/职责相对单一）
 
@@ -589,6 +591,7 @@
 ### utils/
 
 - `core/utils/catalog_registry_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
+- `core/utils/int_value_parse_helpers.gd`：（已新增 2026-01-26）用于收敛 rules/milestone effects 的整值解析样板
 - `core/utils/json_value_parse_helpers.gd`：（已新增 2026-01-26）用于收敛存档/回放/命令解析中的 JSON 数值校验样板
 - `core/utils/range_utils.gd`：偏长脚本；建议关注职责边界/可读性
 - `core/utils/round_state_counters.gd`：未发现明显结构问题（小文件/职责相对单一）

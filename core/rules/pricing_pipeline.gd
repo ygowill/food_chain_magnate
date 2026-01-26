@@ -6,6 +6,7 @@ extends RefCounted
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const MilestoneDefClass = preload("res://core/data/milestone_def.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 
 static func calculate_unit_price(state: GameState, player_id: int) -> Result:
 	var unit_price: int = state.get_rule_int("base_unit_price")
@@ -150,7 +151,7 @@ static func _get_base_price_delta_from_milestones(milestones: Array) -> Result:
 				continue
 
 			var value_val = eff.get("value", null)
-			var v_read := _parse_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+			var v_read := IntValueParseHelpersClass.parse_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
 			if not v_read.ok:
 				return Result.failure("PricingPipeline: %s" % v_read.error)
 			delta += int(v_read.value)
@@ -198,28 +199,10 @@ static func _get_sell_bonus_by_category_from_milestones(milestones: Array) -> Re
 				return Result.failure("PricingPipeline: %s.effects[%d].product 不能为空" % [mid, e_i])
 
 			var value_val = eff.get("value", null)
-			var v_read := _parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+			var v_read := IntValueParseHelpersClass.parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
 			if not v_read.ok:
 				return Result.failure("PricingPipeline: %s" % v_read.error)
 
 			out[product] = int(out.get(product, 0)) + int(v_read.value)
 
 	return Result.success(out)
-
-static func _parse_int_value(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f == int(f):
-			return Result.success(int(f))
-		return Result.failure("%s 必须为整数（不允许小数）" % path)
-	return Result.failure("%s 必须为整数" % path)
-
-static func _parse_non_negative_int_value(value, path: String) -> Result:
-	var r := _parse_int_value(value, path)
-	if not r.ok:
-		return r
-	if int(r.value) < 0:
-		return Result.failure("%s 必须 >= 0，实际: %d" % [path, int(r.value)])
-	return r
