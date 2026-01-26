@@ -116,3 +116,75 @@ static func parse_tile_placements(value, path: String, valid_rotations: Array = 
 		})
 
 	return Result.success(out)
+
+static func parse_road_grid(value, path: String, tile_size: int, valid_dirs: Array) -> Result:
+	if not (value is Array) or value.size() != tile_size:
+		return Result.failure("%s 类型错误（期望 %dx%d 数组）" % [path, tile_size, tile_size])
+	for y in range(tile_size):
+		if not (value[y] is Array) or value[y].size() != tile_size:
+			return Result.failure("%s[%d] 类型错误（期望长度=%d 的 Array）" % [path, y, tile_size])
+		for x in range(tile_size):
+			var cell = value[y][x]
+			if not (cell is Array):
+				return Result.failure("%s[%d][%d] 类型错误（期望 Array）" % [path, y, x])
+			for s in range(cell.size()):
+				var seg = cell[s]
+				if not (seg is Dictionary):
+					return Result.failure("%s[%d][%d][%d] 类型错误（期望 Dictionary）" % [path, y, x, s])
+				if not seg.has("dirs") or not (seg.get("dirs", null) is Array):
+					return Result.failure("%s[%d][%d][%d].dirs 缺失或类型错误（期望 Array[String]）" % [path, y, x, s])
+				if not seg.has("bridge") or not (seg.get("bridge", null) is bool):
+					return Result.failure("%s[%d][%d][%d].bridge 缺失或类型错误（期望 bool）" % [path, y, x, s])
+				var dirs: Array = seg.get("dirs", [])
+				for d in dirs:
+					if not (d is String) or not valid_dirs.has(str(d)):
+						return Result.failure("%s[%d][%d][%d].dirs 含非法方向: %s" % [path, y, x, s, str(d)])
+	return Result.success(value)
+
+static func parse_drink_sources(value, path: String) -> Result:
+	if not (value is Array):
+		return Result.failure("%s 类型错误（期望 Array[Dictionary]）" % path)
+	var out: Array[Dictionary] = []
+	for i in range(value.size()):
+		var item = value[i]
+		if not (item is Dictionary):
+			return Result.failure("%s[%d] 类型错误（期望 Dictionary）" % [path, i])
+		if not item.has("pos") or not item.has("type"):
+			return Result.failure("%s[%d] 缺少字段 pos/type" % [path, i])
+		var pos_read := parse_vec2i(item.get("pos", null), "%s[%d].pos" % [path, i])
+		if not pos_read.ok:
+			return pos_read
+		var t = item.get("type", null)
+		if not (t is String) or str(t).strip_edges().is_empty():
+			return Result.failure("%s[%d].type 类型错误或为空（期望非空 String）" % [path, i])
+		out.append({"pos": pos_read.value, "type": str(t).strip_edges()})
+	return Result.success(out)
+
+static func parse_printed_structures(value, path: String, valid_rotations: Array) -> Result:
+	if not (value is Array):
+		return Result.failure("%s 类型错误（期望 Array[Dictionary]）" % path)
+	var out: Array[Dictionary] = []
+	for i in range(value.size()):
+		var item = value[i]
+		if not (item is Dictionary):
+			return Result.failure("%s[%d] 类型错误（期望 Dictionary）" % [path, i])
+		if not item.has("piece_id") or not item.has("anchor") or not item.has("rotation"):
+			return Result.failure("%s[%d] 缺少字段 piece_id/anchor/rotation" % [path, i])
+		var pid = item.get("piece_id", null)
+		if not (pid is String) or str(pid).strip_edges().is_empty():
+			return Result.failure("%s[%d].piece_id 类型错误或为空（期望非空 String）" % [path, i])
+		var anchor_read := parse_vec2i(item.get("anchor", null), "%s[%d].anchor" % [path, i])
+		if not anchor_read.ok:
+			return anchor_read
+		var rot_read := parse_int(item.get("rotation", null), "%s[%d].rotation" % [path, i])
+		if not rot_read.ok:
+			return rot_read
+		var rot: int = int(rot_read.value)
+		if not valid_rotations.has(rot):
+			return Result.failure("%s[%d].rotation 旋转角非法: %d" % [path, i, rot])
+		var struct_dict: Dictionary = item.duplicate(true)
+		struct_dict["piece_id"] = str(pid).strip_edges()
+		struct_dict["anchor"] = anchor_read.value
+		struct_dict["rotation"] = rot
+		out.append(struct_dict)
+	return Result.success(out)
