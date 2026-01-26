@@ -83,6 +83,7 @@
 - 2026-01-27：拆分 `RangeUtils`：`core/utils/range_utils.gd` 保留对外 API wrapper，road/air 实现分别落在 `range_utils_road.gd`/`range_utils_air.gd`（降低单文件体积，便于后续进一步拆分/维护）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：拆分 `TrainSlotUsage`：`core/rules/employee_rules/train_slot_usage.gd` 保留对外 API wrapper，完整实现移至 `train_slot_usage_impl.gd`（降低单文件体积，便于按“round_state 存储/培训员选择/slot 分配”继续拆分）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：拆分 `MarketingSettlementHelpers`：`core/rules/phase/marketing/settlement_helpers.gd` 保留 class_name + 对外 API wrapper，完整实现移至 `settlement_helpers_impl.gd`（降低单文件体积，便于按“到期处理/需求写入/里程碑 effects”继续拆分）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：将 `PieceDef.from_dict(...)` 的“严格解析/校验”抽离到 `core/map/piece_def_parser.gd`，`piece_def.gd` 仅保留对象构建与核心方法（缩短超长脚本，降低 map 数据模型与解析耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -102,7 +103,7 @@
   - 将大量 debug 命令串在一个文件中；后续继续加 debug 命令时容易进一步膨胀。
 - `core/engine/game_engine.gd`（~512 LOC）
   - 引擎主体 + rewind 辅助查询 + EventBus.history 重建桥接逻辑都在一起。
-- `core/map/piece_def.gd`（~354 LOC）、`core/map/tile_def.gd`（~262 LOC）、`core/map/map_def.gd`（~311 LOC）
+- `core/map/piece_def.gd`（~275 LOC；（已整改 2026-01-27）解析逻辑抽离到 `piece_def_parser.gd`）、`core/map/tile_def.gd`（~262 LOC）、`core/map/map_def.gd`（~311 LOC）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
 - 其他超过 ~300 行的文件：
   - `core/engine/game_engine/modules_v2.gd`、`core/rules/phase/payday_settlement.gd`、`core/rules/drinks_procurement.gd`、`core/rules/phase/marketing/settlement_helpers_impl.gd`、`core/rules/employee_rules/train_slot_usage_impl.gd`、`core/actions/action_registry.gd`、`core/engine/game_engine/auto_advance.gd`
@@ -351,7 +352,8 @@
 | `core/map/map_utils.gd` | 239 | 0 | 0 |  |
 | `core/map/marketing_placement_query.gd` | 250 | 1 | 0 |  |
 | `core/map/parse_helpers.gd` | 215 | 0 | 0 |  |
-| `core/map/piece_def.gd` | 354 | 2 | 0 |  |
+| `core/map/piece_def.gd` | 275 | 2 | 0 |  |
+| `core/map/piece_def_parser.gd` | 125 | 2 | 0 |  |
 | `core/map/piece_registry.gd` | 67 | 2 | 0 |  |
 | `core/map/placement_validator/garden_attachment.gd` | 124 | 2 | 0 |  |
 | `core/map/placement_validator/map_access.gd` | 40 | 0 | 0 |  |
@@ -554,7 +556,8 @@
 - `core/map/map_utils.gd`：中等体量；后续可按重构优先级处理
 - `core/map/marketing_placement_query.gd`：中等体量；后续可按重构优先级处理
 - `core/map/parse_helpers.gd`：（已部分整改 2026-01-26）扩展 `parse_vec2i_array`/`parse_rotation_array` 并用于 `TileDef`/`PieceDef`；（已整改 2026-01-26）新增 `parse_tile_placements(...)` 并用于 `MapDef`/`MapOptionDef`；（已整改 2026-01-26）新增 `parse_road_grid(...)`/`parse_drink_sources(...)`/`parse_printed_structures(...)` 并用于 `TileDef`；（已整改 2026-01-26）新增 `parse_footprint_mask(...)` 并用于 `PieceDef`，进一步收敛地图解析样板代码
-- `core/map/piece_def.gd`：（已部分整改 2026-01-26）旋转数组/入口点解析已改为复用 `MapParseHelpers`（减少重复 helper）；（已整改 2026-01-26）footprint_mask/anchor/garden_extension_size/allowed_on/forbidden_layers 解析改为直接使用 `MapParseHelpers`，并移除自带 `_parse_*` 解析函数（继续收敛解析样板）；仍为超长脚本（维护成本高）；建议按职责拆分
+- `core/map/piece_def.gd`：（已部分整改 2026-01-26）解析样板已开始收敛到 `MapParseHelpers`；（已整改 2026-01-27）将 `from_dict(...)` 的严格解析抽离到 `piece_def_parser.gd`，本文件更聚焦于数据模型/查询/校验；体积已下降但仍可继续按“工厂方法/序列化/调试方法”等职责拆分
+- `core/map/piece_def_parser.gd`：（已新增 2026-01-27）PieceDef 的 Dictionary 严格解析/校验（用于缩短 `piece_def.gd` 并集中维护错误信息与字段规则）
 - `core/map/piece_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/placement_validator/garden_attachment.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/placement_validator/map_access.gd`：未发现明显结构问题（小文件/职责相对单一）

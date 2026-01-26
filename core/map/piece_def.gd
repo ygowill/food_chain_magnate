@@ -9,7 +9,7 @@ var display_name: String = ""
 var category: String = "structure"  # "structure", "marketing", "terrain"
 
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
-const MapParseHelpersClass = preload("res://core/map/parse_helpers.gd")
+const PieceDefParserClass = preload("res://core/map/piece_def_parser.gd")
 const _VALID_ROTATIONS = MapUtilsClass.VALID_ROTATIONS
 
 # === 占地定义 ===
@@ -121,107 +121,28 @@ func to_dict() -> Dictionary:
 	}
 
 static func from_dict(data: Dictionary) -> Result:
-	if not (data is Dictionary):
-		return Result.failure("PieceDef.from_dict: data 类型错误（期望 Dictionary）")
-
-	var required_keys := [
-		"id",
-		"display_name",
-		"category",
-		"footprint_mask",
-		"anchor",
-		"allowed_rotations",
-		"mirror_allowed",
-		"must_be_on_empty",
-		"must_touch_road",
-		"allowed_on",
-		"forbidden_layers",
-		"entrance_type",
-		"entrance_points",
-		"is_house",
-		"can_have_garden",
-		"garden_extension_size",
-	]
-	for key in required_keys:
-		if not data.has(key):
-			return Result.failure("PieceDef 缺少字段: %s" % key)
-
-	var id_val = data.get("id", null)
-	if not (id_val is String) or str(id_val).strip_edges().is_empty():
-		return Result.failure("PieceDef.id 类型错误或为空（期望非空 String）")
-	var display_name_val = data.get("display_name", null)
-	if not (display_name_val is String) or str(display_name_val).strip_edges().is_empty():
-		return Result.failure("PieceDef.display_name 类型错误或为空（期望非空 String）")
-	var category_val = data.get("category", null)
-	if not (category_val is String) or str(category_val).strip_edges().is_empty():
-		return Result.failure("PieceDef.category 类型错误或为空（期望非空 String）")
-
-	var footprint_val = data.get("footprint_mask", null)
-	var footprint_read := MapParseHelpersClass.parse_footprint_mask(footprint_val, "PieceDef.footprint_mask")
-	if not footprint_read.ok:
-		return footprint_read
-
-	var anchor_read := MapParseHelpersClass.parse_vec2i(data.get("anchor", null), "PieceDef.anchor")
-	if not anchor_read.ok:
-		return anchor_read
-
-	var rotations_read := MapParseHelpersClass.parse_rotation_array(data.get("allowed_rotations", null), "PieceDef.allowed_rotations", _VALID_ROTATIONS)
-	if not rotations_read.ok:
-		return rotations_read
-
-	var mirror_val = data.get("mirror_allowed", null)
-	if not (mirror_val is bool):
-		return Result.failure("PieceDef.mirror_allowed 类型错误（期望 bool）")
-	var must_be_on_empty_val = data.get("must_be_on_empty", null)
-	if not (must_be_on_empty_val is bool):
-		return Result.failure("PieceDef.must_be_on_empty 类型错误（期望 bool）")
-	var must_touch_road_val = data.get("must_touch_road", null)
-	if not (must_touch_road_val is bool):
-		return Result.failure("PieceDef.must_touch_road 类型错误（期望 bool）")
-
-	var allowed_on_read := MapParseHelpersClass.parse_string_array(data.get("allowed_on", null), "PieceDef.allowed_on", true)
-	if not allowed_on_read.ok:
-		return allowed_on_read
-	var forbidden_layers_read := MapParseHelpersClass.parse_string_array(data.get("forbidden_layers", null), "PieceDef.forbidden_layers", false)
-	if not forbidden_layers_read.ok:
-		return forbidden_layers_read
-
-	var entrance_type_val = data.get("entrance_type", null)
-	if not (entrance_type_val is String) or str(entrance_type_val).strip_edges().is_empty():
-		return Result.failure("PieceDef.entrance_type 类型错误或为空（期望非空 String）")
-
-	var entrance_points_read := MapParseHelpersClass.parse_vec2i_array(data.get("entrance_points", null), "PieceDef.entrance_points")
-	if not entrance_points_read.ok:
-		return entrance_points_read
-
-	var is_house_val = data.get("is_house", null)
-	if not (is_house_val is bool):
-		return Result.failure("PieceDef.is_house 类型错误（期望 bool）")
-	var can_have_garden_val = data.get("can_have_garden", null)
-	if not (can_have_garden_val is bool):
-		return Result.failure("PieceDef.can_have_garden 类型错误（期望 bool）")
-
-	var garden_size_read := MapParseHelpersClass.parse_vec2i(data.get("garden_extension_size", null), "PieceDef.garden_extension_size")
-	if not garden_size_read.ok:
-		return garden_size_read
+	var read := PieceDefParserClass.parse_piece_def_dict(data)
+	if not read.ok:
+		return read
+	var parsed: Dictionary = read.value
 
 	var piece := PieceDef.new()
-	piece.id = str(id_val).strip_edges()
-	piece.display_name = str(display_name_val).strip_edges()
-	piece.category = str(category_val).strip_edges()
-	piece.footprint_mask = footprint_read.value
-	piece.anchor = anchor_read.value
-	piece.allowed_rotations = rotations_read.value
-	piece.mirror_allowed = bool(mirror_val)
-	piece.must_be_on_empty = bool(must_be_on_empty_val)
-	piece.must_touch_road = bool(must_touch_road_val)
-	piece.allowed_on = allowed_on_read.value
-	piece.forbidden_layers = forbidden_layers_read.value
-	piece.entrance_type = str(entrance_type_val).strip_edges()
-	piece.entrance_points = entrance_points_read.value
-	piece.is_house = bool(is_house_val)
-	piece.can_have_garden = bool(can_have_garden_val)
-	piece.garden_extension_size = garden_size_read.value
+	piece.id = str(parsed.get("id", ""))
+	piece.display_name = str(parsed.get("display_name", ""))
+	piece.category = str(parsed.get("category", ""))
+	piece.footprint_mask = parsed.get("footprint_mask", [[1]])
+	piece.anchor = parsed.get("anchor", Vector2i.ZERO)
+	piece.allowed_rotations = parsed.get("allowed_rotations", Array(_VALID_ROTATIONS, TYPE_INT, "", null))
+	piece.mirror_allowed = bool(parsed.get("mirror_allowed", false))
+	piece.must_be_on_empty = bool(parsed.get("must_be_on_empty", true))
+	piece.must_touch_road = bool(parsed.get("must_touch_road", true))
+	piece.allowed_on = parsed.get("allowed_on", ["ground"])
+	piece.forbidden_layers = parsed.get("forbidden_layers", [])
+	piece.entrance_type = str(parsed.get("entrance_type", ""))
+	piece.entrance_points = parsed.get("entrance_points", [])
+	piece.is_house = bool(parsed.get("is_house", false))
+	piece.can_have_garden = bool(parsed.get("can_have_garden", false))
+	piece.garden_extension_size = parsed.get("garden_extension_size", Vector2i(2, 1))
 
 	return Result.success(piece)
 
