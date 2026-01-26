@@ -3,6 +3,7 @@ class_name ModuleManifest
 extends RefCounted
 
 const SUPPORTED_SCHEMA_VERSION := 1
+const DataParseHelpersClass = preload("res://core/data/parse_helpers.gd")
 
 var schema_version: int = SUPPORTED_SCHEMA_VERSION
 var id: String = ""
@@ -107,27 +108,13 @@ func to_dict() -> Dictionary:
 # === 严格解析辅助（允许 JSON 数字以整值 float 表示）===
 
 static func _parse_string_required(value, path: String) -> Result:
-	if not (value is String):
-		return Result.failure("%s 类型错误（期望 String）" % path)
-	var s: String = value
-	if s.is_empty():
-		return Result.failure("%s 不能为空" % path)
-	return Result.success(s)
+	return DataParseHelpersClass.parse_string(value, path, false)
 
 static func _parse_string_allow_empty(value, path: String) -> Result:
-	if not (value is String):
-		return Result.failure("%s 类型错误（期望 String）" % path)
-	return Result.success(str(value))
+	return DataParseHelpersClass.parse_string(value, path, true)
 
 static func _parse_int_required(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
-		return Result.success(int(f))
-	return Result.failure("%s 类型错误（期望整数）" % path)
+	return DataParseHelpersClass.parse_int(value, path)
 
 static func _parse_int_optional(value, path: String) -> Result:
 	if value == null:
@@ -137,16 +124,4 @@ static func _parse_int_optional(value, path: String) -> Result:
 static func _parse_string_array_optional(value, path: String) -> Result:
 	if value == null:
 		return Result.success([])
-	if not (value is Array):
-		return Result.failure("%s 类型错误（期望 Array[String]）" % path)
-	var any: Array = value
-	var out: Array[String] = []
-	for i in range(any.size()):
-		var item = any[i]
-		if not (item is String):
-			return Result.failure("%s[%d] 类型错误（期望 String）" % [path, i])
-		var s: String = str(item)
-		if s.is_empty():
-			return Result.failure("%s[%d] 不能为空" % [path, i])
-		out.append(s)
-	return Result.success(out)
+	return DataParseHelpersClass.parse_string_array(value, path, true)

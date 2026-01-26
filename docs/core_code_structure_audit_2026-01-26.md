@@ -38,6 +38,7 @@
 - 2026-01-26：将 `GameConfig` 的通用 `_parse_*` 改为复用 `core/state/serialization/parse_helpers.gd`，并仅保留业务专用 `_parse_reserve_cards`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `WorkingFlow` 的 `_parse_non_negative_int_value` 改为复用 `IntValueParseHelpers.parse_non_negative_int_value(...)`（保留 assert-based fail fast 语义）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `PoolBuilder` 的 `_parse_non_negative_int` 改为复用 `DataParseHelpers.parse_non_negative_int(...)`，并移除自带解析函数；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：将 `ModuleManifest` 的 `_parse_*` 改为复用 `DataParseHelpers`（减少 manifest 解析样板代码）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -308,7 +309,7 @@
 | `core/modules/v2/content_catalog.gd` | 68 | 0 | 0 |  |
 | `core/modules/v2/content_catalog_loader.gd` | 274 | 9 | 0 |  |
 | `core/modules/v2/module_dir_spec.gd` | 36 | 0 | 0 |  |
-| `core/modules/v2/module_manifest.gd` | 152 | 0 | 0 | defines:_parse_* |
+| `core/modules/v2/module_manifest.gd` | 127 | 1 | 0 | uses:DataParseHelpers |
 | `core/modules/v2/module_package_loader.gd` | 82 | 1 | 0 |  |
 | `core/modules/v2/module_plan_builder.gd` | 124 | 0 | 0 |  |
 | `core/modules/v2/pool_builder.gd` | 86 | 4 | 0 | uses:DataParseHelpers |
@@ -502,7 +503,7 @@
 - `core/modules/v2/content_catalog.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/modules/v2/content_catalog_loader.gd`：中等体量；后续可按重构优先级处理；存在一定数量的 preload 依赖
 - `core/modules/v2/module_dir_spec.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/modules/v2/module_manifest.gd`：自带 _parse_* 解析函数（重复实现可收敛）
+- `core/modules/v2/module_manifest.gd`：（已部分整改 2026-01-26）`_parse_*` 改为复用 `DataParseHelpers`（仍保留薄 wrapper 以维持 module.json 语义）
 - `core/modules/v2/module_package_loader.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/modules/v2/module_plan_builder.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/modules/v2/pool_builder.gd`：（已部分整改 2026-01-26）移除自带 `_parse_non_negative_int`，改用 `DataParseHelpers`
