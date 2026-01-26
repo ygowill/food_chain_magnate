@@ -6,12 +6,12 @@
 
 ## 快速指标（非测试脚本）
 
-- 非测试脚本：169 个，约 26,719 行（`wc -l`）
+- 非测试脚本：169 个，约 26,736 行（`wc -l`）
 - 其中：
   - `core/rules/`：45 文件 / 6,505 行
-  - `core/engine/`：27 文件 / 5,708 行
+  - `core/engine/`：27 文件 / 5,723 行
   - `core/map/`：35 文件 / 4,615 行
-  - `core/modules/`：19 文件 / 2,801 行
+  - `core/modules/`：19 文件 / 2,798 行
   - `core/state/`：14 文件 / 2,063 行
   - `core/data/`：13 文件 / 1,686 行
   - `core/debug/`：6 文件 / 1,439 行
@@ -24,6 +24,7 @@
 
 - 2026-01-26：移除 `ProductDef`/`ModuleManifest` 的“自 load 创建实例”写法，改为直接 `new()`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：新增 `ActionExecutor.apply_changes_in_place(...)` 并用于 `AutoAdvance`（避免跨文件调用私有 `_apply_changes`）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：为 `CommandRunner`/`PhaseManager` 增加公开 wrapper（`build_*`/`drain_auto_advances`/`is_settlement_scheduled`），并替换 `StepTimelineBuild`/`EventHistoryRebuild` 中跨文件调用私有 `_` 前缀方法；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -31,10 +32,10 @@
 
 下列文件普遍存在“单文件承担多个职责”的情况，阅读与修改成本显著偏高（不仅是行数问题，更是职责边界问题）：
 
-- `core/engine/game_engine/command_runner.gd`（~640 LOC）
+- `core/engine/game_engine/command_runner.gd`（~651 LOC）
   - 既做命令执行主流程，又做事件构建、auto-advance 驱动、不变量校验、checkpoint 写入、EventBus 发射等。
   - 事件构建逻辑里包含大量 phase 特例（如 Dinnertime/Payday/Marketing 的 report 与拆分事件），属于“日志/展示语义”，容易随着 UI 需求膨胀而继续变长。
-- `core/engine/game_engine/step_timeline_build.gd`（~631 LOC）
+- `core/engine/game_engine/step_timeline_build.gd`（~630 LOC）
   - 主要是“回放/日志时间线”的语义构建，逻辑复杂且强依赖事件归属规则（phase_segment、step_index、进入/离开阶段的事件归属等）。
   - 这类逻辑更像 UI/回放子系统的“派生视图构建”，放在 core/engine 内会让 engine 边界持续被拉宽。
 - `core/rules/phase/dinnertime_settlement.gd`（~536 LOC）
@@ -96,7 +97,7 @@
 ### 2.3 事件构建 / 时间线构建存在交叉引用与重复
 
 表现：
-- `core/engine/game_engine/step_timeline_build.gd` 直接调用 `CommandRunnerClass._build_*`（私有前缀函数）以及 `engine.phase_manager._is_settlement_scheduled(...)`（私有前缀方法）。
+- （已整改 2026-01-26）`core/engine/game_engine/step_timeline_build.gd` 曾直接调用 `CommandRunnerClass._build_*`（私有前缀函数）以及 `engine.phase_manager._is_settlement_scheduled(...)`（私有前缀方法）；现改为 `CommandRunnerClass.build_*` 与 `PhaseManager.is_settlement_scheduled(...)` 公共 wrapper。
 - `core/engine/game_engine/event_timeline_build.gd`、`core/engine/game_engine/step_timeline_build.gd`、`core/engine/game_engine/initializer.gd` 都会构建/注入 `GAME_STARTED` 等事件数据（相近但不完全一致）。
 
 风险：
@@ -140,9 +141,9 @@
 ### 3.4 私有方法/私有 helper 的跨文件调用（封装破坏）
 
 典型点：
-- `core/engine/game_engine/step_timeline_build.gd` 调用：
-  - `CommandRunnerClass._build_player_cash_changed_events(...)`、`CommandRunnerClass._build_milestone_achieved_events(...)`
-  - `engine.phase_manager._is_settlement_scheduled(...)`
+- `core/engine/game_engine/step_timeline_build.gd` / `core/engine/game_engine/event_history_rebuild.gd`：
+  - （已整改 2026-01-26）已改用 `CommandRunnerClass.build_*` / `CommandRunnerClass.drain_auto_advances(...)` 等公开 wrapper，不再跨文件调用 `_build_*` / `_drain_auto_advances`。
+  - （已整改 2026-01-26）已改用 `PhaseManager.is_settlement_scheduled(...)`，不再跨文件调用 `_is_settlement_scheduled`。
 - `core/engine/game_engine/auto_advance.gd` 调用：
   - （已整改 2026-01-26）原先调用 `executor._apply_changes(...)`；已改为 `executor.apply_changes_in_place(...)`（行为不变，但避免跨文件访问私有方法）
 
@@ -233,16 +234,16 @@
 | `core/engine/game_engine/archive.gd` | 127 | 1 | 0 | uses:GameLog |
 | `core/engine/game_engine/auto_advance.gd` | 304 | 1 | 0 |  |
 | `core/engine/game_engine/checkpoints.gd` | 55 | 0 | 0 | uses:GameLog,uses:DebugFlags |
-| `core/engine/game_engine/command_runner.gd` | 640 | 1 | 0 | uses:EventBus,uses:GameLog,uses:DebugFlags,uses:OS.has_feature |
+| `core/engine/game_engine/command_runner.gd` | 651 | 1 | 0 | uses:EventBus,uses:GameLog,uses:DebugFlags,uses:OS.has_feature |
 | `core/engine/game_engine/diagnostics.gd` | 48 | 0 | 0 |  |
-| `core/engine/game_engine/event_history_rebuild.gd` | 105 | 1 | 0 | uses:EventBus,uses:OS.has_feature |
+| `core/engine/game_engine/event_history_rebuild.gd` | 104 | 1 | 0 | uses:EventBus,uses:OS.has_feature |
 | `core/engine/game_engine/event_timeline_build.gd` | 113 | 1 | 0 | uses:EventBus |
 | `core/engine/game_engine/initializer.gd` | 266 | 9 | 0 | uses:EventBus,uses:GameLog |
 | `core/engine/game_engine/invariants.gd` | 259 | 1 | 0 |  |
 | `core/engine/game_engine/loader.gd` | 170 | 2 | 0 | uses:EventBus,uses:GameLog,defines:_parse_* |
 | `core/engine/game_engine/modules_v2.gd` | 413 | 22 | 0 |  |
 | `core/engine/game_engine/replay.gd` | 202 | 1 | 0 | uses:GameLog,uses:OS.has_feature |
-| `core/engine/game_engine/step_timeline_build.gd` | 631 | 4 | 0 | uses:EventBus,uses:OS.has_feature |
+| `core/engine/game_engine/step_timeline_build.gd` | 630 | 4 | 0 | uses:EventBus,uses:OS.has_feature |
 | `core/engine/game_engine.gd` | 465 | 13 | 0 | uses:EventBus,uses:OS.has_feature |
 | `core/engine/phase_manager/advance_phase.gd` | 240 | 2 | 0 | uses:GameLog |
 | `core/engine/phase_manager/advance_sub_phase.gd` | 279 | 2 | 0 | uses:GameLog |
@@ -252,7 +253,7 @@
 | `core/engine/phase_manager/order_config.gd` | 152 | 1 | 0 |  |
 | `core/engine/phase_manager/settlement_triggers.gd` | 127 | 2 | 0 |  |
 | `core/engine/phase_manager/working_flow.gd` | 166 | 3 | 0 | defines:_parse_* |
-| `core/engine/phase_manager.gd` | 299 | 10 | 0 |  |
+| `core/engine/phase_manager.gd` | 301 | 10 | 0 |  |
 | `core/map/house_number_manager.gd` | 233 | 0 | 0 |  |
 | `core/map/map_baker/bake.gd` | 80 | 3 | 0 |  |
 | `core/map/map_baker/boundary_index.gd` | 22 | 0 | 0 |  |
@@ -428,7 +429,7 @@
 - `core/engine/game_engine/loader.gd`：依赖 EventBus（引擎与日志/UI 耦合）；依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
 - `core/engine/game_engine/modules_v2.gd`：超长脚本（维护成本高）；建议按职责拆分；preload 依赖较多（耦合偏高）；函数数量较多，可能包含多职责/可考虑拆 helper
 - `core/engine/game_engine/replay.gd`：中等体量；后续可按重构优先级处理；含调试/发布差异分支（DebugFlags/OS.has_feature）
-- `core/engine/game_engine/step_timeline_build.gd`：时间线/日志“派生视图”构建逻辑很重，且调用 CommandRunner/PhaseManager 的私有前缀方法（封装破坏）；超长脚本（维护成本高）；建议按职责拆分；依赖 EventBus（引擎与日志/UI 耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
+- `core/engine/game_engine/step_timeline_build.gd`：时间线/日志“派生视图”构建逻辑很重；超长脚本（维护成本高）；建议按职责拆分；依赖 EventBus（引擎与日志/UI 耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）；（已整改 2026-01-26：不再跨文件调用 CommandRunner/PhaseManager 的私有 `_` 前缀方法）
 - `core/engine/phase_manager.gd`：偏长脚本；建议关注职责边界/可读性；preload 依赖较多（耦合偏高）；函数数量较多，可能包含多职责/可考虑拆 helper
 - `core/engine/phase_manager/advance_phase.gd`：中等体量；后续可按重构优先级处理；依赖 GameLog 全局单例（耦合）
 - `core/engine/phase_manager/advance_sub_phase.gd`：中等体量；后续可按重构优先级处理；依赖 GameLog 全局单例（耦合）

@@ -125,6 +125,18 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 	all_warnings.append_array(auto_r.warnings)
 	return Result.success(engine.state).with_warnings(all_warnings)
 
+static func build_player_cash_changed_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
+	return _build_player_cash_changed_events(old_state, new_state, command)
+
+static func build_milestone_achieved_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
+	return _build_milestone_achieved_events(old_state, new_state, command)
+
+static func build_phase_change_events(old_state: GameState, new_state: GameState) -> Array[Dictionary]:
+	return _build_phase_change_events(old_state, new_state)
+
+static func drain_auto_advances(engine: GameEngine, state_in: GameState) -> Result:
+	return _drain_auto_advances(engine, state_in)
+
 static func _build_milestone_achieved_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	if old_state == null or new_state == null:

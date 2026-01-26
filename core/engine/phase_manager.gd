@@ -165,6 +165,9 @@ func get_effect_registry():
 func validate_required_primary_settlements() -> Result:
 	return SettlementTriggersClass.validate_required_primary_settlements(self)
 
+func is_settlement_scheduled(phase: int, point: int) -> bool:
+	return SettlementTriggersClass.is_settlement_scheduled(self, phase, point)
+
 func _is_settlement_scheduled(phase: int, point: int) -> bool:
 	return SettlementTriggersClass.is_settlement_scheduled(self, phase, point)
 

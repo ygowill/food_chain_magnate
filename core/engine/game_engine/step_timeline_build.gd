@@ -147,8 +147,8 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 
 		# 命令本体事件（归属到 command step）
 		var command_events := executor.generate_events(old_state, state_in, cmd)
-		var cash_events_cmd := CommandRunnerClass._build_player_cash_changed_events(old_state, state_in, cmd)
-		var milestone_events_cmd := CommandRunnerClass._build_milestone_achieved_events(old_state, state_in, cmd)
+		var cash_events_cmd := CommandRunnerClass.build_player_cash_changed_events(old_state, state_in, cmd)
+		var milestone_events_cmd := CommandRunnerClass.build_milestone_achieved_events(old_state, state_in, cmd)
 		milestone_events_cmd = _filter_out_first_throw_away_milestone_events(milestone_events_cmd, pending_cleanup_throw_away_milestone_events)
 		# 若命令本身发生了 phase 切换（如 advance_phase），则：
 		# - PHASE_CHANGED 之前的事件（含 *_REPORT）归属到“命令前”的 step（旧阶段）
@@ -182,10 +182,10 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 			var new_enter_scheduled := false
 			if engine.phase_manager != null:
 				var old_enum := PhaseDefsClass.get_phase_enum(old_phase_name.strip_edges())
-				if old_enum != -1 and engine.phase_manager._is_settlement_scheduled(old_enum, SettlementRegistryClass.Point.EXIT):
+				if old_enum != -1 and engine.phase_manager.is_settlement_scheduled(old_enum, SettlementRegistryClass.Point.EXIT):
 					old_exit_scheduled = true
 				var new_enum := PhaseDefsClass.get_phase_enum(new_phase_name.strip_edges())
-				if new_enum != -1 and engine.phase_manager._is_settlement_scheduled(new_enum, SettlementRegistryClass.Point.ENTER):
+				if new_enum != -1 and engine.phase_manager.is_settlement_scheduled(new_enum, SettlementRegistryClass.Point.ENTER):
 					new_enter_scheduled = true
 
 			var after_exit_settlements: GameState = null
@@ -200,10 +200,10 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 			var milestone_events_new: Array[Dictionary] = []
 
 			if after_exit_settlements != null:
-				cash_events_old = CommandRunnerClass._build_player_cash_changed_events(old_state, after_exit_settlements, cmd)
-				milestone_events_old = CommandRunnerClass._build_milestone_achieved_events(old_state, after_exit_settlements, cmd)
-				cash_events_new = CommandRunnerClass._build_player_cash_changed_events(after_exit_settlements, state_in, cmd)
-				milestone_events_new = CommandRunnerClass._build_milestone_achieved_events(after_exit_settlements, state_in, cmd)
+				cash_events_old = CommandRunnerClass.build_player_cash_changed_events(old_state, after_exit_settlements, cmd)
+				milestone_events_old = CommandRunnerClass.build_milestone_achieved_events(old_state, after_exit_settlements, cmd)
+				cash_events_new = CommandRunnerClass.build_player_cash_changed_events(after_exit_settlements, state_in, cmd)
+				milestone_events_new = CommandRunnerClass.build_milestone_achieved_events(after_exit_settlements, state_in, cmd)
 			else:
 				var to_old_segment := _should_attribute_settlement_effects_to_old_phase(engine, old_phase_name, new_phase_name)
 				if to_old_segment:
@@ -289,10 +289,10 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 
 			var phase_changed := (str(before.phase) != str(state_in.phase))
 
-			# 构建阶段/子阶段变化事件（与 CommandRunner._drain_auto_advances 对齐）
-			var phase_events := CommandRunnerClass._build_phase_change_events(before, state_in)
-			var cash_events := CommandRunnerClass._build_player_cash_changed_events(before, state_in, Command.create_system("auto_advance"))
-			var milestone_events := CommandRunnerClass._build_milestone_achieved_events(before, state_in, cmd)
+			# 构建阶段/子阶段变化事件（与 CommandRunner.drain_auto_advances 对齐）
+			var phase_events := CommandRunnerClass.build_phase_change_events(before, state_in)
+			var cash_events := CommandRunnerClass.build_player_cash_changed_events(before, state_in, Command.create_system("auto_advance"))
+			var milestone_events := CommandRunnerClass.build_milestone_achieved_events(before, state_in, cmd)
 			milestone_events = _filter_out_first_throw_away_milestone_events(milestone_events, pending_cleanup_throw_away_milestone_events)
 
 			if phase_changed:
@@ -346,10 +346,10 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 				var new_enter_scheduled := false
 				if engine.phase_manager != null:
 					var old_enum := PhaseDefsClass.get_phase_enum(old_phase_name.strip_edges())
-					if old_enum != -1 and engine.phase_manager._is_settlement_scheduled(old_enum, SettlementRegistryClass.Point.EXIT):
+					if old_enum != -1 and engine.phase_manager.is_settlement_scheduled(old_enum, SettlementRegistryClass.Point.EXIT):
 						old_exit_scheduled = true
 					var new_enum := PhaseDefsClass.get_phase_enum(new_phase_name.strip_edges())
-					if new_enum != -1 and engine.phase_manager._is_settlement_scheduled(new_enum, SettlementRegistryClass.Point.ENTER):
+					if new_enum != -1 and engine.phase_manager.is_settlement_scheduled(new_enum, SettlementRegistryClass.Point.ENTER):
 						new_enter_scheduled = true
 
 				var after_exit_settlements: GameState = null
@@ -365,10 +365,10 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 
 				if after_exit_settlements != null:
 					var auto_cmd := Command.create_system("auto_advance")
-					cash_events_old = CommandRunnerClass._build_player_cash_changed_events(before, after_exit_settlements, auto_cmd)
-					milestone_events_old = CommandRunnerClass._build_milestone_achieved_events(before, after_exit_settlements, cmd)
-					cash_events_new = CommandRunnerClass._build_player_cash_changed_events(after_exit_settlements, state_in, auto_cmd)
-					milestone_events_new = CommandRunnerClass._build_milestone_achieved_events(after_exit_settlements, state_in, cmd)
+					cash_events_old = CommandRunnerClass.build_player_cash_changed_events(before, after_exit_settlements, auto_cmd)
+					milestone_events_old = CommandRunnerClass.build_milestone_achieved_events(before, after_exit_settlements, cmd)
+					cash_events_new = CommandRunnerClass.build_player_cash_changed_events(after_exit_settlements, state_in, auto_cmd)
+					milestone_events_new = CommandRunnerClass.build_milestone_achieved_events(after_exit_settlements, state_in, cmd)
 				else:
 					var to_old_segment := _should_attribute_settlement_effects_to_old_phase(engine, old_phase_name, new_phase_name)
 					if to_old_segment:
@@ -560,11 +560,11 @@ static func _should_attribute_settlement_effects_to_old_phase(engine: GameEngine
 	var pm = engine.phase_manager
 
 	var old_enum := PhaseDefsClass.get_phase_enum(str(old_phase).strip_edges())
-	if old_enum != -1 and pm._is_settlement_scheduled(old_enum, SettlementRegistryClass.Point.EXIT):
+	if old_enum != -1 and pm.is_settlement_scheduled(old_enum, SettlementRegistryClass.Point.EXIT):
 		return true
 
 	var new_enum := PhaseDefsClass.get_phase_enum(str(new_phase).strip_edges())
-	if new_enum != -1 and pm._is_settlement_scheduled(new_enum, SettlementRegistryClass.Point.ENTER):
+	if new_enum != -1 and pm.is_settlement_scheduled(new_enum, SettlementRegistryClass.Point.ENTER):
 		return false
 
 	return false

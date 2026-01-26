@@ -52,9 +52,9 @@ static func build(engine: GameEngine, target_index: int) -> Result:
 
 		# 生成事件（与 CommandRunner.execute_command 对齐）
 		var events := executor.generate_events(replay_state, new_state, cmd)
-		events.append_array(CommandRunnerClass._build_player_cash_changed_events(replay_state, new_state, cmd))
+		events.append_array(CommandRunnerClass.build_player_cash_changed_events(replay_state, new_state, cmd))
 
-		var auto_r: Result = CommandRunnerClass._drain_auto_advances(engine, new_state)
+		var auto_r: Result = CommandRunnerClass.drain_auto_advances(engine, new_state)
 		if not auto_r.ok:
 			return Result.failure("EventHistoryRebuild: auto_advance 失败(命令 #%d): %s" % [i, auto_r.error])
 		all_warnings.append_array(auto_r.warnings)
@@ -68,7 +68,7 @@ static func build(engine: GameEngine, target_index: int) -> Result:
 			if auto_state_val is GameState:
 				new_state = auto_state_val
 
-		events.append_array(CommandRunnerClass._build_milestone_achieved_events(replay_state, new_state, cmd))
+		events.append_array(CommandRunnerClass.build_milestone_achieved_events(replay_state, new_state, cmd))
 
 		for e_val in events:
 			if not (e_val is Dictionary):
