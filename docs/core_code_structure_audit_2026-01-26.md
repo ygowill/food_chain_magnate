@@ -6,11 +6,11 @@
 
 ## 快速指标（非测试脚本）
 
-- 非测试脚本：175 个，约 26,448 行（`wc -l`）
+- 非测试脚本：175 个，约 26,447 行（`wc -l`）
 - 其中：
   - `core/rules/`：46 文件 / 6,392 行
   - `core/engine/`：29 文件 / 5,689 行
-  - `core/map/`：35 文件 / 4,615 行
+  - `core/map/`：35 文件 / 4,614 行
   - `core/modules/`：19 文件 / 2,750 行
   - `core/state/`：14 文件 / 2,063 行
   - `core/data/`：14 文件 / 1,534 行
@@ -27,6 +27,7 @@
 - 2026-01-26：为 `CommandRunner`/`PhaseManager` 增加公开 wrapper（`build_*`/`drain_auto_advances`/`is_settlement_scheduled`），并替换 `StepTimelineBuild`/`EventHistoryRebuild` 中跨文件调用私有 `_` 前缀方法；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：新增 `GameStartedEventBuild`，统一 `initializer`/`event_timeline_build`/`step_timeline_build` 构建 `GAME_STARTED` 的字段与 state_hash 计算方式（并在缺少初始 checkpoint 时降级为 warning）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：为 `GameEngine` 增加公开 wrapper（`ensure_initialized`/`truncate_future_history`），并替换 `CommandRunner`/`EventHistoryRebuild`/`EventTimelineBuild`/`StepTimelineBuild` 中跨文件调用私有 `_ensure_initialized`/`_truncate_future_history`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：移除 `MapOptionDef` 的自 preload 创建实例（`_SELF_SCRIPT.new()`），改为直接 `MapOptionDef.new()`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将“内建动作注册”从 `core/engine/game_engine/action_setup.gd` 迁移到 `gameplay/action_setup.gd`；core `ActionSetup` 改为委托 provider（移除 core 内对 `gameplay/actions/*.gd` 的 preload）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：为 core `ActionSetup` 增加显式注入点 `set_provider_path(...)`，允许在不修改 core 的情况下替换动作注册 provider；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：引入 `Result.error_code`（含 `MISSING_PARAMS`），并在 `ActionExecutor.require_*`/`ActionRegistry.get_player_initiatable_actions` 中使用（保留旧字符串前缀兼容）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
@@ -293,7 +294,7 @@
 | `core/map/map_baker/tile_baking.gd` | 280 | 0 | 0 |  |
 | `core/map/map_context_builder.gd` | 21 | 1 | 0 |  |
 | `core/map/map_def.gd` | 354 | 2 | 0 | defines:_parse_* |
-| `core/map/map_option_def.gd` | 177 | 3 | 0 | defines:_parse_* |
+| `core/map/map_option_def.gd` | 175 | 3 | 0 | defines:_parse_* |
 | `core/map/map_runtime/baked_map.gd` | 160 | 2 | 0 | defines:_parse_* |
 | `core/map/map_runtime/cells.gd` | 95 | 1 | 0 |  |
 | `core/map/map_runtime/coords.gd` | 59 | 0 | 0 |  |
@@ -487,7 +488,7 @@
 - `core/map/map_baker/tile_baking.gd`：中等体量；后续可按重构优先级处理；存在较多 assert；注意与 Result/fail-fast 策略一致性
 - `core/map/map_context_builder.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/map_def.gd`：偏长脚本；建议关注职责边界/可读性；自带 _parse_* 解析函数（重复实现可收敛）
-- `core/map/map_option_def.gd`：自带 _parse_* 解析函数（重复实现可收敛）
+- `core/map/map_option_def.gd`：（已部分整改 2026-01-26）移除 `_SELF_SCRIPT.new()` 自 preload 创建实例，改为直接 `MapOptionDef.new()`；仍自带 _parse_* 解析函数（重复实现可收敛）
 - `core/map/map_runtime/baked_map.gd`：自带 _parse_* 解析函数（重复实现可收敛）
 - `core/map/map_runtime/cells.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/map_runtime/coords.gd`：未发现明显结构问题（小文件/职责相对单一）

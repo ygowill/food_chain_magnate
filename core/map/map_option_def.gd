@@ -10,7 +10,6 @@ const MapParseHelpersClass = preload("res://core/map/parse_helpers.gd")
 
 const _VALID_LAYOUT_MODES: Array[String] = ["random_all_tiles", "fixed"]
 const _VALID_ROTATIONS = MapUtilsClass.VALID_ROTATIONS
-const _SELF_SCRIPT = preload("res://core/map/map_option_def.gd")
 
 var id: String = ""
 var display_name: String = ""
@@ -105,7 +104,7 @@ static func from_dict(data: Dictionary) -> Result:
 		if tiles_read.value.is_empty():
 			return Result.failure("MapOptionDef.tiles 不能为空（layout_mode=fixed）")
 
-	var opt := _SELF_SCRIPT.new()
+	var opt := MapOptionDef.new()
 	opt.id = str(id_val).strip_edges()
 	opt.display_name = str(display_name_val).strip_edges()
 	opt.min_players = min_players
