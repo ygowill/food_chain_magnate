@@ -9,7 +9,7 @@ var tags: Array[String] = []
 var starting_inventory: int = 0
 
 static func from_dict(data: Dictionary) -> Result:
-	var def = (load("res://core/data/product_def.gd") as Script).new()
+	var def := ProductDef.new()
 
 	var id_read := _parse_string(data.get("id", null), "ProductDef.id", false)
 	if not id_read.ok:

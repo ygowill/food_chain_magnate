@@ -29,10 +29,7 @@ static func load_from_file(path: String) -> Result:
 	return from_json(json)
 
 static func from_dict(data: Dictionary) -> Result:
-	var script = load("res://core/modules/v2/module_manifest.gd")
-	if script == null:
-		return Result.failure("内部错误：无法加载 module_manifest.gd")
-	var out = script.new()
+	var out := ModuleManifest.new()
 
 	var schema_read := _parse_int_required(data.get("schema_version", null), "schema_version")
 	if not schema_read.ok:
