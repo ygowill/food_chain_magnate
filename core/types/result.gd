@@ -3,10 +3,17 @@
 class_name Result
 extends RefCounted
 
+# 结构化错误码（避免用错误字符串做控制流）
+enum ErrorCode {
+	NONE = 0,
+	MISSING_PARAMS = 1,
+}
+
 # 核心属性
 var ok: bool = false
 var value = null  # 成功时的返回值
 var error: String = ""  # 失败时的错误信息
+var error_code: int = ErrorCode.NONE
 var warnings: Array[String] = []
 
 # 静态工厂方法：创建成功结果
@@ -17,10 +24,11 @@ static func success(val = null) -> Result:
 	return r
 
 # 静态工厂方法：创建失败结果
-static func failure(err: String) -> Result:
+static func failure(err: String, code: int = 0) -> Result:
 	var r := Result.new()
 	r.ok = false
 	r.error = err
+	r.error_code = int(code)
 	return r
 
 # 添加警告（链式调用）
@@ -52,6 +60,7 @@ func to_dict() -> Dictionary:
 		"ok": ok,
 		"value": value,
 		"error": error,
+		"error_code": error_code,
 		"warnings": warnings
 	}
 
@@ -61,6 +70,7 @@ static func from_dict(data: Dictionary) -> Result:
 	r.ok = data.get("ok", false)
 	r.value = data.get("value", null)
 	r.error = data.get("error", "")
+	r.error_code = int(data.get("error_code", 0))
 	r.warnings = Array(data.get("warnings", []), TYPE_STRING, "", null)
 	return r
 

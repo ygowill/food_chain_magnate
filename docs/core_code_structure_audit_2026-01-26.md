@@ -6,7 +6,7 @@
 
 ## 快速指标（非测试脚本）
 
-- 非测试脚本：169 个，约 26,668 行（`wc -l`）
+- 非测试脚本：169 个，约 26,683 行（`wc -l`）
 - 其中：
   - `core/rules/`：45 文件 / 6,505 行
   - `core/engine/`：27 文件 / 5,655 行
@@ -27,6 +27,7 @@
 - 2026-01-26：为 `CommandRunner`/`PhaseManager` 增加公开 wrapper（`build_*`/`drain_auto_advances`/`is_settlement_scheduled`），并替换 `StepTimelineBuild`/`EventHistoryRebuild` 中跨文件调用私有 `_` 前缀方法；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将“内建动作注册”从 `core/engine/game_engine/action_setup.gd` 迁移到 `gameplay/action_setup.gd`；core `ActionSetup` 改为委托 provider（移除 core 内对 `gameplay/actions/*.gd` 的 preload）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：为 core `ActionSetup` 增加显式注入点 `set_provider_path(...)`，允许在不修改 core 的情况下替换动作注册 provider；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：引入 `Result.error_code`（含 `MISSING_PARAMS`），并在 `ActionExecutor.require_*`/`ActionRegistry.get_player_initiatable_actions` 中使用（保留旧字符串前缀兼容）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -131,14 +132,14 @@
 ### 3.3 ActionRegistry 混入 UI 语义 + 字符串错误消息作为控制流
 
 - `core/actions/action_registry.gd`
-  - `get_player_initiatable_actions(...)` 通过判断 `Result.error` 是否 `begins_with("缺少参数:")` 来决定 UI 是否允许“先进入面板再补参数”。
+  - （已部分整改 2026-01-26）`get_player_initiatable_actions(...)` 优先判断 `Result.error_code == Result.ErrorCode.MISSING_PARAMS`，并保留旧字符串前缀兼容（避免文案变更破坏行为）。
 
 风险：
 - 错误文案变更会破坏行为（隐式契约）；也会让 i18n/重构变难。
 
 建议（方向）：
 - 把“是否可启动”的判断从 core 移到 gameplay/ui；
-- 或在 Result 中引入结构化错误码（而非靠字符串前缀）。
+- 或在 Result 中引入结构化错误码（而非靠字符串前缀）（已部分整改 2026-01-26）。
 
 ### 3.4 私有方法/私有 helper 的跨文件调用（封装破坏）
 
@@ -208,8 +209,8 @@
 | path | loc | preloads | loads | flags |
 |---|---:|---:|---:|---|
 | `core/actions/action_availability_registry.gd` | 267 | 0 | 0 |  |
-| `core/actions/action_executor.gd` | 203 | 0 | 0 | defines:_parse_* |
-| `core/actions/action_registry.gd` | 320 | 0 | 0 | uses:GameLog |
+| `core/actions/action_executor.gd` | 207 | 0 | 0 | defines:_parse_* |
+| `core/actions/action_registry.gd` | 324 | 0 | 0 | uses:GameLog |
 | `core/data/employee_def/debug.gd` | 22 | 0 | 0 |  |
 | `core/data/employee_def/parser.gd` | 258 | 0 | 0 | defines:_parse_* |
 | `core/data/employee_def/serialization.gd` | 47 | 0 | 0 |  |
@@ -371,7 +372,7 @@
 | `core/state/state_updater/inventory.gd` | 91 | 0 | 0 |  |
 | `core/state/state_updater.gd` | 103 | 5 | 0 |  |
 | `core/types/command.gd` | 193 | 0 | 0 | defines:_parse_* |
-| `core/types/result.gd` | 122 | 0 | 0 |  |
+| `core/types/result.gd` | 131 | 0 | 0 |  |
 | `core/utils/catalog_registry_helpers.gd` | 40 | 0 | 0 |  |
 | `core/utils/range_utils.gd` | 352 | 2 | 0 |  |
 | `core/utils/round_state_counters.gd` | 146 | 0 | 0 |  |
@@ -385,7 +386,7 @@
 
 - `core/actions/action_availability_registry.gd`：中等体量；后续可按重构优先级处理
 - `core/actions/action_executor.gd`：中等体量；后续可按重构优先级处理；自带 _parse_* 解析函数（重复实现可收敛）
-- `core/actions/action_registry.gd`：包含 UI 语义：通过错误字符串前缀判断“可启动动作”（隐式契约）；偏长脚本；建议关注职责边界/可读性；依赖 GameLog 全局单例（耦合）
+- `core/actions/action_registry.gd`：包含 UI 语义：`get_player_initiatable_actions(...)` 判定“可启动动作”（隐式契约）；（已部分整改 2026-01-26）引入 `Result.error_code` 并优先按错误码判断，保留旧前缀兼容；偏长脚本；建议关注职责边界/可读性；依赖 GameLog 全局单例（耦合）
 
 ### data/
 

@@ -110,14 +110,14 @@ func _validate_base(state: GameState, command: Command) -> Result:
 # 获取必需参数，如果不存在返回错误
 func require_param(command: Command, key: String) -> Result:
 	if not command.params.has(key):
-		return Result.failure("缺少必需参数: %s" % key)
+		return Result.failure("缺少必需参数: %s" % key, Result.ErrorCode.MISSING_PARAMS)
 	return Result.success(command.params[key])
 
 # === 严格参数解析（Fail Fast） ===
 
 func require_array_param(command: Command, key: String) -> Result:
 	if not command.params.has(key):
-		return Result.failure("缺少参数: %s" % key)
+		return Result.failure("缺少参数: %s" % key, Result.ErrorCode.MISSING_PARAMS)
 	var value = command.params[key]
 	if not (value is Array):
 		return Result.failure("%s 必须为数组" % key)
@@ -125,7 +125,7 @@ func require_array_param(command: Command, key: String) -> Result:
 
 func require_string_param(command: Command, key: String) -> Result:
 	if not command.params.has(key):
-		return Result.failure("缺少参数: %s" % key)
+		return Result.failure("缺少参数: %s" % key, Result.ErrorCode.MISSING_PARAMS)
 	var value = command.params[key]
 	if not (value is String):
 		return Result.failure("%s 必须为字符串" % key)
@@ -147,7 +147,7 @@ func optional_string_param(command: Command, key: String, default_value: String)
 
 func require_int_param(command: Command, key: String) -> Result:
 	if not command.params.has(key):
-		return Result.failure("缺少参数: %s" % key)
+		return Result.failure("缺少参数: %s" % key, Result.ErrorCode.MISSING_PARAMS)
 	return _parse_int_value(command.params[key], key)
 
 func optional_int_param(command: Command, key: String, default_value: int) -> Result:

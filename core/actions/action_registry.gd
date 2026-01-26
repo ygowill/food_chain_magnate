@@ -240,7 +240,7 @@ func get_player_initiatable_actions(state: GameState, player_id: int) -> Array[S
 			result.append(action_id)
 			continue
 
-		if _is_missing_params_error(validate_result.error):
+		if _is_missing_params_error(validate_result):
 			var can_initiate := true
 			if executor.has_method("can_initiate"):
 				var v = executor.can_initiate(state, player_id)
@@ -251,8 +251,13 @@ func get_player_initiatable_actions(state: GameState, player_id: int) -> Array[S
 
 	return result
 
-static func _is_missing_params_error(err: String) -> bool:
-	# ActionExecutor.require_* 系列统一使用这些前缀
+static func _is_missing_params_error(r: Result) -> bool:
+	if r == null or r.ok:
+		return false
+	if int(r.error_code) == Result.ErrorCode.MISSING_PARAMS:
+		return true
+	# 兼容旧路径：部分代码仍直接返回“缺少参数:*”字符串
+	var err: String = str(r.error)
 	return err.begins_with("缺少参数:") or err.begins_with("缺少必需参数:")
 
 # 获取强制动作
