@@ -299,10 +299,11 @@ func find_phase_start_command_index() -> Result:
 
 	return Result.success(first_in_phase - 1)
 
-# 查找“当前玩家回合开始”对应的命令索引（用于 UI 的“一键回退当前玩家回合”）。
+# 查找“当前玩家在当前阶段的回合开始”对应的命令索引（用于 UI 的“一键回退当前玩家回合”）。
 # 语义：返回 target_index，用于 rewind_to_command(target_index)。
-# - 若能在 EventBus.history 找到 PLAYER_TURN_STARTED 事件，则返回该事件所在命令索引（该命令执行后即为回合开始状态）。
-# - 若找不到（例如首回合/阶段不发射 turn_started），则回退到 -1（视为对局开始）。
+# - 目标是撤销“当前玩家在当前阶段内”的操作（不跨阶段）。
+# - 仅依赖 PLAYER_TURN_STARTED 会漏掉“阶段变化但当前玩家不变”的场景（例如 OrderOfBusiness 自动进入 Working），
+#   从而把回合开始错误定位到更早的阶段（例如 Payday）。因此这里同时考虑 phase/round 变化。
 func find_current_player_turn_start_command_index() -> Result:
 	var init_check := _ensure_initialized()
 	if not init_check.ok:
@@ -317,58 +318,34 @@ func find_current_player_turn_start_command_index() -> Result:
 	if current_command_index < 0:
 		return Result.success(-1)
 
-	# 优先使用 EventBus.history（运行时与回退后均会补齐 command_index）
-	if EventBus != null and EventBus.has_method("get_history_by_type"):
-		var evs_val = EventBus.get_history_by_type(EventBus.EventType.PLAYER_TURN_STARTED)
-		if evs_val is Array:
-			var evs: Array = evs_val
-			for i in range(evs.size() - 1, -1, -1):
-				var e_val = evs[i]
-				if not (e_val is Dictionary):
-					continue
-				var e: Dictionary = e_val
-				var data_val = e.get("data", null)
-				if not (data_val is Dictionary):
-					continue
-				var data: Dictionary = data_val
+	var phase_name := str(state.phase)
+	var round_num := int(state.round_number)
 
-				var pid_val = data.get("player_id", null)
-				var ev_pid := -1
-				if pid_val is int:
-					ev_pid = int(pid_val)
-				elif pid_val is float:
-					var f: float = float(pid_val)
-					if f == int(f):
-						ev_pid = int(f)
-				elif pid_val is String and str(pid_val).is_valid_int():
-					ev_pid = int(str(pid_val))
-				if ev_pid != pid:
-					continue
+	# 目标：撤销“当前玩家在当前阶段内”的所有命令。
+	# 因此应回到“该玩家在该阶段内的第一个命令之前”的位置（而非“最近一次进入该玩家/阶段组合”的位置），
+	# 以覆盖可能存在的“临时切换当前玩家后又切回”的场景。
+	var first_cmd_in_phase_for_player := -1
+	for i in range(int(current_command_index) + 1):
+		var cmd: Command = command_history[i]
+		if cmd == null:
+			continue
+		if int(cmd.actor) != int(pid):
+			continue
+		if str(cmd.phase) != phase_name:
+			continue
+		# timestamp = round*1000 + ...（CommandRunner 写入），用于区分不同回合的同名阶段
+		if int(cmd.timestamp) >= 0 and int(int(cmd.timestamp) / 1000) != round_num:
+			continue
+		first_cmd_in_phase_for_player = i
+		break
 
-				var idx_val = data.get("command_index", null)
-				var idx := -999
-				if idx_val is int:
-					idx = int(idx_val)
-				elif idx_val is float:
-					var f2: float = float(idx_val)
-					if f2 == int(f2):
-						idx = int(f2)
-				elif idx_val is String and str(idx_val).is_valid_int():
-					idx = int(str(idx_val))
-				if idx < -1 or idx > int(current_command_index):
-					continue
+	if first_cmd_in_phase_for_player < 0:
+		# 当前阶段内该玩家尚未执行任何命令：已经位于回合开始
+		return Result.success(int(current_command_index))
 
-				return Result.success(idx)
+	return Result.success(first_cmd_in_phase_for_player - 1)
 
-	# EventBus.history 可能被清空/截断（例如 UI 日志重建、单测隔离、未来的性能优化），
-	# 此时回退按钮仍需要可用：回退到“该玩家成为当前玩家”的那条命令索引。
-	var inferred := _infer_current_player_turn_start_command_index_by_replay(pid, int(current_command_index))
-	if inferred.ok:
-		return inferred
-
-	return Result.success(-1).with_warnings(inferred.warnings)
-
-func _infer_current_player_turn_start_command_index_by_replay(player_id: int, target_index: int) -> Result:
+func _infer_current_player_turn_start_command_index_by_replay(player_id: int, target_index: int, target_phase: String, target_round: int) -> Result:
 	if target_index < 0:
 		return Result.success(-1)
 	if checkpoints.is_empty():
@@ -388,9 +365,13 @@ func _infer_current_player_turn_start_command_index_by_replay(player_id: int, ta
 	if replay_state == null:
 		return Result.failure("恢复初始 state 失败: state 为空")
 
-	var last_turn_start := -1
+	var phase_name := str(target_phase).strip_edges()
+	var round_num := int(target_round)
+	var last_turn_start := -999
 	var prev_pid := replay_state.get_current_player_id()
-	if prev_pid == player_id:
+	var prev_phase := str(replay_state.phase)
+	var prev_round := int(replay_state.round_number)
+	if prev_pid == player_id and prev_phase == phase_name and prev_round == round_num:
 		last_turn_start = -1
 
 	var warnings: Array[String] = []
@@ -423,11 +404,19 @@ func _infer_current_player_turn_start_command_index_by_replay(player_id: int, ta
 		warnings.append_array(auto_r.warnings)
 
 		var now_pid := new_state.get_current_player_id()
-		if now_pid != prev_pid and now_pid == player_id:
-			last_turn_start = i
+		var now_phase := str(new_state.phase)
+		var now_round := int(new_state.round_number)
+		if now_pid == player_id and now_phase == phase_name and now_round == round_num:
+			if now_pid != prev_pid or now_phase != prev_phase or now_round != prev_round:
+				last_turn_start = i
 		prev_pid = now_pid
+		prev_phase = now_phase
+		prev_round = now_round
 		replay_state = new_state
 
+	if last_turn_start == -999:
+		# 未能进入目标阶段（可能 target_phase/round 不匹配或回放失败未触达）
+		return Result.failure("回放推导失败：未找到 turn_start（player=%d phase=%s round=%d）" % [player_id, phase_name, round_num]).with_warnings(warnings)
 	return Result.success(last_turn_start).with_warnings(warnings)
 
 func _should_force_execute_in_replay(command: Command) -> bool:

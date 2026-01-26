@@ -91,6 +91,10 @@ var _history_head_step_index: int = -1
 var _history_cursor_step_index: int = -1
 var _history_original_log_entries: Array[Dictionary] = []
 var _history_latest_state_dict: Dictionary = {}
+# 时间线编辑模式：允许在 cursor<head 时继续执行命令（将丢弃未来时间线并产生新分支）。
+# - 仅由显式“回退类操作”（如调试面板 undo/redo、UI 的回退到回合开始）开启。
+# - 通过日志面板/回放条 seek 进入的“查看历史”仍保持只读（避免 step 快照与 RNG 不一致）。
+var _timeline_edit_mode_active: bool = false
 var _startup_replay_from_main_menu: bool = false
 var _startup_replay_file_path: String = ""
 
@@ -891,7 +895,7 @@ func _update_ui() -> void:
 	if _replay_mode_active:
 		replay_suffix = "（回放）"
 	elif cursor_index < head_index:
-		replay_suffix = "（复盘）"
+		replay_suffix = "（时间旅行）" if _timeline_edit_mode_active else "（复盘）"
 
 	if state.phase == "Restructuring":
 		var submitted_count := 0
@@ -968,6 +972,9 @@ func _on_debug_command_executed(command: String, _result: String) -> void:
 		if _panel_controller != null and _panel_controller.has_method("hide_all"):
 			_panel_controller.hide_all()
 		_apply_live_log_timeline_from_engine()
+		# 调试面板的 undo/redo 需要进入“时间线编辑模式”，否则 undo 后 UI 会处于只读态导致无法继续操作。
+		if head == "undo" or head == "redo":
+			_timeline_edit_mode_active = true
 
 	# 调试命令执行后刷新游戏 UI
 	_update_ui()
@@ -1013,6 +1020,7 @@ func _confirm_rewind_to_turn_start(target_index: int) -> void:
 	if not result.ok:
 		GameLog.warn("Game", "回退到回合开始失败: %s" % result.error)
 	else:
+		_timeline_edit_mode_active = true
 		_apply_live_log_timeline_from_engine()
 	_update_ui()
 
@@ -1022,7 +1030,8 @@ func _execute_command(command: Command) -> Result:
 	if _replay_mode_active:
 		return Result.failure("回放模式下无法执行命令")
 	var head_index := game_engine.command_history.size() - 1
-	if int(game_engine.current_command_index) < head_index:
+	var was_in_history := int(game_engine.current_command_index) < head_index
+	if was_in_history and not _timeline_edit_mode_active:
 		return Result.failure("查看历史中无法执行命令（请先返回最新）")
 
 	var auto := _maybe_auto_complete_mandatory_actions_before_skip(command)
@@ -1037,9 +1046,12 @@ func _execute_command(command: Command) -> Result:
 		_maybe_show_payday_blocker_prompt(command, result)
 	else:
 		GameLog.info("Game", "命令执行成功: %s" % command.action_id)
-		# 实时日志：仅在日志面板可见时重建（降低每步全量回放开销）。
-		if is_instance_valid(game_log_panel) and game_log_panel.visible:
+		# 时间线被回退过时，执行新命令会截断未来时间线并生成新分支：需要重建 step_timeline 视图，避免 UI 仍引用旧 head。
+		# 其它情况下：仅在日志面板可见时重建（降低每步全量回放开销）。
+		if was_in_history or (is_instance_valid(game_log_panel) and game_log_panel.visible):
 			_apply_live_log_timeline_from_engine()
+		if was_in_history:
+			_timeline_edit_mode_active = false
 
 	_update_ui()
 	return result
@@ -1582,7 +1594,7 @@ func _sync_timeline_ui(head_index: int, cursor_index: int) -> void:
 		var reason := ""
 		if _replay_mode_active:
 			reason = "回放中不可操作"
-		elif cursor_index < head_index:
+		elif cursor_index < head_index and not _timeline_edit_mode_active:
 			reason = "查看历史中不可操作"
 		action_panel.set_globally_disabled(reason)
 
@@ -1805,6 +1817,8 @@ func _on_timeline_seek_requested(timeline_index: int) -> void:
 func _on_replay_bar_seek_requested(target_index: int) -> void:
 	if game_engine == null:
 		return
+	# 通过 ReplayBar/日志 seek 进入的“查看历史”一律保持只读（避免 step 快照状态用于分支编辑）。
+	_timeline_edit_mode_active = false
 
 	# M4.2：回放模式采用 step_index（阶段切分点）seek，直接用快照覆盖 game_engine.state（只读）。
 	if _replay_mode_active and _replay_step_timeline.has("steps"):
