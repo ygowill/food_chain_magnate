@@ -34,6 +34,7 @@
 - 2026-01-26：扩展 `JsonValueParseHelpers`（新增 `parse_non_negative_int_value`），并用于 `core/engine/game_engine/replay.gd` 的 checkpoint.rng_calls 与 `core/rules/drinks_procurement/inputs.gd` 的 route 坐标解析；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：新增 `core/utils/int_value_parse_helpers.gd`（`IntValueParseHelpers`）收敛 rules/milestone effects 的整值解析，并替换 `core/rules/pricing_pipeline.gd`/`core/rules/phase/payday_settlement.gd` 内自带 `_parse_*`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `CleanupSettlement`/`DinnertimeSettlement` 的非负整数解析改为复用 `IntValueParseHelpers.parse_non_negative_int_value(...)`，并移除自带 `_parse_non_negative_int_value`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：将 `ActionExecutor` 的整数参数解析改为复用 `IntValueParseHelpers.parse_int_value(...)`，并移除自带 `_parse_int_value`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -79,7 +80,7 @@
 
 典型文件（不完全列举）：
 - 数据定义解析重复：（已部分整改 2026-01-26）`core/data/product_def.gd`、`core/data/milestone_def.gd`、`core/data/employee_def/parser.gd`、`core/data/marketing_def.gd` 已改为共用 `core/data/parse_helpers.gd`；`core/data/game_config.gd` 仍自带 `_parse_*`
-- 命令/存档解析重复：（已部分整改 2026-01-26）`core/types/command.gd` 与 `core/engine/game_engine/loader.gd` 已共用 `core/utils/json_value_parse_helpers.gd`；`core/actions/action_executor.gd` 仍自带 `_parse_int_value`
+- 命令/存档解析重复：（已部分整改 2026-01-26）`core/types/command.gd` 与 `core/engine/game_engine/loader.gd` 已共用 `core/utils/json_value_parse_helpers.gd`；（已部分整改 2026-01-26）`core/actions/action_executor.gd` 已改为共用 `core/utils/int_value_parse_helpers.gd`
 - 规则内重复：`core/rules/pricing_pipeline.gd`、`core/rules/drinks_procurement.gd`、`core/rules/phase/payday_settlement.gd`、`core/rules/phase/cleanup_settlement.gd`、`core/rules/phase/dinnertime_settlement.gd`
 
 风险：
@@ -217,7 +218,7 @@
 | path | loc | preloads | loads | flags |
 |---|---:|---:|---:|---|
 | `core/actions/action_availability_registry.gd` | 267 | 0 | 0 |  |
-| `core/actions/action_executor.gd` | 207 | 0 | 0 | defines:_parse_* |
+| `core/actions/action_executor.gd` | 199 | 1 | 0 | uses:IntValueParseHelpers |
 | `core/actions/action_registry.gd` | 324 | 0 | 0 | uses:GameLog |
 | `core/data/employee_def/debug.gd` | 22 | 0 | 0 |  |
 | `core/data/employee_def/parser.gd` | 213 | 0 | 0 | uses:DataParseHelpers |
@@ -396,7 +397,7 @@
 ### actions/
 
 - `core/actions/action_availability_registry.gd`：中等体量；后续可按重构优先级处理
-- `core/actions/action_executor.gd`：中等体量；后续可按重构优先级处理；自带 _parse_* 解析函数（重复实现可收敛）
+- `core/actions/action_executor.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `IntValueParseHelpers`；中等体量；后续可按重构优先级处理
 - `core/actions/action_registry.gd`：包含 UI 语义：`get_player_initiatable_actions(...)` 判定“可启动动作”（隐式契约）；（已部分整改 2026-01-26）引入 `Result.error_code` 并优先按错误码判断、保留旧前缀兼容，并开始向常见调用链（含部分 gameplay 与 UI）扩散；偏长脚本；建议关注职责边界/可读性；依赖 GameLog 全局单例（耦合）
 
 ### data/

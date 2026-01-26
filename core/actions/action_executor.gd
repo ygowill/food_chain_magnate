@@ -3,6 +3,8 @@
 class_name ActionExecutor
 extends RefCounted
 
+const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
+
 # 动作标识符
 var action_id: String = ""
 
@@ -148,12 +150,12 @@ func optional_string_param(command: Command, key: String, default_value: String)
 func require_int_param(command: Command, key: String) -> Result:
 	if not command.params.has(key):
 		return Result.failure("缺少参数: %s" % key, Result.ErrorCode.MISSING_PARAMS)
-	return _parse_int_value(command.params[key], key)
+	return IntValueParseHelpersClass.parse_int_value(command.params[key], key)
 
 func optional_int_param(command: Command, key: String, default_value: int) -> Result:
 	if not command.params.has(key):
 		return Result.success(default_value)
-	return _parse_int_value(command.params[key], key)
+	return IntValueParseHelpersClass.parse_int_value(command.params[key], key)
 
 func require_vector2i_param(command: Command, key: String) -> Result:
 	var arr_result := require_array_param(command, key)
@@ -164,24 +166,14 @@ func require_vector2i_param(command: Command, key: String) -> Result:
 	if arr.size() != 2:
 		return Result.failure("%s 格式错误（期望 [x,y]）" % key)
 
-	var x_result := _parse_int_value(arr[0], "%s[0]" % key)
+	var x_result := IntValueParseHelpersClass.parse_int_value(arr[0], "%s[0]" % key)
 	if not x_result.ok:
 		return x_result
-	var y_result := _parse_int_value(arr[1], "%s[1]" % key)
+	var y_result := IntValueParseHelpersClass.parse_int_value(arr[1], "%s[1]" % key)
 	if not y_result.ok:
 		return y_result
 
 	return Result.success(Vector2i(int(x_result.value), int(y_result.value)))
-
-static func _parse_int_value(value, key: String) -> Result:
-	if value is int:
-		return Result.success(value)
-	if value is float:
-		var f: float = value
-		if f == int(f):
-			return Result.success(int(f))
-		return Result.failure("%s 必须为整数（不允许小数）" % key)
-	return Result.failure("%s 必须为整数" % key)
 
 # 获取玩家
 func get_actor_player(state: GameState, command: Command) -> Dictionary:
