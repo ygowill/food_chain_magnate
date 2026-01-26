@@ -42,7 +42,7 @@ static func run() -> Result:
 	var new_state: GameState = old_state.duplicate_state()
 	new_state.phase = "Cleanup"
 
-	var events := CommandRunnerClass._build_phase_change_events(old_state, new_state)
+	var events := CommandRunnerClass.build_phase_change_events(old_state, new_state)
 	var found := false
 	for e_val in events:
 		if not (e_val is Dictionary):
@@ -73,4 +73,3 @@ static func run() -> Result:
 		return Result.failure("expected DEMAND_GENERATED event when leaving Marketing")
 
 	return Result.success({})
-

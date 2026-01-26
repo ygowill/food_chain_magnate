@@ -115,7 +115,7 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, _comm
 					"report": report,
 				}
 			})
-			events.append_array(CommandRunnerClass._build_food_sold_events_from_dinnertime_report(old_state, report))
+			events.append_array(CommandRunnerClass.build_food_sold_events_from_dinnertime_report(old_state, report))
 
 		if str(old_state.phase) == "Payday":
 			var report_payday: Dictionary = {}
@@ -136,8 +136,8 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, _comm
 		# Marketing 结算摘要：在离开 Marketing 时发射（便于 UI 日志从 EventBus.history 恢复）。
 		# issue_tracker #48: per board 1 log entry, with details in event data.
 		if str(old_state.phase) == "Marketing":
-			events.append_array(CommandRunnerClass._build_marketing_demand_generated_events(old_state))
-			events.append_array(CommandRunnerClass._build_marketing_expired_events(old_state))
+			events.append_array(CommandRunnerClass.build_marketing_demand_generated_events(old_state))
+			events.append_array(CommandRunnerClass.build_marketing_expired_events(old_state))
 
 		events.append({
 			"type": EventBus.EventType.PHASE_CHANGED,
@@ -150,7 +150,7 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, _comm
 
 		# Cleanup 库存丢弃：在进入 Cleanup 时发射（清理结算在 Cleanup:enter 运行）。
 		if str(new_state.phase) == "Cleanup":
-			events.append_array(CommandRunnerClass._build_cleanup_inventory_discarded_events(new_state))
+			events.append_array(CommandRunnerClass.build_cleanup_inventory_discarded_events(new_state))
 
 		# 回合开始事件
 		if old_state.round_number != new_state.round_number:
