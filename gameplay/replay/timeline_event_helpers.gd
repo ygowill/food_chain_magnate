@@ -1,4 +1,4 @@
-# Timeline event formatting helpers
+# Timeline event formatting helpers (replay/log derived view)
 # - Centralizes event envelope fields: sequence/timestamp/command_index
 # - Provides StepTimelineBuild helpers to inject step_index/phase_segment consistently
 extends RefCounted

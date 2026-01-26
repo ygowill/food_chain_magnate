@@ -6,7 +6,7 @@ class_name EventTimelineBuildTest
 extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
-const EventTimelineBuildClass = preload("res://core/engine/game_engine/event_timeline_build.gd")
+const EventTimelineBuildClass = preload("res://gameplay/replay/event_timeline_build.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345, min_commands: int = 20) -> Result:
 	if EventBus != null:
@@ -92,4 +92,3 @@ static func run(player_count: int = 2, seed_val: int = 12345, min_commands: int 
 		"commands": last_index + 1,
 		"events": events.size(),
 	})
-

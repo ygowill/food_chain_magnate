@@ -4,7 +4,7 @@
 class_name StepTimelinePhaseBoundaryOrderTest
 extends RefCounted
 
-const StepTimelineBuildClass = preload("res://core/engine/game_engine/step_timeline_build.gd")
+const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 
 static func run(seed_val: int = 12345) -> Result:
 	var engine := GameEngine.new()

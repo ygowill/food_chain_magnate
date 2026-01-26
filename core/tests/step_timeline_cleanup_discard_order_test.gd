@@ -4,7 +4,7 @@
 class_name StepTimelineCleanupDiscardOrderTest
 extends RefCounted
 
-const StepTimelineBuildClass = preload("res://core/engine/game_engine/step_timeline_build.gd")
+const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 

@@ -5,7 +5,7 @@ class_name ReplayLogFutureVisibilityTest
 extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
-const EventTimelineBuildClass = preload("res://core/engine/game_engine/event_timeline_build.gd")
+const EventTimelineBuildClass = preload("res://gameplay/replay/event_timeline_build.gd")
 const GameEventLogFormatterClass = preload("res://ui/scenes/game/game_event_log_formatter.gd")
 const GameLogPanelClass = preload("res://ui/components/game_log/game_log_panel.gd")
 

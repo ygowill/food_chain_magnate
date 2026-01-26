@@ -1,4 +1,5 @@
-# GameEngine：语义步进时间线构建（step_index）
+# 语义步进时间线构建（step_index）
+# 该文件位于 gameplay 层：属于 UI/回放/日志派生视图构建，不是 core 执行内核。
 # 目标：
 # - 在“命令（Command）”之外，引入可停留的阶段切分点（phase step），避免 auto-advance 把多个大阶段合并成一个位置。
 # - Working 内的小阶段（sub_phase）尽可能打包：sub_phase 变化不额外生成 step，仅更新当前 step 的状态快照与事件归属。
@@ -14,7 +15,7 @@ const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd"
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
 const GameStartedEventBuildClass = preload("res://core/engine/game_engine/game_started_event_build.gd")
 const ReplayClass = preload("res://core/engine/game_engine/replay.gd")
-const TimelineEventHelpersClass = preload("res://core/engine/game_engine/timeline_event_helpers.gd")
+const TimelineEventHelpersClass = preload("res://gameplay/replay/timeline_event_helpers.gd")
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 

@@ -52,8 +52,8 @@ const SaveLoadDialogScript = preload("res://ui/dialogs/save_load_dialog.gd")
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
-const EventTimelineBuildClass = preload("res://core/engine/game_engine/event_timeline_build.gd")
-const StepTimelineBuildClass = preload("res://core/engine/game_engine/step_timeline_build.gd")
+const EventTimelineBuildClass = preload("res://gameplay/replay/event_timeline_build.gd")
+const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 const GameEventLogFormatterClass = preload("res://ui/scenes/game/game_event_log_formatter.gd")
 
 # 游戏状态

@@ -1,11 +1,12 @@
-# GameEngine：完整事件时间线构建（用于“完整日志时间线/回放”）
+# 完整事件时间线构建（用于“完整日志时间线/回放”）
+# 该文件位于 gameplay 层：属于 UI/回放/日志派生视图构建，不是 core 执行内核。
 # - 包含初始化事件（command_index = -1）
 # - 为每条事件补齐 command_index，并写入确定性的 sequence/timestamp（用于 UI 稳定排序）
 extends RefCounted
 
 const EventHistoryRebuildClass = preload("res://core/engine/game_engine/event_history_rebuild.gd")
 const GameStartedEventBuildClass = preload("res://core/engine/game_engine/game_started_event_build.gd")
-const TimelineEventHelpersClass = preload("res://core/engine/game_engine/timeline_event_helpers.gd")
+const TimelineEventHelpersClass = preload("res://gameplay/replay/timeline_event_helpers.gd")
 
 static func build_full(engine: GameEngine) -> Result:
 	if engine == null:

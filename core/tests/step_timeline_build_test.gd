@@ -5,7 +5,7 @@
 class_name StepTimelineBuildTest
 extends RefCounted
 
-const StepTimelineBuildClass = preload("res://core/engine/game_engine/step_timeline_build.gd")
+const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 
 const SAVE_RES_PATH := "res://.savings/manual_cases/logs/event_log_review.json"
 

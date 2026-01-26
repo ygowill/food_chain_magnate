@@ -4,7 +4,7 @@
 class_name StepTimelineMarketingMilestoneOrderTest
 extends RefCounted
 
-const StepTimelineBuildClass = preload("res://core/engine/game_engine/step_timeline_build.gd")
+const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 
