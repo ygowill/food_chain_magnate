@@ -1,5 +1,5 @@
-# CommandRunner：事件构建（抽离自 command_runner.gd）
-# 目标：把“日志/展示语义”的事件生成逻辑从命令执行主流程中分离，降低单文件职责负担。
+# CommandRunner：事件构建（日志/展示语义）
+# 该文件位于 gameplay 层：用于 UI/回放/日志从 state 差异推导事件，不属于 core 执行内核。
 extends RefCounted
 
 static func build_milestone_achieved_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:

@@ -2,7 +2,44 @@
 extends RefCounted
 
 const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
-const CommandRunnerEventBuildClass = preload("res://core/engine/game_engine/command_runner_event_build.gd")
+
+const EVENT_BUILD_PROVIDER_PATH_SETTING = "fcm/command_runner_event_build_provider_path"
+static var event_build_provider_path_override: String = ""
+static var _event_build_provider_cache = null
+static var _event_build_provider_cache_path: String = ""
+
+static func set_event_build_provider_path(path: String) -> void:
+	event_build_provider_path_override = str(path).strip_edges()
+	_event_build_provider_cache = null
+	_event_build_provider_cache_path = ""
+
+static func _resolve_event_build_provider_path() -> String:
+	if not event_build_provider_path_override.is_empty():
+		return event_build_provider_path_override
+	if not ProjectSettings.has_setting(EVENT_BUILD_PROVIDER_PATH_SETTING):
+		return ""
+	var v = ProjectSettings.get_setting(EVENT_BUILD_PROVIDER_PATH_SETTING)
+	if not (v is String):
+		return ""
+	return str(v).strip_edges()
+
+static func _get_event_build_provider():
+	var provider_path := _resolve_event_build_provider_path()
+	if provider_path.is_empty():
+		return null
+	if _event_build_provider_cache != null and _event_build_provider_cache_path == provider_path:
+		return _event_build_provider_cache
+
+	var provider = load(provider_path)
+	if provider == null:
+		GameLog.error("CommandRunner", "缺少事件构建 provider: %s" % provider_path)
+		_event_build_provider_cache = null
+		_event_build_provider_cache_path = provider_path
+		return null
+
+	_event_build_provider_cache = provider
+	_event_build_provider_cache_path = provider_path
+	return provider
 
 static func execute_command(engine: GameEngine, command: Command, is_replay: bool = false) -> Result:
 	var init_check := engine.ensure_initialized()
@@ -55,7 +92,9 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 
 	# 生成事件
 	var events := executor.generate_events(old_state, new_state, command)
-	events.append_array(CommandRunnerEventBuildClass.build_player_cash_changed_events(old_state, new_state, command))
+	var event_build_provider = _get_event_build_provider()
+	if event_build_provider != null:
+		events.append_array(event_build_provider.build_player_cash_changed_events(old_state, new_state, command))
 
 	# 自动推进（首轮无操作阶段 / 结算阶段默认跳过）
 	var auto_r := _drain_auto_advances(engine, new_state)
@@ -69,7 +108,8 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 	new_state = auto_r.value.get("state", new_state) if (auto_r.value is Dictionary) else new_state
 
 	# 里程碑事件：从 state 差异中推导（用于 UI 日志/提示）
-	events.append_array(CommandRunnerEventBuildClass.build_milestone_achieved_events(old_state, new_state, command))
+	if event_build_provider != null:
+		events.append_array(event_build_provider.build_milestone_achieved_events(old_state, new_state, command))
 
 	# 更新状态
 	engine.state = new_state
@@ -127,25 +167,46 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 	return Result.success(engine.state).with_warnings(all_warnings)
 
 static func build_player_cash_changed_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
-	return CommandRunnerEventBuildClass.build_player_cash_changed_events(old_state, new_state, command)
+	var provider = _get_event_build_provider()
+	if provider == null:
+		return []
+	return provider.build_player_cash_changed_events(old_state, new_state, command)
 
 static func build_milestone_achieved_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
-	return CommandRunnerEventBuildClass.build_milestone_achieved_events(old_state, new_state, command)
+	var provider = _get_event_build_provider()
+	if provider == null:
+		return []
+	return provider.build_milestone_achieved_events(old_state, new_state, command)
 
 static func build_phase_change_events(old_state: GameState, new_state: GameState) -> Array[Dictionary]:
-	return CommandRunnerEventBuildClass.build_phase_change_events(old_state, new_state)
+	var provider = _get_event_build_provider()
+	if provider == null:
+		return []
+	return provider.build_phase_change_events(old_state, new_state)
 
 static func build_food_sold_events_from_dinnertime_report(dinnertime_state: GameState, report: Dictionary) -> Array[Dictionary]:
-	return CommandRunnerEventBuildClass.build_food_sold_events_from_dinnertime_report(dinnertime_state, report)
+	var provider = _get_event_build_provider()
+	if provider == null:
+		return []
+	return provider.build_food_sold_events_from_dinnertime_report(dinnertime_state, report)
 
 static func build_marketing_demand_generated_events(marketing_state: GameState) -> Array[Dictionary]:
-	return CommandRunnerEventBuildClass.build_marketing_demand_generated_events(marketing_state)
+	var provider = _get_event_build_provider()
+	if provider == null:
+		return []
+	return provider.build_marketing_demand_generated_events(marketing_state)
 
 static func build_marketing_expired_events(marketing_state: GameState) -> Array[Dictionary]:
-	return CommandRunnerEventBuildClass.build_marketing_expired_events(marketing_state)
+	var provider = _get_event_build_provider()
+	if provider == null:
+		return []
+	return provider.build_marketing_expired_events(marketing_state)
 
 static func build_cleanup_inventory_discarded_events(cleanup_state: GameState) -> Array[Dictionary]:
-	return CommandRunnerEventBuildClass.build_cleanup_inventory_discarded_events(cleanup_state)
+	var provider = _get_event_build_provider()
+	if provider == null:
+		return []
+	return provider.build_cleanup_inventory_discarded_events(cleanup_state)
 
 static func drain_auto_advances(engine: GameEngine, state_in: GameState) -> Result:
 	return _drain_auto_advances(engine, state_in)
@@ -203,8 +264,10 @@ static func _drain_auto_advances(engine: GameEngine, state_in: GameState) -> Res
 		if not bool(step.value):
 			break
 
-		events.append_array(CommandRunnerEventBuildClass.build_phase_change_events(before, state_in))
-		events.append_array(CommandRunnerEventBuildClass.build_player_cash_changed_events(before, state_in, Command.create_system("auto_advance")))
+		var provider = _get_event_build_provider()
+		if provider != null:
+			events.append_array(provider.build_phase_change_events(before, state_in))
+			events.append_array(provider.build_player_cash_changed_events(before, state_in, Command.create_system("auto_advance")))
 
 	if safety >= 32:
 		return Result.failure("auto_advance: exceeded max steps (possible loop)")
