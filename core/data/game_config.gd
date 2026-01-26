@@ -5,6 +5,7 @@ extends RefCounted
 
 const DEFAULT_PATH := "res://data/config/game_config.json"
 const SUPPORTED_SCHEMA_VERSION := 2
+const ParseHelpersClass = preload("res://core/state/serialization/parse_helpers.gd")
 
 var schema_version: int = 1
 
@@ -62,7 +63,7 @@ static func from_dict(data: Dictionary) -> Result:
 	var cfg := GameConfig.new()
 
 	var schema_val = data.get("schema_version", null)
-	var schema_read := _parse_int(schema_val, "schema_version")
+	var schema_read := ParseHelpersClass.parse_int(schema_val, "schema_version")
 	if not schema_read.ok:
 		return schema_read
 	cfg.schema_version = int(schema_read.value)
@@ -75,7 +76,7 @@ static func from_dict(data: Dictionary) -> Result:
 	var bank: Dictionary = bank_val
 	if not bank.has("default_per_player"):
 		return Result.failure("GameConfig.bank 缺少 default_per_player")
-	var bank_default_read := _parse_non_negative_int(bank.get("default_per_player", null), "bank.default_per_player")
+	var bank_default_read := ParseHelpersClass.parse_non_negative_int(bank.get("default_per_player", null), "bank.default_per_player")
 	if not bank_default_read.ok:
 		return bank_default_read
 	cfg.bank_default_per_player = int(bank_default_read.value)
@@ -85,37 +86,37 @@ static func from_dict(data: Dictionary) -> Result:
 		return Result.failure("GameConfig.rules 缺失或类型错误（期望 Dictionary）")
 	var rules: Dictionary = rules_val
 
-	var base_unit_price_read := _parse_non_negative_int(rules.get("base_unit_price", null), "rules.base_unit_price")
+	var base_unit_price_read := ParseHelpersClass.parse_non_negative_int(rules.get("base_unit_price", null), "rules.base_unit_price")
 	if not base_unit_price_read.ok:
 		return base_unit_price_read
 	cfg.rule_base_unit_price = int(base_unit_price_read.value)
 
-	var salary_cost_read := _parse_non_negative_int(rules.get("salary_cost", null), "rules.salary_cost")
+	var salary_cost_read := ParseHelpersClass.parse_non_negative_int(rules.get("salary_cost", null), "rules.salary_cost")
 	if not salary_cost_read.ok:
 		return salary_cost_read
 	cfg.rule_salary_cost = int(salary_cost_read.value)
 
-	var waitress_tips_read := _parse_non_negative_int(rules.get("waitress_tips", null), "rules.waitress_tips")
+	var waitress_tips_read := ParseHelpersClass.parse_non_negative_int(rules.get("waitress_tips", null), "rules.waitress_tips")
 	if not waitress_tips_read.ok:
 		return waitress_tips_read
 	cfg.rule_waitress_tips = int(waitress_tips_read.value)
 
-	var cfo_bonus_percent_read := _parse_non_negative_int(rules.get("cfo_bonus_percent", null), "rules.cfo_bonus_percent")
+	var cfo_bonus_percent_read := ParseHelpersClass.parse_non_negative_int(rules.get("cfo_bonus_percent", null), "rules.cfo_bonus_percent")
 	if not cfo_bonus_percent_read.ok:
 		return cfo_bonus_percent_read
 	cfg.rule_cfo_bonus_percent = int(cfo_bonus_percent_read.value)
 
-	var demand_cap_normal_read := _parse_non_negative_int(rules.get("demand_cap_normal", null), "rules.demand_cap_normal")
+	var demand_cap_normal_read := ParseHelpersClass.parse_non_negative_int(rules.get("demand_cap_normal", null), "rules.demand_cap_normal")
 	if not demand_cap_normal_read.ok:
 		return demand_cap_normal_read
 	cfg.rule_demand_cap_normal = int(demand_cap_normal_read.value)
 
-	var demand_cap_with_garden_read := _parse_non_negative_int(rules.get("demand_cap_with_garden", null), "rules.demand_cap_with_garden")
+	var demand_cap_with_garden_read := ParseHelpersClass.parse_non_negative_int(rules.get("demand_cap_with_garden", null), "rules.demand_cap_with_garden")
 	if not demand_cap_with_garden_read.ok:
 		return demand_cap_with_garden_read
 	cfg.rule_demand_cap_with_garden = int(demand_cap_with_garden_read.value)
 
-	var fridge_capacity_read := _parse_non_negative_int(rules.get("fridge_capacity_per_product", null), "rules.fridge_capacity_per_product")
+	var fridge_capacity_read := ParseHelpersClass.parse_non_negative_int(rules.get("fridge_capacity_per_product", null), "rules.fridge_capacity_per_product")
 	if not fridge_capacity_read.ok:
 		return fridge_capacity_read
 	cfg.rule_fridge_capacity_per_product = int(fridge_capacity_read.value)
@@ -128,7 +129,7 @@ static func from_dict(data: Dictionary) -> Result:
 	for player_count_key in ["2", "3", "4", "5"]:
 		if not one_x_copies.has(player_count_key):
 			return Result.failure("GameConfig.rules.one_x_employee_copies_by_player_count 缺少 key: %s" % player_count_key)
-		var c_read := _parse_non_negative_int(one_x_copies.get(player_count_key, null), "rules.one_x_employee_copies_by_player_count.%s" % player_count_key)
+		var c_read := ParseHelpersClass.parse_non_negative_int(one_x_copies.get(player_count_key, null), "rules.one_x_employee_copies_by_player_count.%s" % player_count_key)
 		if not c_read.ok:
 			return c_read
 		cfg.rule_one_x_employee_copies_by_player_count[player_count_key] = int(c_read.value)
@@ -138,17 +139,17 @@ static func from_dict(data: Dictionary) -> Result:
 		return Result.failure("GameConfig.player 缺失或类型错误（期望 Dictionary）")
 	var player: Dictionary = player_val
 
-	var starting_cash_read := _parse_non_negative_int(player.get("starting_cash", null), "player.starting_cash")
+	var starting_cash_read := ParseHelpersClass.parse_non_negative_int(player.get("starting_cash", null), "player.starting_cash")
 	if not starting_cash_read.ok:
 		return starting_cash_read
 	cfg.player_starting_cash = int(starting_cash_read.value)
 
-	var starting_employees_read := _parse_string_array(player.get("starting_employees", null), "player.starting_employees")
+	var starting_employees_read := ParseHelpersClass.parse_string_array(player.get("starting_employees", null), "player.starting_employees", false)
 	if not starting_employees_read.ok:
 		return starting_employees_read
 	cfg.player_starting_employees = starting_employees_read.value
 
-	var starting_inventory_read := _parse_int_dict(player.get("starting_inventory", null), "player.starting_inventory")
+	var starting_inventory_read := ParseHelpersClass.parse_non_negative_int_dict(player.get("starting_inventory", null), "player.starting_inventory")
 	if not starting_inventory_read.ok:
 		return starting_inventory_read
 	cfg.player_starting_inventory = starting_inventory_read.value
@@ -163,7 +164,7 @@ static func from_dict(data: Dictionary) -> Result:
 		return reserve_cards_read
 	cfg.player_reserve_cards = reserve_cards_read.value
 
-	var reserve_card_selected_read := _parse_non_negative_int(player.get("reserve_card_selected", null), "player.reserve_card_selected")
+	var reserve_card_selected_read := ParseHelpersClass.parse_non_negative_int(player.get("reserve_card_selected", null), "player.reserve_card_selected")
 	if not reserve_card_selected_read.ok:
 		return reserve_card_selected_read
 	cfg.player_reserve_card_selected = int(reserve_card_selected_read.value)
@@ -178,65 +179,6 @@ static func from_dict(data: Dictionary) -> Result:
 func build_reserve_cards() -> Array[Dictionary]:
 	return player_reserve_cards.duplicate(true)
 
-static func _parse_int(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
-		return Result.success(int(f))
-	return Result.failure("%s 缺失或类型错误（期望整数）" % path)
-
-static func _parse_non_negative_int(value, path: String) -> Result:
-	var r := _parse_int(value, path)
-	if not r.ok:
-		return r
-	var n: int = int(r.value)
-	if n < 0:
-		return Result.failure("%s 不能为负数: %d" % [path, n])
-	return Result.success(n)
-
-static func _parse_string_array(value, path: String) -> Result:
-	if not (value is Array):
-		return Result.failure("%s 缺失或类型错误（期望 Array）" % path)
-	var out: Array[String] = []
-	for i in range(value.size()):
-		var item = value[i]
-		if not (item is String):
-			return Result.failure("%s[%d] 类型错误（期望 String），实际: %s" % [path, i, str(typeof(item))])
-		var s := str(item)
-		if s.is_empty():
-			return Result.failure("%s[%d] 不能为空字符串" % [path, i])
-		out.append(s)
-	return Result.success(out)
-
-static func _parse_int_dict(value, path: String) -> Result:
-	if not (value is Dictionary):
-		return Result.failure("%s 缺失或类型错误（期望 Dictionary）" % path)
-	var out := {}
-	for k in value.keys():
-		if not (k is String):
-			return Result.failure("%s key 类型错误（期望 String），实际: %s" % [path, str(typeof(k))])
-		var key := str(k)
-		var v_read := _parse_non_negative_int(value.get(k, null), "%s.%s" % [path, key])
-		if not v_read.ok:
-			return v_read
-		out[key] = int(v_read.value)
-	return Result.success(out)
-
-static func _parse_non_negative_int_dict(value: Dictionary, path: String) -> Result:
-	var out := {}
-	for k in value.keys():
-		if not (k is String):
-			return Result.failure("%s key 类型错误（期望 String），实际: %s" % [path, str(typeof(k))])
-		var key := str(k)
-		var v_read := _parse_non_negative_int(value.get(k, null), "%s.%s" % [path, key])
-		if not v_read.ok:
-			return v_read
-		out[key] = int(v_read.value)
-	return Result.success(out)
-
 static func _parse_reserve_cards(value, path: String) -> Result:
 	if not (value is Array):
 		return Result.failure("%s 缺失或类型错误（期望 Array）" % path)
@@ -249,13 +191,13 @@ static func _parse_reserve_cards(value, path: String) -> Result:
 		for required_key in ["type", "cash", "ceo_slots"]:
 			if not card.has(required_key):
 				return Result.failure("%s[%d] 缺少字段: %s" % [path, i, required_key])
-		var t_read := _parse_non_negative_int(card.get("type", null), "%s[%d].type" % [path, i])
+		var t_read := ParseHelpersClass.parse_non_negative_int(card.get("type", null), "%s[%d].type" % [path, i])
 		if not t_read.ok:
 			return t_read
-		var cash_read := _parse_non_negative_int(card.get("cash", null), "%s[%d].cash" % [path, i])
+		var cash_read := ParseHelpersClass.parse_non_negative_int(card.get("cash", null), "%s[%d].cash" % [path, i])
 		if not cash_read.ok:
 			return cash_read
-		var slots_read := _parse_non_negative_int(card.get("ceo_slots", null), "%s[%d].ceo_slots" % [path, i])
+		var slots_read := ParseHelpersClass.parse_non_negative_int(card.get("ceo_slots", null), "%s[%d].ceo_slots" % [path, i])
 		if not slots_read.ok:
 			return slots_read
 		out.append({

@@ -35,6 +35,7 @@
 - 2026-01-26：新增 `core/utils/int_value_parse_helpers.gd`（`IntValueParseHelpers`）收敛 rules/milestone effects 的整值解析，并替换 `core/rules/pricing_pipeline.gd`/`core/rules/phase/payday_settlement.gd` 内自带 `_parse_*`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `CleanupSettlement`/`DinnertimeSettlement` 的非负整数解析改为复用 `IntValueParseHelpers.parse_non_negative_int_value(...)`，并移除自带 `_parse_non_negative_int_value`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `ActionExecutor` 的整数参数解析改为复用 `IntValueParseHelpers.parse_int_value(...)`，并移除自带 `_parse_int_value`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：将 `GameConfig` 的通用 `_parse_*` 改为复用 `core/state/serialization/parse_helpers.gd`，并仅保留业务专用 `_parse_reserve_cards`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -79,7 +80,7 @@
   - （已部分整改 2026-01-26）`core/utils/json_value_parse_helpers.gd`
 
 典型文件（不完全列举）：
-- 数据定义解析重复：（已部分整改 2026-01-26）`core/data/product_def.gd`、`core/data/milestone_def.gd`、`core/data/employee_def/parser.gd`、`core/data/marketing_def.gd` 已改为共用 `core/data/parse_helpers.gd`；`core/data/game_config.gd` 仍自带 `_parse_*`
+- 数据定义解析重复：（已部分整改 2026-01-26）`core/data/product_def.gd`、`core/data/milestone_def.gd`、`core/data/employee_def/parser.gd`、`core/data/marketing_def.gd` 已改为共用 `core/data/parse_helpers.gd`；（已部分整改 2026-01-26）`core/data/game_config.gd` 已改为复用 `core/state/serialization/parse_helpers.gd`
 - 命令/存档解析重复：（已部分整改 2026-01-26）`core/types/command.gd` 与 `core/engine/game_engine/loader.gd` 已共用 `core/utils/json_value_parse_helpers.gd`；（已部分整改 2026-01-26）`core/actions/action_executor.gd` 已改为共用 `core/utils/int_value_parse_helpers.gd`
 - 规则内重复：`core/rules/pricing_pipeline.gd`、`core/rules/drinks_procurement.gd`、`core/rules/phase/payday_settlement.gd`、`core/rules/phase/cleanup_settlement.gd`、`core/rules/phase/dinnertime_settlement.gd`
 
@@ -225,7 +226,7 @@
 | `core/data/employee_def/serialization.gd` | 47 | 0 | 0 |  |
 | `core/data/employee_def.gd` | 184 | 3 | 0 |  |
 | `core/data/employee_registry.gd` | 93 | 2 | 0 |  |
-| `core/data/game_config.gd` | 267 | 0 | 0 | defines:_parse_* |
+| `core/data/game_config.gd` | 208 | 1 | 0 | uses:ParseHelpers |
 | `core/data/game_data.gd` | 109 | 3 | 0 |  |
 | `core/data/marketing_def.gd` | 104 | 0 | 0 | uses:DataParseHelpers |
 | `core/data/marketing_registry.gd` | 71 | 1 | 0 |  |
@@ -407,7 +408,7 @@
 - `core/data/employee_def/parser.gd`：（已部分整改 2026-01-26）移除自带 `_parse_*`，改用 `DataParseHelpers`；仍偏长，且含较多“字段组合约束”（建议后续按子结构拆分校验逻辑）
 - `core/data/employee_def/serialization.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/data/employee_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/data/game_config.gd`：中等体量；后续可按重构优先级处理；自带 _parse_* 解析函数（重复实现可收敛）
+- `core/data/game_config.gd`：（已部分整改 2026-01-26）通用 `_parse_*` 已改为复用 `ParseHelpers`，仅保留业务专用 `_parse_reserve_cards`；中等体量；后续可按重构优先级处理
 - `core/data/game_data.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/data/marketing_def.gd`：（已整改 2026-01-26）移除自带 `_parse_*`，改用 `DataParseHelpers`
 - `core/data/marketing_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
