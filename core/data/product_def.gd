@@ -3,6 +3,8 @@
 class_name ProductDef
 extends RefCounted
 
+const DataParseHelpersClass = preload("res://core/data/parse_helpers.gd")
+
 var id: String = ""
 var name: String = ""
 var tags: Array[String] = []
@@ -11,24 +13,24 @@ var starting_inventory: int = 0
 static func from_dict(data: Dictionary) -> Result:
 	var def := ProductDef.new()
 
-	var id_read := _parse_string(data.get("id", null), "ProductDef.id", false)
+	var id_read := DataParseHelpersClass.parse_string(data.get("id", null), "ProductDef.id", false)
 	if not id_read.ok:
 		return id_read
 	def.id = id_read.value
 	if def.id == "drink":
 		return Result.failure("ProductDef.id 不允许为保留字: drink")
 
-	var name_read := _parse_string(data.get("name", null), "ProductDef.name", false)
+	var name_read := DataParseHelpersClass.parse_string(data.get("name", null), "ProductDef.name", false)
 	if not name_read.ok:
 		return name_read
 	def.name = name_read.value
 
-	var tags_read := _parse_string_array(data.get("tags", []), "ProductDef.tags", true)
+	var tags_read := DataParseHelpersClass.parse_string_array(data.get("tags", []), "ProductDef.tags", true)
 	if not tags_read.ok:
 		return tags_read
 	def.tags = tags_read.value
 
-	var start_read := _parse_non_negative_int(data.get("starting_inventory", 0), "ProductDef.starting_inventory")
+	var start_read := DataParseHelpersClass.parse_non_negative_int(data.get("starting_inventory", 0), "ProductDef.starting_inventory")
 	if not start_read.ok:
 		return start_read
 	def.starting_inventory = int(start_read.value)
@@ -62,46 +64,3 @@ func to_dict() -> Dictionary:
 		"tags": tags,
 		"starting_inventory": starting_inventory,
 	}
-
-static func _parse_string(value, path: String, allow_empty: bool) -> Result:
-	if not (value is String):
-		return Result.failure("%s 类型错误（期望 String）" % path)
-	# 在数据加载阶段做规范化：去掉首尾空白，避免 UI/规则层反复 strip_edges().
-	var s: String = str(value).strip_edges()
-	if not allow_empty and s.is_empty():
-		return Result.failure("%s 不能为空" % path)
-	return Result.success(s)
-
-static func _parse_string_array(value, path: String, allow_empty: bool) -> Result:
-	if value == null:
-		if allow_empty:
-			return Result.success([])
-		return Result.failure("%s 缺失" % path)
-	if not (value is Array):
-		return Result.failure("%s 类型错误（期望 Array[String]）" % path)
-	var any: Array = value
-	var out: Array[String] = []
-	for i in range(any.size()):
-		var item = any[i]
-		var s_read := _parse_string(item, "%s[%d]" % [path, i], false)
-		if not s_read.ok:
-			return s_read
-		out.append(s_read.value)
-	if not allow_empty and out.is_empty():
-		return Result.failure("%s 不能为空" % path)
-	return Result.success(out)
-
-static func _parse_non_negative_int(value, path: String) -> Result:
-	if value is int:
-		if int(value) < 0:
-			return Result.failure("%s 不能为负数: %d" % [path, int(value)])
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数（不允许小数）" % path)
-		var i: int = int(f)
-		if i < 0:
-			return Result.failure("%s 不能为负数: %d" % [path, i])
-		return Result.success(i)
-	return Result.failure("%s 类型错误（期望 int）" % path)

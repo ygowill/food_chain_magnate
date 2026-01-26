@@ -29,6 +29,7 @@
 - 2026-01-26：为 core `ActionSetup` 增加显式注入点 `set_provider_path(...)`，允许在不修改 core 的情况下替换动作注册 provider；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：引入 `Result.error_code`（含 `MISSING_PARAMS`），并在 `ActionExecutor.require_*`/`ActionRegistry.get_player_initiatable_actions` 中使用（保留旧字符串前缀兼容）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `MISSING_PARAMS` 错误码扩展到部分 gameplay actions/validators 以及 `core/rules/drinks_procurement.gd`，并让 UI 的缺参判断优先使用 `Result.error_code`（仍保留旧字符串前缀兼容）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：新增 `core/data/parse_helpers.gd`（`DataParseHelpers`）收敛 data JSON 解析样板代码，并替换 `ProductDef`/`MarketingDef`/`MilestoneDef`/`EmployeeDef.parser` 内自带 `_parse_*`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -69,9 +70,10 @@
 - 同时仓库已经存在可复用的解析 helper：
   - `core/state/serialization/parse_helpers.gd`
   - `core/map/parse_helpers.gd`
+  - （已部分整改 2026-01-26）`core/data/parse_helpers.gd`
 
 典型文件（不完全列举）：
-- 数据定义解析重复：`core/data/product_def.gd`、`core/data/milestone_def.gd`、`core/data/employee_def/parser.gd`、`core/data/game_config.gd`、`core/data/marketing_def.gd`
+- 数据定义解析重复：（已部分整改 2026-01-26）`core/data/product_def.gd`、`core/data/milestone_def.gd`、`core/data/employee_def/parser.gd`、`core/data/marketing_def.gd` 已改为共用 `core/data/parse_helpers.gd`；`core/data/game_config.gd` 仍自带 `_parse_*`
 - 命令/存档解析重复：`core/types/command.gd`、`core/engine/game_engine/loader.gd`、`core/actions/action_executor.gd`
 - 规则内重复：`core/rules/pricing_pipeline.gd`、`core/rules/drinks_procurement.gd`、`core/rules/phase/payday_settlement.gd`、`core/rules/phase/cleanup_settlement.gd`、`core/rules/phase/dinnertime_settlement.gd`
 
@@ -213,17 +215,18 @@
 | `core/actions/action_executor.gd` | 207 | 0 | 0 | defines:_parse_* |
 | `core/actions/action_registry.gd` | 324 | 0 | 0 | uses:GameLog |
 | `core/data/employee_def/debug.gd` | 22 | 0 | 0 |  |
-| `core/data/employee_def/parser.gd` | 258 | 0 | 0 | defines:_parse_* |
+| `core/data/employee_def/parser.gd` | 213 | 0 | 0 | uses:DataParseHelpers |
 | `core/data/employee_def/serialization.gd` | 47 | 0 | 0 |  |
 | `core/data/employee_def.gd` | 184 | 3 | 0 |  |
 | `core/data/employee_registry.gd` | 93 | 2 | 0 |  |
 | `core/data/game_config.gd` | 267 | 0 | 0 | defines:_parse_* |
 | `core/data/game_data.gd` | 109 | 3 | 0 |  |
-| `core/data/marketing_def.gd` | 138 | 0 | 0 | defines:_parse_* |
+| `core/data/marketing_def.gd` | 104 | 0 | 0 | uses:DataParseHelpers |
 | `core/data/marketing_registry.gd` | 71 | 1 | 0 |  |
-| `core/data/milestone_def.gd` | 261 | 0 | 0 | defines:_parse_* |
+| `core/data/milestone_def.gd` | 219 | 0 | 0 | uses:DataParseHelpers |
 | `core/data/milestone_registry.gd` | 59 | 2 | 0 |  |
-| `core/data/product_def.gd` | 107 | 0 | 0 | defines:_parse_* |
+| `core/data/parse_helpers.gd` | 65 | 0 | 0 |  |
+| `core/data/product_def.gd` | 66 | 0 | 0 | uses:DataParseHelpers |
 | `core/data/product_registry.gd` | 82 | 2 | 0 |  |
 | `core/debug/debug_command_registry.gd` | 181 | 0 | 0 | uses:GameLog |
 | `core/debug/debug_commands/action_commands.gd` | 478 | 0 | 0 | uses:DebugFlags |
@@ -393,16 +396,17 @@
 
 - `core/data/employee_def.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/data/employee_def/debug.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/data/employee_def/parser.gd`：中等体量；后续可按重构优先级处理；自带 _parse_* 解析函数（重复实现可收敛）
+- `core/data/employee_def/parser.gd`：（已部分整改 2026-01-26）移除自带 `_parse_*`，改用 `DataParseHelpers`；仍偏长，且含较多“字段组合约束”（建议后续按子结构拆分校验逻辑）
 - `core/data/employee_def/serialization.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/data/employee_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/data/game_config.gd`：中等体量；后续可按重构优先级处理；自带 _parse_* 解析函数（重复实现可收敛）
 - `core/data/game_data.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/data/marketing_def.gd`：自带 _parse_* 解析函数（重复实现可收敛）
+- `core/data/marketing_def.gd`：（已整改 2026-01-26）移除自带 `_parse_*`，改用 `DataParseHelpers`
 - `core/data/marketing_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/data/milestone_def.gd`：中等体量；后续可按重构优先级处理；自带 _parse_* 解析函数（重复实现可收敛）
+- `core/data/milestone_def.gd`：（已部分整改 2026-01-26）移除自带 `_parse_*`，改用 `DataParseHelpers`；仍含较多 effects/filter 解析（对应 2.2 的后续收敛方向）
 - `core/data/milestone_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/data/product_def.gd`：自带 _parse_* 解析函数（重复实现可收敛）
+- `core/data/parse_helpers.gd`：（已新增 2026-01-26）用于收敛 `core/data/*` 内重复解析样板
+- `core/data/product_def.gd`：（已整改 2026-01-26）移除自带 `_parse_*`，改用 `DataParseHelpers`
 - `core/data/product_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 
 ### debug/

@@ -3,6 +3,8 @@
 class_name MarketingDef
 extends RefCounted
 
+const DataParseHelpersClass = preload("res://core/data/parse_helpers.gd")
+
 var id: String = ""
 var board_number: int = 0
 var type: String = ""  # strict：具体 type 是否可用由模块注册的 MarketingTypeRegistry 决定
@@ -17,19 +19,19 @@ var max_players = null  # int | null
 static func from_dict(data: Dictionary) -> Result:
 	var def := MarketingDef.new()
 
-	var id_read := _parse_string(data.get("id", null), "MarketingDef.id", false)
+	var id_read := DataParseHelpersClass.parse_string(data.get("id", null), "MarketingDef.id", false)
 	if not id_read.ok:
 		return id_read
 	def.id = id_read.value
 
-	var board_number_read := _parse_int(data.get("board_number", null), "MarketingDef.board_number")
+	var board_number_read := DataParseHelpersClass.parse_int(data.get("board_number", null), "MarketingDef.board_number")
 	if not board_number_read.ok:
 		return board_number_read
 	def.board_number = int(board_number_read.value)
 	if def.board_number <= 0:
 		return Result.failure("MarketingDef.board_number 必须 > 0")
 
-	var type_read := _parse_string(data.get("type", null), "MarketingDef.type", false)
+	var type_read := DataParseHelpersClass.parse_string(data.get("type", null), "MarketingDef.type", false)
 	if not type_read.ok:
 		return type_read
 	def.type = type_read.value
@@ -37,7 +39,7 @@ static func from_dict(data: Dictionary) -> Result:
 	# 占地尺寸（Strict Mode：缺字段直接失败）
 	if not data.has("footprint_size"):
 		return Result.failure("MarketingDef 缺少 footprint_size")
-	var size_read := _parse_vec2i(data.get("footprint_size", null), "MarketingDef.footprint_size")
+	var size_read := DataParseHelpersClass.parse_vec2i(data.get("footprint_size", null), "MarketingDef.footprint_size")
 	if not size_read.ok:
 		return size_read
 	def.footprint_size = size_read.value
@@ -47,7 +49,7 @@ static func from_dict(data: Dictionary) -> Result:
 	# 按玩家数可用性（Strict Mode：缺字段直接失败）
 	if not data.has("min_players"):
 		return Result.failure("MarketingDef 缺少 min_players")
-	var min_players_read := _parse_int(data.get("min_players", null), "MarketingDef.min_players")
+	var min_players_read := DataParseHelpersClass.parse_int(data.get("min_players", null), "MarketingDef.min_players")
 	if not min_players_read.ok:
 		return min_players_read
 	def.min_players = int(min_players_read.value)
@@ -60,7 +62,7 @@ static func from_dict(data: Dictionary) -> Result:
 	if max_val == null:
 		def.max_players = null
 	else:
-		var max_read := _parse_int(max_val, "MarketingDef.max_players")
+		var max_read := DataParseHelpersClass.parse_int(max_val, "MarketingDef.max_players")
 		if not max_read.ok:
 			return max_read
 		var max_players: int = int(max_read.value)
@@ -83,41 +85,6 @@ static func load_from_file(path: String) -> Result:
 	var json := file.get_as_text()
 	file.close()
 	return from_json(json)
-
-# === 严格解析辅助 ===
-
-static func _parse_string(value, path: String, allow_empty: bool) -> Result:
-	if not (value is String):
-		return Result.failure("%s 类型错误（期望 String）" % path)
-	# 在数据加载阶段做规范化：去掉首尾空白，避免 UI/规则层反复 strip_edges().
-	var s: String = str(value).strip_edges()
-	if not allow_empty and s.is_empty():
-		return Result.failure("%s 不能为空" % path)
-	return Result.success(s)
-
-static func _parse_int(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
-		return Result.success(int(f))
-	return Result.failure("%s 类型错误（期望整数）" % path)
-
-static func _parse_vec2i(value, path: String) -> Result:
-	if not (value is Array):
-		return Result.failure("%s 类型错误（期望 [x,y] Array）" % path)
-	var arr: Array = value
-	if arr.size() != 2:
-		return Result.failure("%s 长度错误（期望 2），实际: %d" % [path, arr.size()])
-	var x_read := _parse_int(arr[0], "%s[0]" % path)
-	if not x_read.ok:
-		return x_read
-	var y_read := _parse_int(arr[1], "%s[1]" % path)
-	if not y_read.ok:
-		return y_read
-	return Result.success(Vector2i(int(x_read.value), int(y_read.value)))
 
 func to_dict() -> Dictionary:
 	return {

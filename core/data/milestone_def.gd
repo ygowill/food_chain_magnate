@@ -3,6 +3,8 @@
 class_name MilestoneDef
 extends RefCounted
 
+const DataParseHelpersClass = preload("res://core/data/parse_helpers.gd")
+
 var id: String = ""
 var name: String = ""
 var trigger_event: String = ""
@@ -17,12 +19,12 @@ var pool_count: int = 1
 static func from_dict(data: Dictionary) -> Result:
 	var def := MilestoneDef.new()
 
-	var id_read := _parse_string(data.get("id", null), "MilestoneDef.id", false)
+	var id_read := DataParseHelpersClass.parse_string(data.get("id", null), "MilestoneDef.id", false)
 	if not id_read.ok:
 		return id_read
 	def.id = id_read.value
 
-	var name_read := _parse_string(data.get("name", null), "MilestoneDef.name", false)
+	var name_read := DataParseHelpersClass.parse_string(data.get("name", null), "MilestoneDef.name", false)
 	if not name_read.ok:
 		return name_read
 	def.name = name_read.value
@@ -32,7 +34,7 @@ static func from_dict(data: Dictionary) -> Result:
 		return Result.failure("MilestoneDef.trigger 缺失或类型错误（期望 Dictionary）")
 	var trigger: Dictionary = trigger_val
 
-	var event_read := _parse_string(trigger.get("event", null), "MilestoneDef.trigger.event", false)
+	var event_read := DataParseHelpersClass.parse_string(trigger.get("event", null), "MilestoneDef.trigger.event", false)
 	if not event_read.ok:
 		return event_read
 	def.trigger_event = event_read.value
@@ -53,12 +55,12 @@ static func from_dict(data: Dictionary) -> Result:
 		if not (item is Dictionary):
 			return Result.failure("MilestoneDef.effects[%d] 类型错误（期望 Dictionary）" % i)
 		var effect: Dictionary = item
-		var type_read := _parse_string(effect.get("type", null), "MilestoneDef.effects[%d].type" % i, false)
+		var type_read := DataParseHelpersClass.parse_string(effect.get("type", null), "MilestoneDef.effects[%d].type" % i, false)
 		if not type_read.ok:
 			return type_read
 	def.effects = e
 
-	var exclusive_read := _parse_string(data.get("exclusive_type", null), "MilestoneDef.exclusive_type", false)
+	var exclusive_read := DataParseHelpersClass.parse_string(data.get("exclusive_type", null), "MilestoneDef.exclusive_type", false)
 	if not exclusive_read.ok:
 		return exclusive_read
 	def.exclusive_type = exclusive_read.value
@@ -67,7 +69,7 @@ static func from_dict(data: Dictionary) -> Result:
 	if exp_val == null:
 		def.expires_at = null
 	else:
-		var exp_read := _parse_non_negative_int(exp_val, "MilestoneDef.expires_at")
+		var exp_read := DataParseHelpersClass.parse_non_negative_int(exp_val, "MilestoneDef.expires_at")
 		if not exp_read.ok:
 			return exp_read
 		def.expires_at = int(exp_read.value)
@@ -87,7 +89,7 @@ static func from_dict(data: Dictionary) -> Result:
 	def.pool_count = 1
 	if pool.has("count"):
 		var count_val = pool.get("count", null)
-		var count_read := _parse_non_negative_int(count_val, "MilestoneDef.pool.count")
+		var count_read := DataParseHelpersClass.parse_non_negative_int(count_val, "MilestoneDef.pool.count")
 		if not count_read.ok:
 			return count_read
 		def.pool_count = int(count_read.value)
@@ -96,7 +98,7 @@ static func from_dict(data: Dictionary) -> Result:
 
 	# effect_ids（可选）：用于 EffectRegistry（M5）
 	if data.has("effect_ids"):
-		var effect_ids_read := _parse_string_array(data.get("effect_ids", null), "MilestoneDef.effect_ids", true)
+		var effect_ids_read := DataParseHelpersClass.parse_string_array(data.get("effect_ids", null), "MilestoneDef.effect_ids", true)
 		if not effect_ids_read.ok:
 			return effect_ids_read
 		def.effect_ids = effect_ids_read.value
@@ -123,49 +125,6 @@ static func load_from_file(path: String) -> Result:
 	var json := file.get_as_text()
 	file.close()
 	return from_json(json)
-
-# === 严格解析辅助 ===
-
-static func _parse_string(value, path: String, allow_empty: bool) -> Result:
-	if not (value is String):
-		return Result.failure("%s 类型错误（期望 String）" % path)
-	# 在数据加载阶段做规范化：去掉首尾空白，避免 UI/规则层反复 strip_edges().
-	var s: String = str(value).strip_edges()
-	if not allow_empty and s.is_empty():
-		return Result.failure("%s 不能为空" % path)
-	return Result.success(s)
-
-static func _parse_int(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
-		return Result.success(int(f))
-	return Result.failure("%s 类型错误（期望整数）" % path)
-
-static func _parse_non_negative_int(value, path: String) -> Result:
-	var r := _parse_int(value, path)
-	if not r.ok:
-		return r
-	if int(r.value) < 0:
-		return Result.failure("%s 必须 >= 0，实际: %d" % [path, int(r.value)])
-	return r
-
-static func _parse_string_array(value, path: String, allow_empty: bool) -> Result:
-	if not (value is Array):
-		return Result.failure("%s 类型错误（期望 Array[String]）" % path)
-	var out: Array[String] = []
-	for i in range(value.size()):
-		var item = value[i]
-		var s_read := _parse_string(item, "%s[%d]" % [path, i], false)
-		if not s_read.ok:
-			return s_read
-		out.append(s_read.value)
-	if not allow_empty and out.is_empty():
-		return Result.failure("%s 不能为空" % path)
-	return Result.success(out)
 
 func matches(event_name: String, context: Dictionary) -> bool:
 	if trigger_event.is_empty() or trigger_event != event_name:
