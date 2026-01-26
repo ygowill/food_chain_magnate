@@ -6,10 +6,10 @@
 
 ## 快速指标（非测试脚本）
 
-- 非测试脚本：175 个，约 26,457 行（`wc -l`）
+- 非测试脚本：175 个，约 26,460 行（`wc -l`）
 - 其中：
   - `core/rules/`：46 文件 / 6,392 行
-  - `core/engine/`：29 文件 / 5,717 行
+  - `core/engine/`：29 文件 / 5,720 行
   - `core/map/`：35 文件 / 4,590 行
   - `core/modules/`：19 文件 / 2,750 行
   - `core/state/`：14 文件 / 2,069 行
@@ -22,6 +22,7 @@
 
 ## 整改日志
 
+- 2026-01-26：为 `GameEngine` 增加 `emit_event(...)` wrapper，并替换 `CommandRunner`/`Initializer` 中对 `EventBus.emit_event(...)` 的直连；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：收敛 initializer/loader 中重复的 EventBus.history 清空逻辑到 `GameEngine.clear_event_history_for_new_session()`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：为 `GameEngine` 增加不变量 baseline 的公开 setter，并替换 `Initializer`/`Loader` 中对私有 `_initial_*` 字段的直接写入；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：`ActionSetup` 的 provider 路径改为从 `ProjectSettings.fcm/action_setup_provider_path` 读取（仍支持 `ActionSetup.set_provider_path(...)` 覆盖），避免 core 内硬编码 gameplay 路径；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
@@ -71,7 +72,7 @@
   - 规则编排（房屋遍历/候选餐厅/胜负判定/库存扣减/收入/里程碑/破产）集中在一个文件里，虽然拆了一些子 helper（`dinnertime_*`），但“主 orchestrator”仍然较大。
 - `core/debug/debug_commands/action_commands.gd`（~478 LOC）
   - 将大量 debug 命令串在一个文件中；后续继续加 debug 命令时容易进一步膨胀。
-- `core/engine/game_engine.gd`（~499 LOC）
+- `core/engine/game_engine.gd`（~502 LOC）
   - 引擎主体 + rewind 辅助查询 + EventBus.history 重建桥接逻辑都在一起。
 - `core/map/piece_def.gd`（~418 LOC）、`core/map/tile_def.gd`（~417 LOC）、`core/map/map_def.gd`（~354 LOC）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
@@ -291,7 +292,7 @@
 | `core/engine/game_engine/modules_v2.gd` | 413 | 22 | 0 |  |
 | `core/engine/game_engine/replay.gd` | 188 | 2 | 0 | uses:GameLog,uses:OS.has_feature,uses:JsonValueParseHelpers |
 | `core/engine/game_engine/step_timeline_build.gd` | 624 | 6 | 0 | uses:EventBus |
-| `core/engine/game_engine.gd` | 499 | 13 | 0 | uses:EventBus,uses:OS.has_feature |
+| `core/engine/game_engine.gd` | 502 | 13 | 0 | uses:EventBus,uses:OS.has_feature |
 | `core/engine/phase_manager/advance_phase.gd` | 239 | 2 | 0 | uses:GameLog |
 | `core/engine/phase_manager/advance_sub_phase.gd` | 278 | 2 | 0 | uses:GameLog |
 | `core/engine/phase_manager/advancement.gd` | 13 | 2 | 0 |  |
@@ -465,19 +466,19 @@
 
 - `core/engine/game_constants.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/game_defaults.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/engine/game_engine.gd`：超长脚本（维护成本高）；建议按职责拆分；preload 依赖较多（耦合偏高）；依赖 EventBus（引擎与日志/UI 耦合）；（已整改 2026-01-26）为不变量 baseline 增加公开 setter，避免外部直接写私有 `_initial_*`；（已整改 2026-01-26）提供 `clear_event_history_for_new_session()` 收敛“新对局清空 EventBus.history”样板
+- `core/engine/game_engine.gd`：超长脚本（维护成本高）；建议按职责拆分；preload 依赖较多（耦合偏高）；依赖 EventBus（引擎与日志/UI 耦合）；（已整改 2026-01-26）为不变量 baseline 增加公开 setter，避免外部直接写私有 `_initial_*`；（已整改 2026-01-26）提供 `clear_event_history_for_new_session()` 收敛“新对局清空 EventBus.history”样板；（已整改 2026-01-26）提供 `emit_event(...)` wrapper 收敛 `EventBus.emit_event(...)` 直连
 - `core/engine/game_engine/action_setup.gd`：已改为委托 `gameplay/action_setup.gd`（移除 core 内对 gameplay/actions 的 preload）；（已整改 2026-01-26）provider 来源改为 `ProjectSettings.fcm/action_setup_provider_path`（仍可用 `ActionSetup.set_provider_path(...)` 覆盖），避免 core 内硬编码 gameplay 路径
 - `core/engine/game_engine/action_wiring.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/game_engine/archive.gd`：依赖 GameLog 全局单例（耦合）
 - `core/engine/game_engine/auto_advance.gd`：通过 `ActionExecutor.apply_changes_in_place` 直接 in-place 改 state（需明确该 API 的契约/适用范围）；偏长脚本；建议关注职责边界/可读性
 - `core/engine/game_engine/checkpoints.gd`：依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
-- `core/engine/game_engine/command_runner.gd`：（已部分整改 2026-01-26）事件构建已下沉到 `command_runner_event_build.gd`，主流程更聚焦于命令执行/auto-advance/invariants/checkpoint/emit；仍依赖 EventBus（引擎与日志/UI 耦合）；依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
+- `core/engine/game_engine/command_runner.gd`：（已部分整改 2026-01-26）事件构建已下沉到 `command_runner_event_build.gd`，主流程更聚焦于命令执行/auto-advance/invariants/checkpoint/emit；仍依赖 EventBus（引擎与日志/UI 耦合）；依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）；（已整改 2026-01-26）事件发射改为调用 `engine.emit_event(...)` wrapper，避免直连 `EventBus.emit_event(...)`
 - `core/engine/game_engine/command_runner_event_build.gd`：（已新增 2026-01-26）从 `CommandRunner` 抽离的事件构建（report/拆分事件/marketing 到期/cleanup 丢弃等，偏日志/展示语义）；偏长脚本；后续可按 phase 拆分
 - `core/engine/game_engine/diagnostics.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/game_engine/event_history_rebuild.gd`：依赖 EventBus（引擎与日志/UI 耦合）；（已部分整改 2026-01-26）debug_force 判定统一复用 `Replay.should_force_execute_in_replay(...)`（移除本文件内重复/分支判断）
 - `core/engine/game_engine/event_timeline_build.gd`：（已部分整改 2026-01-26）`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建（缺少初始 checkpoint 时仅 warning，不阻塞时间线构建）；依赖 EventBus（引擎与日志/UI 耦合）
 - `core/engine/game_engine/game_started_event_build.gd`：（已新增 2026-01-26）抽离 `GAME_STARTED` 事件字段构建（initializer/event_timeline_build/step_timeline_build 共用），避免字段/计算方式漂移
-- `core/engine/game_engine/initializer.gd`：（已部分整改 2026-01-26）`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建；中等体量；存在一定数量的 preload 依赖；依赖 EventBus（引擎与日志/UI 耦合）；（已整改 2026-01-26）不再直接写 `engine._initial_*`，改用公开 setter；（已整改 2026-01-26）EventBus.history 清空逻辑改为调用 `engine.clear_event_history_for_new_session()`
+- `core/engine/game_engine/initializer.gd`：（已部分整改 2026-01-26）`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建；中等体量；存在一定数量的 preload 依赖；依赖 EventBus（引擎与日志/UI 耦合）；（已整改 2026-01-26）不再直接写 `engine._initial_*`，改用公开 setter；（已整改 2026-01-26）EventBus.history 清空逻辑改为调用 `engine.clear_event_history_for_new_session()`；（已整改 2026-01-26）`GAME_STARTED` 事件发射改为调用 `engine.emit_event(...)` wrapper
 - `core/engine/game_engine/invariants.gd`：中等体量；后续可按重构优先级处理
 - `core/engine/game_engine/loader.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `JsonValueParseHelpers`；依赖 EventBus（引擎与日志/UI 耦合）；依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）；（已整改 2026-01-26）不再直接写 `engine._initial_*`，改用公开 setter；（已整改 2026-01-26）EventBus.history 清空逻辑改为调用 `engine.clear_event_history_for_new_session()`
 - `core/engine/game_engine/modules_v2.gd`：超长脚本（维护成本高）；建议按职责拆分；preload 依赖较多（耦合偏高）；函数数量较多，可能包含多职责/可考虑拆 helper

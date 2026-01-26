@@ -93,6 +93,9 @@ func clear_event_history_for_new_session() -> void:
 	elif EventBus.has_method("clear_history"):
 		EventBus.clear_history()
 
+func emit_event(event_type: String, data: Dictionary) -> void:
+	EventBus.emit_event(event_type, data)
+
 # === 初始化 ===
 
 func _init() -> void:

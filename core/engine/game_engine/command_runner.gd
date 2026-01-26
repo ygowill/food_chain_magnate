@@ -110,9 +110,9 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 		data["command_index"] = cmd_index
 		event["data"] = data
 
-		EventBus.emit_event(t, data)
+		engine.emit_event(t, data)
 
-	EventBus.emit_event(EventBus.EventType.COMMAND_EXECUTED, {
+	engine.emit_event(EventBus.EventType.COMMAND_EXECUTED, {
 		"command_index": command.index,
 		"action_id": command.action_id,
 		"actor": command.actor
