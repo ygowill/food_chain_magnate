@@ -117,29 +117,14 @@ static func _compute_order_of_business_empty_slots(state: GameState, player: Dic
 	return empty_slots
 
 static func _get_turnorder_empty_slots_bonus_from_milestones(milestones: Array) -> int:
-	var bonus := 0
-
-	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
+	var bonus_read := MilestoneEffectQueriesClass.sum_non_negative_int_values(
 		milestones,
 		"turnorder_empty_slots",
 		"WorkingFlow: ",
 		"milestones"
 	)
-	assert(entries_read.ok, str(entries_read.error))
-	var entries: Array = entries_read.value
-	for entry_val in entries:
-		var entry: Dictionary = entry_val
-		var mid: String = str(entry.get("milestone_id", ""))
-		var e_i: int = int(entry.get("effect_index", -1))
-		var eff_val = entry.get("effect", null)
-		var eff: Dictionary = eff_val
-
-		var value_val = eff.get("value", null)
-		var v_read := IntValueParseHelpersClass.parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
-		assert(v_read.ok, str(v_read.error))
-		bonus += int(v_read.value)
-
-	return bonus
+	assert(bonus_read.ok, str(bonus_read.error))
+	return int(bonus_read.value)
 
 static func _enforce_company_capacity(player: Dictionary) -> void:
 	CompanyStructureRulesClass.enforce_capacity(player)

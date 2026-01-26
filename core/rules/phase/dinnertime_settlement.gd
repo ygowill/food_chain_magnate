@@ -478,33 +478,18 @@ static func _apply_global_effects_by_segment(
 	return DinnertimeEffectsClass.apply_global_effects_by_segment(state, player_id_for_ctx, effect_registry, segment, ctx)
 
 static func _get_waitress_tips_override_from_milestones(milestones: Array) -> Result:
-	var found := false
-	var best := 0
-
-	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
+	var best_read := MilestoneEffectQueriesClass.max_non_negative_int_value(
 		milestones,
 		"waitress_tips",
 		"晚餐结算失败：",
 		"milestones"
 	)
-	if not entries_read.ok:
-		return entries_read
-	var entries: Array = entries_read.value
-	for entry_val in entries:
-		var entry: Dictionary = entry_val
-		var mid: String = str(entry.get("milestone_id", ""))
-		var e_i: int = int(entry.get("effect_index", -1))
-		var eff_val = entry.get("effect", null)
-		var eff: Dictionary = eff_val
-
-		var value_val = eff.get("value", null)
-		var v_read := IntValueParseHelpersClass.parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
-		if not v_read.ok:
-			return Result.failure("晚餐结算失败：%s" % v_read.error)
-		found = true
-		best = maxi(best, int(v_read.value))
-
+	if not best_read.ok:
+		return best_read
+	if not (best_read.value is Dictionary):
+		return Result.failure("晚餐结算失败：内部错误（max_non_negative_int_value 返回值类型错误）")
+	var best: Dictionary = best_read.value
 	return Result.success({
-		"found": found,
-		"value": best,
+		"found": bool(best.get("found", false)),
+		"value": int(best.get("value", 0)),
 	})

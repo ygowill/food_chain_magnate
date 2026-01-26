@@ -142,35 +142,20 @@ static func apply(state: GameState) -> Result:
 	return Result.success().with_warnings(warnings)
 
 static func get_fridge_capacity_from_milestones(milestones: Array) -> Result:
-	var has_fridge := false
-	var capacity := 0
-
-	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
+	var best_read := MilestoneEffectQueriesClass.max_non_negative_int_value(
 		milestones,
 		"gain_fridge",
 		"CleanupSettlement: ",
 		"player.milestones"
 	)
-	if not entries_read.ok:
-		return entries_read
-	var entries: Array = entries_read.value
-	for entry_val in entries:
-		var entry: Dictionary = entry_val
-		var mid: String = str(entry.get("milestone_id", ""))
-		var e_i: int = int(entry.get("effect_index", -1))
-		var eff_val = entry.get("effect", null)
-		var eff: Dictionary = eff_val
-
-		var value_val = eff.get("value", null)
-		var v_read := IntValueParseHelpersClass.parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
-		if not v_read.ok:
-			return Result.failure("CleanupSettlement: %s" % v_read.error)
-		has_fridge = true
-		capacity = maxi(capacity, int(v_read.value))
-
+	if not best_read.ok:
+		return best_read
+	if not (best_read.value is Dictionary):
+		return Result.failure("CleanupSettlement: 内部错误（max_non_negative_int_value 返回值类型错误）")
+	var best: Dictionary = best_read.value
 	return Result.success({
-		"has_fridge": has_fridge,
-		"capacity": capacity,
+		"has_fridge": bool(best.get("found", false)),
+		"capacity": int(best.get("value", 0)),
 	})
 
 static func apply_cleanup_milestones(state: GameState) -> Result:

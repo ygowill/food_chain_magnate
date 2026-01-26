@@ -118,30 +118,12 @@ static func calculate_sale_breakdown(state: GameState, player_id: int, house: Di
 	})
 
 static func _get_base_price_delta_from_milestones(milestones: Array) -> Result:
-	var delta := 0
-	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
+	return MilestoneEffectQueriesClass.sum_int_values(
 		milestones,
 		"base_price_delta",
 		"PricingPipeline: ",
 		"milestones"
 	)
-	if not entries_read.ok:
-		return entries_read
-	var entries: Array = entries_read.value
-	for entry_val in entries:
-		var entry: Dictionary = entry_val
-		var mid: String = str(entry.get("milestone_id", ""))
-		var e_i: int = int(entry.get("effect_index", -1))
-		var eff_val = entry.get("effect", null)
-		var eff: Dictionary = eff_val
-
-		var value_val = eff.get("value", null)
-		var v_read := IntValueParseHelpersClass.parse_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
-		if not v_read.ok:
-			return Result.failure("PricingPipeline: %s" % v_read.error)
-		delta += int(v_read.value)
-
-	return Result.success(delta)
 
 static func _get_sell_bonus_by_category_from_milestones(milestones: Array) -> Result:
 	var out: Dictionary = {}

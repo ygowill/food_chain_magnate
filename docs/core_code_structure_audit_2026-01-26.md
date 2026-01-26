@@ -74,6 +74,7 @@
 - 2026-01-26：将 debug command registry/commands 的实现移至 `ui/debug/`，core/debug 仅保留 class_name 兼容 shim（用于 global_script_class_cache/旧路径）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `TileDef` 的板块编辑器编辑方法（road/drink/printed/blocked）移出 `core/map/tile_def.gd`，放到 `ui/scenes/tools/tile_editor/tile_def_edit.gd`；core 仅保留 `ensure_road_grid()` 与数据/校验/查询逻辑（减少 core 与 tools 耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `GameStateFactory` 的餐厅 Logo 分配逻辑外移到 `gameplay/setup/restaurant_logo_assignment.gd`，并通过 `ProjectSettings.fcm/restaurant_logo_assignment_provider_path` 动态加载（减少 core/state 的 UI/setup 语义）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：扩展 `MilestoneEffectQueries`（新增 sum/max helpers）并用于 `PricingPipeline`/`DrinksProcurement`/`WorkingFlow`/`PaydaySettlement`/`CleanupSettlement`/`DinnertimeSettlement` 收敛“entries->value 解析/累加/取最大”样板；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -515,7 +516,7 @@
 - `core/engine/phase_manager/hooks.gd`：中等体量；后续可按重构优先级处理；依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
 - `core/engine/phase_manager/order_config.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/phase_manager/settlement_triggers.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/engine/phase_manager/working_flow.gd`：（已整改 2026-01-26）移除 `_parse_non_negative_int_value` wrapper，直接调用 `IntValueParseHelpers`；（已部分整改 2026-01-26）里程碑 effects 遍历改为复用 `MilestoneEffectQueries`；仍大量使用 assert 做 fail-fast（需注意 release 下 assert 行为）
+- `core/engine/phase_manager/working_flow.gd`：（已整改 2026-01-26）移除 `_parse_non_negative_int_value` wrapper，直接调用 `IntValueParseHelpers`；（已整改 2026-01-26）里程碑 effects 的 value 求和改用 `MilestoneEffectQueries.sum_non_negative_int_values(...)`（减少重复/样板）；仍大量使用 assert 做 fail-fast（需注意 release 下 assert 行为）
 
 ### map/
 
@@ -587,7 +588,7 @@
 - `core/rules/company_structure_rules.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/dinnertime_demand_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/dinnertime_route_purchase_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/drinks_procurement.gd`：规则编排较大；与 inputs/validator/finder 等已拆分但主流程仍偏重；偏长脚本；建议关注职责边界/可读性；存在一定数量的 preload 依赖；（已整改 2026-01-26）移除 `_parse_positive_int_value` wrapper，直接调用 `IntValueParseHelpers`；（已部分整改 2026-01-26）里程碑 effects 遍历改为复用 `MilestoneEffectQueries`
+- `core/rules/drinks_procurement.gd`：规则编排较大；与 inputs/validator/finder 等已拆分但主流程仍偏重；偏长脚本；建议关注职责边界/可读性；存在一定数量的 preload 依赖；（已整改 2026-01-26）移除 `_parse_positive_int_value` wrapper，直接调用 `IntValueParseHelpers`；（已整改 2026-01-26）`procure_plus_one` 的 value 求和改用 `MilestoneEffectQueries.sum_positive_int_values(...)`（减少重复/样板）
 - `core/rules/drinks_procurement/default_route_builder.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/drinks_procurement/inputs.gd`：（已整改 2026-01-26）移除自带 `_parse_int`，改用 `JsonValueParseHelpers`
 - `core/rules/drinks_procurement/picked_sources_finder.gd`：未发现明显结构问题（小文件/职责相对单一）
@@ -612,22 +613,22 @@
 - `core/rules/marketing_range_calculator.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/marketing_rules.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/marketing_type_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/milestone_effect_queries.gd`：（已新增 2026-01-26）用于收敛“遍历 milestones -> MilestoneDef.effects”样板，供 pricing/settlement/drinks 等复用
+- `core/rules/milestone_effect_queries.gd`：（已新增 2026-01-26）用于收敛“遍历 milestones -> MilestoneDef.effects”样板，供 pricing/settlement/drinks 等复用；（已整改 2026-01-26）新增 sum/max helpers 收敛 `effects[*].value` 的解析/聚合样板
 - `core/rules/milestone_effect_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/milestone_system.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/phase/cleanup_settlement.gd`：（已部分整改 2026-01-26）移除自带 `_parse_non_negative_int_value`，改用 `IntValueParseHelpers`；（已部分整改 2026-01-26）里程碑 effects 遍历改为复用 `MilestoneEffectQueries`；中等体量；后续可按重构优先级处理
+- `core/rules/phase/cleanup_settlement.gd`：（已部分整改 2026-01-26）移除自带 `_parse_non_negative_int_value`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`gain_fridge` 的 “取最大 capacity” 逻辑改用 `MilestoneEffectQueries.max_non_negative_int_value(...)`（减少重复/样板）；中等体量；后续可按重构优先级处理
 - `core/rules/phase/dinnertime/dinnertime_distance.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/phase/dinnertime/dinnertime_effects.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/phase/dinnertime/dinnertime_events.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/phase/dinnertime/dinnertime_inventory.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/phase/dinnertime/dinnertime_selection.gd`：中等体量；后续可按重构优先级处理；存在较多 assert；注意与 Result/fail-fast 策略一致性
-- `core/rules/phase/dinnertime_settlement.gd`：（已部分整改 2026-01-26）移除自带 `_parse_non_negative_int_value`，改用 `IntValueParseHelpers`；（已部分整改 2026-01-26）里程碑 effects 遍历改为复用 `MilestoneEffectQueries`；晚餐结算 orchestrator 过大；可进一步把“选择/计价/结算写入/报告生成”分层；超长脚本（维护成本高）；建议按职责拆分；preload 依赖较多（耦合偏高）
+- `core/rules/phase/dinnertime_settlement.gd`：（已部分整改 2026-01-26）移除自带 `_parse_non_negative_int_value`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`waitress_tips` 的 “取最大 tips” 逻辑改用 `MilestoneEffectQueries.max_non_negative_int_value(...)`（减少重复/样板）；晚餐结算 orchestrator 过大；可进一步把“选择/计价/结算写入/报告生成”分层；超长脚本（维护成本高）；建议按职责拆分；preload 依赖较多（耦合偏高）
 - `core/rules/phase/marketing/marketing_instances_validation.gd`：（已新增 2026-01-26）抽离 MarketingSettlement 的 marketing_instances 校验/归一化逻辑（减少单文件职责/缩短脚本）
 - `core/rules/phase/marketing/settlement_helpers.gd`：偏长脚本；建议关注职责边界/可读性；存在较多 assert；注意与 Result/fail-fast 策略一致性
 - `core/rules/phase/marketing_settlement.gd`：（已整改 2026-01-26）将 marketing_instances 校验/归一化抽离到 `marketing_instances_validation.gd`（减少单文件职责/缩短脚本）；其余结算/需求生成/到期清理仍可按职责继续拆分
-- `core/rules/phase/payday_settlement.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `IntValueParseHelpers`；（已部分整改 2026-01-26）里程碑 effects 遍历改为复用 `MilestoneEffectQueries`；结算逻辑较大；包含 token 支付/折扣/报告写入等多职责，可分层；偏长脚本；建议关注职责边界/可读性；存在一定数量的 preload 依赖
+- `core/rules/phase/payday_settlement.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`salary_total_delta` 的 value 求和改用 `MilestoneEffectQueries.sum_int_values(...)`（减少重复/样板）；结算逻辑较大；包含 token 支付/折扣/报告写入等多职责，可分层；偏长脚本；建议关注职责边界/可读性；存在一定数量的 preload 依赖
 - `core/rules/placement_conflict_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/pricing_pipeline.gd`：（已部分整改 2026-01-26）移除自带 `_parse_*`，改用 `IntValueParseHelpers`；（已部分整改 2026-01-26）里程碑 effects 遍历改为复用 `MilestoneEffectQueries`；中等体量；后续可按重构优先级处理
+- `core/rules/pricing_pipeline.gd`：（已部分整改 2026-01-26）移除自带 `_parse_*`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`base_price_delta` 的 value 求和改用 `MilestoneEffectQueries.sum_int_values(...)`（减少重复/样板）；中等体量；后续可按重构优先级处理
 - `core/rules/settlement_registry.gd`：依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
 - `core/rules/working/mandatory_actions_rules.gd`：未发现明显结构问题（小文件/职责相对单一）
 

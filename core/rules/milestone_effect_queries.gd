@@ -5,6 +5,7 @@ extends RefCounted
 
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const MilestoneDefClass = preload("res://core/data/milestone_def.gd")
+const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 
 static func collect_effect_entries(milestones: Array, effect_type: String, prefix: String, milestones_path: String) -> Result:
 	if effect_type.is_empty():
@@ -51,3 +52,93 @@ static func collect_effect_entries(milestones: Array, effect_type: String, prefi
 			})
 
 	return Result.success(out)
+
+static func sum_int_values(milestones: Array, effect_type: String, prefix: String, milestones_path: String) -> Result:
+	var total := 0
+	var entries_read := collect_effect_entries(milestones, effect_type, prefix, milestones_path)
+	if not entries_read.ok:
+		return entries_read
+	var entries: Array = entries_read.value
+	for entry_val in entries:
+		var entry: Dictionary = entry_val
+		var mid: String = str(entry.get("milestone_id", ""))
+		var e_i: int = int(entry.get("effect_index", -1))
+		var eff_val = entry.get("effect", null)
+		var eff: Dictionary = eff_val
+
+		var value_val = eff.get("value", null)
+		var v_read := IntValueParseHelpersClass.parse_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+		if not v_read.ok:
+			return Result.failure("%s%s" % [prefix, v_read.error])
+		total += int(v_read.value)
+
+	return Result.success(total)
+
+static func sum_non_negative_int_values(milestones: Array, effect_type: String, prefix: String, milestones_path: String) -> Result:
+	var total := 0
+	var entries_read := collect_effect_entries(milestones, effect_type, prefix, milestones_path)
+	if not entries_read.ok:
+		return entries_read
+	var entries: Array = entries_read.value
+	for entry_val in entries:
+		var entry: Dictionary = entry_val
+		var mid: String = str(entry.get("milestone_id", ""))
+		var e_i: int = int(entry.get("effect_index", -1))
+		var eff_val = entry.get("effect", null)
+		var eff: Dictionary = eff_val
+
+		var value_val = eff.get("value", null)
+		var v_read := IntValueParseHelpersClass.parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+		if not v_read.ok:
+			return Result.failure("%s%s" % [prefix, v_read.error])
+		total += int(v_read.value)
+
+	return Result.success(total)
+
+static func sum_positive_int_values(milestones: Array, effect_type: String, prefix: String, milestones_path: String) -> Result:
+	var total := 0
+	var entries_read := collect_effect_entries(milestones, effect_type, prefix, milestones_path)
+	if not entries_read.ok:
+		return entries_read
+	var entries: Array = entries_read.value
+	for entry_val in entries:
+		var entry: Dictionary = entry_val
+		var mid: String = str(entry.get("milestone_id", ""))
+		var e_i: int = int(entry.get("effect_index", -1))
+		var eff_val = entry.get("effect", null)
+		var eff: Dictionary = eff_val
+
+		var value_val = eff.get("value", null)
+		var v_read := IntValueParseHelpersClass.parse_positive_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+		if not v_read.ok:
+			return Result.failure("%s%s" % [prefix, v_read.error])
+		total += int(v_read.value)
+
+	return Result.success(total)
+
+static func max_non_negative_int_value(milestones: Array, effect_type: String, prefix: String, milestones_path: String) -> Result:
+	var found := false
+	var best := 0
+
+	var entries_read := collect_effect_entries(milestones, effect_type, prefix, milestones_path)
+	if not entries_read.ok:
+		return entries_read
+	var entries: Array = entries_read.value
+	for entry_val in entries:
+		var entry: Dictionary = entry_val
+		var mid: String = str(entry.get("milestone_id", ""))
+		var e_i: int = int(entry.get("effect_index", -1))
+		var eff_val = entry.get("effect", null)
+		var eff: Dictionary = eff_val
+
+		var value_val = eff.get("value", null)
+		var v_read := IntValueParseHelpersClass.parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+		if not v_read.ok:
+			return Result.failure("%s%s" % [prefix, v_read.error])
+		found = true
+		best = maxi(best, int(v_read.value))
+
+	return Result.success({
+		"found": found,
+		"value": best,
+	})

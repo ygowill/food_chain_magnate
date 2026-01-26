@@ -188,30 +188,12 @@ static func get_drinks_per_source_bonus_from_milestones(state: GameState, player
 		return Result.failure("DrinksProcurement: player[%d].milestones 缺失或类型错误（期望 Array）" % player_id)
 	var milestones: Array = player["milestones"]
 
-	var bonus := 0
-	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
+	return MilestoneEffectQueriesClass.sum_positive_int_values(
 		milestones,
 		"procure_plus_one",
 		"DrinksProcurement: ",
 		"milestones"
 	)
-	if not entries_read.ok:
-		return entries_read
-	var entries: Array = entries_read.value
-	for entry_val in entries:
-		var entry: Dictionary = entry_val
-		var mid: String = str(entry.get("milestone_id", ""))
-		var e_i: int = int(entry.get("effect_index", -1))
-		var eff_val = entry.get("effect", null)
-		var eff: Dictionary = eff_val
-
-		var value_val = eff.get("value", null)
-		var v_read := IntValueParseHelpersClass.parse_positive_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
-		if not v_read.ok:
-			return Result.failure("DrinksProcurement: %s" % v_read.error)
-		bonus += int(v_read.value)
-
-	return Result.success(bonus)
 
 static func get_drinks_per_source_delta_for_employee_from_milestones(state: GameState, player_id: int, employee_id: String) -> Result:
 	if state == null:
