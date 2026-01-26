@@ -6,12 +6,12 @@
 
 ## 快速指标（非测试脚本）
 
-- 非测试脚本：175 个，约 26,380 行（`wc -l`）
+- 非测试脚本：175 个，约 26,354 行（`wc -l`）
 - 其中：
-  - `core/rules/`：46 文件 / 6,392 行
-  - `core/engine/`：29 文件 / 5,730 行
+  - `core/rules/`：46 文件 / 6,389 行
+  - `core/engine/`：29 文件 / 5,726 行
   - `core/map/`：35 文件 / 4,521 行
-  - `core/modules/`：19 文件 / 2,750 行
+  - `core/modules/`：19 文件 / 2,731 行
   - `core/state/`：14 文件 / 2,048 行
   - `core/data/`：14 文件 / 1,534 行
   - `core/debug/`：6 文件 / 1,439 行
@@ -22,6 +22,7 @@
 
 ## 整改日志
 
+- 2026-01-26：移除 `ModuleManifest`/`WorkingFlow`/`DrinksProcurement` 中薄 `_parse_*` wrapper，直接调用 `DataParseHelpers`/`IntValueParseHelpers`（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：`RoadGraphBuilder` 的 external_cells 位置解析改为复用 `core/map/map_runtime/cells.gd`（新增 `sorted_positions_from_external_cells(...)`），并移除 builder 内自带 `_parse_*`（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：`GameStateSerialization` 移除自带 `_parse_*` wrapper，改为直接调用 `ParseHelpers`/`RoundStateParser`（收敛 state 解析样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：`BakedMap` 移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
@@ -310,7 +311,7 @@
 | `core/engine/phase_manager/hooks.gd` | 220 | 1 | 0 | uses:GameLog,uses:DebugFlags |
 | `core/engine/phase_manager/order_config.gd` | 152 | 1 | 0 |  |
 | `core/engine/phase_manager/settlement_triggers.gd` | 127 | 2 | 0 |  |
-| `core/engine/phase_manager/working_flow.gd` | 149 | 3 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
+| `core/engine/phase_manager/working_flow.gd` | 145 | 3 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
 | `core/engine/phase_manager.gd` | 310 | 10 | 0 |  |
 | `core/map/house_number_manager.gd` | 233 | 0 | 0 |  |
 | `core/map/map_baker/bake.gd` | 80 | 3 | 0 |  |
@@ -350,7 +351,7 @@
 | `core/modules/v2/content_catalog.gd` | 68 | 0 | 0 |  |
 | `core/modules/v2/content_catalog_loader.gd` | 274 | 9 | 0 |  |
 | `core/modules/v2/module_dir_spec.gd` | 36 | 0 | 0 |  |
-| `core/modules/v2/module_manifest.gd` | 127 | 1 | 0 | uses:DataParseHelpers |
+| `core/modules/v2/module_manifest.gd` | 108 | 1 | 0 | uses:DataParseHelpers |
 | `core/modules/v2/module_package_loader.gd` | 82 | 1 | 0 |  |
 | `core/modules/v2/module_plan_builder.gd` | 124 | 0 | 0 |  |
 | `core/modules/v2/pool_builder.gd` | 86 | 4 | 0 | uses:DataParseHelpers |
@@ -377,7 +378,7 @@
 | `core/rules/drinks_procurement/route_validator.gd` | 121 | 5 | 0 |  |
 | `core/rules/drinks_procurement/start_restaurant_resolver.gd` | 89 | 3 | 0 |  |
 | `core/rules/drinks_procurement/tile_route_utils.gd` | 83 | 1 | 0 |  |
-| `core/rules/drinks_procurement.gd` | 325 | 7 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
+| `core/rules/drinks_procurement.gd` | 322 | 7 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
 | `core/rules/economy/bankruptcy_rules.gd` | 270 | 3 | 0 |  |
 | `core/rules/effect_registry.gd` | 67 | 0 | 0 |  |
 | `core/rules/employee_pool_patch_registry.gd` | 113 | 0 | 0 |  |
@@ -502,7 +503,7 @@
 - `core/engine/phase_manager/hooks.gd`：中等体量；后续可按重构优先级处理；依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
 - `core/engine/phase_manager/order_config.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/phase_manager/settlement_triggers.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/engine/phase_manager/working_flow.gd`：（已部分整改 2026-01-26）`_parse_non_negative_int_value` 改为复用 `IntValueParseHelpers`；（已部分整改 2026-01-26）里程碑 effects 遍历改为复用 `MilestoneEffectQueries`；仍大量使用 assert 做 fail-fast（需注意 release 下 assert 行为）
+- `core/engine/phase_manager/working_flow.gd`：（已整改 2026-01-26）移除 `_parse_non_negative_int_value` wrapper，直接调用 `IntValueParseHelpers`；（已部分整改 2026-01-26）里程碑 effects 遍历改为复用 `MilestoneEffectQueries`；仍大量使用 assert 做 fail-fast（需注意 release 下 assert 行为）
 
 ### map/
 
@@ -547,7 +548,7 @@
 - `core/modules/v2/content_catalog.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/modules/v2/content_catalog_loader.gd`：中等体量；后续可按重构优先级处理；存在一定数量的 preload 依赖
 - `core/modules/v2/module_dir_spec.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/modules/v2/module_manifest.gd`：（已部分整改 2026-01-26）`_parse_*` 改为复用 `DataParseHelpers`（仍保留薄 wrapper 以维持 module.json 语义）
+- `core/modules/v2/module_manifest.gd`：（已整改 2026-01-26）移除薄 `_parse_*` wrapper，直接调用 `DataParseHelpers`（仍保持 module.json 语义）
 - `core/modules/v2/module_package_loader.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/modules/v2/module_plan_builder.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/modules/v2/pool_builder.gd`：（已部分整改 2026-01-26）移除自带 `_parse_non_negative_int`，改用 `DataParseHelpers`
@@ -574,7 +575,7 @@
 - `core/rules/company_structure_rules.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/dinnertime_demand_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/dinnertime_route_purchase_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/drinks_procurement.gd`：规则编排较大；与 inputs/validator/finder 等已拆分但主流程仍偏重；偏长脚本；建议关注职责边界/可读性；存在一定数量的 preload 依赖；（已部分整改 2026-01-26）`_parse_positive_int_value` 改为复用 `IntValueParseHelpers`；（已部分整改 2026-01-26）里程碑 effects 遍历改为复用 `MilestoneEffectQueries`
+- `core/rules/drinks_procurement.gd`：规则编排较大；与 inputs/validator/finder 等已拆分但主流程仍偏重；偏长脚本；建议关注职责边界/可读性；存在一定数量的 preload 依赖；（已整改 2026-01-26）移除 `_parse_positive_int_value` wrapper，直接调用 `IntValueParseHelpers`；（已部分整改 2026-01-26）里程碑 effects 遍历改为复用 `MilestoneEffectQueries`
 - `core/rules/drinks_procurement/default_route_builder.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/drinks_procurement/inputs.gd`：（已整改 2026-01-26）移除自带 `_parse_int`，改用 `JsonValueParseHelpers`
 - `core/rules/drinks_procurement/picked_sources_finder.gd`：未发现明显结构问题（小文件/职责相对单一）

@@ -206,7 +206,7 @@ static func get_drinks_per_source_bonus_from_milestones(state: GameState, player
 		var eff: Dictionary = eff_val
 
 		var value_val = eff.get("value", null)
-		var v_read := _parse_positive_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+		var v_read := IntValueParseHelpersClass.parse_positive_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
 		if not v_read.ok:
 			return Result.failure("DrinksProcurement: %s" % v_read.error)
 		bonus += int(v_read.value)
@@ -263,7 +263,7 @@ static func get_drinks_per_source_delta_for_employee_from_milestones(state: Game
 			continue
 
 		var value_val = eff.get("value", null)
-		var v_read := _parse_positive_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+		var v_read := IntValueParseHelpersClass.parse_positive_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
 		if not v_read.ok:
 			return Result.failure("DrinksProcurement: %s" % v_read.error)
 		bonus += int(v_read.value)
@@ -320,6 +320,3 @@ static func _get_distance_range_bonus_from_milestones(state: GameState, player_i
 				break
 
 	return Result.success(bonus)
-
-static func _parse_positive_int_value(value, path: String) -> Result:
-	return IntValueParseHelpersClass.parse_positive_int_value(value, path)

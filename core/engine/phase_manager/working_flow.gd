@@ -135,15 +135,11 @@ static func _get_turnorder_empty_slots_bonus_from_milestones(milestones: Array) 
 		var eff: Dictionary = eff_val
 
 		var value_val = eff.get("value", null)
-		var v := _parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
-		bonus += v
+		var v_read := IntValueParseHelpersClass.parse_non_negative_int_value(value_val, "%s.effects[%d].value" % [mid, e_i])
+		assert(v_read.ok, str(v_read.error))
+		bonus += int(v_read.value)
 
 	return bonus
-
-static func _parse_non_negative_int_value(value, path: String) -> int:
-	var r := IntValueParseHelpersClass.parse_non_negative_int_value(value, path)
-	assert(r.ok, str(r.error))
-	return int(r.value)
 
 static func _enforce_company_capacity(player: Dictionary) -> void:
 	CompanyStructureRulesClass.enforce_capacity(player)

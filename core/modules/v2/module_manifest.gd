@@ -32,14 +32,14 @@ static func load_from_file(path: String) -> Result:
 static func from_dict(data: Dictionary) -> Result:
 	var out := ModuleManifest.new()
 
-	var schema_read := _parse_int_required(data.get("schema_version", null), "schema_version")
+	var schema_read := DataParseHelpersClass.parse_int(data.get("schema_version", null), "schema_version")
 	if not schema_read.ok:
 		return schema_read
 	out.schema_version = int(schema_read.value)
 	if out.schema_version != SUPPORTED_SCHEMA_VERSION:
 		return Result.failure("不支持的 module.json.schema_version: %d (期望: %d)" % [out.schema_version, SUPPORTED_SCHEMA_VERSION])
 
-	var id_read := _parse_string_required(data.get("id", null), "id")
+	var id_read := DataParseHelpersClass.parse_string(data.get("id", null), "id", false)
 	if not id_read.ok:
 		return id_read
 	out.id = id_read.value
@@ -48,36 +48,38 @@ static func from_dict(data: Dictionary) -> Result:
 	if name_val == null:
 		out.name = out.id
 	else:
-		var name_read := _parse_string_allow_empty(name_val, "name")
+		var name_read := DataParseHelpersClass.parse_string(name_val, "name", true)
 		if not name_read.ok:
 			return name_read
 		out.name = name_read.value
 		if out.name.is_empty():
 			out.name = out.id
 
-	var version_read := _parse_string_required(data.get("version", null), "version")
+	var version_read := DataParseHelpersClass.parse_string(data.get("version", null), "version", false)
 	if not version_read.ok:
 		return version_read
 	out.version = version_read.value
 
 	var priority_val = data.get("priority", 100)
-	var priority_read := _parse_int_optional(priority_val, "priority")
+	var priority_read := Result.success(0) if priority_val == null else DataParseHelpersClass.parse_int(priority_val, "priority")
 	if not priority_read.ok:
 		return priority_read
 	out.priority = int(priority_read.value)
 
-	var deps_read := _parse_string_array_optional(data.get("dependencies", []), "dependencies")
+	var deps_val = data.get("dependencies", [])
+	var deps_read := Result.success([]) if deps_val == null else DataParseHelpersClass.parse_string_array(deps_val, "dependencies", true)
 	if not deps_read.ok:
 		return deps_read
 	out.dependencies = deps_read.value
 
-	var conflicts_read := _parse_string_array_optional(data.get("conflicts", []), "conflicts")
+	var conflicts_val = data.get("conflicts", [])
+	var conflicts_read := Result.success([]) if conflicts_val == null else DataParseHelpersClass.parse_string_array(conflicts_val, "conflicts", true)
 	if not conflicts_read.ok:
 		return conflicts_read
 	out.conflicts = conflicts_read.value
 
 	var entry_val = data.get("entry_script", "")
-	var entry_read := _parse_string_allow_empty(entry_val, "entry_script")
+	var entry_read := DataParseHelpersClass.parse_string(entry_val, "entry_script", true)
 	if not entry_read.ok:
 		return entry_read
 	out.entry_script = entry_read.value
@@ -104,24 +106,3 @@ func to_dict() -> Dictionary:
 		"entry_script": entry_script,
 		"provides": provides,
 	}
-
-# === 严格解析辅助（允许 JSON 数字以整值 float 表示）===
-
-static func _parse_string_required(value, path: String) -> Result:
-	return DataParseHelpersClass.parse_string(value, path, false)
-
-static func _parse_string_allow_empty(value, path: String) -> Result:
-	return DataParseHelpersClass.parse_string(value, path, true)
-
-static func _parse_int_required(value, path: String) -> Result:
-	return DataParseHelpersClass.parse_int(value, path)
-
-static func _parse_int_optional(value, path: String) -> Result:
-	if value == null:
-		return Result.success(0)
-	return _parse_int_required(value, path)
-
-static func _parse_string_array_optional(value, path: String) -> Result:
-	if value == null:
-		return Result.success([])
-	return DataParseHelpersClass.parse_string_array(value, path, true)
