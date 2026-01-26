@@ -156,14 +156,14 @@ static func initialize_new_game(
 		return Result.failure("初始化失败：state.bank.reserve_added_total 缺失或类型错误（期望 int）")
 	if not state.bank.has("removed_total") or not (state.bank["removed_total"] is int):
 		return Result.failure("初始化失败：state.bank.removed_total 缺失或类型错误（期望 int）")
-	engine._initial_total_cash = int(total_cash_read.value) - int(state.bank["reserve_added_total"]) + int(state.bank["removed_total"])
+	engine.set_initial_total_cash_for_invariants(int(total_cash_read.value) - int(state.bank["reserve_added_total"]) + int(state.bank["removed_total"]))
 
 	var span_emp_totals := PerfTraceClass.begin_span("init:Invariants.compute_employee_totals")
 	var employee_totals_read := InvariantsClass.compute_employee_totals(state)
 	PerfTraceClass.end_span(span_emp_totals)
 	if not employee_totals_read.ok:
 		return Result.failure("初始化失败：无法计算初始员工总量: %s" % employee_totals_read.error)
-	engine._initial_employee_totals = employee_totals_read.value
+	engine.set_initial_employee_totals_for_invariants(employee_totals_read.value)
 
 	engine.command_history.clear()
 	engine.checkpoints.clear()

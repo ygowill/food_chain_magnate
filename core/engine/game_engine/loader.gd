@@ -107,11 +107,11 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result
 	if not engine.state.bank.has("removed_total") or not (engine.state.bank["removed_total"] is int):
 		return Result.failure("无效的 initial_state：state.bank.removed_total 缺失或类型错误（期望 int）")
 	# _initial_total_cash 语义：不包含“后续注入/移除”的 delta（以便 invariant 使用 base + delta 计算）。
-	engine._initial_total_cash = int(total_cash_read.value) - int(engine.state.bank["reserve_added_total"]) + int(engine.state.bank["removed_total"])
+	engine.set_initial_total_cash_for_invariants(int(total_cash_read.value) - int(engine.state.bank["reserve_added_total"]) + int(engine.state.bank["removed_total"]))
 	var employee_totals_read := InvariantsClass.compute_employee_totals(engine.state)
 	if not employee_totals_read.ok:
 		return Result.failure("无效的 initial_state：无法计算初始员工总量: %s" % employee_totals_read.error)
-	engine._initial_employee_totals = employee_totals_read.value
+	engine.set_initial_employee_totals_for_invariants(employee_totals_read.value)
 
 	# 重放命令
 	engine.command_history.clear()

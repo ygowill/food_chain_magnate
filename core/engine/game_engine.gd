@@ -230,6 +230,12 @@ func verify_checkpoints() -> Result:
 
 # === 不变量检查 ===
 
+func set_initial_total_cash_for_invariants(total_cash: int) -> void:
+	_initial_total_cash = int(total_cash)
+
+func set_initial_employee_totals_for_invariants(employee_totals: Dictionary) -> void:
+	_initial_employee_totals = employee_totals
+
 func _check_invariants() -> Result:
 	return InvariantsClass.check_invariants(state, _initial_total_cash, _initial_employee_totals)
 
