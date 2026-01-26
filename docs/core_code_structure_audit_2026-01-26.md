@@ -73,6 +73,7 @@
 - 2026-01-26：`GameEngine.clear_event_history_for_new_session()` 与 `rewind_to_command()` 在可用时优先调用注入的 `event_sink`（`clear_history_and_reset_sequence`/`record_event`），再回退到 EventBus（进一步降低硬依赖）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 debug command registry/commands 的实现移至 `ui/debug/`，core/debug 仅保留 class_name 兼容 shim（用于 global_script_class_cache/旧路径）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `TileDef` 的板块编辑器编辑方法（road/drink/printed/blocked）移出 `core/map/tile_def.gd`，放到 `ui/scenes/tools/tile_editor/tile_def_edit.gd`；core 仅保留 `ensure_road_grid()` 与数据/校验/查询逻辑（减少 core 与 tools 耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：将 `GameStateFactory` 的餐厅 Logo 分配逻辑外移到 `gameplay/setup/restaurant_logo_assignment.gd`，并通过 `ProjectSettings.fcm/restaurant_logo_assignment_provider_path` 动态加载（减少 core/state 的 UI/setup 语义）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -226,7 +227,7 @@
 - Debug 命令系统在 core：
   - （已整改 2026-01-26）实现已移至 `ui/debug/`，core/debug 仅保留 class_name 兼容 shim（用于 global_script_class_cache/旧路径）。
 - GameStateFactory 含“Logo 分配”等偏展示/前端选择的确定性逻辑：
-  - `core/state/game_state_factory.gd` 中 `restaurant_logo_id` 分配策略（含随机/显式选择合并）更像 game setup/前端选择的结果落盘；放在 core 会让 core 牵涉 UI 资源/规则变化。
+  - （已整改 2026-01-26）`core/state/game_state_factory.gd` 中 `restaurant_logo_id` 分配策略已外移到 `gameplay/setup/restaurant_logo_assignment.gd`，并由 `ProjectSettings.fcm/restaurant_logo_assignment_provider_path` 注入（core/state 不再内置具体分配逻辑）。
 - MapDef/TileDef/PieceDef 内含“编辑方法/调试 dump”：
   - （已整改 2026-01-26）`TileDef` 的板块编辑器编辑方法已移至 `ui/scenes/tools/tile_editor/tile_def_edit.gd`，core `TileDef` 不再包含 tools 专用 API。
 
@@ -633,7 +634,7 @@
 ### state/
 
 - `core/state/game_state.gd`：中等体量；后续可按重构优先级处理
-- `core/state/game_state_factory.gd`：含 UI/setup 语义的 logo 分配落盘逻辑；若目标是更纯的 core，可考虑外移到上层；中等体量；后续可按重构优先级处理；存在一定数量的 preload 依赖
+- `core/state/game_state_factory.gd`：（已整改 2026-01-26）logo 分配已委托 provider（`gameplay/setup/restaurant_logo_assignment.gd`），并由 `ProjectSettings.fcm/restaurant_logo_assignment_provider_path` 注入，减少 core/state 的 UI/setup 语义；中等体量；存在一定数量的 preload 依赖
 - `core/state/game_state_serialization.gd`：（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `ParseHelpers`/`RoundStateParser`（收敛 state 解析样板）；中等体量；后续可按重构优先级处理；存在一定数量的 preload 依赖
 - `core/state/serialization/json_safe.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/serialization/parse_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）

@@ -9,6 +9,22 @@ const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const PoolBuilderClass = preload("res://core/modules/v2/pool_builder.gd")
 const GameConstantsClass = preload("res://core/engine/game_constants.gd")
 
+const RESTAURANT_LOGO_ASSIGNMENT_PROVIDER_PATH_SETTING = "fcm/restaurant_logo_assignment_provider_path"
+static var restaurant_logo_assignment_provider_path_override: String = ""
+
+static func set_restaurant_logo_assignment_provider_path(path: String) -> void:
+	restaurant_logo_assignment_provider_path_override = str(path).strip_edges()
+
+static func _resolve_restaurant_logo_assignment_provider_path() -> String:
+	if not restaurant_logo_assignment_provider_path_override.is_empty():
+		return restaurant_logo_assignment_provider_path_override
+	if not ProjectSettings.has_setting(RESTAURANT_LOGO_ASSIGNMENT_PROVIDER_PATH_SETTING):
+		return ""
+	var v = ProjectSettings.get_setting(RESTAURANT_LOGO_ASSIGNMENT_PROVIDER_PATH_SETTING)
+	if not (v is String):
+		return ""
+	return str(v).strip_edges()
+
 static func apply_initial_state(
 	state,
 	player_count: int,
@@ -64,59 +80,9 @@ static func apply_initial_state(
 	for i in range(player_count):
 		state.players.append(_create_player_from_config(i, cfg))
 
-	# 餐厅 Logo：进入游戏前分配一次，并写入存档以保证回放/联机确定性。
-	# - 默认：按 seed 确定性洗牌后分配（等价于旧逻辑）
-	# - 若提供 restaurant_logo_choices_by_player：尊重显式选择（0..4），其余用洗牌后的剩余值填充；始终唯一。
-	# 注意：这里使用独立 RNG（仅依赖 seed），避免影响 engine.random_manager 的调用序列。
-	var logo_count := 5
-	var remaining: Array[int] = []
-	for i in range(logo_count):
-		remaining.append(i)
-
-	var fixed := {} # logo_id -> true（防重复）
-	var needs_random: Array[bool] = []
-	for pid in range(player_count):
-		needs_random.append(true)
-
-	for pid in range(player_count):
-		if pid < 0 or pid >= state.players.size():
-			continue
-		var choice := -1
-		if restaurant_logo_choices_by_player != null and pid < restaurant_logo_choices_by_player.size():
-			var v = restaurant_logo_choices_by_player[pid]
-			if v is int:
-				choice = int(v)
-			elif v is float:
-				var f: float = float(v)
-				if f == floor(f):
-					choice = int(f)
-		if choice >= 0 and choice < logo_count and not fixed.has(choice):
-			fixed[choice] = true
-			needs_random[pid] = false
-			state.players[pid]["restaurant_logo_id"] = choice
-			remaining.erase(choice)
-
-	var logo_rng := RandomNumberGenerator.new()
-	var logo_seed := int(rng_seed) ^ int(0x4C4F474F) # 'LOGO'
-	logo_rng.seed = logo_seed
-	logo_rng.state = int(logo_seed)
-	for i in range(remaining.size() - 1, 0, -1):
-		var j := logo_rng.randi_range(0, i)
-		var tmp = remaining[i]
-		remaining[i] = remaining[j]
-		remaining[j] = tmp
-
-	var next_idx := 0
-	for pid in range(player_count):
-		if pid < 0 or pid >= state.players.size():
-			continue
-		if not needs_random[pid]:
-			continue
-		if next_idx < remaining.size():
-			state.players[pid]["restaurant_logo_id"] = int(remaining[next_idx])
-			next_idx += 1
-		else:
-			state.players[pid]["restaurant_logo_id"] = int(pid % logo_count)
+	var assign_logo := _assign_restaurant_logo_ids(state.players, player_count, rng_seed, restaurant_logo_choices_by_player)
+	if not assign_logo.ok:
+		return assign_logo
 
 	state.turn_order.clear()
 	for i in range(player_count):
@@ -166,6 +132,43 @@ static func apply_initial_state(
 	state.marketing_instances.clear()
 
 	return Result.success(state)
+
+static func _assign_restaurant_logo_ids(players: Array, player_count: int, rng_seed: int, restaurant_logo_choices_by_player) -> Result:
+	var provider_path := _resolve_restaurant_logo_assignment_provider_path()
+	if provider_path.is_empty():
+		return Result.failure("缺少餐厅 Logo 分配 provider（override 或 ProjectSettings.%s）" % RESTAURANT_LOGO_ASSIGNMENT_PROVIDER_PATH_SETTING)
+	var provider = load(provider_path)
+	if provider == null:
+		return Result.failure("缺少餐厅 Logo 分配 provider: %s" % provider_path)
+	if not provider.has_method("assign_logo_ids"):
+		return Result.failure("餐厅 Logo 分配 provider 缺少 assign_logo_ids: %s" % provider_path)
+
+	var ids_r = provider.assign_logo_ids(player_count, rng_seed, restaurant_logo_choices_by_player)
+	if not (ids_r is Result):
+		return Result.failure("餐厅 Logo 分配 provider 返回值类型错误（期望 Result）: %s" % provider_path)
+	var r: Result = ids_r
+	if not r.ok:
+		return Result.failure("餐厅 Logo 分配失败: %s" % r.error)
+	if not (r.value is Array):
+		return Result.failure("餐厅 Logo 分配结果类型错误（期望 Array）: %s" % provider_path)
+	var ids: Array = Array(r.value)
+	if ids.size() < player_count:
+		return Result.failure("餐厅 Logo 分配结果长度不足: got=%d need=%d" % [ids.size(), player_count])
+
+	for pid in range(min(player_count, players.size())):
+		var v = ids[pid]
+		if v is int:
+			players[pid]["restaurant_logo_id"] = int(v)
+		elif v is float:
+			var f: float = float(v)
+			if f == floor(f):
+				players[pid]["restaurant_logo_id"] = int(f)
+			else:
+				return Result.failure("餐厅 Logo 分配结果[%d] 类型错误（期望 int）" % pid)
+		else:
+			return Result.failure("餐厅 Logo 分配结果[%d] 类型错误（期望 int）" % pid)
+
+	return Result.success(true)
 
 static func _create_player_from_config(id: int, cfg) -> Dictionary:
 	var employees: Array = []
