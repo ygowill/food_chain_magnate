@@ -180,32 +180,7 @@ static func _parse_string_array(value, path: String, require_non_empty: bool) ->
 	return MapParseHelpersClass.parse_string_array(value, path, require_non_empty)
 
 static func _parse_tiles(value, path: String) -> Result:
-	if not (value is Array):
-		return Result.failure("%s 类型错误（期望 Array[Dictionary]）" % path)
-	var out: Array[Dictionary] = []
-	for i in range(value.size()):
-		var item = value[i]
-		if not (item is Dictionary):
-			return Result.failure("%s[%d] 类型错误（期望 Dictionary）" % [path, i])
-		var tile: Dictionary = item
-		for k in ["tile_id", "board_pos", "rotation"]:
-			if not tile.has(k):
-				return Result.failure("%s[%d] 缺少字段: %s" % [path, i, k])
-		var tile_id_val = tile.get("tile_id", null)
-		if not (tile_id_val is String) or str(tile_id_val).strip_edges().is_empty():
-			return Result.failure("%s[%d].tile_id 类型错误或为空（期望非空 String）" % [path, i])
-		var board_pos_read := _parse_vec2i(tile.get("board_pos", null), "%s[%d].board_pos" % [path, i])
-		if not board_pos_read.ok:
-			return board_pos_read
-		var rotation_read := _parse_int(tile.get("rotation", null), "%s[%d].rotation" % [path, i])
-		if not rotation_read.ok:
-			return rotation_read
-		out.append({
-			"tile_id": str(tile_id_val).strip_edges(),
-			"board_pos": board_pos_read.value,
-			"rotation": int(rotation_read.value),
-		})
-	return Result.success(out)
+	return MapParseHelpersClass.parse_tile_placements(value, path)
 
 # === 编辑方法 ===
 
