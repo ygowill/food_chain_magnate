@@ -112,7 +112,7 @@ static func apply_baked_map(state, baked_data: Dictionary) -> Result:
 
 	if not baked_data.has("next_house_number"):
 		return Result.failure("baked_data.next_house_number 缺失")
-	var next_house_read := _parse_non_negative_int(baked_data["next_house_number"], "baked_data.next_house_number")
+	var next_house_read := MapParseHelpersClass.parse_non_negative_int(baked_data["next_house_number"], "baked_data.next_house_number")
 	if not next_house_read.ok:
 		return next_house_read
 	var next_house_number: int = int(next_house_read.value)
@@ -151,9 +151,3 @@ static func apply_baked_map(state, baked_data: Dictionary) -> Result:
 	RoadGraphCache.invalidate_road_graph(state)
 
 	return Result.success()
-
-static func _parse_int(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_int(value, path)
-
-static func _parse_non_negative_int(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_non_negative_int(value, path)
