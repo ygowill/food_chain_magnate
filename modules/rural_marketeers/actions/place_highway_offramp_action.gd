@@ -53,7 +53,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not (command.params is Dictionary):
 		return Result.failure("command.params 类型错误（期望 Dictionary）")
 	if not command.params.has("position"):
-		return Result.failure("缺少参数: position")
+		return Result.failure("缺少参数: position", Result.ErrorCode.MISSING_PARAMS)
 	var pos_val = command.params.get("position", null)
 	if not (pos_val is Array) or (pos_val as Array).size() != 2:
 		return Result.failure("position 格式错误（期望 [x,y]）")

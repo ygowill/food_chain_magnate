@@ -761,14 +761,6 @@ class ActionButton extends Button:
 	func _on_mouse_exited() -> void:
 		tooltip_text = ""
 
-func _is_missing_params_error(r: Result) -> bool:
-	if r == null or r.ok:
-		return false
-	if int(r.error_code) == Result.ErrorCode.MISSING_PARAMS:
-		return true
-	var err: String = str(r.error)
-	return err.begins_with("缺少参数:") or err.begins_with("缺少必需参数:")
-
 func _get_missing_mandatory_actions_for_current_player() -> Array[String]:
 	if _game_state == null:
 		return []
@@ -804,6 +796,11 @@ func _get_missing_mandatory_actions_for_current_player() -> Array[String]:
 		missing.append(aid)
 
 	return missing
+
+func _is_missing_params_error(r: Result) -> bool:
+	if r == null or r.ok:
+		return false
+	return int(r.error_code) == Result.ErrorCode.MISSING_PARAMS
 
 func _should_enable_skip_via_auto_mandatory_actions() -> bool:
 	if _action_registry == null or _game_state == null:

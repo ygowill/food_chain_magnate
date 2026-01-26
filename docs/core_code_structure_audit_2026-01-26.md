@@ -67,6 +67,7 @@
 - 2026-01-26：将 `CommandRunner` 的事件构建（report 拆分/marketing 到期/cleanup 丢弃等）抽离到 `core/engine/game_engine/command_runner_event_build.gd`，并为 `CommandRunner` 增加公开 `build_*` wrapper，替换 gameplay phase/skip actions 与 `MarketingDemandGeneratedEventTest` 中对私有 `_build_*` 的直接调用；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：新增 `core/engine/game_engine/timeline_event_helpers.gd` 收敛时间线事件 envelope（`sequence`/`timestamp`/`command_index`/`step_index`/`phase_segment`）；`event_timeline_build.gd`/`step_timeline_build.gd` 复用该 helper（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `MarketingSettlement` 内的 marketing_instances 校验/归一化逻辑抽离到 `core/rules/phase/marketing/marketing_instances_validation.gd`（减少单文件职责/缩短脚本）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：统一“缺少参数”判定走 `Result.error_code == Result.ErrorCode.MISSING_PARAMS`（`ActionRegistry`/UI 移除对旧字符串前缀的兼容），并为 `modules/rural_marketeers/actions/place_highway_offramp_action.gd` 补齐缺参 error_code；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -175,14 +176,14 @@
 ### 3.3 ActionRegistry 混入 UI 语义 + 字符串错误消息作为控制流
 
 - `core/actions/action_registry.gd`
-  - （已部分整改 2026-01-26）`get_player_initiatable_actions(...)` 优先判断 `Result.error_code == Result.ErrorCode.MISSING_PARAMS`，并保留旧字符串前缀兼容；并同步在常见 gameplay actions/validators 与 UI 缺参判断处逐步推广 error_code（减少对文案的依赖）。
+  - （已整改 2026-01-26）`get_player_initiatable_actions(...)` 统一按 `Result.error_code == Result.ErrorCode.MISSING_PARAMS` 判定缺参；并推动相关 actions/validators 返回结构化错误码（避免靠“缺少参数:*”文案做控制流）。
 
 风险：
 - 错误文案变更会破坏行为（隐式契约）；也会让 i18n/重构变难。
 
 建议（方向）：
 - 把“是否可启动”的判断从 core 移到 gameplay/ui；
-- 或在 Result 中引入结构化错误码（而非靠字符串前缀）（已部分整改 2026-01-26）。
+- 或在 Result 中引入结构化错误码（而非靠字符串前缀）（已整改 2026-01-26）。
 
 ### 3.4 私有方法/私有 helper 的跨文件调用（封装破坏）
 
@@ -449,7 +450,7 @@
 
 - `core/actions/action_availability_registry.gd`：中等体量；后续可按重构优先级处理
 - `core/actions/action_executor.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `IntValueParseHelpers`；中等体量；后续可按重构优先级处理
-- `core/actions/action_registry.gd`：包含 UI 语义：`get_player_initiatable_actions(...)` 判定“可启动动作”（隐式契约）；（已部分整改 2026-01-26）引入 `Result.error_code` 并优先按错误码判断、保留旧前缀兼容，并开始向常见调用链（含部分 gameplay 与 UI）扩散；偏长脚本；建议关注职责边界/可读性；依赖 GameLog 全局单例（耦合）
+- `core/actions/action_registry.gd`：包含 UI 语义：`get_player_initiatable_actions(...)` 判定“可启动动作”（隐式契约）；（已整改 2026-01-26）缺参判定统一走 `Result.ErrorCode.MISSING_PARAMS`（避免错误文案做控制流）；偏长脚本；建议关注职责边界/可读性；依赖 GameLog 全局单例（耦合）
 
 ### data/
 

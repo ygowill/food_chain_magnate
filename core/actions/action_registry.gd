@@ -254,11 +254,7 @@ func get_player_initiatable_actions(state: GameState, player_id: int) -> Array[S
 static func _is_missing_params_error(r: Result) -> bool:
 	if r == null or r.ok:
 		return false
-	if int(r.error_code) == Result.ErrorCode.MISSING_PARAMS:
-		return true
-	# 兼容旧路径：部分代码仍直接返回“缺少参数:*”字符串
-	var err: String = str(r.error)
-	return err.begins_with("缺少参数:") or err.begins_with("缺少必需参数:")
+	return int(r.error_code) == Result.ErrorCode.MISSING_PARAMS
 
 # 获取强制动作
 func get_mandatory_actions(state: GameState) -> Array[String]:
