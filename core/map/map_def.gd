@@ -107,21 +107,21 @@ static func from_dict(data: Dictionary) -> Result:
 	if not (display_name_val is String) or str(display_name_val).strip_edges().is_empty():
 		return Result.failure("MapDef.display_name 类型错误或为空（期望非空 String）")
 
-	var grid_size_read := _parse_vec2i(data.get("grid_size", null), "MapDef.grid_size")
+	var grid_size_read := MapParseHelpersClass.parse_vec2i(data.get("grid_size", null), "MapDef.grid_size")
 	if not grid_size_read.ok:
 		return grid_size_read
 	var gs: Vector2i = grid_size_read.value
 	if gs.x <= 0 or gs.y <= 0:
 		return Result.failure("MapDef.grid_size 无效: %s" % str(gs))
 
-	var min_players_read := _parse_non_negative_int(data.get("min_players", null), "MapDef.min_players")
+	var min_players_read := MapParseHelpersClass.parse_non_negative_int(data.get("min_players", null), "MapDef.min_players")
 	if not min_players_read.ok:
 		return min_players_read
-	var max_players_read := _parse_non_negative_int(data.get("max_players", null), "MapDef.max_players")
+	var max_players_read := MapParseHelpersClass.parse_non_negative_int(data.get("max_players", null), "MapDef.max_players")
 	if not max_players_read.ok:
 		return max_players_read
-
-	var random_tile_pool_read := _parse_string_array(data.get("random_tile_pool", null), "MapDef.random_tile_pool", false)
+	
+	var random_tile_pool_read := MapParseHelpersClass.parse_string_array(data.get("random_tile_pool", null), "MapDef.random_tile_pool", false)
 	if not random_tile_pool_read.ok:
 		return random_tile_pool_read
 
@@ -129,12 +129,12 @@ static func from_dict(data: Dictionary) -> Result:
 	if not (random_rotation_val is bool):
 		return Result.failure("MapDef.random_rotation 类型错误（期望 bool）")
 
-	var random_seed_read := _parse_non_negative_int(data.get("random_seed", null), "MapDef.random_seed")
+	var random_seed_read := MapParseHelpersClass.parse_non_negative_int(data.get("random_seed", null), "MapDef.random_seed")
 	if not random_seed_read.ok:
 		return random_seed_read
 
 	var tiles_val = data.get("tiles", null)
-	var tiles_read := _parse_tiles(tiles_val, "MapDef.tiles")
+	var tiles_read := MapParseHelpersClass.parse_tile_placements(tiles_val, "MapDef.tiles")
 	if not tiles_read.ok:
 		return tiles_read
 
@@ -164,23 +164,6 @@ static func load_from_file(path: String) -> Result:
 	var json := file.get_as_text()
 	file.close()
 	return from_json(json)
-
-# === 严格解析辅助 ===
-
-static func _parse_int(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_int(value, path)
-
-static func _parse_non_negative_int(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_non_negative_int(value, path)
-
-static func _parse_vec2i(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_vec2i(value, path)
-
-static func _parse_string_array(value, path: String, require_non_empty: bool) -> Result:
-	return MapParseHelpersClass.parse_string_array(value, path, require_non_empty)
-
-static func _parse_tiles(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_tile_placements(value, path)
 
 # === 编辑方法 ===
 

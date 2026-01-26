@@ -67,10 +67,10 @@ static func from_dict(data: Dictionary) -> Result:
 	if not (display_name_val is String) or str(display_name_val).strip_edges().is_empty():
 		return Result.failure("MapOptionDef.display_name 类型错误或为空（期望非空 String）")
 
-	var min_players_read := _parse_non_negative_int(data.get("min_players", null), "MapOptionDef.min_players")
+	var min_players_read := MapParseHelpersClass.parse_non_negative_int(data.get("min_players", null), "MapOptionDef.min_players")
 	if not min_players_read.ok:
 		return min_players_read
-	var max_players_read := _parse_non_negative_int(data.get("max_players", null), "MapOptionDef.max_players")
+	var max_players_read := MapParseHelpersClass.parse_non_negative_int(data.get("max_players", null), "MapOptionDef.max_players")
 	if not max_players_read.ok:
 		return max_players_read
 	var min_players: int = int(min_players_read.value)
@@ -89,11 +89,11 @@ static func from_dict(data: Dictionary) -> Result:
 	if not (random_rotation_val is bool):
 		return Result.failure("MapOptionDef.random_rotation 类型错误（期望 bool）")
 
-	var required_modules_read := _parse_string_array(data.get("required_modules", null), "MapOptionDef.required_modules", false)
+	var required_modules_read := MapParseHelpersClass.parse_string_array(data.get("required_modules", null), "MapOptionDef.required_modules", false)
 	if not required_modules_read.ok:
 		return required_modules_read
 
-	var tiles_read := _parse_tiles(data.get("tiles", null), "MapOptionDef.tiles")
+	var tiles_read := MapParseHelpersClass.parse_tile_placements(data.get("tiles", null), "MapOptionDef.tiles", _VALID_ROTATIONS)
 	if not tiles_read.ok:
 		return tiles_read
 
@@ -128,18 +128,3 @@ static func load_from_file(path: String) -> Result:
 	var json := file.get_as_text()
 	file.close()
 	return from_json(json)
-
-static func _parse_int(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_int(value, path)
-
-static func _parse_non_negative_int(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_non_negative_int(value, path)
-
-static func _parse_vec2i(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_vec2i(value, path)
-
-static func _parse_string_array(value, path: String, require_non_empty: bool) -> Result:
-	return MapParseHelpersClass.parse_string_array(value, path, require_non_empty)
-
-static func _parse_tiles(value, path: String) -> Result:
-	return MapParseHelpersClass.parse_tile_placements(value, path, _VALID_ROTATIONS)

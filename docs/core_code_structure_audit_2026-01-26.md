@@ -6,11 +6,11 @@
 
 ## 快速指标（非测试脚本）
 
-- 非测试脚本：175 个，约 26,434 行（`wc -l`）
+- 非测试脚本：175 个，约 26,402 行（`wc -l`）
 - 其中：
   - `core/rules/`：46 文件 / 6,392 行
   - `core/engine/`：29 文件 / 5,730 行
-  - `core/map/`：35 文件 / 4,554 行
+  - `core/map/`：35 文件 / 4,522 行
   - `core/modules/`：19 文件 / 2,750 行
   - `core/state/`：14 文件 / 2,069 行
   - `core/data/`：14 文件 / 1,534 行
@@ -22,6 +22,7 @@
 
 ## 整改日志
 
+- 2026-01-26：`MapDef`/`MapOptionDef` 移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（减少重复解析样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：`TileDef` 移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（进一步收敛解析样板、缩短 TileDef）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：新增 `MapParseHelpers.parse_footprint_mask(...)` 并用于 `PieceDef`，移除 `PieceDef` 内自带 `_parse_*` 解析 helper（进一步收敛 map/piece 解析样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：`TileDef` 的 road_grid/drink_sources/printed_structures 解析改为委托 `MapParseHelpers`（新增 `parse_road_grid(...)`/`parse_drink_sources(...)`/`parse_printed_structures(...)`），继续收敛地图解析样板；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
@@ -79,7 +80,7 @@
   - 将大量 debug 命令串在一个文件中；后续继续加 debug 命令时容易进一步膨胀。
 - `core/engine/game_engine.gd`（~512 LOC）
   - 引擎主体 + rewind 辅助查询 + EventBus.history 重建桥接逻辑都在一起。
-- `core/map/piece_def.gd`（~354 LOC）、`core/map/tile_def.gd`（~309 LOC）、`core/map/map_def.gd`（~328 LOC）
+- `core/map/piece_def.gd`（~354 LOC）、`core/map/tile_def.gd`（~309 LOC）、`core/map/map_def.gd`（~311 LOC）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
 - 其他超过 ~300 行的文件：
   - `core/engine/game_engine/modules_v2.gd`、`core/rules/phase/payday_settlement.gd`、`core/rules/drinks_procurement.gd`、`core/utils/range_utils.gd`、`core/rules/phase/marketing/settlement_helpers.gd`、`core/rules/employee_rules/train_slot_usage.gd`、`core/actions/action_registry.gd`、`core/rules/phase/marketing_settlement.gd`、`core/engine/game_engine/auto_advance.gd`
@@ -316,8 +317,8 @@
 | `core/map/map_baker/queries.gd` | 43 | 0 | 0 |  |
 | `core/map/map_baker/tile_baking.gd` | 280 | 0 | 0 |  |
 | `core/map/map_context_builder.gd` | 21 | 1 | 0 |  |
-| `core/map/map_def.gd` | 328 | 2 | 0 | defines:_parse_* |
-| `core/map/map_option_def.gd` | 145 | 3 | 0 | defines:_parse_* |
+| `core/map/map_def.gd` | 311 | 2 | 0 |  |
+| `core/map/map_option_def.gd` | 130 | 3 | 0 |  |
 | `core/map/map_runtime/baked_map.gd` | 160 | 2 | 0 | defines:_parse_* |
 | `core/map/map_runtime/cells.gd` | 95 | 1 | 0 |  |
 | `core/map/map_runtime/coords.gd` | 59 | 0 | 0 |  |
@@ -510,8 +511,8 @@
 - `core/map/map_baker/queries.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/map_baker/tile_baking.gd`：中等体量；后续可按重构优先级处理；存在较多 assert；注意与 Result/fail-fast 策略一致性
 - `core/map/map_context_builder.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/map/map_def.gd`：偏长脚本；建议关注职责边界/可读性；（已整改 2026-01-26）tiles placements 解析改为复用 `MapParseHelpers.parse_tile_placements(...)`（减少重复解析样板）
-- `core/map/map_option_def.gd`：（已部分整改 2026-01-26）移除 `_SELF_SCRIPT.new()` 自 preload 创建实例，改为直接 `MapOptionDef.new()`；（已整改 2026-01-26）tiles placements 解析改为复用 `MapParseHelpers.parse_tile_placements(...)`（减少重复解析样板）；仍自带部分 _parse_* wrapper（可继续收敛）
+- `core/map/map_def.gd`：偏长脚本；建议关注职责边界/可读性；（已整改 2026-01-26）tiles placements 解析改为复用 `MapParseHelpers.parse_tile_placements(...)`（减少重复解析样板）；（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）
+- `core/map/map_option_def.gd`：（已部分整改 2026-01-26）移除 `_SELF_SCRIPT.new()` 自 preload 创建实例，改为直接 `MapOptionDef.new()`；（已整改 2026-01-26）tiles placements 解析改为复用 `MapParseHelpers.parse_tile_placements(...)`（减少重复解析样板）；（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）
 - `core/map/map_runtime/baked_map.gd`：自带 _parse_* 解析函数（重复实现可收敛）
 - `core/map/map_runtime/cells.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/map_runtime/coords.gd`：未发现明显结构问题（小文件/职责相对单一）
