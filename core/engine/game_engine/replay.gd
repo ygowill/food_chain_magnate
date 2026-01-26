@@ -2,6 +2,7 @@
 extends RefCounted
 
 const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
+const JsonValueParseHelpersClass = preload("res://core/utils/json_value_parse_helpers.gd")
 
 static func rewind_to_command(
 	command_history: Array[Command],
@@ -176,21 +177,7 @@ static func _require_checkpoint_rng_calls(checkpoint: Dictionary, path: String) 
 		return Result.failure("%s 的上级对象类型错误（期望 Dictionary）" % path)
 	if not checkpoint.has("rng_calls"):
 		return Result.failure("缺少字段: %s" % path)
-	var v = checkpoint["rng_calls"]
-	if v is int:
-		var n: int = int(v)
-		if n < 0:
-			return Result.failure("%s 不能为负数: %d" % [path, n])
-		return Result.success(n)
-	if v is float:
-		var f: float = float(v)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数（不允许小数），实际: %s" % [path, str(v)])
-		var n2: int = int(f)
-		if n2 < 0:
-			return Result.failure("%s 不能为负数: %d" % [path, n2])
-		return Result.success(n2)
-	return Result.failure("%s 类型错误（期望整数）" % path)
+	return JsonValueParseHelpersClass.parse_non_negative_int_value(checkpoint["rng_calls"], path)
 
 static func _find_nearest_checkpoint(checkpoints: Array[Dictionary], target_index: int) -> Dictionary:
 	var best: Dictionary = {}

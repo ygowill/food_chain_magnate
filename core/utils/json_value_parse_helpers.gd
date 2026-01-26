@@ -13,3 +13,11 @@ static func parse_int_value(value, path: String) -> Result:
 		return Result.success(int(f))
 	return Result.failure("%s 类型错误（期望整数），实际: %s" % [path, typeof(value)])
 
+static func parse_non_negative_int_value(value, path: String) -> Result:
+	var r := parse_int_value(value, path)
+	if not r.ok:
+		return r
+	var n: int = int(r.value)
+	if n < 0:
+		return Result.failure("%s 不能为负数: %d" % [path, n])
+	return r

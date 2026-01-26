@@ -1,6 +1,8 @@
 # 饮料采购：输入解析与基础校验（Fail Fast）
 extends RefCounted
 
+const JsonValueParseHelpersClass = preload("res://core/utils/json_value_parse_helpers.gd")
+
 static func validate_drink_sources(drink_sources: Array) -> Result:
 	for i in range(drink_sources.size()):
 		var source = drink_sources[i]
@@ -34,24 +36,14 @@ static func parse_route_positions(value) -> Result:
 		var coord: Array = item
 		if coord.size() != 2:
 			return Result.failure("route[%d] 必须为 [x,y]，实际长度=%d" % [i, coord.size()])
-		var x_read := _parse_int(coord[0], "route[%d][0]" % i)
+		var x_read := JsonValueParseHelpersClass.parse_int_value(coord[0], "route[%d][0]" % i)
 		if not x_read.ok:
 			return x_read
-		var y_read := _parse_int(coord[1], "route[%d][1]" % i)
+		var y_read := JsonValueParseHelpersClass.parse_int_value(coord[1], "route[%d][1]" % i)
 		if not y_read.ok:
 			return y_read
 		route.append(Vector2i(int(x_read.value), int(y_read.value)))
 	return Result.success(route)
-
-static func _parse_int(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数（不允许小数），实际: %s" % [path, str(value)])
-		return Result.success(int(f))
-	return Result.failure("%s 必须为整数，实际类型: %s" % [path, typeof(value)])
 
 static func require_restaurant_entrance_pos(rest: Dictionary, rest_id: String) -> Result:
 	if not rest.has("entrance_pos") or not (rest["entrance_pos"] is Vector2i):
