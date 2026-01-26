@@ -6,10 +6,10 @@
 
 ## 快速指标（非测试脚本）
 
-- 非测试脚本：175 个，约 26,443 行（`wc -l`）
+- 非测试脚本：175 个，约 26,453 行（`wc -l`）
 - 其中：
   - `core/rules/`：46 文件 / 6,392 行
-  - `core/engine/`：29 文件 / 5,720 行
+  - `core/engine/`：29 文件 / 5,730 行
   - `core/map/`：35 文件 / 4,573 行
   - `core/modules/`：19 文件 / 2,750 行
   - `core/state/`：14 文件 / 2,069 行
@@ -22,6 +22,7 @@
 
 ## 整改日志
 
+- 2026-01-26：为 `GameEngine` 增加可注入的 `event_sink`，并让 `emit_event(...)` 在缺少 EventBus 时可安全降级（默认行为不变）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：新增 `MapParseHelpers.parse_tile_placements(...)` 并用于 `MapDef`/`MapOptionDef`，收敛重复的 tiles placements 解析逻辑；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：为 `GameEngine` 增加 `emit_event(...)` wrapper，并替换 `CommandRunner`/`Initializer` 中对 `EventBus.emit_event(...)` 的直连；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：收敛 initializer/loader 中重复的 EventBus.history 清空逻辑到 `GameEngine.clear_event_history_for_new_session()`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
@@ -73,7 +74,7 @@
   - 规则编排（房屋遍历/候选餐厅/胜负判定/库存扣减/收入/里程碑/破产）集中在一个文件里，虽然拆了一些子 helper（`dinnertime_*`），但“主 orchestrator”仍然较大。
 - `core/debug/debug_commands/action_commands.gd`（~478 LOC）
   - 将大量 debug 命令串在一个文件中；后续继续加 debug 命令时容易进一步膨胀。
-- `core/engine/game_engine.gd`（~502 LOC）
+- `core/engine/game_engine.gd`（~512 LOC）
   - 引擎主体 + rewind 辅助查询 + EventBus.history 重建桥接逻辑都在一起。
 - `core/map/piece_def.gd`（~418 LOC）、`core/map/tile_def.gd`（~417 LOC）、`core/map/map_def.gd`（~328 LOC）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
@@ -154,8 +155,9 @@
 ### 3.2 core/engine 对 EventBus/DebugFlags/GameLog 等全局单例有硬依赖
 
 涉及文件（集中在 engine）：
-- `core/engine/game_engine/command_runner.gd`（EventBus.emit_event + DebugFlags/OS.has_feature）
-- `core/engine/game_engine/loader.gd`、`core/engine/game_engine/initializer.gd`、`core/engine/game_engine.gd`（清空/重建 EventBus.history）
+- `core/engine/game_engine/command_runner.gd`（DebugFlags/OS.has_feature；事件发射经 `engine.emit_event(...)` wrapper）
+- `core/engine/game_engine/loader.gd`、`core/engine/game_engine/initializer.gd`（清空 EventBus.history 经 `engine.clear_event_history_for_new_session()` wrapper）
+- `core/engine/game_engine.gd`（仍负责 EventBus.history 重建桥接；（已部分整改 2026-01-26）增加 `event_sink` 注入点，降低对 EventBus 的硬依赖）
 
 风险：
 - 引擎逻辑与 UI/日志系统绑死；做“纯逻辑回放”或“服务器侧模拟”会更难。
@@ -293,7 +295,7 @@
 | `core/engine/game_engine/modules_v2.gd` | 413 | 22 | 0 |  |
 | `core/engine/game_engine/replay.gd` | 188 | 2 | 0 | uses:GameLog,uses:OS.has_feature,uses:JsonValueParseHelpers |
 | `core/engine/game_engine/step_timeline_build.gd` | 624 | 6 | 0 | uses:EventBus |
-| `core/engine/game_engine.gd` | 502 | 13 | 0 | uses:EventBus,uses:OS.has_feature |
+| `core/engine/game_engine.gd` | 512 | 13 | 0 | uses:EventBus,uses:OS.has_feature |
 | `core/engine/phase_manager/advance_phase.gd` | 239 | 2 | 0 | uses:GameLog |
 | `core/engine/phase_manager/advance_sub_phase.gd` | 278 | 2 | 0 | uses:GameLog |
 | `core/engine/phase_manager/advancement.gd` | 13 | 2 | 0 |  |
@@ -467,7 +469,7 @@
 
 - `core/engine/game_constants.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/game_defaults.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/engine/game_engine.gd`：超长脚本（维护成本高）；建议按职责拆分；preload 依赖较多（耦合偏高）；依赖 EventBus（引擎与日志/UI 耦合）；（已整改 2026-01-26）为不变量 baseline 增加公开 setter，避免外部直接写私有 `_initial_*`；（已整改 2026-01-26）提供 `clear_event_history_for_new_session()` 收敛“新对局清空 EventBus.history”样板；（已整改 2026-01-26）提供 `emit_event(...)` wrapper 收敛 `EventBus.emit_event(...)` 直连
+- `core/engine/game_engine.gd`：超长脚本（维护成本高）；建议按职责拆分；preload 依赖较多（耦合偏高）；依赖 EventBus（引擎与日志/UI 耦合）；（已整改 2026-01-26）为不变量 baseline 增加公开 setter，避免外部直接写私有 `_initial_*`；（已整改 2026-01-26）提供 `clear_event_history_for_new_session()` 收敛“新对局清空 EventBus.history”样板；（已整改 2026-01-26）提供 `emit_event(...)` wrapper 收敛 `EventBus.emit_event(...)` 直连；（已整改 2026-01-26）增加可注入 `event_sink`，降低对 EventBus 的硬依赖
 - `core/engine/game_engine/action_setup.gd`：已改为委托 `gameplay/action_setup.gd`（移除 core 内对 gameplay/actions 的 preload）；（已整改 2026-01-26）provider 来源改为 `ProjectSettings.fcm/action_setup_provider_path`（仍可用 `ActionSetup.set_provider_path(...)` 覆盖），避免 core 内硬编码 gameplay 路径
 - `core/engine/game_engine/action_wiring.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/game_engine/archive.gd`：依赖 GameLog 全局单例（耦合）

@@ -42,6 +42,9 @@ var checkpoint_interval: int = 50  # 每 N 条命令创建校验点
 # === 配置 ===
 var validate_invariants: bool = true
 
+# 可注入的事件输出（默认使用 EventBus autoload）
+var event_sink = null
+
 # 用于不变量检查（现金守恒）
 var _initial_total_cash: int = 0
 # 用于不变量检查（员工供应池守恒）
@@ -93,8 +96,15 @@ func clear_event_history_for_new_session() -> void:
 	elif EventBus.has_method("clear_history"):
 		EventBus.clear_history()
 
+func set_event_sink(sink) -> void:
+	event_sink = sink
+
 func emit_event(event_type: String, data: Dictionary) -> void:
-	EventBus.emit_event(event_type, data)
+	if event_sink != null and event_sink.has_method("emit_event"):
+		event_sink.emit_event(event_type, data)
+		return
+	if EventBus != null and EventBus.has_method("emit_event"):
+		EventBus.emit_event(event_type, data)
 
 # === 初始化 ===
 
