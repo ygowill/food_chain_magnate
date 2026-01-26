@@ -22,7 +22,7 @@ static func initialize_new_game(
 	restaurant_logo_choices_by_player: Array[int] = []
 ) -> Result:
 	var span_total := PerfTraceClass.begin_span("init:GameEngine.initialize_new_game")
-	engine._reset_modules_v2()
+	engine.reset_modules_v2()
 	var init_warnings: Array[String] = []
 
 	# EventBus.history 为“单局”语义：新开一局时应清空，避免跨对局的事件混入（影响日志/回退定位等功能）。
@@ -46,7 +46,7 @@ static func initialize_new_game(
 	engine.random_manager = RandomManager.new(seed_value)
 
 	var span_modules := PerfTraceClass.begin_span("init:ModulesV2.apply")
-	var modules_v2_result := engine._apply_modules_v2(enabled_modules_v2, modules_v2_base_dir)
+	var modules_v2_result := engine.apply_modules_v2(enabled_modules_v2, modules_v2_base_dir)
 	PerfTraceClass.end_span(span_modules)
 	if not modules_v2_result.ok:
 		return modules_v2_result
@@ -66,7 +66,7 @@ static func initialize_new_game(
 		return Result.failure("加载数据失败: %s" % data_result.error)
 	engine.game_data = data_result.value
 	var span_actions := PerfTraceClass.begin_span("init:ActionRegistry.setup_action_registry")
-	var setup_actions := engine._setup_action_registry(engine.game_data.pieces)
+	var setup_actions := engine.setup_action_registry(engine.game_data.pieces)
 	PerfTraceClass.end_span(span_actions)
 	if not setup_actions.ok:
 		return Result.failure("初始化失败：ActionRegistry 设置失败: %s" % setup_actions.error)
@@ -169,8 +169,8 @@ static func initialize_new_game(
 	engine.checkpoints.clear()
 	engine.current_command_index = -1
 
-	var span_checkpoint := PerfTraceClass.begin_span("init:GameEngine._create_checkpoint")
-	engine._create_checkpoint(0)
+	var span_checkpoint := PerfTraceClass.begin_span("init:GameEngine.create_checkpoint")
+	engine.create_checkpoint(0)
 	PerfTraceClass.end_span(span_checkpoint)
 
 	GameLog.info("GameEngine", "游戏初始化完成 - 玩家: %d, 种子: %d" % [player_count, seed_value])

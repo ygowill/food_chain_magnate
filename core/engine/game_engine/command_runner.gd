@@ -81,7 +81,7 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 
 	# 校验不变量
 	if engine.validate_invariants and DebugFlags.validate_invariants:
-		var invariant_result := engine._check_invariants()
+		var invariant_result := engine.check_invariants()
 		if not invariant_result.ok:
 			GameLog.error("GameEngine", "不变量校验失败: %s" % invariant_result.error)
 			# 回滚状态
@@ -92,7 +92,7 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 
 	# 创建校验点
 	if engine.command_history.size() % engine.checkpoint_interval == 0:
-		engine._create_checkpoint(engine.command_history.size())
+		engine.create_checkpoint(engine.command_history.size())
 
 	# 发送事件
 	# 重要：为每条事件补齐 command_index，确保读档后从 EventBus.history 恢复日志时不会把整段历史压扁到同一个索引。

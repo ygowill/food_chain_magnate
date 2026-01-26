@@ -6,7 +6,7 @@ const InvariantsClass = preload("res://core/engine/game_engine/invariants.gd")
 const JsonValueParseHelpersClass = preload("res://core/utils/json_value_parse_helpers.gd")
 
 static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result:
-	engine._reset_modules_v2()
+	engine.reset_modules_v2()
 
 	var all_warnings: Array[String] = []
 
@@ -64,7 +64,7 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result
 			return Result.failure("无效的存档格式: modules_v2_base_dir 不能为空")
 		base_dir = base_dir_read
 
-	var modules_v2_read := engine._apply_modules_v2(enabled_modules, base_dir)
+	var modules_v2_read := engine.apply_modules_v2(enabled_modules, base_dir)
 	if not modules_v2_read.ok:
 		return Result.failure("存档加载失败：模块系统 V2 装配失败: %s" % modules_v2_read.error)
 	all_warnings.append_array(modules_v2_read.warnings)
@@ -93,7 +93,7 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result
 	if not data_result.ok:
 		return Result.failure("加载数据失败: %s" % data_result.error)
 	engine.game_data = data_result.value
-	var setup_actions := engine._setup_action_registry(engine.game_data.pieces)
+	var setup_actions := engine.setup_action_registry(engine.game_data.pieces)
 	if not setup_actions.ok:
 		return Result.failure("存档加载失败：ActionRegistry 设置失败: %s" % setup_actions.error)
 
@@ -118,7 +118,7 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result
 	engine.checkpoints.clear()
 	engine.current_command_index = -1
 
-	engine._create_checkpoint(0)
+	engine.create_checkpoint(0)
 
 	var commands_val = archive.get("commands", null)
 	if commands_val == null or not (commands_val is Array):

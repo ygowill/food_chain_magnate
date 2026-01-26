@@ -95,6 +95,9 @@ func _init() -> void:
 func _setup_action_registry(piece_registry: Dictionary = {}) -> Result:
 	return ActionWiringClass.setup_action_registry(self, piece_registry)
 
+func setup_action_registry(piece_registry: Dictionary = {}) -> Result:
+	return _setup_action_registry(piece_registry)
+
 # 初始化新游戏
 func initialize(
 	player_count: int,
@@ -113,8 +116,14 @@ func load_from_archive(archive: Dictionary) -> Result:
 func _reset_modules_v2() -> void:
 	ModulesV2Class.reset(self)
 
+func reset_modules_v2() -> void:
+	_reset_modules_v2()
+
 func _apply_modules_v2(module_ids: Array[String], base_dir: String) -> Result:
 	return ModulesV2Class.apply(self, module_ids, base_dir)
+
+func apply_modules_v2(module_ids: Array[String], base_dir: String) -> Result:
+	return _apply_modules_v2(module_ids, base_dir)
 
 # 执行命令
 func execute_command(command: Command, is_replay: bool = false) -> Result:
@@ -209,6 +218,9 @@ func full_replay() -> Result:
 func _create_checkpoint(index: int) -> void:
 	CheckpointsClass.create_checkpoint(checkpoints, state, random_manager, index)
 
+func create_checkpoint(index: int) -> void:
+	_create_checkpoint(index)
+
 func _find_nearest_checkpoint(target_index: int) -> Dictionary:
 	return CheckpointsClass.find_nearest_checkpoint(checkpoints, target_index)
 
@@ -220,6 +232,9 @@ func verify_checkpoints() -> Result:
 
 func _check_invariants() -> Result:
 	return InvariantsClass.check_invariants(state, _initial_total_cash, _initial_employee_totals)
+
+func check_invariants() -> Result:
+	return _check_invariants()
 
 # === 存档 ===
 
