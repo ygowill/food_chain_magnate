@@ -6,7 +6,7 @@ const Pathfinding = preload("res://core/map/road_graph/pathfinding.gd")
 # 获取指定距离内的所有道路格子
 static func get_cells_within_distance(graph, from_pos: Vector2i, max_distance: int) -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
-	var start_nodes := Pathfinding._get_nodes_at_pos(graph, from_pos)
+	var start_nodes := Pathfinding.get_nodes_at_pos(graph, from_pos)
 
 	if start_nodes.is_empty():
 		return result
@@ -43,4 +43,3 @@ static func get_cells_within_distance(graph, from_pos: Vector2i, max_distance: i
 					})
 
 	return result
-

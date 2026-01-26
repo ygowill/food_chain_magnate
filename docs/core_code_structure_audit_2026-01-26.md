@@ -6,13 +6,13 @@
 
 ## 快速指标（非测试脚本）
 
-- 非测试脚本：175 个，约 26,430 行（`wc -l`）
+- 非测试脚本：175 个，约 26,437 行（`wc -l`）
 - 其中：
   - `core/rules/`：46 文件 / 6,392 行
   - `core/engine/`：29 文件 / 5,697 行
-  - `core/map/`：35 文件 / 4,589 行
+  - `core/map/`：35 文件 / 4,590 行
   - `core/modules/`：19 文件 / 2,750 行
-  - `core/state/`：14 文件 / 2,063 行
+  - `core/state/`：14 文件 / 2,069 行
   - `core/data/`：14 文件 / 1,534 行
   - `core/debug/`：6 文件 / 1,439 行
 
@@ -22,6 +22,7 @@
 
 ## 整改日志
 
+- 2026-01-26：为 `Pathfinding`/`CashOps` 增加公开 wrapper（`get_nodes_at_pos`/`get_balance`/`modify_balance`），并替换 `RangeQuery`/`StateUpdater` 中跨文件调用私有 `_` 方法；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：移除 `ProductDef`/`ModuleManifest` 的“自 load 创建实例”写法，改为直接 `new()`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：新增 `ActionExecutor.apply_changes_in_place(...)` 并用于 `AutoAdvance`（避免跨文件调用私有 `_apply_changes`）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：为 `CommandRunner`/`PhaseManager` 增加公开 wrapper（`build_*`/`drain_auto_advances`/`is_settlement_scheduled`），并替换 `StepTimelineBuild`/`EventHistoryRebuild` 中跨文件调用私有 `_` 前缀方法；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
@@ -182,6 +183,10 @@
   - （已整改 2026-01-26）不再调用 `CommandRunnerClass._build_*` 私有静态方法，改为调用 `CommandRunnerClass.build_*` wrapper。
 - `core/engine/game_engine/auto_advance.gd` 调用：
   - （已整改 2026-01-26）原先调用 `executor._apply_changes(...)`；已改为 `executor.apply_changes_in_place(...)`（行为不变，但避免跨文件访问私有方法）
+- `core/map/road_graph/range_query.gd`：
+  - （已整改 2026-01-26）改用 `Pathfinding.get_nodes_at_pos(...)` 公开 wrapper，避免跨文件调用 `Pathfinding._get_nodes_at_pos(...)`。
+- `core/state/state_updater.gd`：
+  - （已整改 2026-01-26）改用 `CashOps.get_balance(...)`/`CashOps.modify_balance(...)` 公开 wrapper，避免跨文件调用 `CashOps._get_balance(...)`/`CashOps._modify_balance(...)`。
 
 风险：
 - 后续想重构接口时，无法在不改调用方的情况下替换内部实现。
@@ -323,8 +328,8 @@
 | `core/map/road_graph/blocks.gd` | 75 | 0 | 0 |  |
 | `core/map/road_graph/builder.gd` | 119 | 1 | 0 | defines:_parse_* |
 | `core/map/road_graph/node_keys.gd` | 18 | 0 | 0 |  |
-| `core/map/road_graph/pathfinding.gd` | 158 | 1 | 0 |  |
-| `core/map/road_graph/range_query.gd` | 47 | 2 | 0 |  |
+| `core/map/road_graph/pathfinding.gd` | 159 | 1 | 0 |  |
+| `core/map/road_graph/range_query.gd` | 45 | 2 | 0 |  |
 | `core/map/road_graph.gd` | 147 | 4 | 0 |  |
 | `core/map/tile_def.gd` | 389 | 2 | 0 | defines:_parse_* |
 | `core/map/tile_registry.gd` | 63 | 2 | 0 |  |
@@ -403,11 +408,11 @@
 | `core/state/serialization/value_decoder.gd` | 92 | 1 | 0 |  |
 | `core/state/state_schema_registry.gd` | 263 | 0 | 0 |  |
 | `core/state/state_updater/batch.gd` | 103 | 2 | 0 |  |
-| `core/state/state_updater/cash.gd` | 157 | 0 | 0 |  |
+| `core/state/state_updater/cash.gd` | 162 | 0 | 0 |  |
 | `core/state/state_updater/collections.gd` | 72 | 0 | 0 |  |
 | `core/state/state_updater/employees_and_milestones.gd` | 118 | 1 | 0 |  |
 | `core/state/state_updater/inventory.gd` | 91 | 0 | 0 |  |
-| `core/state/state_updater.gd` | 103 | 5 | 0 |  |
+| `core/state/state_updater.gd` | 102 | 5 | 0 |  |
 | `core/types/command.gd` | 184 | 1 | 0 | uses:JsonValueParseHelpers |
 | `core/types/result.gd` | 131 | 0 | 0 |  |
 | `core/utils/catalog_registry_helpers.gd` | 40 | 0 | 0 |  |
@@ -518,8 +523,8 @@
 - `core/map/road_graph/blocks.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/road_graph/builder.gd`：自带 _parse_* 解析函数（重复实现可收敛）
 - `core/map/road_graph/node_keys.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/map/road_graph/pathfinding.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/map/road_graph/range_query.gd`：未发现明显结构问题（小文件/职责相对单一）
+- `core/map/road_graph/pathfinding.gd`：（已整改 2026-01-26）补充 `get_nodes_at_pos(...)` 公开 wrapper，用于避免外部调用私有 `_get_nodes_at_pos(...)`
+- `core/map/road_graph/range_query.gd`：（已整改 2026-01-26）改用 `Pathfinding.get_nodes_at_pos(...)`，避免跨文件调用私有 `_get_nodes_at_pos(...)`
 - `core/map/tile_def.gd`：（已部分整改 2026-01-26）blocked_cells/allowed_rotations 解析已改为复用 `MapParseHelpers`（减少重复 helper）；仍为超长脚本（维护成本高）；建议按职责拆分；仍含部分自带 _parse_* 解析函数（可继续收敛）
 - `core/map/tile_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 
@@ -608,9 +613,9 @@
 - `core/state/serialization/round_state_parser.gd`：中等体量；后续可按重构优先级处理
 - `core/state/serialization/value_decoder.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/state_schema_registry.gd`：中等体量；后续可按重构优先级处理
-- `core/state/state_updater.gd`：存在一定数量的 preload 依赖
+- `core/state/state_updater.gd`：存在一定数量的 preload 依赖；（已整改 2026-01-26）改用 `CashOps.get_balance/modify_balance` wrapper，避免跨文件调用私有 `_get_balance/_modify_balance`
 - `core/state/state_updater/batch.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/state/state_updater/cash.gd`：未发现明显结构问题（小文件/职责相对单一）
+- `core/state/state_updater/cash.gd`：（已整改 2026-01-26）补充 `get_balance(...)`/`modify_balance(...)` 公开 wrapper，用于避免外部调用私有 `_get_balance/_modify_balance`
 - `core/state/state_updater/collections.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/state_updater/employees_and_milestones.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/state_updater/inventory.gd`：未发现明显结构问题（小文件/职责相对单一）

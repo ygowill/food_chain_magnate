@@ -116,6 +116,9 @@ static func _get_nodes_at_pos(graph, pos: Vector2i) -> Array:
 			break
 	return nodes
 
+static func get_nodes_at_pos(graph, pos: Vector2i) -> Array:
+	return _get_nodes_at_pos(graph, pos)
+
 static func are_positions_connected(graph, pos1: Vector2i, pos2: Vector2i) -> bool:
 	var result := find_shortest_path(graph, pos1, pos2)
 	return result.ok
@@ -154,4 +157,3 @@ static func get_reachable_neighbors(graph, pos: Vector2i) -> Array[Vector2i]:
 
 static func has_road_at(graph, pos: Vector2i) -> bool:
 	return not _get_nodes_at_pos(graph, pos).is_empty()
-

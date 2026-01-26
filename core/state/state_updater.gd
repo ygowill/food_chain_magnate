@@ -22,10 +22,10 @@ static func transfer_cash(
 	return CashOps.transfer_cash(state, from_type, from_id, to_type, to_id, amount)
 
 static func _get_balance(state: GameState, holder_type: String, holder_id: int) -> Result:
-	return CashOps._get_balance(state, holder_type, holder_id)
+	return CashOps.get_balance(state, holder_type, holder_id)
 
 static func _modify_balance(state: GameState, holder_type: String, holder_id: int, delta: int) -> Result:
-	return CashOps._modify_balance(state, holder_type, holder_id, delta)
+	return CashOps.modify_balance(state, holder_type, holder_id, delta)
 
 # === 玩家现金便捷方法 ===
 

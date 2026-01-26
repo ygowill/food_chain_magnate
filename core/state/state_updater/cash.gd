@@ -94,6 +94,9 @@ static func _get_balance(state: GameState, holder_type: String, holder_id: int) 
 		_:
 			return Result.failure("StateUpdater._get_balance: 未知 holder_type: %s" % holder_type)
 
+static func get_balance(state: GameState, holder_type: String, holder_id: int) -> Result:
+	return _get_balance(state, holder_type, holder_id)
+
 # 修改余额
 static func _modify_balance(state: GameState, holder_type: String, holder_id: int, delta: int) -> Result:
 	if state == null:
@@ -118,6 +121,9 @@ static func _modify_balance(state: GameState, holder_type: String, holder_id: in
 			return Result.success()
 		_:
 			return Result.failure("StateUpdater._modify_balance: 未知 holder_type: %s" % holder_type)
+
+static func modify_balance(state: GameState, holder_type: String, holder_id: int, delta: int) -> Result:
+	return _modify_balance(state, holder_type, holder_id, delta)
 
 # === 玩家现金便捷方法 ===
 
