@@ -5,6 +5,7 @@ extends RefCounted
 
 const EventHistoryRebuildClass = preload("res://core/engine/game_engine/event_history_rebuild.gd")
 const GameStartedEventBuildClass = preload("res://core/engine/game_engine/game_started_event_build.gd")
+const TimelineEventHelpersClass = preload("res://core/engine/game_engine/timeline_event_helpers.gd")
 
 static func build_full(engine: GameEngine) -> Result:
 	if engine == null:
@@ -24,15 +25,8 @@ static func build_full(engine: GameEngine) -> Result:
 		warnings.append(init_event.error)
 	warnings.append_array(init_event.warnings)
 
-	seq += 1
 	var init_data: Dictionary = init_event.value if init_event.ok else {}
-	out.append({
-		"type": EventBus.EventType.GAME_STARTED,
-		"data": init_data,
-		"sequence": seq,
-		"timestamp": seq,
-		"command_index": -1,
-	})
+	seq = TimelineEventHelpersClass.append_timeline_event(out, EventBus.EventType.GAME_STARTED, init_data, seq, -1)
 
 	# 2) 命令时间线事件（按命令重放生成，稳定顺序）
 	var last_index := engine.command_history.size() - 1
@@ -56,14 +50,7 @@ static func build_full(engine: GameEngine) -> Result:
 		var d: Dictionary = d_val if (d_val is Dictionary) else {}
 		var cmd_index := int(d.get("command_index", -1))
 
-		seq += 1
-		out.append({
-			"type": t,
-			"data": d,
-			"sequence": seq,
-			"timestamp": seq,
-			"command_index": cmd_index,
-		})
+		seq = TimelineEventHelpersClass.append_timeline_event(out, t, d, seq, cmd_index)
 
 	return Result.success(out).with_warnings(warnings).with_warnings(history_r.warnings)
 

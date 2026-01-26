@@ -14,6 +14,7 @@ const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd"
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
 const GameStartedEventBuildClass = preload("res://core/engine/game_engine/game_started_event_build.gd")
 const ReplayClass = preload("res://core/engine/game_engine/replay.gd")
+const TimelineEventHelpersClass = preload("res://core/engine/game_engine/timeline_event_helpers.gd")
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 
@@ -529,19 +530,7 @@ static func _append_single_event(
 		return
 	var d_val = ev.get("data", {})
 	var d: Dictionary = d_val if (d_val is Dictionary) else {}
-	d["command_index"] = int(command_index)
-	d["step_index"] = int(step_index)
-	ev["data"] = d
-
-	out_events.append({
-		"type": t,
-		"data": d,
-		"sequence": seq,
-		"timestamp": seq,
-		"command_index": int(command_index),
-		"step_index": int(step_index),
-		"phase_segment": str(phase_segment),
-	})
+	TimelineEventHelpersClass.append_step_event(out_events, t, d, int(seq) - 1, command_index, step_index, phase_segment)
 
 static func _should_attribute_settlement_effects_to_old_phase(engine: GameEngine, old_phase: String, new_phase: String) -> bool:
 	# 目的：避免“离开 Payday 的 EXIT settlement”产生的现金/里程碑被归到新阶段（典型：Marketing）。
