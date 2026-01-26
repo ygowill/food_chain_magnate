@@ -3,6 +3,8 @@
 class_name Command
 extends RefCounted
 
+const JsonValueParseHelpersClass = preload("res://core/utils/json_value_parse_helpers.gd")
+
 # === 核心字段 ===
 var index: int = -1              # 全局序号（从 0 递增）
 var action_id: String = ""       # 动作类型 ID，如 "Recruit", "Train", "PlaceRestaurant"
@@ -44,7 +46,7 @@ static func _parse_from_dict(data: Dictionary) -> Result:
 	# index（仅用于调试；回放时会被 GameEngine 覆盖，但仍要求格式正确）
 	if not data.has("index"):
 		return Result.failure("Command.index 缺失")
-	var index_read := _parse_int_value(data.get("index", null), "Command.index")
+	var index_read := JsonValueParseHelpersClass.parse_int_value(data.get("index", null), "Command.index")
 	if not index_read.ok:
 		return index_read
 	var index_val: int = int(index_read.value)
@@ -66,7 +68,7 @@ static func _parse_from_dict(data: Dictionary) -> Result:
 	# actor
 	if not data.has("actor"):
 		return Result.failure("Command.actor 缺失")
-	var actor_read := _parse_int_value(data.get("actor", null), "Command.actor")
+	var actor_read := JsonValueParseHelpersClass.parse_int_value(data.get("actor", null), "Command.actor")
 	if not actor_read.ok:
 		return actor_read
 	var actor_val: int = int(actor_read.value)
@@ -108,7 +110,7 @@ static func _parse_from_dict(data: Dictionary) -> Result:
 	# timestamp
 	if not data.has("timestamp"):
 		return Result.failure("Command.timestamp 缺失")
-	var ts_read := _parse_int_value(data.get("timestamp", null), "Command.timestamp")
+	var ts_read := JsonValueParseHelpersClass.parse_int_value(data.get("timestamp", null), "Command.timestamp")
 	if not ts_read.ok:
 		return ts_read
 	var ts_val: int = int(ts_read.value)
@@ -129,16 +131,6 @@ static func _parse_from_dict(data: Dictionary) -> Result:
 	cmd.metadata = meta
 
 	return Result.success(cmd)
-
-static func _parse_int_value(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数（不允许小数），实际: %s" % [path, str(value)])
-		return Result.success(int(f))
-	return Result.failure("%s 类型错误（期望整数），实际: %s" % [path, typeof(value)])
 
 # === 工厂方法 ===
 static func create(p_action_id: String, p_actor: int, p_params: Dictionary = {}) -> Command:

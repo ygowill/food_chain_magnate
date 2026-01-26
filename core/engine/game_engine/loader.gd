@@ -3,6 +3,7 @@ extends RefCounted
 
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const InvariantsClass = preload("res://core/engine/game_engine/invariants.gd")
+const JsonValueParseHelpersClass = preload("res://core/utils/json_value_parse_helpers.gd")
 
 static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result:
 	engine._reset_modules_v2()
@@ -21,7 +22,7 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result
 		return Result.failure("无效的存档格式")
 	if not archive.has("schema_version"):
 		return Result.failure("无效的存档格式: schema_version")
-	var schema_read := _parse_int_value(archive["schema_version"], "archive.schema_version")
+	var schema_read := JsonValueParseHelpersClass.parse_int_value(archive["schema_version"], "archive.schema_version")
 	if not schema_read.ok:
 		return schema_read
 	var schema_version: int = int(schema_read.value)
@@ -141,7 +142,7 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result
 	# 若存档记录了当前指针（undo/redo），则回到该位置
 	if not archive.has("current_index"):
 		return Result.failure("无效的存档格式: current_index")
-	var desired_index_read := _parse_int_value(archive["current_index"], "archive.current_index")
+	var desired_index_read := JsonValueParseHelpersClass.parse_int_value(archive["current_index"], "archive.current_index")
 	if not desired_index_read.ok:
 		return desired_index_read
 	var desired_index: int = int(desired_index_read.value)
@@ -156,14 +157,3 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result
 		engine.command_history.size(), engine.current_command_index
 	])
 	return Result.success(engine.state).with_warnings(all_warnings)
-
-# 解析“应为整数”的值：允许 JSON 数字用 float 表示，但必须是整值；不允许小数与字符串等容错。
-static func _parse_int_value(value, path: String) -> Result:
-	if value is int:
-		return Result.success(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f != floor(f):
-			return Result.failure("%s 必须为整数（不允许小数），实际: %s" % [path, str(value)])
-		return Result.success(int(f))
-	return Result.failure("%s 类型错误（期望整数），实际: %s" % [path, typeof(value)])

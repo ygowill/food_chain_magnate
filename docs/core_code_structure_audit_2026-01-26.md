@@ -30,6 +30,7 @@
 - 2026-01-26：引入 `Result.error_code`（含 `MISSING_PARAMS`），并在 `ActionExecutor.require_*`/`ActionRegistry.get_player_initiatable_actions` 中使用（保留旧字符串前缀兼容）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `MISSING_PARAMS` 错误码扩展到部分 gameplay actions/validators 以及 `core/rules/drinks_procurement.gd`，并让 UI 的缺参判断优先使用 `Result.error_code`（仍保留旧字符串前缀兼容）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：新增 `core/data/parse_helpers.gd`（`DataParseHelpers`）收敛 data JSON 解析样板代码，并替换 `ProductDef`/`MarketingDef`/`MilestoneDef`/`EmployeeDef.parser` 内自带 `_parse_*`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：新增 `core/utils/json_value_parse_helpers.gd`（`JsonValueParseHelpers`）收敛“JSON int 允许用整值 float 表示”的重复校验，并用于 `core/types/command.gd`/`core/engine/game_engine/loader.gd`；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -71,10 +72,11 @@
   - `core/state/serialization/parse_helpers.gd`
   - `core/map/parse_helpers.gd`
   - （已部分整改 2026-01-26）`core/data/parse_helpers.gd`
+  - （已部分整改 2026-01-26）`core/utils/json_value_parse_helpers.gd`
 
 典型文件（不完全列举）：
 - 数据定义解析重复：（已部分整改 2026-01-26）`core/data/product_def.gd`、`core/data/milestone_def.gd`、`core/data/employee_def/parser.gd`、`core/data/marketing_def.gd` 已改为共用 `core/data/parse_helpers.gd`；`core/data/game_config.gd` 仍自带 `_parse_*`
-- 命令/存档解析重复：`core/types/command.gd`、`core/engine/game_engine/loader.gd`、`core/actions/action_executor.gd`
+- 命令/存档解析重复：（已部分整改 2026-01-26）`core/types/command.gd` 与 `core/engine/game_engine/loader.gd` 已共用 `core/utils/json_value_parse_helpers.gd`；`core/actions/action_executor.gd` 仍自带 `_parse_int_value`
 - 规则内重复：`core/rules/pricing_pipeline.gd`、`core/rules/drinks_procurement.gd`、`core/rules/phase/payday_settlement.gd`、`core/rules/phase/cleanup_settlement.gd`、`core/rules/phase/dinnertime_settlement.gd`
 
 风险：
@@ -247,7 +249,7 @@
 | `core/engine/game_engine/event_timeline_build.gd` | 113 | 1 | 0 | uses:EventBus |
 | `core/engine/game_engine/initializer.gd` | 266 | 9 | 0 | uses:EventBus,uses:GameLog |
 | `core/engine/game_engine/invariants.gd` | 259 | 1 | 0 |  |
-| `core/engine/game_engine/loader.gd` | 170 | 2 | 0 | uses:EventBus,uses:GameLog,defines:_parse_* |
+| `core/engine/game_engine/loader.gd` | 159 | 3 | 0 | uses:EventBus,uses:GameLog,uses:JsonValueParseHelpers |
 | `core/engine/game_engine/modules_v2.gd` | 413 | 22 | 0 |  |
 | `core/engine/game_engine/replay.gd` | 202 | 1 | 0 | uses:GameLog,uses:OS.has_feature |
 | `core/engine/game_engine/step_timeline_build.gd` | 630 | 4 | 0 | uses:EventBus,uses:OS.has_feature |
@@ -375,9 +377,10 @@
 | `core/state/state_updater/employees_and_milestones.gd` | 118 | 1 | 0 |  |
 | `core/state/state_updater/inventory.gd` | 91 | 0 | 0 |  |
 | `core/state/state_updater.gd` | 103 | 5 | 0 |  |
-| `core/types/command.gd` | 193 | 0 | 0 | defines:_parse_* |
+| `core/types/command.gd` | 184 | 1 | 0 | uses:JsonValueParseHelpers |
 | `core/types/result.gd` | 131 | 0 | 0 |  |
 | `core/utils/catalog_registry_helpers.gd` | 40 | 0 | 0 |  |
+| `core/utils/json_value_parse_helpers.gd` | 15 | 0 | 0 |  |
 | `core/utils/range_utils.gd` | 352 | 2 | 0 |  |
 | `core/utils/round_state_counters.gd` | 146 | 0 | 0 |  |
 | `core/utils/type_helpers.gd` | 34 | 0 | 0 |  |
@@ -434,7 +437,7 @@
 - `core/engine/game_engine/event_timeline_build.gd`：依赖 EventBus（引擎与日志/UI 耦合）
 - `core/engine/game_engine/initializer.gd`：中等体量；后续可按重构优先级处理；存在一定数量的 preload 依赖；依赖 EventBus（引擎与日志/UI 耦合）
 - `core/engine/game_engine/invariants.gd`：中等体量；后续可按重构优先级处理
-- `core/engine/game_engine/loader.gd`：依赖 EventBus（引擎与日志/UI 耦合）；依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
+- `core/engine/game_engine/loader.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `JsonValueParseHelpers`；依赖 EventBus（引擎与日志/UI 耦合）；依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
 - `core/engine/game_engine/modules_v2.gd`：超长脚本（维护成本高）；建议按职责拆分；preload 依赖较多（耦合偏高）；函数数量较多，可能包含多职责/可考虑拆 helper
 - `core/engine/game_engine/replay.gd`：中等体量；后续可按重构优先级处理；含调试/发布差异分支（DebugFlags/OS.has_feature）
 - `core/engine/game_engine/step_timeline_build.gd`：时间线/日志“派生视图”构建逻辑很重；超长脚本（维护成本高）；建议按职责拆分；依赖 EventBus（引擎与日志/UI 耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）；（已整改 2026-01-26：不再跨文件调用 CommandRunner/PhaseManager 的私有 `_` 前缀方法）
@@ -579,12 +582,13 @@
 
 ### types/
 
-- `core/types/command.gd`：自带 _parse_* 解析函数（重复实现可收敛）
+- `core/types/command.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `JsonValueParseHelpers`；仍含较多“字段存在性 + 类型校验”样板（后续可继续收敛）
 - `core/types/result.gd`：未发现明显结构问题（小文件/职责相对单一）
 
 ### utils/
 
 - `core/utils/catalog_registry_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
+- `core/utils/json_value_parse_helpers.gd`：（已新增 2026-01-26）用于收敛存档/回放/命令解析中的 JSON 数值校验样板
 - `core/utils/range_utils.gd`：偏长脚本；建议关注职责边界/可读性
 - `core/utils/round_state_counters.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/utils/type_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
