@@ -80,6 +80,7 @@
 - 2026-01-27：将 `AutoAdvance` 的实现抽离到 `core/engine/game_engine/auto_advance_impl.gd`，`auto_advance.gd` 保留 class_name + 轻量 wrapper（降低单文件职责与体积）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：将 `ModulesV2` 的 catalog/config 校验逻辑抽离到 `core/engine/game_engine/modules_v2_validations.gd`（降低 `modules_v2.gd` 单文件职责与体积）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：移除 `PhaseManager` 中未使用的 preload 依赖，并删除未被使用的私有 wrapper（降低耦合与噪音）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：拆分 `RangeUtils`：`core/utils/range_utils.gd` 保留对外 API wrapper，road/air 实现分别落在 `range_utils_road.gd`/`range_utils_air.gd`（降低单文件体积，便于后续进一步拆分/维护）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -102,7 +103,7 @@
 - `core/map/piece_def.gd`（~354 LOC）、`core/map/tile_def.gd`（~262 LOC）、`core/map/map_def.gd`（~311 LOC）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
 - 其他超过 ~300 行的文件：
-  - `core/engine/game_engine/modules_v2.gd`、`core/rules/phase/payday_settlement.gd`、`core/rules/drinks_procurement.gd`、`core/utils/range_utils.gd`、`core/rules/phase/marketing/settlement_helpers.gd`、`core/rules/employee_rules/train_slot_usage.gd`、`core/actions/action_registry.gd`、`core/engine/game_engine/auto_advance.gd`
+  - `core/engine/game_engine/modules_v2.gd`、`core/rules/phase/payday_settlement.gd`、`core/rules/drinks_procurement.gd`、`core/rules/phase/marketing/settlement_helpers.gd`、`core/rules/employee_rules/train_slot_usage.gd`、`core/actions/action_registry.gd`、`core/engine/game_engine/auto_advance.gd`
 
 建议记录（后续重构方向）：
 - 先从“职责剥离”入手，而不是单纯按行数拆文件：
@@ -450,7 +451,9 @@
 | `core/utils/catalog_registry_helpers.gd` | 40 | 0 | 0 |  |
 | `core/utils/int_value_parse_helpers.gd` | 37 | 0 | 0 |  |
 | `core/utils/json_value_parse_helpers.gd` | 23 | 0 | 0 |  |
-| `core/utils/range_utils.gd` | 352 | 2 | 0 |  |
+| `core/utils/range_utils.gd` | 67 | 2 | 0 |  |
+| `core/utils/range_utils_air.gd` | 94 | 0 | 0 |  |
+| `core/utils/range_utils_road.gd` | 260 | 2 | 0 |  |
 | `core/utils/round_state_counters.gd` | 146 | 0 | 0 |  |
 | `core/utils/type_helpers.gd` | 34 | 0 | 0 |  |
 
@@ -667,6 +670,8 @@
 - `core/utils/catalog_registry_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/utils/int_value_parse_helpers.gd`：（已新增 2026-01-26）用于收敛 rules/milestone effects 的整值解析样板
 - `core/utils/json_value_parse_helpers.gd`：（已新增 2026-01-26）用于收敛存档/回放/命令解析中的 JSON 数值校验样板
-- `core/utils/range_utils.gd`：偏长脚本；建议关注职责边界/可读性
+- `core/utils/range_utils.gd`：（已整改 2026-01-27）对外 API wrapper；road/air 实现分别落在 `range_utils_road.gd`/`range_utils_air.gd`（降低单文件体积，便于维护）
+- `core/utils/range_utils_road.gd`：（已新增 2026-01-27）道路范围实现（RoadGraph 距离/邻接道路格）；仍偏长但职责更聚焦，后续可继续按“输入校验/餐厅入口点计算/道路距离查询”再拆分
+- `core/utils/range_utils_air.gd`：（已新增 2026-01-27）空中范围实现（Manhattan 距离）；小文件/职责单一
 - `core/utils/round_state_counters.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/utils/type_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
