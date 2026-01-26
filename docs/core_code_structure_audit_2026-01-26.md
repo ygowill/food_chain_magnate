@@ -6,10 +6,10 @@
 
 ## 快速指标（非测试脚本）
 
-- 非测试脚本：169 个，约 26,662 行（`wc -l`）
+- 非测试脚本：169 个，约 26,668 行（`wc -l`）
 - 其中：
   - `core/rules/`：45 文件 / 6,505 行
-  - `core/engine/`：27 文件 / 5,649 行
+  - `core/engine/`：27 文件 / 5,655 行
   - `core/map/`：35 文件 / 4,615 行
   - `core/modules/`：19 文件 / 2,798 行
   - `core/state/`：14 文件 / 2,063 行
@@ -26,6 +26,7 @@
 - 2026-01-26：新增 `ActionExecutor.apply_changes_in_place(...)` 并用于 `AutoAdvance`（避免跨文件调用私有 `_apply_changes`）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：为 `CommandRunner`/`PhaseManager` 增加公开 wrapper（`build_*`/`drain_auto_advances`/`is_settlement_scheduled`），并替换 `StepTimelineBuild`/`EventHistoryRebuild` 中跨文件调用私有 `_` 前缀方法；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将“内建动作注册”从 `core/engine/game_engine/action_setup.gd` 迁移到 `gameplay/action_setup.gd`；core `ActionSetup` 改为委托 provider（移除 core 内对 `gameplay/actions/*.gd` 的 preload）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：为 core `ActionSetup` 增加显式注入点 `set_provider_path(...)`，允许在不修改 core 的情况下替换动作注册 provider；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -112,7 +113,7 @@
 
 - `core/engine/game_engine/action_setup.gd`
   - （已整改 2026-01-26）不再直接 `preload("res://gameplay/actions/*.gd")`；改为委托 `gameplay/action_setup.gd` 提供“内建动作注册”。
-  - 仍存在默认 provider 路径对 `gameplay/` 的运行时依赖；后续可将 provider 变为可配置/可注入，以便 core 真正可独立复用。
+  - 仍存在默认 provider 路径对 `gameplay/` 的运行时依赖；（已整改 2026-01-26）已提供 `ActionSetup.set_provider_path(...)` 用于注入/覆盖 provider 路径。
 
 建议（方向）：
 - 将 “内建 action wiring / action executor 注册” 移到 `gameplay/`（或更上层），core 只提供 `ActionRegistry` 的 API 与引擎执行能力。
@@ -189,7 +190,7 @@
 
 为降低风险，建议按“先切边界、再收敛重复、最后做结构升级”的顺序推进：
 
-1. **解耦 core ↔ gameplay**：已开始处理 `core/engine/game_engine/action_setup.gd` 的反向依赖（2026-01-26：动作注册迁移到 `gameplay/action_setup.gd`）；下一步引入可配置/注入的 provider，让 core 可脱离 gameplay。
+1. **解耦 core ↔ gameplay**：已开始处理 `core/engine/game_engine/action_setup.gd` 的反向依赖（动作注册迁移到 `gameplay/action_setup.gd`，并提供 `ActionSetup.set_provider_path(...)` 注入点）；下一步把 provider 来源做成配置/模块化（避免默认写死 gameplay 路径）。
 2. **抽离事件/日志语义**：把 `CommandRunner` 中的“事件构建/归属/拆分”拆到独立组件（可放在 gameplay 或 ui 的回放子系统），core 保留最小执行路径。
 3. **统一解析/校验工具链**：收敛 `_parse_*` 重复实现，优先统一数据/存档/命令解析路径。
 4. **收敛 milestone effects 处理**：明确“effects.type 的唯一解释器”与“effects/effect_ids 的边界”，尽量走 registry/handler 体系，减少散落的手写解析。
@@ -230,7 +231,7 @@
 | `core/debug/perf_trace.gd` | 146 | 0 | 0 |  |
 | `core/engine/game_constants.gd` | 9 | 0 | 0 |  |
 | `core/engine/game_defaults.gd` | 22 | 0 | 0 |  |
-| `core/engine/game_engine/action_setup.gd` | 17 | 0 | 1 | delegates:gameplay,uses:GameLog |
+| `core/engine/game_engine/action_setup.gd` | 23 | 0 | 1 | delegates:gameplay,uses:GameLog |
 | `core/engine/game_engine/action_wiring.gd` | 100 | 2 | 0 |  |
 | `core/engine/game_engine/archive.gd` | 127 | 1 | 0 | uses:GameLog |
 | `core/engine/game_engine/auto_advance.gd` | 304 | 1 | 0 |  |
@@ -416,7 +417,7 @@
 - `core/engine/game_constants.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/game_defaults.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/game_engine.gd`：超长脚本（维护成本高）；建议按职责拆分；preload 依赖较多（耦合偏高）；依赖 EventBus（引擎与日志/UI 耦合）
-- `core/engine/game_engine/action_setup.gd`：已改为委托 `gameplay/action_setup.gd`（移除 core 内对 gameplay/actions 的 preload）；仍有默认 provider 路径依赖，后续可做可配置/注入以进一步解耦
+- `core/engine/game_engine/action_setup.gd`：已改为委托 `gameplay/action_setup.gd`（移除 core 内对 gameplay/actions 的 preload）；已提供 `ActionSetup.set_provider_path(...)` 注入点，后续可进一步把 provider 来源做成配置/模块化
 - `core/engine/game_engine/action_wiring.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/game_engine/archive.gd`：依赖 GameLog 全局单例（耦合）
 - `core/engine/game_engine/auto_advance.gd`：通过 `ActionExecutor.apply_changes_in_place` 直接 in-place 改 state（需明确该 API 的契约/适用范围）；偏长脚本；建议关注职责边界/可读性
