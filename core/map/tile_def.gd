@@ -171,6 +171,9 @@ func _ensure_road_grid() -> void:
 		while road_segments[y].size() < TILE_SIZE:
 			road_segments[y].append([])
 
+func ensure_road_grid() -> void:
+	_ensure_road_grid()
+
 # === 查询方法 ===
 
 # 获取指定位置的道路段
@@ -197,56 +200,6 @@ func get_road_cells() -> Array[Vector2i]:
 			if not road_segments[y][x].is_empty():
 				cells.append(Vector2i(x, y))
 	return cells
-
-# === 编辑方法 (用于板块编辑器) ===
-
-# 添加道路段
-func add_road_segment(local_pos: Vector2i, dirs: Array, is_bridge: bool = false) -> void:
-	if local_pos.x < 0 or local_pos.x >= TILE_SIZE:
-		return
-	if local_pos.y < 0 or local_pos.y >= TILE_SIZE:
-		return
-
-	road_segments[local_pos.y][local_pos.x].append({
-		"dirs": dirs,
-		"bridge": is_bridge
-	})
-
-# 清除指定位置的所有道路段
-func clear_road_segments(local_pos: Vector2i) -> void:
-	if local_pos.x < 0 or local_pos.x >= TILE_SIZE:
-		return
-	if local_pos.y < 0 or local_pos.y >= TILE_SIZE:
-		return
-	road_segments[local_pos.y][local_pos.x] = []
-
-# 添加印刷建筑
-func add_printed_structure(piece_id: String, anchor: Vector2i, rotation: int = 0,
-	house_id: String = "", house_number = null) -> void:
-	var struct := {
-		"piece_id": piece_id,
-		"anchor": anchor,
-		"rotation": rotation
-	}
-	if not house_id.is_empty():
-		struct["house_id"] = house_id
-		struct["house_number"] = house_number if house_number != null else 0
-	printed_structures.append(struct)
-
-# 添加饮品源
-func add_drink_source(local_pos: Vector2i, drink_type: String) -> void:
-	drink_sources.append({
-		"pos": local_pos,
-		"type": drink_type
-	})
-
-# 设置格子为阻塞
-func set_blocked(local_pos: Vector2i, blocked: bool) -> void:
-	var idx := blocked_cells.find(local_pos)
-	if blocked and idx == -1:
-		blocked_cells.append(local_pos)
-	elif not blocked and idx != -1:
-		blocked_cells.remove_at(idx)
 
 # === 验证 ===
 

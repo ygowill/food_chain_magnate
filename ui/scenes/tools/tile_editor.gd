@@ -7,6 +7,7 @@ const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const Storage = preload("res://ui/scenes/tools/tile_editor/storage.gd")
 const CellModel = preload("res://ui/scenes/tools/tile_editor/cell_model.gd")
+const TileDefEdit = preload("res://ui/scenes/tools/tile_editor/tile_def_edit.gd")
 
 @onready var tile_select: OptionButton = $Root/TopBar/TileSelect
 @onready var tile_id_edit: LineEdit = $Root/TopBar/TileIdEdit
@@ -93,7 +94,7 @@ func _on_save_pressed() -> void:
 	if current_tile.display_name.is_empty():
 		current_tile.display_name = "板块 %s" % new_id
 
-	current_tile._ensure_road_grid()
+	current_tile.ensure_road_grid()
 
 	var validate := current_tile.validate()
 	if not validate.ok:
@@ -141,7 +142,7 @@ func _on_validate_pressed() -> void:
 func _on_blocked_toggled(toggled_on: bool) -> void:
 	if current_tile == null:
 		return
-	current_tile.set_blocked(selected_local, toggled_on)
+	TileDefEdit.set_blocked(current_tile, selected_local, toggled_on)
 	_refresh_cell(selected_local)
 
 func _on_add_road_pressed() -> void:
@@ -160,14 +161,14 @@ func _on_add_road_pressed() -> void:
 		_set_status("请至少选择一个方向", true)
 		return
 
-	current_tile.add_road_segment(selected_local, dirs, road_bridge.button_pressed)
+	TileDefEdit.add_road_segment(current_tile, selected_local, dirs, road_bridge.button_pressed)
 	_refresh_cell(selected_local)
 	_refresh_road_segments_list()
 
 func _on_clear_road_pressed() -> void:
 	if current_tile == null:
 		return
-	current_tile.clear_road_segments(selected_local)
+	TileDefEdit.clear_road_segments(current_tile, selected_local)
 	_refresh_cell(selected_local)
 	_refresh_road_segments_list()
 
@@ -179,7 +180,7 @@ func _on_set_drink_pressed() -> void:
 		_set_status("饮品类型不能为空", true)
 		return
 	CellModel.remove_drink_source_at(current_tile, selected_local)
-	current_tile.add_drink_source(selected_local, drink_type)
+	TileDefEdit.add_drink_source(current_tile, selected_local, drink_type)
 	_refresh_cell(selected_local)
 
 func _on_clear_drink_pressed() -> void:
@@ -201,9 +202,9 @@ func _on_add_printed_pressed() -> void:
 	var house_number := int(printed_house_number.value)
 
 	if house_id.is_empty():
-		current_tile.add_printed_structure(piece_id, selected_local, rot)
+		TileDefEdit.add_printed_structure(current_tile, piece_id, selected_local, rot)
 	else:
-		current_tile.add_printed_structure(piece_id, selected_local, rot, house_id, house_number)
+		TileDefEdit.add_printed_structure(current_tile, piece_id, selected_local, rot, house_id, house_number)
 
 	_refresh_cell(selected_local)
 	_refresh_printed_list()

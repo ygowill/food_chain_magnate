@@ -72,6 +72,7 @@
 - 2026-01-26：将 `EventTimelineBuild`/`StepTimelineBuild`/`TimelineEventHelpers` 移出 core 至 `gameplay/replay/`（回放/日志派生视图构建不再占用 core/engine）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：`GameEngine.clear_event_history_for_new_session()` 与 `rewind_to_command()` 在可用时优先调用注入的 `event_sink`（`clear_history_and_reset_sequence`/`record_event`），再回退到 EventBus（进一步降低硬依赖）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 debug command registry/commands 的实现移至 `ui/debug/`，core/debug 仅保留 class_name 兼容 shim（用于 global_script_class_cache/旧路径）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：将 `TileDef` 的板块编辑器编辑方法（road/drink/printed/blocked）移出 `core/map/tile_def.gd`，放到 `ui/scenes/tools/tile_editor/tile_def_edit.gd`；core 仅保留 `ensure_road_grid()` 与数据/校验/查询逻辑（减少 core 与 tools 耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -91,7 +92,7 @@
   - 将大量 debug 命令串在一个文件中；后续继续加 debug 命令时容易进一步膨胀。
 - `core/engine/game_engine.gd`（~512 LOC）
   - 引擎主体 + rewind 辅助查询 + EventBus.history 重建桥接逻辑都在一起。
-- `core/map/piece_def.gd`（~354 LOC）、`core/map/tile_def.gd`（~309 LOC）、`core/map/map_def.gd`（~311 LOC）
+- `core/map/piece_def.gd`（~354 LOC）、`core/map/tile_def.gd`（~262 LOC）、`core/map/map_def.gd`（~311 LOC）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
 - 其他超过 ~300 行的文件：
   - `core/engine/game_engine/modules_v2.gd`、`core/rules/phase/payday_settlement.gd`、`core/rules/drinks_procurement.gd`、`core/utils/range_utils.gd`、`core/rules/phase/marketing/settlement_helpers.gd`、`core/rules/employee_rules/train_slot_usage.gd`、`core/actions/action_registry.gd`、`core/engine/game_engine/auto_advance.gd`
@@ -227,7 +228,7 @@
 - GameStateFactory 含“Logo 分配”等偏展示/前端选择的确定性逻辑：
   - `core/state/game_state_factory.gd` 中 `restaurant_logo_id` 分配策略（含随机/显式选择合并）更像 game setup/前端选择的结果落盘；放在 core 会让 core 牵涉 UI 资源/规则变化。
 - MapDef/TileDef/PieceDef 内含“编辑方法/调试 dump”：
-  - 例如 `core/map/tile_def.gd` 明确标注了“用于板块编辑器”的编辑方法，这类逻辑可考虑移到 tools 或 ui/editor 辅助层，避免数据结构类变得“既是模型又是编辑器”。
+  - （已整改 2026-01-26）`TileDef` 的板块编辑器编辑方法已移至 `ui/scenes/tools/tile_editor/tile_def_edit.gd`，core `TileDef` 不再包含 tools 专用 API。
 
 ---
 
@@ -354,7 +355,7 @@
 | `core/map/road_graph/pathfinding.gd` | 159 | 1 | 0 |  |
 | `core/map/road_graph/range_query.gd` | 45 | 2 | 0 |  |
 | `core/map/road_graph.gd` | 147 | 4 | 0 |  |
-| `core/map/tile_def.gd` | 309 | 2 | 0 |  |
+| `core/map/tile_def.gd` | 262 | 2 | 0 |  |
 | `core/map/tile_registry.gd` | 63 | 2 | 0 |  |
 | `core/modules/v2/content_catalog.gd` | 68 | 0 | 0 |  |
 | `core/modules/v2/content_catalog_loader.gd` | 274 | 9 | 0 |  |
@@ -550,7 +551,7 @@
 - `core/map/road_graph/node_keys.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/road_graph/pathfinding.gd`：（已整改 2026-01-26）补充 `get_nodes_at_pos(...)` 公开 wrapper，用于避免外部调用私有 `_get_nodes_at_pos(...)`
 - `core/map/road_graph/range_query.gd`：（已整改 2026-01-26）改用 `Pathfinding.get_nodes_at_pos(...)`，避免跨文件调用私有 `_get_nodes_at_pos(...)`
-- `core/map/tile_def.gd`：（已部分整改 2026-01-26）blocked_cells/allowed_rotations 解析已改为复用 `MapParseHelpers`（减少重复 helper）；（已整改 2026-01-26）road_grid/drink_sources/printed_structures 解析已改为复用 `MapParseHelpers`（减少重复解析样板）；（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）；仍为超长脚本（维护成本高）；建议按职责拆分
+- `core/map/tile_def.gd`：（已部分整改 2026-01-26）blocked_cells/allowed_rotations 解析已改为复用 `MapParseHelpers`（减少重复 helper）；（已整改 2026-01-26）road_grid/drink_sources/printed_structures 解析已改为复用 `MapParseHelpers`（减少重复解析样板）；（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）；（已整改 2026-01-26）板块编辑器的编辑方法（road/drink/printed/blocked）移至 `ui/scenes/tools/tile_editor/tile_def_edit.gd`，core 不再包含 tools 专用 API；体积已下降但仍偏大（建议后续按职责拆分）
 - `core/map/tile_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 
 ### modules/
