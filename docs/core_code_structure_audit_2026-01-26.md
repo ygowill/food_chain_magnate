@@ -75,6 +75,7 @@
 - 2026-01-26：将 `TileDef` 的板块编辑器编辑方法（road/drink/printed/blocked）移出 `core/map/tile_def.gd`，放到 `ui/scenes/tools/tile_editor/tile_def_edit.gd`；core 仅保留 `ensure_road_grid()` 与数据/校验/查询逻辑（减少 core 与 tools 耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：将 `GameStateFactory` 的餐厅 Logo 分配逻辑外移到 `gameplay/setup/restaurant_logo_assignment.gd`，并通过 `ProjectSettings.fcm/restaurant_logo_assignment_provider_path` 动态加载（减少 core/state 的 UI/setup 语义）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-26：扩展 `MilestoneEffectQueries`（新增 sum/max helpers）并用于 `PricingPipeline`/`DrinksProcurement`/`WorkingFlow`/`PaydaySettlement`/`CleanupSettlement`/`DinnertimeSettlement` 收敛“entries->value 解析/累加/取最大”样板；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-26：将 `PerfTrace` 实现移至 `tools/perf_trace.gd`，core/debug 保留 shim（减少 core/debug 的工具逻辑负担）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -293,7 +294,7 @@
 | `core/debug/debug_commands/game_commands.gd` | 10 | 0 | 0 | shim->ui |
 | `core/debug/debug_commands/state_commands.gd` | 10 | 0 | 0 | shim->ui |
 | `core/debug/debug_commands/util_commands.gd` | 10 | 0 | 0 | shim->ui |
-| `core/debug/perf_trace.gd` | 146 | 0 | 0 |  |
+| `core/debug/perf_trace.gd` | 146 | 0 | 0 | shim->tools |
 | `core/engine/game_constants.gd` | 9 | 0 | 0 |  |
 | `core/engine/game_defaults.gd` | 22 | 0 | 0 |  |
 | `core/engine/game_engine/action_setup.gd` | 37 | 0 | 1 | delegates:gameplay,uses:GameLog,uses:ProjectSettings |
@@ -483,7 +484,7 @@
 - `core/debug/debug_commands/game_commands.gd`：（已整改 2026-01-26）兼容 shim；实际实现位于 `ui/debug/debug_commands/game_commands.gd`
 - `core/debug/debug_commands/state_commands.gd`：（已整改 2026-01-26）兼容 shim；实际实现位于 `ui/debug/debug_commands/state_commands.gd`
 - `core/debug/debug_commands/util_commands.gd`：（已整改 2026-01-26）兼容 shim；实际实现位于 `ui/debug/debug_commands/util_commands.gd`
-- `core/debug/perf_trace.gd`：调试/开发工具逻辑；若 core 目标更纯，可考虑外移或作为可选层
+- `core/debug/perf_trace.gd`：（已整改 2026-01-26）实现已移至 `tools/perf_trace.gd`；core/debug 保留 shim（用于稳定引用路径）
 
 ### engine/
 
