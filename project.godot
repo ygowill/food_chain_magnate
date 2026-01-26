@@ -34,3 +34,7 @@ window/stretch/mode="canvas_items"
 [internationalization]
 
 locale/fallback="zh"
+
+[fcm]
+
+action_setup_provider_path="res://gameplay/action_setup.gd"
