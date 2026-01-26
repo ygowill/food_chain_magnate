@@ -4,6 +4,7 @@
 extends RefCounted
 
 const EventHistoryRebuildClass = preload("res://core/engine/game_engine/event_history_rebuild.gd")
+const GameStartedEventBuildClass = preload("res://core/engine/game_engine/game_started_event_build.gd")
 
 static func build_full(engine: GameEngine) -> Result:
 	if engine == null:
@@ -21,6 +22,7 @@ static func build_full(engine: GameEngine) -> Result:
 	var init_event := _build_game_started_event(engine)
 	if not init_event.ok:
 		warnings.append(init_event.error)
+	warnings.append_array(init_event.warnings)
 
 	seq += 1
 	var init_data: Dictionary = init_event.value if init_event.ok else {}
@@ -71,42 +73,40 @@ static func _build_game_started_event(engine: GameEngine) -> Result:
 	if engine.state == null:
 		return Result.failure("EventTimelineBuild: state 为空")
 
+	# fallback：尽量不阻塞完整时间线构建（player_count/seed 仍可从运行中引擎读取）
 	var player_count := engine.state.players.size() if (engine.state.players is Array) else -1
 	var seed := engine.random_manager.get_seed() if (engine.random_manager != null and engine.random_manager.has_method("get_seed")) else 0
 
-	var state_hash := ""
-	var hash_r := _try_compute_initial_state_hash(engine)
-	if hash_r.ok:
-		state_hash = str(hash_r.value)
-	else:
-		# hash 仅用于日志对齐/调试；失败时不阻塞完整时间线构建。
-		state_hash = ""
-
-	return Result.success({
-		"player_count": player_count,
-		"seed": seed,
-		"state_hash": state_hash,
-	})
-
-static func _try_compute_initial_state_hash(engine: GameEngine) -> Result:
-	if engine == null:
-		return Result.failure("EventTimelineBuild: engine 为空")
+	# 优先从初始 checkpoint 构建（更贴近 command_index=-1 的语义）。
 	if engine.checkpoints.is_empty():
-		return Result.failure("EventTimelineBuild: 缺少初始 checkpoint")
+		return Result.success({
+			"player_count": player_count,
+			"seed": seed,
+			"state_hash": "",
+		}).with_warning("EventTimelineBuild: 缺少初始 checkpoint，GAME_STARTED.state_hash 留空")
+
 	var cp_val = engine.checkpoints[0]
 	if not (cp_val is Dictionary):
-		return Result.failure("EventTimelineBuild: checkpoints[0] 类型错误（期望 Dictionary）")
+		return Result.success({
+			"player_count": player_count,
+			"seed": seed,
+			"state_hash": "",
+		}).with_warning("EventTimelineBuild: checkpoints[0] 类型错误（期望 Dictionary），GAME_STARTED.state_hash 留空")
 	var cp: Dictionary = cp_val
 	var state_dict_val = cp.get("state_dict", null)
 	if not (state_dict_val is Dictionary):
-		return Result.failure("EventTimelineBuild: checkpoints[0].state_dict 缺失或类型错误（期望 Dictionary）")
+		return Result.success({
+			"player_count": player_count,
+			"seed": seed,
+			"state_hash": "",
+		}).with_warning("EventTimelineBuild: checkpoints[0].state_dict 缺失或类型错误，GAME_STARTED.state_hash 留空")
 
-	var restore_r := GameState.from_dict(state_dict_val)
-	if not restore_r.ok:
-		return Result.failure("EventTimelineBuild: 恢复初始 state 失败: %s" % restore_r.error)
-	var s: GameState = restore_r.value
-	if s == null:
-		return Result.failure("EventTimelineBuild: 恢复初始 state 失败: state 为空")
+	var data_read := GameStartedEventBuildClass.build_from_state_dict(state_dict_val, "EventTimelineBuild")
+	if not data_read.ok:
+		return Result.success({
+			"player_count": player_count,
+			"seed": seed,
+			"state_hash": "",
+		}).with_warning("EventTimelineBuild: %s" % data_read.error)
 
-	return Result.success(s.compute_hash())
-
+	return data_read

@@ -12,6 +12,7 @@ extends RefCounted
 
 const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
+const GameStartedEventBuildClass = preload("res://core/engine/game_engine/game_started_event_build.gd")
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 
@@ -66,16 +67,17 @@ static func _build_full_impl(engine: GameEngine) -> Result:
 	var seq := 0
 
 	# 初始化事件（step=-1）
+	var started_data_read := GameStartedEventBuildClass.build_from_state(replay_state)
+	if not started_data_read.ok:
+		return Result.failure("StepTimelineBuild: GAME_STARTED 构建失败: %s" % started_data_read.error).with_warnings(warnings)
+	var started_data: Dictionary = started_data_read.value
+	started_data["command_index"] = -1
+	started_data["step_index"] = -1
+
 	seq += 1
 	events_out.append({
 		"type": EventBus.EventType.GAME_STARTED,
-		"data": {
-			"player_count": replay_state.players.size() if (replay_state.players is Array) else -1,
-			"seed": int(replay_state.seed),
-			"state_hash": replay_state.compute_hash(),
-			"command_index": -1,
-			"step_index": -1,
-		},
+		"data": started_data,
 		"sequence": seq,
 		"timestamp": seq,
 		"command_index": -1,

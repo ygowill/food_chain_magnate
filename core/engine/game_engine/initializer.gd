@@ -10,6 +10,7 @@ const ModulesV2Class = preload("res://core/engine/game_engine/modules_v2.gd")
 const EmployeePoolPatchRegistryClass = preload("res://core/rules/employee_pool_patch_registry.gd")
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
+const GameStartedEventBuildClass = preload("res://core/engine/game_engine/game_started_event_build.gd")
 
 static func initialize_new_game(
 	engine: GameEngine,
@@ -179,11 +180,13 @@ static func initialize_new_game(
 	PerfTraceClass.end_span(span_state_hash)
 
 	var span_emit := PerfTraceClass.begin_span("init:EventBus.emit_event(GAME_STARTED)")
-	EventBus.emit_event(EventBus.EventType.GAME_STARTED, {
-		"player_count": player_count,
-		"seed": seed_value,
-		"state_hash": state_hash
-	})
+	var started_data_read := GameStartedEventBuildClass.build_from_state(state, str(state_hash))
+	if not started_data_read.ok:
+		return Result.failure("初始化失败：GAME_STARTED 构建失败: %s" % started_data_read.error).with_warnings(init_warnings)
+	var started_data: Dictionary = started_data_read.value
+	# 对齐历史行为：seed 取 initialize_new_game(...) 的入参。
+	started_data["seed"] = seed_value
+	EventBus.emit_event(EventBus.EventType.GAME_STARTED, started_data)
 	PerfTraceClass.end_span(span_emit)
 
 	PerfTraceClass.end_span(span_total)
