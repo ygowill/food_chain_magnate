@@ -1,5 +1,6 @@
 extends RefCounted
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const TypeHelpersClass = preload("res://core/utils/type_helpers.gd")
 
 static func is_phase_blocked_by_pending_actions(state_in: GameState, phase_name: String) -> Result:
@@ -24,13 +25,4 @@ static func is_phase_blocked_by_pending_actions(state_in: GameState, phase_name:
 	return Result.success(not list.is_empty())
 
 static func is_auto_skip_settlement_phase(phase_name: String) -> bool:
-	match phase_name:
-		"Dinnertime":
-			return true
-		"Marketing":
-			return true
-		"Cleanup":
-			return true
-		_:
-			return false
-
+	return phase_name == DefsClass.PHASE_DINNERTIME or phase_name == DefsClass.PHASE_MARKETING or phase_name == DefsClass.PHASE_CLEANUP

@@ -1,5 +1,7 @@
 extends RefCounted
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const PhaseBlockingClass = preload("res://core/engine/game_engine/auto_advance_phase_blocking.gd")
 const OrderOfBusinessRound1Class = preload("res://core/engine/game_engine/auto_advance_order_of_business_round1.gd")
 const WorkingMandatoryClass = preload("res://core/engine/game_engine/auto_advance_working_mandatory.gd")
@@ -13,8 +15,8 @@ static func try_advance_one(state_in: GameState, phase_manager: PhaseManager, ac
 		return Result.failure("auto_advance: action_registry 为空")
 
 	# 首轮自动跳过：Restructuring / OrderOfBusiness（保留未来扩展空间）
-	if state_in.round_number == 1 and state_in.phase == "Restructuring":
-		var blocked_r: Result = PhaseBlockingClass.is_phase_blocked_by_pending_actions(state_in, "Restructuring")
+	if state_in.round_number == 1 and state_in.phase == DefsClass.PHASE_RESTRUCTURING:
+		var blocked_r: Result = PhaseBlockingClass.is_phase_blocked_by_pending_actions(state_in, DefsClass.PHASE_RESTRUCTURING)
 		if not blocked_r.ok:
 			return blocked_r
 		if bool(blocked_r.value):
@@ -25,8 +27,8 @@ static func try_advance_one(state_in: GameState, phase_manager: PhaseManager, ac
 			return adv
 		return Result.success(true).with_warnings(adv.warnings)
 
-	if state_in.round_number == 1 and state_in.phase == "OrderOfBusiness":
-		var blocked_r2: Result = PhaseBlockingClass.is_phase_blocked_by_pending_actions(state_in, "OrderOfBusiness")
+	if state_in.round_number == 1 and state_in.phase == DefsClass.PHASE_ORDER_OF_BUSINESS:
+		var blocked_r2: Result = PhaseBlockingClass.is_phase_blocked_by_pending_actions(state_in, DefsClass.PHASE_ORDER_OF_BUSINESS)
 		if not blocked_r2.ok:
 			return blocked_r2
 		if bool(blocked_r2.value):
@@ -46,8 +48,8 @@ static func try_advance_one(state_in: GameState, phase_manager: PhaseManager, ac
 		return Result.success(true).with_warnings(warnings2)
 
 	# Restructuring：所有玩家都确认后，自动进入下一阶段（避免动作内 advance_phase 导致日志归属错乱）。
-	if state_in.phase == "Restructuring":
-		var blocked_r4: Result = PhaseBlockingClass.is_phase_blocked_by_pending_actions(state_in, "Restructuring")
+	if state_in.phase == DefsClass.PHASE_RESTRUCTURING:
+		var blocked_r4: Result = PhaseBlockingClass.is_phase_blocked_by_pending_actions(state_in, DefsClass.PHASE_RESTRUCTURING)
 		if not blocked_r4.ok:
 			return blocked_r4
 		if bool(blocked_r4.value):
@@ -69,8 +71,8 @@ static func try_advance_one(state_in: GameState, phase_manager: PhaseManager, ac
 		return Result.success(true).with_warnings(adv_r4.warnings)
 
 	# OrderOfBusiness：行动顺序落地后，自动进入 Working（保证日志顺序为“选择顺序 -> 进入 Working”）。
-	if state_in.phase == "OrderOfBusiness":
-		var blocked_r5: Result = PhaseBlockingClass.is_phase_blocked_by_pending_actions(state_in, "OrderOfBusiness")
+	if state_in.phase == DefsClass.PHASE_ORDER_OF_BUSINESS:
+		var blocked_r5: Result = PhaseBlockingClass.is_phase_blocked_by_pending_actions(state_in, DefsClass.PHASE_ORDER_OF_BUSINESS)
 		if not blocked_r5.ok:
 			return blocked_r5
 		if bool(blocked_r5.value):
@@ -109,7 +111,7 @@ static func try_advance_one(state_in: GameState, phase_manager: PhaseManager, ac
 		return Result.success(true).with_warnings(adv3.warnings)
 
 	# Working：若当前玩家在当前子阶段无可做动作，则自动推进到下一子阶段
-	if state_in.phase == "Working":
+	if state_in.phase == DefsClass.PHASE_WORKING:
 		# 先自动执行“可无参补完”的强制动作（避免其阻断子阶段 auto-advance：issue #62/#discount_manager）。
 		var mandatory_r: Result = WorkingMandatoryClass.try_auto_complete_working_mandatory_actions(state_in, action_registry)
 		if not mandatory_r.ok:
@@ -130,7 +132,7 @@ static func try_advance_one(state_in: GameState, phase_manager: PhaseManager, ac
 			var initiatable: Array[String] = action_registry.get_player_initiatable_actions(state_in, pid)
 			var has_real_actions := false
 			for aid in initiatable:
-				if aid == "skip" or aid == "skip_sub_phase" or aid == "end_turn" or aid == "advance_phase":
+				if aid == ActionIdsClass.SKIP or aid == ActionIdsClass.SKIP_SUB_PHASE or aid == ActionIdsClass.END_TURN or aid == ActionIdsClass.ADVANCE_PHASE:
 					continue
 				has_real_actions = true
 				break
@@ -142,4 +144,3 @@ static func try_advance_one(state_in: GameState, phase_manager: PhaseManager, ac
 				return Result.success(true).with_warnings(adv4.warnings)
 
 	return Result.success(false)
-

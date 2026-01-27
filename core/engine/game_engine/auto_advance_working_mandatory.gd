@@ -1,12 +1,15 @@
 extends RefCounted
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+
 # 可自动补完的强制动作（定价/折扣/奢侈品）：
 # - 这些动作无参数，且允许在 Working 任意子阶段执行。
 # - 若不自动补完，会被 ActionRegistry 视为“可启动动作”，从而阻止 Working 子阶段的 auto-advance（造成软锁/需要手动跳过）。
 const AUTO_MANDATORY_ACTION_IDS: Array[String] = [
-	"set_price",
-	"set_discount",
-	"set_luxury_price",
+	ActionIdsClass.SET_PRICE,
+	ActionIdsClass.SET_DISCOUNT,
+	ActionIdsClass.SET_LUXURY_PRICE,
 ]
 
 static func try_auto_complete_working_mandatory_actions(state_in: GameState, action_registry: ActionRegistry) -> Result:
@@ -14,7 +17,7 @@ static func try_auto_complete_working_mandatory_actions(state_in: GameState, act
 		return Result.failure("auto_mandatory: state 为空")
 	if action_registry == null:
 		return Result.failure("auto_mandatory: action_registry 为空")
-	if state_in.phase != "Working":
+	if state_in.phase != DefsClass.PHASE_WORKING:
 		return Result.success(false)
 
 	var pid := state_in.get_current_player_id()
@@ -50,4 +53,3 @@ static func try_auto_complete_working_mandatory_actions(state_in: GameState, act
 		return Result.success(true).with_warnings(ar.warnings)
 
 	return Result.success(false)
-

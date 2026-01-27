@@ -32,9 +32,9 @@ static func _rollback_and_return(state: GameState, snapshot: Dictionary, r: Resu
 
 # 推进子阶段（Working 或模块注入的 Cleanup 子阶段）
 static func advance_sub_phase(pm, state: GameState) -> Result:
-	if state.phase == "Working":
+	if state.phase == DefsClass.PHASE_WORKING:
 		return _advance_working_sub_phase(pm, state)
-	if state.phase == "Cleanup":
+	if state.phase == DefsClass.PHASE_CLEANUP:
 		return _advance_cleanup_sub_phase(pm, state)
 	var phase_enum: int = DefsClass.get_phase_enum(state.phase)
 	if phase_enum == -1:

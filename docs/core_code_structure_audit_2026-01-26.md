@@ -124,6 +124,7 @@
 - 2026-01-27：复核并更新文档：将审计中残留的“已部分整改”标记统一更新为“已整改”（代码改动已在此前完成，本文档仅做状态对齐）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：`AdvanceSubPhase`（Working）对 `round_state.sub_phase_passed` 的校验从 `assert` 改为返回 `Result.failure` 并回滚 snapshot（fail-fast 在 release 下也生效，且失败不污染 state）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：减少 Dictionary 裸写（第一步）：新增 `core/state/player_state_access.gd`（`PlayerStateAccess`）用于收敛 `players[*].milestones` 的读取/校验样板，并用于 `PricingPipeline`/`WorkingFlow`/`MarketingSettlement`/`DrinksProcurement` 等路径（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：phase/action 字符串常量化（第一步）：在 `core/engine/phase_manager/definitions.gd` 集中定义 `PHASE_*`/`SUB_PHASE_*` 常量；新增 `core/actions/action_ids.gd`（集中常用 action_id 常量），并替换 core/engine 的 AutoAdvance/AdvanceSubPhase 等关键路径比较逻辑（降低拼写风险/重命名成本）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -304,6 +305,7 @@
 - phase/action 等大量字符串驱动：
   - 例如多个地方直接比较 `"Marketing" / "Dinnertime" / "Working" ...`，容易产生拼写/重命名成本与难以全局替换的问题。
   - 建议逐步迁移到集中定义（constants/enum），并提供转换与校验入口。
+  - （已整改 2026-01-27）第一步：`PhaseManager/AutoAdvance` 相关核心路径已开始改用集中常量（`DefsClass.PHASE_*` + `ActionIdsClass.*`）；其余 callsite（core/rules、core/tests、ui）可后续逐步推进。
 - `assert` 与 `Result.failure` 混用导致“release 下校验失效”的风险：
   - （已整改 2026-01-27）以 `core/engine/phase_manager/working_flow.gd` 为例，里程碑 effects 解析与 OrderOfBusiness 排序相关的 fail-fast 已从 `assert` 改为返回 `Result.failure`，并在 base_rules/movie_stars hooks 中显式传播（release 下也生效）。
   - 仍有少量 `assert`（多为初始化/内部不变量/模块校验）；关键路径（`WorkingFlow`/`CompanyStructureRules`/`HouseNumberManager`/`DinnertimeSelection`/`TileBaking`/`PhaseManager.advance_sub_phase`）已改为 `Result.failure` fail-fast，后续可继续统一策略。
@@ -339,6 +341,7 @@
 |---|---:|---:|---:|---|
 | `core/actions/action_availability_registry.gd` | 267 | 0 | 0 |  |
 | `core/actions/action_executor.gd` | 199 | 1 | 0 | uses:IntValueParseHelpers |
+| `core/actions/action_ids.gd` | 13 | 0 | 0 | helper:action_ids |
 | `core/actions/action_registry.gd` | 235 | 2 | 0 | uses:AutoloadAccess |
 | `core/data/employee_def/debug.gd` | 22 | 0 | 0 |  |
 | `core/data/employee_def/parser.gd` | 13 | 2 | 0 | helper:employee_def_parser_wrapper |
@@ -370,9 +373,9 @@
 | `core/engine/game_engine/auto_advance.gd` | 14 | 1 | 0 |  |
 | `core/engine/game_engine/auto_advance_impl.gd` | 34 | 1 | 0 |  |
 | `core/engine/game_engine/auto_advance_order_of_business_round1.gd` | 51 | 0 | 0 | helper:auto_advance_oob_round1 |
-| `core/engine/game_engine/auto_advance_phase_blocking.gd` | 36 | 1 | 0 | helper:auto_advance_phase_blocking |
-| `core/engine/game_engine/auto_advance_try_step.gd` | 145 | 3 | 0 | helper:auto_advance_try_step |
-| `core/engine/game_engine/auto_advance_working_mandatory.gd` | 53 | 0 | 0 | helper:auto_advance_working_mandatory |
+| `core/engine/game_engine/auto_advance_phase_blocking.gd` | 28 | 2 | 0 | helper:auto_advance_phase_blocking |
+| `core/engine/game_engine/auto_advance_try_step.gd` | 146 | 5 | 0 | helper:auto_advance_try_step |
+| `core/engine/game_engine/auto_advance_working_mandatory.gd` | 55 | 2 | 0 | helper:auto_advance_working_mandatory |
 | `core/engine/game_engine/checkpoints.gd` | 55 | 0 | 0 | uses:GameLog,uses:DebugFlags |
 | `core/engine/game_engine/command_runner.gd` | 215 | 2 | 0 | uses:EventBus,uses:GameLog,uses:DebugFlags,uses:OS.has_feature |
 | `gameplay/replay/command_runner_event_build.gd` | 67 | 9 | 0 | moved:gameplay,uses:EventBus |
@@ -398,9 +401,9 @@
 | `core/engine/game_engine/command_index_queries.gd` | 168 | 2 | 0 | helper:command_index_queries |
 | `core/engine/game_engine.gd` | 285 | 12 | 0 | uses:EventBus |
 | `core/engine/phase_manager/advance_phase.gd` | 239 | 2 | 0 | uses:GameLog |
-| `core/engine/phase_manager/advance_sub_phase.gd` | 278 | 2 | 0 | uses:GameLog |
+| `core/engine/phase_manager/advance_sub_phase.gd` | 280 | 3 | 0 | uses:GameLog |
 | `core/engine/phase_manager/advancement.gd` | 13 | 2 | 0 |  |
-| `core/engine/phase_manager/definitions.gd` | 218 | 0 | 0 |  |
+| `core/engine/phase_manager/definitions.gd` | 237 | 0 | 0 |  |
 | `core/engine/phase_manager/hooks.gd` | 220 | 1 | 0 | uses:GameLog,uses:DebugFlags |
 | `core/engine/phase_manager/order_config.gd` | 152 | 1 | 0 |  |
 | `core/engine/phase_manager/settlement_triggers.gd` | 127 | 2 | 0 |  |
@@ -565,6 +568,7 @@
 
 - `core/actions/action_availability_registry.gd`：中等体量；后续可按重构优先级处理
 - `core/actions/action_executor.gd`：（已整改 2026-01-26）移除自带 `_parse_int_value`，改用 `IntValueParseHelpers`；中等体量；后续可按重构优先级处理
+- `core/actions/action_ids.gd`：（已新增 2026-01-27）集中管理 core/engine 常用 action_id 字符串常量（减少硬编码/拼写风险）
 - `core/actions/action_registry.gd`：包含 UI 语义：`get_player_initiatable_actions(...)` 判定“可启动动作”（隐式契约）；（已整改 2026-01-26）缺参判定统一走 `Result.ErrorCode.MISSING_PARAMS`（避免错误文案做控制流）；（已整改 2026-01-27）查询/过滤逻辑已抽离到 `action_registry_queries.gd`（ActionRegistry 主体更聚焦于注册/校验器）；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（避免直接引用 Autoload 全局变量）
 - `core/actions/action_registry_queries.gd`：（已新增 2026-01-27）ActionRegistry 查询/过滤辅助（按 phase/player 过滤动作），用于降低 `ActionRegistry` 单文件职责与体积
 
@@ -607,9 +611,9 @@
 - `core/engine/game_engine/archive.gd`：（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（降低对 Autoload 全局变量的硬依赖）
 - `core/engine/game_engine/auto_advance.gd`：（已整改 2026-01-27）class_name + 对外 API wrapper；实现委托 `auto_advance_impl.gd`
 - `core/engine/game_engine/auto_advance_impl.gd`：（已整改 2026-01-27）聚合转发（对外仍通过 `AutoAdvance.drain/try_advance_one` 调用）；推进决策拆分到 `auto_advance_try_step.gd`/`auto_advance_phase_blocking.gd`/`auto_advance_working_mandatory.gd`/`auto_advance_order_of_business_round1.gd`
-- `core/engine/game_engine/auto_advance_try_step.gd`：（已新增 2026-01-27）AutoAdvance 决策主流程：按 phase 判定并调用 PhaseManager 执行推进；依赖 action_registry 查询/执行强制动作
-- `core/engine/game_engine/auto_advance_phase_blocking.gd`：（已新增 2026-01-27）推进阻断检查：读取 `round_state.pending_phase_actions` 并判断是否阻断；包含“结算阶段是否默认跳过”的判定
-- `core/engine/game_engine/auto_advance_working_mandatory.gd`：（已新增 2026-01-27）Working 阶段强制动作补完：可无参自动执行的定价/折扣/奢侈品（避免阻断 auto-advance）
+- `core/engine/game_engine/auto_advance_try_step.gd`：（已新增 2026-01-27）AutoAdvance 决策主流程：按 phase 判定并调用 PhaseManager 执行推进；依赖 action_registry 查询/执行强制动作；（已整改 2026-01-27）phase/action 比较改为引用 `DefsClass.PHASE_*` 与 `ActionIdsClass.*`（减少硬编码/拼写风险）
+- `core/engine/game_engine/auto_advance_phase_blocking.gd`：（已新增 2026-01-27）推进阻断检查：读取 `round_state.pending_phase_actions` 并判断是否阻断；包含“结算阶段是否默认跳过”的判定；（已整改 2026-01-27）结算阶段判定改用 `DefsClass.PHASE_*` 常量
+- `core/engine/game_engine/auto_advance_working_mandatory.gd`：（已新增 2026-01-27）Working 阶段强制动作补完：可无参自动执行的定价/折扣/奢侈品（避免阻断 auto-advance）；（已整改 2026-01-27）action_id/phase 判定改为引用集中常量（`ActionIdsClass.*` + `DefsClass.PHASE_*`）
 - `core/engine/game_engine/auto_advance_order_of_business_round1.gd`：（已新增 2026-01-27）首轮 OrderOfBusiness 自动 finalize：基于 `previous_turn_order` 写入 picks 并落地 turn_order
 - `core/engine/game_engine/checkpoints.gd`：（已整改 2026-01-27）日志/verbose 开关读取改为通过 `AutoloadAccess` 动态访问 `GameLog`/`DebugFlags`（降低对 Autoload 全局变量的硬依赖）；仍含调试/发布差异分支（OS.has_feature）
 - `core/engine/game_engine/command_runner.gd`：（已整改 2026-01-26）事件构建已下沉到 `gameplay/replay/command_runner_event_build.gd`（并由 `ProjectSettings.fcm/command_runner_event_build_provider_path` 提供），主流程更聚焦于命令执行/auto-advance/invariants/checkpoint/emit；（已整改 2026-01-27）对 `EventBus`/`GameLog`/`DebugFlags` 的访问改为通过 `AutoloadAccess` 动态获取（并将 `EventBus.EventType.*` 改为字符串常量），降低对 Autoload 全局变量的硬依赖；仍含调试/发布差异分支（OS.has_feature）；（已整改 2026-01-26）事件发射改为调用 `engine.emit_event(...)` wrapper，避免直连 `EventBus.emit_event(...)`
@@ -630,7 +634,7 @@
 - `core/engine/phase_manager/advance_phase.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（降低对 Autoload 全局变量的硬依赖）
 - `core/engine/phase_manager/advance_sub_phase.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（降低对 Autoload 全局变量的硬依赖）；（已整改 2026-01-27）Working: `round_state.sub_phase_passed` 校验从 `assert` 改为 `Result.failure` 并回滚 snapshot（fail-fast 在 release 下也生效）
 - `core/engine/phase_manager/advancement.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/engine/phase_manager/definitions.gd`：中等体量；后续可按重构优先级处理
+- `core/engine/phase_manager/definitions.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）补充 `PHASE_*`/`SUB_PHASE_*` 常量，供核心路径避免散落硬编码
 - `core/engine/phase_manager/hooks.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志/调试开关读取改为通过 `AutoloadAccess` 动态访问 `GameLog`/`DebugFlags`（降低对 Autoload 全局变量的硬依赖）
 - `core/engine/phase_manager/order_config.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/phase_manager/settlement_triggers.gd`：未发现明显结构问题（小文件/职责相对单一）

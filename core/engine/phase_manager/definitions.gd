@@ -2,6 +2,26 @@
 # 负责：Phase/WorkingSubPhase 的枚举、名称映射、顺序，以及时间戳计算等纯函数。
 extends RefCounted
 
+# 阶段名称常量（state.phase / command.phase）
+const PHASE_SETUP := "Setup"
+const PHASE_RESTRUCTURING := "Restructuring"
+const PHASE_ORDER_OF_BUSINESS := "OrderOfBusiness"
+const PHASE_WORKING := "Working"
+const PHASE_DINNERTIME := "Dinnertime"
+const PHASE_PAYDAY := "Payday"
+const PHASE_MARKETING := "Marketing"
+const PHASE_CLEANUP := "Cleanup"
+const PHASE_GAME_OVER := "GameOver"
+
+# Working 子阶段名称常量（state.sub_phase / command.sub_phase）
+const SUB_PHASE_RECRUIT := "Recruit"
+const SUB_PHASE_TRAIN := "Train"
+const SUB_PHASE_MARKETING := "Marketing"
+const SUB_PHASE_GET_FOOD := "GetFood"
+const SUB_PHASE_GET_DRINKS := "GetDrinks"
+const SUB_PHASE_PLACE_HOUSES := "PlaceHouses"
+const SUB_PHASE_PLACE_RESTAURANTS := "PlaceRestaurants"
+
 # 七大阶段
 enum Phase {
 	SETUP,
@@ -17,15 +37,15 @@ enum Phase {
 
 # 阶段名称映射
 const PHASE_NAMES := {
-	Phase.SETUP: "Setup",
-	Phase.RESTRUCTURING: "Restructuring",
-	Phase.ORDER_OF_BUSINESS: "OrderOfBusiness",
-	Phase.WORKING: "Working",
-	Phase.DINNERTIME: "Dinnertime",
-	Phase.PAYDAY: "Payday",
-	Phase.MARKETING: "Marketing",
-	Phase.CLEANUP: "Cleanup",
-	Phase.GAME_OVER: "GameOver"
+	Phase.SETUP: PHASE_SETUP,
+	Phase.RESTRUCTURING: PHASE_RESTRUCTURING,
+	Phase.ORDER_OF_BUSINESS: PHASE_ORDER_OF_BUSINESS,
+	Phase.WORKING: PHASE_WORKING,
+	Phase.DINNERTIME: PHASE_DINNERTIME,
+	Phase.PAYDAY: PHASE_PAYDAY,
+	Phase.MARKETING: PHASE_MARKETING,
+	Phase.CLEANUP: PHASE_CLEANUP,
+	Phase.GAME_OVER: PHASE_GAME_OVER
 }
 
 # 阶段顺序（不包含 Setup / GameOver）
@@ -52,13 +72,13 @@ enum WorkingSubPhase {
 
 # 子阶段名称映射
 const SUB_PHASE_NAMES := {
-	WorkingSubPhase.RECRUIT: "Recruit",
-	WorkingSubPhase.TRAIN: "Train",
-	WorkingSubPhase.MARKETING: "Marketing",
-	WorkingSubPhase.GET_FOOD: "GetFood",
-	WorkingSubPhase.GET_DRINKS: "GetDrinks",
-	WorkingSubPhase.PLACE_HOUSES: "PlaceHouses",
-	WorkingSubPhase.PLACE_RESTAURANTS: "PlaceRestaurants"
+	WorkingSubPhase.RECRUIT: SUB_PHASE_RECRUIT,
+	WorkingSubPhase.TRAIN: SUB_PHASE_TRAIN,
+	WorkingSubPhase.MARKETING: SUB_PHASE_MARKETING,
+	WorkingSubPhase.GET_FOOD: SUB_PHASE_GET_FOOD,
+	WorkingSubPhase.GET_DRINKS: SUB_PHASE_GET_DRINKS,
+	WorkingSubPhase.PLACE_HOUSES: SUB_PHASE_PLACE_HOUSES,
+	WorkingSubPhase.PLACE_RESTAURANTS: SUB_PHASE_PLACE_RESTAURANTS
 }
 
 # 子阶段顺序
@@ -115,7 +135,7 @@ static func get_sub_phase_name(sub_phase: int) -> String:
 
 # 检查是否在工作阶段
 static func is_working_phase(state: GameState) -> bool:
-	return state.phase == "Working"
+	return state.phase == PHASE_WORKING
 
 # 获取当前子阶段索引
 static func get_sub_phase_index(state: GameState) -> int:
@@ -142,9 +162,9 @@ static func compute_timestamp(state: GameState) -> int:
 			var order_val = rs.get("phase_order", null)
 			if order_val is Array:
 				var order: Array = order_val
-				if state.phase == "Setup":
+				if state.phase == PHASE_SETUP:
 					phase_index = 0
-				elif state.phase == "GameOver":
+				elif state.phase == PHASE_GAME_OVER:
 					phase_index = order.size() + 1
 				else:
 					var idx := order.find(state.phase)
@@ -156,7 +176,7 @@ static func compute_timestamp(state: GameState) -> int:
 	return state.round_number * 1000 + phase_index * 100 + sub_phase_index
 
 static func get_any_sub_phase_index(state: GameState) -> int:
-	if state.phase == "Working":
+	if state.phase == PHASE_WORKING:
 		return get_sub_phase_index(state)
 	if state != null and (state.round_state is Dictionary):
 		var rs: Dictionary = state.round_state
