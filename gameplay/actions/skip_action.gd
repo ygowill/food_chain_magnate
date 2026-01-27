@@ -6,11 +6,13 @@ extends ActionExecutor
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 var phase_manager: PhaseManager = null
 
 func _init(manager: PhaseManager = null) -> void:
-	action_id = "skip"
+	action_id = ActionIdsClass.SKIP
 	display_name = "确认结束"
 	description = "确认结束当前阶段/子阶段"
 	requires_actor = true
@@ -19,11 +21,11 @@ func _init(manager: PhaseManager = null) -> void:
 
 func _validate_specific(state: GameState, command: Command) -> Result:
 	# OrderOfBusiness 必须完成顺序选择，不能通过“确认结束”跳过
-	if state.phase == "OrderOfBusiness":
+	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS:
 		return Result.failure("决定顺序阶段不能确认结束，请选择顺序")
 
 	# Restructuring（hotseat 提交制）：禁止使用“确认结束”，避免误操作导致软锁
-	if state.phase == "Restructuring" and int(state.round_number) > 1:
+	if state.phase == DefsClass.PHASE_RESTRUCTURING and int(state.round_number) > 1:
 		return Result.failure("重组阶段不能确认结束，请使用“确认重组”提交公司结构")
 
 	# 检查是否是当前玩家的回合
@@ -32,7 +34,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("不是你的回合，当前玩家: %d" % current_player_id)
 
 	# Setup：必须先放置至少 1 个餐厅才能确认结束
-	if state.phase == "Setup":
+	if state.phase == DefsClass.PHASE_SETUP:
 		if str(state.sub_phase) == "ReserveCards":
 			return Result.failure("请先选择银行储备卡")
 		var player := state.get_player(command.actor)
@@ -43,8 +45,8 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 			return Result.failure("设置阶段必须先放置餐厅才能确认结束")
 
 	# Working：只有在最后一个子阶段才能确认结束（结束该玩家的 Working 回合）
-	if state.phase == "Working":
-		var last_sub_phase := "PlaceRestaurants"
+	if state.phase == DefsClass.PHASE_WORKING:
+		var last_sub_phase := DefsClass.SUB_PHASE_PLACE_RESTAURANTS
 		if phase_manager != null:
 			var order := phase_manager.get_working_sub_phase_order_names()
 			if not order.is_empty():
@@ -53,14 +55,14 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 			return Result.failure("Working 阶段需要先完成所有子阶段才能确认结束（可使用“跳过子阶段”进入下一步）")
 
 	# Train：存在缺货预支待培训时，相关玩家不能确认结束（否则会软锁）
-	if state.phase == "Working" and state.sub_phase == "Train":
+	if state.phase == DefsClass.PHASE_WORKING and state.sub_phase == DefsClass.SUB_PHASE_TRAIN:
 		var pending_total := int(EmployeeRulesClass.get_immediate_train_pending_total(state, command.actor))
 		if pending_total > 0:
 			return Result.failure("存在缺货预支待培训员工，必须先在 Train 子阶段完成培训后才能确认结束")
 
 	# Working 最后子阶段：强制动作未完成时，相关玩家不能确认结束（否则会软锁）
-	if state.phase == "Working":
-		var last_sub_phase2 := "PlaceRestaurants"
+	if state.phase == DefsClass.PHASE_WORKING:
+		var last_sub_phase2 := DefsClass.SUB_PHASE_PLACE_RESTAURANTS
 		if phase_manager != null:
 			var order2 := phase_manager.get_working_sub_phase_order_names()
 			if not order2.is_empty():
@@ -113,7 +115,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	state.round_state["sub_phase_passed"] = passed
 
 	# Working：确认结束当前玩家的 Working 回合（由 PhaseManager 负责：最后子阶段 -> 下一玩家回合 / 全员结束 -> 离开 Working）
-	if state.phase == "Working":
+	if state.phase == DefsClass.PHASE_WORKING:
 		if phase_manager == null:
 			return Result.failure("skip: phase_manager 未注入")
 		var adv0 := phase_manager.advance_sub_phase(state)
@@ -146,7 +148,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 	for offset in range(1, size + 1):
 		var idx: int
-		if state.phase == "Setup":
+		if state.phase == DefsClass.PHASE_SETUP:
 			# 初始餐厅放置：逆序轮转（从顺序轨最后一位开始）
 			idx = state.current_player_index - offset
 			while idx < 0:
@@ -174,7 +176,7 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 		"type": EventBus.EventType.PLAYER_TURN_ENDED,
 		"data": {
 			"player_id": command.actor,
-			"action": "skip"
+			"action": ActionIdsClass.SKIP
 		}
 	})
 
@@ -190,7 +192,7 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 
 	# 阶段变化事件（当“全员确认结束”触发自动推进时）
 	if old_state.phase != new_state.phase:
-		if str(old_state.phase) == "Dinnertime":
+		if str(old_state.phase) == DefsClass.PHASE_DINNERTIME:
 			var report: Dictionary = {}
 			if old_state.round_state is Dictionary:
 				var v = Dictionary(old_state.round_state).get("dinnertime", null)
@@ -207,7 +209,7 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 			})
 			events.append_array(CommandRunnerClass.build_food_sold_events_from_dinnertime_report(old_state, report))
 
-		if str(old_state.phase) == "Payday":
+		if str(old_state.phase) == DefsClass.PHASE_PAYDAY:
 			var report_payday: Dictionary = {}
 			if new_state.round_state is Dictionary:
 				var v2 = Dictionary(new_state.round_state).get("payday", null)
@@ -225,11 +227,11 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 
 		# Marketing 结算摘要：在离开 Marketing 时发射（便于 UI 日志从 EventBus.history 恢复）。
 		# issue_tracker #48: per board 1 log entry, with details in event data.
-		if str(old_state.phase) == "Marketing":
+		if str(old_state.phase) == DefsClass.PHASE_MARKETING:
 			events.append_array(CommandRunnerClass.build_marketing_demand_generated_events(old_state))
 			events.append_array(CommandRunnerClass.build_marketing_expired_events(old_state))
 
-		if str(old_state.phase) == "Cleanup":
+		if str(old_state.phase) == DefsClass.PHASE_CLEANUP:
 			events.append_array(CommandRunnerClass.build_cleanup_inventory_discarded_events(old_state))
 
 		events.append({
@@ -271,13 +273,13 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 
 static func _should_emit_player_turn_started(phase_name: String) -> bool:
 	match str(phase_name).strip_edges():
-		"Dinnertime":
+		DefsClass.PHASE_DINNERTIME:
 			return false
-		"Marketing":
+		DefsClass.PHASE_MARKETING:
 			return false
-		"Cleanup":
+		DefsClass.PHASE_CLEANUP:
 			return false
-		"GameOver":
+		DefsClass.PHASE_GAME_OVER:
 			return false
 		_:
 			return true

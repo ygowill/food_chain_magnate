@@ -3,8 +3,11 @@
 class_name EndTurnAction
 extends ActionExecutor
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+
 func _init() -> void:
-	action_id = "end_turn"
+	action_id = ActionIdsClass.END_TURN
 	display_name = "结束回合"
 	description = "推进到下一位玩家"
 	requires_actor = true
@@ -14,7 +17,7 @@ func _init() -> void:
 func _validate_specific(state: GameState, command: Command) -> Result:
 	if state == null:
 		return Result.failure("state 为空")
-	if state.phase == "GameOver":
+	if state.phase == DefsClass.PHASE_GAME_OVER:
 		return Result.failure("游戏已结束")
 
 	var current_player_id := state.get_current_player_id()
@@ -58,7 +61,7 @@ func _generate_specific_events(_old_state: GameState, new_state: GameState, comm
 		"type": EventBus.EventType.PLAYER_TURN_ENDED,
 		"data": {
 			"player_id": command.actor,
-			"action": "end_turn"
+			"action": ActionIdsClass.END_TURN
 		}
 	})
 

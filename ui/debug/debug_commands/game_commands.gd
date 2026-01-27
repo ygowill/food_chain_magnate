@@ -1,6 +1,9 @@
 # 游戏流程调试命令（UI/开发工具）
 extends RefCounted
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+
 static func register_all(registry: DebugCommandRegistry) -> void:
 	registry.register("advance", _cmd_advance.bind(registry), "推进阶段", "advance [phase|sub_phase]", ["target"])
 	registry.register("skip", _cmd_skip.bind(registry), "跳过当前玩家", "skip [player_id]", ["player_id"])
@@ -28,9 +31,9 @@ static func _cmd_advance(args: Array, registry: DebugCommandRegistry) -> Result:
 
 	var cmd: Command
 	if target == "sub_phase":
-		cmd = Command.create_system("advance_phase", {"target": "sub_phase"})
+		cmd = Command.create_system(ActionIdsClass.ADVANCE_PHASE, {"target": "sub_phase"})
 	else:
-		cmd = Command.create_system("advance_phase")
+		cmd = Command.create_system(ActionIdsClass.ADVANCE_PHASE)
 
 	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
@@ -53,7 +56,7 @@ static func _cmd_skip(args: Array, registry: DebugCommandRegistry) -> Result:
 	if not args.is_empty():
 		player_id = int(args[0])
 
-	var cmd := Command.create("skip", player_id)
+	var cmd := Command.create(ActionIdsClass.SKIP, player_id)
 	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 	if not result.ok:
@@ -117,7 +120,7 @@ static func _cmd_set_phase(args: Array, registry: DebugCommandRegistry) -> Resul
 	if order.is_empty() and engine.phase_manager != null and engine.phase_manager.has_method("get_phase_order_names"):
 		order = engine.phase_manager.get_phase_order_names()
 
-	if phase_name == "Setup":
+	if phase_name == DefsClass.PHASE_SETUP:
 		return Result.failure("不支持跳回 Setup（请使用 undo/restore）")
 	if not order.has(phase_name):
 		return Result.failure("未知阶段: %s" % phase_name)
@@ -176,9 +179,9 @@ static func _advance_one_step(engine: GameEngine) -> Result:
 
 	var cmd: Command
 	if not state.sub_phase.is_empty():
-		cmd = Command.create_system("advance_phase", {"target": "sub_phase"})
+		cmd = Command.create_system(ActionIdsClass.ADVANCE_PHASE, {"target": "sub_phase"})
 	else:
-		cmd = Command.create_system("advance_phase")
+		cmd = Command.create_system(ActionIdsClass.ADVANCE_PHASE)
 
 	_mark_debug_force(cmd)
 	return engine.execute_command(cmd)

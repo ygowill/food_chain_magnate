@@ -2,6 +2,8 @@
 # 将游戏中的所有动作接入调试命令系统
 extends RefCounted
 
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+
 static func register_all(registry: DebugCommandRegistry) -> void:
 	# 阶段管理
 	registry.register("skip_sub", _cmd_skip_sub_phase.bind(registry), "跳过子阶段", "skip_sub")
@@ -54,7 +56,7 @@ static func _cmd_skip_sub_phase(args: Array, registry: DebugCommandRegistry) -> 
 		return Result.failure("游戏引擎未初始化")
 
 	var state := engine.get_state()
-	var cmd := Command.create("skip_sub_phase", _resolve_actor_id(state, registry))
+	var cmd := Command.create(ActionIdsClass.SKIP_SUB_PHASE, _resolve_actor_id(state, registry))
 	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
@@ -88,7 +90,7 @@ static func _cmd_end_turn(args: Array, registry: DebugCommandRegistry) -> Result
 		return Result.failure("游戏引擎未初始化")
 
 	var state := engine.get_state()
-	var cmd := Command.create("end_turn", _resolve_actor_id(state, registry))
+	var cmd := Command.create(ActionIdsClass.END_TURN, _resolve_actor_id(state, registry))
 	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 

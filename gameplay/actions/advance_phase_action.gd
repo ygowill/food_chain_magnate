@@ -4,11 +4,13 @@ class_name AdvancePhaseAction
 extends ActionExecutor
 
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 var phase_manager: PhaseManager = null
 
 func _init(manager: PhaseManager = null) -> void:
-	action_id = "advance_phase"
+	action_id = ActionIdsClass.ADVANCE_PHASE
 	display_name = "推进阶段"
 	description = "推进游戏到下一阶段或子阶段"
 	requires_actor = false  # 系统动作
@@ -24,7 +26,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("未知推进目标: %s" % target)
 
 	# 检查是否在 Setup 阶段（需要特殊处理）
-	if state.phase == "Setup":
+	if state.phase == DefsClass.PHASE_SETUP:
 		# Setup 没有子阶段
 		if target == "sub_phase":
 			return Result.failure("Setup 阶段没有子阶段")
@@ -36,7 +38,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		if state.sub_phase.is_empty():
 			return Result.failure("子阶段为空，无法推进")
 		# Working：子阶段推进是“单玩家流转”，不要求所有玩家 pass
-		if state.phase == "Working":
+		if state.phase == DefsClass.PHASE_WORKING:
 			return Result.success()
 		if not (state.round_state is Dictionary):
 			return Result.failure("未初始化(round_state)")
@@ -61,7 +63,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 			return Result.failure("当前存在子阶段，请使用 target=sub_phase 推进")
 
 		# 决定顺序阶段：必须先完成所有玩家的顺序选择
-		if state.phase == "OrderOfBusiness":
+		if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS:
 			if not (state.round_state is Dictionary):
 				return Result.failure("OrderOfBusiness 未初始化")
 			if not state.round_state.has("order_of_business"):
@@ -100,7 +102,7 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, _comm
 
 	# 阶段变化事件
 	if old_state.phase != new_state.phase:
-		if str(old_state.phase) == "Dinnertime":
+		if str(old_state.phase) == DefsClass.PHASE_DINNERTIME:
 			var report: Dictionary = {}
 			if old_state.round_state is Dictionary:
 				var v = Dictionary(old_state.round_state).get("dinnertime", null)
@@ -117,7 +119,7 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, _comm
 			})
 			events.append_array(CommandRunnerClass.build_food_sold_events_from_dinnertime_report(old_state, report))
 
-		if str(old_state.phase) == "Payday":
+		if str(old_state.phase) == DefsClass.PHASE_PAYDAY:
 			var report_payday: Dictionary = {}
 			if new_state.round_state is Dictionary:
 				var v2 = Dictionary(new_state.round_state).get("payday", null)
@@ -135,7 +137,7 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, _comm
 
 		# Marketing 结算摘要：在离开 Marketing 时发射（便于 UI 日志从 EventBus.history 恢复）。
 		# issue_tracker #48: per board 1 log entry, with details in event data.
-		if str(old_state.phase) == "Marketing":
+		if str(old_state.phase) == DefsClass.PHASE_MARKETING:
 			events.append_array(CommandRunnerClass.build_marketing_demand_generated_events(old_state))
 			events.append_array(CommandRunnerClass.build_marketing_expired_events(old_state))
 
@@ -149,7 +151,7 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, _comm
 		})
 
 		# Cleanup 库存丢弃：在进入 Cleanup 时发射（清理结算在 Cleanup:enter 运行）。
-		if str(new_state.phase) == "Cleanup":
+		if str(new_state.phase) == DefsClass.PHASE_CLEANUP:
 			events.append_array(CommandRunnerClass.build_cleanup_inventory_discarded_events(new_state))
 
 		# 回合开始事件

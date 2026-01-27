@@ -6,22 +6,24 @@ extends ActionExecutor
 
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 var phase_manager: PhaseManager = null
 
 func _init(manager: PhaseManager = null) -> void:
-	action_id = "skip_sub_phase"
+	action_id = ActionIdsClass.SKIP_SUB_PHASE
 	display_name = "跳过子阶段"
 	description = "跳过当前子阶段"
 	requires_actor = true
 	is_mandatory = false
-	allowed_phases = ["Working"]
+	allowed_phases = [DefsClass.PHASE_WORKING]
 	phase_manager = manager
 
 func _validate_specific(state: GameState, command: Command) -> Result:
 	if state == null:
 		return Result.failure("state 为空")
-	if state.phase != "Working":
+	if state.phase != DefsClass.PHASE_WORKING:
 		return Result.failure("仅允许在 Working 阶段使用")
 	if state.sub_phase.is_empty():
 		return Result.failure("Working 子阶段为空，无法跳过")
@@ -95,7 +97,7 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 
 	# 若从最后子阶段跳过，则视为结束该玩家的 Working 回合（玩家先结束 -> 系统推进）。
 	var ended_turn := false
-	if old_state.phase == "Working" and phase_manager != null:
+	if old_state.phase == DefsClass.PHASE_WORKING and phase_manager != null:
 		var order := phase_manager.get_working_sub_phase_order_names()
 		if not order.is_empty():
 			var last_sub_phase: String = str(order[order.size() - 1])
@@ -105,7 +107,7 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 					"type": EventBus.EventType.PLAYER_TURN_ENDED,
 					"data": {
 						"player_id": command.actor,
-						"action": "skip_sub_phase"
+						"action": ActionIdsClass.SKIP_SUB_PHASE
 					}
 				})
 
@@ -121,7 +123,7 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 
 	# 阶段变化事件
 	if old_state.phase != new_state.phase:
-		if str(old_state.phase) == "Dinnertime":
+		if str(old_state.phase) == DefsClass.PHASE_DINNERTIME:
 			var report: Dictionary = {}
 			if old_state.round_state is Dictionary:
 				var v = Dictionary(old_state.round_state).get("dinnertime", null)
@@ -140,11 +142,11 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 
 		# Marketing 结算摘要：在离开 Marketing 时发射（便于 UI 日志从 EventBus.history 恢复）。
 		# issue_tracker #48: per board 1 log entry, with details in event data.
-		if str(old_state.phase) == "Marketing":
+		if str(old_state.phase) == DefsClass.PHASE_MARKETING:
 			events.append_array(CommandRunnerClass.build_marketing_demand_generated_events(old_state))
 			events.append_array(CommandRunnerClass.build_marketing_expired_events(old_state))
 
-		if str(old_state.phase) == "Cleanup":
+		if str(old_state.phase) == DefsClass.PHASE_CLEANUP:
 			events.append_array(CommandRunnerClass.build_cleanup_inventory_discarded_events(old_state))
 
 		events.append({
@@ -187,13 +189,13 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 
 static func _should_emit_player_turn_started(phase_name: String) -> bool:
 	match str(phase_name).strip_edges():
-		"Dinnertime":
+		DefsClass.PHASE_DINNERTIME:
 			return false
-		"Marketing":
+		DefsClass.PHASE_MARKETING:
 			return false
-		"Cleanup":
+		DefsClass.PHASE_CLEANUP:
 			return false
-		"GameOver":
+		DefsClass.PHASE_GAME_OVER:
 			return false
 		_:
 			return true
