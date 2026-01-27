@@ -87,6 +87,7 @@
 - 2026-01-27：将 `GameEngine` 的“阶段/玩家回合起点索引”推导逻辑抽离到 `core/engine/game_engine/command_index_queries.gd`，并复用 `Replay.should_force_execute_in_replay(...)`（缩短 `core/engine/game_engine.gd` 并减少重复判断）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `MarketingSettlementHelpers`：将 `settlement_helpers_impl.gd` 的实现按职责拆到 `settlement_instance_expiration.gd`/`settlement_products.gd`/`settlement_house_demand.gd`/`settlement_demand_effects.gd`，impl 文件仅保留聚合转发（进一步降低单文件体积）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `TrainSlotUsage`：将 `train_slot_usage_impl.gd` 的实现按职责拆到 `train_slot_usage_storage.gd`/`train_slot_usage_providers.gd`/`train_slot_usage_allocator.gd`，impl 文件仅保留聚合转发；同时引入 `round_state.train_slot_usage_instances` 记录“按培训员实例”的使用量并兼容旧版总计数（进一步降低单文件体积与耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：拆分 `PaydaySettlement`：将“薪资 token 支付”与“薪资折扣容量推导”拆到 `core/rules/phase/payday/` 下的独立 helper（`payday_salary_token_payment.gd`/`payday_salary_discount.gd`），`payday_settlement.gd` 保留 orchestrator + round_state 报告写入；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -109,8 +110,9 @@
 - `core/map/piece_def.gd`（~275 LOC；（已整改 2026-01-27）解析逻辑抽离到 `piece_def_parser.gd`）、`core/map/tile_def.gd`（~262 LOC）、`core/map/map_def.gd`（~311 LOC）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
 - 其他超过 ~300 行的文件：
-  - `core/rules/phase/payday_settlement.gd`、`core/map/map_def.gd`、`core/rules/drinks_procurement.gd`、`core/engine/phase_manager.gd`、`core/engine/game_engine/auto_advance_impl.gd`
+  - `core/map/map_def.gd`、`core/rules/drinks_procurement.gd`、`core/engine/phase_manager.gd`、`core/engine/game_engine/auto_advance_impl.gd`
   - （已整改 2026-01-27）`core/rules/employee_rules/train_slot_usage_impl.gd` 已拆分为 `train_slot_usage_storage.gd`/`train_slot_usage_providers.gd`/`train_slot_usage_allocator.gd`
+  - （已整改 2026-01-27）`core/rules/phase/payday_settlement.gd` 已按“token 支付/折扣推导”拆分到 `core/rules/phase/payday/`（主文件不再超长）
 
 建议记录（后续重构方向）：
 - 先从“职责剥离”入手，而不是单纯按行数拆文件：
@@ -445,7 +447,9 @@
 | `core/rules/phase/marketing/settlement_instance_expiration.gd` | 52 | 1 | 0 |  |
 | `core/rules/phase/marketing/settlement_products.gd` | 35 | 0 | 0 |  |
 | `core/rules/phase/marketing_settlement.gd` | 228 | 4 | 0 |  |
-| `core/rules/phase/payday_settlement.gd` | 350 | 7 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
+| `core/rules/phase/payday/payday_salary_discount.gd` | 52 | 1 | 0 | helper:payday_salary_discount |
+| `core/rules/phase/payday/payday_salary_token_payment.gd` | 91 | 1 | 0 | helper:payday_salary_token_payment |
+| `core/rules/phase/payday_settlement.gd` | 204 | 6 | 0 | uses:MilestoneEffectQueries |
 | `core/rules/placement_conflict_registry.gd` | 133 | 0 | 0 |  |
 | `core/rules/pricing_pipeline.gd` | 180 | 3 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
 | `core/rules/settlement_registry.gd` | 158 | 0 | 0 | uses:GameLog,uses:DebugFlags |
@@ -666,7 +670,9 @@
 - `core/rules/phase/marketing/settlement_house_demand.gd`：（已新增 2026-01-27）需求写入（cap/花园/倍增）与房屋排序；职责单一
 - `core/rules/phase/marketing/settlement_demand_effects.gd`：（已新增 2026-01-27）营销需求数量/现金奖金 effects 计算（遍历 milestones -> effect_registry.invoke）；后续可考虑进一步收敛“milestone 扫描”样板
 - `core/rules/phase/marketing_settlement.gd`：（已整改 2026-01-26）将 marketing_instances 校验/归一化抽离到 `marketing_instances_validation.gd`（减少单文件职责/缩短脚本）；其余结算/需求生成/到期清理仍可按职责继续拆分
-- `core/rules/phase/payday_settlement.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`salary_total_delta` 的 value 求和改用 `MilestoneEffectQueries.sum_int_values(...)`（减少重复/样板）；结算逻辑较大；包含 token 支付/折扣/报告写入等多职责，可分层；偏长脚本；建议关注职责边界/可读性；存在一定数量的 preload 依赖
+- `core/rules/phase/payday_settlement.gd`：（已整改 2026-01-27）将“薪资 token 支付”与“薪资折扣容量推导”拆到 `core/rules/phase/payday/`，主文件更聚焦在 orchestrator（按玩家结算/写入 round_state.payday 报告/触发里程碑）；仍包含较多 Payday 规则分支，但体量已下降
+- `core/rules/phase/payday/payday_salary_discount.gd`：（已新增 2026-01-27）薪资折扣容量推导：遍历在岗员工 effect_ids 并通过 effect_registry.invoke 累计 `salary_discount_recruit_capacity`
+- `core/rules/phase/payday/payday_salary_token_payment.gd`：（已新增 2026-01-27）薪资 token 支付：基于 ProductDef tags 统计/扣减可用 food/drink token（排除 `salary_token_ineligible`）
 - `core/rules/placement_conflict_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/pricing_pipeline.gd`：（已部分整改 2026-01-26）移除自带 `_parse_*`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`base_price_delta` 的 value 求和改用 `MilestoneEffectQueries.sum_int_values(...)`（减少重复/样板）；中等体量；后续可按重构优先级处理
 - `core/rules/settlement_registry.gd`：依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）

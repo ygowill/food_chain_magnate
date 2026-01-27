@@ -4,14 +4,11 @@ class_name PaydaySettlement
 extends RefCounted
 
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
-const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
-const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
-const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
-
-const EFFECT_SEG_PAYDAY_SALARY_DISCOUNT := ":payday:salary_discount:"
+const SalaryDiscountClass = preload("res://core/rules/phase/payday/payday_salary_discount.gd")
+const SalaryTokenPaymentClass = preload("res://core/rules/phase/payday/payday_salary_token_payment.gd")
 
 static func apply(state: GameState, phase_manager = null) -> Result:
 	if state == null:
@@ -72,7 +69,7 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 				return Result.failure("PaydaySettlement: round_state.recruit_used[%d] 类型错误（期望 int）" % i)
 			used_recruit = int(recruit_used[i])
 
-		var cap_read := _get_salary_discount_recruit_capacity(state, i, player, effect_registry)
+		var cap_read := SalaryDiscountClass.get_salary_discount_recruit_capacity(state, i, player, effect_registry)
 		if not cap_read.ok:
 			return cap_read
 		warnings.append_array(cap_read.warnings)
@@ -115,11 +112,11 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 
 		var tokens_available := 0
 		if pay_with_tokens:
-			tokens_available = _count_food_drink_tokens(inventory)
+			tokens_available = SalaryTokenPaymentClass.count_food_drink_tokens(inventory)
 
 		var tokens_used := 0
 		if pay_with_tokens and tokens_available > 0 and paid_employee_count > 0:
-			var need := _compute_min_tokens_needed(
+			var need := SalaryTokenPaymentClass.compute_min_tokens_needed(
 				paid_employee_count, salary_cost, milestone_delta_amount, discount_amount, cash_before
 			)
 			tokens_used = mini(tokens_available, need)
@@ -134,7 +131,7 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 
 		var token_payment: Dictionary = {}
 		if tokens_used > 0:
-			var token_pay := _pay_with_tokens(state, i, tokens_used)
+			var token_pay := SalaryTokenPaymentClass.pay_with_tokens(state, i, tokens_used)
 			if not token_pay.ok:
 				return token_pay
 			token_payment = token_pay.value
@@ -190,126 +187,10 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 	return Result.success().with_warnings(warnings)
 
 static func _count_food_drink_tokens(inventory: Dictionary) -> int:
-	var total := 0
-	for k in inventory.keys():
-		var product_id: String = str(k)
-		var def = ProductRegistryClass.get_def(product_id)
-		if def == null or not (def is ProductDef):
-			continue
-		var p: ProductDef = def
-		if p.has_tag("salary_token_ineligible"):
-			continue
-		if not (p.has_tag("food") or p.has_tag("drink")):
-			continue
-		var v = inventory.get(k, 0)
-		if v is int and int(v) > 0:
-			total += int(v)
-	return total
-
-static func _compute_min_tokens_needed(paid_employee_count: int, salary_cost: int, milestone_delta: int, discount_amount: int, cash_available: int) -> int:
-	if paid_employee_count <= 0:
-		return 0
-	for t in range(paid_employee_count + 1):
-		var due_cash := maxi(0, (paid_employee_count - t) * salary_cost + milestone_delta - discount_amount)
-		if cash_available >= due_cash:
-			return t
-	return paid_employee_count
+	return SalaryTokenPaymentClass.count_food_drink_tokens(inventory)
 
 static func _pay_with_tokens(state: GameState, player_id: int, tokens_needed: int) -> Result:
-	if state == null:
-		return Result.failure("PaydaySettlement: state 为空")
-	if player_id < 0 or player_id >= state.players.size():
-		return Result.failure("PaydaySettlement: player_id 越界: %d" % player_id)
-	if tokens_needed <= 0:
-		return Result.success({})
-
-	var player_val = state.players[player_id]
-	if not (player_val is Dictionary):
-		return Result.failure("PaydaySettlement: players[%d] 类型错误（期望 Dictionary）" % player_id)
-	var player: Dictionary = player_val
-
-	var inventory_val = player.get("inventory", null)
-	if not (inventory_val is Dictionary):
-		return Result.failure("PaydaySettlement: player[%d].inventory 类型错误（期望 Dictionary）" % player_id)
-	var inventory: Dictionary = inventory_val
-
-	var paid: Dictionary = {}
-	var remaining := tokens_needed
-
-	var ids := []
-	for k in inventory.keys():
-		ids.append(str(k))
-	ids.sort()
-
-	for pid in ids:
-		if remaining <= 0:
-			break
-		var def = ProductRegistryClass.get_def(pid)
-		if def == null or not (def is ProductDef):
-			continue
-		var p: ProductDef = def
-		if p.has_tag("salary_token_ineligible"):
-			continue
-		if not (p.has_tag("food") or p.has_tag("drink")):
-			continue
-		var cur_val = inventory.get(pid, 0)
-		if not (cur_val is int):
-			continue
-		var cur: int = int(cur_val)
-		if cur <= 0:
-			continue
-		var use := mini(cur, remaining)
-		inventory[pid] = cur - use
-		paid[pid] = use
-		remaining -= use
-
-	if remaining > 0:
-		return Result.failure("PaydaySettlement: food/drink tokens 不足（need=%d remain=%d）" % [tokens_needed, remaining])
-
-	player["inventory"] = inventory
-	state.players[player_id] = player
-	return Result.success(paid)
-
-static func _get_salary_discount_recruit_capacity(state: GameState, player_id: int, player: Dictionary, effect_registry) -> Result:
-	assert(state != null, "PaydaySettlement: state 为空")
-	assert(player.has("employees") and (player["employees"] is Array), "PaydaySettlement: player.employees 缺失或类型错误（期望 Array）")
-	var employees: Array = player["employees"]
-
-	if effect_registry == null:
-		return Result.failure("PaydaySettlement: EffectRegistry 未设置")
-
-	var warnings: Array[String] = []
-	var ctx := {"salary_discount_recruit_capacity": 0}
-
-	# Q3：折扣仅由“在岗员工”提供（reserve 不计入）
-	for i in range(employees.size()):
-		var emp_val = employees[i]
-		if not (emp_val is String):
-			return Result.failure("PaydaySettlement: employees[%d] 类型错误（期望 String）" % i)
-		var emp_id: String = str(emp_val)
-		if emp_id.is_empty():
-			return Result.failure("PaydaySettlement: employees 不应包含空字符串")
-
-		var def_val = EmployeeRegistryClass.get_def(emp_id)
-		if def_val == null:
-			return Result.failure("PaydaySettlement: 未知员工定义: %s" % emp_id)
-		if not (def_val is EmployeeDef):
-			return Result.failure("PaydaySettlement: 员工定义类型错误（期望 EmployeeDef）: %s" % emp_id)
-		var def: EmployeeDef = def_val
-
-		for eid in def.effect_ids:
-			var effect_id: String = eid
-			if effect_id.find(EFFECT_SEG_PAYDAY_SALARY_DISCOUNT) == -1:
-				continue
-			var r = effect_registry.invoke(effect_id, [state, player_id, ctx, emp_id])
-			if not r.ok:
-				return r
-			warnings.append_array(r.warnings)
-
-	var cap_val = ctx.get("salary_discount_recruit_capacity", null)
-	if not (cap_val is int):
-		return Result.failure("PaydaySettlement: ctx.salary_discount_recruit_capacity 类型错误（期望 int）")
-	return Result.success(int(cap_val)).with_warnings(warnings)
+	return SalaryTokenPaymentClass.pay_with_tokens(state, player_id, tokens_needed)
 
 static func _get_salary_total_delta(_state: GameState, player: Dictionary) -> Result:
 	assert(player.has("milestones") and (player["milestones"] is Array), "PaydaySettlement: player.milestones 缺失或类型错误（期望 Array）")
@@ -321,12 +202,3 @@ static func _get_salary_total_delta(_state: GameState, player: Dictionary) -> Re
 		"PaydaySettlement: ",
 		"player.milestones"
 	)
-
-static func _count_employee_in_list(list: Array, employee_id: String) -> int:
-	var count := 0
-	for emp in list:
-		assert(emp is String, "PaydaySettlement: 员工列表元素类型错误（期望 String）: %s" % str(emp))
-		var id: String = emp
-		if id == employee_id:
-			count += 1
-	return count
