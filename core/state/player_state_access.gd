@@ -6,7 +6,11 @@ static func _prefix(label: String) -> String:
 		return ""
 	if label.ends_with(": "):
 		return label
+	if label.ends_with("： "):
+		return label
 	if label.ends_with(":"):
+		return "%s " % label
+	if label.ends_with("："):
 		return "%s " % label
 	return "%s: " % label
 
@@ -35,4 +39,3 @@ static func require_player_milestones(state: GameState, player_id: int, prefix_l
 		return player_read
 	var player: Dictionary = player_read.value
 	return require_milestones(player, "player[%d]" % player_id, prefix_label)
-

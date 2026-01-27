@@ -124,6 +124,7 @@
 - 2026-01-27：复核并更新文档：将审计中残留的“已部分整改”标记统一更新为“已整改”（代码改动已在此前完成，本文档仅做状态对齐）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：`AdvanceSubPhase`（Working）对 `round_state.sub_phase_passed` 的校验从 `assert` 改为返回 `Result.failure` 并回滚 snapshot（fail-fast 在 release 下也生效，且失败不污染 state）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：减少 Dictionary 裸写（第一步）：新增 `core/state/player_state_access.gd`（`PlayerStateAccess`）用于收敛 `players[*].milestones` 的读取/校验样板，并用于 `PricingPipeline`/`WorkingFlow`/`MarketingSettlement`/`DrinksProcurement` 等路径（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：减少 Dictionary 裸写（milestones 扩展）：将 `CleanupSettlement`/`PaydaySettlement`/`DinnertimeEffects`/`EmployeeRules.Salary`/`StateUpdater.employees_and_milestones` 等处对 `player.milestones` 的手写校验改为复用 `PlayerStateAccess`；并让 prefix 处理兼容中文冒号（`：`），以便复用中文错误前缀；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：phase/action 字符串常量化（第一步）：在 `core/engine/phase_manager/definitions.gd` 集中定义 `PHASE_*`/`SUB_PHASE_*` 常量；新增 `core/actions/action_ids.gd`（集中常用 action_id 常量），并替换 core/engine 的 AutoAdvance/AdvanceSubPhase 等关键路径比较逻辑（降低拼写风险/重命名成本）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
@@ -313,6 +314,7 @@
   - 多文件重复出现 `if not (x is Dictionary)`、`get(..., null)`、`duplicate(true)` 组合，属于结构性样板代码。
   - 已有 `TypeHelpers` / `ParseHelpers` / 若干 query helper（例如 `CatalogRegistryHelpers`、`MarketingPlacementQuery`）但使用不一致，导致全局风格不统一。
   - （已整改 2026-01-27）新增 `PlayerStateAccess`（`core/state/player_state_access.gd`）作为第一步：收敛 `player.milestones` 的读取/校验样板，并在 `PricingPipeline`/`WorkingFlow`/`MarketingSettlement`/`DrinksProcurement` 等处复用（减少重复/样板）
+  - （已整改 2026-01-27）继续迁移剩余 milestones callsite：`CleanupSettlement`/`PaydaySettlement`/`DinnertimeEffects`/`EmployeeRules.Salary`/`StateUpdater.employees_and_milestones` 也统一复用 `PlayerStateAccess`（进一步减少 Dictionary 裸写与重复样板）
 - 少量“自加载创建实例”的奇怪模式：
   - （已整改 2026-01-26）`core/data/product_def.gd`、`core/modules/v2/module_manifest.gd` 已从 `load(自身脚本路径).new()` 改为直接 `new()`。
 
@@ -488,7 +490,7 @@
 | `core/rules/employee_rules/employee_array_helpers.gd` | 24 | 1 | 0 |  |
 | `core/rules/employee_rules/immediate_train_pending.gd` | 149 | 0 | 0 |  |
 | `core/rules/employee_rules/limits.gd` | 46 | 2 | 0 |  |
-| `core/rules/employee_rules/salary.gd` | 65 | 4 | 0 |  |
+| `core/rules/employee_rules/salary.gd` | 58 | 4 | 0 | uses:PlayerStateAccess |
 | `core/rules/employee_rules/train_slot_usage.gd` | 30 | 1 | 0 |  |
 | `core/rules/employee_rules/train_slot_usage_allocator.gd` | 163 | 2 | 0 |  |
 | `core/rules/employee_rules/train_slot_usage_impl.gd` | 31 | 2 | 0 |  |
@@ -505,9 +507,9 @@
 | `core/rules/milestone_effect_queries.gd` | 53 | 2 | 0 |  |
 | `core/rules/milestone_effect_registry.gd` | 71 | 0 | 0 |  |
 | `core/rules/milestone_system.gd` | 120 | 4 | 0 |  |
-| `core/rules/phase/cleanup_settlement.gd` | 243 | 5 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
+| `core/rules/phase/cleanup_settlement.gd` | 229 | 6 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries,uses:PlayerStateAccess |
 | `core/rules/phase/dinnertime/dinnertime_distance.gd` | 176 | 1 | 0 |  |
-| `core/rules/phase/dinnertime/dinnertime_effects.gd` | 153 | 3 | 0 |  |
+| `core/rules/phase/dinnertime/dinnertime_effects.gd` | 153 | 4 | 0 | uses:PlayerStateAccess |
 | `core/rules/phase/dinnertime/dinnertime_events.gd` | 46 | 0 | 0 |  |
 | `core/rules/phase/dinnertime/dinnertime_inventory.gd` | 81 | 1 | 0 |  |
 | `core/rules/phase/dinnertime/dinnertime_selection.gd` | 202 | 4 | 0 |  |
@@ -524,7 +526,7 @@
 | `core/rules/phase/marketing_settlement.gd` | 228 | 4 | 0 |  |
 | `core/rules/phase/payday/payday_salary_discount.gd` | 52 | 1 | 0 | helper:payday_salary_discount |
 | `core/rules/phase/payday/payday_salary_token_payment.gd` | 91 | 1 | 0 | helper:payday_salary_token_payment |
-| `core/rules/phase/payday_settlement.gd` | 204 | 6 | 0 | uses:MilestoneEffectQueries |
+| `core/rules/phase/payday_settlement.gd` | 207 | 7 | 0 | uses:MilestoneEffectQueries,uses:PlayerStateAccess |
 | `core/rules/placement_conflict_registry.gd` | 133 | 0 | 0 |  |
 | `core/rules/pricing_pipeline.gd` | 165 | 4 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries,uses:PlayerStateAccess |
 | `core/rules/settlement_registry.gd` | 159 | 1 | 0 | uses:AutoloadAccess |
@@ -532,7 +534,7 @@
 | `core/state/game_state.gd` | 230 | 2 | 0 |  |
 | `core/state/game_state_factory.gd` | 209 | 5 | 0 |  |
 | `core/state/game_state_serialization.gd` | 226 | 5 | 0 |  |
-| `core/state/player_state_access.gd` | 38 | 0 | 0 | helper:player_state_access |
+| `core/state/player_state_access.gd` | 41 | 0 | 0 | helper:player_state_access |
 | `core/state/serialization/json_safe.gd` | 25 | 0 | 0 |  |
 | `core/state/serialization/parse_helpers.gd` | 70 | 0 | 0 |  |
 | `core/state/serialization/round_state_parser.gd` | 37 | 3 | 0 | helper:round_state_parser_wrapper |
@@ -544,7 +546,7 @@
 | `core/state/state_updater/batch.gd` | 103 | 2 | 0 |  |
 | `core/state/state_updater/cash.gd` | 162 | 0 | 0 |  |
 | `core/state/state_updater/collections.gd` | 72 | 0 | 0 |  |
-| `core/state/state_updater/employees_and_milestones.gd` | 118 | 1 | 0 |  |
+| `core/state/state_updater/employees_and_milestones.gd` | 121 | 2 | 0 | uses:PlayerStateAccess |
 | `core/state/state_updater/inventory.gd` | 91 | 0 | 0 |  |
 | `core/state/state_updater.gd` | 102 | 5 | 0 |  |
 | `core/types/command.gd` | 184 | 1 | 0 | uses:JsonValueParseHelpers |
@@ -731,7 +733,7 @@
 - `core/rules/employee_rules/employee_array_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/employee_rules/immediate_train_pending.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/employee_rules/limits.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/employee_rules/salary.gd`：（已整改 2026-01-27）营销员免薪（`marketing_no_salary`）判定改为复用 `MilestoneEffectQueries`（减少 milestones->effects 遍历样板）；其余未发现明显结构问题（小文件/职责相对单一）
+- `core/rules/employee_rules/salary.gd`：（已整改 2026-01-27）营销员免薪（`marketing_no_salary`）判定改为复用 `MilestoneEffectQueries`（减少 milestones->effects 遍历样板）；（已整改 2026-01-27）读取 `player.milestones` 改为复用 `PlayerStateAccess`（减少重复/样板）；其余未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/employee_rules/train_slot_usage.gd`：（已整改 2026-01-27）对外 API wrapper；完整实现移至 `train_slot_usage_impl.gd`（降低单文件体积，便于维护/进一步拆分）
 - `core/rules/employee_rules/train_slot_usage_impl.gd`：（已整改 2026-01-27）TrainSlotUsage 聚合转发（对外 API 仍保持稳定）；实现拆分到 storage/providers/allocator，便于分别维护 round_state 存储/培训员扫描/分配策略
 - `core/rules/employee_rules/train_slot_usage_storage.gd`：（已新增 2026-01-27）round_state 存储层：读写 `train_slot_usage_instances` 并兼容旧版 `train_slot_usage` 总用量（Fail Fast 校验结构）
@@ -747,9 +749,9 @@
 - `core/rules/milestone_effect_queries.gd`：（已新增 2026-01-26）用于收敛“遍历 milestones -> MilestoneDef.effects”样板，供 pricing/settlement/drinks 等复用；（已整改 2026-01-26）新增 sum/max helpers 收敛 `effects[*].value` 的解析/聚合样板
 - `core/rules/milestone_effect_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/milestone_system.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/phase/cleanup_settlement.gd`：（已整改 2026-01-26）移除自带 `_parse_non_negative_int_value`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`gain_fridge` 的 “取最大 capacity” 逻辑改用 `MilestoneEffectQueries.max_non_negative_int_value(...)`（减少重复/样板）；中等体量；后续可按重构优先级处理
+- `core/rules/phase/cleanup_settlement.gd`：（已整改 2026-01-26）移除自带 `_parse_non_negative_int_value`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`gain_fridge` 的 “取最大 capacity” 逻辑改用 `MilestoneEffectQueries.max_non_negative_int_value(...)`（减少重复/样板）；（已整改 2026-01-27）读取 `player.milestones` 改为复用 `PlayerStateAccess`（减少重复/样板）；中等体量；后续可按重构优先级处理
 - `core/rules/phase/dinnertime/dinnertime_distance.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/phase/dinnertime/dinnertime_effects.gd`：未发现明显结构问题（小文件/职责相对单一）
+- `core/rules/phase/dinnertime/dinnertime_effects.gd`：（已整改 2026-01-27）读取 `player.milestones` 改为复用 `PlayerStateAccess`（减少重复/样板）；其余未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/phase/dinnertime/dinnertime_events.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/phase/dinnertime/dinnertime_inventory.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/phase/dinnertime/dinnertime_selection.gd`：（已整改 2026-01-27）将多处 `assert` fail-fast 改为返回 `Result.failure`（fail-fast 在 release 下也生效）；中等体量；后续仍可按重构优先级处理
@@ -764,7 +766,7 @@
 - `core/rules/phase/marketing/settlement_house_demand.gd`：（已新增 2026-01-27）需求写入（cap/花园/倍增）与房屋排序；职责单一
 - `core/rules/phase/marketing/settlement_demand_effects.gd`：（已新增 2026-01-27）营销需求数量/现金奖金 effects 计算（遍历 milestones -> effect_registry.invoke）；（已整改 2026-01-27）玩家 milestones 读取改为复用 `PlayerStateAccess`（减少重复/样板）；后续可考虑进一步收敛“milestone 扫描”样板
 - `core/rules/phase/marketing_settlement.gd`：（已整改 2026-01-26）将 marketing_instances 校验/归一化抽离到 `marketing_instances_validation.gd`（减少单文件职责/缩短脚本）；其余结算/需求生成/到期清理仍可按职责继续拆分
-- `core/rules/phase/payday_settlement.gd`：（已整改 2026-01-27）将“薪资 token 支付”与“薪资折扣容量推导”拆到 `core/rules/phase/payday/`，主文件更聚焦在 orchestrator（按玩家结算/写入 round_state.payday 报告/触发里程碑）；仍包含较多 Payday 规则分支，但体量已下降
+- `core/rules/phase/payday_settlement.gd`：（已整改 2026-01-27）将“薪资 token 支付”与“薪资折扣容量推导”拆到 `core/rules/phase/payday/`，主文件更聚焦在 orchestrator（按玩家结算/写入 round_state.payday 报告/触发里程碑）；（已整改 2026-01-27）读取 `player.milestones` 改为复用 `PlayerStateAccess`（减少重复/样板）；仍包含较多 Payday 规则分支，但体量已下降
 - `core/rules/phase/payday/payday_salary_discount.gd`：（已新增 2026-01-27）薪资折扣容量推导：遍历在岗员工 effect_ids 并通过 effect_registry.invoke 累计 `salary_discount_recruit_capacity`
 - `core/rules/phase/payday/payday_salary_token_payment.gd`：（已新增 2026-01-27）薪资 token 支付：基于 ProductDef tags 统计/扣减可用 food/drink token（排除 `salary_token_ineligible`）
 - `core/rules/placement_conflict_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
@@ -777,7 +779,7 @@
 - `core/state/game_state.gd`：中等体量；后续可按重构优先级处理
 - `core/state/game_state_factory.gd`：（已整改 2026-01-26）logo 分配已委托 provider（`gameplay/setup/restaurant_logo_assignment.gd`），并由 `ProjectSettings.fcm/restaurant_logo_assignment_provider_path` 注入，减少 core/state 的 UI/setup 语义；中等体量；存在一定数量的 preload 依赖
 - `core/state/game_state_serialization.gd`：（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `ParseHelpers`/`RoundStateParser`（收敛 state 解析样板）；中等体量；后续可按重构优先级处理；存在一定数量的 preload 依赖
-- `core/state/player_state_access.gd`：（已新增 2026-01-27）玩家相关 Dictionary 读取/校验 helper（当前覆盖 milestones；后续可扩展 employees/inventory 等），用于减少 Dictionary 裸写与重复样板
+- `core/state/player_state_access.gd`：（已新增 2026-01-27）玩家相关 Dictionary 读取/校验 helper（当前覆盖 milestones；后续可扩展 employees/inventory 等），用于减少 Dictionary 裸写与重复样板；（已整改 2026-01-27）prefix 兼容中文冒号（`：`），便于复用中文错误前缀
 - `core/state/serialization/json_safe.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/serialization/parse_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/serialization/round_state_parser.gd`：（已整改 2026-01-27）orchestrator wrapper；required/optional 字段解析拆到 `round_state_parser_required_fields.gd`/`round_state_parser_optional_fields.gd`；玩家 id key 归一化收敛到 `round_state_player_id_keys.gd`
@@ -790,7 +792,7 @@
 - `core/state/state_updater/batch.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/state_updater/cash.gd`：（已整改 2026-01-26）补充 `get_balance(...)`/`modify_balance(...)` 公开 wrapper，用于避免外部调用私有 `_get_balance/_modify_balance`
 - `core/state/state_updater/collections.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/state/state_updater/employees_and_milestones.gd`：未发现明显结构问题（小文件/职责相对单一）
+- `core/state/state_updater/employees_and_milestones.gd`：（已整改 2026-01-27）读取 `player.milestones` 改为复用 `PlayerStateAccess`（减少重复/样板）；其余未发现明显结构问题（小文件/职责相对单一）
 - `core/state/state_updater/inventory.gd`：未发现明显结构问题（小文件/职责相对单一）
 
 ### types/

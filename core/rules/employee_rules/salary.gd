@@ -3,6 +3,7 @@ extends RefCounted
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeArrayHelpers = preload("res://core/rules/employee_rules/employee_array_helpers.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 static func requires_salary(employee_id: String, player: Dictionary = {}) -> bool:
 	# 从 EmployeeRegistry 读取 salary 字段，并叠加里程碑效果。
@@ -21,8 +22,8 @@ static func requires_salary(employee_id: String, player: Dictionary = {}) -> boo
 			return false
 
 	# 里程碑效果：marketing_no_salary -> 营销员不再需要支付薪水（避免硬编码 first_billboard）
-	var milestones_val = player.get("milestones", null)
-	if milestones_val is Array:
+	var milestones_read := PlayerStateAccessClass.require_milestones(player, "player", "EmployeeRules.requires_salary: ")
+	if milestones_read.ok:
 		var milestones := EmployeeArrayHelpers.require_string_array_field(player, "milestones", "player")
 		var def_val = EmployeeRegistryClass.get_def(employee_id)
 		if def_val != null and (def_val is EmployeeDef) and is_marketing_employee_def(def_val):

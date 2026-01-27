@@ -1,6 +1,7 @@
 extends RefCounted
 
 const Collections = preload("res://core/state/state_updater/collections.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 # === 员工操作 ===
 
@@ -112,6 +113,9 @@ static func player_has_milestone(state: GameState, player_id: int, milestone_id:
 	var player_val = state.players[player_id]
 	assert(player_val is Dictionary, "player_has_milestone: players[%d] 类型错误（期望 Dictionary）" % player_id)
 	var player: Dictionary = player_val
-	assert(player.has("milestones") and (player["milestones"] is Array), "player_has_milestone: players[%d].milestones 缺失或类型错误（期望 Array）" % player_id)
-	var milestones: Array = player["milestones"]
+	var milestones_read := PlayerStateAccessClass.require_milestones(player, "players[%d]" % player_id, "player_has_milestone")
+	if not milestones_read.ok:
+		assert(false, milestones_read.error)
+		return false
+	var milestones: Array = milestones_read.value
 	return milestones.has(milestone_id)

@@ -5,6 +5,7 @@ extends RefCounted
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const GlobalEffectListClass = preload("res://core/rules/global_effect_list.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 static func apply_employee_effects_by_segment(
 	state: GameState,
@@ -80,10 +81,10 @@ static func apply_milestone_effects_by_segment(
 		return Result.failure("晚餐结算失败：player 类型错误: players[%d]（期望 Dictionary）" % player_id)
 	var player: Dictionary = player_val
 
-	var milestones_val = player.get("milestones", null)
-	if not (milestones_val is Array):
-		return Result.failure("晚餐结算失败：player[%d].milestones 类型错误（期望 Array）" % player_id)
-	var milestones: Array = milestones_val
+	var milestones_read := PlayerStateAccessClass.require_milestones(player, "player[%d]" % player_id, "晚餐结算失败：")
+	if not milestones_read.ok:
+		return milestones_read
+	var milestones: Array = milestones_read.value
 
 	var warnings: Array[String] = []
 	for i in range(milestones.size()):

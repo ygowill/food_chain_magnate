@@ -9,6 +9,7 @@ const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const SalaryDiscountClass = preload("res://core/rules/phase/payday/payday_salary_discount.gd")
 const SalaryTokenPaymentClass = preload("res://core/rules/phase/payday/payday_salary_token_payment.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 static func apply(state: GameState, phase_manager = null) -> Result:
 	if state == null:
@@ -193,8 +194,10 @@ static func _pay_with_tokens(state: GameState, player_id: int, tokens_needed: in
 	return SalaryTokenPaymentClass.pay_with_tokens(state, player_id, tokens_needed)
 
 static func _get_salary_total_delta(_state: GameState, player: Dictionary) -> Result:
-	assert(player.has("milestones") and (player["milestones"] is Array), "PaydaySettlement: player.milestones 缺失或类型错误（期望 Array）")
-	var milestones: Array = player["milestones"]
+	var milestones_read := PlayerStateAccessClass.require_milestones(player, "player", "PaydaySettlement")
+	if not milestones_read.ok:
+		return milestones_read
+	var milestones: Array = milestones_read.value
 
 	return MilestoneEffectQueriesClass.sum_int_values(
 		milestones,

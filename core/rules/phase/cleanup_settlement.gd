@@ -8,6 +8,7 @@ const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 static func apply(state: GameState) -> Result:
 	if not (state.round_state is Dictionary):
@@ -31,10 +32,10 @@ static func apply(state: GameState) -> Result:
 			return Result.failure("CleanupSettlement: player[%d] 类型错误（期望 Dictionary）" % i)
 		var player: Dictionary = player_val
 
-		var milestones_val = player.get("milestones", null)
-		if not (milestones_val is Array):
-			return Result.failure("CleanupSettlement: player[%d].milestones 类型错误（期望 Array）" % i)
-		var milestones: Array = milestones_val
+		var milestones_read := PlayerStateAccessClass.require_milestones(player, "player[%d]" % i, "CleanupSettlement")
+		if not milestones_read.ok:
+			return milestones_read
+		var milestones: Array = milestones_read.value
 		var fridge_read := get_fridge_capacity_from_milestones(milestones)
 		if not fridge_read.ok:
 			return fridge_read
