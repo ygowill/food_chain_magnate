@@ -113,6 +113,7 @@
 - 2026-01-27：`ActionRegistry`/`SettlementRegistry` 不再直接引用 Autoload 全局 `GameLog`/`DebugFlags`，改为通过 `AutoloadAccess` 动态访问（继续降低 core 对日志/调试单例的硬依赖）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：以 `WorkingFlow.start_order_of_business(...)` 为例，将 OrderOfBusiness 相关 fail-fast 从 `assert` 改为返回 `Result.failure` 并在 base_rules/movie_stars hooks 中显式传播（release 下也能阻止坏数据继续跑）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：为 `WorkingFlow` 增加 `compute_order_of_business_empty_slots(...)` 公共 wrapper，并让 `movie_stars` 模块不再跨文件调用 `_compute_order_of_business_empty_slots(...)` 私有 helper（避免封装破坏）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：将 `CompanyStructureRules.get_empty_slots(...)`/`enforce_capacity(...)` 从 `assert` fail-fast 改为返回 `Result.failure`（并在 `WorkingFlow` 侧显式传播），避免 release 下 assert 失效导致坏状态继续跑；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -295,7 +296,7 @@
   - 建议逐步迁移到集中定义（constants/enum），并提供转换与校验入口。
 - `assert` 与 `Result.failure` 混用导致“release 下校验失效”的风险：
   - （已部分整改 2026-01-27）以 `core/engine/phase_manager/working_flow.gd` 为例，里程碑 effects 解析与 OrderOfBusiness 排序相关的 fail-fast 已从 `assert` 改为返回 `Result.failure`，并在 base_rules/movie_stars hooks 中显式传播（release 下也生效）。
-  - 其它位置仍有 `assert`（例如 `CompanyStructureRules` 等），依赖“模块系统 strict validation”虽然能降低风险，但属于隐式前置条件，建议继续统一策略。
+  - 其它位置仍有 `assert`（例如 `HouseNumberManager`、`DinnertimeSelection`、`TileBaking` 等），依赖“模块系统 strict validation”虽然能降低风险，但属于隐式前置条件，建议继续统一策略。
 - 大量 `Dictionary` 结构的手工深层读取/写入：
   - 多文件重复出现 `if not (x is Dictionary)`、`get(..., null)`、`duplicate(true)` 组合，属于结构性样板代码。
   - 已有 `TypeHelpers` / `ParseHelpers` / 若干 query helper（例如 `CatalogRegistryHelpers`、`MarketingPlacementQuery`）但使用不一致，导致全局风格不统一。
@@ -448,7 +449,7 @@
 | `core/modules/v2/visual_catalog_loader.gd` | 266 | 5 | 0 | uses:DataParseHelpers |
 | `core/random/random_manager.gd` | 235 | 0 | 0 |  |
 | `core/rules/bankruptcy_registry.gd` | 69 | 0 | 0 |  |
-| `core/rules/company_structure_rules.gd` | 137 | 1 | 0 |  |
+| `core/rules/company_structure_rules.gd` | 186 | 2 | 0 | uses:IntValueParseHelpers |
 | `core/rules/dinnertime_demand_registry.gd` | 186 | 0 | 0 |  |
 | `core/rules/dinnertime_route_purchase_registry.gd` | 174 | 0 | 0 |  |
 | `core/rules/drinks_procurement/default_route_builder.gd` | 165 | 4 | 0 |  |
@@ -688,7 +689,7 @@
 ### rules/
 
 - `core/rules/bankruptcy_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/company_structure_rules.gd`：未发现明显结构问题（小文件/职责相对单一）
+- `core/rules/company_structure_rules.gd`：（已整改 2026-01-27）将 `assert` fail-fast 改为返回 `Result.failure`（release 下也生效）；仍为小文件/职责相对单一
 - `core/rules/dinnertime_demand_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/dinnertime_route_purchase_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/drinks_procurement.gd`：（已整改 2026-01-27）对外 API wrapper；主流程拆到 `drinks_procurement/plan_resolver.gd`，milestone bonus 计算拆到 `drinks_procurement/milestone_bonuses.gd`（主文件体量下降，耦合更集中/可维护）

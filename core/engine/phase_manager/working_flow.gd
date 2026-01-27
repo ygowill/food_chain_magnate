@@ -44,7 +44,9 @@ static func auto_activate_reserve_employees(state: GameState) -> Result:
 		active.append_array(reserve)
 		player["employees"] = active
 		player["reserve_employees"] = []
-		_enforce_company_capacity(player)
+		var cap_r := _enforce_company_capacity(player)
+		if not cap_r.ok:
+			return cap_r
 		state.players[i] = player
 	return Result.success()
 
@@ -158,9 +160,10 @@ static func _compute_order_of_business_selection(state: GameState, previous_turn
 	return Result.success(ids)
 
 static func _compute_order_of_business_empty_slots(state: GameState, player: Dictionary) -> Result:
-	var empty_slots: int = int(CompanyStructureRulesClass.get_empty_slots(player))
-	if empty_slots < 0:
-		return Result.failure("WorkingFlow: company_structure 已超载（empty_slots=%d）" % empty_slots)
+	var empty_slots_read := CompanyStructureRulesClass.get_empty_slots(player)
+	if not empty_slots_read.ok:
+		return empty_slots_read
+	var empty_slots: int = int(empty_slots_read.value)
 
 	var milestones_val = player.get("milestones", null)
 	if not (milestones_val is Array):
@@ -184,5 +187,5 @@ static func _get_turnorder_empty_slots_bonus_from_milestones(milestones: Array) 
 		return bonus_read
 	return Result.success(int(bonus_read.value))
 
-static func _enforce_company_capacity(player: Dictionary) -> void:
-	CompanyStructureRulesClass.enforce_capacity(player)
+static func _enforce_company_capacity(player: Dictionary) -> Result:
+	return CompanyStructureRulesClass.enforce_capacity(player)
