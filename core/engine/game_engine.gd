@@ -4,17 +4,14 @@ class_name GameEngine
 extends RefCounted
 
 const ActionWiringClass = preload("res://core/engine/game_engine/action_wiring.gd")
-const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
 const CheckpointsClass = preload("res://core/engine/game_engine/checkpoints.gd")
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
 const InitializerClass = preload("res://core/engine/game_engine/initializer.gd")
 const InvariantsClass = preload("res://core/engine/game_engine/invariants.gd")
 const LoaderClass = preload("res://core/engine/game_engine/loader.gd")
 const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
-const ReplayClass = preload("res://core/engine/game_engine/replay.gd")
 const CommandIndexQueriesClass = preload("res://core/engine/game_engine/command_index_queries.gd")
 const DiagnosticsClass = preload("res://core/engine/game_engine/diagnostics.gd")
-const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModulesV2Class = preload("res://core/engine/game_engine/modules_v2.gd")
 const RewindOpsClass = preload("res://core/engine/game_engine/rewind_ops.gd")
 const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
@@ -54,7 +51,7 @@ var _initial_employee_totals: Dictionary = {}  # employee_id -> total_count (poo
 
 # === 内部工具 ===
 
-func _ensure_initialized() -> Result:
+func ensure_initialized() -> Result:
 	if state == null:
 		return Result.failure("游戏引擎未初始化")
 	if action_registry == null:
@@ -63,12 +60,9 @@ func _ensure_initialized() -> Result:
 		return Result.failure("RandomManager 未初始化")
 	return Result.success()
 
-func ensure_initialized() -> Result:
-	return _ensure_initialized()
-
 # 若曾 rewind 到历史中的某个位置，再执行新命令会产生“分支”。
 # 当前实现选择丢弃未来命令与未来校验点，保持线性时间线。
-func _truncate_future_history() -> void:
+func truncate_future_history() -> void:
 	var target_size := current_command_index + 1
 	if target_size >= command_history.size():
 		return
@@ -79,16 +73,13 @@ func _truncate_future_history() -> void:
 	# checkpoint.index 表示“已执行命令数”（command_history.size()）
 	for i in range(checkpoints.size() - 1, -1, -1):
 		var checkpoint_val = checkpoints[i]
-		assert(checkpoint_val is Dictionary, "GameEngine._truncate_future_history: checkpoint 类型错误（期望 Dictionary）")
+		assert(checkpoint_val is Dictionary, "GameEngine.truncate_future_history: checkpoint 类型错误（期望 Dictionary）")
 		var checkpoint: Dictionary = checkpoint_val
-		assert(checkpoint.has("index"), "GameEngine._truncate_future_history: checkpoint 缺少字段: index")
-		assert(checkpoint["index"] is int, "GameEngine._truncate_future_history: checkpoint.index 类型错误（期望 int）")
+		assert(checkpoint.has("index"), "GameEngine.truncate_future_history: checkpoint 缺少字段: index")
+		assert(checkpoint["index"] is int, "GameEngine.truncate_future_history: checkpoint.index 类型错误（期望 int）")
 		var checkpoint_index: int = int(checkpoint["index"])
 		if checkpoint_index > target_size:
 			checkpoints.remove_at(i)
-
-func truncate_future_history() -> void:
-	_truncate_future_history()
 
 func clear_event_history_for_new_session() -> void:
 	if event_sink != null:
@@ -123,13 +114,10 @@ func emit_event(event_type: String, data: Dictionary) -> void:
 func _init() -> void:
 	phase_manager = PhaseManager.new()
 	action_registry = ActionRegistry.new()
-	_reset_modules_v2()
-
-func _setup_action_registry(piece_registry: Dictionary = {}) -> Result:
-	return ActionWiringClass.setup_action_registry(self, piece_registry)
+	reset_modules_v2()
 
 func setup_action_registry(piece_registry: Dictionary = {}) -> Result:
-	return _setup_action_registry(piece_registry)
+	return ActionWiringClass.setup_action_registry(self, piece_registry)
 
 # 初始化新游戏
 func initialize(
@@ -146,17 +134,11 @@ func initialize(
 func load_from_archive(archive: Dictionary) -> Result:
 	return LoaderClass.load_from_archive(self, archive)
 
-func _reset_modules_v2() -> void:
+func reset_modules_v2() -> void:
 	ModulesV2Class.reset(self)
 
-func reset_modules_v2() -> void:
-	_reset_modules_v2()
-
-func _apply_modules_v2(module_ids: Array[String], base_dir: String) -> Result:
-	return ModulesV2Class.apply(self, module_ids, base_dir)
-
 func apply_modules_v2(module_ids: Array[String], base_dir: String) -> Result:
-	return _apply_modules_v2(module_ids, base_dir)
+	return ModulesV2Class.apply(self, module_ids, base_dir)
 
 # 执行命令
 func execute_command(command: Command, is_replay: bool = false) -> Result:
@@ -186,14 +168,8 @@ func full_replay() -> Result:
 
 # === 校验点管理 ===
 
-func _create_checkpoint(index: int) -> void:
-	CheckpointsClass.create_checkpoint(checkpoints, state, random_manager, index)
-
 func create_checkpoint(index: int) -> void:
-	_create_checkpoint(index)
-
-func _find_nearest_checkpoint(target_index: int) -> Dictionary:
-	return CheckpointsClass.find_nearest_checkpoint(checkpoints, target_index)
+	CheckpointsClass.create_checkpoint(checkpoints, state, random_manager, index)
 
 # 验证校验点哈希
 func verify_checkpoints() -> Result:
@@ -207,24 +183,21 @@ func set_initial_total_cash_for_invariants(total_cash: int) -> void:
 func set_initial_employee_totals_for_invariants(employee_totals: Dictionary) -> void:
 	_initial_employee_totals = employee_totals
 
-func _check_invariants() -> Result:
-	return InvariantsClass.check_invariants(state, _initial_total_cash, _initial_employee_totals)
-
 func check_invariants() -> Result:
-	return _check_invariants()
+	return InvariantsClass.check_invariants(state, _initial_total_cash, _initial_employee_totals)
 
 # === 存档 ===
 
 # 创建存档
 func create_archive() -> Result:
-	var init_check := _ensure_initialized()
+	var init_check := ensure_initialized()
 	if not init_check.ok:
 		return init_check
 	return ArchiveClass.create_archive(state, random_manager, checkpoints, command_history, current_command_index, modules_v2_base_dir)
 
 # 保存到文件
 func save_to_file(path: String) -> Result:
-	var init_check := _ensure_initialized()
+	var init_check := ensure_initialized()
 	if not init_check.ok:
 		return init_check
 
@@ -275,18 +248,6 @@ func find_phase_start_command_index() -> Result:
 #   从而把回合开始错误定位到更早的阶段（例如 Payday）。因此这里同时考虑 phase/round 变化。
 func find_current_player_turn_start_command_index() -> Result:
 	return CommandIndexQueriesClass.find_current_player_turn_start_command_index(self)
-
-func _infer_current_player_turn_start_command_index_by_replay(player_id: int, target_index: int, target_phase: String, target_round: int) -> Result:
-	return CommandIndexQueriesClass.infer_current_player_turn_start_command_index_by_replay(
-		self,
-		player_id,
-		target_index,
-		target_phase,
-		target_round
-	)
-
-func _should_force_execute_in_replay(command: Command) -> bool:
-	return ReplayClass.should_force_execute_in_replay(command)
 
 # 获取特定范围的命令
 func get_commands_range(from: int, to: int) -> Array[Command]:

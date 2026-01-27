@@ -120,6 +120,7 @@
 - 2026-01-27：缩短 `MilestoneDef`：将 `from_dict(...)` 的严格解析/校验抽离到 `core/data/milestone_def_parser.gd`，并将 `trigger.filter` 的匹配逻辑抽离到 `core/data/milestone_trigger_filter.gd`（降低单文件体积与职责耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `gameplay/replay/command_runner_event_build.gd`：将 `PHASE_CHANGED`/`SUB_PHASE_CHANGED` 下沉到 `gameplay/replay/command_runner_event_build/phase_events.gd`，将 `PLAYER_CASH_CHANGED` 下沉到 `cash_events.gd`，将 `MILESTONE_ACHIEVED` 下沉到 `milestone_events.gd`，主文件更聚焦 orchestrator/wrapper（继续降低单文件体积）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `StepTimelineBuild`：将“阶段切换事件归属 + 结算 effects 归属”抽离到 `gameplay/replay/step_timeline_build/phase_transition.gd`，将 auto-advance 分段主循环抽离到 `gameplay/replay/step_timeline_build/auto_advance_drain.gd`，`build_full_impl.gd` 收敛为 orchestrator（体积降至 ~289 LOC）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：清理 `GameEngine`：移除未使用的 preload 依赖，并删除薄 `_` wrapper（减少噪音/耦合，体积降至 ~285 LOC）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -137,8 +138,8 @@
   - （已整改 2026-01-27）已将“逐房屋售卖主循环”从 impl 中抽离到 `dinnertime_house_sales.gd`；impl 仅保留 orchestrator（house_sales + tips/CFO + round_state 报告写入）；后续若继续拆分，可将 house_sales 内部再按“需求 variants 选择/route purchase/支付与报告”分层。
 - `ui/debug/debug_commands/action_commands.gd`（~476 LOC）（已整改 2026-01-26：实现移出 core；core/debug 为 shim）
   - 将大量 debug 命令串在一个文件中；后续继续加 debug 命令时容易进一步膨胀。
-- `core/engine/game_engine.gd`（~320 LOC；（已部分整改 2026-01-27）命令索引推导抽离到 `command_index_queries.gd`；回退/回放逻辑抽离到 `rewind_ops.gd`）
-  - 引擎主体 + rewind/EventBus.history 重建桥接逻辑仍集中；可继续按职责拆分。
+- `core/engine/game_engine.gd`（~285 LOC；（已整改 2026-01-27）命令索引推导抽离到 `command_index_queries.gd`；回退/回放逻辑抽离到 `rewind_ops.gd`；移除未使用 preload 并删除薄 `_` wrapper）
+  - 重逻辑已基本抽离；主文件目前以 orchestrator + 对外 API 为主，后续若继续拆分可按“初始化/存档/调试查询”分层。
 - `core/map/piece_def.gd`（~275 LOC；（已整改 2026-01-27）解析逻辑抽离到 `piece_def_parser.gd`）、`core/map/tile_def.gd`（~217 LOC；（已整改 2026-01-27）解析逻辑抽离到 `tile_def_parser.gd`）、`core/map/map_def.gd`（~260 LOC；（已整改 2026-01-27）解析逻辑抽离到 `map_def_parser.gd`）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
 - 其他超过 ~300 行的文件：
@@ -391,7 +392,7 @@
 | `gameplay/replay/step_timeline_build/helpers.gd` | 139 | 0 | 0 | helper:step_timeline_build |
 | `gameplay/replay/timeline_event_helpers.gd` | 75 | 0 | 0 | moved:gameplay,helper:timeline_event |
 | `core/engine/game_engine/command_index_queries.gd` | 168 | 2 | 0 | helper:command_index_queries |
-| `core/engine/game_engine.gd` | 320 | 14 | 0 | uses:EventBus |
+| `core/engine/game_engine.gd` | 285 | 12 | 0 | uses:EventBus |
 | `core/engine/phase_manager/advance_phase.gd` | 239 | 2 | 0 | uses:GameLog |
 | `core/engine/phase_manager/advance_sub_phase.gd` | 278 | 2 | 0 | uses:GameLog |
 | `core/engine/phase_manager/advancement.gd` | 13 | 2 | 0 |  |
@@ -594,7 +595,7 @@
 
 - `core/engine/game_constants.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/game_defaults.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/engine/game_engine.gd`：偏长脚本；建议按职责拆分；preload 依赖较多（耦合偏高）；（已整改 2026-01-27）EventBus 访问改为通过 `AutoloadAccess` 动态获取（并保留可注入 `event_sink`），降低对 Autoload 全局变量的硬依赖；（已整改 2026-01-26）为不变量 baseline 增加公开 setter，避免外部直接写私有 `_initial_*`；（已整改 2026-01-26）提供 `clear_event_history_for_new_session()` 收敛“新对局清空 EventBus.history”样板；（已整改 2026-01-26）提供 `emit_event(...)` wrapper 收敛 `EventBus.emit_event(...)` 直连；（已整改 2026-01-26）增加可注入 `event_sink`，并让 history clear/rebuild 也优先走 sink，降低对 EventBus 的硬依赖；（已整改 2026-01-27）命令索引推导逻辑已抽离到 `core/engine/game_engine/command_index_queries.gd`；（已整改 2026-01-27）回退/回放主流程已抽离到 `core/engine/game_engine/rewind_ops.gd`
+- `core/engine/game_engine.gd`：偏长脚本；建议按职责拆分；preload 依赖较多（耦合偏高）；（已整改 2026-01-27）EventBus 访问改为通过 `AutoloadAccess` 动态获取（并保留可注入 `event_sink`），降低对 Autoload 全局变量的硬依赖；（已整改 2026-01-26）为不变量 baseline 增加公开 setter，避免外部直接写私有 `_initial_*`；（已整改 2026-01-26）提供 `clear_event_history_for_new_session()` 收敛“新对局清空 EventBus.history”样板；（已整改 2026-01-26）提供 `emit_event(...)` wrapper 收敛 `EventBus.emit_event(...)` 直连；（已整改 2026-01-26）增加可注入 `event_sink`，并让 history clear/rebuild 也优先走 sink，降低对 EventBus 的硬依赖；（已整改 2026-01-27）命令索引推导逻辑已抽离到 `core/engine/game_engine/command_index_queries.gd`；（已整改 2026-01-27）回退/回放主流程已抽离到 `core/engine/game_engine/rewind_ops.gd`；（已整改 2026-01-27）移除未使用的 preload 依赖，并删除薄 `_` wrapper（减少噪音/耦合）
 - `core/engine/game_engine/command_index_queries.gd`：（已新增 2026-01-27）抽离 UI 回退相关的命令索引推导（phase_start / player_turn_start / replay 推导），用于缩短 `game_engine.gd` 并减少重复逻辑
 - `core/engine/game_engine/action_setup.gd`：已改为委托 `gameplay/action_setup.gd`（移除 core 内对 gameplay/actions 的 preload）；（已整改 2026-01-26）provider 来源改为 `ProjectSettings.fcm/action_setup_provider_path`（仍可用 `ActionSetup.set_provider_path(...)` 覆盖），避免 core 内硬编码 gameplay 路径
 - `core/engine/game_engine/action_wiring.gd`：未发现明显结构问题（小文件/职责相对单一）
