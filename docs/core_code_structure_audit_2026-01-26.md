@@ -86,6 +86,7 @@
 - 2026-01-27：将 `PieceDef.from_dict(...)` 的“严格解析/校验”抽离到 `core/map/piece_def_parser.gd`，`piece_def.gd` 仅保留对象构建与核心方法（缩短超长脚本，降低 map 数据模型与解析耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：将 `GameEngine` 的“阶段/玩家回合起点索引”推导逻辑抽离到 `core/engine/game_engine/command_index_queries.gd`，并复用 `Replay.should_force_execute_in_replay(...)`（缩短 `core/engine/game_engine.gd` 并减少重复判断）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `MarketingSettlementHelpers`：将 `settlement_helpers_impl.gd` 的实现按职责拆到 `settlement_instance_expiration.gd`/`settlement_products.gd`/`settlement_house_demand.gd`/`settlement_demand_effects.gd`，impl 文件仅保留聚合转发（进一步降低单文件体积）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：继续拆分 `TrainSlotUsage`：将 `train_slot_usage_impl.gd` 的实现按职责拆到 `train_slot_usage_storage.gd`/`train_slot_usage_providers.gd`/`train_slot_usage_allocator.gd`，impl 文件仅保留聚合转发；同时引入 `round_state.train_slot_usage_instances` 记录“按培训员实例”的使用量并兼容旧版总计数（进一步降低单文件体积与耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -108,7 +109,8 @@
 - `core/map/piece_def.gd`（~275 LOC；（已整改 2026-01-27）解析逻辑抽离到 `piece_def_parser.gd`）、`core/map/tile_def.gd`（~262 LOC）、`core/map/map_def.gd`（~311 LOC）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
 - 其他超过 ~300 行的文件：
-  - `core/rules/phase/payday_settlement.gd`、`core/rules/employee_rules/train_slot_usage_impl.gd`、`core/map/map_def.gd`、`core/rules/drinks_procurement.gd`、`core/engine/phase_manager.gd`、`core/engine/game_engine/auto_advance_impl.gd`
+  - `core/rules/phase/payday_settlement.gd`、`core/map/map_def.gd`、`core/rules/drinks_procurement.gd`、`core/engine/phase_manager.gd`、`core/engine/game_engine/auto_advance_impl.gd`
+  - （已整改 2026-01-27）`core/rules/employee_rules/train_slot_usage_impl.gd` 已拆分为 `train_slot_usage_storage.gd`/`train_slot_usage_providers.gd`/`train_slot_usage_allocator.gd`
 
 建议记录（后续重构方向）：
 - 先从“职责剥离”入手，而不是单纯按行数拆文件：
@@ -413,7 +415,10 @@
 | `core/rules/employee_rules/limits.gd` | 46 | 2 | 0 |  |
 | `core/rules/employee_rules/salary.gd` | 65 | 4 | 0 |  |
 | `core/rules/employee_rules/train_slot_usage.gd` | 30 | 1 | 0 |  |
-| `core/rules/employee_rules/train_slot_usage_impl.gd` | 325 | 3 | 0 |  |
+| `core/rules/employee_rules/train_slot_usage_allocator.gd` | 163 | 2 | 0 |  |
+| `core/rules/employee_rules/train_slot_usage_impl.gd` | 31 | 2 | 0 |  |
+| `core/rules/employee_rules/train_slot_usage_providers.gd` | 55 | 2 | 0 |  |
+| `core/rules/employee_rules/train_slot_usage_storage.gd` | 123 | 1 | 0 |  |
 | `core/rules/employee_rules/working_multiplier.gd` | 29 | 0 | 0 |  |
 | `core/rules/employee_rules.gd` | 105 | 7 | 0 |  |
 | `core/rules/global_effect_list.gd` | 112 | 0 | 0 |  |
@@ -632,7 +637,10 @@
 - `core/rules/employee_rules/limits.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/employee_rules/salary.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/employee_rules/train_slot_usage.gd`：（已整改 2026-01-27）对外 API wrapper；完整实现移至 `train_slot_usage_impl.gd`（降低单文件体积，便于维护/进一步拆分）
-- `core/rules/employee_rules/train_slot_usage_impl.gd`：（已新增 2026-01-27）TrainSlotUsage 完整实现（round_state 存储 + 培训员选择 + slot 分配）；仍偏长，后续可按“存储层/选择策略/分配策略”继续拆分
+- `core/rules/employee_rules/train_slot_usage_impl.gd`：（已整改 2026-01-27）TrainSlotUsage 聚合转发（对外 API 仍保持稳定）；实现拆分到 storage/providers/allocator，便于分别维护 round_state 存储/培训员扫描/分配策略
+- `core/rules/employee_rules/train_slot_usage_storage.gd`：（已新增 2026-01-27）round_state 存储层：读写 `train_slot_usage_instances` 并兼容旧版 `train_slot_usage` 总用量（Fail Fast 校验结构）
+- `core/rules/employee_rules/train_slot_usage_providers.gd`：（已新增 2026-01-27）培训员来源扫描：从玩家在岗员工中筛出具备 train_capacity 且包含 `use:train` 的员工，并按容量排序
+- `core/rules/employee_rules/train_slot_usage_allocator.gd`：（已新增 2026-01-27）分配策略：计算 max_steps、选择可用培训员实例、写回 round_state；用于支持“同一员工必须由同一名培训员继续培训”的偏好参数
 - `core/rules/employee_rules/working_multiplier.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/global_effect_list.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/map_generation_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
