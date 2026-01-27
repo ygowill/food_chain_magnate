@@ -105,7 +105,9 @@ static func _test_order_of_business_priority(seed_val: int) -> Result:
 	state.players[0]["company_structure"]["ceo_slots"] = 9
 	state.players[1]["company_structure"]["ceo_slots"] = 3
 
-	WorkingFlowClass.start_order_of_business(state)
+	var oob := WorkingFlowClass.start_order_of_business(state)
+	if not oob.ok:
+		return oob
 	state.phase = "OrderOfBusiness"
 	var entry = ModuleEntryClass.new()
 	var hook_r := entry._on_order_of_business_after_enter(state)

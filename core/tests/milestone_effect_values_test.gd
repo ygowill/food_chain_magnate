@@ -178,7 +178,9 @@ static func _test_turnorder_empty_slots() -> Result:
 	state.turn_order = [1, 0]
 	state.current_player_index = 0
 
-	WorkingFlowClass.start_order_of_business(state)
+	var oob := WorkingFlowClass.start_order_of_business(state)
+	if not oob.ok:
+		return oob
 	if state.selection_order != [0, 1]:
 		return Result.failure("ms_oob_bonus(value=3) 应使玩家0优先选择，实际 selection_order: %s" % str(state.selection_order))
 

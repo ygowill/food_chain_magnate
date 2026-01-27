@@ -111,6 +111,7 @@
 - 2026-01-27：继续拆分 `gameplay/replay/command_runner_event_build.gd`：将 `ROUND_STARTED`/`ROUND_ENDED` 推导抽离到 `gameplay/replay/command_runner_event_build/round_events.gd`，主文件进一步聚焦 orchestrator/wrapper（继续降低残余特殊事件）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：复核并修正文档：3.2 中“事件历史重建桥接”实际位于 `core/engine/game_engine/rewind_ops.gd`（调用 `event_history_rebuild.gd`），而 `core/engine/game_engine.gd` 主要提供 `event_sink` 注入 + emit/clear wrapper；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：`ActionRegistry`/`SettlementRegistry` 不再直接引用 Autoload 全局 `GameLog`/`DebugFlags`，改为通过 `AutoloadAccess` 动态访问（继续降低 core 对日志/调试单例的硬依赖）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：以 `WorkingFlow.start_order_of_business(...)` 为例，将 OrderOfBusiness 相关 fail-fast 从 `assert` 改为返回 `Result.failure` 并在 base_rules/movie_stars hooks 中显式传播（release 下也能阻止坏数据继续跑）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -290,8 +291,8 @@
   - 例如多个地方直接比较 `"Marketing" / "Dinnertime" / "Working" ...`，容易产生拼写/重命名成本与难以全局替换的问题。
   - 建议逐步迁移到集中定义（constants/enum），并提供转换与校验入口。
 - `assert` 与 `Result.failure` 混用导致“release 下校验失效”的风险：
-  - 例如 `core/engine/phase_manager/working_flow.gd` 在里程碑 effects 解析与数值解析中大量使用 `assert` 来保证输入合法；若 release 构建关闭 assert，会出现“坏数据变成默认值继续跑”的可能。
-  - 依赖“模块系统 strict validation”可以降低风险，但这属于隐式前置条件，建议在关键路径显式说明或统一处理策略。
+  - （已部分整改 2026-01-27）以 `core/engine/phase_manager/working_flow.gd` 为例，里程碑 effects 解析与 OrderOfBusiness 排序相关的 fail-fast 已从 `assert` 改为返回 `Result.failure`，并在 base_rules/movie_stars hooks 中显式传播（release 下也生效）。
+  - 其它位置仍有 `assert`（例如 `CompanyStructureRules` 等），依赖“模块系统 strict validation”虽然能降低风险，但属于隐式前置条件，建议继续统一策略。
 - 大量 `Dictionary` 结构的手工深层读取/写入：
   - 多文件重复出现 `if not (x is Dictionary)`、`get(..., null)`、`duplicate(true)` 组合，属于结构性样板代码。
   - 已有 `TypeHelpers` / `ParseHelpers` / 若干 query helper（例如 `CatalogRegistryHelpers`、`MarketingPlacementQuery`）但使用不一致，导致全局风格不统一。
@@ -383,7 +384,7 @@
 | `core/engine/phase_manager/hooks.gd` | 220 | 1 | 0 | uses:GameLog,uses:DebugFlags |
 | `core/engine/phase_manager/order_config.gd` | 152 | 1 | 0 |  |
 | `core/engine/phase_manager/settlement_triggers.gd` | 127 | 2 | 0 |  |
-| `core/engine/phase_manager/working_flow.gd` | 145 | 3 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
+| `core/engine/phase_manager/working_flow.gd` | 185 | 3 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
 | `core/engine/phase_manager.gd` | 266 | 6 | 0 |  |
 | `core/map/house_number_manager.gd` | 233 | 0 | 0 |  |
 | `core/map/map_baker/bake.gd` | 80 | 3 | 0 |  |
@@ -612,7 +613,7 @@
 - `core/engine/phase_manager/hooks.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志/调试开关读取改为通过 `AutoloadAccess` 动态访问 `GameLog`/`DebugFlags`（降低对 Autoload 全局变量的硬依赖）
 - `core/engine/phase_manager/order_config.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/phase_manager/settlement_triggers.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/engine/phase_manager/working_flow.gd`：（已整改 2026-01-26）移除 `_parse_non_negative_int_value` wrapper，直接调用 `IntValueParseHelpers`；（已整改 2026-01-26）里程碑 effects 的 value 求和改用 `MilestoneEffectQueries.sum_non_negative_int_values(...)`（减少重复/样板）；仍大量使用 assert 做 fail-fast（需注意 release 下 assert 行为）
+- `core/engine/phase_manager/working_flow.gd`：（已整改 2026-01-26）移除 `_parse_non_negative_int_value` wrapper，直接调用 `IntValueParseHelpers`；（已整改 2026-01-26）里程碑 effects 的 value 求和改用 `MilestoneEffectQueries.sum_non_negative_int_values(...)`（减少重复/样板）；（已部分整改 2026-01-27）OrderOfBusiness 相关 fail-fast 改为返回 `Result.failure`（不再依赖 assert；release 下也生效）
 
 ### map/
 

@@ -236,8 +236,10 @@ func _on_restructuring_before_exit(state: GameState) -> Result:
 func _on_order_of_business_before_enter(state: GameState) -> Result:
 	if state == null:
 		return Result.failure("base_rules:order_of_business_before_enter: state 为空")
-	WorkingFlowClass.start_order_of_business(state)
-	return Result.success()
+	var r: Result = WorkingFlowClass.start_order_of_business(state)
+	if not r.ok:
+		return r
+	return Result.success().with_warnings(r.warnings)
 
 func _on_working_before_enter(state: GameState) -> Result:
 	if state == null:

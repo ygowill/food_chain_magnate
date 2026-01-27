@@ -102,14 +102,23 @@ func _on_order_of_business_after_enter(state: GameState) -> Result:
 	for i in range(prev_turn.size()):
 		prev_index[int(prev_turn[i])] = i
 
+	for pid in range(state.players.size()):
+		if not prev_index.has(pid):
+			return Result.failure("%s: previous_turn_order 缺少玩家: %d" % [MODULE_ID, pid])
+
+	var slot_map := {}
+	for pid in non_star:
+		var slots_read := WorkingFlowClass._compute_order_of_business_empty_slots(state, state.players[pid])
+		if not slots_read.ok:
+			return slots_read
+		slot_map[int(pid)] = int(slots_read.value)
+
 	non_star.sort_custom(func(a: int, b: int) -> bool:
-		var a_slots := WorkingFlowClass._compute_order_of_business_empty_slots(state, state.players[a])
-		var b_slots := WorkingFlowClass._compute_order_of_business_empty_slots(state, state.players[b])
+		var a_slots: int = int(slot_map.get(a, 0))
+		var b_slots: int = int(slot_map.get(b, 0))
 		if a_slots != b_slots:
 			return a_slots > b_slots
-		assert(prev_index.has(a), "%s: previous_turn_order 缺少玩家: %d" % [MODULE_ID, a])
-		assert(prev_index.has(b), "%s: previous_turn_order 缺少玩家: %d" % [MODULE_ID, b])
-		return int(prev_index[a]) < int(prev_index[b])
+		return int(prev_index.get(a, 0)) < int(prev_index.get(b, 0))
 	)
 
 	var selection: Array[int] = []
