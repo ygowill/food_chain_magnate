@@ -109,6 +109,8 @@
 - 2026-01-27：继续拆分 `StepTimelineBuild`：将 `_build_full_impl(...)` 的回放/分段主流程迁移到 `gameplay/replay/step_timeline_build/build_full_impl.gd`，`step_timeline_build.gd` 保留 trace toggling wrapper（进一步降低入口脚本复杂度，便于后续按职责继续拆分 build_full_impl）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `gameplay/replay/command_runner_event_build.gd`：将 Dinnertime 的 `DINNERTIME_REPORT` 构建也下沉到 `gameplay/replay/command_runner_event_build/dinnertime_events.gd`，主文件进一步聚焦 orchestrator/wrapper（继续降低单文件体积）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `gameplay/replay/command_runner_event_build.gd`：将 `ROUND_STARTED`/`ROUND_ENDED` 推导抽离到 `gameplay/replay/command_runner_event_build/round_events.gd`，主文件进一步聚焦 orchestrator/wrapper（继续降低残余特殊事件）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：复核并修正文档：3.2 中“事件历史重建桥接”实际位于 `core/engine/game_engine/rewind_ops.gd`（调用 `event_history_rebuild.gd`），而 `core/engine/game_engine.gd` 主要提供 `event_sink` 注入 + emit/clear wrapper；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：`ActionRegistry`/`SettlementRegistry` 不再直接引用 Autoload 全局 `GameLog`/`DebugFlags`，改为通过 `AutoloadAccess` 动态访问（继续降低 core 对日志/调试单例的硬依赖）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -217,10 +219,13 @@
 
 ### 3.2 core/engine 对 EventBus/DebugFlags/GameLog 等全局单例耦合偏高（已部分整改）
 
-涉及文件（集中在 engine）：
+涉及文件（主要集中在 engine，另含 actions/rules）：
 - `core/engine/game_engine/command_runner.gd`：（已整改 2026-01-27）对 `GameLog`/`DebugFlags`/`EventBus` 不再直接引用 Autoload 全局变量，改为统一通过 `AutoloadAccess` 动态获取；仍包含 `OS.has_feature` 的调试/发布差异分支；事件发射仍经 `engine.emit_event(...)` wrapper
 - `core/engine/game_engine/loader.gd`、`core/engine/game_engine/initializer.gd`：（已整改 2026-01-27）日志/事件相关访问通过 `AutoloadAccess`/engine wrapper 动态获取；清空事件历史仍经 `engine.clear_event_history_for_new_session()` wrapper
-- `core/engine/game_engine.gd`：（仍负责事件历史重建桥接；（已整改 2026-01-26）增加 `event_sink` 注入点，并让 history clear/rebuild 也优先走 sink；（已整改 2026-01-27）默认通过 `AutoloadAccess` 动态访问 EventBus，降低对 Autoload 全局变量的硬依赖）
+- `core/engine/game_engine.gd`：（已整改 2026-01-26）增加 `event_sink` 注入点，并让 history clear 也优先走 sink；（已整改 2026-01-27）默认通过 `AutoloadAccess` 动态访问 EventBus，降低对 Autoload 全局变量的硬依赖
+- `core/engine/game_engine/rewind_ops.gd`：（已整改 2026-01-27）回退时负责 EventBus.history 重建桥接（调用 `event_history_rebuild.gd` 推导事件列表，并以 `record_event` 回填历史），仍属于“引擎与日志系统”的耦合点
+- `core/actions/action_registry.gd`：（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（避免直接引用 Autoload 全局变量；行为不变）
+- `core/rules/settlement_registry.gd`：（已整改 2026-01-27）warn/debug 判定改为通过 `AutoloadAccess` 动态访问 `GameLog`/`DebugFlags`（避免直接引用 Autoload 全局变量；行为不变）
 
 风险：
 - 引擎逻辑与 UI/日志系统绑死；做“纯逻辑回放”或“服务器侧模拟”会更难。
@@ -318,7 +323,7 @@
 |---|---:|---:|---:|---|
 | `core/actions/action_availability_registry.gd` | 267 | 0 | 0 |  |
 | `core/actions/action_executor.gd` | 199 | 1 | 0 | uses:IntValueParseHelpers |
-| `core/actions/action_registry.gd` | 324 | 0 | 0 | uses:GameLog |
+| `core/actions/action_registry.gd` | 235 | 2 | 0 | uses:AutoloadAccess |
 | `core/data/employee_def/debug.gd` | 22 | 0 | 0 |  |
 | `core/data/employee_def/parser.gd` | 13 | 2 | 0 | helper:employee_def_parser_wrapper |
 | `core/data/employee_def/parser/core_fields.gd` | 115 | 1 | 0 | helper:employee_def_parser_core,uses:DataParseHelpers |
@@ -498,7 +503,7 @@
 | `core/rules/phase/payday_settlement.gd` | 204 | 6 | 0 | uses:MilestoneEffectQueries |
 | `core/rules/placement_conflict_registry.gd` | 133 | 0 | 0 |  |
 | `core/rules/pricing_pipeline.gd` | 180 | 3 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
-| `core/rules/settlement_registry.gd` | 158 | 0 | 0 | uses:GameLog,uses:DebugFlags |
+| `core/rules/settlement_registry.gd` | 159 | 1 | 0 | uses:AutoloadAccess |
 | `core/rules/working/mandatory_actions_rules.gd` | 169 | 1 | 0 |  |
 | `core/state/game_state.gd` | 230 | 2 | 0 |  |
 | `core/state/game_state_factory.gd` | 209 | 5 | 0 |  |
@@ -538,7 +543,7 @@
 
 - `core/actions/action_availability_registry.gd`：中等体量；后续可按重构优先级处理
 - `core/actions/action_executor.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `IntValueParseHelpers`；中等体量；后续可按重构优先级处理
-- `core/actions/action_registry.gd`：包含 UI 语义：`get_player_initiatable_actions(...)` 判定“可启动动作”（隐式契约）；（已整改 2026-01-26）缺参判定统一走 `Result.ErrorCode.MISSING_PARAMS`（避免错误文案做控制流）；（已整改 2026-01-27）查询/过滤逻辑已抽离到 `action_registry_queries.gd`（ActionRegistry 主体更聚焦于注册/校验器）；依赖 GameLog 全局单例（耦合）
+- `core/actions/action_registry.gd`：包含 UI 语义：`get_player_initiatable_actions(...)` 判定“可启动动作”（隐式契约）；（已整改 2026-01-26）缺参判定统一走 `Result.ErrorCode.MISSING_PARAMS`（避免错误文案做控制流）；（已整改 2026-01-27）查询/过滤逻辑已抽离到 `action_registry_queries.gd`（ActionRegistry 主体更聚焦于注册/校验器）；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（避免直接引用 Autoload 全局变量）
 - `core/actions/action_registry_queries.gd`：（已新增 2026-01-27）ActionRegistry 查询/过滤辅助（按 phase/player 过滤动作），用于降低 `ActionRegistry` 单文件职责与体积
 
 ### data/
@@ -738,7 +743,7 @@
 - `core/rules/phase/payday/payday_salary_token_payment.gd`：（已新增 2026-01-27）薪资 token 支付：基于 ProductDef tags 统计/扣减可用 food/drink token（排除 `salary_token_ineligible`）
 - `core/rules/placement_conflict_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/pricing_pipeline.gd`：（已部分整改 2026-01-26）移除自带 `_parse_*`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`base_price_delta` 的 value 求和改用 `MilestoneEffectQueries.sum_int_values(...)`（减少重复/样板）；中等体量；后续可按重构优先级处理
-- `core/rules/settlement_registry.gd`：依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
+- `core/rules/settlement_registry.gd`：（已整改 2026-01-27）warn/debug 判定改为通过 `AutoloadAccess` 动态访问 `GameLog`/`DebugFlags`（避免直接引用 Autoload 全局变量；行为不变）；含调试/发布差异分支（AutoloadAccess.is_debug_mode -> DebugFlags/OS.has_feature）
 - `core/rules/working/mandatory_actions_rules.gd`：未发现明显结构问题（小文件/职责相对单一）
 
 ### state/

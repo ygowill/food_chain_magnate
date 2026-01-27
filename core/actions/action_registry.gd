@@ -3,6 +3,7 @@
 class_name ActionRegistry
 extends RefCounted
 
+const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 const QueriesClass = preload("res://core/actions/action_registry_queries.gd")
 
 # 注册的执行器
@@ -24,14 +25,14 @@ var _global_validators: Array[Dictionary] = []
 # 注册执行器
 func register_executor(executor: ActionExecutor) -> void:
 	if executor.action_id.is_empty():
-		GameLog.error("ActionRegistry", "执行器缺少 action_id")
+		AutoloadAccessClass.log_error("ActionRegistry", "执行器缺少 action_id")
 		return
 
 	if _executors.has(executor.action_id):
-		GameLog.warn("ActionRegistry", "覆盖已存在的执行器: %s" % executor.action_id)
+		AutoloadAccessClass.log_warn("ActionRegistry", "覆盖已存在的执行器: %s" % executor.action_id)
 
 	_executors[executor.action_id] = executor
-	GameLog.info("ActionRegistry", "注册执行器: %s" % executor.action_id)
+	AutoloadAccessClass.log_info("ActionRegistry", "注册执行器: %s" % executor.action_id)
 
 func set_availability_registry(registry) -> void:
 	_availability_registry = registry
@@ -48,7 +49,7 @@ func register_executors(executors: Array[ActionExecutor]) -> void:
 func unregister_executor(action_id: String) -> bool:
 	if _executors.has(action_id):
 		_executors.erase(action_id)
-		GameLog.info("ActionRegistry", "注销执行器: %s" % action_id)
+		AutoloadAccessClass.log_info("ActionRegistry", "注销执行器: %s" % action_id)
 		return true
 	return false
 
@@ -90,7 +91,7 @@ func register_global_validator(
 			return int(a.priority) < int(b.priority)
 		return str(a.id) < str(b.id)
 	)
-	GameLog.info("ActionRegistry", "注册全局校验器: %s (优先级: %d)" % [validator_id, priority])
+	AutoloadAccessClass.log_info("ActionRegistry", "注册全局校验器: %s (优先级: %d)" % [validator_id, priority])
 
 # 注销全局校验器
 func unregister_global_validator(validator_id: String) -> bool:

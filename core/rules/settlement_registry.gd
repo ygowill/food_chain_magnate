@@ -5,6 +5,8 @@
 class_name SettlementRegistry
 extends RefCounted
 
+const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
+
 enum Point {
 	ENTER,
 	EXIT,
@@ -99,8 +101,8 @@ func run(phase: int, point: int, state: GameState, phase_manager) -> Result:
 				str(typeof(r)),
 			]
 			all_warnings.append(msg)
-			GameLog.warn("SettlementRegistry", msg)
-			if DebugFlags.is_debug_mode():
+			AutoloadAccessClass.log_warn("SettlementRegistry", msg)
+			if AutoloadAccessClass.is_debug_mode():
 				return Result.failure(msg).with_warnings(all_warnings)
 
 	# primary
@@ -120,8 +122,8 @@ func run(phase: int, point: int, state: GameState, phase_manager) -> Result:
 			str(typeof(primary_result)),
 		]
 		all_warnings.append(msg2)
-		GameLog.warn("SettlementRegistry", msg2)
-		if DebugFlags.is_debug_mode():
+		AutoloadAccessClass.log_warn("SettlementRegistry", msg2)
+		if AutoloadAccessClass.is_debug_mode():
 			return Result.failure(msg2).with_warnings(all_warnings)
 
 	# priority >= 100：primary 之后
@@ -147,8 +149,8 @@ func run(phase: int, point: int, state: GameState, phase_manager) -> Result:
 				str(typeof(r)),
 			]
 			all_warnings.append(msg)
-			GameLog.warn("SettlementRegistry", msg)
-			if DebugFlags.is_debug_mode():
+			AutoloadAccessClass.log_warn("SettlementRegistry", msg)
+			if AutoloadAccessClass.is_debug_mode():
 				return Result.failure(msg).with_warnings(all_warnings)
 
 	return Result.success().with_warnings(all_warnings)
