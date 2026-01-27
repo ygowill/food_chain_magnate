@@ -97,6 +97,7 @@
 - 2026-01-27：继续拆分 `DinnertimeSettlement`：将“逐房屋售卖主循环”抽离到 `core/rules/phase/dinnertime/dinnertime_house_sales.gd`，`dinnertime_settlement_impl.gd` 聚焦 orchestrator（调用 house_sales + tips/CFO + round_state 报告写入）（进一步降低单文件耦合，便于后续按职责继续拆分）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `RangeUtils`（road）：将 `range_utils_road.gd` 拆为 wrapper + 子模块（`core/utils/range_utils_road/adjacent_cells.gd`、`core/utils/range_utils_road/distance_queries.gd`），降低单文件体积并按职责聚焦；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：将 `TileDef.from_dict(...)` 的“严格解析/校验”抽离到 `core/map/tile_def_parser.gd`，`tile_def.gd` 更聚焦于数据模型/序列化/校验/查询（降低 map 数据模型与解析耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：拆分 `EmployeeDef` 解析：`core/data/employee_def/parser.gd` 仅保留 orchestrator wrapper；核心字段与可选字段解析分别拆到 `core/data/employee_def/parser/core_fields.gd` 与 `core/data/employee_def/parser/optional_fields.gd`（降低单文件体积，便于维护字段组合约束）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -302,7 +303,9 @@
 | `core/actions/action_executor.gd` | 199 | 1 | 0 | uses:IntValueParseHelpers |
 | `core/actions/action_registry.gd` | 324 | 0 | 0 | uses:GameLog |
 | `core/data/employee_def/debug.gd` | 22 | 0 | 0 |  |
-| `core/data/employee_def/parser.gd` | 213 | 0 | 0 | uses:DataParseHelpers |
+| `core/data/employee_def/parser.gd` | 13 | 2 | 0 | helper:employee_def_parser_wrapper |
+| `core/data/employee_def/parser/core_fields.gd` | 115 | 1 | 0 | helper:employee_def_parser_core,uses:DataParseHelpers |
+| `core/data/employee_def/parser/optional_fields.gd` | 106 | 1 | 0 | helper:employee_def_parser_optional,uses:DataParseHelpers |
 | `core/data/employee_def/serialization.gd` | 47 | 0 | 0 |  |
 | `core/data/employee_def.gd` | 184 | 3 | 0 |  |
 | `core/data/employee_registry.gd` | 93 | 2 | 0 |  |
@@ -520,7 +523,9 @@
 
 - `core/data/employee_def.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/data/employee_def/debug.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/data/employee_def/parser.gd`：（已部分整改 2026-01-26）移除自带 `_parse_*`，改用 `DataParseHelpers`；仍偏长，且含较多“字段组合约束”（建议后续按子结构拆分校验逻辑）
+- `core/data/employee_def/parser.gd`：（已整改 2026-01-27）orchestrator wrapper；核心字段与可选字段解析分别在 `parser/core_fields.gd` 与 `parser/optional_fields.gd`（降低单文件体积，便于维护字段组合约束）
+- `core/data/employee_def/parser/core_fields.gd`：（已新增 2026-01-27）核心字段解析（id/name/role/range/train/tags/usage_tags/recruit_capacity 组合约束），依赖 `DataParseHelpers`
+- `core/data/employee_def/parser/optional_fields.gd`：（已新增 2026-01-27）可选字段解析（mandatory/can_be_fired/marketing_max_duration/produces/pool/effect_ids），依赖 `DataParseHelpers`
 - `core/data/employee_def/serialization.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/data/employee_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/data/game_config.gd`：（已部分整改 2026-01-26）通用 `_parse_*` 已改为复用 `ParseHelpers`，仅保留业务专用 `_parse_reserve_cards`；中等体量；后续可按重构优先级处理
