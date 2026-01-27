@@ -4,6 +4,7 @@ extends RefCounted
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const WorkingFlowClass = preload("res://core/engine/phase_manager/working_flow.gd")
 const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
+const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 
 const Phase = DefsClass.Phase
 const PHASE_NAMES = DefsClass.PHASE_NAMES
@@ -51,19 +52,13 @@ static func advance_phase(pm, state: GameState) -> Result:
 		return Result.failure("游戏已结束")
 
 	# 通用：若当前阶段存在待处理的“阶段内必做动作”，禁止推进到下一阶段（由模块注入）。
-	if state.round_state is Dictionary and state.round_state.has("pending_phase_actions"):
-		var ppa_val = state.round_state.get("pending_phase_actions", null)
-		if not (ppa_val is Dictionary):
-			return Result.failure("round_state.pending_phase_actions 类型错误（期望 Dictionary）")
-		var pending: Dictionary = ppa_val
+	if state.round_state is Dictionary:
 		var key := str(state.phase)
-		if pending.has(key):
-			var list_val = pending.get(key, null)
-			if not (list_val is Array):
-				return Result.failure("round_state.pending_phase_actions[%s] 类型错误（期望 Array）" % key)
-			var list: Array = list_val
-			if not list.is_empty():
-				return Result.failure("当前阶段仍有待处理动作，无法推进：%s" % key)
+		var blocked_read := RoundStatePendingPhaseActionsClass.is_phase_blocked(state.round_state, key, "")
+		if not blocked_read.ok:
+			return blocked_read
+		if bool(blocked_read.value):
+			return Result.failure("当前阶段仍有待处理动作，无法推进：%s" % key)
 
 	var all_warnings: Array[String] = []
 	var snapshot: GameState = state.duplicate_state()

@@ -9,6 +9,7 @@ const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_q
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 
 static func apply(state: GameState) -> Result:
 	if not (state.round_state is Dictionary):
@@ -111,21 +112,20 @@ static func apply(state: GameState) -> Result:
 	# 若需要玩家在 Cleanup 选择保留库存，则暂缓“里程碑池清理”，
 	# 否则 CleanupDiscard 触发的里程碑可能发生在清理之后而残留在 pool 中。
 	if not needs_fridge_choice.is_empty():
-		if not state.round_state.has("pending_phase_actions"):
-			state.round_state["pending_phase_actions"] = {}
-		var ppa_val = state.round_state.get("pending_phase_actions", null)
-		if not (ppa_val is Dictionary):
-			return Result.failure("CleanupSettlement: round_state.pending_phase_actions 类型错误（期望 Dictionary）")
-		var ppa: Dictionary = ppa_val
-
 		# 按 turn_order 顺序依次弹窗（hotseat）
 		var pending: Array[int] = []
 		for pid_val in state.turn_order:
 			var pid: int = int(pid_val)
 			if needs_fridge_choice.has(pid):
 				pending.append(pid)
-		ppa["Cleanup"] = pending
-		state.round_state["pending_phase_actions"] = ppa
+		var set_pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
+			state.round_state,
+			"Cleanup",
+			pending,
+			"CleanupSettlement"
+		)
+		if not set_pending.ok:
+			return set_pending
 
 		# 将 current_player_index 对齐到第一位待处理玩家，保证 UI/命令执行一致
 		if not pending.is_empty():

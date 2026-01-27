@@ -129,6 +129,7 @@
 - 2026-01-28：减少 Dictionary 裸写（round_state.action_counts）：`core/rules/employee_rules/action_counts.gd` 改为复用 `RoundStateCounters.get_player_key_count/increment_player_key_count`（收敛 round_state.action_counts 的读取/写入校验样板，行为不变）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：减少 Dictionary 裸写（round_state.mandatory_actions_completed）：新增 `RoundStatePlayerStringLists`（`core/utils/round_state_player_string_lists.gd`）收敛 `player_id -> Array[String]` 结构的读取/校验/去重添加，并用于 `MandatoryActionsRules`（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：phase/action 字符串常量化（第一步）：在 `core/engine/phase_manager/definitions.gd` 集中定义 `PHASE_*`/`SUB_PHASE_*` 常量；新增 `core/actions/action_ids.gd`（集中常用 action_id 常量），并替换 core/engine 的 AutoAdvance/AdvanceSubPhase 等关键路径比较逻辑（降低拼写风险/重命名成本）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-28：减少 Dictionary 裸写（round_state.pending_phase_actions）：新增 `RoundStatePendingPhaseActions`（`core/utils/round_state_pending_phase_actions.gd`）收敛 `round_state.pending_phase_actions` 的读取/写入校验样板，并用于 `AutoAdvancePhaseBlocking`/`PhaseManager.advance_phase`/`CleanupSettlement`（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -381,7 +382,7 @@
 | `core/engine/game_engine/auto_advance.gd` | 14 | 1 | 0 |  |
 | `core/engine/game_engine/auto_advance_impl.gd` | 34 | 1 | 0 |  |
 | `core/engine/game_engine/auto_advance_order_of_business_round1.gd` | 51 | 0 | 0 | helper:auto_advance_oob_round1 |
-| `core/engine/game_engine/auto_advance_phase_blocking.gd` | 28 | 2 | 0 | helper:auto_advance_phase_blocking |
+| `core/engine/game_engine/auto_advance_phase_blocking.gd` | 12 | 2 | 0 | helper:auto_advance_phase_blocking |
 | `core/engine/game_engine/auto_advance_try_step.gd` | 146 | 5 | 0 | helper:auto_advance_try_step |
 | `core/engine/game_engine/auto_advance_working_mandatory.gd` | 55 | 2 | 0 | helper:auto_advance_working_mandatory |
 | `core/engine/game_engine/checkpoints.gd` | 55 | 0 | 0 | uses:GameLog,uses:DebugFlags |
@@ -408,7 +409,7 @@
 | `gameplay/replay/timeline_event_helpers.gd` | 75 | 0 | 0 | moved:gameplay,helper:timeline_event |
 | `core/engine/game_engine/command_index_queries.gd` | 168 | 2 | 0 | helper:command_index_queries |
 | `core/engine/game_engine.gd` | 285 | 12 | 0 | uses:EventBus |
-| `core/engine/phase_manager/advance_phase.gd` | 239 | 2 | 0 | uses:GameLog |
+| `core/engine/phase_manager/advance_phase.gd` | 235 | 4 | 0 | uses:GameLog |
 | `core/engine/phase_manager/advance_sub_phase.gd` | 280 | 3 | 0 | uses:GameLog |
 | `core/engine/phase_manager/advancement.gd` | 13 | 2 | 0 |  |
 | `core/engine/phase_manager/definitions.gd` | 237 | 0 | 0 |  |
@@ -513,7 +514,7 @@
 | `core/rules/milestone_effect_queries.gd` | 53 | 2 | 0 |  |
 | `core/rules/milestone_effect_registry.gd` | 71 | 0 | 0 |  |
 | `core/rules/milestone_system.gd` | 120 | 4 | 0 |  |
-| `core/rules/phase/cleanup_settlement.gd` | 229 | 6 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries,uses:PlayerStateAccess |
+| `core/rules/phase/cleanup_settlement.gd` | 229 | 7 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries,uses:PlayerStateAccess,uses:RoundStatePendingPhaseActions |
 | `core/rules/phase/dinnertime/dinnertime_distance.gd` | 176 | 1 | 0 |  |
 | `core/rules/phase/dinnertime/dinnertime_effects.gd` | 153 | 4 | 0 | uses:PlayerStateAccess |
 | `core/rules/phase/dinnertime/dinnertime_events.gd` | 46 | 0 | 0 |  |
@@ -565,6 +566,7 @@
 | `core/utils/range_utils_road.gd` | 38 | 2 | 0 | helper:range_utils_road_wrapper |
 | `core/utils/range_utils_road/adjacent_cells.gd` | 58 | 1 | 0 | helper:range_utils_road_adjacent |
 | `core/utils/range_utils_road/distance_queries.gd` | 205 | 3 | 0 | helper:range_utils_road_distance |
+| `core/utils/round_state_pending_phase_actions.gd` | 66 | 0 | 0 | helper:round_state_pending_phase_actions |
 | `core/utils/round_state_player_string_lists.gd` | 74 | 0 | 0 | helper:round_state_player_string_lists |
 | `core/utils/round_state_counters.gd` | 146 | 0 | 0 |  |
 | `core/utils/type_helpers.gd` | 34 | 0 | 0 |  |
@@ -621,7 +623,7 @@
 - `core/engine/game_engine/auto_advance.gd`：（已整改 2026-01-27）class_name + 对外 API wrapper；实现委托 `auto_advance_impl.gd`
 - `core/engine/game_engine/auto_advance_impl.gd`：（已整改 2026-01-27）聚合转发（对外仍通过 `AutoAdvance.drain/try_advance_one` 调用）；推进决策拆分到 `auto_advance_try_step.gd`/`auto_advance_phase_blocking.gd`/`auto_advance_working_mandatory.gd`/`auto_advance_order_of_business_round1.gd`
 - `core/engine/game_engine/auto_advance_try_step.gd`：（已新增 2026-01-27）AutoAdvance 决策主流程：按 phase 判定并调用 PhaseManager 执行推进；依赖 action_registry 查询/执行强制动作；（已整改 2026-01-27）phase/action 比较改为引用 `DefsClass.PHASE_*` 与 `ActionIdsClass.*`（减少硬编码/拼写风险）
-- `core/engine/game_engine/auto_advance_phase_blocking.gd`：（已新增 2026-01-27）推进阻断检查：读取 `round_state.pending_phase_actions` 并判断是否阻断；包含“结算阶段是否默认跳过”的判定；（已整改 2026-01-27）结算阶段判定改用 `DefsClass.PHASE_*` 常量
+- `core/engine/game_engine/auto_advance_phase_blocking.gd`：（已新增 2026-01-27）推进阻断检查：读取 `round_state.pending_phase_actions` 并判断是否阻断；包含“结算阶段是否默认跳过”的判定；（已整改 2026-01-27）结算阶段判定改用 `DefsClass.PHASE_*` 常量；（已整改 2026-01-28）pending_phase_actions 读取改为复用 `RoundStatePendingPhaseActions`（减少重复/样板）
 - `core/engine/game_engine/auto_advance_working_mandatory.gd`：（已新增 2026-01-27）Working 阶段强制动作补完：可无参自动执行的定价/折扣/奢侈品（避免阻断 auto-advance）；（已整改 2026-01-27）action_id/phase 判定改为引用集中常量（`ActionIdsClass.*` + `DefsClass.PHASE_*`）
 - `core/engine/game_engine/auto_advance_order_of_business_round1.gd`：（已新增 2026-01-27）首轮 OrderOfBusiness 自动 finalize：基于 `previous_turn_order` 写入 picks 并落地 turn_order
 - `core/engine/game_engine/checkpoints.gd`：（已整改 2026-01-27）日志/verbose 开关读取改为通过 `AutoloadAccess` 动态访问 `GameLog`/`DebugFlags`（降低对 Autoload 全局变量的硬依赖）；仍含调试/发布差异分支（OS.has_feature）
@@ -640,7 +642,7 @@
 - （已移出 core 2026-01-26）`gameplay/replay/step_timeline_build.gd`（wrapper） + `gameplay/replay/step_timeline_build/build_full_impl.gd`：`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建；debug_force 判定统一复用 `Replay.should_force_execute_in_replay(...)`；复用 `timeline_event_helpers.gd` 统一写入事件 envelope（`sequence/timestamp/command_index/step_index/phase_segment`）（减少重复/样板）；时间线/日志“派生视图”构建逻辑很重；（已整改 2026-01-27）将 step dict/事件封装/阶段归属等内部 helper 抽离到 `gameplay/replay/step_timeline_build/helpers.gd`；（已整改 2026-01-27）将 auto-advance 分段主循环抽离到 `auto_advance_drain.gd`，将阶段切换/结算 effects 归属抽离到 `phase_transition.gd`，`build_full_impl.gd` 收敛为 orchestrator；依赖 EventBus（日志/UI 耦合）；（已整改 2026-01-26：不再跨文件调用 CommandRunner/PhaseManager 的私有 `_` 前缀方法）
 - （已移出 core 2026-01-26）`gameplay/replay/timeline_event_helpers.gd`：收敛时间线事件 envelope 字段写入（`sequence`/`timestamp`/`command_index`/`step_index`/`phase_segment`），供 `event_timeline_build.gd`/`step_timeline_build.gd` 等复用（减少重复/样板）
 - `core/engine/phase_manager.gd`：（已整改 2026-01-27）移除未使用的 preload 依赖（减少耦合/噪音）；移除未被使用的静态 defs wrapper（保留 `compute_timestamp(...)`），减少重复 API，降低单文件体积
-- `core/engine/phase_manager/advance_phase.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（降低对 Autoload 全局变量的硬依赖）
+- `core/engine/phase_manager/advance_phase.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（降低对 Autoload 全局变量的硬依赖）；（已整改 2026-01-28）pending_phase_actions 门禁判定改为复用 `RoundStatePendingPhaseActions`（减少重复/样板）
 - `core/engine/phase_manager/advance_sub_phase.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（降低对 Autoload 全局变量的硬依赖）；（已整改 2026-01-27）Working: `round_state.sub_phase_passed` 校验从 `assert` 改为 `Result.failure` 并回滚 snapshot（fail-fast 在 release 下也生效）
 - `core/engine/phase_manager/advancement.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/phase_manager/definitions.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）补充 `PHASE_*`/`SUB_PHASE_*` 常量，供核心路径避免散落硬编码
@@ -756,7 +758,7 @@
 - `core/rules/milestone_effect_queries.gd`：（已新增 2026-01-26）用于收敛“遍历 milestones -> MilestoneDef.effects”样板，供 pricing/settlement/drinks 等复用；（已整改 2026-01-26）新增 sum/max helpers 收敛 `effects[*].value` 的解析/聚合样板
 - `core/rules/milestone_effect_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/milestone_system.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/phase/cleanup_settlement.gd`：（已整改 2026-01-26）移除自带 `_parse_non_negative_int_value`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`gain_fridge` 的 “取最大 capacity” 逻辑改用 `MilestoneEffectQueries.max_non_negative_int_value(...)`（减少重复/样板）；（已整改 2026-01-27）读取 `player.milestones` 改为复用 `PlayerStateAccess`（减少重复/样板）；中等体量；后续可按重构优先级处理
+- `core/rules/phase/cleanup_settlement.gd`：（已整改 2026-01-26）移除自带 `_parse_non_negative_int_value`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`gain_fridge` 的 “取最大 capacity” 逻辑改用 `MilestoneEffectQueries.max_non_negative_int_value(...)`（减少重复/样板）；（已整改 2026-01-27）读取 `player.milestones` 改为复用 `PlayerStateAccess`（减少重复/样板）；（已整改 2026-01-28）pending_phase_actions 写入改为复用 `RoundStatePendingPhaseActions`（减少重复/样板）；中等体量；后续可按重构优先级处理
 - `core/rules/phase/dinnertime/dinnertime_distance.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/phase/dinnertime/dinnertime_effects.gd`：（已整改 2026-01-27）读取 `player.milestones` 改为复用 `PlayerStateAccess`（减少重复/样板）；其余未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/phase/dinnertime/dinnertime_events.gd`：未发现明显结构问题（小文件/职责相对单一）
@@ -818,6 +820,7 @@
 - `core/utils/range_utils_road/adjacent_cells.gd`：（已新增 2026-01-27）邻接道路格计算（支持 external_cells）；小文件/职责单一
 - `core/utils/range_utils_road/distance_queries.gd`：（已新增 2026-01-27）道路距离/范围查询（min_distance/within_range，含 drive_thru 入口点扩展）；中等体量；后续若继续拆分可按“目标点归一化/餐厅入口点计算/距离查询”分层
 - `core/utils/range_utils_air.gd`：（已新增 2026-01-27）空中范围实现（Manhattan 距离）；小文件/职责单一
+- `core/utils/round_state_pending_phase_actions.gd`：（已新增 2026-01-28）round_state.pending_phase_actions 的读取/校验/写入工具（Fail Fast），用于减少重复样板
 - `core/utils/round_state_player_string_lists.gd`：（已新增 2026-01-28）round_state 下 player_id -> Array[String] 结构的读取/校验/去重添加（Fail Fast），用于减少重复样板
 - `core/utils/round_state_counters.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/utils/type_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
