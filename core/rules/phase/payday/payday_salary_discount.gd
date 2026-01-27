@@ -1,6 +1,7 @@
 extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 const EFFECT_SEG_PAYDAY_SALARY_DISCOUNT := ":payday:salary_discount:"
 
@@ -10,9 +11,12 @@ static func get_salary_discount_recruit_capacity(
 	player: Dictionary,
 	effect_registry
 ) -> Result:
-	assert(state != null, "PaydaySalaryDiscount: state 为空")
-	assert(player.has("employees") and (player["employees"] is Array), "PaydaySalaryDiscount: player.employees 缺失或类型错误（期望 Array）")
-	var employees: Array = player["employees"]
+	if state == null:
+		return Result.failure("PaydaySalaryDiscount: state 为空")
+	var employees_read := PlayerStateAccessClass.require_employees(player, "player", "PaydaySalaryDiscount")
+	if not employees_read.ok:
+		return employees_read
+	var employees: Array = employees_read.value
 
 	if effect_registry == null:
 		return Result.failure("PaydaySalaryDiscount: EffectRegistry 未设置")
@@ -49,4 +53,3 @@ static func get_salary_discount_recruit_capacity(
 	if not (cap_val is int):
 		return Result.failure("PaydaySalaryDiscount: ctx.salary_discount_recruit_capacity 类型错误（期望 int）")
 	return Result.success(int(cap_val)).with_warnings(warnings)
-

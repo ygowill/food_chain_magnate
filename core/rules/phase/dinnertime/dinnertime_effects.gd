@@ -28,10 +28,10 @@ static func apply_employee_effects_by_segment(
 		return Result.failure("晚餐结算失败：player 类型错误: players[%d]（期望 Dictionary）" % player_id)
 	var player: Dictionary = player_val
 
-	var employees_val = player.get("employees", null)
-	if not (employees_val is Array):
-		return Result.failure("晚餐结算失败：player[%d].employees 类型错误（期望 Array）" % player_id)
-	var employees: Array = employees_val
+	var employees_read := PlayerStateAccessClass.require_employees(player, "player[%d]" % player_id, "晚餐结算失败：")
+	if not employees_read.ok:
+		return employees_read
+	var employees: Array = employees_read.value
 
 	var warnings: Array[String] = []
 	for i in range(employees.size()):

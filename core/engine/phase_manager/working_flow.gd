@@ -31,17 +31,17 @@ static func auto_activate_reserve_employees(state: GameState) -> Result:
 			return Result.failure("WorkingFlow.auto_activate_reserve_employees: players[%d] 类型错误（期望 Dictionary）" % i)
 		var player: Dictionary = player_val
 
-		var reserve_val = player.get("reserve_employees", null)
-		if not (reserve_val is Array):
-			return Result.failure("WorkingFlow.auto_activate_reserve_employees: players[%d].reserve_employees 缺失或类型错误（期望 Array）" % i)
-		var reserve: Array = reserve_val
+		var reserve_read := PlayerStateAccessClass.require_reserve_employees(player, "players[%d]" % i, "WorkingFlow.auto_activate_reserve_employees")
+		if not reserve_read.ok:
+			return reserve_read
+		var reserve: Array = reserve_read.value
 		if reserve.is_empty():
 			continue
 
-		var active_val = player.get("employees", null)
-		if not (active_val is Array):
-			return Result.failure("WorkingFlow.auto_activate_reserve_employees: players[%d].employees 缺失或类型错误（期望 Array）" % i)
-		var active: Array = active_val
+		var active_read := PlayerStateAccessClass.require_employees(player, "players[%d]" % i, "WorkingFlow.auto_activate_reserve_employees")
+		if not active_read.ok:
+			return active_read
+		var active: Array = active_read.value
 		active.append_array(reserve)
 		player["employees"] = active
 		player["reserve_employees"] = []

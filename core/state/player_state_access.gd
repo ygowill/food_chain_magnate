@@ -33,6 +33,18 @@ static func require_milestones(player: Dictionary, player_label: String, prefix_
 		return Result.failure("%s%s.milestones 缺失或类型错误（期望 Array）" % [prefix, player_label])
 	return Result.success(player["milestones"])
 
+static func require_employees(player: Dictionary, player_label: String, prefix_label: String) -> Result:
+	var prefix := _prefix(prefix_label)
+	if not player.has("employees") or not (player["employees"] is Array):
+		return Result.failure("%s%s.employees 缺失或类型错误（期望 Array）" % [prefix, player_label])
+	return Result.success(player["employees"])
+
+static func require_reserve_employees(player: Dictionary, player_label: String, prefix_label: String) -> Result:
+	var prefix := _prefix(prefix_label)
+	if not player.has("reserve_employees") or not (player["reserve_employees"] is Array):
+		return Result.failure("%s%s.reserve_employees 缺失或类型错误（期望 Array）" % [prefix, player_label])
+	return Result.success(player["reserve_employees"])
+
 static func require_inventory(player: Dictionary, player_label: String, prefix_label: String) -> Result:
 	var prefix := _prefix(prefix_label)
 	if not player.has("inventory") or not (player["inventory"] is Dictionary):
@@ -52,3 +64,17 @@ static func require_player_inventory(state: GameState, player_id: int, prefix_la
 		return player_read
 	var player: Dictionary = player_read.value
 	return require_inventory(player, "player[%d]" % player_id, prefix_label)
+
+static func require_player_employees(state: GameState, player_id: int, prefix_label: String) -> Result:
+	var player_read := require_player(state, player_id, prefix_label)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	return require_employees(player, "player[%d]" % player_id, prefix_label)
+
+static func require_player_reserve_employees(state: GameState, player_id: int, prefix_label: String) -> Result:
+	var player_read := require_player(state, player_id, prefix_label)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	return require_reserve_employees(player, "player[%d]" % player_id, prefix_label)

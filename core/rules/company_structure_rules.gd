@@ -5,6 +5,7 @@ extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 static func get_empty_slots(player: Dictionary) -> Result:
 	var usage_read := _compute_usage(player)
@@ -23,18 +24,18 @@ static func get_empty_slots(player: Dictionary) -> Result:
 	return Result.success(total_slots - used_slots)
 
 static func enforce_capacity(player: Dictionary) -> Result:
-	var employees_val = player.get("employees", null)
-	if not (employees_val is Array):
-		return Result.failure("CompanyStructureRules.enforce_capacity: player.employees 缺失或类型错误（期望 Array[String]）")
-	var reserve_val = player.get("reserve_employees", null)
-	if not (reserve_val is Array):
-		return Result.failure("CompanyStructureRules.enforce_capacity: player.reserve_employees 缺失或类型错误（期望 Array[String]）")
+	var employees_read := PlayerStateAccessClass.require_employees(player, "player", "CompanyStructureRules.enforce_capacity")
+	if not employees_read.ok:
+		return employees_read
+	var reserve_read := PlayerStateAccessClass.require_reserve_employees(player, "player", "CompanyStructureRules.enforce_capacity")
+	if not reserve_read.ok:
+		return reserve_read
 	var company_structure_val = player.get("company_structure", null)
 	if not (company_structure_val is Dictionary):
 		return Result.failure("CompanyStructureRules.enforce_capacity: player.company_structure 缺失或类型错误（期望 Dictionary）")
 
-	var employees_in: Array = employees_val
-	var reserve_in: Array = reserve_val
+	var employees_in: Array = employees_read.value
+	var reserve_in: Array = reserve_read.value
 	var employees: Array = employees_in.duplicate()
 	var reserve: Array = reserve_in.duplicate()
 
@@ -85,10 +86,10 @@ static func enforce_capacity(player: Dictionary) -> Result:
 	return Result.success()
 
 static func _compute_usage(player: Dictionary) -> Result:
-	var employees_val = player.get("employees", null)
-	if not (employees_val is Array):
-		return Result.failure("CompanyStructureRules: player.employees 缺失或类型错误（期望 Array[String]）")
-	var employees: Array = employees_val
+	var employees_read := PlayerStateAccessClass.require_employees(player, "player", "CompanyStructureRules")
+	if not employees_read.ok:
+		return employees_read
+	var employees: Array = employees_read.value
 	return _compute_usage_with_employees(player, employees)
 
 static func _compute_usage_with_employees(player: Dictionary, employees: Array) -> Result:
