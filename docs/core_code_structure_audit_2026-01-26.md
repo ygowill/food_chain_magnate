@@ -103,6 +103,7 @@
 - 2026-01-27：收敛 `Command.from_dict(...)` 的字段校验样板：新增 `_parse_required_*` helpers（required key/string/dict/int），并保持错误信息与语义不变（减少“字段存在性 + 类型校验”重复代码）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：新增 `core/utils/autoload_access.gd`（`AutoloadAccess`）并用于 core/engine：对 `EventBus`/`GameLog`/`DebugFlags` 的访问改为运行时按 `/root/<name>` 动态获取（减少对 Autoload 全局变量的硬依赖），同时将 `EventBus.EventType.*` 改为直接使用事件 type 字符串（行为不变）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `gameplay/replay/command_runner_event_build.gd`：将 Dinnertime/Marketing/Cleanup 的事件推导分别抽离到 `gameplay/replay/command_runner_event_build/dinnertime_events.gd`、`gameplay/replay/command_runner_event_build/marketing_events.gd`、`gameplay/replay/command_runner_event_build/cleanup_events.gd`，主文件保留 orchestrator/wrapper（降低单文件体积，便于继续按 phase 拆分）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：复核并更新文档：2.1 `_parse_*` 重复实现已大幅收敛（core 内仅余 3 文件含 `func _parse_*`）；2.2 规则侧 milestones->effects 遍历已基本迁移到 `MilestoneEffectQueries`（仅保留 MilestoneSystem/模块校验等通用路径直接遍历 `def.effects`）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -141,15 +142,21 @@
 
 ## 2) 重复逻辑 / 重复 helper（难以统一修复）
 
-### 2.1 `_parse_*` 家族重复实现（至少 25 个文件）
+### 2.1 `_parse_*` 家族重复实现（已大幅整改）
 
 表现：
-- 在 25 个文件中出现 `static func _parse_*` 系列（int/string/bool/array 等）重复实现。
+- （历史审计）曾在至少 25 个文件中出现 `static func _parse_*` 系列（int/string/bool/array 等）重复实现。
 - 同时仓库已经存在可复用的解析 helper：
   - `core/state/serialization/parse_helpers.gd`
   - `core/map/parse_helpers.gd`
   - （已部分整改 2026-01-26）`core/data/parse_helpers.gd`
   - （已部分整改 2026-01-26）`core/utils/json_value_parse_helpers.gd`
+
+现状（已复核 2026-01-27）：
+- `core/` 中仅剩 3 个文件包含 `func _parse_*`（均为业务/局部 helper，不再是跨目录重复实现）：
+  - `core/data/game_config.gd`：仅保留业务专用 `_parse_reserve_cards(...)`
+  - `core/modules/v2/visual_catalog_loader.gd`：局部结构解析（vec2/vec2i/piece_visuals）
+  - `core/types/command.gd`：required 字段解析 helper（用于减少 `from_dict(...)` 校验样板）
 
 典型文件（不完全列举）：
 - 数据定义解析重复：（已部分整改 2026-01-26）`core/data/product_def.gd`、`core/data/milestone_def.gd`、`core/data/employee_def/parser.gd`、`core/data/marketing_def.gd` 已改为共用 `core/data/parse_helpers.gd`；（已部分整改 2026-01-26）`core/data/game_config.gd` 已改为复用 `core/state/serialization/parse_helpers.gd`
@@ -172,10 +179,10 @@
  - `core/rules/phase/cleanup_settlement.gd`
  - `core/engine/phase_manager/working_flow.gd`
  - `core/rules/phase/marketing/settlement_demand_effects.gd`（叠加 effect_registry 的 invoke）
-  - （已部分整改 2026-01-26）上述多数文件已改为复用 `core/rules/milestone_effect_queries.gd` 收敛 milestones->effects 遍历样板（仍有零散 callsite 可继续迁移）
+  - （已整改 2026-01-27）规则侧相关 callsite 已基本迁移到 `core/rules/milestone_effect_queries.gd` 收敛 milestones->effects 遍历样板；目前仅保留 `MilestoneSystem`（应用效果）与模块内容校验等路径会直接遍历 `def.effects`（属通用/校验路径）
 
 现状矛盾点：
-- core 已经存在 `core/rules/milestone_effect_registry.gd`（effects.type -> handler），但仍有大量“手写解析 + 叠加”的路径。
+- core 已经存在 `core/rules/milestone_effect_registry.gd`（effects.type -> handler），规则侧 effects.value 叠加/查询已基本收敛到 `MilestoneEffectQueries`；仍有少量按 `effect_id` segment 过滤并调用 `effect_registry.invoke(...)` 的路径（如 MarketingSettlement 相关逻辑），属于不同的 effect 表达方式，后续可按需要继续收敛。
 
 风险：
 - 新增/修改 milestone effect 时需要同步修改多个地方，容易出现“同一个 effect_type 在不同系统语义不一致”。
