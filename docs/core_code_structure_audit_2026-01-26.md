@@ -118,6 +118,7 @@
 - 2026-01-27：将 `DinnertimeSelection` 内部校验（sale_breakdown/distance_info/candidate 比较）从 `assert` 改为返回 `Result.failure`（fail-fast 在 release 下也生效）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：将 `TileBaking` 中 printed_structures/drink_sources 的 fail-fast 从 `assert` 改为返回 `Result.failure`（fail-fast 在 release 下也生效）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：缩短 `MilestoneDef`：将 `from_dict(...)` 的严格解析/校验抽离到 `core/data/milestone_def_parser.gd`，并将 `trigger.filter` 的匹配逻辑抽离到 `core/data/milestone_trigger_filter.gd`（降低单文件体积与职责耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：继续拆分 `gameplay/replay/command_runner_event_build.gd`：将 `PHASE_CHANGED`/`SUB_PHASE_CHANGED` 下沉到 `gameplay/replay/command_runner_event_build/phase_events.gd`，将 `PLAYER_CASH_CHANGED` 下沉到 `cash_events.gd`，将 `MILESTONE_ACHIEVED` 下沉到 `milestone_events.gd`，主文件更聚焦 orchestrator/wrapper（继续降低单文件体积）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -125,9 +126,9 @@
 
 下列文件普遍存在“单文件承担多个职责”的情况，阅读与修改成本显著偏高（不仅是行数问题，更是职责边界问题）：
 
-- `core/engine/game_engine/command_runner.gd`（~215 LOC） + `gameplay/replay/command_runner_event_build.gd`（~168 LOC；（已部分整改 2026-01-27）Dinnertime/Marketing/Cleanup/OrderOfBusiness/Payday 的事件推导已抽离到 `gameplay/replay/command_runner_event_build/`）
+- `core/engine/game_engine/command_runner.gd`（~215 LOC） + `gameplay/replay/command_runner_event_build.gd`（~67 LOC；（已整改 2026-01-27）事件推导已基本拆到 `gameplay/replay/command_runner_event_build/` 下的子模块，主文件仅保留 orchestrator/wrapper）
   - （已部分整改 2026-01-26）事件构建已下沉到 `command_runner_event_build.gd`；`CommandRunner` 主流程更聚焦于“命令执行 + auto-advance + 不变量/校验点 + EventBus 发射”。
-  - `DINNERTIME_REPORT`/回合边界事件已拆到子模块；主文件主要保留 orchestrator + `PHASE_CHANGED`/`SUB_PHASE_CHANGED` 这类通用事件封装。
+  - `DINNERTIME_REPORT`/回合边界事件以及 `PHASE_CHANGED`/`SUB_PHASE_CHANGED`/玩家现金变化/里程碑达成等事件推导已拆到子模块；主文件主要保留 orchestrator/wrapper。
 - `gameplay/replay/step_timeline_build/build_full_impl.gd`（~494 LOC；（已部分整改 2026-01-27）`step_timeline_build.gd` 已降为 wrapper；内部 helper 抽离到 `gameplay/replay/step_timeline_build/helpers.gd`）
   - 主要是“回放/日志时间线”的语义构建，逻辑复杂且强依赖事件归属规则（phase_segment、step_index、进入/离开阶段的事件归属等）。
   - 这类逻辑更像 UI/回放子系统的“派生视图构建”，放在 core/engine 内会让 engine 边界持续被拉宽。
@@ -368,7 +369,10 @@
 | `core/engine/game_engine/auto_advance_working_mandatory.gd` | 53 | 0 | 0 | helper:auto_advance_working_mandatory |
 | `core/engine/game_engine/checkpoints.gd` | 55 | 0 | 0 | uses:GameLog,uses:DebugFlags |
 | `core/engine/game_engine/command_runner.gd` | 215 | 2 | 0 | uses:EventBus,uses:GameLog,uses:DebugFlags,uses:OS.has_feature |
-| `gameplay/replay/command_runner_event_build.gd` | 168 | 6 | 0 | moved:gameplay,uses:EventBus |
+| `gameplay/replay/command_runner_event_build.gd` | 67 | 9 | 0 | moved:gameplay,uses:EventBus |
+| `gameplay/replay/command_runner_event_build/cash_events.gd` | 38 | 0 | 0 | moved:gameplay,uses:EventBus |
+| `gameplay/replay/command_runner_event_build/milestone_events.gd` | 66 | 0 | 0 | moved:gameplay,uses:EventBus |
+| `gameplay/replay/command_runner_event_build/phase_events.gd` | 37 | 0 | 0 | moved:gameplay,uses:EventBus |
 | `core/engine/game_engine/diagnostics.gd` | 48 | 0 | 0 |  |
 | `core/engine/game_engine/event_history_rebuild.gd` | 96 | 2 | 0 | uses:EventBus |
 | `gameplay/replay/event_timeline_build.gd` | 99 | 3 | 0 | moved:gameplay,uses:EventBus |
@@ -600,7 +604,7 @@
 - `core/engine/game_engine/auto_advance_order_of_business_round1.gd`：（已新增 2026-01-27）首轮 OrderOfBusiness 自动 finalize：基于 `previous_turn_order` 写入 picks 并落地 turn_order
 - `core/engine/game_engine/checkpoints.gd`：（已整改 2026-01-27）日志/verbose 开关读取改为通过 `AutoloadAccess` 动态访问 `GameLog`/`DebugFlags`（降低对 Autoload 全局变量的硬依赖）；仍含调试/发布差异分支（OS.has_feature）
 - `core/engine/game_engine/command_runner.gd`：（已部分整改 2026-01-26）事件构建已下沉到 `gameplay/replay/command_runner_event_build.gd`（并由 `ProjectSettings.fcm/command_runner_event_build_provider_path` 提供），主流程更聚焦于命令执行/auto-advance/invariants/checkpoint/emit；（已整改 2026-01-27）对 `EventBus`/`GameLog`/`DebugFlags` 的访问改为通过 `AutoloadAccess` 动态获取（并将 `EventBus.EventType.*` 改为字符串常量），降低对 Autoload 全局变量的硬依赖；仍含调试/发布差异分支（OS.has_feature）；（已整改 2026-01-26）事件发射改为调用 `engine.emit_event(...)` wrapper，避免直连 `EventBus.emit_event(...)`
-- （已移出 core 2026-01-26）`gameplay/replay/command_runner_event_build.gd`：从 `CommandRunner` 抽离的派生事件构建（report/拆分事件/marketing 到期/cleanup 丢弃等，偏日志/展示语义）；（已部分整改 2026-01-27）已将 Dinnertime/Marketing/Cleanup/OrderOfBusiness/Payday 的事件推导按 phase 拆到 `gameplay/replay/command_runner_event_build/`；（已部分整改 2026-01-27）`DINNERTIME_REPORT` 已下沉到 `gameplay/replay/command_runner_event_build/dinnertime_events.gd`；（已部分整改 2026-01-27）`ROUND_STARTED`/`ROUND_ENDED` 已下沉到 `gameplay/replay/command_runner_event_build/round_events.gd`；后续若仍需继续拆分，可考虑将 `SUB_PHASE_CHANGED` 也独立为子模块
+- （已移出 core 2026-01-26）`gameplay/replay/command_runner_event_build.gd`：从 `CommandRunner` 抽离的派生事件构建（report/拆分事件/marketing 到期/cleanup 丢弃等，偏日志/展示语义）；（已整改 2026-01-27）已将 Dinnertime/Marketing/Cleanup/OrderOfBusiness/Payday/Round/Phase/Cash/Milestone 的事件推导拆到 `gameplay/replay/command_runner_event_build/` 下的子模块；主文件仅保留 orchestrator/wrapper
 - `core/engine/game_engine/diagnostics.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/game_engine/event_history_rebuild.gd`：（已整改 2026-01-27）`EventBus.EventType.*` 改为使用事件 type 字符串，降低对 Autoload 全局变量的硬依赖；（已部分整改 2026-01-26）debug_force 判定统一复用 `Replay.should_force_execute_in_replay(...)`（移除本文件内重复/分支判断）
 - （已移出 core 2026-01-26）`gameplay/replay/event_timeline_build.gd`：`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建（缺少初始 checkpoint 时仅 warning，不阻塞时间线构建）；复用 `timeline_event_helpers.gd` 统一写入 `sequence/timestamp/command_index`（减少重复/样板）；依赖 EventBus（日志/UI 耦合）

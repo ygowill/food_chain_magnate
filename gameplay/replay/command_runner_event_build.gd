@@ -8,68 +8,12 @@ const CleanupEventsClass = preload("res://gameplay/replay/command_runner_event_b
 const OrderOfBusinessEventsClass = preload("res://gameplay/replay/command_runner_event_build/order_of_business_events.gd")
 const PaydayEventsClass = preload("res://gameplay/replay/command_runner_event_build/payday_events.gd")
 const RoundEventsClass = preload("res://gameplay/replay/command_runner_event_build/round_events.gd")
+const PhaseEventsClass = preload("res://gameplay/replay/command_runner_event_build/phase_events.gd")
+const MilestoneEventsClass = preload("res://gameplay/replay/command_runner_event_build/milestone_events.gd")
+const CashEventsClass = preload("res://gameplay/replay/command_runner_event_build/cash_events.gd")
 
 static func build_milestone_achieved_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
-	var events: Array[Dictionary] = []
-	if old_state == null or new_state == null:
-		return events
-	if not (old_state.players is Array) or not (new_state.players is Array):
-		return events
-
-	var count := mini(old_state.players.size(), new_state.players.size())
-	for player_id in range(count):
-		var old_val = old_state.players[player_id]
-		var new_val = new_state.players[player_id]
-		if not (old_val is Dictionary) or not (new_val is Dictionary):
-			continue
-		var old_player: Dictionary = old_val
-		var new_player: Dictionary = new_val
-
-		var old_ms_val = old_player.get("milestones", [])
-		var new_ms_val = new_player.get("milestones", [])
-		if not (old_ms_val is Array) or not (new_ms_val is Array):
-			continue
-		var old_ms: Array = old_ms_val
-		var new_ms: Array = new_ms_val
-
-		var old_set := {}
-		for mid_val in old_ms:
-			if not (mid_val is String):
-				continue
-			var mid: String = str(mid_val)
-			if mid.is_empty():
-				continue
-			old_set[mid] = true
-
-		var added: Array[String] = []
-		for mid_val2 in new_ms:
-			if not (mid_val2 is String):
-				continue
-			var mid2: String = str(mid_val2)
-			if mid2.is_empty():
-				continue
-			if old_set.has(mid2):
-				continue
-			added.append(mid2)
-
-		if added.is_empty():
-			continue
-		added.sort()
-
-		for milestone_id in added:
-			events.append({
-				"type": EventBus.EventType.MILESTONE_ACHIEVED,
-				"data": {
-					"player_id": player_id,
-					"milestone_id": milestone_id,
-					"action_id": str(command.action_id),
-					"phase": str(new_state.phase),
-					"sub_phase": str(new_state.sub_phase),
-					"round": int(new_state.round_number),
-				}
-			})
-
-	return events
+	return MilestoneEventsClass.build_milestone_achieved_events(old_state, new_state, command)
 
 static func build_phase_change_events(old_state: GameState, new_state: GameState) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
@@ -93,14 +37,7 @@ static func build_phase_change_events(old_state: GameState, new_state: GameState
 			events.append_array(MarketingEventsClass.build_marketing_demand_generated_events(old_state))
 			events.append_array(MarketingEventsClass.build_marketing_expired_events(old_state))
 
-		events.append({
-			"type": EventBus.EventType.PHASE_CHANGED,
-			"data": {
-				"old_phase": old_state.phase,
-				"new_phase": new_state.phase,
-				"round": new_state.round_number
-			}
-		})
+		events.append_array(PhaseEventsClass.build_phase_changed_events(old_state, new_state))
 
 		# Cleanup 库存丢弃：在进入 Cleanup 时发射（清理结算在 Cleanup:enter 运行）。
 		if str(new_state.phase) == "Cleanup":
@@ -110,14 +47,7 @@ static func build_phase_change_events(old_state: GameState, new_state: GameState
 		events.append_array(RoundEventsClass.build_round_boundary_events(old_state, new_state))
 
 	# 子阶段变化事件
-	if old_state.sub_phase != new_state.sub_phase and not new_state.sub_phase.is_empty():
-		events.append({
-			"type": EventBus.EventType.SUB_PHASE_CHANGED,
-			"data": {
-				"old_sub_phase": old_state.sub_phase,
-				"new_sub_phase": new_state.sub_phase
-			}
-		})
+	events.append_array(PhaseEventsClass.build_sub_phase_changed_events(old_state, new_state))
 
 	return events
 
@@ -134,35 +64,4 @@ static func build_cleanup_inventory_discarded_events(cleanup_state: GameState) -
 	return CleanupEventsClass.build_cleanup_inventory_discarded_events(cleanup_state)
 
 static func build_player_cash_changed_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
-	var events: Array[Dictionary] = []
-	if old_state == null or new_state == null:
-		return events
-	if not (old_state.players is Array) or not (new_state.players is Array):
-		return events
-
-	var count := mini(old_state.players.size(), new_state.players.size())
-	for player_id in range(count):
-		var old_val = old_state.players[player_id]
-		var new_val = new_state.players[player_id]
-		if not (old_val is Dictionary) or not (new_val is Dictionary):
-			continue
-		var old_player: Dictionary = old_val
-		var new_player: Dictionary = new_val
-		var old_cash := int(old_player.get("cash", 0))
-		var new_cash := int(new_player.get("cash", 0))
-		if old_cash == new_cash:
-			continue
-		events.append({
-			"type": EventBus.EventType.PLAYER_CASH_CHANGED,
-			"data": {
-				"player_id": player_id,
-				"old_cash": old_cash,
-				"new_cash": new_cash,
-				"delta": new_cash - old_cash,
-				"action_id": str(command.action_id),
-				"phase": str(new_state.phase),
-				"sub_phase": str(new_state.sub_phase),
-			}
-		})
-
-	return events
+	return CashEventsClass.build_player_cash_changed_events(old_state, new_state, command)
