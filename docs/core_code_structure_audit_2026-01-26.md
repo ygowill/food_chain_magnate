@@ -96,6 +96,7 @@
 - 2026-01-27：缩短 `GameEngine`：将 `rewind_to_command(...)`/`full_replay()` 的实现抽离到 `core/engine/game_engine/rewind_ops.gd`，`game_engine.gd` 仅保留对外 wrapper（降低单文件体积，便于继续按职责拆分）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `DinnertimeSettlement`：将“逐房屋售卖主循环”抽离到 `core/rules/phase/dinnertime/dinnertime_house_sales.gd`，`dinnertime_settlement_impl.gd` 聚焦 orchestrator（调用 house_sales + tips/CFO + round_state 报告写入）（进一步降低单文件耦合，便于后续按职责继续拆分）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `RangeUtils`（road）：将 `range_utils_road.gd` 拆为 wrapper + 子模块（`core/utils/range_utils_road/adjacent_cells.gd`、`core/utils/range_utils_road/distance_queries.gd`），降低单文件体积并按职责聚焦；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：将 `TileDef.from_dict(...)` 的“严格解析/校验”抽离到 `core/map/tile_def_parser.gd`，`tile_def.gd` 更聚焦于数据模型/序列化/校验/查询（降低 map 数据模型与解析耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -115,7 +116,7 @@
   - 将大量 debug 命令串在一个文件中；后续继续加 debug 命令时容易进一步膨胀。
 - `core/engine/game_engine.gd`（~320 LOC；（已部分整改 2026-01-27）命令索引推导抽离到 `command_index_queries.gd`；回退/回放逻辑抽离到 `rewind_ops.gd`）
   - 引擎主体 + rewind/EventBus.history 重建桥接逻辑仍集中；可继续按职责拆分。
-- `core/map/piece_def.gd`（~275 LOC；（已整改 2026-01-27）解析逻辑抽离到 `piece_def_parser.gd`）、`core/map/tile_def.gd`（~262 LOC）、`core/map/map_def.gd`（~260 LOC；（已整改 2026-01-27）解析逻辑抽离到 `map_def_parser.gd`）
+- `core/map/piece_def.gd`（~275 LOC；（已整改 2026-01-27）解析逻辑抽离到 `piece_def_parser.gd`）、`core/map/tile_def.gd`（~217 LOC；（已整改 2026-01-27）解析逻辑抽离到 `tile_def_parser.gd`）、`core/map/map_def.gd`（~260 LOC；（已整改 2026-01-27）解析逻辑抽离到 `map_def_parser.gd`）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
 - 其他超过 ~300 行的文件：
   - （已整改 2026-01-27）`core/rules/employee_rules/train_slot_usage_impl.gd` 已拆分为 `train_slot_usage_storage.gd`/`train_slot_usage_providers.gd`/`train_slot_usage_allocator.gd`
@@ -392,7 +393,8 @@
 | `core/map/road_graph/pathfinding.gd` | 159 | 1 | 0 |  |
 | `core/map/road_graph/range_query.gd` | 45 | 2 | 0 |  |
 | `core/map/road_graph.gd` | 147 | 4 | 0 |  |
-| `core/map/tile_def.gd` | 262 | 2 | 0 |  |
+| `core/map/tile_def.gd` | 217 | 2 | 0 |  |
+| `core/map/tile_def_parser.gd` | 77 | 2 | 0 | helper:tile_def_parser |
 | `core/map/tile_registry.gd` | 63 | 2 | 0 |  |
 | `core/modules/v2/content_catalog.gd` | 68 | 0 | 0 |  |
 | `core/modules/v2/content_catalog_loader.gd` | 274 | 9 | 0 |  |
@@ -458,8 +460,8 @@
 | `core/rules/phase/dinnertime/dinnertime_events.gd` | 46 | 0 | 0 |  |
 | `core/rules/phase/dinnertime/dinnertime_inventory.gd` | 81 | 1 | 0 |  |
 | `core/rules/phase/dinnertime/dinnertime_selection.gd` | 202 | 4 | 0 |  |
-| `core/rules/phase/dinnertime/dinnertime_settlement_impl.gd` | 212 | 2 | 0 | uses:DinnertimeHouseSales,uses:DinnertimeEffects |
-| `core/rules/phase/dinnertime/dinnertime_house_sales.gd` | 281 | 1 | 0 | helper:dinnertime_house_sales,uses:DinnertimeSelection |
+| `core/rules/phase/dinnertime/dinnertime_settlement_impl.gd` | 212 | 4 | 0 | uses:DinnertimeHouseSales,uses:DinnertimeEffects |
+| `core/rules/phase/dinnertime/dinnertime_house_sales.gd` | 281 | 8 | 0 | helper:dinnertime_house_sales,uses:DinnertimeSelection |
 | `core/rules/phase/dinnertime_settlement.gd` | 37 | 2 | 0 |  |
 | `core/rules/phase/marketing/marketing_instances_validation.gd` | 96 | 1 | 0 |  |
 | `core/rules/phase/marketing/settlement_demand_effects.gd` | 160 | 2 | 0 |  |
@@ -497,8 +499,8 @@
 | `core/utils/json_value_parse_helpers.gd` | 23 | 0 | 0 |  |
 | `core/utils/range_utils.gd` | 67 | 2 | 0 |  |
 | `core/utils/range_utils_air.gd` | 94 | 0 | 0 |  |
-| `core/utils/range_utils_road.gd` | 38 | 5 | 0 | helper:range_utils_road_wrapper |
-| `core/utils/range_utils_road/adjacent_cells.gd` | 58 | 2 | 0 | helper:range_utils_road_adjacent |
+| `core/utils/range_utils_road.gd` | 38 | 2 | 0 | helper:range_utils_road_wrapper |
+| `core/utils/range_utils_road/adjacent_cells.gd` | 58 | 1 | 0 | helper:range_utils_road_adjacent |
 | `core/utils/range_utils_road/distance_queries.gd` | 205 | 3 | 0 | helper:range_utils_road_distance |
 | `core/utils/round_state_counters.gd` | 146 | 0 | 0 |  |
 | `core/utils/type_helpers.gd` | 34 | 0 | 0 |  |
@@ -617,7 +619,8 @@
 - `core/map/road_graph/node_keys.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/road_graph/pathfinding.gd`：（已整改 2026-01-26）补充 `get_nodes_at_pos(...)` 公开 wrapper，用于避免外部调用私有 `_get_nodes_at_pos(...)`
 - `core/map/road_graph/range_query.gd`：（已整改 2026-01-26）改用 `Pathfinding.get_nodes_at_pos(...)`，避免跨文件调用私有 `_get_nodes_at_pos(...)`
-- `core/map/tile_def.gd`：（已部分整改 2026-01-26）blocked_cells/allowed_rotations 解析已改为复用 `MapParseHelpers`（减少重复 helper）；（已整改 2026-01-26）road_grid/drink_sources/printed_structures 解析已改为复用 `MapParseHelpers`（减少重复解析样板）；（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）；（已整改 2026-01-26）板块编辑器的编辑方法（road/drink/printed/blocked）移至 `ui/scenes/tools/tile_editor/tile_def_edit.gd`，core 不再包含 tools 专用 API；体积已下降但仍偏大（建议后续按职责拆分）
+- `core/map/tile_def.gd`：（已部分整改 2026-01-26）blocked_cells/allowed_rotations/road_grid/drink_sources/printed_structures 解析已改为复用 `MapParseHelpers`（减少重复解析样板）；（已整改 2026-01-26）板块编辑器的编辑方法（road/drink/printed/blocked）移至 `ui/scenes/tools/tile_editor/tile_def_edit.gd`，core 不再包含 tools 专用 API；（已整改 2026-01-27）将 `from_dict(...)` 的严格解析抽离到 `tile_def_parser.gd`，本文件更聚焦于数据模型/序列化/校验/查询；体积已下降但仍可按“工厂方法/序列化/调试方法”等职责继续拆分
+- `core/map/tile_def_parser.gd`：（已新增 2026-01-27）TileDef 的 Dictionary 严格解析/校验（用于缩短 `tile_def.gd` 并集中维护错误信息与字段规则）
 - `core/map/tile_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 
 ### modules/
