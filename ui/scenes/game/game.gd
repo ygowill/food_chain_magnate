@@ -55,6 +55,7 @@ const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 const EventTimelineBuildClass = preload("res://gameplay/replay/event_timeline_build.gd")
 const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 const GameEventLogFormatterClass = preload("res://ui/scenes/game/game_event_log_formatter.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 # 游戏状态
 var game_engine: GameEngine = null
@@ -897,7 +898,7 @@ func _update_ui() -> void:
 	elif cursor_index < head_index:
 		replay_suffix = "（时间旅行）" if _timeline_edit_mode_active else "（复盘）"
 
-	if state.phase == "Restructuring":
+	if state.phase == DefsClass.PHASE_RESTRUCTURING:
 		var submitted_count := 0
 		var total := state.players.size()
 		if state.round_state is Dictionary:

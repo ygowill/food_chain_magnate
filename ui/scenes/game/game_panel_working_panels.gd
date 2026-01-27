@@ -9,6 +9,7 @@ const TileRouteUtilsClass = preload("res://core/rules/drinks_procurement/tile_ro
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const RecruitPanelScene = preload("res://ui/components/recruit_panel/recruit_panel.tscn")
 const TrainPanelScene = preload("res://ui/components/train_panel/train_panel.tscn")
@@ -474,7 +475,7 @@ func _on_train_requested(from_employee: String, to_employee: String) -> void:
 
 	if result.ok:
 		var state: GameState = _scene.game_engine.get_state()
-		if state != null and state.phase == "Working" and state.sub_phase == "Train":
+		if state != null and state.phase == DefsClass.PHASE_WORKING and state.sub_phase == DefsClass.SUB_PHASE_TRAIN:
 			show_train_panel()
 
 func _on_price_confirmed(action_id: String) -> void:

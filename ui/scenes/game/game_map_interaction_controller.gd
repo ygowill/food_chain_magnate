@@ -17,6 +17,7 @@ const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
 const ChoiceDialogScene = preload("res://ui/dialogs/choice_dialog.tscn")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 var _scene = null
 var _map_canvas = null
@@ -1254,11 +1255,11 @@ func on_restaurant_highlight_requested(mode: String, rotation: int, restaurant_i
 				ctx,
 				world_anchor,
 				rotation,
-				piece_registry,
-				actor,
-				state.phase == "Setup",
-				extra
-			)
+					piece_registry,
+					actor,
+					state.phase == DefsClass.PHASE_SETUP,
+					extra
+				)
 			if not r.ok:
 				continue
 			if anchor_set.has(world_anchor):
@@ -1377,11 +1378,11 @@ func on_restaurant_preview_requested(mode: String, position: Vector2i, rotation:
 		ctx,
 		position,
 		rotation,
-		piece_registry,
-		actor,
-		state.phase == "Setup",
-		extra
-	)
+			piece_registry,
+			actor,
+			state.phase == DefsClass.PHASE_SETUP,
+			extra
+		)
 
 	var valid := validate_r.ok
 	var message := "" if valid else validate_r.error
