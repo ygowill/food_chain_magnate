@@ -35,17 +35,22 @@ static func bake_tile(
 
 	# 烘焙印刷建筑
 	for struct in tile_def.printed_structures:
-		assert(struct is Dictionary, "MapBaker._bake_tile: printed_structures 元素类型错误（期望 Dictionary）")
-		assert(struct.has("piece_id") and (struct["piece_id"] is String) and not str(struct["piece_id"]).is_empty(), "MapBaker._bake_tile: printed_structures.piece_id 缺失或为空")
+		if not (struct is Dictionary):
+			return Result.failure("MapBaker._bake_tile: printed_structures 元素类型错误（期望 Dictionary）")
+		if not (struct.has("piece_id") and (struct["piece_id"] is String) and not str(struct["piece_id"]).is_empty()):
+			return Result.failure("MapBaker._bake_tile: printed_structures.piece_id 缺失或为空")
 		var piece_id: String = struct["piece_id"]
-		assert(struct.has("anchor") and (struct["anchor"] is Vector2i), "MapBaker._bake_tile: printed_structures.anchor 缺失或类型错误（期望 Vector2i）")
+		if not (struct.has("anchor") and (struct["anchor"] is Vector2i)):
+			return Result.failure("MapBaker._bake_tile: printed_structures.anchor 缺失或类型错误（期望 Vector2i）")
 		var local_anchor: Vector2i = struct["anchor"]
-		assert(struct.has("rotation") and (struct["rotation"] is int), "MapBaker._bake_tile: printed_structures.rotation 缺失或类型错误（期望 int）")
+		if not (struct.has("rotation") and (struct["rotation"] is int)):
+			return Result.failure("MapBaker._bake_tile: printed_structures.rotation 缺失或类型错误（期望 int）")
 		var struct_rotation: int = int(struct["rotation"])
 
 		var house_id := ""
 		if struct.has("house_id"):
-			assert(struct["house_id"] is String, "MapBaker._bake_tile: printed_structures.house_id 类型错误（期望 String）")
+			if not (struct["house_id"] is String):
+				return Result.failure("MapBaker._bake_tile: printed_structures.house_id 类型错误（期望 String）")
 			house_id = str(struct["house_id"])
 
 		var house_number = 0
@@ -111,11 +116,14 @@ static func bake_tile(
 
 	# 烘焙饮品源
 	for source in tile_def.drink_sources:
-		assert(source is Dictionary, "MapBaker._bake_tile: drink_sources 元素类型错误（期望 Dictionary）")
-		assert(source.has("pos") and (source["pos"] is Vector2i), "MapBaker._bake_tile: drink_sources.pos 缺失或类型错误（期望 Vector2i）")
+		if not (source is Dictionary):
+			return Result.failure("MapBaker._bake_tile: drink_sources 元素类型错误（期望 Dictionary）")
+		if not (source.has("pos") and (source["pos"] is Vector2i)):
+			return Result.failure("MapBaker._bake_tile: drink_sources.pos 缺失或类型错误（期望 Vector2i）")
 		var local_pos: Vector2i = source["pos"]
 		var world_pos := MapUtils.local_to_world(local_pos, board_pos, rotation)
-		assert(source.has("type") and (source["type"] is String) and not str(source["type"]).is_empty(), "MapBaker._bake_tile: drink_sources.type 缺失或为空")
+		if not (source.has("type") and (source["type"] is String) and not str(source["type"]).is_empty()):
+			return Result.failure("MapBaker._bake_tile: drink_sources.type 缺失或为空")
 		var drink_type: String = source["type"]
 
 		cells[world_pos.y][world_pos.x]["drink_source"] = {
@@ -181,17 +189,22 @@ static func bake_tile_into_cells(
 
 	# 烘焙印刷建筑
 	for struct in tile_def.printed_structures:
-		assert(struct is Dictionary, "MapBaker.bake_tile_into_cells: printed_structures 元素类型错误（期望 Dictionary）")
-		assert(struct.has("piece_id") and (struct["piece_id"] is String) and not str(struct["piece_id"]).is_empty(), "MapBaker.bake_tile_into_cells: printed_structures.piece_id 缺失或为空")
+		if not (struct is Dictionary):
+			return Result.failure("MapBaker.bake_tile_into_cells: printed_structures 元素类型错误（期望 Dictionary）")
+		if not (struct.has("piece_id") and (struct["piece_id"] is String) and not str(struct["piece_id"]).is_empty()):
+			return Result.failure("MapBaker.bake_tile_into_cells: printed_structures.piece_id 缺失或为空")
 		var piece_id: String = struct["piece_id"]
-		assert(struct.has("anchor") and (struct["anchor"] is Vector2i), "MapBaker.bake_tile_into_cells: printed_structures.anchor 缺失或类型错误（期望 Vector2i）")
+		if not (struct.has("anchor") and (struct["anchor"] is Vector2i)):
+			return Result.failure("MapBaker.bake_tile_into_cells: printed_structures.anchor 缺失或类型错误（期望 Vector2i）")
 		var local_anchor: Vector2i = struct["anchor"]
-		assert(struct.has("rotation") and (struct["rotation"] is int), "MapBaker.bake_tile_into_cells: printed_structures.rotation 缺失或类型错误（期望 int）")
+		if not (struct.has("rotation") and (struct["rotation"] is int)):
+			return Result.failure("MapBaker.bake_tile_into_cells: printed_structures.rotation 缺失或类型错误（期望 int）")
 		var struct_rotation: int = int(struct["rotation"])
 
 		var house_id := ""
 		if struct.has("house_id"):
-			assert(struct["house_id"] is String, "MapBaker.bake_tile_into_cells: printed_structures.house_id 类型错误（期望 String）")
+			if not (struct["house_id"] is String):
+				return Result.failure("MapBaker.bake_tile_into_cells: printed_structures.house_id 类型错误（期望 String）")
 			house_id = str(struct["house_id"])
 
 		var house_number = 0
@@ -255,14 +268,17 @@ static func bake_tile_into_cells(
 
 	# 烘焙饮品源
 	for source in tile_def.drink_sources:
-		assert(source is Dictionary, "MapBaker.bake_tile_into_cells: drink_sources 元素类型错误（期望 Dictionary）")
-		assert(source.has("pos") and (source["pos"] is Vector2i), "MapBaker.bake_tile_into_cells: drink_sources.pos 缺失或类型错误（期望 Vector2i）")
+		if not (source is Dictionary):
+			return Result.failure("MapBaker.bake_tile_into_cells: drink_sources 元素类型错误（期望 Dictionary）")
+		if not (source.has("pos") and (source["pos"] is Vector2i)):
+			return Result.failure("MapBaker.bake_tile_into_cells: drink_sources.pos 缺失或类型错误（期望 Vector2i）")
 		var local_pos: Vector2i = source["pos"]
 		var world_pos2 := MapUtils.local_to_world(local_pos, board_pos, rotation)
 		var idx3 := world_pos2 + map_origin
 		if not MapUtils.is_valid_pos(idx3, grid_size):
 			return Result.failure("MapBaker.bake_tile_into_cells: drink_source 写入越界: %s" % str(world_pos2))
-		assert(source.has("type") and (source["type"] is String) and not str(source["type"]).is_empty(), "MapBaker.bake_tile_into_cells: drink_sources.type 缺失或为空")
+		if not (source.has("type") and (source["type"] is String) and not str(source["type"]).is_empty()):
+			return Result.failure("MapBaker.bake_tile_into_cells: drink_sources.type 缺失或为空")
 		var drink_type: String = source["type"]
 
 		cells[idx3.y][idx3.x]["drink_source"] = {
@@ -276,4 +292,3 @@ static func bake_tile_into_cells(
 		})
 
 	return Result.success({"max_house_number": max_house_number})
-
