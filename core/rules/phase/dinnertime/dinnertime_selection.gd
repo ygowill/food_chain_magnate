@@ -62,18 +62,27 @@ static func pick_winner_for_required(
 		if not breakdown_read.ok:
 			return Result.failure("晚餐结算失败：PricingPipeline 失败: %s" % breakdown_read.error)
 		var breakdown: Dictionary = breakdown_read.value
+		if not (breakdown.has("decision_unit_price") and breakdown["decision_unit_price"] is int):
+			return Result.failure("晚餐结算失败：PricingPipeline.calculate_sale_breakdown: 缺少/错误 decision_unit_price（期望 int）")
+		if not (breakdown.has("unit_price") and breakdown["unit_price"] is int):
+			return Result.failure("晚餐结算失败：PricingPipeline.calculate_sale_breakdown: 缺少/错误 unit_price（期望 int）")
+		if not (breakdown.has("revenue") and breakdown["revenue"] is int):
+			return Result.failure("晚餐结算失败：PricingPipeline.calculate_sale_breakdown: 缺少/错误 revenue（期望 int）")
+		if not (breakdown.has("quantity") and breakdown["quantity"] is int):
+			return Result.failure("晚餐结算失败：PricingPipeline.calculate_sale_breakdown: 缺少/错误 quantity（期望 int）")
+		if not (breakdown.has("has_garden") and breakdown["has_garden"] is bool):
+			return Result.failure("晚餐结算失败：PricingPipeline.calculate_sale_breakdown: 缺少/错误 has_garden（期望 bool）")
+		if not (breakdown.has("price_part") and breakdown["price_part"] is int):
+			return Result.failure("晚餐结算失败：PricingPipeline.calculate_sale_breakdown: 缺少/错误 price_part（期望 int）")
+		if not (breakdown.has("bonus") and breakdown["bonus"] is int):
+			return Result.failure("晚餐结算失败：PricingPipeline.calculate_sale_breakdown: 缺少/错误 bonus（期望 int）")
 
-		assert(breakdown.has("decision_unit_price") and breakdown["decision_unit_price"] is int, "PricingPipeline.calculate_sale_breakdown: 缺少/错误 decision_unit_price（期望 int）")
-		assert(breakdown.has("unit_price") and breakdown["unit_price"] is int, "PricingPipeline.calculate_sale_breakdown: 缺少/错误 unit_price（期望 int）")
-		assert(breakdown.has("revenue") and breakdown["revenue"] is int, "PricingPipeline.calculate_sale_breakdown: 缺少/错误 revenue（期望 int）")
-		assert(breakdown.has("quantity") and breakdown["quantity"] is int, "PricingPipeline.calculate_sale_breakdown: 缺少/错误 quantity（期望 int）")
-		assert(breakdown.has("has_garden") and breakdown["has_garden"] is bool, "PricingPipeline.calculate_sale_breakdown: 缺少/错误 has_garden（期望 bool）")
-		assert(breakdown.has("price_part") and breakdown["price_part"] is int, "PricingPipeline.calculate_sale_breakdown: 缺少/错误 price_part（期望 int）")
-		assert(breakdown.has("bonus") and breakdown["bonus"] is int, "PricingPipeline.calculate_sale_breakdown: 缺少/错误 bonus（期望 int）")
-
-		assert(distance_info.has("distance") and distance_info["distance"] is int, "内部错误: distance_info.distance 缺失或类型错误（期望 int）")
-		assert(distance_info.has("steps") and distance_info["steps"] is int, "内部错误: distance_info.steps 缺失或类型错误（期望 int）")
-		assert(distance_info.has("path") and distance_info["path"] is Array, "内部错误: distance_info.path 缺失或类型错误（期望 Array[Vector2i]）")
+		if not (distance_info.has("distance") and distance_info["distance"] is int):
+			return Result.failure("晚餐结算失败：内部错误: distance_info.distance 缺失或类型错误（期望 int）")
+		if not (distance_info.has("steps") and distance_info["steps"] is int):
+			return Result.failure("晚餐结算失败：内部错误: distance_info.steps 缺失或类型错误（期望 int）")
+		if not (distance_info.has("path") and distance_info["path"] is Array):
+			return Result.failure("晚餐结算失败：内部错误: distance_info.path 缺失或类型错误（期望 Array[Vector2i]）")
 
 		var decision_unit_price: int = breakdown["decision_unit_price"]
 		var dist: int = distance_info["distance"]
@@ -143,37 +152,54 @@ static func pick_winner_for_required(
 			"decision_unit_price": decision_unit_price,
 			"breakdown": breakdown,
 		}
-
-		if winner.is_empty() or _is_candidate_better(state, candidate, winner):
+		if winner.is_empty():
 			winner = candidate
+		else:
+			var better_r := _is_candidate_better(state, candidate, winner)
+			if not better_r.ok:
+				return better_r
+			if bool(better_r.value):
+				winner = candidate
 
 	return Result.success(winner)
 
-static func _is_candidate_better(state: GameState, a: Dictionary, b: Dictionary) -> bool:
-	assert(a.has("score") and a["score"] is int, "内部错误: candidate.score 缺失或类型错误（期望 int）")
-	assert(b.has("score") and b["score"] is int, "内部错误: candidate.score 缺失或类型错误（期望 int）")
-	assert(a.has("tiebreak_score") and a["tiebreak_score"] is int, "内部错误: candidate.tiebreak_score 缺失或类型错误（期望 int）")
-	assert(b.has("tiebreak_score") and b["tiebreak_score"] is int, "内部错误: candidate.tiebreak_score 缺失或类型错误（期望 int）")
-	assert(a.has("owner") and a["owner"] is int, "内部错误: candidate.owner 缺失或类型错误（期望 int）")
-	assert(b.has("owner") and b["owner"] is int, "内部错误: candidate.owner 缺失或类型错误（期望 int）")
-	assert(a.has("distance") and a["distance"] is int, "内部错误: candidate.distance 缺失或类型错误（期望 int）")
-	assert(b.has("distance") and b["distance"] is int, "内部错误: candidate.distance 缺失或类型错误（期望 int）")
-	assert(a.has("steps") and a["steps"] is int, "内部错误: candidate.steps 缺失或类型错误（期望 int）")
-	assert(b.has("steps") and b["steps"] is int, "内部错误: candidate.steps 缺失或类型错误（期望 int）")
-	assert(a.has("restaurant_id") and a["restaurant_id"] is String, "内部错误: candidate.restaurant_id 缺失或类型错误（期望 String）")
-	assert(b.has("restaurant_id") and b["restaurant_id"] is String, "内部错误: candidate.restaurant_id 缺失或类型错误（期望 String）")
+static func _is_candidate_better(state: GameState, a: Dictionary, b: Dictionary) -> Result:
+	if not (a.has("score") and a["score"] is int):
+		return Result.failure("晚餐结算失败：内部错误: candidate.score 缺失或类型错误（期望 int）")
+	if not (b.has("score") and b["score"] is int):
+		return Result.failure("晚餐结算失败：内部错误: candidate.score 缺失或类型错误（期望 int）")
+	if not (a.has("tiebreak_score") and a["tiebreak_score"] is int):
+		return Result.failure("晚餐结算失败：内部错误: candidate.tiebreak_score 缺失或类型错误（期望 int）")
+	if not (b.has("tiebreak_score") and b["tiebreak_score"] is int):
+		return Result.failure("晚餐结算失败：内部错误: candidate.tiebreak_score 缺失或类型错误（期望 int）")
+	if not (a.has("owner") and a["owner"] is int):
+		return Result.failure("晚餐结算失败：内部错误: candidate.owner 缺失或类型错误（期望 int）")
+	if not (b.has("owner") and b["owner"] is int):
+		return Result.failure("晚餐结算失败：内部错误: candidate.owner 缺失或类型错误（期望 int）")
+	if not (a.has("distance") and a["distance"] is int):
+		return Result.failure("晚餐结算失败：内部错误: candidate.distance 缺失或类型错误（期望 int）")
+	if not (b.has("distance") and b["distance"] is int):
+		return Result.failure("晚餐结算失败：内部错误: candidate.distance 缺失或类型错误（期望 int）")
+	if not (a.has("steps") and a["steps"] is int):
+		return Result.failure("晚餐结算失败：内部错误: candidate.steps 缺失或类型错误（期望 int）")
+	if not (b.has("steps") and b["steps"] is int):
+		return Result.failure("晚餐结算失败：内部错误: candidate.steps 缺失或类型错误（期望 int）")
+	if not (a.has("restaurant_id") and a["restaurant_id"] is String):
+		return Result.failure("晚餐结算失败：内部错误: candidate.restaurant_id 缺失或类型错误（期望 String）")
+	if not (b.has("restaurant_id") and b["restaurant_id"] is String):
+		return Result.failure("晚餐结算失败：内部错误: candidate.restaurant_id 缺失或类型错误（期望 String）")
 
 	# 1) score 更小者优先（单价 + 距离）
 	var a_score: int = int(a["score"])
 	var b_score: int = int(b["score"])
 	if a_score != b_score:
-		return a_score < b_score
+		return Result.success(a_score < b_score)
 
 	# 2) tiebreak_score 更大者优先（默认=女服务员数量）
 	var a_tb: int = int(a["tiebreak_score"])
 	var b_tb: int = int(b["tiebreak_score"])
 	if a_tb != b_tb:
-		return a_tb > b_tb
+		return Result.success(a_tb > b_tb)
 
 	# 3) 回合顺序靠前者优先
 	var a_owner: int = int(a["owner"])
@@ -181,20 +207,20 @@ static func _is_candidate_better(state: GameState, a: Dictionary, b: Dictionary)
 	var a_rank := _turn_order_rank(state, a_owner)
 	var b_rank := _turn_order_rank(state, b_owner)
 	if a_rank != b_rank:
-		return a_rank < b_rank
+		return Result.success(a_rank < b_rank)
 
 	# 4) 同一玩家多个餐厅：选距离更短（更稳定）
 	var a_dist: int = int(a["distance"])
 	var b_dist: int = int(b["distance"])
 	if a_dist != b_dist:
-		return a_dist < b_dist
+		return Result.success(a_dist < b_dist)
 
 	var a_steps: int = int(a["steps"])
 	var b_steps: int = int(b["steps"])
 	if a_steps != b_steps:
-		return a_steps < b_steps
+		return Result.success(a_steps < b_steps)
 
-	return str(a["restaurant_id"]) < str(b["restaurant_id"])
+	return Result.success(str(a["restaurant_id"]) < str(b["restaurant_id"]))
 
 static func _turn_order_rank(state: GameState, player_id: int) -> int:
 	var idx := state.turn_order.find(player_id)

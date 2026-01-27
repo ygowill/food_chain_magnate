@@ -115,6 +115,7 @@
 - 2026-01-27：为 `WorkingFlow` 增加 `compute_order_of_business_empty_slots(...)` 公共 wrapper，并让 `movie_stars` 模块不再跨文件调用 `_compute_order_of_business_empty_slots(...)` 私有 helper（避免封装破坏）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：将 `CompanyStructureRules.get_empty_slots(...)`/`enforce_capacity(...)` 从 `assert` fail-fast 改为返回 `Result.failure`（并在 `WorkingFlow` 侧显式传播），避免 release 下 assert 失效导致坏状态继续跑；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：将 `HouseNumberManager` 与房屋排序相关 fail-fast 从 `assert` 改为返回 `Result.failure`，并在 Marketing/Dinnertime 相关调用链中显式传播（release 下也生效）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：将 `DinnertimeSelection` 内部校验（sale_breakdown/distance_info/candidate 比较）从 `assert` 改为返回 `Result.failure`（fail-fast 在 release 下也生效）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -297,7 +298,7 @@
   - 建议逐步迁移到集中定义（constants/enum），并提供转换与校验入口。
 - `assert` 与 `Result.failure` 混用导致“release 下校验失效”的风险：
   - （已部分整改 2026-01-27）以 `core/engine/phase_manager/working_flow.gd` 为例，里程碑 effects 解析与 OrderOfBusiness 排序相关的 fail-fast 已从 `assert` 改为返回 `Result.failure`，并在 base_rules/movie_stars hooks 中显式传播（release 下也生效）。
-  - 其它位置仍有 `assert`（例如 `DinnertimeSelection`、`TileBaking` 等），依赖“模块系统 strict validation”虽然能降低风险，但属于隐式前置条件，建议继续统一策略。
+  - 其它位置仍有 `assert`（例如 `TileBaking` 等），依赖“模块系统 strict validation”虽然能降低风险，但属于隐式前置条件，建议继续统一策略。
 - 大量 `Dictionary` 结构的手工深层读取/写入：
   - 多文件重复出现 `if not (x is Dictionary)`、`get(..., null)`、`duplicate(true)` 组合，属于结构性样板代码。
   - 已有 `TypeHelpers` / `ParseHelpers` / 若干 query helper（例如 `CatalogRegistryHelpers`、`MarketingPlacementQuery`）但使用不一致，导致全局风格不统一。
@@ -732,7 +733,7 @@
 - `core/rules/phase/dinnertime/dinnertime_effects.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/phase/dinnertime/dinnertime_events.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/phase/dinnertime/dinnertime_inventory.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/phase/dinnertime/dinnertime_selection.gd`：中等体量；后续可按重构优先级处理；存在较多 assert；注意与 Result/fail-fast 策略一致性
+- `core/rules/phase/dinnertime/dinnertime_selection.gd`：（已整改 2026-01-27）将多处 `assert` fail-fast 改为返回 `Result.failure`（fail-fast 在 release 下也生效）；中等体量；后续仍可按重构优先级处理
 - `core/rules/phase/dinnertime_settlement.gd`：（已整改 2026-01-27）class_name + 对外 API wrapper；结算实现迁移至 `core/rules/phase/dinnertime/dinnertime_settlement_impl.gd`；并保留 `_apply_*_effects_by_segment(...)` 薄委托供现有测试调用
 - `core/rules/phase/dinnertime/dinnertime_settlement_impl.gd`：（已新增 2026-01-27）晚餐结算 orchestrator（调用 `dinnertime_house_sales.gd` + tips/CFO + round_state 报告写入）；体量已下降，后续可按需要继续拆分
 - `core/rules/phase/dinnertime/dinnertime_house_sales.gd`：（已新增 2026-01-27）逐房屋售卖主循环（variants 选择/选店/route purchase/扣库存/支付/写入 sales&skipped 报告）；中等体量但职责更聚焦，后续可按需要继续拆分
