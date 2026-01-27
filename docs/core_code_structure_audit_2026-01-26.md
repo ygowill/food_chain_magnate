@@ -89,6 +89,7 @@
 - 2026-01-27：继续拆分 `TrainSlotUsage`：将 `train_slot_usage_impl.gd` 的实现按职责拆到 `train_slot_usage_storage.gd`/`train_slot_usage_providers.gd`/`train_slot_usage_allocator.gd`，impl 文件仅保留聚合转发；同时引入 `round_state.train_slot_usage_instances` 记录“按培训员实例”的使用量并兼容旧版总计数（进一步降低单文件体积与耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：拆分 `PaydaySettlement`：将“薪资 token 支付”与“薪资折扣容量推导”拆到 `core/rules/phase/payday/` 下的独立 helper（`payday_salary_token_payment.gd`/`payday_salary_discount.gd`），`payday_settlement.gd` 保留 orchestrator + round_state 报告写入；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：拆分 `DrinksProcurement`：`core/rules/drinks_procurement.gd` 保留对外 API wrapper；“采购计划解析/路线校验/来源筛选”下沉到 `core/rules/drinks_procurement/plan_resolver.gd`，“milestone bonus 计算”下沉到 `core/rules/drinks_procurement/milestone_bonuses.gd`（降低单文件体积与耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：继续拆分 `AutoAdvance`：将 `auto_advance_impl.gd` 的推进决策/阻断检查/Working 强制动作补完/OOB 首轮 finalize 拆到 `auto_advance_try_step.gd`/`auto_advance_phase_blocking.gd`/`auto_advance_working_mandatory.gd`/`auto_advance_order_of_business_round1.gd`，impl 文件仅保留聚合转发（进一步降低单文件体积）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -111,10 +112,11 @@
 - `core/map/piece_def.gd`（~275 LOC；（已整改 2026-01-27）解析逻辑抽离到 `piece_def_parser.gd`）、`core/map/tile_def.gd`（~262 LOC）、`core/map/map_def.gd`（~311 LOC）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
 - 其他超过 ~300 行的文件：
-  - `core/map/map_def.gd`、`core/engine/phase_manager.gd`、`core/engine/game_engine/auto_advance_impl.gd`
+  - `core/map/map_def.gd`、`core/engine/phase_manager.gd`
   - （已整改 2026-01-27）`core/rules/employee_rules/train_slot_usage_impl.gd` 已拆分为 `train_slot_usage_storage.gd`/`train_slot_usage_providers.gd`/`train_slot_usage_allocator.gd`
   - （已整改 2026-01-27）`core/rules/phase/payday_settlement.gd` 已按“token 支付/折扣推导”拆分到 `core/rules/phase/payday/`（主文件不再超长）
   - （已整改 2026-01-27）`core/rules/drinks_procurement.gd` 已拆分为 `drinks_procurement/plan_resolver.gd` + `drinks_procurement/milestone_bonuses.gd`（主文件不再超长）
+  - （已整改 2026-01-27）`core/engine/game_engine/auto_advance_impl.gd` 已拆分到 `auto_advance_*.gd`（主文件不再超长）
 
 建议记录（后续重构方向）：
 - 先从“职责剥离”入手，而不是单纯按行数拆文件：
@@ -316,7 +318,12 @@
 | `core/engine/game_engine/action_setup.gd` | 37 | 0 | 1 | delegates:gameplay,uses:GameLog,uses:ProjectSettings |
 | `core/engine/game_engine/action_wiring.gd` | 100 | 2 | 0 |  |
 | `core/engine/game_engine/archive.gd` | 127 | 1 | 0 | uses:GameLog |
-| `core/engine/game_engine/auto_advance.gd` | 304 | 1 | 0 |  |
+| `core/engine/game_engine/auto_advance.gd` | 14 | 1 | 0 |  |
+| `core/engine/game_engine/auto_advance_impl.gd` | 34 | 1 | 0 |  |
+| `core/engine/game_engine/auto_advance_order_of_business_round1.gd` | 51 | 0 | 0 | helper:auto_advance_oob_round1 |
+| `core/engine/game_engine/auto_advance_phase_blocking.gd` | 36 | 1 | 0 | helper:auto_advance_phase_blocking |
+| `core/engine/game_engine/auto_advance_try_step.gd` | 145 | 3 | 0 | helper:auto_advance_try_step |
+| `core/engine/game_engine/auto_advance_working_mandatory.gd` | 53 | 0 | 0 | helper:auto_advance_working_mandatory |
 | `core/engine/game_engine/checkpoints.gd` | 55 | 0 | 0 | uses:GameLog,uses:DebugFlags |
 | `core/engine/game_engine/command_runner.gd` | 215 | 2 | 0 | uses:EventBus,uses:GameLog,uses:DebugFlags,uses:OS.has_feature |
 | `gameplay/replay/command_runner_event_build.gd` | 464 | 0 | 0 | moved:gameplay,uses:EventBus |
@@ -529,8 +536,12 @@
 - `core/engine/game_engine/action_setup.gd`：已改为委托 `gameplay/action_setup.gd`（移除 core 内对 gameplay/actions 的 preload）；（已整改 2026-01-26）provider 来源改为 `ProjectSettings.fcm/action_setup_provider_path`（仍可用 `ActionSetup.set_provider_path(...)` 覆盖），避免 core 内硬编码 gameplay 路径
 - `core/engine/game_engine/action_wiring.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/game_engine/archive.gd`：依赖 GameLog 全局单例（耦合）
-- `core/engine/game_engine/auto_advance.gd`：（已整改 2026-01-27）实现已抽离到 `auto_advance_impl.gd`，本文件保留 class_name + wrapper（降低单文件职责与体积）；通过 `ActionExecutor.apply_changes_in_place` 直接 in-place 改 state（需明确该 API 的契约/适用范围）
-- `core/engine/game_engine/auto_advance_impl.gd`：（已新增 2026-01-27）AutoAdvance 实现（对外仍通过 `AutoAdvance.drain/try_advance_one` 调用），用于降低 `auto_advance.gd` 单文件职责与体积
+- `core/engine/game_engine/auto_advance.gd`：（已整改 2026-01-27）class_name + 对外 API wrapper；实现委托 `auto_advance_impl.gd`
+- `core/engine/game_engine/auto_advance_impl.gd`：（已整改 2026-01-27）聚合转发（对外仍通过 `AutoAdvance.drain/try_advance_one` 调用）；推进决策拆分到 `auto_advance_try_step.gd`/`auto_advance_phase_blocking.gd`/`auto_advance_working_mandatory.gd`/`auto_advance_order_of_business_round1.gd`
+- `core/engine/game_engine/auto_advance_try_step.gd`：（已新增 2026-01-27）AutoAdvance 决策主流程：按 phase 判定并调用 PhaseManager 执行推进；依赖 action_registry 查询/执行强制动作
+- `core/engine/game_engine/auto_advance_phase_blocking.gd`：（已新增 2026-01-27）推进阻断检查：读取 `round_state.pending_phase_actions` 并判断是否阻断；包含“结算阶段是否默认跳过”的判定
+- `core/engine/game_engine/auto_advance_working_mandatory.gd`：（已新增 2026-01-27）Working 阶段强制动作补完：可无参自动执行的定价/折扣/奢侈品（避免阻断 auto-advance）
+- `core/engine/game_engine/auto_advance_order_of_business_round1.gd`：（已新增 2026-01-27）首轮 OrderOfBusiness 自动 finalize：基于 `previous_turn_order` 写入 picks 并落地 turn_order
 - `core/engine/game_engine/checkpoints.gd`：依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
 - `core/engine/game_engine/command_runner.gd`：（已部分整改 2026-01-26）事件构建已下沉到 `gameplay/replay/command_runner_event_build.gd`（并由 `ProjectSettings.fcm/command_runner_event_build_provider_path` 提供），主流程更聚焦于命令执行/auto-advance/invariants/checkpoint/emit；仍依赖 EventBus（引擎与日志/UI 耦合）；依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）；（已整改 2026-01-26）事件发射改为调用 `engine.emit_event(...)` wrapper，避免直连 `EventBus.emit_event(...)`
 - （已移出 core 2026-01-26）`gameplay/replay/command_runner_event_build.gd`：从 `CommandRunner` 抽离的派生事件构建（report/拆分事件/marketing 到期/cleanup 丢弃等，偏日志/展示语义）；偏长脚本；后续可按 phase 拆分
