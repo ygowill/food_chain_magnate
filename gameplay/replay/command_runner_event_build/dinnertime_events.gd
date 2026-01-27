@@ -2,11 +2,13 @@
 # 用途：从 dinnertime 报告中拆分细粒度售卖事件（日志/展示语义）。
 extends RefCounted
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+
 static func build_dinnertime_report_events(old_state: GameState, new_state: GameState) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	if old_state == null or new_state == null:
 		return events
-	if str(old_state.phase) != "Dinnertime":
+	if str(old_state.phase) != DefsClass.PHASE_DINNERTIME:
 		return events
 	if str(old_state.phase) == str(new_state.phase):
 		return events

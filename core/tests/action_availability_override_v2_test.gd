@@ -3,6 +3,7 @@ class_name ActionAvailabilityOverrideV2Test
 extends RefCounted
 
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var engine := GameEngine.new()
@@ -21,16 +22,16 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		return Result.failure("初始化失败: %s" % init.error)
 
 	var state := engine.get_state()
-	state.phase = "Working"
+	state.phase = DefsClass.PHASE_WORKING
 
 	# Train 子阶段：应能看到 recruit（被模组覆盖）
-	state.sub_phase = "Train"
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
 	var actions_train := engine.get_available_actions()
 	if not actions_train.has("recruit"):
 		return Result.failure("Working/Train 应包含 recruit（override 生效），实际: %s" % str(actions_train))
 
 	# Recruit 子阶段：应不可用
-	state.sub_phase = "Recruit"
+	state.sub_phase = DefsClass.SUB_PHASE_RECRUIT
 	var actions_recruit := engine.get_available_actions()
 	if actions_recruit.has("recruit"):
 		return Result.failure("Working/Recruit 不应包含 recruit（override 生效），实际: %s" % str(actions_recruit))

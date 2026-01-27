@@ -9,6 +9,7 @@ const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const DrinksProcurementClass = preload("res://core/rules/drinks_procurement.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 
 # 每个饮料源提供的饮料数量
@@ -20,8 +21,8 @@ func _init() -> void:
 	description = "从饮料源采购饮料"
 	requires_actor = true
 	is_mandatory = false
-	allowed_phases = ["Working"]
-	allowed_sub_phases = ["GetDrinks"]
+	allowed_phases = [DefsClass.PHASE_WORKING]
+	allowed_sub_phases = [DefsClass.SUB_PHASE_GET_DRINKS]
 
 func can_initiate(state: GameState, player_id: int) -> bool:
 	if state == null:

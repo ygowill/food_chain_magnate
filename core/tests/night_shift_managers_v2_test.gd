@@ -4,6 +4,8 @@ class_name NightShiftManagersV2Test
 extends RefCounted
 
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count != 2:
@@ -51,12 +53,12 @@ static func _test_recruit_limit_doubled(seed_val: int) -> Result:
 	_take_to_active(s1, 0, "recruiting_girl")
 
 	# 触发进入 Working（执行 phase hooks）
-	var adv := e1.execute_command(Command.create_system("advance_phase"))
+	var adv := e1.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if not adv.ok:
 		return Result.failure("推进到 Working 失败: %s" % adv.error)
 
 	s1 = e1.get_state()
-	if s1.phase != "Working":
+	if s1.phase != DefsClass.PHASE_WORKING:
 		return Result.failure("当前应为 Working，实际: %s" % s1.phase)
 
 	var limit := EmployeeRulesClass.get_recruit_limit_for_working(s1, 0)
@@ -82,7 +84,7 @@ static func _test_recruit_limit_doubled(seed_val: int) -> Result:
 	return Result.success()
 
 static func _force_player0_ready_for_working(state: GameState) -> void:
-	state.phase = "OrderOfBusiness"
+	state.phase = DefsClass.PHASE_ORDER_OF_BUSINESS
 	state.sub_phase = ""
 	state.turn_order = [0, 1]
 	state.current_player_index = 0

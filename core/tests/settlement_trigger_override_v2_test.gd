@@ -2,6 +2,9 @@
 class_name SettlementTriggerOverrideV2Test
 extends RefCounted
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(player_count, seed, [
@@ -21,16 +24,16 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	# Restructuring -> OrderOfBusiness（触发 enter settlement）
 	var state := engine.get_state()
 	state.round_number = 2
-	state.phase = "Restructuring"
+	state.phase = DefsClass.PHASE_RESTRUCTURING
 	state.sub_phase = ""
 	var gate := _force_restructuring_submitted(state)
 	if not gate.ok:
 		return gate
 
-	var adv1 := engine.execute_command(Command.create_system("advance_phase"))
+	var adv1 := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if not adv1.ok:
 		return Result.failure("推进到 OrderOfBusiness 失败: %s" % adv1.error)
-	if engine.get_state().phase != "OrderOfBusiness":
+	if engine.get_state().phase != DefsClass.PHASE_ORDER_OF_BUSINESS:
 		return Result.failure("当前应为 OrderOfBusiness，实际: %s" % engine.get_state().phase)
 
 	var rs: Dictionary = engine.get_state().round_state
@@ -57,7 +60,7 @@ static func _force_restructuring_submitted(state: GameState) -> Result:
 	# 若测试/初始化残留 pending_phase_actions，则清理本阶段 key，避免 advance_phase 被门禁阻断
 	if state.round_state.has("pending_phase_actions") and (state.round_state["pending_phase_actions"] is Dictionary):
 		var ppa: Dictionary = state.round_state["pending_phase_actions"]
-		ppa.erase("Restructuring")
+		ppa.erase(DefsClass.PHASE_RESTRUCTURING)
 		state.round_state["pending_phase_actions"] = ppa
 
 	return Result.success()

@@ -10,6 +10,8 @@ const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const GameStateClass = preload("res://core/state/game_state.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	EmployeeRegistryClass.reset()
@@ -28,7 +30,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 
 	# 构造：从 Payday -> Marketing 开始，Marketing 生成需求；下一回合 Working 生产食物；Dinnertime 售出并清空需求。
 	state.round_number = 1
-	state.phase = "Payday"
+	state.phase = DefsClass.PHASE_PAYDAY
 	state.sub_phase = ""
 
 	# 现金守恒：总额保持 2*$50=100
@@ -77,7 +79,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var initial_state_dict: Dictionary = state.to_dict().duplicate(true)
 
 	# 1) Payday -> Marketing：应生成 house_left 的 burger 需求
-	var to_marketing := engine_a.execute_command(Command.create_system("advance_phase"))
+	var to_marketing := engine_a.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if not to_marketing.ok:
 		return Result.failure("推进到 Marketing 失败: %s" % to_marketing.error)
 
@@ -93,7 +95,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not restruct.ok:
 		return restruct
 	state = engine_a.get_state()
-	if state.phase != "OrderOfBusiness":
+	if state.phase != DefsClass.PHASE_ORDER_OF_BUSINESS:
 		return Result.failure("当前应为 OrderOfBusiness，实际: %s" % state.phase)
 
 	var oob := _complete_order_of_business(engine_a)
@@ -102,7 +104,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 
 	# 3) OrderOfBusiness 完成后应自动进入 Working，并推进到 GetFood
 	state = engine_a.get_state()
-	if state.phase != "Working":
+	if state.phase != DefsClass.PHASE_WORKING:
 		return Result.failure("OrderOfBusiness 完成后应进入 Working，实际: %s" % state.phase)
 
 	# 轮转到玩家0（若 OOB 选择导致玩家1 先手）
@@ -112,16 +114,16 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		if safety > 5:
 			return Result.failure("轮转到玩家0 超出安全上限")
 		var pid := engine_a.get_state().get_current_player_id()
-		var et := engine_a.execute_command(Command.create("end_turn", pid))
+		var et := engine_a.execute_command(Command.create(ActionIdsClass.END_TURN, pid))
 		if not et.ok:
 			return Result.failure("end_turn 失败: %s" % et.error)
 
 	# 推进到 GetFood（记录为命令，确保回放一致）
-	var to_get_food := TestPhaseUtilsClass.advance_until_working_sub_phase(engine_a, "GetFood", 10)
+	var to_get_food := TestPhaseUtilsClass.advance_until_working_sub_phase(engine_a, DefsClass.SUB_PHASE_GET_FOOD, 10)
 	if not to_get_food.ok:
 		return to_get_food
 	state = engine_a.get_state()
-	if state.sub_phase != "GetFood":
+	if state.sub_phase != DefsClass.SUB_PHASE_GET_FOOD:
 		return Result.failure("当前应为 GetFood，实际: %s" % state.sub_phase)
 
 	# 4) 生产食物：burger_cook 产出 burger
@@ -130,12 +132,12 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("produce_food 失败: %s" % prod.error)
 
 	# 5) 推进到 Payday（Dinnertime 会自动结算跳过）
-	var to_payday := TestPhaseUtilsClass.advance_until_phase(engine_a, "Payday", 30)
+	var to_payday := TestPhaseUtilsClass.advance_until_phase(engine_a, DefsClass.PHASE_PAYDAY, 30)
 	if not to_payday.ok:
 		return to_payday
 
 	state = engine_a.get_state()
-	if state.phase != "Payday":
+	if state.phase != DefsClass.PHASE_PAYDAY:
 		return Result.failure("当前应为 Payday（Dinnertime 已自动结算跳过），实际: %s" % state.phase)
 
 	# 结算结果：
@@ -190,7 +192,7 @@ static func _complete_order_of_business(engine: GameEngine) -> Result:
 	var state := engine.get_state()
 	var player_count := state.players.size()
 	var safety := 0
-	while state.phase == "OrderOfBusiness":
+	while state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS:
 		safety += 1
 		if safety > player_count + 2:
 			return Result.failure("OrderOfBusiness 选择循环超出安全上限")

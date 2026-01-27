@@ -9,6 +9,7 @@ const DinnertimeSettlementClass = preload("res://core/rules/phase/dinnertime_set
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count != 2:
@@ -426,7 +427,7 @@ static func _try_place_road(engine: GameEngine) -> Result:
 	return Result.failure("未找到可放置道路的位置（测试环境）")
 
 static func _force_player0_ready_for_lobbyists(state: GameState) -> void:
-	state.phase = "Working"
+	state.phase = DefsClass.PHASE_WORKING
 	state.sub_phase = "Lobbyists"
 	state.turn_order = [0, 1]
 	state.current_player_index = 0

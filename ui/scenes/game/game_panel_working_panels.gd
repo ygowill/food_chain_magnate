@@ -108,7 +108,7 @@ func _sync_recruit_panel(state: GameState) -> void:
 		return
 	if not is_instance_valid(recruit_panel) or not recruit_panel.visible:
 		return
-	if state.phase != "Working" or state.sub_phase != "Recruit":
+	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_RECRUIT:
 		recruit_panel.visible = false
 		return
 	if recruit_panel.has_method("set_recruit_count"):
@@ -259,7 +259,7 @@ func _sync_train_panel(state: GameState) -> void:
 		return
 	if not is_instance_valid(train_panel) or not train_panel.visible:
 		return
-	if state.phase != "Working" or state.sub_phase != "Train":
+	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_TRAIN:
 		train_panel.visible = false
 		return
 		if train_panel.has_method("set_train_count"):
@@ -315,7 +315,7 @@ func _sync_price_panel(state: GameState) -> void:
 		return
 	if not is_instance_valid(price_panel) or not price_panel.visible:
 		return
-	if state.phase != "Working":
+	if state.phase != DefsClass.PHASE_WORKING:
 		price_panel.visible = false
 		return
 
@@ -407,15 +407,15 @@ func _sync_production_panel(state: GameState) -> void:
 		return
 	if not is_instance_valid(production_panel) or not production_panel.visible:
 		return
-	if state.phase != "Working":
+	if state.phase != DefsClass.PHASE_WORKING:
 		production_panel.visible = false
 		_hide_procurement_route_overlay()
 		return
-	if state.sub_phase != "GetFood" and state.sub_phase != "GetDrinks":
+	if state.sub_phase != DefsClass.SUB_PHASE_GET_FOOD and state.sub_phase != DefsClass.SUB_PHASE_GET_DRINKS:
 		production_panel.visible = false
 		_hide_procurement_route_overlay()
 		return
-	if state.sub_phase != "GetDrinks":
+	if state.sub_phase != DefsClass.SUB_PHASE_GET_DRINKS:
 		_hide_procurement_route_overlay()
 
 func show_milestone_panel() -> void:
@@ -551,7 +551,7 @@ func _on_producer_changed(employee_type: String, product_type: String) -> void:
 	var state: GameState = _scene.game_engine.get_state()
 	if state == null:
 		return
-	if state.phase != "Working" or state.sub_phase != "GetDrinks":
+	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_GET_DRINKS:
 		_reset_procurement_selection_state()
 		_hide_procurement_route_overlay()
 		if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
@@ -716,7 +716,7 @@ func _on_procure_drinks_source_selected(world_pos: Vector2i) -> void:
 	var state: GameState = _scene.game_engine.get_state()
 	if state == null:
 		return
-	if state.phase != "Working" or state.sub_phase != "GetDrinks":
+	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_GET_DRINKS:
 		return
 
 	if _procure_selected_employee_type.is_empty() or _procure_selected_employee_type == "errand_boy":

@@ -5,6 +5,7 @@ extends RefCounted
 
 const WorkingPanelsClass = preload("res://ui/scenes/game/game_panel_working_panels.gd")
 const GameStateClass = preload("res://core/state/game_state.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 class DummyEngine:
 	extends RefCounted
@@ -37,8 +38,8 @@ static func run() -> Result:
 	var state: GameState = GameStateClass.new()
 	state.turn_order = [0]
 	state.current_player_index = 0
-	state.phase = "Working"
-	state.sub_phase = "GetDrinks"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
 	state.map = {
 		"grid_size": Vector2i(10, 5), # 2x1 tiles，tile_size=5
 		"tile_grid_size": Vector2i(2, 1),
@@ -89,4 +90,3 @@ static func run() -> Result:
 	return Result.success({
 		"legal_tiles": legal,
 	})
-

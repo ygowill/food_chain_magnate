@@ -8,6 +8,7 @@ extends RefCounted
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(player_count: int = 2, seed_val: int = 993311) -> Result:
 	if player_count != 2:
@@ -32,8 +33,8 @@ static func run(player_count: int = 2, seed_val: int = 993311) -> Result:
 	_force_turn_order(state)
 
 	# recruiting_girl 在岗，执行 2 次招聘：第二次必然用到 recruiting_girl 的容量 -> 触发里程碑
-	state.phase = "Working"
-	state.sub_phase = "Recruit"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_RECRUIT
 	var take := StateUpdaterClass.take_from_pool(state, "recruiting_girl", 1)
 	if not take.ok:
 		return Result.failure("从员工池取出 recruiting_girl 失败: %s" % take.error)

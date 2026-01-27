@@ -54,8 +54,8 @@ static func append_phase_transition_events(
 		seq = _sync_seq(out_events, seq)
 
 	# Marketing: 先输出汇总事件（如 DEMAND_GENERATED），再输出进入 Marketing 时产生的 cash/milestone。
-	if old_phase_name == "Marketing" and pending_marketing_enter_effect_events != null and not pending_marketing_enter_effect_events.is_empty():
-		StepTimelineHelpersClass.append_events(out_events, pending_marketing_enter_effect_events, command_index, old_step_index, "Marketing", seq)
+	if old_phase_name == PhaseDefsClass.PHASE_MARKETING and pending_marketing_enter_effect_events != null and not pending_marketing_enter_effect_events.is_empty():
+		StepTimelineHelpersClass.append_events(out_events, pending_marketing_enter_effect_events, command_index, old_step_index, PhaseDefsClass.PHASE_MARKETING, seq)
 		seq = _sync_seq(out_events, seq)
 		pending_marketing_enter_effect_events.clear()
 		pending_anchor = -1
@@ -114,7 +114,7 @@ static func append_phase_transition_events(
 		seq = _sync_seq(out_events, seq)
 
 	if not cash_events_new.is_empty() or not milestone_events_new.is_empty():
-		if new_phase_name == "Marketing":
+		if new_phase_name == PhaseDefsClass.PHASE_MARKETING:
 			pending_anchor = command_index
 			if pending_marketing_enter_effect_events != null:
 				if not cash_events_new.is_empty():
@@ -130,8 +130,8 @@ static func append_phase_transition_events(
 				seq = _sync_seq(out_events, seq)
 
 	# CleanupDiscard: 若进入 Cleanup 时无需 pending（无 choose_fridge_keep），则在该 step 末尾刷出 first_throw_away。
-	if new_phase_name == "Cleanup" and (not StepTimelineHelpersClass.has_pending_cleanup_actions(new_state)) and pending_cleanup_throw_away_milestone_events != null and not pending_cleanup_throw_away_milestone_events.is_empty():
-		StepTimelineHelpersClass.append_events(out_events, pending_cleanup_throw_away_milestone_events, command_index, new_step_index, "Cleanup", seq)
+	if new_phase_name == PhaseDefsClass.PHASE_CLEANUP and (not StepTimelineHelpersClass.has_pending_cleanup_actions(new_state)) and pending_cleanup_throw_away_milestone_events != null and not pending_cleanup_throw_away_milestone_events.is_empty():
+		StepTimelineHelpersClass.append_events(out_events, pending_cleanup_throw_away_milestone_events, command_index, new_step_index, PhaseDefsClass.PHASE_CLEANUP, seq)
 		seq = _sync_seq(out_events, seq)
 		pending_cleanup_throw_away_milestone_events.clear()
 
@@ -147,4 +147,3 @@ static func _sync_seq(out_events: Array[Dictionary], seq_fallback: int) -> int:
 	if last is Dictionary and Dictionary(last).has("sequence"):
 		return int(Dictionary(last).get("sequence", seq_fallback))
 	return int(seq_fallback)
-

@@ -2,6 +2,8 @@
 class_name EventHistoryRewindTest
 extends RefCounted
 
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if EventBus != null:
 		if EventBus.has_method("clear_history_and_reset_sequence"):
@@ -23,12 +25,12 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 
 	# 1) 执行两条 end_turn（会各自产生 player_turn_ended 事件）
 	var p0 := engine.get_state().get_current_player_id()
-	var r1 := engine.execute_command(Command.create("end_turn", p0))
+	var r1 := engine.execute_command(Command.create(ActionIdsClass.END_TURN, p0))
 	if not r1.ok:
 		return Result.failure("end_turn(1) 失败: %s" % r1.error)
 
 	var p1 := engine.get_state().get_current_player_id()
-	var r2 := engine.execute_command(Command.create("end_turn", p1))
+	var r2 := engine.execute_command(Command.create(ActionIdsClass.END_TURN, p1))
 	if not r2.ok:
 		return Result.failure("end_turn(2) 失败: %s" % r2.error)
 
@@ -63,4 +65,3 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		"player_turn_ended_after": ended_after,
 		"player_turn_ended_redo": ended_redo,
 	})
-

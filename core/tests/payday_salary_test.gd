@@ -5,6 +5,7 @@ extends RefCounted
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const PaydaySettlementClass = preload("res://core/rules/phase/payday_settlement.gd")
 const EffectRegistryClass = preload("res://core/rules/effect_registry.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var r_strict := _test_recruit_capacity_strict_parsing()
@@ -28,7 +29,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	# 本用例改为直接验证 PaydaySettlement.apply 的结算结果（含 round_state.payday 记录与现金/银行变化）。
 	var target_player := 0
 	var state := engine.get_state()
-	state.phase = "Payday"
+	state.phase = DefsClass.PHASE_PAYDAY
 
 	# 注：burger_cook 不再是入门级员工（需通过培训获得）。
 	# 该测试只关心“Payday 薪水扣除”，因此这里直接从员工池取出并放入待命区（保持守恒）。
@@ -270,7 +271,7 @@ static func _complete_order_of_business(engine: GameEngine) -> Result:
 	var state := engine.get_state()
 	var player_count := state.players.size()
 	var safety := 0
-	while state.phase == "OrderOfBusiness":
+	while state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS:
 		safety += 1
 		if safety > player_count + 2:
 			return Result.failure("OrderOfBusiness 选择循环超出安全上限")

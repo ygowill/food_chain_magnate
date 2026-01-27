@@ -6,6 +6,7 @@ extends RefCounted
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const CompanyStructureValidatorClass = preload("res://gameplay/validators/company_structure_validator.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	# 重置 EmployeeRegistry 缓存，确保测试隔离
@@ -20,12 +21,12 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var state := engine.get_state()
 
 	# 2) 推进到 Working 阶段的 Recruit 子阶段
-	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 30)
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
 	if not to_working.ok:
 		return to_working
 
 	state = engine.get_state()
-	if state.phase != "Working" or state.sub_phase != "Recruit":
+	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_RECRUIT:
 		return Result.failure("应该在 Working/Recruit，实际: %s/%s" % [state.phase, state.sub_phase])
 
 	# 3) 获取当前玩家 ID

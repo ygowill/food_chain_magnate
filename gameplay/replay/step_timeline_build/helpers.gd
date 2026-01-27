@@ -130,10 +130,9 @@ static func has_pending_cleanup_actions(state: GameState) -> bool:
 	if not (ppa_val is Dictionary):
 		return false
 	var ppa: Dictionary = ppa_val
-	if not ppa.has("Cleanup"):
+	if not ppa.has(PhaseDefsClass.PHASE_CLEANUP):
 		return false
-	var list_val = ppa.get("Cleanup", null)
+	var list_val = ppa.get(PhaseDefsClass.PHASE_CLEANUP, null)
 	if not (list_val is Array):
 		return false
 	return not Array(list_val).is_empty()
-

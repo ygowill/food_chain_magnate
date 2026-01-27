@@ -10,6 +10,7 @@ const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func apply(state: GameState) -> Result:
 	if not (state.round_state is Dictionary):
@@ -120,7 +121,7 @@ static func apply(state: GameState) -> Result:
 				pending.append(pid)
 		var set_pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
 			state.round_state,
-			"Cleanup",
+			DefsClass.PHASE_CLEANUP,
 			pending,
 			"CleanupSettlement"
 		)

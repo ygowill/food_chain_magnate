@@ -5,6 +5,8 @@ class_name RewindTurnStartPhaseChangeTest
 extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if EventBus == null:
@@ -19,12 +21,12 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if not init.ok:
 		return Result.failure("初始化失败: %s" % init.error)
 
-	var to_oob := TestPhaseUtilsClass.advance_until_phase(engine, "OrderOfBusiness", 400)
+	var to_oob := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_ORDER_OF_BUSINESS, 400)
 	if not to_oob.ok:
 		return to_oob
 
 	var state := engine.get_state()
-	if str(state.phase) != "OrderOfBusiness":
+	if str(state.phase) != DefsClass.PHASE_ORDER_OF_BUSINESS:
 		return Result.failure("未进入 OrderOfBusiness（当前=%s）" % str(state.phase))
 
 	# 构造：最后选择顺序的玩家成为 Working 起始玩家（玩家不变，但阶段变化）。
@@ -43,7 +45,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		return Result.failure("choose_turn_order(P%d) 失败: %s" % [pid_b + 1, pick_b.error])
 
 	state = engine.get_state()
-	if str(state.phase) != "Working":
+	if str(state.phase) != DefsClass.PHASE_WORKING:
 		return Result.failure("choose_turn_order 最后一手应自动进入 Working（当前=%s）" % str(state.phase))
 	if int(state.get_current_player_id()) != pid_b:
 		return Result.failure("Working 起始玩家不符合前置条件（期望=%d 实际=%d）" % [pid_b, int(state.get_current_player_id())])
@@ -51,10 +53,10 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		return Result.failure("Working 子阶段为空")
 
 	# 执行一个不会切换玩家的 Working 命令（skip_sub_phase 非最后子阶段会留在当前玩家）。
-	var skip_sub := engine.execute_command(Command.create("skip_sub_phase", pid_b))
+	var skip_sub := engine.execute_command(Command.create(ActionIdsClass.SKIP_SUB_PHASE, pid_b))
 	if not skip_sub.ok:
 		return Result.failure("skip_sub_phase 失败: %s" % skip_sub.error)
-	if str(engine.get_state().phase) != "Working":
+	if str(engine.get_state().phase) != DefsClass.PHASE_WORKING:
 		return Result.failure("skip_sub_phase 后不应离开 Working（当前=%s）" % str(engine.get_state().phase))
 	if int(engine.get_state().get_current_player_id()) != pid_b:
 		return Result.failure("skip_sub_phase 后不应切换当前玩家（期望=%d 实际=%d）" % [pid_b, int(engine.get_state().get_current_player_id())])

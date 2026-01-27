@@ -8,6 +8,7 @@ class_name NewMilestonesPizzaSoldV2Test
 extends RefCounted
 
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 
@@ -50,7 +51,7 @@ static func run(player_count: int = 2, seed_val: int = 990011) -> Result:
 	state.map["houses"] = houses
 
 	# 运行晚餐结算（含 new_milestones 的 extension：ProductSold + pizza radio pending）
-	state.phase = "Dinnertime"
+	state.phase = PhaseDefsClass.PHASE_DINNERTIME
 	state.sub_phase = ""
 	var reg = engine.phase_manager.get_settlement_registry()
 	if reg == null:
@@ -70,7 +71,7 @@ static func run(player_count: int = 2, seed_val: int = 990011) -> Result:
 	if pending.size() != 3:
 		return Result.failure("pizza radios pending 应为 3，实际: %d" % pending.size())
 
-	var adv1 := engine.execute_command(Command.create_system("advance_phase"))
+	var adv1 := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if adv1.ok:
 		return Result.failure("存在 pending 时不应允许推进阶段")
 
@@ -88,8 +89,8 @@ static func run(player_count: int = 2, seed_val: int = 990011) -> Result:
 	# 放完后：若仍停留在 Dinnertime，则应允许推进阶段；
 	# 新规则下 Dinnertime 会自动结算跳过到 Payday，因此这里仅在仍处于 Dinnertime 时手动推进。
 	state = engine.get_state()
-	if state.phase == "Dinnertime":
-		var adv2 := engine.execute_command(Command.create_system("advance_phase"))
+	if state.phase == PhaseDefsClass.PHASE_DINNERTIME:
+		var adv2 := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 		if not adv2.ok:
 			return Result.failure("放完 radio 后应允许推进阶段: %s" % adv2.error)
 

@@ -5,6 +5,8 @@ extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if EventBus == null:
@@ -17,7 +19,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if not init.ok:
 		return Result.failure("初始化失败: %s" % init.error)
 
-	var to_payday := TestPhaseUtilsClass.advance_until_phase(engine, "Payday", 200)
+	var to_payday := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_PAYDAY, 200)
 	if not to_payday.ok:
 		return to_payday
 
@@ -39,7 +41,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		if str(engine.get_state().phase) != phase_before:
 			break
 		var actor := engine.get_state().get_current_player_id()
-		var sk := engine.execute_command(Command.create("skip", actor))
+		var sk := engine.execute_command(Command.create(ActionIdsClass.SKIP, actor))
 		if not sk.ok:
 			return Result.failure("离开 Payday 失败（skip）: %s" % sk.error)
 
@@ -83,4 +85,3 @@ static func _clear_event_history() -> void:
 		EventBus.clear_history_and_reset_sequence()
 	elif EventBus.has_method("clear_history"):
 		EventBus.clear_history()
-

@@ -11,6 +11,7 @@ const RoundEventsClass = preload("res://gameplay/replay/command_runner_event_bui
 const PhaseEventsClass = preload("res://gameplay/replay/command_runner_event_build/phase_events.gd")
 const MilestoneEventsClass = preload("res://gameplay/replay/command_runner_event_build/milestone_events.gd")
 const CashEventsClass = preload("res://gameplay/replay/command_runner_event_build/cash_events.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func build_milestone_achieved_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
 	return MilestoneEventsClass.build_milestone_achieved_events(old_state, new_state, command)
@@ -33,14 +34,14 @@ static func build_phase_change_events(old_state: GameState, new_state: GameState
 
 		# Marketing 结算摘要：在离开 Marketing 时发射（便于 UI 日志从 EventBus.history 恢复）。
 		# issue_tracker #48: per board 1 log entry, with details in event data.
-		if str(old_state.phase) == "Marketing":
+		if str(old_state.phase) == DefsClass.PHASE_MARKETING:
 			events.append_array(MarketingEventsClass.build_marketing_demand_generated_events(old_state))
 			events.append_array(MarketingEventsClass.build_marketing_expired_events(old_state))
 
 		events.append_array(PhaseEventsClass.build_phase_changed_events(old_state, new_state))
 
 		# Cleanup 库存丢弃：在进入 Cleanup 时发射（清理结算在 Cleanup:enter 运行）。
-		if str(new_state.phase) == "Cleanup":
+		if str(new_state.phase) == DefsClass.PHASE_CLEANUP:
 			events.append_array(CleanupEventsClass.build_cleanup_inventory_discarded_events(new_state))
 
 		# 回合开始/结束事件

@@ -6,6 +6,7 @@ class_name CleanupInventoryTest
 extends RefCounted
 
 const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count < 2:
@@ -18,7 +19,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 
 	var state := engine.get_state()
 	# 测试只关注 Cleanup 逻辑：手动切到 Cleanup（round=1 -> 离开 Cleanup 将进入 round=2）
-	state.phase = "Cleanup"
+	state.phase = DefsClass.PHASE_CLEANUP
 	state.sub_phase = ""
 	state.round_number = 1
 	state.turn_order = [0, 1]
@@ -70,7 +71,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not (ppa_val is Dictionary):
 		return Result.failure("缺少 pending_phase_actions")
 	var ppa: Dictionary = ppa_val
-	var pending_val = ppa.get("Cleanup", null)
+	var pending_val = ppa.get(DefsClass.PHASE_CLEANUP, null)
 	if not (pending_val is Array):
 		return Result.failure("pending_phase_actions[Cleanup] 类型错误（期望 Array）")
 	var pending: Array = pending_val
@@ -84,7 +85,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 
 	var state_after: GameState = engine.get_state()
 	var ppa_after_val = state_after.round_state.get("pending_phase_actions", null)
-	if ppa_after_val is Dictionary and Dictionary(ppa_after_val).has("Cleanup"):
+	if ppa_after_val is Dictionary and Dictionary(ppa_after_val).has(DefsClass.PHASE_CLEANUP):
 		return Result.failure("choose_fridge_keep 后不应残留 pending_phase_actions[Cleanup]")
 
 	var inv1_after: Dictionary = state_after.players[1].get("inventory", {})
@@ -102,7 +103,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not init2.ok:
 		return Result.failure("游戏初始化失败(case2): %s" % init2.error)
 	var state2 := engine2.get_state()
-	state2.phase = "Cleanup"
+	state2.phase = DefsClass.PHASE_CLEANUP
 	state2.sub_phase = ""
 	state2.round_number = 1
 	state2.turn_order = [0, 1]
@@ -124,7 +125,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not cleanup2.ok:
 		return Result.failure("CleanupSettlement 失败(case2): %s" % cleanup2.error)
 	var ppa2_val = state2.round_state.get("pending_phase_actions", null)
-	if ppa2_val is Dictionary and Dictionary(ppa2_val).has("Cleanup"):
+	if ppa2_val is Dictionary and Dictionary(ppa2_val).has(DefsClass.PHASE_CLEANUP):
 		return Result.failure("case2 不应进入 pending_phase_actions[Cleanup]")
 	var inv1_case2: Dictionary = state2.players[1].get("inventory", {})
 	if int(inv1_case2.get("burger", 0)) != 4 or int(inv1_case2.get("pizza", 0)) != 3 or int(inv1_case2.get("beer", 0)) != 2:

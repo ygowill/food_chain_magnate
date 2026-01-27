@@ -2,6 +2,8 @@
 class_name SettlementRegistryV2Test
 extends RefCounted
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var missing := _test_missing_required_settlements_fail(player_count, seed_val)
 	if not missing.ok:
@@ -55,7 +57,7 @@ static func _test_settlements_called_through_registry(player_count: int, seed_va
 		var step: Result = pm.advance_phase(state)
 		if not step.ok:
 			return Result.failure("推进阶段失败: %s" % step.error)
-	if state.phase != "Dinnertime":
+	if state.phase != DefsClass.PHASE_DINNERTIME:
 		return Result.failure("期望进入 Dinnertime，实际: %s" % state.phase)
 	if not (state.rules is Dictionary) or not state.rules.has("probe_dinnertime_enter") or not (state.rules["probe_dinnertime_enter"] is int) or int(state.rules["probe_dinnertime_enter"]) != 1:
 		return Result.failure("Dinnertime enter settlement 未被调用或计数错误: %s" % str(state.rules.get("probe_dinnertime_enter", null)))
@@ -64,14 +66,14 @@ static func _test_settlements_called_through_registry(player_count: int, seed_va
 	var to_payday: Result = pm.advance_phase(state)
 	if not to_payday.ok:
 		return Result.failure("推进到 Payday 失败: %s" % to_payday.error)
-	if state.phase != "Payday":
+	if state.phase != DefsClass.PHASE_PAYDAY:
 		return Result.failure("期望进入 Payday，实际: %s" % state.phase)
 
 	# Payday -> Marketing（触发 payday_exit + marketing_enter）
 	var to_marketing: Result = pm.advance_phase(state)
 	if not to_marketing.ok:
 		return Result.failure("推进到 Marketing 失败: %s" % to_marketing.error)
-	if state.phase != "Marketing":
+	if state.phase != DefsClass.PHASE_MARKETING:
 		return Result.failure("期望进入 Marketing，实际: %s" % state.phase)
 	if not state.rules.has("probe_payday_exit") or not (state.rules["probe_payday_exit"] is int) or int(state.rules["probe_payday_exit"]) != 1:
 		return Result.failure("Payday exit settlement 未被调用或计数错误: %s" % str(state.rules.get("probe_payday_exit", null)))
@@ -82,7 +84,7 @@ static func _test_settlements_called_through_registry(player_count: int, seed_va
 	var to_cleanup: Result = pm.advance_phase(state)
 	if not to_cleanup.ok:
 		return Result.failure("推进到 Cleanup 失败: %s" % to_cleanup.error)
-	if state.phase != "Cleanup":
+	if state.phase != DefsClass.PHASE_CLEANUP:
 		return Result.failure("期望进入 Cleanup，实际: %s" % state.phase)
 	if not state.rules.has("probe_cleanup_enter") or not (state.rules["probe_cleanup_enter"] is int) or int(state.rules["probe_cleanup_enter"]) != 1:
 		return Result.failure("Cleanup enter settlement 未被调用或计数错误: %s" % str(state.rules.get("probe_cleanup_enter", null)))

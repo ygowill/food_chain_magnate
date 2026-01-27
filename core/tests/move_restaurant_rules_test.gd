@@ -8,6 +8,8 @@ extends RefCounted
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var engine := GameEngine.new()
@@ -20,17 +22,17 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not setup.ok:
 		return setup
 
-	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 30)
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
 	if not to_working.ok:
 		return to_working
 
 	# 推进到 PlaceRestaurants 子阶段（Recruit -> Train -> Marketing -> GetFood -> GetDrinks -> PlaceHouses -> PlaceRestaurants）
-	var to_place_restaurants := TestPhaseUtilsClass.advance_until_working_sub_phase(engine, "PlaceRestaurants", 20)
+	var to_place_restaurants := TestPhaseUtilsClass.advance_until_working_sub_phase(engine, DefsClass.SUB_PHASE_PLACE_RESTAURANTS, 20)
 	if not to_place_restaurants.ok:
 		return to_place_restaurants
 
 	var state := engine.get_state()
-	if state.phase != "Working" or state.sub_phase != "PlaceRestaurants":
+	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_PLACE_RESTAURANTS:
 		return Result.failure("应处于 Working/PlaceRestaurants，实际: %s/%s" % [state.phase, state.sub_phase])
 
 	var actor := state.get_current_player_id()
@@ -133,7 +135,7 @@ static func _place_initial_restaurants(engine: GameEngine) -> Result:
 			placed[current_player] = true
 
 		# 结束回合
-		var cmd_skip := Command.create("skip", current_player)
+		var cmd_skip := Command.create(ActionIdsClass.SKIP, current_player)
 		var exec_skip := engine.execute_command(cmd_skip)
 		if not exec_skip.ok:
 			return Result.failure("skip 失败: %s (%s)" % [exec_skip.error, str(cmd_skip)])

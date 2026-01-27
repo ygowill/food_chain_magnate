@@ -5,6 +5,7 @@ extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	# 重置 EmployeeRegistry 缓存，确保测试隔离
@@ -19,12 +20,12 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var state := engine.get_state()
 
 	# 2) 推进到 Working 阶段
-	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 30)
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
 	if not to_working.ok:
 		return to_working
 
 	state = engine.get_state()
-	if state.phase != "Working":
+	if state.phase != DefsClass.PHASE_WORKING:
 		return Result.failure("当前应该在 Working 阶段，实际: %s" % state.phase)
 
 	# 3) 获取当前玩家 ID（使用正确的回合顺序）
@@ -33,7 +34,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("无法获取当前玩家 ID")
 
 	# 固定到 GetFood 子阶段（测试 produce_food 本身，不依赖 Working 自动跳子阶段的细节）
-	state.sub_phase = "GetFood"
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
 
 	# 4) 给当前玩家添加一个汉堡厨师（模拟招聘）
 	if state.employee_pool.get("burger_cook", 0) <= 0:
@@ -66,7 +67,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("生产后汉堡库存应为 3，实际: %d" % new_burger)
 
 	# 8) 尝试再次使用同一厨师生产（应该失败 - 每个厨师每子阶段只能生产一次）
-	state.sub_phase = "GetFood"
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
 	var produce_again := Command.create("produce_food", current_player_id, {"employee_type": "burger_cook"})
 	var produce_again_result := engine.execute_command(produce_again)
 	if produce_again_result.ok:
@@ -77,7 +78,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("员工池中没有 burger_cook（第二个）")
 	state.employee_pool["burger_cook"] = int(state.employee_pool.get("burger_cook", 0)) - 1
 	state.players[current_player_id]["employees"].append("burger_cook")
-	state.sub_phase = "GetFood"
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
 	var produce_second := Command.create("produce_food", current_player_id, {"employee_type": "burger_cook"})
 	var produce_second_result := engine.execute_command(produce_second)
 	if not produce_second_result.ok:
@@ -93,7 +94,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("员工池中没有 burger_chef")
 	state.employee_pool["burger_chef"] = int(state.employee_pool.get("burger_chef", 0)) - 1
 	state.players[current_player_id]["employees"].append("burger_chef")
-	state.sub_phase = "GetFood"
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
 	var produce_chef := Command.create("produce_food", current_player_id, {"employee_type": "burger_chef"})
 	var produce_chef_result := engine.execute_command(produce_chef)
 	if not produce_chef_result.ok:
@@ -105,7 +106,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("加上主厨后库存应为 14，实际: %d" % chef_burger)
 
 	# 11) 测试披萨厨师
-	state.sub_phase = "GetFood"
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
 	var produce_pizza := Command.create("produce_food", current_player_id, {"employee_type": "pizza_cook"})
 	var produce_pizza_result := engine.execute_command(produce_pizza)
 	if not produce_pizza_result.ok:
@@ -117,14 +118,14 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("披萨库存应为 3，实际: %d" % pizza_count)
 
 	# 12) 测试无效的员工类型
-	state.sub_phase = "GetFood"
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
 	var invalid_cmd := Command.create("produce_food", current_player_id, {"employee_type": "recruiting_girl"})
 	var invalid_result := engine.execute_command(invalid_cmd)
 	if invalid_result.ok:
 		return Result.failure("recruiting_girl 不应该能生产食物")
 
 	# 13) 测试玩家没有的厨师类型
-	state.sub_phase = "GetFood"
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
 	var no_cook := Command.create("produce_food", current_player_id, {"employee_type": "pizza_chef"})
 	var no_cook_result := engine.execute_command(no_cook)
 	if no_cook_result.ok:
@@ -137,25 +138,25 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	state.players[current_player_id]["employees"].append("kitchen_trainee")
 	state.players[current_player_id]["employees"].append("kitchen_trainee")
 
-	state.sub_phase = "GetFood"
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
 	var trainee_missing := Command.create("produce_food", current_player_id, {"employee_type": "kitchen_trainee"})
 	var trainee_missing_result := engine.execute_command(trainee_missing)
 	if trainee_missing_result.ok:
 		return Result.failure("kitchen_trainee 未提供 food_type 时不应能生产")
 
-	state.sub_phase = "GetFood"
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
 	var trainee_invalid := Command.create("produce_food", current_player_id, {"employee_type": "kitchen_trainee", "food_type": "lemonade"})
 	var trainee_invalid_result := engine.execute_command(trainee_invalid)
 	if trainee_invalid_result.ok:
 		return Result.failure("kitchen_trainee 不应能生产 lemonade")
 
-	state.sub_phase = "GetFood"
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
 	var trainee_burger := Command.create("produce_food", current_player_id, {"employee_type": "kitchen_trainee", "food_type": "burger"})
 	var trainee_burger_result := engine.execute_command(trainee_burger)
 	if not trainee_burger_result.ok:
 		return Result.failure("kitchen_trainee(burger) 应该可以生产: %s" % trainee_burger_result.error)
 
-	state.sub_phase = "GetFood"
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
 	var trainee_pizza := Command.create("produce_food", current_player_id, {"employee_type": "kitchen_trainee", "food_type": "pizza"})
 	var trainee_pizza_result := engine.execute_command(trainee_pizza)
 	if not trainee_pizza_result.ok:

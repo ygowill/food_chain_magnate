@@ -6,6 +6,7 @@ extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var engine := GameEngine.new()
@@ -20,13 +21,13 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		if not grant.ok:
 			return Result.failure("发放测试现金失败: %s" % grant.error)
 
-	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 30)
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
 	if not to_working.ok:
 		return to_working
 
 	var state := engine.get_state()
-	state.sub_phase = "PlaceRestaurants"
-	if state.phase != "Working" or state.sub_phase != "PlaceRestaurants":
+	state.sub_phase = DefsClass.SUB_PHASE_PLACE_RESTAURANTS
+	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_PLACE_RESTAURANTS:
 		return Result.failure("应处于 Working/PlaceRestaurants，实际: %s/%s" % [state.phase, state.sub_phase])
 
 	var actor := state.get_current_player_id()
@@ -72,7 +73,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("第二次放置应提示次数已用完，实际: %s" % exec_again.error)
 
 	# 4) 推进到下一回合 Restructuring：Cleanup 会自动结算并重置 drive_thru_active
-	var to_restructuring := TestPhaseUtilsClass.advance_until_phase(engine, "Restructuring", 80)
+	var to_restructuring := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_RESTRUCTURING, 80)
 	if not to_restructuring.ok:
 		return to_restructuring
 	if bool(engine.get_state().players[actor].get("drive_thru_active", true)):

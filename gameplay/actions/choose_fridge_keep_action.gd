@@ -5,12 +5,13 @@ extends ActionExecutor
 const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 func _init() -> void:
 	action_id = "choose_fridge_keep"
 	display_name = "选择冰箱保留"
 	description = "清理阶段：选择保留在冰箱中的食物/饮料（总量不超过容量）"
-	allowed_phases = ["Cleanup"]
+	allowed_phases = [DefsClass.PHASE_CLEANUP]
 	requires_actor = true
 	is_mandatory = false
 	is_internal = true
@@ -18,7 +19,7 @@ func _init() -> void:
 func _validate_specific(state: GameState, command: Command) -> Result:
 	if state == null:
 		return Result.failure("state 为空")
-	if str(state.phase) != "Cleanup":
+	if str(state.phase) != DefsClass.PHASE_CLEANUP:
 		return Result.failure("仅可在 Cleanup 阶段执行")
 	if not (state.round_state is Dictionary):
 		return Result.failure("round_state 类型错误（期望 Dictionary）")
@@ -281,9 +282,9 @@ static func _get_pending_cleanup_players(state: GameState) -> Result:
 	if not (ppa_val is Dictionary):
 		return Result.failure("pending_phase_actions 类型错误（期望 Dictionary）")
 	var ppa: Dictionary = ppa_val
-	if not ppa.has("Cleanup"):
+	if not ppa.has(DefsClass.PHASE_CLEANUP):
 		return Result.success([] as Array[int])
-	var list_val = ppa.get("Cleanup", null)
+	var list_val = ppa.get(DefsClass.PHASE_CLEANUP, null)
 	if not (list_val is Array):
 		return Result.failure("pending_phase_actions[Cleanup] 类型错误（期望 Array）")
 	var list: Array = list_val
@@ -303,9 +304,9 @@ static func _set_pending_cleanup_players(state: GameState, pending: Array[int]) 
 		return
 	var ppa: Dictionary = ppa_val
 	if pending.is_empty():
-		ppa.erase("Cleanup")
+		ppa.erase(DefsClass.PHASE_CLEANUP)
 	else:
-		ppa["Cleanup"] = pending
+		ppa[DefsClass.PHASE_CLEANUP] = pending
 	state.round_state["pending_phase_actions"] = ppa
 
 static func _upsert_cleanup_inventory_discarded(state: GameState, player_id: int, discarded: Dictionary, has_fridge: bool) -> void:

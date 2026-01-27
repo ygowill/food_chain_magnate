@@ -4,6 +4,7 @@ class_name MassMarketeersV2Test
 extends RefCounted
 
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var engine := GameEngine.new()
@@ -57,7 +58,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		"tile_index": -1,
 	}
 
-	state.phase = "Payday"
+	state.phase = DefsClass.PHASE_PAYDAY
 	state.sub_phase = ""
 	var cash := StateUpdaterClass.player_receive_from_bank(state, 0, 20)
 	if not cash.ok:

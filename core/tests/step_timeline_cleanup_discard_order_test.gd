@@ -7,6 +7,8 @@ extends RefCounted
 const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(seed_val: int = 12345) -> Result:
 	var auto_r := _case_auto_discard(seed_val)
@@ -34,7 +36,7 @@ static func _case_auto_discard(seed_val: int) -> Result:
 	state.turn_order = [0, 1]
 	state.current_player_index = 0
 	state.round_number = 1
-	state.phase = "Marketing"
+	state.phase = DefsClass.PHASE_MARKETING
 	state.sub_phase = ""
 
 	state.players[0]["inventory"] = {"burger": 2, "soda": 1}
@@ -48,7 +50,7 @@ static func _case_auto_discard(seed_val: int) -> Result:
 	cp["hash"] = state.compute_hash()
 	engine.checkpoints[0] = cp
 
-	var adv := engine.execute_command(Command.create_system("advance_phase"))
+	var adv := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if not adv.ok:
 		return Result.failure("advance_phase failed: %s" % adv.error)
 
@@ -71,7 +73,7 @@ static func _case_auto_discard(seed_val: int) -> Result:
 			continue
 		var ev: Dictionary = ev_val
 		var t := str(ev.get("type", "")).strip_edges()
-		if t == EventBus.EventType.FOOD_DISCARDED and str(ev.get("phase_segment", "")).strip_edges() == "Cleanup":
+		if t == EventBus.EventType.FOOD_DISCARDED and str(ev.get("phase_segment", "")).strip_edges() == DefsClass.PHASE_CLEANUP:
 			discard_idxs.append(idx)
 		if t == EventBus.EventType.MILESTONE_ACHIEVED:
 			var d_val = ev.get("data", null)
@@ -110,7 +112,7 @@ static func _case_choose_fridge_keep(seed_val: int) -> Result:
 	state.turn_order = [0, 1]
 	state.current_player_index = 0
 	state.round_number = 2
-	state.phase = "Cleanup"
+	state.phase = DefsClass.PHASE_CLEANUP
 	state.sub_phase = ""
 
 	# 手动给予冰箱（first_throw_away 的 gain_fridge=10），并制造超出容量的库存。

@@ -6,6 +6,8 @@ class_name RewindTurnStartReenterTest
 extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if EventBus == null:
@@ -20,12 +22,12 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if not init.ok:
 		return Result.failure("初始化失败: %s" % init.error)
 
-	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 200)
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 200)
 	if not to_working.ok:
 		return to_working
 
 	var state := engine.get_state()
-	if str(state.phase) != "Working":
+	if str(state.phase) != DefsClass.PHASE_WORKING:
 		return Result.failure("未进入 Working（当前=%s）" % str(state.phase))
 
 	# 使用 end_turn（内部动作）制造“同一阶段内临时切换当前玩家后又切回”的场景。
@@ -33,7 +35,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if pid_a < 0:
 		return Result.failure("当前玩家无效")
 
-	var end_a := engine.execute_command(Command.create("end_turn", pid_a))
+	var end_a := engine.execute_command(Command.create(ActionIdsClass.END_TURN, pid_a))
 	if not end_a.ok:
 		return Result.failure("end_turn(P%d) 失败: %s" % [pid_a + 1, end_a.error])
 	var pid_a_first_cmd_index := int(engine.current_command_index)
@@ -42,7 +44,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if pid_b == pid_a:
 		return Result.failure("end_turn 未切换当前玩家（pid=%d）" % pid_a)
 
-	var end_b := engine.execute_command(Command.create("end_turn", pid_b))
+	var end_b := engine.execute_command(Command.create(ActionIdsClass.END_TURN, pid_b))
 	if not end_b.ok:
 		return Result.failure("end_turn(P%d) 失败: %s" % [pid_b + 1, end_b.error])
 
@@ -70,4 +72,3 @@ static func _clear_event_history() -> void:
 		EventBus.clear_history_and_reset_sequence()
 	elif EventBus.has_method("clear_history"):
 		EventBus.clear_history()
-

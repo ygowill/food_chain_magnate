@@ -7,6 +7,8 @@ extends RefCounted
 
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed_val: int = 882211) -> Result:
 	if player_count != 2:
@@ -30,7 +32,7 @@ static func run(player_count: int = 2, seed_val: int = 882211) -> Result:
 		return Result.failure("初始化失败: %s" % init.error)
 	var state := engine.get_state()
 	_force_turn_order(state)
-	state.phase = "Payday"
+	state.phase = DefsClass.PHASE_PAYDAY
 	state.sub_phase = ""
 	var take_pc := StateUpdaterClass.take_from_pool(state, "pizza_cook", 1)
 	if not take_pc.ok:
@@ -40,7 +42,7 @@ static func run(player_count: int = 2, seed_val: int = 882211) -> Result:
 		return Result.failure("添加 pizza_cook 失败: %s" % add_pc.error)
 	state.players[0]["cash"] = 0 # 需要支付薪水但无现金
 
-	var adv := engine.execute_command(Command.create_system("advance_phase"))
+	var adv := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if adv.ok:
 		return Result.failure("欠薪时不应允许离开 Payday（无 first_trainer_used）")
 
@@ -49,7 +51,7 @@ static func run(player_count: int = 2, seed_val: int = 882211) -> Result:
 	if not ms.ok:
 		return Result.failure("触发里程碑失败(UseEmployee/trainer): %s" % ms.error)
 
-	var adv2 := engine.execute_command(Command.create_system("advance_phase"))
+	var adv2 := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if not adv2.ok:
 		return Result.failure("有 first_trainer_used 时应允许离开 Payday: %s" % adv2.error)
 
@@ -60,7 +62,7 @@ static func run(player_count: int = 2, seed_val: int = 882211) -> Result:
 		return Result.failure("初始化失败(2): %s" % init2.error)
 	var state2 := engine2.get_state()
 	_force_turn_order(state2)
-	state2.phase = "Payday"
+	state2.phase = DefsClass.PHASE_PAYDAY
 	state2.sub_phase = ""
 	var take_pc2 := StateUpdaterClass.take_from_pool(state2, "pizza_cook", 1)
 	if not take_pc2.ok:
@@ -75,7 +77,7 @@ static func run(player_count: int = 2, seed_val: int = 882211) -> Result:
 	if not ms2.ok:
 		return Result.failure("触发里程碑失败(ProductSold/beer): %s" % ms2.error)
 
-	var adv3 := engine2.execute_command(Command.create_system("advance_phase"))
+	var adv3 := engine2.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if not adv3.ok:
 		return Result.failure("有 first_beer_sold 且 token 足够时应允许离开 Payday: %s" % adv3.error)
 

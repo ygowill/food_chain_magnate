@@ -5,6 +5,7 @@ extends RefCounted
 
 const GameEventLogControllerClass = preload("res://ui/scenes/game/game_event_log_controller.gd")
 const GameLogPanelClass = preload("res://ui/components/game_log/game_log_panel.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run() -> Result:
 	if EventBus != null:
@@ -13,8 +14,8 @@ static func run() -> Result:
 	# 模拟存档加载的“回放阶段”：EventBus 已经发射了事件，但日志面板尚未 setup()
 	EventBus.emit_event(EventBus.EventType.COMMAND_EXECUTED, {"action_id": "noop"})
 	EventBus.emit_event(EventBus.EventType.PHASE_CHANGED, {
-		"old_phase": "Setup",
-		"new_phase": "Restructuring",
+		"old_phase": DefsClass.PHASE_SETUP,
+		"new_phase": DefsClass.PHASE_RESTRUCTURING,
 		"round": 1,
 	})
 	EventBus.emit_event(EventBus.EventType.EMPLOYEE_RECRUITED, {

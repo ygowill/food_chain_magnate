@@ -3,6 +3,8 @@ class_name PaydaySubPhaseV2Test
 extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var engine := GameEngine.new()
@@ -20,7 +22,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if not init.ok:
 		return Result.failure("初始化失败: %s" % init.error)
 
-	var to_payday := TestPhaseUtilsClass.advance_until_phase(engine, "Payday", 80)
+	var to_payday := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_PAYDAY, 80)
 	if not to_payday.ok:
 		return to_payday
 	if engine.get_state().sub_phase != "PaydayExtra":
@@ -36,9 +38,9 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	for pid in range(engine.get_state().players.size()):
 		passed[pid] = true
 
-	var adv := engine.execute_command(Command.create_system("advance_phase", {"target": "sub_phase"}))
+	var adv := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE, {"target": "sub_phase"}))
 	if not adv.ok:
 		return Result.failure("推进 Payday 子阶段失败: %s" % adv.error)
-	if engine.get_state().phase != "Restructuring":
+	if engine.get_state().phase != DefsClass.PHASE_RESTRUCTURING:
 		return Result.failure("推进子阶段后应进入 Restructuring（Marketing/Cleanup 已自动结算跳过），实际: %s" % engine.get_state().phase)
 	return Result.success()

@@ -19,6 +19,9 @@ signal log_added(entry: Dictionary)
 @onready var auto_scroll_check: CheckBox = $MarginContainer/VBoxContainer/BottomRow/AutoScrollCheck
 @onready var entry_count_label: Label = $MarginContainer/VBoxContainer/BottomRow/EntryCountLabel
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+
 # 日志类型
 enum LogType {
 	SYSTEM,      # 系统消息
@@ -45,15 +48,15 @@ const LOG_TYPE_COLORS: Dictionary = {
 }
 
 const PHASE_DISPLAY_NAMES: Dictionary = {
-	"Working": "工作时间",
-	"Dinnertime": "晚餐时间",
-	"Setup": "开局设置",
-	"Payday": "发薪日",
-	"Marketing": "广告行动",
-	"Cleanup": "清理阶段",
-	"Restructuring": "重组结构",
-	"OrderOfBusiness": "商业秩序",
-	"GameOver": "游戏结束",
+	DefsClass.PHASE_WORKING: "工作时间",
+	DefsClass.PHASE_DINNERTIME: "晚餐时间",
+	DefsClass.PHASE_SETUP: "开局设置",
+	DefsClass.PHASE_PAYDAY: "发薪日",
+	DefsClass.PHASE_MARKETING: "广告行动",
+	DefsClass.PHASE_CLEANUP: "清理阶段",
+	DefsClass.PHASE_RESTRUCTURING: "重组结构",
+	DefsClass.PHASE_ORDER_OF_BUSINESS: "商业秩序",
+	DefsClass.PHASE_GAME_OVER: "游戏结束",
 }
 
 var _step_timeline: Dictionary = {} # {initial_state_dict, steps[], events[]}
@@ -616,7 +619,7 @@ func _pick_primary_entry_for_action_group(entries: Array) -> Dictionary:
 
 func _is_flow_command_action_id(action_id: String) -> bool:
 	var aid := str(action_id).strip_edges()
-	return aid == "skip" or aid == "end_turn" or aid == "skip_sub_phase"
+	return aid == ActionIdsClass.SKIP or aid == ActionIdsClass.END_TURN or aid == ActionIdsClass.SKIP_SUB_PHASE
 
 func _build_action_group_fallback_summary(step_index: int, step: Dictionary) -> String:
 	# 兜底：系统摘要/命令元信息（用于“无可见事件 step”的可读性）

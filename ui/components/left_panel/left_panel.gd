@@ -10,6 +10,7 @@ signal logs_requested()
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 @onready var player_tabs: VBoxContainer = $MarginContainer/HBoxContainer/PlayerTabs
 @onready var summary_row: Control = $MarginContainer/HBoxContainer/Content/SummaryRow
@@ -806,7 +807,7 @@ func _maybe_auto_select_tab_for_phase() -> void:
 		return
 	_last_phase = phase
 
-	if phase == "Restructuring":
+	if phase == DefsClass.PHASE_RESTRUCTURING:
 		tab_container.current_tab = TAB_EMPLOYEES
 
 func _resolve_view_player_id() -> int:

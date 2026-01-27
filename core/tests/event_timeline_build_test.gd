@@ -7,6 +7,7 @@ extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const EventTimelineBuildClass = preload("res://gameplay/replay/event_timeline_build.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345, min_commands: int = 20) -> Result:
 	if EventBus != null:
@@ -31,7 +32,7 @@ static func run(player_count: int = 2, seed_val: int = 12345, min_commands: int 
 		if safety > min_commands * 3:
 			return Result.failure("生成命令超出安全上限: %d" % safety)
 		var pid := engine.get_state().get_current_player_id()
-		var r := engine.execute_command(Command.create("end_turn", pid))
+		var r := engine.execute_command(Command.create(ActionIdsClass.END_TURN, pid))
 		if not r.ok:
 			return Result.failure("end_turn 失败: %s" % r.error)
 

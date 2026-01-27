@@ -8,6 +8,7 @@ extends RefCounted
 
 const MarketingSettlementClass = preload("res://core/rules/phase/marketing_settlement.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const MILESTONE_ID := "first_campaign_manager_used"
 
@@ -34,8 +35,8 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	_force_turn_order(state)
 	_apply_test_map(state)
 
-	state.phase = "Working"
-	state.sub_phase = "Marketing"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
 
 	# 给玩家0 添加 1 张在岗 campaign_manager（从池取卡，保持守恒）
 	if int(state.employee_pool.get("campaign_manager", 0)) <= 0:
@@ -117,8 +118,8 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var state2 := engine2.get_state()
 	_force_turn_order(state2)
 	_apply_test_map(state2)
-	state2.phase = "Working"
-	state2.sub_phase = "Marketing"
+	state2.phase = DefsClass.PHASE_WORKING
+	state2.sub_phase = DefsClass.SUB_PHASE_MARKETING
 	state2.players[0]["milestones"].append(MILESTONE_ID)
 	if int(state2.employee_pool.get("campaign_manager", 0)) <= 0:
 		return Result.failure("employee_pool 中没有 campaign_manager(2)")

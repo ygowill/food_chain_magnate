@@ -4,6 +4,8 @@ extends Control
 
 const GameScene: PackedScene = preload("res://ui/scenes/game/game.tscn")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 @onready var output: RichTextLabel = $Root/Output
 @onready var run_button: Button = $Root/TopBar/RunButton
@@ -54,10 +56,10 @@ func _run_test() -> int:
 		return await _fail("game.game_engine 为空（初始化失败或节点结构变更）")
 
 	# 推进到 Working/Recruit（使用 core 工具直接推进引擎状态）
-	var adv = TestPhaseUtilsClass.advance_until_phase(game.game_engine, "Working", 80)
+	var adv = TestPhaseUtilsClass.advance_until_phase(game.game_engine, DefsClass.PHASE_WORKING, 80)
 	if not adv.ok:
 		return await _fail("推进到 Working 失败: %s" % adv.error)
-	if game.game_engine.get_state().sub_phase != "Recruit":
+	if game.game_engine.get_state().sub_phase != DefsClass.SUB_PHASE_RECRUIT:
 		return await _fail("Working 初始子阶段应为 Recruit，实际: %s" % game.game_engine.get_state().sub_phase)
 
 	# 打开招聘面板（保持在屏幕上，模拟玩家持续查看/操作）
@@ -92,7 +94,7 @@ func _run_test() -> int:
 		if player_b == player_a:
 			return await _fail("recruit 后应切到另一位玩家（auto end_turn 预期生效）")
 
-		var et = game._execute_command(Command.create("end_turn", player_b))
+		var et = game._execute_command(Command.create(ActionIdsClass.END_TURN, player_b))
 		if not et.ok:
 			return await _fail("玩家 B end_turn 失败: %s" % et.error)
 
@@ -111,7 +113,7 @@ func _run_test() -> int:
 		])
 
 	# A skip（结束招聘）；应切换到 B，且面板同步显示 B 的剩余次数（不能沿用 A 的 0）
-	var sk = game._execute_command(Command.create("skip", player_a))
+	var sk = game._execute_command(Command.create(ActionIdsClass.SKIP, player_a))
 	if not sk.ok:
 		return await _fail("玩家 A skip 失败: %s" % sk.error)
 

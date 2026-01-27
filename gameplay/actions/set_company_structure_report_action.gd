@@ -5,6 +5,7 @@ class_name SetCompanyStructureReportAction
 extends ActionExecutor
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 func _init() -> void:
 	action_id = "set_company_structure_report"
@@ -13,12 +14,12 @@ func _init() -> void:
 	requires_actor = true
 	is_mandatory = false
 	is_internal = true
-	allowed_phases = ["Restructuring"]
+	allowed_phases = [DefsClass.PHASE_RESTRUCTURING]
 
 func _validate_specific(state: GameState, command: Command) -> Result:
 	if state == null:
 		return Result.failure("state 为空")
-	if state.phase != "Restructuring":
+	if state.phase != DefsClass.PHASE_RESTRUCTURING:
 		return Result.failure("当前不在 Restructuring")
 	if not (state.round_state is Dictionary):
 		return Result.failure("round_state 类型错误（期望 Dictionary）")

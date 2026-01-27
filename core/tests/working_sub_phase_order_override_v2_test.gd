@@ -3,6 +3,7 @@ class_name WorkingSubPhaseOrderOverrideV2Test
 extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var engine := GameEngine.new()
@@ -21,10 +22,10 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		return Result.failure("初始化失败: %s" % init.error)
 
 	var order: Array[String] = engine.phase_manager.get_working_sub_phase_order_names()
-	if order.size() < 2 or order[0] != "Train" or order[1] != "Recruit":
+	if order.size() < 2 or order[0] != DefsClass.SUB_PHASE_TRAIN or order[1] != DefsClass.SUB_PHASE_RECRUIT:
 		return Result.failure("working_sub_phase_order override 未生效: %s" % str(order))
 
-	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 30)
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
 	if not to_working.ok:
 		return to_working
 	var state := engine.get_state()
@@ -32,7 +33,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if not (rs_val is Array):
 		return Result.failure("round_state.working_sub_phase_order 缺失或类型错误（期望 Array）")
 	var rs: Array = rs_val
-	if rs.size() < 2 or str(rs[0]) != "Train" or str(rs[1]) != "Recruit":
+	if rs.size() < 2 or str(rs[0]) != DefsClass.SUB_PHASE_TRAIN or str(rs[1]) != DefsClass.SUB_PHASE_RECRUIT:
 		return Result.failure("round_state.working_sub_phase_order 未按 override 初始化: %s" % str(rs))
 
 	return Result.success({

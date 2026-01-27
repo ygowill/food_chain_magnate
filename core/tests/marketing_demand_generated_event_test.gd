@@ -4,6 +4,7 @@ class_name MarketingDemandGeneratedEventTest
 extends RefCounted
 
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run() -> Result:
 	var engine := GameEngine.new()
@@ -12,7 +13,7 @@ static func run() -> Result:
 		return Result.failure("init failed: %s" % init.error)
 
 	var old_state: GameState = engine.get_state().duplicate_state()
-	old_state.phase = "Marketing"
+	old_state.phase = DefsClass.PHASE_MARKETING
 	old_state.sub_phase = ""
 	old_state.round_number = 3
 
@@ -40,7 +41,7 @@ static func run() -> Result:
 	}
 
 	var new_state: GameState = old_state.duplicate_state()
-	new_state.phase = "Cleanup"
+	new_state.phase = DefsClass.PHASE_CLEANUP
 
 	var events := CommandRunnerClass.build_phase_change_events(old_state, new_state)
 	var found := false

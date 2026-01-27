@@ -17,6 +17,7 @@ const ProcurementRouteOverlayControllerClass = preload("res://ui/scenes/game/gam
 const DinnertimeOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_dinnertime.gd")
 const DemandIndicatorControllerClass = preload("res://ui/scenes/game/game_overlay_demand_indicator.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const TOAST_DESIRED_WIDTH := 520.0
 const TOAST_MIN_MARGIN := 12.0
@@ -292,23 +293,23 @@ func _on_phase_label_mouse_exited() -> void:
 
 func _get_phase_help_key(phase: String) -> String:
 	match phase:
-		"Setup":
+		DefsClass.PHASE_SETUP:
 			return "phase_setup"
-		"Restructuring":
+		DefsClass.PHASE_RESTRUCTURING:
 			return "phase_restructuring"
-		"OrderOfBusiness":
+		DefsClass.PHASE_ORDER_OF_BUSINESS:
 			return "phase_order_of_business"
-		"Working":
+		DefsClass.PHASE_WORKING:
 			return "phase_working"
-		"Dinnertime":
+		DefsClass.PHASE_DINNERTIME:
 			return "phase_dinner_time"
-		"Payday":
+		DefsClass.PHASE_PAYDAY:
 			return "phase_payday"
-		"Marketing":
+		DefsClass.PHASE_MARKETING:
 			return "phase_marketing"
-		"Cleanup":
+		DefsClass.PHASE_CLEANUP:
 			return "phase_cleanup"
-		"GameOver":
+		DefsClass.PHASE_GAME_OVER:
 			return "phase_game_over"
 	return ""
 

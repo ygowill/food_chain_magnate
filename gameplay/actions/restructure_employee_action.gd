@@ -3,6 +3,8 @@
 class_name RestructureEmployeeAction
 extends ActionExecutor
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+
 func _init() -> void:
 	action_id = "restructure_employee"
 	display_name = "重组员工"
@@ -10,7 +12,7 @@ func _init() -> void:
 	requires_actor = true
 	is_mandatory = false
 	is_internal = true
-	allowed_phases = ["Restructuring"]
+	allowed_phases = [DefsClass.PHASE_RESTRUCTURING]
 
 func _validate_specific(state: GameState, command: Command) -> Result:
 	if state == null:

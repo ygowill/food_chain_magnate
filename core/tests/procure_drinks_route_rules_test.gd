@@ -4,6 +4,7 @@ class_name ProcureDrinksRouteRulesTest
 extends RefCounted
 
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var action := ProcureDrinksAction.new()
@@ -40,8 +41,8 @@ static func _run_truck_route_rules(action: ProcureDrinksAction, player_count: in
 		return Result.failure("初始化失败: %s" % init.error)
 	var state: GameState = engine.get_state().duplicate_state()
 	_force_turn_order(state, player_count)
-	state.phase = "Working"
-	state.sub_phase = "GetDrinks"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
 
 	var actor := state.get_current_player_id()
 	state.players[actor]["employees"].append("truck_driver")
@@ -124,8 +125,8 @@ static func _run_truck_distance_plus_one(action: ProcureDrinksAction, player_cou
 		return Result.failure("初始化失败: %s" % init.error)
 	var state: GameState = engine.get_state().duplicate_state()
 	_force_turn_order(state, player_count)
-	state.phase = "Working"
-	state.sub_phase = "GetDrinks"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
 
 	var actor := state.get_current_player_id()
 	state.players[actor]["employees"].append("truck_driver")
@@ -182,8 +183,8 @@ static func _run_air_route_rules(action: ProcureDrinksAction, player_count: int,
 		return Result.failure("初始化失败: %s" % init.error)
 	var state: GameState = engine.get_state().duplicate_state()
 	_force_turn_order(state, player_count)
-	state.phase = "Working"
-	state.sub_phase = "GetDrinks"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
 
 	var actor := state.get_current_player_id()
 	state.players[actor]["employees"].append("zeppelin_pilot")
@@ -284,8 +285,8 @@ static func _run_errand_boy_any_drink(action: ProcureDrinksAction, player_count:
 		return Result.failure("初始化失败: %s" % init.error)
 	var state: GameState = engine.get_state().duplicate_state()
 	_force_turn_order(state, player_count)
-	state.phase = "Working"
-	state.sub_phase = "GetDrinks"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
 
 	var actor := state.get_current_player_id()
 	state.players[actor]["employees"].append("errand_boy")

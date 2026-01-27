@@ -56,6 +56,7 @@ const EventTimelineBuildClass = preload("res://gameplay/replay/event_timeline_bu
 const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 const GameEventLogFormatterClass = preload("res://ui/scenes/game/game_event_log_formatter.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 # 游戏状态
 var game_engine: GameEngine = null
@@ -103,9 +104,9 @@ var _background_ui_warmup_started: bool = false
 var _startup_profile_reported: bool = false
 
 const AUTO_MANDATORY_ACTION_IDS := {
-	"set_price": true,
-	"set_discount": true,
-	"set_luxury_price": true,
+	ActionIdsClass.SET_PRICE: true,
+	ActionIdsClass.SET_DISCOUNT: true,
+	ActionIdsClass.SET_LUXURY_PRICE: true,
 }
 
 # 存档管理（多槽 + 文件选择）
@@ -218,7 +219,7 @@ func _ready() -> void:
 		var keep_loading_until_reserve_modal := false
 		if game_engine != null:
 			var s := game_engine.get_state()
-			if s != null and str(s.phase) == "Setup" and str(s.sub_phase) == "ReserveCards":
+			if s != null and str(s.phase) == DefsClass.PHASE_SETUP and str(s.sub_phase) == "ReserveCards":
 				keep_loading_until_reserve_modal = true
 		if not keep_loading_until_reserve_modal:
 			if SceneManager != null and SceneManager.has_method("hide_loading"):
@@ -1058,7 +1059,7 @@ func _execute_command(command: Command) -> Result:
 	return result
 
 func _get_last_working_sub_phase_name() -> String:
-	var last_sub_phase := "PlaceRestaurants"
+	var last_sub_phase := DefsClass.SUB_PHASE_PLACE_RESTAURANTS
 	if game_engine != null and game_engine.phase_manager != null and game_engine.phase_manager.has_method("get_working_sub_phase_order_names"):
 		var order = game_engine.phase_manager.get_working_sub_phase_order_names()
 		if order is Array and not order.is_empty():
@@ -1068,7 +1069,7 @@ func _get_last_working_sub_phase_name() -> String:
 func _maybe_auto_complete_mandatory_actions_before_skip(command: Command) -> Result:
 	if command == null:
 		return Result.failure("command 为空")
-	if command.action_id != "skip":
+	if str(command.action_id).strip_edges() != ActionIdsClass.SKIP:
 		return Result.success()
 	if game_engine == null:
 		return Result.failure("游戏引擎未初始化")
@@ -1076,7 +1077,7 @@ func _maybe_auto_complete_mandatory_actions_before_skip(command: Command) -> Res
 	var state: GameState = game_engine.get_state()
 	if state == null:
 		return Result.failure("游戏状态为空")
-	if str(state.phase) != "Working":
+	if str(state.phase) != DefsClass.PHASE_WORKING:
 		return Result.success()
 	if str(state.sub_phase) != _get_last_working_sub_phase_name():
 		return Result.success()
@@ -1135,7 +1136,7 @@ func _maybe_show_payday_blocker_prompt(_command: Command, result: Result) -> voi
 	var state := game_engine.get_state()
 	if state == null:
 		return
-	if str(state.phase) != "Payday":
+	if str(state.phase) != DefsClass.PHASE_PAYDAY:
 		return
 
 	var err := str(result.error).strip_edges()
@@ -1161,10 +1162,10 @@ func _open_payday_panel_from_prompt() -> void:
 		_panel_controller.call("show_payday_panel")
 
 func _on_advance_phase_pressed() -> void:
-	_execute_command(Command.create_system("advance_phase"))
+	_execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 
 func _on_advance_sub_phase_pressed() -> void:
-	_execute_command(Command.create_system("advance_phase", {"target": "sub_phase"}))
+	_execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE, {"target": "sub_phase"}))
 
 func _on_skip_pressed() -> void:
 	if game_engine == null:
@@ -1182,7 +1183,7 @@ func _confirm_skip() -> void:
 	if game_engine == null:
 		return
 	var current_player_id := game_engine.get_state().get_current_player_id()
-	_execute_command(Command.create("skip", current_player_id))
+	_execute_command(Command.create(ActionIdsClass.SKIP, current_player_id))
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:

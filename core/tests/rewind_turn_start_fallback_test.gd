@@ -4,6 +4,8 @@ class_name RewindTurnStartFallbackTest
 extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if EventBus == null:
@@ -18,12 +20,12 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if not init.ok:
 		return Result.failure("初始化失败: %s" % init.error)
 
-	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 200)
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 200)
 	if not to_working.ok:
 		return to_working
 
 	var state := engine.get_state()
-	if str(state.phase) != "Working":
+	if str(state.phase) != DefsClass.PHASE_WORKING:
 		return Result.failure("未进入 Working（当前=%s）" % str(state.phase))
 	if str(state.sub_phase).is_empty():
 		return Result.failure("Working 子阶段为空")
@@ -36,7 +38,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 			return Result.failure("当前处于最后子阶段（%s），测试前置条件不满足" % last_sub)
 
 	var pid_a := int(state.get_current_player_id())
-	var end_turn := engine.execute_command(Command.create("end_turn", pid_a))
+	var end_turn := engine.execute_command(Command.create(ActionIdsClass.END_TURN, pid_a))
 	if not end_turn.ok:
 		return Result.failure("end_turn 失败: %s" % end_turn.error)
 
@@ -44,7 +46,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if pid_b == pid_a:
 		return Result.failure("end_turn 未切换当前玩家（pid=%d）" % pid_a)
 
-	var skip_sub := engine.execute_command(Command.create("skip_sub_phase", pid_b))
+	var skip_sub := engine.execute_command(Command.create(ActionIdsClass.SKIP_SUB_PHASE, pid_b))
 	if not skip_sub.ok:
 		return Result.failure("skip_sub_phase 失败: %s" % skip_sub.error)
 	if int(engine.get_state().get_current_player_id()) != pid_b:

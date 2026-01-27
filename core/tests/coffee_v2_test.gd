@@ -5,6 +5,7 @@ extends RefCounted
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const CoffeeRulesEntryClass = preload("res://modules/coffee/rules/entry.gd")
 
@@ -47,8 +48,8 @@ static func _test_train_trigger_allows_place_and_move(seed_val: int) -> Result:
 	_apply_train_test_map(state)
 	_apply_coffee_map_fields(state)
 
-	state.phase = "Working"
-	state.sub_phase = "Train"
+	state.phase = PhaseDefsClass.PHASE_WORKING
+	state.sub_phase = PhaseDefsClass.SUB_PHASE_TRAIN
 	_mark_all_players_not_passed(state)
 
 	# 提供培训员，保证 Train 子阶段可执行
@@ -207,10 +208,10 @@ static func _test_dinnertime_route_buys_multiple_coffee(seed_val: int) -> Result
 
 static func _advance_to_dinnertime(engine: GameEngine) -> Result:
 	var state := engine.get_state()
-	state.phase = "Working"
-	state.sub_phase = "PlaceRestaurants"
+	state.phase = PhaseDefsClass.PHASE_WORKING
+	state.sub_phase = PhaseDefsClass.SUB_PHASE_PLACE_RESTAURANTS
 	_mark_all_players_passed(state)
-	var adv := engine.execute_command(Command.create_system("advance_phase", {"target": "sub_phase"}))
+	var adv := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE, {"target": "sub_phase"}))
 	if not adv.ok:
 		return Result.failure("推进到 Dinnertime 失败: %s" % adv.error)
 	return Result.success()

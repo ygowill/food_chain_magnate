@@ -8,6 +8,7 @@ extends RefCounted
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const WorkingFlowClass = preload("res://core/engine/phase_manager/working_flow.gd")
 const ModuleEntryClass = preload("res://modules/movie_stars/rules/entry.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const EFFECT_B := "movie_stars:dinnertime:tiebreaker:movie_star_b"
 const EFFECT_C := "movie_stars:dinnertime:tiebreaker:movie_star_c"
@@ -108,7 +109,7 @@ static func _test_order_of_business_priority(seed_val: int) -> Result:
 	var oob := WorkingFlowClass.start_order_of_business(state)
 	if not oob.ok:
 		return oob
-	state.phase = "OrderOfBusiness"
+	state.phase = DefsClass.PHASE_ORDER_OF_BUSINESS
 	var entry = ModuleEntryClass.new()
 	var hook_r := entry._on_order_of_business_after_enter(state)
 	if not hook_r.ok:

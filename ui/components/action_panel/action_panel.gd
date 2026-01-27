@@ -43,12 +43,12 @@ var _globally_disabled_reason: String = ""
 
 # 不在 UI 中展示的内部动作
 const HIDDEN_ACTION_IDS := {
-	"end_turn": true,
-	"advance_phase": true,
+	ActionIdsClass.END_TURN: true,
+	ActionIdsClass.ADVANCE_PHASE: true,
 	# 定价类强制动作改为“准备离开 Working 时自动执行”，不在面板中展示。
-	"set_price": true,
-	"set_discount": true,
-	"set_luxury_price": true,
+	ActionIdsClass.SET_PRICE: true,
+	ActionIdsClass.SET_DISCOUNT: true,
+	ActionIdsClass.SET_LUXURY_PRICE: true,
 }
 
 # 若动作对“当前玩家”不可启动，则不展示（避免按钮常驻但永远灰掉）
@@ -56,9 +56,9 @@ const HIDDEN_ACTION_IDS := {
 # - “模块/里程碑驱动动作”：未满足前置条件时隐藏（避免在行动面板中产生噪音/误导）
 # -（历史兼容）部分员工驱动动作
 const AUTO_HIDE_IF_NOT_INITIATABLE_ACTION_IDS := {
-	"set_price": true,
-	"set_discount": true,
-	"set_luxury_price": true,
+	ActionIdsClass.SET_PRICE: true,
+	ActionIdsClass.SET_DISCOUNT: true,
+	ActionIdsClass.SET_LUXURY_PRICE: true,
 	"place_giant_billboard": true,
 	"place_highway_offramp": true,
 }
@@ -66,16 +66,16 @@ const AUTO_HIDE_IF_NOT_INITIATABLE_ACTION_IDS := {
 # 定价类强制动作在 UI 中隐藏，并在执行 skip 前由 Game 自动补完（见 Game._maybe_auto_complete_mandatory_actions_before_skip）。
 # 为避免软锁：当 skip 仅因“缺少这些可自动补完的强制动作”而不可用时，ActionPanel 仍应允许点击 skip。
 const AUTO_MANDATORY_ACTION_IDS := {
-	"set_price": true,
-	"set_discount": true,
-	"set_luxury_price": true,
+	ActionIdsClass.SET_PRICE: true,
+	ActionIdsClass.SET_DISCOUNT: true,
+	ActionIdsClass.SET_LUXURY_PRICE: true,
 }
 
 # 动作显示名称映射
 const ACTION_DISPLAY_NAMES: Dictionary = {
-	"advance_phase": "推进阶段",
-	"skip": "确认结束",
-	"skip_sub_phase": "跳过子阶段",
+	ActionIdsClass.ADVANCE_PHASE: "推进阶段",
+	ActionIdsClass.SKIP: "确认结束",
+	ActionIdsClass.SKIP_SUB_PHASE: "跳过子阶段",
 	"choose_turn_order": "选择顺序",
 	"submit_restructuring": "确认重组",
 	"recruit": "招聘",
@@ -87,17 +87,17 @@ const ACTION_DISPLAY_NAMES: Dictionary = {
 	"add_garden": "添加花园",
 	"place_restaurant": "放置餐厅",
 	"move_restaurant": "移动餐厅",
-	"set_price": "设定价格",
-	"set_luxury_price": "设定奢侈品价格",
-	"set_discount": "设定折扣",
+	ActionIdsClass.SET_PRICE: "设定价格",
+	ActionIdsClass.SET_LUXURY_PRICE: "设定奢侈品价格",
+	ActionIdsClass.SET_DISCOUNT: "设定折扣",
 	"fire": "解雇员工",
 }
 
 # 动作说明映射
 const ACTION_DESCRIPTIONS: Dictionary = {
-	"advance_phase": "强制推进到下一阶段",
-	"skip": "确认结束本阶段/子阶段",
-	"skip_sub_phase": "跳过当前子阶段（Working）",
+	ActionIdsClass.ADVANCE_PHASE: "强制推进到下一阶段",
+	ActionIdsClass.SKIP: "确认结束本阶段/子阶段",
+	ActionIdsClass.SKIP_SUB_PHASE: "跳过当前子阶段（Working）",
 	"choose_turn_order": "在顺序轨上选择位置",
 	"submit_restructuring": "提交本回合公司结构（重组阶段）",
 	"recruit": "招聘一名入门级员工",
@@ -109,9 +109,9 @@ const ACTION_DESCRIPTIONS: Dictionary = {
 	"add_garden": "为房屋添加花园",
 	"place_restaurant": "放置新餐厅",
 	"move_restaurant": "移动已有餐厅",
-	"set_price": "设定产品价格",
-	"set_luxury_price": "设定奢侈品价格",
-	"set_discount": "设定折扣",
+	ActionIdsClass.SET_PRICE: "设定产品价格",
+	ActionIdsClass.SET_LUXURY_PRICE: "设定奢侈品价格",
+	ActionIdsClass.SET_DISCOUNT: "设定折扣",
 	"fire": "解雇员工",
 }
 

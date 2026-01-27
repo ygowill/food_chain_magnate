@@ -3,6 +3,7 @@ extends RefCounted
 
 const DinnerTimeOverlayScene = preload("res://ui/components/dinner_time/dinner_time_overlay.tscn")
 const OverlayUtils = preload("res://ui/scenes/game/game_overlay_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 var _scene = null
 var _bank_break_panel = null
@@ -19,7 +20,7 @@ func sync_dinnertime_overlay(state: GameState) -> void:
 	if state == null:
 		_hide_dinnertime_overlay()
 		return
-	if state.phase != "Dinnertime":
+	if state.phase != DefsClass.PHASE_DINNERTIME:
 		_hide_dinnertime_overlay()
 		return
 	if is_instance_valid(_bank_break_panel) and _bank_break_panel.visible:

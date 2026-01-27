@@ -7,6 +7,8 @@ extends RefCounted
 const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(seed_val: int = 12345) -> Result:
 	var engine := GameEngine.new()
@@ -56,7 +58,7 @@ static func run(seed_val: int = 12345) -> Result:
 	state.players[0]["busy_marketers"] = ["marketing_trainee"]
 
 	# 从 Payday 推进到 Marketing（典型 exit+enter 叠加：Payday:exit + Marketing:enter）
-	state.phase = "Payday"
+	state.phase = DefsClass.PHASE_PAYDAY
 	state.sub_phase = ""
 
 	# StepTimelineBuild 从 checkpoints[0].state_dict 开始回放：需要同步“初始状态”。
@@ -67,7 +69,7 @@ static func run(seed_val: int = 12345) -> Result:
 	cp["hash"] = state.compute_hash()
 	engine.checkpoints[0] = cp
 
-	var adv := engine.execute_command(Command.create_system("advance_phase"))
+	var adv := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if not adv.ok:
 		return Result.failure("advance_phase failed: %s" % adv.error)
 
@@ -96,7 +98,7 @@ static func run(seed_val: int = 12345) -> Result:
 		var seg := str(ev.get("phase_segment", "")).strip_edges()
 		var seq := int(ev.get("sequence", -1))
 
-		if t == EventBus.EventType.DEMAND_GENERATED and seg == "Marketing" and demand_seq < 0:
+		if t == EventBus.EventType.DEMAND_GENERATED and seg == DefsClass.PHASE_MARKETING and demand_seq < 0:
 			demand_seq = seq
 
 		if t == EventBus.EventType.MILESTONE_ACHIEVED:
@@ -112,7 +114,7 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("expected DEMAND_GENERATED in Marketing segment")
 	if milestone_seq < 0:
 		return Result.failure("expected MILESTONE_ACHIEVED first_burger_marketed")
-	if milestone_seg != "Marketing":
+	if milestone_seg != DefsClass.PHASE_MARKETING:
 		return Result.failure("expected first_burger_marketed in Marketing segment, got: %s" % milestone_seg)
 	if milestone_seq <= demand_seq:
 		return Result.failure("expected first_burger_marketed after DEMAND_GENERATED (milestone_seq=%d demand_seq=%d)" % [milestone_seq, demand_seq])

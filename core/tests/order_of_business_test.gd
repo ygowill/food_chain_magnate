@@ -2,6 +2,9 @@
 class_name OrderOfBusinessTest
 extends RefCounted
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+
 static func run(player_count: int = 3, seed: int = 12345) -> Result:
 	if EventBus == null:
 		return Result.failure("EventBus is not available")
@@ -21,11 +24,11 @@ static func run(player_count: int = 3, seed: int = 12345) -> Result:
 	state.round_number = 1
 
 	# Setup -> Restructuring（回合 1）
-	var adv1 := engine.execute_command(Command.create_system("advance_phase"))
+	var adv1 := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if not adv1.ok:
 		return Result.failure("推进到 Restructuring 失败: %s" % adv1.error)
 
-	if engine.get_state().phase != "Restructuring":
+	if engine.get_state().phase != DefsClass.PHASE_RESTRUCTURING:
 		return Result.failure("期望进入 Restructuring，实际: %s" % engine.get_state().phase)
 
 	# 构造不同的空余卡槽数：
@@ -55,14 +58,14 @@ static func run(player_count: int = 3, seed: int = 12345) -> Result:
 
 	# Restructuring -> OrderOfBusiness：应计算 selection_order，并初始化 picks
 	for pid2 in range(player_count):
-		if engine.get_state().phase != "Restructuring":
+		if engine.get_state().phase != DefsClass.PHASE_RESTRUCTURING:
 			break
 		var submit := engine.execute_command(Command.create("submit_restructuring", pid2, {}))
 		if not submit.ok:
 			return Result.failure("提交重组失败: %s" % submit.error)
 
 	state = engine.get_state()
-	if state.phase != "OrderOfBusiness":
+	if state.phase != DefsClass.PHASE_ORDER_OF_BUSINESS:
 		return Result.failure("期望进入 OrderOfBusiness，实际: %s" % state.phase)
 
 	var expected := [1, 2, 0]
@@ -71,7 +74,7 @@ static func run(player_count: int = 3, seed: int = 12345) -> Result:
 
 	# 选择顺序：按选择顺序依次选最靠前的空位（确定性）
 	var safety := 0
-	while state.phase == "OrderOfBusiness":
+	while state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS:
 		safety += 1
 		if safety > player_count + 2:
 			return Result.failure("OrderOfBusiness 选择循环超出安全上限")
@@ -96,7 +99,7 @@ static func run(player_count: int = 3, seed: int = 12345) -> Result:
 
 	# OrderOfBusiness 完成后应自动进入 Working
 	state = engine.get_state()
-	if state.phase != "Working":
+	if state.phase != DefsClass.PHASE_WORKING:
 		return Result.failure("OrderOfBusiness 完成后应自动进入 Working，实际: %s" % state.phase)
 	if state.get_current_player_id() != 1:
 		return Result.failure("Working 首位玩家应为 1，实际: %d" % state.get_current_player_id())
@@ -131,7 +134,7 @@ static func run(player_count: int = 3, seed: int = 12345) -> Result:
 	s2.current_player_index = 0
 
 	var before2 := EventBus.get_history_by_type(EventBus.EventType.TURN_ORDER_FINALIZED).size()
-	var adv2 := engine2.execute_command(Command.create_system("advance_phase"))
+	var adv2 := engine2.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if not adv2.ok:
 		return Result.failure("首轮推进失败: %s" % adv2.error)
 

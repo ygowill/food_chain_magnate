@@ -9,6 +9,7 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 func _init() -> void:
 	action_id = "produce_food"
@@ -16,8 +17,8 @@ func _init() -> void:
 	description = "使用厨师/主厨生产食物"
 	requires_actor = true
 	is_mandatory = false
-	allowed_phases = ["Working"]
-	allowed_sub_phases = ["GetFood"]
+	allowed_phases = [DefsClass.PHASE_WORKING]
+	allowed_sub_phases = [DefsClass.SUB_PHASE_GET_FOOD]
 
 func can_initiate(state: GameState, player_id: int) -> bool:
 	if state == null:

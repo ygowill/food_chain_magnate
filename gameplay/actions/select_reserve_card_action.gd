@@ -3,6 +3,7 @@
 class_name SelectReserveCardAction
 extends ActionExecutor
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SETUP_SUB_PHASE := "ReserveCards"
 
 func _init() -> void:
@@ -12,13 +13,13 @@ func _init() -> void:
 	requires_actor = true
 	is_mandatory = false
 	is_internal = true # 由强制弹窗驱动，不在 ActionPanel 中展示
-	allowed_phases = ["Setup"]
+	allowed_phases = [DefsClass.PHASE_SETUP]
 	allowed_sub_phases = [SETUP_SUB_PHASE]
 
 func _validate_specific(state: GameState, command: Command) -> Result:
 	if state == null:
 		return Result.failure("state 为空")
-	if state.phase != "Setup":
+	if state.phase != DefsClass.PHASE_SETUP:
 		return Result.failure("当前不在 Setup，无法选择储备卡")
 	if state.sub_phase != SETUP_SUB_PHASE:
 		return Result.failure("当前不在储备卡选择阶段")
@@ -131,4 +132,3 @@ static func _find_next_unselected_turn_index(state: GameState, current_index: in
 			return idx
 
 	return -1
-

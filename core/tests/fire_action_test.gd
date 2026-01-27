@@ -4,6 +4,7 @@ class_name FireActionTest
 extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	# 1) Restructuring：不允许解雇（约束对齐 rules.md）
@@ -12,7 +13,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not init_r.ok:
 		return Result.failure("游戏初始化失败: %s" % init_r.error)
 	var state_r := engine_r.get_state()
-	state_r.phase = "Restructuring"
+	state_r.phase = DefsClass.PHASE_RESTRUCTURING
 	state_r.sub_phase = ""
 	var restructuring_actor := state_r.get_current_player_id()
 	if restructuring_actor < 0:
@@ -26,12 +27,12 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var init := engine.initialize(player_count, seed_val)
 	if not init.ok:
 		return Result.failure("游戏初始化失败: %s" % init.error)
-	var to_payday := TestPhaseUtilsClass.advance_until_phase(engine, "Payday", 30)
+	var to_payday := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_PAYDAY, 30)
 	if not to_payday.ok:
 		return to_payday
 
 	var state := engine.get_state()
-	if state.phase != "Payday":
+	if state.phase != DefsClass.PHASE_PAYDAY:
 		return Result.failure("当前应为 Payday，实际: %s" % state.phase)
 
 	# Payday：解雇应可用

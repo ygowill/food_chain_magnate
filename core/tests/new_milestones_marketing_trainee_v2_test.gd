@@ -6,6 +6,7 @@ class_name NewMilestonesMarketingTraineeV2Test
 extends RefCounted
 
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const MILESTONE_ID := "first_marketing_trainee_used"
 
@@ -32,8 +33,8 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	_force_turn_order(state)
 	_apply_test_map(state)
 
-	state.phase = "Working"
-	state.sub_phase = "Marketing"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
 
 	# 给玩家0 添加 1 张在岗 marketing_trainee（从池取卡，保持守恒）
 	if int(state.employee_pool.get("marketing_trainee", 0)) <= 0:

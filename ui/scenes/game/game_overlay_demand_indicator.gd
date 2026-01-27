@@ -3,6 +3,7 @@ extends RefCounted
 
 const DemandIndicatorScene = preload("res://ui/components/demand_indicator/demand_indicator.tscn")
 const OverlayUtils = preload("res://ui/scenes/game/game_overlay_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 var _scene = null
 var _map_canvas = null
@@ -21,7 +22,7 @@ func sync_demand_indicator(state: GameState) -> void:
 	if state == null:
 		_hide_demand_indicator()
 		return
-	if state.phase != "Dinnertime":
+	if state.phase != DefsClass.PHASE_DINNERTIME:
 		_hide_demand_indicator()
 		return
 	if is_instance_valid(_bank_break_panel) and _bank_break_panel.visible:

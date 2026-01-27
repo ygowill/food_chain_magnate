@@ -3,6 +3,8 @@ class_name SettlementTriggerOverrideExtraV2Test
 extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var r1 := _test_invalid_required_fails(player_count, seed)
@@ -56,12 +58,12 @@ static func _test_exit_trigger_runs(player_count: int, seed: int) -> Result:
 	# Restructuring -> OrderOfBusiness（离开 Restructuring 时触发 exit settlement）
 	var state := engine.get_state()
 	state.round_number = 2
-	state.phase = "Restructuring"
+	state.phase = DefsClass.PHASE_RESTRUCTURING
 	state.sub_phase = ""
 	var gate := _force_restructuring_submitted(state)
 	if not gate.ok:
 		return gate
-	var adv1 := engine.execute_command(Command.create_system("advance_phase"))
+	var adv1 := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if not adv1.ok:
 		return Result.failure("推进到 OrderOfBusiness 失败: %s" % adv1.error)
 
@@ -89,7 +91,7 @@ static func _test_multiple_points_order(player_count: int, seed: int) -> Result:
 	# 进入 Marketing：该测试模块会在 enter 时同时触发 ENTER 与 EXIT（通过 trigger override）
 	var state := engine.get_state()
 	state.round_number = 1
-	state.phase = "Payday"
+	state.phase = DefsClass.PHASE_PAYDAY
 	state.sub_phase = ""
 	var adv := engine.phase_manager.advance_phase(state)
 	if not adv.ok:
@@ -117,7 +119,7 @@ static func _force_restructuring_submitted(state: GameState) -> Result:
 
 	if state.round_state.has("pending_phase_actions") and (state.round_state["pending_phase_actions"] is Dictionary):
 		var ppa: Dictionary = state.round_state["pending_phase_actions"]
-		ppa.erase("Restructuring")
+		ppa.erase(DefsClass.PHASE_RESTRUCTURING)
 		state.round_state["pending_phase_actions"] = ppa
 
 	return Result.success()

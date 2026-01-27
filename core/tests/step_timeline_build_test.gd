@@ -6,6 +6,7 @@ class_name StepTimelineBuildTest
 extends RefCounted
 
 const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const SAVE_RES_PATH := "res://.savings/manual_cases/logs/event_log_review.json"
 
@@ -51,9 +52,9 @@ static func run() -> Result:
 		if kind == "phase":
 			has_phase_step = true
 			var phase := str(s.get("phase", "")).strip_edges()
-			if phase == "Cleanup":
+			if phase == DefsClass.PHASE_CLEANUP:
 				has_cleanup_phase_step = true
-			if phase == "Restructuring":
+			if phase == DefsClass.PHASE_RESTRUCTURING:
 				has_restructuring_phase_step = true
 	if not has_phase_step:
 		return Result.failure("expected at least one phase step in %s" % SAVE_RES_PATH)
@@ -101,7 +102,7 @@ static func run() -> Result:
 			seen_phase_segments[seg] = true
 
 	# 至少应出现 Marketing/Cleanup/Payday 三段（验证“离开阶段事件归属 + auto-advance 分段”）
-	if not (seen_phase_segments.has("Payday") and seen_phase_segments.has("Marketing") and seen_phase_segments.has("Cleanup")):
+	if not (seen_phase_segments.has(DefsClass.PHASE_PAYDAY) and seen_phase_segments.has(DefsClass.PHASE_MARKETING) and seen_phase_segments.has(DefsClass.PHASE_CLEANUP)):
 		return Result.failure("expected phase segments to include Payday/Marketing/Cleanup in %s (seen=%s)" % [SAVE_RES_PATH, str(seen_phase_segments.keys())])
 
 	# 现金变化：Payday 的薪资结算应归属到 Payday 段落（避免被推到 Marketing）。
@@ -121,7 +122,7 @@ static func run() -> Result:
 			continue
 		cash_segments[seg2] = true
 
-	if has_payday_report and not cash_segments.has("Payday"):
+	if has_payday_report and not cash_segments.has(DefsClass.PHASE_PAYDAY):
 		return Result.failure("expected at least one PLAYER_CASH_CHANGED in Payday segment (cash_segments=%s)" % str(cash_segments.keys()))
 
 	# 里程碑：若该存档触发里程碑，则不应全部被推迟到 Restructuring 段落。
@@ -134,7 +135,7 @@ static func run() -> Result:
 		if str(ev3.get("type", "")).strip_edges() != EventBus.EventType.MILESTONE_ACHIEVED:
 			continue
 		milestone_count += 1
-		if str(ev3.get("phase_segment", "")).strip_edges() != "Restructuring":
+		if str(ev3.get("phase_segment", "")).strip_edges() != DefsClass.PHASE_RESTRUCTURING:
 			non_restructuring_milestone = true
 
 	if milestone_count > 0 and not non_restructuring_milestone:
@@ -178,7 +179,7 @@ static func run() -> Result:
 		return Result.failure("expected PLAYER_TURN_ENDED and PHASE_CHANGED for command_index=6 in %s" % SAVE_RES_PATH)
 	if cmd6_turn_ended_seq > cmd6_phase_changed_seq:
 		return Result.failure("expected PLAYER_TURN_ENDED before PHASE_CHANGED for command_index=6 (turn_ended_seq=%d phase_changed_seq=%d)" % [cmd6_turn_ended_seq, cmd6_phase_changed_seq])
-	if cmd6_turn_ended_seg != "Payday":
+	if cmd6_turn_ended_seg != DefsClass.PHASE_PAYDAY:
 		return Result.failure("expected command_index=6 PLAYER_TURN_ENDED in Payday segment, got: %s" % cmd6_turn_ended_seg)
 
 	return Result.success({

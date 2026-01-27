@@ -2,6 +2,7 @@ extends Node
 
 const WorkingPanelsClass = preload("res://ui/scenes/game/game_panel_working_panels.gd")
 const MapControllerClass = preload("res://ui/scenes/game/game_map_interaction_controller.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 class FakeEngine extends RefCounted:
 	var _state: GameState = null
@@ -30,8 +31,8 @@ func _run() -> Result:
 	print("[ProcureDrinksMapClickTest] START args=%s" % str(OS.get_cmdline_user_args()))
 
 	var state := GameState.new()
-	state.phase = "Working"
-	state.sub_phase = "GetDrinks"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
 	state.turn_order = [0]
 	state.current_player_index = 0
 	state.players = [{

@@ -5,6 +5,7 @@ class_name StepTimelinePhaseBoundaryOrderTest
 extends RefCounted
 
 const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(seed_val: int = 12345) -> Result:
 	var engine := GameEngine.new()
@@ -18,7 +19,7 @@ static func run(seed_val: int = 12345) -> Result:
 
 	# 构造一个“回合 2 的 Restructuring”，避免触发 round1 的 auto finalize 特判。
 	state.round_number = 2
-	state.phase = "Restructuring"
+	state.phase = DefsClass.PHASE_RESTRUCTURING
 	state.sub_phase = ""
 
 	if not (state.round_state is Dictionary):
@@ -30,7 +31,7 @@ static func run(seed_val: int = 12345) -> Result:
 		"finalized": false,
 	}
 	state.round_state["pending_phase_actions"] = {
-		"Restructuring": [0, 1]
+		DefsClass.PHASE_RESTRUCTURING: [0, 1]
 	}
 
 	# StepTimelineBuild 从 checkpoints[0].state_dict 开始回放：需要同步“初始状态”。
@@ -50,7 +51,7 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("submit_restructuring p1 failed: %s" % r1.error)
 
 	var state_after := engine.get_state()
-	if state_after.phase != "OrderOfBusiness":
+	if state_after.phase != DefsClass.PHASE_ORDER_OF_BUSINESS:
 		return Result.failure("expected phase OrderOfBusiness after restructuring, got: %s" % str(state_after.phase))
 
 	# 选择顺序（两人局：位置 0/1 必可用），之后应由 AutoAdvance 推进到 Working。
@@ -94,12 +95,12 @@ static func run(seed_val: int = 12345) -> Result:
 
 	var step_submit_last: Dictionary = steps[int(command_steps[1])]
 	var submit_phase := str(step_submit_last.get("phase", "")).strip_edges()
-	if submit_phase != "Restructuring":
+	if submit_phase != DefsClass.PHASE_RESTRUCTURING:
 		return Result.failure("expected last submit_restructuring in Restructuring, got: %s" % submit_phase)
 
 	var step_choose_last: Dictionary = steps[int(command_steps[3])]
 	var choose_phase := str(step_choose_last.get("phase", "")).strip_edges()
-	if choose_phase != "OrderOfBusiness":
+	if choose_phase != DefsClass.PHASE_ORDER_OF_BUSINESS:
 		return Result.failure("expected last choose_turn_order in OrderOfBusiness, got: %s" % choose_phase)
 
 	# 需要存在对应的 phase step，并且出现在该 command step 之后。
@@ -114,9 +115,9 @@ static func run(seed_val: int = 12345) -> Result:
 			continue
 		var anchor := int(s2.get("anchor_command_index", -1))
 		var ph := str(s2.get("phase", "")).strip_edges()
-		if anchor == 1 and ph == "OrderOfBusiness":
+		if anchor == 1 and ph == DefsClass.PHASE_ORDER_OF_BUSINESS:
 			phase_step_oob = i2
-		if anchor == 3 and ph == "Working":
+		if anchor == 3 and ph == DefsClass.PHASE_WORKING:
 			phase_step_working = i2
 
 	if phase_step_oob < 0:

@@ -5,6 +5,7 @@ extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var engine := GameEngine.new()
@@ -12,13 +13,13 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not init.ok:
 		return Result.failure("初始化失败: %s" % init.error)
 
-	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 30)
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
 	if not to_working.ok:
 		return to_working
 
 	var state := engine.get_state()
-	state.sub_phase = "PlaceHouses"
-	if state.phase != "Working" or state.sub_phase != "PlaceHouses":
+	state.sub_phase = DefsClass.SUB_PHASE_PLACE_HOUSES
+	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_PLACE_HOUSES:
 		return Result.failure("应处于 Working/PlaceHouses，实际: %s/%s" % [state.phase, state.sub_phase])
 
 	var actor := state.get_current_player_id()

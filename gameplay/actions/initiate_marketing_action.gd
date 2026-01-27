@@ -7,6 +7,7 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const ValidationClass = preload("res://gameplay/actions/initiate_marketing/validation.gd")
 const ApplyClass = preload("res://gameplay/actions/initiate_marketing/apply.gd")
@@ -17,8 +18,8 @@ func _init() -> void:
 	description = "放置营销板件并创建营销活动"
 	requires_actor = true
 	is_mandatory = false
-	allowed_phases = ["Working"]
-	allowed_sub_phases = ["Marketing"]
+	allowed_phases = [DefsClass.PHASE_WORKING]
+	allowed_sub_phases = [DefsClass.SUB_PHASE_MARKETING]
 
 func can_initiate(state: GameState, player_id: int) -> bool:
 	if state == null:

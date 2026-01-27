@@ -17,6 +17,8 @@ const ReplayClass = preload("res://core/engine/game_engine/replay.gd")
 const StepTimelineHelpersClass = preload("res://gameplay/replay/step_timeline_build/helpers.gd")
 const PhaseTransitionClass = preload("res://gameplay/replay/step_timeline_build/phase_transition.gd")
 const AutoAdvanceDrainClass = preload("res://gameplay/replay/step_timeline_build/auto_advance_drain.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func build_full_impl(engine: GameEngine) -> Result:
 	if engine == null:
@@ -111,7 +113,7 @@ static func build_full_impl(engine: GameEngine) -> Result:
 		# Working：跳过“被跳过子阶段”的冗余步进（例如 skip_sub_phase 非最后子阶段），避免出现“单步推进无变化”。
 		# 这些命令的效果会被合并到上一条可见 step（anchor_command_index 保持不变）。
 		var merge_into_prev_step := false
-		if str(cmd.action_id).strip_edges() == "skip_sub_phase" and str(old_state.phase) == "Working":
+		if str(cmd.action_id).strip_edges() == ActionIdsClass.SKIP_SUB_PHASE and str(old_state.phase) == DefsClass.PHASE_WORKING:
 			var order_names := engine.phase_manager.get_working_sub_phase_order_names()
 			if not order_names.is_empty():
 				var last_sub_phase: String = str(order_names[order_names.size() - 1])
@@ -240,7 +242,7 @@ static func build_full_impl(engine: GameEngine) -> Result:
 			var flush_ci := pending_marketing_enter_anchor_command_index
 			if flush_ci < 0:
 				flush_ci = engine.command_history.size() - 1
-			_append_events(events_out, pending_marketing_enter_effect_events, flush_ci, flush_step_index, "Marketing", seq)
+			_append_events(events_out, pending_marketing_enter_effect_events, flush_ci, flush_step_index, DefsClass.PHASE_MARKETING, seq)
 			seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 		pending_marketing_enter_effect_events = []
 		pending_marketing_enter_anchor_command_index = -1
@@ -250,7 +252,7 @@ static func build_full_impl(engine: GameEngine) -> Result:
 		var flush_step_index2 := steps.size() - 1
 		if flush_step_index2 >= 0:
 			var flush_ci2 := engine.command_history.size() - 1
-			_append_events(events_out, pending_cleanup_throw_away_milestone_events, flush_ci2, flush_step_index2, "Cleanup", seq)
+			_append_events(events_out, pending_cleanup_throw_away_milestone_events, flush_ci2, flush_step_index2, DefsClass.PHASE_CLEANUP, seq)
 			seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 		pending_cleanup_throw_away_milestone_events = []
 

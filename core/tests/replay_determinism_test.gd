@@ -4,6 +4,8 @@ class_name ReplayDeterminismTest
 extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed: int = 12345, min_commands: int = 20) -> Result:
 	var engine_a := GameEngine.new()
@@ -83,7 +85,7 @@ static func _build_and_execute_command_sequence(engine: GameEngine, min_commands
 		return setup
 
 	# 推进到 Working（若已在 Working 则直接通过）
-	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 80)
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 80)
 	if not to_working.ok:
 		return to_working
 
@@ -93,7 +95,7 @@ static func _build_and_execute_command_sequence(engine: GameEngine, min_commands
 		return w1
 
 	# Round 2：推进到 Working（Restructuring / OrderOfBusiness 需要显式确认/选择）
-	var to_working2 := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 120)
+	var to_working2 := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 120)
 	if not to_working2.ok:
 		return to_working2
 
@@ -103,12 +105,12 @@ static func _build_and_execute_command_sequence(engine: GameEngine, min_commands
 		safety_pad += 1
 		if safety_pad > min_commands + 100:
 			return Result.failure("补足命令循环超出安全上限")
-		if engine.get_state().phase != "Working":
-			var back_to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 120)
+		if engine.get_state().phase != DefsClass.PHASE_WORKING:
+			var back_to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 120)
 			if not back_to_working.ok:
 				return back_to_working
 		var pid := engine.get_state().get_current_player_id()
-		var cmd_pad := Command.create("skip_sub_phase", pid)
+		var cmd_pad := Command.create(ActionIdsClass.SKIP_SUB_PHASE, pid)
 		var exec_pad := engine.execute_command(cmd_pad)
 		if not exec_pad.ok:
 			return Result.failure("补足命令 skip_sub_phase 失败: %s (%s)" % [exec_pad.error, str(cmd_pad)])
@@ -119,7 +121,7 @@ static func _complete_order_of_business(engine: GameEngine) -> Result:
 	var state := engine.get_state()
 	var player_count := state.players.size()
 	var safety := 0
-	while state.phase == "OrderOfBusiness":
+	while state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS:
 		safety += 1
 		if safety > player_count + 2:
 			return Result.failure("OrderOfBusiness 选择循环超出安全上限")

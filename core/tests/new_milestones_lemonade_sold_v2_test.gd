@@ -7,6 +7,7 @@ extends RefCounted
 
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const MILESTONE_ID := "first_lemonade_sold"
 
@@ -40,8 +41,8 @@ static func run(player_count: int = 2, seed_val: int = 771122) -> Result:
 		return Result.failure("玩家0 应获得里程碑 %s" % MILESTONE_ID)
 
 	# 场景A：在岗 management_trainee -> junior_vice_president（同色，且旧员工未使用）=> 新员工应立刻在岗
-	state.phase = "Working"
-	state.sub_phase = "Train"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
 	var take_trainer := StateUpdaterClass.take_from_pool(state, "trainer", 1)
 	if not take_trainer.ok:
 		return Result.failure("从员工池取出 trainer 失败: %s" % take_trainer.error)
@@ -84,15 +85,15 @@ static func run(player_count: int = 2, seed_val: int = 771122) -> Result:
 		return Result.failure("junior_vice_president 不应在 reserve_employees 中")
 
 	# 场景B：在岗 pizza_cook 先被使用（produce_food），再培训 -> pizza_chef => 新员工应进入待命
-	state.phase = "Working"
-	state.sub_phase = "GetFood"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
 	var p := engine.execute_command(Command.create("produce_food", 0, {"employee_type": "pizza_cook"}))
 	if not p.ok:
 		return Result.failure("produce_food(pizza_cook) 失败: %s" % p.error)
 
 	state = engine.get_state()
-	state.phase = "Working"
-	state.sub_phase = "Train"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
 	var t2 := engine.execute_command(Command.create("train", 0, {
 		"from_employee": "pizza_cook",
 		"to_employee": "pizza_chef",

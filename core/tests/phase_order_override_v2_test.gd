@@ -2,6 +2,8 @@
 class_name PhaseOrderOverrideV2Test
 extends RefCounted
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(player_count, seed, [
@@ -20,13 +22,13 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 
 	var order: Array[String] = engine.phase_manager.get_phase_order_names()
 	var expected: Array[String] = [
-		"Restructuring",
-		"OrderOfBusiness",
-		"Working",
-		"Dinnertime",
-		"Marketing",
-		"Payday",
-		"Cleanup",
+		DefsClass.PHASE_RESTRUCTURING,
+		DefsClass.PHASE_ORDER_OF_BUSINESS,
+		DefsClass.PHASE_WORKING,
+		DefsClass.PHASE_DINNERTIME,
+		DefsClass.PHASE_MARKETING,
+		DefsClass.PHASE_PAYDAY,
+		DefsClass.PHASE_CLEANUP,
 	]
 	if order != expected:
 		return Result.failure("phase_order override 未生效: %s != %s" % [str(order), str(expected)])
@@ -38,7 +40,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 
 	var state := engine.get_state()
 	state.round_number = 1
-	state.phase = "Restructuring"
+	state.phase = DefsClass.PHASE_RESTRUCTURING
 	state.sub_phase = ""
 	var ts1 := PhaseManager.compute_timestamp(state)
 	if ts1 != 1100:

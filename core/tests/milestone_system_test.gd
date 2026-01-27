@@ -11,6 +11,8 @@ const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache
 const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
 const PaydaySettlementClass = preload("res://core/rules/phase/payday_settlement.gd")
 const BankruptcyRulesClass = preload("res://core/rules/economy/bankruptcy_rules.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	EmployeeRegistryClass.reset()
@@ -136,8 +138,8 @@ static func _test_train_triggers_first_train(seed_val: int) -> Result:
 
 	var state := engine.get_state()
 	_force_turn_order(state)
-	state.phase = "Working"
-	state.sub_phase = "Train"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
 
 	# 准备在岗 trainer（提供培训次数）
 	var take_trainer := StateUpdaterClass.take_from_pool(state, "trainer", 1)
@@ -178,7 +180,7 @@ static func _test_lower_price_triggers_first_lower_prices(seed_val: int) -> Resu
 
 	var state := engine.get_state()
 	_force_turn_order(state)
-	state.phase = "Working"
+	state.phase = DefsClass.PHASE_WORKING
 	state.sub_phase = ""
 
 	var take := StateUpdaterClass.take_from_pool(state, "pricing_manager", 1)
@@ -207,8 +209,8 @@ static func _test_produce_triggers_first_burger_produced(seed_val: int) -> Resul
 
 	var state := engine.get_state()
 	_force_turn_order(state)
-	state.phase = "Working"
-	state.sub_phase = "GetFood"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
 
 	var take := StateUpdaterClass.take_from_pool(state, "burger_cook", 1)
 	if not take.ok:
@@ -268,9 +270,9 @@ static func _test_demand_marked_triggers_first_burger_marketed(seed_val: int) ->
 		return Result.failure("从员工池取出 marketing_trainee 失败: %s" % take.error)
 	state.players[0]["busy_marketers"] = ["marketing_trainee"]
 
-	state.phase = "Payday"
+	state.phase = DefsClass.PHASE_PAYDAY
 	state.sub_phase = ""
-	var adv := engine.execute_command(Command.create_system("advance_phase"))
+	var adv := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if not adv.ok:
 		return Result.failure("推进到 Marketing 失败: %s" % adv.error)
 
@@ -290,8 +292,8 @@ static func _test_recruit_triggers_first_hire_3(seed_val: int) -> Result:
 
 	var state := engine.get_state()
 	_force_turn_order(state)
-	state.phase = "Working"
-	state.sub_phase = "Recruit"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_RECRUIT
 
 	# 准备 hr_director（提供 4 次招聘；加上 CEO=1，总计>=3）
 	var take_hr := StateUpdaterClass.take_from_pool(state, "hr_director", 1)
@@ -454,8 +456,8 @@ static func _test_chain_train_restricted_without_milestone(seed_val: int) -> Res
 
 	var state := engine.get_state()
 	_force_turn_order(state)
-	state.phase = "Working"
-	state.sub_phase = "Train"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
 
 	# 2 名 trainer => 2 次培训
 	for _i in range(2):
@@ -493,8 +495,8 @@ static func _test_chain_train_allowed_with_milestone(seed_val: int) -> Result:
 
 	var state := engine.get_state()
 	_force_turn_order(state)
-	state.phase = "Working"
-	state.sub_phase = "Train"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
 	state.players[0]["multi_trainer_on_one"] = true
 
 	for _i in range(2):
@@ -529,8 +531,8 @@ static func _test_multi_step_train_disallowed_without_coach_or_guru(seed_val: in
 
 	var state := engine.get_state()
 	_force_turn_order(state)
-	state.phase = "Working"
-	state.sub_phase = "Train"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
 
 	# 2 名 trainer => 2 次培训，但单次最多 1 步（不能拼成 2 步培训同一人）
 	for _i in range(2):
@@ -563,8 +565,8 @@ static func _test_multi_step_train_allowed_with_coach(seed_val: int) -> Result:
 
 	var state := engine.get_state()
 	_force_turn_order(state)
-	state.phase = "Working"
-	state.sub_phase = "Train"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
 
 	# coach => 2 次培训，可对同一人 2 步
 	var take_coach := StateUpdaterClass.take_from_pool(state, "coach", 1)
@@ -608,8 +610,8 @@ static func _test_multi_step_train_allowed_with_guru(seed_val: int) -> Result:
 
 	var state := engine.get_state()
 	_force_turn_order(state)
-	state.phase = "Working"
-	state.sub_phase = "Train"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
 
 	# guru => 3 次培训，可对同一人 3 步
 	var take_guru := StateUpdaterClass.take_from_pool(state, "guru", 1)
@@ -654,8 +656,8 @@ static func _test_guru_can_continue_training_after_two_step(seed_val: int) -> Re
 
 	var state := engine.get_state()
 	_force_turn_order(state)
-	state.phase = "Working"
-	state.sub_phase = "Train"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
 
 	# guru => 3 次培训：先 2 步，再允许继续 1 步（同一名 guru 仍有剩余 slot）
 	var take_guru := StateUpdaterClass.take_from_pool(state, "guru", 1)
@@ -705,8 +707,8 @@ static func _test_switch_trainer_disallowed_without_milestone(seed_val: int) -> 
 
 	var state := engine.get_state()
 	_force_turn_order(state)
-	state.phase = "Working"
-	state.sub_phase = "Train"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
 
 	# 1 trainer + 1 coach：总训练次数足够，但同一名员工不应允许“先 trainer 再 coach”继续培训（无里程碑）。
 	var take_trainer := StateUpdaterClass.take_from_pool(state, "trainer", 1)
@@ -749,8 +751,8 @@ static func _test_switch_between_two_coaches_disallowed_without_milestone(seed_v
 
 	var state := engine.get_state()
 	_force_turn_order(state)
-	state.phase = "Working"
-	state.sub_phase = "Train"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
 
 	# 2 名 coach：先用 1 名 coach 完成 2 步培训后，不应允许“换另一名 coach”继续培训同一员工（无里程碑）。
 	for _i in range(2):

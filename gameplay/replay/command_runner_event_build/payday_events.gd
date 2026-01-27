@@ -2,11 +2,13 @@
 # 用途：从 round_state.payday 中推导 payday 结算报告事件（日志/展示语义）。
 extends RefCounted
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+
 static func build_payday_report_events(old_state: GameState, new_state: GameState) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	if old_state == null or new_state == null:
 		return events
-	if str(old_state.phase) != "Payday":
+	if str(old_state.phase) != DefsClass.PHASE_PAYDAY:
 		return events
 	if str(old_state.phase) == str(new_state.phase):
 		return events
@@ -26,4 +28,3 @@ static func build_payday_report_events(old_state: GameState, new_state: GameStat
 		}
 	})
 	return events
-

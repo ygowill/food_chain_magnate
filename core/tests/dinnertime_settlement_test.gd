@@ -6,6 +6,8 @@ extends RefCounted
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	EmployeeRegistryClass.reset()
@@ -67,7 +69,7 @@ static func _test_distance_winner(seed_val: int) -> Result:
 		return adv
 
 	state = engine.get_state()
-	if state.phase != "Payday":
+	if state.phase != DefsClass.PHASE_PAYDAY:
 		return Result.failure("当前应为 Payday（Dinnertime 已自动结算跳过），实际: %s" % state.phase)
 
 	if int(state.players[0].get("cash", 0)) != 10:
@@ -287,8 +289,8 @@ static func _test_garden_bonus_tips_cfo(seed_val: int) -> Result:
 
 static func _advance_to_dinnertime(engine: GameEngine) -> Result:
 	var state := engine.get_state()
-	state.phase = "Working"
-	state.sub_phase = "PlaceRestaurants"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_PLACE_RESTAURANTS
 	if not (state.round_state is Dictionary):
 		state.round_state = {}
 	var passed := {}
@@ -296,7 +298,7 @@ static func _advance_to_dinnertime(engine: GameEngine) -> Result:
 		passed[pid] = true
 	state.round_state["sub_phase_passed"] = passed
 
-	var adv := engine.execute_command(Command.create_system("advance_phase", {"target": "sub_phase"}))
+	var adv := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE, {"target": "sub_phase"}))
 	if not adv.ok:
 		return Result.failure("推进到 Dinnertime 失败: %s" % adv.error)
 	return Result.success()

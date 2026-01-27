@@ -3,6 +3,8 @@
 class_name ChooseTurnOrderAction
 extends ActionExecutor
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+
 var phase_manager: PhaseManager = null
 
 func _init(manager: PhaseManager = null) -> void:
@@ -11,7 +13,7 @@ func _init(manager: PhaseManager = null) -> void:
 	description = "在决定顺序阶段选择行动顺序位置"
 	requires_actor = true
 	is_mandatory = false
-	allowed_phases = ["OrderOfBusiness"]
+	allowed_phases = [DefsClass.PHASE_ORDER_OF_BUSINESS]
 	phase_manager = manager
 
 func _validate_specific(state: GameState, command: Command) -> Result:
@@ -131,7 +133,7 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, _comm
 
 	# 若本动作触发了自动推进阶段，则补齐 phase/sub_phase 事件（原先由手动 advance_phase 触发）
 	if old_state.phase != new_state.phase:
-		if str(old_state.phase) == "Dinnertime":
+		if str(old_state.phase) == DefsClass.PHASE_DINNERTIME:
 			var report: Dictionary = {}
 			if old_state.round_state is Dictionary:
 				var v = Dictionary(old_state.round_state).get("dinnertime", null)

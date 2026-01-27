@@ -3,6 +3,7 @@ extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const MarketingPanelScene = preload("res://ui/components/marketing_panel/marketing_panel.tscn")
 
@@ -32,7 +33,7 @@ func sync(state: GameState) -> void:
 		return
 	if not is_instance_valid(marketing_panel) or not marketing_panel.visible:
 		return
-	if state.phase != "Working" or state.sub_phase != "Marketing":
+	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_MARKETING:
 		marketing_panel.visible = false
 		if _map_controller != null:
 			_map_controller.clear_selection()

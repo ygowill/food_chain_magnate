@@ -5,6 +5,7 @@ class_name RuralMarketeersV2Test
 extends RefCounted
 
 const ModuleEntryClass = preload("res://modules/rural_marketeers/rules/entry.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count != 2:
@@ -108,8 +109,8 @@ static func _test_place_billboard_and_offramp(seed_val: int) -> Result:
 	return Result.success()
 
 static func _force_player0_ready_for_marketing(state: GameState) -> void:
-	state.phase = "Working"
-	state.sub_phase = "Marketing"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
 	state.turn_order = [0, 1]
 	state.current_player_index = 0
 	state.round_state["sub_phase_passed"] = {0: false, 1: false}

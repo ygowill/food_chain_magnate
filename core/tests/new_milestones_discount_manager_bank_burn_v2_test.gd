@@ -6,6 +6,8 @@ class_name NewMilestonesDiscountManagerBankBurnV2Test
 extends RefCounted
 
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed_val: int = 445566) -> Result:
 	if player_count != 2:
@@ -30,8 +32,8 @@ static func run(player_count: int = 2, seed_val: int = 445566) -> Result:
 	_force_turn_order(state)
 
 	# 在 Working 中执行 set_discount（不依赖子阶段）
-	state.phase = "Working"
-	state.sub_phase = "Recruit"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_RECRUIT
 	var take := StateUpdaterClass.take_from_pool(state, "discount_manager", 1)
 	if not take.ok:
 		return Result.failure("从员工池取出 discount_manager 失败: %s" % take.error)
@@ -50,7 +52,7 @@ static func run(player_count: int = 2, seed_val: int = 445566) -> Result:
 		return Result.failure("应标记 bank_burn_pending=true")
 
 	# 模拟进入下一回合的 Restructuring，并离开 Restructuring（触发 BEFORE_EXIT hook）
-	state.phase = "Restructuring"
+	state.phase = DefsClass.PHASE_RESTRUCTURING
 	state.sub_phase = ""
 	state.round_number += 1
 	var gate := _force_restructuring_submitted(state)
@@ -58,7 +60,7 @@ static func run(player_count: int = 2, seed_val: int = 445566) -> Result:
 		return gate
 
 	var before := int(state.bank.get("total", 0))
-	var adv := engine.execute_command(Command.create_system("advance_phase"))
+	var adv := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if not adv.ok:
 		return Result.failure("advance_phase(Restructuring->...) 失败: %s" % adv.error)
 
@@ -92,7 +94,7 @@ static func _force_restructuring_submitted(state: GameState) -> Result:
 
 	if state.round_state.has("pending_phase_actions") and (state.round_state["pending_phase_actions"] is Dictionary):
 		var ppa: Dictionary = state.round_state["pending_phase_actions"]
-		ppa.erase("Restructuring")
+		ppa.erase(DefsClass.PHASE_RESTRUCTURING)
 		state.round_state["pending_phase_actions"] = ppa
 
 	return Result.success()

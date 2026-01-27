@@ -5,6 +5,7 @@ extends RefCounted
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 const Phase = PhaseDefsClass.Phase
 const Point = SettlementRegistryClass.Point
@@ -141,8 +142,8 @@ static func _test_cleanup_produces_and_forces_kimchi_storage(seed_val: int) -> R
 
 static func _advance_to_dinnertime(engine: GameEngine) -> Result:
 	var state := engine.get_state()
-	state.phase = "Working"
-	state.sub_phase = "PlaceRestaurants"
+	state.phase = PhaseDefsClass.PHASE_WORKING
+	state.sub_phase = PhaseDefsClass.SUB_PHASE_PLACE_RESTAURANTS
 	if not (state.round_state is Dictionary):
 		state.round_state = {}
 	var passed := {}
@@ -150,7 +151,7 @@ static func _advance_to_dinnertime(engine: GameEngine) -> Result:
 		passed[pid] = true
 	state.round_state["sub_phase_passed"] = passed
 
-	var adv := engine.execute_command(Command.create_system("advance_phase", {"target": "sub_phase"}))
+	var adv := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE, {"target": "sub_phase"}))
 	if not adv.ok:
 		return Result.failure("推进到 Dinnertime 失败: %s" % adv.error)
 	return Result.success()

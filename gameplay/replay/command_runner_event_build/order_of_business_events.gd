@@ -2,11 +2,13 @@
 # 用途：从 round_state.order_of_business 中推导“行动顺序最终落地”事件（日志/展示语义）。
 extends RefCounted
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+
 static func build_turn_order_finalized_events(old_state: GameState, new_state: GameState) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	if old_state == null or new_state == null:
 		return events
-	if str(old_state.phase) != "OrderOfBusiness":
+	if str(old_state.phase) != DefsClass.PHASE_ORDER_OF_BUSINESS:
 		return events
 	if str(old_state.phase) == str(new_state.phase):
 		return events
@@ -39,4 +41,3 @@ static func build_turn_order_finalized_events(old_state: GameState, new_state: G
 		}
 	})
 	return events
-

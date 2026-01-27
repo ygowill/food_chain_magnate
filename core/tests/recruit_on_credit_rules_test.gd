@@ -7,6 +7,8 @@ extends RefCounted
 
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if player_count != 2:
@@ -20,8 +22,8 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var state := engine.get_state()
 	state.turn_order = [0, 1]
 	state.current_player_index = 0
-	state.phase = "Working"
-	state.sub_phase = "Recruit"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_RECRUIT
 
 	# 准备在岗 trainer（提供培训次数），以允许缺货预支
 	var take_trainer := StateUpdaterClass.take_from_pool(state, "trainer", 1)
@@ -72,26 +74,26 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		return Result.failure("缺货预支登记不正确: %s" % str(pending_all))
 
 	# 2) 禁止跳过 Working 阶段
-	var adv_phase := engine.execute_command(Command.create_system("advance_phase"))
+	var adv_phase := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if adv_phase.ok:
 		return Result.failure("存在缺货预支待培训时不应允许推进主阶段（跳过 Train）")
 
 	# 3) 进入 Train 子阶段
 	state = engine.get_state()
-	if state.phase != "Working":
+	if state.phase != DefsClass.PHASE_WORKING:
 		return Result.failure("当前应为 Working，实际: %s" % state.phase)
-	if state.sub_phase != "Train":
+	if state.sub_phase != DefsClass.SUB_PHASE_TRAIN:
 		var pass_all_recruit := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine)
 		if not pass_all_recruit.ok:
 			return pass_all_recruit
 	state = engine.get_state()
-	if state.phase != "Working" or state.sub_phase != "Train":
+	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_TRAIN:
 		return Result.failure("当前应为 Working/Train，实际: %s/%s" % [state.phase, state.sub_phase])
 
 	# 4) 未清账前禁止离开 Train 子阶段
 	state = engine.get_state()
 	state.current_player_index = 0
-	var cannot_skip_train := engine.execute_command(Command.create("skip", 0))
+	var cannot_skip_train := engine.execute_command(Command.create(ActionIdsClass.SKIP, 0))
 	if cannot_skip_train.ok:
 		return Result.failure("存在缺货预支待培训时不应允许确认结束 Train 子阶段")
 
@@ -118,14 +120,14 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 
 	# 6) 清账后允许离开 Train
 	state = engine.get_state()
-	if state.sub_phase == "Train":
+	if state.sub_phase == DefsClass.SUB_PHASE_TRAIN:
 		var pass_all_train2 := TestPhaseUtilsClass.pass_all_players_in_working_sub_phase(engine)
 		if not pass_all_train2.ok:
 			return pass_all_train2
 	state = engine.get_state()
-	if state.phase != "Working":
+	if state.phase != DefsClass.PHASE_WORKING:
 		return Result.failure("清账后推进子阶段不应离开 Working，实际: %s" % state.phase)
-	if state.sub_phase == "Train":
+	if state.sub_phase == DefsClass.SUB_PHASE_TRAIN:
 		return Result.failure("清账后应允许离开 Train 子阶段，但仍在 Train")
 
 	return Result.success({

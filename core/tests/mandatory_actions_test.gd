@@ -6,6 +6,8 @@ extends RefCounted
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	# 1) 初始化游戏（模块系统 V2 会装配 EmployeeRegistry）
@@ -36,12 +38,12 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("luxury_manager 应该是 mandatory=true")
 
 	# 3) 推进到 Working 阶段
-	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 30)
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
 	if not to_working.ok:
 		return to_working
 
 	state = engine.get_state()
-	if state.phase != "Working":
+	if state.phase != DefsClass.PHASE_WORKING:
 		return Result.failure("当前应该在 Working 阶段，实际: %s" % state.phase)
 
 	# 4) 获取当前玩家 ID（使用正确的回合顺序）
@@ -60,7 +62,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	# 6) 测试 MandatoryActionsRules.get_required_mandatory_actions
 	var current_player := state.get_player(current_player_id)
 	var required := MandatoryActionsRulesClass.get_required_mandatory_actions(current_player)
-	if not required.has("set_price"):
+	if not required.has(ActionIdsClass.SET_PRICE):
 		return Result.failure("当前玩家应该需要执行 set_price 强制动作，实际需要: %s" % str(required))
 
 	# 7) 测试 check_mandatory_actions_completed 失败（未完成强制动作）
@@ -73,7 +75,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 
 	# 8) 触发一次命令执行，使 auto_advance 有机会自动补完强制动作（set_price）
 	# - 这里不直接执行 set_price（玩家无感知自动执行）
-	var auto_trigger := engine.execute_command(Command.create("skip_sub_phase", current_player_id))
+	var auto_trigger := engine.execute_command(Command.create(ActionIdsClass.SKIP_SUB_PHASE, current_player_id))
 	if not auto_trigger.ok:
 		return Result.failure("skip_sub_phase 失败: %s" % auto_trigger.error)
 
@@ -82,7 +84,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	# 9) 验证强制动作已完成（应被 auto_advance 自动补完）
 	assert(state.round_state.mandatory_actions_completed.has(current_player_id), "round_state.mandatory_actions_completed 缺少玩家 key")
 	var completed: Array = state.round_state.mandatory_actions_completed[current_player_id]
-	if not completed.has("set_price"):
+	if not completed.has(ActionIdsClass.SET_PRICE):
 		return Result.failure("set_price 应该被自动执行并写入已完成列表")
 
 	# 10) 再次检查，应该通过
@@ -102,7 +104,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return leave_working
 
 	state = engine.get_state()
-	if state.phase == "Working":
+	if state.phase == DefsClass.PHASE_WORKING:
 		return Result.failure("强制动作完成后应允许离开 Working 阶段")
 
 	return Result.success({

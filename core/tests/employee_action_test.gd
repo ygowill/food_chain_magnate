@@ -3,6 +3,8 @@ class_name EmployeeActionTest
 extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var engine := GameEngine.new()
@@ -11,11 +13,11 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		return Result.failure("初始化失败: %s" % init.error)
 
 	# 推进到 Working / Recruit
-	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 30)
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
 	if not to_working.ok:
 		return to_working
 
-	if engine.get_state().sub_phase != "Recruit":
+	if engine.get_state().sub_phase != DefsClass.SUB_PHASE_RECRUIT:
 		return Result.failure("Working 初始子阶段应为 Recruit，实际: %s" % engine.get_state().sub_phase)
 
 	var first_actor := engine.get_state().get_current_player_id()
@@ -30,7 +32,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		return Result.failure("无招聘员时不应允许第二次招聘（应受 CEO 1 次限制）")
 
 	# 2) 结束一整回合，进入下一回合 Restructuring：待命员工需要在重组阶段手动激活
-	var to_restructuring := TestPhaseUtilsClass.advance_until_phase(engine, "Restructuring", 50)
+	var to_restructuring := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_RESTRUCTURING, 50)
 	if not to_restructuring.ok:
 		return to_restructuring
 
@@ -41,10 +43,10 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		if safety2 > 20:
 			return Result.failure("轮转到目标玩家超出安全上限（Restructuring）")
 		var pid_turn := engine.get_state().get_current_player_id()
-		var end_turn := engine.execute_command(Command.create("end_turn", pid_turn))
+		var end_turn := engine.execute_command(Command.create(ActionIdsClass.END_TURN, pid_turn))
 		if not end_turn.ok:
 			return Result.failure("end_turn 失败: %s" % end_turn.error)
-		if engine.get_state().phase != "Restructuring":
+		if engine.get_state().phase != DefsClass.PHASE_RESTRUCTURING:
 			return Result.failure("轮转玩家时不应离开 Restructuring")
 
 	var activate := engine.execute_command(Command.create("restructure_employee", first_actor, {"employee_id": "recruiting_girl", "to_reserve": false}))
@@ -60,7 +62,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		return Result.failure("重组后 recruiting_girl 不应仍在待命区")
 
 	# 3) 推进到下一次 Working / Recruit：人力资源专员应提供额外次数（共 2 次）
-	var to_working2 := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 50)
+	var to_working2 := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 50)
 	if not to_working2.ok:
 		return to_working2
 
@@ -73,7 +75,7 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		var end_turn := TestPhaseUtilsClass.end_current_player_working_turn(engine, 50)
 		if not end_turn.ok:
 			return end_turn
-		if engine.get_state().phase != "Working":
+		if engine.get_state().phase != DefsClass.PHASE_WORKING:
 			return Result.failure("未轮转到目标玩家前不应离开 Working")
 
 	var rr1 := engine.execute_command(Command.create("recruit", first_actor, {"employee_type": "trainer"}))
@@ -98,7 +100,7 @@ static func _complete_order_of_business(engine: GameEngine) -> Result:
 	var state := engine.get_state()
 	var player_count := state.players.size()
 	var safety := 0
-	while state.phase == "OrderOfBusiness":
+	while state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS:
 		safety += 1
 		if safety > player_count + 2:
 			return Result.failure("OrderOfBusiness 选择循环超出安全上限")

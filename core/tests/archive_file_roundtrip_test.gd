@@ -5,6 +5,8 @@
 class_name ArchiveFileRoundtripTest
 extends RefCounted
 
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(player_count, seed_val)
@@ -34,7 +36,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 			engine.checkpoints[0] = cp0
 
 	# 生成至少 1 条命令，覆盖 commands/timestamp 的序列化与回放
-	var adv := engine.execute_command(Command.create_system("advance_phase"))
+	var adv := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if not adv.ok:
 		return Result.failure("预置命令 advance_phase 失败: %s" % adv.error)
 

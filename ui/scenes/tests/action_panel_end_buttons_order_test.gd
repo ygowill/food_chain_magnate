@@ -5,6 +5,7 @@ class_name ActionPanelEndButtonsOrderTest
 extends RefCounted
 
 const ActionPanelClass = preload("res://ui/components/action_panel/action_panel.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run() -> Result:
 	var r1 := _case_both_present()
@@ -21,10 +22,10 @@ static func _case_both_present() -> Result:
 	panel.add_child(container)
 	panel.items_container = container
 
-	panel.set_available_actions(["recruit", "skip", "train", "skip_sub_phase"])
+	panel.set_available_actions(["recruit", ActionIdsClass.SKIP, "train", ActionIdsClass.SKIP_SUB_PHASE])
 
 	var ids := _read_action_ids(container)
-	if ids.size() < 2 or ids[ids.size() - 2] != "skip_sub_phase" or ids[ids.size() - 1] != "skip":
+	if ids.size() < 2 or ids[ids.size() - 2] != ActionIdsClass.SKIP_SUB_PHASE or ids[ids.size() - 1] != ActionIdsClass.SKIP:
 		_safe_free(panel)
 		return Result.failure("ActionPanel order mismatch (both): %s" % str(ids))
 
@@ -37,10 +38,10 @@ static func _case_skip_only() -> Result:
 	panel.add_child(container)
 	panel.items_container = container
 
-	panel.set_available_actions(["skip", "recruit"])
+	panel.set_available_actions([ActionIdsClass.SKIP, "recruit"])
 
 	var ids := _read_action_ids(container)
-	if ids.is_empty() or ids[ids.size() - 1] != "skip":
+	if ids.is_empty() or ids[ids.size() - 1] != ActionIdsClass.SKIP:
 		_safe_free(panel)
 		return Result.failure("ActionPanel order mismatch (skip only): %s" % str(ids))
 

@@ -10,6 +10,7 @@ const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 
 const HOUSE_PIECE_ID := "house_with_garden"
@@ -24,8 +25,8 @@ func _init(piece_registry: Dictionary = {}) -> void:
 	description = "在地图上放置房屋"
 	requires_actor = true
 	is_mandatory = false
-	allowed_phases = ["Working"]
-	allowed_sub_phases = ["PlaceHouses"]
+	allowed_phases = [DefsClass.PHASE_WORKING]
+	allowed_sub_phases = [DefsClass.SUB_PHASE_PLACE_HOUSES]
 	_piece_registry = piece_registry
 
 func can_initiate(state: GameState, player_id: int) -> bool:

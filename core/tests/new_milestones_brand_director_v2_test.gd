@@ -9,6 +9,7 @@ extends RefCounted
 
 const MarketingSettlementClass = preload("res://core/rules/phase/marketing_settlement.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const MILESTONE_ID := "first_brand_director_used"
 
@@ -35,8 +36,8 @@ static func run(player_count: int = 2, seed_val: int = 334455) -> Result:
 	var state := engine.get_state()
 	_force_turn_order(state)
 	_apply_test_map(state)
-	state.phase = "Working"
-	state.sub_phase = "Marketing"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
 	if int(state.employee_pool.get("brand_director", 0)) <= 0:
 		return Result.failure("员工池中没有 brand_director")
 	state.employee_pool["brand_director"] = int(state.employee_pool.get("brand_director", 0)) - 1
@@ -79,8 +80,8 @@ static func run(player_count: int = 2, seed_val: int = 334455) -> Result:
 	var state2 := engine2.get_state()
 	_force_turn_order(state2)
 	_apply_test_map(state2)
-	state2.phase = "Working"
-	state2.sub_phase = "Marketing"
+	state2.phase = DefsClass.PHASE_WORKING
+	state2.sub_phase = DefsClass.SUB_PHASE_MARKETING
 	if int(state2.employee_pool.get("brand_director", 0)) <= 0:
 		return Result.failure("员工池中没有 brand_director")
 	state2.employee_pool["brand_director"] = int(state2.employee_pool.get("brand_director", 0)) - 1

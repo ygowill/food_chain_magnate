@@ -9,6 +9,8 @@ const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var last_error: String = ""
@@ -47,22 +49,22 @@ static func _run_once(player_count: int, seed_val: int) -> Result:
 		return place_result
 
 	state = engine.get_state()
-	if state.phase != "Working":
+	if state.phase != DefsClass.PHASE_WORKING:
 		# 首轮：Restructuring/OrderOfBusiness 会自动跳过到 Working
-		if state.phase != "Restructuring":
+		if state.phase != DefsClass.PHASE_RESTRUCTURING:
 			return Result.failure("放置餐厅并全员确认结束后应进入 Working（首轮自动跳过 Restructuring/OOB），实际: %s" % state.phase)
 
 	# 3) 推进到 Working 阶段
-	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 30)
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
 	if not to_working.ok:
 		return to_working
 
 	state = engine.get_state()
-	if state.phase != "Working":
+	if state.phase != DefsClass.PHASE_WORKING:
 		return Result.failure("当前应该在 Working 阶段，实际: %s" % state.phase)
 
 	# 固定到 GetDrinks 子阶段（测试 procure_drinks 本身，不依赖 Working 自动跳子阶段的细节）
-	state.sub_phase = "GetDrinks"
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
 
 	# 5) 检查地图上是否有饮料源
 	var drink_sources: Array = state.map.get("drink_sources", [])
@@ -80,7 +82,7 @@ static func _run_once(player_count: int, seed_val: int) -> Result:
 		turn_order.append(pid)
 	state.turn_order = turn_order
 	state.current_player_index = air_player_id
-	state.sub_phase = "GetDrinks"
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
 
 	# 7) 给该玩家添加一个飞艇驾驶员（air range = 4）
 	if int(state.employee_pool.get("zeppelin_pilot", 0)) <= 0:
@@ -124,7 +126,7 @@ static func _run_once(player_count: int, seed_val: int) -> Result:
 		return Result.failure("飞艇采购后饮料总库存应至少增加 2，实际增量: %d" % (drinks_after_air - drinks_before_air))
 
 	# 11) 尝试再次使用同一员工采购（应该失败 - 每个员工每子阶段只能采购一次）
-	state.sub_phase = "GetDrinks"
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
 	state.current_player_index = air_player_id
 	var procure_again := Command.create("procure_drinks", air_player_id, {"employee_type": "zeppelin_pilot"})
 	var procure_again_result := engine.execute_command(procure_again)
@@ -138,7 +140,7 @@ static func _run_once(player_count: int, seed_val: int) -> Result:
 		return Result.failure("找不到任何玩家能在卡车范围内采购饮料")
 
 	state.current_player_index = road_player_id
-	state.sub_phase = "GetDrinks"
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
 
 	# 13) 测试卡车司机（road range = 3）
 	if state.employee_pool.get("truck_driver", 0) <= 0:
@@ -177,7 +179,7 @@ static func _run_once(player_count: int, seed_val: int) -> Result:
 		return Result.failure("recruiting_girl 不应该能采购饮料")
 
 	# 15) 测试玩家没有的员工类型
-	state.sub_phase = "GetDrinks"
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
 	state.current_player_index = road_player_id
 	var no_emp := Command.create("procure_drinks", road_player_id, {"employee_type": "truck_driver"})
 	# 先移除 truck_driver
@@ -260,17 +262,17 @@ static func _place_initial_restaurants(engine: GameEngine) -> Result:
 				return Result.failure("放置餐厅失败: %s (%s)" % [exec_place.error, str(cmd_place)])
 			placed[current_player] = true
 
-		# 放置后手动结束回合
-		var cmd_skip := Command.create("skip", current_player)
-		var exec_skip := engine.execute_command(cmd_skip)
-		if not exec_skip.ok:
-			return Result.failure("skip 失败: %s (%s)" % [exec_skip.error, str(cmd_skip)])
+			# 放置后手动结束回合
+			var cmd_skip := Command.create(ActionIdsClass.SKIP, current_player)
+			var exec_skip := engine.execute_command(cmd_skip)
+			if not exec_skip.ok:
+				return Result.failure("skip 失败: %s (%s)" % [exec_skip.error, str(cmd_skip)])
 
 	return Result.success()
 
 static func _find_restaurant_placement_with_air_access(engine: GameEngine, actor: int, range_value: int) -> Command:
 	var state := engine.get_state()
-	if state.phase != "Setup":
+	if state.phase != DefsClass.PHASE_SETUP:
 		return null
 
 	var executor := engine.action_registry.get_executor("place_restaurant")
@@ -343,7 +345,7 @@ static func _find_first_valid_placement(engine: GameEngine, action_id: String, a
 
 static func _find_restaurant_placement_with_road_access(engine: GameEngine, actor: int, range_value: int) -> Command:
 	var state := engine.get_state()
-	if state.phase != "Setup":
+	if state.phase != DefsClass.PHASE_SETUP:
 		return null
 
 	var executor := engine.action_registry.get_executor("place_restaurant")
@@ -606,7 +608,7 @@ static func _rotate_to_player(engine: GameEngine, target_player_id: int) -> Resu
 		if safety > 20:
 			return Result.failure("轮转到目标玩家超出安全上限")
 		var current := engine.get_state().get_current_player_id()
-		var sk := engine.execute_command(Command.create("skip", current))
+		var sk := engine.execute_command(Command.create(ActionIdsClass.SKIP, current))
 		if not sk.ok:
 			return Result.failure("skip 失败: %s" % sk.error)
 	return Result.success()

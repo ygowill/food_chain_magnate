@@ -6,6 +6,7 @@ class_name SubmitRestructuringAction
 extends ActionExecutor
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 var phase_manager: PhaseManager = null
 
@@ -15,7 +16,7 @@ func _init(manager: PhaseManager = null) -> void:
 	description = "提交本回合公司结构"
 	requires_actor = true
 	is_mandatory = false
-	allowed_phases = ["Restructuring"]
+	allowed_phases = [DefsClass.PHASE_RESTRUCTURING]
 	phase_manager = manager
 
 func _validate_specific(state: GameState, command: Command) -> Result:
@@ -23,7 +24,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("state 为空")
 	if not (state.round_state is Dictionary):
 		return Result.failure("round_state 类型错误（期望 Dictionary）")
-	if state.phase != "Restructuring":
+	if state.phase != DefsClass.PHASE_RESTRUCTURING:
 		return Result.failure("当前不在 Restructuring")
 	if not EmployeeRegistryClass.is_loaded():
 		return Result.failure("EmployeeRegistry 未初始化")
@@ -404,10 +405,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		var ppa_val = state.round_state.get("pending_phase_actions", null)
 		if ppa_val is Dictionary:
 			var ppa: Dictionary = ppa_val
-			if ppa.has("Restructuring") and (ppa["Restructuring"] is Array):
-				var pending: Array = ppa["Restructuring"]
+			if ppa.has(DefsClass.PHASE_RESTRUCTURING) and (ppa[DefsClass.PHASE_RESTRUCTURING] is Array):
+				var pending: Array = ppa[DefsClass.PHASE_RESTRUCTURING]
 				pending.erase(player_id)
-				ppa["Restructuring"] = pending
+				ppa[DefsClass.PHASE_RESTRUCTURING] = pending
 				state.round_state["pending_phase_actions"] = ppa
 	state.round_state["restructuring"] = r
 
@@ -425,7 +426,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		var ppa_val2 = state.round_state.get("pending_phase_actions", null)
 		if ppa_val2 is Dictionary:
 			var ppa2: Dictionary = ppa_val2
-			ppa2.erase("Restructuring")
+			ppa2.erase(DefsClass.PHASE_RESTRUCTURING)
 			state.round_state["pending_phase_actions"] = ppa2
 
 		# Restructuring 为“同时进行”：不推进 current_player_index（避免隐式顺序/误导 UI）。

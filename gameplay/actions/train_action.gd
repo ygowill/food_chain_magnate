@@ -10,6 +10,7 @@ const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const TrainCompanyValidationClass = preload("res://gameplay/actions/train/train_company_validation.gd")
 const TrainEmployeeUsageClass = preload("res://gameplay/actions/train/train_employee_usage.gd")
 const TrainEmployeeLocksClass = preload("res://gameplay/actions/train/train_employee_locks.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func _compute_train_steps_within_limit(from_employee: String, to_employee: String, max_steps: int) -> int:
 	# 规则：培训必须沿 employee_def.train_to 的路径逐步进行。
@@ -62,8 +63,8 @@ func _init() -> void:
 	description = "将待命员工培训为更高级职位"
 	requires_actor = true
 	is_mandatory = false
-	allowed_phases = ["Working"]
-	allowed_sub_phases = ["Train"]
+	allowed_phases = [DefsClass.PHASE_WORKING]
+	allowed_sub_phases = [DefsClass.SUB_PHASE_TRAIN]
 
 func can_initiate(state: GameState, player_id: int) -> bool:
 	if state == null:

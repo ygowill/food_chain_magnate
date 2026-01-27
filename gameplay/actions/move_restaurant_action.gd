@@ -7,6 +7,7 @@ const RestaurantPlacementClass = preload("res://core/map/placement_validator/res
 const MapContextBuilderClass = preload("res://core/map/map_context_builder.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 
 var _piece_registry: Dictionary = {}
@@ -17,8 +18,8 @@ func _init(piece_registry: Dictionary = {}) -> void:
 	description = "移动一个已有餐厅到新位置"
 	requires_actor = true
 	is_mandatory = false
-	allowed_phases = ["Working"]
-	allowed_sub_phases = ["PlaceRestaurants"]
+	allowed_phases = [DefsClass.PHASE_WORKING]
+	allowed_sub_phases = [DefsClass.SUB_PHASE_PLACE_RESTAURANTS]
 	_piece_registry = piece_registry
 
 func can_initiate(state: GameState, player_id: int) -> bool:

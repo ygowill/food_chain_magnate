@@ -6,6 +6,7 @@ extends ActionExecutor
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 func _init() -> void:
 	action_id = "set_discount"
@@ -13,7 +14,7 @@ func _init() -> void:
 	description = "激活折扣经理效果（-$3）"
 	requires_actor = true
 	is_mandatory = true
-	allowed_phases = ["Working"]
+	allowed_phases = [DefsClass.PHASE_WORKING]
 	allowed_sub_phases = []  # 任何子阶段都可以执行
 
 func _validate_specific(state: GameState, command: Command) -> Result:

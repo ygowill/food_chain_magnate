@@ -9,6 +9,7 @@ const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 
 const GARDEN_SUPPLY_KEY := "garden_supply_remaining"
@@ -22,8 +23,8 @@ func _init(piece_registry: Dictionary = {}) -> void:
 	description = "为一个已有的房屋添加花园"
 	requires_actor = true
 	is_mandatory = false
-	allowed_phases = ["Working"]
-	allowed_sub_phases = ["PlaceHouses"]
+	allowed_phases = [DefsClass.PHASE_WORKING]
+	allowed_sub_phases = [DefsClass.SUB_PHASE_PLACE_HOUSES]
 	_piece_registry = piece_registry
 
 func can_initiate(state: GameState, player_id: int) -> bool:

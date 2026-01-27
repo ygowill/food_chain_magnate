@@ -13,6 +13,7 @@ const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EffectRegistryClass = preload("res://core/rules/effect_registry.gd")
 const PhaseManagerClass = preload("res://core/engine/phase_manager.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	EmployeeRegistryClass.reset()
@@ -76,8 +77,8 @@ static func _test_billboard_mailbox_and_expiry(player_count: int, seed_val: int)
 	state.players[actor]["employees"].append("campaign_manager")
 
 	# 固定到 Working / Marketing 子阶段
-	state.phase = "Working"
-	state.sub_phase = "Marketing"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
 
 	# 该测试使用固定的板件占地尺寸（用于验证“多格板件不会错误覆盖道路格”）
 	var b11_val = MarketingRegistryClass.get_def(11)
@@ -152,7 +153,7 @@ static func _test_billboard_mailbox_and_expiry(player_count: int, seed_val: int)
 		return Result.failure("营销员不应仍留在在岗 employees")
 
 	# 3) 进入 Marketing 阶段：结算需求并使持续时间 -1（duration=1 => 到期）
-	state.phase = "Payday"
+	state.phase = DefsClass.PHASE_PAYDAY
 	state.sub_phase = ""
 	var cash := StateUpdaterClass.player_receive_from_bank(state, actor, 20)
 	if not cash.ok:
@@ -244,8 +245,8 @@ static func _test_radio_and_airplane_ranges(player_count: int, seed_val: int) ->
 	state.players[actor]["employees"].append("brand_manager")
 
 	# 固定到 Working / Marketing 子阶段
-	state.phase = "Working"
-	state.sub_phase = "Marketing"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
 
 	# 1) Radio（board #1）：放在 tile(0,0)，应影响 2x2 tiles 区域内的房屋
 	var radio := engine.execute_command(Command.create("initiate_marketing", actor, {
@@ -271,7 +272,7 @@ static func _test_radio_and_airplane_ranges(player_count: int, seed_val: int) ->
 
 	# 3) 进入 Marketing 阶段结算
 	state = engine.get_state()
-	state.phase = "Payday"
+	state.phase = DefsClass.PHASE_PAYDAY
 	state.sub_phase = ""
 	var cash := StateUpdaterClass.player_receive_from_bank(state, actor, 20)
 	if not cash.ok:
@@ -348,8 +349,8 @@ static func _test_first_billboard_permanent_and_no_salary(player_count: int, see
 	state.employee_pool["campaign_manager"] = int(state.employee_pool.get("campaign_manager", 0)) - 1
 	state.players[actor]["employees"].append("campaign_manager")
 
-	state.phase = "Working"
-	state.sub_phase = "Marketing"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
 
 	var paid_before := EmployeeRulesClass.count_paid_employees(state.players[actor])
 	if paid_before != 1:
@@ -468,8 +469,8 @@ static func _test_effect_registry_first_radio_demand_amount(player_count: int, s
 	state.players[actor]["employees"].append("brand_director")
 
 	# 固定到 Working / Marketing 子阶段
-	state.phase = "Working"
-	state.sub_phase = "Marketing"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
 
 	var radio := engine.execute_command(Command.create("initiate_marketing", actor, {
 		"employee_type": "brand_director",
@@ -556,8 +557,8 @@ static func _test_marketing_rejects_drink_source_overlap(player_count: int, seed
 	state.players[actor]["employees"].append("brand_manager")
 
 	# 固定到 Working / Marketing 子阶段
-	state.phase = "Working"
-	state.sub_phase = "Marketing"
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
 
 	# 在 billboard(#11) 的占地内放置一个饮品进货点，营销应被拒绝（issue_tracker #35）
 	var ds_pos := Vector2i(1, 2)

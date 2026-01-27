@@ -9,6 +9,7 @@ const RoundStateCountersClass = preload("res://core/utils/round_state_counters.g
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func _compute_min_steps_to_any_in_stock_target(
 	from_employee: String,
@@ -67,8 +68,8 @@ func _init() -> void:
 	description = "从员工池招聘员工"
 	requires_actor = true
 	is_mandatory = false
-	allowed_phases = ["Working"]
-	allowed_sub_phases = ["Recruit"]
+	allowed_phases = [DefsClass.PHASE_WORKING]
+	allowed_sub_phases = [DefsClass.SUB_PHASE_RECRUIT]
 
 func can_initiate(state: GameState, player_id: int) -> bool:
 	if state == null:

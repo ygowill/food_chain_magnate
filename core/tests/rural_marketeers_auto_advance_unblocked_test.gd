@@ -6,6 +6,7 @@ extends RefCounted
 
 const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const ACTION_ID := "place_giant_billboard"
 const EMPLOYEE_ID := "rural_marketeer"
@@ -16,7 +17,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not init.ok:
 		return Result.failure("游戏初始化失败: %s" % init.error)
 
-	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, "Working", 60)
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 60)
 	if not to_working.ok:
 		return to_working
 
@@ -27,7 +28,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 
 	# 构造：进入 Working/Marketing，且当前玩家没有任何营销相关员工，
 	# 使“无真实动作”成为预期，从而验证 auto-advance 不应被 place_giant_billboard 阻塞。
-	state.sub_phase = "Marketing"
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
 	state.players[pid]["employees"] = []
 
 	var initiatable := engine.action_registry.get_player_initiatable_actions(state, pid)
@@ -50,4 +51,3 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		"before_sub_phase": before_sub,
 		"after_sub_phase": str(state.sub_phase),
 	})
-

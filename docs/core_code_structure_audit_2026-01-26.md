@@ -1,6 +1,6 @@
 # core/ GDScript 结构问题清单（用于后续重构）
 
-更新时间：2026-01-27  
+更新时间：2026-01-28  
 审计范围：`core/**/*.gd`  
 说明：本报告以“可维护性/层次边界/重复逻辑/过度耦合”为主，目的是为后续逐步重构提供抓手与文件定位；不在本次直接改代码。
 
@@ -136,6 +136,7 @@
 - 2026-01-28：phase/action 字符串常量化（第五步）：将 gameplay 的 `place_restaurant`/`fire` 中 phase 判定与 allowed_phases 改为引用集中常量（`DefsClass.PHASE_*` + `DefsClass.SUB_PHASE_*`），减少硬编码与拼写风险；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：phase/action 字符串常量化（第六步）：将 UI 的 `ActionPanel` 中 phase 判定、fallback phase/sub_phase 分支、以及系统 action_id 判定改为引用集中常量（`DefsClass.PHASE_*` + `DefsClass.SUB_PHASE_*` + `ActionIdsClass.*`），减少硬编码与拼写风险；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：phase/action 字符串常量化（第七步）：将 UI 的 `game.gd`/`game_panel_working_panels.gd`/`game_map_interaction_controller.gd` 中残留 phase/sub_phase 判定改为引用集中常量（`DefsClass.PHASE_*` + `DefsClass.SUB_PHASE_*`），减少硬编码与拼写风险；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-28：phase/action 字符串常量化（第八步）：继续覆盖 gameplay/actions + gameplay/replay + core/tests + ui/scenes/tests 中残留 phase/sub_phase 判定与系统 action_id（`skip/skip_sub_phase/end_turn/advance_phase`）字符串，统一引用集中常量（`DefsClass.PHASE_*` + `DefsClass.SUB_PHASE_*` + `ActionIdsClass.*`），进一步减少硬编码与拼写风险；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -323,6 +324,7 @@
   - （已整改 2026-01-28）第五步：gameplay 的部分动作也开始改用集中常量（先覆盖 place_restaurant/fire 的 phase 判定与 allowed_phases），其余 gameplay/actions 可继续逐步推进。
   - （已整改 2026-01-28）第六步：UI 侧 ActionPanel 也开始改用集中常量（phase 判定/fallback/misc system action 判定），其余 UI 组件/测试可继续逐步推进。
   - （已整改 2026-01-28）第七步：UI 侧剩余少量 phase/sub_phase 判定也开始改用集中常量（game/working_panels/map_interaction_controller），其余 core/tests 等可继续逐步推进。
+  - （已整改 2026-01-28）第八步：继续将 gameplay/actions+replay、core/tests 与 ui/scenes/tests 中残留 phase/sub_phase + 系统 action_id 判定改为引用集中常量（`DefsClass.PHASE_*` + `DefsClass.SUB_PHASE_*` + `ActionIdsClass.*`），使 phase/action 相关 callsite 基本不再裸写字符串。
 - `assert` 与 `Result.failure` 混用导致“release 下校验失效”的风险：
   - （已整改 2026-01-27）以 `core/engine/phase_manager/working_flow.gd` 为例，里程碑 effects 解析与 OrderOfBusiness 排序相关的 fail-fast 已从 `assert` 改为返回 `Result.failure`，并在 base_rules/movie_stars hooks 中显式传播（release 下也生效）。
   - 仍有少量 `assert`（多为初始化/内部不变量/模块校验）；关键路径（`WorkingFlow`/`CompanyStructureRules`/`HouseNumberManager`/`DinnertimeSelection`/`TileBaking`/`PhaseManager.advance_sub_phase`）已改为 `Result.failure` fail-fast，后续可继续统一策略。

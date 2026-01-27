@@ -64,7 +64,7 @@ static func run(player_count: int = 2, seed_val: int = 889900) -> Result:
 		return Result.failure("玩家0 应获得里程碑 %s，实际: %s" % [MILESTONE_ID, str(milestones0)])
 
 	# Cleanup：有 freezer 后 food+drink 总量 cap=10；超出则进入 pending 并允许玩家选择保留
-	state.phase = "Cleanup"
+	state.phase = PhaseDefsClass.PHASE_CLEANUP
 	state.sub_phase = ""
 	state.round_number = 1
 
@@ -80,7 +80,7 @@ static func run(player_count: int = 2, seed_val: int = 889900) -> Result:
 	if not (ppa_val is Dictionary):
 		return Result.failure("缺少 pending_phase_actions")
 	var ppa: Dictionary = ppa_val
-	var pending_val = ppa.get("Cleanup", null)
+	var pending_val = ppa.get(PhaseDefsClass.PHASE_CLEANUP, null)
 	if not (pending_val is Array):
 		return Result.failure("pending_phase_actions[Cleanup] 类型错误（期望 Array）")
 	var pending: Array = pending_val

@@ -4,6 +4,8 @@ class_name RestructuringOverflowPenaltyTest
 extends RefCounted
 
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var engine := GameEngine.new()
@@ -14,10 +16,10 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	# 避免首轮 Restructuring 自动跳过：让离开 Setup 后进入 round=2
 	engine.get_state().round_number = 1
 
-	var adv1 := engine.execute_command(Command.create_system("advance_phase"))
+	var adv1 := engine.execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if not adv1.ok:
 		return Result.failure("推进到 Restructuring 失败: %s" % adv1.error)
-	if engine.get_state().phase != "Restructuring":
+	if engine.get_state().phase != DefsClass.PHASE_RESTRUCTURING:
 		return Result.failure("期望进入 Restructuring，实际: %s" % engine.get_state().phase)
 
 	# 构造超限：把 CEO 卡槽设为 1，并添加 2 名在岗员工
@@ -46,14 +48,14 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 
 	# Restructuring -> OrderOfBusiness：离开重组时应触发超限惩罚
 	for pid in range(player_count):
-		if engine.get_state().phase != "Restructuring":
+		if engine.get_state().phase != DefsClass.PHASE_RESTRUCTURING:
 			break
 		var submit := engine.execute_command(Command.create("submit_restructuring", pid, {}))
 		if not submit.ok:
 			return Result.failure("提交重组失败: %s" % submit.error)
 
 	state = engine.get_state()
-	if state.phase != "OrderOfBusiness":
+	if state.phase != DefsClass.PHASE_ORDER_OF_BUSINESS:
 		return Result.failure("期望进入 OrderOfBusiness，实际: %s" % state.phase)
 	
 	var p_after := state.get_player(0)
