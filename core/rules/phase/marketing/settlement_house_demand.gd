@@ -74,23 +74,32 @@ static func add_house_demand(
 	state.map["houses"] = houses
 	return Result.success(added)
 
-static func sort_house_ids_by_number(state: GameState, house_ids: Array[String]) -> Array[String]:
+static func sort_house_ids_by_number(state: GameState, house_ids: Array) -> Result:
 	if house_ids.is_empty():
-		return []
-	assert(state != null, "MarketingSettlementHelpers.sort_house_ids_by_number: state 为空")
-	assert(state.map is Dictionary, "MarketingSettlementHelpers.sort_house_ids_by_number: state.map 类型错误（期望 Dictionary）")
-	assert(state.map.has("houses") and (state.map["houses"] is Dictionary), "MarketingSettlementHelpers.sort_house_ids_by_number: state.map.houses 缺失或类型错误（期望 Dictionary）")
+		return Result.success([])
+	if state == null:
+		return Result.failure("MarketingSettlementHelpers.sort_house_ids_by_number: state 为空")
+	if not (state.map is Dictionary):
+		return Result.failure("MarketingSettlementHelpers.sort_house_ids_by_number: state.map 类型错误（期望 Dictionary）")
+	if not state.map.has("houses") or not (state.map["houses"] is Dictionary):
+		return Result.failure("MarketingSettlementHelpers.sort_house_ids_by_number: state.map.houses 缺失或类型错误（期望 Dictionary）")
 	var houses: Dictionary = state.map["houses"]
 
 	var subset := {}
 	var seen := {}
 	for hid in house_ids:
-		assert(hid is String and not str(hid).is_empty(), "MarketingSettlementHelpers.sort_house_ids_by_number: house_id 不能为空")
+		if not (hid is String):
+			return Result.failure("MarketingSettlementHelpers.sort_house_ids_by_number: house_id 类型错误（期望 String）")
 		var id: String = str(hid)
-		assert(not seen.has(id), "MarketingSettlementHelpers.sort_house_ids_by_number: 重复 house_id: %s" % id)
+		if id.is_empty():
+			return Result.failure("MarketingSettlementHelpers.sort_house_ids_by_number: house_id 不能为空")
+		if seen.has(id):
+			return Result.failure("MarketingSettlementHelpers.sort_house_ids_by_number: 重复 house_id: %s" % id)
 		seen[id] = true
-		assert(houses.has(id), "MarketingSettlementHelpers.sort_house_ids_by_number: house_id 不存在: %s" % id)
-		assert(houses[id] is Dictionary, "MarketingSettlementHelpers.sort_house_ids_by_number: houses[%s] 类型错误（期望 Dictionary）" % id)
+		if not houses.has(id):
+			return Result.failure("MarketingSettlementHelpers.sort_house_ids_by_number: house_id 不存在: %s" % id)
+		if not (houses[id] is Dictionary):
+			return Result.failure("MarketingSettlementHelpers.sort_house_ids_by_number: houses[%s] 类型错误（期望 Dictionary）" % id)
 		subset[id] = houses[id]
 
 	return HouseNumberManagerClass.get_sorted_house_ids(subset)

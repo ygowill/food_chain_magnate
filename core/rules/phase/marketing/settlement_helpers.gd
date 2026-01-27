@@ -27,5 +27,5 @@ static func get_demand_amount_for_instance(state: GameState, inst: Dictionary, e
 static func apply_marketing_demand_cash_effects(state: GameState, effect_registry, inst: Dictionary, demands_added: int) -> Result:
 	return Impl.apply_marketing_demand_cash_effects(state, effect_registry, inst, demands_added)
 
-static func sort_house_ids_by_number(state: GameState, house_ids: Array[String]) -> Array[String]:
+static func sort_house_ids_by_number(state: GameState, house_ids: Array) -> Result:
 	return Impl.sort_house_ids_by_number(state, house_ids)

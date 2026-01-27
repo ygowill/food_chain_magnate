@@ -51,10 +51,10 @@ static func get_player_restaurants(state, player_id: int) -> Array[String]:
 	result.sort()
 	return result
 
-static func get_sorted_house_ids(state) -> Array[String]:
+static func get_sorted_house_ids(state) -> Result:
 	if state == null or not (state.map is Dictionary):
-		return []
+		return Result.failure("Structures.get_sorted_house_ids: state.map 类型错误（期望 Dictionary）")
 	if not state.map.has("houses") or not (state.map["houses"] is Dictionary):
-		return []
+		return Result.failure("Structures.get_sorted_house_ids: state.map.houses 缺失或类型错误（期望 Dictionary）")
 	var houses: Dictionary = state.map["houses"]
 	return HouseNumberManagerClass.get_sorted_house_ids(houses)

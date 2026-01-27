@@ -48,7 +48,10 @@ static func apply(
 
 	var warnings: Array[String] = []
 
-	var ordered_house_ids: Array[String] = StructuresClass.get_sorted_house_ids(state)
+	var ordered_read := StructuresClass.get_sorted_house_ids(state)
+	if not ordered_read.ok:
+		return Result.failure("晚餐结算失败：%s" % str(ordered_read.error))
+	var ordered_house_ids: Array[String] = ordered_read.value
 	for house_id in ordered_house_ids:
 		if not houses.has(house_id):
 			continue
@@ -278,4 +281,3 @@ static func apply(
 		"skipped": skipped,
 		"sold_marketed_demand_events": sold_marketed_demand_events,
 	}).with_warnings(warnings)
-

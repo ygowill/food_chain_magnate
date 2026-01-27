@@ -68,7 +68,10 @@ static func apply(state: GameState, marketing_range_calculator = null, rounds: i
 		if not affected_result.ok:
 			return affected_result
 		var affected: Array = affected_result.value
-		affected_by_board_number[board_number] = _sort_house_ids_by_number(state, affected)
+		var sorted_read := _sort_house_ids_by_number(state, affected)
+		if not sorted_read.ok:
+			return sorted_read
+		affected_by_board_number[board_number] = sorted_read.value
 
 		var marketing_type: String = inst["type"]
 		var owner: int = inst["owner"]
@@ -92,7 +95,6 @@ static func apply(state: GameState, marketing_range_calculator = null, rounds: i
 			if not products_in_order_r.ok:
 				return products_in_order_r
 			var products_in_order: Array = products_in_order_r.value
-
 			var affected: Array = affected_by_board_number.get(board_number, [])
 			var demand_amount: int = int(demand_amount_by_board_number.get(board_number, 1))
 
@@ -141,7 +143,7 @@ static func apply(state: GameState, marketing_range_calculator = null, rounds: i
 		var world_pos: Vector2i = inst["world_pos"]
 		var before_duration: int = inst["remaining_duration"]
 
-		var affected: Array[String] = affected_by_board_number.get(board_number, [])
+		var affected: Array = affected_by_board_number.get(board_number, [])
 		var demands_added: int = int(demands_added_by_board_number.get(board_number, 0))
 
 		var after_duration: int = before_duration
@@ -224,5 +226,5 @@ static func _get_demand_amount_for_instance(state: GameState, inst: Dictionary, 
 static func _apply_marketing_demand_cash_effects(state: GameState, effect_registry, inst: Dictionary, demands_added: int) -> Result:
 	return HelpersClass.apply_marketing_demand_cash_effects(state, effect_registry, inst, demands_added)
 
-static func _sort_house_ids_by_number(state: GameState, house_ids: Array[String]) -> Array[String]:
+static func _sort_house_ids_by_number(state: GameState, house_ids: Array) -> Result:
 	return HelpersClass.sort_house_ids_by_number(state, house_ids)
