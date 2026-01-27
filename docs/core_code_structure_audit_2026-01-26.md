@@ -121,6 +121,7 @@
 - 2026-01-27：继续拆分 `gameplay/replay/command_runner_event_build.gd`：将 `PHASE_CHANGED`/`SUB_PHASE_CHANGED` 下沉到 `gameplay/replay/command_runner_event_build/phase_events.gd`，将 `PLAYER_CASH_CHANGED` 下沉到 `cash_events.gd`，将 `MILESTONE_ACHIEVED` 下沉到 `milestone_events.gd`，主文件更聚焦 orchestrator/wrapper（继续降低单文件体积）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `StepTimelineBuild`：将“阶段切换事件归属 + 结算 effects 归属”抽离到 `gameplay/replay/step_timeline_build/phase_transition.gd`，将 auto-advance 分段主循环抽离到 `gameplay/replay/step_timeline_build/auto_advance_drain.gd`，`build_full_impl.gd` 收敛为 orchestrator（体积降至 ~289 LOC）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：清理 `GameEngine`：移除未使用的 preload 依赖，并删除薄 `_` wrapper（减少噪音/耦合，体积降至 ~285 LOC）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：复核并更新文档：将审计中残留的“已部分整改”标记统一更新为“已整改”（代码改动已在此前完成，本文档仅做状态对齐）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -129,7 +130,7 @@
 下列文件普遍存在“单文件承担多个职责”的情况，阅读与修改成本显著偏高（不仅是行数问题，更是职责边界问题）：
 
 - `core/engine/game_engine/command_runner.gd`（~215 LOC） + `gameplay/replay/command_runner_event_build.gd`（~67 LOC；（已整改 2026-01-27）事件推导已基本拆到 `gameplay/replay/command_runner_event_build/` 下的子模块，主文件仅保留 orchestrator/wrapper）
-  - （已部分整改 2026-01-26）事件构建已下沉到 `command_runner_event_build.gd`；`CommandRunner` 主流程更聚焦于“命令执行 + auto-advance + 不变量/校验点 + EventBus 发射”。
+  - （已整改 2026-01-26）事件构建已下沉到 `command_runner_event_build.gd`；`CommandRunner` 主流程更聚焦于“命令执行 + auto-advance + 不变量/校验点 + EventBus 发射”。
   - `DINNERTIME_REPORT`/回合边界事件以及 `PHASE_CHANGED`/`SUB_PHASE_CHANGED`/玩家现金变化/里程碑达成等事件推导已拆到子模块；主文件主要保留 orchestrator/wrapper。
 - `gameplay/replay/step_timeline_build/build_full_impl.gd`（~289 LOC；（已整改 2026-01-27）将阶段切换归属与 auto-advance 分段分别抽离到 `phase_transition.gd`/`auto_advance_drain.gd`，主文件更聚焦于 orchestrator）
   - 主要是“回放/日志时间线”的语义构建，逻辑复杂且强依赖事件归属规则（phase_segment、step_index、进入/离开阶段的事件归属等）。
@@ -166,8 +167,8 @@
 - 同时仓库已经存在可复用的解析 helper：
   - `core/state/serialization/parse_helpers.gd`
   - `core/map/parse_helpers.gd`
-  - （已部分整改 2026-01-26）`core/data/parse_helpers.gd`
-  - （已部分整改 2026-01-26）`core/utils/json_value_parse_helpers.gd`
+  - （已整改 2026-01-26）`core/data/parse_helpers.gd`
+  - （已整改 2026-01-26）`core/utils/json_value_parse_helpers.gd`
 
 现状（已复核 2026-01-27）：
 - `core/` 中仅剩 3 个文件包含 `func _parse_*`（均为业务/局部 helper，不再是跨目录重复实现）：
@@ -176,8 +177,8 @@
   - `core/types/command.gd`：required 字段解析 helper（用于减少 `from_dict(...)` 校验样板）
 
 典型文件（不完全列举）：
-- 数据定义解析重复：（已部分整改 2026-01-26）`core/data/product_def.gd`、`core/data/milestone_def.gd`、`core/data/employee_def/parser.gd`、`core/data/marketing_def.gd` 已改为共用 `core/data/parse_helpers.gd`；（已部分整改 2026-01-26）`core/data/game_config.gd` 已改为复用 `core/state/serialization/parse_helpers.gd`
-- 命令/存档解析重复：（已部分整改 2026-01-26）`core/types/command.gd` 与 `core/engine/game_engine/loader.gd` 已共用 `core/utils/json_value_parse_helpers.gd`；（已部分整改 2026-01-26）`core/actions/action_executor.gd` 已改为共用 `core/utils/int_value_parse_helpers.gd`
+- 数据定义解析重复：（已整改 2026-01-26）`core/data/product_def.gd`、`core/data/milestone_def.gd`、`core/data/employee_def/parser.gd`、`core/data/marketing_def.gd` 已改为共用 `core/data/parse_helpers.gd`；（已整改 2026-01-26）`core/data/game_config.gd` 已改为复用 `core/state/serialization/parse_helpers.gd`
+- 命令/存档解析重复：（已整改 2026-01-26）`core/types/command.gd` 与 `core/engine/game_engine/loader.gd` 已共用 `core/utils/json_value_parse_helpers.gd`；（已整改 2026-01-26）`core/actions/action_executor.gd` 已改为共用 `core/utils/int_value_parse_helpers.gd`
 - 规则内重复：`core/rules/pricing_pipeline.gd`、`core/rules/drinks_procurement.gd`、`core/rules/phase/payday_settlement.gd`、`core/rules/phase/cleanup_settlement.gd`、`core/rules/phase/dinnertime_settlement.gd`
 
 风险：
@@ -227,7 +228,7 @@
 - 将 “内建 action wiring / action executor 注册” 移到 `gameplay/`（或更上层），core 只提供 `ActionRegistry` 的 API 与引擎执行能力。
 - 或引入“动作提供者/注册回调”的注入点：由 app/gameplay 在初始化时向 engine 提供 executors。
 
-### 3.2 core/engine 对 EventBus/DebugFlags/GameLog 等全局单例耦合偏高（已部分整改）
+### 3.2 core/engine 对 EventBus/DebugFlags/GameLog 等全局单例耦合偏高（已整改）
 
 涉及文件（主要集中在 engine，另含 actions/rules）：
 - `core/engine/game_engine/command_runner.gd`：（已整改 2026-01-27）对 `GameLog`/`DebugFlags`/`EventBus` 不再直接引用 Autoload 全局变量，改为统一通过 `AutoloadAccess` 动态获取；仍包含 `OS.has_feature` 的调试/发布差异分支；事件发射仍经 `engine.emit_event(...)` wrapper
@@ -302,7 +303,7 @@
   - 例如多个地方直接比较 `"Marketing" / "Dinnertime" / "Working" ...`，容易产生拼写/重命名成本与难以全局替换的问题。
   - 建议逐步迁移到集中定义（constants/enum），并提供转换与校验入口。
 - `assert` 与 `Result.failure` 混用导致“release 下校验失效”的风险：
-  - （已部分整改 2026-01-27）以 `core/engine/phase_manager/working_flow.gd` 为例，里程碑 effects 解析与 OrderOfBusiness 排序相关的 fail-fast 已从 `assert` 改为返回 `Result.failure`，并在 base_rules/movie_stars hooks 中显式传播（release 下也生效）。
+  - （已整改 2026-01-27）以 `core/engine/phase_manager/working_flow.gd` 为例，里程碑 effects 解析与 OrderOfBusiness 排序相关的 fail-fast 已从 `assert` 改为返回 `Result.failure`，并在 base_rules/movie_stars hooks 中显式传播（release 下也生效）。
   - 仍有少量 `assert`（多为初始化/内部不变量/模块校验）；关键路径（`WorkingFlow`/`CompanyStructureRules`/`HouseNumberManager`/`DinnertimeSelection`/`TileBaking`）已改为 `Result.failure` fail-fast，后续可继续统一策略。
 - 大量 `Dictionary` 结构的手工深层读取/写入：
   - 多文件重复出现 `if not (x is Dictionary)`、`get(..., null)`、`duplicate(true)` 组合，属于结构性样板代码。
@@ -559,7 +560,7 @@
 ### actions/
 
 - `core/actions/action_availability_registry.gd`：中等体量；后续可按重构优先级处理
-- `core/actions/action_executor.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `IntValueParseHelpers`；中等体量；后续可按重构优先级处理
+- `core/actions/action_executor.gd`：（已整改 2026-01-26）移除自带 `_parse_int_value`，改用 `IntValueParseHelpers`；中等体量；后续可按重构优先级处理
 - `core/actions/action_registry.gd`：包含 UI 语义：`get_player_initiatable_actions(...)` 判定“可启动动作”（隐式契约）；（已整改 2026-01-26）缺参判定统一走 `Result.ErrorCode.MISSING_PARAMS`（避免错误文案做控制流）；（已整改 2026-01-27）查询/过滤逻辑已抽离到 `action_registry_queries.gd`（ActionRegistry 主体更聚焦于注册/校验器）；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（避免直接引用 Autoload 全局变量）
 - `core/actions/action_registry_queries.gd`：（已新增 2026-01-27）ActionRegistry 查询/过滤辅助（按 phase/player 过滤动作），用于降低 `ActionRegistry` 单文件职责与体积
 
@@ -572,7 +573,7 @@
 - `core/data/employee_def/parser/optional_fields.gd`：（已新增 2026-01-27）可选字段解析（mandatory/can_be_fired/marketing_max_duration/produces/pool/effect_ids），依赖 `DataParseHelpers`
 - `core/data/employee_def/serialization.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/data/employee_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/data/game_config.gd`：（已部分整改 2026-01-26）通用 `_parse_*` 已改为复用 `ParseHelpers`，仅保留业务专用 `_parse_reserve_cards`；中等体量；后续可按重构优先级处理
+- `core/data/game_config.gd`：（已整改 2026-01-26）通用 `_parse_*` 已改为复用 `ParseHelpers`，仅保留业务专用 `_parse_reserve_cards`；中等体量；后续可按重构优先级处理
 - `core/data/game_data.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/data/marketing_def.gd`：（已整改 2026-01-26）移除自带 `_parse_*`，改用 `DataParseHelpers`
 - `core/data/marketing_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
@@ -607,18 +608,18 @@
 - `core/engine/game_engine/auto_advance_working_mandatory.gd`：（已新增 2026-01-27）Working 阶段强制动作补完：可无参自动执行的定价/折扣/奢侈品（避免阻断 auto-advance）
 - `core/engine/game_engine/auto_advance_order_of_business_round1.gd`：（已新增 2026-01-27）首轮 OrderOfBusiness 自动 finalize：基于 `previous_turn_order` 写入 picks 并落地 turn_order
 - `core/engine/game_engine/checkpoints.gd`：（已整改 2026-01-27）日志/verbose 开关读取改为通过 `AutoloadAccess` 动态访问 `GameLog`/`DebugFlags`（降低对 Autoload 全局变量的硬依赖）；仍含调试/发布差异分支（OS.has_feature）
-- `core/engine/game_engine/command_runner.gd`：（已部分整改 2026-01-26）事件构建已下沉到 `gameplay/replay/command_runner_event_build.gd`（并由 `ProjectSettings.fcm/command_runner_event_build_provider_path` 提供），主流程更聚焦于命令执行/auto-advance/invariants/checkpoint/emit；（已整改 2026-01-27）对 `EventBus`/`GameLog`/`DebugFlags` 的访问改为通过 `AutoloadAccess` 动态获取（并将 `EventBus.EventType.*` 改为字符串常量），降低对 Autoload 全局变量的硬依赖；仍含调试/发布差异分支（OS.has_feature）；（已整改 2026-01-26）事件发射改为调用 `engine.emit_event(...)` wrapper，避免直连 `EventBus.emit_event(...)`
+- `core/engine/game_engine/command_runner.gd`：（已整改 2026-01-26）事件构建已下沉到 `gameplay/replay/command_runner_event_build.gd`（并由 `ProjectSettings.fcm/command_runner_event_build_provider_path` 提供），主流程更聚焦于命令执行/auto-advance/invariants/checkpoint/emit；（已整改 2026-01-27）对 `EventBus`/`GameLog`/`DebugFlags` 的访问改为通过 `AutoloadAccess` 动态获取（并将 `EventBus.EventType.*` 改为字符串常量），降低对 Autoload 全局变量的硬依赖；仍含调试/发布差异分支（OS.has_feature）；（已整改 2026-01-26）事件发射改为调用 `engine.emit_event(...)` wrapper，避免直连 `EventBus.emit_event(...)`
 - （已移出 core 2026-01-26）`gameplay/replay/command_runner_event_build.gd`：从 `CommandRunner` 抽离的派生事件构建（report/拆分事件/marketing 到期/cleanup 丢弃等，偏日志/展示语义）；（已整改 2026-01-27）已将 Dinnertime/Marketing/Cleanup/OrderOfBusiness/Payday/Round/Phase/Cash/Milestone 的事件推导拆到 `gameplay/replay/command_runner_event_build/` 下的子模块；主文件仅保留 orchestrator/wrapper
 - `core/engine/game_engine/diagnostics.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/engine/game_engine/event_history_rebuild.gd`：（已整改 2026-01-27）`EventBus.EventType.*` 改为使用事件 type 字符串，降低对 Autoload 全局变量的硬依赖；（已部分整改 2026-01-26）debug_force 判定统一复用 `Replay.should_force_execute_in_replay(...)`（移除本文件内重复/分支判断）
+- `core/engine/game_engine/event_history_rebuild.gd`：（已整改 2026-01-27）`EventBus.EventType.*` 改为使用事件 type 字符串，降低对 Autoload 全局变量的硬依赖；（已整改 2026-01-26）debug_force 判定统一复用 `Replay.should_force_execute_in_replay(...)`（移除本文件内重复/分支判断）
 - （已移出 core 2026-01-26）`gameplay/replay/event_timeline_build.gd`：`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建（缺少初始 checkpoint 时仅 warning，不阻塞时间线构建）；复用 `timeline_event_helpers.gd` 统一写入 `sequence/timestamp/command_index`（减少重复/样板）；依赖 EventBus（日志/UI 耦合）
 - `core/engine/game_engine/game_started_event_build.gd`：（已新增 2026-01-26）抽离 `GAME_STARTED` 事件字段构建（initializer/event_timeline_build/step_timeline_build 共用），避免字段/计算方式漂移
-- `core/engine/game_engine/initializer.gd`：（已部分整改 2026-01-26）`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建；中等体量；存在一定数量的 preload 依赖；（已整改 2026-01-27）日志/事件类型改为通过 `AutoloadAccess`/字符串常量处理，降低对 Autoload 全局变量的硬依赖；（已整改 2026-01-26）不再直接写 `engine._initial_*`，改用公开 setter；（已整改 2026-01-26）EventBus.history 清空逻辑改为调用 `engine.clear_event_history_for_new_session()`；（已整改 2026-01-26）`GAME_STARTED` 事件发射改为调用 `engine.emit_event(...)` wrapper
+- `core/engine/game_engine/initializer.gd`：（已整改 2026-01-26）`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建；中等体量；存在一定数量的 preload 依赖；（已整改 2026-01-27）日志/事件类型改为通过 `AutoloadAccess`/字符串常量处理，降低对 Autoload 全局变量的硬依赖；（已整改 2026-01-26）不再直接写 `engine._initial_*`，改用公开 setter；（已整改 2026-01-26）EventBus.history 清空逻辑改为调用 `engine.clear_event_history_for_new_session()`；（已整改 2026-01-26）`GAME_STARTED` 事件发射改为调用 `engine.emit_event(...)` wrapper
 - `core/engine/game_engine/invariants.gd`：中等体量；后续可按重构优先级处理
-- `core/engine/game_engine/loader.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `JsonValueParseHelpers`；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（降低对 Autoload 全局变量的硬依赖）；含调试/发布差异分支（OS.has_feature）；（已整改 2026-01-26）不再直接写 `engine._initial_*`，改用公开 setter；（已整改 2026-01-26）EventBus.history 清空逻辑改为调用 `engine.clear_event_history_for_new_session()`
+- `core/engine/game_engine/loader.gd`：（已整改 2026-01-26）移除自带 `_parse_int_value`，改用 `JsonValueParseHelpers`；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（降低对 Autoload 全局变量的硬依赖）；含调试/发布差异分支（OS.has_feature）；（已整改 2026-01-26）不再直接写 `engine._initial_*`，改用公开 setter；（已整改 2026-01-26）EventBus.history 清空逻辑改为调用 `engine.clear_event_history_for_new_session()`
 - `core/engine/game_engine/modules_v2.gd`：中等体量；preload 依赖较多（耦合偏高）；（已整改 2026-01-27）catalog/config 校验逻辑已抽离到 `modules_v2_validations.gd`
 - `core/engine/game_engine/modules_v2_validations.gd`：（已新增 2026-01-27）ModulesV2 校验辅助（catalog/config 结构校验），用于降低 `modules_v2.gd` 单文件职责与体积
-- `core/engine/game_engine/replay.gd`：中等体量；后续可按重构优先级处理；含调试/发布差异分支（OS.has_feature）；（已部分整改 2026-01-26）checkpoint.rng_calls 解析共用 `JsonValueParseHelpers`
+- `core/engine/game_engine/replay.gd`：中等体量；后续可按重构优先级处理；含调试/发布差异分支（OS.has_feature）；（已整改 2026-01-26）checkpoint.rng_calls 解析共用 `JsonValueParseHelpers`
 - （已移出 core 2026-01-26）`gameplay/replay/step_timeline_build.gd`（wrapper） + `gameplay/replay/step_timeline_build/build_full_impl.gd`：`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建；debug_force 判定统一复用 `Replay.should_force_execute_in_replay(...)`；复用 `timeline_event_helpers.gd` 统一写入事件 envelope（`sequence/timestamp/command_index/step_index/phase_segment`）（减少重复/样板）；时间线/日志“派生视图”构建逻辑很重；（已整改 2026-01-27）将 step dict/事件封装/阶段归属等内部 helper 抽离到 `gameplay/replay/step_timeline_build/helpers.gd`；（已整改 2026-01-27）将 auto-advance 分段主循环抽离到 `auto_advance_drain.gd`，将阶段切换/结算 effects 归属抽离到 `phase_transition.gd`，`build_full_impl.gd` 收敛为 orchestrator；依赖 EventBus（日志/UI 耦合）；（已整改 2026-01-26：不再跨文件调用 CommandRunner/PhaseManager 的私有 `_` 前缀方法）
 - （已移出 core 2026-01-26）`gameplay/replay/timeline_event_helpers.gd`：收敛时间线事件 envelope 字段写入（`sequence`/`timestamp`/`command_index`/`step_index`/`phase_segment`），供 `event_timeline_build.gd`/`step_timeline_build.gd` 等复用（减少重复/样板）
 - `core/engine/phase_manager.gd`：（已整改 2026-01-27）移除未使用的 preload 依赖（减少耦合/噪音）；移除未被使用的静态 defs wrapper（保留 `compute_timestamp(...)`），减少重复 API，降低单文件体积
@@ -629,7 +630,7 @@
 - `core/engine/phase_manager/hooks.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志/调试开关读取改为通过 `AutoloadAccess` 动态访问 `GameLog`/`DebugFlags`（降低对 Autoload 全局变量的硬依赖）
 - `core/engine/phase_manager/order_config.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/phase_manager/settlement_triggers.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/engine/phase_manager/working_flow.gd`：（已整改 2026-01-26）移除 `_parse_non_negative_int_value` wrapper，直接调用 `IntValueParseHelpers`；（已整改 2026-01-26）里程碑 effects 的 value 求和改用 `MilestoneEffectQueries.sum_non_negative_int_values(...)`（减少重复/样板）；（已部分整改 2026-01-27）OrderOfBusiness 相关 fail-fast 改为返回 `Result.failure`（不再依赖 assert；release 下也生效）
+- `core/engine/phase_manager/working_flow.gd`：（已整改 2026-01-26）移除 `_parse_non_negative_int_value` wrapper，直接调用 `IntValueParseHelpers`；（已整改 2026-01-26）里程碑 effects 的 value 求和改用 `MilestoneEffectQueries.sum_non_negative_int_values(...)`（减少重复/样板）；（已整改 2026-01-27）OrderOfBusiness 相关 fail-fast 改为返回 `Result.failure`（不再依赖 assert；release 下也生效）
 
 ### map/
 
@@ -643,7 +644,7 @@
 - `core/map/map_context_builder.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/map_def.gd`：（已整改 2026-01-27）`from_dict(...)` 解析/校验已抽离到 `map_def_parser.gd`（降低 map 数据模型与解析耦合）；其余查询/编辑/验证仍在本文件
 - `core/map/map_def_parser.gd`：（已新增 2026-01-27）MapDef 严格解析/校验（复用 `MapParseHelpers`）；供 `MapDef.from_dict(...)` 调用
-- `core/map/map_option_def.gd`：（已部分整改 2026-01-26）移除 `_SELF_SCRIPT.new()` 自 preload 创建实例，改为直接 `MapOptionDef.new()`；（已整改 2026-01-26）tiles placements 解析改为复用 `MapParseHelpers.parse_tile_placements(...)`（减少重复解析样板）；（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）
+- `core/map/map_option_def.gd`：（已整改 2026-01-26）移除 `_SELF_SCRIPT.new()` 自 preload 创建实例，改为直接 `MapOptionDef.new()`；（已整改 2026-01-26）tiles placements 解析改为复用 `MapParseHelpers.parse_tile_placements(...)`（减少重复解析样板）；（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）
 - `core/map/map_runtime/baked_map.gd`：（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）
 - `core/map/map_runtime/cells.gd`：（已整改 2026-01-26）补充 `try_parse_pos_key(...)`/`sorted_positions_from_external_cells(...)`，用于收敛 external_cells 的 key->pos 解析；小文件/职责相对单一
 - `core/map/map_runtime/coords.gd`：未发现明显结构问题（小文件/职责相对单一）
@@ -652,8 +653,8 @@
 - `core/map/map_runtime/tile_edit.gd`：中等体量；后续可按重构优先级处理
 - `core/map/map_utils.gd`：中等体量；后续可按重构优先级处理
 - `core/map/marketing_placement_query.gd`：中等体量；后续可按重构优先级处理
-- `core/map/parse_helpers.gd`：（已部分整改 2026-01-26）扩展 `parse_vec2i_array`/`parse_rotation_array` 并用于 `TileDef`/`PieceDef`；（已整改 2026-01-26）新增 `parse_tile_placements(...)` 并用于 `MapDef`/`MapOptionDef`；（已整改 2026-01-26）新增 `parse_road_grid(...)`/`parse_drink_sources(...)`/`parse_printed_structures(...)` 并用于 `TileDef`；（已整改 2026-01-26）新增 `parse_footprint_mask(...)` 并用于 `PieceDef`，进一步收敛地图解析样板代码
-- `core/map/piece_def.gd`：（已部分整改 2026-01-26）解析样板已开始收敛到 `MapParseHelpers`；（已整改 2026-01-27）将 `from_dict(...)` 的严格解析抽离到 `piece_def_parser.gd`，本文件更聚焦于数据模型/查询/校验；体积已下降但仍可继续按“工厂方法/序列化/调试方法”等职责拆分
+- `core/map/parse_helpers.gd`：（已整改 2026-01-26）扩展 `parse_vec2i_array`/`parse_rotation_array` 并用于 `TileDef`/`PieceDef`；（已整改 2026-01-26）新增 `parse_tile_placements(...)` 并用于 `MapDef`/`MapOptionDef`；（已整改 2026-01-26）新增 `parse_road_grid(...)`/`parse_drink_sources(...)`/`parse_printed_structures(...)` 并用于 `TileDef`；（已整改 2026-01-26）新增 `parse_footprint_mask(...)` 并用于 `PieceDef`，进一步收敛地图解析样板代码
+- `core/map/piece_def.gd`：（已整改 2026-01-26）解析样板已开始收敛到 `MapParseHelpers`；（已整改 2026-01-27）将 `from_dict(...)` 的严格解析抽离到 `piece_def_parser.gd`，本文件更聚焦于数据模型/查询/校验；体积已下降但仍可继续按“工厂方法/序列化/调试方法”等职责拆分
 - `core/map/piece_def_parser.gd`：（已新增 2026-01-27）PieceDef 的 Dictionary 严格解析/校验（用于缩短 `piece_def.gd` 并集中维护错误信息与字段规则）
 - `core/map/piece_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/placement_validator/garden_attachment.gd`：未发现明显结构问题（小文件/职责相对单一）
@@ -668,7 +669,7 @@
 - `core/map/road_graph/node_keys.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/road_graph/pathfinding.gd`：（已整改 2026-01-26）补充 `get_nodes_at_pos(...)` 公开 wrapper，用于避免外部调用私有 `_get_nodes_at_pos(...)`
 - `core/map/road_graph/range_query.gd`：（已整改 2026-01-26）改用 `Pathfinding.get_nodes_at_pos(...)`，避免跨文件调用私有 `_get_nodes_at_pos(...)`
-- `core/map/tile_def.gd`：（已部分整改 2026-01-26）blocked_cells/allowed_rotations/road_grid/drink_sources/printed_structures 解析已改为复用 `MapParseHelpers`（减少重复解析样板）；（已整改 2026-01-26）板块编辑器的编辑方法（road/drink/printed/blocked）移至 `ui/scenes/tools/tile_editor/tile_def_edit.gd`，core 不再包含 tools 专用 API；（已整改 2026-01-27）将 `from_dict(...)` 的严格解析抽离到 `tile_def_parser.gd`，本文件更聚焦于数据模型/序列化/校验/查询；体积已下降但仍可按“工厂方法/序列化/调试方法”等职责继续拆分
+- `core/map/tile_def.gd`：（已整改 2026-01-26）blocked_cells/allowed_rotations/road_grid/drink_sources/printed_structures 解析已改为复用 `MapParseHelpers`（减少重复解析样板）；（已整改 2026-01-26）板块编辑器的编辑方法（road/drink/printed/blocked）移至 `ui/scenes/tools/tile_editor/tile_def_edit.gd`，core 不再包含 tools 专用 API；（已整改 2026-01-27）将 `from_dict(...)` 的严格解析抽离到 `tile_def_parser.gd`，本文件更聚焦于数据模型/序列化/校验/查询；体积已下降但仍可按“工厂方法/序列化/调试方法”等职责继续拆分
 - `core/map/tile_def_parser.gd`：（已新增 2026-01-27）TileDef 的 Dictionary 严格解析/校验（用于缩短 `tile_def.gd` 并集中维护错误信息与字段规则）
 - `core/map/tile_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 
@@ -680,7 +681,7 @@
 - `core/modules/v2/module_manifest.gd`：（已整改 2026-01-26）移除薄 `_parse_*` wrapper，直接调用 `DataParseHelpers`（仍保持 module.json 语义）
 - `core/modules/v2/module_package_loader.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/modules/v2/module_plan_builder.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/modules/v2/pool_builder.gd`：（已部分整改 2026-01-26）移除自带 `_parse_non_negative_int`，改用 `DataParseHelpers`
+- `core/modules/v2/pool_builder.gd`：（已整改 2026-01-26）移除自带 `_parse_non_negative_int`，改用 `DataParseHelpers`
 - `core/modules/v2/ruleset.gd`：中等体量；后续可按重构优先级处理；preload 依赖较多（耦合偏高）；函数数量较多，可能包含多职责/可考虑拆 helper
 - `core/modules/v2/ruleset/action_registration.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/modules/v2/ruleset/content_validation.gd`：未发现明显结构问题（小文件/职责相对单一）
@@ -692,7 +693,7 @@
 - `core/modules/v2/ruleset_builder.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/modules/v2/ruleset_loader.gd`：使用动态 load（可能影响静态分析/可替换性）
 - `core/modules/v2/visual_catalog.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/modules/v2/visual_catalog_loader.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_required`，改用 `DataParseHelpers`；中等体量；后续可按重构优先级处理
+- `core/modules/v2/visual_catalog_loader.gd`：（已整改 2026-01-26）移除自带 `_parse_int_required`，改用 `DataParseHelpers`；中等体量；后续可按重构优先级处理
 
 ### random/
 
@@ -738,7 +739,7 @@
 - `core/rules/milestone_effect_queries.gd`：（已新增 2026-01-26）用于收敛“遍历 milestones -> MilestoneDef.effects”样板，供 pricing/settlement/drinks 等复用；（已整改 2026-01-26）新增 sum/max helpers 收敛 `effects[*].value` 的解析/聚合样板
 - `core/rules/milestone_effect_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/milestone_system.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/phase/cleanup_settlement.gd`：（已部分整改 2026-01-26）移除自带 `_parse_non_negative_int_value`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`gain_fridge` 的 “取最大 capacity” 逻辑改用 `MilestoneEffectQueries.max_non_negative_int_value(...)`（减少重复/样板）；中等体量；后续可按重构优先级处理
+- `core/rules/phase/cleanup_settlement.gd`：（已整改 2026-01-26）移除自带 `_parse_non_negative_int_value`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`gain_fridge` 的 “取最大 capacity” 逻辑改用 `MilestoneEffectQueries.max_non_negative_int_value(...)`（减少重复/样板）；中等体量；后续可按重构优先级处理
 - `core/rules/phase/dinnertime/dinnertime_distance.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/phase/dinnertime/dinnertime_effects.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/phase/dinnertime/dinnertime_events.gd`：未发现明显结构问题（小文件/职责相对单一）
@@ -759,7 +760,7 @@
 - `core/rules/phase/payday/payday_salary_discount.gd`：（已新增 2026-01-27）薪资折扣容量推导：遍历在岗员工 effect_ids 并通过 effect_registry.invoke 累计 `salary_discount_recruit_capacity`
 - `core/rules/phase/payday/payday_salary_token_payment.gd`：（已新增 2026-01-27）薪资 token 支付：基于 ProductDef tags 统计/扣减可用 food/drink token（排除 `salary_token_ineligible`）
 - `core/rules/placement_conflict_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/pricing_pipeline.gd`：（已部分整改 2026-01-26）移除自带 `_parse_*`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`base_price_delta` 的 value 求和改用 `MilestoneEffectQueries.sum_int_values(...)`（减少重复/样板）；中等体量；后续可按重构优先级处理
+- `core/rules/pricing_pipeline.gd`：（已整改 2026-01-26）移除自带 `_parse_*`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`base_price_delta` 的 value 求和改用 `MilestoneEffectQueries.sum_int_values(...)`（减少重复/样板）；中等体量；后续可按重构优先级处理
 - `core/rules/settlement_registry.gd`：（已整改 2026-01-27）warn/debug 判定改为通过 `AutoloadAccess` 动态访问 `GameLog`/`DebugFlags`（避免直接引用 Autoload 全局变量；行为不变）；含调试/发布差异分支（AutoloadAccess.is_debug_mode -> DebugFlags/OS.has_feature）
 - `core/rules/working/mandatory_actions_rules.gd`：未发现明显结构问题（小文件/职责相对单一）
 
@@ -785,7 +786,7 @@
 
 ### types/
 
-- `core/types/command.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `JsonValueParseHelpers`；（已整改 2026-01-27）required 字段解析收敛到 `_parse_required_*` helpers，减少“字段存在性 + 类型校验”样板
+- `core/types/command.gd`：（已整改 2026-01-26）移除自带 `_parse_int_value`，改用 `JsonValueParseHelpers`；（已整改 2026-01-27）required 字段解析收敛到 `_parse_required_*` helpers，减少“字段存在性 + 类型校验”样板
 - `core/types/result.gd`：未发现明显结构问题（小文件/职责相对单一）
 
 ### utils/
