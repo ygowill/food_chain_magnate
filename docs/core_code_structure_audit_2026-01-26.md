@@ -92,6 +92,7 @@
 - 2026-01-27：继续拆分 `AutoAdvance`：将 `auto_advance_impl.gd` 的推进决策/阻断检查/Working 强制动作补完/OOB 首轮 finalize 拆到 `auto_advance_try_step.gd`/`auto_advance_phase_blocking.gd`/`auto_advance_working_mandatory.gd`/`auto_advance_order_of_business_round1.gd`，impl 文件仅保留聚合转发（进一步降低单文件体积）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：将 `MapDef.from_dict(...)` 的“严格解析/校验”抽离到 `core/map/map_def_parser.gd`，`map_def.gd` 仅保留数据模型/查询/编辑/验证（缩短超长脚本，降低 map 数据模型与解析耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：拆分 `DinnertimeSettlement`：`core/rules/phase/dinnertime_settlement.gd` 保留 class_name + 对外 API wrapper；完整结算实现迁移至 `core/rules/phase/dinnertime/dinnertime_settlement_impl.gd`；并保留 `_apply_*_effects_by_segment(...)` 薄委托供现有测试调用（降低单文件体积，便于继续按职责拆分）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：缩短 `PhaseManager`：移除未被使用的静态 defs wrapper（保留 `compute_timestamp(...)`），并将内部对 `get_sub_phase_enum(...)` 的调用改为直接调用 `DefsClass.get_sub_phase_enum(...)`（降低单文件体积与重复 API）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -114,12 +115,13 @@
 - `core/map/piece_def.gd`（~275 LOC；（已整改 2026-01-27）解析逻辑抽离到 `piece_def_parser.gd`）、`core/map/tile_def.gd`（~262 LOC）、`core/map/map_def.gd`（~260 LOC；（已整改 2026-01-27）解析逻辑抽离到 `map_def_parser.gd`）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
 - 其他超过 ~300 行的文件：
-  - `core/engine/phase_manager.gd`
+  - `core/engine/game_engine/modules_v2.gd`
   - （已整改 2026-01-27）`core/rules/employee_rules/train_slot_usage_impl.gd` 已拆分为 `train_slot_usage_storage.gd`/`train_slot_usage_providers.gd`/`train_slot_usage_allocator.gd`
   - （已整改 2026-01-27）`core/rules/phase/payday_settlement.gd` 已按“token 支付/折扣推导”拆分到 `core/rules/phase/payday/`（主文件不再超长）
   - （已整改 2026-01-27）`core/rules/drinks_procurement.gd` 已拆分为 `drinks_procurement/plan_resolver.gd` + `drinks_procurement/milestone_bonuses.gd`（主文件不再超长）
   - （已整改 2026-01-27）`core/engine/game_engine/auto_advance_impl.gd` 已拆分到 `auto_advance_*.gd`（主文件不再超长）
   - （已整改 2026-01-27）`core/map/map_def.gd` 已拆分出 `map_def_parser.gd`（主文件不再超长）
+  - （已整改 2026-01-27）`core/engine/phase_manager.gd` 已移除冗余静态 defs wrapper（主文件不再超长）
 
 建议记录（后续重构方向）：
 - 先从“职责剥离”入手，而不是单纯按行数拆文件：
@@ -351,7 +353,7 @@
 | `core/engine/phase_manager/order_config.gd` | 152 | 1 | 0 |  |
 | `core/engine/phase_manager/settlement_triggers.gd` | 127 | 2 | 0 |  |
 | `core/engine/phase_manager/working_flow.gd` | 145 | 3 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
-| `core/engine/phase_manager.gd` | 310 | 10 | 0 |  |
+| `core/engine/phase_manager.gd` | 266 | 6 | 0 |  |
 | `core/map/house_number_manager.gd` | 233 | 0 | 0 |  |
 | `core/map/map_baker/bake.gd` | 80 | 3 | 0 |  |
 | `core/map/map_baker/boundary_index.gd` | 22 | 0 | 0 |  |
@@ -562,7 +564,7 @@
 - `core/engine/game_engine/replay.gd`：中等体量；后续可按重构优先级处理；含调试/发布差异分支（OS.has_feature）；（已部分整改 2026-01-26）checkpoint.rng_calls 解析共用 `JsonValueParseHelpers`
 - （已移出 core 2026-01-26）`gameplay/replay/step_timeline_build.gd`：`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建；debug_force 判定统一复用 `Replay.should_force_execute_in_replay(...)`；复用 `timeline_event_helpers.gd` 统一写入事件 envelope（`sequence/timestamp/command_index/step_index/phase_segment`）（减少重复/样板）；时间线/日志“派生视图”构建逻辑很重；超长脚本（维护成本高）；建议按职责拆分；依赖 EventBus（日志/UI 耦合）；（已整改 2026-01-26：不再跨文件调用 CommandRunner/PhaseManager 的私有 `_` 前缀方法）
 - （已移出 core 2026-01-26）`gameplay/replay/timeline_event_helpers.gd`：收敛时间线事件 envelope 字段写入（`sequence`/`timestamp`/`command_index`/`step_index`/`phase_segment`），供 `event_timeline_build.gd`/`step_timeline_build.gd` 等复用（减少重复/样板）
-- `core/engine/phase_manager.gd`：偏长脚本；建议关注职责边界/可读性；preload 依赖较多（耦合偏高）；函数数量较多，可能包含多职责/可考虑拆 helper；（已整改 2026-01-27）移除未使用的 preload 依赖（减少耦合/噪音）
+- `core/engine/phase_manager.gd`：（已整改 2026-01-27）移除未使用的 preload 依赖（减少耦合/噪音）；移除未被使用的静态 defs wrapper（保留 `compute_timestamp(...)`），减少重复 API，降低单文件体积
 - `core/engine/phase_manager/advance_phase.gd`：中等体量；后续可按重构优先级处理；依赖 GameLog 全局单例（耦合）
 - `core/engine/phase_manager/advance_sub_phase.gd`：中等体量；后续可按重构优先级处理；依赖 GameLog 全局单例（耦合）
 - `core/engine/phase_manager/advancement.gd`：未发现明显结构问题（小文件/职责相对单一）

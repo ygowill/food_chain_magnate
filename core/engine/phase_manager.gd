@@ -120,7 +120,7 @@ func _run_working_sub_phase_hooks(sub_phase_name: String, hook_type: int, state:
 	var warnings: Array[String] = []
 
 	# 1) 基础枚举 hooks（若存在）
-	var sub_enum := get_sub_phase_enum(sub_phase_name)
+	var sub_enum := DefsClass.get_sub_phase_enum(sub_phase_name)
 	if sub_enum != -1:
 		var r1: Result = _hooks.run_sub_phase_hooks(sub_enum, hook_type, state)
 		if not r1.ok:
@@ -253,47 +253,10 @@ func register_sub_phase_hook_by_name(
 func unregister_hook(phase: int, hook_type: int, callback: Callable) -> bool:
 	return _hooks.unregister_hook(phase, hook_type, callback)
 
-# === 查询方法 ===
-
-# 获取阶段序号（用于游戏内时间戳/确定性日志）
-# 约定：
-# - Setup = 0
-# - 其余按 PHASE_ORDER 顺序从 1 开始
-static func get_phase_index(phase_name: String) -> int:
-	return DefsClass.get_phase_index(phase_name)
-
-# 从字符串获取阶段枚举
-static func get_phase_enum(phase_name: String) -> int:
-	return DefsClass.get_phase_enum(phase_name)
-
-# 从字符串获取子阶段枚举
-static func get_sub_phase_enum(sub_phase_name: String) -> int:
-	return DefsClass.get_sub_phase_enum(sub_phase_name)
-
-# 获取阶段名称
-static func get_phase_name(phase: int) -> String:
-	return DefsClass.get_phase_name(phase)
-
-# 获取子阶段名称
-static func get_sub_phase_name(sub_phase: int) -> String:
-	return DefsClass.get_sub_phase_name(sub_phase)
-
-# 检查是否在工作阶段
-static func is_working_phase(state: GameState) -> bool:
-	return DefsClass.is_working_phase(state)
-
-# 获取当前子阶段索引
-static func get_sub_phase_index(state: GameState) -> int:
-	return DefsClass.get_sub_phase_index(state)
-
 # 计算确定性的“游戏内时间戳”
 # 对齐 docs/design.md（round * 1000 + phase_index * 100 + sub_phase_index）
 static func compute_timestamp(state: GameState) -> int:
 	return DefsClass.compute_timestamp(state)
-
-# 获取阶段进度（用于显示）
-static func get_phase_progress(state: GameState) -> Dictionary:
-	return DefsClass.get_phase_progress(state)
 
 # === 调试 ===
 
