@@ -95,6 +95,7 @@
 - 2026-01-27：缩短 `PhaseManager`：移除未被使用的静态 defs wrapper（保留 `compute_timestamp(...)`），并将内部对 `get_sub_phase_enum(...)` 的调用改为直接调用 `DefsClass.get_sub_phase_enum(...)`（降低单文件体积与重复 API）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：缩短 `GameEngine`：将 `rewind_to_command(...)`/`full_replay()` 的实现抽离到 `core/engine/game_engine/rewind_ops.gd`，`game_engine.gd` 仅保留对外 wrapper（降低单文件体积，便于继续按职责拆分）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `DinnertimeSettlement`：将“逐房屋售卖主循环”抽离到 `core/rules/phase/dinnertime/dinnertime_house_sales.gd`，`dinnertime_settlement_impl.gd` 聚焦 orchestrator（调用 house_sales + tips/CFO + round_state 报告写入）（进一步降低单文件耦合，便于后续按职责继续拆分）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：继续拆分 `RangeUtils`（road）：将 `range_utils_road.gd` 拆为 wrapper + 子模块（`core/utils/range_utils_road/adjacent_cells.gd`、`core/utils/range_utils_road/distance_queries.gd`），降低单文件体积并按职责聚焦；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -496,7 +497,9 @@
 | `core/utils/json_value_parse_helpers.gd` | 23 | 0 | 0 |  |
 | `core/utils/range_utils.gd` | 67 | 2 | 0 |  |
 | `core/utils/range_utils_air.gd` | 94 | 0 | 0 |  |
-| `core/utils/range_utils_road.gd` | 260 | 2 | 0 |  |
+| `core/utils/range_utils_road.gd` | 38 | 5 | 0 | helper:range_utils_road_wrapper |
+| `core/utils/range_utils_road/adjacent_cells.gd` | 58 | 2 | 0 | helper:range_utils_road_adjacent |
+| `core/utils/range_utils_road/distance_queries.gd` | 205 | 3 | 0 | helper:range_utils_road_distance |
 | `core/utils/round_state_counters.gd` | 146 | 0 | 0 |  |
 | `core/utils/type_helpers.gd` | 34 | 0 | 0 |  |
 
@@ -736,7 +739,9 @@
 - `core/utils/int_value_parse_helpers.gd`：（已新增 2026-01-26）用于收敛 rules/milestone effects 的整值解析样板
 - `core/utils/json_value_parse_helpers.gd`：（已新增 2026-01-26）用于收敛存档/回放/命令解析中的 JSON 数值校验样板
 - `core/utils/range_utils.gd`：（已整改 2026-01-27）对外 API wrapper；road/air 实现分别落在 `range_utils_road.gd`/`range_utils_air.gd`（降低单文件体积，便于维护）
-- `core/utils/range_utils_road.gd`：（已新增 2026-01-27）道路范围实现（RoadGraph 距离/邻接道路格）；仍偏长但职责更聚焦，后续可继续按“输入校验/餐厅入口点计算/道路距离查询”再拆分
+- `core/utils/range_utils_road.gd`：（已新增 2026-01-27）对外 wrapper；实现已拆分至 `core/utils/range_utils_road/adjacent_cells.gd` 与 `core/utils/range_utils_road/distance_queries.gd`（便于维护/复用）
+- `core/utils/range_utils_road/adjacent_cells.gd`：（已新增 2026-01-27）邻接道路格计算（支持 external_cells）；小文件/职责单一
+- `core/utils/range_utils_road/distance_queries.gd`：（已新增 2026-01-27）道路距离/范围查询（min_distance/within_range，含 drive_thru 入口点扩展）；中等体量；后续若继续拆分可按“目标点归一化/餐厅入口点计算/距离查询”分层
 - `core/utils/range_utils_air.gd`：（已新增 2026-01-27）空中范围实现（Manhattan 距离）；小文件/职责单一
 - `core/utils/round_state_counters.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/utils/type_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
