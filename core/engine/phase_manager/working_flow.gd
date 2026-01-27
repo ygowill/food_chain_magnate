@@ -110,6 +110,9 @@ static func reset_sub_phase_passed(state: GameState) -> void:
 		passed[i] = false
 	state.round_state["sub_phase_passed"] = passed
 
+static func compute_order_of_business_empty_slots(state: GameState, player: Dictionary) -> Result:
+	return _compute_order_of_business_empty_slots(state, player)
+
 static func _compute_order_of_business_selection(state: GameState, previous_turn_order: Array[int]) -> Result:
 	var player_count := state.players.size()
 	if previous_turn_order.size() != player_count:

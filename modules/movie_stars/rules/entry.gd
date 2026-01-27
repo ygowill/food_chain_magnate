@@ -108,7 +108,7 @@ func _on_order_of_business_after_enter(state: GameState) -> Result:
 
 	var slot_map := {}
 	for pid in non_star:
-		var slots_read := WorkingFlowClass._compute_order_of_business_empty_slots(state, state.players[pid])
+		var slots_read := WorkingFlowClass.compute_order_of_business_empty_slots(state, state.players[pid])
 		if not slots_read.ok:
 			return slots_read
 		slot_map[int(pid)] = int(slots_read.value)

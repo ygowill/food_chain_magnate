@@ -112,6 +112,7 @@
 - 2026-01-27：复核并修正文档：3.2 中“事件历史重建桥接”实际位于 `core/engine/game_engine/rewind_ops.gd`（调用 `event_history_rebuild.gd`），而 `core/engine/game_engine.gd` 主要提供 `event_sink` 注入 + emit/clear wrapper；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：`ActionRegistry`/`SettlementRegistry` 不再直接引用 Autoload 全局 `GameLog`/`DebugFlags`，改为通过 `AutoloadAccess` 动态访问（继续降低 core 对日志/调试单例的硬依赖）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：以 `WorkingFlow.start_order_of_business(...)` 为例，将 OrderOfBusiness 相关 fail-fast 从 `assert` 改为返回 `Result.failure` 并在 base_rules/movie_stars hooks 中显式传播（release 下也能阻止坏数据继续跑）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：为 `WorkingFlow` 增加 `compute_order_of_business_empty_slots(...)` 公共 wrapper，并让 `movie_stars` 模块不再跨文件调用 `_compute_order_of_business_empty_slots(...)` 私有 helper（避免封装破坏）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -263,6 +264,8 @@
   - （已整改 2026-01-26）改用 `Pathfinding.get_nodes_at_pos(...)` 公开 wrapper，避免跨文件调用 `Pathfinding._get_nodes_at_pos(...)`。
 - `core/state/state_updater.gd`：
   - （已整改 2026-01-26）改用 `CashOps.get_balance(...)`/`CashOps.modify_balance(...)` 公开 wrapper，避免跨文件调用 `CashOps._get_balance(...)`/`CashOps._modify_balance(...)`。
+- `modules/movie_stars/rules/entry.gd` / `core/engine/phase_manager/working_flow.gd`：
+  - （已整改 2026-01-27）改用 `WorkingFlow.compute_order_of_business_empty_slots(...)` 公开 wrapper，不再跨文件调用 `_compute_order_of_business_empty_slots(...)`。
 
 风险：
 - 后续想重构接口时，无法在不改调用方的情况下替换内部实现。
