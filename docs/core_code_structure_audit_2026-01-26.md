@@ -99,6 +99,7 @@
 - 2026-01-27：将 `TileDef.from_dict(...)` 的“严格解析/校验”抽离到 `core/map/tile_def_parser.gd`，`tile_def.gd` 更聚焦于数据模型/序列化/校验/查询（降低 map 数据模型与解析耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：拆分 `EmployeeDef` 解析：`core/data/employee_def/parser.gd` 仅保留 orchestrator wrapper；核心字段与可选字段解析分别拆到 `core/data/employee_def/parser/core_fields.gd` 与 `core/data/employee_def/parser/optional_fields.gd`（降低单文件体积，便于维护字段组合约束）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：拆分 `RoundStateParser`：`round_state_parser.gd` 仅保留 orchestrator wrapper；required/optional 字段解析拆到 `round_state_parser_required_fields.gd`/`round_state_parser_optional_fields.gd`，并复用 `round_state_player_id_keys.gd` 收敛“玩家 id key 归一化”样板（降低单文件体积，便于维护 round_state 字段规则）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：`EmployeeRules` 的营销员免薪（`marketing_no_salary`）判定改为复用 `MilestoneEffectQueries.collect_effect_entries(...)`（收敛 milestones->effects 遍历样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -682,7 +683,7 @@
 - `core/rules/employee_rules/employee_array_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/employee_rules/immediate_train_pending.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/employee_rules/limits.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/employee_rules/salary.gd`：未发现明显结构问题（小文件/职责相对单一）
+- `core/rules/employee_rules/salary.gd`：（已整改 2026-01-27）营销员免薪（`marketing_no_salary`）判定改为复用 `MilestoneEffectQueries`（减少 milestones->effects 遍历样板）；其余未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/employee_rules/train_slot_usage.gd`：（已整改 2026-01-27）对外 API wrapper；完整实现移至 `train_slot_usage_impl.gd`（降低单文件体积，便于维护/进一步拆分）
 - `core/rules/employee_rules/train_slot_usage_impl.gd`：（已整改 2026-01-27）TrainSlotUsage 聚合转发（对外 API 仍保持稳定）；实现拆分到 storage/providers/allocator，便于分别维护 round_state 存储/培训员扫描/分配策略
 - `core/rules/employee_rules/train_slot_usage_storage.gd`：（已新增 2026-01-27）round_state 存储层：读写 `train_slot_usage_instances` 并兼容旧版 `train_slot_usage` 总用量（Fail Fast 校验结构）

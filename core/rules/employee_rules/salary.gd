@@ -2,18 +2,7 @@ extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeArrayHelpers = preload("res://core/rules/employee_rules/employee_array_helpers.gd")
-const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
-const MilestoneDefClass = preload("res://core/data/milestone_def.gd")
-
-static func _milestone_def_has_effect_type(ms_def: MilestoneDefClass, effect_type: String) -> bool:
-	for e_i in range(ms_def.effects.size()):
-		var eff_val = ms_def.effects[e_i]
-		assert(eff_val is Dictionary, "EmployeeRules.requires_salary: effects[%d] 类型错误（期望 Dictionary）" % e_i)
-		var eff: Dictionary = eff_val
-		assert(eff.has("type") and (eff["type"] is String), "EmployeeRules.requires_salary: effects[%d].type 缺失或类型错误（期望 String）" % e_i)
-		if str(eff["type"]) == effect_type:
-			return true
-	return false
+const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 
 static func requires_salary(employee_id: String, player: Dictionary = {}) -> bool:
 	# 从 EmployeeRegistry 读取 salary 字段，并叠加里程碑效果。
@@ -37,13 +26,17 @@ static func requires_salary(employee_id: String, player: Dictionary = {}) -> boo
 		var milestones := EmployeeArrayHelpers.require_string_array_field(player, "milestones", "player")
 		var def_val = EmployeeRegistryClass.get_def(employee_id)
 		if def_val != null and (def_val is EmployeeDef) and is_marketing_employee_def(def_val):
-			for mid in milestones:
-				var ms_def_val = MilestoneRegistryClass.get_def(mid)
-				assert(ms_def_val != null, "EmployeeRules.requires_salary: 未知里程碑定义: %s" % mid)
-				assert(ms_def_val is MilestoneDefClass, "EmployeeRules.requires_salary: 里程碑定义类型错误（期望 MilestoneDef）: %s" % mid)
-				var ms_def: MilestoneDefClass = ms_def_val
-				if _milestone_def_has_effect_type(ms_def, "marketing_no_salary"):
-					return false
+			var ms_read := MilestoneEffectQueriesClass.collect_effect_entries(
+				milestones,
+				"marketing_no_salary",
+				"EmployeeRules.requires_salary: ",
+				"player.milestones"
+			)
+			if not ms_read.ok:
+				assert(false, ms_read.error)
+				return true
+			if not (ms_read.value as Array).is_empty():
+				return false
 
 	return true
 
