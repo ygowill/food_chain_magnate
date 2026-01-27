@@ -88,6 +88,7 @@
 - 2026-01-27：继续拆分 `MarketingSettlementHelpers`：将 `settlement_helpers_impl.gd` 的实现按职责拆到 `settlement_instance_expiration.gd`/`settlement_products.gd`/`settlement_house_demand.gd`/`settlement_demand_effects.gd`，impl 文件仅保留聚合转发（进一步降低单文件体积）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `TrainSlotUsage`：将 `train_slot_usage_impl.gd` 的实现按职责拆到 `train_slot_usage_storage.gd`/`train_slot_usage_providers.gd`/`train_slot_usage_allocator.gd`，impl 文件仅保留聚合转发；同时引入 `round_state.train_slot_usage_instances` 记录“按培训员实例”的使用量并兼容旧版总计数（进一步降低单文件体积与耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：拆分 `PaydaySettlement`：将“薪资 token 支付”与“薪资折扣容量推导”拆到 `core/rules/phase/payday/` 下的独立 helper（`payday_salary_token_payment.gd`/`payday_salary_discount.gd`），`payday_settlement.gd` 保留 orchestrator + round_state 报告写入；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：拆分 `DrinksProcurement`：`core/rules/drinks_procurement.gd` 保留对外 API wrapper；“采购计划解析/路线校验/来源筛选”下沉到 `core/rules/drinks_procurement/plan_resolver.gd`，“milestone bonus 计算”下沉到 `core/rules/drinks_procurement/milestone_bonuses.gd`（降低单文件体积与耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -110,9 +111,10 @@
 - `core/map/piece_def.gd`（~275 LOC；（已整改 2026-01-27）解析逻辑抽离到 `piece_def_parser.gd`）、`core/map/tile_def.gd`（~262 LOC）、`core/map/map_def.gd`（~311 LOC）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
 - 其他超过 ~300 行的文件：
-  - `core/map/map_def.gd`、`core/rules/drinks_procurement.gd`、`core/engine/phase_manager.gd`、`core/engine/game_engine/auto_advance_impl.gd`
+  - `core/map/map_def.gd`、`core/engine/phase_manager.gd`、`core/engine/game_engine/auto_advance_impl.gd`
   - （已整改 2026-01-27）`core/rules/employee_rules/train_slot_usage_impl.gd` 已拆分为 `train_slot_usage_storage.gd`/`train_slot_usage_providers.gd`/`train_slot_usage_allocator.gd`
   - （已整改 2026-01-27）`core/rules/phase/payday_settlement.gd` 已按“token 支付/折扣推导”拆分到 `core/rules/phase/payday/`（主文件不再超长）
+  - （已整改 2026-01-27）`core/rules/drinks_procurement.gd` 已拆分为 `drinks_procurement/plan_resolver.gd` + `drinks_procurement/milestone_bonuses.gd`（主文件不再超长）
 
 建议记录（后续重构方向）：
 - 先从“职责剥离”入手，而不是单纯按行数拆文件：
@@ -402,11 +404,13 @@
 | `core/rules/dinnertime_route_purchase_registry.gd` | 174 | 0 | 0 |  |
 | `core/rules/drinks_procurement/default_route_builder.gd` | 165 | 4 | 0 |  |
 | `core/rules/drinks_procurement/inputs.gd` | 58 | 1 | 0 | uses:JsonValueParseHelpers |
+| `core/rules/drinks_procurement/milestone_bonuses.gd` | 136 | 2 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
 | `core/rules/drinks_procurement/picked_sources_finder.gd` | 45 | 2 | 0 |  |
+| `core/rules/drinks_procurement/plan_resolver.gd` | 162 | 6 | 0 | helper:drinks_procurement_plan |
 | `core/rules/drinks_procurement/route_validator.gd` | 121 | 5 | 0 |  |
 | `core/rules/drinks_procurement/start_restaurant_resolver.gd` | 89 | 3 | 0 |  |
 | `core/rules/drinks_procurement/tile_route_utils.gd` | 83 | 1 | 0 |  |
-| `core/rules/drinks_procurement.gd` | 322 | 7 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
+| `core/rules/drinks_procurement.gd` | 32 | 2 | 0 |  |
 | `core/rules/economy/bankruptcy_rules.gd` | 270 | 3 | 0 |  |
 | `core/rules/effect_registry.gd` | 67 | 0 | 0 |  |
 | `core/rules/employee_pool_patch_registry.gd` | 113 | 0 | 0 |  |
@@ -623,10 +627,12 @@
 - `core/rules/company_structure_rules.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/dinnertime_demand_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/dinnertime_route_purchase_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/drinks_procurement.gd`：规则编排较大；与 inputs/validator/finder 等已拆分但主流程仍偏重；偏长脚本；建议关注职责边界/可读性；存在一定数量的 preload 依赖；（已整改 2026-01-26）移除 `_parse_positive_int_value` wrapper，直接调用 `IntValueParseHelpers`；（已整改 2026-01-26）`procure_plus_one` 的 value 求和改用 `MilestoneEffectQueries.sum_positive_int_values(...)`（减少重复/样板）
+- `core/rules/drinks_procurement.gd`：（已整改 2026-01-27）对外 API wrapper；主流程拆到 `drinks_procurement/plan_resolver.gd`，milestone bonus 计算拆到 `drinks_procurement/milestone_bonuses.gd`（主文件体量下降，耦合更集中/可维护）
 - `core/rules/drinks_procurement/default_route_builder.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/drinks_procurement/inputs.gd`：（已整改 2026-01-26）移除自带 `_parse_int`，改用 `JsonValueParseHelpers`
+- `core/rules/drinks_procurement/milestone_bonuses.gd`：（已新增 2026-01-27）milestone bonus 计算：`procure_plus_one`/`drinks_per_source_delta`/`distance_plus_one`（延续使用 `MilestoneEffectQueries`/`IntValueParseHelpers` 收敛解析样板）
 - `core/rules/drinks_procurement/picked_sources_finder.gd`：未发现明显结构问题（小文件/职责相对单一）
+- `core/rules/drinks_procurement/plan_resolver.gd`：（已新增 2026-01-27）采购计划解析：餐厅/路线/选点校验，起点餐厅推导，route 校验，沿路线拾取 sources 并按 selected_sources 过滤
 - `core/rules/drinks_procurement/route_validator.gd`：存在一定数量的 preload 依赖
 - `core/rules/drinks_procurement/start_restaurant_resolver.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/drinks_procurement/tile_route_utils.gd`：未发现明显结构问题（小文件/职责相对单一）
