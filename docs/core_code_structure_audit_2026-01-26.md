@@ -117,6 +117,7 @@
 - 2026-01-27：将 `HouseNumberManager` 与房屋排序相关 fail-fast 从 `assert` 改为返回 `Result.failure`，并在 Marketing/Dinnertime 相关调用链中显式传播（release 下也生效）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：将 `DinnertimeSelection` 内部校验（sale_breakdown/distance_info/candidate 比较）从 `assert` 改为返回 `Result.failure`（fail-fast 在 release 下也生效）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：将 `TileBaking` 中 printed_structures/drink_sources 的 fail-fast 从 `assert` 改为返回 `Result.failure`（fail-fast 在 release 下也生效）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：缩短 `MilestoneDef`：将 `from_dict(...)` 的严格解析/校验抽离到 `core/data/milestone_def_parser.gd`，并将 `trigger.filter` 的匹配逻辑抽离到 `core/data/milestone_trigger_filter.gd`（降低单文件体积与职责耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -567,7 +568,7 @@
 - `core/data/game_data.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/data/marketing_def.gd`：（已整改 2026-01-26）移除自带 `_parse_*`，改用 `DataParseHelpers`
 - `core/data/marketing_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/data/milestone_def.gd`：（已部分整改 2026-01-26）移除自带 `_parse_*`，改用 `DataParseHelpers`；仍含较多 effects/filter 解析（对应 2.2 的后续收敛方向）
+- `core/data/milestone_def.gd`：（已整改 2026-01-27）`from_dict(...)` 严格解析/校验抽离到 `core/data/milestone_def_parser.gd`；`trigger.filter` 匹配抽离到 `core/data/milestone_trigger_filter.gd`；本文件更聚焦于数据模型/序列化/匹配 API
 - `core/data/milestone_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/data/parse_helpers.gd`：（已新增 2026-01-26）用于收敛 `core/data/*` 内重复解析样板
 - `core/data/product_def.gd`：（已整改 2026-01-26）移除自带 `_parse_*`，改用 `DataParseHelpers`

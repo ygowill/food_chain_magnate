@@ -3,7 +3,8 @@
 class_name MilestoneDef
 extends RefCounted
 
-const DataParseHelpersClass = preload("res://core/data/parse_helpers.gd")
+const MilestoneDefParserClass = preload("res://core/data/milestone_def_parser.gd")
+const TriggerFilterClass = preload("res://core/data/milestone_trigger_filter.gd")
 
 var id: String = ""
 var name: String = ""
@@ -17,98 +18,22 @@ var pool_enabled: bool = true
 var pool_count: int = 1
 
 static func from_dict(data: Dictionary) -> Result:
+	var fields_read := MilestoneDefParserClass.parse_fields_from_dict(data)
+	if not fields_read.ok:
+		return fields_read
+	var f: Dictionary = fields_read.value
+
 	var def := MilestoneDef.new()
-
-	var id_read := DataParseHelpersClass.parse_string(data.get("id", null), "MilestoneDef.id", false)
-	if not id_read.ok:
-		return id_read
-	def.id = id_read.value
-
-	var name_read := DataParseHelpersClass.parse_string(data.get("name", null), "MilestoneDef.name", false)
-	if not name_read.ok:
-		return name_read
-	def.name = name_read.value
-
-	var trigger_val = data.get("trigger", null)
-	if not (trigger_val is Dictionary):
-		return Result.failure("MilestoneDef.trigger 缺失或类型错误（期望 Dictionary）")
-	var trigger: Dictionary = trigger_val
-
-	var event_read := DataParseHelpersClass.parse_string(trigger.get("event", null), "MilestoneDef.trigger.event", false)
-	if not event_read.ok:
-		return event_read
-	def.trigger_event = event_read.value
-
-	var filter_val = trigger.get("filter", {})
-	if not (filter_val is Dictionary):
-		return Result.failure("MilestoneDef.trigger.filter 类型错误（期望 Dictionary）")
-	def.trigger_filter = filter_val
-
-	var effects_val = data.get("effects", null)
-	if not (effects_val is Array):
-		return Result.failure("MilestoneDef.effects 缺失或类型错误（期望 Array）")
-	var e: Array = effects_val
-	if e.is_empty():
-		return Result.failure("MilestoneDef.effects 不能为空")
-	for i in range(e.size()):
-		var item = e[i]
-		if not (item is Dictionary):
-			return Result.failure("MilestoneDef.effects[%d] 类型错误（期望 Dictionary）" % i)
-		var effect: Dictionary = item
-		var type_read := DataParseHelpersClass.parse_string(effect.get("type", null), "MilestoneDef.effects[%d].type" % i, false)
-		if not type_read.ok:
-			return type_read
-	def.effects = e
-
-	var exclusive_read := DataParseHelpersClass.parse_string(data.get("exclusive_type", null), "MilestoneDef.exclusive_type", false)
-	if not exclusive_read.ok:
-		return exclusive_read
-	def.exclusive_type = exclusive_read.value
-
-	var exp_val = data.get("expires_at", null)
-	if exp_val == null:
-		def.expires_at = null
-	else:
-		var exp_read := DataParseHelpersClass.parse_non_negative_int(exp_val, "MilestoneDef.expires_at")
-		if not exp_read.ok:
-			return exp_read
-		def.expires_at = int(exp_read.value)
-
-	var pool_val = data.get("pool", null)
-	if not (pool_val is Dictionary):
-		return Result.failure("MilestoneDef.pool 缺失或类型错误（期望 Dictionary）")
-	var pool: Dictionary = pool_val
-	if not pool.has("enabled"):
-		return Result.failure("MilestoneDef.pool 缺少 enabled")
-	var enabled_val = pool.get("enabled", null)
-	if not (enabled_val is bool):
-		return Result.failure("MilestoneDef.pool.enabled 类型错误（期望 bool）")
-	def.pool_enabled = bool(enabled_val)
-
-	# pool.count（可选）：同一里程碑在 supply 中的拷贝数（用于“每人一张”类供给）
-	def.pool_count = 1
-	if pool.has("count"):
-		var count_val = pool.get("count", null)
-		var count_read := DataParseHelpersClass.parse_non_negative_int(count_val, "MilestoneDef.pool.count")
-		if not count_read.ok:
-			return count_read
-		def.pool_count = int(count_read.value)
-		if def.pool_count <= 0:
-			return Result.failure("MilestoneDef.pool.count 必须 > 0，实际: %d" % def.pool_count)
-
-	# effect_ids（可选）：用于 EffectRegistry（M5）
-	if data.has("effect_ids"):
-		var effect_ids_read := DataParseHelpersClass.parse_string_array(data.get("effect_ids", null), "MilestoneDef.effect_ids", true)
-		if not effect_ids_read.ok:
-			return effect_ids_read
-		def.effect_ids = effect_ids_read.value
-		for i in range(def.effect_ids.size()):
-			var eid: String = def.effect_ids[i]
-			var colon_idx := eid.find(":")
-			if colon_idx <= 0 or colon_idx >= eid.length() - 1:
-				return Result.failure("MilestoneDef.effect_ids[%d] 必须为 module_id:...，实际: %s" % [i, eid])
-	else:
-		def.effect_ids = []
+	def.id = str(f.get("id", ""))
+	def.name = str(f.get("name", ""))
+	def.trigger_event = str(f.get("trigger_event", ""))
+	def.trigger_filter = f.get("trigger_filter", {})
+	def.effects = f.get("effects", [])
+	def.effect_ids = f.get("effect_ids", [])
+	def.exclusive_type = str(f.get("exclusive_type", ""))
+	def.expires_at = f.get("expires_at", null)
+	def.pool_enabled = bool(f.get("pool_enabled", true))
+	def.pool_count = int(f.get("pool_count", 1))
 
 	return Result.success(def)
 
@@ -129,76 +54,7 @@ static func load_from_file(path: String) -> Result:
 func matches(event_name: String, context: Dictionary) -> bool:
 	if trigger_event.is_empty() or trigger_event != event_name:
 		return false
-	if trigger_filter.is_empty():
-		return true
-
-	for k in trigger_filter.keys():
-		var expected = trigger_filter.get(k, null)
-		var actual = context.get(k, null)
-		if expected is Dictionary:
-			var expected_dict: Dictionary = expected
-			# 支持数值比较：{"paid": {"gte": 20}}
-			if expected_dict.has("gte"):
-				var limit_val = expected_dict.get("gte", null)
-				if not ((limit_val is int or limit_val is float) and (actual is int or actual is float)):
-					return false
-				if float(actual) < float(limit_val):
-					return false
-				continue
-			if expected_dict.has("gt"):
-				var limit_val = expected_dict.get("gt", null)
-				if not ((limit_val is int or limit_val is float) and (actual is int or actual is float)):
-					return false
-				if float(actual) <= float(limit_val):
-					return false
-				continue
-			if expected_dict.has("lte"):
-				var limit_val = expected_dict.get("lte", null)
-				if not ((limit_val is int or limit_val is float) and (actual is int or actual is float)):
-					return false
-				if float(actual) > float(limit_val):
-					return false
-				continue
-			if expected_dict.has("lt"):
-				var limit_val = expected_dict.get("lt", null)
-				if not ((limit_val is int or limit_val is float) and (actual is int or actual is float)):
-					return false
-				if float(actual) >= float(limit_val):
-					return false
-				continue
-			if expected_dict.has("eq"):
-				var eq_val = expected_dict.get("eq", null)
-				if typeof(actual) != typeof(eq_val):
-					return false
-				if actual != eq_val:
-					return false
-				continue
-			if expected_dict.has("in"):
-				var in_val = expected_dict.get("in", null)
-				if not (in_val is Array):
-					return false
-				var arr: Array = in_val
-				if arr.find(actual) == -1 and arr.find(str(actual)) == -1:
-					return false
-				continue
-			# 未知比较器：视为不匹配（Fail Close）
-			return false
-		match typeof(expected):
-			TYPE_INT, TYPE_FLOAT:
-				if actual == null:
-					return false
-				if int(actual) != int(expected):
-					return false
-			TYPE_BOOL:
-				if actual == null:
-					return false
-				if bool(actual) != bool(expected):
-					return false
-			_:
-				if str(actual) != str(expected):
-					return false
-
-	return true
+	return TriggerFilterClass.matches_filter(trigger_filter, context)
 
 func to_dict() -> Dictionary:
 	var pool: Dictionary = {"enabled": pool_enabled}
