@@ -106,6 +106,7 @@
 - 2026-01-27：复核并更新文档：2.1 `_parse_*` 重复实现已大幅收敛（core 内仅余 3 文件含 `func _parse_*`）；2.2 规则侧 milestones->effects 遍历已基本迁移到 `MilestoneEffectQueries`（仅保留 MilestoneSystem/模块校验等通用路径直接遍历 `def.effects`）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `StepTimelineBuild`：将 step dict/事件封装/阶段归属等内部 helper 抽离到 `gameplay/replay/step_timeline_build/helpers.gd`，主文件保留 orchestrator（降低单文件体积，便于后续按职责继续拆分）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `gameplay/replay/command_runner_event_build.gd`：将 OrderOfBusiness/Payday 的事件推导分别抽离到 `gameplay/replay/command_runner_event_build/order_of_business_events.gd`、`gameplay/replay/command_runner_event_build/payday_events.gd`，主文件继续聚焦 orchestrator/wrapper（进一步降低单文件体积）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：继续拆分 `StepTimelineBuild`：将 `_build_full_impl(...)` 的回放/分段主流程迁移到 `gameplay/replay/step_timeline_build/build_full_impl.gd`，`step_timeline_build.gd` 保留 trace toggling wrapper（进一步降低入口脚本复杂度，便于后续按职责继续拆分 build_full_impl）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -116,7 +117,7 @@
 - `core/engine/game_engine/command_runner.gd`（~215 LOC） + `gameplay/replay/command_runner_event_build.gd`（~196 LOC；（已部分整改 2026-01-27）Dinnertime/Marketing/Cleanup/OrderOfBusiness/Payday 的事件推导已抽离到 `gameplay/replay/command_runner_event_build/`）
   - （已部分整改 2026-01-26）事件构建已下沉到 `command_runner_event_build.gd`；`CommandRunner` 主流程更聚焦于“命令执行 + auto-advance + 不变量/校验点 + EventBus 发射”。
   - 事件构建逻辑仍包含少量 phase 特例（如 Dinnertime report 与回合开始/结束事件归属），属于“日志/展示语义”，后续可继续按 phase 拆分或外移到 UI/回放子系统。
-- `gameplay/replay/step_timeline_build.gd`（~511 LOC；（已部分整改 2026-01-27）内部 helper 抽离到 `gameplay/replay/step_timeline_build/helpers.gd`）
+- `gameplay/replay/step_timeline_build/build_full_impl.gd`（~494 LOC；（已部分整改 2026-01-27）`step_timeline_build.gd` 已降为 wrapper；内部 helper 抽离到 `gameplay/replay/step_timeline_build/helpers.gd`）
   - 主要是“回放/日志时间线”的语义构建，逻辑复杂且强依赖事件归属规则（phase_segment、step_index、进入/离开阶段的事件归属等）。
   - 这类逻辑更像 UI/回放子系统的“派生视图构建”，放在 core/engine 内会让 engine 边界持续被拉宽。
 - `core/rules/phase/dinnertime_settlement.gd`（~37 LOC；（已整改 2026-01-27）wrapper） + `core/rules/phase/dinnertime/dinnertime_settlement_impl.gd`（~212 LOC） + `core/rules/phase/dinnertime/dinnertime_house_sales.gd`（~281 LOC）
@@ -362,7 +363,8 @@
 | `core/engine/game_engine/modules_v2.gd` | 231 | 23 | 0 |  |
 | `core/engine/game_engine/replay.gd` | 188 | 2 | 0 | uses:GameLog,uses:OS.has_feature,uses:JsonValueParseHelpers |
 | `core/engine/game_engine/rewind_ops.gd` | 82 | 2 | 0 | helper:rewind_ops |
-| `gameplay/replay/step_timeline_build.gd` | 511 | 7 | 0 | moved:gameplay,uses:EventBus |
+| `gameplay/replay/step_timeline_build.gd` | 35 | 1 | 0 | moved:gameplay |
+| `gameplay/replay/step_timeline_build/build_full_impl.gd` | 494 | 7 | 0 | moved:gameplay,uses:EventBus |
 | `gameplay/replay/step_timeline_build/helpers.gd` | 139 | 0 | 0 | helper:step_timeline_build |
 | `gameplay/replay/timeline_event_helpers.gd` | 75 | 0 | 0 | moved:gameplay,helper:timeline_event |
 | `core/engine/game_engine/command_index_queries.gd` | 168 | 2 | 0 | helper:command_index_queries |
@@ -593,7 +595,7 @@
 - `core/engine/game_engine/modules_v2.gd`：中等体量；preload 依赖较多（耦合偏高）；（已整改 2026-01-27）catalog/config 校验逻辑已抽离到 `modules_v2_validations.gd`
 - `core/engine/game_engine/modules_v2_validations.gd`：（已新增 2026-01-27）ModulesV2 校验辅助（catalog/config 结构校验），用于降低 `modules_v2.gd` 单文件职责与体积
 - `core/engine/game_engine/replay.gd`：中等体量；后续可按重构优先级处理；含调试/发布差异分支（OS.has_feature）；（已部分整改 2026-01-26）checkpoint.rng_calls 解析共用 `JsonValueParseHelpers`
-- （已移出 core 2026-01-26）`gameplay/replay/step_timeline_build.gd`：`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建；debug_force 判定统一复用 `Replay.should_force_execute_in_replay(...)`；复用 `timeline_event_helpers.gd` 统一写入事件 envelope（`sequence/timestamp/command_index/step_index/phase_segment`）（减少重复/样板）；时间线/日志“派生视图”构建逻辑很重；超长脚本（维护成本高）；（已部分整改 2026-01-27）将 step dict/事件封装/阶段归属等内部 helper 抽离到 `gameplay/replay/step_timeline_build/helpers.gd`；后续建议继续按职责拆分 `_build_full_impl(...)` 的回放/分段逻辑；依赖 EventBus（日志/UI 耦合）；（已整改 2026-01-26：不再跨文件调用 CommandRunner/PhaseManager 的私有 `_` 前缀方法）
+- （已移出 core 2026-01-26）`gameplay/replay/step_timeline_build.gd`（wrapper） + `gameplay/replay/step_timeline_build/build_full_impl.gd`：`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建；debug_force 判定统一复用 `Replay.should_force_execute_in_replay(...)`；复用 `timeline_event_helpers.gd` 统一写入事件 envelope（`sequence/timestamp/command_index/step_index/phase_segment`）（减少重复/样板）；时间线/日志“派生视图”构建逻辑很重；（已部分整改 2026-01-27）将 step dict/事件封装/阶段归属等内部 helper 抽离到 `gameplay/replay/step_timeline_build/helpers.gd`；（已部分整改 2026-01-27）将 `_build_full_impl(...)` 的回放/分段主流程迁移到 `gameplay/replay/step_timeline_build/build_full_impl.gd` 并让 `step_timeline_build.gd` 保留 wrapper；后续仍可继续按“命令回放/auto-advance 分段/flush pending”拆分 build_full_impl；依赖 EventBus（日志/UI 耦合）；（已整改 2026-01-26：不再跨文件调用 CommandRunner/PhaseManager 的私有 `_` 前缀方法）
 - （已移出 core 2026-01-26）`gameplay/replay/timeline_event_helpers.gd`：收敛时间线事件 envelope 字段写入（`sequence`/`timestamp`/`command_index`/`step_index`/`phase_segment`），供 `event_timeline_build.gd`/`step_timeline_build.gd` 等复用（减少重复/样板）
 - `core/engine/phase_manager.gd`：（已整改 2026-01-27）移除未使用的 preload 依赖（减少耦合/噪音）；移除未被使用的静态 defs wrapper（保留 `compute_timestamp(...)`），减少重复 API，降低单文件体积
 - `core/engine/phase_manager/advance_phase.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（降低对 Autoload 全局变量的硬依赖）
