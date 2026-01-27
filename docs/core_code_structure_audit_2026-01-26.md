@@ -85,6 +85,7 @@
 - 2026-01-27：拆分 `MarketingSettlementHelpers`：`core/rules/phase/marketing/settlement_helpers.gd` 保留 class_name + 对外 API wrapper，完整实现移至 `settlement_helpers_impl.gd`（降低单文件体积，便于按“到期处理/需求写入/里程碑 effects”继续拆分）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：将 `PieceDef.from_dict(...)` 的“严格解析/校验”抽离到 `core/map/piece_def_parser.gd`，`piece_def.gd` 仅保留对象构建与核心方法（缩短超长脚本，降低 map 数据模型与解析耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：将 `GameEngine` 的“阶段/玩家回合起点索引”推导逻辑抽离到 `core/engine/game_engine/command_index_queries.gd`，并复用 `Replay.should_force_execute_in_replay(...)`（缩短 `core/engine/game_engine.gd` 并减少重复判断）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：继续拆分 `MarketingSettlementHelpers`：将 `settlement_helpers_impl.gd` 的实现按职责拆到 `settlement_instance_expiration.gd`/`settlement_products.gd`/`settlement_house_demand.gd`/`settlement_demand_effects.gd`，impl 文件仅保留聚合转发（进一步降低单文件体积）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -107,7 +108,7 @@
 - `core/map/piece_def.gd`（~275 LOC；（已整改 2026-01-27）解析逻辑抽离到 `piece_def_parser.gd`）、`core/map/tile_def.gd`（~262 LOC）、`core/map/map_def.gd`（~311 LOC）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
 - 其他超过 ~300 行的文件：
-  - `core/engine/game_engine/modules_v2.gd`、`core/rules/phase/payday_settlement.gd`、`core/rules/drinks_procurement.gd`、`core/rules/phase/marketing/settlement_helpers_impl.gd`、`core/rules/employee_rules/train_slot_usage_impl.gd`、`core/actions/action_registry.gd`、`core/engine/game_engine/auto_advance.gd`
+  - `core/rules/phase/payday_settlement.gd`、`core/rules/employee_rules/train_slot_usage_impl.gd`、`core/map/map_def.gd`、`core/rules/drinks_procurement.gd`、`core/engine/phase_manager.gd`、`core/engine/game_engine/auto_advance_impl.gd`
 
 建议记录（后续重构方向）：
 - 先从“职责剥离”入手，而不是单纯按行数拆文件：
@@ -148,7 +149,7 @@
  - `core/rules/phase/payday_settlement.gd`
  - `core/rules/phase/cleanup_settlement.gd`
  - `core/engine/phase_manager/working_flow.gd`
- - `core/rules/phase/marketing/settlement_helpers_impl.gd`（叠加 effect_registry 的 invoke）
+ - `core/rules/phase/marketing/settlement_demand_effects.gd`（叠加 effect_registry 的 invoke）
   - （已部分整改 2026-01-26）上述多数文件已改为复用 `core/rules/milestone_effect_queries.gd` 收敛 milestones->effects 遍历样板（仍有零散 callsite 可继续迁移）
 
 现状矛盾点：
@@ -432,8 +433,12 @@
 | `core/rules/phase/dinnertime/dinnertime_selection.gd` | 202 | 4 | 0 |  |
 | `core/rules/phase/dinnertime_settlement.gd` | 510 | 16 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
 | `core/rules/phase/marketing/marketing_instances_validation.gd` | 96 | 1 | 0 |  |
+| `core/rules/phase/marketing/settlement_demand_effects.gd` | 160 | 2 | 0 |  |
+| `core/rules/phase/marketing/settlement_house_demand.gd` | 96 | 1 | 0 |  |
 | `core/rules/phase/marketing/settlement_helpers.gd` | 31 | 1 | 0 |  |
-| `core/rules/phase/marketing/settlement_helpers_impl.gd` | 335 | 4 | 0 |  |
+| `core/rules/phase/marketing/settlement_helpers_impl.gd` | 33 | 4 | 0 |  |
+| `core/rules/phase/marketing/settlement_instance_expiration.gd` | 52 | 1 | 0 |  |
+| `core/rules/phase/marketing/settlement_products.gd` | 35 | 0 | 0 |  |
 | `core/rules/phase/marketing_settlement.gd` | 228 | 4 | 0 |  |
 | `core/rules/phase/payday_settlement.gd` | 350 | 7 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
 | `core/rules/placement_conflict_registry.gd` | 133 | 0 | 0 |  |
@@ -647,7 +652,11 @@
 - `core/rules/phase/dinnertime_settlement.gd`：（已部分整改 2026-01-26）移除自带 `_parse_non_negative_int_value`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`waitress_tips` 的 “取最大 tips” 逻辑改用 `MilestoneEffectQueries.max_non_negative_int_value(...)`（减少重复/样板）；晚餐结算 orchestrator 过大；可进一步把“选择/计价/结算写入/报告生成”分层；超长脚本（维护成本高）；建议按职责拆分；preload 依赖较多（耦合偏高）
 - `core/rules/phase/marketing/marketing_instances_validation.gd`：（已新增 2026-01-26）抽离 MarketingSettlement 的 marketing_instances 校验/归一化逻辑（减少单文件职责/缩短脚本）
 - `core/rules/phase/marketing/settlement_helpers.gd`：（已整改 2026-01-27）class_name + 对外 API wrapper；完整实现移至 `settlement_helpers_impl.gd`（降低单文件体积，便于维护/进一步拆分）
-- `core/rules/phase/marketing/settlement_helpers_impl.gd`：（已新增 2026-01-27）MarketingSettlementHelpers 完整实现（到期处理/需求写入/里程碑 effects/排序）；仍偏长且 assert 较多，后续可按“effects/需求写入/排序”等职责继续拆分
+- `core/rules/phase/marketing/settlement_helpers_impl.gd`：（已整改 2026-01-27）实现已进一步拆分到 `settlement_instance_expiration.gd`/`settlement_products.gd`/`settlement_house_demand.gd`/`settlement_demand_effects.gd`；本文件仅保留聚合转发（降低单文件体积）
+- `core/rules/phase/marketing/settlement_instance_expiration.gd`：（已新增 2026-01-27）营销实例到期处理（回收板件/释放 busy_marketers）；职责单一
+- `core/rules/phase/marketing/settlement_products.gd`：（已新增 2026-01-27）营销实例的产品序列解析（primary + products）；职责单一
+- `core/rules/phase/marketing/settlement_house_demand.gd`：（已新增 2026-01-27）需求写入（cap/花园/倍增）与房屋排序；职责单一
+- `core/rules/phase/marketing/settlement_demand_effects.gd`：（已新增 2026-01-27）营销需求数量/现金奖金 effects 计算（遍历 milestones -> effect_registry.invoke）；后续可考虑进一步收敛“milestone 扫描”样板
 - `core/rules/phase/marketing_settlement.gd`：（已整改 2026-01-26）将 marketing_instances 校验/归一化抽离到 `marketing_instances_validation.gd`（减少单文件职责/缩短脚本）；其余结算/需求生成/到期清理仍可按职责继续拆分
 - `core/rules/phase/payday_settlement.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`salary_total_delta` 的 value 求和改用 `MilestoneEffectQueries.sum_int_values(...)`（减少重复/样板）；结算逻辑较大；包含 token 支付/折扣/报告写入等多职责，可分层；偏长脚本；建议关注职责边界/可读性；存在一定数量的 preload 依赖
 - `core/rules/placement_conflict_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
