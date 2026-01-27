@@ -9,6 +9,8 @@ const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var items_container: VBoxContainer = $MarginContainer/VBoxContainer/ItemsContainer
@@ -573,17 +575,17 @@ func refresh() -> void:
 		visible_executable.append(aid2)
 
 	# Restructuring（hotseat 提交制）：隐藏“确认结束(skip)”，避免误解/误点造成卡住
-	if _game_state.phase == "Restructuring" and int(_game_state.round_number) > 1:
+	if _game_state.phase == DefsClass.PHASE_RESTRUCTURING and int(_game_state.round_number) > 1:
 		var filtered_ids: Array[String] = []
 		for aid_skip in visible_ids:
-			if aid_skip == "skip":
+			if aid_skip == ActionIdsClass.SKIP:
 				continue
 			filtered_ids.append(aid_skip)
 		visible_ids = filtered_ids
 
 		var filtered_executable: Array[String] = []
 		for aid_skip2 in visible_executable:
-			if aid_skip2 == "skip":
+			if aid_skip2 == ActionIdsClass.SKIP:
 				continue
 			filtered_executable.append(aid_skip2)
 		visible_executable = filtered_executable
@@ -618,10 +620,10 @@ func refresh() -> void:
 	if has_player_executable_info:
 		for aid3 in visible_ids:
 			var enabled := visible_executable.has(aid3)
-			if (not enabled) and aid3 == "skip" and _should_enable_skip_via_auto_mandatory_actions():
+			if (not enabled) and aid3 == ActionIdsClass.SKIP and _should_enable_skip_via_auto_mandatory_actions():
 				enabled = true
 			# 保留调试用强制推进按钮
-			if aid3 == "advance_phase":
+			if aid3 == ActionIdsClass.ADVANCE_PHASE:
 				enabled = true
 			set_action_enabled(aid3, enabled)
 			if enabled:
@@ -641,32 +643,32 @@ func _on_rewind_phase_pressed() -> void:
 	action_requested.emit("rewind_to_turn_start", {})
 
 func _get_fallback_actions(phase: String, sub_phase: String) -> Array[String]:
-	var result: Array[String] = ["skip"]
+	var result: Array[String] = [ActionIdsClass.SKIP]
 
 	match phase:
-		"Setup":
+		DefsClass.PHASE_SETUP:
 			result.append("place_restaurant")
-		"OrderOfBusiness":
+		DefsClass.PHASE_ORDER_OF_BUSINESS:
 			result.append("choose_turn_order")
-		"Working":
+		DefsClass.PHASE_WORKING:
 			match sub_phase:
-				"Recruit":
+				DefsClass.SUB_PHASE_RECRUIT:
 					result.append("recruit")
-				"Train":
+				DefsClass.SUB_PHASE_TRAIN:
 					result.append("train")
-				"Marketing":
+				DefsClass.SUB_PHASE_MARKETING:
 					result.append("initiate_marketing")
-				"GetFood":
+				DefsClass.SUB_PHASE_GET_FOOD:
 					result.append("produce_food")
-				"GetDrinks":
+				DefsClass.SUB_PHASE_GET_DRINKS:
 					result.append("procure_drinks")
-				"PlaceHouses":
+				DefsClass.SUB_PHASE_PLACE_HOUSES:
 					result.append("place_house")
 					result.append("add_garden")
-				"PlaceRestaurants":
+				DefsClass.SUB_PHASE_PLACE_RESTAURANTS:
 					result.append("place_restaurant")
 					result.append("move_restaurant")
-		"Payday":
+		DefsClass.PHASE_PAYDAY:
 			result.append("fire")
 
 	return result
@@ -679,18 +681,18 @@ func _sort_action_ids_for_display(action_ids: Array[String]) -> Array[String]:
 	var has_skip := false
 	for v in action_ids:
 		var aid := str(v)
-		if aid == "skip_sub_phase":
+		if aid == ActionIdsClass.SKIP_SUB_PHASE:
 			has_skip_sub = true
 			continue
-		if aid == "skip":
+		if aid == ActionIdsClass.SKIP:
 			has_skip = true
 			continue
 		out.append(aid)
 
 	if has_skip_sub:
-		out.append("skip_sub_phase")
+		out.append(ActionIdsClass.SKIP_SUB_PHASE)
 	if has_skip:
-		out.append("skip")
+		out.append(ActionIdsClass.SKIP)
 	return out
 
 func _rebuild_action_buttons(action_ids: Array[String]) -> void:
@@ -811,10 +813,10 @@ func _should_enable_skip_via_auto_mandatory_actions() -> bool:
 		return false
 
 	# 仅当 skip 的失败原因是“缺少强制动作”时才考虑启用；其他原因（例如未到 Working 最后子阶段）不应放行。
-	var skip_exec = _action_registry.get_executor("skip")
+	var skip_exec = _action_registry.get_executor(ActionIdsClass.SKIP)
 	if skip_exec == null:
 		return false
-	var test_command := Command.create("skip", _current_player_id)
+	var test_command := Command.create(ActionIdsClass.SKIP, _current_player_id)
 	test_command.phase = _game_state.phase
 	test_command.sub_phase = _game_state.sub_phase
 	var r = skip_exec.validate(_game_state, test_command)
