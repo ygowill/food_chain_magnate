@@ -7,6 +7,7 @@ const MarketingEventsClass = preload("res://gameplay/replay/command_runner_event
 const CleanupEventsClass = preload("res://gameplay/replay/command_runner_event_build/cleanup_events.gd")
 const OrderOfBusinessEventsClass = preload("res://gameplay/replay/command_runner_event_build/order_of_business_events.gd")
 const PaydayEventsClass = preload("res://gameplay/replay/command_runner_event_build/payday_events.gd")
+const RoundEventsClass = preload("res://gameplay/replay/command_runner_event_build/round_events.gd")
 
 static func build_milestone_achieved_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
@@ -106,20 +107,7 @@ static func build_phase_change_events(old_state: GameState, new_state: GameState
 			events.append_array(CleanupEventsClass.build_cleanup_inventory_discarded_events(new_state))
 
 		# 回合开始/结束事件
-		if old_state.round_number != new_state.round_number:
-			events.append({
-				"type": EventBus.EventType.ROUND_ENDED,
-				"data": {
-					"round": old_state.round_number,
-					"next_round": new_state.round_number,
-				}
-			})
-			events.append({
-				"type": EventBus.EventType.ROUND_STARTED,
-				"data": {
-					"round": new_state.round_number
-				}
-			})
+		events.append_array(RoundEventsClass.build_round_boundary_events(old_state, new_state))
 
 	# 子阶段变化事件
 	if old_state.sub_phase != new_state.sub_phase and not new_state.sub_phase.is_empty():
