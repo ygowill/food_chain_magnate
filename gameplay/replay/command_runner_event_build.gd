@@ -5,6 +5,8 @@ extends RefCounted
 const DinnertimeEventsClass = preload("res://gameplay/replay/command_runner_event_build/dinnertime_events.gd")
 const MarketingEventsClass = preload("res://gameplay/replay/command_runner_event_build/marketing_events.gd")
 const CleanupEventsClass = preload("res://gameplay/replay/command_runner_event_build/cleanup_events.gd")
+const OrderOfBusinessEventsClass = preload("res://gameplay/replay/command_runner_event_build/order_of_business_events.gd")
+const PaydayEventsClass = preload("res://gameplay/replay/command_runner_event_build/payday_events.gd")
 
 static func build_milestone_achieved_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
@@ -76,32 +78,7 @@ static func build_phase_change_events(old_state: GameState, new_state: GameState
 	# 阶段变化事件
 	if old_state.phase != new_state.phase:
 		# 最终行动顺序落地事件（首轮 OrderOfBusiness auto finalize 依赖此事件用于日志显示/回放恢复）。
-		if str(old_state.phase) == "OrderOfBusiness":
-			var old_finalized := false
-			var new_finalized := false
-			if old_state.round_state is Dictionary:
-				var oob_old_val = Dictionary(old_state.round_state).get("order_of_business", null)
-				if oob_old_val is Dictionary:
-					var oob_old: Dictionary = oob_old_val
-					if oob_old.has("finalized") and (oob_old["finalized"] is bool):
-						old_finalized = bool(oob_old["finalized"])
-			if new_state.round_state is Dictionary:
-				var oob_new_val = Dictionary(new_state.round_state).get("order_of_business", null)
-				if oob_new_val is Dictionary:
-					var oob_new: Dictionary = oob_new_val
-					if oob_new.has("finalized") and (oob_new["finalized"] is bool):
-						new_finalized = bool(oob_new["finalized"])
-			if (not old_finalized) and new_finalized:
-				var final_order: Array[int] = []
-				for pid in new_state.turn_order:
-					final_order.append(int(pid))
-				events.append({
-					"type": EventBus.EventType.TURN_ORDER_FINALIZED,
-					"data": {
-						"round": int(new_state.round_number),
-						"turn_order": final_order,
-					}
-				})
+		events.append_array(OrderOfBusinessEventsClass.build_turn_order_finalized_events(old_state, new_state))
 
 		# Dinnertime 结算报告：在离开 Dinnertime 时发射（便于 UI/日志按事件历史恢复，且不依赖当前 state）。
 		if str(old_state.phase) == "Dinnertime":
@@ -123,21 +100,7 @@ static func build_phase_change_events(old_state: GameState, new_state: GameState
 			events.append_array(DinnertimeEventsClass.build_food_sold_events_from_dinnertime_report(old_state, report))
 
 		# Payday 结算报告：在离开 Payday 时发射（PaydaySettlement 在 exit hook 运行，报告写入 new_state.round_state.payday）。
-		if str(old_state.phase) == "Payday":
-			var report_payday: Dictionary = {}
-			if new_state.round_state is Dictionary:
-				var v2 = Dictionary(new_state.round_state).get("payday", null)
-				if v2 is Dictionary:
-					report_payday = Dictionary(v2).duplicate(true)
-			events.append({
-				"type": EventBus.EventType.PAYDAY_REPORT,
-				"data": {
-					"round": old_state.round_number,
-					"from_phase": str(old_state.phase),
-					"to_phase": str(new_state.phase),
-					"report": report_payday,
-				}
-			})
+		events.append_array(PaydayEventsClass.build_payday_report_events(old_state, new_state))
 
 		# Marketing 结算摘要：在离开 Marketing 时发射（便于 UI 日志从 EventBus.history 恢复）。
 		# issue_tracker #48: per board 1 log entry, with details in event data.
