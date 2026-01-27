@@ -4,6 +4,7 @@ class_name MandatoryActionsRules
 extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const RoundStatePlayerStringListsClass = preload("res://core/utils/round_state_player_string_lists.gd")
 
 # 查找提供某个强制动作的员工（用于 gameplay/actions 的强制动作执行器）
 static func find_provider_employee_id(player: Dictionary, mandatory_action_id: String) -> String:
@@ -28,28 +29,26 @@ static func find_provider_employee_id(player: Dictionary, mandatory_action_id: S
 
 static func has_completed_this_round(state: GameState, player_id: int, mandatory_action_id: String) -> bool:
 	assert(state.round_state is Dictionary, "MandatoryActionsRules.has_completed_this_round: state.round_state 类型错误（期望 Dictionary）")
-	assert(state.round_state.has("mandatory_actions_completed"), "MandatoryActionsRules.has_completed_this_round: round_state 缺少 mandatory_actions_completed")
-	var mac_val = state.round_state["mandatory_actions_completed"]
-	assert(mac_val is Dictionary, "MandatoryActionsRules.has_completed_this_round: round_state.mandatory_actions_completed 类型错误（期望 Dictionary）")
-	var mac: Dictionary = mac_val
-	assert(mac.has(player_id), "MandatoryActionsRules.has_completed_this_round: mandatory_actions_completed 缺少玩家 key: %d" % player_id)
-	var completed_val = mac[player_id]
-	assert(completed_val is Array, "MandatoryActionsRules.has_completed_this_round: mandatory_actions_completed[%d] 类型错误（期望 Array）" % player_id)
-	var completed: Array = completed_val
-	return completed.has(mandatory_action_id)
+	var read := RoundStatePlayerStringListsClass.has_value(
+		state.round_state,
+		"mandatory_actions_completed",
+		player_id,
+		mandatory_action_id,
+		"MandatoryActionsRules.has_completed_this_round"
+	)
+	assert(read.ok, read.error)
+	return bool(read.value)
 
 static func mark_completed(state: GameState, player_id: int, mandatory_action_id: String) -> void:
 	assert(state.round_state is Dictionary, "MandatoryActionsRules.mark_completed: state.round_state 类型错误（期望 Dictionary）")
-	assert(state.round_state.has("mandatory_actions_completed"), "MandatoryActionsRules.mark_completed: round_state 缺少 mandatory_actions_completed")
-	var mac_val = state.round_state["mandatory_actions_completed"]
-	assert(mac_val is Dictionary, "MandatoryActionsRules.mark_completed: round_state.mandatory_actions_completed 类型错误（期望 Dictionary）")
-	var mac: Dictionary = mac_val
-	assert(mac.has(player_id), "MandatoryActionsRules.mark_completed: mandatory_actions_completed 缺少玩家 key: %d" % player_id)
-	var completed_val = mac[player_id]
-	assert(completed_val is Array, "MandatoryActionsRules.mark_completed: mandatory_actions_completed[%d] 类型错误（期望 Array）" % player_id)
-	var completed: Array = completed_val
-	if not completed.has(mandatory_action_id):
-		completed.append(mandatory_action_id)
+	var r := RoundStatePlayerStringListsClass.add_unique_value(
+		state.round_state,
+		"mandatory_actions_completed",
+		player_id,
+		mandatory_action_id,
+		"MandatoryActionsRules.mark_completed"
+	)
+	assert(r.ok, r.error)
 
 # 检查所有玩家是否完成了必须的强制动作
 static func check_mandatory_actions_completed(state: GameState) -> Result:
@@ -62,10 +61,6 @@ static func check_mandatory_actions_completed(state: GameState) -> Result:
 
 	if not state.round_state.has("mandatory_actions_completed"):
 		return Result.failure("MandatoryActionsRules: round_state.mandatory_actions_completed 缺失")
-	var mac_val = state.round_state["mandatory_actions_completed"]
-	if not (mac_val is Dictionary):
-		return Result.failure("MandatoryActionsRules: round_state.mandatory_actions_completed 类型错误（期望 Dictionary）")
-	var mandatory_actions_completed: Dictionary = mac_val
 
 	var missing_actions: Array[Dictionary] = []
 
@@ -76,12 +71,15 @@ static func check_mandatory_actions_completed(state: GameState) -> Result:
 		var player: Dictionary = player_val
 
 		var required := get_required_mandatory_actions(player)
-		if not mandatory_actions_completed.has(player_id):
-			return Result.failure("MandatoryActionsRules: mandatory_actions_completed 缺少玩家 key: %d" % player_id)
-		var completed_val = mandatory_actions_completed[player_id]
-		if not (completed_val is Array):
-			return Result.failure("MandatoryActionsRules: mandatory_actions_completed[%d] 类型错误（期望 Array）" % player_id)
-		var completed: Array = completed_val
+		var completed_read := RoundStatePlayerStringListsClass.require_player_string_array(
+			state.round_state,
+			"mandatory_actions_completed",
+			player_id,
+			"MandatoryActionsRules"
+		)
+		if not completed_read.ok:
+			return completed_read
+		var completed: Array = completed_read.value
 
 		for action_id in required:
 			if not completed.has(action_id):
@@ -135,10 +133,6 @@ static func get_mandatory_actions_status(state: GameState) -> Result:
 
 	if not state.round_state.has("mandatory_actions_completed"):
 		return Result.failure("MandatoryActionsRules: round_state.mandatory_actions_completed 缺失")
-	var mac_val = state.round_state["mandatory_actions_completed"]
-	if not (mac_val is Dictionary):
-		return Result.failure("MandatoryActionsRules: round_state.mandatory_actions_completed 类型错误（期望 Dictionary）")
-	var mandatory_actions_completed: Dictionary = mac_val
 
 	var status: Dictionary = {}
 
@@ -149,12 +143,15 @@ static func get_mandatory_actions_status(state: GameState) -> Result:
 		var player: Dictionary = player_val
 
 		var required := get_required_mandatory_actions(player)
-		if not mandatory_actions_completed.has(player_id):
-			return Result.failure("MandatoryActionsRules: mandatory_actions_completed 缺少玩家 key: %d" % player_id)
-		var completed_val = mandatory_actions_completed[player_id]
-		if not (completed_val is Array):
-			return Result.failure("MandatoryActionsRules: mandatory_actions_completed[%d] 类型错误（期望 Array）" % player_id)
-		var completed: Array = completed_val
+		var completed_read := RoundStatePlayerStringListsClass.require_player_string_array(
+			state.round_state,
+			"mandatory_actions_completed",
+			player_id,
+			"MandatoryActionsRules"
+		)
+		if not completed_read.ok:
+			return completed_read
+		var completed: Array = completed_read.value
 
 		var player_status: Array[Dictionary] = []
 		for action_id in required:

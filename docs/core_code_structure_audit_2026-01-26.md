@@ -127,6 +127,7 @@
 - 2026-01-27：减少 Dictionary 裸写（milestones 扩展）：将 `CleanupSettlement`/`PaydaySettlement`/`DinnertimeEffects`/`EmployeeRules.Salary`/`StateUpdater.employees_and_milestones` 等处对 `player.milestones` 的手写校验改为复用 `PlayerStateAccess`；并让 prefix 处理兼容中文冒号（`：`），以便复用中文错误前缀；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：减少 Dictionary 裸写（inventory 扩展）：为 `PlayerStateAccess` 补充 `player.inventory` 的读取/校验 API，并用于 `PaydaySalaryTokenPayment`/`CleanupSettlement`/`DinnertimeInventory`（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：减少 Dictionary 裸写（round_state.action_counts）：`core/rules/employee_rules/action_counts.gd` 改为复用 `RoundStateCounters.get_player_key_count/increment_player_key_count`（收敛 round_state.action_counts 的读取/写入校验样板，行为不变）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-28：减少 Dictionary 裸写（round_state.mandatory_actions_completed）：新增 `RoundStatePlayerStringLists`（`core/utils/round_state_player_string_lists.gd`）收敛 `player_id -> Array[String]` 结构的读取/校验/去重添加，并用于 `MandatoryActionsRules`（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：phase/action 字符串常量化（第一步）：在 `core/engine/phase_manager/definitions.gd` 集中定义 `PHASE_*`/`SUB_PHASE_*` 常量；新增 `core/actions/action_ids.gd`（集中常用 action_id 常量），并替换 core/engine 的 AutoAdvance/AdvanceSubPhase 等关键路径比较逻辑（降低拼写风险/重命名成本）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
@@ -319,6 +320,7 @@
   - （已整改 2026-01-27）继续迁移剩余 milestones callsite：`CleanupSettlement`/`PaydaySettlement`/`DinnertimeEffects`/`EmployeeRules.Salary`/`StateUpdater.employees_and_milestones` 也统一复用 `PlayerStateAccess`（进一步减少 Dictionary 裸写与重复样板）
   - （已整改 2026-01-27）为 `PlayerStateAccess` 增加 `inventory` 读取/校验 API，并先在 `PaydaySalaryTokenPayment`/`CleanupSettlement`/`DinnertimeInventory` 等路径复用（继续减少 Dictionary 裸写）
   - （已整改 2026-01-28）`round_state.action_counts` 的读写改为复用 `RoundStateCounters`（进一步减少 round_state 结构的重复校验/样板）
+  - （已整改 2026-01-28）`round_state.mandatory_actions_completed` 的读写改为复用 `RoundStatePlayerStringLists`（进一步减少 round_state 结构的重复校验/样板）
 - 少量“自加载创建实例”的奇怪模式：
   - （已整改 2026-01-26）`core/data/product_def.gd`、`core/modules/v2/module_manifest.gd` 已从 `load(自身脚本路径).new()` 改为直接 `new()`。
 
@@ -534,7 +536,7 @@
 | `core/rules/placement_conflict_registry.gd` | 133 | 0 | 0 |  |
 | `core/rules/pricing_pipeline.gd` | 165 | 4 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries,uses:PlayerStateAccess |
 | `core/rules/settlement_registry.gd` | 159 | 1 | 0 | uses:AutoloadAccess |
-| `core/rules/working/mandatory_actions_rules.gd` | 169 | 1 | 0 |  |
+| `core/rules/working/mandatory_actions_rules.gd` | 165 | 2 | 0 | uses:RoundStatePlayerStringLists |
 | `core/state/game_state.gd` | 230 | 2 | 0 |  |
 | `core/state/game_state_factory.gd` | 209 | 5 | 0 |  |
 | `core/state/game_state_serialization.gd` | 226 | 5 | 0 |  |
@@ -563,6 +565,7 @@
 | `core/utils/range_utils_road.gd` | 38 | 2 | 0 | helper:range_utils_road_wrapper |
 | `core/utils/range_utils_road/adjacent_cells.gd` | 58 | 1 | 0 | helper:range_utils_road_adjacent |
 | `core/utils/range_utils_road/distance_queries.gd` | 205 | 3 | 0 | helper:range_utils_road_distance |
+| `core/utils/round_state_player_string_lists.gd` | 74 | 0 | 0 | helper:round_state_player_string_lists |
 | `core/utils/round_state_counters.gd` | 146 | 0 | 0 |  |
 | `core/utils/type_helpers.gd` | 34 | 0 | 0 |  |
 
@@ -776,7 +779,7 @@
 - `core/rules/placement_conflict_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/pricing_pipeline.gd`：（已整改 2026-01-26）移除自带 `_parse_*`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`base_price_delta` 的 value 求和改用 `MilestoneEffectQueries.sum_int_values(...)`（减少重复/样板）；（已整改 2026-01-27）读取 `player.milestones` 改为复用 `PlayerStateAccess`（减少重复/样板）；中等体量；后续可按重构优先级处理
 - `core/rules/settlement_registry.gd`：（已整改 2026-01-27）warn/debug 判定改为通过 `AutoloadAccess` 动态访问 `GameLog`/`DebugFlags`（避免直接引用 Autoload 全局变量；行为不变）；含调试/发布差异分支（AutoloadAccess.is_debug_mode -> DebugFlags/OS.has_feature）
-- `core/rules/working/mandatory_actions_rules.gd`：未发现明显结构问题（小文件/职责相对单一）
+- `core/rules/working/mandatory_actions_rules.gd`：（已整改 2026-01-28）读取 `round_state.mandatory_actions_completed` 改为复用 `RoundStatePlayerStringLists`（减少重复/样板）；其余未发现明显结构问题（小文件/职责相对单一）
 
 ### state/
 
@@ -815,5 +818,6 @@
 - `core/utils/range_utils_road/adjacent_cells.gd`：（已新增 2026-01-27）邻接道路格计算（支持 external_cells）；小文件/职责单一
 - `core/utils/range_utils_road/distance_queries.gd`：（已新增 2026-01-27）道路距离/范围查询（min_distance/within_range，含 drive_thru 入口点扩展）；中等体量；后续若继续拆分可按“目标点归一化/餐厅入口点计算/距离查询”分层
 - `core/utils/range_utils_air.gd`：（已新增 2026-01-27）空中范围实现（Manhattan 距离）；小文件/职责单一
+- `core/utils/round_state_player_string_lists.gd`：（已新增 2026-01-28）round_state 下 player_id -> Array[String] 结构的读取/校验/去重添加（Fail Fast），用于减少重复样板
 - `core/utils/round_state_counters.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/utils/type_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
