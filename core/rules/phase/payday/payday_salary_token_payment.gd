@@ -1,6 +1,7 @@
 extends RefCounted
 
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 static func count_food_drink_tokens(inventory: Dictionary) -> int:
 	var total := 0
@@ -47,10 +48,10 @@ static func pay_with_tokens(state: GameState, player_id: int, tokens_needed: int
 		return Result.failure("PaydaySalaryTokenPayment: players[%d] 类型错误（期望 Dictionary）" % player_id)
 	var player: Dictionary = player_val
 
-	var inventory_val = player.get("inventory", null)
-	if not (inventory_val is Dictionary):
-		return Result.failure("PaydaySalaryTokenPayment: player[%d].inventory 类型错误（期望 Dictionary）" % player_id)
-	var inventory: Dictionary = inventory_val
+	var inventory_read := PlayerStateAccessClass.require_inventory(player, "player[%d]" % player_id, "PaydaySalaryTokenPayment")
+	if not inventory_read.ok:
+		return inventory_read
+	var inventory: Dictionary = inventory_read.value
 
 	var paid: Dictionary = {}
 	var remaining := tokens_needed
@@ -88,4 +89,3 @@ static func pay_with_tokens(state: GameState, player_id: int, tokens_needed: int
 	player["inventory"] = inventory
 	state.players[player_id] = player
 	return Result.success(paid)
-

@@ -43,10 +43,10 @@ static func apply(state: GameState) -> Result:
 		var has_fridge: bool = bool(fridge.get("has_fridge", false))
 		var fridge_cap: int = int(fridge.get("capacity", 0))
 
-		var inventory_val = player.get("inventory", null)
-		if not (inventory_val is Dictionary):
-			return Result.failure("CleanupSettlement: player[%d].inventory 类型错误（期望 Dictionary）" % i)
-		var inventory: Dictionary = inventory_val
+		var inventory_read := PlayerStateAccessClass.require_inventory(player, "player[%d]" % i, "CleanupSettlement")
+		if not inventory_read.ok:
+			return inventory_read
+		var inventory: Dictionary = inventory_read.value
 
 		# food+drink 总量（用于判断是否需要弹窗选择）
 		var total_food_drink := 0

@@ -33,9 +33,22 @@ static func require_milestones(player: Dictionary, player_label: String, prefix_
 		return Result.failure("%s%s.milestones 缺失或类型错误（期望 Array）" % [prefix, player_label])
 	return Result.success(player["milestones"])
 
+static func require_inventory(player: Dictionary, player_label: String, prefix_label: String) -> Result:
+	var prefix := _prefix(prefix_label)
+	if not player.has("inventory") or not (player["inventory"] is Dictionary):
+		return Result.failure("%s%s.inventory 缺失或类型错误（期望 Dictionary）" % [prefix, player_label])
+	return Result.success(player["inventory"])
+
 static func require_player_milestones(state: GameState, player_id: int, prefix_label: String) -> Result:
 	var player_read := require_player(state, player_id, prefix_label)
 	if not player_read.ok:
 		return player_read
 	var player: Dictionary = player_read.value
 	return require_milestones(player, "player[%d]" % player_id, prefix_label)
+
+static func require_player_inventory(state: GameState, player_id: int, prefix_label: String) -> Result:
+	var player_read := require_player(state, player_id, prefix_label)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	return require_inventory(player, "player[%d]" % player_id, prefix_label)

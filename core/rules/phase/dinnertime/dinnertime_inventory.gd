@@ -3,6 +3,7 @@ class_name DinnertimeInventory
 extends RefCounted
 
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 static func build_demand_requirements(demands: Array) -> Result:
 	var required: Dictionary = {}
@@ -39,10 +40,10 @@ static func required_has_non_drink_food(required: Dictionary) -> Result:
 	return Result.success(false)
 
 static func player_has_inventory(player: Dictionary, required: Dictionary) -> Result:
-	var inv_val = player.get("inventory", null)
-	if not (inv_val is Dictionary):
-		return Result.failure("晚餐结算失败：player.inventory 类型错误（期望 Dictionary）")
-	var inv: Dictionary = inv_val
+	var inv_read := PlayerStateAccessClass.require_inventory(player, "player", "晚餐结算失败：")
+	if not inv_read.ok:
+		return inv_read
+	var inv: Dictionary = inv_read.value
 
 	for product in required.keys():
 		var need := int(required.get(product, 0))
@@ -61,10 +62,10 @@ static func apply_inventory_delta(state: GameState, player_id: int, required: Di
 		return Result.failure("晚餐结算失败：player 类型错误: players[%d]（期望 Dictionary）" % player_id)
 	var player: Dictionary = player_val
 
-	var inv_val = player.get("inventory", null)
-	if not (inv_val is Dictionary):
-		return Result.failure("晚餐结算失败：player[%d].inventory 类型错误（期望 Dictionary）" % player_id)
-	var inv: Dictionary = inv_val
+	var inv_read := PlayerStateAccessClass.require_inventory(player, "player[%d]" % player_id, "晚餐结算失败：")
+	if not inv_read.ok:
+		return inv_read
+	var inv: Dictionary = inv_read.value
 
 	for product in required.keys():
 		var need := int(required.get(product, 0))
