@@ -122,6 +122,7 @@
 - 2026-01-27：继续拆分 `StepTimelineBuild`：将“阶段切换事件归属 + 结算 effects 归属”抽离到 `gameplay/replay/step_timeline_build/phase_transition.gd`，将 auto-advance 分段主循环抽离到 `gameplay/replay/step_timeline_build/auto_advance_drain.gd`，`build_full_impl.gd` 收敛为 orchestrator（体积降至 ~289 LOC）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：清理 `GameEngine`：移除未使用的 preload 依赖，并删除薄 `_` wrapper（减少噪音/耦合，体积降至 ~285 LOC）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：复核并更新文档：将审计中残留的“已部分整改”标记统一更新为“已整改”（代码改动已在此前完成，本文档仅做状态对齐）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：`AdvanceSubPhase`（Working）对 `round_state.sub_phase_passed` 的校验从 `assert` 改为返回 `Result.failure` 并回滚 snapshot（fail-fast 在 release 下也生效，且失败不污染 state）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -304,7 +305,7 @@
   - 建议逐步迁移到集中定义（constants/enum），并提供转换与校验入口。
 - `assert` 与 `Result.failure` 混用导致“release 下校验失效”的风险：
   - （已整改 2026-01-27）以 `core/engine/phase_manager/working_flow.gd` 为例，里程碑 effects 解析与 OrderOfBusiness 排序相关的 fail-fast 已从 `assert` 改为返回 `Result.failure`，并在 base_rules/movie_stars hooks 中显式传播（release 下也生效）。
-  - 仍有少量 `assert`（多为初始化/内部不变量/模块校验）；关键路径（`WorkingFlow`/`CompanyStructureRules`/`HouseNumberManager`/`DinnertimeSelection`/`TileBaking`）已改为 `Result.failure` fail-fast，后续可继续统一策略。
+  - 仍有少量 `assert`（多为初始化/内部不变量/模块校验）；关键路径（`WorkingFlow`/`CompanyStructureRules`/`HouseNumberManager`/`DinnertimeSelection`/`TileBaking`/`PhaseManager.advance_sub_phase`）已改为 `Result.failure` fail-fast，后续可继续统一策略。
 - 大量 `Dictionary` 结构的手工深层读取/写入：
   - 多文件重复出现 `if not (x is Dictionary)`、`get(..., null)`、`duplicate(true)` 组合，属于结构性样板代码。
   - 已有 `TypeHelpers` / `ParseHelpers` / 若干 query helper（例如 `CatalogRegistryHelpers`、`MarketingPlacementQuery`）但使用不一致，导致全局风格不统一。
@@ -624,7 +625,7 @@
 - （已移出 core 2026-01-26）`gameplay/replay/timeline_event_helpers.gd`：收敛时间线事件 envelope 字段写入（`sequence`/`timestamp`/`command_index`/`step_index`/`phase_segment`），供 `event_timeline_build.gd`/`step_timeline_build.gd` 等复用（减少重复/样板）
 - `core/engine/phase_manager.gd`：（已整改 2026-01-27）移除未使用的 preload 依赖（减少耦合/噪音）；移除未被使用的静态 defs wrapper（保留 `compute_timestamp(...)`），减少重复 API，降低单文件体积
 - `core/engine/phase_manager/advance_phase.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（降低对 Autoload 全局变量的硬依赖）
-- `core/engine/phase_manager/advance_sub_phase.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（降低对 Autoload 全局变量的硬依赖）
+- `core/engine/phase_manager/advance_sub_phase.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（降低对 Autoload 全局变量的硬依赖）；（已整改 2026-01-27）Working: `round_state.sub_phase_passed` 校验从 `assert` 改为 `Result.failure` 并回滚 snapshot（fail-fast 在 release 下也生效）
 - `core/engine/phase_manager/advancement.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/phase_manager/definitions.gd`：中等体量；后续可按重构优先级处理
 - `core/engine/phase_manager/hooks.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志/调试开关读取改为通过 `AutoloadAccess` 动态访问 `GameLog`/`DebugFlags`（降低对 Autoload 全局变量的硬依赖）

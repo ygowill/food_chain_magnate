@@ -128,17 +128,18 @@ static func _advance_working_sub_phase(pm, state: GameState) -> Result:
 		all_warnings.append_array(after_exit_last.warnings)
 
 		if not (state.round_state is Dictionary):
-			return Result.failure("Working: round_state 类型错误（期望 Dictionary）")
+			return _rollback_and_return(state, snapshot, Result.failure("Working: round_state 类型错误（期望 Dictionary）"))
 		if not state.round_state.has("sub_phase_passed"):
-			return Result.failure("Working: round_state.sub_phase_passed 缺失")
+			return _rollback_and_return(state, snapshot, Result.failure("Working: round_state.sub_phase_passed 缺失"))
 		var passed_val = state.round_state["sub_phase_passed"]
 		if not (passed_val is Dictionary):
-			return Result.failure("Working: round_state.sub_phase_passed 类型错误（期望 Dictionary）")
+			return _rollback_and_return(state, snapshot, Result.failure("Working: round_state.sub_phase_passed 类型错误（期望 Dictionary）"))
 		var passed: Dictionary = passed_val
 
 		var all_passed := true
 		for pid in range(state.players.size()):
-			assert(passed.has(pid) and (passed[pid] is bool), "Working: sub_phase_passed[%d] 缺失或类型错误（期望 bool）" % pid)
+			if not passed.has(pid) or not (passed[pid] is bool):
+				return _rollback_and_return(state, snapshot, Result.failure("Working: sub_phase_passed[%d] 缺失或类型错误（期望 bool）" % pid))
 			if not bool(passed[pid]):
 				all_passed = false
 				break
@@ -151,7 +152,7 @@ static func _advance_working_sub_phase(pm, state: GameState) -> Result:
 
 		var size := state.turn_order.size()
 		if size <= 0:
-			return Result.failure("turn_order 为空")
+			return _rollback_and_return(state, snapshot, Result.failure("turn_order 为空"))
 
 		var next_idx := -1
 		for offset in range(1, size + 1):
@@ -167,7 +168,7 @@ static func _advance_working_sub_phase(pm, state: GameState) -> Result:
 				break
 
 		if next_idx == -1:
-			return Result.failure("Working: 未找到下一位未确认结束的玩家（sub_phase_passed 可能损坏）")
+			return _rollback_and_return(state, snapshot, Result.failure("Working: 未找到下一位未确认结束的玩家（sub_phase_passed 可能损坏）"))
 
 		state.current_player_index = next_idx
 		state.sub_phase = pm._working_sub_phase_order_names[0]
