@@ -3,6 +3,7 @@
 extends RefCounted
 
 const GameStateClass = preload("res://core/state/game_state.gd")
+const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 static func create_archive(
 	state: GameState,
@@ -83,7 +84,7 @@ static func save_archive_to_file(archive: Dictionary, path: String) -> Result:
 	file.store_string(json)
 	file.close()
 
-	GameLog.info("GameEngine", "存档已保存: %s" % path)
+	AutoloadAccessClass.log_info("GameEngine", "存档已保存: %s" % path)
 	return Result.success(path)
 
 static func load_archive_from_file(path: String) -> Result:

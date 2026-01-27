@@ -83,7 +83,7 @@ static func build(engine: GameEngine, target_index: int) -> Result:
 
 		# 额外的“命令已执行”事件（便于回放验证与 UI 过滤/恢复）
 		all_events.append({
-			"type": EventBus.EventType.COMMAND_EXECUTED,
+			"type": "command_executed",
 			"data": {
 				"command_index": i,
 				"action_id": str(cmd.action_id),

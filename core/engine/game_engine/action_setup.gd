@@ -3,6 +3,7 @@
 extends RefCounted
 
 const PROVIDER_PATH_SETTING = "fcm/action_setup_provider_path"
+const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 static var provider_path_override: String = ""
 
@@ -25,13 +26,13 @@ static func build_registry(phase_manager: PhaseManager, piece_registry: Dictiona
 
 	var provider_path := _resolve_provider_path()
 	if provider_path.is_empty():
-		GameLog.error("ActionSetup", "未配置动作注册 provider（override 或 ProjectSettings.%s）" % PROVIDER_PATH_SETTING)
+		AutoloadAccessClass.log_error("ActionSetup", "未配置动作注册 provider（override 或 ProjectSettings.%s）" % PROVIDER_PATH_SETTING)
 		return ActionRegistry.new()
 	var provider = load(provider_path)
 	if provider == null:
-		GameLog.error("ActionSetup", "缺少动作注册 provider: %s" % provider_path)
+		AutoloadAccessClass.log_error("ActionSetup", "缺少动作注册 provider: %s" % provider_path)
 		return ActionRegistry.new()
 	if provider.has_method("build_registry"):
 		return provider.build_registry(phase_manager, piece_registry)
-	GameLog.error("ActionSetup", "动作注册 provider 缺少 build_registry: %s" % provider_path)
+	AutoloadAccessClass.log_error("ActionSetup", "动作注册 provider 缺少 build_registry: %s" % provider_path)
 	return ActionRegistry.new()

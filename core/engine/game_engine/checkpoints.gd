@@ -2,6 +2,8 @@
 # 负责：创建/查找/校验 checkpoint（用于 rewind/replay 与存档）。
 extends RefCounted
 
+const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
+
 static func create_checkpoint(
 	checkpoints: Array[Dictionary],
 	state: GameState,
@@ -21,8 +23,8 @@ static func create_checkpoint(
 	}
 	checkpoints.append(checkpoint)
 
-	if DebugFlags.verbose_logging:
-		GameLog.debug("GameEngine", "创建校验点 #%d (hash: %s...)" % [
+	if AutoloadAccessClass.is_verbose_logging():
+		AutoloadAccessClass.log_debug("GameEngine", "创建校验点 #%d (hash: %s...)" % [
 			index, str(checkpoint.hash).substr(0, 8)
 		])
 
@@ -51,4 +53,3 @@ static func verify_checkpoints(checkpoints: Array[Dictionary]) -> Result:
 			])
 
 	return Result.success("所有 %d 个校验点验证通过" % checkpoints.size())
-

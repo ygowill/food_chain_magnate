@@ -4,6 +4,7 @@ extends RefCounted
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const InvariantsClass = preload("res://core/engine/game_engine/invariants.gd")
 const JsonValueParseHelpersClass = preload("res://core/utils/json_value_parse_helpers.gd")
+const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result:
 	engine.reset_modules_v2()
@@ -149,7 +150,7 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result
 		if not rewind_result.ok:
 			return Result.failure("回退到 current_index 失败: %s" % rewind_result.error)
 
-	GameLog.info("GameEngine", "存档加载完成 - 回放 %d 条命令 (current: %d)" % [
+	AutoloadAccessClass.log_info("GameEngine", "存档加载完成 - 回放 %d 条命令 (current: %d)" % [
 		engine.command_history.size(), engine.current_command_index
 	])
 	return Result.success(engine.state).with_warnings(all_warnings)

@@ -3,6 +3,7 @@
 extends RefCounted
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 # phase -> hook_type -> Array[{callback, priority, source}]
 var _phase_hooks: Dictionary = {}
@@ -31,7 +32,7 @@ func register_phase_hook(
 	source: String = ""
 ) -> void:
 	if not _phase_hooks.has(phase):
-		GameLog.warn("PhaseManager", "未知阶段: %d" % phase)
+		AutoloadAccessClass.log_warn("PhaseManager", "未知阶段: %d" % phase)
 		return
 
 	var hook := {
@@ -47,8 +48,8 @@ func register_phase_hook(
 		return str(a.source) < str(b.source)
 	)
 
-	if DebugFlags.verbose_logging:
-		GameLog.debug("PhaseManager", "注册阶段钩子: %s %s (优先级: %d)" % [
+	if AutoloadAccessClass.is_verbose_logging():
+		AutoloadAccessClass.log_debug("PhaseManager", "注册阶段钩子: %s %s (优先级: %d)" % [
 			DefsClass.PHASE_NAMES.get(phase, "?"),
 			_hook_type_name(hook_type),
 			priority
@@ -62,7 +63,7 @@ func register_sub_phase_hook(
 	source: String = ""
 ) -> void:
 	if not _sub_phase_hooks.has(sub_phase):
-		GameLog.warn("PhaseManager", "未知子阶段: %d" % sub_phase)
+		AutoloadAccessClass.log_warn("PhaseManager", "未知子阶段: %d" % sub_phase)
 		return
 
 	var hook := {
@@ -86,7 +87,7 @@ func register_sub_phase_hook_by_name(
 	source: String = ""
 ) -> void:
 	if sub_phase_name.is_empty():
-		GameLog.warn("PhaseManager", "未知子阶段名: <empty>")
+		AutoloadAccessClass.log_warn("PhaseManager", "未知子阶段名: <empty>")
 		return
 
 	if not _sub_phase_hooks_by_name.has(sub_phase_name):
@@ -205,8 +206,8 @@ static func _run_hooks(hooks: Array, state: GameState, ctx: String = "") -> Resu
 				str(cb),
 			]
 			warnings.append(msg)
-			GameLog.warn("PhaseManager", msg)
-			if DebugFlags.is_debug_mode():
+			AutoloadAccessClass.log_warn("PhaseManager", msg)
+			if AutoloadAccessClass.is_debug_mode():
 				return Result.failure(msg).with_warnings(warnings)
 	return Result.success().with_warnings(warnings)
 

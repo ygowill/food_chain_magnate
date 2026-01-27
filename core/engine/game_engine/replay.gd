@@ -3,6 +3,7 @@ extends RefCounted
 
 const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
 const JsonValueParseHelpersClass = preload("res://core/utils/json_value_parse_helpers.gd")
+const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 static func rewind_to_command(
 	command_history: Array[Command],
@@ -91,7 +92,7 @@ static func rewind_to_command(
 			return Result.failure("回放命令 #%d 失败: %s" % [i, auto_r.error])
 		all_warnings.append_array(auto_r.warnings)
 
-	GameLog.info("GameEngine", "回退到命令 #%d (从校验点 #%d 重放)" % [
+	AutoloadAccessClass.log_info("GameEngine", "回退到命令 #%d (从校验点 #%d 重放)" % [
 		target_index, checkpoint.index
 	])
 
@@ -155,7 +156,7 @@ static func full_replay(
 			return Result.failure("重放命令 #%d 失败: %s" % [i, auto_r.error])
 		all_warnings.append_array(auto_r.warnings)
 
-	GameLog.info("GameEngine", "完整重放 %d 条命令" % command_history.size())
+	AutoloadAccessClass.log_info("GameEngine", "完整重放 %d 条命令" % command_history.size())
 
 	return Result.success({
 		"state": replay_state,

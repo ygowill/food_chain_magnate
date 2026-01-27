@@ -2,6 +2,7 @@
 extends RefCounted
 
 const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
+const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 const EVENT_BUILD_PROVIDER_PATH_SETTING = "fcm/command_runner_event_build_provider_path"
 static var event_build_provider_path_override: String = ""
@@ -32,7 +33,7 @@ static func _get_event_build_provider():
 
 	var provider = load(provider_path)
 	if provider == null:
-		GameLog.error("CommandRunner", "缺少事件构建 provider: %s" % provider_path)
+		AutoloadAccessClass.log_error("CommandRunner", "缺少事件构建 provider: %s" % provider_path)
 		_event_build_provider_cache = null
 		_event_build_provider_cache_path = provider_path
 		return null
@@ -120,10 +121,10 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 	engine.current_command_index = command.index
 
 	# 校验不变量
-	if engine.validate_invariants and DebugFlags.validate_invariants:
+	if engine.validate_invariants and AutoloadAccessClass.validate_invariants_enabled():
 		var invariant_result := engine.check_invariants()
 		if not invariant_result.ok:
-			GameLog.error("GameEngine", "不变量校验失败: %s" % invariant_result.error)
+			AutoloadAccessClass.log_error("GameEngine", "不变量校验失败: %s" % invariant_result.error)
 			# 回滚状态
 			engine.state = old_state
 			engine.command_history.pop_back()
@@ -152,14 +153,14 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 
 		engine.emit_event(t, data)
 
-	engine.emit_event(EventBus.EventType.COMMAND_EXECUTED, {
+	engine.emit_event("command_executed", {
 		"command_index": command.index,
 		"action_id": command.action_id,
 		"actor": command.actor
 	})
 
-	if DebugFlags.verbose_logging:
-		GameLog.debug("GameEngine", "执行命令 #%d: %s" % [command.index, command.action_id])
+	if AutoloadAccessClass.is_verbose_logging():
+		AutoloadAccessClass.log_debug("GameEngine", "执行命令 #%d: %s" % [command.index, command.action_id])
 
 	var all_warnings: Array[String] = []
 	all_warnings.append_array(execute_result.warnings)
@@ -220,7 +221,7 @@ static func _should_force_execute(engine: GameEngine, command: Command, is_repla
 		return false
 	if is_replay:
 		return true
-	return DebugFlags.is_debug_mode() and DebugFlags.force_execute_commands
+	return AutoloadAccessClass.is_debug_mode() and AutoloadAccessClass.force_execute_commands_enabled()
 
 static func _is_force_execute_requested(command: Command) -> bool:
 	if command == null:

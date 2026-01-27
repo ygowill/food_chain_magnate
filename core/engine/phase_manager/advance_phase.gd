@@ -3,6 +3,7 @@ extends RefCounted
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const WorkingFlowClass = preload("res://core/engine/phase_manager/working_flow.gd")
+const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 const Phase = DefsClass.Phase
 const PHASE_NAMES = DefsClass.PHASE_NAMES
@@ -228,7 +229,7 @@ static func advance_phase(pm, state: GameState) -> Result:
 			"after_exit_settlements": trace_after_exit_settlements,
 		}
 
-	GameLog.info("PhaseManager", "阶段推进: %s -> %s (回合 %d)" % [
+	AutoloadAccessClass.log_info("PhaseManager", "阶段推进: %s -> %s (回合 %d)" % [
 		old_phase, state.phase, state.round_number
 	])
 

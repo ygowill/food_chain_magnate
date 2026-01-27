@@ -11,6 +11,7 @@ const EmployeePoolPatchRegistryClass = preload("res://core/rules/employee_pool_p
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 const GameStartedEventBuildClass = preload("res://core/engine/game_engine/game_started_event_build.gd")
+const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 static func initialize_new_game(
 	engine: GameEngine,
@@ -169,7 +170,7 @@ static func initialize_new_game(
 	engine.create_checkpoint(0)
 	PerfTraceClass.end_span(span_checkpoint)
 
-	GameLog.info("GameEngine", "游戏初始化完成 - 玩家: %d, 种子: %d" % [player_count, seed_value])
+	AutoloadAccessClass.log_info("GameEngine", "游戏初始化完成 - 玩家: %d, 种子: %d" % [player_count, seed_value])
 
 	var span_state_hash := PerfTraceClass.begin_span("init:GameState.compute_hash")
 	var state_hash := state.compute_hash()
@@ -182,7 +183,7 @@ static func initialize_new_game(
 	var started_data: Dictionary = started_data_read.value
 	# 对齐历史行为：seed 取 initialize_new_game(...) 的入参。
 	started_data["seed"] = seed_value
-	engine.emit_event(EventBus.EventType.GAME_STARTED, started_data)
+	engine.emit_event("game_started", started_data)
 	PerfTraceClass.end_span(span_emit)
 
 	PerfTraceClass.end_span(span_total)

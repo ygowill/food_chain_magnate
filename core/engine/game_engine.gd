@@ -17,6 +17,7 @@ const DiagnosticsClass = preload("res://core/engine/game_engine/diagnostics.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModulesV2Class = preload("res://core/engine/game_engine/modules_v2.gd")
 const RewindOpsClass = preload("res://core/engine/game_engine/rewind_ops.gd")
+const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 # === 核心组件 ===
 var state: GameState
@@ -97,12 +98,14 @@ func clear_event_history_for_new_session() -> void:
 		if event_sink.has_method("clear_history"):
 			event_sink.clear_history()
 			return
-	if EventBus == null:
+
+	var bus = AutoloadAccessClass.get_autoload("EventBus")
+	if bus == null:
 		return
-	if EventBus.has_method("clear_history_and_reset_sequence"):
-		EventBus.clear_history_and_reset_sequence()
-	elif EventBus.has_method("clear_history"):
-		EventBus.clear_history()
+	if bus.has_method("clear_history_and_reset_sequence"):
+		bus.clear_history_and_reset_sequence()
+	elif bus.has_method("clear_history"):
+		bus.clear_history()
 
 func set_event_sink(sink) -> void:
 	event_sink = sink
@@ -111,8 +114,9 @@ func emit_event(event_type: String, data: Dictionary) -> void:
 	if event_sink != null and event_sink.has_method("emit_event"):
 		event_sink.emit_event(event_type, data)
 		return
-	if EventBus != null and EventBus.has_method("emit_event"):
-		EventBus.emit_event(event_type, data)
+	var bus = AutoloadAccessClass.get_autoload("EventBus")
+	if bus != null and bus.has_method("emit_event"):
+		bus.emit_event(event_type, data)
 
 # === 初始化 ===
 

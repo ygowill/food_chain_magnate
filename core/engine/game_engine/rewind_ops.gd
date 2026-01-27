@@ -2,6 +2,7 @@ extends RefCounted
 
 const ReplayClass = preload("res://core/engine/game_engine/replay.gd")
 const EventHistoryRebuildClass = preload("res://core/engine/game_engine/event_history_rebuild.gd")
+const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 static func rewind_to_command(engine, target_index: int) -> Result:
 	if engine == null:
@@ -31,7 +32,7 @@ static func rewind_to_command(engine, target_index: int) -> Result:
 	# 否则 UI 日志/回放验证会残留未来事件（undo/redo 视觉上不会真的回到过去）。
 	var sink = engine.event_sink
 	if sink == null or (not sink.has_method("clear_history_and_reset_sequence")) or (not sink.has_method("record_event")):
-		sink = EventBus if (EventBus != null) else null
+		sink = AutoloadAccessClass.get_autoload("EventBus")
 	if sink != null and sink.has_method("clear_history_and_reset_sequence") and sink.has_method("record_event"):
 		var history_r: Result = EventHistoryRebuildClass.build(engine, target_index)
 		if not history_r.ok:
@@ -79,4 +80,3 @@ static func full_replay(engine) -> Result:
 	engine.random_manager = data["random_manager"]
 	engine.current_command_index = data["current_command_index"]
 	return Result.success(engine.state)
-

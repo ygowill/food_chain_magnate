@@ -3,6 +3,7 @@ extends RefCounted
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const WorkingFlowClass = preload("res://core/engine/phase_manager/working_flow.gd")
+const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 enum HookType {
 	BEFORE_ENTER,
@@ -93,7 +94,7 @@ static func _advance_generic_sub_phase(pm, state: GameState, order_names: Array[
 		return _rollback_and_return(state, snapshot, sub_after_enter)
 	all_warnings.append_array(sub_after_enter.warnings)
 
-	GameLog.info("PhaseManager", "子阶段推进: %s -> %s" % [old_sub, state.sub_phase])
+	AutoloadAccessClass.log_info("PhaseManager", "子阶段推进: %s -> %s" % [old_sub, state.sub_phase])
 	return Result.success({
 		"old_sub_phase": old_sub,
 		"new_sub_phase": state.sub_phase
@@ -183,7 +184,7 @@ static func _advance_working_sub_phase(pm, state: GameState) -> Result:
 			return _rollback_and_return(state, snapshot, sub_after_enter0)
 		all_warnings.append_array(sub_after_enter0.warnings)
 
-		GameLog.info("PhaseManager", "Working 回合切换：进入玩家 %d，从子阶段 %s 开始" % [
+		AutoloadAccessClass.log_info("PhaseManager", "Working 回合切换：进入玩家 %d，从子阶段 %s 开始" % [
 			state.get_current_player_id(),
 			state.sub_phase
 		])
@@ -214,7 +215,7 @@ static func _advance_working_sub_phase(pm, state: GameState) -> Result:
 		return _rollback_and_return(state, snapshot, sub_after_enter)
 	all_warnings.append_array(sub_after_enter.warnings)
 
-	GameLog.info("PhaseManager", "子阶段推进: %s -> %s" % [old_sub, state.sub_phase])
+	AutoloadAccessClass.log_info("PhaseManager", "子阶段推进: %s -> %s" % [old_sub, state.sub_phase])
 
 	return Result.success({
 		"old_sub_phase": old_sub,
@@ -270,7 +271,7 @@ static func _advance_cleanup_sub_phase(pm, state: GameState) -> Result:
 		return _rollback_and_return(state, snapshot, sub_after_enter)
 	all_warnings.append_array(sub_after_enter.warnings)
 
-	GameLog.info("PhaseManager", "子阶段推进(Cleanup): %s -> %s" % [old_sub, state.sub_phase])
+	AutoloadAccessClass.log_info("PhaseManager", "子阶段推进(Cleanup): %s -> %s" % [old_sub, state.sub_phase])
 
 	return Result.success({
 		"old_sub_phase": old_sub,

@@ -101,6 +101,7 @@
 - 2026-01-27：拆分 `RoundStateParser`：`round_state_parser.gd` 仅保留 orchestrator wrapper；required/optional 字段解析拆到 `round_state_parser_required_fields.gd`/`round_state_parser_optional_fields.gd`，并复用 `round_state_player_id_keys.gd` 收敛“玩家 id key 归一化”样板（降低单文件体积，便于维护 round_state 字段规则）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：`EmployeeRules` 的营销员免薪（`marketing_no_salary`）判定改为复用 `MilestoneEffectQueries.collect_effect_entries(...)`（收敛 milestones->effects 遍历样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：收敛 `Command.from_dict(...)` 的字段校验样板：新增 `_parse_required_*` helpers（required key/string/dict/int），并保持错误信息与语义不变（减少“字段存在性 + 类型校验”重复代码）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：新增 `core/utils/autoload_access.gd`（`AutoloadAccess`）并用于 core/engine：对 `EventBus`/`GameLog`/`DebugFlags` 的访问改为运行时按 `/root/<name>` 动态获取（减少对 Autoload 全局变量的硬依赖），同时将 `EventBus.EventType.*` 改为直接使用事件 type 字符串（行为不变）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -201,12 +202,12 @@
 - 将 “内建 action wiring / action executor 注册” 移到 `gameplay/`（或更上层），core 只提供 `ActionRegistry` 的 API 与引擎执行能力。
 - 或引入“动作提供者/注册回调”的注入点：由 app/gameplay 在初始化时向 engine 提供 executors。
 
-### 3.2 core/engine 对 EventBus/DebugFlags/GameLog 等全局单例有硬依赖
+### 3.2 core/engine 对 EventBus/DebugFlags/GameLog 等全局单例耦合偏高（已部分整改）
 
 涉及文件（集中在 engine）：
-- `core/engine/game_engine/command_runner.gd`（DebugFlags/OS.has_feature；事件发射经 `engine.emit_event(...)` wrapper）
-- `core/engine/game_engine/loader.gd`、`core/engine/game_engine/initializer.gd`（清空 EventBus.history 经 `engine.clear_event_history_for_new_session()` wrapper）
-- `core/engine/game_engine.gd`（仍负责 EventBus.history 重建桥接；（已整改 2026-01-26）增加 `event_sink` 注入点，并让 history clear/rebuild 也优先走 sink，降低对 EventBus 的硬依赖）
+- `core/engine/game_engine/command_runner.gd`：（已整改 2026-01-27）对 `GameLog`/`DebugFlags`/`EventBus` 不再直接引用 Autoload 全局变量，改为统一通过 `AutoloadAccess` 动态获取；仍包含 `OS.has_feature` 的调试/发布差异分支；事件发射仍经 `engine.emit_event(...)` wrapper
+- `core/engine/game_engine/loader.gd`、`core/engine/game_engine/initializer.gd`：（已整改 2026-01-27）日志/事件相关访问通过 `AutoloadAccess`/engine wrapper 动态获取；清空事件历史仍经 `engine.clear_event_history_for_new_session()` wrapper
+- `core/engine/game_engine.gd`：（仍负责事件历史重建桥接；（已整改 2026-01-26）增加 `event_sink` 注入点，并让 history clear/rebuild 也优先走 sink；（已整改 2026-01-27）默认通过 `AutoloadAccess` 动态访问 EventBus，降低对 Autoload 全局变量的硬依赖）
 
 风险：
 - 引擎逻辑与 UI/日志系统绑死；做“纯逻辑回放”或“服务器侧模拟”会更难。
@@ -557,38 +558,38 @@
 
 - `core/engine/game_constants.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/game_defaults.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/engine/game_engine.gd`：偏长脚本；建议按职责拆分；preload 依赖较多（耦合偏高）；依赖 EventBus（引擎与日志/UI 耦合）；（已整改 2026-01-26）为不变量 baseline 增加公开 setter，避免外部直接写私有 `_initial_*`；（已整改 2026-01-26）提供 `clear_event_history_for_new_session()` 收敛“新对局清空 EventBus.history”样板；（已整改 2026-01-26）提供 `emit_event(...)` wrapper 收敛 `EventBus.emit_event(...)` 直连；（已整改 2026-01-26）增加可注入 `event_sink`，并让 history clear/rebuild 也优先走 sink，降低对 EventBus 的硬依赖；（已整改 2026-01-27）命令索引推导逻辑已抽离到 `core/engine/game_engine/command_index_queries.gd`；（已整改 2026-01-27）回退/回放主流程已抽离到 `core/engine/game_engine/rewind_ops.gd`
+- `core/engine/game_engine.gd`：偏长脚本；建议按职责拆分；preload 依赖较多（耦合偏高）；（已整改 2026-01-27）EventBus 访问改为通过 `AutoloadAccess` 动态获取（并保留可注入 `event_sink`），降低对 Autoload 全局变量的硬依赖；（已整改 2026-01-26）为不变量 baseline 增加公开 setter，避免外部直接写私有 `_initial_*`；（已整改 2026-01-26）提供 `clear_event_history_for_new_session()` 收敛“新对局清空 EventBus.history”样板；（已整改 2026-01-26）提供 `emit_event(...)` wrapper 收敛 `EventBus.emit_event(...)` 直连；（已整改 2026-01-26）增加可注入 `event_sink`，并让 history clear/rebuild 也优先走 sink，降低对 EventBus 的硬依赖；（已整改 2026-01-27）命令索引推导逻辑已抽离到 `core/engine/game_engine/command_index_queries.gd`；（已整改 2026-01-27）回退/回放主流程已抽离到 `core/engine/game_engine/rewind_ops.gd`
 - `core/engine/game_engine/command_index_queries.gd`：（已新增 2026-01-27）抽离 UI 回退相关的命令索引推导（phase_start / player_turn_start / replay 推导），用于缩短 `game_engine.gd` 并减少重复逻辑
 - `core/engine/game_engine/action_setup.gd`：已改为委托 `gameplay/action_setup.gd`（移除 core 内对 gameplay/actions 的 preload）；（已整改 2026-01-26）provider 来源改为 `ProjectSettings.fcm/action_setup_provider_path`（仍可用 `ActionSetup.set_provider_path(...)` 覆盖），避免 core 内硬编码 gameplay 路径
 - `core/engine/game_engine/action_wiring.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/engine/game_engine/archive.gd`：依赖 GameLog 全局单例（耦合）
+- `core/engine/game_engine/archive.gd`：（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（降低对 Autoload 全局变量的硬依赖）
 - `core/engine/game_engine/auto_advance.gd`：（已整改 2026-01-27）class_name + 对外 API wrapper；实现委托 `auto_advance_impl.gd`
 - `core/engine/game_engine/auto_advance_impl.gd`：（已整改 2026-01-27）聚合转发（对外仍通过 `AutoAdvance.drain/try_advance_one` 调用）；推进决策拆分到 `auto_advance_try_step.gd`/`auto_advance_phase_blocking.gd`/`auto_advance_working_mandatory.gd`/`auto_advance_order_of_business_round1.gd`
 - `core/engine/game_engine/auto_advance_try_step.gd`：（已新增 2026-01-27）AutoAdvance 决策主流程：按 phase 判定并调用 PhaseManager 执行推进；依赖 action_registry 查询/执行强制动作
 - `core/engine/game_engine/auto_advance_phase_blocking.gd`：（已新增 2026-01-27）推进阻断检查：读取 `round_state.pending_phase_actions` 并判断是否阻断；包含“结算阶段是否默认跳过”的判定
 - `core/engine/game_engine/auto_advance_working_mandatory.gd`：（已新增 2026-01-27）Working 阶段强制动作补完：可无参自动执行的定价/折扣/奢侈品（避免阻断 auto-advance）
 - `core/engine/game_engine/auto_advance_order_of_business_round1.gd`：（已新增 2026-01-27）首轮 OrderOfBusiness 自动 finalize：基于 `previous_turn_order` 写入 picks 并落地 turn_order
-- `core/engine/game_engine/checkpoints.gd`：依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
-- `core/engine/game_engine/command_runner.gd`：（已部分整改 2026-01-26）事件构建已下沉到 `gameplay/replay/command_runner_event_build.gd`（并由 `ProjectSettings.fcm/command_runner_event_build_provider_path` 提供），主流程更聚焦于命令执行/auto-advance/invariants/checkpoint/emit；仍依赖 EventBus（引擎与日志/UI 耦合）；依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）；（已整改 2026-01-26）事件发射改为调用 `engine.emit_event(...)` wrapper，避免直连 `EventBus.emit_event(...)`
+- `core/engine/game_engine/checkpoints.gd`：（已整改 2026-01-27）日志/verbose 开关读取改为通过 `AutoloadAccess` 动态访问 `GameLog`/`DebugFlags`（降低对 Autoload 全局变量的硬依赖）；仍含调试/发布差异分支（OS.has_feature）
+- `core/engine/game_engine/command_runner.gd`：（已部分整改 2026-01-26）事件构建已下沉到 `gameplay/replay/command_runner_event_build.gd`（并由 `ProjectSettings.fcm/command_runner_event_build_provider_path` 提供），主流程更聚焦于命令执行/auto-advance/invariants/checkpoint/emit；（已整改 2026-01-27）对 `EventBus`/`GameLog`/`DebugFlags` 的访问改为通过 `AutoloadAccess` 动态获取（并将 `EventBus.EventType.*` 改为字符串常量），降低对 Autoload 全局变量的硬依赖；仍含调试/发布差异分支（OS.has_feature）；（已整改 2026-01-26）事件发射改为调用 `engine.emit_event(...)` wrapper，避免直连 `EventBus.emit_event(...)`
 - （已移出 core 2026-01-26）`gameplay/replay/command_runner_event_build.gd`：从 `CommandRunner` 抽离的派生事件构建（report/拆分事件/marketing 到期/cleanup 丢弃等，偏日志/展示语义）；偏长脚本；后续可按 phase 拆分
 - `core/engine/game_engine/diagnostics.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/engine/game_engine/event_history_rebuild.gd`：依赖 EventBus（引擎与日志/UI 耦合）；（已部分整改 2026-01-26）debug_force 判定统一复用 `Replay.should_force_execute_in_replay(...)`（移除本文件内重复/分支判断）
+- `core/engine/game_engine/event_history_rebuild.gd`：（已整改 2026-01-27）`EventBus.EventType.*` 改为使用事件 type 字符串，降低对 Autoload 全局变量的硬依赖；（已部分整改 2026-01-26）debug_force 判定统一复用 `Replay.should_force_execute_in_replay(...)`（移除本文件内重复/分支判断）
 - （已移出 core 2026-01-26）`gameplay/replay/event_timeline_build.gd`：`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建（缺少初始 checkpoint 时仅 warning，不阻塞时间线构建）；复用 `timeline_event_helpers.gd` 统一写入 `sequence/timestamp/command_index`（减少重复/样板）；依赖 EventBus（日志/UI 耦合）
 - `core/engine/game_engine/game_started_event_build.gd`：（已新增 2026-01-26）抽离 `GAME_STARTED` 事件字段构建（initializer/event_timeline_build/step_timeline_build 共用），避免字段/计算方式漂移
-- `core/engine/game_engine/initializer.gd`：（已部分整改 2026-01-26）`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建；中等体量；存在一定数量的 preload 依赖；依赖 EventBus（引擎与日志/UI 耦合）；（已整改 2026-01-26）不再直接写 `engine._initial_*`，改用公开 setter；（已整改 2026-01-26）EventBus.history 清空逻辑改为调用 `engine.clear_event_history_for_new_session()`；（已整改 2026-01-26）`GAME_STARTED` 事件发射改为调用 `engine.emit_event(...)` wrapper
+- `core/engine/game_engine/initializer.gd`：（已部分整改 2026-01-26）`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建；中等体量；存在一定数量的 preload 依赖；（已整改 2026-01-27）日志/事件类型改为通过 `AutoloadAccess`/字符串常量处理，降低对 Autoload 全局变量的硬依赖；（已整改 2026-01-26）不再直接写 `engine._initial_*`，改用公开 setter；（已整改 2026-01-26）EventBus.history 清空逻辑改为调用 `engine.clear_event_history_for_new_session()`；（已整改 2026-01-26）`GAME_STARTED` 事件发射改为调用 `engine.emit_event(...)` wrapper
 - `core/engine/game_engine/invariants.gd`：中等体量；后续可按重构优先级处理
-- `core/engine/game_engine/loader.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `JsonValueParseHelpers`；依赖 EventBus（引擎与日志/UI 耦合）；依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）；（已整改 2026-01-26）不再直接写 `engine._initial_*`，改用公开 setter；（已整改 2026-01-26）EventBus.history 清空逻辑改为调用 `engine.clear_event_history_for_new_session()`
+- `core/engine/game_engine/loader.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `JsonValueParseHelpers`；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（降低对 Autoload 全局变量的硬依赖）；含调试/发布差异分支（OS.has_feature）；（已整改 2026-01-26）不再直接写 `engine._initial_*`，改用公开 setter；（已整改 2026-01-26）EventBus.history 清空逻辑改为调用 `engine.clear_event_history_for_new_session()`
 - `core/engine/game_engine/modules_v2.gd`：中等体量；preload 依赖较多（耦合偏高）；（已整改 2026-01-27）catalog/config 校验逻辑已抽离到 `modules_v2_validations.gd`
 - `core/engine/game_engine/modules_v2_validations.gd`：（已新增 2026-01-27）ModulesV2 校验辅助（catalog/config 结构校验），用于降低 `modules_v2.gd` 单文件职责与体积
 - `core/engine/game_engine/replay.gd`：中等体量；后续可按重构优先级处理；含调试/发布差异分支（OS.has_feature）；（已部分整改 2026-01-26）checkpoint.rng_calls 解析共用 `JsonValueParseHelpers`
 - （已移出 core 2026-01-26）`gameplay/replay/step_timeline_build.gd`：`GAME_STARTED` 事件数据统一由 `GameStartedEventBuild` 构建；debug_force 判定统一复用 `Replay.should_force_execute_in_replay(...)`；复用 `timeline_event_helpers.gd` 统一写入事件 envelope（`sequence/timestamp/command_index/step_index/phase_segment`）（减少重复/样板）；时间线/日志“派生视图”构建逻辑很重；超长脚本（维护成本高）；建议按职责拆分；依赖 EventBus（日志/UI 耦合）；（已整改 2026-01-26：不再跨文件调用 CommandRunner/PhaseManager 的私有 `_` 前缀方法）
 - （已移出 core 2026-01-26）`gameplay/replay/timeline_event_helpers.gd`：收敛时间线事件 envelope 字段写入（`sequence`/`timestamp`/`command_index`/`step_index`/`phase_segment`），供 `event_timeline_build.gd`/`step_timeline_build.gd` 等复用（减少重复/样板）
 - `core/engine/phase_manager.gd`：（已整改 2026-01-27）移除未使用的 preload 依赖（减少耦合/噪音）；移除未被使用的静态 defs wrapper（保留 `compute_timestamp(...)`），减少重复 API，降低单文件体积
-- `core/engine/phase_manager/advance_phase.gd`：中等体量；后续可按重构优先级处理；依赖 GameLog 全局单例（耦合）
-- `core/engine/phase_manager/advance_sub_phase.gd`：中等体量；后续可按重构优先级处理；依赖 GameLog 全局单例（耦合）
+- `core/engine/phase_manager/advance_phase.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（降低对 Autoload 全局变量的硬依赖）
+- `core/engine/phase_manager/advance_sub_phase.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志输出改为通过 `AutoloadAccess` 动态访问 `GameLog`（降低对 Autoload 全局变量的硬依赖）
 - `core/engine/phase_manager/advancement.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/phase_manager/definitions.gd`：中等体量；后续可按重构优先级处理
-- `core/engine/phase_manager/hooks.gd`：中等体量；后续可按重构优先级处理；依赖 GameLog 全局单例（耦合）；含调试/发布差异分支（DebugFlags/OS.has_feature）
+- `core/engine/phase_manager/hooks.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志/调试开关读取改为通过 `AutoloadAccess` 动态访问 `GameLog`/`DebugFlags`（降低对 Autoload 全局变量的硬依赖）
 - `core/engine/phase_manager/order_config.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/phase_manager/settlement_triggers.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/phase_manager/working_flow.gd`：（已整改 2026-01-26）移除 `_parse_non_negative_int_value` wrapper，直接调用 `IntValueParseHelpers`；（已整改 2026-01-26）里程碑 effects 的 value 求和改用 `MilestoneEffectQueries.sum_non_negative_int_values(...)`（减少重复/样板）；仍大量使用 assert 做 fail-fast（需注意 release 下 assert 行为）
@@ -752,6 +753,7 @@
 
 ### utils/
 
+- `core/utils/autoload_access.gd`：（已新增 2026-01-27）Autoload 访问/日志/DebugFlags 查询辅助（可选依赖），用于让 core/engine 避免直接引用 Autoload 全局变量
 - `core/utils/catalog_registry_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/utils/int_value_parse_helpers.gd`：（已新增 2026-01-26）用于收敛 rules/milestone effects 的整值解析样板
 - `core/utils/json_value_parse_helpers.gd`：（已新增 2026-01-26）用于收敛存档/回放/命令解析中的 JSON 数值校验样板
