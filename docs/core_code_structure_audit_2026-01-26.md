@@ -94,6 +94,7 @@
 - 2026-01-27：拆分 `DinnertimeSettlement`：`core/rules/phase/dinnertime_settlement.gd` 保留 class_name + 对外 API wrapper；完整结算实现迁移至 `core/rules/phase/dinnertime/dinnertime_settlement_impl.gd`；并保留 `_apply_*_effects_by_segment(...)` 薄委托供现有测试调用（降低单文件体积，便于继续按职责拆分）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：缩短 `PhaseManager`：移除未被使用的静态 defs wrapper（保留 `compute_timestamp(...)`），并将内部对 `get_sub_phase_enum(...)` 的调用改为直接调用 `DefsClass.get_sub_phase_enum(...)`（降低单文件体积与重复 API）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：缩短 `GameEngine`：将 `rewind_to_command(...)`/`full_replay()` 的实现抽离到 `core/engine/game_engine/rewind_ops.gd`，`game_engine.gd` 仅保留对外 wrapper（降低单文件体积，便于继续按职责拆分）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：继续拆分 `DinnertimeSettlement`：将“逐房屋售卖主循环”抽离到 `core/rules/phase/dinnertime/dinnertime_house_sales.gd`，`dinnertime_settlement_impl.gd` 聚焦 orchestrator（调用 house_sales + tips/CFO + round_state 报告写入）（进一步降低单文件耦合，便于后续按职责继续拆分）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -107,8 +108,8 @@
 - `gameplay/replay/step_timeline_build.gd`（~613 LOC）
   - 主要是“回放/日志时间线”的语义构建，逻辑复杂且强依赖事件归属规则（phase_segment、step_index、进入/离开阶段的事件归属等）。
   - 这类逻辑更像 UI/回放子系统的“派生视图构建”，放在 core/engine 内会让 engine 边界持续被拉宽。
-- `core/rules/phase/dinnertime_settlement.gd`（~37 LOC；（已整改 2026-01-27）wrapper） + `core/rules/phase/dinnertime/dinnertime_settlement_impl.gd`（~494 LOC）
-  - 规则编排（房屋遍历/候选餐厅/胜负判定/库存扣减/收入/里程碑/破产）已从 class_name wrapper 中迁出；仍可继续将 impl 按“房屋售卖/工资与加成/报告写入/模块扩展点”分层以降低体积与耦合。
+- `core/rules/phase/dinnertime_settlement.gd`（~37 LOC；（已整改 2026-01-27）wrapper） + `core/rules/phase/dinnertime/dinnertime_settlement_impl.gd`（~212 LOC） + `core/rules/phase/dinnertime/dinnertime_house_sales.gd`（~281 LOC）
+  - （已整改 2026-01-27）已将“逐房屋售卖主循环”从 impl 中抽离到 `dinnertime_house_sales.gd`；impl 仅保留 orchestrator（house_sales + tips/CFO + round_state 报告写入）；后续若继续拆分，可将 house_sales 内部再按“需求 variants 选择/route purchase/支付与报告”分层。
 - `ui/debug/debug_commands/action_commands.gd`（~476 LOC）（已整改 2026-01-26：实现移出 core；core/debug 为 shim）
   - 将大量 debug 命令串在一个文件中；后续继续加 debug 命令时容易进一步膨胀。
 - `core/engine/game_engine.gd`（~320 LOC；（已部分整改 2026-01-27）命令索引推导抽离到 `command_index_queries.gd`；回退/回放逻辑抽离到 `rewind_ops.gd`）
@@ -456,7 +457,8 @@
 | `core/rules/phase/dinnertime/dinnertime_events.gd` | 46 | 0 | 0 |  |
 | `core/rules/phase/dinnertime/dinnertime_inventory.gd` | 81 | 1 | 0 |  |
 | `core/rules/phase/dinnertime/dinnertime_selection.gd` | 202 | 4 | 0 |  |
-| `core/rules/phase/dinnertime/dinnertime_settlement_impl.gd` | 494 | 16 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
+| `core/rules/phase/dinnertime/dinnertime_settlement_impl.gd` | 212 | 2 | 0 | uses:DinnertimeHouseSales,uses:DinnertimeEffects |
+| `core/rules/phase/dinnertime/dinnertime_house_sales.gd` | 281 | 1 | 0 | helper:dinnertime_house_sales,uses:DinnertimeSelection |
 | `core/rules/phase/dinnertime_settlement.gd` | 37 | 2 | 0 |  |
 | `core/rules/phase/marketing/marketing_instances_validation.gd` | 96 | 1 | 0 |  |
 | `core/rules/phase/marketing/settlement_demand_effects.gd` | 160 | 2 | 0 |  |
@@ -688,7 +690,8 @@
 - `core/rules/phase/dinnertime/dinnertime_inventory.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/phase/dinnertime/dinnertime_selection.gd`：中等体量；后续可按重构优先级处理；存在较多 assert；注意与 Result/fail-fast 策略一致性
 - `core/rules/phase/dinnertime_settlement.gd`：（已整改 2026-01-27）class_name + 对外 API wrapper；结算实现迁移至 `core/rules/phase/dinnertime/dinnertime_settlement_impl.gd`；并保留 `_apply_*_effects_by_segment(...)` 薄委托供现有测试调用
-- `core/rules/phase/dinnertime/dinnertime_settlement_impl.gd`：（已新增 2026-01-27）晚餐结算实现（房屋售卖/route purchase/里程碑与效果/破产与支付/round_state 报告）；仍偏长，后续可继续按职责拆分
+- `core/rules/phase/dinnertime/dinnertime_settlement_impl.gd`：（已新增 2026-01-27）晚餐结算 orchestrator（调用 `dinnertime_house_sales.gd` + tips/CFO + round_state 报告写入）；体量已下降，后续可按需要继续拆分
+- `core/rules/phase/dinnertime/dinnertime_house_sales.gd`：（已新增 2026-01-27）逐房屋售卖主循环（variants 选择/选店/route purchase/扣库存/支付/写入 sales&skipped 报告）；中等体量但职责更聚焦，后续可按需要继续拆分
 - `core/rules/phase/marketing/marketing_instances_validation.gd`：（已新增 2026-01-26）抽离 MarketingSettlement 的 marketing_instances 校验/归一化逻辑（减少单文件职责/缩短脚本）
 - `core/rules/phase/marketing/settlement_helpers.gd`：（已整改 2026-01-27）class_name + 对外 API wrapper；完整实现移至 `settlement_helpers_impl.gd`（降低单文件体积，便于维护/进一步拆分）
 - `core/rules/phase/marketing/settlement_helpers_impl.gd`：（已整改 2026-01-27）实现已进一步拆分到 `settlement_instance_expiration.gd`/`settlement_products.gd`/`settlement_house_demand.gd`/`settlement_demand_effects.gd`；本文件仅保留聚合转发（降低单文件体积）
