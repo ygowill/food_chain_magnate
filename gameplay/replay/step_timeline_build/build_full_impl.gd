@@ -11,13 +11,12 @@
 # - `*_REPORT` 等“离开阶段时发射”的事件归属到离开前阶段（phase_segment=old_phase）。
 extends RefCounted
 
-const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
 const GameStartedEventBuildClass = preload("res://core/engine/game_engine/game_started_event_build.gd")
 const ReplayClass = preload("res://core/engine/game_engine/replay.gd")
-const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
-const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const StepTimelineHelpersClass = preload("res://gameplay/replay/step_timeline_build/helpers.gd")
+const PhaseTransitionClass = preload("res://gameplay/replay/step_timeline_build/phase_transition.gd")
+const AutoAdvanceDrainClass = preload("res://gameplay/replay/step_timeline_build/auto_advance_drain.gd")
 
 static func build_full_impl(engine: GameEngine) -> Result:
 	if engine == null:
@@ -138,114 +137,33 @@ static func build_full_impl(engine: GameEngine) -> Result:
 		var cash_events_cmd := CommandRunnerClass.build_player_cash_changed_events(old_state, state_in, cmd)
 		var milestone_events_cmd := CommandRunnerClass.build_milestone_achieved_events(old_state, state_in, cmd)
 		milestone_events_cmd = _filter_out_first_throw_away_milestone_events(milestone_events_cmd, pending_cleanup_throw_away_milestone_events)
+
 		# 若命令本身发生了 phase 切换（如 advance_phase），则：
 		# - PHASE_CHANGED 之前的事件（含 *_REPORT）归属到“命令前”的 step（旧阶段）
 		# - PHASE_CHANGED 及之后的事件归属到“玩家行动 step”（新阶段）
 		# 这能避免 Payday/Marketing/Cleanup 等阶段被压到同一个 step。
 		var phase_changed_in_command := (str(old_state.phase) != str(state_in.phase))
 		if phase_changed_in_command and prev_step_index >= -1:
-			var before_phase_events: Array[Dictionary] = []
-			var after_phase_events: Array[Dictionary] = []
-			var seen_phase_changed := false
-			for ev_val in command_events:
-				if not (ev_val is Dictionary):
-					continue
-				var ev: Dictionary = ev_val
-				var t: String = str(ev.get("type", "")).strip_edges()
-				if t == EventBus.EventType.PHASE_CHANGED:
-					seen_phase_changed = true
-				if seen_phase_changed:
-					after_phase_events.append(ev)
-				else:
-					before_phase_events.append(ev)
-
-			# 结算/里程碑/现金变化：按结算触发点归属。
-			# - 兼容 Payday->Marketing 的 exit+enter 叠加：拆分 exit/enter 的差异，避免 Marketing:enter 被误归到 Payday。
-			# - Marketing:enter 的 cash/milestone 需延后到离开 Marketing 后（在 DEMAND_GENERATED 等汇总事件之后）再输出。
-			var trace: Dictionary = engine.phase_manager.consume_timeline_last_advance_trace() if engine.phase_manager != null else {}
-			var old_phase_name := str(old_state.phase)
-			var new_phase_name := str(state_in.phase)
-
-			var old_exit_scheduled := false
-			var new_enter_scheduled := false
-			if engine.phase_manager != null:
-				var old_enum := PhaseDefsClass.get_phase_enum(old_phase_name.strip_edges())
-				if old_enum != -1 and engine.phase_manager.is_settlement_scheduled(old_enum, SettlementRegistryClass.Point.EXIT):
-					old_exit_scheduled = true
-				var new_enum := PhaseDefsClass.get_phase_enum(new_phase_name.strip_edges())
-				if new_enum != -1 and engine.phase_manager.is_settlement_scheduled(new_enum, SettlementRegistryClass.Point.ENTER):
-					new_enter_scheduled = true
-
-			var after_exit_settlements: GameState = null
-			if old_exit_scheduled and new_enter_scheduled and (trace is Dictionary):
-				var v = trace.get("after_exit_settlements", null)
-				if v is GameState:
-					after_exit_settlements = v
-
-			var cash_events_old: Array[Dictionary] = []
-			var milestone_events_old: Array[Dictionary] = []
-			var cash_events_new: Array[Dictionary] = []
-			var milestone_events_new: Array[Dictionary] = []
-
-			if after_exit_settlements != null:
-				cash_events_old = CommandRunnerClass.build_player_cash_changed_events(old_state, after_exit_settlements, cmd)
-				milestone_events_old = CommandRunnerClass.build_milestone_achieved_events(old_state, after_exit_settlements, cmd)
-				cash_events_new = CommandRunnerClass.build_player_cash_changed_events(after_exit_settlements, state_in, cmd)
-				milestone_events_new = CommandRunnerClass.build_milestone_achieved_events(after_exit_settlements, state_in, cmd)
-			else:
-				var to_old_segment := _should_attribute_settlement_effects_to_old_phase(engine, old_phase_name, new_phase_name)
-				if to_old_segment:
-					cash_events_old = cash_events_cmd
-					milestone_events_old = milestone_events_cmd
-				else:
-					cash_events_new = cash_events_cmd
-					milestone_events_new = milestone_events_cmd
-
-			milestone_events_old = _filter_out_first_throw_away_milestone_events(milestone_events_old, pending_cleanup_throw_away_milestone_events)
-			milestone_events_new = _filter_out_first_throw_away_milestone_events(milestone_events_new, pending_cleanup_throw_away_milestone_events)
-
-			if not before_phase_events.is_empty():
-				_append_events(events_out, before_phase_events, i, prev_step_index, str(old_state.phase), seq)
-				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-
-			# Marketing: 先输出汇总事件（如 DEMAND_GENERATED），再输出进入 Marketing 时产生的 cash/milestone。
-			if str(old_state.phase) == "Marketing" and not pending_marketing_enter_effect_events.is_empty():
-				_append_events(events_out, pending_marketing_enter_effect_events, i, prev_step_index, "Marketing", seq)
-				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-				pending_marketing_enter_effect_events = []
-				pending_marketing_enter_anchor_command_index = -1
-
-			if not cash_events_old.is_empty():
-				_append_events(events_out, _override_events_phase_fields(cash_events_old, old_state), i, prev_step_index, str(old_state.phase), seq)
-				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-			if not milestone_events_old.is_empty():
-				_append_events(events_out, _override_events_phase_fields(milestone_events_old, old_state), i, prev_step_index, str(old_state.phase), seq)
-				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-
-			if not after_phase_events.is_empty():
-				_append_events(events_out, after_phase_events, i, command_step_index, str(state_in.phase), seq)
-				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-
-			if not cash_events_new.is_empty() or not milestone_events_new.is_empty():
-				if new_phase_name == "Marketing":
-					pending_marketing_enter_anchor_command_index = i
-					if not cash_events_new.is_empty():
-						pending_marketing_enter_effect_events.append_array(_override_events_phase_fields(cash_events_new, state_in))
-					if not milestone_events_new.is_empty():
-						pending_marketing_enter_effect_events.append_array(_override_events_phase_fields(milestone_events_new, state_in))
-				else:
-					if not cash_events_new.is_empty():
-						_append_events(events_out, _override_events_phase_fields(cash_events_new, state_in), i, command_step_index, str(state_in.phase), seq)
-						seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-					if not milestone_events_new.is_empty():
-						_append_events(events_out, _override_events_phase_fields(milestone_events_new, state_in), i, command_step_index, str(state_in.phase), seq)
-						seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-
-			# CleanupDiscard: first_throw_away 延后到“清理库存动作完成后”再显示（避免出现在清理库存之前）。
-			if new_phase_name == "Cleanup" and (not _has_pending_cleanup_actions(state_in)) and not pending_cleanup_throw_away_milestone_events.is_empty():
-				_append_events(events_out, pending_cleanup_throw_away_milestone_events, i, command_step_index, "Cleanup", seq)
-				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-				pending_cleanup_throw_away_milestone_events = []
+			var update: Dictionary = PhaseTransitionClass.append_phase_transition_events(
+				engine,
+				events_out,
+				i,
+				prev_step_index,
+				command_step_index,
+				old_state,
+				state_in,
+				command_events,
+				cash_events_cmd,
+				milestone_events_cmd,
+				cmd,
+				cmd,
+				pending_marketing_enter_effect_events,
+				pending_marketing_enter_anchor_command_index,
+				pending_cleanup_throw_away_milestone_events,
+				seq
+			)
+			seq = int(update.get("seq", seq))
+			pending_marketing_enter_anchor_command_index = int(update.get("pending_marketing_enter_anchor_command_index", pending_marketing_enter_anchor_command_index))
 		else:
 			_append_events(events_out, command_events, i, command_step_index, str(state_in.phase), seq)
 			seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
@@ -260,160 +178,37 @@ static func build_full_impl(engine: GameEngine) -> Result:
 			if str(cmd.action_id).strip_edges() == "choose_fridge_keep" and (not _has_pending_cleanup_actions(state_in)) and not pending_cleanup_throw_away_milestone_events.is_empty():
 				_append_events(events_out, pending_cleanup_throw_away_milestone_events, i, command_step_index, str(state_in.phase), seq)
 				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-				pending_cleanup_throw_away_milestone_events = []
+				pending_cleanup_throw_away_milestone_events.clear()
 
 		# auto-advance：逐步执行。sub_phase 变化打包在当前 step；phase 变化插入新 step。
 		var current_step_index := command_step_index
-		var safety := 0
-		while safety < 32:
-			safety += 1
-			var before := state_in.duplicate_state()
-			var adv: Result = AutoAdvanceClass.try_advance_one(state_in, engine.phase_manager, engine.action_registry)
-			if not adv.ok:
-				return Result.failure("StepTimelineBuild: auto_advance 失败(命令 #%d): %s" % [i, adv.error]).with_warnings(warnings).with_warnings(adv.warnings)
-			warnings.append_array(adv.warnings)
-			if not bool(adv.value):
-				break
-
-			var phase_changed := (str(before.phase) != str(state_in.phase))
-
-			# 构建阶段/子阶段变化事件（与 CommandRunner.drain_auto_advances 对齐）
-			var phase_events := CommandRunnerClass.build_phase_change_events(before, state_in)
-			var cash_events := CommandRunnerClass.build_player_cash_changed_events(before, state_in, Command.create_system("auto_advance"))
-			var milestone_events := CommandRunnerClass.build_milestone_achieved_events(before, state_in, cmd)
-			milestone_events = _filter_out_first_throw_away_milestone_events(milestone_events, pending_cleanup_throw_away_milestone_events)
-
-			if phase_changed:
-				# 冻结旧 step 的快照：停在“离开前阶段”的最后稳定状态
-				steps[current_step_index] = _update_step_snapshot(steps[current_step_index], before)
-
-				# 新建“阶段切换 step”：状态为进入新阶段后的 state（含 enter settlement/enter hooks）
-				var phase_step_index := steps.size()
-				steps.append(_build_step_dict("phase", i, state_in, {
-					"from_phase": str(before.phase),
-					"to_phase": str(state_in.phase),
-				}))
-
-				# 事件归属：
-				# - `*_REPORT` 等离开阶段事件：归属到旧阶段（old_phase）
-				# - PHASE_CHANGED/ROUND_* 等：归属到新阶段（new_phase）
-				# 同时：现金/里程碑按结算触发点归属，避免 Payday exit settlement 被推到 Marketing 段落。
-				var before_phase_events: Array[Dictionary] = []
-				var after_phase_events: Array[Dictionary] = []
-				var seen_phase_changed := false
-				for ev_val in phase_events:
-					if not (ev_val is Dictionary):
-						continue
-					var ev: Dictionary = ev_val
-					var t: String = str(ev.get("type", "")).strip_edges()
-					if t == EventBus.EventType.PHASE_CHANGED:
-						seen_phase_changed = true
-					if seen_phase_changed:
-						after_phase_events.append(ev)
-					else:
-						before_phase_events.append(ev)
-
-				if not before_phase_events.is_empty():
-					_append_events(events_out, before_phase_events, i, current_step_index, str(before.phase), seq)
-					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-
-				# Marketing: 先输出汇总事件（如 DEMAND_GENERATED），再输出进入 Marketing 时产生的 cash/milestone。
-				if str(before.phase) == "Marketing" and not pending_marketing_enter_effect_events.is_empty():
-					_append_events(events_out, pending_marketing_enter_effect_events, i, current_step_index, "Marketing", seq)
-					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-					pending_marketing_enter_effect_events = []
-					pending_marketing_enter_anchor_command_index = -1
-
-				# 结算/里程碑/现金变化：按结算触发点归属。
-				# - 兼容 Payday->Marketing 的 exit+enter 叠加：拆分 exit/enter 的差异，避免 Marketing:enter 被误归到 Payday。
-				var trace: Dictionary = engine.phase_manager.consume_timeline_last_advance_trace() if engine.phase_manager != null else {}
-				var old_phase_name := str(before.phase)
-				var new_phase_name := str(state_in.phase)
-
-				var old_exit_scheduled := false
-				var new_enter_scheduled := false
-				if engine.phase_manager != null:
-					var old_enum := PhaseDefsClass.get_phase_enum(old_phase_name.strip_edges())
-					if old_enum != -1 and engine.phase_manager.is_settlement_scheduled(old_enum, SettlementRegistryClass.Point.EXIT):
-						old_exit_scheduled = true
-					var new_enum := PhaseDefsClass.get_phase_enum(new_phase_name.strip_edges())
-					if new_enum != -1 and engine.phase_manager.is_settlement_scheduled(new_enum, SettlementRegistryClass.Point.ENTER):
-						new_enter_scheduled = true
-
-				var after_exit_settlements: GameState = null
-				if old_exit_scheduled and new_enter_scheduled and (trace is Dictionary):
-					var v = trace.get("after_exit_settlements", null)
-					if v is GameState:
-						after_exit_settlements = v
-
-				var cash_events_old: Array[Dictionary] = []
-				var milestone_events_old: Array[Dictionary] = []
-				var cash_events_new: Array[Dictionary] = []
-				var milestone_events_new: Array[Dictionary] = []
-
-				if after_exit_settlements != null:
-					var auto_cmd := Command.create_system("auto_advance")
-					cash_events_old = CommandRunnerClass.build_player_cash_changed_events(before, after_exit_settlements, auto_cmd)
-					milestone_events_old = CommandRunnerClass.build_milestone_achieved_events(before, after_exit_settlements, cmd)
-					cash_events_new = CommandRunnerClass.build_player_cash_changed_events(after_exit_settlements, state_in, auto_cmd)
-					milestone_events_new = CommandRunnerClass.build_milestone_achieved_events(after_exit_settlements, state_in, cmd)
-				else:
-					var to_old_segment := _should_attribute_settlement_effects_to_old_phase(engine, old_phase_name, new_phase_name)
-					if to_old_segment:
-						cash_events_old = cash_events
-						milestone_events_old = milestone_events
-					else:
-						cash_events_new = cash_events
-						milestone_events_new = milestone_events
-
-				milestone_events_old = _filter_out_first_throw_away_milestone_events(milestone_events_old, pending_cleanup_throw_away_milestone_events)
-				milestone_events_new = _filter_out_first_throw_away_milestone_events(milestone_events_new, pending_cleanup_throw_away_milestone_events)
-
-				if not cash_events_old.is_empty():
-					_append_events(events_out, _override_events_phase_fields(cash_events_old, before), i, current_step_index, str(before.phase), seq)
-					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-				if not milestone_events_old.is_empty():
-					_append_events(events_out, _override_events_phase_fields(milestone_events_old, before), i, current_step_index, str(before.phase), seq)
-					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-
-				if not after_phase_events.is_empty():
-					_append_events(events_out, after_phase_events, i, phase_step_index, str(state_in.phase), seq)
-					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-
-				if not cash_events_new.is_empty() or not milestone_events_new.is_empty():
-					if new_phase_name == "Marketing":
-						pending_marketing_enter_anchor_command_index = i
-						if not cash_events_new.is_empty():
-							pending_marketing_enter_effect_events.append_array(_override_events_phase_fields(cash_events_new, state_in))
-						if not milestone_events_new.is_empty():
-							pending_marketing_enter_effect_events.append_array(_override_events_phase_fields(milestone_events_new, state_in))
-					else:
-						if not cash_events_new.is_empty():
-							_append_events(events_out, _override_events_phase_fields(cash_events_new, state_in), i, phase_step_index, str(state_in.phase), seq)
-							seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-						if not milestone_events_new.is_empty():
-							_append_events(events_out, _override_events_phase_fields(milestone_events_new, state_in), i, phase_step_index, str(state_in.phase), seq)
-							seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-
-				# CleanupDiscard: 若进入 Cleanup 时无需 pending（无 choose_fridge_keep），则在该 phase step 末尾刷出 first_throw_away。
-				if new_phase_name == "Cleanup" and (not _has_pending_cleanup_actions(state_in)) and not pending_cleanup_throw_away_milestone_events.is_empty():
-					_append_events(events_out, pending_cleanup_throw_away_milestone_events, i, phase_step_index, "Cleanup", seq)
-					seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-					pending_cleanup_throw_away_milestone_events = []
-
-				current_step_index = phase_step_index
-			else:
-				# sub_phase 等变化：打包在当前 step，并更新快照到最新稳定状态
-				steps[current_step_index] = _update_step_snapshot(steps[current_step_index], state_in)
-				_append_events(events_out, phase_events, i, current_step_index, str(state_in.phase), seq)
-				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-				_append_events(events_out, cash_events, i, current_step_index, str(state_in.phase), seq)
-				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-				_append_events(events_out, milestone_events, i, current_step_index, str(state_in.phase), seq)
-				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
-
-		if safety >= 32:
-			return Result.failure("StepTimelineBuild: auto_advance exceeded max steps (possible loop)").with_warnings(warnings)
+		var drain := AutoAdvanceDrainClass.drain(
+			engine,
+			cmd,
+			i,
+			state_in,
+			steps,
+			events_out,
+			current_step_index,
+			seq,
+			pending_marketing_enter_effect_events,
+			pending_marketing_enter_anchor_command_index,
+			pending_cleanup_throw_away_milestone_events,
+			warnings
+		)
+		if not drain.ok:
+			return drain
+		var drain_val = drain.value
+		if not (drain_val is Dictionary):
+			return Result.failure("StepTimelineBuild: auto_advance drain 返回值类型错误（期望 Dictionary）").with_warnings(warnings)
+		var drain_dict: Dictionary = drain_val
+		var state_out_val = drain_dict.get("state", null)
+		if not (state_out_val is GameState):
+			return Result.failure("StepTimelineBuild: auto_advance drain 返回 state 类型错误（期望 GameState）").with_warnings(warnings)
+		state_in = state_out_val
+		current_step_index = int(drain_dict.get("current_step_index", current_step_index))
+		seq = int(drain_dict.get("seq", seq))
+		pending_marketing_enter_anchor_command_index = int(drain_dict.get("pending_marketing_enter_anchor_command_index", pending_marketing_enter_anchor_command_index))
 
 		# 命令已执行（便于回放验证与旧逻辑兼容；默认归属到玩家行动 step）
 		seq += 1
