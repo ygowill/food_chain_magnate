@@ -4,6 +4,8 @@ extends RefCounted
 const PaydayPanelScene = preload("res://ui/components/payday_panel/payday_panel.tscn")
 const GameOverPanelScene = preload("res://ui/components/game_over/game_over_panel.tscn")
 const BankBreakPanelScene = preload("res://ui/components/bank_break/bank_break_panel.tscn")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 var _scene = null
 var _overlay_controller = null
@@ -70,7 +72,7 @@ func sync(state: GameState) -> void:
 		return
 
 	_check_bank_break(state)
-	if state != null and state.phase == "GameOver":
+	if state != null and state.phase == DefsClass.PHASE_GAME_OVER:
 		_show_game_over()
 
 func _sync_payday_panel(state: GameState) -> void:
@@ -78,7 +80,7 @@ func _sync_payday_panel(state: GameState) -> void:
 		return
 	if not is_instance_valid(payday_panel) or not payday_panel.visible:
 		return
-	if state.phase != "Payday":
+	if state.phase != DefsClass.PHASE_PAYDAY:
 		payday_panel.visible = false
 		return
 
@@ -202,7 +204,7 @@ func _on_pay_confirmed() -> void:
 		return
 	if _hide_all.is_valid():
 		_hide_all.call()
-	_execute_command.call(Command.create_system("advance_phase"))
+	_execute_command.call(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
 
 func _on_game_over_return() -> void:
 	Globals.reset_game_config()

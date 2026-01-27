@@ -4,6 +4,7 @@ extends RefCounted
 const RestaurantPlacementScene = preload("res://ui/components/restaurant_placement/restaurant_placement_overlay.tscn")
 const HousePlacementScene = preload("res://ui/components/house_placement/house_placement_overlay.tscn")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 var _scene = null
 var _map_controller = null
@@ -38,9 +39,9 @@ func _sync_restaurant_placement_overlay(state: GameState) -> void:
 		return
 
 	var allowed := false
-	if state.phase == "Setup":
+	if state.phase == DefsClass.PHASE_SETUP:
 		allowed = true
-	elif state.phase == "Working" and state.sub_phase == "PlaceRestaurants":
+	elif state.phase == DefsClass.PHASE_WORKING and state.sub_phase == DefsClass.SUB_PHASE_PLACE_RESTAURANTS:
 		allowed = true
 
 	if not allowed:
@@ -54,7 +55,7 @@ func _sync_house_placement_overlay(state: GameState) -> void:
 		return
 	if not is_instance_valid(house_placement_overlay) or not house_placement_overlay.visible:
 		return
-	if state.phase != "Working" or state.sub_phase != "PlaceHouses":
+	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_PLACE_HOUSES:
 		house_placement_overlay.visible = false
 		if _map_controller != null:
 			_map_controller.clear_selection()
@@ -107,7 +108,7 @@ func show_restaurant_placement(action_id: String, params: Dictionary) -> void:
 
 	if restaurant_placement_overlay.has_method("set_available_employees"):
 		var usage_tag := ""
-		if state.phase == "Working":
+		if state.phase == DefsClass.PHASE_WORKING:
 			usage_tag = "use:move_restaurant" if action_id == "move_restaurant" else "use:place_restaurant"
 		restaurant_placement_overlay.set_available_employees(
 			_get_active_employee_types_with_usage_tag(state, current_player_id, usage_tag)
@@ -155,7 +156,7 @@ func show_house_placement(action_id: String, params: Dictionary) -> void:
 		house_placement_overlay.set_map_data(state.map)
 	if house_placement_overlay.has_method("set_available_employees"):
 		var usage_tag := ""
-		if state.phase == "Working":
+		if state.phase == DefsClass.PHASE_WORKING:
 			usage_tag = "use:add_garden" if action_id == "add_garden" else "use:place_house"
 		house_placement_overlay.set_available_employees(
 			_get_active_employee_types_with_usage_tag(state, state.get_current_player_id(), usage_tag)
