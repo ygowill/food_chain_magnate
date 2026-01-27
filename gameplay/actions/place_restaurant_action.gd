@@ -11,6 +11,7 @@ const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 var _piece_registry: Dictionary = {}
 
@@ -20,8 +21,8 @@ func _init(piece_registry: Dictionary = {}) -> void:
 	description = "在地图上放置餐厅"
 	requires_actor = true
 	is_mandatory = false
-	allowed_phases = ["Setup", "Working"]
-	allowed_sub_phases = ["PlaceRestaurants"]
+	allowed_phases = [DefsClass.PHASE_SETUP, DefsClass.PHASE_WORKING]
+	allowed_sub_phases = [DefsClass.SUB_PHASE_PLACE_RESTAURANTS]
 	_piece_registry = piece_registry
 
 func can_initiate(state: GameState, player_id: int) -> bool:
@@ -30,13 +31,13 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 	if state.get_current_player_id() != player_id:
 		return false
 
-	if state.phase == "Setup":
+	if state.phase == DefsClass.PHASE_SETUP:
 		if str(state.sub_phase) == "ReserveCards":
 			return false
 		var player_restaurants := StructuresClass.get_player_restaurants(state, player_id)
 		return player_restaurants.size() < 1
 
-	if state.phase != "Working":
+	if state.phase != DefsClass.PHASE_WORKING:
 		return true
 
 	var player := state.get_player(player_id)
@@ -76,7 +77,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	employee_type = employee_type_result.value
 
 	# 规则：Working/PlaceRestaurants 需要在岗的本地经理或区域经理（docs/rules.md 子阶段 6）
-	var is_initial := state.phase == "Setup"
+	var is_initial := state.phase == DefsClass.PHASE_SETUP
 	if is_initial and str(state.sub_phase) == "ReserveCards":
 		return Result.failure("请先选择银行储备卡（所有玩家选择后才能放置餐厅）")
 
@@ -86,7 +87,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		if player_restaurants.size() >= 1:
 			return Result.failure("设置阶段每位玩家只能放置一个餐厅")
 
-	if state.phase == "Working":
+	if state.phase == DefsClass.PHASE_WORKING:
 		var player := state.get_player(command.actor)
 		var eligible := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, command.actor, "use:place_restaurant")
 		if eligible <= 0:
@@ -137,7 +138,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	# 构建地图上下文和建筑件注册表
 	var map_ctx := MapContextBuilderClass.build_context(state)
 	var piece_registry := _get_piece_registry()
-	var is_initial := state.phase == "Setup"
+	var is_initial := state.phase == DefsClass.PHASE_SETUP
 
 	# 获取验证结果 (包含 footprint_cells)
 	var validate_result := RestaurantPlacementClass.validate_restaurant_placement(
@@ -195,7 +196,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	RoadGraphCacheClass.invalidate_road_graph(state)
 
 	# Working 阶段：使用本地/大区经理放置餐厅会启用本回合的免下车能力
-	if state.phase == "Working":
+	if state.phase == DefsClass.PHASE_WORKING:
 		state.players[player_id]["drive_thru_active"] = true
 		EmployeeRulesClass.increment_action_count(state, player_id, action_id)
 
@@ -207,7 +208,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	})
 
 	# 里程碑触发（模块化）：首次在 Working 阶段放置新餐厅
-	if state.phase == "Working":
+	if state.phase == DefsClass.PHASE_WORKING:
 		var ms := MilestoneSystemClass.process_event(state, "RestaurantPlaced", {
 			"player_id": player_id,
 			"phase": state.phase,
@@ -224,7 +225,7 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 		var employee_type_result := require_string_param(command, "employee_type")
 		assert(employee_type_result.ok, "place_restaurant 缺少/错误参数: employee_type")
 		employee_type = employee_type_result.value
-	if employee_type.is_empty() and old_state.phase == "Working":
+	if employee_type.is_empty() and old_state.phase == DefsClass.PHASE_WORKING:
 		var candidates := EmployeeUsageHelperClass.get_active_employee_types_for_usage_tag(
 			old_state, command.actor, "use:place_restaurant"
 		)

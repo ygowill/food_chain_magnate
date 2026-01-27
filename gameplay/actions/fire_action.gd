@@ -5,6 +5,7 @@ extends ActionExecutor
 
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 func _init() -> void:
 	action_id = "fire"
@@ -12,7 +13,7 @@ func _init() -> void:
 	description = "将员工从公司移除并归还到员工池"
 	requires_actor = true
 	is_mandatory = false
-	allowed_phases = ["Payday"]
+	allowed_phases = [DefsClass.PHASE_PAYDAY]
 
 func _validate_specific(state: GameState, command: Command) -> Result:
 	var current_player_id := state.get_current_player_id()
@@ -49,7 +50,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("未知 location: %s" % location)
 
 	# Payday 规则：通常忙碌营销员不能解雇；特殊例外（对齐 rules.md）见 _can_fire_busy_marketer。
-	if state.phase == "Payday" and location == "busy":
+	if state.phase == DefsClass.PHASE_PAYDAY and location == "busy":
 		if not _can_fire_busy_marketer(state, command.actor, employee_id):
 			return Result.failure("通常忙碌的营销员不能解雇")
 

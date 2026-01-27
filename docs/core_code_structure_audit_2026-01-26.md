@@ -133,6 +133,7 @@
 - 2026-01-28：phase/action 字符串常量化（第二步）：将 gameplay 的 `skip/skip_sub_phase/end_turn/advance_phase` 以及 `ui/debug` 调试命令中的 `Command.create(_system)` 也改为引用集中常量（`DefsClass.PHASE_*` + `ActionIdsClass.*`），减少硬编码与拼写风险；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：phase/action 字符串常量化（第三步）：将 UI 的 `GamePanelController` 中 phase 判定与系统动作分派改为引用集中常量（`DefsClass.PHASE_*` + `ActionIdsClass.*`），减少硬编码与拼写风险；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：phase/action 字符串常量化（第四步）：将 UI 的 `game_panel_end_panels.gd`/`game_panel_placement_overlays.gd` 中 phase 判定与系统动作（advance_phase）改为引用集中常量（`DefsClass.PHASE_*` + `ActionIdsClass.*`），减少硬编码与拼写风险；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-28：phase/action 字符串常量化（第五步）：将 gameplay 的 `place_restaurant`/`fire` 中 phase 判定与 allowed_phases 改为引用集中常量（`DefsClass.PHASE_*` + `DefsClass.SUB_PHASE_*`），减少硬编码与拼写风险；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -317,6 +318,7 @@
   - （已整改 2026-01-28）第二步：gameplay actions 与 ui/debug 调试命令也开始改用集中常量（先覆盖 `skip/skip_sub_phase/end_turn/advance_phase`），其余 callsite 可继续按风险/频率逐步推进。
   - （已整改 2026-01-28）第三步：UI 侧 `GamePanelController` 也开始改用集中常量（phase 判定 + 系统 action 分派），其余 UI 组件/测试可继续逐步推进。
   - （已整改 2026-01-28）第四步：UI 侧 end panels/placement overlays 也开始改用集中常量（phase 判定 + advance_phase），其余 UI 组件/测试可继续逐步推进。
+  - （已整改 2026-01-28）第五步：gameplay 的部分动作也开始改用集中常量（先覆盖 place_restaurant/fire 的 phase 判定与 allowed_phases），其余 gameplay/actions 可继续逐步推进。
 - `assert` 与 `Result.failure` 混用导致“release 下校验失效”的风险：
   - （已整改 2026-01-27）以 `core/engine/phase_manager/working_flow.gd` 为例，里程碑 effects 解析与 OrderOfBusiness 排序相关的 fail-fast 已从 `assert` 改为返回 `Result.failure`，并在 base_rules/movie_stars hooks 中显式传播（release 下也生效）。
   - 仍有少量 `assert`（多为初始化/内部不变量/模块校验）；关键路径（`WorkingFlow`/`CompanyStructureRules`/`HouseNumberManager`/`DinnertimeSelection`/`TileBaking`/`PhaseManager.advance_sub_phase`）已改为 `Result.failure` fail-fast，后续可继续统一策略。
