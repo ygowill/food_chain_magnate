@@ -1,6 +1,6 @@
 # core/ GDScript 结构问题清单（用于后续重构）
 
-更新时间：2026-01-26  
+更新时间：2026-01-27  
 审计范围：`core/**/*.gd`  
 说明：本报告以“可维护性/层次边界/重复逻辑/过度耦合”为主，目的是为后续逐步重构提供抓手与文件定位；不在本次直接改代码。
 
@@ -98,6 +98,7 @@
 - 2026-01-27：继续拆分 `RangeUtils`（road）：将 `range_utils_road.gd` 拆为 wrapper + 子模块（`core/utils/range_utils_road/adjacent_cells.gd`、`core/utils/range_utils_road/distance_queries.gd`），降低单文件体积并按职责聚焦；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：将 `TileDef.from_dict(...)` 的“严格解析/校验”抽离到 `core/map/tile_def_parser.gd`，`tile_def.gd` 更聚焦于数据模型/序列化/校验/查询（降低 map 数据模型与解析耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：拆分 `EmployeeDef` 解析：`core/data/employee_def/parser.gd` 仅保留 orchestrator wrapper；核心字段与可选字段解析分别拆到 `core/data/employee_def/parser/core_fields.gd` 与 `core/data/employee_def/parser/optional_fields.gd`（降低单文件体积，便于维护字段组合约束）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：拆分 `RoundStateParser`：`round_state_parser.gd` 仅保留 orchestrator wrapper；required/optional 字段解析拆到 `round_state_parser_required_fields.gd`/`round_state_parser_optional_fields.gd`，并复用 `round_state_player_id_keys.gd` 收敛“玩家 id key 归一化”样板（降低单文件体积，便于维护 round_state 字段规则）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -486,7 +487,10 @@
 | `core/state/game_state_serialization.gd` | 226 | 5 | 0 |  |
 | `core/state/serialization/json_safe.gd` | 25 | 0 | 0 |  |
 | `core/state/serialization/parse_helpers.gd` | 70 | 0 | 0 |  |
-| `core/state/serialization/round_state_parser.gd` | 296 | 2 | 0 |  |
+| `core/state/serialization/round_state_parser.gd` | 37 | 3 | 0 | helper:round_state_parser_wrapper |
+| `core/state/serialization/round_state_parser_optional_fields.gd` | 214 | 2 | 0 | helper:round_state_parser_optional,uses:ParseHelpers |
+| `core/state/serialization/round_state_parser_required_fields.gd` | 80 | 2 | 0 | helper:round_state_parser_required,uses:ParseHelpers |
+| `core/state/serialization/round_state_player_id_keys.gd` | 10 | 0 | 0 | helper:round_state_player_id_keys |
 | `core/state/serialization/value_decoder.gd` | 92 | 1 | 0 |  |
 | `core/state/state_schema_registry.gd` | 263 | 0 | 0 |  |
 | `core/state/state_updater/batch.gd` | 103 | 2 | 0 |  |
@@ -726,7 +730,10 @@
 - `core/state/game_state_serialization.gd`：（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `ParseHelpers`/`RoundStateParser`（收敛 state 解析样板）；中等体量；后续可按重构优先级处理；存在一定数量的 preload 依赖
 - `core/state/serialization/json_safe.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/serialization/parse_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/state/serialization/round_state_parser.gd`：中等体量；后续可按重构优先级处理
+- `core/state/serialization/round_state_parser.gd`：（已整改 2026-01-27）orchestrator wrapper；required/optional 字段解析拆到 `round_state_parser_required_fields.gd`/`round_state_parser_optional_fields.gd`；玩家 id key 归一化收敛到 `round_state_player_id_keys.gd`
+- `core/state/serialization/round_state_parser_required_fields.gd`：（已新增 2026-01-27）round_state 必须字段解析（mandatory_actions_completed/sub_phase_passed/action_counts）；复用 `ParseHelpers` 与 player_id key 归一化 helper
+- `core/state/serialization/round_state_parser_optional_fields.gd`：（已新增 2026-01-27）round_state 可选字段解析（price_modifiers/immediate_train_pending/counters/train_* 等）；复用 `ParseHelpers` 与 player_id key 归一化 helper
+- `core/state/serialization/round_state_player_id_keys.gd`：（已新增 2026-01-27）player_id key 解析/归一化辅助（字符串 int -> int，统一错误信息）
 - `core/state/serialization/value_decoder.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/state_schema_registry.gd`：中等体量；后续可按重构优先级处理
 - `core/state/state_updater.gd`：存在一定数量的 preload 依赖；（已整改 2026-01-26）改用 `CashOps.get_balance/modify_balance` wrapper，避免跨文件调用私有 `_get_balance/_modify_balance`
