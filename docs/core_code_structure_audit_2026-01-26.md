@@ -90,6 +90,7 @@
 - 2026-01-27：拆分 `PaydaySettlement`：将“薪资 token 支付”与“薪资折扣容量推导”拆到 `core/rules/phase/payday/` 下的独立 helper（`payday_salary_token_payment.gd`/`payday_salary_discount.gd`），`payday_settlement.gd` 保留 orchestrator + round_state 报告写入；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：拆分 `DrinksProcurement`：`core/rules/drinks_procurement.gd` 保留对外 API wrapper；“采购计划解析/路线校验/来源筛选”下沉到 `core/rules/drinks_procurement/plan_resolver.gd`，“milestone bonus 计算”下沉到 `core/rules/drinks_procurement/milestone_bonuses.gd`（降低单文件体积与耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：继续拆分 `AutoAdvance`：将 `auto_advance_impl.gd` 的推进决策/阻断检查/Working 强制动作补完/OOB 首轮 finalize 拆到 `auto_advance_try_step.gd`/`auto_advance_phase_blocking.gd`/`auto_advance_working_mandatory.gd`/`auto_advance_order_of_business_round1.gd`，impl 文件仅保留聚合转发（进一步降低单文件体积）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：将 `MapDef.from_dict(...)` 的“严格解析/校验”抽离到 `core/map/map_def_parser.gd`，`map_def.gd` 仅保留数据模型/查询/编辑/验证（缩短超长脚本，降低 map 数据模型与解析耦合）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -109,14 +110,15 @@
   - 将大量 debug 命令串在一个文件中；后续继续加 debug 命令时容易进一步膨胀。
 - `core/engine/game_engine.gd`（~385 LOC；（已部分整改 2026-01-27）命令索引推导抽离到 `command_index_queries.gd`）
   - 引擎主体 + rewind/EventBus.history 重建桥接逻辑仍集中；可继续按职责拆分。
-- `core/map/piece_def.gd`（~275 LOC；（已整改 2026-01-27）解析逻辑抽离到 `piece_def_parser.gd`）、`core/map/tile_def.gd`（~262 LOC）、`core/map/map_def.gd`（~311 LOC）
+- `core/map/piece_def.gd`（~275 LOC；（已整改 2026-01-27）解析逻辑抽离到 `piece_def_parser.gd`）、`core/map/tile_def.gd`（~262 LOC）、`core/map/map_def.gd`（~260 LOC；（已整改 2026-01-27）解析逻辑抽离到 `map_def_parser.gd`）
   - 数据模型 + 严格解析 + 验证 +（部分文件还含编辑器/调试方法）揉在一起，导致“修改数据结构”和“修改解析/验证规则”互相影响。
 - 其他超过 ~300 行的文件：
-  - `core/map/map_def.gd`、`core/engine/phase_manager.gd`
+  - `core/engine/phase_manager.gd`
   - （已整改 2026-01-27）`core/rules/employee_rules/train_slot_usage_impl.gd` 已拆分为 `train_slot_usage_storage.gd`/`train_slot_usage_providers.gd`/`train_slot_usage_allocator.gd`
   - （已整改 2026-01-27）`core/rules/phase/payday_settlement.gd` 已按“token 支付/折扣推导”拆分到 `core/rules/phase/payday/`（主文件不再超长）
   - （已整改 2026-01-27）`core/rules/drinks_procurement.gd` 已拆分为 `drinks_procurement/plan_resolver.gd` + `drinks_procurement/milestone_bonuses.gd`（主文件不再超长）
   - （已整改 2026-01-27）`core/engine/game_engine/auto_advance_impl.gd` 已拆分到 `auto_advance_*.gd`（主文件不再超长）
+  - （已整改 2026-01-27）`core/map/map_def.gd` 已拆分出 `map_def_parser.gd`（主文件不再超长）
 
 建议记录（后续重构方向）：
 - 先从“职责剥离”入手，而不是单纯按行数拆文件：
@@ -357,7 +359,8 @@
 | `core/map/map_baker/queries.gd` | 43 | 0 | 0 |  |
 | `core/map/map_baker/tile_baking.gd` | 280 | 0 | 0 |  |
 | `core/map/map_context_builder.gd` | 21 | 1 | 0 |  |
-| `core/map/map_def.gd` | 311 | 2 | 0 |  |
+| `core/map/map_def.gd` | 260 | 2 | 0 |  |
+| `core/map/map_def_parser.gd` | 73 | 1 | 0 | helper:map_def_parser |
 | `core/map/map_option_def.gd` | 130 | 3 | 0 |  |
 | `core/map/map_runtime/baked_map.gd` | 153 | 2 | 0 |  |
 | `core/map/map_runtime/cells.gd` | 117 | 1 | 0 |  |
@@ -577,7 +580,8 @@
 - `core/map/map_baker/queries.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/map/map_baker/tile_baking.gd`：中等体量；后续可按重构优先级处理；存在较多 assert；注意与 Result/fail-fast 策略一致性
 - `core/map/map_context_builder.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/map/map_def.gd`：偏长脚本；建议关注职责边界/可读性；（已整改 2026-01-26）tiles placements 解析改为复用 `MapParseHelpers.parse_tile_placements(...)`（减少重复解析样板）；（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）
+- `core/map/map_def.gd`：（已整改 2026-01-27）`from_dict(...)` 解析/校验已抽离到 `map_def_parser.gd`（降低 map 数据模型与解析耦合）；其余查询/编辑/验证仍在本文件
+- `core/map/map_def_parser.gd`：（已新增 2026-01-27）MapDef 严格解析/校验（复用 `MapParseHelpers`）；供 `MapDef.from_dict(...)` 调用
 - `core/map/map_option_def.gd`：（已部分整改 2026-01-26）移除 `_SELF_SCRIPT.new()` 自 preload 创建实例，改为直接 `MapOptionDef.new()`；（已整改 2026-01-26）tiles placements 解析改为复用 `MapParseHelpers.parse_tile_placements(...)`（减少重复解析样板）；（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）
 - `core/map/map_runtime/baked_map.gd`：（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `MapParseHelpers`（继续收敛解析样板）
 - `core/map/map_runtime/cells.gd`：（已整改 2026-01-26）补充 `try_parse_pos_key(...)`/`sorted_positions_from_external_cells(...)`，用于收敛 external_cells 的 key->pos 解析；小文件/职责相对单一
