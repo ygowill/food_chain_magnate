@@ -131,6 +131,7 @@
 - 2026-01-27：phase/action 字符串常量化（第一步）：在 `core/engine/phase_manager/definitions.gd` 集中定义 `PHASE_*`/`SUB_PHASE_*` 常量；新增 `core/actions/action_ids.gd`（集中常用 action_id 常量），并替换 core/engine 的 AutoAdvance/AdvanceSubPhase 等关键路径比较逻辑（降低拼写风险/重命名成本）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：减少 Dictionary 裸写（round_state.pending_phase_actions）：新增 `RoundStatePendingPhaseActions`（`core/utils/round_state_pending_phase_actions.gd`）收敛 `round_state.pending_phase_actions` 的读取/写入校验样板，并用于 `AutoAdvancePhaseBlocking`/`PhaseManager.advance_phase`/`CleanupSettlement`（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：phase/action 字符串常量化（第二步）：将 gameplay 的 `skip/skip_sub_phase/end_turn/advance_phase` 以及 `ui/debug` 调试命令中的 `Command.create(_system)` 也改为引用集中常量（`DefsClass.PHASE_*` + `ActionIdsClass.*`），减少硬编码与拼写风险；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-28：phase/action 字符串常量化（第三步）：将 UI 的 `GamePanelController` 中 phase 判定与系统动作分派改为引用集中常量（`DefsClass.PHASE_*` + `ActionIdsClass.*`），减少硬编码与拼写风险；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -313,6 +314,7 @@
   - 建议逐步迁移到集中定义（constants/enum），并提供转换与校验入口。
   - （已整改 2026-01-27）第一步：`PhaseManager/AutoAdvance` 相关核心路径已开始改用集中常量（`DefsClass.PHASE_*` + `ActionIdsClass.*`）；其余 callsite（core/rules、core/tests、ui）可后续逐步推进。
   - （已整改 2026-01-28）第二步：gameplay actions 与 ui/debug 调试命令也开始改用集中常量（先覆盖 `skip/skip_sub_phase/end_turn/advance_phase`），其余 callsite 可继续按风险/频率逐步推进。
+  - （已整改 2026-01-28）第三步：UI 侧 `GamePanelController` 也开始改用集中常量（phase 判定 + 系统 action 分派），其余 UI 组件/测试可继续逐步推进。
 - `assert` 与 `Result.failure` 混用导致“release 下校验失效”的风险：
   - （已整改 2026-01-27）以 `core/engine/phase_manager/working_flow.gd` 为例，里程碑 effects 解析与 OrderOfBusiness 排序相关的 fail-fast 已从 `assert` 改为返回 `Result.failure`，并在 base_rules/movie_stars hooks 中显式传播（release 下也生效）。
   - 仍有少量 `assert`（多为初始化/内部不变量/模块校验）；关键路径（`WorkingFlow`/`CompanyStructureRules`/`HouseNumberManager`/`DinnertimeSelection`/`TileBaking`/`PhaseManager.advance_sub_phase`）已改为 `Result.failure` fail-fast，后续可继续统一策略。

@@ -19,6 +19,8 @@ const EmployeeTreeScene = preload("res://ui/components/employee_tree/employee_tr
 const MilestoneFullScreenViewScene = preload("res://ui/components/milestone_panel/milestone_full_screen_view.tscn")
 const ReserveAreaFullScreenViewScene = preload("res://ui/components/reserve_area/reserve_area_full_screen_view.tscn")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 const POPUP_LAYOUT_META_KEY := "popup_layout"
 const POPUP_LAYOUT_DOCK_RIGHT := "dock_right"
@@ -339,7 +341,7 @@ func _update_ui_components(state: GameState) -> void:
 	var using_default_view := view_player_id != requested_view_player_id
 
 	# Restructuring：若当前默认视图玩家已提交，自动切到第一位未提交玩家（避免“看起来无法拖拽”）。
-	if using_default_view and state.phase == "Restructuring" and (state.round_state is Dictionary):
+	if using_default_view and state.phase == DefsClass.PHASE_RESTRUCTURING and (state.round_state is Dictionary):
 		var r_val = state.round_state.get("restructuring", null)
 		if r_val is Dictionary:
 			var r: Dictionary = r_val
@@ -396,7 +398,7 @@ func _update_ui_components(state: GameState) -> void:
 	# 顺序轨
 	# selections: position -> player_id
 	var selections := {}
-	if state.phase == "OrderOfBusiness" and (state.round_state is Dictionary):
+	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and (state.round_state is Dictionary):
 		var rs: Dictionary = state.round_state
 		var oob_val = rs.get("order_of_business", null)
 		if oob_val is Dictionary:
@@ -470,7 +472,7 @@ func _update_ui_components(state: GameState) -> void:
 
 		_scene.hand_area.set_employees(employees, reserve, busy)
 
-		var enable_drag := (state.phase == "Restructuring")
+		var enable_drag := (state.phase == DefsClass.PHASE_RESTRUCTURING)
 		if enable_drag and (state.round_state is Dictionary):
 			var r_val = state.round_state.get("restructuring", null)
 			if r_val is Dictionary:
@@ -555,10 +557,10 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 			return
 
 		# 系统动作
-		"advance_phase":
-			_execute_command.call(Command.create_system("advance_phase", params))
-		"skip":
-			_execute_command.call(Command.create("skip", current_player_id, params))
+		ActionIdsClass.ADVANCE_PHASE:
+			_execute_command.call(Command.create_system(ActionIdsClass.ADVANCE_PHASE, params))
+		ActionIdsClass.SKIP:
+			_execute_command.call(Command.create(ActionIdsClass.SKIP, current_player_id, params))
 		"choose_turn_order":
 			var state: GameState = _scene.game_engine.get_state()
 			if state != null:
@@ -579,7 +581,7 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 		"initiate_marketing":
 			if _marketing_panels != null:
 				_marketing_panels.show_marketing_panel()
-		"set_price", "set_luxury_price", "set_discount":
+		ActionIdsClass.SET_PRICE, ActionIdsClass.SET_LUXURY_PRICE, ActionIdsClass.SET_DISCOUNT:
 			if _working_panels != null:
 				_working_panels.show_price_panel(action_id)
 		"produce_food":
@@ -621,7 +623,7 @@ func _on_hand_card_dropped(employee_id: String, target: Control) -> void:
 	var state: GameState = _scene.game_engine.get_state()
 	if state == null:
 		return
-	if state.phase != "Restructuring":
+	if state.phase != DefsClass.PHASE_RESTRUCTURING:
 		return
 
 	var actor_id := _get_effective_view_player_id(state, _view_player_id)
@@ -904,19 +906,19 @@ func _sync_modals(state: GameState) -> void:
 	var covered := _get_modal_cover_rect()
 
 	# 储备卡选择（Setup/ReserveCards）
-	if state.phase == "Setup" and str(state.sub_phase) == "ReserveCards" and current_player_id >= 0:
+	if state.phase == DefsClass.PHASE_SETUP and str(state.sub_phase) == "ReserveCards" and current_player_id >= 0:
 		_show_reserve_card_modal(state, current_player_id, covered)
 	else:
 		_hide_reserve_card_modal()
 
 	# 冰箱保留选择（Cleanup）
 	var should_show_fridge_keep := false
-	if state.phase == "Cleanup" and (state.round_state is Dictionary) and current_player_id >= 0:
+	if state.phase == DefsClass.PHASE_CLEANUP and (state.round_state is Dictionary) and current_player_id >= 0:
 		var rs: Dictionary = state.round_state
 		var ppa_val = rs.get("pending_phase_actions", null)
 		if ppa_val is Dictionary:
 			var ppa: Dictionary = ppa_val
-			var list_val = ppa.get("Cleanup", null)
+			var list_val = ppa.get(DefsClass.PHASE_CLEANUP, null)
 			if list_val is Array:
 				var list: Array = list_val
 				if not list.is_empty() and int(list[0]) == current_player_id:
@@ -929,7 +931,7 @@ func _sync_modals(state: GameState) -> void:
 
 	# 顺序选择（OrderOfBusiness）
 	var selections := {}
-	if state.phase == "OrderOfBusiness" and (state.round_state is Dictionary):
+	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and (state.round_state is Dictionary):
 		var rs: Dictionary = state.round_state
 		var oob_val = rs.get("order_of_business", null)
 		if oob_val is Dictionary:
@@ -947,7 +949,7 @@ func _sync_modals(state: GameState) -> void:
 				selections[i] = state.turn_order[i]
 
 	var should_show_turn_order := false
-	if state.phase == "OrderOfBusiness" and current_player_id >= 0:
+	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and current_player_id >= 0:
 		should_show_turn_order = not selections.values().has(current_player_id)
 
 	if should_show_turn_order:
@@ -957,7 +959,7 @@ func _sync_modals(state: GameState) -> void:
 
 	# 重组（Restructuring）
 	var should_show_restructuring := false
-	if state.phase == "Restructuring" and state.players.size() > 0:
+	if state.phase == DefsClass.PHASE_RESTRUCTURING and state.players.size() > 0:
 		var all_submitted := false
 		if state.round_state is Dictionary:
 			var r_val = state.round_state.get("restructuring", null)
@@ -1027,7 +1029,7 @@ func _show_turn_order_modal_for_state(state: GameState) -> void:
 	var current_player_id := state.get_current_player_id()
 	var selections := {}
 
-	if state.phase == "OrderOfBusiness" and (state.round_state is Dictionary):
+	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and (state.round_state is Dictionary):
 		var rs: Dictionary = state.round_state
 		var oob_val = rs.get("order_of_business", null)
 		if oob_val is Dictionary:
@@ -1171,7 +1173,7 @@ func _deferred_open_reserve_card_modal() -> void:
 		if state == null:
 			_reserve_card_open_routine_running = false
 			return
-		if str(state.phase) != "Setup" or str(state.sub_phase) != "ReserveCards":
+		if str(state.phase) != DefsClass.PHASE_SETUP or str(state.sub_phase) != "ReserveCards":
 			_pending_reserve_card_open_player_id = -1
 			_pending_reserve_card_open_attempts = 0
 			_reserve_card_open_routine_running = false
