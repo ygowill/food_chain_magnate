@@ -37,6 +37,54 @@ func to_dict() -> Dictionary:
 static func from_dict(data: Dictionary) -> Result:
 	return _parse_from_dict(data)
 
+static func _require_key(data: Dictionary, key: String, path: String) -> Result:
+	if not data.has(key):
+		return Result.failure("%s 缺失" % path)
+	return Result.success()
+
+static func _parse_required_int_value_field(data: Dictionary, key: String, path: String) -> Result:
+	var require := _require_key(data, key, path)
+	if not require.ok:
+		return require
+	var read := JsonValueParseHelpersClass.parse_int_value(data.get(key, null), path)
+	if not read.ok:
+		return read
+	return Result.success(int(read.value))
+
+static func _parse_required_non_empty_string_field(data: Dictionary, key: String, path: String) -> Result:
+	var require := _require_key(data, key, path)
+	if not require.ok:
+		return require
+	var val = data.get(key, null)
+	if not (val is String):
+		return Result.failure("%s 类型错误（期望 String）" % path)
+	var s: String = str(val)
+	if s.is_empty():
+		return Result.failure("%s 不能为空" % path)
+	return Result.success(s)
+
+static func _parse_required_string_field(data: Dictionary, key: String, path: String) -> Result:
+	var require := _require_key(data, key, path)
+	if not require.ok:
+		return require
+	var val = data.get(key, null)
+	if not (val is String):
+		return Result.failure("%s 类型错误（期望 String）" % path)
+	return Result.success(str(val))
+
+static func _parse_required_dict_with_string_keys(data: Dictionary, key: String, path: String) -> Result:
+	var require := _require_key(data, key, path)
+	if not require.ok:
+		return require
+	var val = data.get(key, null)
+	if not (val is Dictionary):
+		return Result.failure("%s 类型错误（期望 Dictionary）" % path)
+	var dict: Dictionary = val
+	for k in dict.keys():
+		if not (k is String):
+			return Result.failure("%s key 类型错误（期望 String）" % path)
+	return Result.success(dict)
+
 static func _parse_from_dict(data: Dictionary) -> Result:
 	if not (data is Dictionary):
 		return Result.failure("Command.from_dict: data 类型错误（期望 Dictionary）")
@@ -44,9 +92,7 @@ static func _parse_from_dict(data: Dictionary) -> Result:
 	var cmd := Command.new()
 
 	# index（仅用于调试；回放时会被 GameEngine 覆盖，但仍要求格式正确）
-	if not data.has("index"):
-		return Result.failure("Command.index 缺失")
-	var index_read := JsonValueParseHelpersClass.parse_int_value(data.get("index", null), "Command.index")
+	var index_read := _parse_required_int_value_field(data, "index", "Command.index")
 	if not index_read.ok:
 		return index_read
 	var index_val: int = int(index_read.value)
@@ -55,20 +101,13 @@ static func _parse_from_dict(data: Dictionary) -> Result:
 	cmd.index = index_val
 
 	# action_id
-	if not data.has("action_id"):
-		return Result.failure("Command.action_id 缺失")
-	var action_val = data.get("action_id", null)
-	if not (action_val is String):
-		return Result.failure("Command.action_id 类型错误（期望 String）")
-	var action_id_str: String = str(action_val)
-	if action_id_str.is_empty():
-		return Result.failure("Command.action_id 不能为空")
-	cmd.action_id = action_id_str
+	var action_read := _parse_required_non_empty_string_field(data, "action_id", "Command.action_id")
+	if not action_read.ok:
+		return action_read
+	cmd.action_id = action_read.value
 
 	# actor
-	if not data.has("actor"):
-		return Result.failure("Command.actor 缺失")
-	var actor_read := JsonValueParseHelpersClass.parse_int_value(data.get("actor", null), "Command.actor")
+	var actor_read := _parse_required_int_value_field(data, "actor", "Command.actor")
 	if not actor_read.ok:
 		return actor_read
 	var actor_val: int = int(actor_read.value)
@@ -77,40 +116,25 @@ static func _parse_from_dict(data: Dictionary) -> Result:
 	cmd.actor = actor_val
 
 	# params
-	if not data.has("params"):
-		return Result.failure("Command.params 缺失")
-	var params_val = data.get("params", null)
-	if not (params_val is Dictionary):
-		return Result.failure("Command.params 类型错误（期望 Dictionary）")
-	var parsed_params: Dictionary = params_val
-	for k in parsed_params.keys():
-		if not (k is String):
-			return Result.failure("Command.params key 类型错误（期望 String）")
-	cmd.params = parsed_params
+	var params_read := _parse_required_dict_with_string_keys(data, "params", "Command.params")
+	if not params_read.ok:
+		return params_read
+	cmd.params = params_read.value
 
 	# phase
-	if not data.has("phase"):
-		return Result.failure("Command.phase 缺失")
-	var phase_val = data.get("phase", null)
-	if not (phase_val is String):
-		return Result.failure("Command.phase 类型错误（期望 String）")
-	var phase_str: String = str(phase_val)
-	if phase_str.is_empty():
-		return Result.failure("Command.phase 不能为空")
-	cmd.phase = phase_str
+	var phase_read := _parse_required_non_empty_string_field(data, "phase", "Command.phase")
+	if not phase_read.ok:
+		return phase_read
+	cmd.phase = phase_read.value
 
 	# sub_phase（允许为空字符串）
-	if not data.has("sub_phase"):
-		return Result.failure("Command.sub_phase 缺失")
-	var sub_phase_val = data.get("sub_phase", null)
-	if not (sub_phase_val is String):
-		return Result.failure("Command.sub_phase 类型错误（期望 String）")
-	cmd.sub_phase = str(sub_phase_val)
+	var sub_phase_read := _parse_required_string_field(data, "sub_phase", "Command.sub_phase")
+	if not sub_phase_read.ok:
+		return sub_phase_read
+	cmd.sub_phase = sub_phase_read.value
 
 	# timestamp
-	if not data.has("timestamp"):
-		return Result.failure("Command.timestamp 缺失")
-	var ts_read := JsonValueParseHelpersClass.parse_int_value(data.get("timestamp", null), "Command.timestamp")
+	var ts_read := _parse_required_int_value_field(data, "timestamp", "Command.timestamp")
 	if not ts_read.ok:
 		return ts_read
 	var ts_val: int = int(ts_read.value)
@@ -119,16 +143,10 @@ static func _parse_from_dict(data: Dictionary) -> Result:
 	cmd.timestamp = ts_val
 
 	# metadata（允许空字典）
-	if not data.has("metadata"):
-		return Result.failure("Command.metadata 缺失")
-	var meta_val = data.get("metadata", null)
-	if not (meta_val is Dictionary):
-		return Result.failure("Command.metadata 类型错误（期望 Dictionary）")
-	var meta: Dictionary = meta_val
-	for k in meta.keys():
-		if not (k is String):
-			return Result.failure("Command.metadata key 类型错误（期望 String）")
-	cmd.metadata = meta
+	var meta_read := _parse_required_dict_with_string_keys(data, "metadata", "Command.metadata")
+	if not meta_read.ok:
+		return meta_read
+	cmd.metadata = meta_read.value
 
 	return Result.success(cmd)
 

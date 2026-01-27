@@ -100,6 +100,7 @@
 - 2026-01-27：拆分 `EmployeeDef` 解析：`core/data/employee_def/parser.gd` 仅保留 orchestrator wrapper；核心字段与可选字段解析分别拆到 `core/data/employee_def/parser/core_fields.gd` 与 `core/data/employee_def/parser/optional_fields.gd`（降低单文件体积，便于维护字段组合约束）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：拆分 `RoundStateParser`：`round_state_parser.gd` 仅保留 orchestrator wrapper；required/optional 字段解析拆到 `round_state_parser_required_fields.gd`/`round_state_parser_optional_fields.gd`，并复用 `round_state_player_id_keys.gd` 收敛“玩家 id key 归一化”样板（降低单文件体积，便于维护 round_state 字段规则）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：`EmployeeRules` 的营销员免薪（`marketing_no_salary`）判定改为复用 `MilestoneEffectQueries.collect_effect_entries(...)`（收敛 milestones->effects 遍历样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：收敛 `Command.from_dict(...)` 的字段校验样板：新增 `_parse_required_*` helpers（required key/string/dict/int），并保持错误信息与语义不变（减少“字段存在性 + 类型校验”重复代码）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -746,7 +747,7 @@
 
 ### types/
 
-- `core/types/command.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `JsonValueParseHelpers`；仍含较多“字段存在性 + 类型校验”样板（后续可继续收敛）
+- `core/types/command.gd`：（已部分整改 2026-01-26）移除自带 `_parse_int_value`，改用 `JsonValueParseHelpers`；（已整改 2026-01-27）required 字段解析收敛到 `_parse_required_*` helpers，减少“字段存在性 + 类型校验”样板
 - `core/types/result.gd`：未发现明显结构问题（小文件/职责相对单一）
 
 ### utils/
