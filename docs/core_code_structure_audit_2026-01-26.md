@@ -123,6 +123,7 @@
 - 2026-01-27：清理 `GameEngine`：移除未使用的 preload 依赖，并删除薄 `_` wrapper（减少噪音/耦合，体积降至 ~285 LOC）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：复核并更新文档：将审计中残留的“已部分整改”标记统一更新为“已整改”（代码改动已在此前完成，本文档仅做状态对齐）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：`AdvanceSubPhase`（Working）对 `round_state.sub_phase_passed` 的校验从 `assert` 改为返回 `Result.failure` 并回滚 snapshot（fail-fast 在 release 下也生效，且失败不污染 state）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-27：减少 Dictionary 裸写（第一步）：新增 `core/state/player_state_access.gd`（`PlayerStateAccess`）用于收敛 `players[*].milestones` 的读取/校验样板，并用于 `PricingPipeline`/`WorkingFlow`/`MarketingSettlement`/`DrinksProcurement` 等路径（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -309,6 +310,7 @@
 - 大量 `Dictionary` 结构的手工深层读取/写入：
   - 多文件重复出现 `if not (x is Dictionary)`、`get(..., null)`、`duplicate(true)` 组合，属于结构性样板代码。
   - 已有 `TypeHelpers` / `ParseHelpers` / 若干 query helper（例如 `CatalogRegistryHelpers`、`MarketingPlacementQuery`）但使用不一致，导致全局风格不统一。
+  - （已整改 2026-01-27）新增 `PlayerStateAccess`（`core/state/player_state_access.gd`）作为第一步：收敛 `player.milestones` 的读取/校验样板，并在 `PricingPipeline`/`WorkingFlow`/`MarketingSettlement`/`DrinksProcurement` 等处复用（减少重复/样板）
 - 少量“自加载创建实例”的奇怪模式：
   - （已整改 2026-01-26）`core/data/product_def.gd`、`core/modules/v2/module_manifest.gd` 已从 `load(自身脚本路径).new()` 改为直接 `new()`。
 
@@ -402,7 +404,7 @@
 | `core/engine/phase_manager/hooks.gd` | 220 | 1 | 0 | uses:GameLog,uses:DebugFlags |
 | `core/engine/phase_manager/order_config.gd` | 152 | 1 | 0 |  |
 | `core/engine/phase_manager/settlement_triggers.gd` | 127 | 2 | 0 |  |
-| `core/engine/phase_manager/working_flow.gd` | 185 | 3 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
+| `core/engine/phase_manager/working_flow.gd` | 192 | 4 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries,uses:PlayerStateAccess |
 | `core/engine/phase_manager.gd` | 266 | 6 | 0 |  |
 | `core/map/house_number_manager.gd` | 233 | 0 | 0 |  |
 | `core/map/map_baker/bake.gd` | 80 | 3 | 0 |  |
@@ -468,7 +470,7 @@
 | `core/rules/dinnertime_route_purchase_registry.gd` | 174 | 0 | 0 |  |
 | `core/rules/drinks_procurement/default_route_builder.gd` | 165 | 4 | 0 |  |
 | `core/rules/drinks_procurement/inputs.gd` | 58 | 1 | 0 | uses:JsonValueParseHelpers |
-| `core/rules/drinks_procurement/milestone_bonuses.gd` | 136 | 2 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
+| `core/rules/drinks_procurement/milestone_bonuses.gd` | 108 | 3 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries,uses:PlayerStateAccess |
 | `core/rules/drinks_procurement/picked_sources_finder.gd` | 45 | 2 | 0 |  |
 | `core/rules/drinks_procurement/plan_resolver.gd` | 162 | 6 | 0 | helper:drinks_procurement_plan |
 | `core/rules/drinks_procurement/route_validator.gd` | 121 | 5 | 0 |  |
@@ -510,7 +512,7 @@
 | `core/rules/phase/dinnertime/dinnertime_house_sales.gd` | 281 | 8 | 0 | helper:dinnertime_house_sales,uses:DinnertimeSelection |
 | `core/rules/phase/dinnertime_settlement.gd` | 37 | 2 | 0 |  |
 | `core/rules/phase/marketing/marketing_instances_validation.gd` | 96 | 1 | 0 |  |
-| `core/rules/phase/marketing/settlement_demand_effects.gd` | 160 | 2 | 0 |  |
+| `core/rules/phase/marketing/settlement_demand_effects.gd` | 163 | 3 | 0 | uses:PlayerStateAccess |
 | `core/rules/phase/marketing/settlement_house_demand.gd` | 96 | 1 | 0 |  |
 | `core/rules/phase/marketing/settlement_helpers.gd` | 31 | 1 | 0 |  |
 | `core/rules/phase/marketing/settlement_helpers_impl.gd` | 33 | 4 | 0 |  |
@@ -521,12 +523,13 @@
 | `core/rules/phase/payday/payday_salary_token_payment.gd` | 91 | 1 | 0 | helper:payday_salary_token_payment |
 | `core/rules/phase/payday_settlement.gd` | 204 | 6 | 0 | uses:MilestoneEffectQueries |
 | `core/rules/placement_conflict_registry.gd` | 133 | 0 | 0 |  |
-| `core/rules/pricing_pipeline.gd` | 180 | 3 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries |
+| `core/rules/pricing_pipeline.gd` | 165 | 4 | 0 | uses:IntValueParseHelpers,uses:MilestoneEffectQueries,uses:PlayerStateAccess |
 | `core/rules/settlement_registry.gd` | 159 | 1 | 0 | uses:AutoloadAccess |
 | `core/rules/working/mandatory_actions_rules.gd` | 169 | 1 | 0 |  |
 | `core/state/game_state.gd` | 230 | 2 | 0 |  |
 | `core/state/game_state_factory.gd` | 209 | 5 | 0 |  |
 | `core/state/game_state_serialization.gd` | 226 | 5 | 0 |  |
+| `core/state/player_state_access.gd` | 38 | 0 | 0 | helper:player_state_access |
 | `core/state/serialization/json_safe.gd` | 25 | 0 | 0 |  |
 | `core/state/serialization/parse_helpers.gd` | 70 | 0 | 0 |  |
 | `core/state/serialization/round_state_parser.gd` | 37 | 3 | 0 | helper:round_state_parser_wrapper |
@@ -631,7 +634,7 @@
 - `core/engine/phase_manager/hooks.gd`：中等体量；后续可按重构优先级处理；（已整改 2026-01-27）日志/调试开关读取改为通过 `AutoloadAccess` 动态访问 `GameLog`/`DebugFlags`（降低对 Autoload 全局变量的硬依赖）
 - `core/engine/phase_manager/order_config.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/engine/phase_manager/settlement_triggers.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/engine/phase_manager/working_flow.gd`：（已整改 2026-01-26）移除 `_parse_non_negative_int_value` wrapper，直接调用 `IntValueParseHelpers`；（已整改 2026-01-26）里程碑 effects 的 value 求和改用 `MilestoneEffectQueries.sum_non_negative_int_values(...)`（减少重复/样板）；（已整改 2026-01-27）OrderOfBusiness 相关 fail-fast 改为返回 `Result.failure`（不再依赖 assert；release 下也生效）
+- `core/engine/phase_manager/working_flow.gd`：（已整改 2026-01-26）移除 `_parse_non_negative_int_value` wrapper，直接调用 `IntValueParseHelpers`；（已整改 2026-01-26）里程碑 effects 的 value 求和改用 `MilestoneEffectQueries.sum_non_negative_int_values(...)`（减少重复/样板）；（已整改 2026-01-27）OrderOfBusiness 相关 fail-fast 改为返回 `Result.failure`（不再依赖 assert；release 下也生效）；（已整改 2026-01-27）读取 `player.milestones` 改为复用 `PlayerStateAccess`（减少重复/样板）
 
 ### map/
 
@@ -709,7 +712,7 @@
 - `core/rules/drinks_procurement.gd`：（已整改 2026-01-27）对外 API wrapper；主流程拆到 `drinks_procurement/plan_resolver.gd`，milestone bonus 计算拆到 `drinks_procurement/milestone_bonuses.gd`（主文件体量下降，耦合更集中/可维护）
 - `core/rules/drinks_procurement/default_route_builder.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/drinks_procurement/inputs.gd`：（已整改 2026-01-26）移除自带 `_parse_int`，改用 `JsonValueParseHelpers`
-- `core/rules/drinks_procurement/milestone_bonuses.gd`：（已新增 2026-01-27）milestone bonus 计算：`procure_plus_one`/`drinks_per_source_delta`/`distance_plus_one`（延续使用 `MilestoneEffectQueries`/`IntValueParseHelpers` 收敛解析样板）
+- `core/rules/drinks_procurement/milestone_bonuses.gd`：（已新增 2026-01-27）milestone bonus 计算：`procure_plus_one`/`drinks_per_source_delta`/`distance_plus_one`（延续使用 `MilestoneEffectQueries`/`IntValueParseHelpers` 收敛解析样板）；（已整改 2026-01-27）读取 `players[*].milestones` 改为复用 `PlayerStateAccess`（减少重复/样板）
 - `core/rules/drinks_procurement/picked_sources_finder.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/drinks_procurement/plan_resolver.gd`：（已新增 2026-01-27）采购计划解析：餐厅/路线/选点校验，起点餐厅推导，route 校验，沿路线拾取 sources 并按 selected_sources 过滤
 - `core/rules/drinks_procurement/route_validator.gd`：存在一定数量的 preload 依赖
@@ -755,13 +758,13 @@
 - `core/rules/phase/marketing/settlement_instance_expiration.gd`：（已新增 2026-01-27）营销实例到期处理（回收板件/释放 busy_marketers）；职责单一
 - `core/rules/phase/marketing/settlement_products.gd`：（已新增 2026-01-27）营销实例的产品序列解析（primary + products）；职责单一
 - `core/rules/phase/marketing/settlement_house_demand.gd`：（已新增 2026-01-27）需求写入（cap/花园/倍增）与房屋排序；职责单一
-- `core/rules/phase/marketing/settlement_demand_effects.gd`：（已新增 2026-01-27）营销需求数量/现金奖金 effects 计算（遍历 milestones -> effect_registry.invoke）；后续可考虑进一步收敛“milestone 扫描”样板
+- `core/rules/phase/marketing/settlement_demand_effects.gd`：（已新增 2026-01-27）营销需求数量/现金奖金 effects 计算（遍历 milestones -> effect_registry.invoke）；（已整改 2026-01-27）玩家 milestones 读取改为复用 `PlayerStateAccess`（减少重复/样板）；后续可考虑进一步收敛“milestone 扫描”样板
 - `core/rules/phase/marketing_settlement.gd`：（已整改 2026-01-26）将 marketing_instances 校验/归一化抽离到 `marketing_instances_validation.gd`（减少单文件职责/缩短脚本）；其余结算/需求生成/到期清理仍可按职责继续拆分
 - `core/rules/phase/payday_settlement.gd`：（已整改 2026-01-27）将“薪资 token 支付”与“薪资折扣容量推导”拆到 `core/rules/phase/payday/`，主文件更聚焦在 orchestrator（按玩家结算/写入 round_state.payday 报告/触发里程碑）；仍包含较多 Payday 规则分支，但体量已下降
 - `core/rules/phase/payday/payday_salary_discount.gd`：（已新增 2026-01-27）薪资折扣容量推导：遍历在岗员工 effect_ids 并通过 effect_registry.invoke 累计 `salary_discount_recruit_capacity`
 - `core/rules/phase/payday/payday_salary_token_payment.gd`：（已新增 2026-01-27）薪资 token 支付：基于 ProductDef tags 统计/扣减可用 food/drink token（排除 `salary_token_ineligible`）
 - `core/rules/placement_conflict_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
-- `core/rules/pricing_pipeline.gd`：（已整改 2026-01-26）移除自带 `_parse_*`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`base_price_delta` 的 value 求和改用 `MilestoneEffectQueries.sum_int_values(...)`（减少重复/样板）；中等体量；后续可按重构优先级处理
+- `core/rules/pricing_pipeline.gd`：（已整改 2026-01-26）移除自带 `_parse_*`，改用 `IntValueParseHelpers`；（已整改 2026-01-26）`base_price_delta` 的 value 求和改用 `MilestoneEffectQueries.sum_int_values(...)`（减少重复/样板）；（已整改 2026-01-27）读取 `player.milestones` 改为复用 `PlayerStateAccess`（减少重复/样板）；中等体量；后续可按重构优先级处理
 - `core/rules/settlement_registry.gd`：（已整改 2026-01-27）warn/debug 判定改为通过 `AutoloadAccess` 动态访问 `GameLog`/`DebugFlags`（避免直接引用 Autoload 全局变量；行为不变）；含调试/发布差异分支（AutoloadAccess.is_debug_mode -> DebugFlags/OS.has_feature）
 - `core/rules/working/mandatory_actions_rules.gd`：未发现明显结构问题（小文件/职责相对单一）
 
@@ -770,6 +773,7 @@
 - `core/state/game_state.gd`：中等体量；后续可按重构优先级处理
 - `core/state/game_state_factory.gd`：（已整改 2026-01-26）logo 分配已委托 provider（`gameplay/setup/restaurant_logo_assignment.gd`），并由 `ProjectSettings.fcm/restaurant_logo_assignment_provider_path` 注入，减少 core/state 的 UI/setup 语义；中等体量；存在一定数量的 preload 依赖
 - `core/state/game_state_serialization.gd`：（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `ParseHelpers`/`RoundStateParser`（收敛 state 解析样板）；中等体量；后续可按重构优先级处理；存在一定数量的 preload 依赖
+- `core/state/player_state_access.gd`：（已新增 2026-01-27）玩家相关 Dictionary 读取/校验 helper（当前覆盖 milestones；后续可扩展 employees/inventory 等），用于减少 Dictionary 裸写与重复样板
 - `core/state/serialization/json_safe.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/serialization/parse_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/serialization/round_state_parser.gd`：（已整改 2026-01-27）orchestrator wrapper；required/optional 字段解析拆到 `round_state_parser_required_fields.gd`/`round_state_parser_optional_fields.gd`；玩家 id key 归一化收敛到 `round_state_player_id_keys.gd`

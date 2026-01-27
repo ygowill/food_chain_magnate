@@ -6,15 +6,17 @@ extends RefCounted
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 static func calculate_unit_price(state: GameState, player_id: int) -> Result:
 	var unit_price: int = state.get_rule_int("base_unit_price")
 
 	var player := state.get_player(player_id)
 	if not player.is_empty():
-		if not player.has("milestones") or not (player["milestones"] is Array):
-			return Result.failure("PricingPipeline: player[%d].milestones 缺失或类型错误（期望 Array）" % player_id)
-		var milestones: Array = player["milestones"]
+		var milestones_read := PlayerStateAccessClass.require_milestones(player, "player[%d]" % player_id, "PricingPipeline")
+		if not milestones_read.ok:
+			return milestones_read
+		var milestones: Array = milestones_read.value
 		var delta_read := _get_base_price_delta_from_milestones(milestones)
 		if not delta_read.ok:
 			return delta_read
@@ -52,9 +54,10 @@ static func calculate_marketing_bonus(state: GameState, player_id: int, required
 	var player := state.get_player(player_id)
 	var milestones: Array = []
 	if not player.is_empty():
-		if not player.has("milestones") or not (player["milestones"] is Array):
-			return Result.failure("PricingPipeline: player[%d].milestones 缺失或类型错误（期望 Array）" % player_id)
-		milestones = player["milestones"]
+		var milestones_read := PlayerStateAccessClass.require_milestones(player, "player[%d]" % player_id, "PricingPipeline")
+		if not milestones_read.ok:
+			return milestones_read
+		milestones = milestones_read.value
 
 	var bonuses_read := _get_sell_bonus_by_category_from_milestones(milestones)
 	if not bonuses_read.ok:

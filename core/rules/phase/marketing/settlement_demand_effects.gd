@@ -3,6 +3,7 @@ extends RefCounted
 
 const BankruptcyRulesClass = preload("res://core/rules/economy/bankruptcy_rules.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 const EFFECT_SEG_MARKETING_DEMAND_AMOUNT := ":marketing:demand_amount:"
 const EFFECT_SEG_MARKETING_DEMAND_CASH := ":marketing:demand_cash:"
@@ -41,9 +42,10 @@ static func get_demand_amount_for_instance(state: GameState, inst: Dictionary, e
 	if not (player_val is Dictionary):
 		return Result.failure("MarketingSettlement: players[%d] 类型错误（期望 Dictionary）" % owner)
 	var player: Dictionary = player_val
-	if not player.has("milestones") or not (player["milestones"] is Array):
-		return Result.failure("MarketingSettlement: player[%d].milestones 缺失或类型错误（期望 Array）" % owner)
-	var milestones: Array = player["milestones"]
+	var milestones_read := PlayerStateAccessClass.require_milestones(player, "player[%d]" % owner, "MarketingSettlement")
+	if not milestones_read.ok:
+		return milestones_read
+	var milestones: Array = milestones_read.value
 
 	for i in range(milestones.size()):
 		var mid_val = milestones[i]
@@ -106,9 +108,10 @@ static func apply_marketing_demand_cash_effects(state: GameState, effect_registr
 	if not (player_val is Dictionary):
 		return Result.failure("MarketingSettlement: players[%d] 类型错误（期望 Dictionary）" % owner)
 	var player: Dictionary = player_val
-	if not player.has("milestones") or not (player["milestones"] is Array):
-		return Result.failure("MarketingSettlement: player[%d].milestones 缺失或类型错误（期望 Array）" % owner)
-	var milestones: Array = player["milestones"]
+	var milestones_read := PlayerStateAccessClass.require_milestones(player, "player[%d]" % owner, "MarketingSettlement")
+	if not milestones_read.ok:
+		return milestones_read
+	var milestones: Array = milestones_read.value
 
 	var warnings: Array[String] = []
 	var ctx := {

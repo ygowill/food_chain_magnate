@@ -5,6 +5,7 @@ extends RefCounted
 const CompanyStructureRulesClass = preload("res://core/rules/company_structure_rules.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 static func start_new_round(state: GameState) -> void:
 	# 重建回合状态（避免残留旧回合的计数/完成记录）
@@ -165,10 +166,10 @@ static func _compute_order_of_business_empty_slots(state: GameState, player: Dic
 		return empty_slots_read
 	var empty_slots: int = int(empty_slots_read.value)
 
-	var milestones_val = player.get("milestones", null)
-	if not (milestones_val is Array):
-		return Result.failure("WorkingFlow: player.milestones 缺失或类型错误（期望 Array）")
-	var milestones: Array = milestones_val
+	var milestones_read := PlayerStateAccessClass.require_milestones(player, "player", "WorkingFlow")
+	if not milestones_read.ok:
+		return milestones_read
+	var milestones: Array = milestones_read.value
 	var bonus_read := _get_turnorder_empty_slots_bonus_from_milestones(milestones)
 	if not bonus_read.ok:
 		return bonus_read

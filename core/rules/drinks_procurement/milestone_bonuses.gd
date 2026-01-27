@@ -2,22 +2,13 @@ extends RefCounted
 
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 static func get_drinks_per_source_bonus_from_milestones(state: GameState, player_id: int) -> Result:
-	if state == null:
-		return Result.failure("DrinksProcurement: state 为空")
-	if not (state.players is Array):
-		return Result.failure("DrinksProcurement: state.players 类型错误（期望 Array）")
-	if player_id < 0 or player_id >= state.players.size():
-		return Result.failure("DrinksProcurement: player_id 越界: %d" % player_id)
-
-	var player_val = state.players[player_id]
-	if not (player_val is Dictionary):
-		return Result.failure("DrinksProcurement: players[%d] 类型错误（期望 Dictionary）" % player_id)
-	var player: Dictionary = player_val
-	if not player.has("milestones") or not (player["milestones"] is Array):
-		return Result.failure("DrinksProcurement: player[%d].milestones 缺失或类型错误（期望 Array）" % player_id)
-	var milestones: Array = player["milestones"]
+	var milestones_read := PlayerStateAccessClass.require_player_milestones(state, player_id, "DrinksProcurement")
+	if not milestones_read.ok:
+		return milestones_read
+	var milestones: Array = milestones_read.value
 
 	return MilestoneEffectQueriesClass.sum_positive_int_values(
 		milestones,
@@ -27,22 +18,13 @@ static func get_drinks_per_source_bonus_from_milestones(state: GameState, player
 	)
 
 static func get_drinks_per_source_delta_for_employee_from_milestones(state: GameState, player_id: int, employee_id: String) -> Result:
-	if state == null:
-		return Result.failure("DrinksProcurement: state 为空")
-	if not (state.players is Array):
-		return Result.failure("DrinksProcurement: state.players 类型错误（期望 Array）")
-	if player_id < 0 or player_id >= state.players.size():
-		return Result.failure("DrinksProcurement: player_id 越界: %d" % player_id)
 	if employee_id.is_empty():
 		return Result.failure("DrinksProcurement: employee_id 不能为空")
 
-	var player_val = state.players[player_id]
-	if not (player_val is Dictionary):
-		return Result.failure("DrinksProcurement: players[%d] 类型错误（期望 Dictionary）" % player_id)
-	var player: Dictionary = player_val
-	if not player.has("milestones") or not (player["milestones"] is Array):
-		return Result.failure("DrinksProcurement: player[%d].milestones 缺失或类型错误（期望 Array）" % player_id)
-	var milestones: Array = player["milestones"]
+	var milestones_read := PlayerStateAccessClass.require_player_milestones(state, player_id, "DrinksProcurement")
+	if not milestones_read.ok:
+		return milestones_read
+	var milestones: Array = milestones_read.value
 
 	var bonus := 0
 	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
@@ -84,22 +66,13 @@ static func get_drinks_per_source_delta_for_employee_from_milestones(state: Game
 	return Result.success(bonus)
 
 static func get_distance_range_bonus_from_milestones(state: GameState, player_id: int, employee_id: String) -> Result:
-	if state == null:
-		return Result.failure("DrinksProcurement: state 为空")
-	if not (state.players is Array):
-		return Result.failure("DrinksProcurement: state.players 类型错误（期望 Array）")
-	if player_id < 0 or player_id >= state.players.size():
-		return Result.failure("DrinksProcurement: player_id 越界: %d" % player_id)
 	if employee_id.is_empty():
 		return Result.failure("DrinksProcurement: employee_id 不能为空")
 
-	var player_val = state.players[player_id]
-	if not (player_val is Dictionary):
-		return Result.failure("DrinksProcurement: players[%d] 类型错误（期望 Dictionary）" % player_id)
-	var player: Dictionary = player_val
-	if not player.has("milestones") or not (player["milestones"] is Array):
-		return Result.failure("DrinksProcurement: player[%d].milestones 缺失或类型错误（期望 Array）" % player_id)
-	var milestones: Array = player["milestones"]
+	var milestones_read := PlayerStateAccessClass.require_player_milestones(state, player_id, "DrinksProcurement")
+	if not milestones_read.ok:
+		return milestones_read
+	var milestones: Array = milestones_read.value
 
 	var bonus := 0
 	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
@@ -133,4 +106,3 @@ static func get_distance_range_bonus_from_milestones(state: GameState, player_id
 				break
 
 	return Result.success(bonus)
-
