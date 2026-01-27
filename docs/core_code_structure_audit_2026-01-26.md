@@ -126,6 +126,7 @@
 - 2026-01-27：减少 Dictionary 裸写（第一步）：新增 `core/state/player_state_access.gd`（`PlayerStateAccess`）用于收敛 `players[*].milestones` 的读取/校验样板，并用于 `PricingPipeline`/`WorkingFlow`/`MarketingSettlement`/`DrinksProcurement` 等路径（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：减少 Dictionary 裸写（milestones 扩展）：将 `CleanupSettlement`/`PaydaySettlement`/`DinnertimeEffects`/`EmployeeRules.Salary`/`StateUpdater.employees_and_milestones` 等处对 `player.milestones` 的手写校验改为复用 `PlayerStateAccess`；并让 prefix 处理兼容中文冒号（`：`），以便复用中文错误前缀；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：减少 Dictionary 裸写（inventory 扩展）：为 `PlayerStateAccess` 补充 `player.inventory` 的读取/校验 API，并用于 `PaydaySalaryTokenPayment`/`CleanupSettlement`/`DinnertimeInventory`（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-28：减少 Dictionary 裸写（round_state.action_counts）：`core/rules/employee_rules/action_counts.gd` 改为复用 `RoundStateCounters.get_player_key_count/increment_player_key_count`（收敛 round_state.action_counts 的读取/写入校验样板，行为不变）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-27：phase/action 字符串常量化（第一步）：在 `core/engine/phase_manager/definitions.gd` 集中定义 `PHASE_*`/`SUB_PHASE_*` 常量；新增 `core/actions/action_ids.gd`（集中常用 action_id 常量），并替换 core/engine 的 AutoAdvance/AdvanceSubPhase 等关键路径比较逻辑（降低拼写风险/重命名成本）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
@@ -317,6 +318,7 @@
   - （已整改 2026-01-27）新增 `PlayerStateAccess`（`core/state/player_state_access.gd`）作为第一步：收敛 `player.milestones` 的读取/校验样板，并在 `PricingPipeline`/`WorkingFlow`/`MarketingSettlement`/`DrinksProcurement` 等处复用（减少重复/样板）
   - （已整改 2026-01-27）继续迁移剩余 milestones callsite：`CleanupSettlement`/`PaydaySettlement`/`DinnertimeEffects`/`EmployeeRules.Salary`/`StateUpdater.employees_and_milestones` 也统一复用 `PlayerStateAccess`（进一步减少 Dictionary 裸写与重复样板）
   - （已整改 2026-01-27）为 `PlayerStateAccess` 增加 `inventory` 读取/校验 API，并先在 `PaydaySalaryTokenPayment`/`CleanupSettlement`/`DinnertimeInventory` 等路径复用（继续减少 Dictionary 裸写）
+  - （已整改 2026-01-28）`round_state.action_counts` 的读写改为复用 `RoundStateCounters`（进一步减少 round_state 结构的重复校验/样板）
 - 少量“自加载创建实例”的奇怪模式：
   - （已整改 2026-01-26）`core/data/product_def.gd`、`core/modules/v2/module_manifest.gd` 已从 `load(自身脚本路径).new()` 改为直接 `new()`。
 
@@ -487,7 +489,7 @@
 | `core/rules/economy/bankruptcy_rules.gd` | 270 | 3 | 0 |  |
 | `core/rules/effect_registry.gd` | 67 | 0 | 0 |  |
 | `core/rules/employee_pool_patch_registry.gd` | 113 | 0 | 0 |  |
-| `core/rules/employee_rules/action_counts.gd` | 55 | 0 | 0 |  |
+| `core/rules/employee_rules/action_counts.gd` | 32 | 1 | 0 | uses:RoundStateCounters |
 | `core/rules/employee_rules/counts.gd` | 58 | 3 | 0 |  |
 | `core/rules/employee_rules/employee_array_helpers.gd` | 24 | 1 | 0 |  |
 | `core/rules/employee_rules/immediate_train_pending.gd` | 149 | 0 | 0 |  |
@@ -730,7 +732,7 @@
 - `core/rules/effect_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/employee_pool_patch_registry.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/employee_rules.gd`：存在一定数量的 preload 依赖
-- `core/rules/employee_rules/action_counts.gd`：未发现明显结构问题（小文件/职责相对单一）
+- `core/rules/employee_rules/action_counts.gd`：（已整改 2026-01-28）round_state.action_counts 的读写改为复用 `RoundStateCounters`（减少重复/样板）；其余未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/employee_rules/counts.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/employee_rules/employee_array_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/rules/employee_rules/immediate_train_pending.gd`：未发现明显结构问题（小文件/职责相对单一）
