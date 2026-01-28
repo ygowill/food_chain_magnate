@@ -1,9 +1,21 @@
 # 联机（Online Multiplayer）
 
-状态：**当前仓库未实现联机模式**（没有 `server/` 目录，也没有网络会话层代码）。本文件仅保留为“未来设计入口”，避免旧文档误导读者以为已落地。
+状态：已落地 **M1（网络骨架 + 单房间大厅）**，尚未实现进入游戏/命令回放（M2 及之后）。
 
-若你要推进该方向，现有的设计/改造计划在：
+已实现内容（M1）：
+- Dedicated Server（ws）：`server/dedicated_server.tscn`、`server/dedicated_server.gd`
+- 房间逻辑（纯逻辑类）：`server/room_manager.gd`、`server/room.gd`
+- Client 会话层（共用 RPC 节点）：`autoload/net_client.gd`、`autoload/net_context.gd`
+- 联机大厅 UI：`ui/scenes/online/online_lobby.tscn`
 
-- `docs/refactors/multiplayer_websocket_plan.md`
+本项目的 `core/` 已具备“命令广播回放”所需的关键基础设施：
 
-建议联机方案仍复用本项目的“命令广播 + 客户端回放 + state_hash 校验”模式（`GameEngine`/`Command`/`GameState.compute_hash` 已满足基础条件）。
+- `core/types/command.gd`：命令可序列化/可严格反序列化
+- `core/engine/game_engine/command_runner.gd`：支持 `is_replay=true` 的回放执行
+- `core/state/game_state.gd`：`compute_hash()` 可用于联机一致性校验
+
+联机设计/改造计划请见：
+
+- `docs/refactors/multiplayer_websocket_plan.md`（整体方案、协议、UI 改造点、里程碑）
+- `docs/refactors/multiplayer_public_deployment.md`（公网 `wss://` 部署与最小鉴权建议）
+- `docs/refactors/multiplayer_implementation_guide.md`（按文件与 RPC 列表的实现指南）

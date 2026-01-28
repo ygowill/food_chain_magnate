@@ -4,6 +4,10 @@
 
 本文是改造落地的工程计划（含模块划分、协议、改动点、测试与里程碑）。
 
+补充文档：
+- 实现指南（按文件与 RPC 列表）：`docs/refactors/multiplayer_implementation_guide.md`
+- 公网部署（`wss://` / TLS / 反向代理示例）：`docs/refactors/multiplayer_public_deployment.md`
+
 ---
 
 ## 0. 约束与决策
@@ -14,7 +18,11 @@
 - 新增联机模式：从主菜单进入独立的“联机大厅/房间”，并进入联机对局。
 - Dedicated server：服务器不占用玩家席位；玩家全部通过客户端连接。
 - 传输层：使用 Godot 4 自带 `WebSocketMultiplayerPeer`（`create_server/create_client`）。
+- 公网部署：支持 `wss://`（TLS）。生产环境采用 **反向代理终止 TLS（Nginx）**（见第 2.3 节与 `docs/refactors/multiplayer_public_deployment.md`）。
+- 房间加入鉴权：默认使用 **room_password**（房主设置、加入者输入）；敏感字段不得写入日志（见第 4.2 节）。
 - “保密”范围：仅限制 **UI/日志/导出** 不泄露其它玩家的储备卡选择；不做强加密/反作弊（但服务器仍应校验所有请求）。
+- 断线重连：阶段 1 不要求（断线后的 UX 以“明确提示 + 返回大厅/重新加入”为主）。
+- 掉线处理（InGame）：其余玩家继续。掉线玩家视为 **弃权**：其棋子/占位从对局中移除，且该玩家不参与最终胜利判定（详见第 4.2.2/第 6/第 11）。
 
 ### 0.2 推荐的执行模型（阶段 1）
 
@@ -75,6 +83,24 @@
 
 配合 `SceneTree.multiplayer`（高层 Multiplayer API）承载 RPC/消息分发。
 
+### 2.3 公网部署（wss://）与 TLS
+
+公网部署下建议把 **TLS 作为硬要求**（避免房间 password/令牌明文传输）。
+
+两种落地方式：
+
+1) **反向代理终止 TLS（推荐）**
+- Dedicated server 监听 `ws://127.0.0.1:<port>`（或内网地址）。
+- 由 Nginx/Caddy/Cloudflare Tunnel 等对外提供 `wss://<domain>` 并转发 WebSocket。
+- 优点：证书管理/续期成熟；可顺便做限流、黑白名单、访问日志与健康检查。
+
+2) **Godot 直启 TLS（`TLSOptions`）**
+- 使用 `TLSOptions.server(key, certificate)` 作为 `create_server(..., tls_server_options)` 参数。
+- 客户端使用 `TLSOptions.client(trusted_chain, common_name_override)`（或系统信任链）作为 `create_client(..., tls_client_options)` 参数。
+- 注意：证书需要包含完整链（中间证书可拼接到同一个 crt 文件）。
+
+部署示例与注意事项：`docs/refactors/multiplayer_public_deployment.md`（本项目选型：Nginx）。
+
 ---
 
 ## 3. 文件/模块组织（建议）
@@ -87,7 +113,7 @@
   - 保存当前模式：`hotseat/online_client`，以及 `local_player_id`、房间信息、玩家档案（name/color）等。
   - 作为 UI 层判断“联机/本地”的统一开关，避免到处散落 `if online`。
 - `autoload/net_client.gd`（联机客户端）
-  - 连接/断线重连、RPC 请求封装、收包派发。
+  - 连接/断线处理（阶段 1 不要求重连）、RPC 请求封装、收包派发。
   - 暴露信号：`connected`、`room_updated`、`game_started`、`command_applied`、`resync_received`。
 - `server/dedicated_server.gd`（联机服务器入口脚本）
   - headless 运行，创建 WebSocket server peer，维护 rooms。
@@ -106,6 +132,7 @@
 
 客户端连接后立即发：
 - `ClientHello`
+  - `protocol_version`（联机协议版本，独立于 game_version；建议从 1 开始）
   - `game_version`（`ProjectSettings.application/config/version`）
   - `schema_version`（`GameState.SCHEMA_VERSION`）
   - `player_profile`：`{name, color_index}`
@@ -115,24 +142,67 @@
 ### 4.2 房间流（房主创建）
 
 客户端→服务器：
-- `CreateRoom { desired_player_count, seed_mode, seed?, enabled_modules_v2, modules_v2_base_dir }`
-- `JoinRoom { room_code }`
+- `CreateRoom { request_id, desired_player_count, seed_mode, seed?, enabled_modules_v2, modules_v2_base_dir, join_policy, room_password? }`
+  - `join_policy` 建议支持：
+    - `"password"`（默认/推荐）：房主设置 `room_password`；加入者需提供同一密码。
+    - `"token"`（可选）：创建房间时由服务器生成高熵 `join_token`，只回传给房主；加入者需提供该 token。
+    - `"open"`（仅开发/局域网）：仅 room_code 即可加入（公网不建议）。
+  - 安全建议：服务器只存储 `join_token_hash`/`password_hash`，不存明文（`Crypto.generate_random_bytes` + `HashingContext.HASH_SHA256`）。
+- `JoinRoom { request_id, room_code, join_token?, room_password? }`
+- `LeaveRoom { request_id }`
 - `UpdateRoomConfig { ... }`（仅房主允许）
 - `StartGame {}`（仅房主允许；校验人数达到 player_count）
 
 服务器→客户端：
 - `RoomState { room_code, host_peer_id, players:[{peer_id, seat_index?, name, color_index}], config, status }`
 - `GameStarted { player_id_by_peer_id: {peer_id:int}, config }`
+- `GameEnded { reason_code, message }`（广播；例如房主中断/玩家断线/服务器关闭房间）
+- `RequestRejected { request_id, code, message }`
+
+说明：
+- `request_id`：客户端生成的唯一请求标识（字符串/整数均可），用于把 `RequestRejected` 对应回 UI 交互（Toast/弹窗）。
+- 服务器不得在日志/RoomState 广播中泄露 `join_token`/`room_password`。
+
+### 4.2.1 room_code 与 join_token 生成建议（实现细节）
+
+- `room_code`：
+  - 目标：短、可手动输入、可分享；**不作为安全凭据**。
+  - 建议：5–6 位 Base32（全大写）并剔除易混淆字符（例如 `I/O/0/1`），服务端保证唯一性（冲突则重试生成）。
+- `join_token`（推荐）：
+  - 目标：作为安全凭据，必须高熵、难猜测。
+  - 建议：使用 `Crypto.generate_random_bytes(N)` 生成随机字节（例如 32 bytes），再编码为可复制字符串（hex 或 base64url）。
+  - 存储：服务端只存 `HashingContext.HASH_SHA256` 哈希（`join_token_hash`），不存明文；比较时对输入做同样哈希再比对。
+- `room_password`：
+  - 阶段 1 可先按“明文输入 → SHA256 存储”落地；后续若需要更强口令学（salt/迭代），可再升级。
+
+### 4.2.2 房间生命周期与断线处理（阶段 1）
+
+阶段 1 不要求断线重连，但仍需明确“断线后发生什么”，避免客户端卡死在游戏场景。
+
+建议约定：
+- 房间状态：`Lobby`（未开始）/ `InGame`（对局中）/ `Ended`（已结束，等待返回）。
+- Lobby 断线：
+  - 玩家断开：从房间移除并广播 `RoomState`。
+  - 房主断开：自动转移房主到剩余玩家中的第一个（或 seat 最小者），并广播 `RoomState`。
+- InGame 断线（本项目阶段 1 约定）：
+  - 任意玩家断开：其余玩家继续进行对局；掉线玩家视为 **弃权**：
+    - 服务器对该玩家执行一次 `forfeit_player`（系统内部动作，见第 6.6），并广播命令给所有客户端回放，以保证一致性。
+    - `forfeit_player` 的效果是：移除该玩家的棋子/占位（例如餐厅、营销板件；房屋/花园不移除，见第 6.6），并确保该玩家不参与最终胜利判定。
+  - 客户端 UX：对局内显示该玩家“已掉线/弃权”；该玩家后续不再出现在 `turn_order` 中，不会卡住回合推进。
+- 空房间回收：
+  - 最简单：房间无玩家时立刻销毁。
+  - 可选：保留 N 分钟 TTL，方便短暂掉线后重新加入（即便不做自动重连，也可能有价值）。
 
 ### 4.3 对局消息
 
 客户端→服务器：
-- `ActionRequest { action_id, params }`
+- `ActionRequest { request_id, action_id, params }`
   - **不允许客户端指定 actor**；服务器基于 `peer_id -> player_id` 映射填充。
 
 服务器→客户端：
 - `CommandApplied { cmd: CommandDict, state_hash: String }`
   - `cmd` 使用 `Command.to_dict()` 完整字段（含 `phase/sub_phase/timestamp/index`），便于客户端用 `Command.from_dict()` 严格解析。
+- `RequestRejected { request_id, code, message }`
 
 ### 4.4 重同步（阶段 1 必做）
 
@@ -148,6 +218,20 @@
 
 客户端收到后：
 - `engine.load_from_archive(archive)`，并继续接收后续 `CommandApplied`。
+
+### 4.5 错误码（建议约定）
+
+最小集合（示例）：
+- `ERR_VERSION_MISMATCH`：game_version/schema_version/protocol_version 不匹配
+- `ERR_ROOM_NOT_FOUND`：room_code 不存在
+- `ERR_ROOM_AUTH_FAILED`：join_token/password 不正确
+- `ERR_ROOM_FULL`：房间已满
+- `ERR_NOT_HOST`：非房主调用 UpdateRoomConfig/StartGame
+- `ERR_INVALID_CONFIG`：配置非法（玩家数/seed/modules_v2 等）
+- `ERR_GAME_NOT_STARTED`：对局未开始就发送 ActionRequest
+- `ERR_ACTION_REJECTED`：动作校验失败（可把 `Result.error` 转为 message）
+- `ERR_RATE_LIMITED`：请求过于频繁
+- `ERR_INTERNAL`：服务器内部错误
 
 ---
 
@@ -240,6 +324,35 @@
 - server 永远忽略客户端提供的 actor（客户端请求不带 actor）。
 - server 对每个请求执行 `ActionRegistry.run_validators` + `executor.validate`（通过 `engine.execute_command` 已包含）。
 
+### 6.6 掉线/弃权：`forfeit_player`（阶段 1 新增内部动作）
+
+为满足“掉线玩家不再参与 + 棋子从对局移除 + 其余玩家继续”，建议增加一个系统内部动作：
+
+- `action_id`: `forfeit_player`
+- `actor`: `-1`（系统）
+- `params`: `{ "player_id": int }`
+- 执行时机：server 检测到 peer 断线，映射到 player_id 后立即执行并广播。
+
+建议的状态变更（需要落地时再细化/写测试）：
+
+1) **回合推进层**
+   - 从 `state.turn_order` / `state.selection_order` 中移除该 player_id。
+   - 若 `state.current_player_index` 指向被移除玩家，修正到下一个可行动玩家，避免卡死。
+2) **地图与棋子**
+   - 移除该玩家拥有的餐厅：清理 `state.map.restaurants`、`players[player_id].restaurants`，并清空 `state.map.cells[*].structure` 中对应 `piece_id=restaurant` 的占用（匹配 `restaurant_id`/`owner`）。
+   - 移除该玩家拥有的营销：清理 `state.marketing_instances`（owner==player_id），并同步清理 `state.map.marketing_placements`（owner==player_id）。
+   - 明确：**不移除**该玩家放置的房屋/花园及其需求标记（这些作为地图结构保留，会继续影响其它玩家）。
+   - 修改地图结构后必须 `RoadGraphCache.invalidate_road_graph(state)`，避免距离缓存错误。
+3) **玩家资产与胜负**
+   - 清空/冻结该玩家资源（员工/库存/忙碌营销员/里程碑等）以避免后续规则误用。
+   - 增加 `player.forfeited=true`（或 `player.status="forfeited"`）字段，用于：
+     - UI 标记“已弃权”
+     - GameOver 排名与赢家判定时排除弃权玩家（本项目需求：弃权玩家不可获胜）
+
+落地时需要同步更新：
+- `ui/components/game_over/game_over_panel.gd`：排名时排除/标注弃权玩家，且冠军不应授予弃权玩家。
+- 任何“遍历 players.size() 计算赢家/奖励”的规则点：若语义上应排除弃权玩家，需要加过滤（否则会产生边界 bug）。
+
 ---
 
 ## 7. 对局启动与初始化一致性
@@ -317,7 +430,12 @@ godot --headless --path . --script res://server/dedicated_server.gd -- --port 80
 
 ### 10.2 Client 连接
 
-客户端配置 `ws://<host>:<port>`，在联机大厅输入并连接。
+开发/局域网：
+- 客户端配置 `ws://<host>:<port>` 并连接（例如 `ws://127.0.0.1:8080`）。
+
+公网部署：
+- 客户端配置 `wss://<domain>/<path>` 并连接（例如 `wss://example.com/ws`，由反向代理转发到内网 `ws://127.0.0.1:<port>`）。
+- 房间 password/令牌应作为消息字段发送（不放在 URL/querystring；且不得写入日志）。
 
 ---
 
@@ -334,4 +452,3 @@ godot --headless --path . --script res://server/dedicated_server.gd -- --port 80
 - 真正的“强保密/抗作弊”：按玩家裁剪 state、加密/承诺-揭示（commit-reveal）等。
 - 观战模式：不给 input 权限，仅接收命令回放。
 - 断线重连带身份令牌：避免 peer_id 变化导致占座丢失。
-

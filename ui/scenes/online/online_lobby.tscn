@@ -1,0 +1,189 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/scenes/online/online_lobby.gd" id="1"]
+
+[node name="OnlineLobby" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="Root" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="TopBar" type="HBoxContainer" parent="Root"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BackButton" type="Button" parent="Root/TopBar"]
+layout_mode = 2
+text = "返回"
+
+[node name="Title" type="Label" parent="Root/TopBar"]
+layout_mode = 2
+text = "联机大厅"
+
+[node name="ConnectionSection" type="VBoxContainer" parent="Root"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ServerRow" type="HBoxContainer" parent="Root/ConnectionSection"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ServerUrlLabel" type="Label" parent="Root/ConnectionSection/ServerRow"]
+layout_mode = 2
+text = "Server URL"
+
+[node name="ServerUrlEdit" type="LineEdit" parent="Root/ConnectionSection/ServerRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ProfileRow" type="HBoxContainer" parent="Root/ConnectionSection"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PlayerNameLabel" type="Label" parent="Root/ConnectionSection/ProfileRow"]
+layout_mode = 2
+text = "昵称"
+
+[node name="PlayerNameEdit" type="LineEdit" parent="Root/ConnectionSection/ProfileRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ColorIndexLabel" type="Label" parent="Root/ConnectionSection/ProfileRow"]
+layout_mode = 2
+text = "颜色"
+
+[node name="ColorIndexSpin" type="SpinBox" parent="Root/ConnectionSection/ProfileRow"]
+layout_mode = 2
+min_value = 0.0
+max_value = 99.0
+step = 1.0
+rounded = true
+
+[node name="ButtonsRow" type="HBoxContainer" parent="Root/ConnectionSection"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ConnectButton" type="Button" parent="Root/ConnectionSection/ButtonsRow"]
+layout_mode = 2
+text = "连接"
+
+[node name="DisconnectButton" type="Button" parent="Root/ConnectionSection/ButtonsRow"]
+layout_mode = 2
+text = "断开"
+
+[node name="RoomSection" type="HBoxContainer" parent="Root"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="CreateRoom" type="VBoxContainer" parent="Root/RoomSection"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="CreateTitle" type="Label" parent="Root/RoomSection/CreateRoom"]
+layout_mode = 2
+text = "创建房间"
+
+[node name="PlayerCountRow" type="HBoxContainer" parent="Root/RoomSection/CreateRoom"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PlayerCountLabel" type="Label" parent="Root/RoomSection/CreateRoom/PlayerCountRow"]
+layout_mode = 2
+text = "人数"
+
+[node name="PlayerCountSpin" type="SpinBox" parent="Root/RoomSection/CreateRoom/PlayerCountRow"]
+layout_mode = 2
+min_value = 2.0
+max_value = 5.0
+step = 1.0
+rounded = true
+
+[node name="PasswordRow" type="HBoxContainer" parent="Root/RoomSection/CreateRoom"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PasswordLabel" type="Label" parent="Root/RoomSection/CreateRoom/PasswordRow"]
+layout_mode = 2
+text = "房间密码"
+
+[node name="RoomPasswordEdit" type="LineEdit" parent="Root/RoomSection/CreateRoom/PasswordRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+secret = true
+
+[node name="CreateRoomButton" type="Button" parent="Root/RoomSection/CreateRoom"]
+layout_mode = 2
+text = "创建"
+
+[node name="JoinRoom" type="VBoxContainer" parent="Root/RoomSection"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="JoinTitle" type="Label" parent="Root/RoomSection/JoinRoom"]
+layout_mode = 2
+text = "加入房间"
+
+[node name="RoomCodeRow" type="HBoxContainer" parent="Root/RoomSection/JoinRoom"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RoomCodeLabel" type="Label" parent="Root/RoomSection/JoinRoom/RoomCodeRow"]
+layout_mode = 2
+text = "Room Code"
+
+[node name="RoomCodeEdit" type="LineEdit" parent="Root/RoomSection/JoinRoom/RoomCodeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PasswordRow" type="HBoxContainer" parent="Root/RoomSection/JoinRoom"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PasswordLabel" type="Label" parent="Root/RoomSection/JoinRoom/PasswordRow"]
+layout_mode = 2
+text = "房间密码"
+
+[node name="RoomPasswordEdit" type="LineEdit" parent="Root/RoomSection/JoinRoom/PasswordRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+secret = true
+
+[node name="JoinRoomButton" type="Button" parent="Root/RoomSection/JoinRoom"]
+layout_mode = 2
+text = "加入"
+
+[node name="RoomActionsRow" type="HBoxContainer" parent="Root"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="LeaveRoomButton" type="Button" parent="Root/RoomActionsRow"]
+layout_mode = 2
+text = "离开房间"
+
+[node name="StatusOutput" type="RichTextLabel" parent="Root"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = false
+scroll_active = true
+
+[connection signal="pressed" from="Root/TopBar/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="Root/ConnectionSection/ButtonsRow/ConnectButton" to="." method="_on_connect_pressed"]
+[connection signal="pressed" from="Root/ConnectionSection/ButtonsRow/DisconnectButton" to="." method="_on_disconnect_pressed"]
+[connection signal="pressed" from="Root/RoomSection/CreateRoom/CreateRoomButton" to="." method="_on_create_room_pressed"]
+[connection signal="pressed" from="Root/RoomSection/JoinRoom/JoinRoomButton" to="." method="_on_join_room_pressed"]
+[connection signal="pressed" from="Root/RoomActionsRow/LeaveRoomButton" to="." method="_on_leave_room_pressed"]
+

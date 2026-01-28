@@ -24,6 +24,8 @@ DebugFlags="*res://autoload/debug_flags.gd"
 Globals="*res://autoload/globals.gd"
 SceneManager="*res://autoload/scene_manager.gd"
 EventBus="*res://autoload/event_bus.gd"
+NetContext="*res://autoload/net_context.gd"
+NetClient="*res://autoload/net_client.gd"
 
 [display]
 

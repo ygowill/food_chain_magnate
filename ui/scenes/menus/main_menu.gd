@@ -20,6 +20,10 @@ func _on_new_game_pressed() -> void:
 	GameLog.info("MainMenu", "点击新游戏")
 	SceneManager.goto_game_setup()
 
+func _on_online_pressed() -> void:
+	GameLog.info("MainMenu", "点击联机")
+	SceneManager.goto_online_lobby()
+
 func _on_load_game_pressed() -> void:
 	GameLog.info("MainMenu", "点击载入游戏")
 	_ensure_save_load_dialog()

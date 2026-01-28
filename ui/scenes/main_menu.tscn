@@ -57,6 +57,11 @@ custom_minimum_size = Vector2(200, 50)
 layout_mode = 2
 text = "新游戏"
 
+[node name="OnlineButton" type="Button" parent="CenterContainer/VBoxContainer"]
+custom_minimum_size = Vector2(200, 50)
+layout_mode = 2
+text = "联机"
+
 [node name="LoadGameButton" type="Button" parent="CenterContainer/VBoxContainer"]
 custom_minimum_size = Vector2(200, 50)
 layout_mode = 2
@@ -95,6 +100,7 @@ text = "v0.1.0"
 horizontal_alignment = 2
 
 [connection signal="pressed" from="CenterContainer/VBoxContainer/NewGameButton" to="." method="_on_new_game_pressed"]
+[connection signal="pressed" from="CenterContainer/VBoxContainer/OnlineButton" to="." method="_on_online_pressed"]
 [connection signal="pressed" from="CenterContainer/VBoxContainer/LoadGameButton" to="." method="_on_load_game_pressed"]
 [connection signal="pressed" from="CenterContainer/VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="CenterContainer/VBoxContainer/ReplayPlayerButton" to="." method="_on_replay_player_pressed"]

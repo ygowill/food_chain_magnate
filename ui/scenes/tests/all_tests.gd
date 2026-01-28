@@ -11,6 +11,7 @@ const GameStateFactoryStartingInventoryTestClass = preload("res://core/tests/gam
 const RestaurantLogoAssignmentTestClass = preload("res://core/tests/restaurant_logo_assignment_test.gd")
 const PaydaySalaryTokenEligibilityTestClass = preload("res://core/tests/payday_salary_token_eligibility_test.gd")
 const CallbackResultContractTestClass = preload("res://core/tests/callback_result_contract_test.gd")
+const OnlineRoomManagerTestClass = preload("res://core/tests/online_room_manager_test.gd")
 const InitialCompanyTestClass = preload("res://core/tests/initial_company_test.gd")
 const MandatoryActionsTestClass = preload("res://core/tests/mandatory_actions_test.gd")
 const RuralMarketeersAutoAdvanceUnblockedTestClass = preload("res://core/tests/rural_marketeers_auto_advance_unblocked_test.gd")
@@ -189,6 +190,10 @@ func _run_all() -> int:
 		{
 			"name": "CallbackResultContractTest",
 			"fn": func() -> Result: return CallbackResultContractTestClass.run(),
+		},
+		{
+			"name": "OnlineRoomManagerTest",
+			"fn": func() -> Result: return OnlineRoomManagerTestClass.run(),
 		},
 		{
 			"name": "InitialCompanyTest",

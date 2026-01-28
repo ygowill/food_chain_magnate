@@ -8,6 +8,7 @@ signal scene_changed(scene_name: String)
 
 # 场景路径常量
 const SCENE_MAIN_MENU := "res://ui/scenes/main_menu.tscn"
+const SCENE_ONLINE_LOBBY := "res://ui/scenes/online/online_lobby.tscn"
 const SCENE_GAME_SETUP := "res://ui/scenes/setup/game_setup.tscn"
 const SCENE_GAME := "res://ui/scenes/game/game.tscn"
 const SCENE_TILE_EDITOR := "res://ui/scenes/tools/tile_editor.tscn"
@@ -105,6 +106,9 @@ func clear_stack() -> void:
 func goto_main_menu() -> void:
 	clear_stack()
 	goto_scene(SCENE_MAIN_MENU, false)
+
+func goto_online_lobby() -> void:
+	goto_scene(SCENE_ONLINE_LOBBY)
 
 func goto_game_setup() -> void:
 	goto_scene(SCENE_GAME_SETUP)
