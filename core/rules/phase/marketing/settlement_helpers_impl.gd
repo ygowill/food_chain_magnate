@@ -6,8 +6,8 @@ const ProductsClass = preload("res://core/rules/phase/marketing/settlement_produ
 const HouseDemandClass = preload("res://core/rules/phase/marketing/settlement_house_demand.gd")
 const DemandEffectsClass = preload("res://core/rules/phase/marketing/settlement_demand_effects.gd")
 
-static func expire_marketing_instance(state: GameState, inst: Dictionary) -> void:
-	InstanceExpirationClass.expire_marketing_instance(state, inst)
+static func expire_marketing_instance(state: GameState, inst: Dictionary) -> Result:
+	return InstanceExpirationClass.expire_marketing_instance(state, inst)
 
 static func get_products_in_order(inst: Dictionary) -> Result:
 	return ProductsClass.get_products_in_order(inst)

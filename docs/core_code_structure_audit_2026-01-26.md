@@ -140,6 +140,7 @@
 - 2026-01-28：phase/action 字符串常量化（第九步）：为 Setup 子阶段补充 `DefsClass.SUB_PHASE_RESERVE_CARDS` 常量，并将 UI/gameplay/core/tests 中对 `ReserveCards` 的比较改为引用集中常量，进一步减少硬编码与拼写风险；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：减少 Dictionary 裸写（employees/reserve_employees 扩展）：为 `PlayerStateAccess` 补充 `player.employees`/`player.reserve_employees` 的读取/校验 API，并用于 `WorkingFlow.auto_activate_reserve_employees`/`CompanyStructureRules`/`DinnertimeEffects`/`PaydaySalaryDiscount` 等路径（继续减少 player 结构的手写校验/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：减少 Dictionary 裸写（busy_marketers 扩展）：为 `PlayerStateAccess` 补充 `player.busy_marketers` 的读取/校验 API，并用于重组相关动作（`RestructureEmployeeAction`/`SetCompanyStructureDirectAction`/`SetCompanyStructureReportAction`）减少重复校验/样板；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-28：将 MarketingSettlement 的“营销实例到期处理”从 `void + assert` 改为返回 `Result` 并在调用链中显式传播（release 下也可 fail-fast）；同时移除 `settlement_demand_effects.gd` 中对 state/inst 的 `assert`，改为 `Result.failure`（行为不变）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -331,7 +332,7 @@
   - （已整改 2026-01-28）第九步：为 Setup 子阶段补充 `DefsClass.SUB_PHASE_RESERVE_CARDS` 常量，并将 UI/gameplay/core/tests 中对 `ReserveCards` 的比较改为引用集中常量，进一步减少硬编码与拼写风险。
 - `assert` 与 `Result.failure` 混用导致“release 下校验失效”的风险：
   - （已整改 2026-01-27）以 `core/engine/phase_manager/working_flow.gd` 为例，里程碑 effects 解析与 OrderOfBusiness 排序相关的 fail-fast 已从 `assert` 改为返回 `Result.failure`，并在 base_rules/movie_stars hooks 中显式传播（release 下也生效）。
-  - 仍有少量 `assert`（多为初始化/内部不变量/模块校验）；关键路径（`WorkingFlow`/`CompanyStructureRules`/`HouseNumberManager`/`DinnertimeSelection`/`TileBaking`/`PhaseManager.advance_sub_phase`）已改为 `Result.failure` fail-fast，后续可继续统一策略。
+  - 仍有少量 `assert`（多为初始化/内部不变量/模块校验）；关键路径（`WorkingFlow`/`CompanyStructureRules`/`HouseNumberManager`/`DinnertimeSelection`/`TileBaking`/`PhaseManager.advance_sub_phase`/`MarketingSettlement.expire_marketing_instance`）已改为 `Result.failure` fail-fast，后续可继续统一策略。
 - 大量 `Dictionary` 结构的手工深层读取/写入：
   - 多文件重复出现 `if not (x is Dictionary)`、`get(..., null)`、`duplicate(true)` 组合，属于结构性样板代码。
   - 已有 `TypeHelpers` / `ParseHelpers` / 若干 query helper（例如 `CatalogRegistryHelpers`、`MarketingPlacementQuery`）但使用不一致，导致全局风格不统一。
@@ -790,10 +791,10 @@
 - `core/rules/phase/marketing/marketing_instances_validation.gd`：（已新增 2026-01-26）抽离 MarketingSettlement 的 marketing_instances 校验/归一化逻辑（减少单文件职责/缩短脚本）
 - `core/rules/phase/marketing/settlement_helpers.gd`：（已整改 2026-01-27）class_name + 对外 API wrapper；完整实现移至 `settlement_helpers_impl.gd`（降低单文件体积，便于维护/进一步拆分）
 - `core/rules/phase/marketing/settlement_helpers_impl.gd`：（已整改 2026-01-27）实现已进一步拆分到 `settlement_instance_expiration.gd`/`settlement_products.gd`/`settlement_house_demand.gd`/`settlement_demand_effects.gd`；本文件仅保留聚合转发（降低单文件体积）
-- `core/rules/phase/marketing/settlement_instance_expiration.gd`：（已新增 2026-01-27）营销实例到期处理（回收板件/释放 busy_marketers）；职责单一
+- `core/rules/phase/marketing/settlement_instance_expiration.gd`：（已新增 2026-01-27）营销实例到期处理（回收板件/释放 busy_marketers）；职责单一；（已整改 2026-01-28）由 `void + assert` 改为返回 `Result` 并在调用链中显式传播（release 下也可 fail-fast）
 - `core/rules/phase/marketing/settlement_products.gd`：（已新增 2026-01-27）营销实例的产品序列解析（primary + products）；职责单一
 - `core/rules/phase/marketing/settlement_house_demand.gd`：（已新增 2026-01-27）需求写入（cap/花园/倍增）与房屋排序；职责单一
-- `core/rules/phase/marketing/settlement_demand_effects.gd`：（已新增 2026-01-27）营销需求数量/现金奖金 effects 计算（遍历 milestones -> effect_registry.invoke）；（已整改 2026-01-27）玩家 milestones 读取改为复用 `PlayerStateAccess`（减少重复/样板）；后续可考虑进一步收敛“milestone 扫描”样板
+- `core/rules/phase/marketing/settlement_demand_effects.gd`：（已新增 2026-01-27）营销需求数量/现金奖金 effects 计算（遍历 milestones -> effect_registry.invoke）；（已整改 2026-01-27）玩家 milestones 读取改为复用 `PlayerStateAccess`（减少重复/样板）；（已整改 2026-01-28）移除对 state/inst 的 `assert`，改为 `Result.failure`（release 下也可 fail-fast）；后续可考虑进一步收敛“milestone 扫描”样板
 - `core/rules/phase/marketing_settlement.gd`：（已整改 2026-01-26）将 marketing_instances 校验/归一化抽离到 `marketing_instances_validation.gd`（减少单文件职责/缩短脚本）；其余结算/需求生成/到期清理仍可按职责继续拆分
 - `core/rules/phase/payday_settlement.gd`：（已整改 2026-01-27）将“薪资 token 支付”与“薪资折扣容量推导”拆到 `core/rules/phase/payday/`，主文件更聚焦在 orchestrator（按玩家结算/写入 round_state.payday 报告/触发里程碑）；（已整改 2026-01-27）读取 `player.milestones` 改为复用 `PlayerStateAccess`（减少重复/样板）；仍包含较多 Payday 规则分支，但体量已下降
 - `core/rules/phase/payday/payday_salary_discount.gd`：（已新增 2026-01-27）薪资折扣容量推导：遍历在岗员工 effect_ids 并通过 effect_registry.invoke 累计 `salary_discount_recruit_capacity`

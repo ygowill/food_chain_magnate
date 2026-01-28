@@ -168,7 +168,10 @@ static func apply(state: GameState, marketing_range_calculator = null, rounds: i
 		})
 
 		if expired_now:
-			_expire_marketing_instance(state, inst)
+			var expire_r := _expire_marketing_instance(state, inst)
+			if not expire_r.ok:
+				return expire_r
+			warnings.append_array(expire_r.warnings)
 			expired.append({
 				"board_number": board_number,
 				"owner": owner,
@@ -203,8 +206,8 @@ static func apply(state: GameState, marketing_range_calculator = null, rounds: i
 
 	return Result.success().with_warnings(warnings)
 
-static func _expire_marketing_instance(state: GameState, inst: Dictionary) -> void:
-	HelpersClass.expire_marketing_instance(state, inst)
+static func _expire_marketing_instance(state: GameState, inst: Dictionary) -> Result:
+	return HelpersClass.expire_marketing_instance(state, inst)
 
 static func _get_products_in_order(inst: Dictionary) -> Result:
 	return HelpersClass.get_products_in_order(inst)

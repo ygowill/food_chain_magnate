@@ -9,8 +9,10 @@ const EFFECT_SEG_MARKETING_DEMAND_AMOUNT := ":marketing:demand_amount:"
 const EFFECT_SEG_MARKETING_DEMAND_CASH := ":marketing:demand_cash:"
 
 static func get_demand_amount_for_instance(state: GameState, inst: Dictionary, effect_registry) -> Result:
-	assert(state != null, "MarketingSettlementHelpers.get_demand_amount_for_instance: state 为空")
-	assert(inst != null, "MarketingSettlementHelpers.get_demand_amount_for_instance: inst 为空")
+	if state == null:
+		return Result.failure("MarketingSettlement: state 为空")
+	if inst == null:
+		return Result.failure("MarketingSettlement: inst 为空")
 
 	if not inst.has("type") or not (inst["type"] is String):
 		return Result.failure("MarketingSettlement: marketing_instances.type 缺失或类型错误（期望 String）")
@@ -80,8 +82,10 @@ static func get_demand_amount_for_instance(state: GameState, inst: Dictionary, e
 	return Result.success(amount).with_warnings(warnings)
 
 static func apply_marketing_demand_cash_effects(state: GameState, effect_registry, inst: Dictionary, demands_added: int) -> Result:
-	assert(state != null, "MarketingSettlementHelpers.apply_marketing_demand_cash_effects: state 为空")
-	assert(inst != null, "MarketingSettlementHelpers.apply_marketing_demand_cash_effects: inst 为空")
+	if state == null:
+		return Result.failure("MarketingSettlement: state 为空")
+	if inst == null:
+		return Result.failure("MarketingSettlement: inst 为空")
 
 	if demands_added <= 0:
 		return Result.success()

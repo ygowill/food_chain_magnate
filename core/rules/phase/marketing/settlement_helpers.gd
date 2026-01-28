@@ -4,8 +4,8 @@ extends RefCounted
 
 const Impl = preload("res://core/rules/phase/marketing/settlement_helpers_impl.gd")
 
-static func expire_marketing_instance(state: GameState, inst: Dictionary) -> void:
-	Impl.expire_marketing_instance(state, inst)
+static func expire_marketing_instance(state: GameState, inst: Dictionary) -> Result:
+	return Impl.expire_marketing_instance(state, inst)
 
 static func get_products_in_order(inst: Dictionary) -> Result:
 	return Impl.get_products_in_order(inst)
