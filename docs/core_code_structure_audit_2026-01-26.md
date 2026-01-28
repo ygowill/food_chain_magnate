@@ -138,6 +138,7 @@
 - 2026-01-28：phase/action 字符串常量化（第七步）：将 UI 的 `game.gd`/`game_panel_working_panels.gd`/`game_map_interaction_controller.gd` 中残留 phase/sub_phase 判定改为引用集中常量（`DefsClass.PHASE_*` + `DefsClass.SUB_PHASE_*`），减少硬编码与拼写风险；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：phase/action 字符串常量化（第八步）：继续覆盖 gameplay/actions + gameplay/replay + core/tests + ui/scenes/tests 中残留 phase/sub_phase 判定与系统 action_id（`skip/skip_sub_phase/end_turn/advance_phase`）字符串，统一引用集中常量（`DefsClass.PHASE_*` + `DefsClass.SUB_PHASE_*` + `ActionIdsClass.*`），进一步减少硬编码与拼写风险；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：减少 Dictionary 裸写（employees/reserve_employees 扩展）：为 `PlayerStateAccess` 补充 `player.employees`/`player.reserve_employees` 的读取/校验 API，并用于 `WorkingFlow.auto_activate_reserve_employees`/`CompanyStructureRules`/`DinnertimeEffects`/`PaydaySalaryDiscount` 等路径（继续减少 player 结构的手写校验/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-28：减少 Dictionary 裸写（busy_marketers 扩展）：为 `PlayerStateAccess` 补充 `player.busy_marketers` 的读取/校验 API，并用于重组相关动作（`RestructureEmployeeAction`/`SetCompanyStructureDirectAction`/`SetCompanyStructureReportAction`）减少重复校验/样板；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -336,6 +337,7 @@
   - （已整改 2026-01-27）继续迁移剩余 milestones callsite：`CleanupSettlement`/`PaydaySettlement`/`DinnertimeEffects`/`EmployeeRules.Salary`/`StateUpdater.employees_and_milestones` 也统一复用 `PlayerStateAccess`（进一步减少 Dictionary 裸写与重复样板）
   - （已整改 2026-01-27）为 `PlayerStateAccess` 增加 `inventory` 读取/校验 API，并先在 `PaydaySalaryTokenPayment`/`CleanupSettlement`/`DinnertimeInventory` 等路径复用（继续减少 Dictionary 裸写）
   - （已整改 2026-01-28）为 `PlayerStateAccess` 增加 `employees`/`reserve_employees` 读取/校验 API，并用于 `WorkingFlow.auto_activate_reserve_employees`/`CompanyStructureRules`/`DinnertimeEffects`/`PaydaySalaryDiscount` 等路径（进一步减少 player 结构的重复校验/样板）
+  - （已整改 2026-01-28）为 `PlayerStateAccess` 增加 `busy_marketers` 读取/校验 API，并用于重组相关动作（`RestructureEmployeeAction`/`SetCompanyStructureDirectAction`/`SetCompanyStructureReportAction`）等路径（进一步减少 player 结构的重复校验/样板）
   - （已整改 2026-01-28）`round_state.action_counts` 的读写改为复用 `RoundStateCounters`（进一步减少 round_state 结构的重复校验/样板）
   - （已整改 2026-01-28）`round_state.mandatory_actions_completed` 的读写改为复用 `RoundStatePlayerStringLists`（进一步减少 round_state 结构的重复校验/样板）
 - 少量“自加载创建实例”的奇怪模式：
@@ -804,7 +806,7 @@
 - `core/state/game_state.gd`：中等体量；后续可按重构优先级处理
 - `core/state/game_state_factory.gd`：（已整改 2026-01-26）logo 分配已委托 provider（`gameplay/setup/restaurant_logo_assignment.gd`），并由 `ProjectSettings.fcm/restaurant_logo_assignment_provider_path` 注入，减少 core/state 的 UI/setup 语义；中等体量；存在一定数量的 preload 依赖
 - `core/state/game_state_serialization.gd`：（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `ParseHelpers`/`RoundStateParser`（收敛 state 解析样板）；中等体量；后续可按重构优先级处理；存在一定数量的 preload 依赖
-- `core/state/player_state_access.gd`：（已新增 2026-01-27）玩家相关 Dictionary 读取/校验 helper（当前覆盖 milestones/inventory/employees/reserve_employees），用于减少 Dictionary 裸写与重复样板；（已整改 2026-01-27）prefix 兼容中文冒号（`：`），便于复用中文错误前缀
+- `core/state/player_state_access.gd`：（已新增 2026-01-27）玩家相关 Dictionary 读取/校验 helper（当前覆盖 milestones/inventory/employees/reserve_employees/busy_marketers），用于减少 Dictionary 裸写与重复样板；（已整改 2026-01-27）prefix 兼容中文冒号（`：`），便于复用中文错误前缀
 - `core/state/serialization/json_safe.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/serialization/parse_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/serialization/round_state_parser.gd`：（已整改 2026-01-27）orchestrator wrapper；required/optional 字段解析拆到 `round_state_parser_required_fields.gd`/`round_state_parser_optional_fields.gd`；玩家 id key 归一化收敛到 `round_state_player_id_keys.gd`

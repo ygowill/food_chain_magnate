@@ -45,6 +45,12 @@ static func require_reserve_employees(player: Dictionary, player_label: String, 
 		return Result.failure("%s%s.reserve_employees 缺失或类型错误（期望 Array）" % [prefix, player_label])
 	return Result.success(player["reserve_employees"])
 
+static func require_busy_marketers(player: Dictionary, player_label: String, prefix_label: String) -> Result:
+	var prefix := _prefix(prefix_label)
+	if not player.has("busy_marketers") or not (player["busy_marketers"] is Array):
+		return Result.failure("%s%s.busy_marketers 缺失或类型错误（期望 Array）" % [prefix, player_label])
+	return Result.success(player["busy_marketers"])
+
 static func require_inventory(player: Dictionary, player_label: String, prefix_label: String) -> Result:
 	var prefix := _prefix(prefix_label)
 	if not player.has("inventory") or not (player["inventory"] is Dictionary):
@@ -78,3 +84,10 @@ static func require_player_reserve_employees(state: GameState, player_id: int, p
 		return player_read
 	var player: Dictionary = player_read.value
 	return require_reserve_employees(player, "player[%d]" % player_id, prefix_label)
+
+static func require_player_busy_marketers(state: GameState, player_id: int, prefix_label: String) -> Result:
+	var player_read := require_player(state, player_id, prefix_label)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	return require_busy_marketers(player, "player[%d]" % player_id, prefix_label)

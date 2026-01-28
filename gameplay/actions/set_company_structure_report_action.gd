@@ -6,6 +6,7 @@ extends ActionExecutor
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 func _init() -> void:
 	action_id = "set_company_structure_report"
@@ -62,18 +63,24 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var player := state.get_player(command.actor)
 	if player.is_empty():
 		return Result.failure("玩家不存在: %d" % command.actor)
-	if not player.has("employees") or not (player["employees"] is Array):
-		return Result.failure("player.employees 缺失或类型错误（期望 Array）")
-	if not player.has("reserve_employees") or not (player["reserve_employees"] is Array):
-		return Result.failure("player.reserve_employees 缺失或类型错误（期望 Array）")
-	if not player.has("busy_marketers") or not (player["busy_marketers"] is Array):
-		return Result.failure("player.busy_marketers 缺失或类型错误（期望 Array）")
 	if not player.has("company_structure") or not (player["company_structure"] is Dictionary):
 		return Result.failure("player.company_structure 缺失或类型错误（期望 Dictionary）")
 
-	var employees: Array = player["employees"]
-	var reserve: Array = player["reserve_employees"]
-	var busy: Array = player["busy_marketers"]
+	var employees_read := PlayerStateAccessClass.require_employees(player, "player", "")
+	if not employees_read.ok:
+		return employees_read
+	var employees: Array = employees_read.value
+
+	var reserve_read := PlayerStateAccessClass.require_reserve_employees(player, "player", "")
+	if not reserve_read.ok:
+		return reserve_read
+	var reserve: Array = reserve_read.value
+
+	var busy_read := PlayerStateAccessClass.require_busy_marketers(player, "player", "")
+	if not busy_read.ok:
+		return busy_read
+	var busy: Array = busy_read.value
+
 	if busy.has(employee_id):
 		return Result.failure("忙碌营销员不能成为下属: %s" % employee_id)
 	if not employees.has(employee_id) and not reserve.has(employee_id):
