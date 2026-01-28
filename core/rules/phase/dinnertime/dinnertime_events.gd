@@ -8,17 +8,20 @@ static func append_sold_marketed_demand_events(
 	house_id: String,
 	house: Dictionary,
 	winner_owner: int
-) -> void:
-	assert(out_events != null, "_append_sold_marketed_demand_events: out_events 为空")
-	assert(demands != null, "_append_sold_marketed_demand_events: demands 为空")
-	assert(not house_id.is_empty(), "_append_sold_marketed_demand_events: house_id 不能为空")
-	assert(house != null, "_append_sold_marketed_demand_events: house 为空")
-	assert(house.has("house_number"), "_append_sold_marketed_demand_events: house.house_number 缺失")
+) -> Result:
+	if out_events == null:
+		return Result.failure("_append_sold_marketed_demand_events: out_events 为空")
+	if demands == null:
+		return Result.failure("_append_sold_marketed_demand_events: demands 为空")
+	if house_id.is_empty():
+		return Result.failure("_append_sold_marketed_demand_events: house_id 不能为空")
+	if house == null:
+		return Result.failure("_append_sold_marketed_demand_events: house 为空")
+	if not house.has("house_number"):
+		return Result.failure("_append_sold_marketed_demand_events: house.house_number 缺失")
 	var house_number_val = house.get("house_number", null)
-	assert(
-		house_number_val is int or house_number_val is float or house_number_val is String,
-		"_append_sold_marketed_demand_events: house.house_number 类型错误（期望 int/float/String）"
-	)
+	if not (house_number_val is int or house_number_val is float or house_number_val is String):
+		return Result.failure("_append_sold_marketed_demand_events: house.house_number 类型错误（期望 int/float/String）")
 	var house_number = house_number_val
 
 	for i in range(demands.size()):
@@ -43,3 +46,5 @@ static func append_sold_marketed_demand_events(
 			"house_number": house_number,
 			"demand_index": i,
 		})
+
+	return Result.success()

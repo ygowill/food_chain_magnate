@@ -145,6 +145,7 @@
 - 2026-01-28：减少 Dictionary 裸写（state.map.marketing_placements 第一步）：新增 `MapStateAccess`（`core/state/map_state_access.gd`）用于收敛 `state.map.marketing_placements` 的读取/校验样板，并用于 `MarketingSettlement`/`MarketingPlacementQuery`/`InitiateMarketing` 相关逻辑（validation/apply）等路径（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：减少 Dictionary 裸写（state.map.restaurants/houses 扩展）：将 core 中对 `state.map.restaurants/houses` 的读取/校验样板改为复用 `MapStateAccess.require_restaurants/require_houses`（覆盖 `RangeUtilsAir/RangeUtilsRoad`、`DinnertimeSettlement`、`SettlementHouseDemand`、`Structures`、`DrinksProcurement.PlanResolver` 等），减少重复/样板；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：收敛 `effect_ids` + `EffectRegistry` segment 过滤：新增 `EffectIdsSegmentInvoker`（`core/rules/effect_ids_segment_invoker.gd`）统一处理“按 segment 过滤 + invoke + 聚合 warnings”的样板，并用于 `DinnertimeEffects`/`PaydaySalaryDiscount`/`MarketingSettlement`（`settlement_demand_effects.gd`）等路径（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-28：继续统一 assert fail-fast（第二轮）：将 `RoundStateCounters`/`PaydaySettlement`/`DinnertimeDistance`/`DinnertimeHouseSales`/`DinnertimeEvents` 等处残留的 `assert` 改为 `Result.failure` 并在调用链中显式传播（release 下也可 fail-fast）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -336,6 +337,7 @@
   - （已整改 2026-01-28）第九步：为 Setup 子阶段补充 `DefsClass.SUB_PHASE_RESERVE_CARDS` 常量，并将 UI/gameplay/core/tests 中对 `ReserveCards` 的比较改为引用集中常量，进一步减少硬编码与拼写风险。
 - `assert` 与 `Result.failure` 混用导致“release 下校验失效”的风险：
   - （已整改 2026-01-27）以 `core/engine/phase_manager/working_flow.gd` 为例，里程碑 effects 解析与 OrderOfBusiness 排序相关的 fail-fast 已从 `assert` 改为返回 `Result.failure`，并在 base_rules/movie_stars hooks 中显式传播（release 下也生效）。
+  - （已整改 2026-01-28）进一步将 `RoundStateCounters`/`PaydaySettlement`/`DinnertimeDistance`/`DinnertimeHouseSales`/`DinnertimeEvents` 等处的 `assert` 改为 `Result.failure` 并在调用链中显式传播（release 下也生效）。
   - 仍有少量 `assert`（多为初始化/内部不变量/模块校验）；关键路径（`WorkingFlow`/`CompanyStructureRules`/`HouseNumberManager`/`DinnertimeSelection`/`TileBaking`/`PhaseManager.advance_sub_phase`/`MarketingSettlement.expire_marketing_instance`）已改为 `Result.failure` fail-fast，后续可继续统一策略。
 - 大量 `Dictionary` 结构的手工深层读取/写入：
   - 多文件重复出现 `if not (x is Dictionary)`、`get(..., null)`、`duplicate(true)` 组合，属于结构性样板代码。

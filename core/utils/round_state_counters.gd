@@ -16,7 +16,8 @@ static func get_player_count(round_state: Dictionary, counter_key: String, playe
 	if not (all_val is Dictionary):
 		return Result.failure("round_state.%s 类型错误（期望 Dictionary）" % counter_key)
 	var all: Dictionary = all_val
-	assert(not all.has(str(player_id)), "round_state.%s 不应包含字符串玩家 key: %s" % [counter_key, str(player_id)])
+	if all.has(str(player_id)):
+		return Result.failure("round_state.%s 不应包含字符串玩家 key: %s" % [counter_key, str(player_id)])
 
 	if not all.has(player_id):
 		return Result.success(0)
@@ -46,7 +47,8 @@ static func increment_player_count(
 	if not (all_val is Dictionary):
 		return Result.failure("round_state.%s 类型错误（期望 Dictionary）" % counter_key)
 	var all: Dictionary = all_val
-	assert(not all.has(str(player_id)), "round_state.%s 不应包含字符串玩家 key: %s" % [counter_key, str(player_id)])
+	if all.has(str(player_id)):
+		return Result.failure("round_state.%s 不应包含字符串玩家 key: %s" % [counter_key, str(player_id)])
 
 	var current := 0
 	if all.has(player_id):
@@ -80,7 +82,8 @@ static func get_player_key_count(
 	if not (all_val is Dictionary):
 		return Result.failure("round_state.%s 类型错误（期望 Dictionary）" % counter_key)
 	var all: Dictionary = all_val
-	assert(not all.has(str(player_id)), "round_state.%s 不应包含字符串玩家 key: %s" % [counter_key, str(player_id)])
+	if all.has(str(player_id)):
+		return Result.failure("round_state.%s 不应包含字符串玩家 key: %s" % [counter_key, str(player_id)])
 
 	if not all.has(player_id):
 		return Result.success(0)
@@ -121,7 +124,8 @@ static func increment_player_key_count(
 	if not (all_val is Dictionary):
 		return Result.failure("round_state.%s 类型错误（期望 Dictionary）" % counter_key)
 	var all: Dictionary = all_val
-	assert(not all.has(str(player_id)), "round_state.%s 不应包含字符串玩家 key: %s" % [counter_key, str(player_id)])
+	if all.has(str(player_id)):
+		return Result.failure("round_state.%s 不应包含字符串玩家 key: %s" % [counter_key, str(player_id)])
 
 	if not all.has(player_id):
 		all[player_id] = {}

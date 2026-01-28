@@ -43,7 +43,8 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 		recruit_used = state.round_state["recruit_used"]
 
 	for i in range(state.players.size()):
-		assert(not recruit_used.has(str(i)), "round_state.recruit_used 不应包含字符串玩家 key: %s" % str(i))
+		if recruit_used.has(str(i)):
+			return Result.failure("round_state.recruit_used 不应包含字符串玩家 key: %s" % str(i))
 		var player_val = state.players[i]
 		if not (player_val is Dictionary):
 			return Result.failure("PaydaySettlement: players[%d] 类型错误（期望 Dictionary）" % i)

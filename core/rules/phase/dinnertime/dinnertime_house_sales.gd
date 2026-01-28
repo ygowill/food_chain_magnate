@@ -153,8 +153,10 @@ static func apply(
 			})
 			continue
 
-		assert(winner.has("owner") and winner["owner"] is int, "内部错误: winner.owner 缺失或类型错误（期望 int）")
-		assert(winner.has("breakdown") and winner["breakdown"] is Dictionary, "内部错误: winner.breakdown 缺失或类型错误（期望 Dictionary）")
+		if not (winner.has("owner") and winner["owner"] is int):
+			return Result.failure("晚餐结算失败：内部错误（winner.owner 缺失或类型错误（期望 int））")
+		if not (winner.has("breakdown") and winner["breakdown"] is Dictionary):
+			return Result.failure("晚餐结算失败：内部错误（winner.breakdown 缺失或类型错误（期望 Dictionary））")
 		var owner_id: int = int(winner["owner"])
 		var breakdown: Dictionary = winner["breakdown"]
 		var revenue: int = int(breakdown["revenue"])
@@ -183,6 +185,7 @@ static func apply(
 			var income_val = route_result.get("income_by_player", {})
 			if income_val is Dictionary:
 				route_income_by_player = income_val as Dictionary
+
 		for pid_val in route_income_by_player.keys():
 			var pid: int = int(pid_val)
 			var amt_val = route_income_by_player.get(pid_val, 0)
@@ -193,7 +196,15 @@ static func apply(
 					total_income_before_cfo[pid] += amt
 
 		# 记录“他人卖出你营销产生的需求”事件（供模块扩展在晚餐结算后处理）
-		DinnertimeEventsClass.append_sold_marketed_demand_events(sold_marketed_demand_events, demands, house_id, house, owner_id)
+		var evt_append := DinnertimeEventsClass.append_sold_marketed_demand_events(
+			sold_marketed_demand_events,
+			demands,
+			house_id,
+			house,
+			owner_id
+		)
+		if not evt_append.ok:
+			return evt_append
 
 		var inv_apply := DinnertimeInventoryClass.apply_inventory_delta(state, owner_id, required)
 		if not inv_apply.ok:

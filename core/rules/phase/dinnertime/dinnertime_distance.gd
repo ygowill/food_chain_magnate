@@ -57,11 +57,15 @@ static func get_restaurant_to_house_distance(
 			var sp = road_graph.find_shortest_path(s, t)
 			if not sp.ok:
 				continue
-			assert(sp.value is Dictionary, "RoadGraph.find_shortest_path: value 类型错误（期望 Dictionary）")
+			if not (sp.value is Dictionary):
+				return Result.failure("RoadGraph.find_shortest_path: value 类型错误（期望 Dictionary）")
 			var sp_val: Dictionary = sp.value
-			assert(sp_val.has("distance") and sp_val["distance"] is int, "RoadGraph.find_shortest_path: 缺少/错误 distance（期望 int）")
-			assert(sp_val.has("steps") and sp_val["steps"] is int, "RoadGraph.find_shortest_path: 缺少/错误 steps（期望 int）")
-			assert(sp_val.has("path") and sp_val["path"] is Array, "RoadGraph.find_shortest_path: 缺少/错误 path（期望 Array）")
+			if not (sp_val.has("distance") and sp_val["distance"] is int):
+				return Result.failure("RoadGraph.find_shortest_path: 缺少/错误 distance（期望 int）")
+			if not (sp_val.has("steps") and sp_val["steps"] is int):
+				return Result.failure("RoadGraph.find_shortest_path: 缺少/错误 steps（期望 int）")
+			if not (sp_val.has("path") and sp_val["path"] is Array):
+				return Result.failure("RoadGraph.find_shortest_path: 缺少/错误 path（期望 Array）")
 			var d: int = int(sp_val["distance"])
 			d += int(rest_entry_cost_by_road.get(s, 0))
 			d += int(house_entry_cost_by_road.get(t, 0))
@@ -144,8 +148,10 @@ static func get_restaurant_entrance_points(state: GameState, restaurant_id: Stri
 		cells.append(c)
 
 	var bounds := MapUtils.get_footprint_bounds(cells)
-	assert(bounds.has("min") and bounds["min"] is Vector2i, "MapUtils.get_footprint_bounds: 缺少/错误 min（期望 Vector2i）")
-	assert(bounds.has("max") and bounds["max"] is Vector2i, "MapUtils.get_footprint_bounds: 缺少/错误 max（期望 Vector2i）")
+	if not (bounds.has("min") and bounds["min"] is Vector2i):
+		return Result.failure("MapUtils.get_footprint_bounds: 缺少/错误 min（期望 Vector2i）")
+	if not (bounds.has("max") and bounds["max"] is Vector2i):
+		return Result.failure("MapUtils.get_footprint_bounds: 缺少/错误 max（期望 Vector2i）")
 	var min_pos: Vector2i = bounds["min"]
 	var max_pos: Vector2i = bounds["max"]
 	return Result.success([
