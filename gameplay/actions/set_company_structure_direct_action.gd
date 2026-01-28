@@ -58,8 +58,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var player := state.get_player(command.actor)
 	if player.is_empty():
 		return Result.failure("玩家不存在: %d" % command.actor)
-	if not player.has("company_structure") or not (player["company_structure"] is Dictionary):
-		return Result.failure("player.company_structure 缺失或类型错误（期望 Dictionary）")
+	var cs_read := PlayerStateAccessClass.require_company_structure(player, "player", "")
+	if not cs_read.ok:
+		return cs_read
 
 	var employees_read := PlayerStateAccessClass.require_employees(player, "player", "")
 	if not employees_read.ok:
@@ -81,7 +82,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not employees.has(employee_id) and not reserve.has(employee_id):
 		return Result.failure("员工不属于当前玩家: %s" % employee_id)
 
-	var cs: Dictionary = player["company_structure"]
+	var cs: Dictionary = cs_read.value
 	if not cs.has("ceo_slots"):
 		return Result.failure("player.company_structure.ceo_slots 缺失")
 	var slots_val = cs.get("ceo_slots", null)

@@ -140,6 +140,7 @@
 - 2026-01-28：phase/action 字符串常量化（第九步）：为 Setup 子阶段补充 `DefsClass.SUB_PHASE_RESERVE_CARDS` 常量，并将 UI/gameplay/core/tests 中对 `ReserveCards` 的比较改为引用集中常量，进一步减少硬编码与拼写风险；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：减少 Dictionary 裸写（employees/reserve_employees 扩展）：为 `PlayerStateAccess` 补充 `player.employees`/`player.reserve_employees` 的读取/校验 API，并用于 `WorkingFlow.auto_activate_reserve_employees`/`CompanyStructureRules`/`DinnertimeEffects`/`PaydaySalaryDiscount` 等路径（继续减少 player 结构的手写校验/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：减少 Dictionary 裸写（busy_marketers 扩展）：为 `PlayerStateAccess` 补充 `player.busy_marketers` 的读取/校验 API，并用于重组相关动作（`RestructureEmployeeAction`/`SetCompanyStructureDirectAction`/`SetCompanyStructureReportAction`）减少重复校验/样板；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-28：减少 Dictionary 裸写（company_structure 扩展）：为 `PlayerStateAccess` 补充 `player.company_structure` 的读取/校验 API，并用于 `CompanyStructureRules` 与重组相关动作（`SetCompanyStructureDirectAction`/`SetCompanyStructureReportAction`/`SubmitRestructuringAction`）减少重复校验/样板；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：将 MarketingSettlement 的“营销实例到期处理”从 `void + assert` 改为返回 `Result` 并在调用链中显式传播（release 下也可 fail-fast）；同时移除 `settlement_demand_effects.gd` 中对 state/inst 的 `assert`，改为 `Result.failure`（行为不变）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
@@ -341,6 +342,7 @@
   - （已整改 2026-01-27）为 `PlayerStateAccess` 增加 `inventory` 读取/校验 API，并先在 `PaydaySalaryTokenPayment`/`CleanupSettlement`/`DinnertimeInventory` 等路径复用（继续减少 Dictionary 裸写）
   - （已整改 2026-01-28）为 `PlayerStateAccess` 增加 `employees`/`reserve_employees` 读取/校验 API，并用于 `WorkingFlow.auto_activate_reserve_employees`/`CompanyStructureRules`/`DinnertimeEffects`/`PaydaySalaryDiscount` 等路径（进一步减少 player 结构的重复校验/样板）
   - （已整改 2026-01-28）为 `PlayerStateAccess` 增加 `busy_marketers` 读取/校验 API，并用于重组相关动作（`RestructureEmployeeAction`/`SetCompanyStructureDirectAction`/`SetCompanyStructureReportAction`）等路径（进一步减少 player 结构的重复校验/样板）
+  - （已整改 2026-01-28）为 `PlayerStateAccess` 增加 `company_structure` 读取/校验 API，并用于 `CompanyStructureRules` 与重组相关动作（`SetCompanyStructureDirectAction`/`SetCompanyStructureReportAction`/`SubmitRestructuringAction`）等路径（进一步减少 player 结构的重复校验/样板）
   - （已整改 2026-01-28）`round_state.action_counts` 的读写改为复用 `RoundStateCounters`（进一步减少 round_state 结构的重复校验/样板）
   - （已整改 2026-01-28）`round_state.mandatory_actions_completed` 的读写改为复用 `RoundStatePlayerStringLists`（进一步减少 round_state 结构的重复校验/样板）
 - 少量“自加载创建实例”的奇怪模式：
@@ -809,7 +811,7 @@
 - `core/state/game_state.gd`：中等体量；后续可按重构优先级处理
 - `core/state/game_state_factory.gd`：（已整改 2026-01-26）logo 分配已委托 provider（`gameplay/setup/restaurant_logo_assignment.gd`），并由 `ProjectSettings.fcm/restaurant_logo_assignment_provider_path` 注入，减少 core/state 的 UI/setup 语义；中等体量；存在一定数量的 preload 依赖
 - `core/state/game_state_serialization.gd`：（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `ParseHelpers`/`RoundStateParser`（收敛 state 解析样板）；中等体量；后续可按重构优先级处理；存在一定数量的 preload 依赖
-- `core/state/player_state_access.gd`：（已新增 2026-01-27）玩家相关 Dictionary 读取/校验 helper（当前覆盖 milestones/inventory/employees/reserve_employees/busy_marketers），用于减少 Dictionary 裸写与重复样板；（已整改 2026-01-27）prefix 兼容中文冒号（`：`），便于复用中文错误前缀
+- `core/state/player_state_access.gd`：（已新增 2026-01-27）玩家相关 Dictionary 读取/校验 helper（当前覆盖 milestones/inventory/employees/reserve_employees/busy_marketers/company_structure），用于减少 Dictionary 裸写与重复样板；（已整改 2026-01-27）prefix 兼容中文冒号（`：`），便于复用中文错误前缀
 - `core/state/serialization/json_safe.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/serialization/parse_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/serialization/round_state_parser.gd`：（已整改 2026-01-27）orchestrator wrapper；required/optional 字段解析拆到 `round_state_parser_required_fields.gd`/`round_state_parser_optional_fields.gd`；玩家 id key 归一化收敛到 `round_state_player_id_keys.gd`

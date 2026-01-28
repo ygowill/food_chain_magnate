@@ -30,9 +30,9 @@ static func enforce_capacity(player: Dictionary) -> Result:
 	var reserve_read := PlayerStateAccessClass.require_reserve_employees(player, "player", "CompanyStructureRules.enforce_capacity")
 	if not reserve_read.ok:
 		return reserve_read
-	var company_structure_val = player.get("company_structure", null)
-	if not (company_structure_val is Dictionary):
-		return Result.failure("CompanyStructureRules.enforce_capacity: player.company_structure 缺失或类型错误（期望 Dictionary）")
+	var company_structure_read := PlayerStateAccessClass.require_company_structure(player, "player", "CompanyStructureRules.enforce_capacity")
+	if not company_structure_read.ok:
+		return company_structure_read
 
 	var employees_in: Array = employees_read.value
 	var reserve_in: Array = reserve_read.value
@@ -93,10 +93,10 @@ static func _compute_usage(player: Dictionary) -> Result:
 	return _compute_usage_with_employees(player, employees)
 
 static func _compute_usage_with_employees(player: Dictionary, employees: Array) -> Result:
-	var company_structure_val = player.get("company_structure", null)
-	if not (company_structure_val is Dictionary):
-		return Result.failure("CompanyStructureRules: player.company_structure 缺失或类型错误（期望 Dictionary）")
-	var company_structure: Dictionary = company_structure_val
+	var company_structure_read := PlayerStateAccessClass.require_company_structure(player, "player", "CompanyStructureRules")
+	if not company_structure_read.ok:
+		return company_structure_read
+	var company_structure: Dictionary = company_structure_read.value
 
 	var ceo_slots_read := IntValueParseHelpersClass.parse_non_negative_int_value(
 		company_structure.get("ceo_slots", null),

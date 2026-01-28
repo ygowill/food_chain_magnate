@@ -7,6 +7,7 @@ extends ActionExecutor
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 var phase_manager: PhaseManager = null
 
@@ -49,9 +50,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("player.employees 缺失或类型错误（期望 Array）")
 	if not player.has("reserve_employees") or not (player["reserve_employees"] is Array):
 		return Result.failure("player.reserve_employees 缺失或类型错误（期望 Array）")
-	if not player.has("company_structure") or not (player["company_structure"] is Dictionary):
-		return Result.failure("player.company_structure 缺失或类型错误（期望 Dictionary）")
-	var cs: Dictionary = player["company_structure"]
+	var cs_read := PlayerStateAccessClass.require_company_structure(player, "player", "")
+	if not cs_read.ok:
+		return cs_read
+	var cs: Dictionary = cs_read.value
 	if not cs.has("ceo_slots"):
 		return Result.failure("player.company_structure.ceo_slots 缺失")
 	var slots_val = cs.get("ceo_slots", null)
