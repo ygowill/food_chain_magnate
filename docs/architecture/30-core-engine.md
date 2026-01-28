@@ -1,166 +1,62 @@
 # 模块：core/engine（GameEngine：命令执行与可回放引擎）
 
-## 系统概述 (System Overview)
+`GameEngine` 是系统的“唯一写入口”。它保证：
 
-`GameEngine` 是系统的“唯一写入口”：所有规则变更都必须通过 `execute_command(Command)` 产生新的 `GameState`。它负责命令历史、线性时间线（rewind 时丢弃未来分支）、校验点、存档与回放一致性。它同时承担引擎级不变量校验与事件发射，确保“状态可验证、结果可复现”。
+- 所有状态变化都来自 `Command`（`execute_command`）
+- 命令历史可重放（`full_replay`）与可回退（`rewind_to_command`）
+- 存档可恢复（`create_archive`/`load_from_archive`）
+- 可通过 `GameState.compute_hash()` 验证确定性
 
-## 静态结构图 (PlantUML)
+代码入口：`core/engine/game_engine.gd`
 
-```plantuml
-@startuml
-title core/engine：GameEngine 内部组成
+## 代码拆分（按文件职责）
 
-hide empty members
-skinparam packageStyle rectangle
+引擎实现被拆分到 `core/engine/game_engine/*`：
 
-package "core/engine" {
-  class GameEngine {
-    +initialize(player_count, seed): Result
-    +execute_command(cmd, is_replay): Result
-    +rewind_to_command(target_index): Result
-    +full_replay(): Result
-    +create_archive(): Result
-    +save_to_file(path): Result
-    +load_from_archive(archive): Result
-    +verify_checkpoints(): Result
-    +get_state(): GameState
-    --
-    -command_history: Array
-    -checkpoints: Array
-    -current_command_index: int
-    -checkpoint_interval: int
-    -validate_invariants: bool
-  }
-}
+- 初始化：`core/engine/game_engine/initializer.gd`
+- 执行：`core/engine/game_engine/command_runner.gd`
+- 回退/重放：`core/engine/game_engine/rewind_ops.gd`
+- 校验点：`core/engine/game_engine/checkpoints.gd`
+- 存档：`core/engine/game_engine/archive.gd` + `core/engine/game_engine/loader.gd`
+- 不变量：`core/engine/game_engine/invariants.gd`
+- 动作装配：`core/engine/game_engine/action_setup.gd` + `core/engine/game_engine/action_wiring.gd`
+- 模块系统 V2：`core/engine/game_engine/modules_v2.gd`
 
-package "core/engine/game_engine" {
-  class Checkpoints {
-    +create_checkpoint(checkpoints, state, rng, index)
-    +find_nearest_checkpoint(checkpoints, target_index)
-    +verify_checkpoints(checkpoints): Result
-  }
-  class Replay {
-    +rewind_to_command(history, checkpoints, registry, target_index): Result
-    +full_replay(history, checkpoints, registry): Result
-  }
-  class Archive {
-    +create_archive(state, rng, checkpoints, history, current_index): Result
-    +save_archive_to_file(archive, path): Result
-    +load_archive_from_file(path): Result
-  }
-  class Invariants {
-    +check_invariants(state, initial_total_cash, initial_employee_totals): Result
-    +compute_total_cash(state): int
-  }
-  class Diagnostics {
-    +dump(state, history, current_index, checkpoints): String
-    +get_status(state, history, current_index, checkpoints): Dictionary
-  }
-  class ActionSetup {
-    +build_registry(phase_manager, piece_registry): ActionRegistry
-  }
-}
+相关补充文档：
 
-package "core/actions" {
-  class ActionRegistry
-}
-package "core/state" {
-  class GameState
-}
-package "core/random" {
-  class RandomManager
-}
-package "core/data" {
-  class GameData
-}
-package "autoload" {
-  class EventBus
-}
-package "core/types" {
-  class Command
-  class Result
-}
+- 自动推进（AutoAdvance）：`docs/architecture/30a-core-engine-auto-advance.md`
+- 存档格式（archive）：`docs/architecture/30b-core-engine-archive.md`
 
-GameEngine o--> GameState
-GameEngine o--> ActionRegistry
-GameEngine o--> RandomManager
-GameEngine ..> GameData : load_default()
+## 时间线语义（线性历史）
 
-GameEngine ..> ActionSetup : build_registry()
-GameEngine ..> Checkpoints
-GameEngine ..> Replay
-GameEngine ..> Archive
-GameEngine ..> Invariants
-GameEngine ..> Diagnostics
-GameEngine ..> EventBus : emit_event()
-@enduml
-```
+引擎维护：
 
-## 核心流程图 (PlantUML Sequence)
+- `command_history`：事实来源（顺序命令列表）
+- `current_command_index`：当前“时间线指针”
+- `checkpoints`：加速回放/回退的快照点
 
-典型场景：**存档加载（load_from_file -> load_from_archive）并重放命令恢复当前指针**。
+当你曾 `rewind_to_command(i)` 回到历史位置，再执行新命令时，引擎会：
 
-```plantuml
-@startuml
-title GameEngine 典型场景：加载存档并回放命令
+- 截断 `i` 之后的未来命令与未来 checkpoint（`truncate_future_history`）
+- 从而保持“单分支线性时间线”
 
-participant "UI/Tool" as Caller
-participant "GameEngine" as GE
-participant "Archive" as AR
-participant "GameData" as GD
-participant "ActionSetup" as AS
-participant "GameState" as GS
-participant "RandomManager" as RNG
+## 事件输出（可注入 sink）
 
-Caller -> GE : load_from_file(path)
-GE -> AR : load_archive_from_file(path)
-AR --> GE : archive(dict)
+`GameEngine` 提供：
 
-GE -> GD : load_default()
-GD --> GE : GameData
-GE -> AS : build_registry(phase_manager, game_data.pieces)
-AS --> GE : ActionRegistry
+- `set_event_sink(sink)`
+- `emit_event(type, data)`
 
-GE -> GS : from_dict(archive.initial_state)
-GS --> GE : restored state
-GE -> RNG : from_dict(archive.rng)\n(fast_forward call_count)
-RNG --> GE : restored rng
+默认情况下会转发到 autoload 的 `EventBus`（`autoload/event_bus.gd`）。测试/工具场景可注入替代 sink，以避免 Node 依赖或实现“只记录历史不触发订阅者”的行为。
 
-loop for each archive.commands
-  GE -> GE : execute_command(cmd, replay)\n(timestamp must exist)
-end
+## 与模块系统 V2 的关系
 
-opt current_index not last
-  GE -> GE : rewind_to_command(current_index)
-end
-GE --> Caller : Result(state)
-@enduml
-```
+初始化新局时（`initializer.gd`）会：
 
-## 状态机/逻辑流 (Mermaid)
+1. `apply_modules_v2(enabled_modules_v2, modules_v2_base_dir)`
+2. 使用装配出的 `ContentCatalog` 构建 `GameData.from_catalog(...)`
+3. 配置各类 registry（员工/里程碑/产品/营销、地图 tiles/pieces、结算/效果等）
+4. 把 `RulesetV2` 的 settlement/effect registry 注入到 `PhaseManager`
 
-引擎层的“状态机”更接近于 **时间线指针**（`current_command_index`）与 **校验点** 的协作，而非游戏阶段（阶段由 `PhaseManager` 管理）。
+详见：`docs/architecture/60-modules-v2.md`
 
-```mermaid
-stateDiagram-v2
-  [*] --> CleanTimeline
-  CleanTimeline --> CleanTimeline : execute_command / append history / maybe checkpoint
-  CleanTimeline --> Rewound : rewind_to_command(i) (state restored)
-  Rewound --> CleanTimeline : execute_command(non-replay) / truncate future history
-  Rewound --> Rewound : rewind_to_command(j)
-```
-
-## 设计模式与要点 (Design Insights)
-
-- **命令模式 + 快照（checkpoint）**：以 `Command` 序列作为事实来源，辅以 `checkpoint.state_dict` 作为加速点。
-- **Fail Fast**：存档 schema_version 严格校验；回放命令必须带 `timestamp`，避免“兼容旧数据导致非确定性”。
-
-维护要点：
-
-1. `ActionExecutor.compute_new_state()` 必须是纯函数（只基于输入 state/cmd 得到新 state）；否则回放/倒带会产生分叉差异。
-2. 任何“非确定性输入”（时间、随机、外部 IO）必须被隔离：存档只允许依赖 `GameState` + `RandomManager` 可序列化状态。
-3. 不变量（`Invariants.check_invariants`）失败时会回滚状态并弹出命令历史尾项；新增规则时需同步维护不变量（或明确关闭/分级）。
-
-潜在耦合风险：
-
-- `Checkpoints.create_checkpoint` 里写入了 `Time.get_unix_time_from_system()`（仅用于展示但会进入 checkpoint 字典）；若未来把 checkpoint 完整序列化到存档，需避免把非确定性字段当作比对依据。

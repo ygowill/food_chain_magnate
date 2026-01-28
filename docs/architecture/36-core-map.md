@@ -1,105 +1,44 @@
-# 模块：core/map（地图系统：烘焙、放置校验与缓存）
+# 模块：core/map（地图生成/烘焙/运行时结构/放置校验/道路缓存）
 
-## 系统概述 (System Overview)
+地图系统把“静态地图定义/板块定义/棋子定义”转成 `GameState.map` 的运行时结构，并提供放置校验与道路图缓存。
 
-core/map 管理地图从静态定义到运行时格子数据的构建（MapBaker），以及建筑放置的规则校验（PlacementValidator）。它还包含道路图等运行时缓存（RoadGraph），用于距离/可达性等计算加速。该模块是“空间规则”的唯一可信来源，动作层只应调用其公开 API，而不应自行复制校验逻辑。
+## 输入：内容来自模块系统 V2
 
-## 静态结构图 (PlantUML)
+地图相关内容通过 V2 装配进入 registry：
 
-```plantuml
-@startuml
-title core/map：MapBaker / PlacementValidator / RoadGraph
+- tile：`core/map/tile_registry.gd`（`TileDef`）
+- piece：`core/map/piece_registry.gd`（`PieceDef`）
+- map option：`GameData.maps`（`MapOptionDef`，由 `GameData.from_catalog(...)` 聚合）
 
-hide empty members
-skinparam packageStyle rectangle
+地图生成规则由模块注册到：
 
-package "core/map" {
-  class MapBaker {
-    {static} +bake(map_def, tiles, pieces): Result
-  }
-  class MapDef
-  class TileDef
-  class PieceDef {
-    +allowed_rotations
-    +must_touch_road: bool
-    +get_world_cells(anchor, rotation): Array
-    +get_world_entrance_points(anchor, rotation): Array
-  }
-  class PlacementValidator {
-    {static} +validate_placement(map_ctx, piece_id, anchor, rotation, registry, context): Result
-    {static} +validate_restaurant_placement(map_ctx, anchor, rotation, registry, player_id, is_initial): Result
-    {static} +validate_house_placement(map_ctx, anchor, rotation, registry, player_id): Result
-  }
-  class RoadGraph
-  class MapUtils
-}
+- `core/rules/map_generation_registry.gd`
 
-package "core/state" {
-  class GameState {
-    +initialize_map(baked_data)
-    +invalidate_road_graph()
-  }
-}
-package "core/engine" {
-  class GameEngine
-}
-package "gameplay/actions" {
-  class PlaceRestaurantAction
-}
+## Map 生成与烘焙
 
-GameState ..> RoadGraph : runtime cache
-PlaceRestaurantAction ..> PlacementValidator : validate_*()
-GameEngine ..> MapBaker : bake(map_def, tiles, pieces)
-GameEngine ..> GameState : initialize_map(baked_data)
-@enduml
-```
+- MapOption/MapDef：
+  - `core/map/map_option_def.gd`
+  - `core/map/map_def.gd`
+- 烘焙入口：
+  - `core/map/map_baker/bake.gd`：`MapBaker.bake(map_def, tile_registry, piece_registry)`
+- 写入 GameState：
+  - `core/map/map_runtime/baked_map.gd`：`apply_baked_map(state, baked_data)`（同时初始化 map 核心 key 并 invalidate RoadGraph）
 
-## 核心流程图 (PlantUML Sequence)
+## 放置校验（Placement Validator）
 
-典型场景：**放置餐厅前的校验链**（边界、格子可用、道路邻接、入口道路可达等）。
+放置校验被拆分到 `core/map/placement_validator/*`：
 
-```plantuml
-@startuml
-title core/map 典型场景：validate_restaurant_placement
+- 通用放置入口：`core/map/placement_validator/placement.gd`
+- 餐厅放置：`core/map/placement_validator/restaurant_placement.gd`
+- 多个小校验器：`core/map/placement_validator/validators.gd`
+- 访问器：`core/map/placement_validator/map_access.gd`
 
-participant "PlaceRestaurantAction" as ACT
-participant "PlacementValidator" as PV
-participant "PieceDef(restaurant)" as PD
-participant "MapUtils" as MU
+动作层（`gameplay/actions/*`）应调用这些校验函数，而不是复制校验逻辑。
 
-ACT -> PV : validate_restaurant_placement(map_ctx, anchor, rotation, registry, player_id, is_initial)
-PV -> PD : is_rotation_allowed(rotation)
-PV -> PD : get_world_cells(anchor, rotation)
-PV -> PV : _validate_bounds/_validate_cells_empty/\n_validate_not_blocked/_validate_no_structure_overlap
-PV -> PD : get_world_entrance_points(anchor, rotation)
-PV -> MU : is_valid_pos(neighbor, grid_size)
-PV --> ACT : Result(ok, footprint_cells, entrance_pos)
-@enduml
-```
+## 道路图与缓存失效
 
-## 状态机/逻辑流 (Mermaid)
+- RoadGraph：`core/map/road_graph.gd` + `core/map/road_graph/*`
+- 缓存容器：`core/map/map_runtime/road_graph_cache.gd`
 
-地图模块的关键“逻辑流”是：**地图烘焙 -> 写入 GameState.map -> 动作写入结构 -> 使道路缓存失效**。
+约定：任何修改地图结构（放置/移动/添加花园/生成棋盘外组件）都必须 invalidate road graph，否则距离/路径计算可能错误。
 
-```mermaid
-flowchart TD
-  A[GameData maps/tiles/pieces] --> B[MapBaker.bake]
-  B --> C[GameState.initialize_map<br/>(write GameState.map)]
-  C --> D[Actions write map structures<br/>(place/move/add_garden)]
-  D --> E[GameState.invalidate_road_graph]
-```
-
-## 设计模式与要点 (Design Insights)
-
-- **管道式校验链**：PlacementValidator 把放置规则拆成可组合的校验函数，便于扩展与定位错误。
-- **缓存失效策略**：RoadGraph 等派生结构按需构建，写入地图后必须显式失效。
-
-维护要点：
-
-1. 放置相关规则（是否必须邻接道路、占地/入口定义）应该由 `PieceDef` 和 `PlacementValidator` 表达；动作层只负责“业务约束 + 写入结果”。
-2. `map_ctx` 以 Dictionary 传递，字段缺失/类型错误可能在运行期才暴露；建议在校验入口处补齐关键字段的 Fail Fast 检查。
-3. 初始放置限制（如“每板块只能有一个餐厅入口”）属于地图规则，应持续保持在 map 模块内，避免在多个动作里重复实现。
-
-潜在耦合风险：
-
-- map 数据结构同样是嵌套 Dictionary/Array，动作对其键名强耦合；地图 schema 演进时建议先定义“兼容层/迁移策略”，否则会牵一发而动全身。

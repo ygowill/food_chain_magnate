@@ -2,52 +2,54 @@
 
 目的：把“模块如何扩展状态结构”的隐式约定显式化，降低跨模块耦合与存档/读档后的类型漂移风险。
 
-## 设计原则
+## 总原则
 
-- **core-owned vs module-owned**：core 定义的 key 属于稳定 ABI；模块不应覆盖/重解释。
-- **模块不得窥探其他模块私有结构**：模块 A 不能通过 `state.map[...] / state.round_state[...]` 直接读取模块 B 的字段来做规则推断；应改为 core-owned 的 registry/helper 查询（见下方）。
+- **core-owned vs module-owned**：core 定义的 key 属于稳定 ABI；模块不得覆盖/重解释。
+- **模块不得窥探其他模块私有结构**：跨模块协作应通过 core-owned registry/provider（例如 PlacementConflictRegistry），而不是读取别的模块私有 key。
 - **命名规则**：
-	- module-owned：必须以 `module_id` 为前缀（例如 `rural_marketeers_offramps`、`lobbyists_extra_tile_pending`）
-	- core-owned/shared：使用无前缀的稳定 key（例如 `cells`、`pending_phase_actions`）
-- **存档一致性**：运行时如果使用 “int key Dictionary”（如 `{player_id(int) -> ...}`），则 JSON 存档会变成数字字符串 key（`"0"`），读档阶段必须做归一化。
+  - module-owned：建议以 `module_id` 前缀命名（例如 `rural_marketeers_offramps`）
+  - core-owned/shared：使用无前缀稳定 key
+- **JSON 存档一致性**：若使用“int key Dictionary”（如 `{player_id(int) -> ...}`），JSON 会把 key 变为字符串（`"0"`）。读档阶段必须做归一化（见 `core/state/state_schema_registry.gd`）。
 
-## key 分类与约束
+## core-owned：state.map（禁止模块覆盖）
 
-### core-owned（禁止模块覆盖）
+地图运行时结构由 `core/map/map_runtime/*` 写入与维护，核心 key 包括：
 
-`state.map`（基础地图结构，示例）：
-- `cells`、`grid_size`、`tile_grid_size`
-- `houses`、`restaurants`
-- `marketing_placements`、`tile_placements`
-- `external_cells`、`external_tile_placements`（模块扩展点：棋盘外结构/板块）
-- `tile_supply_remaining`
+- 结构与尺寸：`cells`、`grid_size`、`tile_grid_size`
+- 地图来源：`tile_placements`、`external_tile_placements`
+- 建筑：`houses`、`restaurants`
+- 营销占位：`marketing_placements`
+- 进货点：`drink_sources`
+- 距离加速：`boundary_index`
+- id 生成：`next_house_number`、`next_restaurant_id`
+- 棋盘外组件容器：`external_cells`
+- 供给（规则/UI）：`house_number_supply_remaining`、`garden_supply_remaining`
 
-`state.round_state`（基础回合结构，示例）：
-- `mandatory_actions_completed`、`actions_this_round`、`action_counts`、`sub_phase_passed`
-- `pending_phase_actions`（shared，总线：需明确写入/清理职责）
+> 说明：module 可以往 `external_cells/external_tile_placements` 写“棋盘外结构”，但不得改变 core-owned 语义与类型约束。
 
-### shared（允许多模块读写，但必须遵守写入规则）
+## core-owned：state.round_state（禁止模块覆盖）
 
-#### `global_effect_ids`
+基础回合态 key（部分为可选，但语义与类型固定）：
 
-用途：在晚餐等阶段作为“全局 effect 总线”供 EffectRegistry 调用。
+- 强制动作：`mandatory_actions_completed`
+- 计数：`actions_this_round`、`action_counts`
+- 子阶段跳过：`sub_phase_passed`
+- 阶段门禁：`pending_phase_actions`（见 `core/utils/round_state_pending_phase_actions.gd`）
+- 顺序覆盖（由 PhaseManager/RulesetV2 写入/读取）：
+  - `phase_order`（Array[String]）
+  - `working_sub_phase_order`（Array[String]，允许包含自定义子阶段名）
+  - `cleanup_sub_phase_order`（Array[String]）
+  - `phase_sub_phase_orders`（Dictionary：phase_name -> Array[String]）
+- 规则辅助字段（示例）：`marketing_rounds`
 
-存储分层（推荐约定）：
-- `state.map.global_effect_ids`：**永久性/全局**效果（跨回合持续）
-- `state.round_state.global_effect_ids`：**回合性**效果（仅本回合有效；由写入方负责清理/重置）
-
-读写规范：
-- 禁止模块直接写裸数组；统一使用 `core/rules/global_effect_list.gd`（`GlobalEffectList.add_to_map/add_to_round_state/get_all_effect_ids`）。
-- `effect_id` 必须为非空字符串；默认不允许重复（helper 会去重添加；读取阶段若发现重复会 warning）。
-
-### module-owned（仅模块自己负责结构与版本）
+## module-owned：仅模块自己负责 schema/version
 
 模块自有 key 由模块维护 schema/version；其他模块禁止直接读取其内部结构。
 
-跨模块需要“查询/互斥/占用”时：
-- 模块注册 provider 到 core-owned registry
-- 其他模块只调用 core API 查询，不依赖字段结构
+跨模块“查询/互斥/占用”应注册 provider 到 core-owned registry，再由其他模块调用 core API 查询。
 
-目前已落地的例子：
-- `PlacementConflictRegistry`（`core/rules/placement_conflict_registry.gd`）：提供“某 world_pos 是否存在外部冲突”的查询面；例如 rural_marketeers 提供 offramp connection cell 冲突。
+已落地例子：
+
+- `core/rules/placement_conflict_registry.gd`：模块提供“world_pos 是否存在外部冲突”查询面，避免互相窥探 state key
+- `core/state/state_schema_registry.gd`：模块注册“int-key Dictionary 的归一化路径”，避免 JSON 字符串 key 漂移
 

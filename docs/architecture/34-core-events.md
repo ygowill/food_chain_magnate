@@ -1,86 +1,41 @@
-# 模块：core/events（EventBus：事件发布订阅）
+# 模块：EventBus（事件发布订阅 + 事件历史）
 
-## 系统概述 (System Overview)
+`EventBus` 位于 autoload（`autoload/event_bus.gd`），用于把引擎/规则变化通知 UI 与调试系统，并提供可检索的事件历史。
 
-`EventBus` 提供全局事件订阅/发射与事件历史记录，用于把核心逻辑的变化通知给 UI/调试系统。它通过事件类型字符串（如 `PHASE_CHANGED`、`COMMAND_EXECUTED`）来组织消息，并支持订阅优先级。它的核心价值在于降低显式依赖，但也会引入隐式调用链。
+## API（以当前实现为准）
 
-## 静态结构图 (PlantUML)
+- 订阅：
+  - `subscribe(event_type: String, callback: Callable, priority := 100, source := "")`
+  - `unsubscribe(event_type, callback) -> bool`
+  - `unsubscribe_all_from_source(source) -> int`
+- 发射：
+  - `emit_event(event_type, data := {})`
+  - `emit_events(events: Array[Dictionary])`
+- 历史：
+  - `get_history(count := -1) -> Array[Dictionary]`
+  - `get_history_by_type(event_type, count := -1)`
+  - `clear_history()`
+  - `clear_history_and_reset_sequence()`：用于“重建历史”
+  - `record_event(event_type, data := {})`：只写历史，不触发订阅者
 
-```plantuml
-@startuml
-title core/events：EventBus
+事件结构（简化）：
 
-hide empty members
-skinparam packageStyle rectangle
-
-package "autoload" {
-  class EventBus <<Node>> {
-    +subscribe(event_type, callback, priority, source)
-    +unsubscribe(event_type, callback): bool
-    +emit_event(event_type, data)
-    +get_history(count): Array
-    +clear_history()
-  }
-}
-
-package "core/engine" {
-  class GameEngine
-}
-package "ui" {
-  class GameScene
-}
-package "tools" {
-  class ReplayRunner
-}
-
-GameEngine ..> EventBus : emit_event()
-GameScene ..> EventBus : subscribe()\n(optional)
-ReplayRunner ..> EventBus : (optional) read history
-@enduml
+```text
+{ type, data, sequence, timestamp, real_time_msec? }
 ```
 
-## 核心流程图 (PlantUML Sequence)
+其中 `timestamp == sequence`（确定性），`real_time_msec` 仅在 debug_mode 下用于展示。
 
-典型场景：**GameEngine 执行命令后发射事件，UI/系统订阅者接收**。
+## 与 GameEngine 的关系
 
-```plantuml
-@startuml
-title EventBus 典型场景：emit_event -> subscribers
+`GameEngine.emit_event(...)` 默认转发到 autoload 的 `EventBus`，但引擎也支持 `set_event_sink(...)` 注入替代 sink。
 
-participant "GameEngine" as GE
-participant "EventBus" as EB
-participant "Subscriber A" as A
-participant "Subscriber B" as B
+用途：
 
-GE -> EB : emit_event("command_executed", data)
-EB -> EB : record history (optional)
-EB -> A : callback(event)
-EB -> B : callback(event)
-@enduml
-```
+- headless/测试：避免依赖 Node
+- rewind/replay：用 `record_event` 重建事件历史而不触发运行期副作用
 
-## 状态机/逻辑流 (Mermaid)
+## 备注：core/events 目录
 
-事件总线的状态主要是“历史记录开关/容量”与“序号递增”，不涉及复杂状态切换。
+当前仓库仍存在 `core/events/` 目录，但并未作为事件系统实现入口（事件总线在 autoload 的 `EventBus`）。
 
-```mermaid
-stateDiagram-v2
-  [*] --> Enabled
-  Enabled --> Disabled : set_history_enabled(false)
-  Disabled --> Enabled : set_history_enabled(true)
-```
-
-## 设计模式与要点 (Design Insights)
-
-- **观察者模式**：订阅者通过回调接收事件，按优先级顺序执行。
-- **事件历史**：用于调试与一致性排查（例如比较回放事件序列）。
-
-维护要点：
-
-1. 事件 payload 建议保持“可序列化、弱依赖 UI”，避免传 Node 引用或非确定性数据进入事件。
-2. 优先级越多越难排查，建议只在确实存在顺序依赖时才使用不同 priority。
-3. 如果事件回调内执行了 `execute_command`，可能形成重入/连锁调用；此类设计需谨慎并明确约束。
-
-潜在耦合风险：
-
-- EventBus 作为全局通道，容易成为“什么都往里塞”的依赖黑洞；长期建议建立事件命名规范与发布边界（哪些事件由 core 发、哪些由 UI 发）。

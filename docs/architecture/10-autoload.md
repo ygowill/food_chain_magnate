@@ -1,110 +1,59 @@
 # 模块：autoload（全局单例）
 
-## 系统概述 (System Overview)
+autoload 目录提供跨场景可用的单例节点（见 `project.godot` 的 `[autoload]`）。它们是“粘合层”：UI 方便，但也会提高耦合度，因此 core 侧尽量只通过可注入接口使用（例如 `GameEngine.event_sink`）。
 
-autoload 模块提供跨场景可用的全局状态与服务入口（配置、场景切换、事件总线）。它承担“跨层粘合剂”的角色，使 UI 与 core 逻辑不必显式传递对象引用即可协作。该模块的使用方式会直接影响系统耦合度与可测试性。
+本项目实际包含：
 
-## 静态结构图 (PlantUML)
+- `autoload/globals.gd`：`Globals`（配置、玩家资料、运行时引擎引用）
+- `autoload/scene_manager.gd`：`SceneManager`（场景切换 + loading overlay）
+- `autoload/event_bus.gd`：`EventBus`（事件发布/订阅 + 历史）
+- `autoload/debug_flags.gd`：`DebugFlags`（调试开关）
 
-```plantuml
-@startuml
-title autoload：Globals / SceneManager / EventBus
+## Globals：跨场景配置与“当前对局上下文”
 
-hide empty members
-skinparam packageStyle rectangle
+代码：`autoload/globals.gd`
 
-package "autoload" {
-  class Globals <<Node>> {
-    +player_count: int
-    +random_seed: int
-    +current_game_engine
-    +is_game_active: bool
-    +reset_game_config()
-    +generate_seed(): int
-  }
+关键字段（以当前代码为准）：
 
-  class SceneManager <<Node>> {
-    +goto_scene(path, push_to_stack)
-    +go_back(): bool
-    +goto_main_menu()
-    +goto_game_setup()
-    +goto_game()
-  }
+- 新局配置：`player_count`、`random_seed`
+- 模块系统 V2：`enabled_modules_v2`、`modules_v2_base_dir`
+- UI/玩家资料：`player_names`、`player_color_indices`、`player_restaurant_logo_choices`、`ui_scale`、`font_scale` 等
+- 运行时：`current_game_engine`、`is_game_active`
+- 回放入口：`pending_replay_file_path`（主菜单选择回放文件后，进入 Game 场景自动打开回放播放器）
 
-  class EventBus <<Node>> {
-    +subscribe(event_type, callback, priority, source)
-    +emit_event(event_type, data)
-    +get_history(count): Array
-  }
-}
+## SceneManager：场景切换与加载遮罩
 
-package "ui" {
-  class GameSetupScene
-  class GameScene
-}
+代码：`autoload/scene_manager.gd`
 
-package "core/engine" {
-  class GameEngine
-}
+职责：
 
-GameSetupScene ..> Globals : read/write config
-GameSetupScene ..> SceneManager : goto_game()
+- 统一场景跳转：`goto_scene(...)`/`goto_main_menu()`/`goto_game_setup()`/`goto_game()`
+- 维护 scene 栈：`go_back()`（用于“返回上一页”）
+- 加载遮罩：`show_loading(...)`/`hide_loading()`（避免初始化/读档卡顿的观感）
 
-GameScene ..> Globals : store engine ref
-GameScene ..> GameEngine : create/execute
+## EventBus：事件总线与“事件历史”
 
-GameEngine ..> EventBus : emit_event()
-@enduml
-```
+代码：`autoload/event_bus.gd`
 
-## 核心流程图 (PlantUML Sequence)
+特性：
 
-典型场景：**从设置界面进入游戏**（写入 Globals，再由 SceneManager 切场景）。
+- 订阅：`subscribe(event_type, callback, priority=100, source="")`
+- 发射：`emit_event(event_type, data={})`
+- **确定性序号**：事件自带 `sequence/timestamp`，用于回放/日志对齐（timestamp=sequence）
+- 历史：`get_history(...)`/`clear_history()`/`clear_history_and_reset_sequence()`
+- 回退/重放支持：`record_event(...)`（只写历史，不触发订阅者副作用）
+- 事件类型常量：`EventBus.EventType.*`（字符串）
 
-```plantuml
-@startuml
-title autoload 典型场景：GameSetup -> Game
+> 约定：core 侧不直接依赖 `EventBus`，而是调用 `GameEngine.emit_event(...)`；引擎默认会把事件转发到 autoload 的 `EventBus`，但也允许通过 `GameEngine.set_event_sink(...)` 注入替代实现（用于 headless/测试/日志重建）。
 
-actor Player as P
-participant "UI(GameSetup)" as Setup
-participant "Globals" as G
-participant "SceneManager" as SM
-participant "UI(GameScene)" as Game
+## DebugFlags：调试与校验开关
 
-P -> Setup : 设置玩家数/种子\n点击开始
-Setup -> G : player_count = N
-alt 未输入种子
-  Setup -> G : generate_seed()
-else 指定种子
-  Setup -> G : random_seed = seed
-end
-Setup -> SM : goto_game()
-SM -> Game : instantiate Game.tscn
-@enduml
-```
+代码：`autoload/debug_flags.gd`
 
-## 状态机/逻辑流 (Mermaid)
+常用字段：
 
-autoload 本身不定义复杂状态机；其状态更多表现为 **Globals 中的运行时标志**（是否在对局中、当前引擎引用等）。
+- `verbose_logging`：更详细的日志
+- `validate_invariants`：每条命令后校验不变量（现金/员工守恒等）
+- `force_execute_commands`：跳过大部分校验（仅 DebugPanel 用，风险很高）
+- `show_console`：UI 控制台/调试面板显隐
 
-```mermaid
-stateDiagram-v2
-  [*] --> Idle
-  Idle --> InGame : Globals.current_game_engine set / Globals.is_game_active=true
-  InGame --> Idle : Globals.reset_game_config()
-```
-
-## 设计模式与要点 (Design Insights)
-
-- **Service Locator（服务定位器）**：autoload 等价于全局服务容器，使用方便但天然增加耦合。
-- **事件总线（EventBus）**：通过发布订阅降低显式依赖，但也会引入“隐式调用链”。
-
-维护要点：
-
-1. `Globals` 中的 `current_game_engine` 是跨层强引用，若未来存在“多局并行/观战/回放实例化”等需求，需要把“当前对局上下文”从全局拆出来。
-2. `SceneManager` 负责场景栈与切换时机（`call_deferred`），UI 状态初始化要假设“下一帧才完成切换”。
-3. `EventBus` 默认记录历史（用于调试/回放比对），若出现性能/内存问题可从 `_max_history_size` 与 `_history_enabled` 入手。
-
-潜在耦合风险：
-
-- 逻辑层（`core/engine/game_engine.gd`）直接调用 `EventBus.emit_event`，使 core 不再是严格“纯逻辑库”；若需要 headless/服务器裁决，建议把“事件输出”改为可注入回调或接口。

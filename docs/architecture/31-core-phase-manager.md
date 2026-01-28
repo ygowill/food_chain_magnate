@@ -1,148 +1,54 @@
-# 模块：core/engine/PhaseManager（阶段状态机与钩子）
+# 模块：core/engine/PhaseManager（阶段/子阶段推进 + 结算触发 + Hooks）
 
-## 系统概述 (System Overview)
+`PhaseManager` 负责“主流程时间轴”的编排（阶段与子阶段推进），并在阶段边界触发结算与 hooks。
 
-`PhaseManager` 定义并驱动游戏主流程的阶段与 Working 子阶段，是“规则编排的时间轴”。它将跨阶段结算（Payday/Marketing/Dinnertime/Cleanup 等）集中到阶段切换点执行，并提供 Hook 机制作为可扩展入口。它的正确性直接决定回合推进、强制动作约束与结算一致性。
+代码入口：`core/engine/phase_manager.gd`
 
-> 说明：当前实现仍通过 `preload()` 直接耦合到具体结算脚本；模块系统 V2 已确定将改为 **SettlementRegistry 由模块注册**，PhaseManager 仅负责编排调用（见 `docs/architecture/60-modules-v2.md`）。
+相关实现文件：
 
-## 静态结构图 (PlantUML)
+- 定义与时间戳：`core/engine/phase_manager/definitions.gd`
+- 推进实现：`core/engine/phase_manager/advancement.gd`、`advance_phase.gd`、`advance_sub_phase.gd`
+- hooks：`core/engine/phase_manager/hooks.gd`
+- 顺序覆盖：`core/engine/phase_manager/order_config.gd`
+- 结算触发点：`core/engine/phase_manager/settlement_triggers.gd`
 
-```plantuml
-@startuml
-title PhaseManager：阶段/子阶段推进 + Hooks
+## 与模块系统 V2 的耦合方式（当前已落地）
 
-hide empty members
-skinparam packageStyle rectangle
+PhaseManager 本身不 preload 具体结算脚本；它通过“可注入 registry”工作：
 
-package "core/engine/phase_manager" {
-  class Definitions {
-    +Phase enum
-    +WorkingSubPhase enum
-    +PHASE_ORDER
-    +SUB_PHASE_ORDER
-    +compute_timestamp(state): int
-  }
+- `set_settlement_registry(registry)`：由 `RulesetV2` 提供（见 `core/rules/settlement_registry.gd`）
+- `set_effect_registry(registry)`：由 `RulesetV2` 提供（见 `core/rules/effect_registry.gd`）
+- `set_*_order(...)` / `set_*_triggers(...)`：模块可覆盖阶段/子阶段顺序与结算触发点
 
-  class Hooks {
-    +register_phase_hook(phase, hook_type, callback, priority, source)
-    +run_phase_hooks(phase, hook_type, state): Result
-    +register_sub_phase_hook(sub_phase, hook_type, callback, priority, source)
-  }
+装配发生在：`core/engine/game_engine/modules_v2.gd`
 
-  class WorkingFlow {
-    +start_new_round(state)
-    +reset_working_phase_state(state)
-    +reset_working_sub_phase_state(state)
-  }
-}
+## 阶段与子阶段
 
-package "core/engine" {
-  class PhaseManager {
-    +advance_phase(state): Result
-    +advance_sub_phase(state): Result
-    +register_phase_hook(phase, hook_type, callback, priority, source)
-    +register_sub_phase_hook(sub_phase, hook_type, callback, priority, source)
-  }
-}
+阶段与 Working 子阶段常量见：`core/engine/phase_manager/definitions.gd`
 
-package "core/rules (结算/约束)" {
-  class PaydaySettlement
-  class MarketingSettlement
-  class DinnertimeSettlement
-  class CleanupSettlement
-  class MandatoryActionsRules
-  class EmployeeRules
-}
+- 阶段：`Setup`、`Restructuring`、`OrderOfBusiness`、`Working`、`Dinnertime`、`Payday`、`Marketing`、`Cleanup`、`GameOver`
+- Setup 子阶段：`ReserveCards`
+- Working 子阶段：`Recruit/Train/Marketing/GetFood/GetDrinks/PlaceHouses/PlaceRestaurants`
 
-PhaseManager ..> Definitions
-PhaseManager o--> Hooks
-PhaseManager ..> WorkingFlow
-PhaseManager ..> PaydaySettlement
-PhaseManager ..> MarketingSettlement
-PhaseManager ..> DinnertimeSettlement
-PhaseManager ..> CleanupSettlement
-PhaseManager ..> MandatoryActionsRules
-PhaseManager ..> EmployeeRules
-@enduml
-```
+> 模块也可以插入自定义子阶段（按名称），并通过 `register_sub_phase_hook_by_name(...)` 注入 hooks。
 
-## 核心流程图 (PlantUML Sequence)
+## 结算触发（Settlement Triggers）
 
-典型场景：**Working 子阶段推进（advance_sub_phase），在最后一个子阶段自动转入下一主阶段**。
+PhaseManager 在阶段 enter/exit 的固定点位调用 settlement registry：
 
-```plantuml
-@startuml
-title PhaseManager 典型场景：advance_sub_phase（最后子阶段 -> advance_phase）
+- 默认触发点由 `core/engine/phase_manager/settlement_triggers.gd` 给出
+- 模块可通过 RulesetV2 注册 override（见 `RulesetV2.register_settlement_triggers_override`）
+- strict：缺失必需的 primary settlements 会在初始化阶段 fail-fast（`validate_required_primary_settlements`）
 
-participant "AdvancePhaseAction" as ACT
-participant "PhaseManager" as PM
-participant "Hooks" as HK
-participant "WorkingFlow" as WF
-participant "Rules(Settlements)" as RS
-participant "GameState" as GS
+## Hooks
 
-ACT -> PM : advance_sub_phase(GS)
-PM -> HK : run_sub_phase_hooks(current, BEFORE_EXIT)
-HK --> PM : Result(ok)
+支持：
 
-alt current is last sub-phase
-  PM -> HK : run_sub_phase_hooks(current, AFTER_EXIT)
-  PM -> PM : advance_phase(GS)
-  PM -> HK : run_phase_hooks(old, BEFORE_EXIT)
-  PM -> RS : (if needed)\napply settlements
-  PM -> WF : init next phase state\n(start_new_round/reset_working...)
-  PM -> HK : run_phase_hooks(new, AFTER_ENTER)
-else not last
-  PM -> GS : set sub_phase to next
-  PM -> WF : reset_working_sub_phase_state(GS)
-  PM -> HK : run_sub_phase_hooks(next, BEFORE_ENTER/AFTER_ENTER)
-end
+- phase hooks：`register_phase_hook(phase_enum, hook_type, callback, ...)`
+- subphase hooks：`register_sub_phase_hook(subphase_enum, ...)`
+- named subphase hooks：`register_sub_phase_hook_by_name(sub_phase_name, ...)`
 
-PM --> ACT : Result(ok)
-@enduml
-```
+hook_type：`BEFORE_ENTER/AFTER_ENTER/BEFORE_EXIT/AFTER_EXIT`
 
-## 状态机/逻辑流 (Mermaid)
+模块注入 hooks 的入口：`RulesetV2.register_phase_hook(...)` / `register_sub_phase_hook(...)`（最终由 `ruleset.apply_hooks_to_phase_manager` 应用）。
 
-```mermaid
-stateDiagram-v2
-  [*] --> Setup
-  Setup --> Restructuring
-  Restructuring --> OrderOfBusiness
-
-  state Working {
-    [*] --> Recruit
-    Recruit --> Train
-    Train --> Marketing
-    Marketing --> GetFood
-    GetFood --> GetDrinks
-    GetDrinks --> PlaceHouses
-    PlaceHouses --> PlaceRestaurants
-    PlaceRestaurants --> [*]
-  }
-
-  OrderOfBusiness --> Working
-  Working --> Dinnertime
-  Dinnertime --> Payday
-  Payday --> MarketingPhase
-  MarketingPhase --> Cleanup
-  Cleanup --> Restructuring : new round
-  Dinnertime --> GameOver : broke_count >= 2
-  GameOver --> [*]
-```
-
-## 设计模式与要点 (Design Insights)
-
-- **状态机 + 模板方法（Hook）**：PhaseManager 固定推进骨架，Hooks 提供“前后插桩”扩展点。
-- **结算集中**：跨阶段的批处理规则在阶段切换点统一执行，避免散落在动作里导致边界不清。
-
-维护要点：
-
-1. Working 阶段禁止直接 `advance_phase`，必须用 `advance_sub_phase` 走完子阶段序列（见 `AdvancePhaseAction.validate`），这是防止绕过强制动作/子阶段重置的关键约束。
-2. PhaseManager 内部对状态回滚采用“快照字段复制”（map/bank/players/round_state 等），新增重要字段时要同步纳入回滚快照，否则失败路径会留下半写入状态。
-3. Hook 回调是隐式依赖，排查问题时建议用 `PhaseManager.dump()`（Hooks.dump）定位哪些 hook 在当前阶段运行。
-
-潜在耦合风险：
-
-- 结算逻辑通过 preload 直接耦合到具体 rules 实现；已在模块系统 V2 中确定整改为“模块注册结算器 + 缺失即初始化失败”（见 `docs/architecture/60-modules-v2.md` 与 `docs/decisions/0002-modules-v2-strict-mode.md`）。
