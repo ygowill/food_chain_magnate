@@ -7,6 +7,7 @@ const MarketingRangeCalculatorClass = preload("res://core/rules/marketing_range_
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const HelpersClass = preload("res://core/rules/phase/marketing/settlement_helpers.gd")
 const MarketingInstancesValidationClass = preload("res://core/rules/phase/marketing/marketing_instances_validation.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 static func apply(state: GameState, marketing_range_calculator = null, rounds: int = 1, phase_manager = null) -> Result:
 	# 对齐 docs/rules.md / docs/design.md：
@@ -16,15 +17,14 @@ static func apply(state: GameState, marketing_range_calculator = null, rounds: i
 		return Result.failure("MarketingSettlement: state 为空")
 	if rounds <= 0:
 		return Result.failure("MarketingSettlement: rounds 必须 > 0，实际: %d" % rounds)
-	if not (state.map is Dictionary):
-		return Result.failure("MarketingSettlement: state.map 类型错误（期望 Dictionary）")
 	if not (state.players is Array):
 		return Result.failure("MarketingSettlement: state.players 类型错误（期望 Array）")
 	if not (state.round_state is Dictionary):
 		return Result.failure("MarketingSettlement: state.round_state 类型错误（期望 Dictionary）")
-	if not state.map.has("marketing_placements") or not (state.map["marketing_placements"] is Dictionary):
-		return Result.failure("MarketingSettlement: state.map.marketing_placements 缺失或类型错误（期望 Dictionary）")
-	var placements: Dictionary = state.map["marketing_placements"]
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, "MarketingSettlement")
+	if not placements_read.ok:
+		return placements_read
+	var placements: Dictionary = placements_read.value
 
 	var effect_registry = null
 	if phase_manager != null and phase_manager.has_method("get_effect_registry"):

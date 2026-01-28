@@ -11,6 +11,7 @@ const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 static func apply(action: ActionExecutor, state: GameState, command: Command) -> Result:
 	var player_id: int = command.actor
@@ -164,9 +165,11 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 	state.marketing_instances.append(instance)
 
 	# 记录放置信息（供 UI/调试）
-	if not state.map.has("marketing_placements") or not (state.map["marketing_placements"] is Dictionary):
-		return Result.failure("state.map.marketing_placements 缺失或类型错误")
-	state.map["marketing_placements"][str(board_number)] = {
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, "")
+	if not placements_read.ok:
+		return placements_read
+	var placements: Dictionary = placements_read.value
+	placements[str(board_number)] = {
 		"board_number": board_number,
 		"type": marketing_type,
 		"owner": player_id,
@@ -178,6 +181,7 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 		"axis": axis,
 		"tile_index": tile_index,
 	}
+	state.map[MapStateAccessClass.KEY_MARKETING_PLACEMENTS] = placements
 
 	var ms := MilestoneSystemClass.process_event(state, "InitiateMarketing", {
 		"player_id": player_id,

@@ -13,6 +13,7 @@ const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 static func validate(action: ActionExecutor, state: GameState, command: Command) -> Result:
 	var current_player_id := state.get_current_player_id()
@@ -74,9 +75,10 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 			return Result.failure("marketing_instances.board_number 缺失或类型错误（期望 int）")
 		if int(inst["board_number"]) == board_number:
 			return Result.failure("营销板件已在使用中: #%d" % board_number)
-	if not state.map.has("marketing_placements") or not (state.map["marketing_placements"] is Dictionary):
-		return Result.failure("state.map.marketing_placements 缺失或类型错误")
-	var placements: Dictionary = state.map["marketing_placements"]
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, "")
+	if not placements_read.ok:
+		return placements_read
+	var placements: Dictionary = placements_read.value
 	if placements.has(str(board_number)):
 		return Result.failure("营销板件已在使用中: #%d" % board_number)
 

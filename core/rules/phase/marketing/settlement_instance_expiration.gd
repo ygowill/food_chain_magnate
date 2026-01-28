@@ -3,14 +3,13 @@ extends RefCounted
 
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 static func expire_marketing_instance(state: GameState, inst: Dictionary) -> Result:
 	if state == null:
 		return Result.failure("MarketingSettlement: state 为空")
 	if inst == null:
 		return Result.failure("MarketingSettlement: inst 为空")
-	if not (state.map is Dictionary):
-		return Result.failure("MarketingSettlement: state.map 类型错误（期望 Dictionary）")
 	if not (state.players is Array):
 		return Result.failure("MarketingSettlement: state.players 类型错误（期望 Array）")
 
@@ -29,11 +28,12 @@ static func expire_marketing_instance(state: GameState, inst: Dictionary) -> Res
 		link_id = str(inst["link_id"])
 
 	# 收回营销板件
-	if not state.map.has("marketing_placements") or not (state.map["marketing_placements"] is Dictionary):
-		return Result.failure("MarketingSettlement: state.map.marketing_placements 缺失或类型错误（期望 Dictionary）")
-	var placements: Dictionary = state.map["marketing_placements"]
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, "MarketingSettlement")
+	if not placements_read.ok:
+		return placements_read
+	var placements: Dictionary = placements_read.value
 	placements.erase(str(board_number))
-	state.map["marketing_placements"] = placements
+	state.map[MapStateAccessClass.KEY_MARKETING_PLACEMENTS] = placements
 
 	# 释放忙碌营销员：仅当该员工仍处于忙碌区（可能在 Payday 被解雇）
 	if owner < 0 or owner >= state.players.size():

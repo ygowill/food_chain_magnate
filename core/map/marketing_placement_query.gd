@@ -4,6 +4,7 @@ class_name MarketingPlacementQuery
 extends RefCounted
 
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const KEY := "marketing_placements"
 
@@ -144,13 +145,7 @@ static func has_type_in_world_positions(state: GameState, marketing_type: String
 	return Result.success(false)
 
 static func _read_placements(state: GameState) -> Result:
-	if state == null:
-		return Result.failure("MarketingPlacementQuery: state 为空")
-	if not (state.map is Dictionary):
-		return Result.failure("MarketingPlacementQuery: state.map 类型错误（期望 Dictionary）")
-	if not state.map.has(KEY) or not (state.map[KEY] is Dictionary):
-		return Result.failure("MarketingPlacementQuery: state.map.%s 缺失或类型错误（期望 Dictionary）" % KEY)
-	return Result.success(state.map[KEY])
+	return MapStateAccessClass.require_marketing_placements(state, "MarketingPlacementQuery")
 
 static func _placement_contains_world_pos(state: GameState, placement: Dictionary, world_pos: Vector2i, path: String) -> Result:
 	var bounds_read := _read_placement_bounds(state, placement, path)
