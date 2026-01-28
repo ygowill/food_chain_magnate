@@ -9,6 +9,7 @@ const TileRouteUtilsClass = preload("res://core/rules/drinks_procurement/tile_ro
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
+const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const RecruitPanelScene = preload("res://ui/components/recruit_panel/recruit_panel.tscn")
@@ -64,11 +65,12 @@ func hide() -> void:
 	if is_instance_valid(milestone_panel):
 		milestone_panel.visible = false
 
-func sync(state: GameState) -> void:
-	_sync_recruit_panel(state)
-	_sync_train_panel(state)
-	_sync_production_panel(state)
-	_sync_price_panel(state)
+func sync(state: GameState, force_full_refresh: bool = false) -> void:
+	_sync_recruit_panel(state, force_full_refresh)
+	_sync_train_panel(state, force_full_refresh)
+	_sync_production_panel(state, force_full_refresh)
+	_sync_price_panel(state, force_full_refresh)
+	_sync_milestone_panel(state, force_full_refresh)
 
 func show_recruit_panel() -> void:
 	if _scene == null or _scene.game_engine == null:
@@ -103,7 +105,7 @@ func show_recruit_panel() -> void:
 		_center_popup.call(recruit_panel)
 	recruit_panel.visible = true
 
-func _sync_recruit_panel(state: GameState) -> void:
+func _sync_recruit_panel(state: GameState, force_full_refresh: bool = false) -> void:
 	if state == null:
 		return
 	if not is_instance_valid(recruit_panel) or not recruit_panel.visible:
@@ -111,6 +113,8 @@ func _sync_recruit_panel(state: GameState) -> void:
 	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_RECRUIT:
 		recruit_panel.visible = false
 		return
+	if force_full_refresh and recruit_panel.has_method("set_employee_pool"):
+		recruit_panel.set_employee_pool(state.employee_pool)
 	if recruit_panel.has_method("set_recruit_count"):
 		var actor := state.get_current_player_id()
 		var counts := _compute_recruit_counts(state, actor)
@@ -254,7 +258,7 @@ func show_train_panel() -> void:
 		_center_popup.call(train_panel)
 	train_panel.visible = true
 
-func _sync_train_panel(state: GameState) -> void:
+func _sync_train_panel(state: GameState, force_full_refresh: bool = false) -> void:
 	if state == null:
 		return
 	if not is_instance_valid(train_panel) or not train_panel.visible:
@@ -262,14 +266,61 @@ func _sync_train_panel(state: GameState) -> void:
 	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_TRAIN:
 		train_panel.visible = false
 		return
-		if train_panel.has_method("set_train_count"):
-			var actor: int = int(state.get_current_player_id())
-			var counts := _compute_train_counts(state, actor)
-			train_panel.set_train_count(int(counts.remaining), int(counts.total))
-		if train_panel.has_method("set_max_steps_one_employee"):
-			var actor2: int = int(state.get_current_player_id())
-			var max_steps := int(EmployeeRulesClass.get_max_train_steps_for_single_employee_for_working(state, actor2))
-			train_panel.set_max_steps_one_employee(max_steps)
+
+	if force_full_refresh:
+		var current_player: Dictionary = state.get_current_player()
+		var actor_id: int = int(state.get_current_player_id())
+
+		if train_panel.has_method("set_employee_pool"):
+			train_panel.set_employee_pool(state.employee_pool)
+
+		var pending_total := int(EmployeeRulesClass.get_immediate_train_pending_total(state, actor_id))
+		var sources := {}
+		var requires_same_color := {}
+		var section_text := "待命区员工（点击选择）"
+		var badges := {}
+
+		if pending_total > 0:
+			sources = _read_immediate_train_pending_sources(state, actor_id)
+			section_text = "缺货预支待培训（必须先清账）"
+			for emp_id in sources.keys():
+				badges[str(emp_id)] = "预支"
+		else:
+			var reserve_counts := _build_employee_type_counts(Array(current_player.get("reserve_employees", [])))
+			sources = reserve_counts.duplicate(true)
+			var can_train_from_active := bool(current_player.get("train_from_active_same_color", false))
+			if can_train_from_active:
+				section_text = "待命/在岗员工（点击选择；在岗同色培训：目标需同色）"
+				var active_counts := _build_employee_type_counts(Array(current_player.get("employees", [])))
+				for emp_id in active_counts.keys():
+					sources[str(emp_id)] = int(sources.get(emp_id, 0)) + int(active_counts.get(emp_id, 0))
+				for emp_id in sources.keys():
+					var active_count: int = int(active_counts.get(emp_id, 0))
+					var reserve_count: int = int(reserve_counts.get(emp_id, 0))
+					if active_count > 0 and reserve_count <= 0:
+						requires_same_color[str(emp_id)] = true
+
+		if train_panel.has_method("set_source_requires_same_color"):
+			train_panel.set_source_requires_same_color(requires_same_color)
+		if train_panel.has_method("set_source_badges"):
+			train_panel.set_source_badges(badges)
+		if train_panel.has_method("set_trainable_sources"):
+			train_panel.set_trainable_sources(sources, section_text)
+		elif train_panel.has_method("set_trainable_employees"):
+			var reserve: Array[String] = []
+			for emp_id in sources.keys():
+				reserve.append(str(emp_id))
+			reserve.sort()
+			train_panel.set_trainable_employees(reserve)
+
+	if train_panel.has_method("set_train_count"):
+		var actor: int = int(state.get_current_player_id())
+		var counts := _compute_train_counts(state, actor)
+		train_panel.set_train_count(int(counts.remaining), int(counts.total))
+	if train_panel.has_method("set_max_steps_one_employee"):
+		var actor2: int = int(state.get_current_player_id())
+		var max_steps := int(EmployeeRulesClass.get_max_train_steps_for_single_employee_for_working(state, actor2))
+		train_panel.set_max_steps_one_employee(max_steps)
 
 func show_price_panel(action_id: String) -> void:
 	if _scene == null or _scene.game_engine == null:
@@ -310,7 +361,7 @@ func show_price_panel(action_id: String) -> void:
 		_center_popup.call(price_panel)
 	price_panel.visible = true
 
-func _sync_price_panel(state: GameState) -> void:
+func _sync_price_panel(state: GameState, force_full_refresh: bool = false) -> void:
 	if state == null:
 		return
 	if not is_instance_valid(price_panel) or not price_panel.visible:
@@ -318,6 +369,12 @@ func _sync_price_panel(state: GameState) -> void:
 	if state.phase != DefsClass.PHASE_WORKING:
 		price_panel.visible = false
 		return
+
+	# 时间线变化：若面板保持打开，刷新当前价格，避免残留旧输入/显示。
+	if force_full_refresh and price_panel.has_method("set_current_prices"):
+		var current_player: Dictionary = state.get_current_player()
+		var prices: Dictionary = current_player.get("prices", {})
+		price_panel.set_current_prices(prices)
 
 func show_production_panel(production_type: String) -> void:
 	if _scene == null or _scene.game_engine == null:
@@ -389,6 +446,25 @@ func show_production_panel(production_type: String) -> void:
 				producers.append(str(e))
 		production_panel.set_available_producers(producers)
 
+		# 同步“已使用员工”禁用态：避免时间线回退/载入后残留旧 UI 缓存，导致员工错误变灰。
+		if production_panel.has_method("set_used_employee_counts") and state != null and (state.round_state is Dictionary):
+			var counter_key := "production_counts" if production_type == "food" else "procurement_counts"
+			var used_counts: Dictionary = {}
+			var seen := {}
+			for emp_val in producers:
+				var emp_id := str(emp_val).strip_edges()
+				if emp_id.is_empty():
+					continue
+				if seen.has(emp_id):
+					continue
+				seen[emp_id] = true
+				var used_r := RoundStateCountersClass.get_player_key_count(state.round_state, counter_key, int(state.get_current_player_id()), emp_id)
+				if used_r.ok:
+					var used := int(used_r.value)
+					if used > 0:
+						used_counts[emp_id] = used
+			production_panel.set_used_employee_counts(used_counts)
+
 	if production_panel.has_method("set_current_inventory"):
 		production_panel.set_current_inventory(current_player.get("inventory", {}))
 
@@ -402,7 +478,7 @@ func show_production_panel(production_type: String) -> void:
 		_center_popup.call(production_panel)
 	production_panel.visible = true
 
-func _sync_production_panel(state: GameState) -> void:
+func _sync_production_panel(state: GameState, force_full_refresh: bool = false) -> void:
 	if state == null:
 		return
 	if not is_instance_valid(production_panel) or not production_panel.visible:
@@ -415,8 +491,104 @@ func _sync_production_panel(state: GameState) -> void:
 		production_panel.visible = false
 		_hide_procurement_route_overlay()
 		return
+	if force_full_refresh:
+		var current_player: Dictionary = state.get_current_player()
+		var production_type := "food" if state.sub_phase == DefsClass.SUB_PHASE_GET_FOOD else "drinks"
+
+		# 记录“回合/子阶段/玩家”上下文：用于 ProductionPanel 跨关闭/重开保持“本次用了哪张卡”的禁用态；
+		# 当上下文变化（换人/换回合/换子阶段）时自动清空。
+		if production_panel.has_method("set_usage_token"):
+			var token := "%d|%d|%s|%s" % [
+				int(state.get_current_player_id()),
+				int(state.round_number),
+				str(state.phase),
+				str(state.sub_phase),
+			]
+			production_panel.set_usage_token(token)
+
+		if production_panel.has_method("set_production_type"):
+			production_panel.set_production_type(production_type)
+		if is_instance_valid(production_panel):
+			production_panel.set_meta("popup_title", "生产" if production_type == "food" else "采购")
+
+		# 时间线变化：清空上一次地图选点/路线缓存，避免残留旧状态
+		_hide_procurement_route_overlay()
+		if production_type == "drinks":
+			_reset_procurement_selection_state()
+			_hide_procurement_route_overlay()
+			if _map_controller != null and _map_controller.has_method("clear_selection"):
+				_map_controller.clear_selection()
+			if production_panel.has_method("set_drinks_procurement_state"):
+				production_panel.set_drinks_procurement_state(0, false, "")
+
+		if production_panel.has_method("set_available_producers"):
+			var producers: Array[String] = []
+			if EmployeeRegistryClass.is_loaded():
+				for e in Array(current_player.get("employees", [])):
+					if not (e is String):
+						continue
+					var emp_id := str(e)
+					if emp_id.is_empty():
+						continue
+					var def_val = EmployeeRegistryClass.get_def(emp_id)
+					if def_val == null or not (def_val is EmployeeDef):
+						continue
+					var def: EmployeeDef = def_val
+					if production_type == "food" and def.can_produce():
+						producers.append(emp_id)
+					elif production_type == "drinks" and def.can_procure():
+						producers.append(emp_id)
+			else:
+				for e in Array(current_player.get("employees", [])):
+					producers.append(str(e))
+			production_panel.set_available_producers(producers)
+
+			# 同步“已使用员工”禁用态：时间线跳转后必须以 round_state 为准。
+			if production_panel.has_method("set_used_employee_counts") and (state.round_state is Dictionary):
+				var counter_key := "production_counts" if production_type == "food" else "procurement_counts"
+				var used_counts: Dictionary = {}
+				var seen := {}
+				for emp_val in producers:
+					var emp_id := str(emp_val).strip_edges()
+					if emp_id.is_empty():
+						continue
+					if seen.has(emp_id):
+						continue
+					seen[emp_id] = true
+					var used_r := RoundStateCountersClass.get_player_key_count(state.round_state, counter_key, int(state.get_current_player_id()), emp_id)
+					if used_r.ok:
+						var used := int(used_r.value)
+						if used > 0:
+							used_counts[emp_id] = used
+				production_panel.set_used_employee_counts(used_counts)
+
+		if production_panel.has_method("set_current_inventory"):
+			production_panel.set_current_inventory(current_player.get("inventory", {}))
+
+		if production_type == "drinks":
+			if production_panel.has_method("set_available_drink_types"):
+				production_panel.set_available_drink_types(_get_all_drink_types())
+			if production_panel.has_method("set_drinks_procurement_state"):
+				production_panel.set_drinks_procurement_state(0, false, "")
+
 	if state.sub_phase != DefsClass.SUB_PHASE_GET_DRINKS:
 		_hide_procurement_route_overlay()
+
+func _sync_milestone_panel(state: GameState, force_full_refresh: bool = false) -> void:
+	if state == null:
+		return
+	if not is_instance_valid(milestone_panel) or not milestone_panel.visible:
+		return
+	if not force_full_refresh:
+		return
+	if milestone_panel.has_method("set_milestone_pool"):
+		milestone_panel.set_milestone_pool(state.milestone_pool)
+	if milestone_panel.has_method("set_players"):
+		milestone_panel.set_players(state.players)
+	if milestone_panel.has_method("set_global_view"):
+		milestone_panel.set_global_view(true)
+	if milestone_panel.has_method("set_rules"):
+		milestone_panel.set_rules(state.rules)
 
 func show_milestone_panel() -> void:
 	if _scene == null or _scene.game_engine == null:

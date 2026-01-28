@@ -284,16 +284,16 @@ func has_open_phase_ui() -> bool:
 
 	return false
 
-func sync(state: GameState) -> void:
+func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	_update_ui_components(state)
 	if _working_panels != null:
-		_working_panels.sync(state)
+		_working_panels.sync(state, force_full_refresh)
 	if _marketing_panels != null:
-		_marketing_panels.sync(state)
+		_marketing_panels.sync(state, force_full_refresh)
 	if _placement_overlays != null:
-		_placement_overlays.sync(state)
+		_placement_overlays.sync(state, force_full_refresh)
 	if _end_panels != null:
-		_end_panels.sync(state)
+		_end_panels.sync(state, force_full_refresh)
 	_sync_modals(state)
 	_sync_action_panel_context()
 

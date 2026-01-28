@@ -43,8 +43,8 @@ func reset_bank_break_tracking(state: GameState) -> void:
 	_last_bank_total = int(state.bank.get("total", 0))
 	_last_bank_broke_count = int(state.bank.get("broke_count", 0))
 
-func sync(state: GameState) -> void:
-	_sync_payday_panel(state)
+func sync(state: GameState, force_full_refresh: bool = false) -> void:
+	_sync_payday_panel(state, force_full_refresh)
 
 	var is_timeline_read_only := false
 	if _scene != null and _scene.has_method("is_timeline_read_only_active"):
@@ -71,11 +71,22 @@ func sync(state: GameState) -> void:
 			game_over_panel.visible = false
 		return
 
+	# 时间线变化：清掉这类“事件型强提示”面板（它们不完全可由 state 推导），并重置 tracking，
+	# 避免回退/跳转后残留旧弹窗或错误触发。
+	if force_full_refresh:
+		reset_bank_break_tracking(state)
+		if is_instance_valid(bank_break_panel):
+			bank_break_panel.visible = false
+		if is_instance_valid(game_over_panel) and state != null and state.phase != DefsClass.PHASE_GAME_OVER:
+			game_over_panel.visible = false
+
 	_check_bank_break(state)
 	if state != null and state.phase == DefsClass.PHASE_GAME_OVER:
 		_show_game_over()
+	elif is_instance_valid(game_over_panel):
+		game_over_panel.visible = false
 
-func _sync_payday_panel(state: GameState) -> void:
+func _sync_payday_panel(state: GameState, force_full_refresh: bool = false) -> void:
 	if state == null:
 		return
 	if not is_instance_valid(payday_panel) or not payday_panel.visible:
@@ -83,6 +94,28 @@ func _sync_payday_panel(state: GameState) -> void:
 	if state.phase != DefsClass.PHASE_PAYDAY:
 		payday_panel.visible = false
 		return
+
+	if not force_full_refresh:
+		return
+
+	var current_player: Dictionary = state.get_current_player()
+
+	if payday_panel.has_method("set_employees"):
+		var employees: Array[String] = []
+		var busy: Array[String] = []
+		for e in Array(current_player.get("employees", [])):
+			employees.append(str(e))
+		for e in Array(current_player.get("busy_marketers", [])):
+			busy.append(str(e))
+		payday_panel.set_employees(employees, busy)
+
+	if payday_panel.has_method("set_player_cash"):
+		payday_panel.set_player_cash(int(current_player.get("cash", 0)))
+
+	if payday_panel.has_method("set_discount") and (state.round_state is Dictionary):
+		var round_state: Dictionary = state.round_state
+		var discount: int = int(round_state.get("salary_discount", 0))
+		payday_panel.set_discount(discount)
 
 func show_payday_panel() -> void:
 	if _scene == null or _scene.game_engine == null:

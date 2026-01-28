@@ -97,6 +97,7 @@ var _history_latest_state_dict: Dictionary = {}
 # - 仅由显式“回退类操作”（如调试面板 undo/redo、UI 的回退到回合开始）开启。
 # - 通过日志面板/回放条 seek 进入的“查看历史”仍保持只读（避免 step 快照与 RNG 不一致）。
 var _timeline_edit_mode_active: bool = false
+var _force_full_panel_sync_next_update: bool = false
 var _startup_replay_from_main_menu: bool = false
 var _startup_replay_file_path: String = ""
 
@@ -943,7 +944,9 @@ func _update_ui() -> void:
 	# UI 同步（面板/覆盖层）
 	if _panel_controller != null:
 		var span_panels := PerfTraceClass.begin_span("ui:panel_controller.sync") if do_profile else -1
-		_panel_controller.sync(state)
+		var force_refresh := _force_full_panel_sync_next_update
+		_force_full_panel_sync_next_update = false
+		_panel_controller.sync(state, force_refresh)
 		_sync_right_panel_docked_view()
 		if do_profile:
 			PerfTraceClass.end_span(span_panels)
@@ -969,10 +972,9 @@ func _on_debug_command_executed(command: String, _result: String) -> void:
 	var is_timeline_change := (head == "undo" or head == "redo" or head == "restore" or head == "load")
 
 	# 避免时间线变化后仍停留在旧面板/选点上下文导致“看起来没回退”；
-	# 先 hide，再走 _update_ui 的 sync，让必要的强制弹窗可按新 state 重新打开。
+	# 不再强制 hide：保持面板打开，但下一帧强制从 state 全量同步，避免残留旧 UI 缓存。
 	if is_timeline_change:
-		if _panel_controller != null and _panel_controller.has_method("hide_all"):
-			_panel_controller.hide_all()
+		_force_full_panel_sync_next_update = true
 		_apply_live_log_timeline_from_engine()
 		# 调试面板的 undo/redo 需要进入“时间线编辑模式”，否则 undo 后 UI 会处于只读态导致无法继续操作。
 		if head == "undo" or head == "redo":
@@ -1015,14 +1017,13 @@ func rewind_to_turn_start() -> void:
 func _confirm_rewind_to_turn_start(target_index: int) -> void:
 	if game_engine == null:
 		return
-	if _panel_controller != null and _panel_controller.has_method("hide_all"):
-		_panel_controller.hide_all()
 
 	var result := game_engine.rewind_to_command(target_index)
 	if not result.ok:
 		GameLog.warn("Game", "回退到回合开始失败: %s" % result.error)
 	else:
 		_timeline_edit_mode_active = true
+		_force_full_panel_sync_next_update = true
 		_apply_live_log_timeline_from_engine()
 	_update_ui()
 
@@ -1857,6 +1858,7 @@ func _on_replay_bar_seek_requested(target_index: int) -> void:
 		GameLog.warn("Game", "时间线 seek 失败: %s" % r.error)
 		return
 
+	_force_full_panel_sync_next_update = true
 	_update_ui()
 
 func _enter_history_step_timeline_for_command(target_command_index: int) -> int:
@@ -1971,6 +1973,7 @@ func _seek_to_history_step(target_step_index: int) -> void:
 	game_engine.current_command_index = anchor_cmd
 	_history_cursor_step_index = target
 
+	_force_full_panel_sync_next_update = true
 	_update_ui()
 
 func _exit_history_step_timeline() -> void:
@@ -2032,6 +2035,7 @@ func _seek_to_replay_step(target_step_index: int) -> void:
 	game_engine.current_command_index = anchor_cmd
 	_replay_cursor_step_index = target
 
+	_force_full_panel_sync_next_update = true
 	_update_ui()
 
 func _on_replay_bar_return_latest_requested() -> void:

@@ -28,11 +28,11 @@ func hide() -> void:
 	if is_instance_valid(house_placement_overlay):
 		house_placement_overlay.visible = false
 
-func sync(state: GameState) -> void:
-	_sync_restaurant_placement_overlay(state)
-	_sync_house_placement_overlay(state)
+func sync(state: GameState, force_full_refresh: bool = false) -> void:
+	_sync_restaurant_placement_overlay(state, force_full_refresh)
+	_sync_house_placement_overlay(state, force_full_refresh)
 
-func _sync_restaurant_placement_overlay(state: GameState) -> void:
+func _sync_restaurant_placement_overlay(state: GameState, force_full_refresh: bool = false) -> void:
 	if state == null:
 		return
 	if not is_instance_valid(restaurant_placement_overlay) or not restaurant_placement_overlay.visible:
@@ -50,7 +50,54 @@ func _sync_restaurant_placement_overlay(state: GameState) -> void:
 			_map_controller.clear_selection()
 		return
 
-func _sync_house_placement_overlay(state: GameState) -> void:
+	# 时间线变化：保持覆盖层打开，但从 state 强制刷新可用员工/地图数据，避免残留旧 UI/选点缓存。
+	if force_full_refresh:
+		var current_player_id := state.get_current_player_id()
+		var current_player: Dictionary = state.get_current_player()
+
+		var action_id := "place_restaurant"
+		if restaurant_placement_overlay.has_method("get_mode"):
+			action_id = str(restaurant_placement_overlay.get_mode())
+
+		var prev_employee := ""
+		if restaurant_placement_overlay.has_method("get_selected_employee"):
+			prev_employee = str(restaurant_placement_overlay.get_selected_employee()).strip_edges()
+		var prev_restaurant := ""
+		if restaurant_placement_overlay.has_method("get_selected_restaurant"):
+			prev_restaurant = str(restaurant_placement_overlay.get_selected_restaurant()).strip_edges()
+
+		if _map_controller != null:
+			_map_controller.begin_selection("restaurant_placement", {"action_id": action_id})
+			if _map_controller.has_method("on_restaurant_preview_cleared"):
+				_map_controller.on_restaurant_preview_cleared()
+
+		if restaurant_placement_overlay.has_method("set_map_data"):
+			restaurant_placement_overlay.set_map_data(state.map)
+
+		if action_id == "move_restaurant":
+			if restaurant_placement_overlay.has_method("set_available_restaurants"):
+				var ids: Array[String] = []
+				for rid in Array(current_player.get("restaurants", [])):
+					ids.append(str(rid))
+				restaurant_placement_overlay.set_available_restaurants(ids)
+			if restaurant_placement_overlay.has_method("set_selected_restaurant") and not prev_restaurant.is_empty():
+				restaurant_placement_overlay.set_selected_restaurant(prev_restaurant)
+
+		if restaurant_placement_overlay.has_method("set_available_employees"):
+			var usage_tag := ""
+			if state.phase == DefsClass.PHASE_WORKING:
+				usage_tag = "use:move_restaurant" if action_id == "move_restaurant" else "use:place_restaurant"
+			restaurant_placement_overlay.set_available_employees(
+				_get_active_employee_types_with_usage_tag(state, current_player_id, usage_tag)
+			)
+			if restaurant_placement_overlay.has_method("set_selected_employee") and not prev_employee.is_empty():
+				restaurant_placement_overlay.set_selected_employee(prev_employee)
+
+		if restaurant_placement_overlay.has_method("get_selected_rotation") and restaurant_placement_overlay.has_method("set_selected_rotation"):
+			var r := int(restaurant_placement_overlay.get_selected_rotation())
+			restaurant_placement_overlay.set_selected_rotation(r)
+
+func _sync_house_placement_overlay(state: GameState, force_full_refresh: bool = false) -> void:
 	if state == null:
 		return
 	if not is_instance_valid(house_placement_overlay) or not house_placement_overlay.visible:
@@ -60,6 +107,40 @@ func _sync_house_placement_overlay(state: GameState) -> void:
 		if _map_controller != null:
 			_map_controller.clear_selection()
 		return
+
+	# 时间线变化：保持覆盖层打开，但从 state 强制刷新可用员工/地图数据，避免残留旧 UI/选点缓存。
+	if force_full_refresh:
+		var current_player_id := state.get_current_player_id()
+
+		var action_id := "place_house"
+		if house_placement_overlay.has_method("get_mode"):
+			action_id = str(house_placement_overlay.get_mode())
+
+		var prev_employee := ""
+		if house_placement_overlay.has_method("get_selected_employee"):
+			prev_employee = str(house_placement_overlay.get_selected_employee()).strip_edges()
+
+		if _map_controller != null:
+			_map_controller.begin_selection("house_placement", {"action_id": action_id})
+			if _map_controller.has_method("on_house_preview_cleared"):
+				_map_controller.on_house_preview_cleared()
+
+		if house_placement_overlay.has_method("set_map_data"):
+			house_placement_overlay.set_map_data(state.map)
+
+		if house_placement_overlay.has_method("set_available_employees"):
+			var usage_tag := ""
+			if state.phase == DefsClass.PHASE_WORKING:
+				usage_tag = "use:add_garden" if action_id == "add_garden" else "use:place_house"
+			house_placement_overlay.set_available_employees(
+				_get_active_employee_types_with_usage_tag(state, current_player_id, usage_tag)
+			)
+			if house_placement_overlay.has_method("set_selected_employee") and not prev_employee.is_empty():
+				house_placement_overlay.set_selected_employee(prev_employee)
+
+		if house_placement_overlay.has_method("get_selected_rotation") and house_placement_overlay.has_method("set_selected_rotation"):
+			var r := int(house_placement_overlay.get_selected_rotation())
+			house_placement_overlay.set_selected_rotation(r)
 
 func show_restaurant_placement(action_id: String, params: Dictionary) -> void:
 	if _scene == null or _scene.game_engine == null:

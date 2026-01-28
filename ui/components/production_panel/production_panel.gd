@@ -83,6 +83,39 @@ func set_usage_token(token: String) -> void:
 	_used_employee_keys_by_mode["drinks"] = {}
 	_selected_employee_key = ""
 
+func set_used_employee_counts(used_counts_by_employee_id: Dictionary) -> void:
+	# 用于“载入/回放/时间线回退”等场景：根据 GameState.round_state 中的计数来同步禁用态，
+	# 避免面板内缓存的 _used_employee_keys_by_mode 残留导致 UI 灰显不一致。
+	var used_set: Dictionary = {}
+	for k in used_counts_by_employee_id.keys():
+		var emp_id := str(k).strip_edges()
+		if emp_id.is_empty():
+			continue
+		var v = used_counts_by_employee_id.get(k, 0)
+		var used := 0
+		if v is int:
+			used = int(v)
+		elif v is float:
+			var f: float = float(v)
+			if f == floor(f):
+				used = int(f)
+		used = maxi(0, used)
+		for idx in range(1, used + 1):
+			used_set["%s#%d" % [emp_id, idx]] = true
+
+	_used_employee_keys_by_mode[_production_type] = used_set
+
+	_rebuild_employee_options()
+	if _production_type == "food":
+		_rebuild_food_type_options()
+		_update_food_controls_visibility()
+		_update_drinks_controls_visibility()
+	else:
+		_update_food_controls_visibility()
+		_update_drinks_controls_visibility()
+	_update_confirm_state()
+	_update_info()
+
 func set_available_producers(producers: Array[String]) -> void:
 	_available_producers = producers.duplicate()
 	_rebuild()

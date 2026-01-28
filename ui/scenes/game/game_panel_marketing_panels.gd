@@ -28,7 +28,7 @@ func hide() -> void:
 	if is_instance_valid(marketing_panel):
 		marketing_panel.visible = false
 
-func sync(state: GameState) -> void:
+func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	if state == null:
 		return
 	if not is_instance_valid(marketing_panel) or not marketing_panel.visible:
@@ -38,6 +38,26 @@ func sync(state: GameState) -> void:
 		if _map_controller != null:
 			_map_controller.clear_selection()
 		return
+
+	# 时间线变化：保持面板打开，但强制从 state 全量刷新，避免残留旧 UI/选点缓存。
+	if force_full_refresh:
+		var current_player: Dictionary = state.get_current_player()
+
+		if marketing_panel.has_method("set_visual_modules") and (state.modules is Array):
+			marketing_panel.set_visual_modules(Array(state.modules, TYPE_STRING, "", null))
+
+		if _map_controller != null:
+			_map_controller.clear_selection()
+		if marketing_panel.has_method("clear_selection"):
+			marketing_panel.clear_selection()
+		if marketing_panel.has_method("set_map_selection_callback") and _map_controller != null:
+			marketing_panel.set_map_selection_callback(Callable(_map_controller, "on_marketing_map_selection_requested"))
+
+		if marketing_panel.has_method("set_available_marketers"):
+			marketing_panel.set_available_marketers(_build_marketing_marketer_entries(current_player))
+
+		if marketing_panel.has_method("set_available_boards"):
+			marketing_panel.set_available_boards(_build_available_marketing_boards_by_type(state))
 
 func show_marketing_panel() -> void:
 	if _scene == null or _scene.game_engine == null:

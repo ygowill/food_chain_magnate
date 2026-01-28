@@ -52,6 +52,7 @@ const MarketingSelectionFreezeTestClass = preload("res://ui/scenes/tests/marketi
 const AirplaneMarketingOutsideSelectionTestClass = preload("res://ui/scenes/tests/airplane_marketing_outside_selection_test.gd")
 const MoveRestaurantDisplayLabelTestClass = preload("res://ui/scenes/tests/move_restaurant_display_label_test.gd")
 const LogRestoreAfterLoadTestClass = preload("res://ui/scenes/tests/log_restore_after_load_test.gd")
+const ProductionPanelUsedCountsSyncTestClass = preload("res://ui/scenes/tests/production_panel_used_counts_sync_test.gd")
 const ManualLogSaveTestClass = preload("res://core/tests/manual_log_save_test.gd")
 const ManualLogSavesCoverageTestClass = preload("res://core/tests/manual_log_saves_coverage_test.gd")
 const EventHistoryRewindTestClass = preload("res://core/tests/event_history_rewind_test.gd")
@@ -352,6 +353,10 @@ func _run_all() -> int:
 				{
 					"name": "LogRestoreAfterLoadTest",
 					"fn": func() -> Result: return LogRestoreAfterLoadTestClass.run(),
+				},
+				{
+					"name": "ProductionPanelUsedCountsSyncTest",
+					"fn": func() -> Result: return ProductionPanelUsedCountsSyncTestClass.run(),
 				},
 					{
 						"name": "ManualLogSaveTest",
