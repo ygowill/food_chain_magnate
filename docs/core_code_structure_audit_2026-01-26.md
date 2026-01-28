@@ -804,7 +804,7 @@
 - `core/state/game_state.gd`：中等体量；后续可按重构优先级处理
 - `core/state/game_state_factory.gd`：（已整改 2026-01-26）logo 分配已委托 provider（`gameplay/setup/restaurant_logo_assignment.gd`），并由 `ProjectSettings.fcm/restaurant_logo_assignment_provider_path` 注入，减少 core/state 的 UI/setup 语义；中等体量；存在一定数量的 preload 依赖
 - `core/state/game_state_serialization.gd`：（已整改 2026-01-26）移除自带 `_parse_*` wrapper，改为直接调用 `ParseHelpers`/`RoundStateParser`（收敛 state 解析样板）；中等体量；后续可按重构优先级处理；存在一定数量的 preload 依赖
-- `core/state/player_state_access.gd`：（已新增 2026-01-27）玩家相关 Dictionary 读取/校验 helper（当前覆盖 milestones/inventory；后续可扩展 employees 等），用于减少 Dictionary 裸写与重复样板；（已整改 2026-01-27）prefix 兼容中文冒号（`：`），便于复用中文错误前缀
+- `core/state/player_state_access.gd`：（已新增 2026-01-27）玩家相关 Dictionary 读取/校验 helper（当前覆盖 milestones/inventory/employees/reserve_employees），用于减少 Dictionary 裸写与重复样板；（已整改 2026-01-27）prefix 兼容中文冒号（`：`），便于复用中文错误前缀
 - `core/state/serialization/json_safe.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/serialization/parse_helpers.gd`：未发现明显结构问题（小文件/职责相对单一）
 - `core/state/serialization/round_state_parser.gd`：（已整改 2026-01-27）orchestrator wrapper；required/optional 字段解析拆到 `round_state_parser_required_fields.gd`/`round_state_parser_optional_fields.gd`；玩家 id key 归一化收敛到 `round_state_player_id_keys.gd`
