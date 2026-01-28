@@ -144,6 +144,7 @@
 - 2026-01-28：将 MarketingSettlement 的“营销实例到期处理”从 `void + assert` 改为返回 `Result` 并在调用链中显式传播（release 下也可 fail-fast）；同时移除 `settlement_demand_effects.gd` 中对 state/inst 的 `assert`，改为 `Result.failure`（行为不变）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：减少 Dictionary 裸写（state.map.marketing_placements 第一步）：新增 `MapStateAccess`（`core/state/map_state_access.gd`）用于收敛 `state.map.marketing_placements` 的读取/校验样板，并用于 `MarketingSettlement`/`MarketingPlacementQuery`/`InitiateMarketing` 相关逻辑（validation/apply）等路径（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：减少 Dictionary 裸写（state.map.restaurants/houses 扩展）：将 core 中对 `state.map.restaurants/houses` 的读取/校验样板改为复用 `MapStateAccess.require_restaurants/require_houses`（覆盖 `RangeUtilsAir/RangeUtilsRoad`、`DinnertimeSettlement`、`SettlementHouseDemand`、`Structures`、`DrinksProcurement.PlanResolver` 等），减少重复/样板；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-28：收敛 `effect_ids` + `EffectRegistry` segment 过滤：新增 `EffectIdsSegmentInvoker`（`core/rules/effect_ids_segment_invoker.gd`）统一处理“按 segment 过滤 + invoke + 聚合 warnings”的样板，并用于 `DinnertimeEffects`/`PaydaySalaryDiscount`/`MarketingSettlement`（`settlement_demand_effects.gd`）等路径（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -222,7 +223,7 @@
   - （已整改 2026-01-27）规则侧相关 callsite 已基本迁移到 `core/rules/milestone_effect_queries.gd` 收敛 milestones->effects 遍历样板；目前仅保留 `MilestoneSystem`（应用效果）与模块内容校验等路径会直接遍历 `def.effects`（属通用/校验路径）
 
 现状矛盾点：
-- core 已经存在 `core/rules/milestone_effect_registry.gd`（effects.type -> handler），规则侧 effects.value 叠加/查询已基本收敛到 `MilestoneEffectQueries`；仍有少量按 `effect_id` segment 过滤并调用 `effect_registry.invoke(...)` 的路径（如 MarketingSettlement 相关逻辑），属于不同的 effect 表达方式，后续可按需要继续收敛。
+- core 已经存在 `core/rules/milestone_effect_registry.gd`（effects.type -> handler），规则侧 effects.value 叠加/查询已基本收敛到 `MilestoneEffectQueries`；（已整改 2026-01-28）按 `effect_id` segment 过滤并调用 `effect_registry.invoke(...)` 的逻辑已收敛到 `EffectIdsSegmentInvoker`（用于 `DinnertimeEffects`/`PaydaySalaryDiscount`/`MarketingSettlement` 等），但仍属于不同的 effect 表达方式；若要进一步统一语义需再做结构升级。
 
 风险：
 - 新增/修改 milestone effect 时需要同步修改多个地方，容易出现“同一个 effect_type 在不同系统语义不一致”。
@@ -360,7 +361,7 @@
 1. **解耦 core ↔ gameplay**：已开始处理 `core/engine/game_engine/action_setup.gd` 的反向依赖（动作注册迁移到 `gameplay/action_setup.gd`，并提供 `ActionSetup.set_provider_path(...)` 注入点）；（已整改 2026-01-26）provider 来源改为 `ProjectSettings.fcm/action_setup_provider_path`（避免默认写死 gameplay 路径）。
 2. **抽离事件/日志语义**：把 `CommandRunner` 中的“事件构建/归属/拆分”拆到独立组件（可放在 gameplay 或 ui 的回放子系统），core 保留最小执行路径；（已整改 2026-01-26~2026-01-27）`CommandRunner` 的派生事件构建已下沉到 `gameplay/replay/command_runner_event_build/`，并由 `ProjectSettings.fcm/command_runner_event_build_provider_path` 提供（core 侧仅保留 provider 调用 + 执行/auto-advance/emit 主流程）。
 3. **统一解析/校验工具链**：收敛 `_parse_*` 重复实现，优先统一数据/存档/命令解析路径。
-4. **收敛 milestone effects 处理**：明确“effects.type 的唯一解释器”与“effects/effect_ids 的边界”，尽量走 registry/handler 体系，减少散落的手写解析；（已整改 2026-01-27）规则侧对 `MilestoneDef.effects` 的叠加/查询已基本迁移到 `core/rules/milestone_effect_queries.gd`（减少散落的 milestones->effects 遍历样板）；仍有少量 `effect_ids` + `EffectRegistry` 的 segment 过滤（如 MarketingSettlement）属于另一套表达方式，可视需求继续收敛。
+4. **收敛 milestone effects 处理**：明确“effects.type 的唯一解释器”与“effects/effect_ids 的边界”，尽量走 registry/handler 体系，减少散落的手写解析；（已整改 2026-01-27）规则侧对 `MilestoneDef.effects` 的叠加/查询已基本迁移到 `core/rules/milestone_effect_queries.gd`（减少散落的 milestones->effects 遍历样板）；（已整改 2026-01-28）`effect_ids` + `EffectRegistry` 的 segment 过滤调用样板已收敛到 `EffectIdsSegmentInvoker`（仍属另一套表达方式，后续若要统一语义可再做结构升级）。
 5. **逐步减少 Dictionary 裸写**：在高频/高风险结构（player、round_state、map 子结构）上引入更明确的 query/mutation API，减少手工深层访问。
 
 ---

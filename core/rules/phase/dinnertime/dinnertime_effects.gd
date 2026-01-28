@@ -5,6 +5,7 @@ extends RefCounted
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const GlobalEffectListClass = preload("res://core/rules/global_effect_list.gd")
+const EffectIdsSegmentInvokerClass = preload("res://core/rules/effect_ids_segment_invoker.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 static func apply_employee_effects_by_segment(
@@ -49,14 +50,17 @@ static func apply_employee_effects_by_segment(
 			return Result.failure("晚餐结算失败：员工定义类型错误（期望 EmployeeDef）: %s" % emp_id)
 		var def: EmployeeDef = def_val
 
-		for eid in def.effect_ids:
-			var effect_id: String = eid
-			if effect_id.find(segment) == -1:
-				continue
-			var r = effect_registry.invoke(effect_id, [state, player_id, ctx])
-			if not r.ok:
-				return r
-			warnings.append_array(r.warnings)
+		var inv := EffectIdsSegmentInvokerClass.invoke_effect_ids_by_segment(
+			effect_registry,
+			def.effect_ids,
+			segment,
+			[state, player_id, ctx],
+			"晚餐结算失败：",
+			"EmployeeDef[%s].effect_ids" % emp_id
+		)
+		if not inv.ok:
+			return inv
+		warnings.append_array(inv.warnings)
 
 	return Result.success().with_warnings(warnings)
 
@@ -102,14 +106,17 @@ static func apply_milestone_effects_by_segment(
 			return Result.failure("晚餐结算失败：里程碑定义类型错误（期望 MilestoneDef）: %s" % ms_id)
 		var def: MilestoneDef = def_val
 
-		for eid in def.effect_ids:
-			var effect_id: String = eid
-			if effect_id.find(segment) == -1:
-				continue
-			var r = effect_registry.invoke(effect_id, [state, player_id, ctx])
-			if not r.ok:
-				return r
-			warnings.append_array(r.warnings)
+		var inv := EffectIdsSegmentInvokerClass.invoke_effect_ids_by_segment(
+			effect_registry,
+			def.effect_ids,
+			segment,
+			[state, player_id, ctx],
+			"晚餐结算失败：",
+			"MilestoneDef[%s].effect_ids" % ms_id
+		)
+		if not inv.ok:
+			return inv
+		warnings.append_array(inv.warnings)
 
 	return Result.success().with_warnings(warnings)
 
@@ -138,16 +145,17 @@ static func apply_global_effects_by_segment(
 		return ids_read
 	warnings.append_array(ids_read.warnings)
 	var ids_any: Array = ids_read.value
-	for i in range(ids_any.size()):
-		var effect_id_val = ids_any[i]
-		if not (effect_id_val is String):
-			return Result.failure("晚餐结算失败：global_effect_ids[%d] 类型错误（期望 String）" % i)
-		var effect_id: String = str(effect_id_val)
-		if effect_id.find(segment) == -1:
-			continue
-		var r = effect_registry.invoke(effect_id, [state, player_id_for_ctx, ctx])
-		if not r.ok:
-			return r
-		warnings.append_array(r.warnings)
+
+	var inv := EffectIdsSegmentInvokerClass.invoke_effect_ids_by_segment(
+		effect_registry,
+		ids_any,
+		segment,
+		[state, player_id_for_ctx, ctx],
+		"晚餐结算失败：",
+		"global_effect_ids"
+	)
+	if not inv.ok:
+		return inv
+	warnings.append_array(inv.warnings)
 
 	return Result.success().with_warnings(warnings)

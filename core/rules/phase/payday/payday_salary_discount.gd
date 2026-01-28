@@ -1,6 +1,7 @@
 extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const EffectIdsSegmentInvokerClass = preload("res://core/rules/effect_ids_segment_invoker.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 const EFFECT_SEG_PAYDAY_SALARY_DISCOUNT := ":payday:salary_discount:"
@@ -40,14 +41,17 @@ static func get_salary_discount_recruit_capacity(
 			return Result.failure("PaydaySalaryDiscount: 员工定义类型错误（期望 EmployeeDef）: %s" % emp_id)
 		var def: EmployeeDef = def_val
 
-		for eid in def.effect_ids:
-			var effect_id: String = eid
-			if effect_id.find(EFFECT_SEG_PAYDAY_SALARY_DISCOUNT) == -1:
-				continue
-			var r = effect_registry.invoke(effect_id, [state, player_id, ctx, emp_id])
-			if not r.ok:
-				return r
-			warnings.append_array(r.warnings)
+		var inv := EffectIdsSegmentInvokerClass.invoke_effect_ids_by_segment(
+			effect_registry,
+			def.effect_ids,
+			EFFECT_SEG_PAYDAY_SALARY_DISCOUNT,
+			[state, player_id, ctx, emp_id],
+			"PaydaySalaryDiscount",
+			"EmployeeDef[%s].effect_ids" % emp_id
+		)
+		if not inv.ok:
+			return inv
+		warnings.append_array(inv.warnings)
 
 	var cap_val = ctx.get("salary_discount_recruit_capacity", null)
 	if not (cap_val is int):

@@ -3,6 +3,7 @@ extends RefCounted
 
 const BankruptcyRulesClass = preload("res://core/rules/economy/bankruptcy_rules.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
+const EffectIdsSegmentInvokerClass = preload("res://core/rules/effect_ids_segment_invoker.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 const EFFECT_SEG_MARKETING_DEMAND_AMOUNT := ":marketing:demand_amount:"
@@ -64,14 +65,17 @@ static func get_demand_amount_for_instance(state: GameState, inst: Dictionary, e
 			return Result.failure("MarketingSettlement: 里程碑定义类型错误（期望 MilestoneDef）: %s" % mid)
 		var def: MilestoneDef = def_val
 
-		for eid in def.effect_ids:
-			var effect_id: String = eid
-			if effect_id.find(EFFECT_SEG_MARKETING_DEMAND_AMOUNT) == -1:
-				continue
-			var r = effect_registry.invoke(effect_id, [state, owner, ctx])
-			if not r.ok:
-				return r
-			warnings.append_array(r.warnings)
+		var inv := EffectIdsSegmentInvokerClass.invoke_effect_ids_by_segment(
+			effect_registry,
+			def.effect_ids,
+			EFFECT_SEG_MARKETING_DEMAND_AMOUNT,
+			[state, owner, ctx],
+			"MarketingSettlement",
+			"MilestoneDef[%s].effect_ids" % mid
+		)
+		if not inv.ok:
+			return inv
+		warnings.append_array(inv.warnings)
 
 	var v = ctx.get("demand_amount", null)
 	if not (v is int):
@@ -142,14 +146,17 @@ static func apply_marketing_demand_cash_effects(state: GameState, effect_registr
 			return Result.failure("MarketingSettlement: 里程碑定义类型错误（期望 MilestoneDef）: %s" % mid)
 		var def: MilestoneDef = def_val
 
-		for eid in def.effect_ids:
-			var effect_id: String = eid
-			if effect_id.find(EFFECT_SEG_MARKETING_DEMAND_CASH) == -1:
-				continue
-			var r = effect_registry.invoke(effect_id, [state, owner, ctx])
-			if not r.ok:
-				return r
-			warnings.append_array(r.warnings)
+		var inv := EffectIdsSegmentInvokerClass.invoke_effect_ids_by_segment(
+			effect_registry,
+			def.effect_ids,
+			EFFECT_SEG_MARKETING_DEMAND_CASH,
+			[state, owner, ctx],
+			"MarketingSettlement",
+			"MilestoneDef[%s].effect_ids" % mid
+		)
+		if not inv.ok:
+			return inv
+		warnings.append_array(inv.warnings)
 
 	var cash_val = ctx.get("cash_bonus", null)
 	if not (cash_val is int):
