@@ -348,7 +348,7 @@
 为降低风险，建议按“先切边界、再收敛重复、最后做结构升级”的顺序推进：
 
 1. **解耦 core ↔ gameplay**：已开始处理 `core/engine/game_engine/action_setup.gd` 的反向依赖（动作注册迁移到 `gameplay/action_setup.gd`，并提供 `ActionSetup.set_provider_path(...)` 注入点）；（已整改 2026-01-26）provider 来源改为 `ProjectSettings.fcm/action_setup_provider_path`（避免默认写死 gameplay 路径）。
-2. **抽离事件/日志语义**：把 `CommandRunner` 中的“事件构建/归属/拆分”拆到独立组件（可放在 gameplay 或 ui 的回放子系统），core 保留最小执行路径。
+2. **抽离事件/日志语义**：把 `CommandRunner` 中的“事件构建/归属/拆分”拆到独立组件（可放在 gameplay 或 ui 的回放子系统），core 保留最小执行路径；（已整改 2026-01-26~2026-01-27）`CommandRunner` 的派生事件构建已下沉到 `gameplay/replay/command_runner_event_build/`，并由 `ProjectSettings.fcm/command_runner_event_build_provider_path` 提供（core 侧仅保留 provider 调用 + 执行/auto-advance/emit 主流程）。
 3. **统一解析/校验工具链**：收敛 `_parse_*` 重复实现，优先统一数据/存档/命令解析路径。
 4. **收敛 milestone effects 处理**：明确“effects.type 的唯一解释器”与“effects/effect_ids 的边界”，尽量走 registry/handler 体系，减少散落的手写解析。
 5. **逐步减少 Dictionary 裸写**：在高频/高风险结构（player、round_state、map 子结构）上引入更明确的 query/mutation API，减少手工深层访问。
