@@ -13,6 +13,9 @@ const PHASE_MARKETING := "Marketing"
 const PHASE_CLEANUP := "Cleanup"
 const PHASE_GAME_OVER := "GameOver"
 
+# Setup 子阶段名称常量（state.sub_phase / command.sub_phase）
+const SUB_PHASE_RESERVE_CARDS := "ReserveCards"
+
 # Working 子阶段名称常量（state.sub_phase / command.sub_phase）
 const SUB_PHASE_RECRUIT := "Recruit"
 const SUB_PHASE_TRAIN := "Train"

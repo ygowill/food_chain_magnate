@@ -4,7 +4,7 @@ class_name SelectReserveCardAction
 extends ActionExecutor
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
-const SETUP_SUB_PHASE := "ReserveCards"
+const SETUP_SUB_PHASE := DefsClass.SUB_PHASE_RESERVE_CARDS
 
 func _init() -> void:
 	action_id = "select_reserve_card"

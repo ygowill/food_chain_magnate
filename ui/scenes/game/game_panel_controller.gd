@@ -906,7 +906,7 @@ func _sync_modals(state: GameState) -> void:
 	var covered := _get_modal_cover_rect()
 
 	# 储备卡选择（Setup/ReserveCards）
-	if state.phase == DefsClass.PHASE_SETUP and str(state.sub_phase) == "ReserveCards" and current_player_id >= 0:
+	if state.phase == DefsClass.PHASE_SETUP and str(state.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS and current_player_id >= 0:
 		_show_reserve_card_modal(state, current_player_id, covered)
 	else:
 		_hide_reserve_card_modal()
@@ -1173,7 +1173,7 @@ func _deferred_open_reserve_card_modal() -> void:
 		if state == null:
 			_reserve_card_open_routine_running = false
 			return
-		if str(state.phase) != DefsClass.PHASE_SETUP or str(state.sub_phase) != "ReserveCards":
+		if str(state.phase) != DefsClass.PHASE_SETUP or str(state.sub_phase) != DefsClass.SUB_PHASE_RESERVE_CARDS:
 			_pending_reserve_card_open_player_id = -1
 			_pending_reserve_card_open_attempts = 0
 			_reserve_card_open_routine_running = false

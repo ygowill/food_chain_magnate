@@ -159,7 +159,7 @@ static func complete_setup(engine: GameEngine, scan_limit: int = 4000) -> Result
 		var pid := state.get_current_player_id()
 
 		# 1) ReserveCards：依次为每位玩家选择一张储备卡
-		if str(state.sub_phase) == "ReserveCards":
+		if str(state.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS:
 			var pick := engine.execute_command(Command.create("select_reserve_card", pid, {"selected_index": 0}))
 			if not pick.ok:
 				return Result.failure("Setup：选择储备卡失败: %s" % pick.error)

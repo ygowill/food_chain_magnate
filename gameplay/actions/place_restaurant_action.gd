@@ -32,7 +32,7 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 		return false
 
 	if state.phase == DefsClass.PHASE_SETUP:
-		if str(state.sub_phase) == "ReserveCards":
+		if str(state.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS:
 			return false
 		var player_restaurants := StructuresClass.get_player_restaurants(state, player_id)
 		return player_restaurants.size() < 1
@@ -78,7 +78,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	# 规则：Working/PlaceRestaurants 需要在岗的本地经理或区域经理（docs/rules.md 子阶段 6）
 	var is_initial := state.phase == DefsClass.PHASE_SETUP
-	if is_initial and str(state.sub_phase) == "ReserveCards":
+	if is_initial and str(state.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS:
 		return Result.failure("请先选择银行储备卡（所有玩家选择后才能放置餐厅）")
 
 	# Setup 阶段：每位玩家只能放置一个餐厅（无需 position/rotation）

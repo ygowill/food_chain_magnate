@@ -219,7 +219,7 @@ func _ready() -> void:
 		var keep_loading_until_reserve_modal := false
 		if game_engine != null:
 			var s := game_engine.get_state()
-			if s != null and str(s.phase) == DefsClass.PHASE_SETUP and str(s.sub_phase) == "ReserveCards":
+			if s != null and str(s.phase) == DefsClass.PHASE_SETUP and str(s.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS:
 				keep_loading_until_reserve_modal = true
 		if not keep_loading_until_reserve_modal:
 			if SceneManager != null and SceneManager.has_method("hide_loading"):

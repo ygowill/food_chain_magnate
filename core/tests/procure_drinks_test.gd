@@ -236,7 +236,7 @@ static func _place_initial_restaurants(engine: GameEngine) -> Result:
 		var current_player := state.get_current_player_id()
 
 		# Setup 第一步：先秘密选择储备卡（不能 skip）
-		if str(state.sub_phase) == "ReserveCards":
+		if str(state.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS:
 			var pick := engine.execute_command(Command.create("select_reserve_card", current_player, {"selected_index": 0}))
 			if not pick.ok:
 				return Result.failure("选择储备卡失败: %s" % pick.error)
