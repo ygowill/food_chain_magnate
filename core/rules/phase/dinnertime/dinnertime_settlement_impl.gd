@@ -6,6 +6,7 @@ const BankruptcyRulesClass = preload("res://core/rules/economy/bankruptcy_rules.
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const DinnertimeEffectsClass = preload("res://core/rules/phase/dinnertime/dinnertime_effects.gd")
 const DinnertimeHouseSalesClass = preload("res://core/rules/phase/dinnertime/dinnertime_house_sales.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const EFFECT_SEG_DINNERTIME_TIEBREAK := ":dinnertime:tiebreaker:"
 const EFFECT_SEG_DINNERTIME_TIPS := ":dinnertime:tips:"
@@ -14,10 +15,10 @@ const EFFECT_SEG_DINNERTIME_DISTANCE_DELTA := ":dinnertime:distance_delta:"
 const EFFECT_SEG_DINNERTIME_SALE_HOUSE_BONUS := ":dinnertime:sale_house_bonus:"
 
 static func _validate_apply_inputs(state: GameState, phase_manager) -> Result:
-	if state == null:
-		return Result.failure("DinnertimeSettlement: state 为空")
-	if not (state.map is Dictionary):
-		return Result.failure("DinnertimeSettlement: state.map 类型错误（期望 Dictionary）")
+	var map_read := MapStateAccessClass.require_map(state, "DinnertimeSettlement")
+	if not map_read.ok:
+		return map_read
+	var map: Dictionary = map_read.value
 	if not (state.players is Array):
 		return Result.failure("DinnertimeSettlement: state.players 类型错误（期望 Array）")
 	if not (state.round_state is Dictionary):
@@ -35,17 +36,19 @@ static func _validate_apply_inputs(state: GameState, phase_manager) -> Result:
 	if road_graph == null:
 		return Result.failure("晚餐结算失败：RoadGraph 未初始化")
 
-	if not state.map.has("grid_size") or not (state.map["grid_size"] is Vector2i):
+	if not map.has("grid_size") or not (map["grid_size"] is Vector2i):
 		return Result.failure("晚餐结算失败：state.map.grid_size 缺失或类型错误（期望 Vector2i）")
-	var grid_size: Vector2i = state.map["grid_size"]
+	var grid_size: Vector2i = map["grid_size"]
 
-	if not state.map.has("houses") or not (state.map["houses"] is Dictionary):
-		return Result.failure("晚餐结算失败：state.map.houses 缺失或类型错误（期望 Dictionary）")
-	var houses: Dictionary = state.map["houses"]
+	var houses_read := MapStateAccessClass.require_houses(state, "晚餐结算失败：")
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
 
-	if not state.map.has("restaurants") or not (state.map["restaurants"] is Dictionary):
-		return Result.failure("晚餐结算失败：state.map.restaurants 缺失或类型错误（期望 Dictionary）")
-	var restaurants: Dictionary = state.map["restaurants"]
+	var restaurants_read := MapStateAccessClass.require_restaurants(state, "晚餐结算失败：")
+	if not restaurants_read.ok:
+		return restaurants_read
+	var restaurants: Dictionary = restaurants_read.value
 
 	return Result.success({
 		"effect_registry": effect_registry,

@@ -3,6 +3,7 @@ extends RefCounted
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const AdjacentCellsClass = preload("res://core/utils/range_utils_road/adjacent_cells.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 static func is_within_road_range_to_any_road_cells(
 	state: GameState,
@@ -43,11 +44,10 @@ static func get_min_road_distance_to_any_road_cells(
 	if road_graph == null:
 		return Result.failure("道路图未初始化")
 
-	if not (state.map is Dictionary):
-		return Result.failure("state.map 类型错误（期望 Dictionary）")
-	if not state.map.has("restaurants") or not (state.map["restaurants"] is Dictionary):
-		return Result.failure("state.map.restaurants 缺失或类型错误")
-	var restaurants: Dictionary = state.map["restaurants"]
+	var restaurants_read := MapStateAccessClass.require_restaurants(state, "")
+	if not restaurants_read.ok:
+		return restaurants_read
+	var restaurants: Dictionary = restaurants_read.value
 
 	var targets: Array[Vector2i] = []
 	var target_set := {}
@@ -163,11 +163,10 @@ static func is_within_road_range(
 	if road_graph == null:
 		return Result.failure("道路图未初始化")
 
-	if not (state.map is Dictionary):
-		return Result.failure("state.map 类型错误（期望 Dictionary）")
-	if not state.map.has("restaurants") or not (state.map["restaurants"] is Dictionary):
-		return Result.failure("state.map.restaurants 缺失或类型错误")
-	var restaurants: Dictionary = state.map["restaurants"]
+	var restaurants_read := MapStateAccessClass.require_restaurants(state, "")
+	if not restaurants_read.ok:
+		return restaurants_read
+	var restaurants: Dictionary = restaurants_read.value
 
 	var target_cells_result: Result = AdjacentCellsClass.get_adjacent_road_cells(state, target_pos)
 	if not target_cells_result.ok:
@@ -202,4 +201,3 @@ static func is_within_road_range(
 					return Result.success(true)
 
 	return Result.success(false)
-

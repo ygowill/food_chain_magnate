@@ -1,39 +1,43 @@
 extends RefCounted
 
 const HouseNumberManagerClass = preload("res://core/map/house_number_manager.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 static func get_house(state, house_id: String) -> Dictionary:
-	if state == null or not (state.map is Dictionary):
+	if state == null:
 		return {}
 	if house_id.is_empty():
 		return {}
-	if not state.map.has("houses") or not (state.map["houses"] is Dictionary):
+	var houses_read := MapStateAccessClass.require_houses(state, "")
+	if not houses_read.ok:
 		return {}
-	var houses: Dictionary = state.map["houses"]
+	var houses: Dictionary = houses_read.value
 	var h_val = houses.get(house_id, null)
 	if h_val is Dictionary:
 		return h_val
 	return {}
 
 static func get_restaurant(state, restaurant_id: String) -> Dictionary:
-	if state == null or not (state.map is Dictionary):
+	if state == null:
 		return {}
 	if restaurant_id.is_empty():
 		return {}
-	if not state.map.has("restaurants") or not (state.map["restaurants"] is Dictionary):
+	var restaurants_read := MapStateAccessClass.require_restaurants(state, "")
+	if not restaurants_read.ok:
 		return {}
-	var restaurants: Dictionary = state.map["restaurants"]
+	var restaurants: Dictionary = restaurants_read.value
 	var r_val = restaurants.get(restaurant_id, null)
 	if r_val is Dictionary:
 		return r_val
 	return {}
 
 static func get_player_restaurants(state, player_id: int) -> Array[String]:
-	if state == null or not (state.map is Dictionary):
+	if state == null:
 		return []
-	if not state.map.has("restaurants") or not (state.map["restaurants"] is Dictionary):
+	var restaurants_read := MapStateAccessClass.require_restaurants(state, "")
+	if not restaurants_read.ok:
 		return []
-	var restaurants: Dictionary = state.map["restaurants"]
+	var restaurants: Dictionary = restaurants_read.value
 	var result: Array[String] = []
 	for rest_id_val in restaurants.keys():
 		if not (rest_id_val is String):
@@ -52,9 +56,8 @@ static func get_player_restaurants(state, player_id: int) -> Array[String]:
 	return result
 
 static func get_sorted_house_ids(state) -> Result:
-	if state == null or not (state.map is Dictionary):
-		return Result.failure("Structures.get_sorted_house_ids: state.map 类型错误（期望 Dictionary）")
-	if not state.map.has("houses") or not (state.map["houses"] is Dictionary):
-		return Result.failure("Structures.get_sorted_house_ids: state.map.houses 缺失或类型错误（期望 Dictionary）")
-	var houses: Dictionary = state.map["houses"]
+	var houses_read := MapStateAccessClass.require_houses(state, "Structures.get_sorted_house_ids")
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
 	return HouseNumberManagerClass.get_sorted_house_ids(houses)

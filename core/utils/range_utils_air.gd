@@ -2,6 +2,8 @@
 # 目的：拆分 RangeUtils 的职责，避免单文件过大；本文件专注于 air range。
 extends RefCounted
 
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
+
 static func is_within_air_range_to_any_cells(
 	state: GameState,
 	actor: int,
@@ -18,11 +20,10 @@ static func is_within_air_range_to_any_cells(
 	if target_cells.is_empty():
 		return Result.success(false)
 
-	if not (state.map is Dictionary):
-		return Result.failure("state.map 类型错误（期望 Dictionary）")
-	if not state.map.has("restaurants") or not (state.map["restaurants"] is Dictionary):
-		return Result.failure("state.map.restaurants 缺失或类型错误")
-	var restaurants: Dictionary = state.map["restaurants"]
+	var restaurants_read := MapStateAccessClass.require_restaurants(state, "")
+	if not restaurants_read.ok:
+		return restaurants_read
+	var restaurants: Dictionary = restaurants_read.value
 
 	var targets: Array[Vector2i] = []
 	var target_set := {}
@@ -69,11 +70,10 @@ static func is_within_air_range(
 	if max_steps < 0:
 		return Result.failure("max_steps 必须 >= 0")
 
-	if not (state.map is Dictionary):
-		return Result.failure("state.map 类型错误（期望 Dictionary）")
-	if not state.map.has("restaurants") or not (state.map["restaurants"] is Dictionary):
-		return Result.failure("state.map.restaurants 缺失或类型错误")
-	var restaurants: Dictionary = state.map["restaurants"]
+	var restaurants_read := MapStateAccessClass.require_restaurants(state, "")
+	if not restaurants_read.ok:
+		return restaurants_read
+	var restaurants: Dictionary = restaurants_read.value
 
 	for rest_id in restaurant_ids:
 		if not restaurants.has(rest_id):

@@ -6,6 +6,7 @@ const RouteValidatorClass = preload("res://core/rules/drinks_procurement/route_v
 const PickedSourcesFinderClass = preload("res://core/rules/drinks_procurement/picked_sources_finder.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const MilestoneBonusesClass = preload("res://core/rules/drinks_procurement/milestone_bonuses.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 static func resolve_procurement_plan(
 	state: GameState,
@@ -29,11 +30,12 @@ static func resolve_procurement_plan(
 	var range_bonus: int = int(range_bonus_read.value)
 	range_value += range_bonus
 
-	var map_data: Dictionary = state.map
+	var restaurants_read := MapStateAccessClass.require_restaurants(state, "")
+	if not restaurants_read.ok:
+		return restaurants_read
+	var restaurants: Dictionary = restaurants_read.value
 
-	if not map_data.has("restaurants") or not (map_data["restaurants"] is Dictionary):
-		return Result.failure("state.map.restaurants 缺失或类型错误")
-	var restaurants: Dictionary = map_data["restaurants"]
+	var map_data: Dictionary = state.map
 
 	if not map_data.has("drink_sources") or not (map_data["drink_sources"] is Array):
 		return Result.failure("state.map.drink_sources 缺失或类型错误")
@@ -159,4 +161,3 @@ static func resolve_procurement_plan(
 		"route": route,
 		"picked_sources": picked_sources,
 	})
-

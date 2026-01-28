@@ -143,6 +143,7 @@
 - 2026-01-28：减少 Dictionary 裸写（company_structure 扩展）：为 `PlayerStateAccess` 补充 `player.company_structure` 的读取/校验 API，并用于 `CompanyStructureRules` 与重组相关动作（`SetCompanyStructureDirectAction`/`SetCompanyStructureReportAction`/`SubmitRestructuringAction`）减少重复校验/样板；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：将 MarketingSettlement 的“营销实例到期处理”从 `void + assert` 改为返回 `Result` 并在调用链中显式传播（release 下也可 fail-fast）；同时移除 `settlement_demand_effects.gd` 中对 state/inst 的 `assert`，改为 `Result.failure`（行为不变）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 - 2026-01-28：减少 Dictionary 裸写（state.map.marketing_placements 第一步）：新增 `MapStateAccess`（`core/state/map_state_access.gd`）用于收敛 `state.map.marketing_placements` 的读取/校验样板，并用于 `MarketingSettlement`/`MarketingPlacementQuery`/`InitiateMarketing` 相关逻辑（validation/apply）等路径（减少重复/样板）；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
+- 2026-01-28：减少 Dictionary 裸写（state.map.restaurants/houses 扩展）：将 core 中对 `state.map.restaurants/houses` 的读取/校验样板改为复用 `MapStateAccess.require_restaurants/require_houses`（覆盖 `RangeUtilsAir/RangeUtilsRoad`、`DinnertimeSettlement`、`SettlementHouseDemand`、`Structures`、`DrinksProcurement.PlanResolver` 等），减少重复/样板；`tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` PASS；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120` PASS（119/119）
 
 ---
 
@@ -344,7 +345,7 @@
   - （已整改 2026-01-28）为 `PlayerStateAccess` 增加 `employees`/`reserve_employees` 读取/校验 API，并用于 `WorkingFlow.auto_activate_reserve_employees`/`CompanyStructureRules`/`DinnertimeEffects`/`PaydaySalaryDiscount` 等路径（进一步减少 player 结构的重复校验/样板）
   - （已整改 2026-01-28）为 `PlayerStateAccess` 增加 `busy_marketers` 读取/校验 API，并用于重组相关动作（`RestructureEmployeeAction`/`SetCompanyStructureDirectAction`/`SetCompanyStructureReportAction`）等路径（进一步减少 player 结构的重复校验/样板）
   - （已整改 2026-01-28）为 `PlayerStateAccess` 增加 `company_structure` 读取/校验 API，并用于 `CompanyStructureRules` 与重组相关动作（`SetCompanyStructureDirectAction`/`SetCompanyStructureReportAction`/`SubmitRestructuringAction`）等路径（进一步减少 player 结构的重复校验/样板）
-  - （已整改 2026-01-28）新增 `MapStateAccess`（`core/state/map_state_access.gd`）作为下一步：先收敛 `state.map.marketing_placements` 的读取/校验样板（用于 `MarketingSettlement`/`MarketingPlacementQuery`/`InitiateMarketing` 等），后续可按同样思路覆盖 `state.map.restaurants/houses/...`（减少 map 结构的重复校验/样板）
+  - （已整改 2026-01-28）新增 `MapStateAccess`（`core/state/map_state_access.gd`）：收敛 `state.map.marketing_placements/restaurants/houses` 的读取/校验样板（覆盖 `MarketingSettlement`/`MarketingPlacementQuery`/`InitiateMarketing`/`DinnertimeSettlement`/`SettlementHouseDemand`/`RangeUtils*`/`Structures`/`DrinksProcurement.PlanResolver` 等），减少 map 结构的重复校验/样板
   - （已整改 2026-01-28）`round_state.action_counts` 的读写改为复用 `RoundStateCounters`（进一步减少 round_state 结构的重复校验/样板）
   - （已整改 2026-01-28）`round_state.mandatory_actions_completed` 的读写改为复用 `RoundStatePlayerStringLists`（进一步减少 round_state 结构的重复校验/样板）
 - 少量“自加载创建实例”的奇怪模式：

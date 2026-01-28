@@ -2,6 +2,7 @@
 extends RefCounted
 
 const HouseNumberManagerClass = preload("res://core/map/house_number_manager.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 static func add_house_demand(
 	state: GameState,
@@ -12,9 +13,10 @@ static func add_house_demand(
 	marketing_type: String,
 	amount: int
 ) -> Result:
-	if not state.map.has("houses") or not (state.map["houses"] is Dictionary):
-		return Result.failure("MarketingSettlement: state.map.houses 类型错误（期望 Dictionary）")
-	var houses: Dictionary = state.map["houses"]
+	var houses_read := MapStateAccessClass.require_houses(state, "MarketingSettlement")
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
 	if not houses.has(house_id):
 		return Result.failure("MarketingSettlement: houses 缺少 house_id: %s" % house_id)
 	var house_val = houses[house_id]
@@ -71,19 +73,16 @@ static func add_house_demand(
 
 	house["demands"] = demands
 	houses[house_id] = house
-	state.map["houses"] = houses
+	state.map[MapStateAccessClass.KEY_HOUSES] = houses
 	return Result.success(added)
 
 static func sort_house_ids_by_number(state: GameState, house_ids: Array) -> Result:
 	if house_ids.is_empty():
 		return Result.success([])
-	if state == null:
-		return Result.failure("MarketingSettlementHelpers.sort_house_ids_by_number: state 为空")
-	if not (state.map is Dictionary):
-		return Result.failure("MarketingSettlementHelpers.sort_house_ids_by_number: state.map 类型错误（期望 Dictionary）")
-	if not state.map.has("houses") or not (state.map["houses"] is Dictionary):
-		return Result.failure("MarketingSettlementHelpers.sort_house_ids_by_number: state.map.houses 缺失或类型错误（期望 Dictionary）")
-	var houses: Dictionary = state.map["houses"]
+	var houses_read := MapStateAccessClass.require_houses(state, "MarketingSettlementHelpers.sort_house_ids_by_number")
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
 
 	var subset := {}
 	var seen := {}
