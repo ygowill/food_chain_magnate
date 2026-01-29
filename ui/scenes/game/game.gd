@@ -1022,6 +1022,16 @@ func _confirm_rewind_to_turn_start(target_index: int) -> void:
 	if game_engine == null:
 		return
 
+	# 联机：回退必须由 server 执行并广播（否则会导致各客户端状态不一致）。
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		if NetClient == null or not NetClient.is_online_client_connected():
+			GameLog.warn("Game", "联机模式下回退失败：未连接到服务器")
+			return
+		_online_resync_in_progress = true
+		var request_id := NetClient.request_rewind_to_turn_start()
+		GameLog.warn("Game", "联机请求回退到回合开始 request_id=%s" % str(request_id))
+		return
+
 	var result := game_engine.rewind_to_command(target_index)
 	if not result.ok:
 		GameLog.warn("Game", "回退到回合开始失败: %s" % result.error)
@@ -1145,6 +1155,7 @@ func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> voi
 func _on_online_resync_archive_received(archive: Dictionary) -> void:
 	if game_engine == null:
 		return
+	_online_resync_in_progress = true
 	var r: Result = game_engine.load_from_archive(archive)
 	if not r.ok:
 		GameLog.error("Game", "联机 ResyncArchive 加载失败: %s" % r.error)
@@ -1800,7 +1811,9 @@ func _sync_timeline_ui(head_index: int, cursor_index: int, state: GameState) -> 
 		elif cursor_index < head_index and not _timeline_edit_mode_active:
 			reason = "查看历史中不可操作"
 		elif NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-			if state == null:
+			if _online_resync_in_progress:
+				reason = "联机：同步中"
+			elif state == null:
 				reason = "联机：等待同步"
 			elif NetContext.local_player_id < 0:
 				reason = "联机：身份未就绪"
@@ -2026,6 +2039,10 @@ func _on_timeline_seek_requested(timeline_index: int) -> void:
 
 func _on_replay_bar_seek_requested(target_index: int) -> void:
 	if game_engine == null:
+		return
+	# 联机：禁止本地时间线回退/复盘（否则会与 server 命令流产生状态不一致）。
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and not _replay_mode_active:
+		GameLog.warn("Game", "联机模式下不支持时间线回退/复盘（避免状态不一致）")
 		return
 	# 通过 ReplayBar/日志 seek 进入的“查看历史”一律保持只读（避免 step 快照状态用于分支编辑）。
 	_timeline_edit_mode_active = false

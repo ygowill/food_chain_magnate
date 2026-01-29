@@ -147,6 +147,15 @@ func request_resync() -> void:
 		return
 	rpc_id(1, "rpc_resync_request", {})
 
+func request_rewind_to_turn_start() -> String:
+	var request_id := _next_request_id()
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return request_id
+	if not is_online_client_connected():
+		return request_id
+	rpc_id(1, "rpc_rewind_to_turn_start", {"request_id": request_id})
+	return request_id
+
 func take_pending_resync_archive() -> Dictionary:
 	var out: Dictionary = _pending_resync_archive.duplicate(true)
 	_pending_resync_archive = {}
@@ -546,6 +555,66 @@ func rpc_resync_request(_request: Dictionary) -> void:
 	rpc_id(peer_id, "rpc_resync_archive", {
 		"archive": Dictionary(archive_r.value).duplicate(true),
 	})
+
+@rpc("any_peer", "reliable")
+func rpc_rewind_to_turn_start(request: Dictionary) -> void:
+	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+
+	var peer_id := multiplayer.get_remote_sender_id()
+	var request_id := str(request.get("request_id", ""))
+	var room = _room_manager.get_room_by_peer(peer_id)
+	if room == null:
+		_send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
+		return
+	if str(room.status) != "InGame":
+		_send_request_rejected(peer_id, request_id, "not_in_game", "Room not in game")
+		return
+	if room.game_engine == null:
+		_send_request_rejected(peer_id, request_id, "engine_missing", "Room engine missing")
+		return
+
+	# Spectator：只读，不允许发起回退（避免影响对局）
+	var actor_id := -1
+	if room.player_id_by_peer_id.has(peer_id):
+		actor_id = int(room.player_id_by_peer_id.get(peer_id, -1))
+	elif room.player_id_by_peer_id.has(str(peer_id)):
+		actor_id = int(room.player_id_by_peer_id.get(str(peer_id), -1))
+	if actor_id < 0:
+		_send_request_rejected(peer_id, request_id, "spectator_readonly", "Spectator cannot request rewind")
+		return
+
+	if not room.has_method("rewind_to_current_player_turn_start"):
+		_send_request_rejected(peer_id, request_id, "not_supported", "Room does not support rewind")
+		return
+
+	var rr: Result = room.rewind_to_current_player_turn_start()
+	if not rr.ok:
+		_send_request_rejected(peer_id, request_id, "rewind_failed", rr.error)
+		return
+	if not (rr.value is Dictionary):
+		_send_request_rejected(peer_id, request_id, "rewind_failed", "rewind result type invalid")
+		return
+
+	var payload: Dictionary = Dictionary(rr.value)
+	var archive_val = payload.get("archive", null)
+	if not (archive_val is Dictionary):
+		_send_request_rejected(peer_id, request_id, "rewind_failed", "archive missing")
+		return
+	var archive: Dictionary = Dictionary(archive_val).duplicate(true)
+
+	# 广播 archive：所有在线成员一起回退，保证状态一致。
+	if room.has_method("get_peer_ids"):
+		for pid in Array(room.get_peer_ids()):
+			var target_peer_id := int(pid)
+			if target_peer_id <= 0:
+				continue
+			rpc_id(target_peer_id, "rpc_resync_archive", {"archive": archive})
+	else:
+		# Fallback：至少把结果发给请求方（避免卡死）。
+		rpc_id(peer_id, "rpc_resync_archive", {"archive": archive})
+
+	_broadcast_room_state(room)
 
 @rpc("authority", "reliable")
 func rpc_room_state(payload: Dictionary) -> void:

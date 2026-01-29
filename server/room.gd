@@ -325,6 +325,51 @@ func start_game() -> Result:
 		"config": config.duplicate(true),
 	})
 
+func rewind_to_current_player_turn_start() -> Result:
+	if status != STATUS_IN_GAME:
+		return Result.failure("Room is not in game")
+	if game_engine == null:
+		return Result.failure("Room engine missing")
+	if not game_engine.has_method("find_current_player_turn_start_command_index"):
+		return Result.failure("Room engine missing turn-start query")
+
+	var idx_r: Result = game_engine.find_current_player_turn_start_command_index()
+	if not idx_r.ok:
+		return Result.failure("find_current_player_turn_start_command_index failed: %s" % idx_r.error)
+	var target_index := int(idx_r.value)
+	var current_index := int(game_engine.current_command_index)
+	if target_index >= current_index:
+		var archive_noop: Result = game_engine.create_archive()
+		if not archive_noop.ok:
+			return Result.failure("create_archive failed: %s" % archive_noop.error)
+		_touch()
+		return Result.success({
+			"archive": Dictionary(archive_noop.value).duplicate(true),
+			"target_index": target_index,
+			"current_index": current_index,
+			"noop": true,
+		})
+
+	var rewind_r: Result = game_engine.rewind_to_command(target_index)
+	if not rewind_r.ok:
+		return Result.failure("rewind_to_command failed: %s" % rewind_r.error)
+
+	# 在线对局：保持线性时间线，丢弃未来命令（与本地执行新命令的 truncate 规则一致）。
+	if game_engine.has_method("truncate_future_history"):
+		game_engine.truncate_future_history()
+
+	var archive_r: Result = game_engine.create_archive()
+	if not archive_r.ok:
+		return Result.failure("create_archive failed: %s" % archive_r.error)
+
+	_touch()
+	return Result.success({
+		"archive": Dictionary(archive_r.value).duplicate(true),
+		"target_index": target_index,
+		"current_index": current_index,
+		"noop": false,
+	})
+
 func _sha256_hex(secret: String) -> String:
 	if secret.is_empty():
 		return ""

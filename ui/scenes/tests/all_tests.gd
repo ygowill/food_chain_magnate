@@ -15,6 +15,7 @@ const OnlineRoomManagerTestClass = preload("res://core/tests/online_room_manager
 const OnlineRoomListTestClass = preload("res://core/tests/online_room_list_test.gd")
 const OnlineStartGameReplayTestClass = preload("res://core/tests/online_start_game_replay_test.gd")
 const OnlineResyncArchiveTestClass = preload("res://core/tests/online_resync_archive_test.gd")
+const OnlineRewindToTurnStartTestClass = preload("res://core/tests/online_rewind_to_turn_start_test.gd")
 const ForfeitPlayerActionTestClass = preload("res://core/tests/forfeit_player_action_test.gd")
 const OnlineRoomSpectatorTestClass = preload("res://core/tests/online_room_spectator_test.gd")
 const OnlineRoomSeedRandomStableTestClass = preload("res://core/tests/online_room_seed_random_stable_test.gd")
@@ -218,6 +219,10 @@ func _run_all() -> int:
 		{
 			"name": "OnlineResyncArchiveTest",
 			"fn": func() -> Result: return OnlineResyncArchiveTestClass.run(),
+		},
+		{
+			"name": "OnlineRewindToTurnStartTest",
+			"fn": func() -> Result: return OnlineRewindToTurnStartTestClass.run(),
 		},
 		{
 			"name": "ForfeitPlayerActionTest",
