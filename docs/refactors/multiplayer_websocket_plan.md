@@ -7,6 +7,7 @@
 补充文档：
 - 实现指南（按文件与 RPC 列表）：`docs/refactors/multiplayer_implementation_guide.md`
 - 公网部署（`wss://` / TLS / 反向代理示例）：`docs/refactors/multiplayer_public_deployment.md`
+- 联机大厅 UI 改版（配置/模块选择复用）：`docs/refactors/multiplayer_lobby_ui_redesign.md`
 
 ---
 
@@ -19,7 +20,7 @@
 - Dedicated server：服务器不占用玩家席位；玩家全部通过客户端连接。
 - 传输层：使用 Godot 4 自带 `WebSocketMultiplayerPeer`（`create_server/create_client`）。
 - 公网部署：支持 `wss://`（TLS）。生产环境采用 **反向代理终止 TLS（Nginx）**（见第 2.3 节与 `docs/refactors/multiplayer_public_deployment.md`）。
-- 房间加入鉴权：默认使用 **room_password**（房主设置、加入者输入）；敏感字段不得写入日志（见第 4.2 节）。
+- 房间加入鉴权：默认使用 **room_password**（房主设置、加入者输入；允许为空字符串=无密码）；敏感字段不得写入日志（见第 4.2 节）。
 - “保密”范围：仅限制 **UI/日志/导出** 不泄露其它玩家的储备卡选择；不做强加密/反作弊（但服务器仍应校验所有请求）。
 - 断线重连：阶段 1 不要求（断线后的 UX 以“明确提示 + 返回大厅/重新加入”为主）。
 - 掉线处理（InGame）：其余玩家继续。掉线玩家视为 **弃权**：其棋子/占位从对局中移除，且该玩家不参与最终胜利判定（详见第 4.2.2/第 6/第 11）。
@@ -142,19 +143,21 @@
 ### 4.2 房间流（房主创建）
 
 客户端→服务器：
-- `CreateRoom { request_id, desired_player_count, seed_mode, seed?, enabled_modules_v2, modules_v2_base_dir, join_policy, room_password? }`
+- `ListRooms { request_id }`
+- `RoomListSubscribe { request_id, subscribe: bool }`（可选：若用 server push，可用此开关；最小可用可不做）
+- `CreateRoom { request_id, desired_player_count, seed_mode, seed?, enabled_modules_v2, modules_v2_base_dir, join_policy, room_password?, allow_spectators=true }`
   - `join_policy` 建议支持：
-    - `"password"`（默认/推荐）：房主设置 `room_password`；加入者需提供同一密码。
+    - `"password"`（默认）：房主设置 `room_password`；加入者需提供同一密码；**允许为空字符串（空=无密码）**。
     - `"token"`（可选）：创建房间时由服务器生成高熵 `join_token`，只回传给房主；加入者需提供该 token。
-    - `"open"`（仅开发/局域网）：仅 room_code 即可加入（公网不建议）。
   - 安全建议：服务器只存储 `join_token_hash`/`password_hash`，不存明文（`Crypto.generate_random_bytes` + `HashingContext.HASH_SHA256`）。
 - `JoinRoom { request_id, room_code, join_token?, room_password? }`
 - `LeaveRoom { request_id }`
-- `UpdateRoomConfig { ... }`（仅房主允许）
+- `UpdateRoomConfig { ... }`（仅房主允许；可包含 `allow_spectators`）
 - `StartGame {}`（仅房主允许；校验人数达到 player_count）
 
 服务器→客户端：
-- `RoomState { room_code, host_peer_id, players:[{peer_id, seat_index?, name, color_index}], config, status }`
+- `RoomList { request_id, rooms: Array[RoomSummary] }`
+- `RoomState { room_code, host_peer_id, players:[{peer_id, seat_index?, name, color_index}], config, status, password_required, allow_spectators }`
 - `GameStarted { player_id_by_peer_id: {peer_id:int}, config }`
 - `GameEnded { reason_code, message }`（广播；例如房主中断/玩家断线/服务器关闭房间）
 - `RequestRejected { request_id, code, message }`
@@ -162,6 +165,12 @@
 说明：
 - `request_id`：客户端生成的唯一请求标识（字符串/整数均可），用于把 `RequestRejected` 对应回 UI 交互（Toast/弹窗）。
 - 服务器不得在日志/RoomState 广播中泄露 `join_token`/`room_password`。
+
+补充（公开房间列表）：
+- RoomSummary 建议字段与 UI 方案见 `docs/refactors/multiplayer_lobby_ui_redesign.md`（第 7 节）。
+- 观战策略（已确认）：InGame 房间允许观战，但满足：
+  - `allow_spectators == true`（房主可关闭）
+  - 若 `room_password` 非空：观战与加入一致，都需要提供正确 `room_password` 鉴权
 
 ### 4.2.1 room_code 与 join_token 生成建议（实现细节）
 
@@ -173,6 +182,7 @@
   - 建议：使用 `Crypto.generate_random_bytes(N)` 生成随机字节（例如 32 bytes），再编码为可复制字符串（hex 或 base64url）。
   - 存储：服务端只存 `HashingContext.HASH_SHA256` 哈希（`join_token_hash`），不存明文；比较时对输入做同样哈希再比对。
 - `room_password`：
+  - 允许为空字符串，表示“无密码房间”。
   - 阶段 1 可先按“明文输入 → SHA256 存储”落地；后续若需要更强口令学（salt/迭代），可再升级。
 
 ### 4.2.2 房间生命周期与断线处理（阶段 1）
@@ -228,6 +238,7 @@
 - `ERR_ROOM_FULL`：房间已满
 - `ERR_NOT_HOST`：非房主调用 UpdateRoomConfig/StartGame
 - `ERR_INVALID_CONFIG`：配置非法（玩家数/seed/modules_v2 等）
+- `ERR_SPECTATE_NOT_ALLOWED`：不允许观战（例如房主关闭观战）
 - `ERR_GAME_NOT_STARTED`：对局未开始就发送 ActionRequest
 - `ERR_ACTION_REJECTED`：动作校验失败（可把 `Result.error` 转为 message）
 - `ERR_RATE_LIMITED`：请求过于频繁

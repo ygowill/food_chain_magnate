@@ -90,6 +90,14 @@ static func run() -> Result:
 	if spectators.size() != 1:
 		return Result.failure("room_state.spectators 长度错误: %d" % spectators.size())
 
+	# 禁止观战后：新的 spectator 不应能加入
+	var ur: Result = room.update_config({"allow_spectators": false})
+	if not ur.ok:
+		return Result.failure("update_config(allow_spectators=false) 失败: %s" % ur.error)
+	var jr3: Result = rm.join_room(21, {"name": "Spec2", "color_index": 0}, room_code, "pw")
+	if jr3.ok:
+		return Result.failure("JoinRoom(spectator, disallowed) 预期失败，但实际 ok=true")
+
 	# spectator 断线：应被移除
 	var dr2: Result = rm.disconnect_peer(20)
 	if not dr2.ok:
@@ -99,4 +107,3 @@ static func run() -> Result:
 		return Result.failure("spectator 断线后未移除: %s" % str(room_state3.get("spectators", [])))
 
 	return Result.success()
-

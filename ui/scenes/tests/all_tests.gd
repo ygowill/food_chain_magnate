@@ -12,10 +12,12 @@ const RestaurantLogoAssignmentTestClass = preload("res://core/tests/restaurant_l
 const PaydaySalaryTokenEligibilityTestClass = preload("res://core/tests/payday_salary_token_eligibility_test.gd")
 const CallbackResultContractTestClass = preload("res://core/tests/callback_result_contract_test.gd")
 const OnlineRoomManagerTestClass = preload("res://core/tests/online_room_manager_test.gd")
+const OnlineRoomListTestClass = preload("res://core/tests/online_room_list_test.gd")
 const OnlineStartGameReplayTestClass = preload("res://core/tests/online_start_game_replay_test.gd")
 const OnlineResyncArchiveTestClass = preload("res://core/tests/online_resync_archive_test.gd")
 const ForfeitPlayerActionTestClass = preload("res://core/tests/forfeit_player_action_test.gd")
 const OnlineRoomSpectatorTestClass = preload("res://core/tests/online_room_spectator_test.gd")
+const OnlineRoomSeedRandomStableTestClass = preload("res://core/tests/online_room_seed_random_stable_test.gd")
 const GameOverWinnerRulesTestClass = preload("res://core/tests/game_over_winner_rules_test.gd")
 const CommandPrivacyTestClass = preload("res://core/tests/command_privacy_test.gd")
 const InitialCompanyTestClass = preload("res://core/tests/initial_company_test.gd")
@@ -203,6 +205,10 @@ func _run_all() -> int:
 			"fn": func() -> Result: return OnlineRoomManagerTestClass.run(),
 		},
 		{
+			"name": "OnlineRoomListTest",
+			"fn": func() -> Result: return OnlineRoomListTestClass.run(),
+		},
+		{
 			"name": "OnlineStartGameReplayTest",
 			"fn": func() -> Result: return OnlineStartGameReplayTestClass.run(),
 		},
@@ -217,6 +223,10 @@ func _run_all() -> int:
 		{
 			"name": "OnlineRoomSpectatorTest",
 			"fn": func() -> Result: return OnlineRoomSpectatorTestClass.run(),
+		},
+		{
+			"name": "OnlineRoomSeedRandomStableTest",
+			"fn": func() -> Result: return OnlineRoomSeedRandomStableTestClass.run(),
 		},
 		{
 			"name": "GameOverWinnerRulesTest",

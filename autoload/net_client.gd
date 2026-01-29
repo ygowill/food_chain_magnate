@@ -9,6 +9,7 @@ const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 signal connected()
 signal disconnected(reason: String)
+signal room_list_updated(rooms: Array)
 signal room_state_updated(room_state: Dictionary)
 signal request_rejected(request_id: String, code: String, message: String)
 signal game_started(payload: Dictionary)
@@ -90,6 +91,12 @@ func request_create_room(desired_player_count: int, room_password: String, confi
 	rpc_id(1, "rpc_create_room", payload)
 	return request_id
 
+func request_list_rooms() -> String:
+	var request_id := _next_request_id()
+	var payload := {"request_id": request_id}
+	rpc_id(1, "rpc_list_rooms", payload)
+	return request_id
+
 func request_join_room(room_code: String, room_password: String) -> String:
 	var request_id := _next_request_id()
 	var payload := {
@@ -162,6 +169,21 @@ func rpc_client_hello(request: Dictionary) -> void:
 		"name": str(profile.get("name", "玩家")),
 		"color_index": int(profile.get("color_index", 0)),
 	}
+	_send_room_list_to_peer(peer_id, "")
+
+@rpc("any_peer", "reliable")
+func rpc_list_rooms(request: Dictionary) -> void:
+	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+
+	var peer_id := multiplayer.get_remote_sender_id()
+	var request_id := str(request.get("request_id", ""))
+	var profile: Dictionary = Dictionary(_profile_by_peer_id.get(peer_id, {}))
+	if profile.is_empty():
+		_send_request_rejected(peer_id, request_id, "missing_client_hello", "ClientHello required before ListRooms")
+		return
+
+	_send_room_list_to_peer(peer_id, request_id)
 
 @rpc("any_peer", "reliable")
 func rpc_create_room(request: Dictionary) -> void:
@@ -185,6 +207,7 @@ func rpc_create_room(request: Dictionary) -> void:
 		"desired_player_count": desired_player_count,
 		"seed_mode": "random",
 		"seed": 0,
+		"allow_spectators": true,
 		"enabled_modules_v2": Array(Globals.enabled_modules_v2, TYPE_STRING, "", null),
 		"modules_v2_base_dir": str(Globals.modules_v2_base_dir),
 	}
@@ -206,6 +229,13 @@ func rpc_create_room(request: Dictionary) -> void:
 			_send_request_rejected(peer_id, request_id, "invalid_params", "seed required when seed_mode=fixed")
 			return
 
+	if request.has("allow_spectators"):
+		var av = request.get("allow_spectators", null)
+		if not (av is bool):
+			_send_request_rejected(peer_id, request_id, "invalid_params", "allow_spectators must be bool")
+			return
+		config["allow_spectators"] = bool(av)
+
 	if request.has("enabled_modules_v2"):
 		var mv = request.get("enabled_modules_v2", null)
 		if not (mv is Array):
@@ -226,6 +256,12 @@ func rpc_create_room(request: Dictionary) -> void:
 			return
 		config["modules_v2_base_dir"] = bd
 
+	# seed_mode=random：由 server 固定生成 seed，以便大厅展示与可复现。
+	if str(config.get("seed_mode", "random")) == "random":
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		config["seed"] = int(rng.randi())
+
 	var cr: Result = _room_manager.create_room(peer_id, profile, room_password, config)
 	if not cr.ok:
 		_send_request_rejected(peer_id, request_id, "create_room_failed", cr.error)
@@ -237,6 +273,7 @@ func rpc_create_room(request: Dictionary) -> void:
 		return
 
 	_broadcast_room_state(room)
+	_broadcast_room_list("")
 
 @rpc("any_peer", "reliable")
 func rpc_join_room(request: Dictionary) -> void:
@@ -264,6 +301,7 @@ func rpc_join_room(request: Dictionary) -> void:
 		return
 
 	_broadcast_room_state(room)
+	_broadcast_room_list("")
 	if str(room.status) == "InGame" and room.game_engine != null:
 		var payload := {
 			"player_id_by_peer_id": room.player_id_by_peer_id.duplicate(true),
@@ -325,6 +363,13 @@ func rpc_update_room_config(request: Dictionary) -> void:
 			return
 		patch["seed"] = int(sv)
 
+	if patch.has("allow_spectators"):
+		var av = patch.get("allow_spectators", null)
+		if not (av is bool):
+			_send_request_rejected(peer_id, request_id, "invalid_params", "allow_spectators must be bool")
+			return
+		patch["allow_spectators"] = bool(av)
+
 	if patch.has("enabled_modules_v2"):
 		var mv = patch.get("enabled_modules_v2", null)
 		if not (mv is Array):
@@ -345,12 +390,33 @@ func rpc_update_room_config(request: Dictionary) -> void:
 			return
 		patch["modules_v2_base_dir"] = bd
 
+	# seed_mode=random：保持一个 server 选定的 seed（不在 StartGame 时再重掷），便于大厅展示/复现。
+	var old_seed_mode := str(room.config.get("seed_mode", "random")).strip_edges()
+	var new_seed_mode := old_seed_mode
+	if patch.has("seed_mode"):
+		new_seed_mode = str(patch.get("seed_mode", "random")).strip_edges()
+
+	if new_seed_mode == "fixed":
+		if not patch.has("seed"):
+			_send_request_rejected(peer_id, request_id, "invalid_params", "seed required when seed_mode=fixed")
+			return
+	elif new_seed_mode == "random":
+		var seed_cur := int(room.config.get("seed", 0))
+		if old_seed_mode != "random":
+			seed_cur = 0
+		if seed_cur <= 0:
+			var rng := RandomNumberGenerator.new()
+			rng.randomize()
+			seed_cur = int(rng.randi())
+		patch["seed"] = seed_cur
+
 	var ur: Result = room.update_config(patch)
 	if not ur.ok:
 		_send_request_rejected(peer_id, request_id, "update_config_failed", ur.error)
 		return
 
 	_broadcast_room_state(room)
+	_broadcast_room_list("")
 
 @rpc("any_peer", "reliable")
 func rpc_leave_room(request: Dictionary) -> void:
@@ -366,8 +432,10 @@ func rpc_leave_room(request: Dictionary) -> void:
 		_send_request_rejected(peer_id, request_id, "leave_room_failed", lr.error)
 		return
 
-	if room != null and not bool(lr.value.get("removed", false)):
+	var removed := bool(lr.value.get("removed", false))
+	if room != null and not removed:
 		_broadcast_room_state(room)
+	_broadcast_room_list("")
 
 	rpc_id(peer_id, "rpc_room_state", _empty_room_state())
 
@@ -392,6 +460,7 @@ func rpc_start_game(request: Dictionary) -> void:
 		return
 
 	_broadcast_room_state(room)
+	_broadcast_room_list("")
 
 	var payload_val: Dictionary = Dictionary(sr.value)
 	var payload := {
@@ -484,6 +553,16 @@ func rpc_room_state(payload: Dictionary) -> void:
 		return
 	NetContext.room_state = payload.duplicate(true)
 	room_state_updated.emit(NetContext.room_state)
+
+@rpc("authority", "reliable")
+func rpc_room_list(payload: Dictionary) -> void:
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	var rooms_val = payload.get("rooms", null)
+	if not (rooms_val is Array):
+		return
+	NetContext.room_list = Array(rooms_val).duplicate(true)
+	room_list_updated.emit(NetContext.room_list.duplicate(true))
 
 @rpc("authority", "reliable")
 func rpc_game_started(payload: Dictionary) -> void:
@@ -619,6 +698,9 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 	if rr.ok and room != null and not removed:
 		_broadcast_room_state(room)
+		_broadcast_room_list("")
+	elif rr.ok and removed:
+		_broadcast_room_list("")
 
 func _on_connected_to_server() -> void:
 	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
@@ -670,9 +752,28 @@ func _empty_room_state() -> Dictionary:
 		"host_peer_id": 0,
 		"players": [],
 		"spectators": [],
+		"password_required": false,
+		"allow_spectators": true,
 		"config": {},
 		"status": "Lobby",
 	}
+
+func _send_room_list_to_peer(peer_id: int, request_id: String) -> void:
+	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+	var rooms: Array[Dictionary] = []
+	if _room_manager != null and _room_manager.has_method("list_room_summaries"):
+		rooms = _room_manager.list_room_summaries()
+	rpc_id(peer_id, "rpc_room_list", {
+		"request_id": request_id,
+		"rooms": rooms,
+	})
+
+func _broadcast_room_list(request_id: String) -> void:
+	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+	for peer_id_val in _profile_by_peer_id.keys():
+		_send_room_list_to_peer(int(peer_id_val), request_id)
 
 func _broadcast_command_applied(room, cmd: Command) -> void:
 	if room == null or cmd == null:

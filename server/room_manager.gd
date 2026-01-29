@@ -57,7 +57,7 @@ func join_room(peer_id: int, profile: Dictionary, room_code: String, room_passwo
 
 	if room.join_policy != "password":
 		return Result.failure("Unsupported join_policy: %s" % room.join_policy)
-	if room.password_hash != _sha256_hex(room_password):
+	if room.is_password_required() and room.password_hash != _sha256_hex(room_password):
 		return Result.failure("Invalid room_password")
 
 	var ar: Result
@@ -80,6 +80,24 @@ func join_room(peer_id: int, profile: Dictionary, room_code: String, room_passwo
 		"room_state": room.to_room_state_dict(),
 		"role": role,
 	})
+
+func list_room_summaries() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for room_val in rooms.values():
+		var room = room_val
+		if room == null:
+			continue
+		if not room.has_method("to_room_summary_dict"):
+			continue
+		out.append(Dictionary(room.to_room_summary_dict()))
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var ta := int(a.get("updated_at_ms", 0))
+		var tb := int(b.get("updated_at_ms", 0))
+		if ta != tb:
+			return ta > tb
+		return str(a.get("room_code", "")) > str(b.get("room_code", ""))
+	)
+	return out
 
 func leave_room(peer_id: int) -> Result:
 	if not peer_to_room.has(peer_id):
@@ -187,6 +205,8 @@ func _generate_room_code() -> String:
 	return out
 
 func _sha256_hex(secret: String) -> String:
+	if secret.is_empty():
+		return ""
 	var ctx := HashingContext.new()
 	ctx.start(HashingContext.HASH_SHA256)
 	ctx.update(secret.to_utf8_buffer())

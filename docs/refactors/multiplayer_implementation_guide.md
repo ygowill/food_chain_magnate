@@ -4,6 +4,11 @@
 
 范围：阶段 1（Hotseat 保留 + Dedicated server + WebSocket + 公网 `wss://` + 房间鉴权 + 储备卡 UI/日志保密；不做断线重连）。
 
+关联文档：
+- `docs/refactors/multiplayer_websocket_plan.md`（整体方案与里程碑）
+- `docs/refactors/multiplayer_public_deployment.md`（公网部署）
+- `docs/refactors/multiplayer_lobby_ui_redesign.md`（联机大厅 UI 改版：拆分页面/模块选择复用/房主配置广播）
+
 ---
 
 ## 1. 新增/改动的模块边界
@@ -27,6 +32,7 @@
   - online_client 会话层：连接/断线、RPC 请求封装、消息分发、状态机（Lobby → Room → InGame）
   - 输出信号建议：
     - `connected()`, `disconnected(reason: String)`
+    - `room_list_updated(rooms: Array)`
     - `room_state_updated(room_state: Dictionary)`
     - `game_started(payload: Dictionary)`
     - `command_applied(cmd_dict: Dictionary, state_hash: String)`
@@ -62,7 +68,8 @@
 
 - `ui/scenes/online/online_lobby.tscn` + `online_lobby.gd`
   - 输入 server URL（`ws://` 或 `wss://`）
-  - 创建/加入房间（输入 room_code + token/password）
+  - 浏览公开房间列表（Rooms）+ 通过 room_code 加入
+  - 创建房间（含可空 `room_password`；seed/modules 配置）
   - 显示 RoomState（玩家列表/房主/配置）
   - 房主可开始游戏
 
@@ -86,14 +93,16 @@
 
 - `rpc_client_hello(request: Dictionary)`
   - `{ request_id, protocol_version, game_version, schema_version, player_profile }`
+- `rpc_list_rooms(request: Dictionary)`
+  - `{ request_id }`
 - `rpc_create_room(request: Dictionary)`
-  - `{ request_id, desired_player_count, seed_mode, seed?, enabled_modules_v2, modules_v2_base_dir, join_policy="password", room_password }`
+  - `{ request_id, desired_player_count, seed_mode, seed?, enabled_modules_v2, modules_v2_base_dir, join_policy="password", room_password, allow_spectators=true }`（`room_password` 可为空字符串）
 - `rpc_join_room(request: Dictionary)`
   - `{ request_id, room_code, room_password }`
 - `rpc_leave_room(request: Dictionary)`
   - `{ request_id }`
 - `rpc_update_room_config(request: Dictionary)`
-  - `{ request_id, ... }`（仅房主）
+  - `{ request_id, ... }`（仅房主；可包含 `allow_spectators`）
 - `rpc_start_game(request: Dictionary)`
   - `{ request_id }`（仅房主）
 - `rpc_action_request(request: Dictionary)`
@@ -103,8 +112,10 @@
 
 ### 2.2 Server → Client（RPC）
 
+- `rpc_room_list(payload: Dictionary)`
+  - `{ request_id, rooms: Array }`（每个元素为 `RoomSummary`；字段见 `docs/refactors/multiplayer_lobby_ui_redesign.md` 第 7 节，含 `password_required/allow_spectators/updated_at_ms`）
 - `rpc_room_state(payload: Dictionary)`
-  - `RoomState { room_code, host_peer_id, players, config, status }`
+  - `RoomState { room_code, host_peer_id, players, config, status, password_required, allow_spectators }`
 - `rpc_game_started(payload: Dictionary)`
   - `{ player_id_by_peer_id, config }`
 - `rpc_command_applied(payload: Dictionary)`
@@ -142,6 +153,6 @@
   - 不移除：房屋/花园
   - 该玩家 `forfeited=true`，只读旁观者且不得获胜
   - 服务器自动代为执行 `skip/end_turn`（以及必要阶段动作）以保证流程继续
-- InGame JoinRoom：允许以 spectator 进入观战（不占用玩家席位；不进入 peer→player_id 映射）。
+- InGame JoinRoom：若 `allow_spectators=true`，允许以 spectator 进入观战（不占用玩家席位；不进入 peer→player_id 映射）；若房间有密码则仍需提供正确 `room_password`。
 - 限流：对 JoinRoom/ActionRequest 做节流，避免刷请求拖垮 server。
 - 敏感字段脱敏：token/password 不写日志；`select_reserve_card.selected_index` 在 UI/导出对非本人且未揭示时脱敏。

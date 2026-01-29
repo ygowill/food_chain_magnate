@@ -2,9 +2,7 @@
 extends Control
 
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
-const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
-const ModulePackageLoaderClass = preload("res://core/modules/v2/module_package_loader.gd")
-const ModulePlanBuilderClass = preload("res://core/modules/v2/module_plan_builder.gd")
+const ModuleSelectorClass = preload("res://ui/components/module_selector/module_selector.gd")
 
 @onready var player_count_spinbox: SpinBox = $CenterContainer/ContentCenter/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer/PlayerCountSpinBox
 @onready var seed_edit: LineEdit = $CenterContainer/ContentCenter/VBoxContainer/MainColumns/LeftColumn/SeedContainer/SeedLineEdit
@@ -16,7 +14,6 @@ const ModulePlanBuilderClass = preload("res://core/modules/v2/module_plan_builde
 var _players_section: VBoxContainer = null
 var _players_container: VBoxContainer = null
 var _modules_section: VBoxContainer = null
-var _modules_groups_container: GridContainer = null
 var _message_label: Label = null
 var _info_label: Label = null
 
@@ -24,13 +21,7 @@ var _player_name_edits: Array[LineEdit] = []
 var _player_logo_options: Array[OptionButton] = []
 var _player_logo_previews: Array[TextureRect] = []
 
-var _available_modules: Dictionary = {}  # module_id -> ModuleManifest
-var _optional_module_ids: Array[String] = []
-var _module_checkboxes: Dictionary = {}  # module_id -> CheckBox
-var _requested_optional_modules: Dictionary = {}  # module_id -> true（用户显式选择）
-var _locked_optional_modules: Dictionary = {}  # module_id -> true（被依赖，禁止取消）
-
-var _suppress_module_signals: bool = false
+var _module_selector = null
 var _suppress_player_signals: bool = false
 
 var _logo_icons_small: Array[Texture2D] = []
@@ -83,10 +74,9 @@ func _ready() -> void:
 
 	_ensure_sections()
 	_ensure_logo_icons_cache()
-	_seed_requested_modules_from_globals()
-	_load_modules()
+	_ensure_module_selector()
 	_rebuild_player_rows()
-	_recompute_modules_and_apply_to_ui()
+	_sync_globals_modules_to_module_selector()
 
 func _on_back_pressed() -> void:
 	GameLog.info("GameSetup", "返回上一场景")
@@ -155,33 +145,7 @@ func _ensure_sections() -> void:
 	_modules_section.name = "ModulesSection"
 	_modules_section.add_theme_constant_override("separation", 6)
 	right_column.add_child(_modules_section)
-
-	var header_row := HBoxContainer.new()
-	header_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	header_row.add_theme_constant_override("separation", 10)
-	_modules_section.add_child(header_row)
-
-	var modules_label := Label.new()
-	modules_label.text = "模块（分组）"
-	modules_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header_row.add_child(modules_label)
-
-	var select_all_btn := Button.new()
-	select_all_btn.text = "全选"
-	select_all_btn.pressed.connect(_on_select_all_modules_pressed)
-	header_row.add_child(select_all_btn)
-
-	var clear_all_btn := Button.new()
-	clear_all_btn.text = "全不选"
-	clear_all_btn.pressed.connect(_on_clear_all_modules_pressed)
-	header_row.add_child(clear_all_btn)
-
-	_modules_groups_container = GridContainer.new()
-	_modules_groups_container.name = "ModulesGroups"
-	_modules_groups_container.columns = 2
-	_modules_groups_container.add_theme_constant_override("h_separation", 20)
-	_modules_groups_container.add_theme_constant_override("v_separation", 20)
-	_modules_section.add_child(_modules_groups_container)
+	_ensure_module_selector()
 
 	_message_label = Label.new()
 	_message_label.name = "MessageLabel"
@@ -206,40 +170,29 @@ func _set_message(text: String) -> void:
 	_message_label.text = s
 	_message_label.visible = not s.is_empty()
 
-func _seed_requested_modules_from_globals() -> void:
-	_requested_optional_modules.clear()
-	for mid_val in Globals.enabled_modules_v2:
-		var id := str(mid_val)
-		if id.begins_with("base_"):
-			continue
-		_requested_optional_modules[id] = true
-
-func _load_modules() -> void:
-	_available_modules.clear()
-	_optional_module_ids.clear()
-
-	var base_dirs_read := ModuleDirSpecClass.parse_base_dirs(Globals.modules_v2_base_dir)
-	if not base_dirs_read.ok:
-		_set_message("解析 modules_v2_base_dir 失败：%s" % base_dirs_read.error)
+func _ensure_module_selector() -> void:
+	if _modules_section == null or not is_instance_valid(_modules_section):
 		return
-	var base_dirs: Array[String] = base_dirs_read.value
-
-	var manifests_read := ModulePackageLoaderClass.load_all_from_dirs(base_dirs)
-	if not manifests_read.ok:
-		_set_message("加载模块列表失败：%s" % manifests_read.error)
+	if _module_selector != null and is_instance_valid(_module_selector):
 		return
-	_available_modules = manifests_read.value
+	_module_selector = ModuleSelectorClass.new()
+	_modules_section.add_child(_module_selector)
+	_module_selector.notes_changed.connect(func(text: String) -> void:
+		_set_message(text)
+	)
+	_module_selector.load_failed.connect(func(msg: String) -> void:
+		_set_message(msg)
+	)
 
-	for mid_val in _available_modules.keys():
-		if not (mid_val is String):
-			continue
-		var mid: String = str(mid_val)
-		if mid.begins_with("base_"):
-			continue
-		_optional_module_ids.append(mid)
-	_optional_module_ids.sort()
-
-	_build_modules_ui()
+func _sync_globals_modules_to_module_selector() -> void:
+	if _module_selector == null or not is_instance_valid(_module_selector):
+		return
+	var base_dir := str(Globals.modules_v2_base_dir)
+	var lr: Result = _module_selector.set_modules_base_dir(base_dir)
+	if not lr.ok:
+		_set_message("加载模块列表失败：%s" % lr.error)
+		return
+	_module_selector.set_initial_enabled_modules_v2(Array(Globals.enabled_modules_v2, TYPE_STRING, "", null))
 
 func _rebuild_player_rows() -> void:
 	if _players_container == null or not is_instance_valid(_players_container):
@@ -375,305 +328,16 @@ func _scale_texture_square(tex: Texture2D, size_px: int) -> Texture2D:
 	img.resize(size_px, size_px, Image.INTERPOLATE_LANCZOS)
 	return ImageTexture.create_from_image(img)
 
-func _build_modules_ui() -> void:
-	if _modules_groups_container == null or not is_instance_valid(_modules_groups_container):
-		return
-
-	for child in _modules_groups_container.get_children():
-		child.queue_free()
-	_module_checkboxes.clear()
-
-	var used: Dictionary = {}
-	for group_def_val in MODULE_GROUPS:
-		if not (group_def_val is Dictionary):
-			continue
-		var group_def: Dictionary = group_def_val
-		var title := str(group_def.get("title", ""))
-		var mids: Array[String] = Array(group_def.get("modules", []), TYPE_STRING, "", null)
-		var box := _build_module_group_box(title, mids)
-		_modules_groups_container.add_child(box)
-		for mid in mids:
-			used[mid] = true
-
-	var other: Array[String] = []
-	for mid in _optional_module_ids:
-		if not used.has(mid):
-			other.append(mid)
-	if not other.is_empty():
-		_modules_groups_container.add_child(_build_module_group_box("其他", other))
-
-func _build_module_group_box(title: String, module_ids: Array[String]) -> Control:
-	var box := VBoxContainer.new()
-	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	box.add_theme_constant_override("separation", 6)
-
-	var header := HBoxContainer.new()
-	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.alignment = BoxContainer.ALIGNMENT_CENTER
-	header.add_theme_constant_override("separation", 10)
-	box.add_child(header)
-
-	var label := Label.new()
-	label.text = title
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(label)
-
-	var mids_copy: Array[String] = module_ids.duplicate()
-
-	var select_btn := Button.new()
-	select_btn.text = "组选"
-	select_btn.pressed.connect(func() -> void:
-		_on_select_group_pressed(mids_copy)
-	)
-	header.add_child(select_btn)
-
-	var clear_btn := Button.new()
-	clear_btn.text = "组不选"
-	clear_btn.pressed.connect(func() -> void:
-		_on_clear_group_pressed(mids_copy)
-	)
-	header.add_child(clear_btn)
-
-	var inner := VBoxContainer.new()
-	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	inner.add_theme_constant_override("separation", 4)
-	box.add_child(inner)
-
-	for mid in module_ids:
-		if not _optional_module_ids.has(mid):
-			continue
-		var cb := CheckBox.new()
-		cb.text = _format_module_label(mid)
-		cb.tooltip_text = _format_module_tooltip(mid)
-		cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var id := mid
-		cb.toggled.connect(func(pressed: bool) -> void:
-			_on_module_checkbox_toggled(id, pressed)
-		)
-		inner.add_child(cb)
-		_module_checkboxes[mid] = cb
-
-	return box
-
-func _format_module_label(mid: String) -> String:
-	var name := mid
-	var manifest_val = _available_modules.get(mid, null)
-	if manifest_val is ModuleManifest:
-		var manifest: ModuleManifest = manifest_val
-		name = str(manifest.name)
-	return "%s (%s)" % [name, mid]
-
-func _format_module_tooltip(mid: String) -> String:
-	var manifest_val = _available_modules.get(mid, null)
-	if not (manifest_val is ModuleManifest):
-		return ""
-	var manifest: ModuleManifest = manifest_val
-	var parts: Array[String] = []
-	if not manifest.dependencies.is_empty():
-		parts.append("依赖: %s" % ", ".join(Array(manifest.dependencies, TYPE_STRING, "", null)))
-	if not manifest.conflicts.is_empty():
-		parts.append("冲突: %s" % ", ".join(Array(manifest.conflicts, TYPE_STRING, "", null)))
-	return "\n".join(parts)
-
-func _on_select_all_modules_pressed() -> void:
-	for mid in _optional_module_ids:
-		_requested_optional_modules[mid] = true
-	_recompute_modules_and_apply_to_ui()
-
-func _on_clear_all_modules_pressed() -> void:
-	_requested_optional_modules.clear()
-	_recompute_modules_and_apply_to_ui()
-
-func _on_select_group_pressed(module_ids: Array[String]) -> void:
-	for mid in module_ids:
-		if _optional_module_ids.has(mid):
-			_requested_optional_modules[mid] = true
-	_recompute_modules_and_apply_to_ui()
-
-func _on_clear_group_pressed(module_ids: Array[String]) -> void:
-	for mid in module_ids:
-		_requested_optional_modules.erase(mid)
-	_recompute_modules_and_apply_to_ui()
-
-func _on_module_checkbox_toggled(module_id: String, pressed: bool) -> void:
-	if _suppress_module_signals:
-		return
-	if pressed:
-		_requested_optional_modules[module_id] = true
-	else:
-		_requested_optional_modules.erase(module_id)
-	_recompute_modules_and_apply_to_ui()
-
-func _recompute_modules_and_apply_to_ui() -> void:
-	if _available_modules.is_empty() or _module_checkboxes.is_empty():
-		return
-
-	var notes: Array[String] = []
-	var new_ms_on := _requested_optional_modules.has("new_milestones")
-
-	# 冲突/兼容性规则：new_milestones 优先。
-	if new_ms_on:
-		if _requested_optional_modules.has("hard_choices"):
-			_requested_optional_modules.erase("hard_choices")
-			notes.append("已自动取消 Hard Choices（与全新里程碑冲突）")
-
-		var remove_list: Array[String] = []
-		for mid_val in _requested_optional_modules.keys():
-			var id := str(mid_val)
-			if id == "new_milestones":
-				continue
-			if _depends_on_base_milestones(id):
-				remove_list.append(id)
-		remove_list.sort()
-		for id in remove_list:
-			_requested_optional_modules.erase(id)
-		if not remove_list.is_empty():
-			notes.append("已自动取消依赖基础里程碑的模块：%s" % ", ".join(remove_list))
-
-	var effective := _compute_effective_optional_modules()
-	_locked_optional_modules = _compute_locked_optional_modules_from_requested()
-
-	_suppress_module_signals = true
-	for mid in _module_checkboxes.keys():
-		var cb_val = _module_checkboxes.get(mid, null)
-		if not (cb_val is CheckBox) or not is_instance_valid(cb_val):
-			continue
-		var cb: CheckBox = cb_val
-
-		var id := str(mid)
-		cb.button_pressed = effective.has(id)
-
-		var disabled := false
-		var tt := _format_module_tooltip(id)
-		if new_ms_on and _depends_on_base_milestones(id):
-			disabled = true
-			if not tt.is_empty():
-				tt += "\n"
-			tt += "与“全新里程碑”不兼容（依赖 base_milestones）"
-		elif _locked_optional_modules.has(id):
-			disabled = true
-			if not tt.is_empty():
-				tt += "\n"
-			tt += "被依赖，需先取消上游模块"
-		cb.disabled = disabled
-		cb.tooltip_text = tt
-	_suppress_module_signals = false
-
-	_set_message("\n".join(notes))
-
-func _compute_effective_optional_modules() -> Dictionary:
-	var effective: Dictionary = {}
-	for mid_val in _requested_optional_modules.keys():
-		effective[str(mid_val)] = true
-
-	var stack: Array[String] = []
-	for mid_val in _requested_optional_modules.keys():
-		stack.append(str(mid_val))
-
-	var visited: Dictionary = {}
-	while not stack.is_empty():
-		var cur: String = stack.pop_back()
-		if visited.has(cur):
-			continue
-		visited[cur] = true
-
-		var manifest_val = _available_modules.get(cur, null)
-		if not (manifest_val is ModuleManifest):
-			continue
-		var manifest: ModuleManifest = manifest_val
-		for dep_val in manifest.dependencies:
-			if not (dep_val is String):
-				continue
-			var dep: String = str(dep_val)
-			if dep.begins_with("base_"):
-				continue
-			effective[dep] = true
-			stack.append(dep)
-
-	return effective
-
-func _compute_locked_optional_modules_from_requested() -> Dictionary:
-	var locked: Dictionary = {}
-	var stack: Array[String] = []
-	for mid_val in _requested_optional_modules.keys():
-		stack.append(str(mid_val))
-
-	var visited: Dictionary = {}
-	while not stack.is_empty():
-		var cur: String = stack.pop_back()
-		if visited.has(cur):
-			continue
-		visited[cur] = true
-
-		var manifest_val = _available_modules.get(cur, null)
-		if not (manifest_val is ModuleManifest):
-			continue
-		var manifest: ModuleManifest = manifest_val
-		for dep_val in manifest.dependencies:
-			if not (dep_val is String):
-				continue
-			var dep: String = str(dep_val)
-			if dep.begins_with("base_"):
-				continue
-			locked[dep] = true
-			stack.append(dep)
-
-	return locked
-
-func _depends_on_base_milestones(module_id: String) -> bool:
-	var stack: Array[String] = [module_id]
-	var visited: Dictionary = {}
-	while not stack.is_empty():
-		var cur: String = stack.pop_back()
-		if visited.has(cur):
-			continue
-		visited[cur] = true
-
-		var manifest_val = _available_modules.get(cur, null)
-		if not (manifest_val is ModuleManifest):
-			continue
-		var manifest: ModuleManifest = manifest_val
-		for dep_val in manifest.dependencies:
-			if not (dep_val is String):
-				continue
-			var dep: String = str(dep_val)
-			if dep == "base_milestones":
-				return true
-			if dep.begins_with("base_"):
-				continue
-			stack.append(dep)
-
-	return false
-
 func _apply_module_selection_to_globals() -> bool:
-	if _available_modules.is_empty():
-		_set_message("模块列表为空，无法开始游戏。")
+	if _module_selector == null or not is_instance_valid(_module_selector):
+		_set_message("模块选择器未初始化，无法开始游戏。")
 		return false
-
-	var base: Array[String] = GameDefaultsClass.build_default_enabled_modules_v2()
-	if _requested_optional_modules.has("new_milestones"):
-		base.erase("base_milestones")
-
-	var requested: Array[String] = []
-	for mid_val in _requested_optional_modules.keys():
-		var id := str(mid_val)
-		if id.is_empty() or id.begins_with("base_"):
-			continue
-		requested.append(id)
-	requested.sort()
-
-	var out: Array[String] = []
-	out.append_array(base)
-	out.append_array(requested)
-	out = Array(out, TYPE_STRING, "", null)
-
-	var plan_read := ModulePlanBuilderClass.build_plan(_available_modules, out)
-	if not plan_read.ok:
-		_set_message("模块选择无效：%s" % plan_read.error)
+	var vr: Result = _module_selector.validate_selection()
+	if not vr.ok:
+		_set_message("模块选择无效：%s" % vr.error)
 		return false
-
-	Globals.enabled_modules_v2 = out
+	var enabled: Array[String] = _module_selector.get_enabled_modules_v2()
+	Globals.enabled_modules_v2 = Array(enabled, TYPE_STRING, "", null)
 	return true
 
 func _apply_player_profiles_to_globals() -> void:

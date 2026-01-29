@@ -14,6 +14,8 @@ var config: Dictionary = {}
 var join_policy: String = "password"
 var password_hash: String = ""
 
+var updated_at_ms: int = 0
+
 var game_engine = null
 var player_id_by_peer_id: Dictionary = {} # peer_id -> player_id
 
@@ -35,6 +37,18 @@ func _init(p_room_code: String, p_host_peer_id: int, p_join_policy: String, p_pa
 	password_hash = p_password_hash
 	config = p_config.duplicate(true)
 	_desired_player_count = int(config.get("desired_player_count", 0))
+	_touch()
+
+func _touch() -> void:
+	updated_at_ms = int(Time.get_unix_time_from_system() * 1000.0)
+
+func is_password_required() -> bool:
+	if join_policy != "password":
+		return true
+	return password_hash != _sha256_hex("")
+
+func get_allow_spectators() -> bool:
+	return bool(config.get("allow_spectators", true))
 
 func update_config(patch: Dictionary) -> Result:
 	if patch.is_empty():
@@ -57,6 +71,7 @@ func update_config(patch: Dictionary) -> Result:
 			continue
 		config[key] = patch.get(k, null)
 
+	_touch()
 	return Result.success()
 
 func has_peer(peer_id: int) -> bool:
@@ -103,6 +118,7 @@ func add_peer(peer_id: int, profile: Dictionary) -> Result:
 	_seat_by_player_peer_id[peer_id] = seat_index
 	_seat_profile_by_seat_index[seat_index] = profile.duplicate(true)
 	_peer_id_by_seat_index[seat_index] = peer_id
+	_touch()
 	return Result.success()
 
 func add_spectator(peer_id: int, profile: Dictionary) -> Result:
@@ -110,13 +126,17 @@ func add_spectator(peer_id: int, profile: Dictionary) -> Result:
 		return Result.failure("Peer already in room")
 	if status != STATUS_IN_GAME:
 		return Result.failure("Room is not in game")
+	if not get_allow_spectators():
+		return Result.failure("Spectators not allowed")
 
 	_spectator_profile_by_peer_id[peer_id] = profile.duplicate(true)
+	_touch()
 	return Result.success()
 
 func remove_peer(peer_id: int) -> Result:
 	if _spectator_profile_by_peer_id.has(peer_id):
 		_spectator_profile_by_peer_id.erase(peer_id)
+		_touch()
 		return Result.success({
 			"host_changed": false,
 			"host_peer_id": host_peer_id,
@@ -137,6 +157,7 @@ func remove_peer(peer_id: int) -> Result:
 		host_peer_id = _pick_new_host_peer_id()
 		host_changed = true
 
+	_touch()
 	return Result.success({
 		"host_changed": host_changed,
 		"host_peer_id": host_peer_id,
@@ -146,6 +167,7 @@ func disconnect_peer(peer_id: int) -> Result:
 	# Spectator：直接移除（无座位）
 	if _spectator_profile_by_peer_id.has(peer_id):
 		_spectator_profile_by_peer_id.erase(peer_id)
+		_touch()
 		return Result.success({
 			"host_changed": false,
 			"host_peer_id": host_peer_id,
@@ -166,6 +188,7 @@ func disconnect_peer(peer_id: int) -> Result:
 		host_peer_id = _pick_new_host_peer_id()
 		host_changed = true
 
+	_touch()
 	return Result.success({
 		"host_changed": host_changed,
 		"host_peer_id": host_peer_id,
@@ -178,7 +201,40 @@ func to_room_state_dict() -> Dictionary:
 		"players": _build_players_array(),
 		"spectators": _build_spectators_array(),
 		"config": config.duplicate(true),
+		"password_required": is_password_required(),
+		"allow_spectators": get_allow_spectators(),
 		"status": status,
+	}
+
+func to_room_summary_dict() -> Dictionary:
+	var cfg: Dictionary = config.duplicate(true)
+	var seed_mode := str(cfg.get("seed_mode", "")).strip_edges()
+	var seed := int(cfg.get("seed", 0))
+	var mods_count := 0
+	var mv = cfg.get("enabled_modules_v2", null)
+	if mv is Array:
+		mods_count = Array(mv).size()
+
+	var host_name := ""
+	var host_profile: Dictionary = Dictionary(_player_profile_by_peer_id.get(host_peer_id, {}))
+	if not host_profile.is_empty():
+		host_name = str(host_profile.get("name", ""))
+
+	return {
+		"room_code": room_code,
+		"status": status,
+		"desired_player_count": int(cfg.get("desired_player_count", 0)),
+		"player_count": get_player_count(),
+		"spectator_count": _spectator_profile_by_peer_id.size(),
+		"password_required": is_password_required(),
+		"allow_spectators": get_allow_spectators(),
+		"updated_at_ms": updated_at_ms,
+		"host_name": host_name,
+		"config_digest": {
+			"seed_mode": seed_mode,
+			"seed": seed,
+			"enabled_modules_count": mods_count,
+		},
 	}
 
 func build_player_id_by_peer_id() -> Dictionary:
@@ -232,10 +288,11 @@ func start_game() -> Result:
 	var seed_mode := str(config.get("seed_mode", "random")).strip_edges()
 	var seed := int(config.get("seed", 0))
 	if seed_mode == "random":
-		var rng := RandomNumberGenerator.new()
-		rng.randomize()
-		seed = int(rng.randi())
-		config["seed"] = seed
+		if seed <= 0:
+			var rng := RandomNumberGenerator.new()
+			rng.randomize()
+			seed = int(rng.randi())
+			config["seed"] = seed
 
 	var enabled_modules: Array[String] = []
 	var mods_val = config.get("enabled_modules_v2", null)
@@ -261,11 +318,20 @@ func start_game() -> Result:
 	game_engine = engine
 	player_id_by_peer_id = build_player_id_by_peer_id()
 	status = STATUS_IN_GAME
+	_touch()
 
 	return Result.success({
 		"player_id_by_peer_id": player_id_by_peer_id.duplicate(true),
 		"config": config.duplicate(true),
 	})
+
+func _sha256_hex(secret: String) -> String:
+	if secret.is_empty():
+		return ""
+	var ctx := HashingContext.new()
+	ctx.start(HashingContext.HASH_SHA256)
+	ctx.update(secret.to_utf8_buffer())
+	return ctx.finish().hex_encode()
 
 func _pick_seat_index() -> int:
 	var max_seats := maxi(1, _desired_player_count)

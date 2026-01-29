@@ -14,6 +14,7 @@ var local_player_id: int = -1
 
 var server_url: String = ""
 var room_state: Dictionary = {}
+var room_list: Array = []
 var player_profile: Dictionary = {}
 
 func _ready() -> void:
@@ -24,6 +25,7 @@ func reset() -> void:
 	local_player_id = -1
 	server_url = ""
 	room_state = {}
+	room_list = []
 	_ensure_default_profile()
 
 func _ensure_default_profile() -> void:
@@ -40,4 +42,3 @@ func _ensure_default_profile() -> void:
 		"name": name,
 		"color_index": color_index,
 	}
-

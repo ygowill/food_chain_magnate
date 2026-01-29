@@ -63,4 +63,13 @@ static func run() -> Result:
 	if jr_missing.ok or jr_missing.error_code != Result.ErrorCode.MISSING_PARAMS:
 		return Result.failure("JoinRoom 缺少 room_code 预期返回 MISSING_PARAMS，但实际 ok=%s error_code=%d" % [str(jr_missing.ok), int(jr_missing.error_code)])
 
+	# 无密码房间：room_password 为空时，JoinRoom 不应要求密码匹配
+	var cr2: Result = rm.create_room(30, {"name": "Host2", "color_index": 0}, "", {"desired_player_count": 2})
+	if not cr2.ok:
+		return Result.failure("CreateRoom(无密码) 失败: %s" % cr2.error)
+	var room_code2 := str(Dictionary(cr2.value).get("room_code", ""))
+	var jr2: Result = rm.join_room(31, {"name": "P2", "color_index": 1}, room_code2, "any")
+	if not jr2.ok:
+		return Result.failure("JoinRoom(无密码) 失败: %s" % jr2.error)
+
 	return Result.success()

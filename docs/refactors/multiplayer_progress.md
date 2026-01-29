@@ -6,13 +6,16 @@
 - 计划与改造点：`docs/refactors/multiplayer_websocket_plan.md`
 - 公网部署（Nginx + `wss://`）：`docs/refactors/multiplayer_public_deployment.md`
 - 实现指南（文件/RPC 清单）：`docs/refactors/multiplayer_implementation_guide.md`
+- 联机大厅 UI 改版（配置/模块选择）：`docs/refactors/multiplayer_lobby_ui_redesign.md`
 
 ---
 
 ## 0. 总体约束（已确认）
 
 - 公网部署：`wss://`，由 Nginx 终止 TLS。
-- 房间加入：默认 `room_password`。
+- 房间列表：服务器公开房间列表（大厅可浏览）。
+- 房间加入：`room_password`（可空；空=无密码）。
+- 观战：InGame 允许作为 spectator 加入；若房间有密码则需输入密码；房主可关闭观战（`allow_spectators=false`）。
 - 保密范围：仅银行储备卡（UI/日志/导出不得泄露 `select_reserve_card.selected_index` 给非本人且未揭示时）。
 - 断线重连：阶段 1 不要求。
 - 掉线处理（InGame）：其余玩家继续；掉线玩家弃权：
@@ -64,6 +67,24 @@
 - [x] 验收：`game_smoke_test`/`all_tests` 通过
 - [x] Docs + Git
 
+### M5：联机大厅 UI/配置改版（拆分页面 + 复用模块选择）
+
+状态：已落地（2026-01-29）。验收：`game_smoke_test`/`all_tests` 通过。
+
+- [x] UI：Connect/Rooms/Create/Room 分页，避免单页堆叠
+- [x] Server：公开房间列表 `RoomList`（创建/人数变化/开始等触发更新）
+- [x] UI：Rooms 页展示房间列表 + 通过房间码加入（`room_password` 可空；密码房间 lock 标识）
+- [x] UI：Rooms 页支持观战（InGame 且房主允许观战；密码房间需输入 password）
+- [x] UI：CreateRoom 使用“模块选择面板”（复用 Hotseat UI/逻辑），不再手填 `enabled_modules_v2`
+- [x] UI：Room 页结构化展示房间信息/玩家列表/旁观者列表；房主编辑配置并自动广播（debounce）
+- [x] UI：seed_mode=随机 时展示最终 seed（由 server 分配并广播；StartGame 不重复随机）
+- [x] UI：`modules_v2_base_dir` 仅放“高级/开发”隐藏
+- [x] UI：房主可配置“是否允许观战”（对所有房间生效；观战仍需 password 鉴权）
+- [x] Refactor：抽取可复用组件 `ModuleSelector` / `RoomConfigEditor`（Hotseat/Online 共用）
+- [x] Tests：`OnlineRoomListTest`/`OnlineRoomSeedRandomStableTest` 等加入 `AllTests`
+- [x] 验收：`game_smoke_test`/`all_tests` 通过
+- [x] Docs + Git
+
 ---
 
 ## 2. 每次开发的固定检查清单
@@ -83,6 +104,7 @@
 
 （按时间倒序追加）
 
+- 2026-01-29：`HashingContext.update()` 传入空 `PackedByteArray` 会报错（`len == 0`），导致“无密码房间”计算 password_hash 时 `AllTests` 失败。修复：对空字符串直接返回 `""`（表示无密码），避免对空 buffer 调用 `update()`。
 - 2026-01-29：`GameEngine.load_from_archive` 会在“已初始化的 engine”上执行 `reset_modules_v2()`；由于 `PhaseManager` hooks 未清理，旧 hooks 的 Callable target 可能已被释放，导致回放时出现 `null::_on_restructuring_before_enter`。修复：在 `ModulesV2.reset` 中调用 `PhaseManager.reset_hooks()` 清空 hooks。
 - 2026-01-29：`AllTests` 开启 warnings-as-errors；测试中对 `Variant` 返回值使用 `:=`（例如 `max(...)`）会触发 “typed as Variant” 警告并当作错误。修复：改用显式类型或 `maxi/mini` 等确定类型函数。
 - 2026-01-29：`CommandPrivacy.sanitize_params` 必须复制 `params`（`duplicate(true)`），否则会在 UI/调试视图中“污染”原始 `Command.params`（导致后续显示/导出/测试错误）。
