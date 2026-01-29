@@ -166,6 +166,78 @@ secret = true
 layout_mode = 2
 text = "加入"
 
+[node name="RoomConfigSection" type="VBoxContainer" parent="Root"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ConfigTitle" type="Label" parent="Root/RoomConfigSection"]
+layout_mode = 2
+text = "房间配置（仅房主可改）"
+
+[node name="ConfigPlayerCountRow" type="HBoxContainer" parent="Root/RoomConfigSection"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ConfigPlayerCountLabel" type="Label" parent="Root/RoomConfigSection/ConfigPlayerCountRow"]
+layout_mode = 2
+text = "人数"
+
+[node name="ConfigPlayerCountSpin" type="SpinBox" parent="Root/RoomConfigSection/ConfigPlayerCountRow"]
+layout_mode = 2
+min_value = 2.0
+max_value = 5.0
+step = 1.0
+rounded = true
+
+[node name="SeedModeRow" type="HBoxContainer" parent="Root/RoomConfigSection"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SeedModeLabel" type="Label" parent="Root/RoomConfigSection/SeedModeRow"]
+layout_mode = 2
+text = "种子"
+
+[node name="SeedModeOption" type="OptionButton" parent="Root/RoomConfigSection/SeedModeRow"]
+layout_mode = 2
+
+[node name="SeedValueSpin" type="SpinBox" parent="Root/RoomConfigSection/SeedModeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 2147483647.0
+step = 1.0
+rounded = true
+
+[node name="ModulesBaseDirRow" type="HBoxContainer" parent="Root/RoomConfigSection"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ModulesBaseDirLabel" type="Label" parent="Root/RoomConfigSection/ModulesBaseDirRow"]
+layout_mode = 2
+text = "Modules Dir"
+
+[node name="ModulesBaseDirEdit" type="LineEdit" parent="Root/RoomConfigSection/ModulesBaseDirRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="EnabledModulesRow" type="VBoxContainer" parent="Root/RoomConfigSection"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="EnabledModulesLabel" type="Label" parent="Root/RoomConfigSection/EnabledModulesRow"]
+layout_mode = 2
+text = "Enabled Modules (V2) 一行一个"
+
+[node name="EnabledModulesEdit" type="TextEdit" parent="Root/RoomConfigSection/EnabledModulesRow"]
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+size_flags_horizontal = 3
+wrap_mode = 0
+
+[node name="UpdateConfigButton" type="Button" parent="Root/RoomConfigSection"]
+layout_mode = 2
+text = "同步配置"
+
 [node name="RoomActionsRow" type="HBoxContainer" parent="Root"]
 layout_mode = 2
 theme_override_constants/separation = 12
@@ -173,6 +245,10 @@ theme_override_constants/separation = 12
 [node name="LeaveRoomButton" type="Button" parent="Root/RoomActionsRow"]
 layout_mode = 2
 text = "离开房间"
+
+[node name="StartGameButton" type="Button" parent="Root/RoomActionsRow"]
+layout_mode = 2
+text = "开始游戏"
 
 [node name="StatusOutput" type="RichTextLabel" parent="Root"]
 layout_mode = 2
@@ -185,5 +261,6 @@ scroll_active = true
 [connection signal="pressed" from="Root/ConnectionSection/ButtonsRow/DisconnectButton" to="." method="_on_disconnect_pressed"]
 [connection signal="pressed" from="Root/RoomSection/CreateRoom/CreateRoomButton" to="." method="_on_create_room_pressed"]
 [connection signal="pressed" from="Root/RoomSection/JoinRoom/JoinRoomButton" to="." method="_on_join_room_pressed"]
+[connection signal="pressed" from="Root/RoomConfigSection/UpdateConfigButton" to="." method="_on_update_config_pressed"]
 [connection signal="pressed" from="Root/RoomActionsRow/LeaveRoomButton" to="." method="_on_leave_room_pressed"]
-
+[connection signal="pressed" from="Root/RoomActionsRow/StartGameButton" to="." method="_on_start_game_pressed"]

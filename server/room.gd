@@ -1,7 +1,11 @@
 class_name OnlineRoom
 extends RefCounted
 
+const GameEngineClass = preload("res://core/engine/game_engine.gd")
+
 const STATUS_LOBBY := "Lobby"
+const STATUS_IN_GAME := "InGame"
+const STATUS_ENDED := "Ended"
 
 var room_code: String = ""
 var host_peer_id: int = 0
@@ -9,6 +13,9 @@ var status: String = STATUS_LOBBY
 var config: Dictionary = {}
 var join_policy: String = "password"
 var password_hash: String = ""
+
+var game_engine = null
+var player_id_by_peer_id: Dictionary = {} # peer_id -> player_id
 
 var _profile_by_peer_id: Dictionary = {} # peer_id -> { name, color_index }
 var _seat_by_peer_id: Dictionary = {} # peer_id -> seat_index
@@ -21,6 +28,29 @@ func _init(p_room_code: String, p_host_peer_id: int, p_join_policy: String, p_pa
 	password_hash = p_password_hash
 	config = p_config.duplicate(true)
 	_desired_player_count = int(config.get("desired_player_count", 0))
+
+func update_config(patch: Dictionary) -> Result:
+	if patch.is_empty():
+		return Result.success()
+
+	if patch.has("desired_player_count"):
+		var v = patch.get("desired_player_count", null)
+		if not (v is int or v is float):
+			return Result.failure("desired_player_count 类型错误（期望 int）")
+		var n := int(v)
+		if n < get_player_count():
+			return Result.failure("desired_player_count 不能小于当前人数: %d" % get_player_count())
+		_desired_player_count = n
+		config["desired_player_count"] = n
+
+	# 其它字段按原样覆盖；校验在 server RPC 层完成。
+	for k in patch.keys():
+		var key := str(k)
+		if key == "desired_player_count":
+			continue
+		config[key] = patch.get(k, null)
+
+	return Result.success()
 
 func has_peer(peer_id: int) -> bool:
 	return _profile_by_peer_id.has(peer_id)
@@ -48,6 +78,8 @@ func is_empty() -> bool:
 func add_peer(peer_id: int, profile: Dictionary) -> Result:
 	if has_peer(peer_id):
 		return Result.failure("Peer already in room")
+	if status != STATUS_LOBBY:
+		return Result.failure("Room is not in Lobby")
 	if is_full():
 		return Result.failure("Room is full")
 
@@ -82,6 +114,83 @@ func to_room_state_dict() -> Dictionary:
 		"status": status,
 	}
 
+func build_player_id_by_peer_id() -> Dictionary:
+	var out: Dictionary = {}
+	var peer_ids := get_peer_ids()
+	for i in range(peer_ids.size()):
+		out[int(peer_ids[i])] = i
+	return out
+
+func can_start_game() -> Result:
+	if status != STATUS_LOBBY:
+		return Result.failure("Room is not in Lobby")
+
+	var desired := int(config.get("desired_player_count", 0))
+	if desired <= 0:
+		return Result.failure("desired_player_count not set")
+	if get_player_count() != desired:
+		return Result.failure("players not ready: have=%d need=%d" % [get_player_count(), desired])
+
+	var seed_mode := str(config.get("seed_mode", "random")).strip_edges()
+	if seed_mode != "random" and seed_mode != "fixed":
+		return Result.failure("invalid seed_mode: %s" % seed_mode)
+	if seed_mode == "fixed" and not config.has("seed"):
+		return Result.failure("seed required when seed_mode=fixed")
+
+	var base_dir := str(config.get("modules_v2_base_dir", "")).strip_edges()
+	if base_dir.is_empty():
+		return Result.failure("modules_v2_base_dir is empty")
+
+	var mods_val = config.get("enabled_modules_v2", null)
+	if mods_val != null and not (mods_val is Array):
+		return Result.failure("enabled_modules_v2 type invalid (expected Array)")
+
+	return Result.success()
+
+func start_game() -> Result:
+	var ready := can_start_game()
+	if not ready.ok:
+		return ready
+
+	var player_count := int(config.get("desired_player_count", 0))
+	var seed_mode := str(config.get("seed_mode", "random")).strip_edges()
+	var seed := int(config.get("seed", 0))
+	if seed_mode == "random":
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		seed = int(rng.randi())
+		config["seed"] = seed
+
+	var enabled_modules: Array[String] = []
+	var mods_val = config.get("enabled_modules_v2", null)
+	if mods_val is Array:
+		for it in Array(mods_val):
+			var s := str(it).strip_edges()
+			if s.is_empty():
+				continue
+			enabled_modules.append(s)
+
+	var base_dir := str(config.get("modules_v2_base_dir", "")).strip_edges()
+
+	var logo_choices: Array[int] = []
+	for _i in range(player_count):
+		logo_choices.append(-1)
+	config["restaurant_logo_choices_by_player"] = logo_choices
+
+	var engine = GameEngineClass.new()
+	var init_r: Result = engine.initialize(player_count, seed, enabled_modules, base_dir, [], logo_choices)
+	if not init_r.ok:
+		return Result.failure("GameEngine.initialize failed: %s" % init_r.error)
+
+	game_engine = engine
+	player_id_by_peer_id = build_player_id_by_peer_id()
+	status = STATUS_IN_GAME
+
+	return Result.success({
+		"player_id_by_peer_id": player_id_by_peer_id.duplicate(true),
+		"config": config.duplicate(true),
+	})
+
 func _pick_seat_index() -> int:
 	var max_seats := maxi(1, _desired_player_count)
 	for i in range(max_seats):
@@ -106,4 +215,3 @@ func _build_players_array() -> Array[Dictionary]:
 			"color_index": int(profile.get("color_index", 0)),
 		})
 	return out
-

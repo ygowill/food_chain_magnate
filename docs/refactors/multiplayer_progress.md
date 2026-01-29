@@ -36,11 +36,11 @@
 
 ### M2：启动对局 + 命令广播回放（先不做保密门禁）
 
-- [ ] Server：StartGame 后创建 `GameEngine` + peer→player_id 映射
-- [ ] Client：进入 Game 场景；只接收 `CommandApplied` 回放
-- [ ] Tests：新增“命令广播回放一致性”测试并加入 `AllTests`
-- [ ] 验收：`game_smoke_test`/`all_tests` 通过
-- [ ] Docs + Git
+- [x] Server：StartGame 后创建 `GameEngine` + peer→player_id 映射
+- [x] Client：进入 Game 场景；通过 `CommandApplied` 回放更新 UI
+- [x] Tests：新增“命令广播回放一致性”测试并加入 `AllTests`
+- [x] 验收：`game_smoke_test`/`all_tests` 通过
+- [x] Docs + Git
 
 ### M3：输入权限收口 + 储备卡保密（UI/日志/导出）
 
@@ -80,3 +80,4 @@
 （按时间倒序追加）
 
 - 2026-01-29：Godot headless 下新加 `class_name` 脚本不会自动进入 Global Class Cache；避免在新脚本上使用 `RoomManager`/`OnlineRoom` 等类型注解（会触发 Parse Error），改用无类型变量或显式 `Script`/`Dictionary`/`Result`。
+- 2026-01-29：GDScript 中使用 `:=` 时需要可推导类型；对未显式类型的对象（例如 `var server_engine = ...`）再调用方法返回值时，可能触发 “Cannot infer the type” 解析错误。测试代码里优先用 `=`（Variant）或补齐类型注解。

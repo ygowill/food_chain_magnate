@@ -196,6 +196,7 @@ func _ready() -> void:
 	PerfTraceClass.end_span(span_init_game)
 	if game_engine != null:
 		_panel_controller.reset_bank_break_tracking(game_engine.get_state())
+		_setup_online_client_bindings()
 
 	# 初始化调试面板
 	_setup_debug_panel()
@@ -1032,6 +1033,22 @@ func _execute_command(command: Command) -> Result:
 		return Result.failure("游戏引擎未初始化")
 	if _replay_mode_active:
 		return Result.failure("回放模式下无法执行命令")
+
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		if NetClient == null or not NetClient.is_online_client_connected():
+			return Result.failure("未连接到服务器")
+		if command == null:
+			return Result.failure("command 为空")
+		var action_id := str(command.action_id).strip_edges()
+		if action_id.is_empty():
+			return Result.failure("action_id 为空")
+		var params: Dictionary = {}
+		if command.params is Dictionary:
+			params = Dictionary(command.params)
+		var request_id := NetClient.request_action(action_id, params)
+		GameLog.info("Game", "联机发送 ActionRequest: %s request_id=%s" % [action_id, request_id])
+		return Result.success({"request_id": request_id})
+
 	var head_index := game_engine.command_history.size() - 1
 	var was_in_history := int(game_engine.current_command_index) < head_index
 	if was_in_history and not _timeline_edit_mode_active:
@@ -1058,6 +1075,55 @@ func _execute_command(command: Command) -> Result:
 
 	_update_ui()
 	return result
+
+func _setup_online_client_bindings() -> void:
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	if NetClient == null:
+		return
+	if not NetClient.command_applied.is_connected(_on_online_command_applied):
+		NetClient.command_applied.connect(_on_online_command_applied)
+	if not NetClient.request_rejected.is_connected(_on_online_request_rejected):
+		NetClient.request_rejected.connect(_on_online_request_rejected)
+	if not NetClient.disconnected.is_connected(_on_online_disconnected):
+		NetClient.disconnected.connect(_on_online_disconnected)
+
+func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> void:
+	if game_engine == null:
+		return
+	var parsed: Result = Command.from_dict(cmd_dict)
+	if not parsed.ok:
+		GameLog.error("Game", "联机 CommandApplied 解析失败: %s" % parsed.error)
+		return
+	var cmd: Command = parsed.value
+	var r: Result = game_engine.execute_command(cmd, true)
+	if not r.ok:
+		GameLog.error("Game", "联机回放命令失败: %s" % r.error)
+		return
+	if not state_hash.is_empty():
+		var state := game_engine.get_state()
+		if state != null and state.has_method("compute_hash"):
+			var local_hash := str(state.compute_hash())
+			if local_hash != state_hash:
+				GameLog.warn("Game", "联机 state_hash 不一致: local=%s server=%s" % [local_hash, state_hash])
+
+	if is_instance_valid(game_log_panel) and game_log_panel.visible:
+		_apply_live_log_timeline_from_engine()
+	_update_ui()
+
+func _on_online_request_rejected(_request_id: String, code: String, message: String) -> void:
+	GameLog.warn("Game", "联机请求被拒绝: %s %s" % [code, message])
+	if OS.has_feature("headless"):
+		return
+	_show_confirm("联机请求失败", "%s\n%s" % [code, message], Callable(), Callable(), "确定", "关闭")
+
+func _on_online_disconnected(reason: String) -> void:
+	if OS.has_feature("headless"):
+		return
+	GameLog.warn("Game", "联机断开: %s" % reason)
+	_show_confirm("联机已断开", "原因：%s\n将返回联机大厅。" % reason, Callable(), Callable(), "确定", "关闭")
+	await get_tree().process_frame
+	SceneManager.goto_online_lobby()
 
 func _get_last_working_sub_phase_name() -> String:
 	var last_sub_phase := DefsClass.SUB_PHASE_PLACE_RESTAURANTS
