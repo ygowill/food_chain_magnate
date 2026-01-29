@@ -104,6 +104,7 @@
 
 （按时间倒序追加）
 
+- 2026-01-30：LeftPanel 的玩家 Tab 选择曾向外 emit `player_selected` 并被 `GamePanelController` 监听，导致“左侧信息面板的选择”影响全局 `view_player`（进而出现 ActionPanel 可用动作跟着变化的错觉/误导）。修复：LeftPanel 不再暴露 `player_selected` 信号，选择仅影响 LeftPanel 自身展示；新增 `LeftPanelSelectionIsolationTest` 防回归并加入 `AllTests`。
 - 2026-01-29：`HashingContext.update()` 传入空 `PackedByteArray` 会报错（`len == 0`），导致“无密码房间”计算 password_hash 时 `AllTests` 失败。修复：对空字符串直接返回 `""`（表示无密码），避免对空 buffer 调用 `update()`。
 - 2026-01-29：`GameEngine.load_from_archive` 会在“已初始化的 engine”上执行 `reset_modules_v2()`；由于 `PhaseManager` hooks 未清理，旧 hooks 的 Callable target 可能已被释放，导致回放时出现 `null::_on_restructuring_before_enter`。修复：在 `ModulesV2.reset` 中调用 `PhaseManager.reset_hooks()` 清空 hooks。
 - 2026-01-29：`AllTests` 开启 warnings-as-errors；测试中对 `Variant` 返回值使用 `:=`（例如 `max(...)`）会触发 “typed as Variant” 警告并当作错误。修复：改用显式类型或 `maxi/mini` 等确定类型函数。

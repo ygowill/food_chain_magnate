@@ -5,7 +5,6 @@
 class_name LeftPanel
 extends Control
 
-signal player_selected(player_id: int)
 signal logs_requested()
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
@@ -361,16 +360,17 @@ func _update_player_tab_icons() -> void:
 		_apply_player_tab_icon(btn, i)
 
 func _update_tab_styles() -> void:
+	var view_id := _resolve_view_player_id()
 	for i in range(_tab_buttons.size()):
 		var btn := _tab_buttons[i]
 		if not is_instance_valid(btn):
 			continue
 
-		btn.set_pressed_no_signal(i == _view_player_id)
+		btn.set_pressed_no_signal(i == view_id)
 
 		var color := Globals.get_player_color(i)
 		var is_current := i == _current_player_id
-		var is_view := i == _view_player_id
+		var is_view := i == view_id
 
 		var normal := StyleBoxFlat.new()
 		normal.bg_color = Color(0.12, 0.12, 0.14, 0.85)
@@ -815,7 +815,11 @@ func _resolve_view_player_id() -> int:
 		return 0
 	var view_id := _view_player_id
 	if view_id < 0 or view_id >= _game_state.players.size():
-		view_id = _current_player_id
+		# 联机模式：默认查看本地玩家，避免跟随 current_player 造成误导。
+		if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and int(NetContext.local_player_id) >= 0:
+			view_id = int(NetContext.local_player_id)
+		else:
+			view_id = _current_player_id
 	if view_id < 0 or view_id >= _game_state.players.size():
 		view_id = 0
 	view_id = clamp(view_id, 0, maxi(0, _game_state.players.size() - 1))
@@ -982,9 +986,9 @@ func _on_tab_changed(_tab_index: int) -> void:
 	_update_tab_styles()
 
 func _on_player_tab_pressed(player_id: int) -> void:
-	player_selected.emit(player_id)
+	set_view_player(player_id)
 
 func _on_player_tab_toggled(pressed: bool, player_id: int) -> void:
 	if not pressed:
 		return
-	player_selected.emit(player_id)
+	set_view_player(player_id)

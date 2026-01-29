@@ -79,7 +79,6 @@ func connect_signals(action_panel, turn_order_track, hand_area, company_structur
 	# 查看玩家（view_player）
 	if _scene != null:
 		UiSignalHelpersClass.safe_connect(_scene.player_panel, "player_selected", _on_view_player_selected)
-		UiSignalHelpersClass.safe_connect(_scene.left_panel, "player_selected", _on_view_player_selected)
 		UiSignalHelpersClass.safe_connect(_scene.left_panel, "milestones_requested", show_milestone_panel)
 
 func reset_bank_break_tracking(state: GameState) -> void:
@@ -406,8 +405,6 @@ func _update_ui_components(state: GameState) -> void:
 			_scene.left_panel.set_game_state(state)
 		if _scene.left_panel.has_method("set_current_player"):
 			_scene.left_panel.set_current_player(current_player_id)
-		if _scene.left_panel.has_method("set_view_player"):
-			_scene.left_panel.set_view_player(view_player_id)
 
 	# 顺序轨
 	# selections: position -> player_id
