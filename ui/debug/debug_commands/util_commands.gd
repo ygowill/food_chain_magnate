@@ -1,6 +1,8 @@
 # 工具类调试命令（UI/开发工具）
 extends RefCounted
 
+const CommandPrivacyClass = preload("res://core/utils/command_privacy.gd")
+
 static func register_all(registry: DebugCommandRegistry) -> void:
 	registry.register("help", _cmd_help.bind(registry), "显示帮助信息", "help [command]", ["command"])
 	registry.register("clear", _cmd_clear.bind(registry), "清空输出", "clear")
@@ -44,11 +46,16 @@ static func _cmd_history(args: Array, registry: DebugCommandRegistry) -> Result:
 		count = int(args[0])
 
 	var history := engine.get_recent_commands(count)
+	var state := engine.get_state()
+	var viewer_player_id := -1
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		viewer_player_id = int(NetContext.local_player_id)
 	var lines: Array[String] = ["=== 命令历史 (最近 %d 条) ===" % count]
 
 	for cmd in history:
 		var actor_str := "系统" if cmd.actor == -1 else "玩家%d" % cmd.actor
-		lines.append("#%d [%s] %s %s" % [cmd.index, actor_str, cmd.action_id, str(cmd.params)])
+		var sanitized: Dictionary = CommandPrivacyClass.sanitize_params(str(cmd.action_id), int(cmd.actor), cmd.params, viewer_player_id, state)
+		lines.append("#%d [%s] %s %s" % [cmd.index, actor_str, cmd.action_id, str(sanitized)])
 
 	return Result.success("\n".join(lines))
 

@@ -42,9 +42,14 @@ func _ready() -> void:
 	_bind_card_button(card_button_2, 2)
 
 func setup(state: GameState, current_player_id: int) -> void:
+	allow_peek_map = false
 	_selected_index = -1
 	_card_summaries.clear()
+	set_confirm_text("确认选择")
 	set_confirm_enabled(false)
+
+	if is_instance_valid(hint_label):
+		hint_label.text = "请确保其他玩家未看到你的选择；确认后不可更改。"
 
 	var name := Globals.get_player_name(current_player_id) if Globals != null else ("玩家%d" % (current_player_id + 1))
 	set_title_text("选择银行储备卡｜当前: %s" % name)
@@ -67,6 +72,36 @@ func setup(state: GameState, current_player_id: int) -> void:
 	_apply_card(0, cards)
 	_apply_card(1, cards)
 	_apply_card(2, cards)
+
+func setup_waiting(current_player_id: int) -> void:
+	# 联机：等待其他玩家选择（不展示任何卡片信息）
+	allow_peek_map = true
+	_selected_index = -1
+	_card_summaries.clear()
+	set_confirm_text("等待中")
+	set_confirm_enabled(false)
+
+	if is_instance_valid(hint_label):
+		hint_label.text = "该选择对其他玩家保密。请等待对方完成。（Space 可暂时查看地图）"
+
+	var name := Globals.get_player_name(current_player_id) if Globals != null else ("玩家%d" % (current_player_id + 1))
+	set_title_text("选择银行储备卡｜等待: %s" % name)
+	if is_instance_valid(selection_label):
+		selection_label.text = "等待玩家：%s 选择储备卡..." % name
+
+	_reset_card_buttons()
+	for i in range(3):
+		var btn: Button = _get_card_button(i)
+		var title_label: Label = _get_card_title_label(i)
+		var desc_label: Label = _get_card_desc_label(i)
+		if is_instance_valid(btn):
+			btn.disabled = true
+			btn.visible = true
+			btn.button_pressed = false
+		if is_instance_valid(title_label):
+			title_label.text = "保密中"
+		if is_instance_valid(desc_label):
+			desc_label.text = ""
 
 func _on_confirm_pressed() -> void:
 	if _selected_index < 0:

@@ -959,7 +959,7 @@ func _update_ui() -> void:
 			PerfTraceClass.end_span(span_overlays)
 
 	# 回放/复盘：日志时间线指针 + ReplayBar 显示 + ActionPanel 禁用
-	_sync_timeline_ui(head_index, cursor_index)
+	_sync_timeline_ui(head_index, cursor_index, state)
 
 	# 同步调试面板
 	if _debug_panel != null and _debug_panel.visible:
@@ -1037,11 +1037,18 @@ func _execute_command(command: Command) -> Result:
 	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
 		if NetClient == null or not NetClient.is_online_client_connected():
 			return Result.failure("未连接到服务器")
+		if NetContext.local_player_id < 0:
+			return Result.failure("联机身份未就绪（local_player_id 未设置）")
 		if command == null:
 			return Result.failure("command 为空")
 		var action_id := str(command.action_id).strip_edges()
 		if action_id.is_empty():
 			return Result.failure("action_id 为空")
+		# 联机模式：禁止代操（客户端侧兜底；服务器仍会根据 peer_id 强制映射 actor_id）
+		if command.actor == -1:
+			return Result.failure("联机模式下不允许发送系统命令")
+		if command.actor != NetContext.local_player_id:
+			return Result.failure("联机模式下只能操作自己（local_player_id=%d）" % int(NetContext.local_player_id))
 		var params: Dictionary = {}
 		if command.params is Dictionary:
 			params = Dictionary(command.params)
@@ -1647,7 +1654,7 @@ func _hide_replay_bar() -> void:
 	if rb.has_method("set_active"):
 		rb.call("set_active", false)
 
-func _sync_timeline_ui(head_index: int, cursor_index: int) -> void:
+func _sync_timeline_ui(head_index: int, cursor_index: int, state: GameState) -> void:
 	if is_instance_valid(game_log_panel):
 		game_log_panel.set_timeline_head(head_index)
 		game_log_panel.set_timeline_cursor(cursor_index)
@@ -1665,6 +1672,13 @@ func _sync_timeline_ui(head_index: int, cursor_index: int) -> void:
 			reason = "回放中不可操作"
 		elif cursor_index < head_index and not _timeline_edit_mode_active:
 			reason = "查看历史中不可操作"
+		elif NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+			if state == null:
+				reason = "联机：等待同步"
+			elif NetContext.local_player_id < 0:
+				reason = "联机：身份未就绪"
+			elif str(state.phase) != DefsClass.PHASE_RESTRUCTURING and state.get_current_player_id() != int(NetContext.local_player_id):
+				reason = "联机：等待其他玩家操作"
 		action_panel.set_globally_disabled(reason)
 
 func _start_replay_from_file(file_path: String) -> void:

@@ -4,6 +4,8 @@ extends MarginContainer
 
 var _registry: DebugCommandRegistry = null
 
+const CommandPrivacyClass = preload("res://core/utils/command_privacy.gd")
+
 @onready var system_check: CheckBox = $VBoxContainer/FilterBar/SystemCheck
 @onready var player_check: CheckBox = $VBoxContainer/FilterBar/PlayerCheck
 @onready var refresh_button: Button = $VBoxContainer/FilterBar/RefreshButton
@@ -43,6 +45,10 @@ func _update_history_list(engine: GameEngine) -> void:
 	var show_player := player_check.button_pressed if is_instance_valid(player_check) else true
 
 	var history := engine.get_command_history()
+	var state := engine.get_state()
+	var viewer_player_id := -1
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		viewer_player_id = int(NetContext.local_player_id)
 
 	history_list.push_color(Color(0.7, 0.7, 0.7))
 	history_list.append_text("═══ 命令历史 (%d 条) ═══\n" % history.size())
@@ -76,8 +82,9 @@ func _update_history_list(engine: GameEngine) -> void:
 		history_list.pop()
 
 		if not cmd.params.is_empty():
+			var sanitized: Dictionary = CommandPrivacyClass.sanitize_params(str(cmd.action_id), int(cmd.actor), cmd.params, viewer_player_id, state)
 			history_list.push_color(Color(0.6, 0.6, 0.6))
-			history_list.append_text(" %s" % _format_params(cmd.params))
+			history_list.append_text(" %s" % _format_params(sanitized))
 			history_list.pop()
 
 		history_list.append_text("\n")
@@ -108,11 +115,16 @@ func _on_export_pressed() -> void:
 		return
 
 	var history := engine.get_command_history()
+	var state := engine.get_state()
+	var viewer_player_id := -1
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		viewer_player_id = int(NetContext.local_player_id)
 	var lines: Array[String] = ["# 命令历史导出", "# 时间: %s" % Time.get_datetime_string_from_system(), ""]
 
 	for cmd in history:
 		var actor_str := "系统" if cmd.actor == -1 else "玩家%d" % cmd.actor
-		lines.append("#%d [%s] %s %s" % [cmd.index, actor_str, cmd.action_id, str(cmd.params)])
+		var sanitized: Dictionary = CommandPrivacyClass.sanitize_params(str(cmd.action_id), int(cmd.actor), cmd.params, viewer_player_id, state)
+		lines.append("#%d [%s] %s %s" % [cmd.index, actor_str, cmd.action_id, str(sanitized)])
 
 	var path := "user://command_history_export.txt"
 	var file := FileAccess.open(path, FileAccess.WRITE)

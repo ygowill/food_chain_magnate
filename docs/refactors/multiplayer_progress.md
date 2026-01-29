@@ -44,12 +44,12 @@
 
 ### M3：输入权限收口 + 储备卡保密（UI/日志/导出）
 
-- [ ] Client：local_player_id 输入权限（禁止代操）
-- [ ] Client：ReserveCards 弹窗仅本人可交互；其他人只显示等待
-- [ ] Client：History/导出脱敏 `select_reserve_card.selected_index`
-- [ ] Tests：隐私脱敏 + 交互门禁测试加入 `AllTests`
-- [ ] 验收：`game_smoke_test`/`all_tests` 通过
-- [ ] Docs + Git
+- [x] Client：local_player_id 输入权限（禁止代操）
+- [x] Client：ReserveCards 弹窗仅本人可交互；其他人只显示等待
+- [x] Client：History/导出脱敏 `select_reserve_card.selected_index`
+- [x] Tests：隐私脱敏 + 交互门禁测试加入 `AllTests`
+- [x] 验收：`game_smoke_test`/`all_tests` 通过
+- [x] Docs + Git
 
 ### M4：Resync + 稳定性 + 掉线弃权（其余继续）
 
@@ -79,5 +79,6 @@
 
 （按时间倒序追加）
 
+- 2026-01-29：`CommandPrivacy.sanitize_params` 必须复制 `params`（`duplicate(true)`），否则会在 UI/调试视图中“污染”原始 `Command.params`（导致后续显示/导出/测试错误）。
 - 2026-01-29：Godot headless 下新加 `class_name` 脚本不会自动进入 Global Class Cache；避免在新脚本上使用 `RoomManager`/`OnlineRoom` 等类型注解（会触发 Parse Error），改用无类型变量或显式 `Script`/`Dictionary`/`Result`。
 - 2026-01-29：GDScript 中使用 `:=` 时需要可推导类型；对未显式类型的对象（例如 `var server_engine = ...`）再调用方法返回值时，可能触发 “Cannot infer the type” 解析错误。测试代码里优先用 `=`（Variant）或补齐类型注解。

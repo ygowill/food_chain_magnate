@@ -13,6 +13,7 @@ const PaydaySalaryTokenEligibilityTestClass = preload("res://core/tests/payday_s
 const CallbackResultContractTestClass = preload("res://core/tests/callback_result_contract_test.gd")
 const OnlineRoomManagerTestClass = preload("res://core/tests/online_room_manager_test.gd")
 const OnlineStartGameReplayTestClass = preload("res://core/tests/online_start_game_replay_test.gd")
+const CommandPrivacyTestClass = preload("res://core/tests/command_privacy_test.gd")
 const InitialCompanyTestClass = preload("res://core/tests/initial_company_test.gd")
 const MandatoryActionsTestClass = preload("res://core/tests/mandatory_actions_test.gd")
 const RuralMarketeersAutoAdvanceUnblockedTestClass = preload("res://core/tests/rural_marketeers_auto_advance_unblocked_test.gd")
@@ -36,6 +37,7 @@ const FireActionTestClass = preload("res://core/tests/fire_action_test.gd")
 const CompanyStructureTestClass = preload("res://core/tests/company_structure_test.gd")
 const ActionPanelEndButtonsOrderTestClass = preload("res://ui/scenes/tests/action_panel_end_buttons_order_test.gd")
 const HandAreaViewSwitchTestClass = preload("res://ui/scenes/tests/hand_area_view_switch_test.gd")
+const ReserveCardSelectionModalPrivacyTestClass = preload("res://ui/scenes/tests/reserve_card_selection_modal_privacy_test.gd")
 const DragPreviewVisualTestClass = preload("res://ui/scenes/tests/drag_preview_visual_test.gd")
 const EmployeePickerMinSizeTestClass = preload("res://ui/scenes/tests/employee_picker_min_size_test.gd")
 const CompanyStructureDeferredRebuildTestClass = preload("res://ui/scenes/tests/company_structure_deferred_rebuild_test.gd")
@@ -199,6 +201,14 @@ func _run_all() -> int:
 		{
 			"name": "OnlineStartGameReplayTest",
 			"fn": func() -> Result: return OnlineStartGameReplayTestClass.run(),
+		},
+		{
+			"name": "CommandPrivacyTest",
+			"fn": func() -> Result: return CommandPrivacyTestClass.run(),
+		},
+		{
+			"name": "ReserveCardSelectionModalPrivacyTest",
+			"fn": func() -> Result: return ReserveCardSelectionModalPrivacyTestClass.run(),
 		},
 		{
 			"name": "InitialCompanyTest",

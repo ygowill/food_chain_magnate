@@ -46,6 +46,7 @@ var _reserve_area_full_screen_view = null
 
 var _view_player_id: int = -1
 var _pending_reserve_card_open_player_id: int = -1
+var _pending_reserve_card_open_interactive: bool = true
 var _pending_reserve_card_open_attempts: int = 0
 var _reserve_card_open_routine_running: bool = false
 
@@ -55,6 +56,9 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 	_overlay_controller = overlay_controller
 	_execute_command = execute_command
 	_refresh_ui = refresh_ui
+	# 联机模式：默认视角锁定到本地玩家（避免默认跟随 current_player 导致“重组拖拽不了自己”的体验）
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and NetContext.local_player_id >= 0:
+		_view_player_id = int(NetContext.local_player_id)
 
 	var hide_all := Callable(self, "_hide_all_phase_panels")
 	var center_popup := Callable(self, "_center_popup")
@@ -336,12 +340,22 @@ func _update_ui_components(state: GameState) -> void:
 	var current_player_id := state.get_current_player_id()
 	var current_player: Dictionary = state.get_current_player()
 
+	var is_online := false
+	var local_player_id := -1
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		is_online = true
+		local_player_id = int(NetContext.local_player_id)
+
 	var requested_view_player_id := _view_player_id
+	# 联机模式：当未显式选择“查看玩家”时，默认查看自己（避免默认跟随 current_player 造成误导/代操风险）。
+	if is_online and requested_view_player_id < 0 and local_player_id >= 0:
+		requested_view_player_id = local_player_id
+		_view_player_id = local_player_id
 	var view_player_id := _get_effective_view_player_id(state, requested_view_player_id)
 	var using_default_view := view_player_id != requested_view_player_id
 
 	# Restructuring：若当前默认视图玩家已提交，自动切到第一位未提交玩家（避免“看起来无法拖拽”）。
-	if using_default_view and state.phase == DefsClass.PHASE_RESTRUCTURING and (state.round_state is Dictionary):
+	if using_default_view and not is_online and state.phase == DefsClass.PHASE_RESTRUCTURING and (state.round_state is Dictionary):
 		var r_val = state.round_state.get("restructuring", null)
 		if r_val is Dictionary:
 			var r: Dictionary = r_val
@@ -485,6 +499,11 @@ func _update_ui_components(state: GameState) -> void:
 							submitted_flag = submitted.get(str(view_player_id), null)
 						if bool(submitted_flag):
 							enable_drag = false
+		# 联机模式：禁止代操公司结构重组（只能拖拽本地玩家的数据）
+		if enable_drag and NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+			var local_pid := int(NetContext.local_player_id)
+			if local_pid < 0 or view_player_id != local_pid:
+				enable_drag = false
 
 		if _scene.hand_area.has_method("set_drag_enabled"):
 			_scene.hand_area.set_drag_enabled(enable_drag)
@@ -629,6 +648,13 @@ func _on_hand_card_dropped(employee_id: String, target: Control) -> void:
 	var actor_id := _get_effective_view_player_id(state, _view_player_id)
 	if actor_id < 0:
 		return
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		var local_pid := int(NetContext.local_player_id)
+		if local_pid < 0:
+			return
+		if actor_id != local_pid:
+			GameLog.warn("Game", "联机模式下只能调整自己的公司结构")
+			return
 	if state.round_state is Dictionary:
 		var r_val = state.round_state.get("restructuring", null)
 		if r_val is Dictionary:
@@ -905,9 +931,19 @@ func _sync_modals(state: GameState) -> void:
 	var current_player_id := state.get_current_player_id()
 	var covered := _get_modal_cover_rect()
 
+	var is_online := false
+	var local_player_id := -1
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		is_online = true
+		local_player_id = int(NetContext.local_player_id)
+	var is_local_turn := (not is_online) or (local_player_id >= 0 and current_player_id == local_player_id)
+
 	# 储备卡选择（Setup/ReserveCards）
 	if state.phase == DefsClass.PHASE_SETUP and str(state.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS and current_player_id >= 0:
-		_show_reserve_card_modal(state, current_player_id, covered)
+		var interactive := true
+		if is_online:
+			interactive = is_local_turn
+		_show_reserve_card_modal(state, current_player_id, covered, interactive)
 	else:
 		_hide_reserve_card_modal()
 
@@ -924,7 +960,7 @@ func _sync_modals(state: GameState) -> void:
 				if not list.is_empty() and int(list[0]) == current_player_id:
 					should_show_fridge_keep = true
 
-	if should_show_fridge_keep:
+	if should_show_fridge_keep and is_local_turn:
 		_show_fridge_keep_modal(state, current_player_id, covered)
 	else:
 		_hide_fridge_keep_modal()
@@ -952,7 +988,7 @@ func _sync_modals(state: GameState) -> void:
 	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and current_player_id >= 0:
 		should_show_turn_order = not selections.values().has(current_player_id)
 
-	if should_show_turn_order:
+	if should_show_turn_order and is_local_turn:
 		_show_turn_order_modal(state, current_player_id, selections, covered)
 	else:
 		_hide_turn_order_modal()
@@ -1112,7 +1148,7 @@ func _on_turn_order_modal_completed(result: Dictionary) -> void:
 func _on_turn_order_modal_cancelled() -> void:
 	_hide_turn_order_modal()
 
-func _show_reserve_card_modal(state: GameState, current_player_id: int, covered: Rect2) -> void:
+func _show_reserve_card_modal(state: GameState, current_player_id: int, covered: Rect2, interactive: bool) -> void:
 	if _scene == null:
 		return
 	if state == null:
@@ -1125,14 +1161,23 @@ func _show_reserve_card_modal(state: GameState, current_player_id: int, covered:
 	if not is_instance_valid(_reserve_card_modal):
 		return
 
-	if _reserve_card_modal.has_method("setup"):
-		_reserve_card_modal.call("setup", state, current_player_id)
+	if interactive:
+		if _reserve_card_modal.has_method("setup"):
+			_reserve_card_modal.call("setup", state, current_player_id)
+	else:
+		# Waiting mode must never reveal reserve card details.
+		if _reserve_card_modal.has_method("setup_waiting"):
+			_reserve_card_modal.call("setup_waiting", current_player_id)
+		else:
+			_hide_reserve_card_modal()
+			return
 	if _reserve_card_modal.has_method("open"):
 		# 首次打开时 UI 布局可能尚未完成，CenterSplit 的 rect 会错误导致遮罩落在左上角；
 		# 延迟一帧再重新计算覆盖区域并打开，确保首位玩家显示正常。
 		if not _reserve_card_modal.visible:
-			if _pending_reserve_card_open_player_id != current_player_id:
+			if _pending_reserve_card_open_player_id != current_player_id or _pending_reserve_card_open_interactive != interactive:
 				_pending_reserve_card_open_player_id = current_player_id
+				_pending_reserve_card_open_interactive = interactive
 				_pending_reserve_card_open_attempts = 0
 			if not _reserve_card_open_routine_running:
 				_reserve_card_open_routine_running = true
@@ -1151,6 +1196,7 @@ func _deferred_open_reserve_card_modal() -> void:
 	# 因此这里按帧等待并重算覆盖区域，避免首位玩家第一次弹窗落在左上角。
 	while true:
 		var expected_player_id := _pending_reserve_card_open_player_id
+		var expected_interactive := _pending_reserve_card_open_interactive
 		if expected_player_id < 0:
 			_reserve_card_open_routine_running = false
 			return
@@ -1165,7 +1211,7 @@ func _deferred_open_reserve_card_modal() -> void:
 		await _scene.get_tree().process_frame
 
 		# 过程中可能发生状态变化，重新校验
-		if _pending_reserve_card_open_player_id != expected_player_id:
+		if _pending_reserve_card_open_player_id != expected_player_id or _pending_reserve_card_open_interactive != expected_interactive:
 			_pending_reserve_card_open_attempts = 0
 			continue
 
@@ -1201,6 +1247,7 @@ func _deferred_open_reserve_card_modal() -> void:
 			continue
 
 		_pending_reserve_card_open_player_id = -1
+		_pending_reserve_card_open_interactive = true
 		_pending_reserve_card_open_attempts = 0
 		_reserve_card_open_routine_running = false
 
@@ -1208,8 +1255,12 @@ func _deferred_open_reserve_card_modal() -> void:
 		if SceneManager != null and SceneManager.has_method("hide_loading"):
 			SceneManager.hide_loading()
 
-		if _reserve_card_modal.has_method("setup"):
-			_reserve_card_modal.call("setup", state, current_player_id)
+		if expected_interactive:
+			if _reserve_card_modal.has_method("setup"):
+				_reserve_card_modal.call("setup", state, current_player_id)
+		else:
+			if _reserve_card_modal.has_method("setup_waiting"):
+				_reserve_card_modal.call("setup_waiting", current_player_id)
 		if _reserve_card_modal.has_method("open"):
 			_reserve_card_modal.call("open", covered)
 		elif _reserve_card_modal is Control:
@@ -1221,6 +1272,7 @@ func _deferred_open_reserve_card_modal() -> void:
 
 func _hide_reserve_card_modal() -> void:
 	_pending_reserve_card_open_player_id = -1
+	_pending_reserve_card_open_interactive = true
 	_pending_reserve_card_open_attempts = 0
 	if not is_instance_valid(_reserve_card_modal):
 		return
@@ -1255,6 +1307,10 @@ func _on_reserve_card_modal_completed(result: Dictionary) -> void:
 	var current_player_id := state.get_current_player_id()
 	if current_player_id < 0:
 		return
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		var local_pid := int(NetContext.local_player_id)
+		if local_pid < 0 or current_player_id != local_pid:
+			return
 
 	_execute_command.call(Command.create("select_reserve_card", current_player_id, {"selected_index": selected_index}))
 
@@ -1480,6 +1536,13 @@ func _on_restructuring_modal_completed(result: Dictionary) -> void:
 		if is_instance_valid(_restructuring_modal) and _restructuring_modal.has_method("set_confirm_enabled"):
 			_restructuring_modal.call("set_confirm_enabled", true)
 		return
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		var local_pid := int(NetContext.local_player_id)
+		if local_pid < 0 or actor_id != local_pid:
+			if is_instance_valid(_restructuring_modal) and _restructuring_modal.has_method("set_confirm_enabled"):
+				_restructuring_modal.call("set_confirm_enabled", true)
+			GameLog.warn("Game", "联机模式下只能提交自己的公司结构")
+			return
 
 	var exec_result = _execute_command.call(Command.create("submit_restructuring", actor_id, {}))
 	if not (exec_result is Result):
@@ -1530,11 +1593,51 @@ func _sync_restructuring_modal_ui(state: GameState, view_player_id: int) -> void
 	if _restructuring_modal.has_method("set_title_text"):
 		_restructuring_modal.call("set_title_text", "公司结构重组（同时）｜查看: %s" % view_name)
 
-	if _restructuring_modal.has_method("set_confirm_text"):
-		_restructuring_modal.call("set_confirm_text", "已提交" if view_submitted else ("确认重组（%s）" % view_name))
-	if _restructuring_modal.has_method("set_confirm_enabled"):
-		_restructuring_modal.call("set_confirm_enabled", not view_submitted)
+	var is_online := false
+	var local_pid := -1
+	var view_is_local := true
+	var local_name := ""
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		is_online = true
+		local_pid = int(NetContext.local_player_id)
+		view_is_local = (local_pid >= 0 and view_player_id == local_pid)
+		local_name = Globals.get_player_name(local_pid) if (Globals != null and local_pid >= 0) else ("玩家%d" % (local_pid + 1))
 
+	var confirm_text := "已提交" if view_submitted else ("确认重组（%s）" % view_name)
+	var confirm_enabled := not view_submitted
+	var status_text := ""
+	var view_status := "已提交" if view_submitted else "未提交"
+	if is_online:
+		if local_pid < 0:
+			confirm_text = "联机：身份未就绪"
+			confirm_enabled = false
+			view_status = "只读"
+			status_text = "联机：身份未就绪（等待同步）｜提交进度: %d/%d" % [submitted_count, total]
+		elif not view_is_local:
+			confirm_text = "只读"
+			confirm_enabled = false
+			view_status = "只读"
+			status_text = "当前查看: %s（只读）｜你只能调整并提交自己的公司结构（%s）｜提交进度: %d/%d" % [
+				view_name,
+				local_name,
+				submitted_count,
+				total
+			]
+		else:
+			confirm_text = "已提交" if view_submitted else "确认重组"
+			confirm_enabled = not view_submitted
+			status_text = "当前查看: %s（%s）｜提交进度: %d/%d｜联机：只能调整并提交自己；切换他人仅查看" % [
+				view_name,
+				view_status,
+				submitted_count,
+				total
+			]
+	else:
+		status_text = "当前查看: %s（%s）｜提交进度: %d/%d｜可在上方切换玩家分别调整并提交" % [view_name, view_status, submitted_count, total]
+
+	if _restructuring_modal.has_method("set_confirm_text"):
+		_restructuring_modal.call("set_confirm_text", confirm_text)
+	if _restructuring_modal.has_method("set_confirm_enabled"):
+		_restructuring_modal.call("set_confirm_enabled", confirm_enabled)
 	if _restructuring_modal.has_method("set_status_text"):
-		var view_status := "已提交" if view_submitted else "未提交"
-		_restructuring_modal.call("set_status_text", "当前查看: %s（%s）｜提交进度: %d/%d｜可在上方切换玩家分别调整并提交" % [view_name, view_status, submitted_count, total])
+		_restructuring_modal.call("set_status_text", status_text)
