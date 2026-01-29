@@ -3,36 +3,36 @@ extends Control
 
 const RoomConfigEditorClass = preload("res://ui/components/room_config_editor/room_config_editor.gd")
 
-@onready var tabs: TabContainer = $Root/Tabs
+@onready var tabs: TabContainer = $Center/Panel/Margin/Root/Tabs
 
-@onready var server_url_edit: LineEdit = $Root/Tabs/ConnectTab/ServerRow/ServerUrlEdit
-@onready var player_name_edit: LineEdit = $Root/Tabs/ConnectTab/ProfileRow/PlayerNameEdit
-@onready var color_index_spin: SpinBox = $Root/Tabs/ConnectTab/ProfileRow/ColorIndexSpin
-@onready var connect_button: Button = $Root/Tabs/ConnectTab/ButtonsRow/ConnectButton
-@onready var disconnect_button: Button = $Root/Tabs/ConnectTab/ButtonsRow/DisconnectButton
-@onready var connect_status_label: Label = $Root/Tabs/ConnectTab/ConnectStatus
+@onready var server_url_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/ConnectTab/ServerRow/ServerUrlEdit
+@onready var player_name_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/ConnectTab/ProfileRow/PlayerNameEdit
+@onready var color_index_spin: SpinBox = $Center/Panel/Margin/Root/Tabs/ConnectTab/ProfileRow/ColorIndexSpin
+@onready var connect_button: Button = $Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/ConnectButton
+@onready var disconnect_button: Button = $Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/DisconnectButton
+@onready var connect_status_label: Label = $Center/Panel/Margin/Root/Tabs/ConnectTab/ConnectStatus
 
-@onready var refresh_rooms_button: Button = $Root/Tabs/RoomsTab/RoomsHeader/RefreshRoomsButton
-@onready var rooms_list_container: VBoxContainer = $Root/Tabs/RoomsTab/RoomsScroll/RoomsList
-@onready var join_by_code_room_code_edit: LineEdit = $Root/Tabs/RoomsTab/JoinByCode/RoomCodeRow/RoomCodeEdit
-@onready var join_by_code_password_edit: LineEdit = $Root/Tabs/RoomsTab/JoinByCode/PasswordRow/RoomPasswordEdit
-@onready var join_by_code_button: Button = $Root/Tabs/RoomsTab/JoinByCode/JoinRoomButton
-@onready var rooms_status_label: Label = $Root/Tabs/RoomsTab/RoomsStatus
+@onready var refresh_rooms_button: Button = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/RefreshRoomsButton
+@onready var rooms_list_container: VBoxContainer = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsScroll/RoomsList
+@onready var join_by_code_room_code_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode/RoomCodeRow/RoomCodeEdit
+@onready var join_by_code_password_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode/PasswordRow/RoomPasswordEdit
+@onready var join_by_code_button: Button = $Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode/JoinRoomButton
+@onready var rooms_status_label: Label = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsStatus
 
-@onready var create_password_edit: LineEdit = $Root/Tabs/CreateTab/CreatePasswordRow/CreateRoomPasswordEdit
-@onready var create_config_container: VBoxContainer = $Root/Tabs/CreateTab/CreateConfigContainer
-@onready var create_room_button: Button = $Root/Tabs/CreateTab/CreateRoomButton
-@onready var create_status_label: Label = $Root/Tabs/CreateTab/CreateStatus
+@onready var create_password_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/CreateTab/CreatePasswordRow/CreateRoomPasswordEdit
+@onready var create_config_container: VBoxContainer = $Center/Panel/Margin/Root/Tabs/CreateTab/CreateConfigContainer
+@onready var create_room_button: Button = $Center/Panel/Margin/Root/Tabs/CreateTab/CreateRoomButton
+@onready var create_status_label: Label = $Center/Panel/Margin/Root/Tabs/CreateTab/CreateStatus
 
-@onready var room_code_label: Label = $Root/Tabs/RoomTab/RoomHeader/RoomCodeLabel
-@onready var copy_room_code_button: Button = $Root/Tabs/RoomTab/RoomHeader/CopyRoomCodeButton
-@onready var players_list_container: VBoxContainer = $Root/Tabs/RoomTab/RoomBody/LeftColumn/PlayersList
-@onready var spectators_list_container: VBoxContainer = $Root/Tabs/RoomTab/RoomBody/LeftColumn/SpectatorsList
-@onready var config_sync_status_label: Label = $Root/Tabs/RoomTab/RoomBody/RightColumn/ConfigSyncStatus
-@onready var room_config_container: VBoxContainer = $Root/Tabs/RoomTab/RoomBody/RightColumn/RoomConfigContainer
-@onready var leave_room_button: Button = $Root/Tabs/RoomTab/RoomActionsRow/LeaveRoomButton
-@onready var start_game_button: Button = $Root/Tabs/RoomTab/RoomActionsRow/StartGameButton
-@onready var room_status_label: Label = $Root/Tabs/RoomTab/RoomStatus
+@onready var room_code_label: Label = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomHeader/RoomCodeLabel
+@onready var copy_room_code_button: Button = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomHeader/CopyRoomCodeButton
+@onready var players_list_container: VBoxContainer = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/PlayersList
+@onready var spectators_list_container: VBoxContainer = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/SpectatorsList
+@onready var config_sync_status_label: Label = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/RightColumn/ConfigSyncStatus
+@onready var room_config_container: VBoxContainer = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/RightColumn/RoomConfigContainer
+@onready var leave_room_button: Button = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomActionsRow/LeaveRoomButton
+@onready var start_game_button: Button = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomActionsRow/StartGameButton
+@onready var room_status_label: Label = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomStatus
 
 @onready var config_debounce_timer: Timer = $ConfigDebounceTimer
 
@@ -62,10 +62,10 @@ func _ready() -> void:
 func _setup_tabs() -> void:
 	if tabs == null or not is_instance_valid(tabs):
 		return
-	_tab_connect = tabs.get_tab_idx_from_control($Root/Tabs/ConnectTab)
-	_tab_rooms = tabs.get_tab_idx_from_control($Root/Tabs/RoomsTab)
-	_tab_create = tabs.get_tab_idx_from_control($Root/Tabs/CreateTab)
-	_tab_room = tabs.get_tab_idx_from_control($Root/Tabs/RoomTab)
+	_tab_connect = tabs.get_tab_idx_from_control(tabs.get_node("ConnectTab") as Control)
+	_tab_rooms = tabs.get_tab_idx_from_control(tabs.get_node("RoomsTab") as Control)
+	_tab_create = tabs.get_tab_idx_from_control(tabs.get_node("CreateTab") as Control)
+	_tab_room = tabs.get_tab_idx_from_control(tabs.get_node("RoomTab") as Control)
 
 	tabs.set_tab_title(_tab_connect, "连接")
 	tabs.set_tab_title(_tab_rooms, "房间")
@@ -344,12 +344,13 @@ func _render_room_state(room_state: Dictionary) -> void:
 	if not is_host and _config_sync_state != "synced":
 		_set_config_sync_state("synced", "")
 	if _room_config_editor != null and is_instance_valid(_room_config_editor):
-		_room_config_editor.set_editable(is_host and str(room_state.get("status", "")) == "Lobby")
+		var editable := is_host and str(room_state.get("status", "")) == "Lobby"
 		if not is_host or _config_sync_state == "synced" or _config_sync_state == "syncing":
 			_room_config_editor.set_from_room_config(cfg)
 			if is_host and _config_sync_state == "syncing":
 				_pending_config_patch = {}
 				_set_config_sync_state("synced", "")
+		_room_config_editor.set_editable(editable)
 
 	# StartGame 按钮
 	start_game_button.disabled = not (connected and _can_start_game(room_state) and _config_sync_state == "synced")

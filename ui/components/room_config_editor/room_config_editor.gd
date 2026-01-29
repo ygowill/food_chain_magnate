@@ -36,7 +36,10 @@ func set_editable(editable: bool) -> void:
 	if _allow_spectators_check != null and is_instance_valid(_allow_spectators_check):
 		_allow_spectators_check.disabled = not editable
 	if _module_selector != null and is_instance_valid(_module_selector):
+		var prev := _suppress_signals
+		_suppress_signals = true
 		_module_selector.set_editable(editable)
+		_suppress_signals = prev
 
 func set_from_room_config(cfg: Dictionary) -> void:
 	_ensure_ui()
