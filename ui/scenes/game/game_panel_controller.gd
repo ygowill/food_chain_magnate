@@ -164,6 +164,21 @@ func _get_effective_view_player_id(state: GameState, requested_view_id: int) -> 
 	return state.get_current_player_id()
 
 func _on_view_player_selected(player_id: int) -> void:
+	# Restructuring 隐私规则：
+	# - Online：禁止查看其他玩家（仅显示提交进度）
+	# - Hotseat：已提交玩家不可再查看
+	if _scene != null and _scene.game_engine != null:
+		var state: GameState = _scene.game_engine.get_state()
+		if state != null and str(state.phase) == DefsClass.PHASE_RESTRUCTURING:
+			if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+				var local_pid := int(NetContext.local_player_id)
+				if local_pid < 0 or player_id != local_pid:
+					return
+			else:
+				var submitted := _get_restructuring_submitted_map(state)
+				if not submitted.is_empty() and _is_restructuring_player_submitted(submitted, player_id):
+					return
+
 	_view_player_id = player_id
 	if _refresh_ui.is_valid():
 		_refresh_ui.call()
@@ -384,6 +399,10 @@ func _update_ui_components(state: GameState) -> void:
 					if picked >= 0:
 						view_player_id = picked
 						_view_player_id = picked
+
+		# Restructuring：隐私规则（Online 仅自己；Hotseat 已提交锁定）
+		if str(state.phase) == DefsClass.PHASE_RESTRUCTURING:
+			view_player_id = _apply_restructuring_view_privacy(state, view_player_id)
 
 	var view_player: Dictionary = current_player
 	if view_player_id >= 0 and view_player_id < state.players.size():
@@ -1031,6 +1050,7 @@ func _sync_modals(state: GameState) -> void:
 	if should_show_restructuring:
 		_show_restructuring_modal(covered)
 		var view_player_id := _get_effective_view_player_id(state, _view_player_id)
+		view_player_id = _apply_restructuring_view_privacy(state, view_player_id)
 		_sync_restructuring_modal_ui(state, view_player_id)
 	else:
 		_hide_restructuring_modal()
@@ -1571,6 +1591,78 @@ func _on_restructuring_modal_completed(result: Dictionary) -> void:
 func _on_restructuring_modal_cancelled() -> void:
 	_hide_restructuring_modal()
 
+func _get_restructuring_submitted_map(state: GameState) -> Dictionary:
+	if state == null:
+		return {}
+	if not (state.round_state is Dictionary):
+		return {}
+	var rs: Dictionary = state.round_state
+	var r_val = rs.get("restructuring", null)
+	if not (r_val is Dictionary):
+		return {}
+	var r: Dictionary = r_val
+	var submitted_val = r.get("submitted", null)
+	if not (submitted_val is Dictionary):
+		return {}
+	return submitted_val
+
+func _is_restructuring_player_submitted(submitted: Dictionary, player_id: int) -> bool:
+	if submitted == null or submitted.is_empty():
+		return false
+	var v = submitted.get(player_id, null)
+	if v == null and submitted.has(str(player_id)):
+		v = submitted.get(str(player_id), null)
+	return bool(v)
+
+func _pick_first_unsubmitted_player_id(state: GameState, submitted: Dictionary) -> int:
+	if state == null:
+		return -1
+	var total := state.players.size()
+	if total <= 0:
+		return -1
+
+	# 优先按 turn_order（更符合“顺序轨/回合”语义）
+	for pid_val in Array(state.turn_order):
+		if not (pid_val is int):
+			continue
+		var pid := int(pid_val)
+		if pid < 0 or pid >= total:
+			continue
+		if not _is_restructuring_player_submitted(submitted, pid):
+			return pid
+
+	for pid2 in range(total):
+		if not _is_restructuring_player_submitted(submitted, pid2):
+			return pid2
+	return -1
+
+func _apply_restructuring_view_privacy(state: GameState, view_player_id: int) -> int:
+	if state == null:
+		return view_player_id
+	if str(state.phase) != DefsClass.PHASE_RESTRUCTURING:
+		return view_player_id
+
+	# Online：仅允许查看自己；旁观者不允许查看任何玩家结构。
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		var local_pid := int(NetContext.local_player_id)
+		if local_pid >= 0:
+			_view_player_id = local_pid
+			return local_pid
+		_view_player_id = -1
+		return -1
+
+	# Hotseat：已提交玩家不可再查看（用于保密）。
+	var submitted := _get_restructuring_submitted_map(state)
+	if submitted.is_empty():
+		return view_player_id
+	if _is_restructuring_player_submitted(submitted, view_player_id):
+		var picked := _pick_first_unsubmitted_player_id(state, submitted)
+		if picked >= 0:
+			_view_player_id = picked
+			return picked
+
+	return view_player_id
+
 func _sync_restructuring_modal_ui(state: GameState, view_player_id: int) -> void:
 	if not is_instance_valid(_restructuring_modal):
 		return
@@ -1604,51 +1696,51 @@ func _sync_restructuring_modal_ui(state: GameState, view_player_id: int) -> void
 	if _restructuring_modal.has_method("set_player_switcher"):
 		_restructuring_modal.call("set_player_switcher", total, view_player_id, submitted)
 
-	var view_name = Globals.get_player_name(view_player_id) if Globals != null else ("玩家%d" % (view_player_id + 1))
+	var view_name := "-"
+	if view_player_id >= 0:
+		view_name = Globals.get_player_name(view_player_id) if Globals != null else ("玩家%d" % (view_player_id + 1))
 	if _restructuring_modal.has_method("set_title_text"):
-		_restructuring_modal.call("set_title_text", "公司结构重组（同时）｜查看: %s" % view_name)
+		var title := "公司结构重组（同时）"
+		if view_player_id >= 0:
+			title = "公司结构重组（同时）｜查看: %s" % view_name
+		_restructuring_modal.call("set_title_text", title)
 
 	var is_online := false
 	var local_pid := -1
-	var view_is_local := true
-	var local_name := ""
 	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
 		is_online = true
 		local_pid = int(NetContext.local_player_id)
-		view_is_local = (local_pid >= 0 and view_player_id == local_pid)
-		local_name = Globals.get_player_name(local_pid) if (Globals != null and local_pid >= 0) else ("玩家%d" % (local_pid + 1))
+
+	# Online spectator：不允许查看任何玩家结构（只显示提交进度）
+	var show_content := true
+	if is_online and local_pid < 0:
+		show_content = false
+	if view_player_id < 0:
+		show_content = false
+	if _restructuring_modal.has_method("set_content_visible"):
+		_restructuring_modal.call("set_content_visible", show_content)
 
 	var confirm_text := "已提交" if view_submitted else ("确认重组（%s）" % view_name)
 	var confirm_enabled := not view_submitted
 	var status_text := ""
 	var view_status := "已提交" if view_submitted else "未提交"
+
 	if is_online:
 		if local_pid < 0:
-			confirm_text = "联机：身份未就绪"
-			confirm_enabled = false
-			view_status = "只读"
-			status_text = "联机：身份未就绪（等待同步）｜提交进度: %d/%d" % [submitted_count, total]
-		elif not view_is_local:
 			confirm_text = "只读"
 			confirm_enabled = false
-			view_status = "只读"
-			status_text = "当前查看: %s（只读）｜你只能调整并提交自己的公司结构（%s）｜提交进度: %d/%d" % [
-				view_name,
-				local_name,
-				submitted_count,
-				total
-			]
+			status_text = "旁观者：重组阶段不可查看玩家公司结构｜提交进度: %d/%d" % [submitted_count, total]
 		else:
 			confirm_text = "已提交" if view_submitted else "确认重组"
 			confirm_enabled = not view_submitted
-			status_text = "当前查看: %s（%s）｜提交进度: %d/%d｜联机：只能调整并提交自己；切换他人仅查看" % [
-				view_name,
-				view_status,
-				submitted_count,
-				total
-			]
+			status_text = "联机：重组阶段不可查看其他玩家｜你的状态: %s｜提交进度: %d/%d" % [view_status, submitted_count, total]
 	else:
-		status_text = "当前查看: %s（%s）｜提交进度: %d/%d｜可在上方切换玩家分别调整并提交" % [view_name, view_status, submitted_count, total]
+		status_text = "当前查看: %s（%s）｜提交进度: %d/%d｜上方仅可切换未提交玩家（已提交将锁定）" % [
+			view_name,
+			view_status,
+			submitted_count,
+			total
+		]
 
 	if _restructuring_modal.has_method("set_confirm_text"):
 		_restructuring_modal.call("set_confirm_text", confirm_text)

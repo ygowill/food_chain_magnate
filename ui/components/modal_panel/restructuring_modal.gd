@@ -68,6 +68,12 @@ func set_player_switcher(player_count: int, view_player_id: int, submitted: Dict
 		return
 	player_buttons_host.visible = true
 
+	var is_online := false
+	var local_pid := -1
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		is_online = true
+		local_pid = int(NetContext.local_player_id)
+
 	var need_rebuild := (_player_buttons.size() != player_count)
 	if need_rebuild:
 		for c in player_buttons_host.get_children():
@@ -100,9 +106,22 @@ func set_player_switcher(player_count: int, view_player_id: int, submitted: Dict
 
 		btn2.text = "%s%s" % [name, "（已提交）" if is_submitted else ""]
 		btn2.set_pressed_no_signal(pid2 == view_player_id)
+		# 隐私规则：
+		# - Online：禁止查看其他玩家的重组结构（仅显示提交状态）
+		# - Hotseat：已提交玩家不可再查看
+		var selectable := true
+		if is_online:
+			selectable = (local_pid >= 0 and pid2 == local_pid)
+		else:
+			selectable = not is_submitted
+		btn2.disabled = not selectable
 
 func _on_player_button_pressed(player_id: int) -> void:
 	player_selected.emit(player_id)
+
+func set_content_visible(visible: bool) -> void:
+	if is_instance_valid(split):
+		split.visible = bool(visible)
 
 func _queue_apply_split_target_width() -> void:
 	_split_adjust_attempts = 0

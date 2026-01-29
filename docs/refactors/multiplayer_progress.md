@@ -104,6 +104,7 @@
 
 （按时间倒序追加）
 
+- 2026-01-30：Restructuring 阶段隐私：Online 不允许查看其他玩家公司结构（仅展示提交进度/状态）；Hotseat 模式已提交玩家不可再切换查看（用于保密）。实现：`RestructuringModal.set_player_switcher` 禁用他人/已提交按钮；`GamePanelController` 在 Restructuring 强制 view_player（online=local；hotseat=未提交）并屏蔽非法切换；旁观者在 Restructuring 隐藏结构内容。新增 `RestructuringPrivacyTest` 并加入 `AllTests`。
 - 2026-01-30：Online 下“回退到当前玩家回合开始”曾为本地 rewind，导致不同客户端状态不一致。修复：新增 `rpc_rewind_to_turn_start`，由 server 执行 rewind + truncate，并广播 `ResyncArchive` 给房间内所有在线成员；同时联机模式禁用本地 ReplayBar/日志 seek（避免本地时间线回退造成不一致）。新增 `OnlineRewindToTurnStartTest` 并加入 `AllTests`。
 - 2026-01-30：Online 下 ActionPanel 以 `current_player_id` 为上下文，导致非当前玩家看到/触发的是“他人的动作”，在联机校验（只能操作自己）下会直接失败，出现“无动作可用/无法继续”。修复：ActionPanel 在 `ONLINE_CLIENT` 模式固定使用 `local_player_id`；`GamePanelController` 创建命令时也使用 `local_player_id` 作为 actor；新增 `ActionPanelOnlineLocalPlayerTest` 并加入 `AllTests`。
 - 2026-01-30：LeftPanel 的玩家 Tab 选择曾向外 emit `player_selected` 并被 `GamePanelController` 监听，导致“左侧信息面板的选择”影响全局 `view_player`（进而出现 ActionPanel 可用动作跟着变化的错觉/误导）。修复：LeftPanel 不再暴露 `player_selected` 信号，选择仅影响 LeftPanel 自身展示；新增 `LeftPanelSelectionIsolationTest` 防回归并加入 `AllTests`。
