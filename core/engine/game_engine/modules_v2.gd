@@ -62,6 +62,8 @@ static func reset(engine) -> void:
 		engine.phase_manager.set_settlement_registry(null)
 	if engine.phase_manager != null and engine.phase_manager.has_method("set_effect_registry"):
 		engine.phase_manager.set_effect_registry(null)
+	if engine.phase_manager != null and engine.phase_manager.has_method("reset_hooks"):
+		engine.phase_manager.reset_hooks()
 
 static func apply(engine, module_ids: Array[String], base_dir: String) -> Result:
 	if engine == null:

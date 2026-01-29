@@ -101,6 +101,9 @@ var _force_full_panel_sync_next_update: bool = false
 var _startup_replay_from_main_menu: bool = false
 var _startup_replay_file_path: String = ""
 
+var _online_resync_in_progress: bool = false
+var _online_resync_pending_cmds: Array[Dictionary] = [] # [{cmd_dict, state_hash}]
+
 var _background_ui_warmup_started: bool = false
 var _startup_profile_reported: bool = false
 
@@ -1090,19 +1093,39 @@ func _setup_online_client_bindings() -> void:
 		return
 	if not NetClient.command_applied.is_connected(_on_online_command_applied):
 		NetClient.command_applied.connect(_on_online_command_applied)
+	if not NetClient.resync_archive_received.is_connected(_on_online_resync_archive_received):
+		NetClient.resync_archive_received.connect(_on_online_resync_archive_received)
 	if not NetClient.request_rejected.is_connected(_on_online_request_rejected):
 		NetClient.request_rejected.connect(_on_online_request_rejected)
 	if not NetClient.disconnected.is_connected(_on_online_disconnected):
 		NetClient.disconnected.connect(_on_online_disconnected)
 
+	var pending := NetClient.take_pending_resync_archive()
+	if not pending.is_empty():
+		_online_resync_in_progress = true
+		_on_online_resync_archive_received(pending)
+
 func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> void:
 	if game_engine == null:
+		return
+	if _online_resync_in_progress:
+		_online_resync_pending_cmds.append({
+			"cmd_dict": cmd_dict.duplicate(true),
+			"state_hash": str(state_hash),
+		})
 		return
 	var parsed: Result = Command.from_dict(cmd_dict)
 	if not parsed.ok:
 		GameLog.error("Game", "联机 CommandApplied 解析失败: %s" % parsed.error)
 		return
 	var cmd: Command = parsed.value
+	if int(cmd.index) != int(game_engine.command_history.size()):
+		_request_online_resync("command_index_mismatch")
+		_online_resync_pending_cmds.append({
+			"cmd_dict": cmd_dict.duplicate(true),
+			"state_hash": str(state_hash),
+		})
+		return
 	var r: Result = game_engine.execute_command(cmd, true)
 	if not r.ok:
 		GameLog.error("Game", "联机回放命令失败: %s" % r.error)
@@ -1113,10 +1136,114 @@ func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> voi
 			var local_hash := str(state.compute_hash())
 			if local_hash != state_hash:
 				GameLog.warn("Game", "联机 state_hash 不一致: local=%s server=%s" % [local_hash, state_hash])
+				_request_online_resync("state_hash_mismatch")
 
 	if is_instance_valid(game_log_panel) and game_log_panel.visible:
 		_apply_live_log_timeline_from_engine()
 	_update_ui()
+
+func _on_online_resync_archive_received(archive: Dictionary) -> void:
+	if game_engine == null:
+		return
+	var r: Result = game_engine.load_from_archive(archive)
+	if not r.ok:
+		GameLog.error("Game", "联机 ResyncArchive 加载失败: %s" % r.error)
+		_online_resync_in_progress = false
+		_online_resync_pending_cmds.clear()
+		return
+
+	GameLog.warn("Game", "联机 ResyncArchive 加载完成（命令数=%d）" % int(game_engine.command_history.size()))
+	_online_resync_in_progress = false
+	_timeline_edit_mode_active = false
+	_force_full_panel_sync_next_update = true
+	if is_instance_valid(game_log_panel) and game_log_panel.visible:
+		_apply_live_log_timeline_from_engine()
+	_update_ui()
+
+	_flush_online_pending_commands_after_resync()
+
+func _flush_online_pending_commands_after_resync() -> void:
+	if game_engine == null:
+		_online_resync_pending_cmds.clear()
+		return
+	if _online_resync_pending_cmds.is_empty():
+		return
+
+	var queue := _online_resync_pending_cmds
+	_online_resync_pending_cmds = []
+
+	queue.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_cmd: Dictionary = Dictionary(a.get("cmd_dict", {}))
+		var b_cmd: Dictionary = Dictionary(b.get("cmd_dict", {}))
+		return int(a_cmd.get("index", -1)) < int(b_cmd.get("index", -1))
+	)
+
+	var safety := 0
+	while not queue.is_empty() and safety < 1000:
+		safety += 1
+		var progressed := false
+
+		for i in range(queue.size()):
+			var item: Dictionary = queue[i]
+			var item_cmd_dict: Dictionary = Dictionary(item.get("cmd_dict", {}))
+			var item_hash := str(item.get("state_hash", ""))
+			var parsed: Result = Command.from_dict(item_cmd_dict)
+			if not parsed.ok:
+				GameLog.error("Game", "联机待处理命令解析失败: %s" % parsed.error)
+				queue.remove_at(i)
+				progressed = true
+				break
+			var cmd: Command = parsed.value
+			var expected_index := int(game_engine.command_history.size())
+			if int(cmd.index) < expected_index:
+				queue.remove_at(i)
+				progressed = true
+				break
+			if int(cmd.index) > expected_index:
+				continue
+
+			var r: Result = game_engine.execute_command(cmd, true)
+			if not r.ok:
+				GameLog.error("Game", "联机回放待处理命令失败: %s" % r.error)
+				queue.remove_at(i)
+				progressed = true
+				break
+			if not item_hash.is_empty():
+				var state := game_engine.get_state()
+				if state != null and state.has_method("compute_hash"):
+					var local_hash := str(state.compute_hash())
+					if local_hash != item_hash:
+						GameLog.warn("Game", "联机待处理 state_hash 不一致: local=%s server=%s" % [local_hash, item_hash])
+						queue.remove_at(i)
+						_request_online_resync("pending_state_hash_mismatch")
+						return
+
+			queue.remove_at(i)
+			progressed = true
+			break
+
+		if not progressed:
+			_request_online_resync("pending_command_gap")
+			return
+
+	if not queue.is_empty():
+		_request_online_resync("pending_queue_overflow")
+		return
+
+	if is_instance_valid(game_log_panel) and game_log_panel.visible:
+		_apply_live_log_timeline_from_engine()
+	_update_ui()
+
+func _request_online_resync(reason: String) -> void:
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	if NetClient == null or not NetClient.is_online_client_connected():
+		return
+	if _online_resync_in_progress:
+		return
+	_online_resync_in_progress = true
+	GameLog.warn("Game", "联机触发 resync: %s" % str(reason))
+	NetClient.request_resync()
 
 func _on_online_request_rejected(_request_id: String, code: String, message: String) -> void:
 	GameLog.warn("Game", "联机请求被拒绝: %s %s" % [code, message])

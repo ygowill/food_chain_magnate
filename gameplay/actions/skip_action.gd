@@ -41,7 +41,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		if not player.has("restaurants") or not (player["restaurants"] is Array):
 			return Result.failure("Setup: player.restaurants 缺失或类型错误（期望 Array）")
 		var restaurants: Array = player["restaurants"]
-		if restaurants.is_empty():
+		if restaurants.is_empty() and not bool(player.get("forfeited", false)):
 			return Result.failure("设置阶段必须先放置餐厅才能确认结束")
 
 	# Working：只有在最后一个子阶段才能确认结束（结束该玩家的 Working 回合）

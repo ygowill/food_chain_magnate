@@ -253,6 +253,9 @@ func register_sub_phase_hook_by_name(
 func unregister_hook(phase: int, hook_type: int, callback: Callable) -> bool:
 	return _hooks.unregister_hook(phase, hook_type, callback)
 
+func reset_hooks() -> void:
+	_hooks = HooksClass.new(PHASE_NAMES.keys(), SUB_PHASE_NAMES.keys(), HookType.values())
+
 # 计算确定性的“游戏内时间戳”
 # 对齐 docs/design.md（round * 1000 + phase_index * 100 + sub_phase_index）
 static func compute_timestamp(state: GameState) -> int:

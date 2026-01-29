@@ -17,6 +17,7 @@ const PlaceHouseActionClass = preload("res://gameplay/actions/place_house_action
 const AddGardenActionClass = preload("res://gameplay/actions/add_garden_action.gd")
 const SelectReserveCardActionClass = preload("res://gameplay/actions/select_reserve_card_action.gd")
 const ChooseFridgeKeepActionClass = preload("res://gameplay/actions/choose_fridge_keep_action.gd")
+const ForfeitPlayerActionClass = preload("res://gameplay/actions/forfeit_player_action.gd")
 
 const SetPriceActionClass = preload("res://gameplay/actions/set_price_action.gd")
 const SetDiscountActionClass = preload("res://gameplay/actions/set_discount_action.gd")
@@ -48,6 +49,7 @@ static func build_registry(phase_manager: PhaseManager, piece_registry: Dictiona
 		InitiateMarketingActionClass.new(),
 		FireActionClass.new(),
 		SelectReserveCardActionClass.new(),
+		ForfeitPlayerActionClass.new(),
 		ChooseFridgeKeepActionClass.new(),
 		PlaceRestaurantActionClass.new(piece_registry),
 		MoveRestaurantActionClass.new(piece_registry),

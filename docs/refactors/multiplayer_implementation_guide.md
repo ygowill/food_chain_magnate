@@ -137,6 +137,11 @@
 ## 4. 必须处理的边界条件（阶段 1）
 
 - 房主离开/断线（Lobby）：迁移房主并广播 RoomState。
-- 任意玩家断线（InGame）：其余玩家继续；服务器对掉线玩家执行一次 `forfeit_player` 并广播（移除其棋子/占位，且该玩家不参与胜利判定）。
+- 任意玩家断线（InGame）：其余玩家继续；服务器对掉线玩家执行一次 `forfeit_player` 并广播：
+  - 移除：餐厅、营销板件（`marketing_instances`/`marketing_placements`）、员工/库存/里程碑/现金等玩家资产
+  - 不移除：房屋/花园
+  - 该玩家 `forfeited=true`，只读旁观者且不得获胜
+  - 服务器自动代为执行 `skip/end_turn`（以及必要阶段动作）以保证流程继续
+- InGame JoinRoom：允许以 spectator 进入观战（不占用玩家席位；不进入 peer→player_id 映射）。
 - 限流：对 JoinRoom/ActionRequest 做节流，避免刷请求拖垮 server。
 - 敏感字段脱敏：token/password 不写日志；`select_reserve_card.selected_index` 在 UI/导出对非本人且未揭示时脱敏。

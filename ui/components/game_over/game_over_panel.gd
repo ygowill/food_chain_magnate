@@ -3,6 +3,8 @@
 class_name GameOverPanel
 extends Control
 
+const GameOverWinnerRulesClass = preload("res://core/rules/game_over_winner_rules.gd")
+
 signal return_to_menu_requested()
 signal play_again_requested()
 
@@ -14,6 +16,7 @@ signal play_again_requested()
 
 var _final_state: GameState = null
 var _player_rankings: Array[Dictionary] = []
+var _winner_player_id: int = -1
 
 func _ready() -> void:
 	if return_btn != null:
@@ -38,23 +41,42 @@ func show_with_animation() -> void:
 
 func _calculate_rankings() -> void:
 	_player_rankings.clear()
+	_winner_player_id = -1
 
 	if _final_state == null:
 		return
 
 	# 收集所有玩家数据
+	var stats_by_id: Dictionary = {}
 	for i in range(_final_state.players.size()):
 		var player: Dictionary = _final_state.players[i]
-		_player_rankings.append({
+		stats_by_id[i] = {
 			"id": i,
 			"cash": int(player.get("cash", 0)),
+			"forfeited": bool(player.get("forfeited", false)),
 			"employees": Array(player.get("employees", [])).size(),
 			"restaurants": Array(player.get("restaurants", [])).size(),
 			"milestones": Array(player.get("milestones", [])).size(),
-		})
+		}
 
-	# 按现金排序（降序）
-	_player_rankings.sort_custom(func(a, b): return a.cash > b.cash)
+	var rankings_r: Result = GameOverWinnerRulesClass.build_cash_rankings(_final_state)
+	if rankings_r.ok and rankings_r.value is Array:
+		for e_val in Array(rankings_r.value):
+			if not (e_val is Dictionary):
+				continue
+			var e: Dictionary = Dictionary(e_val)
+			var pid := int(e.get("id", -1))
+			if stats_by_id.has(pid):
+				_player_rankings.append(Dictionary(stats_by_id[pid]))
+	else:
+		# 兜底：保持旧行为（按现金降序）
+		for k in stats_by_id.keys():
+			_player_rankings.append(Dictionary(stats_by_id[k]))
+		_player_rankings.sort_custom(func(a, b): return int(a.cash) > int(b.cash))
+
+	var winner_r: Result = GameOverWinnerRulesClass.pick_winner_player_id(_final_state)
+	if winner_r.ok:
+		_winner_player_id = int(winner_r.value)
 
 func _rebuild_display() -> void:
 	_rebuild_rankings()
@@ -107,7 +129,7 @@ func _rebuild_rankings() -> void:
 		rank_item.rank = rank_idx + 1
 		rank_item.player_id = int(player_data.id)
 		rank_item.cash = int(player_data.cash)
-		rank_item.is_winner = (rank_idx == 0)
+		rank_item.is_winner = (_winner_player_id >= 0 and int(player_data.id) == _winner_player_id)
 		rankings_container.add_child(rank_item)
 
 func _rebuild_stats() -> void:

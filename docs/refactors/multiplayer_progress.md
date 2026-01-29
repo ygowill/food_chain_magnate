@@ -17,8 +17,11 @@
 - 断线重连：阶段 1 不要求。
 - 掉线处理（InGame）：其余玩家继续；掉线玩家弃权：
   - 移除：餐厅 + 营销板件（`marketing_instances` / `marketing_placements`）+ 员工/库存/里程碑等玩家资产
+  - 现金也属于玩家资产：弃权时清零（并计入 `bank.removed_total`）
   - 不移除：房屋/花园
   - 弃权玩家不得获胜
+  - 服务器自动代为执行 `skip/end_turn`（以及必要的阶段动作）以保证流程继续
+  - 弃权玩家保留在房间内作为“旁观者”（只读）
 
 ---
 
@@ -53,12 +56,13 @@
 
 ### M4：Resync + 稳定性 + 掉线弃权（其余继续）
 
-- [ ] Client：index/hash mismatch 自动 resync
-- [ ] Server：ResyncArchive（`engine.create_archive()`）
-- [ ] Server：掉线玩家执行 `forfeit_player`（移除餐厅/营销/玩家资产；不移除房屋/花园；不得获胜）
-- [ ] Tests：resync + forfeit 行为测试加入 `AllTests`
-- [ ] 验收：`game_smoke_test`/`all_tests` 通过
-- [ ] Docs + Git
+- [x] Client：index/hash mismatch 自动 resync（含 pending queue）
+- [x] Server：ResyncArchive（`engine.create_archive()`）+ Join mid-game 观战（spectator）
+- [x] Server：掉线玩家执行 `forfeit_player`（移除餐厅/营销/玩家资产；保留房屋/花园；不得获胜；只读旁观者）
+- [x] Server：弃权玩家自动推进（`select_reserve_card/submit_restructuring/choose_turn_order/skip(_sub_phase)` 等）
+- [x] Tests：resync + forfeit + room spectator 行为测试加入 `AllTests`
+- [x] 验收：`game_smoke_test`/`all_tests` 通过
+- [x] Docs + Git
 
 ---
 
@@ -79,6 +83,8 @@
 
 （按时间倒序追加）
 
+- 2026-01-29：`GameEngine.load_from_archive` 会在“已初始化的 engine”上执行 `reset_modules_v2()`；由于 `PhaseManager` hooks 未清理，旧 hooks 的 Callable target 可能已被释放，导致回放时出现 `null::_on_restructuring_before_enter`。修复：在 `ModulesV2.reset` 中调用 `PhaseManager.reset_hooks()` 清空 hooks。
+- 2026-01-29：`AllTests` 开启 warnings-as-errors；测试中对 `Variant` 返回值使用 `:=`（例如 `max(...)`）会触发 “typed as Variant” 警告并当作错误。修复：改用显式类型或 `maxi/mini` 等确定类型函数。
 - 2026-01-29：`CommandPrivacy.sanitize_params` 必须复制 `params`（`duplicate(true)`），否则会在 UI/调试视图中“污染”原始 `Command.params`（导致后续显示/导出/测试错误）。
 - 2026-01-29：Godot headless 下新加 `class_name` 脚本不会自动进入 Global Class Cache；避免在新脚本上使用 `RoomManager`/`OnlineRoom` 等类型注解（会触发 Parse Error），改用无类型变量或显式 `Script`/`Dictionary`/`Result`。
 - 2026-01-29：GDScript 中使用 `:=` 时需要可推导类型；对未显式类型的对象（例如 `var server_engine = ...`）再调用方法返回值时，可能触发 “Cannot infer the type” 解析错误。测试代码里优先用 `=`（Variant）或补齐类型注解。

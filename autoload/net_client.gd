@@ -4,6 +4,8 @@ extends Node
 const RoomManagerClass = preload("res://server/room_manager.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const CommandClass = preload("res://core/types/command.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 signal connected()
 signal disconnected(reason: String)
@@ -11,6 +13,7 @@ signal room_state_updated(room_state: Dictionary)
 signal request_rejected(request_id: String, code: String, message: String)
 signal game_started(payload: Dictionary)
 signal command_applied(cmd_dict: Dictionary, state_hash: String)
+signal resync_archive_received(archive: Dictionary)
 
 var _peer: WebSocketMultiplayerPeer = null
 
@@ -19,6 +22,7 @@ var _profile_by_peer_id: Dictionary = {} # peer_id -> profile
 
 var _client_transport_connected: bool = false
 var _request_counter: int = 0
+var _pending_resync_archive: Dictionary = {}
 
 func _ready() -> void:
 	_ensure_signal_connections()
@@ -66,6 +70,7 @@ func shutdown() -> void:
 	_room_manager = null
 	_profile_by_peer_id = {}
 	_client_transport_connected = false
+	_pending_resync_archive = {}
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	NetContext.reset()
 
@@ -127,6 +132,18 @@ func request_action(action_id: String, params: Dictionary) -> String:
 	}
 	rpc_id(1, "rpc_action_request", payload)
 	return request_id
+
+func request_resync() -> void:
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	if not is_online_client_connected():
+		return
+	rpc_id(1, "rpc_resync_request", {})
+
+func take_pending_resync_archive() -> Dictionary:
+	var out: Dictionary = _pending_resync_archive.duplicate(true)
+	_pending_resync_archive = {}
+	return out
 
 @rpc("any_peer", "reliable")
 func rpc_client_hello(request: Dictionary) -> void:
@@ -247,6 +264,17 @@ func rpc_join_room(request: Dictionary) -> void:
 		return
 
 	_broadcast_room_state(room)
+	if str(room.status) == "InGame" and room.game_engine != null:
+		var payload := {
+			"player_id_by_peer_id": room.player_id_by_peer_id.duplicate(true),
+			"config": room.config.duplicate(true),
+		}
+		rpc_id(peer_id, "rpc_game_started", payload)
+		var archive_r: Result = room.game_engine.create_archive()
+		if archive_r.ok:
+			rpc_id(peer_id, "rpc_resync_archive", {
+				"archive": Dictionary(archive_r.value).duplicate(true),
+			})
 
 @rpc("any_peer", "reliable")
 func rpc_update_room_config(request: Dictionary) -> void:
@@ -410,23 +438,45 @@ func rpc_action_request(request: Dictionary) -> void:
 	if params_val is Dictionary:
 		params = Dictionary(params_val)
 
+	var state: GameState = room.game_engine.get_state()
+	if _server_is_player_forfeited(state, actor_id):
+		_send_request_rejected(peer_id, request_id, "forfeited_readonly", "Player has forfeited (spectator, read-only)")
+		return
+
 	var cmd = CommandClass.create(action_id, actor_id, params)
 	var r: Result = room.game_engine.execute_command(cmd)
 	if not r.ok:
 		_send_request_rejected(peer_id, request_id, "action_failed", r.error)
 		return
 
-	var state_hash := ""
-	var state = room.game_engine.get_state()
-	if state != null and state.has_method("compute_hash"):
-		state_hash = str(state.compute_hash())
+	_broadcast_command_applied(room, cmd)
+	_server_drain_forfeited_auto_steps(room)
 
-	var payload := {
-		"cmd": cmd.to_dict(),
-		"state_hash": state_hash,
-	}
-	for pid in room.get_peer_ids():
-		rpc_id(int(pid), "rpc_command_applied", payload)
+@rpc("any_peer", "reliable")
+func rpc_resync_request(_request: Dictionary) -> void:
+	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+
+	var peer_id := multiplayer.get_remote_sender_id()
+	var room = _room_manager.get_room_by_peer(peer_id)
+	if room == null:
+		_send_request_rejected(peer_id, "", "not_in_room", "Not in room")
+		return
+	if str(room.status) != "InGame":
+		_send_request_rejected(peer_id, "", "not_in_game", "Room not in game")
+		return
+	if room.game_engine == null:
+		_send_request_rejected(peer_id, "", "engine_missing", "Room engine missing")
+		return
+
+	var archive_r: Result = room.game_engine.create_archive()
+	if not archive_r.ok:
+		_send_request_rejected(peer_id, "", "resync_failed", archive_r.error)
+		return
+
+	rpc_id(peer_id, "rpc_resync_archive", {
+		"archive": Dictionary(archive_r.value).duplicate(true),
+	})
 
 @rpc("authority", "reliable")
 func rpc_room_state(payload: Dictionary) -> void:
@@ -505,6 +555,16 @@ func rpc_command_applied(payload: Dictionary) -> void:
 	command_applied.emit(Dictionary(cmd_dict_val), state_hash)
 
 @rpc("authority", "reliable")
+func rpc_resync_archive(payload: Dictionary) -> void:
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	var archive_val = payload.get("archive", null)
+	if not (archive_val is Dictionary):
+		return
+	_pending_resync_archive = Dictionary(archive_val).duplicate(true)
+	resync_archive_received.emit(_pending_resync_archive.duplicate(true))
+
+@rpc("authority", "reliable")
 func rpc_request_rejected(payload: Dictionary) -> void:
 	var request_id := str(payload.get("request_id", ""))
 	var code := str(payload.get("code", ""))
@@ -533,8 +593,31 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 	_profile_by_peer_id.erase(peer_id)
 	var room = _room_manager.get_room_by_peer(peer_id)
-	var lr: Result = _room_manager.leave_room(peer_id)
-	if lr.ok and room != null and not bool(lr.value.get("removed", false)):
+	var in_game := room != null and str(room.status) == "InGame"
+	var actor_id := -1
+	if room != null and (room.player_id_by_peer_id is Dictionary):
+		if room.player_id_by_peer_id.has(peer_id):
+			actor_id = int(room.player_id_by_peer_id.get(peer_id, -1))
+			room.player_id_by_peer_id.erase(peer_id)
+		elif room.player_id_by_peer_id.has(str(peer_id)):
+			actor_id = int(room.player_id_by_peer_id.get(str(peer_id), -1))
+			room.player_id_by_peer_id.erase(str(peer_id))
+
+	var removed := false
+	var rr: Result = _room_manager.disconnect_peer(peer_id) if in_game else _room_manager.leave_room(peer_id)
+	if rr.ok:
+		removed = bool(rr.value.get("removed", false))
+
+	if in_game and actor_id >= 0 and room.game_engine != null:
+		var cmd = CommandClass.create("forfeit_player", actor_id, {})
+		var fr: Result = room.game_engine.execute_command(cmd)
+		if fr.ok:
+			_broadcast_command_applied(room, cmd)
+			_server_drain_forfeited_auto_steps(room)
+		else:
+			GameLog.error("NetClient", "forfeit_player failed: %s" % fr.error)
+
+	if rr.ok and room != null and not removed:
 		_broadcast_room_state(room)
 
 func _on_connected_to_server() -> void:
@@ -586,9 +669,131 @@ func _empty_room_state() -> Dictionary:
 		"room_code": "",
 		"host_peer_id": 0,
 		"players": [],
+		"spectators": [],
 		"config": {},
 		"status": "Lobby",
 	}
+
+func _broadcast_command_applied(room, cmd: Command) -> void:
+	if room == null or cmd == null:
+		return
+	if room.game_engine == null:
+		return
+	var state_hash := ""
+	var state = room.game_engine.get_state()
+	if state != null and state.has_method("compute_hash"):
+		state_hash = str(state.compute_hash())
+	var payload := {
+		"cmd": cmd.to_dict(),
+		"state_hash": state_hash,
+	}
+	for pid in room.get_peer_ids():
+		rpc_id(int(pid), "rpc_command_applied", payload)
+
+func _server_is_player_forfeited(state: GameState, player_id: int) -> bool:
+	if state == null:
+		return false
+	if player_id < 0 or player_id >= state.players.size():
+		return false
+	var p_val = state.players[player_id]
+	if not (p_val is Dictionary):
+		return false
+	return bool(Dictionary(p_val).get("forfeited", false))
+
+func _server_pick_order_of_business_position(state: GameState) -> int:
+	if state == null or not (state.round_state is Dictionary):
+		return -1
+	var oob_val = Dictionary(state.round_state).get("order_of_business", null)
+	if not (oob_val is Dictionary):
+		return -1
+	var oob: Dictionary = oob_val
+	var picks_val = oob.get("picks", null)
+	if not (picks_val is Array):
+		return -1
+	var picks: Array = picks_val
+	for pos in range(picks.size() - 1, -1, -1):
+		if int(picks[pos]) == -1:
+			return pos
+	return -1
+
+func _server_try_auto_submit_forfeited_restructuring(room) -> bool:
+	if room == null or room.game_engine == null:
+		return false
+	var state: GameState = room.game_engine.get_state()
+	if state == null:
+		return false
+	if str(state.phase) != DefsClass.PHASE_RESTRUCTURING:
+		return false
+	if int(state.round_number) <= 1:
+		return false
+	if not (state.round_state is Dictionary):
+		return false
+	var r_val = Dictionary(state.round_state).get("restructuring", null)
+	if not (r_val is Dictionary):
+		return false
+	var r: Dictionary = r_val
+	var submitted_val = r.get("submitted", null)
+	if not (submitted_val is Dictionary):
+		return false
+	var submitted: Dictionary = submitted_val
+
+	var any := false
+	for pid in range(state.players.size()):
+		if not _server_is_player_forfeited(state, pid):
+			continue
+		if bool(submitted.get(pid, false)):
+			continue
+		var cmd = CommandClass.create("submit_restructuring", pid, {})
+		var exec_r: Result = room.game_engine.execute_command(cmd)
+		if not exec_r.ok:
+			GameLog.error("NetClient", "auto submit_restructuring failed: %s" % exec_r.error)
+			return any
+		_broadcast_command_applied(room, cmd)
+		any = true
+	return any
+
+func _server_drain_forfeited_auto_steps(room) -> void:
+	if room == null or room.game_engine == null:
+		return
+
+	var safety := 0
+	while safety < 128:
+		safety += 1
+		var state: GameState = room.game_engine.get_state()
+		if state == null:
+			return
+
+		if _server_try_auto_submit_forfeited_restructuring(room):
+			continue
+
+		var current_pid := int(state.get_current_player_id())
+		if current_pid < 0:
+			return
+		if not _server_is_player_forfeited(state, current_pid):
+			return
+
+		var cmd: Command = null
+		if str(state.phase) == DefsClass.PHASE_SETUP and str(state.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS:
+			cmd = CommandClass.create("select_reserve_card", current_pid, {"selected_index": 0})
+		elif str(state.phase) == DefsClass.PHASE_RESTRUCTURING and int(state.round_number) > 1:
+			cmd = CommandClass.create("submit_restructuring", current_pid, {})
+		elif str(state.phase) == DefsClass.PHASE_ORDER_OF_BUSINESS:
+			var pos := _server_pick_order_of_business_position(state)
+			if pos < 0:
+				return
+			cmd = CommandClass.create("choose_turn_order", current_pid, {"position": pos})
+		elif str(state.phase) == DefsClass.PHASE_WORKING:
+			cmd = CommandClass.create(ActionIdsClass.SKIP_SUB_PHASE, current_pid, {})
+		else:
+			cmd = CommandClass.create(ActionIdsClass.SKIP, current_pid, {})
+
+		var exec_r2: Result = room.game_engine.execute_command(cmd)
+		if not exec_r2.ok:
+			GameLog.error("NetClient", "auto step failed: %s (action=%s)" % [exec_r2.error, str(cmd.action_id)])
+			return
+		_broadcast_command_applied(room, cmd)
+
+	GameLog.error("NetClient", "auto steps exceeded safety limit")
 
 func _next_request_id() -> String:
 	_request_counter += 1

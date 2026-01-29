@@ -17,8 +17,15 @@ var password_hash: String = ""
 var game_engine = null
 var player_id_by_peer_id: Dictionary = {} # peer_id -> player_id
 
-var _profile_by_peer_id: Dictionary = {} # peer_id -> { name, color_index }
-var _seat_by_peer_id: Dictionary = {} # peer_id -> seat_index
+# 玩家座位：seat_index -> profile（即便掉线/弃权也保留，用于“旁观者”占位）
+var _seat_profile_by_seat_index: Dictionary = {} # seat_index -> { name, color_index }
+var _peer_id_by_seat_index: Dictionary = {} # seat_index -> peer_id（在线；掉线则不存在或为 0）
+
+# 在线成员：peer_id -> profile
+var _player_profile_by_peer_id: Dictionary = {} # peer_id -> { name, color_index }
+var _spectator_profile_by_peer_id: Dictionary = {} # peer_id -> { name, color_index }
+
+var _seat_by_player_peer_id: Dictionary = {} # peer_id -> seat_index
 var _desired_player_count: int = 0
 
 func _init(p_room_code: String, p_host_peer_id: int, p_join_policy: String, p_password_hash: String, p_config: Dictionary) -> void:
@@ -53,19 +60,27 @@ func update_config(patch: Dictionary) -> Result:
 	return Result.success()
 
 func has_peer(peer_id: int) -> bool:
-	return _profile_by_peer_id.has(peer_id)
+	return _player_profile_by_peer_id.has(peer_id) or _spectator_profile_by_peer_id.has(peer_id)
 
 func get_peer_ids() -> Array[int]:
 	var peer_ids: Array[int] = []
-	for k in _profile_by_peer_id.keys():
+	for k in _player_profile_by_peer_id.keys():
 		peer_ids.append(int(k))
 	peer_ids.sort_custom(func(a: int, b: int) -> bool:
-		return int(_seat_by_peer_id.get(a, 999999)) < int(_seat_by_peer_id.get(b, 999999))
+		return int(_seat_by_player_peer_id.get(a, 999999)) < int(_seat_by_player_peer_id.get(b, 999999))
 	)
+	var spectator_ids: Array[int] = []
+	for k2 in _spectator_profile_by_peer_id.keys():
+		spectator_ids.append(int(k2))
+	spectator_ids.sort()
+	peer_ids.append_array(spectator_ids)
 	return peer_ids
 
 func get_player_count() -> int:
-	return _profile_by_peer_id.size()
+	return _seat_profile_by_seat_index.size()
+
+func get_connected_player_count() -> int:
+	return _player_profile_by_peer_id.size()
 
 func is_full() -> bool:
 	if _desired_player_count <= 0:
@@ -73,7 +88,7 @@ func is_full() -> bool:
 	return get_player_count() >= _desired_player_count
 
 func is_empty() -> bool:
-	return _profile_by_peer_id.is_empty()
+	return _seat_profile_by_seat_index.is_empty() and _spectator_profile_by_peer_id.is_empty()
 
 func add_peer(peer_id: int, profile: Dictionary) -> Result:
 	if has_peer(peer_id):
@@ -84,16 +99,67 @@ func add_peer(peer_id: int, profile: Dictionary) -> Result:
 		return Result.failure("Room is full")
 
 	var seat_index := _pick_seat_index()
-	_profile_by_peer_id[peer_id] = profile.duplicate(true)
-	_seat_by_peer_id[peer_id] = seat_index
+	_player_profile_by_peer_id[peer_id] = profile.duplicate(true)
+	_seat_by_player_peer_id[peer_id] = seat_index
+	_seat_profile_by_seat_index[seat_index] = profile.duplicate(true)
+	_peer_id_by_seat_index[seat_index] = peer_id
+	return Result.success()
+
+func add_spectator(peer_id: int, profile: Dictionary) -> Result:
+	if has_peer(peer_id):
+		return Result.failure("Peer already in room")
+	if status != STATUS_IN_GAME:
+		return Result.failure("Room is not in game")
+
+	_spectator_profile_by_peer_id[peer_id] = profile.duplicate(true)
 	return Result.success()
 
 func remove_peer(peer_id: int) -> Result:
-	if not has_peer(peer_id):
+	if _spectator_profile_by_peer_id.has(peer_id):
+		_spectator_profile_by_peer_id.erase(peer_id)
+		return Result.success({
+			"host_changed": false,
+			"host_peer_id": host_peer_id,
+		})
+
+	if not _player_profile_by_peer_id.has(peer_id):
 		return Result.failure("Peer not in room")
 
-	_profile_by_peer_id.erase(peer_id)
-	_seat_by_peer_id.erase(peer_id)
+	var seat_index := int(_seat_by_player_peer_id.get(peer_id, -1))
+	_player_profile_by_peer_id.erase(peer_id)
+	_seat_by_player_peer_id.erase(peer_id)
+	if seat_index >= 0:
+		_peer_id_by_seat_index.erase(seat_index)
+		_seat_profile_by_seat_index.erase(seat_index)
+
+	var host_changed := false
+	if host_peer_id == peer_id:
+		host_peer_id = _pick_new_host_peer_id()
+		host_changed = true
+
+	return Result.success({
+		"host_changed": host_changed,
+		"host_peer_id": host_peer_id,
+	})
+
+func disconnect_peer(peer_id: int) -> Result:
+	# Spectator：直接移除（无座位）
+	if _spectator_profile_by_peer_id.has(peer_id):
+		_spectator_profile_by_peer_id.erase(peer_id)
+		return Result.success({
+			"host_changed": false,
+			"host_peer_id": host_peer_id,
+		})
+
+	# Player：保留 seat_profile（作为旁观者占位），但移除在线 peer 映射
+	if not _player_profile_by_peer_id.has(peer_id):
+		return Result.failure("Peer not in room")
+
+	var seat_index := int(_seat_by_player_peer_id.get(peer_id, -1))
+	_player_profile_by_peer_id.erase(peer_id)
+	_seat_by_player_peer_id.erase(peer_id)
+	if seat_index >= 0:
+		_peer_id_by_seat_index.erase(seat_index)
 
 	var host_changed := false
 	if host_peer_id == peer_id:
@@ -110,16 +176,26 @@ func to_room_state_dict() -> Dictionary:
 		"room_code": room_code,
 		"host_peer_id": host_peer_id,
 		"players": _build_players_array(),
+		"spectators": _build_spectators_array(),
 		"config": config.duplicate(true),
 		"status": status,
 	}
 
 func build_player_id_by_peer_id() -> Dictionary:
 	var out: Dictionary = {}
-	var peer_ids := get_peer_ids()
+	var peer_ids := get_player_peer_ids()
 	for i in range(peer_ids.size()):
 		out[int(peer_ids[i])] = i
 	return out
+
+func get_player_peer_ids() -> Array[int]:
+	var peer_ids: Array[int] = []
+	for k in _player_profile_by_peer_id.keys():
+		peer_ids.append(int(k))
+	peer_ids.sort_custom(func(a: int, b: int) -> bool:
+		return int(_seat_by_player_peer_id.get(a, 999999)) < int(_seat_by_player_peer_id.get(b, 999999))
+	)
+	return peer_ids
 
 func can_start_game() -> Result:
 	if status != STATUS_LOBBY:
@@ -194,23 +270,55 @@ func start_game() -> Result:
 func _pick_seat_index() -> int:
 	var max_seats := maxi(1, _desired_player_count)
 	for i in range(max_seats):
-		if not _seat_by_peer_id.values().has(i):
+		if not _seat_profile_by_seat_index.has(i):
 			return i
 	return max_seats
 
 func _pick_new_host_peer_id() -> int:
-	var peer_ids := get_peer_ids()
+	var peer_ids := get_player_peer_ids()
 	if peer_ids.is_empty():
 		return 0
 	return int(peer_ids[0])
 
 func _build_players_array() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	for peer_id in get_peer_ids():
-		var profile: Dictionary = Dictionary(_profile_by_peer_id.get(peer_id, {}))
+	var seat_indices: Array[int] = []
+	for k in _seat_profile_by_seat_index.keys():
+		seat_indices.append(int(k))
+	seat_indices.sort()
+
+	var forfeited_by_player_id: Dictionary = {}
+	if status == STATUS_IN_GAME and game_engine != null:
+		var state = game_engine.get_state()
+		if state != null and (state.players is Array):
+			for pid in range(state.players.size()):
+				var pv = state.players[pid]
+				if pv is Dictionary:
+					forfeited_by_player_id[pid] = bool(Dictionary(pv).get("forfeited", false))
+
+	for seat_index in seat_indices:
+		var profile: Dictionary = Dictionary(_seat_profile_by_seat_index.get(seat_index, {}))
+		var peer_id := int(_peer_id_by_seat_index.get(seat_index, 0))
 		out.append({
 			"peer_id": peer_id,
-			"seat_index": int(_seat_by_peer_id.get(peer_id, 0)),
+			"connected": peer_id > 0,
+			"seat_index": seat_index,
+			"name": str(profile.get("name", "")),
+			"color_index": int(profile.get("color_index", 0)),
+			"forfeited": bool(forfeited_by_player_id.get(seat_index, false)),
+		})
+	return out
+
+func _build_spectators_array() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var peer_ids: Array[int] = []
+	for k in _spectator_profile_by_peer_id.keys():
+		peer_ids.append(int(k))
+	peer_ids.sort()
+	for peer_id in peer_ids:
+		var profile: Dictionary = Dictionary(_spectator_profile_by_peer_id.get(peer_id, {}))
+		out.append({
+			"peer_id": peer_id,
 			"name": str(profile.get("name", "")),
 			"color_index": int(profile.get("color_index", 0)),
 		})

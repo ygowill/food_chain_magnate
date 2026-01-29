@@ -191,6 +191,7 @@ static func _create_player_from_config(id: int, cfg) -> Dictionary:
 
 	return {
 		"id": id,
+		"forfeited": false,
 		"cash": int(cfg.player_starting_cash),
 		"employees": employees,
 		"reserve_employees": [],

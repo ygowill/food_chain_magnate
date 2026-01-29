@@ -13,6 +13,10 @@ const PaydaySalaryTokenEligibilityTestClass = preload("res://core/tests/payday_s
 const CallbackResultContractTestClass = preload("res://core/tests/callback_result_contract_test.gd")
 const OnlineRoomManagerTestClass = preload("res://core/tests/online_room_manager_test.gd")
 const OnlineStartGameReplayTestClass = preload("res://core/tests/online_start_game_replay_test.gd")
+const OnlineResyncArchiveTestClass = preload("res://core/tests/online_resync_archive_test.gd")
+const ForfeitPlayerActionTestClass = preload("res://core/tests/forfeit_player_action_test.gd")
+const OnlineRoomSpectatorTestClass = preload("res://core/tests/online_room_spectator_test.gd")
+const GameOverWinnerRulesTestClass = preload("res://core/tests/game_over_winner_rules_test.gd")
 const CommandPrivacyTestClass = preload("res://core/tests/command_privacy_test.gd")
 const InitialCompanyTestClass = preload("res://core/tests/initial_company_test.gd")
 const MandatoryActionsTestClass = preload("res://core/tests/mandatory_actions_test.gd")
@@ -178,18 +182,18 @@ func _run_all() -> int:
 			"name": "PaydayReportEventTest",
 			"fn": func() -> Result: return PaydayReportEventTestClass.run(2, 12345),
 		},
-			{
-				"name": "GameStateFactoryStartingInventoryTest",
-				"fn": func() -> Result: return GameStateFactoryStartingInventoryTestClass.run(),
-			},
-			{
-				"name": "RestaurantLogoAssignmentTest",
-				"fn": func() -> Result: return RestaurantLogoAssignmentTestClass.run(3, 12345),
-			},
-			{
-				"name": "PaydaySalaryTokenEligibilityTest",
-				"fn": func() -> Result: return PaydaySalaryTokenEligibilityTestClass.run(),
-			},
+		{
+			"name": "GameStateFactoryStartingInventoryTest",
+			"fn": func() -> Result: return GameStateFactoryStartingInventoryTestClass.run(),
+		},
+		{
+			"name": "RestaurantLogoAssignmentTest",
+			"fn": func() -> Result: return RestaurantLogoAssignmentTestClass.run(3, 12345),
+		},
+		{
+			"name": "PaydaySalaryTokenEligibilityTest",
+			"fn": func() -> Result: return PaydaySalaryTokenEligibilityTestClass.run(),
+		},
 		{
 			"name": "CallbackResultContractTest",
 			"fn": func() -> Result: return CallbackResultContractTestClass.run(),
@@ -201,6 +205,22 @@ func _run_all() -> int:
 		{
 			"name": "OnlineStartGameReplayTest",
 			"fn": func() -> Result: return OnlineStartGameReplayTestClass.run(),
+		},
+		{
+			"name": "OnlineResyncArchiveTest",
+			"fn": func() -> Result: return OnlineResyncArchiveTestClass.run(),
+		},
+		{
+			"name": "ForfeitPlayerActionTest",
+			"fn": func() -> Result: return ForfeitPlayerActionTestClass.run(),
+		},
+		{
+			"name": "OnlineRoomSpectatorTest",
+			"fn": func() -> Result: return OnlineRoomSpectatorTestClass.run(),
+		},
+		{
+			"name": "GameOverWinnerRulesTest",
+			"fn": func() -> Result: return GameOverWinnerRulesTestClass.run(),
 		},
 		{
 			"name": "CommandPrivacyTest",

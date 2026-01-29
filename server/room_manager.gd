@@ -54,15 +54,21 @@ func join_room(peer_id: int, profile: Dictionary, room_code: String, room_passwo
 	var room = rooms.get(room_code, null)
 	if room == null:
 		return Result.failure("Room not found")
-	if room.is_full():
-		return Result.failure("Room is full")
 
 	if room.join_policy != "password":
 		return Result.failure("Unsupported join_policy: %s" % room.join_policy)
 	if room.password_hash != _sha256_hex(room_password):
 		return Result.failure("Invalid room_password")
 
-	var ar: Result = room.add_peer(peer_id, profile)
+	var ar: Result
+	var role := "player"
+	if str(room.status) == "InGame":
+		ar = room.add_spectator(peer_id, profile)
+		role = "spectator"
+	else:
+		if room.is_full():
+			return Result.failure("Room is full")
+		ar = room.add_peer(peer_id, profile)
 	if not ar.ok:
 		return ar
 
@@ -72,6 +78,7 @@ func join_room(peer_id: int, profile: Dictionary, room_code: String, room_passwo
 		"room_code": room_code,
 		"room": room,
 		"room_state": room.to_room_state_dict(),
+		"role": role,
 	})
 
 func leave_room(peer_id: int) -> Result:
@@ -100,6 +107,49 @@ func leave_room(peer_id: int) -> Result:
 	if not rr.ok:
 		return rr
 
+	if room.is_empty():
+		rooms.erase(room_code)
+		return Result.success({
+			"room_code": room_code,
+			"room": null,
+			"removed": true,
+			"room_state": null,
+		})
+
+	return Result.success({
+		"room_code": room_code,
+		"room": room,
+		"removed": false,
+		"room_state": room.to_room_state_dict(),
+	})
+
+func disconnect_peer(peer_id: int) -> Result:
+	if not peer_to_room.has(peer_id):
+		return Result.success({
+			"room_code": "",
+			"room": null,
+			"removed": false,
+			"room_state": null,
+		})
+
+	var room_code := str(peer_to_room.get(peer_id, ""))
+	peer_to_room.erase(peer_id)
+
+	var room = rooms.get(room_code, null)
+	if room == null:
+		rooms.erase(room_code)
+		return Result.success({
+			"room_code": room_code,
+			"room": null,
+			"removed": true,
+			"room_state": null,
+		})
+
+	var dr: Result = room.disconnect_peer(peer_id)
+	if not dr.ok:
+		return dr
+
+	# 注意：InGame 断线保留座位（旁观者占位），因此通常不会为空；这里仍保持兜底清理。
 	if room.is_empty():
 		rooms.erase(room_code)
 		return Result.success({
