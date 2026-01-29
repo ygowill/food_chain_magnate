@@ -462,7 +462,10 @@ func _update_ui_components(state: GameState) -> void:
 		if _scene.action_panel.has_method("set_game_state"):
 			_scene.action_panel.set_game_state(state)
 		if _scene.action_panel.has_method("set_current_player"):
-			_scene.action_panel.set_current_player(current_player_id)
+			var action_player_id := current_player_id
+			if is_online and local_player_id >= 0:
+				action_player_id = local_player_id
+			_scene.action_panel.set_current_player(action_player_id)
 		if _scene.action_panel.has_method("set_action_registry") and _scene.game_engine != null:
 			var registry = _scene.game_engine.get_action_registry() if _scene.game_engine.has_method("get_action_registry") else null
 			if registry != null:
@@ -563,7 +566,15 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
 
-	var current_player_id = _scene.game_engine.get_state().get_current_player_id()
+	var state: GameState = _scene.game_engine.get_state()
+	if state == null:
+		return
+
+	var current_player_id := state.get_current_player_id()
+	var actor_id := current_player_id
+	# 联机模式：所有玩家动作都应以本地玩家为 actor（避免误用 current_player_id 导致无法继续）
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and int(NetContext.local_player_id) >= 0:
+		actor_id = int(NetContext.local_player_id)
 
 	match action_id:
 		# UI 工具：时间线回退
@@ -576,9 +587,8 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 		ActionIdsClass.ADVANCE_PHASE:
 			_execute_command.call(Command.create_system(ActionIdsClass.ADVANCE_PHASE, params))
 		ActionIdsClass.SKIP:
-			_execute_command.call(Command.create(ActionIdsClass.SKIP, current_player_id, params))
+			_execute_command.call(Command.create(ActionIdsClass.SKIP, actor_id, params))
 		"choose_turn_order":
-			var state: GameState = _scene.game_engine.get_state()
 			if state != null:
 				_show_turn_order_modal_for_state(state)
 
@@ -617,13 +627,18 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 
 		# 其他动作直接创建命令
 		_:
-			_execute_command.call(Command.create(action_id, current_player_id, params))
+			_execute_command.call(Command.create(action_id, actor_id, params))
 
 func _on_turn_order_position_selected(position: int) -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
-	var current_player_id = _scene.game_engine.get_state().get_current_player_id()
-	_execute_command.call(Command.create("choose_turn_order", current_player_id, {"position": position}))
+	var state: GameState = _scene.game_engine.get_state()
+	if state == null:
+		return
+	var actor_id := state.get_current_player_id()
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and int(NetContext.local_player_id) >= 0:
+		actor_id = int(NetContext.local_player_id)
+	_execute_command.call(Command.create("choose_turn_order", actor_id, {"position": position}))
 
 func _on_hand_cards_selected(employee_ids: Array[String]) -> void:
 	GameLog.info("Game", "选中员工: %s" % str(employee_ids))
@@ -1136,11 +1151,14 @@ func _on_turn_order_modal_completed(result: Dictionary) -> void:
 	var state: GameState = _scene.game_engine.get_state()
 	if state == null:
 		return
-	var current_player_id := state.get_current_player_id()
-	if current_player_id < 0:
+	var actor_id := state.get_current_player_id()
+	if actor_id < 0:
 		return
 
-	_execute_command.call(Command.create("choose_turn_order", current_player_id, {"position": position}))
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and int(NetContext.local_player_id) >= 0:
+		actor_id = int(NetContext.local_player_id)
+
+	_execute_command.call(Command.create("choose_turn_order", actor_id, {"position": position}))
 
 func _on_turn_order_modal_cancelled() -> void:
 	_hide_turn_order_modal()
