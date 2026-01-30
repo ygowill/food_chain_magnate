@@ -1,0 +1,96 @@
+# 通用信息弹窗（单按钮关闭）
+class_name InfoDialog
+extends Window
+
+signal closed()
+
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
+var _title_label: Label = null
+var _message_label: Label = null
+var _close_button: Button = null
+
+func _ready() -> void:
+	title = "信息"
+	size = Vector2i(520, 360)
+	visible = false
+	transient = true
+
+	_build_ui()
+	close_requested.connect(_on_close_pressed)
+
+func show_info(title_text: String, message: String, min_size: Vector2i = Vector2i(520, 360), close_text: String = "关闭") -> void:
+	title = str(title_text).strip_edges()
+	if min_size.x > 0 and min_size.y > 0:
+		size = min_size
+	if _title_label != null and is_instance_valid(_title_label):
+		_title_label.text = str(title_text)
+	if _message_label != null and is_instance_valid(_message_label):
+		_message_label.text = str(message)
+	if _close_button != null and is_instance_valid(_close_button):
+		_close_button.text = str(close_text)
+
+	popup_centered()
+	if _close_button != null and is_instance_valid(_close_button):
+		_close_button.grab_focus()
+
+func _build_ui() -> void:
+	var bg := Panel.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(bg)
+	UiStylesClass.apply_dialog_surface(bg)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 18)
+	margin.add_theme_constant_override("margin_top", 18)
+	margin.add_theme_constant_override("margin_right", 18)
+	margin.add_theme_constant_override("margin_bottom", 18)
+	add_child(margin)
+
+	var root := VBoxContainer.new()
+	root.add_theme_constant_override("separation", 12)
+	margin.add_child(root)
+
+	_title_label = Label.new()
+	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_title_label.add_theme_font_size_override("font_size", 18)
+	root.add_child(_title_label)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(scroll)
+
+	var msg_wrap := MarginContainer.new()
+	msg_wrap.add_theme_constant_override("margin_left", 6)
+	msg_wrap.add_theme_constant_override("margin_top", 2)
+	msg_wrap.add_theme_constant_override("margin_right", 6)
+	msg_wrap.add_theme_constant_override("margin_bottom", 2)
+	msg_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(msg_wrap)
+
+	_message_label = Label.new()
+	_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_message_label.add_theme_font_size_override("font_size", 14)
+	_message_label.add_theme_color_override("font_color", Color(0.92, 0.94, 0.98))
+	_message_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	msg_wrap.add_child(_message_label)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.alignment = BoxContainer.ALIGNMENT_END
+	root.add_child(row)
+
+	_close_button = Button.new()
+	_close_button.text = "关闭"
+	UiStylesClass.apply_button_primary(_close_button)
+	_close_button.pressed.connect(_on_close_pressed)
+	row.add_child(_close_button)
+
+func _on_close_pressed() -> void:
+	hide()
+	closed.emit()
+

@@ -7,6 +7,7 @@ signal build_finished()
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeDefClass = preload("res://core/data/employee_def.gd")
+const InfoDialogClass = preload("res://ui/dialogs/info_dialog.gd")
 
 @onready var close_button: Button = $MarginContainer/VBoxContainer/HeaderRow/CloseButton
 @onready var fit_button: Button = $MarginContainer/VBoxContainer/HeaderRow/FitButton
@@ -21,7 +22,7 @@ var _dragging: bool = false
 var _drag_start_mouse: Vector2 = Vector2.ZERO
 var _drag_start_pos: Vector2 = Vector2.ZERO
 
-var _detail_dialog: AcceptDialog = null
+var _detail_dialog = null
 var _built: bool = false
 var _build_in_progress: bool = false
 
@@ -219,8 +220,7 @@ func _fit_to_width() -> void:
 func _ensure_detail_dialog() -> void:
 	if _detail_dialog != null and is_instance_valid(_detail_dialog):
 		return
-	_detail_dialog = AcceptDialog.new()
-	_detail_dialog.title = "员工详情"
+	_detail_dialog = InfoDialogClass.new()
 	add_child(_detail_dialog)
 
 func _on_employee_clicked(employee_id: String) -> void:
@@ -253,5 +253,5 @@ func _on_employee_clicked(employee_id: String) -> void:
 				tt.sort()
 				lines.append("可培训为: %s" % ", ".join(tt))
 
-	_detail_dialog.dialog_text = "\n".join(lines)
-	_detail_dialog.popup_centered(Vector2i(520, 360))
+	if _detail_dialog.has_method("show_info"):
+		_detail_dialog.call("show_info", "员工详情", "\n".join(lines), Vector2i(520, 360), "关闭")
