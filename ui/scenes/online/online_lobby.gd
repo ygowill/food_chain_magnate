@@ -170,6 +170,18 @@ func _refresh_ui() -> void:
 	leave_room_button.disabled = not connected
 
 	var in_room := _get_current_room_code().is_empty() == false
+	if not connected:
+		if connect_status_label.text.strip_edges().is_empty():
+			_set_connect_status("未连接：请先连接服务器。")
+		if rooms_status_label.text.strip_edges().is_empty():
+			_set_rooms_status("未连接：请先连接服务器再刷新/加入房间。")
+		if create_status_label.text.strip_edges().is_empty():
+			_set_create_status("未连接：请先连接服务器再创建房间。")
+		if room_status_label.text.strip_edges().is_empty():
+			_set_room_status("未连接：请先连接并加入房间。")
+	elif connected and not in_room and room_status_label.text.strip_edges().is_empty():
+		_set_room_status("未在房间内：请先加入/创建房间。")
+
 	if tabs != null and is_instance_valid(tabs):
 		tabs.set_tab_disabled(_tab_rooms, not connected)
 		tabs.set_tab_disabled(_tab_create, not connected)
