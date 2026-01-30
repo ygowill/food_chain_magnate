@@ -3,6 +3,7 @@ extends Control
 
 const RoomConfigEditorClass = preload("res://ui/components/room_config_editor/room_config_editor.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
 
 @onready var panel: PanelContainer = $Center/Panel
 @onready var tabs: TabContainer = $Center/Panel/Margin/Root/Tabs
@@ -50,8 +51,7 @@ var _config_sync_state: String = "synced" # synced/dirty/syncing/error
 var _config_sync_message: String = ""
 var _pending_config_patch: Dictionary = {}
 
-var _password_dialog: ConfirmationDialog = null
-var _password_edit: LineEdit = null
+var _password_dialog = null
 var _password_dialog_room_code: String = ""
 
 func _ready() -> void:
@@ -104,18 +104,10 @@ func _ensure_editors() -> void:
 func _ensure_password_dialog() -> void:
 	if _password_dialog != null and is_instance_valid(_password_dialog):
 		return
-	_password_dialog = ConfirmationDialog.new()
-	_password_dialog.title = "输入房间密码"
-	_password_dialog.dialog_text = "该房间需要密码才能加入/观战。"
+	_password_dialog = PasswordDialogClass.new()
 	add_child(_password_dialog)
-
-	_password_edit = LineEdit.new()
-	_password_edit.secret = true
-	_password_edit.placeholder_text = "房间密码（可空则留空）"
-	_password_edit.custom_minimum_size = Vector2(280, 0)
-	_password_dialog.add_child(_password_edit)
-
-	_password_dialog.confirmed.connect(_on_password_dialog_confirmed)
+	if _password_dialog.has_signal("submitted") and not _password_dialog.submitted.is_connected(_on_password_dialog_submitted):
+		_password_dialog.submitted.connect(_on_password_dialog_submitted)
 
 func _apply_defaults() -> void:
 	_set_connect_status("")
@@ -290,17 +282,16 @@ func _join_room_from_list(room_code: String, password_required: bool) -> void:
 func _prompt_password_and_join(room_code: String) -> void:
 	_ensure_password_dialog()
 	_password_dialog_room_code = room_code
-	_password_edit.text = ""
-	_password_dialog.popup_centered()
+	if _password_dialog != null and is_instance_valid(_password_dialog) and _password_dialog.has_method("open_for_room"):
+		_password_dialog.call("open_for_room", room_code, "加入/观战")
 
-func _on_password_dialog_confirmed() -> void:
+func _on_password_dialog_submitted(password: String) -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
 		return
 	var code := str(_password_dialog_room_code).strip_edges().to_upper()
 	if code.is_empty():
 		return
-	var pw := str(_password_edit.text)
-	var request_id := NetClient.request_join_room(code, pw)
+	var request_id := NetClient.request_join_room(code, str(password))
 	_set_rooms_status("JoinRoom 已发送 request_id=%s" % request_id)
 
 func _render_room_state(room_state: Dictionary) -> void:
