@@ -75,6 +75,7 @@ const EventHistoryRewindTestClass = preload("res://core/tests/event_history_rewi
 const RewindTurnStartFallbackTestClass = preload("res://core/tests/rewind_turn_start_fallback_test.gd")
 const RewindTurnStartPhaseChangeTestClass = preload("res://core/tests/rewind_turn_start_phase_change_test.gd")
 const RewindTurnStartReenterTestClass = preload("res://core/tests/rewind_turn_start_reenter_test.gd")
+const RewindTurnStartSetupTurnSwitchTestClass = preload("res://core/tests/rewind_turn_start_setup_turn_switch_test.gd")
 const EventTimelineBuildTestClass = preload("res://core/tests/event_timeline_build_test.gd")
 const StepTimelineBuildTestClass = preload("res://core/tests/step_timeline_build_test.gd")
 const StepTimelineMarketingMilestoneOrderTestClass = preload("res://core/tests/step_timeline_marketing_milestone_order_test.gd")
@@ -458,14 +459,18 @@ func _run_all() -> int:
 										"name": "RewindTurnStartPhaseChangeTest",
 										"fn": func() -> Result: return RewindTurnStartPhaseChangeTestClass.run(2, 12345),
 									},
-									{
-										"name": "RewindTurnStartReenterTest",
-										"fn": func() -> Result: return RewindTurnStartReenterTestClass.run(2, 12345),
-									},
-									{
-										"name": "EventTimelineBuildTest",
-										"fn": func() -> Result: return EventTimelineBuildTestClass.run(2, 12345, 20),
-									},
+										{
+											"name": "RewindTurnStartReenterTest",
+											"fn": func() -> Result: return RewindTurnStartReenterTestClass.run(2, 12345),
+										},
+										{
+											"name": "RewindTurnStartSetupTurnSwitchTest",
+											"fn": func() -> Result: return RewindTurnStartSetupTurnSwitchTestClass.run(12345),
+										},
+										{
+											"name": "EventTimelineBuildTest",
+											"fn": func() -> Result: return EventTimelineBuildTestClass.run(2, 12345, 20),
+										},
 						{
 							"name": "StepTimelineBuildTest",
 							"fn": func() -> Result: return StepTimelineBuildTestClass.run(),

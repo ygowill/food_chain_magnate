@@ -4,6 +4,7 @@ extends RefCounted
 
 const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
 const ReplayClass = preload("res://core/engine/game_engine/replay.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 # 查找“当前阶段开始”对应的命令索引（用于 UI 的“一键回退本阶段”）。
 # 语义：返回 target_index，用于 engine.rewind_to_command(target_index)。
@@ -62,6 +63,24 @@ static func find_current_player_turn_start_command_index(engine: GameEngine) -> 
 
 	var phase_name := str(engine.state.phase)
 	var round_num := int(engine.state.round_number)
+	var sub_phase_name := str(engine.state.sub_phase)
+
+	# Setup/ReserveCards 是一个独立的“轮转小流程”：
+	# - ReserveCards 完成后进入起始餐厅放置，此时回退工具应回到“放置流程开始”（即 ReserveCards 最后一条命令之后），
+	#   避免把用户带回储备卡选择（尤其在联机模式下会让体验非常突兀）。
+	if phase_name == DefsClass.PHASE_SETUP and sub_phase_name != DefsClass.SUB_PHASE_RESERVE_CARDS:
+		for i in range(int(engine.current_command_index), -1, -1):
+			var cmd_sc: Command = engine.command_history[i]
+			if cmd_sc == null:
+				continue
+			if str(cmd_sc.phase) != phase_name:
+				continue
+			# timestamp = round*1000 + ...（CommandRunner 写入），用于区分不同回合的同名阶段
+			if int(cmd_sc.timestamp) >= 0 and int(int(cmd_sc.timestamp) / 1000) != round_num:
+				continue
+			if str(cmd_sc.sub_phase) != DefsClass.SUB_PHASE_RESERVE_CARDS:
+				continue
+			return Result.success(i)
 
 	# 目标：撤销“当前玩家在当前阶段内”的所有命令。
 	# 因此应回到“该玩家在该阶段内的第一个命令之前”的位置（而非“最近一次进入该玩家/阶段组合”的位置），
