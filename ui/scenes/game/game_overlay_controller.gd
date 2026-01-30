@@ -393,6 +393,11 @@ func _on_milestone_achieved(event: Dictionary) -> void:
 
 	_enqueue_toast(msg)
 
+func show_toast(message: String) -> void:
+	if OS.has_feature("headless"):
+		return
+	_enqueue_toast(message)
+
 func _enqueue_toast(message: String) -> void:
 	var msg := message.strip_edges()
 	if msg.is_empty():

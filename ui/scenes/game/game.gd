@@ -109,6 +109,7 @@ var _startup_replay_file_path: String = ""
 
 var _online_resync_in_progress: bool = false
 var _online_resync_pending_cmds: Array[Dictionary] = [] # [{cmd_dict, state_hash}]
+var _online_turn_toast_last_player_id: int = -999
 
 var _background_ui_warmup_started: bool = false
 var _startup_profile_reported: bool = false
@@ -979,9 +980,46 @@ func _update_ui() -> void:
 	# 回放/复盘：日志时间线指针 + ReplayBar 显示 + ActionPanel 禁用
 	_sync_timeline_ui(head_index, cursor_index, state)
 
+	_maybe_show_online_turn_toast(state)
+
 	# 同步调试面板
 	if _debug_panel != null and _debug_panel.visible:
 		_debug_panel.refresh_state()
+
+func _maybe_show_online_turn_toast(state: GameState) -> void:
+	if OS.has_feature("headless"):
+		return
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		_online_turn_toast_last_player_id = -999
+		return
+	if _online_resync_in_progress:
+		return
+	if state == null:
+		return
+	if str(state.phase) == DefsClass.PHASE_RESTRUCTURING:
+		return
+
+	var local_pid := int(NetContext.local_player_id)
+	if local_pid < 0:
+		return
+	var current_pid := int(state.get_current_player_id())
+	if current_pid < 0:
+		return
+	if current_pid == _online_turn_toast_last_player_id:
+		return
+	_online_turn_toast_last_player_id = current_pid
+
+	var msg := ""
+	if current_pid == local_pid:
+		msg = "轮到你行动"
+	else:
+		var name := "玩家%d" % (current_pid + 1)
+		if Globals != null and Globals.has_method("get_player_name"):
+			name = str(Globals.get_player_name(current_pid))
+		msg = "轮到 %s 行动" % name
+
+	if _overlay_controller != null and _overlay_controller.has_method("show_toast"):
+		_overlay_controller.show_toast(msg)
 
 func _on_debug_command_executed(command: String, _result: String) -> void:
 	# undo/redo/restore/load 会“改写时间线”；
