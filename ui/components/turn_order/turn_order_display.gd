@@ -3,6 +3,8 @@
 class_name TurnOrderDisplay
 extends Control
 
+signal position_selected(position: int)
+
 @onready var slots_container: HBoxContainer = $SlotsContainer
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
@@ -22,6 +24,7 @@ var _player_count: int = 0
 var _current_selections: Dictionary = {} # position -> player_id
 var _current_player_id: int = -1
 var _slot_nodes: Array[OrderBadge] = []
+var _selectable: bool = false
 
 func _ready() -> void:
 	_rebuild()
@@ -44,6 +47,10 @@ func set_current_player(player_id: int) -> void:
 	_current_player_id = player_id
 	_update_display()
 
+func set_selectable(can_select: bool) -> void:
+	_selectable = bool(can_select)
+	_update_display()
+
 func _rebuild() -> void:
 	for slot in _slot_nodes:
 		if is_instance_valid(slot):
@@ -56,6 +63,7 @@ func _rebuild() -> void:
 	for i in range(_player_count):
 		var badge := OrderBadge.new()
 		badge.slot_position = i
+		badge.clicked.connect(_on_badge_clicked)
 		slots_container.add_child(badge)
 		_slot_nodes.append(badge)
 
@@ -71,8 +79,20 @@ func _update_display() -> void:
 			var pid := int(_current_selections[pos])
 			var tex := _get_player_restaurant_logo_texture(pid)
 			slot.set_player(pid, Globals.get_player_color(pid), pid == _current_player_id, tex)
+			slot.set_highlighted(false)
+			slot.set_clickable(false)
 		else:
-			slot.set_empty(pos == 0 and _player_count == 0)
+			slot.set_empty()
+			var can_pick := _selectable and not _current_selections.has(pos)
+			slot.set_highlighted(can_pick)
+			slot.set_clickable(can_pick)
+
+func _on_badge_clicked(position: int) -> void:
+	if not _selectable:
+		return
+	if _current_selections.has(position):
+		return
+	position_selected.emit(position)
 
 func _ensure_skin() -> void:
 	if _game_state == null:
@@ -170,6 +190,8 @@ class OrderBadge extends PanelContainer:
 	const RESTAURANT_BG_COLOR := Color("#f4edd1")
 	const CURRENT_BORDER_COLOR := Color("#e74c3c")
 
+	signal clicked(position: int)
+
 	var slot_position: int = 0
 
 	var _icon: TextureRect
@@ -179,9 +201,12 @@ class OrderBadge extends PanelContainer:
 	var _is_current: bool = false
 	var _occupied: bool = false
 	var _logo_texture: Texture2D = null
+	var _highlighted: bool = false
+	var _clickable: bool = false
 
 	func _ready() -> void:
 		custom_minimum_size = Vector2(BADGE_SIZE, BADGE_SIZE)
+		gui_input.connect(_on_gui_input)
 		_icon = TextureRect.new()
 		_icon.anchors_preset = Control.PRESET_FULL_RECT
 		_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -200,6 +225,14 @@ class OrderBadge extends PanelContainer:
 		add_child(_label)
 		_update()
 
+	func set_highlighted(highlighted: bool) -> void:
+		_highlighted = highlighted
+		_update()
+
+	func set_clickable(clickable: bool) -> void:
+		_clickable = clickable
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if clickable else Control.CURSOR_ARROW
+
 	func set_player(player_id: int, color: Color, is_current: bool, logo_texture: Texture2D) -> void:
 		_player_id = player_id
 		_player_color = color
@@ -208,7 +241,7 @@ class OrderBadge extends PanelContainer:
 		_logo_texture = logo_texture
 		_update()
 
-	func set_empty(_unused: bool = false) -> void:
+	func set_empty() -> void:
 		_player_id = -1
 		_player_color = Color(0.35, 0.35, 0.4, 0.8)
 		_is_current = false
@@ -221,21 +254,36 @@ class OrderBadge extends PanelContainer:
 			_icon.texture = _logo_texture
 			_icon.visible = _occupied and _logo_texture != null
 		if _label != null:
-			_label.text = "" if (_occupied and _logo_texture != null) else (str(_player_id + 1) if _occupied else "")
+			if _occupied:
+				_label.text = "" if _logo_texture != null else str(_player_id + 1)
+				_label.add_theme_color_override("font_color", Color(0.15, 0.15, 0.15, 0.9))
+			else:
+				_label.text = str(slot_position + 1)
+				_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8, 0.8))
 
-		var style := StyleBoxFlat.new()
-		if _occupied:
-			var bg := RESTAURANT_BG_COLOR
-			bg.a = 0.95
-			style.bg_color = bg
-		else:
-			style.bg_color = Color(0.15, 0.15, 0.18, 0.8)
-		style.border_color = CURRENT_BORDER_COLOR if _is_current else (_player_color if _occupied else Color(0.3, 0.3, 0.35, 0.6))
-		style.set_border_width_all(3 if _is_current else 1)
-		style.set_corner_radius_all(int(BADGE_SIZE / 2))
-		add_theme_stylebox_override("panel", style)
+			var style := StyleBoxFlat.new()
+			if _occupied:
+				var bg := RESTAURANT_BG_COLOR
+				bg.a = 0.95
+				style.bg_color = bg
+			elif _highlighted:
+				style.bg_color = Color(0.20, 0.30, 0.22, 0.85)
+			else:
+				style.bg_color = Color(0.15, 0.15, 0.18, 0.8)
+			style.border_color = CURRENT_BORDER_COLOR if _is_current else (_player_color if _occupied else Color(0.3, 0.3, 0.35, 0.6))
+			style.set_border_width_all(3 if _is_current else 1)
+			style.set_corner_radius_all(int(BADGE_SIZE / 2))
+			add_theme_stylebox_override("panel", style)
 
-		if _occupied:
-			tooltip_text = "顺位 %d: %s" % [slot_position + 1, Globals.get_player_name(_player_id)]
-		else:
-			tooltip_text = "顺位 %d: （空）" % (slot_position + 1)
+			if _occupied:
+				tooltip_text = "顺位 %d: %s" % [slot_position + 1, Globals.get_player_name(_player_id)]
+			else:
+				tooltip_text = "顺位 %d: （空）" % (slot_position + 1)
+
+	func _on_gui_input(event: InputEvent) -> void:
+		if not _clickable:
+			return
+		if event is InputEventMouseButton:
+			var e: InputEventMouseButton = event
+			if e.button_index == MOUSE_BUTTON_LEFT and e.pressed:
+				clicked.emit(slot_position)

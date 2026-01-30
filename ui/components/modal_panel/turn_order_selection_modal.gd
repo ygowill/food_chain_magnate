@@ -3,9 +3,10 @@ class_name TurnOrderSelectionModal
 extends "res://ui/components/modal_panel/modal_panel_base.gd"
 
 @onready var selection_label: Label = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/SelectionLabel
-@onready var track: Control = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/TurnOrderTrack
+@onready var display: Control = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/TurnOrderDisplay
 
 var _selected_position: int = -1
+var _interactive: bool = true
 
 func _ready() -> void:
 	super._ready()
@@ -14,30 +15,44 @@ func _ready() -> void:
 	set_cancel_text("关闭")
 	set_confirm_enabled(false)
 
-	if is_instance_valid(track) and track.has_signal("position_selected"):
-		if not track.position_selected.is_connected(_on_position_selected):
-			track.position_selected.connect(_on_position_selected)
+	if is_instance_valid(display) and display.has_signal("position_selected"):
+		if not display.position_selected.is_connected(_on_position_selected):
+			display.position_selected.connect(_on_position_selected)
 
-func setup(state: GameState, current_player_id: int, selections: Dictionary) -> void:
+func setup(state: GameState, current_player_id: int, selections: Dictionary, interactive: bool = true, local_player_id: int = -1) -> void:
+	_interactive = bool(interactive)
 	_selected_position = -1
 	set_confirm_enabled(false)
+	if is_instance_valid(confirm_button):
+		confirm_button.visible = _interactive
 	var current_name := Globals.get_player_name(current_player_id) if Globals != null else ("玩家%d" % (current_player_id + 1))
 	set_title_text("选择顺序位置｜当前: %s" % current_name)
 	if is_instance_valid(selection_label):
-		selection_label.text = "当前玩家：%s，请选择一个空位" % current_name
+		if _interactive:
+			selection_label.text = "轮到你行动：请选择一个空位"
+		else:
+			var extra := ""
+			if local_player_id >= 0:
+				for pos in selections.keys():
+					if int(selections[pos]) == int(local_player_id):
+						extra = "（你已选择：顺位 %d）" % (int(pos) + 1)
+						break
+			selection_label.text = "当前玩家：%s 正在选择顺位%s" % [current_name, extra]
 
-	if not is_instance_valid(track):
+	if not is_instance_valid(display):
 		return
-	if track.has_method("set_player_count"):
-		track.call("set_player_count", state.players.size())
-	if track.has_method("set_current_selections"):
-		track.call("set_current_selections", selections)
-	if track.has_method("set_selectable"):
-		track.call("set_selectable", true, current_player_id)
-		if track.has_method("highlight_available_positions"):
-			track.call("highlight_available_positions")
+	if display.has_method("set_game_state"):
+		display.call("set_game_state", state)
+	if display.has_method("set_player_count"):
+		display.call("set_player_count", state.players.size())
+	if display.has_method("set_current_selections"):
+		display.call("set_current_selections", selections)
+	if display.has_method("set_selectable"):
+		display.call("set_selectable", _interactive)
 
 func _on_position_selected(position: int) -> void:
+	if not _interactive:
+		return
 	_selected_position = position
 	set_confirm_enabled(true)
 	if is_instance_valid(selection_label):

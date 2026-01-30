@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://ui/components/modal_panel/turn_order_selection_modal.gd" id="1_turn_order_modal"]
-[ext_resource type="PackedScene" path="res://ui/components/turn_order/turn_order_track.tscn" id="2_turn_order_track"]
+[ext_resource type="PackedScene" path="res://ui/components/turn_order/turn_order_display.tscn" id="2_turn_order_display"]
 
 [node name="TurnOrderSelectionModal" type="Control"]
 layout_mode = 3
@@ -65,7 +65,7 @@ theme_override_font_sizes/font_size = 14
 text = "请选择一个空位"
 horizontal_alignment = 1
 
-[node name="TurnOrderTrack" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer" instance=ExtResource("2_turn_order_track")]
+[node name="TurnOrderDisplay" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer" instance=ExtResource("2_turn_order_display")]
 layout_mode = 2
 size_flags_vertical = 3
 

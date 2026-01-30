@@ -999,8 +999,8 @@ func _sync_modals(state: GameState) -> void:
 	# 顺序选择（OrderOfBusiness）
 	var selections := {}
 	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and (state.round_state is Dictionary):
-		var rs: Dictionary = state.round_state
-		var oob_val = rs.get("order_of_business", null)
+		var rs2: Dictionary = state.round_state
+		var oob_val = rs2.get("order_of_business", null)
 		if oob_val is Dictionary:
 			var oob: Dictionary = oob_val
 			var picks_val = oob.get("picks", null)
@@ -1016,11 +1016,15 @@ func _sync_modals(state: GameState) -> void:
 				selections[i] = state.turn_order[i]
 
 	var should_show_turn_order := false
+	var turn_order_interactive := true
 	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and current_player_id >= 0:
+		# 联机：即使不是自己回合，也显示“顺位选择进度”，但只有当前玩家可交互。
 		should_show_turn_order = not selections.values().has(current_player_id)
+		if is_online:
+			turn_order_interactive = is_local_turn
 
-	if should_show_turn_order and is_local_turn:
-		_show_turn_order_modal(state, current_player_id, selections, covered)
+	if should_show_turn_order:
+		_show_turn_order_modal(state, current_player_id, selections, covered, turn_order_interactive, local_player_id)
 	else:
 		_hide_turn_order_modal()
 
@@ -1096,6 +1100,11 @@ func _show_turn_order_modal_for_state(state: GameState) -> void:
 		return
 	var current_player_id := state.get_current_player_id()
 	var selections := {}
+	var is_online := false
+	var local_player_id := -1
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		is_online = true
+		local_player_id = int(NetContext.local_player_id)
 
 	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and (state.round_state is Dictionary):
 		var rs: Dictionary = state.round_state
@@ -1114,9 +1123,12 @@ func _show_turn_order_modal_for_state(state: GameState) -> void:
 			if i < state.players.size():
 				selections[i] = state.turn_order[i]
 
-	_show_turn_order_modal(state, current_player_id, selections, _get_modal_cover_rect())
+	var interactive := true
+	if is_online:
+		interactive = (local_player_id >= 0 and local_player_id == current_player_id)
+	_show_turn_order_modal(state, current_player_id, selections, _get_modal_cover_rect(), interactive, local_player_id)
 
-func _show_turn_order_modal(state: GameState, current_player_id: int, selections: Dictionary, covered: Rect2) -> void:
+func _show_turn_order_modal(state: GameState, current_player_id: int, selections: Dictionary, covered: Rect2, interactive: bool, local_player_id: int) -> void:
 	if _scene == null:
 		return
 	if state == null:
@@ -1131,7 +1143,7 @@ func _show_turn_order_modal(state: GameState, current_player_id: int, selections
 		return
 
 	if _turn_order_modal.has_method("setup"):
-		_turn_order_modal.call("setup", state, current_player_id, selections)
+		_turn_order_modal.call("setup", state, current_player_id, selections, bool(interactive), int(local_player_id))
 	if _turn_order_modal.has_method("open"):
 		_turn_order_modal.call("open", covered)
 	elif _turn_order_modal is Control:

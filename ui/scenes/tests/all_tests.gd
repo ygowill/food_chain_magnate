@@ -47,6 +47,7 @@ const ActionPanelOnlineLocalPlayerTestClass = preload("res://ui/scenes/tests/act
 const ActionPanelGlobalDisabledRestoreTestClass = preload("res://ui/scenes/tests/action_panel_global_disabled_restore_test.gd")
 const HandAreaViewSwitchTestClass = preload("res://ui/scenes/tests/hand_area_view_switch_test.gd")
 const ReserveCardSelectionModalPrivacyTestClass = preload("res://ui/scenes/tests/reserve_card_selection_modal_privacy_test.gd")
+const TurnOrderSelectionModalOnlineVisibilityTestClass = preload("res://ui/scenes/tests/turn_order_selection_modal_online_visibility_test.gd")
 const RoomConfigEditorEditableSignalTestClass = preload("res://ui/scenes/tests/room_config_editor_editable_signal_test.gd")
 const LeftPanelSelectionIsolationTestClass = preload("res://ui/scenes/tests/left_panel_selection_isolation_test.gd")
 const DragPreviewVisualTestClass = preload("res://ui/scenes/tests/drag_preview_visual_test.gd")
@@ -247,14 +248,18 @@ func _run_all() -> int:
 			"name": "CommandPrivacyTest",
 			"fn": func() -> Result: return CommandPrivacyTestClass.run(),
 		},
-		{
-			"name": "ReserveCardSelectionModalPrivacyTest",
-			"fn": func() -> Result: return ReserveCardSelectionModalPrivacyTestClass.run(),
-		},
-		{
-			"name": "RoomConfigEditorEditableSignalTest",
-			"fn": func() -> Result: return RoomConfigEditorEditableSignalTestClass.run(),
-		},
+			{
+				"name": "ReserveCardSelectionModalPrivacyTest",
+				"fn": func() -> Result: return ReserveCardSelectionModalPrivacyTestClass.run(),
+			},
+			{
+				"name": "TurnOrderSelectionModalOnlineVisibilityTest",
+				"fn": func() -> Result: return TurnOrderSelectionModalOnlineVisibilityTestClass.run(),
+			},
+			{
+				"name": "RoomConfigEditorEditableSignalTest",
+				"fn": func() -> Result: return RoomConfigEditorEditableSignalTestClass.run(),
+			},
 			{
 				"name": "ActionPanelOnlineLocalPlayerTest",
 				"fn": func() -> Result: return ActionPanelOnlineLocalPlayerTestClass.run(),

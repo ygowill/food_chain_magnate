@@ -104,6 +104,7 @@
 
 （按时间倒序追加）
 
+- 2026-01-30：Online 的顺位选择（OrderOfBusiness）原先只在轮到本地玩家时显示，导致其他玩家看不到实时选位进度（需要等到自己回合才看到）。修复：`TurnOrderSelectionModal` 复用游戏内 `TurnOrderDisplay` 组件，并支持等待态（非当前玩家只读）；`GamePanelController` 在联机模式下对所有客户端显示顺位选择弹窗，但仅当前玩家可交互。新增 `TurnOrderSelectionModalOnlineVisibilityTest` 并加入 `AllTests`。
 - 2026-01-30：Setup 阶段从 `ReserveCards` 进入起始餐厅放置后，“回退到当前玩家回合开始”会把时间线回到储备卡选择（观感像按钮失效/回退过头）。修复：`find_current_player_turn_start_command_index()` 在 Setup 且不处于 `ReserveCards` 时，将回合起点定位为 `ReserveCards` 的最后一条命令索引（即放置流程开始）。新增 `RewindTurnStartSetupTurnSwitchTest` 并加入 `AllTests`。
 - 2026-01-30：Online 回合交接时，非当前玩家的 ActionPanel 会被 “联机：等待其他玩家操作” 全局禁用；当轮到自己时虽然解禁，但按钮仍停留在 `disabled=true` 导致无法行动。原因：`set_globally_disabled("")` 只清理 reason 不恢复按钮 enabled 状态；而联机 UI 刷新顺序为“先 refresh 再 set_globally_disabled”，会触发该残留。修复：`ActionPanel.set_globally_disabled()` 在从禁用→解禁时主动 `refresh()` 一次恢复按钮状态。新增 `ActionPanelGlobalDisabledRestoreTest` 并加入 `AllTests`。
 - 2026-01-30：Restructuring 阶段隐私：Online 不允许查看其他玩家公司结构（仅展示提交进度/状态）；Hotseat 模式已提交玩家不可再切换查看（用于保密）。实现：`RestructuringModal.set_player_switcher` 禁用他人/已提交按钮；`GamePanelController` 在 Restructuring 强制 view_player（online=local；hotseat=未提交）并屏蔽非法切换；旁观者在 Restructuring 隐藏结构内容。新增 `RestructuringPrivacyTest` 并加入 `AllTests`。
