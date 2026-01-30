@@ -3,13 +3,17 @@ extends Control
 
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModuleSelectorClass = preload("res://ui/components/module_selector/module_selector.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
-@onready var player_count_spinbox: SpinBox = $CenterContainer/ContentCenter/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer/PlayerCountSpinBox
-@onready var seed_edit: LineEdit = $CenterContainer/ContentCenter/VBoxContainer/MainColumns/LeftColumn/SeedContainer/SeedLineEdit
-@onready var root_vbox: VBoxContainer = $CenterContainer/ContentCenter/VBoxContainer
-@onready var spacer2: Control = $CenterContainer/ContentCenter/VBoxContainer/Spacer2
-@onready var left_column: VBoxContainer = $CenterContainer/ContentCenter/VBoxContainer/MainColumns/LeftColumn
-@onready var right_column: VBoxContainer = $CenterContainer/ContentCenter/VBoxContainer/MainColumns/RightColumn
+@onready var card: PanelContainer = $CenterContainer/ContentCenter/Card
+@onready var player_count_spinbox: SpinBox = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer/PlayerCountSpinBox
+@onready var seed_edit: LineEdit = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/SeedContainer/SeedLineEdit
+@onready var root_vbox: VBoxContainer = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer
+@onready var spacer2: Control = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer/Spacer2
+@onready var left_column: VBoxContainer = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn
+@onready var right_column: VBoxContainer = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/RightColumn
+@onready var back_button: Button = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer/BackButton
+@onready var start_button: Button = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer/StartButton
 
 var _players_section: VBoxContainer = null
 var _players_container: VBoxContainer = null
@@ -64,6 +68,9 @@ const MODULE_GROUPS: Array[Dictionary] = [
 
 func _ready() -> void:
 	GameLog.info("GameSetup", "游戏设置界面已加载")
+	UiStylesClass.apply_dialog_surface(card)
+	UiStylesClass.apply_button_secondary(back_button)
+	UiStylesClass.apply_button_primary(start_button)
 
 	player_count_spinbox.value = Globals.player_count
 	if Globals.random_seed != 0:

@@ -31,54 +31,65 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer"]
+[node name="Card" type="PanelContainer" parent="CenterContainer"]
+custom_minimum_size = Vector2(520, 0)
 layout_mode = 2
-theme_override_constants/separation = 20
 
-[node name="Title" type="Label" parent="CenterContainer/VBoxContainer"]
+[node name="Margin" type="MarginContainer" parent="CenterContainer/Card"]
+layout_mode = 2
+theme_override_constants/margin_left = 36
+theme_override_constants/margin_top = 32
+theme_override_constants/margin_right = 36
+theme_override_constants/margin_bottom = 32
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/Card/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="Title" type="Label" parent="CenterContainer/Card/Margin/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 48
 text = "快餐连锁大亨"
 horizontal_alignment = 1
 
-[node name="Subtitle" type="Label" parent="CenterContainer/VBoxContainer"]
+[node name="Subtitle" type="Label" parent="CenterContainer/Card/Margin/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
 theme_override_font_sizes/font_size = 16
 text = "Food Chain Magnate"
 horizontal_alignment = 1
 
-[node name="Spacer" type="Control" parent="CenterContainer/VBoxContainer"]
+[node name="Spacer" type="Control" parent="CenterContainer/Card/Margin/VBoxContainer"]
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 
-[node name="NewGameButton" type="Button" parent="CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(200, 50)
+[node name="NewGameButton" type="Button" parent="CenterContainer/Card/Margin/VBoxContainer"]
+custom_minimum_size = Vector2(240, 48)
 layout_mode = 2
 text = "新游戏"
 
-[node name="OnlineButton" type="Button" parent="CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(200, 50)
+[node name="OnlineButton" type="Button" parent="CenterContainer/Card/Margin/VBoxContainer"]
+custom_minimum_size = Vector2(240, 48)
 layout_mode = 2
 text = "联机"
 
-[node name="LoadGameButton" type="Button" parent="CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(200, 50)
+[node name="LoadGameButton" type="Button" parent="CenterContainer/Card/Margin/VBoxContainer"]
+custom_minimum_size = Vector2(240, 48)
 layout_mode = 2
 text = "载入游戏"
 
-[node name="SettingsButton" type="Button" parent="CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(200, 50)
+[node name="SettingsButton" type="Button" parent="CenterContainer/Card/Margin/VBoxContainer"]
+custom_minimum_size = Vector2(240, 48)
 layout_mode = 2
 text = "设置"
 
-[node name="ReplayPlayerButton" type="Button" parent="CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(200, 50)
+[node name="ReplayPlayerButton" type="Button" parent="CenterContainer/Card/Margin/VBoxContainer"]
+custom_minimum_size = Vector2(240, 48)
 layout_mode = 2
 text = "回放播放器"
 
-[node name="QuitButton" type="Button" parent="CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(200, 50)
+[node name="QuitButton" type="Button" parent="CenterContainer/Card/Margin/VBoxContainer"]
+custom_minimum_size = Vector2(240, 48)
 layout_mode = 2
 text = "退出"
 
@@ -99,9 +110,9 @@ theme_override_font_sizes/font_size = 12
 text = "v0.1.0"
 horizontal_alignment = 2
 
-[connection signal="pressed" from="CenterContainer/VBoxContainer/NewGameButton" to="." method="_on_new_game_pressed"]
-[connection signal="pressed" from="CenterContainer/VBoxContainer/OnlineButton" to="." method="_on_online_pressed"]
-[connection signal="pressed" from="CenterContainer/VBoxContainer/LoadGameButton" to="." method="_on_load_game_pressed"]
-[connection signal="pressed" from="CenterContainer/VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
-[connection signal="pressed" from="CenterContainer/VBoxContainer/ReplayPlayerButton" to="." method="_on_replay_player_pressed"]
-[connection signal="pressed" from="CenterContainer/VBoxContainer/QuitButton" to="." method="_on_quit_pressed"]
+[connection signal="pressed" from="CenterContainer/Card/Margin/VBoxContainer/NewGameButton" to="." method="_on_new_game_pressed"]
+[connection signal="pressed" from="CenterContainer/Card/Margin/VBoxContainer/OnlineButton" to="." method="_on_online_pressed"]
+[connection signal="pressed" from="CenterContainer/Card/Margin/VBoxContainer/LoadGameButton" to="." method="_on_load_game_pressed"]
+[connection signal="pressed" from="CenterContainer/Card/Margin/VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
+[connection signal="pressed" from="CenterContainer/Card/Margin/VBoxContainer/ReplayPlayerButton" to="." method="_on_replay_player_pressed"]
+[connection signal="pressed" from="CenterContainer/Card/Margin/VBoxContainer/QuitButton" to="." method="_on_quit_pressed"]

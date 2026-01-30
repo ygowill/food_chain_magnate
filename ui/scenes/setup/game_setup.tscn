@@ -34,79 +34,90 @@ layout_mode = 2
 size_flags_horizontal = 3
 alignment = 1
 
-[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/ContentCenter"]
+[node name="Card" type="PanelContainer" parent="CenterContainer/ContentCenter"]
+custom_minimum_size = Vector2(1100, 0)
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="CenterContainer/ContentCenter/Card"]
+layout_mode = 2
+theme_override_constants/margin_left = 36
+theme_override_constants/margin_top = 32
+theme_override_constants/margin_right = 36
+theme_override_constants/margin_bottom = 32
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin"]
 layout_mode = 2
 theme_override_constants/separation = 20
 
-[node name="Title" type="Label" parent="CenterContainer/ContentCenter/VBoxContainer"]
+[node name="Title" type="Label" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 36
 text = "游戏设置"
 horizontal_alignment = 1
 
-[node name="Spacer1" type="Control" parent="CenterContainer/ContentCenter/VBoxContainer"]
+[node name="Spacer1" type="Control" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer"]
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
 
-[node name="MainColumns" type="HBoxContainer" parent="CenterContainer/ContentCenter/VBoxContainer"]
+[node name="MainColumns" type="HBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/separation = 40
 
-[node name="LeftColumn" type="VBoxContainer" parent="CenterContainer/ContentCenter/VBoxContainer/MainColumns"]
+[node name="LeftColumn" type="VBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns"]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="RightColumn" type="VBoxContainer" parent="CenterContainer/ContentCenter/VBoxContainer/MainColumns"]
+[node name="RightColumn" type="VBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns"]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="PlayerCountContainer" type="HBoxContainer" parent="CenterContainer/ContentCenter/VBoxContainer/MainColumns/LeftColumn"]
+[node name="PlayerCountContainer" type="HBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn"]
 layout_mode = 2
 alignment = 1
 
-[node name="PlayerCountLabel" type="Label" parent="CenterContainer/ContentCenter/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer"]
+[node name="PlayerCountLabel" type="Label" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "玩家数量："
 
-[node name="PlayerCountSpinBox" type="SpinBox" parent="CenterContainer/ContentCenter/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer"]
+[node name="PlayerCountSpinBox" type="SpinBox" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer"]
 layout_mode = 2
 min_value = 2.0
 max_value = 5.0
 value = 2.0
 
-[node name="SeedContainer" type="HBoxContainer" parent="CenterContainer/ContentCenter/VBoxContainer/MainColumns/LeftColumn"]
+[node name="SeedContainer" type="HBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn"]
 layout_mode = 2
 alignment = 1
 
-[node name="SeedLabel" type="Label" parent="CenterContainer/ContentCenter/VBoxContainer/MainColumns/LeftColumn/SeedContainer"]
+[node name="SeedLabel" type="Label" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/SeedContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "随机种子："
 
-[node name="SeedLineEdit" type="LineEdit" parent="CenterContainer/ContentCenter/VBoxContainer/MainColumns/LeftColumn/SeedContainer"]
+[node name="SeedLineEdit" type="LineEdit" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/SeedContainer"]
 custom_minimum_size = Vector2(150, 0)
 layout_mode = 2
 placeholder_text = "留空自动生成"
 
-[node name="Spacer2" type="Control" parent="CenterContainer/ContentCenter/VBoxContainer"]
+[node name="Spacer2" type="Control" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer"]
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
 
-[node name="ButtonContainer" type="HBoxContainer" parent="CenterContainer/ContentCenter/VBoxContainer"]
+[node name="ButtonContainer" type="HBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer"]
 layout_mode = 2
 alignment = 1
 theme_override_constants/separation = 20
 
-[node name="BackButton" type="Button" parent="CenterContainer/ContentCenter/VBoxContainer/ButtonContainer"]
+[node name="BackButton" type="Button" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer"]
 custom_minimum_size = Vector2(150, 50)
 layout_mode = 2
 text = "返回"
 
-[node name="StartButton" type="Button" parent="CenterContainer/ContentCenter/VBoxContainer/ButtonContainer"]
+[node name="StartButton" type="Button" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer"]
 custom_minimum_size = Vector2(150, 50)
 layout_mode = 2
 text = "开始游戏"
 
-[connection signal="pressed" from="CenterContainer/ContentCenter/VBoxContainer/ButtonContainer/BackButton" to="." method="_on_back_pressed"]
-[connection signal="pressed" from="CenterContainer/ContentCenter/VBoxContainer/ButtonContainer/StartButton" to="." method="_on_start_pressed"]
+[connection signal="pressed" from="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer/StartButton" to="." method="_on_start_pressed"]

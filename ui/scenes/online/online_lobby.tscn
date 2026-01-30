@@ -73,7 +73,7 @@ theme_override_constants/separation = 8
 
 [node name="ServerUrlLabel" type="Label" parent="Center/Panel/Margin/Root/Tabs/ConnectTab/ServerRow"]
 layout_mode = 2
-text = "Server URL"
+text = "服务器地址"
 
 [node name="ServerUrlEdit" type="LineEdit" parent="Center/Panel/Margin/Root/Tabs/ConnectTab/ServerRow"]
 layout_mode = 2
@@ -160,7 +160,7 @@ theme_override_constants/separation = 8
 
 [node name="RoomCodeLabel" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode/RoomCodeRow"]
 layout_mode = 2
-text = "Room Code"
+text = "房间码"
 
 [node name="RoomCodeEdit" type="LineEdit" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode/RoomCodeRow"]
 layout_mode = 2

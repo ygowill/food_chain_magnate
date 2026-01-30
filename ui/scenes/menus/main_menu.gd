@@ -4,8 +4,16 @@ extends Control
 const SettingsDialogScene = preload("res://ui/dialogs/settings_dialog.tscn")
 const ConfirmDialogScene = preload("res://ui/dialogs/confirm_dialog.tscn")
 const SaveLoadDialogScript = preload("res://ui/dialogs/save_load_dialog.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 @onready var version_label: Label = $VersionLabel
+@onready var card: PanelContainer = $CenterContainer/Card
+@onready var new_game_button: Button = $CenterContainer/Card/Margin/VBoxContainer/NewGameButton
+@onready var online_button: Button = $CenterContainer/Card/Margin/VBoxContainer/OnlineButton
+@onready var load_game_button: Button = $CenterContainer/Card/Margin/VBoxContainer/LoadGameButton
+@onready var settings_button: Button = $CenterContainer/Card/Margin/VBoxContainer/SettingsButton
+@onready var replay_player_button: Button = $CenterContainer/Card/Margin/VBoxContainer/ReplayPlayerButton
+@onready var quit_button: Button = $CenterContainer/Card/Margin/VBoxContainer/QuitButton
 
 var _settings_dialog: Window = null
 var _message_dialog: Window = null
@@ -15,6 +23,13 @@ var _save_load_context: String = ""
 func _ready() -> void:
 	GameLog.info("MainMenu", "主菜单已加载")
 	version_label.text = "v%s" % Globals.get_version()
+	UiStylesClass.apply_dialog_surface(card)
+	UiStylesClass.apply_button_primary(new_game_button)
+	UiStylesClass.apply_button_secondary(online_button)
+	UiStylesClass.apply_button_secondary(load_game_button)
+	UiStylesClass.apply_button_secondary(settings_button)
+	UiStylesClass.apply_button_secondary(replay_player_button)
+	UiStylesClass.apply_button_secondary(quit_button)
 
 func _on_new_game_pressed() -> void:
 	GameLog.info("MainMenu", "点击新游戏")

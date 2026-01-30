@@ -25,9 +25,9 @@
 - [x] `ui/scenes/game/game.tscn`（`MenuDialog`）：菜单弹窗同风格
 
 ### 2) 菜单页（主菜单 / 设置前置 / 联机大厅）
-- [ ] `ui/scenes/main_menu.tscn`：增加视觉层级（标题、按钮组、版本信息），统一按钮尺寸与间距
-- [ ] `ui/scenes/setup/game_setup.tscn`：提升信息密度与可读性（分组、边距、按钮主次）
-- [ ] `ui/scenes/online/online_lobby.tscn`：统一标题栏与内容区层级，弱化表单“堆砌感”
+- [x] `ui/scenes/main_menu.tscn`：增加视觉层级（标题、按钮组、版本信息），统一按钮尺寸与间距
+- [x] `ui/scenes/setup/game_setup.tscn`：提升信息密度与可读性（分组、边距、按钮主次）
+- [x] `ui/scenes/online/online_lobby.tscn`：统一标题栏与内容区层级，弱化表单“堆砌感”
 
 ### 3) 联机对局关键提醒
 - [ ] In-game Toast/提示：当“轮到你行动”时提供明显提醒（文本 + 可选轻提示音/闪烁）

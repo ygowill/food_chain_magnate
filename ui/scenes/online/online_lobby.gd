@@ -2,7 +2,9 @@
 extends Control
 
 const RoomConfigEditorClass = preload("res://ui/components/room_config_editor/room_config_editor.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
+@onready var panel: PanelContainer = $Center/Panel
 @onready var tabs: TabContainer = $Center/Panel/Margin/Root/Tabs
 
 @onready var server_url_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/ConnectTab/ServerRow/ServerUrlEdit
@@ -53,6 +55,17 @@ var _password_edit: LineEdit = null
 var _password_dialog_room_code: String = ""
 
 func _ready() -> void:
+	UiStylesClass.apply_dialog_surface(panel)
+	UiStylesClass.apply_button_secondary($Center/Panel/Margin/Root/TopBar/BackButton)
+	UiStylesClass.apply_button_primary(connect_button)
+	UiStylesClass.apply_button_secondary(disconnect_button)
+	UiStylesClass.apply_button_secondary(refresh_rooms_button)
+	UiStylesClass.apply_button_primary(join_by_code_button)
+	UiStylesClass.apply_button_primary(create_room_button)
+	UiStylesClass.apply_button_secondary(copy_room_code_button)
+	UiStylesClass.apply_button_secondary(leave_room_button)
+	UiStylesClass.apply_button_primary(start_game_button)
+
 	_bind_net_signals()
 	_setup_tabs()
 	_ensure_editors()
@@ -233,6 +246,7 @@ func _render_room_list(rooms: Array) -> void:
 		if code == current_code:
 			var enter_btn := Button.new()
 			enter_btn.text = "进入"
+			UiStylesClass.apply_button_secondary(enter_btn)
 			enter_btn.pressed.connect(func() -> void:
 				_select_tab(_tab_room)
 			)
@@ -245,6 +259,7 @@ func _render_room_list(rooms: Array) -> void:
 		var join_btn := Button.new()
 		join_btn.text = "加入"
 		join_btn.disabled = not can_join
+		UiStylesClass.apply_button_primary(join_btn)
 		join_btn.pressed.connect(func() -> void:
 			_join_room_from_list(code, password_required)
 		)
@@ -253,6 +268,7 @@ func _render_room_list(rooms: Array) -> void:
 		var spectate_btn := Button.new()
 		spectate_btn.text = "观战"
 		spectate_btn.disabled = not can_spectate
+		UiStylesClass.apply_button_secondary(spectate_btn)
 		spectate_btn.pressed.connect(func() -> void:
 			_join_room_from_list(code, password_required)
 		)
