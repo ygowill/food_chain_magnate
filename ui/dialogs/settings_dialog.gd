@@ -82,6 +82,14 @@ func _ready() -> void:
 	_setup_resolution_options()
 	_load_settings()
 
+func show_dialog() -> void:
+	popup_centered()
+	call_deferred("_grab_default_focus")
+
+func _grab_default_focus() -> void:
+	if close_btn != null:
+		close_btn.grab_focus()
+
 func _setup_resolution_options() -> void:
 	if resolution_option == null:
 		return
@@ -257,6 +265,15 @@ func _on_reset_pressed() -> void:
 func _on_close_pressed() -> void:
 	hide()
 	closed.emit()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event is InputEventKey:
+		var e: InputEventKey = event
+		if e.pressed and not e.echo and e.keycode == KEY_ESCAPE:
+			_on_close_pressed()
+			get_viewport().set_input_as_handled()
 
 func get_setting(key: String, default_value = null):
 	return _current_settings.get(key, default_value)

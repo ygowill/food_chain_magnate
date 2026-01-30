@@ -98,3 +98,11 @@ func _on_cancel_pressed() -> void:
 	hide()
 	cancelled.emit()
 
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event is InputEventKey:
+		var e: InputEventKey = event
+		if e.pressed and not e.echo and e.keycode == KEY_ESCAPE:
+			_on_cancel_pressed()
+			get_viewport().set_input_as_handled()

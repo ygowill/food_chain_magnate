@@ -53,6 +53,7 @@ func open_for_load() -> void:
 	_refresh_slots()
 	_update_ui_state()
 	popup_centered()
+	call_deferred("_grab_default_focus")
 
 func open_for_replay() -> void:
 	_dialog_mode = DialogMode.REPLAY
@@ -61,6 +62,7 @@ func open_for_replay() -> void:
 	_refresh_slots()
 	_update_ui_state()
 	popup_centered()
+	call_deferred("_grab_default_focus")
 
 func open_for_save(engine: GameEngine) -> void:
 	_dialog_mode = DialogMode.SAVE
@@ -69,6 +71,14 @@ func open_for_save(engine: GameEngine) -> void:
 	_refresh_slots()
 	_update_ui_state()
 	popup_centered()
+	call_deferred("_grab_default_focus")
+
+func _grab_default_focus() -> void:
+	if _dialog_mode == DialogMode.SAVE and _slot_name_edit != null:
+		_slot_name_edit.grab_focus()
+		return
+	if _slot_list != null:
+		_slot_list.grab_focus()
 
 func _build_ui() -> void:
 	var bg := Panel.new()
@@ -377,6 +387,15 @@ func _on_refresh_pressed() -> void:
 func _on_cancel_pressed() -> void:
 	hide()
 	cancelled.emit()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event is InputEventKey:
+		var e: InputEventKey = event
+		if e.pressed and not e.echo and e.keycode == KEY_ESCAPE:
+			_on_cancel_pressed()
+			get_viewport().set_input_as_handled()
 
 func _on_primary_pressed() -> void:
 	match _dialog_mode:

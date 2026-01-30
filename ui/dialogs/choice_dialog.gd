@@ -42,6 +42,16 @@ func setup(title: String, message: String, options: Array[Dictionary], cancel_te
 
 func show_dialog() -> void:
 	popup_centered()
+	call_deferred("_grab_default_focus")
+
+func _grab_default_focus() -> void:
+	if options_container != null:
+		for child in options_container.get_children():
+			if child is Button and (child as Button).visible and not (child as Button).disabled:
+				(child as Button).grab_focus()
+				return
+	if cancel_btn != null:
+		cancel_btn.grab_focus()
 
 func _rebuild_options() -> void:
 	if options_container == null:
@@ -138,3 +148,12 @@ func _on_option_pressed(option_id: String) -> void:
 func _on_cancel_pressed() -> void:
 	hide()
 	cancelled.emit()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event is InputEventKey:
+		var e: InputEventKey = event
+		if e.pressed and not e.echo and e.keycode == KEY_ESCAPE:
+			_on_cancel_pressed()
+			get_viewport().set_input_as_handled()
