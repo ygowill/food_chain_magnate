@@ -10,6 +10,14 @@ visible = false
 transient = true
 script = ExtResource("1_choice")
 
+[node name="BackgroundPanel" type="Panel" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
 [node name="MarginContainer" type="MarginContainer" parent="."]
 anchors_preset = 15
 anchor_right = 1.0
@@ -36,7 +44,7 @@ layout_mode = 2
 size_flags_vertical = 3
 theme_override_font_sizes/font_size = 14
 text = ""
-horizontal_alignment = 1
+horizontal_alignment = 0
 autowrap_mode = 2
 
 [node name="OptionsRow" type="HFlowContainer" parent="MarginContainer/VBoxContainer"]

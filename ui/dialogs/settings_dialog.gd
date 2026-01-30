@@ -6,6 +6,9 @@ extends Window
 signal settings_changed(settings: Dictionary)
 signal closed()
 
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
+@onready var background_panel: Panel = $BackgroundPanel
 @onready var tab_container: TabContainer = $MarginContainer/VBoxContainer/TabContainer
 @onready var close_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/CloseButton
 @onready var apply_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/ApplyButton
@@ -62,6 +65,11 @@ var _default_settings: Dictionary = {
 }
 
 func _ready() -> void:
+	UiStylesClass.apply_dialog_surface(background_panel)
+	UiStylesClass.apply_button_primary(apply_btn)
+	UiStylesClass.apply_button_secondary(reset_btn)
+	UiStylesClass.apply_button_secondary(close_btn)
+
 	if close_btn != null:
 		close_btn.pressed.connect(_on_close_pressed)
 	if apply_btn != null:

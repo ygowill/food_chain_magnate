@@ -15,14 +15,14 @@
 ## 进度清单
 
 ### 0) 追踪与基线
-- [ ] 建立本进度文档并记录当前问题点（本条仅用于初始化）
+- [x] 建立本进度文档并记录当前问题点（本条仅用于初始化）
 
 ### 1) 弹窗 / 对话框（视觉与一致性）
-- [ ] `ui/dialogs/confirm_dialog.tscn`：统一背景、圆角、阴影、主次按钮区分
-- [ ] `ui/dialogs/choice_dialog.tscn`：同上，并优化选项区域可读性与间距
-- [ ] `ui/dialogs/settings_dialog.tscn`：同上，并统一底部操作区按钮样式
-- [ ] `ui/dialogs/save_load_dialog.gd`：增加内边距与背景容器，减少“顶边贴边”的廉价感
-- [ ] `ui/scenes/game/game.tscn`（`MenuDialog`）：菜单弹窗同风格
+- [x] `ui/dialogs/confirm_dialog.tscn`：统一背景、圆角、阴影、主次按钮区分
+- [x] `ui/dialogs/choice_dialog.tscn`：同上，并优化选项区域可读性与间距
+- [x] `ui/dialogs/settings_dialog.tscn`：同上，并统一底部操作区按钮样式
+- [x] `ui/dialogs/save_load_dialog.gd`：增加内边距与背景容器，减少“顶边贴边”的廉价感
+- [x] `ui/scenes/game/game.tscn`（`MenuDialog`）：菜单弹窗同风格
 
 ### 2) 菜单页（主菜单 / 设置前置 / 联机大厅）
 - [ ] `ui/scenes/main_menu.tscn`：增加视觉层级（标题、按钮组、版本信息），统一按钮尺寸与间距
@@ -51,4 +51,3 @@
 ## 回归测试
 - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`
 - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`
-

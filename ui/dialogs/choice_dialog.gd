@@ -6,6 +6,9 @@ extends Window
 signal option_selected(option_id: String)
 signal cancelled()
 
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
+@onready var background_panel: Panel = $BackgroundPanel
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var message_label: Label = $MarginContainer/VBoxContainer/MessageLabel
 @onready var options_container: HFlowContainer = $MarginContainer/VBoxContainer/OptionsRow
@@ -16,6 +19,8 @@ var _options: Array[Dictionary] = []
 var _base_size: Vector2i = Vector2i.ZERO
 
 func _ready() -> void:
+	UiStylesClass.apply_dialog_surface(background_panel)
+	UiStylesClass.apply_button_secondary(cancel_btn)
 	_base_size = size
 	if cancel_btn != null:
 		cancel_btn.pressed.connect(_on_cancel_pressed)
@@ -58,6 +63,7 @@ func _rebuild_options() -> void:
 		var btn := Button.new()
 		btn.text = text if not text.is_empty() else option_id
 		btn.custom_minimum_size = Vector2(110, 34)
+		UiStylesClass.apply_button_secondary(btn)
 		btn.pressed.connect(_on_option_pressed.bind(option_id))
 		options_container.add_child(btn)
 

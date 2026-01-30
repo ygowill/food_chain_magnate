@@ -6,6 +6,9 @@ extends Window
 signal confirmed()
 signal cancelled()
 
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
+@onready var background_panel: Panel = $BackgroundPanel
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var message_label: Label = $MarginContainer/VBoxContainer/MessageScroll/MessageContainer/MessageLabel
 @onready var confirm_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/ConfirmButton
@@ -15,6 +18,10 @@ var _confirm_text: String = "确认"
 var _cancel_text: String = "取消"
 
 func _ready() -> void:
+	UiStylesClass.apply_dialog_surface(background_panel)
+	UiStylesClass.apply_button_primary(confirm_btn)
+	UiStylesClass.apply_button_secondary(cancel_btn)
+
 	if confirm_btn != null:
 		confirm_btn.pressed.connect(_on_confirm_pressed)
 	if cancel_btn != null:
@@ -50,6 +57,11 @@ func _on_cancel_pressed() -> void:
 static func show_confirm(parent: Node, title: String, message: String, on_confirm: Callable, on_cancel: Callable = Callable()) -> ConfirmDialog:
 	var dialog := ConfirmDialog.new()
 	dialog.title = title
+
+	var bg := Panel.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	UiStylesClass.apply_dialog_surface(bg)
+	dialog.add_child(bg)
 
 	# 手动构建 UI（因为静态方法无法加载场景）
 	var margin := MarginContainer.new()
@@ -95,6 +107,7 @@ static func show_confirm(parent: Node, title: String, message: String, on_confir
 	var cancel_btn := Button.new()
 	cancel_btn.text = "取消"
 	cancel_btn.custom_minimum_size = Vector2(80, 32)
+	UiStylesClass.apply_button_secondary(cancel_btn)
 	cancel_btn.pressed.connect(func():
 		dialog.hide()
 		dialog.queue_free()
@@ -106,6 +119,7 @@ static func show_confirm(parent: Node, title: String, message: String, on_confir
 	var confirm_btn := Button.new()
 	confirm_btn.text = "确认"
 	confirm_btn.custom_minimum_size = Vector2(80, 32)
+	UiStylesClass.apply_button_primary(confirm_btn)
 	confirm_btn.pressed.connect(func():
 		dialog.hide()
 		dialog.queue_free()

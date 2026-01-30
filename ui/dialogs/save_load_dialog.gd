@@ -8,6 +8,8 @@ signal load_selected(path: String)
 signal save_completed(path: String)
 signal cancelled()
 
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
 enum DialogMode { LOAD, SAVE, REPLAY }
 
 const SAVES_DIR := "user://saves"
@@ -69,10 +71,22 @@ func open_for_save(engine: GameEngine) -> void:
 	popup_centered()
 
 func _build_ui() -> void:
+	var bg := Panel.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(bg)
+	UiStylesClass.apply_dialog_surface(bg)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 18)
+	margin.add_theme_constant_override("margin_top", 18)
+	margin.add_theme_constant_override("margin_right", 18)
+	margin.add_theme_constant_override("margin_bottom", 18)
+	add_child(margin)
+
 	var root := VBoxContainer.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.add_theme_constant_override("separation", 10)
-	add_child(root)
+	root.add_theme_constant_override("separation", 12)
+	margin.add_child(root)
 
 	_tabs = TabContainer.new()
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -101,6 +115,7 @@ func _build_ui() -> void:
 	_slot_refresh_btn = Button.new()
 	_slot_refresh_btn.text = "刷新"
 	_slot_refresh_btn.custom_minimum_size = Vector2(72, 30)
+	UiStylesClass.apply_button_secondary(_slot_refresh_btn)
 	name_row.add_child(_slot_refresh_btn)
 
 	_slot_list = ItemList.new()
@@ -118,11 +133,13 @@ func _build_ui() -> void:
 	_slot_cancel_btn = Button.new()
 	_slot_cancel_btn.text = "取消"
 	_slot_cancel_btn.custom_minimum_size = Vector2(90, 34)
+	UiStylesClass.apply_button_secondary(_slot_cancel_btn)
 	slot_btn_row.add_child(_slot_cancel_btn)
 
 	_slot_primary_btn = Button.new()
 	_slot_primary_btn.text = "确定"
 	_slot_primary_btn.custom_minimum_size = Vector2(120, 34)
+	UiStylesClass.apply_button_primary(_slot_primary_btn)
 	slot_btn_row.add_child(_slot_primary_btn)
 
 	# === Tab 2: 文件系统 ===
@@ -148,6 +165,7 @@ func _build_ui() -> void:
 	_file_browse_btn = Button.new()
 	_file_browse_btn.text = "浏览..."
 	_file_browse_btn.custom_minimum_size = Vector2(90, 30)
+	UiStylesClass.apply_button_secondary(_file_browse_btn)
 	file_row.add_child(_file_browse_btn)
 
 	var file_btn_row := HBoxContainer.new()
@@ -159,11 +177,13 @@ func _build_ui() -> void:
 	_file_cancel_btn = Button.new()
 	_file_cancel_btn.text = "取消"
 	_file_cancel_btn.custom_minimum_size = Vector2(90, 34)
+	UiStylesClass.apply_button_secondary(_file_cancel_btn)
 	file_btn_row.add_child(_file_cancel_btn)
 
 	_file_primary_btn = Button.new()
 	_file_primary_btn.text = "加载"
 	_file_primary_btn.custom_minimum_size = Vector2(120, 34)
+	UiStylesClass.apply_button_primary(_file_primary_btn)
 	file_btn_row.add_child(_file_primary_btn)
 
 	_status_label = Label.new()

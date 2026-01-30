@@ -12,6 +12,11 @@ extends Control
 @onready var toggle_right_panel_button: Button = $UIRoot/TopBar/ButtonRow/ToggleRightPanelButton
 @onready var toggle_bottom_panel_button: Button = $MenuDialog/VBoxContainer/ToggleBottomPanelButton
 @onready var menu_dialog: Window = $MenuDialog
+@onready var menu_dialog_background_panel: Panel = $MenuDialog/BackgroundPanel
+@onready var menu_resume_button: Button = $MenuDialog/VBoxContainer/ResumeButton
+@onready var menu_save_button: Button = $MenuDialog/VBoxContainer/SaveButton
+@onready var menu_settings_button: Button = $MenuDialog/VBoxContainer/SettingsButton
+@onready var menu_quit_to_menu_button: Button = $MenuDialog/VBoxContainer/QuitToMenuButton
 @onready var main_content: Control = $UIRoot/MainContent
 @onready var center_split: HSplitContainer = $UIRoot/MainContent/CenterSplit
 @onready var map_view: ScrollContainer = $UIRoot/MainContent/CenterSplit/GameArea/MapView
@@ -57,6 +62,7 @@ const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_buil
 const GameEventLogFormatterClass = preload("res://ui/scenes/game/game_event_log_formatter.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 # 游戏状态
 var game_engine: GameEngine = null
@@ -161,6 +167,7 @@ func _ready() -> void:
 		EventBus.clear_history()
 
 	var span_layout := PerfTraceClass.begin_span("game:layout+controllers_init")
+	_apply_menu_dialog_styles()
 	_apply_ui_layout()
 	_init_left_panel_toggle()
 	_init_right_panel_toggle()
@@ -237,6 +244,14 @@ func _ready() -> void:
 	if PerfTraceClass.enabled() and not _startup_profile_reported:
 		_startup_profile_reported = true
 		call_deferred("_report_startup_profile")
+
+func _apply_menu_dialog_styles() -> void:
+	UiStylesClass.apply_dialog_surface(menu_dialog_background_panel)
+	UiStylesClass.apply_button_primary(menu_resume_button)
+	UiStylesClass.apply_button_secondary(menu_save_button)
+	UiStylesClass.apply_button_secondary(menu_settings_button)
+	UiStylesClass.apply_button_secondary(toggle_bottom_panel_button)
+	UiStylesClass.apply_button_secondary(menu_quit_to_menu_button)
 
 func _report_startup_profile() -> void:
 	# 让首帧/次帧的 deferred/UI queue 跑完，避免漏掉 MapSkin 构建等同步耗时的尾部。
