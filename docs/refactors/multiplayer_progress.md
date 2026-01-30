@@ -104,6 +104,7 @@
 
 （按时间倒序追加）
 
+- 2026-01-30：Online 回合交接时，非当前玩家的 ActionPanel 会被 “联机：等待其他玩家操作” 全局禁用；当轮到自己时虽然解禁，但按钮仍停留在 `disabled=true` 导致无法行动。原因：`set_globally_disabled("")` 只清理 reason 不恢复按钮 enabled 状态；而联机 UI 刷新顺序为“先 refresh 再 set_globally_disabled”，会触发该残留。修复：`ActionPanel.set_globally_disabled()` 在从禁用→解禁时主动 `refresh()` 一次恢复按钮状态。新增 `ActionPanelGlobalDisabledRestoreTest` 并加入 `AllTests`。
 - 2026-01-30：Restructuring 阶段隐私：Online 不允许查看其他玩家公司结构（仅展示提交进度/状态）；Hotseat 模式已提交玩家不可再切换查看（用于保密）。实现：`RestructuringModal.set_player_switcher` 禁用他人/已提交按钮；`GamePanelController` 在 Restructuring 强制 view_player（online=local；hotseat=未提交）并屏蔽非法切换；旁观者在 Restructuring 隐藏结构内容。新增 `RestructuringPrivacyTest` 并加入 `AllTests`。
 - 2026-01-30：Online 下“回退到当前玩家回合开始”曾为本地 rewind，导致不同客户端状态不一致。修复：新增 `rpc_rewind_to_turn_start`，由 server 执行 rewind + truncate，并广播 `ResyncArchive` 给房间内所有在线成员；同时联机模式禁用本地 ReplayBar/日志 seek（避免本地时间线回退造成不一致）。新增 `OnlineRewindToTurnStartTest` 并加入 `AllTests`。
 - 2026-01-30：Online 下 ActionPanel 以 `current_player_id` 为上下文，导致非当前玩家看到/触发的是“他人的动作”，在联机校验（只能操作自己）下会直接失败，出现“无动作可用/无法继续”。修复：ActionPanel 在 `ONLINE_CLIENT` 模式固定使用 `local_player_id`；`GamePanelController` 创建命令时也使用 `local_player_id` 作为 actor；新增 `ActionPanelOnlineLocalPlayerTest` 并加入 `AllTests`。

@@ -499,10 +499,15 @@ func set_action_disabled_reason(action_id: String, reason: String) -> void:
 
 func set_globally_disabled(reason: String) -> void:
 	var r := str(reason).strip_edges()
+	var was_disabled := _globally_disabled
 	_globally_disabled = not r.is_empty()
 	_globally_disabled_reason = r
 	_update_title()
 	_apply_global_disabled_state()
+	# 重要：当从“全局禁用”恢复为可操作时，需要主动刷新一次以恢复各按钮的 enabled 状态。
+	# 否则在联机模式中（先 refresh 再 set_globally_disabled），按钮可能会一直停留在 disabled=true。
+	if was_disabled and not _globally_disabled:
+		refresh()
 
 func _apply_global_disabled_state() -> void:
 	# 全局禁用用于“回放/查看历史”态，避免误操作产生时间线分支。

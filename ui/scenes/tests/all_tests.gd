@@ -44,6 +44,7 @@ const FireActionTestClass = preload("res://core/tests/fire_action_test.gd")
 const CompanyStructureTestClass = preload("res://core/tests/company_structure_test.gd")
 const ActionPanelEndButtonsOrderTestClass = preload("res://ui/scenes/tests/action_panel_end_buttons_order_test.gd")
 const ActionPanelOnlineLocalPlayerTestClass = preload("res://ui/scenes/tests/action_panel_online_local_player_test.gd")
+const ActionPanelGlobalDisabledRestoreTestClass = preload("res://ui/scenes/tests/action_panel_global_disabled_restore_test.gd")
 const HandAreaViewSwitchTestClass = preload("res://ui/scenes/tests/hand_area_view_switch_test.gd")
 const ReserveCardSelectionModalPrivacyTestClass = preload("res://ui/scenes/tests/reserve_card_selection_modal_privacy_test.gd")
 const RoomConfigEditorEditableSignalTestClass = preload("res://ui/scenes/tests/room_config_editor_editable_signal_test.gd")
@@ -253,14 +254,18 @@ func _run_all() -> int:
 			"name": "RoomConfigEditorEditableSignalTest",
 			"fn": func() -> Result: return RoomConfigEditorEditableSignalTestClass.run(),
 		},
-		{
-			"name": "ActionPanelOnlineLocalPlayerTest",
-			"fn": func() -> Result: return ActionPanelOnlineLocalPlayerTestClass.run(),
-		},
-		{
-			"name": "LeftPanelSelectionIsolationTest",
-			"fn": func() -> Result: return LeftPanelSelectionIsolationTestClass.run(),
-		},
+			{
+				"name": "ActionPanelOnlineLocalPlayerTest",
+				"fn": func() -> Result: return ActionPanelOnlineLocalPlayerTestClass.run(),
+			},
+			{
+				"name": "ActionPanelGlobalDisabledRestoreTest",
+				"fn": func() -> Result: return ActionPanelGlobalDisabledRestoreTestClass.run(),
+			},
+			{
+				"name": "LeftPanelSelectionIsolationTest",
+				"fn": func() -> Result: return LeftPanelSelectionIsolationTestClass.run(),
+			},
 		{
 			"name": "InitialCompanyTest",
 			"fn": func() -> Result: return InitialCompanyTestClass.run(2, 12345),
