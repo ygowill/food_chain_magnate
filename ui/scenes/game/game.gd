@@ -110,6 +110,7 @@ var _startup_replay_file_path: String = ""
 
 var _online_resync_in_progress: bool = false
 var _online_resync_pending_cmds: Array[Dictionary] = [] # [{cmd_dict, state_hash}]
+var _online_rewind_request_id: String = ""
 var _online_turn_toast_last_player_id: int = -999
 var _phase_toast_last_phase: String = ""
 
@@ -1122,6 +1123,7 @@ func _confirm_rewind_to_turn_start(target_index: int) -> void:
 			return
 		_online_resync_in_progress = true
 		var request_id := NetClient.request_rewind_to_turn_start()
+		_online_rewind_request_id = str(request_id)
 		GameLog.warn("Game", "联机请求回退到回合开始 request_id=%s" % str(request_id))
 		return
 
@@ -1253,11 +1255,13 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 	if not r.ok:
 		GameLog.error("Game", "联机 ResyncArchive 加载失败: %s" % r.error)
 		_online_resync_in_progress = false
+		_online_rewind_request_id = ""
 		_online_resync_pending_cmds.clear()
 		return
 
 	GameLog.warn("Game", "联机 ResyncArchive 加载完成（命令数=%d）" % int(game_engine.command_history.size()))
 	_online_resync_in_progress = false
+	_online_rewind_request_id = ""
 	_timeline_edit_mode_active = false
 	_force_full_panel_sync_next_update = true
 	if is_instance_valid(game_log_panel) and game_log_panel.visible:
@@ -1346,11 +1350,18 @@ func _request_online_resync(reason: String) -> void:
 	if _online_resync_in_progress:
 		return
 	_online_resync_in_progress = true
+	_online_rewind_request_id = ""
 	GameLog.warn("Game", "联机触发 resync: %s" % str(reason))
 	NetClient.request_resync()
 
-func _on_online_request_rejected(_request_id: String, code: String, message: String) -> void:
-	GameLog.warn("Game", "联机请求被拒绝: %s %s" % [code, message])
+func _on_online_request_rejected(request_id: String, code: String, message: String) -> void:
+	GameLog.warn("Game", "联机请求被拒绝 request_id=%s: %s %s" % [str(request_id), code, message])
+	if _online_resync_in_progress and not _online_rewind_request_id.is_empty() and str(request_id) == _online_rewind_request_id:
+		# 避免“回退请求失败但仍卡在同步中”，导致 ActionPanel 永久禁用与状态不一致。
+		_online_resync_in_progress = false
+		_online_rewind_request_id = ""
+		_flush_online_pending_commands_after_resync()
+		_update_ui()
 	if OS.has_feature("headless"):
 		return
 	_show_confirm("联机请求失败", "%s\n%s" % [code, message], Callable(), Callable(), "确定", "关闭")
