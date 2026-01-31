@@ -173,6 +173,23 @@ func get_game_info() -> Dictionary:
 		"is_game_active": is_game_active
 	}
 
+func apply_online_room_state(room_state: Dictionary) -> void:
+	if room_state == null or room_state.is_empty():
+		return
+	var players_val = room_state.get("players", null)
+	if not (players_val is Array):
+		return
+	var players: Array = Array(players_val)
+	for p_val in players:
+		if not (p_val is Dictionary):
+			continue
+		var p: Dictionary = Dictionary(p_val)
+		var pid := int(p.get("seat_index", -1))
+		if pid < 0:
+			continue
+		set_player_name(pid, str(p.get("name", "")))
+		set_player_color_index(pid, int(p.get("color_index", 0)))
+
 func get_default_save_path() -> String:
 	return "user://savegame.json"
 

@@ -621,6 +621,8 @@ func rpc_room_state(payload: Dictionary) -> void:
 	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
 		return
 	NetContext.room_state = payload.duplicate(true)
+	if Globals != null and Globals.has_method("apply_online_room_state"):
+		Globals.apply_online_room_state(NetContext.room_state)
 	room_state_updated.emit(NetContext.room_state)
 
 @rpc("authority", "reliable")
@@ -689,6 +691,8 @@ func rpc_game_started(payload: Dictionary) -> void:
 
 	Globals.set_current_game_engine(engine)
 	Globals.sync_runtime_config_from_engine(engine)
+	if Globals != null and Globals.has_method("apply_online_room_state"):
+		Globals.apply_online_room_state(NetContext.room_state if NetContext != null else {})
 
 	game_started.emit(payload.duplicate(true))
 
