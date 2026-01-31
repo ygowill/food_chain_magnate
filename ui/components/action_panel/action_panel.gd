@@ -61,6 +61,7 @@ const AUTO_HIDE_IF_NOT_INITIATABLE_ACTION_IDS := {
 	ActionIdsClass.SET_LUXURY_PRICE: true,
 	"place_giant_billboard": true,
 	"place_highway_offramp": true,
+	"place_or_move_coffee_shop": true,
 }
 
 # 定价类强制动作在 UI 中隐藏，并在执行 skip 前由 Game 自动补完（见 Game._maybe_auto_complete_mandatory_actions_before_skip）。
