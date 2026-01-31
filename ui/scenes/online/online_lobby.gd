@@ -217,19 +217,9 @@ func _refresh_ui() -> void:
 	back_to_rooms_button.disabled = not connected
 	create_room_button.disabled = not connected
 	leave_room_button.disabled = not connected
-
-	var in_room := _get_current_room_code().is_empty() == false
 	if not connected:
 		if connect_status_label.text.strip_edges().is_empty():
 			_set_connect_status("未连接：请先连接服务器。")
-		if rooms_status_label.text.strip_edges().is_empty():
-			_set_rooms_status("未连接：请先连接服务器再刷新/加入房间。")
-		if create_status_label.text.strip_edges().is_empty():
-			_set_create_status("未连接：请先连接服务器再创建房间。")
-		if room_status_label.text.strip_edges().is_empty():
-			_set_room_status("未连接：请先连接并加入房间。")
-	elif connected and not in_room and room_status_label.text.strip_edges().is_empty():
-		_set_room_status("未在房间内：请先加入/创建房间。")
 
 	_render_room_list(NetContext.room_list if NetContext != null else [])
 	_render_room_state(NetContext.room_state if NetContext != null else {})
@@ -333,8 +323,8 @@ func _join_room_from_list(room_code: String, password_required: bool) -> void:
 	if password_required:
 		_prompt_password_and_join(code)
 		return
-	var request_id := NetClient.request_join_room(code, "")
-	_set_rooms_status("JoinRoom 已发送 request_id=%s" % request_id)
+	NetClient.request_join_room(code, "")
+	_set_rooms_status("")
 
 func _prompt_password_and_join(room_code: String) -> void:
 	_ensure_password_dialog()
@@ -348,8 +338,8 @@ func _on_password_dialog_submitted(password: String) -> void:
 	var code := str(_password_dialog_room_code).strip_edges().to_upper()
 	if code.is_empty():
 		return
-	var request_id := NetClient.request_join_room(code, str(password))
-	_set_rooms_status("JoinRoom 已发送 request_id=%s" % request_id)
+	NetClient.request_join_room(code, str(password))
+	_set_rooms_status("")
 
 func _render_room_state(room_state: Dictionary) -> void:
 	var connected := NetClient != null and NetClient.is_online_client_connected()
@@ -479,6 +469,10 @@ func _get_current_room_code() -> String:
 
 func _on_net_connected() -> void:
 	_set_connect_status("已连接")
+	_set_rooms_status("")
+	_set_join_by_code_status("")
+	_set_create_status("")
+	_set_room_status("")
 	_refresh_ui()
 	_show_page(LobbyPage.ROOMS, true)
 
@@ -545,8 +539,8 @@ func _on_config_debounce_timeout() -> void:
 		return
 
 	_set_config_sync_state("syncing", "")
-	var request_id := NetClient.request_update_room_config(_pending_config_patch)
-	_set_room_status("UpdateRoomConfig 已发送 request_id=%s" % request_id)
+	NetClient.request_update_room_config(_pending_config_patch)
+	_set_room_status("")
 
 func _on_back_pressed() -> void:
 	if NetClient != null:
@@ -601,8 +595,8 @@ func _on_refresh_rooms_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
 		_set_rooms_status("未连接到服务器")
 		return
-	var request_id := NetClient.request_list_rooms()
-	_set_rooms_status("ListRooms 已发送 request_id=%s" % request_id)
+	NetClient.request_list_rooms()
+	_set_rooms_status("")
 
 func _on_join_by_code_submit_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
@@ -610,8 +604,8 @@ func _on_join_by_code_submit_pressed() -> void:
 		return
 	var room_code := str(join_by_code_room_code_edit.text).strip_edges().to_upper()
 	var room_password := str(join_by_code_password_edit.text)
-	var request_id := NetClient.request_join_room(room_code, room_password)
-	_set_join_by_code_status("JoinRoom 已发送 request_id=%s" % request_id)
+	NetClient.request_join_room(room_code, room_password)
+	_set_join_by_code_status("")
 
 func _on_create_room_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
@@ -623,8 +617,8 @@ func _on_create_room_pressed() -> void:
 	var desired := clampi(int(create_players_spin.value), Globals.MIN_PLAYERS, Globals.MAX_PLAYERS)
 
 	var room_password := str(create_password_edit.text)
-	var request_id := NetClient.request_create_room(desired, room_password, {})
-	_set_create_status("CreateRoom 已发送 request_id=%s" % request_id)
+	NetClient.request_create_room(desired, room_password, {})
+	_set_create_status("")
 
 func _on_leave_room_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
@@ -633,8 +627,8 @@ func _on_leave_room_pressed() -> void:
 	config_debounce_timer.stop()
 	_pending_config_patch = {}
 	_set_config_sync_state("synced", "")
-	var request_id := NetClient.request_leave_room()
-	_set_room_status("LeaveRoom 已发送 request_id=%s" % request_id)
+	NetClient.request_leave_room()
+	_set_room_status("")
 
 func _on_start_game_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
@@ -647,8 +641,8 @@ func _on_start_game_pressed() -> void:
 	if _config_sync_state != "synced":
 		_set_room_status("配置未同步，无法开始")
 		return
-	var request_id := NetClient.request_start_game()
-	_set_room_status("StartGame 已发送 request_id=%s" % request_id)
+	NetClient.request_start_game()
+	_set_room_status("")
 
 func _on_copy_room_code_pressed() -> void:
 	var code := _get_current_room_code()
