@@ -1,30 +1,32 @@
 # 选项对话框组件
 # 用于需要用户在多个选项中做选择的场景（例如：飞机角落方向选择）。
 class_name ChoiceDialog
-extends Window
+extends ModalDialogBase
 
 signal option_selected(option_id: String)
 signal cancelled()
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
-@onready var background_panel: Panel = $BackgroundPanel
-@onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
-@onready var message_label: Label = $MarginContainer/VBoxContainer/MessageLabel
-@onready var options_container: HFlowContainer = $MarginContainer/VBoxContainer/OptionsRow
-@onready var cancel_btn: Button = $MarginContainer/VBoxContainer/CancelRow/CancelButton
-@onready var margin_container: MarginContainer = $MarginContainer
+@onready var dialog_root: Control = $Center/Dialog
+@onready var background_panel: Panel = $Center/Dialog/BackgroundPanel
+@onready var title_label: Label = $Center/Dialog/MarginContainer/VBoxContainer/TitleLabel
+@onready var message_label: Label = $Center/Dialog/MarginContainer/VBoxContainer/MessageLabel
+@onready var options_container: HFlowContainer = $Center/Dialog/MarginContainer/VBoxContainer/OptionsRow
+@onready var cancel_btn: Button = $Center/Dialog/MarginContainer/VBoxContainer/CancelRow/CancelButton
+@onready var margin_container: MarginContainer = $Center/Dialog/MarginContainer
 
 var _options: Array[Dictionary] = []
 var _base_size: Vector2i = Vector2i.ZERO
 
 func _ready() -> void:
+	super._ready()
 	UiStylesClass.apply_dialog_surface(background_panel)
 	UiStylesClass.apply_button_secondary(cancel_btn)
-	_base_size = size
+	if dialog_root != null and is_instance_valid(dialog_root):
+		_base_size = Vector2i(dialog_root.custom_minimum_size)
 	if cancel_btn != null:
 		cancel_btn.pressed.connect(_on_cancel_pressed)
-	close_requested.connect(_on_cancel_pressed)
 
 func setup(title: String, message: String, options: Array[Dictionary], cancel_text: String = "取消") -> void:
 	_options = options.duplicate(true)
@@ -36,13 +38,10 @@ func setup(title: String, message: String, options: Array[Dictionary], cancel_te
 		cancel_btn.text = cancel_text
 
 	if _base_size != Vector2i.ZERO:
-		size = _base_size
+		if dialog_root != null and is_instance_valid(dialog_root):
+			dialog_root.custom_minimum_size = Vector2(_base_size.x, _base_size.y)
 	_rebuild_options()
 	_apply_auto_height_for_options()
-
-func show_dialog() -> void:
-	popup_centered()
-	call_deferred("_grab_default_focus")
 
 func _grab_default_focus() -> void:
 	if options_container != null:
@@ -81,7 +80,8 @@ func _apply_auto_height_for_options() -> void:
 	if options_container == null:
 		return
 	if _base_size == Vector2i.ZERO:
-		_base_size = size
+		if dialog_root != null and is_instance_valid(dialog_root):
+			_base_size = Vector2i(dialog_root.custom_minimum_size)
 
 	var buttons: Array[Control] = []
 	for ch in options_container.get_children():
@@ -91,10 +91,11 @@ func _apply_auto_height_for_options() -> void:
 	if buttons.is_empty():
 		options_container.custom_minimum_size = Vector2.ZERO
 		if _base_size != Vector2i.ZERO:
-			size = _base_size
+			if dialog_root != null and is_instance_valid(dialog_root):
+				dialog_root.custom_minimum_size = Vector2(_base_size.x, _base_size.y)
 		return
 
-	var available_width := float(size.x)
+	var available_width := float(_base_size.x)
 	if margin_container != null:
 		available_width -= float(margin_container.get_theme_constant("margin_left") + margin_container.get_theme_constant("margin_right"))
 	available_width = maxf(0.0, available_width)
@@ -139,14 +140,15 @@ func _apply_auto_height_for_options() -> void:
 	if viewport_h > 0:
 		target_h = mini(target_h, int(round(float(viewport_h) * 0.9)))
 	target_h = maxi(target_h, _base_size.y)
-	size = Vector2i(_base_size.x, target_h)
+	if dialog_root != null and is_instance_valid(dialog_root):
+		dialog_root.custom_minimum_size = Vector2(_base_size.x, target_h)
 
 func _on_option_pressed(option_id: String) -> void:
-	hide()
+	close()
 	option_selected.emit(option_id)
 
 func _on_cancel_pressed() -> void:
-	hide()
+	close()
 	cancelled.emit()
 
 func _unhandled_input(event: InputEvent) -> void:

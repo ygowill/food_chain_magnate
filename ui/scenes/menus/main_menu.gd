@@ -15,8 +15,8 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 @onready var replay_player_button: Button = $CenterContainer/Card/Margin/VBoxContainer/ReplayPlayerButton
 @onready var quit_button: Button = $CenterContainer/Card/Margin/VBoxContainer/QuitButton
 
-var _settings_dialog: Window = null
-var _message_dialog: Window = null
+var _message_dialog: Control = null
+var _settings_dialog: Control = null
 var _save_load_dialog = null
 var _save_load_context: String = ""
 

@@ -1,7 +1,7 @@
 # 设置对话框组件
 # 游戏设置、音量、显示选项等
 class_name SettingsDialog
-extends Window
+extends ModalDialogBase
 
 signal settings_changed(settings: Dictionary)
 signal closed()
@@ -65,6 +65,7 @@ var _default_settings: Dictionary = {
 }
 
 func _ready() -> void:
+	super._ready()
 	UiStylesClass.apply_dialog_surface(background_panel)
 	UiStylesClass.apply_button_primary(apply_btn)
 	UiStylesClass.apply_button_secondary(reset_btn)
@@ -77,14 +78,8 @@ func _ready() -> void:
 	if reset_btn != null:
 		reset_btn.pressed.connect(_on_reset_pressed)
 
-	close_requested.connect(_on_close_pressed)
-
 	_setup_resolution_options()
 	_load_settings()
-
-func show_dialog() -> void:
-	popup_centered()
-	call_deferred("_grab_default_focus")
 
 func _grab_default_focus() -> void:
 	if close_btn != null:
@@ -263,7 +258,7 @@ func _on_reset_pressed() -> void:
 	_update_ui_from_settings()
 
 func _on_close_pressed() -> void:
-	hide()
+	close()
 	closed.emit()
 
 func _unhandled_input(event: InputEvent) -> void:

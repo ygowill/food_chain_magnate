@@ -11,7 +11,8 @@ extends Control
 @onready var toggle_left_panel_button: Button = $UIRoot/TopBar/ButtonRow/ToggleLeftPanelButton
 @onready var toggle_right_panel_button: Button = $UIRoot/TopBar/ButtonRow/ToggleRightPanelButton
 @onready var toggle_bottom_panel_button: Button = $MenuDialog/VBoxContainer/ToggleBottomPanelButton
-@onready var menu_dialog: Window = $MenuDialog
+@onready var menu_dialog: Control = $MenuDialog
+@onready var menu_dialog_overlay: ColorRect = $MenuDialog/Overlay
 @onready var menu_dialog_background_panel: Panel = $MenuDialog/BackgroundPanel
 @onready var menu_resume_button: Button = $MenuDialog/VBoxContainer/ResumeButton
 @onready var menu_save_button: Button = $MenuDialog/VBoxContainer/SaveButton
@@ -248,6 +249,11 @@ func _ready() -> void:
 		call_deferred("_report_startup_profile")
 
 func _apply_menu_dialog_styles() -> void:
+	if is_instance_valid(menu_dialog):
+		menu_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+	if is_instance_valid(menu_dialog_overlay):
+		menu_dialog_overlay.color = Color(0, 0, 0, 0.62)
+		menu_dialog_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	UiStylesClass.apply_dialog_surface(menu_dialog_background_panel)
 	UiStylesClass.apply_button_primary(menu_resume_button)
 	UiStylesClass.apply_button_secondary(menu_save_button)
@@ -1533,18 +1539,24 @@ func _try_trigger_right_panel_footer_secondary() -> bool:
 	return true
 
 func _handle_escape() -> bool:
-	# 关闭顶层 Window
+	# 关闭顶层对话框
 	if is_instance_valid(menu_dialog) and menu_dialog.visible:
 		_on_menu_dialog_close_requested()
 		return true
 	if _confirm_dialog != null and is_instance_valid(_confirm_dialog) and _confirm_dialog.visible:
-		_confirm_dialog.hide()
+		if _confirm_dialog.has_method("_on_cancel_pressed"):
+			_confirm_dialog.call("_on_cancel_pressed")
+		else:
+			_confirm_dialog.hide()
 		return true
 
 	if _overlay_controller != null:
 		var dlg = _overlay_controller.settings_dialog
 		if is_instance_valid(dlg) and dlg.visible:
-			dlg.hide()
+			if dlg.has_method("_on_close_pressed"):
+				dlg.call("_on_close_pressed")
+			else:
+				dlg.hide()
 			return true
 
 	# 关闭全屏浏览视图（例如里程碑/保留区），避免影响底层面板/选中状态。

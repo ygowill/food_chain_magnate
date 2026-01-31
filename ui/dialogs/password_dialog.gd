@@ -1,28 +1,26 @@
 # 房间密码输入弹窗（联机加入/观战）
 class_name PasswordDialog
-extends Window
+extends ModalDialogBase
 
 signal submitted(password: String)
 signal cancelled()
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
+var _title_label: Label = null
 var _message_label: Label = null
 var _password_edit: LineEdit = null
 var _confirm_button: Button = null
 var _cancel_button: Button = null
+var _dialog_panel: PanelContainer = null
 
 func _ready() -> void:
-	title = "输入房间密码"
-	size = Vector2i(460, 220)
-	visible = false
-	transient = true
-
+	super._ready()
 	_build_ui()
-	close_requested.connect(_on_cancel_pressed)
 
 func open_for_room(room_code: String, confirm_text: String = "加入/观战") -> void:
-	title = "输入房间密码"
+	if _title_label != null and is_instance_valid(_title_label):
+		_title_label.text = "输入房间密码"
 	if _message_label != null and is_instance_valid(_message_label):
 		var code := str(room_code).strip_edges().to_upper()
 		_message_label.text = "房间 %s 需要密码才能加入/观战。\n（若房间密码为空，可直接留空）" % (code if not code.is_empty() else "-")
@@ -30,27 +28,43 @@ func open_for_room(room_code: String, confirm_text: String = "加入/观战") ->
 		_confirm_button.text = str(confirm_text).strip_edges()
 	if _password_edit != null and is_instance_valid(_password_edit):
 		_password_edit.text = ""
-	popup_centered()
-	if _password_edit != null and is_instance_valid(_password_edit):
-		_password_edit.grab_focus()
+	open()
 
 func _build_ui() -> void:
-	var bg := Panel.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
-	UiStylesClass.apply_dialog_surface(bg)
+	var overlay_rect := ColorRect.new()
+	overlay_rect.name = "Overlay"
+	overlay_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay_rect.color = overlay_color
+	overlay_rect.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(overlay_rect)
+
+	var center := CenterContainer.new()
+	center.name = "Center"
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(center)
+
+	_dialog_panel = PanelContainer.new()
+	_dialog_panel.custom_minimum_size = Vector2(460, 240)
+	UiStylesClass.apply_dialog_surface(_dialog_panel)
+	center.add_child(_dialog_panel)
 
 	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 18)
 	margin.add_theme_constant_override("margin_top", 18)
 	margin.add_theme_constant_override("margin_right", 18)
 	margin.add_theme_constant_override("margin_bottom", 18)
-	add_child(margin)
+	_dialog_panel.add_child(margin)
 
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", 12)
 	margin.add_child(root)
+
+	_title_label = Label.new()
+	_title_label.text = "输入房间密码"
+	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_title_label.add_theme_font_size_override("font_size", 18)
+	root.add_child(_title_label)
 
 	_message_label = Label.new()
 	_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD
@@ -87,15 +101,19 @@ func _build_ui() -> void:
 	_confirm_button.pressed.connect(_on_confirm_pressed)
 	row.add_child(_confirm_button)
 
+func _grab_default_focus() -> void:
+	if _password_edit != null and is_instance_valid(_password_edit):
+		_password_edit.grab_focus()
+
 func _on_confirm_pressed() -> void:
 	var pw := ""
 	if _password_edit != null and is_instance_valid(_password_edit):
 		pw = str(_password_edit.text)
-	hide()
+	close()
 	submitted.emit(pw)
 
 func _on_cancel_pressed() -> void:
-	hide()
+	close()
 	cancelled.emit()
 
 func _unhandled_input(event: InputEvent) -> void:

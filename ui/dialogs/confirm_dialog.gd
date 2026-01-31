@@ -1,23 +1,24 @@
 # 确认对话框组件
 # 通用确认/取消对话框
 class_name ConfirmDialog
-extends Window
+extends ModalDialogBase
 
 signal confirmed()
 signal cancelled()
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
-@onready var background_panel: Panel = $BackgroundPanel
-@onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
-@onready var message_label: Label = $MarginContainer/VBoxContainer/MessageScroll/MessageContainer/MessageLabel
-@onready var confirm_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/ConfirmButton
-@onready var cancel_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/CancelButton
+@onready var background_panel: Panel = $Center/Dialog/BackgroundPanel
+@onready var title_label: Label = $Center/Dialog/MarginContainer/VBoxContainer/TitleLabel
+@onready var message_label: Label = $Center/Dialog/MarginContainer/VBoxContainer/MessageScroll/MessageContainer/MessageLabel
+@onready var confirm_btn: Button = $Center/Dialog/MarginContainer/VBoxContainer/ButtonRow/ConfirmButton
+@onready var cancel_btn: Button = $Center/Dialog/MarginContainer/VBoxContainer/ButtonRow/CancelButton
 
 var _confirm_text: String = "确认"
 var _cancel_text: String = "取消"
 
 func _ready() -> void:
+	super._ready()
 	UiStylesClass.apply_dialog_surface(background_panel)
 	UiStylesClass.apply_button_primary(confirm_btn)
 	UiStylesClass.apply_button_secondary(cancel_btn)
@@ -26,8 +27,6 @@ func _ready() -> void:
 		confirm_btn.pressed.connect(_on_confirm_pressed)
 	if cancel_btn != null:
 		cancel_btn.pressed.connect(_on_cancel_pressed)
-
-	close_requested.connect(_on_cancel_pressed)
 
 func setup(title: String, message: String, confirm_text: String = "确认", cancel_text: String = "取消") -> void:
 	if title_label != null:
@@ -42,20 +41,16 @@ func setup(title: String, message: String, confirm_text: String = "确认", canc
 	_confirm_text = confirm_text
 	_cancel_text = cancel_text
 
-func show_dialog() -> void:
-	popup_centered()
-	call_deferred("_grab_default_focus")
-
 func _grab_default_focus() -> void:
 	if cancel_btn != null:
 		cancel_btn.grab_focus()
 
 func _on_confirm_pressed() -> void:
-	hide()
+	close()
 	confirmed.emit()
 
 func _on_cancel_pressed() -> void:
-	hide()
+	close()
 	cancelled.emit()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -69,83 +64,28 @@ func _unhandled_input(event: InputEvent) -> void:
 
 # 便捷静态方法
 static func show_confirm(parent: Node, title: String, message: String, on_confirm: Callable, on_cancel: Callable = Callable()) -> ConfirmDialog:
-	var dialog := ConfirmDialog.new()
-	dialog.title = title
+	var scene: PackedScene = load("res://ui/dialogs/confirm_dialog.tscn")
+	if scene == null:
+		return null
 
-	var bg := Panel.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	UiStylesClass.apply_dialog_surface(bg)
-	dialog.add_child(bg)
+	var dialog_val := scene.instantiate()
+	if not (dialog_val is ConfirmDialog):
+		if dialog_val != null:
+			dialog_val.queue_free()
+		return null
+	var dialog: ConfirmDialog = dialog_val
+	parent.add_child(dialog)
 
-	# 手动构建 UI（因为静态方法无法加载场景）
-	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 20)
-	margin.add_theme_constant_override("margin_top", 20)
-	margin.add_theme_constant_override("margin_right", 20)
-	margin.add_theme_constant_override("margin_bottom", 20)
-	dialog.add_child(margin)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 16)
-	margin.add_child(vbox)
-
-	var title_lbl := Label.new()
-	title_lbl.text = title
-	title_lbl.add_theme_font_size_override("font_size", 18)
-	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title_lbl)
-
-	var msg_lbl := Label.new()
-	var msg_scroll := ScrollContainer.new()
-	msg_scroll.horizontal_scroll_mode = 0
-	msg_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(msg_scroll)
-
-	var msg_box := VBoxContainer.new()
-	msg_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	msg_scroll.add_child(msg_box)
-
-	msg_lbl.text = message
-	msg_lbl.add_theme_font_size_override("font_size", 14)
-	msg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	msg_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
-	msg_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	msg_box.add_child(msg_lbl)
-
-	var btn_row := HBoxContainer.new()
-	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	btn_row.add_theme_constant_override("separation", 20)
-	vbox.add_child(btn_row)
-
-	var cancel_btn := Button.new()
-	cancel_btn.text = "取消"
-	cancel_btn.custom_minimum_size = Vector2(80, 32)
-	UiStylesClass.apply_button_secondary(cancel_btn)
-	cancel_btn.pressed.connect(func():
-		dialog.hide()
-		dialog.queue_free()
-		if on_cancel.is_valid():
-			on_cancel.call()
-	)
-	btn_row.add_child(cancel_btn)
-
-	var confirm_btn := Button.new()
-	confirm_btn.text = "确认"
-	confirm_btn.custom_minimum_size = Vector2(80, 32)
-	UiStylesClass.apply_button_primary(confirm_btn)
-	confirm_btn.pressed.connect(func():
-		dialog.hide()
-		dialog.queue_free()
+	dialog.setup(title, message)
+	dialog.confirmed.connect(func() -> void:
 		if on_confirm.is_valid():
 			on_confirm.call()
+		dialog.queue_free()
 	)
-	btn_row.add_child(confirm_btn)
-
-	dialog.size = Vector2i(350, 180)
-	dialog.transient = true
-
-	parent.add_child(dialog)
-	dialog.popup_centered()
-
+	dialog.cancelled.connect(func() -> void:
+		if on_cancel.is_valid():
+			on_cancel.call()
+		dialog.queue_free()
+	)
+	dialog.show_dialog()
 	return dialog

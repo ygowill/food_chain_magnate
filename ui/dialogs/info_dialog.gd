@@ -1,6 +1,6 @@
 # 通用信息弹窗（单按钮关闭）
 class_name InfoDialog
-extends Window
+extends ModalDialogBase
 
 signal closed()
 
@@ -9,20 +9,16 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 var _title_label: Label = null
 var _message_label: Label = null
 var _close_button: Button = null
+var _dialog_panel: PanelContainer = null
 
 func _ready() -> void:
-	title = "信息"
-	size = Vector2i(520, 360)
-	visible = false
-	transient = true
-
+	super._ready()
 	_build_ui()
-	close_requested.connect(_on_close_pressed)
 
 func show_info(title_text: String, message: String, min_size: Vector2i = Vector2i(520, 360), close_text: String = "关闭") -> void:
-	title = str(title_text).strip_edges()
 	if min_size.x > 0 and min_size.y > 0:
-		size = min_size
+		if _dialog_panel != null and is_instance_valid(_dialog_panel):
+			_dialog_panel.custom_minimum_size = Vector2(min_size.x, min_size.y)
 	if _title_label != null and is_instance_valid(_title_label):
 		_title_label.text = str(title_text)
 	if _message_label != null and is_instance_valid(_message_label):
@@ -30,23 +26,33 @@ func show_info(title_text: String, message: String, min_size: Vector2i = Vector2
 	if _close_button != null and is_instance_valid(_close_button):
 		_close_button.text = str(close_text)
 
-	popup_centered()
-	if _close_button != null and is_instance_valid(_close_button):
-		_close_button.grab_focus()
+	open()
 
 func _build_ui() -> void:
-	var bg := Panel.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
-	UiStylesClass.apply_dialog_surface(bg)
+	var overlay_rect := ColorRect.new()
+	overlay_rect.name = "Overlay"
+	overlay_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay_rect.color = overlay_color
+	overlay_rect.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(overlay_rect)
+
+	var center := CenterContainer.new()
+	center.name = "Center"
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(center)
+
+	_dialog_panel = PanelContainer.new()
+	_dialog_panel.custom_minimum_size = Vector2(520, 360)
+	UiStylesClass.apply_dialog_surface(_dialog_panel)
+	center.add_child(_dialog_panel)
 
 	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 18)
 	margin.add_theme_constant_override("margin_top", 18)
 	margin.add_theme_constant_override("margin_right", 18)
 	margin.add_theme_constant_override("margin_bottom", 18)
-	add_child(margin)
+	_dialog_panel.add_child(margin)
 
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", 12)
@@ -90,8 +96,12 @@ func _build_ui() -> void:
 	_close_button.pressed.connect(_on_close_pressed)
 	row.add_child(_close_button)
 
+func _grab_default_focus() -> void:
+	if _close_button != null and is_instance_valid(_close_button):
+		_close_button.grab_focus()
+
 func _on_close_pressed() -> void:
-	hide()
+	close()
 	closed.emit()
 
 func _unhandled_input(event: InputEvent) -> void:

@@ -2,7 +2,7 @@
 # - 多存档槽：支持 user://savegame.json（快速存档）+ user://saves/*.json（命名槽位）
 # - 文件系统选择：FileDialog 选择任意 JSON 存档文件
 class_name SaveLoadDialog
-extends Window
+extends ModalDialogBase
 
 signal load_selected(path: String)
 signal save_completed(path: String)
@@ -17,6 +17,9 @@ const QUICK_SAVE_PATH := "user://savegame.json"
 
 var _dialog_mode: DialogMode = DialogMode.LOAD
 var _engine: GameEngine = null
+
+var _title_label: Label
+var _dialog_panel: PanelContainer
 
 var _tabs: TabContainer
 var _slot_list: ItemList
@@ -37,41 +40,36 @@ var _slot_paths: Array[String] = []
 var _suppress_slot_selection: bool = false
 
 func _ready() -> void:
-	title = "存档管理"
-	size = Vector2i(760, 520)
-	visible = false
-
+	super._ready()
 	_build_ui()
 	_connect_signals()
+	_set_title("存档管理")
 	_refresh_slots()
 	_update_ui_state()
 
 func open_for_load() -> void:
 	_dialog_mode = DialogMode.LOAD
 	_engine = null
-	title = "载入游戏"
+	_set_title("载入游戏")
 	_refresh_slots()
 	_update_ui_state()
-	popup_centered()
-	call_deferred("_grab_default_focus")
+	open()
 
 func open_for_replay() -> void:
 	_dialog_mode = DialogMode.REPLAY
 	_engine = null
-	title = "选择回放文件"
+	_set_title("选择回放文件")
 	_refresh_slots()
 	_update_ui_state()
-	popup_centered()
-	call_deferred("_grab_default_focus")
+	open()
 
 func open_for_save(engine: GameEngine) -> void:
 	_dialog_mode = DialogMode.SAVE
 	_engine = engine
-	title = "保存游戏"
+	_set_title("保存游戏")
 	_refresh_slots()
 	_update_ui_state()
-	popup_centered()
-	call_deferred("_grab_default_focus")
+	open()
 
 func _grab_default_focus() -> void:
 	if _dialog_mode == DialogMode.SAVE and _slot_name_edit != null:
@@ -80,23 +78,46 @@ func _grab_default_focus() -> void:
 	if _slot_list != null:
 		_slot_list.grab_focus()
 
+func _set_title(text: String) -> void:
+	if _title_label != null and is_instance_valid(_title_label):
+		_title_label.text = str(text).strip_edges()
+
 func _build_ui() -> void:
-	var bg := Panel.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
-	UiStylesClass.apply_dialog_surface(bg)
+	var overlay_rect := ColorRect.new()
+	overlay_rect.name = "Overlay"
+	overlay_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay_rect.color = overlay_color
+	overlay_rect.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(overlay_rect)
+
+	var center := CenterContainer.new()
+	center.name = "Center"
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(center)
+
+	_dialog_panel = PanelContainer.new()
+	_dialog_panel.name = "DialogPanel"
+	_dialog_panel.custom_minimum_size = Vector2(760, 520)
+	UiStylesClass.apply_dialog_surface(_dialog_panel)
+	center.add_child(_dialog_panel)
 
 	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 18)
 	margin.add_theme_constant_override("margin_top", 18)
 	margin.add_theme_constant_override("margin_right", 18)
 	margin.add_theme_constant_override("margin_bottom", 18)
-	add_child(margin)
+	_dialog_panel.add_child(margin)
 
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", 12)
 	margin.add_child(root)
+
+	_title_label = Label.new()
+	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_title_label.add_theme_font_size_override("font_size", 22)
+	root.add_child(_title_label)
 
 	_tabs = TabContainer.new()
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -213,8 +234,6 @@ func _build_ui() -> void:
 	add_child(_file_dialog)
 
 func _connect_signals() -> void:
-	close_requested.connect(_on_cancel_pressed)
-
 	_slot_refresh_btn.pressed.connect(_on_refresh_pressed)
 	_slot_cancel_btn.pressed.connect(_on_cancel_pressed)
 	_slot_primary_btn.pressed.connect(_on_primary_pressed)
@@ -385,7 +404,9 @@ func _on_refresh_pressed() -> void:
 	_refresh_slots()
 
 func _on_cancel_pressed() -> void:
-	hide()
+	if _file_dialog != null and is_instance_valid(_file_dialog):
+		_file_dialog.hide()
+	close()
 	cancelled.emit()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -417,7 +438,7 @@ func _on_primary_file_pressed() -> void:
 		_set_status("文件不存在: %s" % path)
 		return
 
-	hide()
+	close()
 	load_selected.emit(path)
 
 func _on_slot_selected(index: int) -> void:
@@ -453,7 +474,7 @@ func _emit_selected_slot() -> void:
 		_set_status("文件不存在: %s" % path)
 		return
 
-	hide()
+	close()
 	load_selected.emit(path)
 
 func _save_selected() -> void:
