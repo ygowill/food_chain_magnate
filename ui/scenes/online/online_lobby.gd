@@ -59,12 +59,13 @@ var _current_page: int = LobbyPage.CONNECT
 var _room_config_editor = null
 
 var _config_sync_state: String = "synced" # synced/dirty/syncing/error
-var _config_sync_message: String = ""
-var _pending_config_patch: Dictionary = {}
+	var _config_sync_message: String = ""
+	var _pending_config_patch: Dictionary = {}
+	var _start_game_request_id: String = ""
 
-var _password_dialog = null
-var _password_dialog_room_code: String = ""
-var _info_dialog = null
+	var _password_dialog = null
+	var _password_dialog_room_code: String = ""
+	var _info_dialog = null
 
 func _ready() -> void:
 	UiStylesClass.apply_dialog_surface(panel)
@@ -598,6 +599,9 @@ func _on_net_disconnected(reason: String) -> void:
 	_set_create_status("")
 	_set_room_status("")
 	_set_config_sync_state("synced", "")
+	_start_game_request_id = ""
+	if SceneManager != null and SceneManager.has_method("hide_loading"):
+		SceneManager.hide_loading()
 	_refresh_ui()
 	_show_page(LobbyPage.CONNECT, false)
 
@@ -606,11 +610,25 @@ func _on_room_list_updated(_rooms: Array) -> void:
 
 func _on_room_state_updated(_room_state: Dictionary) -> void:
 	_refresh_ui()
+	if OS.has_feature("headless"):
+		return
+	var room_state: Dictionary = NetContext.room_state if NetContext != null else {}
+	if str(room_state.get("status", "")).strip_edges() != "InGame":
+		return
+	if SceneManager != null and SceneManager.has_method("is_loading_visible") and SceneManager.is_loading_visible():
+		return
+	if SceneManager != null and SceneManager.has_method("show_loading"):
+		SceneManager.show_loading("正在进入联机对局...")
 
 func _on_request_rejected(request_id: String, code: String, message: String) -> void:
 	if str(code).begins_with("update_config"):
 		_set_config_sync_state("error", str(message))
 		_refresh_ui()
+
+	if not _start_game_request_id.is_empty() and str(request_id) == _start_game_request_id:
+		_start_game_request_id = ""
+		if SceneManager != null and SceneManager.has_method("hide_loading"):
+			SceneManager.hide_loading()
 
 	if OS.has_feature("headless"):
 		return
@@ -688,6 +706,7 @@ func _on_request_rejected(request_id: String, code: String, message: String) -> 
 	_show_error_dialog(title, body)
 
 func _on_game_started(_payload: Dictionary) -> void:
+	_start_game_request_id = ""
 	if SceneManager != null and SceneManager.has_method("show_loading"):
 		SceneManager.show_loading("正在进入联机对局...")
 		await get_tree().process_frame
@@ -835,7 +854,11 @@ func _on_start_game_pressed() -> void:
 		_show_error_dialog("无法开始游戏", "配置未同步完成，无法开始游戏。")
 		_set_room_status("")
 		return
-	NetClient.request_start_game()
+	_start_game_request_id = NetClient.request_start_game()
+	if OS.has_feature("headless"):
+		return
+	if SceneManager != null and SceneManager.has_method("show_loading"):
+		SceneManager.show_loading("正在开始游戏...")
 	_set_room_status("")
 
 func _on_copy_room_code_pressed() -> void:
