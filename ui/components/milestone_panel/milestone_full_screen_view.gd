@@ -24,6 +24,7 @@ const CARD_MIN_WIDTH := 220
 var _skin = null
 var _skin_key: String = ""
 var _rules: Dictionary = {}
+var _viewer_player_id: int = -1
 
 var _cards: Dictionary = {} # milestone_id -> MilestoneCard
 var _formatter: MilestonePanel = null
@@ -65,6 +66,7 @@ func begin_background_build(state: GameState, skin_override = null) -> void:
 	if state == null:
 		return
 	_pending_state = state
+	_viewer_player_id = _resolve_viewer_player_id(state)
 
 	if skin_override != null:
 		set_skin(skin_override)
@@ -106,6 +108,7 @@ func begin_background_build(state: GameState, skin_override = null) -> void:
 func sync_from_state(state: GameState, skin_override = null, force_rebuild: bool = false) -> void:
 	if state == null:
 		return
+	_viewer_player_id = _resolve_viewer_player_id(state)
 
 	# 仅用于格式化少量文案（例如 CFO 加成百分比），不需要 deep duplicate；避免首次打开里程碑面板卡顿。
 	_rules = state.rules if (state.rules is Dictionary) else {}
@@ -171,6 +174,15 @@ func _ensure_formatter() -> void:
 		return
 	# 复用 MilestonePanel 的效果文案格式化逻辑；该实例不入树，仅作为 formatter 使用。
 	_formatter = MilestonePanelClass.new()
+
+func _resolve_viewer_player_id(state: GameState) -> int:
+	if state == null:
+		return -1
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		var pid := int(NetContext.local_player_id)
+		if pid >= 0 and pid < state.players.size():
+			return pid
+	return -1
 
 func _ensure_skin_for_state(state: GameState) -> void:
 	var modules: Array[String] = []
@@ -240,7 +252,7 @@ func _run_background_rebuild(milestone_ids: Array[String], claimed_by: Dictionar
 		card.milestone_def = def
 		card.effect_text = effect_text
 		card.player_logo_textures = logo_textures
-		card.set_state(owners, pool_count, round_number)
+		card.set_state(owners, pool_count, round_number, _viewer_player_id)
 		grid.add_child(card)
 		_cards[ms_id] = card
 
@@ -299,6 +311,7 @@ func _compute_sync_key(state: GameState) -> String:
 func _rebuild_from_state(state: GameState) -> void:
 	if grid == null:
 		return
+	_viewer_player_id = _resolve_viewer_player_id(state)
 	for c in grid.get_children():
 		if is_instance_valid(c):
 			c.queue_free()
@@ -340,13 +353,14 @@ func _rebuild_from_state(state: GameState) -> void:
 		card.milestone_def = def
 		card.effect_text = effect_text
 		card.player_logo_textures = logo_textures
-		card.set_state(owners, pool_count, round_number)
+		card.set_state(owners, pool_count, round_number, _viewer_player_id)
 		grid.add_child(card)
 		_cards[ms_id] = card
 
 func _update_from_state(state: GameState) -> void:
 	if _cards.is_empty():
 		return
+	_viewer_player_id = _resolve_viewer_player_id(state)
 	var claimed_by := _build_claimed_by(state)
 	var pool_counts := _build_pool_counts(state)
 	var logo_textures := _build_player_logo_textures(state)
@@ -366,7 +380,7 @@ func _update_from_state(state: GameState) -> void:
 					owners.append(int(v))
 		owners.sort()
 		var pool_count := int(pool_counts.get(ms_id, 0))
-		card.update_from_state(owners, pool_count, round_number, logo_textures)
+		card.update_from_state(owners, pool_count, round_number, logo_textures, _viewer_player_id)
 
 func _get_all_milestone_ids(state: GameState) -> Array[String]:
 	var set := {}
@@ -498,6 +512,7 @@ class MilestoneCard extends PanelContainer:
 	var _owners: Array[int] = []
 	var _pool_count: int = 0
 	var _round_number: int = 0
+	var _viewer_player_id: int = -1
 
 	var _panel_style: StyleBoxFlat = null
 	var _name_label: Label
@@ -509,7 +524,7 @@ class MilestoneCard extends PanelContainer:
 		_build_ui()
 		_update_display()
 
-	func set_state(owners: Array[int], pool_count: int, round_number: int) -> void:
+	func set_state(owners: Array[int], pool_count: int, round_number: int, viewer_player_id: int = -1) -> void:
 		var normalized: Array[int] = []
 		for v in Array(owners):
 			if v is int:
@@ -519,9 +534,10 @@ class MilestoneCard extends PanelContainer:
 		_owners = normalized
 		_pool_count = maxi(0, int(pool_count))
 		_round_number = maxi(0, int(round_number))
+		_viewer_player_id = int(viewer_player_id)
 		_update_display()
 
-	func update_from_state(owners: Array[int], pool_count: int, round_number: int, logo_textures: Dictionary) -> void:
+	func update_from_state(owners: Array[int], pool_count: int, round_number: int, logo_textures: Dictionary, viewer_player_id: int = -1) -> void:
 		# 仅在必要时刷新（避免每次 open/sync 都重建 icons 节点）。
 		var textures_changed := (player_logo_textures != logo_textures)
 		if textures_changed:
@@ -543,12 +559,14 @@ class MilestoneCard extends PanelContainer:
 
 		var pool_changed := (_pool_count != maxi(0, int(pool_count)))
 		var round_changed := (_round_number != maxi(0, int(round_number)))
+		var viewer_changed := (_viewer_player_id != int(viewer_player_id))
 
-		if not owners_changed and not textures_changed and not pool_changed and not round_changed:
+		if not owners_changed and not textures_changed and not pool_changed and not round_changed and not viewer_changed:
 			return
 		_owners = normalized
 		_pool_count = maxi(0, int(pool_count))
 		_round_number = maxi(0, int(round_number))
+		_viewer_player_id = int(viewer_player_id)
 		_update_display()
 
 	func _build_ui() -> void:
@@ -624,12 +642,21 @@ class MilestoneCard extends PanelContainer:
 					expires_text = "剩余 %d 回合" % remaining
 
 		var status := CardStatus.UNOBTAINABLE
-		if _pool_count > 0 and not expired:
-			status = CardStatus.OBTAINABLE
-		elif not _owners.is_empty():
-			status = CardStatus.CLAIMED
+		if _viewer_player_id >= 0:
+			if _owners.has(_viewer_player_id):
+				status = CardStatus.CLAIMED
+			elif _pool_count > 0 and not expired:
+				status = CardStatus.OBTAINABLE
+			else:
+				status = CardStatus.UNOBTAINABLE
 		else:
-			status = CardStatus.UNOBTAINABLE
+			# 非联机视角：保持原逻辑（全局状态）。
+			if _pool_count > 0 and not expired:
+				status = CardStatus.OBTAINABLE
+			elif not _owners.is_empty():
+				status = CardStatus.CLAIMED
+			else:
+				status = CardStatus.UNOBTAINABLE
 
 		var status_text := ""
 		match status:
@@ -642,17 +669,17 @@ class MilestoneCard extends PanelContainer:
 
 		if _status_label != null:
 			_status_label.text = status_text + ("\n" + expires_text if not expires_text.is_empty() else "")
-			var c := Color(0.7, 0.7, 0.7, 1)
+			var color := Color(0.7, 0.7, 0.7, 1)
 			if status == CardStatus.OBTAINABLE:
-				c = Color(0.55, 0.9, 0.6, 1)
+				color = Color(0.55, 0.9, 0.6, 1)
 			elif status == CardStatus.CLAIMED:
-				c = Color(0.5, 0.85, 0.55, 1)
-			_status_label.add_theme_color_override("font_color", c)
+				color = Color(0.5, 0.85, 0.55, 1)
+			_status_label.add_theme_color_override("font_color", color)
 
 		if _icons_row != null:
-			for c in _icons_row.get_children():
-				if is_instance_valid(c):
-					c.queue_free()
+			for child in _icons_row.get_children():
+				if is_instance_valid(child):
+					child.queue_free()
 
 			for pid in _owners:
 				var tex_val = player_logo_textures.get(pid, null)
