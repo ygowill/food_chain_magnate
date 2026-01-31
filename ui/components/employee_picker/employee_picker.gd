@@ -189,6 +189,8 @@ func _find_first_enabled_key() -> String:
 class EmployeePickerItem extends Control:
 	signal pressed(item_key: String)
 
+	const BADGE_BAR_HEIGHT := 22
+
 	var employee_id: String = ""
 	var item_key: String = ""
 	var employee_def: Dictionary = {}
@@ -209,9 +211,9 @@ class EmployeePickerItem extends Control:
 
 	func _build_ui() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		# FlowContainer 布局依赖子控件的 minimum size。EmployeeCard 的 min size 不会自动上推到父 Control，
-		# 若不设置会导致父容器高度偏小，卡片绘制溢出并覆盖下方内容（issue_tracker #34）。
-		custom_minimum_size = EmployeeCard.COMPACT_SIZE
+		# FlowContainer 布局依赖子控件的 minimum size。EmployeeCard 的 min size 不会自动上推到父 Control。
+		# 这里额外预留顶部 badge 区域，避免数量/步数标记遮挡卡片标题（issue_tracker #34 / #ui-polish-10）。
+		custom_minimum_size = EmployeeCard.COMPACT_SIZE + Vector2(0, BADGE_BAR_HEIGHT)
 
 		_card = EmployeeCardClass.new()
 		_card.variant = EmployeeCard.CardVariant.COMPACT
@@ -222,7 +224,7 @@ class EmployeePickerItem extends Control:
 		add_child(_card)
 		_card.set_anchors_preset(Control.PRESET_FULL_RECT)
 		_card.offset_left = 0
-		_card.offset_top = 0
+		_card.offset_top = BADGE_BAR_HEIGHT
 		_card.offset_right = 0
 		_card.offset_bottom = 0
 
