@@ -31,7 +31,7 @@ const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
 
 @onready var back_to_rooms_button: Button = $Center/Panel/Margin/Root/Tabs/CreateTab/CreateHeaderRow/BackToRoomsButton
 @onready var create_password_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/CreateTab/CreatePasswordRow/CreateRoomPasswordEdit
-@onready var create_config_container: VBoxContainer = $Center/Panel/Margin/Root/Tabs/CreateTab/CreateConfigContainer
+@onready var create_players_spin: SpinBox = $Center/Panel/Margin/Root/Tabs/CreateTab/CreatePlayersRow/CreatePlayersSpin
 @onready var create_room_button: Button = $Center/Panel/Margin/Root/Tabs/CreateTab/CreateRoomButton
 @onready var create_status_label: Label = $Center/Panel/Margin/Root/Tabs/CreateTab/CreateStatus
 
@@ -50,7 +50,6 @@ const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
 enum LobbyPage { CONNECT, ROOMS, CREATE, ROOM }
 var _current_page: int = LobbyPage.CONNECT
 
-var _create_config_editor = null
 var _room_config_editor = null
 
 var _config_sync_state: String = "synced" # synced/dirty/syncing/error
@@ -80,10 +79,6 @@ func _ready() -> void:
 	_refresh_ui()
 
 func _ensure_editors() -> void:
-	if _create_config_editor == null or not is_instance_valid(_create_config_editor):
-		_create_config_editor = RoomConfigEditorClass.new()
-		create_config_container.add_child(_create_config_editor)
-
 	if _room_config_editor == null or not is_instance_valid(_room_config_editor):
 		_room_config_editor = RoomConfigEditorClass.new()
 		room_config_container.add_child(_room_config_editor)
@@ -123,17 +118,10 @@ func _apply_defaults() -> void:
 
 	_set_config_sync_state("synced", "")
 
-	# Create 默认配置：复用本地 Globals（seed 由 server 在创建后生成并广播）
-	var cfg := {
-		"desired_player_count": clampi(int(Globals.player_count), Globals.MIN_PLAYERS, Globals.MAX_PLAYERS),
-		"seed_mode": "random",
-		"seed": 0,
-		"allow_spectators": true,
-		"enabled_modules_v2": Array(Globals.enabled_modules_v2, TYPE_STRING, "", null),
-		"modules_v2_base_dir": str(Globals.modules_v2_base_dir),
-	}
-	if _create_config_editor != null and is_instance_valid(_create_config_editor):
-		_create_config_editor.set_from_room_config(cfg)
+	if create_players_spin != null and is_instance_valid(create_players_spin):
+		create_players_spin.min_value = float(Globals.MIN_PLAYERS)
+		create_players_spin.max_value = float(Globals.MAX_PLAYERS)
+		create_players_spin.value = float(clampi(int(Globals.player_count), Globals.MIN_PLAYERS, Globals.MAX_PLAYERS))
 
 func _bind_net_signals() -> void:
 	if NetClient == null:
@@ -594,21 +582,13 @@ func _on_create_room_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
 		_set_create_status("未连接到服务器")
 		return
-	if _create_config_editor == null or not is_instance_valid(_create_config_editor):
-		_set_create_status("配置编辑器缺失")
+	if create_players_spin == null or not is_instance_valid(create_players_spin):
+		_set_create_status("人数输入缺失")
 		return
-
-	var vr: Result = _create_config_editor.validate()
-	if not vr.ok:
-		_set_create_status("配置无效：%s" % vr.error)
-		return
-
-	var cfg: Dictionary = _create_config_editor.get_config_patch()
-	var desired := int(cfg.get("desired_player_count", Globals.MIN_PLAYERS))
-	cfg.erase("desired_player_count")
+	var desired := clampi(int(create_players_spin.value), Globals.MIN_PLAYERS, Globals.MAX_PLAYERS)
 
 	var room_password := str(create_password_edit.text)
-	var request_id := NetClient.request_create_room(desired, room_password, cfg)
+	var request_id := NetClient.request_create_room(desired, room_password, {})
 	_set_create_status("CreateRoom 已发送 request_id=%s" % request_id)
 
 func _on_leave_room_pressed() -> void:
