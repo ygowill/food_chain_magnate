@@ -5,6 +5,7 @@ const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const ModulePackageLoaderClass = preload("res://core/modules/v2/module_package_loader.gd")
 const ModulePlanBuilderClass = preload("res://core/modules/v2/module_plan_builder.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 signal selection_changed(enabled_modules_v2: Array)
 signal notes_changed(text: String)
@@ -36,6 +37,15 @@ const MODULE_GROUPS: Array[Dictionary] = [
 		"title": "员工变体",
 		"modules": ["movie_stars", "night_shift_managers"],
 	},
+]
+
+const _GROUP_BG_COLORS: Array[Color] = [
+	Color(0.16, 0.24, 0.44, 0.35), # map_expansion
+	Color(0.18, 0.42, 0.26, 0.35), # food_and_chefs
+	Color(0.44, 0.22, 0.48, 0.35), # marketing_expansion
+	Color(0.58, 0.36, 0.18, 0.35), # rules_and_milestones
+	Color(0.16, 0.44, 0.44, 0.35), # employee_variants
+	Color(0.24, 0.26, 0.32, 0.35), # other
 ]
 
 var _modules_base_dir_spec: String = ""
@@ -125,12 +135,16 @@ func _ensure_base_ui() -> void:
 
 	var select_all_btn := Button.new()
 	select_all_btn.text = "全选"
+	select_all_btn.custom_minimum_size = Vector2(72, 30)
+	UiStylesClass.apply_button_secondary(select_all_btn)
 	select_all_btn.pressed.connect(_on_select_all_modules_pressed)
 	_header_row.add_child(select_all_btn)
 	_action_buttons.append(select_all_btn)
 
 	var clear_all_btn := Button.new()
 	clear_all_btn.text = "全不选"
+	clear_all_btn.custom_minimum_size = Vector2(72, 30)
+	UiStylesClass.apply_button_secondary(clear_all_btn)
 	clear_all_btn.pressed.connect(_on_clear_all_modules_pressed)
 	_header_row.add_child(clear_all_btn)
 	_action_buttons.append(clear_all_btn)
@@ -202,28 +216,57 @@ func _build_modules_ui() -> void:
 	_action_buttons = kept
 
 	var used: Dictionary = {}
+	var group_index := 0
 	for group_def_val in MODULE_GROUPS:
 		if not (group_def_val is Dictionary):
 			continue
 		var group_def: Dictionary = group_def_val
 		var title := str(group_def.get("title", ""))
 		var mids: Array[String] = Array(group_def.get("modules", []), TYPE_STRING, "", null)
-		var box := _build_module_group_box(title, mids)
+		var bg := _GROUP_BG_COLORS[group_index] if group_index >= 0 and group_index < _GROUP_BG_COLORS.size() else _GROUP_BG_COLORS[_GROUP_BG_COLORS.size() - 1]
+		var box := _build_module_group_box(title, mids, bg)
 		_groups_container.add_child(box)
 		for mid in mids:
 			used[mid] = true
+		group_index += 1
 
 	var other: Array[String] = []
 	for mid in _optional_module_ids:
 		if not used.has(mid):
 			other.append(mid)
 	if not other.is_empty():
-		_groups_container.add_child(_build_module_group_box("其他", other))
+		_groups_container.add_child(_build_module_group_box("其他", other, _GROUP_BG_COLORS[_GROUP_BG_COLORS.size() - 1]))
 
-func _build_module_group_box(title: String, module_ids: Array[String]) -> Control:
+func _build_group_panel_style(bg: Color) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.border_color = Color(1, 1, 1, 0.10)
+	sb.border_width_left = 1
+	sb.border_width_top = 1
+	sb.border_width_right = 1
+	sb.border_width_bottom = 1
+	sb.corner_radius_top_left = 12
+	sb.corner_radius_top_right = 12
+	sb.corner_radius_bottom_right = 12
+	sb.corner_radius_bottom_left = 12
+	return sb
+
+func _build_module_group_box(title: String, module_ids: Array[String], bg_color: Color) -> Control:
+	var panel := PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_theme_stylebox_override("panel", _build_group_panel_style(bg_color))
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	panel.add_child(margin)
+
 	var box := VBoxContainer.new()
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_theme_constant_override("separation", 6)
+	margin.add_child(box)
 
 	var header := HBoxContainer.new()
 	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -242,6 +285,8 @@ func _build_module_group_box(title: String, module_ids: Array[String]) -> Contro
 	var select_btn := Button.new()
 	select_btn.text = "组选"
 	select_btn.disabled = not _editable
+	select_btn.custom_minimum_size = Vector2(72, 28)
+	UiStylesClass.apply_button_secondary(select_btn)
 	select_btn.pressed.connect(func() -> void:
 		_on_select_group_pressed(mids_copy)
 	)
@@ -251,6 +296,8 @@ func _build_module_group_box(title: String, module_ids: Array[String]) -> Contro
 	var clear_btn := Button.new()
 	clear_btn.text = "组不选"
 	clear_btn.disabled = not _editable
+	clear_btn.custom_minimum_size = Vector2(72, 28)
+	UiStylesClass.apply_button_secondary(clear_btn)
 	clear_btn.pressed.connect(func() -> void:
 		_on_clear_group_pressed(mids_copy)
 	)
@@ -276,7 +323,7 @@ func _build_module_group_box(title: String, module_ids: Array[String]) -> Contro
 		inner.add_child(cb)
 		_module_checkboxes[mid] = cb
 
-	return box
+	return panel
 
 func _format_module_label(mid: String) -> String:
 	var name := mid
