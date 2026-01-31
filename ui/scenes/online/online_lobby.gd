@@ -1,4 +1,4 @@
-# 联机大厅（M5）：Connect/Rooms/Create/Room 分页 + 公开房间列表 + 配置自动同步 + 模块选择复用
+# 联机大厅（M5）：Connect/Rooms/Create/Room 页面导航 + 公开房间列表 + 配置自动同步 + 模块选择复用
 extends Control
 
 const RoomConfigEditorClass = preload("res://ui/components/room_config_editor/room_config_editor.gd")
@@ -6,7 +6,13 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
 
 @onready var panel: PanelContainer = $Center/Panel
-@onready var tabs: TabContainer = $Center/Panel/Margin/Root/Tabs
+@onready var back_button: Button = $Center/Panel/Margin/Root/TopBar/BackButton
+@onready var top_title_label: Label = $Center/Panel/Margin/Root/TopBar/Title
+@onready var pages: VBoxContainer = $Center/Panel/Margin/Root/Tabs
+@onready var page_connect: Control = $Center/Panel/Margin/Root/Tabs/ConnectTab
+@onready var page_rooms: Control = $Center/Panel/Margin/Root/Tabs/RoomsTab
+@onready var page_create: Control = $Center/Panel/Margin/Root/Tabs/CreateTab
+@onready var page_room: Control = $Center/Panel/Margin/Root/Tabs/RoomTab
 
 @onready var server_url_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/ConnectTab/ServerRow/ServerUrlEdit
 @onready var player_name_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/ConnectTab/ProfileRow/PlayerNameEdit
@@ -15,6 +21,7 @@ const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
 @onready var disconnect_button: Button = $Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/DisconnectButton
 @onready var connect_status_label: Label = $Center/Panel/Margin/Root/Tabs/ConnectTab/ConnectStatus
 
+@onready var open_create_button: Button = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/OpenCreateButton
 @onready var refresh_rooms_button: Button = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/RefreshRoomsButton
 @onready var rooms_list_container: VBoxContainer = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsScroll/RoomsList
 @onready var join_by_code_room_code_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode/RoomCodeRow/RoomCodeEdit
@@ -22,6 +29,7 @@ const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
 @onready var join_by_code_button: Button = $Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode/JoinRoomButton
 @onready var rooms_status_label: Label = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsStatus
 
+@onready var back_to_rooms_button: Button = $Center/Panel/Margin/Root/Tabs/CreateTab/CreateHeaderRow/BackToRoomsButton
 @onready var create_password_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/CreateTab/CreatePasswordRow/CreateRoomPasswordEdit
 @onready var create_config_container: VBoxContainer = $Center/Panel/Margin/Root/Tabs/CreateTab/CreateConfigContainer
 @onready var create_room_button: Button = $Center/Panel/Margin/Root/Tabs/CreateTab/CreateRoomButton
@@ -39,10 +47,8 @@ const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
 
 @onready var config_debounce_timer: Timer = $ConfigDebounceTimer
 
-var _tab_connect: int = 0
-var _tab_rooms: int = 0
-var _tab_create: int = 0
-var _tab_room: int = 0
+enum LobbyPage { CONNECT, ROOMS, CREATE, ROOM }
+var _current_page: int = LobbyPage.CONNECT
 
 var _create_config_editor = null
 var _room_config_editor = null
@@ -56,37 +62,22 @@ var _password_dialog_room_code: String = ""
 
 func _ready() -> void:
 	UiStylesClass.apply_dialog_surface(panel)
-	UiStylesClass.apply_button_secondary($Center/Panel/Margin/Root/TopBar/BackButton)
+	UiStylesClass.apply_button_secondary(back_button)
 	UiStylesClass.apply_button_primary(connect_button)
 	UiStylesClass.apply_button_secondary(disconnect_button)
+	UiStylesClass.apply_button_primary(open_create_button)
 	UiStylesClass.apply_button_secondary(refresh_rooms_button)
 	UiStylesClass.apply_button_primary(join_by_code_button)
+	UiStylesClass.apply_button_secondary(back_to_rooms_button)
 	UiStylesClass.apply_button_primary(create_room_button)
 	UiStylesClass.apply_button_secondary(copy_room_code_button)
 	UiStylesClass.apply_button_secondary(leave_room_button)
 	UiStylesClass.apply_button_primary(start_game_button)
 
 	_bind_net_signals()
-	_setup_tabs()
 	_ensure_editors()
 	_apply_defaults()
 	_refresh_ui()
-
-func _setup_tabs() -> void:
-	if tabs == null or not is_instance_valid(tabs):
-		return
-	_tab_connect = tabs.get_tab_idx_from_control(tabs.get_node("ConnectTab") as Control)
-	_tab_rooms = tabs.get_tab_idx_from_control(tabs.get_node("RoomsTab") as Control)
-	_tab_create = tabs.get_tab_idx_from_control(tabs.get_node("CreateTab") as Control)
-	_tab_room = tabs.get_tab_idx_from_control(tabs.get_node("RoomTab") as Control)
-
-	tabs.set_tab_title(_tab_connect, "连接")
-	tabs.set_tab_title(_tab_rooms, "房间")
-	tabs.set_tab_title(_tab_create, "创建")
-	tabs.set_tab_title(_tab_room, "房间内")
-
-	if not tabs.tab_changed.is_connected(_on_tab_changed):
-		tabs.tab_changed.connect(_on_tab_changed)
 
 func _ensure_editors() -> void:
 	if _create_config_editor == null or not is_instance_valid(_create_config_editor):
@@ -160,12 +151,64 @@ func _bind_net_signals() -> void:
 	if not NetClient.game_started.is_connected(_on_game_started):
 		NetClient.game_started.connect(_on_game_started)
 
+func _show_page(page: int, request_rooms_on_entry: bool = true) -> void:
+	var prev := _current_page
+	_current_page = page
+
+	if is_instance_valid(page_connect):
+		page_connect.visible = page == LobbyPage.CONNECT
+	if is_instance_valid(page_rooms):
+		page_rooms.visible = page == LobbyPage.ROOMS
+	if is_instance_valid(page_create):
+		page_create.visible = page == LobbyPage.CREATE
+	if is_instance_valid(page_room):
+		page_room.visible = page == LobbyPage.ROOM
+
+	_update_top_title()
+
+	if request_rooms_on_entry and page == LobbyPage.ROOMS and page != prev:
+		if NetClient != null and NetClient.is_online_client_connected():
+			NetClient.request_list_rooms()
+
+func _sync_page_from_state() -> void:
+	var connected := NetClient != null and NetClient.is_online_client_connected()
+	var in_room := not _get_current_room_code().is_empty()
+
+	if not connected:
+		_show_page(LobbyPage.CONNECT, false)
+		return
+
+	if in_room:
+		_show_page(LobbyPage.ROOM, false)
+		return
+
+	if _current_page == LobbyPage.CREATE:
+		_show_page(LobbyPage.CREATE, false)
+		return
+
+	_show_page(LobbyPage.ROOMS, true)
+
+func _update_top_title() -> void:
+	if top_title_label == null or not is_instance_valid(top_title_label):
+		return
+	match _current_page:
+		LobbyPage.CONNECT:
+			top_title_label.text = "连接服务器"
+		LobbyPage.ROOMS:
+			top_title_label.text = "房间列表"
+		LobbyPage.CREATE:
+			top_title_label.text = "创建房间"
+		LobbyPage.ROOM:
+			top_title_label.text = "房间内"
+
 func _refresh_ui() -> void:
 	var connected := NetClient != null and NetClient.is_online_client_connected()
 	connect_button.disabled = connected
 	disconnect_button.disabled = not connected
+	open_create_button.disabled = not connected
 	refresh_rooms_button.disabled = not connected
 	join_by_code_button.disabled = not connected
+	back_to_rooms_button.disabled = not connected
 	create_room_button.disabled = not connected
 	leave_room_button.disabled = not connected
 
@@ -182,13 +225,9 @@ func _refresh_ui() -> void:
 	elif connected and not in_room and room_status_label.text.strip_edges().is_empty():
 		_set_room_status("未在房间内：请先加入/创建房间。")
 
-	if tabs != null and is_instance_valid(tabs):
-		tabs.set_tab_disabled(_tab_rooms, not connected)
-		tabs.set_tab_disabled(_tab_create, not connected)
-		tabs.set_tab_disabled(_tab_room, not (connected and in_room))
-
 	_render_room_list(NetContext.room_list if NetContext != null else [])
 	_render_room_state(NetContext.room_state if NetContext != null else {})
+	_sync_page_from_state()
 
 func _render_room_list(rooms: Array) -> void:
 	if rooms_list_container == null or not is_instance_valid(rooms_list_container):
@@ -252,7 +291,7 @@ func _render_room_list(rooms: Array) -> void:
 			enter_btn.text = "进入"
 			UiStylesClass.apply_button_secondary(enter_btn)
 			enter_btn.pressed.connect(func() -> void:
-				_select_tab(_tab_room)
+				_show_page(LobbyPage.ROOM, false)
 			)
 			row.add_child(enter_btn)
 			continue
@@ -374,8 +413,8 @@ func _render_room_state(room_state: Dictionary) -> void:
 	# StartGame 按钮
 	start_game_button.disabled = not (connected and _can_start_game(room_state) and _config_sync_state == "synced")
 
-	if in_room and tabs != null and is_instance_valid(tabs) and tabs.current_tab != _tab_room:
-		_select_tab(_tab_room)
+	if in_room and _current_page != LobbyPage.ROOM:
+		_show_page(LobbyPage.ROOM, false)
 
 func _is_host(room_state: Dictionary) -> bool:
 	var host_peer_id := int(room_state.get("host_peer_id", 0))
@@ -394,11 +433,6 @@ func _can_start_game(room_state: Dictionary) -> bool:
 		return false
 	var players: Array = Array(room_state.get("players", []))
 	return players.size() == desired
-
-func _select_tab(idx: int) -> void:
-	if tabs == null or not is_instance_valid(tabs):
-		return
-	tabs.current_tab = idx
 
 func _set_connect_status(text: String) -> void:
 	connect_status_label.text = str(text).strip_edges()
@@ -434,15 +468,10 @@ func _get_current_room_code() -> String:
 		return ""
 	return str(NetContext.room_state.get("room_code", "")).strip_edges().to_upper()
 
-func _on_tab_changed(idx: int) -> void:
-	if idx == _tab_rooms and NetClient != null and NetClient.is_online_client_connected():
-		NetClient.request_list_rooms()
-
 func _on_net_connected() -> void:
 	_set_connect_status("已连接")
 	_refresh_ui()
-	if NetClient != null:
-		NetClient.request_list_rooms()
+	_show_page(LobbyPage.ROOMS, true)
 
 func _on_net_disconnected(reason: String) -> void:
 	_set_connect_status("已断开：%s" % reason)
@@ -451,6 +480,7 @@ func _on_net_disconnected(reason: String) -> void:
 	_set_room_status("")
 	_set_config_sync_state("synced", "")
 	_refresh_ui()
+	_show_page(LobbyPage.CONNECT, false)
 
 func _on_room_list_updated(_rooms: Array) -> void:
 	_refresh_ui()
@@ -532,6 +562,17 @@ func _on_disconnect_pressed() -> void:
 	if NetClient != null:
 		NetClient.shutdown()
 	_refresh_ui()
+
+func _on_open_create_pressed() -> void:
+	if NetClient == null or not NetClient.is_online_client_connected():
+		_set_rooms_status("未连接到服务器")
+		return
+	_set_create_status("")
+	_show_page(LobbyPage.CREATE, false)
+
+func _on_back_to_rooms_pressed() -> void:
+	_set_create_status("")
+	_show_page(LobbyPage.ROOMS, true)
 
 func _on_refresh_rooms_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():

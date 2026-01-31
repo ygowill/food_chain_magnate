@@ -59,12 +59,13 @@ theme_override_font_sizes/font_size = 24
 text = "联机大厅"
 horizontal_alignment = 1
 
-[node name="Tabs" type="TabContainer" parent="Center/Panel/Margin/Root"]
+[node name="Tabs" type="VBoxContainer" parent="Center/Panel/Margin/Root"]
 layout_mode = 2
 size_flags_vertical = 3
 
 [node name="ConnectTab" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs"]
 layout_mode = 2
+size_flags_vertical = 3
 theme_override_constants/separation = 10
 
 [node name="ServerRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/ConnectTab"]
@@ -120,7 +121,9 @@ autowrap_mode = 2
 text = ""
 
 [node name="RoomsTab" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs"]
+visible = false
 layout_mode = 2
+size_flags_vertical = 3
 theme_override_constants/separation = 10
 
 [node name="RoomsHeader" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomsTab"]
@@ -131,6 +134,10 @@ theme_override_constants/separation = 8
 layout_mode = 2
 size_flags_horizontal = 3
 text = "房间列表"
+
+[node name="OpenCreateButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader"]
+layout_mode = 2
+text = "创建房间"
 
 [node name="RefreshRoomsButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader"]
 layout_mode = 2
@@ -189,12 +196,24 @@ autowrap_mode = 2
 text = ""
 
 [node name="CreateTab" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs"]
+visible = false
 layout_mode = 2
+size_flags_vertical = 3
 theme_override_constants/separation = 10
 
-[node name="CreateHeader" type="Label" parent="Center/Panel/Margin/Root/Tabs/CreateTab"]
+[node name="CreateHeaderRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/CreateTab"]
 layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="BackToRoomsButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/CreateTab/CreateHeaderRow"]
+layout_mode = 2
+text = "← 房间列表"
+
+[node name="CreateHeader" type="Label" parent="Center/Panel/Margin/Root/Tabs/CreateTab/CreateHeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
 text = "创建房间"
+horizontal_alignment = 1
 
 [node name="CreatePasswordRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/CreateTab"]
 layout_mode = 2
@@ -211,6 +230,7 @@ secret = true
 
 [node name="CreateConfigContainer" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs/CreateTab"]
 layout_mode = 2
+size_flags_vertical = 3
 theme_override_constants/separation = 10
 
 [node name="CreateRoomButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/CreateTab"]
@@ -223,7 +243,9 @@ autowrap_mode = 2
 text = ""
 
 [node name="RoomTab" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs"]
+visible = false
 layout_mode = 2
+size_flags_vertical = 3
 theme_override_constants/separation = 10
 
 [node name="RoomHeader" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomTab"]
@@ -310,8 +332,10 @@ wait_time = 0.5
 [connection signal="pressed" from="Center/Panel/Margin/Root/TopBar/BackButton" to="." method="_on_back_pressed"]
 [connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/ConnectButton" to="." method="_on_connect_pressed"]
 [connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/DisconnectButton" to="." method="_on_disconnect_pressed"]
+[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/OpenCreateButton" to="." method="_on_open_create_pressed"]
 [connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/RefreshRoomsButton" to="." method="_on_refresh_rooms_pressed"]
 [connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode/JoinRoomButton" to="." method="_on_join_by_code_pressed"]
+[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/CreateTab/CreateHeaderRow/BackToRoomsButton" to="." method="_on_back_to_rooms_pressed"]
 [connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/CreateTab/CreateRoomButton" to="." method="_on_create_room_pressed"]
 [connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/RoomTab/RoomHeader/CopyRoomCodeButton" to="." method="_on_copy_room_code_pressed"]
 [connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/RoomTab/RoomActionsRow/LeaveRoomButton" to="." method="_on_leave_room_pressed"]
