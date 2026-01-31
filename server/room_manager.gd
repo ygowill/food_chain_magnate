@@ -167,6 +167,17 @@ func disconnect_peer(peer_id: int) -> Result:
 	if not dr.ok:
 		return dr
 
+	# 若房间内已无任何在线成员（玩家/旁观者），则直接清理房间，避免目录残留。
+	# 注意：InGame 模式会保留掉线玩家的座位信息（用于占位/重连），因此不能仅用 is_empty() 判断。
+	if room.get_peer_ids().is_empty():
+		rooms.erase(room_code)
+		return Result.success({
+			"room_code": room_code,
+			"room": null,
+			"removed": true,
+			"room_state": null,
+		})
+
 	# 注意：InGame 断线保留座位（旁观者占位），因此通常不会为空；这里仍保持兜底清理。
 	if room.is_empty():
 		rooms.erase(room_code)
