@@ -11,6 +11,7 @@ const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
 @onready var pages: VBoxContainer = $Center/Panel/Margin/Root/Tabs
 @onready var page_connect: Control = $Center/Panel/Margin/Root/Tabs/ConnectTab
 @onready var page_rooms: Control = $Center/Panel/Margin/Root/Tabs/RoomsTab
+@onready var page_join_by_code: Control = $Center/Panel/Margin/Root/Tabs/JoinByCodeTab
 @onready var page_create: Control = $Center/Panel/Margin/Root/Tabs/CreateTab
 @onready var page_room: Control = $Center/Panel/Margin/Root/Tabs/RoomTab
 
@@ -22,12 +23,16 @@ const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
 @onready var connect_status_label: Label = $Center/Panel/Margin/Root/Tabs/ConnectTab/ConnectStatus
 
 @onready var open_create_button: Button = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/OpenCreateButton
+@onready var open_join_by_code_button: Button = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/OpenJoinByCodeButton
 @onready var refresh_rooms_button: Button = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/RefreshRoomsButton
 @onready var rooms_list_container: VBoxContainer = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsScroll/RoomsList
-@onready var join_by_code_room_code_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode/RoomCodeRow/RoomCodeEdit
-@onready var join_by_code_password_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode/PasswordRow/RoomPasswordEdit
-@onready var join_by_code_button: Button = $Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode/JoinRoomButton
 @onready var rooms_status_label: Label = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsStatus
+
+@onready var join_by_code_back_button: Button = $Center/Panel/Margin/Root/Tabs/JoinByCodeTab/JoinHeaderRow/BackToRoomsButton
+@onready var join_by_code_room_code_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/JoinByCodeTab/RoomCodeRow/RoomCodeEdit
+@onready var join_by_code_password_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/JoinByCodeTab/PasswordRow/RoomPasswordEdit
+@onready var join_by_code_submit_button: Button = $Center/Panel/Margin/Root/Tabs/JoinByCodeTab/JoinRoomButton
+@onready var join_by_code_status_label: Label = $Center/Panel/Margin/Root/Tabs/JoinByCodeTab/JoinStatus
 
 @onready var back_to_rooms_button: Button = $Center/Panel/Margin/Root/Tabs/CreateTab/CreateHeaderRow/BackToRoomsButton
 @onready var create_password_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/CreateTab/CreatePasswordRow/CreateRoomPasswordEdit
@@ -47,7 +52,7 @@ const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
 
 @onready var config_debounce_timer: Timer = $ConfigDebounceTimer
 
-enum LobbyPage { CONNECT, ROOMS, CREATE, ROOM }
+enum LobbyPage { CONNECT, ROOMS, JOIN_BY_CODE, CREATE, ROOM }
 var _current_page: int = LobbyPage.CONNECT
 
 var _room_config_editor = null
@@ -65,8 +70,10 @@ func _ready() -> void:
 	UiStylesClass.apply_button_primary(connect_button)
 	UiStylesClass.apply_button_secondary(disconnect_button)
 	UiStylesClass.apply_button_primary(open_create_button)
+	UiStylesClass.apply_button_secondary(open_join_by_code_button)
 	UiStylesClass.apply_button_secondary(refresh_rooms_button)
-	UiStylesClass.apply_button_primary(join_by_code_button)
+	UiStylesClass.apply_button_secondary(join_by_code_back_button)
+	UiStylesClass.apply_button_primary(join_by_code_submit_button)
 	UiStylesClass.apply_button_secondary(back_to_rooms_button)
 	UiStylesClass.apply_button_primary(create_room_button)
 	UiStylesClass.apply_button_secondary(copy_room_code_button)
@@ -98,6 +105,7 @@ func _ensure_password_dialog() -> void:
 func _apply_defaults() -> void:
 	_set_connect_status("")
 	_set_rooms_status("")
+	_set_join_by_code_status("")
 	_set_create_status("")
 	_set_room_status("")
 
@@ -147,6 +155,8 @@ func _show_page(page: int, request_rooms_on_entry: bool = true) -> void:
 		page_connect.visible = page == LobbyPage.CONNECT
 	if is_instance_valid(page_rooms):
 		page_rooms.visible = page == LobbyPage.ROOMS
+	if is_instance_valid(page_join_by_code):
+		page_join_by_code.visible = page == LobbyPage.JOIN_BY_CODE
 	if is_instance_valid(page_create):
 		page_create.visible = page == LobbyPage.CREATE
 	if is_instance_valid(page_room):
@@ -170,6 +180,10 @@ func _sync_page_from_state() -> void:
 		_show_page(LobbyPage.ROOM, false)
 		return
 
+	if _current_page == LobbyPage.JOIN_BY_CODE:
+		_show_page(LobbyPage.JOIN_BY_CODE, false)
+		return
+
 	if _current_page == LobbyPage.CREATE:
 		_show_page(LobbyPage.CREATE, false)
 		return
@@ -184,6 +198,8 @@ func _update_top_title() -> void:
 			top_title_label.text = "连接服务器"
 		LobbyPage.ROOMS:
 			top_title_label.text = "房间列表"
+		LobbyPage.JOIN_BY_CODE:
+			top_title_label.text = "房间码加入"
 		LobbyPage.CREATE:
 			top_title_label.text = "创建房间"
 		LobbyPage.ROOM:
@@ -194,8 +210,10 @@ func _refresh_ui() -> void:
 	connect_button.disabled = connected
 	disconnect_button.disabled = not connected
 	open_create_button.disabled = not connected
+	open_join_by_code_button.disabled = not connected
 	refresh_rooms_button.disabled = not connected
-	join_by_code_button.disabled = not connected
+	join_by_code_back_button.disabled = not connected
+	join_by_code_submit_button.disabled = not connected
 	back_to_rooms_button.disabled = not connected
 	create_room_button.disabled = not connected
 	leave_room_button.disabled = not connected
@@ -428,6 +446,9 @@ func _set_connect_status(text: String) -> void:
 func _set_rooms_status(text: String) -> void:
 	rooms_status_label.text = str(text).strip_edges()
 
+func _set_join_by_code_status(text: String) -> void:
+	join_by_code_status_label.text = str(text).strip_edges()
+
 func _set_create_status(text: String) -> void:
 	create_status_label.text = str(text).strip_edges()
 
@@ -464,6 +485,7 @@ func _on_net_connected() -> void:
 func _on_net_disconnected(reason: String) -> void:
 	_set_connect_status("已断开：%s" % reason)
 	_set_rooms_status("")
+	_set_join_by_code_status("")
 	_set_create_status("")
 	_set_room_status("")
 	_set_config_sync_state("synced", "")
@@ -558,6 +580,19 @@ func _on_open_create_pressed() -> void:
 	_set_create_status("")
 	_show_page(LobbyPage.CREATE, false)
 
+func _on_open_join_by_code_pressed() -> void:
+	if NetClient == null or not NetClient.is_online_client_connected():
+		_set_rooms_status("未连接到服务器")
+		return
+	_set_join_by_code_status("")
+	_show_page(LobbyPage.JOIN_BY_CODE, false)
+	if join_by_code_room_code_edit != null and is_instance_valid(join_by_code_room_code_edit):
+		join_by_code_room_code_edit.grab_focus()
+
+func _on_back_from_join_pressed() -> void:
+	_set_join_by_code_status("")
+	_show_page(LobbyPage.ROOMS, true)
+
 func _on_back_to_rooms_pressed() -> void:
 	_set_create_status("")
 	_show_page(LobbyPage.ROOMS, true)
@@ -569,14 +604,14 @@ func _on_refresh_rooms_pressed() -> void:
 	var request_id := NetClient.request_list_rooms()
 	_set_rooms_status("ListRooms 已发送 request_id=%s" % request_id)
 
-func _on_join_by_code_pressed() -> void:
+func _on_join_by_code_submit_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
-		_set_rooms_status("未连接到服务器")
+		_set_join_by_code_status("未连接到服务器")
 		return
 	var room_code := str(join_by_code_room_code_edit.text).strip_edges().to_upper()
 	var room_password := str(join_by_code_password_edit.text)
 	var request_id := NetClient.request_join_room(room_code, room_password)
-	_set_rooms_status("JoinRoom 已发送 request_id=%s" % request_id)
+	_set_join_by_code_status("JoinRoom 已发送 request_id=%s" % request_id)
 
 func _on_create_room_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():

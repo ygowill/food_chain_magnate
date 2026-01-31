@@ -139,6 +139,10 @@ text = "房间列表"
 layout_mode = 2
 text = "创建房间"
 
+[node name="OpenJoinByCodeButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader"]
+layout_mode = 2
+text = "房间码加入"
+
 [node name="RefreshRoomsButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader"]
 layout_mode = 2
 text = "刷新"
@@ -153,44 +157,66 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 6
 
-[node name="JoinByCode" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomsTab"]
+[node name="RoomsStatus" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomsTab"]
+layout_mode = 2
+autowrap_mode = 2
+text = ""
+
+[node name="JoinByCodeTab" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="JoinHeaderRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="JoinTitle" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode"]
+[node name="BackToRoomsButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab/JoinHeaderRow"]
 layout_mode = 2
+text = "← 房间列表"
+
+[node name="JoinHeader" type="Label" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab/JoinHeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
 text = "通过房间码加入/观战"
+horizontal_alignment = 1
 
-[node name="RoomCodeRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode"]
+[node name="RoomCodeRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="RoomCodeLabel" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode/RoomCodeRow"]
+[node name="RoomCodeLabel" type="Label" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab/RoomCodeRow"]
 layout_mode = 2
 text = "房间码"
 
-[node name="RoomCodeEdit" type="LineEdit" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode/RoomCodeRow"]
+[node name="RoomCodeEdit" type="LineEdit" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab/RoomCodeRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="PasswordRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode"]
+[node name="PasswordRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="PasswordLabel" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode/PasswordRow"]
+[node name="PasswordLabel" type="Label" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab/PasswordRow"]
 layout_mode = 2
 text = "房间密码（可空）"
 
-[node name="RoomPasswordEdit" type="LineEdit" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode/PasswordRow"]
+[node name="RoomPasswordEdit" type="LineEdit" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab/PasswordRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 secret = true
 
-[node name="JoinRoomButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode"]
+[node name="JoinHint" type="Label" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab"]
+layout_mode = 2
+autowrap_mode = 2
+text = "提示：如果房间正在对局中且允许旁观，将以旁观者身份加入。"
+
+[node name="JoinRoomButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab"]
 layout_mode = 2
 text = "加入/观战"
 
-[node name="RoomsStatus" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomsTab"]
+[node name="JoinStatus" type="Label" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab"]
 layout_mode = 2
 autowrap_mode = 2
 text = ""
@@ -349,8 +375,10 @@ wait_time = 0.5
 [connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/ConnectButton" to="." method="_on_connect_pressed"]
 [connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/DisconnectButton" to="." method="_on_disconnect_pressed"]
 [connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/OpenCreateButton" to="." method="_on_open_create_pressed"]
+[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/OpenJoinByCodeButton" to="." method="_on_open_join_by_code_pressed"]
 [connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/RefreshRoomsButton" to="." method="_on_refresh_rooms_pressed"]
-[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/RoomsTab/JoinByCode/JoinRoomButton" to="." method="_on_join_by_code_pressed"]
+[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/JoinByCodeTab/JoinHeaderRow/BackToRoomsButton" to="." method="_on_back_from_join_pressed"]
+[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/JoinByCodeTab/JoinRoomButton" to="." method="_on_join_by_code_submit_pressed"]
 [connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/CreateTab/CreateHeaderRow/BackToRoomsButton" to="." method="_on_back_to_rooms_pressed"]
 [connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/CreateTab/CreateRoomButton" to="." method="_on_create_room_pressed"]
 [connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/RoomTab/RoomHeader/CopyRoomCodeButton" to="." method="_on_copy_room_code_pressed"]
