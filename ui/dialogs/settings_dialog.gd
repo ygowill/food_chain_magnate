@@ -37,11 +37,25 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 @onready var animation_speed_slider: HSlider = $MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer/AnimSpeedRow/AnimSpeedSlider
 
 const RESOLUTIONS: Array[Vector2i] = [
+	# 16:9 / 16:10 / 3:2 主流桌面与笔记本分辨率
 	Vector2i(1280, 720),
+	Vector2i(1280, 800),
 	Vector2i(1366, 768),
+	Vector2i(1440, 900),
+	Vector2i(1536, 864),
 	Vector2i(1600, 900),
+	Vector2i(1680, 1050),
 	Vector2i(1920, 1080),
+	Vector2i(1920, 1200),
+	Vector2i(2160, 1440),
+	Vector2i(2256, 1504),
+	Vector2i(2560, 1080),
 	Vector2i(2560, 1440),
+	Vector2i(2560, 1600),
+	Vector2i(2880, 1800),
+	Vector2i(3200, 1800),
+	Vector2i(3440, 1440),
+	Vector2i(3840, 2160),
 ]
 
 var _current_settings: Dictionary = {}
@@ -92,6 +106,26 @@ func _setup_resolution_options() -> void:
 	resolution_option.clear()
 	for res in RESOLUTIONS:
 		resolution_option.add_item("%dx%d" % [res.x, res.y])
+
+func _rebuild_resolution_options(selected_res: Vector2i) -> void:
+	if resolution_option == null:
+		return
+
+	resolution_option.clear()
+	var found_index := -1
+	for i in range(RESOLUTIONS.size()):
+		var res := RESOLUTIONS[i]
+		resolution_option.add_item("%dx%d" % [res.x, res.y])
+		if res == selected_res:
+			found_index = i
+
+	if found_index >= 0:
+		resolution_option.select(found_index)
+		return
+
+	if selected_res.x > 0 and selected_res.y > 0:
+		resolution_option.add_item("%dx%d（当前）" % [selected_res.x, selected_res.y])
+		resolution_option.select(resolution_option.item_count - 1)
 
 func _load_settings() -> void:
 	# 尝试从配置文件加载
@@ -174,10 +208,7 @@ func _update_ui_from_settings() -> void:
 	_set_checkbox(vsync_check, bool(_current_settings.get("vsync", _default_settings.vsync)))
 	if resolution_option != null:
 		var res: Vector2i = _current_settings.get("resolution", _default_settings.resolution)
-		for i in range(RESOLUTIONS.size()):
-			if RESOLUTIONS[i] == res:
-				resolution_option.select(i)
-				break
+		_rebuild_resolution_options(res)
 	if ui_scale_slider != null:
 		ui_scale_slider.value = float(_current_settings.get("ui_scale", _default_settings.ui_scale)) * 100
 	if font_scale_slider != null:
