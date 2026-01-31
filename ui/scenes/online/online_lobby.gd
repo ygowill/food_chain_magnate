@@ -4,6 +4,7 @@ extends Control
 const RoomConfigEditorClass = preload("res://ui/components/room_config_editor/room_config_editor.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
+const InfoDialogClass = preload("res://ui/dialogs/info_dialog.gd")
 
 @onready var panel: PanelContainer = $Center/Panel
 @onready var back_button: Button = $Center/Panel/Margin/Root/TopBar/BackButton
@@ -63,6 +64,7 @@ var _pending_config_patch: Dictionary = {}
 
 var _password_dialog = null
 var _password_dialog_room_code: String = ""
+var _info_dialog = null
 
 func _ready() -> void:
 	UiStylesClass.apply_dialog_surface(panel)
@@ -83,6 +85,7 @@ func _ready() -> void:
 	_bind_net_signals()
 	_ensure_editors()
 	_ensure_password_dialog()
+	_ensure_info_dialog()
 	_apply_defaults()
 	_refresh_ui()
 
@@ -102,6 +105,21 @@ func _ensure_password_dialog() -> void:
 	add_child(_password_dialog)
 	if _password_dialog.has_signal("submitted") and not _password_dialog.submitted.is_connected(_on_password_dialog_submitted):
 		_password_dialog.submitted.connect(_on_password_dialog_submitted)
+
+func _ensure_info_dialog() -> void:
+	if _info_dialog != null and is_instance_valid(_info_dialog):
+		return
+	_info_dialog = InfoDialogClass.new()
+	add_child(_info_dialog)
+
+func _show_error_dialog(title_text: String, message: String) -> void:
+	if OS.has_feature("headless"):
+		return
+	_ensure_info_dialog()
+	if _info_dialog == null or not is_instance_valid(_info_dialog):
+		return
+	if _info_dialog.has_method("show_info"):
+		_info_dialog.call("show_info", title_text, message, Vector2i(520, 320), "确定")
 
 func _apply_defaults() -> void:
 	_set_connect_status("")
@@ -316,7 +334,8 @@ func _render_room_list(rooms: Array) -> void:
 
 func _join_room_from_list(room_code: String, password_required: bool) -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
-		_set_rooms_status("未连接到服务器")
+		_show_error_dialog("未连接到服务器", "请先连接服务器。")
+		_set_rooms_status("")
 		return
 	var code := str(room_code).strip_edges().to_upper()
 	if code.is_empty():
@@ -589,15 +608,84 @@ func _on_room_state_updated(_room_state: Dictionary) -> void:
 	_refresh_ui()
 
 func _on_request_rejected(request_id: String, code: String, message: String) -> void:
-	var s := "RequestRejected request_id=%s code=%s message=%s" % [request_id, code, message]
-	_set_room_status(s)
-	if code.begins_with("create_room"):
-		_set_create_status(s)
-	elif code.begins_with("join_room") or code.begins_with("list_rooms"):
-		_set_rooms_status(s)
-	elif code.begins_with("update_config"):
-		_set_config_sync_state("error", message)
-	_refresh_ui()
+	if str(code).begins_with("update_config"):
+		_set_config_sync_state("error", str(message))
+		_refresh_ui()
+
+	if OS.has_feature("headless"):
+		return
+
+	var title := "请求失败"
+	var body := ""
+	var c := str(code).strip_edges()
+	var m := str(message).strip_edges()
+
+	match c:
+		"protocol_version_mismatch":
+			title = "协议版本不匹配"
+			body = "客户端与服务器版本不一致，请更新后重试。"
+		"missing_client_hello":
+			title = "连接未完成"
+			body = "请先连接服务器后再重试。"
+		"invalid_player_count":
+			title = "创建房间失败"
+			body = "玩家人数不合法。"
+		"invalid_params":
+			title = "请求参数错误"
+			body = m
+		"create_room_failed":
+			title = "创建房间失败"
+			body = m
+		"join_room_failed":
+			title = "加入房间失败"
+			match m:
+				"Missing room_code":
+					body = "请填写房间码。"
+				"Room not found":
+					body = "房间不存在或已解散。"
+				"Invalid room_password":
+					body = "房间密码错误，请重试。"
+				"Room is full":
+					body = "房间已满。"
+				_:
+					body = m
+		"leave_room_failed":
+			title = "离开房间失败"
+			body = m
+		"start_game_failed":
+			title = "开始游戏失败"
+			body = m
+		"update_config_failed":
+			title = "配置同步失败"
+			body = m
+		"not_in_room":
+			title = "操作失败"
+			body = "你当前不在房间内。"
+		"not_in_game":
+			title = "操作失败"
+			body = "房间不在对局中。"
+		"not_host":
+			title = "操作失败"
+			body = "仅房主可以执行该操作。"
+		"spectator_readonly":
+			title = "只读模式"
+			body = "旁观者无法执行该操作。"
+		"forfeited_readonly":
+			title = "只读模式"
+			body = "你已弃权，当前为只读旁观模式。"
+		_:
+			title = "请求失败"
+			if not m.is_empty():
+				body = m
+			else:
+				body = "%s" % c
+
+	if body.is_empty():
+		body = "请求失败，请稍后重试。"
+	if not request_id.is_empty():
+		body = "%s\n\n（请求号：%s）" % [body, request_id]
+
+	_show_error_dialog(title, body)
 
 func _on_game_started(_payload: Dictionary) -> void:
 	if SceneManager != null and SceneManager.has_method("show_loading"):
@@ -665,14 +753,16 @@ func _on_disconnect_pressed() -> void:
 
 func _on_open_create_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
-		_set_rooms_status("未连接到服务器")
+		_show_error_dialog("未连接到服务器", "请先连接服务器。")
+		_set_rooms_status("")
 		return
 	_set_create_status("")
 	_show_page(LobbyPage.CREATE, false)
 
 func _on_open_join_by_code_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
-		_set_rooms_status("未连接到服务器")
+		_show_error_dialog("未连接到服务器", "请先连接服务器。")
+		_set_rooms_status("")
 		return
 	_set_join_by_code_status("")
 	_show_page(LobbyPage.JOIN_BY_CODE, false)
@@ -689,14 +779,16 @@ func _on_back_to_rooms_pressed() -> void:
 
 func _on_refresh_rooms_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
-		_set_rooms_status("未连接到服务器")
+		_show_error_dialog("未连接到服务器", "请先连接服务器。")
+		_set_rooms_status("")
 		return
 	NetClient.request_list_rooms()
 	_set_rooms_status("")
 
 func _on_join_by_code_submit_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
-		_set_join_by_code_status("未连接到服务器")
+		_show_error_dialog("未连接到服务器", "请先连接服务器。")
+		_set_join_by_code_status("")
 		return
 	var room_code := str(join_by_code_room_code_edit.text).strip_edges().to_upper()
 	var room_password := str(join_by_code_password_edit.text)
@@ -705,10 +797,12 @@ func _on_join_by_code_submit_pressed() -> void:
 
 func _on_create_room_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
-		_set_create_status("未连接到服务器")
+		_show_error_dialog("未连接到服务器", "请先连接服务器。")
+		_set_create_status("")
 		return
 	if create_players_spin == null or not is_instance_valid(create_players_spin):
-		_set_create_status("人数输入缺失")
+		_show_error_dialog("创建房间失败", "人数输入缺失。")
+		_set_create_status("")
 		return
 	var desired := clampi(int(create_players_spin.value), Globals.MIN_PLAYERS, Globals.MAX_PLAYERS)
 
@@ -718,7 +812,8 @@ func _on_create_room_pressed() -> void:
 
 func _on_leave_room_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
-		_set_room_status("未连接到服务器")
+		_show_error_dialog("未连接到服务器", "请先连接服务器。")
+		_set_room_status("")
 		return
 	config_debounce_timer.stop()
 	_pending_config_patch = {}
@@ -728,14 +823,17 @@ func _on_leave_room_pressed() -> void:
 
 func _on_start_game_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
-		_set_room_status("未连接到服务器")
+		_show_error_dialog("未连接到服务器", "请先连接服务器。")
+		_set_room_status("")
 		return
 	var room_state: Dictionary = NetContext.room_state if NetContext != null else {}
 	if not _is_host(room_state):
-		_set_room_status("仅房主可开始游戏")
+		_show_error_dialog("无法开始游戏", "仅房主可开始游戏。")
+		_set_room_status("")
 		return
 	if _config_sync_state != "synced":
-		_set_room_status("配置未同步，无法开始")
+		_show_error_dialog("无法开始游戏", "配置未同步完成，无法开始游戏。")
+		_set_room_status("")
 		return
 	NetClient.request_start_game()
 	_set_room_status("")
