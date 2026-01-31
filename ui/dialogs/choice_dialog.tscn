@@ -52,17 +52,17 @@ theme_override_constants/margin_top = 18
 theme_override_constants/margin_right = 20
 theme_override_constants/margin_bottom = 18
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="Center/Dialog/MarginContainer"]
 layout_mode = 2
 theme_override_constants/separation = 14
 
-[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+[node name="TitleLabel" type="Label" parent="Center/Dialog/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "请选择"
 horizontal_alignment = 1
 
-[node name="MessageLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+[node name="MessageLabel" type="Label" parent="Center/Dialog/MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_font_sizes/font_size = 14
@@ -70,17 +70,17 @@ text = ""
 horizontal_alignment = 0
 autowrap_mode = 2
 
-[node name="OptionsRow" type="HFlowContainer" parent="MarginContainer/VBoxContainer"]
+[node name="OptionsRow" type="HFlowContainer" parent="Center/Dialog/MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/h_separation = 12
 theme_override_constants/v_separation = 12
 
-[node name="CancelRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="CancelRow" type="HBoxContainer" parent="Center/Dialog/MarginContainer/VBoxContainer"]
 layout_mode = 2
 alignment = 1
 
-[node name="CancelButton" type="Button" parent="MarginContainer/VBoxContainer/CancelRow"]
+[node name="CancelButton" type="Button" parent="Center/Dialog/MarginContainer/VBoxContainer/CancelRow"]
 custom_minimum_size = Vector2(90, 32)
 layout_mode = 2
 text = "取消"
