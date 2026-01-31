@@ -67,7 +67,6 @@ horizontal_alignment = 1
 
 [node name="TurnOrderDisplay" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer" instance=ExtResource("2_turn_order_display")]
 layout_mode = 2
-size_flags_vertical = 3
 
 [node name="ButtonRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2

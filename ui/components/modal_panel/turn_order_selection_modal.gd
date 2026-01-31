@@ -7,6 +7,8 @@ extends "res://ui/components/modal_panel/modal_panel_base.gd"
 
 var _selected_position: int = -1
 var _interactive: bool = true
+var _base_selections: Dictionary = {}
+var _acting_player_id: int = -1
 
 func _ready() -> void:
 	super._ready()
@@ -22,6 +24,8 @@ func _ready() -> void:
 func setup(state: GameState, current_player_id: int, selections: Dictionary, interactive: bool = true, local_player_id: int = -1) -> void:
 	_interactive = bool(interactive)
 	_selected_position = -1
+	_base_selections = selections.duplicate(true)
+	_acting_player_id = int(current_player_id)
 	set_confirm_enabled(false)
 	if is_instance_valid(confirm_button):
 		confirm_button.visible = _interactive
@@ -57,6 +61,10 @@ func _on_position_selected(position: int) -> void:
 	set_confirm_enabled(true)
 	if is_instance_valid(selection_label):
 		selection_label.text = "当前选择: 顺位 %d" % (position + 1)
+	if is_instance_valid(display) and display.has_method("set_current_selections") and _acting_player_id >= 0:
+		var preview := _base_selections.duplicate(true)
+		preview[position] = _acting_player_id
+		display.call("set_current_selections", preview)
 
 func _on_confirm_pressed() -> void:
 	if _selected_position < 0:

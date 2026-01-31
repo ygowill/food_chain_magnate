@@ -206,6 +206,8 @@ class OrderBadge extends PanelContainer:
 
 	func _ready() -> void:
 		custom_minimum_size = Vector2(BADGE_SIZE, BADGE_SIZE)
+		size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		gui_input.connect(_on_gui_input)
 		_icon = TextureRect.new()
 		_icon.anchors_preset = Control.PRESET_FULL_RECT
