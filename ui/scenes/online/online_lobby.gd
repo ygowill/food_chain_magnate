@@ -59,13 +59,13 @@ var _current_page: int = LobbyPage.CONNECT
 var _room_config_editor = null
 
 var _config_sync_state: String = "synced" # synced/dirty/syncing/error
-	var _config_sync_message: String = ""
-	var _pending_config_patch: Dictionary = {}
-	var _start_game_request_id: String = ""
+var _config_sync_message: String = ""
+var _pending_config_patch: Dictionary = {}
+var _start_game_request_id: String = ""
 
-	var _password_dialog = null
-	var _password_dialog_room_code: String = ""
-	var _info_dialog = null
+var _password_dialog = null
+var _password_dialog_room_code: String = ""
+var _info_dialog = null
 
 func _ready() -> void:
 	UiStylesClass.apply_dialog_surface(panel)

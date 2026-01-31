@@ -584,6 +584,15 @@ func rpc_rewind_to_turn_start(request: Dictionary) -> void:
 		_send_request_rejected(peer_id, request_id, "spectator_readonly", "Spectator cannot request rewind")
 		return
 
+	# 仅允许“当前玩家”发起回退（避免旁观/非当前回合玩家影响对局）。
+	var state: GameState = room.game_engine.get_state()
+	if state == null:
+		_send_request_rejected(peer_id, request_id, "state_missing", "Room state missing")
+		return
+	if str(state.phase) != DefsClass.PHASE_RESTRUCTURING and int(state.get_current_player_id()) != actor_id:
+		_send_request_rejected(peer_id, request_id, "not_current_player", "Only current player can request rewind")
+		return
+
 	if not room.has_method("rewind_to_current_player_turn_start"):
 		_send_request_rejected(peer_id, request_id, "not_supported", "Room does not support rewind")
 		return
