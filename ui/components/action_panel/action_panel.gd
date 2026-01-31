@@ -115,6 +115,69 @@ const ACTION_DESCRIPTIONS: Dictionary = {
 	"fire": "解雇员工",
 }
 
+func _get_working_sub_phase_order_names(state: GameState) -> Array[String]:
+	if state == null:
+		return []
+	if state.round_state is Dictionary:
+		var rs: Dictionary = state.round_state
+		var order_val = rs.get("working_sub_phase_order", null)
+		if order_val is Array:
+			var order: Array[String] = []
+			for it in Array(order_val):
+				var s := str(it).strip_edges()
+				if not s.is_empty():
+					order.append(s)
+			if not order.is_empty():
+				return order
+
+	return [
+		DefsClass.SUB_PHASE_RECRUIT,
+		DefsClass.SUB_PHASE_TRAIN,
+		DefsClass.SUB_PHASE_MARKETING,
+		DefsClass.SUB_PHASE_GET_FOOD,
+		DefsClass.SUB_PHASE_GET_DRINKS,
+		DefsClass.SUB_PHASE_PLACE_HOUSES,
+		DefsClass.SUB_PHASE_PLACE_RESTAURANTS,
+	]
+
+func _should_show_skip_sub_phase_button() -> bool:
+	if _game_state == null:
+		return true
+	if str(_game_state.phase) != DefsClass.PHASE_WORKING:
+		return true
+	var current_sub := str(_game_state.sub_phase).strip_edges()
+	if current_sub.is_empty():
+		return true
+
+	var order := _get_working_sub_phase_order_names(_game_state)
+	if order.is_empty():
+		return true
+	var idx := order.find(current_sub)
+	if idx < 0:
+		return true
+	return idx < order.size() - 1
+
+func _get_skip_sub_phase_display_name() -> String:
+	if _game_state == null:
+		return "跳过子阶段"
+	match str(_game_state.sub_phase):
+		DefsClass.SUB_PHASE_RECRUIT:
+			return "跳过招聘"
+		DefsClass.SUB_PHASE_TRAIN:
+			return "跳过培训"
+		DefsClass.SUB_PHASE_MARKETING:
+			return "跳过营销"
+		DefsClass.SUB_PHASE_GET_FOOD:
+			return "跳过生产食物"
+		DefsClass.SUB_PHASE_GET_DRINKS:
+			return "跳过采购饮料"
+		DefsClass.SUB_PHASE_PLACE_HOUSES:
+			return "跳过放置房屋"
+		DefsClass.SUB_PHASE_PLACE_RESTAURANTS:
+			return "跳过放置餐厅"
+		_:
+			return "跳过子阶段"
+
 func _ready() -> void:
 	_build_ui()
 
@@ -601,6 +664,23 @@ func refresh() -> void:
 
 	# Working：即使当前子阶段无任何可执行动作，也必须保留“跳过子阶段”，否则会造成软锁
 	# （例如 Train 子阶段没有可培训来源/次数时，skip 被 validate 拒绝，只能用 skip_sub_phase 推进）。
+	#
+	# 但当 skip_sub_phase 实际效果等于“结束回合/结束工作阶段”（例如最后子阶段），不应再展示该按钮以避免误导。
+	if visible_ids.has(ActionIdsClass.SKIP_SUB_PHASE) and not _should_show_skip_sub_phase_button():
+		var filtered_skip_sub: Array[String] = []
+		for v in visible_ids:
+			if v == ActionIdsClass.SKIP_SUB_PHASE:
+				continue
+			filtered_skip_sub.append(v)
+		visible_ids = filtered_skip_sub
+
+		if has_player_executable_info:
+			var filtered_exec_skip_sub: Array[String] = []
+			for v2 in visible_executable:
+				if v2 == ActionIdsClass.SKIP_SUB_PHASE:
+					continue
+				filtered_exec_skip_sub.append(v2)
+			visible_executable = filtered_exec_skip_sub
 
 	# P1：默认不再自动隐藏“玩家依赖动作”，改为灰显 + 原因（提升发现性）。
 	# 但对少数“模块/里程碑动作”，若对当前玩家不可启动则直接隐藏（issue_tracker #78）。
@@ -717,7 +797,10 @@ func _rebuild_action_buttons(action_ids: Array[String]) -> void:
 	for action_id in ids:
 		var btn := ActionButton.new()
 		btn.action_id = action_id
-		btn.display_name = ACTION_DISPLAY_NAMES.get(action_id, action_id)
+		if action_id == ActionIdsClass.SKIP_SUB_PHASE:
+			btn.display_name = _get_skip_sub_phase_display_name()
+		else:
+			btn.display_name = ACTION_DISPLAY_NAMES.get(action_id, action_id)
 		btn.description = ACTION_DESCRIPTIONS.get(action_id, "")
 		btn.is_mandatory = _mandatory_action_ids.has(action_id)
 		btn.action_clicked.connect(_on_action_clicked)
