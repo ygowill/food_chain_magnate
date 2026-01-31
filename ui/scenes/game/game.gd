@@ -110,6 +110,7 @@ var _startup_replay_file_path: String = ""
 var _online_resync_in_progress: bool = false
 var _online_resync_pending_cmds: Array[Dictionary] = [] # [{cmd_dict, state_hash}]
 var _online_turn_toast_last_player_id: int = -999
+var _phase_toast_last_phase: String = ""
 
 var _background_ui_warmup_started: bool = false
 var _startup_profile_reported: bool = false
@@ -980,13 +981,14 @@ func _update_ui() -> void:
 	# 回放/复盘：日志时间线指针 + ReplayBar 显示 + ActionPanel 禁用
 	_sync_timeline_ui(head_index, cursor_index, state)
 
-	_maybe_show_online_turn_toast(state)
+	_maybe_show_online_turn_toast(head_index, cursor_index, state)
+	_maybe_show_phase_change_toast(head_index, cursor_index, state)
 
 	# 同步调试面板
 	if _debug_panel != null and _debug_panel.visible:
 		_debug_panel.refresh_state()
 
-func _maybe_show_online_turn_toast(state: GameState) -> void:
+func _maybe_show_online_turn_toast(head_index: int, cursor_index: int, state: GameState) -> void:
 	if OS.has_feature("headless"):
 		return
 	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
@@ -995,6 +997,10 @@ func _maybe_show_online_turn_toast(state: GameState) -> void:
 	if _online_resync_in_progress:
 		return
 	if state == null:
+		return
+	if _replay_mode_active or _history_step_timeline_active:
+		return
+	if cursor_index < head_index:
 		return
 	if str(state.phase) == DefsClass.PHASE_RESTRUCTURING:
 		return
@@ -1009,15 +1015,43 @@ func _maybe_show_online_turn_toast(state: GameState) -> void:
 		return
 	_online_turn_toast_last_player_id = current_pid
 
-	var msg := ""
-	if current_pid == local_pid:
-		msg = "轮到你行动"
-	else:
-		var name := "玩家%d" % (current_pid + 1)
-		if Globals != null and Globals.has_method("get_player_name"):
-			name = str(Globals.get_player_name(current_pid))
-		msg = "轮到 %s 行动" % name
+	if current_pid != local_pid:
+		return
 
+	if _overlay_controller != null and _overlay_controller.has_method("show_toast"):
+		_overlay_controller.show_toast("轮到你行动")
+
+	var sm := SoundManager.get_instance()
+	if sm != null and is_instance_valid(sm):
+		# 占位：若资源缺失则静默；后续补齐 res://ui/audio/sfx/event_turn_start.(wav/ogg/mp3)
+		sm.play(SoundManager.SOUND_TURN_START)
+
+func _maybe_show_phase_change_toast(head_index: int, cursor_index: int, state: GameState) -> void:
+	if OS.has_feature("headless"):
+		return
+	if state == null:
+		return
+
+	# 回放/复盘/时间线回退时会频繁切换阶段：避免刷屏，仅在“实时头部”显示。
+	if _replay_mode_active or _history_step_timeline_active:
+		_phase_toast_last_phase = ""
+		return
+	if cursor_index < head_index:
+		return
+
+	var phase := str(state.phase).strip_edges()
+	if phase.is_empty():
+		return
+	if _phase_toast_last_phase.is_empty():
+		_phase_toast_last_phase = phase
+		return
+	if phase == _phase_toast_last_phase:
+		return
+	_phase_toast_last_phase = phase
+
+	# 只提示大阶段；Working 内子阶段不提示（sub_phase 忽略）。
+	var display_name = GameLogPanel.PHASE_DISPLAY_NAMES.get(phase, phase)
+	var msg := "进入阶段：%s" % str(display_name)
 	if _overlay_controller != null and _overlay_controller.has_method("show_toast"):
 		_overlay_controller.show_toast(msg)
 
