@@ -82,6 +82,7 @@ func _ready() -> void:
 
 	_bind_net_signals()
 	_ensure_editors()
+	_ensure_password_dialog()
 	_apply_defaults()
 	_refresh_ui()
 
@@ -330,7 +331,7 @@ func _prompt_password_and_join(room_code: String) -> void:
 	_ensure_password_dialog()
 	_password_dialog_room_code = room_code
 	if _password_dialog != null and is_instance_valid(_password_dialog) and _password_dialog.has_method("open_for_room"):
-		_password_dialog.call("open_for_room", room_code, "加入/观战")
+		_password_dialog.call_deferred("open_for_room", room_code, "加入/观战")
 
 func _on_password_dialog_submitted(password: String) -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
