@@ -1209,8 +1209,6 @@ func _setup_online_client_bindings() -> void:
 		NetClient.command_applied.connect(_on_online_command_applied)
 	if not NetClient.resync_archive_received.is_connected(_on_online_resync_archive_received):
 		NetClient.resync_archive_received.connect(_on_online_resync_archive_received)
-	if not NetClient.rewind_to_turn_start_applied.is_connected(_on_online_rewind_to_turn_start_applied):
-		NetClient.rewind_to_turn_start_applied.connect(_on_online_rewind_to_turn_start_applied)
 	if not NetClient.request_rejected.is_connected(_on_online_request_rejected):
 		NetClient.request_rejected.connect(_on_online_request_rejected)
 	if not NetClient.disconnected.is_connected(_on_online_disconnected):
@@ -1220,10 +1218,6 @@ func _setup_online_client_bindings() -> void:
 	if not pending.is_empty():
 		_online_resync_in_progress = true
 		_on_online_resync_archive_received(pending)
-
-	var pending_rewind := NetClient.take_pending_rewind_to_turn_start_applied()
-	if not pending_rewind.is_empty():
-		_on_online_rewind_to_turn_start_applied(pending_rewind)
 
 func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> void:
 	if game_engine == null:
@@ -1265,6 +1259,12 @@ func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> voi
 func _on_online_resync_archive_received(archive: Dictionary) -> void:
 	if game_engine == null:
 		return
+	# 联机回退：server 通过 ResyncArchive 通道下发“元数据”（避免发送大 archive 导致 WebSocket buffer 溢出）。
+	if archive.has("_rewind_to_turn_start"):
+		var meta_val = archive.get("_rewind_to_turn_start", null)
+		if meta_val is Dictionary:
+			_on_online_rewind_to_turn_start_meta(Dictionary(meta_val))
+			return
 	_online_resync_in_progress = true
 	var r: Result = game_engine.load_from_archive(archive)
 	if not r.ok:
@@ -1288,7 +1288,7 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 
 	_flush_online_pending_commands_after_resync()
 
-func _on_online_rewind_to_turn_start_applied(payload: Dictionary) -> void:
+func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 	if game_engine == null:
 		return
 	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
