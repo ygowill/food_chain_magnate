@@ -24,8 +24,24 @@ func _build_ui() -> void:
 
 func set_game_state(state: GameState) -> void:
 	_game_state = state
-	_rebuild_player_items()
+	_ensure_player_items()
 	refresh()
+
+func _ensure_player_items() -> void:
+	var target_count := 0
+	if _game_state != null and (_game_state.players is Array):
+		target_count = _game_state.players.size()
+
+	if _player_items.size() == target_count:
+		var all_valid := true
+		for it in _player_items:
+			if not is_instance_valid(it):
+				all_valid = false
+				break
+		if all_valid:
+			return
+
+	_rebuild_player_items()
 
 func set_current_player(player_id: int) -> void:
 	_current_player_id = player_id

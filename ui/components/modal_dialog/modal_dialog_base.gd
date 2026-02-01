@@ -14,16 +14,17 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_process_unhandled_input(true)
 
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	_apply_full_rect_layout()
 
 	if overlay != null:
-		overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+		overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, 0)
 		overlay.color = overlay_color
 		overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 
 func open() -> void:
 	visible = true
 	_bring_to_front()
+	call_deferred("_apply_full_rect_layout")
 	grab_focus()
 	if has_method("_grab_default_focus"):
 		call_deferred("_grab_default_focus")
@@ -33,6 +34,13 @@ func close() -> void:
 
 func show_dialog() -> void:
 	open()
+
+func _apply_full_rect_layout() -> void:
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, 0)
+	position = Vector2.ZERO
+	var p := get_parent()
+	if p is Control:
+		size = (p as Control).size
 
 func _bring_to_front() -> void:
 	var p := get_parent()

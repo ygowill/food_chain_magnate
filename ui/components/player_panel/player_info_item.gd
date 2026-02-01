@@ -23,6 +23,8 @@ func _ready() -> void:
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 func _build_ui() -> void:
+	if is_instance_valid(color_rect):
+		return
 	custom_minimum_size = Vector2(240, 36)
 
 	var hbox := HBoxContainer.new()
@@ -96,6 +98,8 @@ func apply_font_settings() -> void:
 		restaurant_label.add_theme_font_size_override("font_size", fs_small)
 
 func update_data(player: Dictionary) -> void:
+	if not is_instance_valid(color_rect):
+		_build_ui()
 	if not is_instance_valid(color_rect):
 		return
 

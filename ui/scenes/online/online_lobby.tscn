@@ -92,17 +92,6 @@ text = "昵称"
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="ColorIndexLabel" type="Label" parent="Center/Panel/Margin/Root/Tabs/ConnectTab/ProfileRow"]
-layout_mode = 2
-text = "颜色"
-
-[node name="ColorIndexSpin" type="SpinBox" parent="Center/Panel/Margin/Root/Tabs/ConnectTab/ProfileRow"]
-layout_mode = 2
-min_value = 0.0
-max_value = 99.0
-step = 1.0
-rounded = true
-
 [node name="ButtonsRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/ConnectTab"]
 layout_mode = 2
 theme_override_constants/separation = 8
@@ -316,6 +305,18 @@ theme_override_constants/separation = 8
 [node name="PlayersTitle" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn"]
 layout_mode = 2
 text = "玩家"
+
+[node name="MyColorRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="MyColorLabel" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/MyColorRow"]
+layout_mode = 2
+text = "我的餐厅"
+
+[node name="MyColorOption" type="OptionButton" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/MyColorRow"]
+layout_mode = 2
+size_flags_horizontal = 3
 
 [node name="PlayersList" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn"]
 layout_mode = 2

@@ -78,9 +78,9 @@ func get_config_patch() -> Dictionary:
 	if _module_selector != null and is_instance_valid(_module_selector):
 		enabled_modules = _module_selector.get_enabled_modules_v2()
 	return {
-		"desired_player_count": int(_player_count_spin.value),
+		"desired_player_count": _get_spinbox_int_value(_player_count_spin),
 		"seed_mode": seed_mode,
-		"seed": int(_seed_value_spin.value),
+		"seed": _get_spinbox_int_value(_seed_value_spin),
 		"enabled_modules_v2": enabled_modules,
 		"modules_v2_base_dir": str(_modules_base_dir_edit.text).strip_edges(),
 		"allow_spectators": bool(_allow_spectators_check.button_pressed),
@@ -127,6 +127,11 @@ func _ensure_ui() -> void:
 	_player_count_spin.value_changed.connect(func(_v: float) -> void:
 		_emit_changed()
 	)
+	var pc_le := _player_count_spin.get_line_edit()
+	if pc_le != null and is_instance_valid(pc_le):
+		pc_le.text_changed.connect(func(_t: String) -> void:
+			_emit_changed()
+		)
 	player_row.add_child(_player_count_spin)
 
 	var seed_row := HBoxContainer.new()
@@ -159,6 +164,11 @@ func _ensure_ui() -> void:
 	_seed_value_spin.value_changed.connect(func(_v: float) -> void:
 		_emit_changed()
 	)
+	var seed_le := _seed_value_spin.get_line_edit()
+	if seed_le != null and is_instance_valid(seed_le):
+		seed_le.text_changed.connect(func(_t: String) -> void:
+			_emit_changed()
+		)
 	seed_row.add_child(_seed_value_spin)
 
 	_module_selector = ModuleSelectorClass.new()
@@ -243,6 +253,17 @@ func _get_seed_mode_value() -> String:
 	var meta = _seed_mode_option.get_item_metadata(idx)
 	var v := str(meta).strip_edges()
 	return v if not v.is_empty() else "random"
+
+func _get_spinbox_int_value(spin: SpinBox) -> int:
+	if spin == null or not is_instance_valid(spin):
+		return 0
+	var v := int(spin.value)
+	var le := spin.get_line_edit()
+	if le != null and is_instance_valid(le):
+		var t := str(le.text).strip_edges()
+		if t.is_valid_int():
+			v = int(t)
+	return clampi(v, int(spin.min_value), int(spin.max_value))
 
 func _select_seed_mode_value(value: String) -> void:
 	for i in range(_seed_mode_option.item_count):

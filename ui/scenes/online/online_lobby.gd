@@ -6,6 +6,8 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
 const InfoDialogClass = preload("res://ui/dialogs/info_dialog.gd")
 
+const _COLOR_NAME_HINTS: Array[String] = ["红", "蓝", "绿", "黄", "紫"]
+
 @onready var panel: PanelContainer = $Center/Panel
 @onready var back_button: Button = $Center/Panel/Margin/Root/TopBar/BackButton
 @onready var top_title_label: Label = $Center/Panel/Margin/Root/TopBar/Title
@@ -18,7 +20,6 @@ const InfoDialogClass = preload("res://ui/dialogs/info_dialog.gd")
 
 @onready var server_url_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/ConnectTab/ServerRow/ServerUrlEdit
 @onready var player_name_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/ConnectTab/ProfileRow/PlayerNameEdit
-@onready var color_index_spin: SpinBox = $Center/Panel/Margin/Root/Tabs/ConnectTab/ProfileRow/ColorIndexSpin
 @onready var connect_button: Button = $Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/ConnectButton
 @onready var disconnect_button: Button = $Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/DisconnectButton
 @onready var connect_status_label: Label = $Center/Panel/Margin/Root/Tabs/ConnectTab/ConnectStatus
@@ -43,6 +44,7 @@ const InfoDialogClass = preload("res://ui/dialogs/info_dialog.gd")
 
 @onready var room_code_label: Label = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomHeader/RoomCodeLabel
 @onready var copy_room_code_button: Button = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomHeader/CopyRoomCodeButton
+@onready var my_color_option: OptionButton = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/MyColorRow/MyColorOption
 @onready var players_list_container: VBoxContainer = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/PlayersList
 @onready var spectators_list_container: VBoxContainer = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/SpectatorsList
 @onready var config_sync_status_label: Label = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/RightColumn/ConfigSyncStatus
@@ -62,10 +64,12 @@ var _config_sync_state: String = "synced" # synced/dirty/syncing/error
 var _config_sync_message: String = ""
 var _pending_config_patch: Dictionary = {}
 var _start_game_request_id: String = ""
+var _start_game_flow_in_progress: bool = false
 
 var _password_dialog = null
 var _password_dialog_room_code: String = ""
 var _info_dialog = null
+var _suppress_profile_signals: bool = false
 
 func _ready() -> void:
 	UiStylesClass.apply_dialog_surface(panel)
@@ -87,8 +91,26 @@ func _ready() -> void:
 	_ensure_editors()
 	_ensure_password_dialog()
 	_ensure_info_dialog()
+	_setup_my_color_selector()
 	_apply_defaults()
 	_refresh_ui()
+
+func _setup_my_color_selector() -> void:
+	if my_color_option == null or not is_instance_valid(my_color_option):
+		return
+	if my_color_option.item_selected.is_connected(_on_my_color_option_selected):
+		return
+	my_color_option.clear()
+	var palette_size := 0
+	if Globals != null and (Globals.PLAYER_COLOR_PALETTE is Array):
+		palette_size = Array(Globals.PLAYER_COLOR_PALETTE).size()
+	if palette_size <= 0:
+		palette_size = _COLOR_NAME_HINTS.size()
+	for i in range(palette_size):
+		var label := _COLOR_NAME_HINTS[i] if i < _COLOR_NAME_HINTS.size() else ("颜色 %d" % i)
+		my_color_option.add_item(label, i)
+		my_color_option.set_item_metadata(i, i)
+	my_color_option.item_selected.connect(_on_my_color_option_selected)
 
 func _ensure_editors() -> void:
 	if _room_config_editor == null or not is_instance_valid(_room_config_editor):
@@ -134,15 +156,21 @@ func _apply_defaults() -> void:
 	else:
 		server_url_edit.text = "ws://127.0.0.1:7000"
 
+	var profile_name := "玩家"
+	var profile_color_index := 0
 	if NetContext != null and NetContext.player_profile is Dictionary and not Dictionary(NetContext.player_profile).is_empty():
 		var p: Dictionary = Dictionary(NetContext.player_profile)
-		player_name_edit.text = str(p.get("name", "玩家"))
-		color_index_spin.value = int(p.get("color_index", 0))
+		profile_name = str(p.get("name", "玩家"))
+		profile_color_index = int(p.get("color_index", 0))
 	elif Globals != null:
 		if Globals.player_names is Array and not Globals.player_names.is_empty():
-			player_name_edit.text = str(Globals.player_names[0])
+			profile_name = str(Globals.player_names[0])
 		if Globals.player_color_indices is Array and not Globals.player_color_indices.is_empty():
-			color_index_spin.value = int(Globals.player_color_indices[0])
+			profile_color_index = int(Globals.player_color_indices[0])
+
+	player_name_edit.text = profile_name
+	_write_local_player_profile(profile_name, profile_color_index)
+	_apply_my_color_option_selection(profile_color_index)
 
 	_set_config_sync_state("synced", "")
 
@@ -438,10 +466,10 @@ func _render_room_state(room_state: Dictionary) -> void:
 		none.text = "暂无旁观者"
 		none.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82, 0.85))
 		spectators_list_container.add_child(none)
-	else:
-		for s_val in spectators:
-			if not (s_val is Dictionary):
-				continue
+		else:
+			for s_val in spectators:
+				if not (s_val is Dictionary):
+					continue
 			var s: Dictionary = Dictionary(s_val)
 			var s_name := str(s.get("name", "")).strip_edges()
 			if s_name.is_empty():
@@ -453,7 +481,25 @@ func _render_room_state(room_state: Dictionary) -> void:
 				["旁观"],
 				false
 			)
-			spectators_list_container.add_child(s_item)
+				spectators_list_container.add_child(s_item)
+
+	# 我的餐厅/颜色选择（进入房间后才允许）
+	if my_color_option != null and is_instance_valid(my_color_option):
+		var local_peer_id := int(multiplayer.get_unique_id())
+		var local_player_entry: Dictionary = {}
+		for p_val2 in players:
+			if not (p_val2 is Dictionary):
+				continue
+			var p2: Dictionary = Dictionary(p_val2)
+			if int(p2.get("peer_id", 0)) == local_peer_id:
+				local_player_entry = p2
+				break
+		var can_edit_color := (not code.is_empty()) and (str(room_state.get("status", "")).strip_edges() == "Lobby") and (not local_player_entry.is_empty())
+		my_color_option.disabled = not can_edit_color
+		if not local_player_entry.is_empty():
+			var local_color_index := int(local_player_entry.get("color_index", 0))
+			_write_local_player_profile(str(local_player_entry.get("name", player_name_edit.text)), local_color_index)
+			_apply_my_color_option_selection(local_color_index)
 
 	var in_room := not code.is_empty()
 	var is_host := in_room and _is_host(room_state)
@@ -466,10 +512,10 @@ func _render_room_state(room_state: Dictionary) -> void:
 			if is_host and _config_sync_state == "syncing":
 				_pending_config_patch = {}
 				_set_config_sync_state("synced", "")
-		_room_config_editor.set_editable(editable)
+			_room_config_editor.set_editable(editable)
 
 	# StartGame 按钮
-	start_game_button.disabled = not (connected and _can_start_game(room_state) and _config_sync_state == "synced")
+	start_game_button.disabled = (not connected) or (not _can_start_game(room_state)) or _start_game_flow_in_progress or _config_sync_state == "error"
 
 	if in_room and _current_page != LobbyPage.ROOM:
 		_show_page(LobbyPage.ROOM, false)
@@ -600,6 +646,7 @@ func _on_net_disconnected(reason: String) -> void:
 	_set_room_status("")
 	_set_config_sync_state("synced", "")
 	_start_game_request_id = ""
+	_start_game_flow_in_progress = false
 	if SceneManager != null and SceneManager.has_method("hide_loading"):
 		SceneManager.hide_loading()
 	_refresh_ui()
@@ -624,9 +671,15 @@ func _on_request_rejected(request_id: String, code: String, message: String) -> 
 	if str(code).begins_with("update_config"):
 		_set_config_sync_state("error", str(message))
 		_refresh_ui()
+		# StartGame 预同步失败：停止 loading 并解锁按钮
+		if _start_game_flow_in_progress and _start_game_request_id.is_empty():
+			_start_game_flow_in_progress = false
+			if SceneManager != null and SceneManager.has_method("hide_loading"):
+				SceneManager.hide_loading()
 
 	if not _start_game_request_id.is_empty() and str(request_id) == _start_game_request_id:
 		_start_game_request_id = ""
+		_start_game_flow_in_progress = false
 		if SceneManager != null and SceneManager.has_method("hide_loading"):
 			SceneManager.hide_loading()
 
@@ -707,6 +760,7 @@ func _on_request_rejected(request_id: String, code: String, message: String) -> 
 
 func _on_game_started(_payload: Dictionary) -> void:
 	_start_game_request_id = ""
+	_start_game_flow_in_progress = false
 	if SceneManager != null and SceneManager.has_method("show_loading"):
 		SceneManager.show_loading("正在进入联机对局...")
 		await get_tree().process_frame
@@ -745,6 +799,60 @@ func _on_config_debounce_timeout() -> void:
 	NetClient.request_update_room_config(_pending_config_patch)
 	_set_room_status("")
 
+func _room_config_matches_patch(cfg: Dictionary, patch: Dictionary) -> bool:
+	if cfg == null or patch == null:
+		return false
+	for k in patch.keys():
+		if cfg.get(k, null) != patch.get(k, null):
+			return false
+	return true
+
+func _await_config_sync(timeout_sec: float = 5.0) -> bool:
+	var deadline_ms := int(Time.get_ticks_msec() + int(round(timeout_sec * 1000.0)))
+	while Time.get_ticks_msec() < deadline_ms:
+		if _config_sync_state == "synced":
+			return true
+		if _config_sync_state == "error":
+			return false
+		await get_tree().process_frame
+	return false
+
+func _apply_my_color_option_selection(color_index: int) -> void:
+	if my_color_option == null or not is_instance_valid(my_color_option):
+		return
+	if my_color_option.item_count <= 0:
+		return
+	var idx := clampi(int(color_index), 0, my_color_option.item_count - 1)
+	_suppress_profile_signals = true
+	my_color_option.select(idx)
+	_suppress_profile_signals = false
+
+func _write_local_player_profile(name: String, color_index: int) -> void:
+	if NetContext == null:
+		return
+	var p: Dictionary = {}
+	if NetContext.player_profile is Dictionary:
+		p = Dictionary(NetContext.player_profile)
+	p["name"] = str(name).strip_edges()
+	p["color_index"] = int(color_index)
+	NetContext.player_profile = p
+
+func _on_my_color_option_selected(index: int) -> void:
+	if _suppress_profile_signals:
+		return
+	if my_color_option == null or not is_instance_valid(my_color_option):
+		return
+	var meta_val = my_color_option.get_item_metadata(index)
+	var palette_index := int(meta_val)
+	_write_local_player_profile(str(player_name_edit.text), palette_index)
+	if NetClient == null or not NetClient.is_online_client_connected():
+		return
+	# 仅在进入房间后允许选择餐厅/颜色（联机大厅设计：避免入局前选择造成困惑/冲突）
+	if _get_current_room_code().is_empty():
+		return
+	if NetClient.has_method("request_update_player_profile"):
+		NetClient.request_update_player_profile(NetContext.player_profile)
+
 func _on_back_pressed() -> void:
 	if NetClient != null:
 		NetClient.shutdown()
@@ -754,11 +862,7 @@ func _on_back_pressed() -> void:
 		SceneManager.goto_main_menu()
 
 func _on_connect_pressed() -> void:
-	if NetContext != null:
-		NetContext.player_profile = {
-			"name": str(player_name_edit.text).strip_edges(),
-			"color_index": int(color_index_spin.value),
-		}
+	_write_local_player_profile(str(player_name_edit.text), int(NetContext.player_profile.get("color_index", 0)) if (NetContext != null and NetContext.player_profile is Dictionary) else 0)
 	var url := str(server_url_edit.text).strip_edges()
 	var r: Result = NetClient.connect_to_server(url)
 	if not r.ok:
@@ -837,6 +941,8 @@ func _on_leave_room_pressed() -> void:
 	config_debounce_timer.stop()
 	_pending_config_patch = {}
 	_set_config_sync_state("synced", "")
+	_start_game_request_id = ""
+	_start_game_flow_in_progress = false
 	NetClient.request_leave_room()
 	_set_room_status("")
 
@@ -850,15 +956,52 @@ func _on_start_game_pressed() -> void:
 		_show_error_dialog("无法开始游戏", "仅房主可开始游戏。")
 		_set_room_status("")
 		return
-	if _config_sync_state != "synced":
-		_show_error_dialog("无法开始游戏", "配置未同步完成，无法开始游戏。")
+	if _start_game_flow_in_progress:
+		return
+	if _room_config_editor == null or not is_instance_valid(_room_config_editor):
+		_show_error_dialog("无法开始游戏", "房间配置编辑器缺失。")
 		_set_room_status("")
 		return
-	_start_game_request_id = NetClient.request_start_game()
-	if OS.has_feature("headless"):
+
+	var vr: Result = _room_config_editor.validate()
+	if not vr.ok:
+		_set_config_sync_state("error", vr.error)
+		_show_error_dialog("无法开始游戏", vr.error)
+		_set_room_status("")
 		return
-	if SceneManager != null and SceneManager.has_method("show_loading"):
-		SceneManager.show_loading("正在开始游戏...")
+
+	_start_game_flow_in_progress = true
+	_refresh_ui()
+
+	if not OS.has_feature("headless"):
+		if SceneManager != null and SceneManager.has_method("show_loading"):
+			SceneManager.show_loading("正在开始游戏...")
+			await get_tree().process_frame
+
+	# StartGame：进入 loading 后主动触发一次同步（避免“光标仍在输入框中导致未同步”）。
+	config_debounce_timer.stop()
+	var patch: Dictionary = _room_config_editor.get_config_patch()
+	var cfg: Dictionary = Dictionary(room_state.get("config", {}))
+
+	if _room_config_matches_patch(cfg, patch):
+		_pending_config_patch = {}
+		_set_config_sync_state("synced", "")
+	else:
+		_pending_config_patch = patch
+		_set_config_sync_state("syncing", "")
+		NetClient.request_update_room_config(patch)
+		var synced := await _await_config_sync(5.0)
+		if not synced:
+			if _config_sync_state != "error":
+				_set_config_sync_state("error", "配置同步超时")
+			_start_game_flow_in_progress = false
+			_refresh_ui()
+			if SceneManager != null and SceneManager.has_method("hide_loading"):
+				SceneManager.hide_loading()
+			_set_room_status("")
+			return
+
+	_start_game_request_id = NetClient.request_start_game()
 	_set_room_status("")
 
 func _on_copy_room_code_pressed() -> void:

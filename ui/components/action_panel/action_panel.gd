@@ -539,6 +539,21 @@ func _update_title() -> void:
 
 	var base := "可用动作"
 	var suffix := ("（%s）" % _globally_disabled_reason) if _globally_disabled and not _globally_disabled_reason.is_empty() else ""
+
+	# 联机模式：标题只展示“本地可操作性”，不展示玩家名（避免 hotseat 语义干扰）。
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and int(NetContext.local_player_id) >= 0:
+		if _globally_disabled and _globally_disabled_reason == "联机：等待其他玩家操作":
+			title_label.text = "等待其他玩家行动"
+			return
+		if _game_state != null:
+			var phase := str(_game_state.phase)
+			var local_pid := int(NetContext.local_player_id)
+			if phase != DefsClass.PHASE_RESTRUCTURING and int(_game_state.get_current_player_id()) != local_pid:
+				title_label.text = "等待其他玩家行动"
+				return
+		title_label.text = base + suffix
+		return
+
 	if _game_state == null or _current_player_id < 0:
 		title_label.text = base + suffix
 		return

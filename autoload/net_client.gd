@@ -128,6 +128,15 @@ func request_update_room_config(config_patch: Dictionary) -> String:
 	rpc_id(1, "rpc_update_room_config", payload)
 	return request_id
 
+func request_update_player_profile(profile: Dictionary) -> void:
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	if not is_online_client_connected():
+		return
+	if profile is Dictionary:
+		NetContext.player_profile = Dictionary(profile).duplicate(true)
+	_send_client_hello()
+
 func request_start_game() -> String:
 	var request_id := _next_request_id()
 	var payload := {"request_id": request_id}
@@ -182,6 +191,14 @@ func rpc_client_hello(request: Dictionary) -> void:
 		"name": str(profile.get("name", "玩家")),
 		"color_index": int(profile.get("color_index", 0)),
 	}
+	# 允许已在房间中的客户端更新自己的 profile（昵称/颜色）。
+	# 重要：不新增 @rpc 方法，避免 dedicated server 与客户端版本不一致时触发 checksum mismatch。
+	var room = _room_manager.get_room_by_peer(peer_id) if _room_manager != null else null
+	if room != null and room.has_method("update_peer_profile"):
+		var ur: Result = room.update_peer_profile(peer_id, Dictionary(_profile_by_peer_id[peer_id]))
+		if ur.ok:
+			_broadcast_room_state(room)
+			_broadcast_room_list("")
 	_send_room_list_to_peer(peer_id, "")
 
 @rpc("any_peer", "reliable")

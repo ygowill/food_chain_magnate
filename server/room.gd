@@ -194,6 +194,31 @@ func disconnect_peer(peer_id: int) -> Result:
 		"host_peer_id": host_peer_id,
 	})
 
+func update_peer_profile(peer_id: int, profile: Dictionary) -> Result:
+	if profile == null:
+		return Result.failure("Invalid profile")
+	var normalized := {
+		"name": str(profile.get("name", "玩家")).strip_edges(),
+		"color_index": int(profile.get("color_index", 0)),
+	}
+	if str(normalized.get("name", "")).is_empty():
+		normalized["name"] = "玩家"
+
+	if _player_profile_by_peer_id.has(peer_id):
+		_player_profile_by_peer_id[peer_id] = normalized.duplicate(true)
+		var seat_index := int(_seat_by_player_peer_id.get(peer_id, -1))
+		if seat_index >= 0 and _seat_profile_by_seat_index.has(seat_index):
+			_seat_profile_by_seat_index[seat_index] = normalized.duplicate(true)
+		_touch()
+		return Result.success()
+
+	if _spectator_profile_by_peer_id.has(peer_id):
+		_spectator_profile_by_peer_id[peer_id] = normalized.duplicate(true)
+		_touch()
+		return Result.success()
+
+	return Result.failure("Peer not in room")
+
 func to_room_state_dict() -> Dictionary:
 	return {
 		"room_code": room_code,

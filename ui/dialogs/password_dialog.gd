@@ -33,14 +33,14 @@ func open_for_room(room_code: String, confirm_text: String = "加入/观战") ->
 func _build_ui() -> void:
 	var overlay_rect := ColorRect.new()
 	overlay_rect.name = "Overlay"
-	overlay_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, 0)
 	overlay_rect.color = overlay_color
 	overlay_rect.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(overlay_rect)
 
 	var center := CenterContainer.new()
 	center.name = "Center"
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, 0)
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
 
