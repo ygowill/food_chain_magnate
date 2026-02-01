@@ -1209,6 +1209,8 @@ func _setup_online_client_bindings() -> void:
 		NetClient.command_applied.connect(_on_online_command_applied)
 	if not NetClient.resync_archive_received.is_connected(_on_online_resync_archive_received):
 		NetClient.resync_archive_received.connect(_on_online_resync_archive_received)
+	if not NetClient.rewind_to_turn_start_applied.is_connected(_on_online_rewind_to_turn_start_applied):
+		NetClient.rewind_to_turn_start_applied.connect(_on_online_rewind_to_turn_start_applied)
 	if not NetClient.request_rejected.is_connected(_on_online_request_rejected):
 		NetClient.request_rejected.connect(_on_online_request_rejected)
 	if not NetClient.disconnected.is_connected(_on_online_disconnected):
@@ -1218,6 +1220,10 @@ func _setup_online_client_bindings() -> void:
 	if not pending.is_empty():
 		_online_resync_in_progress = true
 		_on_online_resync_archive_received(pending)
+
+	var pending_rewind := NetClient.take_pending_rewind_to_turn_start_applied()
+	if not pending_rewind.is_empty():
+		_on_online_rewind_to_turn_start_applied(pending_rewind)
 
 func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> void:
 	if game_engine == null:
@@ -1280,6 +1286,98 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 		_apply_live_log_timeline_from_engine()
 	_update_ui()
 
+	_flush_online_pending_commands_after_resync()
+
+func _on_online_rewind_to_turn_start_applied(payload: Dictionary) -> void:
+	if game_engine == null:
+		return
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	if NetClient == null or not NetClient.is_online_client_connected():
+		return
+
+	var request_id := str(payload.get("request_id", ""))
+	var target_index := int(payload.get("target_index", -999))
+	var history_size := int(payload.get("history_size", -1))
+	var expected_hash := str(payload.get("state_hash", ""))
+	var noop := bool(payload.get("noop", false))
+
+	if not request_id.is_empty() and request_id == _online_rewind_request_id:
+		_online_rewind_request_id = ""
+		_online_resync_ticket += 1
+
+	_online_resync_in_progress = true
+
+	if noop:
+		_online_resync_in_progress = false
+		_timeline_edit_mode_active = false
+		_force_full_panel_sync_next_update = true
+		if is_instance_valid(game_log_panel) and game_log_panel.visible:
+			_apply_live_log_timeline_from_engine()
+		_update_ui()
+		_flush_online_pending_commands_after_resync()
+		return
+
+	# 时间线被 server 回退并截断：丢弃本地等待队列中的旧 CommandApplied（可能属于被撤销的未来）。
+	_online_resync_pending_cmds.clear()
+
+	if target_index < -1:
+		GameLog.warn("Game", "联机回退应用失败：target_index 无效: %d" % target_index)
+		_online_resync_in_progress = false
+		_update_ui()
+		return
+	if target_index >= game_engine.command_history.size():
+		GameLog.warn(
+			"Game",
+			"联机回退应用失败：本地历史不足（local=%d target=%d），触发 resync"
+				% [game_engine.command_history.size(), target_index]
+		)
+		_online_rewind_request_id = ""
+		NetClient.request_resync()
+		_update_ui()
+		return
+
+	var rewind_r: Result = game_engine.rewind_to_command(target_index)
+	if not rewind_r.ok:
+		GameLog.error("Game", "联机回退应用失败：%s（触发 resync）" % rewind_r.error)
+		_online_rewind_request_id = ""
+		NetClient.request_resync()
+		_update_ui()
+		return
+
+	game_engine.truncate_future_history()
+
+	if history_size >= 0 and game_engine.command_history.size() != history_size:
+		GameLog.warn(
+			"Game",
+			"联机回退后历史长度不一致（local=%d server=%d），触发 resync"
+				% [game_engine.command_history.size(), history_size]
+		)
+		NetClient.request_resync()
+		_update_ui()
+		return
+
+	if not expected_hash.is_empty():
+		var state := game_engine.get_state()
+		if state != null and state.has_method("compute_hash"):
+			var local_hash := str(state.compute_hash())
+			if local_hash != expected_hash:
+				GameLog.warn(
+					"Game",
+					"联机回退后 state_hash 不一致（local=%s server=%s），触发 resync"
+						% [local_hash, expected_hash]
+				)
+				NetClient.request_resync()
+				_update_ui()
+				return
+
+	_online_resync_in_progress = false
+	_online_rewind_request_id = ""
+	_timeline_edit_mode_active = false
+	_force_full_panel_sync_next_update = true
+	if is_instance_valid(game_log_panel) and game_log_panel.visible:
+		_apply_live_log_timeline_from_engine()
+	_update_ui()
 	_flush_online_pending_commands_after_resync()
 
 func _online_schedule_resync_timeout(ticket: int, request_id: String) -> void:

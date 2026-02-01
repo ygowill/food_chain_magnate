@@ -325,7 +325,7 @@ func start_game() -> Result:
 		"config": config.duplicate(true),
 	})
 
-func rewind_to_current_player_turn_start() -> Result:
+func rewind_to_current_player_turn_start(include_archive: bool = true) -> Result:
 	if status != STATUS_IN_GAME:
 		return Result.failure("Room is not in game")
 	if game_engine == null:
@@ -336,39 +336,41 @@ func rewind_to_current_player_turn_start() -> Result:
 	var idx_r: Result = game_engine.find_current_player_turn_start_command_index()
 	if not idx_r.ok:
 		return Result.failure("find_current_player_turn_start_command_index failed: %s" % idx_r.error)
+
 	var target_index := int(idx_r.value)
-	var current_index := int(game_engine.current_command_index)
-	if target_index >= current_index:
-		var archive_noop: Result = game_engine.create_archive()
-		if not archive_noop.ok:
-			return Result.failure("create_archive failed: %s" % archive_noop.error)
-		_touch()
-		return Result.success({
-			"archive": Dictionary(archive_noop.value).duplicate(true),
-			"target_index": target_index,
-			"current_index": current_index,
-			"noop": true,
-		})
+	var before_index := int(game_engine.current_command_index)
 
-	var rewind_r: Result = game_engine.rewind_to_command(target_index)
-	if not rewind_r.ok:
-		return Result.failure("rewind_to_command failed: %s" % rewind_r.error)
+	if target_index < before_index:
+		var rewind_r: Result = game_engine.rewind_to_command(target_index)
+		if not rewind_r.ok:
+			return Result.failure("rewind_to_command failed: %s" % rewind_r.error)
 
-	# 在线对局：保持线性时间线，丢弃未来命令（与本地执行新命令的 truncate 规则一致）。
-	if game_engine.has_method("truncate_future_history"):
-		game_engine.truncate_future_history()
+		# 在线对局：保持线性时间线，丢弃未来命令（与本地执行新命令的 truncate 规则一致）。
+		if game_engine.has_method("truncate_future_history"):
+			game_engine.truncate_future_history()
 
-	var archive_r: Result = game_engine.create_archive()
-	if not archive_r.ok:
-		return Result.failure("create_archive failed: %s" % archive_r.error)
+	var state_hash := ""
+	var state: GameState = game_engine.get_state()
+	if state != null:
+		state_hash = str(state.compute_hash())
+
+	var out := {
+		"target_index": target_index,
+		"before_index": before_index,
+		"current_index": int(game_engine.current_command_index),
+		"history_size": int(game_engine.command_history.size()),
+		"state_hash": state_hash,
+		"noop": target_index >= before_index,
+	}
+
+	if include_archive:
+		var archive_r: Result = game_engine.create_archive()
+		if not archive_r.ok:
+			return Result.failure("create_archive failed: %s" % archive_r.error)
+		out["archive"] = Dictionary(archive_r.value).duplicate(true)
 
 	_touch()
-	return Result.success({
-		"archive": Dictionary(archive_r.value).duplicate(true),
-		"target_index": target_index,
-		"current_index": current_index,
-		"noop": false,
-	})
+	return Result.success(out)
 
 func _sha256_hex(secret: String) -> String:
 	if secret.is_empty():

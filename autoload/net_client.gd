@@ -15,6 +15,7 @@ signal request_rejected(request_id: String, code: String, message: String)
 signal game_started(payload: Dictionary)
 signal command_applied(cmd_dict: Dictionary, state_hash: String)
 signal resync_archive_received(archive: Dictionary)
+signal rewind_to_turn_start_applied(payload: Dictionary)
 
 var _peer: WebSocketMultiplayerPeer = null
 
@@ -24,6 +25,7 @@ var _profile_by_peer_id: Dictionary = {} # peer_id -> profile
 var _client_transport_connected: bool = false
 var _request_counter: int = 0
 var _pending_resync_archive: Dictionary = {}
+var _pending_rewind_to_turn_start_applied: Dictionary = {}
 
 func _ready() -> void:
 	_ensure_signal_connections()
@@ -33,6 +35,8 @@ func start_server(port: int, bind_address: String = "*") -> Result:
 	NetContext.mode = NetContext.Mode.ONLINE_SERVER
 
 	_peer = WebSocketMultiplayerPeer.new()
+	_peer.inbound_buffer_size = 4 * 1024 * 1024
+	_peer.outbound_buffer_size = 4 * 1024 * 1024
 	var err := _peer.create_server(port, bind_address)
 	if err != OK:
 		_peer = null
@@ -53,6 +57,8 @@ func connect_to_server(url: String) -> Result:
 	NetContext.server_url = url
 
 	_peer = WebSocketMultiplayerPeer.new()
+	_peer.inbound_buffer_size = 4 * 1024 * 1024
+	_peer.outbound_buffer_size = 4 * 1024 * 1024
 	var err := _peer.create_client(url)
 	if err != OK:
 		_peer = null
@@ -72,6 +78,7 @@ func shutdown() -> void:
 	_profile_by_peer_id = {}
 	_client_transport_connected = false
 	_pending_resync_archive = {}
+	_pending_rewind_to_turn_start_applied = {}
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	NetContext.reset()
 
@@ -159,6 +166,11 @@ func request_rewind_to_turn_start() -> String:
 func take_pending_resync_archive() -> Dictionary:
 	var out: Dictionary = _pending_resync_archive.duplicate(true)
 	_pending_resync_archive = {}
+	return out
+
+func take_pending_rewind_to_turn_start_applied() -> Dictionary:
+	var out: Dictionary = _pending_rewind_to_turn_start_applied.duplicate(true)
+	_pending_rewind_to_turn_start_applied = {}
 	return out
 
 @rpc("any_peer", "reliable")
@@ -597,7 +609,7 @@ func rpc_rewind_to_turn_start(request: Dictionary) -> void:
 		_send_request_rejected(peer_id, request_id, "not_supported", "Room does not support rewind")
 		return
 
-	var rr: Result = room.rewind_to_current_player_turn_start()
+	var rr: Result = room.rewind_to_current_player_turn_start(false)
 	if not rr.ok:
 		_send_request_rejected(peer_id, request_id, "rewind_failed", rr.error)
 		return
@@ -606,22 +618,24 @@ func rpc_rewind_to_turn_start(request: Dictionary) -> void:
 		return
 
 	var payload: Dictionary = Dictionary(rr.value)
-	var archive_val = payload.get("archive", null)
-	if not (archive_val is Dictionary):
-		_send_request_rejected(peer_id, request_id, "rewind_failed", "archive missing")
-		return
-	var archive: Dictionary = Dictionary(archive_val).duplicate(true)
+	var out := {
+		"request_id": request_id,
+		"target_index": int(payload.get("target_index", -1)),
+		"before_index": int(payload.get("before_index", payload.get("current_index", -1))),
+		"history_size": int(payload.get("history_size", -1)),
+		"state_hash": str(payload.get("state_hash", "")),
+		"noop": bool(payload.get("noop", false)),
+	}
 
-	# 广播 archive：所有在线成员一起回退，保证状态一致。
+	# 广播元数据：各客户端本地 rewind + truncate，避免发送大 archive 导致 WebSocket buffer 溢出。
 	if room.has_method("get_peer_ids"):
 		for pid in Array(room.get_peer_ids()):
 			var target_peer_id := int(pid)
 			if target_peer_id <= 0:
 				continue
-			rpc_id(target_peer_id, "rpc_resync_archive", {"archive": archive})
+			rpc_id(target_peer_id, "rpc_rewind_to_turn_start_applied", out)
 	else:
-		# Fallback：至少把结果发给请求方（避免卡死）。
-		rpc_id(peer_id, "rpc_resync_archive", {"archive": archive})
+		rpc_id(peer_id, "rpc_rewind_to_turn_start_applied", out)
 
 	_broadcast_room_state(room)
 
@@ -724,6 +738,13 @@ func rpc_resync_archive(payload: Dictionary) -> void:
 		return
 	_pending_resync_archive = Dictionary(archive_val).duplicate(true)
 	resync_archive_received.emit(_pending_resync_archive.duplicate(true))
+
+@rpc("authority", "reliable")
+func rpc_rewind_to_turn_start_applied(payload: Dictionary) -> void:
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	_pending_rewind_to_turn_start_applied = payload.duplicate(true)
+	rewind_to_turn_start_applied.emit(_pending_rewind_to_turn_start_applied.duplicate(true))
 
 @rpc("authority", "reliable")
 func rpc_request_rejected(payload: Dictionary) -> void:
