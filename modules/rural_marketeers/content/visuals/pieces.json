@@ -1,0 +1,8 @@
+{
+	"schema_version": 1,
+	"piece_visuals": {
+		"highway_offramp": {"texture": "res://modules/rural_marketeers/assets/map/pieces/freeway.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"rural_area": {"texture": "res://modules/rural_marketeers/assets/map/pieces/ruralArea.jpg", "offset_px": [0, 0], "scale": [1, 1]},
+		"rural_billboard": {"texture": "res://modules/rural_marketeers/assets/map/icons/rural_billboard.png", "offset_px": [0, 0], "scale": [1, 1]}
+	}
+}

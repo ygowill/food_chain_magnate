@@ -1,0 +1,6 @@
+{
+	"schema_version": 1,
+	"piece_visuals": {
+		"apartment": {"texture": "res://modules/new_districts/assets/map/pieces/apartment.png", "offset_px": [0, 0], "scale": [1, 1]}
+	}
+}

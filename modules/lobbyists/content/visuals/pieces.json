@@ -1,0 +1,12 @@
+{
+	"schema_version": 1,
+	"piece_visuals": {
+		"lobbyists_road_straight": {"texture": "res://modules/lobbyists/assets/map/icons/under_construction.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"lobbyists_road_long": {"texture": "res://modules/lobbyists/assets/map/icons/under_construction.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"lobbyists_road_l": {"texture": "res://modules/lobbyists/assets/map/icons/under_construction.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"lobbyists_park_line": {"texture": "res://modules/base_pieces/assets/map/pieces/park.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"lobbyists_park_t": {"texture": "res://modules/base_pieces/assets/map/pieces/park.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"lobbyists_park_l": {"texture": "res://modules/base_pieces/assets/map/pieces/park.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"lobbyists_roadworks_marker": {"texture": "res://modules/lobbyists/assets/map/icons/under_construction.png", "offset_px": [0, 0], "scale": [1, 1]}
+	}
+}

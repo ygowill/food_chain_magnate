@@ -1,0 +1,6 @@
+{
+	"schema_version": 1,
+	"marketing_visuals": {
+		"gourmet_guide": {"texture": "res://modules/gourmet_food_critics/assets/map/icons/gourmet_guide.png"}
+	}
+}
