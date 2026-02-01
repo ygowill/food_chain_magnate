@@ -185,6 +185,7 @@ static func _index_structure_cell(canvas, world_pos: Vector2i, cell_val) -> void
 			"owner": owner,
 			"rotation": rotation,
 			"house_id": house_id,
+			"cells": [pos],
 			"min": pos,
 			"max": pos,
 		}
@@ -200,4 +201,8 @@ static func _index_structure_cell(canvas, world_pos: Vector2i, cell_val) -> void
 		max_pos.y = max(max_pos.y, pos.y)
 		info["min"] = min_pos
 		info["max"] = max_pos
+		if info.has("cells") and (info["cells"] is Array):
+			(info["cells"] as Array).append(pos)
+		else:
+			info["cells"] = [pos]
 		canvas._structures_by_anchor[anchor] = info

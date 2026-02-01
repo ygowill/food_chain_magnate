@@ -13,13 +13,12 @@ const RoundStateCountersClass = preload("res://core/utils/round_state_counters.g
 
 const MODULE_ID := "lobbyists"
 
-const ROAD_SUPPLY_KEY := "lobbyists_road_supply_remaining"
 const PENDING_ROADS_KEY := "lobbyists_pending_roads"
 const ROADWORK_MARKERS_KEY := "lobbyists_roadworks_markers"
 
 const EXTRA_TILE_PENDING_KEY := "lobbyists_extra_tile_pending"
 
-const ROAD_PIECES: Array[String] = ["lobbyists_road_straight", "lobbyists_road_l"]
+const ROAD_PIECES: Array[String] = ["lobbyists_road_straight", "lobbyists_road_long", "lobbyists_road_l"]
 
 const ROAD_OVERLAYS := {
 	"lobbyists_road_straight": {
@@ -30,6 +29,17 @@ const ROAD_OVERLAYS := {
 		"arrows": [
 			{"offset": Vector2i(0, 0), "dir": "W"},
 			{"offset": Vector2i(1, 0), "dir": "E"},
+		],
+	},
+	"lobbyists_road_long": {
+		"segments": [
+			{"offset": Vector2i(0, 0), "dirs": ["E", "W"]},
+			{"offset": Vector2i(1, 0), "dirs": ["E", "W"]},
+			{"offset": Vector2i(2, 0), "dirs": ["E", "W"]},
+		],
+		"arrows": [
+			{"offset": Vector2i(0, 0), "dir": "W"},
+			{"offset": Vector2i(2, 0), "dir": "E"},
 		],
 	},
 	"lobbyists_road_l": {
@@ -73,10 +83,6 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	if not (state.map is Dictionary):
 		return Result.failure("state.map 类型错误（期望 Dictionary）")
-	if not state.map.has(ROAD_SUPPLY_KEY) or not (state.map[ROAD_SUPPLY_KEY] is int):
-		return Result.failure("缺少道路供应计数（模块未初始化）")
-	if int(state.map[ROAD_SUPPLY_KEY]) <= 0:
-		return Result.failure("道路已用尽")
 
 	var piece_id_read := require_string_param(command, "piece_id")
 	if not piece_id_read.ok:
@@ -84,6 +90,12 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var piece_id: String = piece_id_read.value
 	if not ROAD_PIECES.has(piece_id):
 		return Result.failure("未知道路 piece_id: %s" % piece_id)
+
+	var supply_key := "%s_supply_remaining" % piece_id
+	if not state.map.has(supply_key) or not (state.map[supply_key] is int):
+		return Result.failure("缺少道路供应计数（模块未初始化）: %s" % supply_key)
+	if int(state.map[supply_key]) <= 0:
+		return Result.failure("道路已用尽: %s" % piece_id)
 
 	var pos_read := require_vector2i_param(command, "anchor_pos")
 	if not pos_read.ok:
@@ -194,9 +206,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 	for pos in piece_cells:
 		var idx := CoordsClass.world_to_index(state, pos)
+		var is_anchor := pos == anchor_pos
 		state.map.cells[idx.y][idx.x]["structure"] = {
 			"piece_id": piece_id,
 			"owner": player_id,
+			"anchor_cell": is_anchor,
+			"parent_anchor": anchor_pos,
 			"rotation": rotation,
 			"dynamic": true,
 		}
@@ -215,7 +230,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	state.map[PENDING_ROADS_KEY] = pending_roads
 
 	# 消耗供应
-	state.map[ROAD_SUPPLY_KEY] = int(state.map[ROAD_SUPPLY_KEY]) - 1
+	var supply_key := "%s_supply_remaining" % piece_id
+	if not state.map.has(supply_key) or not (state.map[supply_key] is int):
+		return Result.failure("缺少道路供应计数（模块未初始化）: %s" % supply_key)
+	state.map[supply_key] = int(state.map[supply_key]) - 1
 
 	# 计数：本子阶段使用次数（road/park 共用）
 	var inc := RoundStateCountersClass.increment_player_count(state.round_state, "lobbyists_place_counts", player_id, 1)

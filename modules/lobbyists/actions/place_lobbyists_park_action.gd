@@ -13,7 +13,7 @@ const RoundStateCountersClass = preload("res://core/utils/round_state_counters.g
 
 const MODULE_ID := "lobbyists"
 
-const PARK_SUPPLY_KEY := "lobbyists_park_supply_remaining"
+const PARK_PIECES: Array[String] = ["lobbyists_park_line", "lobbyists_park_t", "lobbyists_park_l"]
 
 func _init() -> void:
 	action_id = "place_lobbyists_park"
@@ -43,10 +43,18 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	if not (state.map is Dictionary):
 		return Result.failure("state.map 类型错误（期望 Dictionary）")
-	if not state.map.has(PARK_SUPPLY_KEY) or not (state.map[PARK_SUPPLY_KEY] is int):
-		return Result.failure("缺少公园供应计数（模块未初始化）")
-	if int(state.map[PARK_SUPPLY_KEY]) <= 0:
-		return Result.failure("公园已用尽")
+	var piece_id_read := require_string_param(command, "piece_id")
+	if not piece_id_read.ok:
+		return piece_id_read
+	var piece_id: String = piece_id_read.value
+	if not PARK_PIECES.has(piece_id):
+		return Result.failure("未知的公园 piece_id: %s" % piece_id)
+
+	var supply_key := "%s_supply_remaining" % piece_id
+	if not state.map.has(supply_key) or not (state.map[supply_key] is int):
+		return Result.failure("缺少公园供应计数（模块未初始化）: %s" % supply_key)
+	if int(state.map[supply_key]) <= 0:
+		return Result.failure("公园已用尽: %s" % piece_id)
 
 	var pos_read := require_vector2i_param(command, "anchor_pos")
 	if not pos_read.ok:
@@ -62,8 +70,8 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	if not PieceRegistryClass.is_loaded():
 		return Result.failure("PieceRegistry 未初始化")
-	if PieceRegistryClass.get_def("park") == null:
-		return Result.failure("未加载的 piece: park")
+	if PieceRegistryClass.get_def(piece_id) == null:
+		return Result.failure("未加载的 piece: %s" % piece_id)
 
 	var map_ctx := {
 		"cells": state.map.cells,
@@ -75,7 +83,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		"marketing_placements": state.map.get("marketing_placements", {}),
 	}
 	var piece_registry := PieceRegistryClass.get_all_defs()
-	var validate := PlacementClass.validate_placement(map_ctx, "park", anchor_pos, rotation, piece_registry, {})
+	var validate := PlacementClass.validate_placement(map_ctx, piece_id, anchor_pos, rotation, piece_registry, {})
 	if not validate.ok:
 		return validate
 	assert(validate.value is Dictionary, "place_lobbyists_park: validate_placement 返回值类型错误（期望 Dictionary）")
@@ -99,22 +107,29 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 func _apply_changes(state: GameState, command: Command) -> Result:
 	var player_id: int = command.actor
+	var piece_id: String = require_string_param(command, "piece_id").value
 	var anchor_pos: Vector2i = require_vector2i_param(command, "anchor_pos").value
 	var rotation: int = int(optional_int_param(command, "rotation", 0).value)
 
-	var piece_def: PieceDef = PieceRegistryClass.get_def("park")
+	var piece_def: PieceDef = PieceRegistryClass.get_def(piece_id)
 	var piece_cells: Array[Vector2i] = piece_def.get_world_cells(anchor_pos, rotation)
 
 	for pos in piece_cells:
 		var idx := CoordsClass.world_to_index(state, pos)
+		var is_anchor := pos == anchor_pos
 		state.map.cells[idx.y][idx.x]["structure"] = {
-			"piece_id": "park",
+			"piece_id": piece_id,
 			"owner": player_id,
+			"anchor_cell": is_anchor,
+			"parent_anchor": anchor_pos,
 			"rotation": rotation,
 			"dynamic": true,
 		}
 
-	state.map[PARK_SUPPLY_KEY] = int(state.map[PARK_SUPPLY_KEY]) - 1
+	var supply_key := "%s_supply_remaining" % piece_id
+	if not state.map.has(supply_key) or not (state.map[supply_key] is int):
+		return Result.failure("缺少公园供应计数（模块未初始化）: %s" % supply_key)
+	state.map[supply_key] = int(state.map[supply_key]) - 1
 
 	var inc := RoundStateCountersClass.increment_player_count(state.round_state, "lobbyists_place_counts", player_id, 1)
 	if not inc.ok:
@@ -126,7 +141,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	})
 	var result := Result.success({
 		"player_id": player_id,
-		"piece_id": "park",
+		"piece_id": piece_id,
 		"anchor_pos": anchor_pos,
 		"rotation": rotation,
 	})

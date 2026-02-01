@@ -820,6 +820,7 @@ class PieceFootprintToken extends Control:
 	var _skin = null
 	var _cell_size: int = 40
 	var _size_cells: Vector2i = Vector2i.ONE
+	var _cell_offsets: Array[Vector2i] = []
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_PASS
@@ -838,6 +839,7 @@ class PieceFootprintToken extends Control:
 
 	func _recompute_footprint() -> void:
 		_size_cells = Vector2i.ONE
+		_cell_offsets.clear()
 		if piece_id.is_empty():
 			return
 		if not PieceRegistryClass.is_loaded():
@@ -849,10 +851,14 @@ class PieceFootprintToken extends Control:
 		var cells: Array[Vector2i] = MapUtilsClass.get_footprint_cells(def.footprint_mask, def.anchor, Vector2i.ZERO, 0)
 		var bounds: Dictionary = MapUtilsClass.get_footprint_bounds(cells)
 		var size_val = bounds.get("size", Vector2i.ONE)
+		var min_val = bounds.get("min", Vector2i.ZERO)
+		var min_pos: Vector2i = min_val if min_val is Vector2i else Vector2i.ZERO
 		if size_val is Vector2i:
 			var s: Vector2i = size_val
 			if s.x > 0 and s.y > 0:
 				_size_cells = s
+		for c in cells:
+			_cell_offsets.append(c - min_pos)
 
 	func _update_min_size() -> void:
 		custom_minimum_size = Vector2(float(maxi(1, _size_cells.x) * _cell_size), float(maxi(1, _size_cells.y) * _cell_size))
@@ -863,13 +869,30 @@ class PieceFootprintToken extends Control:
 		draw_rect(rect, bg, true)
 		draw_rect(rect, Color(0.25, 0.25, 0.3, 0.6), false, 1.0)
 
+		# Footprint outline (supports non-rect shapes).
+		for off in _cell_offsets:
+			var cell_rect := Rect2(Vector2(off.x * _cell_size, off.y * _cell_size), Vector2(_cell_size, _cell_size))
+			draw_rect(cell_rect, Color(1, 1, 1, 0.06), true)
+			draw_rect(cell_rect, Color(1, 1, 1, 0.12), false, 1.0)
+
 		if _skin != null and not piece_id.is_empty():
 			var tex: Texture2D = _skin.get_piece_texture(piece_id)
 			var offset_px: Vector2i = _skin.get_piece_offset_px(piece_id)
 			var scale: Vector2 = _skin.get_piece_scale(piece_id)
-			var pos_px := Vector2(float(offset_px.x), float(offset_px.y))
-			var size_px := Vector2(float(_size_cells.x * _cell_size), float(_size_cells.y * _cell_size)) * scale
-			draw_texture_rect(tex, Rect2(pos_px, size_px), false, Color(1, 1, 1, 0.85))
+			if tex != null and tex.get_size() != Vector2.ZERO and _size_cells.x > 0 and _size_cells.y > 0:
+				var pos_px := Vector2(float(offset_px.x), float(offset_px.y))
+				var size_px := Vector2(float(_size_cells.x * _cell_size), float(_size_cells.y * _cell_size)) * scale
+				var full := Rect2(pos_px, size_px)
+				var mod := Color(1, 1, 1, 0.85)
+				var src_cell := tex.get_size() / Vector2(float(_size_cells.x), float(_size_cells.y))
+				var dst_cell := Vector2(float(_cell_size), float(_cell_size)) * scale
+				if _cell_offsets.size() >= _size_cells.x * _size_cells.y:
+					draw_texture_rect(tex, full, false, mod)
+				else:
+					for off2 in _cell_offsets:
+						var dst := Rect2(pos_px + Vector2(float(off2.x * _cell_size), float(off2.y * _cell_size)) * scale, dst_cell)
+						var src := Rect2(Vector2(float(off2.x) * src_cell.x, float(off2.y) * src_cell.y), src_cell)
+						draw_texture_rect_region(tex, dst, src, mod)
 
 		if count > 0:
 			_draw_count_badge(rect, count)

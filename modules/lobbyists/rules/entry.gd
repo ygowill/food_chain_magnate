@@ -18,11 +18,17 @@ const HookType = PhaseManagerClass.HookType
 
 const MODULE_ID := "lobbyists"
 
-const ROAD_SUPPLY_TOTAL := 8
-const PARK_SUPPLY_TOTAL := 8
+const ROAD_SUPPLY_BY_PIECE_ID := {
+	"lobbyists_road_straight": 4,
+	"lobbyists_road_long": 2,
+	"lobbyists_road_l": 2,
+}
 
-const ROAD_SUPPLY_KEY := "lobbyists_road_supply_remaining"
-const PARK_SUPPLY_KEY := "lobbyists_park_supply_remaining"
+const PARK_SUPPLY_BY_PIECE_ID := {
+	"lobbyists_park_line": 1,
+	"lobbyists_park_t": 1,
+	"lobbyists_park_l": 2,
+}
 const PENDING_ROADS_KEY := "lobbyists_pending_roads"
 const ROADWORK_MARKERS_KEY := "lobbyists_roadworks_markers"
 const EXTRA_TILE_PENDING_KEY := "lobbyists_extra_tile_pending"
@@ -60,10 +66,49 @@ func _on_restructuring_before_enter(state: GameState) -> Result:
 	if not (state.map is Dictionary):
 		return Result.failure("%s: state.map 类型错误（期望 Dictionary）" % MODULE_ID)
 
-	if not state.map.has(ROAD_SUPPLY_KEY):
-		state.map[ROAD_SUPPLY_KEY] = ROAD_SUPPLY_TOTAL
-	if not state.map.has(PARK_SUPPLY_KEY):
-		state.map[PARK_SUPPLY_KEY] = PARK_SUPPLY_TOTAL
+	# Lobbyists rule: parallel adjacent road lanes are connected.
+	var opt_key := "road_graph_connect_parallel_lanes"
+	var should_invalidate := false
+	var opt_val = state.map.get(opt_key, null)
+	if opt_val == null:
+		should_invalidate = true
+	elif opt_val is bool:
+		should_invalidate = not bool(opt_val)
+	elif opt_val is int:
+		should_invalidate = int(opt_val) == 0
+	elif opt_val is float:
+		var f: float = float(opt_val)
+		if f == floor(f):
+			should_invalidate = int(f) == 0
+		else:
+			return Result.failure("%s: state.map.%s 类型错误（期望 bool/int）" % [MODULE_ID, opt_key])
+	else:
+		return Result.failure("%s: state.map.%s 类型错误（期望 bool/int）" % [MODULE_ID, opt_key])
+	if should_invalidate:
+		state.map[opt_key] = true
+		RoadGraphCacheClass.invalidate_road_graph(state)
+
+	for piece_id in ROAD_SUPPLY_BY_PIECE_ID.keys():
+		var supply_key := "%s_supply_remaining" % str(piece_id)
+		if not state.map.has(supply_key):
+			state.map[supply_key] = int(ROAD_SUPPLY_BY_PIECE_ID[piece_id])
+		else:
+			var v = state.map.get(supply_key, null)
+			if not (v is int):
+				return Result.failure("%s: state.map.%s 类型错误（期望 int）" % [MODULE_ID, supply_key])
+			if int(v) < 0:
+				return Result.failure("%s: state.map.%s 不能为负数: %d" % [MODULE_ID, supply_key, int(v)])
+
+	for park_piece_id in PARK_SUPPLY_BY_PIECE_ID.keys():
+		var park_supply_key := "%s_supply_remaining" % str(park_piece_id)
+		if not state.map.has(park_supply_key):
+			state.map[park_supply_key] = int(PARK_SUPPLY_BY_PIECE_ID[park_piece_id])
+		else:
+			var v2 = state.map.get(park_supply_key, null)
+			if not (v2 is int):
+				return Result.failure("%s: state.map.%s 类型错误（期望 int）" % [MODULE_ID, park_supply_key])
+			if int(v2) < 0:
+				return Result.failure("%s: state.map.%s 不能为负数: %d" % [MODULE_ID, park_supply_key, int(v2)])
 	if not state.map.has(PENDING_ROADS_KEY):
 		state.map[PENDING_ROADS_KEY] = []
 	if not state.map.has(ROADWORK_MARKERS_KEY):
@@ -290,6 +335,12 @@ func _effect_dinnertime_sale_house_bonus_park(state: GameState, _player_id: int,
 	ctx["bonus"] = int(ctx["bonus"]) + unit_price * qty
 	return Result.success()
 
+static func _is_park_piece_id(piece_id: String) -> bool:
+	var id := str(piece_id).strip_edges()
+	if id.is_empty():
+		return false
+	return id == "park" or id.begins_with("lobbyists_park_")
+
 func _house_has_adjacent_park(state: GameState, cells_any: Array) -> Result:
 	if state == null or not (state.map is Dictionary):
 		return Result.failure("%s: park_adj: state.map 类型错误" % MODULE_ID)
@@ -331,7 +382,7 @@ func _house_has_adjacent_park(state: GameState, cells_any: Array) -> Result:
 			if not (s_val is Dictionary):
 				continue
 			var s: Dictionary = s_val
-			if str(s.get("piece_id", "")) == "park":
+			if _is_park_piece_id(str(s.get("piece_id", ""))):
 				return Result.success(true)
 
 	return Result.success(false)

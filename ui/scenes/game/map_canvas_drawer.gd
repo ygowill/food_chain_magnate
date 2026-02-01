@@ -10,6 +10,23 @@ const RESTAURANT_LOGO_PIECE_IDS = [
 	"restaurant_logo_xango_blues_bar",
 ]
 
+const LOBBYISTS_ROADWORK_MARKERS_KEY := "lobbyists_roadworks_markers"
+
+const LOBBYISTS_ROAD_ARROWS := {
+	"lobbyists_road_straight": [
+		{"offset": Vector2i(0, 0), "dir": "W"},
+		{"offset": Vector2i(1, 0), "dir": "E"},
+	],
+	"lobbyists_road_long": [
+		{"offset": Vector2i(0, 0), "dir": "W"},
+		{"offset": Vector2i(2, 0), "dir": "E"},
+	],
+	"lobbyists_road_l": [
+		{"offset": Vector2i(0, 0), "dir": "N"},
+		{"offset": Vector2i(1, 1), "dir": "E"},
+	],
+}
+
 static func _draw_texture_aspect_fit(canvas, texture: Texture2D, rect: Rect2, modulate: Color = Color(1, 1, 1, 1), v_align: String = "center") -> void:
 	if texture == null:
 		return
@@ -61,6 +78,7 @@ static func draw(canvas) -> void:
 
 	_draw_ground_and_blocked(canvas, cell_size)
 	_draw_roads(canvas, cell_size)
+	_draw_roadworks_markers(canvas, cell_size)
 	# 先画板块边框（底层），避免盖住上层 piece（房屋/餐厅/营销等）。
 	_draw_tile_borders(canvas, cell_size)
 	_draw_drink_sources(canvas, cell_size)
@@ -187,6 +205,45 @@ static func _draw_cells_overlay(canvas, cell_size: int, world_cells: Array, fill
 		if not view_set.has(vpos + Vector2i(0, 1)):
 			canvas.draw_rect(Rect2(base + Vector2(0.0, float(cell_size) - bw), Vector2(float(cell_size), bw)), border, true)
 
+static func _draw_view_cells_overlay(canvas, cell_size: int, view_cells_any: Array, fill: Color, border: Color, border_width: float) -> void:
+	if view_cells_any.is_empty():
+		return
+	if fill.a <= 0.0 and border.a <= 0.0:
+		return
+
+	var bw := clampf(border_width, 0.0, float(cell_size))
+
+	var view_set := {}
+	var view_cells: Array[Vector2i] = []
+	for v in view_cells_any:
+		if not (v is Vector2i):
+			continue
+		var p: Vector2i = v
+		if view_set.has(p):
+			continue
+		view_set[p] = true
+		view_cells.append(p)
+
+	for p2 in view_cells:
+		if fill.a <= 0.0:
+			continue
+		var rect := Rect2(Vector2(p2.x * cell_size, p2.y * cell_size), Vector2(cell_size, cell_size))
+		canvas.draw_rect(rect, fill, true)
+
+	if border.a <= 0.0 or bw <= 0.0:
+		return
+
+	for p3 in view_cells:
+		var base := Vector2(float(p3.x * cell_size), float(p3.y * cell_size))
+		if not view_set.has(p3 + Vector2i(-1, 0)):
+			canvas.draw_rect(Rect2(base, Vector2(bw, float(cell_size))), border, true)
+		if not view_set.has(p3 + Vector2i(1, 0)):
+			canvas.draw_rect(Rect2(base + Vector2(float(cell_size) - bw, 0.0), Vector2(bw, float(cell_size))), border, true)
+		if not view_set.has(p3 + Vector2i(0, -1)):
+			canvas.draw_rect(Rect2(base, Vector2(float(cell_size), bw)), border, true)
+		if not view_set.has(p3 + Vector2i(0, 1)):
+			canvas.draw_rect(Rect2(base + Vector2(0.0, float(cell_size) - bw), Vector2(float(cell_size), bw)), border, true)
+
 static func _draw_cell_highlights(canvas, cell_size: int) -> void:
 	if canvas._highlighted_cells.is_empty():
 		return
@@ -283,10 +340,12 @@ static func _draw_structure_preview_piece(canvas, cell_size: int, preview_info: 
 	var vmin := Vector2i(2147483647, 2147483647)
 	var vmax := Vector2i(-2147483648, -2147483648)
 	var any := false
+	var view_cells: Array[Vector2i] = []
 	for world_pos in canvas._structure_preview_cells:
 		if not (world_pos is Vector2i):
 			continue
 		var vpos: Vector2i = canvas._world_to_view(world_pos)
+		view_cells.append(vpos)
 		any = true
 		vmin.x = min(vmin.x, vpos.x)
 		vmin.y = min(vmin.y, vpos.y)
@@ -308,6 +367,7 @@ static func _draw_structure_preview_piece(canvas, cell_size: int, preview_info: 
 		"owner": owner,
 		"min": vmin,
 		"max": vmax,
+		"cells": view_cells,
 	}
 
 	if piece_id == "restaurant":
@@ -321,6 +381,187 @@ static func _draw_structure_preview_piece(canvas, cell_size: int, preview_info: 
 			"product": str(preview_info.get("product", "")),
 		}
 		_draw_marketing_placement(canvas, cell_size, p, 0.55, structure_rect)
+	elif piece_id.begins_with("lobbyists_road_"):
+		_draw_lobbyists_road_piece(canvas, cell_size, anchor, info, alpha)
+	elif piece_id == "park" or piece_id.begins_with("lobbyists_park_"):
+		_draw_park_piece(canvas, cell_size, info, alpha)
+	else:
+		_draw_generic_piece(canvas, cell_size, info, alpha)
+
+static func _draw_lobbyists_roadworks_markers(canvas, cell_size: int) -> void:
+	if canvas == null or canvas._skin == null:
+		return
+	if not (canvas._map_data is Dictionary):
+		return
+	var markers_val = canvas._map_data.get(LOBBYISTS_ROADWORK_MARKERS_KEY, null)
+	if not (markers_val is Dictionary):
+		return
+	var markers: Dictionary = markers_val
+	if markers.is_empty():
+		return
+
+	var tex: Texture2D = canvas._skin.get_piece_texture("lobbyists_roadworks_marker")
+	var pad := maxf(2.0, float(cell_size) * 0.08)
+	var mod := Color(1, 1, 1, 0.95)
+
+	for k in markers.keys():
+		if not (k is String):
+			continue
+		var parts := str(k).split(",")
+		if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
+			continue
+		var world_pos := Vector2i(int(parts[0]), int(parts[1]))
+		if not canvas._is_valid_world_pos(world_pos):
+			continue
+		var vpos: Vector2i = canvas._world_to_view(world_pos)
+		var rect := Rect2(Vector2(vpos.x * cell_size, vpos.y * cell_size), Vector2(cell_size, cell_size)).grow(-pad)
+		_draw_texture_aspect_fit(canvas, tex, rect, mod)
+
+static func _draw_roadworks_markers(canvas, cell_size: int) -> void:
+	# Backward-compat alias (older code paths may call this name).
+	_draw_lobbyists_roadworks_markers(canvas, cell_size)
+
+static func _draw_dir_arrow(canvas, rect: Rect2, dir: String, col: Color) -> void:
+	var d := str(dir)
+	var pad := maxf(2.0, rect.size.x * 0.14)
+	var s := minf(rect.size.x, rect.size.y)
+	var h := s * 0.26
+	var w := s * 0.22
+	var cx := rect.position.x + rect.size.x * 0.5
+	var cy := rect.position.y + rect.size.y * 0.5
+
+	var points: PackedVector2Array = []
+	match d:
+		"N":
+			points = PackedVector2Array([
+				Vector2(cx, rect.position.y + pad),
+				Vector2(cx - w, rect.position.y + pad + h),
+				Vector2(cx + w, rect.position.y + pad + h),
+			])
+		"S":
+			points = PackedVector2Array([
+				Vector2(cx, rect.position.y + rect.size.y - pad),
+				Vector2(cx - w, rect.position.y + rect.size.y - pad - h),
+				Vector2(cx + w, rect.position.y + rect.size.y - pad - h),
+			])
+		"E":
+			points = PackedVector2Array([
+				Vector2(rect.position.x + rect.size.x - pad, cy),
+				Vector2(rect.position.x + rect.size.x - pad - h, cy - w),
+				Vector2(rect.position.x + rect.size.x - pad - h, cy + w),
+			])
+		"W":
+			points = PackedVector2Array([
+				Vector2(rect.position.x + pad, cy),
+				Vector2(rect.position.x + pad + h, cy - w),
+				Vector2(rect.position.x + pad + h, cy + w),
+			])
+		_:
+			return
+
+	canvas.draw_colored_polygon(points, col)
+
+static func _draw_lobbyists_road_piece(canvas, cell_size: int, anchor: Vector2i, info: Dictionary, alpha: float = 1.0) -> void:
+	if canvas == null or canvas._skin == null:
+		return
+	var piece_id: String = str(info.get("piece_id", ""))
+	if piece_id.is_empty():
+		return
+	var cells_val = info.get("cells", null)
+	if not (cells_val is Array):
+		return
+
+	var fill := Color("#c6c9d2")
+	fill.a = 0.72 * clampf(alpha, 0.0, 1.0)
+	var border := Color(0, 0, 0, 0.28 * clampf(alpha, 0.0, 1.0))
+	_draw_view_cells_overlay(canvas, cell_size, cells_val, fill, border, 1.0)
+
+	var min_pos: Vector2i = info.get("min", Vector2i.ZERO)
+	var max_pos: Vector2i = info.get("max", Vector2i.ZERO)
+	var size_cells := (max_pos - min_pos) + Vector2i.ONE
+	var structure_rect := Rect2(
+		Vector2(min_pos.x * cell_size, min_pos.y * cell_size),
+		Vector2(size_cells.x * cell_size, size_cells.y * cell_size)
+	)
+
+	var sign_tex: Texture2D = canvas._skin.get_piece_texture("lobbyists_roadworks_marker")
+	var pad := maxf(2.0, float(cell_size) * 0.12)
+	var sign_rect := structure_rect.grow(-pad)
+	_draw_texture_aspect_fit(canvas, sign_tex, sign_rect, Color(1, 1, 1, 0.90 * clampf(alpha, 0.0, 1.0)))
+
+	var rot := int(info.get("rotation", 0))
+	var arrows_val = LOBBYISTS_ROAD_ARROWS.get(piece_id, null)
+	if not (arrows_val is Array):
+		return
+	var arrows: Array = arrows_val
+	var arrow_col := Color(0, 0, 0, 0.85 * clampf(alpha, 0.0, 1.0))
+	for a_val in arrows:
+		if not (a_val is Dictionary):
+			continue
+		var a: Dictionary = a_val
+		var off_val = a.get("offset", null)
+		var dir_val = a.get("dir", null)
+		if not (off_val is Vector2i) or not (dir_val is String):
+			continue
+		var off: Vector2i = off_val
+		var base_dir: String = str(dir_val)
+		var world_from := anchor + MapUtils.rotate_offset(off, rot)
+		if not canvas._is_valid_world_pos(world_from):
+			continue
+		var vpos: Vector2i = canvas._world_to_view(world_from)
+		var rect := Rect2(Vector2(vpos.x * cell_size, vpos.y * cell_size), Vector2(cell_size, cell_size))
+		var d := MapUtils.rotate_dir(base_dir, rot)
+		_draw_dir_arrow(canvas, rect, d, arrow_col)
+
+static func _draw_park_piece(canvas, cell_size: int, info: Dictionary, alpha: float = 1.0) -> void:
+	if canvas == null or canvas._skin == null:
+		return
+	var piece_id: String = str(info.get("piece_id", ""))
+	if piece_id.is_empty():
+		return
+	var cells_val = info.get("cells", null)
+	if not (cells_val is Array):
+		return
+
+	var fill := Color("#22C55E")
+	fill.a = 0.28 * clampf(alpha, 0.0, 1.0)
+	var border := Color("#22C55E")
+	border.a = 0.55 * clampf(alpha, 0.0, 1.0)
+	_draw_view_cells_overlay(canvas, cell_size, cells_val, fill, border, 1.0)
+
+	var min_pos: Vector2i = info.get("min", Vector2i.ZERO)
+	var max_pos: Vector2i = info.get("max", Vector2i.ZERO)
+	var size_cells := (max_pos - min_pos) + Vector2i.ONE
+	var structure_rect := Rect2(
+		Vector2(min_pos.x * cell_size, min_pos.y * cell_size),
+		Vector2(size_cells.x * cell_size, size_cells.y * cell_size)
+	)
+
+	var tex: Texture2D = canvas._skin.get_piece_texture(piece_id)
+	var pad := maxf(2.0, float(cell_size) * 0.10)
+	var rect := structure_rect.grow(-pad)
+	_draw_texture_aspect_fit(canvas, tex, rect, Color(1, 1, 1, 0.85 * clampf(alpha, 0.0, 1.0)))
+
+static func _draw_generic_piece(canvas, cell_size: int, info: Dictionary, alpha: float = 1.0) -> void:
+	if canvas == null or canvas._skin == null:
+		return
+	var piece_id: String = str(info.get("piece_id", ""))
+	if piece_id.is_empty():
+		return
+
+	var min_pos: Vector2i = info.get("min", Vector2i.ZERO)
+	var max_pos: Vector2i = info.get("max", Vector2i.ZERO)
+	var size_cells := (max_pos - min_pos) + Vector2i.ONE
+	var offset_px: Vector2i = canvas._skin.get_piece_offset_px(piece_id)
+	var scale: Vector2 = canvas._skin.get_piece_scale(piece_id)
+
+	var pos_px := Vector2(min_pos.x * cell_size, min_pos.y * cell_size) + Vector2(offset_px.x, offset_px.y)
+	var size_px := Vector2(size_cells.x * cell_size, size_cells.y * cell_size) * scale
+	var rect := Rect2(pos_px, size_px)
+
+	var tex: Texture2D = canvas._skin.get_piece_texture(piece_id)
+	var mod := Color(1, 1, 1, 0.85 * clampf(alpha, 0.0, 1.0))
+	canvas.draw_texture_rect(tex, rect, false, mod)
 
 static func _draw_ground_and_blocked(canvas, cell_size: int) -> void:
 	var blocked_tex: Texture2D = canvas._skin.get_blocked_overlay_texture()
@@ -502,6 +743,14 @@ static func _draw_structures(canvas, cell_size: int) -> void:
 
 		if piece_id == "house" or piece_id == "house_with_garden":
 			_draw_house_and_garden(canvas, cell_size, anchor, info)
+			continue
+
+		if piece_id.begins_with("lobbyists_road_"):
+			_draw_lobbyists_road_piece(canvas, cell_size, anchor, info)
+			continue
+
+		if piece_id == "park" or piece_id.begins_with("lobbyists_park_"):
+			_draw_park_piece(canvas, cell_size, info)
 			continue
 
 		var min_pos: Vector2i = info.get("min", anchor)

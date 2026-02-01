@@ -402,20 +402,21 @@ static func _inject_park_at_world_pos(state: GameState, pos: Vector2i) -> void:
 static func _try_place_park(engine: GameEngine) -> Result:
 	var s: GameState = engine.get_state()
 	var grid: Vector2i = s.map.grid_size
-	for y in range(grid.y):
-		for x in range(grid.x):
-			for rot in [0, 90, 180, 270]:
-				var cmd := Command.create("place_lobbyists_park", 0)
-				cmd.params = {"anchor_pos": [x, y], "rotation": rot}
-				var r := engine.execute_command(cmd)
-				if r.ok:
-					return Result.success()
+	for piece_id in ["lobbyists_park_line", "lobbyists_park_t", "lobbyists_park_l"]:
+		for y in range(grid.y):
+			for x in range(grid.x):
+				for rot in [0, 90, 180, 270]:
+					var cmd := Command.create("place_lobbyists_park", 0)
+					cmd.params = {"piece_id": piece_id, "anchor_pos": [x, y], "rotation": rot}
+					var r := engine.execute_command(cmd)
+					if r.ok:
+						return Result.success()
 	return Result.failure("未找到可放置公园的位置（测试环境）")
 
 static func _try_place_road(engine: GameEngine) -> Result:
 	var s: GameState = engine.get_state()
 	var grid: Vector2i = s.map.grid_size
-	for piece_id in ["lobbyists_road_straight", "lobbyists_road_l"]:
+	for piece_id in ["lobbyists_road_straight", "lobbyists_road_long", "lobbyists_road_l"]:
 		for y in range(grid.y):
 			for x in range(grid.x):
 				for rot in [0, 90, 180, 270]:

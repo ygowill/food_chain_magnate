@@ -32,7 +32,22 @@ static func get_road_graph(state) -> RefCounted:
 		if external_cells_val is Dictionary:
 			external_cells = external_cells_val
 		var origin := Coords.get_map_origin(state)
-		state._road_graph = RoadGraphClass.build_from_cells_with_external(cells, grid_size, origin, external_cells, boundary_index)
+
+		var options: Dictionary = {}
+		var connect_parallel := false
+		var cpl_val = map.get("road_graph_connect_parallel_lanes", null)
+		if cpl_val is bool:
+			connect_parallel = bool(cpl_val)
+		elif cpl_val is int:
+			connect_parallel = int(cpl_val) != 0
+		elif cpl_val is float:
+			var f: float = float(cpl_val)
+			if f == floor(f):
+				connect_parallel = int(f) != 0
+		if connect_parallel:
+			options["connect_parallel_lanes"] = true
+		state._road_graph = RoadGraphClass.build_from_cells_with_external(cells, grid_size, origin, external_cells, boundary_index, options)
+		return state._road_graph
 	return state._road_graph
 
 static func invalidate_road_graph(state) -> void:

@@ -2926,7 +2926,7 @@ func _find_first_valid_lobbyists_road(engine: GameEngine, actor: int) -> Result:
 		return Result.failure("cannot load Coords: %s" % CoordsScriptPath)
 	var minp: Vector2i = coords_script.get_world_min(state)
 	var maxp: Vector2i = coords_script.get_world_max(state)
-	for piece_id in ["lobbyists_road_straight", "lobbyists_road_l"]:
+	for piece_id in ["lobbyists_road_straight", "lobbyists_road_long", "lobbyists_road_l"]:
 		for y in range(minp.y, maxp.y + 1):
 			for x in range(minp.x, maxp.x + 1):
 				for rot in MapUtils.VALID_ROTATIONS:
@@ -2980,20 +2980,22 @@ func _find_first_valid_lobbyists_park(engine: GameEngine, actor: int) -> Result:
 		return Result.failure("cannot load Coords: %s" % CoordsScriptPath)
 	var minp: Vector2i = coords_script.get_world_min(state)
 	var maxp: Vector2i = coords_script.get_world_max(state)
-	for y in range(minp.y, maxp.y + 1):
-		for x in range(minp.x, maxp.x + 1):
-			for rot in MapUtils.VALID_ROTATIONS:
-				var cmd := Command.create("place_lobbyists_park", actor, {
-					"anchor_pos": [x, y],
-					"rotation": int(rot),
-				})
-				var vr := ex.validate(state, cmd)
-				if vr.ok:
-					return Result.success({
-						"action_id": "place_lobbyists_park",
-						"actor": actor,
-						"params": cmd.params.duplicate(true),
+	for piece_id in ["lobbyists_park_line", "lobbyists_park_t", "lobbyists_park_l"]:
+		for y in range(minp.y, maxp.y + 1):
+			for x in range(minp.x, maxp.x + 1):
+				for rot in MapUtils.VALID_ROTATIONS:
+					var cmd := Command.create("place_lobbyists_park", actor, {
+						"piece_id": piece_id,
+						"anchor_pos": [x, y],
+						"rotation": int(rot),
 					})
+					var vr := ex.validate(state, cmd)
+					if vr.ok:
+						return Result.success({
+							"action_id": "place_lobbyists_park",
+							"actor": actor,
+							"params": cmd.params.duplicate(true),
+						})
 	return Result.failure("no valid place_lobbyists_park placement found")
 
 func _build_employee_lobbyist_place_park(engine: GameEngine, _c: Dictionary) -> Result:

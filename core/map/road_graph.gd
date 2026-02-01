@@ -24,22 +24,23 @@ var _cell_to_block: Dictionary = {}  # Vector2i -> region_id
 
 # === 构建图 ===
 
-static func build_from_cells(cells: Array, grid_size: Vector2i, boundary_index: Dictionary = {}) -> RoadGraph:
-	return build_from_cells_with_external(cells, grid_size, Vector2i.ZERO, {}, boundary_index)
+static func build_from_cells(cells: Array, grid_size: Vector2i, boundary_index: Dictionary = {}, options: Dictionary = {}) -> RoadGraph:
+	return build_from_cells_with_external(cells, grid_size, Vector2i.ZERO, {}, boundary_index, options)
 
 static func build_from_cells_with_external(
 	cells: Array,
 	grid_size: Vector2i,
 	map_origin: Vector2i,
 	external_cells: Dictionary,
-	boundary_index: Dictionary = {}
+	boundary_index: Dictionary = {},
+	options: Dictionary = {}
 ) -> RoadGraph:
 	var graph := RoadGraph.new()
 	graph._grid_size = grid_size
 	graph._map_origin = map_origin
 	graph._boundary_index = boundary_index
 
-	Builder.populate_nodes_and_edges(graph, cells, external_cells)
+	Builder.populate_nodes_and_edges(graph, cells, external_cells, options)
 	Blocks.calculate_block_regions(graph, cells)
 
 	return graph
