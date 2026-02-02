@@ -38,7 +38,6 @@
 | 864 | 48 | 7 | 2 | `ui/components/marketing_panel/marketing_panel.gd` |
 | 852 | 29 | 2 | 3 | `ui/components/company_structure/company_structure.gd` |
 | 837 | 19 | 10 | 0 | `core/tests/milestone_system_test.gd` |
-| 807 | 6 | 141 | 0 | `ui/scenes/tests/all_tests.gd` |
 
 ## 跨文件共性问题（模式级发现）
 
@@ -96,7 +95,7 @@
 
 典型文件：
 
-- `ui/scenes/tests/all_tests.gd`：大量 `preload` + 手工维护的测试列表。
+- `ui/scenes/tests/all_tests.gd`：手工维护的测试列表（preload 已下沉到 `ui/scenes/tests/all_tests_refs.gd`）。
 - `tools/generate_manual_test_saves_manifest.gd`（聚合） + `tools/manual_test_saves/manifest_*.gd`：大量 case 字典堆叠。
 
 主要问题：
@@ -370,12 +369,12 @@
 
 当前职责：
 
-- headless 测试聚合入口：维护大量 preload，并按固定顺序执行。
+- headless 测试聚合入口：按固定顺序执行全部测试（preload 列表已下沉到 `ui/scenes/tests/all_tests_refs.gd`）。
 
 主要问题：
 
 - 维护成本高：新增/删除测试要改同一个大文件。
-- preload 列表超长，容易在 merge 时冲突。
+- 测试清单仍集中在一个文件里，仍可能引发 merge 冲突（已缓解：preload 列表已拆出）。
 
 建议拆分方向：
 
@@ -434,7 +433,7 @@
 
 ### P0（最快降低痛点）
 
-- `ui/scenes/tests/all_tests.gd`：清单拆分/自动发现（降低日常冲突与维护）。
+- `ui/scenes/tests/all_tests.gd`：清单拆分/自动发现（降低日常冲突与维护）。（已完成：preload 列表下沉到 `ui/scenes/tests/all_tests_refs.gd`）
 - `tools/generate_manual_test_saves_manifest.gd`：按领域拆分清单（减少冲突）。（已完成：拆分到 `tools/manual_test_saves/manifest_*.gd`）
 - `tools/generate_manual_test_saves.gd`：按 builder 拆文件 + registry 分发（降低 3k 行单点风险）。
 
@@ -460,3 +459,4 @@
 
 - 2026-02-02：拆分手工复核存档 manifest：`tools/generate_manual_test_saves_manifest.gd` 改为聚合入口；新增 `tools/manual_test_saves/manifest_examples.gd`、`tools/manual_test_saves/manifest_employees.gd`、`tools/manual_test_saves/manifest_logs.gd`，并引入 `tools/manual_test_saves/manifest_milestones.gd` 作为里程碑聚合入口；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：进一步拆分里程碑清单：新增 `tools/manual_test_saves/manifest_milestones_base.gd`、`tools/manual_test_saves/manifest_milestones_ketchup.gd`、`tools/manual_test_saves/manifest_milestones_lobbyists.gd`、`tools/manual_test_saves/manifest_milestones_rural_marketeers.gd`、`tools/manual_test_saves/manifest_milestones_new_milestones.gd`；`tools/manual_test_saves/manifest_milestones.gd` 改为聚合入口；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-02：AllTests preload 列表拆分：新增 `ui/scenes/tests/all_tests_refs.gd`；`ui/scenes/tests/all_tests.gd` 仅保留 runner 与测试顺序；并通过 `ui/scenes/tests/all_tests.tscn`。

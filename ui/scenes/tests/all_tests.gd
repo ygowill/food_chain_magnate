@@ -1,147 +1,7 @@
 # 全部测试聚合场景（Headless / Autorun）
 extends Control
 
-const ReplayDeterminismTestClass = preload("res://core/tests/replay_determinism_test.gd")
-const EmployeeActionTestClass = preload("res://core/tests/employee_action_test.gd")
-const RestructuringOverflowPenaltyTestClass = preload("res://core/tests/restructuring_overflow_penalty_test.gd")
-const RecruitOnCreditRulesTestClass = preload("res://core/tests/recruit_on_credit_rules_test.gd")
-const PaydaySalaryTestClass = preload("res://core/tests/payday_salary_test.gd")
-const PaydayReportEventTestClass = preload("res://core/tests/payday_report_event_test.gd")
-const GameStateFactoryStartingInventoryTestClass = preload("res://core/tests/game_state_factory_starting_inventory_test.gd")
-const RestaurantLogoAssignmentTestClass = preload("res://core/tests/restaurant_logo_assignment_test.gd")
-const PaydaySalaryTokenEligibilityTestClass = preload("res://core/tests/payday_salary_token_eligibility_test.gd")
-const CallbackResultContractTestClass = preload("res://core/tests/callback_result_contract_test.gd")
-const OnlineRoomManagerTestClass = preload("res://core/tests/online_room_manager_test.gd")
-const OnlineRoomListTestClass = preload("res://core/tests/online_room_list_test.gd")
-const OnlineStartGameReplayTestClass = preload("res://core/tests/online_start_game_replay_test.gd")
-const OnlineResyncArchiveTestClass = preload("res://core/tests/online_resync_archive_test.gd")
-const OnlineRewindToTurnStartTestClass = preload("res://core/tests/online_rewind_to_turn_start_test.gd")
-const ForfeitPlayerActionTestClass = preload("res://core/tests/forfeit_player_action_test.gd")
-const OnlineRoomSpectatorTestClass = preload("res://core/tests/online_room_spectator_test.gd")
-const OnlineRoomSeedRandomStableTestClass = preload("res://core/tests/online_room_seed_random_stable_test.gd")
-const GameOverWinnerRulesTestClass = preload("res://core/tests/game_over_winner_rules_test.gd")
-const CommandPrivacyTestClass = preload("res://core/tests/command_privacy_test.gd")
-const InitialCompanyTestClass = preload("res://core/tests/initial_company_test.gd")
-const MandatoryActionsTestClass = preload("res://core/tests/mandatory_actions_test.gd")
-const RuralMarketeersAutoAdvanceUnblockedTestClass = preload("res://core/tests/rural_marketeers_auto_advance_unblocked_test.gd")
-const ProduceFoodTestClass = preload("res://core/tests/produce_food_test.gd")
-const ProcureDrinksTestClass = preload("res://core/tests/procure_drinks_test.gd")
-const ProcureDrinksRouteRulesTestClass = preload("res://core/tests/procure_drinks_route_rules_test.gd")
-const AirProcureStartTileChoiceTestClass = preload("res://ui/scenes/tests/air_procure_start_tile_choice_test.gd")
-const PlaceHouseRulesTestClass = preload("res://core/tests/place_house_rules_test.gd")
-const AddGardenRulesTestClass = preload("res://core/tests/add_garden_rules_test.gd")
-const PlaceRestaurantRulesTestClass = preload("res://core/tests/place_restaurant_rules_test.gd")
-const MoveRestaurantRulesTestClass = preload("res://core/tests/move_restaurant_rules_test.gd")
-const FailFastParsingTestClass = preload("res://core/tests/fail_fast_parsing_test.gd")
-const ArchiveFailFastTestClass = preload("res://core/tests/archive_fail_fast_test.gd")
-const ArchiveFileRoundtripTestClass = preload("res://core/tests/archive_file_roundtrip_test.gd")
-const StateSchemaArchiveLoadTestClass = preload("res://core/tests/state_schema_archive_load_test.gd")
-const StateSchemaUnregisteredModuleKeyWarningTestClass = preload("res://core/tests/state_schema_unregistered_module_key_warning_test.gd")
-const InvariantsFailFastTestClass = preload("res://core/tests/invariants_fail_fast_test.gd")
-const RoundStateFailFastTestClass = preload("res://core/tests/round_state_fail_fast_test.gd")
-const CleanupInventoryTestClass = preload("res://core/tests/cleanup_inventory_test.gd")
-const FireActionTestClass = preload("res://core/tests/fire_action_test.gd")
-const CompanyStructureTestClass = preload("res://core/tests/company_structure_test.gd")
-const ActionPanelEndButtonsOrderTestClass = preload("res://ui/scenes/tests/action_panel_end_buttons_order_test.gd")
-const ActionPanelOnlineLocalPlayerTestClass = preload("res://ui/scenes/tests/action_panel_online_local_player_test.gd")
-const ActionPanelGlobalDisabledRestoreTestClass = preload("res://ui/scenes/tests/action_panel_global_disabled_restore_test.gd")
-const ActionPanelExecutorMetadataTestClass = preload("res://ui/scenes/tests/action_panel_executor_metadata_test.gd")
-const DistanceOverlayRoadworksPenaltyTestClass = preload("res://ui/scenes/tests/distance_overlay_roadworks_penalty_test.gd")
-const GameSmokeTestScene = preload("res://ui/scenes/tests/game_smoke_test.tscn")
-const HandAreaViewSwitchTestClass = preload("res://ui/scenes/tests/hand_area_view_switch_test.gd")
-const ReserveCardSelectionModalPrivacyTestClass = preload("res://ui/scenes/tests/reserve_card_selection_modal_privacy_test.gd")
-const TurnOrderSelectionModalOnlineVisibilityTestClass = preload("res://ui/scenes/tests/turn_order_selection_modal_online_visibility_test.gd")
-const RoomConfigEditorEditableSignalTestClass = preload("res://ui/scenes/tests/room_config_editor_editable_signal_test.gd")
-const LeftPanelSelectionIsolationTestClass = preload("res://ui/scenes/tests/left_panel_selection_isolation_test.gd")
-const DragPreviewVisualTestClass = preload("res://ui/scenes/tests/drag_preview_visual_test.gd")
-const EmployeePickerMinSizeTestClass = preload("res://ui/scenes/tests/employee_picker_min_size_test.gd")
-const CompanyStructureDeferredRebuildTestClass = preload("res://ui/scenes/tests/company_structure_deferred_rebuild_test.gd")
-const RestructuringLayoutTestClass = preload("res://ui/scenes/tests/restructuring_layout_test.gd")
-const RestructuringReserveDropTargetTestClass = preload("res://ui/scenes/tests/restructuring_reserve_drop_target_test.gd")
-const RestructuringPrivacyTestClass = preload("res://ui/scenes/tests/restructuring_privacy_test.gd")
-const UiRegressionPropertyTestClass = preload("res://ui/scenes/tests/ui_regression_property_test.gd")
-const MapZoomPropertyTestClass = preload("res://ui/scenes/tests/map_zoom_property_test.gd")
-const TileInternalGridLinesTestClass = preload("res://ui/scenes/tests/tile_internal_grid_lines_test.gd")
-const MapGroundSkipsOutsideRingTestClass = preload("res://ui/scenes/tests/map_ground_skips_outside_ring_test.gd")
-const AirplaneMarketingOutsideRenderTestClass = preload("res://ui/scenes/tests/airplane_marketing_outside_render_test.gd")
-const AirplaneMarketingIconRotationTestClass = preload("res://ui/scenes/tests/airplane_marketing_icon_rotation_test.gd")
-const MarketingRangeFullFootprintTestClass = preload("res://ui/scenes/tests/marketing_range_full_footprint_test.gd")
-const MarketingHighlightsNoDrinkSourceTestClass = preload("res://ui/scenes/tests/marketing_highlights_no_drink_source_test.gd")
-const MarketingBoardNumberBadgeTestClass = preload("res://ui/scenes/tests/marketing_board_number_badge_test.gd")
-const MarketingSelectionFreezeTestClass = preload("res://ui/scenes/tests/marketing_selection_freeze_test.gd")
-const AirplaneMarketingOutsideSelectionTestClass = preload("res://ui/scenes/tests/airplane_marketing_outside_selection_test.gd")
-const MoveRestaurantDisplayLabelTestClass = preload("res://ui/scenes/tests/move_restaurant_display_label_test.gd")
-const LogRestoreAfterLoadTestClass = preload("res://ui/scenes/tests/log_restore_after_load_test.gd")
-const ProductionPanelUsedCountsSyncTestClass = preload("res://ui/scenes/tests/production_panel_used_counts_sync_test.gd")
-const ManualLogSaveTestClass = preload("res://core/tests/manual_log_save_test.gd")
-const ManualLogSavesCoverageTestClass = preload("res://core/tests/manual_log_saves_coverage_test.gd")
-const EventHistoryRewindTestClass = preload("res://core/tests/event_history_rewind_test.gd")
-const RewindTurnStartFallbackTestClass = preload("res://core/tests/rewind_turn_start_fallback_test.gd")
-const RewindTurnStartPhaseChangeTestClass = preload("res://core/tests/rewind_turn_start_phase_change_test.gd")
-const RewindTurnStartReenterTestClass = preload("res://core/tests/rewind_turn_start_reenter_test.gd")
-const RewindTurnStartSetupTurnSwitchTestClass = preload("res://core/tests/rewind_turn_start_setup_turn_switch_test.gd")
-const EventTimelineBuildTestClass = preload("res://core/tests/event_timeline_build_test.gd")
-const StepTimelineBuildTestClass = preload("res://core/tests/step_timeline_build_test.gd")
-const StepTimelineMarketingMilestoneOrderTestClass = preload("res://core/tests/step_timeline_marketing_milestone_order_test.gd")
-const StepTimelinePhaseBoundaryOrderTestClass = preload("res://core/tests/step_timeline_phase_boundary_order_test.gd")
-const StepTimelineCleanupDiscardOrderTestClass = preload("res://core/tests/step_timeline_cleanup_discard_order_test.gd")
-const ReplayLogFutureVisibilityTestClass = preload("res://ui/scenes/tests/replay_log_future_visibility_test.gd")
-const ReplayPlayerSmokeTestClass = preload("res://ui/scenes/tests/replay_player_smoke_test.gd")
-const OrderOfBusinessTestClass = preload("res://core/tests/order_of_business_test.gd")
-const MilestoneSystemTestClass = preload("res://core/tests/milestone_system_test.gd")
-const ModulePackageLoaderV2TestClass = preload("res://core/tests/module_package_loader_v2_test.gd")
-const ContentCatalogV2TestClass = preload("res://core/tests/content_catalog_v2_test.gd")
-const VisualCatalogLoaderV2TestClass = preload("res://core/tests/visual_catalog_loader_v2_test.gd")
-const ModulePlanBuilderV2TestClass = preload("res://core/tests/module_plan_builder_v2_test.gd")
-const ModuleSystemV2BootstrapTestClass = preload("res://core/tests/module_system_v2_bootstrap_test.gd")
-const SettlementRegistryV2TestClass = preload("res://core/tests/settlement_registry_v2_test.gd")
-const DinnertimeDemandRegistryV2TestClass = preload("res://core/tests/dinnertime_demand_registry_v2_test.gd")
-const DinnertimeRoutePurchaseRegistryV2TestClass = preload("res://core/tests/dinnertime_route_purchase_registry_v2_test.gd")
-const EffectRegistryV2TestClass = preload("res://core/tests/effect_registry_v2_test.gd")
-const PoolBuilderV2TestClass = preload("res://core/tests/pool_builder_v2_test.gd")
-const MarketingBoardDataTestClass = preload("res://core/tests/marketing_board_data_test.gd")
-const MarketingCampaignsTestClass = preload("res://core/tests/marketing_campaigns_test.gd")
-const MassMarketeersV2TestClass = preload("res://core/tests/mass_marketeers_v2_test.gd")
-const KetchupMechanismV2TestClass = preload("res://core/tests/ketchup_mechanism_v2_test.gd")
-const KimchiV2TestClass = preload("res://core/tests/kimchi_v2_test.gd")
-const CoffeeV2TestClass = preload("res://core/tests/coffee_v2_test.gd")
-const MovieStarsV2TestClass = preload("res://core/tests/movie_stars_v2_test.gd")
-const NightShiftManagersV2TestClass = preload("res://core/tests/night_shift_managers_v2_test.gd")
-const NewDistrictsV2TestClass = preload("res://core/tests/new_districts_v2_test.gd")
-const FryChefsV2TestClass = preload("res://core/tests/fry_chefs_v2_test.gd")
-const RuralMarketeersV2TestClass = preload("res://core/tests/rural_marketeers_v2_test.gd")
-const GourmetFoodCriticsV2TestClass = preload("res://core/tests/gourmet_food_critics_v2_test.gd")
-const ReservePricesV2TestClass = preload("res://core/tests/reserve_prices_v2_test.gd")
-const HardChoicesV2TestClass = preload("res://core/tests/hard_choices_v2_test.gd")
-const PhaseOrderOverrideV2TestClass = preload("res://core/tests/phase_order_override_v2_test.gd")
-const WorkingSubPhaseOrderOverrideV2TestClass = preload("res://core/tests/working_sub_phase_order_override_v2_test.gd")
-const SettlementTriggerOverrideV2TestClass = preload("res://core/tests/settlement_trigger_override_v2_test.gd")
-const SettlementTriggerOverrideExtraV2TestClass = preload("res://core/tests/settlement_trigger_override_extra_v2_test.gd")
-const PaydaySubPhaseV2TestClass = preload("res://core/tests/payday_sub_phase_v2_test.gd")
-const ActionAvailabilityOverrideV2TestClass = preload("res://core/tests/action_availability_override_v2_test.gd")
-const NewMilestonesV2TestClass = preload("res://core/tests/new_milestones_v2_test.gd")
-const NewMilestonesNewRestaurantV2TestClass = preload("res://core/tests/new_milestones_new_restaurant_v2_test.gd")
-const NewMilestonesMarketingTraineeV2TestClass = preload("res://core/tests/new_milestones_marketing_trainee_v2_test.gd")
-const NewMilestonesCampaignManagerV2TestClass = preload("res://core/tests/new_milestones_campaign_manager_v2_test.gd")
-const NewMilestonesBrandManagerV2TestClass = preload("res://core/tests/new_milestones_brand_manager_v2_test.gd")
-const NewMilestonesBrandDirectorV2TestClass = preload("res://core/tests/new_milestones_brand_director_v2_test.gd")
-const NewMilestonesBurgerSoldV2TestClass = preload("res://core/tests/new_milestones_burger_sold_v2_test.gd")
-const NewMilestonesCokeSoldV2TestClass = preload("res://core/tests/new_milestones_coke_sold_v2_test.gd")
-const NewMilestonesPizzaSoldV2TestClass = preload("res://core/tests/new_milestones_pizza_sold_v2_test.gd")
-const NewMilestonesLemonadeSoldV2TestClass = preload("res://core/tests/new_milestones_lemonade_sold_v2_test.gd")
-const NewMilestonesBeerTrainerPaydayV2TestClass = preload("res://core/tests/new_milestones_beer_trainer_payday_v2_test.gd")
-const NewMilestonesRecruiterWaitressV2TestClass = preload("res://core/tests/new_milestones_recruiter_waitress_v2_test.gd")
-const NewMilestonesDiscountManagerBankBurnV2TestClass = preload("res://core/tests/new_milestones_discount_manager_bank_burn_v2_test.gd")
-const LobbyistsV2TestClass = preload("res://core/tests/lobbyists_v2_test.gd")
-const NoodlesSushiV2TestClass = preload("res://core/tests/noodles_sushi_v2_test.gd")
-const MarketingSettlementFailFastTestClass = preload("res://core/tests/marketing_settlement_fail_fast_test.gd")
-const MarketingDemandGeneratedEventTestClass = preload("res://core/tests/marketing_demand_generated_event_test.gd")
-const MarketingDinnertimeGoldenReplayTestClass = preload("res://core/tests/marketing_dinnertime_golden_replay_test.gd")
-const MilestoneEffectValuesTestClass = preload("res://core/tests/milestone_effect_values_test.gd")
-const RandomMapGenerationTestClass = preload("res://core/tests/random_map_generation_test.gd")
-const DinnertimeSettlementTestClass = preload("res://core/tests/dinnertime_settlement_test.gd")
-const DinnertimeDistanceEntryBoundaryTestClass = preload("res://core/tests/dinnertime_distance_entry_boundary_test.gd")
-const BankruptcyTestClass = preload("res://core/tests/bankruptcy_test.gd")
+const TestRefs = preload("res://ui/scenes/tests/all_tests_refs.gd")
 
 @onready var output: RichTextLabel = $Root/Output
 @onready var run_button: Button = $Root/TopBar/RunButton
@@ -177,563 +37,563 @@ func _run_all() -> int:
 		},
 		{
 			"name": "ReplayTest",
-			"fn": func() -> Result: return ReplayDeterminismTestClass.run(2, 12345, 20),
+			"fn": func() -> Result: return TestRefs.ReplayDeterminismTestClass.run(2, 12345, 20),
 		},
 		{
 			"name": "EmployeeTest",
-			"fn": func() -> Result: return EmployeeActionTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.EmployeeActionTestClass.run(2, 12345),
 		},
 		{
 			"name": "RestructuringOverflowPenaltyTest",
-			"fn": func() -> Result: return RestructuringOverflowPenaltyTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.RestructuringOverflowPenaltyTestClass.run(2, 12345),
 		},
 		{
 			"name": "RecruitOnCreditRulesTest",
-			"fn": func() -> Result: return RecruitOnCreditRulesTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.RecruitOnCreditRulesTestClass.run(2, 12345),
 		},
 		{
 			"name": "PaydaySalaryTest",
-			"fn": func() -> Result: return PaydaySalaryTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.PaydaySalaryTestClass.run(2, 12345),
 		},
 		{
 			"name": "PaydayReportEventTest",
-			"fn": func() -> Result: return PaydayReportEventTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.PaydayReportEventTestClass.run(2, 12345),
 		},
 		{
 			"name": "GameStateFactoryStartingInventoryTest",
-			"fn": func() -> Result: return GameStateFactoryStartingInventoryTestClass.run(),
+			"fn": func() -> Result: return TestRefs.GameStateFactoryStartingInventoryTestClass.run(),
 		},
 		{
 			"name": "RestaurantLogoAssignmentTest",
-			"fn": func() -> Result: return RestaurantLogoAssignmentTestClass.run(3, 12345),
+			"fn": func() -> Result: return TestRefs.RestaurantLogoAssignmentTestClass.run(3, 12345),
 		},
 		{
 			"name": "PaydaySalaryTokenEligibilityTest",
-			"fn": func() -> Result: return PaydaySalaryTokenEligibilityTestClass.run(),
+			"fn": func() -> Result: return TestRefs.PaydaySalaryTokenEligibilityTestClass.run(),
 		},
 		{
 			"name": "CallbackResultContractTest",
-			"fn": func() -> Result: return CallbackResultContractTestClass.run(),
+			"fn": func() -> Result: return TestRefs.CallbackResultContractTestClass.run(),
 		},
 		{
 			"name": "OnlineRoomManagerTest",
-			"fn": func() -> Result: return OnlineRoomManagerTestClass.run(),
+			"fn": func() -> Result: return TestRefs.OnlineRoomManagerTestClass.run(),
 		},
 		{
 			"name": "OnlineRoomListTest",
-			"fn": func() -> Result: return OnlineRoomListTestClass.run(),
+			"fn": func() -> Result: return TestRefs.OnlineRoomListTestClass.run(),
 		},
 		{
 			"name": "OnlineStartGameReplayTest",
-			"fn": func() -> Result: return OnlineStartGameReplayTestClass.run(),
+			"fn": func() -> Result: return TestRefs.OnlineStartGameReplayTestClass.run(),
 		},
 		{
 			"name": "OnlineResyncArchiveTest",
-			"fn": func() -> Result: return OnlineResyncArchiveTestClass.run(),
+			"fn": func() -> Result: return TestRefs.OnlineResyncArchiveTestClass.run(),
 		},
 		{
 			"name": "OnlineRewindToTurnStartTest",
-			"fn": func() -> Result: return OnlineRewindToTurnStartTestClass.run(),
+			"fn": func() -> Result: return TestRefs.OnlineRewindToTurnStartTestClass.run(),
 		},
 		{
 			"name": "ForfeitPlayerActionTest",
-			"fn": func() -> Result: return ForfeitPlayerActionTestClass.run(),
+			"fn": func() -> Result: return TestRefs.ForfeitPlayerActionTestClass.run(),
 		},
 		{
 			"name": "OnlineRoomSpectatorTest",
-			"fn": func() -> Result: return OnlineRoomSpectatorTestClass.run(),
+			"fn": func() -> Result: return TestRefs.OnlineRoomSpectatorTestClass.run(),
 		},
 		{
 			"name": "OnlineRoomSeedRandomStableTest",
-			"fn": func() -> Result: return OnlineRoomSeedRandomStableTestClass.run(),
+			"fn": func() -> Result: return TestRefs.OnlineRoomSeedRandomStableTestClass.run(),
 		},
 		{
 			"name": "GameOverWinnerRulesTest",
-			"fn": func() -> Result: return GameOverWinnerRulesTestClass.run(),
+			"fn": func() -> Result: return TestRefs.GameOverWinnerRulesTestClass.run(),
 		},
 		{
 			"name": "CommandPrivacyTest",
-			"fn": func() -> Result: return CommandPrivacyTestClass.run(),
+			"fn": func() -> Result: return TestRefs.CommandPrivacyTestClass.run(),
 		},
 			{
 				"name": "ReserveCardSelectionModalPrivacyTest",
-				"fn": func() -> Result: return ReserveCardSelectionModalPrivacyTestClass.run(),
+				"fn": func() -> Result: return TestRefs.ReserveCardSelectionModalPrivacyTestClass.run(),
 			},
 			{
 				"name": "TurnOrderSelectionModalOnlineVisibilityTest",
-				"fn": func() -> Result: return TurnOrderSelectionModalOnlineVisibilityTestClass.run(),
+				"fn": func() -> Result: return TestRefs.TurnOrderSelectionModalOnlineVisibilityTestClass.run(),
 			},
 			{
 				"name": "RoomConfigEditorEditableSignalTest",
-				"fn": func() -> Result: return RoomConfigEditorEditableSignalTestClass.run(),
+				"fn": func() -> Result: return TestRefs.RoomConfigEditorEditableSignalTestClass.run(),
 			},
 			{
 				"name": "ActionPanelOnlineLocalPlayerTest",
-				"fn": func() -> Result: return ActionPanelOnlineLocalPlayerTestClass.run(),
+				"fn": func() -> Result: return TestRefs.ActionPanelOnlineLocalPlayerTestClass.run(),
 			},
 			{
 				"name": "ActionPanelGlobalDisabledRestoreTest",
-				"fn": func() -> Result: return ActionPanelGlobalDisabledRestoreTestClass.run(),
+				"fn": func() -> Result: return TestRefs.ActionPanelGlobalDisabledRestoreTestClass.run(),
 			},
 			{
 				"name": "ActionPanelExecutorMetadataTest",
-				"fn": func() -> Result: return ActionPanelExecutorMetadataTestClass.run(),
+				"fn": func() -> Result: return TestRefs.ActionPanelExecutorMetadataTestClass.run(),
 			},
 			{
 				"name": "LeftPanelSelectionIsolationTest",
-				"fn": func() -> Result: return LeftPanelSelectionIsolationTestClass.run(),
+				"fn": func() -> Result: return TestRefs.LeftPanelSelectionIsolationTestClass.run(),
 			},
 		{
 			"name": "InitialCompanyTest",
-			"fn": func() -> Result: return InitialCompanyTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.InitialCompanyTestClass.run(2, 12345),
 		},
 		{
 			"name": "MandatoryActionsTest",
-			"fn": func() -> Result: return MandatoryActionsTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.MandatoryActionsTestClass.run(2, 12345),
 		},
 		{
 			"name": "RuralMarketeersAutoAdvanceUnblockedTest",
-			"fn": func() -> Result: return RuralMarketeersAutoAdvanceUnblockedTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.RuralMarketeersAutoAdvanceUnblockedTestClass.run(2, 12345),
 		},
 		{
 			"name": "ProduceFoodTest",
-			"fn": func() -> Result: return ProduceFoodTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.ProduceFoodTestClass.run(2, 12345),
 		},
 		{
 			"name": "ProcureDrinksTest",
-			"fn": func() -> Result: return ProcureDrinksTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.ProcureDrinksTestClass.run(2, 12345),
 		},
 		{
 			"name": "ProcureDrinksRouteRulesTest",
-			"fn": func() -> Result: return ProcureDrinksRouteRulesTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.ProcureDrinksRouteRulesTestClass.run(2, 12345),
 		},
 		{
 			"name": "AirProcureStartTileChoiceTest",
-			"fn": func() -> Result: return AirProcureStartTileChoiceTestClass.run(),
+			"fn": func() -> Result: return TestRefs.AirProcureStartTileChoiceTestClass.run(),
 		},
 		{
 			"name": "PlaceHouseRulesTest",
-			"fn": func() -> Result: return PlaceHouseRulesTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.PlaceHouseRulesTestClass.run(2, 12345),
 		},
 		{
 			"name": "AddGardenRulesTest",
-			"fn": func() -> Result: return AddGardenRulesTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.AddGardenRulesTestClass.run(2, 12345),
 		},
 		{
 			"name": "PlaceRestaurantRulesTest",
-			"fn": func() -> Result: return PlaceRestaurantRulesTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.PlaceRestaurantRulesTestClass.run(2, 12345),
 		},
 		{
 			"name": "MoveRestaurantRulesTest",
-			"fn": func() -> Result: return MoveRestaurantRulesTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.MoveRestaurantRulesTestClass.run(2, 12345),
 		},
 		{
 			"name": "FailFastParsingTest",
-			"fn": func() -> Result: return FailFastParsingTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.FailFastParsingTestClass.run(2, 12345),
 		},
 		{
 			"name": "ArchiveFailFastTest",
-			"fn": func() -> Result: return ArchiveFailFastTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.ArchiveFailFastTestClass.run(2, 12345),
 		},
 		{
 			"name": "ArchiveFileRoundtripTest",
-			"fn": func() -> Result: return ArchiveFileRoundtripTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.ArchiveFileRoundtripTestClass.run(2, 12345),
 		},
 		{
 			"name": "StateSchemaArchiveLoadTest",
-			"fn": func() -> Result: return StateSchemaArchiveLoadTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.StateSchemaArchiveLoadTestClass.run(2, 12345),
 		},
 		{
 			"name": "StateSchemaUnregisteredModuleKeyWarningTest",
-			"fn": func() -> Result: return StateSchemaUnregisteredModuleKeyWarningTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.StateSchemaUnregisteredModuleKeyWarningTestClass.run(2, 12345),
 		},
 		{
 			"name": "InvariantsFailFastTest",
-			"fn": func() -> Result: return InvariantsFailFastTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.InvariantsFailFastTestClass.run(2, 12345),
 		},
 		{
 			"name": "RoundStateFailFastTest",
-			"fn": func() -> Result: return RoundStateFailFastTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.RoundStateFailFastTestClass.run(2, 12345),
 		},
 		{
 			"name": "CleanupInventoryTest",
-			"fn": func() -> Result: return CleanupInventoryTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.CleanupInventoryTestClass.run(2, 12345),
 		},
 		{
 			"name": "FireActionTest",
-			"fn": func() -> Result: return FireActionTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.FireActionTestClass.run(2, 12345),
 		},
 		{
 			"name": "CompanyStructureTest",
-			"fn": func() -> Result: return CompanyStructureTestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.CompanyStructureTestClass.run(2, 12345),
 		},
 		{
 			"name": "ActionPanelEndButtonsOrderTest",
-			"fn": func() -> Result: return ActionPanelEndButtonsOrderTestClass.run(),
+			"fn": func() -> Result: return TestRefs.ActionPanelEndButtonsOrderTestClass.run(),
 		},
 		{
 			"name": "HandAreaViewSwitchTest",
-			"fn": func() -> Result: return HandAreaViewSwitchTestClass.run(),
+			"fn": func() -> Result: return TestRefs.HandAreaViewSwitchTestClass.run(),
 		},
 		{
 			"name": "DragPreviewVisualTest",
-			"fn": func() -> Result: return DragPreviewVisualTestClass.run(),
+			"fn": func() -> Result: return TestRefs.DragPreviewVisualTestClass.run(),
 		},
 		{
 			"name": "EmployeePickerMinSizeTest",
-			"fn": func() -> Result: return EmployeePickerMinSizeTestClass.run(),
+			"fn": func() -> Result: return TestRefs.EmployeePickerMinSizeTestClass.run(),
 		},
 		{
 			"name": "CompanyStructureDeferredRebuildTest",
-			"fn": func() -> Result: return CompanyStructureDeferredRebuildTestClass.run(),
+			"fn": func() -> Result: return TestRefs.CompanyStructureDeferredRebuildTestClass.run(),
 		},
 		{
 			"name": "RestructuringLayoutTest",
-			"fn": func() -> Result: return RestructuringLayoutTestClass.run(),
+			"fn": func() -> Result: return TestRefs.RestructuringLayoutTestClass.run(),
 		},
 		{
 			"name": "RestructuringReserveDropTargetTest",
-			"fn": func() -> Result: return RestructuringReserveDropTargetTestClass.run(),
+			"fn": func() -> Result: return TestRefs.RestructuringReserveDropTargetTestClass.run(),
 		},
 		{
 			"name": "RestructuringPrivacyTest",
-			"fn": func() -> Result: return RestructuringPrivacyTestClass.run(),
+			"fn": func() -> Result: return TestRefs.RestructuringPrivacyTestClass.run(),
 		},
 		{
 			"name": "UiRegressionPropertyTest",
-			"fn": func() -> Result: return UiRegressionPropertyTestClass.run(),
+			"fn": func() -> Result: return TestRefs.UiRegressionPropertyTestClass.run(),
 		},
 			{
 				"name": "MapZoomPropertyTest",
-				"fn": func() -> Result: return MapZoomPropertyTestClass.run(),
+				"fn": func() -> Result: return TestRefs.MapZoomPropertyTestClass.run(),
 			},
 				{
 					"name": "TileInternalGridLinesTest",
-					"fn": func() -> Result: return TileInternalGridLinesTestClass.run(),
+					"fn": func() -> Result: return TestRefs.TileInternalGridLinesTestClass.run(),
 				},
 				{
 					"name": "MapGroundSkipsOutsideRingTest",
-					"fn": func() -> Result: return MapGroundSkipsOutsideRingTestClass.run(),
+					"fn": func() -> Result: return TestRefs.MapGroundSkipsOutsideRingTestClass.run(),
 				},
 		{
 			"name": "AirplaneMarketingOutsideRenderTest",
-			"fn": func() -> Result: return AirplaneMarketingOutsideRenderTestClass.run(),
+			"fn": func() -> Result: return TestRefs.AirplaneMarketingOutsideRenderTestClass.run(),
 		},
 		{
 			"name": "AirplaneMarketingIconRotationTest",
-			"fn": func() -> Result: return AirplaneMarketingIconRotationTestClass.run(),
+			"fn": func() -> Result: return TestRefs.AirplaneMarketingIconRotationTestClass.run(),
 		},
 		{
 			"name": "MarketingRangeFullFootprintTest",
-			"fn": func() -> Result: return MarketingRangeFullFootprintTestClass.run(),
+			"fn": func() -> Result: return TestRefs.MarketingRangeFullFootprintTestClass.run(),
 		},
 			{
 				"name": "MarketingHighlightsNoDrinkSourceTest",
-				"fn": func() -> Result: return MarketingHighlightsNoDrinkSourceTestClass.run(),
+				"fn": func() -> Result: return TestRefs.MarketingHighlightsNoDrinkSourceTestClass.run(),
 			},
 			{
 				"name": "MarketingBoardNumberBadgeTest",
-				"fn": func() -> Result: return MarketingBoardNumberBadgeTestClass.run(),
+				"fn": func() -> Result: return TestRefs.MarketingBoardNumberBadgeTestClass.run(),
 			},
 			{
 				"name": "MarketingSelectionFreezeTest",
-				"fn": func() -> Result: return MarketingSelectionFreezeTestClass.run(),
+				"fn": func() -> Result: return TestRefs.MarketingSelectionFreezeTestClass.run(),
 			},
 			{
 				"name": "AirplaneMarketingOutsideSelectionTest",
-				"fn": func() -> Result: return AirplaneMarketingOutsideSelectionTestClass.run(),
+				"fn": func() -> Result: return TestRefs.AirplaneMarketingOutsideSelectionTestClass.run(),
 			},
 			{
 				"name": "MoveRestaurantDisplayLabelTest",
-				"fn": func() -> Result: return MoveRestaurantDisplayLabelTestClass.run(),
+				"fn": func() -> Result: return TestRefs.MoveRestaurantDisplayLabelTestClass.run(),
 			},
 				{
 					"name": "LogRestoreAfterLoadTest",
-					"fn": func() -> Result: return LogRestoreAfterLoadTestClass.run(),
+					"fn": func() -> Result: return TestRefs.LogRestoreAfterLoadTestClass.run(),
 				},
 				{
 					"name": "ProductionPanelUsedCountsSyncTest",
-					"fn": func() -> Result: return ProductionPanelUsedCountsSyncTestClass.run(),
+					"fn": func() -> Result: return TestRefs.ProductionPanelUsedCountsSyncTestClass.run(),
 				},
 					{
 						"name": "ManualLogSaveTest",
-						"fn": func() -> Result: return ManualLogSaveTestClass.run(),
+						"fn": func() -> Result: return TestRefs.ManualLogSaveTestClass.run(),
 					},
 					{
 						"name": "ManualLogSavesCoverageTest",
-						"fn": func() -> Result: return ManualLogSavesCoverageTestClass.run(),
+						"fn": func() -> Result: return TestRefs.ManualLogSavesCoverageTestClass.run(),
 					},
 							{
 								"name": "EventHistoryRewindTest",
-								"fn": func() -> Result: return EventHistoryRewindTestClass.run(2, 12345),
+								"fn": func() -> Result: return TestRefs.EventHistoryRewindTestClass.run(2, 12345),
 							},
 								{
 									"name": "RewindTurnStartFallbackTest",
-									"fn": func() -> Result: return RewindTurnStartFallbackTestClass.run(2, 12345),
+									"fn": func() -> Result: return TestRefs.RewindTurnStartFallbackTestClass.run(2, 12345),
 								},
 									{
 										"name": "RewindTurnStartPhaseChangeTest",
-										"fn": func() -> Result: return RewindTurnStartPhaseChangeTestClass.run(2, 12345),
+										"fn": func() -> Result: return TestRefs.RewindTurnStartPhaseChangeTestClass.run(2, 12345),
 									},
 										{
 											"name": "RewindTurnStartReenterTest",
-											"fn": func() -> Result: return RewindTurnStartReenterTestClass.run(2, 12345),
+											"fn": func() -> Result: return TestRefs.RewindTurnStartReenterTestClass.run(2, 12345),
 										},
 										{
 											"name": "RewindTurnStartSetupTurnSwitchTest",
-											"fn": func() -> Result: return RewindTurnStartSetupTurnSwitchTestClass.run(12345),
+											"fn": func() -> Result: return TestRefs.RewindTurnStartSetupTurnSwitchTestClass.run(12345),
 										},
 										{
 											"name": "EventTimelineBuildTest",
-											"fn": func() -> Result: return EventTimelineBuildTestClass.run(2, 12345, 20),
+											"fn": func() -> Result: return TestRefs.EventTimelineBuildTestClass.run(2, 12345, 20),
 										},
 						{
 							"name": "StepTimelineBuildTest",
-							"fn": func() -> Result: return StepTimelineBuildTestClass.run(),
+							"fn": func() -> Result: return TestRefs.StepTimelineBuildTestClass.run(),
 						},
 							{
 								"name": "StepTimelineMarketingMilestoneOrderTest",
-								"fn": func() -> Result: return StepTimelineMarketingMilestoneOrderTestClass.run(12345),
+								"fn": func() -> Result: return TestRefs.StepTimelineMarketingMilestoneOrderTestClass.run(12345),
 							},
 								{
 									"name": "StepTimelinePhaseBoundaryOrderTest",
-									"fn": func() -> Result: return StepTimelinePhaseBoundaryOrderTestClass.run(12345),
+									"fn": func() -> Result: return TestRefs.StepTimelinePhaseBoundaryOrderTestClass.run(12345),
 								},
 								{
 									"name": "StepTimelineCleanupDiscardOrderTest",
-									"fn": func() -> Result: return StepTimelineCleanupDiscardOrderTestClass.run(12345),
+									"fn": func() -> Result: return TestRefs.StepTimelineCleanupDiscardOrderTestClass.run(12345),
 								},
 								{
 									"name": "ReplayLogFutureVisibilityTest",
-									"fn": func() -> Result: return ReplayLogFutureVisibilityTestClass.run(2, 12345, 12),
+									"fn": func() -> Result: return TestRefs.ReplayLogFutureVisibilityTestClass.run(2, 12345, 12),
 								},
 			{
 				"name": "ReplayPlayerSmokeTest",
-				"fn": func() -> Result: return ReplayPlayerSmokeTestClass.run(),
+				"fn": func() -> Result: return TestRefs.ReplayPlayerSmokeTestClass.run(),
 			},
 			{
 				"name": "OrderOfBusinessTest",
-				"fn": func() -> Result: return OrderOfBusinessTestClass.run(3, 12345),
+				"fn": func() -> Result: return TestRefs.OrderOfBusinessTestClass.run(3, 12345),
 			},
 			{
 				"name": "MilestoneSystemTest",
-				"fn": func() -> Result: return MilestoneSystemTestClass.run(2, 12345),
+				"fn": func() -> Result: return TestRefs.MilestoneSystemTestClass.run(2, 12345),
 			},
 			{
 				"name": "ModulePackageLoaderV2Test",
-				"fn": func() -> Result: return ModulePackageLoaderV2TestClass.run(2, 12345),
+				"fn": func() -> Result: return TestRefs.ModulePackageLoaderV2TestClass.run(2, 12345),
 			},
 			{
 				"name": "ContentCatalogV2Test",
-				"fn": func() -> Result: return ContentCatalogV2TestClass.run(2, 12345),
+				"fn": func() -> Result: return TestRefs.ContentCatalogV2TestClass.run(2, 12345),
 			},
 			{
 				"name": "VisualCatalogLoaderV2Test",
-				"fn": func() -> Result: return VisualCatalogLoaderV2TestClass.run(2, 12345),
+				"fn": func() -> Result: return TestRefs.VisualCatalogLoaderV2TestClass.run(2, 12345),
 			},
 			{
 				"name": "ModulePlanBuilderV2Test",
-				"fn": func() -> Result: return ModulePlanBuilderV2TestClass.run(2, 12345),
+				"fn": func() -> Result: return TestRefs.ModulePlanBuilderV2TestClass.run(2, 12345),
 			},
 			{
 				"name": "ModuleSystemV2BootstrapTest",
-				"fn": func() -> Result: return ModuleSystemV2BootstrapTestClass.run(2, 12345),
+				"fn": func() -> Result: return TestRefs.ModuleSystemV2BootstrapTestClass.run(2, 12345),
 			},
 				{
 					"name": "SettlementRegistryV2Test",
-					"fn": func() -> Result: return SettlementRegistryV2TestClass.run(2, 12345),
+					"fn": func() -> Result: return TestRefs.SettlementRegistryV2TestClass.run(2, 12345),
 				},
 				{
 					"name": "DinnertimeDemandRegistryV2Test",
-					"fn": func() -> Result: return DinnertimeDemandRegistryV2TestClass.run(2, 12345),
+					"fn": func() -> Result: return TestRefs.DinnertimeDemandRegistryV2TestClass.run(2, 12345),
 				},
 				{
 					"name": "DinnertimeRoutePurchaseRegistryV2Test",
-					"fn": func() -> Result: return DinnertimeRoutePurchaseRegistryV2TestClass.run(2, 12345),
+					"fn": func() -> Result: return TestRefs.DinnertimeRoutePurchaseRegistryV2TestClass.run(2, 12345),
 				},
 				{
 					"name": "EffectRegistryV2Test",
-					"fn": func() -> Result: return EffectRegistryV2TestClass.run(2, 12345),
+					"fn": func() -> Result: return TestRefs.EffectRegistryV2TestClass.run(2, 12345),
 				},
 			{
 				"name": "PoolBuilderV2Test",
-				"fn": func() -> Result: return PoolBuilderV2TestClass.run(2, 12345),
+				"fn": func() -> Result: return TestRefs.PoolBuilderV2TestClass.run(2, 12345),
 			},
 			{
 				"name": "MarketingBoardDataTest",
-				"fn": func() -> Result: return MarketingBoardDataTestClass.run(2, 12345),
+				"fn": func() -> Result: return TestRefs.MarketingBoardDataTestClass.run(2, 12345),
 			},
 					{
 						"name": "MarketingCampaignsTest",
-						"fn": func() -> Result: return MarketingCampaignsTestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.MarketingCampaignsTestClass.run(2, 12345),
 					},
 					{
 						"name": "MassMarketeersV2Test",
-						"fn": func() -> Result: return MassMarketeersV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.MassMarketeersV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "KetchupMechanismV2Test",
-						"fn": func() -> Result: return KetchupMechanismV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.KetchupMechanismV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "KimchiV2Test",
-						"fn": func() -> Result: return KimchiV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.KimchiV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "CoffeeV2Test",
-						"fn": func() -> Result: return CoffeeV2TestClass.run(12345),
+						"fn": func() -> Result: return TestRefs.CoffeeV2TestClass.run(12345),
 					},
 					{
 						"name": "MovieStarsV2Test",
-						"fn": func() -> Result: return MovieStarsV2TestClass.run(3, 12345),
+						"fn": func() -> Result: return TestRefs.MovieStarsV2TestClass.run(3, 12345),
 					},
 					{
 						"name": "NightShiftManagersV2Test",
-						"fn": func() -> Result: return NightShiftManagersV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.NightShiftManagersV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "NewDistrictsV2Test",
-						"fn": func() -> Result: return NewDistrictsV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.NewDistrictsV2TestClass.run(2, 12345),
 					},
 		{
 			"name": "FryChefsV2Test",
-			"fn": func() -> Result: return FryChefsV2TestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.FryChefsV2TestClass.run(2, 12345),
 		},
 		{
 			"name": "RuralMarketeersV2Test",
-			"fn": func() -> Result: return RuralMarketeersV2TestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.RuralMarketeersV2TestClass.run(2, 12345),
 		},
 		{
 			"name": "GourmetFoodCriticsV2Test",
-			"fn": func() -> Result: return GourmetFoodCriticsV2TestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.GourmetFoodCriticsV2TestClass.run(2, 12345),
 		},
 		{
 			"name": "ReservePricesV2Test",
-			"fn": func() -> Result: return ReservePricesV2TestClass.run(2, 12345),
+			"fn": func() -> Result: return TestRefs.ReservePricesV2TestClass.run(2, 12345),
 		},
 					{
 						"name": "HardChoicesV2Test",
-						"fn": func() -> Result: return HardChoicesV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.HardChoicesV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "PhaseOrderOverrideV2Test",
-						"fn": func() -> Result: return PhaseOrderOverrideV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.PhaseOrderOverrideV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "WorkingSubPhaseOrderOverrideV2Test",
-						"fn": func() -> Result: return WorkingSubPhaseOrderOverrideV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.WorkingSubPhaseOrderOverrideV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "SettlementTriggerOverrideV2Test",
-						"fn": func() -> Result: return SettlementTriggerOverrideV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.SettlementTriggerOverrideV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "SettlementTriggerOverrideExtraV2Test",
-						"fn": func() -> Result: return SettlementTriggerOverrideExtraV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.SettlementTriggerOverrideExtraV2TestClass.run(2, 12345),
 					},
 				{
 					"name": "PaydaySubPhaseV2Test",
-					"fn": func() -> Result: return PaydaySubPhaseV2TestClass.run(2, 12345),
+					"fn": func() -> Result: return TestRefs.PaydaySubPhaseV2TestClass.run(2, 12345),
 				},
 				{
 					"name": "ActionAvailabilityOverrideV2Test",
-					"fn": func() -> Result: return ActionAvailabilityOverrideV2TestClass.run(2, 12345),
+					"fn": func() -> Result: return TestRefs.ActionAvailabilityOverrideV2TestClass.run(2, 12345),
 				},
 				{
 					"name": "NewMilestonesV2Test",
-					"fn": func() -> Result: return NewMilestonesV2TestClass.run(2, 12345),
+					"fn": func() -> Result: return TestRefs.NewMilestonesV2TestClass.run(2, 12345),
 				},
 					{
 						"name": "NewMilestonesNewRestaurantV2Test",
-						"fn": func() -> Result: return NewMilestonesNewRestaurantV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.NewMilestonesNewRestaurantV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "NewMilestonesMarketingTraineeV2Test",
-						"fn": func() -> Result: return NewMilestonesMarketingTraineeV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.NewMilestonesMarketingTraineeV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "NewMilestonesCampaignManagerV2Test",
-						"fn": func() -> Result: return NewMilestonesCampaignManagerV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.NewMilestonesCampaignManagerV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "NewMilestonesBrandManagerV2Test",
-						"fn": func() -> Result: return NewMilestonesBrandManagerV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.NewMilestonesBrandManagerV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "NewMilestonesBrandDirectorV2Test",
-						"fn": func() -> Result: return NewMilestonesBrandDirectorV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.NewMilestonesBrandDirectorV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "NewMilestonesBurgerSoldV2Test",
-						"fn": func() -> Result: return NewMilestonesBurgerSoldV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.NewMilestonesBurgerSoldV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "NewMilestonesCokeSoldV2Test",
-						"fn": func() -> Result: return NewMilestonesCokeSoldV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.NewMilestonesCokeSoldV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "NewMilestonesPizzaSoldV2Test",
-						"fn": func() -> Result: return NewMilestonesPizzaSoldV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.NewMilestonesPizzaSoldV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "NewMilestonesLemonadeSoldV2Test",
-						"fn": func() -> Result: return NewMilestonesLemonadeSoldV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.NewMilestonesLemonadeSoldV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "NewMilestonesBeerTrainerPaydayV2Test",
-						"fn": func() -> Result: return NewMilestonesBeerTrainerPaydayV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.NewMilestonesBeerTrainerPaydayV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "NewMilestonesRecruiterWaitressV2Test",
-						"fn": func() -> Result: return NewMilestonesRecruiterWaitressV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.NewMilestonesRecruiterWaitressV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "NewMilestonesDiscountManagerBankBurnV2Test",
-						"fn": func() -> Result: return NewMilestonesDiscountManagerBankBurnV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.NewMilestonesDiscountManagerBankBurnV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "LobbyistsV2Test",
-						"fn": func() -> Result: return LobbyistsV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.LobbyistsV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "NoodlesSushiV2Test",
-						"fn": func() -> Result: return NoodlesSushiV2TestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.NoodlesSushiV2TestClass.run(2, 12345),
 					},
 					{
 						"name": "MarketingSettlementFailFastTest",
-						"fn": func() -> Result: return MarketingSettlementFailFastTestClass.run(2, 12345),
+						"fn": func() -> Result: return TestRefs.MarketingSettlementFailFastTestClass.run(2, 12345),
 					},
 					{
 						"name": "MarketingDemandGeneratedEventTest",
-						"fn": func() -> Result: return MarketingDemandGeneratedEventTestClass.run(),
+						"fn": func() -> Result: return TestRefs.MarketingDemandGeneratedEventTestClass.run(),
 					},
 			{
 				"name": "MarketingDinnertimeGoldenReplayTest",
-				"fn": func() -> Result: return MarketingDinnertimeGoldenReplayTestClass.run(2, 12345),
+				"fn": func() -> Result: return TestRefs.MarketingDinnertimeGoldenReplayTestClass.run(2, 12345),
 			},
 			{
 				"name": "MilestoneEffectValuesTest",
-				"fn": func() -> Result: return MilestoneEffectValuesTestClass.run(2, 12345),
+				"fn": func() -> Result: return TestRefs.MilestoneEffectValuesTestClass.run(2, 12345),
 			},
 			{
 				"name": "RandomMapGenerationTest",
-				"fn": func() -> Result: return RandomMapGenerationTestClass.run(2, 12345),
+				"fn": func() -> Result: return TestRefs.RandomMapGenerationTestClass.run(2, 12345),
 			},
 			{
 				"name": "DinnertimeSettlementTest",
-				"fn": func() -> Result: return DinnertimeSettlementTestClass.run(2, 12345),
+				"fn": func() -> Result: return TestRefs.DinnertimeSettlementTestClass.run(2, 12345),
 			},
 			{
 				"name": "DinnertimeDistanceEntryBoundaryTest",
-				"fn": func() -> Result: return DinnertimeDistanceEntryBoundaryTestClass.run(2, 12345),
+				"fn": func() -> Result: return TestRefs.DinnertimeDistanceEntryBoundaryTestClass.run(2, 12345),
 			},
 			{
 				"name": "BankruptcyTest",
-				"fn": func() -> Result: return BankruptcyTestClass.run(2, 12345),
+				"fn": func() -> Result: return TestRefs.BankruptcyTestClass.run(2, 12345),
 			},
 		{
 			"name": "DistanceOverlayRoadworksPenaltyTest",
-			"fn": func() -> Result: return DistanceOverlayRoadworksPenaltyTestClass.run(),
+			"fn": func() -> Result: return TestRefs.DistanceOverlayRoadworksPenaltyTestClass.run(),
 		},
 	]
 
@@ -781,8 +641,8 @@ func _run_all() -> int:
 
 func _run_game_smoke_test() -> Result:
 	var smoke = get_node_or_null("GameSmokeTest")
-	if smoke == null and GameSmokeTestScene != null:
-		smoke = GameSmokeTestScene.instantiate()
+	if smoke == null and TestRefs.GameSmokeTestScene != null:
+		smoke = TestRefs.GameSmokeTestScene.instantiate()
 		add_child(smoke)
 		if smoke is CanvasItem:
 			(smoke as CanvasItem).visible = false
