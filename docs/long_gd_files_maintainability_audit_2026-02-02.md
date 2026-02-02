@@ -24,7 +24,7 @@
 | 行数 | funcs | preloads | signals | 文件 |
 |---:|---:|---:|---:|---|
 | 1421 | 94 | 20 | 0 | `ui/scenes/game/game.gd` |
-| 1274 | 41 | 3 | 0 | `ui/scenes/game/map_canvas_drawer.gd` |
+| 1146 | 41 | 5 | 0 | `ui/scenes/game/map_canvas_drawer.gd` |
 | 1085 | 66 | 8 | 2 | `ui/components/action_panel/action_panel.gd` |
 | 1019 | 54 | 4 | 0 | `ui/scenes/online/online_lobby.gd` |
 | 1006 | 50 | 5 | 8 | `autoload/net_client.gd` |
@@ -240,6 +240,7 @@
 实施结果（阶段性）：
 
 - 已完成：提取营销绘制 pass：新增 `ui/scenes/game/map_canvas_drawer_marketing_pass.gd` 与 `ui/scenes/game/map_canvas_drawer_texture_utils.gd`；`ui/scenes/game/map_canvas_drawer.gd` 行数从 1600 降至 1274；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 已完成：提取 ground/tile 绘制 pass：新增 `ui/scenes/game/map_canvas_drawer_ground_pass.gd` 与 `ui/scenes/game/map_canvas_drawer_tiles_pass.gd`；`ui/scenes/game/map_canvas_drawer.gd` 行数降至 1146；并通过 `ui/scenes/tests/all_tests.tscn`。
 
 ### 6) `ui/components/game_log/game_log_panel.gd`
 
@@ -517,3 +518,4 @@
 - 2026-02-03：提取地图交互 marketing 模式：新增 `ui/scenes/game/game_map_interaction_marketing_mode.gd`；`ui/scenes/game/game_map_interaction_controller.gd` 行数降至 820（仍略高于 800，后续将继续拆 placement）；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-03：提取地图交互 placement 模式：新增 `ui/scenes/game/game_map_interaction_placement_mode.gd`；`ui/scenes/game/game_map_interaction_controller.gd` 行数降至 411（低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-03：拆分 MapCanvasDrawer 的营销绘制：新增 `ui/scenes/game/map_canvas_drawer_marketing_pass.gd` 与 `ui/scenes/game/map_canvas_drawer_texture_utils.gd`；`ui/scenes/game/map_canvas_drawer.gd` 行数降至 1274；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-03：拆分 MapCanvasDrawer 的 ground/tile 绘制：新增 `ui/scenes/game/map_canvas_drawer_ground_pass.gd` 与 `ui/scenes/game/map_canvas_drawer_tiles_pass.gd`；`ui/scenes/game/map_canvas_drawer.gd` 行数降至 1146；并通过 `ui/scenes/tests/all_tests.tscn`。

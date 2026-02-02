@@ -12,6 +12,8 @@ const RESTAURANT_LOGO_PIECE_IDS = [
 
 const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
 const MarketingPassClass = preload("res://ui/scenes/game/map_canvas_drawer_marketing_pass.gd")
+const GroundPassClass = preload("res://ui/scenes/game/map_canvas_drawer_ground_pass.gd")
+const TilesPassClass = preload("res://ui/scenes/game/map_canvas_drawer_tiles_pass.gd")
 
 const LobbyistsRoadOverlaysClass = preload("res://modules/lobbyists/road_overlays.gd")
 const LOBBYISTS_ROADWORK_MARKERS_KEY := LobbyistsRoadOverlaysClass.ROADWORK_MARKERS_KEY
@@ -587,29 +589,7 @@ static func _draw_generic_piece(canvas, cell_size: int, info: Dictionary, alpha:
 	canvas.draw_texture_rect(tex, rect, false, mod)
 
 static func _draw_ground_and_blocked(canvas, cell_size: int) -> void:
-	var blocked_tex: Texture2D = canvas._skin.get_blocked_overlay_texture()
-	var ground_col := Color("#ffffff")
-	# Only paint ground for the base map cells.
-	# external_cells and the UI-only outside ring (used by airplane marketing) must stay transparent (issue_tracker #40).
-	var map_origin: Vector2i = canvas._map_data.get("map_origin", Vector2i.ZERO)
-	var base_grid_size: Vector2i = canvas._base_grid_size
-	if base_grid_size == Vector2i.ZERO:
-		var gs_val = canvas._map_data.get("grid_size", null)
-		if gs_val is Vector2i:
-			base_grid_size = gs_val
-	var base_min := -map_origin
-	var base_max := Vector2i(base_grid_size.x - map_origin.x - 1, base_grid_size.y - map_origin.y - 1)
-
-	for y in range(canvas._grid_size.y):
-		for x in range(canvas._grid_size.x):
-			var rect := Rect2(Vector2(x * cell_size, y * cell_size), Vector2(cell_size, cell_size))
-			var world_pos: Vector2i = canvas._world_origin + Vector2i(x, y)
-			if world_pos.x >= base_min.x and world_pos.x <= base_max.x and world_pos.y >= base_min.y and world_pos.y <= base_max.y:
-				canvas.draw_rect(rect, ground_col, true)
-
-			var cell: Dictionary = canvas._get_cell_world(world_pos)
-			if bool(cell.get("blocked", false)):
-				canvas.draw_texture_rect(blocked_tex, rect, false, Color(1, 1, 1, 0.85))
+	GroundPassClass.draw_ground_and_blocked(canvas, cell_size)
 
 static func _draw_roads(canvas, cell_size: int) -> void:
 	var pending_extra_dirs := _build_lobbyists_pending_road_connection_dirs(canvas)
@@ -1160,115 +1140,7 @@ static func _draw_selection(canvas, cell_size: int) -> void:
 		canvas.draw_rect(rect2, Color(1.0, 1.0, 1.0, 0.35), false, 1.0)
 
 static func _draw_tile_borders(canvas, cell_size: int) -> void:
-	if canvas._map_data.is_empty():
-		return
-	var tps_val = canvas._map_data.get("tile_placements", null)
-	if not (tps_val is Array):
-		return
-	var tps: Array = tps_val
-	if tps.is_empty():
-		return
-
-	var tile_size := int(MapUtils.TILE_SIZE)
-	if tile_size <= 0:
-		return
-
-	var thickness := maxf(1.5, float(cell_size) * 0.05)
-	thickness = minf(thickness, float(cell_size))
-	var col := Color(0, 0, 0, 0.9)
-
-	# tile 内部细分网格线（细线）：黑色 alpha≈0.25，线宽随 zoom 缩放为 max(1, cell_size*0.02)
-	var inner_thickness := maxf(1.0, float(cell_size) * 0.02)
-	inner_thickness = minf(inner_thickness, float(cell_size))
-	var inner_col := Color(0, 0, 0, 0.25)
-
-	for tp_val in tps:
-		if not (tp_val is Dictionary):
-			continue
-		var tp: Dictionary = tp_val
-		var board_pos_val = tp.get("board_pos", null)
-		if not (board_pos_val is Vector2i):
-			continue
-		var board_pos: Vector2i = board_pos_val
-		var world_min := board_pos * tile_size
-		var vmin = canvas._world_to_view(world_min)
-		var rect := Rect2(
-			Vector2(vmin.x * cell_size, vmin.y * cell_size),
-			Vector2(tile_size * cell_size, tile_size * cell_size)
-		)
-
-		# 内部细线先画，外边缘粗线后画（避免细线盖住外边缘）
-		for i in range(1, tile_size):
-			var x := rect.position.x + float(i * cell_size) - inner_thickness * 0.5
-			canvas.draw_rect(Rect2(Vector2(x, rect.position.y), Vector2(inner_thickness, rect.size.y)), inner_col, true)
-			var y := rect.position.y + float(i * cell_size) - inner_thickness * 0.5
-			canvas.draw_rect(Rect2(Vector2(rect.position.x, y), Vector2(rect.size.x, inner_thickness)), inner_col, true)
-
-		# 向内黑边框（不应盖住上层 piece）
-		canvas.draw_rect(Rect2(rect.position, Vector2(rect.size.x, thickness)), col, true)
-		canvas.draw_rect(Rect2(rect.position + Vector2(0, rect.size.y - thickness), Vector2(rect.size.x, thickness)), col, true)
-		canvas.draw_rect(Rect2(rect.position, Vector2(thickness, rect.size.y)), col, true)
-		canvas.draw_rect(Rect2(rect.position + Vector2(rect.size.x - thickness, 0), Vector2(thickness, rect.size.y)), col, true)
+	TilesPassClass.draw_tile_borders(canvas, cell_size)
 
 static func _draw_tile_id_labels(canvas, cell_size: int) -> void:
-	if canvas._map_data.is_empty():
-		return
-	var tps_val = canvas._map_data.get("tile_placements", null)
-	if not (tps_val is Array):
-		return
-	var tps: Array = tps_val
-	if tps.is_empty():
-		return
-
-	var show_tile_ids := false
-	if Globals != null:
-		show_tile_ids = bool(Globals.show_tile_ids)
-	if not show_tile_ids:
-		return
-
-	var tile_size := int(MapUtils.TILE_SIZE)
-	if tile_size <= 0:
-		return
-
-	var font: Font = ThemeDB.fallback_font
-	var font_size := maxi(10, int(round(float(cell_size) * 0.28)))
-	var pad := maxf(2.0, float(cell_size) * 0.12)
-
-	for tp_val in tps:
-		if not (tp_val is Dictionary):
-			continue
-		var tp: Dictionary = tp_val
-		var board_pos_val = tp.get("board_pos", null)
-		if not (board_pos_val is Vector2i):
-			continue
-		var board_pos: Vector2i = board_pos_val
-		var world_min := board_pos * tile_size
-		var vmin = canvas._world_to_view(world_min)
-		var rect := Rect2(
-			Vector2(vmin.x * cell_size, vmin.y * cell_size),
-			Vector2(tile_size * cell_size, tile_size * cell_size)
-		)
-
-		var tile_id := str(tp.get("tile_id", "")).strip_edges()
-		if tile_id.is_empty():
-			continue
-		var rotation := int(tp.get("rotation", 0)) % 360
-
-		var align := HORIZONTAL_ALIGNMENT_LEFT
-		match rotation:
-			90:
-				align = HORIZONTAL_ALIGNMENT_RIGHT
-			180:
-				align = HORIZONTAL_ALIGNMENT_RIGHT
-			270:
-				align = HORIZONTAL_ALIGNMENT_LEFT
-			_:
-				align = HORIZONTAL_ALIGNMENT_LEFT
-
-		var baseline_y := rect.position.y + pad + float(font_size)
-		if rotation == 180 or rotation == 270:
-			baseline_y = rect.position.y + rect.size.y - pad
-		var baseline := Vector2(rect.position.x + pad, baseline_y)
-		var width := rect.size.x - pad * 2.0
-		canvas.draw_string(font, baseline + Vector2(1, 1), tile_id, align, width, font_size, Color(0, 0, 0, 0.85))
-		canvas.draw_string(font, baseline, tile_id, align, width, font_size, Color(1, 1, 1, 1))
+	TilesPassClass.draw_tile_id_labels(canvas, cell_size)
