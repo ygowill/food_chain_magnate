@@ -14,9 +14,9 @@ const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const RecruitControllerClass = preload("res://ui/scenes/game/game_panel_working_recruit_controller.gd")
 const PriceControllerClass = preload("res://ui/scenes/game/game_panel_working_price_controller.gd")
+const MilestoneControllerClass = preload("res://ui/scenes/game/game_panel_working_milestone_controller.gd")
 const TrainPanelScene = preload("res://ui/components/train_panel/train_panel.tscn")
 const ProductionPanelScene = preload("res://ui/components/production_panel/production_panel.tscn")
-const MilestonePanelScene = preload("res://ui/components/milestone_panel/milestone_panel.tscn")
 
 var _scene = null
 var _map_controller = null
@@ -26,6 +26,7 @@ var _center_popup: Callable
 var _overlay_controller = null
 var _recruit_controller = null
 var _price_controller = null
+var _milestone_controller = null
 
 var recruit_panel = null
 var train_panel = null
@@ -50,6 +51,7 @@ func _init(scene, map_controller, execute_command: Callable, hide_all: Callable,
 	_overlay_controller = overlay_controller
 	_recruit_controller = RecruitControllerClass.new(_scene, _execute_command, _hide_all, _center_popup)
 	_price_controller = PriceControllerClass.new(_scene, _execute_command, _hide_all, _center_popup)
+	_milestone_controller = MilestoneControllerClass.new(_scene, _hide_all, _center_popup)
 
 	if _map_controller != null and _map_controller.has_signal("procure_drinks_source_selected"):
 		var sig := Signal(_map_controller, &"procure_drinks_source_selected")
@@ -490,50 +492,14 @@ func _sync_production_panel(state: GameState, force_full_refresh: bool = false) 
 		_hide_procurement_route_overlay()
 
 func _sync_milestone_panel(state: GameState, force_full_refresh: bool = false) -> void:
-	if state == null:
-		return
-	if not is_instance_valid(milestone_panel) or not milestone_panel.visible:
-		return
-	if not force_full_refresh:
-		return
-	if milestone_panel.has_method("set_milestone_pool"):
-		milestone_panel.set_milestone_pool(state.milestone_pool)
-	if milestone_panel.has_method("set_players"):
-		milestone_panel.set_players(state.players)
-	if milestone_panel.has_method("set_global_view"):
-		milestone_panel.set_global_view(true)
-	if milestone_panel.has_method("set_rules"):
-		milestone_panel.set_rules(state.rules)
+	if _milestone_controller != null:
+		_milestone_controller.sync(state, force_full_refresh)
 
 func show_milestone_panel() -> void:
-	if _scene == null or _scene.game_engine == null:
+	if _milestone_controller == null:
 		return
-	if _hide_all.is_valid():
-		_hide_all.call()
-
-	if milestone_panel == null:
-		milestone_panel = MilestonePanelScene.instantiate()
-		milestone_panel.visible = false
-		milestone_panel.set_meta("popup_layout", "dock_right")
-		milestone_panel.set_meta("popup_title", "里程碑")
-		if milestone_panel.has_signal("cancelled"):
-			milestone_panel.cancelled.connect(_on_cancelled)
-		_scene.add_child(milestone_panel)
-
-	var state = _scene.game_engine.get_state()
-
-	if milestone_panel.has_method("set_milestone_pool"):
-		milestone_panel.set_milestone_pool(state.milestone_pool)
-	if milestone_panel.has_method("set_players"):
-		milestone_panel.set_players(state.players)
-	if milestone_panel.has_method("set_global_view"):
-		milestone_panel.set_global_view(true)
-	if milestone_panel.has_method("set_rules"):
-		milestone_panel.set_rules(state.rules)
-
-	if _center_popup.is_valid():
-		_center_popup.call(milestone_panel)
-	milestone_panel.visible = true
+	_milestone_controller.show()
+	milestone_panel = _milestone_controller.milestone_panel
 
 func _on_train_requested(from_employee: String, to_employee: String) -> void:
 	if _scene == null or _scene.game_engine == null:
