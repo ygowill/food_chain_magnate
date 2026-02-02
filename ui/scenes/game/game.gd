@@ -55,16 +55,14 @@ const GameOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_co
 const GameMapInteractionControllerClass = preload("res://ui/scenes/game/game_map_interaction_controller.gd")
 const GamePanelControllerClass = preload("res://ui/scenes/game/game_panel_controller.gd")
 const GameOnlineResyncControllerClass = preload("res://ui/scenes/game/game_online_resync_controller.gd")
+const GameTimelineControllerClass = preload("res://ui/scenes/game/game_timeline_controller.gd")
 const DebugPanelScene = preload("res://ui/scenes/debug/debug_panel.tscn")
 const ConfirmDialogScene = preload("res://ui/dialogs/confirm_dialog.tscn")
-const ReplayPlayerScene = preload("res://ui/components/replay_player/replay_player.tscn")
 const SaveLoadDialogScript = preload("res://ui/dialogs/save_load_dialog.gd")
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 const EventTimelineBuildClass = preload("res://gameplay/replay/event_timeline_build.gd")
-const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
-const GameEventLogFormatterClass = preload("res://ui/scenes/game/game_event_log_formatter.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
@@ -82,6 +80,7 @@ var _overlay_controller = null
 var _map_controller = null
 var _panel_controller = null
 var _online_resync_controller = null
+var _timeline_controller = null
 
 # 调试面板
 var _debug_panel: Window = null
@@ -90,31 +89,6 @@ var _debug_panel: Window = null
 var _confirm_dialog: ConfirmDialog = null
 var _confirm_dialog_on_confirm: Callable = Callable()
 var _confirm_dialog_on_cancel: Callable = Callable()
-
-# 回放播放器（P2）
-var _replay_player: ReplayPlayer = null
-var _replay_mode_active: bool = false
-var _replay_original_engine: GameEngine = null
-var _replay_original_log_entries: Array[Dictionary] = []
-var _replay_file_path: String = ""
-var _replay_step_timeline: Dictionary = {} # {initial_state_dict, steps, events}
-var _replay_head_step_index: int = -1
-var _replay_cursor_step_index: int = -1
-
-# 复盘（非回放）：当 cursor < head 时，切换到 step_index 时间线（支持大阶段切分），并在返回最新时恢复实时日志。
-var _history_step_timeline_active: bool = false
-var _history_step_timeline: Dictionary = {} # {initial_state_dict, steps, events}
-var _history_head_step_index: int = -1
-var _history_cursor_step_index: int = -1
-var _history_original_log_entries: Array[Dictionary] = []
-var _history_latest_state_dict: Dictionary = {}
-# 时间线编辑模式：允许在 cursor<head 时继续执行命令（将丢弃未来时间线并产生新分支）。
-# - 仅由显式“回退类操作”（如调试面板 undo/redo、UI 的回退到回合开始）开启。
-# - 通过日志面板/回放条 seek 进入的“查看历史”仍保持只读（避免 step 快照与 RNG 不一致）。
-var _timeline_edit_mode_active: bool = false
-var _force_full_panel_sync_next_update: bool = false
-var _startup_replay_from_main_menu: bool = false
-var _startup_replay_file_path: String = ""
 var _online_turn_toast_last_player_id: int = -999
 var _phase_toast_last_phase: String = ""
 
@@ -141,12 +115,15 @@ func _ready() -> void:
 	if not is_instance_valid(self):
 		return
 
+	var startup_replay_from_main_menu := false
+	var startup_replay_path := ""
+
 	# 主菜单入口：选择回放文件后，进入 Game 并自动打开回放播放器。
 	if Globals != null:
 		var p := str(Globals.pending_replay_file_path).strip_edges()
 		if not p.is_empty():
-			_startup_replay_from_main_menu = true
-			_startup_replay_file_path = p
+			startup_replay_from_main_menu = true
+			startup_replay_path = p
 			Globals.pending_replay_file_path = ""
 
 	var should_restore_log_history := false
@@ -220,10 +197,22 @@ func _ready() -> void:
 	# 不再依赖 EventBus 订阅追加日志。
 	_event_log_controller = null
 	UiSignalHelpersClass.safe_connect(game_log_panel, "close_requested", toggle_game_log)
-	UiSignalHelpersClass.safe_connect(game_log_panel, "log_entry_clicked", _on_log_entry_clicked)
-	if game_log_panel.has_signal("timeline_seek_requested"):
-		UiSignalHelpersClass.safe_connect(game_log_panel, "timeline_seek_requested", _on_timeline_seek_requested)
-	_init_replay_bar()
+
+	_timeline_controller = GameTimelineControllerClass.new(
+		self,
+		game_log_panel,
+		action_panel,
+		Callable(self, "_get_game_engine"),
+		Callable(self, "_set_active_game_engine"),
+		Callable(self, "_update_ui"),
+		Callable(self, "_show_confirm"),
+		Callable(self, "_show_game_log_panel_in_right_panel"),
+		Callable(self, "_open_replay_load_dialog"),
+		Callable(self, "_is_online_resync_in_progress")
+	)
+	_timeline_controller.set_startup_replay_from_main_menu(startup_replay_from_main_menu)
+	_timeline_controller.initialize()
+
 	PerfTraceClass.end_span(span_layout)
 
 	var span_init_game := PerfTraceClass.begin_span("game:_initialize_game")
@@ -235,7 +224,7 @@ func _ready() -> void:
 			self,
 			game_log_panel,
 			Callable(self, "_get_game_engine"),
-			Callable(self, "_apply_live_log_timeline_from_engine"),
+			Callable(_timeline_controller, "apply_live_log_timeline_from_engine"),
 			Callable(self, "_update_ui"),
 			Callable(self, "_reset_timeline_state_after_online_resync"),
 			Callable(self, "_show_confirm"),
@@ -252,9 +241,9 @@ func _ready() -> void:
 	_init_left_area_resize()
 	_apply_responsive_layout()
 	UiSignalHelpersClass.safe_connect(self, "resized", _on_root_resized)
-	if _startup_replay_from_main_menu and not _startup_replay_file_path.is_empty():
+	if startup_replay_from_main_menu and not startup_replay_path.is_empty():
 		# 回放入口：保持加载遮罩，避免先渲染“新开局”的 UI 再切换到回放造成闪烁。
-		_start_replay_from_file(_startup_replay_file_path)
+		_start_replay_from_file(startup_replay_path)
 	else:
 		var span_update_ui := PerfTraceClass.begin_span("game:_update_ui(first)")
 		_update_ui()
@@ -399,6 +388,10 @@ func _dispose_runtime() -> void:
 	if _online_resync_controller != null and _online_resync_controller.has_method("dispose"):
 		_online_resync_controller.dispose()
 	_online_resync_controller = null
+
+	if _timeline_controller != null and _timeline_controller.has_method("dispose"):
+		_timeline_controller.dispose()
+	_timeline_controller = null
 
 	if Globals != null and Globals.current_game_engine == game_engine:
 		Globals.current_game_engine = null
@@ -604,17 +597,12 @@ func _update_ui() -> void:
 
 	var head_index := game_engine.command_history.size() - 1
 	var cursor_index := int(game_engine.current_command_index)
-	if _replay_mode_active and _replay_step_timeline.has("steps"):
-		head_index = _replay_head_step_index
-		cursor_index = _replay_cursor_step_index
-	elif _history_step_timeline_active and _history_step_timeline.has("steps"):
-		head_index = _history_head_step_index
-		cursor_index = _history_cursor_step_index
 	var replay_suffix := ""
-	if _replay_mode_active:
-		replay_suffix = "（回放）"
-	elif cursor_index < head_index:
-		replay_suffix = "（时间旅行）" if _timeline_edit_mode_active else "（复盘）"
+	if _timeline_controller != null:
+		var hc = _timeline_controller.get_ui_head_cursor(game_engine)
+		head_index = int(hc.x)
+		cursor_index = int(hc.y)
+		replay_suffix = _timeline_controller.get_ui_replay_suffix(game_engine, head_index, cursor_index)
 
 	if state.phase == DefsClass.PHASE_RESTRUCTURING:
 		var submitted_count := 0
@@ -660,8 +648,9 @@ func _update_ui() -> void:
 	# UI 同步（面板/覆盖层）
 	if _panel_controller != null:
 		var span_panels := PerfTraceClass.begin_span("ui:panel_controller.sync") if do_profile else -1
-		var force_refresh := _force_full_panel_sync_next_update
-		_force_full_panel_sync_next_update = false
+		var force_refresh := false
+		if _timeline_controller != null:
+			force_refresh = bool(_timeline_controller.consume_force_full_panel_sync_next_update())
 		_panel_controller.sync(state, force_refresh)
 		_sync_right_panel_docked_view()
 		if do_profile:
@@ -674,7 +663,8 @@ func _update_ui() -> void:
 			PerfTraceClass.end_span(span_overlays)
 
 	# 回放/复盘：日志时间线指针 + ReplayBar 显示 + ActionPanel 禁用
-	_sync_timeline_ui(head_index, cursor_index, state)
+	if _timeline_controller != null:
+		_timeline_controller.sync_timeline_ui(head_index, cursor_index, state)
 
 	_maybe_show_online_turn_toast(head_index, cursor_index, state)
 	_maybe_show_phase_change_toast(head_index, cursor_index, state)
@@ -693,7 +683,7 @@ func _maybe_show_online_turn_toast(head_index: int, cursor_index: int, state: Ga
 		return
 	if state == null:
 		return
-	if _replay_mode_active or _history_step_timeline_active:
+	if _timeline_controller != null and (_timeline_controller.is_replay_mode_active() or _timeline_controller.is_history_step_timeline_active()):
 		return
 	if cursor_index < head_index:
 		return
@@ -728,7 +718,7 @@ func _maybe_show_phase_change_toast(head_index: int, cursor_index: int, state: G
 		return
 
 	# 回放/复盘/时间线回退时会频繁切换阶段：避免刷屏，仅在“实时头部”显示。
-	if _replay_mode_active or _history_step_timeline_active:
+	if _timeline_controller != null and (_timeline_controller.is_replay_mode_active() or _timeline_controller.is_history_step_timeline_active()):
 		_phase_toast_last_phase = ""
 		return
 	if cursor_index < head_index:
@@ -760,11 +750,12 @@ func _on_debug_command_executed(command: String, _result: String) -> void:
 	# 避免时间线变化后仍停留在旧面板/选点上下文导致“看起来没回退”；
 	# 不再强制 hide：保持面板打开，但下一帧强制从 state 全量同步，避免残留旧 UI 缓存。
 	if is_timeline_change:
-		_force_full_panel_sync_next_update = true
-		_apply_live_log_timeline_from_engine()
-		# 调试面板的 undo/redo 需要进入“时间线编辑模式”，否则 undo 后 UI 会处于只读态导致无法继续操作。
-		if head == "undo" or head == "redo":
-			_timeline_edit_mode_active = true
+		if _timeline_controller != null:
+			_timeline_controller.request_force_full_panel_sync_next_update()
+			_timeline_controller.apply_live_log_timeline_from_engine()
+			# 调试面板的 undo/redo 需要进入“时间线编辑模式”，否则 undo 后 UI 会处于只读态导致无法继续操作。
+			if head == "undo" or head == "redo":
+				_timeline_controller.set_timeline_edit_mode_active(true)
 
 	# 调试命令执行后刷新游戏 UI
 	_update_ui()
@@ -772,7 +763,7 @@ func _on_debug_command_executed(command: String, _result: String) -> void:
 func rewind_to_turn_start() -> void:
 	if game_engine == null:
 		return
-	if _replay_mode_active:
+	if _timeline_controller != null and _timeline_controller.is_replay_mode_active():
 		GameLog.warn("Game", "回放模式下无法回退回合")
 		return
 
@@ -819,15 +810,16 @@ func _confirm_rewind_to_turn_start(target_index: int) -> void:
 	if not result.ok:
 		GameLog.warn("Game", "回退到回合开始失败: %s" % result.error)
 	else:
-		_timeline_edit_mode_active = true
-		_force_full_panel_sync_next_update = true
-		_apply_live_log_timeline_from_engine()
+		if _timeline_controller != null:
+			_timeline_controller.set_timeline_edit_mode_active(true)
+			_timeline_controller.request_force_full_panel_sync_next_update()
+			_timeline_controller.apply_live_log_timeline_from_engine()
 	_update_ui()
 
 func _execute_command(command: Command) -> Result:
 	if game_engine == null:
 		return Result.failure("游戏引擎未初始化")
-	if _replay_mode_active:
+	if _timeline_controller != null and _timeline_controller.is_replay_mode_active():
 		return Result.failure("回放模式下无法执行命令")
 
 	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
@@ -837,7 +829,8 @@ func _execute_command(command: Command) -> Result:
 
 	var head_index := game_engine.command_history.size() - 1
 	var was_in_history := int(game_engine.current_command_index) < head_index
-	if was_in_history and not _timeline_edit_mode_active:
+	var can_edit_timeline = (_timeline_controller != null and _timeline_controller.is_timeline_edit_mode_active())
+	if was_in_history and not can_edit_timeline:
 		return Result.failure("查看历史中无法执行命令（请先返回最新）")
 
 	var auto := _maybe_auto_complete_mandatory_actions_before_skip(command)
@@ -855,9 +848,10 @@ func _execute_command(command: Command) -> Result:
 		# 时间线被回退过时，执行新命令会截断未来时间线并生成新分支：需要重建 step_timeline 视图，避免 UI 仍引用旧 head。
 		# 其它情况下：仅在日志面板可见时重建（降低每步全量回放开销）。
 		if was_in_history or (is_instance_valid(game_log_panel) and game_log_panel.visible):
-			_apply_live_log_timeline_from_engine()
-		if was_in_history:
-			_timeline_edit_mode_active = false
+			if _timeline_controller != null:
+				_timeline_controller.apply_live_log_timeline_from_engine()
+		if was_in_history and _timeline_controller != null:
+			_timeline_controller.set_timeline_edit_mode_active(false)
 
 	_update_ui()
 	return result
@@ -1265,728 +1259,18 @@ func _cancel_quit_to_menu() -> void:
 	elif is_instance_valid(menu_dialog):
 		menu_dialog.show()
 
-# === P2 工具方法（对外 API）===
-
-func is_replay_mode_active() -> bool:
-	return _replay_mode_active
-
-func is_timeline_read_only_active() -> bool:
-	# Read-only whenever we're using a replay engine, or when the local engine cursor is behind head (reviewing history).
-	if _replay_mode_active:
-		return true
-	if game_engine == null:
-		return false
-	var head_index := game_engine.command_history.size() - 1
-	var cursor_index := int(game_engine.current_command_index)
-	return cursor_index < head_index
-
-func _init_replay_bar() -> void:
-	if game_log_panel == null or not is_instance_valid(game_log_panel):
-		return
-	if not game_log_panel.has_method("get_replay_bar"):
-		return
-	var rb = game_log_panel.call("get_replay_bar")
-	if rb == null or not is_instance_valid(rb):
-		return
-
-	if rb.has_signal("seek_requested"):
-		UiSignalHelpersClass.safe_connect(rb, "seek_requested", _on_replay_bar_seek_requested)
-	if rb.has_signal("return_latest_requested"):
-		UiSignalHelpersClass.safe_connect(rb, "return_latest_requested", _on_replay_bar_return_latest_requested)
-	if rb.has_signal("load_requested"):
-		UiSignalHelpersClass.safe_connect(rb, "load_requested", _on_replay_bar_load_requested)
-	if rb.has_signal("close_requested"):
-		UiSignalHelpersClass.safe_connect(rb, "close_requested", _on_replay_bar_close_requested)
-
-	if rb.has_method("set_active"):
-		rb.call("set_active", false)
-
-func _set_replay_bar_state(head_index: int, cursor_index: int, read_only: bool) -> void:
-	if game_log_panel == null or not is_instance_valid(game_log_panel):
-		return
-	if not game_log_panel.has_method("get_replay_bar"):
-		return
-	var rb = game_log_panel.call("get_replay_bar")
-	if rb == null or not is_instance_valid(rb):
-		return
-
-	if rb.has_method("set_active"):
-		rb.call("set_active", true)
-	if rb.has_method("set_timeline"):
-		var extra := ""
-		if _replay_mode_active and _replay_step_timeline.has("steps"):
-			extra = _build_replay_bar_status_extra(cursor_index, _replay_step_timeline)
-		elif _history_step_timeline_active and _history_step_timeline.has("steps"):
-			extra = _build_replay_bar_status_extra(cursor_index, _history_step_timeline)
-		rb.call("set_timeline", head_index, cursor_index, read_only, extra)
-
-func _build_replay_bar_status_extra(step_index: int, timeline: Dictionary) -> String:
-	# M4.3：不展示 step/cmd，仅展示“当前阶段”。
-	if timeline == null or timeline.is_empty():
-		return ""
-
-	var idx := int(step_index)
-	var phase := ""
-	if idx < 0:
-		var init_val = timeline.get("initial_state_dict", null)
-		if init_val is Dictionary:
-			phase = str(Dictionary(init_val).get("phase", "")).strip_edges()
-	else:
-		var steps_val = timeline.get("steps", null)
-		if not (steps_val is Array):
-			return ""
-		var steps: Array = steps_val
-		if idx >= steps.size():
-			return ""
-		var s_val = steps[idx]
-		if not (s_val is Dictionary):
-			return ""
-		phase = str(Dictionary(s_val).get("phase", "")).strip_edges()
-
-	var display_name = GameLogPanel.PHASE_DISPLAY_NAMES.get(phase, phase)
-	if str(display_name).strip_edges().is_empty():
-		return "初始"
-	return "阶段：%s" % str(display_name)
-
-func _hide_replay_bar() -> void:
-	if game_log_panel == null or not is_instance_valid(game_log_panel):
-		return
-	if not game_log_panel.has_method("get_replay_bar"):
-		return
-	var rb = game_log_panel.call("get_replay_bar")
-	if rb == null or not is_instance_valid(rb):
-		return
-	if rb.has_method("set_active"):
-		rb.call("set_active", false)
-
-func _sync_timeline_ui(head_index: int, cursor_index: int, state: GameState) -> void:
-	if is_instance_valid(game_log_panel):
-		game_log_panel.set_timeline_head(head_index)
-		game_log_panel.set_timeline_cursor(cursor_index)
-
-	var show_bar := _replay_mode_active or cursor_index < head_index
-	if show_bar:
-		_set_replay_bar_state(head_index, cursor_index, _replay_mode_active)
-	else:
-		_hide_replay_bar()
-
-	# 回放/查看历史：禁用 ActionPanel（避免时间线分支与误操作）。
-	if is_instance_valid(action_panel) and action_panel.has_method("set_globally_disabled"):
-		var reason := ""
-		if _replay_mode_active:
-			reason = "回放中不可操作"
-		elif cursor_index < head_index and not _timeline_edit_mode_active:
-			reason = "查看历史中不可操作"
-		elif NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-			if _online_resync_controller != null and _online_resync_controller.is_resync_in_progress():
-				reason = "联机：同步中"
-			elif state == null:
-				reason = "联机：等待同步"
-			elif NetContext.local_player_id < 0:
-				reason = "联机：身份未就绪"
-			elif str(state.phase) != DefsClass.PHASE_RESTRUCTURING and state.get_current_player_id() != int(NetContext.local_player_id):
-				reason = "联机：等待其他玩家操作"
-		action_panel.set_globally_disabled(reason)
+# === 时间线/回放（由 GameTimelineController 负责）===
 
 func _get_game_engine() -> GameEngine:
 	return game_engine
 
-func _reset_timeline_state_after_online_resync() -> void:
-	_timeline_edit_mode_active = false
-	_force_full_panel_sync_next_update = true
-
-func _goto_online_lobby() -> void:
-	if SceneManager != null and SceneManager.has_method("goto_online_lobby"):
-		SceneManager.goto_online_lobby()
-
-func _start_replay_from_file(file_path: String) -> void:
-	if file_path.is_empty():
-		return
-	_replay_file_path = file_path
-
-	# 若是从对局中进入回放：保留原日志，退出回放时可恢复。
-	if not _replay_mode_active and is_instance_valid(game_log_panel) and game_log_panel.has_method("get_entries"):
-		_replay_original_log_entries = game_log_panel.get_entries()
-
-	var engine := GameEngine.new()
-	var load_result: Result = engine.load_from_file(file_path)
-	if not load_result.ok:
-		GameLog.error("Game", "回放加载失败: %s" % load_result.error)
-		if _startup_replay_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
-			SceneManager.hide_loading()
-		_show_confirm("回放加载失败", load_result.error, Callable(), Callable())
-		return
-
-	if _startup_replay_from_main_menu and Globals != null and Globals.has_method("sync_runtime_config_from_engine"):
-		Globals.sync_runtime_config_from_engine(engine)
-
-	_enter_replay_mode(engine)
-	_apply_full_replay_log_timeline(engine)
-	_show_game_log_panel_in_right_panel()
-
-	if _startup_replay_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
-		SceneManager.hide_loading()
-	if _startup_replay_from_main_menu:
-		call_deferred("_start_background_ui_warmup")
-
-func _apply_full_replay_log_timeline(engine: GameEngine) -> void:
-	if engine == null or not is_instance_valid(engine):
-		return
-	if not is_instance_valid(game_log_panel):
-		return
-
-	# M4.2：构建 step_index 时间线（阶段切分点 + 状态快照），用于回放步进与日志高亮。
-	var build_r: Result = StepTimelineBuildClass.build_full(engine)
-	if not build_r.ok:
-		GameLog.error("Game", "构建 step 时间线失败: %s" % build_r.error)
-		_show_confirm("回放加载失败", "构建 step 时间线失败: %s" % build_r.error, Callable(), Callable())
-		return
-
-	var timeline_val = build_r.value
-	if not (timeline_val is Dictionary):
-		_show_confirm("回放加载失败", "构建 step 时间线失败: 内部错误（返回类型错误）", Callable(), Callable())
-		return
-
-	_replay_step_timeline = Dictionary(timeline_val).duplicate(true)
-
-	var events_val = _replay_step_timeline.get("events", [])
-	var events: Array = events_val if (events_val is Array) else []
-	var entries := _build_log_entries_from_timeline_events(events)
-	if game_log_panel.has_method("load_step_timeline"):
-		game_log_panel.load_step_timeline(_replay_step_timeline, entries, true)
-	else:
-		game_log_panel.load_entries(entries)
-
-	var steps_val = _replay_step_timeline.get("steps", [])
-	var steps: Array = steps_val if (steps_val is Array) else []
-	_replay_head_step_index = steps.size() - 1
-	_replay_cursor_step_index = _replay_head_step_index
-
-	game_log_panel.set_timeline_head(_replay_head_step_index)
-	game_log_panel.set_timeline_cursor(_replay_cursor_step_index)
-	_set_replay_bar_state(_replay_head_step_index, _replay_cursor_step_index, true)
-
-func _apply_live_log_timeline_from_engine() -> void:
-	# M4.3：正常对局（实时）也使用 step_timeline 来渲染日志结构。
-	# - 仅在本地 engine 下使用（回放模式由 _apply_full_replay_log_timeline 负责）。
-	# - timeline 的结构来自 steps，内容来自 formatter(entries)。
-	if _replay_mode_active:
-		return
-	if game_engine == null:
-		return
-	if not is_instance_valid(game_log_panel):
-		return
-
-	var build_r: Result = StepTimelineBuildClass.build_full(game_engine)
-	if not build_r.ok:
-		GameLog.warn("Game", "构建 step 时间线失败（实时日志将为空/不更新）: %s" % build_r.error)
-		return
-	if not (build_r.value is Dictionary):
-		GameLog.warn("Game", "构建 step 时间线失败（返回类型错误）")
-		return
-
-	_history_step_timeline = Dictionary(build_r.value).duplicate(true)
-	_history_step_timeline_active = true
-
-	var events_val = _history_step_timeline.get("events", [])
-	var events: Array = events_val if (events_val is Array) else []
-	var entries := _build_log_entries_from_timeline_events(events)
-	if game_log_panel.has_method("load_step_timeline"):
-		# 保留 UI-only 日志（例如动作失败提示），避免 rebuild 覆盖用户可见反馈。
-		game_log_panel.load_step_timeline(_history_step_timeline, entries, false)
-	else:
-		game_log_panel.load_entries(entries)
-
-	var steps_val = _history_step_timeline.get("steps", [])
-	var steps: Array = steps_val if (steps_val is Array) else []
-	_history_head_step_index = steps.size() - 1
-
-	# 默认定位到“当前引擎指针”的稳定落点：
-	# - 若在最新：cursor=head_step；
-	# - 若在历史：cursor=该 command_index 对应的最后一个 step（通常是该命令链路结束后的稳定状态）。
-	var head_cmd := game_engine.command_history.size() - 1
-	var cursor_cmd := int(game_engine.current_command_index)
-	if cursor_cmd < 0:
-		_history_cursor_step_index = -1
-	elif cursor_cmd >= head_cmd:
-		_history_cursor_step_index = _history_head_step_index
-	else:
-		_history_cursor_step_index = _command_index_to_last_step_index(cursor_cmd, _history_step_timeline)
-		if _history_cursor_step_index < -1:
-			_history_cursor_step_index = _history_head_step_index
-
-	game_log_panel.set_timeline_head(_history_head_step_index)
-	game_log_panel.set_timeline_cursor(_history_cursor_step_index)
-
-func _command_index_to_last_step_index(command_index: int, timeline: Dictionary) -> int:
-	var cmd := int(command_index)
-	if cmd < 0:
-		return -1
-	if timeline == null or timeline.is_empty():
-		return -1
-	var steps_val = timeline.get("steps", null)
-	if not (steps_val is Array):
-		return -1
-	var steps: Array = steps_val
-	for idx in range(steps.size() - 1, -1, -1):
-		var s_val = steps[idx]
-		if not (s_val is Dictionary):
-			continue
-		var s: Dictionary = s_val
-		if int(s.get("anchor_command_index", -999)) == cmd:
-			return idx
-	return -1
-
-func _build_log_entries_from_timeline_events(events: Array) -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	if events == null or events.is_empty():
-		return out
-
-	var formatter = GameEventLogFormatterClass.new()
-	var entry_id := 0
-
-	for ev_val in events:
-		if not (ev_val is Dictionary):
-			continue
-		var ev: Dictionary = ev_val
-		var event_type := str(ev.get("type", "")).strip_edges()
-		var is_stage_event := (
-			event_type == EventBus.EventType.PHASE_CHANGED
-			or event_type == EventBus.EventType.SUB_PHASE_CHANGED
-			or event_type == EventBus.EventType.ROUND_STARTED
-			or event_type == EventBus.EventType.ROUND_ENDED
-			or event_type == EventBus.EventType.PLAYER_TURN_STARTED
-			or event_type == EventBus.EventType.PLAYER_TURN_ENDED
-			or event_type.ends_with("_report")
-		)
-		var cmd_index := int(ev.get("command_index", -1))
-		var step_index := int(ev.get("step_index", cmd_index))
-		var phase_segment := str(ev.get("phase_segment", "")).strip_edges()
-		var event_seq := int(ev.get("sequence", entry_id))
-
-		var formatted: Array = formatter.format(ev) if (formatter != null and is_instance_valid(formatter) and formatter.has_method("format")) else []
-		for f_val in formatted:
-			if not (f_val is Dictionary):
-				continue
-			var f: Dictionary = f_val
-			var log_type := int(f.get("type", GameLogPanel.LogType.DEBUG))
-			var msg := str(f.get("message", ""))
-			var details_val = f.get("details", {})
-			var details: Dictionary = details_val if (details_val is Dictionary) else {}
-			if not details.has("command_index"):
-				details["command_index"] = cmd_index
-			if not details.has("step_index"):
-				details["step_index"] = step_index
-			if not phase_segment.is_empty() and not details.has("phase_segment"):
-				details["phase_segment"] = phase_segment
-			if not event_type.is_empty() and not details.has("event_type"):
-				details["event_type"] = event_type
-			if not details.has("is_stage_event"):
-				details["is_stage_event"] = is_stage_event
-
-			out.append({
-				"type": log_type,
-				"message": msg,
-				"timestamp": str(event_seq),
-				"details": details,
-				"command_index": cmd_index,
-				"step_index": step_index,
-				"phase_segment": phase_segment,
-				"event_seq": event_seq,
-				"event_type": event_type,
-				"is_stage_event": is_stage_event,
-			})
-			entry_id += 1
-
-	return out
-
-func _on_log_entry_clicked(entry_id: int) -> void:
-	if game_engine == null:
-		return
-	if game_log_panel == null or not is_instance_valid(game_log_panel):
-		return
-	if not game_log_panel.has_method("get_entry_timeline_index"):
-		return
-	var idx := int(game_log_panel.call("get_entry_timeline_index", entry_id))
-	if idx < -1:
-		return
-	_on_replay_bar_seek_requested(idx)
-
-func _on_timeline_seek_requested(timeline_index: int) -> void:
-	_on_replay_bar_seek_requested(int(timeline_index))
-
-func _on_replay_bar_seek_requested(target_index: int) -> void:
-	if game_engine == null:
-		return
-	# 联机：禁止本地时间线回退/复盘（否则会与 server 命令流产生状态不一致）。
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and not _replay_mode_active:
-		GameLog.warn("Game", "联机模式下不支持时间线回退/复盘（避免状态不一致）")
-		return
-	# 通过 ReplayBar/日志 seek 进入的“查看历史”一律保持只读（避免 step 快照状态用于分支编辑）。
-	_timeline_edit_mode_active = false
-
-	# M4.2：回放模式采用 step_index（阶段切分点）seek，直接用快照覆盖 game_engine.state（只读）。
-	if _replay_mode_active and _replay_step_timeline.has("steps"):
-		_seek_to_replay_step(int(target_index))
-		return
-
-	# 复盘（非回放）：当 step 时间线激活时，seek 参数为 step_index。
-	if _history_step_timeline_active and _history_step_timeline.has("steps"):
-		_seek_to_history_step(int(target_index))
-		return
-
-	var head_index := game_engine.command_history.size() - 1
-	var target := clampi(int(target_index), -1, head_index)
-	if target == int(game_engine.current_command_index):
-		# 若已经通过其它路径回退到历史命令（cursor<head），也允许“原地切换”为 step 时间线，
-		# 以便把该命令链路中的 auto-advance 大阶段拆分成可步进点（避免看起来仍被打包在一个位置）。
-		if not _history_step_timeline_active and target < head_index:
-			var step_target2 := _enter_history_step_timeline_for_command(target)
-			if step_target2 >= -1:
-				_seek_to_history_step(step_target2)
-				return
-		_update_ui()
-		return
-
-	# 首次进入复盘：从命令时间线切换到 step 时间线（用于大阶段切分）。
-	if target < head_index:
-		var step_target := _enter_history_step_timeline_for_command(target)
-		if step_target >= -1:
-			_seek_to_history_step(step_target)
-			return
-
-	var r := game_engine.rewind_to_command(target)
-	if not r.ok:
-		GameLog.warn("Game", "时间线 seek 失败: %s" % r.error)
-		return
-
-	_force_full_panel_sync_next_update = true
-	_update_ui()
-
-func _enter_history_step_timeline_for_command(target_command_index: int) -> int:
-	if _history_step_timeline_active and _history_step_timeline.has("steps"):
-		return _history_command_index_to_step_index(int(target_command_index))
-	if game_engine == null:
-		return -999
-	if not is_instance_valid(game_log_panel):
-		return -999
-
-	var build_r: Result = StepTimelineBuildClass.build_full(game_engine)
-	if not build_r.ok:
-		GameLog.warn("Game", "构建 step 时间线失败（复盘模式将回退到命令时间线）: %s" % build_r.error)
-		return -999
-	if not (build_r.value is Dictionary):
-		GameLog.warn("Game", "构建 step 时间线失败（返回类型错误）")
-		return -999
-
-	_history_step_timeline = Dictionary(build_r.value).duplicate(true)
-	_history_step_timeline_active = true
-
-	var events_val = _history_step_timeline.get("events", [])
-	var events: Array = events_val if (events_val is Array) else []
-	var entries := _build_log_entries_from_timeline_events(events)
-	if game_log_panel.has_method("load_step_timeline"):
-		game_log_panel.load_step_timeline(_history_step_timeline, entries, false)
-	else:
-		game_log_panel.load_entries(entries)
-
-	var steps_val = _history_step_timeline.get("steps", [])
-	var steps: Array = steps_val if (steps_val is Array) else []
-	_history_head_step_index = steps.size() - 1
-	_history_cursor_step_index = _history_head_step_index
-
-	game_log_panel.set_timeline_head(_history_head_step_index)
-	game_log_panel.set_timeline_cursor(_history_cursor_step_index)
-	_set_replay_bar_state(_history_head_step_index, _history_cursor_step_index, false)
-	_show_game_log_panel_in_right_panel()
-
-	return _history_command_index_to_step_index(int(target_command_index))
-
-func _history_command_index_to_step_index(command_index: int) -> int:
-	if not _history_step_timeline.has("steps"):
-		return -999
-	var steps_val = _history_step_timeline.get("steps", null)
-	if not (steps_val is Array):
-		return -999
-	var steps: Array = steps_val
-	var cmd := int(command_index)
-	if cmd < 0:
-		return -1
-	for idx in range(steps.size()):
-		var s_val = steps[idx]
-		if not (s_val is Dictionary):
-			continue
-		var s: Dictionary = s_val
-		if str(s.get("kind", "")).strip_edges() != "command":
-			continue
-		if int(s.get("anchor_command_index", -999)) == cmd:
-			return idx
-	return -999
-
-func _seek_to_history_step(target_step_index: int) -> void:
-	if game_engine == null:
-		return
-	if not _history_step_timeline.has("steps"):
-		return
-
-	var steps_val = _history_step_timeline.get("steps", null)
-	if not (steps_val is Array):
-		return
-	var steps: Array = steps_val
-
-	_history_head_step_index = steps.size() - 1
-	var target := clampi(int(target_step_index), -1, _history_head_step_index)
-	if target == _history_cursor_step_index:
-		_update_ui()
-		return
-
-	var state_dict: Dictionary = {}
-	var anchor_cmd := -1
-	if target < 0:
-		var init_val = _history_step_timeline.get("initial_state_dict", null)
-		if init_val is Dictionary:
-			state_dict = Dictionary(init_val)
-	else:
-		if target >= steps.size():
-			return
-		var step_val = steps[target]
-		if step_val is Dictionary:
-			var step: Dictionary = step_val
-			anchor_cmd = int(step.get("anchor_command_index", -1))
-			var sd_val = step.get("state_dict", null)
-			if sd_val is Dictionary:
-				state_dict = Dictionary(sd_val)
-
-	if state_dict.is_empty():
-		GameLog.warn("Game", "复盘 step seek 失败：缺少 state 快照: step=%d" % target)
-		return
-
-	var restore_r := GameState.from_dict(state_dict)
-	if not restore_r.ok:
-		GameLog.warn("Game", "复盘 step seek 失败：恢复 state 失败: %s" % restore_r.error)
-		return
-	var restored: GameState = restore_r.value
-	if restored == null:
-		GameLog.warn("Game", "复盘 step seek 失败：恢复 state 为空")
-		return
-
-	# 复盘态：允许用 step 快照覆盖 state；动作面板仍保持禁用，避免产生新分支。
-	game_engine.state = restored
-	game_engine.current_command_index = anchor_cmd
-	_history_cursor_step_index = target
-
-	_force_full_panel_sync_next_update = true
-	_update_ui()
-
-func _exit_history_step_timeline() -> void:
-	# M4.3：正常对局也使用 step 时间线视图；“退出复盘”仅意味着跳回最新 step。
-	if not _history_step_timeline_active or not _history_step_timeline.has("steps"):
-		_on_replay_bar_seek_requested(game_engine.command_history.size() - 1)
-		return
-	_seek_to_history_step(_history_head_step_index)
-
-func _seek_to_replay_step(target_step_index: int) -> void:
-	if game_engine == null:
-		return
-	if not _replay_step_timeline.has("steps"):
-		return
-
-	var steps_val = _replay_step_timeline.get("steps", null)
-	if not (steps_val is Array):
-		return
-	var steps: Array = steps_val
-
-	_replay_head_step_index = steps.size() - 1
-	var target := clampi(int(target_step_index), -1, _replay_head_step_index)
-	if target == _replay_cursor_step_index:
-		_update_ui()
-		return
-
-	var state_dict: Dictionary = {}
-	var anchor_cmd := -1
-	if target < 0:
-		var init_val = _replay_step_timeline.get("initial_state_dict", null)
-		if init_val is Dictionary:
-			state_dict = Dictionary(init_val)
-	else:
-		if target >= steps.size():
-			return
-		var step_val = steps[target]
-		if step_val is Dictionary:
-			var step: Dictionary = step_val
-			anchor_cmd = int(step.get("anchor_command_index", -1))
-			var sd_val = step.get("state_dict", null)
-			if sd_val is Dictionary:
-				state_dict = Dictionary(sd_val)
-
-	if state_dict.is_empty():
-		GameLog.warn("Game", "回放 step seek 失败：缺少 state 快照: step=%d" % target)
-		return
-
-	var restore_r := GameState.from_dict(state_dict)
-	if not restore_r.ok:
-		GameLog.warn("Game", "回放 step seek 失败：恢复 state 失败: %s" % restore_r.error)
-		return
-	var restored: GameState = restore_r.value
-	if restored == null:
-		GameLog.warn("Game", "回放 step seek 失败：恢复 state 为空")
-		return
-
-	# 只读回放：允许直接覆盖 state（不改写 command_history/checkpoints）。
-	game_engine.state = restored
-	game_engine.current_command_index = anchor_cmd
-	_replay_cursor_step_index = target
-
-	_force_full_panel_sync_next_update = true
-	_update_ui()
-
-func _on_replay_bar_return_latest_requested() -> void:
-	if game_engine == null:
-		return
-	if _replay_mode_active and _replay_step_timeline.has("steps"):
-		_on_replay_bar_seek_requested(_replay_head_step_index)
-		return
-	if _history_step_timeline_active and _history_step_timeline.has("steps"):
-		_exit_history_step_timeline()
-		return
-	_on_replay_bar_seek_requested(game_engine.command_history.size() - 1)
-
-func _on_replay_bar_load_requested() -> void:
-	if _save_load_controller != null:
-		_save_load_controller.open_for_replay()
-
-func _on_replay_bar_close_requested() -> void:
-	if _startup_replay_from_main_menu:
-		Globals.reset_game_config()
-		SceneManager.goto_main_menu()
-		return
-
-	# 对局内“查看历史”态：关闭等价于“返回最新”。
-	if not _replay_mode_active:
-		_on_replay_bar_return_latest_requested()
-		return
-
-	_hide_replay_bar()
-	_exit_replay_mode()
-
-	# 恢复对局内进入回放前的日志（避免依赖已被回放覆盖的 EventBus.history）。
-	if not _replay_original_log_entries.is_empty() and is_instance_valid(game_log_panel):
-		game_log_panel.load_entries(_replay_original_log_entries)
-	_replay_original_log_entries.clear()
-
-	if game_engine != null and is_instance_valid(game_log_panel):
-		var head_index := game_engine.command_history.size() - 1
-		var cursor_index := int(game_engine.current_command_index)
-		game_log_panel.set_timeline_head(head_index)
-		game_log_panel.set_timeline_cursor(cursor_index)
-
-func show_replay_player(file_path: String) -> void:
-	# Debug-only 工具：覆盖式 ReplayPlayer（旧入口）
-	# 说明：主流程已切换为日志面板顶部的 ReplayBar；保留该面板用于开发期排查/对照。
-	if file_path.is_empty():
-		return
-	_replay_file_path = file_path
-
-	if _replay_player == null or not is_instance_valid(_replay_player):
-		_replay_player = ReplayPlayerScene.instantiate()
-		_replay_player.visible = false
-		add_child(_replay_player)
-
-		if _replay_player.has_signal("close_requested"):
-			_replay_player.close_requested.connect(_on_replay_close_requested)
-		if _replay_player.has_signal("state_changed"):
-			_replay_player.state_changed.connect(_on_replay_state_changed)
-		if _replay_player.has_signal("error_occurred"):
-			_replay_player.error_occurred.connect(_on_replay_error)
-
-	_replay_player.visible = true
-	_replay_player.z_index = 1000
-	_center_replay_player()
-	call_deferred("_load_replay_from_file")
-
-func hide_replay_player() -> void:
-	if _replay_player != null and is_instance_valid(_replay_player):
-		_replay_player.visible = false
-	_exit_replay_mode()
-
-func _center_replay_player() -> void:
-	if _replay_player == null or not is_instance_valid(_replay_player):
-		return
-	await get_tree().process_frame
-
-	var viewport_size := get_viewport_rect().size
-	var panel_size := _replay_player.size
-	if panel_size == Vector2.ZERO:
-		panel_size = _replay_player.custom_minimum_size
-	_replay_player.position = (viewport_size - panel_size) / 2.0
-
-func _load_replay_from_file() -> void:
-	if _replay_player == null or not is_instance_valid(_replay_player):
-		return
-	if _replay_file_path.is_empty():
-		return
-
-	var load_result: Result = _replay_player.load_from_file(_replay_file_path)
-	if not load_result.ok:
-		GameLog.error("Game", "回放加载失败: %s" % load_result.error)
-		if _startup_replay_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
-			SceneManager.hide_loading()
-		_show_confirm("回放加载失败", load_result.error, Callable(), Callable())
-		return
-
-	var replay_engine: GameEngine = _replay_player.get_game_engine()
-	if replay_engine == null:
-		GameLog.error("Game", "回放加载失败: GameEngine 为空")
-		if _startup_replay_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
-			SceneManager.hide_loading()
-		_show_confirm("回放加载失败", "内部错误: GameEngine 为空", Callable(), Callable())
-		return
-
-	if _startup_replay_from_main_menu and Globals != null and Globals.has_method("sync_runtime_config_from_engine"):
-		Globals.sync_runtime_config_from_engine(replay_engine)
-
-	_enter_replay_mode(replay_engine)
-	if _startup_replay_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
-		SceneManager.hide_loading()
-	if _startup_replay_from_main_menu and _event_log_controller != null and _event_log_controller.has_method("rebuild_from_history"):
-		_event_log_controller.rebuild_from_history()
-	if _startup_replay_from_main_menu:
-		call_deferred("_start_background_ui_warmup")
-
-func _enter_replay_mode(engine: GameEngine) -> void:
+func _set_active_game_engine(engine: GameEngine) -> void:
 	if engine == null:
 		return
-	if not _replay_mode_active:
-		_replay_original_engine = game_engine
 
-	_replay_mode_active = true
 	game_engine = engine
-	Globals.current_game_engine = engine
-	Globals.is_game_active = true
-
-	if _debug_panel != null and is_instance_valid(_debug_panel):
-		_debug_panel.set_game_engine(game_engine)
-
-	if _panel_controller != null and game_engine != null:
-		_panel_controller.reset_bank_break_tracking(game_engine.get_state())
-
-	_update_ui()
-
-func _exit_replay_mode() -> void:
-	if not _replay_mode_active:
-		return
-
-	_replay_mode_active = false
-	_replay_step_timeline.clear()
-	_replay_head_step_index = -1
-	_replay_cursor_step_index = -1
-
-	var restore_engine := _replay_original_engine
-	_replay_original_engine = null
-
-	if restore_engine != null:
-		game_engine = restore_engine
-		Globals.current_game_engine = restore_engine
+	if Globals != null:
+		Globals.current_game_engine = engine
 		Globals.is_game_active = true
 
 	if _debug_panel != null and is_instance_valid(_debug_panel):
@@ -1995,37 +1279,29 @@ func _exit_replay_mode() -> void:
 	if _panel_controller != null and game_engine != null:
 		_panel_controller.reset_bank_break_tracking(game_engine.get_state())
 
-	_update_ui()
+func _open_replay_load_dialog() -> void:
+	if _save_load_controller != null:
+		_save_load_controller.open_for_replay()
 
-func _on_replay_state_changed(_command_index: int, _state: GameState) -> void:
-	if not _replay_mode_active:
-		return
-	if _replay_player == null or not is_instance_valid(_replay_player):
-		return
+func _is_online_resync_in_progress() -> bool:
+	if _online_resync_controller == null:
+		return false
+	if _online_resync_controller.has_method("is_resync_in_progress"):
+		return bool(_online_resync_controller.call("is_resync_in_progress"))
+	return false
 
-	var replay_engine: GameEngine = _replay_player.get_game_engine()
-	if replay_engine == null:
-		return
+func _reset_timeline_state_after_online_resync() -> void:
+	if _timeline_controller != null:
+		_timeline_controller.set_timeline_edit_mode_active(false)
+		_timeline_controller.request_force_full_panel_sync_next_update()
 
-	if replay_engine != game_engine:
-		_enter_replay_mode(replay_engine)
-	else:
-		_update_ui()
+func _goto_online_lobby() -> void:
+	if SceneManager != null and SceneManager.has_method("goto_online_lobby"):
+		SceneManager.goto_online_lobby()
 
-	# 回放 seek 会重建 EventBus.history（record_event，不会通知订阅者），
-	# 因此 UI 日志需显式从 history 重建，避免残留旧时间线日志。
-	if _event_log_controller != null and _event_log_controller.has_method("rebuild_from_history"):
-		_event_log_controller.rebuild_from_history()
-
-func _on_replay_error(message: String) -> void:
-	GameLog.warn("ReplayPlayer", message)
-
-func _on_replay_close_requested() -> void:
-	if _startup_replay_from_main_menu:
-		Globals.reset_game_config()
-		SceneManager.goto_main_menu()
-		return
-	hide_replay_player()
+func _start_replay_from_file(file_path: String) -> void:
+	if _timeline_controller != null:
+		_timeline_controller.start_replay_from_file(file_path)
 
 func show_distance_overlay(from_position: Vector2i, to_positions: Array[Vector2i]) -> void:
 	if _overlay_controller != null:
@@ -2062,7 +1338,8 @@ func toggle_game_log() -> void:
 		_ensure_right_panel_visible()
 
 		# M4.3：打开日志时，按当前引擎状态重建 step 时间线视图（保证实时/回放一致）。
-		_apply_live_log_timeline_from_engine()
+		if _timeline_controller != null:
+			_timeline_controller.apply_live_log_timeline_from_engine()
 
 		# 若右侧已有 docked 操作面板/弹窗，先关闭它们，避免日志被遮挡或出现多个 docked 视图竞争焦点。
 		var has_other_docked := false

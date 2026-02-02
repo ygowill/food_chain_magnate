@@ -23,7 +23,7 @@
 
 | 行数 | funcs | preloads | signals | 文件 |
 |---:|---:|---:|---:|---|
-| 2144 | 122 | 22 | 0 | `ui/scenes/game/game.gd` |
+| 1421 | 94 | 20 | 0 | `ui/scenes/game/game.gd` |
 | 1631 | 117 | 2 | 13 | `ui/components/game_log/game_log_panel.gd` |
 | 1622 | 41 | 13 | 2 | `ui/scenes/game/game_map_interaction_controller.gd` |
 | 1600 | 41 | 1 | 0 | `ui/scenes/game/map_canvas_drawer.gd` |
@@ -31,6 +31,7 @@
 | 1019 | 54 | 4 | 0 | `ui/scenes/online/online_lobby.gd` |
 | 1006 | 50 | 5 | 8 | `autoload/net_client.gd` |
 | 998 | 59 | 3 | 1 | `ui/components/left_panel/left_panel.gd` |
+| 830 | 21 | 4 | 0 | `ui/scenes/game/game_event_log_formatter.gd` |
 
 ## 跨文件共性问题（模式级发现）
 
@@ -144,6 +145,10 @@
 
 - 先拆“最少依赖其他系统”的：Layout/Dock/SaveLoad（更容易独立）。
 - 再拆 Timeline/Online（需要更多依赖注入与验证）。
+
+实施结果（阶段性）：
+
+- 已完成：提取回放/复盘/时间线控制器 `ui/scenes/game/game_timeline_controller.gd`（并将 events->entries 格式化拆到 `ui/scenes/game/game_timeline_log_entries_builder.gd`）；`ui/scenes/game/game.gd` 行数降至 1421；并通过 `ui/scenes/tests/all_tests.tscn`。
 
 ### 2) `ui/scenes/game/game_panel_controller.gd`
 
@@ -497,3 +502,4 @@
 - 2026-02-02：提取营销面板图标缓存：新增 `ui/components/marketing_panel/marketing_panel_icon_cache.gd`；`ui/components/marketing_panel/marketing_panel.gd` 下沉 skin 初始化与产品/营销图标缩放缓存（行数降至 717，低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：拆分供应堆全屏视图 token：新增 `ui/components/reserve_area/reserve_area_full_screen_view_tokens.gd`；`ui/components/reserve_area/reserve_area_full_screen_view.gd` 移除内部 token 类（行数降至 641，低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：提取联机 Resync/Rewind 控制器：新增 `ui/scenes/game/game_online_resync_controller.gd`；`ui/scenes/game/game.gd` 下沉联机同步/回退/队列回放逻辑（行数降至 2144）；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-03：提取回放/复盘时间线控制器：新增 `ui/scenes/game/game_timeline_controller.gd` 与 `ui/scenes/game/game_timeline_log_entries_builder.gd`；`ui/scenes/game/game.gd` 下沉回放/复盘/时间线与 ReplayBar 逻辑（行数降至 1421）；并通过 `ui/scenes/tests/all_tests.tscn`。
