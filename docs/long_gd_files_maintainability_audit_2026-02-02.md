@@ -326,6 +326,11 @@
 - `RoomClient`：client-only 的请求封装与回调分发。
 - `NetClient` 作为 façade：对外保持 RPC/信号接口稳定，内部组合上述子模块。
 
+实施结果（阶段性）：
+
+- 已完成：提取 NetClient 内部实现：新增 `autoload/net_client_internal.gd` 承载信号连接/连接回调/room 广播/forfeit 自动推进等；`autoload/net_client.gd` 保持 @rpc 接口不变并瘦身（行数 1006 -> 751）；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 待执行：继续按 transport/protocol/room server/client 拆分（需要联机回归验证，避免破坏协议与兼容性）。
+
 ### 10) `ui/components/left_panel/left_panel.gd`
 
 当前职责：
@@ -553,3 +558,4 @@
 - 2026-02-03：拆分 MapCanvasDrawer 的 roads/structures/overlay：新增 `ui/scenes/game/map_canvas_drawer_roads_pass.gd`、`ui/scenes/game/map_canvas_drawer_structures_pass.gd`、`ui/scenes/game/map_canvas_drawer_overlay_utils.gd`；`ui/scenes/game/map_canvas_drawer.gd` 行数降至 410（低于 800）；并更新 `ui/components/reserve_area/reserve_area_full_screen_view_tokens.gd` 以调用 StructuresPass；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-03：提取 ActionPanel 上下文控制器：新增 `ui/components/action_panel/action_panel_context_controller.gd`；`ui/components/action_panel/action_panel.gd` 行数降至 702（低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-03：拆分 OnlineLobby 渲染：新增 `ui/scenes/online/online_lobby_room_list_controller.gd` 与 `ui/scenes/online/online_lobby_room_state_renderer.gd`；`ui/scenes/online/online_lobby.gd` 改为委托渲染（行数 1019 -> 763）；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-03：拆分 NetClient 内部实现：新增 `autoload/net_client_internal.gd`；`autoload/net_client.gd` 保持 @rpc 接口不变并瘦身（行数 1006 -> 751）；并通过 `ui/scenes/tests/all_tests.tscn`。
