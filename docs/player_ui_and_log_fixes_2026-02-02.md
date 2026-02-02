@@ -108,8 +108,10 @@
 
 ## 9. 地图公园与花园背景色不应有透明度
 
-- 状态：TODO
+- 状态：DONE
 - 现象：公园与花园的背景色存在透明度（alpha < 1），视觉上“发灰/透底”。
 - 期望：公园与花园背景色为完全不透明（alpha = 1）。
-- 验证：待补充
-- 提交：待补充
+- 实施：
+	- 公园与花园底色 alpha 从固定半透明改为随 `alpha` 参数变化：默认 `alpha=1` 时完全不透明（避免透底），预览/淡出时仍可用 `alpha<1` 渐隐。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 141/141）
+- 提交：`fix(ui): make park/garden backgrounds opaque`

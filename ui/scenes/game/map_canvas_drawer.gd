@@ -632,9 +632,9 @@ static func _draw_park_piece(canvas, cell_size: int, info: Dictionary, alpha: fl
 		return
 
 	var fill := Color("#22C55E")
-	fill.a = 0.28 * clampf(alpha, 0.0, 1.0)
+	fill.a = clampf(alpha, 0.0, 1.0)
 	var border := Color("#22C55E")
-	border.a = 0.55 * clampf(alpha, 0.0, 1.0)
+	border.a = clampf(alpha, 0.0, 1.0)
 	_draw_view_cells_overlay(canvas, cell_size, cells_val, fill, border, 1.0)
 
 	var min_pos: Vector2i = info.get("min", Vector2i.ZERO)
@@ -1093,7 +1093,7 @@ static func _draw_house_and_garden(canvas, cell_size: int, anchor: Vector2i, inf
 			var garden_size_cells := (garden_max - garden_min) + Vector2i.ONE
 			garden_rect = Rect2(Vector2(garden_min.x * cell_size, garden_min.y * cell_size), Vector2(garden_size_cells.x * cell_size, garden_size_cells.y * cell_size))
 			var garden_bg := Color("#22C55E")
-			garden_bg.a = 0.30 * clampf(alpha, 0.0, 1.0)
+			garden_bg.a = clampf(alpha, 0.0, 1.0)
 			canvas.draw_rect(garden_rect, garden_bg, true)
 
 	# 贴图：房屋主体
