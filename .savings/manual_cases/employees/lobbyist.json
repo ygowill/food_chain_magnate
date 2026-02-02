@@ -1,15 +1,15 @@
 {
 	"checkpoints": [
 		{
-			"hash": "2b50b21ab996027a50900e221ca32383",
+			"hash": "6205de82b279dc437d8a5b0fcba3b170",
 			"index": 0,
 			"rng_calls": 30
 		}
 	],
 	"commands": [],
-	"created_at": "2026-01-20T03:45:35",
+	"created_at": "2026-02-02T10:06:10",
 	"current_index": -1,
-	"final_hash": "2b50b21ab996027a50900e221ca32383",
+	"final_hash": "6205de82b279dc437d8a5b0fcba3b170",
 	"game_version": "0.1.0",
 	"initial_state": {
 		"bank": {
@@ -4076,9 +4076,13 @@
 					"printed": true
 				}
 			},
-			"lobbyists_park_supply_remaining": 8,
+			"lobbyists_park_l_supply_remaining": 2,
+			"lobbyists_park_line_supply_remaining": 1,
+			"lobbyists_park_t_supply_remaining": 1,
 			"lobbyists_pending_roads": [],
-			"lobbyists_road_supply_remaining": 8,
+			"lobbyists_road_l_supply_remaining": 2,
+			"lobbyists_road_long_supply_remaining": 2,
+			"lobbyists_road_straight_supply_remaining": 4,
 			"lobbyists_roadworks_markers": {
 
 			},
@@ -4155,6 +4159,7 @@
 					"rotation": 0
 				}
 			},
+			"road_graph_connect_parallel_lanes": true,
 			"tile_grid_size": [
 				3,
 				3
@@ -4298,6 +4303,7 @@
 					"ceo",
 					"lobbyist"
 				],
+				"forfeited": false,
 				"id": 0,
 				"inventory": {
 					"beer": 0,
@@ -4347,6 +4353,7 @@
 				"employees": [
 					"ceo"
 				],
+				"forfeited": false,
 				"id": 1,
 				"inventory": {
 					"beer": 0,
@@ -4429,6 +4436,15 @@
 			"sub_phase_passed": {
 				"0": true,
 				"1": false
+			},
+			"train_employee_locks": {
+
+			},
+			"train_slot_usage": {
+
+			},
+			"train_slot_usage_instances": {
+
 			},
 			"working_sub_phase_order": [
 				"Recruit",

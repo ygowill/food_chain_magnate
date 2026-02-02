@@ -11,6 +11,7 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const PiecePlacementOverlayScript = preload("res://ui/components/piece_placement/piece_placement_overlay.gd")
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var items_container: VBoxContainer = $MarginContainer/VBoxContainer/ItemsContainer
@@ -21,6 +22,8 @@ const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 @onready var restaurant_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RestaurantRow/RestaurantOption
 @onready var employee_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/EmployeeRow
 @onready var employee_option: HFlowContainer = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/EmployeeRow/EmployeeOption
+@onready var piece_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/PieceRow
+@onready var piece_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/PieceRow/PieceOption
 @onready var rotation_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow
 @onready var rotation_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationOption
 @onready var house_number_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/HouseNumberRow
@@ -49,19 +52,6 @@ const HIDDEN_ACTION_IDS := {
 	ActionIdsClass.SET_PRICE: true,
 	ActionIdsClass.SET_DISCOUNT: true,
 	ActionIdsClass.SET_LUXURY_PRICE: true,
-}
-
-# 若动作对“当前玩家”不可启动，则不展示（避免按钮常驻但永远灰掉）
-# 目前用于：
-# - “模块/里程碑驱动动作”：未满足前置条件时隐藏（避免在行动面板中产生噪音/误导）
-# -（历史兼容）部分员工驱动动作
-const AUTO_HIDE_IF_NOT_INITIATABLE_ACTION_IDS := {
-	ActionIdsClass.SET_PRICE: true,
-	ActionIdsClass.SET_DISCOUNT: true,
-	ActionIdsClass.SET_LUXURY_PRICE: true,
-	"place_giant_billboard": true,
-	"place_highway_offramp": true,
-	"place_or_move_coffee_shop": true,
 }
 
 # 定价类强制动作在 UI 中隐藏，并在执行 skip 前由 Game 自动补完（见 Game._maybe_auto_complete_mandatory_actions_before_skip）。
@@ -115,6 +105,31 @@ const ACTION_DESCRIPTIONS: Dictionary = {
 	ActionIdsClass.SET_DISCOUNT: "设定折扣",
 	"fire": "解雇员工",
 }
+
+func _get_executor_display_name(action_id: String) -> String:
+	if _action_registry == null or not _action_registry.has_method("get_executor"):
+		return ""
+	var ex = _action_registry.get_executor(action_id)
+	if ex == null:
+		return ""
+	return str(ex.display_name).strip_edges()
+
+func _get_executor_description(action_id: String) -> String:
+	if _action_registry == null or not _action_registry.has_method("get_executor"):
+		return ""
+	var ex = _action_registry.get_executor(action_id)
+	if ex == null:
+		return ""
+	return str(ex.description).strip_edges()
+
+func _should_auto_hide_if_not_initiatable(action_id: String) -> bool:
+	if _action_registry == null or not _action_registry.has_method("get_executor"):
+		return false
+	var ex = _action_registry.get_executor(action_id)
+	if ex == null:
+		return false
+	# ActionExecutor 提供 ui_hide_if_not_initiatable 属性；模块侧可按需设置，避免 UI 硬编码 action_id。
+	return bool(ex.ui_hide_if_not_initiatable)
 
 func _get_working_sub_phase_order_names(state: GameState) -> Array[String]:
 	if state == null:
@@ -202,6 +217,7 @@ func _setup_context_ui() -> void:
 	UiSignalHelpersClass.safe_connect(confirm_context_button, "pressed", _on_confirm_context_pressed)
 	UiSignalHelpersClass.safe_connect(restaurant_option, "item_selected", _on_restaurant_option_selected)
 	UiSignalHelpersClass.safe_connect(employee_option, "employee_selected", _on_employee_option_selected)
+	UiSignalHelpersClass.safe_connect(piece_option, "item_selected", _on_piece_option_selected)
 	UiSignalHelpersClass.safe_connect(rotation_option, "item_selected", _on_rotation_option_selected)
 	UiSignalHelpersClass.safe_connect(house_number_option, "item_selected", _on_house_number_option_selected)
 	UiSignalHelpersClass.safe_connect(direction_option, "item_selected", _on_direction_option_selected)
@@ -264,6 +280,9 @@ func _refresh_context_from_overlay() -> void:
 	if _context_overlay is HousePlacementOverlay:
 		_refresh_house_placement_context(_context_overlay as HousePlacementOverlay)
 		return
+	if PiecePlacementOverlayScript != null and _context_overlay is PiecePlacementOverlayScript:
+		_refresh_piece_placement_context(_context_overlay)
+		return
 
 	clear_context_overlay()
 
@@ -281,6 +300,7 @@ func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) 
 
 	restaurant_row.visible = (mode == "move_restaurant")
 	employee_row.visible = false
+	piece_row.visible = false
 	direction_row.visible = false
 	rotation_row.visible = true
 	house_number_row.visible = false
@@ -314,6 +334,7 @@ func _refresh_house_placement_context(overlay: HousePlacementOverlay) -> void:
 
 	restaurant_row.visible = false
 	employee_row.visible = false
+	piece_row.visible = false
 	rotation_row.visible = (mode == "place_house")
 	house_number_row.visible = (mode == "place_house")
 	direction_row.visible = (mode == "add_garden")
@@ -331,6 +352,37 @@ func _refresh_house_placement_context(overlay: HousePlacementOverlay) -> void:
 		_rebuild_direction_option(overlay.get_selected_direction())
 
 	confirm_context_button.text = "确认添加花园" if mode == "add_garden" else "确认放置"
+	confirm_context_button.disabled = not overlay.can_confirm()
+
+	_context_syncing = false
+
+func _refresh_piece_placement_context(overlay) -> void:
+	if overlay == null or not is_instance_valid(overlay):
+		clear_context_overlay()
+		return
+
+	_context_syncing = true
+	_show_context_panel()
+
+	var mode := str(overlay.get_mode()).strip_edges()
+	var title := _get_executor_display_name(mode)
+	if title.is_empty():
+		context_title_label.text = "🧩 放置板块"
+	else:
+		context_title_label.text = "🧩 %s" % title
+	context_hint_label.text = overlay.get_hint_text()
+
+	restaurant_row.visible = false
+	employee_row.visible = false
+	piece_row.visible = true
+	rotation_row.visible = true
+	house_number_row.visible = false
+	direction_row.visible = false
+
+	_rebuild_piece_option(overlay.get_available_pieces(), overlay.get_selected_piece())
+	_rebuild_rotation_option(overlay.get_selected_rotation())
+
+	confirm_context_button.text = "确认放置"
 	confirm_context_button.disabled = not overlay.can_confirm()
 
 	_context_syncing = false
@@ -391,6 +443,32 @@ func _rebuild_restaurant_option(restaurant_ids: Array[String], selected_restaura
 		var idx := restaurant_option.get_item_count() - 1
 		restaurant_option.set_item_metadata(idx, s)
 	_select_option_by_metadata_string(restaurant_option, selected_restaurant_id)
+
+func _rebuild_piece_option(piece_ids: Array[String], selected_piece_id: String) -> void:
+	if not is_instance_valid(piece_option):
+		return
+	piece_option.clear()
+	var ids := piece_ids.duplicate()
+	if ids.is_empty():
+		piece_option.add_item("请选择...")
+		piece_option.set_item_metadata(0, "")
+		piece_option.select(0)
+		return
+
+	for pid in ids:
+		var s := str(pid).strip_edges()
+		if s.is_empty():
+			continue
+		var label := s
+		if _context_overlay != null and is_instance_valid(_context_overlay) and _context_overlay.has_method("get_piece_display_label"):
+			var v = _context_overlay.call("get_piece_display_label", s)
+			var t := str(v).strip_edges()
+			if not t.is_empty():
+				label = t
+		piece_option.add_item(label)
+		var idx := piece_option.get_item_count() - 1
+		piece_option.set_item_metadata(idx, s)
+	_select_option_by_metadata_string(piece_option, selected_piece_id)
 
 func _rebuild_employee_option(employee_ids: Array[String], selected_employee_id: String) -> void:
 	if not is_instance_valid(employee_option):
@@ -479,6 +557,14 @@ func _on_employee_option_selected(employee_type: String) -> void:
 		return
 	var emp_id := str(employee_type).strip_edges()
 	_call_context_overlay_method("set_selected_employee", [emp_id])
+
+func _on_piece_option_selected(index: int) -> void:
+	if _context_syncing:
+		return
+	if not is_instance_valid(piece_option):
+		return
+	var pid := str(piece_option.get_item_metadata(index))
+	_call_context_overlay_method("set_selected_piece", [pid])
 
 func _get_employee_def_for_card(employee_type: String) -> Dictionary:
 	var emp_id := str(employee_type).strip_edges()
@@ -700,10 +786,10 @@ func refresh() -> void:
 
 	# P1：默认不再自动隐藏“玩家依赖动作”，改为灰显 + 原因（提升发现性）。
 	# 但对少数“模块/里程碑动作”，若对当前玩家不可启动则直接隐藏（issue_tracker #78）。
-	if has_player_executable_info and not AUTO_HIDE_IF_NOT_INITIATABLE_ACTION_IDS.is_empty():
+	if has_player_executable_info:
 		var filtered_visible: Array[String] = []
 		for aid_hide in visible_ids:
-			if AUTO_HIDE_IF_NOT_INITIATABLE_ACTION_IDS.has(aid_hide) and not visible_executable.has(aid_hide):
+			if _should_auto_hide_if_not_initiatable(aid_hide) and not visible_executable.has(aid_hide):
 				continue
 			filtered_visible.append(aid_hide)
 		visible_ids = filtered_visible
@@ -816,8 +902,10 @@ func _rebuild_action_buttons(action_ids: Array[String]) -> void:
 		if action_id == ActionIdsClass.SKIP_SUB_PHASE:
 			btn.display_name = _get_skip_sub_phase_display_name()
 		else:
-			btn.display_name = ACTION_DISPLAY_NAMES.get(action_id, action_id)
-		btn.description = ACTION_DESCRIPTIONS.get(action_id, "")
+			var ex_name := _get_executor_display_name(action_id)
+			btn.display_name = ex_name if not ex_name.is_empty() else ACTION_DISPLAY_NAMES.get(action_id, action_id)
+		var ex_desc := _get_executor_description(action_id)
+		btn.description = ex_desc if not ex_desc.is_empty() else ACTION_DESCRIPTIONS.get(action_id, "")
 		btn.is_mandatory = _mandatory_action_ids.has(action_id)
 		btn.action_clicked.connect(_on_action_clicked)
 		items_container.add_child(btn)

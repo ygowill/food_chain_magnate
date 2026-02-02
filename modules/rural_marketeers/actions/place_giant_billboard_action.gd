@@ -23,6 +23,7 @@ func _init() -> void:
 	description = "使用乡村营销员在乡村地区放置一个永久的巨型广告牌"
 	requires_actor = true
 	is_mandatory = false
+	ui_hide_if_not_initiatable = true
 	allowed_phases = ["Working"]
 	allowed_sub_phases = ["Marketing"]
 

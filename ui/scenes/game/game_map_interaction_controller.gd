@@ -9,6 +9,7 @@ signal procure_drinks_source_selected(world_pos: Vector2i)
 const PlacementClass = preload("res://core/map/placement_validator/placement.gd")
 const RestaurantPlacementClass = preload("res://core/map/placement_validator/restaurant_placement.gd")
 const PieceDefClass = preload("res://core/map/piece_def.gd")
+const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
@@ -27,6 +28,7 @@ var _mode: String = ""
 var _payload: Dictionary = {}
 var _restaurant_valid_anchors: Dictionary = {} # Vector2i -> true
 var _house_valid_anchors: Dictionary = {} # Vector2i -> true
+var _piece_valid_anchors: Dictionary = {} # Vector2i -> true
 var _marketing_valid_anchors: Dictionary = {} # Vector2i -> true
 var _marketing_outside_to_anchor: Dictionary = {} # outside_world_pos(Vector2i) -> inside_anchor(Vector2i) (airplane only)
 var _distance_tool_from: Vector2i = Vector2i(-1, -1)
@@ -35,6 +37,7 @@ var _pending_airplane_corner_pos: Vector2i = Vector2i(-1, -1)
 var marketing_panel = null
 var restaurant_placement_overlay = null
 var house_placement_overlay = null
+var piece_placement_overlay = null
 
 const _DISTANCE_TOOL_POINTS_OVERLAY_ID := "distance_tool_points"
 
@@ -71,11 +74,15 @@ func set_restaurant_placement_overlay(overlay) -> void:
 func set_house_placement_overlay(overlay) -> void:
 	house_placement_overlay = overlay
 
+func set_piece_placement_overlay(overlay) -> void:
+	piece_placement_overlay = overlay
+
 func begin_selection(mode: String, payload: Dictionary = {}) -> void:
 	_mode = mode
 	_payload = payload.duplicate(true)
 	_restaurant_valid_anchors.clear()
 	_house_valid_anchors.clear()
+	_piece_valid_anchors.clear()
 	_marketing_valid_anchors.clear()
 	_marketing_outside_to_anchor.clear()
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_cell_highlights"):
@@ -110,6 +117,7 @@ func clear_selection() -> void:
 
 	_restaurant_valid_anchors.clear()
 	_house_valid_anchors.clear()
+	_piece_valid_anchors.clear()
 	_marketing_valid_anchors.clear()
 	_marketing_outside_to_anchor.clear()
 	if old_mode == "distance_tool":
@@ -240,6 +248,15 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 			if is_instance_valid(house_placement_overlay) and house_placement_overlay.visible and house_placement_overlay.has_method("set_selected_position"):
 				house_placement_overlay.set_selected_position(world_pos)
 				_maybe_auto_confirm_placement(house_placement_overlay)
+		"piece_placement":
+			# 仅允许点击“高亮的合法格”
+			if _piece_valid_anchors.is_empty() or not _piece_valid_anchors.has(world_pos):
+				if is_instance_valid(piece_placement_overlay) and piece_placement_overlay.visible and piece_placement_overlay.has_method("set_validation"):
+					piece_placement_overlay.set_validation(false, "请选择高亮的可放置格")
+				return
+			if is_instance_valid(piece_placement_overlay) and piece_placement_overlay.visible and piece_placement_overlay.has_method("set_selected_position"):
+				piece_placement_overlay.set_selected_position(world_pos)
+				_maybe_auto_confirm_placement(piece_placement_overlay)
 		"distance_tool":
 			if _overlay_controller == null:
 				return
@@ -1475,3 +1492,131 @@ func on_house_preview_requested(action_id: String, position: Vector2i, rotation:
 		})
 
 	# HousePlacementOverlay 目前没有 validation UI（只做预览与确认）
+
+func on_piece_highlight_requested(action_id: String, rotation: int, piece_id: String) -> void:
+	if _mode != "piece_placement":
+		return
+	if not (is_instance_valid(piece_placement_overlay) and piece_placement_overlay.visible):
+		return
+	if _scene == null:
+		return
+	var engine = _scene.game_engine
+	if engine == null:
+		return
+	var state = engine.get_state()
+	if state == null:
+		return
+
+	var aid := str(action_id).strip_edges()
+	var pid := str(piece_id).strip_edges()
+	if aid.is_empty() or pid.is_empty():
+		_piece_valid_anchors.clear()
+		if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_cell_highlights"):
+			_map_canvas.call("clear_cell_highlights")
+		return
+
+	if not (state.map is Dictionary):
+		return
+	if not state.map.has("grid_size") or not (state.map["grid_size"] is Vector2i):
+		return
+	var grid_size: Vector2i = state.map["grid_size"]
+	var map_origin: Vector2i = state.map.get("map_origin", Vector2i.ZERO)
+
+	var actor: int = state.get_current_player_id()
+	var executor = engine.get_action_registry().get_executor(aid)
+	if executor == null:
+		_piece_valid_anchors.clear()
+		if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_cell_highlights"):
+			_map_canvas.call("clear_cell_highlights")
+		return
+
+	var anchors: Array[Vector2i] = []
+	var anchor_set := {}
+	for y in range(grid_size.y):
+		for x in range(grid_size.x):
+			var world_anchor: Vector2i = Vector2i(x, y) - map_origin
+			var cmd := Command.create(aid, actor, {
+				"piece_id": pid,
+				"anchor_pos": [world_anchor.x, world_anchor.y],
+				"rotation": int(rotation),
+			})
+			cmd.phase = state.phase
+			cmd.sub_phase = state.sub_phase
+			var vr: Result = executor.validate(state, cmd)
+			if not vr.ok:
+				continue
+			if anchor_set.has(world_anchor):
+				continue
+			anchor_set[world_anchor] = true
+			anchors.append(world_anchor)
+
+	_piece_valid_anchors = anchor_set
+	if is_instance_valid(_map_canvas) and _map_canvas.has_method("set_cell_highlights"):
+		_map_canvas.call("set_cell_highlights", anchors)
+
+func on_piece_preview_cleared() -> void:
+	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_structure_preview"):
+		_map_canvas.call("clear_structure_preview")
+	if is_instance_valid(piece_placement_overlay) and piece_placement_overlay.has_method("set_validation"):
+		piece_placement_overlay.set_validation(true, "")
+
+func on_piece_preview_requested(action_id: String, position: Vector2i, rotation: int, piece_id: String) -> void:
+	if _scene == null:
+		return
+	var engine = _scene.game_engine
+	if engine == null:
+		return
+	var state = engine.get_state()
+	if state == null:
+		return
+
+	var actor: int = state.get_current_player_id()
+	var aid := str(action_id).strip_edges()
+	var pid := str(piece_id).strip_edges()
+
+	var footprint_cells: Array[Vector2i] = []
+	var valid := true
+	var message := ""
+
+	if pid.is_empty():
+		valid = false
+		message = "piece_id 为空"
+	elif not PieceRegistryClass.is_loaded():
+		valid = false
+		message = "PieceRegistry 未初始化"
+	else:
+		var piece_def_val = PieceRegistryClass.get_def(pid)
+		if piece_def_val == null or not (piece_def_val is PieceDef):
+			valid = false
+			message = "未加载的 piece: %s" % pid
+		else:
+			var piece_def: PieceDef = piece_def_val
+			footprint_cells = piece_def.get_world_cells(position, rotation)
+
+	var cmd := Command.create(aid, actor, {
+		"piece_id": pid,
+		"anchor_pos": [position.x, position.y],
+		"rotation": int(rotation),
+	})
+	cmd.phase = state.phase
+	cmd.sub_phase = state.sub_phase
+	var executor = engine.get_action_registry().get_executor(aid)
+	if executor != null:
+		var ex_r: Result = executor.validate(state, cmd)
+		if not ex_r.ok:
+			valid = false
+			message = ex_r.error
+	else:
+		valid = false
+		if message.is_empty():
+			message = "无法找到执行器: %s" % aid
+
+	if is_instance_valid(_map_canvas) and _map_canvas.has_method("set_structure_preview"):
+		_map_canvas.call("set_structure_preview", footprint_cells, valid, {
+			"piece_id": pid,
+			"anchor": position,
+			"rotation": int(rotation),
+			"owner": actor,
+		})
+	if is_instance_valid(piece_placement_overlay) and piece_placement_overlay.has_method("set_validation"):
+		piece_placement_overlay.set_validation(valid, message)

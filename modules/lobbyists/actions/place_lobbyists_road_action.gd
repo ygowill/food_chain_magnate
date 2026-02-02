@@ -61,6 +61,7 @@ func _init() -> void:
 	description = "放置一块建设中的道路，并在相邻道路上放置 roadworks 标记"
 	requires_actor = true
 	is_mandatory = false
+	ui_piece_ids = ROAD_PIECES.duplicate()
 	allowed_phases = ["Working"]
 	allowed_sub_phases = ["Lobbyists"]
 

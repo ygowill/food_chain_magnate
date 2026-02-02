@@ -45,6 +45,7 @@ const CompanyStructureTestClass = preload("res://core/tests/company_structure_te
 const ActionPanelEndButtonsOrderTestClass = preload("res://ui/scenes/tests/action_panel_end_buttons_order_test.gd")
 const ActionPanelOnlineLocalPlayerTestClass = preload("res://ui/scenes/tests/action_panel_online_local_player_test.gd")
 const ActionPanelGlobalDisabledRestoreTestClass = preload("res://ui/scenes/tests/action_panel_global_disabled_restore_test.gd")
+const ActionPanelExecutorMetadataTestClass = preload("res://ui/scenes/tests/action_panel_executor_metadata_test.gd")
 const HandAreaViewSwitchTestClass = preload("res://ui/scenes/tests/hand_area_view_switch_test.gd")
 const ReserveCardSelectionModalPrivacyTestClass = preload("res://ui/scenes/tests/reserve_card_selection_modal_privacy_test.gd")
 const TurnOrderSelectionModalOnlineVisibilityTestClass = preload("res://ui/scenes/tests/turn_order_selection_modal_online_visibility_test.gd")
@@ -267,6 +268,10 @@ func _run_all() -> int:
 			{
 				"name": "ActionPanelGlobalDisabledRestoreTest",
 				"fn": func() -> Result: return ActionPanelGlobalDisabledRestoreTestClass.run(),
+			},
+			{
+				"name": "ActionPanelExecutorMetadataTest",
+				"fn": func() -> Result: return ActionPanelExecutorMetadataTestClass.run(),
 			},
 			{
 				"name": "LeftPanelSelectionIsolationTest",

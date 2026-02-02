@@ -21,6 +21,7 @@ func _init() -> void:
 	description = "放置一个公园（影响晚餐单价）"
 	requires_actor = true
 	is_mandatory = false
+	ui_piece_ids = PARK_PIECES.duplicate()
 	allowed_phases = ["Working"]
 	allowed_sub_phases = ["Lobbyists"]
 

@@ -22,6 +22,7 @@ func _init() -> void:
 	description = "放置一个棋盘外的高速公路出口（offramp），必须连接到道路"
 	requires_actor = true
 	is_mandatory = false
+	ui_hide_if_not_initiatable = true
 	allowed_phases = ["Working"]
 	allowed_sub_phases = ["Marketing"]
 

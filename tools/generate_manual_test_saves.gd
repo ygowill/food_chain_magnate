@@ -218,7 +218,7 @@ func _freeze_engine_as_initial(engine: GameEngine) -> void:
 	engine.command_history.clear()
 	engine.checkpoints.clear()
 	engine.current_command_index = -1
-	engine._create_checkpoint(0)
+	engine.create_checkpoint(0)
 
 func _write_text(abs_path: String, text: String) -> Result:
 	if abs_path.is_empty():

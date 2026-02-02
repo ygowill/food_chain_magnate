@@ -15,6 +15,7 @@ func _init() -> void:
 	description = "在培训咖啡师后，放置或移动一个咖啡店"
 	requires_actor = true
 	is_mandatory = false
+	ui_hide_if_not_initiatable = true
 	allowed_phases = ["Working"]
 	allowed_sub_phases = ["Train"]
 

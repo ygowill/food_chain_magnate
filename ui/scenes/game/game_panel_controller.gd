@@ -339,6 +339,8 @@ func _sync_action_panel_context() -> void:
 			overlay = _placement_overlays.restaurant_placement_overlay
 		elif is_instance_valid(_placement_overlays.house_placement_overlay) and _placement_overlays.house_placement_overlay.visible:
 			overlay = _placement_overlays.house_placement_overlay
+		elif is_instance_valid(_placement_overlays.piece_placement_overlay) and _placement_overlays.piece_placement_overlay.visible:
+			overlay = _placement_overlays.piece_placement_overlay
 
 	if overlay != null:
 		if _scene.action_panel.has_method("bind_context_overlay"):
@@ -646,6 +648,10 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 
 		# 其他动作直接创建命令
 		_:
+			if _placement_overlays != null and _placement_overlays.has_method("try_show_piece_placement"):
+				if bool(_placement_overlays.try_show_piece_placement(action_id, params)):
+					_sync_action_panel_context()
+					return
 			_execute_command.call(Command.create(action_id, actor_id, params))
 
 func _on_turn_order_position_selected(position: int) -> void:

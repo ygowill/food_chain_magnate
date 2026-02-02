@@ -17,6 +17,10 @@ var requires_actor: bool = true  # 是否需要玩家执行
 var is_mandatory: bool = false  # 是否是强制动作
 var is_internal: bool = false  # 内部动作：不应出现在“可用动作列表”中（但可被直接执行）
 
+# UI 辅助元数据（避免把模组 UI 逻辑硬编码到 ActionPanel）
+var ui_hide_if_not_initiatable: bool = false
+var ui_piece_ids: Array[String] = []
+
 # === 核心接口（子类必须实现） ===
 
 # 校验动作是否可执行
@@ -193,6 +197,8 @@ func get_metadata() -> Dictionary:
 		"requires_actor": requires_actor,
 		"is_mandatory": is_mandatory,
 		"is_internal": is_internal,
+		"ui_hide_if_not_initiatable": ui_hide_if_not_initiatable,
+		"ui_piece_ids": ui_piece_ids,
 	}
 
 func _to_string() -> String:
