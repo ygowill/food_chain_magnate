@@ -147,6 +147,7 @@
 - 已完成：提取回放/复盘/时间线控制器 `ui/scenes/game/game_timeline_controller.gd`（并将 events->entries 格式化拆到 `ui/scenes/game/game_timeline_log_entries_builder.gd`）；`ui/scenes/game/game.gd` 行数降至 1421；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 已完成：提取 UI 同步控制器 `ui/scenes/game/game_ui_sync_controller.gd`（顶栏/面板/覆盖层同步 + toast + 调试命令后的 UI 刷新）；`ui/scenes/game/game.gd` 行数 1421 -> 1270；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 已完成：提取命令执行/阶段推进控制器 `ui/scenes/game/game_command_controller.gd`（本地/联机执行、回退到回合开始、SKIP 前强制动作补完、发薪日拦截提示）；`ui/scenes/game/game.gd` 行数 1270 -> 1078；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 已完成：进一步拆分输入/菜单/提示条/日志 dock/后台预热/调试面板控制器：`ui/scenes/game/game_input_controller.gd`、`ui/scenes/game/game_menu_controller.gd`、`ui/scenes/game/game_map_mode_bar_controller.gd`、`ui/scenes/game/game_log_dock_controller.gd`、`ui/scenes/game/game_background_warmup_controller.gd`、`ui/scenes/game/game_debug_panel_controller.gd`；`ui/scenes/game/game.gd` 行数 1078 -> 799（低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
 
 ### 2) `ui/scenes/game/game_panel_controller.gd`
 

@@ -46,15 +46,20 @@ extends Control
 @onready var company_structure: Control = $UIRoot/BottomPanel/CompanyStructure
 @onready var bottom_panel: Control = $UIRoot/BottomPanel
 
-const GameEventLogControllerClass = preload("res://ui/scenes/game/game_event_log_controller.gd")
 const GameMenuDebugControllerClass = preload("res://ui/scenes/game/game_menu_debug_controller.gd")
+const GameMenuControllerClass = preload("res://ui/scenes/game/game_menu_controller.gd")
 const GameSaveLoadControllerClass = preload("res://ui/scenes/game/game_save_load_controller.gd")
 const GameLayoutControllerClass = preload("res://ui/scenes/game/game_layout_controller.gd")
 const GameRightPanelDockControllerClass = preload("res://ui/scenes/game/game_right_panel_dock_controller.gd")
 const GameUiSyncControllerClass = preload("res://ui/scenes/game/game_ui_sync_controller.gd")
 const GameCommandControllerClass = preload("res://ui/scenes/game/game_command_controller.gd")
+const GameInputControllerClass = preload("res://ui/scenes/game/game_input_controller.gd")
+const GameLogDockControllerClass = preload("res://ui/scenes/game/game_log_dock_controller.gd")
+const GameBackgroundWarmupControllerClass = preload("res://ui/scenes/game/game_background_warmup_controller.gd")
+const GameDebugPanelControllerClass = preload("res://ui/scenes/game/game_debug_panel_controller.gd")
 const GameOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_controller.gd")
 const GameMapInteractionControllerClass = preload("res://ui/scenes/game/game_map_interaction_controller.gd")
+const GameMapModeBarControllerClass = preload("res://ui/scenes/game/game_map_mode_bar_controller.gd")
 const GamePanelControllerClass = preload("res://ui/scenes/game/game_panel_controller.gd")
 const GameOnlineResyncControllerClass = preload("res://ui/scenes/game/game_online_resync_controller.gd")
 const GameTimelineControllerClass = preload("res://ui/scenes/game/game_timeline_controller.gd")
@@ -70,34 +75,27 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 var game_engine: GameEngine = null
 
 # 控制器
-var _event_log_controller = null
 var _menu_debug_controller = null
+var _menu_controller = null
 var _save_load_controller = null
 var _layout_controller = null
 var _right_panel_dock_controller = null
 var _overlay_controller = null
 var _map_controller = null
+var _map_mode_bar_controller = null
 var _panel_controller = null
 var _online_resync_controller = null
 var _timeline_controller = null
 var _ui_sync_controller = null
 var _command_controller = null
-
-# 调试面板
-var _debug_panel: Window = null
-
-# 确认对话框（复用）
-var _confirm_dialog: ConfirmDialog = null
-var _confirm_dialog_on_confirm: Callable = Callable()
-var _confirm_dialog_on_cancel: Callable = Callable()
-
-var _background_ui_warmup_started: bool = false
+var _input_controller = null
+var _log_dock_controller = null
+var _warmup_controller = null
+var _debug_panel_controller = null
 var _startup_profile_reported: bool = false
-
 func _ready() -> void:
 	var span_ready := PerfTraceClass.begin_span("game:_ready")
 	GameLog.info("Game", "游戏场景已加载")
-
 	# 初始化/读档可能耗时：确保加载遮罩至少绘制一帧，避免“卡住”的观感。
 	var need_show_loading := true
 	if SceneManager != null and SceneManager.has_method("is_loading_visible"):
@@ -107,10 +105,8 @@ func _ready() -> void:
 	await get_tree().process_frame
 	if not is_instance_valid(self):
 		return
-
 	var startup_replay_from_main_menu := false
 	var startup_replay_path := ""
-
 	# 主菜单入口：选择回放文件后，进入 Game 并自动打开回放播放器。
 	if Globals != null:
 		var p := str(Globals.pending_replay_file_path).strip_edges()
@@ -118,7 +114,6 @@ func _ready() -> void:
 			startup_replay_from_main_menu = true
 			startup_replay_path = p
 			Globals.pending_replay_file_path = ""
-
 	var should_restore_log_history := false
 	if Globals.current_game_engine != null and Globals.current_game_engine is GameEngine:
 		var existing_engine: GameEngine = Globals.current_game_engine
@@ -159,7 +154,8 @@ func _ready() -> void:
 
 	_map_controller = GameMapInteractionControllerClass.new(self, map_canvas, _overlay_controller)
 	_map_controller.connect_signals()
-	UiSignalHelpersClass.safe_connect(_map_controller, "mode_changed", _on_map_mode_changed)
+	_map_mode_bar_controller = GameMapModeBarControllerClass.new(map_mode_bar)
+	UiSignalHelpersClass.safe_connect(_map_controller, "mode_changed", Callable(_map_mode_bar_controller, "on_map_mode_changed"))
 
 	_panel_controller = GamePanelControllerClass.new(
 		self,
@@ -169,9 +165,22 @@ func _ready() -> void:
 		Callable(self, "_update_ui")
 	)
 	_panel_controller.connect_signals(action_panel, turn_order_track, hand_area, company_structure)
+	_warmup_controller = GameBackgroundWarmupControllerClass.new(self, Callable(self, "_get_game_engine"), _panel_controller, map_canvas)
 
 	_menu_debug_controller = GameMenuDebugControllerClass.new(self, menu_dialog)
 	_save_load_controller = GameSaveLoadControllerClass.new(self, SaveLoadDialogScript, Callable(self, "_start_replay_from_file"))
+	_menu_controller = GameMenuControllerClass.new(
+		self,
+		_menu_debug_controller,
+		menu_dialog,
+		ConfirmDialogScene,
+		_save_load_controller,
+		Callable(self, "_get_game_engine"),
+		Callable(self, "show_settings_dialog"),
+		Callable(self, "toggle_game_log"),
+		Callable(self, "show_milestone_panel"),
+		Callable(self, "toggle_distance_tool")
+	)
 	_right_panel_dock_controller = GameRightPanelDockControllerClass.new(
 		Callable(self, "_ensure_right_panel_visible"),
 		Callable(self, "_cancel_right_panel_docked_panel"),
@@ -186,9 +195,18 @@ func _ready() -> void:
 		right_panel_footer_secondary_button,
 		right_panel_footer_primary_button
 	)
+	_input_controller = GameInputControllerClass.new(
+		_menu_controller,
+		_overlay_controller,
+		_panel_controller,
+		_map_controller,
+		_right_panel_dock_controller,
+		right_panel_footer_row,
+		right_panel_footer_secondary_button,
+		right_panel_footer_primary_button
+	)
 	# M4.3：日志面板统一使用 step 时间线视图（由 StepTimelineBuild.build_full 重建），
 	# 不再依赖 EventBus 订阅追加日志。
-	_event_log_controller = null
 	UiSignalHelpersClass.safe_connect(game_log_panel, "close_requested", toggle_game_log)
 
 	_timeline_controller = GameTimelineControllerClass.new(
@@ -206,6 +224,17 @@ func _ready() -> void:
 	_timeline_controller.set_startup_replay_from_main_menu(startup_replay_from_main_menu)
 	_timeline_controller.initialize()
 
+	_log_dock_controller = GameLogDockControllerClass.new(
+		Callable(self, "_ensure_left_area_visible"),
+		Callable(self, "_ensure_right_panel_visible"),
+		Callable(self, "_cancel_right_panel_docked_panel"),
+		Callable(self, "_sync_right_panel_docked_view"),
+		Callable(self, "dock_popup_into_right_panel"),
+		game_log_panel,
+		right_panel_dock_host,
+		_timeline_controller
+	)
+
 	_ui_sync_controller = GameUiSyncControllerClass.new(
 		Callable(self, "_get_game_engine"),
 		Callable(self, "_update_ui"),
@@ -219,6 +248,14 @@ func _ready() -> void:
 		_panel_controller,
 		_overlay_controller,
 		_timeline_controller
+	)
+
+	_debug_panel_controller = GameDebugPanelControllerClass.new(
+		self,
+		DebugPanelScene,
+		Callable(self, "_get_game_engine"),
+		Callable(self, "_on_debug_command_executed"),
+		_ui_sync_controller
 	)
 
 	_command_controller = GameCommandControllerClass.new(
@@ -254,9 +291,12 @@ func _ready() -> void:
 			_command_controller.set_online_resync_controller(_online_resync_controller)
 
 	# 初始化调试面板
-	_setup_debug_panel()
-	DebugFlags.debug_panel_toggled.connect(_on_debug_panel_toggled)
-	_on_debug_panel_toggled(DebugFlags.show_console)
+	if _debug_panel_controller != null and _debug_panel_controller.has_method("setup_debug_panel"):
+		_debug_panel_controller.call("setup_debug_panel")
+	if DebugFlags != null and _debug_panel_controller != null:
+		UiSignalHelpersClass.safe_connect(DebugFlags, "debug_panel_toggled", Callable(_debug_panel_controller, "on_debug_panel_toggled"))
+		if _debug_panel_controller.has_method("on_debug_panel_toggled"):
+			_debug_panel_controller.call("on_debug_panel_toggled", DebugFlags.show_console)
 
 	_init_bottom_panel_toggle()
 	_init_left_area_resize()
@@ -269,7 +309,8 @@ func _ready() -> void:
 		var span_update_ui := PerfTraceClass.begin_span("game:_update_ui(first)")
 		_update_ui()
 		PerfTraceClass.end_span(span_update_ui)
-		_on_map_mode_changed("", {})
+		if _map_mode_bar_controller != null and _map_mode_bar_controller.has_method("on_map_mode_changed"):
+			_map_mode_bar_controller.call("on_map_mode_changed", "", {})
 
 		# 若开局需要强制弹出“储备卡选择”，则保留加载遮罩直到弹窗真正打开，
 		# 避免先露出一帧游戏 UI 再弹窗导致的闪烁体验。
@@ -310,74 +351,14 @@ func _report_startup_profile() -> void:
 	PerfTraceClass.report(20)
 
 func _start_background_ui_warmup() -> void:
-	if _background_ui_warmup_started:
-		return
-	_background_ui_warmup_started = true
-
-	var span_warmup := PerfTraceClass.begin_span("game:background_ui_warmup")
-	# 让游戏 UI 先进入可交互状态，再开始后台构建。
-	await get_tree().process_frame
-	await get_tree().process_frame
-	if not is_instance_valid(self):
-		return
-
-	if game_engine == null or _panel_controller == null:
-		return
-	var state := game_engine.get_state()
-	if state == null:
-		return
-
-	# 复用 MapCanvas 的 MapSkin；避免后台预热时触发 MapSkinBuilder 重复加载。
-	var skin = null
-	if is_instance_valid(map_canvas) and map_canvas.has_method("get_skin"):
-		skin = map_canvas.call("get_skin")
-
-	# 1) 升级路线（EmployeeTree）
-	var tree = _panel_controller.call("get_employee_tree_panel") if _panel_controller.has_method("get_employee_tree_panel") else null
-	if is_instance_valid(tree) and tree.has_method("begin_background_build"):
-		var span_tree := PerfTraceClass.begin_span("warmup:employee_tree")
-		tree.call("begin_background_build")
-		if tree.has_signal("build_finished"):
-			await tree.build_finished
-		PerfTraceClass.end_span(span_tree)
-	await get_tree().process_frame
-	if not is_instance_valid(self):
-		return
-
-	# 2) 里程碑全屏视图
-	if skin != null:
-		var ms = _panel_controller.call("get_milestone_full_screen_view") if _panel_controller.has_method("get_milestone_full_screen_view") else null
-		if is_instance_valid(ms) and ms.has_method("begin_background_build"):
-			var span_ms := PerfTraceClass.begin_span("warmup:milestones")
-			ms.call("begin_background_build", state, skin)
-			if ms.has_signal("build_finished"):
-				await ms.build_finished
-			PerfTraceClass.end_span(span_ms)
-	await get_tree().process_frame
-	if not is_instance_valid(self):
-		return
-
-	# 3) 供应堆全屏视图
-	if skin != null:
-		var supply = _panel_controller.call("get_reserve_area_full_screen_view") if _panel_controller.has_method("get_reserve_area_full_screen_view") else null
-		if is_instance_valid(supply) and supply.has_method("begin_background_build"):
-			var span_supply := PerfTraceClass.begin_span("warmup:supply_pile")
-			supply.call("begin_background_build", state, skin)
-			if supply.has_signal("build_finished"):
-				await supply.build_finished
-			PerfTraceClass.end_span(span_supply)
-
-	PerfTraceClass.end_span(span_warmup)
+	if _warmup_controller != null and _warmup_controller.has_method("start_background_ui_warmup"):
+		await _warmup_controller.start_background_ui_warmup()
 
 func _exit_tree() -> void:
 	_dispose_runtime()
 
 func _dispose_runtime() -> void:
 	# 释放 RefCounted 控制器（避免 headless 测试退出时资源泄漏）
-	if _event_log_controller != null and _event_log_controller.has_method("dispose"):
-		_event_log_controller.dispose()
-	_event_log_controller = null
-
 	if _panel_controller != null and _panel_controller.has_method("dispose"):
 		_panel_controller.dispose()
 	_panel_controller = null
@@ -389,6 +370,26 @@ func _dispose_runtime() -> void:
 	if _overlay_controller != null and _overlay_controller.has_method("dispose"):
 		_overlay_controller.dispose()
 	_overlay_controller = null
+
+	if _input_controller != null and _input_controller.has_method("dispose"):
+		_input_controller.dispose()
+	_input_controller = null
+
+	if _map_mode_bar_controller != null and _map_mode_bar_controller.has_method("dispose"):
+		_map_mode_bar_controller.dispose()
+	_map_mode_bar_controller = null
+
+	if _menu_controller != null and _menu_controller.has_method("dispose"):
+		_menu_controller.dispose()
+	_menu_controller = null
+
+	if _log_dock_controller != null and _log_dock_controller.has_method("dispose"):
+		_log_dock_controller.dispose()
+	_log_dock_controller = null
+
+	if _warmup_controller != null and _warmup_controller.has_method("dispose"):
+		_warmup_controller.dispose()
+	_warmup_controller = null
 
 	if _menu_debug_controller != null and _menu_debug_controller.has_method("dispose"):
 		_menu_debug_controller.dispose()
@@ -413,6 +414,10 @@ func _dispose_runtime() -> void:
 	if _timeline_controller != null and _timeline_controller.has_method("dispose"):
 		_timeline_controller.dispose()
 	_timeline_controller = null
+
+	if _debug_panel_controller != null and _debug_panel_controller.has_method("dispose"):
+		_debug_panel_controller.dispose()
+	_debug_panel_controller = null
 
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("dispose"):
 		_ui_sync_controller.dispose()
@@ -589,23 +594,6 @@ func _initialize_game() -> void:
 		PerfTraceClass.end_span(dump_span)
 	GameLog.info("Game", "初始状态:\n%s" % state_dump)
 
-func _setup_debug_panel() -> void:
-	if not DebugFlags.is_debug_mode():
-		return
-
-	if _debug_panel != null and is_instance_valid(_debug_panel):
-		return
-
-	_debug_panel = DebugPanelScene.instantiate()
-	add_child(_debug_panel)
-	_debug_panel.set_game_engine(game_engine)
-	_debug_panel.hide()
-
-	# 连接命令执行信号以刷新 UI
-	_debug_panel.command_executed.connect(_on_debug_command_executed)
-	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_debug_panel"):
-		_ui_sync_controller.set_debug_panel(_debug_panel)
-
 func _update_ui() -> void:
 	var do_profile := PerfTraceClass.enabled() and not _startup_profile_reported
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("update_ui"):
@@ -641,155 +629,10 @@ func _on_skip_pressed() -> void:
 		_command_controller.on_skip_pressed()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey:
-		var e: InputEventKey = event
-		if not e.pressed or e.echo:
-			return
-
-		match e.keycode:
-			KEY_ESCAPE:
-				if _handle_escape():
-					accept_event()
-					return
-				_on_menu_pressed()
-				accept_event()
-			KEY_ENTER, KEY_KP_ENTER:
-				var handled := false
-				if e.shift_pressed:
-					handled = _try_trigger_right_panel_footer_secondary()
-				else:
-					handled = _try_trigger_right_panel_footer_primary()
-				if handled:
-					accept_event()
-			KEY_D:
-				toggle_distance_tool()
-				accept_event()
-			KEY_R:
-				if _try_rotate_placement():
-					accept_event()
-
-func _try_trigger_right_panel_footer_primary() -> bool:
-	if not is_instance_valid(right_panel_footer_row) or not right_panel_footer_row.visible:
-		return false
-	if not is_instance_valid(right_panel_footer_primary_button) or not right_panel_footer_primary_button.visible:
-		return false
-	if right_panel_footer_primary_button.disabled:
-		return false
-	_on_right_panel_footer_primary_pressed()
-	return true
-
-func _try_trigger_right_panel_footer_secondary() -> bool:
-	if not is_instance_valid(right_panel_footer_row) or not right_panel_footer_row.visible:
-		return false
-	if not is_instance_valid(right_panel_footer_secondary_button) or not right_panel_footer_secondary_button.visible:
-		return false
-	if right_panel_footer_secondary_button.disabled:
-		return false
-	_on_right_panel_footer_secondary_pressed()
-	return true
-
-func _handle_escape() -> bool:
-	# 关闭顶层对话框
-	if is_instance_valid(menu_dialog) and menu_dialog.visible:
-		_on_menu_dialog_close_requested()
-		return true
-	if _confirm_dialog != null and is_instance_valid(_confirm_dialog) and _confirm_dialog.visible:
-		if _confirm_dialog.has_method("_on_cancel_pressed"):
-			_confirm_dialog.call("_on_cancel_pressed")
-		else:
-			_confirm_dialog.hide()
-		return true
-
-	if _overlay_controller != null:
-		var dlg = _overlay_controller.settings_dialog
-		if is_instance_valid(dlg) and dlg.visible:
-			if dlg.has_method("_on_close_pressed"):
-				dlg.call("_on_close_pressed")
-			else:
-				dlg.hide()
-			return true
-
-	# 关闭全屏浏览视图（例如里程碑/保留区），避免影响底层面板/选中状态。
-	if _panel_controller != null and _panel_controller.has_method("hide_top_overlays_if_open"):
-		var closed = _panel_controller.call("hide_top_overlays_if_open")
-		if closed is bool and bool(closed):
-			return true
-
-	# 关闭阶段面板/取消地图模式
-	if _panel_controller != null:
-		var map_mode_active := (_map_controller != null and not str(_map_controller.get_mode()).is_empty())
-		if map_mode_active:
-			_panel_controller.hide_all()
-			return true
-		if _panel_controller.has_open_phase_ui():
-			if _panel_controller.has_method("hide_all_keep_selection"):
-				_panel_controller.hide_all_keep_selection()
-			else:
-				_panel_controller.hide_all()
-			return true
-
-	return false
-
-func _try_rotate_placement() -> bool:
-	# 若有顶层对话框，优先不处理
-	if is_instance_valid(menu_dialog) and menu_dialog.visible:
-		return false
-	if _confirm_dialog != null and is_instance_valid(_confirm_dialog) and _confirm_dialog.visible:
-		return false
-	if _overlay_controller != null:
-		var dlg = _overlay_controller.settings_dialog
-		if is_instance_valid(dlg) and dlg.visible:
-			return false
-
-	if _map_controller == null:
-		return false
-	var mode := str(_map_controller.get_mode())
-
-	if mode == "restaurant_placement":
-		var ov = _map_controller.restaurant_placement_overlay
-		if is_instance_valid(ov) and ov.visible and ov.has_method("rotate_cw"):
-			ov.rotate_cw()
-			return true
-	if mode == "house_placement":
-		var ov2 = _map_controller.house_placement_overlay
-		if is_instance_valid(ov2) and ov2.visible and ov2.has_method("rotate_cw"):
-			ov2.rotate_cw()
-			return true
-
-	return false
-
-func _on_map_mode_changed(mode: String, payload: Dictionary) -> void:
-	if not is_instance_valid(map_mode_bar):
-		return
-
-	var m := str(mode)
-	if m.is_empty():
-		map_mode_bar.hide_mode()
-		return
-
-	match m:
-		"marketing":
-			var mt := str(payload.get("marketing_type", ""))
-			var title := "📍 营销放置" if mt.is_empty() else "📍 营销放置：%s" % mt
-			var hint := "点击地图选择位置｜ESC 取消"
-			if mt == "airplane":
-				hint = "点击地图边缘选择位置｜角落需选择横/竖飞｜ESC 取消"
-			map_mode_bar.show_mode(title, hint)
-		"restaurant_placement":
-			var action_id := str(payload.get("action_id", ""))
-			var title2 := "🏪 放置餐厅" if action_id != "move_restaurant" else "🏪 移动餐厅"
-			map_mode_bar.show_mode(title2, "点击地图选择位置｜R 旋转｜右侧确认/取消｜ESC 取消")
-		"house_placement":
-			var action_id2 := str(payload.get("action_id", ""))
-			var title3 := "🏠 放置房屋" if action_id2 != "add_garden" else "🌳 添加花园"
-			if action_id2 == "add_garden":
-				map_mode_bar.show_mode(title3, "点击地图选择房屋｜右侧选择方向并确认｜ESC 取消")
-			else:
-				map_mode_bar.show_mode(title3, "点击地图选择位置｜R 旋转｜右侧确认/取消｜ESC 取消")
-		"distance_tool":
-			map_mode_bar.show_mode("📏 距离工具", "只允许点道路格｜点起点再点终点｜测完点任意道路格重开｜D/ESC 关闭")
-		_:
-			map_mode_bar.show_mode("模式：%s" % m, "ESC 取消")
+	if _input_controller != null and _input_controller.has_method("handle_unhandled_input"):
+		var handled = _input_controller.handle_unhandled_input(event)
+		if handled is bool and bool(handled):
+			accept_event()
 
 func _on_log_button_pressed() -> void:
 	toggle_game_log()
@@ -823,98 +666,48 @@ func get_key_values() -> Dictionary:
 # === 菜单/调试（TopBar + Dialogs）===
 
 func _on_menu_pressed() -> void:
-	if _menu_debug_controller != null:
-		_menu_debug_controller.open_menu()
-	else:
-		menu_dialog.show()
+	if _menu_controller != null and _menu_controller.has_method("on_menu_pressed"):
+		_menu_controller.call("on_menu_pressed")
 
 func _on_menu_dialog_close_requested() -> void:
-	if _menu_debug_controller != null:
-		_menu_debug_controller.close_menu()
-	else:
-		menu_dialog.hide()
+	if _menu_controller != null and _menu_controller.has_method("on_menu_dialog_close_requested"):
+		_menu_controller.call("on_menu_dialog_close_requested")
 
 func _on_resume_pressed() -> void:
-	if _menu_debug_controller != null:
-		_menu_debug_controller.resume()
-	else:
-		menu_dialog.hide()
+	if _menu_controller != null and _menu_controller.has_method("on_resume_pressed"):
+		_menu_controller.call("on_resume_pressed")
 
 func _on_save_pressed() -> void:
-	if _save_load_controller != null:
-		_save_load_controller.open_for_save(game_engine)
-	_on_menu_dialog_close_requested()
+	if _menu_controller != null and _menu_controller.has_method("on_save_pressed"):
+		_menu_controller.call("on_save_pressed")
 
 func _on_settings_pressed() -> void:
-	show_settings_dialog()
-	_on_menu_dialog_close_requested()
+	if _menu_controller != null and _menu_controller.has_method("on_settings_pressed"):
+		_menu_controller.call("on_settings_pressed")
 
 func _on_toggle_log_pressed() -> void:
-	toggle_game_log()
-	_on_menu_dialog_close_requested()
+	if _menu_controller != null and _menu_controller.has_method("on_toggle_log_pressed"):
+		_menu_controller.call("on_toggle_log_pressed")
 
 func _on_milestones_pressed() -> void:
-	show_milestone_panel()
-	_on_menu_dialog_close_requested()
+	if _menu_controller != null and _menu_controller.has_method("on_milestones_pressed"):
+		_menu_controller.call("on_milestones_pressed")
 
 func _on_distance_tool_pressed() -> void:
-	toggle_distance_tool()
-	_on_menu_dialog_close_requested()
+	if _menu_controller != null and _menu_controller.has_method("on_distance_tool_pressed"):
+		_menu_controller.call("on_distance_tool_pressed")
 
 func _on_replay_pressed() -> void:
-	if _save_load_controller != null:
-		_save_load_controller.open_for_replay()
-	_on_menu_dialog_close_requested()
+	if _menu_controller != null and _menu_controller.has_method("on_replay_pressed"):
+		_menu_controller.call("on_replay_pressed")
 
 func _on_quit_to_menu_pressed() -> void:
-	_on_menu_dialog_close_requested()
-	_show_confirm(
-		"返回主菜单",
-		"确定要返回主菜单吗？\n未保存的进度将丢失。",
-		Callable(self, "_confirm_quit_to_menu"),
-		Callable(self, "_cancel_quit_to_menu")
-	)
-
-# === 确认弹窗（P2）===
+	if _menu_controller != null and _menu_controller.has_method("on_quit_to_menu_pressed"):
+		_menu_controller.call("on_quit_to_menu_pressed")
 
 func _show_confirm(title: String, message: String, on_confirm: Callable, on_cancel: Callable = Callable(), confirm_text: String = "确认", cancel_text: String = "取消") -> void:
-	if _confirm_dialog == null or not is_instance_valid(_confirm_dialog):
-		_confirm_dialog = ConfirmDialogScene.instantiate()
-		add_child(_confirm_dialog)
-		_confirm_dialog.confirmed.connect(_on_confirm_dialog_confirmed)
-		_confirm_dialog.cancelled.connect(_on_confirm_dialog_cancelled)
-
-	_confirm_dialog_on_confirm = on_confirm
-	_confirm_dialog_on_cancel = on_cancel
-	_confirm_dialog.setup(title, message, confirm_text, cancel_text)
-	_confirm_dialog.show_dialog()
-
-func _on_confirm_dialog_confirmed() -> void:
-	var cb := _confirm_dialog_on_confirm
-	_confirm_dialog_on_confirm = Callable()
-	_confirm_dialog_on_cancel = Callable()
-	if cb.is_valid():
-		cb.call()
-
-func _on_confirm_dialog_cancelled() -> void:
-	var cb := _confirm_dialog_on_cancel
-	_confirm_dialog_on_confirm = Callable()
-	_confirm_dialog_on_cancel = Callable()
-	if cb.is_valid():
-		cb.call()
-
-func _confirm_quit_to_menu() -> void:
-	if _menu_debug_controller != null:
-		_menu_debug_controller.quit_to_menu()
-	else:
-		Globals.reset_game_config()
-		SceneManager.goto_main_menu()
-
-func _cancel_quit_to_menu() -> void:
-	if _menu_debug_controller != null:
-		_menu_debug_controller.open_menu()
-	elif is_instance_valid(menu_dialog):
-		menu_dialog.show()
+	if _menu_controller != null and _menu_controller.has_method("show_confirm"):
+		_menu_controller.call("show_confirm", title, message, on_confirm, on_cancel, confirm_text, cancel_text)
 
 # === 时间线/回放（由 GameTimelineController 负责）===
 
@@ -930,8 +723,8 @@ func _set_active_game_engine(engine: GameEngine) -> void:
 		Globals.current_game_engine = engine
 		Globals.is_game_active = true
 
-	if _debug_panel != null and is_instance_valid(_debug_panel):
-		_debug_panel.set_game_engine(game_engine)
+	if _debug_panel_controller != null and _debug_panel_controller.has_method("set_game_engine"):
+		_debug_panel_controller.call("set_game_engine", game_engine)
 
 	if _panel_controller != null and game_engine != null:
 		_panel_controller.reset_bank_break_tracking(game_engine.get_state())
@@ -985,67 +778,12 @@ func show_milestone_panel() -> void:
 		_panel_controller.show_milestone_panel()
 
 func toggle_game_log() -> void:
-	if not is_instance_valid(game_log_panel):
-		return
-
-	var show_logs: bool = not bool(game_log_panel.visible)
-	if show_logs:
-		# 玩家信息与日志需要同屏：确保左侧信息区可见，同时确保右侧面板可见以承载日志。
-		_ensure_left_area_visible()
-		_ensure_right_panel_visible()
-
-		# M4.3：打开日志时，按当前引擎状态重建 step 时间线视图（保证实时/回放一致）。
-		if _timeline_controller != null:
-			_timeline_controller.apply_live_log_timeline_from_engine()
-
-		# 若右侧已有 docked 操作面板/弹窗，先关闭它们，避免日志被遮挡或出现多个 docked 视图竞争焦点。
-		var has_other_docked := false
-		if is_instance_valid(right_panel_dock_host):
-			for ch in right_panel_dock_host.get_children():
-				if ch == game_log_panel:
-					continue
-				if ch is Control and (ch as Control).visible:
-					has_other_docked = true
-					break
-		if has_other_docked:
-			_cancel_right_panel_docked_panel()
-			_sync_right_panel_docked_view()
-
-		# 将日志面板嵌入到 RightPanel 抽屉区域（覆盖 ActionPanel），并显示。
-		game_log_panel.set_meta("popup_title", "日志")
-		dock_popup_into_right_panel(game_log_panel)
-	else:
-		# 关闭日志：返回默认右侧动作区。
-		game_log_panel.visible = false
-		_sync_right_panel_docked_view()
+	if _log_dock_controller != null and _log_dock_controller.has_method("toggle_game_log"):
+		_log_dock_controller.toggle_game_log()
 
 func _show_game_log_panel_in_right_panel() -> void:
-	# 回放/复盘默认显示日志：避免 ReplayBar/时间线功能“藏在被关闭的面板里”。
-	if not is_instance_valid(game_log_panel):
-		return
-
-	# 已在 RightPanel 抽屉中显示
-	if game_log_panel.visible and is_instance_valid(right_panel_dock_host) and game_log_panel.get_parent() == right_panel_dock_host:
-		return
-
-	_ensure_left_area_visible()
-	_ensure_right_panel_visible()
-
-	# 若右侧已有 docked 操作面板/弹窗，先关闭它们，避免多个 docked 视图竞争焦点。
-	var has_other_docked := false
-	if is_instance_valid(right_panel_dock_host):
-		for ch in right_panel_dock_host.get_children():
-			if ch == game_log_panel:
-				continue
-			if ch is Control and (ch as Control).visible:
-				has_other_docked = true
-				break
-	if has_other_docked:
-		_cancel_right_panel_docked_panel()
-		_sync_right_panel_docked_view()
-
-	game_log_panel.set_meta("popup_title", "日志")
-	dock_popup_into_right_panel(game_log_panel)
+	if _log_dock_controller != null and _log_dock_controller.has_method("show_game_log_panel_in_right_panel"):
+		_log_dock_controller.show_game_log_panel_in_right_panel()
 
 func show_settings_dialog() -> void:
 	if _overlay_controller != null:
@@ -1059,20 +797,3 @@ func get_ui_animation_manager() -> Node:
 	if _overlay_controller != null:
 		return _overlay_controller.get_ui_animation_manager()
 	return null
-
-func _on_debug_panel_toggled(visible: bool) -> void:
-	if not DebugFlags.is_debug_mode():
-		if _debug_panel != null and is_instance_valid(_debug_panel):
-			_debug_panel.hide()
-		return
-
-	if visible:
-		if _debug_panel == null or not is_instance_valid(_debug_panel):
-			_debug_panel = null
-			_setup_debug_panel()
-		if _debug_panel != null:
-			_debug_panel.show()
-			_debug_panel.refresh_state()
-	else:
-		if _debug_panel != null and is_instance_valid(_debug_panel):
-			_debug_panel.hide()
