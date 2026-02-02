@@ -10,8 +10,8 @@ const WorkingPanelsClass = preload("res://ui/scenes/game/game_panel_working_pane
 const MarketingPanelsClass = preload("res://ui/scenes/game/game_panel_marketing_panels.gd")
 const PlacementOverlaysClass = preload("res://ui/scenes/game/game_panel_placement_overlays.gd")
 const EndPanelsClass = preload("res://ui/scenes/game/game_panel_end_panels.gd")
+const RestructuringControllerClass = preload("res://ui/scenes/game/game_panel_restructuring_controller.gd")
 
-const RestructuringModalScene = preload("res://ui/components/modal_panel/restructuring_modal.tscn")
 const TurnOrderSelectionModalScene = preload("res://ui/components/modal_panel/turn_order_selection_modal.tscn")
 const ReserveCardSelectionModalScene = preload("res://ui/components/modal_panel/reserve_card_selection_modal.tscn")
 const FridgeKeepModalScene = preload("res://ui/components/modal_panel/fridge_keep_modal.tscn")
@@ -36,7 +36,7 @@ var _marketing_panels = null
 var _placement_overlays = null
 var _end_panels = null
 
-var _restructuring_modal = null
+var _restructuring_controller = null
 var _turn_order_modal = null
 var _reserve_card_modal = null
 var _fridge_keep_modal = null
@@ -67,6 +67,12 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 	_marketing_panels = MarketingPanelsClass.new(_scene, _map_controller, _overlay_controller, _execute_command, hide_all, center_popup)
 	_placement_overlays = PlacementOverlaysClass.new(_scene, _map_controller, _overlay_controller, _execute_command, hide_all)
 	_end_panels = EndPanelsClass.new(_scene, _overlay_controller, _execute_command, hide_all, center_popup, _refresh_ui)
+	_restructuring_controller = RestructuringControllerClass.new(
+		_scene,
+		_execute_command,
+		Callable(self, "get_view_player_id"),
+		Callable(self, "_on_view_player_selected")
+	)
 
 func connect_signals(action_panel, turn_order_track, hand_area, company_structure) -> void:
 	UiSignalHelpersClass.safe_connect(action_panel, "action_requested", on_action_requested)
@@ -175,8 +181,7 @@ func _on_view_player_selected(player_id: int) -> void:
 				if local_pid < 0 or player_id != local_pid:
 					return
 			else:
-				var submitted := _get_restructuring_submitted_map(state)
-				if not submitted.is_empty() and _is_restructuring_player_submitted(submitted, player_id):
+				if _restructuring_controller != null and _restructuring_controller.is_player_submitted(state, player_id):
 					return
 
 	_view_player_id = player_id
@@ -198,9 +203,9 @@ func dispose() -> void:
 	_placement_overlays = null
 	_end_panels = null
 
-	if is_instance_valid(_restructuring_modal):
-		_restructuring_modal.queue_free()
-	_restructuring_modal = null
+	if _restructuring_controller != null and _restructuring_controller.has_method("dispose"):
+		_restructuring_controller.dispose()
+	_restructuring_controller = null
 
 	if is_instance_valid(_turn_order_modal):
 		_turn_order_modal.queue_free()
@@ -231,8 +236,9 @@ func dispose() -> void:
 	_overlay_controller = null
 
 func has_open_modal_ui() -> bool:
-	if is_instance_valid(_restructuring_modal) and _restructuring_modal.visible:
-		return true
+	if _restructuring_controller != null and _restructuring_controller.has_method("has_open_modal_ui"):
+		if bool(_restructuring_controller.has_open_modal_ui()):
+			return true
 	if is_instance_valid(_turn_order_modal) and _turn_order_modal.visible:
 		return true
 	if is_instance_valid(_reserve_card_modal) and _reserve_card_modal.visible:
@@ -249,7 +255,8 @@ func has_open_modal_ui() -> bool:
 
 func hide_modal_ui() -> void:
 	_hide_turn_order_modal()
-	_hide_restructuring_modal()
+	if _restructuring_controller != null and _restructuring_controller.has_method("hide_modal"):
+		_restructuring_controller.hide_modal()
 	_hide_reserve_card_modal()
 	_hide_fridge_keep_modal()
 	_hide_employee_tree()
@@ -402,9 +409,12 @@ func _update_ui_components(state: GameState) -> void:
 						view_player_id = picked
 						_view_player_id = picked
 
-		# Restructuring：隐私规则（Online 仅自己；Hotseat 已提交锁定）
-		if str(state.phase) == DefsClass.PHASE_RESTRUCTURING:
-			view_player_id = _apply_restructuring_view_privacy(state, view_player_id)
+			# Restructuring：隐私规则（Online 仅自己；Hotseat 已提交锁定）
+			if str(state.phase) == DefsClass.PHASE_RESTRUCTURING and _restructuring_controller != null:
+				var adjusted = _restructuring_controller.apply_view_privacy(state, view_player_id)
+				if adjusted != view_player_id:
+					view_player_id = adjusted
+					_view_player_id = adjusted
 
 	var view_player: Dictionary = current_player
 	if view_player_id >= 0 and view_player_id < state.players.size():
@@ -671,151 +681,8 @@ func _on_hand_cards_selected(employee_ids: Array[String]) -> void:
 	GameLog.info("Game", "选中员工: %s" % str(employee_ids))
 
 func _on_hand_card_dropped(employee_id: String, target: Control) -> void:
-	if _scene == null or _scene.game_engine == null:
-		return
-	if employee_id.is_empty():
-		return
-	if not is_instance_valid(target):
-		return
-
-	var state: GameState = _scene.game_engine.get_state()
-	if state == null:
-		return
-	if state.phase != DefsClass.PHASE_RESTRUCTURING:
-		return
-
-	var actor_id := _get_effective_view_player_id(state, _view_player_id)
-	if actor_id < 0:
-		return
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-		var local_pid := int(NetContext.local_player_id)
-		if local_pid < 0:
-			return
-		if actor_id != local_pid:
-			GameLog.warn("Game", "联机模式下只能调整自己的公司结构")
-			return
-	if state.round_state is Dictionary:
-		var r_val = state.round_state.get("restructuring", null)
-		if r_val is Dictionary:
-			var r: Dictionary = r_val
-			var submitted_val = r.get("submitted", null)
-			if submitted_val is Dictionary:
-				var submitted: Dictionary = submitted_val
-				var submitted_flag = submitted.get(actor_id, null)
-				if submitted_flag == null and submitted.has(str(actor_id)):
-					submitted_flag = submitted.get(str(actor_id), null)
-				if bool(submitted_flag):
-					return
-
-	# 放到公司结构（经理下属区）
-	if target.is_in_group("company_structure_reports_drop_target"):
-		var manager_slot_index := -1
-		if target.has_meta("manager_slot_index"):
-			var mv = target.get_meta("manager_slot_index")
-			if mv is int:
-				manager_slot_index = int(mv)
-			elif mv is float:
-				var mf: float = float(mv)
-				if mf == floor(mf):
-					manager_slot_index = int(mf)
-		if manager_slot_index < 0:
-			GameLog.warn("Game", "无法获取经理槽位索引")
-			return
-
-		var manager_employee_id := ""
-		if target.has_meta("manager_employee_id"):
-			var m_id_val = target.get_meta("manager_employee_id")
-			if m_id_val is String:
-				manager_employee_id = str(m_id_val)
-		if manager_employee_id.is_empty():
-			GameLog.warn("Game", "无法获取该经理槽位的员工 id（manager_employee_id），无法分配下属")
-			return
-
-		var player := state.get_player(actor_id)
-		var needs_direct_sync := true
-		if not player.is_empty():
-			var cs_val = player.get("company_structure", null)
-			if cs_val is Dictionary:
-				var cs: Dictionary = cs_val
-				var struct_val = cs.get("structure", null)
-				if struct_val is Array:
-					var structure: Array = struct_val
-					if manager_slot_index < structure.size():
-						var entry_val = structure[manager_slot_index]
-						if entry_val is Dictionary:
-							var entry: Dictionary = entry_val
-							var stored_id := str(entry.get("employee_id", ""))
-							if stored_id == manager_employee_id and not stored_id.is_empty():
-								needs_direct_sync = false
-
-		# 当 UI 显示的“经理”与 state.company_structure.structure 不一致（或未初始化）时，
-		# 先同步一次直属槽，避免 set_company_structure_report 直接失败/看起来“拖拽无效”。
-		if needs_direct_sync:
-			var init_r: Result = _execute_command.call(Command.create("set_company_structure_direct", actor_id, {
-				"slot_index": manager_slot_index,
-				"employee_id": manager_employee_id
-			}))
-			if not init_r.ok:
-				GameLog.warn("Game", "初始化 CEO 直属槽失败: %s" % init_r.error)
-				return
-
-		var set_r: Result = _execute_command.call(Command.create("set_company_structure_report", actor_id, {
-			"manager_slot_index": manager_slot_index,
-			"employee_id": employee_id
-		}))
-		if not set_r.ok:
-			GameLog.warn("Game", "设置经理下属失败: %s" % set_r.error)
-		return
-
-	# 放到公司结构（CEO 直属槽）
-	if target.is_in_group("company_structure_direct_slot"):
-		var slot_index := -1
-		if target.has_method("get_slot_index"):
-			var v = target.call("get_slot_index")
-			if v is int:
-				slot_index = int(v)
-			elif v is float:
-				var f: float = float(v)
-				if f == floor(f):
-					slot_index = int(f)
-		if slot_index < 0:
-			GameLog.warn("Game", "无法获取公司结构槽位索引")
-			return
-
-		var direct_r: Result = _execute_command.call(Command.create("set_company_structure_direct", actor_id, {
-			"slot_index": slot_index,
-			"employee_id": employee_id
-		}))
-		if not direct_r.ok:
-			GameLog.warn("Game", "设置 CEO 直属槽失败: %s" % direct_r.error)
-		return
-
-	var to_reserve := false
-	if is_instance_valid(_scene.hand_area):
-		var ha: HandArea = _scene.hand_area
-		var mode := ""
-		if ha.has_method("get_display_mode"):
-			mode = str(ha.call("get_display_mode"))
-
-		# In restructuring, allow dropping anywhere within the reserve scroll area (issue_tracker #46).
-		if mode == "restructuring":
-			if target.is_in_group("hand_area_reserve_drop_target"):
-				to_reserve = true
-			elif is_instance_valid(ha.reserve_container):
-				to_reserve = (target == ha.reserve_container) or ha.reserve_container.is_ancestor_of(target) or target.is_ancestor_of(ha.reserve_container)
-		else:
-			if is_instance_valid(ha.reserve_container):
-				to_reserve = (target == ha.reserve_container) or ha.reserve_container.is_ancestor_of(target) or target.is_ancestor_of(ha.reserve_container)
-			if is_instance_valid(ha.active_container):
-				if (target == ha.active_container) or ha.active_container.is_ancestor_of(target) or target.is_ancestor_of(ha.active_container):
-					to_reserve = false
-
-	var move_r: Result = _execute_command.call(Command.create("restructure_employee", actor_id, {
-		"employee_id": employee_id,
-		"to_reserve": to_reserve
-	}))
-	if not move_r.ok:
-		GameLog.warn("Game", "移动员工失败: %s" % move_r.error)
+	if _restructuring_controller != null and _restructuring_controller.has_method("on_hand_card_dropped"):
+		_restructuring_controller.on_hand_card_dropped(employee_id, target)
 
 func _on_company_structure_changed(new_structure: Dictionary) -> void:
 	GameLog.info("Game", "公司结构变更: %s" % str(new_structure))
@@ -963,7 +830,8 @@ func _sync_modals(state: GameState) -> void:
 	if is_timeline_read_only:
 		_hide_reserve_card_modal()
 		_hide_turn_order_modal()
-		_hide_restructuring_modal()
+		if _restructuring_controller != null and _restructuring_controller.has_method("hide_modal"):
+			_restructuring_controller.hide_modal()
 		_hide_fridge_keep_modal()
 		return
 
@@ -1037,35 +905,8 @@ func _sync_modals(state: GameState) -> void:
 		_hide_turn_order_modal()
 
 	# 重组（Restructuring）
-	var should_show_restructuring := false
-	if state.phase == DefsClass.PHASE_RESTRUCTURING and state.players.size() > 0:
-		var all_submitted := false
-		if state.round_state is Dictionary:
-			var r_val = state.round_state.get("restructuring", null)
-			if r_val is Dictionary:
-				var r: Dictionary = r_val
-				var finalized_val = r.get("finalized", null)
-				if finalized_val is bool and bool(finalized_val):
-					all_submitted = true
-				elif r.has("submitted") and (r["submitted"] is Dictionary):
-					var submitted: Dictionary = r["submitted"]
-					all_submitted = true
-					for pid in range(state.players.size()):
-						var v = submitted.get(pid, null)
-						if v == null and submitted.has(str(pid)):
-							v = submitted.get(str(pid), null)
-						if not bool(v):
-							all_submitted = false
-							break
-		should_show_restructuring = not all_submitted
-
-	if should_show_restructuring:
-		_show_restructuring_modal(covered)
-		var view_player_id := _get_effective_view_player_id(state, _view_player_id)
-		view_player_id = _apply_restructuring_view_privacy(state, view_player_id)
-		_sync_restructuring_modal_ui(state, view_player_id)
-	else:
-		_hide_restructuring_modal()
+	if _restructuring_controller != null and _restructuring_controller.has_method("sync_modal"):
+		_view_player_id = int(_restructuring_controller.sync_modal(state, covered, _view_player_id))
 
 func _get_modal_cover_rect() -> Rect2:
 	if _scene == null:
@@ -1420,44 +1261,6 @@ func _on_fridge_keep_modal_completed(result: Dictionary) -> void:
 
 	_execute_command.call(Command.create("choose_fridge_keep", current_player_id, {"keep": keep}))
 
-func _show_restructuring_modal(covered: Rect2) -> void:
-	if _scene == null:
-		return
-
-	_restructuring_modal = _initialize_modal(_restructuring_modal, RestructuringModalScene, {
-		"completed": _on_restructuring_modal_completed,
-		"cancelled": _on_restructuring_modal_cancelled,
-		"player_selected": _on_view_player_selected,
-	})
-	if not is_instance_valid(_restructuring_modal):
-		return
-
-	var hand_area = _scene.get("hand_area")
-	if is_instance_valid(hand_area) and _restructuring_modal.has_method("attach_hand_area"):
-		_restructuring_modal.call("attach_hand_area", hand_area)
-	var company_structure = _scene.get("company_structure")
-	if is_instance_valid(company_structure) and _restructuring_modal.has_method("attach_company_structure"):
-		_restructuring_modal.call("attach_company_structure", company_structure)
-
-	if _restructuring_modal.has_method("open"):
-		_restructuring_modal.call("open", covered)
-	elif _restructuring_modal is Control:
-		var c: Control = _restructuring_modal
-		c.position = covered.position
-		c.size = covered.size
-		c.visible = true
-
-func _hide_restructuring_modal() -> void:
-	if not is_instance_valid(_restructuring_modal):
-		return
-
-	if _restructuring_modal.has_method("close"):
-		_restructuring_modal.call("close")
-	elif _restructuring_modal is Control:
-		(_restructuring_modal as Control).visible = false
-
-	_restore_info_panels_after_restructuring()
-
 func _ensure_employee_tree_panel() -> void:
 	if _scene == null:
 		return
@@ -1540,231 +1343,3 @@ func _ensure_reserve_area_full_screen_view() -> void:
 func _hide_reserve_area_full_screen_view() -> void:
 	if is_instance_valid(_reserve_area_full_screen_view):
 		_reserve_area_full_screen_view.visible = false
-
-func _restore_info_panels_after_restructuring() -> void:
-	if _scene == null:
-		return
-
-	var hand_area = _scene.get("hand_area")
-	var company_structure = _scene.get("company_structure")
-	if not is_instance_valid(hand_area) and not is_instance_valid(company_structure):
-		return
-
-	var bottom_panel = _scene.get("bottom_panel")
-	if not is_instance_valid(bottom_panel):
-		return
-
-	if is_instance_valid(hand_area):
-		_reparent_control(hand_area, bottom_panel)
-	if is_instance_valid(company_structure):
-		_reparent_control(company_structure, bottom_panel)
-
-func _reparent_control(node: Node, target_parent: Node) -> void:
-	if node == null or not is_instance_valid(node):
-		return
-	if target_parent == null or not is_instance_valid(target_parent):
-		return
-	if node.get_parent() == target_parent:
-		return
-	var old_parent := node.get_parent()
-	if is_instance_valid(old_parent):
-		old_parent.remove_child(node)
-	target_parent.add_child(node)
-
-func _on_restructuring_modal_completed(result: Dictionary) -> void:
-	if _scene == null or _scene.game_engine == null:
-		return
-	if not is_instance_valid(_restructuring_modal):
-		return
-
-	if _restructuring_modal.has_method("set_confirm_enabled"):
-		_restructuring_modal.call("set_confirm_enabled", false)
-
-	var state: GameState = _scene.game_engine.get_state()
-	if state == null:
-		if is_instance_valid(_restructuring_modal) and _restructuring_modal.has_method("set_confirm_enabled"):
-			_restructuring_modal.call("set_confirm_enabled", true)
-		return
-
-	var actor_id := _get_effective_view_player_id(state, _view_player_id)
-	if actor_id < 0:
-		if is_instance_valid(_restructuring_modal) and _restructuring_modal.has_method("set_confirm_enabled"):
-			_restructuring_modal.call("set_confirm_enabled", true)
-		return
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-		var local_pid := int(NetContext.local_player_id)
-		if local_pid < 0 or actor_id != local_pid:
-			if is_instance_valid(_restructuring_modal) and _restructuring_modal.has_method("set_confirm_enabled"):
-				_restructuring_modal.call("set_confirm_enabled", true)
-			GameLog.warn("Game", "联机模式下只能提交自己的公司结构")
-			return
-
-	var exec_result = _execute_command.call(Command.create("submit_restructuring", actor_id, {}))
-	if not (exec_result is Result):
-		if is_instance_valid(_restructuring_modal) and _restructuring_modal.has_method("set_confirm_enabled"):
-			_restructuring_modal.call("set_confirm_enabled", true)
-		return
-	if not (exec_result as Result).ok:
-		if is_instance_valid(_restructuring_modal) and _restructuring_modal.has_method("set_confirm_enabled"):
-			_restructuring_modal.call("set_confirm_enabled", true)
-
-func _on_restructuring_modal_cancelled() -> void:
-	_hide_restructuring_modal()
-
-func _get_restructuring_submitted_map(state: GameState) -> Dictionary:
-	if state == null:
-		return {}
-	if not (state.round_state is Dictionary):
-		return {}
-	var rs: Dictionary = state.round_state
-	var r_val = rs.get("restructuring", null)
-	if not (r_val is Dictionary):
-		return {}
-	var r: Dictionary = r_val
-	var submitted_val = r.get("submitted", null)
-	if not (submitted_val is Dictionary):
-		return {}
-	return submitted_val
-
-func _is_restructuring_player_submitted(submitted: Dictionary, player_id: int) -> bool:
-	if submitted == null or submitted.is_empty():
-		return false
-	var v = submitted.get(player_id, null)
-	if v == null and submitted.has(str(player_id)):
-		v = submitted.get(str(player_id), null)
-	return bool(v)
-
-func _pick_first_unsubmitted_player_id(state: GameState, submitted: Dictionary) -> int:
-	if state == null:
-		return -1
-	var total := state.players.size()
-	if total <= 0:
-		return -1
-
-	# 优先按 turn_order（更符合“顺序轨/回合”语义）
-	for pid_val in Array(state.turn_order):
-		if not (pid_val is int):
-			continue
-		var pid := int(pid_val)
-		if pid < 0 or pid >= total:
-			continue
-		if not _is_restructuring_player_submitted(submitted, pid):
-			return pid
-
-	for pid2 in range(total):
-		if not _is_restructuring_player_submitted(submitted, pid2):
-			return pid2
-	return -1
-
-func _apply_restructuring_view_privacy(state: GameState, view_player_id: int) -> int:
-	if state == null:
-		return view_player_id
-	if str(state.phase) != DefsClass.PHASE_RESTRUCTURING:
-		return view_player_id
-
-	# Online：仅允许查看自己；旁观者不允许查看任何玩家结构。
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-		var local_pid := int(NetContext.local_player_id)
-		if local_pid >= 0:
-			_view_player_id = local_pid
-			return local_pid
-		_view_player_id = -1
-		return -1
-
-	# Hotseat：已提交玩家不可再查看（用于保密）。
-	var submitted := _get_restructuring_submitted_map(state)
-	if submitted.is_empty():
-		return view_player_id
-	if _is_restructuring_player_submitted(submitted, view_player_id):
-		var picked := _pick_first_unsubmitted_player_id(state, submitted)
-		if picked >= 0:
-			_view_player_id = picked
-			return picked
-
-	return view_player_id
-
-func _sync_restructuring_modal_ui(state: GameState, view_player_id: int) -> void:
-	if not is_instance_valid(_restructuring_modal):
-		return
-	if state == null:
-		return
-
-	var submitted_count := 0
-	var total := state.players.size()
-	var view_submitted := false
-	var submitted: Dictionary = {}
-
-	if state.round_state is Dictionary:
-		var r_val = state.round_state.get("restructuring", null)
-		if r_val is Dictionary:
-			var r: Dictionary = r_val
-			var submitted_val = r.get("submitted", null)
-			if submitted_val is Dictionary:
-				submitted = submitted_val
-				for pid in range(total):
-					var v = submitted.get(pid, null)
-					if v == null and submitted.has(str(pid)):
-						v = submitted.get(str(pid), null)
-					if bool(v):
-						submitted_count += 1
-
-				var v2 = submitted.get(view_player_id, null)
-				if v2 == null and submitted.has(str(view_player_id)):
-					v2 = submitted.get(str(view_player_id), null)
-				view_submitted = bool(v2)
-
-	if _restructuring_modal.has_method("set_player_switcher"):
-		_restructuring_modal.call("set_player_switcher", total, view_player_id, submitted)
-
-	var view_name := "-"
-	if view_player_id >= 0:
-		view_name = Globals.get_player_name(view_player_id) if Globals != null else ("玩家%d" % (view_player_id + 1))
-	if _restructuring_modal.has_method("set_title_text"):
-		var title := "公司结构重组（同时）"
-		if view_player_id >= 0:
-			title = "公司结构重组（同时）｜查看: %s" % view_name
-		_restructuring_modal.call("set_title_text", title)
-
-	var is_online := false
-	var local_pid := -1
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-		is_online = true
-		local_pid = int(NetContext.local_player_id)
-
-	# Online spectator：不允许查看任何玩家结构（只显示提交进度）
-	var show_content := true
-	if is_online and local_pid < 0:
-		show_content = false
-	if view_player_id < 0:
-		show_content = false
-	if _restructuring_modal.has_method("set_content_visible"):
-		_restructuring_modal.call("set_content_visible", show_content)
-
-	var confirm_text := "已提交" if view_submitted else ("确认重组（%s）" % view_name)
-	var confirm_enabled := not view_submitted
-	var status_text := ""
-	var view_status := "已提交" if view_submitted else "未提交"
-
-	if is_online:
-		if local_pid < 0:
-			confirm_text = "只读"
-			confirm_enabled = false
-			status_text = "旁观者：重组阶段不可查看玩家公司结构｜提交进度: %d/%d" % [submitted_count, total]
-		else:
-			confirm_text = "已提交" if view_submitted else "确认重组"
-			confirm_enabled = not view_submitted
-			status_text = "联机：重组阶段不可查看其他玩家｜你的状态: %s｜提交进度: %d/%d" % [view_status, submitted_count, total]
-	else:
-		status_text = "当前查看: %s（%s）｜提交进度: %d/%d｜上方仅可切换未提交玩家（已提交将锁定）" % [
-			view_name,
-			view_status,
-			submitted_count,
-			total
-		]
-
-	if _restructuring_modal.has_method("set_confirm_text"):
-		_restructuring_modal.call("set_confirm_text", confirm_text)
-	if _restructuring_modal.has_method("set_confirm_enabled"):
-		_restructuring_modal.call("set_confirm_enabled", confirm_enabled)
-	if _restructuring_modal.has_method("set_status_text"):
-		_restructuring_modal.call("set_status_text", status_text)
