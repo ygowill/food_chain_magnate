@@ -49,6 +49,7 @@ extends Control
 const GameEventLogControllerClass = preload("res://ui/scenes/game/game_event_log_controller.gd")
 const GameMenuDebugControllerClass = preload("res://ui/scenes/game/game_menu_debug_controller.gd")
 const GameSaveLoadControllerClass = preload("res://ui/scenes/game/game_save_load_controller.gd")
+const GameLayoutControllerClass = preload("res://ui/scenes/game/game_layout_controller.gd")
 const GameRightPanelDockControllerClass = preload("res://ui/scenes/game/game_right_panel_dock_controller.gd")
 const GameOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_controller.gd")
 const GameMapInteractionControllerClass = preload("res://ui/scenes/game/game_map_interaction_controller.gd")
@@ -74,6 +75,7 @@ var game_engine: GameEngine = null
 var _event_log_controller = null
 var _menu_debug_controller = null
 var _save_load_controller = null
+var _layout_controller = null
 var _right_panel_dock_controller = null
 var _overlay_controller = null
 var _map_controller = null
@@ -128,18 +130,6 @@ const AUTO_MANDATORY_ACTION_IDS := {
 	ActionIdsClass.SET_LUXURY_PRICE: true,
 }
 
-var _left_area_visible: bool = true
-var _main_content_default_split_offset: int = 360
-var _left_area_user_resized: bool = false
-const LEFT_AREA_MIN_WIDTH := 200
-
-var _bottom_panel_visible: bool = true
-var _right_panel_visible: bool = true
-var _center_split_default_split_offset: int = -340
-
-var _responsive_mode: String = ""
-var _responsive_font_scale: float = -1.0
-
 func _ready() -> void:
 	var span_ready := PerfTraceClass.begin_span("game:_ready")
 	GameLog.info("Game", "游戏场景已加载")
@@ -172,6 +162,25 @@ func _ready() -> void:
 
 	var span_layout := PerfTraceClass.begin_span("game:layout+controllers_init")
 	_apply_menu_dialog_styles()
+	_layout_controller = GameLayoutControllerClass.new(
+		self,
+		round_label,
+		phase_label,
+		bank_label,
+		current_player_label,
+		toggle_left_panel_button,
+		toggle_right_panel_button,
+		toggle_bottom_panel_button,
+		main_content,
+		center_split,
+		left_area,
+		left_panel,
+		game_log_panel,
+		bottom_panel,
+		$UIRoot/MainContent/CenterSplit/RightPanel,
+		player_panel,
+		inventory_panel
+	)
 	_apply_ui_layout()
 	_init_left_panel_toggle()
 	_init_right_panel_toggle()
@@ -372,6 +381,10 @@ func _dispose_runtime() -> void:
 		_save_load_controller.dispose()
 	_save_load_controller = null
 
+	if _layout_controller != null and _layout_controller.has_method("dispose"):
+		_layout_controller.dispose()
+	_layout_controller = null
+
 	if _right_panel_dock_controller != null and _right_panel_dock_controller.has_method("dispose"):
 		_right_panel_dock_controller.dispose()
 	_right_panel_dock_controller = null
@@ -396,55 +409,24 @@ func _init_left_area_resize() -> void:
 		sc.dragged.connect(_on_main_content_dragged)
 
 func _on_main_content_dragged(offset: int) -> void:
-	if not _left_area_visible:
-		return
-	_left_area_user_resized = true
-	# 只限制最小宽度（issue_tracker #61）：避免把“用户拖到的宽度”写回 custom_minimum_size 导致无法再缩小。
-	var clamped := maxi(int(offset), LEFT_AREA_MIN_WIDTH)
-	_main_content_default_split_offset = clamped
-	if is_instance_valid(main_content):
-		main_content.split_offset = clamped
-	if is_instance_valid(left_area):
-		left_area.custom_minimum_size.x = LEFT_AREA_MIN_WIDTH
+	if _layout_controller != null:
+		_layout_controller.on_main_content_dragged(offset)
 
 func _init_left_panel_toggle() -> void:
-	if is_instance_valid(main_content):
-		_main_content_default_split_offset = maxi(int(main_content.split_offset), LEFT_AREA_MIN_WIDTH)
-	_left_area_visible = is_instance_valid(left_area) and left_area.visible
-	_update_left_panel_toggle_button()
-
-func _update_left_panel_toggle_button() -> void:
-	if not is_instance_valid(toggle_left_panel_button):
-		return
-	toggle_left_panel_button.text = "隐藏信息" if _left_area_visible else "显示信息"
+	if _layout_controller != null:
+		_layout_controller.init_left_panel_toggle()
 
 func _ensure_left_area_visible() -> void:
-	if _left_area_visible:
-		return
-	_left_area_visible = true
-	if is_instance_valid(left_area):
-		left_area.visible = true
-	if is_instance_valid(main_content):
-		main_content.split_offset = _main_content_default_split_offset
-	_update_left_panel_toggle_button()
+	if _layout_controller != null:
+		_layout_controller.ensure_left_area_visible()
 
 func _on_toggle_left_panel_pressed() -> void:
-	_left_area_visible = not _left_area_visible
-	if is_instance_valid(left_area):
-		left_area.visible = _left_area_visible
-	if is_instance_valid(main_content):
-		if _left_area_visible:
-			main_content.split_offset = _main_content_default_split_offset
-		else:
-			main_content.split_offset = 0
-	_update_left_panel_toggle_button()
+	if _layout_controller != null:
+		_layout_controller.on_toggle_left_panel_pressed()
 
 func _init_right_panel_toggle() -> void:
-	if is_instance_valid(center_split):
-		_center_split_default_split_offset = center_split.split_offset
-	var right_panel := $UIRoot/MainContent/CenterSplit/RightPanel
-	_right_panel_visible = is_instance_valid(right_panel) and right_panel.visible
-	_update_right_panel_toggle_button()
+	if _layout_controller != null:
+		_layout_controller.init_right_panel_toggle()
 
 func _init_right_panel_header() -> void:
 	if is_instance_valid(right_panel_back_button):
@@ -467,21 +449,9 @@ func _init_right_panel_footer() -> void:
 			right_panel_footer_primary_button.pressed.connect(_on_right_panel_footer_primary_pressed)
 	_sync_right_panel_docked_view()
 
-func _update_right_panel_toggle_button() -> void:
-	if not is_instance_valid(toggle_right_panel_button):
-		return
-	toggle_right_panel_button.text = "隐藏操作" if _right_panel_visible else "显示操作"
-
 func _ensure_right_panel_visible() -> void:
-	if _right_panel_visible:
-		return
-	_right_panel_visible = true
-	var right_panel := $UIRoot/MainContent/CenterSplit/RightPanel
-	if is_instance_valid(right_panel):
-		right_panel.visible = true
-	if is_instance_valid(center_split):
-		center_split.split_offset = _center_split_default_split_offset
-	_update_right_panel_toggle_button()
+	if _layout_controller != null:
+		_layout_controller.ensure_right_panel_visible()
 
 func dock_popup_into_right_panel(panel: Control) -> bool:
 	if _right_panel_dock_controller == null:
@@ -511,7 +481,7 @@ func _on_right_panel_back_pressed() -> void:
 	_on_right_panel_footer_cancel_pressed()
 
 func _on_right_panel_close_pressed() -> void:
-	if _right_panel_visible:
+	if _layout_controller != null and _layout_controller.is_right_panel_visible():
 		_on_toggle_right_panel_pressed()
 
 func _cancel_right_panel_docked_panel() -> void:
@@ -533,185 +503,24 @@ func _cancel_right_panel_docked_panel() -> void:
 		_panel_controller.hide_all()
 
 func _on_toggle_right_panel_pressed() -> void:
-	_right_panel_visible = not _right_panel_visible
-
-	var right_panel := $UIRoot/MainContent/CenterSplit/RightPanel
-	if is_instance_valid(right_panel):
-		if OS.has_feature("headless"):
-			right_panel.visible = _right_panel_visible
-		else:
-			await _animate_right_panel_visibility(right_panel, _right_panel_visible)
-
-	if is_instance_valid(center_split) and _right_panel_visible:
-		center_split.split_offset = _center_split_default_split_offset
-
-	_update_right_panel_toggle_button()
-
-func _animate_right_panel_visibility(right_panel: Control, make_visible: bool) -> void:
-	if not is_instance_valid(right_panel):
-		return
-	if OS.has_feature("headless"):
-		right_panel.visible = make_visible
-		return
-	if not (has_method("get_ui_animation_manager")):
-		right_panel.visible = make_visible
-		return
-	var anim_manager = get_ui_animation_manager()
-	if anim_manager == null:
-		right_panel.visible = make_visible
-		return
-
-	if make_visible:
-		right_panel.visible = true
-		await get_tree().process_frame
-		if anim_manager.has_method("animate_slide_in"):
-			anim_manager.call("animate_slide_in", right_panel, "right")
-	else:
-		if not anim_manager.has_method("animate_slide_out"):
-			right_panel.visible = false
-			return
-		var original_pos := right_panel.position
-		anim_manager.call("animate_slide_out", right_panel, "right", Callable(self, "_finish_hide_right_panel").bind(right_panel, original_pos))
-
-func _finish_hide_right_panel(right_panel: Control, original_pos: Vector2) -> void:
-	if not is_instance_valid(right_panel):
-		return
-	right_panel.visible = false
-	right_panel.position = original_pos
+	if _layout_controller != null:
+		await _layout_controller.on_toggle_right_panel_pressed()
 
 func _apply_ui_layout() -> void:
-	# 强制新布局（v2），不再支持 v1（issue_tracker #60）。
-	if is_instance_valid(player_panel):
-		player_panel.visible = false
-	if is_instance_valid(inventory_panel):
-		inventory_panel.visible = false
-	if is_instance_valid(left_panel):
-		left_panel.visible = true
-		if is_instance_valid(game_log_panel):
-			game_log_panel.visible = false
-			if left_panel.has_method("bind_game_log_panel"):
-				left_panel.call("bind_game_log_panel", game_log_panel)
-			elif left_panel.has_method("attach_game_log_panel"):
-				left_panel.call("attach_game_log_panel", game_log_panel)
-		if left_panel.has_signal("logs_requested"):
-			var sig := Signal(left_panel, &"logs_requested")
-			var cb := Callable(self, "_on_left_panel_logs_requested")
-			if not sig.is_connected(cb):
-				sig.connect(cb)
-
-	if is_instance_valid(bottom_panel):
-		bottom_panel.visible = false
-	_bottom_panel_visible = false
-	if is_instance_valid(toggle_bottom_panel_button):
-		toggle_bottom_panel_button.visible = false
+	if _layout_controller != null:
+		_layout_controller.apply_ui_layout()
 
 func _init_bottom_panel_toggle() -> void:
-	_bottom_panel_visible = false
-	_update_bottom_panel_toggle_button()
-
-func _update_bottom_panel_toggle_button() -> void:
-	if is_instance_valid(toggle_bottom_panel_button):
-		toggle_bottom_panel_button.text = "隐藏底部" if _bottom_panel_visible else "显示底部"
+	if _layout_controller != null:
+		_layout_controller.init_bottom_panel_toggle()
 
 func _on_toggle_bottom_panel_pressed() -> void:
-	_bottom_panel_visible = not _bottom_panel_visible
-	if is_instance_valid(bottom_panel):
-		bottom_panel.visible = _bottom_panel_visible
-	_update_bottom_panel_toggle_button()
+	if _layout_controller != null:
+		_layout_controller.on_toggle_bottom_panel_pressed()
 
 func _apply_responsive_layout() -> void:
-	if not is_instance_valid(main_content) or not is_instance_valid(center_split):
-		return
-
-	var width := int(get_viewport_rect().size.x)
-	var mode := "standard"
-	if width < 1280:
-		mode = "narrow"
-	elif width > 1920:
-		mode = "wide"
-
-	var current_font_scale := 1.0
-	if Globals != null:
-		current_font_scale = float(Globals.font_scale)
-
-	if mode == _responsive_mode and is_equal_approx(current_font_scale, _responsive_font_scale):
-		return
-	_responsive_mode = mode
-	_responsive_font_scale = current_font_scale
-
-	var left_width := 360
-	var right_width := 340
-	var font_size := 18
-	var separation := 20
-
-	match mode:
-		"narrow":
-			left_width = 260
-			right_width = 300
-			font_size = 14
-			separation = 12
-		"wide":
-			left_width = 320
-			right_width = 380
-			font_size = 18
-			separation = 24
-		_:
-			left_width = 280
-			right_width = 340
-			font_size = 18
-			separation = 20
-
-	if _left_area_user_resized:
-		left_width = maxi(int(_main_content_default_split_offset), LEFT_AREA_MIN_WIDTH)
-	else:
-		left_width = maxi(int(left_width), LEFT_AREA_MIN_WIDTH)
-
-	if is_instance_valid(left_area):
-		left_area.custom_minimum_size.x = LEFT_AREA_MIN_WIDTH
-	_main_content_default_split_offset = left_width
-	if _left_area_visible:
-		main_content.split_offset = left_width
-
-	var right_panel := $UIRoot/MainContent/CenterSplit/RightPanel
-	if is_instance_valid(right_panel):
-		right_panel.custom_minimum_size.x = right_width
-	_center_split_default_split_offset = -right_width
-	if _right_panel_visible:
-		center_split.split_offset = _center_split_default_split_offset
-
-	var top_bar := $UIRoot/TopBar
-	if top_bar is VBoxContainer:
-		var info_row := (top_bar as VBoxContainer).get_node_or_null("InfoRow")
-		if info_row is HBoxContainer:
-			(info_row as HBoxContainer).add_theme_constant_override("separation", separation)
-		var button_row := (top_bar as VBoxContainer).get_node_or_null("ButtonRow")
-		if button_row is HBoxContainer:
-			(button_row as HBoxContainer).add_theme_constant_override("separation", separation)
-	elif top_bar is FlowContainer:
-		# 单行布局（可自动换行）：InfoRow + ButtonRow。
-		top_bar.add_theme_constant_override("h_separation", separation)
-		top_bar.add_theme_constant_override("v_separation", 6)
-		var info_row := top_bar.get_node_or_null("InfoRow")
-		if info_row is HBoxContainer:
-			(info_row as HBoxContainer).add_theme_constant_override("separation", separation)
-		var button_row := top_bar.get_node_or_null("ButtonRow")
-		if button_row is HBoxContainer:
-			(button_row as HBoxContainer).add_theme_constant_override("separation", separation)
-	elif top_bar is HBoxContainer:
-		(top_bar as HBoxContainer).add_theme_constant_override("separation", separation)
-
-	var scaled_font_size := font_size
-	if Globals != null:
-		scaled_font_size = int(Globals.get_scaled_font_size(font_size))
-
-	if is_instance_valid(round_label):
-		round_label.add_theme_font_size_override("font_size", scaled_font_size)
-	if is_instance_valid(phase_label):
-		phase_label.add_theme_font_size_override("font_size", scaled_font_size)
-	if is_instance_valid(bank_label):
-		bank_label.add_theme_font_size_override("font_size", scaled_font_size)
-	if is_instance_valid(current_player_label):
-		current_player_label.add_theme_font_size_override("font_size", scaled_font_size)
+	if _layout_controller != null:
+		_layout_controller.apply_responsive_layout()
 
 func _initialize_game() -> void:
 	# 载入游戏：主菜单可能已在 Globals 中准备好 GameEngine。
