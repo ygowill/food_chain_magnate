@@ -21,14 +21,13 @@
 
 ## 3. 动作面板“生产食物”不应使用下拉框，应直接展示可点选的食物图标
 
-- 状态：TODO
+- 状态：DONE
 - 现象：生产食物时通过下拉框选择食物类型，交互效率低且不直观。
 - 期望：直接显示食物图标（可点击选择），并保持 headless 测试可跑。
-- 待澄清：
-	- 图标资源来源与优先级（若缺失图标：使用占位图/文字按钮？）
-	- 是否需要显示 tooltip（食物名/售价/成本等）。
-- 验证：待补充
-- 提交：待补充
+- 实施：
+	- `ProductionPanel` 中“多食物可选”（见习厨师）改为图标按钮选择；使用 `UiSkinCache` 的 product_icons，支持 tooltip。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 141/141）
+- 提交：`fix(ui): replace produce-food dropdown with icon picker`
 
 ---
 

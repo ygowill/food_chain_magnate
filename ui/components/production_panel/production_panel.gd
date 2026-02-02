@@ -19,6 +19,7 @@ signal drinks_undo_requested()
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 const EmployeePickerClass = preload("res://ui/components/employee_picker/employee_picker.gd")
 
@@ -38,7 +39,8 @@ var _used_employee_keys_by_mode: Dictionary = {
 	"drinks": {},
 }
 
-var _food_type_option: OptionButton = null
+var _food_type_container: HFlowContainer = null
+var _food_type_items: Dictionary = {} # product_id -> FoodTypeItem
 var _food_type_label: Label = null
 var _available_food_types: Array[String] = []
 var _selected_food_type: String = ""
@@ -54,6 +56,8 @@ var _available_drink_types: Array[String] = []
 var _selected_drink_type: String = ""
 var _drinks_selected_sources_count: int = 0
 var _drinks_confirm_ready: bool = false
+
+var _skin = null
 
 func _get_confirm_button() -> Button:
 	return confirm_btn
@@ -188,7 +192,8 @@ func _rebuild_content() -> void:
 	products_container.add_child(_info_label)
 
 	_food_type_label = null
-	_food_type_option = null
+	_food_type_container = null
+	_food_type_items.clear()
 	_available_food_types.clear()
 	_selected_food_type = ""
 
@@ -219,8 +224,6 @@ func _apply_embedding_layout() -> void:
 	var embedded := is_embedded_in_right_panel()
 	if scroll_container != null:
 		scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if embedded else ScrollContainer.SCROLL_MODE_DISABLED
-	if _food_type_option != null:
-		_food_type_option.custom_minimum_size = Vector2.ZERO if embedded else Vector2(380, 0)
 	if _drink_type_option != null:
 		_drink_type_option.custom_minimum_size = Vector2.ZERO if embedded else Vector2(380, 0)
 
@@ -498,28 +501,40 @@ func _build_food_controls(parent: VBoxContainer) -> void:
 	_food_type_label.add_theme_font_size_override("font_size", 12)
 	parent.add_child(_food_type_label)
 
-	_food_type_option = OptionButton.new()
-	_food_type_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_food_type_option.custom_minimum_size = Vector2.ZERO if is_embedded_in_right_panel() else Vector2(380, 0)
-	_food_type_option.item_selected.connect(_on_food_type_selected)
-	parent.add_child(_food_type_option)
+	_food_type_container = HFlowContainer.new()
+	_food_type_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_food_type_container.add_theme_constant_override("h_separation", 10)
+	_food_type_container.add_theme_constant_override("v_separation", 10)
+	parent.add_child(_food_type_container)
 
 	_rebuild_food_type_options()
 
 func _rebuild_food_type_options() -> void:
+	var prev_selected := _selected_food_type
 	_selected_food_type = ""
 	_available_food_types.clear()
-	if _food_type_option == null:
+	_food_type_items.clear()
+	if _food_type_container == null:
 		return
-	_food_type_option.clear()
+	UiRebuildHelpersClass.free_children(_food_type_container)
 	_available_food_types = _get_food_options_for_employee(_selected_employee_type)
+	_ensure_skin()
 	for t in _available_food_types:
-		_food_type_option.add_item(_get_product_display_name(t))
-		var idx := _food_type_option.get_item_count() - 1
-		_food_type_option.set_item_metadata(idx, t)
-	if _food_type_option.get_item_count() > 0:
-		_food_type_option.select(0)
-		_apply_selected_food_type(0)
+		var item := FoodTypeItem.new()
+		item.product_id = t
+		item.display_name = _get_product_display_name(t)
+		item.icon_texture = _get_product_icon_texture(t)
+		item.pressed.connect(_on_food_type_item_pressed)
+		_food_type_container.add_child(item)
+		_food_type_items[t] = item
+
+	var desired := ""
+	if not prev_selected.is_empty() and _food_type_items.has(prev_selected):
+		desired = prev_selected
+	elif not _available_food_types.is_empty():
+		desired = _available_food_types[0]
+	if not desired.is_empty():
+		_select_food_type(desired, false)
 
 func _get_food_options_for_employee(employee_type: String) -> Array[String]:
 	var emp_id := str(employee_type)
@@ -548,18 +563,23 @@ func _get_food_options_for_employee(employee_type: String) -> Array[String]:
 	out.sort()
 	return out
 
-func _apply_selected_food_type(index: int) -> void:
-	if _food_type_option == null:
-		return
-	if index < 0 or index >= _food_type_option.get_item_count():
-		return
-	var meta = _food_type_option.get_item_metadata(index)
-	_selected_food_type = str(meta)
+func _select_food_type(product_id: String, update_ui: bool = true) -> void:
+	var pid := str(product_id).strip_edges()
+	_selected_food_type = pid if (not pid.is_empty() and _food_type_items.has(pid)) else ""
+	for k in _food_type_items.keys():
+		var item_val = _food_type_items.get(k, null)
+		if not (item_val is FoodTypeItem):
+			continue
+		var item: FoodTypeItem = item_val
+		if is_instance_valid(item):
+			item.set_selected(str(k) == _selected_food_type)
 
-func _on_food_type_selected(index: int) -> void:
-	_apply_selected_food_type(index)
-	_update_confirm_state()
-	_update_info()
+	if update_ui:
+		_update_confirm_state()
+		_update_info()
+
+func _on_food_type_item_pressed(product_id: String) -> void:
+	_select_food_type(product_id, true)
 
 func _update_food_controls_visibility() -> void:
 	if _production_type != "food":
@@ -567,8 +587,8 @@ func _update_food_controls_visibility() -> void:
 	var has_choice := not _available_food_types.is_empty()
 	if _food_type_label != null:
 		_food_type_label.visible = has_choice
-	if _food_type_option != null:
-		_food_type_option.visible = has_choice
+	if _food_type_container != null:
+		_food_type_container.visible = has_choice
 
 func _rebuild_drink_type_options() -> void:
 	_selected_drink_type = ""
@@ -656,3 +676,93 @@ func _get_product_display_name(product_id: String) -> String:
 		if not def.name.is_empty():
 			return def.name
 	return pid
+
+func _ensure_skin() -> void:
+	if _skin != null:
+		return
+
+	var base_dir := "res://modules"
+	if Globals != null:
+		base_dir = str(Globals.modules_v2_base_dir)
+
+	var mods: Array[String] = []
+	if Globals != null and (Globals.enabled_modules_v2 is Array):
+		mods = Array(Globals.enabled_modules_v2, TYPE_STRING, "", null)
+
+	_skin = UiSkinCacheClass.get_skin_for_modules(base_dir, mods, 40)
+
+func _get_product_icon_texture(product_id: String) -> Texture2D:
+	_ensure_skin()
+	if _skin == null or not _skin.has_method("get_product_icon_texture"):
+		return null
+	var pid := str(product_id).strip_edges()
+	if pid == "cola":
+		pid = "soda"
+	return _skin.get_product_icon_texture(pid)
+
+
+class FoodTypeItem extends PanelContainer:
+	signal pressed(product_id: String)
+
+	var product_id: String = ""
+	var display_name: String = ""
+	var icon_texture: Texture2D = null
+
+	var _icon: TextureRect = null
+	var _label: Label = null
+	var _selected: bool = false
+	var _style: StyleBoxFlat = null
+
+	func _ready() -> void:
+		_build_ui()
+		gui_input.connect(_on_gui_input)
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+
+	func _build_ui() -> void:
+		custom_minimum_size = Vector2(72, 72)
+
+		var vbox := VBoxContainer.new()
+		vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		add_child(vbox)
+
+		_icon = TextureRect.new()
+		_icon.custom_minimum_size = Vector2(40, 40)
+		_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		vbox.add_child(_icon)
+
+		_label = Label.new()
+		_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+		_label.add_theme_font_size_override("font_size", 12)
+		vbox.add_child(_label)
+
+		_update_display()
+		_update_style()
+
+	func _update_display() -> void:
+		if _icon != null:
+			_icon.texture = icon_texture
+		if _label != null:
+			var name := display_name if not display_name.is_empty() else product_id
+			_label.text = name
+			tooltip_text = name
+
+	func set_selected(selected: bool) -> void:
+		_selected = selected
+		_update_style()
+
+	func _update_style() -> void:
+		if _style == null:
+			_style = StyleBoxFlat.new()
+			_style.bg_color = Color(0, 0, 0, 0.22)
+			_style.set_corner_radius_all(8)
+			_style.set_border_width_all(2)
+			add_theme_stylebox_override("panel", _style)
+		_style.border_color = Color(0.35, 0.55, 0.95, 0.95) if _selected else Color(1, 1, 1, 0.15)
+
+	func _on_gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton:
+			var mb: InputEventMouseButton = event
+			if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+				pressed.emit(product_id)
