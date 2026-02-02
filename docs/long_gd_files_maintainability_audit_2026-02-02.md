@@ -38,7 +38,6 @@
 | 864 | 48 | 7 | 2 | `ui/components/marketing_panel/marketing_panel.gd` |
 | 852 | 29 | 2 | 3 | `ui/components/company_structure/company_structure.gd` |
 | 837 | 19 | 10 | 0 | `core/tests/milestone_system_test.gd` |
-| 807 | 2 | 0 | 0 | `tools/manual_test_saves/manifest_milestones.gd` |
 | 807 | 6 | 141 | 0 | `ui/scenes/tests/all_tests.gd` |
 
 ## 跨文件共性问题（模式级发现）
@@ -406,11 +405,11 @@
 
 主要问题：
 
-- 拆分后仍可能存在个别主题文件接近/超过 800 行（例如里程碑清单），仍建议继续按模块/领域细拆。
+- 拆分后仍需防止个别主题文件重新膨胀；新增用例应优先落在对应主题/模块文件中（避免回到“单文件堆叠”）。
 
 建议拆分方向：
 
-- 按领域/模块拆清单文件（employee/milestone/logs/每个模块各自一份）。（已完成第一步：按主题拆分）
+- 按领域/模块拆清单文件（employee/milestone/logs/每个模块各自一份）。（已完成：按主题拆分；里程碑已进一步按模块拆分）
 - 或迁移为 JSON 数据（便于工具脚本读取与 diff）。
 
 ### 17) `tools/generate_manual_test_saves.gd`
@@ -459,4 +458,5 @@
 
 ## 实施记录
 
-- 2026-02-02：拆分手工复核存档 manifest：`tools/generate_manual_test_saves_manifest.gd` 改为聚合入口；新增 `tools/manual_test_saves/manifest_examples.gd`、`tools/manual_test_saves/manifest_milestones.gd`、`tools/manual_test_saves/manifest_employees.gd`、`tools/manual_test_saves/manifest_logs.gd`；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-02：拆分手工复核存档 manifest：`tools/generate_manual_test_saves_manifest.gd` 改为聚合入口；新增 `tools/manual_test_saves/manifest_examples.gd`、`tools/manual_test_saves/manifest_employees.gd`、`tools/manual_test_saves/manifest_logs.gd`，并引入 `tools/manual_test_saves/manifest_milestones.gd` 作为里程碑聚合入口；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-02：进一步拆分里程碑清单：新增 `tools/manual_test_saves/manifest_milestones_base.gd`、`tools/manual_test_saves/manifest_milestones_ketchup.gd`、`tools/manual_test_saves/manifest_milestones_lobbyists.gd`、`tools/manual_test_saves/manifest_milestones_rural_marketeers.gd`、`tools/manual_test_saves/manifest_milestones_new_milestones.gd`；`tools/manual_test_saves/manifest_milestones.gd` 改为聚合入口；并通过 `ui/scenes/tests/all_tests.tscn`。
