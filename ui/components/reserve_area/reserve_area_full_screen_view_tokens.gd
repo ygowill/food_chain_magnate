@@ -2,6 +2,7 @@
 extends RefCounted
 
 const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
+const StructuresPassClass = preload("res://ui/scenes/game/map_canvas_drawer_structures_pass.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 
@@ -92,7 +93,7 @@ class HouseWithGardenNumberToken extends Control:
 	func _draw() -> void:
 		if _skin == null:
 			return
-		# MapCanvasDrawer._draw_house_and_garden 依赖 canvas._skin / canvas._world_to_view()
+		# MapCanvasDrawerStructuresPass.draw_house_and_garden 依赖 canvas._skin / canvas._world_to_view()
 		self._skin = _skin
 		var info := {
 			"piece_id": "house_with_garden",
@@ -101,7 +102,7 @@ class HouseWithGardenNumberToken extends Control:
 			"min": Vector2i(0, 0),
 			"max": Vector2i(1, 2), # 2x3（house 2x2 + garden 2x1）
 		}
-		MapCanvasDrawerClass._draw_house_and_garden(self, _cell_size, Vector2i.ZERO, info, 1.0)
+		StructuresPassClass.draw_house_and_garden(self, _cell_size, Vector2i.ZERO, info, 1.0)
 
 
 # === 花园 token（按地图风格绘制 2x1 花园扩展 + 数量角标）===

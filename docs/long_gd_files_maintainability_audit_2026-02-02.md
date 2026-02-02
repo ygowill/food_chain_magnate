@@ -24,7 +24,6 @@
 | 行数 | funcs | preloads | signals | 文件 |
 |---:|---:|---:|---:|---|
 | 1421 | 94 | 20 | 0 | `ui/scenes/game/game.gd` |
-| 1146 | 41 | 5 | 0 | `ui/scenes/game/map_canvas_drawer.gd` |
 | 1085 | 66 | 8 | 2 | `ui/components/action_panel/action_panel.gd` |
 | 1019 | 54 | 4 | 0 | `ui/scenes/online/online_lobby.gd` |
 | 1006 | 50 | 5 | 8 | `autoload/net_client.gd` |
@@ -56,7 +55,7 @@
 
 目前存在“基础组件直接感知某个模块”的情况，会让模块扩展不可控、耦合变硬：
 
-- `ui/scenes/game/map_canvas_drawer.gd` 直接引用 lobbyists 模组，并包含 lobbyists 专属的绘制分支。
+- （已部分改善）`ui/scenes/game/map_canvas_drawer.gd` 过去直接引用 lobbyists 模组并包含专属绘制分支；现已将相关逻辑下沉到 draw pass（例如 `ui/scenes/game/map_canvas_drawer_roads_pass.gd` / `ui/scenes/game/map_canvas_drawer_structures_pass.gd`），基础 drawer 不再直接依赖模块。
 
 主要风险：
 
@@ -230,7 +229,7 @@
 主要问题：
 
 - 绘制逻辑跨度大（地面/道路/结构/营销/高亮/预览/选择等），天然容易超长。
-- 存在模块专属绘制分支（例如 lobbyists），基础 drawer 与模块耦合。
+- （已改善）模块专属绘制分支（例如 lobbyists）已下沉到 draw pass；基础 drawer 不再直接依赖模块，但仍建议后续引入可插拔 pass 注册以彻底解耦。
 
 建议拆分方向：
 
@@ -241,6 +240,7 @@
 
 - 已完成：提取营销绘制 pass：新增 `ui/scenes/game/map_canvas_drawer_marketing_pass.gd` 与 `ui/scenes/game/map_canvas_drawer_texture_utils.gd`；`ui/scenes/game/map_canvas_drawer.gd` 行数从 1600 降至 1274；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 已完成：提取 ground/tile 绘制 pass：新增 `ui/scenes/game/map_canvas_drawer_ground_pass.gd` 与 `ui/scenes/game/map_canvas_drawer_tiles_pass.gd`；`ui/scenes/game/map_canvas_drawer.gd` 行数降至 1146；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 已完成：提取 roads/structures/overlay：新增 `ui/scenes/game/map_canvas_drawer_roads_pass.gd`、`ui/scenes/game/map_canvas_drawer_structures_pass.gd`、`ui/scenes/game/map_canvas_drawer_overlay_utils.gd`；`ui/scenes/game/map_canvas_drawer.gd` 行数降至 410（低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
 
 ### 6) `ui/components/game_log/game_log_panel.gd`
 
@@ -519,3 +519,4 @@
 - 2026-02-03：提取地图交互 placement 模式：新增 `ui/scenes/game/game_map_interaction_placement_mode.gd`；`ui/scenes/game/game_map_interaction_controller.gd` 行数降至 411（低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-03：拆分 MapCanvasDrawer 的营销绘制：新增 `ui/scenes/game/map_canvas_drawer_marketing_pass.gd` 与 `ui/scenes/game/map_canvas_drawer_texture_utils.gd`；`ui/scenes/game/map_canvas_drawer.gd` 行数降至 1274；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-03：拆分 MapCanvasDrawer 的 ground/tile 绘制：新增 `ui/scenes/game/map_canvas_drawer_ground_pass.gd` 与 `ui/scenes/game/map_canvas_drawer_tiles_pass.gd`；`ui/scenes/game/map_canvas_drawer.gd` 行数降至 1146；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-03：拆分 MapCanvasDrawer 的 roads/structures/overlay：新增 `ui/scenes/game/map_canvas_drawer_roads_pass.gd`、`ui/scenes/game/map_canvas_drawer_structures_pass.gd`、`ui/scenes/game/map_canvas_drawer_overlay_utils.gd`；`ui/scenes/game/map_canvas_drawer.gd` 行数降至 410（低于 800）；并更新 `ui/components/reserve_area/reserve_area_full_screen_view_tokens.gd` 以调用 StructuresPass；并通过 `ui/scenes/tests/all_tests.tscn`。
