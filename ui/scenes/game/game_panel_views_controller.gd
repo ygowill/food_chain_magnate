@@ -96,6 +96,10 @@ func show_milestone_full_screen_view(state: GameState, map_skin) -> void:
 		return
 	if _milestone_full_screen_view.has_method("open_with_state"):
 		_milestone_full_screen_view.call("open_with_state", state, map_skin)
+
+	# 覆盖全屏（不使用居中弹窗布局）
+	if _scene != null and _milestone_full_screen_view is Control:
+		_apply_full_rect(_milestone_full_screen_view as Control)
 	_milestone_full_screen_view.visible = true
 
 func hide_milestone_full_screen_view() -> void:
@@ -114,7 +118,24 @@ func show_reserve_area_full_screen_view(state: GameState, map_skin) -> void:
 		return
 	if _reserve_area_full_screen_view.has_method("open_with_state"):
 		_reserve_area_full_screen_view.call("open_with_state", state, map_skin)
+
+	# 覆盖全屏（不使用居中弹窗布局）
+	if _scene != null and _reserve_area_full_screen_view is Control:
+		_apply_full_rect(_reserve_area_full_screen_view as Control)
 	_reserve_area_full_screen_view.visible = true
+
+func _apply_full_rect(ctrl: Control) -> void:
+	if _scene == null:
+		return
+	if ctrl == null or not is_instance_valid(ctrl):
+		return
+	ctrl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ctrl.offset_left = 0.0
+	ctrl.offset_top = 0.0
+	ctrl.offset_right = 0.0
+	ctrl.offset_bottom = 0.0
+	ctrl.position = Vector2.ZERO
+	ctrl.size = _scene.get_viewport_rect().size
 
 func hide_reserve_area_full_screen_view() -> void:
 	if is_instance_valid(_reserve_area_full_screen_view):
@@ -176,4 +197,3 @@ func _ensure_reserve_area_full_screen_view() -> void:
 		c.z_index = 900
 
 	UiSignalHelpersClass.safe_connect(_reserve_area_full_screen_view, "close_requested", hide_reserve_area_full_screen_view)
-

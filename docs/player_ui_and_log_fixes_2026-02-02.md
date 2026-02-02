@@ -96,11 +96,13 @@
 
 ## 8. 顶部工具栏：供应堆与里程碑无法打开
 
-- 状态：TODO
+- 状态：DONE
 - 现象：游戏最上方工具栏中的供应堆与里程碑入口点击后无响应/无法打开。
 - 期望：点击后正确打开对应面板/弹窗，并保持 headless 测试稳定。
-- 验证：待补充
-- 提交：待补充
+- 实施：
+	- 顶部工具栏打开“里程碑/供应堆”时，将对应全屏视图强制设为 `FULL_RECT`（anchors/offset/size），避免 0 尺寸导致“看起来打不开”。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 141/141）
+- 提交：`fix(ui): make topbar milestone/supply views fullscreen`
 
 ---
 
