@@ -10,6 +10,8 @@ signal logs_requested()
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const LeftPanelEmployeeIconsControllerClass = preload("res://ui/components/left_panel/left_panel_employee_icons_controller.gd")
+const LeftPanelTurnLogControllerClass = preload("res://ui/components/left_panel/left_panel_turn_log_controller.gd")
 
 @onready var player_tabs: HBoxContainer = $MarginContainer/HBoxContainer/PlayerTabs
 @onready var summary_row: Control = $MarginContainer/HBoxContainer/Content/SummaryRow
@@ -79,20 +81,30 @@ var _attached_log_panel: Node = null
 var _attached_hand_area: Node = null
 var _attached_company_structure: Node = null
 var _last_phase: String = ""
+var _employee_icons_controller = null
+var _turn_log_controller = null
 
 func _ready() -> void:
+	_ensure_controllers()
 	_init_tab_titles()
 	if is_instance_valid(summary_label):
 		summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	if is_instance_valid(tab_container):
 		tab_container.tab_changed.connect(_on_tab_changed)
-	if is_instance_valid(turn_log_toggle_button):
-		turn_log_toggle_button.toggled.connect(_on_turn_log_toggled)
-	if is_instance_valid(turn_log_to_logs_button):
-		turn_log_to_logs_button.pressed.connect(_on_turn_log_to_logs_pressed)
 	_rebuild_player_tabs()
 	apply_font_settings()
 	_refresh()
+
+func _ensure_controllers() -> void:
+	if _employee_icons_controller == null or not is_instance_valid(_employee_icons_controller):
+		_employee_icons_controller = LeftPanelEmployeeIconsControllerClass.new()
+	if _employee_icons_controller != null and is_instance_valid(_employee_icons_controller):
+		_employee_icons_controller.setup(self)
+
+	if _turn_log_controller == null or not is_instance_valid(_turn_log_controller):
+		_turn_log_controller = LeftPanelTurnLogControllerClass.new()
+	if _turn_log_controller != null and is_instance_valid(_turn_log_controller):
+		_turn_log_controller.setup(self)
 
 func _init_tab_titles() -> void:
 	if not is_instance_valid(tab_container):
@@ -136,12 +148,15 @@ func set_current_player(player_id: int) -> void:
 	_update_tab_styles()
 
 func set_view_player(player_id: int) -> void:
+	_ensure_controllers()
 	_view_player_id = player_id
 	_update_tab_styles()
 	_refresh_summary()
-	_refresh_employee_icons()
+	if _employee_icons_controller != null and is_instance_valid(_employee_icons_controller):
+		_employee_icons_controller.refresh()
 	_refresh_milestones()
-	_refresh_turn_log()
+	if _turn_log_controller != null and is_instance_valid(_turn_log_controller):
+		_turn_log_controller.refresh()
 
 func select_tab(tab_id: String) -> void:
 	if not is_instance_valid(tab_container):
@@ -157,12 +172,11 @@ func select_tab(tab_id: String) -> void:
 			logs_requested.emit()
 
 func bind_game_log_panel(panel: Node) -> void:
+	_ensure_controllers()
 	if panel == null or not is_instance_valid(panel):
 		return
-	_detach_log_panel_signals()
-	_attached_log_panel = panel
-	_attach_log_panel_signals()
-	_refresh_turn_log()
+	if _turn_log_controller != null and is_instance_valid(_turn_log_controller):
+		_turn_log_controller.bind_log_panel(panel)
 
 # 兼容旧调用：不再 reparent 到 Logs Tab（日志视图由 Game 负责切换）
 func attach_game_log_panel(panel: Node) -> void:
@@ -403,182 +417,13 @@ func _update_tab_styles() -> void:
 		btn.add_theme_color_override("font_color", Color(0.15, 0.15, 0.15, 0.9))
 
 func _refresh() -> void:
+	_ensure_controllers()
 	_refresh_summary()
-	_refresh_employee_icons()
+	if _employee_icons_controller != null and is_instance_valid(_employee_icons_controller):
+		_employee_icons_controller.refresh()
 	_update_tab_styles()
-	_refresh_turn_log()
-
-func _refresh_employee_icons() -> void:
-	_clear_employee_icon_containers()
-
-	if _game_state == null or not (_game_state.players is Array) or _game_state.players.is_empty():
-		_update_employee_row_visibility()
-		return
-
-	var view_id := _resolve_view_player_id()
-	if view_id < 0 or view_id >= _game_state.players.size():
-		_update_employee_row_visibility()
-		return
-
-	var player_val = _game_state.players[view_id]
-	var player: Dictionary = player_val if player_val is Dictionary else {}
-
-	_build_hand_employee_icons(player)
-	_build_company_employee_icons(player)
-	_update_employee_row_visibility()
-
-func _clear_employee_icon_containers() -> void:
-	for c in [
-		hand_management_icons,
-		hand_kitchen_icons,
-		hand_marketing_icons,
-		hand_other_icons,
-		company_management_icons,
-		company_kitchen_icons,
-		company_marketing_icons,
-		company_other_icons,
-	]:
-		_clear_container_children(c)
-
-func _clear_container_children(container: Node) -> void:
-	if container == null or not is_instance_valid(container):
-		return
-	for ch in container.get_children():
-		if is_instance_valid(ch):
-			ch.queue_free()
-
-func _build_hand_employee_icons(player: Dictionary) -> void:
-	if player == null:
-		return
-
-	var reserve: Array[String] = []
-	var busy: Array[String] = []
-
-	for e in Array(player.get("reserve_employees", [])):
-		var s := str(e).strip_edges()
-		if not s.is_empty():
-			reserve.append(s)
-	for e2 in Array(player.get("busy_marketers", [])):
-		var s2 := str(e2).strip_edges()
-		if not s2.is_empty():
-			busy.append(s2)
-
-	reserve.sort()
-	busy.sort()
-
-	for emp_id in reserve:
-		_add_employee_entry_to_category(_get_hand_icons_for_category(_get_employee_category(emp_id)), emp_id, false)
-	for emp_id2 in busy:
-		_add_employee_entry_to_category(_get_hand_icons_for_category(_get_employee_category(emp_id2)), emp_id2, true)
-
-func _build_company_employee_icons(player: Dictionary) -> void:
-	if player == null:
-		return
-
-	var employees: Array[String] = []
-	for e in Array(player.get("employees", [])):
-		var s := str(e).strip_edges()
-		if not s.is_empty():
-			employees.append(s)
-	employees.sort()
-
-	for emp_id in employees:
-		_add_employee_entry_to_category(_get_company_icons_for_category(_get_employee_category(emp_id)), emp_id, false)
-
-func _add_employee_entry_to_category(container: VBoxContainer, employee_id: String, busy: bool) -> void:
-	if container == null or not is_instance_valid(container):
-		return
-
-	var emp_id := str(employee_id).strip_edges()
-	if emp_id.is_empty():
-		return
-
-	var name := _get_employee_display_name(emp_id)
-	var label_text := "• %s" % name
-	if name != emp_id:
-		label_text = "• %s (%s)" % [name, emp_id]
-	if busy:
-		label_text += "（忙）"
-
-	var line := Label.new()
-	line.text = label_text
-	line.autowrap_mode = TextServer.AUTOWRAP_WORD
-	var fs := 16
-	if Globals != null:
-		fs = int(Globals.get_scaled_font_size(16))
-	line.add_theme_font_size_override("font_size", fs)
-	if busy:
-		line.add_theme_color_override("font_color", Color(0.9, 0.8, 0.5, 1))
-	else:
-		line.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95, 1))
-	container.add_child(line)
-
-func _get_employee_display_name(employee_id: String) -> String:
-	var emp_id := str(employee_id).strip_edges()
-	if emp_id.is_empty():
-		return ""
-	if EmployeeRegistry.is_loaded():
-		var def_val = EmployeeRegistry.get_def(emp_id)
-		if def_val is EmployeeDef:
-			var def: EmployeeDef = def_val
-			var name := def.name.strip_edges()
-			if not name.is_empty():
-				return name
-	return emp_id
-
-func _get_employee_category(employee_id: String) -> String:
-	var emp_id := str(employee_id).strip_edges()
-	if emp_id.is_empty():
-		return "其他"
-
-	if EmployeeRegistry.is_loaded():
-		var def_val = EmployeeRegistry.get_def(emp_id)
-		if def_val is EmployeeDef:
-			var def: EmployeeDef = def_val
-			return _role_to_category(def.get_role())
-
-	return "其他"
-
-func _get_hand_icons_for_category(category: String) -> VBoxContainer:
-	match category:
-		"管理":
-			return hand_management_icons
-		"厨房":
-			return hand_kitchen_icons
-		"营销":
-			return hand_marketing_icons
-		_:
-			return hand_other_icons
-
-func _get_company_icons_for_category(category: String) -> VBoxContainer:
-	match category:
-		"管理":
-			return company_management_icons
-		"厨房":
-			return company_kitchen_icons
-		"营销":
-			return company_marketing_icons
-		_:
-			return company_other_icons
-
-func _update_employee_row_visibility() -> void:
-	if is_instance_valid(hand_management_row) and is_instance_valid(hand_management_icons):
-		hand_management_row.visible = hand_management_icons.get_child_count() > 0
-	if is_instance_valid(hand_kitchen_row) and is_instance_valid(hand_kitchen_icons):
-		hand_kitchen_row.visible = hand_kitchen_icons.get_child_count() > 0
-	if is_instance_valid(hand_marketing_row) and is_instance_valid(hand_marketing_icons):
-		hand_marketing_row.visible = hand_marketing_icons.get_child_count() > 0
-	if is_instance_valid(hand_other_row) and is_instance_valid(hand_other_icons):
-		hand_other_row.visible = hand_other_icons.get_child_count() > 0
-
-	if is_instance_valid(company_management_row) and is_instance_valid(company_management_icons):
-		company_management_row.visible = company_management_icons.get_child_count() > 0
-	if is_instance_valid(company_kitchen_row) and is_instance_valid(company_kitchen_icons):
-		company_kitchen_row.visible = company_kitchen_icons.get_child_count() > 0
-	if is_instance_valid(company_marketing_row) and is_instance_valid(company_marketing_icons):
-		company_marketing_row.visible = company_marketing_icons.get_child_count() > 0
-	if is_instance_valid(company_other_row) and is_instance_valid(company_other_icons):
-		company_other_row.visible = company_other_icons.get_child_count() > 0
+	if _turn_log_controller != null and is_instance_valid(_turn_log_controller):
+		_turn_log_controller.refresh()
 
 func _refresh_summary() -> void:
 	if not is_instance_valid(summary_label):
@@ -828,163 +673,6 @@ func _resolve_view_player_id() -> int:
 		view_id = 0
 	view_id = clamp(view_id, 0, maxi(0, _game_state.players.size() - 1))
 	return view_id
-
-func _attach_log_panel_signals() -> void:
-	if _attached_log_panel == null or not is_instance_valid(_attached_log_panel):
-		return
-	if _attached_log_panel.has_signal("log_added"):
-		var sig = _attached_log_panel.log_added
-		if sig is Signal:
-			if not sig.is_connected(_on_log_added):
-				sig.connect(_on_log_added)
-
-func _detach_log_panel_signals() -> void:
-	if _attached_log_panel == null or not is_instance_valid(_attached_log_panel):
-		_attached_log_panel = null
-		return
-	if _attached_log_panel.has_signal("log_added"):
-		var sig = _attached_log_panel.log_added
-		if sig is Signal:
-			if sig.is_connected(_on_log_added):
-				sig.disconnect(_on_log_added)
-	_attached_log_panel = null
-
-func _on_log_added(_entry: Dictionary) -> void:
-	_refresh_turn_log()
-
-func _refresh_turn_log() -> void:
-	if not is_instance_valid(turn_log_lines):
-		return
-
-	for c in turn_log_lines.get_children():
-		if is_instance_valid(c):
-			c.queue_free()
-
-	if _attached_log_panel == null or not is_instance_valid(_attached_log_panel):
-		_add_turn_log_line("（未绑定日志面板）", Color(0.6, 0.6, 0.6, 0.9))
-		return
-	if not _attached_log_panel.has_method("get_entries"):
-		_add_turn_log_line("（日志面板不支持 get_entries）", Color(0.6, 0.6, 0.6, 0.9))
-		return
-
-	var view_id := _resolve_view_player_id()
-	var entries_val = _attached_log_panel.call("get_entries")
-	if not (entries_val is Array):
-		_add_turn_log_line("（日志数据异常）", Color(0.6, 0.6, 0.6, 0.9))
-		return
-	var entries: Array = entries_val
-
-	var start_idx := 0
-	var round_number := int(_game_state.round_number) if _game_state != null else -1
-	var round_start_idx := _find_round_start_entry_index(entries, round_number)
-	if round_start_idx >= 0:
-		start_idx = round_start_idx + 1
-
-	var matched: Array[Dictionary] = []
-	for i in range(start_idx, entries.size()):
-		var e_val = entries[i]
-		if not (e_val is Dictionary):
-			continue
-		var e: Dictionary = e_val
-		if _entry_matches_view_player(e, view_id):
-			matched.append(e)
-
-	var n := matched.size()
-	var max_lines := 6
-	var start := maxi(0, n - max_lines)
-	if n <= 0:
-		_add_turn_log_line("（暂无该玩家日志）", Color(0.6, 0.6, 0.6, 0.9))
-		return
-	for i in range(start, n):
-		var e: Dictionary = matched[i]
-		var msg := str(e.get("message", ""))
-		msg = msg.strip_edges()
-		if msg.is_empty():
-			continue
-		_add_turn_log_line(msg, Color(0.85, 0.85, 0.9, 1))
-
-func _find_round_start_entry_index(entries: Array, round_number: int) -> int:
-	if round_number < 0:
-		return -1
-	if entries == null or entries.is_empty():
-		return -1
-
-	for i in range(entries.size() - 1, -1, -1):
-		var e_val = entries[i]
-		if not (e_val is Dictionary):
-			continue
-		var e: Dictionary = e_val
-
-		var t_val = e.get("type", null)
-		var t := int(t_val) if (t_val is int or t_val is float) else -1
-		if t != 1: # GameLogPanel.LogType.PHASE
-			continue
-
-		var msg := str(e.get("message", "")).strip_edges()
-		if not msg.begins_with("回合开始"):
-			continue
-
-		var details_val = e.get("details", null)
-		if not (details_val is Dictionary):
-			continue
-		var details: Dictionary = details_val
-		var r_val = details.get("round", null)
-		var r := -1
-		if r_val is int:
-			r = int(r_val)
-		elif r_val is float:
-			var f: float = float(r_val)
-			if f == floor(f):
-				r = int(f)
-		if r == round_number:
-			return i
-
-	return -1
-
-func _entry_matches_view_player(entry: Dictionary, view_id: int) -> bool:
-	if entry == null or entry.is_empty():
-		return false
-
-	var details_val = entry.get("details", null)
-	if details_val is Dictionary:
-		var details: Dictionary = details_val
-		var pid_val = details.get("player_id", null)
-		if pid_val is int:
-			return int(pid_val) == view_id
-		if pid_val is float:
-			var f: float = float(pid_val)
-			if f == floor(f):
-				return int(f) == view_id
-
-	var t_val = entry.get("type", null)
-	var t := int(t_val) if (t_val is int or t_val is float) else -1
-	if t == 2: # GameLogPanel.LogType.PLAYER
-		var msg := str(entry.get("message", ""))
-		return msg.begins_with("玩家%d:" % (view_id + 1))
-
-	return false
-
-func _add_turn_log_line(text: String, color: Color) -> void:
-	if not is_instance_valid(turn_log_lines):
-		return
-	var l := Label.new()
-	l.text = text
-	l.autowrap_mode = TextServer.AUTOWRAP_WORD
-	l.add_theme_font_size_override("font_size", 13)
-	l.add_theme_color_override("font_color", color)
-	turn_log_lines.add_child(l)
-
-func _on_turn_log_toggled(pressed: bool) -> void:
-	if is_instance_valid(turn_log_lines):
-		turn_log_lines.visible = pressed
-	if is_instance_valid(turn_log_toggle_button):
-		turn_log_toggle_button.text = ("▼ 本回合日志" if pressed else "▶ 本回合日志")
-
-func _on_turn_log_to_logs_pressed() -> void:
-	logs_requested.emit()
-	if is_instance_valid(turn_log_toggle_button) and not turn_log_toggle_button.button_pressed:
-		turn_log_toggle_button.button_pressed = true
-		_on_turn_log_toggled(true)
 
 func _on_tab_changed(_tab_index: int) -> void:
 	_update_tab_styles()
