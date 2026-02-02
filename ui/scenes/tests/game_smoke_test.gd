@@ -2,13 +2,19 @@
 # 目标：验证主游戏场景可加载、初始化完成，并能正常释放（避免脚本报错/节点路径漂移）。
 extends Control
 
+const MainMenuScene: PackedScene = preload("res://ui/scenes/main_menu.tscn")
+const GameSetupScene: PackedScene = preload("res://ui/scenes/setup/game_setup.tscn")
 const GameScene: PackedScene = preload("res://ui/scenes/game/game.tscn")
+const OnlineLobbyScene: PackedScene = preload("res://ui/scenes/online/online_lobby.tscn")
 
 @onready var output: RichTextLabel = $Root/Output
 @onready var run_button: Button = $Root/TopBar/RunButton
 
 var _exit_code: int = 0
+var _main_menu_instance: Node = null
+var _game_setup_instance: Node = null
 var _game_instance: Node = null
+var _online_lobby_instance: Node = null
 
 func _ready() -> void:
 	if is_instance_valid(output):
@@ -38,12 +44,76 @@ func _run_test() -> int:
 	if GameScene == null:
 		return await _fail("预加载 game.tscn 失败（PackedScene 为空）")
 
+	# MainMenu 场景基础加载（主入口）
+	if is_instance_valid(output):
+		output.append_text("检查主菜单场景可加载...\n")
+	print("[GameSmokeTest] STEP main_menu")
+
+	if MainMenuScene == null:
+		return await _fail("预加载 main_menu.tscn 失败（PackedScene 为空）")
+
+	var menu = MainMenuScene.instantiate()
+	if menu == null:
+		return await _fail("实例化 main_menu.tscn 失败（instantiate 为空）")
+
+	add_child(menu)
+	_main_menu_instance = menu
+	if menu is CanvasItem:
+		(menu as CanvasItem).visible = false
+
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	if menu.get_node_or_null("CenterContainer/Card/Margin/VBoxContainer/NewGameButton") == null:
+		return await _fail("main_menu.tscn 缺少 NewGameButton 节点（节点路径漂移）")
+	if menu.get_node_or_null("CenterContainer/Card/Margin/VBoxContainer/OnlineButton") == null:
+		return await _fail("main_menu.tscn 缺少 OnlineButton 节点（节点路径漂移）")
+	if menu.get_node_or_null("VersionLabel") == null:
+		return await _fail("main_menu.tscn 缺少 VersionLabel 节点（节点路径漂移）")
+
+	# GameSetup 场景基础加载（新局入口）
+	if is_instance_valid(output):
+		output.append_text("检查新局设置场景可加载...\n")
+	print("[GameSmokeTest] STEP game_setup")
+
+	if GameSetupScene == null:
+		return await _fail("预加载 game_setup.tscn 失败（PackedScene 为空）")
+
+	var setup = GameSetupScene.instantiate()
+	if setup == null:
+		return await _fail("实例化 game_setup.tscn 失败（instantiate 为空）")
+
+	add_child(setup)
+	_game_setup_instance = setup
+	if setup is CanvasItem:
+		(setup as CanvasItem).visible = false
+
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	if setup.get_node_or_null("CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer/BackButton") == null:
+		return await _fail("game_setup.tscn 缺少 BackButton 节点（节点路径漂移）")
+	if setup.get_node_or_null("CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer/StartButton") == null:
+		return await _fail("game_setup.tscn 缺少 StartButton 节点（节点路径漂移）")
+	if setup.get_node_or_null("CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer/PlayerCountSpinBox") == null:
+		return await _fail("game_setup.tscn 缺少 PlayerCountSpinBox 节点（节点路径漂移）")
+	if setup.get_node_or_null("CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/SeedContainer/SeedLineEdit") == null:
+		return await _fail("game_setup.tscn 缺少 SeedLineEdit 节点（节点路径漂移）")
+
+	# 关键：校验 game_setup.gd 的动态 UI 组装是否执行（避免 _ready/节点路径错误导致静默失败）
+	if setup.get_node_or_null("CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayersSection") == null:
+		return await _fail("game_setup.tscn 缺少 PlayersSection（可能是 game_setup.gd 未正确运行）")
+	if setup.get_node_or_null("CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/RightColumn/ModulesSection") == null:
+		return await _fail("game_setup.tscn 缺少 ModulesSection（可能是 game_setup.gd 未正确运行）")
+
 	var inst = GameScene.instantiate()
 	if inst == null:
 		return await _fail("实例化 game.tscn 失败（instantiate 为空）")
 
 	add_child(inst)
 	_game_instance = inst
+	if inst is CanvasItem:
+		(inst as CanvasItem).visible = false
 
 	# 等待若干帧，确保 _ready/_process_frame 已运行
 	await get_tree().process_frame
@@ -55,6 +125,33 @@ func _run_test() -> int:
 	if not bool(Globals.is_game_active):
 		return await _fail("Globals.is_game_active 为 false（game 初始化失败或未完成）")
 
+	# OnlineLobby 场景基础加载（防止联机入口脚本/节点路径漂移导致“联机模式无法启动”）
+	if is_instance_valid(output):
+		output.append_text("检查联机大厅场景可加载...\n")
+	print("[GameSmokeTest] STEP online_lobby")
+
+	if OnlineLobbyScene == null:
+		return await _fail("预加载 online_lobby.tscn 失败（PackedScene 为空）")
+
+	var lobby = OnlineLobbyScene.instantiate()
+	if lobby == null:
+		return await _fail("实例化 online_lobby.tscn 失败（instantiate 为空）")
+
+	add_child(lobby)
+	_online_lobby_instance = lobby
+	if lobby is CanvasItem:
+		(lobby as CanvasItem).visible = false
+
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	if lobby.get_node_or_null("Center/Panel/Margin/Root/TopBar/BackButton") == null:
+		return await _fail("online_lobby.tscn 缺少 BackButton 节点（节点路径漂移）")
+	if lobby.get_node_or_null("Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/ConnectButton") == null:
+		return await _fail("online_lobby.tscn 缺少 ConnectButton 节点（节点路径漂移）")
+	if lobby.get_node_or_null("ConfigDebounceTimer") == null:
+		return await _fail("online_lobby.tscn 缺少 ConfigDebounceTimer 节点（节点路径漂移）")
+
 	await _cleanup()
 
 	if is_instance_valid(output):
@@ -63,10 +160,21 @@ func _run_test() -> int:
 	return 0
 
 func _cleanup() -> void:
+	if is_instance_valid(_online_lobby_instance):
+		_online_lobby_instance.queue_free()
+		_online_lobby_instance = null
 	if is_instance_valid(_game_instance):
 		_game_instance.queue_free()
 		_game_instance = null
+	if is_instance_valid(_game_setup_instance):
+		_game_setup_instance.queue_free()
+		_game_setup_instance = null
+	if is_instance_valid(_main_menu_instance):
+		_main_menu_instance.queue_free()
+		_main_menu_instance = null
 	await get_tree().process_frame
+	if NetClient != null:
+		NetClient.shutdown()
 	Globals.reset_game_config()
 
 func _fail(msg: String) -> int:
@@ -78,8 +186,10 @@ func _fail(msg: String) -> int:
 	return 1
 
 func _should_autorun() -> bool:
+	var tree = get_tree()
+	if tree == null or tree.current_scene != self:
+		return false
 	var args := OS.get_cmdline_user_args()
 	if args.has("autorun") or args.has("--autorun"):
 		return true
 	return OS.has_feature("headless")
-

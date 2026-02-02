@@ -6,6 +6,8 @@ extends BaseTileOverlay
 signal path_selected(house_id: String, restaurant_id: String)
 
 const RoadGraphClass = preload("res://core/map/road_graph.gd")
+const ROADWORK_MARKERS_KEY := "lobbyists_roadworks_markers"
+const DISTANCE_OVERRIDE_NONE := -999999999
 var _road_graph = null  # RoadGraph 引用
 var _map_data: Dictionary = {}
 
@@ -81,25 +83,37 @@ func show_distances(from_position: Vector2i, to_positions: Array[Vector2i]) -> v
 
 	for to_pos in to_positions:
 		var path_points: Array[Vector2i] = []
-		var distance := _calculate_distance(from_position, to_pos, [])
+		var distance := -1
 
 		if _road_graph != null and _road_graph.has_method("find_shortest_path"):
 			var sp = _road_graph.find_shortest_path(from_position, to_pos)
 			if sp.ok and (sp.value is Dictionary):
 				var spv: Dictionary = sp.value
-				distance = int(spv.get("distance", distance))
+				distance = int(spv.get("distance", -1))
 				var path_val = spv.get("path", null)
 				if path_val is Array:
 					for p in path_val:
 						if p is Vector2i:
 							path_points.append(p)
 
-		show_distance(from_position, to_pos, path_points)
+		if distance >= 0 and path_points.size() > 1:
+			distance += _count_roadworks_penalty(path_points)
+
+		show_distance(from_position, to_pos, path_points, "", "", distance)
 
 	_update_path_styles()
 
-func show_distance(house_pos: Vector2i, restaurant_pos: Vector2i, path_points: Array[Vector2i] = [], house_id: String = "", restaurant_id: String = "") -> void:
-	var distance := _calculate_distance(house_pos, restaurant_pos, path_points)
+func show_distance(
+	house_pos: Vector2i,
+	restaurant_pos: Vector2i,
+	path_points: Array[Vector2i] = [],
+	house_id: String = "",
+	restaurant_id: String = "",
+	distance_override: int = DISTANCE_OVERRIDE_NONE
+) -> void:
+	var distance := distance_override
+	if distance_override == DISTANCE_OVERRIDE_NONE:
+		distance = _calculate_distance(house_pos, restaurant_pos, path_points)
 
 	var path_data: Dictionary = {
 		"house_pos": house_pos,
@@ -125,7 +139,12 @@ func show_all_distances(house_restaurant_pairs: Array[Dictionary]) -> void:
 		for p in Array(pair.get("path_points", [])):
 			path_points.append(p as Vector2i)
 
-		show_distance(house_pos, restaurant_pos, path_points, house_id, restaurant_id)
+		var distance_override := DISTANCE_OVERRIDE_NONE
+		var dist_val = pair.get("distance", null)
+		if dist_val is int or dist_val is float:
+			distance_override = int(dist_val)
+
+		show_distance(house_pos, restaurant_pos, path_points, house_id, restaurant_id, distance_override)
 
 	_update_path_styles()
 
@@ -148,13 +167,31 @@ func clear_all() -> void:
 func _calculate_distance(house_pos: Vector2i, restaurant_pos: Vector2i, path_points: Array[Vector2i]) -> int:
 	# 使用 RoadGraph 计算
 	if _road_graph != null and _road_graph.has_method("get_distance"):
-		return int(_road_graph.get_distance(house_pos, restaurant_pos))
+		var base := int(_road_graph.get_distance(house_pos, restaurant_pos))
+		if base >= 0 and path_points.size() > 1:
+			base += _count_roadworks_penalty(path_points)
+		return base
 
 	if path_points.size() > 1:
 		return path_points.size() - 1
 
 	# 距离工具：不做“曼哈顿兜底”，避免给出误导性结果；无法连接时返回 -1。
 	return -1
+
+func _count_roadworks_penalty(path_points: Array[Vector2i]) -> int:
+	var markers_val = _map_data.get(ROADWORK_MARKERS_KEY, null)
+	if not (markers_val is Dictionary):
+		return 0
+	var markers: Dictionary = markers_val
+	if markers.is_empty():
+		return 0
+	var penalty := 0
+	for i in range(1, path_points.size()):
+		var p: Vector2i = path_points[i]
+		var key := "%d,%d" % [p.x, p.y]
+		if markers.has(key):
+			penalty += 1
+	return penalty
 
 func _add_path_visual(path_data: Dictionary) -> void:
 	var house_pos: Vector2i = path_data.house_pos

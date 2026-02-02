@@ -46,6 +46,8 @@ const ActionPanelEndButtonsOrderTestClass = preload("res://ui/scenes/tests/actio
 const ActionPanelOnlineLocalPlayerTestClass = preload("res://ui/scenes/tests/action_panel_online_local_player_test.gd")
 const ActionPanelGlobalDisabledRestoreTestClass = preload("res://ui/scenes/tests/action_panel_global_disabled_restore_test.gd")
 const ActionPanelExecutorMetadataTestClass = preload("res://ui/scenes/tests/action_panel_executor_metadata_test.gd")
+const DistanceOverlayRoadworksPenaltyTestClass = preload("res://ui/scenes/tests/distance_overlay_roadworks_penalty_test.gd")
+const GameSmokeTestScene = preload("res://ui/scenes/tests/game_smoke_test.tscn")
 const HandAreaViewSwitchTestClass = preload("res://ui/scenes/tests/hand_area_view_switch_test.gd")
 const ReserveCardSelectionModalPrivacyTestClass = preload("res://ui/scenes/tests/reserve_card_selection_modal_privacy_test.gd")
 const TurnOrderSelectionModalOnlineVisibilityTestClass = preload("res://ui/scenes/tests/turn_order_selection_modal_online_visibility_test.gd")
@@ -151,7 +153,7 @@ func _ready() -> void:
 	output.append_text("全部测试聚合：按既定顺序依次运行所有 headless 测试。\n")
 	output.append_text("提示：CLI 可用 `-- --autorun` 自动执行并退出。\n")
 	if _should_autorun():
-		_exit_code = _run_all()
+		_exit_code = await _run_all()
 		get_tree().quit(_exit_code)
 
 func _on_back_pressed() -> void:
@@ -160,7 +162,7 @@ func _on_back_pressed() -> void:
 func _on_run_pressed() -> void:
 	if is_instance_valid(run_button):
 		run_button.disabled = true
-	_exit_code = _run_all()
+	_exit_code = await _run_all()
 	if is_instance_valid(run_button):
 		run_button.disabled = false
 
@@ -169,6 +171,10 @@ func _run_all() -> int:
 	print("[AllTests] START args=%s" % str(OS.get_cmdline_user_args()))
 
 	var tests: Array[Dictionary] = [
+		{
+			"name": "GameSmokeTest",
+			"fn": func() -> Result: return await _run_game_smoke_test(),
+		},
 		{
 			"name": "ReplayTest",
 			"fn": func() -> Result: return ReplayDeterminismTestClass.run(2, 12345, 20),
@@ -725,7 +731,11 @@ func _run_all() -> int:
 				"name": "BankruptcyTest",
 				"fn": func() -> Result: return BankruptcyTestClass.run(2, 12345),
 			},
-		]
+		{
+			"name": "DistanceOverlayRoadworksPenaltyTest",
+			"fn": func() -> Result: return DistanceOverlayRoadworksPenaltyTestClass.run(),
+		},
+	]
 
 	var passed := 0
 	var failed: Array[String] = []
@@ -739,7 +749,8 @@ func _run_all() -> int:
 		print("[AllTests] RUN %s" % name)
 
 		var start := Time.get_ticks_msec()
-		var result: Result = fn.call()
+		var call_result = await fn.call()
+		var result: Result = call_result if (call_result is Result) else Result.failure("测试返回值类型错误（期望 Result）")
 		var duration_ms := Time.get_ticks_msec() - start
 
 		if result.ok:
@@ -751,6 +762,15 @@ func _run_all() -> int:
 			output.append_text("FAIL (%dms): %s\n" % [duration_ms, result.error])
 			push_error("[AllTests] FAIL %s: %s" % [name, result.error])
 			print("[AllTests] FAIL %s (%dms): %s" % [name, duration_ms, result.error])
+			if name == "GameSmokeTest":
+				var total_ms := Time.get_ticks_msec() - total_start
+				var skipped := tests.size() - passed - failed.size()
+				output.append_text("\n--- 汇总 ---\n")
+				output.append_text("通过: %d/%d, 总耗时: %dms\n" % [passed, tests.size(), total_ms])
+				output.append_text("Smoke test 失败：已跳过后续 %d 个测试。\n" % skipped)
+				print("[AllTests] FAIL_FAST skipped=%d" % skipped)
+				print("[AllTests] SUMMARY passed=%d/%d failed=%s total_ms=%d" % [passed, tests.size(), str(failed), total_ms])
+				return 1
 
 	var total_ms := Time.get_ticks_msec() - total_start
 	output.append_text("\n--- 汇总 ---\n")
@@ -758,6 +778,27 @@ func _run_all() -> int:
 	print("[AllTests] SUMMARY passed=%d/%d failed=%s total_ms=%d" % [passed, tests.size(), str(failed), total_ms])
 
 	return 0 if failed.is_empty() else 1
+
+func _run_game_smoke_test() -> Result:
+	var smoke = get_node_or_null("GameSmokeTest")
+	if smoke == null and GameSmokeTestScene != null:
+		smoke = GameSmokeTestScene.instantiate()
+		add_child(smoke)
+		if smoke is CanvasItem:
+			(smoke as CanvasItem).visible = false
+		await get_tree().process_frame
+
+	if smoke == null or not is_instance_valid(smoke):
+		return Result.failure("GameSmokeTest 节点缺失")
+	if smoke is CanvasItem:
+		(smoke as CanvasItem).visible = false
+	if not smoke.has_method("_run_test"):
+		return Result.failure("GameSmokeTest 缺少 _run_test()")
+
+	var code = await smoke.call("_run_test")
+	if code is int and int(code) == 0:
+		return Result.success({})
+	return Result.failure("GameSmokeTest 失败: exit_code=%s" % str(code))
 
 func _should_autorun() -> bool:
 	var args := OS.get_cmdline_user_args()

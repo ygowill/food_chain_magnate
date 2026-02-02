@@ -466,10 +466,10 @@ func _render_room_state(room_state: Dictionary) -> void:
 		none.text = "暂无旁观者"
 		none.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82, 0.85))
 		spectators_list_container.add_child(none)
-		else:
-			for s_val in spectators:
-				if not (s_val is Dictionary):
-					continue
+	else:
+		for s_val in spectators:
+			if not (s_val is Dictionary):
+				continue
 			var s: Dictionary = Dictionary(s_val)
 			var s_name := str(s.get("name", "")).strip_edges()
 			if s_name.is_empty():
@@ -481,7 +481,7 @@ func _render_room_state(room_state: Dictionary) -> void:
 				["旁观"],
 				false
 			)
-				spectators_list_container.add_child(s_item)
+			spectators_list_container.add_child(s_item)
 
 	# 我的餐厅/颜色选择（进入房间后才允许）
 	if my_color_option != null and is_instance_valid(my_color_option):
@@ -639,7 +639,14 @@ func _on_net_connected() -> void:
 	_show_page(LobbyPage.ROOMS, true)
 
 func _on_net_disconnected(reason: String) -> void:
-	_set_connect_status("已断开：%s" % reason)
+	var r := str(reason).strip_edges()
+	if r == "connection_failed":
+		var project_path := ProjectSettings.globalize_path("res://")
+		var cmd := "godot --headless --path \"%s\" --scene res://server/dedicated_server.tscn -- --port=7000" % project_path
+		_set_connect_status("连接失败：无法连接到服务器（请先启动 dedicated server）")
+		_show_error_dialog("连接失败", "无法连接到服务器。\n\n若你尚未启动 Dedicated Server，可在项目根目录运行：\n%s" % cmd)
+	else:
+		_set_connect_status("已断开：%s" % reason)
 	_set_rooms_status("")
 	_set_join_by_code_status("")
 	_set_create_status("")
