@@ -188,11 +188,20 @@ func _on_cleanup_enter_extension(state: GameState, _phase_manager) -> Result:
 		return Result.failure("%s: state.map.cells 缺失或类型错误（期望 Array）" % MODULE_ID)
 	var cells: Array = state.map["cells"]
 
+	var extra_dirs_by_pos := {} # Vector2i -> {dir -> true}
+	var clear_structure_cells := {} # Vector2i -> true
+
 	for i in range(pending_roads.size()):
 		var e_val = pending_roads[i]
 		if not (e_val is Dictionary):
 			return Result.failure("%s: pending_roads[%d] 类型错误（期望 Dictionary）" % [MODULE_ID, i])
 		var e: Dictionary = e_val
+		var piece_cells_val = e.get("cells", null)
+		if piece_cells_val is Array:
+			for c_val in Array(piece_cells_val):
+				if c_val is Vector2i:
+					clear_structure_cells[c_val] = true
+
 		var segments_val = e.get("segments_by_pos", null)
 		if not (segments_val is Dictionary):
 			return Result.failure("%s: pending_roads[%d].segments_by_pos 类型错误（期望 Dictionary）" % [MODULE_ID, i])
@@ -222,10 +231,138 @@ func _on_cleanup_enter_extension(state: GameState, _phase_manager) -> Result:
 			var add_val = segments_by_pos[k]
 			if not (add_val is Array):
 				return Result.failure("%s: segments_by_pos[%s] 类型错误（期望 Array）" % [MODULE_ID, str(k)])
+
+			# 根据新增段，推导“邻居道路”需要补齐的对向连接（用于真实连通 + 贴图）
+			for seg_val in Array(add_val):
+				if not (seg_val is Dictionary):
+					continue
+				var seg: Dictionary = seg_val
+				var dirs_val = seg.get("dirs", null)
+				if not (dirs_val is Array):
+					continue
+				for d_val in Array(dirs_val):
+					var d := str(d_val).strip_edges()
+					if d.is_empty() or not MapUtils.DIR_OFFSETS.has(d):
+						continue
+					var npos = world_pos + MapUtils.DIR_OFFSETS[d]
+					if not CoordsClass.is_world_pos_in_grid(state, npos):
+						continue
+					var opp := MapUtils.get_opposite_dir(d)
+					if opp.is_empty():
+						continue
+					var set_val = extra_dirs_by_pos.get(npos, null)
+					var set: Dictionary = set_val if (set_val is Dictionary) else {}
+					set[opp] = true
+					extra_dirs_by_pos[npos] = set
+
 			segs.append_array(add_val)
 			cell["road_segments"] = segs
 			row[idx.x] = cell
 			cells[idx.y] = row
+
+	# 3) 让新增道路与已有道路真正连通：为相邻道路补齐对向 dirs
+	for pos_val in extra_dirs_by_pos.keys():
+		if not (pos_val is Vector2i):
+			continue
+		var world_pos2: Vector2i = pos_val
+		if not CoordsClass.is_world_pos_in_grid(state, world_pos2):
+			continue
+
+		var row_read2 := _require_row_at_world_pos(state, cells, world_pos2)
+		if not row_read2.ok:
+			return row_read2
+		var idx2: Vector2i = row_read2.value["idx"]
+		var row2: Array = row_read2.value["row"]
+
+		var cell_read2 := _require_cell_dict(row2, idx2)
+		if not cell_read2.ok:
+			return cell_read2
+		var cell2: Dictionary = cell_read2.value
+
+		var segs_read2 := _require_cell_road_segments(cell2, world_pos2)
+		if not segs_read2.ok:
+			return segs_read2
+		var segs2: Array = segs_read2.value
+		if segs2.is_empty():
+			continue
+
+		var needed_val = extra_dirs_by_pos.get(world_pos2, null)
+		if not (needed_val is Dictionary):
+			continue
+		var needed: Dictionary = needed_val
+
+		for dir_key in needed.keys():
+			var need_dir := str(dir_key).strip_edges()
+			if need_dir.is_empty():
+				continue
+			var already := false
+			for s_val in segs2:
+				if not (s_val is Dictionary):
+					continue
+				var s: Dictionary = s_val
+				var dirs3_val = s.get("dirs", null)
+				if dirs3_val is Array and need_dir in Array(dirs3_val):
+					already = true
+					break
+			if already:
+				continue
+
+			# 优先修改非桥段（Lobbyists 道路为 bridge=false）
+			var target_idx := -1
+			for j in range(segs2.size()):
+				var sv = segs2[j]
+				if not (sv is Dictionary):
+					continue
+				if not bool(Dictionary(sv).get("bridge", false)):
+					target_idx = j
+					break
+			if target_idx < 0:
+				for j2 in range(segs2.size()):
+					if segs2[j2] is Dictionary:
+						target_idx = j2
+						break
+			if target_idx < 0:
+				continue
+
+			var seg2: Dictionary = segs2[target_idx]
+			var dirs2_val = seg2.get("dirs", null)
+			var dirs2: Array = dirs2_val if (dirs2_val is Array) else []
+			if not dirs2.has(need_dir):
+				dirs2.append(need_dir)
+			seg2["dirs"] = dirs2
+			segs2[target_idx] = seg2
+
+		cell2["road_segments"] = segs2
+		row2[idx2.x] = cell2
+		cells[idx2.y] = row2
+
+	# 4) 清理“建设中道路”的结构占用（仅保留 road_segments，使其变为真正道路）
+	for cpos_val in clear_structure_cells.keys():
+		if not (cpos_val is Vector2i):
+			continue
+		var cpos: Vector2i = cpos_val
+		if not CoordsClass.is_world_pos_in_grid(state, cpos):
+			continue
+
+		var row_read3 := _require_row_at_world_pos(state, cells, cpos)
+		if not row_read3.ok:
+			return row_read3
+		var idx3: Vector2i = row_read3.value["idx"]
+		var row3: Array = row_read3.value["row"]
+
+		var cell_read3 := _require_cell_dict(row3, idx3)
+		if not cell_read3.ok:
+			return cell_read3
+		var cell3: Dictionary = cell_read3.value
+
+		var s_val = cell3.get("structure", null)
+		if s_val is Dictionary:
+			var s: Dictionary = s_val
+			var pid := str(s.get("piece_id", ""))
+			if pid.begins_with("lobbyists_road_") and bool(s.get("dynamic", false)):
+				cell3["structure"] = {}
+				row3[idx3.x] = cell3
+				cells[idx3.y] = row3
 
 	state.map["cells"] = cells
 	state.map[PENDING_ROADS_KEY] = []

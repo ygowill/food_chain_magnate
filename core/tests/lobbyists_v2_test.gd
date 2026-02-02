@@ -142,6 +142,19 @@ static func _test_road_pending_and_cleanup(seed_val: int) -> Result:
 		return Result.failure("缺少 state.map.lobbyists_pending_roads")
 	if (s.map["lobbyists_pending_roads"] as Array).is_empty():
 		return Result.failure("应存在 pending_roads")
+	var pending_roads: Array = s.map["lobbyists_pending_roads"]
+	var pending0_val = pending_roads[0]
+	if not (pending0_val is Dictionary):
+		return Result.failure("pending_roads[0] 类型错误（期望 Dictionary）")
+	var pending0: Dictionary = pending0_val
+	var pending_segments_by_pos_val = pending0.get("segments_by_pos", null)
+	if not (pending_segments_by_pos_val is Dictionary):
+		return Result.failure("pending_roads[0].segments_by_pos 类型错误（期望 Dictionary）")
+	var pending_segments_by_pos: Dictionary = pending_segments_by_pos_val
+	var pending_cells_val = pending0.get("cells", null)
+	if not (pending_cells_val is Array):
+		return Result.failure("pending_roads[0].cells 类型错误（期望 Array）")
+	var pending_cells: Array = pending_cells_val
 	if not s.map.has("lobbyists_roadworks_markers") or not (s.map["lobbyists_roadworks_markers"] is Dictionary):
 		return Result.failure("缺少 state.map.lobbyists_roadworks_markers")
 	if (s.map["lobbyists_roadworks_markers"] as Dictionary).is_empty():
@@ -154,6 +167,67 @@ static func _test_road_pending_and_cleanup(seed_val: int) -> Result:
 		return Result.failure("Cleanup 后 pending_roads 应清空")
 	if not (s.map["lobbyists_roadworks_markers"] as Dictionary).is_empty():
 		return Result.failure("Cleanup 后 roadworks_markers 应清空")
+
+	# Cleanup 后：建设中道路应变为真正道路（road_segments 写入、结构占用清理、与邻路连通）
+	for c_val in pending_cells:
+		if not (c_val is Vector2i):
+			continue
+		var cpos: Vector2i = c_val
+		if not CoordsClass.is_world_pos_in_grid(s, cpos):
+			continue
+		if CellsClass.has_structure_at(s, cpos):
+			return Result.failure("Cleanup 后建设中道路结构占用未清理: %s" % str(cpos))
+		if not CellsClass.has_road_at(s, cpos):
+			return Result.failure("Cleanup 后建设中道路未写入 road_segments: %s" % str(cpos))
+
+	# 对每个新增 road segment：若其邻居格存在道路，则邻居必须包含对向 dirs（确保图/测距连通）
+	for k in pending_segments_by_pos.keys():
+		if not (k is String):
+			continue
+		var parts := str(k).split(",")
+		if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
+			continue
+		var world_pos := Vector2i(int(parts[0]), int(parts[1]))
+		var seg_list_val = pending_segments_by_pos.get(k, null)
+		if not (seg_list_val is Array):
+			continue
+		for seg_val in Array(seg_list_val):
+			if not (seg_val is Dictionary):
+				continue
+			var seg: Dictionary = seg_val
+			var dirs_val = seg.get("dirs", null)
+			if not (dirs_val is Array):
+				continue
+			for d_val in Array(dirs_val):
+				var d := str(d_val).strip_edges()
+				if d.is_empty() or not MapUtils.DIR_OFFSETS.has(d):
+					continue
+				var npos = world_pos + MapUtils.DIR_OFFSETS[d]
+				if not CoordsClass.is_world_pos_in_grid(s, npos):
+					continue
+				var ncell: Dictionary = CellsClass.get_cell(s, npos)
+				if ncell.is_empty():
+					continue
+				var rs_val = ncell.get("road_segments", null)
+				if not (rs_val is Array):
+					return Result.failure("cell.road_segments 类型错误: %s" % str(npos))
+				var nsegs: Array = rs_val
+				if nsegs.is_empty():
+					continue
+				var opp := MapUtils.get_opposite_dir(d)
+				if opp.is_empty():
+					continue
+				var ok := false
+				for nseg_val in nsegs:
+					if not (nseg_val is Dictionary):
+						continue
+					var nseg: Dictionary = nseg_val
+					var ndirs_val = nseg.get("dirs", null)
+					if ndirs_val is Array and opp in Array(ndirs_val):
+						ok = true
+						break
+				if not ok:
+					return Result.failure("Cleanup 后道路连通缺失: %s -> %s (need %s in neighbor)" % [str(world_pos), str(npos), opp])
 
 	return Result.success()
 

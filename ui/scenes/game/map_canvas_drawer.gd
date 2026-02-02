@@ -705,6 +705,7 @@ static func _draw_ground_and_blocked(canvas, cell_size: int) -> void:
 				canvas.draw_texture_rect(blocked_tex, rect, false, Color(1, 1, 1, 0.85))
 
 static func _draw_roads(canvas, cell_size: int) -> void:
+	var pending_extra_dirs := _build_lobbyists_pending_road_connection_dirs(canvas)
 	for y in range(canvas._grid_size.y):
 		for x in range(canvas._grid_size.x):
 			var world_pos = canvas._world_origin + Vector2i(x, y)
@@ -742,6 +743,27 @@ static func _draw_roads(canvas, cell_size: int) -> void:
 				if not (dirs_val is Array):
 					continue
 				var dirs: Array = dirs_val
+				var extra_val = pending_extra_dirs.get(world_pos, null)
+				if extra_val is Dictionary and not (extra_val as Dictionary).is_empty():
+					var eff: Array = []
+					var seen := {}
+					for d in dirs:
+						var s := str(d).strip_edges()
+						if s.is_empty():
+							continue
+						if seen.has(s):
+							continue
+						seen[s] = true
+						eff.append(s)
+					for d2 in (extra_val as Dictionary).keys():
+						var s2 := str(d2).strip_edges()
+						if s2.is_empty():
+							continue
+						if seen.has(s2):
+							continue
+						seen[s2] = true
+						eff.append(s2)
+					dirs = eff
 				if dirs.is_empty():
 					continue
 				var is_bridge := bool(seg.get("bridge", false))
@@ -764,6 +786,61 @@ static func _draw_roads(canvas, cell_size: int) -> void:
 				canvas.draw_set_transform(center + offset, deg_to_rad(float(rot_deg)), Vector2.ONE)
 				canvas.draw_texture_rect(tex, Rect2(-size * 0.5, size), false)
 				canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+static func _build_lobbyists_pending_road_connection_dirs(canvas) -> Dictionary:
+	if canvas == null:
+		return {}
+	if not (canvas._map_data is Dictionary):
+		return {}
+	var map_data: Dictionary = canvas._map_data
+	var pending_val = map_data.get(LobbyistsRoadOverlaysClass.PENDING_ROADS_KEY, null)
+	if not (pending_val is Array):
+		return {}
+	var pending: Array = pending_val
+	if pending.is_empty():
+		return {}
+
+	var out := {} # Vector2i -> {dir -> true}
+
+	for e_val in pending:
+		if not (e_val is Dictionary):
+			continue
+		var e: Dictionary = e_val
+		var sbp_val = e.get("segments_by_pos", null)
+		if not (sbp_val is Dictionary):
+			continue
+		var segments_by_pos: Dictionary = sbp_val
+		for k in segments_by_pos.keys():
+			if not (k is String):
+				continue
+			var parts := str(k).split(",")
+			if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
+				continue
+			var world_pos := Vector2i(int(parts[0]), int(parts[1]))
+			var seg_list_val = segments_by_pos.get(k, null)
+			if not (seg_list_val is Array):
+				continue
+			for seg_val in Array(seg_list_val):
+				if not (seg_val is Dictionary):
+					continue
+				var seg: Dictionary = seg_val
+				var dirs_val = seg.get("dirs", null)
+				if not (dirs_val is Array):
+					continue
+				for d_val in Array(dirs_val):
+					var d := str(d_val).strip_edges()
+					if d.is_empty() or not MapUtils.DIR_OFFSETS.has(d):
+						continue
+					var npos = world_pos + MapUtils.DIR_OFFSETS[d]
+					var opp := MapUtils.get_opposite_dir(d)
+					if opp.is_empty():
+						continue
+					var set_val = out.get(npos, null)
+					var set: Dictionary = set_val if (set_val is Dictionary) else {}
+					set[opp] = true
+					out[npos] = set
+
+	return out
 
 static func _compute_road_shape_info(dirs: Array) -> Dictionary:
 	var set := {}
