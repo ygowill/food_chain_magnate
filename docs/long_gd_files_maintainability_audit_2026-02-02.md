@@ -28,7 +28,6 @@
 | 1770 | 68 | 14 | 0 | `ui/scenes/game/game_panel_controller.gd` |
 | 1631 | 74 | 2 | 4 | `ui/components/game_log/game_log_panel.gd` |
 | 1622 | 41 | 13 | 2 | `ui/scenes/game/game_map_interaction_controller.gd` |
-| 1604 | 23 | 0 | 0 | `tools/generate_manual_test_saves_manifest.gd` |
 | 1600 | 41 | 1 | 0 | `ui/scenes/game/map_canvas_drawer.gd` |
 | 1581 | 51 | 15 | 0 | `ui/scenes/game/game_panel_working_panels.gd` |
 | 1085 | 59 | 8 | 1 | `ui/components/action_panel/action_panel.gd` |
@@ -39,6 +38,7 @@
 | 864 | 48 | 7 | 2 | `ui/components/marketing_panel/marketing_panel.gd` |
 | 852 | 29 | 2 | 3 | `ui/components/company_structure/company_structure.gd` |
 | 837 | 19 | 10 | 0 | `core/tests/milestone_system_test.gd` |
+| 807 | 2 | 0 | 0 | `tools/manual_test_saves/manifest_milestones.gd` |
 | 807 | 6 | 141 | 0 | `ui/scenes/tests/all_tests.gd` |
 
 ## 跨文件共性问题（模式级发现）
@@ -98,7 +98,7 @@
 典型文件：
 
 - `ui/scenes/tests/all_tests.gd`：大量 `preload` + 手工维护的测试列表。
-- `tools/generate_manual_test_saves_manifest.gd`：大量 case 字典堆叠。
+- `tools/generate_manual_test_saves_manifest.gd`（聚合） + `tools/manual_test_saves/manifest_*.gd`：大量 case 字典堆叠。
 
 主要问题：
 
@@ -397,19 +397,20 @@
 
 - 拆分为多个更小的 test 文件（按触发点/规则分组），并抽共享 helper（初始化、加员工、断言 milestone）到 `core/tests/test_helpers/`。
 
-### 16) `tools/generate_manual_test_saves_manifest.gd`
+### 16) `tools/generate_manual_test_saves_manifest.gd`（已拆分）
 
 当前职责：
 
-- 手工复核存档的 case 清单（大量字典），包含步骤/预期/关联测试。
+- `tools/generate_manual_test_saves_manifest.gd`：清单聚合入口，保持对外 `get_cases()` 不变。
+- `tools/manual_test_saves/manifest_*.gd`：按主题拆分的 case 清单。
 
 主要问题：
 
-- 作为“数据清单”放在单一脚本里，编辑冲突与维护难度高。
+- 拆分后仍可能存在个别主题文件接近/超过 800 行（例如里程碑清单），仍建议继续按模块/领域细拆。
 
 建议拆分方向：
 
-- 按领域/模块拆清单文件（employee/milestone/logs/每个模块各自一份）。
+- 按领域/模块拆清单文件（employee/milestone/logs/每个模块各自一份）。（已完成第一步：按主题拆分）
 - 或迁移为 JSON 数据（便于工具脚本读取与 diff）。
 
 ### 17) `tools/generate_manual_test_saves.gd`
@@ -435,7 +436,7 @@
 ### P0（最快降低痛点）
 
 - `ui/scenes/tests/all_tests.gd`：清单拆分/自动发现（降低日常冲突与维护）。
-- `tools/generate_manual_test_saves_manifest.gd`：按领域拆分清单（减少冲突）。
+- `tools/generate_manual_test_saves_manifest.gd`：按领域拆分清单（减少冲突）。（已完成：拆分到 `tools/manual_test_saves/manifest_*.gd`）
 - `tools/generate_manual_test_saves.gd`：按 builder 拆文件 + registry 分发（降低 3k 行单点风险）。
 
 ### P1（主线可维护性）
@@ -456,3 +457,6 @@
 - 拆分后优先补齐 headless 测试覆盖：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`。
 - 对模块扩展点：先定义接口/数据格式，再迁移现有模块（例如 lobbyists）作为样板。
 
+## 实施记录
+
+- 2026-02-02：拆分手工复核存档 manifest：`tools/generate_manual_test_saves_manifest.gd` 改为聚合入口；新增 `tools/manual_test_saves/manifest_examples.gd`、`tools/manual_test_saves/manifest_milestones.gd`、`tools/manual_test_saves/manifest_employees.gd`、`tools/manual_test_saves/manifest_logs.gd`；并通过 `ui/scenes/tests/all_tests.tscn`。
