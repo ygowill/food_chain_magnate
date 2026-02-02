@@ -467,3 +467,4 @@
 - 2026-02-02：提取右侧 Dock 控制器：新增 `ui/scenes/game/game_right_panel_dock_controller.gd`；`ui/scenes/game/game.gd` 下沉 dock/title/footer 分发逻辑；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：提取布局/响应式控制器：新增 `ui/scenes/game/game_layout_controller.gd`；`ui/scenes/game/game.gd` 下沉左侧信息区/右侧操作区/底部面板的可见性与响应式布局逻辑；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：提取重组阶段控制器：新增 `ui/scenes/game/game_panel_restructuring_controller.gd`；`ui/scenes/game/game_panel_controller.gd` 下沉重组弹窗/视角隐私/拖拽重组命令等逻辑；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-02：提取 Working/Recruit 面板控制器：新增 `ui/scenes/game/game_panel_working_recruit_controller.gd`；`ui/scenes/game/game_panel_working_panels.gd` 下沉 RecruitPanel 的生命周期/同步/命令分发；并通过 `ui/scenes/tests/all_tests.tscn`。
