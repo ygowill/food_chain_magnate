@@ -24,7 +24,7 @@
 | 行数 | funcs | preloads | signals | 文件 |
 |---:|---:|---:|---:|---|
 | 1421 | 94 | 20 | 0 | `ui/scenes/game/game.gd` |
-| 1622 | 41 | 13 | 2 | `ui/scenes/game/game_map_interaction_controller.gd` |
+| 820 | 33 | 11 | 2 | `ui/scenes/game/game_map_interaction_controller.gd` |
 | 1600 | 41 | 1 | 0 | `ui/scenes/game/map_canvas_drawer.gd` |
 | 1085 | 66 | 8 | 2 | `ui/components/action_panel/action_panel.gd` |
 | 1019 | 54 | 4 | 0 | `ui/scenes/online/online_lobby.gd` |
@@ -217,6 +217,10 @@
   - `MapModeBase`（接口：begin/clear/on_hover/on_select）
   - `ProcureDrinksMode`、`MarketingPlacementMode`、`StructurePlacementMode`、`DistanceToolMode` 等
 - Controller 只维护当前 mode 实例 + 输入分发 + 与 MapCanvas 的信号连接。
+
+实施结果（阶段性）：
+
+- 已完成：提取 marketing 模式逻辑到 `ui/scenes/game/game_map_interaction_marketing_mode.gd`，并将 `ui/scenes/game/game_map_interaction_controller.gd` 行数从 1622 降至 820；通过 `ui/scenes/tests/all_tests.tscn`。
 
 ### 5) `ui/scenes/game/map_canvas_drawer.gd`
 
@@ -507,3 +511,4 @@
 - 2026-02-02：提取联机 Resync/Rewind 控制器：新增 `ui/scenes/game/game_online_resync_controller.gd`；`ui/scenes/game/game.gd` 下沉联机同步/回退/队列回放逻辑（行数降至 2144）；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-03：提取回放/复盘时间线控制器：新增 `ui/scenes/game/game_timeline_controller.gd` 与 `ui/scenes/game/game_timeline_log_entries_builder.gd`；`ui/scenes/game/game.gd` 下沉回放/复盘/时间线与 ReplayBar 逻辑（行数降至 1421）；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-03：拆分日志面板条目与 timeline builder：新增 `ui/components/game_log/game_log_unified_timeline_builder.gd`、`ui/components/game_log/game_log_entry_utils.gd`、`ui/components/game_log/game_log_details_window_controller.gd`，以及条目组件 `ui/components/game_log/game_log_round_header_item.gd` / `ui/components/game_log/game_log_phase_header_item.gd` / `ui/components/game_log/game_log_action_group_header_item.gd` / `ui/components/game_log/game_log_event_item.gd` / `ui/components/game_log/game_log_item.gd`；`ui/components/game_log/game_log_panel.gd` 行数降至 649（低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-03：提取地图交互 marketing 模式：新增 `ui/scenes/game/game_map_interaction_marketing_mode.gd`；`ui/scenes/game/game_map_interaction_controller.gd` 行数降至 820（仍略高于 800，后续将继续拆 placement）；并通过 `ui/scenes/tests/all_tests.tscn`。
