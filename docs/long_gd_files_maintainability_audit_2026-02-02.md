@@ -464,3 +464,4 @@
 - 2026-02-02：拆分里程碑系统单测：`core/tests/milestone_system_test.gd` 改为聚合入口；新增 `core/tests/milestone_system/milestone_system_triggers_test.gd`、`core/tests/milestone_system/milestone_system_train_rules_test.gd`、`core/tests/milestone_system/milestone_system_test_support.gd`；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：拆分手工复核存档生成器 builder：新增 `tools/manual_test_saves/builders/`（support + employees/placement/logs/milestones）；`tools/generate_manual_test_saves.gd` 改为 runner + runtime registry 分发；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：提取存档/回放选择控制器：新增 `ui/scenes/game/game_save_load_controller.gd`；`ui/scenes/game/game.gd` 下沉 SaveLoadDialog 生命周期与回调分发；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-02：提取右侧 Dock 控制器：新增 `ui/scenes/game/game_right_panel_dock_controller.gd`；`ui/scenes/game/game.gd` 下沉 dock/title/footer 分发逻辑；并通过 `ui/scenes/tests/all_tests.tscn`。

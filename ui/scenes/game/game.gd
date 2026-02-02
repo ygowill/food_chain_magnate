@@ -49,6 +49,7 @@ extends Control
 const GameEventLogControllerClass = preload("res://ui/scenes/game/game_event_log_controller.gd")
 const GameMenuDebugControllerClass = preload("res://ui/scenes/game/game_menu_debug_controller.gd")
 const GameSaveLoadControllerClass = preload("res://ui/scenes/game/game_save_load_controller.gd")
+const GameRightPanelDockControllerClass = preload("res://ui/scenes/game/game_right_panel_dock_controller.gd")
 const GameOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_controller.gd")
 const GameMapInteractionControllerClass = preload("res://ui/scenes/game/game_map_interaction_controller.gd")
 const GamePanelControllerClass = preload("res://ui/scenes/game/game_panel_controller.gd")
@@ -73,6 +74,7 @@ var game_engine: GameEngine = null
 var _event_log_controller = null
 var _menu_debug_controller = null
 var _save_load_controller = null
+var _right_panel_dock_controller = null
 var _overlay_controller = null
 var _map_controller = null
 var _panel_controller = null
@@ -137,7 +139,6 @@ var _center_split_default_split_offset: int = -340
 
 var _responsive_mode: String = ""
 var _responsive_font_scale: float = -1.0
-var _right_panel_footer_source: Object = null
 
 func _ready() -> void:
 	var span_ready := PerfTraceClass.begin_span("game:_ready")
@@ -195,6 +196,20 @@ func _ready() -> void:
 
 	_menu_debug_controller = GameMenuDebugControllerClass.new(self, menu_dialog)
 	_save_load_controller = GameSaveLoadControllerClass.new(self, SaveLoadDialogScript, Callable(self, "_start_replay_from_file"))
+	_right_panel_dock_controller = GameRightPanelDockControllerClass.new(
+		Callable(self, "_ensure_right_panel_visible"),
+		Callable(self, "_cancel_right_panel_docked_panel"),
+		Callable(self, "toggle_game_log"),
+		game_log_panel,
+		right_panel_default_stack,
+		right_panel_dock_host,
+		right_panel_back_button,
+		right_panel_title_label,
+		right_panel_footer_row,
+		right_panel_footer_cancel_button,
+		right_panel_footer_secondary_button,
+		right_panel_footer_primary_button
+	)
 	# M4.3：日志面板统一使用 step 时间线视图（由 StepTimelineBuild.build_full 重建），
 	# 不再依赖 EventBus 订阅追加日志。
 	_event_log_controller = null
@@ -357,7 +372,9 @@ func _dispose_runtime() -> void:
 		_save_load_controller.dispose()
 	_save_load_controller = null
 
-	_right_panel_footer_source = null
+	if _right_panel_dock_controller != null and _right_panel_dock_controller.has_method("dispose"):
+		_right_panel_dock_controller.dispose()
+	_right_panel_dock_controller = null
 
 	if Globals != null and Globals.current_game_engine == game_engine:
 		Globals.current_game_engine = null
@@ -467,182 +484,29 @@ func _ensure_right_panel_visible() -> void:
 	_update_right_panel_toggle_button()
 
 func dock_popup_into_right_panel(panel: Control) -> bool:
-	if panel == null or not is_instance_valid(panel):
+	if _right_panel_dock_controller == null:
 		return false
-	if not is_instance_valid(right_panel_dock_host):
-		return false
-
-	_ensure_right_panel_visible()
-
-	# 避免“首次添加到场景 root 时闪一下/溢出”：先以隐藏状态移动，再在抽屉中显示。
-	panel.visible = false
-	if panel.get_parent() != right_panel_dock_host:
-		var old_parent := panel.get_parent()
-		if is_instance_valid(old_parent):
-			old_parent.remove_child(panel)
-		right_panel_dock_host.add_child(panel)
-
-	if panel.has_method("set_embedded_in_right_panel"):
-		panel.call("set_embedded_in_right_panel", true)
-
-	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	panel.offset_left = 0
-	panel.offset_top = 0
-	panel.offset_right = 0
-	panel.offset_bottom = 0
-
-	panel.visible = true
-	_sync_right_panel_docked_view()
-	return true
+	return _right_panel_dock_controller.dock_popup(panel)
 
 func _sync_right_panel_docked_view() -> void:
-	var active: Control = null
-	if is_instance_valid(right_panel_dock_host):
-		for ch in right_panel_dock_host.get_children():
-			if not (ch is Control):
-				continue
-			var c: Control = ch
-			if is_instance_valid(c) and c.visible:
-				active = c
-				break
-
-	var has_docked := active != null
-
-	if is_instance_valid(right_panel_default_stack):
-		right_panel_default_stack.visible = not has_docked
-	if is_instance_valid(right_panel_dock_host):
-		right_panel_dock_host.visible = has_docked
-	if is_instance_valid(right_panel_back_button):
-		right_panel_back_button.visible = has_docked
-	if is_instance_valid(right_panel_title_label):
-		if has_docked and is_instance_valid(active):
-			var title := ""
-			if active.has_meta("popup_title"):
-				title = str(active.get_meta("popup_title")).strip_edges()
-			if title.is_empty():
-				title = str(active.name)
-			right_panel_title_label.text = title
-		else:
-			right_panel_title_label.text = "操作"
-
-	_bind_right_panel_footer_source(active)
-	_sync_right_panel_footer(active)
-
-func _bind_right_panel_footer_source(active_panel: Object) -> void:
-	if _right_panel_footer_source == active_panel:
-		return
-
-	var handler := Callable(self, "_on_right_panel_footer_changed")
-
-	if is_instance_valid(_right_panel_footer_source) and _right_panel_footer_source.has_signal("right_panel_footer_changed"):
-		var old_sig := Signal(_right_panel_footer_source, &"right_panel_footer_changed")
-		if old_sig.is_connected(handler):
-			old_sig.disconnect(handler)
-
-	_right_panel_footer_source = active_panel
-
-	if is_instance_valid(_right_panel_footer_source) and _right_panel_footer_source.has_signal("right_panel_footer_changed"):
-		var new_sig := Signal(_right_panel_footer_source, &"right_panel_footer_changed")
-		if not new_sig.is_connected(handler):
-			new_sig.connect(handler)
-
-func _sync_right_panel_footer(active_panel: Object) -> void:
-	if not is_instance_valid(right_panel_footer_row):
-		return
-	if not is_instance_valid(right_panel_footer_cancel_button) or not is_instance_valid(right_panel_footer_primary_button) or not is_instance_valid(right_panel_footer_secondary_button):
-		right_panel_footer_row.visible = false
-		return
-
-	if active_panel == null or not is_instance_valid(active_panel):
-		right_panel_footer_row.visible = false
-		return
-
-	var config: Dictionary = {}
-	if active_panel.has_method("right_panel_get_footer_config"):
-		var r = active_panel.call("right_panel_get_footer_config")
-		if r is Dictionary:
-			config = r
-
-	if config.is_empty():
-		right_panel_footer_row.visible = false
-		return
-
-	var show_cancel := bool(config.get("show_cancel", true))
-	var cancel_text := str(config.get("cancel_text", "取消"))
-	var cancel_enabled := bool(config.get("cancel_enabled", true))
-
-	var show_secondary := bool(config.get("show_secondary", false))
-	var secondary_text := str(config.get("secondary_text", ""))
-	var secondary_enabled := bool(config.get("secondary_enabled", true))
-
-	var show_primary := bool(config.get("show_primary", true))
-	var primary_text := str(config.get("primary_text", ""))
-	var primary_enabled := bool(config.get("primary_enabled", true))
-
-	if secondary_text.is_empty():
-		show_secondary = false
-	if primary_text.is_empty():
-		show_primary = false
-
-	right_panel_footer_row.visible = show_cancel or show_secondary or show_primary
-
-	right_panel_footer_cancel_button.visible = show_cancel
-	right_panel_footer_cancel_button.text = cancel_text
-	right_panel_footer_cancel_button.disabled = not cancel_enabled
-
-	right_panel_footer_secondary_button.visible = show_secondary
-	right_panel_footer_secondary_button.text = secondary_text
-	right_panel_footer_secondary_button.disabled = not secondary_enabled
-
-	right_panel_footer_primary_button.visible = show_primary
-	right_panel_footer_primary_button.text = primary_text
-	right_panel_footer_primary_button.disabled = not primary_enabled
-
-func _on_right_panel_footer_changed() -> void:
-	_sync_right_panel_docked_view()
+	if _right_panel_dock_controller != null:
+		_right_panel_dock_controller.sync_docked_view()
 
 func _on_right_panel_footer_cancel_pressed() -> void:
-	_cancel_right_panel_docked_panel()
-	_sync_right_panel_docked_view()
+	if _right_panel_dock_controller != null:
+		_right_panel_dock_controller.on_footer_cancel_pressed()
 
 func _on_right_panel_footer_primary_pressed() -> void:
-	var active: Control = null
-	if is_instance_valid(right_panel_dock_host):
-		for ch in right_panel_dock_host.get_children():
-			if not (ch is Control):
-				continue
-			var c: Control = ch
-			if is_instance_valid(c) and c.visible:
-				active = c
-				break
-
-	if active == null or not is_instance_valid(active):
-		return
-	if active.has_method("right_panel_footer_primary"):
-		active.call("right_panel_footer_primary")
-		return
+	if _right_panel_dock_controller != null:
+		_right_panel_dock_controller.on_footer_primary_pressed()
 
 func _on_right_panel_footer_secondary_pressed() -> void:
-	var active: Control = null
-	if is_instance_valid(right_panel_dock_host):
-		for ch in right_panel_dock_host.get_children():
-			if not (ch is Control):
-				continue
-			var c: Control = ch
-			if is_instance_valid(c) and c.visible:
-				active = c
-				break
-
-	if active == null or not is_instance_valid(active):
-		return
-	if active.has_method("right_panel_footer_secondary"):
-		active.call("right_panel_footer_secondary")
-		return
+	if _right_panel_dock_controller != null:
+		_right_panel_dock_controller.on_footer_secondary_pressed()
 
 func _on_right_panel_back_pressed() -> void:
-	# 日志面板作为 RightPanel 抽屉视图时：返回键应关闭日志，而不是走“取消当前动作/面板”的逻辑。
-	if is_instance_valid(game_log_panel) and game_log_panel.visible and is_instance_valid(right_panel_dock_host) and game_log_panel.get_parent() == right_panel_dock_host:
-		toggle_game_log()
+	if _right_panel_dock_controller != null:
+		_right_panel_dock_controller.on_back_pressed()
 		return
 	_on_right_panel_footer_cancel_pressed()
 
