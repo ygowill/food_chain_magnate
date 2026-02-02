@@ -24,7 +24,6 @@
 | 行数 | funcs | preloads | signals | 文件 |
 |---:|---:|---:|---:|---|
 | 1421 | 94 | 20 | 0 | `ui/scenes/game/game.gd` |
-| 1631 | 117 | 2 | 13 | `ui/components/game_log/game_log_panel.gd` |
 | 1622 | 41 | 13 | 2 | `ui/scenes/game/game_map_interaction_controller.gd` |
 | 1600 | 41 | 1 | 0 | `ui/scenes/game/map_canvas_drawer.gd` |
 | 1085 | 66 | 8 | 2 | `ui/components/action_panel/action_panel.gd` |
@@ -250,6 +249,10 @@
 
 - 抽纯数据层：`LogTimelineModel`（构建 entries、分组、折叠策略、max_entries 裁剪等），可在 `core/` 或 `gameplay/` 测试。
 - Panel 只做：渲染 model 输出 + 转发 UI 事件（close/seek/click）。
+
+实施结果：
+
+- 已完成：拆分日志面板条目与 timeline builder：新增 `ui/components/game_log/game_log_unified_timeline_builder.gd`、`ui/components/game_log/game_log_entry_utils.gd`、`ui/components/game_log/game_log_details_window_controller.gd`，以及条目组件 `ui/components/game_log/game_log_round_header_item.gd` / `ui/components/game_log/game_log_phase_header_item.gd` / `ui/components/game_log/game_log_action_group_header_item.gd` / `ui/components/game_log/game_log_event_item.gd` / `ui/components/game_log/game_log_item.gd`；`ui/components/game_log/game_log_panel.gd` 行数降至 649（低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
 
 ### 7) `ui/components/action_panel/action_panel.gd`
 
@@ -503,3 +506,4 @@
 - 2026-02-02：拆分供应堆全屏视图 token：新增 `ui/components/reserve_area/reserve_area_full_screen_view_tokens.gd`；`ui/components/reserve_area/reserve_area_full_screen_view.gd` 移除内部 token 类（行数降至 641，低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：提取联机 Resync/Rewind 控制器：新增 `ui/scenes/game/game_online_resync_controller.gd`；`ui/scenes/game/game.gd` 下沉联机同步/回退/队列回放逻辑（行数降至 2144）；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-03：提取回放/复盘时间线控制器：新增 `ui/scenes/game/game_timeline_controller.gd` 与 `ui/scenes/game/game_timeline_log_entries_builder.gd`；`ui/scenes/game/game.gd` 下沉回放/复盘/时间线与 ReplayBar 逻辑（行数降至 1421）；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-03：拆分日志面板条目与 timeline builder：新增 `ui/components/game_log/game_log_unified_timeline_builder.gd`、`ui/components/game_log/game_log_entry_utils.gd`、`ui/components/game_log/game_log_details_window_controller.gd`，以及条目组件 `ui/components/game_log/game_log_round_header_item.gd` / `ui/components/game_log/game_log_phase_header_item.gd` / `ui/components/game_log/game_log_action_group_header_item.gd` / `ui/components/game_log/game_log_event_item.gd` / `ui/components/game_log/game_log_item.gd`；`ui/components/game_log/game_log_panel.gd` 行数降至 649（低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
