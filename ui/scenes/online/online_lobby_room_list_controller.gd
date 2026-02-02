@@ -24,7 +24,7 @@ func render_room_list(rooms: Array) -> void:
 	if not connected:
 		return
 
-	var current_code := _lobby._get_current_room_code()
+	var current_code: String = _lobby._get_current_room_code()
 
 	for room_val in rooms:
 		if not (room_val is Dictionary):
@@ -100,4 +100,3 @@ func render_room_list(rooms: Array) -> void:
 			_lobby._join_room_from_list(code, password_required)
 		)
 		row.add_child(spectate_btn)
-

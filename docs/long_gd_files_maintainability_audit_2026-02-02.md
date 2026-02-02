@@ -302,6 +302,11 @@
 - `RoomConfigSyncController`：debounce、dirty/syncing/error 状态机与补丁合并。
 - `LobbyViewModel`：将 `NetContext.room_state` 映射为 UI 可消费的数据结构（减少 UI 层字典操作）。
 
+实施结果（阶段性）：
+
+- 已完成：提取房间列表渲染与 RoomTab 渲染：新增 `ui/scenes/online/online_lobby_room_list_controller.gd` 与 `ui/scenes/online/online_lobby_room_state_renderer.gd`；`ui/scenes/online/online_lobby.gd` 改为委托渲染（行数 1019 -> 763）；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 待执行：进一步提取 `RoomConfigSyncController`（debounce/dirty/syncing/error）与 `LobbyViewModel`（减少字典操作与 UI 耦合）。
+
 ### 9) `autoload/net_client.gd`
 
 当前职责：
@@ -340,6 +345,26 @@
 - `LeftPanelMilestonesView`
 - `LeftPanelTurnLog`
 - 展示名/图标尽量从 registry/统一文案派生。
+
+### 10b) `ui/scenes/game/game_event_log_formatter.gd`
+
+当前职责：
+
+- 将 `EventBus` 的事件字典格式化为 `GameLogPanel` 可消费的日志条目（纯格式化，不直接操作节点）。
+
+主要问题：
+
+- 单文件巨大 `match`：新增/修改事件时很容易继续膨胀，难以按“领域”定位改动点。
+- report 类事件（如 Payday/Dinnertime）包含较长的分解与聚合逻辑，与主 dispatch 混在一起，阅读与维护成本高。
+- 文案/展示策略与事件 schema 的耦合点集中，缺少分域组织与复用边界。
+
+建议拆分方向：
+
+- 保留 `GameEventLogFormatter` 作为 façade（对外接口稳定），内部按领域拆子 formatter：
+  - `GameEventLogReportsFormatter`：负责 Payday/Dinnertime 等 report 类事件格式化。
+  - `GameEventLogPhaseFormatter`：Phase/Round/TurnOrder 等流程事件。
+  - `GameEventLogActionsFormatter`：action 请求/执行等。
+- 先拆 “report formatter”（改动面小、收益大），让主文件行数先降到 <800，再逐步下沉更多 handler。
 
 ### 11) `ui/components/company_structure/company_structure.gd`
 
@@ -480,6 +505,9 @@
 - `ui/scenes/game/game.gd`：按子系统拆 controller（layout/dock/save-load）。
 - `ui/scenes/game/game_panel_controller.gd` / `ui/scenes/game/game_panel_working_panels.gd`：按阶段/面板拆 controller。
 - `ui/scenes/game/game_map_interaction_controller.gd`：按 mode 拆策略对象。
+- `ui/scenes/online/online_lobby.gd`：提取房间列表/房间状态渲染 + 配置同步控制器。
+- `ui/components/left_panel/left_panel.gd`：按 tabs/summary/employees/milestones/turn log 拆 controller。
+- `ui/scenes/game/game_event_log_formatter.gd`：按领域拆 formatter（优先 report formatter）。
 
 ### P2（架构层面优化）
 
@@ -524,3 +552,4 @@
 - 2026-02-03：拆分 MapCanvasDrawer 的 ground/tile 绘制：新增 `ui/scenes/game/map_canvas_drawer_ground_pass.gd` 与 `ui/scenes/game/map_canvas_drawer_tiles_pass.gd`；`ui/scenes/game/map_canvas_drawer.gd` 行数降至 1146；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-03：拆分 MapCanvasDrawer 的 roads/structures/overlay：新增 `ui/scenes/game/map_canvas_drawer_roads_pass.gd`、`ui/scenes/game/map_canvas_drawer_structures_pass.gd`、`ui/scenes/game/map_canvas_drawer_overlay_utils.gd`；`ui/scenes/game/map_canvas_drawer.gd` 行数降至 410（低于 800）；并更新 `ui/components/reserve_area/reserve_area_full_screen_view_tokens.gd` 以调用 StructuresPass；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-03：提取 ActionPanel 上下文控制器：新增 `ui/components/action_panel/action_panel_context_controller.gd`；`ui/components/action_panel/action_panel.gd` 行数降至 702（低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-03：拆分 OnlineLobby 渲染：新增 `ui/scenes/online/online_lobby_room_list_controller.gd` 与 `ui/scenes/online/online_lobby_room_state_renderer.gd`；`ui/scenes/online/online_lobby.gd` 改为委托渲染（行数 1019 -> 763）；并通过 `ui/scenes/tests/all_tests.tscn`。

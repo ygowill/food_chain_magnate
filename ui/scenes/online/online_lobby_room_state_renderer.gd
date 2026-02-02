@@ -120,12 +120,12 @@ func render_room_state(room_state: Dictionary) -> void:
 			_lobby._write_local_player_profile(str(local_player_entry.get("name", _lobby.player_name_edit.text)), local_color_index)
 			_lobby._apply_my_color_option_selection(local_color_index)
 
-	var in_room := not code.is_empty()
-	var is_host := in_room and _lobby._is_host(room_state)
+	var in_room: bool = not code.is_empty()
+	var is_host: bool = in_room and _lobby._is_host(room_state)
 	if not is_host and _lobby._config_sync_state != "synced":
 		_lobby._set_config_sync_state("synced", "")
 	if _lobby._room_config_editor != null and is_instance_valid(_lobby._room_config_editor):
-		var editable := is_host and str(room_state.get("status", "")).strip_edges() == "Lobby"
+		var editable: bool = is_host and str(room_state.get("status", "")).strip_edges() == "Lobby"
 		if not is_host or _lobby._config_sync_state == "synced" or _lobby._config_sync_state == "syncing":
 			_lobby._room_config_editor.set_from_room_config(cfg)
 			if is_host and _lobby._config_sync_state == "syncing":
@@ -192,4 +192,3 @@ func _build_room_member_item(primary_text: String, accent_color: Color, tags: Ar
 		row.add_child(tag_label)
 
 	return panel
-

@@ -5,6 +5,8 @@ const RoomConfigEditorClass = preload("res://ui/components/room_config_editor/ro
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
 const InfoDialogClass = preload("res://ui/dialogs/info_dialog.gd")
+const RoomListControllerClass = preload("res://ui/scenes/online/online_lobby_room_list_controller.gd")
+const RoomStateRendererClass = preload("res://ui/scenes/online/online_lobby_room_state_renderer.gd")
 
 const _COLOR_NAME_HINTS: Array[String] = ["红", "蓝", "绿", "黄", "紫"]
 
@@ -59,6 +61,8 @@ enum LobbyPage { CONNECT, ROOMS, JOIN_BY_CODE, CREATE, ROOM }
 var _current_page: int = LobbyPage.CONNECT
 
 var _room_config_editor = null
+var _room_list_controller = null
+var _room_state_renderer = null
 
 var _config_sync_state: String = "synced" # synced/dirty/syncing/error
 var _config_sync_message: String = ""
@@ -91,6 +95,7 @@ func _ready() -> void:
 	_ensure_editors()
 	_ensure_password_dialog()
 	_ensure_info_dialog()
+	_ensure_room_renderers()
 	_setup_my_color_selector()
 	_apply_defaults()
 	_refresh_ui()
@@ -120,6 +125,14 @@ func _ensure_editors() -> void:
 		_room_config_editor.validation_failed.connect(func(msg: String) -> void:
 			_set_config_sync_state("error", msg)
 		)
+
+func _ensure_room_renderers() -> void:
+	if _room_list_controller == null or not is_instance_valid(_room_list_controller):
+		_room_list_controller = RoomListControllerClass.new()
+		_room_list_controller.setup(self)
+	if _room_state_renderer == null or not is_instance_valid(_room_state_renderer):
+		_room_state_renderer = RoomStateRendererClass.new()
+		_room_state_renderer.setup(self)
 
 func _ensure_password_dialog() -> void:
 	if _password_dialog != null and is_instance_valid(_password_dialog):
@@ -254,6 +267,7 @@ func _update_top_title() -> void:
 			top_title_label.text = "房间内"
 
 func _refresh_ui() -> void:
+	_ensure_room_renderers()
 	var connected := NetClient != null and NetClient.is_online_client_connected()
 	connect_button.disabled = connected
 	disconnect_button.disabled = not connected
@@ -269,97 +283,11 @@ func _refresh_ui() -> void:
 		if connect_status_label.text.strip_edges().is_empty():
 			_set_connect_status("未连接：请先连接服务器。")
 
-	_render_room_list(NetContext.room_list if NetContext != null else [])
-	_render_room_state(NetContext.room_state if NetContext != null else {})
+	if _room_list_controller != null and is_instance_valid(_room_list_controller):
+		_room_list_controller.render_room_list(NetContext.room_list if NetContext != null else [])
+	if _room_state_renderer != null and is_instance_valid(_room_state_renderer):
+		_room_state_renderer.render_room_state(NetContext.room_state if NetContext != null else {})
 	_sync_page_from_state()
-
-func _render_room_list(rooms: Array) -> void:
-	if rooms_list_container == null or not is_instance_valid(rooms_list_container):
-		return
-
-	for child in rooms_list_container.get_children():
-		child.queue_free()
-
-	var connected := NetClient != null and NetClient.is_online_client_connected()
-	if not connected:
-		return
-
-	var current_code := _get_current_room_code()
-
-	for room_val in rooms:
-		if not (room_val is Dictionary):
-			continue
-		var room: Dictionary = Dictionary(room_val)
-
-		var code := str(room.get("room_code", "")).strip_edges().to_upper()
-		if code.is_empty():
-			continue
-		var status := str(room.get("status", "")).strip_edges()
-		var desired := int(room.get("desired_player_count", 0))
-		var player_count := int(room.get("player_count", 0))
-		var password_required := bool(room.get("password_required", false))
-		var allow_spectators := bool(room.get("allow_spectators", true))
-
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
-		rooms_list_container.add_child(row)
-
-		var code_label := Label.new()
-		code_label.text = code
-		code_label.custom_minimum_size = Vector2(90, 0)
-		row.add_child(code_label)
-
-		var status_label := Label.new()
-		status_label.text = status
-		status_label.custom_minimum_size = Vector2(60, 0)
-		row.add_child(status_label)
-
-		var count_label := Label.new()
-		count_label.text = "%d/%d" % [player_count, desired]
-		count_label.custom_minimum_size = Vector2(60, 0)
-		row.add_child(count_label)
-
-		var lock_label := Label.new()
-		lock_label.text = "🔒" if password_required else ""
-		lock_label.custom_minimum_size = Vector2(24, 0)
-		row.add_child(lock_label)
-
-		var host_name := str(room.get("host_name", "")).strip_edges()
-		var host_label := Label.new()
-		host_label.text = host_name
-		host_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(host_label)
-
-		if code == current_code:
-			var enter_btn := Button.new()
-			enter_btn.text = "进入"
-			UiStylesClass.apply_button_secondary(enter_btn)
-			enter_btn.pressed.connect(func() -> void:
-				_show_page(LobbyPage.ROOM, false)
-			)
-			row.add_child(enter_btn)
-			continue
-
-		var can_join := status == "Lobby" and desired > 0 and player_count < desired
-		var can_spectate := status == "InGame" and allow_spectators
-
-		var join_btn := Button.new()
-		join_btn.text = "加入"
-		join_btn.disabled = not can_join
-		UiStylesClass.apply_button_primary(join_btn)
-		join_btn.pressed.connect(func() -> void:
-			_join_room_from_list(code, password_required)
-		)
-		row.add_child(join_btn)
-
-		var spectate_btn := Button.new()
-		spectate_btn.text = "观战"
-		spectate_btn.disabled = not can_spectate
-		UiStylesClass.apply_button_secondary(spectate_btn)
-		spectate_btn.pressed.connect(func() -> void:
-			_join_room_from_list(code, password_required)
-		)
-		row.add_child(spectate_btn)
 
 func _join_room_from_list(room_code: String, password_required: bool) -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
@@ -389,190 +317,6 @@ func _on_password_dialog_submitted(password: String) -> void:
 		return
 	NetClient.request_join_room(code, str(password))
 	_set_rooms_status("")
-
-func _render_room_state(room_state: Dictionary) -> void:
-	var connected := NetClient != null and NetClient.is_online_client_connected()
-	if not connected:
-		room_code_label.text = "房间：-"
-		return
-
-	var code := str(room_state.get("room_code", "")).strip_edges()
-	if code.is_empty():
-		room_code_label.text = "房间：-"
-	else:
-		room_code_label.text = "房间：%s" % code
-
-	# 玩家/旁观者列表
-	for child in players_list_container.get_children():
-		child.queue_free()
-	for child2 in spectators_list_container.get_children():
-		child2.queue_free()
-
-	# Room 配置：host 自动同步 / 非 host 只读
-	var cfg: Dictionary = Dictionary(room_state.get("config", {}))
-	var desired_player_count := int(cfg.get("desired_player_count", 0))
-
-	var host_peer_id := int(room_state.get("host_peer_id", 0))
-	var player_by_seat: Dictionary = {}
-	var players: Array = Array(room_state.get("players", []))
-	for p_val in players:
-		if not (p_val is Dictionary):
-			continue
-		var p: Dictionary = Dictionary(p_val)
-		var seat := int(p.get("seat_index", -1))
-		if seat < 0:
-			continue
-		player_by_seat[seat] = p
-
-	var seat_count := maxi(players.size(), desired_player_count)
-	for seat_index in range(seat_count):
-		if player_by_seat.has(seat_index):
-			var p: Dictionary = Dictionary(player_by_seat.get(seat_index, {}))
-			var name := str(p.get("name", "")).strip_edges()
-			if name.is_empty():
-				name = "玩家 %d" % (seat_index + 1)
-			var palette_index := int(p.get("color_index", 0))
-			var connected_flag := bool(p.get("connected", true))
-			var forfeited := bool(p.get("forfeited", false))
-			var peer_id := int(p.get("peer_id", 0))
-
-			var tags: Array[String] = []
-			if peer_id > 0 and peer_id == host_peer_id:
-				tags.append("房主")
-			if not connected_flag:
-				tags.append("掉线")
-			if forfeited:
-				tags.append("弃权")
-
-			var item := _build_room_member_item(
-				"玩家 %d：%s" % [seat_index + 1, name],
-				_color_from_palette_index(palette_index),
-				tags,
-				not connected_flag
-			)
-			players_list_container.add_child(item)
-		else:
-			var empty_item := _build_room_member_item(
-				"玩家 %d：空位" % (seat_index + 1),
-				Color(0.35, 0.35, 0.4, 0.8),
-				[],
-				true
-			)
-			players_list_container.add_child(empty_item)
-
-	var spectators: Array = Array(room_state.get("spectators", []))
-	if spectators.is_empty():
-		var none := Label.new()
-		none.text = "暂无旁观者"
-		none.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82, 0.85))
-		spectators_list_container.add_child(none)
-	else:
-		for s_val in spectators:
-			if not (s_val is Dictionary):
-				continue
-			var s: Dictionary = Dictionary(s_val)
-			var s_name := str(s.get("name", "")).strip_edges()
-			if s_name.is_empty():
-				s_name = "旁观者"
-			var s_palette_index := int(s.get("color_index", 0))
-			var s_item := _build_room_member_item(
-				s_name,
-				_color_from_palette_index(s_palette_index),
-				["旁观"],
-				false
-			)
-			spectators_list_container.add_child(s_item)
-
-	# 我的餐厅/颜色选择（进入房间后才允许）
-	if my_color_option != null and is_instance_valid(my_color_option):
-		var local_peer_id := int(multiplayer.get_unique_id())
-		var local_player_entry: Dictionary = {}
-		for p_val2 in players:
-			if not (p_val2 is Dictionary):
-				continue
-			var p2: Dictionary = Dictionary(p_val2)
-			if int(p2.get("peer_id", 0)) == local_peer_id:
-				local_player_entry = p2
-				break
-		var can_edit_color := (not code.is_empty()) and (str(room_state.get("status", "")).strip_edges() == "Lobby") and (not local_player_entry.is_empty())
-		my_color_option.disabled = not can_edit_color
-		if not local_player_entry.is_empty():
-			var local_color_index := int(local_player_entry.get("color_index", 0))
-			_write_local_player_profile(str(local_player_entry.get("name", player_name_edit.text)), local_color_index)
-			_apply_my_color_option_selection(local_color_index)
-
-	var in_room := not code.is_empty()
-	var is_host := in_room and _is_host(room_state)
-	if not is_host and _config_sync_state != "synced":
-		_set_config_sync_state("synced", "")
-	if _room_config_editor != null and is_instance_valid(_room_config_editor):
-		var editable := is_host and str(room_state.get("status", "")) == "Lobby"
-		if not is_host or _config_sync_state == "synced" or _config_sync_state == "syncing":
-			_room_config_editor.set_from_room_config(cfg)
-			if is_host and _config_sync_state == "syncing":
-				_pending_config_patch = {}
-				_set_config_sync_state("synced", "")
-			_room_config_editor.set_editable(editable)
-
-	# StartGame 按钮
-	start_game_button.disabled = (not connected) or (not _can_start_game(room_state)) or _start_game_flow_in_progress or _config_sync_state == "error"
-
-	if in_room and _current_page != LobbyPage.ROOM:
-		_show_page(LobbyPage.ROOM, false)
-
-func _color_from_palette_index(palette_index: int) -> Color:
-	if Globals == null:
-		return Color.WHITE
-	if not (Globals.PLAYER_COLOR_PALETTE is Array) or Array(Globals.PLAYER_COLOR_PALETTE).is_empty():
-		return Color.WHITE
-	var palette: Array = Array(Globals.PLAYER_COLOR_PALETTE)
-	var idx := clampi(int(palette_index), 0, palette.size() - 1)
-	var c_val = palette[idx]
-	if c_val is Color:
-		return c_val
-	return Color.WHITE
-
-func _build_room_member_item(primary_text: String, accent_color: Color, tags: Array[String], muted: bool) -> Control:
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(0, 34)
-
-	var style := StyleBoxFlat.new()
-	style.set_corner_radius_all(6)
-	if muted:
-		style.bg_color = Color(0.18, 0.18, 0.22, 0.35)
-		style.border_color = Color(0.25, 0.25, 0.3, 0.5)
-	else:
-		style.bg_color = Color(0.2, 0.2, 0.25, 0.6)
-		style.border_color = Color(0.25, 0.25, 0.3, 0.7)
-	style.set_border_width_all(1)
-	panel.add_theme_stylebox_override("panel", style)
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	panel.add_child(row)
-
-	var color_rect := ColorRect.new()
-	color_rect.custom_minimum_size = Vector2(8, 0)
-	color_rect.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	color_rect.color = accent_color
-	color_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(color_rect)
-
-	var name_label := Label.new()
-	name_label.text = str(primary_text)
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(name_label)
-
-	if not tags.is_empty():
-		var tag_label := Label.new()
-		tag_label.text = " ".join(tags)
-		tag_label.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82, 0.95))
-		tag_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		tag_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.add_child(tag_label)
-
-	return panel
 
 func _is_host(room_state: Dictionary) -> bool:
 	var host_peer_id := int(room_state.get("host_peer_id", 0))
