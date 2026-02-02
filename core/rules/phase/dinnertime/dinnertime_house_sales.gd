@@ -216,6 +216,7 @@ static func apply(
 			return has_food_read
 		var house_bonus_ctx := {
 			"bonus": 0,
+			"bonus_breakdown": {},
 			"house_id": house_id,
 			"restaurant_id": str(winner["restaurant_id"]),
 			"has_non_drink_food": bool(has_food_read.value),
@@ -240,6 +241,24 @@ static func apply(
 		var house_bonus: int = int(house_bonus_val)
 		if house_bonus < 0:
 			return Result.failure("晚餐结算失败：sale_house_bonus ctx.bonus 不能为负数: %d" % house_bonus)
+
+		var house_bonus_breakdown: Dictionary = {}
+		var breakdown_val = house_bonus_ctx.get("bonus_breakdown", null)
+		if breakdown_val != null:
+			if not (breakdown_val is Dictionary):
+				return Result.failure("晚餐结算失败：sale_house_bonus ctx.bonus_breakdown 类型错误（期望 Dictionary）")
+			for k in (breakdown_val as Dictionary).keys():
+				if not (k is String):
+					return Result.failure("晚餐结算失败：sale_house_bonus ctx.bonus_breakdown key 类型错误（期望 String）")
+				var key: String = str(k).strip_edges()
+				if key.is_empty():
+					continue
+				var v = (breakdown_val as Dictionary).get(k, 0)
+				if not (v is int):
+					return Result.failure("晚餐结算失败：sale_house_bonus ctx.bonus_breakdown[%s] 类型错误（期望 int）" % key)
+				var amt: int = int(v)
+				if amt != 0:
+					house_bonus_breakdown[key] = int(house_bonus_breakdown.get(key, 0)) + amt
 
 		if revenue > 0:
 			var pay_result := BankruptcyRulesClass.pay_bank_to_player(state, owner_id, revenue, "晚餐收入")
@@ -278,6 +297,7 @@ static func apply(
 			"price_part": int(breakdown["price_part"]),
 			"bonus": int(breakdown["bonus"]),
 			"house_bonus": house_bonus,
+			"house_bonus_breakdown": house_bonus_breakdown.duplicate(true),
 			"revenue": revenue,
 		})
 

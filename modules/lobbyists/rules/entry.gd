@@ -470,7 +470,12 @@ func _effect_dinnertime_sale_house_bonus_park(state: GameState, _player_id: int,
 	if unit_price <= 0 or qty <= 0:
 		return Result.success()
 
-	ctx["bonus"] = int(ctx["bonus"]) + unit_price * qty
+	var add := unit_price * qty
+	ctx["bonus"] = int(ctx["bonus"]) + add
+	if ctx.has("bonus_breakdown") and (ctx["bonus_breakdown"] is Dictionary):
+		var breakdown: Dictionary = ctx["bonus_breakdown"]
+		breakdown["park"] = int(breakdown.get("park", 0)) + add
+		ctx["bonus_breakdown"] = breakdown
 	return Result.success()
 
 static func _is_park_piece_id(piece_id: String) -> bool:

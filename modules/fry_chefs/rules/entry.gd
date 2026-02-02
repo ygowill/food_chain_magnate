@@ -31,4 +31,8 @@ func _effect_sale_house_bonus_plus_10(_state: GameState, _player_id: int, ctx: D
 		return Result.success()
 
 	ctx["bonus"] = int(ctx["bonus"]) + 10
+	if ctx.has("bonus_breakdown") and (ctx["bonus_breakdown"] is Dictionary):
+		var breakdown: Dictionary = ctx["bonus_breakdown"]
+		breakdown["fry_chef"] = int(breakdown.get("fry_chef", 0)) + 10
+		ctx["bonus_breakdown"] = breakdown
 	return Result.success()

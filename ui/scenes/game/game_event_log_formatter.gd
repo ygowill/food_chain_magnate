@@ -14,6 +14,20 @@ const PRICE_ACTION_LOG_TEXT: Dictionary = {
 	"set_luxury_price": "设定奢侈品价格（+$10）",
 }
 
+const CASH_INCOME_BREAKDOWN_LABELS: Dictionary = {
+	"food_price": "食物售价",
+	"garden_bonus": "花园加成",
+	"marketing_bonus": "营销加成",
+	"route_purchase_income": "沿路购买收入",
+	"park_bonus": "公园加成",
+	"fry_chef_bonus": "薯条厨师加成",
+	"house_bonus_other": "其它房屋加成",
+	"tips": "服务员收入",
+	"cfo_bonus": "CFO 加成",
+	"revenue_floor_adjustment": "下限调整",
+	"other": "其它",
+}
+
 func format(event: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if not (event is Dictionary) or event.is_empty():
@@ -66,12 +80,14 @@ func format(event: Dictionary) -> Array[Dictionary]:
 				str(data.get("action", "")),
 			], data))
 		EventBus.EventType.PLAYER_CASH_CHANGED:
-			out.append(_event("玩家 %d 现金变化: %d -> %d (%+d)" % [
+			var breakdown_suffix := _format_cash_income_breakdown_suffix(data)
+			var base_text := "玩家 %d 现金变化: %d -> %d (%+d)" % [
 				int(data.get("player_id", -1)) + 1,
 				int(data.get("old_cash", 0)),
 				int(data.get("new_cash", 0)),
 				int(data.get("delta", 0)),
-			], data))
+			]
+			out.append(_event(base_text + breakdown_suffix, data))
 		EventBus.EventType.PLAYER_BROKE:
 			var player_id := int(data.get("player_id", -1))
 			var reason := str(data.get("reason", "")).strip_edges()
@@ -421,6 +437,40 @@ func _event(message: String, details: Dictionary) -> Dictionary:
 
 func _debug(message: String, details: Dictionary) -> Dictionary:
 	return {"type": GameLogPanel.LogType.DEBUG, "message": message, "details": details}
+
+func _format_cash_income_breakdown_suffix(details: Dictionary) -> String:
+	if details == null or not (details is Dictionary):
+		return ""
+	var breakdown_val = details.get("income_breakdown", null)
+	if not (breakdown_val is Dictionary):
+		return ""
+	var breakdown: Dictionary = breakdown_val
+	if str(breakdown.get("context", "")).strip_edges() != "dinnertime_income":
+		return ""
+	var items_val = breakdown.get("items", null)
+	if not (items_val is Array):
+		return ""
+	var items: Array = items_val
+	if items.is_empty():
+		return ""
+
+	var parts: Array[String] = []
+	for it_val in items:
+		if not (it_val is Dictionary):
+			continue
+		var it: Dictionary = it_val
+		var id := str(it.get("id", "")).strip_edges()
+		var amt := int(it.get("amount", 0))
+		if id.is_empty() or amt == 0:
+			continue
+		var label := str(CASH_INCOME_BREAKDOWN_LABELS.get(id, id)).strip_edges()
+		if label.is_empty():
+			label = id
+		parts.append("%s $%d" % [label, amt])
+
+	if parts.is_empty():
+		return ""
+	return "（晚餐收入来源：" + "，".join(parts) + "）"
 
 func _product_name(product_id: String) -> String:
 	var pid := str(product_id).strip_edges()
