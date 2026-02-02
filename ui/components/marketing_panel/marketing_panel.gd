@@ -28,7 +28,7 @@ const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const MarketingBoardButtonClass = preload("res://ui/components/marketing_panel/marketing_board_button.gd")
 const MarketingTypeButtonClass = preload("res://ui/components/marketing_panel/marketing_type_button.gd")
-const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+const MarketingPanelIconCacheClass = preload("res://ui/components/marketing_panel/marketing_panel_icon_cache.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 
 # 营销面板内的产品图标目标尺寸（方形，居中）。
@@ -62,10 +62,7 @@ var _type_buttons: Dictionary = {}  # type_id -> marketing_type_button instance
 var _marketer_max_duration_by_id: Dictionary = {}  # employee_type -> max_duration
 
 var _map_callback: Callable  # 用于请求地图选择
-var _visual_modules: Array[String] = []
-var _skin = null
-var _product_icon_cache: Dictionary = {} # product_id -> Texture2D
-var _marketing_type_icon_cache: Dictionary = {} # marketing_type -> Texture2D
+var _icon_cache = MarketingPanelIconCacheClass.new()
 
 var _board_button_group: ButtonGroup = ButtonGroup.new()
 var _product_button_group: ButtonGroup = ButtonGroup.new()
@@ -77,11 +74,7 @@ var _product_button_by_id: Dictionary = {} # String -> Button
 var _duration_button_by_value: Dictionary = {} # int -> Button
 
 func set_visual_modules(modules: Array[String]) -> void:
-	_visual_modules = Array(modules, TYPE_STRING, "", null)
-	_skin = null
-	_product_icon_cache.clear()
-	_marketing_type_icon_cache.clear()
-	_ensure_skin()
+	_icon_cache.set_visual_modules(modules)
 	_rebuild_type_buttons()
 	_rebuild_product_buttons()
 	_rebuild_board_buttons()
@@ -163,8 +156,6 @@ func _rebuild_type_buttons() -> void:
 	if type_container == null:
 		return
 
-	_ensure_skin()
-
 	var marketers_by_type: Dictionary = {}
 	for marketer in _available_marketers:
 		var m_type: String = str(marketer.get("type", ""))
@@ -181,7 +172,7 @@ func _rebuild_type_buttons() -> void:
 		var btn = MarketingTypeButtonClass.new()
 		btn.type_id = type_id
 		btn.type_def = type_def
-		btn.icon_texture = _get_marketing_icon_texture(type_id)
+		btn.icon_texture = _icon_cache.get_marketing_icon_texture(type_id, MARKETING_TYPE_ICON_SIZE)
 		btn.is_available = is_available
 		btn.marketer_count = marketer_count
 		btn.board_count = board_count
@@ -395,7 +386,7 @@ func _set_selected_board_number(board_number: int) -> void:
 	_request_map_selection_refresh()
 
 func _sync_board_button_previews() -> void:
-	var product_tex := _get_product_icon_texture(_selected_product)
+	var product_tex := _icon_cache.get_product_icon_texture(_selected_product)
 	for bn in _board_button_by_number.keys():
 		var btn = _board_button_by_number.get(bn, null)
 		if not is_instance_valid(btn):
@@ -474,10 +465,7 @@ func _rebuild_board_buttons() -> void:
 					boards.append(int(f))
 	boards.sort()
 
-	_ensure_skin()
-	var type_tex: Texture2D = null
-	if _skin != null and _skin.has_method("get_marketing_texture"):
-		type_tex = _skin.get_marketing_texture(_selected_type)
+	var type_tex: Texture2D = _icon_cache.get_marketing_texture(_selected_type)
 
 	for bn in boards:
 		var btn = MarketingBoardButtonClass.new()
@@ -489,7 +477,7 @@ func _rebuild_board_buttons() -> void:
 		btn.base_size = _get_board_base_size(bn)
 		btn.board_rotation = _selected_rotation
 		btn.marketing_texture = type_tex
-		btn.product_texture = _get_product_icon_texture(_selected_product)
+		btn.product_texture = _icon_cache.get_product_icon_texture(_selected_product)
 		btn.show_product = false
 		btn.tooltip_text = "#%d  %dx%d" % [bn, btn.get_rotated_size().x, btn.get_rotated_size().y]
 		btn.pressed.connect(func():
@@ -508,8 +496,6 @@ func _rebuild_product_buttons() -> void:
 		return
 	if not ProductRegistryClass.is_loaded():
 		return
-
-	_ensure_skin()
 
 	var ids: Array[String] = []
 	for pid_val in ProductRegistryClass.get_all_ids():
@@ -530,23 +516,23 @@ func _rebuild_product_buttons() -> void:
 			# 兜底：ProductDef 有字段 name
 			name = str(def_val.name)
 
-		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(44, 44)
-		btn.toggle_mode = true
-		btn.button_group = _product_button_group
-		btn.focus_mode = Control.FOCUS_NONE
-		btn.icon = _get_product_icon_texture_scaled(pid)
-		btn.expand_icon = true
-		btn.text = ""
-		btn.tooltip_text = name
-		btn.set_meta("product_id", pid)
-		btn.pressed.connect(func():
-			_on_product_button_pressed(pid)
-		)
-		product_flow.add_child(btn)
-		_product_button_by_id[pid] = btn
-		if first_pid.is_empty():
-			first_pid = pid
+			var btn := Button.new()
+			btn.custom_minimum_size = Vector2(44, 44)
+			btn.toggle_mode = true
+			btn.button_group = _product_button_group
+			btn.focus_mode = Control.FOCUS_NONE
+			btn.icon = _icon_cache.get_product_icon_texture_scaled(pid, PRODUCT_ICON_SIZE)
+			btn.expand_icon = true
+			btn.text = ""
+			btn.tooltip_text = name
+			btn.set_meta("product_id", pid)
+			btn.pressed.connect(func():
+				_on_product_button_pressed(pid)
+			)
+			product_flow.add_child(btn)
+			_product_button_by_id[pid] = btn
+			if first_pid.is_empty():
+				first_pid = pid
 
 	var to_select := _selected_product
 	if to_select.is_empty() or not _product_button_by_id.has(to_select):
@@ -556,139 +542,6 @@ func _rebuild_product_buttons() -> void:
 		var b: Button = _product_button_by_id[to_select]
 		b.button_pressed = true
 		_on_product_button_pressed(to_select)
-
-func _ensure_skin() -> void:
-	if _skin != null:
-		return
-
-	var base_dir := "res://modules"
-	if Globals != null:
-		base_dir = str(Globals.modules_v2_base_dir)
-
-	var mods := _visual_modules
-	if mods.is_empty() and Globals != null and (Globals.enabled_modules_v2 is Array):
-		mods = Array(Globals.enabled_modules_v2, TYPE_STRING, "", null)
-
-	_skin = UiSkinCacheClass.get_skin_for_modules(base_dir, mods, 40)
-
-func _get_product_icon_texture(product_id: String) -> Texture2D:
-	if _skin == null or not _skin.has_method("get_product_icon_texture"):
-		return null
-	var pid := str(product_id)
-	if pid == "cola":
-		pid = "soda"
-	return _skin.get_product_icon_texture(pid)
-
-func _get_product_icon_texture_scaled(product_id: String) -> Texture2D:
-	var pid := str(product_id)
-	if pid.is_empty():
-		return null
-
-	if _product_icon_cache.has(pid):
-		var cached = _product_icon_cache.get(pid, null)
-		return cached if cached is Texture2D else null
-
-	var base_tex := _get_product_icon_texture(pid)
-	var scaled := _scale_texture_to_square(base_tex, PRODUCT_ICON_SIZE)
-	_product_icon_cache[pid] = scaled
-	return scaled
-
-func _scale_texture_to_square(tex: Texture2D, target_size: Vector2i) -> Texture2D:
-	if tex == null:
-		return null
-
-	var tw := maxi(1, int(target_size.x))
-	var th := maxi(1, int(target_size.y))
-
-	var src_size: Vector2i = tex.get_size()
-	var sw := int(src_size.x)
-	var sh := int(src_size.y)
-	if sw <= 0 or sh <= 0:
-		return tex
-
-	# 只做缩小；避免小图被放大后发糊。
-	if sw <= tw and sh <= th:
-		return tex
-
-	var img := tex.get_image()
-	if img == null or img.is_empty():
-		return tex
-
-	if img.is_compressed():
-		# 修改像素前需解压，否则 resize 会失败。
-		img.decompress()
-	if img.get_format() != Image.FORMAT_RGBA8:
-		img.convert(Image.FORMAT_RGBA8)
-
-	var scale := minf(float(tw) / float(sw), float(th) / float(sh))
-	var new_w := maxi(1, int(round(float(sw) * scale)))
-	var new_h := maxi(1, int(round(float(sh) * scale)))
-
-	img.resize(new_w, new_h, Image.INTERPOLATE_LANCZOS)
-
-	var out := Image.create(tw, th, false, Image.FORMAT_RGBA8)
-	out.fill(Color(0, 0, 0, 0))
-	var dst := Vector2i(int((tw - new_w) / 2), int((th - new_h) / 2))
-	out.blit_rect(img, Rect2i(Vector2i.ZERO, Vector2i(new_w, new_h)), dst)
-
-	return ImageTexture.create_from_image(out)
-
-func _get_marketing_icon_texture(type_id: String) -> Texture2D:
-	var key := str(type_id)
-	if key.is_empty():
-		key = "default"
-
-	if _marketing_type_icon_cache.has(key):
-		var cached = _marketing_type_icon_cache.get(key, null)
-		return cached if cached is Texture2D else null
-
-	if _skin == null or not _skin.has_method("get_marketing_texture"):
-		return null
-
-	var base_tex = _skin.get_marketing_texture(key)
-	var scaled := _scale_texture_to_square_cover(base_tex, MARKETING_TYPE_ICON_SIZE)
-	_marketing_type_icon_cache[key] = scaled
-	return scaled
-
-func _scale_texture_to_square_cover(tex: Texture2D, target_size: Vector2i) -> Texture2D:
-	if tex == null:
-		return null
-
-	var tw := maxi(1, int(target_size.x))
-	var th := maxi(1, int(target_size.y))
-
-	var src_size: Vector2i = tex.get_size()
-	var sw := int(src_size.x)
-	var sh := int(src_size.y)
-	if sw <= 0 or sh <= 0:
-		return tex
-
-	# 只做缩小；避免把小图放大后发糊（TextureRect 会在必要时自行放大）。
-	if sw <= tw and sh <= th:
-		return tex
-
-	var img := tex.get_image()
-	if img == null or img.is_empty():
-		return tex
-
-	if img.is_compressed():
-		img.decompress()
-	if img.get_format() != Image.FORMAT_RGBA8:
-		img.convert(Image.FORMAT_RGBA8)
-
-	# Cover：按较大的缩放比放大到至少覆盖目标尺寸，再居中裁切。
-	var scale := maxf(float(tw) / float(sw), float(th) / float(sh))
-	var new_w := maxi(tw, int(ceil(float(sw) * scale)))
-	var new_h := maxi(th, int(ceil(float(sh) * scale)))
-
-	img.resize(new_w, new_h, Image.INTERPOLATE_LANCZOS)
-
-	var x0 := maxi(0, int((new_w - tw) / 2))
-	var y0 := maxi(0, int((new_h - th) / 2))
-	var out := Image.create(tw, th, false, Image.FORMAT_RGBA8)
-	out.fill(Color(0, 0, 0, 0))
-	out.blit_rect(img, Rect2i(Vector2i(x0, y0), Vector2i(tw, th)), Vector2i.ZERO)
-	return ImageTexture.create_from_image(out)
 
 func _on_marketer_selected(employee_type: String) -> void:
 	_apply_selected_marketer(employee_type)
