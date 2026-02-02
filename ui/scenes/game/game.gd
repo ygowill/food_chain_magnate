@@ -54,6 +54,7 @@ const GameRightPanelDockControllerClass = preload("res://ui/scenes/game/game_rig
 const GameOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_controller.gd")
 const GameMapInteractionControllerClass = preload("res://ui/scenes/game/game_map_interaction_controller.gd")
 const GamePanelControllerClass = preload("res://ui/scenes/game/game_panel_controller.gd")
+const GameOnlineResyncControllerClass = preload("res://ui/scenes/game/game_online_resync_controller.gd")
 const DebugPanelScene = preload("res://ui/scenes/debug/debug_panel.tscn")
 const ConfirmDialogScene = preload("res://ui/dialogs/confirm_dialog.tscn")
 const ReplayPlayerScene = preload("res://ui/components/replay_player/replay_player.tscn")
@@ -80,6 +81,7 @@ var _right_panel_dock_controller = null
 var _overlay_controller = null
 var _map_controller = null
 var _panel_controller = null
+var _online_resync_controller = null
 
 # 调试面板
 var _debug_panel: Window = null
@@ -113,11 +115,6 @@ var _timeline_edit_mode_active: bool = false
 var _force_full_panel_sync_next_update: bool = false
 var _startup_replay_from_main_menu: bool = false
 var _startup_replay_file_path: String = ""
-
-var _online_resync_in_progress: bool = false
-var _online_resync_pending_cmds: Array[Dictionary] = [] # [{cmd_dict, state_hash}]
-var _online_rewind_request_id: String = ""
-var _online_resync_ticket: int = 0
 var _online_turn_toast_last_player_id: int = -999
 var _phase_toast_last_phase: String = ""
 
@@ -234,7 +231,17 @@ func _ready() -> void:
 	PerfTraceClass.end_span(span_init_game)
 	if game_engine != null:
 		_panel_controller.reset_bank_break_tracking(game_engine.get_state())
-		_setup_online_client_bindings()
+		_online_resync_controller = GameOnlineResyncControllerClass.new(
+			self,
+			game_log_panel,
+			Callable(self, "_get_game_engine"),
+			Callable(self, "_apply_live_log_timeline_from_engine"),
+			Callable(self, "_update_ui"),
+			Callable(self, "_reset_timeline_state_after_online_resync"),
+			Callable(self, "_show_confirm"),
+			Callable(self, "_goto_online_lobby")
+		)
+		_online_resync_controller.initialize()
 
 	# 初始化调试面板
 	_setup_debug_panel()
@@ -388,6 +395,10 @@ func _dispose_runtime() -> void:
 	if _right_panel_dock_controller != null and _right_panel_dock_controller.has_method("dispose"):
 		_right_panel_dock_controller.dispose()
 	_right_panel_dock_controller = null
+
+	if _online_resync_controller != null and _online_resync_controller.has_method("dispose"):
+		_online_resync_controller.dispose()
+	_online_resync_controller = null
 
 	if Globals != null and Globals.current_game_engine == game_engine:
 		Globals.current_game_engine = null
@@ -678,7 +689,7 @@ func _maybe_show_online_turn_toast(head_index: int, cursor_index: int, state: Ga
 	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
 		_online_turn_toast_last_player_id = -999
 		return
-	if _online_resync_in_progress:
+	if _online_resync_controller != null and _online_resync_controller.is_resync_in_progress():
 		return
 	if state == null:
 		return
@@ -795,19 +806,13 @@ func _confirm_rewind_to_turn_start(target_index: int) -> void:
 
 	# 联机：回退必须由 server 执行并广播（否则会导致各客户端状态不一致）。
 	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		if _online_resync_controller == null:
+			GameLog.warn("Game", "联机模式下回退失败：控制器未就绪")
+			return
 		# 避免重复触发（例如用户连续点击）
-		if _online_resync_in_progress:
+		if _online_resync_controller.is_resync_in_progress():
 			return
-		if NetClient == null or not NetClient.is_online_client_connected():
-			GameLog.warn("Game", "联机模式下回退失败：未连接到服务器")
-			return
-		_online_resync_in_progress = true
-		var request_id := NetClient.request_rewind_to_turn_start()
-		_online_rewind_request_id = str(request_id)
-		GameLog.warn("Game", "联机请求回退到回合开始 request_id=%s" % str(request_id))
-		_online_resync_ticket += 1
-		_update_ui()
-		_online_schedule_resync_timeout(_online_resync_ticket, _online_rewind_request_id)
+		_online_resync_controller.begin_rewind_to_turn_start_request()
 		return
 
 	var result := game_engine.rewind_to_command(target_index)
@@ -826,28 +831,9 @@ func _execute_command(command: Command) -> Result:
 		return Result.failure("回放模式下无法执行命令")
 
 	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-		if _online_resync_in_progress:
-			return Result.failure("联机同步中，请稍后")
-		if NetClient == null or not NetClient.is_online_client_connected():
-			return Result.failure("未连接到服务器")
-		if NetContext.local_player_id < 0:
-			return Result.failure("联机身份未就绪（local_player_id 未设置）")
-		if command == null:
-			return Result.failure("command 为空")
-		var action_id := str(command.action_id).strip_edges()
-		if action_id.is_empty():
-			return Result.failure("action_id 为空")
-		# 联机模式：禁止代操（客户端侧兜底；服务器仍会根据 peer_id 强制映射 actor_id）
-		if command.actor == -1:
-			return Result.failure("联机模式下不允许发送系统命令")
-		if command.actor != NetContext.local_player_id:
-			return Result.failure("联机模式下只能操作自己（local_player_id=%d）" % int(NetContext.local_player_id))
-		var params: Dictionary = {}
-		if command.params is Dictionary:
-			params = Dictionary(command.params)
-		var request_id := NetClient.request_action(action_id, params)
-		GameLog.info("Game", "联机发送 ActionRequest: %s request_id=%s" % [action_id, request_id])
-		return Result.success({"request_id": request_id})
+		if _online_resync_controller == null:
+			return Result.failure("联机同步未就绪")
+		return _online_resync_controller.try_send_online_action(command)
 
 	var head_index := game_engine.command_history.size() - 1
 	var was_in_history := int(game_engine.current_command_index) < head_index
@@ -875,316 +861,6 @@ func _execute_command(command: Command) -> Result:
 
 	_update_ui()
 	return result
-
-func _setup_online_client_bindings() -> void:
-	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
-		return
-	if NetClient == null:
-		return
-	if not NetClient.command_applied.is_connected(_on_online_command_applied):
-		NetClient.command_applied.connect(_on_online_command_applied)
-	if not NetClient.resync_archive_received.is_connected(_on_online_resync_archive_received):
-		NetClient.resync_archive_received.connect(_on_online_resync_archive_received)
-	if not NetClient.request_rejected.is_connected(_on_online_request_rejected):
-		NetClient.request_rejected.connect(_on_online_request_rejected)
-	if not NetClient.disconnected.is_connected(_on_online_disconnected):
-		NetClient.disconnected.connect(_on_online_disconnected)
-
-	var pending := NetClient.take_pending_resync_archive()
-	if not pending.is_empty():
-		_online_resync_in_progress = true
-		_on_online_resync_archive_received(pending)
-
-func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> void:
-	if game_engine == null:
-		return
-	if _online_resync_in_progress:
-		_online_resync_pending_cmds.append({
-			"cmd_dict": cmd_dict.duplicate(true),
-			"state_hash": str(state_hash),
-		})
-		return
-	var parsed: Result = Command.from_dict(cmd_dict)
-	if not parsed.ok:
-		GameLog.error("Game", "联机 CommandApplied 解析失败: %s" % parsed.error)
-		return
-	var cmd: Command = parsed.value
-	if int(cmd.index) != int(game_engine.command_history.size()):
-		_request_online_resync("command_index_mismatch")
-		_online_resync_pending_cmds.append({
-			"cmd_dict": cmd_dict.duplicate(true),
-			"state_hash": str(state_hash),
-		})
-		return
-	var r: Result = game_engine.execute_command(cmd, true)
-	if not r.ok:
-		GameLog.error("Game", "联机回放命令失败: %s" % r.error)
-		return
-	if not state_hash.is_empty():
-		var state := game_engine.get_state()
-		if state != null and state.has_method("compute_hash"):
-			var local_hash := str(state.compute_hash())
-			if local_hash != state_hash:
-				GameLog.warn("Game", "联机 state_hash 不一致: local=%s server=%s" % [local_hash, state_hash])
-				_request_online_resync("state_hash_mismatch")
-
-	if is_instance_valid(game_log_panel) and game_log_panel.visible:
-		_apply_live_log_timeline_from_engine()
-	_update_ui()
-
-func _on_online_resync_archive_received(archive: Dictionary) -> void:
-	if game_engine == null:
-		return
-	# 联机回退：server 通过 ResyncArchive 通道下发“元数据”（避免发送大 archive 导致 WebSocket buffer 溢出）。
-	if archive.has("_rewind_to_turn_start"):
-		var meta_val = archive.get("_rewind_to_turn_start", null)
-		if meta_val is Dictionary:
-			_on_online_rewind_to_turn_start_meta(Dictionary(meta_val))
-			return
-	_online_resync_in_progress = true
-	var r: Result = game_engine.load_from_archive(archive)
-	if not r.ok:
-		GameLog.error("Game", "联机 ResyncArchive 加载失败: %s" % r.error)
-		_online_resync_in_progress = false
-		_online_rewind_request_id = ""
-		_online_resync_pending_cmds.clear()
-		_update_ui()
-		if not OS.has_feature("headless"):
-			_show_confirm("联机同步失败", r.error, Callable(), Callable(), "确定", "关闭")
-		return
-
-	GameLog.warn("Game", "联机 ResyncArchive 加载完成（命令数=%d）" % int(game_engine.command_history.size()))
-	_online_resync_in_progress = false
-	_online_rewind_request_id = ""
-	_timeline_edit_mode_active = false
-	_force_full_panel_sync_next_update = true
-	if is_instance_valid(game_log_panel) and game_log_panel.visible:
-		_apply_live_log_timeline_from_engine()
-	_update_ui()
-
-	_flush_online_pending_commands_after_resync()
-
-func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
-	if game_engine == null:
-		return
-	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
-		return
-	if NetClient == null or not NetClient.is_online_client_connected():
-		return
-
-	var request_id := str(payload.get("request_id", ""))
-	var target_index := int(payload.get("target_index", -999))
-	var history_size := int(payload.get("history_size", -1))
-	var expected_hash := str(payload.get("state_hash", ""))
-	var noop := bool(payload.get("noop", false))
-
-	if not request_id.is_empty() and request_id == _online_rewind_request_id:
-		_online_rewind_request_id = ""
-		_online_resync_ticket += 1
-
-	_online_resync_in_progress = true
-
-	if noop:
-		_online_resync_in_progress = false
-		_timeline_edit_mode_active = false
-		_force_full_panel_sync_next_update = true
-		if is_instance_valid(game_log_panel) and game_log_panel.visible:
-			_apply_live_log_timeline_from_engine()
-		_update_ui()
-		_flush_online_pending_commands_after_resync()
-		return
-
-	# 时间线被 server 回退并截断：丢弃本地等待队列中的旧 CommandApplied（可能属于被撤销的未来）。
-	_online_resync_pending_cmds.clear()
-
-	if target_index < -1:
-		GameLog.warn("Game", "联机回退应用失败：target_index 无效: %d" % target_index)
-		_online_resync_in_progress = false
-		_update_ui()
-		return
-	if target_index >= game_engine.command_history.size():
-		GameLog.warn(
-			"Game",
-			"联机回退应用失败：本地历史不足（local=%d target=%d），触发 resync"
-				% [game_engine.command_history.size(), target_index]
-		)
-		_online_rewind_request_id = ""
-		NetClient.request_resync()
-		_update_ui()
-		return
-
-	var rewind_r: Result = game_engine.rewind_to_command(target_index)
-	if not rewind_r.ok:
-		GameLog.error("Game", "联机回退应用失败：%s（触发 resync）" % rewind_r.error)
-		_online_rewind_request_id = ""
-		NetClient.request_resync()
-		_update_ui()
-		return
-
-	game_engine.truncate_future_history()
-
-	if history_size >= 0 and game_engine.command_history.size() != history_size:
-		GameLog.warn(
-			"Game",
-			"联机回退后历史长度不一致（local=%d server=%d），触发 resync"
-				% [game_engine.command_history.size(), history_size]
-		)
-		NetClient.request_resync()
-		_update_ui()
-		return
-
-	if not expected_hash.is_empty():
-		var state := game_engine.get_state()
-		if state != null and state.has_method("compute_hash"):
-			var local_hash := str(state.compute_hash())
-			if local_hash != expected_hash:
-				GameLog.warn(
-					"Game",
-					"联机回退后 state_hash 不一致（local=%s server=%s），触发 resync"
-						% [local_hash, expected_hash]
-				)
-				NetClient.request_resync()
-				_update_ui()
-				return
-
-	_online_resync_in_progress = false
-	_online_rewind_request_id = ""
-	_timeline_edit_mode_active = false
-	_force_full_panel_sync_next_update = true
-	if is_instance_valid(game_log_panel) and game_log_panel.visible:
-		_apply_live_log_timeline_from_engine()
-	_update_ui()
-	_flush_online_pending_commands_after_resync()
-
-func _online_schedule_resync_timeout(ticket: int, request_id: String) -> void:
-	if ticket <= 0:
-		return
-	if request_id.is_empty():
-		return
-	var t := get_tree().create_timer(2.0)
-	if t == null:
-		return
-	t.timeout.connect(_on_online_resync_timeout.bind(ticket, request_id))
-
-func _on_online_resync_timeout(ticket: int, request_id: String) -> void:
-	if ticket != _online_resync_ticket:
-		return
-	if not _online_resync_in_progress:
-		return
-	if request_id.is_empty() or _online_rewind_request_id != request_id:
-		return
-	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
-		return
-	if NetClient == null or not NetClient.is_online_client_connected():
-		return
-
-	# 若回退请求迟迟未回灌（例如网络抖动/包丢失），主动发起 resync 兜底，避免 UI 看起来“没反应”。
-	GameLog.warn("Game", "联机回退未收到回灌，触发 resync request_id=%s" % str(request_id))
-	NetClient.request_resync()
-
-func _flush_online_pending_commands_after_resync() -> void:
-	if game_engine == null:
-		_online_resync_pending_cmds.clear()
-		return
-	if _online_resync_pending_cmds.is_empty():
-		return
-
-	var queue := _online_resync_pending_cmds
-	_online_resync_pending_cmds = []
-
-	queue.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		var a_cmd: Dictionary = Dictionary(a.get("cmd_dict", {}))
-		var b_cmd: Dictionary = Dictionary(b.get("cmd_dict", {}))
-		return int(a_cmd.get("index", -1)) < int(b_cmd.get("index", -1))
-	)
-
-	var safety := 0
-	while not queue.is_empty() and safety < 1000:
-		safety += 1
-		var progressed := false
-
-		for i in range(queue.size()):
-			var item: Dictionary = queue[i]
-			var item_cmd_dict: Dictionary = Dictionary(item.get("cmd_dict", {}))
-			var item_hash := str(item.get("state_hash", ""))
-			var parsed: Result = Command.from_dict(item_cmd_dict)
-			if not parsed.ok:
-				GameLog.error("Game", "联机待处理命令解析失败: %s" % parsed.error)
-				queue.remove_at(i)
-				progressed = true
-				break
-			var cmd: Command = parsed.value
-			var expected_index := int(game_engine.command_history.size())
-			if int(cmd.index) < expected_index:
-				queue.remove_at(i)
-				progressed = true
-				break
-			if int(cmd.index) > expected_index:
-				continue
-
-			var r: Result = game_engine.execute_command(cmd, true)
-			if not r.ok:
-				GameLog.error("Game", "联机回放待处理命令失败: %s" % r.error)
-				queue.remove_at(i)
-				progressed = true
-				break
-			if not item_hash.is_empty():
-				var state := game_engine.get_state()
-				if state != null and state.has_method("compute_hash"):
-					var local_hash := str(state.compute_hash())
-					if local_hash != item_hash:
-						GameLog.warn("Game", "联机待处理 state_hash 不一致: local=%s server=%s" % [local_hash, item_hash])
-						queue.remove_at(i)
-						_request_online_resync("pending_state_hash_mismatch")
-						return
-
-			queue.remove_at(i)
-			progressed = true
-			break
-
-		if not progressed:
-			_request_online_resync("pending_command_gap")
-			return
-
-	if not queue.is_empty():
-		_request_online_resync("pending_queue_overflow")
-		return
-
-	if is_instance_valid(game_log_panel) and game_log_panel.visible:
-		_apply_live_log_timeline_from_engine()
-	_update_ui()
-
-func _request_online_resync(reason: String) -> void:
-	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
-		return
-	if NetClient == null or not NetClient.is_online_client_connected():
-		return
-	if _online_resync_in_progress:
-		return
-	_online_resync_in_progress = true
-	_online_rewind_request_id = ""
-	GameLog.warn("Game", "联机触发 resync: %s" % str(reason))
-	NetClient.request_resync()
-
-func _on_online_request_rejected(request_id: String, code: String, message: String) -> void:
-	GameLog.warn("Game", "联机请求被拒绝 request_id=%s: %s %s" % [str(request_id), code, message])
-	if _online_resync_in_progress and not _online_rewind_request_id.is_empty() and str(request_id) == _online_rewind_request_id:
-		# 避免“回退请求失败但仍卡在同步中”，导致 ActionPanel 永久禁用与状态不一致。
-		_online_resync_in_progress = false
-		_online_rewind_request_id = ""
-		_flush_online_pending_commands_after_resync()
-		_update_ui()
-	if OS.has_feature("headless"):
-		return
-	_show_confirm("联机请求失败", "%s\n%s" % [code, message], Callable(), Callable(), "确定", "关闭")
-
-func _on_online_disconnected(reason: String) -> void:
-	if OS.has_feature("headless"):
-		return
-	GameLog.warn("Game", "联机断开: %s" % reason)
-	_show_confirm("联机已断开", "原因：%s\n将返回联机大厅。" % reason, Callable(), Callable(), "确定", "关闭")
-	await get_tree().process_frame
-	SceneManager.goto_online_lobby()
 
 func _get_last_working_sub_phase_name() -> String:
 	var last_sub_phase := DefsClass.SUB_PHASE_PLACE_RESTAURANTS
@@ -1702,7 +1378,7 @@ func _sync_timeline_ui(head_index: int, cursor_index: int, state: GameState) -> 
 		elif cursor_index < head_index and not _timeline_edit_mode_active:
 			reason = "查看历史中不可操作"
 		elif NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-			if _online_resync_in_progress:
+			if _online_resync_controller != null and _online_resync_controller.is_resync_in_progress():
 				reason = "联机：同步中"
 			elif state == null:
 				reason = "联机：等待同步"
@@ -1711,6 +1387,17 @@ func _sync_timeline_ui(head_index: int, cursor_index: int, state: GameState) -> 
 			elif str(state.phase) != DefsClass.PHASE_RESTRUCTURING and state.get_current_player_id() != int(NetContext.local_player_id):
 				reason = "联机：等待其他玩家操作"
 		action_panel.set_globally_disabled(reason)
+
+func _get_game_engine() -> GameEngine:
+	return game_engine
+
+func _reset_timeline_state_after_online_resync() -> void:
+	_timeline_edit_mode_active = false
+	_force_full_panel_sync_next_update = true
+
+func _goto_online_lobby() -> void:
+	if SceneManager != null and SceneManager.has_method("goto_online_lobby"):
+		SceneManager.goto_online_lobby()
 
 func _start_replay_from_file(file_path: String) -> void:
 	if file_path.is_empty():

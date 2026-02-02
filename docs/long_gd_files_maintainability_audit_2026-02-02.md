@@ -23,14 +23,14 @@
 
 | 行数 | funcs | preloads | signals | 文件 |
 |---:|---:|---:|---:|---|
-| 2457 | 129 | 21 | 0 | `ui/scenes/game/game.gd` |
+| 2144 | 122 | 22 | 0 | `ui/scenes/game/game.gd` |
 | 1631 | 117 | 2 | 13 | `ui/components/game_log/game_log_panel.gd` |
 | 1622 | 41 | 13 | 2 | `ui/scenes/game/game_map_interaction_controller.gd` |
 | 1600 | 41 | 1 | 0 | `ui/scenes/game/map_canvas_drawer.gd` |
 | 1085 | 66 | 8 | 2 | `ui/components/action_panel/action_panel.gd` |
 | 1019 | 54 | 4 | 0 | `ui/scenes/online/online_lobby.gd` |
 | 1006 | 50 | 5 | 8 | `autoload/net_client.gd` |
-| 994 | 59 | 3 | 1 | `ui/components/left_panel/left_panel.gd` |
+| 998 | 59 | 3 | 1 | `ui/components/left_panel/left_panel.gd` |
 
 ## 跨文件共性问题（模式级发现）
 
@@ -496,3 +496,4 @@
 - 2026-02-02：拆分公司结构内部卡槽：新增 `ui/components/company_structure/company_structure_card_slot.gd`；`ui/components/company_structure/company_structure.gd` 移除内部 `CardSlot` 类（行数降至 771，低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：提取营销面板图标缓存：新增 `ui/components/marketing_panel/marketing_panel_icon_cache.gd`；`ui/components/marketing_panel/marketing_panel.gd` 下沉 skin 初始化与产品/营销图标缩放缓存（行数降至 717，低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：拆分供应堆全屏视图 token：新增 `ui/components/reserve_area/reserve_area_full_screen_view_tokens.gd`；`ui/components/reserve_area/reserve_area_full_screen_view.gd` 移除内部 token 类（行数降至 641，低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-02：提取联机 Resync/Rewind 控制器：新增 `ui/scenes/game/game_online_resync_controller.gd`；`ui/scenes/game/game.gd` 下沉联机同步/回退/队列回放逻辑（行数降至 2144）；并通过 `ui/scenes/tests/all_tests.tscn`。
