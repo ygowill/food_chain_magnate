@@ -9,6 +9,7 @@ signal card_dropped(employee_id: String, target: Control)
 
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const CompanyStructureCardSlotClass = preload("res://ui/components/company_structure/company_structure_card_slot.gd")
 
 @onready var ceo_slot: Control = $MarginContainer/VBoxContainer/CEORow/CEOSlot
 @onready var manager_container: HBoxContainer = $MarginContainer/VBoxContainer/ManagerRow/ManagerScroll/ManagerContainer
@@ -20,7 +21,7 @@ var _player_data: Dictionary = {}
 var _ceo_slots: int = 3  # 默认 CEO 卡槽数
 var _current_structure: Dictionary = {}  # 当前结构
 
-var _slot_nodes: Array = []  # CardSlot 节点列表
+var _slot_nodes: Array = []  # CompanyStructureCardSlot 节点列表
 var _report_containers: Array = []  # slot_index -> VBoxContainer（下属卡槽容器）
 var _report_cards: Array = []  # 下属卡槽中的 EmployeeCard
 var _ceo_card: EmployeeCard = null
@@ -165,7 +166,7 @@ func _rebuild_structure() -> void:
 			direct_slot_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			col.add_child(direct_slot_host)
 
-			var slot := CardSlot.new()
+			var slot = CompanyStructureCardSlotClass.new()
 			slot.slot_index = i
 			slot.add_to_group("employee_card_drop_target")
 			slot.add_to_group("company_structure_direct_slot")
@@ -191,9 +192,9 @@ func _rebuild_structure() -> void:
 func _fill_existing_structure(structure: Array) -> void:
 	for i in range(_slot_nodes.size()):
 		var slot_val = _slot_nodes[i]
-		if not (slot_val is CardSlot):
+		if slot_val == null or not is_instance_valid(slot_val) or not slot_val.has_method("place_card"):
 			continue
-		var slot: CardSlot = slot_val
+		var slot = slot_val
 
 		var reports_box_val = _report_containers[i] if i < _report_containers.size() else null
 		var reports_box: VBoxContainer = reports_box_val if reports_box_val is VBoxContainer else null
@@ -261,7 +262,7 @@ func _fill_existing_structure(structure: Array) -> void:
 		reports_box.add_child(grid)
 
 		for r_i in range(cap):
-			var report_slot := CardSlot.new()
+			var report_slot = CompanyStructureCardSlotClass.new()
 			report_slot.add_to_group("employee_card_drop_target")
 			report_slot.add_to_group("company_structure_reports_drop_target")
 			report_slot.set_meta("manager_slot_index", i)
@@ -767,86 +768,3 @@ func _set_hover_drop_target(target: Control) -> void:
 	if _hover_drop_target != null and is_instance_valid(_hover_drop_target):
 		if _hover_drop_target.has_method("set_drop_highlighted"):
 			_hover_drop_target.call("set_drop_highlighted", true)
-
-
-# === 内部类：卡槽 ===
-class CardSlot extends PanelContainer:
-	signal card_placed(slot_index: int, employee_id: String)
-	signal card_removed(slot_index: int, employee_id: String)
-
-	var slot_index: int = 0
-	var _card: EmployeeCard = null
-	var _drop_highlighted: bool = false
-	
-	func _ready() -> void:
-		_build_ui()
-	
-	func _build_ui() -> void:
-		custom_minimum_size = EmployeeCardClass.COMPACT_SIZE
-		_apply_style()
-	
-		# 空卡槽提示
-		var hint := Label.new()
-		hint.text = "空卡槽"
-		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		hint.add_theme_font_size_override("font_size", 12)
-		hint.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4, 0.6))
-		hint.name = "Hint"
-		add_child(hint)
-
-	func set_drop_highlighted(highlighted: bool) -> void:
-		if _drop_highlighted == highlighted:
-			return
-		_drop_highlighted = highlighted
-		_apply_style()
-
-	func get_slot_index() -> int:
-		return slot_index
-
-	func _apply_style() -> void:
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0.15, 0.15, 0.18, 0.8)
-		if _drop_highlighted:
-			style.border_color = Color(0.8, 0.7, 0.3, 0.9)
-			style.set_border_width_all(3)
-		else:
-			style.border_color = Color(0.3, 0.3, 0.35, 0.6)
-			style.set_border_width_all(1)
-		style.set_corner_radius_all(4)
-		add_theme_stylebox_override("panel", style)
-
-	func place_card(card: EmployeeCard) -> void:
-		if _card != null:
-			remove_card()
-
-		_card = card
-		add_child(_card)
-
-		var hint := get_node_or_null("Hint")
-		if hint != null:
-			hint.visible = false
-
-		card_placed.emit(slot_index, _card.employee_id)
-
-	func remove_card() -> void:
-		if _card == null:
-			return
-
-		var emp_id := _card.employee_id
-		_card.queue_free()
-		_card = null
-
-		var hint := get_node_or_null("Hint")
-		if hint != null:
-			hint.visible = true
-
-		card_removed.emit(slot_index, emp_id)
-
-	func has_card() -> bool:
-		return _card != null and is_instance_valid(_card)
-
-	func get_employee_id() -> String:
-		if _card != null:
-			return _card.employee_id
-		return ""

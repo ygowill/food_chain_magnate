@@ -33,7 +33,6 @@
 | 994 | 59 | 3 | 1 | `ui/components/left_panel/left_panel.gd` |
 | 911 | 52 | 5 | 2 | `ui/components/reserve_area/reserve_area_full_screen_view.gd` |
 | 864 | 48 | 7 | 2 | `ui/components/marketing_panel/marketing_panel.gd` |
-| 852 | 38 | 2 | 5 | `ui/components/company_structure/company_structure.gd` |
 
 ## 跨文件共性问题（模式级发现）
 
@@ -341,6 +340,10 @@
 - 抽“结构模型/容量计算/合法性校验”为纯逻辑模块（更适合 `core/`），UI 只负责呈现与交互。
 - 将拖拽视觉层/preview 与结构重建逻辑拆成子对象，降低主脚本复杂度。
 
+实施结果：
+
+- 已完成：将内部 `CardSlot` 拆分为独立脚本 `ui/components/company_structure/company_structure_card_slot.gd`；`ui/components/company_structure/company_structure.gd` 行数降至 771（低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
+
 ### 12) `ui/components/marketing_panel/marketing_panel.gd`
 
 当前职责：
@@ -463,6 +466,7 @@
 - Godot/GDScript 缩进：全程使用 tabs，避免混用空格导致运行期错误（尤其是 `match`/多层 if/信号回调）。
 - 重构应“先移动/拆分，再改行为”，每次 PR 保持范围小、可回滚。
 - 拆分后优先补齐 headless 测试覆盖：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`。
+- Headless 下新增 `class_name` 类型不一定可用于静态类型注解（依赖 `.godot/global_script_class_cache.cfg`）；更稳妥的方式是 `preload()` + 无类型注解/duck typing。
 - 对模块扩展点：先定义接口/数据格式，再迁移现有模块（例如 lobbyists）作为样板。
 
 ## 实施记录
@@ -483,3 +487,4 @@
 - 2026-02-02：提取 Working/Production（生产/采购）面板控制器：新增 `ui/scenes/game/game_panel_working_production_controller.gd` 与 `ui/scenes/game/game_panel_working_drinks_procurement_controller.gd`；`ui/scenes/game/game_panel_working_panels.gd` 仅保留面板聚合与薄封装（行数降至 108）；并更新 `ui/scenes/tests/air_procure_start_tile_choice_test.gd` 适配新结构；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：提取通用模态弹窗控制器：新增 `ui/scenes/game/game_panel_modals_controller.gd`；`ui/scenes/game/game_panel_controller.gd` 下沉 TurnOrder/ReserveCard/FridgeKeep modal 的创建/显示/回调与延迟打开逻辑（行数降至 980）；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：提取全屏/覆盖视图控制器：新增 `ui/scenes/game/game_panel_views_controller.gd`；`ui/scenes/game/game_panel_controller.gd` 下沉 EmployeeTree/MilestoneFullScreen/ReserveAreaFullScreen 的创建/显示/隐藏/释放逻辑（行数降至 790，低于 800）；并为 `ui/scenes/game/game_panel_modals_controller.gd` 增加 `sync_for_state()` 统一同步入口；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-02：拆分公司结构内部卡槽：新增 `ui/components/company_structure/company_structure_card_slot.gd`；`ui/components/company_structure/company_structure.gd` 移除内部 `CardSlot` 类（行数降至 771，低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
