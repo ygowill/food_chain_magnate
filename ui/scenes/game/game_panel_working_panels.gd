@@ -13,8 +13,8 @@ const RoundStateCountersClass = preload("res://core/utils/round_state_counters.g
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const RecruitControllerClass = preload("res://ui/scenes/game/game_panel_working_recruit_controller.gd")
+const PriceControllerClass = preload("res://ui/scenes/game/game_panel_working_price_controller.gd")
 const TrainPanelScene = preload("res://ui/components/train_panel/train_panel.tscn")
-const PricePanelScene = preload("res://ui/components/price_panel/price_setting_panel.tscn")
 const ProductionPanelScene = preload("res://ui/components/production_panel/production_panel.tscn")
 const MilestonePanelScene = preload("res://ui/components/milestone_panel/milestone_panel.tscn")
 
@@ -25,6 +25,7 @@ var _hide_all: Callable
 var _center_popup: Callable
 var _overlay_controller = null
 var _recruit_controller = null
+var _price_controller = null
 
 var recruit_panel = null
 var train_panel = null
@@ -48,6 +49,7 @@ func _init(scene, map_controller, execute_command: Callable, hide_all: Callable,
 	_center_popup = center_popup
 	_overlay_controller = overlay_controller
 	_recruit_controller = RecruitControllerClass.new(_scene, _execute_command, _hide_all, _center_popup)
+	_price_controller = PriceControllerClass.new(_scene, _execute_command, _hide_all, _center_popup)
 
 	if _map_controller != null and _map_controller.has_signal("procure_drinks_source_selected"):
 		var sig := Signal(_map_controller, &"procure_drinks_source_selected")
@@ -280,58 +282,14 @@ func _sync_train_panel(state: GameState, force_full_refresh: bool = false) -> vo
 		train_panel.set_max_steps_one_employee(max_steps)
 
 func show_price_panel(action_id: String) -> void:
-	if _scene == null or _scene.game_engine == null:
+	if _price_controller == null:
 		return
-	if _hide_all.is_valid():
-		_hide_all.call()
-
-	if price_panel == null:
-		price_panel = PricePanelScene.instantiate()
-		price_panel.visible = false
-		price_panel.set_meta("popup_layout", "dock_right")
-		if price_panel.has_signal("price_confirmed"):
-			price_panel.price_confirmed.connect(_on_price_confirmed)
-		if price_panel.has_signal("cancelled"):
-			price_panel.cancelled.connect(_on_cancelled)
-		_scene.add_child(price_panel)
-
-	var state = _scene.game_engine.get_state()
-	var current_player: Dictionary = state.get_current_player()
-
-	if price_panel.has_method("set_mode"):
-		match action_id:
-			"set_price":
-				price_panel.set_meta("popup_title", "定价")
-				price_panel.set_mode("price")
-			"set_luxury_price":
-				price_panel.set_meta("popup_title", "奢侈品定价")
-				price_panel.set_mode("luxury")
-			"set_discount":
-				price_panel.set_meta("popup_title", "折扣")
-				price_panel.set_mode("discount")
-
-	if price_panel.has_method("set_current_prices"):
-		var prices: Dictionary = current_player.get("prices", {})
-		price_panel.set_current_prices(prices)
-
-	if _center_popup.is_valid():
-		_center_popup.call(price_panel)
-	price_panel.visible = true
+	_price_controller.show(action_id)
+	price_panel = _price_controller.price_panel
 
 func _sync_price_panel(state: GameState, force_full_refresh: bool = false) -> void:
-	if state == null:
-		return
-	if not is_instance_valid(price_panel) or not price_panel.visible:
-		return
-	if state.phase != DefsClass.PHASE_WORKING:
-		price_panel.visible = false
-		return
-
-	# 时间线变化：若面板保持打开，刷新当前价格，避免残留旧输入/显示。
-	if force_full_refresh and price_panel.has_method("set_current_prices"):
-		var current_player: Dictionary = state.get_current_player()
-		var prices: Dictionary = current_player.get("prices", {})
-		price_panel.set_current_prices(prices)
+	if _price_controller != null:
+		_price_controller.sync(state, force_full_refresh)
 
 func show_production_panel(production_type: String) -> void:
 	if _scene == null or _scene.game_engine == null:
@@ -592,19 +550,6 @@ func _on_train_requested(from_employee: String, to_employee: String) -> void:
 		var state: GameState = _scene.game_engine.get_state()
 		if state != null and state.phase == DefsClass.PHASE_WORKING and state.sub_phase == DefsClass.SUB_PHASE_TRAIN:
 			show_train_panel()
-
-func _on_price_confirmed(action_id: String) -> void:
-	if _scene == null or _scene.game_engine == null:
-		return
-	if not _execute_command.is_valid():
-		return
-	var current_player_id = _scene.game_engine.get_state().get_current_player_id()
-	if action_id.is_empty():
-		return
-	var result: Result = _execute_command.call(Command.create(action_id, current_player_id))
-
-	if result.ok and _hide_all.is_valid():
-		_hide_all.call()
 
 func _on_production_requested(employee_type: String, product_type: String) -> void:
 	if _scene == null or _scene.game_engine == null:
