@@ -487,6 +487,8 @@ func _update_ui_components(state: GameState) -> void:
 			if is_online and local_player_id >= 0:
 				action_player_id = local_player_id
 			_scene.action_panel.set_current_player(action_player_id)
+		if _scene.action_panel.has_method("set_map_skin"):
+			_scene.action_panel.set_map_skin(_get_current_map_skin())
 		if _scene.action_panel.has_method("set_action_registry") and _scene.game_engine != null:
 			var registry = _scene.game_engine.get_action_registry() if _scene.game_engine.has_method("get_action_registry") else null
 			if registry != null:

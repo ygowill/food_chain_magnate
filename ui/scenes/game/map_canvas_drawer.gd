@@ -10,22 +10,8 @@ const RESTAURANT_LOGO_PIECE_IDS = [
 	"restaurant_logo_xango_blues_bar",
 ]
 
-const LOBBYISTS_ROADWORK_MARKERS_KEY := "lobbyists_roadworks_markers"
-
-const LOBBYISTS_ROAD_ARROWS := {
-	"lobbyists_road_straight": [
-		{"offset": Vector2i(0, 0), "dir": "W"},
-		{"offset": Vector2i(1, 0), "dir": "E"},
-	],
-	"lobbyists_road_long": [
-		{"offset": Vector2i(0, 0), "dir": "W"},
-		{"offset": Vector2i(2, 0), "dir": "E"},
-	],
-	"lobbyists_road_l": [
-		{"offset": Vector2i(0, 0), "dir": "N"},
-		{"offset": Vector2i(1, 1), "dir": "E"},
-	],
-}
+const LobbyistsRoadOverlaysClass = preload("res://modules/lobbyists/road_overlays.gd")
+const LOBBYISTS_ROADWORK_MARKERS_KEY := LobbyistsRoadOverlaysClass.ROADWORK_MARKERS_KEY
 
 static func _draw_texture_aspect_fit(canvas, texture: Texture2D, rect: Rect2, modulate: Color = Color(1, 1, 1, 1), v_align: String = "center") -> void:
 	if texture == null:
@@ -43,6 +29,76 @@ static func _draw_texture_aspect_fit(canvas, texture: Texture2D, rect: Rect2, mo
 		pos.y = rect.position.y + rect.size.y - size.y
 
 	canvas.draw_texture_rect(texture, Rect2(pos, size), false, modulate)
+
+static func _get_texture_aspect_fit_rect(texture: Texture2D, rect: Rect2, v_align: String = "center") -> Rect2:
+	if texture == null:
+		return Rect2()
+	var ts: Vector2 = texture.get_size()
+	if ts.x <= 0.0 or ts.y <= 0.0:
+		return Rect2()
+	if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+		return Rect2()
+
+	var scale := minf(rect.size.x / ts.x, rect.size.y / ts.y)
+	var size := ts * scale
+	var pos := rect.position + (rect.size - size) * 0.5
+	if v_align == "top":
+		pos.y = rect.position.y
+	elif v_align == "bottom":
+		pos.y = rect.position.y + rect.size.y - size.y
+
+	return Rect2(pos, size)
+
+static func _get_texture_aspect_fill_rect(texture: Texture2D, rect: Rect2) -> Rect2:
+	if texture == null:
+		return Rect2()
+	var ts: Vector2 = texture.get_size()
+	if ts.x <= 0.0 or ts.y <= 0.0:
+		return Rect2()
+	if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+		return Rect2()
+
+	var scale := maxf(rect.size.x / ts.x, rect.size.y / ts.y)
+	var size := ts * scale
+	var pos := rect.position + (rect.size - size) * 0.5
+	return Rect2(pos, size)
+
+static func _draw_texture_rect_clipped_by_view_cells(canvas, texture: Texture2D, dst_rect: Rect2, view_cells: Array, cell_size: int, modulate: Color) -> void:
+	if canvas == null or texture == null:
+		return
+	if dst_rect.size.x <= 0.0 or dst_rect.size.y <= 0.0:
+		return
+	var ts: Vector2 = texture.get_size()
+	if ts.x <= 0.0 or ts.y <= 0.0:
+		return
+
+	var inv_w := 1.0 / dst_rect.size.x
+	var inv_h := 1.0 / dst_rect.size.y
+
+	for vpos_val in view_cells:
+		if not (vpos_val is Vector2i):
+			continue
+		var vpos: Vector2i = vpos_val
+		var cell_rect := Rect2(Vector2(vpos.x * cell_size, vpos.y * cell_size), Vector2(cell_size, cell_size))
+		var clip := dst_rect.intersection(cell_rect)
+		if clip.size.x <= 0.1 or clip.size.y <= 0.1:
+			continue
+
+		var u0 := (clip.position.x - dst_rect.position.x) * inv_w
+		var v0 := (clip.position.y - dst_rect.position.y) * inv_h
+		var u1 := (clip.position.x + clip.size.x - dst_rect.position.x) * inv_w
+		var v1 := (clip.position.y + clip.size.y - dst_rect.position.y) * inv_h
+
+		u0 = clampf(u0, 0.0, 1.0)
+		v0 = clampf(v0, 0.0, 1.0)
+		u1 = clampf(u1, 0.0, 1.0)
+		v1 = clampf(v1, 0.0, 1.0)
+
+		var src_pos := Vector2(u0 * ts.x, v0 * ts.y)
+		var src_size := Vector2(maxf(0.0, (u1 - u0) * ts.x), maxf(0.0, (v1 - v0) * ts.y))
+		if src_size.x <= 0.1 or src_size.y <= 0.1:
+			continue
+		canvas.draw_texture_rect_region(texture, clip, Rect2(src_pos, src_size), modulate)
 
 static func _draw_texture_aspect_fill(canvas, texture: Texture2D, rect: Rect2, modulate: Color = Color(1, 1, 1, 1)) -> void:
 	if texture == null:
@@ -471,9 +527,54 @@ static func _draw_lobbyists_road_piece(canvas, cell_size: int, anchor: Vector2i,
 	if not (cells_val is Array):
 		return
 
-	var fill := Color("#c6c9d2")
-	fill.a = 0.72 * clampf(alpha, 0.0, 1.0)
-	var border := Color(0, 0, 0, 0.28 * clampf(alpha, 0.0, 1.0))
+	var rot := int(info.get("rotation", 0))
+
+	var overlay_val = LobbyistsRoadOverlaysClass.ROAD_OVERLAYS.get(piece_id, null)
+	if not (overlay_val is Dictionary):
+		return
+	var overlay: Dictionary = overlay_val
+
+	# Base road visuals: reuse the same road textures as normal roads, then overlay arrows + roadworks sign.
+	var segments_val = overlay.get("segments", null)
+	if segments_val is Array:
+		var segments: Array = segments_val
+		for seg_val in segments:
+			if not (seg_val is Dictionary):
+				continue
+			var seg: Dictionary = seg_val
+			var off_val = seg.get("offset", null)
+			var dirs_val = seg.get("dirs", null)
+			if not (off_val is Vector2i) or not (dirs_val is Array):
+				continue
+			var off: Vector2i = off_val
+			var world_pos := anchor + MapUtils.rotate_offset(off, rot)
+			if not canvas._is_valid_world_pos(world_pos):
+				continue
+			var vpos: Vector2i = canvas._world_to_view(world_pos)
+			var rect := Rect2(Vector2(vpos.x * cell_size, vpos.y * cell_size), Vector2(cell_size, cell_size))
+			var center := rect.position + rect.size * 0.5
+
+			var dirs: Array = []
+			for d in Array(dirs_val):
+				var s := str(d).strip_edges()
+				if s.is_empty():
+					continue
+				dirs.append(MapUtils.rotate_dir(s, rot))
+			var shape_info := _compute_road_shape_info(dirs)
+			if shape_info.is_empty():
+				continue
+			var shape: String = str(shape_info.get("shape", "default"))
+			var rot_deg: int = int(shape_info.get("rotation_deg", 0))
+			var tex: Texture2D = canvas._skin.get_road_texture(shape)
+
+			var mod := Color(1, 1, 1, 0.92 * clampf(alpha, 0.0, 1.0))
+			canvas.draw_set_transform(center, deg_to_rad(float(rot_deg)), Vector2.ONE)
+			canvas.draw_texture_rect(tex, Rect2(-rect.size * 0.5, rect.size), false, mod)
+			canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+	# Subtle overlay so the footprint is readable on busy maps.
+	var fill := Color(0, 0, 0, 0.08 * clampf(alpha, 0.0, 1.0))
+	var border := Color(0, 0, 0, 0.22 * clampf(alpha, 0.0, 1.0))
 	_draw_view_cells_overlay(canvas, cell_size, cells_val, fill, border, 1.0)
 
 	var min_pos: Vector2i = info.get("min", Vector2i.ZERO)
@@ -487,10 +588,17 @@ static func _draw_lobbyists_road_piece(canvas, cell_size: int, anchor: Vector2i,
 	var sign_tex: Texture2D = canvas._skin.get_piece_texture("lobbyists_roadworks_marker")
 	var pad := maxf(2.0, float(cell_size) * 0.12)
 	var sign_rect := structure_rect.grow(-pad)
-	_draw_texture_aspect_fit(canvas, sign_tex, sign_rect, Color(1, 1, 1, 0.90 * clampf(alpha, 0.0, 1.0)))
+	var sign_dst := _get_texture_aspect_fit_rect(sign_tex, sign_rect)
+	_draw_texture_rect_clipped_by_view_cells(
+		canvas,
+		sign_tex,
+		sign_dst,
+		cells_val,
+		cell_size,
+		Color(1, 1, 1, 0.90 * clampf(alpha, 0.0, 1.0))
+	)
 
-	var rot := int(info.get("rotation", 0))
-	var arrows_val = LOBBYISTS_ROAD_ARROWS.get(piece_id, null)
+	var arrows_val = overlay.get("arrows", null)
 	if not (arrows_val is Array):
 		return
 	var arrows: Array = arrows_val
@@ -538,9 +646,17 @@ static func _draw_park_piece(canvas, cell_size: int, info: Dictionary, alpha: fl
 	)
 
 	var tex: Texture2D = canvas._skin.get_piece_texture(piece_id)
-	var pad := maxf(2.0, float(cell_size) * 0.10)
+	var pad := maxf(1.0, float(cell_size) * 0.06)
 	var rect := structure_rect.grow(-pad)
-	_draw_texture_aspect_fit(canvas, tex, rect, Color(1, 1, 1, 0.85 * clampf(alpha, 0.0, 1.0)))
+	var dst := _get_texture_aspect_fill_rect(tex, rect)
+	_draw_texture_rect_clipped_by_view_cells(
+		canvas,
+		tex,
+		dst,
+		cells_val,
+		cell_size,
+		Color(1, 1, 1, 0.85 * clampf(alpha, 0.0, 1.0))
+	)
 
 static func _draw_generic_piece(canvas, cell_size: int, info: Dictionary, alpha: float = 1.0) -> void:
 	if canvas == null or canvas._skin == null:

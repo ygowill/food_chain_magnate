@@ -465,7 +465,7 @@ func _on_piece_placement_confirmed(position: Vector2i, rotation: int, piece_id: 
 	if action_id.is_empty():
 		return
 
-	var current_player_id := _scene.game_engine.get_state().get_current_player_id()
+	var current_player_id = _scene.game_engine.get_state().get_current_player_id()
 	var command_params := {
 		"piece_id": piece_id,
 		"anchor_pos": [position.x, position.y],

@@ -110,10 +110,11 @@ custom_minimum_size = Vector2(42, 0)
 layout_mode = 2
 text = "板块"
 
-[node name="PieceOption" type="OptionButton" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/PieceRow"]
-custom_minimum_size = Vector2(140, 0)
+[node name="PieceFlow" type="HFlowContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/PieceRow"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
 
 [node name="RotationRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer"]
 layout_mode = 2

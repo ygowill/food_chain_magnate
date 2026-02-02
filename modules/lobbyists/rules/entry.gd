@@ -7,6 +7,7 @@ const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const GlobalEffectListClass = preload("res://core/rules/global_effect_list.gd")
+const LobbyistsRoadOverlaysClass = preload("res://modules/lobbyists/road_overlays.gd")
 
 const PlaceLobbyistsRoadActionClass = preload("res://modules/lobbyists/actions/place_lobbyists_road_action.gd")
 const PlaceLobbyistsParkActionClass = preload("res://modules/lobbyists/actions/place_lobbyists_park_action.gd")
@@ -16,7 +17,7 @@ const SkipLobbyistsExtraMapTileActionClass = preload("res://modules/lobbyists/ac
 const Phase = PhaseDefsClass.Phase
 const HookType = PhaseManagerClass.HookType
 
-const MODULE_ID := "lobbyists"
+const MODULE_ID := LobbyistsRoadOverlaysClass.MODULE_ID
 
 const ROAD_SUPPLY_BY_PIECE_ID := {
 	"lobbyists_road_straight": 4,
@@ -29,8 +30,8 @@ const PARK_SUPPLY_BY_PIECE_ID := {
 	"lobbyists_park_t": 1,
 	"lobbyists_park_l": 2,
 }
-const PENDING_ROADS_KEY := "lobbyists_pending_roads"
-const ROADWORK_MARKERS_KEY := "lobbyists_roadworks_markers"
+const PENDING_ROADS_KEY := LobbyistsRoadOverlaysClass.PENDING_ROADS_KEY
+const ROADWORK_MARKERS_KEY := LobbyistsRoadOverlaysClass.ROADWORK_MARKERS_KEY
 const EXTRA_TILE_PENDING_KEY := "lobbyists_extra_tile_pending"
 
 const EFFECT_ID_ROADWORKS_DISTANCE := "%s:dinnertime:distance_delta:roadworks" % MODULE_ID

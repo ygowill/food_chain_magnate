@@ -10,50 +10,17 @@ const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
+const LobbyistsRoadOverlaysClass = preload("res://modules/lobbyists/road_overlays.gd")
 
-const MODULE_ID := "lobbyists"
+const MODULE_ID := LobbyistsRoadOverlaysClass.MODULE_ID
 
-const PENDING_ROADS_KEY := "lobbyists_pending_roads"
-const ROADWORK_MARKERS_KEY := "lobbyists_roadworks_markers"
+const PENDING_ROADS_KEY := LobbyistsRoadOverlaysClass.PENDING_ROADS_KEY
+const ROADWORK_MARKERS_KEY := LobbyistsRoadOverlaysClass.ROADWORK_MARKERS_KEY
 
 const EXTRA_TILE_PENDING_KEY := "lobbyists_extra_tile_pending"
 
-const ROAD_PIECES: Array[String] = ["lobbyists_road_straight", "lobbyists_road_long", "lobbyists_road_l"]
-
-const ROAD_OVERLAYS := {
-	"lobbyists_road_straight": {
-		"segments": [
-			{"offset": Vector2i(0, 0), "dirs": ["E", "W"]},
-			{"offset": Vector2i(1, 0), "dirs": ["E", "W"]},
-		],
-		"arrows": [
-			{"offset": Vector2i(0, 0), "dir": "W"},
-			{"offset": Vector2i(1, 0), "dir": "E"},
-		],
-	},
-	"lobbyists_road_long": {
-		"segments": [
-			{"offset": Vector2i(0, 0), "dirs": ["E", "W"]},
-			{"offset": Vector2i(1, 0), "dirs": ["E", "W"]},
-			{"offset": Vector2i(2, 0), "dirs": ["E", "W"]},
-		],
-		"arrows": [
-			{"offset": Vector2i(0, 0), "dir": "W"},
-			{"offset": Vector2i(2, 0), "dir": "E"},
-		],
-	},
-	"lobbyists_road_l": {
-		"segments": [
-			{"offset": Vector2i(0, 0), "dirs": ["N", "S"]},
-			{"offset": Vector2i(0, 1), "dirs": ["N", "E"]},
-			{"offset": Vector2i(1, 1), "dirs": ["W", "E"]},
-		],
-		"arrows": [
-			{"offset": Vector2i(0, 0), "dir": "N"},
-			{"offset": Vector2i(1, 1), "dir": "E"},
-		],
-	},
-}
+const ROAD_PIECES: Array[String] = LobbyistsRoadOverlaysClass.ROAD_PIECES
+const ROAD_OVERLAYS := LobbyistsRoadOverlaysClass.ROAD_OVERLAYS
 
 func _init() -> void:
 	action_id = "place_lobbyists_road"

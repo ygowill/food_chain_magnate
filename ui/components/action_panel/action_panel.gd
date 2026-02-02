@@ -12,6 +12,7 @@ const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_a
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const PiecePlacementOverlayScript = preload("res://ui/components/piece_placement/piece_placement_overlay.gd")
+const PiecePickerButtonClass = preload("res://ui/components/action_panel/piece_picker_button.gd")
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var items_container: VBoxContainer = $MarginContainer/VBoxContainer/ItemsContainer
@@ -23,7 +24,7 @@ const PiecePlacementOverlayScript = preload("res://ui/components/piece_placement
 @onready var employee_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/EmployeeRow
 @onready var employee_option: HFlowContainer = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/EmployeeRow/EmployeeOption
 @onready var piece_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/PieceRow
-@onready var piece_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/PieceRow/PieceOption
+@onready var piece_flow: HFlowContainer = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/PieceRow/PieceFlow
 @onready var rotation_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow
 @onready var rotation_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationOption
 @onready var house_number_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/HouseNumberRow
@@ -43,6 +44,7 @@ var _context_overlay: Node = null
 var _context_syncing: bool = false
 var _globally_disabled: bool = false
 var _globally_disabled_reason: String = ""
+var _map_skin = null # MapSkin (optional)
 
 # 不在 UI 中展示的内部动作
 const HIDDEN_ACTION_IDS := {
@@ -217,7 +219,6 @@ func _setup_context_ui() -> void:
 	UiSignalHelpersClass.safe_connect(confirm_context_button, "pressed", _on_confirm_context_pressed)
 	UiSignalHelpersClass.safe_connect(restaurant_option, "item_selected", _on_restaurant_option_selected)
 	UiSignalHelpersClass.safe_connect(employee_option, "employee_selected", _on_employee_option_selected)
-	UiSignalHelpersClass.safe_connect(piece_option, "item_selected", _on_piece_option_selected)
 	UiSignalHelpersClass.safe_connect(rotation_option, "item_selected", _on_rotation_option_selected)
 	UiSignalHelpersClass.safe_connect(house_number_option, "item_selected", _on_house_number_option_selected)
 	UiSignalHelpersClass.safe_connect(direction_option, "item_selected", _on_direction_option_selected)
@@ -379,7 +380,7 @@ func _refresh_piece_placement_context(overlay) -> void:
 	house_number_row.visible = false
 	direction_row.visible = false
 
-	_rebuild_piece_option(overlay.get_available_pieces(), overlay.get_selected_piece())
+	_rebuild_piece_flow(overlay.get_available_pieces(), overlay.get_selected_piece(), overlay.get_selected_rotation())
 	_rebuild_rotation_option(overlay.get_selected_rotation())
 
 	confirm_context_button.text = "确认放置"
@@ -444,31 +445,51 @@ func _rebuild_restaurant_option(restaurant_ids: Array[String], selected_restaura
 		restaurant_option.set_item_metadata(idx, s)
 	_select_option_by_metadata_string(restaurant_option, selected_restaurant_id)
 
-func _rebuild_piece_option(piece_ids: Array[String], selected_piece_id: String) -> void:
-	if not is_instance_valid(piece_option):
+func _rebuild_piece_flow(piece_ids: Array[String], selected_piece_id: String, rotation: int) -> void:
+	if not is_instance_valid(piece_flow):
 		return
-	piece_option.clear()
+
+	# Clear old buttons
+	for child in piece_flow.get_children():
+		if is_instance_valid(child):
+			child.queue_free()
+
 	var ids := piece_ids.duplicate()
-	if ids.is_empty():
-		piece_option.add_item("请选择...")
-		piece_option.set_item_metadata(0, "")
-		piece_option.select(0)
-		return
+	var selected := str(selected_piece_id).strip_edges()
+	var rot := int(rotation)
+
+	var group := ButtonGroup.new()
+	group.allow_unpress = false
 
 	for pid in ids:
 		var s := str(pid).strip_edges()
 		if s.is_empty():
 			continue
+
+		var btn = PiecePickerButtonClass.new()
+		btn.piece_id = s
+		btn.call("set_piece_rotation", rot)
+		btn.button_group = group
+		btn.button_pressed = (not selected.is_empty()) and s == selected
+		if _map_skin != null and is_instance_valid(_map_skin) and _map_skin.has_method("get_piece_texture") and btn.has_method("set_preview_texture"):
+			btn.call("set_preview_texture", _map_skin.call("get_piece_texture", s))
+
 		var label := s
 		if _context_overlay != null and is_instance_valid(_context_overlay) and _context_overlay.has_method("get_piece_display_label"):
 			var v = _context_overlay.call("get_piece_display_label", s)
 			var t := str(v).strip_edges()
 			if not t.is_empty():
 				label = t
-		piece_option.add_item(label)
-		var idx := piece_option.get_item_count() - 1
-		piece_option.set_item_metadata(idx, s)
-	_select_option_by_metadata_string(piece_option, selected_piece_id)
+		btn.tooltip_text = label
+
+		btn.pressed.connect(_on_piece_button_pressed.bind(s))
+		piece_flow.add_child(btn)
+
+func _on_piece_button_pressed(piece_id: String) -> void:
+	var pid := str(piece_id).strip_edges()
+	if pid.is_empty():
+		return
+	_call_context_overlay_method("set_selected_piece", [pid])
 
 func _rebuild_employee_option(employee_ids: Array[String], selected_employee_id: String) -> void:
 	if not is_instance_valid(employee_option):
@@ -558,14 +579,6 @@ func _on_employee_option_selected(employee_type: String) -> void:
 	var emp_id := str(employee_type).strip_edges()
 	_call_context_overlay_method("set_selected_employee", [emp_id])
 
-func _on_piece_option_selected(index: int) -> void:
-	if _context_syncing:
-		return
-	if not is_instance_valid(piece_option):
-		return
-	var pid := str(piece_option.get_item_metadata(index))
-	_call_context_overlay_method("set_selected_piece", [pid])
-
 func _get_employee_def_for_card(employee_type: String) -> Dictionary:
 	var emp_id := str(employee_type).strip_edges()
 	if emp_id.is_empty():
@@ -604,6 +617,14 @@ func _on_direction_option_selected(index: int) -> void:
 func set_action_registry(registry) -> void:
 	_action_registry = registry
 	refresh()
+
+func set_map_skin(skin) -> void:
+	# Optional: used to render piece previews in the piece picker buttons.
+	if _map_skin == skin:
+		return
+	_map_skin = skin
+	if _context_overlay != null and is_instance_valid(_context_overlay) and PiecePlacementOverlayScript != null and _context_overlay is PiecePlacementOverlayScript:
+		_refresh_context_from_overlay()
 
 func set_game_state(state: GameState) -> void:
 	_game_state = state
@@ -692,6 +713,10 @@ func _apply_global_disabled_state() -> void:
 		direction_option.disabled = _globally_disabled
 	if is_instance_valid(employee_option) and employee_option.has_method("set_disabled"):
 		employee_option.call("set_disabled", _globally_disabled)
+	if is_instance_valid(piece_flow):
+		for child in piece_flow.get_children():
+			if child is BaseButton:
+				(child as BaseButton).disabled = _globally_disabled
 
 	for aid in _action_buttons.keys():
 		var btn_val = _action_buttons[aid]
