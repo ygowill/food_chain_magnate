@@ -131,6 +131,7 @@ func get_game_engine() -> GameEngine:
 func refresh_state() -> void:
 	# 刷新所有标签页
 	_call_tab_method(state_tab, "refresh")
+	_call_tab_method(command_tab, "refresh")
 	_call_tab_method(entity_tab, "refresh")
 	_call_tab_method(history_tab, "refresh")
 

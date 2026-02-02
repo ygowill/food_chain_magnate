@@ -3,12 +3,10 @@
 class_name DebugParamDialog
 extends Window
 
-signal command_submitted(command: String, selected_player_id: int)
+signal command_submitted(command: String)
 
 var _command_template: String = ""
 var _param_controls: Array[Dictionary] = [] # [{kind: "text"|"select", control: Control}]
-var _player_option: OptionButton = null
-var _selected_player_id: int = -1
 
 @onready var title_label: Label = $VBoxContainer/TitleLabel
 @onready var params_container: VBoxContainer = $VBoxContainer/ParamsContainer
@@ -23,14 +21,10 @@ func _ready() -> void:
 func show_dialog(
 	title: String,
 	command_template: String,
-	params: Array[Dictionary],
-	player_items: Array[Dictionary] = [],
-	selected_player_id: int = -1
+	params: Array[Dictionary]
 ) -> void:
 	_command_template = command_template
 	_param_controls.clear()
-	_player_option = null
-	_selected_player_id = selected_player_id
 
 	# 设置标题
 	title_label.text = title
@@ -39,39 +33,6 @@ func show_dialog(
 	# 清空参数容器
 	for child in params_container.get_children():
 		child.queue_free()
-
-	# 玩家选择（让“弹窗内就能切换目标玩家”，避免只在面板顶部可切换带来的不便）
-	if not player_items.is_empty():
-		var hbox_p := HBoxContainer.new()
-		params_container.add_child(hbox_p)
-
-		var p_label := Label.new()
-		p_label.text = "目标玩家:"
-		p_label.custom_minimum_size.x = 120
-		hbox_p.add_child(p_label)
-
-		_player_option = OptionButton.new()
-		_player_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		for item_val in player_items:
-			if not (item_val is Dictionary):
-				continue
-			var item: Dictionary = item_val
-			var text := str(item.get("text", "")).strip_edges()
-			var pid := int(item.get("id", -1))
-			if text.is_empty():
-				continue
-			_player_option.add_item(text, pid)
-		_player_option.item_selected.connect(_on_player_option_selected)
-		hbox_p.add_child(_player_option)
-
-		# 设置初始选中
-		var select_index := 0
-		for i in range(_player_option.item_count):
-			if int(_player_option.get_item_id(i)) == _selected_player_id:
-				select_index = i
-				break
-		_player_option.select(select_index)
-		_selected_player_id = int(_player_option.get_item_id(select_index))
 
 	# 创建参数输入
 	for param in params:
@@ -87,15 +48,9 @@ func show_dialog(
 		if options_val is Array and not Array(options_val).is_empty():
 			var option := OptionButton.new()
 			option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			var options: Array = options_val
-			for o in options:
-				option.add_item(str(o))
+			_build_option_items(option, Array(options_val))
 			if param.has("default"):
-				var want := str(param["default"])
-				for i in range(option.item_count):
-					if option.get_item_text(i) == want:
-						option.select(i)
-						break
+				_select_option_by_default(option, param["default"])
 			hbox.add_child(option)
 			_param_controls.append({"kind": "select", "control": option})
 		else:
@@ -116,12 +71,40 @@ func show_dialog(
 		if c is Control:
 			c.grab_focus()
 
-func _on_player_option_selected(index: int) -> void:
-	if _player_option == null:
+func _build_option_items(option: OptionButton, options: Array) -> void:
+	if option == null:
 		return
-	if index < 0:
+	option.clear()
+	for o in options:
+		var label := ""
+		var value = null
+		if o is Dictionary:
+			var d: Dictionary = o
+			label = str(d.get("text", d.get("label", ""))).strip_edges()
+			value = d.get("value", d.get("id", label))
+		else:
+			label = str(o).strip_edges()
+			value = o
+		if label.is_empty():
+			continue
+		option.add_item(label)
+		var idx := option.get_item_count() - 1
+		option.set_item_metadata(idx, value)
+
+func _select_option_by_default(option: OptionButton, want_val) -> void:
+	if option == null:
 		return
-	_selected_player_id = int(_player_option.get_item_id(index))
+	var want := str(want_val).strip_edges()
+	if want.is_empty():
+		return
+	for i in range(option.item_count):
+		var meta = option.get_item_metadata(i)
+		if str(meta).strip_edges() == want:
+			option.select(i)
+			return
+		if option.get_item_text(i).strip_edges() == want:
+			option.select(i)
+			return
 
 func _on_submit() -> void:
 	var parts: Array[String] = [_command_template]
@@ -135,14 +118,15 @@ func _on_submit() -> void:
 		if kind == "select" and c is OptionButton:
 			var ob: OptionButton = c
 			if ob.selected >= 0:
-				value = str(ob.get_item_text(ob.selected)).strip_edges()
+				var meta = ob.get_item_metadata(ob.selected)
+				value = str(meta).strip_edges() if meta != null else str(ob.get_item_text(ob.selected)).strip_edges()
 		elif c is LineEdit:
 			value = str(c.text).strip_edges()
 		if value.is_empty():
 			continue
 		parts.append(value)
 
-	command_submitted.emit(" ".join(parts).strip_edges(), _selected_player_id)
+	command_submitted.emit(" ".join(parts).strip_edges())
 	hide()
 
 func _on_cancel() -> void:

@@ -6,33 +6,33 @@ const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func register_all(registry: DebugCommandRegistry) -> void:
 	# 阶段管理
-	registry.register("skip_sub", _cmd_skip_sub_phase.bind(registry), "跳过子阶段", "skip_sub")
-	registry.register("choose_order", _cmd_choose_order.bind(registry), "选择顺序位置", "choose_order <position>", ["position"])
-	registry.register("end_turn", _cmd_end_turn.bind(registry), "结束回合", "end_turn")
+	registry.register("skip_sub", _cmd_skip_sub_phase.bind(registry), "跳过子阶段", "skip_sub <player>", ["player"])
+	registry.register("choose_order", _cmd_choose_order.bind(registry), "选择顺序位置", "choose_order <player> <position>", ["player", "position"])
+	registry.register("end_turn", _cmd_end_turn.bind(registry), "结束回合", "end_turn <player>", ["player"])
 
 	# 员工管理
-	registry.register("recruit", _cmd_recruit.bind(registry), "招聘员工", "recruit <employee_type>", ["employee_type"])
-	registry.register("train", _cmd_train.bind(registry), "培训员工", "train <from_type> <to_type>", ["from_type", "to_type"])
-	registry.register("fire", _cmd_fire.bind(registry), "解雇员工", "fire <employee_id>", ["employee_id"])
+	registry.register("recruit", _cmd_recruit.bind(registry), "招聘员工", "recruit <player> <employee_type>", ["player", "employee_type"])
+	registry.register("train", _cmd_train.bind(registry), "培训员工", "train <player> <from_type> <to_type>", ["player", "from_type", "to_type"])
+	registry.register("fire", _cmd_fire.bind(registry), "解雇员工", "fire <player> <employee_id>", ["player", "employee_id"])
 
 	# 资源生产
-	registry.register("produce", _cmd_produce.bind(registry), "增加食物库存（调试）", "produce <product> [amount]", ["product", "amount"])
-	registry.register("procure", _cmd_procure.bind(registry), "增加饮料库存（调试）", "procure <product> [amount]", ["product", "amount"])
+	registry.register("produce", _cmd_produce.bind(registry), "增加食物库存（调试）", "produce <player> <product> [amount]", ["player", "product", "amount"])
+	registry.register("procure", _cmd_procure.bind(registry), "增加饮料库存（调试）", "procure <player> <product> [amount]", ["player", "product", "amount"])
 
 	# 地图操作
-	registry.register("place_restaurant", _cmd_place_restaurant.bind(registry), "放置餐厅", "place_restaurant <x> <y> [rotation]", ["x", "y", "rotation"])
-	registry.register("place_house", _cmd_place_house.bind(registry), "放置房屋", "place_house <x> <y> [house_number] [rotation]", ["x", "y", "rotation"])
-	registry.register("move_restaurant", _cmd_move_restaurant.bind(registry), "移动餐厅", "move_restaurant <restaurant_id> <x> <y> [rotation]", ["restaurant_id", "x", "y", "rotation"])
-	registry.register("add_garden", _cmd_add_garden.bind(registry), "添加花园", "add_garden <house_id> <direction>", ["house_id", "direction"])
+	registry.register("place_restaurant", _cmd_place_restaurant.bind(registry), "放置餐厅", "place_restaurant <player> <x> <y> [rotation]", ["player", "x", "y", "rotation"])
+	registry.register("place_house", _cmd_place_house.bind(registry), "放置房屋", "place_house <player> <x> <y> [house_number] [rotation]", ["player", "x", "y", "house_number", "rotation"])
+	registry.register("move_restaurant", _cmd_move_restaurant.bind(registry), "移动餐厅", "move_restaurant <player> <restaurant_id> <x> <y> [rotation]", ["player", "restaurant_id", "x", "y", "rotation"])
+	registry.register("add_garden", _cmd_add_garden.bind(registry), "添加花园", "add_garden <player> <house_id> <direction>", ["player", "house_id", "direction"])
 
 	# 营销系统
-	registry.register("marketing", _cmd_marketing.bind(registry), "发起营销", "marketing <employee_type> <board_number> <product> <x> <y>", ["employee_type", "board_number", "product", "x", "y"])
+	registry.register("marketing", _cmd_marketing.bind(registry), "发起营销", "marketing <player> <employee_type> <board_number> <product> <x> <y>", ["player", "employee_type", "board_number", "product", "x", "y"])
 	registry.register("add_house_demand", _cmd_add_house_demand.bind(registry), "给房屋增加需求", "add_house_demand <house_id> <product> [amount] [from_player] [marketing_type] [board_number]", ["house_id", "product", "amount", "from_player", "marketing_type", "board_number"])
 
 	# 价格设定
-	registry.register("set_price", _cmd_set_price.bind(registry), "设定价格（-$1）", "set_price")
-	registry.register("set_discount", _cmd_set_discount.bind(registry), "设定折扣（-$3）", "set_discount")
-	registry.register("set_luxury", _cmd_set_luxury.bind(registry), "设定奢侈品价格（+$10）", "set_luxury")
+	registry.register("set_price", _cmd_set_price.bind(registry), "设定价格（-$1）", "set_price <player>", ["player"])
+	registry.register("set_discount", _cmd_set_discount.bind(registry), "设定折扣（-$3）", "set_discount <player>", ["player"])
+	registry.register("set_luxury", _cmd_set_luxury.bind(registry), "设定奢侈品价格（+$10）", "set_luxury <player>", ["player"])
 
 static func _mark_debug_force(cmd: Command) -> void:
 	if not DebugFlags.is_debug_mode():
@@ -43,10 +43,43 @@ static func _mark_debug_force(cmd: Command) -> void:
 		cmd.metadata = {}
 	cmd.metadata["debug_force"] = true
 
-static func _resolve_actor_id(state: GameState, registry: DebugCommandRegistry) -> int:
-	if registry != null and registry.has_method("resolve_selected_player_id"):
-		return int(registry.resolve_selected_player_id(state))
-	return state.get_current_player_id()
+static func _parse_player_id_arg(arg, state: GameState) -> Result:
+	if state == null:
+		return Result.failure("游戏状态为空")
+	var player_count := state.players.size()
+	if player_count <= 0:
+		return Result.failure("玩家数量无效: %d" % player_count)
+
+	var token := str(arg).strip_edges()
+	if token.is_empty():
+		return Result.failure("player 不能为空")
+
+	var lower := token.to_lower()
+	if lower.begins_with("id:"):
+		var id_str := token.substr(3).strip_edges()
+		if not id_str.is_valid_int():
+			return Result.failure("player_id 格式错误: %s" % token)
+		var pid := int(id_str)
+		if pid < 0 or pid >= player_count:
+			return Result.failure("无效的 player_id: %d（有效范围 0..%d）" % [pid, player_count - 1])
+		return Result.success(pid)
+
+	if lower.begins_with("pid:"):
+		var id_str2 := token.substr(4).strip_edges()
+		if not id_str2.is_valid_int():
+			return Result.failure("player_id 格式错误: %s" % token)
+		var pid2 := int(id_str2)
+		if pid2 < 0 or pid2 >= player_count:
+			return Result.failure("无效的 player_id: %d（有效范围 0..%d）" % [pid2, player_count - 1])
+		return Result.success(pid2)
+
+	# 默认按玩家顺位 1..N 解析（不允许“当前玩家”隐式行为）
+	if not token.is_valid_int():
+		return Result.failure("player 必须为 1..%d（或使用 id:<player_id>）" % player_count)
+	var pnum := int(token)
+	if pnum < 1 or pnum > player_count:
+		return Result.failure("无效的玩家顺位: %d（有效范围 1..%d）" % [pnum, player_count])
+	return Result.success(pnum - 1)
 
 # === 阶段管理 ===
 
@@ -55,8 +88,15 @@ static func _cmd_skip_sub_phase(args: Array, registry: DebugCommandRegistry) -> 
 	if engine == null:
 		return Result.failure("游戏引擎未初始化")
 
+	if args.is_empty():
+		return Result.failure("用法: skip_sub <player>")
+
 	var state := engine.get_state()
-	var cmd := Command.create(ActionIdsClass.SKIP_SUB_PHASE, _resolve_actor_id(state, registry))
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+	var cmd := Command.create(ActionIdsClass.SKIP_SUB_PHASE, player_id)
 	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
@@ -70,12 +110,17 @@ static func _cmd_choose_order(args: Array, registry: DebugCommandRegistry) -> Re
 	if engine == null:
 		return Result.failure("游戏引擎未初始化")
 
-	if args.is_empty():
-		return Result.failure("用法: choose_order <position>")
+	if args.size() < 2:
+		return Result.failure("用法: choose_order <player> <position>")
 
-	var position := int(args[0])
 	var state := engine.get_state()
-	var cmd := Command.create("choose_turn_order", _resolve_actor_id(state, registry), {"position": position})
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+
+	var position := int(args[1])
+	var cmd := Command.create("choose_turn_order", player_id, {"position": position})
 	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
@@ -89,8 +134,15 @@ static func _cmd_end_turn(args: Array, registry: DebugCommandRegistry) -> Result
 	if engine == null:
 		return Result.failure("游戏引擎未初始化")
 
+	if args.is_empty():
+		return Result.failure("用法: end_turn <player>")
+
 	var state := engine.get_state()
-	var cmd := Command.create(ActionIdsClass.END_TURN, _resolve_actor_id(state, registry))
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+	var cmd := Command.create(ActionIdsClass.END_TURN, player_id)
 	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
@@ -106,12 +158,17 @@ static func _cmd_recruit(args: Array, registry: DebugCommandRegistry) -> Result:
 	if engine == null:
 		return Result.failure("游戏引擎未初始化")
 
-	if args.is_empty():
-		return Result.failure("用法: recruit <employee_type>")
+	if args.size() < 2:
+		return Result.failure("用法: recruit <player> <employee_type>")
 
-	var employee_type := str(args[0])
 	var state := engine.get_state()
-	var cmd := Command.create("recruit", _resolve_actor_id(state, registry), {"employee_type": employee_type})
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+
+	var employee_type := str(args[1])
+	var cmd := Command.create("recruit", player_id, {"employee_type": employee_type})
 	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
@@ -125,13 +182,18 @@ static func _cmd_train(args: Array, registry: DebugCommandRegistry) -> Result:
 	if engine == null:
 		return Result.failure("游戏引擎未初始化")
 
-	if args.size() < 2:
-		return Result.failure("用法: train <from_type> <to_type>")
+	if args.size() < 3:
+		return Result.failure("用法: train <player> <from_type> <to_type>")
 
-	var from_type := str(args[0])
-	var to_type := str(args[1])
 	var state := engine.get_state()
-	var cmd := Command.create("train", _resolve_actor_id(state, registry), {
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+
+	var from_type := str(args[1])
+	var to_type := str(args[2])
+	var cmd := Command.create("train", player_id, {
 		"from_employee": from_type,
 		"to_employee": to_type
 	})
@@ -148,12 +210,17 @@ static func _cmd_fire(args: Array, registry: DebugCommandRegistry) -> Result:
 	if engine == null:
 		return Result.failure("游戏引擎未初始化")
 
-	if args.is_empty():
-		return Result.failure("用法: fire <employee_id>")
+	if args.size() < 2:
+		return Result.failure("用法: fire <player> <employee_id>")
 
-	var employee_id := str(args[0])
 	var state := engine.get_state()
-	var cmd := Command.create("fire", _resolve_actor_id(state, registry), {"employee_id": employee_id})
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+
+	var employee_id := str(args[1])
+	var cmd := Command.create("fire", player_id, {"employee_id": employee_id})
 	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
@@ -169,20 +236,24 @@ static func _cmd_produce(args: Array, registry: DebugCommandRegistry) -> Result:
 	if engine == null:
 		return Result.failure("游戏引擎未初始化")
 
-	if args.is_empty():
-		return Result.failure("用法: produce <product> [amount]")
+	if args.size() < 2:
+		return Result.failure("用法: produce <player> <product> [amount]")
 
-	var product := str(args[0]).strip_edges()
+	var state := engine.get_state()
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+
+	var product := str(args[1]).strip_edges()
 	if product.is_empty():
 		return Result.failure("product 不能为空")
 	var amount := 1
-	if args.size() > 1 and not str(args[1]).is_empty():
-		amount = int(args[1])
+	if args.size() > 2 and not str(args[2]).is_empty():
+		amount = int(args[2])
 	if amount < 0:
 		return Result.failure("amount 不能为负: %d" % amount)
 
-	var state := engine.get_state()
-	var player_id := _resolve_actor_id(state, registry)
 	# 通过 internal debug action 修改状态（保持命令历史/回放/不变量）
 	var cmd := Command.create_system("debug_add_inventory", {"player_id": player_id, "product": product, "amount": amount})
 	_mark_debug_force(cmd)
@@ -198,20 +269,24 @@ static func _cmd_procure(args: Array, registry: DebugCommandRegistry) -> Result:
 	if engine == null:
 		return Result.failure("游戏引擎未初始化")
 
-	if args.is_empty():
-		return Result.failure("用法: procure <product> [amount]")
+	if args.size() < 2:
+		return Result.failure("用法: procure <player> <product> [amount]")
 
-	var product := str(args[0]).strip_edges()
+	var state := engine.get_state()
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+
+	var product := str(args[1]).strip_edges()
 	if product.is_empty():
 		return Result.failure("product 不能为空")
 	var amount := 1
-	if args.size() > 1 and not str(args[1]).is_empty():
-		amount = int(args[1])
+	if args.size() > 2 and not str(args[2]).is_empty():
+		amount = int(args[2])
 	if amount < 0:
 		return Result.failure("amount 不能为负: %d" % amount)
 
-	var state := engine.get_state()
-	var player_id := _resolve_actor_id(state, registry)
 	# 通过 internal debug action 修改状态（保持命令历史/回放/不变量）
 	var cmd := Command.create_system("debug_add_inventory", {"player_id": player_id, "product": product, "amount": amount})
 	_mark_debug_force(cmd)
@@ -229,15 +304,20 @@ static func _cmd_place_restaurant(args: Array, registry: DebugCommandRegistry) -
 	if engine == null:
 		return Result.failure("游戏引擎未初始化")
 
-	if args.size() < 2:
-		return Result.failure("用法: place_restaurant <x> <y> [rotation]")
-
-	var x := int(args[0])
-	var y := int(args[1])
-	var rotation := int(args[2]) if args.size() > 2 else 0
+	if args.size() < 3:
+		return Result.failure("用法: place_restaurant <player> <x> <y> [rotation]")
 
 	var state := engine.get_state()
-	var cmd := Command.create("place_restaurant", _resolve_actor_id(state, registry), {
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+
+	var x := int(args[1])
+	var y := int(args[2])
+	var rotation := int(args[3]) if args.size() > 3 else 0
+
+	var cmd := Command.create("place_restaurant", player_id, {
 		"position": [x, y],
 		"rotation": rotation
 	})
@@ -254,23 +334,27 @@ static func _cmd_place_house(args: Array, registry: DebugCommandRegistry) -> Res
 	if engine == null:
 		return Result.failure("游戏引擎未初始化")
 
-	if args.size() < 2:
-		return Result.failure("用法: place_house <x> <y> [house_number] [rotation]")
-
-	var x := int(args[0])
-	var y := int(args[1])
-	var house_number := -1
-	var rotation := 0
-	if args.size() > 2:
-		var a2 := int(args[2])
-		# Backward compatible: old usage was place_house <x> <y> [rotation]
-		if a2 in [0, 90, 180, 270]:
-			rotation = a2
-		else:
-			house_number = a2
-			rotation = int(args[3]) if args.size() > 3 else 0
+	if args.size() < 3:
+		return Result.failure("用法: place_house <player> <x> <y> [house_number] [rotation]")
 
 	var state := engine.get_state()
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+
+	var x := int(args[1])
+	var y := int(args[2])
+	var house_number := -1
+	var rotation := 0
+	if args.size() > 3:
+		var a3 := int(args[3])
+		# Backward compatible: old usage was place_house <x> <y> [rotation]
+		if a3 in [0, 90, 180, 270]:
+			rotation = a3
+		else:
+			house_number = a3
+			rotation = int(args[4]) if args.size() > 4 else 0
 	if house_number <= 0:
 		# Debug fallback: choose the smallest remaining house_number when not provided.
 		var supply_val = state.map.get("house_number_supply_remaining", null) if state != null and (state.map is Dictionary) else null
@@ -290,7 +374,7 @@ static func _cmd_place_house(args: Array, registry: DebugCommandRegistry) -> Res
 			return Result.failure("可放置房屋编号已用完")
 		house_number = int(supply[0])
 
-	var cmd := Command.create("place_house", _resolve_actor_id(state, registry), {
+	var cmd := Command.create("place_house", player_id, {
 		"position": [x, y],
 		"rotation": rotation,
 		"house_number": house_number
@@ -308,16 +392,21 @@ static func _cmd_move_restaurant(args: Array, registry: DebugCommandRegistry) ->
 	if engine == null:
 		return Result.failure("游戏引擎未初始化")
 
-	if args.size() < 3:
-		return Result.failure("用法: move_restaurant <restaurant_id> <x> <y> [rotation]")
-
-	var restaurant_id := str(args[0])
-	var x := int(args[1])
-	var y := int(args[2])
-	var rotation := int(args[3]) if args.size() > 3 else 0
+	if args.size() < 4:
+		return Result.failure("用法: move_restaurant <player> <restaurant_id> <x> <y> [rotation]")
 
 	var state := engine.get_state()
-	var cmd := Command.create("move_restaurant", _resolve_actor_id(state, registry), {
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+
+	var restaurant_id := str(args[1])
+	var x := int(args[2])
+	var y := int(args[3])
+	var rotation := int(args[4]) if args.size() > 4 else 0
+
+	var cmd := Command.create("move_restaurant", player_id, {
 		"restaurant_id": restaurant_id,
 		"position": [x, y],
 		"rotation": rotation
@@ -335,14 +424,19 @@ static func _cmd_add_garden(args: Array, registry: DebugCommandRegistry) -> Resu
 	if engine == null:
 		return Result.failure("游戏引擎未初始化")
 
-	if args.size() < 2:
-		return Result.failure("用法: add_garden <house_id> <direction>")
-
-	var house_id := str(args[0])
-	var direction := str(args[1]).to_upper()
+	if args.size() < 3:
+		return Result.failure("用法: add_garden <player> <house_id> <direction>")
 
 	var state := engine.get_state()
-	var cmd := Command.create("add_garden", _resolve_actor_id(state, registry), {
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+
+	var house_id := str(args[1])
+	var direction := str(args[2]).to_upper()
+
+	var cmd := Command.create("add_garden", player_id, {
 		"house_id": house_id,
 		"direction": direction
 	})
@@ -361,17 +455,22 @@ static func _cmd_marketing(args: Array, registry: DebugCommandRegistry) -> Resul
 	if engine == null:
 		return Result.failure("游戏引擎未初始化")
 
-	if args.size() < 5:
-		return Result.failure("用法: marketing <employee_type> <board_number> <product> <x> <y>")
-
-	var employee_type := str(args[0])
-	var board_number := int(args[1])
-	var product := str(args[2])
-	var x := int(args[3])
-	var y := int(args[4])
+	if args.size() < 6:
+		return Result.failure("用法: marketing <player> <employee_type> <board_number> <product> <x> <y>")
 
 	var state := engine.get_state()
-	var cmd := Command.create("initiate_marketing", _resolve_actor_id(state, registry), {
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+
+	var employee_type := str(args[1])
+	var board_number := int(args[2])
+	var product := str(args[3])
+	var x := int(args[4])
+	var y := int(args[5])
+
+	var cmd := Command.create("initiate_marketing", player_id, {
 		"employee_type": employee_type,
 		"board_number": board_number,
 		"product": product,
@@ -401,9 +500,12 @@ static func _cmd_add_house_demand(args: Array, registry: DebugCommandRegistry) -
 		amount = int(args[2])
 
 	var state := engine.get_state()
-	var from_player := _resolve_actor_id(state, registry)
+	var from_player := -1
 	if args.size() > 3 and not str(args[3]).is_empty():
-		from_player = int(args[3])
+		var from_player_r := _parse_player_id_arg(args[3], state)
+		if not from_player_r.ok:
+			return from_player_r
+		from_player = int(from_player_r.value)
 
 	var marketing_type := "debug"
 	if args.size() > 4 and not str(args[4]).is_empty():
@@ -438,7 +540,13 @@ static func _cmd_set_price(args: Array, registry: DebugCommandRegistry) -> Resul
 		return Result.failure("游戏引擎未初始化")
 
 	var state := engine.get_state()
-	var cmd := Command.create("set_price", _resolve_actor_id(state, registry))
+	if args.is_empty():
+		return Result.failure("用法: set_price <player>")
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+	var cmd := Command.create("set_price", player_id)
 	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
@@ -453,7 +561,13 @@ static func _cmd_set_discount(args: Array, registry: DebugCommandRegistry) -> Re
 		return Result.failure("游戏引擎未初始化")
 
 	var state := engine.get_state()
-	var cmd := Command.create("set_discount", _resolve_actor_id(state, registry))
+	if args.is_empty():
+		return Result.failure("用法: set_discount <player>")
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+	var cmd := Command.create("set_discount", player_id)
 	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 
@@ -468,7 +582,13 @@ static func _cmd_set_luxury(args: Array, registry: DebugCommandRegistry) -> Resu
 		return Result.failure("游戏引擎未初始化")
 
 	var state := engine.get_state()
-	var cmd := Command.create("set_luxury_price", _resolve_actor_id(state, registry))
+	if args.is_empty():
+		return Result.failure("用法: set_luxury <player>")
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+	var cmd := Command.create("set_luxury_price", player_id)
 	_mark_debug_force(cmd)
 	var result := engine.execute_command(cmd)
 

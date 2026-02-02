@@ -6,8 +6,8 @@ const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func register_all(registry: DebugCommandRegistry) -> void:
 	registry.register("advance", _cmd_advance.bind(registry), "推进阶段", "advance [phase|sub_phase]", ["target"])
-	registry.register("skip", _cmd_skip.bind(registry), "跳过当前玩家", "skip [player_id]", ["player_id"])
-	registry.register("give_money", _cmd_give_money.bind(registry), "给玩家金钱", "give_money <player_id> <amount>", ["player_id", "amount"])
+	registry.register("skip", _cmd_skip.bind(registry), "跳过玩家回合", "skip <player>", ["player"])
+	registry.register("give_money", _cmd_give_money.bind(registry), "给玩家金钱", "give_money <player> <amount>", ["player", "amount"])
 	registry.register("set_phase", _cmd_set_phase.bind(registry), "设置当前阶段", "set_phase <phase_name>", ["phase"])
 	registry.register("next_round", _cmd_next_round.bind(registry), "跳到下一回合", "next_round")
 
@@ -19,6 +19,44 @@ static func _mark_debug_force(cmd: Command) -> void:
 	if not (cmd.metadata is Dictionary):
 		cmd.metadata = {}
 	cmd.metadata["debug_force"] = true
+
+static func _parse_player_id_arg(arg, state: GameState) -> Result:
+	if state == null:
+		return Result.failure("游戏状态为空")
+	var player_count := state.players.size()
+	if player_count <= 0:
+		return Result.failure("玩家数量无效: %d" % player_count)
+
+	var token := str(arg).strip_edges()
+	if token.is_empty():
+		return Result.failure("player 不能为空")
+
+	var lower := token.to_lower()
+	if lower.begins_with("id:"):
+		var id_str := token.substr(3).strip_edges()
+		if not id_str.is_valid_int():
+			return Result.failure("player_id 格式错误: %s" % token)
+		var pid := int(id_str)
+		if pid < 0 or pid >= player_count:
+			return Result.failure("无效的 player_id: %d（有效范围 0..%d）" % [pid, player_count - 1])
+		return Result.success(pid)
+
+	if lower.begins_with("pid:"):
+		var id_str2 := token.substr(4).strip_edges()
+		if not id_str2.is_valid_int():
+			return Result.failure("player_id 格式错误: %s" % token)
+		var pid2 := int(id_str2)
+		if pid2 < 0 or pid2 >= player_count:
+			return Result.failure("无效的 player_id: %d（有效范围 0..%d）" % [pid2, player_count - 1])
+		return Result.success(pid2)
+
+	# 默认按玩家顺位 1..N 解析（不允许“当前玩家”隐式行为）
+	if not token.is_valid_int():
+		return Result.failure("player 必须为 1..%d（或使用 id:<player_id>）" % player_count)
+	var pnum := int(token)
+	if pnum < 1 or pnum > player_count:
+		return Result.failure("无效的玩家顺位: %d（有效范围 1..%d）" % [pnum, player_count])
+	return Result.success(pnum - 1)
 
 static func _cmd_advance(args: Array, registry: DebugCommandRegistry) -> Result:
 	var engine := registry.get_game_engine()
@@ -49,12 +87,12 @@ static func _cmd_skip(args: Array, registry: DebugCommandRegistry) -> Result:
 		return Result.failure("游戏引擎未初始化")
 
 	var state := engine.get_state()
-	var player_id := state.get_current_player_id()
-	if registry != null and registry.has_method("resolve_selected_player_id"):
-		player_id = int(registry.resolve_selected_player_id(state))
-
-	if not args.is_empty():
-		player_id = int(args[0])
+	if args.is_empty():
+		return Result.failure("用法: skip <player>")
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
 
 	var cmd := Command.create(ActionIdsClass.SKIP, player_id)
 	_mark_debug_force(cmd)
@@ -70,14 +108,14 @@ static func _cmd_give_money(args: Array, registry: DebugCommandRegistry) -> Resu
 		return Result.failure("游戏引擎未初始化")
 
 	if args.size() < 2:
-		return Result.failure("用法: give_money <player_id> <amount>")
-
-	var player_id := int(args[0])
-	var amount := int(args[1])
+		return Result.failure("用法: give_money <player> <amount>")
 
 	var state := engine.get_state()
-	if player_id < 0 or player_id >= state.players.size():
-		return Result.failure("无效的玩家 ID: %d" % player_id)
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
+	var amount := int(args[1])
 
 	var old_cash := 0
 	if state.players[player_id] is Dictionary:

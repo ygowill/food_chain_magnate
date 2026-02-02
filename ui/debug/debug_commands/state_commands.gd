@@ -6,10 +6,48 @@ static func register_all(registry: DebugCommandRegistry) -> void:
 	registry.register("dump", _cmd_dump.bind(registry), "导出完整状态", "dump")
 	registry.register("hash", _cmd_hash.bind(registry), "显示状态哈希", "hash")
 	registry.register("players", _cmd_players.bind(registry), "显示所有玩家信息", "players")
-	registry.register("player", _cmd_player.bind(registry), "显示指定玩家信息", "player <id>", ["player_id"])
+	registry.register("player", _cmd_player.bind(registry), "显示指定玩家信息", "player <player>", ["player"])
 	registry.register("bank", _cmd_bank.bind(registry), "显示银行状态", "bank")
 	registry.register("map", _cmd_map.bind(registry), "显示地图状态", "map")
 	registry.register("marketing_list", _cmd_marketing.bind(registry), "显示营销实例", "marketing_list")
+
+static func _parse_player_id_arg(arg, state: GameState) -> Result:
+	if state == null:
+		return Result.failure("游戏状态为空")
+	var player_count := state.players.size()
+	if player_count <= 0:
+		return Result.failure("玩家数量无效: %d" % player_count)
+
+	var token := str(arg).strip_edges()
+	if token.is_empty():
+		return Result.failure("player 不能为空")
+
+	var lower := token.to_lower()
+	if lower.begins_with("id:"):
+		var id_str := token.substr(3).strip_edges()
+		if not id_str.is_valid_int():
+			return Result.failure("player_id 格式错误: %s" % token)
+		var pid := int(id_str)
+		if pid < 0 or pid >= player_count:
+			return Result.failure("无效的 player_id: %d（有效范围 0..%d）" % [pid, player_count - 1])
+		return Result.success(pid)
+
+	if lower.begins_with("pid:"):
+		var id_str2 := token.substr(4).strip_edges()
+		if not id_str2.is_valid_int():
+			return Result.failure("player_id 格式错误: %s" % token)
+		var pid2 := int(id_str2)
+		if pid2 < 0 or pid2 >= player_count:
+			return Result.failure("无效的 player_id: %d（有效范围 0..%d）" % [pid2, player_count - 1])
+		return Result.success(pid2)
+
+	# 默认按玩家顺位 1..N 解析
+	if not token.is_valid_int():
+		return Result.failure("player 必须为 1..%d（或使用 id:<player_id>）" % player_count)
+	var pnum := int(token)
+	if pnum < 1 or pnum > player_count:
+		return Result.failure("无效的玩家顺位: %d（有效范围 1..%d）" % [pnum, player_count])
+	return Result.success(pnum - 1)
 
 static func _cmd_state(args: Array, registry: DebugCommandRegistry) -> Result:
 	var engine := registry.get_game_engine()
@@ -76,15 +114,16 @@ static func _cmd_player(args: Array, registry: DebugCommandRegistry) -> Result:
 		return Result.failure("游戏引擎未初始化")
 
 	if args.is_empty():
-		return Result.failure("用法: player <id>")
+		return Result.failure("用法: player <player>")
 
-	var player_id := int(args[0])
 	var state := engine.get_state()
 	if state == null:
 		return Result.failure("游戏状态为空")
 
-	if player_id < 0 or player_id >= state.players.size():
-		return Result.failure("无效的玩家 ID: %d" % player_id)
+	var player_id_r := _parse_player_id_arg(args[0], state)
+	if not player_id_r.ok:
+		return player_id_r
+	var player_id := int(player_id_r.value)
 
 	var player: Dictionary = state.players[player_id]
 	var lines: Array[String] = [

@@ -19,7 +19,6 @@ class CommandDef:
 
 var _commands: Dictionary = {}  # name -> CommandDef
 var _game_engine: GameEngine = null
-var _selected_player_id: int = -1 # -1=当前玩家；>=0=指定玩家（调试用）
 
 func _init() -> void:
 	pass
@@ -27,27 +26,12 @@ func _init() -> void:
 func dispose() -> void:
 	_game_engine = null
 	_commands.clear()
-	_selected_player_id = -1
 
 func set_game_engine(engine: GameEngine) -> void:
 	_game_engine = engine
 
 func get_game_engine() -> GameEngine:
 	return _game_engine
-
-func set_selected_player_id(player_id: int) -> void:
-	_selected_player_id = player_id
-
-func get_selected_player_id() -> int:
-	return _selected_player_id
-
-func resolve_selected_player_id(state: GameState) -> int:
-	# 调试面板可选择目标玩家；若无效则回退到当前玩家。
-	if state == null:
-		return _selected_player_id
-	if _selected_player_id >= 0 and _selected_player_id < state.players.size():
-		return _selected_player_id
-	return state.get_current_player_id()
 
 # 注册命令
 func register(name: String, handler: Callable, description: String, usage: String = "", arg_hints: Array[String] = []) -> void:
