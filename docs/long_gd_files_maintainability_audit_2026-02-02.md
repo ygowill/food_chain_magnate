@@ -375,6 +375,11 @@
   - `GameEventLogActionsFormatter`：action 请求/执行等。
 - 先拆 “report formatter”（改动面小、收益大），让主文件行数先降到 <800，再逐步下沉更多 handler。
 
+实施结果（阶段性）：
+
+- 已完成：提取 report formatter：新增 `ui/scenes/game/game_event_log_reports_formatter.gd`；`ui/scenes/game/game_event_log_formatter.gd` 将 Payday/Dinnertime report 分支委托（行数 830 -> 699）；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 待执行：继续按 phase/actions 等分域下沉更多 handler（以维持主文件长期不再膨胀）。
+
 ### 11) `ui/components/company_structure/company_structure.gd`
 
 当前职责：
@@ -564,3 +569,4 @@
 - 2026-02-03：拆分 OnlineLobby 渲染：新增 `ui/scenes/online/online_lobby_room_list_controller.gd` 与 `ui/scenes/online/online_lobby_room_state_renderer.gd`；`ui/scenes/online/online_lobby.gd` 改为委托渲染（行数 1019 -> 763）；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-03：拆分 NetClient 内部实现：新增 `autoload/net_client_internal.gd`；`autoload/net_client.gd` 保持 @rpc 接口不变并瘦身（行数 1006 -> 751）；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-03：拆分 LeftPanel：新增 `ui/components/left_panel/left_panel_employee_icons_controller.gd` 与 `ui/components/left_panel/left_panel_turn_log_controller.gd`；`ui/components/left_panel/left_panel.gd` 行数 998 -> 686；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-03：拆分 GameEventLogFormatter report：新增 `ui/scenes/game/game_event_log_reports_formatter.gd`；`ui/scenes/game/game_event_log_formatter.gd` 行数 830 -> 699；并通过 `ui/scenes/tests/all_tests.tscn`。

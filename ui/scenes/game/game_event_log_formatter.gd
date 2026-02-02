@@ -7,6 +7,7 @@ const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
+const ReportsFormatterClass = preload("res://ui/scenes/game/game_event_log_reports_formatter.gd")
 
 const PRICE_ACTION_LOG_TEXT: Dictionary = {
 	"set_price": "设定价格（-$1）",
@@ -27,6 +28,8 @@ const CASH_INCOME_BREAKDOWN_LABELS: Dictionary = {
 	"revenue_floor_adjustment": "下限调整",
 	"other": "其它",
 }
+
+var _reports_formatter = null
 
 func format(event: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -438,6 +441,19 @@ func _event(message: String, details: Dictionary) -> Dictionary:
 func _debug(message: String, details: Dictionary) -> Dictionary:
 	return {"type": GameLogPanel.LogType.DEBUG, "message": message, "details": details}
 
+func _ensure_reports_formatter() -> void:
+	if _reports_formatter == null or not is_instance_valid(_reports_formatter):
+		_reports_formatter = ReportsFormatterClass.new()
+		_reports_formatter.setup(self)
+
+func _format_payday_report(data: Dictionary) -> Array[Dictionary]:
+	_ensure_reports_formatter()
+	return _reports_formatter.format_payday_report(data)
+
+func _format_dinnertime_report(data: Dictionary) -> Array[Dictionary]:
+	_ensure_reports_formatter()
+	return _reports_formatter.format_dinnertime_report(data)
+
 func _format_cash_income_breakdown_suffix(details: Dictionary) -> String:
 	if details == null or not (details is Dictionary):
 		return ""
@@ -681,150 +697,3 @@ func _format_required_short(required: Dictionary, max_items: int = 3) -> String:
 	if keys.size() > shown:
 		suffix = " ..."
 	return " + ".join(parts) + suffix
-
-func _format_payday_report(data: Dictionary) -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	var round := int(data.get("round", -1))
-	var report_val = data.get("report", null)
-	if not (report_val is Dictionary):
-		out.append(_event("发薪日结算报告缺失（回合 %d）" % round, data))
-		return out
-	var report: Dictionary = report_val
-
-	var details_val = report.get("details", null)
-	if not (details_val is Array):
-		out.append(_event("发薪日结算报告缺失明细（回合 %d）" % round, report))
-		return out
-	var details: Array = details_val
-
-	for item_val in details:
-		if not (item_val is Dictionary):
-			continue
-		var item: Dictionary = item_val
-		var player_id := int(item.get("player_id", -1))
-		if player_id < 0:
-			continue
-
-		var due := int(item.get("due", 0))
-		var paid_cash := int(item.get("paid", 0))
-		var unpaid := int(item.get("unpaid", 0))
-		var discount := int(item.get("salary_discount", 0))
-		var delta := int(item.get("milestone_delta", 0))
-
-		var token_total := 0
-		var paid_tokens_val = item.get("paid_with_tokens", null)
-		if paid_tokens_val is Dictionary:
-			var paid_tokens: Dictionary = paid_tokens_val
-			for k in paid_tokens.keys():
-				token_total += int(paid_tokens.get(k, 0))
-
-		var extra_parts: Array[String] = []
-		if discount > 0:
-			extra_parts.append("折扣-$%d" % discount)
-		if delta != 0:
-			extra_parts.append("里程碑%+d" % delta)
-
-		var text := "发薪日"
-		if due == 0 and paid_cash == 0 and unpaid == 0 and token_total == 0:
-			text += "：无需支付"
-			if not extra_parts.is_empty():
-				text += "（%s）" % "，".join(extra_parts)
-		else:
-			text += "：应付$%d" % due
-
-			var pay_parts: Array[String] = []
-			if paid_cash > 0:
-				pay_parts.append("现金$%d" % paid_cash)
-			if token_total > 0:
-				pay_parts.append("代币x%d" % token_total)
-			if not pay_parts.is_empty():
-				text += "，支付：" + " + ".join(pay_parts)
-
-			if unpaid > 0:
-				text += "，欠薪$%d" % unpaid
-
-			if not extra_parts.is_empty():
-				text += "（%s）" % "，".join(extra_parts)
-
-		var d := item.duplicate(true)
-		d["round"] = round
-		out.append(_player(player_id, text, d))
-
-	return out
-
-func _format_dinnertime_report(data: Dictionary) -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	var round := int(data.get("round", -1))
-	var report_val = data.get("report", null)
-	if not (report_val is Dictionary):
-		out.append(_event("晚餐结算报告缺失（回合 %d）" % round, data))
-		return out
-	var report: Dictionary = report_val
-
-	var sales_val = report.get("sales", null)
-	var skipped_val = report.get("skipped", null)
-	var income_sales_val = report.get("income_sales", null)
-	var income_house_bonus_val = report.get("income_sale_house_bonus", null)
-	var income_tips_val = report.get("income_tips", null)
-	var income_cfo_val = report.get("income_cfo_bonus", null)
-	var total_income_val = report.get("total_income", null)
-
-	var sales: Array = sales_val if (sales_val is Array) else []
-	var skipped: Array = skipped_val if (skipped_val is Array) else []
-
-	out.append(_event("晚餐结算（回合 %d）：售出 %d，未满足 %d" % [round, sales.size(), skipped.size()], data))
-
-	# 1) 每个房屋消费记录
-	for s_val in sales:
-		if not (s_val is Dictionary):
-			continue
-		var s: Dictionary = s_val
-		var owner := int(s.get("winner_owner", -1))
-		var house_number := str(s.get("house_number", "")).strip_edges()
-		var rest_text := _format_restaurant_id_short(str(s.get("winner_restaurant_id", "")).strip_edges())
-		var required_val = s.get("required", null)
-		var required: Dictionary = required_val if (required_val is Dictionary) else {}
-		var revenue := int(s.get("revenue", 0))
-		var bonus := int(s.get("bonus", 0))
-		var house_bonus := int(s.get("house_bonus", 0))
-
-		var items := _format_required_short(required, 3)
-		var msg := "晚餐：房屋#%s 消费 %s" % [house_number, items]
-		if not rest_text.is_empty():
-			msg += " -> %s" % rest_text
-		msg += " 收入 $%d" % revenue
-		if bonus != 0 or house_bonus != 0:
-			msg += " (奖励 $%d, 房屋奖 $%d)" % [bonus, house_bonus]
-		if owner >= 0:
-			out.append(_player(owner, msg, s))
-		else:
-			out.append(_event(msg, s))
-
-	for sk_val in skipped:
-		if not (sk_val is Dictionary):
-			continue
-		var sk: Dictionary = sk_val
-		var hn := str(sk.get("house_number", "")).strip_edges()
-		var dcnt := int(sk.get("demands", 0))
-		out.append(_event("晚餐：房屋#%s 未满足（需求 %d）" % [hn, dcnt], sk))
-
-	# 2) 总结报告（按玩家/按分类）
-	var income_sales: Array = income_sales_val if (income_sales_val is Array) else []
-	var income_house_bonus: Array = income_house_bonus_val if (income_house_bonus_val is Array) else []
-	var income_tips: Array = income_tips_val if (income_tips_val is Array) else []
-	var income_cfo: Array = income_cfo_val if (income_cfo_val is Array) else []
-	var total_income: Array = total_income_val if (total_income_val is Array) else []
-
-	var player_count := maxi(income_sales.size(), total_income.size())
-	for pid in range(player_count):
-		var s_amt := int(income_sales[pid]) if pid < income_sales.size() else 0
-		var hb_amt := int(income_house_bonus[pid]) if pid < income_house_bonus.size() else 0
-		var tips_amt := int(income_tips[pid]) if pid < income_tips.size() else 0
-		var cfo_amt := int(income_cfo[pid]) if pid < income_cfo.size() else 0
-		var tot_amt := int(total_income[pid]) if pid < total_income.size() else (s_amt + hb_amt + tips_amt + cfo_amt)
-
-		out.append(_event("晚餐总结 玩家%d: 总 $%d (售卖 $%d, 房屋奖 $%d, 服务员 $%d, CFO $%d)" % [
-			pid + 1, tot_amt, s_amt, hb_amt, tips_amt, cfo_amt
-		], {"round": round, "player_id": pid}))
-
-	return out
