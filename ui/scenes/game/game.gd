@@ -48,6 +48,7 @@ extends Control
 
 const GameEventLogControllerClass = preload("res://ui/scenes/game/game_event_log_controller.gd")
 const GameMenuDebugControllerClass = preload("res://ui/scenes/game/game_menu_debug_controller.gd")
+const GameSaveLoadControllerClass = preload("res://ui/scenes/game/game_save_load_controller.gd")
 const GameOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_controller.gd")
 const GameMapInteractionControllerClass = preload("res://ui/scenes/game/game_map_interaction_controller.gd")
 const GamePanelControllerClass = preload("res://ui/scenes/game/game_panel_controller.gd")
@@ -71,6 +72,7 @@ var game_engine: GameEngine = null
 # 控制器
 var _event_log_controller = null
 var _menu_debug_controller = null
+var _save_load_controller = null
 var _overlay_controller = null
 var _map_controller = null
 var _panel_controller = null
@@ -123,10 +125,6 @@ const AUTO_MANDATORY_ACTION_IDS := {
 	ActionIdsClass.SET_DISCOUNT: true,
 	ActionIdsClass.SET_LUXURY_PRICE: true,
 }
-
-# 存档管理（多槽 + 文件选择）
-var _save_load_dialog = null
-var _save_load_context: String = ""
 
 var _left_area_visible: bool = true
 var _main_content_default_split_offset: int = 360
@@ -196,6 +194,7 @@ func _ready() -> void:
 	_panel_controller.connect_signals(action_panel, turn_order_track, hand_area, company_structure)
 
 	_menu_debug_controller = GameMenuDebugControllerClass.new(self, menu_dialog)
+	_save_load_controller = GameSaveLoadControllerClass.new(self, SaveLoadDialogScript, Callable(self, "_start_replay_from_file"))
 	# M4.3：日志面板统一使用 step 时间线视图（由 StepTimelineBuild.build_full 重建），
 	# 不再依赖 EventBus 订阅追加日志。
 	_event_log_controller = null
@@ -353,6 +352,10 @@ func _dispose_runtime() -> void:
 	if _menu_debug_controller != null and _menu_debug_controller.has_method("dispose"):
 		_menu_debug_controller.dispose()
 	_menu_debug_controller = null
+
+	if _save_load_controller != null and _save_load_controller.has_method("dispose"):
+		_save_load_controller.dispose()
+	_save_load_controller = null
 
 	_right_panel_footer_source = null
 
@@ -1838,9 +1841,8 @@ func _on_resume_pressed() -> void:
 		menu_dialog.hide()
 
 func _on_save_pressed() -> void:
-	_ensure_save_load_dialog()
-	_save_load_context = "save"
-	_save_load_dialog.open_for_save(game_engine)
+	if _save_load_controller != null:
+		_save_load_controller.open_for_save(game_engine)
 	_on_menu_dialog_close_requested()
 
 func _on_settings_pressed() -> void:
@@ -1860,9 +1862,8 @@ func _on_distance_tool_pressed() -> void:
 	_on_menu_dialog_close_requested()
 
 func _on_replay_pressed() -> void:
-	_ensure_save_load_dialog()
-	_save_load_context = "replay"
-	_save_load_dialog.open_for_replay()
+	if _save_load_controller != null:
+		_save_load_controller.open_for_replay()
 	_on_menu_dialog_close_requested()
 
 func _on_quit_to_menu_pressed() -> void:
@@ -1929,35 +1930,6 @@ func is_timeline_read_only_active() -> bool:
 	var head_index := game_engine.command_history.size() - 1
 	var cursor_index := int(game_engine.current_command_index)
 	return cursor_index < head_index
-
-func _ensure_save_load_dialog() -> void:
-	if _save_load_dialog != null and is_instance_valid(_save_load_dialog):
-		return
-
-	_save_load_dialog = SaveLoadDialogScript.new()
-	add_child(_save_load_dialog)
-
-	if _save_load_dialog.has_signal("load_selected"):
-		if not _save_load_dialog.load_selected.is_connected(_on_save_load_selected):
-			_save_load_dialog.load_selected.connect(_on_save_load_selected)
-	if _save_load_dialog.has_signal("save_completed"):
-		if not _save_load_dialog.save_completed.is_connected(_on_save_completed):
-			_save_load_dialog.save_completed.connect(_on_save_completed)
-
-func _on_save_load_selected(path: String) -> void:
-	if path.is_empty():
-		return
-	if _save_load_context == "replay":
-		_start_replay_from_file(path)
-		return
-
-	# 预留：未来可支持“游戏内载入存档”
-	GameLog.warn("Game", "未支持的存档载入上下文: %s (%s)" % [_save_load_context, path])
-
-func _on_save_completed(path: String) -> void:
-	if path.is_empty():
-		return
-	GameLog.info("Game", "存档已保存: %s" % path)
 
 func _init_replay_bar() -> void:
 	if game_log_panel == null or not is_instance_valid(game_log_panel):
@@ -2520,9 +2492,8 @@ func _on_replay_bar_return_latest_requested() -> void:
 	_on_replay_bar_seek_requested(game_engine.command_history.size() - 1)
 
 func _on_replay_bar_load_requested() -> void:
-	_ensure_save_load_dialog()
-	_save_load_context = "replay"
-	_save_load_dialog.open_for_replay()
+	if _save_load_controller != null:
+		_save_load_controller.open_for_replay()
 
 func _on_replay_bar_close_requested() -> void:
 	if _startup_replay_from_main_menu:
