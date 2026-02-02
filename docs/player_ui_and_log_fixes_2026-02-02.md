@@ -33,25 +33,25 @@
 
 ## 4. 玩家信息面板左侧图标复用“玩家顺位中的餐厅图标”，保持同样背景色并正确缩放
 
-- 状态：TODO
+- 状态：DONE
 - 现象：玩家信息面板左侧图标与顺位轨（玩家顺位）餐厅图标样式不一致；缩放可能超出范围。
 - 期望：复用同一套餐厅图标组件/样式（含背景色），并在信息面板既定区域内自适应缩放不溢出。
-- 待澄清：
-	- “复用”是指直接实例化同一场景（推荐）还是仅共享 texture+style。
-- 验证：待补充
-- 提交：待补充
+- 实施：
+	- 玩家 tab 使用同一餐厅 logo 贴图来源，并对齐顺位轨的浅色背景与图标缩放策略。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 141/141）
+- 提交：`fix(ui): move player restaurant tabs to top and match turn-order style`
 
 ---
 
 ## 5. 玩家信息面板左侧的“餐厅图标 tab”应移动到信息面板上方，横向排列
 
-- 状态：TODO
+- 状态：DONE
 - 现象：餐厅图标 tab 位于信息面板左侧区域，信息架构不理想。
 - 期望：将 tab 放到信息面板上方，横向排列，并保持现有切换逻辑可用。
-- 待澄清：
-	- tab 的交互：是否需要支持水平滚动/换行，或固定可见数量。
-- 验证：待补充
-- 提交：待补充
+- 实施：
+	- `LeftPanel` 的玩家 tab 从左侧纵向改为面板顶部横向排列。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 141/141）
+- 提交：`fix(ui): move player restaurant tabs to top and match turn-order style`
 
 ---
 

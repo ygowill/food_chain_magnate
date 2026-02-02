@@ -11,7 +11,7 @@ const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
-@onready var player_tabs: VBoxContainer = $MarginContainer/HBoxContainer/PlayerTabs
+@onready var player_tabs: HBoxContainer = $MarginContainer/HBoxContainer/PlayerTabs
 @onready var summary_row: Control = $MarginContainer/HBoxContainer/Content/SummaryRow
 @onready var summary_label: Label = $MarginContainer/HBoxContainer/Content/SummaryRow/SummaryLabel
 @onready var inventory_title_label: Label = $MarginContainer/HBoxContainer/Content/SummaryRow/InventoryTitleLabel
@@ -240,7 +240,7 @@ func _rebuild_player_tabs() -> void:
 		var btn := Button.new()
 		btn.toggle_mode = true
 		btn.button_group = group
-		btn.custom_minimum_size = Vector2(44, 44)
+		btn.custom_minimum_size = Vector2(52, 52)
 		_apply_player_tab_icon(btn, i)
 		btn.toggled.connect(_on_player_tab_toggled.bind(i))
 		player_tabs.add_child(btn)
@@ -372,31 +372,35 @@ func _update_tab_styles() -> void:
 		var is_current := i == _current_player_id
 		var is_view := i == view_id
 
+		var bg := Color("#f4edd1")
+		bg.a = 0.95
+
 		var normal := StyleBoxFlat.new()
-		normal.bg_color = Color(0.12, 0.12, 0.14, 0.85)
-		normal.border_color = Color(0.25, 0.25, 0.3, 0.7)
+		normal.bg_color = bg
+		normal.border_color = Color(color.r, color.g, color.b, 0.85)
 		normal.set_border_width_all(1)
-		normal.set_corner_radius_all(8)
+		normal.set_corner_radius_all(26)
 
 		var pressed := StyleBoxFlat.new()
-		pressed.bg_color = Color(color.r, color.g, color.b, 0.28) if is_view else normal.bg_color
-		pressed.border_color = color if is_view else normal.border_color
-		pressed.set_border_width_all(2 if is_view else 1)
-		pressed.set_corner_radius_all(8)
+		pressed.bg_color = bg
+		pressed.border_color = color
+		pressed.set_border_width_all(3 if is_view else 1)
+		pressed.set_corner_radius_all(26)
 
 		# 当前行动玩家：额外高亮边框（优先级高于 view）
 		if is_current:
-			pressed.border_color = Color(0.95, 0.95, 0.95, 0.9)
-			pressed.set_border_width_all(2)
+			var current_border := Color(0.95, 0.95, 0.95, 0.9)
+			pressed.border_color = current_border
+			pressed.set_border_width_all(3)
 			if not is_view:
-				normal.border_color = pressed.border_color
-				normal.set_border_width_all(2)
+				normal.border_color = current_border
+				normal.set_border_width_all(3)
 
 		btn.add_theme_stylebox_override("normal", normal)
 		btn.add_theme_stylebox_override("pressed", pressed)
 		btn.add_theme_stylebox_override("hover", pressed)
 
-		btn.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+		btn.add_theme_color_override("font_color", Color(0.15, 0.15, 0.15, 0.9))
 
 func _refresh() -> void:
 	_refresh_summary()

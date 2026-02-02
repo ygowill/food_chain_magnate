@@ -33,14 +33,15 @@ theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 8
 theme_override_constants/margin_bottom = 8
 
-[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer"]
+[node name="HBoxContainer" type="VBoxContainer" parent="MarginContainer"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="PlayerTabs" type="VBoxContainer" parent="MarginContainer/HBoxContainer"]
-custom_minimum_size = Vector2(52, 0)
+[node name="PlayerTabs" type="HBoxContainer" parent="MarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
-size_flags_vertical = 3
+size_flags_horizontal = 3
+alignment = 1
 theme_override_constants/separation = 8
 
 [node name="Content" type="VBoxContainer" parent="MarginContainer/HBoxContainer"]
