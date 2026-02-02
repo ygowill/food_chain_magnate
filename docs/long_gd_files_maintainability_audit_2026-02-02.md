@@ -31,7 +31,6 @@
 | 1019 | 54 | 4 | 0 | `ui/scenes/online/online_lobby.gd` |
 | 1006 | 50 | 5 | 8 | `autoload/net_client.gd` |
 | 994 | 59 | 3 | 1 | `ui/components/left_panel/left_panel.gd` |
-| 911 | 52 | 5 | 2 | `ui/components/reserve_area/reserve_area_full_screen_view.gd` |
 
 ## 跨文件共性问题（模式级发现）
 
@@ -378,6 +377,10 @@
 - 将各 section builder 拆为独立文件（house numbers / gardens / marketing boards / module supplies / player token supplies）。
 - 保留一个 orchestrator 负责 build key、后台构建节奏、zoom 应用。
 
+实施结果：
+
+- 已完成：将 token UI 内部类拆分到 `ui/components/reserve_area/reserve_area_full_screen_view_tokens.gd`；`ui/components/reserve_area/reserve_area_full_screen_view.gd` 行数降至 641（低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
+
 ### 14) `ui/scenes/tests/all_tests.gd`
 
 当前职责：
@@ -492,3 +495,4 @@
 - 2026-02-02：提取全屏/覆盖视图控制器：新增 `ui/scenes/game/game_panel_views_controller.gd`；`ui/scenes/game/game_panel_controller.gd` 下沉 EmployeeTree/MilestoneFullScreen/ReserveAreaFullScreen 的创建/显示/隐藏/释放逻辑（行数降至 790，低于 800）；并为 `ui/scenes/game/game_panel_modals_controller.gd` 增加 `sync_for_state()` 统一同步入口；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：拆分公司结构内部卡槽：新增 `ui/components/company_structure/company_structure_card_slot.gd`；`ui/components/company_structure/company_structure.gd` 移除内部 `CardSlot` 类（行数降至 771，低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：提取营销面板图标缓存：新增 `ui/components/marketing_panel/marketing_panel_icon_cache.gd`；`ui/components/marketing_panel/marketing_panel.gd` 下沉 skin 初始化与产品/营销图标缩放缓存（行数降至 717，低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-02：拆分供应堆全屏视图 token：新增 `ui/components/reserve_area/reserve_area_full_screen_view_tokens.gd`；`ui/components/reserve_area/reserve_area_full_screen_view.gd` 移除内部 token 类（行数降至 641，低于 800）；并通过 `ui/scenes/tests/all_tests.tscn`。
