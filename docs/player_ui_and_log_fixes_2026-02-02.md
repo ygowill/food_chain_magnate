@@ -57,11 +57,13 @@
 
 ## 6. 日志面板“回放播放器”宽度溢出导致横向滚动/裁切问题
 
-- 状态：TODO
+- 状态：DONE
 - 现象：回放播放器宽度大于日志面板，导致横向溢出。
 - 期望：回放播放器不应超过日志面板可用宽度（必要时自适应或换行），避免横向溢出。
-- 验证：待补充
-- 提交：待补充
+- 实施：
+	- 回放条改为可换行布局（窄宽度下自动折行），避免撑出日志面板宽度。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 141/141）
+- 提交：`fix(ui): prevent replay bar overflow in log panel`
 
 ---
 
