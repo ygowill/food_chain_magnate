@@ -145,6 +145,7 @@
 实施结果（阶段性）：
 
 - 已完成：提取回放/复盘/时间线控制器 `ui/scenes/game/game_timeline_controller.gd`（并将 events->entries 格式化拆到 `ui/scenes/game/game_timeline_log_entries_builder.gd`）；`ui/scenes/game/game.gd` 行数降至 1421；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 已完成：提取 UI 同步控制器 `ui/scenes/game/game_ui_sync_controller.gd`（顶栏/面板/覆盖层同步 + toast + 调试命令后的 UI 刷新）；`ui/scenes/game/game.gd` 行数 1421 -> 1270；并通过 `ui/scenes/tests/all_tests.tscn`。
 
 ### 2) `ui/scenes/game/game_panel_controller.gd`
 

@@ -51,6 +51,7 @@ const GameMenuDebugControllerClass = preload("res://ui/scenes/game/game_menu_deb
 const GameSaveLoadControllerClass = preload("res://ui/scenes/game/game_save_load_controller.gd")
 const GameLayoutControllerClass = preload("res://ui/scenes/game/game_layout_controller.gd")
 const GameRightPanelDockControllerClass = preload("res://ui/scenes/game/game_right_panel_dock_controller.gd")
+const GameUiSyncControllerClass = preload("res://ui/scenes/game/game_ui_sync_controller.gd")
 const GameOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_controller.gd")
 const GameMapInteractionControllerClass = preload("res://ui/scenes/game/game_map_interaction_controller.gd")
 const GamePanelControllerClass = preload("res://ui/scenes/game/game_panel_controller.gd")
@@ -81,6 +82,7 @@ var _map_controller = null
 var _panel_controller = null
 var _online_resync_controller = null
 var _timeline_controller = null
+var _ui_sync_controller = null
 
 # 调试面板
 var _debug_panel: Window = null
@@ -89,8 +91,6 @@ var _debug_panel: Window = null
 var _confirm_dialog: ConfirmDialog = null
 var _confirm_dialog_on_confirm: Callable = Callable()
 var _confirm_dialog_on_cancel: Callable = Callable()
-var _online_turn_toast_last_player_id: int = -999
-var _phase_toast_last_phase: String = ""
 
 var _background_ui_warmup_started: bool = false
 var _startup_profile_reported: bool = false
@@ -213,6 +213,21 @@ func _ready() -> void:
 	_timeline_controller.set_startup_replay_from_main_menu(startup_replay_from_main_menu)
 	_timeline_controller.initialize()
 
+	_ui_sync_controller = GameUiSyncControllerClass.new(
+		Callable(self, "_get_game_engine"),
+		Callable(self, "_update_ui"),
+		Callable(self, "_sync_right_panel_docked_view"),
+		round_label,
+		phase_label,
+		bank_label,
+		current_player_label,
+		game_log_panel,
+		map_view,
+		_panel_controller,
+		_overlay_controller,
+		_timeline_controller
+	)
+
 	PerfTraceClass.end_span(span_layout)
 
 	var span_init_game := PerfTraceClass.begin_span("game:_initialize_game")
@@ -231,6 +246,8 @@ func _ready() -> void:
 			Callable(self, "_goto_online_lobby")
 		)
 		_online_resync_controller.initialize()
+		if _ui_sync_controller != null and _ui_sync_controller.has_method("set_online_resync_controller"):
+			_ui_sync_controller.set_online_resync_controller(_online_resync_controller)
 
 	# 初始化调试面板
 	_setup_debug_panel()
@@ -392,6 +409,10 @@ func _dispose_runtime() -> void:
 	if _timeline_controller != null and _timeline_controller.has_method("dispose"):
 		_timeline_controller.dispose()
 	_timeline_controller = null
+
+	if _ui_sync_controller != null and _ui_sync_controller.has_method("dispose"):
+		_ui_sync_controller.dispose()
+	_ui_sync_controller = null
 
 	if Globals != null and Globals.current_game_engine == game_engine:
 		Globals.current_game_engine = null
@@ -574,191 +595,19 @@ func _setup_debug_panel() -> void:
 
 	# 连接命令执行信号以刷新 UI
 	_debug_panel.command_executed.connect(_on_debug_command_executed)
+	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_debug_panel"):
+		_ui_sync_controller.set_debug_panel(_debug_panel)
 
 func _update_ui() -> void:
-	if game_engine == null:
-		return
-
-	var state := game_engine.get_state()
 	var do_profile := PerfTraceClass.enabled() and not _startup_profile_reported
-	round_label.text = "回合: %d" % state.round_number
-	phase_label.text = "阶段: %s%s" % [
-		state.phase,
-		(" / %s" % state.sub_phase) if not state.sub_phase.is_empty() else ""
-	]
-	var pid := state.get_current_player_id()
-	var current_name := Globals.get_player_name(pid) if pid >= 0 else "-"
-	var view_id := pid
-	if _panel_controller != null and _panel_controller.has_method("get_view_player_id"):
-		var v := int(_panel_controller.call("get_view_player_id"))
-		if v >= 0:
-			view_id = v
-	var view_name := Globals.get_player_name(view_id) if view_id >= 0 else "-"
-
-	var head_index := game_engine.command_history.size() - 1
-	var cursor_index := int(game_engine.current_command_index)
-	var replay_suffix := ""
-	if _timeline_controller != null:
-		var hc = _timeline_controller.get_ui_head_cursor(game_engine)
-		head_index = int(hc.x)
-		cursor_index = int(hc.y)
-		replay_suffix = _timeline_controller.get_ui_replay_suffix(game_engine, head_index, cursor_index)
-
-	if state.phase == DefsClass.PHASE_RESTRUCTURING:
-		var submitted_count := 0
-		var total := state.players.size()
-		if state.round_state is Dictionary:
-			var r_val = state.round_state.get("restructuring", null)
-			if r_val is Dictionary:
-				var r: Dictionary = r_val
-				var submitted_val = r.get("submitted", null)
-				if submitted_val is Dictionary:
-					var submitted: Dictionary = submitted_val
-					for pid2 in range(total):
-						var v2 = submitted.get(pid2, null)
-						if v2 == null and submitted.has(str(pid2)):
-							v2 = submitted.get(str(pid2), null)
-						if bool(v2):
-							submitted_count += 1
-
-		current_player_label.text = "重组（同时）%s｜查看: %s｜提交: %d/%d" % [
-			replay_suffix,
-			view_name,
-			submitted_count,
-			total
-		]
-	else:
-		current_player_label.text = "行动%s: %s｜查看: %s" % [
-			replay_suffix,
-			current_name,
-			view_name
-		]
-	bank_label.text = "银行: $%d" % state.bank.get("total", 0)
-
-	if is_instance_valid(game_log_panel) and game_log_panel.has_method("set_player_count"):
-		game_log_panel.set_player_count(state.players.size())
-
-	# 地图渲染（M2 接入）
-	if is_instance_valid(map_view) and map_view.has_method("set_game_state"):
-		var span_map := PerfTraceClass.begin_span("ui:map_view.set_game_state") if do_profile else -1
-		map_view.call("set_game_state", state)
-		if do_profile:
-			PerfTraceClass.end_span(span_map)
-
-	# UI 同步（面板/覆盖层）
-	if _panel_controller != null:
-		var span_panels := PerfTraceClass.begin_span("ui:panel_controller.sync") if do_profile else -1
-		var force_refresh := false
-		if _timeline_controller != null:
-			force_refresh = bool(_timeline_controller.consume_force_full_panel_sync_next_update())
-		_panel_controller.sync(state, force_refresh)
-		_sync_right_panel_docked_view()
-		if do_profile:
-			PerfTraceClass.end_span(span_panels)
-	if _overlay_controller != null:
-		var span_overlays := PerfTraceClass.begin_span("ui:overlay_controller.sync") if do_profile else -1
-		_overlay_controller.sync_dinnertime_overlay(state)
-		_overlay_controller.sync_demand_indicator(state)
-		if do_profile:
-			PerfTraceClass.end_span(span_overlays)
-
-	# 回放/复盘：日志时间线指针 + ReplayBar 显示 + ActionPanel 禁用
-	if _timeline_controller != null:
-		_timeline_controller.sync_timeline_ui(head_index, cursor_index, state)
-
-	_maybe_show_online_turn_toast(head_index, cursor_index, state)
-	_maybe_show_phase_change_toast(head_index, cursor_index, state)
-
-	# 同步调试面板
-	if _debug_panel != null and _debug_panel.visible:
-		_debug_panel.refresh_state()
-
-func _maybe_show_online_turn_toast(head_index: int, cursor_index: int, state: GameState) -> void:
-	if OS.has_feature("headless"):
-		return
-	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
-		_online_turn_toast_last_player_id = -999
-		return
-	if _online_resync_controller != null and _online_resync_controller.is_resync_in_progress():
-		return
-	if state == null:
-		return
-	if _timeline_controller != null and (_timeline_controller.is_replay_mode_active() or _timeline_controller.is_history_step_timeline_active()):
-		return
-	if cursor_index < head_index:
-		return
-	if str(state.phase) == DefsClass.PHASE_RESTRUCTURING:
-		return
-
-	var local_pid := int(NetContext.local_player_id)
-	if local_pid < 0:
-		return
-	var current_pid := int(state.get_current_player_id())
-	if current_pid < 0:
-		return
-	if current_pid == _online_turn_toast_last_player_id:
-		return
-	_online_turn_toast_last_player_id = current_pid
-
-	if current_pid != local_pid:
-		return
-
-	if _overlay_controller != null and _overlay_controller.has_method("show_toast"):
-		_overlay_controller.show_toast("轮到你行动")
-
-	var sm := SoundManager.get_instance()
-	if sm != null and is_instance_valid(sm):
-		# 占位：若资源缺失则静默；后续补齐 res://ui/audio/sfx/event_turn_start.(wav/ogg/mp3)
-		sm.play(SoundManager.SOUND_TURN_START)
-
-func _maybe_show_phase_change_toast(head_index: int, cursor_index: int, state: GameState) -> void:
-	if OS.has_feature("headless"):
-		return
-	if state == null:
-		return
-
-	# 回放/复盘/时间线回退时会频繁切换阶段：避免刷屏，仅在“实时头部”显示。
-	if _timeline_controller != null and (_timeline_controller.is_replay_mode_active() or _timeline_controller.is_history_step_timeline_active()):
-		_phase_toast_last_phase = ""
-		return
-	if cursor_index < head_index:
-		return
-
-	var phase := str(state.phase).strip_edges()
-	if phase.is_empty():
-		return
-	if _phase_toast_last_phase.is_empty():
-		_phase_toast_last_phase = phase
-		return
-	if phase == _phase_toast_last_phase:
-		return
-	_phase_toast_last_phase = phase
-
-	# 只提示大阶段；Working 内子阶段不提示（sub_phase 忽略）。
-	var display_name = GameLogPanel.PHASE_DISPLAY_NAMES.get(phase, phase)
-	var msg := "进入阶段：%s" % str(display_name)
-	if _overlay_controller != null and _overlay_controller.has_method("show_toast"):
-		_overlay_controller.show_toast(msg)
+	if _ui_sync_controller != null and _ui_sync_controller.has_method("update_ui"):
+		_ui_sync_controller.update_ui(do_profile)
 
 func _on_debug_command_executed(command: String, _result: String) -> void:
-	# undo/redo/restore/load 会“改写时间线”；
-	# M4.3：日志面板统一使用 step_timeline，因此时间线变化后需要重建 step_timeline 视图。
-	var cmd := str(command).strip_edges()
-	var head := cmd.split(" ", false, 1)[0] if not cmd.is_empty() else ""
-	var is_timeline_change := (head == "undo" or head == "redo" or head == "restore" or head == "load")
-
-	# 避免时间线变化后仍停留在旧面板/选点上下文导致“看起来没回退”；
-	# 不再强制 hide：保持面板打开，但下一帧强制从 state 全量同步，避免残留旧 UI 缓存。
-	if is_timeline_change:
-		if _timeline_controller != null:
-			_timeline_controller.request_force_full_panel_sync_next_update()
-			_timeline_controller.apply_live_log_timeline_from_engine()
-			# 调试面板的 undo/redo 需要进入“时间线编辑模式”，否则 undo 后 UI 会处于只读态导致无法继续操作。
-			if head == "undo" or head == "redo":
-				_timeline_controller.set_timeline_edit_mode_active(true)
-
-	# 调试命令执行后刷新游戏 UI
-	_update_ui()
+	if _ui_sync_controller != null and _ui_sync_controller.has_method("on_debug_command_executed"):
+		_ui_sync_controller.on_debug_command_executed(command)
+	else:
+		_update_ui()
 
 func rewind_to_turn_start() -> void:
 	if game_engine == null:
