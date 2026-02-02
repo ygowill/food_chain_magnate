@@ -57,7 +57,7 @@ static func run() -> Result:
 	var panels = WorkingPanelsClass.new(scene, null, Callable(), Callable(), Callable(), overlay)
 
 	# 选择飞艇驾驶员（air procure）：多餐厅时应展示“起点 tile 可选”高亮，而不是自动选第一家。
-	panels._on_producer_changed("zeppelin_pilot", "drinks")
+	panels._production_controller._on_producer_changed("zeppelin_pilot", "drinks")
 
 	if overlay.calls.size() != 1:
 		return Result.failure("多餐厅飞艇采购：应触发一次起点 tiles overlay，实际 calls=%d" % overlay.calls.size())
@@ -82,10 +82,13 @@ static func run() -> Result:
 	if legal != expected:
 		return Result.failure("overlay.legal_tiles=%s (期望 %s)" % [str(legal), str(expected)])
 
-	if panels._procure_selected_tiles.size() != 0:
-		return Result.failure("多餐厅飞艇采购：不应自动选定起点 tile，实际 selected_tiles=%s" % str(panels._procure_selected_tiles))
-	if not str(panels._procure_air_start_restaurant_id).is_empty():
-		return Result.failure("多餐厅飞艇采购：不应自动选定起点餐厅，实际=%s" % str(panels._procure_air_start_restaurant_id))
+	var procure = panels._production_controller._procure_controller
+	if procure == null:
+		return Result.failure("procure controller 未初始化")
+	if procure._procure_selected_tiles.size() != 0:
+		return Result.failure("多餐厅飞艇采购：不应自动选定起点 tile，实际 selected_tiles=%s" % str(procure._procure_selected_tiles))
+	if not str(procure._procure_air_start_restaurant_id).is_empty():
+		return Result.failure("多餐厅飞艇采购：不应自动选定起点餐厅，实际=%s" % str(procure._procure_air_start_restaurant_id))
 
 	return Result.success({
 		"legal_tiles": legal,

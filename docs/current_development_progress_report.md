@@ -79,7 +79,7 @@
 - 命令：`produce_food` / `procure_drinks`
 - 已支持：`GetDrinks` 选择采购员后显示“自动路线预览”
   - 可视化：`ui/overlays/procurement_route_overlay.gd`
-  - 触发：`ui/scenes/game/game_panel_working_panels.gd:_on_producer_changed`
+  - 触发：`ui/scenes/game/game_panel_working_production_controller.gd:_on_producer_changed`（委托至 `ui/scenes/game/game_panel_working_drinks_procurement_controller.gd:on_drinks_producer_changed`）
 
 #### PlaceHouses / PlaceRestaurants
 
