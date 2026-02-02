@@ -7,12 +7,10 @@ signal action_requested(action_id: String, params: Dictionary)
 
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
-const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
-const PiecePlacementOverlayScript = preload("res://ui/components/piece_placement/piece_placement_overlay.gd")
-const PiecePickerButtonClass = preload("res://ui/components/action_panel/piece_picker_button.gd")
+const ContextControllerClass = preload("res://ui/components/action_panel/action_panel_context_controller.gd")
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var items_container: VBoxContainer = $MarginContainer/VBoxContainer/ItemsContainer
@@ -40,11 +38,9 @@ var _game_state: GameState = null
 var _current_player_id: int = -1
 var _action_buttons: Dictionary = {}  # action_id -> ActionButton
 var _mandatory_action_ids: Dictionary = {}  # action_id -> true
-var _context_overlay: Node = null
-var _context_syncing: bool = false
+var _context_controller = null
 var _globally_disabled: bool = false
 var _globally_disabled_reason: String = ""
-var _map_skin = null # MapSkin (optional)
 
 # 不在 UI 中展示的内部动作
 const HIDDEN_ACTION_IDS := {
@@ -213,418 +209,39 @@ func _setup_utility_ui() -> void:
 func _setup_context_ui() -> void:
 	if not is_instance_valid(context_panel):
 		return
-	context_panel.visible = false
-
-	UiSignalHelpersClass.safe_connect(cancel_context_button, "pressed", _on_cancel_context_pressed)
-	UiSignalHelpersClass.safe_connect(confirm_context_button, "pressed", _on_confirm_context_pressed)
-	UiSignalHelpersClass.safe_connect(restaurant_option, "item_selected", _on_restaurant_option_selected)
-	UiSignalHelpersClass.safe_connect(employee_option, "employee_selected", _on_employee_option_selected)
-	UiSignalHelpersClass.safe_connect(rotation_option, "item_selected", _on_rotation_option_selected)
-	UiSignalHelpersClass.safe_connect(house_number_option, "item_selected", _on_house_number_option_selected)
-	UiSignalHelpersClass.safe_connect(direction_option, "item_selected", _on_direction_option_selected)
+	if _context_controller == null:
+		_context_controller = ContextControllerClass.new()
+	_context_controller.setup(self)
+	_context_controller.set_action_registry(_action_registry)
 
 func bind_context_overlay(overlay: Node) -> void:
-	if overlay == null or not is_instance_valid(overlay):
-		clear_context_overlay()
+	if _context_controller == null:
+		_setup_context_ui()
+	if _context_controller == null:
 		return
-
-	if _context_overlay == overlay:
-		_refresh_context_from_overlay()
-		return
-
-	_detach_overlay_signals()
-	_context_overlay = overlay
-	_attach_overlay_signals()
-	_refresh_context_from_overlay()
+	_context_controller.bind_context_overlay(overlay)
 
 func clear_context_overlay() -> void:
-	_detach_overlay_signals()
-	_context_overlay = null
-	_hide_context_panel()
-
-func _attach_overlay_signals() -> void:
-	if _context_overlay == null or not is_instance_valid(_context_overlay):
+	if _context_controller == null:
+		_setup_context_ui()
+	if _context_controller == null:
+		if is_instance_valid(context_panel):
+			context_panel.visible = false
 		return
-	UiSignalHelpersClass.safe_connect(_context_overlay, "ui_state_changed", _on_overlay_ui_state_changed)
-
-func _detach_overlay_signals() -> void:
-	if _context_overlay == null or not is_instance_valid(_context_overlay):
-		return
-	var sig := StringName("ui_state_changed")
-	if not _context_overlay.has_signal(sig):
-		return
-	if _context_overlay.is_connected(sig, _on_overlay_ui_state_changed):
-		_context_overlay.disconnect(sig, _on_overlay_ui_state_changed)
-
-func _on_overlay_ui_state_changed() -> void:
-	_refresh_context_from_overlay()
-
-func _hide_context_panel() -> void:
-	if is_instance_valid(context_panel):
-		context_panel.visible = false
-
-func _show_context_panel() -> void:
-	if is_instance_valid(context_panel):
-		context_panel.visible = true
-
-func _refresh_context_from_overlay() -> void:
-	if _context_overlay == null or not is_instance_valid(_context_overlay):
-		_hide_context_panel()
-		return
-	if _context_overlay is Control and not (_context_overlay as Control).visible:
-		clear_context_overlay()
-		return
-
-	if _context_overlay is RestaurantPlacementOverlay:
-		_refresh_restaurant_placement_context(_context_overlay as RestaurantPlacementOverlay)
-		return
-	if _context_overlay is HousePlacementOverlay:
-		_refresh_house_placement_context(_context_overlay as HousePlacementOverlay)
-		return
-	if PiecePlacementOverlayScript != null and _context_overlay is PiecePlacementOverlayScript:
-		_refresh_piece_placement_context(_context_overlay)
-		return
-
-	clear_context_overlay()
-
-func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) -> void:
-	if overlay == null or not is_instance_valid(overlay):
-		clear_context_overlay()
-		return
-
-	_context_syncing = true
-	_show_context_panel()
-
-	var mode := overlay.get_mode()
-	context_title_label.text = "🏪 放置餐厅" if mode != "move_restaurant" else "🏪 移动餐厅"
-	context_hint_label.text = overlay.get_hint_text()
-
-	restaurant_row.visible = (mode == "move_restaurant")
-	employee_row.visible = false
-	piece_row.visible = false
-	direction_row.visible = false
-	rotation_row.visible = true
-	house_number_row.visible = false
-
-	_rebuild_rotation_option(overlay.get_selected_rotation())
-	_rebuild_employee_option(overlay.get_available_employees(), overlay.get_selected_employee())
-	employee_row.visible = not overlay.get_available_employees().is_empty()
-
-	if mode == "move_restaurant":
-		_rebuild_restaurant_option(
-			overlay.get_available_restaurants(),
-			overlay.get_selected_restaurant()
-		)
-
-	confirm_context_button.text = "确认移动" if mode == "move_restaurant" else "确认放置"
-	confirm_context_button.disabled = not overlay.can_confirm()
-
-	_context_syncing = false
-
-func _refresh_house_placement_context(overlay: HousePlacementOverlay) -> void:
-	if overlay == null or not is_instance_valid(overlay):
-		clear_context_overlay()
-		return
-
-	_context_syncing = true
-	_show_context_panel()
-
-	var mode := overlay.get_mode()
-	context_title_label.text = "🌳 添加花园" if mode == "add_garden" else "🏠 放置房屋"
-	context_hint_label.text = overlay.get_hint_text()
-
-	restaurant_row.visible = false
-	employee_row.visible = false
-	piece_row.visible = false
-	rotation_row.visible = (mode == "place_house")
-	house_number_row.visible = (mode == "place_house")
-	direction_row.visible = (mode == "add_garden")
-
-	_rebuild_employee_option(overlay.get_available_employees(), overlay.get_selected_employee())
-	employee_row.visible = not overlay.get_available_employees().is_empty()
-
-	if mode == "place_house":
-		_rebuild_rotation_option(overlay.get_selected_rotation())
-		_rebuild_house_number_option(
-			overlay.get_available_house_numbers(),
-			overlay.get_selected_house_number()
-		)
-	if mode == "add_garden":
-		_rebuild_direction_option(overlay.get_selected_direction())
-
-	confirm_context_button.text = "确认添加花园" if mode == "add_garden" else "确认放置"
-	confirm_context_button.disabled = not overlay.can_confirm()
-
-	_context_syncing = false
-
-func _refresh_piece_placement_context(overlay) -> void:
-	if overlay == null or not is_instance_valid(overlay):
-		clear_context_overlay()
-		return
-
-	_context_syncing = true
-	_show_context_panel()
-
-	var mode := str(overlay.get_mode()).strip_edges()
-	var title := _get_executor_display_name(mode)
-	if title.is_empty():
-		context_title_label.text = "🧩 放置板块"
-	else:
-		context_title_label.text = "🧩 %s" % title
-	context_hint_label.text = overlay.get_hint_text()
-
-	restaurant_row.visible = false
-	employee_row.visible = false
-	piece_row.visible = true
-	rotation_row.visible = true
-	house_number_row.visible = false
-	direction_row.visible = false
-
-	_rebuild_piece_flow(overlay.get_available_pieces(), overlay.get_selected_piece(), overlay.get_selected_rotation())
-	_rebuild_rotation_option(overlay.get_selected_rotation())
-
-	confirm_context_button.text = "确认放置"
-	confirm_context_button.disabled = not overlay.can_confirm()
-
-	_context_syncing = false
-
-func _rebuild_rotation_option(selected_rotation: int) -> void:
-	if not is_instance_valid(rotation_option):
-		return
-	rotation_option.clear()
-	for rot in [0, 90, 180, 270]:
-		rotation_option.add_item("%d°" % rot)
-		var idx := rotation_option.get_item_count() - 1
-		rotation_option.set_item_metadata(idx, rot)
-	_select_option_by_metadata_int(rotation_option, selected_rotation)
-
-func _rebuild_house_number_option(available_numbers: Array[int], selected_house_number: int) -> void:
-	if not is_instance_valid(house_number_option):
-		return
-	house_number_option.clear()
-	house_number_option.add_item("请选择...")
-	house_number_option.set_item_metadata(0, -1)
-	var nums: Array[int] = []
-	for n_val in available_numbers:
-		nums.append(int(n_val))
-	nums.sort()
-	for n in nums:
-		house_number_option.add_item(str(n))
-		var idx := house_number_option.get_item_count() - 1
-		house_number_option.set_item_metadata(idx, int(n))
-	_select_option_by_metadata_int(house_number_option, int(selected_house_number))
-
-func _rebuild_direction_option(selected_direction: String) -> void:
-	if not is_instance_valid(direction_option):
-		return
-	direction_option.clear()
-	for d in ["N", "E", "S", "W"]:
-		direction_option.add_item(d)
-		var idx := direction_option.get_item_count() - 1
-		direction_option.set_item_metadata(idx, d)
-	_select_option_by_metadata_string(direction_option, selected_direction)
-
-func _rebuild_restaurant_option(restaurant_ids: Array[String], selected_restaurant_id: String) -> void:
-	if not is_instance_valid(restaurant_option):
-		return
-	restaurant_option.clear()
-	var ids := restaurant_ids.duplicate()
-	ids.sort()
-	for rid in ids:
-		var s := str(rid).strip_edges()
-		if s.is_empty():
-			continue
-		var label := s
-		if _context_overlay != null and is_instance_valid(_context_overlay) and _context_overlay.has_method("get_restaurant_display_label"):
-			var v = _context_overlay.call("get_restaurant_display_label", s)
-			var t := str(v).strip_edges()
-			if not t.is_empty():
-				label = t
-		restaurant_option.add_item(label)
-		var idx := restaurant_option.get_item_count() - 1
-		restaurant_option.set_item_metadata(idx, s)
-	_select_option_by_metadata_string(restaurant_option, selected_restaurant_id)
-
-func _rebuild_piece_flow(piece_ids: Array[String], selected_piece_id: String, rotation: int) -> void:
-	if not is_instance_valid(piece_flow):
-		return
-
-	# Clear old buttons
-	for child in piece_flow.get_children():
-		if is_instance_valid(child):
-			child.queue_free()
-
-	var ids := piece_ids.duplicate()
-	var selected := str(selected_piece_id).strip_edges()
-	var rot := int(rotation)
-
-	var group := ButtonGroup.new()
-	group.allow_unpress = false
-
-	for pid in ids:
-		var s := str(pid).strip_edges()
-		if s.is_empty():
-			continue
-
-		var btn = PiecePickerButtonClass.new()
-		btn.piece_id = s
-		btn.call("set_piece_rotation", rot)
-		btn.button_group = group
-		btn.button_pressed = (not selected.is_empty()) and s == selected
-		if _map_skin != null and is_instance_valid(_map_skin) and _map_skin.has_method("get_piece_texture") and btn.has_method("set_preview_texture"):
-			btn.call("set_preview_texture", _map_skin.call("get_piece_texture", s))
-
-		var label := s
-		if _context_overlay != null and is_instance_valid(_context_overlay) and _context_overlay.has_method("get_piece_display_label"):
-			var v = _context_overlay.call("get_piece_display_label", s)
-			var t := str(v).strip_edges()
-			if not t.is_empty():
-				label = t
-		btn.tooltip_text = label
-
-		btn.pressed.connect(_on_piece_button_pressed.bind(s))
-		piece_flow.add_child(btn)
-
-func _on_piece_button_pressed(piece_id: String) -> void:
-	var pid := str(piece_id).strip_edges()
-	if pid.is_empty():
-		return
-	_call_context_overlay_method("set_selected_piece", [pid])
-
-func _rebuild_employee_option(employee_ids: Array[String], selected_employee_id: String) -> void:
-	if not is_instance_valid(employee_option):
-		return
-	var ids: Array[String] = []
-	var seen := {}
-	for v in employee_ids:
-		var s := str(v).strip_edges()
-		if s.is_empty():
-			continue
-		if not seen.has(s):
-			ids.append(s)
-		seen[s] = int(seen.get(s, 0)) + 1
-	ids.sort()
-
-	var items: Array[Dictionary] = []
-	for emp_id in ids:
-		items.append({
-			"id": emp_id,
-			"employee_def": _get_employee_def_for_card(emp_id),
-			"badge_text": "",
-			"enabled": true,
-		})
-
-	var selected := str(selected_employee_id).strip_edges()
-	if selected.is_empty() and not ids.is_empty():
-		selected = str(ids[0])
-	employee_option.set_items(items, selected)
-
-func _select_option_by_metadata_int(option: OptionButton, desired: int) -> void:
-	if option == null or not is_instance_valid(option):
-		return
-	for i in range(option.get_item_count()):
-		if int(option.get_item_metadata(i)) == desired:
-			option.select(i)
-			return
-	if option.get_item_count() > 0:
-		option.select(0)
-
-func _select_option_by_metadata_string(option: OptionButton, desired: String) -> void:
-	if option == null or not is_instance_valid(option):
-		return
-	var d := str(desired).strip_edges()
-	if not d.is_empty():
-		for i in range(option.get_item_count()):
-			if str(option.get_item_metadata(i)) == d:
-				option.select(i)
-				return
-	if option.get_item_count() > 0:
-		option.select(0)
-
-func _call_context_overlay_method(method: StringName, args: Array = []) -> bool:
-	if _context_overlay == null or not is_instance_valid(_context_overlay):
-		return false
-	if not _context_overlay.has_method(method):
-		return false
-	_context_overlay.callv(method, args)
-	return true
-
-func _on_cancel_context_pressed() -> void:
-	if not _call_context_overlay_method("request_cancel"):
-		clear_context_overlay()
-		return
-	clear_context_overlay()
-
-func _on_confirm_context_pressed() -> void:
-	if _context_overlay == null or not is_instance_valid(_context_overlay):
-		clear_context_overlay()
-		return
-	if confirm_context_button != null and confirm_context_button.disabled:
-		return
-	_call_context_overlay_method("request_confirm")
-	if confirm_context_button != null:
-		confirm_context_button.disabled = true
-
-func _on_restaurant_option_selected(index: int) -> void:
-	if _context_syncing:
-		return
-	if not is_instance_valid(restaurant_option):
-		return
-	var rid := str(restaurant_option.get_item_metadata(index))
-	_call_context_overlay_method("set_selected_restaurant", [rid])
-
-func _on_employee_option_selected(employee_type: String) -> void:
-	if _context_syncing:
-		return
-	var emp_id := str(employee_type).strip_edges()
-	_call_context_overlay_method("set_selected_employee", [emp_id])
-
-func _get_employee_def_for_card(employee_type: String) -> Dictionary:
-	var emp_id := str(employee_type).strip_edges()
-	if emp_id.is_empty():
-		return {"id": emp_id, "name": emp_id}
-	if not EmployeeRegistryClass.is_loaded():
-		return {"id": emp_id, "name": emp_id}
-	var def_val = EmployeeRegistryClass.get_def(emp_id)
-	if def_val != null and def_val.has_method("to_dict"):
-		return def_val.to_dict()
-	return {"id": emp_id, "name": emp_id}
-
-func _on_rotation_option_selected(index: int) -> void:
-	if _context_syncing:
-		return
-	if not is_instance_valid(rotation_option):
-		return
-	var rot := int(rotation_option.get_item_metadata(index))
-	_call_context_overlay_method("set_selected_rotation", [rot])
-
-func _on_house_number_option_selected(index: int) -> void:
-	if _context_syncing:
-		return
-	if not is_instance_valid(house_number_option):
-		return
-	var n := int(house_number_option.get_item_metadata(index))
-	_call_context_overlay_method("set_selected_house_number", [n])
-
-func _on_direction_option_selected(index: int) -> void:
-	if _context_syncing:
-		return
-	if not is_instance_valid(direction_option):
-		return
-	var d := str(direction_option.get_item_metadata(index))
-	_call_context_overlay_method("set_selected_direction", [d])
+	_context_controller.clear_context_overlay()
 
 func set_action_registry(registry) -> void:
 	_action_registry = registry
+	if _context_controller != null:
+		_context_controller.set_action_registry(_action_registry)
 	refresh()
 
 func set_map_skin(skin) -> void:
-	# Optional: used to render piece previews in the piece picker buttons.
-	if _map_skin == skin:
+	if _context_controller == null:
+		_setup_context_ui()
+	if _context_controller == null:
 		return
-	_map_skin = skin
-	if _context_overlay != null and is_instance_valid(_context_overlay) and PiecePlacementOverlayScript != null and _context_overlay is PiecePlacementOverlayScript:
-		_refresh_context_from_overlay()
+	_context_controller.set_map_skin(skin)
 
 func set_game_state(state: GameState) -> void:
 	_game_state = state
