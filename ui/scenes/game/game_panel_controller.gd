@@ -11,10 +11,7 @@ const MarketingPanelsClass = preload("res://ui/scenes/game/game_panel_marketing_
 const PlacementOverlaysClass = preload("res://ui/scenes/game/game_panel_placement_overlays.gd")
 const EndPanelsClass = preload("res://ui/scenes/game/game_panel_end_panels.gd")
 const RestructuringControllerClass = preload("res://ui/scenes/game/game_panel_restructuring_controller.gd")
-
-const TurnOrderSelectionModalScene = preload("res://ui/components/modal_panel/turn_order_selection_modal.tscn")
-const ReserveCardSelectionModalScene = preload("res://ui/components/modal_panel/reserve_card_selection_modal.tscn")
-const FridgeKeepModalScene = preload("res://ui/components/modal_panel/fridge_keep_modal.tscn")
+const ModalsControllerClass = preload("res://ui/scenes/game/game_panel_modals_controller.gd")
 const EmployeeTreeScene = preload("res://ui/components/employee_tree/employee_tree.tscn")
 const MilestoneFullScreenViewScene = preload("res://ui/components/milestone_panel/milestone_full_screen_view.tscn")
 const ReserveAreaFullScreenViewScene = preload("res://ui/components/reserve_area/reserve_area_full_screen_view.tscn")
@@ -37,18 +34,12 @@ var _placement_overlays = null
 var _end_panels = null
 
 var _restructuring_controller = null
-var _turn_order_modal = null
-var _reserve_card_modal = null
-var _fridge_keep_modal = null
+var _modals_controller = null
 var _employee_tree_panel = null
 var _milestone_full_screen_view = null
 var _reserve_area_full_screen_view = null
 
 var _view_player_id: int = -1
-var _pending_reserve_card_open_player_id: int = -1
-var _pending_reserve_card_open_interactive: bool = true
-var _pending_reserve_card_open_attempts: int = 0
-var _reserve_card_open_routine_running: bool = false
 
 func _init(scene, map_controller, overlay_controller, execute_command: Callable, refresh_ui: Callable) -> void:
 	_scene = scene
@@ -73,6 +64,7 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 		Callable(self, "get_view_player_id"),
 		Callable(self, "_on_view_player_selected")
 	)
+	_modals_controller = ModalsControllerClass.new(_scene, _execute_command)
 
 func connect_signals(action_panel, turn_order_track, hand_area, company_structure) -> void:
 	UiSignalHelpersClass.safe_connect(action_panel, "action_requested", on_action_requested)
@@ -206,18 +198,9 @@ func dispose() -> void:
 	if _restructuring_controller != null and _restructuring_controller.has_method("dispose"):
 		_restructuring_controller.dispose()
 	_restructuring_controller = null
-
-	if is_instance_valid(_turn_order_modal):
-		_turn_order_modal.queue_free()
-	_turn_order_modal = null
-
-	if is_instance_valid(_reserve_card_modal):
-		_reserve_card_modal.queue_free()
-	_reserve_card_modal = null
-
-	if is_instance_valid(_fridge_keep_modal):
-		_fridge_keep_modal.queue_free()
-	_fridge_keep_modal = null
+	if _modals_controller != null and _modals_controller.has_method("dispose"):
+		_modals_controller.dispose()
+	_modals_controller = null
 
 	if is_instance_valid(_employee_tree_panel):
 		_employee_tree_panel.queue_free()
@@ -239,12 +222,9 @@ func has_open_modal_ui() -> bool:
 	if _restructuring_controller != null and _restructuring_controller.has_method("has_open_modal_ui"):
 		if bool(_restructuring_controller.has_open_modal_ui()):
 			return true
-	if is_instance_valid(_turn_order_modal) and _turn_order_modal.visible:
-		return true
-	if is_instance_valid(_reserve_card_modal) and _reserve_card_modal.visible:
-		return true
-	if is_instance_valid(_fridge_keep_modal) and _fridge_keep_modal.visible:
-		return true
+	if _modals_controller != null and _modals_controller.has_method("has_open_modal_ui"):
+		if bool(_modals_controller.has_open_modal_ui()):
+			return true
 	if is_instance_valid(_employee_tree_panel) and _employee_tree_panel.visible:
 		return true
 	if is_instance_valid(_milestone_full_screen_view) and _milestone_full_screen_view.visible:
@@ -254,11 +234,10 @@ func has_open_modal_ui() -> bool:
 	return false
 
 func hide_modal_ui() -> void:
-	_hide_turn_order_modal()
+	if _modals_controller != null and _modals_controller.has_method("hide"):
+		_modals_controller.hide()
 	if _restructuring_controller != null and _restructuring_controller.has_method("hide_modal"):
 		_restructuring_controller.hide_modal()
-	_hide_reserve_card_modal()
-	_hide_fridge_keep_modal()
 	_hide_employee_tree()
 	_hide_milestone_full_screen_view()
 	_hide_reserve_area_full_screen_view()
@@ -622,8 +601,8 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 		ActionIdsClass.SKIP:
 			_execute_command.call(Command.create(ActionIdsClass.SKIP, actor_id, params))
 		"choose_turn_order":
-			if state != null:
-				_show_turn_order_modal_for_state(state)
+			if state != null and _modals_controller != null:
+				_modals_controller.show_turn_order_modal_for_state(state)
 
 		# P0 动作 - 需要弹出面板
 		"recruit":
@@ -828,15 +807,18 @@ func _sync_modals(state: GameState) -> void:
 
 	# 回放/复盘（只读时间线）：禁止强制交互弹窗（否则会遮挡并吞掉时间线输入）
 	if is_timeline_read_only:
-		_hide_reserve_card_modal()
-		_hide_turn_order_modal()
+		if _modals_controller != null:
+			_modals_controller.hide()
 		if _restructuring_controller != null and _restructuring_controller.has_method("hide_modal"):
 			_restructuring_controller.hide_modal()
-		_hide_fridge_keep_modal()
 		return
 
 	var current_player_id := state.get_current_player_id()
-	var covered := _get_modal_cover_rect()
+	var covered := Rect2(Vector2.ZERO, Vector2.ZERO)
+	if _modals_controller != null and _modals_controller.has_method("get_modal_cover_rect"):
+		covered = _modals_controller.get_modal_cover_rect()
+	elif _scene != null:
+		covered = Rect2(Vector2.ZERO, _scene.get_viewport_rect().size)
 
 	var is_online := false
 	var local_player_id := -1
@@ -850,9 +832,11 @@ func _sync_modals(state: GameState) -> void:
 		var interactive := true
 		if is_online:
 			interactive = is_local_turn
-		_show_reserve_card_modal(state, current_player_id, covered, interactive)
+		if _modals_controller != null:
+			_modals_controller.show_reserve_card_modal(state, current_player_id, covered, interactive)
 	else:
-		_hide_reserve_card_modal()
+		if _modals_controller != null:
+			_modals_controller.hide_reserve_card_modal()
 
 	# 冰箱保留选择（Cleanup）
 	var should_show_fridge_keep := false
@@ -868,9 +852,11 @@ func _sync_modals(state: GameState) -> void:
 					should_show_fridge_keep = true
 
 	if should_show_fridge_keep and is_local_turn:
-		_show_fridge_keep_modal(state, current_player_id, covered)
+		if _modals_controller != null:
+			_modals_controller.show_fridge_keep_modal(state, current_player_id, covered)
 	else:
-		_hide_fridge_keep_modal()
+		if _modals_controller != null:
+			_modals_controller.hide_fridge_keep_modal()
 
 	# 顺序选择（OrderOfBusiness）
 	var selections := {}
@@ -900,366 +886,15 @@ func _sync_modals(state: GameState) -> void:
 			turn_order_interactive = is_local_turn
 
 	if should_show_turn_order:
-		_show_turn_order_modal(state, current_player_id, selections, covered, turn_order_interactive, local_player_id)
+		if _modals_controller != null:
+			_modals_controller.show_turn_order_modal(state, current_player_id, selections, covered, turn_order_interactive, local_player_id)
 	else:
-		_hide_turn_order_modal()
+		if _modals_controller != null:
+			_modals_controller.hide_turn_order_modal()
 
 	# 重组（Restructuring）
 	if _restructuring_controller != null and _restructuring_controller.has_method("sync_modal"):
 		_view_player_id = int(_restructuring_controller.sync_modal(state, covered, _view_player_id))
-
-func _get_modal_cover_rect() -> Rect2:
-	if _scene == null:
-		return Rect2(Vector2.ZERO, Vector2.ZERO)
-
-	var center_split = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit")
-	if center_split is Control:
-		var c: Control = center_split
-		var gr := c.get_global_rect()
-		var scene_global := Vector2.ZERO
-		if _scene is Control:
-			scene_global = (_scene as Control).global_position
-		return Rect2(gr.position - scene_global, gr.size)
-
-	return Rect2(Vector2.ZERO, _scene.get_viewport_rect().size)
-
-func _initialize_modal(modal_ref, scene: PackedScene, signal_map: Dictionary):
-	if _scene == null:
-		return modal_ref
-	if is_instance_valid(modal_ref):
-		return modal_ref
-
-	var inst = scene.instantiate()
-	if not is_instance_valid(inst):
-		return inst
-
-	_scene.add_child(inst)
-	if inst is Control:
-		(inst as Control).z_index = 900
-
-	for sig_name in signal_map.keys():
-		var cb = signal_map.get(sig_name, null)
-		if cb is Callable:
-			UiSignalHelpersClass.safe_connect(inst, sig_name, cb)
-
-	return inst
-
-func _show_turn_order_modal_for_state(state: GameState) -> void:
-	if state == null:
-		return
-	var current_player_id := state.get_current_player_id()
-	var selections := {}
-	var is_online := false
-	var local_player_id := -1
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-		is_online = true
-		local_player_id = int(NetContext.local_player_id)
-
-	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and (state.round_state is Dictionary):
-		var rs: Dictionary = state.round_state
-		var oob_val = rs.get("order_of_business", null)
-		if oob_val is Dictionary:
-			var oob: Dictionary = oob_val
-			var picks_val = oob.get("picks", null)
-			if picks_val is Array:
-				var picks: Array = picks_val
-				for pos in range(min(picks.size(), state.players.size())):
-					var pid: int = int(picks[pos])
-					if pid >= 0:
-						selections[pos] = pid
-	else:
-		for i in range(state.turn_order.size()):
-			if i < state.players.size():
-				selections[i] = state.turn_order[i]
-
-	var interactive := true
-	if is_online:
-		interactive = (local_player_id >= 0 and local_player_id == current_player_id)
-	_show_turn_order_modal(state, current_player_id, selections, _get_modal_cover_rect(), interactive, local_player_id)
-
-func _show_turn_order_modal(state: GameState, current_player_id: int, selections: Dictionary, covered: Rect2, interactive: bool, local_player_id: int) -> void:
-	if _scene == null:
-		return
-	if state == null:
-		return
-
-	_turn_order_modal = _initialize_modal(_turn_order_modal, TurnOrderSelectionModalScene, {
-		"completed": _on_turn_order_modal_completed,
-		"cancelled": _on_turn_order_modal_cancelled,
-	})
-
-	if not is_instance_valid(_turn_order_modal):
-		return
-
-	if _turn_order_modal.has_method("setup"):
-		_turn_order_modal.call("setup", state, current_player_id, selections, bool(interactive), int(local_player_id))
-	if _turn_order_modal.has_method("open"):
-		_turn_order_modal.call("open", covered)
-	elif _turn_order_modal is Control:
-		var c: Control = _turn_order_modal
-		c.position = covered.position
-		c.size = covered.size
-		c.visible = true
-
-func _hide_turn_order_modal() -> void:
-	if not is_instance_valid(_turn_order_modal):
-		return
-	if _turn_order_modal.has_method("close"):
-		_turn_order_modal.call("close")
-	elif _turn_order_modal is Control:
-		(_turn_order_modal as Control).visible = false
-
-func _on_turn_order_modal_completed(result: Dictionary) -> void:
-	if _scene == null or _scene.game_engine == null:
-		return
-	if not is_instance_valid(_turn_order_modal):
-		return
-
-	var pos_val = result.get("position", null)
-	var position := -1
-	if pos_val is int:
-		position = int(pos_val)
-	elif pos_val is float:
-		var f: float = float(pos_val)
-		if f == floor(f):
-			position = int(f)
-	if position < 0:
-		return
-
-	if _turn_order_modal.has_method("set_confirm_enabled"):
-		_turn_order_modal.call("set_confirm_enabled", false)
-
-	var state: GameState = _scene.game_engine.get_state()
-	if state == null:
-		return
-	var actor_id := state.get_current_player_id()
-	if actor_id < 0:
-		return
-
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and int(NetContext.local_player_id) >= 0:
-		actor_id = int(NetContext.local_player_id)
-
-	_execute_command.call(Command.create("choose_turn_order", actor_id, {"position": position}))
-
-func _on_turn_order_modal_cancelled() -> void:
-	_hide_turn_order_modal()
-
-func _show_reserve_card_modal(state: GameState, current_player_id: int, covered: Rect2, interactive: bool) -> void:
-	if _scene == null:
-		return
-	if state == null:
-		return
-
-	_reserve_card_modal = _initialize_modal(_reserve_card_modal, ReserveCardSelectionModalScene, {
-		"completed": _on_reserve_card_modal_completed,
-	})
-
-	if not is_instance_valid(_reserve_card_modal):
-		return
-
-	if interactive:
-		if _reserve_card_modal.has_method("setup"):
-			_reserve_card_modal.call("setup", state, current_player_id)
-	else:
-		# Waiting mode must never reveal reserve card details.
-		if _reserve_card_modal.has_method("setup_waiting"):
-			_reserve_card_modal.call("setup_waiting", current_player_id)
-		else:
-			_hide_reserve_card_modal()
-			return
-	if _reserve_card_modal.has_method("open"):
-		# 首次打开时 UI 布局可能尚未完成，CenterSplit 的 rect 会错误导致遮罩落在左上角；
-		# 延迟一帧再重新计算覆盖区域并打开，确保首位玩家显示正常。
-		if not _reserve_card_modal.visible:
-			if _pending_reserve_card_open_player_id != current_player_id or _pending_reserve_card_open_interactive != interactive:
-				_pending_reserve_card_open_player_id = current_player_id
-				_pending_reserve_card_open_interactive = interactive
-				_pending_reserve_card_open_attempts = 0
-			if not _reserve_card_open_routine_running:
-				_reserve_card_open_routine_running = true
-				call_deferred("_deferred_open_reserve_card_modal")
-			return
-
-		_reserve_card_modal.call("open", covered)
-	elif _reserve_card_modal is Control:
-		var c: Control = _reserve_card_modal
-		c.position = covered.position
-		c.size = covered.size
-		c.visible = true
-
-func _deferred_open_reserve_card_modal() -> void:
-	# 注意：call_deferred 只保证“当前调用栈之后”，不保证已完成容器布局；
-	# 因此这里按帧等待并重算覆盖区域，避免首位玩家第一次弹窗落在左上角。
-	while true:
-		var expected_player_id := _pending_reserve_card_open_player_id
-		var expected_interactive := _pending_reserve_card_open_interactive
-		if expected_player_id < 0:
-			_reserve_card_open_routine_running = false
-			return
-		if _scene == null or _scene.game_engine == null:
-			_reserve_card_open_routine_running = false
-			return
-		if not is_instance_valid(_reserve_card_modal):
-			_reserve_card_open_routine_running = false
-			return
-
-		# 等待至少一帧，让 VBox/SplitContainer 等容器完成布局（位置/尺寸）。
-		await _scene.get_tree().process_frame
-
-		# 过程中可能发生状态变化，重新校验
-		if _pending_reserve_card_open_player_id != expected_player_id or _pending_reserve_card_open_interactive != expected_interactive:
-			_pending_reserve_card_open_attempts = 0
-			continue
-
-		var state: GameState = _scene.game_engine.get_state()
-		if state == null:
-			_reserve_card_open_routine_running = false
-			return
-		if str(state.phase) != DefsClass.PHASE_SETUP or str(state.sub_phase) != DefsClass.SUB_PHASE_RESERVE_CARDS:
-			_pending_reserve_card_open_player_id = -1
-			_pending_reserve_card_open_attempts = 0
-			_reserve_card_open_routine_running = false
-			return
-
-		var current_player_id := state.get_current_player_id()
-		if current_player_id != expected_player_id:
-			_reserve_card_open_routine_running = false
-			return
-
-		var covered := _get_modal_cover_rect()
-
-		# UI 布局刚完成前的一两帧，CenterSplit 的 rect 可能异常偏小（但非 0），导致遮罩落在左上角；
-		# 这里最多等待几帧，直到覆盖区域尺寸接近 viewport（再打开）。
-		var viewport_size = _scene.get_viewport_rect().size
-		var should_retry := false
-		if viewport_size.x > 1.0 and viewport_size.y > 1.0:
-			if covered.size.x < viewport_size.x * 0.4 or covered.size.y < viewport_size.y * 0.4:
-				should_retry = true
-		else:
-			should_retry = covered.size.x <= 1.0 or covered.size.y <= 1.0
-
-		if should_retry and _pending_reserve_card_open_attempts < 8:
-			_pending_reserve_card_open_attempts += 1
-			continue
-
-		_pending_reserve_card_open_player_id = -1
-		_pending_reserve_card_open_interactive = true
-		_pending_reserve_card_open_attempts = 0
-		_reserve_card_open_routine_running = false
-
-		# 进入储备卡选择时再隐藏加载遮罩，避免“先闪一帧游戏 UI 再弹窗”的体验。
-		if SceneManager != null and SceneManager.has_method("hide_loading"):
-			SceneManager.hide_loading()
-
-		if expected_interactive:
-			if _reserve_card_modal.has_method("setup"):
-				_reserve_card_modal.call("setup", state, current_player_id)
-		else:
-			if _reserve_card_modal.has_method("setup_waiting"):
-				_reserve_card_modal.call("setup_waiting", current_player_id)
-		if _reserve_card_modal.has_method("open"):
-			_reserve_card_modal.call("open", covered)
-		elif _reserve_card_modal is Control:
-			var c: Control = _reserve_card_modal
-			c.position = covered.position
-			c.size = covered.size
-			c.visible = true
-		return
-
-func _hide_reserve_card_modal() -> void:
-	_pending_reserve_card_open_player_id = -1
-	_pending_reserve_card_open_interactive = true
-	_pending_reserve_card_open_attempts = 0
-	if not is_instance_valid(_reserve_card_modal):
-		return
-	if _reserve_card_modal.has_method("close"):
-		_reserve_card_modal.call("close")
-	elif _reserve_card_modal is Control:
-		(_reserve_card_modal as Control).visible = false
-
-func _on_reserve_card_modal_completed(result: Dictionary) -> void:
-	if _scene == null or _scene.game_engine == null:
-		return
-	if not is_instance_valid(_reserve_card_modal):
-		return
-
-	var idx_val = result.get("selected_index", null)
-	var selected_index := -1
-	if idx_val is int:
-		selected_index = int(idx_val)
-	elif idx_val is float:
-		var f: float = float(idx_val)
-		if f == floor(f):
-			selected_index = int(f)
-	if selected_index < 0:
-		return
-
-	if _reserve_card_modal.has_method("set_confirm_enabled"):
-		_reserve_card_modal.call("set_confirm_enabled", false)
-
-	var state: GameState = _scene.game_engine.get_state()
-	if state == null:
-		return
-	var current_player_id := state.get_current_player_id()
-	if current_player_id < 0:
-		return
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-		var local_pid := int(NetContext.local_player_id)
-		if local_pid < 0 or current_player_id != local_pid:
-			return
-
-	_execute_command.call(Command.create("select_reserve_card", current_player_id, {"selected_index": selected_index}))
-
-func _show_fridge_keep_modal(state: GameState, current_player_id: int, covered: Rect2) -> void:
-	if _scene == null:
-		return
-	if state == null:
-		return
-
-	_fridge_keep_modal = _initialize_modal(_fridge_keep_modal, FridgeKeepModalScene, {
-		"completed": _on_fridge_keep_modal_completed,
-	})
-	if not is_instance_valid(_fridge_keep_modal):
-		return
-
-	if _fridge_keep_modal.has_method("setup"):
-		_fridge_keep_modal.call("setup", state, current_player_id)
-	if _fridge_keep_modal.has_method("open"):
-		_fridge_keep_modal.call("open", covered)
-	elif _fridge_keep_modal is Control:
-		var c: Control = _fridge_keep_modal
-		c.position = covered.position
-		c.size = covered.size
-		c.visible = true
-
-func _hide_fridge_keep_modal() -> void:
-	if not is_instance_valid(_fridge_keep_modal):
-		return
-	if _fridge_keep_modal.has_method("close"):
-		_fridge_keep_modal.call("close")
-	elif _fridge_keep_modal is Control:
-		(_fridge_keep_modal as Control).visible = false
-
-func _on_fridge_keep_modal_completed(result: Dictionary) -> void:
-	if _scene == null or _scene.game_engine == null:
-		return
-	if not is_instance_valid(_fridge_keep_modal):
-		return
-
-	var keep_val = result.get("keep", {})
-	var keep: Dictionary = keep_val if keep_val is Dictionary else {}
-
-	if _fridge_keep_modal.has_method("set_confirm_enabled"):
-		_fridge_keep_modal.call("set_confirm_enabled", false)
-
-	var state: GameState = _scene.game_engine.get_state()
-	if state == null:
-		return
-	var current_player_id := state.get_current_player_id()
-	if current_player_id < 0:
-		return
-
-	_execute_command.call(Command.create("choose_fridge_keep", current_player_id, {"keep": keep}))
 
 func _ensure_employee_tree_panel() -> void:
 	if _scene == null:
