@@ -52,6 +52,7 @@ const GameSaveLoadControllerClass = preload("res://ui/scenes/game/game_save_load
 const GameLayoutControllerClass = preload("res://ui/scenes/game/game_layout_controller.gd")
 const GameRightPanelDockControllerClass = preload("res://ui/scenes/game/game_right_panel_dock_controller.gd")
 const GameUiSyncControllerClass = preload("res://ui/scenes/game/game_ui_sync_controller.gd")
+const GameCommandControllerClass = preload("res://ui/scenes/game/game_command_controller.gd")
 const GameOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_controller.gd")
 const GameMapInteractionControllerClass = preload("res://ui/scenes/game/game_map_interaction_controller.gd")
 const GamePanelControllerClass = preload("res://ui/scenes/game/game_panel_controller.gd")
@@ -60,12 +61,9 @@ const GameTimelineControllerClass = preload("res://ui/scenes/game/game_timeline_
 const DebugPanelScene = preload("res://ui/scenes/debug/debug_panel.tscn")
 const ConfirmDialogScene = preload("res://ui/dialogs/confirm_dialog.tscn")
 const SaveLoadDialogScript = preload("res://ui/dialogs/save_load_dialog.gd")
-const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
-const EventTimelineBuildClass = preload("res://gameplay/replay/event_timeline_build.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
-const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 # 游戏状态
@@ -83,6 +81,7 @@ var _panel_controller = null
 var _online_resync_controller = null
 var _timeline_controller = null
 var _ui_sync_controller = null
+var _command_controller = null
 
 # 调试面板
 var _debug_panel: Window = null
@@ -94,12 +93,6 @@ var _confirm_dialog_on_cancel: Callable = Callable()
 
 var _background_ui_warmup_started: bool = false
 var _startup_profile_reported: bool = false
-
-const AUTO_MANDATORY_ACTION_IDS := {
-	ActionIdsClass.SET_PRICE: true,
-	ActionIdsClass.SET_DISCOUNT: true,
-	ActionIdsClass.SET_LUXURY_PRICE: true,
-}
 
 func _ready() -> void:
 	var span_ready := PerfTraceClass.begin_span("game:_ready")
@@ -228,6 +221,15 @@ func _ready() -> void:
 		_timeline_controller
 	)
 
+	_command_controller = GameCommandControllerClass.new(
+		Callable(self, "_get_game_engine"),
+		Callable(self, "_update_ui"),
+		Callable(self, "_show_confirm"),
+		_timeline_controller,
+		_panel_controller,
+		game_log_panel
+	)
+
 	PerfTraceClass.end_span(span_layout)
 
 	var span_init_game := PerfTraceClass.begin_span("game:_initialize_game")
@@ -248,6 +250,8 @@ func _ready() -> void:
 		_online_resync_controller.initialize()
 		if _ui_sync_controller != null and _ui_sync_controller.has_method("set_online_resync_controller"):
 			_ui_sync_controller.set_online_resync_controller(_online_resync_controller)
+		if _command_controller != null and _command_controller.has_method("set_online_resync_controller"):
+			_command_controller.set_online_resync_controller(_online_resync_controller)
 
 	# 初始化调试面板
 	_setup_debug_panel()
@@ -413,6 +417,10 @@ func _dispose_runtime() -> void:
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("dispose"):
 		_ui_sync_controller.dispose()
 	_ui_sync_controller = null
+
+	if _command_controller != null and _command_controller.has_method("dispose"):
+		_command_controller.dispose()
+	_command_controller = null
 
 	if Globals != null and Globals.current_game_engine == game_engine:
 		Globals.current_game_engine = null
@@ -610,227 +618,27 @@ func _on_debug_command_executed(command: String, _result: String) -> void:
 		_update_ui()
 
 func rewind_to_turn_start() -> void:
-	if game_engine == null:
-		return
-	if _timeline_controller != null and _timeline_controller.is_replay_mode_active():
-		GameLog.warn("Game", "回放模式下无法回退回合")
-		return
-
-	var idx_r: Result = game_engine.find_current_player_turn_start_command_index()
-	if not idx_r.ok:
-		GameLog.warn("Game", "计算回合开始索引失败: %s" % idx_r.error)
-		return
-
-	var target_index := int(idx_r.value)
-	var current_index := int(game_engine.current_command_index)
-	if target_index >= current_index:
-		return
-
-	var state := game_engine.get_state()
-	var pid := state.get_current_player_id()
-	var phase_name := str(state.phase)
-	var steps := current_index - target_index
-
-	_show_confirm(
-		"回退到回合开始",
-		"确定要回退到当前玩家（P%d）的回合开始吗？\n将撤销从该回合开始以来的 %d 步操作。\n（阶段：%s）" % [pid + 1, steps, phase_name],
-		Callable(self, "_confirm_rewind_to_turn_start").bind(target_index),
-		Callable(),
-		"回退",
-		"取消"
-	)
-
-func _confirm_rewind_to_turn_start(target_index: int) -> void:
-	if game_engine == null:
-		return
-
-	# 联机：回退必须由 server 执行并广播（否则会导致各客户端状态不一致）。
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-		if _online_resync_controller == null:
-			GameLog.warn("Game", "联机模式下回退失败：控制器未就绪")
-			return
-		# 避免重复触发（例如用户连续点击）
-		if _online_resync_controller.is_resync_in_progress():
-			return
-		_online_resync_controller.begin_rewind_to_turn_start_request()
-		return
-
-	var result := game_engine.rewind_to_command(target_index)
-	if not result.ok:
-		GameLog.warn("Game", "回退到回合开始失败: %s" % result.error)
-	else:
-		if _timeline_controller != null:
-			_timeline_controller.set_timeline_edit_mode_active(true)
-			_timeline_controller.request_force_full_panel_sync_next_update()
-			_timeline_controller.apply_live_log_timeline_from_engine()
-	_update_ui()
+	if _command_controller != null and _command_controller.has_method("rewind_to_turn_start"):
+		_command_controller.rewind_to_turn_start()
 
 func _execute_command(command: Command) -> Result:
-	if game_engine == null:
-		return Result.failure("游戏引擎未初始化")
-	if _timeline_controller != null and _timeline_controller.is_replay_mode_active():
-		return Result.failure("回放模式下无法执行命令")
-
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-		if _online_resync_controller == null:
-			return Result.failure("联机同步未就绪")
-		return _online_resync_controller.try_send_online_action(command)
-
-	var head_index := game_engine.command_history.size() - 1
-	var was_in_history := int(game_engine.current_command_index) < head_index
-	var can_edit_timeline = (_timeline_controller != null and _timeline_controller.is_timeline_edit_mode_active())
-	if was_in_history and not can_edit_timeline:
-		return Result.failure("查看历史中无法执行命令（请先返回最新）")
-
-	var auto := _maybe_auto_complete_mandatory_actions_before_skip(command)
-	if auto is Result and not auto.ok:
-		GameLog.warn("Game", "自动完成强制动作失败: %s" % auto.error)
-		_update_ui()
-		return auto
-
-	var result := game_engine.execute_command(command)
-	if not result.ok:
-		GameLog.warn("Game", "命令执行失败: %s" % result.error)
-		_maybe_show_payday_blocker_prompt(command, result)
-	else:
-		GameLog.info("Game", "命令执行成功: %s" % command.action_id)
-		# 时间线被回退过时，执行新命令会截断未来时间线并生成新分支：需要重建 step_timeline 视图，避免 UI 仍引用旧 head。
-		# 其它情况下：仅在日志面板可见时重建（降低每步全量回放开销）。
-		if was_in_history or (is_instance_valid(game_log_panel) and game_log_panel.visible):
-			if _timeline_controller != null:
-				_timeline_controller.apply_live_log_timeline_from_engine()
-		if was_in_history and _timeline_controller != null:
-			_timeline_controller.set_timeline_edit_mode_active(false)
-
-	_update_ui()
-	return result
-
-func _get_last_working_sub_phase_name() -> String:
-	var last_sub_phase := DefsClass.SUB_PHASE_PLACE_RESTAURANTS
-	if game_engine != null and game_engine.phase_manager != null and game_engine.phase_manager.has_method("get_working_sub_phase_order_names"):
-		var order = game_engine.phase_manager.get_working_sub_phase_order_names()
-		if order is Array and not order.is_empty():
-			last_sub_phase = str(order[order.size() - 1])
-	return last_sub_phase
-
-func _maybe_auto_complete_mandatory_actions_before_skip(command: Command) -> Result:
-	if command == null:
-		return Result.failure("command 为空")
-	if str(command.action_id).strip_edges() != ActionIdsClass.SKIP:
-		return Result.success()
-	if game_engine == null:
-		return Result.failure("游戏引擎未初始化")
-
-	var state: GameState = game_engine.get_state()
-	if state == null:
-		return Result.failure("游戏状态为空")
-	if str(state.phase) != DefsClass.PHASE_WORKING:
-		return Result.success()
-	if str(state.sub_phase) != _get_last_working_sub_phase_name():
-		return Result.success()
-
-	var current_player_id := state.get_current_player_id()
-	if int(command.actor) != int(current_player_id):
-		return Result.success()
-
-	var player := state.get_player(current_player_id)
-	var required := MandatoryActionsRulesClass.get_required_mandatory_actions(player)
-	if required.is_empty():
-		return Result.success()
-
-	if not (state.round_state is Dictionary):
-		return Result.failure("round_state 类型错误（期望 Dictionary）")
-	if not state.round_state.has("mandatory_actions_completed"):
-		return Result.failure("round_state.mandatory_actions_completed 缺失")
-	var mac_val = state.round_state["mandatory_actions_completed"]
-	if not (mac_val is Dictionary):
-		return Result.failure("round_state.mandatory_actions_completed 类型错误（期望 Dictionary）")
-	var mac: Dictionary = mac_val
-	if not mac.has(current_player_id):
-		return Result.failure("mandatory_actions_completed 缺少玩家 key: %d" % current_player_id)
-	var completed_val = mac[current_player_id]
-	if not (completed_val is Array):
-		return Result.failure("mandatory_actions_completed[%d] 类型错误（期望 Array）" % current_player_id)
-	var completed: Array = completed_val
-
-	var missing: Array[String] = []
-	for action_id in required:
-		var aid := str(action_id).strip_edges()
-		if aid.is_empty():
-			continue
-		if not AUTO_MANDATORY_ACTION_IDS.has(aid):
-			continue
-		if completed.has(aid):
-			continue
-		missing.append(aid)
-
-	for aid2 in missing:
-		var cmd := Command.create(str(aid2), current_player_id, {"auto": true})
-		var r := game_engine.execute_command(cmd)
-		if not r.ok:
-			return Result.failure("自动执行强制动作失败(%s): %s" % [aid2, r.error])
-
-	return Result.success()
-
-func _maybe_show_payday_blocker_prompt(_command: Command, result: Result) -> void:
-	if result == null or result.ok:
-		return
-	if OS.has_feature("headless"):
-		return
-	if game_engine == null:
-		return
-
-	var state := game_engine.get_state()
-	if state == null:
-		return
-	if str(state.phase) != DefsClass.PHASE_PAYDAY:
-		return
-
-	var err := str(result.error).strip_edges()
-	if err.is_empty():
-		return
-	if err.find("薪水不足") == -1:
-		return
-
-	if _panel_controller != null and _panel_controller.has_method("show_payday_panel"):
-		_panel_controller.call("show_payday_panel")
-
-	_show_confirm(
-		"无法结束发薪日",
-		"%s\n\n请在发薪日解雇员工以支付薪资，然后再确认结束。" % err,
-		Callable(self, "_open_payday_panel_from_prompt"),
-		Callable(),
-		"打开发薪日",
-		"知道了"
-	)
-
-func _open_payday_panel_from_prompt() -> void:
-	if _panel_controller != null and _panel_controller.has_method("show_payday_panel"):
-		_panel_controller.call("show_payday_panel")
+	if _command_controller != null and _command_controller.has_method("execute_command"):
+		var r_val = _command_controller.execute_command(command)
+		if r_val is Result:
+			return r_val
+	return Result.failure("命令控制器未就绪")
 
 func _on_advance_phase_pressed() -> void:
-	_execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
+	if _command_controller != null and _command_controller.has_method("on_advance_phase_pressed"):
+		_command_controller.on_advance_phase_pressed()
 
 func _on_advance_sub_phase_pressed() -> void:
-	_execute_command(Command.create_system(ActionIdsClass.ADVANCE_PHASE, {"target": "sub_phase"}))
+	if _command_controller != null and _command_controller.has_method("on_advance_sub_phase_pressed"):
+		_command_controller.on_advance_sub_phase_pressed()
 
 func _on_skip_pressed() -> void:
-	if game_engine == null:
-		return
-	if bool(Globals.confirm_actions):
-		_show_confirm(
-			"确认结束",
-			"确定要结束当前阶段/子阶段吗？",
-			Callable(self, "_confirm_skip")
-		)
-		return
-	_confirm_skip()
-
-func _confirm_skip() -> void:
-	if game_engine == null:
-		return
-	var current_player_id := game_engine.get_state().get_current_player_id()
-	_execute_command(Command.create(ActionIdsClass.SKIP, current_player_id))
+	if _command_controller != null and _command_controller.has_method("on_skip_pressed"):
+		_command_controller.on_skip_pressed()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
