@@ -470,3 +470,4 @@
 - 2026-02-02：提取 Working/Recruit 面板控制器：新增 `ui/scenes/game/game_panel_working_recruit_controller.gd`；`ui/scenes/game/game_panel_working_panels.gd` 下沉 RecruitPanel 的生命周期/同步/命令分发；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：提取 Working/Price 面板控制器：新增 `ui/scenes/game/game_panel_working_price_controller.gd`；`ui/scenes/game/game_panel_working_panels.gd` 下沉 PriceSettingPanel 的生命周期/同步/命令分发；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：提取 Working/Milestone 面板控制器：新增 `ui/scenes/game/game_panel_working_milestone_controller.gd`；`ui/scenes/game/game_panel_working_panels.gd` 下沉 MilestonePanel 的生命周期/同步；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-02：提取 Working/Train 面板控制器：新增 `ui/scenes/game/game_panel_working_train_controller.gd`；`ui/scenes/game/game_panel_working_panels.gd` 下沉 TrainPanel 的生命周期/同步/命令分发；并通过 `ui/scenes/tests/all_tests.tscn`。
