@@ -23,7 +23,6 @@
 
 | 行数 | funcs | preloads | signals | 文件 |
 |---:|---:|---:|---:|---|
-| 3255 | 121 | 1 | 0 | `tools/generate_manual_test_saves.gd` |
 | 2813 | 140 | 18 | 0 | `ui/scenes/game/game.gd` |
 | 1770 | 68 | 14 | 0 | `ui/scenes/game/game_panel_controller.gd` |
 | 1631 | 74 | 2 | 4 | `ui/components/game_log/game_log_panel.gd` |
@@ -410,21 +409,24 @@
 - 按领域/模块拆清单文件（employee/milestone/logs/每个模块各自一份）。（已完成：按主题拆分；里程碑已进一步按模块拆分）
 - 或迁移为 JSON 数据（便于工具脚本读取与 diff）。
 
-### 17) `tools/generate_manual_test_saves.gd`
+### 17) `tools/generate_manual_test_saves.gd`（已拆分）
 
 当前职责：
 
-- 读取 manifest 并生成批量存档；包含大量 builder 的实现与分发（巨大的 `match`）。
+- `tools/generate_manual_test_saves.gd`：入口 runner（解析参数/读取 manifest/写出 JSON+MD）。
+- `tools/manual_test_saves/builders/*.gd`：按领域拆分的 builder 实现 + registry（name -> Callable）。
+- `tools/manual_test_saves/builders/*_support.gd`：共用 helper（phase 推进、map/placement helper 等）。
 
 主要问题：
 
-- builder 分发与 builder 实现混在同一文件，导致文件极度膨胀。
-- builder 参数读取/校验代码在多个 builder 中重复出现。
+- （已解决）builder 分发与 builder 实现混在同一文件，导致文件极度膨胀。
+- （保留）builder 参数读取/校验代码在多个 builder 中仍有重复空间（可在后续按领域再抽 helper）。
 
-建议拆分方向：
+实施结果：
 
-- 拆分 builder：按领域/模块拆成多个文件（例如 `builders/employee/*.gd`、`builders/milestone/*.gd`、`builders/modules/lobbyists/*.gd`）。
-- 使用 builder registry（`Dictionary` 映射 name -> Callable）替代巨大 `match`，并抽通用参数校验 helper。
+- 已完成：builder 拆分到 `tools/manual_test_saves/builders/`（employees/placement/logs/milestones + support）。
+- 已完成：runner 使用 builder registry（`Dictionary` 映射 name -> Callable），替代巨大 `match`。
+- `tools/generate_manual_test_saves.gd` 行数从 3255 降至 361，不再属于超长脚本。
 
 ## 建议的实施优先级（你点头后可执行）
 
@@ -434,7 +436,7 @@
 
 - `ui/scenes/tests/all_tests.gd`：清单拆分/自动发现（降低日常冲突与维护）。（已完成：preload 列表下沉到 `ui/scenes/tests/all_tests_refs.gd`）
 - `tools/generate_manual_test_saves_manifest.gd`：按领域拆分清单（减少冲突）。（已完成：拆分到 `tools/manual_test_saves/manifest_*.gd`）
-- `tools/generate_manual_test_saves.gd`：按 builder 拆文件 + registry 分发（降低 3k 行单点风险）。
+- `tools/generate_manual_test_saves.gd`：按 builder 拆文件 + registry 分发（降低 3k 行单点风险）。（已完成：builder 拆分到 `tools/manual_test_saves/builders/`，runner 使用 registry 分发）
 
 ### P1（主线可维护性）
 
@@ -460,3 +462,4 @@
 - 2026-02-02：进一步拆分里程碑清单：新增 `tools/manual_test_saves/manifest_milestones_base.gd`、`tools/manual_test_saves/manifest_milestones_ketchup.gd`、`tools/manual_test_saves/manifest_milestones_lobbyists.gd`、`tools/manual_test_saves/manifest_milestones_rural_marketeers.gd`、`tools/manual_test_saves/manifest_milestones_new_milestones.gd`；`tools/manual_test_saves/manifest_milestones.gd` 改为聚合入口；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：AllTests preload 列表拆分：新增 `ui/scenes/tests/all_tests_refs.gd`；`ui/scenes/tests/all_tests.gd` 仅保留 runner 与测试顺序；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：拆分里程碑系统单测：`core/tests/milestone_system_test.gd` 改为聚合入口；新增 `core/tests/milestone_system/milestone_system_triggers_test.gd`、`core/tests/milestone_system/milestone_system_train_rules_test.gd`、`core/tests/milestone_system/milestone_system_test_support.gd`；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-02：拆分手工复核存档生成器 builder：新增 `tools/manual_test_saves/builders/`（support + employees/placement/logs/milestones）；`tools/generate_manual_test_saves.gd` 改为 runner + runtime registry 分发；并通过 `ui/scenes/tests/all_tests.tscn`。
