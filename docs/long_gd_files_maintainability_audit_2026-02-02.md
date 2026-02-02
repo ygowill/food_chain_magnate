@@ -37,7 +37,6 @@
 | 911 | 28 | 5 | 2 | `ui/components/reserve_area/reserve_area_full_screen_view.gd` |
 | 864 | 48 | 7 | 2 | `ui/components/marketing_panel/marketing_panel.gd` |
 | 852 | 29 | 2 | 3 | `ui/components/company_structure/company_structure.gd` |
-| 837 | 19 | 10 | 0 | `core/tests/milestone_system_test.gd` |
 
 ## 跨文件共性问题（模式级发现）
 
@@ -385,15 +384,15 @@
 
 当前职责：
 
-- 里程碑系统的多场景覆盖测试集合。
+- 里程碑系统测试聚合入口（对外保留 `MilestoneSystemTest.run()`），具体用例已拆分到 `core/tests/milestone_system/*.gd`。
 
 主要问题：
 
-- 单文件包含较多独立 case，后续继续加覆盖会膨胀；失败定位与维护成本增加。
+- 新增用例若继续堆回聚合文件，会再次膨胀；建议按领域继续落在分组脚本中。
 
 建议拆分方向：
 
-- 拆分为多个更小的 test 文件（按触发点/规则分组），并抽共享 helper（初始化、加员工、断言 milestone）到 `core/tests/test_helpers/`。
+- 已完成：按触发点/规则拆分到 `core/tests/milestone_system/milestone_system_triggers_test.gd` 与 `core/tests/milestone_system/milestone_system_train_rules_test.gd`，共享 helper 放在 `core/tests/milestone_system/milestone_system_test_support.gd`。
 
 ### 16) `tools/generate_manual_test_saves_manifest.gd`（已拆分）
 
@@ -460,3 +459,4 @@
 - 2026-02-02：拆分手工复核存档 manifest：`tools/generate_manual_test_saves_manifest.gd` 改为聚合入口；新增 `tools/manual_test_saves/manifest_examples.gd`、`tools/manual_test_saves/manifest_employees.gd`、`tools/manual_test_saves/manifest_logs.gd`，并引入 `tools/manual_test_saves/manifest_milestones.gd` 作为里程碑聚合入口；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：进一步拆分里程碑清单：新增 `tools/manual_test_saves/manifest_milestones_base.gd`、`tools/manual_test_saves/manifest_milestones_ketchup.gd`、`tools/manual_test_saves/manifest_milestones_lobbyists.gd`、`tools/manual_test_saves/manifest_milestones_rural_marketeers.gd`、`tools/manual_test_saves/manifest_milestones_new_milestones.gd`；`tools/manual_test_saves/manifest_milestones.gd` 改为聚合入口；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：AllTests preload 列表拆分：新增 `ui/scenes/tests/all_tests_refs.gd`；`ui/scenes/tests/all_tests.gd` 仅保留 runner 与测试顺序；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-02：拆分里程碑系统单测：`core/tests/milestone_system_test.gd` 改为聚合入口；新增 `core/tests/milestone_system/milestone_system_triggers_test.gd`、`core/tests/milestone_system/milestone_system_train_rules_test.gd`、`core/tests/milestone_system/milestone_system_test_support.gd`；并通过 `ui/scenes/tests/all_tests.tscn`。
