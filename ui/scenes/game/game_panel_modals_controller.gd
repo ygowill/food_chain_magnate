@@ -62,6 +62,77 @@ func hide() -> void:
 	hide_reserve_card_modal()
 	hide_fridge_keep_modal()
 
+func sync_for_state(state: GameState, covered: Rect2) -> void:
+	if state == null:
+		return
+
+	var current_player_id := state.get_current_player_id()
+	var is_online := false
+	var local_player_id := -1
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		is_online = true
+		local_player_id = int(NetContext.local_player_id)
+	var is_local_turn := (not is_online) or (local_player_id >= 0 and current_player_id == local_player_id)
+
+	# 储备卡选择（Setup/ReserveCards）
+	if state.phase == DefsClass.PHASE_SETUP and str(state.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS and current_player_id >= 0:
+		var interactive := true
+		if is_online:
+			interactive = is_local_turn
+		show_reserve_card_modal(state, current_player_id, covered, interactive)
+	else:
+		hide_reserve_card_modal()
+
+	# 冰箱保留选择（Cleanup）
+	var should_show_fridge_keep := false
+	if state.phase == DefsClass.PHASE_CLEANUP and (state.round_state is Dictionary) and current_player_id >= 0:
+		var rs: Dictionary = state.round_state
+		var ppa_val = rs.get("pending_phase_actions", null)
+		if ppa_val is Dictionary:
+			var ppa: Dictionary = ppa_val
+			var list_val = ppa.get(DefsClass.PHASE_CLEANUP, null)
+			if list_val is Array:
+				var list: Array = list_val
+				if not list.is_empty() and int(list[0]) == current_player_id:
+					should_show_fridge_keep = true
+
+	if should_show_fridge_keep and is_local_turn:
+		show_fridge_keep_modal(state, current_player_id, covered)
+	else:
+		hide_fridge_keep_modal()
+
+	# 顺序选择（OrderOfBusiness）
+	var selections := {}
+	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and (state.round_state is Dictionary):
+		var rs2: Dictionary = state.round_state
+		var oob_val = rs2.get("order_of_business", null)
+		if oob_val is Dictionary:
+			var oob: Dictionary = oob_val
+			var picks_val = oob.get("picks", null)
+			if picks_val is Array:
+				var picks: Array = picks_val
+				for pos in range(min(picks.size(), state.players.size())):
+					var pid: int = int(picks[pos])
+					if pid >= 0:
+						selections[pos] = pid
+	else:
+		for i in range(state.turn_order.size()):
+			if i < state.players.size():
+				selections[i] = state.turn_order[i]
+
+	var should_show_turn_order := false
+	var turn_order_interactive := true
+	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and current_player_id >= 0:
+		# 联机：即使不是自己回合，也显示“顺位选择进度”，但只有当前玩家可交互。
+		should_show_turn_order = not selections.values().has(current_player_id)
+		if is_online:
+			turn_order_interactive = is_local_turn
+
+	if should_show_turn_order:
+		show_turn_order_modal(state, current_player_id, selections, covered, turn_order_interactive, local_player_id)
+	else:
+		hide_turn_order_modal()
+
 func get_modal_cover_rect() -> Rect2:
 	if _scene == null:
 		return Rect2(Vector2.ZERO, Vector2.ZERO)
@@ -420,4 +491,3 @@ func _on_fridge_keep_modal_completed(result: Dictionary) -> void:
 		return
 
 	_execute_command.call(Command.create("choose_fridge_keep", current_player_id, {"keep": keep}))
-

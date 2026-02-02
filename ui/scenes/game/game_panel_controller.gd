@@ -12,9 +12,7 @@ const PlacementOverlaysClass = preload("res://ui/scenes/game/game_panel_placemen
 const EndPanelsClass = preload("res://ui/scenes/game/game_panel_end_panels.gd")
 const RestructuringControllerClass = preload("res://ui/scenes/game/game_panel_restructuring_controller.gd")
 const ModalsControllerClass = preload("res://ui/scenes/game/game_panel_modals_controller.gd")
-const EmployeeTreeScene = preload("res://ui/components/employee_tree/employee_tree.tscn")
-const MilestoneFullScreenViewScene = preload("res://ui/components/milestone_panel/milestone_full_screen_view.tscn")
-const ReserveAreaFullScreenViewScene = preload("res://ui/components/reserve_area/reserve_area_full_screen_view.tscn")
+const ViewsControllerClass = preload("res://ui/scenes/game/game_panel_views_controller.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
@@ -35,9 +33,7 @@ var _end_panels = null
 
 var _restructuring_controller = null
 var _modals_controller = null
-var _employee_tree_panel = null
-var _milestone_full_screen_view = null
-var _reserve_area_full_screen_view = null
+var _views_controller = null
 
 var _view_player_id: int = -1
 
@@ -65,6 +61,7 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 		Callable(self, "_on_view_player_selected")
 	)
 	_modals_controller = ModalsControllerClass.new(_scene, _execute_command)
+	_views_controller = ViewsControllerClass.new(_scene)
 
 func connect_signals(action_panel, turn_order_track, hand_area, company_structure) -> void:
 	UiSignalHelpersClass.safe_connect(action_panel, "action_requested", on_action_requested)
@@ -92,14 +89,8 @@ func show_milestone_panel() -> void:
 	var state: GameState = engine.get_state()
 	if state == null:
 		return
-
-	_ensure_milestone_full_screen_view()
-	if not is_instance_valid(_milestone_full_screen_view):
-		return
-
-	if _milestone_full_screen_view.has_method("open_with_state"):
-		_milestone_full_screen_view.call("open_with_state", state, _get_current_map_skin())
-	_milestone_full_screen_view.visible = true
+	if _views_controller != null:
+		_views_controller.show_milestone_full_screen_view(state, _get_current_map_skin())
 
 func show_reserve_area_panel() -> void:
 	if _scene == null:
@@ -110,14 +101,8 @@ func show_reserve_area_panel() -> void:
 	var state: GameState = engine.get_state()
 	if state == null:
 		return
-
-	_ensure_reserve_area_full_screen_view()
-	if not is_instance_valid(_reserve_area_full_screen_view):
-		return
-
-	if _reserve_area_full_screen_view.has_method("open_with_state"):
-		_reserve_area_full_screen_view.call("open_with_state", state, _get_current_map_skin())
-	_reserve_area_full_screen_view.visible = true
+	if _views_controller != null:
+		_views_controller.show_reserve_area_full_screen_view(state, _get_current_map_skin())
 
 func show_payday_panel() -> void:
 	if _end_panels != null:
@@ -126,30 +111,14 @@ func show_payday_panel() -> void:
 func toggle_employee_tree() -> void:
 	if _scene == null:
 		return
-
-	if is_instance_valid(_employee_tree_panel) and _employee_tree_panel.visible:
-		_employee_tree_panel.visible = false
+	if _views_controller == null:
+		return
+	if _views_controller.is_employee_tree_visible():
+		_views_controller.hide_employee_tree()
 		return
 
 	_hide_all_phase_panels(true)
-	_ensure_employee_tree_panel()
-	if not is_instance_valid(_employee_tree_panel):
-		return
-
-	if _employee_tree_panel.has_method("open"):
-		_employee_tree_panel.call("open")
-
-	# 覆盖全屏（不使用居中弹窗布局）
-	if _employee_tree_panel is Control:
-		var p: Control = _employee_tree_panel
-		p.set_anchors_preset(Control.PRESET_FULL_RECT)
-		p.offset_left = 0.0
-		p.offset_top = 0.0
-		p.offset_right = 0.0
-		p.offset_bottom = 0.0
-		p.position = Vector2.ZERO
-		p.size = _scene.get_viewport_rect().size
-	_employee_tree_panel.visible = true
+	_views_controller.show_employee_tree()
 
 func get_view_player_id() -> int:
 	return _view_player_id
@@ -201,18 +170,9 @@ func dispose() -> void:
 	if _modals_controller != null and _modals_controller.has_method("dispose"):
 		_modals_controller.dispose()
 	_modals_controller = null
-
-	if is_instance_valid(_employee_tree_panel):
-		_employee_tree_panel.queue_free()
-		_employee_tree_panel = null
-
-	if is_instance_valid(_milestone_full_screen_view):
-		_milestone_full_screen_view.queue_free()
-		_milestone_full_screen_view = null
-
-	if is_instance_valid(_reserve_area_full_screen_view):
-		_reserve_area_full_screen_view.queue_free()
-		_reserve_area_full_screen_view = null
+	if _views_controller != null and _views_controller.has_method("dispose"):
+		_views_controller.dispose()
+	_views_controller = null
 
 	_scene = null
 	_map_controller = null
@@ -225,12 +185,9 @@ func has_open_modal_ui() -> bool:
 	if _modals_controller != null and _modals_controller.has_method("has_open_modal_ui"):
 		if bool(_modals_controller.has_open_modal_ui()):
 			return true
-	if is_instance_valid(_employee_tree_panel) and _employee_tree_panel.visible:
-		return true
-	if is_instance_valid(_milestone_full_screen_view) and _milestone_full_screen_view.visible:
-		return true
-	if is_instance_valid(_reserve_area_full_screen_view) and _reserve_area_full_screen_view.visible:
-		return true
+	if _views_controller != null and _views_controller.has_method("has_open_view_ui"):
+		if bool(_views_controller.has_open_view_ui()):
+			return true
 	return false
 
 func hide_modal_ui() -> void:
@@ -238,18 +195,13 @@ func hide_modal_ui() -> void:
 		_modals_controller.hide()
 	if _restructuring_controller != null and _restructuring_controller.has_method("hide_modal"):
 		_restructuring_controller.hide_modal()
-	_hide_employee_tree()
-	_hide_milestone_full_screen_view()
-	_hide_reserve_area_full_screen_view()
+	if _views_controller != null and _views_controller.has_method("hide"):
+		_views_controller.hide()
 
 func hide_top_overlays_if_open() -> bool:
 	# 仅关闭“覆盖全屏的浏览视图”（例如里程碑/保留区），避免 ESC 误触发 hide_all() 影响底层面板状态。
-	if is_instance_valid(_reserve_area_full_screen_view) and _reserve_area_full_screen_view.visible:
-		_hide_reserve_area_full_screen_view()
-		return true
-	if is_instance_valid(_milestone_full_screen_view) and _milestone_full_screen_view.visible:
-		_hide_milestone_full_screen_view()
-		return true
+	if _views_controller != null and _views_controller.has_method("hide_top_overlays_if_open"):
+		return bool(_views_controller.hide_top_overlays_if_open())
 	return false
 
 func has_open_phase_ui() -> bool:
@@ -302,16 +254,19 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	_sync_action_panel_context()
 
 func get_milestone_full_screen_view():
-	_ensure_milestone_full_screen_view()
-	return _milestone_full_screen_view
+	if _views_controller == null:
+		return null
+	return _views_controller.get_milestone_full_screen_view()
 
 func get_reserve_area_full_screen_view():
-	_ensure_reserve_area_full_screen_view()
-	return _reserve_area_full_screen_view
+	if _views_controller == null:
+		return null
+	return _views_controller.get_reserve_area_full_screen_view()
 
 func get_employee_tree_panel():
-	_ensure_employee_tree_panel()
-	return _employee_tree_panel
+	if _views_controller == null:
+		return null
+	return _views_controller.get_employee_tree_panel()
 
 func _sync_action_panel_context() -> void:
 	if _scene == null:
@@ -813,109 +768,18 @@ func _sync_modals(state: GameState) -> void:
 			_restructuring_controller.hide_modal()
 		return
 
-	var current_player_id := state.get_current_player_id()
 	var covered := Rect2(Vector2.ZERO, Vector2.ZERO)
 	if _modals_controller != null and _modals_controller.has_method("get_modal_cover_rect"):
 		covered = _modals_controller.get_modal_cover_rect()
 	elif _scene != null:
 		covered = Rect2(Vector2.ZERO, _scene.get_viewport_rect().size)
 
-	var is_online := false
-	var local_player_id := -1
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-		is_online = true
-		local_player_id = int(NetContext.local_player_id)
-	var is_local_turn := (not is_online) or (local_player_id >= 0 and current_player_id == local_player_id)
-
-	# 储备卡选择（Setup/ReserveCards）
-	if state.phase == DefsClass.PHASE_SETUP and str(state.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS and current_player_id >= 0:
-		var interactive := true
-		if is_online:
-			interactive = is_local_turn
-		if _modals_controller != null:
-			_modals_controller.show_reserve_card_modal(state, current_player_id, covered, interactive)
-	else:
-		if _modals_controller != null:
-			_modals_controller.hide_reserve_card_modal()
-
-	# 冰箱保留选择（Cleanup）
-	var should_show_fridge_keep := false
-	if state.phase == DefsClass.PHASE_CLEANUP and (state.round_state is Dictionary) and current_player_id >= 0:
-		var rs: Dictionary = state.round_state
-		var ppa_val = rs.get("pending_phase_actions", null)
-		if ppa_val is Dictionary:
-			var ppa: Dictionary = ppa_val
-			var list_val = ppa.get(DefsClass.PHASE_CLEANUP, null)
-			if list_val is Array:
-				var list: Array = list_val
-				if not list.is_empty() and int(list[0]) == current_player_id:
-					should_show_fridge_keep = true
-
-	if should_show_fridge_keep and is_local_turn:
-		if _modals_controller != null:
-			_modals_controller.show_fridge_keep_modal(state, current_player_id, covered)
-	else:
-		if _modals_controller != null:
-			_modals_controller.hide_fridge_keep_modal()
-
-	# 顺序选择（OrderOfBusiness）
-	var selections := {}
-	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and (state.round_state is Dictionary):
-		var rs2: Dictionary = state.round_state
-		var oob_val = rs2.get("order_of_business", null)
-		if oob_val is Dictionary:
-			var oob: Dictionary = oob_val
-			var picks_val = oob.get("picks", null)
-			if picks_val is Array:
-				var picks: Array = picks_val
-				for pos in range(min(picks.size(), state.players.size())):
-					var pid: int = int(picks[pos])
-					if pid >= 0:
-						selections[pos] = pid
-	else:
-		for i in range(state.turn_order.size()):
-			if i < state.players.size():
-				selections[i] = state.turn_order[i]
-
-	var should_show_turn_order := false
-	var turn_order_interactive := true
-	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and current_player_id >= 0:
-		# 联机：即使不是自己回合，也显示“顺位选择进度”，但只有当前玩家可交互。
-		should_show_turn_order = not selections.values().has(current_player_id)
-		if is_online:
-			turn_order_interactive = is_local_turn
-
-	if should_show_turn_order:
-		if _modals_controller != null:
-			_modals_controller.show_turn_order_modal(state, current_player_id, selections, covered, turn_order_interactive, local_player_id)
-	else:
-		if _modals_controller != null:
-			_modals_controller.hide_turn_order_modal()
+	if _modals_controller != null and _modals_controller.has_method("sync_for_state"):
+		_modals_controller.sync_for_state(state, covered)
 
 	# 重组（Restructuring）
 	if _restructuring_controller != null and _restructuring_controller.has_method("sync_modal"):
 		_view_player_id = int(_restructuring_controller.sync_modal(state, covered, _view_player_id))
-
-func _ensure_employee_tree_panel() -> void:
-	if _scene == null:
-		return
-	if is_instance_valid(_employee_tree_panel):
-		return
-
-	_employee_tree_panel = EmployeeTreeScene.instantiate()
-	if not is_instance_valid(_employee_tree_panel):
-		return
-	_employee_tree_panel.visible = false
-	_scene.add_child(_employee_tree_panel)
-	if _employee_tree_panel is Control:
-		(_employee_tree_panel as Control).z_index = 900
-	if _employee_tree_panel.has_signal("closed"):
-		if not _employee_tree_panel.closed.is_connected(_hide_employee_tree):
-			_employee_tree_panel.closed.connect(_hide_employee_tree)
-
-func _hide_employee_tree() -> void:
-	if is_instance_valid(_employee_tree_panel):
-		_employee_tree_panel.visible = false
 
 func _get_current_map_skin():
 	if _scene == null:
@@ -924,57 +788,3 @@ func _get_current_map_skin():
 	if is_instance_valid(canvas) and canvas.has_method("get_skin"):
 		return canvas.call("get_skin")
 	return null
-
-func _ensure_milestone_full_screen_view() -> void:
-	if _scene == null:
-		return
-	if is_instance_valid(_milestone_full_screen_view):
-		return
-
-	_milestone_full_screen_view = MilestoneFullScreenViewScene.instantiate()
-	if not is_instance_valid(_milestone_full_screen_view):
-		return
-	_milestone_full_screen_view.visible = false
-	_scene.add_child(_milestone_full_screen_view)
-
-	if _milestone_full_screen_view is Control:
-		var c: Control = _milestone_full_screen_view
-		c.z_index = 900
-		c.set_anchors_preset(Control.PRESET_FULL_RECT)
-		c.offset_left = 0.0
-		c.offset_top = 0.0
-		c.offset_right = 0.0
-		c.offset_bottom = 0.0
-
-	UiSignalHelpersClass.safe_connect(_milestone_full_screen_view, "close_requested", _hide_milestone_full_screen_view)
-
-func _hide_milestone_full_screen_view() -> void:
-	if is_instance_valid(_milestone_full_screen_view):
-		_milestone_full_screen_view.visible = false
-
-func _ensure_reserve_area_full_screen_view() -> void:
-	if _scene == null:
-		return
-	if is_instance_valid(_reserve_area_full_screen_view):
-		return
-
-	_reserve_area_full_screen_view = ReserveAreaFullScreenViewScene.instantiate()
-	if not is_instance_valid(_reserve_area_full_screen_view):
-		return
-	_reserve_area_full_screen_view.visible = false
-	_scene.add_child(_reserve_area_full_screen_view)
-
-	if _reserve_area_full_screen_view is Control:
-		var c: Control = _reserve_area_full_screen_view
-		c.z_index = 900
-		c.set_anchors_preset(Control.PRESET_FULL_RECT)
-		c.offset_left = 0.0
-		c.offset_top = 0.0
-		c.offset_right = 0.0
-		c.offset_bottom = 0.0
-
-	UiSignalHelpersClass.safe_connect(_reserve_area_full_screen_view, "close_requested", _hide_reserve_area_full_screen_view)
-
-func _hide_reserve_area_full_screen_view() -> void:
-	if is_instance_valid(_reserve_area_full_screen_view):
-		_reserve_area_full_screen_view.visible = false

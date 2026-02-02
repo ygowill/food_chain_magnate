@@ -9,7 +9,7 @@
 - 责任边界模糊：UI、流程编排、业务规则、模块扩展点混在一起，导致“改 A 影响 B”。
 - 测试与复用困难：难以抽出纯逻辑做 `core/tests/` 级别单元测试。
 
-本报告仅做“发现与改进建议”的记录，不包含任何结构性重构实施（等待你点头后再做）。
+本报告最初用于“发现与改进建议”的记录；在你确认后，已开始按本文档逐步实施拆分，实施记录见下方。
 
 ## 扫描方法
 
@@ -23,19 +23,17 @@
 
 | 行数 | funcs | preloads | signals | 文件 |
 |---:|---:|---:|---:|---|
-| 2813 | 140 | 18 | 0 | `ui/scenes/game/game.gd` |
-| 1770 | 68 | 14 | 0 | `ui/scenes/game/game_panel_controller.gd` |
-| 1631 | 74 | 2 | 4 | `ui/components/game_log/game_log_panel.gd` |
+| 2457 | 129 | 21 | 0 | `ui/scenes/game/game.gd` |
+| 1631 | 117 | 2 | 13 | `ui/components/game_log/game_log_panel.gd` |
 | 1622 | 41 | 13 | 2 | `ui/scenes/game/game_map_interaction_controller.gd` |
 | 1600 | 41 | 1 | 0 | `ui/scenes/game/map_canvas_drawer.gd` |
-| 1581 | 51 | 15 | 0 | `ui/scenes/game/game_panel_working_panels.gd` |
-| 1085 | 59 | 8 | 1 | `ui/components/action_panel/action_panel.gd` |
+| 1085 | 66 | 8 | 2 | `ui/components/action_panel/action_panel.gd` |
 | 1019 | 54 | 4 | 0 | `ui/scenes/online/online_lobby.gd` |
 | 1006 | 50 | 5 | 8 | `autoload/net_client.gd` |
 | 994 | 59 | 3 | 1 | `ui/components/left_panel/left_panel.gd` |
-| 911 | 28 | 5 | 2 | `ui/components/reserve_area/reserve_area_full_screen_view.gd` |
+| 911 | 52 | 5 | 2 | `ui/components/reserve_area/reserve_area_full_screen_view.gd` |
 | 864 | 48 | 7 | 2 | `ui/components/marketing_panel/marketing_panel.gd` |
-| 852 | 29 | 2 | 3 | `ui/components/company_structure/company_structure.gd` |
+| 852 | 38 | 2 | 5 | `ui/components/company_structure/company_structure.gd` |
 
 ## 跨文件共性问题（模式级发现）
 
@@ -169,6 +167,13 @@
 - `RestructuringController`：重组阶段拖拽、隐私约束、提交状态检查、与 CompanyStructure 交互。
 - 各阶段面板控制器：Working/Marketing/Placement/End 分离后，`GamePanelController` 只做聚合与对外接口。
 
+实施结果（阶段性）：
+
+- 已完成：提取重组阶段控制器 `ui/scenes/game/game_panel_restructuring_controller.gd`。
+- 已完成：提取通用模态弹窗控制器 `ui/scenes/game/game_panel_modals_controller.gd`（并新增 `sync_for_state()` 统一同步入口）。
+- 已完成：提取全屏/覆盖视图控制器 `ui/scenes/game/game_panel_views_controller.gd`（EmployeeTree/Milestone/ReserveArea 的创建/显示/隐藏/释放）。
+- 当前：`ui/scenes/game/game_panel_controller.gd` 行数已降至 790（低于 800），主要保留 action 路由 + 子控制器聚合与少量 glue。
+
 ### 3) `ui/scenes/game/game_panel_working_panels.gd`
 
 当前职责：
@@ -189,6 +194,10 @@
   - `working/production_panel_controller.gd`
   - `working/milestone_panel_controller.gd`
 - WorkingPanels 仅保留 `sync(state)` 与“打开某面板”的薄封装。
+
+实施结果：
+
+- 已完成：按面板拆 controller（Recruit/Train/Price/Milestone/Production/ProcureDrinks），`ui/scenes/game/game_panel_working_panels.gd` 行数降至 108，仅保留面板聚合与薄封装。
 
 ### 4) `ui/scenes/game/game_map_interaction_controller.gd`
 
@@ -473,3 +482,4 @@
 - 2026-02-02：提取 Working/Train 面板控制器：新增 `ui/scenes/game/game_panel_working_train_controller.gd`；`ui/scenes/game/game_panel_working_panels.gd` 下沉 TrainPanel 的生命周期/同步/命令分发；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：提取 Working/Production（生产/采购）面板控制器：新增 `ui/scenes/game/game_panel_working_production_controller.gd` 与 `ui/scenes/game/game_panel_working_drinks_procurement_controller.gd`；`ui/scenes/game/game_panel_working_panels.gd` 仅保留面板聚合与薄封装（行数降至 108）；并更新 `ui/scenes/tests/air_procure_start_tile_choice_test.gd` 适配新结构；并通过 `ui/scenes/tests/all_tests.tscn`。
 - 2026-02-02：提取通用模态弹窗控制器：新增 `ui/scenes/game/game_panel_modals_controller.gd`；`ui/scenes/game/game_panel_controller.gd` 下沉 TurnOrder/ReserveCard/FridgeKeep modal 的创建/显示/回调与延迟打开逻辑（行数降至 980）；并通过 `ui/scenes/tests/all_tests.tscn`。
+- 2026-02-02：提取全屏/覆盖视图控制器：新增 `ui/scenes/game/game_panel_views_controller.gd`；`ui/scenes/game/game_panel_controller.gd` 下沉 EmployeeTree/MilestoneFullScreen/ReserveAreaFullScreen 的创建/显示/隐藏/释放逻辑（行数降至 790，低于 800）；并为 `ui/scenes/game/game_panel_modals_controller.gd` 增加 `sync_for_state()` 统一同步入口；并通过 `ui/scenes/tests/all_tests.tscn`。
