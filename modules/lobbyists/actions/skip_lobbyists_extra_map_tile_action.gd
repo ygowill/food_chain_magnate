@@ -31,4 +31,3 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	pending[command.actor] = false
 	state.round_state[EXTRA_TILE_PENDING_KEY] = pending
 	return Result.success({"player_id": int(command.actor)})
-

@@ -50,6 +50,8 @@ const HIDDEN_ACTION_IDS := {
 	ActionIdsClass.SET_PRICE: true,
 	ActionIdsClass.SET_DISCOUNT: true,
 	ActionIdsClass.SET_LUXURY_PRICE: true,
+	"place_lobbyists_extra_map_tile": true,
+	"skip_lobbyists_extra_map_tile": true,
 }
 
 # 定价类强制动作在 UI 中隐藏，并在执行 skip 前由 Game 自动补完（见 Game._maybe_auto_complete_mandatory_actions_before_skip）。

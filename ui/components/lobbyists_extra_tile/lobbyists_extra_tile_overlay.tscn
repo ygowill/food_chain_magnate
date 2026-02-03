@@ -1,0 +1,67 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/components/lobbyists_extra_tile/lobbyists_extra_tile_overlay.gd" id="1_lobbyists_extra_tile"]
+
+[node name="LobbyistsExtraTileOverlay" type="VBoxContainer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+visible = false
+mouse_filter = 2
+theme_override_constants/separation = 0
+script = ExtResource("1_lobbyists_extra_tile")
+
+[node name="TopSpacer" type="Control" parent="."]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="HintMargin" type="MarginContainer" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_right = 12
+
+[node name="HintPanel" type="PanelContainer" parent="HintMargin"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+
+[node name="VBox" type="VBoxContainer" parent="HintMargin/HintPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="HintLabel" type="Label" parent="HintMargin/HintPanel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "里程碑奖励：扩边放置地图板块"
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="ControlsRow" type="HBoxContainer" parent="HintMargin/HintPanel/VBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="TileOption" type="OptionButton" parent="HintMargin/HintPanel/VBox/ControlsRow"]
+custom_minimum_size = Vector2(150, 32)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RotationOption" type="OptionButton" parent="HintMargin/HintPanel/VBox/ControlsRow"]
+custom_minimum_size = Vector2(90, 32)
+layout_mode = 2
+
+[node name="ConfirmButton" type="Button" parent="HintMargin/HintPanel/VBox/ControlsRow"]
+custom_minimum_size = Vector2(90, 32)
+layout_mode = 2
+text = "放置"
+
+[node name="SkipButton" type="Button" parent="HintMargin/HintPanel/VBox/ControlsRow"]
+custom_minimum_size = Vector2(90, 32)
+layout_mode = 2
+text = "放弃"
+

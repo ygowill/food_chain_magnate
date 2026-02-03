@@ -97,7 +97,7 @@
 | 83 | 日志面板：回放播放器宽度溢出导致横向溢出 | UI/布局 | ReplayBar 默认最小宽度/布局策略会撑开导致横向溢出 | Implemented（待手动验收） |
 | 84 | 顶部工具栏：供应堆与里程碑按钮无法打开 | UI/交互 | TopBar 入口信号/节点路径回归导致按钮无响应 | 待实施（已复现） |
 | 85 | 调试面板：玩家相关命令必须显式 player 参数；房屋/广告牌等用下拉框列可用项 | 工具/UI | 依赖“当前玩家”状态且手填输入易错；需要统一参数与可用项下拉 | 待实施（已澄清） |
-| 86 | 说客模组：扩边奖励改为获得里程碑时弹窗二选一（必须当场选择），不作为动作按钮 | 规则+UI | 当前流程与动作面板混在一起；需重构为强制对话框 + 放置模式 | 待实施（已澄清） |
+| 86 | 说客模组：扩边奖励改为获得里程碑时弹窗二选一（必须当场选择），不作为动作按钮 | 规则+UI | 当前流程与动作面板混在一起；需重构为强制对话框 + 放置模式 | Implemented（待手动验收） |
 | 87 | 说客模组：施工标记距离惩罚应包含起点格 | 规则 | 现实现疑似忽略路线起点格的 roadworks marker | 待实施（已确认） |
 | 88 | 公园/花园：背景色无透明度（花园 #699055；公园 #587a51） | UI/渲染 | Color alpha <1 导致叠色；需统一为不透明色 | 待实施（已澄清） |
 
@@ -4535,9 +4535,31 @@
 
 - 获得奖励时必弹窗；选择“使用”进入放置流程；选择“放弃”清除 pending；动作面板不再出现对应按钮入口。
 
+**实施记录**
+
+- 通过 `round_state.lobbyists_extra_tile_pending` 驱动“里程碑奖励：扩边”流程：
+	- pending 出现时弹出二选一对话框（使用/放弃），且无取消。
+	- 选择“使用”后进入地图扩边放置流程（选 tile/旋转 → 地图高亮可放边缘格 → 预览 → 确认放置）。
+	- 选择“放弃”执行 `skip_lobbyists_extra_map_tile` 清除 pending。
+	- `ui/scenes/game/game_panel_placement_overlays.gd`
+- 地图交互新增 `lobbyists_extra_tile` 选点模式：
+	- 根据 `place_lobbyists_extra_map_tile` 的 `validate()` 动态高亮可放置的“边缘格”（非角落），并提供预览覆盖层。
+	- `ui/scenes/game/game_map_interaction_controller.gd`
+- 新增扩边放置 overlay（tile/旋转选择、确认/放弃、提示与校验信息）：
+	- `ui/components/lobbyists_extra_tile/lobbyists_extra_tile_overlay.tscn`
+	- `ui/components/lobbyists_extra_tile/lobbyists_extra_tile_overlay.gd`
+- `ChoiceDialog` 支持无取消模式（cancel 文案为空时隐藏取消行，ESC 不再触发取消）：
+	- `ui/dialogs/choice_dialog.gd`
+- 动作面板中隐藏扩边相关动作入口（但动作仍保留在 ActionRegistry 中供 auto-advance 判定与直接执行）：
+	- `ui/components/action_panel/action_panel.gd`
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（141/141，`.godot/AllTests.log`）
+
 **状态**
 
-- 待实施
+- Implemented（待手动验收）
 
 ## 87. 说客模组：施工标记距离惩罚应包含起点格
 

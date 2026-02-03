@@ -13,11 +13,13 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 @onready var title_label: Label = $Center/Dialog/MarginContainer/VBoxContainer/TitleLabel
 @onready var message_label: Label = $Center/Dialog/MarginContainer/VBoxContainer/MessageLabel
 @onready var options_container: HFlowContainer = $Center/Dialog/MarginContainer/VBoxContainer/OptionsRow
+@onready var cancel_row: Control = $Center/Dialog/MarginContainer/VBoxContainer/CancelRow
 @onready var cancel_btn: Button = $Center/Dialog/MarginContainer/VBoxContainer/CancelRow/CancelButton
 @onready var margin_container: MarginContainer = $Center/Dialog/MarginContainer
 
 var _options: Array[Dictionary] = []
 var _base_size: Vector2i = Vector2i.ZERO
+var _allow_cancel: bool = true
 
 func _ready() -> void:
 	super._ready()
@@ -35,7 +37,10 @@ func setup(title: String, message: String, options: Array[Dictionary], cancel_te
 	if message_label != null:
 		message_label.text = message
 	if cancel_btn != null:
+		_allow_cancel = not str(cancel_text).is_empty()
 		cancel_btn.text = cancel_text
+	if cancel_row != null:
+		cancel_row.visible = _allow_cancel
 
 	if _base_size != Vector2i.ZERO:
 		if dialog_root != null and is_instance_valid(dialog_root):
@@ -157,5 +162,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var e: InputEventKey = event
 		if e.pressed and not e.echo and e.keycode == KEY_ESCAPE:
-			_on_cancel_pressed()
-			get_viewport().set_input_as_handled()
+			if _allow_cancel:
+				_on_cancel_pressed()
+				get_viewport().set_input_as_handled()
