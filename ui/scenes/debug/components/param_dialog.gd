@@ -45,14 +45,51 @@ func show_dialog(
 		hbox.add_child(label)
 
 		var options_val = param.get("options", null)
+		var allow_custom := bool(param.get("allow_custom", false))
 		if options_val is Array and not Array(options_val).is_empty():
-			var option := OptionButton.new()
-			option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			_build_option_items(option, Array(options_val))
-			if param.has("default"):
-				_select_option_by_default(option, param["default"])
-			hbox.add_child(option)
-			_param_controls.append({"kind": "select", "control": option})
+			if allow_custom:
+				var option := OptionButton.new()
+				option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				option.clear()
+				option.add_item("(手动输入)")
+				option.set_item_metadata(0, "")
+				for o in Array(options_val):
+					var opt_label := ""
+					var value = null
+					if o is Dictionary:
+						var d: Dictionary = o
+						opt_label = str(d.get("text", d.get("label", ""))).strip_edges()
+						value = d.get("value", d.get("id", opt_label))
+					else:
+						opt_label = str(o).strip_edges()
+						value = o
+					if opt_label.is_empty():
+						continue
+					option.add_item(opt_label)
+					var idx := option.get_item_count() - 1
+					option.set_item_metadata(idx, value)
+				if param.has("default"):
+					_select_option_by_default(option, param["default"])
+				else:
+					option.select(0)
+
+				var input := LineEdit.new()
+				input.placeholder_text = param.get("hint", "")
+				input.custom_minimum_size.x = 160
+				if param.has("default_text"):
+					input.text = str(param["default_text"])
+
+				hbox.add_child(option)
+				hbox.add_child(input)
+				_param_controls.append({"kind": "select_custom", "option": option, "input": input})
+			else:
+				var option := OptionButton.new()
+				option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				_build_option_items(option, Array(options_val))
+				if param.has("default"):
+					_select_option_by_default(option, param["default"])
+				hbox.add_child(option)
+				_param_controls.append({"kind": "select", "control": option})
 		else:
 			var input := LineEdit.new()
 			input.placeholder_text = param.get("hint", "")
@@ -120,6 +157,16 @@ func _on_submit() -> void:
 			if ob.selected >= 0:
 				var meta = ob.get_item_metadata(ob.selected)
 				value = str(meta).strip_edges() if meta != null else str(ob.get_item_text(ob.selected)).strip_edges()
+		elif kind == "select_custom":
+			var ob2 = d.get("option", null)
+			var le = d.get("input", null)
+			if le is LineEdit:
+				value = str((le as LineEdit).text).strip_edges()
+			if value.is_empty() and ob2 is OptionButton:
+				var obc: OptionButton = ob2
+				if obc.selected >= 0:
+					var meta2 = obc.get_item_metadata(obc.selected)
+					value = str(meta2).strip_edges() if meta2 != null else str(obc.get_item_text(obc.selected)).strip_edges()
 		elif c is LineEdit:
 			value = str(c.text).strip_edges()
 		if value.is_empty():

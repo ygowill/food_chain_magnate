@@ -145,7 +145,7 @@ func _build_ui() -> void:
 			{"name": "house_id", "label": "房屋", "hint": "如: house_1", "options": house_options},
 			{"name": "product", "label": "产品", "hint": "如: burger, pizza", "options": product_options},
 			{"name": "amount", "label": "数量", "hint": "1, 2, 3...", "default": "1"},
-			{"name": "from_player", "label": "来源玩家(可选)", "hint": "留空表示无(-1)", "options": from_player_options},
+			{"name": "from_player", "label": "来源玩家(可选)", "hint": "留空表示无(-1)，也可输入 id:<player_id>", "options": from_player_options, "allow_custom": true},
 		]},
 	])
 
@@ -257,6 +257,7 @@ func _get_player_param() -> Dictionary:
 		"label": "玩家",
 		"hint": "玩家顺位 1..N（也可输入 id:<player_id>）",
 		"options": _get_player_options(),
+		"allow_custom": true,
 	}
 
 func _get_player_options() -> Array[Dictionary]:
@@ -310,7 +311,7 @@ func _get_house_options() -> Array[Dictionary]:
 			var p: Vector2i = anchor_val
 			pos_text = "%d,%d" % [p.x, p.y]
 		items.append({
-			"text": "房号%s %s (%s)" % [house_number, hid, pos_text],
+			"text": "房号%s house_id=%s 坐标=(%s)" % [house_number, hid, pos_text],
 			"value": hid,
 		})
 	return items
