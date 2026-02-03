@@ -24,4 +24,11 @@ static func draw_ground_and_blocked(canvas, cell_size: int) -> void:
 
 			var cell: Dictionary = canvas._get_cell_world(world_pos)
 			if bool(cell.get("blocked", false)):
-				canvas.draw_texture_rect(blocked_tex, rect, false, Color(1, 1, 1, 0.85))
+				# Skip drawing the red-X overlay for "void" cells created by ensure_world_rect.
+				# These cells are not part of any placed tile yet and can become valid later
+				# (e.g. additional tile placement milestones / airplane marketing UI ring).
+				var tile_origin_val = cell.get("tile_origin", null)
+				if tile_origin_val is Vector2i and (tile_origin_val as Vector2i) == Vector2i(-1, -1):
+					pass
+				else:
+					canvas.draw_texture_rect(blocked_tex, rect, false, Color(1, 1, 1, 0.85))

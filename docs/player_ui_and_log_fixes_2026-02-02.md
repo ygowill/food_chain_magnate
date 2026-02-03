@@ -179,3 +179,31 @@
 	- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`（PASS）
 	- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 141/141）
 - 提交：`fix(ui): keep house demand icons visible at rule cap`
+
+---
+
+## 14. 说客扩边后新增空余区域不应显示“红叉 blocked 格”
+
+- 状态：DONE
+- 现象：放置额外地图 tile 扩边后，地图下方/周边出现的“空余区域”被 UI 绘制为带红色叉的 blocked 方格，视觉上像是“不可用/禁止放置”。
+- 期望：这些 void 区域不应显示红叉（仍可能用于后续放置/扩边，以及棋盘外放置如 airplane marketing 等）。
+- 根因：扩边通过 `ensure_world_rect` 生成的 void cell（`tile_origin == (-1,-1)`）在 core 中标记为 `blocked=true`（用于禁止常规建筑），但 UI ground pass 无差别绘制 blocked overlay。
+- 实施：
+	- `MapCanvasDrawerGroundPass` 绘制 blocked overlay 时跳过 `tile_origin == (-1,-1)` 的 void cells，仅对真实 blocked 地形绘制红叉覆盖。
+	- 新增 UI 单测：`ui/scenes/tests/map_blocked_overlay_skips_void_cells_test.gd`。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 142/142）
+- 提交：（见本次提交）
+
+---
+
+## 15. 新增手工复核存档：同回合多玩家依次扩边
+
+- 状态：DONE
+- 目的：用于手动复核“同一回合多名玩家都获得 first_lobbyist_used 后，能够依次弹窗并各自放置额外 tile”，同时便于肉眼确认“void 区域不显示红叉”。
+- 存档：
+	- `res://.savings/manual_cases/milestones/first_lobbyist_used_multi_player_same_round.json`
+	- `res://.savings/manual_cases/milestones/first_lobbyist_used_multi_player_same_round.md`
+- 生成逻辑：
+	- manifest：`tools/manual_test_saves/manifest_milestones_lobbyists.gd`
+	- builder：`tools/manual_test_saves/builders/manual_test_save_employee_placement_builders.gd`
+- 验证：存档生成脚本自带 load 校验；另外 `AllTests` 通过（PASS 142/142）

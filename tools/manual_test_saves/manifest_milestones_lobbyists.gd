@@ -30,6 +30,29 @@ static func get_cases() -> Array[Dictionary]:
 		],
 	}))
 
+	cases.append(_case({
+		"kind": "milestone",
+		"id": "first_lobbyist_used_multi_player_same_round",
+		"title": "同回合多玩家扩边（first_lobbyist_used）",
+		"enabled_modules": ["lobbyists"],
+		"builder": "milestone_first_lobbyist_used_multi_player_same_round",
+		"purpose": "验证同一回合内多名玩家都拥有「额外地图板块」放置机会时，UI 会在各自回合弹出二选一并允许依次扩边；同时扩边产生的 void 区域不应显示红叉 blocked 覆盖。",
+		"steps": [
+			"载入后应处于 Working/Lobbyists，且玩家 0/1 都已获得 first_lobbyist_used（或等价的 extra tile pending）。",
+			"玩家 0：应立刻看到「使用/放弃」二选一；选择“使用”，并在地图上放置 1 个额外 tile（注意扩边后空余区域不应显示红色叉）。",
+			"玩家 0：点击 Pass 结束本子阶段行动，轮到玩家 1。",
+			"玩家 1：同样应看到二选一；选择“使用”，并放置 1 个额外 tile（可复核多名玩家同回合均可扩边）。",
+		],
+		"expected": [
+			"玩家 0/1 均能在 Lobbyists 子阶段弹出二选一并成功执行扩边放置。",
+			"扩边造成的空余（void）区域不应显示红叉 blocked 覆盖（仍可能用于后续放置/扩边）。",
+		],
+		"related_tests": [
+			"core/tests/lobbyists_v2_test.gd",
+			"ui/scenes/tests/map_blocked_overlay_skips_void_cells_test.gd",
+		],
+	}))
+
 	return cases
 
 static func _case(overrides: Dictionary) -> Dictionary:
@@ -40,4 +63,3 @@ static func _case(overrides: Dictionary) -> Dictionary:
 	for k in overrides.keys():
 		c[k] = overrides[k]
 	return c
-

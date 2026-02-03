@@ -271,14 +271,18 @@ func _run_all() -> int:
 					"name": "TileInternalGridLinesTest",
 					"fn": func() -> Result: return TestRefs.TileInternalGridLinesTestClass.run(),
 				},
-				{
-					"name": "MapGroundSkipsOutsideRingTest",
-					"fn": func() -> Result: return TestRefs.MapGroundSkipsOutsideRingTestClass.run(),
-				},
-		{
-			"name": "AirplaneMarketingOutsideRenderTest",
-			"fn": func() -> Result: return TestRefs.AirplaneMarketingOutsideRenderTestClass.run(),
-		},
+					{
+						"name": "MapGroundSkipsOutsideRingTest",
+						"fn": func() -> Result: return TestRefs.MapGroundSkipsOutsideRingTestClass.run(),
+					},
+					{
+						"name": "MapBlockedOverlaySkipsVoidCellsTest",
+						"fn": func() -> Result: return TestRefs.MapBlockedOverlaySkipsVoidCellsTestClass.run(),
+					},
+			{
+				"name": "AirplaneMarketingOutsideRenderTest",
+				"fn": func() -> Result: return TestRefs.AirplaneMarketingOutsideRenderTestClass.run(),
+			},
 		{
 			"name": "AirplaneMarketingIconRotationTest",
 			"fn": func() -> Result: return TestRefs.AirplaneMarketingIconRotationTestClass.run(),

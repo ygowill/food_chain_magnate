@@ -11,6 +11,7 @@ func get_registry() -> Dictionary:
 
 		# milestone wrappers / placements
 		"milestone_first_lobbyist_used": Callable(self, "_build_milestone_first_lobbyist_used"),
+		"milestone_first_lobbyist_used_multi_player_same_round": Callable(self, "_build_milestone_first_lobbyist_used_multi_player_same_round"),
 		"milestone_first_house_built": Callable(self, "_build_milestone_first_house_built"),
 		"milestone_first_new_restaurant": Callable(self, "_build_milestone_first_new_restaurant"),
 	}
@@ -183,6 +184,30 @@ func _build_employee_lobbyist_place_park(engine: GameEngine, _c: Dictionary) -> 
 func _build_milestone_first_lobbyist_used(engine: GameEngine, c: Dictionary) -> Result:
 	return _build_employee_lobbyist_place_road(engine, c)
 
+func _build_milestone_first_lobbyist_used_multi_player_same_round(engine: GameEngine, _c: Dictionary) -> Result:
+	var adv := _advance_to_working_sub_phase(engine, "Lobbyists")
+	if not adv.ok:
+		return adv
+
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("state is null")
+
+	# Ensure all players have a lobbyist (matches "multi-player same round" scenario).
+	for pid in range(state.players.size()):
+		var ensure := _ensure_employee(state, pid, "lobbyist", false, 1)
+		if not ensure.ok:
+			return ensure
+
+	# Simulate "multiple players used lobbyist" by awarding the milestone to player 0 and 1
+	# (milestone supply is only removed in Cleanup, so same-round multi-claim is supported).
+	for pid2 in range(mini(2, state.players.size())):
+		var ms := MilestoneSystem.process_event(state, "UseEmployee", {"player_id": pid2, "employee_id": "lobbyist"})
+		if not ms.ok:
+			return Result.failure("MilestoneSystem.process_event failed: %s" % ms.error)
+
+	return Result.success()
+
 func _build_milestone_first_house_built(engine: GameEngine, c: Dictionary) -> Result:
 	return _build_employee_place_house(engine, c)
 
@@ -218,4 +243,3 @@ func _build_milestone_first_new_restaurant(engine: GameEngine, c: Dictionary) ->
 	return Result.success({
 		"suggested_command": find.value
 	})
-
