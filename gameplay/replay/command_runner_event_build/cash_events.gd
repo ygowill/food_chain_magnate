@@ -13,8 +13,10 @@ static func build_player_cash_changed_events(old_state: GameState, new_state: Ga
 
 	var dinnertime_report: Dictionary = {}
 	var can_attach_dinnertime_breakdown := false
-	if _is_entering_dinnertime(old_state, new_state):
+	if _is_dinnertime_context(old_state, new_state):
 		dinnertime_report = _read_dinnertime_report(new_state)
+		if dinnertime_report.is_empty():
+			dinnertime_report = _read_dinnertime_report(old_state)
 		can_attach_dinnertime_breakdown = not dinnertime_report.is_empty()
 
 	var count := mini(old_state.players.size(), new_state.players.size())
@@ -52,12 +54,10 @@ static func build_player_cash_changed_events(old_state: GameState, new_state: Ga
 
 	return events
 
-static func _is_entering_dinnertime(old_state: GameState, new_state: GameState) -> bool:
+static func _is_dinnertime_context(old_state: GameState, new_state: GameState) -> bool:
 	if old_state == null or new_state == null:
 		return false
-	if str(old_state.phase) == str(new_state.phase):
-		return false
-	return str(new_state.phase) == DefsClass.PHASE_DINNERTIME
+	return str(old_state.phase) == DefsClass.PHASE_DINNERTIME or str(new_state.phase) == DefsClass.PHASE_DINNERTIME
 
 static func _read_dinnertime_report(state: GameState) -> Dictionary:
 	if state == null:
