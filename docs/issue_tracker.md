@@ -99,7 +99,7 @@
 | 85 | 调试面板：玩家相关命令必须显式 player 参数；房屋/广告牌等用下拉框列可用项 | 工具/UI | 依赖“当前玩家”状态且手填输入易错；需要统一参数与可用项下拉 | Implemented（待手动验收） |
 | 86 | 说客模组：扩边奖励改为获得里程碑时弹窗二选一（必须当场选择），不作为动作按钮 | 规则+UI | 当前流程与动作面板混在一起；需重构为强制对话框 + 放置模式 | Implemented（待手动验收） |
 | 87 | 说客模组：施工标记距离惩罚应包含起点格 | 规则 | 现实现疑似忽略路线起点格的 roadworks marker | Implemented（待手动验收） |
-| 88 | 公园/花园：背景色无透明度（花园 #699055；公园 #587a51） | UI/渲染 | Color alpha <1 导致叠色；需统一为不透明色 | 待实施（已澄清） |
+| 88 | 公园/花园：背景色无透明度（花园 #699055；公园 #587a51） | UI/渲染 | Color alpha <1 导致叠色；需统一为不透明色 | Implemented（待手动验收） |
 
 ---
 
@@ -4623,6 +4623,17 @@
 
 - UI 中对应区域的背景色 alpha=1，且颜色值与指定一致。
 
+**实施记录**
+
+- 公园/花园背景色统一为不透明（alpha=1），并使用指定色值：
+	- 花园：`#699055`
+	- 公园：`#587a51`
+	- `ui/scenes/game/map_canvas_drawer_structures_pass.gd`
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（141/141，`.godot/AllTests.log`）
+
 **状态**
 
-- 待实施
+- Implemented（待手动验收）
