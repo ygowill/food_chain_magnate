@@ -147,8 +147,10 @@
 
 ## 12. 说客模组：施工标记（roadworks）应计入起点格距离惩罚
 
-- 状态：TODO
+- 状态：DONE
 - 现象：施工标记的距离惩罚似乎会忽略路径起点格的施工标记。
 - 期望：路线只要包含施工标记格就应 +1 距离（包含起点格）。
-- 验证：待补充
-- 提交：待补充
+- 实施：
+	- 施工标记距离惩罚计数改为覆盖整条路径（包含起点格），避免漏算。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 141/141）
+- 提交：`fix(lobbyists): include start cell in roadworks penalty`

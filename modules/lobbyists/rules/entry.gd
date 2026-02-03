@@ -424,7 +424,7 @@ func _effect_dinnertime_distance_delta_roadworks(state: GameState, _player_id: i
 
 	var path_any: Array = ctx["path"]
 	var penalty := 0
-	for i in range(1, path_any.size()):
+	for i in range(path_any.size()):
 		var p = path_any[i]
 		if not (p is Vector2i):
 			return Result.failure("%s: roadworks: ctx.path[%d] 类型错误（期望 Vector2i）" % [MODULE_ID, i])
