@@ -128,10 +128,16 @@
 	- 选择“使用”后进入地图扩边放置 overlay：选择 tile/rotation → 地图高亮可放置边缘格 → 预览 → 确认；选择“放弃”则执行 `skip_lobbyists_extra_map_tile` 清除 pending。
 	- 动作面板中隐藏 `place_lobbyists_extra_map_tile/skip_lobbyists_extra_map_tile`，避免与说客动作混在一起。
 	- 兼容旧存档/回放：若 `round_state.lobbyists_extra_tile_pending` 缺失，里程碑效果会自动初始化该字段，避免“拿到里程碑但无事发生”。
+	- 规则对齐（First Lobbyist Used）：
+		- 扩边冲突：禁止扩边覆盖棋盘外占位（offramp/airplane）。offramp 通过 `state.map.external_cells` 与新 tile 区域重叠判断；airplane 通过 `state.map.marketing_placements` 推导其棋盘外占用矩形并检测与新 tile 重叠。
+		- 新 tile 上 road/park：本回合本玩家刚扩边放下的 tile 内，放置说客 road/park 不再要求 `range=2 by road`；通过 `round_state.lobbyists_extra_tile_last_placed[player_id]=[board_x, board_y]` 标记，并在离开 Lobbyists 子阶段自动清理。
+		- road 箭头连接收紧：必须至少一个箭头指向已有道路（不再允许“指向自己的餐厅入口格”）。
+		- 修复扩边后地图尺寸不一致：`MapRuntime.add_map_tile` 在 `ensure_world_rect` 后重读 `cells/grid_size`，避免扩边时 `grid_size` 已变更但 `cells` 仍使用旧引用导致越界。
 - 验证：
 	- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`（PASS）
 	- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 141/141）
 - 提交：`fix(lobbyists): init extra tile pending on milestone`
+	- 补充提交：`fix(lobbyists): align extra tile placement with rulebook`
 
 ---
 

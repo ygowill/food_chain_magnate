@@ -23,6 +23,18 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r.ok:
 		return r
 
+	r = _test_extra_tile_expand_is_blocked_by_airplane_and_offramp(seed_val)
+	if not r.ok:
+		return r
+
+	r = _test_extra_tile_allows_free_park_on_new_tile(seed_val)
+	if not r.ok:
+		return r
+
+	r = _test_lobbyists_road_requires_existing_road_connection(seed_val)
+	if not r.ok:
+		return r
+
 	r = _test_road_pending_and_cleanup(seed_val)
 	if not r.ok:
 		return r
@@ -38,6 +50,254 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_park_bonus_is_invoked(seed_val)
 	if not r.ok:
 		return r
+
+	return Result.success()
+
+static func _test_extra_tile_expand_is_blocked_by_airplane_and_offramp(seed_val: int) -> Result:
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"lobbyists",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+	var s: GameState = e.get_state()
+
+	var entry = ModuleEntryClass.new()
+	var init_r: Result = entry._on_restructuring_before_enter(s)
+	if not init_r.ok:
+		return Result.failure("初始化 Lobbyists 失败: %s" % init_r.error)
+	_force_player0_ready_for_lobbyists(s)
+
+	if not s.round_state.has("lobbyists_extra_tile_pending") or not (s.round_state["lobbyists_extra_tile_pending"] is Dictionary):
+		return Result.failure("缺少 round_state.lobbyists_extra_tile_pending")
+	var pending: Dictionary = s.round_state["lobbyists_extra_tile_pending"]
+	pending[0] = true
+	s.round_state["lobbyists_extra_tile_pending"] = pending
+
+	if not s.map.has("tile_supply_remaining") or not (s.map["tile_supply_remaining"] is Array) or (s.map["tile_supply_remaining"] as Array).is_empty():
+		return Result.failure("tile_supply_remaining 不应为空（否则无法测试扩边）")
+	var tile_id_val = (s.map["tile_supply_remaining"] as Array)[0]
+	if not (tile_id_val is String) or str(tile_id_val).is_empty():
+		return Result.failure("tile_supply_remaining[0] 类型错误")
+	var tile_id: String = str(tile_id_val)
+
+	# 1) airplane：占用棋盘外侧区域，应阻挡扩边
+	var minp := CoordsClass.get_world_min(s)
+	var mp_val = s.map.get("marketing_placements", null)
+	if mp_val == null:
+		mp_val = {}
+	if not (mp_val is Dictionary):
+		return Result.failure("state.map.marketing_placements 类型错误（期望 Dictionary）")
+	var placements: Dictionary = mp_val
+	placements["__test_airplane__"] = {
+		"board_number": 999,
+		"type": "airplane",
+		"world_pos": Vector2i(0, minp.y),
+		"axis": "col",
+		"footprint_size": Vector2i(5, 2),
+	}
+	s.map["marketing_placements"] = placements
+
+	var cmd := Command.create("place_lobbyists_extra_map_tile", 0)
+	cmd.params = {
+		"tile_id": tile_id,
+		"attach_to_tile_board_pos": [0, 0],
+		"side": "N",
+		"rotation": 0,
+	}
+	var r := e.execute_command(cmd)
+	if r.ok:
+		return Result.failure("扩边在 airplane 冲突时应失败（实际成功）")
+	if not str(r.error).contains("airplane"):
+		return Result.failure("扩边错误信息应包含 airplane（实际: %s）" % str(r.error))
+
+	# 2) offramp：external_cells 覆盖到新 tile 区域，应阻挡扩边
+	placements.erase("__test_airplane__")
+	s.map["marketing_placements"] = placements
+	pending = s.round_state["lobbyists_extra_tile_pending"]
+	pending[0] = true
+	s.round_state["lobbyists_extra_tile_pending"] = pending
+
+	var wp := Vector2i(0, minp.y - 1)
+	var ext_val = s.map.get("external_cells", null)
+	if not (ext_val is Dictionary):
+		return Result.failure("state.map.external_cells 类型错误（期望 Dictionary）")
+	var external_cells: Dictionary = ext_val
+	external_cells["%d,%d" % [wp.x, wp.y]] = {
+		"road_segments": [],
+		"structure": {"piece_id": "highway_offramp"},
+		"blocked": false,
+		"tile_origin": Vector2i(-1, -1),
+	}
+	s.map["external_cells"] = external_cells
+
+	var r2 := e.execute_command(cmd)
+	if r2.ok:
+		return Result.failure("扩边在 offramp 冲突时应失败（实际成功）")
+	if not str(r2.error).contains("offramp"):
+		return Result.failure("扩边错误信息应包含 offramp（实际: %s）" % str(r2.error))
+
+	return Result.success()
+
+static func _test_extra_tile_allows_free_park_on_new_tile(seed_val: int) -> Result:
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"lobbyists",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+	var s: GameState = e.get_state()
+
+	var entry = ModuleEntryClass.new()
+	var init_r: Result = entry._on_restructuring_before_enter(s)
+	if not init_r.ok:
+		return Result.failure("初始化 Lobbyists 失败: %s" % init_r.error)
+
+	_force_player0_ready_for_lobbyists(s)
+	_take_to_active(s, 0, "lobbyist")
+
+	# 直接设置 pending，避免依赖“先放 road/park”触发里程碑。
+	if not s.round_state.has("lobbyists_extra_tile_pending") or not (s.round_state["lobbyists_extra_tile_pending"] is Dictionary):
+		return Result.failure("缺少 round_state.lobbyists_extra_tile_pending")
+	var pending: Dictionary = s.round_state["lobbyists_extra_tile_pending"]
+	pending[0] = true
+	s.round_state["lobbyists_extra_tile_pending"] = pending
+
+	if not s.map.has("tile_supply_remaining") or not (s.map["tile_supply_remaining"] is Array) or (s.map["tile_supply_remaining"] as Array).is_empty():
+		return Result.failure("tile_supply_remaining 不应为空（否则无法测试扩边）")
+	var tile_id_val = (s.map["tile_supply_remaining"] as Array)[0]
+	if not (tile_id_val is String) or str(tile_id_val).is_empty():
+		return Result.failure("tile_supply_remaining[0] 类型错误")
+	var tile_id: String = str(tile_id_val)
+
+	var cmd := Command.create("place_lobbyists_extra_map_tile", 0)
+	cmd.params = {
+		"tile_id": tile_id,
+		"attach_to_tile_board_pos": [0, 0],
+		"side": "N",
+		"rotation": 0,
+	}
+	var r := e.execute_command(cmd)
+	if not r.ok:
+		return Result.failure("扩边放置 tile 失败: %s" % r.error)
+	s = e.get_state()
+
+	# 清空 restaurants：若仍执行 reachability 校验则必失败；现在应允许在新 tile 上放 park。
+	s.map["restaurants"] = {}
+	s.map["drink_sources"] = []
+
+	var new_tile_board_pos := Vector2i(0, -1)
+	_clear_tile_area_for_free_placement(s, new_tile_board_pos)
+	var placed := _try_place_park_within_tile(e, 0, new_tile_board_pos)
+	if not placed.ok:
+		return placed
+
+	return Result.success()
+
+static func _test_lobbyists_road_requires_existing_road_connection(seed_val: int) -> Result:
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"lobbyists",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+	var s: GameState = e.get_state()
+
+	var entry = ModuleEntryClass.new()
+	var init_r: Result = entry._on_restructuring_before_enter(s)
+	if not init_r.ok:
+		return Result.failure("初始化 Lobbyists 失败: %s" % init_r.error)
+
+	_force_player0_ready_for_lobbyists(s)
+	_take_to_active(s, 0, "lobbyist")
+
+	# 设置 pending 并扩边，确保“新 tile 上放 road/park 不受 range=2 限制”的分支可用。
+	if not s.round_state.has("lobbyists_extra_tile_pending") or not (s.round_state["lobbyists_extra_tile_pending"] is Dictionary):
+		return Result.failure("缺少 round_state.lobbyists_extra_tile_pending")
+	var pending: Dictionary = s.round_state["lobbyists_extra_tile_pending"]
+	pending[0] = true
+	s.round_state["lobbyists_extra_tile_pending"] = pending
+
+	var tile_id_val = (s.map.get("tile_supply_remaining", []) as Array)[0]
+	if not (tile_id_val is String) or str(tile_id_val).is_empty():
+		return Result.failure("tile_supply_remaining[0] 类型错误")
+	var tile_id: String = str(tile_id_val)
+
+	var cmd_tile := Command.create("place_lobbyists_extra_map_tile", 0)
+	cmd_tile.params = {
+		"tile_id": tile_id,
+		"attach_to_tile_board_pos": [0, 0],
+		"side": "N",
+		"rotation": 0,
+	}
+	var tr := e.execute_command(cmd_tile)
+	if not tr.ok:
+		return Result.failure("扩边放置 tile 失败: %s" % tr.error)
+	s = e.get_state()
+
+	var new_tile_board_pos := Vector2i(0, -1)
+	s.map["drink_sources"] = []
+	_clear_tile_area_for_free_placement(s, new_tile_board_pos)
+
+	# 清空 restaurants：避免 reachability 分支误通过（应由“新 tile 豁免”跳过）。
+	s.map["restaurants"] = {}
+
+	# 在新 tile 内找一个可放置 road_straight 的位置，使其箭头指向一个“自己的餐厅入口格”（但不指向道路）。
+	var candidate := _find_road_straight_anchor_within_tile(s, new_tile_board_pos)
+	if not candidate.ok:
+		return candidate
+	var info: Dictionary = candidate.value
+	var anchor: Vector2i = info["anchor"]
+	var rotation: int = int(info["rotation"])
+	var endpoint: Vector2i = info["endpoint"]
+
+	# 注入“餐厅入口格”（不放道路），验证 road 必须指向已有道路而非餐厅入口。
+	var idx2 := CoordsClass.world_to_index(s, endpoint)
+	var old_struct = s.map.cells[idx2.y][idx2.x]["structure"]
+	s.map.cells[idx2.y][idx2.x]["structure"] = {
+		"piece_id": "restaurant",
+		"owner": 0,
+		"anchor_cell": true,
+	}
+
+	var cmd := Command.create("place_lobbyists_road", 0)
+	cmd.params = {"piece_id": "lobbyists_road_straight", "anchor_pos": [anchor.x, anchor.y], "rotation": rotation}
+	var r := e.execute_command(cmd)
+
+	# 回滚注入，避免污染后续验证（即使本测试提前返回）。
+	s.map.cells[idx2.y][idx2.x]["structure"] = old_struct
+
+	if r.ok:
+		return Result.failure("道路仅指向餐厅入口且不指向道路时应失败（实际成功）")
+	if not str(r.error).contains("箭头"):
+		return Result.failure("错误信息应提示箭头连接要求（实际: %s）" % str(r.error))
 
 	return Result.success()
 
@@ -604,6 +864,119 @@ static func _try_place_road(engine: GameEngine) -> Result:
 					if r.ok:
 						return Result.success()
 	return Result.failure("未找到可放置道路的位置（测试环境）")
+
+static func _try_place_park_within_tile(engine: GameEngine, player_id: int, board_pos: Vector2i) -> Result:
+	var tile_world_min := board_pos * MapUtils.TILE_SIZE
+	for piece_id in ["lobbyists_park_line", "lobbyists_park_t", "lobbyists_park_l"]:
+		for ly in range(MapUtils.TILE_SIZE):
+			for lx in range(MapUtils.TILE_SIZE):
+				var anchor := tile_world_min + Vector2i(lx, ly)
+				for rot in [0, 90, 180, 270]:
+					var cmd := Command.create("place_lobbyists_park", player_id)
+					cmd.params = {"piece_id": piece_id, "anchor_pos": [anchor.x, anchor.y], "rotation": rot}
+					var r := engine.execute_command(cmd)
+					if r.ok:
+						return Result.success()
+	return Result.failure("未找到可放置公园的位置（tile=%s）" % str(board_pos))
+
+static func _clear_tile_area_for_free_placement(state: GameState, board_pos: Vector2i) -> void:
+	if state == null or not (state.map is Dictionary):
+		return
+	if not state.map.has("cells") or not (state.map["cells"] is Array):
+		return
+
+	var tile_world_min := board_pos * MapUtils.TILE_SIZE
+	var cells: Array = state.map["cells"]
+	for dy in range(MapUtils.TILE_SIZE):
+		for dx in range(MapUtils.TILE_SIZE):
+			var wp := tile_world_min + Vector2i(dx, dy)
+			if not CoordsClass.is_world_pos_in_grid(state, wp):
+				continue
+			var idx := CoordsClass.world_to_index(state, wp)
+			if idx.y < 0 or idx.y >= cells.size():
+				continue
+			var row_val = cells[idx.y]
+			if not (row_val is Array):
+				continue
+			var row: Array = row_val
+			if idx.x < 0 or idx.x >= row.size():
+				continue
+			var cell_val = row[idx.x]
+			if not (cell_val is Dictionary):
+				continue
+			var cell: Dictionary = cell_val
+			cell["blocked"] = false
+			cell["road_segments"] = []
+			cell["structure"] = {}
+			cell["drink_source"] = null
+			row[idx.x] = cell
+			cells[idx.y] = row
+	state.map["cells"] = cells
+
+static func _find_road_straight_anchor_within_tile(state: GameState, board_pos: Vector2i) -> Result:
+	if state == null or not (state.map is Dictionary):
+		return Result.failure("state.map 类型错误（期望 Dictionary）")
+	var tile_world_min := board_pos * MapUtils.TILE_SIZE
+
+	var offsets := [Vector2i(0, 0), Vector2i(1, 0)]
+	var arrows := [
+		{"offset": Vector2i(0, 0), "dir": "W"},
+		{"offset": Vector2i(1, 0), "dir": "E"},
+	]
+
+	for rot in [0, 90, 180, 270]:
+		for ly in range(1, MapUtils.TILE_SIZE - 1):
+			for lx in range(1, MapUtils.TILE_SIZE - 2):
+				var anchor := tile_world_min + Vector2i(lx, ly)
+
+				# footprint cells：必须全部在 tile 内且为空
+				var ok_cells := true
+				var piece_cells: Array[Vector2i] = []
+				for off in offsets:
+					var wp := anchor + MapUtils.rotate_offset(off, rot)
+					var tinfo: Dictionary = MapUtils.world_to_tile(wp)
+					if not (tinfo.get("board_pos", null) is Vector2i) or Vector2i(tinfo["board_pos"]) != board_pos:
+						ok_cells = false
+						break
+					if not CoordsClass.is_world_pos_in_grid(state, wp):
+						ok_cells = false
+						break
+					var cell: Dictionary = CellsClass.get_cell(state, wp)
+					if bool(cell.get("blocked", false)):
+						ok_cells = false
+						break
+					var s_val = cell.get("structure", null)
+					if s_val is Dictionary and not (s_val as Dictionary).is_empty():
+						ok_cells = false
+						break
+					piece_cells.append(wp)
+				if not ok_cells:
+					continue
+
+				# arrows：需要至少一个 endpoint 在 tile 内且为空（用于注入 restaurant）
+				for a in arrows:
+					var off2: Vector2i = a["offset"]
+					var dir: String = str(a["dir"])
+					var from := anchor + MapUtils.rotate_offset(off2, rot)
+					var to: Vector2i = from + Vector2i(MapUtils.DIR_OFFSETS.get(MapUtils.rotate_dir(dir, rot), Vector2i.ZERO))
+					var tinfo2: Dictionary = MapUtils.world_to_tile(to)
+					if not (tinfo2.get("board_pos", null) is Vector2i) or Vector2i(tinfo2["board_pos"]) != board_pos:
+						continue
+					if not CoordsClass.is_world_pos_in_grid(state, to):
+						continue
+					var cell2: Dictionary = CellsClass.get_cell(state, to)
+					if bool(cell2.get("blocked", false)):
+						continue
+					var s2_val = cell2.get("structure", null)
+					if s2_val is Dictionary and not (s2_val as Dictionary).is_empty():
+						continue
+					# Ensure endpoint has no road segments (we want "restaurant only" connection).
+					var rs_val = cell2.get("road_segments", null)
+					if rs_val is Array and not (rs_val as Array).is_empty():
+						continue
+					return Result.success({"anchor": anchor, "rotation": rot, "endpoint": to})
+
+	return Result.failure("未找到可用的 road_straight 放置点用于箭头连接测试（tile=%s）" % str(board_pos))
 
 static func _force_player0_ready_for_lobbyists(state: GameState) -> void:
 	state.phase = DefsClass.PHASE_WORKING

@@ -17,7 +17,7 @@ const MODULE_ID := LobbyistsRoadOverlaysClass.MODULE_ID
 const PENDING_ROADS_KEY := LobbyistsRoadOverlaysClass.PENDING_ROADS_KEY
 const ROADWORK_MARKERS_KEY := LobbyistsRoadOverlaysClass.ROADWORK_MARKERS_KEY
 
-const EXTRA_TILE_PENDING_KEY := "lobbyists_extra_tile_pending"
+const EXTRA_TILE_LAST_PLACED_KEY := "lobbyists_extra_tile_last_placed"
 
 const ROAD_PIECES: Array[String] = LobbyistsRoadOverlaysClass.ROAD_PIECES
 const ROAD_OVERLAYS := LobbyistsRoadOverlaysClass.ROAD_OVERLAYS
@@ -103,11 +103,15 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 			return Result.failure("place_lobbyists_road: cells[%d] 类型错误（期望 Vector2i）" % i)
 		piece_cells.append(c)
 
-	var reachable := _is_adjacent_to_reachable_road(state, command.actor, piece_cells, 2)
-	if not reachable.ok:
-		return reachable
-	if not bool(reachable.value):
-		return Result.failure("必须放置在可达道路旁（range=2 by road）")
+	var is_on_extra_tile := _is_placement_on_last_extra_tile(state, command.actor, piece_cells)
+	if not is_on_extra_tile.ok:
+		return is_on_extra_tile
+	if not bool(is_on_extra_tile.value):
+		var reachable := _is_adjacent_to_reachable_road(state, command.actor, piece_cells, 2)
+		if not reachable.ok:
+			return reachable
+		if not bool(reachable.value):
+			return Result.failure("必须放置在可达道路旁（range=2 by road）")
 
 	var overlay = ROAD_OVERLAYS.get(piece_id, null)
 	if not (overlay is Dictionary):
@@ -121,7 +125,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not arrow_check.ok:
 		return arrow_check
 	if not bool(arrow_check.value):
-		return Result.failure("道路必须至少有一个箭头指向已有道路或你的餐厅入口")
+		return Result.failure("道路必须至少有一个箭头指向已有道路")
 
 	return Result.success()
 
@@ -352,13 +356,49 @@ func _validate_arrows_have_connection(
 			has_connection = true
 			break
 
-		# 或指向自己的餐厅入口格
-		var s_val = cell.get("structure", null)
-		if s_val is Dictionary:
-			var s: Dictionary = s_val
-			if str(s.get("piece_id", "")) == "restaurant" and bool(s.get("anchor_cell", false)):
-				if int(s.get("owner", -999)) == actor:
-					has_connection = true
-					break
-
 	return Result.success(has_connection)
+
+func _is_placement_on_last_extra_tile(state: GameState, actor: int, piece_cells: Array[Vector2i]) -> Result:
+	if state == null or not (state.round_state is Dictionary):
+		return Result.failure("state.round_state 类型错误（期望 Dictionary）")
+	var last_val = state.round_state.get(EXTRA_TILE_LAST_PLACED_KEY, null)
+	if last_val == null:
+		return Result.success(false)
+	if not (last_val is Array):
+		return Result.failure("round_state.%s 类型错误（期望 Array）" % EXTRA_TILE_LAST_PLACED_KEY)
+	var last: Array = last_val
+	if actor < 0 or actor >= last.size():
+		return Result.success(false)
+	var bp_val = last[actor]
+	if bp_val == null:
+		return Result.success(false)
+	var bp_read := _parse_vec2i_array(bp_val, "round_state.%s[%d]" % [EXTRA_TILE_LAST_PLACED_KEY, actor])
+	if not bp_read.ok:
+		return bp_read
+	var bp: Vector2i = bp_read.value
+
+	for cell in piece_cells:
+		var info: Dictionary = MapUtilsClass.world_to_tile(cell)
+		var board_pos_val = info.get("board_pos", null)
+		if not (board_pos_val is Vector2i) or Vector2i(board_pos_val) != bp:
+			return Result.success(false)
+
+	return Result.success(true)
+
+func _parse_vec2i_array(v, path: String) -> Result:
+	if v is Vector2i:
+		return Result.success(Vector2i(v))
+	if v is Array:
+		var arr: Array = v
+		if arr.size() != 2:
+			return Result.failure("%s 长度错误（期望 2），实际: %d" % [path, arr.size()])
+		var x_val = arr[0]
+		var y_val = arr[1]
+		if not (x_val is int or x_val is float) or not (y_val is int or y_val is float):
+			return Result.failure("%s 类型错误（期望 [int,int]）" % path)
+		var x := int(x_val)
+		var y := int(y_val)
+		if float(x_val) != float(x) or float(y_val) != float(y):
+			return Result.failure("%s 必须为整数，实际: %s" % [path, str(v)])
+		return Result.success(Vector2i(x, y))
+	return Result.failure("%s 类型错误（期望 Vector2i 或 [x,y]）" % path)

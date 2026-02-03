@@ -90,7 +90,15 @@ static func add_map_tile(
 		return ensure
 
 	var origin := Coords.get_map_origin(state)
-	# 这里不再重复读取/校验：上方已通过 helper 拿到 grid_size/cells/houses/drink_sources。
+	# ensure_world_rect 可能会替换 cells/grid_size（扩边时必然如此）；这里必须重新读取。
+	var grid_read2 := _require_map_vec2i(map, "grid_size", "%s: state.map.grid_size" % prefix)
+	if not grid_read2.ok:
+		return grid_read2
+	grid_size = grid_read2.value
+	var cells_read2 := _require_map_array(map, "cells", "%s: state.map.cells" % prefix)
+	if not cells_read2.ok:
+		return cells_read2
+	cells = cells_read2.value
 
 	var bake := TileBakingClass.bake_tile_into_cells(
 		cells, grid_size, origin, tile_def, board_pos, rotation, piece_registry, houses, drink_sources

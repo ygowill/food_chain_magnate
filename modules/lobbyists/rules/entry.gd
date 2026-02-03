@@ -33,6 +33,7 @@ const PARK_SUPPLY_BY_PIECE_ID := {
 const PENDING_ROADS_KEY := LobbyistsRoadOverlaysClass.PENDING_ROADS_KEY
 const ROADWORK_MARKERS_KEY := LobbyistsRoadOverlaysClass.ROADWORK_MARKERS_KEY
 const EXTRA_TILE_PENDING_KEY := "lobbyists_extra_tile_pending"
+const EXTRA_TILE_LAST_PLACED_KEY := "lobbyists_extra_tile_last_placed"
 
 const EFFECT_ID_ROADWORKS_DISTANCE := "%s:dinnertime:distance_delta:roadworks" % MODULE_ID
 const EFFECT_ID_PARK_BONUS := "%s:dinnertime:sale_house_bonus:park" % MODULE_ID
@@ -131,6 +132,11 @@ func _on_restructuring_before_enter(state: GameState) -> Result:
 		for i in range(state.players.size()):
 			pending[i] = false
 		state.round_state[EXTRA_TILE_PENDING_KEY] = pending
+	# 每回合清空：记录“本回合通过里程碑扩边放置的 tile”（用于 Lobbyists 子阶段内的放置豁免）。
+	var last := []
+	for i in range(state.players.size()):
+		last.append(null)
+	state.round_state[EXTRA_TILE_LAST_PLACED_KEY] = last
 
 	return Result.success()
 
@@ -385,6 +391,8 @@ func _on_lobbyists_before_exit(state: GameState) -> Result:
 			return Result.failure("%s: round_state.%s[%d] 类型错误（期望 bool）" % [MODULE_ID, EXTRA_TILE_PENDING_KEY, pid])
 		if bool(v):
 			return Result.failure("存在未处理的“额外地图板块”放置（必须先放置或放弃）: player=%d" % pid)
+	if state.round_state.has(EXTRA_TILE_LAST_PLACED_KEY):
+		state.round_state.erase(EXTRA_TILE_LAST_PLACED_KEY)
 	return Result.success()
 
 func _milestone_effect_grant_extra_map_tile(state: GameState, player_id: int, _milestone_id: String, _eff: Dictionary) -> Result:

@@ -4637,3 +4637,51 @@
 **状态**
 
 - Implemented（待手动验收）
+
+## 89. 说客模组：First Lobbyist Used（额外板块）规则对齐（airplane/offramp 阻挡；新 tile 上 road/park 无 range 限制；road 箭头必须指向道路）
+
+**需求（规则书 + 已澄清）**
+
+- 获得 `First Lobbyist Used` 里程碑后：立刻获得“额外板块放置机会”，并必须当场二选一（使用 / 放弃）。
+- 额外 tile：
+	- 从剩余 tile 池中任选；若 tile 已用尽则无额外放置。
+	- 必须整边贴合某一现有 tile 的一侧；不要求道路连通；无 range 限制。
+	- 不能放在包含 airplane 或 highway offramp 的那一侧（否则扩边 tile 会与棋盘外组件重叠）。
+- 新 tile 的后续使用：
+	- 本轮后续到 `PlaceRestaurants` 子阶段能放餐厅即可（不要求在 Lobbyists 子阶段当场放）。
+	- 若玩家有 >1 lobbyist，可在新 tile 上继续放 road/park；其中 lobbyist road 仍要求至少一端（箭头）指向已有道路。
+
+**验收**
+
+- 扩边放置时：被 airplane/offramp 占用的边缘段不能作为 attach side 进行扩边。
+- 扩边成功后：同一 Lobbyists 子阶段内，本玩家在“本次扩边放下的新 tile”上放置 road/park 不再要求 `range=2 by road`。
+- `place_lobbyists_road`：必须至少一个箭头指向已有道路（不再允许“指向自己餐厅入口格”作为连接）。
+
+**实施记录**
+
+- 扩边冲突检测改为“棋盘外占位重叠”语义：
+	- offramp：通过 `state.map.external_cells` 与新 tile 区域是否重叠判定（外部格子一旦被扩边覆盖会破坏 external_cells 语义）。
+	- airplane：根据 `state.map.marketing_placements`（`axis/footprint_size/world_pos`）推导其棋盘外占用矩形，与新 tile 区域做相交检测。
+	- `modules/lobbyists/actions/place_lobbyists_extra_map_tile_action.gd`
+- 新 tile 上 road/park 放置豁免：
+	- 在扩边成功后记录 `round_state.lobbyists_extra_tile_last_placed[player_id]=[board_x, board_y]`。
+	- 对该 tile 内的 `place_lobbyists_road/place_lobbyists_park` 跳过 `range=2 by road` 校验；离开 Lobbyists 子阶段清理该字段。
+	- `modules/lobbyists/actions/place_lobbyists_road_action.gd`
+	- `modules/lobbyists/actions/place_lobbyists_park_action.gd`
+	- `modules/lobbyists/rules/entry.gd`
+- 修复扩边后地图尺寸可能不一致的问题（测试中发现）：
+	- `MapRuntime.add_map_tile` 在 `ensure_world_rect` 后必须重读 `cells/grid_size`，避免 `grid_size` 已扩边但 `cells` 仍使用旧引用导致道路图构建越界。
+	- `core/map/map_runtime/tile_edit.gd`
+- 补回归用例：
+	- 扩边冲突（airplane/offramp）阻挡。
+	- 新 tile 上 park 放置不受 reachability 限制。
+	- road 箭头连接必须指向已有道路（餐厅入口不再算）。
+	- `core/tests/lobbyists_v2_test.gd`
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`：PASS（141/141，`.godot/AllTests.log`）
+
+**状态**
+
+- Implemented（待手动验收）

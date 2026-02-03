@@ -3,14 +3,13 @@ extends ActionExecutor
 
 const TileEditClass = preload("res://core/map/map_runtime/tile_edit.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
-const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
-const PlacementConflictRegistryClass = preload("res://core/rules/placement_conflict_registry.gd")
 
 const MODULE_ID := "lobbyists"
 const EXTRA_TILE_PENDING_KEY := "lobbyists_extra_tile_pending"
-const CONFLICT_ID_OFFRAMP_CONNECTION := "rural_marketeers:offramp_connection"
+const EXTRA_TILE_LAST_PLACED_KEY := "lobbyists_extra_tile_last_placed"
 
 func _init() -> void:
 	action_id = "place_lobbyists_extra_map_tile"
@@ -113,6 +112,20 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	pending[player_id] = false
 	state.round_state[EXTRA_TILE_PENDING_KEY] = pending
 
+	# 记录本回合本玩家“通过里程碑扩边”放置的 tile（用于允许在新 tile 上放公园/道路不受 range 限制）。
+	if state.round_state is Dictionary:
+		var last_val = state.round_state.get(EXTRA_TILE_LAST_PLACED_KEY, null)
+		var last: Array = []
+		if last_val is Array:
+			last = last_val
+		else:
+			for i in range(state.players.size()):
+				last.append(null)
+		while last.size() < state.players.size():
+			last.append(null)
+		last[player_id] = [new_board_pos.x, new_board_pos.y]
+		state.round_state[EXTRA_TILE_LAST_PLACED_KEY] = last
+
 	return Result.success({
 		"player_id": player_id,
 		"tile_id": tile_id,
@@ -158,41 +171,160 @@ func _validate_extra_tile_position(state: GameState, attach_board_pos: Vector2i,
 	return Result.success(new_pos)
 
 func _check_edge_conflicts(state: GameState, attach_board_pos: Vector2i, side: String) -> Result:
-	# 计算 attach tile 的该侧边缘 5 个世界格
-	var edge_cells: Array[Vector2i] = []
-	match side:
-		"N":
-			for lx in range(MapUtilsClass.TILE_SIZE):
-				edge_cells.append(attach_board_pos * MapUtilsClass.TILE_SIZE + Vector2i(lx, 0))
-		"S":
-			for lx in range(MapUtilsClass.TILE_SIZE):
-				edge_cells.append(attach_board_pos * MapUtilsClass.TILE_SIZE + Vector2i(lx, MapUtilsClass.TILE_SIZE - 1))
-		"W":
-			for ly in range(MapUtilsClass.TILE_SIZE):
-				edge_cells.append(attach_board_pos * MapUtilsClass.TILE_SIZE + Vector2i(0, ly))
-		"E":
-			for ly in range(MapUtilsClass.TILE_SIZE):
-				edge_cells.append(attach_board_pos * MapUtilsClass.TILE_SIZE + Vector2i(MapUtilsClass.TILE_SIZE - 1, ly))
+	# 规则书语义：airplane / highway offramp 都在棋盘外侧，
+	# 若本次扩边的 tile 覆盖到它们占用的棋盘外区域，则禁止扩边。
+	if state == null or not (state.map is Dictionary):
+		return Result.failure("state.map 类型错误（期望 Dictionary）")
 
-	# airplane
-	var airplane_conflict := MarketingPlacementQueryClass.has_type_in_world_positions(state, "airplane", edge_cells)
-	if not airplane_conflict.ok:
-		return airplane_conflict
-	if bool(airplane_conflict.value):
-		return Result.failure("该边缘包含 airplane，禁止扩边: %s" % str(side))
+	var tile_size := int(MapUtilsClass.TILE_SIZE)
+	if tile_size <= 0:
+		return Result.failure("MapUtils.TILE_SIZE 非法: %d" % tile_size)
 
-	# offramp（若 rural_marketeers 模块存在，则其 connection cell 在 map 中）
-	for wp in edge_cells:
-		if not (wp is Vector2i):
+	var new_board_pos := attach_board_pos + _offset_for_side(side)
+	var new_world_min := new_board_pos * tile_size
+	var new_world_size := Vector2i(tile_size, tile_size)
+
+	# 1) external_cells：覆盖到任意棋盘外组件（例如 offramp）即冲突。
+	var ext_val = state.map.get("external_cells", null)
+	if ext_val != null and not (ext_val is Dictionary):
+		return Result.failure("state.map.external_cells 类型错误（期望 Dictionary）")
+	var external_cells: Dictionary = ext_val if (ext_val is Dictionary) else {}
+
+	for dy in range(tile_size):
+		for dx in range(tile_size):
+			var wp := new_world_min + Vector2i(dx, dy)
+			var key := "%d,%d" % [wp.x, wp.y]
+			if not external_cells.has(key):
+				continue
+			var cell_val = external_cells.get(key, null)
+			if cell_val is Dictionary:
+				var s_val = (cell_val as Dictionary).get("structure", null)
+				if s_val is Dictionary and str((s_val as Dictionary).get("piece_id", "")) == "highway_offramp":
+					return Result.failure("该边缘包含 offramp，禁止扩边: %s" % str(side))
+			return Result.failure("该边缘包含棋盘外组件，禁止扩边: %s" % str(side))
+
+	# 2) airplane：其占用区域在棋盘外，需要根据 placement 推导出棋盘外占用矩形。
+	var mp_val = state.map.get("marketing_placements", null)
+	if mp_val == null:
+		return Result.success()
+	if not (mp_val is Dictionary):
+		return Result.failure("state.map.marketing_placements 类型错误（期望 Dictionary）")
+	var placements: Dictionary = mp_val
+
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
+	for k in placements.keys():
+		var p_val = placements[k]
+		if not (p_val is Dictionary):
+			return Result.failure("state.map.marketing_placements[%s] 类型错误（期望 Dictionary）" % str(k))
+		var p: Dictionary = p_val
+		if str(p.get("type", "")) != "airplane":
 			continue
-		var conflicts_read := PlacementConflictRegistryClass.get_conflicts_at_world_pos(state, wp, {"action": action_id, "purpose": "expand_edge"})
-		if not conflicts_read.ok:
-			return conflicts_read
-		var conflicts: Array = conflicts_read.value
-		if conflicts.has(CONFLICT_ID_OFFRAMP_CONNECTION):
-			return Result.failure("该边缘包含 offramp，禁止扩边: %s" % str(side))
+
+		var wp_val = p.get("world_pos", null)
+		if not (wp_val is Vector2i):
+			return Result.failure("state.map.marketing_placements[%s].world_pos 类型错误（期望 Vector2i）" % str(k))
+		var anchor: Vector2i = wp_val
+
+		var axis := str(p.get("axis", "")).strip_edges()
+		if axis != "row" and axis != "col":
+			# Fallback inference for older data.
+			if anchor.x == minp.x or anchor.x == maxp.x:
+				axis = "row"
+			elif anchor.y == minp.y or anchor.y == maxp.y:
+				axis = "col"
+			else:
+				continue
+
+		var fs_read := _read_marketing_footprint_size(p, "state.map.marketing_placements[%s]" % str(k))
+		if not fs_read.ok:
+			return fs_read
+		var base_size: Vector2i = fs_read.value
+		if base_size.x <= 0 or base_size.y <= 0:
+			continue
+
+		var thickness := 2
+		var length := 0
+		if base_size.x == 2 and base_size.y != 2:
+			length = base_size.y
+		elif base_size.y == 2 and base_size.x != 2:
+			length = base_size.x
+		else:
+			thickness = mini(base_size.x, base_size.y)
+			length = maxi(base_size.x, base_size.y)
+		if thickness <= 0 or length <= 0:
+			continue
+
+		# Axis determines oriented size (length along edge, thickness outward).
+		var size := Vector2i.ZERO
+		if axis == "row":
+			size = Vector2i(maxi(1, thickness), maxi(1, length))
+		else:
+			size = Vector2i(maxi(1, length), maxi(1, thickness))
+
+		var attach := ""
+		if axis == "row":
+			if anchor.x == minp.x:
+				attach = "left"
+			elif anchor.x >= maxp.x - 1:
+				attach = "right"
+		else:
+			if anchor.y == minp.y:
+				attach = "top"
+			elif anchor.y >= maxp.y - 1:
+				attach = "bottom"
+		if attach.is_empty():
+			continue
+
+		var offset := Vector2i.ZERO
+		match attach:
+			"left":
+				offset = Vector2i(-size.x, 0)
+			"right":
+				offset = Vector2i(1, 0)
+			"top":
+				offset = Vector2i(0, -size.y)
+			"bottom":
+				offset = Vector2i(0, 1)
+		var outside_anchor := anchor + offset
+
+		if _rects_intersect(outside_anchor, size, new_world_min, new_world_size):
+			return Result.failure("该边缘包含 airplane，禁止扩边: %s" % str(side))
 
 	return Result.success()
+
+func _read_marketing_footprint_size(p: Dictionary, path: String) -> Result:
+	var fs_val = p.get("footprint_size", null)
+	if fs_val is Vector2i:
+		return Result.success(Vector2i(fs_val))
+	if fs_val is Array:
+		var arr: Array = fs_val
+		if arr.size() != 2:
+			return Result.failure("%s.footprint_size 长度错误（期望 2），实际: %d" % [path, arr.size()])
+		var w_val = arr[0]
+		var h_val = arr[1]
+		if not (w_val is int or w_val is float) or not (h_val is int or h_val is float):
+			return Result.failure("%s.footprint_size 类型错误（期望 [int,int]）" % path)
+		var w := int(w_val)
+		var h := int(h_val)
+		if float(w_val) != float(w) or float(h_val) != float(h):
+			return Result.failure("%s.footprint_size 必须为整数，实际: %s" % [path, str(fs_val)])
+		return Result.success(Vector2i(w, h))
+	return Result.success(Vector2i.ONE)
+
+func _rects_intersect(a_pos: Vector2i, a_size: Vector2i, b_pos: Vector2i, b_size: Vector2i) -> bool:
+	if a_size.x <= 0 or a_size.y <= 0 or b_size.x <= 0 or b_size.y <= 0:
+		return false
+	var a_right := a_pos.x + a_size.x
+	var a_bottom := a_pos.y + a_size.y
+	var b_right := b_pos.x + b_size.x
+	var b_bottom := b_pos.y + b_size.y
+	return not (
+		a_right <= b_pos.x
+		or b_right <= a_pos.x
+		or a_bottom <= b_pos.y
+		or b_bottom <= a_pos.y
+	)
 
 func _offset_for_side(side: String) -> Vector2i:
 	if side == "N":
