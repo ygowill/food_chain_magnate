@@ -298,15 +298,20 @@ static func _draw_house_demands(canvas, cell_size: int) -> void:
 	if not canvas._map_data.has("houses") or not (canvas._map_data["houses"] is Dictionary):
 		return
 
-	# Demand tokens: fixed size (no per-house shrinking); when demands change, we re-layout all tokens.
-	var icon_size := float(cell_size) * 0.90
-	var min_spacing := maxf(1.0, float(cell_size) * 0.04)
+	# Demand tokens: prefer large icons, but shrink per-house as needed to fit the rule cap
+	# (3 for normal houses, 5 for garden houses) across zoom levels.
+	var base_icon_size := float(cell_size) * 0.90
+	var base_min_spacing := maxf(1.0, float(cell_size) * 0.04)
 
 	for anchor_val in canvas._structures_by_anchor.keys():
 		if not (anchor_val is Vector2i):
 			continue
 		var anchor: Vector2i = anchor_val
 		var info: Dictionary = canvas._structures_by_anchor[anchor]
+
+		var piece_id: String = str(info.get("piece_id", "")).strip_edges()
+		if piece_id.is_empty():
+			continue
 
 		var house_id: String = str(info.get("house_id", ""))
 		if house_id.is_empty():
@@ -333,21 +338,26 @@ static func _draw_house_demands(canvas, cell_size: int) -> void:
 			Vector2(size_cells.x * cell_size, size_cells.y * cell_size)
 		)
 
-		var demand_area_rect := structure_rect
 		var rotation: int = int(info.get("rotation", 0))
 		var house_mask := [[1, 1], [1, 1]]
 		var house_cells_world: Array[Vector2i] = MapUtils.get_footprint_cells(house_mask, Vector2i.ZERO, anchor, rotation)
-		if not house_cells_world.is_empty():
-			var hmin := Vector2i(2147483647, 2147483647)
-			var hmax := Vector2i(-2147483648, -2147483648)
-			for wpos in house_cells_world:
-				var vpos: Vector2i = canvas._world_to_view(wpos)
-				hmin.x = min(hmin.x, vpos.x)
-				hmin.y = min(hmin.y, vpos.y)
-				hmax.x = max(hmax.x, vpos.x)
-				hmax.y = max(hmax.y, vpos.y)
-			var hsize_cells := (hmax - hmin) + Vector2i.ONE
-			demand_area_rect = Rect2(Vector2(hmin.x * cell_size, hmin.y * cell_size), Vector2(hsize_cells.x * cell_size, hsize_cells.y * cell_size))
+		if house_cells_world.is_empty():
+			continue
+		var hmin := Vector2i(2147483647, 2147483647)
+		var hmax := Vector2i(-2147483648, -2147483648)
+		for wpos in house_cells_world:
+			var vpos: Vector2i = canvas._world_to_view(wpos)
+			hmin.x = min(hmin.x, vpos.x)
+			hmin.y = min(hmin.y, vpos.y)
+			hmax.x = max(hmax.x, vpos.x)
+			hmax.y = max(hmax.y, vpos.y)
+		var hsize_cells := (hmax - hmin) + Vector2i.ONE
+		var house_rect := Rect2(Vector2(hmin.x * cell_size, hmin.y * cell_size), Vector2(hsize_cells.x * cell_size, hsize_cells.y * cell_size))
+
+		var demand_area_rect := house_rect
+		if piece_id == "house_with_garden":
+			# Garden houses can have more demands; allow spilling tokens into the garden area for visibility.
+			demand_area_rect = structure_rect
 
 		var product_ids: Array[String] = []
 		for d_val in demands:
@@ -370,21 +380,31 @@ static func _draw_house_demands(canvas, cell_size: int) -> void:
 		seed = int((seed ^ _hash_string_32(demand_key)) & 0x7FFFFFFF)
 
 		var reserved: Array[Rect2] = []
-		reserved.append(StructuresPassClass.compute_house_id_rect(cell_size, demand_area_rect))
+		reserved.append(StructuresPassClass.compute_house_id_rect(cell_size, house_rect))
 
-		var scatter_area_rect := demand_area_rect.grow(-float(cell_size) * 0.05)
-		var slots := _build_demand_token_slots(scatter_area_rect, icon_size, min_spacing, reserved)
-		if slots.size() < draw_count:
-			slots = _build_demand_token_slots(demand_area_rect, icon_size, min_spacing, reserved)
-		if slots.size() < draw_count:
+		var slots: Array[Rect2] = []
+		var icon_size := base_icon_size
+		var min_spacing := base_min_spacing
+		var scales := [1.0, 0.86, 0.74, 0.62, 0.50]
+		for scale in scales:
+			icon_size = base_icon_size * float(scale)
+			min_spacing = base_min_spacing * float(scale)
+			var scatter_area_rect := demand_area_rect.grow(-float(cell_size) * 0.05)
+			slots = _build_demand_token_slots(scatter_area_rect, icon_size, min_spacing, reserved)
+			if slots.size() < draw_count:
+				slots = _build_demand_token_slots(demand_area_rect, icon_size, min_spacing, reserved)
+			if slots.size() >= draw_count:
+				break
+		if slots.is_empty():
 			continue
+		var actual_draw_count: int = min(draw_count, slots.size())
 
 		var rng := RandomNumberGenerator.new()
 		rng.seed = seed
 		rng.state = int(seed)
 		_shuffle_rect2_array(rng, slots)
 
-		for i in range(draw_count):
+		for i in range(actual_draw_count):
 			var product_id: String = draw_product_ids[i]
 			if product_id.is_empty():
 				continue

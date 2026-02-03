@@ -154,3 +154,19 @@
 	- 施工标记距离惩罚计数改为覆盖整条路径（包含起点格），避免漏算。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 141/141）
 - 提交：`fix(lobbyists): include start cell in roadworks penalty`
+
+---
+
+## 13. 地图房屋需求图标：普通房屋 3 个需求/花园房屋更多需求时不显示或显示不完整
+
+- 状态：DONE
+- 现象：当房屋需求增加到 3 个时，地图上的需求图标会不显示（或显示不完整）。
+- 期望：房屋需求图标应至少支持规则上限（普通房屋最多 3 个；有花园的房屋最多 5 个），在不同缩放等级下也能稳定显示。
+- 根因：需求图标采用固定较大的 icon_size，且需要避让 `house_id` 徽章；在缩放较小时可用 slots 数不足，代码会直接跳过整栋房屋的需求绘制，导致“需求达到上限反而不显示”。
+- 实施：
+	- 需求图标布局改为按房屋自适应缩小 icon_size/min_spacing，直到能容纳全部需求；若仍不足则至少绘制可容纳的部分。
+	- 带花园房屋允许需求图标扩展到花园区域，提高最多 5 个需求的可见性。
+- 验证：
+	- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`（PASS）
+	- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 141/141）
+- 提交：`fix(ui): keep house demand icons visible at rule cap`
