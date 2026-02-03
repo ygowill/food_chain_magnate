@@ -134,12 +134,14 @@
 
 ## 11. 地图配色：花园/公园背景色更新
 
-- 状态：TODO
+- 状态：DONE
 - 期望：
 	- 花园背景色使用 `#699055`
 	- 公园背景色使用 `#587a51`
-- 验证：待补充
-- 提交：待补充
+- 实施：
+	- 更新 `MapCanvas` 绘制：花园底色 `#699055`；公园底色 `#587a51`（边框为同色加深）。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 141/141）
+- 提交：`fix(ui): update park/garden background colors`
 
 ---
 
