@@ -1,15 +1,15 @@
 {
 	"checkpoints": [
 		{
-			"hash": "ea379280ebabd144e90122cbf25d6516",
+			"hash": "211eb3060f16c50c8b4daad177504af0",
 			"index": 0,
 			"rng_calls": 30
 		}
 	],
 	"commands": [],
-	"created_at": "2026-02-04T01:37:56",
+	"created_at": "2026-02-04T02:10:26",
 	"current_index": -1,
-	"final_hash": "ea379280ebabd144e90122cbf25d6516",
+	"final_hash": "211eb3060f16c50c8b4daad177504af0",
 	"game_version": "0.1.0",
 	"initial_state": {
 		"bank": {
@@ -4312,9 +4312,7 @@
 					"pizza": 0,
 					"soda": 0
 				},
-				"milestones": [
-					"first_lobbyist_used"
-				],
+				"milestones": [],
 				"multi_trainer_on_one": false,
 				"reserve_card_revealed": false,
 				"reserve_card_selected": 0,
@@ -4365,9 +4363,7 @@
 					"pizza": 0,
 					"soda": 0
 				},
-				"milestones": [
-					"first_lobbyist_used"
-				],
+				"milestones": [],
 				"multi_trainer_on_one": false,
 				"reserve_card_revealed": false,
 				"reserve_card_selected": 0,
@@ -4401,39 +4397,17 @@
 
 			},
 			"actions_this_round": [],
+			"lobbyists_extra_tile_last_placed": [
+				null,
+				null
+			],
 			"lobbyists_extra_tile_pending": {
-				"0": true,
-				"1": true
+				"0": false,
+				"1": false
 			},
 			"mandatory_actions_completed": {
 				"0": [],
 				"1": []
-			},
-			"milestones_auto_awarded": [
-				{
-					"context": {
-						"employee_id": "lobbyist",
-						"player_id": 0
-					},
-					"event": "UseEmployee",
-					"milestone_id": "first_lobbyist_used",
-					"player_id": 0
-				},
-				{
-					"context": {
-						"employee_id": "lobbyist",
-						"player_id": 1
-					},
-					"event": "UseEmployee",
-					"milestone_id": "first_lobbyist_used",
-					"player_id": 1
-				}
-			],
-			"milestones_claimed": {
-				"first_lobbyist_used": [
-					0,
-					1
-				]
 			},
 			"order_of_business": {
 				"finalized": true,

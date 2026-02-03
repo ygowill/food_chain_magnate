@@ -199,14 +199,37 @@ func _build_milestone_first_lobbyist_used_multi_player_same_round(engine: GameEn
 		if not ensure.ok:
 			return ensure
 
-	# Simulate "multiple players used lobbyist" by awarding the milestone to player 0 and 1
-	# (milestone supply is only removed in Cleanup, so same-round multi-claim is supported).
-	for pid2 in range(mini(2, state.players.size())):
-		var ms := MilestoneSystem.process_event(state, "UseEmployee", {"player_id": pid2, "employee_id": "lobbyist"})
-		if not ms.ok:
-			return Result.failure("MilestoneSystem.process_event failed: %s" % ms.error)
+	# This save should start BEFORE anyone used a lobbyist.
+	# Players should earn the milestone by actually placing a lobbyists road/park in-game.
+	if state.round_state is Dictionary:
+		var pending := {}
+		for i in range(state.players.size()):
+			pending[i] = false
+		state.round_state["lobbyists_extra_tile_pending"] = pending
+		var last := []
+		for i in range(state.players.size()):
+			last.append(null)
+		state.round_state["lobbyists_extra_tile_last_placed"] = last
 
-	return Result.success()
+	for pid2 in range(state.players.size()):
+		var p := state.get_player(pid2)
+		if p.has("milestones") and (p["milestones"] is Array):
+			var ms: Array = (p["milestones"] as Array).duplicate()
+			while ms.has("first_lobbyist_used"):
+				ms.erase("first_lobbyist_used")
+			p["milestones"] = ms
+
+	# Provide a suggested command for player 0 to trigger the milestone quickly.
+	var actor := 0
+	if actor >= 0 and actor < state.players.size():
+		var find := _find_first_valid_lobbyists_road(engine, actor)
+		if find.ok:
+			return Result.success({"suggested_command": find.value})
+		var find2 := _find_first_valid_lobbyists_park(engine, actor)
+		if find2.ok:
+			return Result.success({"suggested_command": find2.value})
+
+	return Result.success({})
 
 func _build_milestone_first_house_built(engine: GameEngine, c: Dictionary) -> Result:
 	return _build_employee_place_house(engine, c)

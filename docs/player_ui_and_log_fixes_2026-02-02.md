@@ -192,18 +192,20 @@
 	- `MapCanvasDrawerGroundPass` 绘制 blocked overlay 时跳过 `tile_origin == (-1,-1)` 的 void cells，仅对真实 blocked 地形绘制红叉覆盖。
 	- 新增 UI 单测：`ui/scenes/tests/map_blocked_overlay_skips_void_cells_test.gd`。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 142/142）
-- 提交：（见本次提交）
+- 提交：`fix(ui): hide blocked overlay on void cells`
 
 ---
 
 ## 15. 新增手工复核存档：同回合多玩家依次扩边
 
 - 状态：DONE
-- 目的：用于手动复核“同一回合多名玩家都获得 first_lobbyist_used 后，能够依次弹窗并各自放置额外 tile”，同时便于肉眼确认“void 区域不显示红叉”。
+- 目的：用于手动复核“同一回合内两名玩家先后使用说客后，都能获得 first_lobbyist_used，并在各自回合弹窗二选一并放置额外 tile”，同时便于肉眼确认“void 区域不显示红叉”。
 - 存档：
 	- `res://.savings/manual_cases/milestones/first_lobbyist_used_multi_player_same_round.json`
 	- `res://.savings/manual_cases/milestones/first_lobbyist_used_multi_player_same_round.md`
 - 生成逻辑：
 	- manifest：`tools/manual_test_saves/manifest_milestones_lobbyists.gd`
 	- builder：`tools/manual_test_saves/builders/manual_test_save_employee_placement_builders.gd`
-- 验证：存档生成脚本自带 load 校验；另外 `AllTests` 通过（PASS 142/142）
+- 验证：
+	- 存档生成脚本自带 load 校验（且载入后两名玩家均未预先获得 first_lobbyist_used）。
+	- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 142/142）
