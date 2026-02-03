@@ -33,13 +33,15 @@ var _last_sync_key: String = ""
 var _last_skin_ref = null
 var _build_in_progress: bool = false
 var _pending_state = null
+var _opened: bool = false
 
 func _ready() -> void:
 	set_process_unhandled_input(true)
 	if is_instance_valid(close_button):
 		close_button.pressed.connect(_on_close_pressed)
 	_set_loading_visible(false)
-	visible = false
+	if not _opened:
+		visible = false
 	_apply_responsive_grid_columns()
 
 func _exit_tree() -> void:
@@ -142,6 +144,7 @@ func sync_from_state(state: GameState, skin_override = null, force_rebuild: bool
 	_update_from_state(state)
 
 func open_with_state(state: GameState, skin_override = null) -> void:
+	_opened = true
 	visible = true
 	begin_background_build(state, skin_override)
 

@@ -29,6 +29,7 @@ var _skin_key: String = ""
 var _build_in_progress: bool = false
 var _last_build_key: String = ""
 var _pending_state = null
+var _opened: bool = false
 
 const BASE_CELL_SIZE := 40
 const ZOOM_MIN_PERCENT := 50
@@ -52,13 +53,15 @@ func _ready() -> void:
 	else:
 		_apply_zoom_percent(_zoom_percent, false)
 	_set_loading_visible(false)
-	visible = false
+	if not _opened:
+		visible = false
 
 func set_skin(skin) -> void:
 	# 允许外部（例如 MapCanvas）注入已构建的 MapSkin，避免重复 build 导致卡顿。
 	_skin = skin
 
 func open_with_state(state: GameState, skin_override = null) -> void:
+	_opened = true
 	visible = true
 	begin_background_build(state, skin_override)
 

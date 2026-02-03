@@ -95,7 +95,7 @@
 | 81 | 动作面板：生产食物不使用下拉框，改为食物图标点击 | UI/交互 | 生产面板需提供图标化选择；避免下拉框低效操作 | Implemented（待手动验收） |
 | 82 | 玩家信息面板：左侧餐厅图标复用顺位餐厅图标；tab 移至上方横排 | UI/布局 | PlayerPanel 需要复用顺位餐厅 logo 与背景色，并把玩家选择入口改为上方横排 | Implemented（待手动验收） |
 | 83 | 日志面板：回放播放器宽度溢出导致横向溢出 | UI/布局 | ReplayBar 默认最小宽度/布局策略会撑开导致横向溢出 | Implemented（待手动验收） |
-| 84 | 顶部工具栏：供应堆与里程碑按钮无法打开 | UI/交互 | TopBar 入口信号/节点路径回归导致按钮无响应 | 待实施（已复现） |
+| 84 | 顶部工具栏：供应堆与里程碑按钮无法打开 | UI/交互 | TopBar 入口信号/节点路径回归导致按钮无响应 | Implemented（待手动验收） |
 | 85 | 调试面板：玩家相关命令必须显式 player 参数；房屋/广告牌等用下拉框列可用项 | 工具/UI | 依赖“当前玩家”状态且手填输入易错；需要统一参数与可用项下拉 | 待实施（已澄清） |
 | 86 | 说客模组：扩边奖励改为获得里程碑时弹窗二选一（必须当场选择），不作为动作按钮 | 规则+UI | 当前流程与动作面板混在一起；需重构为强制对话框 + 放置模式 | Implemented（待手动验收） |
 | 87 | 说客模组：施工标记距离惩罚应包含起点格 | 规则 | 现实现疑似忽略路线起点格的 roadworks marker | 待实施（已确认） |
@@ -4500,9 +4500,21 @@
 
 - 两个入口均可正常打开/关闭对应面板（含首次打开）。
 
+**实施记录**
+
+- 修复首次打开“里程碑/供应堆”全屏视图时被 `_ready()` 重置为 `visible=false` 导致“打不开”的问题：
+	- 在 `open_with_state()` 设置 `_opened=true`；
+	- `_ready()` 仅在未打开时才将 `visible` 置为 `false`，避免首次 open 调用早于 `_ready()` 的竞态。
+	- `ui/components/milestone_panel/milestone_full_screen_view.gd`
+	- `ui/components/reserve_area/reserve_area_full_screen_view.gd`
+
+**验证**
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（141/141，`.godot/AllTests.log`）
+
 **状态**
 
-- 待实施
+- Implemented（待手动验收）
 
 ## 85. 调试面板：玩家相关命令必须显式 player 参数；房屋/广告牌等用下拉框列可用项
 
