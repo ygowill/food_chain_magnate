@@ -27,6 +27,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r.ok:
 		return r
 
+	r = _test_roadworks_distance_penalty_includes_start_cell(seed_val)
+	if not r.ok:
+		return r
+
 	r = _test_park_bonus_is_invoked(seed_val)
 	if not r.ok:
 		return r
@@ -285,6 +289,62 @@ static func _test_roadworks_distance_penalty_is_invoked(seed_val: int) -> Result
 		return eff_r
 	if int(ctx.get("distance", -1)) != 1:
 		return Result.failure("roadworks 应使 distance +1（实际: %s）" % str(ctx.get("distance", null)))
+
+	return Result.success()
+
+static func _test_roadworks_distance_penalty_includes_start_cell(seed_val: int) -> Result:
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"lobbyists",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+	var s: GameState = e.get_state()
+
+	var entry = ModuleEntryClass.new()
+	var init_r: Result = entry._on_restructuring_before_enter(s)
+	if not init_r.ok:
+		return Result.failure("初始化 Lobbyists 失败: %s" % init_r.error)
+
+	var road_graph = RoadGraphCacheClass.get_road_graph(s)
+	if road_graph == null:
+		return Result.failure("道路图未初始化")
+	var pick := _pick_connected_road_path(s, road_graph)
+	if not pick.ok:
+		return pick
+	var path: Array[Vector2i] = pick.value
+	if path.size() < 3:
+		return Result.failure("测试需要 >=3 的道路 path（实际: %d）" % path.size())
+
+	var marker_pos: Vector2i = path[0]
+	s.map["lobbyists_roadworks_markers"] = {
+		"%d,%d" % [marker_pos.x, marker_pos.y]: true,
+	}
+
+	var ctx := {
+		"distance": 0,
+		"path": path,
+	}
+	var eff_r := DinnertimeSettlementClass._apply_global_effects_by_segment(
+		s,
+		0,
+		e.ruleset_v2.effect_registry,
+		":dinnertime:distance_delta:",
+		ctx
+	)
+	if not eff_r.ok:
+		return eff_r
+	if int(ctx.get("distance", -1)) != 1:
+		return Result.failure("roadworks 起点格应使 distance +1（实际: %s）" % str(ctx.get("distance", null)))
 
 	return Result.success()
 
