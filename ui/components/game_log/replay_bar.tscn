@@ -5,10 +5,13 @@
 [node name="ReplayBar" type="PanelContainer"]
 visible = false
 layout_mode = 2
+size_flags_horizontal = 3
+clip_contents = true
 script = ExtResource("1_replay_bar")
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/margin_left = 6
 theme_override_constants/margin_top = 4
 theme_override_constants/margin_right = 6
@@ -16,6 +19,7 @@ theme_override_constants/margin_bottom = 4
 
 [node name="HBox" type="HFlowContainer" parent="MarginContainer"]
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/h_separation = 6
 theme_override_constants/v_separation = 6
 alignment = 1
