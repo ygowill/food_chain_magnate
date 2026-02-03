@@ -267,14 +267,18 @@ func _run_all() -> int:
 				"name": "MapZoomPropertyTest",
 				"fn": func() -> Result: return TestRefs.MapZoomPropertyTestClass.run(),
 			},
-				{
-					"name": "TileInternalGridLinesTest",
-					"fn": func() -> Result: return TestRefs.TileInternalGridLinesTestClass.run(),
-				},
 					{
-						"name": "MapGroundSkipsOutsideRingTest",
-						"fn": func() -> Result: return TestRefs.MapGroundSkipsOutsideRingTestClass.run(),
+						"name": "TileInternalGridLinesTest",
+						"fn": func() -> Result: return TestRefs.TileInternalGridLinesTestClass.run(),
 					},
+					{
+						"name": "ExternalTileInternalGridLinesTest",
+						"fn": func() -> Result: return TestRefs.ExternalTileInternalGridLinesTestClass.run(),
+					},
+						{
+							"name": "MapGroundSkipsOutsideRingTest",
+							"fn": func() -> Result: return TestRefs.MapGroundSkipsOutsideRingTestClass.run(),
+						},
 					{
 						"name": "MapBlockedOverlaySkipsVoidCellsTest",
 						"fn": func() -> Result: return TestRefs.MapBlockedOverlaySkipsVoidCellsTestClass.run(),

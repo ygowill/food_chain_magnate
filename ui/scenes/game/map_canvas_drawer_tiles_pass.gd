@@ -4,10 +4,13 @@ extends RefCounted
 static func draw_tile_borders(canvas, cell_size: int) -> void:
 	if canvas._map_data.is_empty():
 		return
-	var tps_val = canvas._map_data.get("tile_placements", null)
-	if not (tps_val is Array):
-		return
-	var tps: Array = tps_val
+	var tps: Array = []
+	var base_val = canvas._map_data.get("tile_placements", null)
+	if base_val is Array:
+		tps.append_array(base_val)
+	var ext_val = canvas._map_data.get("external_tile_placements", null)
+	if ext_val is Array:
+		tps.append_array(ext_val)
 	if tps.is_empty():
 		return
 
@@ -55,10 +58,13 @@ static func draw_tile_borders(canvas, cell_size: int) -> void:
 static func draw_tile_id_labels(canvas, cell_size: int) -> void:
 	if canvas._map_data.is_empty():
 		return
-	var tps_val = canvas._map_data.get("tile_placements", null)
-	if not (tps_val is Array):
-		return
-	var tps: Array = tps_val
+	var tps: Array = []
+	var base_val = canvas._map_data.get("tile_placements", null)
+	if base_val is Array:
+		tps.append_array(base_val)
+	var ext_val = canvas._map_data.get("external_tile_placements", null)
+	if ext_val is Array:
+		tps.append_array(ext_val)
 	if tps.is_empty():
 		return
 

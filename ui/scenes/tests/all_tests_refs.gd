@@ -63,6 +63,7 @@ const RestructuringPrivacyTestClass = preload("res://ui/scenes/tests/restructuri
 const UiRegressionPropertyTestClass = preload("res://ui/scenes/tests/ui_regression_property_test.gd")
 const MapZoomPropertyTestClass = preload("res://ui/scenes/tests/map_zoom_property_test.gd")
 const TileInternalGridLinesTestClass = preload("res://ui/scenes/tests/tile_internal_grid_lines_test.gd")
+const ExternalTileInternalGridLinesTestClass = preload("res://ui/scenes/tests/external_tile_internal_grid_lines_test.gd")
 const MapGroundSkipsOutsideRingTestClass = preload("res://ui/scenes/tests/map_ground_skips_outside_ring_test.gd")
 const MapBlockedOverlaySkipsVoidCellsTestClass = preload("res://ui/scenes/tests/map_blocked_overlay_skips_void_cells_test.gd")
 const AirplaneMarketingOutsideRenderTestClass = preload("res://ui/scenes/tests/airplane_marketing_outside_render_test.gd")

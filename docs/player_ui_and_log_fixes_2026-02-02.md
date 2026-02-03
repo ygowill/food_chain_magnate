@@ -209,3 +209,16 @@
 - 验证：
 	- 存档生成脚本自带 load 校验（且载入后两名玩家均未预先获得 first_lobbyist_used）。
 	- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 142/142）
+
+---
+
+## 16. 说客扩边新放置的 tile 缺少内部细线（样式不统一）
+
+- 状态：DONE
+- 现象：通过说客里程碑扩边新放置的 tile 没有绘制 tile 内部细分网格线（细线），看起来与初始 tile 样式不一致。
+- 根因：地图绘制 `TilesPass.draw_tile_borders/draw_tile_id_labels` 只读取 `state.map.tile_placements`，未合并 `state.map.external_tile_placements`（扩边放置记录写在该字段），导致新增 tile 不参与“tile 边框/内部细线”绘制。
+- 实施：
+	- tile 边框/内部细线绘制合并 `tile_placements + external_tile_placements`。
+	- 新增 UI 单测：`ui/scenes/tests/external_tile_internal_grid_lines_test.gd`。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 143/143）
+- 提交：（见本次提交）
