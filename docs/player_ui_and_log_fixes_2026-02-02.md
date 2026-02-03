@@ -120,15 +120,18 @@
 
 ## 10. 说客模组：额外地图板块放置机会应在里程碑获得时弹窗提示“使用/放弃”，而非作为动作面板按钮
 
-- 状态：BLOCKED（需要确认 UI/交互细节后再动手）
+- 状态：DONE
 - 现象：说客模组的“额外地图板块放置机会”没有正常生效；并且当前与说客动作面板中的动作放在一起，交互不符合预期。
-- 期望：在获得里程碑时立即弹出窗口，让玩家选择“使用”或“放弃”；不再把该流程作为 ActionPanel 的动作按钮混在一起。
-- 待澄清（请你确认）：
-	- 选择“使用”后，放置地图板块的交互希望是：A) 继续弹窗内用下拉框选择 tile/attach/side/rotation 并确认；还是 B) 进入地图点选交互（点击边缘 tile 选择连接侧、再选 rotation 等）？
-	- “取消/关闭窗口”时的行为：是否允许暂时不处理（保持 pending，稍后再弹出/手动打开），还是必须当场二选一（否则无法继续推进子阶段）？
-	- 联机模式：是否仅对本地玩家弹窗（其他玩家获得里程碑只显示 toast）？
-- 验证：待补充
-- 提交：待补充
+- 期望：在获得里程碑时立即弹出窗口，让玩家当场二选一“使用/放弃”；选择“使用”后进入地图点选交互（B）；联机模式仅本地玩家回合弹窗。
+- 实施：
+	- 里程碑触发后（`round_state.lobbyists_extra_tile_pending[player]=true`）在 Working/Lobbyists 子阶段弹出 `ChoiceDialog`（无取消）。
+	- 选择“使用”后进入地图扩边放置 overlay：选择 tile/rotation → 地图高亮可放置边缘格 → 预览 → 确认；选择“放弃”则执行 `skip_lobbyists_extra_map_tile` 清除 pending。
+	- 动作面板中隐藏 `place_lobbyists_extra_map_tile/skip_lobbyists_extra_map_tile`，避免与说客动作混在一起。
+	- 兼容旧存档/回放：若 `round_state.lobbyists_extra_tile_pending` 缺失，里程碑效果会自动初始化该字段，避免“拿到里程碑但无事发生”。
+- 验证：
+	- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`（PASS）
+	- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 141/141）
+- 提交：`fix(lobbyists): init extra tile pending on milestone`
 
 ---
 

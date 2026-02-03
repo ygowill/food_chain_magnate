@@ -398,11 +398,25 @@ func _milestone_effect_grant_extra_map_tile(state: GameState, player_id: int, _m
 		var arr: Array = state.map["tile_supply_remaining"]
 		if arr.is_empty():
 			return Result.success()
-	if not state.round_state.has(EXTRA_TILE_PENDING_KEY) or not (state.round_state[EXTRA_TILE_PENDING_KEY] is Dictionary):
-		return Result.failure("%s: milestone_effect: 缺少 round_state.%s（模块未正确初始化）" % [MODULE_ID, EXTRA_TILE_PENDING_KEY])
-	var pending: Dictionary = state.round_state[EXTRA_TILE_PENDING_KEY]
-	pending[player_id] = true
-	state.round_state[EXTRA_TILE_PENDING_KEY] = pending
+
+	# 兼容：旧存档/回放可能在进入 Restructuring hook 之前加载进来，导致 round_state 缺少该字段。
+	var pending: Dictionary = {}
+	if state.round_state.has(EXTRA_TILE_PENDING_KEY) and (state.round_state[EXTRA_TILE_PENDING_KEY] is Dictionary):
+		pending = state.round_state[EXTRA_TILE_PENDING_KEY]
+
+	var normalized := {}
+	for i in range(state.players.size()):
+		normalized[i] = false
+	for k in pending.keys():
+		var pid := int(k)
+		if pid < 0 or pid >= state.players.size():
+			continue
+		var v = pending.get(k, null)
+		if v is bool:
+			normalized[pid] = bool(v)
+
+	normalized[player_id] = true
+	state.round_state[EXTRA_TILE_PENDING_KEY] = normalized
 	return Result.success()
 
 func _effect_dinnertime_distance_delta_roadworks(state: GameState, _player_id: int, ctx: Dictionary) -> Result:

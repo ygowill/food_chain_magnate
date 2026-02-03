@@ -15,7 +15,11 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count != 2:
 		return Result.failure("本测试固定为 2 人局（实际: %d）" % player_count)
 
-	var r := _test_park_triggers_extra_tile(seed_val)
+	var r := _test_milestone_effect_initializes_pending_key(seed_val)
+	if not r.ok:
+		return r
+
+	r = _test_park_triggers_extra_tile(seed_val)
 	if not r.ok:
 		return r
 
@@ -34,6 +38,46 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_park_bonus_is_invoked(seed_val)
 	if not r.ok:
 		return r
+
+	return Result.success()
+
+static func _test_milestone_effect_initializes_pending_key(seed_val: int) -> Result:
+	# 兼容：旧存档/回放可能缺少 round_state.lobbyists_extra_tile_pending，
+	# 但仍可能触发 first_lobbyist_used（UseEmployee/lobbyist）。
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"lobbyists",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+	var s: GameState = e.get_state()
+
+	if s.round_state is Dictionary and s.round_state.has("lobbyists_extra_tile_pending"):
+		s.round_state.erase("lobbyists_extra_tile_pending")
+
+	var entry = ModuleEntryClass.new()
+	var eff := {"type": "lobbyists_grant_extra_map_tile"}
+	var r := entry._milestone_effect_grant_extra_map_tile(s, 0, "first_lobbyist_used", eff)
+	if not r.ok:
+		return Result.failure("milestone_effect 应可自动初始化 pending key（实际失败）: %s" % r.error)
+
+	var pending_val = s.round_state.get("lobbyists_extra_tile_pending", null)
+	if not (pending_val is Dictionary):
+		return Result.failure("milestone_effect 未写入 round_state.lobbyists_extra_tile_pending")
+	var pending: Dictionary = pending_val
+	if not (pending.get(0, null) is bool) or not bool(pending.get(0, false)):
+		return Result.failure("milestone_effect 应设置 pending[0]=true")
+	if not (pending.get(1, null) is bool):
+		return Result.failure("milestone_effect 应初始化 pending[1]（bool）")
 
 	return Result.success()
 
