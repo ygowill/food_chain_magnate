@@ -241,3 +241,18 @@
 	- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`（PASS）
 	- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 143/143）
 - 提交：`fix(ui): lobbyists extra tile preview matches placed tile`
+
+---
+
+## 18. 说客扩边：tile 预览应直接复用真实地图渲染（道路/房屋/饮品贴图一致）
+
+- 状态：DONE
+- 现象：tile 预览为简化线稿/色块，与实际地图 tile 的渲染效果不一致（道路、房屋、饮品等贴图差异明显）。
+- 期望：tile 预览应直接渲染“真实 tile”（与地图上放置后的效果一致），避免维护两套绘制逻辑。
+- 实施：
+	- `TilePreview` 改为继承 `MapCanvas`：用 `MapBaker.bake_tile_into_cells()` 生成 5×5 的临时 `map_data`，再用 `MapCanvasDrawer` 完整绘制（ground/roads/printed structures/drink sources/tile borders）。
+	- Preview-only：禁用 hover/selection 输入，并启用 `clip_contents`，保证仅作为静态预览。
+- 验证：
+	- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`（PASS）
+	- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 143/143）
+- 提交：`fix(ui): render lobbyists tile preview with map renderer`

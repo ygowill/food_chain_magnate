@@ -1,6 +1,8 @@
 class_name TilePreview
-extends Control
+extends "res://ui/scenes/game/map_canvas.gd"
 
+const CellsClass = preload("res://core/map/map_baker/cells.gd")
+const TileBakingClass = preload("res://core/map/map_baker/tile_baking.gd")
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
@@ -9,13 +11,22 @@ var tile_id: String = ""
 var tile_rotation: int = 0 # 0/90/180/270
 
 func _ready() -> void:
-	if not resized.is_connected(queue_redraw):
-		resized.connect(queue_redraw)
+	# Preview-only: disable hover/selection and keep rendering clipped inside the node rect.
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	clip_contents = true
+
+	if not resized.is_connected(_on_resized):
+		resized.connect(_on_resized)
+
+	_refresh_preview()
 
 func set_tile(id_str: String, rot: int) -> void:
 	tile_id = str(id_str).strip_edges()
 	tile_rotation = _normalize_rotation(rot)
-	queue_redraw()
+	_refresh_preview()
+
+func _on_resized() -> void:
+	_update_zoom_to_fit()
 
 func _normalize_rotation(rot: int) -> int:
 	var r := int(rot) % 360
@@ -25,153 +36,85 @@ func _normalize_rotation(rot: int) -> int:
 		r = 0
 	return r
 
-func _draw() -> void:
-	var r := Rect2(Vector2.ZERO, size)
-	if r.size.x <= 4.0 or r.size.y <= 4.0:
-		return
-
-	var pad := maxf(4.0, minf(r.size.x, r.size.y) * 0.06)
-	var preview_rect := Rect2(Vector2(pad, pad), Vector2(r.size.x - pad * 2.0, r.size.y - pad * 2.0))
-	if preview_rect.size.x <= 4.0 or preview_rect.size.y <= 4.0:
-		return
-
-	var tile_size := int(MapUtilsClass.TILE_SIZE)
-	if tile_size <= 0:
-		return
-
-	var cell_px := minf(preview_rect.size.x / float(tile_size), preview_rect.size.y / float(tile_size))
-	cell_px = maxf(2.0, floor(cell_px))
-	var board_px := Vector2(float(tile_size) * cell_px, float(tile_size) * cell_px)
-	var board_pos := preview_rect.position + (preview_rect.size - board_px) * 0.5
-	var board_rect := Rect2(board_pos, board_px)
-
-	var base := Color("#2a2d34")
-	var fill := base
-	fill.a = 0.22
-	var border := base.lightened(0.25)
-	border.a = 0.65
-
-	draw_rect(board_rect, fill, true)
-	draw_rect(board_rect, border, false, 1.0)
-
-	# Grid lines
-	for ix in range(tile_size + 1):
-		var x := board_pos.x + float(ix) * cell_px
-		draw_line(Vector2(x, board_pos.y), Vector2(x, board_pos.y + board_px.y), Color(border, 0.38), 1.0)
-	for iy in range(tile_size + 1):
-		var y := board_pos.y + float(iy) * cell_px
-		draw_line(Vector2(board_pos.x, y), Vector2(board_pos.x + board_px.x, y), Color(border, 0.38), 1.0)
-
+func _refresh_preview() -> void:
 	if tile_id.is_empty():
+		clear()
 		return
-	if not TileRegistryClass.is_loaded():
+	if not TileRegistryClass.is_loaded() or not PieceRegistryClass.is_loaded():
+		clear()
 		return
+
 	var def_val = TileRegistryClass.get_def(tile_id)
 	if def_val == null or not (def_val is TileDef):
+		clear()
 		return
 	var tile_def: TileDef = def_val
+	if tile_def.has_method("ensure_road_grid"):
+		tile_def.ensure_road_grid()
 
-	_draw_blocked_cells(tile_def, board_pos, cell_px)
-	_draw_printed_structures(tile_def, board_pos, cell_px)
-	_draw_roads(tile_def, board_pos, cell_px)
+	var mods: Array[String] = []
+	if Globals != null and Globals.enabled_modules_v2 is Array:
+		mods = Array(Globals.enabled_modules_v2, TYPE_STRING, "", null)
 
-func _draw_blocked_cells(tile_def: TileDef, board_pos: Vector2, cell_px: float) -> void:
+	_ensure_skin(mods)
+
 	var tile_size := int(MapUtilsClass.TILE_SIZE)
-	var col := Color(1, 1, 1, 0.10)
-	for ly in range(tile_size):
-		for lx in range(tile_size):
-			var local_pos := Vector2i(lx, ly)
-			if not tile_def.is_blocked_at(local_pos):
-				continue
-			var wp := MapUtilsClass.local_to_world(local_pos, Vector2i.ZERO, tile_rotation)
-			var rect := Rect2(board_pos + Vector2(float(wp.x) * cell_px, float(wp.y) * cell_px), Vector2(cell_px, cell_px))
-			draw_rect(rect.grow(-1.0), col, true)
+	var grid_size := Vector2i(tile_size, tile_size)
+	var cells := CellsClass.create_empty_cells(grid_size)
 
-func _draw_printed_structures(tile_def: TileDef, board_pos: Vector2, cell_px: float) -> void:
-	if not PieceRegistryClass.is_loaded():
+	var houses: Dictionary = {}
+	var drink_sources: Array = []
+	var piece_registry: Dictionary = PieceRegistryClass.get_all_defs()
+
+	# Apply zoom before set_map_data() so MapCanvas doesn't temporarily expand to 5*BASE_CELL_SIZE.
+	_update_zoom_to_fit()
+
+	var baked: Result = TileBakingClass.bake_tile_into_cells(
+		cells,
+		grid_size,
+		Vector2i.ZERO,
+		tile_def,
+		Vector2i.ZERO,
+		tile_rotation,
+		piece_registry,
+		houses,
+		drink_sources
+	)
+	if not baked.ok:
+		push_error("TilePreview: bake_tile_into_cells failed: %s" % str(baked.error))
+		clear()
 		return
 
-	for struct_val in tile_def.printed_structures:
-		if not (struct_val is Dictionary):
-			continue
-		var s: Dictionary = struct_val
-		var piece_id := str(s.get("piece_id", "")).strip_edges()
-		if piece_id.is_empty():
-			continue
-		var anchor_val = s.get("anchor", null)
-		if not (anchor_val is Vector2i):
-			continue
-		var local_anchor: Vector2i = anchor_val
-		var rot0 := int(s.get("rotation", 0))
-		var total_rot := _normalize_rotation(rot0 + tile_rotation)
+	var map_data := {
+		"grid_size": grid_size,
+		"cells": cells,
+		"map_origin": Vector2i.ZERO,
+		"external_cells": {},
+		"tile_placements": [{
+			"tile_id": tile_id,
+			"board_pos": Vector2i.ZERO,
+			"rotation": tile_rotation,
+		}],
+		"external_tile_placements": [],
+		"houses": houses,
+		"restaurants": {},
+		"marketing_placements": {},
+		"drink_sources": drink_sources,
+	}
+	set_map_data(map_data)
 
-		var piece_def_val = PieceRegistryClass.get_def(piece_id)
-		if piece_def_val == null or not (piece_def_val is PieceDef):
-			continue
-		var piece_def: PieceDef = piece_def_val
+	_update_zoom_to_fit()
 
-		var world_anchor := MapUtilsClass.local_to_world(local_anchor, Vector2i.ZERO, tile_rotation)
-		var cells: Array[Vector2i] = piece_def.get_world_cells(world_anchor, total_rot)
-		if cells.is_empty():
-			continue
-
-		var fill := _structure_fill_color(piece_id)
-		var border := fill.darkened(0.35)
-		fill.a = 0.26
-		border.a = 0.55
-
-		for wp in cells:
-			if wp.x < 0 or wp.y < 0 or wp.x >= int(MapUtilsClass.TILE_SIZE) or wp.y >= int(MapUtilsClass.TILE_SIZE):
-				continue
-			var rect := Rect2(board_pos + Vector2(float(wp.x) * cell_px, float(wp.y) * cell_px), Vector2(cell_px, cell_px))
-			draw_rect(rect.grow(-1.0), fill, true)
-			draw_rect(rect.grow(-1.0), border, false, 1.0)
-
-func _structure_fill_color(piece_id: String) -> Color:
-	var id := str(piece_id).to_lower()
-	if id.contains("restaurant"):
-		return Color("#ef4444")
-	if id.contains("garden"):
-		return Color("#22c55e")
-	if id.contains("house"):
-		return Color("#a16207")
-	return Color("#60a5fa")
-
-func _draw_roads(tile_def: TileDef, board_pos: Vector2, cell_px: float) -> void:
-	var tile_size := int(MapUtilsClass.TILE_SIZE)
-	var road_col := Color(1, 1, 1, 0.80)
-	var road_w := maxf(2.0, cell_px * 0.14)
-
-	for ly in range(tile_size):
-		for lx in range(tile_size):
-			var local_pos := Vector2i(lx, ly)
-			var segs: Array = tile_def.get_road_segments_at(local_pos)
-			if segs.is_empty():
-				continue
-
-			var wp := MapUtilsClass.local_to_world(local_pos, Vector2i.ZERO, tile_rotation)
-			var cell_origin := board_pos + Vector2(float(wp.x) * cell_px, float(wp.y) * cell_px)
-			var c := cell_origin + Vector2(cell_px * 0.5, cell_px * 0.5)
-
-			for seg_val in segs:
-				if not (seg_val is Dictionary):
-					continue
-				var rotated := MapUtilsClass.rotate_segment(seg_val, tile_rotation)
-				var dirs_val = (rotated as Dictionary).get("dirs", null)
-				if not (dirs_val is Array):
-					continue
-				for d_val in Array(dirs_val):
-					var d := str(d_val).strip_edges()
-					var p := c
-					match d:
-						"N":
-							p = cell_origin + Vector2(cell_px * 0.5, 0.0)
-						"E":
-							p = cell_origin + Vector2(cell_px, cell_px * 0.5)
-						"S":
-							p = cell_origin + Vector2(cell_px * 0.5, cell_px)
-						"W":
-							p = cell_origin + Vector2(0.0, cell_px * 0.5)
-						_:
-							continue
-					draw_line(c, p, road_col, road_w)
+func _update_zoom_to_fit() -> void:
+	var avail := size
+	if avail.x <= 4.0 or avail.y <= 4.0:
+		avail = custom_minimum_size
+	if avail.x <= 4.0 or avail.y <= 4.0:
+		return
+	var tile_size := float(int(MapUtilsClass.TILE_SIZE))
+	if tile_size <= 0.0:
+		return
+	var cell_px: float = floor(minf(avail.x, avail.y) / tile_size)
+	cell_px = maxf(2.0, cell_px)
+	var z := float(cell_px) / float(BASE_CELL_SIZE)
+	set_zoom(z)
