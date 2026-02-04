@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://ui/components/lobbyists_extra_tile/lobbyists_extra_tile_overlay.gd" id="1_lobbyists_extra_tile"]
+[ext_resource type="Script" path="res://ui/components/lobbyists_extra_tile/tile_preview.gd" id="2_tile_preview"]
 
 [node name="LobbyistsExtraTileOverlay" type="VBoxContainer"]
 layout_mode = 3
@@ -41,15 +42,33 @@ horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
 
+[node name="TilesRow" type="HBoxContainer" parent="HintMargin/HintPanel/VBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="SelectedTilePreview" type="Control" parent="HintMargin/HintPanel/VBox/TilesRow"]
+custom_minimum_size = Vector2(110, 110)
+layout_mode = 2
+script = ExtResource("2_tile_preview")
+
+[node name="TilesScroll" type="ScrollContainer" parent="HintMargin/HintPanel/VBox/TilesRow"]
+custom_minimum_size = Vector2(0, 110)
+layout_mode = 2
+size_flags_horizontal = 3
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 1
+
+[node name="TilesFlow" type="HFlowContainer" parent="HintMargin/HintPanel/VBox/TilesRow/TilesScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+
 [node name="ControlsRow" type="HBoxContainer" parent="HintMargin/HintPanel/VBox"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 8
-
-[node name="TileOption" type="OptionButton" parent="HintMargin/HintPanel/VBox/ControlsRow"]
-custom_minimum_size = Vector2(150, 32)
-layout_mode = 2
-size_flags_horizontal = 3
 
 [node name="RotationOption" type="OptionButton" parent="HintMargin/HintPanel/VBox/ControlsRow"]
 custom_minimum_size = Vector2(90, 32)
@@ -64,4 +83,3 @@ text = "放置"
 custom_minimum_size = Vector2(90, 32)
 layout_mode = 2
 text = "放弃"
-

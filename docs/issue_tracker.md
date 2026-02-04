@@ -4573,6 +4573,10 @@
 - 新增扩边放置 overlay（tile/旋转选择、确认/放弃、提示与校验信息）：
 	- `ui/components/lobbyists_extra_tile/lobbyists_extra_tile_overlay.tscn`
 	- `ui/components/lobbyists_extra_tile/lobbyists_extra_tile_overlay.gd`
+- 扩边 overlay 的 tile 选择改为“带预览按钮网格”，并提供所选 tile 的旋转预览（避免下拉框难以对比）：
+	- `ui/components/lobbyists_extra_tile/tile_preview.gd`
+	- `ui/components/lobbyists_extra_tile/tile_picker_button.gd`
+	- `ui/components/lobbyists_extra_tile/lobbyists_extra_tile_overlay.tscn`
 - pending 出现时额外 toast 强提示（避免“看起来无事发生”）：
 	- `ui/scenes/game/game_panel_placement_overlays.gd`
 - pending 未处理前阻断继续放 road/park（强制玩家先完成“使用/放弃”的二选一流程）：
