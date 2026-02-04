@@ -222,3 +222,22 @@
 	- 新增 UI 单测：`ui/scenes/tests/external_tile_internal_grid_lines_test.gd`。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 143/143）
 - 提交：（见本次提交）
+
+---
+
+## 17. 说客扩边：tile 预览不应被 toast 遮挡，且预览应与实际 tile 一致
+
+- 状态：DONE
+- 现象：
+	- 扩边 overlay 打开时，顶部 toast 提示会遮挡 tile 预览区域。
+	- tile 大预览缺少道路绘制，导致与实际 tile（地图上放置后的道路布局）不一致。
+- 根因：
+	- toast 为全局高层 UI（z_index=1000），而 overlay 顶部留白不足，导致重叠。
+	- `TilePreview._draw_roads()` 内部缩进错误，导致道路绘制逻辑被 `continue` 跳过。
+- 实施：
+	- `TilePreview` 修复道路绘制逻辑（预览与实际 tile 的 road_segments 对齐）。
+	- `LobbyistsExtraTileOverlay` 顶部增加留白，避免 toast 遮挡预览与提示文本。
+- 验证：
+	- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`（PASS）
+	- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 143/143）
+- 提交：`fix(ui): lobbyists extra tile preview matches placed tile`

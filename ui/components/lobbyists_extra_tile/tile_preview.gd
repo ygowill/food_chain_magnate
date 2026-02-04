@@ -148,29 +148,30 @@ func _draw_roads(tile_def: TileDef, board_pos: Vector2, cell_px: float) -> void:
 			var segs: Array = tile_def.get_road_segments_at(local_pos)
 			if segs.is_empty():
 				continue
-				var wp := MapUtilsClass.local_to_world(local_pos, Vector2i.ZERO, tile_rotation)
-				var cell_origin := board_pos + Vector2(float(wp.x) * cell_px, float(wp.y) * cell_px)
-				var c := cell_origin + Vector2(cell_px * 0.5, cell_px * 0.5)
 
-				for seg_val in segs:
-					if not (seg_val is Dictionary):
-						continue
-					var rotated := MapUtilsClass.rotate_segment(seg_val, tile_rotation)
-					var dirs_val = (rotated as Dictionary).get("dirs", null)
-					if not (dirs_val is Array):
-						continue
-					for d_val in Array(dirs_val):
-						var d := str(d_val).strip_edges()
-						var p := c
-						match d:
-							"N":
-								p = cell_origin + Vector2(cell_px * 0.5, 0.0)
-							"E":
-								p = cell_origin + Vector2(cell_px, cell_px * 0.5)
-							"S":
-								p = cell_origin + Vector2(cell_px * 0.5, cell_px)
-							"W":
-								p = cell_origin + Vector2(0.0, cell_px * 0.5)
-							_:
-								continue
-						draw_line(c, p, road_col, road_w)
+			var wp := MapUtilsClass.local_to_world(local_pos, Vector2i.ZERO, tile_rotation)
+			var cell_origin := board_pos + Vector2(float(wp.x) * cell_px, float(wp.y) * cell_px)
+			var c := cell_origin + Vector2(cell_px * 0.5, cell_px * 0.5)
+
+			for seg_val in segs:
+				if not (seg_val is Dictionary):
+					continue
+				var rotated := MapUtilsClass.rotate_segment(seg_val, tile_rotation)
+				var dirs_val = (rotated as Dictionary).get("dirs", null)
+				if not (dirs_val is Array):
+					continue
+				for d_val in Array(dirs_val):
+					var d := str(d_val).strip_edges()
+					var p := c
+					match d:
+						"N":
+							p = cell_origin + Vector2(cell_px * 0.5, 0.0)
+						"E":
+							p = cell_origin + Vector2(cell_px, cell_px * 0.5)
+						"S":
+							p = cell_origin + Vector2(cell_px * 0.5, cell_px)
+						"W":
+							p = cell_origin + Vector2(0.0, cell_px * 0.5)
+						_:
+							continue
+					draw_line(c, p, road_col, road_w)

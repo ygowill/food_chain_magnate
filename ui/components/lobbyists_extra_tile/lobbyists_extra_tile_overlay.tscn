@@ -16,7 +16,7 @@ theme_override_constants/separation = 0
 script = ExtResource("1_lobbyists_extra_tile")
 
 [node name="TopSpacer" type="Control" parent="."]
-custom_minimum_size = Vector2(0, 20)
+custom_minimum_size = Vector2(0, 92)
 layout_mode = 2
 
 [node name="HintMargin" type="MarginContainer" parent="."]
