@@ -23,6 +23,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r.ok:
 		return r
 
+	r = _test_pending_blocks_additional_lobbyists_actions(seed_val)
+	if not r.ok:
+		return r
+
 	r = _test_extra_tile_expand_is_blocked_by_airplane_and_offramp(seed_val)
 	if not r.ok:
 		return r
@@ -411,6 +415,63 @@ static func _test_park_triggers_extra_tile(seed_val: int) -> Result:
 	var ext: Array = s.map["external_tile_placements"]
 	if ext.is_empty():
 		return Result.failure("应记录 external_tile_placements")
+
+	return Result.success()
+
+static func _test_pending_blocks_additional_lobbyists_actions(seed_val: int) -> Result:
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"lobbyists",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+	var s: GameState = e.get_state()
+
+	var entry = ModuleEntryClass.new()
+	var init_r: Result = entry._on_restructuring_before_enter(s)
+	if not init_r.ok:
+		return Result.failure("初始化 Lobbyists 失败: %s" % init_r.error)
+
+	_force_player0_ready_for_lobbyists(s)
+	_take_to_active(s, 0, "lobbyist")
+	_inject_dummy_restaurant_for_player0(s)
+
+	var placed_park := _try_place_park(e)
+	if not placed_park.ok:
+		return placed_park
+	s = e.get_state()
+
+	if not s.round_state.has("lobbyists_extra_tile_pending") or not (s.round_state["lobbyists_extra_tile_pending"] is Dictionary):
+		return Result.failure("缺少 round_state.lobbyists_extra_tile_pending")
+	var pending: Dictionary = s.round_state["lobbyists_extra_tile_pending"]
+	if not bool(pending.get(0, false)):
+		return Result.failure("预期玩家 0 仍有 extra_tile pending=true")
+
+	# pending 未处理前，不允许继续放 road/park（避免错过“必须当场二选一”的扩边流程）。
+	var cmd_road := Command.create("place_lobbyists_road", 0)
+	cmd_road.params = {}
+	var r1 := e.execute_command(cmd_road)
+	if r1.ok:
+		return Result.failure("pending 未处理时 place_lobbyists_road 不应允许执行")
+	if not str(r1.error).contains("扩边"):
+		return Result.failure("place_lobbyists_road 错误信息应提示扩边 pending（实际: %s）" % str(r1.error))
+
+	var cmd_park := Command.create("place_lobbyists_park", 0)
+	cmd_park.params = {}
+	var r2 := e.execute_command(cmd_park)
+	if r2.ok:
+		return Result.failure("pending 未处理时 place_lobbyists_park 不应允许执行")
+	if not str(r2.error).contains("扩边"):
+		return Result.failure("place_lobbyists_park 错误信息应提示扩边 pending（实际: %s）" % str(r2.error))
 
 	return Result.success()
 

@@ -14,6 +14,7 @@ const RoundStateCountersClass = preload("res://core/utils/round_state_counters.g
 const MODULE_ID := "lobbyists"
 
 const PARK_PIECES: Array[String] = ["lobbyists_park_line", "lobbyists_park_t", "lobbyists_park_l"]
+const EXTRA_TILE_PENDING_KEY := "lobbyists_extra_tile_pending"
 const EXTRA_TILE_LAST_PLACED_KEY := "lobbyists_extra_tile_last_placed"
 
 func _init() -> void:
@@ -30,6 +31,17 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var current_player_id := state.get_current_player_id()
 	if command.actor != current_player_id:
 		return Result.failure("不是你的回合")
+
+	# 里程碑奖励“扩边”必须当场处理（使用/放弃）。未处理前不允许继续放 road/park。
+	if state.round_state is Dictionary:
+		var pending_val = state.round_state.get(EXTRA_TILE_PENDING_KEY, null)
+		if pending_val is Dictionary:
+			var pending: Dictionary = pending_val
+			var flag = pending.get(command.actor, null)
+			if flag == null and pending.has(str(command.actor)):
+				flag = pending.get(str(command.actor), null)
+			if bool(flag):
+				return Result.failure("请先处理里程碑奖励：扩边放置地图板块（使用/放弃）")
 
 	var player := state.get_player(command.actor)
 	var capacity := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, command.actor, "use:lobbyists")

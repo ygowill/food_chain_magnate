@@ -410,10 +410,6 @@ func _sync_lobbyists_extra_tile_flow(state: GameState, force_full_refresh: bool 
 		_reset_lobbyists_extra_tile_flow()
 		return
 
-	# 只能在 Working/Lobbyists 执行 place/skip（动作执行器限制），因此 UI 也仅在此时激活。
-	if str(state.phase) != DefsClass.PHASE_WORKING or str(state.sub_phase) != "Lobbyists":
-		return
-
 	var is_new_pending := (not _lobbyists_extra_tile_pending_active) or (_lobbyists_extra_tile_pending_player_id != actor_id)
 	if is_new_pending:
 		_lobbyists_extra_tile_pending_active = true
@@ -422,6 +418,12 @@ func _sync_lobbyists_extra_tile_flow(state: GameState, force_full_refresh: bool 
 		_hide_lobbyists_extra_tile_choice_dialog()
 		if is_instance_valid(lobbyists_extra_tile_overlay) and lobbyists_extra_tile_overlay.has_method("clear_target"):
 			lobbyists_extra_tile_overlay.clear_target()
+		if _overlay_controller != null and _overlay_controller.has_method("show_toast"):
+			_overlay_controller.show_toast("里程碑奖励：扩边（请立即二选一：使用/放弃）")
+
+	# 只能在 Working/Lobbyists 执行 place/skip（动作执行器限制），因此 UI 也仅在此时激活。
+	if str(state.phase) != DefsClass.PHASE_WORKING or str(state.sub_phase) != "Lobbyists":
+		return
 
 	# choice 已确定为 use：确保 overlay 存在并保持同步
 	if _lobbyists_extra_tile_choice == "use":

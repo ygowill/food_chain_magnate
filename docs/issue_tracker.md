@@ -4573,6 +4573,12 @@
 - 新增扩边放置 overlay（tile/旋转选择、确认/放弃、提示与校验信息）：
 	- `ui/components/lobbyists_extra_tile/lobbyists_extra_tile_overlay.tscn`
 	- `ui/components/lobbyists_extra_tile/lobbyists_extra_tile_overlay.gd`
+- pending 出现时额外 toast 强提示（避免“看起来无事发生”）：
+	- `ui/scenes/game/game_panel_placement_overlays.gd`
+- pending 未处理前阻断继续放 road/park（强制玩家先完成“使用/放弃”的二选一流程）：
+	- `modules/lobbyists/actions/place_lobbyists_road_action.gd`
+	- `modules/lobbyists/actions/place_lobbyists_park_action.gd`
+	- `core/tests/lobbyists_v2_test.gd`
 - `ChoiceDialog` 支持无取消模式（cancel 文案为空时隐藏取消行，ESC 不再触发取消）：
 	- `ui/dialogs/choice_dialog.gd`
 - 动作面板中隐藏扩边相关动作入口（但动作仍保留在 ActionRegistry 中供 auto-advance 判定与直接执行）：
@@ -4580,7 +4586,7 @@
 
 **验证**
 
-- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS（141/141，`.godot/AllTests.log`）
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`：PASS（143/143，`.godot/AllTests.log`）
 
 **状态**
 

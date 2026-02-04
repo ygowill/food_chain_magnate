@@ -17,6 +17,7 @@ const MODULE_ID := LobbyistsRoadOverlaysClass.MODULE_ID
 const PENDING_ROADS_KEY := LobbyistsRoadOverlaysClass.PENDING_ROADS_KEY
 const ROADWORK_MARKERS_KEY := LobbyistsRoadOverlaysClass.ROADWORK_MARKERS_KEY
 
+const EXTRA_TILE_PENDING_KEY := "lobbyists_extra_tile_pending"
 const EXTRA_TILE_LAST_PLACED_KEY := "lobbyists_extra_tile_last_placed"
 
 const ROAD_PIECES: Array[String] = LobbyistsRoadOverlaysClass.ROAD_PIECES
@@ -36,6 +37,17 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var current_player_id := state.get_current_player_id()
 	if command.actor != current_player_id:
 		return Result.failure("不是你的回合")
+
+	# 里程碑奖励“扩边”必须当场处理（使用/放弃）。未处理前不允许继续放 road/park。
+	if state.round_state is Dictionary:
+		var pending_val = state.round_state.get(EXTRA_TILE_PENDING_KEY, null)
+		if pending_val is Dictionary:
+			var pending: Dictionary = pending_val
+			var flag = pending.get(command.actor, null)
+			if flag == null and pending.has(str(command.actor)):
+				flag = pending.get(str(command.actor), null)
+			if bool(flag):
+				return Result.failure("请先处理里程碑奖励：扩边放置地图板块（使用/放弃）")
 
 	var player := state.get_player(command.actor)
 	var capacity := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, command.actor, "use:lobbyists")
