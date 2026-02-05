@@ -1,7 +1,6 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://modules/lobbyists/ui/components/lobbyists_extra_tile/lobbyists_extra_tile_overlay.gd" id="1_lobbyists_extra_tile"]
-[ext_resource type="Script" path="res://modules/lobbyists/ui/components/lobbyists_extra_tile/tile_preview.gd" id="2_tile_preview"]
 
 [node name="LobbyistsExtraTileOverlay" type="VBoxContainer"]
 layout_mode = 3
@@ -15,27 +14,29 @@ mouse_filter = 2
 theme_override_constants/separation = 0
 script = ExtResource("1_lobbyists_extra_tile")
 
-[node name="HintMargin" type="MarginContainer" parent="."]
+[node name="Center" type="CenterContainer" parent="."]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
+
+[node name="HintMargin" type="MarginContainer" parent="Center"]
+layout_mode = 2
+size_flags_horizontal = 0
 theme_override_constants/margin_left = 12
 theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 12
 theme_override_constants/margin_bottom = 12
 
-[node name="HintPanel" type="PanelContainer" parent="HintMargin"]
+[node name="HintPanel" type="PanelContainer" parent="Center/HintMargin"]
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
 mouse_filter = 0
 
-[node name="VBox" type="VBoxContainer" parent="HintMargin/HintPanel"]
+[node name="VBox" type="VBoxContainer" parent="Center/HintMargin/HintPanel"]
 layout_mode = 2
-size_flags_vertical = 3
 theme_override_constants/separation = 8
 
-[node name="HintLabel" type="Label" parent="HintMargin/HintPanel/VBox"]
+[node name="HintLabel" type="Label" parent="Center/HintMargin/HintPanel/VBox"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "里程碑奖励：扩边放置地图板块"
@@ -43,47 +44,38 @@ horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
 
-[node name="TilesRow" type="VBoxContainer" parent="HintMargin/HintPanel/VBox"]
+[node name="TilesRow" type="VBoxContainer" parent="Center/HintMargin/HintPanel/VBox"]
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
 theme_override_constants/separation = 12
 
-[node name="SelectedTilePreview" type="Control" parent="HintMargin/HintPanel/VBox/TilesRow"]
-custom_minimum_size = Vector2(200, 200)
+[node name="TilesScroll" type="ScrollContainer" parent="Center/HintMargin/HintPanel/VBox/TilesRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-script = ExtResource("2_tile_preview")
-
-[node name="TilesScroll" type="ScrollContainer" parent="HintMargin/HintPanel/VBox/TilesRow"]
-custom_minimum_size = Vector2(0, 260)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
 horizontal_scroll_mode = 0
 vertical_scroll_mode = 1
 
-[node name="TilesFlow" type="HFlowContainer" parent="HintMargin/HintPanel/VBox/TilesRow/TilesScroll"]
+[node name="TilesFlow" type="HFlowContainer" parent="Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/h_separation = 12
 theme_override_constants/v_separation = 12
 
-[node name="ControlsRow" type="HBoxContainer" parent="HintMargin/HintPanel/VBox"]
+[node name="ControlsRow" type="HBoxContainer" parent="Center/HintMargin/HintPanel/VBox"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="RotationOption" type="OptionButton" parent="HintMargin/HintPanel/VBox/ControlsRow"]
+[node name="RotationOption" type="OptionButton" parent="Center/HintMargin/HintPanel/VBox/ControlsRow"]
 custom_minimum_size = Vector2(90, 32)
 layout_mode = 2
 
-[node name="ConfirmButton" type="Button" parent="HintMargin/HintPanel/VBox/ControlsRow"]
+[node name="ConfirmButton" type="Button" parent="Center/HintMargin/HintPanel/VBox/ControlsRow"]
 custom_minimum_size = Vector2(90, 32)
 layout_mode = 2
 text = "放置"
 
-[node name="SkipButton" type="Button" parent="HintMargin/HintPanel/VBox/ControlsRow"]
+[node name="SkipButton" type="Button" parent="Center/HintMargin/HintPanel/VBox/ControlsRow"]
 custom_minimum_size = Vector2(90, 32)
 layout_mode = 2
 text = "放弃"

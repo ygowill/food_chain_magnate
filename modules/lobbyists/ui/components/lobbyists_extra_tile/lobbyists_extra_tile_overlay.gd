@@ -10,15 +10,14 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const TilePickerButtonClass = preload("res://modules/lobbyists/ui/components/lobbyists_extra_tile/tile_picker_button.gd")
 const ActionPanelExtraTileContextScenePath := "res://modules/lobbyists/ui/components/lobbyists_extra_tile/action_panel_extra_tile_context.tscn"
 
-@onready var hint_panel: Control = $HintMargin/HintPanel
-@onready var hint_margin: Control = $HintMargin
-@onready var hint_label: Label = $HintMargin/HintPanel/VBox/HintLabel
-@onready var selected_tile_preview: Control = $HintMargin/HintPanel/VBox/TilesRow/SelectedTilePreview
-@onready var tiles_flow: HFlowContainer = $HintMargin/HintPanel/VBox/TilesRow/TilesScroll/TilesFlow
-@onready var controls_row: Control = $HintMargin/HintPanel/VBox/ControlsRow
-@onready var rotation_option: OptionButton = $HintMargin/HintPanel/VBox/ControlsRow/RotationOption
-@onready var confirm_button: Button = $HintMargin/HintPanel/VBox/ControlsRow/ConfirmButton
-@onready var skip_button: Button = $HintMargin/HintPanel/VBox/ControlsRow/SkipButton
+@onready var hint_panel: Control = $Center/HintMargin/HintPanel
+@onready var hint_margin: Control = $Center/HintMargin
+@onready var hint_label: Label = $Center/HintMargin/HintPanel/VBox/HintLabel
+@onready var tiles_flow: HFlowContainer = $Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll/TilesFlow
+@onready var controls_row: Control = $Center/HintMargin/HintPanel/VBox/ControlsRow
+@onready var rotation_option: OptionButton = $Center/HintMargin/HintPanel/VBox/ControlsRow/RotationOption
+@onready var confirm_button: Button = $Center/HintMargin/HintPanel/VBox/ControlsRow/ConfirmButton
+@onready var skip_button: Button = $Center/HintMargin/HintPanel/VBox/ControlsRow/SkipButton
 
 var _available_tiles: Array[String] = []
 var _selected_tile_id: String = ""
@@ -30,7 +29,7 @@ var _selected_side: String = ""
 
 var _validation_ok: bool = true
 var _validation_message: String = ""
-var _picker_visible: bool = true
+var _picker_visible: bool = false
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -52,6 +51,9 @@ func _ready() -> void:
 	if skip_button != null and not skip_button.pressed.is_connected(request_skip):
 		skip_button.pressed.connect(request_skip)
 
+	if tiles_flow != null and is_instance_valid(tiles_flow):
+		tiles_flow.alignment = FlowContainer.ALIGNMENT_CENTER
+
 	_rebuild_rotation_options()
 	_rebuild_tile_buttons()
 	_apply_picker_visibility()
@@ -64,8 +66,10 @@ func show_picker() -> void:
 	if _picker_visible:
 		return
 	_picker_visible = true
+	_update_picker_layout()
 	_apply_picker_visibility()
 	_update_ui()
+	_emit_clear_highlight_request()
 	ui_state_changed.emit()
 
 func hide_picker() -> void:
@@ -74,6 +78,7 @@ func hide_picker() -> void:
 	_picker_visible = false
 	_apply_picker_visibility()
 	_update_ui()
+	_emit_highlight_request()
 	ui_state_changed.emit()
 
 func _apply_picker_visibility() -> void:
@@ -101,7 +106,6 @@ func set_available_tiles(tile_ids: Array[String]) -> void:
 		_selected_tile_id = _available_tiles[0]
 
 	_rebuild_tile_buttons()
-	_emit_highlight_request()
 	_update_ui()
 	ui_state_changed.emit()
 
@@ -156,7 +160,6 @@ func request_skip() -> void:
 
 func set_selected_rotation(rotation: int) -> void:
 	_selected_rotation = _normalize_rotation(rotation)
-	_sync_tile_button_rotations()
 	if rotation_option != null:
 		for i in range(rotation_option.get_item_count()):
 			if int(rotation_option.get_item_id(i)) == _selected_rotation:
@@ -198,31 +201,27 @@ func _rebuild_tile_buttons() -> void:
 
 		var btn = TilePickerButtonClass.new()
 		btn.tile_id = tid
-		btn.call("set_tile_rotation", _selected_rotation)
 		btn.button_group = group
 		btn.button_pressed = (not _selected_tile_id.is_empty()) and tid == _selected_tile_id
-		btn.tooltip_text = tid
 		btn.pressed.connect(_on_tile_button_pressed.bind(tid))
 		tiles_flow.add_child(btn)
 		_tile_buttons_by_id[tid] = btn
-
-func _sync_tile_button_rotations() -> void:
-	for tid in _tile_buttons_by_id.keys():
-		var btn_val = _tile_buttons_by_id.get(tid, null)
-		if btn_val is Node and is_instance_valid(btn_val) and btn_val.has_method("set_tile_rotation"):
-			btn_val.call("set_tile_rotation", _selected_rotation)
+	tiles_flow.queue_sort()
 
 func _on_tile_button_pressed(tile_id_in: String) -> void:
 	var tid := str(tile_id_in).strip_edges()
 	if tid.is_empty():
 		return
 	_selected_tile_id = tid
-	_emit_highlight_request()
-	if _picker_visible:
-		hide_picker()
-	else:
-		_update_ui()
-		ui_state_changed.emit()
+	hide_picker()
+
+func _update_picker_layout() -> void:
+	if hint_panel == null or not is_instance_valid(hint_panel):
+		return
+	var vp := get_viewport_rect().size
+	var max_w := maxf(320.0, vp.x - 48.0)
+	var w := minf(960.0, max_w)
+	hint_panel.custom_minimum_size = Vector2(w, 0)
 
 func _on_rotation_selected(_index: int) -> void:
 	if rotation_option == null:
@@ -241,16 +240,20 @@ func _normalize_rotation(rotation: int) -> int:
 func _emit_highlight_request() -> void:
 	highlight_requested.emit(_selected_tile_id, _selected_rotation)
 
+func _emit_clear_highlight_request() -> void:
+	highlight_requested.emit("", 0)
+
 func _update_ui() -> void:
 	_update_hint()
-	if selected_tile_preview != null and is_instance_valid(selected_tile_preview) and selected_tile_preview.has_method("set_tile"):
-		selected_tile_preview.call("set_tile", _selected_tile_id, _selected_rotation)
 	if confirm_button != null:
 		confirm_button.disabled = not can_confirm()
 
 func get_hint_text() -> String:
 	if not _validation_ok and not _validation_message.is_empty():
 		return "无法放置：%s" % _validation_message
+
+	if _picker_visible:
+		return "请选择要扩边放置的地图板块"
 
 	if _selected_tile_id.is_empty():
 		return "请选择要扩边放置的地图板块"
