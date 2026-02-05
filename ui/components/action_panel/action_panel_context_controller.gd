@@ -19,7 +19,9 @@ var _employee_option: HFlowContainer = null
 var _piece_row: Control = null
 var _piece_flow: HFlowContainer = null
 var _rotation_row: Control = null
-var _rotation_option: OptionButton = null
+var _rotate_left_button: Button = null
+var _rotation_value_label: Label = null
+var _rotate_right_button: Button = null
 var _house_number_row: Control = null
 var _house_number_option: OptionButton = null
 var _direction_row: Control = null
@@ -46,7 +48,9 @@ func setup(panel) -> void:
 	_piece_row = panel.piece_row
 	_piece_flow = panel.piece_flow
 	_rotation_row = panel.rotation_row
-	_rotation_option = panel.rotation_option
+	_rotate_left_button = panel.rotate_left_button
+	_rotation_value_label = panel.rotation_value_label
+	_rotate_right_button = panel.rotate_right_button
 	_house_number_row = panel.house_number_row
 	_house_number_option = panel.house_number_option
 	_direction_row = panel.direction_row
@@ -63,7 +67,8 @@ func setup(panel) -> void:
 	UiSignalHelpersClass.safe_connect(_confirm_context_button, "pressed", _on_confirm_context_pressed)
 	UiSignalHelpersClass.safe_connect(_restaurant_option, "item_selected", _on_restaurant_option_selected)
 	UiSignalHelpersClass.safe_connect(_employee_option, "employee_selected", _on_employee_option_selected)
-	UiSignalHelpersClass.safe_connect(_rotation_option, "item_selected", _on_rotation_option_selected)
+	UiSignalHelpersClass.safe_connect(_rotate_left_button, "pressed", _on_rotate_left_pressed)
+	UiSignalHelpersClass.safe_connect(_rotate_right_button, "pressed", _on_rotate_right_pressed)
 	UiSignalHelpersClass.safe_connect(_house_number_option, "item_selected", _on_house_number_option_selected)
 	UiSignalHelpersClass.safe_connect(_direction_option, "item_selected", _on_direction_option_selected)
 	_clear_custom_context()
@@ -179,7 +184,7 @@ func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) 
 	_house_number_row.visible = false
 	_set_custom_context_visible(false)
 
-	_rebuild_rotation_option(overlay.get_selected_rotation())
+	_sync_rotation_controls(overlay.get_selected_rotation())
 	_rebuild_employee_option(overlay.get_available_employees(), overlay.get_selected_employee())
 	_employee_row.visible = not overlay.get_available_employees().is_empty()
 
@@ -220,7 +225,7 @@ func _refresh_house_placement_context(overlay: HousePlacementOverlay) -> void:
 	_employee_row.visible = not overlay.get_available_employees().is_empty()
 
 	if mode == "place_house":
-		_rebuild_rotation_option(overlay.get_selected_rotation())
+		_sync_rotation_controls(overlay.get_selected_rotation())
 		_rebuild_house_number_option(
 			overlay.get_available_house_numbers(),
 			overlay.get_selected_house_number()
@@ -260,7 +265,7 @@ func _refresh_piece_placement_context(overlay) -> void:
 	_set_custom_context_visible(false)
 
 	_rebuild_piece_flow(overlay.get_available_pieces(), overlay.get_selected_piece(), overlay.get_selected_rotation())
-	_rebuild_rotation_option(overlay.get_selected_rotation())
+	_sync_rotation_controls(overlay.get_selected_rotation())
 
 	_confirm_context_button.text = "确认放置"
 	_confirm_context_button.disabled = not overlay.can_confirm()
@@ -359,15 +364,16 @@ func _sync_custom_context_node(overlay: Node) -> void:
 	if _custom_context_node.has_method("sync_from_overlay"):
 		_custom_context_node.call("sync_from_overlay")
 
-func _rebuild_rotation_option(selected_rotation: int) -> void:
-	if not is_instance_valid(_rotation_option):
-		return
-	_rotation_option.clear()
-	for rot in [0, 90, 180, 270]:
-		_rotation_option.add_item("%d°" % rot)
-		var idx := _rotation_option.get_item_count() - 1
-		_rotation_option.set_item_metadata(idx, rot)
-	_select_option_by_metadata_int(_rotation_option, selected_rotation)
+func _sync_rotation_controls(selected_rotation: int) -> void:
+	if is_instance_valid(_rotation_value_label):
+		_rotation_value_label.text = "%d°" % int(selected_rotation)
+
+	var can_rotate := _context_overlay != null and is_instance_valid(_context_overlay) and _context_overlay.has_method("set_selected_rotation")
+	if not can_rotate:
+		if is_instance_valid(_rotate_left_button):
+			_rotate_left_button.disabled = true
+		if is_instance_valid(_rotate_right_button):
+			_rotate_right_button.disabled = true
 
 func _rebuild_house_number_option(available_numbers: Array[int], selected_house_number: int) -> void:
 	if not is_instance_valid(_house_number_option):
@@ -561,13 +567,25 @@ func _get_employee_def_for_card(employee_type: String) -> Dictionary:
 		return def_val.to_dict()
 	return {"id": emp_id, "name": emp_id}
 
-func _on_rotation_option_selected(index: int) -> void:
+func _on_rotate_left_pressed() -> void:
 	if _context_syncing:
 		return
-	if not is_instance_valid(_rotation_option):
+	_rotate_selected_rotation(-90)
+
+func _on_rotate_right_pressed() -> void:
+	if _context_syncing:
 		return
-	var rot := int(_rotation_option.get_item_metadata(index))
-	_call_context_overlay_method("set_selected_rotation", [rot])
+	_rotate_selected_rotation(90)
+
+func _rotate_selected_rotation(delta_degrees: int) -> void:
+	if _context_overlay == null or not is_instance_valid(_context_overlay):
+		return
+	if not _context_overlay.has_method("set_selected_rotation"):
+		return
+	var rot := 0
+	if _context_overlay.has_method("get_selected_rotation"):
+		rot = int(_context_overlay.call("get_selected_rotation"))
+	_call_context_overlay_method("set_selected_rotation", [rot + int(delta_degrees)])
 
 func _on_house_number_option_selected(index: int) -> void:
 	if _context_syncing:

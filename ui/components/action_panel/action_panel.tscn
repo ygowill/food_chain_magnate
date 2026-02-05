@@ -125,10 +125,29 @@ custom_minimum_size = Vector2(42, 0)
 layout_mode = 2
 text = "旋转"
 
-[node name="RotationOption" type="OptionButton" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow"]
+[node name="RotationControls" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow"]
 custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="RotateLeftButton" type="Button" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationControls"]
+custom_minimum_size = Vector2(40, 34)
+layout_mode = 2
+text = "↺"
+tooltip_text = "向左旋转 90°"
+
+[node name="RotationValueLabel" type="Label" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationControls"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "0°"
+horizontal_alignment = 1
+
+[node name="RotateRightButton" type="Button" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationControls"]
+custom_minimum_size = Vector2(40, 34)
+layout_mode = 2
+text = "↻"
+tooltip_text = "向右旋转 90°"
 
 [node name="HouseNumberRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer"]
 layout_mode = 2

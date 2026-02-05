@@ -25,8 +25,20 @@ custom_minimum_size = Vector2(110, 34)
 layout_mode = 2
 text = "选择板块"
 
-[node name="RotateButton" type="Button" parent="ButtonsRow"]
-custom_minimum_size = Vector2(110, 34)
+[node name="RotateLeftButton" type="Button" parent="ButtonsRow"]
+custom_minimum_size = Vector2(40, 34)
 layout_mode = 2
-text = "旋转"
+text = "↺"
+tooltip_text = "向左旋转 90°"
 
+[node name="RotationValueLabel" type="Label" parent="ButtonsRow"]
+custom_minimum_size = Vector2(56, 0)
+layout_mode = 2
+text = "0°"
+horizontal_alignment = 1
+
+[node name="RotateRightButton" type="Button" parent="ButtonsRow"]
+custom_minimum_size = Vector2(40, 34)
+layout_mode = 2
+text = "↻"
+tooltip_text = "向右旋转 90°"

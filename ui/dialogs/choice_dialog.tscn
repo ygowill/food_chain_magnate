@@ -67,12 +67,13 @@ layout_mode = 2
 size_flags_vertical = 3
 theme_override_font_sizes/font_size = 14
 text = ""
-horizontal_alignment = 0
+horizontal_alignment = 1
 autowrap_mode = 2
 
 [node name="OptionsRow" type="HFlowContainer" parent="Center/Dialog/MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
+alignment = 1
 theme_override_constants/h_separation = 12
 theme_override_constants/v_separation = 12
 

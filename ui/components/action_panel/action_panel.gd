@@ -24,7 +24,9 @@ const ContextControllerClass = preload("res://ui/components/action_panel/action_
 @onready var piece_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/PieceRow
 @onready var piece_flow: HFlowContainer = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/PieceRow/PieceFlow
 @onready var rotation_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow
-@onready var rotation_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationOption
+@onready var rotate_left_button: Button = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationControls/RotateLeftButton
+@onready var rotation_value_label: Label = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationControls/RotationValueLabel
+@onready var rotate_right_button: Button = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationControls/RotateRightButton
 @onready var house_number_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/HouseNumberRow
 @onready var house_number_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/HouseNumberRow/HouseNumberOption
 @onready var direction_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/DirectionRow
@@ -358,8 +360,10 @@ func _apply_global_disabled_state() -> void:
 		cancel_context_button.disabled = _globally_disabled
 	if is_instance_valid(restaurant_option):
 		restaurant_option.disabled = _globally_disabled
-	if is_instance_valid(rotation_option):
-		rotation_option.disabled = _globally_disabled
+	if is_instance_valid(rotate_left_button):
+		rotate_left_button.disabled = _globally_disabled
+	if is_instance_valid(rotate_right_button):
+		rotate_right_button.disabled = _globally_disabled
 	if is_instance_valid(house_number_option):
 		house_number_option.disabled = _globally_disabled
 	if is_instance_valid(direction_option):
