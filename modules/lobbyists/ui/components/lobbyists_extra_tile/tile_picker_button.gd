@@ -21,7 +21,7 @@ func _ready() -> void:
 	toggle_mode = true
 
 	custom_minimum_size = Vector2(150, 150)
-	minimum_size_changed()
+	minimum_size_changed.emit()
 
 	if not resized.is_connected(queue_redraw):
 		resized.connect(queue_redraw)

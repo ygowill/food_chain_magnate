@@ -40,7 +40,7 @@ func set_zoom(zoom: float) -> void:
 	# Restore the node's original minimum size defined by the UI layout (or 0 for code-created previews).
 	if custom_minimum_size != _base_minimum_size:
 		custom_minimum_size = _base_minimum_size
-		minimum_size_changed()
+		minimum_size_changed.emit()
 
 func _on_resized() -> void:
 	_update_zoom_to_fit()
