@@ -10,6 +10,7 @@ const MapUtilsClass = preload("res://core/map/map_utils.gd")
 var tile_id: String = ""
 var tile_rotation: int = 0 # 0/90/180/270
 var _base_minimum_size: Vector2 = Vector2.ZERO
+var _is_ready: bool = false
 
 func _ready() -> void:
 	# Preview-only: disable hover/selection and keep rendering clipped inside the node rect.
@@ -24,6 +25,7 @@ func _ready() -> void:
 	if not resized.is_connected(_on_resized):
 		resized.connect(_on_resized)
 
+	_is_ready = true
 	_refresh_preview()
 	# Ensure we also fit after layout has settled (some parents size after children enter the tree).
 	call_deferred("_update_zoom_to_fit")
@@ -31,6 +33,8 @@ func _ready() -> void:
 func set_tile(id_str: String, rot: int) -> void:
 	tile_id = str(id_str).strip_edges()
 	tile_rotation = _normalize_rotation(rot)
+	if not _is_ready:
+		return
 	_refresh_preview()
 
 func set_zoom(zoom: float) -> void:

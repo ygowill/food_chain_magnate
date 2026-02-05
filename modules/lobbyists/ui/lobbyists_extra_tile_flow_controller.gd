@@ -203,6 +203,8 @@ func _show_overlay(state: GameState, force_full_refresh: bool = false) -> void:
 		return
 
 	_overlay.visible = true
+	# Overlay instance may be reused across turns/players; ensure the map mode can always access it.
+	_set_map_mode_overlay(_overlay)
 	if (not already_visible or force_full_refresh) and _overlay.has_method("show_picker"):
 		_overlay.show_picker()
 
