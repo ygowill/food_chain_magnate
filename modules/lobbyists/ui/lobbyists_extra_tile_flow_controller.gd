@@ -194,7 +194,8 @@ func _show_overlay(state: GameState, force_full_refresh: bool = false) -> void:
 			if _overlay.has_signal("skip_requested"):
 				_overlay.skip_requested.connect(_on_overlay_skip_requested)
 			if _overlay.has_signal("highlight_requested") and _map_controller != null:
-				_overlay.highlight_requested.connect(Callable(_map_controller, "notify_custom_mode_highlight").bind(MODE_ID))
+				# NOTE: Callable.bind() appends args after signal args; keep mode_id first.
+				_overlay.highlight_requested.connect(_on_overlay_highlight_requested)
 			_scene.add_child(_overlay)
 			_set_map_mode_overlay(_overlay)
 
@@ -214,6 +215,12 @@ func _show_overlay(state: GameState, force_full_refresh: bool = false) -> void:
 
 	if force_full_refresh and _overlay.has_method("clear_target"):
 		_overlay.clear_target()
+
+func _on_overlay_highlight_requested(tile_id: String, rotation: int) -> void:
+	if _map_controller == null:
+		return
+	if _map_controller.has_method("notify_custom_mode_highlight"):
+		_map_controller.notify_custom_mode_highlight(MODE_ID, tile_id, rotation)
 
 func _sync_overlay_tiles(state: GameState) -> void:
 	if state == null:
