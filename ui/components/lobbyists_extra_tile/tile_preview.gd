@@ -24,6 +24,8 @@ func _ready() -> void:
 		resized.connect(_on_resized)
 
 	_refresh_preview()
+	# Ensure we also fit after layout has settled (some parents size after children enter the tree).
+	call_deferred("_update_zoom_to_fit")
 
 func set_tile(id_str: String, rot: int) -> void:
 	tile_id = str(id_str).strip_edges()

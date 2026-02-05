@@ -15,6 +15,7 @@ func _ready() -> void:
 	icon = null
 	expand_icon = true
 	clip_text = true
+	clip_contents = true
 	toggle_mode = true
 
 	custom_minimum_size = Vector2(150, 150)
