@@ -221,7 +221,12 @@ func _update_picker_layout() -> void:
 	var vp := get_viewport_rect().size
 	var max_w := maxf(320.0, vp.x - 48.0)
 	var w := minf(960.0, max_w)
-	hint_panel.custom_minimum_size = Vector2(w, 0)
+	var max_h := maxf(260.0, vp.y - 48.0)
+	var h := minf(720.0, max_h)
+	hint_panel.custom_minimum_size = Vector2(w, h)
+	hint_panel.minimum_size_changed.emit()
+	if hint_panel.has_method("queue_sort"):
+		hint_panel.queue_sort()
 
 func _on_rotation_selected(_index: int) -> void:
 	if rotation_option == null:

@@ -30,10 +30,12 @@ theme_override_constants/margin_bottom = 12
 [node name="HintPanel" type="PanelContainer" parent="Center/HintMargin"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
 mouse_filter = 0
 
 [node name="VBox" type="VBoxContainer" parent="Center/HintMargin/HintPanel"]
 layout_mode = 2
+size_flags_vertical = 3
 theme_override_constants/separation = 8
 
 [node name="HintLabel" type="Label" parent="Center/HintMargin/HintPanel/VBox"]
@@ -47,11 +49,14 @@ autowrap_mode = 2
 [node name="TilesRow" type="VBoxContainer" parent="Center/HintMargin/HintPanel/VBox"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
 theme_override_constants/separation = 12
 
 [node name="TilesScroll" type="ScrollContainer" parent="Center/HintMargin/HintPanel/VBox/TilesRow"]
+custom_minimum_size = Vector2(0, 260)
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
 horizontal_scroll_mode = 0
 vertical_scroll_mode = 1
 
