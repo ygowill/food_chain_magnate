@@ -38,8 +38,6 @@ static func run() -> Result:
 		Globals.reset_game_config()
 		return Result.failure("实例化 game.tscn 失败")
 	host.add_child(game)
-	if game is CanvasItem:
-		(game as CanvasItem).visible = false
 
 	await st.process_frame
 	await st.process_frame
@@ -83,7 +81,13 @@ static func run() -> Result:
 	if not choose0.ok:
 		await _cleanup_game_instance(game)
 		return Result.failure("玩家0选择“使用”失败: %s" % choose0.error)
-	await st.process_frame
+	for _i in range(10):
+		await st.process_frame
+
+	# Mimic real UI flow: player must hide the picker before interacting with the map / completing placement.
+	var ov0 = flow.call("get_context_overlay") if flow.has_method("get_context_overlay") else null
+	if ov0 != null and is_instance_valid(ov0) and ov0.has_method("hide_picker"):
+		ov0.call("hide_picker")
 	await st.process_frame
 
 	var place0_r := _find_first_valid_lobbyists_extra_map_tile(game.game_engine, actor0)
@@ -125,8 +129,8 @@ static func run() -> Result:
 	if not choose1.ok:
 		await _cleanup_game_instance(game)
 		return Result.failure("玩家1选择“使用”失败: %s" % choose1.error)
-	await st.process_frame
-	await st.process_frame
+	for _j in range(10):
+		await st.process_frame
 
 	var ov = flow.call("get_context_overlay")
 	if ov == null or not is_instance_valid(ov):

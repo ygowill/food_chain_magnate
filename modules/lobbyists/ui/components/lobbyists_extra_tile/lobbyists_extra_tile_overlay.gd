@@ -45,8 +45,6 @@ func _ready() -> void:
 
 	if not resized.is_connected(_on_resized):
 		resized.connect(_on_resized)
-	if tiles_scroll != null and is_instance_valid(tiles_scroll) and not tiles_scroll.resized.is_connected(_on_tiles_scroll_resized):
-		tiles_scroll.resized.connect(_on_tiles_scroll_resized)
 
 	if background != null and is_instance_valid(background):
 		background.visible = false
@@ -98,7 +96,7 @@ func _on_resized() -> void:
 
 func _on_tiles_scroll_resized() -> void:
 	if _picker_visible:
-		_request_tiles_flow_matrix_layout_update(3)
+		_request_tiles_flow_matrix_layout_update(2)
 
 func _input(event: InputEvent) -> void:
 	if not visible:
@@ -278,7 +276,6 @@ func _rebuild_tile_buttons() -> void:
 		btn.pressed.connect(_on_tile_button_pressed.bind(tid))
 		tiles_flow.add_child(btn)
 		_tile_buttons_by_id[tid] = btn
-	tiles_flow.queue_sort()
 	_request_tiles_flow_matrix_layout_update(3)
 
 func _sync_tile_button_rotations() -> void:
@@ -302,9 +299,6 @@ func _update_picker_layout() -> void:
 	var w := maxf(320.0, vp.x - 24.0)
 	var h := maxf(260.0, vp.y - 24.0)
 	hint_panel.custom_minimum_size = Vector2(w, h)
-	hint_panel.minimum_size_changed.emit()
-	if hint_panel.has_method("queue_sort"):
-		hint_panel.queue_sort()
 	_request_tiles_flow_matrix_layout_update(3)
 
 func _request_tiles_flow_matrix_layout_update(frames: int = 2) -> void:
@@ -321,21 +315,31 @@ func _run_tiles_flow_matrix_layout_update() -> void:
 	if not _picker_visible:
 		_matrix_layout_remaining_frames = 0
 		return
-	_update_tiles_flow_matrix_layout()
+	var changed := _update_tiles_flow_matrix_layout()
 
 	_matrix_layout_remaining_frames -= 1
-	if _matrix_layout_remaining_frames > 0 and not _matrix_layout_update_scheduled:
+	if (not changed) or _matrix_layout_remaining_frames <= 0:
+		_matrix_layout_remaining_frames = 0
+		return
+
+	if not _matrix_layout_update_scheduled:
 		_matrix_layout_update_scheduled = true
 		call_deferred("_run_tiles_flow_matrix_layout_update")
 
-func _update_tiles_flow_matrix_layout() -> void:
+func _update_tiles_flow_matrix_layout() -> bool:
 	if tiles_flow == null or not is_instance_valid(tiles_flow):
-		return
+		return false
 
 	var count := _available_tiles.size()
 	if count <= 0:
-		tiles_flow.custom_minimum_size = Vector2.ZERO
-		return
+		var changed := false
+		if tiles_flow.custom_minimum_size != Vector2.ZERO:
+			tiles_flow.custom_minimum_size = Vector2.ZERO
+			changed = true
+		if tiles_stage != null and is_instance_valid(tiles_stage) and tiles_stage.custom_minimum_size != Vector2.ZERO:
+			tiles_stage.custom_minimum_size = Vector2.ZERO
+			changed = true
+		return changed
 
 	var tile_w := 160.0
 	var tile_h := 190.0
@@ -404,9 +408,11 @@ func _update_tiles_flow_matrix_layout() -> void:
 	var desired_w := float(best_cols) * tile_w + float(maxi(0, best_cols - 1)) * h_sep
 	var desired_h := float(best_rows) * tile_h + float(maxi(0, best_rows - 1)) * v_sep
 
-	tiles_flow.custom_minimum_size = Vector2(desired_w, desired_h)
-	tiles_flow.minimum_size_changed.emit()
-	tiles_flow.queue_sort()
+	var changed_any := false
+	var desired_flow_size := Vector2(desired_w, desired_h)
+	if absf(tiles_flow.custom_minimum_size.x - desired_flow_size.x) > 0.5 or absf(tiles_flow.custom_minimum_size.y - desired_flow_size.y) > 0.5:
+		tiles_flow.custom_minimum_size = desired_flow_size
+		changed_any = true
 
 	# ScrollContainer doesn't automatically expand its child to viewport size; ensure TilesStage is at
 	# least as large as the visible area so Top/Bottom spacers can center the matrix.
@@ -417,9 +423,12 @@ func _update_tiles_flow_matrix_layout() -> void:
 			stage_w = desired_w
 		if stage_h <= 4.0:
 			stage_h = desired_h
-		tiles_stage.custom_minimum_size = Vector2(stage_w, stage_h)
-		tiles_stage.minimum_size_changed.emit()
-		tiles_stage.queue_sort()
+		var desired_stage_size := Vector2(stage_w, stage_h)
+		if absf(tiles_stage.custom_minimum_size.x - desired_stage_size.x) > 0.5 or absf(tiles_stage.custom_minimum_size.y - desired_stage_size.y) > 0.5:
+			tiles_stage.custom_minimum_size = desired_stage_size
+			changed_any = true
+
+	return changed_any
 
 func _on_rotation_selected(_index: int) -> void:
 	if rotation_option == null:
