@@ -34,6 +34,26 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 	_execute_command = execute_command
 	_hide_all = hide_all
 
+func _bind_action_panel_context(overlay: Node) -> void:
+	# NOTE: “使用扩边”是 UI 内部状态切换，并不会触发 state 变更；
+	# 因此需要在这里主动让 ActionPanel ContextPanel 绑定到 overlay。
+	if _scene == null:
+		return
+	var ap = _scene.get("action_panel")
+	if ap == null or not is_instance_valid(ap):
+		return
+	if ap.has_method("bind_context_overlay"):
+		ap.call("bind_context_overlay", overlay)
+
+func _clear_action_panel_context() -> void:
+	if _scene == null:
+		return
+	var ap = _scene.get("action_panel")
+	if ap == null or not is_instance_valid(ap):
+		return
+	if ap.has_method("clear_context_overlay"):
+		ap.call("clear_context_overlay")
+
 func hide() -> void:
 	if is_instance_valid(restaurant_placement_overlay):
 		restaurant_placement_overlay.visible = false
@@ -437,6 +457,7 @@ func _reset_lobbyists_extra_tile_flow() -> void:
 	_hide_lobbyists_extra_tile_choice_dialog()
 	if is_instance_valid(lobbyists_extra_tile_overlay):
 		lobbyists_extra_tile_overlay.visible = false
+	_clear_action_panel_context()
 	if _map_controller != null and _map_controller.has_method("get_mode") and str(_map_controller.get_mode()) == "lobbyists_extra_tile":
 		_map_controller.clear_selection()
 	_lobbyists_extra_tile_pending_active = false
@@ -549,6 +570,7 @@ func _show_lobbyists_extra_tile_overlay(state: GameState, force_full_refresh: bo
 	lobbyists_extra_tile_overlay.visible = true
 	if (not already_visible or force_full_refresh) and lobbyists_extra_tile_overlay.has_method("show_picker"):
 		lobbyists_extra_tile_overlay.show_picker()
+	_bind_action_panel_context(lobbyists_extra_tile_overlay)
 
 	# 进入地图选点模式：高亮有效的扩边边缘格
 	if not _map_controller.has_method("get_mode") or str(_map_controller.get_mode()) != "lobbyists_extra_tile" or force_full_refresh:
@@ -590,6 +612,7 @@ func _execute_skip_lobbyists_extra_tile(actor_id: int) -> void:
 		_hide_lobbyists_extra_tile_choice_dialog()
 		if is_instance_valid(lobbyists_extra_tile_overlay):
 			lobbyists_extra_tile_overlay.visible = false
+		_clear_action_panel_context()
 		if _map_controller != null:
 			_map_controller.clear_selection()
 	else:
@@ -629,6 +652,7 @@ func _on_lobbyists_extra_tile_placement_confirmed(attach_board_pos: Vector2i, si
 		_hide_lobbyists_extra_tile_choice_dialog()
 		if is_instance_valid(lobbyists_extra_tile_overlay):
 			lobbyists_extra_tile_overlay.visible = false
+		_clear_action_panel_context()
 		if _map_controller != null:
 			_map_controller.clear_selection()
 		if _overlay_controller != null:

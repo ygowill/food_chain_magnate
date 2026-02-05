@@ -273,8 +273,9 @@
 - 实施：
 	- TilePickerButton 直接复用 `TilePreview(MapCanvas)` 渲染真实 tile，并将按钮尺寸提升到 110×110。
 	- `LobbyistsExtraTileOverlay` 增加 picker show/hide：选中 tile 后自动隐藏；并隐藏 overlay 内部的旋转/确认按钮（统一由 ActionPanel ContextPanel 提供）。
-	- ActionPanel ContextPanel 支持 `LobbyistsExtraTileOverlay`：显示所选 tile 预览 + “重新选择板块/旋转”按钮；底部按钮“放弃扩边/确认放置”。
+	- ActionPanel ContextPanel 支持 `LobbyistsExtraTileOverlay`：显示所选 tile 预览 + “重新选择板块/旋转”按钮；底部按钮“放弃扩边/确认放置”。（修复：选择“使用扩边”属于 UI 内部状态切换，会主动 bind ContextPanel，避免看不到按钮）
 	- 地图交互：点击高亮边缘格选定扩边位置后，绘制持久的半透明板块区域（hover 预览仍保留）。
+	- 选中提示：tile 按钮增加半透明选中遮罩 + 角标（避免仅靠边框不明显）。
 - 验证：
 	- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`（PASS）
 	- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 143/143）

@@ -7,6 +7,8 @@ var tile_id: String = ""
 var tile_rotation: int = 0 # 0/90/180/270
 
 var _preview: Control = null
+var _selected_overlay: ColorRect = null
+var _badge_bg: ColorRect = null
 
 func _ready() -> void:
 	text = ""
@@ -21,16 +23,18 @@ func _ready() -> void:
 		resized.connect(queue_redraw)
 	if not toggled.is_connected(_on_toggled):
 		toggled.connect(_on_toggled)
-	if not mouse_entered.is_connected(queue_redraw):
-		mouse_entered.connect(queue_redraw)
-	if not mouse_exited.is_connected(queue_redraw):
-		mouse_exited.connect(queue_redraw)
+	if not mouse_entered.is_connected(_on_mouse_state_changed):
+		mouse_entered.connect(_on_mouse_state_changed)
+	if not mouse_exited.is_connected(_on_mouse_state_changed):
+		mouse_exited.connect(_on_mouse_state_changed)
 
 	_ensure_preview()
 	_sync_preview()
+	_update_selection_visual()
 	queue_redraw()
 
 func _on_toggled(_pressed: bool) -> void:
+	_update_selection_visual()
 	queue_redraw()
 
 func set_tile_rotation(rot: int) -> void:
@@ -58,12 +62,67 @@ func _ensure_preview() -> void:
 	add_child(p)
 	_preview = p
 
+	var ov := ColorRect.new()
+	ov.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ov.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ov.offset_left = 4
+	ov.offset_top = 4
+	ov.offset_right = -4
+	ov.offset_bottom = -4
+	ov.color = Color(0.2, 0.65, 1.0, 0.16)
+	ov.visible = false
+	add_child(ov)
+	_selected_overlay = ov
+
+	var badge_bg := ColorRect.new()
+	badge_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge_bg.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	badge_bg.offset_left = -30
+	badge_bg.offset_top = 4
+	badge_bg.offset_right = -4
+	badge_bg.offset_bottom = 30
+	badge_bg.color = Color(0.08, 0.10, 0.14, 0.75)
+	badge_bg.visible = false
+	add_child(badge_bg)
+	_badge_bg = badge_bg
+
+	var badge := Label.new()
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.set_anchors_preset(Control.PRESET_FULL_RECT)
+	badge.text = "✓"
+	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	badge.add_theme_font_size_override("font_size", 18)
+	badge.add_theme_color_override("font_color", Color(1, 1, 1, 0.95))
+	badge_bg.add_child(badge)
+
 func _sync_preview() -> void:
 	_ensure_preview()
 	if not is_instance_valid(_preview):
 		return
 	if _preview.has_method("set_tile"):
 		_preview.call("set_tile", tile_id, tile_rotation)
+
+func _on_mouse_state_changed() -> void:
+	_update_selection_visual()
+	queue_redraw()
+
+func _update_selection_visual() -> void:
+	var pressed := bool(button_pressed)
+	var hovered := is_hovered()
+
+	if is_instance_valid(_selected_overlay):
+		if pressed:
+			_selected_overlay.visible = true
+			_selected_overlay.color = Color(0.2, 0.65, 1.0, 0.16)
+		elif hovered:
+			_selected_overlay.visible = true
+			_selected_overlay.color = Color(1, 1, 1, 0.06)
+		else:
+			_selected_overlay.visible = false
+
+	if is_instance_valid(_badge_bg):
+		_badge_bg.visible = pressed
 
 func _draw() -> void:
 	var r := Rect2(Vector2.ZERO, size)
@@ -74,7 +133,7 @@ func _draw() -> void:
 	var border_w := 2.0
 	if button_pressed:
 		border_col = Color(0.2, 0.65, 1.0, 0.95)
-		border_w = 3.0
+		border_w = 4.0
 	elif is_hovered():
 		border_col = Color(1, 1, 1, 0.35)
 		border_w = 2.0
