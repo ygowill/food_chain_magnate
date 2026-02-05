@@ -4,8 +4,9 @@ class_name GameMapInteractionLobbyistsExtraTileMode
 extends RefCounted
 
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
-const LobbyistsTilePreviewClass = preload("res://ui/components/lobbyists_extra_tile/tile_preview.gd")
+const LobbyistsTilePreviewClass = preload("res://modules/lobbyists/ui/components/lobbyists_extra_tile/tile_preview.gd")
 
+const MODE_ID := "lobbyists_extra_tile"
 const _PREVIEW_OVERLAY_ID := "lobbyists_extra_tile_preview"
 const _SELECTED_OVERLAY_ID := "lobbyists_extra_tile_selected_preview"
 
@@ -19,6 +20,13 @@ var _preview_rotation: int = 0
 
 func _init(controller) -> void:
 	_controller = controller
+
+func _get_overlay():
+	if _controller == null or not is_instance_valid(_controller):
+		return null
+	if _controller.has_method("get_custom_mode_overlay"):
+		return _controller.get_custom_mode_overlay(MODE_ID)
+	return null
 
 func reset() -> void:
 	_preview_tile_id = ""
@@ -34,7 +42,7 @@ func get_outside_margin_override() -> int:
 func on_highlight_requested(tile_id: String, rotation: int) -> void:
 	if _controller == null:
 		return
-	if _controller._mode != "lobbyists_extra_tile":
+	if _controller._mode != MODE_ID:
 		return
 	if not is_instance_valid(_controller._map_canvas):
 		return
@@ -102,7 +110,7 @@ func on_highlight_requested(tile_id: String, rotation: int) -> void:
 func on_cell_hovered(world_pos: Vector2i) -> void:
 	if _controller == null:
 		return
-	if _controller._mode != "lobbyists_extra_tile":
+	if _controller._mode != MODE_ID:
 		return
 	if not is_instance_valid(_controller._map_canvas):
 		return
@@ -132,13 +140,15 @@ func on_cell_hovered(world_pos: Vector2i) -> void:
 func on_cell_selected(world_pos: Vector2i) -> void:
 	if _controller == null:
 		return
-	if _controller._mode != "lobbyists_extra_tile":
+	if _controller._mode != MODE_ID:
 		return
+
+	var overlay = _get_overlay()
 
 	# 仅允许点击“高亮的合法边缘格”
 	if _valid_anchors.is_empty() or not _valid_anchors.has(world_pos):
-		if is_instance_valid(_controller.lobbyists_extra_tile_overlay) and _controller.lobbyists_extra_tile_overlay.visible and _controller.lobbyists_extra_tile_overlay.has_method("set_validation"):
-			_controller.lobbyists_extra_tile_overlay.set_validation(false, "请选择高亮的可放置边缘格")
+		if is_instance_valid(overlay) and overlay is CanvasItem and (overlay as CanvasItem).visible and overlay.has_method("set_validation"):
+			overlay.call("set_validation", false, "请选择高亮的可放置边缘格")
 		return
 
 	if _controller._scene == null or _controller._scene.game_engine == null:
@@ -152,20 +162,20 @@ func on_cell_selected(world_pos: Vector2i) -> void:
 	var local_pos: Vector2i = tile_info.get("local_pos", Vector2i.ZERO)
 	var side := _side_from_tile_local_pos(local_pos)
 	if side.is_empty():
-		if is_instance_valid(_controller.lobbyists_extra_tile_overlay) and _controller.lobbyists_extra_tile_overlay.visible and _controller.lobbyists_extra_tile_overlay.has_method("set_validation"):
-			_controller.lobbyists_extra_tile_overlay.set_validation(false, "请点击板块边缘格（非角落）")
+		if is_instance_valid(overlay) and overlay is CanvasItem and (overlay as CanvasItem).visible and overlay.has_method("set_validation"):
+			overlay.call("set_validation", false, "请点击板块边缘格（非角落）")
 		return
 
 	var tile_id := ""
 	var rotation := 0
-	if is_instance_valid(_controller.lobbyists_extra_tile_overlay):
-		if _controller.lobbyists_extra_tile_overlay.has_method("get_selected_tile_id"):
-			tile_id = str(_controller.lobbyists_extra_tile_overlay.get_selected_tile_id()).strip_edges()
-		if _controller.lobbyists_extra_tile_overlay.has_method("get_selected_rotation"):
-			rotation = int(_controller.lobbyists_extra_tile_overlay.get_selected_rotation())
+	if is_instance_valid(overlay):
+		if overlay.has_method("get_selected_tile_id"):
+			tile_id = str(overlay.call("get_selected_tile_id")).strip_edges()
+		if overlay.has_method("get_selected_rotation"):
+			rotation = int(overlay.call("get_selected_rotation"))
 	if tile_id.is_empty():
-		if is_instance_valid(_controller.lobbyists_extra_tile_overlay) and _controller.lobbyists_extra_tile_overlay.visible and _controller.lobbyists_extra_tile_overlay.has_method("set_validation"):
-			_controller.lobbyists_extra_tile_overlay.set_validation(false, "tile 未选择")
+		if is_instance_valid(overlay) and overlay is CanvasItem and (overlay as CanvasItem).visible and overlay.has_method("set_validation"):
+			overlay.call("set_validation", false, "tile 未选择")
 		return
 
 	var actor := int(state2.get_current_player_id())
@@ -185,18 +195,18 @@ func on_cell_selected(world_pos: Vector2i) -> void:
 	if executor != null:
 		var vr: Result = executor.validate(state2, cmd)
 		if not vr.ok:
-			if is_instance_valid(_controller.lobbyists_extra_tile_overlay) and _controller.lobbyists_extra_tile_overlay.visible and _controller.lobbyists_extra_tile_overlay.has_method("set_validation"):
-				_controller.lobbyists_extra_tile_overlay.set_validation(false, vr.error)
+			if is_instance_valid(overlay) and overlay is CanvasItem and (overlay as CanvasItem).visible and overlay.has_method("set_validation"):
+				overlay.call("set_validation", false, vr.error)
 			return
 
-	if is_instance_valid(_controller.lobbyists_extra_tile_overlay) and _controller.lobbyists_extra_tile_overlay.visible:
-		if _controller.lobbyists_extra_tile_overlay.has_method("set_selected_target"):
-			_controller.lobbyists_extra_tile_overlay.set_selected_target(attach_board_pos, side)
-		if _controller.lobbyists_extra_tile_overlay.has_method("set_validation"):
-			_controller.lobbyists_extra_tile_overlay.set_validation(true, "")
+	if is_instance_valid(overlay) and overlay is CanvasItem and (overlay as CanvasItem).visible:
+		if overlay.has_method("set_selected_target"):
+			overlay.call("set_selected_target", attach_board_pos, side)
+		if overlay.has_method("set_validation"):
+			overlay.call("set_validation", true, "")
 		_set_selected_overlay(attach_board_pos, side)
 		if _controller.has_method("_maybe_auto_confirm_placement"):
-			_controller._maybe_auto_confirm_placement(_controller.lobbyists_extra_tile_overlay)
+			_controller._maybe_auto_confirm_placement(overlay)
 
 func _clear_overlays() -> void:
 	if not is_instance_valid(_controller) or not is_instance_valid(_controller._map_canvas):
@@ -347,21 +357,22 @@ func _hide_tile_previews() -> void:
 	_hide_selected_tile_preview()
 
 func _sync_selected_tile_preview_from_overlay() -> void:
-	if not is_instance_valid(_controller) or not is_instance_valid(_controller.lobbyists_extra_tile_overlay):
+	var overlay = _get_overlay()
+	if not is_instance_valid(_controller) or not is_instance_valid(overlay):
 		_hide_selected_tile_preview()
 		return
-	if not _controller.lobbyists_extra_tile_overlay.has_method("get_selected_side"):
+	if not overlay.has_method("get_selected_side"):
 		_hide_selected_tile_preview()
 		return
 
-	var side := str(_controller.lobbyists_extra_tile_overlay.call("get_selected_side")).strip_edges()
+	var side := str(overlay.call("get_selected_side")).strip_edges()
 	if side.is_empty():
 		_hide_selected_tile_preview()
 		return
 
 	var attach_board_pos := Vector2i.ZERO
-	if _controller.lobbyists_extra_tile_overlay.has_method("get_selected_attach_board_pos"):
-		var bp_val = _controller.lobbyists_extra_tile_overlay.call("get_selected_attach_board_pos")
+	if overlay.has_method("get_selected_attach_board_pos"):
+		var bp_val = overlay.call("get_selected_attach_board_pos")
 		if bp_val is Vector2i:
 			attach_board_pos = bp_val
 
@@ -443,4 +454,3 @@ func _normalize_rotation(rotation: int) -> int:
 	if r != 0 and r != 90 and r != 180 and r != 270:
 		r = 0
 	return r
-

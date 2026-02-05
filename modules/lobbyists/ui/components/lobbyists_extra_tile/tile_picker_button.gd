@@ -1,7 +1,7 @@
 # Lobbyists extra tile：板块选择按钮（渲染真实 tile 贴图，非缩略图）
 extends Button
 
-const TilePreviewClass = preload("res://ui/components/lobbyists_extra_tile/tile_preview.gd")
+const TilePreviewClass = preload("res://modules/lobbyists/ui/components/lobbyists_extra_tile/tile_preview.gd")
 
 var tile_id: String = ""
 var tile_rotation: int = 0 # 0/90/180/270
@@ -16,9 +16,12 @@ func _ready() -> void:
 	expand_icon = true
 	clip_text = true
 	clip_contents = true
+	if has_method("set_clip_children_mode"):
+		set_clip_children_mode(CanvasItem.CLIP_CHILDREN_AND_DRAW)
 	toggle_mode = true
 
 	custom_minimum_size = Vector2(150, 150)
+	minimum_size_changed()
 
 	if not resized.is_connected(queue_redraw):
 		resized.connect(queue_redraw)

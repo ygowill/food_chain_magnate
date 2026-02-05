@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://ui/components/lobbyists_extra_tile/lobbyists_extra_tile_overlay.gd" id="1_lobbyists_extra_tile"]
-[ext_resource type="Script" path="res://ui/components/lobbyists_extra_tile/tile_preview.gd" id="2_tile_preview"]
+[ext_resource type="Script" path="res://modules/lobbyists/ui/components/lobbyists_extra_tile/lobbyists_extra_tile_overlay.gd" id="1_lobbyists_extra_tile"]
+[ext_resource type="Script" path="res://modules/lobbyists/ui/components/lobbyists_extra_tile/tile_preview.gd" id="2_tile_preview"]
 
 [node name="LobbyistsExtraTileOverlay" type="VBoxContainer"]
 layout_mode = 3

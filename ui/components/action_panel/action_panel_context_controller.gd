@@ -24,15 +24,14 @@ var _house_number_row: Control = null
 var _house_number_option: OptionButton = null
 var _direction_row: Control = null
 var _direction_option: OptionButton = null
-var _lobbyists_tile_preview: Control = null
-var _lobbyists_buttons_row: Control = null
-var _lobbyists_picker_button: Button = null
-var _lobbyists_rotate_button: Button = null
+var _custom_context_container: Control = null
 var _cancel_context_button: Button = null
 var _confirm_context_button: Button = null
 
 var _context_overlay: Node = null
 var _context_syncing: bool = false
+var _custom_context_node: Control = null
+var _custom_context_scene_path: String = ""
 
 func setup(panel) -> void:
 	if panel == null or not is_instance_valid(panel):
@@ -52,10 +51,7 @@ func setup(panel) -> void:
 	_house_number_option = panel.house_number_option
 	_direction_row = panel.direction_row
 	_direction_option = panel.direction_option
-	_lobbyists_tile_preview = panel.lobbyists_tile_preview
-	_lobbyists_buttons_row = panel.lobbyists_buttons_row
-	_lobbyists_picker_button = panel.lobbyists_picker_button
-	_lobbyists_rotate_button = panel.lobbyists_rotate_button
+	_custom_context_container = panel.custom_context_container
 	_cancel_context_button = panel.cancel_context_button
 	_confirm_context_button = panel.confirm_context_button
 
@@ -70,8 +66,7 @@ func setup(panel) -> void:
 	UiSignalHelpersClass.safe_connect(_rotation_option, "item_selected", _on_rotation_option_selected)
 	UiSignalHelpersClass.safe_connect(_house_number_option, "item_selected", _on_house_number_option_selected)
 	UiSignalHelpersClass.safe_connect(_direction_option, "item_selected", _on_direction_option_selected)
-	UiSignalHelpersClass.safe_connect(_lobbyists_picker_button, "pressed", _on_lobbyists_picker_pressed)
-	UiSignalHelpersClass.safe_connect(_lobbyists_rotate_button, "pressed", _on_lobbyists_rotate_pressed)
+	_clear_custom_context()
 
 func set_action_registry(registry) -> void:
 	_action_registry = registry
@@ -93,12 +88,14 @@ func bind_context_overlay(overlay: Node) -> void:
 		return
 
 	_detach_overlay_signals()
+	_clear_custom_context()
 	_context_overlay = overlay
 	_attach_overlay_signals()
 	_refresh_context_from_overlay()
 
 func clear_context_overlay() -> void:
 	_detach_overlay_signals()
+	_clear_custom_context()
 	_context_overlay = null
 	_hide_context_panel()
 
@@ -152,17 +149,15 @@ func _refresh_context_from_overlay() -> void:
 	if PiecePlacementOverlayScript != null and _context_overlay is PiecePlacementOverlayScript:
 		_refresh_piece_placement_context(_context_overlay)
 		return
-	if _context_overlay is LobbyistsExtraTileOverlay:
-		_refresh_lobbyists_extra_tile_context(_context_overlay as LobbyistsExtraTileOverlay)
+	if _context_overlay.has_method("get_action_panel_context_spec"):
+		_refresh_custom_context(_context_overlay)
 		return
 
 	clear_context_overlay()
 
-func _set_lobbyists_context_visible(show: bool) -> void:
-	if is_instance_valid(_lobbyists_tile_preview):
-		_lobbyists_tile_preview.visible = show
-	if is_instance_valid(_lobbyists_buttons_row):
-		_lobbyists_buttons_row.visible = show
+func _set_custom_context_visible(show: bool) -> void:
+	if is_instance_valid(_custom_context_container):
+		_custom_context_container.visible = show
 
 func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) -> void:
 	if overlay == null or not is_instance_valid(overlay):
@@ -182,7 +177,7 @@ func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) 
 	_direction_row.visible = false
 	_rotation_row.visible = true
 	_house_number_row.visible = false
-	_set_lobbyists_context_visible(false)
+	_set_custom_context_visible(false)
 
 	_rebuild_rotation_option(overlay.get_selected_rotation())
 	_rebuild_employee_option(overlay.get_available_employees(), overlay.get_selected_employee())
@@ -219,7 +214,7 @@ func _refresh_house_placement_context(overlay: HousePlacementOverlay) -> void:
 	_rotation_row.visible = (mode == "place_house")
 	_house_number_row.visible = (mode == "place_house")
 	_direction_row.visible = (mode == "add_garden")
-	_set_lobbyists_context_visible(false)
+	_set_custom_context_visible(false)
 
 	_rebuild_employee_option(overlay.get_available_employees(), overlay.get_selected_employee())
 	_employee_row.visible = not overlay.get_available_employees().is_empty()
@@ -262,7 +257,7 @@ func _refresh_piece_placement_context(overlay) -> void:
 	_rotation_row.visible = true
 	_house_number_row.visible = false
 	_direction_row.visible = false
-	_set_lobbyists_context_visible(false)
+	_set_custom_context_visible(false)
 
 	_rebuild_piece_flow(overlay.get_available_pieces(), overlay.get_selected_piece(), overlay.get_selected_rotation())
 	_rebuild_rotation_option(overlay.get_selected_rotation())
@@ -274,19 +269,37 @@ func _refresh_piece_placement_context(overlay) -> void:
 
 	_context_syncing = false
 
-func _refresh_lobbyists_extra_tile_context(overlay: LobbyistsExtraTileOverlay) -> void:
+func _clear_custom_context() -> void:
+	_custom_context_scene_path = ""
+	_custom_context_node = null
+	if not is_instance_valid(_custom_context_container):
+		return
+	for child in _custom_context_container.get_children():
+		child.queue_free()
+
+func _refresh_custom_context(overlay: Node) -> void:
 	if overlay == null or not is_instance_valid(overlay):
 		clear_context_overlay()
 		return
 
+	var spec_val = overlay.call("get_action_panel_context_spec") if overlay.has_method("get_action_panel_context_spec") else null
+	if not (spec_val is Dictionary):
+		clear_context_overlay()
+		return
+	var spec: Dictionary = spec_val
+
 	_context_syncing = true
 	_show_context_panel()
 
-	_context_title_label.text = "🗺️ 扩边放置板块"
-	if overlay.has_method("get_hint_text"):
-		_context_hint_label.text = str(overlay.get_hint_text())
-	else:
-		_context_hint_label.text = "请选择板块并在地图上点击高亮边缘格"
+	var title := str(spec.get("title", "")).strip_edges()
+	_context_title_label.text = title if not title.is_empty() else "当前操作"
+
+	var hint := ""
+	if spec.has("hint"):
+		hint = str(spec.get("hint", ""))
+	elif overlay.has_method("get_hint_text"):
+		hint = str(overlay.call("get_hint_text"))
+	_context_hint_label.text = hint
 
 	_restaurant_row.visible = false
 	_employee_row.visible = false
@@ -294,32 +307,57 @@ func _refresh_lobbyists_extra_tile_context(overlay: LobbyistsExtraTileOverlay) -
 	_rotation_row.visible = false
 	_house_number_row.visible = false
 	_direction_row.visible = false
-	_set_lobbyists_context_visible(true)
+	_set_custom_context_visible(true)
 
-	var tile_id := ""
-	var rot := 0
-	if overlay.has_method("get_selected_tile_id"):
-		tile_id = str(overlay.get_selected_tile_id()).strip_edges()
-	if overlay.has_method("get_selected_rotation"):
-		rot = int(overlay.get_selected_rotation())
+	var scene_path := str(spec.get("custom_scene", "")).strip_edges()
+	_ensure_custom_context_node(scene_path, overlay)
+	_sync_custom_context_node(overlay)
 
-	if is_instance_valid(_lobbyists_tile_preview) and _lobbyists_tile_preview.has_method("set_tile"):
-		_lobbyists_tile_preview.call("set_tile", tile_id, rot)
-
-	if is_instance_valid(_lobbyists_picker_button):
-		_lobbyists_picker_button.text = "重新选择板块" if not tile_id.is_empty() else "选择板块"
-
-	if is_instance_valid(_lobbyists_rotate_button):
-		_lobbyists_rotate_button.text = "旋转 ↻ %d°" % rot
-		_lobbyists_rotate_button.disabled = tile_id.is_empty()
-
-	_cancel_context_button.visible = true
-	_cancel_context_button.text = "放弃扩边"
-
-	_confirm_context_button.text = "确认放置"
-	_confirm_context_button.disabled = not overlay.can_confirm()
+	if is_instance_valid(_cancel_context_button):
+		_cancel_context_button.visible = true
+		_cancel_context_button.text = str(spec.get("cancel_text", "取消"))
+	if is_instance_valid(_confirm_context_button):
+		_confirm_context_button.text = str(spec.get("confirm_text", "确认"))
+		var disabled := false
+		if overlay.has_method("can_confirm"):
+			disabled = not bool(overlay.call("can_confirm"))
+		elif spec.has("confirm_disabled"):
+			disabled = bool(spec.get("confirm_disabled", false))
+		_confirm_context_button.disabled = disabled
 
 	_context_syncing = false
+
+func _ensure_custom_context_node(scene_path: String, overlay: Node) -> void:
+	if not is_instance_valid(_custom_context_container):
+		return
+	var path := str(scene_path).strip_edges()
+	if path.is_empty():
+		_clear_custom_context()
+		return
+	if path != _custom_context_scene_path or _custom_context_container.get_child_count() == 0:
+		_clear_custom_context()
+		_custom_context_scene_path = path
+		var res = load(path)
+		if res is PackedScene:
+			var inst = (res as PackedScene).instantiate()
+			if inst != null:
+				_custom_context_container.add_child(inst)
+				_custom_context_node = inst if inst is Control else null
+		elif res is Script:
+			var inst2 = (res as Script).new()
+			if inst2 != null:
+				_custom_context_container.add_child(inst2)
+				_custom_context_node = inst2 if inst2 is Control else null
+
+func _sync_custom_context_node(overlay: Node) -> void:
+	if not is_instance_valid(_custom_context_node):
+		return
+	if _custom_context_node.has_method("bind_overlay"):
+		_custom_context_node.call("bind_overlay", overlay)
+	elif _custom_context_node.has_method("set_overlay"):
+		_custom_context_node.call("set_overlay", overlay)
+	if _custom_context_node.has_method("sync_from_overlay"):
+		_custom_context_node.call("sync_from_overlay")
 
 func _rebuild_rotation_option(selected_rotation: int) -> void:
 	if not is_instance_valid(_rotation_option):
@@ -546,28 +584,3 @@ func _on_direction_option_selected(index: int) -> void:
 		return
 	var d := str(_direction_option.get_item_metadata(index))
 	_call_context_overlay_method("set_selected_direction", [d])
-
-func _on_lobbyists_picker_pressed() -> void:
-	if _context_syncing:
-		return
-	if _context_overlay == null or not is_instance_valid(_context_overlay):
-		return
-	if _context_overlay.has_method("show_picker"):
-		_context_overlay.call("show_picker")
-
-func _on_lobbyists_rotate_pressed() -> void:
-	if _context_syncing:
-		return
-	if _context_overlay == null or not is_instance_valid(_context_overlay):
-		return
-	if _context_overlay.has_method("rotate_clockwise"):
-		_context_overlay.call("rotate_clockwise")
-		return
-
-	var rot := 0
-	if _context_overlay.has_method("get_selected_rotation"):
-		rot = int(_context_overlay.call("get_selected_rotation"))
-	var next := rot + 90
-	if next >= 360:
-		next = 0
-	_call_context_overlay_method("set_selected_rotation", [next])

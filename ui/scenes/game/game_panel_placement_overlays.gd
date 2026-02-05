@@ -4,12 +4,8 @@ extends RefCounted
 const RestaurantPlacementScene = preload("res://ui/components/restaurant_placement/restaurant_placement_overlay.tscn")
 const HousePlacementScene = preload("res://ui/components/house_placement/house_placement_overlay.tscn")
 const PiecePlacementScene = preload("res://ui/components/piece_placement/piece_placement_overlay.tscn")
-const LobbyistsExtraTileOverlayScene = preload("res://ui/components/lobbyists_extra_tile/lobbyists_extra_tile_overlay.tscn")
-const ChoiceDialogScene = preload("res://ui/dialogs/choice_dialog.tscn")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
-
-const LOBBYISTS_EXTRA_TILE_PENDING_KEY := "lobbyists_extra_tile_pending"
 
 var _scene = null
 var _map_controller = null
@@ -20,12 +16,8 @@ var _hide_all: Callable
 var restaurant_placement_overlay = null
 var house_placement_overlay = null
 var piece_placement_overlay = null
-var lobbyists_extra_tile_overlay = null
-
-var _lobbyists_extra_tile_choice_dialog = null
-var _lobbyists_extra_tile_pending_active: bool = false
-var _lobbyists_extra_tile_pending_player_id: int = -1
-var _lobbyists_extra_tile_choice: String = "" # "" | "use"
+var _module_overlay_controllers: Array = []
+var _module_overlay_controllers_loaded: bool = false
 
 func _init(scene, map_controller, overlay_controller, execute_command: Callable, hide_all: Callable) -> void:
 	_scene = scene
@@ -34,25 +26,22 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 	_execute_command = execute_command
 	_hide_all = hide_all
 
-func _bind_action_panel_context(overlay: Node) -> void:
-	# NOTE: “使用扩边”是 UI 内部状态切换，并不会触发 state 变更；
-	# 因此需要在这里主动让 ActionPanel ContextPanel 绑定到 overlay。
-	if _scene == null:
-		return
-	var ap = _scene.get("action_panel")
-	if ap == null or not is_instance_valid(ap):
-		return
-	if ap.has_method("bind_context_overlay"):
-		ap.call("bind_context_overlay", overlay)
-
-func _clear_action_panel_context() -> void:
-	if _scene == null:
-		return
-	var ap = _scene.get("action_panel")
-	if ap == null or not is_instance_valid(ap):
-		return
-	if ap.has_method("clear_context_overlay"):
-		ap.call("clear_context_overlay")
+func get_active_context_overlay():
+	_ensure_module_overlay_controllers_loaded()
+	if is_instance_valid(restaurant_placement_overlay) and restaurant_placement_overlay.visible:
+		return restaurant_placement_overlay
+	if is_instance_valid(house_placement_overlay) and house_placement_overlay.visible:
+		return house_placement_overlay
+	if is_instance_valid(piece_placement_overlay) and piece_placement_overlay.visible:
+		return piece_placement_overlay
+	for c in _module_overlay_controllers:
+		if c == null or not is_instance_valid(c):
+			continue
+		if c.has_method("get_context_overlay"):
+			var ov = c.call("get_context_overlay")
+			if ov != null and is_instance_valid(ov):
+				return ov
+	return null
 
 func hide() -> void:
 	if is_instance_valid(restaurant_placement_overlay):
@@ -61,15 +50,15 @@ func hide() -> void:
 		house_placement_overlay.visible = false
 	if is_instance_valid(piece_placement_overlay):
 		piece_placement_overlay.visible = false
-	if is_instance_valid(lobbyists_extra_tile_overlay):
-		lobbyists_extra_tile_overlay.visible = false
-	_hide_lobbyists_extra_tile_choice_dialog()
+	for c in _module_overlay_controllers:
+		if c != null and is_instance_valid(c) and c.has_method("hide"):
+			c.call("hide")
 
 func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	_sync_restaurant_placement_overlay(state, force_full_refresh)
 	_sync_house_placement_overlay(state, force_full_refresh)
 	_sync_piece_placement_overlay(state, force_full_refresh)
-	_sync_lobbyists_extra_tile_flow(state, force_full_refresh)
+	_sync_module_overlays(state, force_full_refresh)
 
 func _sync_restaurant_placement_overlay(state: GameState, force_full_refresh: bool = false) -> void:
 	if state == null:
@@ -403,263 +392,50 @@ func show_house_placement(action_id: String, params: Dictionary) -> void:
 	if _map_controller != null:
 		_map_controller.on_house_preview_cleared()
 
-func _sync_lobbyists_extra_tile_flow(state: GameState, force_full_refresh: bool = false) -> void:
-	# Lobbyists milestone：首个使用说客 -> 立即二选一（使用扩边 / 放弃）
-	if state == null:
-		_reset_lobbyists_extra_tile_flow()
-		return
+func _sync_module_overlays(state: GameState, force_full_refresh: bool = false) -> void:
+	_ensure_module_overlay_controllers_loaded()
+	for c in _module_overlay_controllers:
+		if c == null or not is_instance_valid(c):
+			continue
+		if c.has_method("sync"):
+			c.call("sync", state, force_full_refresh)
 
-	var is_online := false
-	var local_player_id := -1
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-		is_online = true
-		local_player_id = int(NetContext.local_player_id)
-
-	var current_player_id := int(state.get_current_player_id())
-	var is_local_turn := (not is_online) or (local_player_id >= 0 and current_player_id == local_player_id)
-	if not is_local_turn:
-		_reset_lobbyists_extra_tile_flow()
-		return
-
-	var actor_id := current_player_id
-	if is_online and local_player_id >= 0:
-		actor_id = local_player_id
-
-	var pending := _is_lobbyists_extra_tile_pending_for_player(state, actor_id)
-	if not pending:
-		_reset_lobbyists_extra_tile_flow()
-		return
-
-	var is_new_pending := (not _lobbyists_extra_tile_pending_active) or (_lobbyists_extra_tile_pending_player_id != actor_id)
-	if is_new_pending:
-		_lobbyists_extra_tile_pending_active = true
-		_lobbyists_extra_tile_pending_player_id = actor_id
-		_lobbyists_extra_tile_choice = ""
-		_hide_lobbyists_extra_tile_choice_dialog()
-		if is_instance_valid(lobbyists_extra_tile_overlay) and lobbyists_extra_tile_overlay.has_method("clear_target"):
-			lobbyists_extra_tile_overlay.clear_target()
-		if _overlay_controller != null and _overlay_controller.has_method("show_toast"):
-			_overlay_controller.show_toast("里程碑奖励：扩边（请立即二选一：使用/放弃）")
-
-	# 只能在 Working/Lobbyists 执行 place/skip（动作执行器限制），因此 UI 也仅在此时激活。
-	if str(state.phase) != DefsClass.PHASE_WORKING or str(state.sub_phase) != "Lobbyists":
-		return
-
-	# choice 已确定为 use：确保 overlay 存在并保持同步
-	if _lobbyists_extra_tile_choice == "use":
-		_show_lobbyists_extra_tile_overlay(state, force_full_refresh)
-		return
-
-	# 尚未做出选择：弹出二选一窗口（无取消）
-	_show_lobbyists_extra_tile_choice_dialog(state, actor_id)
-
-func _reset_lobbyists_extra_tile_flow() -> void:
-	_hide_lobbyists_extra_tile_choice_dialog()
-	if is_instance_valid(lobbyists_extra_tile_overlay):
-		lobbyists_extra_tile_overlay.visible = false
-	_clear_action_panel_context()
-	if _map_controller != null and _map_controller.has_method("get_mode") and str(_map_controller.get_mode()) == "lobbyists_extra_tile":
-		_map_controller.clear_selection()
-	_lobbyists_extra_tile_pending_active = false
-	_lobbyists_extra_tile_pending_player_id = -1
-	_lobbyists_extra_tile_choice = ""
-
-func _is_lobbyists_extra_tile_pending_for_player(state: GameState, player_id: int) -> bool:
-	if state == null or not (state.round_state is Dictionary):
-		return false
-	var rs: Dictionary = state.round_state
-	var pending_val = rs.get(LOBBYISTS_EXTRA_TILE_PENDING_KEY, null)
-	if not (pending_val is Dictionary):
-		return false
-	var pending: Dictionary = pending_val
-	var flag = pending.get(player_id, null)
-	if flag == null and pending.has(str(player_id)):
-		flag = pending.get(str(player_id), null)
-	return bool(flag)
-
-func _show_lobbyists_extra_tile_choice_dialog(state: GameState, actor_id: int) -> void:
-	if _scene == null:
-		return
-	if is_instance_valid(_lobbyists_extra_tile_choice_dialog) and (_lobbyists_extra_tile_choice_dialog as Control).visible:
-		return
-
-	if _lobbyists_extra_tile_choice_dialog == null:
-		_lobbyists_extra_tile_choice_dialog = ChoiceDialogScene.instantiate()
-		if is_instance_valid(_lobbyists_extra_tile_choice_dialog):
-			_scene.add_child(_lobbyists_extra_tile_choice_dialog)
-			if _lobbyists_extra_tile_choice_dialog is Control:
-				(_lobbyists_extra_tile_choice_dialog as Control).z_index = 950
-			if _lobbyists_extra_tile_choice_dialog.has_signal("option_selected"):
-				_lobbyists_extra_tile_choice_dialog.option_selected.connect(_on_lobbyists_extra_tile_choice_selected)
-			if _lobbyists_extra_tile_choice_dialog.has_signal("cancelled"):
-				_lobbyists_extra_tile_choice_dialog.cancelled.connect(_on_lobbyists_extra_tile_choice_cancelled)
-
-	if not is_instance_valid(_lobbyists_extra_tile_choice_dialog):
-		return
-
-	var who := "玩家%d" % (actor_id + 1)
-	if Globals != null and Globals.has_method("get_player_name"):
-		who = str(Globals.get_player_name(actor_id))
-
-	var title := "里程碑奖励：扩边"
-	var message := "%s 获得“首个使用说客”里程碑奖励：\n是否立即使用扩边放置一块地图板块？" % who
-	var options: Array[Dictionary] = [
-		{"id": "use", "text": "使用"},
-		{"id": "skip", "text": "放弃"},
-	]
-	if _lobbyists_extra_tile_choice_dialog.has_method("setup"):
-		_lobbyists_extra_tile_choice_dialog.setup(title, message, options, "")
-	if _lobbyists_extra_tile_choice_dialog.has_method("open"):
-		_lobbyists_extra_tile_choice_dialog.open()
-
-func _hide_lobbyists_extra_tile_choice_dialog() -> void:
-	if not is_instance_valid(_lobbyists_extra_tile_choice_dialog):
-		return
-	if _lobbyists_extra_tile_choice_dialog.has_method("close"):
-		_lobbyists_extra_tile_choice_dialog.close()
-	elif _lobbyists_extra_tile_choice_dialog is Control:
-		(_lobbyists_extra_tile_choice_dialog as Control).visible = false
-
-func _on_lobbyists_extra_tile_choice_selected(option_id: String) -> void:
-	var opt := str(option_id).strip_edges()
-	if opt == "use":
-		_lobbyists_extra_tile_choice = "use"
-		if _scene != null and _scene.game_engine != null:
-			var state: GameState = _scene.game_engine.get_state()
-			if state != null:
-				_show_lobbyists_extra_tile_overlay(state, true)
-		return
-
-	if opt == "skip":
-		var actor_id := _lobbyists_extra_tile_pending_player_id
-		_execute_skip_lobbyists_extra_tile(actor_id)
-		return
-
-func _on_lobbyists_extra_tile_choice_cancelled() -> void:
-	# 本对话框用于“必须当场二选一”，cancel 被隐藏；这里保留兼容处理。
-	var actor_id := _lobbyists_extra_tile_pending_player_id
-	_execute_skip_lobbyists_extra_tile(actor_id)
-
-func _show_lobbyists_extra_tile_overlay(state: GameState, force_full_refresh: bool = false) -> void:
-	if _scene == null or _scene.game_engine == null:
-		return
-	if _map_controller == null:
-		return
-	var already_visible := false
-	if is_instance_valid(lobbyists_extra_tile_overlay):
-		already_visible = bool(lobbyists_extra_tile_overlay.visible)
-	if not already_visible and _hide_all.is_valid():
-		_hide_all.call()
-
-	if lobbyists_extra_tile_overlay == null:
-		lobbyists_extra_tile_overlay = LobbyistsExtraTileOverlayScene.instantiate()
-		if is_instance_valid(lobbyists_extra_tile_overlay):
-			if lobbyists_extra_tile_overlay.has_signal("placement_confirmed"):
-				lobbyists_extra_tile_overlay.placement_confirmed.connect(_on_lobbyists_extra_tile_placement_confirmed)
-			if lobbyists_extra_tile_overlay.has_signal("skip_requested"):
-				lobbyists_extra_tile_overlay.skip_requested.connect(_on_lobbyists_extra_tile_skip_requested)
-			if lobbyists_extra_tile_overlay.has_signal("highlight_requested") and _map_controller != null:
-				lobbyists_extra_tile_overlay.highlight_requested.connect(Callable(_map_controller, "on_lobbyists_extra_tile_highlight_requested"))
-			_scene.add_child(lobbyists_extra_tile_overlay)
-			if _map_controller.has_method("set_lobbyists_extra_tile_overlay"):
-				_map_controller.set_lobbyists_extra_tile_overlay(lobbyists_extra_tile_overlay)
-
-	if not is_instance_valid(lobbyists_extra_tile_overlay):
-		return
-
-	lobbyists_extra_tile_overlay.visible = true
-	if (not already_visible or force_full_refresh) and lobbyists_extra_tile_overlay.has_method("show_picker"):
-		lobbyists_extra_tile_overlay.show_picker()
-	_bind_action_panel_context(lobbyists_extra_tile_overlay)
-
-	# 进入地图选点模式：高亮有效的扩边边缘格
-	if not _map_controller.has_method("get_mode") or str(_map_controller.get_mode()) != "lobbyists_extra_tile" or force_full_refresh:
-		_map_controller.begin_selection("lobbyists_extra_tile")
-	_sync_lobbyists_extra_tile_overlay_tiles(state)
-
-	if force_full_refresh and lobbyists_extra_tile_overlay.has_method("clear_target"):
-		lobbyists_extra_tile_overlay.clear_target()
-
-func _sync_lobbyists_extra_tile_overlay_tiles(state: GameState) -> void:
-	if state == null:
-		return
-	if not is_instance_valid(lobbyists_extra_tile_overlay):
-		return
-
-	var remaining: Array[String] = []
-	if state.map is Dictionary and state.map.has("tile_supply_remaining") and (state.map["tile_supply_remaining"] is Array):
-		for v in Array(state.map["tile_supply_remaining"]):
-			var s := str(v).strip_edges()
-			if not s.is_empty():
-				remaining.append(s)
-	remaining.sort()
-
-	if lobbyists_extra_tile_overlay.has_method("set_available_tiles"):
-		lobbyists_extra_tile_overlay.set_available_tiles(remaining)
-
-func _execute_skip_lobbyists_extra_tile(actor_id: int) -> void:
-	if actor_id < 0:
+func _ensure_module_overlay_controllers_loaded() -> void:
+	if _module_overlay_controllers_loaded:
 		return
 	if _scene == null or _scene.game_engine == null:
 		return
-	if not _execute_command.is_valid():
-		return
 
-	var cmd := Command.create("skip_lobbyists_extra_map_tile", actor_id, {})
-	var result: Result = _execute_command.call(cmd)
-	if result.ok:
-		_lobbyists_extra_tile_choice = ""
-		_hide_lobbyists_extra_tile_choice_dialog()
-		if is_instance_valid(lobbyists_extra_tile_overlay):
-			lobbyists_extra_tile_overlay.visible = false
-		_clear_action_panel_context()
-		if _map_controller != null:
-			_map_controller.clear_selection()
-	else:
-		if _overlay_controller != null and _overlay_controller.has_method("show_toast"):
-			_overlay_controller.show_toast("放弃扩边失败：%s" % str(result.error))
+	var engine: GameEngine = _scene.game_engine
+	var manifests: Dictionary = engine.module_manifests_v2
+	var plan: Array[String] = engine.get_module_plan_v2() if engine.has_method("get_module_plan_v2") else []
 
-func _on_lobbyists_extra_tile_skip_requested() -> void:
-	var actor_id := _lobbyists_extra_tile_pending_player_id
-	_execute_skip_lobbyists_extra_tile(actor_id)
+	var seen := {}
+	for mid in plan:
+		var manifest_val = manifests.get(mid, null)
+		if not (manifest_val is ModuleManifest):
+			continue
+		var manifest: ModuleManifest = manifest_val
+		var provides: Dictionary = manifest.provides
+		var ui_val = provides.get("ui", null)
+		if not (ui_val is Dictionary):
+			continue
+		var ui: Dictionary = ui_val
+		var controllers_val = ui.get("placement_overlays", null)
+		if not (controllers_val is Array):
+			continue
 
-func _on_lobbyists_extra_tile_placement_confirmed(attach_board_pos: Vector2i, side: String, rotation: int, tile_id: String) -> void:
-	if _scene == null or _scene.game_engine == null:
-		return
-	if not _execute_command.is_valid():
-		return
-	if tile_id.is_empty() or side.is_empty():
-		return
+		for p in Array(controllers_val):
+			var path := str(p).strip_edges()
+			if path.is_empty() or seen.has(path):
+				continue
+			seen[path] = true
+			var res = load(path)
+			if res is Script:
+				var ctrl = (res as Script).new(_scene, _map_controller, _overlay_controller, _execute_command, _hide_all)
+				_module_overlay_controllers.append(ctrl)
 
-	var state: GameState = _scene.game_engine.get_state()
-	if state == null:
-		return
-
-	var current_player_id := int(state.get_current_player_id())
-	var actor_id := current_player_id
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and int(NetContext.local_player_id) >= 0:
-		actor_id = int(NetContext.local_player_id)
-
-	var params := {
-		"tile_id": tile_id,
-		"attach_to_tile_board_pos": [attach_board_pos.x, attach_board_pos.y],
-		"side": side,
-		"rotation": int(rotation),
-	}
-	var result: Result = _execute_command.call(Command.create("place_lobbyists_extra_map_tile", actor_id, params))
-	if result.ok:
-		_lobbyists_extra_tile_choice = ""
-		_hide_lobbyists_extra_tile_choice_dialog()
-		if is_instance_valid(lobbyists_extra_tile_overlay):
-			lobbyists_extra_tile_overlay.visible = false
-		_clear_action_panel_context()
-		if _map_controller != null:
-			_map_controller.clear_selection()
-		if _overlay_controller != null:
-			_overlay_controller.hide_all_overlays()
-	else:
-		if is_instance_valid(lobbyists_extra_tile_overlay) and lobbyists_extra_tile_overlay.has_method("set_validation"):
-			lobbyists_extra_tile_overlay.set_validation(false, result.error)
+	_module_overlay_controllers_loaded = true
 
 func _on_restaurant_placement_confirmed(position: Vector2i, rotation: int, restaurant_id: String) -> void:
 	if _scene == null or _scene.game_engine == null:

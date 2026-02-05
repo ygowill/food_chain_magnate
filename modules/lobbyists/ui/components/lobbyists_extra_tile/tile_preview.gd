@@ -9,16 +9,17 @@ const MapUtilsClass = preload("res://core/map/map_utils.gd")
 
 var tile_id: String = ""
 var tile_rotation: int = 0 # 0/90/180/270
+var _base_minimum_size: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
 	# Preview-only: disable hover/selection and keep rendering clipped inside the node rect.
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	clip_contents = true
+	_base_minimum_size = custom_minimum_size
 	# NOTE: clip_contents only clips children; MapCanvas draws in _draw().
 	# Use CanvasItem clip mode so tile preview won't bleed into neighboring UI cells.
 	if has_method("set_clip_children_mode"):
-		# CanvasItem.CLIP_CHILDREN_AND_DRAW == 2 (Godot 4.x)
-		set_clip_children_mode(2)
+		set_clip_children_mode(CanvasItem.CLIP_CHILDREN_AND_DRAW)
 
 	if not resized.is_connected(_on_resized):
 		resized.connect(_on_resized)
@@ -31,6 +32,15 @@ func set_tile(id_str: String, rot: int) -> void:
 	tile_id = str(id_str).strip_edges()
 	tile_rotation = _normalize_rotation(rot)
 	_refresh_preview()
+
+func set_zoom(zoom: float) -> void:
+	super.set_zoom(zoom)
+	# TilePreview is embedded in UI controls; MapCanvas.set_zoom() updates custom_minimum_size based
+	# on map bounds, which can force the preview to expand beyond its parent and overlap neighbors.
+	# Restore the node's original minimum size defined by the UI layout (or 0 for code-created previews).
+	if custom_minimum_size != _base_minimum_size:
+		custom_minimum_size = _base_minimum_size
+		minimum_size_changed()
 
 func _on_resized() -> void:
 	_update_zoom_to_fit()

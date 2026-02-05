@@ -7,7 +7,8 @@ signal highlight_requested(tile_id: String, rotation: int)
 signal ui_state_changed()
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
-const TilePickerButtonClass = preload("res://ui/components/lobbyists_extra_tile/tile_picker_button.gd")
+const TilePickerButtonClass = preload("res://modules/lobbyists/ui/components/lobbyists_extra_tile/tile_picker_button.gd")
+const ActionPanelExtraTileContextScenePath := "res://modules/lobbyists/ui/components/lobbyists_extra_tile/action_panel_extra_tile_context.tscn"
 
 @onready var hint_panel: Control = $HintMargin/HintPanel
 @onready var hint_margin: Control = $HintMargin
@@ -263,6 +264,15 @@ func get_hint_text() -> String:
 		str(_selected_attach_board_pos),
 		_selected_side,
 	]
+
+func get_action_panel_context_spec() -> Dictionary:
+	return {
+		"title": "🗺️ 扩边放置板块",
+		"hint": get_hint_text(),
+		"confirm_text": "确认放置",
+		"cancel_text": "放弃扩边",
+		"custom_scene": ActionPanelExtraTileContextScenePath,
+	}
 
 func _update_hint() -> void:
 	if hint_label == null:

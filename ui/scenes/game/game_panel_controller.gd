@@ -276,16 +276,17 @@ func _sync_action_panel_context() -> void:
 
 	var overlay = null
 	if _placement_overlays != null:
-		if is_instance_valid(_placement_overlays.restaurant_placement_overlay) and _placement_overlays.restaurant_placement_overlay.visible:
-			overlay = _placement_overlays.restaurant_placement_overlay
-		elif is_instance_valid(_placement_overlays.house_placement_overlay) and _placement_overlays.house_placement_overlay.visible:
-			overlay = _placement_overlays.house_placement_overlay
-		elif is_instance_valid(_placement_overlays.piece_placement_overlay) and _placement_overlays.piece_placement_overlay.visible:
-			overlay = _placement_overlays.piece_placement_overlay
-		elif is_instance_valid(_placement_overlays.lobbyists_extra_tile_overlay) and _placement_overlays.lobbyists_extra_tile_overlay.visible:
-			overlay = _placement_overlays.lobbyists_extra_tile_overlay
+		if _placement_overlays.has_method("get_active_context_overlay"):
+			overlay = _placement_overlays.call("get_active_context_overlay")
+		else:
+			if is_instance_valid(_placement_overlays.restaurant_placement_overlay) and _placement_overlays.restaurant_placement_overlay.visible:
+				overlay = _placement_overlays.restaurant_placement_overlay
+			elif is_instance_valid(_placement_overlays.house_placement_overlay) and _placement_overlays.house_placement_overlay.visible:
+				overlay = _placement_overlays.house_placement_overlay
+			elif is_instance_valid(_placement_overlays.piece_placement_overlay) and _placement_overlays.piece_placement_overlay.visible:
+				overlay = _placement_overlays.piece_placement_overlay
 
-	if overlay != null:
+	if overlay != null and is_instance_valid(overlay):
 		if _scene.action_panel.has_method("bind_context_overlay"):
 			_scene.action_panel.call("bind_context_overlay", overlay)
 	else:

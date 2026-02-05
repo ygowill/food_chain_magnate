@@ -9,7 +9,6 @@ signal procure_drinks_source_selected(world_pos: Vector2i)
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingModeClass = preload("res://ui/scenes/game/game_map_interaction_marketing_mode.gd")
 const PlacementModeClass = preload("res://ui/scenes/game/game_map_interaction_placement_mode.gd")
-const LobbyistsExtraTileModeClass = preload("res://ui/scenes/game/game_map_interaction_lobbyists_extra_tile_mode.gd")
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 
 var _scene = null
@@ -17,7 +16,9 @@ var _map_canvas = null
 var _overlay_controller = null
 var _marketing_mode = null
 var _placement_mode = null
-var _lobbyists_extra_tile_mode = null
+var _module_modes_loaded: bool = false
+var _custom_mode_handlers: Dictionary = {} # mode_id -> handler (RefCounted)
+var _custom_mode_overlays: Dictionary = {} # mode_id -> overlay (Node)
 
 var _mode: String = ""
 var _payload: Dictionary = {}
@@ -32,7 +33,6 @@ var marketing_panel = null
 var restaurant_placement_overlay = null
 var house_placement_overlay = null
 var piece_placement_overlay = null
-var lobbyists_extra_tile_overlay = null
 
 const _DISTANCE_TOOL_POINTS_OVERLAY_ID := "distance_tool_points"
 
@@ -42,7 +42,6 @@ func _init(scene, map_canvas, overlay_controller) -> void:
 	_overlay_controller = overlay_controller
 	_marketing_mode = MarketingModeClass.new(self)
 	_placement_mode = PlacementModeClass.new(self)
-	_lobbyists_extra_tile_mode = LobbyistsExtraTileModeClass.new(self)
 
 func connect_signals() -> void:
 	if not is_instance_valid(_map_canvas):
@@ -75,12 +74,34 @@ func set_house_placement_overlay(overlay) -> void:
 func set_piece_placement_overlay(overlay) -> void:
 	piece_placement_overlay = overlay
 
-func set_lobbyists_extra_tile_overlay(overlay) -> void:
-	lobbyists_extra_tile_overlay = overlay
+func set_custom_mode_overlay(mode_id: String, overlay: Node) -> void:
+	var key := str(mode_id).strip_edges()
+	if key.is_empty():
+		return
+	if overlay == null or not is_instance_valid(overlay):
+		_custom_mode_overlays.erase(key)
+	else:
+		_custom_mode_overlays[key] = overlay
+
+func get_custom_mode_overlay(mode_id: String):
+	var key := str(mode_id).strip_edges()
+	if key.is_empty():
+		return null
+	return _custom_mode_overlays.get(key, null)
+
+func notify_custom_mode_highlight(mode_id: String, tile_id: String, rotation: int) -> void:
+	_ensure_module_modes_loaded()
+	var key := str(mode_id).strip_edges()
+	if key.is_empty():
+		return
+	var handler = _custom_mode_handlers.get(key, null)
+	if handler != null and is_instance_valid(handler) and handler.has_method("on_highlight_requested"):
+		handler.call("on_highlight_requested", tile_id, rotation)
 
 func begin_selection(mode: String, payload: Dictionary = {}) -> void:
 	_mode = mode
 	_payload = payload.duplicate(true)
+	_ensure_module_modes_loaded()
 	_restaurant_valid_anchors.clear()
 	_house_valid_anchors.clear()
 	_piece_valid_anchors.clear()
@@ -92,8 +113,7 @@ func begin_selection(mode: String, payload: Dictionary = {}) -> void:
 		_map_canvas.call("clear_move_restaurant_selected_restaurant")
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_piece_overlay"):
 		_map_canvas.call("clear_piece_overlay", _DISTANCE_TOOL_POINTS_OVERLAY_ID)
-	if _lobbyists_extra_tile_mode != null:
-		_lobbyists_extra_tile_mode.reset()
+	_reset_custom_modes()
 
 	# 动态控制“地图外围 UI-only 空圈”：仅在需要放置/显示外围 piece 时开启（issue_tracker #64）。
 	_update_map_outside_margin_for_mode()
@@ -114,8 +134,7 @@ func clear_selection() -> void:
 		_map_canvas.call("clear_move_restaurant_selected_restaurant")
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_piece_overlay"):
 		_map_canvas.call("clear_piece_overlay", _DISTANCE_TOOL_POINTS_OVERLAY_ID)
-	if _lobbyists_extra_tile_mode != null:
-		_lobbyists_extra_tile_mode.reset()
+	_reset_custom_modes()
 
 	# 退出任何选点模式后，如果不再需要外围空圈则恢复（issue_tracker #64）。
 	_update_map_outside_margin_for_mode()
@@ -133,6 +152,55 @@ func clear_selection() -> void:
 
 func get_mode() -> String:
 	return _mode
+
+func _ensure_module_modes_loaded() -> void:
+	if _module_modes_loaded:
+		return
+	if _scene == null or _scene.game_engine == null:
+		return
+
+	var engine: GameEngine = _scene.game_engine
+	var manifests: Dictionary = engine.module_manifests_v2
+	var plan: Array[String] = engine.get_module_plan_v2() if engine.has_method("get_module_plan_v2") else []
+
+	for mid in plan:
+		var manifest_val = manifests.get(mid, null)
+		if not (manifest_val is ModuleManifest):
+			continue
+		var manifest: ModuleManifest = manifest_val
+		var provides: Dictionary = manifest.provides
+		var ui_val = provides.get("ui", null)
+		if not (ui_val is Dictionary):
+			continue
+		var ui: Dictionary = ui_val
+		var modes_val = ui.get("map_interaction_modes", null)
+		if not (modes_val is Array):
+			continue
+
+		for mv in Array(modes_val):
+			if not (mv is Dictionary):
+				continue
+			var d: Dictionary = mv
+			var mode_id := str(d.get("id", d.get("mode", ""))).strip_edges()
+			if mode_id.is_empty() or _custom_mode_handlers.has(mode_id):
+				continue
+			var script_path := str(d.get("script", "")).strip_edges()
+			if script_path.is_empty():
+				continue
+			var res = load(script_path)
+			if not (res is Script):
+				continue
+			var handler = (res as Script).new(self)
+			if handler == null:
+				continue
+			_custom_mode_handlers[mode_id] = handler
+
+	_module_modes_loaded = true
+
+func _reset_custom_modes() -> void:
+	for h in _custom_mode_handlers.values():
+		if h != null and is_instance_valid(h) and h.has_method("reset"):
+			h.call("reset")
 
 func _emit_mode_changed() -> void:
 	mode_changed.emit(_mode, _payload.duplicate(true))
@@ -209,9 +277,6 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 			if is_instance_valid(piece_placement_overlay) and piece_placement_overlay.visible and piece_placement_overlay.has_method("set_selected_position"):
 				piece_placement_overlay.set_selected_position(world_pos)
 				_maybe_auto_confirm_placement(piece_placement_overlay)
-		"lobbyists_extra_tile":
-			if _lobbyists_extra_tile_mode != null:
-				_lobbyists_extra_tile_mode.on_cell_selected(world_pos)
 		"distance_tool":
 			if _overlay_controller == null:
 				return
@@ -248,7 +313,9 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 			_show_distance_tool_points_highlight([_distance_tool_from, world_pos])
 			_distance_tool_from = Vector2i(-1, -1)
 		_:
-			pass
+			var handler = _custom_mode_handlers.get(_mode, null)
+			if handler != null and is_instance_valid(handler) and handler.has_method("on_cell_selected"):
+				handler.call("on_cell_selected", world_pos)
 
 func _show_distance_tool_points_highlight(cells_in: Array[Vector2i]) -> void:
 	if not is_instance_valid(_map_canvas):
@@ -279,13 +346,16 @@ func _update_map_outside_margin_for_mode() -> void:
 	if not _map_canvas.has_method("set_ui_outside_margin_override"):
 		return
 
+	_ensure_module_modes_loaded()
+
 	var requested := 0
 	if _mode == "marketing":
 		var mt := str(_payload.get("marketing_type", "")).strip_edges()
 		if mt == "airplane":
 			requested = 2
-	if _mode == "lobbyists_extra_tile" and _lobbyists_extra_tile_mode != null:
-		requested = _lobbyists_extra_tile_mode.get_outside_margin_override()
+	var handler = _custom_mode_handlers.get(_mode, null)
+	if handler != null and is_instance_valid(handler) and handler.has_method("get_outside_margin_override"):
+		requested = int(handler.call("get_outside_margin_override"))
 
 	var changed := bool(_map_canvas.call("set_ui_outside_margin_override", requested))
 	if changed:
@@ -370,9 +440,10 @@ func _maybe_auto_confirm_placement(overlay: Node) -> void:
 	overlay.call_deferred("request_confirm")
 
 func _on_map_cell_hovered(world_pos: Vector2i) -> void:
-	if _mode == "lobbyists_extra_tile":
-		if _lobbyists_extra_tile_mode != null:
-			_lobbyists_extra_tile_mode.on_cell_hovered(world_pos)
+	_ensure_module_modes_loaded()
+	var handler = _custom_mode_handlers.get(_mode, null)
+	if handler != null and is_instance_valid(handler) and handler.has_method("on_cell_hovered"):
+		handler.call("on_cell_hovered", world_pos)
 		return
 	if _mode == "marketing":
 		if _marketing_mode != null:
@@ -428,7 +499,3 @@ func on_piece_preview_cleared() -> void:
 func on_piece_preview_requested(action_id: String, position: Vector2i, rotation: int, piece_id: String) -> void:
 	if _placement_mode != null:
 		_placement_mode.on_piece_preview_requested(action_id, position, rotation, piece_id)
-
-func on_lobbyists_extra_tile_highlight_requested(tile_id: String, rotation: int) -> void:
-	if _lobbyists_extra_tile_mode != null:
-		_lobbyists_extra_tile_mode.on_highlight_requested(tile_id, rotation)

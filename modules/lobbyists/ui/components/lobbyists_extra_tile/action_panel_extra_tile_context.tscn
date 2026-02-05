@@ -1,0 +1,32 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://modules/lobbyists/ui/components/lobbyists_extra_tile/action_panel_extra_tile_context.gd" id="1_context"]
+[ext_resource type="Script" path="res://modules/lobbyists/ui/components/lobbyists_extra_tile/tile_preview.gd" id="2_tile_preview"]
+
+[node name="LobbyistsExtraTileContext" type="VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+script = ExtResource("1_context")
+
+[node name="TilePreview" type="Control" parent="."]
+custom_minimum_size = Vector2(0, 140)
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("2_tile_preview")
+
+[node name="ButtonsRow" type="HBoxContainer" parent="."]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 8
+
+[node name="PickButton" type="Button" parent="ButtonsRow"]
+custom_minimum_size = Vector2(110, 34)
+layout_mode = 2
+text = "选择板块"
+
+[node name="RotateButton" type="Button" parent="ButtonsRow"]
+custom_minimum_size = Vector2(110, 34)
+layout_mode = 2
+text = "旋转"
+

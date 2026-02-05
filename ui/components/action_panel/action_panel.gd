@@ -29,10 +29,7 @@ const ContextControllerClass = preload("res://ui/components/action_panel/action_
 @onready var house_number_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/HouseNumberRow/HouseNumberOption
 @onready var direction_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/DirectionRow
 @onready var direction_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/DirectionRow/DirectionOption
-@onready var lobbyists_tile_preview: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/LobbyistsTilePreview
-@onready var lobbyists_buttons_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/LobbyistsButtonsRow
-@onready var lobbyists_picker_button: Button = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/LobbyistsButtonsRow/LobbyistsPickerButton
-@onready var lobbyists_rotate_button: Button = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/LobbyistsButtonsRow/LobbyistsRotateButton
+@onready var custom_context_container: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/CustomContextContainer
 @onready var cancel_context_button: Button = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/ButtonsRow/CancelContextButton
 @onready var confirm_context_button: Button = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/ButtonsRow/ConfirmContextButton
 @onready var rewind_phase_button: Button = $MarginContainer/VBoxContainer/UtilityRow/RewindPhaseButton
@@ -47,16 +44,49 @@ var _globally_disabled: bool = false
 var _globally_disabled_reason: String = ""
 
 # 不在 UI 中展示的内部动作
-const HIDDEN_ACTION_IDS := {
+const BASE_HIDDEN_ACTION_IDS := {
 	ActionIdsClass.END_TURN: true,
 	ActionIdsClass.ADVANCE_PHASE: true,
 	# 定价类强制动作改为“准备离开 Working 时自动执行”，不在面板中展示。
 	ActionIdsClass.SET_PRICE: true,
 	ActionIdsClass.SET_DISCOUNT: true,
 	ActionIdsClass.SET_LUXURY_PRICE: true,
-	"place_lobbyists_extra_map_tile": true,
-	"skip_lobbyists_extra_map_tile": true,
 }
+
+func _get_hidden_action_ids() -> Dictionary:
+	var hidden: Dictionary = BASE_HIDDEN_ACTION_IDS.duplicate()
+
+	var engine = null
+	if Globals != null and Globals.current_game_engine != null and Globals.current_game_engine is GameEngine:
+		engine = Globals.current_game_engine
+	if engine == null:
+		return hidden
+
+	var manifests_val = engine.get("module_manifests_v2") if engine != null else null
+	var manifests: Dictionary = manifests_val if manifests_val is Dictionary else {}
+	var plan: Array[String] = []
+	if engine.has_method("get_module_plan_v2"):
+		plan = Array(engine.get_module_plan_v2(), TYPE_STRING, "", null)
+
+	for mid in plan:
+		var manifest_val = manifests.get(mid, null)
+		if not (manifest_val is ModuleManifest):
+			continue
+		var manifest: ModuleManifest = manifest_val
+		var provides: Dictionary = manifest.provides
+		var ui_val = provides.get("ui", null)
+		if not (ui_val is Dictionary):
+			continue
+		var ui: Dictionary = ui_val
+		var ids_val = ui.get("hidden_action_ids", null)
+		if not (ids_val is Array):
+			continue
+		for aid in Array(ids_val):
+			var s := str(aid).strip_edges()
+			if not s.is_empty():
+				hidden[s] = true
+
+	return hidden
 
 # 定价类强制动作在 UI 中隐藏，并在执行 skip 前由 Game 自动补完（见 Game._maybe_auto_complete_mandatory_actions_before_skip）。
 # 为避免软锁：当 skip 仅因“缺少这些可自动补完的强制动作”而不可用时，ActionPanel 仍应允许点击 skip。
@@ -383,16 +413,18 @@ func refresh() -> void:
 		# 备用：根据阶段硬编码部分常用动作
 		available_ids = _get_fallback_actions(_game_state.phase, _game_state.sub_phase)
 
+	var hidden_ids := _get_hidden_action_ids()
+
 	# 隐藏内部动作
 	var visible_ids: Array[String] = []
 	for aid in available_ids:
-		if HIDDEN_ACTION_IDS.has(aid):
+		if hidden_ids.has(aid):
 			continue
 		visible_ids.append(aid)
 
 	var visible_executable: Array[String] = []
 	for aid2 in executable_ids:
-		if HIDDEN_ACTION_IDS.has(aid2):
+		if hidden_ids.has(aid2):
 			continue
 		visible_executable.append(aid2)
 
