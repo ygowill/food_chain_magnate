@@ -36,11 +36,12 @@ var _selected_side: String = ""
 var _validation_ok: bool = true
 var _validation_message: String = ""
 var _picker_visible: bool = false
+var _matrix_layout_remaining_frames: int = 0
+var _matrix_layout_update_scheduled: bool = false
 
 func _ready() -> void:
 	set_process_input(true)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	visible = false
 
 	if not resized.is_connected(_on_resized):
 		resized.connect(_on_resized)
@@ -87,7 +88,7 @@ func _ready() -> void:
 
 	_rebuild_rotation_options()
 	_rebuild_tile_buttons()
-	call_deferred("_update_tiles_flow_matrix_layout")
+	_request_tiles_flow_matrix_layout_update(3)
 	_apply_picker_visibility()
 	_update_ui()
 
@@ -97,7 +98,7 @@ func _on_resized() -> void:
 
 func _on_tiles_scroll_resized() -> void:
 	if _picker_visible:
-		call_deferred("_update_tiles_flow_matrix_layout")
+		_request_tiles_flow_matrix_layout_update(3)
 
 func _input(event: InputEvent) -> void:
 	if not visible:
@@ -278,7 +279,7 @@ func _rebuild_tile_buttons() -> void:
 		tiles_flow.add_child(btn)
 		_tile_buttons_by_id[tid] = btn
 	tiles_flow.queue_sort()
-	call_deferred("_update_tiles_flow_matrix_layout")
+	_request_tiles_flow_matrix_layout_update(3)
 
 func _sync_tile_button_rotations() -> void:
 	for tid in _tile_buttons_by_id.keys():
@@ -304,7 +305,28 @@ func _update_picker_layout() -> void:
 	hint_panel.minimum_size_changed.emit()
 	if hint_panel.has_method("queue_sort"):
 		hint_panel.queue_sort()
-	call_deferred("_update_tiles_flow_matrix_layout")
+	_request_tiles_flow_matrix_layout_update(3)
+
+func _request_tiles_flow_matrix_layout_update(frames: int = 2) -> void:
+	if not _picker_visible:
+		return
+	_matrix_layout_remaining_frames = maxi(_matrix_layout_remaining_frames, maxi(1, int(frames)))
+	if _matrix_layout_update_scheduled:
+		return
+	_matrix_layout_update_scheduled = true
+	call_deferred("_run_tiles_flow_matrix_layout_update")
+
+func _run_tiles_flow_matrix_layout_update() -> void:
+	_matrix_layout_update_scheduled = false
+	if not _picker_visible:
+		_matrix_layout_remaining_frames = 0
+		return
+	_update_tiles_flow_matrix_layout()
+
+	_matrix_layout_remaining_frames -= 1
+	if _matrix_layout_remaining_frames > 0 and not _matrix_layout_update_scheduled:
+		_matrix_layout_update_scheduled = true
+		call_deferred("_run_tiles_flow_matrix_layout_update")
 
 func _update_tiles_flow_matrix_layout() -> void:
 	if tiles_flow == null or not is_instance_valid(tiles_flow):
@@ -335,42 +357,43 @@ func _update_tiles_flow_matrix_layout() -> void:
 	var avail_w := 0.0
 	if tiles_scroll != null and is_instance_valid(tiles_scroll):
 		avail_w = float(tiles_scroll.size.x)
-	if avail_w <= 4.0:
+	if avail_w <= 64.0:
 		avail_w = float(get_viewport_rect().size.x - 72.0)
 	avail_w = maxf(avail_w, tile_w)
 
 	var avail_h := 0.0
 	if tiles_scroll != null and is_instance_valid(tiles_scroll):
 		avail_h = float(tiles_scroll.size.y)
-	if avail_h <= 4.0:
+	if avail_h <= 64.0:
 		avail_h = float(get_viewport_rect().size.y - 200.0)
 
 	var max_cols_fit := maxi(1, int(floor((avail_w + h_sep) / (tile_w + h_sep))))
 
 	var best_cols := 1
-	var best_score := 2147483647
+	var best_square_score := 2147483647.0
 	var best_waste := 2147483647
 	var best_fits_height := false
 	for cols in range(1, max_cols_fit + 1):
 		var rows := int(ceil(float(count) / float(cols)))
-		var score := absi(rows - cols)
-		var waste := rows * cols - count
+		var w := float(cols) * tile_w + float(maxi(0, cols - 1)) * h_sep
 		var h := float(rows) * tile_h + float(maxi(0, rows - 1)) * v_sep
-		var fits_h := avail_h <= 4.0 or h <= avail_h + 0.5
+		var square_score := absf(w - h)
+		var waste := rows * cols - count
+		var fits_h := avail_h <= 64.0 or h <= avail_h + 0.5
 
 		if best_fits_height and not fits_h:
 			continue
 		if (not best_fits_height) and fits_h:
 			best_cols = cols
-			best_score = score
+			best_square_score = square_score
 			best_waste = waste
 			best_fits_height = true
 			continue
-		if score < best_score:
+		if square_score < best_square_score:
 			best_cols = cols
-			best_score = score
+			best_square_score = square_score
 			best_waste = waste
-		elif score == best_score:
+		elif is_equal_approx(square_score, best_square_score):
 			if waste < best_waste:
 				best_cols = cols
 				best_waste = waste

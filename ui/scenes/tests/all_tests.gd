@@ -559,14 +559,22 @@ func _run_all() -> int:
 						"name": "NewMilestonesDiscountManagerBankBurnV2Test",
 						"fn": func() -> Result: return TestRefs.NewMilestonesDiscountManagerBankBurnV2TestClass.run(2, 12345),
 					},
-					{
-						"name": "LobbyistsV2Test",
-						"fn": func() -> Result: return TestRefs.LobbyistsV2TestClass.run(2, 12345),
-					},
-					{
-						"name": "NoodlesSushiV2Test",
-						"fn": func() -> Result: return TestRefs.NoodlesSushiV2TestClass.run(2, 12345),
-					},
+						{
+							"name": "LobbyistsV2Test",
+							"fn": func() -> Result: return TestRefs.LobbyistsV2TestClass.run(2, 12345),
+						},
+						{
+							"name": "LobbyistsExtraTileMultiPlayerSameRoundUiTest",
+							"fn": func() -> Result: return await TestRefs.LobbyistsExtraTileMultiPlayerSameRoundUiTestClass.run(),
+						},
+						{
+							"name": "LobbyistsExtraTilePickerLayoutUiTest",
+							"fn": func() -> Result: return await TestRefs.LobbyistsExtraTilePickerLayoutUiTestClass.run(),
+						},
+						{
+							"name": "NoodlesSushiV2Test",
+							"fn": func() -> Result: return TestRefs.NoodlesSushiV2TestClass.run(2, 12345),
+						},
 					{
 						"name": "MarketingSettlementFailFastTest",
 						"fn": func() -> Result: return TestRefs.MarketingSettlementFailFastTestClass.run(2, 12345),
