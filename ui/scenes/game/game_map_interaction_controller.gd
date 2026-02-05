@@ -36,6 +36,7 @@ var lobbyists_extra_tile_overlay = null
 
 const _DISTANCE_TOOL_POINTS_OVERLAY_ID := "distance_tool_points"
 const _LOBBYISTS_EXTRA_TILE_PREVIEW_OVERLAY_ID := "lobbyists_extra_tile_preview"
+const _LOBBYISTS_EXTRA_TILE_SELECTED_OVERLAY_ID := "lobbyists_extra_tile_selected_preview"
 
 func _init(scene, map_canvas, overlay_controller) -> void:
 	_scene = scene
@@ -94,6 +95,7 @@ func begin_selection(mode: String, payload: Dictionary = {}) -> void:
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_piece_overlay"):
 		_map_canvas.call("clear_piece_overlay", _DISTANCE_TOOL_POINTS_OVERLAY_ID)
 		_map_canvas.call("clear_piece_overlay", _LOBBYISTS_EXTRA_TILE_PREVIEW_OVERLAY_ID)
+		_map_canvas.call("clear_piece_overlay", _LOBBYISTS_EXTRA_TILE_SELECTED_OVERLAY_ID)
 
 	# 动态控制“地图外围 UI-only 空圈”：仅在需要放置/显示外围 piece 时开启（issue_tracker #64）。
 	_update_map_outside_margin_for_mode()
@@ -115,6 +117,7 @@ func clear_selection() -> void:
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_piece_overlay"):
 		_map_canvas.call("clear_piece_overlay", _DISTANCE_TOOL_POINTS_OVERLAY_ID)
 		_map_canvas.call("clear_piece_overlay", _LOBBYISTS_EXTRA_TILE_PREVIEW_OVERLAY_ID)
+		_map_canvas.call("clear_piece_overlay", _LOBBYISTS_EXTRA_TILE_SELECTED_OVERLAY_ID)
 
 	# 退出任何选点模式后，如果不再需要外围空圈则恢复（issue_tracker #64）。
 	_update_map_outside_margin_for_mode()
@@ -268,6 +271,7 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 					lobbyists_extra_tile_overlay.set_selected_target(attach_board_pos, side)
 				if lobbyists_extra_tile_overlay.has_method("set_validation"):
 					lobbyists_extra_tile_overlay.set_validation(true, "")
+				_set_lobbyists_extra_tile_selected_overlay(attach_board_pos, side)
 				_maybe_auto_confirm_placement(lobbyists_extra_tile_overlay)
 		"distance_tool":
 			if _overlay_controller == null:
@@ -501,6 +505,7 @@ func on_lobbyists_extra_tile_highlight_requested(tile_id: String, rotation: int)
 			_map_canvas.call("clear_cell_highlights")
 		if _map_canvas.has_method("clear_piece_overlay"):
 			_map_canvas.call("clear_piece_overlay", _LOBBYISTS_EXTRA_TILE_PREVIEW_OVERLAY_ID)
+			_map_canvas.call("clear_piece_overlay", _LOBBYISTS_EXTRA_TILE_SELECTED_OVERLAY_ID)
 		return
 
 	var actor := int(state.get_current_player_id())
@@ -578,6 +583,32 @@ func _on_lobbyists_extra_tile_cell_hovered(world_pos: Vector2i) -> void:
 	_map_canvas.call("set_piece_overlay", _LOBBYISTS_EXTRA_TILE_PREVIEW_OVERLAY_ID, region, {
 		"fill": Color(0.2, 0.65, 1.0, 0.12),
 		"border": Color(0.2, 0.65, 1.0, 0.9),
+		"border_width": 3.0,
+	})
+
+func _set_lobbyists_extra_tile_selected_overlay(attach_board_pos: Vector2i, side: String) -> void:
+	if not is_instance_valid(_map_canvas):
+		return
+	if not _map_canvas.has_method("set_piece_overlay"):
+		return
+
+	var s := str(side).strip_edges()
+	if s.is_empty():
+		return
+
+	var offset: Vector2i = MapUtilsClass.DIR_OFFSETS.get(s, Vector2i.ZERO)
+	var new_board_pos: Vector2i = attach_board_pos + offset
+
+	var region: Array[Vector2i] = []
+	var tile_size := int(MapUtilsClass.TILE_SIZE)
+	var origin: Vector2i = new_board_pos * tile_size
+	for dy in range(tile_size):
+		for dx in range(tile_size):
+			region.append(origin + Vector2i(dx, dy))
+
+	_map_canvas.call("set_piece_overlay", _LOBBYISTS_EXTRA_TILE_SELECTED_OVERLAY_ID, region, {
+		"fill": Color(0.2, 0.65, 1.0, 0.16),
+		"border": Color(0.2, 0.65, 1.0, 0.95),
 		"border_width": 3.0,
 	})
 

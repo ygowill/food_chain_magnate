@@ -547,6 +547,8 @@ func _show_lobbyists_extra_tile_overlay(state: GameState, force_full_refresh: bo
 		return
 
 	lobbyists_extra_tile_overlay.visible = true
+	if (not already_visible or force_full_refresh) and lobbyists_extra_tile_overlay.has_method("show_picker"):
+		lobbyists_extra_tile_overlay.show_picker()
 
 	# 进入地图选点模式：高亮有效的扩边边缘格
 	if not _map_controller.has_method("get_mode") or str(_map_controller.get_mode()) != "lobbyists_extra_tile" or force_full_refresh:

@@ -282,6 +282,8 @@ func _sync_action_panel_context() -> void:
 			overlay = _placement_overlays.house_placement_overlay
 		elif is_instance_valid(_placement_overlays.piece_placement_overlay) and _placement_overlays.piece_placement_overlay.visible:
 			overlay = _placement_overlays.piece_placement_overlay
+		elif is_instance_valid(_placement_overlays.lobbyists_extra_tile_overlay) and _placement_overlays.lobbyists_extra_tile_overlay.visible:
+			overlay = _placement_overlays.lobbyists_extra_tile_overlay
 
 	if overlay != null:
 		if _scene.action_panel.has_method("bind_context_overlay"):

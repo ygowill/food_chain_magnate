@@ -24,6 +24,10 @@ var _house_number_row: Control = null
 var _house_number_option: OptionButton = null
 var _direction_row: Control = null
 var _direction_option: OptionButton = null
+var _lobbyists_tile_preview: Control = null
+var _lobbyists_buttons_row: Control = null
+var _lobbyists_picker_button: Button = null
+var _lobbyists_rotate_button: Button = null
 var _cancel_context_button: Button = null
 var _confirm_context_button: Button = null
 
@@ -48,6 +52,10 @@ func setup(panel) -> void:
 	_house_number_option = panel.house_number_option
 	_direction_row = panel.direction_row
 	_direction_option = panel.direction_option
+	_lobbyists_tile_preview = panel.lobbyists_tile_preview
+	_lobbyists_buttons_row = panel.lobbyists_buttons_row
+	_lobbyists_picker_button = panel.lobbyists_picker_button
+	_lobbyists_rotate_button = panel.lobbyists_rotate_button
 	_cancel_context_button = panel.cancel_context_button
 	_confirm_context_button = panel.confirm_context_button
 
@@ -62,6 +70,8 @@ func setup(panel) -> void:
 	UiSignalHelpersClass.safe_connect(_rotation_option, "item_selected", _on_rotation_option_selected)
 	UiSignalHelpersClass.safe_connect(_house_number_option, "item_selected", _on_house_number_option_selected)
 	UiSignalHelpersClass.safe_connect(_direction_option, "item_selected", _on_direction_option_selected)
+	UiSignalHelpersClass.safe_connect(_lobbyists_picker_button, "pressed", _on_lobbyists_picker_pressed)
+	UiSignalHelpersClass.safe_connect(_lobbyists_rotate_button, "pressed", _on_lobbyists_rotate_pressed)
 
 func set_action_registry(registry) -> void:
 	_action_registry = registry
@@ -142,8 +152,17 @@ func _refresh_context_from_overlay() -> void:
 	if PiecePlacementOverlayScript != null and _context_overlay is PiecePlacementOverlayScript:
 		_refresh_piece_placement_context(_context_overlay)
 		return
+	if _context_overlay is LobbyistsExtraTileOverlay:
+		_refresh_lobbyists_extra_tile_context(_context_overlay as LobbyistsExtraTileOverlay)
+		return
 
 	clear_context_overlay()
+
+func _set_lobbyists_context_visible(show: bool) -> void:
+	if is_instance_valid(_lobbyists_tile_preview):
+		_lobbyists_tile_preview.visible = show
+	if is_instance_valid(_lobbyists_buttons_row):
+		_lobbyists_buttons_row.visible = show
 
 func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) -> void:
 	if overlay == null or not is_instance_valid(overlay):
@@ -163,6 +182,7 @@ func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) 
 	_direction_row.visible = false
 	_rotation_row.visible = true
 	_house_number_row.visible = false
+	_set_lobbyists_context_visible(false)
 
 	_rebuild_rotation_option(overlay.get_selected_rotation())
 	_rebuild_employee_option(overlay.get_available_employees(), overlay.get_selected_employee())
@@ -176,6 +196,8 @@ func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) 
 
 	_confirm_context_button.text = "确认移动" if mode == "move_restaurant" else "确认放置"
 	_confirm_context_button.disabled = not overlay.can_confirm()
+	_cancel_context_button.visible = true
+	_cancel_context_button.text = "取消"
 
 	_context_syncing = false
 
@@ -197,6 +219,7 @@ func _refresh_house_placement_context(overlay: HousePlacementOverlay) -> void:
 	_rotation_row.visible = (mode == "place_house")
 	_house_number_row.visible = (mode == "place_house")
 	_direction_row.visible = (mode == "add_garden")
+	_set_lobbyists_context_visible(false)
 
 	_rebuild_employee_option(overlay.get_available_employees(), overlay.get_selected_employee())
 	_employee_row.visible = not overlay.get_available_employees().is_empty()
@@ -212,6 +235,8 @@ func _refresh_house_placement_context(overlay: HousePlacementOverlay) -> void:
 
 	_confirm_context_button.text = "确认添加花园" if mode == "add_garden" else "确认放置"
 	_confirm_context_button.disabled = not overlay.can_confirm()
+	_cancel_context_button.visible = true
+	_cancel_context_button.text = "取消"
 
 	_context_syncing = false
 
@@ -237,9 +262,59 @@ func _refresh_piece_placement_context(overlay) -> void:
 	_rotation_row.visible = true
 	_house_number_row.visible = false
 	_direction_row.visible = false
+	_set_lobbyists_context_visible(false)
 
 	_rebuild_piece_flow(overlay.get_available_pieces(), overlay.get_selected_piece(), overlay.get_selected_rotation())
 	_rebuild_rotation_option(overlay.get_selected_rotation())
+
+	_confirm_context_button.text = "确认放置"
+	_confirm_context_button.disabled = not overlay.can_confirm()
+	_cancel_context_button.visible = true
+	_cancel_context_button.text = "取消"
+
+	_context_syncing = false
+
+func _refresh_lobbyists_extra_tile_context(overlay: LobbyistsExtraTileOverlay) -> void:
+	if overlay == null or not is_instance_valid(overlay):
+		clear_context_overlay()
+		return
+
+	_context_syncing = true
+	_show_context_panel()
+
+	_context_title_label.text = "🗺️ 扩边放置板块"
+	if overlay.has_method("get_hint_text"):
+		_context_hint_label.text = str(overlay.get_hint_text())
+	else:
+		_context_hint_label.text = "请选择板块并在地图上点击高亮边缘格"
+
+	_restaurant_row.visible = false
+	_employee_row.visible = false
+	_piece_row.visible = false
+	_rotation_row.visible = false
+	_house_number_row.visible = false
+	_direction_row.visible = false
+	_set_lobbyists_context_visible(true)
+
+	var tile_id := ""
+	var rot := 0
+	if overlay.has_method("get_selected_tile_id"):
+		tile_id = str(overlay.get_selected_tile_id()).strip_edges()
+	if overlay.has_method("get_selected_rotation"):
+		rot = int(overlay.get_selected_rotation())
+
+	if is_instance_valid(_lobbyists_tile_preview) and _lobbyists_tile_preview.has_method("set_tile"):
+		_lobbyists_tile_preview.call("set_tile", tile_id, rot)
+
+	if is_instance_valid(_lobbyists_picker_button):
+		_lobbyists_picker_button.text = "重新选择板块" if not tile_id.is_empty() else "选择板块"
+
+	if is_instance_valid(_lobbyists_rotate_button):
+		_lobbyists_rotate_button.text = "旋转 ↻ %d°" % rot
+		_lobbyists_rotate_button.disabled = tile_id.is_empty()
+
+	_cancel_context_button.visible = true
+	_cancel_context_button.text = "放弃扩边"
 
 	_confirm_context_button.text = "确认放置"
 	_confirm_context_button.disabled = not overlay.can_confirm()
@@ -472,3 +547,27 @@ func _on_direction_option_selected(index: int) -> void:
 	var d := str(_direction_option.get_item_metadata(index))
 	_call_context_overlay_method("set_selected_direction", [d])
 
+func _on_lobbyists_picker_pressed() -> void:
+	if _context_syncing:
+		return
+	if _context_overlay == null or not is_instance_valid(_context_overlay):
+		return
+	if _context_overlay.has_method("show_picker"):
+		_context_overlay.call("show_picker")
+
+func _on_lobbyists_rotate_pressed() -> void:
+	if _context_syncing:
+		return
+	if _context_overlay == null or not is_instance_valid(_context_overlay):
+		return
+	if _context_overlay.has_method("rotate_clockwise"):
+		_context_overlay.call("rotate_clockwise")
+		return
+
+	var rot := 0
+	if _context_overlay.has_method("get_selected_rotation"):
+		rot = int(_context_overlay.call("get_selected_rotation"))
+	var next := rot + 90
+	if next >= 360:
+		next = 0
+	_call_context_overlay_method("set_selected_rotation", [next])

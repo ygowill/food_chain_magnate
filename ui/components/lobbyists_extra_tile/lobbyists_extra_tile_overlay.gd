@@ -9,10 +9,13 @@ signal ui_state_changed()
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const TilePickerButtonClass = preload("res://ui/components/lobbyists_extra_tile/tile_picker_button.gd")
 
+@onready var top_spacer: Control = $TopSpacer
 @onready var hint_panel: Control = $HintMargin/HintPanel
+@onready var hint_margin: Control = $HintMargin
 @onready var hint_label: Label = $HintMargin/HintPanel/VBox/HintLabel
 @onready var selected_tile_preview: Control = $HintMargin/HintPanel/VBox/TilesRow/SelectedTilePreview
 @onready var tiles_flow: HFlowContainer = $HintMargin/HintPanel/VBox/TilesRow/TilesScroll/TilesFlow
+@onready var controls_row: Control = $HintMargin/HintPanel/VBox/ControlsRow
 @onready var rotation_option: OptionButton = $HintMargin/HintPanel/VBox/ControlsRow/RotationOption
 @onready var confirm_button: Button = $HintMargin/HintPanel/VBox/ControlsRow/ConfirmButton
 @onready var skip_button: Button = $HintMargin/HintPanel/VBox/ControlsRow/SkipButton
@@ -27,6 +30,7 @@ var _selected_side: String = ""
 
 var _validation_ok: bool = true
 var _validation_message: String = ""
+var _picker_visible: bool = true
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -38,6 +42,8 @@ func _ready() -> void:
 		UiStylesClass.apply_button_primary(confirm_button)
 	if skip_button != null:
 		UiStylesClass.apply_button_secondary(skip_button)
+	if controls_row != null:
+		controls_row.visible = false
 
 	if rotation_option != null and not rotation_option.item_selected.is_connected(_on_rotation_selected):
 		rotation_option.item_selected.connect(_on_rotation_selected)
@@ -48,7 +54,35 @@ func _ready() -> void:
 
 	_rebuild_rotation_options()
 	_rebuild_tile_buttons()
+	_apply_picker_visibility()
 	_update_ui()
+
+func is_picker_visible() -> bool:
+	return _picker_visible
+
+func show_picker() -> void:
+	if _picker_visible:
+		return
+	_picker_visible = true
+	_apply_picker_visibility()
+	_update_ui()
+	ui_state_changed.emit()
+
+func hide_picker() -> void:
+	if not _picker_visible:
+		return
+	_picker_visible = false
+	_apply_picker_visibility()
+	_update_ui()
+	ui_state_changed.emit()
+
+func _apply_picker_visibility() -> void:
+	var show := _picker_visible
+	if top_spacer != null and is_instance_valid(top_spacer):
+		top_spacer.visible = show
+		top_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if hint_margin != null and is_instance_valid(hint_margin):
+		hint_margin.visible = show
 
 func set_available_tiles(tile_ids: Array[String]) -> void:
 	var ids: Array[String] = []
@@ -114,8 +148,30 @@ func request_confirm() -> void:
 		return
 	placement_confirmed.emit(_selected_attach_board_pos, _selected_side, _selected_rotation, _selected_tile_id)
 
+func request_cancel() -> void:
+	# ActionPanel ContextPanel 取消按钮：用于“放弃扩边”避免软锁。
+	request_skip()
+
 func request_skip() -> void:
 	skip_requested.emit()
+
+func set_selected_rotation(rotation: int) -> void:
+	_selected_rotation = _normalize_rotation(rotation)
+	_sync_tile_button_rotations()
+	if rotation_option != null:
+		for i in range(rotation_option.get_item_count()):
+			if int(rotation_option.get_item_id(i)) == _selected_rotation:
+				rotation_option.select(i)
+				break
+	_emit_highlight_request()
+	_update_ui()
+	ui_state_changed.emit()
+
+func rotate_clockwise() -> void:
+	var next := _selected_rotation + 90
+	if next >= 360:
+		next = 0
+	set_selected_rotation(next)
 
 func _rebuild_rotation_options() -> void:
 	if rotation_option == null:
@@ -163,18 +219,17 @@ func _on_tile_button_pressed(tile_id_in: String) -> void:
 		return
 	_selected_tile_id = tid
 	_emit_highlight_request()
-	_update_ui()
-	ui_state_changed.emit()
+	if _picker_visible:
+		hide_picker()
+	else:
+		_update_ui()
+		ui_state_changed.emit()
 
 func _on_rotation_selected(_index: int) -> void:
 	if rotation_option == null:
 		return
 	var id := int(rotation_option.get_selected_id())
-	_selected_rotation = _normalize_rotation(id)
-	_sync_tile_button_rotations()
-	_emit_highlight_request()
-	_update_ui()
-	ui_state_changed.emit()
+	set_selected_rotation(id)
 
 func _normalize_rotation(rotation: int) -> int:
 	var r := int(rotation) % 360
@@ -194,25 +249,24 @@ func _update_ui() -> void:
 	if confirm_button != null:
 		confirm_button.disabled = not can_confirm()
 
-func _update_hint() -> void:
-	if hint_label == null:
-		return
-
+func get_hint_text() -> String:
 	if not _validation_ok and not _validation_message.is_empty():
-		hint_label.text = "无法放置：%s" % _validation_message
-		return
+		return "无法放置：%s" % _validation_message
 
 	if _selected_tile_id.is_empty():
-		hint_label.text = "请选择要扩边放置的地图板块"
-		return
+		return "请选择要扩边放置的地图板块"
 
 	if not _has_selected_target:
-		hint_label.text = "已选择 tile=%s 旋转:%d°，请点击地图上高亮的边缘格选择扩边位置" % [_selected_tile_id, _selected_rotation]
-		return
+		return "已选择 tile=%s 旋转:%d°，请点击地图上高亮的边缘格选择扩边位置" % [_selected_tile_id, _selected_rotation]
 
-	hint_label.text = "tile=%s 旋转:%d° | attach=%s side=%s" % [
+	return "tile=%s 旋转:%d° | attach=%s side=%s" % [
 		_selected_tile_id,
 		_selected_rotation,
 		str(_selected_attach_board_pos),
 		_selected_side,
 	]
+
+func _update_hint() -> void:
+	if hint_label == null:
+		return
+	hint_label.text = get_hint_text()

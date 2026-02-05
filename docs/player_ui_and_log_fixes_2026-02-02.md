@@ -256,3 +256,26 @@
 	- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`（PASS）
 	- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 143/143）
 - 提交：`fix(ui): render lobbyists tile preview with map renderer`
+
+---
+
+## 19. 说客扩边：板块选择仅显示完整贴图；选中后隐藏选择界面；右侧动作面板提供“重新选择/旋转/确认”；选点后地图显示半透明板块
+
+- 状态：DONE
+- 现象：
+	- 选板块界面同时展示“缩略图（列表按钮）+ 完整预览（左侧大图）”，缩略图与实际 tile 不一致且信息冗余。
+	- 选中板块后选择界面仍停留在地图上方，遮挡地图上侧区域，导致难以选择上侧扩边位置。
+	- 点击扩边放置位置后没有“锁定的半透明板块”提示（仅 hover 时有蓝色区域提示），需要右侧确认时不直观。
+- 期望：
+	- 所有可选 tile 都以“完整贴图”展示，不再用缩略图。
+	- 玩家选中 tile 后，选择界面自动隐藏；在右侧动作面板提供按钮重新打开选择界面，并提供旋转与确认。
+	- 玩家点击地图选定扩边位置后，在对应位置显示半透明板块，直到确认/取消。
+- 实施：
+	- TilePickerButton 直接复用 `TilePreview(MapCanvas)` 渲染真实 tile，并将按钮尺寸提升到 110×110。
+	- `LobbyistsExtraTileOverlay` 增加 picker show/hide：选中 tile 后自动隐藏；并隐藏 overlay 内部的旋转/确认按钮（统一由 ActionPanel ContextPanel 提供）。
+	- ActionPanel ContextPanel 支持 `LobbyistsExtraTileOverlay`：显示所选 tile 预览 + “重新选择板块/旋转”按钮；底部按钮“放弃扩边/确认放置”。
+	- 地图交互：点击高亮边缘格选定扩边位置后，绘制持久的半透明板块区域（hover 预览仍保留）。
+- 验证：
+	- `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`（PASS）
+	- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 143/143）
+- 提交：（见本次提交）

@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://ui/components/action_panel/action_panel.gd" id="1_panel"]
 [ext_resource type="Script" path="res://ui/components/employee_picker/employee_picker.gd" id="2_employee_picker"]
+[ext_resource type="Script" path="res://ui/components/lobbyists_extra_tile/tile_preview.gd" id="3_tile_preview"]
 
 [node name="ActionPanel" type="Control"]
 custom_minimum_size = Vector2(200, 0)
@@ -157,6 +158,29 @@ text = "方向"
 custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
 size_flags_horizontal = 3
+
+[node name="LobbyistsTilePreview" type="Control" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer"]
+visible = false
+custom_minimum_size = Vector2(0, 140)
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("3_tile_preview")
+
+[node name="LobbyistsButtonsRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer"]
+visible = false
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 8
+
+[node name="LobbyistsPickerButton" type="Button" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/LobbyistsButtonsRow"]
+custom_minimum_size = Vector2(110, 34)
+layout_mode = 2
+text = "选择板块"
+
+[node name="LobbyistsRotateButton" type="Button" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/LobbyistsButtonsRow"]
+custom_minimum_size = Vector2(110, 34)
+layout_mode = 2
+text = "旋转"
 
 [node name="ButtonsRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer"]
 layout_mode = 2
