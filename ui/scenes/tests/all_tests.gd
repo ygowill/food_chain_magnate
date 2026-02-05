@@ -283,6 +283,10 @@ func _run_all() -> int:
 						"name": "MapBlockedOverlaySkipsVoidCellsTest",
 						"fn": func() -> Result: return TestRefs.MapBlockedOverlaySkipsVoidCellsTestClass.run(),
 					},
+					{
+						"name": "MapIndexerStructuresRespectsMapOriginTest",
+						"fn": func() -> Result: return TestRefs.MapIndexerStructuresRespectsMapOriginTestClass.run(),
+					},
 			{
 				"name": "AirplaneMarketingOutsideRenderTest",
 				"fn": func() -> Result: return TestRefs.AirplaneMarketingOutsideRenderTestClass.run(),

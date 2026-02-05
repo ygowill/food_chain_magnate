@@ -66,6 +66,7 @@ const TileInternalGridLinesTestClass = preload("res://ui/scenes/tests/tile_inter
 const ExternalTileInternalGridLinesTestClass = preload("res://ui/scenes/tests/external_tile_internal_grid_lines_test.gd")
 const MapGroundSkipsOutsideRingTestClass = preload("res://ui/scenes/tests/map_ground_skips_outside_ring_test.gd")
 const MapBlockedOverlaySkipsVoidCellsTestClass = preload("res://ui/scenes/tests/map_blocked_overlay_skips_void_cells_test.gd")
+const MapIndexerStructuresRespectsMapOriginTestClass = preload("res://ui/scenes/tests/map_indexer_structures_respects_map_origin_test.gd")
 const AirplaneMarketingOutsideRenderTestClass = preload("res://ui/scenes/tests/airplane_marketing_outside_render_test.gd")
 const AirplaneMarketingIconRotationTestClass = preload("res://ui/scenes/tests/airplane_marketing_icon_rotation_test.gd")
 const MarketingRangeFullFootprintTestClass = preload("res://ui/scenes/tests/marketing_range_full_footprint_test.gd")

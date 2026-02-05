@@ -143,7 +143,8 @@ static func rebuild_overlay_indexes(canvas) -> void:
 		for x in range(canvas._base_grid_size.x):
 			if x < 0 or x >= row.size():
 				continue
-			_index_structure_cell(canvas, Vector2i(x, y), row[x])
+			# _cells is indexed by idx(world + map_origin); convert back to world coords here.
+			_index_structure_cell(canvas, Vector2i(x, y) - map_origin, row[x])
 
 	var external_positions: Array[Vector2i] = []
 	for k in canvas._external_cells_by_pos.keys():
