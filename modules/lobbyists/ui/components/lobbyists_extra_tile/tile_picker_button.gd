@@ -1,12 +1,18 @@
-# Lobbyists extra tile：板块选择按钮（文本型，避免大图占位/遮挡）
+# Lobbyists extra tile：板块选择按钮（显示完整 tile 预览缩略图）
 extends Button
 
+const TilePreviewClass = preload("res://modules/lobbyists/ui/components/lobbyists_extra_tile/tile_preview.gd")
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
 
 var tile_id: String = ""
-var tile_rotation: int = 0 # 0/90/180/270（保留：兼容 set_tile_rotation）
+var tile_rotation: int = 0 # 0/90/180/270
 
 var _display_name: String = ""
+var _preview: Control = null
+var _name_label: Label = null
+var _selected_overlay: ColorRect = null
+var _badge_bg: ColorRect = null
+var _is_ready: bool = false
 
 func _ready() -> void:
 	text = ""
@@ -15,27 +21,118 @@ func _ready() -> void:
 	clip_text = true
 	toggle_mode = true
 	flat = true
+	clip_contents = true
+	if has_method("set_clip_children_mode"):
+		set_clip_children_mode(CanvasItem.CLIP_CHILDREN_AND_DRAW)
 
-	custom_minimum_size = Vector2(180, 44)
+	custom_minimum_size = Vector2(160, 190)
 	minimum_size_changed.emit()
 
 	_refresh_display_name()
-	text = _display_name
 	tooltip_text = tile_id
 
 	if not resized.is_connected(queue_redraw):
 		resized.connect(queue_redraw)
 	if not toggled.is_connected(_on_toggled):
 		toggled.connect(_on_toggled)
-	if not mouse_entered.is_connected(queue_redraw):
-		mouse_entered.connect(queue_redraw)
-	if not mouse_exited.is_connected(queue_redraw):
-		mouse_exited.connect(queue_redraw)
+	if not mouse_entered.is_connected(_on_mouse_state_changed):
+		mouse_entered.connect(_on_mouse_state_changed)
+	if not mouse_exited.is_connected(_on_mouse_state_changed):
+		mouse_exited.connect(_on_mouse_state_changed)
+
+	_ensure_children()
+	_is_ready = true
+	_sync_preview()
+	_update_selection_visual()
 
 	queue_redraw()
 
 func set_tile_rotation(rot: int) -> void:
 	tile_rotation = _normalize_rotation(rot)
+	if _is_ready:
+		_sync_preview()
+
+func _ensure_children() -> void:
+	if is_instance_valid(_preview):
+		return
+
+	var content := VBoxContainer.new()
+	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.set_anchors_preset(Control.PRESET_FULL_RECT)
+	content.offset_left = 6
+	content.offset_top = 6
+	content.offset_right = -6
+	content.offset_bottom = -6
+	content.add_theme_constant_override("separation", 4)
+	add_child(content)
+
+	var p: Control = TilePreviewClass.new()
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	p.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	p.custom_minimum_size = Vector2(0, 128)
+	content.add_child(p)
+	_preview = p
+
+	var name_bg := ColorRect.new()
+	name_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name_bg.custom_minimum_size = Vector2(0, 26)
+	name_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_bg.color = Color(0, 0, 0, 0.35)
+	content.add_child(name_bg)
+
+	var label := Label.new()
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.clip_text = true
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_bg.add_child(label)
+	_name_label = label
+
+	var ov := ColorRect.new()
+	ov.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ov.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ov.offset_left = 4
+	ov.offset_top = 4
+	ov.offset_right = -4
+	ov.offset_bottom = -4
+	ov.color = Color(0.2, 0.65, 1.0, 0.16)
+	ov.visible = false
+	add_child(ov)
+	_selected_overlay = ov
+
+	var badge_bg := ColorRect.new()
+	badge_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge_bg.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	badge_bg.offset_left = -30
+	badge_bg.offset_top = 6
+	badge_bg.offset_right = -6
+	badge_bg.offset_bottom = 30
+	badge_bg.color = Color(0.08, 0.10, 0.14, 0.75)
+	badge_bg.visible = false
+	add_child(badge_bg)
+	_badge_bg = badge_bg
+
+	var badge := Label.new()
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.set_anchors_preset(Control.PRESET_FULL_RECT)
+	badge.text = "✓"
+	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	badge.add_theme_font_size_override("font_size", 18)
+	badge.add_theme_color_override("font_color", Color(1, 1, 1, 0.95))
+	badge_bg.add_child(badge)
+
+func _sync_preview() -> void:
+	if not _is_ready:
+		return
+	_refresh_display_name()
+	if is_instance_valid(_name_label):
+		_name_label.text = _display_name
+	if is_instance_valid(_preview) and _preview.has_method("set_tile"):
+		_preview.call("set_tile", tile_id, tile_rotation)
 
 func _refresh_display_name() -> void:
 	_display_name = tile_id
@@ -60,42 +157,40 @@ func _normalize_rotation(rot: int) -> int:
 	return r
 
 func _on_toggled(_pressed: bool) -> void:
+	_update_selection_visual()
 	queue_redraw()
+
+func _on_mouse_state_changed() -> void:
+	_update_selection_visual()
+	queue_redraw()
+
+func _update_selection_visual() -> void:
+	var pressed := bool(button_pressed)
+	var hovered := is_hovered()
+
+	if is_instance_valid(_selected_overlay):
+		if pressed:
+			_selected_overlay.visible = true
+			_selected_overlay.color = Color(0.2, 0.65, 1.0, 0.16)
+		elif hovered:
+			_selected_overlay.visible = true
+			_selected_overlay.color = Color(1, 1, 1, 0.06)
+		else:
+			_selected_overlay.visible = false
+
+	if is_instance_valid(_badge_bg):
+		_badge_bg.visible = pressed
 
 func _draw() -> void:
 	var r := Rect2(Vector2.ZERO, size)
 	if r.size.x <= 2.0 or r.size.y <= 2.0:
 		return
 
-	var bg := Color(0.10, 0.11, 0.14, 0.55)
 	var border_col := Color(1, 1, 1, 0.14)
 	var border_w := 2.0
-	var text_col := Color(0.92, 0.92, 0.95, 0.95)
-
 	if button_pressed:
-		bg = Color(0.12, 0.20, 0.28, 0.75)
 		border_col = Color(0.2, 0.65, 1.0, 0.95)
 		border_w = 3.0
-		text_col = Color(1, 1, 1, 1)
 	elif is_hovered():
-		bg = Color(0.13, 0.14, 0.18, 0.70)
 		border_col = Color(1, 1, 1, 0.24)
-		text_col = Color(0.98, 0.98, 1, 1)
-
-	draw_rect(r, bg, true)
 	draw_rect(r.grow(-0.5), border_col, false, border_w)
-
-	var font: Font = ThemeDB.fallback_font
-	var font_size := 14
-	if Globals != null and Globals.has_method("get_scaled_font_size"):
-		font_size = int(Globals.get_scaled_font_size(14))
-
-	var pad_x := 12.0
-	var right_pad := 30.0
-	var max_w := maxf(0.0, r.size.x - pad_x - right_pad)
-	var baseline_y := r.size.y * 0.5 + float(font_size) * 0.35
-	draw_string(font, Vector2(pad_x, baseline_y), _display_name, HORIZONTAL_ALIGNMENT_LEFT, max_w, font_size, text_col)
-
-	if button_pressed:
-		var check_x := r.size.x - right_pad + 6.0
-		draw_string(font, Vector2(check_x, baseline_y), "✓", HORIZONTAL_ALIGNMENT_LEFT, right_pad - 6.0, font_size, Color(0.2, 0.65, 1.0, 1))

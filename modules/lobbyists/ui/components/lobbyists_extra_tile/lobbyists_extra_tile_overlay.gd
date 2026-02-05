@@ -54,6 +54,9 @@ func _ready() -> void:
 	if tiles_flow != null and is_instance_valid(tiles_flow):
 		tiles_flow.alignment = FlowContainer.ALIGNMENT_CENTER
 
+	if _picker_visible:
+		_update_picker_layout()
+
 	_rebuild_rotation_options()
 	_rebuild_tile_buttons()
 	_apply_picker_visibility()
@@ -160,6 +163,7 @@ func request_skip() -> void:
 
 func set_selected_rotation(rotation: int) -> void:
 	_selected_rotation = _normalize_rotation(rotation)
+	_sync_tile_button_rotations()
 	if rotation_option != null:
 		for i in range(rotation_option.get_item_count()):
 			if int(rotation_option.get_item_id(i)) == _selected_rotation:
@@ -201,12 +205,21 @@ func _rebuild_tile_buttons() -> void:
 
 		var btn = TilePickerButtonClass.new()
 		btn.tile_id = tid
+		if btn.has_method("set_tile_rotation"):
+			btn.call("set_tile_rotation", _selected_rotation)
 		btn.button_group = group
 		btn.button_pressed = (not _selected_tile_id.is_empty()) and tid == _selected_tile_id
+		btn.tooltip_text = tid
 		btn.pressed.connect(_on_tile_button_pressed.bind(tid))
 		tiles_flow.add_child(btn)
 		_tile_buttons_by_id[tid] = btn
 	tiles_flow.queue_sort()
+
+func _sync_tile_button_rotations() -> void:
+	for tid in _tile_buttons_by_id.keys():
+		var btn_val = _tile_buttons_by_id.get(tid, null)
+		if btn_val is Node and is_instance_valid(btn_val) and btn_val.has_method("set_tile_rotation"):
+			btn_val.call("set_tile_rotation", _selected_rotation)
 
 func _on_tile_button_pressed(tile_id_in: String) -> void:
 	var tid := str(tile_id_in).strip_edges()
