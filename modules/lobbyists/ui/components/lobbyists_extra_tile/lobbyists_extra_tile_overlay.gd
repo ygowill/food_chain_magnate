@@ -11,6 +11,7 @@ const TilePickerButtonClass = preload("res://modules/lobbyists/ui/components/lob
 const ActionPanelExtraTileContextScenePath := "res://modules/lobbyists/ui/components/lobbyists_extra_tile/action_panel_extra_tile_context.tscn"
 
 @onready var hint_panel: Control = $Center/HintMargin/HintPanel
+@onready var center: Control = $Center
 @onready var hint_margin: Control = $Center/HintMargin
 @onready var hint_label: Label = $Center/HintMargin/HintPanel/VBox/HintLabel
 @onready var tiles_flow: HFlowContainer = $Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll/TilesFlow
@@ -86,6 +87,8 @@ func hide_picker() -> void:
 
 func _apply_picker_visibility() -> void:
 	var show := _picker_visible
+	if center != null and is_instance_valid(center):
+		center.visible = show
 	if hint_margin != null and is_instance_valid(hint_margin):
 		hint_margin.visible = show
 	# While picker is visible, block map interactions (modal full-screen picker).

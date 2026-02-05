@@ -43,6 +43,8 @@ func _ready() -> void:
 	_ensure_children()
 	_is_ready = true
 	_sync_preview()
+	# Some registries/skins may finalize after UI enters the tree; refresh once more next frame.
+	call_deferred("_sync_preview")
 	_update_selection_visual()
 
 	queue_redraw()
@@ -186,11 +188,15 @@ func _draw() -> void:
 	if r.size.x <= 2.0 or r.size.y <= 2.0:
 		return
 
+	var bg := Color(0.10, 0.11, 0.14, 0.55)
 	var border_col := Color(1, 1, 1, 0.14)
 	var border_w := 2.0
 	if button_pressed:
+		bg = Color(0.12, 0.20, 0.28, 0.75)
 		border_col = Color(0.2, 0.65, 1.0, 0.95)
 		border_w = 3.0
 	elif is_hovered():
+		bg = Color(0.13, 0.14, 0.18, 0.70)
 		border_col = Color(1, 1, 1, 0.24)
+	draw_rect(r, bg, true)
 	draw_rect(r.grow(-0.5), border_col, false, border_w)
