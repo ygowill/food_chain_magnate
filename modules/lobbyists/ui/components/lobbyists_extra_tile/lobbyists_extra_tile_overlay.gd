@@ -10,11 +10,14 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const TilePickerButtonClass = preload("res://modules/lobbyists/ui/components/lobbyists_extra_tile/tile_picker_button.gd")
 const ActionPanelExtraTileContextScenePath := "res://modules/lobbyists/ui/components/lobbyists_extra_tile/action_panel_extra_tile_context.tscn"
 
+@onready var background: ColorRect = $Background
+@onready var picker_toggle_button: Button = $PickerToggleButton
 @onready var hint_panel: Control = $Center/HintMargin/HintPanel
 @onready var center: Control = $Center
 @onready var hint_margin: Control = $Center/HintMargin
-@onready var hint_label: Label = $Center/HintMargin/HintPanel/VBox/HintLabel
-@onready var tiles_flow: HFlowContainer = $Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll/TilesFlow
+@onready var hint_label: Label = $Center/HintMargin/HintPanel/VBox/HeaderRow/HintLabel
+@onready var hide_button: Button = $Center/HintMargin/HintPanel/VBox/HeaderRow/HideButton
+@onready var tiles_flow: HFlowContainer = $Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll/TilesCenter/TilesFlow
 @onready var controls_row: Control = $Center/HintMargin/HintPanel/VBox/ControlsRow
 @onready var rotation_option: OptionButton = $Center/HintMargin/HintPanel/VBox/ControlsRow/RotationOption
 @onready var confirm_button: Button = $Center/HintMargin/HintPanel/VBox/ControlsRow/ConfirmButton
@@ -33,11 +36,29 @@ var _validation_message: String = ""
 var _picker_visible: bool = false
 
 func _ready() -> void:
+	set_process_input(true)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visible = false
 
+	if not resized.is_connected(_on_resized):
+		resized.connect(_on_resized)
+
+	if background != null and is_instance_valid(background):
+		background.visible = false
+	if picker_toggle_button != null and is_instance_valid(picker_toggle_button):
+		picker_toggle_button.visible = false
+		picker_toggle_button.focus_mode = Control.FOCUS_NONE
+		UiStylesClass.apply_button_secondary(picker_toggle_button)
+		if not picker_toggle_button.pressed.is_connected(show_picker):
+			picker_toggle_button.pressed.connect(show_picker)
+
 	if hint_panel != null:
 		UiStylesClass.apply_dialog_surface(hint_panel)
+	if hide_button != null and is_instance_valid(hide_button):
+		hide_button.focus_mode = Control.FOCUS_NONE
+		UiStylesClass.apply_button_secondary(hide_button)
+		if not hide_button.pressed.is_connected(hide_picker):
+			hide_button.pressed.connect(hide_picker)
 	if confirm_button != null:
 		UiStylesClass.apply_button_primary(confirm_button)
 	if skip_button != null:
@@ -63,6 +84,31 @@ func _ready() -> void:
 	_apply_picker_visibility()
 	_update_ui()
 
+func _on_resized() -> void:
+	if _picker_visible:
+		_update_picker_layout()
+
+func _input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if not (event is InputEventKey):
+		return
+	var e: InputEventKey = event
+	if not e.pressed or e.echo:
+		return
+
+	if e.keycode == KEY_TAB:
+		if _picker_visible:
+			hide_picker()
+		else:
+			show_picker()
+		get_viewport().set_input_as_handled()
+		return
+
+	if e.keycode == KEY_ESCAPE and _picker_visible:
+		hide_picker()
+		get_viewport().set_input_as_handled()
+
 func is_picker_visible() -> bool:
 	return _picker_visible
 
@@ -87,10 +133,14 @@ func hide_picker() -> void:
 
 func _apply_picker_visibility() -> void:
 	var show := _picker_visible
+	if background != null and is_instance_valid(background):
+		background.visible = show
 	if center != null and is_instance_valid(center):
 		center.visible = show
 	if hint_margin != null and is_instance_valid(hint_margin):
 		hint_margin.visible = show
+	if picker_toggle_button != null and is_instance_valid(picker_toggle_button):
+		picker_toggle_button.visible = not show
 	# While picker is visible, block map interactions (modal full-screen picker).
 	mouse_filter = Control.MOUSE_FILTER_STOP if show else Control.MOUSE_FILTER_IGNORE
 
@@ -235,10 +285,9 @@ func _update_picker_layout() -> void:
 	if hint_panel == null or not is_instance_valid(hint_panel):
 		return
 	var vp := get_viewport_rect().size
-	var max_w := maxf(320.0, vp.x - 48.0)
-	var w := minf(960.0, max_w)
-	var max_h := maxf(260.0, vp.y - 48.0)
-	var h := minf(720.0, max_h)
+	# Full-screen panel (keep a minimal outer margin via HintMargin).
+	var w := maxf(320.0, vp.x - 24.0)
+	var h := maxf(260.0, vp.y - 24.0)
 	hint_panel.custom_minimum_size = Vector2(w, h)
 	hint_panel.minimum_size_changed.emit()
 	if hint_panel.has_method("queue_sort"):
@@ -274,7 +323,7 @@ func get_hint_text() -> String:
 		return "无法放置：%s" % _validation_message
 
 	if _picker_visible:
-		return "请选择要扩边放置的地图板块"
+		return "请选择要扩边放置的地图板块（Tab 隐藏/显示）"
 
 	if _selected_tile_id.is_empty():
 		return "请选择要扩边放置的地图板块"

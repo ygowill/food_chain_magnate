@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://modules/lobbyists/ui/components/lobbyists_extra_tile/lobbyists_extra_tile_overlay.gd" id="1_lobbyists_extra_tile"]
 
-[node name="LobbyistsExtraTileOverlay" type="VBoxContainer"]
+[node name="LobbyistsExtraTileOverlay" type="Control"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -11,13 +11,35 @@ grow_horizontal = 2
 grow_vertical = 2
 visible = false
 mouse_filter = 2
-theme_override_constants/separation = 0
 script = ExtResource("1_lobbyists_extra_tile")
 
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.08, 0.09, 0.1, 0.92)
+
+[node name="PickerToggleButton" type="Button" parent="."]
+custom_minimum_size = Vector2(160, 34)
+layout_mode = 1
+anchors_preset = 0
+offset_left = 12.0
+offset_top = 12.0
+offset_right = 172.0
+offset_bottom = 46.0
+text = "选择板块 (Tab)"
+
 [node name="Center" type="CenterContainer" parent="."]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="HintMargin" type="MarginContainer" parent="Center"]
 layout_mode = 2
@@ -38,13 +60,24 @@ layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 8
 
-[node name="HintLabel" type="Label" parent="Center/HintMargin/HintPanel/VBox"]
+[node name="HeaderRow" type="HBoxContainer" parent="Center/HintMargin/HintPanel/VBox"]
 layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="HintLabel" type="Label" parent="Center/HintMargin/HintPanel/VBox/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 14
 text = "里程碑奖励：扩边放置地图板块"
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
+
+[node name="HideButton" type="Button" parent="Center/HintMargin/HintPanel/VBox/HeaderRow"]
+custom_minimum_size = Vector2(120, 32)
+layout_mode = 2
+text = "收起 (Esc)"
 
 [node name="TilesRow" type="VBoxContainer" parent="Center/HintMargin/HintPanel/VBox"]
 layout_mode = 2
@@ -60,7 +93,12 @@ size_flags_vertical = 3
 horizontal_scroll_mode = 0
 vertical_scroll_mode = 1
 
-[node name="TilesFlow" type="HFlowContainer" parent="Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll"]
+[node name="TilesCenter" type="CenterContainer" parent="Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="TilesFlow" type="HFlowContainer" parent="Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll/TilesCenter"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/h_separation = 12
