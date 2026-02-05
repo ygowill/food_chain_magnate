@@ -17,7 +17,9 @@ const ActionPanelExtraTileContextScenePath := "res://modules/lobbyists/ui/compon
 @onready var hint_margin: Control = $Center/HintMargin
 @onready var hint_label: Label = $Center/HintMargin/HintPanel/VBox/HeaderRow/HintLabel
 @onready var hide_button: Button = $Center/HintMargin/HintPanel/VBox/HeaderRow/HideButton
-@onready var tiles_flow: HFlowContainer = $Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll/TilesFlow
+@onready var tiles_scroll: ScrollContainer = $Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll
+@onready var tiles_stage: VBoxContainer = $Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll/TilesStage
+@onready var tiles_flow: HFlowContainer = $Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll/TilesStage/TilesFlow
 @onready var controls_row: Control = $Center/HintMargin/HintPanel/VBox/ControlsRow
 @onready var rotation_option: OptionButton = $Center/HintMargin/HintPanel/VBox/ControlsRow/RotationOption
 @onready var confirm_button: Button = $Center/HintMargin/HintPanel/VBox/ControlsRow/ConfirmButton
@@ -42,6 +44,8 @@ func _ready() -> void:
 
 	if not resized.is_connected(_on_resized):
 		resized.connect(_on_resized)
+	if tiles_scroll != null and is_instance_valid(tiles_scroll) and not tiles_scroll.resized.is_connected(_on_tiles_scroll_resized):
+		tiles_scroll.resized.connect(_on_tiles_scroll_resized)
 
 	if background != null and is_instance_valid(background):
 		background.visible = false
@@ -75,18 +79,25 @@ func _ready() -> void:
 
 	if tiles_flow != null and is_instance_valid(tiles_flow):
 		tiles_flow.alignment = FlowContainer.ALIGNMENT_CENTER
+		tiles_flow.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		tiles_flow.size_flags_vertical = 0
 
 	if _picker_visible:
 		_update_picker_layout()
 
 	_rebuild_rotation_options()
 	_rebuild_tile_buttons()
+	call_deferred("_update_tiles_flow_matrix_layout")
 	_apply_picker_visibility()
 	_update_ui()
 
 func _on_resized() -> void:
 	if _picker_visible:
 		_update_picker_layout()
+
+func _on_tiles_scroll_resized() -> void:
+	if _picker_visible:
+		call_deferred("_update_tiles_flow_matrix_layout")
 
 func _input(event: InputEvent) -> void:
 	if not visible:
@@ -267,6 +278,7 @@ func _rebuild_tile_buttons() -> void:
 		tiles_flow.add_child(btn)
 		_tile_buttons_by_id[tid] = btn
 	tiles_flow.queue_sort()
+	call_deferred("_update_tiles_flow_matrix_layout")
 
 func _sync_tile_button_rotations() -> void:
 	for tid in _tile_buttons_by_id.keys():
@@ -292,6 +304,99 @@ func _update_picker_layout() -> void:
 	hint_panel.minimum_size_changed.emit()
 	if hint_panel.has_method("queue_sort"):
 		hint_panel.queue_sort()
+	call_deferred("_update_tiles_flow_matrix_layout")
+
+func _update_tiles_flow_matrix_layout() -> void:
+	if tiles_flow == null or not is_instance_valid(tiles_flow):
+		return
+
+	var count := _available_tiles.size()
+	if count <= 0:
+		tiles_flow.custom_minimum_size = Vector2.ZERO
+		return
+
+	var tile_w := 160.0
+	var tile_h := 190.0
+	if tiles_flow.get_child_count() > 0:
+		var c0 = tiles_flow.get_child(0)
+		if c0 is Control and is_instance_valid(c0):
+			var ms := (c0 as Control).get_combined_minimum_size()
+			if ms.x > 4.0 and ms.y > 4.0:
+				tile_w = float(ms.x)
+				tile_h = float(ms.y)
+
+	var h_sep := float(tiles_flow.get_theme_constant("h_separation"))
+	if h_sep <= 0.0:
+		h_sep = 12.0
+	var v_sep := float(tiles_flow.get_theme_constant("v_separation"))
+	if v_sep <= 0.0:
+		v_sep = 12.0
+
+	var avail_w := 0.0
+	if tiles_scroll != null and is_instance_valid(tiles_scroll):
+		avail_w = float(tiles_scroll.size.x)
+	if avail_w <= 4.0:
+		avail_w = float(get_viewport_rect().size.x - 72.0)
+	avail_w = maxf(avail_w, tile_w)
+
+	var avail_h := 0.0
+	if tiles_scroll != null and is_instance_valid(tiles_scroll):
+		avail_h = float(tiles_scroll.size.y)
+	if avail_h <= 4.0:
+		avail_h = float(get_viewport_rect().size.y - 200.0)
+
+	var max_cols_fit := maxi(1, int(floor((avail_w + h_sep) / (tile_w + h_sep))))
+
+	var best_cols := 1
+	var best_score := 2147483647
+	var best_waste := 2147483647
+	var best_fits_height := false
+	for cols in range(1, max_cols_fit + 1):
+		var rows := int(ceil(float(count) / float(cols)))
+		var score := absi(rows - cols)
+		var waste := rows * cols - count
+		var h := float(rows) * tile_h + float(maxi(0, rows - 1)) * v_sep
+		var fits_h := avail_h <= 4.0 or h <= avail_h + 0.5
+
+		if best_fits_height and not fits_h:
+			continue
+		if (not best_fits_height) and fits_h:
+			best_cols = cols
+			best_score = score
+			best_waste = waste
+			best_fits_height = true
+			continue
+		if score < best_score:
+			best_cols = cols
+			best_score = score
+			best_waste = waste
+		elif score == best_score:
+			if waste < best_waste:
+				best_cols = cols
+				best_waste = waste
+			elif waste == best_waste and cols < best_cols:
+				best_cols = cols
+
+	var best_rows := int(ceil(float(count) / float(best_cols)))
+	var desired_w := float(best_cols) * tile_w + float(maxi(0, best_cols - 1)) * h_sep
+	var desired_h := float(best_rows) * tile_h + float(maxi(0, best_rows - 1)) * v_sep
+
+	tiles_flow.custom_minimum_size = Vector2(desired_w, desired_h)
+	tiles_flow.minimum_size_changed.emit()
+	tiles_flow.queue_sort()
+
+	# ScrollContainer doesn't automatically expand its child to viewport size; ensure TilesStage is at
+	# least as large as the visible area so Top/Bottom spacers can center the matrix.
+	if tiles_stage != null and is_instance_valid(tiles_stage):
+		var stage_w := avail_w
+		var stage_h := maxf(avail_h, desired_h)
+		if stage_w <= 4.0:
+			stage_w = desired_w
+		if stage_h <= 4.0:
+			stage_h = desired_h
+		tiles_stage.custom_minimum_size = Vector2(stage_w, stage_h)
+		tiles_stage.minimum_size_changed.emit()
+		tiles_stage.queue_sort()
 
 func _on_rotation_selected(_index: int) -> void:
 	if rotation_option == null:

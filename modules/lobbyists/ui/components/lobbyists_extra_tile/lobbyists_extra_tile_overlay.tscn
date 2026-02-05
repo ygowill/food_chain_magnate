@@ -93,12 +93,26 @@ size_flags_vertical = 3
 horizontal_scroll_mode = 0
 vertical_scroll_mode = 1
 
-[node name="TilesFlow" type="HFlowContainer" parent="Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll"]
+[node name="TilesStage" type="VBoxContainer" parent="Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
+alignment = 1
+
+[node name="TopSpacer" type="Control" parent="Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll/TilesStage"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 0
+
+[node name="TilesFlow" type="HFlowContainer" parent="Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll/TilesStage"]
+layout_mode = 2
 theme_override_constants/h_separation = 12
 theme_override_constants/v_separation = 12
+
+[node name="BottomSpacer" type="Control" parent="Center/HintMargin/HintPanel/VBox/TilesRow/TilesScroll/TilesStage"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 0
 
 [node name="ControlsRow" type="HBoxContainer" parent="Center/HintMargin/HintPanel/VBox"]
 layout_mode = 2
