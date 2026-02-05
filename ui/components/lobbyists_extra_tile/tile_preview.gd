@@ -14,6 +14,11 @@ func _ready() -> void:
 	# Preview-only: disable hover/selection and keep rendering clipped inside the node rect.
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	clip_contents = true
+	# NOTE: clip_contents only clips children; MapCanvas draws in _draw().
+	# Use CanvasItem clip mode so tile preview won't bleed into neighboring UI cells.
+	if has_method("set_clip_children_mode"):
+		# CanvasItem.CLIP_CHILDREN_AND_DRAW == 2 (Godot 4.x)
+		set_clip_children_mode(2)
 
 	if not resized.is_connected(_on_resized):
 		resized.connect(_on_resized)

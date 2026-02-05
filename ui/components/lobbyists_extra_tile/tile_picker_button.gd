@@ -17,7 +17,7 @@ func _ready() -> void:
 	clip_text = true
 	toggle_mode = true
 
-	custom_minimum_size = Vector2(110, 110)
+	custom_minimum_size = Vector2(150, 150)
 
 	if not resized.is_connected(queue_redraw):
 		resized.connect(queue_redraw)

@@ -15,23 +15,24 @@ mouse_filter = 2
 theme_override_constants/separation = 0
 script = ExtResource("1_lobbyists_extra_tile")
 
-[node name="TopSpacer" type="Control" parent="."]
-custom_minimum_size = Vector2(0, 92)
-layout_mode = 2
-
 [node name="HintMargin" type="MarginContainer" parent="."]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
 theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
 
 [node name="HintPanel" type="PanelContainer" parent="HintMargin"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
 mouse_filter = 0
 
 [node name="VBox" type="VBoxContainer" parent="HintMargin/HintPanel"]
 layout_mode = 2
+size_flags_vertical = 3
 theme_override_constants/separation = 8
 
 [node name="HintLabel" type="Label" parent="HintMargin/HintPanel/VBox"]
@@ -42,28 +43,31 @@ horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
 
-[node name="TilesRow" type="HBoxContainer" parent="HintMargin/HintPanel/VBox"]
+[node name="TilesRow" type="VBoxContainer" parent="HintMargin/HintPanel/VBox"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 10
+size_flags_vertical = 3
+theme_override_constants/separation = 12
 
 [node name="SelectedTilePreview" type="Control" parent="HintMargin/HintPanel/VBox/TilesRow"]
-custom_minimum_size = Vector2(110, 110)
+custom_minimum_size = Vector2(200, 200)
 layout_mode = 2
+size_flags_horizontal = 3
 script = ExtResource("2_tile_preview")
 
 [node name="TilesScroll" type="ScrollContainer" parent="HintMargin/HintPanel/VBox/TilesRow"]
-custom_minimum_size = Vector2(0, 110)
+custom_minimum_size = Vector2(0, 260)
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
 horizontal_scroll_mode = 0
 vertical_scroll_mode = 1
 
 [node name="TilesFlow" type="HFlowContainer" parent="HintMargin/HintPanel/VBox/TilesRow/TilesScroll"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/h_separation = 8
-theme_override_constants/v_separation = 8
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 12
 
 [node name="ControlsRow" type="HBoxContainer" parent="HintMargin/HintPanel/VBox"]
 layout_mode = 2

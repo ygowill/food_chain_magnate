@@ -11,6 +11,7 @@ const MarketingModeClass = preload("res://ui/scenes/game/game_map_interaction_ma
 const PlacementModeClass = preload("res://ui/scenes/game/game_map_interaction_placement_mode.gd")
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
+const LobbyistsTilePreviewClass = preload("res://ui/components/lobbyists_extra_tile/tile_preview.gd")
 
 var _scene = null
 var _map_canvas = null
@@ -33,6 +34,10 @@ var restaurant_placement_overlay = null
 var house_placement_overlay = null
 var piece_placement_overlay = null
 var lobbyists_extra_tile_overlay = null
+var _lobbyists_extra_tile_hover_tile_preview: Control = null
+var _lobbyists_extra_tile_selected_tile_preview: Control = null
+var _lobbyists_extra_tile_preview_tile_id: String = ""
+var _lobbyists_extra_tile_preview_rotation: int = 0
 
 const _DISTANCE_TOOL_POINTS_OVERLAY_ID := "distance_tool_points"
 const _LOBBYISTS_EXTRA_TILE_PREVIEW_OVERLAY_ID := "lobbyists_extra_tile_preview"
@@ -96,6 +101,7 @@ func begin_selection(mode: String, payload: Dictionary = {}) -> void:
 		_map_canvas.call("clear_piece_overlay", _DISTANCE_TOOL_POINTS_OVERLAY_ID)
 		_map_canvas.call("clear_piece_overlay", _LOBBYISTS_EXTRA_TILE_PREVIEW_OVERLAY_ID)
 		_map_canvas.call("clear_piece_overlay", _LOBBYISTS_EXTRA_TILE_SELECTED_OVERLAY_ID)
+	_hide_lobbyists_extra_tile_tile_previews()
 
 	# 动态控制“地图外围 UI-only 空圈”：仅在需要放置/显示外围 piece 时开启（issue_tracker #64）。
 	_update_map_outside_margin_for_mode()
@@ -118,6 +124,7 @@ func clear_selection() -> void:
 		_map_canvas.call("clear_piece_overlay", _DISTANCE_TOOL_POINTS_OVERLAY_ID)
 		_map_canvas.call("clear_piece_overlay", _LOBBYISTS_EXTRA_TILE_PREVIEW_OVERLAY_ID)
 		_map_canvas.call("clear_piece_overlay", _LOBBYISTS_EXTRA_TILE_SELECTED_OVERLAY_ID)
+	_hide_lobbyists_extra_tile_tile_previews()
 
 	# 退出任何选点模式后，如果不再需要外围空圈则恢复（issue_tracker #64）。
 	_update_map_outside_margin_for_mode()
@@ -341,6 +348,9 @@ func _update_map_outside_margin_for_mode() -> void:
 		return
 
 	var requested := 0
+	if _mode == "lobbyists_extra_tile":
+		# Allow showing the full 5×5 expansion tile outside current map bounds.
+		requested = int(MapUtilsClass.TILE_SIZE)
 	if _mode == "marketing":
 		var mt := str(_payload.get("marketing_type", "")).strip_edges()
 		if mt == "airplane":
@@ -500,6 +510,9 @@ func on_lobbyists_extra_tile_highlight_requested(tile_id: String, rotation: int)
 
 	var tid := str(tile_id).strip_edges()
 	if tid.is_empty():
+		_lobbyists_extra_tile_preview_tile_id = ""
+		_lobbyists_extra_tile_preview_rotation = 0
+		_hide_lobbyists_extra_tile_tile_previews()
 		_lobbyists_extra_tile_valid_anchors.clear()
 		if _map_canvas.has_method("clear_cell_highlights"):
 			_map_canvas.call("clear_cell_highlights")
@@ -507,6 +520,13 @@ func on_lobbyists_extra_tile_highlight_requested(tile_id: String, rotation: int)
 			_map_canvas.call("clear_piece_overlay", _LOBBYISTS_EXTRA_TILE_PREVIEW_OVERLAY_ID)
 			_map_canvas.call("clear_piece_overlay", _LOBBYISTS_EXTRA_TILE_SELECTED_OVERLAY_ID)
 		return
+
+	var rot := _normalize_rotation(rotation)
+	_lobbyists_extra_tile_preview_tile_id = tid
+	_lobbyists_extra_tile_preview_rotation = rot
+	if is_instance_valid(_lobbyists_extra_tile_hover_tile_preview) and (_lobbyists_extra_tile_hover_tile_preview as CanvasItem).visible:
+		if _lobbyists_extra_tile_hover_tile_preview.has_method("set_tile"):
+			_lobbyists_extra_tile_hover_tile_preview.call("set_tile", tid, rot)
 
 	var actor := int(state.get_current_player_id())
 	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and int(NetContext.local_player_id) >= 0:
@@ -530,7 +550,7 @@ func on_lobbyists_extra_tile_highlight_requested(tile_id: String, rotation: int)
 				"tile_id": tid,
 				"attach_to_tile_board_pos": [board_pos.x, board_pos.y],
 				"side": str(side),
-				"rotation": _normalize_rotation(rotation),
+				"rotation": rot,
 			})
 			cmd.phase = state.phase
 			cmd.sub_phase = state.sub_phase
@@ -547,6 +567,7 @@ func on_lobbyists_extra_tile_highlight_requested(tile_id: String, rotation: int)
 	_lobbyists_extra_tile_valid_anchors = anchor_set
 	if _map_canvas.has_method("set_cell_highlights"):
 		_map_canvas.call("set_cell_highlights", cells)
+	_sync_lobbyists_extra_tile_selected_tile_preview_from_overlay()
 
 func _on_lobbyists_extra_tile_cell_hovered(world_pos: Vector2i) -> void:
 	if not is_instance_valid(_map_canvas):
@@ -556,6 +577,7 @@ func _on_lobbyists_extra_tile_cell_hovered(world_pos: Vector2i) -> void:
 	if not bool(_map_canvas.call("is_cell_highlighted", world_pos)):
 		if _map_canvas.has_method("clear_piece_overlay"):
 			_map_canvas.call("clear_piece_overlay", _LOBBYISTS_EXTRA_TILE_PREVIEW_OVERLAY_ID)
+		_hide_lobbyists_extra_tile_hover_tile_preview()
 		return
 
 	var info: Dictionary = MapUtilsClass.world_to_tile(world_pos)
@@ -565,6 +587,7 @@ func _on_lobbyists_extra_tile_cell_hovered(world_pos: Vector2i) -> void:
 	if side.is_empty():
 		if _map_canvas.has_method("clear_piece_overlay"):
 			_map_canvas.call("clear_piece_overlay", _LOBBYISTS_EXTRA_TILE_PREVIEW_OVERLAY_ID)
+		_hide_lobbyists_extra_tile_hover_tile_preview()
 		return
 
 	var offset: Vector2i = MapUtilsClass.DIR_OFFSETS.get(side, Vector2i.ZERO)
@@ -585,6 +608,7 @@ func _on_lobbyists_extra_tile_cell_hovered(world_pos: Vector2i) -> void:
 		"border": Color(0.2, 0.65, 1.0, 0.9),
 		"border_width": 3.0,
 	})
+	_show_lobbyists_extra_tile_hover_tile_preview(new_board_pos)
 
 func _set_lobbyists_extra_tile_selected_overlay(attach_board_pos: Vector2i, side: String) -> void:
 	if not is_instance_valid(_map_canvas):
@@ -611,6 +635,129 @@ func _set_lobbyists_extra_tile_selected_overlay(attach_board_pos: Vector2i, side
 		"border": Color(0.2, 0.65, 1.0, 0.95),
 		"border_width": 3.0,
 	})
+	_show_lobbyists_extra_tile_selected_tile_preview(new_board_pos)
+
+func _ensure_lobbyists_extra_tile_tile_previews() -> void:
+	if not is_instance_valid(_map_canvas):
+		return
+
+	if not is_instance_valid(_lobbyists_extra_tile_hover_tile_preview):
+		var p: Control = LobbyistsTilePreviewClass.new()
+		p.name = "LobbyistsExtraTileHoverTilePreview"
+		p.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		p.visible = false
+		p.modulate = Color(1, 1, 1, 0.55)
+		p.z_index = 10
+		_map_canvas.add_child(p)
+		_lobbyists_extra_tile_hover_tile_preview = p
+
+	if not is_instance_valid(_lobbyists_extra_tile_selected_tile_preview):
+		var p2: Control = LobbyistsTilePreviewClass.new()
+		p2.name = "LobbyistsExtraTileSelectedTilePreview"
+		p2.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		p2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		p2.visible = false
+		p2.modulate = Color(1, 1, 1, 0.75)
+		p2.z_index = 11
+		_map_canvas.add_child(p2)
+		_lobbyists_extra_tile_selected_tile_preview = p2
+
+func _show_lobbyists_extra_tile_hover_tile_preview(new_board_pos: Vector2i) -> void:
+	if _lobbyists_extra_tile_preview_tile_id.is_empty():
+		_hide_lobbyists_extra_tile_hover_tile_preview()
+		return
+	_ensure_lobbyists_extra_tile_tile_previews()
+	_show_lobbyists_extra_tile_tile_preview_node(
+		_lobbyists_extra_tile_hover_tile_preview,
+		new_board_pos,
+		_lobbyists_extra_tile_preview_tile_id,
+		_lobbyists_extra_tile_preview_rotation
+	)
+
+func _show_lobbyists_extra_tile_selected_tile_preview(new_board_pos: Vector2i) -> void:
+	if _lobbyists_extra_tile_preview_tile_id.is_empty():
+		_hide_lobbyists_extra_tile_selected_tile_preview()
+		return
+	_ensure_lobbyists_extra_tile_tile_previews()
+	_show_lobbyists_extra_tile_tile_preview_node(
+		_lobbyists_extra_tile_selected_tile_preview,
+		new_board_pos,
+		_lobbyists_extra_tile_preview_tile_id,
+		_lobbyists_extra_tile_preview_rotation
+	)
+
+func _show_lobbyists_extra_tile_tile_preview_node(preview: Control, new_board_pos: Vector2i, tile_id: String, rotation: int) -> void:
+	if not is_instance_valid(_map_canvas):
+		return
+	if not is_instance_valid(preview):
+		return
+
+	var tid := str(tile_id).strip_edges()
+	if tid.is_empty():
+		preview.visible = false
+		return
+
+	var cell_size := 1
+	if _map_canvas.has_method("get_cell_size"):
+		cell_size = int(_map_canvas.call("get_cell_size"))
+	cell_size = maxi(1, cell_size)
+
+	var world_origin := Vector2i.ZERO
+	if _map_canvas.has_method("get_world_origin"):
+		var wo_val = _map_canvas.call("get_world_origin")
+		if wo_val is Vector2i:
+			world_origin = wo_val
+
+	var tile_size := int(MapUtilsClass.TILE_SIZE)
+	var world_min := new_board_pos * tile_size
+	var view_min := world_min - world_origin
+
+	var px_pos := Vector2(float(view_min.x * cell_size), float(view_min.y * cell_size))
+	var px_size := Vector2(float(tile_size * cell_size), float(tile_size * cell_size))
+
+	preview.position = px_pos
+	preview.size = px_size
+	preview.custom_minimum_size = px_size
+	preview.visible = true
+
+	if preview.has_method("set_tile"):
+		preview.call("set_tile", tid, _normalize_rotation(rotation))
+
+func _hide_lobbyists_extra_tile_hover_tile_preview() -> void:
+	if is_instance_valid(_lobbyists_extra_tile_hover_tile_preview):
+		_lobbyists_extra_tile_hover_tile_preview.visible = false
+
+func _hide_lobbyists_extra_tile_selected_tile_preview() -> void:
+	if is_instance_valid(_lobbyists_extra_tile_selected_tile_preview):
+		_lobbyists_extra_tile_selected_tile_preview.visible = false
+
+func _hide_lobbyists_extra_tile_tile_previews() -> void:
+	_hide_lobbyists_extra_tile_hover_tile_preview()
+	_hide_lobbyists_extra_tile_selected_tile_preview()
+
+func _sync_lobbyists_extra_tile_selected_tile_preview_from_overlay() -> void:
+	if not is_instance_valid(lobbyists_extra_tile_overlay):
+		_hide_lobbyists_extra_tile_selected_tile_preview()
+		return
+	if not lobbyists_extra_tile_overlay.has_method("get_selected_side"):
+		_hide_lobbyists_extra_tile_selected_tile_preview()
+		return
+
+	var side := str(lobbyists_extra_tile_overlay.call("get_selected_side")).strip_edges()
+	if side.is_empty():
+		_hide_lobbyists_extra_tile_selected_tile_preview()
+		return
+
+	var attach_board_pos := Vector2i.ZERO
+	if lobbyists_extra_tile_overlay.has_method("get_selected_attach_board_pos"):
+		var bp_val = lobbyists_extra_tile_overlay.call("get_selected_attach_board_pos")
+		if bp_val is Vector2i:
+			attach_board_pos = bp_val
+
+	var offset: Vector2i = MapUtilsClass.DIR_OFFSETS.get(side, Vector2i.ZERO)
+	var new_board_pos: Vector2i = attach_board_pos + offset
+	_show_lobbyists_extra_tile_selected_tile_preview(new_board_pos)
 
 func _get_occupied_tile_board_positions(state: GameState) -> Array[Vector2i]:
 	var result: Array[Vector2i] = []

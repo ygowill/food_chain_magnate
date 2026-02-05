@@ -9,7 +9,6 @@ signal ui_state_changed()
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const TilePickerButtonClass = preload("res://ui/components/lobbyists_extra_tile/tile_picker_button.gd")
 
-@onready var top_spacer: Control = $TopSpacer
 @onready var hint_panel: Control = $HintMargin/HintPanel
 @onready var hint_margin: Control = $HintMargin
 @onready var hint_label: Label = $HintMargin/HintPanel/VBox/HintLabel
@@ -78,11 +77,10 @@ func hide_picker() -> void:
 
 func _apply_picker_visibility() -> void:
 	var show := _picker_visible
-	if top_spacer != null and is_instance_valid(top_spacer):
-		top_spacer.visible = show
-		top_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if hint_margin != null and is_instance_valid(hint_margin):
 		hint_margin.visible = show
+	# While picker is visible, block map interactions (modal full-screen picker).
+	mouse_filter = Control.MOUSE_FILTER_STOP if show else Control.MOUSE_FILTER_IGNORE
 
 func set_available_tiles(tile_ids: Array[String]) -> void:
 	var ids: Array[String] = []
