@@ -290,8 +290,93 @@ func _on_procure_drinks_source_selected(world_pos: Vector2i) -> void:
 
 	if _procure_selected_sources.has(world_pos):
 		return
+	if emp_def == null:
+		_procure_selected_sources.append(world_pos)
+		_recompute_procurement_plan(state)
+		return
+
+	var validate_r := _validate_road_procure_sources_after_adding(state, emp_def, world_pos)
+	if not validate_r.ok:
+		_toast_procure_drinks_invalid_source(validate_r.error)
+		return
+
 	_procure_selected_sources.append(world_pos)
 	_recompute_procurement_plan(state)
+
+func _toast_procure_drinks_invalid_source(error_text: String) -> void:
+	var msg := str(error_text).strip_edges()
+	if msg.is_empty():
+		msg = "该进货点不可选"
+	else:
+		msg = "该进货点不可选：%s" % msg
+	if _overlay_controller != null and _overlay_controller.has_method("show_toast"):
+		_overlay_controller.call("show_toast", msg)
+
+func _validate_road_procure_sources_after_adding(state: GameState, emp_def: EmployeeDef, new_source_world_pos: Vector2i) -> Result:
+	if state == null:
+		return Result.failure("state 为空")
+	if emp_def == null:
+		return Result.failure("员工缺失")
+	if _procure_selected_employee_type.is_empty() or _procure_selected_employee_type == "errand_boy":
+		return Result.failure("员工未选择")
+
+	var player_id := state.get_current_player_id()
+	var restaurant_ids := StructuresClass.get_player_restaurants(state, player_id)
+	if restaurant_ids.is_empty():
+		return Result.failure("你没有餐厅，无法采购饮料")
+	restaurant_ids.sort()
+
+	var restaurants_val = state.map.get("restaurants", null)
+	if not (restaurants_val is Dictionary):
+		return Result.failure("state.map.restaurants 缺失或类型错误")
+	var restaurants: Dictionary = restaurants_val
+
+	var chosen_restaurant_id := ""
+	var entrance_pos: Vector2i = Vector2i(-1, -1)
+
+	var requested_id := str(_procure_selected_start_restaurant_id).strip_edges()
+	if not requested_id.is_empty() and restaurant_ids.has(requested_id):
+		if restaurants.has(requested_id) and (restaurants[requested_id] is Dictionary):
+			var rest_req: Dictionary = restaurants[requested_id]
+			var ep_req = rest_req.get("entrance_pos", null)
+			if ep_req is Vector2i:
+				chosen_restaurant_id = requested_id
+				entrance_pos = Vector2i(ep_req)
+
+	if chosen_restaurant_id.is_empty():
+		for rid in restaurant_ids:
+			if not restaurants.has(rid):
+				continue
+			var rest_val = restaurants[rid]
+			if not (rest_val is Dictionary):
+				continue
+			var rest: Dictionary = rest_val
+			var ep = rest.get("entrance_pos", null)
+			if ep is Vector2i:
+				chosen_restaurant_id = str(rid)
+				entrance_pos = Vector2i(ep)
+				break
+
+	if chosen_restaurant_id.is_empty():
+		return Result.failure("无法解析餐厅入口位置")
+
+	var candidate_sources: Array[Vector2i] = []
+	for p in _procure_selected_sources:
+		candidate_sources.append(p)
+	candidate_sources.append(new_source_world_pos)
+
+	var route_r := _build_road_route(state, entrance_pos, candidate_sources)
+	if not route_r.ok:
+		return route_r
+	var route: Array[Vector2i] = route_r.value
+
+	var cmd := Command.create("procure_drinks", player_id, {
+		"employee_type": _procure_selected_employee_type,
+		"restaurant_id": chosen_restaurant_id,
+		"route": DrinksProcurementClass.serialize_route(route),
+		"selected_sources": DrinksProcurementClass.serialize_route(candidate_sources),
+	})
+	return DrinksProcurementClass.resolve_procurement_plan(state, cmd, restaurant_ids, emp_def)
 
 func _on_procure_drinks_start_restaurant_selected(restaurant_id: String) -> void:
 	if _scene == null or _scene.game_engine == null:
