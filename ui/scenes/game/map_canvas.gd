@@ -49,6 +49,10 @@ var _piece_overlays: Dictionary = {}
 # move_restaurant 模式：用于高亮“当前被移动的餐厅”（入口 anchor）。
 var _move_restaurant_selected_anchor: Vector2i = Vector2i(-1, -1) # world_pos
 
+var _procure_drinks_restaurant_index_by_anchor: Dictionary = {} # Vector2i(anchor) -> 1-based index
+var _procure_drinks_selected_restaurant_anchor: Vector2i = Vector2i(-1, -1) # world_pos
+var _procure_drinks_hovered_restaurant_anchor: Vector2i = Vector2i(-1, -1) # world_pos
+
 var _skin = null
 var _skin_modules_key: String = ""
 
@@ -162,6 +166,9 @@ func clear() -> void:
 	_highlighted_cells.clear()
 	_piece_overlays.clear()
 	_move_restaurant_selected_anchor = Vector2i(-1, -1)
+	_procure_drinks_restaurant_index_by_anchor.clear()
+	_procure_drinks_selected_restaurant_anchor = Vector2i(-1, -1)
+	_procure_drinks_hovered_restaurant_anchor = Vector2i(-1, -1)
 	custom_minimum_size = Vector2.ZERO
 	queue_redraw()
 
@@ -269,6 +276,56 @@ func clear_move_restaurant_selected_restaurant() -> void:
 	if _move_restaurant_selected_anchor == Vector2i(-1, -1):
 		return
 	_move_restaurant_selected_anchor = Vector2i(-1, -1)
+	queue_redraw()
+
+func set_procure_drinks_restaurant_indices(index_by_anchor: Dictionary) -> void:
+	_procure_drinks_restaurant_index_by_anchor.clear()
+	for k in index_by_anchor.keys():
+		if not (k is Vector2i):
+			continue
+		var v = index_by_anchor.get(k, 0)
+		var idx := 0
+		if v is int:
+			idx = int(v)
+		elif v is float:
+			var f: float = float(v)
+			if f == floor(f):
+				idx = int(f)
+		if idx <= 0:
+			continue
+		_procure_drinks_restaurant_index_by_anchor[Vector2i(k)] = idx
+	queue_redraw()
+
+func clear_procure_drinks_restaurant_indices() -> void:
+	if _procure_drinks_restaurant_index_by_anchor.is_empty() and _procure_drinks_selected_restaurant_anchor == Vector2i(-1, -1) and _procure_drinks_hovered_restaurant_anchor == Vector2i(-1, -1):
+		return
+	_procure_drinks_restaurant_index_by_anchor.clear()
+	_procure_drinks_selected_restaurant_anchor = Vector2i(-1, -1)
+	_procure_drinks_hovered_restaurant_anchor = Vector2i(-1, -1)
+	queue_redraw()
+
+func set_procure_drinks_selected_restaurant_anchor(anchor_world_pos: Vector2i) -> void:
+	if _procure_drinks_selected_restaurant_anchor == anchor_world_pos:
+		return
+	_procure_drinks_selected_restaurant_anchor = anchor_world_pos
+	queue_redraw()
+
+func clear_procure_drinks_selected_restaurant_anchor() -> void:
+	if _procure_drinks_selected_restaurant_anchor == Vector2i(-1, -1):
+		return
+	_procure_drinks_selected_restaurant_anchor = Vector2i(-1, -1)
+	queue_redraw()
+
+func set_procure_drinks_hovered_restaurant_anchor(anchor_world_pos: Vector2i) -> void:
+	if _procure_drinks_hovered_restaurant_anchor == anchor_world_pos:
+		return
+	_procure_drinks_hovered_restaurant_anchor = anchor_world_pos
+	queue_redraw()
+
+func clear_procure_drinks_hovered_restaurant_anchor() -> void:
+	if _procure_drinks_hovered_restaurant_anchor == Vector2i(-1, -1):
+		return
+	_procure_drinks_hovered_restaurant_anchor = Vector2i(-1, -1)
 	queue_redraw()
 
 func is_cell_highlighted(world_pos: Vector2i) -> bool:

@@ -61,6 +61,24 @@ func handle_unhandled_input(event: InputEvent) -> bool:
 			if e.shift_pressed:
 				return _try_trigger_right_panel_footer_secondary()
 			return _try_trigger_right_panel_footer_primary()
+		KEY_1, KEY_KP_1:
+			return _try_select_procure_drinks_start_restaurant_by_index(1)
+		KEY_2, KEY_KP_2:
+			return _try_select_procure_drinks_start_restaurant_by_index(2)
+		KEY_3, KEY_KP_3:
+			return _try_select_procure_drinks_start_restaurant_by_index(3)
+		KEY_4, KEY_KP_4:
+			return _try_select_procure_drinks_start_restaurant_by_index(4)
+		KEY_5, KEY_KP_5:
+			return _try_select_procure_drinks_start_restaurant_by_index(5)
+		KEY_6, KEY_KP_6:
+			return _try_select_procure_drinks_start_restaurant_by_index(6)
+		KEY_7, KEY_KP_7:
+			return _try_select_procure_drinks_start_restaurant_by_index(7)
+		KEY_8, KEY_KP_8:
+			return _try_select_procure_drinks_start_restaurant_by_index(8)
+		KEY_9, KEY_KP_9:
+			return _try_select_procure_drinks_start_restaurant_by_index(9)
 		KEY_D:
 			if is_instance_valid(_map_controller) and _map_controller.has_method("toggle_distance_tool"):
 				_map_controller.call("toggle_distance_tool")
@@ -71,6 +89,26 @@ func handle_unhandled_input(event: InputEvent) -> bool:
 			return false
 
 	return false
+
+func _try_select_procure_drinks_start_restaurant_by_index(index: int) -> bool:
+	# 若有顶层对话框，优先不处理
+	if is_instance_valid(_menu_controller):
+		if _menu_controller.has_method("is_menu_visible") and bool(_menu_controller.call("is_menu_visible")):
+			return false
+		if _menu_controller.has_method("is_confirm_visible") and bool(_menu_controller.call("is_confirm_visible")):
+			return false
+
+	if is_instance_valid(_overlay_controller):
+		var dlg = _overlay_controller.settings_dialog
+		if is_instance_valid(dlg) and dlg.visible:
+			return false
+
+	if not is_instance_valid(_map_controller):
+		return false
+	if not _map_controller.has_method("try_select_procure_drinks_start_restaurant_by_index"):
+		return false
+	var handled = _map_controller.call("try_select_procure_drinks_start_restaurant_by_index", int(index))
+	return handled is bool and bool(handled)
 
 func _try_trigger_right_panel_footer_primary() -> bool:
 	if not is_instance_valid(_right_panel_footer_row) or not _right_panel_footer_row.visible:

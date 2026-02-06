@@ -6,7 +6,11 @@ extends BaseTileOverlay
 const ROUTE_COLOR := Color(0.35, 0.8, 1.0, 0.8)
 const ROUTE_WIDTH := 4.0
 
+const PREVIEW_ROUTE_COLOR := Color(1.0, 0.75, 0.25, 0.75)
+const PREVIEW_ROUTE_WIDTH := 3.0
+
 const START_COLOR := Color(0.35, 0.9, 0.55, 0.95)
+const PREVIEW_START_COLOR := Color(1.0, 0.78, 0.35, 0.95)
 const MARKER_SIZE := 10.0
 const LEGAL_TILE_OUTLINE_COLOR := Color(0.45, 0.82, 1.0, 0.7)
 const SELECTED_TILE_OUTLINE_COLOR := Color(0.12, 0.35, 0.85, 0.95)
@@ -22,6 +26,7 @@ var _route_line: Line2D = null
 var _markers: Array[Control] = []
 var _tile_mode: bool = false
 var _show_route_line: bool = true
+var _preview: bool = false
 var _tile_size_cells: int = 1
 var _legal_tiles: Array[Vector2i] = []
 var _selected_tiles: Array[Vector2i] = []
@@ -38,6 +43,7 @@ func show_plan(entrance_pos: Vector2i, route: Array[Vector2i], picked_sources: A
 	_route = route.duplicate()
 	_picked_sources = picked_sources.duplicate()
 	var opts := options if options is Dictionary else {}
+	_preview = bool(opts.get("preview", false))
 	_tile_mode = bool(opts.get("tile_mode", false)) or str(opts.get("mode", "")) == "air"
 	_show_route_line = bool(opts.get("show_route_line", true))
 	_tile_size_cells = maxi(1, int(opts.get("tile_size_cells", 1)))
@@ -51,6 +57,7 @@ func clear_all() -> void:
 	_picked_sources.clear()
 	_tile_mode = false
 	_show_route_line = true
+	_preview = false
 	_tile_size_cells = 1
 	_legal_tiles.clear()
 	_selected_tiles.clear()
@@ -80,6 +87,8 @@ func _rebuild_visuals() -> void:
 		queue_redraw()
 		return
 
+	_route_line.default_color = PREVIEW_ROUTE_COLOR if _preview else ROUTE_COLOR
+	_route_line.width = PREVIEW_ROUTE_WIDTH if _preview else ROUTE_WIDTH
 	_route_line.clear_points()
 	_route_line.visible = (not _tile_mode) and _show_route_line
 
@@ -91,7 +100,7 @@ func _rebuild_visuals() -> void:
 		if start == Vector2i(-1, -1) and _route.size() > 0:
 			start = _route[0]
 		if start != Vector2i(-1, -1):
-			_add_marker(start, START_COLOR)
+			_add_marker(start, PREVIEW_START_COLOR if _preview else START_COLOR)
 
 	queue_redraw()
 

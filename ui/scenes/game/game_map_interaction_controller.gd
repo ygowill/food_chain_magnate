@@ -5,6 +5,8 @@ extends RefCounted
 
 signal mode_changed(mode: String, payload: Dictionary)
 signal procure_drinks_source_selected(world_pos: Vector2i)
+signal procure_drinks_start_restaurant_selected(restaurant_id: String)
+signal procure_drinks_start_restaurant_hovered(restaurant_id: String)
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingModeClass = preload("res://ui/scenes/game/game_map_interaction_marketing_mode.gd")
@@ -28,6 +30,7 @@ var _piece_valid_anchors: Dictionary = {} # Vector2i -> true
 var _marketing_valid_anchors: Dictionary = {} # Vector2i -> true
 var _marketing_outside_to_anchor: Dictionary = {} # outside_world_pos(Vector2i) -> {anchor: Vector2i, axis: String, attach: String} (airplane only)
 var _distance_tool_from: Vector2i = Vector2i(-1, -1)
+var _procure_drinks_hover_restaurant_id: String = ""
 
 var marketing_panel = null
 var restaurant_placement_overlay = null
@@ -101,6 +104,7 @@ func notify_custom_mode_highlight(mode_id: String, tile_id: String, rotation: in
 func begin_selection(mode: String, payload: Dictionary = {}) -> void:
 	_mode = mode
 	_payload = payload.duplicate(true)
+	_reset_procure_drinks_restaurant_hover()
 	_ensure_module_modes_loaded()
 	_restaurant_valid_anchors.clear()
 	_house_valid_anchors.clear()
@@ -126,6 +130,7 @@ func clear_selection() -> void:
 	var old_mode := _mode
 	_mode = ""
 	_payload.clear()
+	_reset_procure_drinks_restaurant_hover()
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_structure_preview"):
 		_map_canvas.call("clear_structure_preview")
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_cell_highlights"):
@@ -221,6 +226,48 @@ func toggle_distance_tool() -> void:
 		_overlay_controller.hide_distance_overlay()
 	GameLog.info("Game", "距离工具已启用：点击起点，再点击终点")
 
+func try_select_procure_drinks_start_restaurant_by_index(index: int) -> bool:
+	var idx := int(index)
+	if idx <= 0:
+		return false
+	if _mode != "procure_drinks":
+		return false
+	var emp_type := str(_payload.get("employee_type", "")).strip_edges()
+	if emp_type.is_empty() or emp_type == "errand_boy":
+		return false
+	if _scene == null or _scene.game_engine == null:
+		return false
+	var state: GameState = _scene.game_engine.get_state()
+	if state == null:
+		return false
+	var restaurants_val = state.map.get("restaurants", null)
+	if not (restaurants_val is Dictionary):
+		return false
+	var restaurants: Dictionary = restaurants_val
+
+	var player_id := state.get_current_player_id()
+	var ids: Array[String] = []
+	for rid_val in restaurants.keys():
+		if not (rid_val is String):
+			continue
+		var rid := str(rid_val)
+		var rest_val = restaurants.get(rid, null)
+		if not (rest_val is Dictionary):
+			continue
+		var rest: Dictionary = rest_val
+		if int(rest.get("owner", -1)) != player_id:
+			continue
+		ids.append(rid)
+	ids.sort()
+	if idx > ids.size():
+		return false
+
+	var pick := str(ids[idx - 1]).strip_edges()
+	if pick.is_empty():
+		return false
+	procure_drinks_start_restaurant_selected.emit(pick)
+	return true
+
 func _on_map_cell_selected(world_pos: Vector2i) -> void:
 	if world_pos == Vector2i(-1, -1):
 		return
@@ -228,13 +275,24 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 	match _mode:
 		"procure_drinks":
 			var emp_type := str(_payload.get("employee_type", ""))
-			if _is_air_procure_employee(emp_type):
-				procure_drinks_source_selected.emit(world_pos)
-				return
 			if _scene == null or _scene.game_engine == null:
+				# 兼容：在没有 scene/engine 的最小测试中，air procure 仍然允许选点（不依赖 state）。
+				if _is_air_procure_employee(emp_type):
+					procure_drinks_source_selected.emit(world_pos)
 				return
 			var state: GameState = _scene.game_engine.get_state()
 			if state == null:
+				return
+
+			# 点击餐厅：在多餐厅时用于选择“起点餐厅”；只响应当前玩家的餐厅。
+			if emp_type != "errand_boy":
+				var rest_id := _resolve_procure_drinks_owned_restaurant_id_at(state, world_pos)
+				if not rest_id.is_empty():
+					procure_drinks_start_restaurant_selected.emit(rest_id)
+					return
+
+			if _is_air_procure_employee(emp_type):
+				procure_drinks_source_selected.emit(world_pos)
 				return
 			var sources_val = state.map.get("drink_sources", null)
 			if not (sources_val is Array):
@@ -410,6 +468,95 @@ func _sync_procure_drinks_highlights() -> void:
 	if _map_canvas.has_method("set_cell_highlights"):
 		_map_canvas.call("set_cell_highlights", cells)
 
+func _sync_procure_drinks_hovered_restaurant(world_pos: Vector2i) -> void:
+	var rid := ""
+	if world_pos != Vector2i(-1, -1):
+		var emp_type := str(_payload.get("employee_type", "")).strip_edges()
+		if not emp_type.is_empty() and emp_type != "errand_boy":
+			if _scene != null and _scene.game_engine != null:
+				var state: GameState = _scene.game_engine.get_state()
+				if state != null:
+					rid = _resolve_procure_drinks_owned_restaurant_id_at(state, world_pos)
+	_set_procure_drinks_hover_restaurant_id(rid)
+
+func _set_procure_drinks_hover_restaurant_id(restaurant_id: String) -> void:
+	var next := str(restaurant_id).strip_edges()
+	if _procure_drinks_hover_restaurant_id == next:
+		return
+	_procure_drinks_hover_restaurant_id = next
+	procure_drinks_start_restaurant_hovered.emit(_procure_drinks_hover_restaurant_id)
+
+func _reset_procure_drinks_restaurant_hover() -> void:
+	_set_procure_drinks_hover_restaurant_id("")
+
+func _resolve_procure_drinks_owned_restaurant_id_at(state: GameState, world_pos: Vector2i) -> String:
+	if state == null:
+		return ""
+	if not (state.map is Dictionary):
+		return ""
+	var restaurants_val = state.map.get("restaurants", null)
+	if not (restaurants_val is Dictionary):
+		return ""
+	var restaurants: Dictionary = restaurants_val
+	var player_id := state.get_current_player_id()
+
+	# entrance_pos -> rest_id（仅限当前玩家的餐厅）
+	var id_by_entrance: Dictionary = {}
+	for rid_val in restaurants.keys():
+		if not (rid_val is String):
+			continue
+		var rid := str(rid_val)
+		var rest_val = restaurants.get(rid, null)
+		if not (rest_val is Dictionary):
+			continue
+		var rest: Dictionary = rest_val
+		if int(rest.get("owner", -1)) != player_id:
+			continue
+		var ep = rest.get("entrance_pos", null)
+		if ep is Vector2i:
+			id_by_entrance[Vector2i(ep)] = rid
+
+	# 优先用 MapCanvas 的 structure 索引：允许点击餐厅占地任意格（不仅是入口格）
+	if is_instance_valid(_map_canvas):
+		var structures_val = _map_canvas.get("_structures_by_anchor")
+		if structures_val is Dictionary:
+			var structures: Dictionary = structures_val
+			var origin := Vector2i.ZERO
+			if _map_canvas.has_method("get_world_origin"):
+				var wo = _map_canvas.call("get_world_origin")
+				if wo is Vector2i:
+					origin = Vector2i(wo)
+			var view_pos := world_pos - origin
+
+			for anchor_val in structures.keys():
+				if not (anchor_val is Vector2i):
+					continue
+				var anchor: Vector2i = anchor_val
+				var info_val = structures.get(anchor, null)
+				if not (info_val is Dictionary):
+					continue
+				var info: Dictionary = info_val
+				if str(info.get("piece_id", "")) != "restaurant":
+					continue
+				if int(info.get("owner", -1)) != player_id:
+					continue
+				var min_pos_val = info.get("min", null)
+				var max_pos_val = info.get("max", null)
+				if not (min_pos_val is Vector2i) or not (max_pos_val is Vector2i):
+					continue
+				var min_pos: Vector2i = min_pos_val
+				var max_pos: Vector2i = max_pos_val
+				if view_pos.x < min_pos.x or view_pos.x > max_pos.x or view_pos.y < min_pos.y or view_pos.y > max_pos.y:
+					continue
+				var found = id_by_entrance.get(anchor, "")
+				if found is String and not str(found).is_empty():
+					return str(found)
+
+	var direct = id_by_entrance.get(world_pos, "")
+	if direct is String:
+		return str(direct)
+	return ""
+
 func _is_air_procure_employee(employee_type: String) -> bool:
 	if employee_type.is_empty():
 		return false
@@ -444,6 +591,9 @@ func _on_map_cell_hovered(world_pos: Vector2i) -> void:
 	var handler = _custom_mode_handlers.get(_mode, null)
 	if handler != null and is_instance_valid(handler) and handler.has_method("on_cell_hovered"):
 		handler.call("on_cell_hovered", world_pos)
+		return
+	if _mode == "procure_drinks":
+		_sync_procure_drinks_hovered_restaurant(world_pos)
 		return
 	if _mode == "marketing":
 		if _marketing_mode != null:

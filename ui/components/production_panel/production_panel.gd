@@ -8,6 +8,7 @@ signal cancelled()
 signal producer_changed(employee_type: String, production_type: String)
 signal drinks_clear_requested()
 signal drinks_undo_requested()
+signal drinks_restaurant_changed(restaurant_id: String)
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var mode_label: Label = $MarginContainer/VBoxContainer/ModeLabel
@@ -47,6 +48,8 @@ var _selected_food_type: String = ""
 
 var _drink_type_option: OptionButton = null
 var _drink_type_label: Label = null
+var _drinks_restaurant_option: OptionButton = null
+var _drinks_restaurant_label: Label = null
 var _drinks_selection_label: Label = null
 var _drinks_error_label: Label = null
 var _drinks_undo_btn: Button = null
@@ -56,6 +59,13 @@ var _available_drink_types: Array[String] = []
 var _selected_drink_type: String = ""
 var _drinks_selected_sources_count: int = 0
 var _drinks_confirm_ready: bool = false
+var _drinks_available_restaurants: Array[String] = []
+var _drinks_restaurant_label_by_id: Dictionary = {} # restaurant_id -> display label
+var _drinks_selected_restaurant_id: String = ""
+var _drinks_restaurant_require_selection: bool = false
+var _drinks_restaurant_show_selector: bool = false
+var _drinks_hover_preview_text: String = ""
+var _suppress_drinks_restaurant_signal: bool = false
 
 var _skin = null
 
@@ -147,6 +157,87 @@ func get_selected_drink_type() -> String:
 func get_selected_food_type() -> String:
 	return _selected_food_type
 
+func set_drinks_procure_restaurants(restaurants: Array[Dictionary], selected_restaurant_id: String = "", require_selection: bool = false) -> void:
+	var prev_selected := _drinks_selected_restaurant_id
+
+	_drinks_available_restaurants.clear()
+	_drinks_restaurant_label_by_id.clear()
+	_drinks_selected_restaurant_id = ""
+	_drinks_restaurant_require_selection = bool(require_selection)
+
+	var seen := {}
+	for r_val in restaurants:
+		if not (r_val is Dictionary):
+			continue
+		var r: Dictionary = r_val
+		var rid := str(r.get("id", "")).strip_edges()
+		if rid.is_empty():
+			continue
+		if seen.has(rid):
+			continue
+		seen[rid] = true
+		_drinks_available_restaurants.append(rid)
+		var label := str(r.get("label", rid)).strip_edges()
+		_drinks_restaurant_label_by_id[rid] = label if not label.is_empty() else rid
+	_drinks_available_restaurants.sort()
+
+	_drinks_restaurant_show_selector = (_drinks_available_restaurants.size() > 1) or _drinks_restaurant_require_selection
+
+	if _drinks_restaurant_option != null:
+		_suppress_drinks_restaurant_signal = true
+		_drinks_restaurant_option.clear()
+
+		if _drinks_restaurant_show_selector:
+			if _drinks_restaurant_require_selection:
+				_drinks_restaurant_option.add_item("请选择起点餐厅")
+				_drinks_restaurant_option.set_item_metadata(0, "")
+
+			for rid2 in _drinks_available_restaurants:
+				_drinks_restaurant_option.add_item(str(_drinks_restaurant_label_by_id.get(rid2, rid2)))
+				var idx := _drinks_restaurant_option.get_item_count() - 1
+				_drinks_restaurant_option.set_item_metadata(idx, rid2)
+
+			var requested := str(selected_restaurant_id).strip_edges()
+			if requested.is_empty():
+				requested = str(prev_selected).strip_edges()
+
+			var select_idx := -1
+			if not requested.is_empty():
+				for i in range(_drinks_restaurant_option.get_item_count()):
+					var meta = _drinks_restaurant_option.get_item_metadata(i)
+					if str(meta).strip_edges() == requested:
+						select_idx = i
+						break
+
+			if select_idx < 0:
+				if _drinks_restaurant_require_selection:
+					select_idx = 0
+				else:
+					select_idx = 0
+
+			if select_idx >= 0 and select_idx < _drinks_restaurant_option.get_item_count():
+				_drinks_restaurant_option.select(select_idx)
+				# 视觉可用性：当餐厅很多时，确保下拉列表滚动到当前选中项（例如通过地图点击切换起点）。
+				var popup := _drinks_restaurant_option.get_popup()
+				if popup != null and is_instance_valid(popup):
+					if popup.has_method("set_focused_item"):
+						popup.call("set_focused_item", select_idx)
+					if popup.has_method("scroll_to_item"):
+						popup.call("scroll_to_item", select_idx)
+				var meta2 = _drinks_restaurant_option.get_item_metadata(select_idx)
+				_drinks_selected_restaurant_id = str(meta2).strip_edges()
+		else:
+			_drinks_selected_restaurant_id = ""
+
+		_suppress_drinks_restaurant_signal = false
+
+	_update_drinks_controls_visibility()
+	_update_confirm_state()
+	_update_info()
+
+func get_selected_drinks_procure_restaurant_id() -> String:
+	return _drinks_selected_restaurant_id
+
 func set_drinks_procurement_state(selected_sources_count: int, confirm_ready: bool, error_text: String = "") -> void:
 	_drinks_selected_sources_count = maxi(0, selected_sources_count)
 	_drinks_confirm_ready = confirm_ready
@@ -154,6 +245,12 @@ func set_drinks_procurement_state(selected_sources_count: int, confirm_ready: bo
 		_drinks_error_label.text = str(error_text).strip_edges()
 		_drinks_error_label.visible = not _drinks_error_label.text.is_empty()
 	_update_drinks_selection_label()
+	_update_confirm_state()
+	_update_info()
+
+func set_drinks_hover_preview_text(text: String) -> void:
+	_drinks_hover_preview_text = str(text).strip_edges()
+	_update_info()
 	_update_confirm_state()
 	_update_info()
 
@@ -199,6 +296,8 @@ func _rebuild_content() -> void:
 
 	_drink_type_label = null
 	_drink_type_option = null
+	_drinks_restaurant_label = null
+	_drinks_restaurant_option = null
 	_drinks_selection_label = null
 	_drinks_error_label = null
 	_drinks_undo_btn = null
@@ -226,6 +325,8 @@ func _apply_embedding_layout() -> void:
 		scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if embedded else ScrollContainer.SCROLL_MODE_DISABLED
 	if _drink_type_option != null:
 		_drink_type_option.custom_minimum_size = Vector2.ZERO if embedded else Vector2(380, 0)
+	if _drinks_restaurant_option != null:
+		_drinks_restaurant_option.custom_minimum_size = Vector2.ZERO if embedded else Vector2(380, 0)
 
 func _rebuild_employee_options() -> void:
 	if _employee_picker == null:
@@ -336,6 +437,8 @@ func _update_confirm_state() -> void:
 			enabled = enabled and not _selected_drink_type.is_empty()
 		else:
 			enabled = enabled and _drinks_confirm_ready
+			if _drinks_restaurant_require_selection:
+				enabled = enabled and not _drinks_selected_restaurant_id.is_empty()
 	elif _production_type == "food":
 		if not _available_food_types.is_empty():
 			enabled = enabled and not _selected_food_type.is_empty()
@@ -357,17 +460,30 @@ func _update_info() -> void:
 			var drink_text := _selected_drink_type if not _selected_drink_type.is_empty() else "（请选择）"
 			_info_label.text = "%s：选择 1 种饮料并直接获得 1 瓶（%s）。" % [emp_name, drink_text]
 		else:
+			var start_text := ""
+			if _drinks_restaurant_show_selector:
+				if not _drinks_selected_restaurant_id.is_empty():
+					var rlabel := str(_drinks_restaurant_label_by_id.get(_drinks_selected_restaurant_id, _drinks_selected_restaurant_id)).strip_edges()
+					if not rlabel.is_empty():
+						start_text = "起点：%s，" % rlabel
+				elif _drinks_restaurant_require_selection:
+					start_text = "请先选择起点餐厅，"
+
 			var is_air := _is_air_procure_employee_type(_selected_employee_type)
 			var suffix := "（请点击地图上的饮料点）"
 			if is_air:
 				suffix = "（从餐厅开始选择相连板块）"
 				if _drinks_selected_sources_count > 0:
 					suffix = "（已选板块: %d）" % _drinks_selected_sources_count
-				_info_label.text = "%s：从餐厅所在板块开始，连续选择相连板块 → 系统生成路线 → 确认后开始采购%s" % [emp_name, suffix]
+				_info_label.text = "%s：%s从餐厅所在板块开始，连续选择相连板块 → 系统生成路线 → 确认后开始采购%s" % [emp_name, start_text, suffix]
 			else:
 				if _drinks_selected_sources_count > 0:
 					suffix = "（已选进货点: %d）" % _drinks_selected_sources_count
-				_info_label.text = "%s：点击地图饮料点逐个选择 → 系统生成路线 → 确认后开始采购%s" % [emp_name, suffix]
+				_info_label.text = "%s：%s点击地图饮料点逐个选择 → 系统生成路线 → 确认后开始采购%s" % [emp_name, start_text, suffix]
+			if _drinks_restaurant_show_selector:
+				_info_label.text = "%s（可点击餐厅或按 1-9 切换起点）" % _info_label.text
+			if not _drinks_hover_preview_text.is_empty():
+				_info_label.text = "%s\n%s" % [_info_label.text, _drinks_hover_preview_text]
 		return
 
 	# food
@@ -466,6 +582,17 @@ func _build_drinks_controls(parent: VBoxContainer) -> void:
 	_drink_type_option.item_selected.connect(_on_drink_type_selected)
 	parent.add_child(_drink_type_option)
 
+	_drinks_restaurant_label = Label.new()
+	_drinks_restaurant_label.text = "起点餐厅"
+	_drinks_restaurant_label.add_theme_font_size_override("font_size", 12)
+	parent.add_child(_drinks_restaurant_label)
+
+	_drinks_restaurant_option = OptionButton.new()
+	_drinks_restaurant_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_drinks_restaurant_option.custom_minimum_size = Vector2.ZERO if is_embedded_in_right_panel() else Vector2(380, 0)
+	_drinks_restaurant_option.item_selected.connect(_on_drinks_restaurant_selected)
+	parent.add_child(_drinks_restaurant_option)
+
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	parent.add_child(row)
@@ -494,6 +621,7 @@ func _build_drinks_controls(parent: VBoxContainer) -> void:
 	parent.add_child(_drinks_error_label)
 
 	_rebuild_drink_type_options()
+	_rebuild_drinks_restaurant_options()
 
 func _build_food_controls(parent: VBoxContainer) -> void:
 	_food_type_label = Label.new()
@@ -603,6 +731,17 @@ func _rebuild_drink_type_options() -> void:
 		_drink_type_option.select(0)
 		_apply_selected_drink_type(0)
 
+func _rebuild_drinks_restaurant_options() -> void:
+	if _drinks_restaurant_option == null:
+		return
+	var opts: Array[Dictionary] = []
+	for rid in _drinks_available_restaurants:
+		opts.append({
+			"id": rid,
+			"label": str(_drinks_restaurant_label_by_id.get(rid, rid)),
+		})
+	set_drinks_procure_restaurants(opts, _drinks_selected_restaurant_id, _drinks_restaurant_require_selection)
+
 func _apply_selected_drink_type(index: int) -> void:
 	if _drink_type_option == null:
 		return
@@ -613,6 +752,19 @@ func _apply_selected_drink_type(index: int) -> void:
 
 func _on_drink_type_selected(index: int) -> void:
 	_apply_selected_drink_type(index)
+	_update_confirm_state()
+	_update_info()
+
+func _on_drinks_restaurant_selected(index: int) -> void:
+	if _suppress_drinks_restaurant_signal:
+		return
+	if _drinks_restaurant_option == null:
+		return
+	if index < 0 or index >= _drinks_restaurant_option.get_item_count():
+		return
+	var meta = _drinks_restaurant_option.get_item_metadata(index)
+	_drinks_selected_restaurant_id = str(meta).strip_edges()
+	drinks_restaurant_changed.emit(_drinks_selected_restaurant_id)
 	_update_confirm_state()
 	_update_info()
 
@@ -630,6 +782,10 @@ func _update_drinks_controls_visibility() -> void:
 		_drink_type_label.visible = is_errand
 	if _drink_type_option != null:
 		_drink_type_option.visible = is_errand
+	if _drinks_restaurant_label != null:
+		_drinks_restaurant_label.visible = (not is_errand) and _drinks_restaurant_show_selector
+	if _drinks_restaurant_option != null:
+		_drinks_restaurant_option.visible = (not is_errand) and _drinks_restaurant_show_selector
 	if _drinks_selection_label != null:
 		_drinks_selection_label.visible = not is_errand
 	if _drinks_undo_btn != null:

@@ -110,6 +110,37 @@ static func draw_restaurant(
 		var outline_col := Color(0.2, 0.8, 1.0, 0.9 * clampf(alpha, 0.0, 1.0))
 		canvas.draw_rect(structure_rect, outline_col, false, outline_w)
 
+	# procure_drinks：高亮当前选择的起点餐厅 + 在多餐厅时显示序号。
+	var procure_anchor_val = canvas.get("_procure_drinks_selected_restaurant_anchor") if canvas != null else null
+	var is_procure_selected := procure_anchor_val is Vector2i and Vector2i(procure_anchor_val) == anchor
+	if is_procure_selected:
+		var outline_w2 := maxf(2.0, float(cell_size) * 0.08)
+		outline_w2 = minf(outline_w2, float(cell_size))
+		var outline_col2 := Color(1.0, 0.85, 0.2, 0.95 * clampf(alpha, 0.0, 1.0))
+		canvas.draw_rect(structure_rect, outline_col2, false, outline_w2)
+
+	# procure_drinks：hover 预览高亮（非选中态）。
+	var hover_anchor_val = canvas.get("_procure_drinks_hovered_restaurant_anchor") if canvas != null else null
+	var is_procure_hovered := hover_anchor_val is Vector2i and Vector2i(hover_anchor_val) == anchor
+	if is_procure_hovered and not is_procure_selected:
+		var outline_w3 := maxf(2.0, float(cell_size) * 0.07)
+		outline_w3 = minf(outline_w3, float(cell_size))
+		var outline_col3 := Color(0.35, 0.8, 1.0, 0.90 * clampf(alpha, 0.0, 1.0))
+		canvas.draw_rect(structure_rect, outline_col3, false, outline_w3)
+
+	var idx_map_val = canvas.get("_procure_drinks_restaurant_index_by_anchor") if canvas != null else null
+	if idx_map_val is Dictionary:
+		var idx_val = (idx_map_val as Dictionary).get(anchor, 0)
+		var idx := 0
+		if idx_val is int:
+			idx = int(idx_val)
+		elif idx_val is float:
+			var f: float = float(idx_val)
+			if f == floor(f):
+				idx = int(f)
+		if idx > 0:
+			draw_restaurant_index(canvas, cell_size, structure_rect, idx, alpha)
+
 static func draw_restaurant_entrance_marker(canvas, cell_size: int, anchor: Vector2i, info: Dictionary, alpha: float = 1.0) -> void:
 	var min_pos_val = info.get("min", null)
 	var max_pos_val = info.get("max", null)
@@ -147,6 +178,29 @@ static func draw_restaurant_entrance_marker(canvas, cell_size: int, anchor: Vect
 	elif is_bottom and is_right:
 		canvas.draw_rect(Rect2(r.position + Vector2(r.size.x - pad - length, r.size.y - pad - thickness), Vector2(length, thickness)), col, true)
 		canvas.draw_rect(Rect2(r.position + Vector2(r.size.x - pad - thickness, r.size.y - pad - length), Vector2(thickness, length)), col, true)
+
+static func compute_restaurant_index_rect(cell_size: int, structure_rect: Rect2) -> Rect2:
+	var pad := maxf(3.0, float(cell_size) * 0.10)
+	var bg_size := Vector2(float(cell_size) * 0.80, float(cell_size) * 0.58)
+	var pos := structure_rect.position + Vector2(pad, pad)
+	return Rect2(pos, bg_size)
+
+static func draw_restaurant_index(canvas, cell_size: int, structure_rect: Rect2, idx: int, alpha: float = 1.0) -> void:
+	if idx <= 0:
+		return
+	var text := str(idx).strip_edges()
+	if text.is_empty():
+		return
+	var label_rect := compute_restaurant_index_rect(cell_size, structure_rect)
+	var bg := Color(0, 0, 0, 0.55 * clampf(alpha, 0.0, 1.0))
+	canvas.draw_rect(label_rect, bg, true)
+
+	var pad := maxf(3.0, float(cell_size) * 0.12)
+	var font_size := maxi(11, int(round(float(cell_size) * 0.34)))
+	var font: Font = ThemeDB.fallback_font
+	var baseline := label_rect.position + Vector2(0.0, label_rect.size.y - pad)
+	canvas.draw_string(font, baseline + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_CENTER, label_rect.size.x, font_size, Color(0, 0, 0, 0.85))
+	canvas.draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_CENTER, label_rect.size.x, font_size, Color(1, 1, 1, 1))
 
 static func draw_house_and_garden(canvas, cell_size: int, anchor: Vector2i, info: Dictionary, alpha: float = 1.0) -> void:
 	var min_pos_val = info.get("min", null)

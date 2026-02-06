@@ -172,6 +172,14 @@ func _run_all() -> int:
 			"fn": func() -> Result: return TestRefs.AirProcureStartTileChoiceTestClass.run(),
 		},
 		{
+			"name": "RoadProcureStartRestaurantChoiceTest",
+			"fn": func() -> Result: return TestRefs.RoadProcureStartRestaurantChoiceTestClass.run(),
+		},
+		{
+			"name": "ProcureDrinksStartRestaurantSelectTest",
+			"fn": func() -> Result: return TestRefs.ProcureDrinksStartRestaurantSelectTestClass.run(),
+		},
+		{
 			"name": "PlaceHouseRulesTest",
 			"fn": func() -> Result: return TestRefs.PlaceHouseRulesTestClass.run(2, 12345),
 		},

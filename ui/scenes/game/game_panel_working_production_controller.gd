@@ -34,6 +34,8 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 func hide() -> void:
 	if is_instance_valid(production_panel):
 		production_panel.visible = false
+	if _procure_controller != null and _procure_controller.has_method("clear_procure_restaurant_choice_ui_and_overlays"):
+		_procure_controller.call("clear_procure_restaurant_choice_ui_and_overlays")
 
 func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	if state == null:
@@ -44,11 +46,13 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 		production_panel.visible = false
 		if _procure_controller != null:
 			_procure_controller.hide_procurement_route_overlay()
+			_procure_controller.call("clear_procure_restaurant_choice_ui_and_overlays")
 		return
 	if state.sub_phase != DefsClass.SUB_PHASE_GET_FOOD and state.sub_phase != DefsClass.SUB_PHASE_GET_DRINKS:
 		production_panel.visible = false
 		if _procure_controller != null:
 			_procure_controller.hide_procurement_route_overlay()
+			_procure_controller.call("clear_procure_restaurant_choice_ui_and_overlays")
 		return
 
 	if force_full_refresh:
@@ -136,6 +140,7 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	if state.sub_phase != DefsClass.SUB_PHASE_GET_DRINKS:
 		if _procure_controller != null:
 			_procure_controller.hide_procurement_route_overlay()
+			_procure_controller.call("clear_procure_restaurant_choice_ui_and_overlays")
 
 func show(production_type: String) -> void:
 	if _scene == null or _scene.game_engine == null:
@@ -155,6 +160,8 @@ func show(production_type: String) -> void:
 			production_panel.drinks_clear_requested.connect(_on_drinks_clear_requested)
 		if production_panel.has_signal("drinks_undo_requested"):
 			production_panel.drinks_undo_requested.connect(_on_drinks_undo_requested)
+		if production_panel.has_signal("drinks_restaurant_changed"):
+			production_panel.drinks_restaurant_changed.connect(_on_drinks_restaurant_changed)
 		if production_panel.has_signal("cancelled"):
 			production_panel.cancelled.connect(_on_cancelled)
 		_scene.add_child(production_panel)
@@ -328,7 +335,15 @@ func _on_drinks_undo_requested() -> void:
 	if _procure_controller != null:
 		_procure_controller.on_drinks_undo_requested()
 
+func _on_drinks_restaurant_changed(restaurant_id: String) -> void:
+	if _scene == null or _scene.game_engine == null:
+		return
+	if _procure_controller == null:
+		return
+	var state: GameState = _scene.game_engine.get_state()
+	if _procure_controller.has_method("on_drinks_start_restaurant_changed"):
+		_procure_controller.call("on_drinks_start_restaurant_changed", state, restaurant_id)
+
 func _on_cancelled() -> void:
 	if _hide_all.is_valid():
 		_hide_all.call()
-
