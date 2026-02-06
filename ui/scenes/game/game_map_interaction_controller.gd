@@ -28,7 +28,7 @@ var _restaurant_valid_anchors: Dictionary = {} # Vector2i -> true
 var _house_valid_anchors: Dictionary = {} # Vector2i -> true
 var _piece_valid_anchors: Dictionary = {} # Vector2i -> true
 var _marketing_valid_anchors: Dictionary = {} # Vector2i -> true
-var _marketing_outside_to_anchor: Dictionary = {} # outside_world_pos(Vector2i) -> {anchor: Vector2i, axis: String, attach: String} (airplane only)
+var _marketing_outside_to_anchor: Dictionary = {} # outside_world_pos(Vector2i) -> {anchor: Vector2i, axis: String, attach: String} (outside marketing)
 var _distance_tool_from: Vector2i = Vector2i(-1, -1)
 var _procure_drinks_hover_restaurant_id: String = ""
 
@@ -409,7 +409,7 @@ func _update_map_outside_margin_for_mode() -> void:
 	var requested := 0
 	if _mode == "marketing":
 		var mt := str(_payload.get("marketing_type", "")).strip_edges()
-		if mt == "airplane":
+		if mt == "airplane" or mt == "gourmet_guide":
 			requested = 2
 	var handler = _custom_mode_handlers.get(_mode, null)
 	if handler != null and is_instance_valid(handler) and handler.has_method("get_outside_margin_override"):

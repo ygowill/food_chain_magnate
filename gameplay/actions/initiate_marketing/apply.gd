@@ -131,21 +131,25 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 	# 使用员工：用于“first_marketeer_used”等里程碑
 	EmployeeUsageHelperClass.append_use_employee_warning(warnings, state, player_id, employee_type)
 
-	# 飞机轴与 tile 索引
+	# 外围营销（飞机/美食指南）轴与 tile 索引
 	var axis := ""
 	var tile_index := -1
-	if marketing_type == "airplane":
+	if marketing_type == "airplane" or marketing_type == "gourmet_guide":
 		var axis_result := action.optional_string_param(command, "axis", "")
 		if not axis_result.ok:
 			return axis_result
 		axis = axis_result.value
 		if axis.is_empty():
 			axis = _infer_airplane_axis(state, world_pos, Vector2i.ONE)
-		if axis != "row" and axis != "col":
-			return Result.failure("飞机缺少 axis（row/col）")
-		# Keep a stable index for debugging/replays. Semantics: start row/col index (cell-level, not tile-level).
-		var idx := CoordsClass.world_to_index(state, world_pos)
-		tile_index = idx.y if axis == "row" else idx.x
+		if marketing_type == "airplane":
+			if axis != "row" and axis != "col":
+				return Result.failure("飞机缺少 axis（row/col）")
+			# Keep a stable index for debugging/replays. Semantics: start row/col index (cell-level, not tile-level).
+			var idx := CoordsClass.world_to_index(state, world_pos)
+			tile_index = idx.y if axis == "row" else idx.x
+		else:
+			if axis != "row" and axis != "col":
+				axis = ""
 
 	# 创建营销实例（按 board_number 唯一）
 	var instance := {

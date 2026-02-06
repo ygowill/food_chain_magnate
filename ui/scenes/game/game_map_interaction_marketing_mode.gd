@@ -1,5 +1,5 @@
 # Game scene：地图交互控制器 - Marketing 模式逻辑下沉
-# 负责：marketing 高亮计算、hover 预览、点击映射（含 airplane 外圈选择）。
+# 负责：marketing 高亮计算、hover 预览、点击映射（含外围营销：airplane/gourmet_guide 的外圈选择）。
 class_name GameMapInteractionMarketingMode
 extends RefCounted
 
@@ -24,9 +24,9 @@ func on_cell_selected(world_pos: Vector2i) -> void:
 
 	var mt0 := str(_controller._payload.get("marketing_type", ""))
 	var mapped_anchor := world_pos
-	var airplane_axis := ""
-	var airplane_attach := ""
-	if mt0 == "airplane" and not _controller._marketing_outside_to_anchor.is_empty() and _controller._marketing_outside_to_anchor.has(world_pos):
+	var outside_axis := ""
+	var outside_attach := ""
+	if (mt0 == "airplane" or mt0 == "gourmet_guide") and not _controller._marketing_outside_to_anchor.is_empty() and _controller._marketing_outside_to_anchor.has(world_pos):
 		var info_val = _controller._marketing_outside_to_anchor.get(world_pos, null)
 		if info_val is Dictionary:
 			var info: Dictionary = info_val
@@ -35,10 +35,10 @@ func on_cell_selected(world_pos: Vector2i) -> void:
 				mapped_anchor = Vector2i(inside_val)
 			var axis_val = info.get("axis", null)
 			if axis_val is String:
-				airplane_axis = str(axis_val)
+				outside_axis = str(axis_val)
 			var attach_val = info.get("attach", null)
 			if attach_val is String:
-				airplane_attach = str(attach_val)
+				outside_attach = str(attach_val)
 
 	if not _controller._marketing_valid_anchors.has(world_pos):
 		_controller._call_marketing_panel_method("set_error", ["该位置不可放置，请选择高亮的可放置格"])
@@ -53,7 +53,7 @@ func on_cell_selected(world_pos: Vector2i) -> void:
 	on_cell_hovered(world_pos)
 
 	if mt == "airplane":
-		var axis := airplane_axis
+		var axis := outside_axis
 		if axis.is_empty():
 			axis = _infer_airplane_axis_for_pos(mapped_anchor)
 		if axis.is_empty():
@@ -63,12 +63,30 @@ func on_cell_selected(world_pos: Vector2i) -> void:
 			return
 
 		_controller._payload["axis"] = axis
-		_controller._payload["attach"] = airplane_attach
+		_controller._payload["attach"] = outside_attach
 		_controller._payload["selected_target"] = mapped_anchor
 		_controller._call_marketing_panel_method("set_selected_target", [mapped_anchor, axis])
 		if _controller._overlay_controller != null:
 			var fs := _get_selected_marketing_board_base_size()
 			_controller._overlay_controller.preview_marketing_range(mapped_anchor, 0, mt, {"axis": axis, "footprint_size": fs})
+		return
+
+	if mt == "gourmet_guide":
+		var axis2 := outside_axis
+		if axis2.is_empty():
+			axis2 = _infer_airplane_axis_for_pos(mapped_anchor)
+		if axis2.is_empty():
+			if _controller._overlay_controller != null:
+				_controller._overlay_controller.hide_marketing_range_overlay()
+			_controller._call_marketing_panel_method("set_error", ["美食指南必须放置在地图边缘"])
+			return
+
+		_controller._payload["axis"] = axis2
+		_controller._payload["attach"] = outside_attach
+		_controller._payload["selected_target"] = mapped_anchor
+		_controller._call_marketing_panel_method("set_selected_target", [mapped_anchor, axis2])
+		if _controller._overlay_controller != null:
+			_controller._overlay_controller.preview_marketing_range(mapped_anchor, 0, mt)
 		return
 
 	_controller._payload.erase("axis")
@@ -111,9 +129,9 @@ func on_cell_hovered(world_pos: Vector2i) -> void:
 
 	# footprint 预览：hover 到合法 anchor 时展示 marketing board 的占地形状（允许透明）。
 	var preview_anchor := world_pos
-	var airplane_axis := ""
-	var airplane_attach := ""
-	if mt == "airplane" and not _controller._marketing_outside_to_anchor.is_empty() and _controller._marketing_outside_to_anchor.has(world_pos):
+	var outside_axis := ""
+	var outside_attach := ""
+	if (mt == "airplane" or mt == "gourmet_guide") and not _controller._marketing_outside_to_anchor.is_empty() and _controller._marketing_outside_to_anchor.has(world_pos):
 		var info_val = _controller._marketing_outside_to_anchor.get(world_pos, null)
 		if info_val is Dictionary:
 			var info: Dictionary = info_val
@@ -122,16 +140,16 @@ func on_cell_hovered(world_pos: Vector2i) -> void:
 				preview_anchor = Vector2i(inside_val)
 			var axis_val = info.get("axis", null)
 			if axis_val is String:
-				airplane_axis = str(axis_val)
+				outside_axis = str(axis_val)
 			var attach_val = info.get("attach", null)
 			if attach_val is String:
-				airplane_attach = str(attach_val)
+				outside_attach = str(attach_val)
 
 	var size := _get_selected_marketing_board_rotated_size()
 	var offset := Vector2i.ZERO
 
-	if mt == "airplane":
-		# 飞机营销：rotation 无意义；由贴边位置决定朝向（issue_tracker #40/#42）。
+	if mt == "airplane" or mt == "gourmet_guide":
+		# 外围营销：rotation 无意义；由贴边位置决定朝向（issue_tracker #40/#42）。
 		var base_size := _get_selected_marketing_board_base_size()
 		var thickness := 2
 		var length := 0
@@ -142,10 +160,10 @@ func on_cell_hovered(world_pos: Vector2i) -> void:
 		else:
 			thickness = mini(base_size.x, base_size.y)
 			length = maxi(base_size.x, base_size.y)
-		var axis2 := airplane_axis
+		var axis2 := outside_axis
 		if axis2.is_empty():
 			axis2 = _infer_airplane_axis_for_pos(preview_anchor)
-		var attach2 := airplane_attach
+		var attach2 := outside_attach
 		if attach2.is_empty() and _controller._scene != null and _controller._scene.game_engine != null:
 			var state2: GameState = _controller._scene.game_engine.get_state()
 			if state2 != null:
@@ -193,7 +211,7 @@ func on_cell_hovered(world_pos: Vector2i) -> void:
 
 	if _controller._overlay_controller != null:
 		if mt == "airplane":
-			var axis := airplane_axis
+			var axis := outside_axis
 			if axis.is_empty():
 				axis = _infer_airplane_axis_for_pos(preview_anchor)
 			if axis.is_empty():
@@ -275,6 +293,9 @@ func sync_highlights() -> void:
 	if mt == "airplane":
 		_sync_airplane_marketing_highlights(state, base_size)
 		return
+	if mt == "gourmet_guide":
+		_sync_gourmet_guide_marketing_highlights(state, base_size)
+		return
 
 	var size := base_size
 	if rotation == 90 or rotation == 270:
@@ -313,7 +334,7 @@ func sync_highlights() -> void:
 				empty_structure_cells_total += 1
 
 	# 营销占地：预先构建占用集合（考虑 footprint + rotation），避免每个候选点重复遍历。
-	# airplane 放在棋盘外，不应阻塞其它“棋盘内营销”的放置（issue_tracker #42）。
+	# 外围营销放在棋盘外，不应阻塞其它“棋盘内营销”的放置（issue_tracker #42）。
 	var occupied_cells := {}
 	if state.map.has("marketing_placements") and (state.map["marketing_placements"] is Dictionary):
 		var placements: Dictionary = state.map["marketing_placements"]
@@ -323,7 +344,7 @@ func sync_highlights() -> void:
 				continue
 			var p: Dictionary = p_val
 			var p_type := str(p.get("type", ""))
-			if p_type == "airplane":
+			if p_type == "airplane" or p_type == "gourmet_guide":
 				continue
 			var anchor_val = p.get("world_pos", null)
 			if not (anchor_val is Vector2i):
@@ -551,7 +572,7 @@ func _sync_airplane_marketing_highlights(state: GameState, base_size: Vector2i) 
 	var minp := CoordsClass.get_world_min(state)
 	var maxp := CoordsClass.get_world_max(state)
 
-	# Existing airplane segments on each side (to prevent overlap in outside area).
+	# Existing outside segments on each side (to prevent overlap in outside area).
 	# side -> Array[Vector2i(start,end)] where start/end are inclusive indexes along the varying axis.
 	var occupied := {"N": [], "S": [], "W": [], "E": []}
 	var placements_val = state.map.get("marketing_placements", null)
@@ -562,7 +583,8 @@ func _sync_airplane_marketing_highlights(state: GameState, base_size: Vector2i) 
 			if not (pv is Dictionary):
 				continue
 			var p: Dictionary = pv
-			if str(p.get("type", "")) != "airplane":
+			var t := str(p.get("type", ""))
+			if t != "airplane" and t != "gourmet_guide":
 				continue
 			var wp_val = p.get("world_pos", null)
 			if not (wp_val is Vector2i):
@@ -590,23 +612,28 @@ func _sync_airplane_marketing_highlights(state: GameState, base_size: Vector2i) 
 			if fs.x <= 0 or fs.y <= 0:
 				fs = Vector2i.ONE
 
+			var thickness2 := 2
 			var length2 := 0
 			if fs.x == 2 and fs.y != 2:
+				thickness2 = 2
 				length2 = fs.y
 			elif fs.y == 2 and fs.x != 2:
+				thickness2 = 2
 				length2 = fs.x
 			else:
+				thickness2 = mini(fs.x, fs.y)
 				length2 = maxi(fs.x, fs.y)
+			thickness2 = maxi(1, thickness2)
 			if length2 <= 0:
 				continue
 
 			if axis == "row":
-				var side := "W" if wp.x == minp.x else "E" if wp.x == maxp.x else ""
+				var side := "W" if wp.x == minp.x else "E" if wp.x == maxp.x or wp.x == (maxp.x - (thickness2 - 1)) else ""
 				if side.is_empty():
 					continue
 				occupied[side].append(Vector2i(wp.y, wp.y + length2 - 1))
 			else:
-				var side2 := "N" if wp.y == minp.y else "S" if wp.y == maxp.y else ""
+				var side2 := "N" if wp.y == minp.y else "S" if wp.y == maxp.y or wp.y == (maxp.y - (thickness2 - 1)) else ""
 				if side2.is_empty():
 					continue
 				occupied[side2].append(Vector2i(wp.x, wp.x + length2 - 1))
@@ -670,7 +697,155 @@ func _sync_airplane_marketing_highlights(state: GameState, base_size: Vector2i) 
 		_controller._map_canvas.call("set_cell_highlights", valid)
 
 	if valid.is_empty():
-		_controller._call_marketing_panel_method("set_error", ["没有可放置格：飞机必须贴边且不能与已有飞机重叠"])
+		_controller._call_marketing_panel_method("set_error", ["没有可放置格：飞机必须贴边且不能与已有外围营销重叠"])
+
+func _sync_gourmet_guide_marketing_highlights(state: GameState, base_size: Vector2i) -> void:
+	if not is_instance_valid(_controller._map_canvas):
+		return
+	if state == null:
+		return
+
+	var thickness := 2
+	var length := 0
+	if base_size.x == 2 and base_size.y != 2:
+		length = base_size.y
+	elif base_size.y == 2 and base_size.x != 2:
+		length = base_size.x
+	else:
+		thickness = mini(base_size.x, base_size.y)
+		length = maxi(base_size.x, base_size.y)
+	if length <= 0:
+		return
+
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
+
+	# Existing outside segments on each side (to prevent overlap in outside area).
+	# side -> Array[Vector2i(start,end)] where start/end are inclusive indexes along the varying axis.
+	var occupied := {"N": [], "S": [], "W": [], "E": []}
+	var placements_val = state.map.get("marketing_placements", null)
+	if placements_val is Dictionary:
+		var placements: Dictionary = placements_val
+		for k in placements.keys():
+			var pv = placements[k]
+			if not (pv is Dictionary):
+				continue
+			var p: Dictionary = pv
+			var t := str(p.get("type", ""))
+			if t != "airplane" and t != "gourmet_guide":
+				continue
+			var wp_val = p.get("world_pos", null)
+			if not (wp_val is Vector2i):
+				continue
+			var wp: Vector2i = wp_val
+
+			var axis := str(p.get("axis", "")).strip_edges()
+			if axis != "row" and axis != "col":
+				# Fallback inference for older data.
+				if wp.x == minp.x or wp.x == maxp.x:
+					axis = "row"
+				elif wp.y == minp.y or wp.y == maxp.y:
+					axis = "col"
+				else:
+					continue
+
+			var fs := Vector2i.ONE
+			var fs_val = p.get("footprint_size", null)
+			if fs_val is Vector2i:
+				fs = Vector2i(fs_val)
+			elif fs_val is Array:
+				var arr: Array = fs_val
+				if arr.size() == 2:
+					fs = Vector2i(int(arr[0]), int(arr[1]))
+			if fs.x <= 0 or fs.y <= 0:
+				fs = Vector2i.ONE
+
+			var thickness2 := 2
+			var length2 := 0
+			if fs.x == 2 and fs.y != 2:
+				thickness2 = 2
+				length2 = fs.y
+			elif fs.y == 2 and fs.x != 2:
+				thickness2 = 2
+				length2 = fs.x
+			else:
+				thickness2 = mini(fs.x, fs.y)
+				length2 = maxi(fs.x, fs.y)
+			thickness2 = maxi(1, thickness2)
+			if length2 <= 0:
+				continue
+
+			if axis == "row":
+				var side := "W" if wp.x == minp.x else "E" if wp.x == maxp.x or wp.x == (maxp.x - (thickness2 - 1)) else ""
+				if side.is_empty():
+					continue
+				occupied[side].append(Vector2i(wp.y, wp.y + length2 - 1))
+			else:
+				var side2 := "N" if wp.y == minp.y else "S" if wp.y == maxp.y or wp.y == (maxp.y - (thickness2 - 1)) else ""
+				if side2.is_empty():
+					continue
+				occupied[side2].append(Vector2i(wp.x, wp.x + length2 - 1))
+
+	var overlaps := func(segments: Array, start: int, end: int) -> bool:
+		for seg_val in segments:
+			if not (seg_val is Vector2i):
+				continue
+			var seg: Vector2i = seg_val
+			if not (end < seg.x or start > seg.y):
+				return true
+		return false
+
+	var valid: Array[Vector2i] = []
+
+	# Top/Bottom edges: axis=col, segment varies along X.
+	var max_start_x := maxp.x - length + 1
+	for x in range(minp.x, max_start_x + 1):
+		var start_x := x
+		var end_x := x + length - 1
+
+		# Top
+		if not overlaps.call(occupied["N"], start_x, end_x):
+			var anchor_top := Vector2i(x, minp.y)
+			var outside_top := anchor_top + Vector2i(0, -1)
+			_controller._marketing_outside_to_anchor[outside_top] = {"anchor": anchor_top, "axis": "col", "attach": "top"}
+			_controller._marketing_valid_anchors[outside_top] = true
+			valid.append(outside_top)
+
+		# Bottom
+		if not overlaps.call(occupied["S"], start_x, end_x):
+			var anchor_bottom := Vector2i(x, maxp.y)
+			var outside_bottom := anchor_bottom + Vector2i(0, 1)
+			_controller._marketing_outside_to_anchor[outside_bottom] = {"anchor": anchor_bottom, "axis": "col", "attach": "bottom"}
+			_controller._marketing_valid_anchors[outside_bottom] = true
+			valid.append(outside_bottom)
+
+	# Left/Right edges: axis=row, segment varies along Y.
+	var max_start_y := maxp.y - length + 1
+	for y in range(minp.y, max_start_y + 1):
+		var start_y := y
+		var end_y := y + length - 1
+
+		# Left
+		if not overlaps.call(occupied["W"], start_y, end_y):
+			var anchor_left := Vector2i(minp.x, y)
+			var outside_left := anchor_left + Vector2i(-1, 0)
+			_controller._marketing_outside_to_anchor[outside_left] = {"anchor": anchor_left, "axis": "row", "attach": "left"}
+			_controller._marketing_valid_anchors[outside_left] = true
+			valid.append(outside_left)
+
+		# Right
+		if not overlaps.call(occupied["E"], start_y, end_y):
+			var anchor_right := Vector2i(maxp.x, y)
+			var outside_right := anchor_right + Vector2i(1, 0)
+			_controller._marketing_outside_to_anchor[outside_right] = {"anchor": anchor_right, "axis": "row", "attach": "right"}
+			_controller._marketing_valid_anchors[outside_right] = true
+			valid.append(outside_right)
+
+	if _controller._map_canvas.has_method("set_cell_highlights"):
+		_controller._map_canvas.call("set_cell_highlights", valid)
+
+	if valid.is_empty():
+		_controller._call_marketing_panel_method("set_error", ["没有可放置格：美食指南必须贴边且不能与已有外围营销重叠"])
 
 func _infer_airplane_axis_for_pos(world_pos: Vector2i) -> String:
 	if _controller._scene == null or _controller._scene.game_engine == null:

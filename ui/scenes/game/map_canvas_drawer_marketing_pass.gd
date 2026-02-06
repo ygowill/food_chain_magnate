@@ -78,8 +78,8 @@ static func draw_marketing(canvas, cell_size: int) -> void:
 			Vector2(size.x * cell_size, size.y * cell_size)
 		)
 
-		# airplane：视觉上贴地图外侧边缘（不在地图内），并与格子对齐（issue_tracker #30）。
-		if key == "airplane":
+		# outside marketing：视觉上贴地图外侧边缘（不在地图内），并与格子对齐（issue_tracker #30/#64）。
+		if key == "airplane" or key == "gourmet_guide":
 			var map_origin: Vector2i = canvas._map_data.get("map_origin", Vector2i.ZERO)
 			var base_grid_size: Vector2i = canvas._base_grid_size
 			if base_grid_size == Vector2i.ZERO:
@@ -91,6 +91,12 @@ static func draw_marketing(canvas, cell_size: int) -> void:
 			var maxp := Vector2i(base_grid_size.x - map_origin.x - 1, base_grid_size.y - map_origin.y - 1)
 
 			var axis := str(p.get("axis", ""))
+			if axis != "row" and axis != "col":
+				# Fallback inference for older data.
+				if anchor.x == minp.x or anchor.x >= maxp.x - 1:
+					axis = "row"
+				elif anchor.y == minp.y or anchor.y >= maxp.y - 1:
+					axis = "col"
 			var attach := ""
 			if axis == "row":
 				attach = "left" if anchor.x == minp.x else "right" if anchor.x >= maxp.x - 1 else ""
