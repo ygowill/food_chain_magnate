@@ -174,6 +174,7 @@ func _on_marketing_enter_extension(state: GameState, phase_manager: PhaseManager
 	if rounds <= 0:
 		return Result.failure("%s: marketing_rounds 非法: %d" % [MODULE_ID, rounds])
 
+	var warnings: Array[String] = []
 	var total_added := 0
 	for side in BILLBOARD_SIDES:
 		if not boards.has(side):
@@ -201,14 +202,24 @@ func _on_marketing_enter_extension(state: GameState, phase_manager: PhaseManager
 			return Result.failure("%s: giant_billboards[%s].board_number 类型错误（期望 int）" % [MODULE_ID, side])
 		var board_number: int = int(board_number_val)
 
-		for _i in range(rounds * 2):
-			demands.append({
+		for _round_index in range(rounds):
+			# 每轮 Marketing：每个巨型广告牌对同一商品进行两次营销。
+			for _i in range(2):
+				demands.append({
+					"product": product,
+					"from_player": owner,
+					"board_number": board_number,
+					"type": "giant_billboard"
+				})
+				total_added += 1
+
+			# 里程碑联动：对齐 core/rules/phase/marketing_settlement.gd 的 DemandMarked 语义。
+			var ms := MilestoneSystemClass.process_event(state, "DemandMarked", {
+				"player_id": owner,
 				"product": product,
-				"from_player": owner,
-				"board_number": board_number,
-				"type": "giant_billboard"
 			})
-			total_added += 1
+			if not ms.ok:
+				warnings.append("里程碑触发失败(DemandMarked)：%s" % ms.error)
 
 	rural["demands"] = demands
 	houses[RURAL_HOUSE_ID] = rural
@@ -225,7 +236,10 @@ func _on_marketing_enter_extension(state: GameState, phase_manager: PhaseManager
 	rs["demands_added"] = int(rs.get("demands_added", 0)) + total_added
 	state.round_state["rural_marketeers"] = rs
 
-	return Result.success()
+	var result := Result.success()
+	if not warnings.is_empty():
+		result.with_warnings(warnings)
+	return result
 
 func _on_dinnertime_enter_before_primary(state: GameState, _phase_manager: PhaseManager) -> Result:
 	if state == null:

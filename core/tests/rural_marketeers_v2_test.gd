@@ -78,6 +78,15 @@ static func _test_airplane_segment_overlap_rejected(seed_val: int) -> Result:
 	if demands.size() != 5:
 		return Result.failure("rural_area.demands 应追加 2 条（cap 不生效），实际: %d" % demands.size())
 
+	# 里程碑联动：DemandMarked 应触发“首个营销汉堡”
+	var p0: Dictionary = s.players[0]
+	var ms_val = p0.get("milestones", null)
+	if not (ms_val is Array):
+		return Result.failure("player0.milestones 类型错误（期望 Array）")
+	var ms: Array = ms_val
+	if not ms.has("first_burger_marketed"):
+		return Result.failure("应触发 first_burger_marketed（DemandMarked）: %s" % str(ms))
+
 	# 由于 milestone effect，玩家 0 应有 offramp pending
 	if not s.round_state.has("rural_marketeers_offramp_pending") or not (s.round_state["rural_marketeers_offramp_pending"] is Dictionary):
 		return Result.failure("缺少 round_state.rural_marketeers_offramp_pending")
