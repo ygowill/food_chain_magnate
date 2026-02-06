@@ -7,7 +7,7 @@
 class_name NewMilestonesBrandDirectorV2Test
 extends RefCounted
 
-const MarketingSettlementClass = preload("res://core/rules/phase/marketing_settlement.gd")
+const MarketingSettlementClass = preload("res://modules/base_rules/rules/phase/marketing_settlement.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 

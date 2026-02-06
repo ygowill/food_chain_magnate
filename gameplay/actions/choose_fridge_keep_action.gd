@@ -2,7 +2,7 @@
 class_name ChooseFridgeKeepAction
 extends ActionExecutor
 
-const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
+const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cleanup_settlement.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")

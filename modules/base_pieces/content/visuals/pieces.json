@@ -10,6 +10,7 @@
 		"restaurant_logo_golden_duck_diner": {"texture": "res://modules/base_pieces/assets/map/logos/golden_duck_diner.png", "offset_px": [0, 0], "scale": [1, 1]},
 		"restaurant_logo_santa_maria_pizza": {"texture": "res://modules/base_pieces/assets/map/logos/santa_maria_pizza.png", "offset_px": [0, 0], "scale": [1, 1]},
 		"restaurant_logo_xango_blues_bar": {"texture": "res://modules/base_pieces/assets/map/logos/xango_blues_bar.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"restaurant_logo_sixth_chain": {"texture": "res://modules/base_pieces/assets/map/logos/sixth_chain.png", "offset_px": [0, 0], "scale": [1, 1]},
 		"restaurant": {"texture": "res://modules/base_pieces/assets/map/pieces/restaurant.png", "offset_px": [0, 0], "scale": [1, 1]}
 	}
 }

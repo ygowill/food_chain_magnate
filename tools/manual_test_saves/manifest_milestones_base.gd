@@ -167,7 +167,7 @@ static func get_cases() -> Array[Dictionary]:
 			"state.map.houses['house_1'].demands 应新增 product=soda 的需求（里程碑按 drink 归一化）。",
 		],
 		"related_tests": [
-			"core/rules/phase/marketing_settlement.gd",
+			"modules/base_rules/rules/phase/marketing_settlement.gd",
 		],
 	}))
 
@@ -187,7 +187,7 @@ static func get_cases() -> Array[Dictionary]:
 			"state.map.houses['house_1'].demands 应新增 product=pizza 的需求。",
 		],
 		"related_tests": [
-			"core/rules/phase/marketing_settlement.gd",
+			"modules/base_rules/rules/phase/marketing_settlement.gd",
 		],
 	}))
 
@@ -290,7 +290,7 @@ static func get_cases() -> Array[Dictionary]:
 			"进入 Cleanup 后库存被清空（无冰箱）。",
 		],
 		"related_tests": [
-			"core/rules/phase/cleanup_settlement.gd",
+			"modules/base_rules/rules/phase/cleanup_settlement.gd",
 			"core/tests/cleanup_inventory_test.gd",
 		],
 	}))
@@ -367,4 +367,3 @@ static func _case(overrides: Dictionary) -> Dictionary:
 	for k in overrides.keys():
 		c[k] = overrides[k]
 	return c
-

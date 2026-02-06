@@ -7,7 +7,7 @@ extends RefCounted
 
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
-const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
+const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cleanup_settlement.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 
 const Phase = PhaseDefsClass.Phase

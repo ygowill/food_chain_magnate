@@ -254,7 +254,7 @@ text = "玩家人数"
 [node name="CreatePlayersSpin" type="SpinBox" parent="Center/Panel/Margin/Root/Tabs/CreateTab/CreatePlayersRow"]
 layout_mode = 2
 min_value = 2.0
-max_value = 5.0
+max_value = 6.0
 step = 1.0
 rounded = true
 value = 2.0

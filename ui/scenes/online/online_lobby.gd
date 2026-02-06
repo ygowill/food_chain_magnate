@@ -8,7 +8,7 @@ const InfoDialogClass = preload("res://ui/dialogs/info_dialog.gd")
 const RoomListControllerClass = preload("res://ui/scenes/online/online_lobby_room_list_controller.gd")
 const RoomStateRendererClass = preload("res://ui/scenes/online/online_lobby_room_state_renderer.gd")
 
-const _COLOR_NAME_HINTS: Array[String] = ["红", "蓝", "绿", "黄", "紫"]
+const _COLOR_NAME_HINTS: Array[String] = ["红", "蓝", "绿", "黄", "紫", "橙"]
 
 @onready var panel: PanelContainer = $Center/Panel
 @onready var back_button: Button = $Center/Panel/Margin/Root/TopBar/BackButton

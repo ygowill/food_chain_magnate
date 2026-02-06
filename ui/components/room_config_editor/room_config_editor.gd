@@ -68,6 +68,8 @@ func set_from_room_config(cfg: Dictionary) -> void:
 		if enabled_val is Array:
 			_module_selector.set_initial_enabled_modules_v2(Array(enabled_val))
 
+	_sync_module_constraints_for_player_count()
+
 	_suppress_signals = false
 	_clear_error()
 
@@ -102,7 +104,23 @@ func validate() -> Result:
 	var r: Result = _module_selector.validate_selection()
 	if not r.ok:
 		return r
+
+	# 规则书：6 人局必须启用 New Districts（新区域）模块。
+	var desired_player_count := _get_spinbox_int_value(_player_count_spin)
+	if desired_player_count == 6:
+		var enabled: Array = _module_selector.get_enabled_modules_v2()
+		if not enabled.has("new_districts"):
+			return Result.failure("6 人局必须启用 New Districts（新区域）模块。")
 	return Result.success()
+
+func _sync_module_constraints_for_player_count() -> void:
+	if _module_selector == null or not is_instance_valid(_module_selector):
+		return
+	var desired_player_count := _get_spinbox_int_value(_player_count_spin)
+	if desired_player_count == 6:
+		_module_selector.set_forced_optional_modules(["new_districts"], "6 人局强制启用 New Districts（新区域）模块。")
+	else:
+		_module_selector.set_forced_optional_modules([])
 
 func _ensure_ui() -> void:
 	if _player_count_spin != null and is_instance_valid(_player_count_spin):
@@ -125,11 +143,13 @@ func _ensure_ui() -> void:
 	_player_count_spin.rounded = true
 	_player_count_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_player_count_spin.value_changed.connect(func(_v: float) -> void:
+		_sync_module_constraints_for_player_count()
 		_emit_changed()
 	)
 	var pc_le := _player_count_spin.get_line_edit()
 	if pc_le != null and is_instance_valid(pc_le):
 		pc_le.text_changed.connect(func(_t: String) -> void:
+			_sync_module_constraints_for_player_count()
 			_emit_changed()
 		)
 	player_row.add_child(_player_count_spin)
@@ -220,6 +240,7 @@ func _ensure_ui() -> void:
 	add_child(_error_label)
 
 	_refresh_seed_editability()
+	_sync_module_constraints_for_player_count()
 
 func _on_toggle_advanced_pressed() -> void:
 	if _advanced_section == null or not is_instance_valid(_advanced_section):

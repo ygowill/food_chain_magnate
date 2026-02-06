@@ -53,7 +53,7 @@ func _run() -> void:
 		quit(1)
 		return
 
-	var DinnertimeDistanceClass = load("res://core/rules/phase/dinnertime/dinnertime_distance.gd")
+	var DinnertimeDistanceClass = load("res://modules/base_rules/rules/phase/dinnertime/dinnertime_distance.gd")
 	if DinnertimeDistanceClass == null:
 		push_error("[%s] FAIL load DinnertimeDistance script" % NAME)
 		quit(1)

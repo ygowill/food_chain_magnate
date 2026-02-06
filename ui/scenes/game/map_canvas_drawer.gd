@@ -8,6 +8,7 @@ const RESTAURANT_LOGO_PIECE_IDS = [
 	"restaurant_logo_golden_duck_diner",
 	"restaurant_logo_santa_maria_pizza",
 	"restaurant_logo_xango_blues_bar",
+	"restaurant_logo_sixth_chain",
 ]
 
 const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")

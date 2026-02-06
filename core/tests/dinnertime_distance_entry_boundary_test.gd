@@ -2,7 +2,7 @@
 class_name DinnertimeDistanceEntryBoundaryTest
 extends RefCounted
 
-const DinnertimeDistanceClass = preload("res://core/rules/phase/dinnertime/dinnertime_distance.gd")
+const DinnertimeDistanceClass = preload("res://modules/base_rules/rules/phase/dinnertime/dinnertime_distance.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:

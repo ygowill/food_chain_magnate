@@ -65,7 +65,11 @@ func _run_all() -> int:
 		},
 		{
 			"name": "RestaurantLogoAssignmentTest",
-			"fn": func() -> Result: return TestRefs.RestaurantLogoAssignmentTestClass.run(3, 12345),
+			"fn": func() -> Result: return TestRefs.RestaurantLogoAssignmentTestClass.run(6, 12345),
+		},
+		{
+			"name": "SixPlayersSetupTest",
+			"fn": func() -> Result: return TestRefs.SixPlayersSetupTestClass.run(12345),
 		},
 		{
 			"name": "PaydaySalaryTokenEligibilityTest",
@@ -74,6 +78,10 @@ func _run_all() -> int:
 		{
 			"name": "CallbackResultContractTest",
 			"fn": func() -> Result: return TestRefs.CallbackResultContractTestClass.run(),
+		},
+		{
+			"name": "ModuleBoundaryContractTest",
+			"fn": func() -> Result: return TestRefs.ModuleBoundaryContractTestClass.run(),
 		},
 		{
 			"name": "OnlineRoomManagerTest",

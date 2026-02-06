@@ -3,7 +3,7 @@ class_name EffectRegistryV2Test
 extends RefCounted
 
 const EffectRegistryClass = preload("res://core/rules/effect_registry.gd")
-const DinnertimeSettlementClass = preload("res://core/rules/phase/dinnertime_settlement.gd")
+const DinnertimeSettlementClass = preload("res://modules/base_rules/rules/phase/dinnertime_settlement.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeDefClass = preload("res://core/data/employee_def.gd")
 const ContentCatalogClass = preload("res://core/modules/v2/content_catalog.gd")

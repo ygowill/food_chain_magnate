@@ -2,7 +2,7 @@
 # 负责：根据 seed +（可选）玩家显式选择，确定性分配每位玩家的 restaurant_logo_id。
 extends RefCounted
 
-const DEFAULT_LOGO_COUNT := 5
+const DEFAULT_LOGO_COUNT := 6
 
 static func assign_logo_ids(player_count: int, rng_seed: int, restaurant_logo_choices_by_player) -> Result:
 	var logo_count := DEFAULT_LOGO_COUNT
@@ -65,4 +65,3 @@ static func _read_choice_id(choices, player_id: int) -> int:
 		if f == floor(f):
 			return int(f)
 	return -1
-

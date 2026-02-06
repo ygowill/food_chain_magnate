@@ -4,5 +4,4 @@ class_name GameConstants
 extends RefCounted
 
 const MIN_PLAYERS := 2
-const MAX_PLAYERS := 5
-
+const MAX_PLAYERS := 6

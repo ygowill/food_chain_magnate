@@ -3,7 +3,7 @@ class_name PaydaySalaryTest
 extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
-const PaydaySettlementClass = preload("res://core/rules/phase/payday_settlement.gd")
+const PaydaySettlementClass = preload("res://modules/base_rules/rules/phase/payday_settlement.gd")
 const EffectRegistryClass = preload("res://core/rules/effect_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 

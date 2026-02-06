@@ -4,10 +4,10 @@ const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const PhaseManagerClass = preload("res://core/engine/phase_manager.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 
-const PaydaySettlementClass = preload("res://core/rules/phase/payday_settlement.gd")
-const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
-const DinnertimeSettlementClass = preload("res://core/rules/phase/dinnertime_settlement.gd")
-const MarketingSettlementClass = preload("res://core/rules/phase/marketing_settlement.gd")
+const PaydaySettlementClass = preload("res://modules/base_rules/rules/phase/payday_settlement.gd")
+const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cleanup_settlement.gd")
+const DinnertimeSettlementClass = preload("res://modules/base_rules/rules/phase/dinnertime_settlement.gd")
+const MarketingSettlementClass = preload("res://modules/base_rules/rules/phase/marketing_settlement.gd")
 const MapDefClass = preload("res://core/map/map_def.gd")
 const MapOptionDefClass = preload("res://core/map/map_option_def.gd")
 const WorkingFlowClass = preload("res://core/engine/phase_manager/working_flow.gd")
@@ -300,14 +300,17 @@ func _on_marketing_enter(state: GameState, phase_manager: PhaseManager) -> Resul
 func _generate_map_def(player_count: int, catalog, map_option, rng_manager) -> Result:
 	if player_count <= 0:
 		return Result.failure("base_rules:map_generator: player_count 无效: %d" % player_count)
-	if player_count == 6:
-		return Result.failure("base_rules:map_generator: 6人地图尚未实现（需要后续扩展模块）")
 	if rng_manager == null or not rng_manager.has_method("shuffle") or not rng_manager.has_method("randi_range"):
 		return Result.failure("base_rules:map_generator: 必须提供可用的 RandomManager（用于确定性地图生成）")
 	if catalog == null or not (catalog.tiles is Dictionary):
 		return Result.failure("base_rules:map_generator: catalog.tiles 缺失或类型错误（期望 Dictionary）")
 	if map_option == null or not (map_option is MapOptionDefClass):
 		return Result.failure("base_rules:map_generator: map_option 类型错误（期望 MapOptionDef）")
+
+	# 6 人局规则：必须使用 New Districts 模块（否则 tile 数量/板块集合不足）。
+	# - 这里通过检查 New Districts 的标志性 tile_id 来 fail fast，避免仅提示“tile 数量不足”造成困惑。
+	if player_count == 6 and not catalog.tiles.has("tile_u"):
+		return Result.failure("base_rules:map_generator: 6 人地图需要启用 New Districts 模块（缺少 tile_u 等新板块）")
 
 	var opt = map_option
 	var grid := _get_grid_size_for_player_count(player_count)
@@ -374,4 +377,6 @@ func _get_grid_size_for_player_count(player_count: int) -> Vector2i:
 			return Vector2i(4, 4)
 		5:
 			return Vector2i(5, 4)
+		6:
+			return Vector2i(4, 6)
 	return Vector2i.ZERO

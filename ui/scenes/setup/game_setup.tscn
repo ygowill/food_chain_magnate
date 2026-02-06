@@ -83,7 +83,7 @@ text = "玩家数量："
 [node name="PlayerCountSpinBox" type="SpinBox" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer"]
 layout_mode = 2
 min_value = 2.0
-max_value = 5.0
+max_value = 6.0
 value = 2.0
 
 [node name="SeedContainer" type="HBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn"]

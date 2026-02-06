@@ -3,7 +3,7 @@
 class_name DebugAddHouseDemandAction
 extends ActionExecutor
 
-const MarketingSettlementHelpersClass = preload("res://core/rules/phase/marketing/settlement_helpers.gd")
+const MarketingSettlementHelpersClass = preload("res://modules/base_rules/rules/phase/marketing/settlement_helpers.gd")
 
 func _init() -> void:
 	action_id = "debug_add_house_demand"
@@ -85,4 +85,3 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	return MarketingSettlementHelpersClass.add_house_demand(
 		state, house_id, product, from_player, board_number, marketing_type, amount
 	)
-

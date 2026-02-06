@@ -3,7 +3,7 @@
 class_name MarketingSettlementFailFastTest
 extends RefCounted
 
-const MarketingSettlementClass = preload("res://core/rules/phase/marketing_settlement.gd")
+const MarketingSettlementClass = preload("res://modules/base_rules/rules/phase/marketing_settlement.gd")
 const EffectRegistryClass = preload("res://core/rules/effect_registry.gd")
 const PhaseManagerClass = preload("res://core/engine/phase_manager.gd")
 
