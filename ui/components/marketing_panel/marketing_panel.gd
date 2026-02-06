@@ -579,23 +579,23 @@ func _rebuild_product_buttons() -> void:
 			# 兜底：ProductDef 有字段 name
 			name = str(def_val.name)
 
-			var btn := Button.new()
-			btn.custom_minimum_size = Vector2(44, 44)
-			btn.toggle_mode = true
-			btn.button_group = _product_button_group
-			btn.focus_mode = Control.FOCUS_NONE
-			btn.icon = _icon_cache.get_product_icon_texture_scaled(pid, PRODUCT_ICON_SIZE)
-			btn.expand_icon = true
-			btn.text = ""
-			btn.tooltip_text = name
-			btn.set_meta("product_id", pid)
-			btn.pressed.connect(func():
-				_on_product_button_pressed(pid)
-			)
-			product_flow.add_child(btn)
-			_product_button_by_id[pid] = btn
-			if first_pid.is_empty():
-				first_pid = pid
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(44, 44)
+		btn.toggle_mode = true
+		btn.button_group = _product_button_group
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.icon = _icon_cache.get_product_icon_texture_scaled(pid, PRODUCT_ICON_SIZE)
+		btn.expand_icon = true
+		btn.text = ""
+		btn.tooltip_text = name
+		btn.set_meta("product_id", pid)
+		btn.pressed.connect(func():
+			_on_product_button_pressed(pid)
+		)
+		product_flow.add_child(btn)
+		_product_button_by_id[pid] = btn
+		if first_pid.is_empty():
+			first_pid = pid
 
 	var to_select := _selected_product
 	if to_select.is_empty() or not _product_button_by_id.has(to_select):
