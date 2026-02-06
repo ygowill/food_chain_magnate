@@ -106,6 +106,7 @@ const DinnertimeRoutePurchaseRegistryV2TestClass = preload("res://core/tests/din
 const EffectRegistryV2TestClass = preload("res://core/tests/effect_registry_v2_test.gd")
 const PoolBuilderV2TestClass = preload("res://core/tests/pool_builder_v2_test.gd")
 const MarketingBoardDataTestClass = preload("res://core/tests/marketing_board_data_test.gd")
+const MarketingPanelModuleTypesUiTestClass = preload("res://ui/scenes/tests/marketing_panel_module_types_ui_test.gd")
 const MarketingCampaignsTestClass = preload("res://core/tests/marketing_campaigns_test.gd")
 const MassMarketeersV2TestClass = preload("res://core/tests/mass_marketeers_v2_test.gd")
 const KetchupMechanismV2TestClass = preload("res://core/tests/ketchup_mechanism_v2_test.gd")

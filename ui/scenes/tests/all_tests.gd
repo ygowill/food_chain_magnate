@@ -443,10 +443,14 @@ func _run_all() -> int:
 				"name": "MarketingBoardDataTest",
 				"fn": func() -> Result: return TestRefs.MarketingBoardDataTestClass.run(2, 12345),
 			},
-					{
-						"name": "MarketingCampaignsTest",
-						"fn": func() -> Result: return TestRefs.MarketingCampaignsTestClass.run(2, 12345),
-					},
+			{
+				"name": "MarketingPanelModuleTypesUiTest",
+				"fn": func() -> Result: return TestRefs.MarketingPanelModuleTypesUiTestClass.run(),
+			},
+						{
+							"name": "MarketingCampaignsTest",
+							"fn": func() -> Result: return TestRefs.MarketingCampaignsTestClass.run(2, 12345),
+						},
 					{
 						"name": "MassMarketeersV2Test",
 						"fn": func() -> Result: return TestRefs.MassMarketeersV2TestClass.run(2, 12345),
