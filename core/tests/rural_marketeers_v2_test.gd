@@ -18,6 +18,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_offramp_segment_overlap_rejected(seed_val)
 	if not r.ok:
 		return r
+
+	r = _test_billboard_product_validation(seed_val)
+	if not r.ok:
+		return r
 	return Result.success()
 
 static func _test_airplane_segment_overlap_rejected(seed_val: int) -> Result:
@@ -219,5 +223,45 @@ static func _test_offramp_segment_overlap_rejected(seed_val: int) -> Result:
 	var r3: Result = ex.validate(s, cmd3)
 	if r3.ok:
 		return Result.failure("airplane 覆盖同边时 offramp 应被拒绝")
+
+	return Result.success()
+
+static func _test_billboard_product_validation(seed_val: int) -> Result:
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"noodles",
+		"rural_marketeers",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+	var s: GameState = e.get_state()
+
+	# 手动触发模块初始化（等价于 Restructuring BEFORE_ENTER）
+	var entry = ModuleEntryClass.new()
+	var init_r := entry._on_restructuring_before_enter(s)
+	if not init_r.ok:
+		return Result.failure("初始化 rural_area 失败: %s" % init_r.error)
+
+	_force_player0_ready_for_marketing(s)
+	_take_to_active(s, 0, "rural_marketeer")
+
+	# noodles 是 food + no_marketing：巨型广告牌应拒绝
+	var cmd := Command.create("place_giant_billboard", 0)
+	cmd.params = {
+		"side": "N",
+		"product": "noodles",
+	}
+	var r: Result = e.execute_command(cmd)
+	if r.ok:
+		return Result.failure("no_marketing 产品不应允许用于巨型广告牌")
 
 	return Result.success()

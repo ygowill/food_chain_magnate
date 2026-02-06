@@ -88,6 +88,14 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var product: String = product_read.value
 	if not ProductRegistryClass.has(product):
 		return Result.failure("未知的产品: %s" % product)
+	var def_val = ProductRegistryClass.get_def(product)
+	if def_val == null or not (def_val is ProductDef):
+		return Result.failure("未知的产品: %s" % product)
+	var def: ProductDef = def_val
+	if def.has_tag("no_marketing"):
+		return Result.failure("该产品不能被营销: %s" % product)
+	if not (def.has_tag("food") or def.has_tag("drink")):
+		return Result.failure("巨型广告牌只能营销食物或饮料: %s" % product)
 
 	var player := state.get_player(command.actor)
 	if player.is_empty():
