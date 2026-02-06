@@ -17,7 +17,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_global_limit_and_offramp_conflict(seed_val)
 	if not r.ok:
 		return r
-	r = _test_gourmet_guide_outside_placement(seed_val)
+	r = _test_gourmet_guide_onboard_placement(seed_val)
 	if not r.ok:
 		return r
 
@@ -43,8 +43,8 @@ static func _test_registration_and_range(seed_val: int) -> Result:
 
 	if not MarketingTypeRegistryClass.has_type("gourmet_guide"):
 		return Result.failure("MarketingTypeRegistry 缺少 gourmet_guide（模块未注册）")
-	if not MarketingTypeRegistryClass.requires_edge("gourmet_guide"):
-		return Result.failure("gourmet_guide 应要求边缘放置（requires_edge=true）")
+	if MarketingTypeRegistryClass.requires_edge("gourmet_guide"):
+		return Result.failure("gourmet_guide 不应要求边缘放置（requires_edge=false）")
 
 	var marketer = EmployeeRegistryClass.get_def("marketing_trainee")
 	if marketer == null:
@@ -142,7 +142,7 @@ static func _test_global_limit_and_offramp_conflict(seed_val: int) -> Result:
 
 	return Result.success()
 
-static func _test_gourmet_guide_outside_placement(seed_val: int) -> Result:
+static func _test_gourmet_guide_onboard_placement(seed_val: int) -> Result:
 	var engine := GameEngine.new()
 	var enabled_modules: Array[String] = [
 		"base_rules",
@@ -165,8 +165,9 @@ static func _test_gourmet_guide_outside_placement(seed_val: int) -> Result:
 	state.phase = DefsClass.PHASE_WORKING
 	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
 
-	# Minimal map: 3x3 empty grid + 1 owned restaurant (marketing requires player has a restaurant).
-	var grid_size := Vector2i(3, 3)
+	# Minimal map: empty grid + 1 owned restaurant (marketing requires player has a restaurant).
+	# gourmet_guide is a 2x2 on-board marketing tile; it must be placed on empty cells adjacent to a road.
+	var grid_size := Vector2i(5, 5)
 	var cells: Array = []
 	for y in range(grid_size.y):
 		var row: Array = []
@@ -180,12 +181,13 @@ static func _test_gourmet_guide_outside_placement(seed_val: int) -> Result:
 			})
 		cells.append(row)
 
-	# Put a structure on an edge cell; gourmet_guide should still be placeable because it is outside the board.
-	cells[0][1]["structure"] = {"piece_id": "house", "dynamic": true}
+	# Add a road adjacent to anchor (1,1)'s 2x2 footprint (covers (1,1)-(2,2)).
+	cells[1][0]["road_segments"] = [{"bridge": false, "dirs": ["N", "S"]}]
 
 	state.map = {
 		"grid_size": grid_size,
 		"tile_grid_size": Vector2i(1, 1),
+		"map_origin": Vector2i.ZERO,
 		"cells": cells,
 		"houses": {},
 		"restaurants": {"rest_0": {"owner": 0}},
@@ -214,8 +216,7 @@ static func _test_gourmet_guide_outside_placement(seed_val: int) -> Result:
 		"board_number": 17,
 		"product": "burger",
 		"duration": 1,
-		"position": [1, 0],
-		"axis": "col",
+		"position": [1, 1],
 	}))
 	if not r.ok:
 		return Result.failure("发起 gourmet_guide 营销失败: %s" % r.error)
@@ -235,13 +236,14 @@ static func _test_gourmet_guide_outside_placement(seed_val: int) -> Result:
 	var p: Dictionary = p_val
 	if str(p.get("type", "")) != "gourmet_guide":
 		return Result.failure("marketing_placements[17].type 应为 gourmet_guide，实际: %s" % str(p.get("type", null)))
-	if str(p.get("axis", "")) != "col":
-		return Result.failure("marketing_placements[17].axis 应为 col（用于外围放置），实际: %s" % str(p.get("axis", null)))
+	if str(p.get("axis", "")) != "":
+		return Result.failure("marketing_placements[17].axis 应为空（仅 airplane 使用），实际: %s" % str(p.get("axis", null)))
 
-	# Sanity: edge structure remains (outside placement should not modify on-board structures).
-	var cell01: Dictionary = (s2.map.get("cells", []) as Array)[0][1]
-	if not (cell01.get("structure", {}) is Dictionary) or (cell01.get("structure", {}) as Dictionary).is_empty():
-		return Result.failure("外围营销不应修改 edge cell 的 structure（预期非空）")
+	# Sanity: road remains (on-board placement should not modify roads).
+	var road_cell: Dictionary = (s2.map.get("cells", []) as Array)[1][0]
+	var rs_val = road_cell.get("road_segments", null)
+	if not (rs_val is Array) or (rs_val as Array).is_empty():
+		return Result.failure("营销放置后 road_segments 不应被清空（预期道路仍存在）")
 
 	# Sanity: marketer becomes busy.
 	var p0: Dictionary = s2.players[0]

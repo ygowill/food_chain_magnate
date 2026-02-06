@@ -16,7 +16,7 @@ func register(registrar) -> Result:
 
 	r = registrar.register_marketing_type(
 		MARKETING_TYPE,
-		{"requires_edge": true},
+		{"requires_edge": false},
 		Callable(self, "_get_gourmet_guide_house_ids")
 	)
 	if not r.ok:

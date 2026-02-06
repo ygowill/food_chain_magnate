@@ -79,7 +79,7 @@ static func draw_marketing(canvas, cell_size: int) -> void:
 		)
 
 		# outside marketing：视觉上贴地图外侧边缘（不在地图内），并与格子对齐（issue_tracker #30/#64）。
-		if key == "airplane" or key == "gourmet_guide":
+		if key == "airplane":
 			var map_origin: Vector2i = canvas._map_data.get("map_origin", Vector2i.ZERO)
 			var base_grid_size: Vector2i = canvas._base_grid_size
 			if base_grid_size == Vector2i.ZERO:

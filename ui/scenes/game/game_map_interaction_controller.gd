@@ -409,7 +409,7 @@ func _update_map_outside_margin_for_mode() -> void:
 	var requested := 0
 	if _mode == "marketing":
 		var mt := str(_payload.get("marketing_type", "")).strip_edges()
-		if mt == "airplane" or mt == "gourmet_guide":
+		if mt == "airplane":
 			requested = 2
 	var handler = _custom_mode_handlers.get(_mode, null)
 	if handler != null and is_instance_valid(handler) and handler.has_method("get_outside_margin_override"):

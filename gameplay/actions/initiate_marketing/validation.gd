@@ -186,7 +186,7 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 			if start_x < minp2.x or (start_x + length - 1) > maxp2.x:
 				return Result.failure("飞机不能飞出棋盘：长度=%d start_x=%d (min=%d max=%d)" % [length, start_x, minp2.x, maxp2.x])
 
-		# Prevent overlap in the outside area (airplane vs airplane / airplane vs gourmet_guide).
+		# Prevent airplane vs airplane overlap on the same side (outside area).
 		var placements2: Dictionary = state.map.get("marketing_placements", {})
 		if placements2 is Dictionary and not placements2.is_empty():
 			var side := ""
@@ -206,8 +206,7 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 				if not (pv is Dictionary):
 					continue
 				var p2: Dictionary = pv
-				var t2 := str(p2.get("type", ""))
-				if t2 != "airplane" and t2 != "gourmet_guide":
+				if str(p2.get("type", "")) != "airplane":
 					continue
 				var wp2_val = p2.get("world_pos", null)
 				if not (wp2_val is Vector2i):
@@ -263,141 +262,7 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 					continue
 				var overlaps := not (seg_end < start2 or seg_start > end2)
 				if overlaps:
-					return Result.failure("飞机与已有外围营销占用同一边并重叠: %s" % side)
-
-		return Result.success()
-
-	# Gourmet guide is placed outside the board (module: gourmet_food_critics):
-	# - It is NOT blocked by structures/roads/drink_sources.
-	# - It should not overlap with other outside marketing pieces on the same side.
-	if marketing_type == "gourmet_guide":
-		# World pos must be a valid edge cell.
-		if not CoordsClass.is_world_pos_in_grid(state, world_pos):
-			return Result.failure("position 越界: %s" % str(world_pos))
-		if not CoordsClass.is_on_map_edge(state, world_pos):
-			return Result.failure("美食指南必须放置在地图边缘格子: %s" % str(world_pos))
-
-		# Reuse "axis" semantics from airplane to disambiguate which side we're attaching to:
-		# - row: left/right
-		# - col: top/bottom
-		var axis_result := action.optional_string_param(command, "axis", "")
-		if not axis_result.ok:
-			return axis_result
-		var axis: String = axis_result.value
-		if axis.is_empty():
-			axis = _infer_airplane_axis(state, world_pos, Vector2i.ONE)
-		if axis != "row" and axis != "col":
-			return Result.failure("美食指南缺少 axis（row/col）")
-
-		var thickness := 2
-		var length := 0
-		if base_size.x == 2 and base_size.y != 2:
-			length = base_size.y
-		elif base_size.y == 2 and base_size.x != 2:
-			length = base_size.x
-		else:
-			thickness = mini(base_size.x, base_size.y)
-			length = maxi(base_size.x, base_size.y)
-		thickness = maxi(1, thickness)
-		length = maxi(1, length)
-
-		var minp2 := CoordsClass.get_world_min(state)
-		var maxp2 := CoordsClass.get_world_max(state)
-
-		# Axis must match the attached edge: left/right -> row, top/bottom -> col.
-		if axis == "row":
-			if world_pos.x != minp2.x and world_pos.x != maxp2.x:
-				return Result.failure("美食指南 axis=row 时必须贴左右边缘: %s" % str(world_pos))
-			var start_y := world_pos.y
-			if start_y < minp2.y or (start_y + length - 1) > maxp2.y:
-				return Result.failure("美食指南不能超出棋盘：长度=%d start_y=%d (min=%d max=%d)" % [length, start_y, minp2.y, maxp2.y])
-		else:
-			if world_pos.y != minp2.y and world_pos.y != maxp2.y:
-				return Result.failure("美食指南 axis=col 时必须贴上下边缘: %s" % str(world_pos))
-			var start_x := world_pos.x
-			if start_x < minp2.x or (start_x + length - 1) > maxp2.x:
-				return Result.failure("美食指南不能超出棋盘：长度=%d start_x=%d (min=%d max=%d)" % [length, start_x, minp2.x, maxp2.x])
-
-		# Prevent overlap in the outside area (gourmet_guide vs gourmet_guide / gourmet_guide vs airplane).
-		var placements3: Dictionary = state.map.get("marketing_placements", {})
-		if placements3 is Dictionary and not placements3.is_empty():
-			var side := ""
-			var seg_start := 0
-			var seg_end := 0
-			if axis == "row":
-				side = "W" if world_pos.x == minp2.x else "E"
-				seg_start = world_pos.y
-				seg_end = world_pos.y + length - 1
-			else:
-				side = "N" if world_pos.y == minp2.y else "S"
-				seg_start = world_pos.x
-				seg_end = world_pos.x + length - 1
-
-			for k3 in placements3.keys():
-				var pv3 = placements3[k3]
-				if not (pv3 is Dictionary):
-					continue
-				var p3: Dictionary = pv3
-				var t3 := str(p3.get("type", ""))
-				if t3 != "airplane" and t3 != "gourmet_guide":
-					continue
-				var wp3_val = p3.get("world_pos", null)
-				if not (wp3_val is Vector2i):
-					continue
-				var wp3: Vector2i = wp3_val
-				var axis3 := str(p3.get("axis", "")).strip_edges()
-				if axis3 != "row" and axis3 != "col":
-					axis3 = _infer_airplane_axis(state, wp3, Vector2i.ONE)
-
-				var fs3_val = p3.get("footprint_size", null)
-				var fs3 := Vector2i.ONE
-				if fs3_val is Vector2i:
-					fs3 = Vector2i(fs3_val)
-				elif fs3_val is Array:
-					var a3: Array = fs3_val
-					if a3.size() == 2:
-						fs3 = Vector2i(int(a3[0]), int(a3[1]))
-				var thickness3 := 2
-				var len3 := 0
-				if fs3.x == 2 and fs3.y != 2:
-					len3 = fs3.y
-				elif fs3.y == 2 and fs3.x != 2:
-					len3 = fs3.x
-				else:
-					thickness3 = mini(fs3.x, fs3.y)
-					len3 = maxi(fs3.x, fs3.y)
-				thickness3 = maxi(1, thickness3)
-				len3 = maxi(1, len3)
-				if len3 <= 0:
-					continue
-
-				var side3 := ""
-				var start3 := 0
-				var end3 := 0
-				if axis3 == "row":
-					if wp3.x == minp2.x:
-						side3 = "W"
-					elif wp3.x == maxp2.x or wp3.x == (maxp2.x - (thickness3 - 1)):
-						side3 = "E"
-					else:
-						continue
-					start3 = wp3.y
-					end3 = wp3.y + len3 - 1
-				else:
-					if wp3.y == minp2.y:
-						side3 = "N"
-					elif wp3.y == maxp2.y or wp3.y == (maxp2.y - (thickness3 - 1)):
-						side3 = "S"
-					else:
-						continue
-					start3 = wp3.x
-					end3 = wp3.x + len3 - 1
-
-				if side3 != side:
-					continue
-				var overlaps := not (seg_end < start3 or seg_start > end3)
-				if overlaps:
-					return Result.failure("美食指南与已有外围营销占用同一边并重叠: %s" % side)
+					return Result.failure("飞机与已有飞机占用同一边并重叠: %s" % side)
 
 		return Result.success()
 
@@ -561,7 +426,7 @@ static func _infer_airplane_axis(state: GameState, pos: Vector2i, size: Vector2i
 	return ""
 
 static func _has_marketing_overlap_excluding_airplane(state: GameState, footprint_cells: Array[Vector2i]) -> Result:
-	# Keep UI/core rules consistent: some marketing types are outside the board and should not block on-board marketing.
+	# Keep UI/core rules consistent: airplane marketing is outside the board and should not block on-board marketing.
 	if state == null or not (state.map is Dictionary):
 		return Result.failure("marketing overlap: state.map 类型错误")
 	var placements_val = state.map.get("marketing_placements", null)
@@ -578,8 +443,7 @@ static func _has_marketing_overlap_excluding_airplane(state: GameState, footprin
 		if not (p_val is Dictionary):
 			return Result.failure("marketing overlap: marketing_placements[%s] 类型错误（期望 Dictionary）" % str(k))
 		var p: Dictionary = p_val
-		var t := str(p.get("type", ""))
-		if t == "airplane" or t == "gourmet_guide":
+		if str(p.get("type", "")) == "airplane":
 			continue
 
 		var wp_val = p.get("world_pos", null)
