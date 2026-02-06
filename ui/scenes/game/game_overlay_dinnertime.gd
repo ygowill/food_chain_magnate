@@ -4,6 +4,7 @@ extends RefCounted
 const DinnerTimeOverlayScene = preload("res://ui/components/dinner_time/dinner_time_overlay.tscn")
 const OverlayUtils = preload("res://ui/scenes/game/game_overlay_utils.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const HouseNumberManagerClass = preload("res://core/map/house_number_manager.gd")
 
 var _scene = null
 var _bank_break_panel = null
@@ -78,6 +79,17 @@ func _build_dinnertime_orders(state: GameState) -> Array[Dictionary]:
 	var dt: Dictionary = dt_val
 
 	var raw_orders: Array[Dictionary] = []
+	var sort_index_by_house_id: Dictionary = {}
+
+	# Keep UI order consistent with core house-number semantics (supports string house numbers like π / zzzz_*).
+	if state.map is Dictionary:
+		var houses_val = state.map.get("houses", null)
+		if houses_val is Dictionary:
+			var sorted_read := HouseNumberManagerClass.get_sorted_house_ids(houses_val)
+			if sorted_read.ok:
+				var sorted_ids: Array[String] = sorted_read.value
+				for i in range(sorted_ids.size()):
+					sort_index_by_house_id[str(sorted_ids[i])] = int(i)
 
 	var sales_val = dt.get("sales", [])
 	if sales_val is Array:
@@ -88,7 +100,7 @@ func _build_dinnertime_orders(state: GameState) -> Array[Dictionary]:
 			var house_id := str(sale.get("house_id", ""))
 			if house_id.is_empty():
 				continue
-			var house_number := OverlayUtils.coerce_int(sale.get("house_number", -1))
+			var house_number = sale.get("house_number", -1)
 			var required := OverlayUtils.normalize_count_dict(sale.get("required", {}))
 			var rest_id := str(sale.get("winner_restaurant_id", ""))
 			raw_orders.append({
@@ -108,7 +120,7 @@ func _build_dinnertime_orders(state: GameState) -> Array[Dictionary]:
 			var house_id2 := str(sk.get("house_id", ""))
 			if house_id2.is_empty():
 				continue
-			var house_number2 := OverlayUtils.coerce_int(sk.get("house_number", -1))
+			var house_number2 = sk.get("house_number", -1)
 			raw_orders.append({
 				"house_number": house_number2,
 				"house_id": house_id2,
@@ -117,9 +129,16 @@ func _build_dinnertime_orders(state: GameState) -> Array[Dictionary]:
 				"products": {},
 			})
 
-	raw_orders.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return int(a.get("house_number", -1)) < int(b.get("house_number", -1))
-	)
+	if not sort_index_by_house_id.is_empty():
+		raw_orders.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			var ai := int(sort_index_by_house_id.get(str(a.get("house_id", "")), 1_000_000_000))
+			var bi := int(sort_index_by_house_id.get(str(b.get("house_id", "")), 1_000_000_000))
+			return ai < bi
+		)
+	else:
+		raw_orders.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return OverlayUtils.coerce_int(a.get("house_number", -1)) < OverlayUtils.coerce_int(b.get("house_number", -1))
+		)
 
 	for o in raw_orders:
 		orders.append(o)
