@@ -328,6 +328,10 @@ func _run_all() -> int:
 				"fn": func() -> Result: return TestRefs.MarketingBoardNumberBadgeTestClass.run(),
 			},
 			{
+				"name": "MarketingRemainingDurationLabelTest",
+				"fn": func() -> Result: return TestRefs.MarketingRemainingDurationLabelTestClass.run(),
+			},
+			{
 				"name": "MarketingSelectionFreezeTest",
 				"fn": func() -> Result: return TestRefs.MarketingSelectionFreezeTestClass.run(),
 			},

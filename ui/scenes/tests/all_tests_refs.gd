@@ -77,6 +77,7 @@ const AirplaneMarketingIconRotationTestClass = preload("res://ui/scenes/tests/ai
 const MarketingRangeFullFootprintTestClass = preload("res://ui/scenes/tests/marketing_range_full_footprint_test.gd")
 const MarketingHighlightsNoDrinkSourceTestClass = preload("res://ui/scenes/tests/marketing_highlights_no_drink_source_test.gd")
 const MarketingBoardNumberBadgeTestClass = preload("res://ui/scenes/tests/marketing_board_number_badge_test.gd")
+const MarketingRemainingDurationLabelTestClass = preload("res://ui/scenes/tests/marketing_remaining_duration_label_test.gd")
 const MarketingSelectionFreezeTestClass = preload("res://ui/scenes/tests/marketing_selection_freeze_test.gd")
 const AirplaneMarketingOutsideSelectionTestClass = preload("res://ui/scenes/tests/airplane_marketing_outside_selection_test.gd")
 const MoveRestaurantDisplayLabelTestClass = preload("res://ui/scenes/tests/move_restaurant_display_label_test.gd")

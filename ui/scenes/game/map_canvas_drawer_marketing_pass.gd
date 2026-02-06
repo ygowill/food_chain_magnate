@@ -213,7 +213,34 @@ static func draw_marketing_placement(canvas, cell_size: int, placement: Dictiona
 		var s := minf(avail.x, avail.y) * 0.85
 		var icon_size2 := Vector2(s, s)
 		var icon_pos2 := rect.position + (rect.size - icon_size2) * 0.5
-		TextureUtilsClass.draw_texture_aspect_fit(canvas, product_tex, Rect2(icon_pos2, icon_size2), Color(1, 1, 1, 0.95 * a))
+		var product_rect := Rect2(icon_pos2, icon_size2)
+		TextureUtilsClass.draw_texture_aspect_fit(canvas, product_tex, product_rect, Color(1, 1, 1, 0.95 * a))
+
+		# Remaining duration label (center): overlays on top of the product icon.
+		var remaining_text := ""
+		var rd := 0
+		var rd_val = placement.get("remaining_duration", null)
+		if rd_val is int:
+			rd = int(rd_val)
+		elif rd_val is float:
+			var f3: float = float(rd_val)
+			if f3 == floor(f3):
+				rd = int(f3)
+		if rd == -1:
+			remaining_text = "∞"
+		elif rd > 0:
+			remaining_text = str(rd)
+		if not remaining_text.is_empty():
+			var font: Font = ThemeDB.fallback_font
+			var font_size := maxi(10, int(round(minf(product_rect.size.x, product_rect.size.y) * 0.55)))
+			if remaining_text.length() >= 2:
+				font_size = int(round(float(font_size) * 0.85))
+			if remaining_text.length() >= 3:
+				font_size = int(round(float(font_size) * 0.75))
+			font_size = maxi(10, font_size)
+			var baseline := Vector2(product_rect.position.x, product_rect.position.y + product_rect.size.y * 0.5 + float(font_size) * 0.35)
+			canvas.draw_string(font, baseline + Vector2(1, 1), remaining_text, HORIZONTAL_ALIGNMENT_CENTER, product_rect.size.x, font_size, Color(0, 0, 0, 0.85 * a))
+			canvas.draw_string(font, baseline, remaining_text, HORIZONTAL_ALIGNMENT_CENTER, product_rect.size.x, font_size, Color(1, 1, 1, 1.0 * a))
 
 	# Board number badge (top-right): white circle + black number (issue_tracker #37).
 	var bn := 0
