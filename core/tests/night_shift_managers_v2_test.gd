@@ -5,8 +5,8 @@ extends RefCounted
 
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EffectRegistryClass = preload("res://core/rules/effect_registry.gd")
-const MarketingSettlementClass = preload("res://core/rules/phase/marketing_settlement.gd")
-const DinnertimeEffectsClass = preload("res://core/rules/phase/dinnertime/dinnertime_effects.gd")
+const MarketingSettlementClass = preload("res://modules/base_rules/rules/phase/marketing_settlement.gd")
+const DinnertimeEffectsClass = preload("res://modules/base_rules/rules/phase/dinnertime/dinnertime_effects.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
