@@ -596,7 +596,7 @@ func _build_employee_tooltip_content() -> String:
 	lines.append("需要薪水: %s" % ("是" if salary else "否"))
 
 	var manager_slots := int(_employee_def.get("manager_slots", 0))
-	if manager_slots > 0:
+	if manager_slots > 0 or role == "manager":
 		lines.append("管理槽位: %d" % manager_slots)
 
 	var recruit_cap := int(_employee_def.get("recruit_capacity", 0))

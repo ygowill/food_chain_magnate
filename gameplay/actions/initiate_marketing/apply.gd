@@ -1,6 +1,7 @@
 # InitiateMarketingAction 应用逻辑（抽离自 gameplay/actions/initiate_marketing_action.gd）
 extends RefCounted
 
+const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingInitiationRegistryClass = preload("res://core/rules/marketing_initiation_registry.gd")
@@ -116,10 +117,29 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 				break
 
 	# 将营销员从在岗移到忙碌（不占卡槽）
-	var removed := StateUpdater.remove_from_array(state.players[player_id], "employees", employee_type)
-	if not removed:
-		return Result.failure("你没有激活的 %s" % employee_type)
-	StateUpdater.append_to_array(state.players[player_id], "busy_marketers", employee_type)
+	var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, player_id, employee_type))
+
+	var consume_active := true
+	var link_id := ""
+	if mult > 1:
+		link_id = _choose_reusable_marketing_link_id_this_round(state, player_id, employee_type, mult)
+		if not link_id.is_empty():
+			consume_active = false
+		else:
+			# 新建一组“同一张营销员卡”的 link_id（用于到期释放判定；避免多个活动提前释放营销员）。
+			link_id = "working_multiplier:marketing:%d:%d:%s:%d" % [state.round_number, player_id, employee_type, board_number]
+
+	if consume_active:
+		var removed := StateUpdater.remove_from_array(state.players[player_id], "employees", employee_type)
+		if not removed:
+			return Result.failure("你没有激活的 %s" % employee_type)
+		StateUpdater.append_to_array(state.players[player_id], "busy_marketers", employee_type)
+	else:
+		# 使用“本回合刚变忙碌”的营销员的额外次数（例如夜班经理带来的第二次工作）。
+		var busy_val = state.players[player_id].get("busy_marketers", [])
+		var busy_now: Array = busy_val if busy_val is Array else []
+		if not busy_now.has(employee_type):
+			return Result.failure("该营销员不在忙碌区，无法追加发起营销: %s" % employee_type)
 
 	var inc_result := RoundStateCountersClass.increment_player_key_count(
 		state.round_state, "marketing_used", player_id, employee_type, 1
@@ -162,6 +182,8 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 		"tile_index": tile_index,
 		"created_round": state.round_number,
 	}
+	if not link_id.is_empty():
+		instance["link_id"] = link_id
 	state.marketing_instances.append(instance)
 
 	# 记录放置信息（供 UI/调试）
@@ -181,6 +203,8 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 		"axis": axis,
 		"tile_index": tile_index,
 	}
+	if not link_id.is_empty():
+		placements[str(board_number)]["link_id"] = link_id
 	state.map[MapStateAccessClass.KEY_MARKETING_PLACEMENTS] = placements
 
 	var ms := MilestoneSystemClass.process_event(state, "InitiateMarketing", {
@@ -210,6 +234,49 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 	result.with_warnings(ext_apply.warnings)
 	result.with_warnings(warnings)
 	return result
+
+static func _choose_reusable_marketing_link_id_this_round(state: GameState, player_id: int, employee_type: String, mult: int) -> String:
+	if state == null:
+		return ""
+	if mult <= 1:
+		return ""
+	if not (state.marketing_instances is Array):
+		return ""
+
+	var counts_by_link: Dictionary = {}
+	for inst_val in state.marketing_instances:
+		if not (inst_val is Dictionary):
+			continue
+		var inst: Dictionary = inst_val
+		if int(inst.get("owner", -1)) != player_id:
+			continue
+		if str(inst.get("employee_type", "")).strip_edges() != employee_type:
+			continue
+		if int(inst.get("created_round", -1)) != state.round_number:
+			continue
+		var link_id := str(inst.get("link_id", "")).strip_edges()
+		if link_id.is_empty():
+			continue
+		counts_by_link[link_id] = int(counts_by_link.get(link_id, 0)) + 1
+
+	var best_link := ""
+	var best_used := 0
+	for k in counts_by_link.keys():
+		var link_id2 := str(k)
+		if link_id2.is_empty():
+			continue
+		var used := int(counts_by_link.get(k, 0))
+		if used >= mult:
+			continue
+		if best_link.is_empty():
+			best_link = link_id2
+			best_used = used
+			continue
+		if used < best_used or (used == best_used and link_id2 < best_link):
+			best_link = link_id2
+			best_used = used
+
+	return best_link
 
 static func _infer_airplane_axis(state: GameState, pos: Vector2i, size: Vector2i) -> String:
 	# 默认：左右边缘 -> row（横飞），上下边缘 -> col（竖飞）

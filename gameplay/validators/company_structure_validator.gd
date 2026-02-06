@@ -106,7 +106,8 @@ func _check_ceo_slots(player: Dictionary, _employee_id: String, employees: Array
 		if def == null:
 			return Result.failure("未知的员工类型: %s" % emp_id)
 		var slots := maxi(0, int(def.manager_slots))
-		if slots > 0:
+		var is_manager := (str(def.role) == "manager") or (slots > 0)
+		if is_manager:
 			manager_count += 1
 			manager_slots_total += slots
 
@@ -119,7 +120,7 @@ func _check_ceo_slots(player: Dictionary, _employee_id: String, employees: Array
 		if add_def == null:
 			return Result.failure("未知的员工类型: %s" % employee_id)
 		add_manager_slots = maxi(0, int(add_def.manager_slots))
-		add_is_manager = add_manager_slots > 0
+		add_is_manager = (str(add_def.role) == "manager") or (add_manager_slots > 0)
 
 	var new_used := used_slots + 1
 	var new_manager_count := manager_count + (1 if add_is_manager else 0)

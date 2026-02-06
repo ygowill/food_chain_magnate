@@ -341,7 +341,9 @@ func _generate_strict_structure_from_employees_with_preferred_direct(employees: 
 		available_counts[emp_id] = int(prev_val) + 1
 		var def := _get_employee_def(emp_id)
 		var ms := maxi(0, int(def.get("manager_slots", 0)))
-		if ms > 0:
+		var role := str(def.get("role", "")).strip_edges()
+		var is_manager := role == "manager" or ms > 0
+		if is_manager:
 			managers.append(emp_id)
 		else:
 			non_managers.append(emp_id)
@@ -409,7 +411,9 @@ func _generate_strict_structure_from_employees_with_preferred_direct(employees: 
 				continue
 			var direct_def2 := _get_employee_def(direct2)
 			var cap2 := maxi(0, int(direct_def2.get("manager_slots", 0)))
-			if cap2 <= 0:
+			var direct_role2 := str(direct_def2.get("role", "")).strip_edges()
+			var direct_is_manager2 := direct_role2 == "manager" or cap2 > 0
+			if not direct_is_manager2:
 				replace_index = i_rep
 				replaced_emp = direct2
 				break
@@ -482,7 +486,10 @@ func _generate_strict_structure_from_employees_with_preferred_direct(employees: 
 				if avail_rep <= 0:
 					continue
 				var rep_def := _get_employee_def(rep_id)
-				if maxi(0, int(rep_def.get("manager_slots", 0))) > 0:
+				var rep_ms := maxi(0, int(rep_def.get("manager_slots", 0)))
+				var rep_role := str(rep_def.get("role", "")).strip_edges()
+				var rep_is_manager := rep_role == "manager" or rep_ms > 0
+				if rep_is_manager:
 					continue
 				var used_rep: int = int(used_counts.get(rep_id, 0))
 				if used_rep >= avail_rep:

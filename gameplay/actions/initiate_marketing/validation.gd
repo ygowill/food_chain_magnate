@@ -108,19 +108,15 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 	if restaurant_ids.is_empty():
 		return Result.failure("你没有餐厅，无法发起营销")
 
-	# 检查玩家是否拥有可用的营销员（每张卡每回合一次）
+	# 检查玩家是否拥有可用的营销员：
+	# - 默认：需要在岗营销员
+	# - 扩展：允许通过 working_employee_multiplier 让“本回合刚变忙碌”的营销员额外发起营销（例如夜班经理）。
 	var player := state.get_player(command.actor)
 	var active_count := EmployeeRulesClass.count_active(player, employee_type)
-	if active_count <= 0:
-		return Result.failure("你没有激活的 %s" % employee_type)
-	var used_result := RoundStateCountersClass.get_player_key_count(
-		state.round_state, "marketing_used", command.actor, employee_type
-	)
-	if not used_result.ok:
-		return used_result
-	var used := int(used_result.value)
-	if used >= active_count:
-		return Result.failure("所有 %s 本子阶段已发起营销: %d/%d" % [employee_type, used, active_count])
+	var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, command.actor, employee_type))
+	var extra_busy_uses := _count_reusable_marketing_uses_from_busy_groups_this_round(state, command.actor, employee_type, mult)
+	if active_count <= 0 and extra_busy_uses <= 0:
+		return Result.failure("你没有可用的 %s" % employee_type)
 
 	# === 放置校验：占地/边界/阻塞/道路/边缘/重叠 ===
 	var base_size := Vector2i.ONE
@@ -409,6 +405,41 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 			return Result.failure("飞机缺少 axis（row/col）")
 
 	return Result.success()
+
+static func _count_reusable_marketing_uses_from_busy_groups_this_round(
+	state: GameState,
+	player_id: int,
+	employee_type: String,
+	mult: int
+) -> int:
+	if state == null:
+		return 0
+	if mult <= 1:
+		return 0
+	if not (state.marketing_instances is Array):
+		return 0
+
+	var by_link: Dictionary = {}
+	for inst_val in state.marketing_instances:
+		if not (inst_val is Dictionary):
+			continue
+		var inst: Dictionary = inst_val
+		if int(inst.get("owner", -1)) != player_id:
+			continue
+		if str(inst.get("employee_type", "")).strip_edges() != employee_type:
+			continue
+		if int(inst.get("created_round", -1)) != state.round_number:
+			continue
+		var link_id := str(inst.get("link_id", "")).strip_edges()
+		if link_id.is_empty():
+			continue
+		by_link[link_id] = int(by_link.get(link_id, 0)) + 1
+
+	var remaining := 0
+	for k in by_link.keys():
+		var used := int(by_link.get(k, 0))
+		remaining += maxi(0, mult - used)
+	return remaining
 
 static func _infer_airplane_axis(state: GameState, pos: Vector2i, size: Vector2i) -> String:
 	# 默认：左右边缘 -> row（横飞），上下边缘 -> col（竖飞）

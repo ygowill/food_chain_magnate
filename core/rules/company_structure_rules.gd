@@ -125,7 +125,8 @@ static func _compute_usage_with_employees(player: Dictionary, employees: Array) 
 		if def_val == null:
 			return Result.failure("CompanyStructureRules: 未知的员工类型: %s" % emp_id)
 		var slots := maxi(0, int(def_val.manager_slots))
-		if slots > 0:
+		var is_manager := (str(def_val.role) == "manager") or (slots > 0)
+		if is_manager:
 			manager_count += 1
 			manager_slots_total += slots
 
@@ -148,7 +149,9 @@ static func _pick_employee_to_reserve(employees: Array, ceo_slots: int, manager_
 			var def_val = EmployeeRegistryClass.get_def(emp_id)
 			if def_val == null:
 				return Result.failure("CompanyStructureRules: 未知的员工类型: %s" % emp_id)
-			if maxi(0, int(def_val.manager_slots)) > 0:
+			var slots := maxi(0, int(def_val.manager_slots))
+			var is_manager := (str(def_val.role) == "manager") or (slots > 0)
+			if is_manager:
 				return Result.success(i)
 		return Result.failure("CompanyStructureRules: 无法选择可移动的经理员工（manager_count=%d, ceo_slots=%d, employees=%s）" % [
 			manager_count,
@@ -164,7 +167,9 @@ static func _pick_employee_to_reserve(employees: Array, ceo_slots: int, manager_
 		var def_val2 = EmployeeRegistryClass.get_def(emp_id2)
 		if def_val2 == null:
 			return Result.failure("CompanyStructureRules: 未知的员工类型: %s" % emp_id2)
-		if maxi(0, int(def_val2.manager_slots)) <= 0:
+		var slots2 := maxi(0, int(def_val2.manager_slots))
+		var is_manager2 := (str(def_val2.role) == "manager") or (slots2 > 0)
+		if not is_manager2:
 			return Result.success(i)
 
 	# 3) 若全是经理，只能移除经理（会连带减少总卡槽，循环会继续收敛）。

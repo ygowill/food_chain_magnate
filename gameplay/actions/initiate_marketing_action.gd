@@ -3,6 +3,7 @@
 class_name InitiateMarketingAction
 extends ActionExecutor
 
+const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
@@ -58,6 +59,9 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 			break
 
 	if not has_marketer:
+		# 扩展：某些模块允许“本回合刚变忙碌”的营销员额外发起营销（例如夜班经理）。
+		has_marketer = _has_reusable_busy_marketer_for_working(state, player_id)
+	if not has_marketer:
 		return false
 
 	var used := {}
@@ -81,6 +85,58 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 		if not def2.is_available_for_player_count(player_count):
 			continue
 		return true
+
+	return false
+
+func _has_reusable_busy_marketer_for_working(state: GameState, player_id: int) -> bool:
+	if state == null:
+		return false
+	if not (state.marketing_instances is Array):
+		return false
+	var player := state.get_player(player_id)
+	if player.is_empty():
+		return false
+
+	var busy_val = player.get("busy_marketers", null)
+	var busy: Array = busy_val if busy_val is Array else []
+	if busy.is_empty():
+		return false
+
+	var counts_by_link: Dictionary = {}  # link_id -> {employee_type, count}
+	for inst_val in state.marketing_instances:
+		if not (inst_val is Dictionary):
+			continue
+		var inst: Dictionary = inst_val
+		if int(inst.get("owner", -1)) != player_id:
+			continue
+		if int(inst.get("created_round", -1)) != state.round_number:
+			continue
+		var employee_type := str(inst.get("employee_type", "")).strip_edges()
+		if employee_type.is_empty():
+			continue
+		var link_id := str(inst.get("link_id", "")).strip_edges()
+		if link_id.is_empty():
+			continue
+		if not counts_by_link.has(link_id):
+			counts_by_link[link_id] = {"employee_type": employee_type, "count": 0}
+		var meta: Dictionary = counts_by_link[link_id]
+		meta["count"] = int(meta.get("count", 0)) + 1
+		counts_by_link[link_id] = meta
+
+	for lid in counts_by_link.keys():
+		var meta2_val = counts_by_link.get(lid, null)
+		if not (meta2_val is Dictionary):
+			continue
+		var meta2: Dictionary = meta2_val
+		var employee_type2 := str(meta2.get("employee_type", "")).strip_edges()
+		if employee_type2.is_empty():
+			continue
+		if not busy.has(employee_type2):
+			continue
+		var used := int(meta2.get("count", 0))
+		var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, player_id, employee_type2))
+		if used < mult:
+			return true
 
 	return false
 

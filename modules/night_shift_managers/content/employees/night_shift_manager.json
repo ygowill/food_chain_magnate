@@ -13,12 +13,12 @@
   "train_to": [],
   "train_capacity": 0,
   "tags": [
+    "entry_level",
     "module:night_shift_managers"
   ],
   "usage_tags": [],
   "mandatory": false,
   "pool": {
-    "type": "fixed",
-    "count": 6
+    "type": "one_x"
   }
 }
