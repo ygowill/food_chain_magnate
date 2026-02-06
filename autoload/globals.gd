@@ -33,8 +33,9 @@ const PLAYER_COLOR_PALETTE: Array[Color] = [
 	Color(0.3, 0.8, 0.4, 1),  # 绿
 	Color(0.9, 0.7, 0.2, 1),  # 黄
 	Color(0.7, 0.4, 0.9, 1),  # 紫
+	Color(0.95, 0.5, 0.15, 1),  # 橙
 ]
-const DEFAULT_RESTAURANT_LOGO_COUNT := 5
+const DEFAULT_RESTAURANT_LOGO_COUNT := 6
 
 var player_names: Array[String] = []
 var player_color_indices: Array[int] = []  # player_id -> palette index

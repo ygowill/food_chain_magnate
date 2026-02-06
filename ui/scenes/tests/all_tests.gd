@@ -65,7 +65,11 @@ func _run_all() -> int:
 		},
 		{
 			"name": "RestaurantLogoAssignmentTest",
-			"fn": func() -> Result: return TestRefs.RestaurantLogoAssignmentTestClass.run(3, 12345),
+			"fn": func() -> Result: return TestRefs.RestaurantLogoAssignmentTestClass.run(6, 12345),
+		},
+		{
+			"name": "SixPlayersSetupTest",
+			"fn": func() -> Result: return TestRefs.SixPlayersSetupTestClass.run(12345),
 		},
 		{
 			"name": "PaydaySalaryTokenEligibilityTest",
@@ -74,6 +78,10 @@ func _run_all() -> int:
 		{
 			"name": "CallbackResultContractTest",
 			"fn": func() -> Result: return TestRefs.CallbackResultContractTestClass.run(),
+		},
+		{
+			"name": "ModuleBoundaryContractTest",
+			"fn": func() -> Result: return TestRefs.ModuleBoundaryContractTestClass.run(),
 		},
 		{
 			"name": "OnlineRoomManagerTest",
@@ -118,6 +126,10 @@ func _run_all() -> int:
 			{
 				"name": "ReserveCardSelectionModalPrivacyTest",
 				"fn": func() -> Result: return TestRefs.ReserveCardSelectionModalPrivacyTestClass.run(),
+			},
+			{
+				"name": "EntityTabReserveCardPrivacyTest",
+				"fn": func() -> Result: return TestRefs.EntityTabReserveCardPrivacyTestClass.run(),
 			},
 			{
 				"name": "TurnOrderSelectionModalOnlineVisibilityTest",
@@ -443,10 +455,14 @@ func _run_all() -> int:
 				"name": "MarketingBoardDataTest",
 				"fn": func() -> Result: return TestRefs.MarketingBoardDataTestClass.run(2, 12345),
 			},
-					{
-						"name": "MarketingCampaignsTest",
-						"fn": func() -> Result: return TestRefs.MarketingCampaignsTestClass.run(2, 12345),
-					},
+			{
+				"name": "MarketingPanelModuleTypesUiTest",
+				"fn": func() -> Result: return TestRefs.MarketingPanelModuleTypesUiTestClass.run(),
+			},
+						{
+							"name": "MarketingCampaignsTest",
+							"fn": func() -> Result: return TestRefs.MarketingCampaignsTestClass.run(2, 12345),
+						},
 					{
 						"name": "MassMarketeersV2Test",
 						"fn": func() -> Result: return TestRefs.MassMarketeersV2TestClass.run(2, 12345),

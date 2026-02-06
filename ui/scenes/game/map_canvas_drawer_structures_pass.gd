@@ -41,6 +41,10 @@ static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: A
 			draw_house_and_garden(canvas, cell_size, anchor, info)
 			continue
 
+		if piece_id == "apartment":
+			draw_apartment(canvas, cell_size, info)
+			continue
+
 		if piece_id.begins_with("lobbyists_road_"):
 			draw_lobbyists_road_piece(canvas, cell_size, anchor, info)
 			continue
@@ -282,6 +286,37 @@ static func draw_house_and_garden(canvas, cell_size: int, anchor: Vector2i, info
 	# 房屋 ID：右上角（仅房屋 2x2 区域）
 	var house_id: String = str(info.get("house_id", ""))
 	draw_house_id(canvas, cell_size, house_rect, house_id)
+
+static func draw_apartment(canvas, cell_size: int, info: Dictionary, alpha: float = 1.0) -> void:
+	if canvas == null or canvas._skin == null:
+		return
+	var min_pos_val = info.get("min", null)
+	var max_pos_val = info.get("max", null)
+	if not (min_pos_val is Vector2i) or not (max_pos_val is Vector2i):
+		return
+	var min_pos: Vector2i = min_pos_val
+	var max_pos: Vector2i = max_pos_val
+	var size_cells := (max_pos - min_pos) + Vector2i.ONE
+	var structure_rect := Rect2(Vector2(min_pos.x * cell_size, min_pos.y * cell_size), Vector2(size_cells.x * cell_size, size_cells.y * cell_size))
+
+	var a := clampf(alpha, 0.0, 1.0)
+
+	# 底色：公寓
+	var bg := Color("#814e60")
+	bg.a = a
+	canvas.draw_rect(structure_rect, bg, true)
+
+	# 贴图：公寓（稍微缩小，靠中下方；对齐方式与房屋一致）
+	var tex: Texture2D = canvas._skin.get_piece_texture("apartment")
+	var pad := maxf(1.0, float(cell_size) * 0.08)
+	var bottom_gap := maxf(2.0, float(cell_size) * 0.10)
+	var tex_rect := structure_rect.grow(-pad)
+	tex_rect.size.y = maxf(0.0, tex_rect.size.y - bottom_gap)
+	TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, tex_rect, Color(1, 1, 1, 0.9 * a), "bottom")
+
+	# 公寓 ID：右上角
+	var house_id: String = str(info.get("house_id", ""))
+	draw_house_id(canvas, cell_size, structure_rect, house_id)
 
 static func compute_house_id_rect(cell_size: int, structure_rect: Rect2) -> Rect2:
 	var pad := maxf(3.0, float(cell_size) * 0.10)

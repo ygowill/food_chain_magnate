@@ -6,7 +6,7 @@ extends RefCounted
 const MapDefClass = preload("res://core/map/map_def.gd")
 const MapBakeClass = preload("res://core/map/map_baker/bake.gd")
 const BakedMapClass = preload("res://core/map/map_runtime/baked_map.gd")
-const MarketingSettlementClass = preload("res://core/rules/phase/marketing_settlement.gd")
+const MarketingSettlementClass = preload("res://modules/base_rules/rules/phase/marketing_settlement.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count != 2:

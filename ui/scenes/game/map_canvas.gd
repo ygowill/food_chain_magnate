@@ -443,7 +443,7 @@ func _get_effective_ui_outside_margin() -> int:
 	return maxi(int(_ui_outside_margin_override), int(_ui_outside_margin_required))
 
 func _compute_required_ui_outside_margin(map_data: Dictionary) -> int:
-	# 目前仅飞机营销需要绘制到棋盘外侧；未来其它外围 piece 可在此扩展（issue_tracker #64）。
+	# 目前只有飞机营销需要绘制到棋盘外侧；未来其它外围 piece 可在此扩展（issue_tracker #64）。
 	if map_data.is_empty():
 		return 0
 	var placements_val = map_data.get("marketing_placements", null)
@@ -455,7 +455,8 @@ func _compute_required_ui_outside_margin(map_data: Dictionary) -> int:
 		if not (pv is Dictionary):
 			continue
 		var p: Dictionary = pv
-		if str(p.get("type", "")).strip_edges() == "airplane":
+		var t := str(p.get("type", "")).strip_edges()
+		if t == "airplane":
 			return UI_OUTSIDE_RING_MARGIN
 	return 0
 

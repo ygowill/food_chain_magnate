@@ -5,8 +5,8 @@ const Support = preload("res://core/tests/milestone_system/milestone_system_test
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
-const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
-const PaydaySettlementClass = preload("res://core/rules/phase/payday_settlement.gd")
+const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cleanup_settlement.gd")
+const PaydaySettlementClass = preload("res://modules/base_rules/rules/phase/payday_settlement.gd")
 const BankruptcyRulesClass = preload("res://core/rules/economy/bankruptcy_rules.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
@@ -385,4 +385,3 @@ static func _test_switch_between_two_coaches_disallowed_without_milestone(seed_v
 		return Result.failure("默认规则下不应允许在两名 coach 间切换继续培训（vice_president -> senior_vice_president）")
 
 	return Result.success()
-

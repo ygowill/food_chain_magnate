@@ -2,6 +2,7 @@
 extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
@@ -54,7 +55,7 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 			marketing_panel.set_map_selection_callback(Callable(_map_controller, "on_marketing_map_selection_requested"))
 
 		if marketing_panel.has_method("set_available_marketers"):
-			marketing_panel.set_available_marketers(_build_marketing_marketer_entries(current_player))
+			marketing_panel.set_available_marketers(_build_marketing_marketer_entries(state, state.get_current_player_id(), current_player))
 
 		if marketing_panel.has_method("set_available_boards"):
 			marketing_panel.set_available_boards(_build_available_marketing_boards_by_type(state))
@@ -94,7 +95,7 @@ func show_marketing_panel() -> void:
 		marketing_panel.set_map_selection_callback(Callable(_map_controller, "on_marketing_map_selection_requested"))
 
 	if marketing_panel.has_method("set_available_marketers"):
-		marketing_panel.set_available_marketers(_build_marketing_marketer_entries(current_player))
+		marketing_panel.set_available_marketers(_build_marketing_marketer_entries(state, state.get_current_player_id(), current_player))
 
 	if marketing_panel.has_method("set_available_boards"):
 		marketing_panel.set_available_boards(_build_available_marketing_boards_by_type(state))
@@ -103,9 +104,9 @@ func show_marketing_panel() -> void:
 		_center_popup.call(marketing_panel)
 	marketing_panel.visible = true
 
-func _build_marketing_marketer_entries(current_player: Dictionary) -> Array[Dictionary]:
+func _build_marketing_marketer_entries(state: GameState, current_player_id: int, current_player: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	if current_player.is_empty():
+	if state == null or current_player.is_empty():
 		return out
 	if not EmployeeRegistryClass.is_loaded():
 		return out
@@ -115,34 +116,68 @@ func _build_marketing_marketer_entries(current_player: Dictionary) -> Array[Dict
 		return out
 	var employees: Array = employees_val
 
-	var busy_val = current_player.get("busy_marketers", [])
-	var busy: Array = busy_val if busy_val is Array else []
-
-	var employee_counts: Dictionary = {}
+	var active_counts: Dictionary = {}
 	for e in employees:
 		if not (e is String):
 			continue
 		var emp_id := str(e)
 		if emp_id.is_empty():
 			continue
-		employee_counts[emp_id] = int(employee_counts.get(emp_id, 0)) + 1
+		active_counts[emp_id] = int(active_counts.get(emp_id, 0)) + 1
 
-	var busy_counts: Dictionary = {}
-	for b in busy:
-		if not (b is String):
-			continue
-		var emp_id2 := str(b)
-		if emp_id2.is_empty():
-			continue
-		busy_counts[emp_id2] = int(busy_counts.get(emp_id2, 0)) + 1
+	# 额外次数：某些效果（如夜班经理）允许“本回合刚变忙碌”的营销员再发起一次营销。
+	# 约束：仅统计 created_round == state.round_number 的营销实例，避免把跨回合的忙碌营销员误判为可用。
+	var extra_uses_by_employee: Dictionary = {}
+	if state.marketing_instances is Array:
+		var groups_by_emp: Dictionary = {}  # employee_type -> { link_id -> count }
+		for inst_val in state.marketing_instances:
+			if not (inst_val is Dictionary):
+				continue
+			var inst: Dictionary = inst_val
+			if int(inst.get("owner", -1)) != current_player_id:
+				continue
+			if int(inst.get("created_round", -1)) != state.round_number:
+				continue
+			var emp_id2 := str(inst.get("employee_type", "")).strip_edges()
+			if emp_id2.is_empty():
+				continue
+			var link_id := str(inst.get("link_id", "")).strip_edges()
+			if link_id.is_empty():
+				continue
+			if not groups_by_emp.has(emp_id2):
+				groups_by_emp[emp_id2] = {}
+			var per: Dictionary = groups_by_emp[emp_id2]
+			per[link_id] = int(per.get(link_id, 0)) + 1
+			groups_by_emp[emp_id2] = per
 
-	for emp_id3_val in employee_counts.keys():
-		var emp_id3 := str(emp_id3_val)
-		if emp_id3.is_empty():
-			continue
-		var total_count := int(employee_counts.get(emp_id3, 0))
-		var busy_count := int(busy_counts.get(emp_id3, 0))
-		var available_count := maxi(0, total_count - busy_count)
+		for emp_id3_val in groups_by_emp.keys():
+			var emp_id3 := str(emp_id3_val)
+			if emp_id3.is_empty():
+				continue
+			var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, current_player_id, emp_id3))
+			if mult <= 1:
+				continue
+			var per2: Dictionary = groups_by_emp[emp_id3]
+			var extra := 0
+			for k in per2.keys():
+				extra += maxi(0, mult - int(per2.get(k, 0)))
+			if extra > 0:
+				extra_uses_by_employee[emp_id3] = extra
+
+	var all_ids: Dictionary = {}
+	for k in active_counts.keys():
+		all_ids[str(k)] = true
+	for k2 in extra_uses_by_employee.keys():
+		all_ids[str(k2)] = true
+
+	var ids: Array[String] = []
+	for k3 in all_ids.keys():
+		ids.append(str(k3))
+	ids.sort()
+
+	for emp_id4 in ids:
+		var emp_id3 := str(emp_id4)
+		var available_count := int(active_counts.get(emp_id3, 0)) + int(extra_uses_by_employee.get(emp_id3, 0))
 		if available_count <= 0:
 			continue
 

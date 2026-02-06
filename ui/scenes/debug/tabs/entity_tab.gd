@@ -11,6 +11,7 @@ var _registry: DebugCommandRegistry = null
 @onready var details_text: RichTextLabel = $HSplitContainer/EntityDetails/DetailsText
 
 var _tree_root: TreeItem = null
+var _last_state: GameState = null
 
 func init(registry: DebugCommandRegistry) -> void:
 	_registry = registry
@@ -38,6 +39,7 @@ func refresh() -> void:
 	var state := engine.get_state()
 	if state == null:
 		return
+	_last_state = state
 
 	_build_tree()
 	_populate_tree(state)
@@ -119,7 +121,10 @@ func _show_details(metadata: Dictionary) -> void:
 	match entity_type:
 		"player":
 			details_label.text = "玩家 %d" % metadata.get("id", -1)
-			details_text.text = _format_dict(data)
+			var pid := int(metadata.get("id", -1))
+			var viewer_pid := _resolve_viewer_player_id(_last_state)
+			var sanitized := _sanitize_player_dict_for_viewer(data, pid, viewer_pid, _last_state)
+			details_text.text = _format_dict(sanitized)
 		"employee":
 			details_label.text = "员工 (玩家 %d)" % metadata.get("player_id", -1)
 			details_text.text = _format_dict(data)
@@ -152,6 +157,76 @@ func _show_details(metadata: Dictionary) -> void:
 		_:
 			details_label.text = "未知类型"
 			details_text.text = str(metadata)
+
+func _resolve_viewer_player_id(state: GameState) -> int:
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		var pid := int(NetContext.local_player_id)
+		if pid >= 0:
+			return pid
+	if state != null:
+		var cur := int(state.get_current_player_id())
+		if cur >= 0:
+			return cur
+	return -1
+
+func _viewer_can_peek_all_reserve_cards(viewer_player_id: int, state: GameState) -> bool:
+	if state == null:
+		return false
+	if viewer_player_id < 0 or viewer_player_id >= state.players.size():
+		return false
+	var p_val = state.players[viewer_player_id]
+	if not (p_val is Dictionary):
+		return false
+	var p: Dictionary = p_val
+	var v = p.get("can_peek_all_reserve_cards", false)
+	return (v is bool) and bool(v)
+
+func _sanitize_player_dict_for_viewer(player: Dictionary, player_id: int, viewer_player_id: int, state: GameState) -> Dictionary:
+	if player == null:
+		return {}
+
+	var out: Dictionary = player.duplicate(true)
+
+	# 无法确定查看者：不做脱敏（通常为开发调试模式）
+	if viewer_player_id < 0:
+		return out
+
+	# 本人可见
+	if viewer_player_id == player_id:
+		return out
+
+	# 特殊能力：允许查看全部储备卡（里程碑 first_have_20）
+	if _viewer_can_peek_all_reserve_cards(viewer_player_id, state):
+		return out
+
+	# 其它玩家：在储备卡揭示前隐藏 reserve_cards/selected；揭示后仅公开已选择的那一张卡
+	var cards_val = out.get("reserve_cards", null)
+	if cards_val is Array:
+		var cards: Array = cards_val
+		var revealed := bool(out.get("reserve_card_revealed", false))
+
+		var idx := -1
+		var idx_val = out.get("reserve_card_selected", -1)
+		if idx_val is int:
+			idx = int(idx_val)
+		elif idx_val is float:
+			var f: float = float(idx_val)
+			if f == floor(f):
+				idx = int(f)
+
+		var masked: Array = []
+		if revealed and idx >= 0 and idx < cards.size():
+			for i in range(cards.size()):
+				masked.append(cards[i] if i == idx else "<hidden>")
+		else:
+			for _i in range(cards.size()):
+				masked.append("<hidden>")
+			if out.has("reserve_card_selected"):
+				out["reserve_card_selected"] = "<hidden>"
+
+		out["reserve_cards"] = masked
+
+	return out
 
 func _add_employee_group(parent_item: TreeItem, player_id: int, player: Dictionary, key: String, label: String) -> void:
 	if not is_instance_valid(entity_tree):

@@ -8,12 +8,62 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count != 2:
 		return Result.failure("本测试固定为 2 人局（实际: %d）" % player_count)
 
-	var r := _test_first_break_sets_base_price_tie_20_wins(seed_val)
+	var r := _test_setup_uses_alternate_reserve_cards(seed_val)
+	if not r.ok:
+		return r
+
+	r = _test_first_break_sets_base_price_tie_20_wins(seed_val)
 	if not r.ok:
 		return r
 	r = _test_first_break_sets_base_price_tie_5_wins_over_10(seed_val)
 	if not r.ok:
 		return r
+
+	return Result.success()
+
+static func _test_setup_uses_alternate_reserve_cards(seed_val: int) -> Result:
+	var er := _make_engine(seed_val)
+	if not er.ok:
+		return er
+	var e: GameEngine = er.value
+	var s: GameState = e.get_state()
+
+	# 开局应在 Setup/ReserveCards；并且 reserve_cards 使用模块14的替代卡（仅含 type，不含 cash/ceo_slots）
+	if str(s.phase) != "Setup":
+		return Result.failure("开局 phase 应为 Setup，实际: %s" % str(s.phase))
+	if str(s.sub_phase) != "ReserveCards":
+		return Result.failure("开局 sub_phase 应为 ReserveCards，实际: %s" % str(s.sub_phase))
+
+	for pid in range(s.players.size()):
+		var p_val = s.players[pid]
+		if not (p_val is Dictionary):
+			return Result.failure("players[%d] 类型错误（期望 Dictionary）" % pid)
+		var p: Dictionary = p_val
+
+		var cards_val = p.get("reserve_cards", null)
+		if not (cards_val is Array):
+			return Result.failure("players[%d].reserve_cards 类型错误（期望 Array）" % pid)
+		var cards: Array = cards_val
+		if cards.size() != 3:
+			return Result.failure("players[%d].reserve_cards 张数应为 3，实际: %d" % [pid, cards.size()])
+		for i in range(cards.size()):
+			var c_val = cards[i]
+			if not (c_val is Dictionary):
+				return Result.failure("players[%d].reserve_cards[%d] 类型错误（期望 Dictionary）" % [pid, i])
+			var c: Dictionary = c_val
+			if not c.has("type") or not (c.get("type", null) is int):
+				return Result.failure("players[%d].reserve_cards[%d].type 缺失或类型错误（期望 int）" % [pid, i])
+			var t: int = int(c["type"])
+			if t != 5 and t != 10 and t != 20:
+				return Result.failure("players[%d].reserve_cards[%d].type 非法（期望 5/10/20），实际: %d" % [pid, i, t])
+			if c.has("cash") or c.has("ceo_slots"):
+				return Result.failure("players[%d].reserve_cards[%d] 不应包含 cash/ceo_slots（应为替代储备卡）" % [pid, i])
+
+		# 仍需在 Setup/ReserveCards 由玩家选择；开局不应自动选中
+		if int(p.get("reserve_card_selected", -999)) != -1:
+			return Result.failure("players[%d].reserve_card_selected 开局应为 -1（未选择），实际: %s" % [pid, str(p.get("reserve_card_selected", null))])
+		if bool(p.get("reserve_card_revealed", true)):
+			return Result.failure("players[%d].reserve_card_revealed 开局应为 false" % pid)
 
 	return Result.success()
 
@@ -109,4 +159,3 @@ static func _test_first_break_sets_base_price_tie_5_wins_over_10(seed_val: int) 
 		return Result.failure("base_unit_price 应变为 5（平局 5 胜出 10），实际: %s" % str(s.rules.get("base_unit_price", null)))
 
 	return Result.success()
-

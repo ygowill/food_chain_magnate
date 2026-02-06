@@ -148,7 +148,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		assert(def_val != null and (def_val is EmployeeDef), "submit_restructuring: 未知员工: %s" % emp_id)
 		var def: EmployeeDef = def_val
 		var ms := maxi(0, int(def.manager_slots))
-		if ms > 0:
+		var is_manager := (str(def.role) == "manager") or (ms > 0)
+		if is_manager:
 			managers.append(emp_id)
 		else:
 			non_managers.append(emp_id)
@@ -253,7 +254,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			if direct_def2 == null:
 				continue
 			var cap2 := maxi(0, int(direct_def2.manager_slots))
-			if cap2 <= 0:
+			var direct_is_manager2 := (str(direct_def2.role) == "manager") or (cap2 > 0)
+			if not direct_is_manager2:
 				replace_index = i_rep
 				replaced_emp = direct2
 				break
@@ -332,7 +334,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 				var rep_def: EmployeeDef = EmployeeRegistryClass.get_def(rep_id)
 				if rep_def == null:
 					continue
-				if maxi(0, int(rep_def.manager_slots)) > 0:
+				var rep_ms := maxi(0, int(rep_def.manager_slots))
+				var rep_is_manager := (str(rep_def.role) == "manager") or (rep_ms > 0)
+				if rep_is_manager:
 					continue
 				var used_rep: int = int(used_counts.get(rep_id, 0))
 				if used_rep >= avail_rep:

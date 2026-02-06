@@ -6,7 +6,7 @@ extends RefCounted
 const ContentCatalogClass = preload("res://core/modules/v2/content_catalog.gd")
 const ProductDefClass = preload("res://core/data/product_def.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
-const PaydaySettlementClass = preload("res://core/rules/phase/payday_settlement.gd")
+const PaydaySettlementClass = preload("res://modules/base_rules/rules/phase/payday_settlement.gd")
 
 static func run() -> Result:
 	var was_loaded := ProductRegistryClass.is_loaded()
@@ -106,4 +106,3 @@ static func run() -> Result:
 		ProductRegistryClass.reset()
 
 	return result
-

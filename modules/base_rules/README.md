@@ -10,5 +10,4 @@
   - `Marketing` enter
   - `Cleanup` enter
 
-> 说明：当前阶段仅接入“结算注册”，内部仍复用现有 `core/rules/phase/*_settlement.gd` 规则实现；后续会继续模块化拆分与效果系统迁移。
-
+> 说明：阶段结算实现位于 `modules/base_rules/rules/phase/**`，由本模块注册为 primary settlements。core 层仅保留注册表/引擎编排等可复用机制，不再直接承载 base_rules 的阶段结算实现。

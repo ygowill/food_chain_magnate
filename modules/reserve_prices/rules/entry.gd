@@ -1,11 +1,6 @@
 extends RefCounted
 
-const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
-const PhaseManagerClass = preload("res://core/engine/phase_manager.gd")
 const RandomManagerClass = preload("res://core/random/random_manager.gd")
-
-const Phase = PhaseDefsClass.Phase
-const HookType = PhaseManagerClass.HookType
 
 const MODULE_ID := "reserve_prices"
 const FIRST_BREAK_ADD_PER_PLAYER := 200
@@ -13,7 +8,7 @@ const CARDS_PER_PLAYER := 3
 const ALLOWED_TYPES: Array[int] = [5, 10, 20]
 
 func register(registrar) -> Result:
-	var r = registrar.register_phase_hook(Phase.RESTRUCTURING, HookType.BEFORE_ENTER, Callable(self, "_on_restructuring_before_enter"), 0)
+	var r = registrar.register_state_initializer("%s:init_state" % MODULE_ID, Callable(self, "_init_state"), 0)
 	if not r.ok:
 		return r
 
@@ -23,12 +18,10 @@ func register(registrar) -> Result:
 
 	return Result.success()
 
-func _on_restructuring_before_enter(state: GameState) -> Result:
-	# 仅在第 1 回合进入 Restructuring 时初始化替代储备卡
+func _init_state(state: GameState, _rng_manager) -> Result:
+	# 规则：开局使用“替代储备卡”集合（每位玩家 3 张；仅包含 type=5/10/20）
 	if state == null:
 		return Result.failure("%s: state 为空" % MODULE_ID)
-	if int(state.round_number) != 1:
-		return Result.success()
 	if not (state.players is Array):
 		return Result.failure("%s: state.players 类型错误（期望 Array）" % MODULE_ID)
 
@@ -58,11 +51,18 @@ func _on_restructuring_before_enter(state: GameState) -> Result:
 			cursor += 1
 
 		player["reserve_cards"] = cards
-		if not player.has("reserve_card_selected") or not (player["reserve_card_selected"] is int):
-			player["reserve_card_selected"] = 0
-		var sel: int = int(player["reserve_card_selected"])
-		if sel < 0 or sel >= CARDS_PER_PLAYER:
-			player["reserve_card_selected"] = 0
+		var sel := -1
+		if player.has("reserve_card_selected"):
+			var sel_val = player.get("reserve_card_selected", -1)
+			if sel_val is int:
+				sel = int(sel_val)
+			elif sel_val is float:
+				var f: float = float(sel_val)
+				if f == floor(f):
+					sel = int(f)
+		if sel < -1 or sel >= CARDS_PER_PLAYER:
+			sel = -1
+		player["reserve_card_selected"] = sel
 		player["reserve_card_revealed"] = false
 		state.players[pid] = player
 
@@ -198,4 +198,3 @@ static func _record_bankruptcy_event(state: GameState, event: Dictionary) -> voi
 	events.append(event)
 	bankruptcy["events"] = events
 	state.round_state["bankruptcy"] = bankruptcy
-

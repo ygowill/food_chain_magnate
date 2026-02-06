@@ -28,7 +28,7 @@ var _restaurant_valid_anchors: Dictionary = {} # Vector2i -> true
 var _house_valid_anchors: Dictionary = {} # Vector2i -> true
 var _piece_valid_anchors: Dictionary = {} # Vector2i -> true
 var _marketing_valid_anchors: Dictionary = {} # Vector2i -> true
-var _marketing_outside_to_anchor: Dictionary = {} # outside_world_pos(Vector2i) -> {anchor: Vector2i, axis: String, attach: String} (airplane only)
+var _marketing_outside_to_anchor: Dictionary = {} # outside_world_pos(Vector2i) -> {anchor: Vector2i, axis: String, attach: String} (outside marketing)
 var _distance_tool_from: Vector2i = Vector2i(-1, -1)
 var _procure_drinks_hover_restaurant_id: String = ""
 

@@ -2,7 +2,7 @@
 class_name HardChoicesV2Test
 extends RefCounted
 
-const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
+const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cleanup_settlement.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const MilestoneDefClass = preload("res://core/data/milestone_def.gd")
 
@@ -100,4 +100,3 @@ static func _test_hard_choices_sets_expires_and_cleanup_removes(seed_val: int) -
 		return Result.failure("启用 hard_choices 后，round3 cleanup 应移除 first_hire_3")
 
 	return Result.success()
-

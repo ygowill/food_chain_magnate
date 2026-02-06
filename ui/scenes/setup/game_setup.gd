@@ -36,6 +36,7 @@ const RESTAURANT_LOGO_TEXTURE_PATHS: Array[String] = [
 	"res://modules/base_pieces/assets/map/logos/golden_duck_diner.png",
 	"res://modules/base_pieces/assets/map/logos/santa_maria_pizza.png",
 	"res://modules/base_pieces/assets/map/logos/xango_blues_bar.png",
+	"res://modules/base_pieces/assets/map/logos/sixth_chain.png",
 ]
 
 const MODULE_GROUPS: Array[Dictionary] = [
@@ -84,6 +85,7 @@ func _ready() -> void:
 	_ensure_module_selector()
 	_rebuild_player_rows()
 	_sync_globals_modules_to_module_selector()
+	_sync_player_count_module_constraints()
 
 func _on_back_pressed() -> void:
 	GameLog.info("GameSetup", "返回上一场景")
@@ -105,6 +107,12 @@ func _on_start_pressed() -> void:
 	# 同步 UI 状态 -> Globals
 	if not _apply_module_selection_to_globals():
 		return
+
+	# 规则书：6 人局必须启用 New Districts（新区域）模块。
+	if Globals.player_count == 6 and not Globals.enabled_modules_v2.has("new_districts"):
+		_set_message("6 人局必须启用 New Districts（新区域）模块。")
+		return
+
 	_apply_player_profiles_to_globals()
 	Globals.save_settings()
 
@@ -122,6 +130,7 @@ func _on_start_pressed() -> void:
 	SceneManager.goto_game()
 
 func _on_player_count_changed(_value: float) -> void:
+	_sync_player_count_module_constraints()
 	_rebuild_player_rows()
 
 func _ensure_sections() -> void:
@@ -201,6 +210,16 @@ func _sync_globals_modules_to_module_selector() -> void:
 		return
 	_module_selector.set_initial_enabled_modules_v2(Array(Globals.enabled_modules_v2, TYPE_STRING, "", null))
 
+func _sync_player_count_module_constraints() -> void:
+	if _module_selector == null or not is_instance_valid(_module_selector):
+		return
+
+	var count := int(player_count_spinbox.value)
+	if count == 6:
+		_module_selector.set_forced_optional_modules(["new_districts"], "6 人局强制启用 New Districts（新区域）模块。")
+	else:
+		_module_selector.set_forced_optional_modules([])
+
 func _rebuild_player_rows() -> void:
 	if _players_container == null or not is_instance_valid(_players_container):
 		return
@@ -242,7 +261,7 @@ func _rebuild_player_rows() -> void:
 		var logo_opt := OptionButton.new()
 		logo_opt.custom_minimum_size = Vector2(180, 0)
 		logo_opt.add_item("随机")
-		for i in range(min(RESTAURANT_LOGO_TEXTURE_PATHS.size(), 5)):
+		for i in range(RESTAURANT_LOGO_TEXTURE_PATHS.size()):
 			var icon_tex := _logo_icons_small[i] if i < _logo_icons_small.size() else null
 			if icon_tex != null:
 				logo_opt.add_icon_item(icon_tex, "店铺 %d" % (i + 1))
@@ -300,7 +319,7 @@ func _refresh_player_logo_unique_constraints() -> void:
 
 		var popup := opt.get_popup()
 		var current_choice := int(opt.selected) - 1
-		for logo_id in range(min(RESTAURANT_LOGO_TEXTURE_PATHS.size(), 5)):
+		for logo_id in range(RESTAURANT_LOGO_TEXTURE_PATHS.size()):
 			var idx := logo_id + 1
 			var taken := used_by.has(logo_id) and int(used_by[logo_id]) != pid
 			if popup != null:

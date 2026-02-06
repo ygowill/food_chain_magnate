@@ -3,10 +3,10 @@ extends RefCounted
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 
-const PaydaySettlementClass = preload("res://core/rules/phase/payday_settlement.gd")
-const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
-const DinnertimeSettlementClass = preload("res://core/rules/phase/dinnertime_settlement.gd")
-const MarketingSettlementClass = preload("res://core/rules/phase/marketing_settlement.gd")
+const PaydaySettlementClass = preload("res://modules/base_rules/rules/phase/payday_settlement.gd")
+const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cleanup_settlement.gd")
+const DinnertimeSettlementClass = preload("res://modules/base_rules/rules/phase/dinnertime_settlement.gd")
+const MarketingSettlementClass = preload("res://modules/base_rules/rules/phase/marketing_settlement.gd")
 const MapDefClass = preload("res://core/map/map_def.gd")
 const MapOptionDefClass = preload("res://core/map/map_option_def.gd")
 

@@ -55,6 +55,7 @@ var _optional_module_ids: Array[String] = []
 var _module_checkboxes: Dictionary = {} # module_id -> CheckBox
 var _requested_optional_modules: Dictionary = {} # module_id -> true（用户显式选择）
 var _locked_optional_modules: Dictionary = {} # module_id -> true（被依赖，禁止取消）
+var _forced_optional_modules: Dictionary = {} # module_id -> reason（外部约束强制启用/锁定）
 
 var _suppress_signals: bool = false
 var _editable: bool = true
@@ -91,17 +92,39 @@ func set_initial_enabled_modules_v2(enabled_modules_v2: Array) -> void:
 		_requested_optional_modules[id] = true
 	_recompute_modules_and_apply_to_ui()
 
+func set_forced_optional_modules(module_ids: Array, reason: String = "") -> void:
+	# 仅影响“可选模块”（非 base_*）。用于 UI 层对规则书约束做强制启用/锁定。
+	_forced_optional_modules.clear()
+	var r := str(reason).strip_edges()
+	for mid_val in module_ids:
+		var id := str(mid_val).strip_edges()
+		if id.is_empty():
+			continue
+		if id.begins_with("base_"):
+			continue
+		_forced_optional_modules[id] = r
+	_recompute_modules_and_apply_to_ui()
+
 func get_enabled_modules_v2() -> Array[String]:
 	var base: Array[String] = GameDefaultsClass.build_default_enabled_modules_v2()
-	if _requested_optional_modules.has("new_milestones"):
+	if _requested_optional_modules.has("new_milestones") or _forced_optional_modules.has("new_milestones"):
 		base.erase("base_milestones")
 
 	var requested: Array[String] = []
+	var seen := {}
 	for mid_val in _requested_optional_modules.keys():
 		var id := str(mid_val)
 		if id.is_empty() or id.begins_with("base_"):
 			continue
+		seen[id] = true
 		requested.append(id)
+	for mid_val2 in _forced_optional_modules.keys():
+		var id2 := str(mid_val2)
+		if id2.is_empty() or id2.begins_with("base_"):
+			continue
+		if seen.has(id2):
+			continue
+		requested.append(id2)
 	requested.sort()
 
 	var out: Array[String] = []
@@ -380,7 +403,17 @@ func _recompute_modules_and_apply_to_ui() -> void:
 		return
 
 	var notes: Array[String] = []
-	var new_ms_on := _requested_optional_modules.has("new_milestones")
+	var new_ms_on := _requested_optional_modules.has("new_milestones") or _forced_optional_modules.has("new_milestones")
+
+	if not _forced_optional_modules.is_empty():
+		var forced: Array[String] = []
+		for mid_val in _forced_optional_modules.keys():
+			var id := str(mid_val).strip_edges()
+			if id.is_empty():
+				continue
+			forced.append(id)
+		forced.sort()
+		notes.append("已强制启用模块：%s" % ", ".join(forced))
 
 	# 冲突/兼容性规则：new_milestones 优先。
 	if new_ms_on:
@@ -421,6 +454,14 @@ func _recompute_modules_and_apply_to_ui() -> void:
 			if not tt.is_empty():
 				tt += "\n"
 			tt += "与“全新里程碑”不兼容（依赖 base_milestones）"
+		elif _forced_optional_modules.has(id):
+			disabled = true
+			if not tt.is_empty():
+				tt += "\n"
+			var reason := str(_forced_optional_modules.get(id, "")).strip_edges()
+			if reason.is_empty():
+				reason = "被规则强制启用"
+			tt += reason
 		elif _locked_optional_modules.has(id):
 			disabled = true
 			if not tt.is_empty():
@@ -437,12 +478,16 @@ func _recompute_modules_and_apply_to_ui() -> void:
 
 func _compute_effective_optional_modules() -> Dictionary:
 	var effective: Dictionary = {}
+	for mid_val2 in _forced_optional_modules.keys():
+		effective[str(mid_val2)] = true
 	for mid_val in _requested_optional_modules.keys():
 		effective[str(mid_val)] = true
 
 	var stack: Array[String] = []
 	for mid_val in _requested_optional_modules.keys():
 		stack.append(str(mid_val))
+	for mid_val3 in _forced_optional_modules.keys():
+		stack.append(str(mid_val3))
 
 	var visited: Dictionary = {}
 	while not stack.is_empty():
@@ -471,6 +516,8 @@ func _compute_locked_optional_modules_from_requested() -> Dictionary:
 	var stack: Array[String] = []
 	for mid_val in _requested_optional_modules.keys():
 		stack.append(str(mid_val))
+	for mid_val2 in _forced_optional_modules.keys():
+		stack.append(str(mid_val2))
 
 	var visited: Dictionary = {}
 	while not stack.is_empty():

@@ -14,7 +14,7 @@
 ## 复核步骤
 
 1. 载入后应处于 Working/Marketing，且玩家 0 在岗包含 gourmet_food_critic。
-2. 行动面板选择「发起营销」，并按说明文件中的推荐坐标放置。
+2. 行动面板选择「发起营销」，选择营销类型「美食指南（gourmet_guide）」后，在地图内点击绿色高亮格放置（2×2，占地为空地且整体邻接道路）。
 
 ## 预期结果
 
@@ -29,8 +29,7 @@
 	- `board_number`: `17`
 	- `product`: `burger`
 	- `duration`: `1`
-	- `position`: `[2, 0]`
-	- `rotation`: `90`
+	- `position`: `（任意高亮 anchor，如 [x, y]）`
 
 ## 关联单元测试
 

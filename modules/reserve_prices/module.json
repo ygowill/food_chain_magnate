@@ -11,9 +11,6 @@
 		"content": [],
 		"actions": [],
 		"settlements": [],
-		"hooks": [
-			"hook:phase:Restructuring:before_enter"
-		]
+		"hooks": []
 	}
 }
-

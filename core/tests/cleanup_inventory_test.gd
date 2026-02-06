@@ -5,7 +5,7 @@
 class_name CleanupInventoryTest
 extends RefCounted
 
-const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
+const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cleanup_settlement.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:

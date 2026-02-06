@@ -56,8 +56,8 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("未知员工: %s" % employee_id)
 
 	var emp_def: EmployeeDef = EmployeeRegistryClass.get_def(employee_id)
-	var emp_ms := maxi(0, int(emp_def.manager_slots))
-	if emp_ms > 0:
+	var emp_is_manager := (str(emp_def.role) == "manager") or (maxi(0, int(emp_def.manager_slots)) > 0)
+	if emp_is_manager:
 		return Result.failure("经理不能成为下属（必须直连 CEO）: %s" % employee_id)
 
 	var player := state.get_player(command.actor)
@@ -136,7 +136,8 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		if not employees.has(rep_id):
 			continue
 		var rep_def: EmployeeDef = EmployeeRegistryClass.get_def(rep_id)
-		if maxi(0, int(rep_def.manager_slots)) > 0:
+		var rep_is_manager := (str(rep_def.role) == "manager") or (maxi(0, int(rep_def.manager_slots)) > 0)
+		if rep_is_manager:
 			continue
 		current_count += 1
 		if current_count >= cap:
@@ -236,7 +237,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		if not employees.has(rep_id2):
 			continue
 		var rep_def2: EmployeeDef = EmployeeRegistryClass.get_def(rep_id2)
-		if maxi(0, int(rep_def2.manager_slots)) > 0:
+		var rep_is_manager2 := (str(rep_def2.role) == "manager") or (maxi(0, int(rep_def2.manager_slots)) > 0)
+		if rep_is_manager2:
 			continue
 		reports2.append(rep_id2)
 		if reports2.size() >= cap:

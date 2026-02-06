@@ -5,8 +5,8 @@ const Support = preload("res://core/tests/milestone_system/milestone_system_test
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
-const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
-const PaydaySettlementClass = preload("res://core/rules/phase/payday_settlement.gd")
+const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cleanup_settlement.gd")
+const PaydaySettlementClass = preload("res://modules/base_rules/rules/phase/payday_settlement.gd")
 const BankruptcyRulesClass = preload("res://core/rules/economy/bankruptcy_rules.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
@@ -408,4 +408,3 @@ static func _test_cash_reached_triggers_first_have_20_and_100(seed_val: int) -> 
 		return Result.failure("下一回合 CFO 加成不匹配: %d != %d" % [int(ctx1.get("extra", -1)), expected_extra])
 
 	return Result.success()
-

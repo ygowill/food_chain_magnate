@@ -2,7 +2,7 @@
 class_name FridgeKeepModal
 extends "res://ui/components/modal_panel/modal_panel_base.gd"
 
-const CleanupSettlementClass = preload("res://core/rules/phase/cleanup_settlement.gd")
+const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cleanup_settlement.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 
 @onready var info_label: Label = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/InfoLabel

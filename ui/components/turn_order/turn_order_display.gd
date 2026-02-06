@@ -30,7 +30,7 @@ func _ready() -> void:
 	_rebuild()
 
 func set_player_count(count: int) -> void:
-	_player_count = clamp(count, 0, 5)
+	_player_count = clampi(count, 0, Globals.MAX_PLAYERS)
 	_rebuild()
 
 func set_game_state(state: GameState) -> void:

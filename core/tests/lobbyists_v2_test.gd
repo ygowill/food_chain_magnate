@@ -5,7 +5,7 @@ class_name LobbyistsV2Test
 extends RefCounted
 
 const ModuleEntryClass = preload("res://modules/lobbyists/rules/entry.gd")
-const DinnertimeSettlementClass = preload("res://core/rules/phase/dinnertime_settlement.gd")
+const DinnertimeSettlementClass = preload("res://modules/base_rules/rules/phase/dinnertime_settlement.gd")
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")

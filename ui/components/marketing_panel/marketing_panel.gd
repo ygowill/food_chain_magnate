@@ -44,6 +44,12 @@ const MARKETING_TYPES: Array[Dictionary] = [
 	{"id": "radio", "name": "电台广告", "icon": "R", "color": Color("#659da5"), "range": 0},  # 全图
 ]
 
+# 模块营销 type 的 UI 名称兜底（若未在 MARKETING_TYPES 中声明）。
+# 说明：营销 type 本身是数据驱动/模块可扩展的；UI 需要一个可读名称。
+const MARKETING_TYPE_NAME_OVERRIDES: Dictionary = {
+	"gourmet_guide": "美食指南",
+}
+
 # 外部数据
 var _available_marketers: Array[Dictionary] = []  # [{id, type, max_duration}]
 var _available_boards_by_type: Dictionary = {}  # type_id -> Array[int]
@@ -163,15 +169,68 @@ func _rebuild_type_buttons() -> void:
 			marketers_by_type[m_type] = []
 		marketers_by_type[m_type].append(marketer)
 
+	# 兼容模块新增营销 type（如 gourmet_guide）。优先使用 MARKETING_TYPES 的 UI 定义，
+	# 未声明的 type 以 type_id 自身做兜底展示。
+	var base_defs_by_id: Dictionary = {}
+	var ordered_type_ids: Array[String] = []
 	for type_def in MARKETING_TYPES:
-		var type_id: String = str(type_def.id)
+		var tid := str(type_def.get("id", "")).strip_edges()
+		if tid.is_empty():
+			continue
+		base_defs_by_id[tid] = type_def
+		ordered_type_ids.append(tid)
+
+	var extra_ids_set: Dictionary = {}
+	for k in marketers_by_type.keys():
+		var tid2 := str(k).strip_edges()
+		if tid2.is_empty():
+			continue
+		if base_defs_by_id.has(tid2):
+			continue
+		extra_ids_set[tid2] = true
+	for k2 in _available_boards_by_type.keys():
+		var tid3 := str(k2).strip_edges()
+		if tid3.is_empty():
+			continue
+		if base_defs_by_id.has(tid3):
+			continue
+		extra_ids_set[tid3] = true
+
+	var extra_ids: Array[String] = []
+	for k3 in extra_ids_set.keys():
+		extra_ids.append(str(k3))
+	extra_ids.sort()
+	ordered_type_ids.append_array(extra_ids)
+
+	var available_type_ids: Array[String] = []
+
+	for type_id in ordered_type_ids:
 		var marketer_count: int = Array(marketers_by_type.get(type_id, [])).size()
 		var board_count: int = Array(_available_boards_by_type.get(type_id, [])).size()
 		var is_available := marketer_count > 0 and board_count > 0
+		if is_available:
+			available_type_ids.append(type_id)
+
+		var type_def_use: Dictionary = {}
+		var known_def = base_defs_by_id.get(type_id, null)
+		if known_def is Dictionary:
+			type_def_use = known_def
+		else:
+			var display_name := str(MARKETING_TYPE_NAME_OVERRIDES.get(type_id, type_id))
+			var fallback_icon := "?"
+			if not type_id.is_empty():
+				fallback_icon = type_id.substr(0, 1).to_upper()
+			type_def_use = {
+				"id": type_id,
+				"name": display_name,
+				"icon": fallback_icon,
+				"color": Color("#9aa3ad"),
+				"range": 0,
+			}
 
 		var btn = MarketingTypeButtonClass.new()
 		btn.type_id = type_id
-		btn.type_def = type_def
+		btn.type_def = type_def_use
 		btn.icon_texture = _icon_cache.get_marketing_icon_texture(type_id, MARKETING_TYPE_ICON_SIZE)
 		btn.is_available = is_available
 		btn.marketer_count = marketer_count
@@ -179,6 +238,10 @@ func _rebuild_type_buttons() -> void:
 		btn.type_selected.connect(_on_type_selected)
 		type_container.add_child(btn)
 		_type_buttons[type_id] = btn
+	
+	# 若当前没有选择任何类型，且仅有一个可用类型：自动选中它，减少一次点击（manual_cases 常用）。
+	if _selected_type.is_empty() and available_type_ids.size() == 1:
+		_on_type_selected(str(available_type_ids[0]))
 
 func _on_type_selected(type_id: String) -> void:
 	_selected_type = type_id
@@ -516,23 +579,23 @@ func _rebuild_product_buttons() -> void:
 			# 兜底：ProductDef 有字段 name
 			name = str(def_val.name)
 
-			var btn := Button.new()
-			btn.custom_minimum_size = Vector2(44, 44)
-			btn.toggle_mode = true
-			btn.button_group = _product_button_group
-			btn.focus_mode = Control.FOCUS_NONE
-			btn.icon = _icon_cache.get_product_icon_texture_scaled(pid, PRODUCT_ICON_SIZE)
-			btn.expand_icon = true
-			btn.text = ""
-			btn.tooltip_text = name
-			btn.set_meta("product_id", pid)
-			btn.pressed.connect(func():
-				_on_product_button_pressed(pid)
-			)
-			product_flow.add_child(btn)
-			_product_button_by_id[pid] = btn
-			if first_pid.is_empty():
-				first_pid = pid
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(44, 44)
+		btn.toggle_mode = true
+		btn.button_group = _product_button_group
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.icon = _icon_cache.get_product_icon_texture_scaled(pid, PRODUCT_ICON_SIZE)
+		btn.expand_icon = true
+		btn.text = ""
+		btn.tooltip_text = name
+		btn.set_meta("product_id", pid)
+		btn.pressed.connect(func():
+			_on_product_button_pressed(pid)
+		)
+		product_flow.add_child(btn)
+		_product_button_by_id[pid] = btn
+		if first_pid.is_empty():
+			first_pid = pid
 
 	var to_select := _selected_product
 	if to_select.is_empty() or not _product_button_by_id.has(to_select):
@@ -606,6 +669,8 @@ func _get_marketing_effect_hint(type_id: String) -> String:
 			return "影响：整行/列（角落需选择方向）"
 		"radio":
 			return "影响：周围 3×3 板块内房屋"
+		"gourmet_guide":
+			return "影响：所有有花园的房屋"
 		_:
 			return ""
 

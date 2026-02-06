@@ -126,7 +126,7 @@ static func from_dict(data: Dictionary) -> Result:
 		return Result.failure("GameConfig.rules.one_x_employee_copies_by_player_count 缺失或类型错误（期望 Dictionary）")
 	var one_x_copies: Dictionary = one_x_copies_val
 	cfg.rule_one_x_employee_copies_by_player_count = {}
-	for player_count_key in ["2", "3", "4", "5"]:
+	for player_count_key in ["2", "3", "4", "5", "6"]:
 		if not one_x_copies.has(player_count_key):
 			return Result.failure("GameConfig.rules.one_x_employee_copies_by_player_count 缺少 key: %s" % player_count_key)
 		var c_read := ParseHelpersClass.parse_non_negative_int(one_x_copies.get(player_count_key, null), "rules.one_x_employee_copies_by_player_count.%s" % player_count_key)
