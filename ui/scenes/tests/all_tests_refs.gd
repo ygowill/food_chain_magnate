@@ -55,6 +55,7 @@ const DistanceOverlayRoadworksPenaltyTestClass = preload("res://ui/scenes/tests/
 const GameSmokeTestScene = preload("res://ui/scenes/tests/game_smoke_test.tscn")
 const HandAreaViewSwitchTestClass = preload("res://ui/scenes/tests/hand_area_view_switch_test.gd")
 const ReserveCardSelectionModalPrivacyTestClass = preload("res://ui/scenes/tests/reserve_card_selection_modal_privacy_test.gd")
+const EntityTabReserveCardPrivacyTestClass = preload("res://ui/scenes/tests/entity_tab_reserve_card_privacy_test.gd")
 const TurnOrderSelectionModalOnlineVisibilityTestClass = preload("res://ui/scenes/tests/turn_order_selection_modal_online_visibility_test.gd")
 const RoomConfigEditorEditableSignalTestClass = preload("res://ui/scenes/tests/room_config_editor_editable_signal_test.gd")
 const LeftPanelSelectionIsolationTestClass = preload("res://ui/scenes/tests/left_panel_selection_isolation_test.gd")

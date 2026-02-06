@@ -128,6 +128,10 @@ func _run_all() -> int:
 				"fn": func() -> Result: return TestRefs.ReserveCardSelectionModalPrivacyTestClass.run(),
 			},
 			{
+				"name": "EntityTabReserveCardPrivacyTest",
+				"fn": func() -> Result: return TestRefs.EntityTabReserveCardPrivacyTestClass.run(),
+			},
+			{
 				"name": "TurnOrderSelectionModalOnlineVisibilityTest",
 				"fn": func() -> Result: return TestRefs.TurnOrderSelectionModalOnlineVisibilityTestClass.run(),
 			},
