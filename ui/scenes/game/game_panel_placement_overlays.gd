@@ -248,6 +248,19 @@ func try_show_piece_placement(action_id: String, params: Dictionary) -> bool:
 	show_piece_placement(action_id, piece_ids, params)
 	return true
 
+func try_show_module_action_overlay(action_id: String, params: Dictionary) -> bool:
+	# Allow module-provided overlay controllers to handle action clicks and open custom UI flows.
+	_ensure_module_overlay_controllers_loaded()
+	for c in _module_overlay_controllers:
+		if c == null or not is_instance_valid(c):
+			continue
+		if not c.has_method("try_handle_action_request"):
+			continue
+		var handled = c.call("try_handle_action_request", action_id, params)
+		if handled is bool and bool(handled):
+			return true
+	return false
+
 func show_piece_placement(action_id: String, piece_ids: Array[String], params: Dictionary) -> void:
 	if _scene == null or _scene.game_engine == null:
 		return

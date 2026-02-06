@@ -319,7 +319,7 @@ func _refresh_custom_context(overlay: Node) -> void:
 	_sync_custom_context_node(overlay)
 
 	if is_instance_valid(_cancel_context_button):
-		_cancel_context_button.visible = true
+		_cancel_context_button.visible = bool(spec.get("cancel_visible", true))
 		_cancel_context_button.text = str(spec.get("cancel_text", "取消"))
 	if is_instance_valid(_confirm_context_button):
 		_confirm_context_button.text = str(spec.get("confirm_text", "确认"))
@@ -331,6 +331,17 @@ func _refresh_custom_context(overlay: Node) -> void:
 		_confirm_context_button.disabled = disabled
 
 	_context_syncing = false
+
+func _should_clear_context_on_cancel() -> bool:
+	if _context_overlay == null or not is_instance_valid(_context_overlay):
+		return true
+	if not _context_overlay.has_method("get_action_panel_context_spec"):
+		return true
+	var spec_val = _context_overlay.call("get_action_panel_context_spec")
+	if not (spec_val is Dictionary):
+		return true
+	var spec: Dictionary = spec_val
+	return bool(spec.get("clear_on_cancel", true))
 
 func _ensure_custom_context_node(scene_path: String, overlay: Node) -> void:
 	if not is_instance_valid(_custom_context_container):
@@ -530,7 +541,8 @@ func _on_cancel_context_pressed() -> void:
 	if not _call_context_overlay_method("request_cancel"):
 		clear_context_overlay()
 		return
-	clear_context_overlay()
+	if _should_clear_context_on_cancel():
+		clear_context_overlay()
 
 func _on_confirm_context_pressed() -> void:
 	if _context_overlay == null or not is_instance_valid(_context_overlay):

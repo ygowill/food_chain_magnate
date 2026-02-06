@@ -20,6 +20,20 @@
 		"actions": [
 			"action:place_giant_billboard",
 			"action:place_highway_offramp"
-		]
+		],
+		"ui": {
+			"placement_overlays": [
+				"res://modules/rural_marketeers/ui/rural_marketeers_flow_controller.gd"
+			],
+			"map_interaction_modes": [
+				{
+					"id": "rural_marketeers_offramp",
+					"script": "res://modules/rural_marketeers/ui/game_map_interaction_rural_offramp_mode.gd"
+				}
+			],
+			"hidden_action_ids": [
+				"place_highway_offramp"
+			]
+		}
 	}
 }

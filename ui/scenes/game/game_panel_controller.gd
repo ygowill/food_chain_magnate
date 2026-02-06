@@ -597,6 +597,10 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 
 		# 其他动作直接创建命令
 		_:
+			if _placement_overlays != null and _placement_overlays.has_method("try_show_module_action_overlay"):
+				if bool(_placement_overlays.try_show_module_action_overlay(action_id, params)):
+					_sync_action_panel_context()
+					return
 			if _placement_overlays != null and _placement_overlays.has_method("try_show_piece_placement"):
 				if bool(_placement_overlays.try_show_piece_placement(action_id, params)):
 					_sync_action_panel_context()
