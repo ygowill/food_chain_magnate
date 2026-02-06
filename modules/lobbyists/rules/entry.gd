@@ -170,6 +170,52 @@ func _require_cell_road_segments(cell: Dictionary, world_pos: Vector2i) -> Resul
 		return Result.failure("%s: cell.road_segments 缺失或类型错误（期望 Array）: %s" % [MODULE_ID, str(world_pos)])
 	return Result.success(cell["road_segments"])
 
+func _segments_have_dir(segments: Array, dir: String) -> bool:
+	var d := str(dir).strip_edges()
+	if d.is_empty():
+		return false
+	for seg_val in segments:
+		if not (seg_val is Dictionary):
+			continue
+		var seg: Dictionary = seg_val
+		var dirs_val = seg.get("dirs", null)
+		if dirs_val is Array and d in Array(dirs_val):
+			return true
+	return false
+
+func _ensure_dir_in_segments(segments: Array, dir: String) -> bool:
+	var need_dir := str(dir).strip_edges()
+	if need_dir.is_empty():
+		return false
+	if _segments_have_dir(segments, need_dir):
+		return false
+
+	# 优先修改非桥段（Lobbyists 道路为 bridge=false）
+	var target_idx := -1
+	for j in range(segments.size()):
+		var sv = segments[j]
+		if not (sv is Dictionary):
+			continue
+		if not bool(Dictionary(sv).get("bridge", false)):
+			target_idx = j
+			break
+	if target_idx < 0:
+		for j2 in range(segments.size()):
+			if segments[j2] is Dictionary:
+				target_idx = j2
+				break
+	if target_idx < 0:
+		return false
+
+	var seg2: Dictionary = segments[target_idx]
+	var dirs2_val = seg2.get("dirs", null)
+	var dirs2: Array = dirs2_val if (dirs2_val is Array) else []
+	if not dirs2.has(need_dir):
+		dirs2.append(need_dir)
+	seg2["dirs"] = dirs2
+	segments[target_idx] = seg2
+	return true
+
 func _on_cleanup_enter_extension(state: GameState, _phase_manager) -> Result:
 	if state == null or not (state.map is Dictionary):
 		return Result.failure("%s: Cleanup 扩展失败：state.map 类型错误" % MODULE_ID)
@@ -341,6 +387,77 @@ func _on_cleanup_enter_extension(state: GameState, _phase_manager) -> Result:
 		cell2["road_segments"] = segs2
 		row2[idx2.x] = cell2
 		cells[idx2.y] = row2
+
+	# 3.5) 邻接道路互联：新增道路格与相邻道路格应互相补齐对向 dirs。
+	# 这一步不要求“原段已开放该方向”：只要相邻格子存在道路，就视为可连通（从而驱动路口贴图与 RoadGraph 升级）。
+	for cpos_val in clear_structure_cells.keys():
+		if not (cpos_val is Vector2i):
+			continue
+		var world_pos4: Vector2i = cpos_val
+		if not CoordsClass.is_world_pos_in_grid(state, world_pos4):
+			continue
+
+		var row_read4 := _require_row_at_world_pos(state, cells, world_pos4)
+		if not row_read4.ok:
+			return row_read4
+		var idx4: Vector2i = row_read4.value["idx"]
+		var row4: Array = row_read4.value["row"]
+
+		var cell_read4 := _require_cell_dict(row4, idx4)
+		if not cell_read4.ok:
+			return cell_read4
+		var cell4: Dictionary = cell_read4.value
+
+		var segs_read4 := _require_cell_road_segments(cell4, world_pos4)
+		if not segs_read4.ok:
+			return segs_read4
+		var segs4: Array = segs_read4.value
+		if segs4.is_empty():
+			continue
+
+		var changed_self := false
+		for dir in MapUtils.DIRECTIONS:
+			var npos4: Vector2i = world_pos4 + MapUtils.DIR_OFFSETS[dir]
+			if not CoordsClass.is_world_pos_in_grid(state, npos4):
+				continue
+
+			var row_read5 := _require_row_at_world_pos(state, cells, npos4)
+			if not row_read5.ok:
+				return row_read5
+			var idx5: Vector2i = row_read5.value["idx"]
+			var row5: Array = row_read5.value["row"]
+
+			var ncell_read := _require_cell_dict(row5, idx5)
+			if not ncell_read.ok:
+				return ncell_read
+			var ncell: Dictionary = ncell_read.value
+
+			var nsegs_read := _require_cell_road_segments(ncell, npos4)
+			if not nsegs_read.ok:
+				return nsegs_read
+			var nsegs: Array = nsegs_read.value
+			if nsegs.is_empty():
+				continue
+
+			var opp := MapUtils.get_opposite_dir(str(dir))
+			if opp.is_empty():
+				continue
+
+			var changed_neighbor := false
+			if _ensure_dir_in_segments(nsegs, opp):
+				changed_neighbor = true
+			if _ensure_dir_in_segments(segs4, str(dir)):
+				changed_self = true
+
+			if changed_neighbor:
+				ncell["road_segments"] = nsegs
+				row5[idx5.x] = ncell
+				cells[idx5.y] = row5
+
+		if changed_self:
+			cell4["road_segments"] = segs4
+			row4[idx4.x] = cell4
+			cells[idx4.y] = row4
 
 	# 4) 清理“建设中道路”的结构占用（仅保留 road_segments，使其变为真正道路）
 	for cpos_val in clear_structure_cells.keys():

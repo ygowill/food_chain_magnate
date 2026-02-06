@@ -43,6 +43,14 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r.ok:
 		return r
 
+	r = _test_road_cleanup_completes_existing_to_new_connections(seed_val)
+	if not r.ok:
+		return r
+
+	r = _test_road_cleanup_connects_adjacent_cells_without_preexisting_dirs(seed_val)
+	if not r.ok:
+		return r
+
 	r = _test_roadworks_distance_penalty_is_invoked(seed_val)
 	if not r.ok:
 		return r
@@ -54,6 +62,174 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_park_bonus_is_invoked(seed_val)
 	if not r.ok:
 		return r
+
+	return Result.success()
+
+static func _test_road_cleanup_connects_adjacent_cells_without_preexisting_dirs(_seed_val: int) -> Result:
+	# Regression: adjacency to an existing road cell must create a connection even if neither side
+	# previously had the matching dirs (e.g. attaching to the "side" of a straight segment).
+	var s := GameState.new()
+	s.map = {
+		"grid_size": Vector2i(3, 3),
+		"cells": [],
+		"boundary_index": {},
+	}
+	CoordsClass.set_map_origin(s, Vector2i.ZERO)
+
+	var cells := []
+	for y in range(3):
+		var row := []
+		for x in range(3):
+			row.append({
+				"road_segments": [],
+				"structure": {},
+				"terrain_type": null,
+				"drink_source": null,
+				"tile_origin": Vector2i(-1, -1),
+				"blocked": false,
+			})
+		cells.append(row)
+	s.map["cells"] = cells
+
+	# Existing road: vertical straight (no E/W initially).
+	s.map["cells"][1][0]["road_segments"] = [{
+		"dirs": ["N", "S"],
+		"bridge": false,
+	}]
+
+	# New road: a corner that doesn't initially face west (no "W").
+	# It should gain "W", and the existing straight should gain "E" after Cleanup.
+	s.map["cells"][1][1]["structure"] = {"piece_id": "lobbyists_road_l", "dynamic": true}
+	s.map["lobbyists_pending_roads"] = [{
+		"cells": [Vector2i(1, 1)],
+		"segments_by_pos": {
+			"1,1": [{"dirs": ["N", "E"], "bridge": false}],
+		},
+	}]
+
+	var entry := ModuleEntryClass.new()
+	var r: Result = entry._on_cleanup_enter_extension(s, null)
+	if not r.ok:
+		return Result.failure("Cleanup 扩展失败: %s" % r.error)
+
+	var left_cell: Dictionary = CellsClass.get_cell(s, Vector2i(0, 1))
+	var left_segs_val = left_cell.get("road_segments", null)
+	if not (left_segs_val is Array):
+		return Result.failure("cell.road_segments 类型错误: (0,1)")
+	var left_segs: Array = left_segs_val
+	if left_segs.is_empty():
+		return Result.failure("预期 (0,1) 有道路")
+	if not _cell_segments_have_dir(left_segs, "E"):
+		return Result.failure("Cleanup 后既有道路未补齐对向 dirs: (0,1) should include E")
+
+	var new_cell: Dictionary = CellsClass.get_cell(s, Vector2i(1, 1))
+	var new_segs_val = new_cell.get("road_segments", null)
+	if not (new_segs_val is Array):
+		return Result.failure("cell.road_segments 类型错误: (1,1)")
+	var new_segs: Array = new_segs_val
+	if new_segs.is_empty():
+		return Result.failure("Cleanup 后新道路未写入 road_segments: (1,1)")
+	if not _cell_segments_have_dir(new_segs, "W"):
+		return Result.failure("Cleanup 后新道路未补齐对向 dirs: (1,1) should include W")
+
+	var road_graph = RoadGraphCacheClass.get_road_graph(s)
+	if road_graph == null:
+		return Result.failure("道路图未初始化（测试）")
+	if int(road_graph.get_distance(Vector2i(0, 1), Vector2i(1, 1))) < 0:
+		return Result.failure("Cleanup 后道路未连通: (0,1) <-> (1,1)")
+
+	return Result.success()
+
+static func _cell_segments_have_dir(segs: Array, dir: String) -> bool:
+	var d := str(dir).strip_edges()
+	if d.is_empty():
+		return false
+	for seg_val in segs:
+		if not (seg_val is Dictionary):
+			continue
+		var seg: Dictionary = seg_val
+		var dirs_val = seg.get("dirs", null)
+		if dirs_val is Array and d in Array(dirs_val):
+			return true
+	return false
+
+static func _test_road_cleanup_completes_existing_to_new_connections(_seed_val: int) -> Result:
+	# Regression: when a newly built road cell is adjacent to an existing road "open end",
+	# Cleanup must also complete the missing opposite dir on the new cell.
+	#
+	# Example: place a corner next to a tee; after Cleanup the corner becomes a tee,
+	# and the road graph must treat them as connected.
+	var s := GameState.new()
+	s.map = {
+		"grid_size": Vector2i(3, 3),
+		"cells": [],
+		"boundary_index": {},
+	}
+	CoordsClass.set_map_origin(s, Vector2i.ZERO)
+
+	var cells := []
+	for y in range(3):
+		var row := []
+		for x in range(3):
+			row.append({
+				"road_segments": [],
+				"structure": {},
+				"terrain_type": null,
+				"drink_source": null,
+				"tile_origin": Vector2i(-1, -1),
+				"blocked": false,
+			})
+		cells.append(row)
+	s.map["cells"] = cells
+
+	# Existing road: tee pointing to north (into the empty cell where the new road will be built).
+	s.map["cells"][1][1]["road_segments"] = [{
+		"dirs": ["N", "E", "W"],
+		"bridge": false,
+	}]
+
+	# New road segment: a corner missing the south dir. It should be upgraded to a tee by Cleanup.
+	s.map["cells"][0][1]["structure"] = {"piece_id": "lobbyists_road_l", "dynamic": true}
+	s.map["lobbyists_pending_roads"] = [{
+		"cells": [Vector2i(1, 0)],
+		"segments_by_pos": {
+			"1,0": [{"dirs": ["N", "E"], "bridge": false}],
+		},
+	}]
+
+	var entry := ModuleEntryClass.new()
+	var r: Result = entry._on_cleanup_enter_extension(s, null)
+	if not r.ok:
+		return Result.failure("Cleanup 扩展失败: %s" % r.error)
+
+	if CellsClass.has_structure_at(s, Vector2i(1, 0)):
+		return Result.failure("Cleanup 后建设中道路结构占用未清理: (1,0)")
+
+	var new_cell: Dictionary = CellsClass.get_cell(s, Vector2i(1, 0))
+	var segs_val = new_cell.get("road_segments", null)
+	if not (segs_val is Array):
+		return Result.failure("cell.road_segments 类型错误: (1,0)")
+	var segs: Array = segs_val
+	if segs.is_empty():
+		return Result.failure("Cleanup 后新道路未写入 road_segments: (1,0)")
+
+	var has_s := false
+	for seg_val in segs:
+		if not (seg_val is Dictionary):
+			continue
+		var seg: Dictionary = seg_val
+		var dirs_val = seg.get("dirs", null)
+		if dirs_val is Array and "S" in Array(dirs_val):
+			has_s = true
+			break
+	if not has_s:
+		return Result.failure("Cleanup 后新道路未补齐对向 dirs: (1,0) should include S")
+
+	var road_graph = RoadGraphCacheClass.get_road_graph(s)
+	if road_graph == null:
+		return Result.failure("道路图未初始化（测试）")
+	if int(road_graph.get_distance(Vector2i(1, 0), Vector2i(1, 1))) < 0:
+		return Result.failure("Cleanup 后道路未连通: (1,0) <-> (1,1)")
 
 	return Result.success()
 
