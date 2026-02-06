@@ -35,6 +35,16 @@ func _force_turn_order(state: GameState) -> void:
 		state.turn_order.append(i)
 	state.current_player_index = 0
 
+func _reset_sub_phase_passed(state: GameState) -> void:
+	if state == null:
+		return
+	if not (state.round_state is Dictionary):
+		return
+	var passed := {}
+	for i in range(state.players.size()):
+		passed[i] = false
+	state.round_state["sub_phase_passed"] = passed
+
 func _advance_to_working(engine: GameEngine) -> Result:
 	var to_working := TestPhaseUtils.advance_until_phase(engine, "Working", 60)
 	if not to_working.ok:
@@ -57,6 +67,7 @@ func _advance_to_working_sub_phase(engine: GameEngine, target_sub_phase: String)
 	var state := engine.get_state()
 	_force_turn_order(state)
 	state.sub_phase = target_sub_phase
+	_reset_sub_phase_passed(state)
 	if state.phase != "Working" or state.sub_phase != target_sub_phase:
 		return Result.failure("expected Working/%s, got: %s/%s" % [target_sub_phase, str(state.phase), str(state.sub_phase)])
 	return Result.success()
@@ -152,4 +163,3 @@ func _freeze_engine_as_initial(engine: GameEngine) -> void:
 	engine.checkpoints.clear()
 	engine.current_command_index = -1
 	engine.create_checkpoint(0)
-

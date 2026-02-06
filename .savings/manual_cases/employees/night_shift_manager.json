@@ -1,15 +1,15 @@
 {
 	"checkpoints": [
 		{
-			"hash": "f6246d86f10d6d984660bd81f7c6242c",
+			"hash": "edc248bcdb3c613ba102501d73f0d461",
 			"index": 0,
 			"rng_calls": 29
 		}
 	],
 	"commands": [],
-	"created_at": "2026-01-20T03:45:35",
+	"created_at": "2026-02-06T22:51:27",
 	"current_index": -1,
-	"final_hash": "f6246d86f10d6d984660bd81f7c6242c",
+	"final_hash": "edc248bcdb3c613ba102501d73f0d461",
 	"game_version": "0.1.0",
 	"initial_state": {
 		"bank": {
@@ -41,7 +41,7 @@
 			"management_trainee": 18,
 			"marketing_trainee": 11,
 			"new_business_developer": 6,
-			"night_shift_manager": 5,
+			"night_shift_manager": 0,
 			"pizza_chef": 1,
 			"pizza_cook": 6,
 			"pricing_manager": 1,
@@ -4438,6 +4438,7 @@
 					"night_shift_manager",
 					"kitchen_trainee"
 				],
+				"forfeited": false,
 				"id": 0,
 				"inventory": {
 					"beer": 0,
@@ -4487,6 +4488,7 @@
 				"employees": [
 					"ceo"
 				],
+				"forfeited": false,
 				"id": 1,
 				"inventory": {
 					"beer": 0,
@@ -4567,11 +4569,22 @@
 				}
 			},
 			"sub_phase_passed": {
-				"0": true,
+				"0": false,
 				"1": false
 			},
-			"working_employee_multipliers": {
+			"train_employee_locks": {
 
+			},
+			"train_slot_usage": {
+
+			},
+			"train_slot_usage_instances": {
+
+			},
+			"working_employee_multipliers": {
+				"0": {
+					"kitchen_trainee": 2
+				}
 			},
 			"working_sub_phase_order": [
 				"Recruit",

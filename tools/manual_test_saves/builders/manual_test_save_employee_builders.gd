@@ -644,6 +644,13 @@ func _build_employee_night_shift_manager_double_action(engine: GameEngine, c: Di
 	if not ensure_target.ok:
 		return ensure_target
 
+	# 手工复核存档构造：由于 auto_advance 会在“无可做动作的子阶段”自动跳过，
+	# 上面的 _advance_to_working_sub_phase() 可能在添加员工前就错过 GetFood；
+	# 同时夜班经理的 multipliers 在进入 Working 时写入，需要在这里补一次。
+	var apply := _apply_night_shift_managers_working_multipliers(state)
+	if not apply.ok:
+		return apply
+
 	return Result.success({
 		"suggested_command": {
 			"action_id": "produce_food",
@@ -654,6 +661,19 @@ func _build_employee_night_shift_manager_double_action(engine: GameEngine, c: Di
 			},
 		}
 	})
+
+func _apply_night_shift_managers_working_multipliers(state: GameState) -> Result:
+	# 复用模块实现逻辑，确保手工存档与真实运行时一致。
+	var script = load("res://modules/night_shift_managers/rules/entry.gd")
+	if script == null:
+		return Result.failure("cannot load night_shift_managers rules entry.gd")
+	var rules = script.new()
+	if rules == null or not rules.has_method("_on_working_before_enter"):
+		return Result.failure("night_shift_managers rules script missing _on_working_before_enter")
+	var r = rules._on_working_before_enter(state)
+	if r is Result:
+		return r
+	return Result.failure("night_shift_managers._on_working_before_enter returned non-Result: %s" % str(r))
 
 func _build_milestone_first_airplane(engine: GameEngine, c: Dictionary) -> Result:
 	return _build_employee_initiate_marketing(engine, c)
