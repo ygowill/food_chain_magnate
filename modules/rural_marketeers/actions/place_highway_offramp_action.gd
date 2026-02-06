@@ -81,12 +81,12 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if has_offramp_at_pos(state, connect_pos):
 		return Result.failure("该边缘格子已存在 offramp: %s" % str(connect_pos))
 
-	# 与 airplane 冲突：同一边缘格子不可同时放置
-	var airplane_read := _has_airplane_at_pos(state, connect_pos)
-	if not airplane_read.ok:
-		return airplane_read
-	if bool(airplane_read.value):
-		return Result.failure("offramp 不能放置在已有飞机营销的格子: %s" % str(connect_pos))
+	# 与 airplane 冲突：不能与任何飞机营销的“外侧占用段”重叠（同边 segment overlap）
+	var airplane_overlap_read := _has_airplane_overlap_at_connection_cell(state, connect_pos, side)
+	if not airplane_overlap_read.ok:
+		return airplane_overlap_read
+	if bool(airplane_overlap_read.value):
+		return Result.failure("offramp 不能与飞机营销重叠: %s side=%s" % [str(connect_pos), side])
 
 	# 必须连接到地图内道路：连接格子必须存在“朝外”的道路段
 	var dirs := _get_road_dirs_at(state, connect_pos)
@@ -307,6 +307,134 @@ static func _get_road_dirs_at(state: GameState, pos: Vector2i) -> Array[String]:
 
 static func _has_airplane_at_pos(state: GameState, pos: Vector2i) -> Result:
 	return MarketingPlacementQueryClass.has_type_at_world_pos(state, "airplane", pos)
+
+static func _has_airplane_overlap_at_connection_cell(state: GameState, connect_pos: Vector2i, side: String) -> Result:
+	# Airplane marketing occupies a segment on the same side; its anchor world_pos does not fully describe the range.
+	if state == null or not (state.map is Dictionary):
+		return Result.failure("_has_airplane_overlap_at_connection_cell: state.map 类型错误")
+	var placements_val = state.map.get("marketing_placements", null)
+	if placements_val == null:
+		return Result.success(false)
+	if not (placements_val is Dictionary):
+		return Result.failure("_has_airplane_overlap_at_connection_cell: state.map.marketing_placements 类型错误（期望 Dictionary）")
+	var placements: Dictionary = placements_val
+	if placements.is_empty():
+		return Result.success(false)
+
+	var target_side := str(side).strip_edges()
+	if target_side.is_empty():
+		return Result.failure("_has_airplane_overlap_at_connection_cell: side 不能为空")
+
+	var coord := connect_pos.x if (target_side == "N" or target_side == "S") else connect_pos.y
+
+	for k in placements.keys():
+		var pv = placements[k]
+		if not (pv is Dictionary):
+			continue
+		var p: Dictionary = pv
+		if str(p.get("type", "")) != "airplane":
+			continue
+		var wp_val = p.get("world_pos", null)
+		if not (wp_val is Vector2i):
+			continue
+		var wp: Vector2i = wp_val
+		var axis := str(p.get("axis", "")).strip_edges()
+		var fs := Vector2i.ONE
+		var fs_val = p.get("footprint_size", null)
+		if fs_val is Vector2i:
+			fs = Vector2i(fs_val)
+		elif fs_val is Array:
+			var arr: Array = fs_val
+			if arr.size() == 2:
+				fs = Vector2i(int(arr[0]), int(arr[1]))
+
+		if axis != "row" and axis != "col":
+			axis = _infer_airplane_axis(state, wp, fs)
+		if axis != "row" and axis != "col":
+			continue
+
+		var seg_read := compute_airplane_segment(state, wp, fs, axis)
+		if not seg_read.ok:
+			return seg_read
+		var seg: Dictionary = seg_read.value
+		if str(seg.get("side", "")) != target_side:
+			continue
+		var start := int(seg.get("start", 0))
+		var end := int(seg.get("end", -1))
+		if coord >= start and coord <= end:
+			return Result.success(true)
+
+	return Result.success(false)
+
+static func compute_airplane_segment(state: GameState, world_pos: Vector2i, footprint_size: Vector2i, axis: String) -> Result:
+	if state == null:
+		return Result.failure("compute_airplane_segment: state 为空")
+	var a := str(axis).strip_edges()
+	if a != "row" and a != "col":
+		return Result.failure("compute_airplane_segment: axis 非法: %s" % a)
+
+	var fs := Vector2i(footprint_size)
+	var thickness := 2
+	var length := 0
+	if fs.x == thickness and fs.y != thickness:
+		length = fs.y
+	elif fs.y == thickness and fs.x != thickness:
+		length = fs.x
+	else:
+		thickness = mini(fs.x, fs.y)
+		length = maxi(fs.x, fs.y)
+	if length <= 0:
+		return Result.failure("compute_airplane_segment: footprint_size 非法: %s" % str(fs))
+
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
+
+	var side := ""
+	var start := 0
+	var end := 0
+	if a == "row":
+		# Left/Right side, segment is along Y.
+		if world_pos.x == minp.x:
+			side = "W"
+		elif world_pos.x == maxp.x or world_pos.x == (maxp.x - (thickness - 1)):
+			side = "E"
+		else:
+			return Result.failure("compute_airplane_segment: axis=row 时 world_pos 不在左右边缘: %s" % str(world_pos))
+		start = world_pos.y
+		end = world_pos.y + length - 1
+	else:
+		# Top/Bottom side, segment is along X.
+		if world_pos.y == minp.y:
+			side = "N"
+		elif world_pos.y == maxp.y or world_pos.y == (maxp.y - (thickness - 1)):
+			side = "S"
+		else:
+			return Result.failure("compute_airplane_segment: axis=col 时 world_pos 不在上下边缘: %s" % str(world_pos))
+		start = world_pos.x
+		end = world_pos.x + length - 1
+
+	return Result.success({
+		"side": side,
+		"start": start,
+		"end": end,
+		"length": length,
+		"thickness": thickness,
+	})
+
+static func _infer_airplane_axis(state: GameState, pos: Vector2i, size: Vector2i) -> String:
+	# Keep semantics consistent with gameplay/actions/initiate_marketing/validation.gd
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
+	var left := pos.x
+	var right := pos.x + size.x - 1
+	var top := pos.y
+	var bottom := pos.y + size.y - 1
+	# Use thickness-aware relaxed edge check (issue_tracker #42 / #40 patterns).
+	if left == minp.x or right == maxp.x or left == (maxp.x - 1) or right == (maxp.x - 1):
+		return "row"
+	if top == minp.y or bottom == maxp.y or top == (maxp.y - 1) or bottom == (maxp.y - 1):
+		return "col"
+	return ""
 
 static func has_offramp_at_pos(state: GameState, pos: Vector2i) -> bool:
 	if state == null or not (state.map is Dictionary):

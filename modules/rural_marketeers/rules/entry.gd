@@ -7,6 +7,7 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const ParseHelpers = preload("res://core/state/serialization/parse_helpers.gd")
 
 const PlaceGiantBillboardActionClass = preload("res://modules/rural_marketeers/actions/place_giant_billboard_action.gd")
@@ -307,7 +308,7 @@ func _milestone_effect_grant_offramp_placement(state: GameState, player_id: int,
 	return Result.success()
 
 func _validate_airplane_offramp_conflict(state: GameState, command: Command) -> Result:
-	# 仅对 airplane 生效：同一边缘格子不能与 offramp 冲突。
+	# 仅对 airplane 生效：不能与 offramp 的连接格在同一边的占用段重叠（segment overlap）。
 	if state == null or command == null:
 		return Result.success()
 	if not (state.map is Dictionary):
@@ -348,7 +349,92 @@ func _validate_airplane_offramp_conflict(state: GameState, command: Command) -> 
 	if not y_read.ok:
 		return y_read
 	var world_pos := Vector2i(int(x_read.value), int(y_read.value))
-	if PlaceHighwayOfframpActionClass.has_offramp_at_pos(state, world_pos):
-		return Result.failure("飞机不能放置在已有高速公路出口的格子: %s" % str(world_pos))
+
+	# Determine airplane axis & segment range.
+	var footprint_size := Vector2i.ONE
+	if def is MarketingDef:
+		footprint_size = (def as MarketingDef).footprint_size
+	elif def != null and def.has_method("get"):
+		var fs = def.get("footprint_size")
+		if fs is Vector2i:
+			footprint_size = fs
+
+	var axis := ""
+	if command.params.has("axis"):
+		axis = str(command.params.get("axis", "")).strip_edges()
+	if axis != "row" and axis != "col":
+		axis = _infer_airplane_axis_for_overlap(state, world_pos, footprint_size)
+	if axis != "row" and axis != "col":
+		# Let core validation fail for missing/invalid axis.
+		return Result.success()
+
+	var seg_read := PlaceHighwayOfframpActionClass.compute_airplane_segment(state, world_pos, footprint_size, axis)
+	if not seg_read.ok:
+		return seg_read
+	var seg: Dictionary = seg_read.value
+	var seg_side := str(seg.get("side", "")).strip_edges()
+	if seg_side.is_empty():
+		return Result.success()
+	var start := int(seg.get("start", 0))
+	var end := int(seg.get("end", -1))
+
+	# Check overlap against existing offramps.
+	if not state.map.has("rural_marketeers_offramps"):
+		return Result.success()
+	var offramps_val = state.map.get("rural_marketeers_offramps", null)
+	if not (offramps_val is Array):
+		return Result.failure("%s: state.map.rural_marketeers_offramps 类型错误（期望 Array）" % MODULE_ID)
+	var offramps: Array = offramps_val
+	for i in range(offramps.size()):
+		var o_val = offramps[i]
+		if not (o_val is Dictionary):
+			continue
+		var o: Dictionary = o_val
+		var off_pos_val = o.get("pos", null)
+		if not (off_pos_val is Vector2i):
+			continue
+		var pos: Vector2i = off_pos_val
+		var off_side := str(o.get("side", "")).strip_edges()
+		if off_side.is_empty():
+			off_side = _infer_edge_side(state, pos)
+		if off_side != seg_side:
+			continue
+		var coord := pos.x if (seg_side == "N" or seg_side == "S") else pos.y
+		if coord >= start and coord <= end:
+			return Result.failure("飞机不能与已有高速公路出口重叠: side=%s pos=%s" % [seg_side, str(pos)])
 
 	return Result.success()
+
+func _infer_edge_side(state: GameState, pos: Vector2i) -> String:
+	if state == null:
+		return ""
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
+	if pos.y == minp.y:
+		return "N"
+	if pos.y == maxp.y:
+		return "S"
+	if pos.x == minp.x:
+		return "W"
+	if pos.x == maxp.x:
+		return "E"
+	return ""
+
+func _infer_airplane_axis_for_overlap(state: GameState, world_pos: Vector2i, footprint_size: Vector2i) -> String:
+	# Copy semantics from gameplay/actions/initiate_marketing/apply.gd, with thickness-aware edge relaxation.
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
+	var thickness := mini(int(footprint_size.x), int(footprint_size.y))
+	thickness = maxi(1, thickness)
+	var left := world_pos.x
+	var right := world_pos.x + 0
+	var top := world_pos.y
+	var bottom := world_pos.y + 0
+
+	# Left/right edges -> row; allow the inner column when thickness=2.
+	if left == minp.x or right == maxp.x or left == (maxp.x - (thickness - 1)) or right == (maxp.x - (thickness - 1)):
+		return "row"
+	# Top/bottom edges -> col; allow the inner row when thickness=2.
+	if top == minp.y or bottom == maxp.y or top == (maxp.y - (thickness - 1)) or bottom == (maxp.y - (thickness - 1)):
+		return "col"
+	return ""
