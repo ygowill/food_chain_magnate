@@ -202,10 +202,14 @@ func _rebuild_type_buttons() -> void:
 	extra_ids.sort()
 	ordered_type_ids.append_array(extra_ids)
 
+	var available_type_ids: Array[String] = []
+
 	for type_id in ordered_type_ids:
 		var marketer_count: int = Array(marketers_by_type.get(type_id, [])).size()
 		var board_count: int = Array(_available_boards_by_type.get(type_id, [])).size()
 		var is_available := marketer_count > 0 and board_count > 0
+		if is_available:
+			available_type_ids.append(type_id)
 
 		var type_def_use: Dictionary = {}
 		var known_def = base_defs_by_id.get(type_id, null)
@@ -234,6 +238,10 @@ func _rebuild_type_buttons() -> void:
 		btn.type_selected.connect(_on_type_selected)
 		type_container.add_child(btn)
 		_type_buttons[type_id] = btn
+	
+	# 若当前没有选择任何类型，且仅有一个可用类型：自动选中它，减少一次点击（manual_cases 常用）。
+	if _selected_type.is_empty() and available_type_ids.size() == 1:
+		_on_type_selected(str(available_type_ids[0]))
 
 func _on_type_selected(type_id: String) -> void:
 	_selected_type = type_id

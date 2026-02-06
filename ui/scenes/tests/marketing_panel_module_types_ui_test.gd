@@ -15,6 +15,10 @@ static func run() -> Result:
 		{"id": "gourmet_food_critic", "type": "gourmet_guide", "max_duration": 3},
 	])
 	panel.set_available_boards({"gourmet_guide": [17, 18]})
+	
+	if str(panel._selected_type) != "gourmet_guide":
+		_safe_free(panel)
+		return Result.failure("MarketingPanel should auto-select the only available type gourmet_guide (selected=%s)" % str(panel._selected_type))
 
 	if not panel._type_buttons.has("gourmet_guide"):
 		_safe_free(panel)
