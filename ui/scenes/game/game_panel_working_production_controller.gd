@@ -4,6 +4,7 @@ class_name GamePanelWorkingProductionController
 extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const DrinksProcurementClass = preload("res://core/rules/drinks_procurement.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
@@ -89,6 +90,7 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 
 		if production_panel.has_method("set_available_producers"):
 			var producers: Array[String] = []
+			var current_player_id := int(state.get_current_player_id())
 			if EmployeeRegistryClass.is_loaded():
 				for e in Array(current_player.get("employees", [])):
 					if not (e is String):
@@ -101,12 +103,21 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 						continue
 					var def: EmployeeDef = def_val
 					if production_type == "food" and def.can_produce():
-						producers.append(emp_id)
+						var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, current_player_id, emp_id))
+						for i in range(mult):
+							producers.append(emp_id)
 					elif production_type == "drinks" and def.can_procure():
-						producers.append(emp_id)
+						var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, current_player_id, emp_id))
+						for i in range(mult):
+							producers.append(emp_id)
 			else:
 				for e in Array(current_player.get("employees", [])):
-					producers.append(str(e))
+					var emp_id := str(e)
+					if emp_id.is_empty():
+						continue
+					var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, current_player_id, emp_id))
+					for i in range(mult):
+						producers.append(emp_id)
 			production_panel.set_available_producers(producers)
 
 			# 同步“已使用员工”禁用态：时间线跳转后必须以 round_state 为准。
@@ -198,6 +209,7 @@ func show(production_type: String) -> void:
 
 	if production_panel.has_method("set_available_producers"):
 		var producers: Array[String] = []
+		var current_player_id := int(state.get_current_player_id())
 		if EmployeeRegistryClass.is_loaded():
 			for e in Array(current_player.get("employees", [])):
 				if not (e is String):
@@ -210,12 +222,21 @@ func show(production_type: String) -> void:
 					continue
 				var def: EmployeeDef = def_val
 				if production_type == "food" and def.can_produce():
-					producers.append(emp_id)
+					var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, current_player_id, emp_id))
+					for i in range(mult):
+						producers.append(emp_id)
 				elif production_type == "drinks" and def.can_procure():
-					producers.append(emp_id)
+					var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, current_player_id, emp_id))
+					for i in range(mult):
+						producers.append(emp_id)
 		else:
 			for e in Array(current_player.get("employees", [])):
-				producers.append(str(e))
+				var emp_id := str(e)
+				if emp_id.is_empty():
+					continue
+				var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, current_player_id, emp_id))
+				for i in range(mult):
+					producers.append(emp_id)
 		production_panel.set_available_producers(producers)
 
 		# 同步“已使用员工”禁用态：避免时间线回退/载入后残留旧 UI 缓存，导致员工错误变灰。
