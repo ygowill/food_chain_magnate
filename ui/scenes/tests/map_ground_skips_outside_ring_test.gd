@@ -50,8 +50,8 @@ class FakeCanvas extends RefCounted:
 	func draw_rect(rect: Rect2, color: Color, filled: bool = true, _width: float = -1.0) -> void:
 		if not filled:
 			return
-		# Ground fill uses solid white; only record those.
-		if not color.is_equal_approx(Color("#ffffff")):
+		# Ground fill uses solid color; only record those.
+		if not color.is_equal_approx(Color("#faf4da")):
 			return
 		var cell_size := rect.size.x
 		var vx := int(round(rect.position.x / cell_size))

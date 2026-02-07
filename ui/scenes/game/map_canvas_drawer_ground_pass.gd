@@ -3,7 +3,7 @@ extends RefCounted
 
 static func draw_ground_and_blocked(canvas, cell_size: int) -> void:
 	var blocked_tex: Texture2D = canvas._skin.get_blocked_overlay_texture()
-	var ground_col := Color("#ffffff")
+	var ground_col := Color("#faf4da")
 	# Only paint ground for the base map cells that are already part of a placed tile.
 	# external_cells and the UI-only outside ring (used by airplane marketing) must stay transparent (issue_tracker #40).
 	# Also skip "void" cells created by ensure_world_rect; these are empty expansion space that may become valid later.
