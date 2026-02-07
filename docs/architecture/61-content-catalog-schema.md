@@ -5,6 +5,10 @@
 - loader：`core/modules/v2/content_catalog_loader.gd`
 - catalog：`core/modules/v2/content_catalog.gd`
 
+若你正在编写新模块，建议搭配阅读：
+
+- `docs/architecture/62-module-development-guide.md`
+
 目录约定（每个模块可选提供任意子目录；不存在则跳过）：
 
 - 产品：例如 `modules/base_products/content/products/` → `ProductDef`（`core/data/product_def.gd`）
@@ -156,4 +160,3 @@
 - `content/visuals/` 目录不存在：允许
 - 单个 JSON 解析失败：fail-fast
 - **key 重复允许覆盖**（按 module plan 顺序，后者覆盖前者），并返回 warnings
-

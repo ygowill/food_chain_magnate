@@ -5,7 +5,7 @@
 建议阅读顺序：
 
 1. `docs/architecture/00-system-overview.md`：系统总览（命令驱动、模块装配、回放/存档/倒带）
-2. `docs/architecture/10-autoload.md`：全局单例（`Globals`/`SceneManager`/`EventBus`/`DebugFlags`）
+2. `docs/architecture/10-autoload.md`：全局单例（`GameLog`/`Globals`/`SceneManager`/`EventBus`/`DebugFlags`/`NetContext`/`NetClient`）
 3. `docs/architecture/20-ui.md`：UI 入口（主菜单/设置/开始新局/载入/回放）与 `GameEngine` 的交互方式
 4. `docs/architecture/21-ui-game-scene.md`：Game 场景 controller 拆分（ui/scenes/game/*）
 5. `docs/architecture/25-debug-and-profiling.md`：调试与性能打点（DebugFlags/Debug commands/PerfTrace）
@@ -28,7 +28,8 @@
 22. `docs/architecture/52-testing.md`：测试分层（core/tests + ui/scenes/tests）
 23. `docs/architecture/60-modules-v2.md`：模块系统 V2（Strict Mode 的实际实现与扩展点）
 24. `docs/architecture/61-content-catalog-schema.md`：ContentCatalog 内容格式（modules/*/content/*.json）
-25. `docs/architecture/70-online-multiplayer.md`：联机（当前未实现，保留为设计入口与链接）
+25. `docs/architecture/62-module-development-guide.md`：开发新模块指南（从 module.json 到 rules/UI/存档兼容）
+26. `docs/architecture/70-online-multiplayer.md`：联机（已落地：大厅/房间/命令广播回放/Resync 等）
 
 补充：
 

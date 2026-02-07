@@ -4,10 +4,22 @@ autoload 目录提供跨场景可用的单例节点（见 `project.godot` 的 `[
 
 本项目实际包含：
 
+- `tools/logger.gd`：`GameLog`（全局日志；级别可由 DebugFlags 调整）
 - `autoload/globals.gd`：`Globals`（配置、玩家资料、运行时引擎引用）
+- `autoload/net_context.gd`：`NetContext`（运行模式/房间信息/本地玩家 profile）
+- `autoload/net_client.gd`：`NetClient`（联机会话层：Client/Server 共用 RPC 节点）
 - `autoload/scene_manager.gd`：`SceneManager`（场景切换 + loading overlay）
 - `autoload/event_bus.gd`：`EventBus`（事件发布/订阅 + 历史）
 - `autoload/debug_flags.gd`：`DebugFlags`（调试开关）
+
+## GameLog：统一日志
+
+代码：`tools/logger.gd`（autoload 名称：`GameLog`）
+
+用途：
+
+- 统一日志级别（DEBUG/INFO/WARN/ERROR）与格式；
+- UI 与 core 都可用（core 侧若需要降低硬依赖，优先通过 `core/utils/autoload_access.gd` 调用）。
 
 ## Globals：跨场景配置与“当前对局上下文”
 
@@ -27,8 +39,10 @@ autoload 目录提供跨场景可用的单例节点（见 `project.godot` 的 `[
 
 职责：
 
-- 统一场景跳转：`goto_scene(...)`/`goto_main_menu()`/`goto_game_setup()`/`goto_game()`
+- 统一场景跳转：`goto_scene(...)`/`goto_main_menu()`/`goto_online_lobby()`/`goto_game_setup()`/`goto_game()`
+- 开发/测试入口：`goto_tile_editor()`/`goto_replay_test()`
 - 维护 scene 栈：`go_back()`（用于“返回上一页”）
+- 栈维护工具：`clear_stack()`（返回主菜单前清空）
 - 加载遮罩：`show_loading(...)`/`hide_loading()`（避免初始化/读档卡顿的观感）
 
 ## EventBus：事件总线与“事件历史”
@@ -57,3 +71,25 @@ autoload 目录提供跨场景可用的单例节点（见 `project.godot` 的 `[
 - `force_execute_commands`：跳过大部分校验（仅 DebugPanel 用，风险很高）
 - `show_console`：UI 控制台/调试面板显隐
 
+## NetContext：联机上下文（模式/房间/玩家）
+
+代码：`autoload/net_context.gd`
+
+关键字段：
+
+- `mode`：`HOTSEAT/ONLINE_CLIENT/ONLINE_SERVER`
+- `local_player_id`：联机模式下本地玩家 seat（用于禁止代操）
+- `room_state`/`room_list`：大厅与房间 UI 的事实来源缓存
+- `player_profile`：默认从 `Globals` 读取（名称/颜色），并由联机大厅更新
+
+## NetClient：联机会话层（WebSocket RPC）
+
+代码：`autoload/net_client.gd`
+
+特性（节选）：
+
+- 连接/断开：`connect_to_server(...)` / `shutdown()`
+- 请求：`request_list_rooms/create_room/join_room/start_game/action/resync/...`
+- 事件信号：`connected/disconnected/room_list_updated/room_state_updated/command_applied/resync_archive_received/...`
+
+联机的整体协议、房间逻辑与 UI 分层见：`docs/architecture/70-online-multiplayer.md`

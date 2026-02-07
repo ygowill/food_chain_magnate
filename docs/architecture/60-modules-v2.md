@@ -78,3 +78,7 @@ manifest 由 `core/modules/v2/module_manifest.gd` 解析，示例（取自 `modu
 - 模块系统 V2 会校验 `GameConfig` 的起始库存/产品是否都存在于当前 `ContentCatalog`（避免“配置引用不存在内容”）
 
 内容 JSON 的字段规范与约束见：`docs/architecture/61-content-catalog-schema.md`
+
+开发新模块（从 module.json、content 到 rules/UI/存档兼容）的实操指南见：
+
+- `docs/architecture/62-module-development-guide.md`

@@ -7,7 +7,7 @@
 相关实现文件：
 
 - 定义与时间戳：`core/engine/phase_manager/definitions.gd`
-- 推进实现：`core/engine/phase_manager/advancement.gd`、`advance_phase.gd`、`advance_sub_phase.gd`
+- 推进实现：`core/engine/phase_manager/advancement.gd`、`advance_phase.gd`、`advance_sub_phase.gd`、`working_flow.gd`
 - hooks：`core/engine/phase_manager/hooks.gd`
 - 顺序覆盖：`core/engine/phase_manager/order_config.gd`
 - 结算触发点：`core/engine/phase_manager/settlement_triggers.gd`
@@ -51,4 +51,3 @@ PhaseManager 在阶段 enter/exit 的固定点位调用 settlement registry：
 hook_type：`BEFORE_ENTER/AFTER_ENTER/BEFORE_EXIT/AFTER_EXIT`
 
 模块注入 hooks 的入口：`RulesetV2.register_phase_hook(...)` / `register_sub_phase_hook(...)`（最终由 `ruleset.apply_hooks_to_phase_manager` 应用）。
-

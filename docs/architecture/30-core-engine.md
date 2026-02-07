@@ -15,12 +15,18 @@
 
 - 初始化：`core/engine/game_engine/initializer.gd`
 - 执行：`core/engine/game_engine/command_runner.gd`
-- 回退/重放：`core/engine/game_engine/rewind_ops.gd`
+- 回放/重放：`core/engine/game_engine/replay.gd`
+- 回退：`core/engine/game_engine/rewind_ops.gd`
+- 自动推进（AutoAdvance）：`core/engine/game_engine/auto_advance.gd` + `core/engine/game_engine/auto_advance_try_step.gd`（细节见下方补充文档）
 - 校验点：`core/engine/game_engine/checkpoints.gd`
 - 存档：`core/engine/game_engine/archive.gd` + `core/engine/game_engine/loader.gd`
 - 不变量：`core/engine/game_engine/invariants.gd`
+- 命令索引查询：`core/engine/game_engine/command_index_queries.gd`（回合开始/阶段边界等查询）
+- 诊断：`core/engine/game_engine/diagnostics.gd`（checkpoint/replay 校验辅助）
+- 事件历史重建：`core/engine/game_engine/event_history_rebuild.gd`、`core/engine/game_engine/game_started_event_build.gd`（供派生时间线/日志使用）
 - 动作装配：`core/engine/game_engine/action_setup.gd` + `core/engine/game_engine/action_wiring.gd`
 - 模块系统 V2：`core/engine/game_engine/modules_v2.gd`
+  - strict 校验：`core/engine/game_engine/modules_v2_validations.gd`
 
 相关补充文档：
 
@@ -59,4 +65,3 @@
 4. 把 `RulesetV2` 的 settlement/effect registry 注入到 `PhaseManager`
 
 详见：`docs/architecture/60-modules-v2.md`
-

@@ -10,3 +10,5 @@
 测试专用模块包请放在 `res://modules_test/`（避免污染可发布内容）。
 
 详细设计见：`docs/architecture/60-modules-v2.md`
+
+开发新模块的实操指引见：`docs/architecture/62-module-development-guide.md`

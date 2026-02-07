@@ -14,7 +14,9 @@
 - `ui/`：场景与交互（把玩家操作转换成 `Command`，并渲染 `GameState`）
 - `autoload/`：跨场景单例（配置/场景切换/事件历史/调试开关）
 - `modules/`：模块系统 V2 的内容与规则脚本
+- `modules_test/`：测试专用模块包（只在开发/CI 中启用）
 - `tools/`：开发工具（回放 runner、编译检查等）
+- `server/`：联机（Dedicated Server / Room 管理 / 协议与广播）
 
 ## 核心对象与职责
 
@@ -36,6 +38,7 @@
   - 解析 `modules_v2_base_dir`，加载 `module.json`
   - 构建 module plan（含依赖闭包/冲突检查/稳定排序）
   - 装配 `ContentCatalog` 与 `RulesetV2`，并配置各类 registry
+- （联机）`autoload/net_client.gd` + `server/*`：WebSocket 房间与命令广播（详见 `docs/architecture/70-online-multiplayer.md`）
 
 ## 新游戏初始化（真实代码路径）
 
@@ -125,4 +128,3 @@ stateDiagram-v2
 - 模块装配：`docs/architecture/60-modules-v2.md`
 - 引擎与时间线：`docs/architecture/30-core-engine.md`
 - 阶段与结算：`docs/architecture/31-core-phase-manager.md`
-
