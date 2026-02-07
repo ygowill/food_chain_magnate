@@ -36,25 +36,12 @@ static func _assert_core_no_modules_path_refs() -> Result:
 		if not read_r.ok:
 			return read_r
 		var text: String = str(read_r.value)
-		# Legacy compatibility shims may reference modules; the core boundary contract is about core domain code.
-		if path.begins_with("res://core/rules/phase/") and _has_legacy_shim_marker(text):
-			continue
 		var idx := text.find(_MODULES_PATH)
 		if idx >= 0:
 			var line_no := _find_line_number(text, idx)
 			return Result.failure("core 不应直接引用 %s: %s:%d" % [_MODULES_PATH, path, line_no])
 
 	return Result.success()
-
-static func _has_legacy_shim_marker(text: String) -> bool:
-	if text.is_empty():
-		return false
-	for line in text.split("\n"):
-		var t := str(line).strip_edges()
-		if t.is_empty():
-			continue
-		return t.find("Deprecated shim for backward compatibility") >= 0
-	return false
 
 static func _assert_no_pattern_in_gd_dir(root_dir: String, pattern: String) -> Result:
 	var files: Array[String] = []
