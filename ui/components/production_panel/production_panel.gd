@@ -875,7 +875,8 @@ class FoodTypeItem extends PanelContainer:
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 	func _build_ui() -> void:
-		custom_minimum_size = Vector2(72, 72)
+		# 与其它面板的产品 token 保持一致，避免图标纹理尺寸变化导致 token 被撑大。
+		custom_minimum_size = Vector2(60, 60)
 
 		var vbox := VBoxContainer.new()
 		vbox.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -883,14 +884,18 @@ class FoodTypeItem extends PanelContainer:
 		add_child(vbox)
 
 		_icon = TextureRect.new()
-		_icon.custom_minimum_size = Vector2(40, 40)
+		_icon.custom_minimum_size = Vector2(32, 32)
+		_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		vbox.add_child(_icon)
 
 		_label = Label.new()
 		_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-		_label.add_theme_font_size_override("font_size", 12)
+		var fs := 12
+		if Globals != null:
+			fs = int(Globals.get_scaled_font_size(12))
+		_label.add_theme_font_size_override("font_size", fs)
 		vbox.add_child(_label)
 
 		_update_display()
