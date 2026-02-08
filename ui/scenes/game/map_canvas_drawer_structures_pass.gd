@@ -69,7 +69,7 @@ static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: A
 			continue
 
 		if piece_id == "highway_offramp":
-			draw_highway_offramp(canvas, cell_size, rect, tex, 0.85)
+			draw_highway_offramp(canvas, rect, tex, 0.85)
 			continue
 
 		if piece_id == "house":
@@ -77,7 +77,7 @@ static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: A
 		else:
 			canvas.draw_texture_rect(tex, rect, false, Color(1, 1, 1, 0.85))
 
-static func draw_highway_offramp(canvas, cell_size: int, rect: Rect2, tex: Texture2D, alpha: float = 0.85) -> void:
+static func draw_highway_offramp(canvas, rect: Rect2, tex: Texture2D, alpha: float = 0.85) -> void:
 	if canvas == null:
 		return
 	if tex == null:
@@ -86,21 +86,17 @@ static func draw_highway_offramp(canvas, cell_size: int, rect: Rect2, tex: Textu
 	if a <= 0.001:
 		return
 
-	# Keep texture aspect ratio; rotate when the footprint is vertical so the sign is readable.
-	var pad := maxf(1.0, float(cell_size) * 0.06)
-	var dst := rect.grow(-pad)
-	if dst.size.x <= 1.0 or dst.size.y <= 1.0:
-		dst = rect
-
+	# Fill the footprint (allow cropping); rotate when the footprint is vertical so the sign is readable.
+	var dst := rect
 	var mod := Color(1, 1, 1, a)
 	if dst.size.y > dst.size.x:
 		var center := dst.position + dst.size * 0.5
 		var swapped := Vector2(dst.size.y, dst.size.x)
 		canvas.draw_set_transform(center, deg_to_rad(90.0), Vector2.ONE)
-		TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, Rect2(-swapped * 0.5, swapped), mod)
+		TextureUtilsClass.draw_texture_aspect_fill(canvas, tex, Rect2(-swapped * 0.5, swapped), mod)
 		canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	else:
-		TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, dst, mod)
+		TextureUtilsClass.draw_texture_aspect_fill(canvas, tex, dst, mod)
 
 static func draw_restaurant(
 	canvas,
