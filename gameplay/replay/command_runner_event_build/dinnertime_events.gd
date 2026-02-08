@@ -55,6 +55,11 @@ static func build_food_sold_events_from_dinnertime_report(dinnertime_state: Game
 		if required_val is Dictionary:
 			required = Dictionary(required_val).duplicate(true)
 
+		var house_bonus_breakdown: Dictionary = {}
+		var hb_breakdown_val = s.get("house_bonus_breakdown", null)
+		if hb_breakdown_val is Dictionary:
+			house_bonus_breakdown = Dictionary(hb_breakdown_val).duplicate(true)
+
 		out.append({
 			"type": EventBus.EventType.FOOD_SOLD,
 			"data": {
@@ -67,6 +72,7 @@ static func build_food_sold_events_from_dinnertime_report(dinnertime_state: Game
 				"revenue": int(s.get("revenue", 0)),
 				"bonus": int(s.get("bonus", 0)),
 				"house_bonus": int(s.get("house_bonus", 0)),
+				"house_bonus_breakdown": house_bonus_breakdown,
 			}
 		})
 

@@ -29,6 +29,11 @@ const CASH_INCOME_BREAKDOWN_LABELS: Dictionary = {
 	"other": "其它",
 }
 
+const HOUSE_BONUS_BREAKDOWN_LABELS: Dictionary = {
+	"park": "公园加成",
+	"fry_chef": "薯条主厨加成",
+}
+
 var _reports_formatter = null
 
 func format(event: Dictionary) -> Array[Dictionary]:
@@ -268,6 +273,9 @@ func format(event: Dictionary) -> Array[Dictionary]:
 			var revenue := int(data.get("revenue", 0))
 			var bonus := int(data.get("bonus", 0))
 			var house_bonus := int(data.get("house_bonus", 0))
+			var hb_breakdown_val = data.get("house_bonus_breakdown", null)
+			var hb_breakdown: Dictionary = hb_breakdown_val if (hb_breakdown_val is Dictionary) else {}
+			var hb_parts := _format_house_bonus_breakdown_parts(hb_breakdown)
 			var msg := "售出"
 			if not house_number.is_empty():
 				msg += "：房屋#%s" % house_number
@@ -277,7 +285,13 @@ func format(event: Dictionary) -> Array[Dictionary]:
 				msg += " -> %s" % rest_text
 			msg += " 收入 $%d" % revenue
 			if bonus != 0 or house_bonus != 0:
-				msg += " (奖励 $%d, 房屋奖 $%d)" % [bonus, house_bonus]
+				var parts: Array[String] = []
+				parts.append("奖励 $%d" % bonus)
+				var house_part := "房屋奖 $%d" % house_bonus
+				if house_bonus != 0 and not hb_parts.is_empty():
+					house_part += "：" + "，".join(hb_parts)
+				parts.append(house_part)
+				msg += " (" + ", ".join(parts) + ")"
 			out.append(_player(player_id, msg, data))
 		EventBus.EventType.FOOD_DISCARDED:
 			var player_id := int(data.get("player_id", -1))
@@ -487,6 +501,42 @@ func _format_cash_income_breakdown_suffix(details: Dictionary) -> String:
 	if parts.is_empty():
 		return ""
 	return "（晚餐收入来源：" + "，".join(parts) + "）"
+
+func _format_house_bonus_breakdown_parts(breakdown: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	if breakdown == null or not (breakdown is Dictionary) or breakdown.is_empty():
+		return out
+
+	var used: Dictionary = {}
+	for key in ["park", "fry_chef"]:
+		if not breakdown.has(key):
+			continue
+		var amt := int(breakdown.get(key, 0))
+		if amt == 0:
+			continue
+		used[key] = true
+		var label := str(HOUSE_BONUS_BREAKDOWN_LABELS.get(key, key)).strip_edges()
+		if label.is_empty():
+			label = key
+		out.append("%s $%d" % [label, amt])
+
+	var remaining: Array[String] = []
+	for k_val in breakdown.keys():
+		var k := str(k_val).strip_edges()
+		if k.is_empty() or used.has(k):
+			continue
+		remaining.append(k)
+	remaining.sort()
+	for k in remaining:
+		var amt2 := int(breakdown.get(k, 0))
+		if amt2 == 0:
+			continue
+		var label2 := str(HOUSE_BONUS_BREAKDOWN_LABELS.get(k, k)).strip_edges()
+		if label2.is_empty():
+			label2 = k
+		out.append("%s $%d" % [label2, amt2])
+
+	return out
 
 func _product_name(product_id: String) -> String:
 	var pid := str(product_id).strip_edges()
