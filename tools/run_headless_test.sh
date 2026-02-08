@@ -37,6 +37,44 @@ LOG_DIR="$PROJECT_PATH/.godot"
 LOG_FILE="$LOG_DIR/${NAME}.log"
 
 mkdir -p "$HOME_DIR" "$LOG_DIR"
+
+# Godot 会缓存 `class_name` 全局类名到项目内的 `.godot/global_script_class_cache.cfg`。
+# 当脚本被移动/删除（例如从 core 迁移到 modules）时，该缓存可能残留旧路径，导致：
+# - "Class X hides a global script class"
+# - 无法解析 type hints（例如 Result）
+# 进而让 headless 测试全部失败。
+#
+# 这里做一次轻量自检：若缓存缺失或包含不存在的脚本路径，则用 headless editor 预热刷新缓存。
+CACHE_FILE="$LOG_DIR/global_script_class_cache.cfg"
+PREFLIGHT_LOG="$LOG_DIR/_preflight.log"
+needs_cache_refresh=0
+if [[ ! -f "$CACHE_FILE" ]]; then
+	needs_cache_refresh=1
+else
+	# 检查缓存中引用的脚本路径是否都存在（只要发现 1 个不存在，就触发刷新）
+	while IFS= read -r line; do
+		path="${line#*\"path\": \"}"
+		path="${path%\"*}"
+		local_path="${path#res://}"
+		if [[ -n "$local_path" && ! -f "$PROJECT_PATH/$local_path" ]]; then
+			needs_cache_refresh=1
+			break
+		fi
+	done < <(grep -E '\"path\": \"res://' "$CACHE_FILE" 2>/dev/null || true)
+fi
+
+if [[ $needs_cache_refresh -eq 1 ]]; then
+	: > "$PREFLIGHT_LOG"
+	echo "[$NAME] INFO refreshing Godot global script class cache"
+	HOME="$HOME_DIR" godot --headless --editor --quit \
+		--path "$PROJECT_PATH" --log-file "$PREFLIGHT_LOG" >/dev/null 2>&1 || {
+			echo "[$NAME] FAIL cache refresh failed"
+			echo "[$NAME] LOG TAIL (last 120 lines)"
+			tail -n 120 "$PREFLIGHT_LOG" 2>/dev/null || true
+			exit 1
+		}
+fi
+
 : > "$LOG_FILE"
 
 echo "[$NAME] START scene=$SCENE timeout=${TIMEOUT_SECONDS}s log=$LOG_FILE"

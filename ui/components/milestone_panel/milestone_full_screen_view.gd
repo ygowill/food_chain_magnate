@@ -635,14 +635,27 @@ class MilestoneCard extends PanelContainer:
 		var expired := false
 		if milestone_def != null and milestone_def is MilestoneDef:
 			var def: MilestoneDef = milestone_def
-			if def.expires_at != null:
+			# 若里程碑已被领取且 supply 已耗尽，则不再展示“剩余回合”（避免与“已获得/不可获得”混淆）。
+			# 仍保留：未领取或 supply 仍有剩余时，展示过期倒计时。
+			if def.expires_at != null and (_owners.is_empty() or _pool_count > 0):
 				var exp_round := int(def.expires_at)
-				var remaining := exp_round - int(_round_number)
-				if remaining < 0:
+				# 过期语义：在第 exp_round 回合的 Cleanup 被移除，因此倒计时应“包含本回合”。
+				# 示例：exp_round=2
+				# - 回合1：剩余 2 回合（含本回合）
+				# - 回合2：剩余 1 回合（含本回合）
+				# - 回合3+：已过期
+				var round_now := maxi(1, int(_round_number))
+				var turns_left := exp_round - round_now + 1
+				if turns_left <= 0:
 					expires_text = "已过期"
 					expired = true
 				else:
-					expires_text = "剩余 %d 回合" % remaining
+					expires_text = "剩余 %d 回合（含本回合）" % turns_left
+
+				# 若 supply 已在 Cleanup 被移除（pool=0 且无人领取），则视为已过期（即使仍处于 exp_round）。
+				if not expired and _pool_count <= 0 and _owners.is_empty() and round_now >= exp_round:
+					expires_text = "已过期"
+					expired = true
 
 		var status := CardStatus.UNOBTAINABLE
 		if _viewer_player_id >= 0:

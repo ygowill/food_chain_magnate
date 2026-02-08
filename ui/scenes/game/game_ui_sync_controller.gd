@@ -89,7 +89,10 @@ func update_ui(do_profile: bool) -> void:
 		return
 
 	if is_instance_valid(_round_label):
-		_round_label.text = "回合: %d" % int(state.round_number)
+		if str(state.phase) == DefsClass.PHASE_SETUP:
+			_round_label.text = "准备阶段"
+		else:
+			_round_label.text = "回合: %d" % int(state.round_number)
 	if is_instance_valid(_phase_label):
 		_phase_label.text = "阶段: %s%s" % [
 			state.phase,
