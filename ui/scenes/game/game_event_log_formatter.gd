@@ -277,7 +277,7 @@ func format(event: Dictionary) -> Array[Dictionary]:
 				msg += " 消费 %s" % items
 			if not rest_text.is_empty():
 				msg += " -> %s" % rest_text
-			msg += " 收入 $%d" % revenue
+			msg += " 收入 $%d" % (revenue + house_bonus)
 			if bonus != 0 or house_bonus != 0:
 				var parts: Array[String] = []
 				parts.append("奖励 $%d" % bonus)
