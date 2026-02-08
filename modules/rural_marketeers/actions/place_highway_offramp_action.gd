@@ -187,6 +187,9 @@ func _apply_external_offramp_piece(state: GameState, owner_id: int, connect_pos:
 	var outward := _outward_dir_for_side(side)
 	var inward := MapUtilsClass.get_opposite_dir(outward)
 	var rotation := _rotation_for_side(side)
+	var parent_anchor: Vector2i = connect_pos
+	if not occupied.is_empty() and (occupied[0] is Vector2i):
+		parent_anchor = occupied[0]
 	for i in range(occupied.size()):
 		var p2: Vector2i = occupied[i]
 		var key2 := "%d,%d" % [p2.x, p2.y]
@@ -199,6 +202,7 @@ func _apply_external_offramp_piece(state: GameState, owner_id: int, connect_pos:
 			"piece_id": OFFRAMP_PIECE_ID,
 			"owner": owner_id,
 			"rotation": rotation,
+			"parent_anchor": parent_anchor,
 		}
 		external_cells[key2] = cell2
 

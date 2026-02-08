@@ -102,7 +102,17 @@ func _draw_giant_billboards(canvas, tile_rect: Rect2, thickness_px: float, rural
 
 		var bb_tex: Texture2D = canvas._skin.get_piece_texture("rural_billboard")
 		var pad := maxf(1.0, minf(r.size.x, r.size.y) * 0.08)
-		TextureUtilsClass.draw_texture_aspect_fit(canvas, bb_tex, r.grow(-pad), Color(1, 1, 1, 0.55))
+		var dst := r.grow(-pad)
+		var mod := Color(1, 1, 1, 0.55)
+		if side == "E" or side == "W":
+			# East/West billboard is vertical; rotate placeholder so the texture is not squashed.
+			var center := dst.position + dst.size * 0.5
+			var swapped := Vector2(dst.size.y, dst.size.x)
+			canvas.draw_set_transform(center, deg_to_rad(90.0), Vector2.ONE)
+			TextureUtilsClass.draw_texture_aspect_fit(canvas, bb_tex, Rect2(-swapped * 0.5, swapped), mod)
+			canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		else:
+			TextureUtilsClass.draw_texture_aspect_fit(canvas, bb_tex, dst, mod)
 
 		if not placed:
 			continue
