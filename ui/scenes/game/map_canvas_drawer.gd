@@ -414,7 +414,13 @@ static func _draw_house_demands(canvas, cell_size: int) -> void:
 
 static func _draw_selection(canvas, cell_size: int) -> void:
 	# 关闭“点击格子选中框”视觉（issue_tracker #31）：保留 cell_selected 信号用于交互逻辑。
-	if canvas._is_valid_world_pos(canvas._hover_pos):
+	var hover_ok := false
+	if canvas != null:
+		if canvas.has_method("is_interactive_world_pos"):
+			hover_ok = bool(canvas.call("is_interactive_world_pos", canvas._hover_pos))
+		else:
+			hover_ok = bool(canvas._is_valid_world_pos(canvas._hover_pos))
+	if hover_ok:
 		var show_hover := false
 		if Globals != null:
 			show_hover = bool(Globals.show_cell_hover_tooltip)

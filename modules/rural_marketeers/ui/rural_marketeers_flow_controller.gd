@@ -5,6 +5,7 @@ const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 
 const GiantBillboardOverlayClass = preload("res://modules/rural_marketeers/ui/components/giant_billboard/giant_billboard_overlay.gd")
 const OfframpPlacementOverlayClass = preload("res://modules/rural_marketeers/ui/components/offramp/offramp_placement_overlay.gd")
+const RuralAreaMapPanelDrawerClass = preload("res://modules/rural_marketeers/ui/rural_area_map_panel_drawer.gd")
 
 const MODE_ID_OFFRAMP := "rural_marketeers_offramp"
 const OFFRAMP_PENDING_KEY := "rural_marketeers_offramp_pending"
@@ -18,6 +19,8 @@ var _hide_all: Callable = Callable()
 
 var _billboard_overlay: Control = null
 var _offramp_overlay: Control = null
+
+var _rural_panel_drawer = null
 
 var _offramp_pending_active: bool = false
 var _offramp_pending_player_id: int = -1
@@ -57,8 +60,31 @@ func try_handle_action_request(action_id: String, params: Dictionary) -> bool:
 	return true
 
 func sync(state: GameState, force_full_refresh: bool = false) -> void:
+	_sync_rural_area_panel()
 	_sync_billboard_overlay_lifecycle(state)
 	_sync_offramp_flow(state, force_full_refresh)
+
+func _sync_rural_area_panel() -> void:
+	if _scene == null:
+		return
+	var canvas = _scene.get("map_canvas") if _scene != null else null
+	if canvas == null or not is_instance_valid(canvas):
+		return
+	if not canvas.has_method("register_map_extension_panel"):
+		return
+
+	if _rural_panel_drawer == null or not is_instance_valid(_rural_panel_drawer):
+		_rural_panel_drawer = RuralAreaMapPanelDrawerClass.new()
+	if _rural_panel_drawer == null:
+		return
+
+	canvas.call(
+		"register_map_extension_panel",
+		str(RuralAreaMapPanelDrawerClass.PANEL_ID),
+		_rural_panel_drawer,
+		int(RuralAreaMapPanelDrawerClass.PANEL_WIDTH_CELLS),
+		int(RuralAreaMapPanelDrawerClass.PANEL_HEIGHT_CELLS)
+	)
 
 func _sync_billboard_overlay_lifecycle(state: GameState) -> void:
 	if not is_instance_valid(_billboard_overlay) or not _billboard_overlay.visible:

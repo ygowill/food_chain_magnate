@@ -287,6 +287,10 @@ func _run_all() -> int:
 				"name": "MapZoomPropertyTest",
 				"fn": func() -> Result: return TestRefs.MapZoomPropertyTestClass.run(),
 			},
+			{
+				"name": "RuralAreaMapPanelBoundsTest",
+				"fn": func() -> Result: return TestRefs.RuralAreaMapPanelBoundsTestClass.run(),
+			},
 					{
 						"name": "TileInternalGridLinesTest",
 						"fn": func() -> Result: return TestRefs.TileInternalGridLinesTestClass.run(),

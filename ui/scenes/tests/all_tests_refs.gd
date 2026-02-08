@@ -67,6 +67,7 @@ const RestructuringReserveDropTargetTestClass = preload("res://ui/scenes/tests/r
 const RestructuringPrivacyTestClass = preload("res://ui/scenes/tests/restructuring_privacy_test.gd")
 const UiRegressionPropertyTestClass = preload("res://ui/scenes/tests/ui_regression_property_test.gd")
 const MapZoomPropertyTestClass = preload("res://ui/scenes/tests/map_zoom_property_test.gd")
+const RuralAreaMapPanelBoundsTestClass = preload("res://ui/scenes/tests/rural_area_map_panel_bounds_test.gd")
 const TileInternalGridLinesTestClass = preload("res://ui/scenes/tests/tile_internal_grid_lines_test.gd")
 const ExternalTileInternalGridLinesTestClass = preload("res://ui/scenes/tests/external_tile_internal_grid_lines_test.gd")
 const MapGroundSkipsOutsideRingTestClass = preload("res://ui/scenes/tests/map_ground_skips_outside_ring_test.gd")
