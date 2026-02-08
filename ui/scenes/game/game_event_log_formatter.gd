@@ -7,6 +7,7 @@ const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
+const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 const ReportsFormatterClass = preload("res://ui/scenes/game/game_event_log_reports_formatter.gd")
 
 const PRICE_ACTION_LOG_TEXT: Dictionary = {
@@ -20,18 +21,11 @@ const CASH_INCOME_BREAKDOWN_LABELS: Dictionary = {
 	"garden_bonus": "花园加成",
 	"marketing_bonus": "营销加成",
 	"route_purchase_income": "沿路购买收入",
-	"park_bonus": "公园加成",
-	"fry_chef_bonus": "薯条主厨加成",
 	"house_bonus_other": "其它房屋加成",
 	"tips": "服务员收入",
 	"cfo_bonus": "CFO 加成",
 	"revenue_floor_adjustment": "下限调整",
 	"other": "其它",
-}
-
-const HOUSE_BONUS_BREAKDOWN_LABELS: Dictionary = {
-	"park": "公园加成",
-	"fry_chef": "薯条主厨加成",
 }
 
 var _reports_formatter = null
@@ -493,7 +487,11 @@ func _format_cash_income_breakdown_suffix(details: Dictionary) -> String:
 		var amt := int(it.get("amount", 0))
 		if id.is_empty() or amt == 0:
 			continue
-		var label := str(CASH_INCOME_BREAKDOWN_LABELS.get(id, id)).strip_edges()
+		var label := ""
+		if id.begins_with("house_bonus:"):
+			label = _format_house_bonus_key_label(id.substr("house_bonus:".length()))
+		else:
+			label = str(CASH_INCOME_BREAKDOWN_LABELS.get(id, id)).strip_edges()
 		if label.is_empty():
 			label = id
 		parts.append("%s $%d" % [label, amt])
@@ -507,36 +505,46 @@ func _format_house_bonus_breakdown_parts(breakdown: Dictionary) -> Array[String]
 	if breakdown == null or not (breakdown is Dictionary) or breakdown.is_empty():
 		return out
 
-	var used: Dictionary = {}
-	for key in ["park", "fry_chef"]:
-		if not breakdown.has(key):
-			continue
-		var amt := int(breakdown.get(key, 0))
-		if amt == 0:
-			continue
-		used[key] = true
-		var label := str(HOUSE_BONUS_BREAKDOWN_LABELS.get(key, key)).strip_edges()
-		if label.is_empty():
-			label = key
-		out.append("%s $%d" % [label, amt])
-
-	var remaining: Array[String] = []
+	var keys: Array[String] = []
 	for k_val in breakdown.keys():
 		var k := str(k_val).strip_edges()
-		if k.is_empty() or used.has(k):
+		if k.is_empty():
 			continue
-		remaining.append(k)
-	remaining.sort()
-	for k in remaining:
-		var amt2 := int(breakdown.get(k, 0))
-		if amt2 == 0:
+		keys.append(k)
+	keys.sort()
+	for k in keys:
+		var amt := int(breakdown.get(k, 0))
+		if amt == 0:
 			continue
-		var label2 := str(HOUSE_BONUS_BREAKDOWN_LABELS.get(k, k)).strip_edges()
-		if label2.is_empty():
-			label2 = k
-		out.append("%s $%d" % [label2, amt2])
+		var label := _format_house_bonus_key_label(k)
+		if label.is_empty():
+			label = k
+		out.append("%s $%d" % [label, amt])
 
 	return out
+
+func _format_house_bonus_key_label(key: String) -> String:
+	var k := str(key).strip_edges()
+	if k.is_empty():
+		return ""
+
+	if EmployeeRegistryClass.is_loaded():
+		var emp_val = EmployeeRegistryClass.get_def(k)
+		if emp_val != null and emp_val is EmployeeDef:
+			var emp: EmployeeDef = emp_val
+			var name := str(emp.name).strip_edges()
+			if not name.is_empty():
+				return "%s加成" % name
+
+	if PieceRegistryClass.is_loaded() and PieceRegistryClass.has(k):
+		var piece_val = PieceRegistryClass.get_def(k)
+		if piece_val != null and piece_val is PieceDef:
+			var piece: PieceDef = piece_val
+			var display_name := str(piece.display_name).strip_edges()
+			if not display_name.is_empty():
+				return "%s加成" % display_name
+
+	return "%s加成" % k
 
 func _product_name(product_id: String) -> String:
 	var pid := str(product_id).strip_edges()

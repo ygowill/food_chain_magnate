@@ -101,8 +101,7 @@ static func _build_dinnertime_income_breakdown(report: Dictionary, player_id: in
 	var revenue_floor_adjustment := 0
 	var sale_revenue_sum := 0
 
-	var park_bonus := 0
-	var fry_chef_bonus := 0
+	var house_bonus_by_key: Dictionary = {}
 
 	var sales_val = report.get("sales", [])
 	var sales: Array = sales_val if (sales_val is Array) else []
@@ -129,11 +128,24 @@ static func _build_dinnertime_income_breakdown(report: Dictionary, player_id: in
 		var hb_breakdown_val = s.get("house_bonus_breakdown", null)
 		if hb_breakdown_val is Dictionary:
 			var hb_breakdown: Dictionary = hb_breakdown_val
-			park_bonus += int(hb_breakdown.get("park", 0))
-			fry_chef_bonus += int(hb_breakdown.get("fry_chef", 0))
+			for k_val in hb_breakdown.keys():
+				var k := str(k_val).strip_edges()
+				if k.is_empty():
+					continue
+				var amt_val = hb_breakdown.get(k_val, 0)
+				if not (amt_val is int):
+					continue
+				var amt := int(amt_val)
+				if amt == 0:
+					continue
+				house_bonus_by_key[k] = int(house_bonus_by_key.get(k, 0)) + amt
 
 	var route_purchase_income := income_sales_total - sale_revenue_sum
-	var house_bonus_other := income_house_bonus_total - park_bonus - fry_chef_bonus
+	var house_bonus_known := 0
+	for amt_val in house_bonus_by_key.values():
+		if amt_val is int:
+			house_bonus_known += int(amt_val)
+	var house_bonus_other := income_house_bonus_total - house_bonus_known
 	if house_bonus_other < 0:
 		house_bonus_other = 0
 
@@ -142,8 +154,15 @@ static func _build_dinnertime_income_breakdown(report: Dictionary, player_id: in
 	_append_breakdown_item(items, "garden_bonus", garden_bonus)
 	_append_breakdown_item(items, "marketing_bonus", marketing_bonus)
 	_append_breakdown_item(items, "route_purchase_income", route_purchase_income)
-	_append_breakdown_item(items, "park_bonus", park_bonus)
-	_append_breakdown_item(items, "fry_chef_bonus", fry_chef_bonus)
+	var house_bonus_keys: Array[String] = []
+	for k_val in house_bonus_by_key.keys():
+		var k := str(k_val).strip_edges()
+		if k.is_empty():
+			continue
+		house_bonus_keys.append(k)
+	house_bonus_keys.sort()
+	for k in house_bonus_keys:
+		_append_breakdown_item(items, "house_bonus:%s" % k, int(house_bonus_by_key.get(k, 0)))
 	_append_breakdown_item(items, "house_bonus_other", house_bonus_other)
 	_append_breakdown_item(items, "tips", income_tips_total)
 	_append_breakdown_item(items, "cfo_bonus", income_cfo_total)
