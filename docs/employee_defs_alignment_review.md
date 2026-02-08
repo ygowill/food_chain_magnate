@@ -137,7 +137,7 @@
 | barista | modules/coffee/content/employees/barista.json | 咖啡师 |  | lead_barista | lead_barista | fixed:6 |  |  |
 | barista_trainee | modules/coffee/content/employees/barista_trainee.json | 咖啡学徒 |  | barista | barista | fixed:12 |  |  |
 | lead_barista | modules/coffee/content/employees/lead_barista.json | 首席咖啡师 |  |  |  | one_x: |  |  |
-| fry_chef | modules/fry_chefs/content/employees/fry_chef.json | 薯条厨师 |  |  |  | fixed:8 |  |  |
+| fry_chef | modules/fry_chefs/content/employees/fry_chef.json | 薯条主厨 |  |  |  | fixed:8 |  |  |
 | gourmet_food_critic | modules/gourmet_food_critics/content/employees/gourmet_food_critic.json | 美食评论家 |  |  |  | fixed:6 |  |  |
 | kimchi_master | modules/kimchi/content/employees/kimchi_master.json | 泡菜大师 |  |  |  | one_x: |  |  |
 | lobbyist | modules/lobbyists/content/employees/lobbyist.json | 说客 |  |  |  | fixed:6 |  |  |

@@ -210,7 +210,7 @@ static func apply(
 		if not inv_apply.ok:
 			return inv_apply
 
-		# 可插拔：每次“成功向一个房屋售卖”后的额外奖金（例如薯条厨师：每个在岗薯条厨师 +$10）
+		# 可插拔：每次“成功向一个房屋售卖”后的额外奖金（例如薯条主厨：每个在岗薯条主厨 +$10）
 		var has_food_read := DinnertimeInventoryClass.required_has_non_drink_food(required)
 		if not has_food_read.ok:
 			return has_food_read

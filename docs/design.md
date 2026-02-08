@@ -605,7 +605,7 @@ class GameEngine:
   1. `BasePriceModifier` (priority: 0): 设置基础单价（默认 10，可被定价/折扣/奢侈品经理调整）
   2. `GardenMultiplier` (priority: 100): 花园倍增（仅对单价部分 `base_price * quantity` 翻倍）
   3. `MilestoneBonusModifier` (priority: 200): 里程碑奖励（如"首个营销汉堡"按件 +$5）
-  4. `EmployeeBonusModifier` (priority: 300): 职业奖励（如"薯条厨师"按房屋 +$10）
+  4. `EmployeeBonusModifier` (priority: 300): 职业奖励（如"薯条主厨"按房屋 +$10）
   5. `FloorZeroModifier` (priority: 900): 最终价格下限钳制为 0（不会出现负收入）
   6. `CFOModifier` (priority: 1000): CFO 倍增（×1.5 向上取整，在晚餐阶段末统一应用）
 - 模块注册方式：
@@ -981,7 +981,7 @@ class TerrainEffectModifier:
 
 - 花园：仅倍增单价部分；
 - 里程碑：如“营销汉堡/披萨/饮品”按件 +5 奖励；
-- 模块：如“薯条厨师”按房屋 +10 固定奖励；
+- 模块：如“薯条主厨”按房屋 +10 固定奖励；
 - 售价下限：最终收入不低于 0（不会出现负收入或向银行支付）；
 - 基础单价：默认 10；可被定价/折扣/奢侈品经理与“储备价格”等模块调整。
 

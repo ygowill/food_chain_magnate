@@ -24,11 +24,6 @@ func _effect_sale_house_bonus_plus_10(_state: GameState, _player_id: int, ctx: D
 		return Result.failure("fry_chefs:sale_house_bonus: ctx 类型错误（期望 Dictionary）")
 	if not ctx.has("bonus") or not (ctx["bonus"] is int):
 		return Result.failure("fry_chefs:sale_house_bonus: ctx.bonus 缺失或类型错误（期望 int）")
-	if not ctx.has("has_non_drink_food") or not (ctx["has_non_drink_food"] is bool):
-		return Result.failure("fry_chefs:sale_house_bonus: ctx.has_non_drink_food 缺失或类型错误（期望 bool）")
-
-	if not bool(ctx["has_non_drink_food"]):
-		return Result.success()
 
 	ctx["bonus"] = int(ctx["bonus"]) + 10
 	if ctx.has("bonus_breakdown") and (ctx["bonus_breakdown"] is Dictionary):

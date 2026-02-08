@@ -12,7 +12,7 @@
 - 现象：晚餐时间售出日志后跟随的现金变化事件日志仅展示总收入，不展示收入构成。
 - 期望：现金变化事件日志除“收入金额”外，还需展示来源明细（例如：食物售价、花园加成、公园加成、CFO 加成等）。
 - 实施：
-	- 晚餐结算 `sale_house_bonus` 记录 `house_bonus_breakdown`（当前覆盖：公园、薯条厨师）。
+	- 晚餐结算 `sale_house_bonus` 记录 `house_bonus_breakdown`（当前覆盖：公园、薯条主厨）。
 	- 进入 Dinnertime 时的 `PLAYER_CASH_CHANGED` 事件附带 `income_breakdown`，并在日志中展示“晚餐收入来源：...”
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（PASS 141/141）
 - 提交：`fix(log): add dinnertime income breakdown to cash events`

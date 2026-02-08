@@ -1,6 +1,6 @@
-# 模块9：薯条厨师（Fry Chefs）
+# 模块9：薯条主厨（Fry Chefs）
 # - 培训：从汉堡/披萨/寿司/面条厨师培训而来（通过 employee patch 注入 train_to）
-# - 晚餐：每成功售卖一个“非饮品 food”的房屋，每个在岗 fry_chef +$10（按房屋算）
+# - 晚餐：每成功售卖一个房屋（含公寓/乡村等 house），每个在岗 fry_chef +$10（按房屋算）
 class_name FryChefsV2Test
 extends RefCounted
 
@@ -21,7 +21,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r2.ok:
 		return r2
 
-	var r3 := _test_house_bonus_not_for_drink(seed_val)
+	var r3 := _test_house_bonus_for_drink(seed_val)
 	if not r3.ok:
 		return r3
 
@@ -128,7 +128,7 @@ static func _test_house_bonus_for_food(seed_val: int) -> Result:
 
 	return Result.success()
 
-static func _test_house_bonus_not_for_drink(seed_val: int) -> Result:
+static func _test_house_bonus_for_drink(seed_val: int) -> Result:
 	var engine := _build_engine_with_fry_chefs(seed_val)
 	if engine == null:
 		return Result.failure("内部错误：engine 为空")
@@ -156,8 +156,8 @@ static func _test_house_bonus_not_for_drink(seed_val: int) -> Result:
 	if not (bonus_val is Array):
 		return Result.failure("income_sale_house_bonus 缺失或类型错误（期望 Array[int]）")
 	var bonus: Array = bonus_val
-	if int(bonus[0]) != 0:
-		return Result.failure("drink 房屋售卖不应触发薯条厨师奖励，实际: %s" % str(bonus))
+	if int(bonus[0]) != 10:
+		return Result.failure("drink 房屋售卖也应触发 +10，实际: %s" % str(bonus))
 
 	return Result.success()
 

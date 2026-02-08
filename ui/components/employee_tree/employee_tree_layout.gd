@@ -112,6 +112,7 @@ static func _assign_positions_lanes(
 	var track_by_id: Dictionary = {}
 	var track_count_by_group: Dictionary = {}
 	var group_count: int = int(ROLE_TO_LANE_GROUP.values().max()) + 1
+	var produce_food_group := int(ROLE_TO_LANE_GROUP.get("produce_food", -1))
 	for gi2 in range(group_count):
 		var group_ids_val = ids_by_group.get(gi2, [])
 		var group_ids: Array = group_ids_val if group_ids_val is Array else []
@@ -146,6 +147,16 @@ static func _assign_positions_lanes(
 						track_by_id[nid] = track
 					break
 				track += 1
+
+		# 将 fry_chef 固定放在厨师升级路线（produce_food lane）的最下方，
+		# 避免因 ID 排序/模块注入导致其它厨师路线的位置发生变化。
+		if gi2 == produce_food_group and group_ids.has("fry_chef") and track_by_id.has("fry_chef"):
+			var outs_val = edges_out.get("fry_chef", [])
+			var outs: Array = outs_val if outs_val is Array else []
+			if outs.is_empty():
+				var bottom_track := max_track + 1
+				track_by_id["fry_chef"] = bottom_track
+				max_track = maxi(max_track, bottom_track)
 		track_count_by_group[gi2] = maxi(0, max_track + 1)
 
 	var base_y_by_group: Array[float] = []

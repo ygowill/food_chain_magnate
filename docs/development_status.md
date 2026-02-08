@@ -415,7 +415,7 @@
 - 新增测试 `core/tests/new_districts_v2_test.gd` 并接入 `ui/scenes/tests/all_tests.gd`
 - 回归：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`（47/47），`tools/check_compile.gd`（188 files）
 
-### 2026-01-03 - M4：模块9 薯条厨师（Fry Chefs）模块化落盘（V2）
+### 2026-01-03 - M4：模块9 薯条主厨（Fry Chefs）模块化落盘（V2）
 
 - 新增晚餐“按房屋额外奖金”扩展点：`DinnertimeSettlement` 支持 `:dinnertime:sale_house_bonus:` effect segment，并在 `round_state.dinnertime.income_sale_house_bonus` 写入每位玩家本回合该类奖金总额
 - 新增占位依赖模块（仅提供员工定义，规则细节后续补齐）：
@@ -434,7 +434,7 @@
 - 新增模块包 `modules/fry_chefs/`：
   - 新增员工 `fry_chef`（pool fixed=8，salary=true）
   - 通过 employee patch 将 `burger_cook/burger_chef/pizza_cook/pizza_chef/noodles_cook/sushi_cook.train_to += fry_chef`
-  - 注册 `fry_chefs:dinnertime:sale_house_bonus:fry_chef`：当售卖的房屋需求包含“非饮品 food”时，每个在岗 `fry_chef` +$10（按房屋算）
+  - 注册 `fry_chefs:dinnertime:sale_house_bonus:fry_chef`：每成功售卖一个房屋，每个在岗 `fry_chef` +$10（按房屋算）
 - 新增测试 `core/tests/fry_chefs_v2_test.gd` 并接入 `ui/scenes/tests/all_tests.gd`；回归通过（`all_tests` 42/42，60s 超时脚本）
 
 ### 2025-12-31 - M5：Night Shift Managers（参考模块）+ Working 有效行动额度

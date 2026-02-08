@@ -525,7 +525,7 @@ static func _employee_fry_chef() -> Dictionary:
 	return _case({
 		"kind": "employee",
 		"id": "fry_chef",
-		"title": "薯条厨师（fry_chef）",
+		"title": "薯条主厨（fry_chef）",
 		"enabled_modules": ["fry_chefs"],
 		"builder": "employee_fry_chef_dinnertime_bonus",
 		"purpose": "构造双方各卖 1 个房屋的局面，验证 fry_chef 每房屋额外 +$10。",

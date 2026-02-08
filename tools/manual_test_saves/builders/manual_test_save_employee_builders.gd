@@ -235,7 +235,7 @@ func _build_employee_fry_chef_dinnertime_bonus(engine: GameEngine, _c: Dictionar
 	if house0.is_empty():
 		return Result.failure("cannot find a house where player 0 is strictly closer")
 
-	# 1) 放 1 个 burger 需求（确保为“非饮品 food”，可触发 fry_chef 奖励）
+		# 1) 放 1 个 burger 需求（用于稳定触发 fry_chef 房屋售卖奖励）
 	var dem0 := _exec_system(engine, "debug_add_house_demand", {"house_id": house0, "product": "burger", "amount": 1})
 	if not dem0.ok:
 		return dem0

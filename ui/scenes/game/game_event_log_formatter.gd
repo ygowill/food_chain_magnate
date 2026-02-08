@@ -21,7 +21,7 @@ const CASH_INCOME_BREAKDOWN_LABELS: Dictionary = {
 	"marketing_bonus": "营销加成",
 	"route_purchase_income": "沿路购买收入",
 	"park_bonus": "公园加成",
-	"fry_chef_bonus": "薯条厨师加成",
+	"fry_chef_bonus": "薯条主厨加成",
 	"house_bonus_other": "其它房屋加成",
 	"tips": "服务员收入",
 	"cfo_bonus": "CFO 加成",

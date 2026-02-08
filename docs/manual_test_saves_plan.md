@@ -451,18 +451,18 @@
 
 ---
 
-### 5.3 fry_chefs（薯条厨师）
+### 5.3 fry_chefs（薯条主厨）
 
-#### fry_chef（薯条厨师）
+#### fry_chef（薯条主厨）
 
 - 核心行为/约束：
-	- 晚餐：每成功售卖一个“非饮品 food”的房屋，每个在岗 fry_chef +$10（按房屋计）。
+	- 晚餐：每成功售卖一个房屋，每个在岗 fry_chef +$10（按房屋计）。
 	- 培训链通过 patch 注入到 burger/pizza/noodle/sushi 的 cook。
 - 存档建议定位：
 	- `Dinnertime`：预置 1 个 food demand 与赢家可售卖路径。
 - 手工测试点：
 	- 卖 food 房屋：收入额外 +10。
-	- 卖 drink 房屋：不应触发 +10。
+	- 卖 drink 房屋：也应触发 +10。
 	- 培训链 patch：相关 cook 的 train_to 应包含 fry_chef（启用模块时）。
 - 参考单测：
 	- `core/tests/fry_chefs_v2_test.gd`
