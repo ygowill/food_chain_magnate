@@ -55,6 +55,10 @@ const PRODUCT_NAMES: Dictionary = {
 	"lemonade": "柠檬水",
 	"beer": "啤酒",
 	"soda": "苏打",
+	"coffee": "咖啡",
+	"kimchi": "泡菜",
+	"noodles": "面条",
+	"sushi": "寿司",
 }
 
 const EMPLOYEE_CATEGORY_ORDER := ["管理", "厨房", "营销", "其他"]

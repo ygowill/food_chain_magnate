@@ -1,0 +1,6 @@
+{
+	"schema_version": 1,
+	"product_icons": {
+		"noodles": {"texture": "res://modules/noodles/assets/map/icons/noodles.png"}
+	}
+}

@@ -136,6 +136,10 @@ class ProductItem extends PanelContainer:
 		"lemonade": "柠檬水",
 		"beer": "啤酒",
 		"soda": "苏打",
+		"coffee": "咖啡",
+		"kimchi": "泡菜",
+		"noodles": "面条",
+		"sushi": "寿司",
 	}
 
 	func _ready() -> void:

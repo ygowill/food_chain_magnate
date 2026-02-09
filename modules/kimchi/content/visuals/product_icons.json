@@ -1,0 +1,6 @@
+{
+	"schema_version": 1,
+	"product_icons": {
+		"kimchi": {"texture": "res://modules/kimchi/assets/map/icons/kimchi.png"}
+	}
+}

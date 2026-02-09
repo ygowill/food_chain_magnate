@@ -153,7 +153,15 @@ func _get_placeholder(kind: String) -> Texture2D:
 func _load_texture_or_placeholder(path: String, kind: String, warnings: Array[String], label: String) -> Texture2D:
 	if path.is_empty():
 		return _get_placeholder(kind)
-	if not ResourceLoader.exists(path):
+
+	# ResourceLoader.exists() may return false for raw assets that haven't been imported yet
+	# (i.e., the `*.import` sidecar isn't generated). If the file exists on disk, still try
+	# to load it and let Godot import on demand.
+	var exists := ResourceLoader.exists(path)
+	if not exists and path.begins_with("res://") and FileAccess.file_exists(path):
+		exists = true
+
+	if not exists:
 		PerfTraceClass.counter_add("skin:texture_missing", 1)
 		warnings.append("MapSkin: 贴图不存在，使用占位: %s (%s)" % [label, path])
 		return _get_placeholder(kind)

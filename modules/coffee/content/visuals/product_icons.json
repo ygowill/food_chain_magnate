@@ -1,0 +1,6 @@
+{
+	"schema_version": 1,
+	"product_icons": {
+		"coffee": {"texture": "res://modules/coffee/assets/map/icons/coffee.png"}
+	}
+}

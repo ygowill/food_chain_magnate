@@ -1,0 +1,6 @@
+{
+	"schema_version": 1,
+	"product_icons": {
+		"sushi": {"texture": "res://modules/sushi/assets/map/icons/sushi.png"}
+	}
+}

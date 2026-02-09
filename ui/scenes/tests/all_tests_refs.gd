@@ -157,3 +157,4 @@ const RandomMapGenerationTestClass = preload("res://core/tests/random_map_genera
 const DinnertimeSettlementTestClass = preload("res://core/tests/dinnertime_settlement_test.gd")
 const DinnertimeDistanceEntryBoundaryTestClass = preload("res://core/tests/dinnertime_distance_entry_boundary_test.gd")
 const BankruptcyTestClass = preload("res://core/tests/bankruptcy_test.gd")
+const ModuleProductIconsLoadedTestClass = preload("res://ui/scenes/tests/module_product_icons_loaded_test.gd")

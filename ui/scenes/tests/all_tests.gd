@@ -436,6 +436,10 @@ func _run_all() -> int:
 				"fn": func() -> Result: return TestRefs.VisualCatalogLoaderV2TestClass.run(2, 12345),
 			},
 			{
+				"name": "ModuleProductIconsLoadedTest",
+				"fn": func() -> Result: return TestRefs.ModuleProductIconsLoadedTestClass.run(),
+			},
+			{
 				"name": "ModulePlanBuilderV2Test",
 				"fn": func() -> Result: return TestRefs.ModulePlanBuilderV2TestClass.run(2, 12345),
 			},
