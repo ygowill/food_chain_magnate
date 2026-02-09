@@ -269,6 +269,20 @@ func _build_markdown(c: Dictionary, build_ctx: Dictionary, rel_json_res_path: St
 		out += "\n## 目的\n\n"
 		out += "- %s\n" % purpose
 
+	var scenario_val = build_ctx.get("scenario", null)
+	if scenario_val is Array and not (scenario_val as Array).is_empty():
+		out += "\n## 情景设计\n\n"
+		for s in (scenario_val as Array):
+			var line := str(s).strip_edges()
+			if line.is_empty():
+				continue
+			out += "- %s\n" % line
+	elif scenario_val is String:
+		var line := str(scenario_val).strip_edges()
+		if not line.is_empty():
+			out += "\n## 情景设计\n\n"
+			out += "- %s\n" % line
+
 	out += "\n## 复核步骤\n\n"
 	if steps is Array and not steps.is_empty():
 		for idx in range(steps.size()):
@@ -358,4 +372,3 @@ func _run_builder(engine: GameEngine, c: Dictionary) -> Result:
 	if out is Result:
 		return out
 	return Result.failure("builder did not return Result: %s" % name)
-

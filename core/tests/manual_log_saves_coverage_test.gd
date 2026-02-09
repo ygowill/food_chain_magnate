@@ -3,6 +3,10 @@
 class_name ManualLogSavesCoverageTest
 extends RefCounted
 
+const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
+const GameTimelineLogEntriesBuilderClass = preload("res://ui/scenes/game/game_timeline_log_entries_builder.gd")
+const GameLogUnifiedTimelineBuilderClass = preload("res://ui/components/game_log/game_log_unified_timeline_builder.gd")
+
 const CASES: Array[Dictionary] = [
 	{
 		"path": "res://.savings/manual_cases/logs/event_log_review.json",
@@ -138,6 +142,87 @@ static func run() -> Result:
 			if not sold_events.is_empty() and found_dinnertime_cash:
 				if max_sold_seq >= min_cash_seq:
 					return Result.failure("expected FOOD_SOLD before dinnertime PLAYER_CASH_CHANGED in history after loading: %s" % res_path)
+
+			# Ensure unified timeline doesn't promote settlement-derived player logs to ActionGroup header for flow commands.
+			# This prevents visual indent issues where the first FOOD_SOLD becomes the header summary and later sales appear over-indented.
+			var timeline_r: Result = StepTimelineBuildClass.build_full(engine)
+			if not timeline_r.ok:
+				return Result.failure("step_timeline build failed for dinnertime save: %s (%s)" % [timeline_r.error, res_path])
+			var timeline_val = timeline_r.value
+			if not (timeline_val is Dictionary):
+				return Result.failure("step_timeline build returned non-Dictionary for dinnertime save: %s" % res_path)
+			var timeline: Dictionary = timeline_val
+			var events_val2 = timeline.get("events", null)
+			if not (events_val2 is Array):
+				return Result.failure("step_timeline.events missing/invalid for dinnertime save: %s" % res_path)
+
+			# Ensure in step_timeline ordering: FOOD_SOLD entries must come before dinnertime cash breakdown entries.
+			var max_sold_seq2 := -1
+			var found_dinnertime_cash2 := false
+			var min_cash_seq2 := 1 << 30
+			for ev2_val in Array(events_val2):
+				if not (ev2_val is Dictionary):
+					continue
+				var ev2: Dictionary = ev2_val
+				var t2 := str(ev2.get("type", "")).strip_edges()
+				if t2 == EventBus.EventType.FOOD_SOLD:
+					max_sold_seq2 = maxi(max_sold_seq2, int(ev2.get("sequence", -1)))
+					continue
+				if t2 != EventBus.EventType.PLAYER_CASH_CHANGED:
+					continue
+				var data2_val = ev2.get("data", null)
+				if not (data2_val is Dictionary):
+					continue
+				var data2: Dictionary = data2_val
+				var breakdown2_val = data2.get("income_breakdown", null)
+				if not (breakdown2_val is Dictionary):
+					continue
+				var breakdown2: Dictionary = breakdown2_val
+				if str(breakdown2.get("context", "")).strip_edges() != "dinnertime_income":
+					continue
+				found_dinnertime_cash2 = true
+				min_cash_seq2 = mini(min_cash_seq2, int(ev2.get("sequence", min_cash_seq2)))
+
+			if max_sold_seq2 >= 0 and found_dinnertime_cash2:
+				if max_sold_seq2 >= min_cash_seq2:
+					return Result.failure("expected FOOD_SOLD before dinnertime PLAYER_CASH_CHANGED in step_timeline: %s" % res_path)
+
+			var entries2: Array[Dictionary] = GameTimelineLogEntriesBuilderClass.build(Array(events_val2))
+			var entries_by_step := {}
+			for e2_val in entries2:
+				if not (e2_val is Dictionary):
+					continue
+				var e2: Dictionary = e2_val
+				var si := int(e2.get("step_index", -999))
+				if si < 0:
+					continue
+				if not entries_by_step.has(si):
+					entries_by_step[si] = []
+				(entries_by_step[si] as Array).append(e2)
+
+			var steps_val2 = timeline.get("steps", null)
+			if not (steps_val2 is Array):
+				return Result.failure("step_timeline.steps missing/invalid for dinnertime save: %s" % res_path)
+			var steps2: Array = steps_val2
+			for si2 in range(steps2.size()):
+				var step_val2 = steps2[si2]
+				if not (step_val2 is Dictionary):
+					continue
+				var step2: Dictionary = step_val2
+				if str(step2.get("kind", "")).strip_edges() != "command":
+					continue
+				var action_id := str(step2.get("action_id", "")).strip_edges()
+				if action_id not in ["skip", "end_turn", "skip_sub_phase", "advance_phase"]:
+					continue
+				var step_entries2: Array = entries_by_step.get(si2, [])
+				var header := GameLogUnifiedTimelineBuilderClass._build_action_group_header_data(si2, step2, step_entries2, false)
+				if not (header is Dictionary):
+					return Result.failure("action_group header data type invalid for flow command step: step=%d (%s)" % [si2, res_path])
+				var primary_id := int(Dictionary(header).get("primary_entry_id", -2))
+				if primary_id != -1:
+					return Result.failure("expected flow command ActionGroup to have no primary entry (primary_entry_id=-1), got %d: step=%d action_id=%s (%s)" % [
+						primary_id, si2, action_id, res_path
+					])
 
 	# Avoid polluting subsequent tests with history from a replay-loaded archive.
 	_clear_event_history()

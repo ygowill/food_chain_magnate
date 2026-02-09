@@ -11,6 +11,15 @@
 
 - 用于手工复核晚餐结算日志：DINNERTIME_REPORT + FOOD_SOLD + PLAYER_CASH_CHANGED（覆盖花园翻倍、营销加成、沿路购买、服务员小费、CFO 加成、薯条主厨房屋奖）。
 
+## 情景设计
+
+- 地图：水平道路 y=3；rest_0/rest_1 位于道路下方；h0(花园)/h1/h2 位于道路上方。
+- h0：花园房屋，需求 burger+beer（覆盖：花园翻倍 + 营销加成 + 薯条主厨房屋奖）。
+- h1：需求 pizza（覆盖：按品类营销加成）。
+- h2：需求 soda（由玩家2售出）。
+- 沿路购买：玩家2在 rest_1 持有 coffee 库存；玩家1从 rest_0 前往 h0/h1 的路径会路过 rest_1，触发咖啡沿路购买收入。
+- 玩家1：waitress x2（tips + 平局）、cfo x1（+50%）、fry_chef x2（每房屋+$10）；里程碑 first_*_marketed 提供 sell_bonus。
+
 ## 复核步骤
 
 1. 载入后打开日志视图。

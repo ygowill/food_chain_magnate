@@ -35,27 +35,18 @@ static func append_events(
 	phase_segment: String,
 	seq_in: int
 ) -> void:
+	# seq_in 表示“上一条已写入事件的 sequence”（即 next = seq_in + 1），与 TimelineEventHelpers.append_step_event 保持一致。
 	var seq := int(seq_in)
 	for ev_val in events:
 		if not (ev_val is Dictionary):
 			continue
-		_append_single_event(out_events, Dictionary(ev_val), command_index, step_index, phase_segment, seq)
-		seq += 1
-
-static func _append_single_event(
-	out_events: Array[Dictionary],
-	ev: Dictionary,
-	command_index: int,
-	step_index: int,
-	phase_segment: String,
-	seq: int
-) -> void:
-	var t: String = str(ev.get("type", "")).strip_edges()
-	if t.is_empty():
-		return
-	var d_val = ev.get("data", {})
-	var d: Dictionary = d_val if (d_val is Dictionary) else {}
-	TimelineEventHelpersClass.append_step_event(out_events, t, d, int(seq) - 1, command_index, step_index, phase_segment)
+		var ev: Dictionary = ev_val
+		var t: String = str(ev.get("type", "")).strip_edges()
+		if t.is_empty():
+			continue
+		var d_val = ev.get("data", {})
+		var d: Dictionary = d_val if (d_val is Dictionary) else {}
+		seq = TimelineEventHelpersClass.append_step_event(out_events, t, d, seq, command_index, step_index, phase_segment)
 
 static func should_attribute_settlement_effects_to_old_phase(engine: GameEngine, old_phase: String, new_phase: String) -> bool:
 	# 目的：避免“离开 Payday 的 EXIT settlement”产生的现金/里程碑被归到新阶段（典型：Marketing）。

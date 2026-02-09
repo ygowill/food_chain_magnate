@@ -218,6 +218,13 @@ static func _should_show_event_item(entry: Dictionary, show_phase_events: bool) 
 
 static func _build_action_group_header_data(step_index: int, step: Dictionary, entries: Array, show_phase_events: bool) -> Dictionary:
 	# 统一视图：ActionGroupHeader 的摘要优先取“第一条玩家动作”，并把该条作为 primary 以避免在子项中重复展示。
+	# 但对 flow command（skip/end_turn/skip_sub_phase）来说，step 内的“第一条可见玩家日志”往往是结算/派生事件，
+	# 把它提升为 summary 会导致同组内其它事件出现额外缩进（且语义上也不应由结算事件代表该 step）。
+	if _is_flow_command_action_id(str(step.get("action_id", "")).strip_edges()):
+		return {
+			"summary": _build_action_group_fallback_summary(step_index, step),
+			"primary_entry_id": -1,
+		}
 	var primary := _pick_primary_entry_for_action_group(entries)
 	if primary != null and not primary.is_empty():
 		var msg := str(primary.get("message", "")).strip_edges()
@@ -248,7 +255,7 @@ static func _pick_primary_entry_for_action_group(entries: Array) -> Dictionary:
 
 static func _is_flow_command_action_id(action_id: String) -> bool:
 	var aid := str(action_id).strip_edges()
-	return aid == ActionIdsClass.SKIP or aid == ActionIdsClass.END_TURN or aid == ActionIdsClass.SKIP_SUB_PHASE
+	return aid == ActionIdsClass.SKIP or aid == ActionIdsClass.END_TURN or aid == ActionIdsClass.SKIP_SUB_PHASE or aid == ActionIdsClass.ADVANCE_PHASE
 
 static func _build_action_group_fallback_summary(step_index: int, step: Dictionary) -> String:
 	# 兜底：系统摘要/命令元信息（用于“无可见事件 step”的可读性）
@@ -403,4 +410,3 @@ static func _add_event_item(
 	log_container.add_child(item)
 	items.append(item)
 	item.apply_timeline_state(int(timeline_cursor_index), int(timeline_head_index))
-

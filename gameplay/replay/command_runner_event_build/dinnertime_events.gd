@@ -69,6 +69,10 @@ static func build_food_sold_events_from_dinnertime_report(dinnertime_state: Game
 				"house_number": s.get("house_number", null),
 				"restaurant_id": str(s.get("winner_restaurant_id", "")).strip_edges(),
 				"required": required,
+				# 用于日志显示的收入拆分（与 cash_events.gd 的 dinnertime_income_breakdown 对齐）
+				"unit_price": int(s.get("unit_price", 0)),
+				"quantity": int(s.get("quantity", 0)),
+				"has_garden": bool(s.get("has_garden", false)),
 				"revenue": int(s.get("revenue", 0)),
 				"bonus": int(s.get("bonus", 0)),
 				"house_bonus": int(s.get("house_bonus", 0)),
