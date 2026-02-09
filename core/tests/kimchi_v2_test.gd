@@ -6,6 +6,7 @@ const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
+const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 const Phase = PhaseDefsClass.Phase
@@ -39,8 +40,20 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r5.ok:
 		return r5
 
+	var r6 := _test_extra_luxury_manager_patch(seed_val)
+	if not r6.ok:
+		return r6
+
+	var r7 := _test_kimchi_product_is_no_marketing(seed_val)
+	if not r7.ok:
+		return r7
+
+	var r8 := _test_cleanup_clamps_kimchi_to_10(seed_val)
+	if not r8.ok:
+		return r8
+
 	return Result.success({
-		"cases": 6,
+		"cases": 9,
 		"seed": seed_val,
 	})
 
@@ -74,6 +87,130 @@ static func _test_kimchi_master_entry_level_and_pool(seed_val: int) -> Result:
 	var pool_count: int = int(pool_val)
 	if pool_count != one_x:
 		return Result.failure("kimchi_master 为 1x 员工：2p 下应为 %d，实际: %d" % [one_x, pool_count])
+
+	return Result.success()
+
+static func _test_extra_luxury_manager_patch(seed_val: int) -> Result:
+	# 基线（2 人局 one_x=1）：base_rules 的 luxury_manager 应为 1
+	var e0 := GameEngine.new()
+	var init0 := e0.initialize(2, seed_val)
+	if not init0.ok:
+		return Result.failure("初始化失败: %s" % init0.error)
+	var s0 := e0.get_state()
+	var lm0: int = int(s0.employee_pool.get("luxury_manager", -1))
+	if lm0 != 1:
+		return Result.failure("基线 luxury_manager 应为 1，实际: %d" % lm0)
+
+	# 启用 kimchi：+1
+	var e1 := GameEngine.new()
+	var init1 := e1.initialize(2, seed_val, [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"kimchi",
+	])
+	if not init1.ok:
+		return Result.failure("初始化失败: %s" % init1.error)
+	var s1 := e1.get_state()
+	var lm1: int = int(s1.employee_pool.get("luxury_manager", -1))
+	if lm1 != 2:
+		return Result.failure("启用 kimchi 后 luxury_manager 应为 2，实际: %d" % lm1)
+
+	# 启用 kimchi + noodles + sushi：仍只加一次（去重）
+	var e2 := GameEngine.new()
+	var init2 := e2.initialize(2, seed_val, [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"kimchi",
+		"noodles",
+		"sushi",
+	])
+	if not init2.ok:
+		return Result.failure("初始化失败: %s" % init2.error)
+	var s2 := e2.get_state()
+	var lm2: int = int(s2.employee_pool.get("luxury_manager", -1))
+	if lm2 != 2:
+		return Result.failure("启用 kimchi+noodles+sushi 后 luxury_manager 应为 2（只加一次），实际: %d" % lm2)
+
+	return Result.success()
+
+static func _test_kimchi_product_is_no_marketing(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val, [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"kimchi",
+	])
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	if not ProductRegistryClass.has("kimchi"):
+		return Result.failure("应存在产品 kimchi（ProductRegistry 缺失？）")
+	var def = ProductRegistryClass.get_def("kimchi")
+	if def == null or not def.has_method("has_tag"):
+		return Result.failure("kimchi 产品定义无效")
+	if not def.has_tag("no_marketing"):
+		return Result.failure("kimchi 不应允许被营销（tags.no_marketing 缺失？）")
+
+	return Result.success()
+
+static func _test_cleanup_clamps_kimchi_to_10(seed_val: int) -> Result:
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"kimchi",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := e.get_state()
+	_force_turn_order(state)
+
+	# 玩家0：已有大量 kimchi，应在 cleanup 后被 clamp 到 10（且其余产品清空）。
+	state.players[0]["inventory"]["kimchi"] = 12
+	state.players[0]["inventory"]["burger"] = 2
+
+	var pm = e.phase_manager
+	if pm == null:
+		return Result.failure("phase_manager 为空")
+	var reg = pm.get_settlement_registry()
+	if reg == null:
+		return Result.failure("SettlementRegistry 为空")
+
+	var r: Result = reg.run(Phase.CLEANUP, Point.ENTER, state, pm)
+	if not r.ok:
+		return Result.failure("Cleanup 结算失败: %s" % r.error)
+
+	var inv: Dictionary = state.players[0]["inventory"]
+	if int(inv.get("kimchi", 0)) != 10:
+		return Result.failure("kimchi freezer 应 clamp 到 10，实际: %d inv=%s" % [int(inv.get("kimchi", 0)), str(inv)])
+	if int(inv.get("burger", 0)) != 0:
+		return Result.failure("存储 kimchi 时其他产品应被丢弃，实际 inv=%s" % str(inv))
 
 	return Result.success()
 
