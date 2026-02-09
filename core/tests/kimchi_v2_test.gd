@@ -5,6 +5,7 @@ extends RefCounted
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
+const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 const Phase = PhaseDefsClass.Phase
@@ -13,6 +14,10 @@ const Point = SettlementRegistryClass.Point
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count != 2:
 		return Result.failure("本测试目前固定为 2 人局（实际: %d）" % player_count)
+
+	var r0 := _test_kimchi_master_entry_level_and_pool(seed_val)
+	if not r0.ok:
+		return r0
 
 	var r1 := _test_prefers_kimchi_restaurant_even_if_score_worse(seed_val)
 	if not r1.ok:
@@ -35,9 +40,42 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return r5
 
 	return Result.success({
-		"cases": 5,
+		"cases": 6,
 		"seed": seed_val,
 	})
+
+static func _test_kimchi_master_entry_level_and_pool(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"kimchi",
+	]
+	var init := engine.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := engine.get_state()
+	if not EmployeeRulesClass.is_entry_level("kimchi_master"):
+		return Result.failure("kimchi_master 应为可直接招聘的入门级员工（tags.entry_level 缺失？）")
+
+	var one_x := int(state.rules.get("one_x_employee_copies", -1))
+	if one_x <= 0:
+		return Result.failure("state.rules.one_x_employee_copies 无效: %d" % one_x)
+	var pool_val = state.employee_pool.get("kimchi_master", null)
+	if not (pool_val is int):
+		return Result.failure("employee_pool.kimchi_master 缺失或类型错误（期望 int）")
+	var pool_count: int = int(pool_val)
+	if pool_count != one_x:
+		return Result.failure("kimchi_master 为 1x 员工：2p 下应为 %d，实际: %d" % [one_x, pool_count])
+
+	return Result.success()
 
 static func _test_prefers_kimchi_restaurant_even_if_score_worse(seed_val: int) -> Result:
 	var e := GameEngine.new()
