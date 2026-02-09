@@ -15,7 +15,7 @@ static func draw_roads(canvas, cell_size: int) -> void:
 			var structure_val = cell.get("structure", null)
 			if structure_val is Dictionary:
 				var structure: Dictionary = structure_val
-				if str(structure.get("piece_id", "")) == "highway_offramp":
+				if str(structure.get("piece_id", "")).strip_edges() == "highway_offramp":
 					continue
 			var segments_val = cell.get("road_segments", null)
 			if not (segments_val is Array):

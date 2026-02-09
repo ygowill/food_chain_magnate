@@ -33,7 +33,7 @@ static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: A
 			continue
 		var anchor: Vector2i = anchor_val
 		var info: Dictionary = canvas._structures_by_anchor[anchor]
-		var piece_id: String = str(info.get("piece_id", ""))
+		var piece_id: String = str(info.get("piece_id", "")).strip_edges()
 		if piece_id.is_empty():
 			continue
 
@@ -558,7 +558,7 @@ static func draw_park_piece(canvas, cell_size: int, info: Dictionary, alpha: flo
 static func draw_generic_piece(canvas, cell_size: int, info: Dictionary, alpha: float = 1.0) -> void:
 	if canvas == null or canvas._skin == null:
 		return
-	var piece_id: String = str(info.get("piece_id", ""))
+	var piece_id: String = str(info.get("piece_id", "")).strip_edges()
 	if piece_id.is_empty():
 		return
 

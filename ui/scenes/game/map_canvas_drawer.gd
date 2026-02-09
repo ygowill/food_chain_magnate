@@ -255,6 +255,9 @@ static func _draw_structure_preview_piece(canvas, cell_size: int, preview_info: 
 		StructuresPassClass.draw_restaurant(canvas, cell_size, anchor, info, structure_rect, alpha, RESTAURANT_LOGO_PIECE_IDS)
 	elif piece_id == "house" or piece_id == "house_with_garden":
 		StructuresPassClass.draw_house_and_garden(canvas, cell_size, anchor, info, alpha)
+	elif piece_id == "highway_offramp":
+		var tex: Texture2D = canvas._skin.get_piece_texture(piece_id)
+		StructuresPassClass.draw_highway_offramp(canvas, structure_rect, tex, rotation)
 	elif piece_id == "marketing":
 		# Marketing preview is drawn as a semi-transparent piece (issue_tracker #36).
 		var p := {

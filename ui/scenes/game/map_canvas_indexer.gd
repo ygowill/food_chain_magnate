@@ -174,7 +174,7 @@ static func _index_structure_cell(canvas, world_pos: Vector2i, cell_val) -> void
 		return
 	var anchor: Vector2i = anchor_val
 
-	var piece_id: String = str(structure.get("piece_id", ""))
+	var piece_id: String = str(structure.get("piece_id", "")).strip_edges()
 	var owner: int = int(structure.get("owner", -1))
 	var rotation: int = int(structure.get("rotation", 0))
 	var house_id: String = str(structure.get("house_id", ""))
