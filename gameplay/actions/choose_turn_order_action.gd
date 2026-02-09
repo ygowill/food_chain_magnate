@@ -4,6 +4,7 @@ class_name ChooseTurnOrderAction
 extends ActionExecutor
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
 
 var phase_manager: PhaseManager = null
 
@@ -133,22 +134,6 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, _comm
 
 	# 若本动作触发了自动推进阶段，则补齐 phase/sub_phase 事件（原先由手动 advance_phase 触发）
 	if old_state.phase != new_state.phase:
-		if str(old_state.phase) == DefsClass.PHASE_DINNERTIME:
-			var report: Dictionary = {}
-			if old_state.round_state is Dictionary:
-				var v = Dictionary(old_state.round_state).get("dinnertime", null)
-				if v is Dictionary:
-					report = Dictionary(v).duplicate(true)
-			events.append({
-				"type": EventBus.EventType.DINNERTIME_REPORT,
-				"data": {
-					"round": old_state.round_number,
-					"from_phase": str(old_state.phase),
-					"to_phase": str(new_state.phase),
-					"report": report,
-				}
-			})
-
 		events.append({
 			"type": EventBus.EventType.PHASE_CHANGED,
 			"data": {
@@ -157,6 +142,24 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, _comm
 				"round": new_state.round_number
 			}
 		})
+
+		# Dinnertime 结算报告：在进入 Dinnertime 时发射（结算在 enter hook 运行，报告写入 new_state.round_state.dinnertime）。
+		if str(new_state.phase) == DefsClass.PHASE_DINNERTIME:
+			var report_dinnertime: Dictionary = {}
+			if new_state.round_state is Dictionary:
+				var v3 = Dictionary(new_state.round_state).get("dinnertime", null)
+				if v3 is Dictionary:
+					report_dinnertime = Dictionary(v3).duplicate(true)
+			events.append({
+				"type": EventBus.EventType.DINNERTIME_REPORT,
+				"data": {
+					"round": new_state.round_number,
+					"from_phase": str(old_state.phase),
+					"to_phase": str(new_state.phase),
+					"report": report_dinnertime,
+				}
+			})
+			events.append_array(CommandRunnerClass.build_food_sold_events_from_dinnertime_report(new_state, report_dinnertime))
 
 		if old_state.round_number != new_state.round_number:
 			events.append({

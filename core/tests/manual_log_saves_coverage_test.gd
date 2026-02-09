@@ -47,6 +47,7 @@ const CASES: Array[Dictionary] = [
 		"required_types": [
 			EventBus.EventType.DINNERTIME_REPORT,
 			EventBus.EventType.FOOD_SOLD,
+			EventBus.EventType.PLAYER_CASH_CHANGED,
 		],
 	},
 ]
@@ -102,6 +103,41 @@ static func run() -> Result:
 					continue
 				if not seen.has(rid):
 					return Result.failure("expected COMMAND_EXECUTED for %s after loading: %s" % [rid, res_path])
+
+		# Ensure ordering for the dinnertime settlement: sold logs first, cash changes after.
+		if res_path.ends_with("event_log_dinnertime_sale.json"):
+			var sold_events: Array = EventBus.get_history_by_type(EventBus.EventType.FOOD_SOLD)
+			var cash_events: Array = EventBus.get_history_by_type(EventBus.EventType.PLAYER_CASH_CHANGED)
+
+			var max_sold_seq := -1
+			for ev_val in sold_events:
+				if not (ev_val is Dictionary):
+					continue
+				var ev: Dictionary = ev_val
+				max_sold_seq = maxi(max_sold_seq, int(ev.get("sequence", -1)))
+
+			var found_dinnertime_cash := false
+			var min_cash_seq := 1 << 30
+			for ev_val in cash_events:
+				if not (ev_val is Dictionary):
+					continue
+				var ev: Dictionary = ev_val
+				var data_val = ev.get("data", null)
+				if not (data_val is Dictionary):
+					continue
+				var data: Dictionary = data_val
+				var breakdown_val = data.get("income_breakdown", null)
+				if not (breakdown_val is Dictionary):
+					continue
+				var breakdown: Dictionary = breakdown_val
+				if str(breakdown.get("context", "")).strip_edges() != "dinnertime_income":
+					continue
+				found_dinnertime_cash = true
+				min_cash_seq = mini(min_cash_seq, int(ev.get("sequence", min_cash_seq)))
+
+			if not sold_events.is_empty() and found_dinnertime_cash:
+				if max_sold_seq >= min_cash_seq:
+					return Result.failure("expected FOOD_SOLD before dinnertime PLAYER_CASH_CHANGED in history after loading: %s" % res_path)
 
 	# Avoid polluting subsequent tests with history from a replay-loaded archive.
 	_clear_event_history()

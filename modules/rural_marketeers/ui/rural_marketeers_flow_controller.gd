@@ -189,7 +189,7 @@ func _show_offramp_overlay(state: GameState, force_full_refresh: bool = false) -
 	_offramp_overlay.visible = true
 	_set_map_mode_overlay(_offramp_overlay)
 
-	var need_begin := (not _map_controller.has_method("get_mode")) or str(_map_controller.get_mode()) != MODE_ID_OFFRAMP
+	var need_begin = (not _map_controller.has_method("get_mode")) or str(_map_controller.get_mode()) != MODE_ID_OFFRAMP
 	if need_begin or force_full_refresh:
 		_map_controller.begin_selection(MODE_ID_OFFRAMP)
 		if force_full_refresh and _offramp_overlay.has_method("clear_target"):

@@ -47,7 +47,7 @@ func on_cell_hovered(world_pos: Vector2i) -> void:
 		_clear_preview_overlay()
 		return
 
-	var info := _validate_anchor_and_get_info(world_pos)
+	var info = _validate_anchor_and_get_info(world_pos)
 	if info == null:
 		_clear_preview_overlay()
 		return
@@ -65,7 +65,7 @@ func on_cell_selected(world_pos: Vector2i) -> void:
 			overlay.call("set_validation", false, "请选择高亮的可放置边缘格")
 		return
 
-	var info := _validate_anchor_and_get_info(world_pos)
+	var info = _validate_anchor_and_get_info(world_pos)
 	if info == null:
 		if is_instance_valid(overlay) and overlay is CanvasItem and (overlay as CanvasItem).visible and overlay.has_method("set_validation"):
 			overlay.call("set_validation", false, "该位置不可放置 offramp")
@@ -248,8 +248,7 @@ func _sync_selected_overlay_from_overlay() -> void:
 		return
 	if not _valid_anchors.has(p):
 		return
-	var info := _validate_anchor_and_get_info(p)
+	var info = _validate_anchor_and_get_info(p)
 	if info == null:
 		return
 	_set_selected_overlay(info)
-

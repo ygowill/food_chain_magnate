@@ -356,22 +356,97 @@ func _build_logs_dinnertime_sale(engine: GameEngine, _c: Dictionary) -> Result:
 
 	var state := engine.get_state()
 	_force_turn_order(state)
-	_apply_test_map_single_sale(state)
-	if state.players.size() > 1:
-		state.players[1]["restaurants"] = []
+	_apply_test_map_dinnertime_sale_complex(state)
+
+	var actor := state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("logs_dinnertime_sale: cannot resolve current player")
+
+	# Ensure employee-based bonuses:
+	# - waitress: tips + tiebreaker
+	# - cfo: income bonus (+50%)
+	# - fry_chef: per-house bonus (+$10)
+	var ensure_waitress := _ensure_employee(state, actor, "waitress", false, 2)
+	if not ensure_waitress.ok:
+		return ensure_waitress
+	var ensure_cfo := _ensure_employee(state, actor, "cfo", false, 1)
+	if not ensure_cfo.ok:
+		return ensure_cfo
+	var ensure_fry_chef := _ensure_employee(state, actor, "fry_chef", false, 2)
+	if not ensure_fry_chef.ok:
+		return ensure_fry_chef
+
+	# Seed milestone-based marketing bonuses (sell_bonus).
+	state.players[actor]["milestones"] = [
+		"first_burger_marketed",
+		"first_drink_marketed",
+		"first_pizza_marketed",
+	]
 
 	var houses: Dictionary = state.map.get("houses", {}) if (state.map is Dictionary) else {}
 	if not houses.has("h0") or not (houses["h0"] is Dictionary):
 		return Result.failure("logs_dinnertime_sale: test house missing (h0)")
-	var h: Dictionary = houses["h0"]
-	h["demands"] = [{"product": "burger"}]
-	houses["h0"] = h
+	if not houses.has("h1") or not (houses["h1"] is Dictionary):
+		return Result.failure("logs_dinnertime_sale: test house missing (h1)")
+	if not houses.has("h2") or not (houses["h2"] is Dictionary):
+		return Result.failure("logs_dinnertime_sale: test house missing (h2)")
+
+	# h0: garden + multiple products (food+drink) to cover garden bonus + marketing bonus.
+	var h0: Dictionary = houses["h0"]
+	h0["demands"] = [{"product": "burger"}, {"product": "beer"}]
+	h0["has_garden"] = true
+	houses["h0"] = h0
+
+	# h1: pizza to cover per-product marketing bonus.
+	var h1: Dictionary = houses["h1"]
+	h1["demands"] = [{"product": "pizza"}]
+	houses["h1"] = h1
+
+	# h2: soda sale by player 2 (also enables route purchase income split).
+	var h2: Dictionary = houses["h2"]
+	h2["demands"] = [{"product": "soda"}]
+	houses["h2"] = h2
+
 	state.map["houses"] = houses
+
+	# Keep cells structure in sync for garden visualization (optional, but avoids confusing state).
+	if state.map.has("cells") and (state.map["cells"] is Array) and h0.has("anchor_pos") and (h0["anchor_pos"] is Vector2i):
+		var p: Vector2i = h0["anchor_pos"]
+		var cells: Array = state.map["cells"]
+		if p.y >= 0 and p.y < cells.size() and (cells[p.y] is Array):
+			var row: Array = cells[p.y]
+			if p.x >= 0 and p.x < row.size() and (row[p.x] is Dictionary):
+				var cell: Dictionary = row[p.x]
+				var s_val = cell.get("structure", null)
+				if s_val is Dictionary:
+					var s: Dictionary = s_val
+					s["has_garden"] = true
+					cell["structure"] = s
+					row[p.x] = cell
+					cells[p.y] = row
+					state.map["cells"] = cells
+
+	# Inventory:
+	# - player 1 wins h0/h1 (food+drink, pizza)
+	# - player 2 wins h2 (soda) and sells coffee along the route to generate route_purchase_income
 	state.players[0]["inventory"]["burger"] = 1
+	state.players[0]["inventory"]["beer"] = 1
+	state.players[0]["inventory"]["pizza"] = 1
+	state.players[0]["inventory"]["soda"] = 0
+	state.players[0]["inventory"]["coffee"] = 0
+
+	if state.players.size() > 1:
+		state.players[1]["inventory"]["burger"] = 0
+		state.players[1]["inventory"]["beer"] = 0
+		state.players[1]["inventory"]["pizza"] = 0
+		state.players[1]["inventory"]["soda"] = 1
+		state.players[1]["inventory"]["coffee"] = 4
 
 	_freeze_engine_as_initial(engine)
 
-	# Advance to Payday: Dinnertime is auto-skipped, and FOOD_SOLD events are emitted when leaving Dinnertime.
+	# Advance to Payday: Dinnertime is auto-skipped. The Dinnertime settlement step should emit:
+	# - FOOD_SOLD first
+	# - PLAYER_CASH_CHANGED after
 	var to_payday := TestPhaseUtils.advance_until_phase(engine, "Payday", 60)
 	if not to_payday.ok:
 		return to_payday
@@ -717,4 +792,3 @@ func _logs_serialize_vec2i_array(points: Array) -> Array:
 			var v: Vector2i = p
 			out.append([v.x, v.y])
 	return out
-

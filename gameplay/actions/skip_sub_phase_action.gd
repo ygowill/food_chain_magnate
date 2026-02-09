@@ -123,23 +123,6 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 
 	# 阶段变化事件
 	if old_state.phase != new_state.phase:
-		if str(old_state.phase) == DefsClass.PHASE_DINNERTIME:
-			var report: Dictionary = {}
-			if old_state.round_state is Dictionary:
-				var v = Dictionary(old_state.round_state).get("dinnertime", null)
-				if v is Dictionary:
-					report = Dictionary(v).duplicate(true)
-			events.append({
-				"type": EventBus.EventType.DINNERTIME_REPORT,
-				"data": {
-					"round": old_state.round_number,
-					"from_phase": str(old_state.phase),
-					"to_phase": str(new_state.phase),
-					"report": report,
-				}
-			})
-			events.append_array(CommandRunnerClass.build_food_sold_events_from_dinnertime_report(old_state, report))
-
 		# Marketing 结算摘要：在离开 Marketing 时发射（便于 UI 日志从 EventBus.history 恢复）。
 		# issue_tracker #48: per board 1 log entry, with details in event data.
 		if str(old_state.phase) == DefsClass.PHASE_MARKETING:
@@ -157,6 +140,24 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 				"round": new_state.round_number
 			}
 			})
+
+		# Dinnertime 结算报告：在进入 Dinnertime 时发射（结算在 enter hook 运行，报告写入 new_state.round_state.dinnertime）。
+		if str(new_state.phase) == DefsClass.PHASE_DINNERTIME:
+			var report_dinnertime: Dictionary = {}
+			if new_state.round_state is Dictionary:
+				var v3 = Dictionary(new_state.round_state).get("dinnertime", null)
+				if v3 is Dictionary:
+					report_dinnertime = Dictionary(v3).duplicate(true)
+			events.append({
+				"type": EventBus.EventType.DINNERTIME_REPORT,
+				"data": {
+					"round": new_state.round_number,
+					"from_phase": str(old_state.phase),
+					"to_phase": str(new_state.phase),
+					"report": report_dinnertime,
+				}
+			})
+			events.append_array(CommandRunnerClass.build_food_sold_events_from_dinnertime_report(new_state, report_dinnertime))
 
 		# 回合开始事件
 		if old_state.round_number != new_state.round_number:

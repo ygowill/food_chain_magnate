@@ -26,9 +26,6 @@ static func build_phase_change_events(old_state: GameState, new_state: GameState
 		# 最终行动顺序落地事件（首轮 OrderOfBusiness auto finalize 依赖此事件用于日志显示/回放恢复）。
 		events.append_array(OrderOfBusinessEventsClass.build_turn_order_finalized_events(old_state, new_state))
 
-		# Dinnertime 结算报告：在离开 Dinnertime 时发射（便于 UI/日志按事件历史恢复，且不依赖当前 state）。
-		events.append_array(DinnertimeEventsClass.build_dinnertime_report_events(old_state, new_state))
-
 		# Payday 结算报告：在离开 Payday 时发射（PaydaySettlement 在 exit hook 运行，报告写入 new_state.round_state.payday）。
 		events.append_array(PaydayEventsClass.build_payday_report_events(old_state, new_state))
 
@@ -39,6 +36,9 @@ static func build_phase_change_events(old_state: GameState, new_state: GameState
 			events.append_array(MarketingEventsClass.build_marketing_expired_events(old_state))
 
 		events.append_array(PhaseEventsClass.build_phase_changed_events(old_state, new_state))
+
+		# Dinnertime 结算报告：在进入 Dinnertime 时发射（结算在 enter hook 运行，报告写入 new_state.round_state.dinnertime）。
+		events.append_array(DinnertimeEventsClass.build_dinnertime_report_events(old_state, new_state))
 
 		# Cleanup 库存丢弃：在进入 Cleanup 时发射（清理结算在 Cleanup:enter 运行）。
 		if str(new_state.phase) == DefsClass.PHASE_CLEANUP:

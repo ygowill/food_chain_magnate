@@ -52,7 +52,7 @@ const LOG_TYPE_COLORS: Dictionary = {
 
 const PHASE_DISPLAY_NAMES: Dictionary = {
 	DefsClass.PHASE_WORKING: "工作时间",
-	DefsClass.PHASE_DINNERTIME: "晚餐时间",
+	DefsClass.PHASE_DINNERTIME: "晚餐结算",
 	DefsClass.PHASE_SETUP: "开局设置",
 	DefsClass.PHASE_PAYDAY: "发薪日",
 	DefsClass.PHASE_MARKETING: "广告行动",

@@ -8,26 +8,26 @@ static func build_dinnertime_report_events(old_state: GameState, new_state: Game
 	var events: Array[Dictionary] = []
 	if old_state == null or new_state == null:
 		return events
-	if str(old_state.phase) != DefsClass.PHASE_DINNERTIME:
+	if str(new_state.phase) != DefsClass.PHASE_DINNERTIME:
 		return events
 	if str(old_state.phase) == str(new_state.phase):
 		return events
 
 	var report: Dictionary = {}
-	if old_state.round_state is Dictionary:
-		var v = Dictionary(old_state.round_state).get("dinnertime", null)
+	if new_state.round_state is Dictionary:
+		var v = Dictionary(new_state.round_state).get("dinnertime", null)
 		if v is Dictionary:
 			report = Dictionary(v).duplicate(true)
 	events.append({
 		"type": EventBus.EventType.DINNERTIME_REPORT,
 		"data": {
-			"round": old_state.round_number,
+			"round": new_state.round_number,
 			"from_phase": str(old_state.phase),
 			"to_phase": str(new_state.phase),
 			"report": report,
 		}
 	})
-	events.append_array(build_food_sold_events_from_dinnertime_report(old_state, report))
+	events.append_array(build_food_sold_events_from_dinnertime_report(new_state, report))
 	return events
 
 static func build_food_sold_events_from_dinnertime_report(dinnertime_state: GameState, report: Dictionary) -> Array[Dictionary]:

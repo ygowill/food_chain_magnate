@@ -117,6 +117,62 @@ func _apply_test_map_single_sale(state: GameState) -> void:
 	state.players[0]["restaurants"] = ["rest_0"]
 	_invalidate_road_graph(state)
 
+func _apply_test_map_dinnertime_sale_complex(state: GameState) -> void:
+	var grid_size := Vector2i(7, 5)
+	var cells := _build_empty_cells(grid_size)
+
+	for x in range(grid_size.x):
+		var dirs: Array = []
+		if x > 0:
+			dirs.append("W")
+		if x < grid_size.x - 1:
+			dirs.append("E")
+		_set_road_segment(cells, Vector2i(x, 3), dirs)
+
+	var rest_0_cells: Array[Vector2i] = [
+		Vector2i(0, 4), Vector2i(1, 4),
+		Vector2i(0, 3), Vector2i(1, 3),
+	]
+	_set_restaurant(cells, "rest_0", 0, rest_0_cells)
+
+	var rest_1_cells: Array[Vector2i] = [
+		Vector2i(3, 4), Vector2i(4, 4),
+		Vector2i(3, 3), Vector2i(4, 3),
+	]
+	_set_restaurant(cells, "rest_1", 1, rest_1_cells)
+
+	_set_house_1x1(cells, "h0", 1, Vector2i(6, 2))
+	_set_house_1x1(cells, "h1", 2, Vector2i(5, 2))
+	_set_house_1x1(cells, "h2", 3, Vector2i(2, 2))
+
+	state.map = {
+		"grid_size": grid_size,
+		"tile_grid_size": Vector2i(1, 1),
+		"cells": cells,
+		"houses": {
+			"h0": {"house_id": "h0", "house_number": 1, "anchor_pos": Vector2i(6, 2), "cells": [Vector2i(6, 2)], "has_garden": false, "is_apartment": false, "printed": false, "owner": -1, "demands": []},
+			"h1": {"house_id": "h1", "house_number": 2, "anchor_pos": Vector2i(5, 2), "cells": [Vector2i(5, 2)], "has_garden": false, "is_apartment": false, "printed": false, "owner": -1, "demands": []},
+			"h2": {"house_id": "h2", "house_number": 3, "anchor_pos": Vector2i(2, 2), "cells": [Vector2i(2, 2)], "has_garden": false, "is_apartment": false, "printed": false, "owner": -1, "demands": []},
+		},
+		"restaurants": {
+			"rest_0": {"restaurant_id": "rest_0", "owner": 0, "anchor_pos": Vector2i(0, 3), "entrance_pos": Vector2i(1, 3), "cells": rest_0_cells},
+			"rest_1": {"restaurant_id": "rest_1", "owner": 1, "anchor_pos": Vector2i(3, 3), "entrance_pos": Vector2i(4, 3), "cells": rest_1_cells},
+		},
+		"drink_sources": [],
+		"next_house_number": 4,
+		"next_restaurant_id": 2,
+		"boundary_index": {},
+		"marketing_placements": {},
+		# coffee module compatibility（route purchase provider requires coffee_shops to exist）
+		"coffee_shops": {},
+		"next_coffee_shop_id": 1,
+	}
+
+	state.players[0]["restaurants"] = ["rest_0"]
+	if state.players.size() > 1:
+		state.players[1]["restaurants"] = ["rest_1"]
+	_invalidate_road_graph(state)
+
 func _apply_test_map_pizza_sale(state: GameState) -> void:
 	var grid_size := Vector2i(5, 5) # 1 tile
 	var cells := _build_empty_cells(grid_size)
@@ -316,4 +372,3 @@ func _build_billboard_map_for_demand_marked() -> Dictionary:
 		"boundary_index": {},
 		"marketing_placements": {}
 	}
-

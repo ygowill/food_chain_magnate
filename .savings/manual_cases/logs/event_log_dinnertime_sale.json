@@ -1,7 +1,7 @@
 {
 	"checkpoints": [
 		{
-			"hash": "d5c379171bd5c50ea1bc4876f6b87de1",
+			"hash": "1b1654919a23b88b020970911f49f958",
 			"index": 0,
 			"rng_calls": 29
 		}
@@ -50,9 +50,9 @@
 			"timestamp": 1306
 		}
 	],
-	"created_at": "2026-01-22T20:46:21",
+	"created_at": "2026-02-09T00:42:04",
 	"current_index": 2,
-	"final_hash": "a04f5cbbf4f881054b6bcdc8926053ca",
+	"final_hash": "55ede7338c5d682409dc1eb9b3c2ee6f",
 	"game_version": "0.1.0",
 	"initial_state": {
 		"bank": {
@@ -64,21 +64,25 @@
 		},
 		"current_player_index": 0,
 		"employee_pool": {
+			"barista": 6,
+			"barista_trainee": 12,
 			"brand_director": 1,
 			"brand_manager": 6,
 			"burger_chef": 1,
 			"burger_cook": 6,
 			"campaign_manager": 6,
 			"cart_operator": 6,
-			"cfo": 1,
+			"cfo": 0,
 			"coach": 6,
 			"discount_manager": 1,
 			"errand_boy": 12,
 			"executive_vice_president": 1,
+			"fry_chef": 6,
 			"guru": 1,
 			"hr_director": 1,
 			"junior_vice_president": 1,
 			"kitchen_trainee": 12,
+			"lead_barista": 1,
 			"local_manager": 6,
 			"luxury_manager": 1,
 			"management_trainee": 18,
@@ -94,7 +98,7 @@
 			"trainer": 11,
 			"truck_driver": 6,
 			"vice_president": 1,
-			"waitress": 12,
+			"waitress": 10,
 			"zeppelin_pilot": 1
 		},
 		"map": {
@@ -142,32 +146,6 @@
 
 						},
 						"terrain_type": "empty"
-					}
-				],
-				[
-					{
-						"blocked": false,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty"
-					},
-					{
-						"blocked": false,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty"
-					},
-					{
-						"blocked": false,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty"
 					},
 					{
 						"blocked": false,
@@ -192,6 +170,84 @@
 						"road_segments": [],
 						"structure": {
 
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": "empty"
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+							"dynamic": true,
+							"has_garden": false,
+							"house_id": "h2",
+							"house_number": 3,
+							"piece_id": "house"
 						},
 						"terrain_type": "empty"
 					},
@@ -217,8 +273,8 @@
 						"structure": {
 							"dynamic": true,
 							"has_garden": false,
-							"house_id": "h0",
-							"house_number": 1,
+							"house_id": "h1",
+							"house_number": 2,
 							"piece_id": "house"
 						},
 						"terrain_type": "empty"
@@ -227,7 +283,11 @@
 						"blocked": false,
 						"road_segments": [],
 						"structure": {
-
+							"dynamic": true,
+							"has_garden": true,
+							"house_id": "h0",
+							"house_number": 1,
+							"piece_id": "house"
 						},
 						"terrain_type": "empty"
 					}
@@ -280,6 +340,42 @@
 						],
 						"structure": {
 
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [
+							{
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+							"dynamic": true,
+							"owner": 1,
+							"piece_id": "restaurant",
+							"restaurant_id": "rest_1"
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [
+							{
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+							"dynamic": true,
+							"owner": 1,
+							"piece_id": "restaurant",
+							"restaurant_id": "rest_1"
 						},
 						"terrain_type": "empty"
 					},
@@ -348,6 +444,28 @@
 						"blocked": false,
 						"road_segments": [],
 						"structure": {
+							"dynamic": true,
+							"owner": 1,
+							"piece_id": "restaurant",
+							"restaurant_id": "rest_1"
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
+							"dynamic": true,
+							"owner": 1,
+							"piece_id": "restaurant",
+							"restaurant_id": "rest_1"
+						},
+						"terrain_type": "empty"
+					},
+					{
+						"blocked": false,
+						"road_segments": [],
+						"structure": {
 
 						},
 						"terrain_type": "empty"
@@ -362,31 +480,83 @@
 					}
 				]
 			],
+			"coffee_shops": {
+
+			},
 			"drink_sources": [],
 			"grid_size": [
-				5,
+				7,
 				5
 			],
 			"houses": {
 				"h0": {
 					"anchor_pos": [
-						3,
+						6,
 						2
 					],
 					"cells": [
 						[
-							3,
+							6,
 							2
 						]
 					],
 					"demands": [
 						{
 							"product": "burger"
+						},
+						{
+							"product": "beer"
+						}
+					],
+					"has_garden": true,
+					"house_id": "h0",
+					"house_number": 1,
+					"is_apartment": false,
+					"owner": -1,
+					"printed": false
+				},
+				"h1": {
+					"anchor_pos": [
+						5,
+						2
+					],
+					"cells": [
+						[
+							5,
+							2
+						]
+					],
+					"demands": [
+						{
+							"product": "pizza"
 						}
 					],
 					"has_garden": false,
-					"house_id": "h0",
-					"house_number": 1,
+					"house_id": "h1",
+					"house_number": 2,
+					"is_apartment": false,
+					"owner": -1,
+					"printed": false
+				},
+				"h2": {
+					"anchor_pos": [
+						2,
+						2
+					],
+					"cells": [
+						[
+							2,
+							2
+						]
+					],
+					"demands": [
+						{
+							"product": "soda"
+						}
+					],
+					"has_garden": false,
+					"house_id": "h2",
+					"house_number": 3,
 					"is_apartment": false,
 					"owner": -1,
 					"printed": false
@@ -395,8 +565,9 @@
 			"marketing_placements": {
 
 			},
-			"next_house_number": 2,
-			"next_restaurant_id": 1,
+			"next_coffee_shop_id": 1,
+			"next_house_number": 4,
+			"next_restaurant_id": 2,
 			"restaurants": {
 				"rest_0": {
 					"anchor_pos": [
@@ -427,6 +598,36 @@
 					],
 					"owner": 0,
 					"restaurant_id": "rest_0"
+				},
+				"rest_1": {
+					"anchor_pos": [
+						3,
+						3
+					],
+					"cells": [
+						[
+							3,
+							4
+						],
+						[
+							4,
+							4
+						],
+						[
+							3,
+							3
+						],
+						[
+							4,
+							3
+						]
+					],
+					"entrance_pos": [
+						4,
+						3
+					],
+					"owner": 1,
+					"restaurant_id": "rest_1"
 				}
 			},
 			"tile_grid_size": [
@@ -463,7 +664,9 @@
 			"base_milestones",
 			"base_pieces",
 			"base_tiles",
-			"base_maps"
+			"base_maps",
+			"coffee",
+			"fry_chefs"
 		],
 		"phase": "Working",
 		"players": [
@@ -473,23 +676,35 @@
 				"can_peek_all_reserve_cards": false,
 				"cash": 0,
 				"ceo_cfo_ability_start_round": -1,
+				"coffee_shop_tokens_remaining": 3,
 				"company_structure": {
 					"ceo_slots": 3.0,
 					"structure": []
 				},
 				"drive_thru_active": false,
 				"employees": [
-					"ceo"
+					"ceo",
+					"waitress",
+					"waitress",
+					"cfo",
+					"fry_chef",
+					"fry_chef"
 				],
+				"forfeited": false,
 				"id": 0,
 				"inventory": {
-					"beer": 0,
+					"beer": 1,
 					"burger": 1,
+					"coffee": 0,
 					"lemonade": 0,
-					"pizza": 0,
+					"pizza": 1,
 					"soda": 0
 				},
-				"milestones": [],
+				"milestones": [
+					"first_burger_marketed",
+					"first_drink_marketed",
+					"first_pizza_marketed"
+				],
 				"multi_trainer_on_one": false,
 				"reserve_card_revealed": false,
 				"reserve_card_selected": 0,
@@ -511,7 +726,7 @@
 					}
 				],
 				"reserve_employees": [],
-				"restaurant_logo_id": 2,
+				"restaurant_logo_id": 4,
 				"restaurants": [
 					"rest_0"
 				]
@@ -522,6 +737,7 @@
 				"can_peek_all_reserve_cards": false,
 				"cash": 0,
 				"ceo_cfo_ability_start_round": -1,
+				"coffee_shop_tokens_remaining": 3,
 				"company_structure": {
 					"ceo_slots": 3.0,
 					"structure": []
@@ -530,13 +746,15 @@
 				"employees": [
 					"ceo"
 				],
+				"forfeited": false,
 				"id": 1,
 				"inventory": {
 					"beer": 0,
 					"burger": 0,
+					"coffee": 4,
 					"lemonade": 0,
 					"pizza": 0,
-					"soda": 0
+					"soda": 1
 				},
 				"milestones": [],
 				"multi_trainer_on_one": false,
@@ -560,8 +778,10 @@
 					}
 				],
 				"reserve_employees": [],
-				"restaurant_logo_id": 3,
-				"restaurants": []
+				"restaurant_logo_id": 0,
+				"restaurants": [
+					"rest_1"
+				]
 			}
 		],
 		"round_number": 1,
