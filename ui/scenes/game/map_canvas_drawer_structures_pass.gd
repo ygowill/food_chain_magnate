@@ -68,16 +68,16 @@ static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: A
 			draw_restaurant(canvas, cell_size, anchor, info, rect, 1.0, restaurant_logo_piece_ids)
 			continue
 
-			if piece_id == "highway_offramp":
-				draw_highway_offramp(canvas, rect, tex)
-				continue
+		if piece_id == "highway_offramp":
+			draw_highway_offramp(canvas, rect, tex, int(info.get("rotation", 0)))
+			continue
 
 		if piece_id == "house":
 			TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, rect, Color(1, 1, 1, 0.85), "bottom")
 		else:
 			canvas.draw_texture_rect(tex, rect, false, Color(1, 1, 1, 0.85))
 
-static func draw_highway_offramp(canvas, rect: Rect2, tex: Texture2D) -> void:
+static func draw_highway_offramp(canvas, rect: Rect2, tex: Texture2D, rotation_deg: int) -> void:
 	if canvas == null:
 		return
 	if tex == null:
@@ -92,16 +92,24 @@ static func draw_highway_offramp(canvas, rect: Rect2, tex: Texture2D) -> void:
 	if inner.size.x <= 1.0 or inner.size.y <= 1.0:
 		inner = rect
 
-	# Fill the inner rect (allow cropping); rotate when the footprint is vertical so the sign is readable.
+	# Fill the inner rect (allow cropping). Texture baseline faces East; map piece rotations:
+	# N=0/E=90/S=180/W=270 -> texture rotation should align with outward direction.
+	var rot := int(rotation_deg) % 360
+	if rot < 0:
+		rot += 360
+	if not rot in [0, 90, 180, 270]:
+		rot = 0
+	var tex_rot := (rot + 270) % 360
+
+	var center := inner.position + inner.size * 0.5
+	var local_size := inner.size
+	if tex_rot == 90 or tex_rot == 270:
+		local_size = Vector2(inner.size.y, inner.size.x)
+
 	var mod := Color(1, 1, 1, 1)
-	if inner.size.y > inner.size.x:
-		var center := inner.position + inner.size * 0.5
-		var swapped := Vector2(inner.size.y, inner.size.x)
-		canvas.draw_set_transform(center, deg_to_rad(90.0), Vector2.ONE)
-		TextureUtilsClass.draw_texture_aspect_fill(canvas, tex, Rect2(-swapped * 0.5, swapped), mod)
-		canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	else:
-		TextureUtilsClass.draw_texture_aspect_fill(canvas, tex, inner, mod)
+	canvas.draw_set_transform(center, deg_to_rad(float(tex_rot)), Vector2.ONE)
+	TextureUtilsClass.draw_texture_aspect_fill(canvas, tex, Rect2(-local_size * 0.5, local_size), mod)
+	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 static func draw_restaurant(
 	canvas,

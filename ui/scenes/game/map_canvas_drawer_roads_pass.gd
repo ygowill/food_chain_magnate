@@ -11,6 +11,12 @@ static func draw_roads(canvas, cell_size: int) -> void:
 		for x in range(canvas._grid_size.x):
 			var world_pos = canvas._world_origin + Vector2i(x, y)
 			var cell: Dictionary = canvas._get_cell_world(world_pos)
+			# Highway offramp: do not render its road segments (the offramp graphic handles visuals).
+			var structure_val = cell.get("structure", null)
+			if structure_val is Dictionary:
+				var structure: Dictionary = structure_val
+				if str(structure.get("piece_id", "")) == "highway_offramp":
+					continue
 			var segments_val = cell.get("road_segments", null)
 			if not (segments_val is Array):
 				continue
