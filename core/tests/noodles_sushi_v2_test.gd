@@ -14,16 +14,28 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r1.ok:
 		return r1
 
-	var r2 := _test_noodles_only_when_base_unavailable(seed_val)
+	var r2 := _test_sushi_production_then_replaces_all(seed_val)
 	if not r2.ok:
 		return r2
 
-	var r3 := _test_extra_luxury_manager_patch(seed_val)
+	var r3 := _test_sushi_insufficient_falls_back_to_base(seed_val)
 	if not r3.ok:
 		return r3
 
+	var r4 := _test_sushi_tiebreak_waitresses(seed_val)
+	if not r4.ok:
+		return r4
+
+	var r5 := _test_noodles_only_when_base_unavailable(seed_val)
+	if not r5.ok:
+		return r5
+
+	var r6 := _test_extra_luxury_manager_patch(seed_val)
+	if not r6.ok:
+		return r6
+
 	return Result.success({
-		"cases": 3,
+		"cases": 6,
 		"seed": seed_val,
 	})
 
@@ -85,6 +97,192 @@ static func _test_sushi_replaces_all_for_garden_house(seed_val: int) -> Result:
 	var s0: Dictionary = sales[0]
 	if str(s0.get("demand_variant_id", "")) != "sushi:replace_all":
 		return Result.failure("demand_variant_id 应为 sushi:replace_all，实际: %s" % str(s0.get("demand_variant_id", null)))
+
+	return Result.success()
+
+static func _test_sushi_production_then_replaces_all(seed_val: int) -> Result:
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"sushi",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := e.get_state()
+	_force_turn_order(state)
+	_apply_test_map(state)
+	_set_house_garden(state, "house_left", true)
+
+	# 花园房屋需求 2 个：先生产 2 sushi，再用 sushi 完全替代
+	_set_house_demands(state, "house_left", [{"product": "burger"}, {"product": "soda"}])
+	_set_house_demands(state, "house_right", [])
+
+	state.players[0]["inventory"]["burger"] = 2
+	state.players[0]["inventory"]["soda"] = 2
+	state.players[0]["inventory"]["sushi"] = 0
+
+	# 注入 1 张 sushi_cook（维持员工池守恒）
+	if int(state.employee_pool.get("sushi_cook", 0)) <= 0:
+		return Result.failure("员工池中没有 sushi_cook")
+	state.employee_pool["sushi_cook"] = int(state.employee_pool.get("sushi_cook", 0)) - 1
+	state.players[0]["employees"].append("sushi_cook")
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
+
+	var prod := e.execute_command(Command.create("produce_food", 0, {"employee_type": "sushi_cook"}))
+	if not prod.ok:
+		return Result.failure("produce_food(sushi_cook) 失败: %s" % prod.error)
+
+	state = e.get_state()
+	if int(state.players[0]["inventory"].get("sushi", 0)) != 2:
+		return Result.failure("sushi_cook 应生产 2 sushi，实际: %d" % int(state.players[0]["inventory"].get("sushi", 0)))
+
+	var adv := _advance_to_dinnertime(e)
+	if not adv.ok:
+		return adv
+
+	state = e.get_state()
+	if int(state.players[0]["inventory"].get("sushi", 0)) != 0:
+		return Result.failure("寿司库存应被扣减至 0，实际: %d" % int(state.players[0]["inventory"].get("sushi", 0)))
+	if int(state.players[0]["inventory"].get("burger", 0)) != 2:
+		return Result.failure("寿司替代不应消耗 burger，实际: %d" % int(state.players[0]["inventory"].get("burger", 0)))
+	if int(state.players[0]["inventory"].get("soda", 0)) != 2:
+		return Result.failure("寿司替代不应消耗 soda，实际: %d" % int(state.players[0]["inventory"].get("soda", 0)))
+
+	var dt: Dictionary = state.round_state.get("dinnertime", {})
+	var sales: Array = dt.get("sales", [])
+	if sales.is_empty():
+		return Result.failure("应存在 1 条 sale 记录")
+	var s0: Dictionary = sales[0]
+	if str(s0.get("demand_variant_id", "")) != "sushi:replace_all":
+		return Result.failure("demand_variant_id 应为 sushi:replace_all，实际: %s" % str(s0.get("demand_variant_id", null)))
+
+	return Result.success()
+
+static func _test_sushi_insufficient_falls_back_to_base(seed_val: int) -> Result:
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"sushi",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := e.get_state()
+	_force_turn_order(state)
+	_apply_test_map(state)
+	_set_house_garden(state, "house_left", true)
+
+	# 需求 2 个：restaurant 必须能提供 2 sushi 才能替代；
+	# 若所有 restaurant 都寿司不足，应回退到 base（且不允许“部分寿司 + 部分原需求”混合成交）。
+	_set_house_demands(state, "house_left", [{"product": "burger"}, {"product": "soda"}])
+	_set_house_demands(state, "house_right", [])
+
+	# 玩家0：寿司不足且 base 也无法满足
+	state.players[0]["inventory"]["sushi"] = 1
+	state.players[0]["inventory"]["burger"] = 0
+	state.players[0]["inventory"]["soda"] = 0
+
+	# 玩家1：满足 base，但无寿司
+	state.players[1]["inventory"]["sushi"] = 0
+	state.players[1]["inventory"]["burger"] = 1
+	state.players[1]["inventory"]["soda"] = 1
+
+	var adv := _advance_to_dinnertime(e)
+	if not adv.ok:
+		return adv
+
+	state = e.get_state()
+	var dt: Dictionary = state.round_state.get("dinnertime", {})
+	var sales: Array = dt.get("sales", [])
+	if sales.is_empty():
+		return Result.failure("应存在 1 条 sale 记录")
+	var s0: Dictionary = sales[0]
+	if str(s0.get("demand_variant_id", "")) != "base":
+		return Result.failure("寿司不足时应回退 base，实际 demand_variant_id=%s" % str(s0.get("demand_variant_id", null)))
+	if int(s0.get("winner_owner", -1)) != 1:
+		return Result.failure("回退 base 时应由玩家1 成交（玩家0 无 base 库存），实际: %s" % str(s0.get("winner_owner", null)))
+	var required: Dictionary = s0.get("required", {})
+	if int(required.get("burger", 0)) != 1 or int(required.get("soda", 0)) != 1:
+		return Result.failure("base 成交 required 应为 burger=1,soda=1，实际: %s" % str(required))
+
+	if int(state.players[0]["inventory"].get("sushi", 0)) != 1:
+		return Result.failure("回退 base 不应消耗玩家0 的 sushi，实际: %d" % int(state.players[0]["inventory"].get("sushi", 0)))
+	if int(state.players[1]["inventory"].get("burger", 0)) != 0 or int(state.players[1]["inventory"].get("soda", 0)) != 0:
+		return Result.failure("base 成交应消耗玩家1 的 burger/soda，实际 inv=%s" % str(state.players[1]["inventory"]))
+
+	return Result.success()
+
+static func _test_sushi_tiebreak_waitresses(seed_val: int) -> Result:
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"sushi",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := e.get_state()
+	_force_turn_order(state)
+	_apply_tiebreak_map(state)
+	_set_house_garden(state, "house_mid", true)
+
+	_set_house_demands(state, "house_mid", [{"product": "burger"}, {"product": "soda"}])
+
+	# 两家餐厅寿司都足够：用常规规则平局裁决
+	state.players[0]["inventory"]["sushi"] = 2
+	state.players[1]["inventory"]["sushi"] = 2
+
+	# player0 多 1 个 waitress，应胜出（平局规则：waitresses -> turn order）
+	if int(state.employee_pool.get("waitress", 0)) <= 0:
+		return Result.failure("员工池中没有 waitress")
+	state.employee_pool["waitress"] = int(state.employee_pool.get("waitress", 0)) - 1
+	state.players[0]["employees"].append("waitress")
+
+	var adv := _advance_to_dinnertime(e)
+	if not adv.ok:
+		return adv
+
+	state = e.get_state()
+	var dt: Dictionary = state.round_state.get("dinnertime", {})
+	var sales: Array = dt.get("sales", [])
+	if sales.is_empty():
+		return Result.failure("应存在 1 条 sale 记录")
+	var s0: Dictionary = sales[0]
+	if str(s0.get("demand_variant_id", "")) != "sushi:replace_all":
+		return Result.failure("demand_variant_id 应为 sushi:replace_all，实际: %s" % str(s0.get("demand_variant_id", null)))
+	if int(s0.get("winner_owner", -1)) != 0:
+		return Result.failure("平局应由 waitress 更多的玩家0 获胜，实际 winner_owner=%s" % str(s0.get("winner_owner", null)))
+
+	if int(state.players[0]["inventory"].get("sushi", 0)) != 0:
+		return Result.failure("玩家0 sushi 应被扣减至 0，实际: %d" % int(state.players[0]["inventory"].get("sushi", 0)))
+	if int(state.players[1]["inventory"].get("sushi", 0)) != 2:
+		return Result.failure("玩家1 sushi 不应被消耗，实际: %d" % int(state.players[1]["inventory"].get("sushi", 0)))
 
 	return Result.success()
 
@@ -332,6 +530,80 @@ static func _apply_test_map(state: GameState) -> void:
 		},
 		"drink_sources": [],
 		"next_house_number": 3,
+		"next_restaurant_id": 2,
+		"boundary_index": {},
+		"marketing_placements": {}
+	}
+
+	state.players[0]["restaurants"] = ["rest_0"]
+	state.players[1]["restaurants"] = ["rest_1"]
+	RoadGraphCacheClass.invalidate_road_graph(state)
+
+static func _apply_tiebreak_map(state: GameState) -> void:
+	# 仅用于测试平局裁决：将 tile_grid_size 设为 1x1，使 distance 固定为 0
+	var grid_size := Vector2i(7, 5)
+	var cells := _build_empty_cells(grid_size)
+
+	for x in range(grid_size.x):
+		var dirs: Array = []
+		if x > 0:
+			dirs.append("W")
+		if x < grid_size.x - 1:
+			dirs.append("E")
+		_set_road_segment(cells, Vector2i(x, 2), dirs)
+
+	var house_cells: Array[Vector2i] = [
+		Vector2i(2, 0), Vector2i(3, 0),
+		Vector2i(2, 1), Vector2i(3, 1),
+	]
+	_set_house(cells, "house_mid", 1, house_cells, false)
+
+	var rest0_cells: Array[Vector2i] = [
+		Vector2i(0, 3), Vector2i(1, 3),
+		Vector2i(0, 4), Vector2i(1, 4),
+	]
+	var rest1_cells: Array[Vector2i] = [
+		Vector2i(5, 3), Vector2i(6, 3),
+		Vector2i(5, 4), Vector2i(6, 4),
+	]
+	_set_restaurant(cells, "rest_0", 0, rest0_cells)
+	_set_restaurant(cells, "rest_1", 1, rest1_cells)
+
+	state.map = {
+		"grid_size": grid_size,
+		"tile_grid_size": Vector2i(1, 1),
+		"cells": cells,
+		"houses": {
+			"house_mid": {
+				"house_id": "house_mid",
+				"house_number": 1,
+				"anchor_pos": Vector2i(2, 0),
+				"cells": house_cells,
+				"has_garden": false,
+				"is_apartment": false,
+				"printed": false,
+				"owner": -1,
+				"demands": []
+			},
+		},
+		"restaurants": {
+			"rest_0": {
+				"restaurant_id": "rest_0",
+				"owner": 0,
+				"anchor_pos": Vector2i(0, 3),
+				"entrance_pos": Vector2i(0, 3),
+				"cells": rest0_cells,
+			},
+			"rest_1": {
+				"restaurant_id": "rest_1",
+				"owner": 1,
+				"anchor_pos": Vector2i(5, 3),
+				"entrance_pos": Vector2i(6, 3),
+				"cells": rest1_cells,
+			},
+		},
+		"drink_sources": [],
+		"next_house_number": 2,
 		"next_restaurant_id": 2,
 		"boundary_index": {},
 		"marketing_placements": {}
