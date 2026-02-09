@@ -62,12 +62,14 @@ func _get_demand_variants(_state: GameState, _house_id: String, house: Dictionar
 	})
 
 	# 2) Kimchi + noodles（仅当 base 无法成交时才会走到这里，所以 rank 必须在 base 之后、noodles 之前）
-	# 说明：面条是 fallback 规则，不应在 base 可成交时被优先。
+	# 说明：在多模块交互（Sushi/Kimchi/Noodles）中，优先级为：
+	#  - Kimchi+Sushi > Kimchi+Base > Kimchi+Noodles > Sushi > Base > Noodles
+	# 因此 Kimchi+Noodles 需要排在 Sushi 与 Base 之前，但仍低于 Kimchi+Base。
 	var total := DemandVariantHelpersClass.sum_required_counts(base_required)
 	if total > 0 and ProductRegistry.has("noodles"):
 		out.append({
 			"id": "%s:kimchi_plus_noodles" % MODULE_ID,
-			"rank": 80,
+			"rank": 20,
 			"required": {
 				"noodles": total,
 				PRODUCT_ID: 1,
