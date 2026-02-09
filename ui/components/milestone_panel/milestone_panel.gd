@@ -372,7 +372,7 @@ func _describe_effect_dict(effect_type: String, effect: Dictionary) -> String:
 				return "电波营销：每房屋放置2个需求（而非1个）"
 			return "营销强化"
 		"ketchup_active":
-			return "晚餐选店距离-1"
+			return "晚餐选店距离-1（允许为负数）"
 		"train_from_active_same_color":
 			return "培训：允许从在职员工培训（同色限制）"
 		"salary_pay_with_tokens":
@@ -404,7 +404,7 @@ func _describe_effect_id(effect_id: String) -> String:
 				return "晚餐收入：CFO 加成 +%d%%（向上取整）" % percent
 			return "晚餐收入：CFO 加成（向上取整）"
 		"ketchup_mechanism:dinnertime:distance_delta:ketchup":
-			return "晚餐选店距离-1"
+			return "晚餐选店距离-1（允许为负数）"
 		"new_milestones:dinnertime:distance_delta:first_marketeer_used":
 			return "晚餐选店距离-2（允许为负数）"
 		"new_milestones:marketing:demand_cash:first_marketeer_used":

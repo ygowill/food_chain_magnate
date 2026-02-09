@@ -176,8 +176,18 @@ static func apply_cleanup_milestones(state: GameState) -> Result:
 	var claimed: Dictionary = claimed_val
 
 	var claimed_ids: Array[String] = []
+	var claimed_remove_counts := {}  # milestone_id -> copies to remove
 	for k in claimed.keys():
-		claimed_ids.append(str(k))
+		var mid := str(k)
+		if mid.is_empty():
+			continue
+		claimed_ids.append(mid)
+		var list_val = claimed.get(k, [])
+		if list_val is Array:
+			claimed_remove_counts[mid] = maxi(1, Array(list_val).size())
+		else:
+			# 容错：结构异常时按 1 份处理（避免阻塞回合推进）
+			claimed_remove_counts[mid] = 1
 	claimed_ids.sort()
 
 	var expired_ids: Array[String] = []
@@ -190,29 +200,36 @@ static func apply_cleanup_milestones(state: GameState) -> Result:
 			expired_ids.append(milestone_id)
 	expired_ids.sort()
 
-	var remove_set := {}
-	for mid in claimed_ids:
-		remove_set[mid] = true
-	for mid in expired_ids:
-		remove_set[mid] = true
-
-	if remove_set.is_empty():
+	if claimed_remove_counts.is_empty() and expired_ids.is_empty():
 		return Result.success()
+
+	var expired_set := {}
+	for mid in expired_ids:
+		expired_set[mid] = true
 
 	var remaining: Array[String] = []
 	var removed: Array[String] = []
+	var removed_claimed_counts := {}  # milestone_id -> removed copies
 	for mid in state.milestone_pool:
 		var milestone_id := str(mid)
-		if remove_set.has(milestone_id):
+		if expired_set.has(milestone_id):
 			removed.append(milestone_id)
-		else:
-			remaining.append(milestone_id)
+			continue
+		if claimed_remove_counts.has(milestone_id):
+			var left: int = int(claimed_remove_counts.get(milestone_id, 0))
+			if left > 0:
+				removed.append(milestone_id)
+				claimed_remove_counts[milestone_id] = left - 1
+				removed_claimed_counts[milestone_id] = int(removed_claimed_counts.get(milestone_id, 0)) + 1
+				continue
+		remaining.append(milestone_id)
 
 	state.milestone_pool = remaining
 
 	state.round_state["cleanup_milestones"] = {
 		"removed": removed,
 		"removed_claimed": claimed_ids,
+		"removed_claimed_counts": removed_claimed_counts,
 		"removed_expired": expired_ids
 	}
 

@@ -404,6 +404,10 @@ func _run_all() -> int:
 									"fn": func() -> Result: return TestRefs.StepTimelineCleanupDiscardOrderTestClass.run(12345),
 								},
 								{
+									"name": "StepTimelineKetchupMilestoneOrderTest",
+									"fn": func() -> Result: return TestRefs.StepTimelineKetchupMilestoneOrderTestClass.run(12345),
+								},
+								{
 									"name": "ReplayLogFutureVisibilityTest",
 									"fn": func() -> Result: return TestRefs.ReplayLogFutureVisibilityTestClass.run(2, 12345, 12),
 								},

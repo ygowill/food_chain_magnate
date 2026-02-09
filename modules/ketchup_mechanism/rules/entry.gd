@@ -35,7 +35,12 @@ func _effect_distance_minus_one(_state: GameState, _player_id: int, ctx: Diction
 	if not ctx.has("distance") or not (ctx["distance"] is int):
 		return Result.failure("ketchup_mechanism:distance_delta: ctx.distance 缺失或类型错误（期望 int）")
 	var dist: int = int(ctx["distance"])
-	ctx["distance"] = maxi(0, dist - 1)
+	# 对齐规则书：晚餐选店时使用 (unit_price + distance - 1)，且可与 new_milestones 的距离修正叠加。
+	# 通过 dist_ctx.allow_negative 支持负数距离（同 first_marketeer_used）。
+	if ctx.has("allow_negative") and not (ctx["allow_negative"] is bool):
+		return Result.failure("ketchup_mechanism:distance_delta: ctx.allow_negative 类型错误（期望 bool）")
+	ctx["allow_negative"] = true
+	ctx["distance"] = dist - 1
 	return Result.success()
 
 func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -> Result:
@@ -57,24 +62,35 @@ func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -
 	if events.is_empty():
 		return Result.success()
 
-	# 触发频率：只处理一次（取事件序列中的第一条，保证确定性）
-	var first_val = events[0]
-	if not (first_val is Dictionary):
-		return Result.success()
-	var first: Dictionary = first_val
-	var from_val = first.get("from_player", null)
-	if not (from_val is int):
-		return Result.success()
-	var from_player: int = int(from_val)
-	if from_player < 0 or from_player >= state.players.size():
-		return Result.failure("ketchup_mechanism: from_player 越界: %d" % from_player)
+	# 同一晚餐可能有多名玩家的需求被“他人售出”（同一房屋多名 marketeer / 多个房屋）。
+	# 里程碑最多每名玩家获得一次；按 player_id 去重并确定性排序后逐个触发。
+	var unique_from_players := {}
+	for e_val in events:
+		if not (e_val is Dictionary):
+			continue
+		var e: Dictionary = e_val
+		var from_val = e.get("from_player", null)
+		if not (from_val is int):
+			continue
+		var from_player: int = int(from_val)
+		if from_player < 0 or from_player >= state.players.size():
+			return Result.failure("ketchup_mechanism: from_player 越界: %d" % from_player)
+		unique_from_players[from_player] = true
 
-	var r := MilestoneSystemClass.process_event(state, "KetchupSoldDemand", {
-		"player_id": from_player,
-		"milestone_id": MILESTONE_ID,
-	})
-	if not r.ok:
-		return r
+	if unique_from_players.is_empty():
+		return Result.success()
+
+	var from_players: Array[int] = []
+	for k in unique_from_players.keys():
+		from_players.append(int(k))
+	from_players.sort()
+
+	for from_player in from_players:
+		var r := MilestoneSystemClass.process_event(state, "KetchupSoldDemand", {
+			"player_id": from_player,
+			"milestone_id": MILESTONE_ID,
+		})
+		if not r.ok:
+			return r
 
 	return Result.success()
-
