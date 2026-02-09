@@ -75,6 +75,36 @@ if [[ $needs_cache_refresh -eq 1 ]]; then
 		}
 fi
 
+# Godot runtime loads imported resources from `.godot/imported/*.ctex`. When new `.import` metadata files
+# are added to the repo (e.g. new product icons), the corresponding `.ctex` may be missing in fresh
+# checkouts, causing `load("res://...png")` to fail in headless tests. Ensure imports are up to date.
+IMPORT_LOG="$LOG_DIR/_import.log"
+needs_import=0
+missing_import_path=""
+while IFS= read -r line; do
+	# line format: <file>.import:path="res://.godot/imported/<hash>.ctex"
+	import_path="${line#*path=\"}"
+	import_path="${import_path%\"*}"
+	local_path="${import_path#res://}"
+	if [[ -n "$local_path" && ! -f "$PROJECT_PATH/$local_path" ]]; then
+		needs_import=1
+		missing_import_path="$import_path"
+		break
+	fi
+done < <(grep -R --line-number '^path="res://.godot/imported/' "$PROJECT_PATH" \
+	--include='*.import' --exclude-dir='.godot' --exclude-dir='.tmp_home' 2>/dev/null || true)
+
+if [[ $needs_import -eq 1 ]]; then
+	: > "$IMPORT_LOG"
+	echo "[$NAME] INFO importing project assets (missing: ${missing_import_path:-unknown})"
+	HOME="$HOME_DIR" godot --headless --import --path "$PROJECT_PATH" --log-file "$IMPORT_LOG" >/dev/null 2>&1 || {
+		echo "[$NAME] FAIL import failed"
+		echo "[$NAME] LOG TAIL (last 120 lines)"
+		tail -n 120 "$IMPORT_LOG" 2>/dev/null || true
+		exit 1
+	}
+fi
+
 : > "$LOG_FILE"
 
 echo "[$NAME] START scene=$SCENE timeout=${TIMEOUT_SECONDS}s log=$LOG_FILE"
