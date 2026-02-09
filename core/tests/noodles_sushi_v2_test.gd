@@ -30,12 +30,16 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r5.ok:
 		return r5
 
-	var r6 := _test_extra_luxury_manager_patch(seed_val)
+	var r6 := _test_noodles_not_used_when_base_available(seed_val)
 	if not r6.ok:
 		return r6
 
+	var r7 := _test_extra_luxury_manager_patch(seed_val)
+	if not r7.ok:
+		return r7
+
 	return Result.success({
-		"cases": 6,
+		"cases": 7,
 		"seed": seed_val,
 	})
 
@@ -337,6 +341,68 @@ static func _test_noodles_only_when_base_unavailable(seed_val: int) -> Result:
 	var s0: Dictionary = sales[0]
 	if str(s0.get("demand_variant_id", "")) != "noodles:replace_all":
 		return Result.failure("demand_variant_id 应为 noodles:replace_all，实际: %s" % str(s0.get("demand_variant_id", null)))
+
+	return Result.success()
+
+static func _test_noodles_not_used_when_base_available(seed_val: int) -> Result:
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"noodles",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := e.get_state()
+	_force_turn_order(state)
+	_apply_test_map(state)
+
+	# base demand 可成交时，房屋应始终优先选择“原有需求”，而不是 noodles（即使 noodles 的 score 更好）
+	_set_house_demands(state, "house_left", [{"product": "burger"}, {"product": "soda"}])
+	_set_house_demands(state, "house_right", [])
+
+	# 玩家1（更远）可满足 base；玩家0（更近）仅有 noodles
+	state.players[0]["inventory"]["burger"] = 0
+	state.players[0]["inventory"]["soda"] = 0
+	state.players[0]["inventory"]["noodles"] = 2
+
+	state.players[1]["inventory"]["burger"] = 1
+	state.players[1]["inventory"]["soda"] = 1
+	state.players[1]["inventory"]["noodles"] = 0
+
+	var adv := _advance_to_dinnertime(e)
+	if not adv.ok:
+		return adv
+
+	state = e.get_state()
+	var cash1: int = int(state.players[1].get("cash", 0))
+	if cash1 != 20:
+		return Result.failure("base 成交应使玩家1 获得 20，实际: %d" % cash1)
+	if int(state.players[0].get("cash", 0)) != 0:
+		return Result.failure("玩家0 不应售出，现金应为 0，实际: %d" % int(state.players[0].get("cash", 0)))
+
+	if int(state.players[1]["inventory"].get("burger", 0)) != 0 or int(state.players[1]["inventory"].get("soda", 0)) != 0:
+		return Result.failure("base 成交应扣减 burger+soda，实际 inv=%s" % str(state.players[1]["inventory"]))
+	if int(state.players[0]["inventory"].get("noodles", 0)) != 2:
+		return Result.failure("base 成交时 noodles 不应被消耗，实际: %d" % int(state.players[0]["inventory"].get("noodles", 0)))
+
+	var dt: Dictionary = state.round_state.get("dinnertime", {})
+	var sales: Array = dt.get("sales", [])
+	if sales.is_empty():
+		return Result.failure("应存在 1 条 sale 记录")
+	var s0: Dictionary = sales[0]
+	if str(s0.get("demand_variant_id", "")) != "base":
+		return Result.failure("demand_variant_id 应为 base，实际: %s" % str(s0.get("demand_variant_id", null)))
+	if int(s0.get("winner_owner", -1)) != 1:
+		return Result.failure("winner_owner 应为 1，实际: %s" % str(s0.get("winner_owner", null)))
 
 	return Result.success()
 
