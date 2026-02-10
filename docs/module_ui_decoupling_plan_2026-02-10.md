@@ -52,11 +52,11 @@
 已消除：
 
 - `ui/components/modal_panel/fridge_keep_modal.gd`：已移除对 `modules/base_rules` 的 `preload`（改用 `core/rules/milestone_effect_queries.gd` 查询 `gain_fridge`）
+- `ui/scenes/game/map_canvas_drawer_roads_pass.gd`：已移除对 `modules/lobbyists/road_overlays.gd` 的 `preload`（改用本地 key 常量）
+- `ui/scenes/game/map_canvas_drawer_structures_pass.gd`：已移除对 `modules/lobbyists/road_overlays.gd` 的 `preload`（overlay 定义暂存于 UI 常量）
 
 仍待消除：
 
-- `ui/scenes/game/map_canvas_drawer_roads_pass.gd`：`preload("res://modules/lobbyists/road_overlays.gd")`
-- `ui/scenes/game/map_canvas_drawer_structures_pass.gd`：`preload("res://modules/lobbyists/road_overlays.gd")`
 - `ui/scenes/setup/game_setup.gd`：写死 base_pieces logo 贴图路径（多条 `res://modules/base_pieces/...png`）
 
 ### 2.2 UI 生产代码中 `res://modules` base_dir 回退（建议收口）
@@ -155,21 +155,27 @@
 
 ### P0-2) 地图绘制 pass preload `modules/lobbyists/road_overlays.gd`（硬引用）
 
+- **状态**
+  - ✅ 已完成（2026-02-10）
 - **涉及位置**
   - `ui/scenes/game/map_canvas_drawer_roads_pass.gd`
   - `ui/scenes/game/map_canvas_drawer_structures_pass.gd`
 - **问题定义**
   - 核心 UI 地图渲染编译期依赖 lobbyists 模块脚本。
 - **迁移/解耦目标**
-  - 渲染层只消费“通用 overlay 指令”，不引用模块脚本/常量。
-- **接口形态**
-  - `MapOverlayProviderRegistry`：provider 输出统一结构，例如：
-    - markers：`{id, positions, texture_key/piece_id, z, alpha}`
-    - roads overlay：`{id, segments_by_pos, render_hints}`
-- **实施步骤（建议）**
-  1. 定义 overlay 指令 schema（只包含 UI 需要的信息）。
-  2. lobbyists 模块实现 provider：把 `pending_roads/roadworks_markers` 等私有结构转换为指令。
-  3. 绘制 pass 改为读取 registry 输出并绘制。
+  - 先清零编译期硬依赖：渲染层不再 `preload("res://modules/lobbyists/road_overlays.gd")`。
+  - 后续进一步解耦：渲染层只消费“通用 overlay 指令”，不读模块私有 key/前缀。
+- **已实施改动**
+  - 移除两处 `preload("res://modules/lobbyists/road_overlays.gd")`
+  - `map_canvas_drawer_roads_pass.gd`：使用本地 key 常量读取 pending_roads / roadworks_markers
+  - `map_canvas_drawer_structures_pass.gd`：将 `ROAD_OVERLAYS` 定义暂存为本地常量，避免依赖模块脚本
+- **新增/补充测试**
+  - `ui/scenes/tests/ui_lobbyists_road_overlays_hard_ref_contract_test.gd`（扫描 `ui/**` 生产代码，确保不再出现硬引用字符串）
+- **验收结果**
+  - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
+- **后续（可选优化）**
+  - 引入 `MapOverlayProviderRegistry`，让 lobbyists 模块把私有结构（pending_roads/roadworks_markers）转换为通用 overlay 指令，核心 UI 只负责绘制。
 - **验收标准**
   - `rg -n 'res://modules/lobbyists/' ui --glob '!ui/scenes/tests/**'` 仅剩模块 UI 测试或 0（目标：生产 UI 为 0）。
 

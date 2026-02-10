@@ -14,6 +14,7 @@ const SixPlayersSetupTestClass = preload("res://core/tests/six_players_setup_tes
 const PaydaySalaryTokenEligibilityTestClass = preload("res://core/tests/payday_salary_token_eligibility_test.gd")
 const CallbackResultContractTestClass = preload("res://core/tests/callback_result_contract_test.gd")
 const ModuleBoundaryContractTestClass = preload("res://core/tests/module_boundary_contract_test.gd")
+const UiLobbyistsRoadOverlaysHardRefContractTestClass = preload("res://ui/scenes/tests/ui_lobbyists_road_overlays_hard_ref_contract_test.gd")
 const OnlineRoomManagerTestClass = preload("res://core/tests/online_room_manager_test.gd")
 const OnlineRoomListTestClass = preload("res://core/tests/online_room_list_test.gd")
 const OnlineStartGameReplayTestClass = preload("res://core/tests/online_start_game_replay_test.gd")

@@ -84,6 +84,10 @@ func _run_all() -> int:
 			"fn": func() -> Result: return TestRefs.ModuleBoundaryContractTestClass.run(),
 		},
 		{
+			"name": "UiLobbyistsRoadOverlaysHardRefContractTest",
+			"fn": func() -> Result: return TestRefs.UiLobbyistsRoadOverlaysHardRefContractTestClass.run(),
+		},
+		{
 			"name": "OnlineRoomManagerTest",
 			"fn": func() -> Result: return TestRefs.OnlineRoomManagerTestClass.run(),
 		},

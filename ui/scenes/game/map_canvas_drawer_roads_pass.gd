@@ -2,8 +2,8 @@
 extends RefCounted
 
 const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
-const LobbyistsRoadOverlaysClass = preload("res://modules/lobbyists/road_overlays.gd")
-const LOBBYISTS_ROADWORK_MARKERS_KEY := LobbyistsRoadOverlaysClass.ROADWORK_MARKERS_KEY
+const LOBBYISTS_PENDING_ROADS_KEY := "lobbyists_pending_roads"
+const LOBBYISTS_ROADWORK_MARKERS_KEY := "lobbyists_roadworks_markers"
 
 static func draw_roads(canvas, cell_size: int) -> void:
 	var pending_extra_dirs := build_lobbyists_pending_road_connection_dirs(canvas)
@@ -100,7 +100,7 @@ static func build_lobbyists_pending_road_connection_dirs(canvas) -> Dictionary:
 	if not (canvas._map_data is Dictionary):
 		return {}
 	var map_data: Dictionary = canvas._map_data
-	var pending_val = map_data.get(LobbyistsRoadOverlaysClass.PENDING_ROADS_KEY, null)
+	var pending_val = map_data.get(LOBBYISTS_PENDING_ROADS_KEY, null)
 	if not (pending_val is Array):
 		return {}
 	var pending: Array = pending_val
