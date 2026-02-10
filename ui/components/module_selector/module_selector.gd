@@ -14,17 +14,17 @@ signal load_failed(message: String)
 const MODULE_GROUPS: Array[Dictionary] = [
 	{
 		"id": "map_expansion",
-		"title": "地图扩展（新城区/说客/咖啡）",
+		"title": "地图变体",
 		"modules": ["new_districts", "lobbyists", "coffee"],
 	},
 	{
 		"id": "food_and_chefs",
-		"title": "新菜系/厨师",
+		"title": "菜系变体",
 		"modules": ["kimchi", "sushi", "noodles", "fry_chefs"],
 	},
 	{
 		"id": "marketing_expansion",
-		"title": "营销扩展",
+		"title": "营销变体",
 		"modules": ["mass_marketeers", "rural_marketeers", "gourmet_food_critics"],
 	},
 	{
