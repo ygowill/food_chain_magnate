@@ -7,22 +7,33 @@ extends CanvasLayer
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeDefClass = preload("res://core/data/employee_def.gd")
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
+const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
+const MilestoneDefClass = preload("res://core/data/milestone_def.gd")
+const MilestonePanelClass = preload("res://ui/components/milestone_panel/milestone_panel.gd")
+const MilestonePreviewCardClass = preload("res://ui/components/milestone_panel/milestone_preview_card.gd")
 
 @onready var panel: PanelContainer = $PreviewPanel
 @onready var card_host: Control = $PreviewPanel/MarginContainer/CardHost
 @onready var margin: MarginContainer = $PreviewPanel/MarginContainer
 
-var _show_delay: float = 0.18
-var _hide_delay: float = 0.05
+enum PreviewKind {
+	EMPLOYEE,
+	MILESTONE,
+}
+
+var _show_delay: float = 0.10
+var _hide_delay: float = 0.02
 
 var _show_timer: Timer = null
 var _hide_timer: Timer = null
 
-var _current_employee_id: String = ""
+var _current_id: String = ""
+var _current_kind: int = PreviewKind.EMPLOYEE
 var _pending_position: Vector2 = Vector2.ZERO
 var _is_visible: bool = false
 
 var _card: EmployeeCard = null
+var _milestone_formatter: MilestonePanel = null
 
 func _ready() -> void:
 	add_to_group("employee_card_preview_manager")
@@ -61,33 +72,53 @@ func request_preview(employee_id: String, position: Vector2) -> void:
 	if eid.is_empty():
 		hide_preview()
 		return
-
-	_hide_timer.stop()
-
-	_pending_position = position
-	_update_position(_pending_position)
-
-	if _is_visible and eid == _current_employee_id:
-		return
-
-	_current_employee_id = eid
-	_show_timer.stop()
-	_show_timer.start(_show_delay)
+	_request(PreviewKind.EMPLOYEE, eid, position)
 
 func show_immediate(employee_id: String, position: Vector2) -> void:
 	var eid := str(employee_id).strip_edges()
 	if eid.is_empty():
 		hide_preview()
 		return
+	_show_immediate(PreviewKind.EMPLOYEE, eid, position)
 
-	_current_employee_id = eid
+func request_milestone_preview(milestone_id: String, position: Vector2) -> void:
+	var mid := str(milestone_id).strip_edges()
+	if mid.is_empty():
+		hide_preview()
+		return
+	_request(PreviewKind.MILESTONE, mid, position)
+
+func show_milestone_immediate(milestone_id: String, position: Vector2) -> void:
+	var mid := str(milestone_id).strip_edges()
+	if mid.is_empty():
+		hide_preview()
+		return
+	_show_immediate(PreviewKind.MILESTONE, mid, position)
+
+func _request(kind: int, id: String, position: Vector2) -> void:
+	_hide_timer.stop()
+
+	_pending_position = position
+	_update_position(_pending_position)
+
+	if _is_visible and id == _current_id and int(kind) == int(_current_kind):
+		return
+
+	_current_kind = int(kind)
+	_current_id = id
+	_show_timer.stop()
+	_show_timer.start(_show_delay)
+
+func _show_immediate(kind: int, id: String, position: Vector2) -> void:
+	_current_kind = int(kind)
+	_current_id = id
 	_pending_position = position
 	_show_timer.stop()
 	_hide_timer.stop()
-	_show_preview(eid, position)
+	_show_preview(_current_kind, _current_id, position)
 
 func hide_preview() -> void:
-	_current_employee_id = ""
+	_current_id = ""
 	_show_timer.stop()
 
 	if not _is_visible:
@@ -102,25 +133,25 @@ func set_hide_delay(seconds: float) -> void:
 	_hide_delay = maxf(0.0, float(seconds))
 
 func _on_show_timer_timeout() -> void:
-	if _current_employee_id.is_empty():
+	if _current_id.is_empty():
 		return
-	_show_preview(_current_employee_id, _pending_position)
+	_show_preview(_current_kind, _current_id, _pending_position)
 
 func _on_hide_timer_timeout() -> void:
 	if panel != null:
 		panel.visible = false
 	_is_visible = false
 
-func _show_preview(employee_id: String, position: Vector2) -> void:
+func _show_preview(kind: int, id: String, position: Vector2) -> void:
 	if panel == null or not is_instance_valid(panel):
 		return
 
-	_rebuild_card(employee_id)
+	_rebuild_card(kind, id)
 	_update_position(position)
 	panel.visible = true
 	_is_visible = true
 
-func _rebuild_card(employee_id: String) -> void:
+func _rebuild_card(kind: int, id: String) -> void:
 	if card_host == null or not is_instance_valid(card_host):
 		return
 
@@ -130,6 +161,18 @@ func _rebuild_card(employee_id: String) -> void:
 			ch.queue_free()
 	_card = null
 
+	var key := str(id).strip_edges()
+	if key.is_empty():
+		return
+
+	if int(kind) == PreviewKind.MILESTONE:
+		_rebuild_milestone_card(key)
+	else:
+		_rebuild_employee_card(key)
+
+	_sync_panel_size_to_card()
+
+func _rebuild_employee_card(employee_id: String) -> void:
 	var eid := str(employee_id).strip_edges()
 	if eid.is_empty():
 		return
@@ -153,12 +196,41 @@ func _rebuild_card(employee_id: String) -> void:
 	card_host.add_child(card)
 	_card = card
 
-	_sync_panel_size_to_card()
+func _rebuild_milestone_card(milestone_id: String) -> void:
+	var mid := str(milestone_id).strip_edges()
+	if mid.is_empty():
+		return
+
+	var def = null
+	var name := mid
+	if MilestoneRegistryClass.is_loaded():
+		var def_val = MilestoneRegistryClass.get_def(mid)
+		if def_val != null and def_val is MilestoneDefClass:
+			def = def_val
+			name = str((def as MilestoneDef).name).strip_edges()
+
+	var effect_text := mid
+	if def != null and def is MilestoneDefClass:
+		if _milestone_formatter == null or not is_instance_valid(_milestone_formatter):
+			_milestone_formatter = MilestonePanelClass.new()
+			if _milestone_formatter.has_method("set_rules"):
+				_milestone_formatter.call("set_rules", {})
+		if _milestone_formatter != null and is_instance_valid(_milestone_formatter) and _milestone_formatter.has_method("_format_milestone_effect_text"):
+			effect_text = str(_milestone_formatter.call("_format_milestone_effect_text", def))
+
+	var card = MilestonePreviewCardClass.new()
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if card.has_method("setup"):
+		card.call("setup", mid, def, effect_text)
+	else:
+		if card.has_method("set"):
+			card.set("milestone_id", mid)
+	card_host.add_child(card)
 
 func _sync_panel_size_to_card() -> void:
 	if panel == null or not is_instance_valid(panel):
 		return
-	if _card == null or not is_instance_valid(_card):
+	if card_host == null or not is_instance_valid(card_host):
 		return
 	if margin == null or not is_instance_valid(margin):
 		return
@@ -166,7 +238,15 @@ func _sync_panel_size_to_card() -> void:
 	var pad_x := float(margin.get_theme_constant("margin_left") + margin.get_theme_constant("margin_right"))
 	var pad_y := float(margin.get_theme_constant("margin_top") + margin.get_theme_constant("margin_bottom"))
 
-	var min_size := _card.custom_minimum_size + Vector2(pad_x, pad_y)
+	var content_size := Vector2.ZERO
+	if card_host.get_child_count() > 0:
+		var ch0 = card_host.get_child(0)
+		if ch0 is Control:
+			content_size = (ch0 as Control).custom_minimum_size
+	if content_size == Vector2.ZERO:
+		content_size = card_host.custom_minimum_size
+
+	var min_size := content_size + Vector2(pad_x, pad_y)
 	panel.custom_minimum_size = min_size
 	panel.size = min_size
 

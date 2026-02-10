@@ -156,17 +156,19 @@ func _hide_employee_preview() -> void:
 		mgr.hide_preview()
 
 func _on_label_meta_hover_started(meta) -> void:
-	if not EmployeeLinksClass.is_employee_meta(meta):
+	if not EmployeeLinksClass.is_preview_meta(meta):
 		return
-	_show_employee_preview(EmployeeLinksClass.employee_id_from_meta(meta), false)
+	var ref := EmployeeLinksClass.preview_ref_from_meta(meta)
+	_show_ref_preview(ref, false)
 
 func _on_label_meta_hover_ended(_meta) -> void:
 	_hide_employee_preview()
 
 func _on_label_meta_clicked(meta) -> void:
-	if not EmployeeLinksClass.is_employee_meta(meta):
+	if not EmployeeLinksClass.is_preview_meta(meta):
 		return
-	_show_employee_preview(EmployeeLinksClass.employee_id_from_meta(meta), true)
+	var ref := EmployeeLinksClass.preview_ref_from_meta(meta)
+	_show_ref_preview(ref, true)
 
 func _on_label_gui_input(event: InputEvent) -> void:
 	# 员工名字点击：显示预览并阻止行点击（不影响其它区域）。
@@ -179,6 +181,30 @@ func _on_label_gui_input(event: InputEvent) -> void:
 		return
 	if _label.has_method("get_meta_under_cursor"):
 		var meta = _label.call("get_meta_under_cursor")
-		if EmployeeLinksClass.is_employee_meta(meta):
-			_show_employee_preview(EmployeeLinksClass.employee_id_from_meta(meta), true)
+		if EmployeeLinksClass.is_preview_meta(meta):
+			var ref := EmployeeLinksClass.preview_ref_from_meta(meta)
+			_show_ref_preview(ref, true)
 			_label.accept_event()
+
+func _show_ref_preview(ref: Dictionary, immediate: bool) -> void:
+	if ref == null or ref.is_empty():
+		return
+	var kind := str(ref.get("kind", "")).strip_edges()
+	var id := str(ref.get("id", "")).strip_edges()
+	if id.is_empty():
+		return
+	var mgr = _get_preview_manager()
+	if mgr == null:
+		return
+	var pos := get_global_mouse_position()
+	if kind == "milestone":
+		if immediate and mgr.has_method("show_milestone_immediate"):
+			mgr.show_milestone_immediate(id, pos)
+		elif mgr.has_method("request_milestone_preview"):
+			mgr.request_milestone_preview(id, pos)
+		return
+
+	if immediate and mgr.has_method("show_immediate"):
+		mgr.show_immediate(id, pos)
+	else:
+		mgr.request_preview(id, pos)
