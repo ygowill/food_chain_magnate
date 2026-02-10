@@ -21,8 +21,8 @@ enum PreviewKind {
 	MILESTONE,
 }
 
-var _show_delay: float = 0.10
-var _hide_delay: float = 0.02
+var _show_delay: float = 0.0
+var _hide_delay: float = 0.0
 
 var _show_timer: Timer = null
 var _hide_timer: Timer = null
@@ -107,7 +107,10 @@ func _request(kind: int, id: String, position: Vector2) -> void:
 	_current_kind = int(kind)
 	_current_id = id
 	_show_timer.stop()
-	_show_timer.start(_show_delay)
+	if _show_delay <= 0.0:
+		_show_preview(_current_kind, _current_id, _pending_position)
+	else:
+		_show_timer.start(_show_delay)
 
 func _show_immediate(kind: int, id: String, position: Vector2) -> void:
 	_current_kind = int(kind)
@@ -124,7 +127,10 @@ func hide_preview() -> void:
 	if not _is_visible:
 		return
 	_hide_timer.stop()
-	_hide_timer.start(_hide_delay)
+	if _hide_delay <= 0.0:
+		_on_hide_timer_timeout()
+	else:
+		_hide_timer.start(_hide_delay)
 
 func set_show_delay(seconds: float) -> void:
 	_show_delay = maxf(0.0, float(seconds))
