@@ -91,6 +91,8 @@ func _draw_giant_billboards(canvas, tile_rect: Rect2, thickness_px: float, rural
 			continue
 		var r: Rect2 = side_rects[side]
 		var placed := boards.has(side)
+		if not placed:
+			continue
 
 		var fill := Color(0, 0, 0, 0.06)
 		var border := Color(0, 0, 0, 0.18)
@@ -113,9 +115,6 @@ func _draw_giant_billboards(canvas, tile_rect: Rect2, thickness_px: float, rural
 			canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		else:
 			TextureUtilsClass.draw_texture_aspect_fit(canvas, bb_tex, dst, mod)
-
-		if not placed:
-			continue
 		var entry_val = boards.get(side, null)
 		if not (entry_val is Dictionary):
 			continue
