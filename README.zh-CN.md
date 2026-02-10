@@ -24,16 +24,28 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60
 godot --headless --path . --scene res://server/dedicated_server.tscn -- --port=7000 --bind=*
 ```
 
-Docker 一键部署脚本（构建镜像并运行/更新容器）：
+Docker 一键部署脚本（从 GHCR 拉取镜像并运行/更新容器）：
 
 ```bash
 ./server/deploy.sh --port 7000
+```
+
+同时启动 server + 网页版客户端：
+
+```bash
+./server/deploy.sh --port 7000 --enable-web --web-port 8080
 ```
 
 一行命令部署（下载并直接执行部署脚本）：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- --port 7000
+```
+
+一行命令部署（server + 网页版客户端）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- --port 7000 --enable-web --web-port 8080
 ```
 
 如果你不希望 `curl | bash`，可以先下载脚本并检查后再执行：

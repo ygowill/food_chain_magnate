@@ -7,6 +7,8 @@ Usage:
   server/deploy.sh [--port 7000] [--bind "*"] [--name fcm-server]
                    [--image <image:tag>] [--pull] [--no-pull]
                    [--build-local] [--foreground]
+                   [--enable-web] [--web-port 8080] [--web-name fcm-web]
+                   [--web-image <image:tag>]
 
 Default behavior:
   - Pull prebuilt image from GHCR
@@ -16,6 +18,9 @@ Default behavior:
 Examples:
   # Pull from GHCR and run on 7000
   ./server/deploy.sh --port 7000
+
+  # Start server + web client together
+  ./server/deploy.sh --port 7000 --enable-web --web-port 8080
 
   # Bind to localhost only (for reverse proxy on same machine)
   ./server/deploy.sh --port 7000 --bind 127.0.0.1
@@ -35,6 +40,10 @@ IMAGE="ghcr.io/ygowill/food_chain_magnate/fcm-server:latest"
 DO_PULL=1
 DO_BUILD=0
 DETACH=1
+ENABLE_WEB=0
+WEB_PORT="8080"
+WEB_NAME="fcm-web"
+WEB_IMAGE="ghcr.io/ygowill/food_chain_magnate/fcm-web:latest"
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -74,6 +83,22 @@ while [[ $# -gt 0 ]]; do
 			DETACH=0
 			shift
 			;;
+		--enable-web)
+			ENABLE_WEB=1
+			shift
+			;;
+		--web-port)
+			WEB_PORT="${2:-}"
+			shift 2
+			;;
+		--web-name)
+			WEB_NAME="${2:-}"
+			shift 2
+			;;
+		--web-image)
+			WEB_IMAGE="${2:-}"
+			shift 2
+			;;
 		*)
 			echo "Unknown arg: $1" >&2
 			usage >&2
@@ -93,10 +118,17 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 echo "[deploy] name=${NAME} image=${IMAGE} port=${PORT} bind=${BIND}"
+if [[ "${ENABLE_WEB}" -eq 1 ]]; then
+	echo "[deploy] web_name=${WEB_NAME} web_image=${WEB_IMAGE} web_port=${WEB_PORT}"
+fi
 
 if [[ "${DO_PULL}" -eq 1 ]]; then
 	echo "[deploy] pulling image: ${IMAGE}"
 	docker pull "${IMAGE}"
+	if [[ "${ENABLE_WEB}" -eq 1 ]]; then
+		echo "[deploy] pulling image: ${WEB_IMAGE}"
+		docker pull "${WEB_IMAGE}"
+	fi
 fi
 
 if [[ "${DO_BUILD}" -eq 1 ]]; then
@@ -126,5 +158,33 @@ fi
 echo "[deploy] starting container..."
 docker run "${run_args[@]}" "${IMAGE}"
 
+if [[ "${ENABLE_WEB}" -eq 1 ]]; then
+	if docker ps -a --format '{{.Names}}' | grep -qx "${WEB_NAME}"; then
+		echo "[deploy] stopping old container: ${WEB_NAME}"
+		docker rm -f "${WEB_NAME}" >/dev/null
+	fi
+
+	web_args=(
+		--name "${WEB_NAME}"
+		-p "${WEB_PORT}:80"
+		--restart unless-stopped
+	)
+	if [[ "${DETACH}" -eq 1 ]]; then
+		web_args+=(-d)
+	fi
+
+	echo "[deploy] starting web container..."
+	docker run "${web_args[@]}" "${WEB_IMAGE}"
+else
+	if docker ps -a --format '{{.Names}}' | grep -qx "${WEB_NAME}"; then
+		echo "[deploy] removing web container (disabled): ${WEB_NAME}"
+		docker rm -f "${WEB_NAME}" >/dev/null
+	fi
+fi
+
 echo "[deploy] done."
 echo "[deploy] logs: docker logs -f ${NAME}"
+if [[ "${ENABLE_WEB}" -eq 1 ]]; then
+	echo "[deploy] web: http://localhost:${WEB_PORT} (or your server IP)"
+	echo "[deploy] web logs: docker logs -f ${WEB_NAME}"
+fi

@@ -182,7 +182,93 @@ jobs:
       - name: Upload release assets artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-assets-${{ needs.guard-main-tag.outputs.tag_name }}
+          name: release-assets-windows-${{ needs.guard-main-tag.outputs.tag_name }}
+          path: build/release
+
+  build-client-web:
+    name: Build client (Web)
+    runs-on: ubuntu-latest
+    needs: [guard-main-tag, test]
+    if: needs.guard-main-tag.outputs.on_main == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/godot
+            ~/.local/share/godot/export_templates
+          key: ${{ runner.os }}-godot-${{ env.GODOT_TAG }}
+
+      - name: Install Godot (editor) + export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update -y
+          sudo apt-get install -y unzip zip
+
+          mkdir -p "$HOME/.cache/godot/bin"
+          if [[ ! -f "$HOME/.cache/godot/bin/godot" ]]; then
+            curl -sSL -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_linux.x86_64.zip"
+            rm -rf /tmp/godot_unzip
+            mkdir -p /tmp/godot_unzip
+            unzip -q /tmp/godot.zip -d /tmp/godot_unzip
+            mv "/tmp/godot_unzip/Godot_v${GODOT_TAG}_linux.x86_64" "$HOME/.cache/godot/bin/godot"
+            chmod +x "$HOME/.cache/godot/bin/godot"
+          fi
+
+          echo "$HOME/.cache/godot/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.cache/godot/bin:$PATH"
+
+          template_dir="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          if [[ ! -d "$template_dir" ]] || [[ -z "$(ls -A "$template_dir" 2>/dev/null || true)" ]]; then
+            curl -sSL -o /tmp/templates.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_export_templates.tpz"
+            rm -rf /tmp/godot_templates
+            mkdir -p /tmp/godot_templates
+            unzip -q /tmp/templates.tpz -d /tmp/godot_templates
+            rm -rf "$template_dir"
+            mkdir -p "$template_dir"
+            mv /tmp/godot_templates/templates/* "$template_dir"
+          fi
+
+          godot --version
+
+      - name: Import project resources
+        shell: bash
+        run: |
+          HOME="$PWD/.tmp_home" godot --headless --import --path "$PWD" >/dev/null 2>&1
+
+      - name: Export Web build
+        shell: bash
+        run: |
+          mkdir -p build/client/web
+          godot --headless --path "$PWD" --export-release "Web" build/client/web/index.html
+
+      - name: Upload Web export artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-export-${{ needs.guard-main-tag.outputs.tag_name }}
+          path: build/client/web
+
+      - name: Package release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ needs.guard-main-tag.outputs.tag_name }}"
+
+          mkdir -p build/release
+
+          zip_name="FCM-web-${tag}.zip"
+          (cd build/client/web && zip -qr "../../release/${zip_name}" .)
+          sha256sum "build/release/${zip_name}" > "build/release/${zip_name}.sha256"
+
+      - name: Upload release assets artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-web-${{ needs.guard-main-tag.outputs.tag_name }}
           path: build/release
 
   build-server-docker:
@@ -241,19 +327,85 @@ jobs:
           push: true
           tags: ${{ env.IMAGE_TAGS }}
 
+  build-web-docker:
+    name: Build web Docker image
+    runs-on: ubuntu-latest
+    needs: [guard-main-tag, test, build-client-web]
+    if: needs.guard-main-tag.outputs.on_main == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Web export
+        uses: actions/download-artifact@v4
+        with:
+          name: web-export-${{ needs.guard-main-tag.outputs.tag_name }}
+          path: build/client/web
+
+      - name: Set image name
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}/fcm-web" >> "$GITHUB_ENV"
+
+      - name: Docker meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_name="${GITHUB_REF#refs/tags/}"
+          tags=(
+            "${IMAGE_NAME}:${GITHUB_SHA}"
+            "${IMAGE_NAME}:${tag_name}"
+          )
+          if [[ "${tag_name}" != *"-"* ]]; then
+            tags+=("${IMAGE_NAME}:latest")
+          fi
+          {
+            echo "IMAGE_TAGS<<EOF"
+            printf "%s\n" "${tags[@]}"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: build/client/web
+          file: web/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_TAGS }}
+
   release:
     name: GitHub Release
     runs-on: ubuntu-latest
-    needs: [guard-main-tag, test, build-client-windows, build-server-docker]
+    needs: [guard-main-tag, test, build-client-windows, build-client-web, build-server-docker, build-web-docker]
     if: needs.guard-main-tag.outputs.on_main == 'true'
     permissions:
       contents: write
     steps:
-      - name: Download release assets
+      - name: Download release assets (Windows)
         uses: actions/download-artifact@v4
         with:
-          name: release-assets-${{ needs.guard-main-tag.outputs.tag_name }}
-          path: build/release
+          name: release-assets-windows-${{ needs.guard-main-tag.outputs.tag_name }}
+          path: build/release/windows
+
+      - name: Download release assets (Web)
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets-web-${{ needs.guard-main-tag.outputs.tag_name }}
+          path: build/release/web
 
       - name: Generate release notes
         shell: bash
@@ -262,26 +414,30 @@ jobs:
 
           tag="${{ needs.guard-main-tag.outputs.tag_name }}"
           repo_lower="$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
-          image_base="ghcr.io/${repo_lower}/fcm-server"
+          server_image_base="ghcr.io/${repo_lower}/fcm-server"
+          web_image_base="ghcr.io/${repo_lower}/fcm-web"
 
           mkdir -p dist
           find build/release -type f -name '*.zip' -exec cp -f {} dist/ \;
           find build/release -type f -name '*.sha256' -exec cp -f {} dist/ \;
 
-          zip_file="$(ls -1 dist/*.zip | head -n 1)"
-          sha_file="$(ls -1 dist/*.sha256 | head -n 1)"
-
           {
             echo "# ${tag}"
             echo
             echo "## Downloads"
-            echo "- Windows: $(basename "${zip_file}")"
-            echo "- SHA256: $(basename "${sha_file}")"
+            for f in dist/*.zip; do
+              echo "- $(basename "$f")"
+            done
+            for f in dist/*.sha256; do
+              echo "- $(basename "$f")"
+            done
             echo
             echo "## Docker"
-            echo "- ${image_base}:${tag}"
+            echo "- ${server_image_base}:${tag}"
+            echo "- ${web_image_base}:${tag}"
             if [[ "${tag}" != *"-"* ]]; then
-              echo "- ${image_base}:latest"
+              echo "- ${server_image_base}:latest"
+              echo "- ${web_image_base}:latest"
             fi
             echo
             echo "## Verified"

@@ -56,10 +56,22 @@ This repo provides a one-click deploy script that **pulls the prebuilt image fro
 ./server/deploy.sh --port 7000
 ```
 
+Start server + web client together:
+
+```bash
+./server/deploy.sh --port 7000 --enable-web --web-port 8080
+```
+
 One-line deploy (downloads and runs the deploy script):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- --port 7000
+```
+
+One-line deploy (server + web client):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- --port 7000 --enable-web --web-port 8080
 ```
 
 If you prefer not to pipe to `bash`, download it first and review:
