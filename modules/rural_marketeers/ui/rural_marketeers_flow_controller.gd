@@ -161,6 +161,8 @@ func _is_offramp_pending_for_player(state: GameState, player_id: int) -> bool:
 	var flag = pending.get(player_id, null)
 	if flag == null and pending.has(str(player_id)):
 		flag = pending.get(str(player_id), null)
+	if not (flag is bool):
+		return false
 	return bool(flag)
 
 func _show_offramp_overlay(state: GameState, force_full_refresh: bool = false) -> void:
