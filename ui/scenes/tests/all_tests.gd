@@ -91,14 +91,18 @@ func _run_all() -> int:
 			"name": "UiLobbyistsRoadOverlaysHardRefContractTest",
 			"fn": func() -> Result: return TestRefs.UiLobbyistsRoadOverlaysHardRefContractTestClass.run(),
 		},
-		{
-			"name": "UiLobbyistsPiecePrefixContractTest",
-			"fn": func() -> Result: return TestRefs.UiLobbyistsPiecePrefixContractTestClass.run(),
-		},
-		{
-			"name": "UiBasePiecesLogoHardRefContractTest",
-			"fn": func() -> Result: return TestRefs.UiBasePiecesLogoHardRefContractTestClass.run(),
-		},
+			{
+				"name": "UiLobbyistsPiecePrefixContractTest",
+				"fn": func() -> Result: return TestRefs.UiLobbyistsPiecePrefixContractTestClass.run(),
+			},
+			{
+				"name": "UiMapOptionalPieceIdsContractTest",
+				"fn": func() -> Result: return TestRefs.UiMapOptionalPieceIdsContractTestClass.run(),
+			},
+			{
+				"name": "UiBasePiecesLogoHardRefContractTest",
+				"fn": func() -> Result: return TestRefs.UiBasePiecesLogoHardRefContractTestClass.run(),
+			},
 		{
 			"name": "UiModulesBaseDirContractTest",
 			"fn": func() -> Result: return TestRefs.UiModulesBaseDirContractTestClass.run(),

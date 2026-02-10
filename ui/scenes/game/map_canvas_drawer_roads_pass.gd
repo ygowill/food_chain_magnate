@@ -2,21 +2,25 @@
 extends RefCounted
 
 const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
-const LOBBYISTS_PENDING_ROADS_KEY := "lobbyists_pending_roads"
+const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
+const PENDING_ROADS_KEY_SUFFIX := "pending_roads"
 const ROADWORK_MARKERS_KEY_SUFFIX := "roadworks_markers"
+const ROADWORK_MARKER_PIECE_SUFFIX := "roadworks_marker"
 
 static func draw_roads(canvas, cell_size: int) -> void:
-	var pending_extra_dirs := build_lobbyists_pending_road_connection_dirs(canvas)
+	var pending_extra_dirs := build_pending_road_connection_dirs(canvas)
 	for y in range(canvas._grid_size.y):
 		for x in range(canvas._grid_size.x):
 			var world_pos = canvas._world_origin + Vector2i(x, y)
 			var cell: Dictionary = canvas._get_cell_world(world_pos)
-			# Highway offramp: do not render its road segments (the offramp graphic handles visuals).
 			var structure_val = cell.get("structure", null)
 			if structure_val is Dictionary:
 				var structure: Dictionary = structure_val
-				if str(structure.get("piece_id", "")).strip_edges() == "highway_offramp":
-					continue
+				var pid := str(structure.get("piece_id", "")).strip_edges()
+				if not pid.is_empty():
+					var hints := PieceUiHintsRegistryClass.get_hints(pid)
+					if bool(hints.get("blocks_roads_under", false)):
+						continue
 			var segments_val = cell.get("road_segments", null)
 			if not (segments_val is Array):
 				continue
@@ -94,16 +98,13 @@ static func draw_roads(canvas, cell_size: int) -> void:
 				canvas.draw_texture_rect(tex, Rect2(-size * 0.5, size), false)
 				canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-static func build_lobbyists_pending_road_connection_dirs(canvas) -> Dictionary:
+static func build_pending_road_connection_dirs(canvas) -> Dictionary:
 	if canvas == null:
 		return {}
 	if not (canvas._map_data is Dictionary):
 		return {}
 	var map_data: Dictionary = canvas._map_data
-	var pending_val = map_data.get(LOBBYISTS_PENDING_ROADS_KEY, null)
-	if not (pending_val is Array):
-		return {}
-	var pending: Array = pending_val
+	var pending: Array = _get_pending_roads_list(map_data)
 	if pending.is_empty():
 		return {}
 
@@ -144,6 +145,26 @@ static func build_lobbyists_pending_road_connection_dirs(canvas) -> Dictionary:
 					m[d] = true
 					out[world_pos] = m
 
+	return out
+
+static func _get_pending_roads_list(map_data: Dictionary) -> Array:
+	if map_data.is_empty():
+		return []
+
+	var keys: Array[String] = []
+	for k in map_data.keys():
+		if not (k is String):
+			continue
+		var key: String = str(k).strip_edges()
+		if key.ends_with(PENDING_ROADS_KEY_SUFFIX):
+			keys.append(key)
+	keys.sort()
+
+	var out: Array = []
+	for key2 in keys:
+		var val = map_data.get(key2, null)
+		if val is Array:
+			out.append_array(Array(val))
 	return out
 
 static func compute_road_shape_info(dirs: Array) -> Dictionary:
@@ -221,7 +242,9 @@ static func draw_roadworks_markers(canvas, cell_size: int) -> void:
 	if markers.is_empty():
 		return
 
-	var tex: Texture2D = canvas._skin.get_piece_texture("lobbyists_roadworks_marker")
+	var tex: Texture2D = get_roadworks_marker_texture(canvas._skin)
+	if tex == null:
+		return
 	var pad := maxf(2.0, float(cell_size) * 0.08)
 	var mod := Color(1, 1, 1, 0.95)
 
@@ -238,16 +261,51 @@ static func draw_roadworks_markers(canvas, cell_size: int) -> void:
 		var rect := Rect2(Vector2(vpos.x * cell_size, vpos.y * cell_size), Vector2(cell_size, cell_size)).grow(-pad)
 		TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, rect, mod)
 
+static func get_roadworks_marker_texture(skin) -> Texture2D:
+	if skin == null:
+		return null
+	var key := _find_first_piece_id_by_suffix(skin, ROADWORK_MARKER_PIECE_SUFFIX)
+	if key.is_empty():
+		return null
+	return skin.get_piece_texture(key) if skin.has_method("get_piece_texture") else null
+
+static func _find_first_piece_id_by_suffix(skin, suffix: String) -> String:
+	if skin == null:
+		return ""
+	if not skin.has_method("get"):
+		return ""
+	var dict_val = skin.get("piece_textures")
+	if not (dict_val is Dictionary):
+		return ""
+	var dict: Dictionary = dict_val
+	var keys: Array[String] = []
+	for k in dict.keys():
+		if not (k is String):
+			continue
+		var s := str(k).strip_edges()
+		if s.ends_with(str(suffix)):
+			keys.append(s)
+	keys.sort()
+	return keys[0] if keys.size() > 0 else ""
+
 static func _get_roadworks_markers_dict(map_data: Dictionary) -> Dictionary:
 	if map_data.is_empty():
 		return {}
+	var keys: Array[String] = []
 	for k in map_data.keys():
 		if not (k is String):
 			continue
 		var key: String = str(k).strip_edges()
-		if not key.ends_with(ROADWORK_MARKERS_KEY_SUFFIX):
+		if key.ends_with(ROADWORK_MARKERS_KEY_SUFFIX):
+			keys.append(key)
+	keys.sort()
+
+	var out := {}
+	for key2 in keys:
+		var val = map_data.get(key2, null)
+		if not (val is Dictionary):
 			continue
-		var val = map_data.get(k, null)
-		if val is Dictionary:
-			return val
-	return {}
+		var dict: Dictionary = val
+		for pos_key in dict.keys():
+			out[pos_key] = dict[pos_key]
+	return out

@@ -17,6 +17,7 @@ const CallbackResultContractTestClass = preload("res://core/tests/callback_resul
 const ModuleBoundaryContractTestClass = preload("res://core/tests/module_boundary_contract_test.gd")
 const UiLobbyistsRoadOverlaysHardRefContractTestClass = preload("res://ui/scenes/tests/ui_lobbyists_road_overlays_hard_ref_contract_test.gd")
 const UiLobbyistsPiecePrefixContractTestClass = preload("res://ui/scenes/tests/ui_lobbyists_piece_prefix_contract_test.gd")
+const UiMapOptionalPieceIdsContractTestClass = preload("res://ui/scenes/tests/ui_map_optional_piece_ids_contract_test.gd")
 const UiBasePiecesLogoHardRefContractTestClass = preload("res://ui/scenes/tests/ui_base_pieces_logo_hard_ref_contract_test.gd")
 const UiModulesBaseDirContractTestClass = preload("res://ui/scenes/tests/ui_modules_base_dir_contract_test.gd")
 const UiProductNameMappingContractTestClass = preload("res://ui/scenes/tests/ui_product_name_mapping_contract_test.gd")

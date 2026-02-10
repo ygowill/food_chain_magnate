@@ -427,6 +427,39 @@
 - **迁移/解耦目标**
   - 核心地图绘制不再写死 optional 模块的 structure piece_id（`apartment`/`coffee_shop`/`highway_offramp`）与 lobbyists 私有 map_data key（如 `lobbyists_pending_roads`）。
   - 使用 ruleset/registry/provider 或 data-driven tags/hints，将模块特有渲染规则下沉到模块侧。
+- **当前状态**
+  - ✅ 已完成（2026-02-10）
+- **涉及位置**
+  - `ui/scenes/game/map_canvas_drawer.gd`
+  - `ui/scenes/game/map_canvas_drawer_roads_pass.gd`
+  - `ui/scenes/game/map_canvas_drawer_structures_pass.gd`
+  - `modules/rural_marketeers/rules/entry.gd`
+  - `modules/coffee/rules/entry.gd`
+  - `modules/new_districts/module.json`
+  - `modules/new_districts/rules/entry.gd`
+- **已实施改动**
+  - 地图渲染（roads pass）：
+    - `pending_roads`：不再读 `lobbyists_pending_roads`，改为聚合 `map_data` 中所有以 `pending_roads` 结尾的 key（兼容旧存档/未来模块扩展）。
+    - `roadworks_markers`：不再依赖模块专用 piece id，改为在 skin 的 `piece_textures` 中按 suffix（`roadworks_marker`）查找可用贴图；并聚合所有 `*roadworks_markers` key。
+    - “道路遮挡”：若结构 piece 通过 `PieceUiHintsRegistry` 标记 `blocks_roads_under=true`，则该格道路不绘制（替代 `highway_offramp` 特判）。
+  - 地图渲染（structures pass / preview）：
+    - 移除 UI 中对 `apartment`/`coffee_shop`/`highway_offramp` 的专用绘制分支与 logo 数组常量。
+    - 新增 hints 驱动的结构渲染风格：
+      - `structure_style=house_id`：背景 + 贴图 + 右上角 ID（用于 `apartment` 等）。
+      - `structure_style=player_logo_bg` + `logo_variant_suffix`：用玩家餐厅 logo 背景风格（用于 `coffee_shop` 的 `_coffee` 变体）。
+      - `structure_style=opaque_rotated_piece`：先画不透明底色，再按旋转绘制贴图（用于 `highway_offramp`）。
+    - 结构预览（MapCanvasDrawer `_draw_structure_preview`）与正式绘制统一走 hints 渲染，避免写死 piece_id。
+  - 模块侧注册 UI hints：
+    - `rural_marketeers`：为 `highway_offramp` 注册 `opaque_rotated_piece`（含 `rotation_offset_deg/bg_color/blocks_roads_under`）。
+    - `coffee`：为 `coffee_shop` 注册 `player_logo_bg`（`logo_variant_suffix=_coffee`）。
+    - `new_districts`：补充 `entry_script` 并为 `apartment` 注册 `house_id` 渲染提示。
+- **新增/补充测试**
+  - 新增 `ui/scenes/tests/ui_map_optional_piece_ids_contract_test.gd`：
+    - 扫描 `res://ui/scenes/game` 生产代码，禁止出现 `\"apartment\"/\"coffee_shop\"/\"highway_offramp\"` 与 `lobbyists_pending_roads/lobbyists_roadworks_marker` 等硬编码字符串。
+    - 已加入 `ui/scenes/tests/all_tests.tscn`（AllTests）。
+- **验收结果**
+  - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
 - **验收标准**
   - `rg -n '\"apartment\"|\"coffee_shop\"|\"highway_offramp\"|lobbyists_pending_roads|lobbyists_roadworks_marker' ui/scenes/game --glob '!ui/scenes/tests/**'` 目标为 0（或仅保留通用 suffix/registry 查询）。
 

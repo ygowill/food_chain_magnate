@@ -51,6 +51,17 @@ func register(registrar) -> Result:
 		# 模块动作
 		Callable(registrar, "register_action_executor").bind(PlaceGiantBillboardActionClass.new()),
 		Callable(registrar, "register_action_executor").bind(PlaceHighwayOfframpActionClass.new()),
+		# UI：地图渲染提示（避免 core UI 写死 piece_id 分支）。
+		Callable(registrar, "register_piece_ui_hint").bind(
+			"highway_offramp",
+			{
+				"structure_style": "opaque_rotated_piece",
+				"rotation_offset_deg": 270,
+				"bg_color": Color("#4c8078"),
+				"blocks_roads_under": true,
+			},
+			100
+		),
 		# 飞机与 offramp 互斥（仅在启用本模块时生效）
 		Callable(registrar, "register_action_validator").bind("initiate_marketing", "%s:airplane_offramp_conflict" % MODULE_ID, Callable(self, "_validate_airplane_offramp_conflict"), 10),
 		# 对外暴露“占用/冲突查询”：其他模块不应直接读取本模块的 state.map 字段结构。

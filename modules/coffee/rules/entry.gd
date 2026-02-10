@@ -31,6 +31,19 @@ func register(registrar) -> Result:
 	if not schema_r.ok:
 		return schema_r
 
+	# UI：coffee_shop 的渲染提示（避免 core UI 写死 piece_id / logo 变体）。
+	var hint_r: Result = registrar.register_piece_ui_hint(
+		"coffee_shop",
+		{
+			"structure_style": "player_logo_bg",
+			"logo_variant_suffix": "_coffee",
+			"bg_color": Color("#f4edd1"),
+		},
+		100
+	)
+	if not hint_r.ok:
+		return hint_r
+
 	return Result.success()
 
 static func _build_coffee_stop_index(state: GameState, exclude_restaurant_id: String) -> Result:
