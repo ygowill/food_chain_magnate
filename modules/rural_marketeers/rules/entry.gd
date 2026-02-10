@@ -40,6 +40,7 @@ func register(registrar) -> Result:
 	var steps: Array[Callable] = [
 		Callable(registrar, "register_employee_patch").bind("marketing_trainee", {"add_train_to": ["rural_marketeer"]}),
 		Callable(registrar, "register_milestone_effect").bind("rural_marketeers:grant_offramp_placement", Callable(self, "_milestone_effect_grant_offramp_placement")),
+		Callable(registrar, "register_milestone_effect_ui_text").bind("rural_marketeers:grant_offramp_placement", "获得一次高速出口（offramp）放置机会（需本回合放置）", 100),
 		# 初始化：确保 rural_area 与 offramp supply 存在
 		Callable(registrar, "register_phase_hook").bind(Phase.RESTRUCTURING, HookType.BEFORE_ENTER, Callable(self, "_on_restructuring_before_enter"), 0),
 		# 乡村地区需求：在 Marketing 阶段按轮次添加（巨型广告牌每轮 +2）

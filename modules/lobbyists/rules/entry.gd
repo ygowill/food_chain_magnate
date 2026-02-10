@@ -49,6 +49,7 @@ func register(registrar) -> Result:
 		Callable(registrar, "register_effect").bind(EFFECT_ID_ROADWORKS_DISTANCE, Callable(self, "_effect_dinnertime_distance_delta_roadworks")),
 		Callable(registrar, "register_effect").bind(EFFECT_ID_PARK_BONUS, Callable(self, "_effect_dinnertime_sale_house_bonus_park")),
 		Callable(registrar, "register_milestone_effect").bind("lobbyists_grant_extra_map_tile", Callable(self, "_milestone_effect_grant_extra_map_tile")),
+		Callable(registrar, "register_milestone_effect_ui_text").bind("lobbyists_grant_extra_map_tile", "获得一次额外地图板块放置机会（需本回合处理）", 100),
 		Callable(registrar, "register_action_executor").bind(PlaceLobbyistsRoadActionClass.new()),
 		Callable(registrar, "register_action_executor").bind(PlaceLobbyistsParkActionClass.new()),
 		Callable(registrar, "register_action_executor").bind(PlaceLobbyistsExtraMapTileActionClass.new()),

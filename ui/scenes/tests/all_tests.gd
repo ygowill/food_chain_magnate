@@ -80,6 +80,10 @@ func _run_all() -> int:
 			"fn": func() -> Result: return TestRefs.PaydaySalaryTokenEligibilityTestClass.run(),
 		},
 		{
+			"name": "EffectUiTextRegistryTest",
+			"fn": func() -> Result: return TestRefs.EffectUiTextRegistryTestClass.run(),
+		},
+		{
 			"name": "CallbackResultContractTest",
 			"fn": func() -> Result: return TestRefs.CallbackResultContractTestClass.run(),
 		},
@@ -95,14 +99,18 @@ func _run_all() -> int:
 				"name": "UiLobbyistsPiecePrefixContractTest",
 				"fn": func() -> Result: return TestRefs.UiLobbyistsPiecePrefixContractTestClass.run(),
 			},
-			{
-				"name": "UiMapOptionalPieceIdsContractTest",
-				"fn": func() -> Result: return TestRefs.UiMapOptionalPieceIdsContractTestClass.run(),
-			},
-			{
-				"name": "UiBasePiecesLogoHardRefContractTest",
-				"fn": func() -> Result: return TestRefs.UiBasePiecesLogoHardRefContractTestClass.run(),
-			},
+		{
+			"name": "UiMapOptionalPieceIdsContractTest",
+			"fn": func() -> Result: return TestRefs.UiMapOptionalPieceIdsContractTestClass.run(),
+		},
+		{
+			"name": "MilestonePanelEffectTextContractTest",
+			"fn": func() -> Result: return TestRefs.MilestonePanelEffectTextContractTestClass.run(),
+		},
+		{
+			"name": "UiBasePiecesLogoHardRefContractTest",
+			"fn": func() -> Result: return TestRefs.UiBasePiecesLogoHardRefContractTestClass.run(),
+		},
 		{
 			"name": "UiModulesBaseDirContractTest",
 			"fn": func() -> Result: return TestRefs.UiModulesBaseDirContractTestClass.run(),

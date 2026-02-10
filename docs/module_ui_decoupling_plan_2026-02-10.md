@@ -467,6 +467,36 @@
 
 - **迁移/解耦目标**
   - `MilestonePanel` 不直接匹配 optional 模块的 `effect_id/effect_type` 字符串，改为从 registry/provider 获取描述（模块注册自己的描述器）。
+- **当前状态**
+  - ✅ 已完成（2026-02-10）
+- **涉及位置**
+  - `core/rules/effect_ui_text_registry.gd`
+  - `core/modules/v2/ruleset.gd`
+  - `core/modules/v2/ruleset_builder.gd`
+  - `core/engine/game_engine/modules_v2.gd`
+  - `ui/components/milestone_panel/milestone_panel.gd`
+  - `modules/ketchup_mechanism/rules/entry.gd`
+  - `modules/new_milestones/rules/effects.gd`
+  - `modules/lobbyists/rules/entry.gd`
+  - `modules/rural_marketeers/rules/entry.gd`
+- **已实施改动**
+  - 新增 `EffectUiTextRegistry`：模块可注册
+    - `effect_id -> 文案`（用于 milestone def.effect_ids）
+    - `milestone effect_type -> 文案`（用于 milestone def.effects[*].type）
+  - `RulesetV2`/`RulesetRegistrarV2` 增加注册接口：`register_effect_ui_text`、`register_milestone_effect_ui_text`；引擎初始化时从 ruleset 配置 registry。
+  - `MilestonePanel` 优先从 `EffectUiTextRegistry` 获取文案，移除对 optional 模块字符串的 `match` 分支。
+  - 由模块自注册文案：
+    - `ketchup_mechanism`：`ketchup_mechanism:dinnertime:distance_delta:ketchup` 与 `ketchup_active`
+    - `new_milestones`：`new_milestones:*` 的两个 effect_id
+    - `lobbyists`：`lobbyists_grant_extra_map_tile`
+    - `rural_marketeers`：`rural_marketeers:grant_offramp_placement`
+- **新增/补充测试**
+  - 新增 `core/tests/effect_ui_text_registry_test.gd`：初始化两套模块组合，验证 registry 已注册对应文案。
+  - 新增 `ui/scenes/tests/milestone_panel_effect_text_contract_test.gd`：禁止 `MilestonePanel` 硬编码 `ketchup_mechanism:`/`new_milestones:`/`rural_marketeers:`/`lobbyists_grant_extra_map_tile`。
+  - 两者均已加入 `ui/scenes/tests/all_tests.tscn`（AllTests）。
+- **验收结果**
+  - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
 - **验收标准**
   - `rg -n 'rural_marketeers:|new_milestones:|ketchup_mechanism:|lobbyists_grant_extra_map_tile' ui/components/milestone_panel/milestone_panel.gd` 返回空（或仅保留 base_rules 范围内的描述）。
 

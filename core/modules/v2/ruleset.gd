@@ -51,6 +51,8 @@ var state_initializers: Array[Dictionary] = []  # [{id, callback, priority, sour
 var state_int_key_dict_schemas: Array[Dictionary] = []  # [{id, root, path, priority, source}]
 var phase_action_ui_modals: Array[Dictionary] = []  # [{phase, kind, scene_path, priority, source}]
 var piece_ui_hints: Array[Dictionary] = []  # [{piece_id, hints, priority, source}]
+var effect_ui_texts: Array[Dictionary] = []  # [{effect_id, text, priority, source}]
+var milestone_effect_ui_texts: Array[Dictionary] = []  # [{effect_type, text, priority, source}]
 var _entry_instances: Array = []
 
 func retain_entry_instance(inst) -> void:
@@ -299,6 +301,52 @@ func register_piece_ui_hint(piece_id: String, hints: Dictionary, priority: int =
 	piece_ui_hints.append({
 		"piece_id": pid,
 		"hints": hints,
+		"priority": int(priority),
+		"source": str(source_module_id),
+	})
+	return Result.success()
+
+func register_effect_ui_text(effect_id: String, text: String, priority: int = 100, source_module_id: String = "") -> Result:
+	var eid := str(effect_id).strip_edges()
+	if eid.is_empty():
+		return Result.failure("RulesetV2: effect_ui_text.effect_id 不能为空")
+	if eid.find(":") <= 0:
+		return Result.failure("RulesetV2: effect_ui_text.effect_id 必须为 module_id:...，实际: %s" % eid)
+
+	var s := str(text).strip_edges()
+	if s.is_empty():
+		return Result.failure("RulesetV2: effect_ui_text.text 不能为空: %s" % eid)
+
+	if not source_module_id.is_empty():
+		var prefix := "%s:" % str(source_module_id)
+		if not eid.begins_with(prefix):
+			return Result.failure("RulesetV2: effect_ui_text.effect_id 必须以 source module_id 作为前缀: %s (expected_prefix=%s)" % [eid, prefix])
+
+	effect_ui_texts.append({
+		"effect_id": eid,
+		"text": s,
+		"priority": int(priority),
+		"source": str(source_module_id),
+	})
+	return Result.success()
+
+func register_milestone_effect_ui_text(effect_type: String, text: String, priority: int = 100, source_module_id: String = "") -> Result:
+	var t := str(effect_type).strip_edges()
+	if t.is_empty():
+		return Result.failure("RulesetV2: milestone_effect_ui_text.effect_type 不能为空")
+
+	var s := str(text).strip_edges()
+	if s.is_empty():
+		return Result.failure("RulesetV2: milestone_effect_ui_text.text 不能为空: %s" % t)
+
+	if not source_module_id.is_empty() and t.find(":") > 0:
+		var prefix := "%s:" % str(source_module_id)
+		if not t.begins_with(prefix):
+			return Result.failure("RulesetV2: milestone_effect_ui_text.effect_type 必须以 source module_id 作为前缀: %s (expected_prefix=%s)" % [t, prefix])
+
+	milestone_effect_ui_texts.append({
+		"effect_type": t,
+		"text": s,
 		"priority": int(priority),
 		"source": str(source_module_id),
 	})

@@ -124,6 +124,16 @@ class RulesetRegistrarV2:
 			return Result.failure("RulesetRegistrarV2: ruleset 缺少 register_piece_ui_hint")
 		return _ruleset.register_piece_ui_hint(piece_id, hints, priority, _module_id)
 
+	func register_effect_ui_text(effect_id: String, text: String, priority: int = 100) -> Result:
+		if _ruleset == null or not _ruleset.has_method("register_effect_ui_text"):
+			return Result.failure("RulesetRegistrarV2: ruleset 缺少 register_effect_ui_text")
+		return _ruleset.register_effect_ui_text(effect_id, text, priority, _module_id)
+
+	func register_milestone_effect_ui_text(effect_type: String, text: String, priority: int = 100) -> Result:
+		if _ruleset == null or not _ruleset.has_method("register_milestone_effect_ui_text"):
+			return Result.failure("RulesetRegistrarV2: ruleset 缺少 register_milestone_effect_ui_text")
+		return _ruleset.register_milestone_effect_ui_text(effect_type, text, priority, _module_id)
+
 	func register_employee_pool_patch(patch_id: String, employee_id: String, delta: int) -> Result:
 		return _ruleset.register_employee_pool_patch(patch_id, employee_id, delta, _module_id)
 
