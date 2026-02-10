@@ -10,6 +10,7 @@ const KimchiStorageModalScene = preload("res://ui/components/modal_panel/kimchi_
 
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const PhaseActionUiRegistryClass = preload("res://ui/scenes/game/phase_action_ui_registry.gd")
 
 var _scene = null
 var _execute_command: Callable = Callable()
@@ -92,50 +93,9 @@ func sync_for_state(state: GameState, covered: Rect2) -> void:
 	else:
 		hide_reserve_card_modal()
 
-	# 泡菜/冰箱保留选择（Cleanup）
-	var should_show_kimchi_storage := false
-	var should_show_fridge_keep := false
-	if state.phase == DefsClass.PHASE_CLEANUP and (state.round_state is Dictionary) and current_player_id >= 0:
-		var rs: Dictionary = state.round_state
-		var ppa_val = rs.get("pending_phase_actions", null)
-		if ppa_val is Dictionary:
-			var ppa: Dictionary = ppa_val
-			var list_val = ppa.get(DefsClass.PHASE_CLEANUP, null)
-			if list_val is Array:
-				var list: Array = list_val
-				if not list.is_empty():
-					var first = list[0]
-					if first is Dictionary:
-						var task: Dictionary = first
-						var kind: String = str(task.get("kind", "")).strip_edges()
-						var pid: int = int(task.get("player_id", -1))
-						if pid == current_player_id:
-							if kind == "kimchi":
-								should_show_kimchi_storage = true
-							elif kind == "fridge_keep":
-								should_show_fridge_keep = true
-					elif first is int or first is float:
-						# 兼容旧存档：Cleanup pending 列表为 [player_id(int)]
-						if int(first) == current_player_id:
-							var kind := ""
-							var cleanup_val = rs.get("cleanup", null)
-							if cleanup_val is Dictionary:
-								var cleanup: Dictionary = cleanup_val
-								kind = str(cleanup.get("pending_choice_kind", "")).strip_edges()
-							if kind == "kimchi":
-								should_show_kimchi_storage = true
-							else:
-								should_show_fridge_keep = true
+	# pending phase actions（Cleanup）：由 registry 路由到对应 modal（避免在 controller 内硬编码 kind）
+	PhaseActionUiRegistryClass.sync_cleanup_pending_modals(self, state, current_player_id, covered, is_local_turn)
 
-	if should_show_kimchi_storage and is_local_turn:
-		show_kimchi_storage_modal(state, current_player_id, covered)
-	else:
-		hide_kimchi_storage_modal()
-
-	if should_show_fridge_keep and is_local_turn:
-		show_fridge_keep_modal(state, current_player_id, covered)
-	else:
-		hide_fridge_keep_modal()
 	# 顺序选择（OrderOfBusiness）
 	var selections := {}
 	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and (state.round_state is Dictionary):

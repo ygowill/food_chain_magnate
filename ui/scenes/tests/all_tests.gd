@@ -96,6 +96,14 @@ func _run_all() -> int:
 			"fn": func() -> Result: return TestRefs.UiBasePiecesLogoHardRefContractTestClass.run(),
 		},
 		{
+			"name": "GamePanelModalsControllerKindContractTest",
+			"fn": func() -> Result: return TestRefs.GamePanelModalsControllerKindContractTestClass.run(),
+		},
+		{
+			"name": "PhaseActionUiRegistryCleanupTest",
+			"fn": func() -> Result: return TestRefs.PhaseActionUiRegistryCleanupTestClass.run(),
+		},
+		{
 			"name": "OnlineRoomManagerTest",
 			"fn": func() -> Result: return TestRefs.OnlineRoomManagerTestClass.run(),
 		},

@@ -205,12 +205,23 @@
 
 ### P1-1) `GamePanelModalsController` 写死 `kind == "kimchi"`（软耦合）
 
+- **状态**
+  - ✅ 已完成（2026-02-10）
 - **涉及位置**
   - `ui/scenes/game/game_panel_modals_controller.gd`
 - **迁移/解耦目标**
   - 核心控制器不再了解任意具体模块的 kind 列表。
 - **接口形态**
   - 同 P0-1：`PhaseActionUiRegistry`
+- **已实施改动**
+  - 新增 `ui/scenes/game/phase_action_ui_registry.gd`：集中处理 Cleanup 的 pending action -> modal 路由（包含旧存档格式兼容）
+  - `game_panel_modals_controller.gd`：移除对具体 kind 的分支判断，改为调用 registry 进行显示/隐藏
+- **新增/补充测试**
+  - `ui/scenes/tests/phase_action_ui_registry_cleanup_test.gd`（覆盖新/旧 pending 格式与交互/非交互分支）
+  - `ui/scenes/tests/game_panel_modals_controller_kind_contract_test.gd`（防止 controller 回退到硬编码 kind）
+- **验收结果**
+  - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
 - **实施步骤（建议）**
   1. pending 列表统一数据结构（包含 kind/payload/player_id）。
   2. 控制器统一按 kind 调 handler。
