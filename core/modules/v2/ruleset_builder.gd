@@ -114,6 +114,11 @@ class RulesetRegistrarV2:
 	func register_range_origin_provider(provider_id: String, callback: Callable, priority: int = 100) -> Result:
 		return _ruleset.register_range_origin_provider(provider_id, callback, priority, _module_id)
 
+	func register_phase_action_ui_modal(phase_name: String, kind: String, scene_path: String, priority: int = 100) -> Result:
+		if _ruleset == null or not _ruleset.has_method("register_phase_action_ui_modal"):
+			return Result.failure("RulesetRegistrarV2: ruleset 缺少 register_phase_action_ui_modal")
+		return _ruleset.register_phase_action_ui_modal(phase_name, kind, scene_path, priority, _module_id)
+
 	func register_employee_pool_patch(patch_id: String, employee_id: String, delta: int) -> Result:
 		return _ruleset.register_employee_pool_patch(patch_id, employee_id, delta, _module_id)
 

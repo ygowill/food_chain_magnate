@@ -49,6 +49,7 @@ var settlement_triggers_override: Array[Dictionary] = []  # [{phase, timing, poi
 var phase_sub_phase_order_overrides: Array[Dictionary] = []  # [{phase, order, priority, source}]
 var state_initializers: Array[Dictionary] = []  # [{id, callback, priority, source}]
 var state_int_key_dict_schemas: Array[Dictionary] = []  # [{id, root, path, priority, source}]
+var phase_action_ui_modals: Array[Dictionary] = []  # [{phase, kind, scene_path, priority, source}]
 var _entry_instances: Array = []
 
 func retain_entry_instance(inst) -> void:
@@ -210,6 +211,73 @@ func register_placement_conflict_provider(provider_id: String, callback: Callabl
 
 func register_range_origin_provider(provider_id: String, callback: Callable, priority: int = 100, source_module_id: String = "") -> Result:
 	return ProviderRegistrationHelperClass.register_range_origin_provider(self, provider_id, callback, priority, source_module_id)
+
+func register_phase_action_ui_modal(
+	phase_name: String,
+	kind: String,
+	scene_path: String,
+	priority: int = 100,
+	source_module_id: String = ""
+) -> Result:
+	var phase := str(phase_name).strip_edges()
+	if phase.is_empty():
+		return Result.failure("RulesetV2: phase_action_ui_modal.phase_name 不能为空")
+	var k := str(kind).strip_edges()
+	if k.is_empty():
+		return Result.failure("RulesetV2: phase_action_ui_modal.kind 不能为空")
+	var path := str(scene_path).strip_edges()
+	if path.is_empty():
+		return Result.failure("RulesetV2: phase_action_ui_modal.scene_path 不能为空")
+	if not path.begins_with("res://"):
+		return Result.failure("RulesetV2: phase_action_ui_modal.scene_path 必须以 res:// 开头: %s" % path)
+
+	var entry := {
+		"phase": phase,
+		"kind": k,
+		"scene_path": path,
+		"priority": int(priority),
+		"source": str(source_module_id),
+	}
+
+	for i in range(phase_action_ui_modals.size()):
+		var prev_val = phase_action_ui_modals[i]
+		if not (prev_val is Dictionary):
+			continue
+		var prev: Dictionary = prev_val
+		if str(prev.get("phase", "")).strip_edges() != phase:
+			continue
+		if str(prev.get("kind", "")).strip_edges() != k:
+			continue
+		var prev_src := str(prev.get("source", "")).strip_edges()
+		phase_action_ui_modals[i] = entry
+		if not prev_src.is_empty():
+			return Result.success().with_warning("phase action ui modal 覆盖: %s:%s (%s -> %s)" % [phase, k, prev_src, str(source_module_id)])
+		return Result.success()
+
+	phase_action_ui_modals.append(entry)
+	return Result.success()
+
+func get_phase_action_ui_modal_scene_path(phase_name: String, kind: String) -> String:
+	var phase := str(phase_name).strip_edges()
+	var k := str(kind).strip_edges()
+	if phase.is_empty() or k.is_empty():
+		return ""
+
+	var best_path := ""
+	var best_pri := -2147483648
+	for e_val in phase_action_ui_modals:
+		if not (e_val is Dictionary):
+			continue
+		var e: Dictionary = e_val
+		if str(e.get("phase", "")).strip_edges() != phase:
+			continue
+		if str(e.get("kind", "")).strip_edges() != k:
+			continue
+		var pri := int(e.get("priority", 100))
+		if best_path.is_empty() or pri >= best_pri:
+			best_pri = pri
+			best_path = str(e.get("scene_path", "")).strip_edges()
+	return best_path
 
 func register_state_initializer(initializer_id: String, callback: Callable, priority: int = 100, source_module_id: String = "") -> Result:
 	return StateAndOrderHelperClass.register_state_initializer(self, initializer_id, callback, priority, source_module_id)

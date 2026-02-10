@@ -1,7 +1,7 @@
 class_name KimchiStorageModalUiTest
 extends RefCounted
 
-const ModalScene: PackedScene = preload("res://ui/components/modal_panel/kimchi_storage_modal.tscn")
+const ModalScene: PackedScene = preload("res://modules/kimchi/ui/components/modal_panel/kimchi_storage_modal.tscn")
 
 static func run(seed_val: int = 12345) -> Result:
 	var tree = Engine.get_main_loop()
@@ -105,4 +105,3 @@ static func _cleanup_modal(modal: Node) -> void:
 	var tree = Engine.get_main_loop()
 	if tree is SceneTree:
 		await (tree as SceneTree).process_frame
-

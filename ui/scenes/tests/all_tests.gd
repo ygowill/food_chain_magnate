@@ -104,6 +104,10 @@ func _run_all() -> int:
 			"fn": func() -> Result: return TestRefs.PhaseActionUiRegistryCleanupTestClass.run(),
 		},
 		{
+			"name": "PhaseActionUiModalRegistrationTest",
+			"fn": func() -> Result: return TestRefs.PhaseActionUiModalRegistrationTestClass.run(),
+		},
+		{
 			"name": "OnlineRoomManagerTest",
 			"fn": func() -> Result: return TestRefs.OnlineRoomManagerTestClass.run(),
 		},

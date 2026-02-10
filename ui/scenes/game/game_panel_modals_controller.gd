@@ -6,7 +6,6 @@ extends RefCounted
 const TurnOrderSelectionModalScene = preload("res://ui/components/modal_panel/turn_order_selection_modal.tscn")
 const ReserveCardSelectionModalScene = preload("res://ui/components/modal_panel/reserve_card_selection_modal.tscn")
 const FridgeKeepModalScene = preload("res://ui/components/modal_panel/fridge_keep_modal.tscn")
-const KimchiStorageModalScene = preload("res://ui/components/modal_panel/kimchi_storage_modal.tscn")
 
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
@@ -163,6 +162,26 @@ func _initialize_modal(modal_ref, scene: PackedScene, signal_map: Dictionary):
 			UiSignalHelpersClass.safe_connect(inst, sig_name, cb)
 
 	return inst
+
+func _load_phase_action_ui_modal_scene(phase_name: String, kind: String) -> PackedScene:
+	if _scene == null:
+		return null
+	var engine = _scene.game_engine if _scene != null else null
+	if engine == null:
+		return null
+	var ruleset = engine.ruleset_v2
+	if ruleset == null or not ruleset.has_method("get_phase_action_ui_modal_scene_path"):
+		return null
+
+	var scene_path: String = str(ruleset.get_phase_action_ui_modal_scene_path(phase_name, kind)).strip_edges()
+	if scene_path.is_empty():
+		GameLog.warn("GamePanelModalsController", "未注册 phase action UI modal: %s:%s" % [phase_name, kind])
+		return null
+	var res = load(scene_path)
+	if res is PackedScene:
+		return res
+	GameLog.warn("GamePanelModalsController", "phase action UI modal 类型错误（期望 PackedScene）: %s" % scene_path)
+	return null
 
 func show_turn_order_modal_for_state(state: GameState) -> void:
 	if state == null:
@@ -493,7 +512,12 @@ func show_kimchi_storage_modal(state: GameState, current_player_id: int, covered
 	if state == null:
 		return
 
-	_kimchi_storage_modal = _initialize_modal(_kimchi_storage_modal, KimchiStorageModalScene, {
+	var modal_scene: PackedScene = _load_phase_action_ui_modal_scene(DefsClass.PHASE_CLEANUP, "kimchi")
+	if modal_scene == null:
+		hide_kimchi_storage_modal()
+		return
+
+	_kimchi_storage_modal = _initialize_modal(_kimchi_storage_modal, modal_scene, {
 		"completed": _on_kimchi_storage_modal_completed,
 	})
 	if not is_instance_valid(_kimchi_storage_modal):

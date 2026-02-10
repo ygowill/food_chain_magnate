@@ -230,13 +230,25 @@
 
 ### P1-2) `KimchiStorageModal` 与 kimchi 私有 round_state 混入核心 UI
 
+- **状态**
+  - ✅ 已完成（2026-02-10）
 - **涉及位置**
-  - `ui/components/modal_panel/kimchi_storage_modal.gd`
-  - `ui/components/modal_panel/kimchi_storage_modal.tscn`
+  - `modules/kimchi/ui/components/modal_panel/kimchi_storage_modal.gd`
+  - `modules/kimchi/ui/components/modal_panel/kimchi_storage_modal.tscn`
 - **迁移/解耦目标**
   - kimchi 专属 UI 迁移至 `modules/kimchi/ui/...`，核心 UI 不读 `round_state.kimchi` 私有结构。
 - **接口形态**
   - handler 由模块提供；UI model 从 payload 或 build_model 产生。
+- **已实施改动**
+  - 将 `KimchiStorageModal` scene/script 从核心 UI 迁移到 `modules/kimchi/ui/...`
+  - 在 `RulesetV2` 中新增 phase action UI modal 注册/查询接口；kimchi 模块在 `rules/entry.gd` 注册 Cleanup 的 kimchi modal 场景路径
+  - `GamePanelModalsController` 在显示 kimchi modal 时从 ruleset 查询并动态加载场景（避免核心 UI 硬编码模块 UI 路径）
+- **新增/补充测试**
+  - `ui/scenes/tests/phase_action_ui_modal_registration_test.gd`（确保 kimchi modal 已注册且可实例化）
+  - 更新 `ui/scenes/tests/kimchi_storage_modal_ui_test.gd` 使用模块内的新场景路径
+- **验收结果**
+  - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
 - **验收标准**
   - `rg -n '\\bkimchi\\b' ui/components/modal_panel --glob '!ui/scenes/tests/**'` 不再命中 kimchi 专属 modal（若迁移走）。
 

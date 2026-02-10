@@ -19,6 +19,7 @@ const UiLobbyistsRoadOverlaysHardRefContractTestClass = preload("res://ui/scenes
 const UiBasePiecesLogoHardRefContractTestClass = preload("res://ui/scenes/tests/ui_base_pieces_logo_hard_ref_contract_test.gd")
 const GamePanelModalsControllerKindContractTestClass = preload("res://ui/scenes/tests/game_panel_modals_controller_kind_contract_test.gd")
 const PhaseActionUiRegistryCleanupTestClass = preload("res://ui/scenes/tests/phase_action_ui_registry_cleanup_test.gd")
+const PhaseActionUiModalRegistrationTestClass = preload("res://ui/scenes/tests/phase_action_ui_modal_registration_test.gd")
 const OnlineRoomManagerTestClass = preload("res://core/tests/online_room_manager_test.gd")
 const OnlineRoomListTestClass = preload("res://core/tests/online_room_list_test.gd")
 const OnlineStartGameReplayTestClass = preload("res://core/tests/online_start_game_replay_test.gd")

@@ -50,6 +50,16 @@ func register(registrar) -> Result:
 	if not r.ok:
 		return r
 
+	# UI：Cleanup pending choice 的 kimchi modal（由模块提供 UI，核心 UI 仅路由）
+	r = registrar.register_phase_action_ui_modal(
+		PhaseDefsClass.PHASE_CLEANUP,
+		MODULE_ID,
+		"res://modules/kimchi/ui/components/modal_panel/kimchi_storage_modal.tscn",
+		100
+	)
+	if not r.ok:
+		return r
+
 	return Result.success()
 
 func _get_demand_variants(_state: GameState, _house_id: String, house: Dictionary, base_required: Dictionary) -> Array[Dictionary]:
