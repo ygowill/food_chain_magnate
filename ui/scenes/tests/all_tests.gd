@@ -487,14 +487,18 @@ func _run_all() -> int:
 						"name": "KetchupMechanismV2Test",
 						"fn": func() -> Result: return TestRefs.KetchupMechanismV2TestClass.run(2, 12345),
 					},
-					{
-						"name": "KimchiStorageModalUiTest",
-						"fn": func() -> Result: return await TestRefs.KimchiStorageModalUiTestClass.run(12345),
-					},
-					{
-						"name": "KimchiV2Test",
-						"fn": func() -> Result: return TestRefs.KimchiV2TestClass.run(2, 12345),
-					},
+						{
+							"name": "KimchiStorageModalUiTest",
+							"fn": func() -> Result: return await TestRefs.KimchiStorageModalUiTestClass.run(12345),
+						},
+						{
+							"name": "FridgeKeepModalUiTest",
+							"fn": func() -> Result: return await TestRefs.FridgeKeepModalUiTestClass.run(12345),
+						},
+						{
+							"name": "KimchiV2Test",
+							"fn": func() -> Result: return TestRefs.KimchiV2TestClass.run(2, 12345),
+						},
 					{
 						"name": "CoffeeV2Test",
 						"fn": func() -> Result: return TestRefs.CoffeeV2TestClass.run(12345),

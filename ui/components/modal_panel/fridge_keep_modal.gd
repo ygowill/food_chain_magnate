@@ -2,7 +2,7 @@
 class_name FridgeKeepModal
 extends "res://ui/components/modal_panel/modal_panel_base.gd"
 
-const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cleanup_settlement.gd")
+const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 
 @onready var info_label: Label = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/InfoLabel
@@ -52,7 +52,7 @@ func setup(state: GameState, current_player_id: int) -> void:
 		_set_labels_invalid("玩家里程碑数据无效")
 		return
 
-	var fridge_r := CleanupSettlementClass.get_fridge_capacity_from_milestones(ms_val)
+	var fridge_r := _get_fridge_capacity_from_milestones(ms_val)
 	if not fridge_r.ok:
 		_set_labels_invalid(fridge_r.error)
 		return
@@ -115,6 +115,23 @@ func _on_confirm_pressed() -> void:
 	# 点击确认后先禁用按钮，避免重复触发；后续由 GamePanelController 根据 state 决定是否继续弹下一位。
 	set_confirm_enabled(false)
 	completed.emit({"keep": keep})
+
+static func _get_fridge_capacity_from_milestones(milestones: Array) -> Result:
+	var best_read := MilestoneEffectQueriesClass.max_non_negative_int_value(
+		milestones,
+		"gain_fridge",
+		"FridgeKeepModal: ",
+		"player.milestones"
+	)
+	if not best_read.ok:
+		return best_read
+	if not (best_read.value is Dictionary):
+		return Result.failure("FridgeKeepModal: 内部错误（max_non_negative_int_value 返回值类型错误）")
+	var best: Dictionary = best_read.value
+	return Result.success({
+		"has_fridge": bool(best.get("found", false)),
+		"capacity": int(best.get("value", 0)),
+	})
 
 func _on_cancel_pressed() -> void:
 	# 强制弹窗：不允许取消

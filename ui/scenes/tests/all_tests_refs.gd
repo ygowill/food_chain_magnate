@@ -114,6 +114,7 @@ const PoolBuilderV2TestClass = preload("res://core/tests/pool_builder_v2_test.gd
 const MarketingBoardDataTestClass = preload("res://core/tests/marketing_board_data_test.gd")
 const MarketingPanelModuleTypesUiTestClass = preload("res://ui/scenes/tests/marketing_panel_module_types_ui_test.gd")
 const KimchiStorageModalUiTestClass = preload("res://ui/scenes/tests/kimchi_storage_modal_ui_test.gd")
+const FridgeKeepModalUiTestClass = preload("res://ui/scenes/tests/fridge_keep_modal_ui_test.gd")
 const MarketingCampaignsTestClass = preload("res://core/tests/marketing_campaigns_test.gd")
 const MassMarketeersV2TestClass = preload("res://core/tests/mass_marketeers_v2_test.gd")
 const KetchupMechanismV2TestClass = preload("res://core/tests/ketchup_mechanism_v2_test.gd")
