@@ -1,76 +1,83 @@
-# Food Chain Magnate（快餐连锁大亨）- 电子版
+# Food Chain Magnate - Fan-made Digital Edition (Toy Project)
 
-基于 Godot 4.5 的桌游《Food Chain Magnate》电子版项目，支持本地对局与联机（Dedicated Server + WebSocket）。
+[中文说明 / Chinese README](README.zh-CN.md)
 
-## 目录
+This is a **toy project for trying “vibe coding”** and exploring Godot workflows.
 
-- [开发环境](#开发环境)
-- [测试](#测试)
-- [运行/部署 Dedicated Server](#运行部署-dedicated-server)
-- [CI/CD（自动发版）](#cicd自动发版)
+It is **work in progress** and may contain **many bugs, broken rules, missing features, and rough UX**. Please do not treat it as a polished product.
 
-## 开发环境
+Built with **Godot 4.5**, aiming to support local play and online multiplayer (Dedicated Server + WebSocket).
 
-- Godot：4.5.x（编辑器/CLI）
-- 建议先阅读：`docs/testing.md`
+## Contents
 
-## 测试
+- [Development](#development)
+- [Tests](#tests)
+- [Run/Deploy Dedicated Server](#rundeploy-dedicated-server)
+- [CI/CD (Automated Releases)](#cicd-automated-releases)
+- [Acknowledgements](#acknowledgements)
 
-推荐用仓库脚本跑全部 headless 测试（带超时与日志处理）：
+## Development
+
+- Godot: 4.5.x (editor/CLI)
+- Read first: `docs/testing.md`
+
+## Tests
+
+Run all headless tests (with timeout + log handling):
 
 ```bash
 tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60
 ```
 
-单个测试场景：
+Run a single test scene:
 
 ```bash
 tools/run_headless_test.sh res://ui/scenes/tests/replay_test.tscn ReplayTest 20
 ```
 
-## 运行/部署 Dedicated Server
+## Run/Deploy Dedicated Server
 
-### 方式 A：本机直接运行（Godot CLI）
+### Option A: Run locally (Godot CLI)
 
 ```bash
 godot --headless --path . --scene res://server/dedicated_server.tscn -- --port=7000 --bind=*
 ```
 
-参数：
+Args:
 
 - `--port`：监听端口（默认 `7000`）
 - `--bind`：监听地址（默认 `*`，表示所有网卡）
 
-### 方式 B：Docker（推荐用于部署）
+### Option B: Docker (recommended for deployment)
 
-仓库已提供一键部署脚本（会构建镜像并以容器方式运行/更新）：
+This repo provides a one-click deploy script (builds an image and runs/updates the container):
 
 ```bash
 ./server/deploy.sh --port 7000
 ```
 
-更多参数：
+More options:
 
 ```bash
 ./server/deploy.sh --help
 ```
 
-公网部署（`wss://`）建议参考：
+For public deployment (`wss://`) suggestions:
 
 - `docs/refactors/multiplayer_public_deployment.md`
 
-## CI/CD（自动发版）
+## CI/CD (Automated Releases)
 
-本仓库使用 GitHub Actions：
+This repo uses GitHub Actions:
 
-- 仅当 `main` 分支上的版本号 tag（`v*`）被 push 时触发
-- 自动执行：
-  - headless 测试（`AllTests`）
-  - 构建并打包 Windows 客户端（`.exe`），作为 GitHub Release Assets
-  - 构建并推送 server Docker image（GHCR）
-  - 创建 GitHub Release
+- Triggers **only** when a version tag (`v*`) on `main` is pushed.
+- Automatically runs:
+  - headless tests (`AllTests`)
+  - exports and zips Windows client (`.exe`) as GitHub Release assets
+  - builds and pushes the server Docker image (GHCR)
+  - creates a GitHub Release
 
-发版示例：
+Release example:
 
 ```bash
 git checkout main
@@ -79,3 +86,7 @@ git tag v0.1.2
 git push origin v0.1.2
 ```
 
+## Acknowledgements
+
+- Many thanks to **Splotter Spellen** for publishing *Food Chain Magnate*. This project is a fan-made experiment.
+- Thanks to [OnlineBoardGamers](https://www.onlineboardgamers.com/) — I’m grateful I discovered this game, and OnlineBoardGamers gave me a lot of inspiration for this development.
