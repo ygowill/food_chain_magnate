@@ -354,10 +354,22 @@
 
 ### P2-2) 产品名映射（coffee/kimchi/noodles/sushi）写死在 UI
 
+- **状态**
+  - ✅ 已完成（2026-02-10）
+- **涉及位置**
+  - `ui/components/left_panel/left_panel.gd`
+  - `ui/components/inventory_panel/inventory_panel.gd`
 - **迁移/解耦目标**
   - UI 用 `ProductRegistry` 的 `ProductDef.name` 生成展示名，避免硬编码模块产品集合。
+- **已实施改动**
+  - 移除 UI 内置 `PRODUCT_NAMES` 映射：`LeftPanel` 与 `InventoryPanel.ProductItem` 在 `ProductRegistry` 已加载时读取 `ProductDef.name`，未加载时回退到 `product_id`。
+- **新增/补充测试**
+  - `ui/scenes/tests/ui_product_name_mapping_contract_test.gd`（扫描 `ui/**` 生产代码，禁止出现 coffee/kimchi/noodles/sushi 的硬编码映射对；排除 `ui/scenes/tests/**`）
+- **验收结果**
+  - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
 - **验收标准**
-  - `rg -n '\"coffee\"\\s*:\\s*\"咖啡\"|\"kimchi\"\\s*:\\s*\"泡菜\"|\"noodles\"|\"sushi\"' ui/components --glob '!ui/scenes/tests/**'` 命中显著减少/归零。
+  - `rg -n '\"coffee\"\\s*:\\s*\"咖啡\"|\"kimchi\"\\s*:\\s*\"泡菜\"|\"noodles\"\\s*:\\s*\"面条\"|\"sushi\"\\s*:\\s*\"寿司\"' ui --glob '!ui/scenes/tests/**'` 返回空。
 
 ### P2-3) EmployeeTree 布局写死 `fry_chef`
 

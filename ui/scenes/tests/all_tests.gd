@@ -104,6 +104,10 @@ func _run_all() -> int:
 			"fn": func() -> Result: return TestRefs.UiModulesBaseDirContractTestClass.run(),
 		},
 		{
+			"name": "UiProductNameMappingContractTest",
+			"fn": func() -> Result: return TestRefs.UiProductNameMappingContractTestClass.run(),
+		},
+		{
 			"name": "GamePanelModalsControllerKindContractTest",
 			"fn": func() -> Result: return TestRefs.GamePanelModalsControllerKindContractTestClass.run(),
 		},

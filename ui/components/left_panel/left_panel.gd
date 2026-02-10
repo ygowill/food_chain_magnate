@@ -10,6 +10,7 @@ signal logs_requested()
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const LeftPanelEmployeeIconsControllerClass = preload("res://ui/components/left_panel/left_panel_employee_icons_controller.gd")
 const LeftPanelTurnLogControllerClass = preload("res://ui/components/left_panel/left_panel_turn_log_controller.gd")
 
@@ -48,18 +49,6 @@ const LeftPanelTurnLogControllerClass = preload("res://ui/components/left_panel/
 
 const TAB_EMPLOYEES := 0
 const TAB_MILESTONES := 1
-
-const PRODUCT_NAMES: Dictionary = {
-	"burger": "汉堡",
-	"pizza": "披萨",
-	"lemonade": "柠檬水",
-	"beer": "啤酒",
-	"soda": "苏打",
-	"coffee": "咖啡",
-	"kimchi": "泡菜",
-	"noodles": "面条",
-	"sushi": "寿司",
-}
 
 const EMPLOYEE_CATEGORY_ORDER := ["管理", "厨房", "营销", "其他"]
 const EMPLOYEE_CATEGORY_ICON: Dictionary = {
@@ -520,9 +509,23 @@ func _build_inventory_token_item(product_id: String, count: int) -> Control:
 	label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95, 1))
 	hbox.add_child(label)
 
-	var name := str(PRODUCT_NAMES.get(product_id, product_id))
+	var name := _get_product_display_name(product_id)
 	hbox.tooltip_text = "%s ×%d" % [name, count]
 	return hbox
+
+func _get_product_display_name(product_id: String) -> String:
+	if product_id.is_empty():
+		return ""
+	var pid := str(product_id)
+	if pid == "cola":
+		pid = "soda"
+	if ProductRegistryClass.is_loaded():
+		var def_val = ProductRegistryClass.get_def(pid)
+		if def_val != null and (def_val is ProductDef):
+			var def: ProductDef = def_val
+			if not def.name.is_empty():
+				return def.name
+	return pid
 
 func _get_product_icon_texture(product_id: String) -> Texture2D:
 	_ensure_skin()
