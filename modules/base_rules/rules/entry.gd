@@ -22,7 +22,7 @@ func register(registrar) -> Result:
 	var modal_r = registrar.register_phase_action_ui_modal(
 		PhaseDefsClass.PHASE_CLEANUP,
 		CLEANUP_KIND_FRIDGE_KEEP,
-		"res://ui/components/modal_panel/fridge_keep_modal.tscn",
+		"res://modules/base_rules/ui/components/modal_panel/fridge_keep_modal.tscn",
 		100
 	)
 	if not modal_r.ok:

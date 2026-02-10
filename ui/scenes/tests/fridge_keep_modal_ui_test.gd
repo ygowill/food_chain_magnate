@@ -1,7 +1,7 @@
 class_name FridgeKeepModalUiTest
 extends RefCounted
 
-const ModalScene: PackedScene = preload("res://ui/components/modal_panel/fridge_keep_modal.tscn")
+const ModalScene: PackedScene = preload("res://modules/base_rules/ui/components/modal_panel/fridge_keep_modal.tscn")
 
 static func run(seed_val: int = 12345) -> Result:
 	var tree = Engine.get_main_loop()
@@ -104,4 +104,3 @@ static func _cleanup_modal(modal: Node) -> void:
 	var tree = Engine.get_main_loop()
 	if tree is SceneTree:
 		await (tree as SceneTree).process_frame
-

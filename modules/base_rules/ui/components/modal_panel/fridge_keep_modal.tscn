@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://ui/components/modal_panel/fridge_keep_modal.gd" id="1_fridge_keep_modal"]
+[ext_resource type="Script" path="res://modules/base_rules/ui/components/modal_panel/fridge_keep_modal.gd" id="1_fridge_keep_modal"]
 
 [node name="FridgeKeepModal" type="Control"]
 layout_mode = 3
@@ -96,4 +96,3 @@ theme_override_font_sizes/font_size = 12
 theme_override_colors/font_color = Color(0.7, 0.7, 0.75, 1)
 text = "ESC 取消 | 按住 Space 查看地图"
 horizontal_alignment = 1
-

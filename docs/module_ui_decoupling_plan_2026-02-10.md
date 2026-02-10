@@ -51,7 +51,7 @@
 
 已消除：
 
-- `ui/components/modal_panel/fridge_keep_modal.gd`：已移除对 `modules/base_rules` 的 `preload`（改用 `core/rules/milestone_effect_queries.gd` 查询 `gain_fridge`）
+- `modules/base_rules/ui/components/modal_panel/fridge_keep_modal.gd`：已迁出核心 UI，且移除对 `modules/base_rules` 的 `preload`（改用 `core/rules/milestone_effect_queries.gd` 查询 `gain_fridge`）
 - `ui/scenes/game/map_canvas_drawer_roads_pass.gd`：已移除对 `modules/lobbyists/road_overlays.gd` 的 `preload`（改用本地 key 常量）
 - `ui/scenes/game/map_canvas_drawer_structures_pass.gd`：已移除对 `modules/lobbyists/road_overlays.gd` 的 `preload`（overlay 定义暂存于 UI 常量）
 - `ui/scenes/setup/game_setup.gd`：已移除写死 base_pieces logo 贴图路径（改为通过 visuals catalog / skin 按 piece_id 加载）
@@ -139,7 +139,8 @@
 - **状态**
   - ✅ 已完成（2026-02-10）
 - **涉及位置**
-  - `ui/components/modal_panel/fridge_keep_modal.gd`
+  - `modules/base_rules/ui/components/modal_panel/fridge_keep_modal.gd`
+  - `modules/base_rules/ui/components/modal_panel/fridge_keep_modal.tscn`
 - **问题定义**
   - 核心 UI 编译期依赖模块脚本；UI 调用模块逻辑计算冰箱容量。
 - **迁移/解耦目标**
@@ -152,7 +153,7 @@
   - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
   - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
 - **后续（可选优化）**
-  - 将 fridge_keep modal 迁移至 `modules/base_rules/ui/...` 并通过 `PhaseActionUiRegistry` 注册，进一步减少核心 UI 对 effect_type（`gain_fridge`）的了解。
+  - ✅ 已完成（2026-02-10）：已将 `FridgeKeepModal` 迁移至 `modules/base_rules/ui/...`，并更新 base_rules 的 ruleset 注册路径；核心 UI 不再包含该 modal 文件。
 
 ### P0-2) 地图绘制 pass preload `modules/lobbyists/road_overlays.gd`（硬引用）
 
@@ -402,7 +403,7 @@
   - `modules/base_rules/rules/entry.gd`
   - `ui/scenes/game/phase_action_ui_registry.gd`
   - `ui/scenes/game/game_panel_modals_controller.gd`
-  - `ui/components/modal_panel/fridge_keep_modal.gd`
+  - `modules/base_rules/ui/components/modal_panel/fridge_keep_modal.gd`
   - `modules/kimchi/ui/components/modal_panel/kimchi_storage_modal.gd`
 - **迁移/解耦目标**
   - 核心 UI 不硬编码 `"kimchi"` kind，也不硬编码 kimchi 的 command_id（`choose_kimchi_storage`）。
