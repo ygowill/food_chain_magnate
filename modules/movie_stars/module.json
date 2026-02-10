@@ -13,6 +13,14 @@
 			"movie_stars:dinnertime:tiebreaker:movie_star_b",
 			"movie_stars:dinnertime:tiebreaker:movie_star_c",
 			"movie_stars:dinnertime:tiebreaker:movie_star_d"
-		]
+		],
+		"ui": {
+			"module_selector": {
+				"group_id": "employee_variants",
+				"group_title": "员工变体",
+				"group_order": 50,
+				"order": 0
+			}
+		}
 	}
 }

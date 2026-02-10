@@ -105,22 +105,29 @@ func validate() -> Result:
 	if not r.ok:
 		return r
 
-	# 规则书：6 人局必须启用 New Districts（新区域）模块。
 	var desired_player_count := _get_spinbox_int_value(_player_count_spin)
-	if desired_player_count == 6:
-		var enabled: Array = _module_selector.get_enabled_modules_v2()
-		if not enabled.has("new_districts"):
-			return Result.failure("6 人局必须启用 New Districts（新区域）模块。")
+	if _module_selector.has_method("get_required_optional_modules_for_player_count"):
+		var req_val = _module_selector.call("get_required_optional_modules_for_player_count", desired_player_count)
+		if req_val is Dictionary:
+			var required: Dictionary = req_val
+			var enabled: Array = _module_selector.get_enabled_modules_v2()
+			for mid_val in required.keys():
+				var mid := str(mid_val)
+				if mid.is_empty():
+					continue
+				if not enabled.has(mid):
+					var reason := str(required.get(mid, "")).strip_edges()
+					if reason.is_empty():
+						reason = "缺少必需模块: %s" % mid
+					return Result.failure(reason)
 	return Result.success()
 
 func _sync_module_constraints_for_player_count() -> void:
 	if _module_selector == null or not is_instance_valid(_module_selector):
 		return
 	var desired_player_count := _get_spinbox_int_value(_player_count_spin)
-	if desired_player_count == 6:
-		_module_selector.set_forced_optional_modules(["new_districts"], "6 人局强制启用 New Districts（新区域）模块。")
-	else:
-		_module_selector.set_forced_optional_modules([])
+	if _module_selector.has_method("set_setup_player_count"):
+		_module_selector.call("set_setup_player_count", desired_player_count)
 
 func _ensure_ui() -> void:
 	if _player_count_spin != null and is_instance_valid(_player_count_spin):

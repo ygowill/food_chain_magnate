@@ -32,34 +32,6 @@ var _suppress_player_signals: bool = false
 
 var _logo_icons_small: Array[Texture2D] = []
 
-const MODULE_GROUPS: Array[Dictionary] = [
-	{
-		"id": "map_expansion",
-		"title": "地图扩展（新城区/说客/咖啡）",
-		"modules": ["new_districts", "lobbyists", "coffee"],
-	},
-	{
-		"id": "food_and_chefs",
-		"title": "新菜系/厨师",
-		"modules": ["kimchi", "sushi", "noodles", "fry_chefs"],
-	},
-	{
-		"id": "marketing_expansion",
-		"title": "营销扩展",
-		"modules": ["mass_marketeers", "rural_marketeers", "gourmet_food_critics"],
-	},
-	{
-		"id": "rules_and_milestones",
-		"title": "规则/里程碑变体",
-		"modules": ["new_milestones", "hard_choices", "ketchup_mechanism", "reserve_prices"],
-	},
-	{
-		"id": "employee_variants",
-		"title": "员工变体",
-		"modules": ["movie_stars", "night_shift_managers"],
-	},
-]
-
 func _ready() -> void:
 	GameLog.info("GameSetup", "游戏设置界面已加载")
 	UiStylesClass.apply_dialog_surface(card)
@@ -99,11 +71,6 @@ func _on_start_pressed() -> void:
 
 	# 同步 UI 状态 -> Globals
 	if not _apply_module_selection_to_globals():
-		return
-
-	# 规则书：6 人局必须启用 New Districts（新区域）模块。
-	if Globals.player_count == 6 and not Globals.enabled_modules_v2.has("new_districts"):
-		_set_message("6 人局必须启用 New Districts（新区域）模块。")
 		return
 
 	_apply_player_profiles_to_globals()
@@ -208,10 +175,8 @@ func _sync_player_count_module_constraints() -> void:
 		return
 
 	var count := int(player_count_spinbox.value)
-	if count == 6:
-		_module_selector.set_forced_optional_modules(["new_districts"], "6 人局强制启用 New Districts（新区域）模块。")
-	else:
-		_module_selector.set_forced_optional_modules([])
+	if _module_selector.has_method("set_setup_player_count"):
+		_module_selector.call("set_setup_player_count", count)
 
 func _rebuild_player_rows() -> void:
 	if _players_container == null or not is_instance_valid(_players_container):

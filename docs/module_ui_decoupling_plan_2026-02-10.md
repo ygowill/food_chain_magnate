@@ -504,8 +504,37 @@
 
 - **迁移/解耦目标**
   - 模块分组/标题/排序/徽章/约束（例如 6 人局强制 new_districts）从硬编码迁移到数据驱动（manifest/ui metadata 或 ruleset constraints）。
+- **当前状态**
+  - ✅ 已完成（2026-02-10）
+- **涉及位置**
+  - `ui/components/module_selector/module_selector.gd`
+  - `ui/scenes/setup/game_setup.gd`
+  - `ui/components/room_config_editor/room_config_editor.gd`
+  - `modules/*/module.json`（optional 模块：新增 `provides.ui.module_selector`；`new_districts` 额外新增 `provides.ui.setup_constraints`）
+- **已实施改动**
+  - `ModuleSelector` 分组改为数据驱动：
+    - 移除 `MODULE_GROUPS` 的硬编码 module_id 列表。
+    - 从各模块 `module.json` 的 `provides.ui.module_selector` 读取 `group_id/group_title/group_order/order` 构建 UI 分组与排序。
+  - Setup 约束改为数据驱动：
+    - `new_districts` 在 `module.json` 中声明 `provides.ui.setup_constraints.required_player_counts=[6]` 及原因。
+    - `GameSetup` 与 `RoomConfigEditor` 不再写死 `new_districts`，仅把玩家人数传给 `ModuleSelector.set_setup_player_count(count)`，由 `ModuleSelector` 扫描 manifests 计算强制模块并锁定。
+  - 兼容性规则泛化：
+    - `ModuleSelector` 不再写死 `new_milestones/hard_choices/base_milestones` 特判：
+      - base_* 的移除基于 manifest.conflicts（例如 optional 模块声明冲突 `base_milestones` 时自动从 base 列表移除）。
+      - optional 冲突基于 manifest.conflicts + priority 自动取消“用户显式选择”的低优先级模块（forced/依赖模块不自动取消）。
+      - 当某 base_* 被冲突移除时，会自动取消“用户显式选择”且依赖该 base_* 的模块，并在 UI 中禁用该类模块。
+- **新增/补充测试**
+  - 新增 `ui/scenes/tests/ui_module_selector_hardcoded_module_ids_contract_test.gd`：
+    - 动态枚举 `res://modules/*` 的 optional module_id，并扫描 `ModuleSelector/GameSetup/RoomConfigEditor` 生产代码，禁止出现 module_id 字符串。
+  - 新增 `ui/scenes/tests/module_selector_setup_constraints_test.gd`：
+    - 验证 `6` 人局存在 setup_constraints 必需模块，并且使用 `ModuleSelector.get_enabled_modules_v2()` 生成的模块列表可成功初始化引擎。
+  - 两者均已加入 `ui/scenes/tests/all_tests.tscn`（AllTests）。
+- **验收结果**
+  - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
 - **验收标准**
-  - `rg -n '\"new_districts\"|\"lobbyists\"|\"coffee\"|\"kimchi\"|\"sushi\"|\"noodles\"|\"fry_chefs\"' ui/components/module_selector/module_selector.gd` 命中显著减少（理想为 0，或仅保留通用 fallback）。
+  - `rg -n '\"new_districts\"|\"lobbyists\"|\"coffee\"|\"kimchi\"|\"sushi\"|\"noodles\"|\"fry_chefs\"' ui/components/module_selector/module_selector.gd` 返回空（理想为 0）。
+  - `rg -n '\"new_districts\"' ui/scenes/setup/game_setup.gd ui/components/room_config_editor/room_config_editor.gd` 返回空。
 
 ---
 

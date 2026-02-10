@@ -8,6 +8,18 @@
 	"conflicts": [],
 	"entry_script": "res://modules/new_districts/rules/entry.gd",
 	"provides": {
-		"content": ["pieces", "tiles"]
+		"content": ["pieces", "tiles"],
+		"ui": {
+			"module_selector": {
+				"group_id": "map_expansion",
+				"group_title": "地图变体",
+				"group_order": 10,
+				"order": 0
+			},
+			"setup_constraints": {
+				"required_player_counts": [6],
+				"reason": "6 人局强制启用 New Districts（新区域）模块。"
+			}
+		}
 	}
 }

@@ -76,6 +76,10 @@ func _run_all() -> int:
 			"fn": func() -> Result: return TestRefs.SixPlayersSetupTestClass.run(12345),
 		},
 		{
+			"name": "ModuleSelectorSetupConstraintsTest",
+			"fn": func() -> Result: return TestRefs.ModuleSelectorSetupConstraintsTestClass.run(12345),
+		},
+		{
 			"name": "PaydaySalaryTokenEligibilityTest",
 			"fn": func() -> Result: return TestRefs.PaydaySalaryTokenEligibilityTestClass.run(),
 		},
@@ -106,6 +110,10 @@ func _run_all() -> int:
 		{
 			"name": "MilestonePanelEffectTextContractTest",
 			"fn": func() -> Result: return TestRefs.MilestonePanelEffectTextContractTestClass.run(),
+		},
+		{
+			"name": "UiModuleSelectorHardcodedModuleIdsContractTest",
+			"fn": func() -> Result: return TestRefs.UiModuleSelectorHardcodedModuleIdsContractTestClass.run(),
 		},
 		{
 			"name": "UiBasePiecesLogoHardRefContractTest",

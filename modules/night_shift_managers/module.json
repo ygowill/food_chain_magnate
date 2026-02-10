@@ -11,7 +11,14 @@
 		"content": ["employees"],
 		"hooks": [
 			"hook:phase:Working:before_enter"
-		]
+		],
+		"ui": {
+			"module_selector": {
+				"group_id": "employee_variants",
+				"group_title": "员工变体",
+				"group_order": 50,
+				"order": 1
+			}
+		}
 	}
 }
-
