@@ -4,43 +4,7 @@ extends RefCounted
 const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
 const OverlayUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_overlay_utils.gd")
 const RoadsPassClass = preload("res://ui/scenes/game/map_canvas_drawer_roads_pass.gd")
-
-# Local copy of lobbyists road overlay definitions to avoid hard dependency on module scripts.
-# TODO: replace with MapOverlayProviderRegistry outputs.
-const LOBBYISTS_ROAD_OVERLAYS := {
-	"lobbyists_road_straight": {
-		"segments": [
-			{"offset": Vector2i(0, 0), "dirs": ["E", "W"]},
-			{"offset": Vector2i(1, 0), "dirs": ["E", "W"]},
-		],
-		"arrows": [
-			{"offset": Vector2i(0, 0), "dir": "W"},
-			{"offset": Vector2i(1, 0), "dir": "E"},
-		],
-	},
-	"lobbyists_road_long": {
-		"segments": [
-			{"offset": Vector2i(0, 0), "dirs": ["E", "W"]},
-			{"offset": Vector2i(1, 0), "dirs": ["E", "W"]},
-			{"offset": Vector2i(2, 0), "dirs": ["E", "W"]},
-		],
-		"arrows": [
-			{"offset": Vector2i(0, 0), "dir": "W"},
-			{"offset": Vector2i(2, 0), "dir": "E"},
-		],
-	},
-	"lobbyists_road_l": {
-		"segments": [
-			{"offset": Vector2i(0, 0), "dirs": ["N", "S"]},
-			{"offset": Vector2i(0, 1), "dirs": ["N", "E"]},
-			{"offset": Vector2i(1, 1), "dirs": ["W", "E"]},
-		],
-		"arrows": [
-			{"offset": Vector2i(0, 0), "dir": "N"},
-			{"offset": Vector2i(1, 1), "dir": "E"},
-		],
-	},
-}
+const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
 
 static func draw_drink_sources(canvas, cell_size: int) -> void:
 	for y in range(canvas._grid_size.y):
@@ -81,11 +45,13 @@ static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: A
 			draw_apartment(canvas, cell_size, info)
 			continue
 
-		if piece_id.begins_with("lobbyists_road_"):
-			draw_lobbyists_road_piece(canvas, cell_size, anchor, info)
+		var road_overlay := PieceUiHintsRegistryClass.get_road_overlay(piece_id)
+		if not road_overlay.is_empty():
+			draw_road_overlay_piece(canvas, cell_size, anchor, info, road_overlay)
 			continue
 
-		if piece_id == "park" or piece_id.begins_with("lobbyists_park_"):
+		var ui_kind := PieceUiHintsRegistryClass.get_kind(piece_id)
+		if piece_id == "park" or ui_kind == "park":
 			draw_park_piece(canvas, cell_size, info)
 			continue
 
@@ -496,10 +462,10 @@ static func _draw_dir_arrow(canvas, rect: Rect2, dir: String, col: Color) -> voi
 
 	canvas.draw_colored_polygon(points, col)
 
-static func draw_lobbyists_road_piece(canvas, cell_size: int, anchor: Vector2i, info: Dictionary, alpha: float = 1.0) -> void:
+static func draw_road_overlay_piece(canvas, cell_size: int, anchor: Vector2i, info: Dictionary, overlay: Dictionary, alpha: float = 1.0) -> void:
 	if canvas == null or canvas._skin == null:
 		return
-	var piece_id: String = str(info.get("piece_id", ""))
+	var piece_id: String = str(info.get("piece_id", "")).strip_edges()
 	if piece_id.is_empty():
 		return
 	var cells_val = info.get("cells", null)
@@ -507,11 +473,8 @@ static func draw_lobbyists_road_piece(canvas, cell_size: int, anchor: Vector2i, 
 		return
 
 	var rot := int(info.get("rotation", 0))
-
-	var overlay_val = LOBBYISTS_ROAD_OVERLAYS.get(piece_id, null)
-	if not (overlay_val is Dictionary):
+	if overlay == null or overlay.is_empty():
 		return
-	var overlay: Dictionary = overlay_val
 
 	# Base road visuals: reuse the same road textures as normal roads, then overlay arrows + roadworks sign.
 	var segments_val = overlay.get("segments", null)

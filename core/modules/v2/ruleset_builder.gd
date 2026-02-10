@@ -119,6 +119,11 @@ class RulesetRegistrarV2:
 			return Result.failure("RulesetRegistrarV2: ruleset 缺少 register_phase_action_ui_modal")
 		return _ruleset.register_phase_action_ui_modal(phase_name, kind, scene_path, priority, _module_id)
 
+	func register_piece_ui_hint(piece_id: String, hints: Dictionary, priority: int = 100) -> Result:
+		if _ruleset == null or not _ruleset.has_method("register_piece_ui_hint"):
+			return Result.failure("RulesetRegistrarV2: ruleset 缺少 register_piece_ui_hint")
+		return _ruleset.register_piece_ui_hint(piece_id, hints, priority, _module_id)
+
 	func register_employee_pool_patch(patch_id: String, employee_id: String, delta: int) -> Result:
 		return _ruleset.register_employee_pool_patch(patch_id, employee_id, delta, _module_id)
 

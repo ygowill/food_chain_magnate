@@ -60,6 +60,27 @@ func register(registrar) -> Result:
 		var r: Result = step.call()
 		if not r.ok:
 			return r
+
+	# UI hints: keep piece classification and overlay definitions out of core UI code.
+	var overlays: Dictionary = LobbyistsRoadOverlaysClass.ROAD_OVERLAYS
+	for pid_val in LobbyistsRoadOverlaysClass.ROAD_PIECES:
+		var pid := str(pid_val).strip_edges()
+		if pid.is_empty():
+			continue
+		var overlay_val = overlays.get(pid, null)
+		if not (overlay_val is Dictionary):
+			return Result.failure("%s: ROAD_OVERLAYS 缺失: %s" % [MODULE_ID, pid])
+		var r_hint: Result = registrar.register_piece_ui_hint(pid, {"kind": "road", "road_overlay": overlay_val}, 100)
+		if not r_hint.ok:
+			return r_hint
+
+	for pid_val in PARK_SUPPLY_BY_PIECE_ID.keys():
+		var pid2 := str(pid_val).strip_edges()
+		if pid2.is_empty():
+			continue
+		var r_hint2: Result = registrar.register_piece_ui_hint(pid2, {"kind": "park"}, 100)
+		if not r_hint2.ok:
+			return r_hint2
 	return Result.success()
 
 func _on_restructuring_before_enter(state: GameState) -> Result:

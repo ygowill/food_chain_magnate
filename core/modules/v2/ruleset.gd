@@ -50,6 +50,7 @@ var phase_sub_phase_order_overrides: Array[Dictionary] = []  # [{phase, order, p
 var state_initializers: Array[Dictionary] = []  # [{id, callback, priority, source}]
 var state_int_key_dict_schemas: Array[Dictionary] = []  # [{id, root, path, priority, source}]
 var phase_action_ui_modals: Array[Dictionary] = []  # [{phase, kind, scene_path, priority, source}]
+var piece_ui_hints: Array[Dictionary] = []  # [{piece_id, hints, priority, source}]
 var _entry_instances: Array = []
 
 func retain_entry_instance(inst) -> void:
@@ -278,6 +279,30 @@ func get_phase_action_ui_modal_scene_path(phase_name: String, kind: String) -> S
 			best_pri = pri
 			best_path = str(e.get("scene_path", "")).strip_edges()
 	return best_path
+
+func register_piece_ui_hint(piece_id: String, hints: Dictionary, priority: int = 100, source_module_id: String = "") -> Result:
+	var pid := str(piece_id).strip_edges()
+	if pid.is_empty():
+		return Result.failure("RulesetV2: piece_ui_hint.piece_id 不能为空")
+	if hints == null or not (hints is Dictionary):
+		return Result.failure("RulesetV2: piece_ui_hint.hints 类型错误（期望 Dictionary）: %s" % pid)
+
+	var kind_val = hints.get("kind", null)
+	if kind_val != null:
+		if not (kind_val is String) or str(kind_val).strip_edges().is_empty():
+			return Result.failure("RulesetV2: piece_ui_hint.kind 类型错误或为空（期望非空 String）: %s" % pid)
+
+	var overlay_val = hints.get("road_overlay", null)
+	if overlay_val != null and not (overlay_val is Dictionary):
+		return Result.failure("RulesetV2: piece_ui_hint.road_overlay 类型错误（期望 Dictionary）: %s" % pid)
+
+	piece_ui_hints.append({
+		"piece_id": pid,
+		"hints": hints,
+		"priority": int(priority),
+		"source": str(source_module_id),
+	})
+	return Result.success()
 
 func register_state_initializer(initializer_id: String, callback: Callable, priority: int = 100, source_module_id: String = "") -> Result:
 	return StateAndOrderHelperClass.register_state_initializer(self, initializer_id, callback, priority, source_module_id)

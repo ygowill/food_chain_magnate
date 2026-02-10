@@ -293,14 +293,33 @@
 
 ### P1-5) `lobbyists_*` 字符串前缀分支（piece 分类/渲染/选择）
 
-- **涉及位置（示例）**
+- **状态**
+  - ✅ 已完成（2026-02-10）
+- **涉及位置**
   - `ui/scenes/game/map_canvas_drawer.gd`
   - `ui/scenes/game/map_canvas_drawer_structures_pass.gd`
   - `ui/components/action_panel/piece_picker_button.gd`
+  - `core/rules/piece_ui_hints_registry.gd`
+  - `core/modules/v2/ruleset.gd`
+  - `core/modules/v2/ruleset_builder.gd`
+  - `core/engine/game_engine/modules_v2.gd`
+  - `modules/lobbyists/rules/entry.gd`
 - **迁移/解耦目标**
   - 核心 UI 不再按字符串前缀识别模块 piece。
 - **接口形态**
-  - content tags（`PieceDef.tags`）或渲染 hook/provider
+  - `PieceUiHintsRegistry`（modules v2：ruleset 注册 -> engine 配置 -> UI 查询）
+- **已实施改动**
+  - 新增 `PieceUiHintsRegistry`：将“模块 piece 的 UI 分类/渲染提示”下沉为 ruleset 可注册项（例如 `road_overlay` 与 `kind`）。
+  - lobbyists 模块在 entry 注册：
+    - road pieces 的 `road_overlay`（segments/arrows）
+    - park pieces 的 `kind="park"`
+  - 核心 UI 移除 `begins_with("lobbyists_road_")` / `begins_with("lobbyists_park_")` 分支，改为查询 registry；同时将绘制函数重命名为通用 `draw_road_overlay_piece`。
+- **新增/补充测试**
+  - `ui/scenes/tests/ui_lobbyists_piece_prefix_contract_test.gd`（扫描 `ui/**` 生产代码，禁止出现 `lobbyists_road_`/`lobbyists_park_`）
+  - `ui/scenes/tests/piece_ui_hints_registry_lobbyists_test.gd`（初始化 lobbyists 模块，验证 registry 注册生效）
+- **验收结果**
+  - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
 - **验收标准**
   - `rg -n 'lobbyists_road_|lobbyists_park_' ui --glob '!ui/scenes/tests/**'` 目标为 0（或仅在模块 UI 目录中出现）。
 

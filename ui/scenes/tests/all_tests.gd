@@ -92,6 +92,10 @@ func _run_all() -> int:
 			"fn": func() -> Result: return TestRefs.UiLobbyistsRoadOverlaysHardRefContractTestClass.run(),
 		},
 		{
+			"name": "UiLobbyistsPiecePrefixContractTest",
+			"fn": func() -> Result: return TestRefs.UiLobbyistsPiecePrefixContractTestClass.run(),
+		},
+		{
 			"name": "UiBasePiecesLogoHardRefContractTest",
 			"fn": func() -> Result: return TestRefs.UiBasePiecesLogoHardRefContractTestClass.run(),
 		},
@@ -106,6 +110,10 @@ func _run_all() -> int:
 		{
 			"name": "PhaseActionUiModalRegistrationTest",
 			"fn": func() -> Result: return TestRefs.PhaseActionUiModalRegistrationTestClass.run(),
+		},
+		{
+			"name": "PieceUiHintsRegistryLobbyistsTest",
+			"fn": func() -> Result: return TestRefs.PieceUiHintsRegistryLobbyistsTestClass.run(),
 		},
 		{
 			"name": "OnlineRoomManagerTest",

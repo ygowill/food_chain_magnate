@@ -27,6 +27,7 @@ const GroundPassClass = preload("res://ui/scenes/game/map_canvas_drawer_ground_p
 const RoadsPassClass = preload("res://ui/scenes/game/map_canvas_drawer_roads_pass.gd")
 const StructuresPassClass = preload("res://ui/scenes/game/map_canvas_drawer_structures_pass.gd")
 const TilesPassClass = preload("res://ui/scenes/game/map_canvas_drawer_tiles_pass.gd")
+const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
 
 static func _draw_texture_aspect_fit(canvas, texture: Texture2D, rect: Rect2, modulate: Color = Color(1, 1, 1, 1), v_align: String = "center") -> void:
 	TextureUtilsClass.draw_texture_aspect_fit(canvas, texture, rect, modulate, v_align)
@@ -274,12 +275,16 @@ static func _draw_structure_preview_piece(canvas, cell_size: int, preview_info: 
 			"product": str(preview_info.get("product", "")),
 		}
 		_draw_marketing_placement(canvas, cell_size, p, 0.55, structure_rect)
-	elif piece_id.begins_with("lobbyists_road_"):
-		StructuresPassClass.draw_lobbyists_road_piece(canvas, cell_size, anchor, info, alpha)
-	elif piece_id == "park" or piece_id.begins_with("lobbyists_park_"):
-		StructuresPassClass.draw_park_piece(canvas, cell_size, info, alpha)
 	else:
-		StructuresPassClass.draw_generic_piece(canvas, cell_size, info, alpha)
+		var road_overlay := PieceUiHintsRegistryClass.get_road_overlay(piece_id)
+		if not road_overlay.is_empty():
+			StructuresPassClass.draw_road_overlay_piece(canvas, cell_size, anchor, info, road_overlay, alpha)
+		else:
+			var ui_kind := PieceUiHintsRegistryClass.get_kind(piece_id)
+			if piece_id == "park" or ui_kind == "park":
+				StructuresPassClass.draw_park_piece(canvas, cell_size, info, alpha)
+			else:
+				StructuresPassClass.draw_generic_piece(canvas, cell_size, info, alpha)
 
 static func _draw_roadworks_markers(canvas, cell_size: int) -> void:
 	RoadsPassClass.draw_roadworks_markers(canvas, cell_size)
