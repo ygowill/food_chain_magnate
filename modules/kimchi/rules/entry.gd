@@ -220,7 +220,17 @@ func _on_cleanup_enter_after_primary(state: GameState, _phase_manager) -> Result
 			if not (list_val is Array):
 				return Result.failure("%s: cleanup: pending_phase_actions[Cleanup] 类型错误（期望 Array）" % MODULE_ID)
 			for v in list_val:
-				fridge_pending_players.append(int(v))
+				if v is Dictionary:
+					var task: Dictionary = v
+					if str(task.get("kind", "")).strip_edges() != "fridge_keep":
+						continue
+					var pid: int = int(task.get("player_id", -1))
+					if pid >= 0 and pid < state.players.size():
+						fridge_pending_players.append(pid)
+				elif v is int or v is float:
+					var pid2: int = int(v)
+					if pid2 >= 0 and pid2 < state.players.size():
+						fridge_pending_players.append(pid2)
 
 	var kimchi_pending_players: Array[int] = []
 	var order: Array[int] = []

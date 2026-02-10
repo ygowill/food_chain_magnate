@@ -114,11 +114,14 @@ static func apply(state: GameState) -> Result:
 	# 否则 CleanupDiscard 触发的里程碑可能发生在清理之后而残留在 pool 中。
 	if not needs_fridge_choice.is_empty():
 		# 按 turn_order 顺序依次弹窗（hotseat）
-		var pending: Array[int] = []
+		var pending: Array[Dictionary] = []
 		for pid_val in state.turn_order:
 			var pid: int = int(pid_val)
 			if needs_fridge_choice.has(pid):
-				pending.append(pid)
+				pending.append({
+					"kind": "fridge_keep",
+					"player_id": pid,
+				})
 		var set_pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
 			state.round_state,
 			DefsClass.PHASE_CLEANUP,
@@ -130,8 +133,10 @@ static func apply(state: GameState) -> Result:
 
 		# 将 current_player_index 对齐到第一位待处理玩家，保证 UI/命令执行一致
 		if not pending.is_empty():
+			var first_task: Dictionary = pending[0]
+			var first_pid: int = int(first_task.get("player_id", -1))
 			for idx in range(state.turn_order.size()):
-				if int(state.turn_order[idx]) == int(pending[0]):
+				if int(state.turn_order[idx]) == first_pid:
 					state.current_player_index = idx
 					break
 
@@ -254,4 +259,6 @@ static func _is_food_or_drink(product_id: String) -> bool:
 	if def_val == null or not (def_val is ProductDef):
 		return false
 	var def: ProductDef = def_val
+	if def.has_tag("no_storage"):
+		return false
 	return def.has_tag("food") or def.has_tag("drink")

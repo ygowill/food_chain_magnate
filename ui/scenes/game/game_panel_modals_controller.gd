@@ -103,16 +103,29 @@ func sync_for_state(state: GameState, covered: Rect2) -> void:
 			var list_val = ppa.get(DefsClass.PHASE_CLEANUP, null)
 			if list_val is Array:
 				var list: Array = list_val
-				if not list.is_empty() and int(list[0]) == current_player_id:
-					var kind := ""
-					var cleanup_val = rs.get("cleanup", null)
-					if cleanup_val is Dictionary:
-						var cleanup: Dictionary = cleanup_val
-						kind = str(cleanup.get("pending_choice_kind", "")).strip_edges()
-					if kind == "kimchi":
-						should_show_kimchi_storage = true
-					else:
-						should_show_fridge_keep = true
+				if not list.is_empty():
+					var first = list[0]
+					if first is Dictionary:
+						var task: Dictionary = first
+						var kind: String = str(task.get("kind", "")).strip_edges()
+						var pid: int = int(task.get("player_id", -1))
+						if pid == current_player_id:
+							if kind == "kimchi":
+								should_show_kimchi_storage = true
+							elif kind == "fridge_keep":
+								should_show_fridge_keep = true
+					elif first is int or first is float:
+						# 兼容旧存档：Cleanup pending 列表为 [player_id(int)]
+						if int(first) == current_player_id:
+							var kind := ""
+							var cleanup_val = rs.get("cleanup", null)
+							if cleanup_val is Dictionary:
+								var cleanup: Dictionary = cleanup_val
+								kind = str(cleanup.get("pending_choice_kind", "")).strip_edges()
+							if kind == "kimchi":
+								should_show_kimchi_storage = true
+							else:
+								should_show_fridge_keep = true
 
 	if should_show_kimchi_storage and is_local_turn:
 		show_kimchi_storage_modal(state, current_player_id, covered)
@@ -123,7 +136,6 @@ func sync_for_state(state: GameState, covered: Rect2) -> void:
 		show_fridge_keep_modal(state, current_player_id, covered)
 	else:
 		hide_fridge_keep_modal()
-
 	# 顺序选择（OrderOfBusiness）
 	var selections := {}
 	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and (state.round_state is Dictionary):

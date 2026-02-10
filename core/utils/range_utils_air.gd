@@ -3,6 +3,7 @@
 extends RefCounted
 
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
+const RangeOriginRegistryClass = preload("res://core/rules/range_origin_registry.gd")
 
 static func is_within_air_range_to_any_cells(
 	state: GameState,
@@ -11,8 +12,8 @@ static func is_within_air_range_to_any_cells(
 	target_cells: Array[Vector2i],
 	max_steps: int
 ) -> Result:
-	if restaurant_ids.is_empty():
-		return Result.failure("restaurant_ids 不能为空")
+	if restaurant_ids == null:
+		return Result.failure("restaurant_ids 为空")
 	if max_steps < 0:
 		return Result.failure("max_steps 必须 >= 0")
 	if target_cells == null:
@@ -39,6 +40,7 @@ static func is_within_air_range_to_any_cells(
 	if targets.is_empty():
 		return Result.success(false)
 
+	# 起点：餐厅入口
 	for rest_id in restaurant_ids:
 		if not restaurants.has(rest_id):
 			return Result.failure("餐厅不存在: %s" % rest_id)
@@ -56,6 +58,17 @@ static func is_within_air_range_to_any_cells(
 			if d <= max_steps:
 				return Result.success(true)
 
+	# 模块可扩展起点（例如 coffee_shop）
+	var extra_read := RangeOriginRegistryClass.get_extra_origin_positions(state, actor, restaurant_ids, "air")
+	if not extra_read.ok:
+		return extra_read
+	var extra: Array[Vector2i] = extra_read.value
+	for origin in extra:
+		for t2 in targets:
+			var d2: int = abs(origin.x - t2.x) + abs(origin.y - t2.y)
+			if d2 <= max_steps:
+				return Result.success(true)
+
 	return Result.success(false)
 
 static func is_within_air_range(
@@ -65,8 +78,8 @@ static func is_within_air_range(
 	target_pos: Vector2i,
 	max_steps: int
 ) -> Result:
-	if restaurant_ids.is_empty():
-		return Result.failure("restaurant_ids 不能为空")
+	if restaurant_ids == null:
+		return Result.failure("restaurant_ids 为空")
 	if max_steps < 0:
 		return Result.failure("max_steps 必须 >= 0")
 
@@ -89,6 +102,16 @@ static func is_within_air_range(
 
 		var d: int = abs(entrance_pos.x - target_pos.x) + abs(entrance_pos.y - target_pos.y)
 		if d <= max_steps:
+			return Result.success(true)
+
+	# 模块可扩展起点（例如 coffee_shop）
+	var extra_read := RangeOriginRegistryClass.get_extra_origin_positions(state, actor, restaurant_ids, "air")
+	if not extra_read.ok:
+		return extra_read
+	var extra: Array[Vector2i] = extra_read.value
+	for origin in extra:
+		var d2: int = abs(origin.x - target_pos.x) + abs(origin.y - target_pos.y)
+		if d2 <= max_steps:
 			return Result.success(true)
 
 	return Result.success(false)

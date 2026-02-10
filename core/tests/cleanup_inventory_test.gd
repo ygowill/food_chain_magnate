@@ -75,8 +75,13 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not (pending_val is Array):
 		return Result.failure("pending_phase_actions[Cleanup] 类型错误（期望 Array）")
 	var pending: Array = pending_val
-	if pending.size() != 1 or int(pending[0]) != 1:
-		return Result.failure("pending_phase_actions[Cleanup] 应为 [1]，实际: %s" % str(pending))
+	if pending.size() != 1:
+		return Result.failure("pending_phase_actions[Cleanup] 应只有 1 个待处理项，实际: %s" % str(pending))
+	if not (pending[0] is Dictionary):
+		return Result.failure("pending_phase_actions[Cleanup][0] 类型错误（期望 Dictionary）: %s" % str(pending[0]))
+	var task: Dictionary = pending[0]
+	if str(task.get("kind", "")) != "fridge_keep" or int(task.get("player_id", -1)) != 1:
+		return Result.failure("pending_phase_actions[Cleanup] 应为 fridge_keep(player=1)，实际: %s" % str(pending))
 
 	# 执行选择：允许主动保留少于 cap
 	var choose := engine.execute_command(Command.create("choose_fridge_keep", 1, {"keep": {"pizza": 3, "beer": 2}}))

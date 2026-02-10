@@ -33,6 +33,7 @@ var action_availability_overrides: Array[Dictionary] = []  # [{action_id, points
 var marketing_type_registrations: Array[Dictionary] = []  # [{type_id, requires_edge, range_handler, source}]
 var marketing_initiation_providers: Array[Dictionary] = []  # [{id, callback, priority, source}]
 var placement_conflict_providers: Array[Dictionary] = []  # [{id, callback, priority, source}]
+var range_origin_providers: Array[Dictionary] = []  # [{id, callback, priority, source}]
 var bankruptcy_handlers: Array[Dictionary] = []  # [{kind, callback, source}]
 var dinnertime_demand_providers: Array[Dictionary] = []  # [{id, callback, priority, source}]
 var dinnertime_route_purchase_providers: Array[Dictionary] = []  # [{id, callback, priority, source}]
@@ -206,6 +207,9 @@ func register_dinnertime_route_purchase_provider(provider_id: String, callback: 
 
 func register_placement_conflict_provider(provider_id: String, callback: Callable, priority: int = 100, source_module_id: String = "") -> Result:
 	return ProviderRegistrationHelperClass.register_placement_conflict_provider(self, provider_id, callback, priority, source_module_id)
+
+func register_range_origin_provider(provider_id: String, callback: Callable, priority: int = 100, source_module_id: String = "") -> Result:
+	return ProviderRegistrationHelperClass.register_range_origin_provider(self, provider_id, callback, priority, source_module_id)
 
 func register_state_initializer(initializer_id: String, callback: Callable, priority: int = 100, source_module_id: String = "") -> Result:
 	return StateAndOrderHelperClass.register_state_initializer(self, initializer_id, callback, priority, source_module_id)

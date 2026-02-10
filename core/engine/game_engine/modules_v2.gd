@@ -24,6 +24,7 @@ const MarketingInitiationRegistryClass = preload("res://core/rules/marketing_ini
 const EmployeePoolPatchRegistryClass = preload("res://core/rules/employee_pool_patch_registry.gd")
 const MilestoneEffectRegistryClass = preload("res://core/rules/milestone_effect_registry.gd")
 const PlacementConflictRegistryClass = preload("res://core/rules/placement_conflict_registry.gd")
+const RangeOriginRegistryClass = preload("res://core/rules/range_origin_registry.gd")
 const StateSchemaRegistryClass = preload("res://core/state/state_schema_registry.gd")
 
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
@@ -52,6 +53,7 @@ static func reset(engine) -> void:
 	MarketingInitiationRegistryClass.reset()
 	EmployeePoolPatchRegistryClass.reset()
 	PlacementConflictRegistryClass.reset()
+	RangeOriginRegistryClass.reset()
 	StateSchemaRegistryClass.reset()
 	MilestoneRegistryClass.reset()
 	MilestoneEffectRegistryClass.reset_current()
@@ -150,6 +152,11 @@ static func apply(engine, module_ids: Array[String], base_dir: String) -> Result
 	var conflict_apply := PlacementConflictRegistryClass.configure_from_ruleset(engine.ruleset_v2)
 	if not conflict_apply.ok:
 		return Result.failure("模块系统 V2：%s" % conflict_apply.error)
+
+	# V2：模块注册的 range 起点扩展（例如 coffee_shop）
+	var range_origin_apply := RangeOriginRegistryClass.configure_from_ruleset(engine.ruleset_v2)
+	if not range_origin_apply.ok:
+		return Result.failure("模块系统 V2：%s" % range_origin_apply.error)
 
 	# V2：模块注册的 state schema（用于反序列化归一化与契约检查）
 	var schema_apply := StateSchemaRegistryClass.configure_from_ruleset(engine.ruleset_v2)
