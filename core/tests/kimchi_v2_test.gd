@@ -20,6 +20,18 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r0.ok:
 		return r0
 
+	var r0b := _test_kimchi_master_can_be_directly_recruited(seed_val)
+	if not r0b.ok:
+		return r0b
+
+	var r0c := _test_kimchi_master_requires_salary_in_payday(seed_val)
+	if not r0c.ok:
+		return r0c
+
+	var r0d := _test_kimchi_master_does_nothing_in_9_to_5(seed_val)
+	if not r0d.ok:
+		return r0d
+
 	var r1 := _test_prefers_kimchi_restaurant_even_if_score_worse(seed_val)
 	if not r1.ok:
 		return r1
@@ -57,7 +69,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return r8
 
 	return Result.success({
-		"cases": 10,
+		"cases": 13,
 		"seed": seed_val,
 	})
 
@@ -91,6 +103,131 @@ static func _test_kimchi_master_entry_level_and_pool(seed_val: int) -> Result:
 	var pool_count: int = int(pool_val)
 	if pool_count != one_x:
 		return Result.failure("kimchi_master 为 1x 员工：2p 下应为 %d，实际: %d" % [one_x, pool_count])
+
+	return Result.success()
+
+static func _test_kimchi_master_can_be_directly_recruited(seed_val: int) -> Result:
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"kimchi",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := e.get_state()
+	_force_turn_order(state)
+	state.phase = PhaseDefsClass.PHASE_WORKING
+	state.sub_phase = PhaseDefsClass.SUB_PHASE_RECRUIT
+	if not (state.round_state is Dictionary):
+		state.round_state = {}
+	state.round_state["sub_phase_passed"] = {0: false, 1: false}
+
+	var before_pool := int(state.employee_pool.get("kimchi_master", 0))
+	if before_pool <= 0:
+		return Result.failure("employee_pool 中没有 kimchi_master")
+
+	var r := e.execute_command(Command.create("recruit", 0, {"employee_type": "kimchi_master"}))
+	if not r.ok:
+		return Result.failure("recruit(kimchi_master) 失败: %s" % r.error)
+
+	state = e.get_state()
+	var after_pool := int(state.employee_pool.get("kimchi_master", 0))
+	if after_pool != before_pool - 1:
+		return Result.failure("recruit 后 employee_pool.kimchi_master 应减少 1: before=%d after=%d" % [before_pool, after_pool])
+	var reserve: Array = state.players[0].get("reserve_employees", [])
+	if not (reserve is Array) or reserve.find("kimchi_master") < 0:
+		return Result.failure("recruit 后 reserve_employees 应包含 kimchi_master，实际: %s" % str(reserve))
+
+	return Result.success()
+
+static func _test_kimchi_master_requires_salary_in_payday(seed_val: int) -> Result:
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"kimchi",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := e.get_state()
+	_force_turn_order(state)
+
+	# 隔离：只保留 kimchi_master 作为付薪员工，避免其它初始员工影响断言。
+	state.players[0]["employees"] = ["kimchi_master"]
+	state.players[0]["reserve_employees"] = []
+	state.players[0]["busy_marketers"] = []
+	state.players[0]["milestones"] = []
+	state.players[0]["cash"] = 100
+
+	var salary_cost: int = state.get_rule_int("salary_cost")
+	if salary_cost <= 0:
+		return Result.failure("salary_cost 无效: %d" % salary_cost)
+
+	var pm = e.phase_manager
+	if pm == null:
+		return Result.failure("phase_manager 为空")
+	var reg = pm.get_settlement_registry()
+	if reg == null:
+		return Result.failure("SettlementRegistry 为空")
+
+	var r: Result = reg.run(Phase.PAYDAY, Point.EXIT, state, pm)
+	if not r.ok:
+		return Result.failure("Payday 结算失败: %s" % r.error)
+
+	state = e.get_state()
+	var cash_after := int(state.players[0].get("cash", -1))
+	var expected := 100 - salary_cost
+	if cash_after != expected:
+		return Result.failure("kimchi_master 应在 Payday 支付薪水: expected=%d got=%d salary_cost=%d" % [expected, cash_after, salary_cost])
+
+	return Result.success()
+
+static func _test_kimchi_master_does_nothing_in_9_to_5(seed_val: int) -> Result:
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"kimchi",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := e.get_state()
+	_force_turn_order(state)
+	state.phase = PhaseDefsClass.PHASE_WORKING
+	state.sub_phase = PhaseDefsClass.SUB_PHASE_GET_FOOD
+	if not (state.round_state is Dictionary):
+		state.round_state = {}
+	state.round_state["sub_phase_passed"] = {0: false, 1: false}
+
+	# kimchi_master 的 role=produce_food，但没有生产选项；尝试 produce_food 应失败。
+	var r := e.execute_command(Command.create("produce_food", 0, {"employee_type": "kimchi_master"}))
+	if r.ok:
+		return Result.failure("kimchi_master 不应在 9-5(GetFood) 阶段生产食物")
 
 	return Result.success()
 
