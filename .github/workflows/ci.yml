@@ -154,6 +154,10 @@ jobs:
             mv /tmp/godot_templates/templates/* "$template_dir"
           fi
 
+          # Exports in this workflow run with HOME="$PWD/.tmp_home". Make export templates visible there.
+          mkdir -p "$PWD/.tmp_home/.local/share/godot"
+          ln -sfn "$HOME/.local/share/godot/export_templates" "$PWD/.tmp_home/.local/share/godot/export_templates"
+
           godot --version
 
       - name: Import project resources
@@ -233,6 +237,10 @@ jobs:
             mkdir -p "$template_dir"
             mv /tmp/godot_templates/templates/* "$template_dir"
           fi
+
+          # Exports in this workflow run with HOME="$PWD/.tmp_home". Make export templates visible there.
+          mkdir -p "$PWD/.tmp_home/.local/share/godot"
+          ln -sfn "$HOME/.local/share/godot/export_templates" "$PWD/.tmp_home/.local/share/godot/export_templates"
 
           godot --version
 
