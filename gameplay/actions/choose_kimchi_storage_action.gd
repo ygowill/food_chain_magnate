@@ -59,7 +59,11 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not (inventory_val is Dictionary):
 		return Result.failure("player.inventory 类型错误（期望 Dictionary）")
 	var inventory: Dictionary = inventory_val
-	if int(inventory.get(PRODUCT_ID, 0)) <= 0:
+	var available_r := _get_kimchi_available(state, command.actor, inventory)
+	if not available_r.ok:
+		return available_r
+	var available: int = int(available_r.value)
+	if available <= 0:
 		return Result.failure("当前玩家没有泡菜，无需选择储存")
 
 	return Result.success()
@@ -75,9 +79,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var player: Dictionary = state.players[command.actor]
 	var inventory: Dictionary = player.get("inventory", {})
 
-	var before_kimchi: int = maxi(0, int(inventory.get(PRODUCT_ID, 0)))
+	var available_r := _get_kimchi_available(state, command.actor, inventory)
+	if not available_r.ok:
+		return available_r
+	var before_kimchi: int = maxi(0, int(available_r.value))
 	if before_kimchi <= 0:
-		return Result.failure("内部错误：kimchi 库存为空")
+		return Result.failure("内部错误：kimchi 可用数量为空")
 
 	var discarded: Dictionary = {}
 	if store:
@@ -86,16 +93,19 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			var pid: String = str(k)
 			if pid.is_empty():
 				continue
-			var before: int = maxi(0, int(inventory.get(pid, 0)))
-			var after := 0
 			if pid == PRODUCT_ID:
-				after = kept_kimchi
-			inventory[pid] = after
-			var delta := before - after
-			if delta > 0:
-				discarded[pid] = delta
+				continue
+			var before: int = maxi(0, int(inventory.get(pid, 0)))
+			inventory[pid] = 0
+			if before > 0:
+				discarded[pid] = before
+
+		inventory[PRODUCT_ID] = kept_kimchi
+		var delta_kimchi := before_kimchi - kept_kimchi
+		if delta_kimchi > 0:
+			discarded[PRODUCT_ID] = int(discarded.get(PRODUCT_ID, 0)) + delta_kimchi
 	else:
-		# 不存泡菜：丢弃全部泡菜，其它商品保持不变（由 base 冰箱逻辑决定是否还需进一步选择）
+		# 不存泡菜：丢弃全部泡菜（包含本回合计划产出的泡菜），其它商品保持不变（由 base 冰箱逻辑决定是否还需进一步选择）
 		inventory[PRODUCT_ID] = 0
 		discarded[PRODUCT_ID] = before_kimchi
 
@@ -242,6 +252,52 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 	})
 	return out
 
+static func _get_kimchi_available(state: GameState, player_id: int, inventory: Dictionary) -> Result:
+	if state == null:
+		return Result.failure("state 为空")
+	if not (state.round_state is Dictionary):
+		return Result.failure("round_state 类型错误（期望 Dictionary）")
+	var inv_before: int = 0
+	if inventory != null and inventory is Dictionary:
+		inv_before = maxi(0, int(inventory.get(PRODUCT_ID, 0)))
+
+	var rs_val = Dictionary(state.round_state).get(PRODUCT_ID, null)
+	if rs_val == null:
+		return Result.success(inv_before)
+	if not (rs_val is Dictionary):
+		return Result.failure("round_state.kimchi 类型错误（期望 Dictionary）")
+	var rs: Dictionary = rs_val
+
+	# 优先使用 available_by_player（由 kimchi cleanup settlement 计算：包含“上回合存的 + 本回合计划产出”）
+	var avail_val = rs.get("available_by_player", null)
+	if avail_val is Dictionary:
+		var avail: Dictionary = avail_val
+		if avail.has(player_id):
+			return Result.success(maxi(inv_before, int(avail.get(player_id, inv_before))))
+		var key_s := str(player_id)
+		if avail.has(key_s):
+			return Result.success(maxi(inv_before, int(avail.get(key_s, inv_before))))
+
+	# 兜底：carried_over_before_cleanup + planned_produced_by_player
+	var carried_val = rs.get("carried_over_before_cleanup", null)
+	var planned_val = rs.get("planned_produced_by_player", null)
+	if carried_val is Dictionary and planned_val is Dictionary:
+		var carried: Dictionary = carried_val
+		var planned: Dictionary = planned_val
+		var c := 0
+		if carried.has(player_id):
+			c = maxi(0, int(carried.get(player_id, 0)))
+		elif carried.has(str(player_id)):
+			c = maxi(0, int(carried.get(str(player_id), 0)))
+		var p := 0
+		if planned.has(player_id):
+			p = maxi(0, int(planned.get(player_id, 0)))
+		elif planned.has(str(player_id)):
+			p = maxi(0, int(planned.get(str(player_id), 0)))
+		return Result.success(maxi(inv_before, c + p))
+
+	return Result.success(inv_before)
+
 static func _require_bool_param(command: Command, key: String) -> Result:
 	if command == null:
 		return Result.failure("command 为空")
@@ -350,4 +406,3 @@ static func _merge_cleanup_inventory_discarded(state: GameState, player_id: int,
 	})
 	cleanup["inventory_discarded"] = inv
 	state.round_state["cleanup"] = cleanup
-

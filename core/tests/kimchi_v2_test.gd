@@ -329,6 +329,11 @@ static func _test_cleanup_produces_and_forces_kimchi_storage(seed_val: int) -> R
 	if produced.is_empty():
 		return Result.failure("round_state.kimchi.produced 应记录生产事件")
 
+	# 规则：泡菜在丢弃之后生产；因此在玩家做出“是否存泡菜”选择前，不应提前写入库存。
+	var inv_before_choice: Dictionary = state.players[0]["inventory"]
+	if int(inv_before_choice.get("kimchi", 0)) != 0:
+		return Result.failure("选择前 kimchi 库存应为 0（生产应在选择/丢弃后落地），实际: %d inv=%s" % [int(inv_before_choice.get("kimchi", 0)), str(inv_before_choice)])
+
 	var choose := e.execute_command(Command.create("choose_kimchi_storage", 0, {"store": true}))
 	if not choose.ok:
 		return Result.failure("choose_kimchi_storage 失败: %s" % choose.error)

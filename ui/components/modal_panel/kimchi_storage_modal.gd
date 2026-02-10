@@ -48,6 +48,37 @@ func setup(state: GameState, current_player_id: int) -> void:
 	var inv: Dictionary = inv_val
 	var count: int = maxi(0, int(inv.get(PRODUCT_ID, 0)))
 
+	# kimchi 在 Cleanup 的结算中会先被“暂存”到 round_state（避免被 base cleanup 丢弃），
+	# 并在玩家做出选择后才写回库存；因此优先从 round_state 读取可用数量用于展示。
+	if state.round_state is Dictionary:
+		var rs_val = Dictionary(state.round_state).get(PRODUCT_ID, null)
+		if rs_val is Dictionary:
+			var rs: Dictionary = rs_val
+			var avail_val = rs.get("available_by_player", null)
+			if avail_val is Dictionary:
+				var avail: Dictionary = avail_val
+				if avail.has(current_player_id):
+					count = maxi(count, int(avail.get(current_player_id, count)))
+				elif avail.has(str(current_player_id)):
+					count = maxi(count, int(avail.get(str(current_player_id), count)))
+			else:
+				var carried_val = rs.get("carried_over_before_cleanup", null)
+				var planned_val = rs.get("planned_produced_by_player", null)
+				if carried_val is Dictionary and planned_val is Dictionary:
+					var carried: Dictionary = carried_val
+					var planned: Dictionary = planned_val
+					var c := 0
+					if carried.has(current_player_id):
+						c = maxi(0, int(carried.get(current_player_id, 0)))
+					elif carried.has(str(current_player_id)):
+						c = maxi(0, int(carried.get(str(current_player_id), 0)))
+					var p := 0
+					if planned.has(current_player_id):
+						p = maxi(0, int(planned.get(current_player_id, 0)))
+					elif planned.has(str(current_player_id)):
+						p = maxi(0, int(planned.get(str(current_player_id), 0)))
+					count = maxi(count, c + p)
+
 	var name := Globals.get_player_name(current_player_id) if Globals != null else ("玩家%d" % (current_player_id + 1))
 	if is_instance_valid(info_label):
 		info_label.text = "当前玩家：%s｜泡菜库存：%d" % [name, count]
@@ -76,4 +107,3 @@ func _set_labels_invalid(msg: String) -> void:
 		info_label.text = msg
 	if is_instance_valid(detail_label):
 		detail_label.text = ""
-
