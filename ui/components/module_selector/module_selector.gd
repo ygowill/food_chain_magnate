@@ -354,7 +354,7 @@ func _format_module_label(mid: String) -> String:
 	if manifest_val is ModuleManifest:
 		var manifest: ModuleManifest = manifest_val
 		name = str(manifest.name)
-	return "%s (%s)" % [name, mid]
+	return name
 
 func _format_module_tooltip(mid: String) -> String:
 	var manifest_val = _available_modules.get(mid, null)

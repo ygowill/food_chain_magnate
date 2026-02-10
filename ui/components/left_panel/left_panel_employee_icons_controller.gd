@@ -98,8 +98,6 @@ func _add_employee_entry_to_category(container: VBoxContainer, employee_id: Stri
 
 	var name := _get_employee_display_name(emp_id)
 	var label_text := "• %s" % name
-	if name != emp_id:
-		label_text = "• %s (%s)" % [name, emp_id]
 	if busy:
 		label_text += "（忙）"
 
