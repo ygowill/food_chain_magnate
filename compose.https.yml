@@ -1,0 +1,53 @@
+services:
+  # HTTPS reverse proxy (Let's Encrypt via Cloudflare DNS-01)
+  traefik:
+    image: traefik:v3.1
+    container_name: fcm-traefik
+    restart: unless-stopped
+    command:
+      - --log.level=INFO
+      - --api.dashboard=false
+
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.dnschallenge=true
+      - --certificatesresolvers.le.acme.dnschallenge.provider=cloudflare
+    environment:
+      # Required (recommended token permissions: Zone.DNS:Edit for your zone).
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+
+  server:
+    ports: []
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.fcm-ws.rule=Host(`${FCM_WS_DOMAIN}`)
+      - traefik.http.routers.fcm-ws.entrypoints=websecure
+      - traefik.http.routers.fcm-ws.tls.certresolver=le
+      - traefik.http.services.fcm-ws.loadbalancer.server.port=7000
+
+  web:
+    ports: []
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.fcm-web.rule=Host(`${FCM_WEB_DOMAIN}`)
+      - traefik.http.routers.fcm-web.entrypoints=websecure
+      - traefik.http.routers.fcm-web.tls.certresolver=le
+      - traefik.http.services.fcm-web.loadbalancer.server.port=80
+
+volumes:
+  traefik_letsencrypt:
+

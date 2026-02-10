@@ -68,6 +68,45 @@ Use Docker Compose directly (optional):
 FCM_TAG=v0.1.0 docker compose --profile web -f compose.yml up -d
 ```
 
+### HTTPS (required for Web client on the Internet)
+
+Godot Web exports require a **secure context**. If you open the web client over plain HTTP on a public domain/IP, the browser will refuse to run it.
+
+Recommended setup:
+
+- Web client: `https://game.example.com/`
+- WebSocket server: `wss://ws.game.example.com/` (separate subdomain is the safest)
+
+This repo includes an HTTPS overlay using **Traefik + Let’s Encrypt** with **Cloudflare DNS-01**:
+
+1) Create DNS records in Cloudflare:
+   - `game.example.com` → A/AAAA to your server IP
+   - `ws.game.example.com` → A/AAAA to your server IP
+
+2) Create a Cloudflare API token:
+   - Permissions: `Zone.DNS:Edit`
+   - Scope: your zone
+
+3) On the server, export env vars and deploy:
+
+```bash
+export ACME_EMAIL="you@example.com"
+export CF_DNS_API_TOKEN="***"
+curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
+  --tag v0.1.0 --enable-web --https \
+  --web-domain game.example.com \
+  --ws-domain ws.game.example.com
+```
+
+4) Ensure your firewall/security group allows inbound:
+   - TCP 80 and 443 (for HTTPS)
+
+In the client, set server URL to:
+
+```text
+wss://ws.game.example.com
+```
+
 One-line deploy (downloads and runs the deploy script):
 
 ```bash

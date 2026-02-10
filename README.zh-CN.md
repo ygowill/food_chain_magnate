@@ -42,6 +42,45 @@ Docker 一键部署脚本（从 GHCR 拉取镜像，并使用 Docker Compose 运
 FCM_TAG=v0.1.0 docker compose --profile web -f compose.yml up -d
 ```
 
+### HTTPS（公网访问网页版必需）
+
+Godot 的 Web 导出需要**安全上下文（Secure Context）**。如果你用公网域名/IP 通过 `http://` 访问网页客户端，浏览器会拒绝运行（你看到的就是这个提示）。
+
+推荐部署方式：
+
+- 网页客户端：`https://game.example.com/`
+- WebSocket 服务：`wss://ws.game.example.com/`（用独立子域名最稳）
+
+本仓库提供 **Traefik + Let’s Encrypt**（通过 **Cloudflare DNS-01**）的 HTTPS 叠加配置：
+
+1) 在 Cloudflare 添加 DNS 记录：
+   - `game.example.com` → A/AAAA 指向你的服务器 IP
+   - `ws.game.example.com` → A/AAAA 指向你的服务器 IP
+
+2) 创建 Cloudflare API Token：
+   - 权限：`Zone.DNS:Edit`
+   - 范围：你的 Zone
+
+3) 在服务器上设置环境变量并部署：
+
+```bash
+export ACME_EMAIL="you@example.com"
+export CF_DNS_API_TOKEN="***"
+curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
+  --tag v0.1.0 --enable-web --https \
+  --web-domain game.example.com \
+  --ws-domain ws.game.example.com
+```
+
+4) 确保防火墙/安全组放行：
+   - TCP 80 和 443（HTTPS）
+
+客户端里把服务器地址填成：
+
+```text
+wss://ws.game.example.com
+```
+
 一行命令部署（下载并直接执行部署脚本）：
 
 ```bash
