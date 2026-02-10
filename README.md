@@ -50,7 +50,7 @@ Args:
 
 ### Option B: Docker (recommended for deployment)
 
-This repo provides a one-click deploy script that **pulls the prebuilt image from GHCR** and runs/updates the container:
+This repo provides a one-click deploy script that **pulls the prebuilt images from GHCR** and runs/updates containers using **Docker Compose**:
 
 ```bash
 ./server/deploy.sh --port 7000
@@ -60,6 +60,12 @@ Start server + web client together:
 
 ```bash
 ./server/deploy.sh --port 7000 --enable-web --web-port 8080
+```
+
+Use Docker Compose directly (optional):
+
+```bash
+FCM_TAG=v0.1.0 docker compose --profile web -f compose.yml up -d
 ```
 
 One-line deploy (downloads and runs the deploy script):
@@ -85,6 +91,20 @@ More options:
 
 ```bash
 ./server/deploy.sh --help
+```
+
+## Web export (local)
+
+Web export requires Godot export templates. This repo includes a helper script that uses a project-local HOME (`.tmp_home/`) to keep things reproducible:
+
+```bash
+tools/export_web.sh --out build/client/web/index.html
+```
+
+If templates are missing, you can install them via the Godot editor, or (optionally) let the script download official templates:
+
+```bash
+tools/export_web.sh --install-templates
 ```
 
 For public deployment (`wss://`) suggestions:

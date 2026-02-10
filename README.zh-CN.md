@@ -24,7 +24,7 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60
 godot --headless --path . --scene res://server/dedicated_server.tscn -- --port=7000 --bind=*
 ```
 
-Docker 一键部署脚本（从 GHCR 拉取镜像并运行/更新容器）：
+Docker 一键部署脚本（从 GHCR 拉取镜像，并使用 Docker Compose 运行/更新容器）：
 
 ```bash
 ./server/deploy.sh --port 7000
@@ -34,6 +34,12 @@ Docker 一键部署脚本（从 GHCR 拉取镜像并运行/更新容器）：
 
 ```bash
 ./server/deploy.sh --port 7000 --enable-web --web-port 8080
+```
+
+也可以直接使用 Docker Compose（可选）：
+
+```bash
+FCM_TAG=v0.1.0 docker compose --profile web -f compose.yml up -d
 ```
 
 一行命令部署（下载并直接执行部署脚本）：
@@ -59,6 +65,20 @@ bash deploy.sh --port 7000
 
 ```bash
 ./server/deploy.sh --help
+```
+
+## Web 导出（本地）
+
+Web 导出需要安装 Godot Export Templates。本仓库提供了一个辅助脚本，会使用项目内的 HOME（`.tmp_home/`）以避免污染你的用户目录：
+
+```bash
+tools/export_web.sh --out build/client/web/index.html
+```
+
+如果缺少模板，可以在 Godot 编辑器中安装，或者（可选）让脚本自动下载官方模板：
+
+```bash
+tools/export_web.sh --install-templates
 ```
 
 ## 致谢

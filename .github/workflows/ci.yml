@@ -165,7 +165,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/client/windows
-          godot --headless --path "$PWD" --export-release "Windows Desktop" build/client/windows/FCM.exe
+          HOME="$PWD/.tmp_home" godot --headless --path "$PWD" --export-release "Windows Desktop" build/client/windows/FCM.exe
 
       - name: Package release assets
         shell: bash
@@ -245,7 +245,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/client/web
-          godot --headless --path "$PWD" --export-release "Web" build/client/web/index.html
+          HOME="$PWD/.tmp_home" godot --headless --path "$PWD" --export-release "Web" build/client/web/index.html
 
       - name: Upload Web export artifact
         uses: actions/upload-artifact@v4

@@ -1,0 +1,22 @@
+name: fcm
+
+services:
+  server:
+    image: ${FCM_SERVER_IMAGE:-ghcr.io/ygowill/food_chain_magnate/fcm-server:${FCM_TAG:-latest}}
+    container_name: ${FCM_SERVER_NAME:-fcm-server}
+    restart: unless-stopped
+    ports:
+      - "${FCM_SERVER_PORT:-7000}:${FCM_SERVER_PORT:-7000}"
+    environment:
+      PORT: "${FCM_SERVER_PORT:-7000}"
+      BIND: "${FCM_SERVER_BIND:-*}"
+
+  web:
+    image: ${FCM_WEB_IMAGE:-ghcr.io/ygowill/food_chain_magnate/fcm-web:${FCM_TAG:-latest}}
+    container_name: ${FCM_WEB_NAME:-fcm-web}
+    restart: unless-stopped
+    ports:
+      - "${FCM_WEB_PORT:-8080}:80"
+    profiles:
+      - web
+

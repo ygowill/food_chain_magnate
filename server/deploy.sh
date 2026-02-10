@@ -4,52 +4,57 @@ set -euo pipefail
 usage() {
 	cat <<'EOF'
 Usage:
-  server/deploy.sh [--port 7000] [--bind "*"] [--name fcm-server]
-                   [--image <image:tag>] [--pull] [--no-pull]
-                   [--build-local] [--foreground]
-                   [--enable-web] [--web-port 8080] [--web-name fcm-web]
-                   [--web-image <image:tag>]
+  server/deploy.sh [--tag latest] [--port 7000] [--bind "*"]
+                   [--name fcm-server] [--web-name fcm-web]
+                   [--image <image:tag>] [--web-image <image:tag>]
+                   [--pull] [--no-pull] [--foreground]
+                   [--enable-web] [--web-port 8080]
+                   [--compose-ref main]
 
 Default behavior:
-  - Pull prebuilt image from GHCR
-  - Replace container (same name)
-  - Run detached with --restart unless-stopped
+  - Uses Docker Compose to run/update containers
+  - Pulls prebuilt images from GHCR
+  - Starts `server` by default; `web` is optional via --enable-web
 
 Examples:
-  # Pull from GHCR and run on 7000
-  ./server/deploy.sh --port 7000
+  # Run server on 7000 (latest images)
+  ./server/deploy.sh --tag latest --port 7000
 
   # Start server + web client together
-  ./server/deploy.sh --port 7000 --enable-web --web-port 8080
+  ./server/deploy.sh --tag latest --port 7000 --enable-web --web-port 8080
 
-  # Bind to localhost only (for reverse proxy on same machine)
-  ./server/deploy.sh --port 7000 --bind 127.0.0.1
+  # Deploy a release tag (recommended)
+  ./server/deploy.sh --tag v0.1.0 --enable-web
 
-  # Run a specific image/tag
-  ./server/deploy.sh --image ghcr.io/<owner>/<repo>/fcm-server:v0.1.2 --pull
-
-  # (Optional) Build locally from this repo (requires repo checkout)
-  ./server/deploy.sh --build-local --image fcm-server:local
+Notes:
+  - Requires Docker Compose v2 (`docker compose`).
+  - If `compose.yml` exists next to the repo root, it will be used.
+    Otherwise the script downloads it from GitHub.
 EOF
 }
 
+TAG="latest"
 PORT="7000"
 BIND="*"
 NAME="fcm-server"
-IMAGE="ghcr.io/ygowill/food_chain_magnate/fcm-server:latest"
-DO_PULL=1
-DO_BUILD=0
-DETACH=1
-ENABLE_WEB=0
 WEB_PORT="8080"
 WEB_NAME="fcm-web"
-WEB_IMAGE="ghcr.io/ygowill/food_chain_magnate/fcm-web:latest"
+IMAGE=""
+WEB_IMAGE=""
+DO_PULL=1
+DETACH=1
+ENABLE_WEB=0
+COMPOSE_REF="main"
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 		-h|--help)
 			usage
 			exit 0
+			;;
+		--tag)
+			TAG="${2:-}"
+			shift 2
 			;;
 		--port)
 			PORT="${2:-}"
@@ -63,8 +68,20 @@ while [[ $# -gt 0 ]]; do
 			NAME="${2:-}"
 			shift 2
 			;;
+		--web-port)
+			WEB_PORT="${2:-}"
+			shift 2
+			;;
+		--web-name)
+			WEB_NAME="${2:-}"
+			shift 2
+			;;
 		--image)
 			IMAGE="${2:-}"
+			shift 2
+			;;
+		--web-image)
+			WEB_IMAGE="${2:-}"
 			shift 2
 			;;
 		--pull)
@@ -75,10 +92,6 @@ while [[ $# -gt 0 ]]; do
 			DO_PULL=0
 			shift
 			;;
-		--build-local)
-			DO_BUILD=1
-			shift
-			;;
 		--foreground)
 			DETACH=0
 			shift
@@ -87,16 +100,8 @@ while [[ $# -gt 0 ]]; do
 			ENABLE_WEB=1
 			shift
 			;;
-		--web-port)
-			WEB_PORT="${2:-}"
-			shift 2
-			;;
-		--web-name)
-			WEB_NAME="${2:-}"
-			shift 2
-			;;
-		--web-image)
-			WEB_IMAGE="${2:-}"
+		--compose-ref)
+			COMPOSE_REF="${2:-}"
 			shift 2
 			;;
 		*)
@@ -111,79 +116,83 @@ if ! command -v docker >/dev/null 2>&1; then
 	echo "ERROR: docker not found in PATH" >&2
 	exit 1
 fi
-
 if ! docker info >/dev/null 2>&1; then
 	echo "ERROR: docker daemon not available (is Docker running?)" >&2
 	exit 1
 fi
+if ! docker compose version >/dev/null 2>&1; then
+	echo "ERROR: Docker Compose v2 not available (expected: docker compose ...)" >&2
+	exit 1
+fi
 
-echo "[deploy] name=${NAME} image=${IMAGE} port=${PORT} bind=${BIND}"
+if [[ -z "${IMAGE}" ]]; then
+	IMAGE="ghcr.io/ygowill/food_chain_magnate/fcm-server:${TAG}"
+fi
+if [[ -z "${WEB_IMAGE}" ]]; then
+	WEB_IMAGE="ghcr.io/ygowill/food_chain_magnate/fcm-web:${TAG}"
+fi
+
+echo "[deploy] tag=${TAG}"
+echo "[deploy] server: name=${NAME} image=${IMAGE} port=${PORT} bind=${BIND}"
 if [[ "${ENABLE_WEB}" -eq 1 ]]; then
-	echo "[deploy] web_name=${WEB_NAME} web_image=${WEB_IMAGE} web_port=${WEB_PORT}"
+	echo "[deploy] web: name=${WEB_NAME} image=${WEB_IMAGE} port=${WEB_PORT}"
 fi
 
-if [[ "${DO_PULL}" -eq 1 ]]; then
-	echo "[deploy] pulling image: ${IMAGE}"
-	docker pull "${IMAGE}"
-	if [[ "${ENABLE_WEB}" -eq 1 ]]; then
-		echo "[deploy] pulling image: ${WEB_IMAGE}"
-		docker pull "${WEB_IMAGE}"
-	fi
-fi
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." 2>/dev/null && pwd || true)"
+local_compose="${repo_root}/compose.yml"
 
-if [[ "${DO_BUILD}" -eq 1 ]]; then
-	repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-	echo "[deploy] repo_root=${repo_root}"
-	echo "[deploy] building image: ${IMAGE}"
-	docker build -t "${IMAGE}" -f "${repo_root}/server/Dockerfile" "${repo_root}"
-fi
+tmp_dir="$(mktemp -d)"
+cleanup() { rm -rf "${tmp_dir}"; }
+trap cleanup EXIT
 
-if docker ps -a --format '{{.Names}}' | grep -qx "${NAME}"; then
-	echo "[deploy] stopping old container: ${NAME}"
-	docker rm -f "${NAME}" >/dev/null
-fi
+compose_file="${tmp_dir}/compose.yml"
+env_file="${tmp_dir}/.env"
 
-run_args=(
-	--name "${NAME}"
-	-p "${PORT}:${PORT}"
-	-e "PORT=${PORT}"
-	-e "BIND=${BIND}"
-	--restart unless-stopped
-)
-
-if [[ "${DETACH}" -eq 1 ]]; then
-	run_args+=(-d)
-fi
-
-echo "[deploy] starting container..."
-docker run "${run_args[@]}" "${IMAGE}"
-
-if [[ "${ENABLE_WEB}" -eq 1 ]]; then
-	if docker ps -a --format '{{.Names}}' | grep -qx "${WEB_NAME}"; then
-		echo "[deploy] stopping old container: ${WEB_NAME}"
-		docker rm -f "${WEB_NAME}" >/dev/null
-	fi
-
-	web_args=(
-		--name "${WEB_NAME}"
-		-p "${WEB_PORT}:80"
-		--restart unless-stopped
-	)
-	if [[ "${DETACH}" -eq 1 ]]; then
-		web_args+=(-d)
-	fi
-
-	echo "[deploy] starting web container..."
-	docker run "${web_args[@]}" "${WEB_IMAGE}"
+if [[ -f "${local_compose}" ]]; then
+	compose_file="${local_compose}"
+	echo "[deploy] using local compose.yml: ${compose_file}"
 else
-	if docker ps -a --format '{{.Names}}' | grep -qx "${WEB_NAME}"; then
-		echo "[deploy] removing web container (disabled): ${WEB_NAME}"
-		docker rm -f "${WEB_NAME}" >/dev/null
+	if ! command -v curl >/dev/null 2>&1; then
+		echo "ERROR: curl not found, and compose.yml not available locally" >&2
+		exit 1
 	fi
+	echo "[deploy] downloading compose.yml (ref=${COMPOSE_REF})"
+	curl -fsSL "https://raw.githubusercontent.com/ygowill/food_chain_magnate/${COMPOSE_REF}/compose.yml" -o "${compose_file}"
+fi
+
+cat > "${env_file}" <<EOF
+FCM_TAG=${TAG}
+FCM_SERVER_IMAGE=${IMAGE}
+FCM_WEB_IMAGE=${WEB_IMAGE}
+FCM_SERVER_NAME=${NAME}
+FCM_WEB_NAME=${WEB_NAME}
+FCM_SERVER_PORT=${PORT}
+FCM_SERVER_BIND=${BIND}
+FCM_WEB_PORT=${WEB_PORT}
+EOF
+
+up_args=(--env-file "${env_file}" -f "${compose_file}" -p fcm)
+if [[ "${DETACH}" -eq 1 ]]; then
+	up_args+=(up -d)
+else
+	up_args+=(up)
+fi
+if [[ "${DO_PULL}" -eq 1 ]]; then
+	up_args+=(--pull always)
+fi
+
+if [[ "${ENABLE_WEB}" -eq 1 ]]; then
+	echo "[deploy] docker compose up (server + web)"
+	docker compose --profile web "${up_args[@]}"
+else
+	echo "[deploy] docker compose up (server only)"
+	docker compose "${up_args[@]}" server
+	docker compose --profile web --env-file "${env_file}" -f "${compose_file}" -p fcm rm -sf web >/dev/null 2>&1 || true
 fi
 
 echo "[deploy] done."
-echo "[deploy] logs: docker logs -f ${NAME}"
+echo "[deploy] server logs: docker logs -f ${NAME}"
 if [[ "${ENABLE_WEB}" -eq 1 ]]; then
 	echo "[deploy] web: http://localhost:${WEB_PORT} (or your server IP)"
 	echo "[deploy] web logs: docker logs -f ${WEB_NAME}"
