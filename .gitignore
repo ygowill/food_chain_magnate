@@ -12,6 +12,9 @@
 # Migration tool outputs / runtime artifacts
 tools/migration/out_legacy_json/
 
+# Build outputs
+build/
+
 # macOS
 .DS_Store
 

@@ -1,0 +1,292 @@
+name: CI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  # Keep these in sync with `project.godot` (config/features) when upgrading Godot.
+  GODOT_VERSION: "4.5.1"
+  GODOT_TAG: "4.5.1-stable"
+
+jobs:
+  guard-main-tag:
+    name: Guard (tag must be on main)
+    runs-on: ubuntu-latest
+    outputs:
+      on_main: ${{ steps.check.outputs.on_main }}
+      tag_name: ${{ steps.check.outputs.tag_name }}
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check tag commit is on main
+        id: check
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag_name="${GITHUB_REF#refs/tags/}"
+          echo "tag_name=${tag_name}" >> "$GITHUB_OUTPUT"
+
+          if ! git show-ref --verify --quiet refs/remotes/origin/main; then
+            echo "on_main=false" >> "$GITHUB_OUTPUT"
+            echo "origin/main not found; skipping."
+            exit 0
+          fi
+
+          if git merge-base --is-ancestor "${GITHUB_SHA}" refs/remotes/origin/main; then
+            echo "on_main=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "on_main=false" >> "$GITHUB_OUTPUT"
+          echo "Tag commit ${GITHUB_SHA} is not contained in origin/main; skipping."
+
+  test:
+    name: Tests (headless)
+    runs-on: ubuntu-latest
+    needs: guard-main-tag
+    if: needs.guard-main-tag.outputs.on_main == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/godot
+            ~/.local/share/godot/export_templates
+          key: ${{ runner.os }}-godot-${{ env.GODOT_TAG }}
+
+      - name: Install Godot (editor) + export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$HOME/.cache/godot/bin"
+          if [[ ! -f "$HOME/.cache/godot/bin/godot" ]]; then
+            curl -sSL -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_linux.x86_64.zip"
+            rm -rf /tmp/godot_unzip
+            mkdir -p /tmp/godot_unzip
+            unzip -q /tmp/godot.zip -d /tmp/godot_unzip
+            mv "/tmp/godot_unzip/Godot_v${GODOT_TAG}_linux.x86_64" "$HOME/.cache/godot/bin/godot"
+            chmod +x "$HOME/.cache/godot/bin/godot"
+          fi
+
+          echo "$HOME/.cache/godot/bin" >> "$GITHUB_PATH"
+
+          template_dir="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          if [[ ! -d "$template_dir" ]] || [[ -z "$(ls -A "$template_dir" 2>/dev/null || true)" ]]; then
+            curl -sSL -o /tmp/templates.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_export_templates.tpz"
+            rm -rf /tmp/godot_templates
+            mkdir -p /tmp/godot_templates
+            unzip -q /tmp/templates.tpz -d /tmp/godot_templates
+            rm -rf "$template_dir"
+            mkdir -p "$template_dir"
+            mv /tmp/godot_templates/templates/* "$template_dir"
+          fi
+
+          godot --version
+
+      - name: Run all headless tests
+        shell: bash
+        run: |
+          tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60
+
+  build-client-windows:
+    name: Build client (Windows .exe)
+    runs-on: ubuntu-latest
+    needs: [guard-main-tag, test]
+    if: needs.guard-main-tag.outputs.on_main == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/godot
+            ~/.local/share/godot/export_templates
+          key: ${{ runner.os }}-godot-${{ env.GODOT_TAG }}
+
+      - name: Install Godot (editor) + export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$HOME/.cache/godot/bin"
+          if [[ ! -f "$HOME/.cache/godot/bin/godot" ]]; then
+            curl -sSL -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_linux.x86_64.zip"
+            rm -rf /tmp/godot_unzip
+            mkdir -p /tmp/godot_unzip
+            unzip -q /tmp/godot.zip -d /tmp/godot_unzip
+            mv "/tmp/godot_unzip/Godot_v${GODOT_TAG}_linux.x86_64" "$HOME/.cache/godot/bin/godot"
+            chmod +x "$HOME/.cache/godot/bin/godot"
+          fi
+
+          echo "$HOME/.cache/godot/bin" >> "$GITHUB_PATH"
+
+          template_dir="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          if [[ ! -d "$template_dir" ]] || [[ -z "$(ls -A "$template_dir" 2>/dev/null || true)" ]]; then
+            curl -sSL -o /tmp/templates.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_export_templates.tpz"
+            rm -rf /tmp/godot_templates
+            mkdir -p /tmp/godot_templates
+            unzip -q /tmp/templates.tpz -d /tmp/godot_templates
+            rm -rf "$template_dir"
+            mkdir -p "$template_dir"
+            mv /tmp/godot_templates/templates/* "$template_dir"
+          fi
+
+          godot --version
+
+      - name: Import project resources
+        shell: bash
+        run: |
+          HOME="$PWD/.tmp_home" godot --headless --import --path "$PWD" >/dev/null 2>&1
+
+      - name: Export Windows build
+        shell: bash
+        run: |
+          mkdir -p build/client/windows
+          godot --headless --path "$PWD" --export-release "Windows Desktop" build/client/windows/FCM.exe
+
+      - name: Package release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ needs.guard-main-tag.outputs.tag_name }}"
+
+          mkdir -p build/release
+
+          zip_name="FCM-windows-x86_64-${tag}.zip"
+          (cd build/client/windows && zip -qr "../../release/${zip_name}" .)
+          sha256sum "build/release/${zip_name}" > "build/release/${zip_name}.sha256"
+
+      - name: Upload release assets artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ needs.guard-main-tag.outputs.tag_name }}
+          path: build/release
+
+  build-server-docker:
+    name: Build server Docker image
+    runs-on: ubuntu-latest
+    needs: [guard-main-tag, test]
+    if: needs.guard-main-tag.outputs.on_main == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image name
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}/fcm-server" >> "$GITHUB_ENV"
+
+      - name: Docker meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_name="${GITHUB_REF#refs/tags/}"
+          tags=(
+            "${IMAGE_NAME}:${GITHUB_SHA}"
+            "${IMAGE_NAME}:${tag_name}"
+          )
+          if [[ "${tag_name}" != *"-"* ]]; then
+            tags+=("${IMAGE_NAME}:latest")
+          fi
+          {
+            echo "IMAGE_TAGS<<EOF"
+            printf "%s\n" "${tags[@]}"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/Dockerfile
+          build-args: |
+            GODOT_TAG=${{ env.GODOT_TAG }}
+          push: true
+          tags: ${{ env.IMAGE_TAGS }}
+
+  release:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    needs: [guard-main-tag, test, build-client-windows, build-server-docker]
+    if: needs.guard-main-tag.outputs.on_main == 'true'
+    permissions:
+      contents: write
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets-${{ needs.guard-main-tag.outputs.tag_name }}
+          path: build/release
+
+      - name: Generate release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${{ needs.guard-main-tag.outputs.tag_name }}"
+          repo_lower="$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          image_base="ghcr.io/${repo_lower}/fcm-server"
+
+          mkdir -p dist
+          find build/release -type f -name '*.zip' -exec cp -f {} dist/ \;
+          find build/release -type f -name '*.sha256' -exec cp -f {} dist/ \;
+
+          zip_file="$(ls -1 dist/*.zip | head -n 1)"
+          sha_file="$(ls -1 dist/*.sha256 | head -n 1)"
+
+          {
+            echo "# ${tag}"
+            echo
+            echo "## Downloads"
+            echo "- Windows: $(basename "${zip_file}")"
+            echo "- SHA256: $(basename "${sha_file}")"
+            echo
+            echo "## Docker"
+            echo "- ${image_base}:${tag}"
+            if [[ "${tag}" != *"-"* ]]; then
+              echo "- ${image_base}:latest"
+            fi
+            echo
+            echo "## Verified"
+            echo "- Headless tests: AllTests"
+          } > RELEASE.md
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ needs.guard-main-tag.outputs.tag_name }}
+          tag_name: ${{ needs.guard-main-tag.outputs.tag_name }}
+          prerelease: ${{ contains(needs.guard-main-tag.outputs.tag_name, '-') }}
+          body_path: RELEASE.md
+          files: |
+            dist/*
+          fail_on_unmatched_files: true
