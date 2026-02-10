@@ -137,6 +137,16 @@ static func apply(state: GameState) -> Result:
 
 		return Result.success().with_warnings(warnings)
 
+	# 允许模块要求延迟“里程碑池清理”（例如：Cleanup 阶段仍有额外交互/选择）。
+	# 约定：模块在 Cleanup primary 之前写入 round_state.cleanup_defer_milestone_cleanup=true，
+	# 并在后续动作完成后调用 apply_cleanup_milestones。
+	if state.round_state.has("cleanup_defer_milestone_cleanup"):
+		var defer_val = state.round_state.get("cleanup_defer_milestone_cleanup", null)
+		if not (defer_val is bool):
+			return Result.failure("CleanupSettlement: round_state.cleanup_defer_milestone_cleanup 类型错误（期望 bool）")
+		if bool(defer_val):
+			return Result.success().with_warnings(warnings)
+
 	var milestone_cleanup := apply_cleanup_milestones(state)
 	if not milestone_cleanup.ok:
 		return milestone_cleanup

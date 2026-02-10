@@ -111,11 +111,27 @@ func _on_cleanup_enter_before_primary(state: GameState, _phase_manager) -> Resul
 		return Result.failure("%s: cleanup(before): state.round_state 类型错误（期望 Dictionary）" % MODULE_ID)
 
 	var carried_over: Dictionary = {}  # player_id(int) -> kimchi_count(int)
+	var produced_next: Dictionary = {}  # player_id(int) -> produced_count(int)
+	var pending_players: Array[int] = []
 	for pid in range(state.players.size()):
 		var p_val = state.players[pid]
 		if not (p_val is Dictionary):
 			return Result.failure("%s: cleanup(before): players[%d] 类型错误（期望 Dictionary）" % [MODULE_ID, pid])
 		var player: Dictionary = p_val
+
+		var employees_val = player.get("employees", null)
+		if not (employees_val is Array):
+			return Result.failure("%s: cleanup(before): players[%d].employees 类型错误（期望 Array）" % [MODULE_ID, pid])
+		var employees: Array = employees_val
+		var km_count := 0
+		for i in range(employees.size()):
+			var e_val = employees[i]
+			if not (e_val is String):
+				return Result.failure("%s: cleanup(before): players[%d].employees[%d] 类型错误（期望 String）" % [MODULE_ID, pid, i])
+			if str(e_val) == KIMCHI_MASTER_ID:
+				km_count += 1
+		if km_count > 0:
+			produced_next[pid] = km_count
 
 		var inv_val = player.get("inventory", null)
 		if not (inv_val is Dictionary):
@@ -123,22 +139,27 @@ func _on_cleanup_enter_before_primary(state: GameState, _phase_manager) -> Resul
 		var inv: Dictionary = inv_val
 
 		var count: int = maxi(0, int(inv.get(PRODUCT_ID, 0)))
-		if count <= 0:
-			continue
+		if count > 0:
+			carried_over[pid] = count
+			# 置零以防 primary cleanup 将其当作普通 food 丢弃。
+			inv[PRODUCT_ID] = 0
+			player["inventory"] = inv
+			state.players[pid] = player
 
-		carried_over[pid] = count
-		# 置零以防 primary cleanup 将其当作普通 food 丢弃。
-		inv[PRODUCT_ID] = 0
-		player["inventory"] = inv
-		state.players[pid] = player
+		# 若 cleanup 后将存在 kimchi（上回合存下来的或本次产出的），需要弹出“是否存泡菜”选择；
+		# 同时要求 base cleanup 延迟里程碑池清理（避免选择导致的丢弃在清理后触发里程碑而残留在 pool 中）。
+		if count + km_count > 0:
+			pending_players.append(pid)
 
-	if carried_over.is_empty():
-		return Result.success()
+	if not pending_players.is_empty():
+		state.round_state["cleanup_defer_milestone_cleanup"] = true
 
 	if state.round_state.has(PRODUCT_ID) and not (state.round_state[PRODUCT_ID] is Dictionary):
 		return Result.failure("%s: cleanup(before): round_state.kimchi 类型错误（期望 Dictionary）" % MODULE_ID)
 	var rs: Dictionary = state.round_state.get(PRODUCT_ID, {})
 	rs["carried_over_before_cleanup"] = carried_over
+	rs["planned_produced_by_player"] = produced_next
+	rs["pending_storage_players"] = pending_players
 	state.round_state[PRODUCT_ID] = rs
 
 	return Result.success()
@@ -210,12 +231,9 @@ func _on_cleanup_enter_after_primary(state: GameState, _phase_manager) -> Result
 		if count > 0:
 			produced.append({"player_id": pid, "count": count})
 
-	# 2) 储存规则（确定性实现）：
-	# - 若玩家在 cleanup 后 inventory 中存在 kimchi，则其他所有产品均丢弃（不可与 kimchi 同存）
-	# - kimchi 最多保留 10
-	# 注意：这是无“玩家选择”的确定性版本；若未来引入选择，将改为显式动作。
-	var stored: Array[Dictionary] = []
-	var pending_cleanup_players: Array[int] = []
+	# 2) 选择：若 cleanup 后存在 kimchi，则要求玩家选择是否存泡菜（存泡菜则其它库存不可保留）。
+	# - kimchi 选择优先于冰箱选择（若存泡菜，则冰箱选择不再需要）。
+	var fridge_pending_players: Array[int] = []
 	if state.round_state.has("pending_phase_actions"):
 		var ppa_val = state.round_state.get("pending_phase_actions", null)
 		if not (ppa_val is Dictionary):
@@ -226,148 +244,78 @@ func _on_cleanup_enter_after_primary(state: GameState, _phase_manager) -> Result
 			if not (list_val is Array):
 				return Result.failure("%s: cleanup: pending_phase_actions[Cleanup] 类型错误（期望 Array）" % MODULE_ID)
 			for v in list_val:
-				pending_cleanup_players.append(int(v))
+				fridge_pending_players.append(int(v))
 
-	var removed_from_pending: Dictionary = {}  # pid -> true
-	for pid in range(state.players.size()):
-		var p_val2 = state.players[pid]
-		var player2: Dictionary = p_val2
-		var inv_val2 = player2.get("inventory", null)
-		if not (inv_val2 is Dictionary):
-			return Result.failure("%s: cleanup: players[%d].inventory 类型错误（期望 Dictionary）" % [MODULE_ID, pid])
-		var inv2: Dictionary = inv_val2
+	var pending_set := {}
+	var rs_any = state.round_state.get(PRODUCT_ID, {})
+	if rs_any is Dictionary:
+		var rs2: Dictionary = rs_any
+		var pending_val = rs2.get("pending_storage_players", [])
+		if pending_val is Array:
+			for v in pending_val:
+				pending_set[int(v)] = true
 
-		var kimchi_count: int = int(inv2.get(PRODUCT_ID, 0))
-		if kimchi_count <= 0:
+	var kimchi_pending_players: Array[int] = []
+	var order: Array[int] = []
+	if state.turn_order is Array and not state.turn_order.is_empty():
+		for v in state.turn_order:
+			order.append(int(v))
+	else:
+		for pid2 in range(state.players.size()):
+			order.append(pid2)
+
+	for pid3 in order:
+		if not pending_set.has(pid3):
 			continue
+		var p_val3 = state.players[pid3]
+		if not (p_val3 is Dictionary):
+			continue
+		var p3: Dictionary = p_val3
+		var inv3_val = p3.get("inventory", null)
+		if not (inv3_val is Dictionary):
+			continue
+		var inv3: Dictionary = inv3_val
+		if maxi(0, int(inv3.get(PRODUCT_ID, 0))) > 0:
+			kimchi_pending_players.append(pid3)
 
-		var kept_kimchi: int = clampi(kimchi_count, 0, 10)
+	var cleanup_val = state.round_state.get("cleanup", null)
+	if not (cleanup_val is Dictionary):
+		return Result.failure("%s: cleanup: round_state.cleanup 类型错误（期望 Dictionary）" % MODULE_ID)
+	var cleanup: Dictionary = cleanup_val
+	cleanup["kimchi_pending_players"] = kimchi_pending_players
+	cleanup["fridge_pending_players"] = fridge_pending_players
+	if cleanup.has("fridge_choice_pending"):
+		cleanup["fridge_choice_pending"] = not fridge_pending_players.is_empty()
 
-		# 计算因“kimchi freezer 互斥 + clamp”导致的丢弃，并同步写入 round_state.cleanup.inventory_discarded。
-		var discarded_due_to_kimchi: Dictionary = {}
-		for k in inv2.keys():
-			var pid_key := str(k)
-			if pid_key.is_empty():
-				continue
-			var before: int = maxi(0, int(inv2.get(k, 0)))
-			var after := 0
-			if pid_key == PRODUCT_ID:
-				after = kept_kimchi
-			var delta := before - after
-			if delta > 0:
-				discarded_due_to_kimchi[pid_key] = delta
-
-		if not discarded_due_to_kimchi.is_empty():
-			var cleanup_val = state.round_state.get("cleanup", null)
-			if not (cleanup_val is Dictionary):
-				return Result.failure("%s: cleanup: round_state.cleanup 类型错误（期望 Dictionary）" % MODULE_ID)
-			var cleanup: Dictionary = cleanup_val
-			var inv_disc_val = cleanup.get("inventory_discarded", null)
-			if not (inv_disc_val is Array):
-				return Result.failure("%s: cleanup: round_state.cleanup.inventory_discarded 类型错误（期望 Array）" % MODULE_ID)
-			var inv_disc: Array = inv_disc_val
-
-			var had_primary_discard := false
-			var updated := false
-			for idx in range(inv_disc.size()):
-				var item_val = inv_disc[idx]
-				if not (item_val is Dictionary):
-					continue
-				var item: Dictionary = item_val
-				if int(item.get("player_id", -1)) != pid:
-					continue
-				var prev_val = item.get("discarded", {})
-				if not (prev_val is Dictionary):
-					return Result.failure("%s: cleanup: inventory_discarded[%d].discarded 类型错误（期望 Dictionary）" % [MODULE_ID, idx])
-				var prev: Dictionary = prev_val
-				had_primary_discard = not prev.is_empty()
-
-				for dk in discarded_due_to_kimchi.keys():
-					var key: String = str(dk)
-					var add_amt: int = int(discarded_due_to_kimchi.get(dk, 0))
-					if add_amt <= 0:
-						continue
-					prev[key] = int(prev.get(key, 0)) + add_amt
-				item["discarded"] = prev
-				inv_disc[idx] = item
-				updated = true
-				break
-			if not updated:
-				# 兜底：理论上 primary cleanup 已为每个玩家写入 inventory_discarded；若缺失则补写。
-				inv_disc.append({
-					"player_id": pid,
-					"has_fridge": true,
-					"discarded": discarded_due_to_kimchi.duplicate(true),
-				})
-				updated = true
-
-			cleanup["inventory_discarded"] = inv_disc
-			state.round_state["cleanup"] = cleanup
-
-			# 只在 primary 未触发过 CleanupDiscard 时触发一次（避免同一玩家同一 Cleanup 重复触发）。
-			if not had_primary_discard:
-				var ms := MilestoneSystemClass.process_event(state, "CleanupDiscard", {
-					"player_id": pid,
-					"discarded": discarded_due_to_kimchi,
-				})
-				if not ms.ok:
-					warnings.append("里程碑触发失败(CleanupDiscard): 玩家 %d: %s" % [pid, ms.error])
-				else:
-					warnings.append_array(ms.warnings)
-
-		var new_inv := {}
-		for k in inv2.keys():
-			new_inv[str(k)] = 0
-		new_inv[PRODUCT_ID] = kept_kimchi
-		player2["inventory"] = new_inv
-		state.players[pid] = player2
-		stored.append({"player_id": pid, "kimchi_kept": int(new_inv[PRODUCT_ID])})
-
-		# 若进入了冰箱选择 pending，则 kimchi 互斥结算后不再需要选择，直接解除阻塞。
-		if pending_cleanup_players.has(pid):
-			removed_from_pending[pid] = true
-
-	if not removed_from_pending.is_empty():
-		var new_pending: Array[int] = []
-		for pid_val in pending_cleanup_players:
-			var pid2: int = int(pid_val)
-			if removed_from_pending.has(pid2):
-				continue
-			new_pending.append(pid2)
-
-		var ppa2: Dictionary = state.round_state.get("pending_phase_actions", {})
-		if not (ppa2 is Dictionary):
+	# 设置 pending：kimchi 选择优先；若无 kimchi pending，则保持/进入 fridge pending。
+	if not kimchi_pending_players.is_empty():
+		cleanup["pending_choice_kind"] = "kimchi"
+		state.round_state["cleanup"] = cleanup
+		if not state.round_state.has("pending_phase_actions"):
+			state.round_state["pending_phase_actions"] = {}
+		var ppa2_val = state.round_state.get("pending_phase_actions", null)
+		if not (ppa2_val is Dictionary):
 			return Result.failure("%s: cleanup: pending_phase_actions 类型错误（期望 Dictionary）" % MODULE_ID)
-		if new_pending.is_empty():
-			ppa2.erase(PhaseDefsClass.PHASE_CLEANUP)
-		else:
-			ppa2[PhaseDefsClass.PHASE_CLEANUP] = new_pending
+		var ppa2: Dictionary = ppa2_val
+		ppa2[PhaseDefsClass.PHASE_CLEANUP] = kimchi_pending_players
 		state.round_state["pending_phase_actions"] = ppa2
 
-		# 同步 cleanup.fridge_choice_pending，并在 pending 清空时补跑 apply_cleanup_milestones（对齐 choose_fridge_keep 行为）。
-		var cleanup_val2 = state.round_state.get("cleanup", null)
-		if cleanup_val2 is Dictionary:
-			var cleanup2: Dictionary = cleanup_val2
-			if cleanup2.has("fridge_choice_pending"):
-				cleanup2["fridge_choice_pending"] = not new_pending.is_empty()
-				state.round_state["cleanup"] = cleanup2
-
-		if new_pending.is_empty():
-			var milestone_cleanup := CleanupSettlementClass.apply_cleanup_milestones(state)
-			if not milestone_cleanup.ok:
-				return milestone_cleanup
-			warnings.append_array(milestone_cleanup.warnings)
-		else:
-			var next_pid: int = int(new_pending[0])
-			for idx2 in range(state.turn_order.size()):
-				if int(state.turn_order[idx2]) == next_pid:
-					state.current_player_index = idx2
-					break
+		var next_pid: int = int(kimchi_pending_players[0])
+		for idx2 in range(state.turn_order.size()):
+			if int(state.turn_order[idx2]) == next_pid:
+				state.current_player_index = idx2
+				break
+	elif not fridge_pending_players.is_empty():
+		cleanup["pending_choice_kind"] = "fridge"
+		state.round_state["cleanup"] = cleanup
+	else:
+		cleanup["pending_choice_kind"] = ""
+		state.round_state["cleanup"] = cleanup
 
 	state.round_state["kimchi"] = {
 		"produced": produced,
-		"stored": stored,
 		"carried_over": carried_over_by_player.duplicate(true),
+		"pending_players": kimchi_pending_players,
 	}
 
 	return Result.success().with_warnings(warnings)

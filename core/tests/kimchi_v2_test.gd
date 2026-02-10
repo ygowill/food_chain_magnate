@@ -28,6 +28,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r2.ok:
 		return r2
 
+	var r2b := _test_cleanup_kimchi_storage_can_decline_and_proceed_to_fridge(seed_val)
+	if not r2b.ok:
+		return r2b
+
 	var r3 := _test_garden_prefers_kimchi_plus_noodles_over_sushi_and_base(seed_val)
 	if not r3.ok:
 		return r3
@@ -53,7 +57,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return r8
 
 	return Result.success({
-		"cases": 9,
+		"cases": 10,
 		"seed": seed_val,
 	})
 
@@ -189,7 +193,7 @@ static func _test_cleanup_clamps_kimchi_to_10(seed_val: int) -> Result:
 		return Result.failure("初始化失败: %s" % init.error)
 
 	var state := e.get_state()
-	_force_turn_order(state)
+	_prepare_cleanup(state)
 
 	# 玩家0：已有大量 kimchi，应在 cleanup 后被 clamp 到 10（且其余产品清空）。
 	state.players[0]["inventory"]["kimchi"] = 12
@@ -206,6 +210,11 @@ static func _test_cleanup_clamps_kimchi_to_10(seed_val: int) -> Result:
 	if not r.ok:
 		return Result.failure("Cleanup 结算失败: %s" % r.error)
 
+	var choose := e.execute_command(Command.create("choose_kimchi_storage", 0, {"store": true}))
+	if not choose.ok:
+		return Result.failure("choose_kimchi_storage 失败: %s" % choose.error)
+
+	state = e.get_state()
 	var inv: Dictionary = state.players[0]["inventory"]
 	if int(inv.get("kimchi", 0)) != 10:
 		return Result.failure("kimchi freezer 应 clamp 到 10，实际: %d inv=%s" % [int(inv.get("kimchi", 0)), str(inv)])
@@ -293,6 +302,7 @@ static func _test_cleanup_produces_and_forces_kimchi_storage(seed_val: int) -> R
 		return Result.failure("初始化失败: %s" % init.error)
 
 	var state := e.get_state()
+	_prepare_cleanup(state)
 
 	# 注入 kimchi_master（在岗），并给一些其他库存，验证 cleanup 后只保留 kimchi
 	if int(state.employee_pool.get("kimchi_master", 0)) <= 0:
@@ -314,16 +324,106 @@ static func _test_cleanup_produces_and_forces_kimchi_storage(seed_val: int) -> R
 	if not r.ok:
 		return Result.failure("Cleanup 结算失败: %s" % r.error)
 
+	var rs_kimchi: Dictionary = state.round_state.get("kimchi", {})
+	var produced: Array = rs_kimchi.get("produced", [])
+	if produced.is_empty():
+		return Result.failure("round_state.kimchi.produced 应记录生产事件")
+
+	var choose := e.execute_command(Command.create("choose_kimchi_storage", 0, {"store": true}))
+	if not choose.ok:
+		return Result.failure("choose_kimchi_storage 失败: %s" % choose.error)
+
+	state = e.get_state()
 	var inv: Dictionary = state.players[0]["inventory"]
 	if int(inv.get("kimchi", 0)) != 1:
 		return Result.failure("kimchi 应被生产并保留 1，实际: %d" % int(inv.get("kimchi", 0)))
 	if int(inv.get("burger", 0)) != 0 or int(inv.get("pizza", 0)) != 0:
 		return Result.failure("存储 kimchi 时其他产品应被丢弃，实际 inv=%s" % str(inv))
 
-	var rs_kimchi: Dictionary = state.round_state.get("kimchi", {})
-	var produced: Array = rs_kimchi.get("produced", [])
-	if produced.is_empty():
-		return Result.failure("round_state.kimchi.produced 应记录生产事件")
+	return Result.success()
+
+static func _test_cleanup_kimchi_storage_can_decline_and_proceed_to_fridge(seed_val: int) -> Result:
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"kimchi",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := e.get_state()
+	_prepare_cleanup(state)
+
+	# 玩家0：有冰箱且库存超出容量 -> 会进入冰箱选择 pending。
+	var claim := StateUpdater.claim_milestone(state, 0, "first_throw_away")
+	if not claim.ok:
+		return Result.failure("为玩家 0 领取 first_throw_away 失败: %s" % claim.error)
+
+	state.players[0]["inventory"]["kimchi"] = 1
+	state.players[0]["inventory"]["burger"] = 12
+	state.players[0]["inventory"]["pizza"] = 9
+
+	var pm = e.phase_manager
+	if pm == null:
+		return Result.failure("phase_manager 为空")
+	var reg = pm.get_settlement_registry()
+	if reg == null:
+		return Result.failure("SettlementRegistry 为空")
+
+	var r: Result = reg.run(Phase.CLEANUP, Point.ENTER, state, pm)
+	if not r.ok:
+		return Result.failure("Cleanup 结算失败: %s" % r.error)
+
+	# kimchi 选择优先于冰箱选择
+	var cleanup_val = state.round_state.get("cleanup", null)
+	if not (cleanup_val is Dictionary):
+		return Result.failure("round_state.cleanup 缺失或类型错误（期望 Dictionary）")
+	var cleanup: Dictionary = cleanup_val
+	if str(cleanup.get("pending_choice_kind", "")) != "kimchi":
+		return Result.failure("pending_choice_kind 应为 kimchi，实际: %s" % str(cleanup.get("pending_choice_kind", null)))
+
+	var choose0 := e.execute_command(Command.create("choose_kimchi_storage", 0, {"store": false}))
+	if not choose0.ok:
+		return Result.failure("choose_kimchi_storage(store=false) 失败: %s" % choose0.error)
+
+	state = e.get_state()
+
+	# 不存泡菜后应进入冰箱选择
+	var cleanup2_val = state.round_state.get("cleanup", null)
+	if not (cleanup2_val is Dictionary):
+		return Result.failure("round_state.cleanup 类型错误（期望 Dictionary）")
+	var cleanup2: Dictionary = cleanup2_val
+	if str(cleanup2.get("pending_choice_kind", "")) != "fridge":
+		return Result.failure("pending_choice_kind 应为 fridge，实际: %s" % str(cleanup2.get("pending_choice_kind", null)))
+
+	var inv_mid: Dictionary = state.players[0]["inventory"]
+	if int(inv_mid.get("kimchi", 0)) != 0:
+		return Result.failure("选择不存泡菜后 kimchi 应为 0，实际: %d inv=%s" % [int(inv_mid.get("kimchi", 0)), str(inv_mid)])
+	if int(inv_mid.get("burger", 0)) != 12 or int(inv_mid.get("pizza", 0)) != 9:
+		return Result.failure("选择不存泡菜不应影响其它库存（应仍待冰箱选择），实际 inv=%s" % str(inv_mid))
+
+	var choose_fridge := e.execute_command(Command.create("choose_fridge_keep", 0, {"keep": {"burger": 5, "pizza": 5}}))
+	if not choose_fridge.ok:
+		return Result.failure("choose_fridge_keep 失败: %s" % choose_fridge.error)
+
+	state = e.get_state()
+	var ppa_val = state.round_state.get("pending_phase_actions", null)
+	if ppa_val is Dictionary and Dictionary(ppa_val).has(PhaseDefsClass.PHASE_CLEANUP):
+		return Result.failure("结算后不应残留 pending_phase_actions[Cleanup]，实际: %s" % str(ppa_val))
+
+	var inv_after: Dictionary = state.players[0]["inventory"]
+	if int(inv_after.get("kimchi", 0)) != 0:
+		return Result.failure("最终 kimchi 应为 0，实际: %d inv=%s" % [int(inv_after.get("kimchi", 0)), str(inv_after)])
+	if int(inv_after.get("burger", 0)) != 5 or int(inv_after.get("pizza", 0)) != 5:
+		return Result.failure("最终冰箱保留数量不正确，实际 inv=%s" % str(inv_after))
 
 	return Result.success()
 
@@ -414,7 +514,7 @@ static func _test_cleanup_preserves_existing_kimchi_without_fridge(seed_val: int
 		return Result.failure("初始化失败: %s" % init.error)
 
 	var state := e.get_state()
-	_force_turn_order(state)
+	_prepare_cleanup(state)
 
 	# 玩家0：无冰箱，但已有上回合存下来的 kimchi，应在 cleanup 后仍保留。
 	state.players[0]["inventory"]["kimchi"] = 3
@@ -431,6 +531,11 @@ static func _test_cleanup_preserves_existing_kimchi_without_fridge(seed_val: int
 	if not r.ok:
 		return Result.failure("Cleanup 结算失败: %s" % r.error)
 
+	var choose := e.execute_command(Command.create("choose_kimchi_storage", 0, {"store": true}))
+	if not choose.ok:
+		return Result.failure("choose_kimchi_storage 失败: %s" % choose.error)
+
+	state = e.get_state()
 	var inv: Dictionary = state.players[0]["inventory"]
 	if int(inv.get("kimchi", 0)) != 3:
 		return Result.failure("无冰箱时应保留已存 kimchi=3，实际: %d inv=%s" % [int(inv.get("kimchi", 0)), str(inv)])
@@ -457,7 +562,7 @@ static func _test_cleanup_kimchi_unblocks_fridge_pending(seed_val: int) -> Resul
 		return Result.failure("初始化失败: %s" % init.error)
 
 	var state := e.get_state()
-	_force_turn_order(state)
+	_prepare_cleanup(state)
 
 	# 玩家0：先获得冰箱里程碑（cap=10），再给超出 cap 的库存，按 base 规则会进入 pending。
 	var claim := StateUpdater.claim_milestone(state, 0, "first_throw_away")
@@ -479,6 +584,11 @@ static func _test_cleanup_kimchi_unblocks_fridge_pending(seed_val: int) -> Resul
 	if not r.ok:
 		return Result.failure("Cleanup 结算失败: %s" % r.error)
 
+	var choose := e.execute_command(Command.create("choose_kimchi_storage", 0, {"store": true}))
+	if not choose.ok:
+		return Result.failure("choose_kimchi_storage 失败: %s" % choose.error)
+
+	state = e.get_state()
 	var ppa_val = state.round_state.get("pending_phase_actions", null)
 	if ppa_val is Dictionary and Dictionary(ppa_val).has(PhaseDefsClass.PHASE_CLEANUP):
 		return Result.failure("kimchi freezer 结算后不应残留 pending_phase_actions[Cleanup]，实际: %s" % str(ppa_val))
@@ -490,6 +600,16 @@ static func _test_cleanup_kimchi_unblocks_fridge_pending(seed_val: int) -> Resul
 		return Result.failure("存储 kimchi 时其他产品应被丢弃，实际 inv=%s" % str(inv))
 
 	return Result.success()
+
+static func _prepare_cleanup(state: GameState) -> void:
+	if state == null:
+		return
+	state.phase = PhaseDefsClass.PHASE_CLEANUP
+	state.sub_phase = ""
+	state.round_number = 1
+	_force_turn_order(state)
+	if not (state.round_state is Dictionary):
+		state.round_state = {}
 
 static func _advance_to_dinnertime(engine: GameEngine) -> Result:
 	var state := engine.get_state()

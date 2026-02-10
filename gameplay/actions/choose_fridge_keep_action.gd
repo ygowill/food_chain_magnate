@@ -39,6 +39,19 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if int(pending[0]) != int(command.actor):
 		return Result.failure("当前不是需要选择冰箱保留的玩家")
 
+	# 兼容：Cleanup 阶段可能存在多种 pending（例如 kimchi 储存选择）
+	# 若存在 kind 标记，则 choose_fridge_keep 仅在 kind=fridge 时可执行。
+	var cleanup_val = Dictionary(state.round_state).get("cleanup", null)
+	if cleanup_val is Dictionary:
+		var cleanup: Dictionary = cleanup_val
+		if cleanup.has("pending_choice_kind"):
+			var kind_val = cleanup.get("pending_choice_kind", "")
+			if not (kind_val is String):
+				return Result.failure("round_state.cleanup.pending_choice_kind 类型错误（期望 String）")
+			var kind: String = str(kind_val)
+			if not kind.is_empty() and kind != "fridge":
+				return Result.failure("当前不是冰箱保留选择（kind=%s）" % kind)
+
 	var player: Dictionary = state.players[command.actor]
 	var inventory_val = player.get("inventory", null)
 	if not (inventory_val is Dictionary):
@@ -144,7 +157,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			var cleanup: Dictionary = cleanup_val
 			if cleanup.has("fridge_choice_pending"):
 				cleanup["fridge_choice_pending"] = false
-				state.round_state["cleanup"] = cleanup
+			if cleanup.has("pending_choice_kind"):
+				cleanup["pending_choice_kind"] = ""
+			state.round_state["cleanup"] = cleanup
+
+		if state.round_state.has("cleanup_defer_milestone_cleanup"):
+			state.round_state.erase("cleanup_defer_milestone_cleanup")
 
 		var milestone_cleanup := CleanupSettlementClass.apply_cleanup_milestones(state)
 		if not milestone_cleanup.ok:
@@ -164,42 +182,56 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, _co
 	var out: Array[Dictionary] = []
 	if _new_state == null or _command == null:
 		return out
-	if not (_new_state.round_state is Dictionary):
+	if _old_state == null:
 		return out
-
-	var cleanup_val = Dictionary(_new_state.round_state).get("cleanup", null)
-	if not (cleanup_val is Dictionary):
-		return out
-	var cleanup: Dictionary = cleanup_val
-	var inv_val = cleanup.get("inventory_discarded", null)
-	if not (inv_val is Array):
+	if not ProductRegistryClass.is_loaded():
 		return out
 
 	var actor := int(_command.actor)
-	for item_val in Array(inv_val):
-		if not (item_val is Dictionary):
-			continue
-		var item: Dictionary = item_val
-		if int(item.get("player_id", -1)) != actor:
-			continue
+	if actor < 0 or actor >= _new_state.players.size():
+		return out
+	if actor >= _old_state.players.size():
+		return out
 
-		var discarded_val = item.get("discarded", null)
-		if not (discarded_val is Dictionary):
-			return out
-		var discarded: Dictionary = Dictionary(discarded_val).duplicate(true)
-		if discarded.is_empty():
-			return out
+	var old_p_val = _old_state.players[actor]
+	var new_p_val = _new_state.players[actor]
+	if not (old_p_val is Dictionary) or not (new_p_val is Dictionary):
+		return out
+	var old_p: Dictionary = old_p_val
+	var new_p: Dictionary = new_p_val
 
-		out.append({
-			"type": EventBus.EventType.FOOD_DISCARDED,
-			"data": {
-				"round": int(_new_state.round_number),
-				"player_id": actor,
-				"has_fridge": bool(item.get("has_fridge", true)),
-				"discarded": discarded,
-			}
-		})
-		break
+	var old_inv_val = old_p.get("inventory", null)
+	var new_inv_val = new_p.get("inventory", null)
+	if not (old_inv_val is Dictionary) or not (new_inv_val is Dictionary):
+		return out
+	var old_inv: Dictionary = old_inv_val
+	var new_inv: Dictionary = new_inv_val
+
+	var discarded: Dictionary = {}
+	for k in old_inv.keys():
+		var pid: String = str(k)
+		if pid.is_empty():
+			continue
+		if not _is_food_or_drink(pid):
+			continue
+		var before: int = maxi(0, int(old_inv.get(pid, 0)))
+		var after: int = maxi(0, int(new_inv.get(pid, 0)))
+		var delta := before - after
+		if delta > 0:
+			discarded[pid] = delta
+
+	if discarded.is_empty():
+		return out
+
+	out.append({
+		"type": EventBus.EventType.FOOD_DISCARDED,
+		"data": {
+			"round": int(_new_state.round_number),
+			"player_id": actor,
+			"has_fridge": true,
+			"discarded": discarded,
+		}
+	})
 
 	return out
 
@@ -325,7 +357,15 @@ static func _upsert_cleanup_inventory_discarded(state: GameState, player_id: int
 		if int(item.get("player_id", -1)) != int(player_id):
 			continue
 		item["has_fridge"] = has_fridge
-		item["discarded"] = discarded
+		var prev_val = item.get("discarded", {})
+		var prev: Dictionary = prev_val if prev_val is Dictionary else {}
+		for k in discarded.keys():
+			var pid: String = str(k)
+			var add_amt: int = int(discarded.get(k, 0))
+			if add_amt <= 0 or pid.is_empty():
+				continue
+			prev[pid] = int(prev.get(pid, 0)) + add_amt
+		item["discarded"] = prev
 		inv[idx] = item
 		cleanup["inventory_discarded"] = inv
 		state.round_state["cleanup"] = cleanup
