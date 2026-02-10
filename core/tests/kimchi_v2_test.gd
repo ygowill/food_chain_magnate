@@ -48,6 +48,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r3.ok:
 		return r3
 
+	var r3b := _test_garden_prefers_kimchi_plus_sushi_over_kimchi_plus_base(seed_val)
+	if not r3b.ok:
+		return r3b
+
 	var r4 := _test_cleanup_preserves_existing_kimchi_without_fridge(seed_val)
 	if not r4.ok:
 		return r4
@@ -69,7 +73,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return r8
 
 	return Result.success({
-		"cases": 13,
+		"cases": 14,
 		"seed": seed_val,
 	})
 
@@ -635,6 +639,67 @@ static func _test_garden_prefers_kimchi_plus_noodles_over_sushi_and_base(seed_va
 		return Result.failure("玩家0 不应售出，现金应为 0，实际: %d" % int(state.players[0].get("cash", 0)))
 	if int(state.players[1].get("cash", 0)) <= 0:
 		return Result.failure("玩家1 应售出并获得收入，实际 cash=%d" % int(state.players[1].get("cash", 0)))
+
+	return Result.success()
+
+static func _test_garden_prefers_kimchi_plus_sushi_over_kimchi_plus_base(seed_val: int) -> Result:
+	var e := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_milestones",
+		"base_marketing",
+		"sushi",
+		"kimchi",
+	]
+	var init := e.initialize(2, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := e.get_state()
+	_force_turn_order(state)
+	_apply_test_map(state)
+
+	# house_left 为花园房屋：需求 burger+beer（total=2）
+	var houses: Dictionary = state.map.get("houses", {})
+	var left: Dictionary = houses.get("house_left", {})
+	left["has_garden"] = true
+	houses["house_left"] = left
+	state.map["houses"] = houses
+
+	_set_house_demands(state, "house_left", [{"product": "burger"}, {"product": "beer"}])
+	_set_house_demands(state, "house_right", [])
+
+	# 玩家0：仅能卖 Kimchi+Base（更近）
+	state.players[0]["inventory"]["burger"] = 1
+	state.players[0]["inventory"]["beer"] = 1
+	state.players[0]["inventory"]["kimchi"] = 1
+	state.players[0]["inventory"]["sushi"] = 0
+
+	# 玩家1：能卖 Kimchi+Sushi（应因优先级更高而胜出）
+	state.players[1]["inventory"]["sushi"] = 2
+	state.players[1]["inventory"]["kimchi"] = 1
+	state.players[1]["inventory"]["burger"] = 0
+	state.players[1]["inventory"]["beer"] = 0
+
+	var adv := _advance_to_dinnertime(e)
+	if not adv.ok:
+		return adv
+
+	state = e.get_state()
+	var dt: Dictionary = state.round_state.get("dinnertime", {})
+	var sales: Array = dt.get("sales", [])
+	if sales.size() != 1:
+		return Result.failure("应存在 1 条 sale 记录，实际: %d" % sales.size())
+	var s0: Dictionary = sales[0]
+	if int(s0.get("winner_owner", -1)) != 1:
+		return Result.failure("应由玩家1 售出（Kimchi+Sushi 优先），实际 winner_owner=%s" % str(s0.get("winner_owner", null)))
+	if str(s0.get("demand_variant_id", "")) != "kimchi:kimchi_plus_sushi":
+		return Result.failure("demand_variant_id 应为 kimchi:kimchi_plus_sushi，实际: %s" % str(s0.get("demand_variant_id", null)))
 
 	return Result.success()
 
