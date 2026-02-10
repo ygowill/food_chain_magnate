@@ -4,13 +4,13 @@
 class_name EmployeeCardPreviewManager
 extends CanvasLayer
 
-const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeDefClass = preload("res://core/data/employee_def.gd")
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 
 @onready var panel: PanelContainer = $PreviewPanel
 @onready var card_host: Control = $PreviewPanel/MarginContainer/CardHost
+@onready var margin: MarginContainer = $PreviewPanel/MarginContainer
 
 var _show_delay: float = 0.18
 var _hide_delay: float = 0.05
@@ -40,7 +40,21 @@ func _ready() -> void:
 	if panel != null:
 		panel.visible = false
 		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		UiStylesClass.apply_dialog_surface(panel)
+		_apply_preview_panel_style()
+
+func _apply_preview_panel_style() -> void:
+	if panel == null or not is_instance_valid(panel):
+		return
+
+	# 预览面板只承载 EmployeeCard，本身不绘制“外层对话框”的底色/边框/阴影，
+	# 避免出现一圈黑边把卡片包住（影响观感）。
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0)
+	sb.border_color = Color(0, 0, 0, 0)
+	sb.set_border_width_all(0)
+	sb.set_corner_radius_all(0)
+	sb.shadow_size = 0
+	panel.add_theme_stylebox_override("panel", sb)
 
 func request_preview(employee_id: String, position: Vector2) -> void:
 	var eid := str(employee_id).strip_edges()
@@ -139,6 +153,23 @@ func _rebuild_card(employee_id: String) -> void:
 	card_host.add_child(card)
 	_card = card
 
+	_sync_panel_size_to_card()
+
+func _sync_panel_size_to_card() -> void:
+	if panel == null or not is_instance_valid(panel):
+		return
+	if _card == null or not is_instance_valid(_card):
+		return
+	if margin == null or not is_instance_valid(margin):
+		return
+
+	var pad_x := float(margin.get_theme_constant("margin_left") + margin.get_theme_constant("margin_right"))
+	var pad_y := float(margin.get_theme_constant("margin_top") + margin.get_theme_constant("margin_bottom"))
+
+	var min_size := _card.custom_minimum_size + Vector2(pad_x, pad_y)
+	panel.custom_minimum_size = min_size
+	panel.size = min_size
+
 func _update_position(position: Vector2) -> void:
 	if panel == null or not is_instance_valid(panel):
 		return
@@ -160,4 +191,3 @@ func _update_position(position: Vector2) -> void:
 	target_pos.y = maxf(5, target_pos.y)
 
 	panel.position = target_pos
-
