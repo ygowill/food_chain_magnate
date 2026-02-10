@@ -199,14 +199,14 @@ func _run_all() -> int:
 			"name": "AddGardenRulesTest",
 			"fn": func() -> Result: return TestRefs.AddGardenRulesTestClass.run(2, 12345),
 		},
-		{
-			"name": "PlaceRestaurantRulesTest",
-			"fn": func() -> Result: return TestRefs.PlaceRestaurantRulesTestClass.run(2, 12345),
-		},
-		{
-			"name": "MoveRestaurantRulesTest",
-			"fn": func() -> Result: return TestRefs.MoveRestaurantRulesTestClass.run(2, 12345),
-		},
+			{
+				"name": "PlaceRestaurantRulesTest",
+				"fn": func() -> Result: return TestRefs.PlaceRestaurantRulesTestClass.run(2, 12345),
+			},
+			{
+				"name": "MoveRestaurantRulesTest",
+				"fn": func() -> Result: return TestRefs.MoveRestaurantRulesTestClass.run(2, 12345),
+			},
 		{
 			"name": "FailFastParsingTest",
 			"fn": func() -> Result: return TestRefs.FailFastParsingTestClass.run(2, 12345),

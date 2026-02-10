@@ -207,6 +207,5 @@ static func _create_player_from_config(id: int, cfg) -> Dictionary:
 		"inventory": inventory,
 		"restaurants": [],
 		"milestones": [],
-		"drive_thru_active": false,
 		"company_structure": cfg.player_starting_company_structure.duplicate(true)
 	}

@@ -214,8 +214,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	restaurants[rest_id] = rest
 	state.map["restaurants"] = restaurants
 
-	# 使用区域经理会启用本回合的免下车能力
-	state.players[player_id]["drive_thru_active"] = true
 	EmployeeRulesClass.increment_action_count(state, player_id, action_id)
 
 	return Result.success({

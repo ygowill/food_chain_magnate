@@ -5,6 +5,7 @@ const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
+const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const TileRouteUtilsClass = preload("res://core/rules/drinks_procurement/tile_route_utils.gd")
 
 static func validate_route(
@@ -41,12 +42,19 @@ static func validate_air_route(
 	var max_tile: Vector2i = tile_bounds.get("max", Vector2i.ZERO)
 	var tiles_set := TileRouteUtilsClass.get_tile_positions_set(state)
 
-	var entrance_tile_read := TileRouteUtilsClass.world_to_tile_pos(state, entrance_pos)
-	if not entrance_tile_read.ok:
-		return entrance_tile_read
-	var entrance_tile: Vector2i = entrance_tile_read.value
-	if route[0] != entrance_tile:
-		return Result.failure("飞艇路线必须从餐厅所在板块出发")
+	var entrance_tiles := {}
+	var rest: Dictionary = restaurants[restaurant_id]
+	var points_read := StructuresClass.get_restaurant_entrance_points(state, restaurant_id, rest)
+	if not points_read.ok:
+		return points_read
+	var points: Array[Vector2i] = points_read.value
+	for ep in points:
+		var t_read := TileRouteUtilsClass.world_to_tile_pos(state, ep)
+		if not t_read.ok:
+			return t_read
+		entrance_tiles[Vector2i(t_read.value)] = true
+	if not entrance_tiles.has(route[0]):
+		return Result.failure("飞艇路线必须从餐厅入口所在板块出发")
 
 	var visited := {}
 	for i in range(route.size()):
@@ -87,10 +95,15 @@ static func validate_road_route(
 	if road_graph == null:
 		return Result.failure("道路图未初始化")
 
-	var start_candidates_result := RangeUtilsClass.get_adjacent_road_cells(state, entrance_pos)
-	if not start_candidates_result.ok:
-		return start_candidates_result
-	var start_candidates: Array[Vector2i] = start_candidates_result.value
+	var rest: Dictionary = restaurants[restaurant_id]
+	var points_read := StructuresClass.get_restaurant_entrance_points(state, restaurant_id, rest)
+	if not points_read.ok:
+		return points_read
+	var points: Array[Vector2i] = points_read.value
+	var start_candidates_result2 := RangeUtilsClass.get_adjacent_road_cells_for_positions(state, points)
+	if not start_candidates_result2.ok:
+		return start_candidates_result2
+	var start_candidates: Array[Vector2i] = start_candidates_result2.value
 	if start_candidates.is_empty():
 		return Result.failure("餐厅入口未邻接道路")
 	if not start_candidates.has(route[0]):

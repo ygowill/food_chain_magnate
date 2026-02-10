@@ -10,7 +10,10 @@ const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+
+const ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY := "opening_soon_restaurants"
 
 static func apply(state: GameState) -> Result:
 	if not (state.round_state is Dictionary):
@@ -84,8 +87,6 @@ static func apply(state: GameState) -> Result:
 				discarded[str(product)] = delta
 
 		player["inventory"] = inventory
-		# 清理阶段重置状态标志（对齐 docs/design.md 的 drive_thru_active）
-		player["drive_thru_active"] = false
 		state.players[i] = player
 
 		inventory_discarded.append({
@@ -109,6 +110,12 @@ static func apply(state: GameState) -> Result:
 		"inventory_discarded": inventory_discarded,
 		"fridge_choice_pending": not needs_fridge_choice.is_empty(),
 	}
+
+	# 新店开业: 将所有“即将开业”的餐厅翻面至“欢迎光临”（加入正式 restaurants 列表，并移除 opening_soon 标记）。
+	var open_r := _open_opening_soon_restaurants(state)
+	if not open_r.ok:
+		return open_r
+	warnings.append_array(open_r.warnings)
 
 	# 若需要玩家在 Cleanup 选择保留库存，则暂缓“里程碑池清理”，
 	# 否则 CleanupDiscard 触发的里程碑可能发生在清理之后而残留在 pool 中。
@@ -156,6 +163,110 @@ static func apply(state: GameState) -> Result:
 	if not milestone_cleanup.ok:
 		return milestone_cleanup
 	warnings.append_array(milestone_cleanup.warnings)
+	return Result.success().with_warnings(warnings)
+
+static func _open_opening_soon_restaurants(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("CleanupSettlement: state 为空")
+	if not (state.round_state is Dictionary):
+		return Result.failure("CleanupSettlement: state.round_state 类型错误（期望 Dictionary）")
+	if not (state.map is Dictionary):
+		return Result.failure("CleanupSettlement: state.map 类型错误（期望 Dictionary）")
+	if not state.map.has("restaurants") or not (state.map["restaurants"] is Dictionary):
+		return Result.failure("CleanupSettlement: state.map.restaurants 缺失或类型错误（期望 Dictionary）")
+	if not (state.players is Array):
+		return Result.failure("CleanupSettlement: state.players 类型错误（期望 Array）")
+
+	var pending_val = state.round_state.get(ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY, null)
+	if pending_val == null:
+		return Result.success()
+	if not (pending_val is Array):
+		return Result.failure("CleanupSettlement: round_state.%s 类型错误（期望 Array）" % ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY)
+	var pending: Array = pending_val
+	if pending.is_empty():
+		return Result.success()
+
+	var warnings: Array[String] = []
+	var restaurants: Dictionary = state.map["restaurants"]
+
+	for i in range(pending.size()):
+		var entry_val = pending[i]
+		if not (entry_val is Dictionary):
+			return Result.failure("CleanupSettlement: opening_soon_restaurants[%d] 类型错误（期望 Dictionary）" % i)
+		var entry: Dictionary = entry_val
+
+		var rid := str(entry.get("restaurant_id", "")).strip_edges()
+		if rid.is_empty():
+			return Result.failure("CleanupSettlement: opening_soon_restaurants[%d].restaurant_id 为空" % i)
+		var owner := int(entry.get("owner", -1))
+		if owner < 0 or owner >= state.players.size():
+			return Result.failure("CleanupSettlement: opening_soon_restaurants[%s].owner 越界: %d" % [rid, owner])
+		var anchor_val = entry.get("anchor_pos", null)
+		var entrance_val = entry.get("entrance_pos", null)
+		var cells_val = entry.get("cells", null)
+		if not (anchor_val is Vector2i):
+			return Result.failure("CleanupSettlement: opening_soon_restaurants[%s].anchor_pos 类型错误（期望 Vector2i）" % rid)
+		if not (entrance_val is Vector2i):
+			return Result.failure("CleanupSettlement: opening_soon_restaurants[%s].entrance_pos 类型错误（期望 Vector2i）" % rid)
+		if not (cells_val is Array):
+			return Result.failure("CleanupSettlement: opening_soon_restaurants[%s].cells 类型错误（期望 Array）" % rid)
+		var anchor_pos: Vector2i = anchor_val
+		var entrance_pos: Vector2i = entrance_val
+		var cells_any: Array = cells_val
+		var cells: Array[Vector2i] = []
+		for j in range(cells_any.size()):
+			var c = cells_any[j]
+			if not (c is Vector2i):
+				return Result.failure("CleanupSettlement: opening_soon_restaurants[%s].cells[%d] 类型错误（期望 Vector2i）" % [rid, j])
+			cells.append(c)
+
+		var rotation := int(entry.get("rotation", 0))
+
+		if restaurants.has(rid):
+			# 容错：已开业则跳过（避免重复加入导致玩家 restaurants 重复）
+			continue
+
+		restaurants[rid] = {
+			"restaurant_id": rid,
+			"owner": owner,
+			"anchor_pos": anchor_pos,
+			"entrance_pos": entrance_pos,
+			"cells": cells,
+			"rotation": rotation,
+		}
+
+		# 玩家餐厅列表
+		var p_val = state.players[owner]
+		if not (p_val is Dictionary):
+			return Result.failure("CleanupSettlement: players[%d] 类型错误（期望 Dictionary）" % owner)
+		var player: Dictionary = p_val
+		if not player.has("restaurants") or not (player["restaurants"] is Array):
+			return Result.failure("CleanupSettlement: players[%d].restaurants 缺失或类型错误（期望 Array）" % owner)
+		var plist: Array = player["restaurants"]
+		if not plist.has(rid):
+			plist.append(rid)
+		player["restaurants"] = plist
+		state.players[owner] = player
+
+		# 清理 structure 上的 opening_soon 标志（翻面至“欢迎光临”）
+		for cpos in cells:
+			var idx: Vector2i = CoordsClass.world_to_index(state, cpos)
+			var cell: Dictionary = state.map.cells[idx.y][idx.x]
+			var s_val = cell.get("structure", null)
+			if not (s_val is Dictionary):
+				continue
+			var s: Dictionary = s_val
+			if str(s.get("piece_id", "")) != "restaurant":
+				continue
+			if str(s.get("restaurant_id", "")) != rid:
+				continue
+			if s.has("opening_soon"):
+				s.erase("opening_soon")
+			cell["structure"] = s
+			state.map.cells[idx.y][idx.x] = cell
+
+	state.map["restaurants"] = restaurants
+	state.round_state.erase(ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY)
 	return Result.success().with_warnings(warnings)
 
 static func get_fridge_capacity_from_milestones(milestones: Array) -> Result:

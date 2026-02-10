@@ -38,6 +38,17 @@ static func count_active_by_usage_tag(player: Dictionary, usage_tag: String) -> 
 
 	return count
 
+static func count_active_by_tag(player: Dictionary, tag: String) -> int:
+	assert(not tag.is_empty(), "tag 不能为空")
+	var employees := EmployeeArrayHelpers.require_string_array_field(player, "employees", "player")
+
+	var count := 0
+	for emp_id in employees:
+		var def := EmployeeArrayHelpers.require_employee_def(emp_id)
+		if def.has_tag(tag):
+			count += 1
+	return count
+
 static func count_active_for_working(state: GameState, player: Dictionary, player_id: int, employee_id: String) -> int:
 	var base := count_active(player, employee_id)
 	var multiplier := WorkingMultiplier.get_working_employee_multiplier(state, player_id, employee_id)

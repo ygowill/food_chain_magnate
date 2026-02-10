@@ -3,6 +3,7 @@ class_name DinnertimeDistance
 extends RefCounted
 
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
+const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 
 static func get_restaurant_to_house_distance(
 	road_graph,
@@ -111,55 +112,10 @@ static func _build_structure_to_road_boundary_cost(
 	return out
 
 static func get_restaurant_entrance_points(state: GameState, restaurant_id: String, rest: Dictionary) -> Result:
-	if not rest.has("entrance_pos") or not (rest["entrance_pos"] is Vector2i):
-		return Result.failure("晚餐结算失败：restaurants[%s].entrance_pos 缺失或类型错误（期望 Vector2i）" % restaurant_id)
-	var entrance: Vector2i = rest["entrance_pos"]
-
-	if not rest.has("owner") or not (rest["owner"] is int):
-		return Result.failure("晚餐结算失败：restaurants[%s].owner 缺失或类型错误（期望 int）" % restaurant_id)
-	var owner: int = int(rest["owner"])
-	if owner < 0 or owner >= state.players.size():
-		return Result.success([entrance])
-
-	# 免下车：四角都视为入口（本回合）
-	var player_val = state.players[owner]
-	if not (player_val is Dictionary):
-		return Result.failure("晚餐结算失败：player 类型错误: players[%d]（期望 Dictionary）" % owner)
-	var player: Dictionary = player_val
-	var drive_thru_active := false
-	if player.has("drive_thru_active"):
-		var v = player["drive_thru_active"]
-		if not (v is bool):
-			return Result.failure("晚餐结算失败：player[%d].drive_thru_active 类型错误（期望 bool）" % owner)
-		drive_thru_active = bool(v)
-	if not drive_thru_active:
-		return Result.success([entrance])
-
-	if not rest.has("cells") or not (rest["cells"] is Array):
-		return Result.failure("晚餐结算失败：restaurants[%s].cells 缺失或类型错误（期望 Array[Vector2i]）" % restaurant_id)
-	var cells_any: Array = rest["cells"]
-	if cells_any.is_empty():
-		return Result.success([entrance])
-	var cells: Array[Vector2i] = []
-	for i in range(cells_any.size()):
-		var c = cells_any[i]
-		if not (c is Vector2i):
-			return Result.failure("晚餐结算失败：restaurants[%s].cells[%d] 类型错误（期望 Vector2i）" % [restaurant_id, i])
-		cells.append(c)
-
-	var bounds := MapUtils.get_footprint_bounds(cells)
-	if not (bounds.has("min") and bounds["min"] is Vector2i):
-		return Result.failure("MapUtils.get_footprint_bounds: 缺少/错误 min（期望 Vector2i）")
-	if not (bounds.has("max") and bounds["max"] is Vector2i):
-		return Result.failure("MapUtils.get_footprint_bounds: 缺少/错误 max（期望 Vector2i）")
-	var min_pos: Vector2i = bounds["min"]
-	var max_pos: Vector2i = bounds["max"]
-	return Result.success([
-		Vector2i(min_pos.x, min_pos.y),
-		Vector2i(max_pos.x, min_pos.y),
-		Vector2i(min_pos.x, max_pos.y),
-		Vector2i(max_pos.x, max_pos.y),
-	])
+	var read := StructuresClass.get_restaurant_entrance_points(state, restaurant_id, rest)
+	if not read.ok:
+		return Result.failure("晚餐结算失败：%s" % read.error)
+	return read
 
 static func get_structure_adjacent_roads(state: GameState, grid_size: Vector2i, structure_cells: Array[Vector2i]) -> Array[Vector2i]:
 	var set := {}

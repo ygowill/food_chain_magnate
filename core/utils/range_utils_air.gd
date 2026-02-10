@@ -4,6 +4,7 @@ extends RefCounted
 
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 const RangeOriginRegistryClass = preload("res://core/rules/range_origin_registry.gd")
+const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 
 static func is_within_air_range_to_any_cells(
 	state: GameState,
@@ -51,12 +52,16 @@ static func is_within_air_range_to_any_cells(
 			return Result.failure("餐厅 %s 不属于玩家 %d" % [rest_id, actor])
 		if not rest.has("entrance_pos") or not (rest["entrance_pos"] is Vector2i):
 			return Result.failure("餐厅 %s 缺少 entrance_pos 或类型错误" % rest_id)
-		var entrance_pos: Vector2i = rest["entrance_pos"]
+		var entrance_points_read := StructuresClass.get_restaurant_entrance_points(state, rest_id, rest)
+		if not entrance_points_read.ok:
+			return entrance_points_read
+		var entrance_points: Array[Vector2i] = entrance_points_read.value
 
 		for t in targets:
-			var d: int = abs(entrance_pos.x - t.x) + abs(entrance_pos.y - t.y)
-			if d <= max_steps:
-				return Result.success(true)
+			for ep in entrance_points:
+				var d: int = abs(ep.x - t.x) + abs(ep.y - t.y)
+				if d <= max_steps:
+					return Result.success(true)
 
 	# 模块可扩展起点（例如 coffee_shop）
 	var extra_read := RangeOriginRegistryClass.get_extra_origin_positions(state, actor, restaurant_ids, "air")
@@ -98,11 +103,15 @@ static func is_within_air_range(
 			return Result.failure("餐厅 %s 不属于玩家 %d" % [rest_id, actor])
 		if not rest.has("entrance_pos") or not (rest["entrance_pos"] is Vector2i):
 			return Result.failure("餐厅 %s 缺少 entrance_pos 或类型错误" % rest_id)
-		var entrance_pos: Vector2i = rest["entrance_pos"]
+		var entrance_points_read := StructuresClass.get_restaurant_entrance_points(state, rest_id, rest)
+		if not entrance_points_read.ok:
+			return entrance_points_read
+		var entrance_points: Array[Vector2i] = entrance_points_read.value
 
-		var d: int = abs(entrance_pos.x - target_pos.x) + abs(entrance_pos.y - target_pos.y)
-		if d <= max_steps:
-			return Result.success(true)
+		for ep in entrance_points:
+			var d: int = abs(ep.x - target_pos.x) + abs(ep.y - target_pos.y)
+			if d <= max_steps:
+				return Result.success(true)
 
 	# 模块可扩展起点（例如 coffee_shop）
 	var extra_read := RangeOriginRegistryClass.get_extra_origin_positions(state, actor, restaurant_ids, "air")

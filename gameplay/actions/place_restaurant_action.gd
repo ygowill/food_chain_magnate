@@ -13,6 +13,8 @@ const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
+const ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY := "opening_soon_restaurants"
+
 var _piece_registry: Dictionary = {}
 
 func _init(piece_registry: Dictionary = {}) -> void:
@@ -127,6 +129,19 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	return Result.success()
 
 func _apply_changes(state: GameState, command: Command) -> Result:
+	var employee_type := ""
+	var employee_type_result := optional_string_param(command, "employee_type", "")
+	if not employee_type_result.ok:
+		return employee_type_result
+	employee_type = employee_type_result.value
+	if employee_type.is_empty() and state.phase == DefsClass.PHASE_WORKING:
+		var candidates := EmployeeUsageHelperClass.get_active_employee_types_for_usage_tag(
+			state, command.actor, "use:place_restaurant"
+		)
+		if not candidates.is_empty():
+			employee_type = candidates[0]
+	var opening_soon := (state.phase == DefsClass.PHASE_WORKING and employee_type == "local_manager")
+
 	var params_result := _parse_params(command)
 	if not params_result.ok:
 		return params_result
@@ -164,7 +179,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	for cell_pos in footprint_cells:
 		var is_anchor = (cell_pos == world_anchor)
 		var idx := CoordsClass.world_to_index(state, cell_pos)
-		state.map.cells[idx.y][idx.x]["structure"] = {
+		var structure := {
 			"piece_id": "restaurant",
 			"owner": player_id,
 			"anchor_cell": is_anchor,
@@ -173,9 +188,11 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			"restaurant_id": restaurant_id,
 			"dynamic": true
 		}
+		if opening_soon:
+			structure["opening_soon"] = true
+		state.map.cells[idx.y][idx.x]["structure"] = structure
 
-	# 注册餐厅
-	state.map.restaurants[restaurant_id] = {
+	var restaurant_data := {
 		"restaurant_id": restaurant_id,
 		"owner": player_id,
 		"anchor_pos": world_anchor,
@@ -184,27 +201,38 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"rotation": rotation
 	}
 
-	# 添加到玩家餐厅列表
-	var player := state.get_player(player_id)
-	assert(not player.is_empty(), "place_restaurant: player 不存在: %d" % player_id)
-	assert(player.has("restaurants") and (player["restaurants"] is Array), "place_restaurant: player.restaurants 缺失或类型错误（期望 Array）")
-	var restaurants: Array = player["restaurants"]
-	restaurants.append(restaurant_id)
-	state.players[player_id]["restaurants"] = restaurants
+	if opening_soon:
+		if not (state.round_state is Dictionary):
+			return Result.failure("place_restaurant: state.round_state 类型错误（期望 Dictionary）")
+		if not state.round_state.has(ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY) or not (state.round_state[ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY] is Array):
+			state.round_state[ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY] = []
+		var pending: Array = state.round_state[ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY]
+		pending.append(restaurant_data.duplicate(true))
+		state.round_state[ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY] = pending
+	else:
+		# 注册餐厅（立即开业）
+		state.map.restaurants[restaurant_id] = restaurant_data
+
+		# 添加到玩家餐厅列表
+		var player := state.get_player(player_id)
+		assert(not player.is_empty(), "place_restaurant: player 不存在: %d" % player_id)
+		assert(player.has("restaurants") and (player["restaurants"] is Array), "place_restaurant: player.restaurants 缺失或类型错误（期望 Array）")
+		var restaurants: Array = player["restaurants"]
+		restaurants.append(restaurant_id)
+		state.players[player_id]["restaurants"] = restaurants
 
 	# 使道路图缓存失效
 	RoadGraphCacheClass.invalidate_road_graph(state)
 
-	# Working 阶段：使用本地/大区经理放置餐厅会启用本回合的免下车能力
 	if state.phase == DefsClass.PHASE_WORKING:
-		state.players[player_id]["drive_thru_active"] = true
 		EmployeeRulesClass.increment_action_count(state, player_id, action_id)
 
 	var result := Result.success({
 		"restaurant_id": restaurant_id,
 		"player_id": player_id,
 		"position": world_anchor,
-		"rotation": rotation
+		"rotation": rotation,
+		"opening_soon": opening_soon,
 	})
 
 	# 里程碑触发（模块化）：首次在 Working 阶段放置新餐厅
@@ -236,16 +264,54 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 	var new_restaurants = new_state.map.restaurants.keys()
 	var old_restaurants = old_state.map.restaurants.keys()
 	var restaurant_id := ""
+	var opening_soon := false
+	var world_anchor: Vector2i = Vector2i(-1, -1)
 
 	for rest_id in new_restaurants:
 		if rest_id not in old_restaurants:
 			restaurant_id = rest_id
 			break
+	if not restaurant_id.is_empty():
+		assert(new_state.map.restaurants.has(restaurant_id), "place_restaurant 新餐厅缺失: %s" % restaurant_id)
+		var rest: Dictionary = new_state.map.restaurants[restaurant_id]
+		assert(rest.has("anchor_pos") and rest["anchor_pos"] is Vector2i, "place_restaurant anchor_pos 缺失或类型错误")
+		world_anchor = rest["anchor_pos"]
+	else:
+		# opening_soon: restaurant 不会立即加入 map.restaurants，改从 round_state 中推导
+		var old_pending: Array = []
+		var new_pending: Array = []
+		if old_state.round_state is Dictionary:
+			var ov = (old_state.round_state as Dictionary).get(ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY, null)
+			if ov is Array:
+				old_pending = ov
+		if new_state.round_state is Dictionary:
+			var nv = (new_state.round_state as Dictionary).get(ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY, null)
+			if nv is Array:
+				new_pending = nv
+
+		var old_ids := {}
+		for e_val in old_pending:
+			if not (e_val is Dictionary):
+				continue
+			var e: Dictionary = e_val
+			var rid := str(e.get("restaurant_id", "")).strip_edges()
+			if not rid.is_empty():
+				old_ids[rid] = true
+		for e_val2 in new_pending:
+			if not (e_val2 is Dictionary):
+				continue
+			var e2: Dictionary = e_val2
+			var rid2 := str(e2.get("restaurant_id", "")).strip_edges()
+			if rid2.is_empty() or old_ids.has(rid2):
+				continue
+			restaurant_id = rid2
+			var ap = e2.get("anchor_pos", null)
+			if ap is Vector2i:
+				world_anchor = Vector2i(ap)
+			opening_soon = true
+			break
+
 	assert(not restaurant_id.is_empty(), "place_restaurant 未找到新创建的餐厅")
-	assert(new_state.map.restaurants.has(restaurant_id), "place_restaurant 新餐厅缺失: %s" % restaurant_id)
-	var rest: Dictionary = new_state.map.restaurants[restaurant_id]
-	assert(rest.has("anchor_pos") and rest["anchor_pos"] is Vector2i, "place_restaurant anchor_pos 缺失或类型错误")
-	var world_anchor: Vector2i = rest["anchor_pos"]
 
 	events.append({
 		"type": EventBus.EventType.RESTAURANT_PLACED,
@@ -253,7 +319,8 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 			"player_id": command.actor,
 			"restaurant_id": restaurant_id,
 			"position": [world_anchor.x, world_anchor.y],
-			"employee_type": employee_type
+			"employee_type": employee_type,
+			"opening_soon": opening_soon,
 		}
 	})
 

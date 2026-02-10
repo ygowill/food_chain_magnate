@@ -212,7 +212,6 @@ static func _remove_player_marketing(state: GameState, player_id: int) -> void:
 
 static func _clear_player_misc_assets(player: Dictionary) -> void:
 	player["banned_employee_ids"] = []
-	player["drive_thru_active"] = false
 	player["can_peek_all_reserve_cards"] = false
 	player["multi_trainer_on_one"] = false
 	player["ceo_cfo_ability_start_round"] = -1
@@ -233,4 +232,3 @@ static func _remove_player_from_pending_phase_actions(state: GameState, player_i
 		ppa[phase_name] = arr
 	rs["pending_phase_actions"] = ppa
 	state.round_state = rs
-

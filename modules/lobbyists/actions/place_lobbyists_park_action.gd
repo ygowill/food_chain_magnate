@@ -4,6 +4,7 @@ extends ActionExecutor
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const PlacementClass = preload("res://core/map/placement_validator/placement.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
@@ -185,18 +186,21 @@ func _is_adjacent_to_reachable_road(state: GameState, actor: int, piece_cells: A
 		var rest: Dictionary = rest_val
 		if not (rest.get("owner", null) is int) or int(rest["owner"]) != actor:
 			continue
-		if not (rest.get("entrance_pos", null) is Vector2i):
-			continue
-		var entrance_pos: Vector2i = rest["entrance_pos"]
-		for dir in MapUtilsClass.DIRECTIONS:
-			var npos := MapUtilsClass.get_neighbor_pos(entrance_pos, dir)
-			if not CoordsClass.is_world_pos_in_grid(state, npos):
-				continue
-			var cell: Dictionary = CellsClass.get_cell(state, npos)
-			var segs: Array = cell.get("road_segments", [])
-			if segs is Array and not segs.is_empty():
-				if not start_roads.has(npos):
-					start_roads.append(npos)
+		var rid := str(rest_id).strip_edges()
+		var points_read := StructuresClass.get_restaurant_entrance_points(state, rid, rest)
+		if not points_read.ok:
+			return Result.failure("lobbyists: %s" % points_read.error)
+		var points: Array[Vector2i] = points_read.value
+		for ep in points:
+			for dir in MapUtilsClass.DIRECTIONS:
+				var npos := MapUtilsClass.get_neighbor_pos(ep, dir)
+				if not CoordsClass.is_world_pos_in_grid(state, npos):
+					continue
+				var cell: Dictionary = CellsClass.get_cell(state, npos)
+				var segs: Array = cell.get("road_segments", [])
+				if segs is Array and not segs.is_empty():
+					if not start_roads.has(npos):
+						start_roads.append(npos)
 	if start_roads.is_empty():
 		return Result.success(false)
 

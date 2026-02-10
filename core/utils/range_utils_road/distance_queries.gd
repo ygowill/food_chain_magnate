@@ -2,6 +2,7 @@ extends RefCounted
 
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const AdjacentCellsClass = preload("res://core/utils/range_utils_road/adjacent_cells.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 const RangeOriginRegistryClass = preload("res://core/rules/range_origin_registry.gd")
@@ -68,26 +69,10 @@ static func get_min_road_distance_to_any_road_cells(
 	if targets.is_empty():
 		return Result.success(-1)
 
-	# 免下车：本回合餐厅四角都视为入口（对齐 docs/rules.md 与 DinnertimeDistance）。
-	# 若开启，则“起点道路格”取所有入口点邻接道路的并集。
-	var drive_thru_active := false
-	if state.players is Array and actor >= 0 and actor < (state.players as Array).size():
-		var p_val = (state.players as Array)[actor]
-		if p_val is Dictionary:
-			var dt_val = (p_val as Dictionary).get("drive_thru_active", false)
-			if dt_val is bool:
-				drive_thru_active = bool(dt_val)
-			else:
-				return Result.failure("player[%d].drive_thru_active 类型错误（期望 bool）" % actor)
-		else:
-			return Result.failure("players[%d] 类型错误（期望 Dictionary）" % actor)
-	else:
-		return Result.failure("state.players 缺失或 actor 越界: %d" % actor)
-
 	var best := -1
 	var start_road_set := {}
 
-	# 起点：餐厅入口（drive_thru active 时四角都视为入口）
+	# 起点：餐厅入口（免下车生效时四角都视为入口）
 	for rest_id in restaurant_ids:
 		if not restaurants.has(rest_id):
 			return Result.failure("餐厅不存在: %s" % rest_id)
@@ -98,30 +83,10 @@ static func get_min_road_distance_to_any_road_cells(
 			return Result.failure("餐厅 %s 不属于玩家 %d" % [rest_id, actor])
 		if not rest.has("entrance_pos") or not (rest["entrance_pos"] is Vector2i):
 			return Result.failure("餐厅 %s 缺少 entrance_pos 或类型错误" % rest_id)
-		var entrance_pos: Vector2i = rest["entrance_pos"]
-
-		var entrance_points: Array[Vector2i] = []
-		if drive_thru_active and rest.has("cells") and (rest["cells"] is Array) and not (rest["cells"] as Array).is_empty():
-			var cells_any: Array = rest["cells"]
-			var cells: Array[Vector2i] = []
-			for i in range(cells_any.size()):
-				var c = cells_any[i]
-				if not (c is Vector2i):
-					return Result.failure("餐厅 %s cells[%d] 类型错误（期望 Vector2i）" % [rest_id, i])
-				cells.append(c)
-			var bounds := MapUtils.get_footprint_bounds(cells)
-			if not bounds.has("min") or not (bounds["min"] is Vector2i) or not bounds.has("max") or not (bounds["max"] is Vector2i):
-				return Result.failure("餐厅 %s footprint_bounds 计算失败" % rest_id)
-			var min_pos: Vector2i = bounds["min"]
-			var max_pos: Vector2i = bounds["max"]
-			entrance_points = [
-				Vector2i(min_pos.x, min_pos.y),
-				Vector2i(max_pos.x, min_pos.y),
-				Vector2i(min_pos.x, max_pos.y),
-				Vector2i(max_pos.x, max_pos.y),
-			]
-		else:
-			entrance_points = [entrance_pos]
+		var entrance_points_read := StructuresClass.get_restaurant_entrance_points(state, rest_id, rest)
+		if not entrance_points_read.ok:
+			return entrance_points_read
+		var entrance_points: Array[Vector2i] = entrance_points_read.value
 
 		for ep in entrance_points:
 			var start_cells_result: Result = AdjacentCellsClass.get_adjacent_road_cells(state, ep)

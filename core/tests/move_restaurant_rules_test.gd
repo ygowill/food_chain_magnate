@@ -2,6 +2,7 @@
 # 验证：
 # - 移动餐厅需要在岗的区域经理
 # - PlaceRestaurants 子阶段中 place/move 共享次数上限
+# - 免下车（drivethrough 标签）：只要在岗即生效，餐厅四角都视为入口点
 class_name MoveRestaurantRulesTest
 extends RefCounted
 
@@ -61,6 +62,19 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not add.ok:
 		return Result.failure("添加 regional_manager 失败: %s" % add.error)
 
+	# 在岗即可免下车：入口点应为餐厅四角（不依赖“本回合使用”）
+	state = engine.get_state()
+	var rest_before: Dictionary = state.map.get("restaurants", {}).get(rest_id, {})
+	var ep_before_r := StructuresClass.get_restaurant_entrance_points(state, rest_id, rest_before)
+	if not ep_before_r.ok:
+		return ep_before_r
+	var corners_r := _get_footprint_corners(rest_before.get("cells", []), "移动前餐厅")
+	if not corners_r.ok:
+		return corners_r
+	var ep_before_check := _assert_entrance_points_match_corners(ep_before_r.value, corners_r.value, "regional_manager 在岗")
+	if not ep_before_check.ok:
+		return ep_before_check
+
 	state = engine.get_state()
 	var old_anchor: Vector2i = state.map.get("restaurants", {}).get(rest_id, {}).get("anchor_pos", Vector2i(-1, -1))
 	var old_rotation: int = int(state.map.get("restaurants", {}).get(rest_id, {}).get("rotation", 0))
@@ -78,8 +92,15 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if rest_after.is_empty():
 		return Result.failure("移动后餐厅应存在: %s" % rest_id)
 
-	if not bool(state.players[actor].get("drive_thru_active", false)):
-		return Result.failure("移动餐厅后 drive_thru_active 应为 true")
+	var ep_after_r := StructuresClass.get_restaurant_entrance_points(state, rest_id, rest_after)
+	if not ep_after_r.ok:
+		return ep_after_r
+	var corners_after_r := _get_footprint_corners(rest_after.get("cells", []), "移动后餐厅")
+	if not corners_after_r.ok:
+		return corners_after_r
+	var ep_after_check := _assert_entrance_points_match_corners(ep_after_r.value, corners_after_r.value, "移动后 regional_manager 在岗")
+	if not ep_after_check.ok:
+		return ep_after_check
 
 	# 3) 与 place_restaurant 共享次数：只有 1 名区域经理时，移动后不应再允许放置餐厅
 	var cmd_place := Command.create("place_restaurant", actor, {"position": [0, 0], "rotation": 0})
@@ -163,6 +184,48 @@ static func _find_first_valid_placement(engine: GameEngine, action_id: String, a
 					return cmd
 
 	return null
+
+static func _get_footprint_corners(cells_any: Array, label: String) -> Result:
+	if cells_any == null or cells_any.is_empty():
+		return Result.failure("%s cells 为空" % label)
+	var min_x := 2147483647
+	var min_y := 2147483647
+	var max_x := -2147483648
+	var max_y := -2147483648
+	for i in range(cells_any.size()):
+		var c_val = cells_any[i]
+		if not (c_val is Vector2i):
+			return Result.failure("%s cells[%d] 类型错误（期望 Vector2i）" % [label, i])
+		var c: Vector2i = c_val
+		min_x = min(min_x, c.x)
+		min_y = min(min_y, c.y)
+		max_x = max(max_x, c.x)
+		max_y = max(max_y, c.y)
+	return Result.success([
+		Vector2i(min_x, min_y),
+		Vector2i(max_x, min_y),
+		Vector2i(min_x, max_y),
+		Vector2i(max_x, max_y),
+	])
+
+static func _assert_entrance_points_match_corners(points_any: Array, corners_any: Array, label: String) -> Result:
+	if points_any == null:
+		return Result.failure("%s entrance_points 为空" % label)
+	if corners_any == null or corners_any.is_empty():
+		return Result.failure("%s corners 为空" % label)
+	if points_any.size() != 4:
+		return Result.failure("%s entrance_points 应为 4 个角点，实际: %s" % [label, str(points_any)])
+	var set := {}
+	for i in range(points_any.size()):
+		var p_val = points_any[i]
+		if not (p_val is Vector2i):
+			return Result.failure("%s entrance_points[%d] 类型错误（期望 Vector2i）" % [label, i])
+		set[Vector2i(p_val)] = true
+	for j in range(corners_any.size()):
+		var c_val = corners_any[j]
+		if c_val is Vector2i and not set.has(Vector2i(c_val)):
+			return Result.failure("%s entrance_points 缺少角点 %s，实际: %s" % [label, str(c_val), str(points_any)])
+	return Result.success(true)
 
 static func _find_first_valid_move(engine: GameEngine, actor: int, rest_id: String, old_anchor: Vector2i, old_rotation: int) -> Command:
 	var state := engine.get_state()

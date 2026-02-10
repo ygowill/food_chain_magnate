@@ -338,44 +338,13 @@ static func _build_coffee_stop_index(state: GameState, exclude_restaurant_id: St
 	return Result.success(out)
 
 static func _get_restaurant_entrance_points(state: GameState, rest: Dictionary) -> Result:
-	if not rest.has("entrance_pos") or not (rest["entrance_pos"] is Vector2i):
-		return Result.failure("coffee: restaurant.entrance_pos 缺失或类型错误（期望 Vector2i）")
-	var entrance: Vector2i = rest["entrance_pos"]
-	var owner: int = int(rest.get("owner", -1))
-	if owner < 0 or owner >= state.players.size():
-		return Result.success([entrance])
-
-	var player: Dictionary = state.players[owner]
-	var drive_thru_active := false
-	if player.has("drive_thru_active"):
-		var v = player["drive_thru_active"]
-		if not (v is bool):
-			return Result.failure("coffee: drive_thru_active 类型错误（期望 bool）")
-		drive_thru_active = bool(v)
-	if not drive_thru_active:
-		return Result.success([entrance])
-
-	if not rest.has("cells") or not (rest["cells"] is Array):
-		return Result.failure("coffee: restaurant.cells 缺失或类型错误（期望 Array[Vector2i]）")
-	var cells_any: Array = rest["cells"]
-	if cells_any.is_empty():
-		return Result.success([entrance])
-	var cells: Array[Vector2i] = []
-	for i in range(cells_any.size()):
-		var c = cells_any[i]
-		if not (c is Vector2i):
-			return Result.failure("coffee: restaurant.cells[%d] 类型错误（期望 Vector2i）" % i)
-		cells.append(c)
-
-	var bounds := MapUtilsClass.get_footprint_bounds(cells)
-	var min_pos: Vector2i = bounds["min"]
-	var max_pos: Vector2i = bounds["max"]
-	return Result.success([
-		Vector2i(min_pos.x, min_pos.y),
-		Vector2i(max_pos.x, min_pos.y),
-		Vector2i(min_pos.x, max_pos.y),
-		Vector2i(max_pos.x, max_pos.y),
-	])
+	var rid := str(rest.get("restaurant_id", "")).strip_edges()
+	if rid.is_empty():
+		return Result.failure("coffee: restaurant.restaurant_id 为空")
+	var read := StructuresClass.get_restaurant_entrance_points(state, rid, rest)
+	if not read.ok:
+		return Result.failure("coffee: %s" % read.error)
+	return read
 
 static func _get_structure_adjacent_roads(state: GameState, structure_cells: Array[Vector2i]) -> Array[Vector2i]:
 	var set := {}

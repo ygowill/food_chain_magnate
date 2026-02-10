@@ -10,6 +10,8 @@ const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const MapCanvasIndexerClass = preload("res://ui/scenes/game/map_canvas_indexer.gd")
 const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
 const MapCanvasTooltipClass = preload("res://ui/scenes/game/map_canvas_tooltip.gd")
+const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 
 const BASE_CELL_SIZE := 40
 const UI_OUTSIDE_RING_MARGIN := 2
@@ -25,6 +27,7 @@ var _cells: Array = []
 var _map_data: Dictionary = {}
 var _state_seed: int = 0
 var _player_restaurant_logo_ids: Dictionary = {} # player_id -> logo_id
+var _drive_thru_active_by_owner: Dictionary = {} # player_id -> bool
 
 var _base_grid_size: Vector2i = Vector2i.ZERO
 var _world_origin: Vector2i = Vector2i.ZERO # view(0,0) 对应的 world_pos
@@ -76,8 +79,10 @@ func set_game_state(state: GameState) -> void:
 		return
 	_state_seed = int(state.seed)
 	_player_restaurant_logo_ids.clear()
+	_drive_thru_active_by_owner.clear()
 	var logo_count := MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS.size()
 	var fallback_logo_ids: Array[int] = _build_fallback_logo_ids(logo_count)
+	var registry_loaded := EmployeeRegistryClass.is_loaded()
 	for i in range(state.players.size()):
 		var p_val = state.players[i]
 		if not (p_val is Dictionary):
@@ -92,6 +97,19 @@ func set_game_state(state: GameState) -> void:
 			_player_restaurant_logo_ids[pid] = logo_id
 		else:
 			_player_restaurant_logo_ids[pid] = _fallback_logo_id_for_player(pid, fallback_logo_ids)
+
+		var drive_thru_active := false
+		if registry_loaded:
+			drive_thru_active = EmployeeRulesClass.count_active_by_tag(p, "drivethrough") > 0
+		else:
+			# 容错：EmployeeRegistry 未初始化时，仅针对基础员工做 best-effort 识别，避免 UI 崩溃。
+			var employees_val = p.get("employees", null)
+			if employees_val is Array:
+				for e in (employees_val as Array):
+					if e is String and (str(e) == "local_manager" or str(e) == "regional_manager"):
+						drive_thru_active = true
+						break
+		_drive_thru_active_by_owner[pid] = drive_thru_active
 	_ensure_skin(Array(state.modules, TYPE_STRING, "", null))
 	set_map_data(state.map)
 
@@ -160,6 +178,7 @@ func clear() -> void:
 	_map_data = {}
 	_state_seed = 0
 	_player_restaurant_logo_ids.clear()
+	_drive_thru_active_by_owner.clear()
 	_base_grid_size = Vector2i.ZERO
 	_world_origin = Vector2i.ZERO
 	_external_cells_by_pos.clear()

@@ -4,6 +4,7 @@ extends ActionExecutor
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const PlacementClass = preload("res://core/map/placement_validator/placement.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
@@ -285,15 +286,18 @@ func _is_adjacent_to_reachable_road(state: GameState, actor: int, piece_cells: A
 		var rest: Dictionary = rest_val
 		if not (rest.get("owner", null) is int) or int(rest["owner"]) != actor:
 			continue
-		if not (rest.get("entrance_pos", null) is Vector2i):
-			continue
-		var entrance_pos: Vector2i = rest["entrance_pos"]
-		var adj := _get_adjacent_road_cells(state, entrance_pos)
-		if not adj.ok:
-			return adj
-		for p in adj.value:
-			if not start_roads.has(p):
-				start_roads.append(p)
+		var rid := str(rest_id).strip_edges()
+		var points_read := StructuresClass.get_restaurant_entrance_points(state, rid, rest)
+		if not points_read.ok:
+			return Result.failure("lobbyists: %s" % points_read.error)
+		var points: Array[Vector2i] = points_read.value
+		for ep in points:
+			var adj := _get_adjacent_road_cells(state, ep)
+			if not adj.ok:
+				return adj
+			for p in adj.value:
+				if not start_roads.has(p):
+					start_roads.append(p)
 	if start_roads.is_empty():
 		return Result.success(false)
 

@@ -148,6 +148,9 @@ static func draw_restaurant(
 
 	draw_restaurant_entrance_marker(canvas, cell_size, anchor, info, alpha)
 
+	if bool(info.get("opening_soon", false)):
+		draw_restaurant_opening_soon_badge(canvas, cell_size, structure_rect, alpha)
+
 	# move_restaurant：高亮当前选中的餐厅（入口 anchor 匹配）。
 	var selected_anchor_val = canvas.get("_move_restaurant_selected_anchor") if canvas != null else null
 	if selected_anchor_val is Vector2i and Vector2i(selected_anchor_val) == anchor:
@@ -236,10 +239,29 @@ static func draw_restaurant_entrance_marker(canvas, cell_size: int, anchor: Vect
 	var min_pos: Vector2i = min_pos_val
 	var max_pos: Vector2i = max_pos_val
 
+	var drive_thru_active := false
+	var owner := int(info.get("owner", -1))
+	if owner >= 0 and canvas != null:
+		var dt_map_val = canvas.get("_drive_thru_active_by_owner") if canvas != null else null
+		if dt_map_val is Dictionary:
+			var dt_map: Dictionary = dt_map_val
+			var v = dt_map.get(owner, false)
+			if v is bool:
+				drive_thru_active = bool(v)
+
+	if drive_thru_active:
+		_draw_restaurant_entrance_l_marker(canvas, cell_size, Vector2i(min_pos.x, min_pos.y), min_pos, max_pos, alpha)
+		_draw_restaurant_entrance_l_marker(canvas, cell_size, Vector2i(max_pos.x, min_pos.y), min_pos, max_pos, alpha)
+		_draw_restaurant_entrance_l_marker(canvas, cell_size, Vector2i(min_pos.x, max_pos.y), min_pos, max_pos, alpha)
+		_draw_restaurant_entrance_l_marker(canvas, cell_size, Vector2i(max_pos.x, max_pos.y), min_pos, max_pos, alpha)
+		return
+
 	var entrance_view: Vector2i = canvas._world_to_view(anchor)
 	if entrance_view.x < min_pos.x or entrance_view.x > max_pos.x or entrance_view.y < min_pos.y or entrance_view.y > max_pos.y:
 		return
+	_draw_restaurant_entrance_l_marker(canvas, cell_size, entrance_view, min_pos, max_pos, alpha)
 
+static func _draw_restaurant_entrance_l_marker(canvas, cell_size: int, entrance_view: Vector2i, min_pos: Vector2i, max_pos: Vector2i, alpha: float) -> void:
 	var r := Rect2(Vector2(entrance_view.x * cell_size, entrance_view.y * cell_size), Vector2(cell_size, cell_size))
 	var pad := maxf(2.0, float(cell_size) * 0.12)
 	var thickness := maxf(1.0, float(cell_size) * 0.06)
@@ -265,6 +287,37 @@ static func draw_restaurant_entrance_marker(canvas, cell_size: int, anchor: Vect
 	elif is_bottom and is_right:
 		canvas.draw_rect(Rect2(r.position + Vector2(r.size.x - pad - length, r.size.y - pad - thickness), Vector2(length, thickness)), col, true)
 		canvas.draw_rect(Rect2(r.position + Vector2(r.size.x - pad - thickness, r.size.y - pad - length), Vector2(thickness, length)), col, true)
+
+static func draw_restaurant_opening_soon_badge(canvas, cell_size: int, structure_rect: Rect2, alpha: float = 1.0) -> void:
+	if canvas == null:
+		return
+	var text := "即将开业"
+	var a := clampf(alpha, 0.0, 1.0)
+	if a <= 0.001:
+		return
+
+	var pad := maxf(2.0, float(cell_size) * 0.08)
+	var badge_h := maxf(14.0, float(cell_size) * 0.44)
+	var badge_w := minf(structure_rect.size.x - pad * 2.0, structure_rect.size.x * 0.78)
+	badge_w = maxf(badge_w, float(cell_size) * 1.20)
+	badge_w = minf(badge_w, structure_rect.size.x - pad * 2.0)
+	if badge_w <= 1.0:
+		return
+
+	var pos := structure_rect.position
+	var x := pos.x + (structure_rect.size.x - badge_w) * 0.5
+	var y := pos.y + structure_rect.size.y - badge_h - maxf(1.0, float(cell_size) * 0.06)
+	var badge_rect := Rect2(Vector2(x, y), Vector2(badge_w, badge_h))
+
+	var bg := Color(0, 0, 0, 0.45 * a)
+	canvas.draw_rect(badge_rect, bg, true)
+
+	var font: Font = ThemeDB.fallback_font
+	var font_size := maxi(10, int(round(float(cell_size) * 0.30)))
+	var inner_pad := maxf(3.0, float(cell_size) * 0.12)
+	var baseline := badge_rect.position + Vector2(0.0, badge_rect.size.y - inner_pad)
+	canvas.draw_string(font, baseline + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_CENTER, badge_rect.size.x, font_size, Color(0, 0, 0, 0.85 * a))
+	canvas.draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_CENTER, badge_rect.size.x, font_size, Color(1, 1, 1, 1.0 * a))
 
 static func compute_restaurant_index_rect(cell_size: int, structure_rect: Rect2) -> Rect2:
 	var pad := maxf(3.0, float(cell_size) * 0.10)
