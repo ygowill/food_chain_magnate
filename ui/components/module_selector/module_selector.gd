@@ -299,7 +299,10 @@ func _build_module_group_box(title: String, module_ids: Array[String], bg_color:
 
 	var label := Label.new()
 	label.text = title
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	label.clip_text = true
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	label.tooltip_text = title
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(label)
 
@@ -309,6 +312,7 @@ func _build_module_group_box(title: String, module_ids: Array[String], bg_color:
 	select_btn.text = "组选"
 	select_btn.disabled = not _editable
 	select_btn.custom_minimum_size = Vector2(72, 28)
+	select_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	UiStylesClass.apply_button_secondary(select_btn)
 	select_btn.pressed.connect(func() -> void:
 		_on_select_group_pressed(mids_copy)
@@ -320,6 +324,7 @@ func _build_module_group_box(title: String, module_ids: Array[String], bg_color:
 	clear_btn.text = "组不选"
 	clear_btn.disabled = not _editable
 	clear_btn.custom_minimum_size = Vector2(72, 28)
+	clear_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	UiStylesClass.apply_button_secondary(clear_btn)
 	clear_btn.pressed.connect(func() -> void:
 		_on_clear_group_pressed(mids_copy)
