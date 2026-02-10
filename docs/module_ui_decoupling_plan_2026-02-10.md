@@ -1,7 +1,7 @@
 # 模块代码混入 core / 核心 UI：迁移与解耦落地方案清单（细化版）
 
 日期：2026-02-10  
-作者：Codex（仅产出报告；未修改 core/ui/module 代码）
+作者：Codex（报告 + 落地记录；变更均以 git commits 落盘）
 
 ---
 
@@ -393,6 +393,56 @@
   - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
 - **验收标准**
   - `rg -n '\"fry_chef\"' ui --glob '!ui/scenes/tests/**'` 目标为 0（或仅在模块 UI/模块 content 中出现）。
+
+### P3-1) Cleanup phase action modal 宿主化（移除 core UI 对 kimchi/command 的特判）
+
+- **状态**
+  - ✅ 已完成（2026-02-10）
+- **涉及位置**
+  - `modules/base_rules/rules/entry.gd`
+  - `ui/scenes/game/phase_action_ui_registry.gd`
+  - `ui/scenes/game/game_panel_modals_controller.gd`
+  - `ui/components/modal_panel/fridge_keep_modal.gd`
+  - `modules/kimchi/ui/components/modal_panel/kimchi_storage_modal.gd`
+- **迁移/解耦目标**
+  - 核心 UI 不硬编码 `"kimchi"` kind，也不硬编码 kimchi 的 command_id（`choose_kimchi_storage`）。
+  - Cleanup pending action 的 modal 全部通过 ruleset 注册 + kind 路由。
+- **已实施改动**
+  - base_rules 在 ruleset 注册 `fridge_keep` 的 phase action UI modal（使核心 controller 也可通过 ruleset 路由）。
+  - `PhaseActionUiRegistry` 改为只做“解析 kind + 调用 controller 通用接口”，不再枚举具体 kind 分支。
+  - `GamePanelModalsController` 新增通用 `show_phase_action_ui_modal` / `hide_phase_action_ui_modals_for_phase`，并以 modal 返回的 `command_id/command_args` 执行命令。
+  - `FridgeKeepModal` 与 `KimchiStorageModal` 的 `completed` payload 增加 `command_id/command_args`（保留原 `keep/store` 字段以兼容既有 UI 测试）。
+- **新增/补充测试**
+  - 更新 `ui/scenes/tests/phase_action_ui_registry_cleanup_test.gd`（验证通用 show/hide 调用形态）
+  - 更新 `ui/scenes/tests/phase_action_ui_modal_registration_test.gd`（同时校验 kimchi 与 fridge_keep modal 注册且可实例化）
+  - 更新 `ui/scenes/tests/game_panel_modals_controller_kind_contract_test.gd`（禁止 controller 内出现 `"kimchi"`/`choose_kimchi_storage`）
+- **验收结果**
+  - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
+- **验收标准**
+  - `rg -n '\"kimchi\"|choose_kimchi_storage' ui/scenes/game/game_panel_modals_controller.gd` 返回空。
+
+### P3-2) 地图渲染消除 optional content id / key 的特判（apartment/coffee_shop/highway_offramp 等）
+
+- **迁移/解耦目标**
+  - 核心地图绘制不再写死 optional 模块的 structure piece_id（`apartment`/`coffee_shop`/`highway_offramp`）与 lobbyists 私有 map_data key（如 `lobbyists_pending_roads`）。
+  - 使用 ruleset/registry/provider 或 data-driven tags/hints，将模块特有渲染规则下沉到模块侧。
+- **验收标准**
+  - `rg -n '\"apartment\"|\"coffee_shop\"|\"highway_offramp\"|lobbyists_pending_roads|lobbyists_roadworks_marker' ui/scenes/game --glob '!ui/scenes/tests/**'` 目标为 0（或仅保留通用 suffix/registry 查询）。
+
+### P3-3) Milestone/Effect 文案的模块耦合（effect_id/effect_type 写死在核心 UI）
+
+- **迁移/解耦目标**
+  - `MilestonePanel` 不直接匹配 optional 模块的 `effect_id/effect_type` 字符串，改为从 registry/provider 获取描述（模块注册自己的描述器）。
+- **验收标准**
+  - `rg -n 'rural_marketeers:|new_milestones:|ketchup_mechanism:|lobbyists_grant_extra_map_tile' ui/components/milestone_panel/milestone_panel.gd` 返回空（或仅保留 base_rules 范围内的描述）。
+
+### P3-4) ModuleSelector/GameSetup 的 module_id 分组/约束硬编码
+
+- **迁移/解耦目标**
+  - 模块分组/标题/排序/徽章/约束（例如 6 人局强制 new_districts）从硬编码迁移到数据驱动（manifest/ui metadata 或 ruleset constraints）。
+- **验收标准**
+  - `rg -n '\"new_districts\"|\"lobbyists\"|\"coffee\"|\"kimchi\"|\"sushi\"|\"noodles\"|\"fry_chefs\"' ui/components/module_selector/module_selector.gd` 命中显著减少（理想为 0，或仅保留通用 fallback）。
 
 ---
 

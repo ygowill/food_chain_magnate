@@ -6,6 +6,7 @@ const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const _PENDING_PHASE_ACTIONS_KEY := "pending_phase_actions"
 const _CLEANUP_COMPAT_KEY := "cleanup"
 const _CLEANUP_COMPAT_KIND_KEY := "pending_choice_kind"
+const _CLEANUP_COMPAT_DEFAULT_KIND := "fridge_keep"
 
 static func sync_cleanup_pending_modals(controller, state: GameState, current_player_id: int, covered: Rect2, interactive: bool) -> void:
 	if controller == null:
@@ -15,22 +16,20 @@ static func sync_cleanup_pending_modals(controller, state: GameState, current_pl
 		return
 
 	var kind := _resolve_cleanup_pending_choice_kind(state, current_player_id)
-	match kind:
-		"kimchi":
-			_call_show(controller, "show_kimchi_storage_modal", state, current_player_id, covered)
-			_call_hide(controller, "hide_fridge_keep_modal")
-		"fridge_keep":
-			_call_show(controller, "show_fridge_keep_modal", state, current_player_id, covered)
-			_call_hide(controller, "hide_kimchi_storage_modal")
-		"":
-			_hide_cleanup_modals(controller)
-		_:
-			GameLog.warn("PhaseActionUiRegistry", "未知 Cleanup pending kind: %s" % kind)
-			_hide_cleanup_modals(controller)
+	if kind.is_empty():
+		_hide_cleanup_modals(controller)
+		return
+
+	if controller.has_method("show_phase_action_ui_modal"):
+		controller.call("show_phase_action_ui_modal", DefsClass.PHASE_CLEANUP, kind, state, current_player_id, covered)
+	else:
+		GameLog.warn("PhaseActionUiRegistry", "controller 缺少 show_phase_action_ui_modal（无法显示 Cleanup pending modal）")
 
 static func _hide_cleanup_modals(controller) -> void:
-	_call_hide(controller, "hide_fridge_keep_modal")
-	_call_hide(controller, "hide_kimchi_storage_modal")
+	if controller == null:
+		return
+	if controller.has_method("hide_phase_action_ui_modals_for_phase"):
+		controller.call("hide_phase_action_ui_modals_for_phase", DefsClass.PHASE_CLEANUP)
 
 static func _resolve_cleanup_pending_choice_kind(state: GameState, current_player_id: int) -> String:
 	if state == null:
@@ -69,26 +68,8 @@ static func _resolve_cleanup_pending_choice_kind(state: GameState, current_playe
 		if cleanup_val is Dictionary:
 			var cleanup: Dictionary = cleanup_val
 			kind = str(cleanup.get(_CLEANUP_COMPAT_KIND_KEY, "")).strip_edges()
-		# 旧格式下：只有 kimchi 是显式分支；其余默认 fridge_keep
-		if kind == "kimchi":
+		if not kind.is_empty():
 			return kind
-		return "fridge_keep"
+		return _CLEANUP_COMPAT_DEFAULT_KIND
 
 	return ""
-
-static func _call_show(controller, method_name: String, state: GameState, current_player_id: int, covered: Rect2) -> void:
-	if controller == null:
-		return
-	if method_name.is_empty():
-		return
-	if controller.has_method(method_name):
-		controller.call(method_name, state, current_player_id, covered)
-
-static func _call_hide(controller, method_name: String) -> void:
-	if controller == null:
-		return
-	if method_name.is_empty():
-		return
-	if controller.has_method(method_name):
-		controller.call(method_name)
-

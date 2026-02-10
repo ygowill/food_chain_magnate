@@ -114,7 +114,11 @@ func _on_confirm_pressed() -> void:
 
 	# 点击确认后先禁用按钮，避免重复触发；后续由 GamePanelController 根据 state 决定是否继续弹下一位。
 	set_confirm_enabled(false)
-	completed.emit({"keep": keep})
+	completed.emit({
+		"keep": keep,
+		"command_id": "choose_fridge_keep",
+		"command_args": {"keep": keep},
+	})
 
 static func _get_fridge_capacity_from_milestones(milestones: Array) -> Result:
 	var best_read := MilestoneEffectQueriesClass.max_non_negative_int_value(

@@ -26,6 +26,10 @@ static func run(seed_val: int = 12345) -> Result:
 	if path.is_empty():
 		return Result.failure("kimchi phase action UI modal 未注册")
 
+	var base_path: String = str(engine.ruleset_v2.get_phase_action_ui_modal_scene_path(DefsClass.PHASE_CLEANUP, "fridge_keep")).strip_edges()
+	if base_path.is_empty():
+		return Result.failure("fridge_keep phase action UI modal 未注册")
+
 	var res = load(path)
 	if not (res is PackedScene):
 		return Result.failure("phase action UI modal 类型错误（期望 PackedScene）: %s" % path)
@@ -42,5 +46,21 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("phase action UI modal 缺少 completed 信号: %s" % path)
 
 	inst.queue_free()
-	return Result.success({"path": path})
 
+	var base_res = load(base_path)
+	if not (base_res is PackedScene):
+		return Result.failure("base phase action UI modal 类型错误（期望 PackedScene）: %s" % base_path)
+
+	var base_inst = (base_res as PackedScene).instantiate()
+	if base_inst == null or not is_instance_valid(base_inst):
+		return Result.failure("base phase action UI modal 无法实例化: %s" % base_path)
+
+	if not base_inst.has_method("setup"):
+		base_inst.queue_free()
+		return Result.failure("base phase action UI modal 缺少 setup(state, current_player_id): %s" % base_path)
+	if not base_inst.has_signal("completed"):
+		base_inst.queue_free()
+		return Result.failure("base phase action UI modal 缺少 completed 信号: %s" % base_path)
+
+	base_inst.queue_free()
+	return Result.success({"path": path, "base_path": base_path})

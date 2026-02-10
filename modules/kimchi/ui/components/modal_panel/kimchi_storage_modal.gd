@@ -91,11 +91,19 @@ func setup(state: GameState, current_player_id: int) -> void:
 
 func _on_confirm_pressed() -> void:
 	_set_buttons_enabled(false)
-	completed.emit({"store": true})
+	completed.emit({
+		"store": true,
+		"command_id": "choose_kimchi_storage",
+		"command_args": {"store": true},
+	})
 
 func _on_cancel_pressed() -> void:
 	_set_buttons_enabled(false)
-	completed.emit({"store": false})
+	completed.emit({
+		"store": false,
+		"command_id": "choose_kimchi_storage",
+		"command_args": {"store": false},
+	})
 
 func _set_buttons_enabled(enabled: bool) -> void:
 	set_confirm_enabled(enabled)

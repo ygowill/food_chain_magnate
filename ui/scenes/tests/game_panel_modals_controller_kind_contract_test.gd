@@ -11,8 +11,12 @@ static func run() -> Result:
 
 	if text.find("kind == \"kimchi\"") >= 0:
 		return Result.failure("controller 不应硬编码 kind==kimchi: %s" % _PATH)
+	if text.find("\"kimchi\"") >= 0:
+		return Result.failure("controller 不应硬编码 kimchi kind 字符串: %s" % _PATH)
 	if text.find("\"fridge_keep\"") >= 0:
 		return Result.failure("controller 不应硬编码 fridge_keep kind 字符串: %s" % _PATH)
+	if text.find("choose_kimchi_storage") >= 0:
+		return Result.failure("controller 不应硬编码 kimchi command_id: %s" % _PATH)
 
 	return Result.success({})
 
