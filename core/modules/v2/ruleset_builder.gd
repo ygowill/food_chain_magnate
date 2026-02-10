@@ -111,6 +111,9 @@ class RulesetRegistrarV2:
 	func register_placement_conflict_provider(provider_id: String, callback: Callable, priority: int = 100) -> Result:
 		return _ruleset.register_placement_conflict_provider(provider_id, callback, priority, _module_id)
 
+	func register_range_origin_provider(provider_id: String, callback: Callable, priority: int = 100) -> Result:
+		return _ruleset.register_range_origin_provider(provider_id, callback, priority, _module_id)
+
 	func register_employee_pool_patch(patch_id: String, employee_id: String, delta: int) -> Result:
 		return _ruleset.register_employee_pool_patch(patch_id, employee_id, delta, _module_id)
 

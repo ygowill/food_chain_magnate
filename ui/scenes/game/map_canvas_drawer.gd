@@ -11,6 +11,15 @@ const RESTAURANT_LOGO_PIECE_IDS = [
 	"restaurant_logo_sixth_chain",
 ]
 
+const COFFEE_SHOP_LOGO_PIECE_IDS = [
+	"restaurant_logo_fried_geese_donkey_coffee",
+	"restaurant_logo_gluttony_inc_burgers_coffee",
+	"restaurant_logo_golden_duck_diner_coffee",
+	"restaurant_logo_santa_maria_pizza_coffee",
+	"restaurant_logo_xango_blues_bar_coffee",
+	"restaurant_logo_sixth_chain_coffee",
+]
+
 const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
 const OverlayUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_overlay_utils.gd")
 const MarketingPassClass = preload("res://ui/scenes/game/map_canvas_drawer_marketing_pass.gd")
@@ -285,7 +294,7 @@ static func _draw_drink_sources(canvas, cell_size: int) -> void:
 	StructuresPassClass.draw_drink_sources(canvas, cell_size)
 
 static func _draw_structures(canvas, cell_size: int) -> void:
-	StructuresPassClass.draw_structures(canvas, cell_size, RESTAURANT_LOGO_PIECE_IDS)
+	StructuresPassClass.draw_structures(canvas, cell_size, RESTAURANT_LOGO_PIECE_IDS, COFFEE_SHOP_LOGO_PIECE_IDS)
 
 static func _draw_marketing(canvas, cell_size: int) -> void:
 	MarketingPassClass.draw_marketing(canvas, cell_size)

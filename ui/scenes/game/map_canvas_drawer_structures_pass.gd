@@ -27,7 +27,7 @@ static func draw_drink_sources(canvas, cell_size: int) -> void:
 			var icon_pos := rect.position + (rect.size - icon_size) * 0.5
 			TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, Rect2(icon_pos, icon_size))
 
-static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: Array) -> void:
+static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: Array, coffee_shop_logo_piece_ids: Array = []) -> void:
 	for anchor_val in canvas._structures_by_anchor.keys():
 		if not (anchor_val is Vector2i):
 			continue
@@ -66,6 +66,10 @@ static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: A
 		var rect := Rect2(pos_px, size_px)
 		if piece_id == "restaurant":
 			draw_restaurant(canvas, cell_size, anchor, info, rect, 1.0, restaurant_logo_piece_ids)
+			continue
+
+		if piece_id == "coffee_shop":
+			draw_coffee_shop(canvas, cell_size, anchor, info, rect, 1.0, restaurant_logo_piece_ids, coffee_shop_logo_piece_ids)
 			continue
 
 		if piece_id == "highway_offramp":
@@ -182,6 +186,47 @@ static func draw_restaurant(
 				idx = int(f)
 		if idx > 0:
 			draw_restaurant_index(canvas, cell_size, structure_rect, idx, alpha)
+
+static func draw_coffee_shop(
+	canvas,
+	cell_size: int,
+	_anchor: Vector2i,
+	info: Dictionary,
+	structure_rect: Rect2,
+	alpha: float,
+	restaurant_logo_piece_ids: Array,
+	coffee_shop_logo_piece_ids: Array
+) -> void:
+	var owner := int(info.get("owner", -1))
+	if owner < 0:
+		return
+	if canvas._skin == null:
+		return
+	if restaurant_logo_piece_ids.is_empty():
+		return
+
+	var logo_map: Dictionary = canvas._player_restaurant_logo_ids
+	var logo_id := int(logo_map.get(owner, -1))
+	if logo_id < 0 or logo_id >= restaurant_logo_piece_ids.size():
+		return
+
+	# 优先使用 coffee shop 专用 logo；缺失则回退到餐厅 logo
+	var base_key: String = restaurant_logo_piece_ids[logo_id]
+	var coffee_key := ""
+	if coffee_shop_logo_piece_ids != null and not coffee_shop_logo_piece_ids.is_empty() and logo_id < coffee_shop_logo_piece_ids.size():
+		coffee_key = str(coffee_shop_logo_piece_ids[logo_id])
+	var logo_key := base_key
+	if not coffee_key.is_empty() and canvas._skin.piece_textures.has(coffee_key):
+		logo_key = coffee_key
+
+	var tex: Texture2D = canvas._skin.get_piece_texture(logo_key)
+	var bg := Color("#f4edd1")
+	bg.a = clampf(alpha, 0.0, 1.0)
+	canvas.draw_rect(structure_rect, bg, true)
+
+	var pad := maxf(2.0, float(cell_size) * 0.10)
+	var logo_rect := structure_rect.grow(-pad)
+	TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, logo_rect, Color(1, 1, 1, 0.98 * alpha))
 
 static func draw_restaurant_entrance_marker(canvas, cell_size: int, anchor: Vector2i, info: Dictionary, alpha: float = 1.0) -> void:
 	var min_pos_val = info.get("min", null)

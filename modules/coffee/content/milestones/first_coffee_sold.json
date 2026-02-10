@@ -1,0 +1,21 @@
+{
+  "id": "first_coffee_sold",
+  "name": "首个卖出咖啡",
+  "trigger": {
+    "event": "ProductSold",
+    "filter": {
+      "product": "coffee"
+    }
+  },
+  "effects": [
+    {
+      "type": "noop"
+    }
+  ],
+  "exclusive_type": "first_coffee_sold",
+  "expires_at": null,
+  "pool": {
+    "enabled": true
+  }
+}
+

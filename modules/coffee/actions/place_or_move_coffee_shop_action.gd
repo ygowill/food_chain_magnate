@@ -3,11 +3,15 @@ extends ActionExecutor
 
 const PlacementClass = preload("res://core/map/placement_validator/placement.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
+const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
+const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
+const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 
 const MODULE_ID := "coffee"
 const PIECE_ID := "coffee_shop"
 const TRIGGER_TO_EMPLOYEES: Array[String] = ["barista", "lead_barista"]
+const TRAIN_PLACEMENT_MAX_RANGE := 2
 
 func _init() -> void:
 	action_id = "place_or_move_coffee_shop"
@@ -65,10 +69,15 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return pos_read
 	var world_anchor: Vector2i = pos_read.value
 
-	# 放置规则：token 用尽则必须 move
+	# 放置规则：
+	# - token 用尽：只能 move
+	# - token 仍有：只能 place（规则书未允许“用 move 代替 place”）
 	if mode == "place" and tokens_remaining <= 0:
 		return Result.failure("咖啡店 token 已用尽，必须移动已有咖啡店")
+	if mode == "move" and tokens_remaining > 0:
+		return Result.failure("仍有咖啡店 token，不能移动已有咖啡店（请放置新咖啡店）")
 
+	var ignore_shop_id := ""
 	if mode == "move":
 		var from_read := require_string_param(command, "from_shop_id")
 		if not from_read.ok:
@@ -82,14 +91,27 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		var shop: Dictionary = shops[from_shop_id]
 		if int(shop.get("owner", -1)) != command.actor:
 			return Result.failure("只能移动自己的咖啡店: %s" % from_shop_id)
+		ignore_shop_id = from_shop_id
 
 	var validate_result := _validate_coffee_shop_placement(state, world_anchor)
 	if not validate_result.ok:
 		return validate_result
 
+	var tile_check := _validate_tile_has_no_other_shop(state, world_anchor, ignore_shop_id)
+	if not tile_check.ok:
+		return tile_check
+
+	var range_check := _validate_within_train_range(state, command.actor, world_anchor)
+	if not range_check.ok:
+		return range_check
+
 	return Result.success()
 
 func _apply_changes(state: GameState, command: Command) -> Result:
+	var validate := _validate_specific(state, command)
+	if not validate.ok:
+		return validate
+
 	var player_id: int = command.actor
 
 	var mode_read := require_string_param(command, "mode")
@@ -249,4 +271,48 @@ static func _increment_used_triggers(round_state: Dictionary, player_id: int, de
 		return Result.failure("round_state.coffee_shop_triggers_used[%d] 类型错误（期望 int）" % player_id)
 	used[player_id] = int(before_val) + delta
 	round_state["coffee_shop_triggers_used"] = used
+	return Result.success()
+
+func _validate_tile_has_no_other_shop(state: GameState, world_anchor: Vector2i, ignore_shop_id: String) -> Result:
+	if state == null or not (state.map is Dictionary):
+		return Result.failure("state.map 无效")
+	if not state.map.has("coffee_shops") or not (state.map["coffee_shops"] is Dictionary):
+		return Result.failure("state.map.coffee_shops 缺失或类型错误")
+	var shops: Dictionary = state.map["coffee_shops"]
+	var target_board: Vector2i = MapUtilsClass.world_to_tile(world_anchor).board_pos
+
+	for sid_val in shops.keys():
+		var sid: String = str(sid_val)
+		if sid.is_empty() or sid == ignore_shop_id:
+			continue
+		var shop_val = shops[sid_val]
+		if not (shop_val is Dictionary):
+			continue
+		var shop: Dictionary = shop_val
+		var pos_val = shop.get("anchor_pos", null)
+		if not (pos_val is Vector2i):
+			continue
+		var board: Vector2i = MapUtilsClass.world_to_tile(pos_val).board_pos
+		if board == target_board:
+			return Result.failure("每个 tile 只能有 1 个咖啡店（该 tile 已有咖啡店）")
+	return Result.success()
+
+func _validate_within_train_range(state: GameState, player_id: int, world_anchor: Vector2i) -> Result:
+	# 规则书：通过培训放置/移动咖啡店时，必须在 range 2 内（道路距离，按地图板块边界计）
+	var target_roads_r := RangeUtilsClass.get_adjacent_road_cells(state, world_anchor)
+	if not target_roads_r.ok:
+		return target_roads_r
+	var target_road_cells: Array[Vector2i] = target_roads_r.value
+	if target_road_cells.is_empty():
+		return Result.failure("咖啡店必须邻接道路")
+
+	var restaurant_ids := StructuresClass.get_player_restaurants(state, player_id)
+	var min_r := RangeUtilsClass.get_min_road_distance_to_any_road_cells(state, player_id, restaurant_ids, target_road_cells)
+	if not min_r.ok:
+		return min_r
+	var min_d: int = int(min_r.value)
+	if min_d < 0:
+		return Result.failure("无法计算距离：餐厅/咖啡店入口未连通到目标附近道路")
+	if min_d > TRAIN_PLACEMENT_MAX_RANGE:
+		return Result.failure("超出距离范围：road %d（最短=%d）" % [TRAIN_PLACEMENT_MAX_RANGE, min_d])
 	return Result.success()

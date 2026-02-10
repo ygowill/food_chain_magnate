@@ -1,0 +1,11 @@
+{
+	"schema_version": 1,
+	"piece_visuals": {
+		"restaurant_logo_fried_geese_donkey_coffee": {"texture": "res://modules/coffee/assets/map/logos/fried_geese_donkey_coffee.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"restaurant_logo_gluttony_inc_burgers_coffee": {"texture": "res://modules/coffee/assets/map/logos/gluttony_inc_burgers_coffee.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"restaurant_logo_golden_duck_diner_coffee": {"texture": "res://modules/coffee/assets/map/logos/golden_duck_diner_coffee.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"restaurant_logo_santa_maria_pizza_coffee": {"texture": "res://modules/coffee/assets/map/logos/santa_maria_pizza_coffee.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"restaurant_logo_xango_blues_bar_coffee": {"texture": "res://modules/coffee/assets/map/logos/xango_blues_bar_coffee.png", "offset_px": [0, 0], "scale": [1, 1]},
+		"restaurant_logo_sixth_chain_coffee": {"texture": "res://modules/coffee/assets/map/logos/Siap_faji_coffee.png", "offset_px": [0, 0], "scale": [1, 1]}
+	}
+}

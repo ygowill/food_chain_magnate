@@ -3,18 +3,26 @@ extends RefCounted
 const CoffeeActionsAndStateClass = preload("res://modules/coffee/rules/coffee_actions_and_state.gd")
 const CoffeeCleanupClass = preload("res://modules/coffee/rules/coffee_cleanup.gd")
 const CoffeeDinnertimeRouteClass = preload("res://modules/coffee/rules/coffee_dinnertime_route.gd")
+const CoffeeFirstCoffeeSoldClass = preload("res://modules/coffee/rules/coffee_first_coffee_sold.gd")
 const ModuleEntryHelpersClass = preload("res://modules/module_entry_helpers.gd")
 
 const COFFEE_SHOP_TRIGGERS_USED_KEY := "coffee_shop_triggers_used"
 const STATE_SCHEMA_ID_COFFEE_SHOP_TRIGGERS_USED := "coffee:round_state_int_keys:coffee_shop_triggers_used"
+const EXTRA_LUXURY_MANAGER_PATCH_ID := "extra_luxury_manager"
 
 func register(registrar) -> Result:
 	var parts := [
 		CoffeeActionsAndStateClass.new(),
 		CoffeeCleanupClass.new(),
 		CoffeeDinnertimeRouteClass.new(),
+		CoffeeFirstCoffeeSoldClass.new(),
 	]
 	var r := ModuleEntryHelpersClass.register_parts(registrar, parts)
+	if not r.ok:
+		return r
+
+	# 额外 +1 张奢侈品经理（多模块同时使用时只加一次）
+	r = registrar.register_employee_pool_patch(EXTRA_LUXURY_MANAGER_PATCH_ID, "luxury_manager", 1)
 	if not r.ok:
 		return r
 

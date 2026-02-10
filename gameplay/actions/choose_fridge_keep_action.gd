@@ -7,6 +7,8 @@ const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
+const PENDING_TASK_KIND := "fridge_keep"
+
 func _init() -> void:
 	action_id = "choose_fridge_keep"
 	display_name = "选择冰箱保留"
@@ -30,13 +32,16 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not ProductRegistryClass.is_loaded():
 		return Result.failure("ProductRegistry 未初始化")
 
-	var pending_r := _get_pending_cleanup_players(state)
+	var pending_r := _get_pending_cleanup_tasks(state)
 	if not pending_r.ok:
 		return pending_r
-	var pending: Array[int] = pending_r.value
+	var pending: Array[Dictionary] = pending_r.value
 	if pending.is_empty():
 		return Result.failure("当前没有待处理的冰箱选择")
-	if int(pending[0]) != int(command.actor):
+	var first: Dictionary = pending[0]
+	if str(first.get("kind", "")) != PENDING_TASK_KIND:
+		return Result.failure("当前待处理动作不是冰箱保留选择")
+	if int(first.get("player_id", -1)) != int(command.actor):
 		return Result.failure("当前不是需要选择冰箱保留的玩家")
 
 	var player: Dictionary = state.players[command.actor]
@@ -126,19 +131,22 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		else:
 			warnings.append_array(ms.warnings)
 
-	var pending_r := _get_pending_cleanup_players(state)
+	var pending_r := _get_pending_cleanup_tasks(state)
 	if not pending_r.ok:
 		return pending_r
-	var pending: Array[int] = pending_r.value
+	var pending: Array[Dictionary] = pending_r.value
 	if pending.is_empty():
 		return Result.failure("内部错误：pending_phase_actions[Cleanup] 缺失")
-	if int(pending[0]) != int(command.actor):
+	var first: Dictionary = pending[0]
+	if str(first.get("kind", "")) != PENDING_TASK_KIND:
+		return Result.failure("内部错误：pending[0] 不是 fridge_keep")
+	if int(first.get("player_id", -1)) != int(command.actor):
 		return Result.failure("内部错误：当前玩家不是 pending[0]")
 
 	pending.remove_at(0)
-	_set_pending_cleanup_players(state, pending)
+	_set_pending_cleanup_tasks(state, pending)
 
-	if pending.is_empty():
+	if not _has_pending_cleanup_task_kind(pending, PENDING_TASK_KIND):
 		var cleanup_val = Dictionary(state.round_state).get("cleanup", null)
 		if cleanup_val is Dictionary:
 			var cleanup: Dictionary = cleanup_val
@@ -150,9 +158,11 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		if not milestone_cleanup.ok:
 			return milestone_cleanup
 		warnings.append_array(milestone_cleanup.warnings)
+
+	if pending.is_empty():
 		return Result.success().with_warnings(warnings)
 
-	var next_pid: int = int(pending[0])
+	var next_pid: int = int(Dictionary(pending[0]).get("player_id", -1))
 	for idx in range(state.turn_order.size()):
 		if int(state.turn_order[idx]) == next_pid:
 			state.current_player_index = idx
@@ -212,6 +222,8 @@ static func _is_food_or_drink(product_id: String) -> bool:
 	if def_val == null or not (def_val is ProductDef):
 		return false
 	var def: ProductDef = def_val
+	if def.has_tag("no_storage"):
+		return false
 	return def.has_tag("food") or def.has_tag("drink")
 
 static func _get_total_food_drink(inventory: Dictionary) -> int:
@@ -271,30 +283,64 @@ static func _parse_non_negative_int(value, path: String) -> Result:
 		return Result.failure("%s 必须为整数（不允许小数）" % path)
 	return Result.failure("%s 必须为非负整数" % path)
 
-static func _get_pending_cleanup_players(state: GameState) -> Result:
+static func _has_pending_cleanup_task_kind(tasks: Array, kind: String) -> bool:
+	if kind.is_empty():
+		return false
+	for v in tasks:
+		if v is Dictionary and str(Dictionary(v).get("kind", "")) == kind:
+			return true
+	return false
+
+static func _get_pending_cleanup_tasks(state: GameState) -> Result:
 	if state == null:
 		return Result.failure("state 为空")
 	if not (state.round_state is Dictionary):
 		return Result.failure("round_state 类型错误（期望 Dictionary）")
 	if not state.round_state.has("pending_phase_actions"):
-		return Result.success([] as Array[int])
+		return Result.success([] as Array[Dictionary])
 	var ppa_val = state.round_state.get("pending_phase_actions", null)
 	if not (ppa_val is Dictionary):
 		return Result.failure("pending_phase_actions 类型错误（期望 Dictionary）")
 	var ppa: Dictionary = ppa_val
 	if not ppa.has(DefsClass.PHASE_CLEANUP):
-		return Result.success([] as Array[int])
+		return Result.success([] as Array[Dictionary])
 	var list_val = ppa.get(DefsClass.PHASE_CLEANUP, null)
 	if not (list_val is Array):
 		return Result.failure("pending_phase_actions[Cleanup] 类型错误（期望 Array）")
 	var list: Array = list_val
 
-	var out: Array[int] = []
-	for v in list:
-		out.append(int(v))
+	var out: Array[Dictionary] = []
+	for i in range(list.size()):
+		var v = list[i]
+		if v is Dictionary:
+			var d: Dictionary = v
+			var kind_val = d.get("kind", null)
+			var pid_val = d.get("player_id", null)
+			if not (kind_val is String):
+				return Result.failure("pending_phase_actions[Cleanup][%d].kind 类型错误（期望 String）" % i)
+			var kind: String = str(kind_val)
+			if kind.is_empty():
+				return Result.failure("pending_phase_actions[Cleanup][%d].kind 不能为空" % i)
+			if not (pid_val is int or pid_val is float):
+				return Result.failure("pending_phase_actions[Cleanup][%d].player_id 类型错误（期望 int/float）" % i)
+			out.append({
+				"kind": kind,
+				"player_id": int(pid_val),
+			})
+			continue
+
+		# 兼容旧存档：Cleanup pending 列表为 [player_id(int)]（仅用于 fridge_keep）
+		if v is int or v is float:
+			out.append({
+				"kind": PENDING_TASK_KIND,
+				"player_id": int(v),
+			})
+			continue
+		return Result.failure("pending_phase_actions[Cleanup][%d] 类型错误（期望 Dictionary/int/float）" % i)
+
 	return Result.success(out)
 
-static func _set_pending_cleanup_players(state: GameState, pending: Array[int]) -> void:
+static func _set_pending_cleanup_tasks(state: GameState, pending: Array[Dictionary]) -> void:
 	if state == null or not (state.round_state is Dictionary):
 		return
 	if not state.round_state.has("pending_phase_actions"):

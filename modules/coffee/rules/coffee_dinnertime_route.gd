@@ -97,12 +97,8 @@ func _dinnertime_route_coffee(state: GameState, ctx: Dictionary) -> Result:
 			return Result.failure("coffee: PricingPipeline 失败: %s" % b_read.error)
 		cup_breakdowns[pid] = b_read.value
 
-	var best := {
-		"purchases": [],
-		"income_by_player": {},
-		"steps": INF,
-		"path_key": "",
-	}
+	var best_purchase_count := -1
+	var best_paths: Array[Dictionary] = []  # [{path, purchases, income_by_player, visited_location_keys, path_key}]
 
 	for pair_val in candidate_pairs:
 		var pair: Dictionary = pair_val
@@ -130,29 +126,50 @@ func _dinnertime_route_coffee(state: GameState, ctx: Dictionary) -> Result:
 			var income_by_player: Dictionary = simv.get("income_by_player", {})
 
 			var purchase_count := purchases.size()
-			var best_count := int(best["purchases"].size())
-			var steps: int = path.size() - 1
-			var key := _path_key(path)
+			var path_key := _path_key(path)
+			var visited_location_keys := _collect_stop_location_keys_for_path(path, stop_index)
 
-			var better := false
-			if purchase_count > best_count:
-				better = true
-			elif purchase_count == best_count:
-				if steps < int(best["steps"]):
-					better = true
-				elif steps == int(best["steps"]):
-					better = key < str(best["path_key"])
+			if purchase_count > best_purchase_count:
+				best_purchase_count = purchase_count
+				best_paths = [{
+					"path": path,
+					"purchases": purchases,
+					"income_by_player": income_by_player,
+					"visited_location_keys": visited_location_keys,
+					"path_key": path_key,
+				}]
+			elif purchase_count == best_purchase_count:
+				best_paths.append({
+					"path": path,
+					"purchases": purchases,
+					"income_by_player": income_by_player,
+					"visited_location_keys": visited_location_keys,
+					"path_key": path_key,
+				})
 
-			if better:
-				best["purchases"] = purchases
-				best["income_by_player"] = income_by_player
-				best["steps"] = steps
-				best["path_key"] = key
+	var final_purchases: Array = []
+	if best_paths.size() == 1:
+		final_purchases = best_paths[0].get("purchases", [])
+	elif best_paths.size() > 1:
+		# 规则书：同最短且咖啡数量相同，则跳过“无法决定的路段”上的所有餐厅/咖啡店。
+		# 这里按“所有同咖啡最优路径的公共停靠点”来确定可决定路段上的停靠点。
+		var common := _intersect_location_key_sets(best_paths)
+		var canonical: Dictionary = {}
+		for entry_val in best_paths:
+			var entry: Dictionary = entry_val
+			if canonical.is_empty() or str(entry.get("path_key", "")) < str(canonical.get("path_key", "")):
+				canonical = entry
+		var path: Array[Vector2i] = canonical.get("path", [])
+		var filtered := _simulate_coffee_purchases_filtered(state, path, stop_index, cup_breakdowns, common)
+		if not filtered.ok:
+			return filtered
+		var fv: Dictionary = filtered.value
+		final_purchases = fv.get("purchases", [])
 
 	# 执行购买：扣库存 + 银行支付
 	var warnings: Array[String] = []
 	var paid_by_player: Dictionary = {}
-	for p_val in best["purchases"]:
+	for p_val in final_purchases:
 		if not (p_val is Dictionary):
 			continue
 		var p: Dictionary = p_val
@@ -178,7 +195,7 @@ func _dinnertime_route_coffee(state: GameState, ctx: Dictionary) -> Result:
 			paid_by_player[seller] = int(paid_by_player.get(seller, 0)) + price
 
 	return Result.success({
-		"purchases": best["purchases"],
+		"purchases": final_purchases,
 		"income_by_player": paid_by_player,
 	}).with_warnings(warnings)
 
@@ -205,8 +222,10 @@ static func _simulate_coffee_purchases(state: GameState, path: Array[Vector2i], 
 			if not (item_val is Dictionary):
 				continue
 			var item: Dictionary = item_val
+			var kind: String = str(item.get("kind", ""))
 			var loc_id: String = str(item.get("id", ""))
-			if loc_id.is_empty() or visited_locations.has(loc_id):
+			var loc_key := _location_key(kind, loc_id)
+			if loc_key.is_empty() or visited_locations.has(loc_key):
 				continue
 			var seller: int = int(item.get("owner", -1))
 			if seller < 0:
@@ -223,13 +242,13 @@ static func _simulate_coffee_purchases(state: GameState, path: Array[Vector2i], 
 			purchases.append({
 				"kind": "coffee",
 				"seller": seller,
-				"source_kind": str(item.get("kind", "")),
+				"source_kind": kind,
 				"source_id": loc_id,
 				"at": [pos.x, pos.y],
 				"price": price,
 			})
 			inv_left[seller] = int(inv_left.get(seller, 0)) - 1
-			visited_locations[loc_id] = true
+			visited_locations[loc_key] = true
 			income_by_player[seller] = int(income_by_player.get(seller, 0)) + maxi(0, price)
 
 	return Result.success({
@@ -464,3 +483,116 @@ static func _path_key(path: Array[Vector2i]) -> String:
 	for p in path:
 		parts.append(_pos_key(p))
 	return "|".join(parts)
+
+static func _location_key(kind: String, id: String) -> String:
+	if kind.is_empty() or id.is_empty():
+		return ""
+	return "%s:%s" % [kind, id]
+
+static func _collect_stop_location_keys_for_path(path: Array[Vector2i], stop_index: Dictionary) -> Dictionary:
+	var out := {}
+	for pos in path:
+		var key := _pos_key(pos)
+		if not stop_index.has(key):
+			continue
+		var list_val = stop_index[key]
+		if not (list_val is Array):
+			continue
+		var list: Array = list_val
+		for item_val in list:
+			if not (item_val is Dictionary):
+				continue
+			var item: Dictionary = item_val
+			var kind: String = str(item.get("kind", ""))
+			var id: String = str(item.get("id", ""))
+			var lk := _location_key(kind, id)
+			if lk.is_empty():
+				continue
+			out[lk] = true
+	return out
+
+static func _intersect_location_key_sets(best_paths: Array[Dictionary]) -> Dictionary:
+	if best_paths.is_empty():
+		return {}
+	var first_val = best_paths[0].get("visited_location_keys", {})
+	if not (first_val is Dictionary):
+		return {}
+	var common: Dictionary = first_val.duplicate(true)
+	for i in range(1, best_paths.size()):
+		var v = best_paths[i].get("visited_location_keys", {})
+		if not (v is Dictionary):
+			common.clear()
+			return common
+		var set_i: Dictionary = v
+		var keys := common.keys()
+		for k in keys:
+			if not set_i.has(k):
+				common.erase(k)
+	return common
+
+static func _simulate_coffee_purchases_filtered(
+	state: GameState,
+	path: Array[Vector2i],
+	stop_index: Dictionary,
+	cup_breakdowns: Dictionary,
+	allowed_location_keys: Dictionary
+) -> Result:
+	var inv_left := {}
+	for pid in range(state.players.size()):
+		var player: Dictionary = state.players[pid]
+		var inv: Dictionary = player.get("inventory", {})
+		inv_left[pid] = int(inv.get(COFFEE_ID, 0))
+
+	var purchases: Array[Dictionary] = []
+	var income_by_player: Dictionary = {}
+	var visited_locations := {}
+
+	for pos in path:
+		var key := _pos_key(pos)
+		if not stop_index.has(key):
+			continue
+		var list_val = stop_index[key]
+		if not (list_val is Array):
+			continue
+		var list: Array = list_val
+		for item_val in list:
+			if not (item_val is Dictionary):
+				continue
+			var item: Dictionary = item_val
+			var kind: String = str(item.get("kind", ""))
+			var loc_id: String = str(item.get("id", ""))
+			var loc_key := _location_key(kind, loc_id)
+			if loc_key.is_empty():
+				continue
+			if not allowed_location_keys.has(loc_key):
+				continue
+			if visited_locations.has(loc_key):
+				continue
+			var seller: int = int(item.get("owner", -1))
+			if seller < 0:
+				continue
+			if int(inv_left.get(seller, 0)) <= 0:
+				continue
+
+			var bd_val = cup_breakdowns.get(seller, null)
+			if not (bd_val is Dictionary):
+				return Result.failure("coffee: cup_breakdowns[%d] 缺失" % seller)
+			var bd: Dictionary = bd_val
+			var price: int = int(bd.get("revenue", 0))
+
+			purchases.append({
+				"kind": "coffee",
+				"seller": seller,
+				"source_kind": kind,
+				"source_id": loc_id,
+				"at": [pos.x, pos.y],
+				"price": price,
+			})
+			inv_left[seller] = int(inv_left.get(seller, 0)) - 1
+			visited_locations[loc_key] = true
+			income_by_player[seller] = int(income_by_player.get(seller, 0)) + maxi(0, price)
+
+	return Result.success({
+		"purchases": purchases,
+		"income_by_player": income_by_player,
+	})

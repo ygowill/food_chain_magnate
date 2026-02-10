@@ -93,8 +93,16 @@ func sync_for_state(state: GameState, covered: Rect2) -> void:
 			var list_val = ppa.get(DefsClass.PHASE_CLEANUP, null)
 			if list_val is Array:
 				var list: Array = list_val
-				if not list.is_empty() and int(list[0]) == current_player_id:
-					should_show_fridge_keep = true
+				if not list.is_empty():
+					var first = list[0]
+					if first is Dictionary:
+						var task: Dictionary = first
+						if str(task.get("kind", "")) == "fridge_keep" and int(task.get("player_id", -1)) == current_player_id:
+							should_show_fridge_keep = true
+					elif first is int or first is float:
+						# 兼容旧存档：Cleanup pending 列表为 [player_id(int)]
+						if int(first) == current_player_id:
+							should_show_fridge_keep = true
 
 	if should_show_fridge_keep and is_local_turn:
 		show_fridge_keep_modal(state, current_player_id, covered)

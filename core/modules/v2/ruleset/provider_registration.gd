@@ -133,3 +133,35 @@ static func register_placement_conflict_provider(
 		return str(a.source) < str(b.source)
 	)
 	return Result.success()
+
+static func register_range_origin_provider(
+	ruleset,
+	provider_id: String,
+	callback: Callable,
+	priority: int = 100,
+	source_module_id: String = ""
+) -> Result:
+	if provider_id.is_empty():
+		return Result.failure("RulesetV2: range origin provider_id 不能为空")
+	if not callback.is_valid():
+		return Result.failure("RulesetV2: range origin provider callback 无效: %s" % provider_id)
+	for item_val in ruleset.range_origin_providers:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if str(item.get("id", "")) == provider_id:
+			return Result.failure("RulesetV2: range origin provider 重复注册: %s (module:%s)" % [provider_id, source_module_id])
+	ruleset.range_origin_providers.append({
+		"id": provider_id,
+		"callback": callback,
+		"priority": priority,
+		"source": source_module_id,
+	})
+	ruleset.range_origin_providers.sort_custom(func(a, b) -> bool:
+		if int(a.priority) != int(b.priority):
+			return int(a.priority) < int(b.priority)
+		if str(a.id) != str(b.id):
+			return str(a.id) < str(b.id)
+		return str(a.source) < str(b.source)
+	)
+	return Result.success()
