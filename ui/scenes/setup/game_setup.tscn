@@ -34,7 +34,7 @@ size_flags_horizontal = 3
 alignment = 1
 
 [node name="Card" type="PanelContainer" parent="CenterContainer/ContentCenter"]
-custom_minimum_size = Vector2(1100, 0)
+custom_minimum_size = Vector2(1500, 0)
 layout_mode = 2
 
 [node name="Margin" type="MarginContainer" parent="CenterContainer/ContentCenter/Card"]
@@ -64,10 +64,12 @@ theme_override_constants/separation = 40
 
 [node name="LeftColumn" type="VBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns"]
 layout_mode = 2
+size_flags_horizontal = 0
 theme_override_constants/separation = 12
 
 [node name="RightColumn" type="VBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns"]
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/separation = 12
 
 [node name="PlayerCountContainer" type="HBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn"]

@@ -277,6 +277,7 @@ func _build_group_panel_style(bg: Color) -> StyleBoxFlat:
 func _build_module_group_box(title: String, module_ids: Array[String], bg_color: Color) -> Control:
 	var panel := PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.custom_minimum_size = Vector2(560, 0)
 	panel.add_theme_stylebox_override("panel", _build_group_panel_style(bg_color))
 
 	var margin := MarginContainer.new()
@@ -291,6 +292,12 @@ func _build_module_group_box(title: String, module_ids: Array[String], bg_color:
 	box.add_theme_constant_override("separation", 6)
 	margin.add_child(box)
 
+	var header := HBoxContainer.new()
+	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.alignment = BoxContainer.ALIGNMENT_CENTER
+	header.add_theme_constant_override("separation", 8)
+	box.add_child(header)
+
 	var title_label := Label.new()
 	title_label.text = title
 	title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -298,13 +305,7 @@ func _build_module_group_box(title: String, module_ids: Array[String], bg_color:
 	title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title_label.tooltip_text = title
 	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	box.add_child(title_label)
-
-	var header := HBoxContainer.new()
-	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.alignment = BoxContainer.ALIGNMENT_END
-	header.add_theme_constant_override("separation", 8)
-	box.add_child(header)
+	header.add_child(title_label)
 
 	var mids_copy: Array[String] = module_ids.duplicate()
 
