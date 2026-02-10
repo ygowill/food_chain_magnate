@@ -150,15 +150,15 @@
 
 定义：
 
-- icon_id 取值 `[0..4]`，与现有 `MapCanvasDrawer.RESTAURANT_LOGO_PIECE_IDS` 顺序一致（保持 UI 与绘制系统一致）。
+- icon_id 取值 `[0..logo_count-1]`，顺序与 base_pieces visuals `restaurant_logo_piece_ids` 一致（UI 通过 `MapSkin.get_restaurant_logo_piece_ids()` 读取，保持与绘制系统一致）。
 - 玩家在设置页保存的是 `choice`：
 	- `choice = -1` 表示“随机”
-	- `choice = 0..4` 表示指定 icon
+	- `choice = 0..logo_count-1` 表示指定 icon
 
 开始游戏时计算最终 `assigned_logo_id[player_id]`：
 
 1. 收集已指定的 icon（必须互不重复；若重复视为 UI bug，启动前强制纠正/报错）
-2. `remaining = [0..4] - fixed_set`
+2. `remaining = [0..logo_count-1] - fixed_set`
 3. 用独立 RNG（seed = `Globals.random_seed ^ 0x4C4F474F`，与当前代码一致）对 `remaining` 洗牌
 4. 对所有 `choice=-1` 的玩家，按 player_id 从小到大依次分配 `remaining.pop_front()`
 

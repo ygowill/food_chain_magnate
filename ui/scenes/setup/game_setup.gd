@@ -4,7 +4,6 @@ extends Control
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModuleSelectorClass = preload("res://ui/components/module_selector/module_selector.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
-const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
 
 @onready var card: PanelContainer = $CenterContainer/ContentCenter/Card
@@ -183,7 +182,7 @@ func _rebuild_player_rows() -> void:
 		return
 
 	_ensure_logo_icons_cache()
-	var logo_count := MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS.size()
+	var logo_count := _logo_icons_small.size()
 
 	for child in _players_container.get_children():
 		child.queue_free()
@@ -248,7 +247,8 @@ func _refresh_player_logo_unique_constraints() -> void:
 		return
 
 	_suppress_player_signals = true
-	var logo_count := MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS.size()
+	_ensure_logo_icons_cache()
+	var logo_count := _logo_icons_small.size()
 
 	var used_by: Dictionary = {} # logo_id -> player_id
 	var dup_pids: Array[int] = []
@@ -303,11 +303,16 @@ func _ensure_logo_icons_cache() -> void:
 		GameLog.warn("GameSetup", "加载餐厅 Logo 贴图失败: %s" % read.error)
 		return
 	var skin = read.value
-	if skin == null or not skin.has_method("get_piece_texture"):
+	if skin == null or not skin.has_method("get_piece_texture") or not skin.has_method("get_restaurant_logo_piece_ids"):
 		GameLog.warn("GameSetup", "加载餐厅 Logo 贴图失败：skin 类型错误")
 		return
 
-	for piece_id_val in MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS:
+	var logo_ids = skin.get_restaurant_logo_piece_ids()
+	if not (logo_ids is Array) or (logo_ids as Array).is_empty():
+		GameLog.warn("GameSetup", "加载餐厅 Logo 贴图失败：缺少 restaurant_logo_piece_ids")
+		return
+
+	for piece_id_val in (logo_ids as Array):
 		var piece_id := str(piece_id_val).strip_edges()
 		if piece_id.is_empty():
 			_logo_icons_small.append(null)

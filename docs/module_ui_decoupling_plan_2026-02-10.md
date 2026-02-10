@@ -190,7 +190,7 @@
 - **迁移/解耦目标**
   - 核心 UI 不直接写死 `res://modules/base_pieces/assets/...` 路径。
 - **已实施改动**
-  - 移除 `GameSetup` 中硬编码的 logo 贴图路径数组，改为使用 `MapSkinBuilder` 从 `content/visuals/*.json` 构建 skin 后按 `MapCanvasDrawer.RESTAURANT_LOGO_PIECE_IDS` 加载对应贴图。
+  - 移除 `GameSetup` 中硬编码的 logo 贴图路径数组，改为使用 `MapSkinBuilder` 从 `content/visuals/*.json` 构建 skin 后按 `MapSkin.get_restaurant_logo_piece_ids()` 加载对应贴图。
 - **新增/补充测试**
   - `ui/scenes/tests/ui_base_pieces_logo_hard_ref_contract_test.gd`（扫描 `ui/**` 生产代码，确保不再出现硬编码 logo 贴图路径前缀）
   - `ui/scenes/tests/restaurant_logo_textures_loaded_test.gd`（确保 restaurant logo 的 piece texture 可通过 skin 加载且非 placeholder）
@@ -198,7 +198,7 @@
   - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
   - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
 - **后续（可选优化）**
-  - 如需让模块自行提供 logo 列表/排序，可进一步把列表迁移到 base_pieces 的 manifest/content，并引入对应 loader/provider。
+  - ✅ 已完成（2026-02-10）：将 logo 列表/排序迁移到 base_pieces 的 visuals data（`modules/base_pieces/content/visuals/pieces.json` 的 `restaurant_logo_piece_ids` 字段）；`VisualCatalogLoader` / `MapSkin` 透传该列表，UI 统一从 `MapSkin.get_restaurant_logo_piece_ids()` 获取并渲染。
 - **验收标准**
   - `rg -n 'res://modules/base_pieces/assets/map/logos/' ui/scenes/setup/game_setup.gd` 返回空。
 

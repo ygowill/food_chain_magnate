@@ -18,12 +18,23 @@ var marketing_textures: Dictionary = {}    # key -> Texture2D
 var piece_offsets_px: Dictionary = {}      # piece_id -> Vector2i
 var piece_scales: Dictionary = {}          # piece_id -> Vector2
 
+var restaurant_logo_piece_ids: Array[String] = []
+
 var _placeholders: Dictionary = {}         # kind -> Texture2D
 var _logo_textures_transparent_bg: Dictionary = {} # piece_id -> Texture2D
 
 func apply_visual_catalog(catalog, warnings: Array[String]) -> void:
 	if catalog == null:
 		return
+
+	restaurant_logo_piece_ids = []
+	var ids_val = catalog.restaurant_logo_piece_ids if catalog.has_method("get") else null
+	if ids_val is Array:
+		for v in Array(ids_val):
+			if v is String:
+				var s := str(v).strip_edges()
+				if not s.is_empty():
+					restaurant_logo_piece_ids.append(s)
 
 	# cell_visuals
 	var span_cell := PerfTraceClass.begin_span("skin:apply.cell_visuals")
@@ -134,6 +145,21 @@ func get_marketing_texture(key: String) -> Texture2D:
 	if marketing_textures.has(key):
 		return marketing_textures[key]
 	return _get_placeholder("marketing")
+
+func get_restaurant_logo_piece_ids() -> Array[String]:
+	return restaurant_logo_piece_ids
+
+func get_restaurant_logo_piece_id(logo_id: int) -> String:
+	var lid := int(logo_id)
+	if lid < 0 or lid >= restaurant_logo_piece_ids.size():
+		return ""
+	return str(restaurant_logo_piece_ids[lid]).strip_edges()
+
+func get_restaurant_logo_texture_by_id(logo_id: int) -> Texture2D:
+	var pid := get_restaurant_logo_piece_id(int(logo_id))
+	if pid.is_empty():
+		return _get_placeholder("piece")
+	return get_piece_texture(pid)
 
 func _init_placeholders() -> void:
 	_placeholders.clear()

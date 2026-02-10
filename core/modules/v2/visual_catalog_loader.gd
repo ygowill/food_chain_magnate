@@ -116,6 +116,19 @@ static func _apply_visuals_dict(catalog, data: Dictionary, module_id: String,
 		var entry3: Dictionary = piece_map[k]
 		_merge_entry(catalog.piece_visuals, catalog.piece_visual_sources, piece_id, entry3, module_id, warnings)
 
+	var logos_val = data.get("restaurant_logo_piece_ids", null)
+	if logos_val != null:
+		var logos_read := _parse_string_array(logos_val, "%s.restaurant_logo_piece_ids" % source_path)
+		if not logos_read.ok:
+			return logos_read
+		var logos: Array[String] = logos_read.value
+		if not logos.is_empty():
+			if not catalog.restaurant_logo_piece_ids.is_empty():
+				var prev_src := str(catalog.restaurant_logo_piece_ids_source)
+				warnings.append("restaurant_logo_piece_ids 覆盖: %s -> %s" % [prev_src, module_id])
+			catalog.restaurant_logo_piece_ids = logos
+			catalog.restaurant_logo_piece_ids_source = module_id
+
 	var prod_val = data.get("product_icons", {})
 	var prod_read := _parse_visual_map_simple(prod_val, "%s.product_icons" % source_path)
 	if not prod_read.ok:
@@ -200,6 +213,26 @@ static func _parse_visual_map_simple(value, path: String) -> Result:
 			"texture": str(texture_val),
 		}
 
+	return Result.success(out)
+
+static func _parse_string_array(value, path: String) -> Result:
+	if value == null:
+		return Result.success([])
+	if not (value is Array):
+		return Result.failure("%s 类型错误（期望 Array[String]）" % path)
+	var out: Array[String] = []
+	var seen := {}
+	for i in range(value.size()):
+		var v = value[i]
+		if not (v is String):
+			return Result.failure("%s[%d] 类型错误（期望 String）" % [path, i])
+		var s := str(v).strip_edges()
+		if s.is_empty():
+			return Result.failure("%s[%d] 不能为空" % [path, i])
+		if seen.has(s):
+			return Result.failure("%s 包含重复项: %s" % [path, s])
+		seen[s] = true
+		out.append(s)
 	return Result.success(out)
 
 static func _parse_vec2i(value, path: String) -> Result:

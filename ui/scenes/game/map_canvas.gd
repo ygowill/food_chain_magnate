@@ -75,8 +75,13 @@ func set_game_state(state: GameState) -> void:
 		clear()
 		return
 	_state_seed = int(state.seed)
+	_ensure_skin(Array(state.modules, TYPE_STRING, "", null))
 	_player_restaurant_logo_ids.clear()
-	var logo_count := MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS.size()
+	var logo_count := 0
+	if _skin != null and _skin.has_method("get_restaurant_logo_piece_ids"):
+		var ids_val = _skin.get_restaurant_logo_piece_ids()
+		if ids_val is Array:
+			logo_count = (ids_val as Array).size()
 	var fallback_logo_ids: Array[int] = _build_fallback_logo_ids(logo_count)
 	for i in range(state.players.size()):
 		var p_val = state.players[i]
@@ -92,7 +97,6 @@ func set_game_state(state: GameState) -> void:
 			_player_restaurant_logo_ids[pid] = logo_id
 		else:
 			_player_restaurant_logo_ids[pid] = _fallback_logo_id_for_player(pid, fallback_logo_ids)
-	_ensure_skin(Array(state.modules, TYPE_STRING, "", null))
 	set_map_data(state.map)
 
 func _read_logo_id(value, logo_count: int) -> int:

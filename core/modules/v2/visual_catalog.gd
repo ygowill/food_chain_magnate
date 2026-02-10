@@ -17,3 +17,7 @@ var piece_visual_sources: Dictionary = {} # piece_id -> module_id
 var product_icon_sources: Dictionary = {} # product_id -> module_id
 var marketing_visual_sources: Dictionary = {} # key -> module_id
 
+# Restaurant logo mapping (logo_id -> piece_id) is UI-facing data but must remain stable for save compatibility.
+# modules can optionally provide/override the ordered list via visuals JSON.
+var restaurant_logo_piece_ids: Array[String] = []
+var restaurant_logo_piece_ids_source: String = ""

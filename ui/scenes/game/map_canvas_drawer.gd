@@ -2,14 +2,14 @@
 class_name MapCanvasDrawer
 extends RefCounted
 
-const RESTAURANT_LOGO_PIECE_IDS = [
-	"restaurant_logo_fried_geese_donkey",
-	"restaurant_logo_gluttony_inc_burgers",
-	"restaurant_logo_golden_duck_diner",
-	"restaurant_logo_santa_maria_pizza",
-	"restaurant_logo_xango_blues_bar",
-	"restaurant_logo_sixth_chain",
-]
+static func _get_restaurant_logo_piece_ids(canvas) -> Array:
+	if canvas == null or canvas._skin == null:
+		return []
+	if canvas._skin.has_method("get_restaurant_logo_piece_ids"):
+		var ids_val = canvas._skin.get_restaurant_logo_piece_ids()
+		if ids_val is Array:
+			return ids_val
+	return []
 
 const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
 const OverlayUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_overlay_utils.gd")
@@ -264,8 +264,10 @@ static func _draw_structure_preview_piece(canvas, cell_size: int, preview_info: 
 		"cells": view_cells,
 	}
 
+	var logo_piece_ids: Array = _get_restaurant_logo_piece_ids(canvas)
+
 	if piece_id == "restaurant":
-		StructuresPassClass.draw_restaurant(canvas, cell_size, anchor, info, structure_rect, alpha, RESTAURANT_LOGO_PIECE_IDS)
+		StructuresPassClass.draw_restaurant(canvas, cell_size, anchor, info, structure_rect, alpha, logo_piece_ids)
 	elif piece_id == "house" or piece_id == "house_with_garden":
 		StructuresPassClass.draw_house_and_garden(canvas, cell_size, anchor, info, alpha)
 	elif piece_id == "marketing":
@@ -292,7 +294,7 @@ static func _draw_structure_preview_piece(canvas, cell_size: int, preview_info: 
 					if owner2 >= 0:
 						var bg_col2 := _read_color_hint(hints, "bg_color", Color("#f4edd1"))
 						var suffix := str(hints.get("logo_variant_suffix", "")).strip_edges()
-						StructuresPassClass.draw_player_logo_structure(canvas, cell_size, anchor, info, structure_rect, alpha, RESTAURANT_LOGO_PIECE_IDS, bg_col2, suffix)
+						StructuresPassClass.draw_player_logo_structure(canvas, cell_size, anchor, info, structure_rect, alpha, logo_piece_ids, bg_col2, suffix)
 						drew = true
 				elif style == "opaque_rotated_piece":
 					var tex2: Texture2D = canvas._skin.get_piece_texture(piece_id)
@@ -322,7 +324,7 @@ static func _draw_drink_sources(canvas, cell_size: int) -> void:
 	StructuresPassClass.draw_drink_sources(canvas, cell_size)
 
 static func _draw_structures(canvas, cell_size: int) -> void:
-	StructuresPassClass.draw_structures(canvas, cell_size, RESTAURANT_LOGO_PIECE_IDS)
+	StructuresPassClass.draw_structures(canvas, cell_size, _get_restaurant_logo_piece_ids(canvas))
 
 static func _draw_marketing(canvas, cell_size: int) -> void:
 	MarketingPassClass.draw_marketing(canvas, cell_size)

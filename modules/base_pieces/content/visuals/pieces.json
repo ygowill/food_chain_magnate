@@ -1,5 +1,13 @@
 {
 	"schema_version": 1,
+	"restaurant_logo_piece_ids": [
+		"restaurant_logo_fried_geese_donkey",
+		"restaurant_logo_gluttony_inc_burgers",
+		"restaurant_logo_golden_duck_diner",
+		"restaurant_logo_santa_maria_pizza",
+		"restaurant_logo_xango_blues_bar",
+		"restaurant_logo_sixth_chain"
+	],
 	"piece_visuals": {
 		"house": {"texture": "res://modules/base_pieces/assets/map/pieces/house.png", "offset_px": [0, 0], "scale": [1, 1]},
 		"house_with_garden": {"texture": "res://modules/base_pieces/assets/map/pieces/house_with_garden.png", "offset_px": [0, 0], "scale": [1, 1]},

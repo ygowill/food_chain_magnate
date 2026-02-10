@@ -8,7 +8,6 @@ signal position_selected(position: int)
 @onready var slots_container: HBoxContainer = $SlotsContainer
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
-const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
 
 const BADGE_SIZE := 78 # 26 * 3 (triple height for better logo readability)
 const BADGE_ICON_MARGIN := 6
@@ -35,8 +34,8 @@ func set_player_count(count: int) -> void:
 
 func set_game_state(state: GameState) -> void:
 	_game_state = state
-	_rebuild_player_logo_ids()
 	_ensure_skin()
+	_rebuild_player_logo_ids()
 	_update_display()
 
 func set_current_selections(selections: Dictionary) -> void:
@@ -154,7 +153,11 @@ func _rebuild_player_logo_ids() -> void:
 		return
 	_state_seed = int(_game_state.seed)
 
-	var logo_count := MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS.size()
+	var logo_count := 0
+	if _skin != null and _skin.has_method("get_restaurant_logo_piece_ids"):
+		var ids_val = _skin.get_restaurant_logo_piece_ids()
+		if ids_val is Array:
+			logo_count = (ids_val as Array).size()
 	_fallback_logo_ids = _build_fallback_logo_ids(logo_count)
 	for i in range(_game_state.players.size()):
 		var p_val = _game_state.players[i]
@@ -174,16 +177,15 @@ func _rebuild_player_logo_ids() -> void:
 func _get_player_restaurant_logo_texture(player_id: int) -> Texture2D:
 	if _skin == null:
 		return null
-	if not (_skin.has_method("get_piece_texture")):
+	if not (_skin.has_method("get_restaurant_logo_piece_ids")) or not (_skin.has_method("get_restaurant_logo_texture_by_id")):
 		return null
-	var logo_count := MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS.size()
+	var logo_count := (_skin.get_restaurant_logo_piece_ids() as Array).size()
 	if logo_count <= 0:
 		return null
 	var logo_id := int(_player_restaurant_logo_ids.get(player_id, -1))
 	if logo_id < 0 or logo_id >= logo_count:
 		logo_id = _fallback_logo_id_for_player(player_id, _fallback_logo_ids)
-	var key: String = MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS[logo_id]
-	return _skin.get_piece_texture(key)
+	return _skin.get_restaurant_logo_texture_by_id(logo_id)
 
 
 class OrderBadge extends PanelContainer:
