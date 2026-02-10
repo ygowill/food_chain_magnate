@@ -6,7 +6,7 @@ extends BaseTileOverlay
 signal path_selected(house_id: String, restaurant_id: String)
 
 const RoadGraphClass = preload("res://core/map/road_graph.gd")
-const ROADWORK_MARKERS_KEY := "lobbyists_roadworks_markers"
+const ROADWORK_MARKERS_KEY_SUFFIX := "roadworks_markers"
 const DISTANCE_OVERRIDE_NONE := -999999999
 var _road_graph = null  # RoadGraph 引用
 var _map_data: Dictionary = {}
@@ -179,10 +179,7 @@ func _calculate_distance(house_pos: Vector2i, restaurant_pos: Vector2i, path_poi
 	return -1
 
 func _count_roadworks_penalty(path_points: Array[Vector2i]) -> int:
-	var markers_val = _map_data.get(ROADWORK_MARKERS_KEY, null)
-	if not (markers_val is Dictionary):
-		return 0
-	var markers: Dictionary = markers_val
+	var markers: Dictionary = _get_roadworks_markers_dict()
 	if markers.is_empty():
 		return 0
 	var penalty := 0
@@ -192,6 +189,20 @@ func _count_roadworks_penalty(path_points: Array[Vector2i]) -> int:
 		if markers.has(key):
 			penalty += 1
 	return penalty
+
+func _get_roadworks_markers_dict() -> Dictionary:
+	if _map_data.is_empty():
+		return {}
+	for k in _map_data.keys():
+		if not (k is String):
+			continue
+		var key: String = str(k).strip_edges()
+		if not key.ends_with(ROADWORK_MARKERS_KEY_SUFFIX):
+			continue
+		var val = _map_data.get(k, null)
+		if val is Dictionary:
+			return val
+	return {}
 
 func _add_path_visual(path_data: Dictionary) -> void:
 	var house_pos: Vector2i = path_data.house_pos

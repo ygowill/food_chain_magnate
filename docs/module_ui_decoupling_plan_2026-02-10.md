@@ -274,12 +274,20 @@
 
 ### P1-4) `DistanceOverlay` 写死 lobbyists key（roadworks markers）
 
+- **状态**
+  - ✅ 已完成（2026-02-10）
 - **涉及位置**
   - `ui/overlays/distance_overlay.gd`
 - **迁移/解耦目标**
   - 距离惩罚逻辑对模块可插拔，UI 不写死 `lobbyists_*` key。
 - **接口形态**
   - `DistanceModifierRegistry`
+- **已实施改动**
+  - 移除 UI 中对 `lobbyists_roadworks_markers` 的硬编码：通过扫描 map_data 中以 `roadworks_markers` 结尾的 key 来读取 markers（兼容旧存档/旧 key）。
+  - 同步移除 `map_canvas_drawer_roads_pass.gd` 中出现的 `lobbyists_roadworks_markers` 字符串（含标识符/常量）。
+- **验收结果**
+  - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
 - **验收标准**
   - `rg -n 'lobbyists_roadworks_markers' ui --glob '!ui/scenes/tests/**'` 返回空。
 

@@ -3,7 +3,7 @@ extends RefCounted
 
 const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
 const LOBBYISTS_PENDING_ROADS_KEY := "lobbyists_pending_roads"
-const LOBBYISTS_ROADWORK_MARKERS_KEY := "lobbyists_roadworks_markers"
+const ROADWORK_MARKERS_KEY_SUFFIX := "roadworks_markers"
 
 static func draw_roads(canvas, cell_size: int) -> void:
 	var pending_extra_dirs := build_lobbyists_pending_road_connection_dirs(canvas)
@@ -213,17 +213,11 @@ static func compute_road_shape_info(dirs: Array) -> Dictionary:
 	return {"shape": "cross", "rotation_deg": 0}
 
 static func draw_roadworks_markers(canvas, cell_size: int) -> void:
-	draw_lobbyists_roadworks_markers(canvas, cell_size)
-
-static func draw_lobbyists_roadworks_markers(canvas, cell_size: int) -> void:
 	if canvas == null or canvas._skin == null:
 		return
 	if not (canvas._map_data is Dictionary):
 		return
-	var markers_val = canvas._map_data.get(LOBBYISTS_ROADWORK_MARKERS_KEY, null)
-	if not (markers_val is Dictionary):
-		return
-	var markers: Dictionary = markers_val
+	var markers: Dictionary = _get_roadworks_markers_dict(canvas._map_data)
 	if markers.is_empty():
 		return
 
@@ -243,3 +237,17 @@ static func draw_lobbyists_roadworks_markers(canvas, cell_size: int) -> void:
 		var vpos: Vector2i = canvas._world_to_view(world_pos)
 		var rect := Rect2(Vector2(vpos.x * cell_size, vpos.y * cell_size), Vector2(cell_size, cell_size)).grow(-pad)
 		TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, rect, mod)
+
+static func _get_roadworks_markers_dict(map_data: Dictionary) -> Dictionary:
+	if map_data.is_empty():
+		return {}
+	for k in map_data.keys():
+		if not (k is String):
+			continue
+		var key: String = str(k).strip_edges()
+		if not key.ends_with(ROADWORK_MARKERS_KEY_SUFFIX):
+			continue
+		var val = map_data.get(k, null)
+		if val is Dictionary:
+			return val
+	return {}
