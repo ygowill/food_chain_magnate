@@ -547,13 +547,33 @@ class MilestoneItem extends PanelContainer:
 			var name := milestone_id
 			if milestone_def != null and milestone_def is MilestoneDef:
 				name = str((milestone_def as MilestoneDef).name)
+			name = _strip_id_suffix(name)
 			_name_label.text = name
+			_name_label.tooltip_text = name
 
 		if _desc_label != null:
 			var text := effect_text
 			if text.is_empty():
 				text = milestone_id
 			_desc_label.text = text
+
+	func _strip_id_suffix(raw_name: String) -> String:
+		var s := str(raw_name).strip_edges()
+		var mid := str(milestone_id).strip_edges()
+		if mid.is_empty():
+			return s
+
+		var suffixes: Array[String] = [
+			" (" + mid + ")",
+			"(" + mid + ")",
+			" （" + mid + "）",
+			"（" + mid + "）",
+		]
+		for suffix in suffixes:
+			if s.ends_with(suffix):
+				s = s.substr(0, s.length() - suffix.length()).strip_edges()
+				break
+		return s
 
 	func set_state(claimed: bool, pool_count: int, claimed_by_players: Array = []) -> void:
 		_is_claimed = claimed
