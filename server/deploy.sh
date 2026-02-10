@@ -11,6 +11,8 @@ Usage:
                    [--enable-web] [--web-port 8080]
                    [--compose-ref main]
                    [--https --web-domain <domain> --ws-domain <domain>]
+                   [--http-port 80] [--https-port 443]
+                   [--down] [--purge]
 
 Default behavior:
   - Uses Docker Compose to run/update containers
@@ -30,6 +32,12 @@ Examples:
   # HTTPS for Web client (Cloudflare DNS-01 + Let's Encrypt)
   # Requires env: ACME_EMAIL, CF_DNS_API_TOKEN
   ./server/deploy.sh --tag v0.1.0 --enable-web --https --web-domain game.example.com --ws-domain ws.game.example.com
+
+  # Stop & remove containers + network (keeps volumes by default)
+  ./server/deploy.sh --down
+
+  # Stop & remove containers + network + volumes (including Let's Encrypt cache)
+  ./server/deploy.sh --down --purge
 
 Notes:
   - Requires Docker Compose v2 (`docker compose`).
@@ -53,12 +61,24 @@ COMPOSE_REF="main"
 ENABLE_HTTPS=0
 WEB_DOMAIN=""
 WS_DOMAIN=""
+HTTP_PORT="80"
+HTTPS_PORT="443"
+ACTION="up"
+PURGE=0
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 		-h|--help)
 			usage
 			exit 0
+			;;
+		--down)
+			ACTION="down"
+			shift
+			;;
+		--purge)
+			PURGE=1
+			shift
 			;;
 		--tag)
 			TAG="${2:-}"
@@ -116,6 +136,14 @@ while [[ $# -gt 0 ]]; do
 			ENABLE_HTTPS=1
 			shift
 			;;
+		--http-port)
+			HTTP_PORT="${2:-}"
+			shift 2
+			;;
+		--https-port)
+			HTTPS_PORT="${2:-}"
+			shift 2
+			;;
 		--web-domain)
 			WEB_DOMAIN="${2:-}"
 			shift 2
@@ -152,26 +180,31 @@ if [[ -z "${WEB_IMAGE}" ]]; then
 	WEB_IMAGE="ghcr.io/ygowill/food_chain_magnate/fcm-web:${TAG}"
 fi
 
-echo "[deploy] tag=${TAG}"
-echo "[deploy] server: name=${NAME} image=${IMAGE} port=${PORT} bind=${BIND}"
-if [[ "${ENABLE_WEB}" -eq 1 ]]; then
-	echo "[deploy] web: name=${WEB_NAME} image=${WEB_IMAGE} port=${WEB_PORT}"
-fi
-if [[ "${ENABLE_HTTPS}" -eq 1 ]]; then
-	if [[ -z "${WEB_DOMAIN}" || -z "${WS_DOMAIN}" ]]; then
-		echo "ERROR: --https requires --web-domain and --ws-domain" >&2
-		exit 2
+if [[ "${ACTION}" == "up" ]]; then
+	echo "[deploy] tag=${TAG}"
+	echo "[deploy] server: name=${NAME} image=${IMAGE} port=${PORT} bind=${BIND}"
+	if [[ "${ENABLE_WEB}" -eq 1 ]]; then
+		echo "[deploy] web: name=${WEB_NAME} image=${WEB_IMAGE} port=${WEB_PORT}"
 	fi
-	if [[ -z "${ACME_EMAIL:-}" || -z "${CF_DNS_API_TOKEN:-}" ]]; then
-		echo "ERROR: --https requires env vars ACME_EMAIL and CF_DNS_API_TOKEN" >&2
-		exit 2
+	if [[ "${ENABLE_HTTPS}" -eq 1 ]]; then
+		if [[ -z "${WEB_DOMAIN}" || -z "${WS_DOMAIN}" ]]; then
+			echo "ERROR: --https requires --web-domain and --ws-domain" >&2
+			exit 2
+		fi
+		if [[ -z "${ACME_EMAIL:-}" || -z "${CF_DNS_API_TOKEN:-}" ]]; then
+			echo "ERROR: --https requires env vars ACME_EMAIL and CF_DNS_API_TOKEN" >&2
+			exit 2
+		fi
+		echo "[deploy] https enabled: web_domain=${WEB_DOMAIN} ws_domain=${WS_DOMAIN} http_port=${HTTP_PORT} https_port=${HTTPS_PORT}"
 	fi
-	echo "[deploy] https enabled: web_domain=${WEB_DOMAIN} ws_domain=${WS_DOMAIN}"
+else
+	echo "[deploy] stopping (docker compose down)..."
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." 2>/dev/null && pwd || true)"
 local_compose="${repo_root}/compose.yml"
+local_compose_https="${repo_root}/compose.https.yml"
 
 tmp_dir="$(mktemp -d)"
 cleanup() { rm -rf "${tmp_dir}"; }
@@ -193,9 +226,20 @@ else
 	curl -fsSL "https://raw.githubusercontent.com/ygowill/food_chain_magnate/${COMPOSE_REF}/compose.yml" -o "${compose_file}"
 fi
 
-if [[ "${ENABLE_HTTPS}" -eq 1 && "${compose_file}" == "${tmp_dir}/compose.yml" ]]; then
-	echo "[deploy] downloading compose.https.yml (ref=${COMPOSE_REF})"
-	curl -fsSL "https://raw.githubusercontent.com/ygowill/food_chain_magnate/${COMPOSE_REF}/compose.https.yml" -o "${compose_https_file}"
+have_https_compose=0
+if [[ "${compose_file}" == "${tmp_dir}/compose.yml" ]]; then
+	if [[ "${ENABLE_HTTPS}" -eq 1 || "${ACTION}" == "down" ]]; then
+		echo "[deploy] downloading compose.https.yml (ref=${COMPOSE_REF})"
+		if curl -fsSL "https://raw.githubusercontent.com/ygowill/food_chain_magnate/${COMPOSE_REF}/compose.https.yml" -o "${compose_https_file}"; then
+			have_https_compose=1
+		else
+			echo "[deploy] compose.https.yml not found for ref=${COMPOSE_REF}; continuing without it."
+		fi
+	fi
+else
+	if [[ -f "${local_compose_https}" ]]; then
+		have_https_compose=1
+	fi
 fi
 
 cat > "${env_file}" <<EOF
@@ -209,24 +253,50 @@ FCM_SERVER_BIND=${BIND}
 FCM_WEB_PORT=${WEB_PORT}
 FCM_WEB_DOMAIN=${WEB_DOMAIN}
 FCM_WS_DOMAIN=${WS_DOMAIN}
+FCM_HTTP_PORT=${HTTP_PORT}
+FCM_HTTPS_PORT=${HTTPS_PORT}
 ACME_EMAIL=${ACME_EMAIL:-}
 CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN:-}
 EOF
 
-up_args=(--env-file "${env_file}" -f "${compose_file}" -p fcm)
+compose_args=(--env-file "${env_file}" -f "${compose_file}" -p fcm)
 if [[ "${ENABLE_HTTPS}" -eq 1 ]]; then
 	if [[ "${compose_file}" == "${tmp_dir}/compose.yml" ]]; then
-		up_args+=(-f "${compose_https_file}")
+		if [[ "${have_https_compose}" -ne 1 ]]; then
+			echo "ERROR: missing compose.https.yml for ref=${COMPOSE_REF} (required for --https)" >&2
+			exit 2
+		fi
+		compose_args+=(-f "${compose_https_file}")
 	else
 		# Local compose mode: expect compose.https.yml next to compose.yml
-		local_compose_https="${repo_root}/compose.https.yml"
 		if [[ ! -f "${local_compose_https}" ]]; then
 			echo "ERROR: missing ${local_compose_https} (required for --https)" >&2
 			exit 2
 		fi
-		up_args+=(-f "${local_compose_https}")
+		compose_args+=(-f "${local_compose_https}")
+	fi
+else
+	# For --down, try to include compose.https.yml if present to ensure Traefik is removed too.
+	if [[ "${ACTION}" == "down" && "${have_https_compose}" -eq 1 ]]; then
+		if [[ "${compose_file}" == "${tmp_dir}/compose.yml" ]]; then
+			compose_args+=(-f "${compose_https_file}")
+		else
+			compose_args+=(-f "${local_compose_https}")
+		fi
 	fi
 fi
+
+if [[ "${ACTION}" == "down" ]]; then
+	down_args=(down --remove-orphans)
+	if [[ "${PURGE}" -eq 1 ]]; then
+		down_args+=(--volumes)
+	fi
+	docker compose --profile web "${compose_args[@]}" "${down_args[@]}"
+	echo "[deploy] stopped."
+	exit 0
+fi
+
+up_args=("${compose_args[@]}")
 if [[ "${DETACH}" -eq 1 ]]; then
 	up_args+=(up -d)
 else
@@ -241,7 +311,11 @@ if [[ "${ENABLE_WEB}" -eq 1 ]]; then
 	docker compose --profile web "${up_args[@]}"
 else
 	echo "[deploy] docker compose up (server only)"
-	docker compose "${up_args[@]}" server
+	if [[ "${ENABLE_HTTPS}" -eq 1 ]]; then
+		docker compose "${up_args[@]}" traefik server
+	else
+		docker compose "${up_args[@]}" server
+	fi
 	docker compose --profile web --env-file "${env_file}" -f "${compose_file}" -p fcm rm -sf web >/dev/null 2>&1 || true
 fi
 
@@ -249,8 +323,12 @@ echo "[deploy] done."
 echo "[deploy] server logs: docker logs -f ${NAME}"
 if [[ "${ENABLE_WEB}" -eq 1 ]]; then
 	if [[ "${ENABLE_HTTPS}" -eq 1 ]]; then
-		echo "[deploy] web: https://${WEB_DOMAIN}/"
-		echo "[deploy] ws:  wss://${WS_DOMAIN}/"
+		web_port_suffix=""
+		if [[ "${HTTPS_PORT}" != "443" ]]; then
+			web_port_suffix=":${HTTPS_PORT}"
+		fi
+		echo "[deploy] web: https://${WEB_DOMAIN}${web_port_suffix}/"
+		echo "[deploy] ws:  wss://${WS_DOMAIN}${web_port_suffix}/"
 	else
 		echo "[deploy] web: http://localhost:${WEB_PORT} (or your server IP)"
 	fi

@@ -73,12 +73,31 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
 ```
 
 4) 确保防火墙/安全组放行：
-   - TCP 80 和 443（HTTPS）
+   - TCP 80 和 443（或你自定义的 `--http-port` / `--https-port`）
+
+如果你不能（或不想）使用 80/443 端口，可以改成其他端口：
+
+```bash
+export ACME_EMAIL="you@example.com"
+export CF_DNS_API_TOKEN="***"
+curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
+  --tag v0.1.0 --enable-web --https \
+  --web-domain game.example.com \
+  --ws-domain ws.game.example.com \
+  --http-port 8080 \
+  --https-port 8443
+```
 
 客户端里把服务器地址填成：
 
 ```text
 wss://ws.game.example.com
+```
+
+如果你改了 `--https-port`（不是 443），需要把端口也带上：
+
+```text
+wss://ws.game.example.com:8443
 ```
 
 一行命令部署（下载并直接执行部署脚本）：
@@ -91,6 +110,12 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- --port 7000 --enable-web --web-port 8080
+```
+
+一行命令停止（删除容器 + network）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- --down
 ```
 
 如果你不希望 `curl | bash`，可以先下载脚本并检查后再执行：

@@ -99,12 +99,31 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
 ```
 
 4) Ensure your firewall/security group allows inbound:
-   - TCP 80 and 443 (for HTTPS)
+   - TCP 80 and 443 (or your custom `--http-port` / `--https-port`)
+
+If you can’t (or don’t want to) use ports 80/443, you can change them:
+
+```bash
+export ACME_EMAIL="you@example.com"
+export CF_DNS_API_TOKEN="***"
+curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
+  --tag v0.1.0 --enable-web --https \
+  --web-domain game.example.com \
+  --ws-domain ws.game.example.com \
+  --http-port 8080 \
+  --https-port 8443
+```
 
 In the client, set server URL to:
 
 ```text
 wss://ws.game.example.com
+```
+
+If you changed `--https-port` (not 443), include it:
+
+```text
+wss://ws.game.example.com:8443
 ```
 
 One-line deploy (downloads and runs the deploy script):
@@ -117,6 +136,12 @@ One-line deploy (server + web client):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- --port 7000 --enable-web --web-port 8080
+```
+
+One-line stop (remove containers + network):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- --down
 ```
 
 If you prefer not to pipe to `bash`, download it first and review:
