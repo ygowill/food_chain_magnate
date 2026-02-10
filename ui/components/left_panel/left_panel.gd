@@ -8,8 +8,8 @@ extends Control
 signal logs_requested()
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
-const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const LeftPanelEmployeeIconsControllerClass = preload("res://ui/components/left_panel/left_panel_employee_icons_controller.gd")
 const LeftPanelTurnLogControllerClass = preload("res://ui/components/left_panel/left_panel_turn_log_controller.gd")
 
@@ -48,18 +48,6 @@ const LeftPanelTurnLogControllerClass = preload("res://ui/components/left_panel/
 
 const TAB_EMPLOYEES := 0
 const TAB_MILESTONES := 1
-
-const PRODUCT_NAMES: Dictionary = {
-	"burger": "汉堡",
-	"pizza": "披萨",
-	"lemonade": "柠檬水",
-	"beer": "啤酒",
-	"soda": "苏打",
-	"coffee": "咖啡",
-	"kimchi": "泡菜",
-	"noodles": "面条",
-	"sushi": "寿司",
-}
 
 const EMPLOYEE_CATEGORY_ORDER := ["管理", "厨房", "营销", "其他"]
 const EMPLOYEE_CATEGORY_ICON: Dictionary = {
@@ -133,8 +121,8 @@ func apply_font_settings() -> void:
 
 func set_game_state(state: GameState) -> void:
 	_game_state = state
-	_rebuild_player_logo_ids()
 	_ensure_skin()
+	_rebuild_player_logo_ids()
 	var count := 0
 	if state != null and state.players is Array:
 		count = state.players.size()
@@ -326,7 +314,11 @@ func _rebuild_player_logo_ids() -> void:
 		return
 	_state_seed = int(_game_state.seed)
 
-	var logo_count := MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS.size()
+	var logo_count := 0
+	if _skin != null and _skin.has_method("get_restaurant_logo_piece_ids"):
+		var ids_val = _skin.get_restaurant_logo_piece_ids()
+		if ids_val is Array:
+			logo_count = (ids_val as Array).size()
 	_fallback_logo_ids = _build_fallback_logo_ids(logo_count)
 	for i in range(_game_state.players.size()):
 		var p_val = _game_state.players[i]
@@ -346,16 +338,15 @@ func _rebuild_player_logo_ids() -> void:
 func _get_player_restaurant_logo_texture(player_id: int) -> Texture2D:
 	if _skin == null:
 		return null
-	if not (_skin.has_method("get_piece_texture")):
+	if not (_skin.has_method("get_restaurant_logo_piece_ids")) or not (_skin.has_method("get_restaurant_logo_texture_by_id")):
 		return null
-	var logo_count := MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS.size()
+	var logo_count := (_skin.get_restaurant_logo_piece_ids() as Array).size()
 	if logo_count <= 0:
 		return null
 	var logo_id := int(_player_restaurant_logo_ids.get(player_id, -1))
 	if logo_id < 0 or logo_id >= logo_count:
 		logo_id = _fallback_logo_id_for_player(player_id, _fallback_logo_ids)
-	var key: String = MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS[logo_id]
-	return _skin.get_piece_texture(key)
+	return _skin.get_restaurant_logo_texture_by_id(logo_id)
 
 func _apply_player_tab_icon(btn: Button, player_id: int) -> void:
 	if btn == null or not is_instance_valid(btn):
@@ -520,9 +511,23 @@ func _build_inventory_token_item(product_id: String, count: int) -> Control:
 	label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95, 1))
 	hbox.add_child(label)
 
-	var name := str(PRODUCT_NAMES.get(product_id, product_id))
+	var name := _get_product_display_name(product_id)
 	hbox.tooltip_text = "%s ×%d" % [name, count]
 	return hbox
+
+func _get_product_display_name(product_id: String) -> String:
+	if product_id.is_empty():
+		return ""
+	var pid := str(product_id)
+	if pid == "cola":
+		pid = "soda"
+	if ProductRegistryClass.is_loaded():
+		var def_val = ProductRegistryClass.get_def(pid)
+		if def_val != null and (def_val is ProductDef):
+			var def: ProductDef = def_val
+			if not def.name.is_empty():
+				return def.name
+	return pid
 
 func _get_product_icon_texture(product_id: String) -> Texture2D:
 	_ensure_skin()

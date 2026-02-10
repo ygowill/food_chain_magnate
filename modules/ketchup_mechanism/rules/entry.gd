@@ -14,7 +14,15 @@ func register(registrar) -> Result:
 	if not r.ok:
 		return r
 
+	r = registrar.register_effect_ui_text(EFFECT_ID_DISTANCE_DELTA, "晚餐选店距离-1（允许为负数）", 100)
+	if not r.ok:
+		return r
+
 	r = registrar.register_milestone_effect("ketchup_active", Callable(self, "_milestone_effect_noop"))
+	if not r.ok:
+		return r
+
+	r = registrar.register_milestone_effect_ui_text("ketchup_active", "晚餐选店距离-1（允许为负数）", 100)
 	if not r.ok:
 		return r
 

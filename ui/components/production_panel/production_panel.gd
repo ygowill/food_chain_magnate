@@ -21,6 +21,7 @@ signal drinks_restaurant_changed(restaurant_id: String)
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 const EmployeePickerClass = preload("res://ui/components/employee_picker/employee_picker.gd")
 
@@ -837,9 +838,7 @@ func _ensure_skin() -> void:
 	if _skin != null:
 		return
 
-	var base_dir := "res://modules"
-	if Globals != null:
-		base_dir = str(Globals.modules_v2_base_dir)
+	var base_dir := ModulesBaseDirClass.get_base_dir()
 
 	var mods: Array[String] = []
 	if Globals != null and (Globals.enabled_modules_v2 is Array):

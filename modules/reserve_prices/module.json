@@ -11,6 +11,14 @@
 		"content": [],
 		"actions": [],
 		"settlements": [],
-		"hooks": []
+		"hooks": [],
+		"ui": {
+			"module_selector": {
+				"group_id": "rules_and_milestones",
+				"group_title": "规则/里程碑变体",
+				"group_order": 40,
+				"order": 3
+			}
+		}
 	}
 }

@@ -33,7 +33,13 @@
 			],
 			"hidden_action_ids": [
 				"place_highway_offramp"
-			]
+			],
+			"module_selector": {
+				"group_id": "marketing_expansion",
+				"group_title": "营销变体",
+				"group_order": 30,
+				"order": 1
+			}
 		}
 	}
 }

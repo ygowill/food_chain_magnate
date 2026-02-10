@@ -40,6 +40,7 @@ func register(registrar) -> Result:
 	var steps: Array[Callable] = [
 		Callable(registrar, "register_employee_patch").bind("marketing_trainee", {"add_train_to": ["rural_marketeer"]}),
 		Callable(registrar, "register_milestone_effect").bind("rural_marketeers:grant_offramp_placement", Callable(self, "_milestone_effect_grant_offramp_placement")),
+		Callable(registrar, "register_milestone_effect_ui_text").bind("rural_marketeers:grant_offramp_placement", "获得一次高速出口（offramp）放置机会（需本回合放置）", 100),
 		# 初始化：确保 rural_area 与 offramp supply 存在
 		Callable(registrar, "register_phase_hook").bind(Phase.RESTRUCTURING, HookType.BEFORE_ENTER, Callable(self, "_on_restructuring_before_enter"), 0),
 		# 乡村地区需求：在 Marketing 阶段按轮次添加（巨型广告牌每轮 +2）
@@ -51,6 +52,17 @@ func register(registrar) -> Result:
 		# 模块动作
 		Callable(registrar, "register_action_executor").bind(PlaceGiantBillboardActionClass.new()),
 		Callable(registrar, "register_action_executor").bind(PlaceHighwayOfframpActionClass.new()),
+		# UI：地图渲染提示（避免 core UI 写死 piece_id 分支）。
+		Callable(registrar, "register_piece_ui_hint").bind(
+			"highway_offramp",
+			{
+				"structure_style": "opaque_rotated_piece",
+				"rotation_offset_deg": 270,
+				"bg_color": Color("#4c8078"),
+				"blocks_roads_under": true,
+			},
+			100
+		),
 		# 飞机与 offramp 互斥（仅在启用本模块时生效）
 		Callable(registrar, "register_action_validator").bind("initiate_marketing", "%s:airplane_offramp_conflict" % MODULE_ID, Callable(self, "_validate_airplane_offramp_conflict"), 10),
 		# 对外暴露“占用/冲突查询”：其他模块不应直接读取本模块的 state.map 字段结构。

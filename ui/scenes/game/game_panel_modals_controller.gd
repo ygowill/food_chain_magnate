@@ -5,19 +5,18 @@ extends RefCounted
 
 const TurnOrderSelectionModalScene = preload("res://ui/components/modal_panel/turn_order_selection_modal.tscn")
 const ReserveCardSelectionModalScene = preload("res://ui/components/modal_panel/reserve_card_selection_modal.tscn")
-const FridgeKeepModalScene = preload("res://ui/components/modal_panel/fridge_keep_modal.tscn")
-const KimchiStorageModalScene = preload("res://ui/components/modal_panel/kimchi_storage_modal.tscn")
 
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const PhaseActionUiRegistryClass = preload("res://ui/scenes/game/phase_action_ui_registry.gd")
 
 var _scene = null
 var _execute_command: Callable = Callable()
 
 var _turn_order_modal = null
 var _reserve_card_modal = null
-var _fridge_keep_modal = null
-var _kimchi_storage_modal = null
+var _phase_action_modals_by_key: Dictionary = {} # "%s|%s" % [phase_name, kind] -> modal instance
+var _phase_action_active_kind_by_phase: Dictionary = {} # phase_name -> kind
 
 var _pending_reserve_card_open_player_id: int = -1
 var _pending_reserve_card_open_interactive: bool = true
@@ -39,13 +38,12 @@ func dispose() -> void:
 		_reserve_card_modal.queue_free()
 	_reserve_card_modal = null
 
-	if is_instance_valid(_fridge_keep_modal):
-		_fridge_keep_modal.queue_free()
-	_fridge_keep_modal = null
-
-	if is_instance_valid(_kimchi_storage_modal):
-		_kimchi_storage_modal.queue_free()
-	_kimchi_storage_modal = null
+	for k in _phase_action_modals_by_key.keys():
+		var inst = _phase_action_modals_by_key.get(k, null)
+		if is_instance_valid(inst):
+			inst.queue_free()
+	_phase_action_modals_by_key.clear()
+	_phase_action_active_kind_by_phase.clear()
 
 	_pending_reserve_card_open_player_id = -1
 	_pending_reserve_card_open_interactive = true
@@ -59,17 +57,18 @@ func has_open_modal_ui() -> bool:
 		return true
 	if is_instance_valid(_reserve_card_modal) and _reserve_card_modal.visible:
 		return true
-	if is_instance_valid(_fridge_keep_modal) and _fridge_keep_modal.visible:
-		return true
-	if is_instance_valid(_kimchi_storage_modal) and _kimchi_storage_modal.visible:
-		return true
+	for k in _phase_action_modals_by_key.keys():
+		var inst = _phase_action_modals_by_key.get(k, null)
+		if not is_instance_valid(inst):
+			continue
+		if inst is Control and (inst as Control).visible:
+			return true
 	return false
 
 func hide() -> void:
 	hide_turn_order_modal()
 	hide_reserve_card_modal()
-	hide_fridge_keep_modal()
-	hide_kimchi_storage_modal()
+	hide_phase_action_ui_modals_for_phase("")
 
 func sync_for_state(state: GameState, covered: Rect2) -> void:
 	if state == null:
@@ -92,50 +91,9 @@ func sync_for_state(state: GameState, covered: Rect2) -> void:
 	else:
 		hide_reserve_card_modal()
 
-	# 泡菜/冰箱保留选择（Cleanup）
-	var should_show_kimchi_storage := false
-	var should_show_fridge_keep := false
-	if state.phase == DefsClass.PHASE_CLEANUP and (state.round_state is Dictionary) and current_player_id >= 0:
-		var rs: Dictionary = state.round_state
-		var ppa_val = rs.get("pending_phase_actions", null)
-		if ppa_val is Dictionary:
-			var ppa: Dictionary = ppa_val
-			var list_val = ppa.get(DefsClass.PHASE_CLEANUP, null)
-			if list_val is Array:
-				var list: Array = list_val
-				if not list.is_empty():
-					var first = list[0]
-					if first is Dictionary:
-						var task: Dictionary = first
-						var kind: String = str(task.get("kind", "")).strip_edges()
-						var pid: int = int(task.get("player_id", -1))
-						if pid == current_player_id:
-							if kind == "kimchi":
-								should_show_kimchi_storage = true
-							elif kind == "fridge_keep":
-								should_show_fridge_keep = true
-					elif first is int or first is float:
-						# 兼容旧存档：Cleanup pending 列表为 [player_id(int)]
-						if int(first) == current_player_id:
-							var kind := ""
-							var cleanup_val = rs.get("cleanup", null)
-							if cleanup_val is Dictionary:
-								var cleanup: Dictionary = cleanup_val
-								kind = str(cleanup.get("pending_choice_kind", "")).strip_edges()
-							if kind == "kimchi":
-								should_show_kimchi_storage = true
-							else:
-								should_show_fridge_keep = true
+	# pending phase actions（Cleanup）：由 registry 路由到对应 modal（避免在 controller 内硬编码 kind）
+	PhaseActionUiRegistryClass.sync_cleanup_pending_modals(self, state, current_player_id, covered, is_local_turn)
 
-	if should_show_kimchi_storage and is_local_turn:
-		show_kimchi_storage_modal(state, current_player_id, covered)
-	else:
-		hide_kimchi_storage_modal()
-
-	if should_show_fridge_keep and is_local_turn:
-		show_fridge_keep_modal(state, current_player_id, covered)
-	else:
-		hide_fridge_keep_modal()
 	# 顺序选择（OrderOfBusiness）
 	var selections := {}
 	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and (state.round_state is Dictionary):
@@ -203,6 +161,26 @@ func _initialize_modal(modal_ref, scene: PackedScene, signal_map: Dictionary):
 			UiSignalHelpersClass.safe_connect(inst, sig_name, cb)
 
 	return inst
+
+func _load_phase_action_ui_modal_scene(phase_name: String, kind: String) -> PackedScene:
+	if _scene == null:
+		return null
+	var engine = _scene.game_engine if _scene != null else null
+	if engine == null:
+		return null
+	var ruleset = engine.ruleset_v2
+	if ruleset == null or not ruleset.has_method("get_phase_action_ui_modal_scene_path"):
+		return null
+
+	var scene_path: String = str(ruleset.get_phase_action_ui_modal_scene_path(phase_name, kind)).strip_edges()
+	if scene_path.is_empty():
+		GameLog.warn("GamePanelModalsController", "未注册 phase action UI modal: %s:%s" % [phase_name, kind])
+		return null
+	var res = load(scene_path)
+	if res is PackedScene:
+		return res
+	GameLog.warn("GamePanelModalsController", "phase action UI modal 类型错误（期望 PackedScene）: %s" % scene_path)
+	return null
 
 func show_turn_order_modal_for_state(state: GameState) -> void:
 	if state == null:
@@ -474,49 +452,93 @@ func _on_reserve_card_modal_completed(result: Dictionary) -> void:
 
 	_execute_command.call(Command.create("select_reserve_card", current_player_id, {"selected_index": selected_index}))
 
-func show_fridge_keep_modal(state: GameState, current_player_id: int, covered: Rect2) -> void:
+func show_phase_action_ui_modal(phase_name: String, kind: String, state: GameState, current_player_id: int, covered: Rect2) -> void:
 	if _scene == null:
 		return
 	if state == null:
 		return
 
-	_fridge_keep_modal = _initialize_modal(_fridge_keep_modal, FridgeKeepModalScene, {
-		"completed": _on_fridge_keep_modal_completed,
-	})
-	if not is_instance_valid(_fridge_keep_modal):
+	var phase := str(phase_name).strip_edges()
+	var k := str(kind).strip_edges()
+	if phase.is_empty() or k.is_empty():
+		hide_phase_action_ui_modals_for_phase(phase)
 		return
 
-	if _fridge_keep_modal.has_method("setup"):
-		_fridge_keep_modal.call("setup", state, current_player_id)
-	if _fridge_keep_modal.has_method("open"):
-		_fridge_keep_modal.call("open", covered)
-	elif _fridge_keep_modal is Control:
-		var c: Control = _fridge_keep_modal
+	var active_k := str(_phase_action_active_kind_by_phase.get(phase, "")).strip_edges()
+	if not active_k.is_empty() and active_k != k:
+		_hide_phase_action_ui_modal(phase, active_k)
+	_phase_action_active_kind_by_phase[phase] = k
+
+	var key := _build_phase_action_ui_modal_key(phase, k)
+	var inst = _phase_action_modals_by_key.get(key, null)
+
+	var modal_scene: PackedScene = _load_phase_action_ui_modal_scene(phase, k)
+	if modal_scene == null:
+		_hide_phase_action_ui_modal(phase, k)
+		return
+
+	inst = _initialize_modal(inst, modal_scene, {
+		"completed": Callable(self, "_on_phase_action_ui_modal_completed").bind(phase, k),
+	})
+	_phase_action_modals_by_key[key] = inst
+	if not is_instance_valid(inst):
+		return
+
+	if inst.has_method("setup"):
+		inst.call("setup", state, current_player_id)
+	if inst.has_method("open"):
+		inst.call("open", covered)
+	elif inst is Control:
+		var c: Control = inst
 		c.position = covered.position
 		c.size = covered.size
 		c.visible = true
 
-func hide_fridge_keep_modal() -> void:
-	if not is_instance_valid(_fridge_keep_modal):
+func hide_phase_action_ui_modals_for_phase(phase_name: String) -> void:
+	if _scene == null:
 		return
-	if _fridge_keep_modal.has_method("close"):
-		_fridge_keep_modal.call("close")
-	elif _fridge_keep_modal is Control:
-		(_fridge_keep_modal as Control).visible = false
 
-func _on_fridge_keep_modal_completed(result: Dictionary) -> void:
-	if _scene == null or _scene.game_engine == null:
+	var phase := str(phase_name).strip_edges()
+	if phase.is_empty():
+		for k in _phase_action_modals_by_key.keys():
+			_hide_phase_action_ui_modal_by_key(str(k))
+		_phase_action_active_kind_by_phase.clear()
 		return
-	if not is_instance_valid(_fridge_keep_modal):
+
+	var active_k := str(_phase_action_active_kind_by_phase.get(phase, "")).strip_edges()
+	if not active_k.is_empty():
+		_hide_phase_action_ui_modal(phase, active_k)
+	_phase_action_active_kind_by_phase.erase(phase)
+
+func _build_phase_action_ui_modal_key(phase_name: String, kind: String) -> String:
+	return "%s|%s" % [str(phase_name).strip_edges(), str(kind).strip_edges()]
+
+func _hide_phase_action_ui_modal(phase_name: String, kind: String) -> void:
+	var key := _build_phase_action_ui_modal_key(phase_name, kind)
+	_hide_phase_action_ui_modal_by_key(key)
+
+func _hide_phase_action_ui_modal_by_key(key: String) -> void:
+	var inst = _phase_action_modals_by_key.get(key, null)
+	if not is_instance_valid(inst):
+		return
+	if inst.has_method("close"):
+		inst.call("close")
+	elif inst is Control:
+		(inst as Control).visible = false
+
+func _on_phase_action_ui_modal_completed(result: Dictionary, phase_name: String, kind: String) -> void:
+	if _scene == null or _scene.game_engine == null:
 		return
 	if not _execute_command.is_valid():
 		return
 
-	var keep_val = result.get("keep", {})
-	var keep: Dictionary = keep_val if keep_val is Dictionary else {}
+	var cmd_id := str(result.get("command_id", "")).strip_edges()
+	if cmd_id.is_empty():
+		GameLog.warn("GamePanelModalsController", "phase action modal 缺少 command_id: %s:%s" % [str(phase_name), str(kind)])
+		return
 
-	if _fridge_keep_modal.has_method("set_confirm_enabled"):
-		_fridge_keep_modal.call("set_confirm_enabled", false)
+	var args_val = result.get("command_args", null)
+	var args: Dictionary = args_val if args_val is Dictionary else {}
 
 	var state: GameState = _scene.game_engine.get_state()
 	if state == null:
@@ -525,53 +547,4 @@ func _on_fridge_keep_modal_completed(result: Dictionary) -> void:
 	if current_player_id < 0:
 		return
 
-	_execute_command.call(Command.create("choose_fridge_keep", current_player_id, {"keep": keep}))
-
-func show_kimchi_storage_modal(state: GameState, current_player_id: int, covered: Rect2) -> void:
-	if _scene == null:
-		return
-	if state == null:
-		return
-
-	_kimchi_storage_modal = _initialize_modal(_kimchi_storage_modal, KimchiStorageModalScene, {
-		"completed": _on_kimchi_storage_modal_completed,
-	})
-	if not is_instance_valid(_kimchi_storage_modal):
-		return
-
-	if _kimchi_storage_modal.has_method("setup"):
-		_kimchi_storage_modal.call("setup", state, current_player_id)
-	if _kimchi_storage_modal.has_method("open"):
-		_kimchi_storage_modal.call("open", covered)
-	elif _kimchi_storage_modal is Control:
-		var c: Control = _kimchi_storage_modal
-		c.position = covered.position
-		c.size = covered.size
-		c.visible = true
-
-func hide_kimchi_storage_modal() -> void:
-	if not is_instance_valid(_kimchi_storage_modal):
-		return
-	if _kimchi_storage_modal.has_method("close"):
-		_kimchi_storage_modal.call("close")
-	elif _kimchi_storage_modal is Control:
-		(_kimchi_storage_modal as Control).visible = false
-
-func _on_kimchi_storage_modal_completed(result: Dictionary) -> void:
-	if _scene == null or _scene.game_engine == null:
-		return
-	if not is_instance_valid(_kimchi_storage_modal):
-		return
-	if not _execute_command.is_valid():
-		return
-
-	var store := bool(result.get("store", true))
-
-	var state: GameState = _scene.game_engine.get_state()
-	if state == null:
-		return
-	var current_player_id := state.get_current_player_id()
-	if current_player_id < 0:
-		return
-
-	_execute_command.call(Command.create("choose_kimchi_storage", current_player_id, {"store": store}))
+	_execute_command.call(Command.create(cmd_id, current_player_id, args))

@@ -12,6 +12,14 @@
 		"effects": [
 			"new_milestones:dinnertime:distance_delta:first_marketeer_used",
 			"new_milestones:marketing:demand_cash:first_marketeer_used"
-		]
+		],
+		"ui": {
+			"module_selector": {
+				"group_id": "rules_and_milestones",
+				"group_title": "规则/里程碑变体",
+				"group_order": 40,
+				"order": 0
+			}
+		}
 	}
 }

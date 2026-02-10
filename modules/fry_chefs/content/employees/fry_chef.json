@@ -12,7 +12,9 @@
   },
   "train_to": [],
   "train_capacity": 0,
-  "tags": [],
+  "tags": [
+    "ui_layout_bottom"
+  ],
   "usage_tags": [],
   "mandatory": false,
   "pool": {

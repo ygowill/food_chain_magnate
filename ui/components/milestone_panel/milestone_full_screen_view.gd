@@ -14,9 +14,9 @@ signal build_finished()
 @onready var close_button: Button = $MarginContainer/VBoxContainer/HeaderRow/CloseButton
 
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
-const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const MilestonePanelClass = preload("res://ui/components/milestone_panel/milestone_panel.gd")
+const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 
 const MAX_COLUMNS := 5
 const CARD_MIN_WIDTH := 220
@@ -191,7 +191,7 @@ func _ensure_skin_for_state(state: GameState) -> void:
 	var modules: Array[String] = []
 	if state.modules is Array:
 		modules = Array(state.modules, TYPE_STRING, "", null)
-	var base_dir := Globals.modules_v2_base_dir if Globals != null else "res://modules"
+	var base_dir := ModulesBaseDirClass.get_base_dir()
 	var key := "%s|%s" % [base_dir, ",".join(modules)]
 	if _skin != null and key == _skin_key:
 		return
@@ -453,9 +453,12 @@ func _build_player_logo_textures(state: GameState) -> Dictionary:
 	var out: Dictionary = {} # player_id -> Texture2D
 	if _skin == null:
 		return out
-	var logo_ids: Array = MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS
-	if logo_ids.is_empty():
+	if not _skin.has_method("get_restaurant_logo_piece_ids") or not _skin.has_method("get_restaurant_logo_texture_by_id"):
 		return out
+	var logo_ids_val = _skin.get_restaurant_logo_piece_ids()
+	if not (logo_ids_val is Array) or (logo_ids_val as Array).is_empty():
+		return out
+	var logo_count := (logo_ids_val as Array).size()
 
 	for pid in range(state.players.size()):
 		var logo_id := -1
@@ -464,10 +467,9 @@ func _build_player_logo_textures(state: GameState) -> Dictionary:
 			var v = Dictionary(p_val).get("restaurant_logo_id", null)
 			if v is int or v is float:
 				logo_id = int(v)
-		if logo_id < 0 or logo_id >= logo_ids.size():
-			logo_id = int(pid % logo_ids.size())
-		var key: String = str(logo_ids[logo_id])
-		out[pid] = _skin.get_piece_texture(key)
+		if logo_id < 0 or logo_id >= logo_count:
+			logo_id = int(pid % logo_count)
+		out[pid] = _skin.get_restaurant_logo_texture_by_id(logo_id)
 
 	return out
 

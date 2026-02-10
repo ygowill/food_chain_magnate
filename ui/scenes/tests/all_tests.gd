@@ -68,12 +68,28 @@ func _run_all() -> int:
 			"fn": func() -> Result: return TestRefs.RestaurantLogoAssignmentTestClass.run(6, 12345),
 		},
 		{
+			"name": "RestaurantLogoTexturesLoadedTest",
+			"fn": func() -> Result: return TestRefs.RestaurantLogoTexturesLoadedTestClass.run(),
+		},
+		{
 			"name": "SixPlayersSetupTest",
 			"fn": func() -> Result: return TestRefs.SixPlayersSetupTestClass.run(12345),
 		},
 		{
+			"name": "ModuleSelectorSetupConstraintsTest",
+			"fn": func() -> Result: return TestRefs.ModuleSelectorSetupConstraintsTestClass.run(12345),
+		},
+		{
 			"name": "PaydaySalaryTokenEligibilityTest",
 			"fn": func() -> Result: return TestRefs.PaydaySalaryTokenEligibilityTestClass.run(),
+		},
+		{
+			"name": "EffectUiTextRegistryTest",
+			"fn": func() -> Result: return TestRefs.EffectUiTextRegistryTestClass.run(),
+		},
+		{
+			"name": "MapOverlayProviderRegistryTest",
+			"fn": func() -> Result: return TestRefs.MapOverlayProviderRegistryTestClass.run(),
 		},
 		{
 			"name": "CallbackResultContractTest",
@@ -82,6 +98,66 @@ func _run_all() -> int:
 		{
 			"name": "ModuleBoundaryContractTest",
 			"fn": func() -> Result: return TestRefs.ModuleBoundaryContractTestClass.run(),
+		},
+		{
+			"name": "UiLobbyistsRoadOverlaysHardRefContractTest",
+			"fn": func() -> Result: return TestRefs.UiLobbyistsRoadOverlaysHardRefContractTestClass.run(),
+		},
+			{
+				"name": "UiLobbyistsPiecePrefixContractTest",
+				"fn": func() -> Result: return TestRefs.UiLobbyistsPiecePrefixContractTestClass.run(),
+			},
+		{
+			"name": "UiMapOptionalPieceIdsContractTest",
+			"fn": func() -> Result: return TestRefs.UiMapOptionalPieceIdsContractTestClass.run(),
+		},
+		{
+			"name": "UiMapOverlayPrivateStateContractTest",
+			"fn": func() -> Result: return TestRefs.UiMapOverlayPrivateStateContractTestClass.run(),
+		},
+		{
+			"name": "MilestonePanelEffectTextContractTest",
+			"fn": func() -> Result: return TestRefs.MilestonePanelEffectTextContractTestClass.run(),
+		},
+		{
+			"name": "UiModuleSelectorHardcodedModuleIdsContractTest",
+			"fn": func() -> Result: return TestRefs.UiModuleSelectorHardcodedModuleIdsContractTestClass.run(),
+		},
+		{
+			"name": "UiBasePiecesLogoHardRefContractTest",
+			"fn": func() -> Result: return TestRefs.UiBasePiecesLogoHardRefContractTestClass.run(),
+		},
+		{
+			"name": "UiModulesBaseDirContractTest",
+			"fn": func() -> Result: return TestRefs.UiModulesBaseDirContractTestClass.run(),
+		},
+		{
+			"name": "UiProductNameMappingContractTest",
+			"fn": func() -> Result: return TestRefs.UiProductNameMappingContractTestClass.run(),
+		},
+		{
+			"name": "UiFryChefEmployeeIdContractTest",
+			"fn": func() -> Result: return TestRefs.UiFryChefEmployeeIdContractTestClass.run(),
+		},
+		{
+			"name": "EmployeeTreeLayoutBottomTagTest",
+			"fn": func() -> Result: return TestRefs.EmployeeTreeLayoutBottomTagTestClass.run(),
+		},
+		{
+			"name": "GamePanelModalsControllerKindContractTest",
+			"fn": func() -> Result: return TestRefs.GamePanelModalsControllerKindContractTestClass.run(),
+		},
+		{
+			"name": "PhaseActionUiRegistryCleanupTest",
+			"fn": func() -> Result: return TestRefs.PhaseActionUiRegistryCleanupTestClass.run(),
+		},
+		{
+			"name": "PhaseActionUiModalRegistrationTest",
+			"fn": func() -> Result: return TestRefs.PhaseActionUiModalRegistrationTestClass.run(),
+		},
+		{
+			"name": "PieceUiHintsRegistryLobbyistsTest",
+			"fn": func() -> Result: return TestRefs.PieceUiHintsRegistryLobbyistsTestClass.run(),
 		},
 		{
 			"name": "OnlineRoomManagerTest",
@@ -126,6 +202,10 @@ func _run_all() -> int:
 			{
 				"name": "ReserveCardSelectionModalPrivacyTest",
 				"fn": func() -> Result: return TestRefs.ReserveCardSelectionModalPrivacyTestClass.run(),
+			},
+			{
+				"name": "ReserveCardSelectionModalPresentationTest",
+				"fn": func() -> Result: return TestRefs.ReserveCardSelectionModalPresentationTestClass.run(),
 			},
 			{
 				"name": "EntityTabReserveCardPrivacyTest",
@@ -487,14 +567,18 @@ func _run_all() -> int:
 						"name": "KetchupMechanismV2Test",
 						"fn": func() -> Result: return TestRefs.KetchupMechanismV2TestClass.run(2, 12345),
 					},
-					{
-						"name": "KimchiStorageModalUiTest",
-						"fn": func() -> Result: return await TestRefs.KimchiStorageModalUiTestClass.run(12345),
-					},
-					{
-						"name": "KimchiV2Test",
-						"fn": func() -> Result: return TestRefs.KimchiV2TestClass.run(2, 12345),
-					},
+						{
+							"name": "KimchiStorageModalUiTest",
+							"fn": func() -> Result: return await TestRefs.KimchiStorageModalUiTestClass.run(12345),
+						},
+						{
+							"name": "FridgeKeepModalUiTest",
+							"fn": func() -> Result: return await TestRefs.FridgeKeepModalUiTestClass.run(12345),
+						},
+						{
+							"name": "KimchiV2Test",
+							"fn": func() -> Result: return TestRefs.KimchiV2TestClass.run(2, 12345),
+						},
 					{
 						"name": "CoffeeV2Test",
 						"fn": func() -> Result: return TestRefs.CoffeeV2TestClass.run(12345),

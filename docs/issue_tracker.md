@@ -1213,7 +1213,7 @@
 - 已新增：`ui/components/milestone_panel/milestone_full_screen_view.gd`
 	- 里程碑卡片：每行 3 列（GridContainer）并居中展示
 	- 同步 state：基于 `state.milestone_pool` + `players[*].milestones` 构建展示列表与获得者
-	- 获得者 icon：读取 `players[*].restaurant_logo_id`，用 `MapSkin.get_piece_texture(MapCanvasDrawer.RESTAURANT_LOGO_PIECE_IDS[logo_id])` 渲染
+	- 获得者 icon：读取 `players[*].restaurant_logo_id`，用 `MapSkin.get_restaurant_logo_texture_by_id(logo_id)` 渲染
 	- `ESC` / 关闭按钮隐藏视图
 - 已修改：`ui/scenes/game/game_panel_controller.gd`
 	- `show_milestone_panel()` 改为打开全屏视图（不再 dock_right）

@@ -19,6 +19,7 @@ signal build_finished()
 
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
 const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
+const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
@@ -151,7 +152,7 @@ func _ensure_skin_for_state(state: GameState) -> void:
 	var modules: Array[String] = []
 	if state.modules is Array:
 		modules = Array(state.modules, TYPE_STRING, "", null)
-	var base_dir := Globals.modules_v2_base_dir if Globals != null else "res://modules"
+	var base_dir := ModulesBaseDirClass.get_base_dir()
 	var key := "%s|%s" % [base_dir, ",".join(modules)]
 	if _skin != null and key == _skin_key:
 		return

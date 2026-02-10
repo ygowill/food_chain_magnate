@@ -14,7 +14,14 @@
 		],
 		"effects": [
 			"ketchup_mechanism:dinnertime:distance_delta:ketchup"
-		]
+		],
+		"ui": {
+			"module_selector": {
+				"group_id": "rules_and_milestones",
+				"group_title": "规则/里程碑变体",
+				"group_order": 40,
+				"order": 2
+			}
+		}
 	}
 }
-

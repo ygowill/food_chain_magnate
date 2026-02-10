@@ -7,6 +7,7 @@ signal product_clicked(product_id: String)
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
+const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var items_container: GridContainer = $MarginContainer/VBoxContainer/ItemsContainer
@@ -97,9 +98,7 @@ func _ensure_skin() -> void:
 	if _skin != null:
 		return
 
-	var base_dir := "res://modules"
-	if Globals != null:
-		base_dir = str(Globals.modules_v2_base_dir)
+	var base_dir := ModulesBaseDirClass.get_base_dir()
 
 	var mods := _visual_modules
 	if mods.is_empty() and Globals != null and (Globals.enabled_modules_v2 is Array):
@@ -121,6 +120,8 @@ func _get_product_icon_texture(product_id: String) -> Texture2D:
 class ProductItem extends PanelContainer:
 	signal item_clicked(product_id: String)
 
+	const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+
 	var product_id: String = ""
 	var count: int = 0
 	var icon_texture: Texture2D = null
@@ -128,19 +129,6 @@ class ProductItem extends PanelContainer:
 	var _icon: TextureRect
 	var _count_label: Label
 	var _highlighted: bool = false
-
-	# 产品显示名称映射
-	const PRODUCT_NAMES: Dictionary = {
-		"burger": "汉堡",
-		"pizza": "披萨",
-		"lemonade": "柠檬水",
-		"beer": "啤酒",
-		"soda": "苏打",
-		"coffee": "咖啡",
-		"kimchi": "泡菜",
-		"noodles": "面条",
-		"sushi": "寿司",
-	}
 
 	func _ready() -> void:
 		_build_ui()
@@ -179,10 +167,24 @@ class ProductItem extends PanelContainer:
 
 	func _update_display() -> void:
 		if _count_label != null:
-			var name: String = PRODUCT_NAMES.get(product_id, product_id)
+			var name := _get_product_display_name(product_id)
 			_count_label.text = "%s\n×%d" % [name, count]
 		if _icon != null:
 			_icon.texture = icon_texture
+
+	func _get_product_display_name(pid_in: String) -> String:
+		if pid_in.is_empty():
+			return ""
+		var pid := str(pid_in)
+		if pid == "cola":
+			pid = "soda"
+		if ProductRegistryClass.is_loaded():
+			var def_val = ProductRegistryClass.get_def(pid)
+			if def_val != null and (def_val is ProductDef):
+				var def: ProductDef = def_val
+				if not def.name.is_empty():
+					return def.name
+		return pid
 
 	func set_highlighted(highlighted: bool) -> void:
 		_highlighted = highlighted

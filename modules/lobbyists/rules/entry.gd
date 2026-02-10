@@ -18,6 +18,7 @@ const Phase = PhaseDefsClass.Phase
 const HookType = PhaseManagerClass.HookType
 
 const MODULE_ID := LobbyistsRoadOverlaysClass.MODULE_ID
+const MAP_OVERLAY_PROVIDER_ID := "%s:map_overlays" % MODULE_ID
 
 const ROAD_SUPPLY_BY_PIECE_ID := {
 	"lobbyists_road_straight": 4,
@@ -49,18 +50,133 @@ func register(registrar) -> Result:
 		Callable(registrar, "register_effect").bind(EFFECT_ID_ROADWORKS_DISTANCE, Callable(self, "_effect_dinnertime_distance_delta_roadworks")),
 		Callable(registrar, "register_effect").bind(EFFECT_ID_PARK_BONUS, Callable(self, "_effect_dinnertime_sale_house_bonus_park")),
 		Callable(registrar, "register_milestone_effect").bind("lobbyists_grant_extra_map_tile", Callable(self, "_milestone_effect_grant_extra_map_tile")),
+		Callable(registrar, "register_milestone_effect_ui_text").bind("lobbyists_grant_extra_map_tile", "获得一次额外地图板块放置机会（需本回合处理）", 100),
 		Callable(registrar, "register_action_executor").bind(PlaceLobbyistsRoadActionClass.new()),
 		Callable(registrar, "register_action_executor").bind(PlaceLobbyistsParkActionClass.new()),
 		Callable(registrar, "register_action_executor").bind(PlaceLobbyistsExtraMapTileActionClass.new()),
 		Callable(registrar, "register_action_executor").bind(SkipLobbyistsExtraMapTileActionClass.new()),
 		# round_state.<player_id(int) -> ...> 字典：读档后需要把 "0"/"1" 转回 0/1
 		Callable(registrar, "register_round_state_int_key_dict_schema").bind(STATE_SCHEMA_ID_EXTRA_TILE_PENDING, [EXTRA_TILE_PENDING_KEY], 100),
+		# UI overlays：把模块私有 map_data（pending_roads/roadworks_markers）转换为通用 overlay 指令，避免 core UI 解析私有结构。
+		Callable(registrar, "register_map_overlay_provider").bind(MAP_OVERLAY_PROVIDER_ID, Callable(self, "_build_map_overlays"), 100),
 	]
 	for step in steps:
 		var r: Result = step.call()
 		if not r.ok:
 			return r
+
+	# UI hints: keep piece classification and overlay definitions out of core UI code.
+	var overlays: Dictionary = LobbyistsRoadOverlaysClass.ROAD_OVERLAYS
+	for pid_val in LobbyistsRoadOverlaysClass.ROAD_PIECES:
+		var pid := str(pid_val).strip_edges()
+		if pid.is_empty():
+			continue
+		var overlay_val = overlays.get(pid, null)
+		if not (overlay_val is Dictionary):
+			return Result.failure("%s: ROAD_OVERLAYS 缺失: %s" % [MODULE_ID, pid])
+		var r_hint: Result = registrar.register_piece_ui_hint(pid, {"kind": "road", "road_overlay": overlay_val}, 100)
+		if not r_hint.ok:
+			return r_hint
+
+	for pid_val in PARK_SUPPLY_BY_PIECE_ID.keys():
+		var pid2 := str(pid_val).strip_edges()
+		if pid2.is_empty():
+			continue
+		var r_hint2: Result = registrar.register_piece_ui_hint(pid2, {"kind": "park"}, 100)
+		if not r_hint2.ok:
+			return r_hint2
 	return Result.success()
+
+func _build_map_overlays(map_data: Dictionary) -> Dictionary:
+	if map_data == null or not (map_data is Dictionary):
+		return {}
+
+	var out := {}
+	var pending_dirs := _build_pending_road_connection_dirs(map_data)
+	if not pending_dirs.is_empty():
+		out["pending_road_connection_dirs_by_pos"] = pending_dirs
+
+	var markers := _build_roadworks_marker_world_positions(map_data)
+	if not markers.is_empty():
+		out["roadworks_marker_world_positions"] = markers
+
+	return out
+
+func _build_pending_road_connection_dirs(map_data: Dictionary) -> Dictionary:
+	if map_data.is_empty():
+		return {}
+	if not map_data.has(PENDING_ROADS_KEY):
+		return {}
+	var pending_val = map_data.get(PENDING_ROADS_KEY, null)
+	if not (pending_val is Array):
+		return {}
+	var pending: Array = pending_val
+	if pending.is_empty():
+		return {}
+
+	var out := {} # Vector2i -> {dir -> true}
+
+	for e_val in pending:
+		if not (e_val is Dictionary):
+			continue
+		var e: Dictionary = e_val
+		var sbp_val = e.get("segments_by_pos", null)
+		if not (sbp_val is Dictionary):
+			continue
+		var segments_by_pos: Dictionary = sbp_val
+		for k in segments_by_pos.keys():
+			if not (k is String):
+				continue
+			var parts := str(k).split(",")
+			if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
+				continue
+			var world_pos := Vector2i(int(parts[0]), int(parts[1]))
+			var seg_list_val = segments_by_pos.get(k, null)
+			if not (seg_list_val is Array):
+				continue
+			for seg_val in Array(seg_list_val):
+				if not (seg_val is Dictionary):
+					continue
+				var seg: Dictionary = seg_val
+				var dirs_val = seg.get("dirs", null)
+				if not (dirs_val is Array):
+					continue
+				for d_val in Array(dirs_val):
+					var d := str(d_val).strip_edges()
+					if d.is_empty() or not MapUtils.DIR_OFFSETS.has(d):
+						continue
+					if not out.has(world_pos):
+						out[world_pos] = {}
+					var m: Dictionary = out[world_pos]
+					m[d] = true
+					out[world_pos] = m
+
+	return out
+
+func _build_roadworks_marker_world_positions(map_data: Dictionary) -> Array[Vector2i]:
+	if map_data.is_empty():
+		return []
+	var val = map_data.get(ROADWORK_MARKERS_KEY, null)
+	if not (val is Dictionary):
+		return []
+	var markers: Dictionary = val
+
+	var out: Array[Vector2i] = []
+	var seen := {}
+	for k in markers.keys():
+		if not (k is String):
+			continue
+		var parts := str(k).split(",")
+		if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
+			continue
+		var pos := Vector2i(int(parts[0]), int(parts[1]))
+		var key := "%d,%d" % [pos.x, pos.y]
+		if seen.has(key):
+			continue
+		seen[key] = true
+		out.append(pos)
+
+	return out
 
 func _on_restructuring_before_enter(state: GameState) -> Result:
 	if state == null:

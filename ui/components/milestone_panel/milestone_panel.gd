@@ -15,6 +15,7 @@ signal cancelled()
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const EffectUiTextRegistryClass = preload("res://core/rules/effect_ui_text_registry.gd")
 
 @export var show_close_button: bool = true
 # LeftPanel 的 “里程碑” Tab 复用同一面板：需要去掉自身背景/边距与最小尺寸，避免与 LeftPanel 风格不一致且产生溢出（issue_tracker #58）。
@@ -294,6 +295,10 @@ func _describe_milestone_id(milestone_id: String) -> Array[String]:
 			return []
 
 func _describe_effect_dict(effect_type: String, effect: Dictionary) -> String:
+	var from_reg := EffectUiTextRegistryClass.get_milestone_effect_type_text(effect_type)
+	if not from_reg.is_empty():
+		return from_reg
+
 	match effect_type:
 		"noop":
 			return ""
@@ -371,8 +376,6 @@ func _describe_effect_dict(effect_type: String, effect: Dictionary) -> String:
 			if t == "radio":
 				return "电波营销：每房屋放置2个需求（而非1个）"
 			return "营销强化"
-		"ketchup_active":
-			return "晚餐选店距离-1（允许为负数）"
 		"train_from_active_same_color":
 			return "培训：允许从在职员工培训（同色限制）"
 		"salary_pay_with_tokens":
@@ -387,14 +390,14 @@ func _describe_effect_dict(effect_type: String, effect: Dictionary) -> String:
 			return "%s免薪" % _get_employee_name(target) if not target.is_empty() else "指定员工免薪"
 		"bank_burn_on_discount_ge_3":
 			return "使用折扣（-$3）后：下回合重组结束时银行移除最多$100"
-		"lobbyists_grant_extra_map_tile":
-			return "获得一次额外地图板块放置机会（需本回合处理）"
-		"rural_marketeers:grant_offramp_placement":
-			return "获得一次高速出口（offramp）放置机会（需本回合放置）"
 		_:
 			return "效果：%s" % effect_type
 
 func _describe_effect_id(effect_id: String) -> String:
+	var from_reg := EffectUiTextRegistryClass.get_effect_id_text(effect_id)
+	if not from_reg.is_empty():
+		return from_reg
+
 	match effect_id:
 		"base_rules:marketing:demand_amount:first_radio":
 			return "电波营销：每房屋放置2个需求（而非1个）"
@@ -403,12 +406,6 @@ func _describe_effect_id(effect_id: String) -> String:
 			if percent > 0:
 				return "晚餐收入：CFO 加成 +%d%%（向上取整）" % percent
 			return "晚餐收入：CFO 加成（向上取整）"
-		"ketchup_mechanism:dinnertime:distance_delta:ketchup":
-			return "晚餐选店距离-1（允许为负数）"
-		"new_milestones:dinnertime:distance_delta:first_marketeer_used":
-			return "晚餐选店距离-2（允许为负数）"
-		"new_milestones:marketing:demand_cash:first_marketeer_used":
-			return "营销需求：每放置1个需求标记+$5"
 		_:
 			return ""
 

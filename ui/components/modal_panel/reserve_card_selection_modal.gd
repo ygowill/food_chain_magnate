@@ -50,8 +50,6 @@ func setup(state: GameState, current_player_id: int) -> void:
 
 	if is_instance_valid(hint_label):
 		hint_label.text = "请确保其他玩家未看到你的选择；确认后不可更改。"
-		if _has_module(state, "reserve_prices"):
-			hint_label.text = "Reserve Prices：储备卡不再影响起始现金/CEO 卡槽；银行首次破产后按多数类型决定基础单价（平局 20 > 5 > 10）。"
 
 	var name := Globals.get_player_name(current_player_id) if Globals != null else ("玩家%d" % (current_player_id + 1))
 	set_title_text("选择银行储备卡｜当前: %s" % name)
@@ -71,10 +69,36 @@ func setup(state: GameState, current_player_id: int) -> void:
 		return
 	var cards: Array = cards_val
 
-	var reserve_prices_mode := _has_module(state, "reserve_prices")
-	_apply_card(0, cards, reserve_prices_mode)
-	_apply_card(1, cards, reserve_prices_mode)
-	_apply_card(2, cards, reserve_prices_mode)
+	var has_any_bank_fields := false
+	var has_any_price_only := false
+	for c_val in cards:
+		if not (c_val is Dictionary):
+			continue
+		var c: Dictionary = c_val
+		var has_bank_fields := (
+			c.has("cash") and (c.get("cash", null) is int)
+			and c.has("ceo_slots") and (c.get("ceo_slots", null) is int)
+		)
+		if has_bank_fields:
+			has_any_bank_fields = true
+		else:
+			has_any_price_only = true
+
+	if is_instance_valid(hint_label):
+		if has_any_price_only and not has_any_bank_fields:
+			hint_label.text = (
+				"请确保其他玩家未看到你的选择；确认后不可更改。\n"
+				+ "提示：本局储备卡不再影响起始现金/CEO 卡槽；银行首次破产后按多数类型决定基础单价（平局 20 > 5 > 10）。"
+			)
+		elif has_any_price_only and has_any_bank_fields:
+			hint_label.text = (
+				"请确保其他玩家未看到你的选择；确认后不可更改。\n"
+				+ "提示：储备卡字段不一致，将按卡片字段分别展示。"
+			)
+
+	_apply_card(0, cards)
+	_apply_card(1, cards)
+	_apply_card(2, cards)
 
 func setup_waiting(current_player_id: int) -> void:
 	# 联机：等待其他玩家选择（不展示任何卡片信息）
@@ -141,7 +165,7 @@ func _reset_card_button(btn: Button, title_label: Label, desc_label: Label) -> v
 	if is_instance_valid(desc_label):
 		desc_label.text = ""
 
-func _apply_card(index: int, cards: Array, reserve_prices_mode: bool = false) -> void:
+func _apply_card(index: int, cards: Array) -> void:
 	var btn: Button = _get_card_button(index)
 	var title_label: Label = _get_card_title_label(index)
 	var desc_label: Label = _get_card_desc_label(index)
@@ -165,7 +189,7 @@ func _apply_card(index: int, cards: Array, reserve_prices_mode: bool = false) ->
 		and c.has("ceo_slots") and (c.get("ceo_slots", null) is int)
 	)
 
-	if reserve_prices_mode or not has_bank_fields:
+	if not has_bank_fields:
 		title_label.text = "储备卡 %d（价格 $%d）" % [index + 1, t]
 		desc_label.text = "图片占位\n基础单价候选：$%d\n首次破产后按多数决定（平局 20 > 5 > 10）" % t
 
@@ -222,10 +246,3 @@ func _get_card_desc_label(index: int) -> Label:
 		1: return card_desc_1
 		2: return card_desc_2
 		_: return null
-
-static func _has_module(state: GameState, module_id: String) -> bool:
-	if state == null:
-		return false
-	if not (state.modules is Array):
-		return false
-	return (state.modules as Array).has(str(module_id))

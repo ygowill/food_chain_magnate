@@ -78,9 +78,14 @@ func set_game_state(state: GameState) -> void:
 		clear()
 		return
 	_state_seed = int(state.seed)
+	_ensure_skin(Array(state.modules, TYPE_STRING, "", null))
 	_player_restaurant_logo_ids.clear()
 	_drive_thru_active_by_owner.clear()
-	var logo_count := MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS.size()
+	var logo_count := 0
+	if _skin != null and _skin.has_method("get_restaurant_logo_piece_ids"):
+		var ids_val = _skin.get_restaurant_logo_piece_ids()
+		if ids_val is Array:
+			logo_count = (ids_val as Array).size()
 	var fallback_logo_ids: Array[int] = _build_fallback_logo_ids(logo_count)
 	var registry_loaded := EmployeeRegistryClass.is_loaded()
 	for i in range(state.players.size()):
@@ -110,7 +115,6 @@ func set_game_state(state: GameState) -> void:
 						drive_thru_active = true
 						break
 		_drive_thru_active_by_owner[pid] = drive_thru_active
-	_ensure_skin(Array(state.modules, TYPE_STRING, "", null))
 	set_map_data(state.map)
 
 func _read_logo_id(value, logo_count: int) -> int:

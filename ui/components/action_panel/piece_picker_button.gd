@@ -2,6 +2,7 @@
 extends Button
 
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
+const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
 
 var piece_id: String = ""
 var piece_rotation: int = 0 # 0/90/180/270
@@ -183,11 +184,17 @@ func _draw_texture_rect_clipped_by_cells(
 		draw_texture_rect_region(texture, clip, Rect2(src_pos, src_size), modulate)
 
 func _infer_kind(pid: String) -> String:
-	var id := str(pid)
-	if id.begins_with("lobbyists_road_"):
-		return "road"
-	if id.begins_with("lobbyists_park_") or id == "park":
+	var id := str(pid).strip_edges()
+	if id.is_empty():
+		return ""
+	if id == "park":
 		return "park"
+
+	var kind := PieceUiHintsRegistryClass.get_kind(id)
+	if kind == "road" or kind == "park":
+		return kind
+	if not PieceUiHintsRegistryClass.get_road_overlay(id).is_empty():
+		return "road"
 	return ""
 
 func _get_piece_cells(pid: String, rot: int) -> Array[Vector2i]:

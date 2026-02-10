@@ -8,7 +8,14 @@
 	"conflicts": [],
 	"entry_script": "res://modules/kimchi/rules/entry.gd",
 	"provides": {
-		"content": ["products", "employees"]
+		"content": ["products", "employees"],
+		"ui": {
+			"module_selector": {
+				"group_id": "food_and_chefs",
+				"group_title": "菜系变体",
+				"group_order": 20,
+				"order": 0
+			}
+		}
 	}
 }
-

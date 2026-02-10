@@ -12,6 +12,14 @@ func register(registrar) -> Result:
 	r = registrar.register_effect(EFFECT_ID_FIRST_MARKETEER_DEMAND_CASH, Callable(self, "_effect_first_marketeer_demand_cash_bonus"))
 	if not r.ok:
 		return r
+
+	r = registrar.register_effect_ui_text(EFFECT_ID_FIRST_MARKETEER_DISTANCE, "晚餐选店距离-2（允许为负数）", 100)
+	if not r.ok:
+		return r
+	r = registrar.register_effect_ui_text(EFFECT_ID_FIRST_MARKETEER_DEMAND_CASH, "营销需求：每放置1个需求标记+$5", 100)
+	if not r.ok:
+		return r
+
 	return Result.success()
 
 func _effect_first_marketeer_distance_minus_two(_state: GameState, _player_id: int, ctx: Dictionary) -> Result:
@@ -59,4 +67,3 @@ func _effect_first_marketeer_demand_cash_bonus(_state: GameState, _player_id: in
 
 	ctx["cash_bonus"] = int(ctx["cash_bonus"]) + demands_added * 5
 	return Result.success()
-

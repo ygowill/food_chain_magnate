@@ -11,44 +11,17 @@ signal selection_changed(enabled_modules_v2: Array)
 signal notes_changed(text: String)
 signal load_failed(message: String)
 
-const MODULE_GROUPS: Array[Dictionary] = [
-	{
-		"id": "map_expansion",
-		"title": "地图变体",
-		"modules": ["new_districts", "lobbyists", "coffee"],
-	},
-	{
-		"id": "food_and_chefs",
-		"title": "菜系变体",
-		"modules": ["kimchi", "sushi", "noodles", "fry_chefs"],
-	},
-	{
-		"id": "marketing_expansion",
-		"title": "营销变体",
-		"modules": ["mass_marketeers", "rural_marketeers", "gourmet_food_critics"],
-	},
-	{
-		"id": "rules_and_milestones",
-		"title": "规则/里程碑变体",
-		"modules": ["new_milestones", "hard_choices", "ketchup_mechanism", "reserve_prices"],
-	},
-	{
-		"id": "employee_variants",
-		"title": "员工变体",
-		"modules": ["movie_stars", "night_shift_managers"],
-	},
-]
-
 const _GROUP_BG_COLORS: Array[Color] = [
-	Color(0.16, 0.24, 0.44, 0.35), # map_expansion
-	Color(0.18, 0.42, 0.26, 0.35), # food_and_chefs
-	Color(0.44, 0.22, 0.48, 0.35), # marketing_expansion
-	Color(0.58, 0.36, 0.18, 0.35), # rules_and_milestones
-	Color(0.16, 0.44, 0.44, 0.35), # employee_variants
-	Color(0.24, 0.26, 0.32, 0.35), # other
+	Color(0.16, 0.24, 0.44, 0.35),
+	Color(0.18, 0.42, 0.26, 0.35),
+	Color(0.44, 0.22, 0.48, 0.35),
+	Color(0.58, 0.36, 0.18, 0.35),
+	Color(0.16, 0.44, 0.44, 0.35),
+	Color(0.24, 0.26, 0.32, 0.35),
 ]
 
 var _modules_base_dir_spec: String = ""
+var _setup_player_count: int = 0
 
 var _available_modules: Dictionary = {} # module_id -> ModuleManifest
 var _optional_module_ids: Array[String] = []
@@ -81,6 +54,14 @@ func set_modules_base_dir(base_dir_spec: String) -> Result:
 	_modules_base_dir_spec = str(base_dir_spec)
 	return _load_modules_and_build_ui()
 
+func set_setup_player_count(player_count: int) -> void:
+	# 用于 Setup/RoomConfig：根据 module.json 的 setup_constraints 自动强制启用模块。
+	_setup_player_count = int(player_count)
+	if _available_modules.is_empty():
+		return
+	_refresh_forced_optional_modules_for_setup_context()
+	_recompute_modules_and_apply_to_ui()
+
 func set_initial_enabled_modules_v2(enabled_modules_v2: Array) -> void:
 	_requested_optional_modules.clear()
 	for mid_val in enabled_modules_v2:
@@ -107,8 +88,11 @@ func set_forced_optional_modules(module_ids: Array, reason: String = "") -> void
 
 func get_enabled_modules_v2() -> Array[String]:
 	var base: Array[String] = GameDefaultsClass.build_default_enabled_modules_v2()
-	if _requested_optional_modules.has("new_milestones") or _forced_optional_modules.has("new_milestones"):
-		base.erase("base_milestones")
+
+	var effective_optional := _compute_effective_optional_modules()
+	var removed_base := _compute_removed_base_modules_from_conflicts(effective_optional)
+	for base_id in removed_base.keys():
+		base.erase(str(base_id))
 
 	var requested: Array[String] = []
 	var seen := {}
@@ -221,6 +205,7 @@ func _load_modules_and_build_ui() -> Result:
 		_optional_module_ids.append(mid)
 	_optional_module_ids.sort()
 
+	_refresh_forced_optional_modules_for_setup_context()
 	_build_modules_ui()
 	_recompute_modules_and_apply_to_ui()
 	return Result.success()
@@ -238,27 +223,13 @@ func _build_modules_ui() -> void:
 			kept.append(btn)
 	_action_buttons = kept
 
-	var used: Dictionary = {}
-	var group_index := 0
-	for group_def_val in MODULE_GROUPS:
-		if not (group_def_val is Dictionary):
-			continue
-		var group_def: Dictionary = group_def_val
-		var title := str(group_def.get("title", ""))
-		var mids: Array[String] = Array(group_def.get("modules", []), TYPE_STRING, "", null)
-		var bg := _GROUP_BG_COLORS[group_index] if group_index >= 0 and group_index < _GROUP_BG_COLORS.size() else _GROUP_BG_COLORS[_GROUP_BG_COLORS.size() - 1]
-		var box := _build_module_group_box(title, mids, bg)
-		_groups_container.add_child(box)
-		for mid in mids:
-			used[mid] = true
-		group_index += 1
-
-	var other: Array[String] = []
-	for mid in _optional_module_ids:
-		if not used.has(mid):
-			other.append(mid)
-	if not other.is_empty():
-		_groups_container.add_child(_build_module_group_box("其他", other, _GROUP_BG_COLORS[_GROUP_BG_COLORS.size() - 1]))
+	var groups: Array[Dictionary] = _compute_module_groups()
+	for i in range(groups.size()):
+		var group: Dictionary = groups[i]
+		var title := str(group.get("title", "")).strip_edges()
+		var mids: Array[String] = Array(group.get("modules", []), TYPE_STRING, "", null)
+		var bg := _GROUP_BG_COLORS[i] if i >= 0 and i < _GROUP_BG_COLORS.size() else _GROUP_BG_COLORS[_GROUP_BG_COLORS.size() - 1]
+		_groups_container.add_child(_build_module_group_box(title, mids, bg))
 
 func _build_group_panel_style(bg: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
@@ -411,7 +382,6 @@ func _recompute_modules_and_apply_to_ui() -> void:
 		return
 
 	var notes: Array[String] = []
-	var new_ms_on := _requested_optional_modules.has("new_milestones") or _forced_optional_modules.has("new_milestones")
 
 	if not _forced_optional_modules.is_empty():
 		var forced: Array[String] = []
@@ -423,24 +393,11 @@ func _recompute_modules_and_apply_to_ui() -> void:
 		forced.sort()
 		notes.append("已强制启用模块：%s" % ", ".join(forced))
 
-	# 冲突/兼容性规则：new_milestones 优先。
-	if new_ms_on:
-		if _requested_optional_modules.has("hard_choices"):
-			_requested_optional_modules.erase("hard_choices")
-			notes.append("已自动取消 Hard Choices（与全新里程碑冲突）")
+	_apply_optional_module_conflicts(notes)
 
-		var remove_list: Array[String] = []
-		for mid_val in _requested_optional_modules.keys():
-			var id := str(mid_val)
-			if id == "new_milestones":
-				continue
-			if _depends_on_base_milestones(id):
-				remove_list.append(id)
-		remove_list.sort()
-		for id in remove_list:
-			_requested_optional_modules.erase(id)
-		if not remove_list.is_empty():
-			notes.append("已自动取消依赖基础里程碑的模块：%s" % ", ".join(remove_list))
+	var effective_before := _compute_effective_optional_modules()
+	var removed_base := _compute_removed_base_modules_from_conflicts(effective_before)
+	_apply_removed_base_dependency_guard(removed_base, notes)
 
 	var effective := _compute_effective_optional_modules()
 	_locked_optional_modules = _compute_locked_optional_modules_from_requested()
@@ -457,11 +414,12 @@ func _recompute_modules_and_apply_to_ui() -> void:
 
 		var disabled := false
 		var tt := _format_module_tooltip(id)
-		if new_ms_on and _depends_on_base_milestones(id):
+		var removed_dep_reason := _get_removed_base_dependency_reason(id, removed_base)
+		if not removed_dep_reason.is_empty():
 			disabled = true
 			if not tt.is_empty():
 				tt += "\n"
-			tt += "与“全新里程碑”不兼容（依赖 base_milestones）"
+			tt += removed_dep_reason
 		elif _forced_optional_modules.has(id):
 			disabled = true
 			if not tt.is_empty():
@@ -549,8 +507,12 @@ func _compute_locked_optional_modules_from_requested() -> Dictionary:
 
 	return locked
 
-func _depends_on_base_milestones(module_id: String) -> bool:
-	var stack: Array[String] = [module_id]
+func _depends_on_module(module_id: String, target_id: String) -> bool:
+	var target := str(target_id).strip_edges()
+	if target.is_empty():
+		return false
+
+	var stack: Array[String] = [str(module_id)]
 	var visited: Dictionary = {}
 	while not stack.is_empty():
 		var cur: String = stack.pop_back()
@@ -566,10 +528,231 @@ func _depends_on_base_milestones(module_id: String) -> bool:
 			if not (dep_val is String):
 				continue
 			var dep: String = str(dep_val)
-			if dep == "base_milestones":
+			if dep == target:
 				return true
 			if dep.begins_with("base_"):
 				continue
 			stack.append(dep)
 
 	return false
+
+func _get_module_ui_dict(module_id: String) -> Dictionary:
+	var manifest_val = _available_modules.get(module_id, null)
+	if not (manifest_val is ModuleManifest):
+		return {}
+	var manifest: ModuleManifest = manifest_val
+	if not (manifest.provides is Dictionary):
+		return {}
+	var provides: Dictionary = manifest.provides
+	var ui_val = provides.get("ui", null)
+	if not (ui_val is Dictionary):
+		return {}
+	return ui_val
+
+func _get_module_selector_meta(module_id: String) -> Dictionary:
+	var ui := _get_module_ui_dict(module_id)
+	var ms_val = ui.get("module_selector", null)
+	return ms_val if (ms_val is Dictionary) else {}
+
+func _get_module_selector_group_id(module_id: String) -> String:
+	var meta := _get_module_selector_meta(module_id)
+	var gid := str(meta.get("group_id", "")).strip_edges()
+	return gid
+
+func _get_module_selector_group_title(module_id: String) -> String:
+	var meta := _get_module_selector_meta(module_id)
+	var title := str(meta.get("group_title", "")).strip_edges()
+	return title
+
+func _get_module_selector_group_order(module_id: String) -> int:
+	var meta := _get_module_selector_meta(module_id)
+	return int(meta.get("group_order", 999))
+
+func _get_module_selector_order_in_group(module_id: String) -> int:
+	var meta := _get_module_selector_meta(module_id)
+	return int(meta.get("order", 999))
+
+func _get_module_display_name(module_id: String) -> String:
+	var manifest_val = _available_modules.get(module_id, null)
+	if manifest_val is ModuleManifest:
+		var manifest: ModuleManifest = manifest_val
+		return str(manifest.name).strip_edges()
+	return str(module_id).strip_edges()
+
+func _compute_module_groups() -> Array[Dictionary]:
+	var groups_by_id: Dictionary = {} # group_id -> {id, title, order, modules}
+	for mid in _optional_module_ids:
+		var group_id := _get_module_selector_group_id(mid)
+		var group_title := _get_module_selector_group_title(mid)
+		var group_order := _get_module_selector_group_order(mid)
+
+		if group_id.is_empty():
+			group_id = "other"
+			group_title = "其他" if group_title.is_empty() else group_title
+			group_order = 9999
+		elif group_title.is_empty():
+			group_title = group_id
+
+		if not groups_by_id.has(group_id):
+			groups_by_id[group_id] = {
+				"id": group_id,
+				"title": group_title,
+				"order": group_order,
+				"modules": [],
+			}
+		var g: Dictionary = groups_by_id[group_id]
+		var arr: Array[String] = Array(g.get("modules", []), TYPE_STRING, "", null)
+		arr.append(mid)
+		g["modules"] = arr
+		groups_by_id[group_id] = g
+
+	var out: Array[Dictionary] = []
+	for gid in groups_by_id.keys():
+		out.append(groups_by_id[gid])
+
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var ao := int(a.get("order", 9999))
+		var bo := int(b.get("order", 9999))
+		if ao != bo:
+			return ao < bo
+		return str(a.get("title", "")) < str(b.get("title", ""))
+	)
+
+	for i in range(out.size()):
+		var g: Dictionary = out[i]
+		var mids: Array[String] = Array(g.get("modules", []), TYPE_STRING, "", null)
+		mids.sort_custom(func(a: String, b: String) -> bool:
+			var ao := _get_module_selector_order_in_group(a)
+			var bo := _get_module_selector_order_in_group(b)
+			if ao != bo:
+				return ao < bo
+			return _get_module_display_name(a) < _get_module_display_name(b)
+		)
+		g["modules"] = mids
+		out[i] = g
+
+	return out
+
+func _refresh_forced_optional_modules_for_setup_context() -> void:
+	_forced_optional_modules = _compute_required_optional_modules_for_player_count(_setup_player_count)
+
+func get_required_optional_modules_for_player_count(player_count: int) -> Dictionary:
+	return _compute_required_optional_modules_for_player_count(player_count).duplicate()
+
+func _compute_required_optional_modules_for_player_count(player_count: int) -> Dictionary:
+	# 基于 module.json 提供的 setup_constraints 计算强制模块列表
+	var out: Dictionary = {}
+	if _available_modules.is_empty():
+		return out
+	var count := int(player_count)
+	if count <= 0:
+		return out
+
+	for mid in _optional_module_ids:
+		var ui := _get_module_ui_dict(mid)
+		var setup_val = ui.get("setup_constraints", null)
+		if not (setup_val is Dictionary):
+			continue
+		var setup: Dictionary = setup_val
+		var counts_val = setup.get("required_player_counts", null)
+		if not (counts_val is Array):
+			continue
+
+		var required := false
+		for c in Array(counts_val):
+			if int(c) == count:
+				required = true
+				break
+		if not required:
+			continue
+
+		var reason := str(setup.get("reason", "")).strip_edges()
+		if reason.is_empty():
+			reason = "%d 人局强制启用 %s 模块。" % [count, _get_module_display_name(mid)]
+		out[mid] = reason
+
+	return out
+
+func _apply_optional_module_conflicts(notes: Array[String]) -> void:
+	# 只自动取消“用户显式选择”的模块；forced/依赖锁定模块不自动取消（避免越权）
+	var effective := _compute_effective_optional_modules()
+	var to_remove: Dictionary = {} # module_id -> reason
+
+	for a_id_val in effective.keys():
+		var a_id := str(a_id_val)
+		var a_manifest_val = _available_modules.get(a_id, null)
+		if not (a_manifest_val is ModuleManifest):
+			continue
+		var a_manifest: ModuleManifest = a_manifest_val
+		var a_pri := int(a_manifest.priority)
+		var conflicts: Array[String] = Array(a_manifest.conflicts, TYPE_STRING, "", null)
+		for b_id in conflicts:
+			if not effective.has(b_id):
+				continue
+			if _forced_optional_modules.has(b_id):
+				continue
+			if not _requested_optional_modules.has(b_id):
+				continue
+			if _forced_optional_modules.has(a_id):
+				to_remove[b_id] = "已自动取消 %s（与 %s 冲突）" % [_get_module_display_name(b_id), _get_module_display_name(a_id)]
+				continue
+			var b_manifest_val = _available_modules.get(b_id, null)
+			var b_pri := int((b_manifest_val as ModuleManifest).priority) if (b_manifest_val is ModuleManifest) else 100
+			if a_pri >= b_pri:
+				to_remove[b_id] = "已自动取消 %s（与 %s 冲突）" % [_get_module_display_name(b_id), _get_module_display_name(a_id)]
+
+	var remove_list: Array[String] = []
+	for mid_val in to_remove.keys():
+		remove_list.append(str(mid_val))
+	remove_list.sort()
+	for id in remove_list:
+		_requested_optional_modules.erase(id)
+		notes.append(str(to_remove.get(id, "")))
+
+func _compute_removed_base_modules_from_conflicts(effective_optional: Dictionary) -> Dictionary:
+	# base_module_id -> source_module_id（哪个 optional 模块声明了该冲突）
+	var removed: Dictionary = {}
+	for mid_val in effective_optional.keys():
+		var mid := str(mid_val)
+		var manifest_val = _available_modules.get(mid, null)
+		if not (manifest_val is ModuleManifest):
+			continue
+		var manifest: ModuleManifest = manifest_val
+		for c_val in manifest.conflicts:
+			if not (c_val is String):
+				continue
+			var c := str(c_val).strip_edges()
+			if c.is_empty():
+				continue
+			if c.begins_with("base_"):
+				removed[c] = mid
+	return removed
+
+func _apply_removed_base_dependency_guard(removed_base: Dictionary, notes: Array[String]) -> void:
+	if removed_base.is_empty():
+		return
+	var remove_list: Array[String] = []
+	for mid_val in _requested_optional_modules.keys():
+		var mid := str(mid_val)
+		for base_id_val in removed_base.keys():
+			var base_id := str(base_id_val)
+			if _depends_on_module(mid, base_id):
+				remove_list.append(mid)
+				break
+	remove_list.sort()
+	for mid in remove_list:
+		_requested_optional_modules.erase(mid)
+		notes.append("已自动取消 %s（依赖被移除的基础模块）" % _get_module_display_name(mid))
+
+func _get_removed_base_dependency_reason(module_id: String, removed_base: Dictionary) -> String:
+	if removed_base.is_empty():
+		return ""
+	var deps: Array[String] = []
+	for base_id_val in removed_base.keys():
+		var base_id := str(base_id_val)
+		if _depends_on_module(module_id, base_id):
+			deps.append(base_id)
+	deps.sort()
+	if deps.is_empty():
+		return ""
+	return "与当前选择不兼容（依赖: %s）" % ", ".join(deps)

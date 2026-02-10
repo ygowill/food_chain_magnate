@@ -4,7 +4,19 @@ extends RefCounted
 const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
 const OverlayUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_overlay_utils.gd")
 const RoadsPassClass = preload("res://ui/scenes/game/map_canvas_drawer_roads_pass.gd")
-const LobbyistsRoadOverlaysClass = preload("res://modules/lobbyists/road_overlays.gd")
+const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
+
+static func _read_color_hint(hints: Dictionary, key: String, fallback: Color) -> Color:
+	if hints == null or hints.is_empty():
+		return fallback
+	var val = hints.get(key, null)
+	if val is Color:
+		return val
+	if val is String:
+		var s := str(val).strip_edges()
+		if not s.is_empty():
+			return Color(s)
+	return fallback
 
 static func draw_drink_sources(canvas, cell_size: int) -> void:
 	for y in range(canvas._grid_size.y):
@@ -27,7 +39,7 @@ static func draw_drink_sources(canvas, cell_size: int) -> void:
 			var icon_pos := rect.position + (rect.size - icon_size) * 0.5
 			TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, Rect2(icon_pos, icon_size))
 
-static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: Array, coffee_shop_logo_piece_ids: Array = []) -> void:
+static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: Array) -> void:
 	for anchor_val in canvas._structures_by_anchor.keys():
 		if not (anchor_val is Vector2i):
 			continue
@@ -41,69 +53,142 @@ static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: A
 			draw_house_and_garden(canvas, cell_size, anchor, info)
 			continue
 
-		if piece_id == "apartment":
-			draw_apartment(canvas, cell_size, info)
+		var road_overlay := PieceUiHintsRegistryClass.get_road_overlay(piece_id)
+		if not road_overlay.is_empty():
+			draw_road_overlay_piece(canvas, cell_size, anchor, info, road_overlay)
 			continue
 
-		if piece_id.begins_with("lobbyists_road_"):
-			draw_lobbyists_road_piece(canvas, cell_size, anchor, info)
-			continue
-
-		if piece_id == "park" or piece_id.begins_with("lobbyists_park_"):
+		var ui_kind := PieceUiHintsRegistryClass.get_kind(piece_id)
+		if piece_id == "park" or ui_kind == "park":
 			draw_park_piece(canvas, cell_size, info)
 			continue
 
 		var min_pos: Vector2i = info.get("min", anchor)
 		var max_pos: Vector2i = info.get("max", anchor)
 		var size_cells := (max_pos - min_pos) + Vector2i.ONE
+		var footprint_rect := Rect2(Vector2(min_pos.x * cell_size, min_pos.y * cell_size), Vector2(size_cells.x * cell_size, size_cells.y * cell_size))
 
-		var tex: Texture2D = canvas._skin.get_piece_texture(piece_id)
-		var offset_px: Vector2i = canvas._skin.get_piece_offset_px(piece_id)
-		var scale: Vector2 = canvas._skin.get_piece_scale(piece_id)
-
-		var pos_px := Vector2(min_pos.x * cell_size, min_pos.y * cell_size) + Vector2(offset_px.x, offset_px.y)
-		var size_px := Vector2(size_cells.x * cell_size, size_cells.y * cell_size) * scale
-		var rect := Rect2(pos_px, size_px)
+		var hints := PieceUiHintsRegistryClass.get_hints(piece_id)
+		var style := str(hints.get("structure_style", "")).strip_edges()
+		if style == "house_id":
+			var bg_col := _read_color_hint(hints, "bg_color", Color("#814e60"))
+			draw_house_id_structure(canvas, cell_size, info, footprint_rect, bg_col, 1.0)
+			continue
+		if style == "player_logo_bg":
+			var owner := int(info.get("owner", -1))
+			if owner >= 0:
+				var bg_col2 := _read_color_hint(hints, "bg_color", Color("#f4edd1"))
+				var suffix := str(hints.get("logo_variant_suffix", "")).strip_edges()
+				draw_player_logo_structure(canvas, cell_size, anchor, info, footprint_rect, 1.0, restaurant_logo_piece_ids, bg_col2, suffix)
+				continue
+		if style == "opaque_rotated_piece":
+			var tex2: Texture2D = canvas._skin.get_piece_texture(piece_id)
+			if tex2 != null:
+				var rot_offset := int(hints.get("rotation_offset_deg", 0))
+				var bg_col3 := _read_color_hint(hints, "bg_color", Color("#4c8078"))
+				draw_opaque_rotated_piece(canvas, footprint_rect, tex2, int(info.get("rotation", 0)), rot_offset, bg_col3, 1.0)
+				continue
 		if piece_id == "restaurant":
+			var tex: Texture2D = canvas._skin.get_piece_texture(piece_id)
+			var offset_px: Vector2i = canvas._skin.get_piece_offset_px(piece_id)
+			var scale: Vector2 = canvas._skin.get_piece_scale(piece_id)
+			var pos_px := Vector2(min_pos.x * cell_size, min_pos.y * cell_size) + Vector2(offset_px.x, offset_px.y)
+			var size_px := Vector2(size_cells.x * cell_size, size_cells.y * cell_size) * scale
+			var rect := Rect2(pos_px, size_px)
 			draw_restaurant(canvas, cell_size, anchor, info, rect, 1.0, restaurant_logo_piece_ids)
 			continue
 
-		if piece_id == "coffee_shop":
-			draw_coffee_shop(canvas, cell_size, anchor, info, rect, 1.0, restaurant_logo_piece_ids, coffee_shop_logo_piece_ids)
-			continue
+		draw_generic_piece(canvas, cell_size, info, 1.0)
 
-		if piece_id == "highway_offramp":
-			draw_highway_offramp(canvas, rect, tex, int(info.get("rotation", 0)))
-			continue
+static func draw_house_id_structure(canvas, cell_size: int, info: Dictionary, structure_rect: Rect2, bg_color: Color, alpha: float = 1.0) -> void:
+	if canvas == null or canvas._skin == null:
+		return
+	if structure_rect.size == Vector2.ZERO:
+		return
 
-		if piece_id == "house":
-			TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, rect, Color(1, 1, 1, 0.85), "bottom")
-		else:
-			canvas.draw_texture_rect(tex, rect, false, Color(1, 1, 1, 0.85))
+	var a := clampf(alpha, 0.0, 1.0)
+	var bg := bg_color
+	bg.a = a
+	canvas.draw_rect(structure_rect, bg, true)
 
-static func draw_highway_offramp(canvas, rect: Rect2, tex: Texture2D, rotation_deg: int) -> void:
+	var pid: String = str(info.get("piece_id", "")).strip_edges()
+	if pid.is_empty():
+		return
+	var tex: Texture2D = canvas._skin.get_piece_texture(pid)
+
+	var pad := maxf(1.0, float(cell_size) * 0.08)
+	var bottom_gap := maxf(2.0, float(cell_size) * 0.10)
+	var tex_rect := structure_rect.grow(-pad)
+	tex_rect.size.y = maxf(0.0, tex_rect.size.y - bottom_gap)
+	TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, tex_rect, Color(1, 1, 1, 0.9 * a), "bottom")
+
+	var house_id: String = str(info.get("house_id", ""))
+	draw_house_id(canvas, cell_size, structure_rect, house_id)
+
+static func draw_player_logo_structure(
+	canvas,
+	cell_size: int,
+	_anchor: Vector2i,
+	info: Dictionary,
+	structure_rect: Rect2,
+	alpha: float,
+	restaurant_logo_piece_ids: Array,
+	bg_color: Color,
+	logo_variant_suffix: String = ""
+) -> void:
+	var owner := int(info.get("owner", -1))
+	if owner < 0:
+		return
+	if canvas == null or canvas._skin == null:
+		return
+	if restaurant_logo_piece_ids.is_empty():
+		return
+
+	var logo_map: Dictionary = canvas._player_restaurant_logo_ids
+	var logo_id := int(logo_map.get(owner, -1))
+	if logo_id < 0 or logo_id >= restaurant_logo_piece_ids.size():
+		return
+
+	var base_key: String = str(restaurant_logo_piece_ids[logo_id])
+	var logo_key := base_key
+	var suffix := str(logo_variant_suffix).strip_edges()
+	if not suffix.is_empty():
+		var var_key := "%s%s" % [base_key, suffix]
+		if canvas._skin.piece_textures.has(var_key):
+			logo_key = var_key
+
+	var tex: Texture2D = canvas._skin.get_piece_texture(logo_key)
+	var bg := bg_color
+	bg.a = clampf(alpha, 0.0, 1.0)
+	canvas.draw_rect(structure_rect, bg, true)
+
+	var pad := maxf(2.0, float(cell_size) * 0.10)
+	var logo_rect := structure_rect.grow(-pad)
+	TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, logo_rect, Color(1, 1, 1, 0.98 * alpha))
+
+static func draw_opaque_rotated_piece(canvas, rect: Rect2, tex: Texture2D, rotation_deg: int, rotation_offset_deg: int, bg_color: Color, alpha: float = 1.0) -> void:
 	if canvas == null:
 		return
 	if tex == null:
 		return
 
-	# Do not show the road behind the offramp: paint an opaque background first.
-	canvas.draw_rect(rect, Color("#4c8078"), true)
+	# Paint an opaque background first (useful for pieces that should hide roads underneath).
+	var bg := bg_color
+	bg.a = clampf(alpha, 0.0, 1.0)
+	canvas.draw_rect(rect, bg, true)
 
-	# Shrink the offramp inside the footprint; fill remaining space with background color.
+	# Shrink inside the footprint; fill remaining space with background color.
 	var pad := maxf(2.0, minf(rect.size.x, rect.size.y) * 0.10)
 	var inner := rect.grow(-pad)
 	if inner.size.x <= 1.0 or inner.size.y <= 1.0:
 		inner = rect
 
-	# Fill the inner rect (allow cropping). Texture baseline faces East; map piece rotations:
-	# N=0/E=90/S=180/W=270 -> texture rotation should align with outward direction.
 	var rot := int(rotation_deg) % 360
 	if rot < 0:
 		rot += 360
 	if not rot in [0, 90, 180, 270]:
 		rot = 0
-	var tex_rot := (rot + 270) % 360
+	var tex_rot := (rot + int(rotation_offset_deg)) % 360
 
 	var center := inner.position + inner.size * 0.5
 	var local_size := inner.size
@@ -111,6 +196,7 @@ static func draw_highway_offramp(canvas, rect: Rect2, tex: Texture2D, rotation_d
 		local_size = Vector2(inner.size.y, inner.size.x)
 
 	var mod := Color(1, 1, 1, 1)
+	mod.a = clampf(alpha, 0.0, 1.0)
 	canvas.draw_set_transform(center, deg_to_rad(float(tex_rot)), Vector2.ONE)
 	TextureUtilsClass.draw_texture_aspect_fill(canvas, tex, Rect2(-local_size * 0.5, local_size), mod)
 	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -189,47 +275,6 @@ static func draw_restaurant(
 				idx = int(f)
 		if idx > 0:
 			draw_restaurant_index(canvas, cell_size, structure_rect, idx, alpha)
-
-static func draw_coffee_shop(
-	canvas,
-	cell_size: int,
-	_anchor: Vector2i,
-	info: Dictionary,
-	structure_rect: Rect2,
-	alpha: float,
-	restaurant_logo_piece_ids: Array,
-	coffee_shop_logo_piece_ids: Array
-) -> void:
-	var owner := int(info.get("owner", -1))
-	if owner < 0:
-		return
-	if canvas._skin == null:
-		return
-	if restaurant_logo_piece_ids.is_empty():
-		return
-
-	var logo_map: Dictionary = canvas._player_restaurant_logo_ids
-	var logo_id := int(logo_map.get(owner, -1))
-	if logo_id < 0 or logo_id >= restaurant_logo_piece_ids.size():
-		return
-
-	# 优先使用 coffee shop 专用 logo；缺失则回退到餐厅 logo
-	var base_key: String = restaurant_logo_piece_ids[logo_id]
-	var coffee_key := ""
-	if coffee_shop_logo_piece_ids != null and not coffee_shop_logo_piece_ids.is_empty() and logo_id < coffee_shop_logo_piece_ids.size():
-		coffee_key = str(coffee_shop_logo_piece_ids[logo_id])
-	var logo_key := base_key
-	if not coffee_key.is_empty() and canvas._skin.piece_textures.has(coffee_key):
-		logo_key = coffee_key
-
-	var tex: Texture2D = canvas._skin.get_piece_texture(logo_key)
-	var bg := Color("#f4edd1")
-	bg.a = clampf(alpha, 0.0, 1.0)
-	canvas.draw_rect(structure_rect, bg, true)
-
-	var pad := maxf(2.0, float(cell_size) * 0.10)
-	var logo_rect := structure_rect.grow(-pad)
-	TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, logo_rect, Color(1, 1, 1, 0.98 * alpha))
 
 static func draw_restaurant_entrance_marker(canvas, cell_size: int, anchor: Vector2i, info: Dictionary, alpha: float = 1.0) -> void:
 	var min_pos_val = info.get("min", null)
@@ -423,37 +468,6 @@ static func draw_house_and_garden(canvas, cell_size: int, anchor: Vector2i, info
 	var house_id: String = str(info.get("house_id", ""))
 	draw_house_id(canvas, cell_size, house_rect, house_id)
 
-static func draw_apartment(canvas, cell_size: int, info: Dictionary, alpha: float = 1.0) -> void:
-	if canvas == null or canvas._skin == null:
-		return
-	var min_pos_val = info.get("min", null)
-	var max_pos_val = info.get("max", null)
-	if not (min_pos_val is Vector2i) or not (max_pos_val is Vector2i):
-		return
-	var min_pos: Vector2i = min_pos_val
-	var max_pos: Vector2i = max_pos_val
-	var size_cells := (max_pos - min_pos) + Vector2i.ONE
-	var structure_rect := Rect2(Vector2(min_pos.x * cell_size, min_pos.y * cell_size), Vector2(size_cells.x * cell_size, size_cells.y * cell_size))
-
-	var a := clampf(alpha, 0.0, 1.0)
-
-	# 底色：公寓
-	var bg := Color("#814e60")
-	bg.a = a
-	canvas.draw_rect(structure_rect, bg, true)
-
-	# 贴图：公寓（稍微缩小，靠中下方；对齐方式与房屋一致）
-	var tex: Texture2D = canvas._skin.get_piece_texture("apartment")
-	var pad := maxf(1.0, float(cell_size) * 0.08)
-	var bottom_gap := maxf(2.0, float(cell_size) * 0.10)
-	var tex_rect := structure_rect.grow(-pad)
-	tex_rect.size.y = maxf(0.0, tex_rect.size.y - bottom_gap)
-	TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, tex_rect, Color(1, 1, 1, 0.9 * a), "bottom")
-
-	# 公寓 ID：右上角
-	var house_id: String = str(info.get("house_id", ""))
-	draw_house_id(canvas, cell_size, structure_rect, house_id)
-
 static func compute_house_id_rect(cell_size: int, structure_rect: Rect2) -> Rect2:
 	var pad := maxf(3.0, float(cell_size) * 0.10)
 	var bg_size := Vector2(float(cell_size) * 0.90, float(cell_size) * 0.58)
@@ -513,10 +527,10 @@ static func _draw_dir_arrow(canvas, rect: Rect2, dir: String, col: Color) -> voi
 
 	canvas.draw_colored_polygon(points, col)
 
-static func draw_lobbyists_road_piece(canvas, cell_size: int, anchor: Vector2i, info: Dictionary, alpha: float = 1.0) -> void:
+static func draw_road_overlay_piece(canvas, cell_size: int, anchor: Vector2i, info: Dictionary, overlay: Dictionary, alpha: float = 1.0) -> void:
 	if canvas == null or canvas._skin == null:
 		return
-	var piece_id: String = str(info.get("piece_id", ""))
+	var piece_id: String = str(info.get("piece_id", "")).strip_edges()
 	if piece_id.is_empty():
 		return
 	var cells_val = info.get("cells", null)
@@ -524,11 +538,8 @@ static func draw_lobbyists_road_piece(canvas, cell_size: int, anchor: Vector2i, 
 		return
 
 	var rot := int(info.get("rotation", 0))
-
-	var overlay_val = LobbyistsRoadOverlaysClass.ROAD_OVERLAYS.get(piece_id, null)
-	if not (overlay_val is Dictionary):
+	if overlay == null or overlay.is_empty():
 		return
-	var overlay: Dictionary = overlay_val
 
 	# Base road visuals: reuse the same road textures as normal roads, then overlay arrows + roadworks sign.
 	var segments_val = overlay.get("segments", null)
@@ -581,18 +592,19 @@ static func draw_lobbyists_road_piece(canvas, cell_size: int, anchor: Vector2i, 
 		Vector2(size_cells.x * cell_size, size_cells.y * cell_size)
 	)
 
-	var sign_tex: Texture2D = canvas._skin.get_piece_texture("lobbyists_roadworks_marker")
-	var pad := maxf(2.0, float(cell_size) * 0.12)
-	var sign_rect := structure_rect.grow(-pad)
-	var sign_dst := TextureUtilsClass.get_texture_aspect_fit_rect(sign_tex, sign_rect)
-	TextureUtilsClass.draw_texture_rect_clipped_by_view_cells(
-		canvas,
-		sign_tex,
-		sign_dst,
-		cells_val,
-		cell_size,
-		Color(1, 1, 1, 0.90 * clampf(alpha, 0.0, 1.0))
-	)
+	var sign_tex: Texture2D = RoadsPassClass.get_roadworks_marker_texture(canvas._skin)
+	if sign_tex != null:
+		var pad := maxf(2.0, float(cell_size) * 0.12)
+		var sign_rect := structure_rect.grow(-pad)
+		var sign_dst := TextureUtilsClass.get_texture_aspect_fit_rect(sign_tex, sign_rect)
+		TextureUtilsClass.draw_texture_rect_clipped_by_view_cells(
+			canvas,
+			sign_tex,
+			sign_dst,
+			cells_val,
+			cell_size,
+			Color(1, 1, 1, 0.90 * clampf(alpha, 0.0, 1.0))
+		)
 
 	var arrows_val = overlay.get("arrows", null)
 	if not (arrows_val is Array):

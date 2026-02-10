@@ -6,7 +6,7 @@ extends BaseTileOverlay
 signal path_selected(house_id: String, restaurant_id: String)
 
 const RoadGraphClass = preload("res://core/map/road_graph.gd")
-const ROADWORK_MARKERS_KEY := "lobbyists_roadworks_markers"
+const MapOverlayProviderRegistryClass = preload("res://core/rules/map_overlay_provider_registry.gd")
 const DISTANCE_OVERRIDE_NONE := -999999999
 var _road_graph = null  # RoadGraph 引用
 var _map_data: Dictionary = {}
@@ -179,17 +179,17 @@ func _calculate_distance(house_pos: Vector2i, restaurant_pos: Vector2i, path_poi
 	return -1
 
 func _count_roadworks_penalty(path_points: Array[Vector2i]) -> int:
-	var markers_val = _map_data.get(ROADWORK_MARKERS_KEY, null)
-	if not (markers_val is Dictionary):
+	var marker_positions: Array[Vector2i] = MapOverlayProviderRegistryClass.get_roadworks_marker_world_positions(_map_data)
+	if marker_positions.is_empty():
 		return 0
-	var markers: Dictionary = markers_val
-	if markers.is_empty():
-		return 0
+	var marker_set := {}
+	for p in marker_positions:
+		if p is Vector2i:
+			marker_set[p] = true
 	var penalty := 0
 	for i in range(1, path_points.size()):
 		var p: Vector2i = path_points[i]
-		var key := "%d,%d" % [p.x, p.y]
-		if markers.has(key):
+		if marker_set.has(p):
 			penalty += 1
 	return penalty
 

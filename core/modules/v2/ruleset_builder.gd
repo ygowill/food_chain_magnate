@@ -114,6 +114,31 @@ class RulesetRegistrarV2:
 	func register_range_origin_provider(provider_id: String, callback: Callable, priority: int = 100) -> Result:
 		return _ruleset.register_range_origin_provider(provider_id, callback, priority, _module_id)
 
+	func register_phase_action_ui_modal(phase_name: String, kind: String, scene_path: String, priority: int = 100) -> Result:
+		if _ruleset == null or not _ruleset.has_method("register_phase_action_ui_modal"):
+			return Result.failure("RulesetRegistrarV2: ruleset 缺少 register_phase_action_ui_modal")
+		return _ruleset.register_phase_action_ui_modal(phase_name, kind, scene_path, priority, _module_id)
+
+	func register_map_overlay_provider(provider_id: String, callback: Callable, priority: int = 100) -> Result:
+		if _ruleset == null or not _ruleset.has_method("register_map_overlay_provider"):
+			return Result.failure("RulesetRegistrarV2: ruleset 缺少 register_map_overlay_provider")
+		return _ruleset.register_map_overlay_provider(provider_id, callback, priority, _module_id)
+
+	func register_piece_ui_hint(piece_id: String, hints: Dictionary, priority: int = 100) -> Result:
+		if _ruleset == null or not _ruleset.has_method("register_piece_ui_hint"):
+			return Result.failure("RulesetRegistrarV2: ruleset 缺少 register_piece_ui_hint")
+		return _ruleset.register_piece_ui_hint(piece_id, hints, priority, _module_id)
+
+	func register_effect_ui_text(effect_id: String, text: String, priority: int = 100) -> Result:
+		if _ruleset == null or not _ruleset.has_method("register_effect_ui_text"):
+			return Result.failure("RulesetRegistrarV2: ruleset 缺少 register_effect_ui_text")
+		return _ruleset.register_effect_ui_text(effect_id, text, priority, _module_id)
+
+	func register_milestone_effect_ui_text(effect_type: String, text: String, priority: int = 100) -> Result:
+		if _ruleset == null or not _ruleset.has_method("register_milestone_effect_ui_text"):
+			return Result.failure("RulesetRegistrarV2: ruleset 缺少 register_milestone_effect_ui_text")
+		return _ruleset.register_milestone_effect_ui_text(effect_type, text, priority, _module_id)
+
 	func register_employee_pool_patch(patch_id: String, employee_id: String, delta: int) -> Result:
 		return _ruleset.register_employee_pool_patch(patch_id, employee_id, delta, _module_id)
 

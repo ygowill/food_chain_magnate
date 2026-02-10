@@ -1,13 +1,13 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://ui/components/modal_panel/kimchi_storage_modal.gd" id="1_kimchi_storage_modal"]
+[ext_resource type="Script" path="res://modules/base_rules/ui/components/modal_panel/fridge_keep_modal.gd" id="1_fridge_keep_modal"]
 
-[node name="KimchiStorageModal" type="Control"]
+[node name="FridgeKeepModal" type="Control"]
 layout_mode = 3
 anchors_preset = 0
 visible = false
 mouse_filter = 0
-script = ExtResource("1_kimchi_storage_modal")
+script = ExtResource("1_fridge_keep_modal")
 
 [node name="Overlay" type="ColorRect" parent="."]
 layout_mode = 1
@@ -20,7 +20,7 @@ mouse_filter = 0
 color = Color(0, 0, 0, 0.72)
 
 [node name="Panel" type="PanelContainer" parent="."]
-custom_minimum_size = Vector2(640, 360)
+custom_minimum_size = Vector2(720, 520)
 layout_mode = 0
 mouse_filter = 0
 
@@ -43,35 +43,37 @@ theme_override_constants/separation = 10
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 18
-text = "泡菜冰柜"
+text = "冰箱保留"
 horizontal_alignment = 1
 
-[node name="ContentHost" type="Control" parent="Panel/MarginContainer/VBoxContainer"]
+[node name="ContentHost" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost"]
 layout_mode = 2
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
 theme_override_constants/separation = 10
 
 [node name="InfoLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
-text = ""
+text = "请选择保留的食物/饮料（总量不超过容量）"
 horizontal_alignment = 1
 
-[node name="DetailLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer"]
+[node name="SummaryLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
-text = ""
+text = "已选择：0/0"
 horizontal_alignment = 1
-autowrap_mode = 3
+
+[node name="ItemsVBox" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
 
 [node name="ButtonRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -79,14 +81,14 @@ alignment = 2
 theme_override_constants/separation = 10
 
 [node name="CancelButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ButtonRow"]
-custom_minimum_size = Vector2(140, 38)
+custom_minimum_size = Vector2(120, 38)
 layout_mode = 2
-text = "不存泡菜"
+text = "取消"
 
 [node name="ConfirmButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ButtonRow"]
-custom_minimum_size = Vector2(140, 38)
+custom_minimum_size = Vector2(120, 38)
 layout_mode = 2
-text = "存泡菜"
+text = "确认"
 
 [node name="HintLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -94,4 +96,3 @@ theme_override_font_sizes/font_size = 12
 theme_override_colors/font_color = Color(0.7, 0.7, 0.75, 1)
 text = "ESC 取消 | 按住 Space 查看地图"
 horizontal_alignment = 1
-

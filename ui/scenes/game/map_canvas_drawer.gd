@@ -2,23 +2,14 @@
 class_name MapCanvasDrawer
 extends RefCounted
 
-const RESTAURANT_LOGO_PIECE_IDS = [
-	"restaurant_logo_fried_geese_donkey",
-	"restaurant_logo_gluttony_inc_burgers",
-	"restaurant_logo_golden_duck_diner",
-	"restaurant_logo_santa_maria_pizza",
-	"restaurant_logo_xango_blues_bar",
-	"restaurant_logo_sixth_chain",
-]
-
-const COFFEE_SHOP_LOGO_PIECE_IDS = [
-	"restaurant_logo_fried_geese_donkey_coffee",
-	"restaurant_logo_gluttony_inc_burgers_coffee",
-	"restaurant_logo_golden_duck_diner_coffee",
-	"restaurant_logo_santa_maria_pizza_coffee",
-	"restaurant_logo_xango_blues_bar_coffee",
-	"restaurant_logo_sixth_chain_coffee",
-]
+static func _get_restaurant_logo_piece_ids(canvas) -> Array:
+	if canvas == null or canvas._skin == null:
+		return []
+	if canvas._skin.has_method("get_restaurant_logo_piece_ids"):
+		var ids_val = canvas._skin.get_restaurant_logo_piece_ids()
+		if ids_val is Array:
+			return ids_val
+	return []
 
 const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
 const OverlayUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_overlay_utils.gd")
@@ -27,6 +18,7 @@ const GroundPassClass = preload("res://ui/scenes/game/map_canvas_drawer_ground_p
 const RoadsPassClass = preload("res://ui/scenes/game/map_canvas_drawer_roads_pass.gd")
 const StructuresPassClass = preload("res://ui/scenes/game/map_canvas_drawer_structures_pass.gd")
 const TilesPassClass = preload("res://ui/scenes/game/map_canvas_drawer_tiles_pass.gd")
+const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
 
 static func _draw_texture_aspect_fit(canvas, texture: Texture2D, rect: Rect2, modulate: Color = Color(1, 1, 1, 1), v_align: String = "center") -> void:
 	TextureUtilsClass.draw_texture_aspect_fit(canvas, texture, rect, modulate, v_align)
@@ -42,6 +34,18 @@ static func _draw_texture_rect_clipped_by_view_cells(canvas, texture: Texture2D,
 
 static func _draw_texture_aspect_fill(canvas, texture: Texture2D, rect: Rect2, modulate: Color = Color(1, 1, 1, 1)) -> void:
 	TextureUtilsClass.draw_texture_aspect_fill(canvas, texture, rect, modulate)
+
+static func _read_color_hint(hints: Dictionary, key: String, fallback: Color) -> Color:
+	if hints == null or hints.is_empty():
+		return fallback
+	var val = hints.get(key, null)
+	if val is Color:
+		return val
+	if val is String:
+		var s := str(val).strip_edges()
+		if not s.is_empty():
+			return Color(s)
+	return fallback
 
 static func draw(canvas) -> void:
 	if canvas._grid_size == Vector2i.ZERO:
@@ -260,13 +264,12 @@ static func _draw_structure_preview_piece(canvas, cell_size: int, preview_info: 
 		"cells": view_cells,
 	}
 
+	var logo_piece_ids: Array = _get_restaurant_logo_piece_ids(canvas)
+
 	if piece_id == "restaurant":
-		StructuresPassClass.draw_restaurant(canvas, cell_size, anchor, info, structure_rect, alpha, RESTAURANT_LOGO_PIECE_IDS)
+		StructuresPassClass.draw_restaurant(canvas, cell_size, anchor, info, structure_rect, alpha, logo_piece_ids)
 	elif piece_id == "house" or piece_id == "house_with_garden":
 		StructuresPassClass.draw_house_and_garden(canvas, cell_size, anchor, info, alpha)
-	elif piece_id == "highway_offramp":
-		var tex: Texture2D = canvas._skin.get_piece_texture(piece_id)
-		StructuresPassClass.draw_highway_offramp(canvas, structure_rect, tex, rotation)
 	elif piece_id == "marketing":
 		# Marketing preview is drawn as a semi-transparent piece (issue_tracker #36).
 		var p := {
@@ -274,12 +277,39 @@ static func _draw_structure_preview_piece(canvas, cell_size: int, preview_info: 
 			"product": str(preview_info.get("product", "")),
 		}
 		_draw_marketing_placement(canvas, cell_size, p, 0.55, structure_rect)
-	elif piece_id.begins_with("lobbyists_road_"):
-		StructuresPassClass.draw_lobbyists_road_piece(canvas, cell_size, anchor, info, alpha)
-	elif piece_id == "park" or piece_id.begins_with("lobbyists_park_"):
-		StructuresPassClass.draw_park_piece(canvas, cell_size, info, alpha)
 	else:
-		StructuresPassClass.draw_generic_piece(canvas, cell_size, info, alpha)
+			var road_overlay := PieceUiHintsRegistryClass.get_road_overlay(piece_id)
+			if not road_overlay.is_empty():
+				StructuresPassClass.draw_road_overlay_piece(canvas, cell_size, anchor, info, road_overlay, alpha)
+			else:
+				var hints := PieceUiHintsRegistryClass.get_hints(piece_id)
+				var style := str(hints.get("structure_style", "")).strip_edges()
+				var drew := false
+				if style == "house_id":
+					var bg_col := _read_color_hint(hints, "bg_color", Color("#814e60"))
+					StructuresPassClass.draw_house_id_structure(canvas, cell_size, info, structure_rect, bg_col, alpha)
+					drew = true
+				elif style == "player_logo_bg":
+					var owner2 := int(info.get("owner", -1))
+					if owner2 >= 0:
+						var bg_col2 := _read_color_hint(hints, "bg_color", Color("#f4edd1"))
+						var suffix := str(hints.get("logo_variant_suffix", "")).strip_edges()
+						StructuresPassClass.draw_player_logo_structure(canvas, cell_size, anchor, info, structure_rect, alpha, logo_piece_ids, bg_col2, suffix)
+						drew = true
+				elif style == "opaque_rotated_piece":
+					var tex2: Texture2D = canvas._skin.get_piece_texture(piece_id)
+					if tex2 != null:
+						var rot_offset := int(hints.get("rotation_offset_deg", 0))
+						var bg_col3 := _read_color_hint(hints, "bg_color", Color("#4c8078"))
+						StructuresPassClass.draw_opaque_rotated_piece(canvas, structure_rect, tex2, rotation, rot_offset, bg_col3, alpha)
+						drew = true
+
+				if not drew:
+					var ui_kind := PieceUiHintsRegistryClass.get_kind(piece_id)
+					if piece_id == "park" or ui_kind == "park":
+						StructuresPassClass.draw_park_piece(canvas, cell_size, info, alpha)
+					else:
+						StructuresPassClass.draw_generic_piece(canvas, cell_size, info, alpha)
 
 static func _draw_roadworks_markers(canvas, cell_size: int) -> void:
 	RoadsPassClass.draw_roadworks_markers(canvas, cell_size)
@@ -294,7 +324,7 @@ static func _draw_drink_sources(canvas, cell_size: int) -> void:
 	StructuresPassClass.draw_drink_sources(canvas, cell_size)
 
 static func _draw_structures(canvas, cell_size: int) -> void:
-	StructuresPassClass.draw_structures(canvas, cell_size, RESTAURANT_LOGO_PIECE_IDS, COFFEE_SHOP_LOGO_PIECE_IDS)
+	StructuresPassClass.draw_structures(canvas, cell_size, _get_restaurant_logo_piece_ids(canvas))
 
 static func _draw_marketing(canvas, cell_size: int) -> void:
 	MarketingPassClass.draw_marketing(canvas, cell_size)
