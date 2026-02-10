@@ -71,6 +71,9 @@ jobs:
         run: |
           set -euo pipefail
 
+          sudo apt-get update -y
+          sudo apt-get install -y unzip zip
+
           mkdir -p "$HOME/.cache/godot/bin"
           if [[ ! -f "$HOME/.cache/godot/bin/godot" ]]; then
             curl -sSL -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_linux.x86_64.zip"
@@ -82,6 +85,7 @@ jobs:
           fi
 
           echo "$HOME/.cache/godot/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.cache/godot/bin:$PATH"
 
           template_dir="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
           if [[ ! -d "$template_dir" ]] || [[ -z "$(ls -A "$template_dir" 2>/dev/null || true)" ]]; then
@@ -123,6 +127,9 @@ jobs:
         run: |
           set -euo pipefail
 
+          sudo apt-get update -y
+          sudo apt-get install -y unzip zip
+
           mkdir -p "$HOME/.cache/godot/bin"
           if [[ ! -f "$HOME/.cache/godot/bin/godot" ]]; then
             curl -sSL -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_linux.x86_64.zip"
@@ -134,6 +141,7 @@ jobs:
           fi
 
           echo "$HOME/.cache/godot/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.cache/godot/bin:$PATH"
 
           template_dir="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
           if [[ ! -d "$template_dir" ]] || [[ -z "$(ls -A "$template_dir" 2>/dev/null || true)" ]]; then
