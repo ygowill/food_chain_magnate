@@ -4,6 +4,7 @@ class_name DemandIndicator
 extends Control
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 
 var _house_demands: Dictionary = {}  # house_id -> {demands, position, satisfied}
 var _demand_markers: Dictionary = {}  # house_id -> DemandMarker
@@ -116,9 +117,7 @@ func _ensure_skin() -> void:
 	if _skin != null:
 		return
 
-	var base_dir := "res://modules"
-	if Globals != null:
-		base_dir = str(Globals.modules_v2_base_dir)
+	var base_dir := ModulesBaseDirClass.get_base_dir()
 	var mods := _visual_modules
 	if mods.is_empty() and Globals != null and (Globals.enabled_modules_v2 is Array):
 		mods = Array(Globals.enabled_modules_v2, TYPE_STRING, "", null)

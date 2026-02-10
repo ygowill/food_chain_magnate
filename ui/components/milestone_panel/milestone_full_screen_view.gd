@@ -17,6 +17,7 @@ const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
 const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const MilestonePanelClass = preload("res://ui/components/milestone_panel/milestone_panel.gd")
+const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 
 const MAX_COLUMNS := 5
 const CARD_MIN_WIDTH := 220
@@ -191,7 +192,7 @@ func _ensure_skin_for_state(state: GameState) -> void:
 	var modules: Array[String] = []
 	if state.modules is Array:
 		modules = Array(state.modules, TYPE_STRING, "", null)
-	var base_dir := Globals.modules_v2_base_dir if Globals != null else "res://modules"
+	var base_dir := ModulesBaseDirClass.get_base_dir()
 	var key := "%s|%s" % [base_dir, ",".join(modules)]
 	if _skin != null and key == _skin_key:
 		return

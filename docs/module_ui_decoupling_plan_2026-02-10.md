@@ -327,12 +327,30 @@
 
 ### P2-1) UI 分散的 `base_dir := "res://modules"` 回退值
 
+- **状态**
+  - ✅ 已完成（2026-02-10）
+- **涉及位置**
+  - `ui/utils/modules_base_dir.gd`
+  - `ui/components/inventory_panel/inventory_panel.gd`
+  - `ui/components/production_panel/production_panel.gd`
+  - `ui/components/dinner_time/dinner_time_overlay.gd`
+  - `ui/components/demand_indicator/demand_indicator.gd`
+  - `ui/components/marketing_panel/marketing_panel_icon_cache.gd`
+  - `ui/overlays/marketing_range_overlay.gd`
+  - `ui/components/milestone_panel/milestone_full_screen_view.gd`
+  - `ui/components/reserve_area/reserve_area_full_screen_view.gd`
 - **迁移/解耦目标**
-  - UI 统一使用 `Globals.modules_v2_base_dir`（或单 helper），减少散落回退。
-- **建议实施**
-  - 新增 `ui/utils/modules_base_dir.gd`（或等价 helper）集中回退策略。
+  - UI 统一使用 `Globals.modules_v2_base_dir` 的回退策略（单 helper），减少散落硬编码。
+- **已实施改动**
+  - 新增 `ui/utils/modules_base_dir.gd`：`ModulesBaseDirClass.get_base_dir()` 优先读取 `Globals.modules_v2_base_dir`，否则回退 `GameDefaults.DEFAULT_MODULES_V2_BASE_DIR`（支持 `;` 分隔多目录）。
+  - 将 UI 中分散的 `base_dir := "res://modules"` / `Globals ... else "res://modules"` 收口到 helper（上述位置列表）。
+- **新增/补充测试**
+  - `ui/scenes/tests/ui_modules_base_dir_contract_test.gd`（扫描 `ui/**` 生产代码，禁止出现 `res://modules` 字符串；排除 `ui/scenes/tests/**`）
+- **验收结果**
+  - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
 - **验收标准**
-  - `rg -n '\"res://modules\"' ui --glob '!ui/scenes/tests/**'` 命中收敛到极少数（理想为 0）。
+  - `rg -n '\"res://modules\"' ui --glob '!ui/scenes/tests/**'` 返回空。
 
 ### P2-2) 产品名映射（coffee/kimchi/noodles/sushi）写死在 UI
 

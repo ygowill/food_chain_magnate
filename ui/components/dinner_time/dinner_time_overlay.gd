@@ -7,6 +7,7 @@ signal order_confirmed(restaurant_id: String, house_id: String, products: Dictio
 signal phase_completed()
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 
 @onready var title_label: Label = $Layout/TopBarMargin/TopBar/TitleLabel
 @onready var progress_label: Label = $Layout/TopBarMargin/TopBar/ProgressLabel
@@ -166,9 +167,7 @@ func _ensure_skin() -> void:
 	if _skin != null:
 		return
 
-	var base_dir := "res://modules"
-	if Globals != null:
-		base_dir = str(Globals.modules_v2_base_dir)
+	var base_dir := ModulesBaseDirClass.get_base_dir()
 
 	var mods := _visual_modules
 	if mods.is_empty() and Globals != null and (Globals.enabled_modules_v2 is Array):
