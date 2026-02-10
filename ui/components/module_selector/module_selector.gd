@@ -291,20 +291,21 @@ func _build_module_group_box(title: String, module_ids: Array[String], bg_color:
 	box.add_theme_constant_override("separation", 6)
 	margin.add_child(box)
 
+	var title_label := Label.new()
+	title_label.text = title
+	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	title_label.max_lines_visible = 2
+	title_label.clip_text = true
+	title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	title_label.tooltip_text = title
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_child(title_label)
+
 	var header := HBoxContainer.new()
 	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.alignment = BoxContainer.ALIGNMENT_CENTER
-	header.add_theme_constant_override("separation", 10)
+	header.alignment = BoxContainer.ALIGNMENT_END
+	header.add_theme_constant_override("separation", 8)
 	box.add_child(header)
-
-	var label := Label.new()
-	label.text = title
-	label.autowrap_mode = TextServer.AUTOWRAP_OFF
-	label.clip_text = true
-	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	label.tooltip_text = title
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(label)
 
 	var mids_copy: Array[String] = module_ids.duplicate()
 
@@ -312,8 +313,9 @@ func _build_module_group_box(title: String, module_ids: Array[String], bg_color:
 	select_btn.text = "组选"
 	select_btn.disabled = not _editable
 	select_btn.custom_minimum_size = Vector2(72, 28)
-	select_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	UiStylesClass.apply_button_secondary(select_btn)
+	select_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
+	select_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	select_btn.pressed.connect(func() -> void:
 		_on_select_group_pressed(mids_copy)
 	)
@@ -324,8 +326,9 @@ func _build_module_group_box(title: String, module_ids: Array[String], bg_color:
 	clear_btn.text = "组不选"
 	clear_btn.disabled = not _editable
 	clear_btn.custom_minimum_size = Vector2(72, 28)
-	clear_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	UiStylesClass.apply_button_secondary(clear_btn)
+	clear_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
+	clear_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	clear_btn.pressed.connect(func() -> void:
 		_on_clear_group_pressed(mids_copy)
 	)
