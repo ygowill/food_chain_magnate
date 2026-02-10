@@ -8,6 +8,7 @@ extends RefCounted
 
 const SettingsDialogScene = preload("res://ui/dialogs/settings_dialog.tscn")
 const HelpTooltipManagerScene = preload("res://ui/components/help_tooltip/help_tooltip_manager.tscn")
+const EmployeeCardPreviewManagerScene = preload("res://ui/components/employee_card_preview/employee_card_preview_manager.tscn")
 const UIAnimationManagerScene = preload("res://ui/visual/ui_animation_manager.tscn")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const ZoomControllerClass = preload("res://ui/scenes/game/game_overlay_zoom.gd")
@@ -39,6 +40,7 @@ var zoom_control = null
 var dinner_time_overlay = null
 var settings_dialog = null
 var help_tooltip_manager = null
+var employee_card_preview_manager = null
 var ui_animation_manager = null
 
 var _zoom_controller = null
@@ -83,6 +85,11 @@ func initialize() -> void:
 		help_tooltip_manager = HelpTooltipManagerScene.instantiate()
 		_scene.add_child(help_tooltip_manager)
 	_setup_help_tooltips()
+
+	# 初始化员工卡片预览管理器（统一悬停/点击预览）
+	if employee_card_preview_manager == null:
+		employee_card_preview_manager = EmployeeCardPreviewManagerScene.instantiate()
+		_scene.add_child(employee_card_preview_manager)
 
 	# 初始化动画管理器
 	if ui_animation_manager == null:

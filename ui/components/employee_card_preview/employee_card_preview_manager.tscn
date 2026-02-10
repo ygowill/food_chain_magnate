@@ -1,0 +1,26 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/components/employee_card_preview/employee_card_preview_manager.gd" id="1_preview"]
+
+[node name="EmployeeCardPreviewManager" type="CanvasLayer"]
+layer = 110
+script = ExtResource("1_preview")
+
+[node name="PreviewPanel" type="PanelContainer" parent="."]
+visible = false
+custom_minimum_size = Vector2(160, 140)
+offset_right = 160.0
+offset_bottom = 140.0
+
+[node name="MarginContainer" type="MarginContainer" parent="PreviewPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="CardHost" type="Control" parent="PreviewPanel/MarginContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+

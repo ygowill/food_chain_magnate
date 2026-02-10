@@ -8,15 +8,18 @@ signal fold_toggled(step_index: int, expanded: bool)
 var step_index: int = -1
 var summary: String = ""
 var primary_entry_id: int = -1
+var primary_entry: Dictionary = {}
 var fold_enabled: bool = false
 var expanded: bool = true
 var child_event_count: int = 0
 
-var _label: Label
+var _label: RichTextLabel
 var _toggle_btn: Button
 var _panel_style: StyleBoxFlat = null
 var _timeline_is_future: bool = false
 var _timeline_is_cursor: bool = false
+
+const EmployeeLinksClass = preload("res://ui/components/game_log/game_log_employee_preview_links.gd")
 
 func _ready() -> void:
 	_build_ui()
@@ -54,11 +57,19 @@ func _build_ui() -> void:
 	_toggle_btn.pressed.connect(_on_toggle_pressed)
 	hbox.add_child(_toggle_btn)
 
-	_label = Label.new()
+	_label = RichTextLabel.new()
 	_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_label.add_theme_font_size_override("font_size", maxi(9, int(round(11.0 * scale))))
-	_label.add_theme_color_override("font_color", Color(0.82, 0.82, 0.85, 1))
+	_label.add_theme_font_size_override("normal_font_size", maxi(9, int(round(11.0 * scale))))
+	_label.add_theme_color_override("default_color", Color(0.82, 0.82, 0.85, 1))
+	_label.bbcode_enabled = false
+	_label.fit_content = true
 	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_label.scroll_active = false
+	_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	_label.meta_clicked.connect(_on_label_meta_clicked)
+	_label.meta_hover_started.connect(_on_label_meta_hover_started)
+	_label.meta_hover_ended.connect(_on_label_meta_hover_ended)
+	_label.gui_input.connect(_on_label_gui_input)
 	hbox.add_child(_label)
 
 	_update_text()
@@ -68,10 +79,16 @@ func _update_text() -> void:
 	var sum := str(summary).strip_edges()
 	if sum.is_empty():
 		sum = "(无摘要)"
+
+	var text := sum
 	if fold_enabled and child_event_count > 0 and not expanded:
-		_label.text = "%s (+%d)" % [sum, child_event_count]
-	else:
-		_label.text = sum
+		text = "%s (+%d)" % [sum, child_event_count]
+
+	if _label != null and is_instance_valid(_label):
+		var details_val = primary_entry.get("details", null)
+		var details: Dictionary = details_val if (details_val is Dictionary) else {}
+		EmployeeLinksClass.build_label(_label, text, details)
+
 	_update_fold_button()
 
 func _update_fold_button() -> void:
@@ -114,7 +131,7 @@ func apply_font_settings() -> void:
 	if _toggle_btn != null:
 		_toggle_btn.add_theme_font_size_override("font_size", maxi(9, int(round(11.0 * scale))))
 	if _label != null:
-		_label.add_theme_font_size_override("font_size", maxi(9, int(round(11.0 * scale))))
+		_label.add_theme_font_size_override("normal_font_size", maxi(9, int(round(11.0 * scale))))
 	_update_text()
 
 func _gui_input(event: InputEvent) -> void:
@@ -129,3 +146,58 @@ func _gui_input(event: InputEvent) -> void:
 			return
 	clicked.emit(get_timeline_index())
 
+func _get_preview_manager():
+	if get_tree() == null:
+		return null
+	for n in get_tree().get_nodes_in_group("employee_card_preview_manager"):
+		if n != null and is_instance_valid(n) and n.has_method("request_preview"):
+			return n
+	return null
+
+func _show_employee_preview(employee_id: String, immediate: bool) -> void:
+	var eid := str(employee_id).strip_edges()
+	if eid.is_empty():
+		return
+	var mgr = _get_preview_manager()
+	if mgr == null:
+		return
+	var pos := get_global_mouse_position()
+	if immediate and mgr.has_method("show_immediate"):
+		mgr.show_immediate(eid, pos)
+	else:
+		mgr.request_preview(eid, pos)
+
+func _hide_employee_preview() -> void:
+	var mgr = _get_preview_manager()
+	if mgr == null:
+		return
+	if mgr.has_method("hide_preview"):
+		mgr.hide_preview()
+
+func _on_label_meta_hover_started(meta) -> void:
+	if not EmployeeLinksClass.is_employee_meta(meta):
+		return
+	_show_employee_preview(EmployeeLinksClass.employee_id_from_meta(meta), false)
+
+func _on_label_meta_hover_ended(_meta) -> void:
+	_hide_employee_preview()
+
+func _on_label_meta_clicked(meta) -> void:
+	if not EmployeeLinksClass.is_employee_meta(meta):
+		return
+	_show_employee_preview(EmployeeLinksClass.employee_id_from_meta(meta), true)
+
+func _on_label_gui_input(event: InputEvent) -> void:
+	# 员工名字点击：显示预览并阻止时间线定位/详情双击。
+	if not (event is InputEventMouseButton):
+		return
+	var mb: InputEventMouseButton = event
+	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
+		return
+	if _label == null or not is_instance_valid(_label):
+		return
+	if _label.has_method("get_meta_under_cursor"):
+		var meta = _label.call("get_meta_under_cursor")
+		if EmployeeLinksClass.is_employee_meta(meta):
+			_show_employee_preview(EmployeeLinksClass.employee_id_from_meta(meta), true)
+			_label.accept_event()

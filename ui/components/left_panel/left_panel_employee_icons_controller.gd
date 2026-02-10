@@ -104,6 +104,11 @@ func _add_employee_entry_to_category(container: VBoxContainer, employee_id: Stri
 	var line := Label.new()
 	line.text = label_text
 	line.autowrap_mode = TextServer.AUTOWRAP_WORD
+	line.mouse_filter = Control.MOUSE_FILTER_STOP
+	line.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	line.mouse_entered.connect(Callable(self, "_on_employee_line_mouse_entered").bind(emp_id, line))
+	line.mouse_exited.connect(Callable(self, "_on_employee_line_mouse_exited"))
+	line.gui_input.connect(Callable(self, "_on_employee_line_gui_input").bind(emp_id, line))
 	var fs := 16
 	if Globals != null:
 		fs = int(Globals.get_scaled_font_size(16))
@@ -113,6 +118,48 @@ func _add_employee_entry_to_category(container: VBoxContainer, employee_id: Stri
 	else:
 		line.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95, 1))
 	container.add_child(line)
+
+func _get_preview_manager():
+	if _panel == null or not is_instance_valid(_panel):
+		return null
+	var tree = _panel.get_tree()
+	if tree == null:
+		return null
+	for n in tree.get_nodes_in_group("employee_card_preview_manager"):
+		if n != null and is_instance_valid(n) and n.has_method("request_preview"):
+			return n
+	return null
+
+func _on_employee_line_mouse_entered(employee_id: String, control: Control) -> void:
+	var mgr = _get_preview_manager()
+	if mgr == null:
+		return
+	if control == null or not is_instance_valid(control):
+		return
+	var pos: Vector2 = control.get_global_rect().position + (control.size / 2.0)
+	mgr.request_preview(str(employee_id), pos)
+
+func _on_employee_line_mouse_exited() -> void:
+	var mgr = _get_preview_manager()
+	if mgr == null:
+		return
+	if mgr.has_method("hide_preview"):
+		mgr.hide_preview()
+
+func _on_employee_line_gui_input(event: InputEvent, employee_id: String, control: Control) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var e: InputEventMouseButton = event
+	if e.button_index != MOUSE_BUTTON_LEFT or not e.pressed:
+		return
+	var mgr = _get_preview_manager()
+	if mgr == null:
+		return
+	if control == null or not is_instance_valid(control):
+		return
+	var pos: Vector2 = control.get_global_rect().position + (control.size / 2.0)
+	if mgr.has_method("show_immediate"):
+		mgr.show_immediate(str(employee_id), pos)
 
 func _get_employee_display_name(employee_id: String) -> String:
 	var emp_id := str(employee_id).strip_edges()

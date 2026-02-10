@@ -14,6 +14,8 @@ var _panel_style: StyleBoxFlat = null
 var _timeline_is_future: bool = false
 var _timeline_is_cursor: bool = false
 
+const EmployeeLinksClass = preload("res://ui/components/game_log/game_log_employee_preview_links.gd")
+
 const LOG_TYPE_COLORS: Dictionary = {
 	0: Color(0.6, 0.6, 0.6, 1),  # SYSTEM
 	1: Color(0.5, 0.7, 0.9, 1),  # PHASE
@@ -73,7 +75,11 @@ func _build_ui() -> void:
 	_message_label.fit_content = true
 	_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_message_label.scroll_active = false
-	_message_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_message_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	_message_label.meta_clicked.connect(_on_message_meta_clicked)
+	_message_label.meta_hover_started.connect(_on_message_meta_hover_started)
+	_message_label.meta_hover_ended.connect(_on_message_meta_hover_ended)
+	_message_label.gui_input.connect(_on_message_gui_input)
 	hbox.add_child(_message_label)
 
 	update_display()
@@ -174,5 +180,63 @@ func update_display() -> void:
 		_type_label.add_theme_color_override("font_color", type_color)
 
 	if _message_label != null:
-		_message_label.text = str(entry_data.get("message", ""))
+		var msg := str(entry_data.get("message", ""))
+		var details_val = entry_data.get("details", null)
+		var details: Dictionary = details_val if (details_val is Dictionary) else {}
+		EmployeeLinksClass.build_label(_message_label, msg, details)
 
+func _get_preview_manager():
+	if get_tree() == null:
+		return null
+	for n in get_tree().get_nodes_in_group("employee_card_preview_manager"):
+		if n != null and is_instance_valid(n) and n.has_method("request_preview"):
+			return n
+	return null
+
+func _show_employee_preview(employee_id: String, immediate: bool) -> void:
+	var eid := str(employee_id).strip_edges()
+	if eid.is_empty():
+		return
+	var mgr = _get_preview_manager()
+	if mgr == null:
+		return
+	var pos := get_global_mouse_position()
+	if immediate and mgr.has_method("show_immediate"):
+		mgr.show_immediate(eid, pos)
+	else:
+		mgr.request_preview(eid, pos)
+
+func _hide_employee_preview() -> void:
+	var mgr = _get_preview_manager()
+	if mgr == null:
+		return
+	if mgr.has_method("hide_preview"):
+		mgr.hide_preview()
+
+func _on_message_meta_hover_started(meta) -> void:
+	if not EmployeeLinksClass.is_employee_meta(meta):
+		return
+	_show_employee_preview(EmployeeLinksClass.employee_id_from_meta(meta), false)
+
+func _on_message_meta_hover_ended(_meta) -> void:
+	_hide_employee_preview()
+
+func _on_message_meta_clicked(meta) -> void:
+	if not EmployeeLinksClass.is_employee_meta(meta):
+		return
+	_show_employee_preview(EmployeeLinksClass.employee_id_from_meta(meta), true)
+
+func _on_message_gui_input(event: InputEvent) -> void:
+	# 员工名字点击：显示预览并阻止行点击（不影响其它区域的行点击/双击）。
+	if not (event is InputEventMouseButton):
+		return
+	var mb: InputEventMouseButton = event
+	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
+		return
+	if _message_label == null or not is_instance_valid(_message_label):
+		return
+	if _message_label.has_method("get_meta_under_cursor"):
+		var meta = _message_label.call("get_meta_under_cursor")
+		if EmployeeLinksClass.is_employee_meta(meta):
+			_show_employee_preview(EmployeeLinksClass.employee_id_from_meta(meta), true)
+			_message_label.accept_event()

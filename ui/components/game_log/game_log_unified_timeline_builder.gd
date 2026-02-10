@@ -49,6 +49,8 @@ static func build(
 	var init_entries: Array = entries_by_step.get(-1, [])
 	var init_header := _build_action_group_header_data(-1, {}, init_entries, show_phase_events)
 	var init_primary_id := int(init_header.get("primary_entry_id", -1))
+	var init_primary_entry_val = init_header.get("primary_entry", {})
+	var init_primary_entry: Dictionary = init_primary_entry_val if (init_primary_entry_val is Dictionary) else {}
 	var init_child_count := _count_event_items_for_action_group(init_entries, init_primary_id, show_phase_events)
 	var init_expanded := _is_expanded(is_action_group_expanded, -1)
 	_add_action_group_header_item(
@@ -57,6 +59,7 @@ static func build(
 		-1,
 		str(init_header.get("summary", "")),
 		init_primary_id,
+		init_primary_entry,
 		fold_details_enabled,
 		init_expanded,
 		init_child_count,
@@ -96,6 +99,8 @@ static func build(
 			var step_entries: Array = entries_by_step.get(idx, [])
 			var header := _build_action_group_header_data(idx, step, step_entries, show_phase_events)
 			var primary_id := int(header.get("primary_entry_id", -1))
+			var primary_entry_val = header.get("primary_entry", {})
+			var primary_entry: Dictionary = primary_entry_val if (primary_entry_val is Dictionary) else {}
 			var child_count := _count_event_items_for_action_group(step_entries, primary_id, show_phase_events)
 			var expanded := _is_expanded(is_action_group_expanded, idx)
 			_add_action_group_header_item(
@@ -104,6 +109,7 @@ static func build(
 				idx,
 				str(header.get("summary", "")),
 				primary_id,
+				primary_entry,
 				fold_details_enabled,
 				expanded,
 				child_count,
@@ -224,6 +230,7 @@ static func _build_action_group_header_data(step_index: int, step: Dictionary, e
 		return {
 			"summary": _build_action_group_fallback_summary(step_index, step),
 			"primary_entry_id": -1,
+			"primary_entry": {},
 		}
 	var primary := _pick_primary_entry_for_action_group(entries)
 	if primary != null and not primary.is_empty():
@@ -232,10 +239,12 @@ static func _build_action_group_header_data(step_index: int, step: Dictionary, e
 			return {
 				"summary": msg,
 				"primary_entry_id": int(primary.get("id", -1)),
+				"primary_entry": primary,
 			}
 	return {
 		"summary": _build_action_group_fallback_summary(step_index, step),
 		"primary_entry_id": -1,
+		"primary_entry": {},
 	}
 
 static func _pick_primary_entry_for_action_group(entries: Array) -> Dictionary:
@@ -319,6 +328,7 @@ static func _add_action_group_header_item(
 	step_index: int,
 	summary: String,
 	primary_entry_id: int,
+	primary_entry: Dictionary,
 	fold_enabled: bool,
 	expanded: bool,
 	child_event_count: int,
@@ -332,6 +342,7 @@ static func _add_action_group_header_item(
 	item.step_index = int(step_index)
 	item.summary = str(summary)
 	item.primary_entry_id = int(primary_entry_id)
+	item.primary_entry = primary_entry.duplicate(true) if (primary_entry is Dictionary) else {}
 	item.fold_enabled = bool(fold_enabled)
 	item.expanded = bool(expanded)
 	item.child_event_count = int(child_event_count)
