@@ -293,8 +293,7 @@ func _build_module_group_box(title: String, module_ids: Array[String], bg_color:
 
 	var title_label := Label.new()
 	title_label.text = title
-	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	title_label.max_lines_visible = 2
+	title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	title_label.clip_text = true
 	title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title_label.tooltip_text = title
