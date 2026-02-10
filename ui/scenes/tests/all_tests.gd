@@ -480,6 +480,10 @@ func _run_all() -> int:
 						"fn": func() -> Result: return TestRefs.KetchupMechanismV2TestClass.run(2, 12345),
 					},
 					{
+						"name": "KimchiStorageModalUiTest",
+						"fn": func() -> Result: return await TestRefs.KimchiStorageModalUiTestClass.run(12345),
+					},
+					{
 						"name": "KimchiV2Test",
 						"fn": func() -> Result: return TestRefs.KimchiV2TestClass.run(2, 12345),
 					},
