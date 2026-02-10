@@ -33,6 +33,8 @@ const ROLE_SUB_PRIORITY_IN_GROUP_0 := {
 	"new_shop": 1,
 }
 
+const TAG_UI_LAYOUT_BOTTOM := "ui_layout_bottom"
+
 static func layout(
 	node_ids: Array[String],
 	edges_out: Dictionary,
@@ -42,7 +44,8 @@ static func layout(
 	layer_spacing: float,
 	node_spacing_y: float,
 	padding: Vector2 = Vector2(40, 40),
-	iterations: int = 6
+	iterations: int = 6,
+	tags_by_id: Dictionary = {}
 ) -> Dictionary:
 	var ids: Array[String] = []
 	ids.append_array(node_ids)
@@ -56,7 +59,7 @@ static func layout(
 	# (GDScript doesn't support discard assignment like `_ = iterations`.)
 
 	var roles: Dictionary = _normalize_roles(ids, role_by_id)
-	var positions: Dictionary = _assign_positions_lanes(ids, roles, layer_by_id, layers, edges_out, edges_in, node_size, layer_spacing, node_spacing_y)
+	var positions: Dictionary = _assign_positions_lanes(ids, roles, layer_by_id, layers, edges_out, edges_in, tags_by_id, node_size, layer_spacing, node_spacing_y)
 	var bounds: Rect2 = _compute_bounds(ids, positions, node_size, padding)
 	var shifted_positions: Dictionary = _shift_positions(ids, positions, bounds.position)
 
@@ -89,6 +92,7 @@ static func _assign_positions_lanes(
 	layers: Array,
 	edges_out: Dictionary,
 	edges_in: Dictionary,
+	tags_by_id: Dictionary,
 	node_size: Vector2,
 	layer_spacing: float,
 	node_spacing_y: float
@@ -148,15 +152,27 @@ static func _assign_positions_lanes(
 					break
 				track += 1
 
-		# 将 fry_chef 固定放在厨师升级路线（produce_food lane）的最下方，
+		# 将带有 UI 布局提示 tag 的 leaf 节点固定放在厨师升级路线（produce_food lane）的最下方，
 		# 避免因 ID 排序/模块注入导致其它厨师路线的位置发生变化。
-		if gi2 == produce_food_group and group_ids.has("fry_chef") and track_by_id.has("fry_chef"):
-			var outs_val = edges_out.get("fry_chef", [])
-			var outs: Array = outs_val if outs_val is Array else []
-			if outs.is_empty():
-				var bottom_track := max_track + 1
-				track_by_id["fry_chef"] = bottom_track
-				max_track = maxi(max_track, bottom_track)
+		if gi2 == produce_food_group:
+			var bottom_ids: Array[String] = []
+			for nid_val in group_ids:
+				var nid := str(nid_val)
+				if nid.is_empty():
+					continue
+				var tags_val = tags_by_id.get(nid, null)
+				if tags_val is Array and Array(tags_val).has(TAG_UI_LAYOUT_BOTTOM) and track_by_id.has(nid):
+					bottom_ids.append(nid)
+			if not bottom_ids.is_empty():
+				bottom_ids.sort()
+				var next_track := max_track + 1
+				for bottom_id in bottom_ids:
+					var outs_val = edges_out.get(bottom_id, [])
+					var outs: Array = outs_val if outs_val is Array else []
+					if outs.is_empty():
+						track_by_id[bottom_id] = next_track
+						max_track = maxi(max_track, next_track)
+						next_track += 1
 		track_count_by_group[gi2] = maxi(0, max_track + 1)
 
 	var base_y_by_group: Array[float] = []

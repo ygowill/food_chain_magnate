@@ -108,6 +108,14 @@ func _run_all() -> int:
 			"fn": func() -> Result: return TestRefs.UiProductNameMappingContractTestClass.run(),
 		},
 		{
+			"name": "UiFryChefEmployeeIdContractTest",
+			"fn": func() -> Result: return TestRefs.UiFryChefEmployeeIdContractTestClass.run(),
+		},
+		{
+			"name": "EmployeeTreeLayoutBottomTagTest",
+			"fn": func() -> Result: return TestRefs.EmployeeTreeLayoutBottomTagTestClass.run(),
+		},
+		{
 			"name": "GamePanelModalsControllerKindContractTest",
 			"fn": func() -> Result: return TestRefs.GamePanelModalsControllerKindContractTestClass.run(),
 		},

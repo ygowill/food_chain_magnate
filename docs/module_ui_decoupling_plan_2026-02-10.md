@@ -373,8 +373,24 @@
 
 ### P2-3) EmployeeTree 布局写死 `fry_chef`
 
+- **状态**
+  - ✅ 已完成（2026-02-10）
+- **涉及位置**
+  - `ui/components/employee_tree/employee_tree_layout.gd`
+  - `ui/components/employee_tree/employee_tree_graph.gd`
+  - `modules/fry_chefs/content/employees/fry_chef.json`
 - **迁移/解耦目标**
   - 以 employee tags/role 驱动布局，而非写死某个 optional 模块员工 id。
+- **已实施改动**
+  - 移除 `EmployeeTreeLayout` 中对 `"fry_chef"` 的硬编码：改为读取 `tags_by_id`，并在 `produce_food` lane 内将带 `ui_layout_bottom` tag 且为 leaf 的节点固定到最下方 track。
+  - `EmployeeTreeGraph` 在构建 layout 输入时传入 `tags_by_id`（来自 `EmployeeDef.tags`）。
+  - `fry_chef` 员工定义增加 `tags: ["ui_layout_bottom"]`，将布局意图下沉到 content 侧（模块可自定义）。
+- **新增/补充测试**
+  - `ui/scenes/tests/ui_fry_chef_employee_id_contract_test.gd`（扫描 `ui/**` 生产代码，禁止出现 `"fry_chef"` employee_id；排除 `ui/scenes/tests/**`）
+  - `ui/scenes/tests/employee_tree_layout_bottom_tag_test.gd`（验证 `ui_layout_bottom` tag 的 bottom-track 行为）
+- **验收结果**
+  - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
 - **验收标准**
   - `rg -n '\"fry_chef\"' ui --glob '!ui/scenes/tests/**'` 目标为 0（或仅在模块 UI/模块 content 中出现）。
 
