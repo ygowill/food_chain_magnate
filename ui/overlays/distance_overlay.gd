@@ -6,7 +6,7 @@ extends BaseTileOverlay
 signal path_selected(house_id: String, restaurant_id: String)
 
 const RoadGraphClass = preload("res://core/map/road_graph.gd")
-const ROADWORK_MARKERS_KEY_SUFFIX := "roadworks_markers"
+const MapOverlayProviderRegistryClass = preload("res://core/rules/map_overlay_provider_registry.gd")
 const DISTANCE_OVERRIDE_NONE := -999999999
 var _road_graph = null  # RoadGraph 引用
 var _map_data: Dictionary = {}
@@ -179,30 +179,19 @@ func _calculate_distance(house_pos: Vector2i, restaurant_pos: Vector2i, path_poi
 	return -1
 
 func _count_roadworks_penalty(path_points: Array[Vector2i]) -> int:
-	var markers: Dictionary = _get_roadworks_markers_dict()
-	if markers.is_empty():
+	var marker_positions: Array[Vector2i] = MapOverlayProviderRegistryClass.get_roadworks_marker_world_positions(_map_data)
+	if marker_positions.is_empty():
 		return 0
+	var marker_set := {}
+	for p in marker_positions:
+		if p is Vector2i:
+			marker_set[p] = true
 	var penalty := 0
 	for i in range(1, path_points.size()):
 		var p: Vector2i = path_points[i]
-		var key := "%d,%d" % [p.x, p.y]
-		if markers.has(key):
+		if marker_set.has(p):
 			penalty += 1
 	return penalty
-
-func _get_roadworks_markers_dict() -> Dictionary:
-	if _map_data.is_empty():
-		return {}
-	for k in _map_data.keys():
-		if not (k is String):
-			continue
-		var key: String = str(k).strip_edges()
-		if not key.ends_with(ROADWORK_MARKERS_KEY_SUFFIX):
-			continue
-		var val = _map_data.get(k, null)
-		if val is Dictionary:
-			return val
-	return {}
 
 func _add_path_visual(path_data: Dictionary) -> void:
 	var house_pos: Vector2i = path_data.house_pos

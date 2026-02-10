@@ -177,7 +177,7 @@
   - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
   - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
 - **后续（可选优化）**
-  - 引入 `MapOverlayProviderRegistry`，让 lobbyists 模块把私有结构（pending_roads/roadworks_markers）转换为通用 overlay 指令，核心 UI 只负责绘制。
+  - ✅ 已完成（2026-02-10）：引入 `MapOverlayProviderRegistry`，由 lobbyists 模块把私有结构（pending_roads/roadworks_markers）转换为通用 overlay 指令；核心 UI（roads pass / distance overlay）仅消费 registry 输出，不再解析模块私有 key。新增测试：`core/tests/map_overlay_provider_registry_test.gd`、`ui/scenes/tests/ui_map_overlay_private_state_contract_test.gd`。
 - **验收标准**
   - `rg -n 'res://modules/lobbyists/' ui --glob '!ui/scenes/tests/**'` 仅剩模块 UI 测试或 0（目标：生产 UI 为 0）。
 

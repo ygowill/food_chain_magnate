@@ -88,6 +88,10 @@ func _run_all() -> int:
 			"fn": func() -> Result: return TestRefs.EffectUiTextRegistryTestClass.run(),
 		},
 		{
+			"name": "MapOverlayProviderRegistryTest",
+			"fn": func() -> Result: return TestRefs.MapOverlayProviderRegistryTestClass.run(),
+		},
+		{
 			"name": "CallbackResultContractTest",
 			"fn": func() -> Result: return TestRefs.CallbackResultContractTestClass.run(),
 		},
@@ -106,6 +110,10 @@ func _run_all() -> int:
 		{
 			"name": "UiMapOptionalPieceIdsContractTest",
 			"fn": func() -> Result: return TestRefs.UiMapOptionalPieceIdsContractTestClass.run(),
+		},
+		{
+			"name": "UiMapOverlayPrivateStateContractTest",
+			"fn": func() -> Result: return TestRefs.UiMapOverlayPrivateStateContractTestClass.run(),
 		},
 		{
 			"name": "MilestonePanelEffectTextContractTest",

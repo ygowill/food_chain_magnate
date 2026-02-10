@@ -50,6 +50,7 @@ var phase_sub_phase_order_overrides: Array[Dictionary] = []  # [{phase, order, p
 var state_initializers: Array[Dictionary] = []  # [{id, callback, priority, source}]
 var state_int_key_dict_schemas: Array[Dictionary] = []  # [{id, root, path, priority, source}]
 var phase_action_ui_modals: Array[Dictionary] = []  # [{phase, kind, scene_path, priority, source}]
+var map_overlay_providers: Array[Dictionary] = []  # [{id, callback, priority, source}]
 var piece_ui_hints: Array[Dictionary] = []  # [{piece_id, hints, priority, source}]
 var effect_ui_texts: Array[Dictionary] = []  # [{effect_id, text, priority, source}]
 var milestone_effect_ui_texts: Array[Dictionary] = []  # [{effect_type, text, priority, source}]
@@ -281,6 +282,36 @@ func get_phase_action_ui_modal_scene_path(phase_name: String, kind: String) -> S
 			best_pri = pri
 			best_path = str(e.get("scene_path", "")).strip_edges()
 	return best_path
+
+func register_map_overlay_provider(provider_id: String, callback: Callable, priority: int = 100, source_module_id: String = "") -> Result:
+	var id := str(provider_id).strip_edges()
+	if id.is_empty():
+		return Result.failure("RulesetV2: map_overlay_provider.id 不能为空")
+	if not callback.is_valid():
+		return Result.failure("RulesetV2: map_overlay_provider.callback 无效: %s" % id)
+
+	var entry := {
+		"id": id,
+		"callback": callback,
+		"priority": int(priority),
+		"source": str(source_module_id),
+	}
+
+	for i in range(map_overlay_providers.size()):
+		var prev_val = map_overlay_providers[i]
+		if not (prev_val is Dictionary):
+			continue
+		var prev: Dictionary = prev_val
+		if str(prev.get("id", "")).strip_edges() != id:
+			continue
+		var prev_src := str(prev.get("source", "")).strip_edges()
+		map_overlay_providers[i] = entry
+		if not prev_src.is_empty():
+			return Result.success().with_warning("map overlay provider 覆盖: %s (%s -> %s)" % [id, prev_src, str(source_module_id)])
+		return Result.success()
+
+	map_overlay_providers.append(entry)
+	return Result.success()
 
 func register_piece_ui_hint(piece_id: String, hints: Dictionary, priority: int = 100, source_module_id: String = "") -> Result:
 	var pid := str(piece_id).strip_edges()

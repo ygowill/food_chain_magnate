@@ -27,6 +27,7 @@ const PlacementConflictRegistryClass = preload("res://core/rules/placement_confl
 const RangeOriginRegistryClass = preload("res://core/rules/range_origin_registry.gd")
 const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
 const EffectUiTextRegistryClass = preload("res://core/rules/effect_ui_text_registry.gd")
+const MapOverlayProviderRegistryClass = preload("res://core/rules/map_overlay_provider_registry.gd")
 const StateSchemaRegistryClass = preload("res://core/state/state_schema_registry.gd")
 
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
@@ -58,6 +59,7 @@ static func reset(engine) -> void:
 	RangeOriginRegistryClass.reset()
 	PieceUiHintsRegistryClass.reset()
 	EffectUiTextRegistryClass.reset()
+	MapOverlayProviderRegistryClass.reset()
 	StateSchemaRegistryClass.reset()
 	MilestoneRegistryClass.reset()
 	MilestoneEffectRegistryClass.reset_current()
@@ -171,6 +173,11 @@ static func apply(engine, module_ids: Array[String], base_dir: String) -> Result
 	var effect_ui_text_apply := EffectUiTextRegistryClass.configure_from_ruleset(engine.ruleset_v2)
 	if not effect_ui_text_apply.ok:
 		return Result.failure("模块系统 V2：%s" % effect_ui_text_apply.error)
+
+	# V2：模块注册的 map overlays provider（模块私有 map_data -> 通用 overlay 指令）
+	var map_overlay_apply := MapOverlayProviderRegistryClass.configure_from_ruleset(engine.ruleset_v2)
+	if not map_overlay_apply.ok:
+		return Result.failure("模块系统 V2：%s" % map_overlay_apply.error)
 
 	# V2：模块注册的 state schema（用于反序列化归一化与契约检查）
 	var schema_apply := StateSchemaRegistryClass.configure_from_ruleset(engine.ruleset_v2)

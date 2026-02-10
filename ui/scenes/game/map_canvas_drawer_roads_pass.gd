@@ -3,8 +3,7 @@ extends RefCounted
 
 const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
 const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
-const PENDING_ROADS_KEY_SUFFIX := "pending_roads"
-const ROADWORK_MARKERS_KEY_SUFFIX := "roadworks_markers"
+const MapOverlayProviderRegistryClass = preload("res://core/rules/map_overlay_provider_registry.gd")
 const ROADWORK_MARKER_PIECE_SUFFIX := "roadworks_marker"
 
 static func draw_roads(canvas, cell_size: int) -> void:
@@ -103,69 +102,7 @@ static func build_pending_road_connection_dirs(canvas) -> Dictionary:
 		return {}
 	if not (canvas._map_data is Dictionary):
 		return {}
-	var map_data: Dictionary = canvas._map_data
-	var pending: Array = _get_pending_roads_list(map_data)
-	if pending.is_empty():
-		return {}
-
-	var out := {} # Vector2i -> {dir -> true}
-
-	for e_val in pending:
-		if not (e_val is Dictionary):
-			continue
-		var e: Dictionary = e_val
-		var sbp_val = e.get("segments_by_pos", null)
-		if not (sbp_val is Dictionary):
-			continue
-		var segments_by_pos: Dictionary = sbp_val
-		for k in segments_by_pos.keys():
-			if not (k is String):
-				continue
-			var parts := str(k).split(",")
-			if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
-				continue
-			var world_pos := Vector2i(int(parts[0]), int(parts[1]))
-			var seg_list_val = segments_by_pos.get(k, null)
-			if not (seg_list_val is Array):
-				continue
-			for seg_val in Array(seg_list_val):
-				if not (seg_val is Dictionary):
-					continue
-				var seg: Dictionary = seg_val
-				var dirs_val = seg.get("dirs", null)
-				if not (dirs_val is Array):
-					continue
-				for d_val in Array(dirs_val):
-					var d := str(d_val).strip_edges()
-					if d.is_empty() or not MapUtils.DIR_OFFSETS.has(d):
-						continue
-					if not out.has(world_pos):
-						out[world_pos] = {}
-					var m: Dictionary = out[world_pos]
-					m[d] = true
-					out[world_pos] = m
-
-	return out
-
-static func _get_pending_roads_list(map_data: Dictionary) -> Array:
-	if map_data.is_empty():
-		return []
-
-	var keys: Array[String] = []
-	for k in map_data.keys():
-		if not (k is String):
-			continue
-		var key: String = str(k).strip_edges()
-		if key.ends_with(PENDING_ROADS_KEY_SUFFIX):
-			keys.append(key)
-	keys.sort()
-
-	var out: Array = []
-	for key2 in keys:
-		var val = map_data.get(key2, null)
-		if val is Array:
-			out.append_array(Array(val))
-	return out
+	return MapOverlayProviderRegistryClass.get_pending_road_connection_dirs(canvas._map_data)
 
 static func compute_road_shape_info(dirs: Array) -> Dictionary:
 	if dirs.is_empty():
@@ -238,8 +175,8 @@ static func draw_roadworks_markers(canvas, cell_size: int) -> void:
 		return
 	if not (canvas._map_data is Dictionary):
 		return
-	var markers: Dictionary = _get_roadworks_markers_dict(canvas._map_data)
-	if markers.is_empty():
+	var marker_positions: Array[Vector2i] = MapOverlayProviderRegistryClass.get_roadworks_marker_world_positions(canvas._map_data)
+	if marker_positions.is_empty():
 		return
 
 	var tex: Texture2D = get_roadworks_marker_texture(canvas._skin)
@@ -248,13 +185,9 @@ static func draw_roadworks_markers(canvas, cell_size: int) -> void:
 	var pad := maxf(2.0, float(cell_size) * 0.08)
 	var mod := Color(1, 1, 1, 0.95)
 
-	for k in markers.keys():
-		if not (k is String):
+	for world_pos in marker_positions:
+		if not (world_pos is Vector2i):
 			continue
-		var parts := str(k).split(",")
-		if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
-			continue
-		var world_pos := Vector2i(int(parts[0]), int(parts[1]))
 		if not canvas._is_valid_world_pos(world_pos):
 			continue
 		var vpos: Vector2i = canvas._world_to_view(world_pos)
@@ -287,25 +220,3 @@ static func _find_first_piece_id_by_suffix(skin, suffix: String) -> String:
 			keys.append(s)
 	keys.sort()
 	return keys[0] if keys.size() > 0 else ""
-
-static func _get_roadworks_markers_dict(map_data: Dictionary) -> Dictionary:
-	if map_data.is_empty():
-		return {}
-	var keys: Array[String] = []
-	for k in map_data.keys():
-		if not (k is String):
-			continue
-		var key: String = str(k).strip_edges()
-		if key.ends_with(ROADWORK_MARKERS_KEY_SUFFIX):
-			keys.append(key)
-	keys.sort()
-
-	var out := {}
-	for key2 in keys:
-		var val = map_data.get(key2, null)
-		if not (val is Dictionary):
-			continue
-		var dict: Dictionary = val
-		for pos_key in dict.keys():
-			out[pos_key] = dict[pos_key]
-	return out
