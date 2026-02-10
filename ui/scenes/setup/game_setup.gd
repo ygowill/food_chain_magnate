@@ -4,6 +4,8 @@ extends Control
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModuleSelectorClass = preload("res://ui/components/module_selector/module_selector.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
+const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
 
 @onready var card: PanelContainer = $CenterContainer/ContentCenter/Card
 @onready var player_count_spinbox: SpinBox = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer/PlayerCountSpinBox
@@ -29,15 +31,6 @@ var _module_selector = null
 var _suppress_player_signals: bool = false
 
 var _logo_icons_small: Array[Texture2D] = []
-
-const RESTAURANT_LOGO_TEXTURE_PATHS: Array[String] = [
-	"res://modules/base_pieces/assets/map/logos/fried_geese_donkey.png",
-	"res://modules/base_pieces/assets/map/logos/gluttony_inc_burgers.png",
-	"res://modules/base_pieces/assets/map/logos/golden_duck_diner.png",
-	"res://modules/base_pieces/assets/map/logos/santa_maria_pizza.png",
-	"res://modules/base_pieces/assets/map/logos/xango_blues_bar.png",
-	"res://modules/base_pieces/assets/map/logos/sixth_chain.png",
-]
 
 const MODULE_GROUPS: Array[Dictionary] = [
 	{
@@ -225,6 +218,7 @@ func _rebuild_player_rows() -> void:
 		return
 
 	_ensure_logo_icons_cache()
+	var logo_count := MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS.size()
 
 	for child in _players_container.get_children():
 		child.queue_free()
@@ -261,7 +255,7 @@ func _rebuild_player_rows() -> void:
 		var logo_opt := OptionButton.new()
 		logo_opt.custom_minimum_size = Vector2(180, 0)
 		logo_opt.add_item("随机")
-		for i in range(RESTAURANT_LOGO_TEXTURE_PATHS.size()):
+		for i in range(logo_count):
 			var icon_tex := _logo_icons_small[i] if i < _logo_icons_small.size() else null
 			if icon_tex != null:
 				logo_opt.add_icon_item(icon_tex, "店铺 %d" % (i + 1))
@@ -269,7 +263,7 @@ func _rebuild_player_rows() -> void:
 				logo_opt.add_item("店铺 %d" % (i + 1))
 
 		var choice := Globals.get_player_restaurant_logo_choice(pid)
-		if choice >= 0 and choice < RESTAURANT_LOGO_TEXTURE_PATHS.size():
+		if choice >= 0 and choice < logo_count:
 			logo_opt.select(choice + 1)
 		else:
 			logo_opt.select(0)
@@ -289,6 +283,7 @@ func _refresh_player_logo_unique_constraints() -> void:
 		return
 
 	_suppress_player_signals = true
+	var logo_count := MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS.size()
 
 	var used_by: Dictionary = {} # logo_id -> player_id
 	var dup_pids: Array[int] = []
@@ -319,20 +314,16 @@ func _refresh_player_logo_unique_constraints() -> void:
 
 		var popup := opt.get_popup()
 		var current_choice := int(opt.selected) - 1
-		for logo_id in range(RESTAURANT_LOGO_TEXTURE_PATHS.size()):
+		for logo_id in range(logo_count):
 			var idx := logo_id + 1
 			var taken := used_by.has(logo_id) and int(used_by[logo_id]) != pid
 			if popup != null:
 				popup.set_item_disabled(idx, taken)
 
 		if preview != null and is_instance_valid(preview):
-			if current_choice >= 0 and current_choice < RESTAURANT_LOGO_TEXTURE_PATHS.size():
+			if current_choice >= 0 and current_choice < logo_count:
 				var small_tex: Texture2D = _logo_icons_small[current_choice] if current_choice < _logo_icons_small.size() else null
-				if small_tex != null:
-					preview.texture = small_tex
-				else:
-					var tex_val = load(RESTAURANT_LOGO_TEXTURE_PATHS[current_choice])
-					preview.texture = tex_val as Texture2D
+				preview.texture = small_tex
 			else:
 				preview.texture = null
 
@@ -340,9 +331,23 @@ func _ensure_logo_icons_cache() -> void:
 	if not _logo_icons_small.is_empty():
 		return
 
-	for path in RESTAURANT_LOGO_TEXTURE_PATHS:
-		var tex_val = load(path)
-		var tex := tex_val as Texture2D
+	var base_dir := str(Globals.modules_v2_base_dir)
+	var modules: Array[String] = ["base_pieces"]
+	var read: Result = MapSkinBuilderClass.build_for_modules(base_dir, modules, 40)
+	if not read.ok:
+		GameLog.warn("GameSetup", "加载餐厅 Logo 贴图失败: %s" % read.error)
+		return
+	var skin = read.value
+	if skin == null or not skin.has_method("get_piece_texture"):
+		GameLog.warn("GameSetup", "加载餐厅 Logo 贴图失败：skin 类型错误")
+		return
+
+	for piece_id_val in MapCanvasDrawerClass.RESTAURANT_LOGO_PIECE_IDS:
+		var piece_id := str(piece_id_val).strip_edges()
+		if piece_id.is_empty():
+			_logo_icons_small.append(null)
+			continue
+		var tex: Texture2D = skin.get_piece_texture(piece_id)
 		_logo_icons_small.append(_scale_texture_square(tex, 20))
 
 func _scale_texture_square(tex: Texture2D, size_px: int) -> Texture2D:

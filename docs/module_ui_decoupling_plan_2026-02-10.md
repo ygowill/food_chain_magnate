@@ -54,10 +54,11 @@
 - `ui/components/modal_panel/fridge_keep_modal.gd`：已移除对 `modules/base_rules` 的 `preload`（改用 `core/rules/milestone_effect_queries.gd` 查询 `gain_fridge`）
 - `ui/scenes/game/map_canvas_drawer_roads_pass.gd`：已移除对 `modules/lobbyists/road_overlays.gd` 的 `preload`（改用本地 key 常量）
 - `ui/scenes/game/map_canvas_drawer_structures_pass.gd`：已移除对 `modules/lobbyists/road_overlays.gd` 的 `preload`（overlay 定义暂存于 UI 常量）
+- `ui/scenes/setup/game_setup.gd`：已移除写死 base_pieces logo 贴图路径（改为通过 visuals catalog / skin 按 piece_id 加载）
 
 仍待消除：
 
-- `ui/scenes/setup/game_setup.gd`：写死 base_pieces logo 贴图路径（多条 `res://modules/base_pieces/...png`）
+- （无）
 
 ### 2.2 UI 生产代码中 `res://modules` base_dir 回退（建议收口）
 
@@ -181,17 +182,22 @@
 
 ### P0-3) Setup 写死 base_pieces logo 贴图路径（硬引用）
 
+- **状态**
+  - ✅ 已完成（2026-02-10）
 - **涉及位置**
   - `ui/scenes/setup/game_setup.gd`（logo 路径数组）
 - **迁移/解耦目标**
   - 核心 UI 不直接写死 `res://modules/base_pieces/assets/...` 路径。
-- **接口形态（推荐顺序）**
-  1. `module.json` 增加 `ui.restaurant_logo_textures`（manifest 严格解析）
-  2. 或新增 content JSON（例如 `modules/base_pieces/content/ui/restaurant_logos.json`）
-- **实施步骤（建议）**
-  1. 选择 manifest 扩展 vs content JSON。
-  2. loader 暴露“logo 列表”给 UI（通过 catalog/manifest）。
-  3. GameSetup 从 loader 读取列表。
+- **已实施改动**
+  - 移除 `GameSetup` 中硬编码的 logo 贴图路径数组，改为使用 `MapSkinBuilder` 从 `content/visuals/*.json` 构建 skin 后按 `MapCanvasDrawer.RESTAURANT_LOGO_PIECE_IDS` 加载对应贴图。
+- **新增/补充测试**
+  - `ui/scenes/tests/ui_base_pieces_logo_hard_ref_contract_test.gd`（扫描 `ui/**` 生产代码，确保不再出现硬编码 logo 贴图路径前缀）
+  - `ui/scenes/tests/restaurant_logo_textures_loaded_test.gd`（确保 restaurant logo 的 piece texture 可通过 skin 加载且非 placeholder）
+- **验收结果**
+  - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
+- **后续（可选优化）**
+  - 如需让模块自行提供 logo 列表/排序，可进一步把列表迁移到 base_pieces 的 manifest/content，并引入对应 loader/provider。
 - **验收标准**
   - `rg -n 'res://modules/base_pieces/assets/map/logos/' ui/scenes/setup/game_setup.gd` 返回空。
 

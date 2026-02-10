@@ -68,6 +68,10 @@ func _run_all() -> int:
 			"fn": func() -> Result: return TestRefs.RestaurantLogoAssignmentTestClass.run(6, 12345),
 		},
 		{
+			"name": "RestaurantLogoTexturesLoadedTest",
+			"fn": func() -> Result: return TestRefs.RestaurantLogoTexturesLoadedTestClass.run(),
+		},
+		{
 			"name": "SixPlayersSetupTest",
 			"fn": func() -> Result: return TestRefs.SixPlayersSetupTestClass.run(12345),
 		},
@@ -86,6 +90,10 @@ func _run_all() -> int:
 		{
 			"name": "UiLobbyistsRoadOverlaysHardRefContractTest",
 			"fn": func() -> Result: return TestRefs.UiLobbyistsRoadOverlaysHardRefContractTestClass.run(),
+		},
+		{
+			"name": "UiBasePiecesLogoHardRefContractTest",
+			"fn": func() -> Result: return TestRefs.UiBasePiecesLogoHardRefContractTestClass.run(),
 		},
 		{
 			"name": "OnlineRoomManagerTest",
