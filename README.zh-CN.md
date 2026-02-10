@@ -30,6 +30,19 @@ Docker 一键部署脚本（构建镜像并运行/更新容器）：
 ./server/deploy.sh --port 7000
 ```
 
+一行命令部署（下载并直接执行部署脚本）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- --port 7000
+```
+
+如果你不希望 `curl | bash`，可以先下载脚本并检查后再执行：
+
+```bash
+curl -fsSL -o deploy.sh https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh
+bash deploy.sh --port 7000
+```
+
 更多参数：
 
 ```bash
@@ -40,4 +53,3 @@ Docker 一键部署脚本（构建镜像并运行/更新容器）：
 
 - 感谢出版商 **Splotter Spellen** 出版了《Food Chain Magnate》，让我遇到了这款游戏。本项目为粉丝向实验性质项目。
 - 感谢 [OnlineBoardGamers](https://www.onlineboardgamers.com/)：我很感谢我遇到了这款游戏，以及 OnlineBoardGamers 给我的开发带来的灵感。
-

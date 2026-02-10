@@ -50,10 +50,23 @@ Args:
 
 ### Option B: Docker (recommended for deployment)
 
-This repo provides a one-click deploy script (builds an image and runs/updates the container):
+This repo provides a one-click deploy script that **pulls the prebuilt image from GHCR** and runs/updates the container:
 
 ```bash
 ./server/deploy.sh --port 7000
+```
+
+One-line deploy (downloads and runs the deploy script):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- --port 7000
+```
+
+If you prefer not to pipe to `bash`, download it first and review:
+
+```bash
+curl -fsSL -o deploy.sh https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh
+bash deploy.sh --port 7000
 ```
 
 More options:

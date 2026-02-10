@@ -5,31 +5,35 @@ usage() {
 	cat <<'EOF'
 Usage:
   server/deploy.sh [--port 7000] [--bind "*"] [--name fcm-server]
-                   [--image <image:tag>] [--pull] [--no-build] [--foreground]
+                   [--image <image:tag>] [--pull] [--no-pull]
+                   [--build-local] [--foreground]
 
 Default behavior:
-  - Build local image from server/Dockerfile
+  - Pull prebuilt image from GHCR
   - Replace container (same name)
   - Run detached with --restart unless-stopped
 
 Examples:
-  # Build from current repo and run on 7000
+  # Pull from GHCR and run on 7000
   ./server/deploy.sh --port 7000
 
   # Bind to localhost only (for reverse proxy on same machine)
   ./server/deploy.sh --port 7000 --bind 127.0.0.1
 
-  # Pull and run a prebuilt image
-  ./server/deploy.sh --image ghcr.io/<owner>/<repo>/fcm-server:v0.1.2 --pull --no-build
+  # Run a specific image/tag
+  ./server/deploy.sh --image ghcr.io/<owner>/<repo>/fcm-server:v0.1.2 --pull
+
+  # (Optional) Build locally from this repo (requires repo checkout)
+  ./server/deploy.sh --build-local --image fcm-server:local
 EOF
 }
 
 PORT="7000"
 BIND="*"
 NAME="fcm-server"
-IMAGE="fcm-server:local"
-DO_PULL=0
-DO_BUILD=1
+IMAGE="ghcr.io/ygowill/food_chain_magnate/fcm-server:latest"
+DO_PULL=1
+DO_BUILD=0
 DETACH=1
 
 while [[ $# -gt 0 ]]; do
@@ -58,8 +62,12 @@ while [[ $# -gt 0 ]]; do
 			DO_PULL=1
 			shift
 			;;
-		--no-build)
-			DO_BUILD=0
+		--no-pull)
+			DO_PULL=0
+			shift
+			;;
+		--build-local)
+			DO_BUILD=1
 			shift
 			;;
 		--foreground)
@@ -84,9 +92,6 @@ if ! docker info >/dev/null 2>&1; then
 	exit 1
 fi
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
-echo "[deploy] repo_root=${repo_root}"
 echo "[deploy] name=${NAME} image=${IMAGE} port=${PORT} bind=${BIND}"
 
 if [[ "${DO_PULL}" -eq 1 ]]; then
@@ -95,6 +100,8 @@ if [[ "${DO_PULL}" -eq 1 ]]; then
 fi
 
 if [[ "${DO_BUILD}" -eq 1 ]]; then
+	repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+	echo "[deploy] repo_root=${repo_root}"
 	echo "[deploy] building image: ${IMAGE}"
 	docker build -t "${IMAGE}" -f "${repo_root}/server/Dockerfile" "${repo_root}"
 fi
@@ -121,4 +128,3 @@ docker run "${run_args[@]}" "${IMAGE}"
 
 echo "[deploy] done."
 echo "[deploy] logs: docker logs -f ${NAME}"
-
