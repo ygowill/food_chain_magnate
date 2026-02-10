@@ -169,6 +169,23 @@ static func _add_milestone_ref(out: Array[Dictionary], milestone_id: String) -> 
 			var def: MilestoneDef = def_val
 			var n := str(def.name).strip_edges()
 			if not n.is_empty():
-				name = n
+				name = _strip_milestone_id_suffix(n, mid)
 
 	out.append({"kind": "milestone", "id": mid, "name": name})
+
+static func _strip_milestone_id_suffix(raw_name: String, milestone_id: String) -> String:
+	var s := str(raw_name).strip_edges()
+	var mid := str(milestone_id).strip_edges()
+	if mid.is_empty():
+		return s
+
+	var suffixes: Array[String] = [
+		" (" + mid + ")",
+		"(" + mid + ")",
+		" （" + mid + "）",
+		"（" + mid + "）",
+	]
+	for suffix in suffixes:
+		if s.ends_with(suffix):
+			return s.substr(0, s.length() - suffix.length()).strip_edges()
+	return s

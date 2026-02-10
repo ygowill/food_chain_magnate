@@ -68,7 +68,9 @@ func _update_display() -> void:
 			name = str((milestone_def as MilestoneDef).name).strip_edges()
 		if name.is_empty():
 			name = milestone_id
+		name = _strip_id_suffix(name)
 		_name_label.text = name
+		_name_label.tooltip_text = name
 
 	if _desc_label != null:
 		var text := effect_text
@@ -76,3 +78,19 @@ func _update_display() -> void:
 			text = milestone_id
 		_desc_label.text = text
 
+func _strip_id_suffix(raw_name: String) -> String:
+	var s := str(raw_name).strip_edges()
+	var mid := str(milestone_id).strip_edges()
+	if mid.is_empty():
+		return s
+
+	var suffixes: Array[String] = [
+		" (" + mid + ")",
+		"(" + mid + ")",
+		" （" + mid + "）",
+		"（" + mid + "）",
+	]
+	for suffix in suffixes:
+		if s.ends_with(suffix):
+			return s.substr(0, s.length() - suffix.length()).strip_edges()
+	return s

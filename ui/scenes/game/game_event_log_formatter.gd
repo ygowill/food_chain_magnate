@@ -441,17 +441,11 @@ func format(event: Dictionary) -> Array[Dictionary]:
 				text += "：" + " ".join(parts3)
 			out.append(_player(player_id, text, data))
 		EventBus.EventType.MILESTONE_ACHIEVED:
-			var milestone_id := str(data.get("milestone_id", ""))
+			var milestone_id := str(data.get("milestone_id", "")).strip_edges()
 			var player_id := int(data.get("player_id", -1))
-			var name := milestone_id
-			if MilestoneRegistryClass.is_loaded() and not milestone_id.is_empty():
-				var def_val = MilestoneRegistryClass.get_def(milestone_id)
-				if def_val != null and def_val is MilestoneDef:
-					name = str((def_val as MilestoneDef).name)
+			var name := _milestone_name(milestone_id)
 			var who := "玩家%d" % (player_id + 1) if player_id >= 0 else "未知玩家"
-			var text := "%s 获得里程碑：%s" % [who, name]
-			if not milestone_id.is_empty() and name != milestone_id:
-				text += " (%s)" % milestone_id
+			var text := "%s 获得里程碑：%s" % [who, name if not name.is_empty() else milestone_id]
 			out.append(_event(text, data))
 		EventBus.EventType.GAME_STARTED:
 			out.append(_system("游戏开始", data))
@@ -469,6 +463,31 @@ func format(event: Dictionary) -> Array[Dictionary]:
 			out.append(_debug("%s: %s" % [t, str(data)], data))
 
 	return out
+
+func _milestone_name(milestone_id: String) -> String:
+	var mid := str(milestone_id).strip_edges()
+	if mid.is_empty():
+		return ""
+
+	var name := mid
+	if MilestoneRegistryClass.is_loaded():
+		var def_val = MilestoneRegistryClass.get_def(mid)
+		if def_val != null and def_val is MilestoneDef:
+			var n := str((def_val as MilestoneDef).name).strip_edges()
+			if not n.is_empty():
+				name = n
+
+	var suffixes: Array[String] = [
+		" (" + mid + ")",
+		"(" + mid + ")",
+		" （" + mid + "）",
+		"（" + mid + "）",
+	]
+	for suffix in suffixes:
+		if name.ends_with(suffix):
+			return name.substr(0, name.length() - suffix.length()).strip_edges()
+
+	return name
 
 func _system(message: String, details: Dictionary) -> Dictionary:
 	return {"type": GameLogPanel.LogType.SYSTEM, "message": message, "details": details}

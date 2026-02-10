@@ -393,12 +393,28 @@ func _on_milestone_achieved(event: Dictionary) -> void:
 		var def_val = MilestoneRegistryClass.get_def(milestone_id)
 		if def_val != null and def_val is MilestoneDef:
 			name = str((def_val as MilestoneDef).name)
+			name = _strip_milestone_id_suffix(name, milestone_id)
 
 	var msg := "%s 获得里程碑：%s" % [who, name]
-	if not milestone_id.is_empty() and name != milestone_id:
-		msg += " (%s)" % milestone_id
 
 	_enqueue_toast(msg)
+
+func _strip_milestone_id_suffix(raw_name: String, milestone_id: String) -> String:
+	var s := str(raw_name).strip_edges()
+	var mid := str(milestone_id).strip_edges()
+	if mid.is_empty():
+		return s
+
+	var suffixes: Array[String] = [
+		" (" + mid + ")",
+		"(" + mid + ")",
+		" （" + mid + "）",
+		"（" + mid + "）",
+	]
+	for suffix in suffixes:
+		if s.ends_with(suffix):
+			return s.substr(0, s.length() - suffix.length()).strip_edges()
+	return s
 
 func show_toast(message: String) -> void:
 	if OS.has_feature("headless"):
