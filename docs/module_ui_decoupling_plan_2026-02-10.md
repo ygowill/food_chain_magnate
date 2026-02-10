@@ -254,12 +254,21 @@
 
 ### P1-3) `ReserveCardSelectionModal` 通过 `_has_module(..., "reserve_prices")` 切换展示
 
+- **状态**
+  - ✅ 已完成（2026-02-10）
 - **涉及位置**
   - `ui/components/modal_panel/reserve_card_selection_modal.gd`
 - **迁移/解耦目标**
   - UI 不直接判断模块启用状态决定展示策略。
 - **接口形态**
   - `ReserveCardPresentationRegistry`：默认 + 模块覆盖 provider
+- **已实施改动**
+  - 移除 `_has_module(state, "reserve_prices")` 判断，改为基于卡片字段（是否包含 `cash/ceo_slots`）推导展示模式与提示文案。
+- **新增/补充测试**
+  - `ui/scenes/tests/reserve_card_selection_modal_presentation_test.gd`（覆盖 base vs reserve_prices 两种卡片字段展示）
+- **验收结果**
+  - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60` 通过
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60` 通过
 - **验收标准**
   - `rg -n '_has_module\\(state, \"reserve_prices\"\\)' ui/components/modal_panel/reserve_card_selection_modal.gd` 返回空。
 
