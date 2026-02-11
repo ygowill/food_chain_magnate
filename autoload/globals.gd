@@ -5,6 +5,7 @@ extends Node
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const GameStateClass = preload("res://core/state/game_state.gd")
 const GameConstantsClass = preload("res://core/engine/game_constants.gd")
+const FALLBACK_FONT: Font = preload("res://assets/fonts/NotoSansSC-Regular.otf")
 
 # 版本信息
 const SCHEMA_VERSION := GameStateClass.SCHEMA_VERSION
@@ -62,12 +63,18 @@ func get_version() -> String:
 	return s
 
 func _ready() -> void:
+	_apply_fallback_font()
 	_base_fallback_font_size = int(ThemeDB.fallback_font_size)
 	GameLog.info("Globals", "全局配置初始化 v%s" % get_version())
 	_load_settings()
 	_ensure_player_profiles()
 	_apply_ui_scale()
 	_apply_font_scale()
+
+func _apply_fallback_font() -> void:
+	if FALLBACK_FONT == null:
+		return
+	ThemeDB.fallback_font = FALLBACK_FONT
 
 # 加载用户设置
 func _load_settings() -> void:
