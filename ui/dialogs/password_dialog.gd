@@ -74,6 +74,9 @@ func _build_ui() -> void:
 
 	_password_edit = LineEdit.new()
 	_password_edit.secret = true
+	# Default secret char (U+2022 BULLET) is missing in some embedded fonts on Web.
+	# Use U+25CF BLACK CIRCLE which is present in our shipped CJK font.
+	_password_edit.secret_character = "●"
 	_password_edit.placeholder_text = "房间密码"
 	_password_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_password_edit.text_submitted.connect(func(_t: String) -> void:
