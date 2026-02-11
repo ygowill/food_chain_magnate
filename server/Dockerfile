@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	curl \
 	unzip \
 	libasound2 \
+	libfontconfig1 \
 	libgl1 \
 	libx11-6 \
 	libxcursor1 \
@@ -37,4 +38,3 @@ ENV BIND=*
 EXPOSE 7000
 
 ENTRYPOINT ["/app/server/entrypoint.sh"]
-

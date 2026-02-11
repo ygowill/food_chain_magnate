@@ -50,13 +50,13 @@ func on_peer_disconnected(peer_id: int) -> void:
 			room.player_id_by_peer_id.erase(str(peer_id))
 
 	var removed := false
-	var rr: Result = _net._room_manager.disconnect_peer(peer_id) if in_game else _net._room_manager.leave_room(peer_id)
+	var rr = _net._room_manager.disconnect_peer(peer_id) if in_game else _net._room_manager.leave_room(peer_id)
 	if rr.ok:
 		removed = bool(rr.value.get("removed", false))
 
 	if in_game and actor_id >= 0 and room.game_engine != null:
 		var cmd = CommandClass.create("forfeit_player", actor_id, {})
-		var fr: Result = room.game_engine.execute_command(cmd)
+		var fr = room.game_engine.execute_command(cmd)
 		if fr.ok:
 			broadcast_command_applied(room, cmd)
 			server_drain_forfeited_auto_steps(room)
@@ -236,7 +236,7 @@ func handle_rpc_create_room(request: Dictionary) -> void:
 		rng.randomize()
 		config["seed"] = int(rng.randi())
 
-	var cr: Result = _net._room_manager.create_room(peer_id, profile, room_password, config)
+	var cr = _net._room_manager.create_room(peer_id, profile, room_password, config)
 	if not cr.ok:
 		send_request_rejected(peer_id, request_id, "create_room_failed", cr.error)
 		return
@@ -267,7 +267,7 @@ func broadcast_command_applied(room, cmd) -> void:
 	for pid in room.get_peer_ids():
 		_net.rpc_id(int(pid), "rpc_command_applied", payload)
 
-func server_is_player_forfeited(state: GameState, player_id: int) -> bool:
+func server_is_player_forfeited(state, player_id: int) -> bool:
 	if state == null:
 		return false
 	if player_id < 0 or player_id >= state.players.size():
@@ -277,7 +277,7 @@ func server_is_player_forfeited(state: GameState, player_id: int) -> bool:
 		return false
 	return bool(Dictionary(p_val).get("forfeited", false))
 
-func server_pick_order_of_business_position(state: GameState) -> int:
+func server_pick_order_of_business_position(state) -> int:
 	if state == null or not (state.round_state is Dictionary):
 		return -1
 	var oob_val = Dictionary(state.round_state).get("order_of_business", null)
@@ -296,7 +296,7 @@ func server_pick_order_of_business_position(state: GameState) -> int:
 func server_try_auto_submit_forfeited_restructuring(room) -> bool:
 	if room == null or room.game_engine == null:
 		return false
-	var state: GameState = room.game_engine.get_state()
+	var state = room.game_engine.get_state()
 	if state == null:
 		return false
 	if str(state.phase) != DefsClass.PHASE_RESTRUCTURING:
@@ -321,7 +321,7 @@ func server_try_auto_submit_forfeited_restructuring(room) -> bool:
 		if bool(submitted.get(pid, false)):
 			continue
 		var cmd = CommandClass.create("submit_restructuring", pid, {})
-		var exec_r: Result = room.game_engine.execute_command(cmd)
+		var exec_r = room.game_engine.execute_command(cmd)
 		if not exec_r.ok:
 			GameLog.error("NetClient", "auto submit_restructuring failed: %s" % exec_r.error)
 			return any
@@ -336,7 +336,7 @@ func server_drain_forfeited_auto_steps(room) -> void:
 	var safety := 0
 	while safety < 128:
 		safety += 1
-		var state: GameState = room.game_engine.get_state()
+		var state = room.game_engine.get_state()
 		if state == null:
 			return
 
@@ -364,7 +364,7 @@ func server_drain_forfeited_auto_steps(room) -> void:
 		else:
 			cmd = CommandClass.create(ActionIdsClass.SKIP, current_pid, {})
 
-		var exec_r2: Result = room.game_engine.execute_command(cmd)
+		var exec_r2 = room.game_engine.execute_command(cmd)
 		if not exec_r2.ok:
 			GameLog.error("NetClient", "auto step failed: %s (action=%s)" % [exec_r2.error, str(cmd.action_id)])
 			return

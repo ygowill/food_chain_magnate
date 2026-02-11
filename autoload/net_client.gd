@@ -36,7 +36,7 @@ func _ensure_internal() -> void:
 		_internal = NetClientInternalClass.new()
 		_internal.setup(self)
 
-func start_server(port: int, bind_address: String = "*") -> Result:
+	func start_server(port: int, bind_address: String = "*"):
 	shutdown()
 	NetContext.mode = NetContext.Mode.ONLINE_SERVER
 
@@ -57,7 +57,7 @@ func start_server(port: int, bind_address: String = "*") -> Result:
 	GameLog.info("NetClient", "Server started on %s:%d" % [bind_address, port])
 	return Result.success()
 
-func connect_to_server(url: String) -> Result:
+	func connect_to_server(url: String):
 	shutdown()
 	NetContext.mode = NetContext.Mode.ONLINE_CLIENT
 	NetContext.server_url = url
@@ -203,7 +203,7 @@ func rpc_client_hello(request: Dictionary) -> void:
 	# 重要：不新增 @rpc 方法，避免 dedicated server 与客户端版本不一致时触发 checksum mismatch。
 	var room = _room_manager.get_room_by_peer(peer_id) if _room_manager != null else null
 	if room != null and room.has_method("update_peer_profile"):
-		var ur: Result = room.update_peer_profile(peer_id, Dictionary(_profile_by_peer_id[peer_id]))
+		var ur = room.update_peer_profile(peer_id, Dictionary(_profile_by_peer_id[peer_id]))
 		if ur.ok:
 			_broadcast_room_state(room)
 			_broadcast_room_list("")
@@ -243,7 +243,7 @@ func rpc_join_room(request: Dictionary) -> void:
 	var room_code := str(request.get("room_code", "")).strip_edges().to_upper()
 	var room_password := str(request.get("room_password", ""))
 
-	var jr: Result = _room_manager.join_room(peer_id, profile, room_code, room_password)
+	var jr = _room_manager.join_room(peer_id, profile, room_code, room_password)
 	if not jr.ok:
 		_send_request_rejected(peer_id, request_id, "join_room_failed", jr.error)
 		return
@@ -261,7 +261,7 @@ func rpc_join_room(request: Dictionary) -> void:
 			"config": room.config.duplicate(true),
 		}
 		rpc_id(peer_id, "rpc_game_started", payload)
-		var archive_r: Result = room.game_engine.create_archive()
+		var archive_r = room.game_engine.create_archive()
 		if archive_r.ok:
 			rpc_id(peer_id, "rpc_resync_archive", {
 				"archive": Dictionary(archive_r.value).duplicate(true),
@@ -363,7 +363,7 @@ func rpc_update_room_config(request: Dictionary) -> void:
 			seed_cur = int(rng.randi())
 		patch["seed"] = seed_cur
 
-	var ur: Result = room.update_config(patch)
+	var ur = room.update_config(patch)
 	if not ur.ok:
 		_send_request_rejected(peer_id, request_id, "update_config_failed", ur.error)
 		return
@@ -380,7 +380,7 @@ func rpc_leave_room(request: Dictionary) -> void:
 	var request_id := str(request.get("request_id", ""))
 	var room = _room_manager.get_room_by_peer(peer_id)
 
-	var lr: Result = _room_manager.leave_room(peer_id)
+	var lr = _room_manager.leave_room(peer_id)
 	if not lr.ok:
 		_send_request_rejected(peer_id, request_id, "leave_room_failed", lr.error)
 		return
@@ -407,7 +407,7 @@ func rpc_start_game(request: Dictionary) -> void:
 		_send_request_rejected(peer_id, request_id, "not_host", "Only host can start game")
 		return
 
-	var sr: Result = room.start_game()
+	var sr = room.start_game()
 	if not sr.ok:
 		_send_request_rejected(peer_id, request_id, "start_game_failed", sr.error)
 		return
@@ -460,13 +460,13 @@ func rpc_action_request(request: Dictionary) -> void:
 	if params_val is Dictionary:
 		params = Dictionary(params_val)
 
-	var state: GameState = room.game_engine.get_state()
+	var state = room.game_engine.get_state()
 	if _server_is_player_forfeited(state, actor_id):
 		_send_request_rejected(peer_id, request_id, "forfeited_readonly", "Player has forfeited (spectator, read-only)")
 		return
 
 	var cmd = CommandClass.create(action_id, actor_id, params)
-	var r: Result = room.game_engine.execute_command(cmd)
+	var r = room.game_engine.execute_command(cmd)
 	if not r.ok:
 		_send_request_rejected(peer_id, request_id, "action_failed", r.error)
 		return
@@ -491,7 +491,7 @@ func rpc_resync_request(_request: Dictionary) -> void:
 		_send_request_rejected(peer_id, "", "engine_missing", "Room engine missing")
 		return
 
-	var archive_r: Result = room.game_engine.create_archive()
+	var archive_r = room.game_engine.create_archive()
 	if not archive_r.ok:
 		_send_request_rejected(peer_id, "", "resync_failed", archive_r.error)
 		return
@@ -529,7 +529,7 @@ func rpc_rewind_to_turn_start(request: Dictionary) -> void:
 		return
 
 	# 仅允许“当前玩家”发起回退（避免旁观/非当前回合玩家影响对局）。
-	var state: GameState = room.game_engine.get_state()
+	var state = room.game_engine.get_state()
 	if state == null:
 		_send_request_rejected(peer_id, request_id, "state_missing", "Room state missing")
 		return
@@ -541,7 +541,7 @@ func rpc_rewind_to_turn_start(request: Dictionary) -> void:
 		_send_request_rejected(peer_id, request_id, "not_supported", "Room does not support rewind")
 		return
 
-	var rr: Result = room.rewind_to_current_player_turn_start(false)
+	var rr = room.rewind_to_current_player_turn_start(false)
 	if not rr.ok:
 		_send_request_rejected(peer_id, request_id, "rewind_failed", rr.error)
 		return
@@ -639,7 +639,7 @@ func rpc_game_started(payload: Dictionary) -> void:
 		logo_choices.append(-1)
 
 	var engine = GameEngineClass.new()
-	var init_r: Result = engine.initialize(player_count, seed, enabled_modules, base_dir, [], logo_choices)
+	var init_r = engine.initialize(player_count, seed, enabled_modules, base_dir, [], logo_choices)
 	if not init_r.ok:
 		GameLog.error("NetClient", "Online client engine initialize failed: %s" % init_r.error)
 		return
@@ -726,15 +726,15 @@ func _broadcast_room_list(request_id: String) -> void:
 	_ensure_internal()
 	_internal.broadcast_room_list(request_id)
 
-func _broadcast_command_applied(room, cmd: Command) -> void:
+func _broadcast_command_applied(room, cmd) -> void:
 	_ensure_internal()
 	_internal.broadcast_command_applied(room, cmd)
 
-func _server_is_player_forfeited(state: GameState, player_id: int) -> bool:
+func _server_is_player_forfeited(state, player_id: int) -> bool:
 	_ensure_internal()
 	return _internal.server_is_player_forfeited(state, player_id)
 
-func _server_pick_order_of_business_position(state: GameState) -> int:
+func _server_pick_order_of_business_position(state) -> int:
 	_ensure_internal()
 	return _internal.server_pick_order_of_business_position(state)
 

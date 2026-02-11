@@ -198,12 +198,12 @@ func set_current_game_engine(engine) -> void:
 	current_game_engine = engine
 	is_game_active = engine != null
 
-func sync_runtime_config_from_engine(engine: GameEngine) -> void:
-	if engine == null:
-		return
-	var state: GameState = engine.get_state()
-	if state == null:
-		return
+	func sync_runtime_config_from_engine(engine) -> void:
+		if engine == null:
+			return
+		var state = engine.get_state()
+		if state == null:
+			return
 
 	player_count = state.players.size()
 	random_seed = int(state.seed)
