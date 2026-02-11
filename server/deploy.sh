@@ -236,8 +236,15 @@ else
 	echo "[deploy] stopping (docker compose down)..."
 fi
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd "${script_dir}/.." 2>/dev/null && pwd || true)"
+script_src="${BASH_SOURCE[0]}"
+if [[ -n "${script_src}" && -f "${script_src}" ]]; then
+	script_dir="$(cd "$(dirname "${script_src}")" && pwd)"
+	repo_root="$(cd "${script_dir}/.." 2>/dev/null && pwd || true)"
+else
+	# `curl ... | bash` mode: treat current working directory as the "repo root".
+	script_dir="$(pwd)"
+	repo_root="${script_dir}"
+fi
 local_compose="${repo_root}/compose.yml"
 local_compose_https="${repo_root}/compose.https.yml"
 
@@ -248,6 +255,9 @@ trap cleanup EXIT
 compose_file="${tmp_dir}/compose.yml"
 compose_https_file="${tmp_dir}/compose.https.yml"
 env_file="${tmp_dir}/.env"
+state_dir="${repo_root}/.fcm_deploy"
+mkdir -p "${state_dir}"
+traefik_dynamic_file="${state_dir}/traefik_dynamic.yml"
 
 if [[ -f "${local_compose}" ]]; then
 	compose_file="${local_compose}"
@@ -288,7 +298,7 @@ FCM_SERVER_IMAGE=${IMAGE}
 FCM_WEB_IMAGE=${WEB_IMAGE}
 FCM_DOCKER_IO_PREFIX=${DOCKER_IO_PREFIX}
 FCM_DOCKER_API_VERSION=${DOCKER_API_VERSION}
-FCM_TRAEFIK_DYNAMIC_FILE=${tmp_dir}/traefik_dynamic.yml
+FCM_TRAEFIK_DYNAMIC_FILE=${traefik_dynamic_file}
 FCM_SERVER_NAME=${NAME}
 FCM_WEB_NAME=${WEB_NAME}
 FCM_SERVER_PORT=${PORT}
@@ -303,7 +313,8 @@ CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN:-}
 EOF
 
 if [[ "${ENABLE_HTTPS}" -eq 1 || ( "${ACTION}" == "down" && "${have_https_compose}" -eq 1 ) ]]; then
-	cat > "${tmp_dir}/traefik_dynamic.yml" <<EOF
+	# Ensure the mounted dynamic config file exists and is stable across restarts.
+	cat > "${traefik_dynamic_file}" <<EOF
 http:
   routers:
     fcm-ws:
@@ -315,7 +326,7 @@ http:
       service: fcm-ws
 EOF
 	if [[ "${ENABLE_WEB}" -eq 1 ]]; then
-		cat >> "${tmp_dir}/traefik_dynamic.yml" <<EOF
+		cat >> "${traefik_dynamic_file}" <<EOF
     fcm-web:
       rule: Host(\`${WEB_DOMAIN}\`)
       entryPoints:
@@ -325,7 +336,7 @@ EOF
       service: fcm-web
 EOF
 	fi
-	cat >> "${tmp_dir}/traefik_dynamic.yml" <<EOF
+	cat >> "${traefik_dynamic_file}" <<EOF
   services:
     fcm-ws:
       loadBalancer:
@@ -333,7 +344,7 @@ EOF
           - url: http://server:${PORT}
 EOF
 	if [[ "${ENABLE_WEB}" -eq 1 ]]; then
-		cat >> "${tmp_dir}/traefik_dynamic.yml" <<EOF
+		cat >> "${traefik_dynamic_file}" <<EOF
     fcm-web:
       loadBalancer:
         servers:
