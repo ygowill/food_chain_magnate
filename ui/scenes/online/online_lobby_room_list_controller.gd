@@ -60,7 +60,7 @@ func render_room_list(rooms: Array) -> void:
 		row.add_child(count_label)
 
 		var lock_label := Label.new()
-		lock_label.text = "锁" if password_required else ""
+		lock_label.text = "🔒" if password_required else ""
 		lock_label.custom_minimum_size = Vector2(24, 0)
 		row.add_child(lock_label)
 

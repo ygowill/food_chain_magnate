@@ -5,7 +5,7 @@ extends Node
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const GameStateClass = preload("res://core/state/game_state.gd")
 const GameConstantsClass = preload("res://core/engine/game_constants.gd")
-const FALLBACK_FONT: Font = preload("res://assets/fonts/NotoSansSC-Regular.otf")
+const FALLBACK_FONT: Font = preload("res://assets/fonts/ui_font_with_emoji.tres")
 
 # 版本信息
 const SCHEMA_VERSION := GameStateClass.SCHEMA_VERSION
