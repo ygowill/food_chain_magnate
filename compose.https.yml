@@ -23,6 +23,8 @@ services:
     environment:
       # Required (recommended token permissions: Zone.DNS:Edit for your zone).
       - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+      # Some Docker daemons reject very old API versions; set a minimum if needed.
+      - DOCKER_API_VERSION=${FCM_DOCKER_API_VERSION:-1.44}
     ports:
       - "${FCM_HTTP_PORT:-80}:${FCM_HTTP_PORT:-80}"
       - "${FCM_HTTPS_PORT:-443}:${FCM_HTTPS_PORT:-443}"

@@ -8,6 +8,7 @@ Usage:
                    [--name fcm-server] [--web-name fcm-web]
                    [--image <image:tag>] [--web-image <image:tag>]
                    [--docker-io-prefix <prefix>]
+                   [--docker-api-version <version>]
                    [--pull] [--no-pull] [--foreground]
                    [--enable-web] [--web-port 8080]
                    [--compose-ref main]
@@ -59,6 +60,7 @@ WEB_NAME="fcm-web"
 IMAGE=""
 WEB_IMAGE=""
 DOCKER_IO_PREFIX=""
+DOCKER_API_VERSION=""
 DO_PULL=1
 DETACH=1
 ENABLE_WEB=0
@@ -119,6 +121,10 @@ while [[ $# -gt 0 ]]; do
 			;;
 		--docker-io-prefix)
 			DOCKER_IO_PREFIX="${2:-}"
+			shift 2
+			;;
+		--docker-api-version)
+			DOCKER_API_VERSION="${2:-}"
 			shift 2
 			;;
 		--pull)
@@ -260,6 +266,7 @@ FCM_TAG=${TAG}
 FCM_SERVER_IMAGE=${IMAGE}
 FCM_WEB_IMAGE=${WEB_IMAGE}
 FCM_DOCKER_IO_PREFIX=${DOCKER_IO_PREFIX}
+FCM_DOCKER_API_VERSION=${DOCKER_API_VERSION}
 FCM_SERVER_NAME=${NAME}
 FCM_WEB_NAME=${WEB_NAME}
 FCM_SERVER_PORT=${PORT}
