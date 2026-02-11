@@ -10,8 +10,11 @@ RUN printf '%s\n' \
 	'' \
 	'  charset utf-8;' \
 	'' \
-	'  # Ensure correct MIME for WebAssembly in minimal environments.' \
-	'  types { application/wasm wasm; }' \
+	'  # Ensure correct MIME types (especially WebAssembly).' \
+	'  types {' \
+	'    include /etc/nginx/mime.types;' \
+	'    application/wasm wasm;' \
+	'  }' \
 	'' \
 	'  add_header X-Content-Type-Options nosniff always;' \
 	'' \
