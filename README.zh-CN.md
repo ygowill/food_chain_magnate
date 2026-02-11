@@ -72,6 +72,14 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
   --ws-domain ws.game.example.com
 ```
 
+可选：如果服务器拉取 Docker Hub 镜像很慢，可以配置镜像站前缀（GHCR 镜像不受影响）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
+  --tag v0.1.0 --https \
+  --docker-io-prefix m.daocloud.io/docker.io/
+```
+
 4) 确保防火墙/安全组放行：
    - TCP 80 和 443（或你自定义的 `--http-port` / `--https-port`）
 

@@ -7,6 +7,7 @@ Usage:
   server/deploy.sh [--tag latest] [--port 7000] [--bind "*"]
                    [--name fcm-server] [--web-name fcm-web]
                    [--image <image:tag>] [--web-image <image:tag>]
+                   [--docker-io-prefix <prefix>]
                    [--pull] [--no-pull] [--foreground]
                    [--enable-web] [--web-port 8080]
                    [--compose-ref main]
@@ -33,6 +34,9 @@ Examples:
   # Requires env: ACME_EMAIL, CF_DNS_API_TOKEN
   ./server/deploy.sh --tag v0.1.0 --enable-web --https --web-domain game.example.com --ws-domain ws.game.example.com
 
+  # Use a Docker Hub mirror/prefix for faster pulls (only affects docker.io images like Traefik)
+  ./server/deploy.sh --tag v0.1.0 --https --docker-io-prefix m.daocloud.io/docker.io/
+
   # Stop & remove containers + network (keeps volumes by default)
   ./server/deploy.sh --down
 
@@ -54,6 +58,7 @@ WEB_PORT="8080"
 WEB_NAME="fcm-web"
 IMAGE=""
 WEB_IMAGE=""
+DOCKER_IO_PREFIX=""
 DO_PULL=1
 DETACH=1
 ENABLE_WEB=0
@@ -112,6 +117,10 @@ while [[ $# -gt 0 ]]; do
 			WEB_IMAGE="${2:-}"
 			shift 2
 			;;
+		--docker-io-prefix)
+			DOCKER_IO_PREFIX="${2:-}"
+			shift 2
+			;;
 		--pull)
 			DO_PULL=1
 			shift
@@ -159,6 +168,10 @@ while [[ $# -gt 0 ]]; do
 			;;
 	esac
 done
+
+if [[ -n "${DOCKER_IO_PREFIX}" && "${DOCKER_IO_PREFIX}" != */ ]]; then
+	DOCKER_IO_PREFIX="${DOCKER_IO_PREFIX}/"
+fi
 
 if ! command -v docker >/dev/null 2>&1; then
 	echo "ERROR: docker not found in PATH" >&2
@@ -246,6 +259,7 @@ cat > "${env_file}" <<EOF
 FCM_TAG=${TAG}
 FCM_SERVER_IMAGE=${IMAGE}
 FCM_WEB_IMAGE=${WEB_IMAGE}
+FCM_DOCKER_IO_PREFIX=${DOCKER_IO_PREFIX}
 FCM_SERVER_NAME=${NAME}
 FCM_WEB_NAME=${WEB_NAME}
 FCM_SERVER_PORT=${PORT}

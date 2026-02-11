@@ -98,6 +98,14 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
   --ws-domain ws.game.example.com
 ```
 
+Optional: if your server pulls Docker Hub images slowly, you can use a mirror/prefix (GHCR images are unchanged):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
+  --tag v0.1.0 --https \
+  --docker-io-prefix m.daocloud.io/docker.io/
+```
+
 4) Ensure your firewall/security group allows inbound:
    - TCP 80 and 443 (or your custom `--http-port` / `--https-port`)
 

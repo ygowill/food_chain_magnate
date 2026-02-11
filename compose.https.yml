@@ -1,7 +1,7 @@
 services:
   # HTTPS reverse proxy (Let's Encrypt via Cloudflare DNS-01)
   traefik:
-    image: traefik:v3.1
+    image: ${FCM_DOCKER_IO_PREFIX:-}traefik:v3.1
     container_name: fcm-traefik
     restart: unless-stopped
     command:
