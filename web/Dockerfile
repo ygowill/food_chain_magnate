@@ -10,12 +10,13 @@ RUN printf '%s\n' \
 	'' \
 	'  charset utf-8;' \
 	'' \
-	'  # Ensure correct MIME types (especially WebAssembly).' \
-	'  include /etc/nginx/mime.types;' \
-	'  default_type application/octet-stream;' \
-	'  types { application/wasm wasm; }' \
-	'' \
 	'  add_header X-Content-Type-Options nosniff always;' \
+	'' \
+	'  # Force a correct MIME type for WebAssembly even in minimal/misconfigured environments.' \
+	'  location ~* \\.wasm$ {' \
+	'    default_type application/wasm;' \
+	'    try_files $uri =404;' \
+	'  }' \
 	'' \
 	'  location / {' \
 	'    try_files $uri $uri/ =404;' \
