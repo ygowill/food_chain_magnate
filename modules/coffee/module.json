@@ -15,7 +15,16 @@
 				"group_title": "地图变体",
 				"group_order": 10,
 				"order": 2
-			}
+			},
+			"placement_overlays": [
+				"res://modules/coffee/ui/coffee_shop_flow_controller.gd"
+			],
+			"map_interaction_modes": [
+				{
+					"id": "coffee_shop_placement",
+					"script": "res://modules/coffee/ui/game_map_interaction_coffee_shop_mode.gd"
+				}
+			]
 		}
 	}
 }
