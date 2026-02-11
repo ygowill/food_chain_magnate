@@ -36,7 +36,7 @@ func _ensure_internal() -> void:
 		_internal = NetClientInternalClass.new()
 		_internal.setup(self)
 
-func start_server(port: int, bind_address: String = "*"):
+func start_server(port: int, bind_address: String = "0.0.0.0"):
 	shutdown()
 	NetContext.mode = NetContext.Mode.ONLINE_SERVER
 

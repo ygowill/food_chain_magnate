@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
 	cat <<'EOF'
 Usage:
-  server/deploy.sh [--tag latest] [--port 7000] [--bind "*"]
+  server/deploy.sh [--tag latest] [--port 7000] [--bind "0.0.0.0"]
                    [--name fcm-server] [--web-name fcm-web]
                    [--image <image:tag>] [--web-image <image:tag>]
                    [--docker-io-prefix <prefix>]
@@ -57,7 +57,7 @@ EOF
 
 TAG="latest"
 PORT="7000"
-BIND="*"
+BIND="0.0.0.0"
 NAME="fcm-server"
 WEB_PORT="8080"
 WEB_NAME="fcm-web"
@@ -190,6 +190,10 @@ fi
 if [[ -n "${GITHUB_RAW_PREFIX}" && "${GITHUB_RAW_PREFIX}" != */ ]]; then
 	GITHUB_RAW_PREFIX="${GITHUB_RAW_PREFIX}/"
 fi
+if [[ "${BIND}" == "*" ]]; then
+	echo "[deploy] WARN --bind=\"*\" is not supported by Godot WebSocket server; using 0.0.0.0 instead."
+	BIND="0.0.0.0"
+fi
 
 if ! command -v docker >/dev/null 2>&1; then
 	echo "ERROR: docker not found in PATH" >&2
@@ -284,6 +288,7 @@ FCM_SERVER_IMAGE=${IMAGE}
 FCM_WEB_IMAGE=${WEB_IMAGE}
 FCM_DOCKER_IO_PREFIX=${DOCKER_IO_PREFIX}
 FCM_DOCKER_API_VERSION=${DOCKER_API_VERSION}
+FCM_TRAEFIK_DYNAMIC_FILE=${tmp_dir}/traefik_dynamic.yml
 FCM_SERVER_NAME=${NAME}
 FCM_WEB_NAME=${WEB_NAME}
 FCM_SERVER_PORT=${PORT}
@@ -296,6 +301,46 @@ FCM_HTTPS_PORT=${HTTPS_PORT}
 ACME_EMAIL=${ACME_EMAIL:-}
 CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN:-}
 EOF
+
+if [[ "${ENABLE_HTTPS}" -eq 1 || ( "${ACTION}" == "down" && "${have_https_compose}" -eq 1 ) ]]; then
+	cat > "${tmp_dir}/traefik_dynamic.yml" <<EOF
+http:
+  routers:
+    fcm-ws:
+      rule: Host(\`${WS_DOMAIN}\`)
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: le
+      service: fcm-ws
+EOF
+	if [[ "${ENABLE_WEB}" -eq 1 ]]; then
+		cat >> "${tmp_dir}/traefik_dynamic.yml" <<EOF
+    fcm-web:
+      rule: Host(\`${WEB_DOMAIN}\`)
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: le
+      service: fcm-web
+EOF
+	fi
+	cat >> "${tmp_dir}/traefik_dynamic.yml" <<EOF
+  services:
+    fcm-ws:
+      loadBalancer:
+        servers:
+          - url: http://server:${PORT}
+EOF
+	if [[ "${ENABLE_WEB}" -eq 1 ]]; then
+		cat >> "${tmp_dir}/traefik_dynamic.yml" <<EOF
+    fcm-web:
+      loadBalancer:
+        servers:
+          - url: http://web:80
+EOF
+	fi
+fi
 
 compose_args=(--env-file "${env_file}" -f "${compose_file}" -p fcm)
 if [[ "${ENABLE_HTTPS}" -eq 1 ]]; then

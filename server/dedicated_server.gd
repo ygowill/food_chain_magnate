@@ -2,7 +2,7 @@
 extends Node
 
 const DEFAULT_PORT := 7000
-const DEFAULT_BIND_ADDRESS := "*"
+const DEFAULT_BIND_ADDRESS := "0.0.0.0"
 
 func _ready() -> void:
 	var port := DEFAULT_PORT
@@ -27,4 +27,3 @@ func _ready() -> void:
 		return
 
 	GameLog.info("DedicatedServer", "Running. args=%s" % str(args))
-

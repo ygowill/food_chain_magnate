@@ -4,7 +4,7 @@ set -eu
 PROJECT_PATH="/app"
 
 PORT="${PORT:-7000}"
-BIND="${BIND:-*}"
+BIND="${BIND:-0.0.0.0}"
 
 # Ensure `user://` is writable/deterministic and pre-warm global script class cache
 # so type hints for `class_name` scripts work on first boot.
