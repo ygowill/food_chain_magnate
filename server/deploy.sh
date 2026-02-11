@@ -12,6 +12,7 @@ Usage:
                    [--pull] [--no-pull] [--foreground]
                    [--enable-web] [--web-port 8080]
                    [--compose-ref main]
+                   [--github-raw-prefix <prefix>]
                    [--https --web-domain <domain> --ws-domain <domain>]
                    [--http-port 80] [--https-port 443]
                    [--down] [--purge]
@@ -37,6 +38,9 @@ Examples:
 
   # Use a Docker Hub mirror/prefix for faster pulls (only affects docker.io images like Traefik)
   ./server/deploy.sh --tag v0.1.0 --https --docker-io-prefix m.daocloud.io/docker.io/
+
+  # Use a GitHub raw accelerator for faster downloads (compose files)
+  ./server/deploy.sh --tag v0.1.0 --github-raw-prefix https://ghfast.top/
 
   # Stop & remove containers + network (keeps volumes by default)
   ./server/deploy.sh --down
@@ -65,6 +69,7 @@ DO_PULL=1
 DETACH=1
 ENABLE_WEB=0
 COMPOSE_REF="main"
+GITHUB_RAW_PREFIX=""
 ENABLE_HTTPS=0
 WEB_DOMAIN=""
 WS_DOMAIN=""
@@ -147,6 +152,10 @@ while [[ $# -gt 0 ]]; do
 			COMPOSE_REF="${2:-}"
 			shift 2
 			;;
+		--github-raw-prefix)
+			GITHUB_RAW_PREFIX="${2:-}"
+			shift 2
+			;;
 		--https)
 			ENABLE_HTTPS=1
 			shift
@@ -177,6 +186,9 @@ done
 
 if [[ -n "${DOCKER_IO_PREFIX}" && "${DOCKER_IO_PREFIX}" != */ ]]; then
 	DOCKER_IO_PREFIX="${DOCKER_IO_PREFIX}/"
+fi
+if [[ -n "${GITHUB_RAW_PREFIX}" && "${GITHUB_RAW_PREFIX}" != */ ]]; then
+	GITHUB_RAW_PREFIX="${GITHUB_RAW_PREFIX}/"
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -241,15 +253,20 @@ else
 		echo "ERROR: curl not found, and compose.yml not available locally" >&2
 		exit 1
 	fi
+	if [[ -n "${GITHUB_RAW_PREFIX}" ]]; then
+		echo "[deploy] github raw prefix: ${GITHUB_RAW_PREFIX}"
+	fi
 	echo "[deploy] downloading compose.yml (ref=${COMPOSE_REF})"
-	curl -fsSL "https://raw.githubusercontent.com/ygowill/food_chain_magnate/${COMPOSE_REF}/compose.yml" -o "${compose_file}"
+	raw_compose_url="https://raw.githubusercontent.com/ygowill/food_chain_magnate/${COMPOSE_REF}/compose.yml"
+	curl -fsSL "${GITHUB_RAW_PREFIX}${raw_compose_url}" -o "${compose_file}"
 fi
 
 have_https_compose=0
 if [[ "${compose_file}" == "${tmp_dir}/compose.yml" ]]; then
 	if [[ "${ENABLE_HTTPS}" -eq 1 || "${ACTION}" == "down" ]]; then
 		echo "[deploy] downloading compose.https.yml (ref=${COMPOSE_REF})"
-		if curl -fsSL "https://raw.githubusercontent.com/ygowill/food_chain_magnate/${COMPOSE_REF}/compose.https.yml" -o "${compose_https_file}"; then
+		raw_compose_https_url="https://raw.githubusercontent.com/ygowill/food_chain_magnate/${COMPOSE_REF}/compose.https.yml"
+		if curl -fsSL "${GITHUB_RAW_PREFIX}${raw_compose_https_url}" -o "${compose_https_file}"; then
 			have_https_compose=1
 		else
 			echo "[deploy] compose.https.yml not found for ref=${COMPOSE_REF}; continuing without it."

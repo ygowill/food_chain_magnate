@@ -106,6 +106,13 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
   --docker-io-prefix m.daocloud.io/docker.io/
 ```
 
+Optional: if your server downloads GitHub raw files slowly, you can use a GitHub raw accelerator/prefix (for compose files):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
+  --tag v0.1.0 --github-raw-prefix https://ghfast.top/
+```
+
 4) Ensure your firewall/security group allows inbound:
    - TCP 80 and 443 (or your custom `--http-port` / `--https-port`)
 

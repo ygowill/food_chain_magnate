@@ -80,6 +80,13 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
   --docker-io-prefix m.daocloud.io/docker.io/
 ```
 
+可选：如果服务器下载 GitHub raw 很慢，可以配置加速前缀（用于 compose 文件下载）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
+  --tag v0.1.0 --github-raw-prefix https://ghfast.top/
+```
+
 4) 确保防火墙/安全组放行：
    - TCP 80 和 443（或你自定义的 `--http-port` / `--https-port`）
 
