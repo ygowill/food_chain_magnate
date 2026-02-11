@@ -36,7 +36,7 @@ func _ensure_internal() -> void:
 		_internal = NetClientInternalClass.new()
 		_internal.setup(self)
 
-	func start_server(port: int, bind_address: String = "*"):
+func start_server(port: int, bind_address: String = "*"):
 	shutdown()
 	NetContext.mode = NetContext.Mode.ONLINE_SERVER
 
@@ -57,7 +57,7 @@ func _ensure_internal() -> void:
 	GameLog.info("NetClient", "Server started on %s:%d" % [bind_address, port])
 	return Result.success()
 
-	func connect_to_server(url: String):
+func connect_to_server(url: String):
 	shutdown()
 	NetContext.mode = NetContext.Mode.ONLINE_CLIENT
 	NetContext.server_url = url
