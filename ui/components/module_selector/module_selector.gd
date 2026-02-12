@@ -399,6 +399,10 @@ func _recompute_modules_and_apply_to_ui() -> void:
 		_set_notes("")
 		return
 
+	# Setup/RoomConfig：若存在人数上下文，则强制模块可能依赖当前选择（例如 5/6 人 Lobbyists -> New Districts）。
+	if _setup_player_count > 0:
+		_refresh_forced_optional_modules_for_setup_context()
+
 	var notes: Array[String] = []
 
 	if not _forced_optional_modules.is_empty():
@@ -658,7 +662,10 @@ func get_required_optional_modules_for_player_count(player_count: int) -> Dictio
 	return _compute_required_optional_modules_for_player_count(player_count).duplicate()
 
 func _compute_required_optional_modules_for_player_count(player_count: int) -> Dictionary:
-	# 基于 module.json 提供的 setup_constraints 计算强制模块列表
+	# 基于 module.json 提供的 setup_constraints 计算强制模块列表。
+	# 支持两类约束：
+	# - setup_constraints.required_player_counts：指定人数下强制启用该模块本身（与选择无关）。
+	# - setup_constraints.requires_optional_modules：当该模块启用且人数匹配时，强制启用其它可选模块（依赖当前选择）。
 	var out: Dictionary = {}
 	if _available_modules.is_empty():
 		return out
@@ -666,6 +673,7 @@ func _compute_required_optional_modules_for_player_count(player_count: int) -> D
 	if count <= 0:
 		return out
 
+	# 1) 人数固定必需模块：required_player_counts
 	for mid in _optional_module_ids:
 		var ui := _get_module_ui_dict(mid)
 		var setup_val = ui.get("setup_constraints", null)
@@ -688,6 +696,93 @@ func _compute_required_optional_modules_for_player_count(player_count: int) -> D
 		if reason.is_empty():
 			reason = "%d 人局强制启用 %s 模块。" % [count, _get_module_display_name(mid)]
 		out[mid] = reason
+
+	# 2) 条件必需模块：requires_optional_modules（当某模块启用且人数匹配时，强制启用其它模块）
+	# schema:
+	# setup_constraints.requires_optional_modules = [
+	#   {
+	#     "required_player_counts": [5, 6], # 可选；缺省表示任意人数
+	#     "module_ids": ["some_optional_module_id"],
+	#     "reason": "..."
+	#   }
+	# ]
+	var selected: Dictionary = {}
+	var queue: Array[String] = []
+
+	for mid_val in _requested_optional_modules.keys():
+		var id := str(mid_val).strip_edges()
+		if id.is_empty():
+			continue
+		if selected.has(id):
+			continue
+		selected[id] = true
+		queue.append(id)
+
+	for mid_val2 in out.keys():
+		var id2 := str(mid_val2).strip_edges()
+		if id2.is_empty():
+			continue
+		if selected.has(id2):
+			continue
+		selected[id2] = true
+		queue.append(id2)
+
+	var visited: Dictionary = {}
+	while not queue.is_empty():
+		var cur: String = queue.pop_front()
+		if visited.has(cur):
+			continue
+		visited[cur] = true
+
+		var ui2 := _get_module_ui_dict(cur)
+		var setup_val2 = ui2.get("setup_constraints", null)
+		if not (setup_val2 is Dictionary):
+			continue
+		var setup2: Dictionary = setup_val2
+
+		var reqs_val = setup2.get("requires_optional_modules", null)
+		if not (reqs_val is Array):
+			continue
+
+		for rule_val in Array(reqs_val):
+			if not (rule_val is Dictionary):
+				continue
+			var rule: Dictionary = rule_val
+
+			var counts_val2 = rule.get("required_player_counts", null)
+			if counts_val2 != null:
+				if not (counts_val2 is Array):
+					continue
+				var ok_count := false
+				for c2 in Array(counts_val2):
+					if int(c2) == count:
+						ok_count = true
+						break
+				if not ok_count:
+					continue
+
+			var module_ids_val = rule.get("module_ids", null)
+			if not (module_ids_val is Array):
+				continue
+
+			var reason2 := str(rule.get("reason", "")).strip_edges()
+			if reason2.is_empty():
+				reason2 = "%d 人局启用 %s 时需要额外模块。" % [count, _get_module_display_name(cur)]
+
+			for req_mid_val in Array(module_ids_val):
+				var req_mid := str(req_mid_val).strip_edges()
+				if req_mid.is_empty():
+					continue
+				if req_mid.begins_with("base_"):
+					continue
+				if not _optional_module_ids.has(req_mid):
+					continue
+				if not out.has(req_mid):
+					out[req_mid] = reason2
+				if selected.has(req_mid):
+					continue
+				selected[req_mid] = true
+				queue.append(req_mid)
 
 	return out
 

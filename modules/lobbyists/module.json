@@ -32,6 +32,15 @@
 				"group_title": "地图变体",
 				"group_order": 10,
 				"order": 1
+			},
+			"setup_constraints": {
+				"requires_optional_modules": [
+					{
+						"required_player_counts": [5, 6],
+						"module_ids": ["new_districts"],
+						"reason": "5/6 人局启用 Lobbyists 时强制启用 New Districts（新区域）模块，以提供额外地图板块。"
+					}
+				]
 			}
 		}
 	}
