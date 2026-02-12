@@ -2,6 +2,7 @@
 extends Control
 
 const TestRefs = preload("res://ui/scenes/tests/all_tests_refs.gd")
+const CheckCompileScript = preload("res://tools/check_compile.gd")
 
 @onready var output: RichTextLabel = $Root/Output
 @onready var run_button: Button = $Root/TopBar/RunButton
@@ -34,6 +35,10 @@ func _run_all() -> int:
 		{
 			"name": "GameSmokeTest",
 			"fn": func() -> Result: return await _run_game_smoke_test(),
+		},
+		{
+			"name": "CheckCompileTest",
+			"fn": func() -> Result: return _run_check_compile_test(),
 		},
 		{
 			"name": "ReplayTest",
@@ -807,6 +812,17 @@ func _run_game_smoke_test() -> Result:
 	if code is int and int(code) == 0:
 		return Result.success({})
 	return Result.failure("GameSmokeTest 失败: exit_code=%s" % str(code))
+
+func _run_check_compile_test() -> Result:
+	var scan_result: Result = CheckCompileScript.run_scan()
+	if scan_result.ok:
+		return scan_result
+
+	var details: Dictionary = scan_result.value if (scan_result.value is Dictionary) else {}
+	var preview: Array[String] = Array(details.get("preview", []), TYPE_STRING, "", null)
+	if preview.is_empty():
+		return scan_result
+	return Result.failure("%s; first=%s" % [scan_result.error, preview[0]])
 
 func _should_autorun() -> bool:
 	var args := OS.get_cmdline_user_args()

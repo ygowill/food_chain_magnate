@@ -162,7 +162,7 @@ func _show_overlay_for_action(state: GameState, actor_id: int, action_id: String
 
 	_sync_overlay_from_state(state, actor_id, action_id, true)
 
-	var need_begin := (not _map_controller.has_method("get_mode")) or str(_map_controller.get_mode()) != MODE_ID
+	var need_begin: bool = (not _map_controller.has_method("get_mode")) or str(_map_controller.get_mode()) != MODE_ID
 	if need_begin or force_full_refresh:
 		_map_controller.begin_selection(MODE_ID, {"action_id": str(action_id).strip_edges()})
 		if force_full_refresh and _overlay.has_method("clear_target"):

@@ -20,17 +20,53 @@ const DEFAULT_ROOTS: Array[String] = [
 	"res://ui",
 ]
 
+static func run_scan(roots: Array[String] = []) -> Result:
+	var scan_roots: Array[String] = []
+	if roots.is_empty():
+		scan_roots = DEFAULT_ROOTS.duplicate()
+	else:
+		scan_roots = roots.duplicate()
+
+	var normalized_roots: Array[String] = []
+	for root in scan_roots:
+		var s: String = str(root).strip_edges()
+		if s.is_empty():
+			continue
+		normalized_roots.append(s)
+
+	var errors: Array[String] = []
+	var files_checked := 0
+	for root in normalized_roots:
+		files_checked += _scan_dir_static(root, errors)
+
+	if errors.is_empty():
+		return Result.success({
+			"roots": normalized_roots,
+			"files_checked": files_checked,
+			"errors": [],
+		})
+
+	var preview: Array[String] = []
+	for i in range(min(errors.size(), 50)):
+		preview.append(errors[i])
+
+	return Result.failure("检查到 %d 个编译/预加载错误（files=%d）" % [errors.size(), files_checked]).with_value({
+		"roots": normalized_roots,
+		"files_checked": files_checked,
+		"errors": errors,
+		"preview": preview,
+	})
+
 func _initialize() -> void:
 	var roots := _get_roots()
 	print("[%s] START roots=%s" % [NAME, str(roots)])
 
-	var errors: Array[String] = []
-	var files_checked := 0
+	var scan_result := run_scan(roots)
+	var details: Dictionary = scan_result.value if (scan_result.value is Dictionary) else {}
+	var files_checked := int(details.get("files_checked", 0))
+	var errors: Array[String] = Array(details.get("errors", []), TYPE_STRING, "", null)
 
-	for root in roots:
-		files_checked += _scan_dir(root, errors)
-
-	if errors.is_empty():
+	if scan_result.ok:
 		print("[%s] PASS files=%d" % [NAME, files_checked])
 		quit(0)
 		return
@@ -43,7 +79,7 @@ func _initialize() -> void:
 func _get_roots() -> Array[String]:
 	var args := OS.get_cmdline_user_args()
 	if args.is_empty():
-		return DEFAULT_ROOTS
+		return DEFAULT_ROOTS.duplicate()
 
 	var roots: Array[String] = []
 	for i in range(args.size()):
@@ -57,6 +93,9 @@ func _get_roots() -> Array[String]:
 	return roots
 
 func _scan_dir(dir_path: String, errors: Array[String]) -> int:
+	return _scan_dir_static(dir_path, errors)
+
+static func _scan_dir_static(dir_path: String, errors: Array[String]) -> int:
 	var dir := DirAccess.open(dir_path)
 	if dir == null:
 		errors.append("无法读取目录: %s" % dir_path)
@@ -72,7 +111,7 @@ func _scan_dir(dir_path: String, errors: Array[String]) -> int:
 
 		var path := dir_path.path_join(name)
 		if dir.current_is_dir():
-			checked += _scan_dir(path, errors)
+			checked += _scan_dir_static(path, errors)
 		else:
 			if name.to_lower().ends_with(".gd"):
 				checked += 1
