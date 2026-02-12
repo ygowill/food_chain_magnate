@@ -91,6 +91,7 @@ func _ready() -> void:
 	UiStylesClass.apply_button_secondary(leave_room_button)
 	UiStylesClass.apply_button_primary(start_game_button)
 
+	_apply_password_mask_fallback()
 	_bind_net_signals()
 	_ensure_editors()
 	_ensure_password_dialog()
@@ -99,6 +100,19 @@ func _ready() -> void:
 	_setup_my_color_selector()
 	_apply_defaults()
 	_refresh_ui()
+
+func _apply_password_mask_fallback() -> void:
+	# Some embedded fonts used in exports may miss the default bullet mask (U+2022),
+	# causing tofu squares. Force an ASCII mask for all password fields.
+	_apply_password_mask_to(join_by_code_password_edit)
+	_apply_password_mask_to(create_password_edit)
+
+func _apply_password_mask_to(edit: LineEdit) -> void:
+	if edit == null or not is_instance_valid(edit):
+		return
+	if not edit.secret:
+		return
+	edit.secret_character = "*"
 
 func _setup_my_color_selector() -> void:
 	if my_color_option == null or not is_instance_valid(my_color_option):
