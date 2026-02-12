@@ -5,6 +5,10 @@ const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_textur
 const OverlayUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_overlay_utils.gd")
 const RoadsPassClass = preload("res://ui/scenes/game/map_canvas_drawer_roads_pass.gd")
 const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
+const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
+
+static var _drink_source_textures: Dictionary = {} # product_id -> Texture2D
+static var _drink_source_textures_base_dir_spec: String = ""
 
 static func _read_color_hint(hints: Dictionary, key: String, fallback: Color) -> Color:
 	if hints == null or hints.is_empty():
@@ -32,12 +36,44 @@ static func draw_drink_sources(canvas, cell_size: int) -> void:
 			var product_id: String = str(drink.get("type", ""))
 			if product_id.is_empty():
 				continue
-			var tex: Texture2D = canvas._skin.get_product_icon_texture(product_id)
+			var override_tex: Texture2D = _get_drink_source_texture(product_id)
+			var tex: Texture2D = override_tex if (override_tex is Texture2D) else canvas._skin.get_product_icon_texture(product_id)
 
 			var rect := Rect2(Vector2(x * cell_size, y * cell_size), Vector2(cell_size, cell_size))
-			var icon_size := rect.size * 0.6
-			var icon_pos := rect.position + (rect.size - icon_size) * 0.5
-			TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, Rect2(icon_pos, icon_size))
+			TextureUtilsClass.draw_texture_aspect_fill(canvas, tex, rect, Color(1, 1, 1, 0.95))
+
+static func _get_drink_source_texture(product_id: String) -> Texture2D:
+	var pid := str(product_id).strip_edges()
+	if pid.is_empty():
+		return null
+
+	var base_dir_spec := str(ModulesBaseDirClass.get_base_dir()).strip_edges()
+	if base_dir_spec != _drink_source_textures_base_dir_spec:
+		_drink_source_textures_base_dir_spec = base_dir_spec
+		_drink_source_textures.clear()
+
+	var cached_val = _drink_source_textures.get(pid, null)
+	if cached_val is Texture2D:
+		return cached_val
+	if _drink_source_textures.has(pid):
+		return null
+
+	var tex: Texture2D = null
+	var base_dirs := base_dir_spec.split(";")
+	for bd_val in base_dirs:
+		var bd := str(bd_val).strip_edges()
+		if bd.is_empty():
+			continue
+		var path := bd.path_join("base_products").path_join("assets").path_join("map").path_join("drink_sources").path_join("%s.png" % pid)
+		if not FileAccess.file_exists(path):
+			continue
+		var res = load(path)
+		if res is Texture2D:
+			tex = res
+		break
+
+	_drink_source_textures[pid] = tex
+	return tex
 
 static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: Array) -> void:
 	for anchor_val in canvas._structures_by_anchor.keys():
