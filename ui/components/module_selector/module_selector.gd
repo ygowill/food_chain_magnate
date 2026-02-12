@@ -33,6 +33,9 @@ var _forced_optional_modules: Dictionary = {} # module_id -> reason（外部约�
 var _suppress_signals: bool = false
 var _editable: bool = true
 
+var _show_tooltips: bool = true
+var _show_notes: bool = true
+
 var _header_row: HBoxContainer = null
 var _groups_container: GridContainer = null
 var _notes_label: Label = null
@@ -40,6 +43,16 @@ var _action_buttons: Array[Button] = []
 
 func _ready() -> void:
 	_ensure_base_ui()
+
+func set_show_tooltips(show: bool) -> void:
+	_ensure_base_ui()
+	_show_tooltips = bool(show)
+	_recompute_modules_and_apply_to_ui()
+
+func set_show_notes(show: bool) -> void:
+	_ensure_base_ui()
+	_show_notes = bool(show)
+	_recompute_modules_and_apply_to_ui()
 
 func set_editable(editable: bool) -> void:
 	_ensure_base_ui()
@@ -173,6 +186,11 @@ func _ensure_base_ui() -> void:
 func _set_notes(text: String) -> void:
 	var s := str(text).strip_edges()
 	if _notes_label == null or not is_instance_valid(_notes_label):
+		return
+	if not _show_notes:
+		_notes_label.text = ""
+		_notes_label.visible = false
+		notes_changed.emit("")
 		return
 	_notes_label.text = s
 	_notes_label.visible = not s.is_empty()
@@ -316,7 +334,7 @@ func _build_module_group_box(title: String, module_ids: Array[String], bg_color:
 			continue
 		var cb := CheckBox.new()
 		cb.text = _format_module_label(mid)
-		cb.tooltip_text = _format_module_tooltip(mid)
+		cb.tooltip_text = _format_module_tooltip(mid) if _show_tooltips else ""
 		cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var id := mid
 		cb.toggled.connect(func(pressed: bool) -> void:
@@ -436,7 +454,7 @@ func _recompute_modules_and_apply_to_ui() -> void:
 		cb.disabled = disabled
 		if not _editable:
 			cb.disabled = true
-		cb.tooltip_text = tt
+		cb.tooltip_text = tt if _show_tooltips else ""
 	_suppress_signals = false
 
 	_set_notes("\n".join(notes))

@@ -20,7 +20,6 @@ var _players_section: VBoxContainer = null
 var _players_container: VBoxContainer = null
 var _modules_section: VBoxContainer = null
 var _message_label: Label = null
-var _info_label: Label = null
 
 var _player_name_edits: Array[LineEdit] = []
 var _player_logo_options: Array[OptionButton] = []
@@ -130,14 +129,6 @@ func _ensure_sections() -> void:
 	root_vbox.add_child(_message_label)
 	root_vbox.move_child(_message_label, spacer2.get_index())
 
-	_info_label = Label.new()
-	_info_label.name = "InfoLabel"
-	_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_info_label.text = "提示：储备卡将在进入游戏后由每位玩家秘密选择（全员完成后才进入起始餐厅放置）。"
-	root_vbox.add_child(_info_label)
-	root_vbox.move_child(_info_label, spacer2.get_index())
-
 func _set_message(text: String) -> void:
 	if _message_label == null or not is_instance_valid(_message_label):
 		return
@@ -152,9 +143,10 @@ func _ensure_module_selector() -> void:
 		return
 	_module_selector = ModuleSelectorClass.new()
 	_modules_section.add_child(_module_selector)
-	_module_selector.notes_changed.connect(func(text: String) -> void:
-		_set_message(text)
-	)
+	if _module_selector.has_method("set_show_tooltips"):
+		_module_selector.call("set_show_tooltips", false)
+	if _module_selector.has_method("set_show_notes"):
+		_module_selector.call("set_show_notes", false)
 	_module_selector.load_failed.connect(func(msg: String) -> void:
 		_set_message(msg)
 	)
