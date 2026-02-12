@@ -3,11 +3,14 @@
 class_name ProcurementRouteOverlay
 extends BaseTileOverlay
 
-const ROUTE_COLOR := Color(0.35, 0.8, 1.0, 0.8)
-const ROUTE_WIDTH := 4.0
+const ROUTE_CELL_FILL_COLOR := Color(0.35, 0.8, 1.0, 0.22)
+const ROUTE_CELL_OUTLINE_COLOR := Color(0.35, 0.8, 1.0, 0.55)
 
-const PREVIEW_ROUTE_COLOR := Color(1.0, 0.75, 0.25, 0.75)
-const PREVIEW_ROUTE_WIDTH := 3.0
+const PREVIEW_ROUTE_CELL_FILL_COLOR := Color(1.0, 0.75, 0.25, 0.18)
+const PREVIEW_ROUTE_CELL_OUTLINE_COLOR := Color(1.0, 0.75, 0.25, 0.55)
+
+const ROUTE_CELL_INSET_PX := 2.0
+const ROUTE_CELL_OUTLINE_WIDTH := 1.0
 
 const START_COLOR := Color(0.35, 0.9, 0.55, 0.95)
 const PREVIEW_START_COLOR := Color(1.0, 0.78, 0.35, 0.95)
@@ -22,10 +25,9 @@ var _entrance_pos: Vector2i = Vector2i(-1, -1)
 var _route: Array[Vector2i] = []
 var _picked_sources: Array[Vector2i] = []
 
-var _route_line: Line2D = null
 var _markers: Array[Control] = []
 var _tile_mode: bool = false
-var _show_route_line: bool = true
+var _show_route: bool = true
 var _preview: bool = false
 var _tile_size_cells: int = 1
 var _legal_tiles: Array[Vector2i] = []
@@ -33,7 +35,6 @@ var _selected_tiles: Array[Vector2i] = []
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_ensure_line()
 
 func _on_layout_changed() -> void:
 	_rebuild_visuals()
@@ -45,7 +46,7 @@ func show_plan(entrance_pos: Vector2i, route: Array[Vector2i], picked_sources: A
 	var opts := options if options is Dictionary else {}
 	_preview = bool(opts.get("preview", false))
 	_tile_mode = bool(opts.get("tile_mode", false)) or str(opts.get("mode", "")) == "air"
-	_show_route_line = bool(opts.get("show_route_line", true))
+	_show_route = bool(opts.get("show_route", opts.get("show_route_line", true)))
 	_tile_size_cells = maxi(1, int(opts.get("tile_size_cells", 1)))
 	_legal_tiles = _read_vec2i_list(opts.get("legal_tiles", []))
 	_selected_tiles = _read_vec2i_list(opts.get("selected_tiles", []))
@@ -56,46 +57,18 @@ func clear_all() -> void:
 	_route.clear()
 	_picked_sources.clear()
 	_tile_mode = false
-	_show_route_line = true
+	_show_route = true
 	_preview = false
 	_tile_size_cells = 1
 	_legal_tiles.clear()
 	_selected_tiles.clear()
 	_free_nodes(_markers)
-	if _route_line != null and is_instance_valid(_route_line):
-		_route_line.clear_points()
 	queue_redraw()
 
-func _ensure_line() -> void:
-	if _route_line != null and is_instance_valid(_route_line):
-		return
-
-	_route_line = Line2D.new()
-	_route_line.width = ROUTE_WIDTH
-	_route_line.default_color = ROUTE_COLOR
-	_route_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
-	_route_line.end_cap_mode = Line2D.LINE_CAP_ROUND
-	_route_line.joint_mode = Line2D.LINE_JOINT_ROUND
-	_route_line.z_index = 10
-	add_child(_route_line)
-
 func _rebuild_visuals() -> void:
-	_ensure_line()
 	_free_nodes(_markers)
 
-	if _route_line == null or not is_instance_valid(_route_line):
-		queue_redraw()
-		return
-
-	_route_line.default_color = PREVIEW_ROUTE_COLOR if _preview else ROUTE_COLOR
-	_route_line.width = PREVIEW_ROUTE_WIDTH if _preview else ROUTE_WIDTH
-	_route_line.clear_points()
-	_route_line.visible = (not _tile_mode) and _show_route_line
-
-	if _route_line.visible:
-		for pos in _route:
-			_route_line.add_point(_grid_to_pixel(pos))
-
+	if (not _tile_mode) and _show_route:
 		var start := _entrance_pos
 		if start == Vector2i(-1, -1) and _route.size() > 0:
 			start = _route[0]
@@ -104,21 +77,22 @@ func _rebuild_visuals() -> void:
 
 	queue_redraw()
 
-func _grid_to_pixel(grid_pos: Vector2i) -> Vector2:
-	return Vector2(grid_pos.x, grid_pos.y) * _tile_size + _map_offset + _tile_size / 2.0
-
 func _add_marker(grid_pos: Vector2i, color: Color, size: float = MARKER_SIZE) -> void:
 	var rect := ColorRect.new()
 	rect.color = color
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rect.custom_minimum_size = Vector2(size, size)
 	rect.size = Vector2(size, size)
-	rect.position = _grid_to_pixel(grid_pos) - Vector2(size, size) / 2.0
+	rect.position = _grid_to_pixel_center(grid_pos) - Vector2(size, size) / 2.0
 	rect.z_index = 11
 	add_child(rect)
 	_markers.append(rect)
 
 func _draw() -> void:
+	if (not _tile_mode) and _show_route and not _route.is_empty():
+		var fill := PREVIEW_ROUTE_CELL_FILL_COLOR if _preview else ROUTE_CELL_FILL_COLOR
+		var outline := PREVIEW_ROUTE_CELL_OUTLINE_COLOR if _preview else ROUTE_CELL_OUTLINE_COLOR
+		_draw_cell_fills(_route, fill, ROUTE_CELL_INSET_PX, outline, ROUTE_CELL_OUTLINE_WIDTH)
 	if _tile_mode:
 		_draw_tile_outlines()
 	_draw_source_outlines()

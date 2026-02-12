@@ -12,19 +12,20 @@ var _road_graph = null  # RoadGraph 引用
 var _map_data: Dictionary = {}
 
 var _paths: Array[Dictionary] = []  # [{house_pos, restaurant_pos, distance, path_points}]
-var _path_lines: Array[Line2D] = []
 var _distance_label_panels: Array[PanelContainer] = []
 var _distance_labels: Array[Label] = []
 
 var _highlight_house: String = ""
 var _highlight_restaurant: String = ""
 
-const PATH_COLOR := Color(0.4, 0.7, 0.9, 0.6)
-const PATH_HIGHLIGHT_COLOR := Color(0.5, 0.9, 0.5, 0.8)
-const PATH_UNREACHABLE_COLOR := Color(0.9, 0.35, 0.35, 0.75)
+const PATH_COLOR := Color(0.4, 0.7, 0.9, 0.22)
+const PATH_HIGHLIGHT_COLOR := Color(0.5, 0.9, 0.5, 0.32)
+const PATH_UNREACHABLE_COLOR := Color(0.9, 0.35, 0.35, 0.22)
 const LABEL_UNREACHABLE_COLOR := Color(1, 0.55, 0.55, 1)
-const PATH_WIDTH := 6.0
-const PATH_HIGHLIGHT_WIDTH := 9.0
+const PATH_CELL_INSET_PX := 2.0
+const PATH_CELL_OUTLINE_WIDTH := 1.0
+const PATH_CELL_HIGHLIGHT_OUTLINE_WIDTH := 2.0
+const PATH_CELL_OUTLINE_ALPHA_BOOST := 0.35
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -160,9 +161,9 @@ func clear_highlight() -> void:
 
 func clear_all() -> void:
 	_paths.clear()
-	_free_nodes(_path_lines)
 	_free_nodes(_distance_label_panels)
 	_free_nodes(_distance_labels)
+	queue_redraw()
 
 func _calculate_distance(house_pos: Vector2i, restaurant_pos: Vector2i, path_points: Array[Vector2i]) -> int:
 	# 使用 RoadGraph 计算
@@ -194,30 +195,8 @@ func _count_roadworks_penalty(path_points: Array[Vector2i]) -> int:
 	return penalty
 
 func _add_path_visual(path_data: Dictionary) -> void:
-	var house_pos: Vector2i = path_data.house_pos
 	var restaurant_pos: Vector2i = path_data.restaurant_pos
 	var distance: int = path_data.distance
-	var path_points: Array[Vector2i] = []
-	for p in Array(path_data.get("path_points", [])):
-		path_points.append(p as Vector2i)
-
-	# 创建路径线
-	var line := Line2D.new()
-	line.width = PATH_WIDTH
-	line.default_color = PATH_COLOR
-	line.begin_cap_mode = Line2D.LINE_CAP_ROUND
-	line.end_cap_mode = Line2D.LINE_CAP_ROUND
-
-	if path_points.size() > 0:
-		for point in path_points:
-			var pixel_pos := _grid_to_pixel(point)
-			line.add_point(pixel_pos)
-	else:
-		line.add_point(_grid_to_pixel(house_pos))
-		line.add_point(_grid_to_pixel(restaurant_pos))
-
-	add_child(line)
-	_path_lines.append(line)
 
 	# 创建距离标签（显示在终点上方，且增加背景以便阅读：issue_tracker #59）。
 	var label_panel := PanelContainer.new()
@@ -235,7 +214,6 @@ func _add_path_visual(path_data: Dictionary) -> void:
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if distance < 0:
 		label.text = "无法连接"
-		line.default_color = PATH_UNREACHABLE_COLOR
 		label.add_theme_color_override("font_color", LABEL_UNREACHABLE_COLOR)
 	else:
 		label.text = str(distance)
@@ -258,13 +236,10 @@ func _add_path_visual(path_data: Dictionary) -> void:
 	label_panel.custom_minimum_size = panel_size
 
 	# 终点上方：以格子中心点为锚，向上偏移半格。
-	var end_center := _grid_to_pixel(restaurant_pos)
+	var end_center := _grid_to_pixel_center(restaurant_pos)
 	var target := end_center + Vector2(0, -_tile_size.y * 0.95)
 	label_panel.position = target - (panel_size * 0.5)
 	_distance_labels.append(label)
-
-func _grid_to_pixel(grid_pos: Vector2i) -> Vector2:
-	return Vector2(grid_pos.x, grid_pos.y) * _tile_size + _map_offset + _tile_size / 2
 
 func _rebuild_paths() -> void:
 	var paths_copy := _paths.duplicate(true)
@@ -274,34 +249,83 @@ func _rebuild_paths() -> void:
 	for path_data in _paths:
 		_add_path_visual(path_data)
 
+	_update_path_styles()
+
+func _draw() -> void:
+	if _paths.is_empty():
+		return
+
+	var highlight_house_pos := _get_house_pos_for_highlight()
+	var highlight_restaurant_pos := _get_restaurant_pos_for_highlight()
+
+	# 先绘制未高亮路径，再绘制高亮路径，确保高亮视觉覆盖在上层。
+	for path_data in _paths:
+		if _is_path_highlighted(path_data, highlight_house_pos, highlight_restaurant_pos):
+			continue
+		_draw_path_cells(path_data, false)
+
+	for path_data2 in _paths:
+		if not _is_path_highlighted(path_data2, highlight_house_pos, highlight_restaurant_pos):
+			continue
+		_draw_path_cells(path_data2, true)
+
+func _draw_path_cells(path_data: Dictionary, is_highlighted: bool) -> void:
+	var d_val = path_data.get("distance", null)
+	var is_unreachable := false
+	if d_val is int:
+		is_unreachable = int(d_val) < 0
+	elif d_val is float:
+		var f: float = float(d_val)
+		if f == floor(f):
+			is_unreachable = int(f) < 0
+
+	var fill := PATH_HIGHLIGHT_COLOR if is_highlighted else (PATH_UNREACHABLE_COLOR if is_unreachable else PATH_COLOR)
+	var outline := fill
+	outline.a = minf(1.0, fill.a + PATH_CELL_OUTLINE_ALPHA_BOOST)
+	var outline_width := PATH_CELL_HIGHLIGHT_OUTLINE_WIDTH if is_highlighted else PATH_CELL_OUTLINE_WIDTH
+
+	var cells := _get_path_cells_for_draw(path_data)
+	_draw_cell_fills(cells, fill, PATH_CELL_INSET_PX, outline, outline_width)
+
+func _get_path_cells_for_draw(path_data: Dictionary) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+
+	var points_val = path_data.get("path_points", null)
+	if points_val is Array:
+		for p in (points_val as Array):
+			if p is Vector2i:
+				out.append(p)
+	if not out.is_empty():
+		return out
+
+	var house_val = path_data.get("house_pos", null)
+	if house_val is Vector2i:
+		out.append(Vector2i(house_val))
+
+	var rest_val = path_data.get("restaurant_pos", null)
+	if rest_val is Vector2i:
+		var rp := Vector2i(rest_val)
+		if out.is_empty() or out[out.size() - 1] != rp:
+			out.append(rp)
+
+	return out
+
 func _update_path_styles() -> void:
 	var highlight_house_pos := _get_house_pos_for_highlight()
 	var highlight_restaurant_pos := _get_restaurant_pos_for_highlight()
 
-	for i in range(_path_lines.size()):
-		var line: Line2D = _path_lines[i]
-		if not is_instance_valid(line):
-			continue
-
+	for i in range(_paths.size()):
 		var is_unreachable := false
 		var is_highlighted := false
-		if i < _paths.size():
-			var path_data: Dictionary = _paths[i]
-			var d_val = path_data.get("distance", null)
-			if d_val is int:
-				is_unreachable = int(d_val) < 0
-			elif d_val is float:
-				var f: float = float(d_val)
-				if f == floor(f):
-					is_unreachable = int(f) < 0
-			is_highlighted = _is_path_highlighted(path_data, highlight_house_pos, highlight_restaurant_pos)
-
-		if is_highlighted:
-			line.width = PATH_HIGHLIGHT_WIDTH
-			line.default_color = PATH_HIGHLIGHT_COLOR
-		else:
-			line.width = PATH_WIDTH
-			line.default_color = PATH_UNREACHABLE_COLOR if is_unreachable else PATH_COLOR
+		var path_data: Dictionary = _paths[i]
+		var d_val = path_data.get("distance", null)
+		if d_val is int:
+			is_unreachable = int(d_val) < 0
+		elif d_val is float:
+			var f: float = float(d_val)
+			if f == floor(f):
+				is_unreachable = int(f) < 0
+		is_highlighted = _is_path_highlighted(path_data, highlight_house_pos, highlight_restaurant_pos)
 
 		if i < _distance_labels.size():
 			var label: Label = _distance_labels[i]
@@ -324,9 +348,11 @@ func _update_path_styles() -> void:
 
 						var rp_val = _paths[i].get("restaurant_pos", null) if i < _paths.size() else null
 						if rp_val is Vector2i:
-							var end_center := _grid_to_pixel(Vector2i(rp_val))
+							var end_center := _grid_to_pixel_center(Vector2i(rp_val))
 							var target := end_center + Vector2(0, -_tile_size.y * 0.95)
 							panel.position = target - (panel_size * 0.5)
+
+	queue_redraw()
 
 func _is_path_highlighted(path_data: Dictionary, highlight_house_pos: Vector2i, highlight_restaurant_pos: Vector2i) -> bool:
 	var house_id: String = str(path_data.get("house_id", ""))
