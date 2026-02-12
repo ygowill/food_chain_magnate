@@ -47,12 +47,16 @@ func _ready() -> void:
 	_refresh_slots()
 	_update_ui_state()
 
+func _is_web() -> bool:
+	return OS.has_feature("web")
+
 func open_for_load() -> void:
 	_dialog_mode = DialogMode.LOAD
 	_engine = null
 	_set_title("载入游戏")
 	_refresh_slots()
 	_update_ui_state()
+	_prefer_file_tab_on_web()
 	open()
 
 func open_for_replay() -> void:
@@ -61,6 +65,7 @@ func open_for_replay() -> void:
 	_set_title("选择回放文件")
 	_refresh_slots()
 	_update_ui_state()
+	_prefer_file_tab_on_web()
 	open()
 
 func open_for_save(engine: GameEngine) -> void:
@@ -69,7 +74,14 @@ func open_for_save(engine: GameEngine) -> void:
 	_set_title("保存游戏")
 	_refresh_slots()
 	_update_ui_state()
+	_prefer_file_tab_on_web()
 	open()
+
+func _prefer_file_tab_on_web() -> void:
+	if not _is_web():
+		return
+	if _tabs != null and is_instance_valid(_tabs):
+		_tabs.current_tab = 1
 
 func _grab_default_focus() -> void:
 	if _dialog_mode == DialogMode.SAVE and _slot_name_edit != null:
@@ -226,11 +238,18 @@ func _build_ui() -> void:
 
 	# FileDialog（文件系统选择）
 	_file_dialog = FileDialog.new()
-	_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_file_dialog.filters = PackedStringArray([
 		"*.json;存档文件;application/json"
 	])
+
+	# Web 端：强制使用浏览器文件选择（上传），避免展示运行环境目录。
+	if _is_web():
+		_file_dialog.use_native_dialog = true
+		_file_dialog.access = FileDialog.ACCESS_USERDATA
+	else:
+		_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
+
 	add_child(_file_dialog)
 
 func _connect_signals() -> void:
@@ -252,17 +271,41 @@ func _create_spacer() -> Control:
 
 func _update_ui_state() -> void:
 	var is_save := _dialog_mode == DialogMode.SAVE
+	var is_web := _is_web()
 	var primary_text := "保存" if is_save else "加载"
+	var file_primary_text := primary_text
 
 	if _slot_primary_btn != null:
 		_slot_primary_btn.text = primary_text
 	if _file_primary_btn != null:
-		_file_primary_btn.text = primary_text
+		if is_save and is_web:
+			file_primary_text = "下载"
+		_file_primary_btn.text = file_primary_text
 
 	if _slot_name_edit != null:
 		_slot_name_edit.editable = is_save
 		if not is_save:
 			_slot_name_edit.placeholder_text = "请选择一个存档槽位"
+
+	if _file_path_edit != null:
+		if is_save and is_web:
+			_file_path_edit.placeholder_text = "例如：savegame.json（将下载到本地）"
+		elif is_save:
+			_file_path_edit.placeholder_text = "选择保存路径（可为 user:// 或绝对路径）"
+		elif is_web:
+			_file_path_edit.placeholder_text = "请选择一个存档 JSON 文件（将上传到浏览器）"
+		else:
+			_file_path_edit.placeholder_text = "选择一个存档 JSON 文件（可为 user:// 或绝对路径）"
+
+	if _file_browse_btn != null:
+		if is_save and is_web:
+			_file_browse_btn.visible = false
+		else:
+			_file_browse_btn.visible = true
+			_file_browse_btn.text = "上传..." if (is_web and not is_save) else "浏览..."
+
+	if _file_dialog != null and is_instance_valid(_file_dialog):
+		_file_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE if is_save else FileDialog.FILE_MODE_OPEN_FILE
 
 func _refresh_slots() -> void:
 	_ensure_saves_dir()
@@ -427,7 +470,7 @@ func _on_primary_pressed() -> void:
 
 func _on_primary_file_pressed() -> void:
 	if _dialog_mode == DialogMode.SAVE:
-		_set_status("当前仅支持保存到 user:// 存档槽位（文件系统保存后续补齐）")
+		_save_to_file_or_download()
 		return
 
 	var path := str(_file_path_edit.text).strip_edges()
@@ -440,6 +483,63 @@ func _on_primary_file_pressed() -> void:
 
 	close()
 	load_selected.emit(path)
+
+func _save_to_file_or_download() -> void:
+	if _engine == null:
+		_set_status("游戏引擎为空，无法保存")
+		return
+
+	if _is_web():
+		var file_name := str(_file_path_edit.text).strip_edges()
+		if file_name.is_empty():
+			file_name = QUICK_SAVE_PATH.get_file()
+		file_name = _sanitize_export_file_name(file_name)
+		file_name = _ensure_json_extension(file_name)
+		if file_name.is_empty():
+			_set_status("文件名无效")
+			return
+
+		var archive_result := _engine.create_archive()
+		if not archive_result.ok:
+			_set_status("导出失败: %s" % archive_result.error)
+			return
+
+		var json := JSON.stringify(archive_result.value, "\t")
+		var bytes: PackedByteArray = json.to_utf8_buffer()
+		JavaScriptBridge.download_buffer(bytes, file_name, "application/json")
+		_set_status("已下载: %s" % file_name)
+		save_completed.emit(file_name)
+		return
+
+	var path := str(_file_path_edit.text).strip_edges()
+	if path.is_empty():
+		_set_status("请选择一个保存路径")
+		return
+	path = _ensure_json_extension(path)
+
+	var result := _engine.save_to_file(path)
+	if not result.ok:
+		_set_status("保存失败: %s" % result.error)
+		return
+
+	_set_status("已保存到: %s" % path)
+	save_completed.emit(path)
+
+func _ensure_json_extension(path_or_name: String) -> String:
+	var out := str(path_or_name).strip_edges()
+	if out.is_empty():
+		return ""
+	if out.to_lower().ends_with(".json"):
+		return out
+	return "%s.json" % out
+
+func _sanitize_export_file_name(name: String) -> String:
+	var out := str(name).strip_edges()
+	out = out.replace("/", "_")
+	out = out.replace("\\", "_")
+	out = out.replace(":", "_")
+	out = out.replace("..", "_")
+	return out
 
 func _on_slot_selected(index: int) -> void:
 	if _suppress_slot_selection:

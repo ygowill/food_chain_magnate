@@ -83,11 +83,6 @@ custom_minimum_size = Vector2(240, 48)
 layout_mode = 2
 text = "设置"
 
-[node name="ReplayPlayerButton" type="Button" parent="CenterContainer/Card/Margin/VBoxContainer"]
-custom_minimum_size = Vector2(240, 48)
-layout_mode = 2
-text = "回放播放器"
-
 [node name="QuitButton" type="Button" parent="CenterContainer/Card/Margin/VBoxContainer"]
 custom_minimum_size = Vector2(240, 48)
 layout_mode = 2
@@ -114,5 +109,4 @@ horizontal_alignment = 2
 [connection signal="pressed" from="CenterContainer/Card/Margin/VBoxContainer/OnlineButton" to="." method="_on_online_pressed"]
 [connection signal="pressed" from="CenterContainer/Card/Margin/VBoxContainer/LoadGameButton" to="." method="_on_load_game_pressed"]
 [connection signal="pressed" from="CenterContainer/Card/Margin/VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
-[connection signal="pressed" from="CenterContainer/Card/Margin/VBoxContainer/ReplayPlayerButton" to="." method="_on_replay_player_pressed"]
 [connection signal="pressed" from="CenterContainer/Card/Margin/VBoxContainer/QuitButton" to="." method="_on_quit_pressed"]
