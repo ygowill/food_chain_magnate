@@ -4,7 +4,7 @@
 	"name": "Noodles",
 	"version": "0.1.0",
 	"priority": 75,
-	"dependencies": [],
+	"dependencies": ["base_rules", "base_employees"],
 	"conflicts": [],
 	"entry_script": "res://modules/noodles/rules/entry.gd",
 	"provides": {
