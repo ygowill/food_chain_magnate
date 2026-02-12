@@ -4,13 +4,12 @@ class_name ProcurementRouteOverlay
 extends BaseTileOverlay
 
 const ROUTE_CELL_FILL_COLOR := Color(0.35, 0.8, 1.0, 0.22)
-const ROUTE_CELL_OUTLINE_COLOR := Color(0.35, 0.8, 1.0, 0.55)
 
 const PREVIEW_ROUTE_CELL_FILL_COLOR := Color(1.0, 0.75, 0.25, 0.18)
-const PREVIEW_ROUTE_CELL_OUTLINE_COLOR := Color(1.0, 0.75, 0.25, 0.55)
 
 const ROUTE_CELL_INSET_PX := 2.0
-const ROUTE_CELL_OUTLINE_WIDTH := 1.0
+const ROUTE_CELL_OPACITY := 0.34
+const PREVIEW_ROUTE_CELL_OPACITY := 0.28
 
 const START_COLOR := Color(0.35, 0.9, 0.55, 0.95)
 const PREVIEW_START_COLOR := Color(1.0, 0.78, 0.35, 0.95)
@@ -90,9 +89,9 @@ func _add_marker(grid_pos: Vector2i, color: Color, size: float = MARKER_SIZE) ->
 
 func _draw() -> void:
 	if (not _tile_mode) and _show_route and not _route.is_empty():
-		var fill := PREVIEW_ROUTE_CELL_FILL_COLOR if _preview else ROUTE_CELL_FILL_COLOR
-		var outline := PREVIEW_ROUTE_CELL_OUTLINE_COLOR if _preview else ROUTE_CELL_OUTLINE_COLOR
-		_draw_cell_fills(_route, fill, ROUTE_CELL_INSET_PX, outline, ROUTE_CELL_OUTLINE_WIDTH)
+		var fill := (PREVIEW_ROUTE_CELL_FILL_COLOR if _preview else ROUTE_CELL_FILL_COLOR)
+		fill.a = PREVIEW_ROUTE_CELL_OPACITY if _preview else ROUTE_CELL_OPACITY
+		_draw_cell_fills(_route, fill, ROUTE_CELL_INSET_PX)
 	if _tile_mode:
 		_draw_tile_outlines()
 	_draw_source_outlines()

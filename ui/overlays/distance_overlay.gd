@@ -18,14 +18,11 @@ var _distance_labels: Array[Label] = []
 var _highlight_house: String = ""
 var _highlight_restaurant: String = ""
 
-const PATH_COLOR := Color(0.4, 0.7, 0.9, 0.22)
-const PATH_HIGHLIGHT_COLOR := Color(0.5, 0.9, 0.5, 0.32)
-const PATH_UNREACHABLE_COLOR := Color(0.9, 0.35, 0.35, 0.22)
+const PATH_COLOR := Color(0.4, 0.7, 0.9, 0.3)
+const PATH_HIGHLIGHT_COLOR := Color(0.5, 0.9, 0.5, 0.42)
+const PATH_UNREACHABLE_COLOR := Color(0.9, 0.35, 0.35, 0.3)
 const LABEL_UNREACHABLE_COLOR := Color(1, 0.55, 0.55, 1)
 const PATH_CELL_INSET_PX := 2.0
-const PATH_CELL_OUTLINE_WIDTH := 1.0
-const PATH_CELL_HIGHLIGHT_OUTLINE_WIDTH := 2.0
-const PATH_CELL_OUTLINE_ALPHA_BOOST := 0.35
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -280,12 +277,9 @@ func _draw_path_cells(path_data: Dictionary, is_highlighted: bool) -> void:
 			is_unreachable = int(f) < 0
 
 	var fill := PATH_HIGHLIGHT_COLOR if is_highlighted else (PATH_UNREACHABLE_COLOR if is_unreachable else PATH_COLOR)
-	var outline := fill
-	outline.a = minf(1.0, fill.a + PATH_CELL_OUTLINE_ALPHA_BOOST)
-	var outline_width := PATH_CELL_HIGHLIGHT_OUTLINE_WIDTH if is_highlighted else PATH_CELL_OUTLINE_WIDTH
 
 	var cells := _get_path_cells_for_draw(path_data)
-	_draw_cell_fills(cells, fill, PATH_CELL_INSET_PX, outline, outline_width)
+	_draw_cell_fills(cells, fill, PATH_CELL_INSET_PX)
 
 func _get_path_cells_for_draw(path_data: Dictionary) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
