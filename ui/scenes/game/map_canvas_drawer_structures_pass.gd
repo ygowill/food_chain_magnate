@@ -74,6 +74,12 @@ static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: A
 			var bg_col := _read_color_hint(hints, "bg_color", Color("#814e60"))
 			draw_house_id_structure(canvas, cell_size, info, footprint_rect, bg_col, 1.0)
 			continue
+		if style == "player_logo":
+			var owner_logo := int(info.get("owner", -1))
+			if owner_logo >= 0:
+				var suffix2 := str(hints.get("logo_variant_suffix", "")).strip_edges()
+				draw_player_logo_piece(canvas, cell_size, footprint_rect, 1.0, restaurant_logo_piece_ids, owner_logo, suffix2)
+				continue
 		if style == "player_logo_bg":
 			var owner := int(info.get("owner", -1))
 			if owner >= 0:
@@ -97,8 +103,40 @@ static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: A
 			var rect := Rect2(pos_px, size_px)
 			draw_restaurant(canvas, cell_size, anchor, info, rect, 1.0, restaurant_logo_piece_ids)
 			continue
-
 		draw_generic_piece(canvas, cell_size, info, 1.0)
+
+static func draw_player_logo_piece(
+	canvas,
+	cell_size: int,
+	structure_rect: Rect2,
+	alpha: float,
+	restaurant_logo_piece_ids: Array,
+	owner_id: int,
+	logo_variant_suffix: String = ""
+) -> void:
+	if owner_id < 0:
+		return
+	if canvas == null or canvas._skin == null:
+		return
+	if restaurant_logo_piece_ids.is_empty():
+		return
+
+	var logo_map: Dictionary = canvas._player_restaurant_logo_ids
+	var logo_id := int(logo_map.get(owner_id, -1))
+	if logo_id < 0 or logo_id >= restaurant_logo_piece_ids.size():
+		return
+
+	var base_key: String = str(restaurant_logo_piece_ids[logo_id])
+	var logo_key := base_key
+	var suffix := str(logo_variant_suffix).strip_edges()
+	if not suffix.is_empty():
+		var var_key := "%s%s" % [base_key, suffix]
+		if canvas._skin.piece_textures.has(var_key):
+			logo_key = var_key
+
+	var tex: Texture2D = canvas._skin.get_piece_texture(logo_key)
+	var mod := Color(1, 1, 1, 0.92 * clampf(alpha, 0.0, 1.0))
+	canvas.draw_texture_rect(tex, structure_rect, false, mod)
 
 static func draw_house_id_structure(canvas, cell_size: int, info: Dictionary, structure_rect: Rect2, bg_color: Color, alpha: float = 1.0) -> void:
 	if canvas == null or canvas._skin == null:

@@ -20,7 +20,7 @@ const CASH_INCOME_BREAKDOWN_LABELS: Dictionary = {
 	"food_price": "食物售价",
 	"garden_bonus": "花园加成",
 	"marketing_bonus": "营销加成",
-	"route_purchase_income": "沿路购买收入",
+	"route_purchase_income": "沿路购买收入（咖啡）",
 	"house_bonus_other": "其它房屋加成",
 	"tips": "服务员收入",
 	"cfo_bonus": "CFO 加成",
@@ -323,6 +323,10 @@ func format(event: Dictionary) -> Array[Dictionary]:
 
 			if not breakdown_parts.is_empty():
 				msg += "（" + "，".join(breakdown_parts) + "）"
+
+			var route_text := _format_route_purchases_short(data.get("route_purchases", null), 4)
+			if not route_text.is_empty():
+				msg += "；" + route_text
 			out.append(_player(player_id, msg, data))
 		EventBus.EventType.FOOD_DISCARDED:
 			var player_id := int(data.get("player_id", -1))
@@ -696,6 +700,62 @@ func _format_restaurant_id_short(restaurant_id: String) -> String:
 		if tail.is_valid_int():
 			return "餐厅#%d" % (int(tail) + 1)
 	return rid
+
+func _format_route_purchase_source_short(source_kind: String, source_id: String) -> String:
+	var k := str(source_kind).strip_edges()
+	var id := str(source_id).strip_edges()
+	if k == "restaurant":
+		return _format_restaurant_id_short(id)
+	if not id.is_empty():
+		return id
+	return k
+
+func _format_route_purchases_short(route_purchases_val, max_items: int = 4) -> String:
+	if route_purchases_val == null or not (route_purchases_val is Array):
+		return ""
+	var purchases: Array = route_purchases_val
+	if purchases.is_empty():
+		return ""
+
+	var parts: Array[String] = []
+	for v in purchases:
+		if not (v is Dictionary):
+			continue
+		var p: Dictionary = v
+		var kind := str(p.get("kind", "")).strip_edges()
+
+		var seller := int(p.get("seller", -1))
+		var seller_text := ("玩家%d" % (seller + 1)) if seller >= 0 else "玩家?"
+
+		var kind_text := _product_name(kind)
+		if kind_text.is_empty():
+			kind_text = kind
+
+		var src_text := _format_route_purchase_source_short(
+			str(p.get("source_kind", "")),
+			str(p.get("source_id", ""))
+		)
+		var price := int(p.get("price", 0))
+
+		var seg := seller_text
+		if not kind_text.is_empty():
+			seg += " " + kind_text
+		if not src_text.is_empty():
+			seg += " " + src_text
+		if price != 0:
+			seg += " $%d" % price
+		parts.append(seg)
+
+	if parts.is_empty():
+		return ""
+
+	var shown: Array[String] = []
+	for i in range(min(parts.size(), maxi(1, int(max_items)))):
+		shown.append(parts[i])
+	var suffix := ""
+	if parts.size() > shown.size():
+		suffix = " 等%d次" % parts.size()
+	return "沿路购买×%d：" % parts.size() + "，".join(shown) + suffix
 
 func _format_picked_drink_sources_short(picked_sources_val, max_items: int = 3) -> String:
 	if picked_sources_val == null or not (picked_sources_val is Array):

@@ -178,6 +178,7 @@ func _on_train_requested(from_employee: String, to_employee: String) -> void:
 		return
 	if not _execute_command.is_valid():
 		return
+	var was_visible: bool = is_instance_valid(train_panel) and bool(train_panel.visible)
 	var current_player_id = _scene.game_engine.get_state().get_current_player_id()
 	var result: Result = _execute_command.call(Command.create("train", current_player_id, {
 		"from_employee": from_employee,
@@ -187,5 +188,8 @@ func _on_train_requested(from_employee: String, to_employee: String) -> void:
 	if result.ok:
 		var state: GameState = _scene.game_engine.get_state()
 		if state != null and state.phase == DefsClass.PHASE_WORKING and state.sub_phase == DefsClass.SUB_PHASE_TRAIN:
-			show()
-
+			# 执行命令后 UI 会立刻同步；再调用 show() 会触发 hide_all()，
+			# 可能误关闭“培训后立即可选动作”的模块覆盖层（例如 coffee_shop 放置）。
+			_refresh_for_state(state)
+			if was_visible and is_instance_valid(train_panel) and train_panel.visible and train_panel.has_method("refresh"):
+				train_panel.refresh()

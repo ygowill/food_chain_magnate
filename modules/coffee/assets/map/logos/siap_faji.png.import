@@ -10,7 +10,7 @@ metadata={
 
 [deps]
 
-source_file="res://modules/base_pieces/assets/map/logos/Siap_Faji.png"
+source_file="res://modules/coffee/assets/map/logos/siap_faji.png"
 dest_files=["res://.godot/imported/Siap_Faji.png-a8ea45ce8098a18c09d44b3b6073ed0a.ctex"]
 
 [params]

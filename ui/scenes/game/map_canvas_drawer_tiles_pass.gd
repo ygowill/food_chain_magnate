@@ -18,7 +18,8 @@ static func draw_tile_borders(canvas, cell_size: int) -> void:
 	if tile_size <= 0:
 		return
 
-	var thickness := maxf(1.5, float(cell_size) * 0.05)
+	# 外边缘：降低线宽，避免过度抢占视觉（尤其在小结构件/coffee_shop 贴图上）。
+	var thickness := maxf(1.0, float(cell_size) * 0.035)
 	thickness = minf(thickness, float(cell_size))
 	var col := Color(0, 0, 0, 0.9)
 

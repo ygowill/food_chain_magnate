@@ -35,9 +35,8 @@ func register(registrar) -> Result:
 	var hint_r: Result = registrar.register_piece_ui_hint(
 		"coffee_shop",
 		{
-			"structure_style": "player_logo_bg",
+			"structure_style": "player_logo",
 			"logo_variant_suffix": "_coffee",
-			"bg_color": Color("#f4edd1"),
 		},
 		100
 	)
