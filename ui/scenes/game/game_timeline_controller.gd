@@ -37,6 +37,9 @@ var _history_cursor_step_index: int = -1
 # 时间线编辑模式：允许在 cursor<head 时继续执行命令（将丢弃未来时间线并产生新分支）。
 var _timeline_edit_mode_active: bool = false
 
+# 手动回放模式：只有玩家显式开启时，才允许通过日志/ReplayBar 进行时间线 seek（避免误触进入复盘）。
+var _manual_replay_enabled: bool = false
+
 var _force_full_panel_sync_next_update: bool = false
 
 var _startup_replay_from_main_menu: bool = false
@@ -68,6 +71,7 @@ func dispose() -> void:
 	_disconnect_log_panel_signals()
 	_disconnect_replay_bar_signals()
 	_replay_mode_active = false
+	_manual_replay_enabled = false
 	_replay_original_engine = null
 	_replay_original_log_entries.clear()
 	_replay_file_path = ""
@@ -88,6 +92,23 @@ func set_startup_replay_from_main_menu(active: bool) -> void:
 
 func is_replay_mode_active() -> bool:
 	return _replay_mode_active
+
+func is_manual_replay_enabled() -> bool:
+	return _manual_replay_enabled
+
+func set_manual_replay_enabled(active: bool) -> void:
+	var v := bool(active)
+	if v == _manual_replay_enabled:
+		return
+	_manual_replay_enabled = v
+
+	# 关闭手动回放：若当前处于“复盘”态，自动回到最新，避免被锁在历史快照中。
+	if not _manual_replay_enabled and not _replay_mode_active:
+		if _history_step_timeline_active and _history_cursor_step_index < _history_head_step_index:
+			_exit_history_step_timeline()
+
+	if _update_ui.is_valid():
+		_update_ui.call()
 
 func is_history_step_timeline_active() -> bool:
 	return _history_step_timeline_active and _history_step_timeline.has("steps")
@@ -228,7 +249,7 @@ func sync_timeline_ui(head_index: int, cursor_index: int, state: GameState) -> v
 		_game_log_panel.call("set_timeline_head", head_index)
 		_game_log_panel.call("set_timeline_cursor", cursor_index)
 
-	var show_bar := _replay_mode_active or cursor_index < head_index
+	var show_bar := _replay_mode_active or cursor_index < head_index or _manual_replay_enabled
 	if show_bar:
 		_set_replay_bar_state(head_index, cursor_index, _replay_mode_active)
 	else:
@@ -430,7 +451,16 @@ func _command_index_to_last_step_index(command_index: int, timeline: Dictionary)
 			return idx
 	return -1
 
+func _is_timeline_seek_enabled() -> bool:
+	if _replay_mode_active:
+		return true
+	if _history_step_timeline_active and _history_step_timeline.has("steps") and _history_cursor_step_index < _history_head_step_index:
+		return true
+	return _manual_replay_enabled
+
 func _on_log_entry_clicked(entry_id: int) -> void:
+	if not _is_timeline_seek_enabled():
+		return
 	var engine: GameEngine = _get_game_engine.call() if _get_game_engine.is_valid() else null
 	if engine == null:
 		return
@@ -444,9 +474,13 @@ func _on_log_entry_clicked(entry_id: int) -> void:
 	_on_replay_bar_seek_requested(idx)
 
 func _on_timeline_seek_requested(timeline_index: int) -> void:
+	if not _is_timeline_seek_enabled():
+		return
 	_on_replay_bar_seek_requested(int(timeline_index))
 
 func _on_replay_bar_seek_requested(target_index: int) -> void:
+	if not _is_timeline_seek_enabled():
+		return
 	var engine: GameEngine = _get_game_engine.call() if _get_game_engine.is_valid() else null
 	if engine == null:
 		return

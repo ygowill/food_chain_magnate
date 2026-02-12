@@ -2,6 +2,7 @@
 extends PanelContainer
 
 signal clicked(timeline_index: int)
+signal primary_entry_clicked(entry_id: int)
 signal primary_entry_double_clicked(entry_id: int)
 signal fold_toggled(step_index: int, expanded: bool)
 
@@ -144,6 +145,9 @@ func _gui_input(event: InputEvent) -> void:
 		if primary_entry_id >= 0:
 			primary_entry_double_clicked.emit(primary_entry_id)
 			return
+	if primary_entry_id >= 0:
+		primary_entry_clicked.emit(primary_entry_id)
+		return
 	clicked.emit(get_timeline_index())
 
 func _get_preview_manager():

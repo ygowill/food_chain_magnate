@@ -7,12 +7,15 @@ signal close_requested()
 signal log_entry_clicked(entry_id: int)
 signal timeline_seek_requested(timeline_index: int)
 signal log_added(entry: Dictionary)
+signal log_entry_hovered(entry_id: int, hovering: bool)
+signal replay_toggle_changed(active: bool)
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleRow/TopRow/TitleLabel
 @onready var show_phase_events_check: CheckBox = $MarginContainer/VBoxContainer/TitleRow/OptionsRow/ShowPhaseEventsCheck
 @onready var fold_details_check: CheckBox = $MarginContainer/VBoxContainer/TitleRow/OptionsRow/FoldDetailsCheck
 @onready var expand_btn: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/ExpandButton
 @onready var close_btn: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/CloseButton
+@onready var replay_toggle_button: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/ReplayToggleButton
 @onready var replay_bar: Control = $MarginContainer/VBoxContainer/TitleRow/ReplayBar
 @onready var scroll_container: ScrollContainer = $MarginContainer/VBoxContainer/ScrollContainer
 @onready var log_container: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/LogContainer
@@ -89,6 +92,9 @@ func _ready() -> void:
 	if auto_scroll_check != null:
 		auto_scroll_check.toggled.connect(_on_auto_scroll_toggled)
 		auto_scroll_check.button_pressed = _auto_scroll
+
+	if replay_toggle_button != null:
+		replay_toggle_button.toggled.connect(_on_replay_toggle_toggled)
 
 	if expand_btn != null:
 		expand_btn.pressed.connect(_on_expand_pressed)
@@ -419,8 +425,10 @@ func _add_log_item(entry: Dictionary) -> void:
 	var item = GameLogItemClass.new()
 	item.entry_data = entry
 	item.log_type = entry.type
+	item.set_meta("log_entry_id", int(entry.get("id", -1)))
 	item.entry_clicked.connect(_on_entry_clicked)
 	item.entry_double_clicked.connect(_on_entry_double_clicked)
+	_connect_item_hover_signals(item)
 	log_container.add_child(item)
 	_log_items.append(item)
 	item.apply_timeline_state(_timeline_cursor_index, _timeline_head_index)
@@ -480,6 +488,9 @@ func _build_unified_timeline_display() -> void:
 		_get_initial_phase_segment()
 	)
 	_log_items = items
+	for item in _log_items:
+		if item is Control:
+			_connect_item_hover_signals(item)
 
 func _on_timeline_header_clicked(timeline_index: int) -> void:
 	timeline_seek_requested.emit(int(timeline_index))
@@ -542,6 +553,42 @@ func _apply_timeline_state_to_items(scroll_to_cursor: bool = false) -> void:
 		scroll_container.call("ensure_control_visible", item)
 		break
 
+func _connect_item_hover_signals(item: Control) -> void:
+	if item == null or not is_instance_valid(item):
+		return
+
+	var cb_enter := Callable(self, "_on_item_mouse_entered").bind(item)
+	if not item.mouse_entered.is_connected(cb_enter):
+		item.mouse_entered.connect(cb_enter)
+	var cb_exit := Callable(self, "_on_item_mouse_exited").bind(item)
+	if not item.mouse_exited.is_connected(cb_exit):
+		item.mouse_exited.connect(cb_exit)
+
+func _on_item_mouse_entered(item: Control) -> void:
+	var entry_id := _get_entry_id_from_item(item)
+	if entry_id < 0:
+		return
+	log_entry_hovered.emit(entry_id, true)
+
+func _on_item_mouse_exited(item: Control) -> void:
+	var entry_id := _get_entry_id_from_item(item)
+	if entry_id < 0:
+		return
+	log_entry_hovered.emit(entry_id, false)
+
+func _get_entry_id_from_item(item: Control) -> int:
+	if item == null or not is_instance_valid(item):
+		return -1
+	if item.has_meta("log_entry_id"):
+		var v = item.get_meta("log_entry_id")
+		if v is int:
+			return int(v)
+		if v is float:
+			var f: float = float(v)
+			if f == floor(f):
+				return int(f)
+	return -1
+
 func _on_show_phase_events_toggled(toggled: bool) -> void:
 	_show_phase_events = bool(toggled)
 	_rebuild_display()
@@ -581,6 +628,16 @@ func set_fold_details_enabled(enabled: bool, update_checkbox: bool = true) -> vo
 
 func _on_auto_scroll_toggled(toggled: bool) -> void:
 	_auto_scroll = toggled
+
+func set_replay_toggle_active(active: bool) -> void:
+	if replay_toggle_button == null:
+		return
+	var v := bool(active)
+	if replay_toggle_button.button_pressed != v:
+		replay_toggle_button.button_pressed = v
+
+func _on_replay_toggle_toggled(toggled: bool) -> void:
+	replay_toggle_changed.emit(bool(toggled))
 
 func _on_close_pressed() -> void:
 	close_requested.emit()

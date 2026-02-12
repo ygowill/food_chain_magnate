@@ -65,6 +65,7 @@ static func build(
 		init_child_count,
 		timeline_cursor_index,
 		timeline_head_index,
+		on_entry_clicked,
 		on_timeline_header_clicked,
 		on_entry_double_clicked,
 		on_action_group_fold_toggled
@@ -115,6 +116,7 @@ static func build(
 				child_count,
 				timeline_cursor_index,
 				timeline_head_index,
+				on_entry_clicked,
 				on_timeline_header_clicked,
 				on_entry_double_clicked,
 				on_action_group_fold_toggled
@@ -334,6 +336,7 @@ static func _add_action_group_header_item(
 	child_event_count: int,
 	timeline_cursor_index: int,
 	timeline_head_index: int,
+	on_entry_clicked: Callable,
 	on_timeline_header_clicked: Callable,
 	on_entry_double_clicked: Callable,
 	on_action_group_fold_toggled: Callable
@@ -346,6 +349,10 @@ static func _add_action_group_header_item(
 	item.fold_enabled = bool(fold_enabled)
 	item.expanded = bool(expanded)
 	item.child_event_count = int(child_event_count)
+	if int(primary_entry_id) >= 0:
+		item.set_meta("log_entry_id", int(primary_entry_id))
+		if on_entry_clicked.is_valid():
+			item.primary_entry_clicked.connect(on_entry_clicked)
 	if on_timeline_header_clicked.is_valid():
 		item.clicked.connect(on_timeline_header_clicked)
 	if on_entry_double_clicked.is_valid():
@@ -414,6 +421,7 @@ static func _add_event_item(
 	var item = GameLogEventItemClass.new()
 	item.entry_data = entry
 	item.indent_level = int(indent_level)
+	item.set_meta("log_entry_id", int(entry.get("id", -1)))
 	if on_entry_clicked.is_valid():
 		item.entry_clicked.connect(on_entry_clicked)
 	if on_entry_double_clicked.is_valid():
