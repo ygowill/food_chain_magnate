@@ -85,12 +85,12 @@
 	],
 	"printed_structures": [
 		{
-			"piece_id": "park",
+			"piece_id": "lobbyists_park_tile_z",
 			"anchor": [0, 0],
 			"rotation": 0
 		},
 		{
-			"piece_id": "park",
+			"piece_id": "lobbyists_park_tile_z",
 			"anchor": [3, 3],
 			"rotation": 0
 		}
@@ -99,4 +99,3 @@
 	"blocked_cells": [],
 	"allowed_rotations": [0, 90, 180, 270]
 }
-

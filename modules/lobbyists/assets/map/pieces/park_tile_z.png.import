@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://mxjxlnhy7jue"
-path="res://.godot/imported/sixth_chain.png-d16b1b69e3ac69cbf5de358f5cb05c42.ctex"
+uid="uid://bk372yuitnbwv"
+path="res://.godot/imported/park_tile_z.png-9887178776cf31b2563112bd2282611c.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://modules/base_pieces/assets/map/logos/sixth_chain.png"
-dest_files=["res://.godot/imported/sixth_chain.png-d16b1b69e3ac69cbf5de358f5cb05c42.ctex"]
+source_file="res://modules/lobbyists/assets/map/pieces/park_tile_z.png"
+dest_files=["res://.godot/imported/park_tile_z.png-9887178776cf31b2563112bd2282611c.ctex"]
 
 [params]
 

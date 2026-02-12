@@ -85,6 +85,9 @@ func register(registrar) -> Result:
 		var r_hint2: Result = registrar.register_piece_ui_hint(pid2, {"kind": "park"}, 100)
 		if not r_hint2.ok:
 			return r_hint2
+	var r_hint3: Result = registrar.register_piece_ui_hint("lobbyists_park_tile_z", {"kind": "park"}, 100)
+	if not r_hint3.ok:
+		return r_hint3
 	return Result.success()
 
 func _build_map_overlays(map_data: Dictionary) -> Dictionary:

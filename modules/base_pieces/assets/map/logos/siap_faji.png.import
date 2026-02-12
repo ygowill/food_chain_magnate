@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://36fhmuf300ss"
-path="res://.godot/imported/siap_faji.png-e47a7f2512a09120aa471f3466130093.ctex"
+uid="uid://dpv6btlefwnl8"
+path="res://.godot/imported/siap_faji.png-4489df90a7c38fa9d13700651c40c91b.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://modules/coffee/assets/map/logos/siap_faji.png"
-dest_files=["res://.godot/imported/siap_faji.png-e47a7f2512a09120aa471f3466130093.ctex"]
+source_file="res://modules/base_pieces/assets/map/logos/siap_faji.png"
+dest_files=["res://.godot/imported/siap_faji.png-4489df90a7c38fa9d13700651c40c91b.ctex"]
 
 [params]
 
