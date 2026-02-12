@@ -75,6 +75,17 @@ func _apply_fallback_font() -> void:
 	if FALLBACK_FONT == null:
 		return
 	ThemeDB.fallback_font = FALLBACK_FONT
+	_log_font_probe()
+
+func _log_font_probe() -> void:
+	if ThemeDB.fallback_font == null:
+		return
+	var font := ThemeDB.fallback_font
+	var supports_lock := font.has_char(0x1F512)
+	var supports_grin := font.has_char(0x1F600)
+	var supports_bullet := font.has_char(0x2022)
+	var supports_circle := font.has_char(0x25CF)
+	GameLog.info("Globals", "Font probe: lock=%s grin=%s bullet=%s circle=%s" % [supports_lock, supports_grin, supports_bullet, supports_circle])
 
 # 加载用户设置
 func _load_settings() -> void:

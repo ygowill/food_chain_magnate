@@ -60,7 +60,13 @@ func render_room_list(rooms: Array) -> void:
 		row.add_child(count_label)
 
 		var lock_label := Label.new()
-		lock_label.text = "🔒" if password_required else ""
+		var lock_text := ""
+		if password_required:
+			lock_text = "🔒"
+			# Avoid tofu if emoji font isn't actually usable in this build.
+			if ThemeDB.fallback_font == null or not ThemeDB.fallback_font.has_char(0x1F512):
+				lock_text = "锁"
+		lock_label.text = lock_text
 		lock_label.custom_minimum_size = Vector2(24, 0)
 		row.add_child(lock_label)
 
