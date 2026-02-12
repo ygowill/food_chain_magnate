@@ -912,6 +912,30 @@ func _try_show_procurement_log_preview_overlay(entry_id: int) -> bool:
 		if selected_parse.ok:
 			picked_sources = selected_parse.value
 
+	var restaurant_id := str(details.get("restaurant_id", cmd.params.get("restaurant_id", ""))).strip_edges()
+	var entrance_pos := Vector2i(-1, -1)
+	var start_restaurant_cells: Array[Vector2i] = []
+	if not restaurant_id.is_empty():
+		var s: GameState = engine.get_state()
+		if s != null and s.map is Dictionary:
+			var restaurants_val = s.map.get("restaurants", null)
+			if restaurants_val is Dictionary:
+				var rest_val = (restaurants_val as Dictionary).get(restaurant_id, null)
+				if rest_val is Dictionary:
+					var rest: Dictionary = rest_val
+					var ep_val = rest.get("entrance_pos", null)
+					if ep_val is Vector2i:
+						entrance_pos = Vector2i(ep_val)
+					var cells_val = rest.get("cells", null)
+					if cells_val is Array:
+						for p in (cells_val as Array):
+							if p is Vector2i:
+								start_restaurant_cells.append(Vector2i(p))
+							elif p is Array:
+								var a: Array = p
+								if a.size() == 2 and (a[0] is int or a[0] is float) and (a[1] is int or a[1] is float):
+									start_restaurant_cells.append(Vector2i(int(a[0]), int(a[1])))
+
 	var employee_type := str(details.get("employee_type", cmd.params.get("employee_type", ""))).strip_edges()
 	var is_air := false
 	if not employee_type.is_empty() and EmployeeRegistryClass.is_loaded():
@@ -931,26 +955,16 @@ func _try_show_procurement_log_preview_overlay(entry_id: int) -> bool:
 			"tile_mode": true,
 			"tile_size_cells": tile_size_cells,
 			"selected_tiles": route.duplicate(),
-			"preview": true
+			"start_restaurant_cells": start_restaurant_cells,
 		}
 		var empty_route: Array[Vector2i] = []
 		_overlay_controller.call("show_procurement_route_overlay", Vector2i(-1, -1), empty_route, picked_sources, opts)
 		return true
 
-	var entrance_pos := Vector2i(-1, -1)
-	var restaurant_id := str(details.get("restaurant_id", cmd.params.get("restaurant_id", ""))).strip_edges()
-	if not restaurant_id.is_empty():
-		var s: GameState = engine.get_state()
-		if s != null and s.map is Dictionary:
-			var restaurants_val = s.map.get("restaurants", null)
-			if restaurants_val is Dictionary:
-				var rest_val = (restaurants_val as Dictionary).get(restaurant_id, null)
-				if rest_val is Dictionary:
-					var ep_val = (rest_val as Dictionary).get("entrance_pos", null)
-					if ep_val is Vector2i:
-						entrance_pos = Vector2i(ep_val)
-
-	_overlay_controller.call("show_procurement_route_overlay", entrance_pos, route, picked_sources, {"preview": true})
+	var opts2 := {
+		"start_restaurant_cells": start_restaurant_cells,
+	}
+	_overlay_controller.call("show_procurement_route_overlay", entrance_pos, route, picked_sources, opts2)
 	return true
 
 func show_distance_overlay(from_position: Vector2i, to_positions: Array[Vector2i]) -> void:

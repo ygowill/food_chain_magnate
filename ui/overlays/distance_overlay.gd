@@ -22,7 +22,7 @@ const PATH_COLOR := Color(0.4, 0.7, 0.9, 0.3)
 const PATH_HIGHLIGHT_COLOR := Color(0.5, 0.9, 0.5, 0.42)
 const PATH_UNREACHABLE_COLOR := Color(0.9, 0.35, 0.35, 0.3)
 const LABEL_UNREACHABLE_COLOR := Color(1, 0.55, 0.55, 1)
-const PATH_CELL_INSET_PX := 2.0
+const PATH_CELL_INSET_PX := 0.0
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE

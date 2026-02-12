@@ -545,7 +545,11 @@ func _apply_procure_hover_preview(state: GameState, restore_selected_overlay_whe
 	_set_procure_hover_preview_text("预览：%s，距离=%d/%d（点击餐厅或按 1-9 选择起点）" % [start_label, used, max_dist])
 
 	if _overlay_controller != null and _overlay_controller.has_method("show_procurement_route_overlay"):
-		_overlay_controller.call("show_procurement_route_overlay", entrance_pos, route, picked_sources_pos, {"preview": true})
+		var opts := {
+			"preview": true,
+			"start_restaurant_cells": _get_restaurant_cells(state, hover_id),
+		}
+		_overlay_controller.call("show_procurement_route_overlay", entrance_pos, route, picked_sources_pos, opts)
 		_procure_hover_preview_active = true
 	else:
 		_procure_hover_preview_active = false
@@ -814,6 +818,7 @@ func _recompute_procurement_plan(state: GameState) -> void:
 			overlay_route = _build_air_tile_display_route(_procure_route, tile_size_cells)
 			overlay_entrance = _get_tile_center_world_pos(entrance_tile, tile_size_cells)
 			overlay_options = _build_air_procure_overlay_options(state, emp_def, entrance_tile)
+		overlay_options["start_restaurant_cells"] = _get_restaurant_cells(state, chosen_restaurant_id)
 		_overlay_controller.call("show_procurement_route_overlay", overlay_entrance, overlay_route, picked_sources_pos, overlay_options)
 
 	if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
@@ -1041,6 +1046,10 @@ func _show_air_procure_overlay(state: GameState, emp_def: EmployeeDef, entrance_
 	var overlay_route := _build_air_tile_display_route(_procure_selected_tiles, tile_size_cells)
 	var overlay_entrance := _get_tile_center_world_pos(entrance_tile, tile_size_cells)
 	var overlay_options := _build_air_procure_overlay_options(state, emp_def, entrance_tile)
+	var rid := str(_procure_air_start_restaurant_id).strip_edges()
+	if rid.is_empty():
+		rid = str(_procure_selected_start_restaurant_id).strip_edges()
+	overlay_options["start_restaurant_cells"] = _get_restaurant_cells(state, rid)
 	_overlay_controller.call("show_procurement_route_overlay", overlay_entrance, overlay_route, picked_sources, overlay_options)
 
 func _try_auto_select_air_start_tile(state: GameState) -> bool:
@@ -1217,6 +1226,32 @@ func _get_map_canvas():
 	if canvas != null and is_instance_valid(canvas):
 		return canvas
 	return null
+
+func _get_restaurant_cells(state: GameState, restaurant_id: String) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if state == null:
+		return out
+	var rid := str(restaurant_id).strip_edges()
+	if rid.is_empty():
+		return out
+	if state.map == null or not (state.map is Dictionary):
+		return out
+	var restaurants_val = state.map.get("restaurants", null)
+	if not (restaurants_val is Dictionary):
+		return out
+	var rest_val = (restaurants_val as Dictionary).get(rid, null)
+	if not (rest_val is Dictionary):
+		return out
+	var cells_val = (rest_val as Dictionary).get("cells", null)
+	if cells_val is Array:
+		for p in (cells_val as Array):
+			if p is Vector2i:
+				out.append(Vector2i(p))
+			elif p is Array:
+				var a: Array = p
+				if a.size() == 2 and (a[0] is int or a[0] is float) and (a[1] is int or a[1] is float):
+					out.append(Vector2i(int(a[0]), int(a[1])))
+	return out
 
 func _clear_procure_restaurant_choice_ui_and_overlays() -> void:
 	var canvas = _get_map_canvas()
