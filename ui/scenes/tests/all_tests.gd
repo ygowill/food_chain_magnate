@@ -149,6 +149,10 @@ func _run_all() -> int:
 			"fn": func() -> Result: return TestRefs.EmployeeTreeLayoutBottomTagTestClass.run(),
 		},
 		{
+			"name": "EmployeeCardDescriptionWrapTest",
+			"fn": func() -> Result: return TestRefs.EmployeeCardDescriptionWrapTestClass.run(),
+		},
+		{
 			"name": "GamePanelModalsControllerKindContractTest",
 			"fn": func() -> Result: return TestRefs.GamePanelModalsControllerKindContractTestClass.run(),
 		},

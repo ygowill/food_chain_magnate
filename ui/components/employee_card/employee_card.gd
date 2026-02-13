@@ -221,9 +221,10 @@ func _build_compact_layout(vbox: VBoxContainer) -> void:
 	_description_label = Label.new()
 	_description_label.add_theme_font_size_override("font_size", _scaled(11.0, 1))
 	_description_label.add_theme_color_override("font_color", Color(0.18, 0.18, 0.2, 1))
-	_description_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_description_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_description_label.max_lines_visible = 3
 	_description_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_description_label.clip_text = true
 	_description_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(_description_label)
 
@@ -314,7 +315,7 @@ func _build_full_layout(vbox: VBoxContainer) -> void:
 	_description_label = Label.new()
 	_description_label.add_theme_font_size_override("font_size", _scaled(12.0, 1))
 	_description_label.add_theme_color_override("font_color", Color(0.18, 0.18, 0.2, 1))
-	_description_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_description_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_description_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(_description_label)
 
