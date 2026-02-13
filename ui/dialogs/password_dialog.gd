@@ -64,11 +64,12 @@ func _build_ui() -> void:
 	_title_label.text = "输入房间密码"
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.add_theme_font_size_override("font_size", 18)
+	UiStylesClass.apply_label_dark(_title_label)
 	root.add_child(_title_label)
 
 	_message_label = Label.new()
 	_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_message_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
+	UiStylesClass.apply_label_dark(_message_label)
 	_message_label.text = "该房间需要密码才能加入/观战。"
 	root.add_child(_message_label)
 
@@ -78,6 +79,7 @@ func _build_ui() -> void:
 	_password_edit.secret_character = "*"
 	_password_edit.placeholder_text = "房间密码"
 	_password_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_line_edit_field(_password_edit)
 	_password_edit.text_submitted.connect(func(_t: String) -> void:
 		_on_confirm_pressed()
 	)

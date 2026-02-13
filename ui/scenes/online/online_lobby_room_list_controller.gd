@@ -47,16 +47,19 @@ func render_room_list(rooms: Array) -> void:
 		var code_label := Label.new()
 		code_label.text = code
 		code_label.custom_minimum_size = Vector2(90, 0)
+		UiStylesClass.apply_label_dark(code_label)
 		row.add_child(code_label)
 
 		var status_label := Label.new()
 		status_label.text = status
 		status_label.custom_minimum_size = Vector2(60, 0)
+		UiStylesClass.apply_label_dark(status_label)
 		row.add_child(status_label)
 
 		var count_label := Label.new()
 		count_label.text = "%d/%d" % [player_count, desired]
 		count_label.custom_minimum_size = Vector2(60, 0)
+		UiStylesClass.apply_label_dark(count_label)
 		row.add_child(count_label)
 
 		var lock_label := Label.new()
@@ -68,12 +71,14 @@ func render_room_list(rooms: Array) -> void:
 				lock_text = "锁"
 		lock_label.text = lock_text
 		lock_label.custom_minimum_size = Vector2(24, 0)
+		UiStylesClass.apply_label_dark(lock_label)
 		row.add_child(lock_label)
 
 		var host_name := str(room.get("host_name", "")).strip_edges()
 		var host_label := Label.new()
 		host_label.text = host_name
 		host_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		UiStylesClass.apply_label_dark(host_label)
 		row.add_child(host_label)
 
 		if code == current_code:

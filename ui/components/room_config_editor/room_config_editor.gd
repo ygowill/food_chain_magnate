@@ -2,6 +2,7 @@
 extends VBoxContainer
 
 const ModuleSelectorClass = preload("res://ui/components/module_selector/module_selector.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 signal changed()
 signal validation_failed(message: String)
@@ -141,6 +142,7 @@ func _ensure_ui() -> void:
 
 	var player_label := Label.new()
 	player_label.text = "人数"
+	UiStylesClass.apply_label_dark(player_label)
 	player_row.add_child(player_label)
 
 	_player_count_spin = SpinBox.new()
@@ -159,6 +161,7 @@ func _ensure_ui() -> void:
 			_sync_module_constraints_for_player_count()
 			_emit_changed()
 		)
+	UiStylesClass.apply_spin_box_field(_player_count_spin)
 	player_row.add_child(_player_count_spin)
 
 	var seed_row := HBoxContainer.new()
@@ -167,6 +170,7 @@ func _ensure_ui() -> void:
 
 	var seed_label := Label.new()
 	seed_label.text = "随机种子"
+	UiStylesClass.apply_label_dark(seed_label)
 	seed_row.add_child(seed_label)
 
 	_seed_mode_option = OptionButton.new()
@@ -180,6 +184,7 @@ func _ensure_ui() -> void:
 		_refresh_seed_editability()
 		_emit_changed()
 	)
+	UiStylesClass.apply_option_button_field(_seed_mode_option)
 	seed_row.add_child(_seed_mode_option)
 
 	_seed_value_spin = SpinBox.new()
@@ -196,6 +201,7 @@ func _ensure_ui() -> void:
 		seed_le.text_changed.connect(func(_t: String) -> void:
 			_emit_changed()
 		)
+	UiStylesClass.apply_spin_box_field(_seed_value_spin)
 	seed_row.add_child(_seed_value_spin)
 
 	_module_selector = ModuleSelectorClass.new()
@@ -209,6 +215,7 @@ func _ensure_ui() -> void:
 
 	_advanced_toggle_btn = Button.new()
 	_advanced_toggle_btn.text = "高级/开发 ▼"
+	UiStylesClass.apply_button_secondary(_advanced_toggle_btn)
 	_advanced_toggle_btn.pressed.connect(_on_toggle_advanced_pressed)
 	add_child(_advanced_toggle_btn)
 
@@ -223,6 +230,7 @@ func _ensure_ui() -> void:
 
 	var base_dir_label := Label.new()
 	base_dir_label.text = "Modules Dir"
+	UiStylesClass.apply_label_dark(base_dir_label)
 	base_dir_row.add_child(base_dir_label)
 
 	_modules_base_dir_edit = LineEdit.new()
@@ -231,6 +239,7 @@ func _ensure_ui() -> void:
 		_on_modules_base_dir_committed()
 	)
 	_modules_base_dir_edit.focus_exited.connect(_on_modules_base_dir_committed)
+	UiStylesClass.apply_line_edit_field(_modules_base_dir_edit)
 	base_dir_row.add_child(_modules_base_dir_edit)
 
 	_allow_spectators_check = CheckBox.new()
@@ -238,12 +247,14 @@ func _ensure_ui() -> void:
 	_allow_spectators_check.toggled.connect(func(_pressed: bool) -> void:
 		_emit_changed()
 	)
+	UiStylesClass.apply_check_box_field(_allow_spectators_check)
 	_advanced_section.add_child(_allow_spectators_check)
 
 	_error_label = Label.new()
 	_error_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_error_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_error_label.visible = false
+	UiStylesClass.apply_label_error(_error_label)
 	add_child(_error_label)
 
 	_refresh_seed_editability()

@@ -32,6 +32,7 @@ const ContextControllerClass = preload("res://ui/components/action_panel/action_
 @onready var house_number_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/HouseNumberRow/HouseNumberOption
 @onready var direction_row: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/DirectionRow
 @onready var direction_option: OptionButton = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/DirectionRow/DirectionOption
+@onready var options_container: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer
 @onready var custom_context_container: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/CustomContextContainer
 @onready var cancel_context_button: Button = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/ButtonsRow/CancelContextButton
 @onready var confirm_context_button: Button = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/ButtonsRow/ConfirmContextButton
@@ -236,12 +237,33 @@ func _ready() -> void:
 	UiStylesClass.apply_button_primary(confirm_context_button)
 	UiStylesClass.apply_button_secondary(cancel_context_button)
 	UiStylesClass.apply_button_secondary(rewind_phase_button)
+	_apply_context_visual_styles()
 
 func _build_ui() -> void:
 	if items_container != null:
 		items_container.add_theme_constant_override("separation", 4)
 	_setup_context_ui()
 	_setup_utility_ui()
+
+func _apply_context_visual_styles() -> void:
+	UiStylesClass.apply_panel_poster_alt(context_panel)
+	_apply_label_style_recursive(options_container)
+	UiStylesClass.apply_label_dark(context_title_label)
+	UiStylesClass.apply_label_hint_dark(context_hint_label)
+	UiStylesClass.apply_option_button_field(restaurant_option)
+	UiStylesClass.apply_option_button_field(house_number_option)
+	UiStylesClass.apply_option_button_field(direction_option)
+	UiStylesClass.apply_button_secondary(rotate_left_button)
+	UiStylesClass.apply_button_secondary(rotate_right_button)
+	UiStylesClass.apply_label_dark(rotation_value_label)
+
+func _apply_label_style_recursive(root: Node) -> void:
+	if root == null:
+		return
+	if root is Label:
+		UiStylesClass.apply_label_dark(root)
+	for child in root.get_children():
+		_apply_label_style_recursive(child)
 
 func _setup_utility_ui() -> void:
 	if not is_instance_valid(rewind_phase_button):

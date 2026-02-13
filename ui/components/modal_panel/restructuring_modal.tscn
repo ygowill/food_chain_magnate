@@ -110,6 +110,6 @@ text = "确认重组"
 [node name="HintLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 12
-theme_override_colors/font_color = Color(0.7, 0.7, 0.75, 1)
+theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
 text = "ESC 取消 | 按住 Space 查看地图"
 horizontal_alignment = 1

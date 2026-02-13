@@ -12,12 +12,12 @@ signal notes_changed(text: String)
 signal load_failed(message: String)
 
 const _GROUP_BG_COLORS: Array[Color] = [
-	Color(0.16, 0.24, 0.44, 0.35),
-	Color(0.18, 0.42, 0.26, 0.35),
-	Color(0.44, 0.22, 0.48, 0.35),
-	Color(0.58, 0.36, 0.18, 0.35),
-	Color(0.16, 0.44, 0.44, 0.35),
-	Color(0.24, 0.26, 0.32, 0.35),
+	Color(0.95, 0.90, 0.80, 0.62),
+	Color(0.94, 0.87, 0.74, 0.62),
+	Color(0.92, 0.84, 0.70, 0.62),
+	Color(0.96, 0.89, 0.77, 0.62),
+	Color(0.91, 0.83, 0.67, 0.62),
+	Color(0.93, 0.86, 0.72, 0.62),
 ]
 
 var _modules_base_dir_spec: String = ""
@@ -151,6 +151,7 @@ func _ensure_base_ui() -> void:
 	var modules_label := Label.new()
 	modules_label.text = "模块（分组）"
 	modules_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_label_dark(modules_label)
 	_header_row.add_child(modules_label)
 
 	var select_all_btn := Button.new()
@@ -181,6 +182,7 @@ func _ensure_base_ui() -> void:
 	_notes_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_notes_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_notes_label.visible = false
+	UiStylesClass.apply_label_hint_dark(_notes_label)
 	add_child(_notes_label)
 
 func _set_notes(text: String) -> void:
@@ -252,7 +254,7 @@ func _build_modules_ui() -> void:
 func _build_group_panel_style(bg: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
-	sb.border_color = Color(1, 1, 1, 0.10)
+	sb.border_color = Color(0.17, 0.13, 0.09, 0.2)
 	sb.border_width_left = 1
 	sb.border_width_top = 1
 	sb.border_width_right = 1
@@ -294,6 +296,7 @@ func _build_module_group_box(title: String, module_ids: Array[String], bg_color:
 	title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title_label.tooltip_text = title
 	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_label_dark(title_label)
 	header.add_child(title_label)
 
 	var mids_copy: Array[String] = module_ids.duplicate()
@@ -336,6 +339,7 @@ func _build_module_group_box(title: String, module_ids: Array[String], bg_color:
 		cb.text = _format_module_label(mid)
 		cb.tooltip_text = _format_module_tooltip(mid) if _show_tooltips else ""
 		cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		UiStylesClass.apply_check_box_field(cb)
 		var id := mid
 		cb.toggled.connect(func(pressed: bool) -> void:
 			_on_module_checkbox_toggled(id, pressed)

@@ -16,6 +16,7 @@ const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const EffectUiTextRegistryClass = preload("res://core/rules/effect_ui_text_registry.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 @export var show_close_button: bool = true
 # LeftPanel 的 “里程碑” Tab 复用同一面板：需要去掉自身背景/边距与最小尺寸，避免与 LeftPanel 风格不一致且产生溢出（issue_tracker #58）。
@@ -35,6 +36,9 @@ func _ready() -> void:
 		_base_custom_minimum_size = custom_minimum_size
 	if close_btn != null:
 		close_btn.pressed.connect(_on_close_pressed)
+		UiStylesClass.apply_button_secondary(close_btn)
+	if is_instance_valid(title_label):
+		UiStylesClass.apply_label_dark(title_label)
 	_apply_embedded_layout()
 	_update_close_visibility()
 	_rebuild_milestones()
@@ -122,7 +126,7 @@ func _rebuild_milestones() -> void:
 		empty.text = "暂无里程碑"
 		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		empty.add_theme_font_size_override("font_size", 12)
-		empty.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.9))
+		UiStylesClass.apply_label_hint_dark(empty)
 		milestones_container.add_child(empty)
 		return
 
@@ -516,12 +520,13 @@ class MilestoneItem extends PanelContainer:
 
 		_name_label = Label.new()
 		_name_label.add_theme_font_size_override("font_size", 15)
+		UiStylesClass.apply_label_dark(_name_label)
 		_name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		info_box.add_child(_name_label)
 
 		_desc_label = Label.new()
 		_desc_label.add_theme_font_size_override("font_size", 12)
-		_desc_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
+		UiStylesClass.apply_label_hint_dark(_desc_label)
 		_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		info_box.add_child(_desc_label)
 
@@ -533,6 +538,7 @@ class MilestoneItem extends PanelContainer:
 
 		_status_label = Label.new()
 		_status_label.add_theme_font_size_override("font_size", 12)
+		UiStylesClass.apply_label_hint_dark(_status_label)
 		_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		right_box.add_child(_status_label)
 
@@ -597,16 +603,16 @@ class MilestoneItem extends PanelContainer:
 				if pool_count > 0:
 					parts.append("供应×%d" % pool_count)
 				_status_label.text = "\n".join(parts)
-				_status_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
+				UiStylesClass.apply_label_hint_dark(_status_label)
 				_status_label.visible = not parts.is_empty()
 			else:
 				if claimed:
 					_status_label.text = "已获得"
-					_status_label.add_theme_color_override("font_color", Color(0.28, 0.55, 0.22, 1))
+					UiStylesClass.apply_label_success(_status_label)
 					_status_label.visible = true
 				elif pool_count > 0:
 					_status_label.text = "供应×%d" % pool_count
-					_status_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
+					UiStylesClass.apply_label_hint_dark(_status_label)
 					_status_label.visible = true
 				else:
 					_status_label.text = ""
@@ -617,24 +623,26 @@ class MilestoneItem extends PanelContainer:
 	func _update_style() -> void:
 		var style := StyleBoxFlat.new()
 		if _is_claimed and not global_view:
-			style.bg_color = Color(0.92, 0.90, 0.82, 0.85)
-			style.border_color = Color(0.4, 0.6, 0.4, 0.5)
+			style.bg_color = Color(UiStylesClass.COLOR_FIELD_BG.r, UiStylesClass.COLOR_FIELD_BG.g, UiStylesClass.COLOR_FIELD_BG.b, 0.86)
+			style.border_color = Color(UiStylesClass.COLOR_TEXT_SUCCESS.r, UiStylesClass.COLOR_TEXT_SUCCESS.g, UiStylesClass.COLOR_TEXT_SUCCESS.b, 0.45)
 			style.set_border_width_all(1)
 		elif _pool_count > 0:
-			style.bg_color = Color(0.95, 0.91, 0.82, 0.9)
-			style.border_color = Color(0.73, 0.23, 0.18, 0.35)
+			style.bg_color = Color(UiStylesClass.COLOR_FIELD_BG.r, UiStylesClass.COLOR_FIELD_BG.g, UiStylesClass.COLOR_FIELD_BG.b, 0.92)
+			style.border_color = Color(UiStylesClass.COLOR_TEXT_HINT.r, UiStylesClass.COLOR_TEXT_HINT.g, UiStylesClass.COLOR_TEXT_HINT.b, 0.36)
 			style.set_border_width_all(1)
 		elif _is_claimed and global_view:
-			style.bg_color = Color(0.92, 0.90, 0.82, 0.85)
-			style.border_color = Color(0.4, 0.6, 0.4, 0.5)
+			style.bg_color = Color(UiStylesClass.COLOR_FIELD_BG.r, UiStylesClass.COLOR_FIELD_BG.g, UiStylesClass.COLOR_FIELD_BG.b, 0.86)
+			style.border_color = Color(UiStylesClass.COLOR_TEXT_SUCCESS.r, UiStylesClass.COLOR_TEXT_SUCCESS.g, UiStylesClass.COLOR_TEXT_SUCCESS.b, 0.45)
 			style.set_border_width_all(1)
 		else:
-			style.bg_color = Color(0.95, 0.91, 0.82, 0.75)
+			style.bg_color = Color(UiStylesClass.COLOR_FIELD_BG_DISABLED.r, UiStylesClass.COLOR_FIELD_BG_DISABLED.g, UiStylesClass.COLOR_FIELD_BG_DISABLED.b, 0.82)
+			style.border_color = Color(UiStylesClass.COLOR_FIELD_BORDER.r, UiStylesClass.COLOR_FIELD_BORDER.g, UiStylesClass.COLOR_FIELD_BORDER.b, 0.2)
+			style.set_border_width_all(1)
 		style.set_corner_radius_all(6)
 		add_theme_stylebox_override("panel", style)
 
 		# 供应池以外变暗
 		if not _is_claimed and _pool_count <= 0:
-			modulate = Color(0.6, 0.6, 0.6, 0.8)
+			modulate = Color(0.82, 0.82, 0.82, 0.92)
 		else:
 			modulate = Color(1, 1, 1, 1)

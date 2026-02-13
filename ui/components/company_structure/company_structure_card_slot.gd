@@ -6,6 +6,7 @@ signal card_placed(slot_index: int, employee_id: String)
 signal card_removed(slot_index: int, employee_id: String)
 
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 var slot_index: int = 0
 var _card: EmployeeCard = null
@@ -24,7 +25,7 @@ func _build_ui() -> void:
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 12)
-	hint.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.6))
+	UiStylesClass.apply_label_hint_dark(hint)
 	hint.name = "Hint"
 	add_child(hint)
 

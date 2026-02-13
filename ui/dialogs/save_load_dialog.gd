@@ -129,10 +129,12 @@ func _build_ui() -> void:
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_title_label.add_theme_font_size_override("font_size", 22)
+	UiStylesClass.apply_label_dark(_title_label)
 	root.add_child(_title_label)
 
 	_tabs = TabContainer.new()
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_tab_container_surface(_tabs)
 	root.add_child(_tabs)
 
 	# === Tab 1: 存档槽 ===
@@ -148,11 +150,13 @@ func _build_ui() -> void:
 	var name_label := Label.new()
 	name_label.text = "槽位名:"
 	name_label.add_theme_font_size_override("font_size", 12)
+	UiStylesClass.apply_label_dark(name_label)
 	name_row.add_child(name_label)
 
 	_slot_name_edit = LineEdit.new()
 	_slot_name_edit.placeholder_text = "例如：slot1 / round3 / my_save"
 	_slot_name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_line_edit_field(_slot_name_edit)
 	name_row.add_child(_slot_name_edit)
 
 	_slot_refresh_btn = Button.new()
@@ -165,6 +169,7 @@ func _build_ui() -> void:
 	_slot_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_slot_list.allow_reselect = true
 	_slot_list.select_mode = ItemList.SELECT_SINGLE
+	UiStylesClass.apply_item_list_surface(_slot_list)
 	slot_tab.add_child(_slot_list)
 
 	var slot_btn_row := HBoxContainer.new()
@@ -198,11 +203,13 @@ func _build_ui() -> void:
 	var file_label := Label.new()
 	file_label.text = "文件:"
 	file_label.add_theme_font_size_override("font_size", 12)
+	UiStylesClass.apply_label_dark(file_label)
 	file_row.add_child(file_label)
 
 	_file_path_edit = LineEdit.new()
 	_file_path_edit.placeholder_text = "选择一个存档 JSON 文件（可为 user:// 或绝对路径）"
 	_file_path_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_line_edit_field(_file_path_edit)
 	file_row.add_child(_file_path_edit)
 
 	_file_browse_btn = Button.new()
@@ -233,7 +240,7 @@ func _build_ui() -> void:
 	_status_label.text = ""
 	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status_label.add_theme_font_size_override("font_size", 12)
-	_status_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35))
+	UiStylesClass.apply_label_hint_dark(_status_label)
 	root.add_child(_status_label)
 
 	# FileDialog（文件系统选择）

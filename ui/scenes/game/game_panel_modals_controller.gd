@@ -301,6 +301,7 @@ func show_reserve_card_modal(state: GameState, current_player_id: int, covered: 
 		return
 	if state == null:
 		return
+	_close_game_menu_for_blocking_modal()
 
 	_reserve_card_modal = _initialize_modal(_reserve_card_modal, ReserveCardSelectionModalScene, {
 		"completed": _on_reserve_card_modal_completed,
@@ -398,6 +399,7 @@ func _deferred_open_reserve_card_modal() -> void:
 		# 进入储备卡选择时再隐藏加载遮罩，避免“先闪一帧游戏 UI 再弹窗”的体验。
 		if SceneManager != null and SceneManager.has_method("hide_loading"):
 			SceneManager.hide_loading()
+		_close_game_menu_for_blocking_modal()
 
 		if expected_interactive:
 			if _reserve_card_modal.has_method("setup"):
@@ -413,6 +415,12 @@ func _deferred_open_reserve_card_modal() -> void:
 			c.size = covered.size
 			c.visible = true
 		return
+
+func _close_game_menu_for_blocking_modal() -> void:
+	if _scene == null:
+		return
+	if _scene.has_method("_ensure_game_menu_closed_for_blocking_modal"):
+		_scene.call("_ensure_game_menu_closed_for_blocking_modal")
 
 func hide_reserve_card_modal() -> void:
 	_pending_reserve_card_open_player_id = -1

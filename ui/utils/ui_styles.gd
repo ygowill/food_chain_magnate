@@ -32,6 +32,16 @@ const PAPER_TEXTURE_PATHS: PackedStringArray = [
 	"res://assets/textures/old_paper.png",
 ]
 
+const COLOR_TEXT_PRIMARY := Color(0.17, 0.13, 0.09, 1.0)
+const COLOR_TEXT_MUTED := Color(0.5, 0.45, 0.35, 1.0)
+const COLOR_TEXT_HINT := Color(0.73, 0.23, 0.18, 0.85)
+const COLOR_TEXT_ERROR := Color(0.73, 0.23, 0.18, 1.0)
+const COLOR_TEXT_SUCCESS := Color(0.28, 0.55, 0.22, 1.0)
+const COLOR_FIELD_BG := Color(0.95, 0.91, 0.82, 0.9)
+const COLOR_FIELD_BG_DISABLED := Color(0.92, 0.88, 0.78, 0.7)
+const COLOR_FIELD_BORDER := Color(0.17, 0.13, 0.09, 0.26)
+const COLOR_FIELD_BORDER_FOCUS := Color(0.73, 0.23, 0.18, 0.72)
+
 static func apply_dialog_surface(panel: Control) -> void:
 	if panel == null:
 		return
@@ -92,10 +102,10 @@ static func apply_button_secondary(button: Button) -> void:
 	button.add_theme_stylebox_override("hover", _BTN_SECONDARY_HOVER)
 	button.add_theme_stylebox_override("pressed", _BTN_SECONDARY_PRESSED)
 	button.add_theme_stylebox_override("disabled", _BTN_SECONDARY_DISABLED)
-	button.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09))
+	button.add_theme_color_override("font_color", COLOR_TEXT_PRIMARY)
 	button.add_theme_color_override("font_hover_color", Color(0.12, 0.09, 0.06))
-	button.add_theme_color_override("font_pressed_color", Color(0.17, 0.13, 0.09))
-	button.add_theme_color_override("font_disabled_color", Color(0.17, 0.13, 0.09, 0.5))
+	button.add_theme_color_override("font_pressed_color", COLOR_TEXT_PRIMARY)
+	button.add_theme_color_override("font_disabled_color", Color(COLOR_TEXT_PRIMARY.r, COLOR_TEXT_PRIMARY.g, COLOR_TEXT_PRIMARY.b, 0.5))
 
 static func apply_panel_poster(panel: Control) -> void:
 	if panel == null:
@@ -115,12 +125,97 @@ static func apply_overlay_dim(overlay: ColorRect) -> void:
 static func apply_label_dark(label: Label) -> void:
 	if label == null:
 		return
-	label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09))
+	label.add_theme_color_override("font_color", COLOR_TEXT_PRIMARY)
 
 static func apply_label_hint_dark(label: Label) -> void:
 	if label == null:
 		return
-	label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35))
+	label.add_theme_color_override("font_color", COLOR_TEXT_MUTED)
+
+static func apply_label_error(label: Label) -> void:
+	if label == null:
+		return
+	label.add_theme_color_override("font_color", COLOR_TEXT_ERROR)
+
+static func apply_label_success(label: Label) -> void:
+	if label == null:
+		return
+	label.add_theme_color_override("font_color", COLOR_TEXT_SUCCESS)
+
+static func apply_rich_text_dark(rich_text: RichTextLabel) -> void:
+	if rich_text == null:
+		return
+	rich_text.add_theme_color_override("default_color", COLOR_TEXT_PRIMARY)
+
+static func apply_line_edit_field(edit: LineEdit) -> void:
+	if edit == null:
+		return
+	edit.add_theme_stylebox_override("normal", _make_field_style(COLOR_FIELD_BG, COLOR_FIELD_BORDER, 1))
+	edit.add_theme_stylebox_override("focus", _make_field_style(COLOR_FIELD_BG, COLOR_FIELD_BORDER_FOCUS, 2))
+	edit.add_theme_stylebox_override("read_only", _make_field_style(COLOR_FIELD_BG_DISABLED, Color(COLOR_FIELD_BORDER.r, COLOR_FIELD_BORDER.g, COLOR_FIELD_BORDER.b, 0.18), 1))
+	edit.add_theme_color_override("font_color", COLOR_TEXT_PRIMARY)
+	edit.add_theme_color_override("font_placeholder_color", Color(COLOR_TEXT_MUTED.r, COLOR_TEXT_MUTED.g, COLOR_TEXT_MUTED.b, 0.78))
+	edit.add_theme_color_override("font_uneditable_color", Color(COLOR_TEXT_MUTED.r, COLOR_TEXT_MUTED.g, COLOR_TEXT_MUTED.b, 0.9))
+	edit.add_theme_color_override("caret_color", COLOR_TEXT_PRIMARY)
+	edit.add_theme_color_override("selection_color", Color(0.73, 0.23, 0.18, 0.25))
+
+static func apply_option_button_field(option: OptionButton) -> void:
+	if option == null:
+		return
+	var normal := _make_field_style(COLOR_FIELD_BG, COLOR_FIELD_BORDER, 1)
+	var hover := _make_field_style(Color(0.97, 0.94, 0.86, 0.95), COLOR_FIELD_BORDER, 1)
+	var pressed := _make_field_style(Color(0.92, 0.88, 0.78, 0.95), COLOR_FIELD_BORDER_FOCUS, 1)
+	var disabled := _make_field_style(COLOR_FIELD_BG_DISABLED, Color(COLOR_FIELD_BORDER.r, COLOR_FIELD_BORDER.g, COLOR_FIELD_BORDER.b, 0.14), 1)
+	option.add_theme_stylebox_override("normal", normal)
+	option.add_theme_stylebox_override("hover", hover)
+	option.add_theme_stylebox_override("pressed", pressed)
+	option.add_theme_stylebox_override("disabled", disabled)
+	option.add_theme_color_override("font_color", COLOR_TEXT_PRIMARY)
+	option.add_theme_color_override("font_hover_color", COLOR_TEXT_PRIMARY)
+	option.add_theme_color_override("font_pressed_color", COLOR_TEXT_PRIMARY)
+	option.add_theme_color_override("font_disabled_color", Color(COLOR_TEXT_MUTED.r, COLOR_TEXT_MUTED.g, COLOR_TEXT_MUTED.b, 0.72))
+
+static func apply_spin_box_field(spin: SpinBox) -> void:
+	if spin == null:
+		return
+	var line_edit := spin.get_line_edit()
+	if line_edit != null and is_instance_valid(line_edit):
+		apply_line_edit_field(line_edit)
+
+static func apply_check_box_field(check: CheckBox) -> void:
+	if check == null:
+		return
+	check.add_theme_color_override("font_color", COLOR_TEXT_PRIMARY)
+	check.add_theme_color_override("font_pressed_color", COLOR_TEXT_PRIMARY)
+	check.add_theme_color_override("font_hover_color", COLOR_TEXT_PRIMARY)
+	check.add_theme_color_override("font_hover_pressed_color", COLOR_TEXT_PRIMARY)
+	check.add_theme_color_override("font_disabled_color", Color(COLOR_TEXT_MUTED.r, COLOR_TEXT_MUTED.g, COLOR_TEXT_MUTED.b, 0.72))
+
+static func apply_tab_container_surface(tab_container: TabContainer) -> void:
+	if tab_container == null:
+		return
+	tab_container.add_theme_stylebox_override("panel", _PANEL_POSTER_ALT)
+	var tab_bar := tab_container.get_tab_bar()
+	if tab_bar == null or not is_instance_valid(tab_bar):
+		return
+	tab_bar.add_theme_stylebox_override("tab_unselected", _make_field_style(COLOR_FIELD_BG, COLOR_FIELD_BORDER, 1))
+	tab_bar.add_theme_stylebox_override("tab_selected", _make_field_style(Color(0.97, 0.94, 0.86, 0.98), COLOR_FIELD_BORDER_FOCUS, 2))
+	tab_bar.add_theme_stylebox_override("tab_hovered", _make_field_style(Color(0.97, 0.94, 0.86, 0.98), COLOR_FIELD_BORDER, 1))
+	tab_bar.add_theme_stylebox_override("tab_disabled", _make_field_style(COLOR_FIELD_BG_DISABLED, Color(COLOR_FIELD_BORDER.r, COLOR_FIELD_BORDER.g, COLOR_FIELD_BORDER.b, 0.14), 1))
+	tab_bar.add_theme_color_override("font_selected_color", COLOR_TEXT_PRIMARY)
+	tab_bar.add_theme_color_override("font_unselected_color", COLOR_TEXT_MUTED)
+	tab_bar.add_theme_color_override("font_hovered_color", COLOR_TEXT_PRIMARY)
+	tab_bar.add_theme_color_override("font_disabled_color", Color(COLOR_TEXT_MUTED.r, COLOR_TEXT_MUTED.g, COLOR_TEXT_MUTED.b, 0.72))
+
+static func apply_item_list_surface(item_list: ItemList) -> void:
+	if item_list == null:
+		return
+	item_list.add_theme_stylebox_override("panel", _make_field_style(COLOR_FIELD_BG, COLOR_FIELD_BORDER, 1))
+	item_list.add_theme_color_override("font_color", COLOR_TEXT_PRIMARY)
+	item_list.add_theme_color_override("font_selected_color", COLOR_TEXT_PRIMARY)
+	item_list.add_theme_color_override("font_hovered_color", COLOR_TEXT_PRIMARY)
+	item_list.add_theme_color_override("font_disabled_color", Color(COLOR_TEXT_MUTED.r, COLOR_TEXT_MUTED.g, COLOR_TEXT_MUTED.b, 0.72))
+	item_list.add_theme_color_override("selection_color", Color(0.73, 0.23, 0.18, 0.2))
 
 static func _load_first_valid_texture(paths: PackedStringArray) -> Texture2D:
 	for path in paths:
@@ -130,3 +225,18 @@ static func _load_first_valid_texture(paths: PackedStringArray) -> Texture2D:
 		if tex is Texture2D:
 			return tex
 	return null
+
+static func _make_field_style(bg_color: Color, border_color: Color, border_width: int) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = bg_color
+	style.border_color = border_color
+	style.set_border_width_all(maxi(0, border_width))
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_right = 4
+	style.corner_radius_bottom_left = 4
+	style.content_margin_left = 6
+	style.content_margin_top = 4
+	style.content_margin_right = 6
+	style.content_margin_bottom = 4
+	return style

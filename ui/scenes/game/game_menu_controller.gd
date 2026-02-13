@@ -19,6 +19,7 @@ var _show_settings_dialog: Callable = Callable()
 var _toggle_game_log: Callable = Callable()
 var _show_milestone_panel: Callable = Callable()
 var _toggle_distance_tool: Callable = Callable()
+var _can_open_menu: Callable = Callable()
 
 func _init(
 	host: Node,
@@ -30,7 +31,8 @@ func _init(
 	show_settings_dialog: Callable,
 	toggle_game_log: Callable,
 	show_milestone_panel: Callable,
-	toggle_distance_tool: Callable
+	toggle_distance_tool: Callable,
+	can_open_menu: Callable = Callable()
 ) -> void:
 	_host = host
 	_menu_debug_controller = menu_debug_controller
@@ -42,6 +44,7 @@ func _init(
 	_toggle_game_log = toggle_game_log
 	_show_milestone_panel = show_milestone_panel
 	_toggle_distance_tool = toggle_distance_tool
+	_can_open_menu = can_open_menu
 
 func dispose() -> void:
 	_host = null
@@ -57,6 +60,7 @@ func dispose() -> void:
 	_toggle_game_log = Callable()
 	_show_milestone_panel = Callable()
 	_toggle_distance_tool = Callable()
+	_can_open_menu = Callable()
 
 func is_menu_visible() -> bool:
 	return is_instance_valid(_menu_dialog) and bool(_menu_dialog.visible)
@@ -78,6 +82,10 @@ func handle_escape() -> bool:
 	return false
 
 func on_menu_pressed() -> void:
+	if _can_open_menu.is_valid():
+		var can_open_val = _can_open_menu.call()
+		if can_open_val is bool and not bool(can_open_val):
+			return
 	if is_instance_valid(_menu_debug_controller) and _menu_debug_controller.has_method("open_menu"):
 		_menu_debug_controller.call("open_menu")
 	elif is_instance_valid(_menu_dialog):
@@ -146,6 +154,8 @@ func show_confirm(title: String, message: String, on_confirm: Callable, on_cance
 		_confirm_dialog = _confirm_dialog_scene.instantiate()
 		if is_instance_valid(_host) and _host.has_method("add_child"):
 			_host.add_child(_confirm_dialog)
+		if _confirm_dialog is Control:
+			(_confirm_dialog as Control).z_index = 1300
 
 		var confirmed_cb := Callable(self, "_on_confirm_dialog_confirmed")
 		var cancelled_cb := Callable(self, "_on_confirm_dialog_cancelled")

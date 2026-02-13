@@ -8,6 +8,7 @@ signal position_selected(position: int)
 @onready var slots_container: HBoxContainer = $SlotsContainer
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 const BADGE_SIZE := 78 # 26 * 3 (triple height for better logo readability)
 const BADGE_ICON_MARGIN := 6
@@ -260,10 +261,14 @@ class OrderBadge extends PanelContainer:
 		if _label != null:
 			if _occupied:
 				_label.text = "" if _logo_texture != null else str(_player_id + 1)
-				_label.add_theme_color_override("font_color", Color(0.15, 0.15, 0.15, 0.9))
+				var occupied_color := UiStylesClass.COLOR_TEXT_PRIMARY
+				occupied_color.a = 0.9
+				_label.add_theme_color_override("font_color", occupied_color)
 			else:
 				_label.text = str(slot_position + 1)
-				_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.6))
+				var empty_color := UiStylesClass.COLOR_TEXT_MUTED
+				empty_color.a = 0.9
+				_label.add_theme_color_override("font_color", empty_color)
 
 			var style := StyleBoxFlat.new()
 			if _occupied:

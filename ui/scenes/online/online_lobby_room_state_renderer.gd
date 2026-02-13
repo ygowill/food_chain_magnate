@@ -1,6 +1,8 @@
 # OnlineLobby：RoomTab 渲染（玩家/旁观者列表 + 配置同步 UI + StartGame 可用性）
 extends RefCounted
 
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
 var _lobby = null
 
 func setup(lobby) -> void:
@@ -83,7 +85,7 @@ func render_room_state(room_state: Dictionary) -> void:
 	if spectators.is_empty():
 		var none := Label.new()
 		none.text = "暂无旁观者"
-		none.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.85))
+		UiStylesClass.apply_label_hint_dark(none)
 		_lobby.spectators_list_container.add_child(none)
 	else:
 		for s_val in spectators:
@@ -181,12 +183,13 @@ func _build_room_member_item(primary_text: String, accent_color: Color, tags: Ar
 	name_label.text = str(primary_text)
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UiStylesClass.apply_label_dark(name_label)
 	row.add_child(name_label)
 
 	if not tags.is_empty():
 		var tag_label := Label.new()
 		tag_label.text = " ".join(tags)
-		tag_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.95))
+		UiStylesClass.apply_label_hint_dark(tag_label)
 		tag_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		tag_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(tag_label)

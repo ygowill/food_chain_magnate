@@ -1,6 +1,8 @@
 # LeftPanel：员工图标/列表渲染（手牌/公司结构）
 extends RefCounted
 
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
 var _panel = null
 
 func setup(panel) -> void:
@@ -104,6 +106,8 @@ func _add_employee_entry_to_category(container: VBoxContainer, employee_id: Stri
 	var line := Label.new()
 	line.text = label_text
 	line.autowrap_mode = TextServer.AUTOWRAP_WORD
+	line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.custom_minimum_size = Vector2(0, 24)
 	line.mouse_filter = Control.MOUSE_FILTER_STOP
 	line.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	line.mouse_entered.connect(Callable(self, "_on_employee_line_mouse_entered").bind(emp_id, line))
@@ -114,9 +118,24 @@ func _add_employee_entry_to_category(container: VBoxContainer, employee_id: Stri
 		fs = int(Globals.get_scaled_font_size(16))
 	line.add_theme_font_size_override("font_size", fs)
 	if busy:
-		line.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 1))
+		UiStylesClass.apply_label_error(line)
 	else:
-		line.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
+		UiStylesClass.apply_label_dark(line)
+
+	var style := StyleBoxFlat.new()
+	if busy:
+		style.bg_color = Color(UiStylesClass.COLOR_TEXT_ERROR.r, UiStylesClass.COLOR_TEXT_ERROR.g, UiStylesClass.COLOR_TEXT_ERROR.b, 0.08)
+		style.border_color = Color(UiStylesClass.COLOR_TEXT_ERROR.r, UiStylesClass.COLOR_TEXT_ERROR.g, UiStylesClass.COLOR_TEXT_ERROR.b, 0.34)
+	else:
+		style.bg_color = Color(UiStylesClass.COLOR_FIELD_BG.r, UiStylesClass.COLOR_FIELD_BG.g, UiStylesClass.COLOR_FIELD_BG.b, 0.74)
+		style.border_color = Color(UiStylesClass.COLOR_FIELD_BORDER.r, UiStylesClass.COLOR_FIELD_BORDER.g, UiStylesClass.COLOR_FIELD_BORDER.b, 0.3)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	style.content_margin_left = 6
+	style.content_margin_right = 6
+	style.content_margin_top = 2
+	style.content_margin_bottom = 2
+	line.add_theme_stylebox_override("normal", style)
 	container.add_child(line)
 
 func _get_preview_manager():

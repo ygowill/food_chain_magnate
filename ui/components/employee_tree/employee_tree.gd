@@ -93,6 +93,10 @@ func _set_loading_visible(loading: bool) -> void:
 func _on_background_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var e: InputEventMouseButton = event
+		if (e.button_index == MOUSE_BUTTON_WHEEL_UP or e.button_index == MOUSE_BUTTON_WHEEL_DOWN) and e.pressed:
+			if _try_apply_wheel_zoom(e.button_index, e.position):
+				get_viewport().set_input_as_handled()
+			return
 		if e.button_index == MOUSE_BUTTON_LEFT:
 			if e.double_click and e.pressed:
 				_fit_to_view()
@@ -111,6 +115,23 @@ func _on_background_gui_input(event: InputEvent) -> void:
 			graph.position = _drag_start_pos + (m.position - _drag_start_mouse)
 		return
 
+func _input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if not _built:
+		return
+	if not is_instance_valid(viewport) or not is_instance_valid(graph):
+		return
+
+	if event is InputEventMagnifyGesture:
+		var g: InputEventMagnifyGesture = event
+		var vp_rect := viewport.get_global_rect()
+		if not vp_rect.has_point(g.position):
+			return
+		var local := g.position - vp_rect.position
+		_set_zoom_at(_zoom * float(g.factor), local)
+		get_viewport().set_input_as_handled()
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
@@ -126,14 +147,30 @@ func _unhandled_input(event: InputEvent) -> void:
 		if not e.pressed:
 			return
 
-		var vp_rect := viewport.get_global_rect()
-		if not vp_rect.has_point(e.position):
-			return
+		if _try_apply_wheel_zoom(e.button_index, e.position):
+			get_viewport().set_input_as_handled()
 
-		var local := e.position - vp_rect.position
-		var dir := 1 if e.button_index == MOUSE_BUTTON_WHEEL_UP else -1
-		_set_zoom_at(_zoom + float(dir) * 0.1, local)
-		get_viewport().set_input_as_handled()
+func _try_apply_wheel_zoom(button_index: int, global_position: Vector2) -> bool:
+	if not is_instance_valid(viewport) or not is_instance_valid(graph):
+		return false
+	if not _built:
+		return false
+
+	var vp_rect := viewport.get_global_rect()
+	if not vp_rect.has_point(global_position):
+		return false
+
+	var local := global_position - vp_rect.position
+	var dir := 0
+	if button_index == MOUSE_BUTTON_WHEEL_UP:
+		dir = 1
+	elif button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		dir = -1
+	if dir == 0:
+		return false
+
+	_set_zoom_at(_zoom + float(dir) * 0.1, local)
+	return true
 
 func _set_zoom_at(target_zoom: float, viewport_local: Vector2) -> void:
 	if not is_instance_valid(graph):

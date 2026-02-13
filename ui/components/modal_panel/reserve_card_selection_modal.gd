@@ -3,6 +3,8 @@
 class_name ReserveCardSelectionModal
 extends "res://ui/components/modal_panel/modal_panel_base.gd"
 
+const ReserveUiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
 @onready var selection_label: Label = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/SelectionLabel
 @onready var card_button_0: Button = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0
 @onready var card_button_1: Button = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1
@@ -23,6 +25,7 @@ var _card_button_group: ButtonGroup = ButtonGroup.new()
 func _ready() -> void:
 	allow_peek_map = false
 	super._ready()
+	_apply_visual_styles()
 
 	set_title_text("选择银行储备卡")
 	set_confirm_text("确认选择")
@@ -40,6 +43,26 @@ func _ready() -> void:
 	_bind_card_button(card_button_0, 0)
 	_bind_card_button(card_button_1, 1)
 	_bind_card_button(card_button_2, 2)
+
+func _apply_visual_styles() -> void:
+	if is_instance_valid(title_label):
+		ReserveUiStylesClass.apply_label_dark(title_label)
+	if is_instance_valid(selection_label):
+		ReserveUiStylesClass.apply_label_dark(selection_label)
+	if is_instance_valid(hint_label):
+		ReserveUiStylesClass.apply_label_error(hint_label)
+
+	for btn in [card_button_0, card_button_1, card_button_2]:
+		if btn is Button and is_instance_valid(btn):
+			ReserveUiStylesClass.apply_button_secondary(btn)
+
+	for label in [card_title_0, card_title_1, card_title_2]:
+		if label is Label and is_instance_valid(label):
+			ReserveUiStylesClass.apply_label_dark(label)
+
+	for label in [card_desc_0, card_desc_1, card_desc_2]:
+		if label is Label and is_instance_valid(label):
+			ReserveUiStylesClass.apply_label_hint_dark(label)
 
 func setup(state: GameState, current_player_id: int) -> void:
 	allow_peek_map = false

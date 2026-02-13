@@ -134,6 +134,7 @@ func _ready() -> void:
 	UiStylesClass.apply_tiled_texture(background, UiStylesClass.WALL_TEXTURE_PATHS, 3.0, Color(0.85, 0.80, 0.68, 1.0))
 	UiStylesClass.apply_vignette(vignette_overlay, 0.25, 0.5)
 	_apply_menu_dialog_styles()
+	_apply_topbar_button_styles()
 	_layout_controller = GameLayoutControllerClass.new(
 		self,
 		round_label,
@@ -189,7 +190,8 @@ func _ready() -> void:
 		Callable(self, "show_settings_dialog"),
 		Callable(self, "toggle_game_log"),
 		Callable(self, "show_milestone_panel"),
-		Callable(self, "toggle_distance_tool")
+		Callable(self, "toggle_distance_tool"),
+		Callable(self, "_can_open_menu")
 	)
 	_right_panel_dock_controller = GameRightPanelDockControllerClass.new(
 		Callable(self, "_ensure_right_panel_visible"),
@@ -347,6 +349,7 @@ func _ready() -> void:
 func _apply_menu_dialog_styles() -> void:
 	if is_instance_valid(menu_dialog):
 		menu_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+		menu_dialog.z_index = 1200
 	if is_instance_valid(menu_dialog_overlay):
 		menu_dialog_overlay.color = Color(0.05, 0.04, 0.03, 0.75)
 		menu_dialog_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -356,6 +359,25 @@ func _apply_menu_dialog_styles() -> void:
 	UiStylesClass.apply_button_primary(menu_settings_button)
 	UiStylesClass.apply_button_primary(toggle_bottom_panel_button)
 	UiStylesClass.apply_button_primary(menu_quit_to_menu_button)
+
+func _apply_topbar_button_styles() -> void:
+	var button_paths := [
+		"UIRoot/TopBar/ButtonRow/AdvancePhaseButton",
+		"UIRoot/TopBar/ButtonRow/AdvanceSubPhaseButton",
+		"UIRoot/TopBar/ButtonRow/EmployeeTreeButton",
+		"UIRoot/TopBar/ButtonRow/LogButton",
+		"UIRoot/TopBar/ButtonRow/MilestonesButton",
+		"UIRoot/TopBar/ButtonRow/ReserveAreaButton",
+		"UIRoot/TopBar/ButtonRow/DistanceToolButton",
+		"UIRoot/TopBar/ButtonRow/SettingsButton",
+		"UIRoot/TopBar/ButtonRow/ToggleLeftPanelButton",
+		"UIRoot/TopBar/ButtonRow/ToggleRightPanelButton",
+		"UIRoot/TopBar/ButtonRow/MenuButton",
+	]
+	for path in button_paths:
+		var btn = get_node_or_null(path)
+		if btn is Button:
+			UiStylesClass.apply_button_secondary(btn)
 
 func _report_startup_profile() -> void:
 	# 让首帧/次帧的 deferred/UI queue 跑完，避免漏掉 MapSkin 构建等同步耗时的尾部。
@@ -677,6 +699,23 @@ func get_key_values() -> Dictionary:
 	return {}
 
 # === 菜单/调试（TopBar + Dialogs）===
+
+func _can_open_menu() -> bool:
+	if _panel_controller != null and _panel_controller.has_method("has_blocking_modal_ui"):
+		if bool(_panel_controller.call("has_blocking_modal_ui")):
+			return false
+	return true
+
+func _ensure_game_menu_closed_for_blocking_modal() -> void:
+	if _menu_controller == null:
+		return
+	if not _menu_controller.has_method("handle_escape"):
+		return
+
+	for _i in range(2):
+		var closed_val = _menu_controller.call("handle_escape")
+		if not (closed_val is bool) or not bool(closed_val):
+			break
 
 func _on_menu_pressed() -> void:
 	if _menu_controller != null and _menu_controller.has_method("on_menu_pressed"):

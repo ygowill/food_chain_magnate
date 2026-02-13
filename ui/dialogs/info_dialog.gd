@@ -62,6 +62,7 @@ func _build_ui() -> void:
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_title_label.add_theme_font_size_override("font_size", 18)
+	UiStylesClass.apply_label_dark(_title_label)
 	root.add_child(_title_label)
 
 	var scroll := ScrollContainer.new()
@@ -81,7 +82,7 @@ func _build_ui() -> void:
 	_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_message_label.add_theme_font_size_override("font_size", 14)
-	_message_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
+	UiStylesClass.apply_label_dark(_message_label)
 	_message_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	msg_wrap.add_child(_message_label)
 

@@ -41,6 +41,8 @@ func _ready() -> void:
 	UiStylesClass.apply_poster_inner_border(inner_border)
 	UiStylesClass.apply_button_secondary(back_button)
 	UiStylesClass.apply_button_primary(start_button)
+	UiStylesClass.apply_spin_box_field(player_count_spinbox)
+	UiStylesClass.apply_line_edit_field(seed_edit)
 
 	player_count_spinbox.value = Globals.player_count
 	if Globals.random_seed != 0:
@@ -114,6 +116,7 @@ func _ensure_sections() -> void:
 	players_header.text = "玩家设置（与玩家数量联动）"
 	players_header.autowrap_mode = TextServer.AUTOWRAP_WORD
 	players_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UiStylesClass.apply_label_dark(players_header)
 	_players_section.add_child(players_header)
 
 	_players_container = VBoxContainer.new()
@@ -132,6 +135,7 @@ func _ensure_sections() -> void:
 	_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_message_label.visible = false
+	UiStylesClass.apply_label_error(_message_label)
 	root_vbox.add_child(_message_label)
 	root_vbox.move_child(_message_label, spacer2.get_index())
 
@@ -198,12 +202,14 @@ func _rebuild_player_rows() -> void:
 		var label := Label.new()
 		label.text = "玩家 %d" % (pid + 1)
 		label.custom_minimum_size = Vector2(70, 0)
+		UiStylesClass.apply_label_dark(label)
 		row.add_child(label)
 
 		var name_edit := LineEdit.new()
 		name_edit.custom_minimum_size = Vector2(160, 0)
 		name_edit.placeholder_text = "玩家名称"
 		name_edit.text = Globals.get_player_name(pid)
+		UiStylesClass.apply_line_edit_field(name_edit)
 		row.add_child(name_edit)
 		_player_name_edits.append(name_edit)
 
@@ -235,6 +241,7 @@ func _rebuild_player_rows() -> void:
 				return
 			_refresh_player_logo_unique_constraints()
 		)
+		UiStylesClass.apply_option_button_field(logo_opt)
 		row.add_child(logo_opt)
 		_player_logo_options.append(logo_opt)
 

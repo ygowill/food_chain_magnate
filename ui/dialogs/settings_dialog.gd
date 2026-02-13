@@ -9,6 +9,7 @@ signal closed()
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 @onready var background_panel: Panel = $BackgroundPanel
+@onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var tab_container: TabContainer = $MarginContainer/VBoxContainer/TabContainer
 @onready var close_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/CloseButton
 @onready var apply_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/ApplyButton
@@ -84,6 +85,7 @@ func _ready() -> void:
 	UiStylesClass.apply_button_primary(apply_btn)
 	UiStylesClass.apply_button_secondary(reset_btn)
 	UiStylesClass.apply_button_secondary(close_btn)
+	_apply_visual_styles()
 
 	if close_btn != null:
 		close_btn.pressed.connect(_on_close_pressed)
@@ -94,6 +96,31 @@ func _ready() -> void:
 
 	_setup_resolution_options()
 	_load_settings()
+
+func _apply_visual_styles() -> void:
+	UiStylesClass.apply_label_dark(title_label)
+	UiStylesClass.apply_tab_container_surface(tab_container)
+	_apply_label_style_recursive(tab_container)
+	_apply_form_control_styles()
+
+func _apply_label_style_recursive(root: Node) -> void:
+	if root == null:
+		return
+	if root is Label:
+		UiStylesClass.apply_label_dark(root)
+	for child in root.get_children():
+		_apply_label_style_recursive(child)
+
+func _apply_form_control_styles() -> void:
+	UiStylesClass.apply_check_box_field(mute_check)
+	UiStylesClass.apply_check_box_field(fullscreen_check)
+	UiStylesClass.apply_check_box_field(vsync_check)
+	UiStylesClass.apply_check_box_field(show_tile_ids_check)
+	UiStylesClass.apply_check_box_field(show_cell_hover_tooltip_check)
+	UiStylesClass.apply_check_box_field(auto_save_check)
+	UiStylesClass.apply_check_box_field(confirm_actions_check)
+	UiStylesClass.apply_check_box_field(show_hints_check)
+	UiStylesClass.apply_option_button_field(resolution_option)
 
 func _grab_default_focus() -> void:
 	if close_btn != null:

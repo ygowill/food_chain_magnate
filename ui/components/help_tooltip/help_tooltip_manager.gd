@@ -3,6 +3,8 @@
 class_name HelpTooltipManager
 extends CanvasLayer
 
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
 signal tooltip_shown(key: String)
 signal tooltip_hidden()
 
@@ -145,7 +147,12 @@ func _ready() -> void:
 	add_child(_show_timer)
 
 	if tooltip_panel != null:
+		UiStylesClass.apply_panel_poster_alt(tooltip_panel)
 		tooltip_panel.visible = false
+	if title_label != null:
+		UiStylesClass.apply_label_dark(title_label)
+	if content_label != null:
+		UiStylesClass.apply_rich_text_dark(content_label)
 
 func request_tooltip(key: String, position: Vector2) -> void:
 	if key == _current_key and _is_visible:

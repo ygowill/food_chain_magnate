@@ -12,6 +12,7 @@ const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const LeftPanelEmployeeIconsControllerClass = preload("res://ui/components/left_panel/left_panel_employee_icons_controller.gd")
 const LeftPanelTurnLogControllerClass = preload("res://ui/components/left_panel/left_panel_turn_log_controller.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 @onready var player_tabs: HBoxContainer = $MarginContainer/HBoxContainer/PlayerTabs
 @onready var summary_row: Control = $MarginContainer/HBoxContainer/Content/SummaryRow
@@ -79,6 +80,7 @@ var _turn_log_controller = null
 func _ready() -> void:
 	_ensure_controllers()
 	_init_tab_titles()
+	_apply_visual_styles()
 	if is_instance_valid(summary_label):
 		summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	if is_instance_valid(tab_container):
@@ -106,6 +108,46 @@ func _init_tab_titles() -> void:
 		tab_container.set_tab_title(TAB_EMPLOYEES, "员工")
 	if tab_container.get_tab_count() >= 2:
 		tab_container.set_tab_title(TAB_MILESTONES, "里程碑")
+
+func _apply_visual_styles() -> void:
+	if is_instance_valid(summary_label):
+		UiStylesClass.apply_label_dark(summary_label)
+	if is_instance_valid(inventory_title_label):
+		UiStylesClass.apply_label_hint_dark(inventory_title_label)
+	if is_instance_valid(tab_container):
+		UiStylesClass.apply_tab_container_surface(tab_container)
+	if is_instance_valid(turn_log_toggle_button):
+		UiStylesClass.apply_button_secondary(turn_log_toggle_button)
+	if is_instance_valid(turn_log_to_logs_button):
+		UiStylesClass.apply_button_secondary(turn_log_to_logs_button)
+	if turn_log_section is PanelContainer:
+		UiStylesClass.apply_panel_poster_alt(turn_log_section as PanelContainer)
+
+	_apply_dark_label_at_path("MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/CompanySection/CompanyHeader")
+	_apply_dark_label_at_path("MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/HandSection/HandHeader")
+
+	var category_label_paths := [
+		"MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/CompanySection/CompanyIconGroups/CompanyManagementRow/Label",
+		"MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/CompanySection/CompanyIconGroups/CompanyKitchenRow/Label",
+		"MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/CompanySection/CompanyIconGroups/CompanyMarketingRow/Label",
+		"MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/CompanySection/CompanyIconGroups/CompanyOtherRow/Label",
+		"MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/HandSection/HandIconGroups/HandManagementRow/Label",
+		"MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/HandSection/HandIconGroups/HandKitchenRow/Label",
+		"MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/HandSection/HandIconGroups/HandMarketingRow/Label",
+		"MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/HandSection/HandIconGroups/HandOtherRow/Label",
+	]
+	for path in category_label_paths:
+		_apply_hint_label_at_path(path)
+
+func _apply_dark_label_at_path(path: String) -> void:
+	var n = get_node_or_null(path)
+	if n is Label:
+		UiStylesClass.apply_label_dark(n as Label)
+
+func _apply_hint_label_at_path(path: String) -> void:
+	var n = get_node_or_null(path)
+	if n is Label:
+		UiStylesClass.apply_label_hint_dark(n as Label)
 
 func apply_font_settings() -> void:
 	var fs_summary := 16
@@ -484,7 +526,7 @@ func _refresh_inventory_ui(inv: Dictionary, fridge_capacity: int) -> void:
 	if added <= 0:
 		var empty := Label.new()
 		empty.text = "无"
-		empty.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.9))
+		UiStylesClass.apply_label_hint_dark(empty)
 		var fs := 14
 		if Globals != null:
 			fs = int(Globals.get_scaled_font_size(14))

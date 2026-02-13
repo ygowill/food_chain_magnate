@@ -38,12 +38,14 @@ const _COLOR_NAME_HINTS: Array[String] = ["红", "蓝", "绿", "黄", "紫", "�
 @onready var join_by_code_back_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/JoinHeaderRow/BackToRoomsButton
 @onready var join_by_code_room_code_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/RoomCodeRow/RoomCodeEdit
 @onready var join_by_code_password_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/PasswordRow/RoomPasswordEdit
+@onready var join_by_code_hint_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/JoinHint
 @onready var join_by_code_submit_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/JoinRoomButton
 @onready var join_by_code_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/JoinStatus
 
 @onready var back_to_rooms_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreateHeaderRow/BackToRoomsButton
 @onready var create_password_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreatePasswordRow/CreateRoomPasswordEdit
 @onready var create_players_spin: SpinBox = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreatePlayersRow/CreatePlayersSpin
+@onready var create_hint_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreateHint
 @onready var create_room_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreateRoomButton
 @onready var create_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreateStatus
 
@@ -96,6 +98,7 @@ func _ready() -> void:
 	UiStylesClass.apply_button_secondary(copy_room_code_button)
 	UiStylesClass.apply_button_secondary(leave_room_button)
 	UiStylesClass.apply_button_primary(start_game_button)
+	_apply_visual_styles()
 
 	_apply_password_mask_fallback()
 	_bind_net_signals()
@@ -106,6 +109,32 @@ func _ready() -> void:
 	_setup_my_color_selector()
 	_apply_defaults()
 	_refresh_ui()
+
+func _apply_visual_styles() -> void:
+	_apply_label_style_recursive(panel)
+	UiStylesClass.apply_label_hint_dark(connect_status_label)
+	UiStylesClass.apply_label_hint_dark(rooms_status_label)
+	UiStylesClass.apply_label_hint_dark(join_by_code_hint_label)
+	UiStylesClass.apply_label_hint_dark(join_by_code_status_label)
+	UiStylesClass.apply_label_hint_dark(create_hint_label)
+	UiStylesClass.apply_label_hint_dark(create_status_label)
+	UiStylesClass.apply_label_hint_dark(config_sync_status_label)
+	UiStylesClass.apply_label_hint_dark(room_status_label)
+	UiStylesClass.apply_line_edit_field(server_url_edit)
+	UiStylesClass.apply_line_edit_field(player_name_edit)
+	UiStylesClass.apply_line_edit_field(join_by_code_room_code_edit)
+	UiStylesClass.apply_line_edit_field(join_by_code_password_edit)
+	UiStylesClass.apply_line_edit_field(create_password_edit)
+	UiStylesClass.apply_spin_box_field(create_players_spin)
+	UiStylesClass.apply_option_button_field(my_color_option)
+
+func _apply_label_style_recursive(root: Node) -> void:
+	if root == null:
+		return
+	if root is Label:
+		UiStylesClass.apply_label_dark(root)
+	for child in root.get_children():
+		_apply_label_style_recursive(child)
 
 func _apply_password_mask_fallback() -> void:
 	# Some embedded fonts used in exports may miss the default bullet mask (U+2022),

@@ -179,14 +179,19 @@ func dispose() -> void:
 	_overlay_controller = null
 
 func has_open_modal_ui() -> bool:
+	if has_blocking_modal_ui():
+		return true
+	if _views_controller != null and _views_controller.has_method("has_open_view_ui"):
+		if bool(_views_controller.has_open_view_ui()):
+			return true
+	return false
+
+func has_blocking_modal_ui() -> bool:
 	if _restructuring_controller != null and _restructuring_controller.has_method("has_open_modal_ui"):
 		if bool(_restructuring_controller.has_open_modal_ui()):
 			return true
 	if _modals_controller != null and _modals_controller.has_method("has_open_modal_ui"):
 		if bool(_modals_controller.has_open_modal_ui()):
-			return true
-	if _views_controller != null and _views_controller.has_method("has_open_view_ui"):
-		if bool(_views_controller.has_open_view_ui()):
 			return true
 	return false
 
