@@ -7,6 +7,7 @@ const GameConfigClass = preload("res://core/data/game_config.gd")
 const InvariantsClass = preload("res://core/engine/game_engine/invariants.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModulesV2Class = preload("res://core/engine/game_engine/modules_v2.gd")
+const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const EmployeePoolPatchRegistryClass = preload("res://core/rules/employee_pool_patch_registry.gd")
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
@@ -33,6 +34,11 @@ static func initialize_new_game(
 		enabled_modules_v2 = GameDefaultsClass.build_default_enabled_modules_v2()
 	if modules_v2_base_dir.is_empty():
 		modules_v2_base_dir = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
+	else:
+		var base_dirs_read := ModuleDirSpecClass.parse_base_dirs(modules_v2_base_dir)
+		if not base_dirs_read.ok:
+			init_warnings.append("modules_v2_base_dir 非 res:// 目录，已回退默认: %s" % modules_v2_base_dir)
+			modules_v2_base_dir = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
 
 	var span_cfg := PerfTraceClass.begin_span("init:GameConfig.load_default")
 	var config_result := GameConfigClass.load_default()

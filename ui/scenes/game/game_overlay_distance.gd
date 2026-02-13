@@ -31,6 +31,32 @@ func show_distance_overlay(from_position: Vector2i, to_positions: Array[Vector2i
 
 	distance_overlay.visible = true
 
+func show_distance_overlay_pair(
+	house_position: Vector2i,
+	restaurant_position: Vector2i,
+	path_points: Array[Vector2i],
+	distance: int
+) -> void:
+	if _scene == null:
+		return
+	_ensure_distance_overlay()
+	if not is_instance_valid(distance_overlay):
+		return
+
+	var engine = _scene.game_engine
+	if engine != null and distance_overlay.has_method("set_map_data"):
+		var state = engine.get_state()
+		distance_overlay.set_map_data(state.map)
+
+	_sync_distance_overlay_transform()
+
+	if distance_overlay.has_method("clear_all"):
+		distance_overlay.clear_all()
+	if distance_overlay.has_method("show_distance"):
+		distance_overlay.show_distance(house_position, restaurant_position, path_points, "", "", distance)
+
+	distance_overlay.visible = true
+
 func hide_distance_overlay() -> void:
 	if is_instance_valid(distance_overlay):
 		if distance_overlay.has_method("clear_all"):

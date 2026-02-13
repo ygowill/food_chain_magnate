@@ -18,9 +18,9 @@ var _distance_labels: Array[Label] = []
 var _highlight_house: String = ""
 var _highlight_restaurant: String = ""
 
-const PATH_COLOR := Color(0.4, 0.7, 0.9, 0.3)
-const PATH_HIGHLIGHT_COLOR := Color(0.5, 0.9, 0.5, 0.42)
-const PATH_UNREACHABLE_COLOR := Color(0.9, 0.35, 0.35, 0.3)
+const PATH_COLOR := Color(0.4, 0.7, 0.9, 0.56)
+const PATH_HIGHLIGHT_COLOR := Color(0.5, 0.9, 0.5, 0.72)
+const PATH_UNREACHABLE_COLOR := Color(0.9, 0.35, 0.35, 0.58)
 const LABEL_UNREACHABLE_COLOR := Color(1, 0.55, 0.55, 1)
 const PATH_CELL_INSET_PX := 0.0
 

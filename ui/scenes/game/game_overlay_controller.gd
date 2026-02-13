@@ -113,6 +113,16 @@ func show_distance_overlay(from_position: Vector2i, to_positions: Array[Vector2i
 		_distance_overlay_controller.show_distance_overlay(from_position, to_positions)
 		distance_overlay = _distance_overlay_controller.distance_overlay
 
+func show_distance_overlay_pair(
+	house_position: Vector2i,
+	restaurant_position: Vector2i,
+	path_points: Array[Vector2i],
+	distance: int
+) -> void:
+	if _distance_overlay_controller != null:
+		_distance_overlay_controller.show_distance_overlay_pair(house_position, restaurant_position, path_points, distance)
+		distance_overlay = _distance_overlay_controller.distance_overlay
+
 func hide_distance_overlay() -> void:
 	if _distance_overlay_controller != null:
 		_distance_overlay_controller.hide_distance_overlay()

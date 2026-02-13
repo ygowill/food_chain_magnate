@@ -44,6 +44,6 @@ func on_map_mode_changed(mode: String, payload: Dictionary) -> void:
 			else:
 				_map_mode_bar.call("show_mode", title3, "点击地图选择位置｜R 旋转｜右侧确认/取消｜ESC 取消")
 		"distance_tool":
-			_map_mode_bar.call("show_mode", "📏 距离工具", "只允许点道路格｜点起点再点终点｜测完点任意道路格重开｜D/ESC 关闭")
+			_map_mode_bar.call("show_mode", "📏 距离工具", "支持道路↔道路，或房屋+餐厅｜点起点再点终点｜测完后点击任意目标重开｜D/ESC 关闭")
 		_:
 			_map_mode_bar.call("show_mode", "模式：%s" % m, "ESC 取消")

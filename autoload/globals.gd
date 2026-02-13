@@ -5,6 +5,7 @@ extends Node
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const GameStateClass = preload("res://core/state/game_state.gd")
 const GameConstantsClass = preload("res://core/engine/game_constants.gd")
+const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const FALLBACK_FONT: Font = preload("res://assets/fonts/ui_font_with_emoji.tres")
 
 # 版本信息
@@ -107,7 +108,7 @@ func _load_settings() -> void:
 			enabled_modules_v2 = Array(mods_val, TYPE_STRING, "", null)
 		var base_dir_val = config.get_value("game", "modules_v2_base_dir", null)
 		if base_dir_val is String and not str(base_dir_val).strip_edges().is_empty():
-			modules_v2_base_dir = str(base_dir_val).strip_edges()
+			modules_v2_base_dir = _normalize_modules_base_dir(str(base_dir_val))
 
 		var names_val = config.get_value("players", "names", null)
 		if names_val is Array:
@@ -158,6 +159,7 @@ func save_settings() -> void:
 	config.load("user://settings.cfg") # 允许文件不存在；确保不覆盖 SettingsDialog 写入的其它字段
 	config.set_value("game", "language", language)
 	config.set_value("game", "enabled_modules_v2", enabled_modules_v2)
+	modules_v2_base_dir = _normalize_modules_base_dir(modules_v2_base_dir)
 	config.set_value("game", "modules_v2_base_dir", modules_v2_base_dir)
 	config.set_value("players", "names", player_names)
 	config.set_value("players", "color_indices", player_color_indices)
@@ -225,7 +227,7 @@ func sync_runtime_config_from_engine(engine) -> void:
 
 	player_count = state.players.size()
 	random_seed = int(state.seed)
-	modules_v2_base_dir = str(engine.modules_v2_base_dir)
+	modules_v2_base_dir = _normalize_modules_base_dir(str(engine.modules_v2_base_dir))
 
 	# enabled_modules_v2：使用存档中的完整模块计划（便于 UI/调试展示；新游戏依然由 GameSetup 控制）
 	if state.modules is Array:
@@ -263,6 +265,16 @@ func _ensure_player_profiles() -> void:
 		var v := int(player_restaurant_logo_choices[i])
 		if v < -1 or v >= DEFAULT_RESTAURANT_LOGO_COUNT:
 			player_restaurant_logo_choices[i] = -1
+
+func _normalize_modules_base_dir(spec: String) -> String:
+	var s := str(spec).strip_edges()
+	if s.is_empty():
+		return GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
+	var read := ModuleDirSpecClass.parse_base_dirs(s)
+	if read.ok:
+		return s
+	GameLog.warn("Globals", "modules_v2_base_dir 非 res:// 目录，已回退默认: %s" % s)
+	return GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
 
 func set_player_name(player_id: int, name: String) -> void:
 	_ensure_player_profiles()

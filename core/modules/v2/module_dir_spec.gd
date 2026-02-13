@@ -16,6 +16,8 @@ static func parse_base_dirs(spec: String) -> Result:
 		var s: String = raw.strip_edges()
 		if s.is_empty():
 			continue
+		if not s.begins_with("res://"):
+			return Result.failure("ModuleDirSpec: 仅支持打包内目录（res://），不允许系统路径: %s" % s)
 		if seen.has(s):
 			continue
 		seen[s] = true
@@ -32,4 +34,3 @@ static func primary_base_dir(spec: String, fallback: String) -> String:
 		if not base_dirs.is_empty():
 			return str(base_dirs[0])
 	return fallback
-

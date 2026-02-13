@@ -18,6 +18,7 @@ enum CardVariant {
 @export var show_salary_indicator: bool = true
 @export var draggable: bool = true
 @export var variant: CardVariant = CardVariant.COMPACT
+@export var multiline_name: bool = false
 
 var display_scale: float = 1.0
 
@@ -183,19 +184,37 @@ func _build_header_bar(parent: VBoxContainer) -> void:
 	_role_color_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(_role_color_rect)
 
-	# Use a container to guarantee horizontal/vertical centering regardless of Control anchor behavior.
-	var header_center := CenterContainer.new()
-	header_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, 0)
-	header_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_role_color_rect.add_child(header_center)
-
 	_name_label = Label.new()
 	_name_label.add_theme_font_size_override("font_size", _scaled(16.0 if variant == CardVariant.FULL else 14.0, 1))
 	_name_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	header_center.add_child(_name_label)
+
+	if multiline_name:
+		# 升级路线图中的卡片名称允许换行，避免导出端字体度量差异导致横向溢出。
+		var header_margin := MarginContainer.new()
+		header_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, 0)
+		header_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var hpad := _scaled(3.0, 0)
+		header_margin.add_theme_constant_override("margin_left", hpad)
+		header_margin.add_theme_constant_override("margin_right", hpad)
+		_role_color_rect.add_child(header_margin)
+
+		_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_name_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		_name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_name_label.max_lines_visible = 2
+		_name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		_name_label.clip_text = true
+		header_margin.add_child(_name_label)
+	else:
+		# 默认保持单行居中。
+		var header_center := CenterContainer.new()
+		header_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, 0)
+		header_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_role_color_rect.add_child(header_center)
+		header_center.add_child(_name_label)
 
 func _build_compact_layout(vbox: VBoxContainer) -> void:
 	# 底部：简短描述

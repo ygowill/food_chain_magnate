@@ -5,6 +5,7 @@ extends RefCounted
 const CommandClass = preload("res://core/types/command.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 
 var _net = null
 
@@ -227,6 +228,10 @@ func handle_rpc_create_room(request: Dictionary) -> void:
 		var bd := str(request.get("modules_v2_base_dir", "")).strip_edges()
 		if bd.is_empty():
 			send_request_rejected(peer_id, request_id, "invalid_params", "modules_v2_base_dir is empty")
+			return
+		var bd_read := ModuleDirSpecClass.parse_base_dirs(bd)
+		if not bd_read.ok:
+			send_request_rejected(peer_id, request_id, "invalid_params", "modules_v2_base_dir must use res:// paths")
 			return
 		config["modules_v2_base_dir"] = bd
 

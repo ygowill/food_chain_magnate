@@ -209,6 +209,7 @@ func _build_nodes(ids: Array[String]) -> void:
 		var card := EmployeeCardClass.new()
 		card.variant = EmployeeCardClass.CardVariant.COMPACT
 		card.draggable = false
+		card.multiline_name = true
 		if card.has_method("set_display_scale"):
 			card.set_display_scale(_display_scale)
 			card.setup(def.to_dict())

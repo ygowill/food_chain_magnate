@@ -8,7 +8,7 @@ const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_regis
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 
 static var _drink_source_textures: Dictionary = {} # product_id -> Texture2D
-static var _drink_source_textures_base_dir_spec: String = ""
+static var _drink_source_textures_base_dir: String = ""
 
 static func _read_color_hint(hints: Dictionary, key: String, fallback: Color) -> Color:
 	if hints == null or hints.is_empty():
@@ -44,12 +44,14 @@ static func draw_drink_sources(canvas, cell_size: int) -> void:
 
 static func _get_drink_source_texture(product_id: String) -> Texture2D:
 	var pid := str(product_id).strip_edges()
+	if pid == "cola":
+		pid = "soda"
 	if pid.is_empty():
 		return null
 
-	var base_dir_spec := str(ModulesBaseDirClass.get_base_dir()).strip_edges()
-	if base_dir_spec != _drink_source_textures_base_dir_spec:
-		_drink_source_textures_base_dir_spec = base_dir_spec
+	var base_dir := str(ModulesBaseDirClass.get_base_dir()).strip_edges()
+	if base_dir != _drink_source_textures_base_dir:
+		_drink_source_textures_base_dir = base_dir
 		_drink_source_textures.clear()
 
 	var cached_val = _drink_source_textures.get(pid, null)
@@ -58,22 +60,23 @@ static func _get_drink_source_texture(product_id: String) -> Texture2D:
 	if _drink_source_textures.has(pid):
 		return null
 
-	var tex: Texture2D = null
-	var base_dirs := base_dir_spec.split(";")
-	for bd_val in base_dirs:
-		var bd := str(bd_val).strip_edges()
-		if bd.is_empty():
-			continue
-		var path := bd.path_join("base_products").path_join("assets").path_join("map").path_join("drink_sources").path_join("%s.png" % pid)
-		if not FileAccess.file_exists(path):
-			continue
-		var res = load(path)
-		if res is Texture2D:
-			tex = res
-		break
-
+	var path := base_dir.path_join("base_products").path_join("assets").path_join("map").path_join("drink_sources").path_join("%s.png" % pid)
+	var tex := _load_texture_from_path(path)
 	_drink_source_textures[pid] = tex
 	return tex
+
+static func _load_texture_from_path(path: String) -> Texture2D:
+	var p := str(path).strip_edges()
+	if p.is_empty():
+		return null
+
+	# Enforce packaged resources only.
+	if not p.begins_with("res://"):
+		return null
+	var res = load(p)
+	if res is Texture2D:
+		return res
+	return null
 
 static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: Array) -> void:
 	for anchor_val in canvas._structures_by_anchor.keys():

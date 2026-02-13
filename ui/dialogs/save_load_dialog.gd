@@ -58,6 +58,7 @@ func open_for_load() -> void:
 	_update_ui_state()
 	_prefer_file_tab_on_web()
 	open()
+	_prompt_web_file_upload()
 
 func open_for_replay() -> void:
 	_dialog_mode = DialogMode.REPLAY
@@ -67,6 +68,7 @@ func open_for_replay() -> void:
 	_update_ui_state()
 	_prefer_file_tab_on_web()
 	open()
+	_prompt_web_file_upload()
 
 func open_for_save(engine: GameEngine) -> void:
 	_dialog_mode = DialogMode.SAVE
@@ -82,6 +84,16 @@ func _prefer_file_tab_on_web() -> void:
 		return
 	if _tabs != null and is_instance_valid(_tabs):
 		_tabs.current_tab = 1
+
+func _prompt_web_file_upload() -> void:
+	if not _is_web():
+		return
+	if _dialog_mode == DialogMode.SAVE:
+		return
+	if _file_dialog == null or not is_instance_valid(_file_dialog):
+		return
+	_file_dialog.current_path = ""
+	_file_dialog.popup_centered_clamped(Vector2i(900, 650))
 
 func _grab_default_focus() -> void:
 	if _dialog_mode == DialogMode.SAVE and _slot_name_edit != null:
@@ -253,7 +265,7 @@ func _build_ui() -> void:
 	# Web 端：强制使用浏览器文件选择（上传），避免展示运行环境目录。
 	if _is_web():
 		_file_dialog.use_native_dialog = true
-		_file_dialog.access = FileDialog.ACCESS_USERDATA
+		_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	else:
 		_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
 

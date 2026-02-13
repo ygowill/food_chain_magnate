@@ -3,9 +3,11 @@ extends Node
 
 const RoomManagerClass = preload("res://server/room_manager.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
+const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const CommandClass = preload("res://core/types/command.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const NetClientInternalClass = preload("res://autoload/net_client_internal.gd")
 
 signal connected()
@@ -341,6 +343,10 @@ func rpc_update_room_config(request: Dictionary) -> void:
 		if bd.is_empty():
 			_send_request_rejected(peer_id, request_id, "invalid_params", "modules_v2_base_dir is empty")
 			return
+		var bd_read := ModuleDirSpecClass.parse_base_dirs(bd)
+		if not bd_read.ok:
+			_send_request_rejected(peer_id, request_id, "invalid_params", "modules_v2_base_dir must use res:// paths")
+			return
 		patch["modules_v2_base_dir"] = bd
 
 	# seed_mode=random：保持一个 server 选定的 seed（不在 StartGame 时再重掷），便于大厅展示/复现。
@@ -620,6 +626,10 @@ func rpc_game_started(payload: Dictionary) -> void:
 	var player_count := int(config.get("desired_player_count", 0))
 	var seed := int(config.get("seed", 0))
 	var base_dir := str(config.get("modules_v2_base_dir", "")).strip_edges()
+	var base_dirs_read := ModuleDirSpecClass.parse_base_dirs(base_dir)
+	if not base_dirs_read.ok:
+		GameLog.warn("NetClient", "Online room modules_v2_base_dir 非 res://，已回退默认: %s" % base_dir)
+		base_dir = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
 	var enabled_modules: Array[String] = []
 	var mods_val = config.get("enabled_modules_v2", null)
 	if mods_val is Array:

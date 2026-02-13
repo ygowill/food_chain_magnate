@@ -21,7 +21,7 @@ mouse_filter = 0
 color = Color(0.05, 0.04, 0.03, 0.75)
 
 [node name="Panel" type="PanelContainer" parent="."]
-custom_minimum_size = Vector2(720, 420)
+custom_minimum_size = Vector2(720, 320)
 layout_mode = 0
 mouse_filter = 0
 
