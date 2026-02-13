@@ -122,7 +122,7 @@ func _rebuild_milestones() -> void:
 		empty.text = "暂无里程碑"
 		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		empty.add_theme_font_size_override("font_size", 12)
-		empty.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.9))
+		empty.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.9))
 		milestones_container.add_child(empty)
 		return
 
@@ -521,7 +521,7 @@ class MilestoneItem extends PanelContainer:
 
 		_desc_label = Label.new()
 		_desc_label.add_theme_font_size_override("font_size", 12)
-		_desc_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+		_desc_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 		_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		info_box.add_child(_desc_label)
 
@@ -597,16 +597,16 @@ class MilestoneItem extends PanelContainer:
 				if pool_count > 0:
 					parts.append("供应×%d" % pool_count)
 				_status_label.text = "\n".join(parts)
-				_status_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+				_status_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 				_status_label.visible = not parts.is_empty()
 			else:
 				if claimed:
 					_status_label.text = "已获得"
-					_status_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5, 1))
+					_status_label.add_theme_color_override("font_color", Color(0.28, 0.55, 0.22, 1))
 					_status_label.visible = true
 				elif pool_count > 0:
 					_status_label.text = "供应×%d" % pool_count
-					_status_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+					_status_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 					_status_label.visible = true
 				else:
 					_status_label.text = ""
@@ -617,19 +617,19 @@ class MilestoneItem extends PanelContainer:
 	func _update_style() -> void:
 		var style := StyleBoxFlat.new()
 		if _is_claimed and not global_view:
-			style.bg_color = Color(0.15, 0.2, 0.15, 0.8)
+			style.bg_color = Color(0.92, 0.90, 0.82, 0.85)
 			style.border_color = Color(0.4, 0.6, 0.4, 0.5)
 			style.set_border_width_all(1)
 		elif _pool_count > 0:
-			style.bg_color = Color(0.2, 0.2, 0.15, 0.9)
-			style.border_color = Color(0.4, 0.4, 0.45, 0.6)
+			style.bg_color = Color(0.95, 0.91, 0.82, 0.9)
+			style.border_color = Color(0.73, 0.23, 0.18, 0.35)
 			style.set_border_width_all(1)
 		elif _is_claimed and global_view:
-			style.bg_color = Color(0.15, 0.2, 0.15, 0.8)
+			style.bg_color = Color(0.92, 0.90, 0.82, 0.85)
 			style.border_color = Color(0.4, 0.6, 0.4, 0.5)
 			style.set_border_width_all(1)
 		else:
-			style.bg_color = Color(0.12, 0.12, 0.14, 0.7)
+			style.bg_color = Color(0.95, 0.91, 0.82, 0.75)
 		style.set_corner_radius_all(6)
 		add_theme_stylebox_override("panel", style)
 

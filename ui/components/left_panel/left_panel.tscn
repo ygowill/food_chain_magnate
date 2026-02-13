@@ -19,7 +19,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.1, 0.1, 0.12, 0.95)
+color = Color(0.97, 0.94, 0.86, 0.98)
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -58,12 +58,13 @@ theme_override_constants/separation = 4
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 text = "查看: -"
 
 [node name="InventoryTitleLabel" type="Label" parent="MarginContainer/HBoxContainer/Content/SummaryRow"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
-theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
 text = "库存（无冰箱）"
 
 [node name="InventoryTokens" type="HFlowContainer" parent="MarginContainer/HBoxContainer/Content/SummaryRow"]
@@ -106,7 +107,7 @@ theme_override_constants/separation = 6
 [node name="CompanyHeader" type="Label" parent="MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/CompanySection"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
-theme_override_colors/font_color = Color(0.6, 0.8, 0.6, 1)
+theme_override_colors/font_color = Color(0.3, 0.5, 0.3, 1)
 text = "在职员工"
 
 [node name="CompanyIconGroups" type="VBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/CompanySection"]
@@ -177,7 +178,7 @@ theme_override_constants/separation = 6
 [node name="HandHeader" type="Label" parent="MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/HandSection"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
-theme_override_colors/font_color = Color(0.7, 0.7, 0.5, 1)
+theme_override_colors/font_color = Color(0.5, 0.45, 0.3, 1)
 text = "手牌"
 
 [node name="HandIconGroups" type="VBoxContainer" parent="MarginContainer/HBoxContainer/Content/TabContainer/Employees/EmployeesScroll/EmployeesContent/HandSection"]

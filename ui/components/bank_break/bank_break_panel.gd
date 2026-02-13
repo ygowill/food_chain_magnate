@@ -3,6 +3,8 @@
 class_name BankBreakPanel
 extends Control
 
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
 signal bankruptcy_acknowledged()
 signal game_end_triggered()
 
@@ -10,6 +12,7 @@ signal game_end_triggered()
 @onready var message_label: Label = $CenterContainer/Panel/MarginContainer/VBoxContainer/MessageLabel
 @onready var details_container: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBoxContainer/DetailsContainer
 @onready var continue_btn: Button = $CenterContainer/Panel/MarginContainer/VBoxContainer/ContinueButton
+@onready var _content_panel: PanelContainer = $CenterContainer/Panel
 
 var _bankruptcy_count: int = 0
 var _is_game_ending: bool = false
@@ -19,6 +22,10 @@ var _bank_total_after: int = 0
 func _ready() -> void:
 	if continue_btn != null:
 		continue_btn.pressed.connect(_on_continue_pressed)
+
+	# 应用对话框表面样式
+	if _content_panel != null:
+		UiStylesClass.apply_dialog_surface(_content_panel)
 
 	# 初始隐藏
 	visible = false
@@ -42,10 +49,10 @@ func _update_display() -> void:
 	if title_label != null:
 		if _is_game_ending:
 			title_label.text = "银行二次破产！"
-			title_label.add_theme_color_override("font_color", Color(0.9, 0.3, 0.3, 1))
+			title_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 1))
 		else:
 			title_label.text = "银行首次破产"
-			title_label.add_theme_color_override("font_color", Color(0.9, 0.7, 0.3, 1))
+			title_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
 
 	if message_label != null:
 		if _is_game_ending:
@@ -76,7 +83,7 @@ func _rebuild_details() -> void:
 	if not _is_game_ending:
 		# 首次破产：显示注资信息
 		var inject_amount := 50  # 默认注资金额，可从 GameState 获取
-		var inject_row := _create_detail_row("银行注资", "+$%d" % inject_amount, Color(0.5, 0.8, 0.5, 1))
+		var inject_row := _create_detail_row("银行注资", "+$%d" % inject_amount, Color(0.28, 0.55, 0.22, 1))
 		details_container.add_child(inject_row)
 
 		var after_row := _create_detail_row("破产后银行余额", "$%d" % _bank_total_after)
@@ -93,12 +100,12 @@ func _rebuild_details() -> void:
 		var warning_label := Label.new()
 		warning_label.text = "⚠ 达到破产上限，游戏将在本回合结束后结算"
 		warning_label.add_theme_font_size_override("font_size", 14)
-		warning_label.add_theme_color_override("font_color", Color(0.9, 0.5, 0.3, 1))
+		warning_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 0.9))
 		warning_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		warning_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 		details_container.add_child(warning_label)
 
-func _create_detail_row(label_text: String, value_text: String, value_color: Color = Color(0.9, 0.9, 0.9, 1)) -> HBoxContainer:
+func _create_detail_row(label_text: String, value_text: String, value_color: Color = Color(0.17, 0.13, 0.09, 1)) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 
@@ -106,7 +113,7 @@ func _create_detail_row(label_text: String, value_text: String, value_color: Col
 	label.text = label_text
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.add_theme_font_size_override("font_size", 14)
-	label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+	label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 	row.add_child(label)
 
 	var value := Label.new()

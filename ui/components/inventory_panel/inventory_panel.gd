@@ -208,7 +208,7 @@ class ProductItem extends PanelContainer:
 			style.border_color = Color(0.6, 0.8, 0.4, 0.8)
 			style.set_border_width_all(2)
 		else:
-			style.bg_color = Color(0.2, 0.22, 0.25, 0.8)
+			style.bg_color = Color(0.92, 0.88, 0.78, 0.8)
 		style.set_corner_radius_all(4)
 		add_theme_stylebox_override("panel", style)
 

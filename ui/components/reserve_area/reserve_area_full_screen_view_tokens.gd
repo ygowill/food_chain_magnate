@@ -23,8 +23,8 @@ class IconToken extends PanelContainer:
 		mouse_filter = Control.MOUSE_FILTER_PASS
 		custom_minimum_size = Vector2(80, 80)
 		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0.12, 0.12, 0.14, 0.92)
-		style.border_color = Color(0.25, 0.25, 0.3, 0.6)
+		style.bg_color = Color(0.97, 0.94, 0.86, 0.95)
+		style.border_color = Color(0.73, 0.23, 0.18, 0.35)
 		style.set_border_width_all(1)
 		style.set_corner_radius_all(10)
 		add_theme_stylebox_override("panel", style)
@@ -46,7 +46,7 @@ class IconToken extends PanelContainer:
 
 		_badge_label = Label.new()
 		_badge_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(12) if Globals != null else 12)
-		_badge_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+		_badge_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
 		_badge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		_badge_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 		_badge_label.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -236,9 +236,9 @@ class PieceFootprintToken extends Control:
 
 	func _draw() -> void:
 		var rect := Rect2(Vector2.ZERO, custom_minimum_size)
-		var bg := Color(0.12, 0.12, 0.14, 0.92)
+		var bg := Color(0.97, 0.94, 0.86, 0.95)
 		draw_rect(rect, bg, true)
-		draw_rect(rect, Color(0.25, 0.25, 0.3, 0.6), false, 1.0)
+		draw_rect(rect, Color(0.73, 0.23, 0.18, 0.35), false, 1.0)
 
 		# Footprint outline (supports non-rect shapes).
 		for off in _cell_offsets:

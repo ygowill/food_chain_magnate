@@ -253,8 +253,8 @@ class EmployeePickerItem extends Control:
 		panel.offset_bottom = offset_rb.y
 
 		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0, 0, 0, 0.65)
-		style.border_color = Color(1, 1, 1, 0.25)
+		style.bg_color = Color(0.73, 0.23, 0.18, 0.85)
+		style.border_color = Color(0.73, 0.23, 0.18, 0.6)
 		style.set_border_width_all(1)
 		style.set_corner_radius_all(6)
 		panel.add_theme_stylebox_override("panel", style)
@@ -263,7 +263,7 @@ class EmployeePickerItem extends Control:
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		label.add_theme_font_size_override("font_size", font_size)
-		label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+		label.add_theme_color_override("font_color", Color(0.97, 0.93, 0.82, 1))
 		label.set_anchors_preset(Control.PRESET_FULL_RECT)
 		label.offset_left = 0
 		label.offset_top = 0

@@ -29,8 +29,8 @@ func _build_ui() -> void:
 	custom_minimum_size = Vector2(240, 120)
 
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.12, 0.12, 0.14, 0.92)
-	style.border_color = Color(0.4, 0.4, 0.45, 0.6)
+	style.bg_color = Color(0.97, 0.94, 0.86, 0.95)
+	style.border_color = Color(0.73, 0.23, 0.18, 0.4)
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(10)
 	add_theme_stylebox_override("panel", style)
@@ -55,7 +55,7 @@ func _build_ui() -> void:
 	_desc_label = Label.new()
 	_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_desc_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(11) if Globals != null else 11)
-	_desc_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75, 0.95))
+	_desc_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 	_desc_label.max_lines_visible = 5
 	_desc_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_desc_label.size_flags_vertical = Control.SIZE_EXPAND_FILL

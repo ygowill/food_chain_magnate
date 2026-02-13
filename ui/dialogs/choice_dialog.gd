@@ -24,6 +24,7 @@ var _allow_cancel: bool = true
 func _ready() -> void:
 	super._ready()
 	UiStylesClass.apply_dialog_surface(background_panel)
+	UiStylesClass.apply_overlay_dim($Overlay)
 	UiStylesClass.apply_button_secondary(cancel_btn)
 	if dialog_root != null and is_instance_valid(dialog_root):
 		_base_size = Vector2i(dialog_root.custom_minimum_size)

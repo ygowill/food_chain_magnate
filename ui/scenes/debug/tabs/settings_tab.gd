@@ -86,7 +86,7 @@ func _create_section_label(text: String) -> void:
 func _create_info_label(text: String) -> void:
 	var label := Label.new()
 	label.text = "  " + text
-	label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35))
 	settings_content.add_child(label)
 
 func _create_checkbox(text: String, callback: Callable) -> CheckBox:

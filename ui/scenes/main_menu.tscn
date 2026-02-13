@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3 uid="uid://b7oufgye7ejgl"]
+[gd_scene load_steps=4 format=3 uid="uid://b7oufgye7ejgl"]
 
 [ext_resource type="Script" uid="uid://cxlc0t7d3fhaf" path="res://ui/scenes/menus/main_menu.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://ui/audio/audio_system_initializer.tscn" id="2_audio_init"]
+[ext_resource type="Texture2D" path="res://assets/main_title_logo_1080.png" id="3_title_logo"]
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -14,14 +15,24 @@ script = ExtResource("1_main")
 
 [node name="AudioSystemInitializer" parent="." instance=ExtResource("2_audio_init")]
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="WallBackground" type="ColorRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.15, 0.15, 0.2, 1)
+color = Color(0.93, 0.88, 0.75, 1)
+
+[node name="VignetteOverlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0)
 
 [node name="CenterContainer" type="CenterContainer" parent="."]
 layout_mode = 1
@@ -32,59 +43,94 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="Card" type="PanelContainer" parent="CenterContainer"]
-custom_minimum_size = Vector2(520, 0)
+custom_minimum_size = Vector2(1120, 0)
 layout_mode = 2
 
-[node name="Margin" type="MarginContainer" parent="CenterContainer/Card"]
+[node name="OuterMargin" type="MarginContainer" parent="CenterContainer/Card"]
 layout_mode = 2
-theme_override_constants/margin_left = 36
-theme_override_constants/margin_top = 32
-theme_override_constants/margin_right = 36
-theme_override_constants/margin_bottom = 32
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 6
 
-[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/Card/Margin"]
+[node name="InnerBorder" type="PanelContainer" parent="CenterContainer/Card/OuterMargin"]
 layout_mode = 2
-theme_override_constants/separation = 18
 
-[node name="Title" type="Label" parent="CenterContainer/Card/Margin/VBoxContainer"]
+[node name="PaperTexture" type="ColorRect" parent="CenterContainer/Card/OuterMargin/InnerBorder"]
+show_behind_parent = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 48
-text = "快餐连锁大亨"
+mouse_filter = 2
+color = Color(0.97, 0.94, 0.86, 0.3)
+
+[node name="InnerMargin" type="MarginContainer" parent="CenterContainer/Card/OuterMargin/InnerBorder"]
+layout_mode = 2
+theme_override_constants/margin_left = 50
+theme_override_constants/margin_top = 42
+theme_override_constants/margin_right = 50
+theme_override_constants/margin_bottom = 38
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="TitleLogo" type="TextureRect" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
+custom_minimum_size = Vector2(880, 340)
+layout_mode = 2
+size_flags_horizontal = 4
+texture = ExtResource("3_title_logo")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="DecorativeLine" type="Label" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_colors/font_color = Color(0.73, 0.23, 0.18, 0.5)
+theme_override_font_sizes/font_size = 14
+text = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 horizontal_alignment = 1
 
-[node name="Subtitle" type="Label" parent="CenterContainer/Card/Margin/VBoxContainer"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
-theme_override_font_sizes/font_size = 16
-text = "Food Chain Magnate"
-horizontal_alignment = 1
-
-[node name="Spacer" type="Control" parent="CenterContainer/Card/Margin/VBoxContainer"]
-custom_minimum_size = Vector2(0, 40)
+[node name="Spacer" type="Control" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
+custom_minimum_size = Vector2(0, 8)
 layout_mode = 2
 
-[node name="NewGameButton" type="Button" parent="CenterContainer/Card/Margin/VBoxContainer"]
-custom_minimum_size = Vector2(240, 48)
+[node name="NewGameButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
+custom_minimum_size = Vector2(420, 64)
 layout_mode = 2
+size_flags_horizontal = 4
 text = "新游戏"
 
-[node name="OnlineButton" type="Button" parent="CenterContainer/Card/Margin/VBoxContainer"]
-custom_minimum_size = Vector2(240, 48)
+[node name="LoadGameButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
+custom_minimum_size = Vector2(420, 56)
 layout_mode = 2
-text = "联机"
-
-[node name="LoadGameButton" type="Button" parent="CenterContainer/Card/Margin/VBoxContainer"]
-custom_minimum_size = Vector2(240, 48)
-layout_mode = 2
+size_flags_horizontal = 4
 text = "载入游戏"
 
-[node name="SettingsButton" type="Button" parent="CenterContainer/Card/Margin/VBoxContainer"]
-custom_minimum_size = Vector2(240, 48)
+[node name="PrimaryGroupGap" type="Control" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+
+[node name="OnlineButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
+custom_minimum_size = Vector2(420, 56)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "联机"
+
+[node name="SystemGroupGap" type="Control" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+
+[node name="SystemButtons" type="HBoxContainer" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="SettingsButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/SystemButtons"]
+custom_minimum_size = Vector2(204, 48)
 layout_mode = 2
 text = "设置"
 
-[node name="QuitButton" type="Button" parent="CenterContainer/Card/Margin/VBoxContainer"]
-custom_minimum_size = Vector2(240, 48)
+[node name="QuitButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/SystemButtons"]
+custom_minimum_size = Vector2(204, 48)
 layout_mode = 2
 text = "退出"
 
@@ -95,18 +141,18 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -120.0
-offset_top = -30.0
-offset_right = -10.0
+offset_left = -240.0
+offset_top = -40.0
+offset_right = -16.0
 grow_horizontal = 0
 grow_vertical = 0
-theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 0.62)
+theme_override_font_sizes/font_size = 14
 text = "v0.1.0"
 horizontal_alignment = 2
 
-[connection signal="pressed" from="CenterContainer/Card/Margin/VBoxContainer/NewGameButton" to="." method="_on_new_game_pressed"]
-[connection signal="pressed" from="CenterContainer/Card/Margin/VBoxContainer/OnlineButton" to="." method="_on_online_pressed"]
-[connection signal="pressed" from="CenterContainer/Card/Margin/VBoxContainer/LoadGameButton" to="." method="_on_load_game_pressed"]
-[connection signal="pressed" from="CenterContainer/Card/Margin/VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
-[connection signal="pressed" from="CenterContainer/Card/Margin/VBoxContainer/QuitButton" to="." method="_on_quit_pressed"]
+[connection signal="pressed" from="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/NewGameButton" to="." method="_on_new_game_pressed"]
+[connection signal="pressed" from="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/OnlineButton" to="." method="_on_online_pressed"]
+[connection signal="pressed" from="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/LoadGameButton" to="." method="_on_load_game_pressed"]
+[connection signal="pressed" from="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/SystemButtons/SettingsButton" to="." method="_on_settings_pressed"]
+[connection signal="pressed" from="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/SystemButtons/QuitButton" to="." method="_on_quit_pressed"]

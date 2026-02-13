@@ -61,7 +61,7 @@ layout_mode = 2
 custom_minimum_size = Vector2(110, 0)
 text = "时间线：-1 / -1"
 theme_override_font_sizes/font_size = 11
-theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
 
 [node name="LatestButton" type="Button" parent="MarginContainer/HBox"]
 layout_mode = 2

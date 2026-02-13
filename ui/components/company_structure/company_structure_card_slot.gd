@@ -24,7 +24,7 @@ func _build_ui() -> void:
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 12)
-	hint.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4, 0.6))
+	hint.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.6))
 	hint.name = "Hint"
 	add_child(hint)
 
@@ -39,12 +39,12 @@ func get_slot_index() -> int:
 
 func _apply_style() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.15, 0.15, 0.18, 0.8)
+	style.bg_color = Color(0.92, 0.88, 0.78, 0.8)
 	if _drop_highlighted:
 		style.border_color = Color(0.8, 0.7, 0.3, 0.9)
 		style.set_border_width_all(3)
 	else:
-		style.border_color = Color(0.3, 0.3, 0.35, 0.6)
+		style.border_color = Color(0.73, 0.23, 0.18, 0.35)
 		style.set_border_width_all(1)
 	style.set_corner_radius_all(4)
 	add_theme_stylebox_override("panel", style)

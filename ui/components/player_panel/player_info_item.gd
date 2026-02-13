@@ -60,7 +60,7 @@ func _build_ui() -> void:
 	employee_label = Label.new()
 	employee_label.name = "EmployeeLabel"
 	employee_label.custom_minimum_size = Vector2(40, 0)
-	employee_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+	employee_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 	employee_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	employee_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(employee_label)
@@ -69,7 +69,7 @@ func _build_ui() -> void:
 	restaurant_label = Label.new()
 	restaurant_label.name = "RestaurantLabel"
 	restaurant_label.custom_minimum_size = Vector2(40, 0)
-	restaurant_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+	restaurant_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 	restaurant_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	restaurant_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(restaurant_label)
@@ -153,7 +153,7 @@ func _update_style() -> void:
 		style.border_color = player_color
 		style.set_border_width_all(2)
 	else:
-		style.bg_color = Color(0.2, 0.2, 0.25, 0.6)
+		style.bg_color = Color(0.92, 0.88, 0.78, 0.6)
 		style.border_color = Color(0.25, 0.25, 0.3, 0.7)
 		style.set_border_width_all(1)
 

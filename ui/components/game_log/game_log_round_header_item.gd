@@ -24,7 +24,7 @@ func _build_ui() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.08, 0.10, 0.9)
+	style.bg_color = Color(0.89, 0.82, 0.66, 0.9)
 	style.set_corner_radius_all(2)
 	add_theme_stylebox_override("panel", style)
 	_panel_style = style
@@ -37,7 +37,7 @@ func _build_ui() -> void:
 	_label = Label.new()
 	_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_label.add_theme_font_size_override("font_size", maxi(10, int(round(12.0 * scale))))
-	_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75, 1))
+	_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hbox.add_child(_label)
 

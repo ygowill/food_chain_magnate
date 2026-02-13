@@ -68,7 +68,7 @@ func _build_ui() -> void:
 
 	_message_label = Label.new()
 	_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_message_label.add_theme_color_override("font_color", Color(0.92, 0.94, 0.98))
+	_message_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
 	_message_label.text = "该房间需要密码才能加入/观战。"
 	root.add_child(_message_label)
 

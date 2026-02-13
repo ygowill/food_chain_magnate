@@ -164,16 +164,16 @@ class OrderSlot extends PanelContainer:
 		var style := StyleBoxFlat.new()
 
 		if _occupied:
-			style.bg_color = Color(0.2, 0.25, 0.3, 0.9)
+			style.bg_color = Color(0.89, 0.85, 0.73, 0.95)
 			style.border_color = _player_color
 			style.set_border_width_all(2)
 		elif _highlighted:
-			style.bg_color = Color(0.25, 0.35, 0.25, 0.8)
+			style.bg_color = Color(0.90, 0.93, 0.85, 0.9)
 			style.border_color = Color(0.5, 0.8, 0.5, 0.8)
 			style.set_border_width_all(2)
 		else:
-			style.bg_color = Color(0.15, 0.15, 0.18, 0.8)
-			style.border_color = Color(0.3, 0.3, 0.35, 0.5)
+			style.bg_color = Color(0.95, 0.91, 0.82, 0.85)
+			style.border_color = Color(0.73, 0.23, 0.18, 0.3)
 			style.set_border_width_all(1)
 
 		style.set_corner_radius_all(6)

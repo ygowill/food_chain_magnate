@@ -5,14 +5,24 @@ const SettingsDialogScene = preload("res://ui/dialogs/settings_dialog.tscn")
 const ConfirmDialogScene = preload("res://ui/dialogs/confirm_dialog.tscn")
 const SaveLoadDialogScript = preload("res://ui/dialogs/save_load_dialog.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const TITLE_LOGO_PATHS: PackedStringArray = [
+	"res://assets/main_title_logo_1080.png",
+	"res://assets/main_title_logo.png",
+]
 
 @onready var version_label: Label = $VersionLabel
+@onready var wall_background: ColorRect = $WallBackground
+@onready var vignette_overlay: ColorRect = $VignetteOverlay
 @onready var card: PanelContainer = $CenterContainer/Card
-@onready var new_game_button: Button = $CenterContainer/Card/Margin/VBoxContainer/NewGameButton
-@onready var online_button: Button = $CenterContainer/Card/Margin/VBoxContainer/OnlineButton
-@onready var load_game_button: Button = $CenterContainer/Card/Margin/VBoxContainer/LoadGameButton
-@onready var settings_button: Button = $CenterContainer/Card/Margin/VBoxContainer/SettingsButton
-@onready var quit_button: Button = $CenterContainer/Card/Margin/VBoxContainer/QuitButton
+@onready var inner_border: PanelContainer = $CenterContainer/Card/OuterMargin/InnerBorder
+@onready var paper_texture: ColorRect = $CenterContainer/Card/OuterMargin/InnerBorder/PaperTexture
+@onready var title_logo: TextureRect = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/TitleLogo
+@onready var decorative_line: Label = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/DecorativeLine
+@onready var new_game_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/NewGameButton
+@onready var online_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/OnlineButton
+@onready var load_game_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/LoadGameButton
+@onready var settings_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/SystemButtons/SettingsButton
+@onready var quit_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/SystemButtons/QuitButton
 
 var _message_dialog: Control = null
 var _settings_dialog: Control = null
@@ -21,12 +31,51 @@ var _save_load_dialog = null
 func _ready() -> void:
 	GameLog.info("MainMenu", "主菜单已加载")
 	version_label.text = "v%s" % Globals.get_version()
+	_apply_title_logo_texture()
+
+	# 墙壁背景纹理（带 fallback 纯色）
+	UiStylesClass.apply_tiled_texture(
+		wall_background,
+		UiStylesClass.WALL_TEXTURE_PATHS,
+		3.0,
+		Color(0.93, 0.88, 0.75, 1.0)
+	)
+
+	# 暗角效果
+	UiStylesClass.apply_vignette(vignette_overlay, 0.45, 0.5)
+
+	# 外层卡片（粗边框）
 	UiStylesClass.apply_dialog_surface(card)
+
+	# 内层红色细边框（双线效果）
+	UiStylesClass.apply_poster_inner_border(inner_border)
+
+	# 纸张纹理叠加层（带 fallback）
+	UiStylesClass.apply_tiled_texture(
+		paper_texture,
+		UiStylesClass.PAPER_TEXTURE_PATHS,
+		4.0,
+		Color(0.97, 0.94, 0.86, 0.3)
+	)
+
+	# 按钮样式
 	UiStylesClass.apply_button_primary(new_game_button)
 	UiStylesClass.apply_button_secondary(online_button)
 	UiStylesClass.apply_button_secondary(load_game_button)
 	UiStylesClass.apply_button_secondary(settings_button)
 	UiStylesClass.apply_button_secondary(quit_button)
+	new_game_button.grab_focus()
+
+func _apply_title_logo_texture() -> void:
+	if title_logo == null:
+		return
+	for path in TITLE_LOGO_PATHS:
+		var image := Image.load_from_file(path)
+		if image == null or image.is_empty():
+			continue
+		title_logo.texture = ImageTexture.create_from_image(image)
+		return
+	GameLog.warn("MainMenu", "标题图片加载失败: %s" % str(TITLE_LOGO_PATHS))
 
 func _on_new_game_pressed() -> void:
 	GameLog.info("MainMenu", "点击新游戏")
@@ -78,7 +127,7 @@ func _on_save_load_selected(path: String) -> void:
 	if EventBus != null:
 		EventBus.clear_history()
 
-	# 存档读取可能耗时：先显示加载遮罩，避免“卡住”的观感
+	# 存档读取可能耗时：先显示加载遮罩，避免"卡住"的观感
 	if SceneManager != null and SceneManager.has_method("show_loading"):
 		SceneManager.show_loading("正在载入存档...")
 		await get_tree().process_frame

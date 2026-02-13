@@ -263,7 +263,7 @@ class OrderBadge extends PanelContainer:
 				_label.add_theme_color_override("font_color", Color(0.15, 0.15, 0.15, 0.9))
 			else:
 				_label.text = str(slot_position + 1)
-				_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8, 0.8))
+				_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.6))
 
 			var style := StyleBoxFlat.new()
 			if _occupied:
@@ -271,9 +271,9 @@ class OrderBadge extends PanelContainer:
 				bg.a = 0.95
 				style.bg_color = bg
 			elif _highlighted:
-				style.bg_color = Color(0.20, 0.30, 0.22, 0.85)
+				style.bg_color = Color(0.90, 0.93, 0.85, 0.9)
 			else:
-				style.bg_color = Color(0.15, 0.15, 0.18, 0.8)
+				style.bg_color = Color(0.95, 0.91, 0.82, 0.85)
 			style.border_color = CURRENT_BORDER_COLOR if _is_current else (_player_color if _occupied else Color(0.3, 0.3, 0.35, 0.6))
 			style.set_border_width_all(3 if _is_current else 1)
 			style.set_corner_radius_all(int(BADGE_SIZE / 2))

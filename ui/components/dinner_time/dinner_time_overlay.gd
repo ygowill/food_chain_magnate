@@ -8,6 +8,7 @@ signal phase_completed()
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 @onready var title_label: Label = $Layout/TopBarMargin/TopBar/TitleLabel
 @onready var progress_label: Label = $Layout/TopBarMargin/TopBar/ProgressLabel
@@ -15,6 +16,7 @@ const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 @onready var next_btn: Button = $Layout/BottomBarMargin/BottomBar/NextButton
 @onready var auto_btn: Button = $Layout/BottomBarMargin/BottomBar/AutoButton
 @onready var center_margin: MarginContainer = $Layout/CenterMargin
+@onready var _center_panel: PanelContainer = $Layout/CenterMargin/CenterPanel
 
 var _pending_orders: Array[Dictionary] = []  # [{house_id, demands, matched_restaurant, products}]
 var _completed_orders: Array[Dictionary] = []
@@ -30,6 +32,10 @@ func _ready() -> void:
 		next_btn.pressed.connect(_on_next_pressed)
 	if auto_btn != null:
 		auto_btn.pressed.connect(_on_auto_pressed)
+
+	# 应用对话框表面样式
+	if _center_panel != null:
+		UiStylesClass.apply_dialog_surface(_center_panel)
 
 	resized.connect(_on_overlay_resized)
 	_update_responsive_margins()
@@ -241,7 +247,7 @@ class OrderItem extends PanelContainer:
 		# 餐厅信息
 		_restaurant_label = Label.new()
 		_restaurant_label.add_theme_font_size_override("font_size", 12)
-		_restaurant_label.add_theme_color_override("font_color", Color(0.6, 0.7, 0.8, 1))
+		_restaurant_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
 		info_box.add_child(_restaurant_label)
 
 		# 产品列表（实际售出）
@@ -283,7 +289,7 @@ class OrderItem extends PanelContainer:
 		if _restaurant_label != null:
 			if restaurant_id.is_empty():
 				_restaurant_label.text = "未匹配餐厅"
-				_restaurant_label.add_theme_color_override("font_color", Color(0.8, 0.5, 0.5, 1))
+				_restaurant_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 1))
 			else:
 				_restaurant_label.text = "餐厅: %s" % restaurant_id
 
@@ -308,13 +314,13 @@ class OrderItem extends PanelContainer:
 		if _status_icon != null:
 			if is_completed:
 				_status_icon.text = "✓"
-				_status_icon.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5, 1))
+				_status_icon.add_theme_color_override("font_color", Color(0.28, 0.55, 0.22, 1))
 			elif is_current:
 				_status_icon.text = "→"
-				_status_icon.add_theme_color_override("font_color", Color(0.9, 0.8, 0.4, 1))
+				_status_icon.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 0.8))
 			else:
 				_status_icon.text = "○"
-				_status_icon.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1))
+				_status_icon.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 
 		_update_style()
 
@@ -345,12 +351,12 @@ class OrderItem extends PanelContainer:
 	func _update_style() -> void:
 		var style := StyleBoxFlat.new()
 		if is_completed:
-			style.bg_color = Color(0.15, 0.2, 0.15, 0.7)
+			style.bg_color = Color(0.95, 0.91, 0.82, 0.9)
 		elif is_current:
-			style.bg_color = Color(0.2, 0.22, 0.18, 0.9)
+			style.bg_color = Color(0.92, 0.88, 0.78, 0.95)
 			style.border_color = Color(0.8, 0.7, 0.3, 0.7)
 			style.set_border_width_all(2)
 		else:
-			style.bg_color = Color(0.15, 0.17, 0.2, 0.8)
+			style.bg_color = Color(0.95, 0.91, 0.82, 0.85)
 		style.set_corner_radius_all(6)
 		add_theme_stylebox_override("panel", style)

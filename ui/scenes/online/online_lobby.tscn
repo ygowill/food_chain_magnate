@@ -11,14 +11,24 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="WallBackground" type="ColorRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.15, 0.15, 0.2, 1)
+color = Color(0.93, 0.88, 0.75, 1)
+
+[node name="VignetteOverlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0)
 
 [node name="Center" type="CenterContainer" parent="."]
 layout_mode = 1
@@ -32,226 +42,237 @@ grow_vertical = 2
 custom_minimum_size = Vector2(980, 720)
 layout_mode = 2
 
-[node name="Margin" type="MarginContainer" parent="Center/Panel"]
+[node name="OuterMargin" type="MarginContainer" parent="Center/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 6
+
+[node name="InnerBorder" type="PanelContainer" parent="Center/Panel/OuterMargin"]
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="Center/Panel/OuterMargin/InnerBorder"]
 layout_mode = 2
 theme_override_constants/margin_left = 24
 theme_override_constants/margin_top = 24
 theme_override_constants/margin_right = 24
 theme_override_constants/margin_bottom = 24
 
-[node name="Root" type="VBoxContainer" parent="Center/Panel/Margin"]
+[node name="Root" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin"]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="TopBar" type="HBoxContainer" parent="Center/Panel/Margin/Root"]
+[node name="TopBar" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root"]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="BackButton" type="Button" parent="Center/Panel/Margin/Root/TopBar"]
+[node name="BackButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar"]
 custom_minimum_size = Vector2(100, 40)
 layout_mode = 2
 text = "返回"
 
-[node name="Title" type="Label" parent="Center/Panel/Margin/Root/TopBar"]
+[node name="Title" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 theme_override_font_sizes/font_size = 24
 text = "联机大厅"
 horizontal_alignment = 1
 
-[node name="Tabs" type="VBoxContainer" parent="Center/Panel/Margin/Root"]
+[node name="Tabs" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root"]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="ConnectTab" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs"]
+[node name="ConnectTab" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs"]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 10
 
-[node name="ServerRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/ConnectTab"]
+[node name="ServerRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="ServerUrlLabel" type="Label" parent="Center/Panel/Margin/Root/Tabs/ConnectTab/ServerRow"]
+[node name="ServerUrlLabel" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ServerRow"]
 layout_mode = 2
 text = "服务器地址"
 
-[node name="ServerUrlEdit" type="LineEdit" parent="Center/Panel/Margin/Root/Tabs/ConnectTab/ServerRow"]
+[node name="ServerUrlEdit" type="LineEdit" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ServerRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="ProfileRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/ConnectTab"]
+[node name="ProfileRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="PlayerNameLabel" type="Label" parent="Center/Panel/Margin/Root/Tabs/ConnectTab/ProfileRow"]
+[node name="PlayerNameLabel" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ProfileRow"]
 layout_mode = 2
 text = "昵称"
 
-[node name="PlayerNameEdit" type="LineEdit" parent="Center/Panel/Margin/Root/Tabs/ConnectTab/ProfileRow"]
+[node name="PlayerNameEdit" type="LineEdit" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ProfileRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="ButtonsRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/ConnectTab"]
+[node name="ButtonsRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="ConnectButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow"]
+[node name="ConnectButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ButtonsRow"]
 layout_mode = 2
 text = "连接"
 
-[node name="DisconnectButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow"]
+[node name="DisconnectButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ButtonsRow"]
 layout_mode = 2
 text = "断开"
 
-[node name="ConnectStatus" type="Label" parent="Center/Panel/Margin/Root/Tabs/ConnectTab"]
+[node name="ConnectStatus" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab"]
 layout_mode = 2
 autowrap_mode = 2
 text = ""
 
-[node name="RoomsTab" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs"]
+[node name="RoomsTab" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs"]
 visible = false
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 10
 
-[node name="RoomsHeader" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomsTab"]
+[node name="RoomsHeader" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="RoomsTitle" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader"]
+[node name="RoomsTitle" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsHeader"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "房间列表"
 
-[node name="OpenCreateButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader"]
+[node name="OpenCreateButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsHeader"]
 layout_mode = 2
 text = "创建房间"
 
-[node name="OpenJoinByCodeButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader"]
+[node name="OpenJoinByCodeButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsHeader"]
 layout_mode = 2
 text = "房间码加入"
 
-[node name="RefreshRoomsButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader"]
+[node name="RefreshRoomsButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsHeader"]
 layout_mode = 2
 text = "刷新"
 
-[node name="RoomsScroll" type="ScrollContainer" parent="Center/Panel/Margin/Root/Tabs/RoomsTab"]
+[node name="RoomsScroll" type="ScrollContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab"]
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="RoomsList" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsScroll"]
+[node name="RoomsList" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsScroll"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 6
 
-[node name="RoomsStatus" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomsTab"]
+[node name="RoomsStatus" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab"]
 layout_mode = 2
 autowrap_mode = 2
 text = ""
 
-[node name="JoinByCodeTab" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs"]
+[node name="JoinByCodeTab" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs"]
 visible = false
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 10
 
-[node name="JoinHeaderRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab"]
+[node name="JoinHeaderRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="BackToRoomsButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab/JoinHeaderRow"]
+[node name="BackToRoomsButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/JoinHeaderRow"]
 layout_mode = 2
 text = "← 房间列表"
 
-[node name="JoinHeader" type="Label" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab/JoinHeaderRow"]
+[node name="JoinHeader" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/JoinHeaderRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "通过房间码加入/观战"
 horizontal_alignment = 1
 
-[node name="RoomCodeRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab"]
+[node name="RoomCodeRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="RoomCodeLabel" type="Label" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab/RoomCodeRow"]
+[node name="RoomCodeLabel" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/RoomCodeRow"]
 layout_mode = 2
 text = "房间码"
 
-[node name="RoomCodeEdit" type="LineEdit" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab/RoomCodeRow"]
+[node name="RoomCodeEdit" type="LineEdit" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/RoomCodeRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="PasswordRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab"]
+[node name="PasswordRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="PasswordLabel" type="Label" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab/PasswordRow"]
+[node name="PasswordLabel" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/PasswordRow"]
 layout_mode = 2
 text = "房间密码（可空）"
 
-[node name="RoomPasswordEdit" type="LineEdit" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab/PasswordRow"]
+[node name="RoomPasswordEdit" type="LineEdit" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/PasswordRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 secret = true
 
-[node name="JoinHint" type="Label" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab"]
+[node name="JoinHint" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab"]
 layout_mode = 2
 autowrap_mode = 2
 text = "提示：如果房间正在对局中且允许旁观，将以旁观者身份加入。"
 
-[node name="JoinRoomButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab"]
+[node name="JoinRoomButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab"]
 layout_mode = 2
 text = "加入/观战"
 
-[node name="JoinStatus" type="Label" parent="Center/Panel/Margin/Root/Tabs/JoinByCodeTab"]
+[node name="JoinStatus" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab"]
 layout_mode = 2
 autowrap_mode = 2
 text = ""
 
-[node name="CreateTab" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs"]
+[node name="CreateTab" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs"]
 visible = false
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 10
 
-[node name="CreateHeaderRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/CreateTab"]
+[node name="CreateHeaderRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="BackToRoomsButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/CreateTab/CreateHeaderRow"]
+[node name="BackToRoomsButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreateHeaderRow"]
 layout_mode = 2
 text = "← 房间列表"
 
-[node name="CreateHeader" type="Label" parent="Center/Panel/Margin/Root/Tabs/CreateTab/CreateHeaderRow"]
+[node name="CreateHeader" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreateHeaderRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "创建房间"
 horizontal_alignment = 1
 
-[node name="CreatePasswordRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/CreateTab"]
+[node name="CreatePasswordRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="CreatePasswordLabel" type="Label" parent="Center/Panel/Margin/Root/Tabs/CreateTab/CreatePasswordRow"]
+[node name="CreatePasswordLabel" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreatePasswordRow"]
 layout_mode = 2
 text = "房间密码（可空）"
 
-[node name="CreateRoomPasswordEdit" type="LineEdit" parent="Center/Panel/Margin/Root/Tabs/CreateTab/CreatePasswordRow"]
+[node name="CreateRoomPasswordEdit" type="LineEdit" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreatePasswordRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 secret = true
 
-[node name="CreatePlayersRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/CreateTab"]
+[node name="CreatePlayersRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="CreatePlayersLabel" type="Label" parent="Center/Panel/Margin/Root/Tabs/CreateTab/CreatePlayersRow"]
+[node name="CreatePlayersLabel" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreatePlayersRow"]
 layout_mode = 2
 text = "玩家人数"
 
-[node name="CreatePlayersSpin" type="SpinBox" parent="Center/Panel/Margin/Root/Tabs/CreateTab/CreatePlayersRow"]
+[node name="CreatePlayersSpin" type="SpinBox" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreatePlayersRow"]
 layout_mode = 2
 min_value = 2.0
 max_value = 6.0
@@ -259,111 +280,111 @@ step = 1.0
 rounded = true
 value = 2.0
 
-[node name="CreateHint" type="Label" parent="Center/Panel/Margin/Root/Tabs/CreateTab"]
+[node name="CreateHint" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab"]
 layout_mode = 2
 autowrap_mode = 2
 text = "房间创建后，可在「房间内」页面调整房间配置（模块/种子/旁观者等）。"
 
-[node name="CreateRoomButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/CreateTab"]
+[node name="CreateRoomButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab"]
 layout_mode = 2
 text = "创建房间"
 
-[node name="CreateStatus" type="Label" parent="Center/Panel/Margin/Root/Tabs/CreateTab"]
+[node name="CreateStatus" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab"]
 layout_mode = 2
 autowrap_mode = 2
 text = ""
 
-[node name="RoomTab" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs"]
+[node name="RoomTab" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs"]
 visible = false
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 10
 
-[node name="RoomHeader" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomTab"]
+[node name="RoomHeader" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="RoomCodeLabel" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomHeader"]
+[node name="RoomCodeLabel" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomHeader"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "房间：-"
 
-[node name="CopyRoomCodeButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomHeader"]
+[node name="CopyRoomCodeButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomHeader"]
 layout_mode = 2
 text = "复制"
 
-[node name="RoomBody" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomTab"]
+[node name="RoomBody" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab"]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 16
 
-[node name="LeftColumn" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody"]
+[node name="LeftColumn" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="PlayersTitle" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn"]
+[node name="PlayersTitle" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn"]
 layout_mode = 2
 text = "玩家"
 
-[node name="MyColorRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn"]
+[node name="MyColorRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="MyColorLabel" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/MyColorRow"]
+[node name="MyColorLabel" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/MyColorRow"]
 layout_mode = 2
 text = "我的餐厅"
 
-[node name="MyColorOption" type="OptionButton" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/MyColorRow"]
+[node name="MyColorOption" type="OptionButton" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/MyColorRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="PlayersList" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn"]
+[node name="PlayersList" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn"]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 4
 
-[node name="SpectatorsTitle" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn"]
+[node name="SpectatorsTitle" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn"]
 layout_mode = 2
 text = "旁观者"
 
-[node name="SpectatorsList" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn"]
+[node name="SpectatorsList" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn"]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 4
 
-[node name="RightColumn" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody"]
+[node name="RightColumn" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="RoomConfigTitle" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/RightColumn"]
+[node name="RoomConfigTitle" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/RightColumn"]
 layout_mode = 2
 text = "房间配置（房主自动同步）"
 
-[node name="ConfigSyncStatus" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/RightColumn"]
+[node name="ConfigSyncStatus" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/RightColumn"]
 layout_mode = 2
 autowrap_mode = 2
 text = ""
 
-[node name="RoomConfigContainer" type="VBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/RightColumn"]
+[node name="RoomConfigContainer" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/RightColumn"]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 10
 
-[node name="RoomActionsRow" type="HBoxContainer" parent="Center/Panel/Margin/Root/Tabs/RoomTab"]
+[node name="RoomActionsRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab"]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="LeaveRoomButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomActionsRow"]
+[node name="LeaveRoomButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomActionsRow"]
 layout_mode = 2
 text = "离开房间"
 
-[node name="StartGameButton" type="Button" parent="Center/Panel/Margin/Root/Tabs/RoomTab/RoomActionsRow"]
+[node name="StartGameButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomActionsRow"]
 layout_mode = 2
 text = "开始游戏"
 
-[node name="RoomStatus" type="Label" parent="Center/Panel/Margin/Root/Tabs/RoomTab"]
+[node name="RoomStatus" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab"]
 layout_mode = 2
 autowrap_mode = 2
 text = ""
@@ -372,17 +393,17 @@ text = ""
 one_shot = true
 wait_time = 0.5
 
-[connection signal="pressed" from="Center/Panel/Margin/Root/TopBar/BackButton" to="." method="_on_back_pressed"]
-[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/ConnectButton" to="." method="_on_connect_pressed"]
-[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/DisconnectButton" to="." method="_on_disconnect_pressed"]
-[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/OpenCreateButton" to="." method="_on_open_create_pressed"]
-[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/OpenJoinByCodeButton" to="." method="_on_open_join_by_code_pressed"]
-[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/RefreshRoomsButton" to="." method="_on_refresh_rooms_pressed"]
-[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/JoinByCodeTab/JoinHeaderRow/BackToRoomsButton" to="." method="_on_back_from_join_pressed"]
-[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/JoinByCodeTab/JoinRoomButton" to="." method="_on_join_by_code_submit_pressed"]
-[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/CreateTab/CreateHeaderRow/BackToRoomsButton" to="." method="_on_back_to_rooms_pressed"]
-[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/CreateTab/CreateRoomButton" to="." method="_on_create_room_pressed"]
-[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/RoomTab/RoomHeader/CopyRoomCodeButton" to="." method="_on_copy_room_code_pressed"]
-[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/RoomTab/RoomActionsRow/LeaveRoomButton" to="." method="_on_leave_room_pressed"]
-[connection signal="pressed" from="Center/Panel/Margin/Root/Tabs/RoomTab/RoomActionsRow/StartGameButton" to="." method="_on_start_game_pressed"]
+[connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ButtonsRow/ConnectButton" to="." method="_on_connect_pressed"]
+[connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ButtonsRow/DisconnectButton" to="." method="_on_disconnect_pressed"]
+[connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsHeader/OpenCreateButton" to="." method="_on_open_create_pressed"]
+[connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsHeader/OpenJoinByCodeButton" to="." method="_on_open_join_by_code_pressed"]
+[connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsHeader/RefreshRoomsButton" to="." method="_on_refresh_rooms_pressed"]
+[connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/JoinHeaderRow/BackToRoomsButton" to="." method="_on_back_from_join_pressed"]
+[connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/JoinRoomButton" to="." method="_on_join_by_code_submit_pressed"]
+[connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreateHeaderRow/BackToRoomsButton" to="." method="_on_back_to_rooms_pressed"]
+[connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreateRoomButton" to="." method="_on_create_room_pressed"]
+[connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomHeader/CopyRoomCodeButton" to="." method="_on_copy_room_code_pressed"]
+[connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomActionsRow/LeaveRoomButton" to="." method="_on_leave_room_pressed"]
+[connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomActionsRow/StartGameButton" to="." method="_on_start_game_pressed"]
 [connection signal="timeout" from="ConfigDebounceTimer" to="." method="_on_config_debounce_timeout"]

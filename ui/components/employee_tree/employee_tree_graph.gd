@@ -324,5 +324,5 @@ func _show_placeholder(text: String) -> void:
 	var lbl := Label.new()
 	lbl.text = str(text)
 	lbl.add_theme_font_size_override("font_size", 14)
-	lbl.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75, 1))
+	lbl.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 	add_child(lbl)

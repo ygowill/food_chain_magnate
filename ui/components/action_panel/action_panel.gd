@@ -7,6 +7,7 @@ signal action_requested(action_id: String, params: Dictionary)
 
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
@@ -232,6 +233,9 @@ func _get_skip_sub_phase_display_name() -> String:
 
 func _ready() -> void:
 	_build_ui()
+	UiStylesClass.apply_button_primary(confirm_context_button)
+	UiStylesClass.apply_button_secondary(cancel_context_button)
+	UiStylesClass.apply_button_secondary(rewind_phase_button)
 
 func _build_ui() -> void:
 	if items_container != null:

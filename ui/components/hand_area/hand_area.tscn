@@ -15,7 +15,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.1, 0.1, 0.12, 0.9)
+color = Color(0.97, 0.94, 0.86, 0.98)
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -58,7 +58,7 @@ theme_override_constants/separation = 4
 [node name="ActiveLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ActiveSection"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 12
-theme_override_colors/font_color = Color(0.6, 0.8, 0.6, 1)
+theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 text = "在岗员工"
 
 [node name="ActiveContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ActiveSection"]
@@ -75,7 +75,7 @@ theme_override_constants/separation = 4
 [node name="ReserveLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ReserveSection"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 12
-theme_override_colors/font_color = Color(0.7, 0.7, 0.5, 1)
+theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 text = "待命区"
 
 [node name="ReserveContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ReserveSection"]
@@ -92,7 +92,7 @@ theme_override_constants/separation = 4
 [node name="BusyLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/BusySection"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 12
-theme_override_colors/font_color = Color(0.8, 0.5, 0.5, 1)
+theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
 text = "忙碌中"
 
 [node name="BusyContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/BusySection"]

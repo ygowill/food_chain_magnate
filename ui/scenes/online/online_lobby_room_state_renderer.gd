@@ -83,7 +83,7 @@ func render_room_state(room_state: Dictionary) -> void:
 	if spectators.is_empty():
 		var none := Label.new()
 		none.text = "暂无旁观者"
-		none.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82, 0.85))
+		none.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.85))
 		_lobby.spectators_list_container.add_child(none)
 	else:
 		for s_val in spectators:
@@ -158,10 +158,10 @@ func _build_room_member_item(primary_text: String, accent_color: Color, tags: Ar
 	var style := StyleBoxFlat.new()
 	style.set_corner_radius_all(6)
 	if muted:
-		style.bg_color = Color(0.18, 0.18, 0.22, 0.35)
+		style.bg_color = Color(0.92, 0.88, 0.78, 0.35)
 		style.border_color = Color(0.25, 0.25, 0.3, 0.5)
 	else:
-		style.bg_color = Color(0.2, 0.2, 0.25, 0.6)
+		style.bg_color = Color(0.92, 0.88, 0.78, 0.6)
 		style.border_color = Color(0.25, 0.25, 0.3, 0.7)
 	style.set_border_width_all(1)
 	panel.add_theme_stylebox_override("panel", style)
@@ -186,7 +186,7 @@ func _build_room_member_item(primary_text: String, accent_color: Color, tags: Ar
 	if not tags.is_empty():
 		var tag_label := Label.new()
 		tag_label.text = " ".join(tags)
-		tag_label.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82, 0.95))
+		tag_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.95))
 		tag_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		tag_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(tag_label)

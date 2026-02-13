@@ -251,7 +251,7 @@ func _fill_existing_structure(structure: Array) -> void:
 		var header := Label.new()
 		header.text = "下属卡槽: %d/%d" % [min(reports.size(), cap), cap]
 		header.add_theme_font_size_override("font_size", 11)
-		header.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+		header.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 		reports_box.add_child(header)
 
 		# 下属槽：单个管理岗下方每行最多 4 个，可多行；避免“纵向堆叠过高看不全”。
@@ -557,7 +557,7 @@ func _update_display() -> void:
 	if warning_label != null:
 		if used > total:
 			warning_label.text = "超出限制!"
-			warning_label.add_theme_color_override("font_color", Color(1, 0.4, 0.4, 1))
+			warning_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 1))
 			warning_label.visible = true
 			slot_overflow_warning.emit()
 		else:

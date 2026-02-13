@@ -11,6 +11,7 @@ const EmployeeCardClass = preload("res://ui/components/employee_card/employee_ca
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const UiNodeAccessClass = preload("res://ui/utils/node_access.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 const _BUTTON_ROW_PATH := NodePath("MarginContainer/VBoxContainer/ButtonRow")
 
@@ -74,6 +75,8 @@ func _ready() -> void:
 		fire_btn.disabled = true
 	if pay_btn != null:
 		pay_btn.pressed.connect(_on_pay_pressed)
+	UiStylesClass.apply_button_primary(pay_btn)
+	UiStylesClass.apply_button_secondary(fire_btn)
 	_apply_embedding_layout()
 	right_panel_footer_changed.emit()
 
@@ -182,9 +185,9 @@ func _update_summary() -> void:
 	if cash_label != null:
 		cash_label.text = "当前现金: $%d" % _player_cash
 		if _player_cash < final_total:
-			cash_label.add_theme_color_override("font_color", Color(0.9, 0.4, 0.4, 1))
+			cash_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 1))
 		else:
-			cash_label.add_theme_color_override("font_color", Color(0.6, 0.8, 0.6, 1))
+			cash_label.add_theme_color_override("font_color", Color(0.28, 0.55, 0.22, 1))
 
 	if fire_btn != null:
 		fire_btn.disabled = _selected_for_fire.is_empty()
@@ -249,7 +252,7 @@ class SalaryItem extends PanelContainer:
 		custom_minimum_size = Vector2(0, 40)
 
 		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0.15, 0.17, 0.2, 0.8)
+		style.bg_color = Color(0.92, 0.88, 0.78, 0.95)
 		style.set_corner_radius_all(4)
 		add_theme_stylebox_override("panel", style)
 
@@ -297,15 +300,15 @@ class SalaryItem extends PanelContainer:
 		if _salary_label != null:
 			if requires_salary:
 				_salary_label.text = "$%d" % salary_amount
-				_salary_label.add_theme_color_override("font_color", Color(0.9, 0.7, 0.5, 1))
+				_salary_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 1))
 			else:
 				_salary_label.text = "-"
-				_salary_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1))
+				_salary_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 
 		if _status_label != null:
 			if is_busy:
 				_status_label.text = "[忙碌]"
-				_status_label.add_theme_color_override("font_color", Color(0.8, 0.6, 0.4, 1))
+				_status_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 0.8))
 				# 忙碌营销员通常不能解雇
 				if _fire_checkbox != null:
 					_fire_checkbox.disabled = true

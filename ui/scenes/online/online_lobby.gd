@@ -10,50 +10,53 @@ const RoomStateRendererClass = preload("res://ui/scenes/online/online_lobby_room
 
 const _COLOR_NAME_HINTS: Array[String] = ["红", "蓝", "绿", "黄", "紫", "橙"]
 
+@onready var wall_background: ColorRect = $WallBackground
+@onready var vignette_overlay: ColorRect = $VignetteOverlay
 @onready var panel: PanelContainer = $Center/Panel
-@onready var back_button: Button = $Center/Panel/Margin/Root/TopBar/BackButton
-@onready var top_title_label: Label = $Center/Panel/Margin/Root/TopBar/Title
-@onready var pages: VBoxContainer = $Center/Panel/Margin/Root/Tabs
-@onready var page_connect: Control = $Center/Panel/Margin/Root/Tabs/ConnectTab
-@onready var page_rooms: Control = $Center/Panel/Margin/Root/Tabs/RoomsTab
-@onready var page_join_by_code: Control = $Center/Panel/Margin/Root/Tabs/JoinByCodeTab
-@onready var page_create: Control = $Center/Panel/Margin/Root/Tabs/CreateTab
-@onready var page_room: Control = $Center/Panel/Margin/Root/Tabs/RoomTab
+@onready var inner_border: PanelContainer = $Center/Panel/OuterMargin/InnerBorder
+@onready var back_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar/BackButton
+@onready var top_title_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar/Title
+@onready var pages: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs
+@onready var page_connect: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab
+@onready var page_rooms: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab
+@onready var page_join_by_code: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab
+@onready var page_create: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab
+@onready var page_room: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab
 
-@onready var server_url_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/ConnectTab/ServerRow/ServerUrlEdit
-@onready var player_name_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/ConnectTab/ProfileRow/PlayerNameEdit
-@onready var connect_button: Button = $Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/ConnectButton
-@onready var disconnect_button: Button = $Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/DisconnectButton
-@onready var connect_status_label: Label = $Center/Panel/Margin/Root/Tabs/ConnectTab/ConnectStatus
+@onready var server_url_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ServerRow/ServerUrlEdit
+@onready var player_name_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ProfileRow/PlayerNameEdit
+@onready var connect_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ButtonsRow/ConnectButton
+@onready var disconnect_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ButtonsRow/DisconnectButton
+@onready var connect_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ConnectStatus
 
-@onready var open_create_button: Button = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/OpenCreateButton
-@onready var open_join_by_code_button: Button = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/OpenJoinByCodeButton
-@onready var refresh_rooms_button: Button = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsHeader/RefreshRoomsButton
-@onready var rooms_list_container: VBoxContainer = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsScroll/RoomsList
-@onready var rooms_status_label: Label = $Center/Panel/Margin/Root/Tabs/RoomsTab/RoomsStatus
+@onready var open_create_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsHeader/OpenCreateButton
+@onready var open_join_by_code_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsHeader/OpenJoinByCodeButton
+@onready var refresh_rooms_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsHeader/RefreshRoomsButton
+@onready var rooms_list_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsScroll/RoomsList
+@onready var rooms_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsStatus
 
-@onready var join_by_code_back_button: Button = $Center/Panel/Margin/Root/Tabs/JoinByCodeTab/JoinHeaderRow/BackToRoomsButton
-@onready var join_by_code_room_code_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/JoinByCodeTab/RoomCodeRow/RoomCodeEdit
-@onready var join_by_code_password_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/JoinByCodeTab/PasswordRow/RoomPasswordEdit
-@onready var join_by_code_submit_button: Button = $Center/Panel/Margin/Root/Tabs/JoinByCodeTab/JoinRoomButton
-@onready var join_by_code_status_label: Label = $Center/Panel/Margin/Root/Tabs/JoinByCodeTab/JoinStatus
+@onready var join_by_code_back_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/JoinHeaderRow/BackToRoomsButton
+@onready var join_by_code_room_code_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/RoomCodeRow/RoomCodeEdit
+@onready var join_by_code_password_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/PasswordRow/RoomPasswordEdit
+@onready var join_by_code_submit_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/JoinRoomButton
+@onready var join_by_code_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/JoinStatus
 
-@onready var back_to_rooms_button: Button = $Center/Panel/Margin/Root/Tabs/CreateTab/CreateHeaderRow/BackToRoomsButton
-@onready var create_password_edit: LineEdit = $Center/Panel/Margin/Root/Tabs/CreateTab/CreatePasswordRow/CreateRoomPasswordEdit
-@onready var create_players_spin: SpinBox = $Center/Panel/Margin/Root/Tabs/CreateTab/CreatePlayersRow/CreatePlayersSpin
-@onready var create_room_button: Button = $Center/Panel/Margin/Root/Tabs/CreateTab/CreateRoomButton
-@onready var create_status_label: Label = $Center/Panel/Margin/Root/Tabs/CreateTab/CreateStatus
+@onready var back_to_rooms_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreateHeaderRow/BackToRoomsButton
+@onready var create_password_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreatePasswordRow/CreateRoomPasswordEdit
+@onready var create_players_spin: SpinBox = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreatePlayersRow/CreatePlayersSpin
+@onready var create_room_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreateRoomButton
+@onready var create_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreateStatus
 
-@onready var room_code_label: Label = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomHeader/RoomCodeLabel
-@onready var copy_room_code_button: Button = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomHeader/CopyRoomCodeButton
-@onready var my_color_option: OptionButton = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/MyColorRow/MyColorOption
-@onready var players_list_container: VBoxContainer = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/PlayersList
-@onready var spectators_list_container: VBoxContainer = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/SpectatorsList
-@onready var config_sync_status_label: Label = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/RightColumn/ConfigSyncStatus
-@onready var room_config_container: VBoxContainer = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomBody/RightColumn/RoomConfigContainer
-@onready var leave_room_button: Button = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomActionsRow/LeaveRoomButton
-@onready var start_game_button: Button = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomActionsRow/StartGameButton
-@onready var room_status_label: Label = $Center/Panel/Margin/Root/Tabs/RoomTab/RoomStatus
+@onready var room_code_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomHeader/RoomCodeLabel
+@onready var copy_room_code_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomHeader/CopyRoomCodeButton
+@onready var my_color_option: OptionButton = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/MyColorRow/MyColorOption
+@onready var players_list_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/PlayersList
+@onready var spectators_list_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/SpectatorsList
+@onready var config_sync_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/RightColumn/ConfigSyncStatus
+@onready var room_config_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/RightColumn/RoomConfigContainer
+@onready var leave_room_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomActionsRow/LeaveRoomButton
+@onready var start_game_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomActionsRow/StartGameButton
+@onready var room_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomStatus
 
 @onready var config_debounce_timer: Timer = $ConfigDebounceTimer
 
@@ -76,7 +79,10 @@ var _info_dialog = null
 var _suppress_profile_signals: bool = false
 
 func _ready() -> void:
+	UiStylesClass.apply_tiled_texture(wall_background, UiStylesClass.WALL_TEXTURE_PATHS, 3.0, Color(0.93, 0.88, 0.75, 1.0))
+	UiStylesClass.apply_vignette(vignette_overlay, 0.45, 0.5)
 	UiStylesClass.apply_dialog_surface(panel)
+	UiStylesClass.apply_poster_inner_border(inner_border)
 	UiStylesClass.apply_button_secondary(back_button)
 	UiStylesClass.apply_button_primary(connect_button)
 	UiStylesClass.apply_button_secondary(disconnect_button)
@@ -743,7 +749,7 @@ func _on_start_game_pressed() -> void:
 			SceneManager.show_loading("正在开始游戏...")
 			await get_tree().process_frame
 
-	# StartGame：进入 loading 后主动触发一次同步（避免“光标仍在输入框中导致未同步”）。
+	# StartGame：进入 loading 后主动触发一次同步（避免"光标仍在输入框中导致未同步"）。
 	config_debounce_timer.stop()
 	var patch: Dictionary = _room_config_editor.get_config_patch()
 	var cfg: Dictionary = Dictionary(room_state.get("config", {}))

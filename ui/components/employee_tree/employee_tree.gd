@@ -8,6 +8,7 @@ signal build_finished()
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeDefClass = preload("res://core/data/employee_def.gd")
 const InfoDialogClass = preload("res://ui/dialogs/info_dialog.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 @onready var close_button: Button = $MarginContainer/VBoxContainer/HeaderRow/CloseButton
 @onready var fit_button: Button = $MarginContainer/VBoxContainer/HeaderRow/FitButton
@@ -37,6 +38,10 @@ func _ready() -> void:
 		pan_background.gui_input.connect(_on_background_gui_input)
 	if is_instance_valid(graph):
 		graph.employee_clicked.connect(_on_employee_clicked)
+
+	UiStylesClass.apply_button_secondary(close_button)
+	UiStylesClass.apply_button_secondary(fit_button)
+	UiStylesClass.apply_button_secondary(fit_width_button)
 
 	_set_loading_visible(true)
 

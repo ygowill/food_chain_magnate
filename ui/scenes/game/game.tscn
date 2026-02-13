@@ -31,7 +31,17 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.1, 0.12, 0.15, 1)
+color = Color(0.85, 0.80, 0.68, 1)
+
+[node name="VignetteOverlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0)
 
 [node name="AudioSystemInitializer" parent="." instance=ExtResource("12_audio_init")]
 
@@ -56,21 +66,25 @@ theme_override_constants/separation = 20
 
 [node name="RoundLabel" type="Label" parent="UIRoot/TopBar/InfoRow"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 theme_override_font_sizes/font_size = 18
 text = "回合: 0"
 
 [node name="PhaseLabel" type="Label" parent="UIRoot/TopBar/InfoRow"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 theme_override_font_sizes/font_size = 18
 text = "阶段: Setup"
 
 [node name="BankLabel" type="Label" parent="UIRoot/TopBar/InfoRow"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 theme_override_font_sizes/font_size = 18
 text = "银行: $0"
 
 [node name="CurrentPlayerLabel" type="Label" parent="UIRoot/TopBar/InfoRow"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 theme_override_font_sizes/font_size = 18
 text = "玩家: -"
 
@@ -211,6 +225,7 @@ text = "← 返回"
 [node name="TitleLabel" type="Label" parent="UIRoot/MainContent/CenterSplit/RightPanel/HeaderRow"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 text = "操作"
 
 [node name="CloseButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/HeaderRow"]
@@ -289,7 +304,8 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-mouse_filter = 2
+mouse_filter = 0
+color = Color(0.05, 0.04, 0.03, 0.75)
 
 [node name="BackgroundPanel" type="Panel" parent="MenuDialog"]
 anchors_preset = 8

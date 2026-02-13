@@ -97,7 +97,7 @@ func _setup_ui() -> void:
 	_status_label = Label.new()
 	_status_label.text = "未加载"
 	_status_label.add_theme_font_size_override("font_size", 12)
-	_status_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	_status_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35))
 	title_row.add_child(_status_label)
 
 	_close_btn = Button.new()
@@ -111,7 +111,7 @@ func _setup_ui() -> void:
 	_error_label.visible = false
 	_error_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_error_label.add_theme_font_size_override("font_size", 12)
-	_error_label.add_theme_color_override("font_color", Color(1, 0.55, 0.55, 1))
+	_error_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 1))
 	vbox.add_child(_error_label)
 
 	# 文件选择行
@@ -209,7 +209,7 @@ func _setup_ui() -> void:
 	_command_info_label = Label.new()
 	_command_info_label.text = ""
 	_command_info_label.add_theme_font_size_override("font_size", 12)
-	_command_info_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+	_command_info_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09))
 	_command_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(_command_info_label)
 

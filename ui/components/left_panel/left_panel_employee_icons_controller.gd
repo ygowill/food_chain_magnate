@@ -114,9 +114,9 @@ func _add_employee_entry_to_category(container: VBoxContainer, employee_id: Stri
 		fs = int(Globals.get_scaled_font_size(16))
 	line.add_theme_font_size_override("font_size", fs)
 	if busy:
-		line.add_theme_color_override("font_color", Color(0.9, 0.8, 0.5, 1))
+		line.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 1))
 	else:
-		line.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95, 1))
+		line.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
 	container.add_child(line)
 
 func _get_preview_manager():

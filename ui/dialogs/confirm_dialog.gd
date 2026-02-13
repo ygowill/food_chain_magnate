@@ -20,6 +20,7 @@ var _cancel_text: String = "取消"
 func _ready() -> void:
 	super._ready()
 	UiStylesClass.apply_dialog_surface(background_panel)
+	UiStylesClass.apply_overlay_dim($Overlay)
 	UiStylesClass.apply_button_primary(confirm_btn)
 	UiStylesClass.apply_button_secondary(cancel_btn)
 

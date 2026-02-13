@@ -90,7 +90,7 @@ func update_display() -> void:
 	if _count_label != null:
 		if is_available:
 			_count_label.text = "员工:%d  板件:%d" % [marketer_count, board_count]
-			_count_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+			_count_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 		else:
 			if marketer_count <= 0:
 				_count_label.text = "无可用员工"
@@ -107,13 +107,13 @@ func set_selected(selected: bool) -> void:
 func _update_style() -> void:
 	var style := StyleBoxFlat.new()
 	if _selected:
-		style.bg_color = Color(0.25, 0.35, 0.45, 0.95)
-		style.border_color = Color(0.4, 0.7, 0.9, 1)
+		style.bg_color = Color(0.89, 0.82, 0.66, 0.95)
+		style.border_color = Color(0.73, 0.23, 0.18, 0.6)
 		style.set_border_width_all(2)
 	elif is_available:
-		style.bg_color = Color(0.18, 0.2, 0.24, 0.9)
+		style.bg_color = Color(0.95, 0.91, 0.82, 0.9)
 	else:
-		style.bg_color = Color(0.12, 0.12, 0.14, 0.7)
+		style.bg_color = Color(0.92, 0.88, 0.78, 0.6)
 	style.set_corner_radius_all(6)
 	add_theme_stylebox_override("panel", style)
 

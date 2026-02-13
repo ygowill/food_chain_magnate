@@ -24,6 +24,7 @@ const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 const EmployeePickerClass = preload("res://ui/components/employee_picker/employee_picker.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 var _production_type: String = "food"  # food | drinks
 var _available_producers: Array[String] = []
@@ -77,6 +78,8 @@ func _get_cancel_button() -> Button:
 	return cancel_btn
 
 func _on_panel_ready() -> void:
+	UiStylesClass.apply_button_primary(confirm_btn)
+	UiStylesClass.apply_button_secondary(cancel_btn)
 	_rebuild()
 	_apply_embedding_layout()
 
@@ -286,7 +289,7 @@ func _rebuild_content() -> void:
 	_info_label = Label.new()
 	_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_info_label.add_theme_font_size_override("font_size", 12)
-	_info_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
+	_info_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 	products_container.add_child(_info_label)
 
 	_food_type_label = null
@@ -601,7 +604,7 @@ func _build_drinks_controls(parent: VBoxContainer) -> void:
 	_drinks_selection_label = Label.new()
 	_drinks_selection_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_drinks_selection_label.add_theme_font_size_override("font_size", 12)
-	_drinks_selection_label.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82, 1))
+	_drinks_selection_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 	row.add_child(_drinks_selection_label)
 
 	_drinks_undo_btn = Button.new()

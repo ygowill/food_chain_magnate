@@ -6,6 +6,7 @@ extends "res://ui/components/common/right_panel_embeddable_panel.gd"
 signal train_requested(from_employee: String, to_employee: String)
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 @onready var counter_label: Label = $MarginContainer/VBoxContainer/CounterRow/CounterLabel
 @onready var trainable_section_label: Label = $MarginContainer/VBoxContainer/TrainableSection/SectionLabel
@@ -43,6 +44,7 @@ func _get_relayout_delay_frames() -> int:
 	return 2
 
 func _on_panel_ready() -> void:
+	UiStylesClass.apply_button_primary(confirm_btn)
 	if trainable_container != null and is_instance_valid(trainable_container):
 		if trainable_container.has_signal("employee_selected"):
 			trainable_container.employee_selected.connect(_on_source_selected)
@@ -199,7 +201,7 @@ func _refresh_target_picker() -> void:
 			path_container.clear()
 		var label := Label.new()
 		label.text = "请选择培训来源"
-		label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+		label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 		path_container.add_child(label)
 		_selected_target = ""
 		_selected_steps_required = 0
@@ -210,7 +212,7 @@ func _refresh_target_picker() -> void:
 			path_container.clear()
 		var label2 := Label.new()
 		label2.text = "无可培训目标"
-		label2.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+		label2.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 		path_container.add_child(label2)
 		_selected_target = ""
 		_selected_steps_required = 0

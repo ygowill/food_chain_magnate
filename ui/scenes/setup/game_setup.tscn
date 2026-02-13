@@ -11,14 +11,24 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_setup")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="WallBackground" type="ColorRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.15, 0.15, 0.2, 1)
+color = Color(0.93, 0.88, 0.75, 1)
+
+[node name="VignetteOverlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0)
 
 [node name="CenterContainer" type="CenterContainer" parent="."]
 layout_mode = 1
@@ -37,88 +47,109 @@ alignment = 1
 custom_minimum_size = Vector2(1500, 0)
 layout_mode = 2
 
-[node name="Margin" type="MarginContainer" parent="CenterContainer/ContentCenter/Card"]
+[node name="OuterMargin" type="MarginContainer" parent="CenterContainer/ContentCenter/Card"]
+layout_mode = 2
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 6
+
+[node name="InnerBorder" type="PanelContainer" parent="CenterContainer/ContentCenter/Card/OuterMargin"]
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder"]
 layout_mode = 2
 theme_override_constants/margin_left = 36
 theme_override_constants/margin_top = 32
 theme_override_constants/margin_right = 36
 theme_override_constants/margin_bottom = 32
 
-[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin"]
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin"]
 layout_mode = 2
 theme_override_constants/separation = 20
 
-[node name="Title" type="Label" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer"]
+[node name="Title" type="Label" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 36
+theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 text = "游戏设置"
 horizontal_alignment = 1
 
-[node name="Spacer1" type="Control" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer"]
-custom_minimum_size = Vector2(0, 20)
+[node name="DecorativeLine" type="Label" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_colors/font_color = Color(0.73, 0.23, 0.18, 0.5)
+theme_override_font_sizes/font_size = 14
+text = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+horizontal_alignment = 1
+
+[node name="Spacer1" type="Control" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer"]
+custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 
-[node name="MainColumns" type="HBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer"]
+[node name="MainColumns" type="HBoxContainer" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/separation = 40
 
-[node name="LeftColumn" type="VBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns"]
+[node name="LeftColumn" type="VBoxContainer" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns"]
 layout_mode = 2
 size_flags_horizontal = 0
 theme_override_constants/separation = 12
 
-[node name="RightColumn" type="VBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns"]
+[node name="RightColumn" type="VBoxContainer" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 12
 
-[node name="PlayerCountContainer" type="HBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn"]
+[node name="PlayerCountContainer" type="HBoxContainer" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn"]
 layout_mode = 2
 alignment = 1
 
-[node name="PlayerCountLabel" type="Label" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer"]
+[node name="PlayerCountLabel" type="Label" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 text = "玩家数量："
 
-[node name="PlayerCountSpinBox" type="SpinBox" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer"]
+[node name="PlayerCountSpinBox" type="SpinBox" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer"]
 layout_mode = 2
 min_value = 2.0
 max_value = 6.0
 value = 2.0
 
-[node name="SeedContainer" type="HBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn"]
+[node name="SeedContainer" type="HBoxContainer" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn"]
 layout_mode = 2
 alignment = 1
 
-[node name="SeedLabel" type="Label" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/SeedContainer"]
+[node name="SeedLabel" type="Label" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn/SeedContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 text = "随机种子："
 
-[node name="SeedLineEdit" type="LineEdit" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/SeedContainer"]
+[node name="SeedLineEdit" type="LineEdit" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn/SeedContainer"]
 custom_minimum_size = Vector2(150, 0)
 layout_mode = 2
 placeholder_text = "留空自动生成"
 
-[node name="Spacer2" type="Control" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer"]
+[node name="Spacer2" type="Control" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer"]
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
 
-[node name="ButtonContainer" type="HBoxContainer" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer"]
+[node name="ButtonContainer" type="HBoxContainer" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer"]
 layout_mode = 2
 alignment = 1
 theme_override_constants/separation = 20
 
-[node name="BackButton" type="Button" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer"]
+[node name="BackButton" type="Button" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/ButtonContainer"]
 custom_minimum_size = Vector2(150, 50)
 layout_mode = 2
 text = "返回"
 
-[node name="StartButton" type="Button" parent="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer"]
+[node name="StartButton" type="Button" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/ButtonContainer"]
 custom_minimum_size = Vector2(150, 50)
 layout_mode = 2
 text = "开始游戏"
 
-[connection signal="pressed" from="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer/BackButton" to="." method="_on_back_pressed"]
-[connection signal="pressed" from="CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer/StartButton" to="." method="_on_start_pressed"]
+[connection signal="pressed" from="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/ButtonContainer/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/ButtonContainer/StartButton" to="." method="_on_start_pressed"]

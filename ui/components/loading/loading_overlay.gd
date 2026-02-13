@@ -2,6 +2,8 @@
 class_name LoadingOverlay
 extends CanvasLayer
 
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
 @onready var blocker: Control = $Root/Blocker
 @onready var title_label: Label = $Root/Center/Panel/MarginContainer/VBoxContainer/TitleLabel
 @onready var detail_label: Label = $Root/Center/Panel/MarginContainer/VBoxContainer/DetailLabel
@@ -9,6 +11,7 @@ extends CanvasLayer
 
 func _ready() -> void:
 	visible = false
+	UiStylesClass.apply_dialog_surface($Root/Center/Panel)
 	if is_instance_valid(blocker):
 		# 阻止交互，避免用户在加载期间误触 UI
 		blocker.mouse_filter = Control.MOUSE_FILTER_STOP

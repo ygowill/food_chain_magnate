@@ -154,7 +154,7 @@ class DemandMarker extends Control:
 		# 背景
 		_background = ColorRect.new()
 		_background.set_anchors_preset(Control.PRESET_FULL_RECT)
-		_background.color = Color(0.1, 0.1, 0.1, 0.85)
+		_background.color = Color(0.97, 0.94, 0.86, 0.92)
 		add_child(_background)
 
 		# 图标容器
@@ -205,9 +205,9 @@ class DemandMarker extends Control:
 		# 更新背景颜色
 		if _background != null:
 			if is_satisfied:
-				_background.color = Color(0.15, 0.25, 0.15, 0.8)
+				_background.color = Color(0.90, 0.93, 0.85, 0.85)
 			else:
-				_background.color = Color(0.1, 0.1, 0.1, 0.85)
+				_background.color = Color(0.97, 0.94, 0.86, 0.92)
 
 		# 调整大小
 		await get_tree().process_frame

@@ -60,7 +60,7 @@ func _update_display() -> void:
 			ch = name.substr(0, 1)
 		fallback_label.text = ch
 		fallback_label.visible = not is_instance_valid(icon_texture) or (icon_texture.texture == null)
-		fallback_label.add_theme_color_override("font_color", Color(0.95, 0.95, 0.95, 1))
+		fallback_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
 
 	tooltip_text = "%s%s" % [name, "（忙碌）" if is_busy else ""]
 
@@ -76,7 +76,7 @@ func _update_style() -> void:
 	style.set_corner_radius_all(4)
 
 	if is_busy:
-		style.bg_color = Color(0.22, 0.22, 0.25, 0.7)
+		style.bg_color = Color(0.95, 0.91, 0.82, 0.8)
 		style.border_color = Color(0.55, 0.55, 0.6, 0.9)
 	else:
 		style.bg_color = Color(base_color.r, base_color.g, base_color.b, 0.35)

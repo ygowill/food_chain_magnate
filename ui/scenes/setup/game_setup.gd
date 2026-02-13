@@ -6,15 +6,18 @@ const ModuleSelectorClass = preload("res://ui/components/module_selector/module_
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
 
+@onready var wall_background: ColorRect = $WallBackground
+@onready var vignette_overlay: ColorRect = $VignetteOverlay
 @onready var card: PanelContainer = $CenterContainer/ContentCenter/Card
-@onready var player_count_spinbox: SpinBox = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer/PlayerCountSpinBox
-@onready var seed_edit: LineEdit = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/SeedContainer/SeedLineEdit
-@onready var root_vbox: VBoxContainer = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer
-@onready var spacer2: Control = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer/Spacer2
-@onready var left_column: VBoxContainer = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn
-@onready var right_column: VBoxContainer = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/RightColumn
-@onready var back_button: Button = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer/BackButton
-@onready var start_button: Button = $CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer/StartButton
+@onready var inner_border: PanelContainer = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder
+@onready var player_count_spinbox: SpinBox = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer/PlayerCountSpinBox
+@onready var seed_edit: LineEdit = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn/SeedContainer/SeedLineEdit
+@onready var root_vbox: VBoxContainer = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer
+@onready var spacer2: Control = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/Spacer2
+@onready var left_column: VBoxContainer = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn
+@onready var right_column: VBoxContainer = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/RightColumn
+@onready var back_button: Button = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/ButtonContainer/BackButton
+@onready var start_button: Button = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/ButtonContainer/StartButton
 
 var _players_section: VBoxContainer = null
 var _players_container: VBoxContainer = null
@@ -32,7 +35,10 @@ var _logo_icons_small: Array[Texture2D] = []
 
 func _ready() -> void:
 	GameLog.info("GameSetup", "游戏设置界面已加载")
+	UiStylesClass.apply_tiled_texture(wall_background, UiStylesClass.WALL_TEXTURE_PATHS, 3.0, Color(0.93, 0.88, 0.75, 1.0))
+	UiStylesClass.apply_vignette(vignette_overlay, 0.45, 0.5)
 	UiStylesClass.apply_dialog_surface(card)
+	UiStylesClass.apply_poster_inner_border(inner_border)
 	UiStylesClass.apply_button_secondary(back_button)
 	UiStylesClass.apply_button_primary(start_button)
 

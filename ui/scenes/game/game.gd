@@ -26,6 +26,8 @@ extends Control
 @onready var left_area: Control = $UIRoot/MainContent/LeftArea
 @onready var game_log_panel: GameLogPanel = $UIRoot/MainContent/LeftArea/GameLogPanel
 @onready var left_panel: Control = $UIRoot/MainContent/LeftArea/LeftPanel
+@onready var background: ColorRect = $Background
+@onready var vignette_overlay: ColorRect = $VignetteOverlay
 
 # 新 UI 组件引用
 @onready var right_panel_back_button: Button = $UIRoot/MainContent/CenterSplit/RightPanel/HeaderRow/BackButton
@@ -129,6 +131,8 @@ func _ready() -> void:
 		EventBus.clear_history()
 
 	var span_layout := PerfTraceClass.begin_span("game:layout+controllers_init")
+	UiStylesClass.apply_tiled_texture(background, UiStylesClass.WALL_TEXTURE_PATHS, 3.0, Color(0.85, 0.80, 0.68, 1.0))
+	UiStylesClass.apply_vignette(vignette_overlay, 0.25, 0.5)
 	_apply_menu_dialog_styles()
 	_layout_controller = GameLayoutControllerClass.new(
 		self,
@@ -344,14 +348,14 @@ func _apply_menu_dialog_styles() -> void:
 	if is_instance_valid(menu_dialog):
 		menu_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
 	if is_instance_valid(menu_dialog_overlay):
-		menu_dialog_overlay.color = Color(0, 0, 0, 0.62)
+		menu_dialog_overlay.color = Color(0.05, 0.04, 0.03, 0.75)
 		menu_dialog_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	UiStylesClass.apply_dialog_surface(menu_dialog_background_panel)
 	UiStylesClass.apply_button_primary(menu_resume_button)
-	UiStylesClass.apply_button_secondary(menu_save_button)
-	UiStylesClass.apply_button_secondary(menu_settings_button)
-	UiStylesClass.apply_button_secondary(toggle_bottom_panel_button)
-	UiStylesClass.apply_button_secondary(menu_quit_to_menu_button)
+	UiStylesClass.apply_button_primary(menu_save_button)
+	UiStylesClass.apply_button_primary(menu_settings_button)
+	UiStylesClass.apply_button_primary(toggle_bottom_panel_button)
+	UiStylesClass.apply_button_primary(menu_quit_to_menu_button)
 
 func _report_startup_profile() -> void:
 	# 让首帧/次帧的 deferred/UI queue 跑完，避免漏掉 MapSkin 构建等同步耗时的尾部。

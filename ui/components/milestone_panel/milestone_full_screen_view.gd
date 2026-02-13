@@ -224,7 +224,7 @@ func _run_background_rebuild(milestone_ids: Array[String], claimed_by: Dictionar
 		empty.text = "暂无里程碑"
 		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		empty.add_theme_font_size_override("font_size", 14)
-		empty.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.95))
+		empty.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.95))
 		grid.add_child(empty)
 		_built_milestone_ids_key = ids_key
 		_last_sync_key = sync_key
@@ -326,7 +326,7 @@ func _rebuild_from_state(state: GameState) -> void:
 		empty.text = "暂无里程碑"
 		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		empty.add_theme_font_size_override("font_size", 14)
-		empty.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.95))
+		empty.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.95))
 		grid.add_child(empty)
 		return
 
@@ -600,7 +600,7 @@ class MilestoneCard extends PanelContainer:
 		_desc_label = Label.new()
 		_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_desc_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(11) if Globals != null else 11)
-		_desc_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75, 0.95))
+		_desc_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.95))
 		_desc_label.max_lines_visible = 4
 		_desc_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		_desc_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -707,11 +707,11 @@ class MilestoneCard extends PanelContainer:
 
 		if _status_label != null:
 			_status_label.text = status_text + ("\n" + expires_text if not expires_text.is_empty() else "")
-			var color := Color(0.7, 0.7, 0.7, 1)
+			var color := Color(0.5, 0.45, 0.35, 1)
 			if status == CardStatus.OBTAINABLE:
-				color = Color(0.55, 0.9, 0.6, 1)
+				color = Color(0.28, 0.55, 0.22, 1)
 			elif status == CardStatus.CLAIMED:
-				color = Color(0.5, 0.85, 0.55, 1)
+				color = Color(0.28, 0.55, 0.22, 1)
 			_status_label.add_theme_color_override("font_color", color)
 
 		if _icons_row != null:
@@ -746,18 +746,18 @@ class MilestoneCard extends PanelContainer:
 		match status:
 			CardStatus.OBTAINABLE:
 				# 可获得：浅绿色边框
-				style.bg_color = Color(0.12, 0.12, 0.14, 0.92)
+				style.bg_color = Color(0.97, 0.94, 0.86, 0.95)
 				style.border_color = Color(0.55, 0.9, 0.6, 0.8)
 				style.set_border_width_all(2)
 			CardStatus.CLAIMED:
 				# 已获得：浅绿色背景
-				style.bg_color = Color(0.18, 0.28, 0.18, 0.92)
+				style.bg_color = Color(0.90, 0.93, 0.85, 0.95)
 				style.border_color = Color(0.55, 0.9, 0.6, 0.75)
 				style.set_border_width_all(1)
 			_:
 				# 不可获得：保持默认颜色状态
-				style.bg_color = Color(0.12, 0.12, 0.14, 0.92)
-				style.border_color = Color(0.25, 0.25, 0.3, 0.6)
+				style.bg_color = Color(0.92, 0.88, 0.78, 0.9)
+				style.border_color = Color(0.73, 0.23, 0.18, 0.35)
 				style.set_border_width_all(1)
 		style.set_corner_radius_all(10)
 		add_theme_stylebox_override("panel", style)

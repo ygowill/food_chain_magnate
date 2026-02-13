@@ -7,6 +7,8 @@ extends Control
 signal completed(result: Dictionary)
 signal cancelled()
 
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
 @export var title: String = ""
 @export var confirm_text: String = "确认"
 @export var cancel_text: String = "取消"
@@ -21,11 +23,14 @@ signal cancelled()
 @onready var hint_label: Label = $Panel/MarginContainer/VBoxContainer/HintLabel
 
 var _peek_held: bool = false
-var _overlay_alpha_normal: float = 0.72
+var _overlay_alpha_normal: float = 0.75
 var _overlay_alpha_peek: float = 0.25
 
 func _ready() -> void:
 	visible = false
+	UiStylesClass.apply_dialog_surface(panel)
+	UiStylesClass.apply_button_primary(confirm_button)
+	UiStylesClass.apply_button_secondary(cancel_button)
 	if is_instance_valid(title_label):
 		title_label.text = title
 	if is_instance_valid(confirm_button):

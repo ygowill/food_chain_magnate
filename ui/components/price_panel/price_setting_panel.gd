@@ -9,6 +9,7 @@ signal right_panel_footer_changed()
 
 const UiNodeAccessClass = preload("res://ui/utils/node_access.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 const _BUTTON_ROW_PATH := NodePath("MarginContainer/VBoxContainer/ButtonRow")
 
@@ -45,6 +46,8 @@ func _ready() -> void:
 		confirm_btn.pressed.connect(_on_confirm_pressed)
 	if cancel_btn != null:
 		cancel_btn.pressed.connect(_on_cancel_pressed)
+	UiStylesClass.apply_button_primary(confirm_btn)
+	UiStylesClass.apply_button_secondary(cancel_btn)
 
 	_rebuild_content()
 
@@ -80,14 +83,14 @@ func _rebuild_content() -> void:
 	var info := Label.new()
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD
 	info.add_theme_font_size_override("font_size", 13)
-	info.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
+	info.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
 	info.text = _get_action_description()
 	products_container.add_child(info)
 
 	var hint := Label.new()
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
 	hint.add_theme_font_size_override("font_size", 12)
-	hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+	hint.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 	hint.text = "该动作不需要选择产品或输入价格，确认即可执行。"
 	products_container.add_child(hint)
 	right_panel_footer_changed.emit()

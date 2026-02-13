@@ -484,7 +484,7 @@ func _refresh_inventory_ui(inv: Dictionary, fridge_capacity: int) -> void:
 	if added <= 0:
 		var empty := Label.new()
 		empty.text = "无"
-		empty.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.9))
+		empty.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.9))
 		var fs := 14
 		if Globals != null:
 			fs = int(Globals.get_scaled_font_size(14))
@@ -508,7 +508,7 @@ func _build_inventory_token_item(product_id: String, count: int) -> Control:
 	if Globals != null:
 		fs = int(Globals.get_scaled_font_size(14))
 	label.add_theme_font_size_override("font_size", fs)
-	label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95, 1))
+	label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
 	hbox.add_child(label)
 
 	var name := _get_product_display_name(product_id)

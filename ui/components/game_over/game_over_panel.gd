@@ -4,6 +4,7 @@ class_name GameOverPanel
 extends Control
 
 const GameOverWinnerRulesClass = preload("res://core/rules/game_over_winner_rules.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 signal return_to_menu_requested()
 signal play_again_requested()
@@ -23,6 +24,11 @@ func _ready() -> void:
 		return_btn.pressed.connect(_on_return_pressed)
 	if play_again_btn != null:
 		play_again_btn.pressed.connect(_on_play_again_pressed)
+
+	# 应用 Diner Poster 风格
+	UiStylesClass.apply_dialog_surface($CenterContainer/Panel)
+	UiStylesClass.apply_button_primary(play_again_btn)
+	UiStylesClass.apply_button_secondary(return_btn)
 
 	# 初始隐藏
 	visible = false
@@ -99,7 +105,7 @@ func _rebuild_rankings() -> void:
 	rank_header.text = "排名"
 	rank_header.custom_minimum_size = Vector2(60, 0)
 	rank_header.add_theme_font_size_override("font_size", 14)
-	rank_header.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+	rank_header.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 	header.add_child(rank_header)
 
 	var player_header := Label.new()
@@ -107,7 +113,7 @@ func _rebuild_rankings() -> void:
 	player_header.custom_minimum_size = Vector2(100, 0)
 	player_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	player_header.add_theme_font_size_override("font_size", 14)
-	player_header.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+	player_header.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 	header.add_child(player_header)
 
 	var cash_header := Label.new()
@@ -115,7 +121,7 @@ func _rebuild_rankings() -> void:
 	cash_header.custom_minimum_size = Vector2(100, 0)
 	cash_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	cash_header.add_theme_font_size_override("font_size", 14)
-	cash_header.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+	cash_header.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 	header.add_child(cash_header)
 
 	# 添加分隔线
@@ -144,7 +150,7 @@ func _rebuild_stats() -> void:
 	var stats_title := Label.new()
 	stats_title.text = "游戏统计"
 	stats_title.add_theme_font_size_override("font_size", 16)
-	stats_title.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
+	stats_title.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
 	stats_container.add_child(stats_title)
 
 	var sep := HSeparator.new()
@@ -172,13 +178,13 @@ func _create_stat_row(label_text: String, value_text: String) -> HBoxContainer:
 	label.text = label_text
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.add_theme_font_size_override("font_size", 14)
-	label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+	label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 	row.add_child(label)
 
 	var value := Label.new()
 	value.text = value_text
 	value.add_theme_font_size_override("font_size", 14)
-	value.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 1))
+	value.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
 	row.add_child(value)
 
 	return row
@@ -225,11 +231,11 @@ class RankingItem extends PanelContainer:
 
 		var style := StyleBoxFlat.new()
 		if is_winner:
-			style.bg_color = Color(0.25, 0.22, 0.15, 0.9)
+			style.bg_color = Color(0.95, 0.90, 0.78, 0.95)
 			style.border_color = Color(1, 0.84, 0, 0.5)
 			style.set_border_width_all(2)
 		else:
-			style.bg_color = Color(0.15, 0.17, 0.2, 0.8)
+			style.bg_color = Color(0.92, 0.88, 0.78, 0.9)
 		style.set_corner_radius_all(6)
 		add_theme_stylebox_override("panel", style)
 
@@ -265,7 +271,7 @@ class RankingItem extends PanelContainer:
 			_crown_label = Label.new()
 			_crown_label.text = "Winner"
 			_crown_label.add_theme_font_size_override("font_size", 14)
-			_crown_label.add_theme_color_override("font_color", Color(1, 0.84, 0, 1))
+			_crown_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 1))
 			hbox.add_child(_crown_label)
 
 		# 现金
@@ -273,6 +279,6 @@ class RankingItem extends PanelContainer:
 		_cash_label.custom_minimum_size = Vector2(100, 0)
 		_cash_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		_cash_label.add_theme_font_size_override("font_size", 18)
-		_cash_label.add_theme_color_override("font_color", Color(0.6, 0.9, 0.6, 1))
+		_cash_label.add_theme_color_override("font_color", Color(0.28, 0.55, 0.22, 1))
 		_cash_label.text = "$%d" % cash
 		hbox.add_child(_cash_label)

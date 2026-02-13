@@ -460,7 +460,7 @@ func _ensure_toast_panel() -> void:
 	_apply_toast_panel_layout()
 
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.12, 0.14, 0.16, 0.92)
+	style.bg_color = Color(0.97, 0.94, 0.86, 0.95)
 	style.border_color = Color(0.4, 0.7, 0.9, 0.6)
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(8)
@@ -479,7 +479,7 @@ func _ensure_toast_panel() -> void:
 	_toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_toast_label.add_theme_font_size_override("font_size", 14)
-	_toast_label.add_theme_color_override("font_color", Color(0.92, 0.94, 0.98, 1))
+	_toast_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
 	_toast_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(_toast_label)
 

@@ -30,6 +30,7 @@ const MarketingBoardButtonClass = preload("res://ui/components/marketing_panel/m
 const MarketingTypeButtonClass = preload("res://ui/components/marketing_panel/marketing_type_button.gd")
 const MarketingPanelIconCacheClass = preload("res://ui/components/marketing_panel/marketing_panel_icon_cache.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 # 营销面板内的产品图标目标尺寸（方形，居中）。
 const PRODUCT_ICON_SIZE := Vector2i(32, 32)
@@ -92,6 +93,8 @@ func _get_cancel_button() -> Button:
 	return cancel_btn
 
 func _on_panel_ready() -> void:
+	UiStylesClass.apply_button_primary(confirm_btn)
+	UiStylesClass.apply_button_secondary(cancel_btn)
 	if marketer_option != null:
 		if marketer_option.has_signal("employee_selected"):
 			marketer_option.employee_selected.connect(_on_marketer_selected)
@@ -701,10 +704,10 @@ func _update_target_display() -> void:
 
 	if _selected_type.is_empty():
 		target_label.text = "请先选择营销类型"
-		target_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1))
+		target_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 	elif _selected_target == Vector2i(-1, -1):
 		target_label.text = "请在地图上选择目标位置"
-		target_label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.4, 1))
+		target_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 0.8))
 	else:
 		var axis_text := ""
 		if _selected_type == "airplane":
@@ -715,7 +718,7 @@ func _update_target_display() -> void:
 			else:
 				axis_text = "（未选择方向）"
 		target_label.text = "目标位置: (%d, %d)%s" % [_selected_target.x, _selected_target.y, axis_text]
-		target_label.add_theme_color_override("font_color", Color(0.6, 0.9, 0.6, 1))
+		target_label.add_theme_color_override("font_color", Color(0.28, 0.55, 0.22, 1))
 
 	if range_info_label != null:
 		if _selected_type.is_empty():

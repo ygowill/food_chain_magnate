@@ -9,6 +9,7 @@ signal cancelled()
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 @onready var counter_label: Label = $MarginContainer/VBoxContainer/CounterRow/CounterLabel
 @onready var items_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ItemsContainer
@@ -37,6 +38,8 @@ func _on_relayout() -> void:
 		items_container.queue_sort()
 
 func _on_panel_ready() -> void:
+	UiStylesClass.apply_button_primary(confirm_btn)
+	UiStylesClass.apply_button_secondary(cancel_btn)
 	if items_container != null and is_instance_valid(items_container):
 		if items_container.has_signal("employee_selected"):
 			items_container.employee_selected.connect(_on_card_selected)

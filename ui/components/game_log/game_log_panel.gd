@@ -23,6 +23,7 @@ signal replay_toggle_changed(active: bool)
 @onready var entry_count_label: Label = $MarginContainer/VBoxContainer/BottomRow/EntryCountLabel
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const GameLogEntryUtilsClass = preload("res://ui/components/game_log/game_log_entry_utils.gd")
 const GameLogDetailsWindowControllerClass = preload("res://ui/components/game_log/game_log_details_window_controller.gd")
 const GameLogUnifiedTimelineBuilderClass = preload("res://ui/components/game_log/game_log_unified_timeline_builder.gd")
@@ -108,6 +109,10 @@ func _ready() -> void:
 	if fold_details_check != null:
 		fold_details_check.toggled.connect(_on_fold_details_toggled)
 		fold_details_check.button_pressed = _fold_details_enabled
+
+	UiStylesClass.apply_button_secondary(close_btn)
+	UiStylesClass.apply_button_secondary(expand_btn)
+	UiStylesClass.apply_button_secondary(replay_toggle_button)
 
 func add_log(log_type: LogType, message: String, details: Dictionary = {}) -> int:
 	var entry_id := _entry_id_counter

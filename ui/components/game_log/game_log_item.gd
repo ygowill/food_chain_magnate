@@ -17,11 +17,11 @@ var _timeline_is_cursor: bool = false
 const EmployeeLinksClass = preload("res://ui/components/game_log/game_log_employee_preview_links.gd")
 
 const LOG_TYPE_COLORS: Dictionary = {
-	0: Color(0.6, 0.6, 0.6, 1),  # SYSTEM
-	1: Color(0.5, 0.7, 0.9, 1),  # PHASE
-	2: Color(0.9, 0.9, 0.9, 1),  # PLAYER
-	3: Color(0.9, 0.7, 0.4, 1),  # GAME_EVENT
-	4: Color(0.5, 0.8, 0.5, 1),  # DEBUG
+	0: Color(0.5, 0.45, 0.35, 1),  # SYSTEM
+	1: Color(0.2, 0.4, 0.6, 1),  # PHASE
+	2: Color(0.17, 0.13, 0.09, 1),  # PLAYER
+	3: Color(0.6, 0.4, 0.15, 1),  # GAME_EVENT
+	4: Color(0.28, 0.55, 0.22, 1),  # DEBUG
 }
 
 const LOG_TYPE_NAMES: Dictionary = {
@@ -44,7 +44,7 @@ func _build_ui() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.12, 0.12, 0.14, 0.6)
+	style.bg_color = Color(0.95, 0.91, 0.82, 0.6)
 	style.set_corner_radius_all(2)
 	add_theme_stylebox_override("panel", style)
 	_panel_style = style
@@ -58,7 +58,7 @@ func _build_ui() -> void:
 	_time_label = Label.new()
 	_time_label.custom_minimum_size = Vector2(50, 0)
 	_time_label.add_theme_font_size_override("font_size", maxi(8, int(round(10.0 * scale))))
-	_time_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1))
+	_time_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 	hbox.add_child(_time_label)
 
 	# 类型
@@ -132,7 +132,7 @@ func _get_entry_command_index() -> int:
 
 func _apply_timeline_visuals() -> void:
 	if _panel_style != null:
-		_panel_style.bg_color = Color(0.20, 0.20, 0.28, 0.85) if _timeline_is_cursor else Color(0.12, 0.12, 0.14, 0.6)
+		_panel_style.bg_color = Color(0.88, 0.82, 0.68, 0.85) if _timeline_is_cursor else Color(0.95, 0.91, 0.82, 0.6)
 
 	if _timeline_is_cursor:
 		modulate = Color(1, 1, 1, 1)
