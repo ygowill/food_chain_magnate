@@ -684,9 +684,26 @@ func _center_popup(panel: Control) -> void:
 func _center_popup_in_viewport(panel: Control) -> void:
 	if panel == null or _scene == null:
 		return
-	var viewport_size: Vector2 = _scene.get_viewport_rect().size
+	var safe_rect := _get_map_area_rect_in_scene()
 	var panel_size := _get_panel_size(panel)
-	panel.position = (viewport_size - panel_size) / 2.0
+
+	var x := safe_rect.position.x + (safe_rect.size.x - panel_size.x) / 2.0
+	var y := safe_rect.position.y + (safe_rect.size.y - panel_size.y) / 2.0
+
+	var margin := 8.0
+	var min_x := safe_rect.position.x + margin
+	var max_x := safe_rect.position.x + safe_rect.size.x - panel_size.x - margin
+	if max_x < min_x:
+		max_x = min_x
+	var min_y := safe_rect.position.y + margin
+	var max_y := safe_rect.position.y + safe_rect.size.y - panel_size.y - margin
+	if max_y < min_y:
+		max_y = min_y
+
+	panel.position = Vector2(
+		clampf(x, min_x, max_x),
+		clampf(y, min_y, max_y)
+	)
 
 func _dock_popup_right(panel: Control) -> void:
 	if panel == null or _scene == null:
@@ -724,6 +741,23 @@ func _get_panel_size(panel: Control) -> Vector2:
 	if s == Vector2.ZERO:
 		s = Vector2(420, 260)
 	return s
+
+func _get_map_area_rect_in_scene() -> Rect2:
+	if _scene == null:
+		return Rect2(Vector2.ZERO, Vector2.ZERO)
+
+	var map_area = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit/GameArea")
+	if map_area is Control:
+		var c: Control = map_area
+		var gr := c.get_global_rect()
+		var scene_global := Vector2.ZERO
+		if _scene is Control:
+			scene_global = (_scene as Control).global_position
+		var rect := Rect2(gr.position - scene_global, gr.size)
+		if rect.size.x > 1.0 and rect.size.y > 1.0:
+			return rect
+
+	return Rect2(Vector2.ZERO, _scene.get_viewport_rect().size)
 
 func _get_popup_safe_rect() -> Rect2:
 	if _scene == null:

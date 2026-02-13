@@ -130,16 +130,28 @@ func get_modal_cover_rect() -> Rect2:
 	if _scene == null:
 		return Rect2(Vector2.ZERO, Vector2.ZERO)
 
-	var center_split = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit")
-	if center_split is Control:
-		var c: Control = center_split
-		var gr := c.get_global_rect()
-		var scene_global := Vector2.ZERO
-		if _scene is Control:
-			scene_global = (_scene as Control).global_position
-		return Rect2(gr.position - scene_global, gr.size)
+	var map_rect := _get_scene_rect_from_path("UIRoot/MainContent/CenterSplit/GameArea")
+	if map_rect.size.x > 1.0 and map_rect.size.y > 1.0:
+		return map_rect
+
+	var center_split_rect := _get_scene_rect_from_path("UIRoot/MainContent/CenterSplit")
+	if center_split_rect.size.x > 1.0 and center_split_rect.size.y > 1.0:
+		return center_split_rect
 
 	return Rect2(Vector2.ZERO, _scene.get_viewport_rect().size)
+
+func _get_scene_rect_from_path(node_path: String) -> Rect2:
+	if _scene == null:
+		return Rect2(Vector2.ZERO, Vector2.ZERO)
+	var n = _scene.get_node_or_null(node_path)
+	if not (n is Control):
+		return Rect2(Vector2.ZERO, Vector2.ZERO)
+	var c: Control = n
+	var gr := c.get_global_rect()
+	var scene_global := Vector2.ZERO
+	if _scene is Control:
+		scene_global = (_scene as Control).global_position
+	return Rect2(gr.position - scene_global, gr.size)
 
 func _initialize_modal(modal_ref, scene: PackedScene, signal_map: Dictionary):
 	if _scene == null:
@@ -368,15 +380,11 @@ func _deferred_open_reserve_card_modal() -> void:
 
 		var covered := get_modal_cover_rect()
 
-		# UI 布局刚完成前的一两帧，CenterSplit 的 rect 可能异常偏小（但非 0），导致遮罩落在左上角；
-		# 这里最多等待几帧，直到覆盖区域尺寸接近 viewport（再打开）。
-		var viewport_size = _scene.get_viewport_rect().size
-		var should_retry := false
-		if viewport_size.x > 1.0 and viewport_size.y > 1.0:
-			if covered.size.x < viewport_size.x * 0.4 or covered.size.y < viewport_size.y * 0.4:
-				should_retry = true
-		else:
-			should_retry = covered.size.x <= 1.0 or covered.size.y <= 1.0
+		# UI 布局刚完成前的一两帧，覆盖区域可能异常偏小（但非 0），导致遮罩落在左上角；
+		# 这里最多等待几帧，直到覆盖区域达到可用尺寸后再打开。
+		var should_retry := covered.size.x <= 1.0 or covered.size.y <= 1.0
+		if not should_retry and (covered.size.x < 160.0 or covered.size.y < 120.0):
+			should_retry = true
 
 		if should_retry and _pending_reserve_card_open_attempts < 8:
 			_pending_reserve_card_open_attempts += 1

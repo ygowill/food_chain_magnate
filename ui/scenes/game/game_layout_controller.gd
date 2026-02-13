@@ -4,6 +4,10 @@ class_name GameLayoutController
 extends RefCounted
 
 const LEFT_AREA_MIN_WIDTH := 200
+const PLAYER_TAB_MIN_SIZE := 52
+const PLAYER_TAB_SEPARATION := 8
+const PLAYER_TAB_PANEL_H_PADDING := 16
+const PLAYER_TAB_PANEL_EXTRA_PADDING := 8
 
 var _scene = null
 
@@ -280,10 +284,14 @@ func apply_responsive_layout() -> void:
 			font_size = 18
 			separation = 20
 
+	var panel_tabs_min_width := _estimate_player_tabs_min_panel_width(_get_layout_player_count())
+	right_width = maxi(int(right_width), panel_tabs_min_width)
+
 	if _left_area_user_resized:
 		left_width = maxi(int(_main_content_default_split_offset), LEFT_AREA_MIN_WIDTH)
 	else:
 		left_width = maxi(int(left_width), LEFT_AREA_MIN_WIDTH)
+		left_width = maxi(int(left_width), panel_tabs_min_width)
 
 	if is_instance_valid(_left_area):
 		_left_area.custom_minimum_size.x = LEFT_AREA_MIN_WIDTH
@@ -330,3 +338,22 @@ func apply_responsive_layout() -> void:
 		_bank_label.add_theme_font_size_override("font_size", scaled_font_size)
 	if is_instance_valid(_current_player_label):
 		_current_player_label.add_theme_font_size_override("font_size", scaled_font_size)
+
+func _get_layout_player_count() -> int:
+	var count := 0
+	if _scene != null and is_instance_valid(_scene):
+		var engine = _scene.game_engine if _scene != null else null
+		if engine != null and engine.has_method("get_state"):
+			var state: GameState = engine.get_state()
+			if state != null and state.players is Array:
+				count = state.players.size()
+	if count <= 0 and Globals != null:
+		count = int(Globals.player_count)
+	return maxi(0, count)
+
+func _estimate_player_tabs_min_panel_width(player_count: int) -> int:
+	if player_count <= 0:
+		return 0
+	var tabs_width := int(player_count) * PLAYER_TAB_MIN_SIZE
+	tabs_width += maxi(0, int(player_count) - 1) * PLAYER_TAB_SEPARATION
+	return tabs_width + PLAYER_TAB_PANEL_H_PADDING + PLAYER_TAB_PANEL_EXTRA_PADDING

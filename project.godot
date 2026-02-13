@@ -34,6 +34,12 @@ window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[fcm]
+
+action_setup_provider_path="res://gameplay/action_setup.gd"
+command_runner_event_build_provider_path="res://gameplay/replay/command_runner_event_build.gd"
+restaurant_logo_assignment_provider_path="res://gameplay/setup/restaurant_logo_assignment.gd"
+
 [gui]
 
 theme/custom_font="res://assets/fonts/ui_font_with_emoji.tres"
@@ -41,9 +47,3 @@ theme/custom_font="res://assets/fonts/ui_font_with_emoji.tres"
 [internationalization]
 
 locale/fallback="zh"
-
-[fcm]
-
-action_setup_provider_path="res://gameplay/action_setup.gd"
-command_runner_event_build_provider_path="res://gameplay/replay/command_runner_event_build.gd"
-restaurant_logo_assignment_provider_path="res://gameplay/setup/restaurant_logo_assignment.gd"

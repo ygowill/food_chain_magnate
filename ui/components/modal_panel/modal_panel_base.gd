@@ -1,5 +1,5 @@
 # 遮罩面板基类
-# - 覆盖指定区域（通常为地图+右侧操作区），不遮挡左侧信息区
+# - 覆盖指定区域（通常为中央地图区）
 # - ESC 取消；Space 按住窥视地图（隐藏面板并降低遮罩）
 class_name ModalPanelBase
 extends Control
@@ -58,8 +58,10 @@ func set_confirm_enabled(enabled: bool) -> void:
 
 func open(covered_rect: Rect2) -> void:
 	# 兼容：首次进入场景时部分 UI 节点尺寸尚未布局完成，可能传入 size=0 的 rect；
-	# 此时使用 viewport 尺寸兜底，避免遮罩显示在左上角且无法覆盖。
+	# 优先尝试从父场景解析中央地图区域，再退回 viewport 尺寸兜底。
 	var rect := covered_rect
+	if rect.size.x <= 1.0 or rect.size.y <= 1.0:
+		rect = _resolve_fallback_cover_rect_from_parent()
 	if rect.size.x <= 1.0 or rect.size.y <= 1.0:
 		rect = Rect2(Vector2.ZERO, get_viewport_rect().size)
 
@@ -70,6 +72,29 @@ func open(covered_rect: Rect2) -> void:
 	# 首次打开时尽量立即居中（避免“第一帧在左上角”），再用 deferred 做二次校正（确保布局完成）。
 	_center_panel()
 	call_deferred("_center_panel")
+
+func _resolve_fallback_cover_rect_from_parent() -> Rect2:
+	var parent_node := get_parent()
+	if parent_node == null or not is_instance_valid(parent_node):
+		return Rect2(Vector2.ZERO, Vector2.ZERO)
+
+	for path in [
+		"UIRoot/MainContent/CenterSplit/GameArea",
+		"UIRoot/MainContent/CenterSplit",
+	]:
+		var n = parent_node.get_node_or_null(path)
+		if not (n is Control):
+			continue
+		var c: Control = n
+		var gr := c.get_global_rect()
+		var parent_global := Vector2.ZERO
+		if parent_node is Control:
+			parent_global = (parent_node as Control).global_position
+		var rect := Rect2(gr.position - parent_global, gr.size)
+		if rect.size.x > 1.0 and rect.size.y > 1.0:
+			return rect
+
+	return Rect2(Vector2.ZERO, Vector2.ZERO)
 
 func close() -> void:
 	_set_peek(false)
