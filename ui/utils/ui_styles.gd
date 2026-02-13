@@ -175,7 +175,28 @@ static func apply_option_button_field(option: OptionButton) -> void:
 	option.add_theme_color_override("font_color", COLOR_TEXT_PRIMARY)
 	option.add_theme_color_override("font_hover_color", COLOR_TEXT_PRIMARY)
 	option.add_theme_color_override("font_pressed_color", COLOR_TEXT_PRIMARY)
+	option.add_theme_color_override("font_focus_color", COLOR_TEXT_PRIMARY)
 	option.add_theme_color_override("font_disabled_color", Color(COLOR_TEXT_MUTED.r, COLOR_TEXT_MUTED.g, COLOR_TEXT_MUTED.b, 0.72))
+	# PopupMenu 样式
+	var popup := option.get_popup()
+	if popup != null:
+		var popup_panel := _make_field_style(COLOR_FIELD_BG, COLOR_FIELD_BORDER, 1)
+		popup_panel.content_margin_left = 4
+		popup_panel.content_margin_top = 4
+		popup_panel.content_margin_right = 4
+		popup_panel.content_margin_bottom = 4
+		popup.add_theme_stylebox_override("panel", popup_panel)
+		var popup_hover := StyleBoxFlat.new()
+		popup_hover.bg_color = Color(0.73, 0.23, 0.18, 0.15)
+		popup_hover.set_border_width_all(0)
+		popup_hover.content_margin_left = 4
+		popup_hover.content_margin_top = 2
+		popup_hover.content_margin_right = 4
+		popup_hover.content_margin_bottom = 2
+		popup.add_theme_stylebox_override("hover", popup_hover)
+		popup.add_theme_color_override("font_color", COLOR_TEXT_PRIMARY)
+		popup.add_theme_color_override("font_hover_color", COLOR_TEXT_PRIMARY)
+		popup.add_theme_color_override("font_disabled_color", Color(COLOR_TEXT_MUTED.r, COLOR_TEXT_MUTED.g, COLOR_TEXT_MUTED.b, 0.72))
 
 static func apply_spin_box_field(spin: SpinBox) -> void:
 	if spin == null:
@@ -228,6 +249,57 @@ static func _load_first_valid_texture(paths: PackedStringArray) -> Texture2D:
 		if tex is Texture2D:
 			return tex
 	return null
+
+static func apply_nav_button(button: Button, selected: bool) -> void:
+	if button == null:
+		return
+	if selected:
+		var style := StyleBoxFlat.new()
+		style.bg_color = COLOR_FIELD_BG
+		style.border_color = Color(0.73, 0.23, 0.18, 0.85)
+		style.set_border_width_all(0)
+		style.border_width_left = 3
+		style.corner_radius_top_left = 2
+		style.corner_radius_bottom_left = 2
+		style.corner_radius_top_right = 2
+		style.corner_radius_bottom_right = 2
+		style.content_margin_left = 10
+		style.content_margin_top = 6
+		style.content_margin_right = 8
+		style.content_margin_bottom = 6
+		button.add_theme_stylebox_override("normal", style)
+		button.add_theme_stylebox_override("hover", style)
+		button.add_theme_stylebox_override("pressed", style)
+		button.add_theme_color_override("font_color", COLOR_TEXT_PRIMARY)
+		button.add_theme_color_override("font_hover_color", COLOR_TEXT_PRIMARY)
+		button.add_theme_color_override("font_pressed_color", COLOR_TEXT_PRIMARY)
+		button.add_theme_color_override("font_focus_color", COLOR_TEXT_PRIMARY)
+	else:
+		var normal := StyleBoxFlat.new()
+		normal.bg_color = Color(0, 0, 0, 0)
+		normal.set_border_width_all(0)
+		normal.content_margin_left = 13
+		normal.content_margin_top = 6
+		normal.content_margin_right = 8
+		normal.content_margin_bottom = 6
+		var hover := StyleBoxFlat.new()
+		hover.bg_color = Color(COLOR_FIELD_BG.r, COLOR_FIELD_BG.g, COLOR_FIELD_BG.b, 0.5)
+		hover.set_border_width_all(0)
+		hover.corner_radius_top_left = 2
+		hover.corner_radius_bottom_left = 2
+		hover.corner_radius_top_right = 2
+		hover.corner_radius_bottom_right = 2
+		hover.content_margin_left = 13
+		hover.content_margin_top = 6
+		hover.content_margin_right = 8
+		hover.content_margin_bottom = 6
+		button.add_theme_stylebox_override("normal", normal)
+		button.add_theme_stylebox_override("hover", hover)
+		button.add_theme_stylebox_override("pressed", normal)
+		button.add_theme_color_override("font_color", COLOR_TEXT_MUTED)
+		button.add_theme_color_override("font_hover_color", COLOR_TEXT_PRIMARY)
+		button.add_theme_color_override("font_pressed_color", COLOR_TEXT_MUTED)
+		button.add_theme_color_override("font_focus_color", COLOR_TEXT_MUTED)
 
 static func _make_field_style(bg_color: Color, border_color: Color, border_width: int) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()

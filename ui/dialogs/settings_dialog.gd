@@ -10,35 +10,53 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 @onready var background_panel: Panel = $BackgroundPanel
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
-@onready var tab_container: TabContainer = $MarginContainer/VBoxContainer/TabContainer
+@onready var page_panel: PanelContainer = $MarginContainer/VBoxContainer/ContentHBox/PagePanel
 @onready var close_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/CloseButton
 @onready var apply_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/ApplyButton
 @onready var reset_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/ResetButton
 
+# 导航按钮
+@onready var audio_nav_btn: Button = %AudioNavBtn
+@onready var display_nav_btn: Button = %DisplayNavBtn
+@onready var game_nav_btn: Button = %GameNavBtn
+@onready var debug_nav_btn: Button = %DebugNavBtn
+
+# 页面
+@onready var audio_page: VBoxContainer = %AudioPage
+@onready var display_page: VBoxContainer = %DisplayPage
+@onready var game_page: VBoxContainer = %GamePage
+@onready var debug_page: VBoxContainer = %DebugPage
+
 # 音频选项
-@onready var master_volume: HSlider = $MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer/MasterRow/MasterSlider
-@onready var music_volume: HSlider = $MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer/MusicRow/MusicSlider
-@onready var sfx_volume: HSlider = $MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer/SFXRow/SFXSlider
-@onready var mute_check: CheckBox = $MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer/MuteCheck
+@onready var master_volume: HSlider = %MasterSlider
+@onready var music_volume: HSlider = %MusicSlider
+@onready var sfx_volume: HSlider = %SFXSlider
+@onready var mute_check: CheckBox = %MuteCheck
+@onready var master_value_label: Label = %MasterValue
+@onready var music_value_label: Label = %MusicValue
+@onready var sfx_value_label: Label = %SFXValue
 
 # 显示选项
-@onready var fullscreen_check: CheckBox = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/FullscreenCheck
-@onready var vsync_check: CheckBox = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/VsyncCheck
-@onready var resolution_option: OptionButton = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/ResolutionRow/ResolutionOption
-@onready var ui_scale_slider: HSlider = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/UIScaleRow/UIScaleSlider
-@onready var font_scale_slider: HSlider = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/FontScaleRow/FontScaleSlider
-@onready var log_font_scale_slider: HSlider = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/LogFontScaleRow/LogFontScaleSlider
-@onready var show_tile_ids_check: CheckBox = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/ShowTileIdsCheck
-@onready var show_cell_hover_tooltip_check: CheckBox = $MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/ShowCellHoverTooltipCheck
+@onready var fullscreen_check: CheckBox = %FullscreenCheck
+@onready var vsync_check: CheckBox = %VsyncCheck
+@onready var resolution_option: OptionButton = %ResolutionOption
+@onready var ui_scale_slider: HSlider = %UIScaleSlider
+@onready var font_scale_slider: HSlider = %FontScaleSlider
+@onready var log_font_scale_slider: HSlider = %LogFontScaleSlider
+@onready var ui_scale_value_label: Label = %UIScaleValue
+@onready var font_scale_value_label: Label = %FontScaleValue
+@onready var log_font_scale_value_label: Label = %LogFontScaleValue
+@onready var show_tile_ids_check: CheckBox = %ShowTileIdsCheck
+@onready var show_cell_hover_tooltip_check: CheckBox = %ShowCellHoverTooltipCheck
 
 # 游戏选项
-@onready var auto_save_check: CheckBox = $MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer/AutoSaveCheck
-@onready var confirm_actions_check: CheckBox = $MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer/ConfirmActionsCheck
-@onready var show_hints_check: CheckBox = $MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer/ShowHintsCheck
-@onready var animation_speed_slider: HSlider = $MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer/AnimSpeedRow/AnimSpeedSlider
+@onready var auto_save_check: CheckBox = %AutoSaveCheck
+@onready var confirm_actions_check: CheckBox = %ConfirmActionsCheck
+@onready var show_hints_check: CheckBox = %ShowHintsCheck
+@onready var animation_speed_slider: HSlider = %AnimSpeedSlider
+@onready var anim_speed_value_label: Label = %AnimSpeedValue
 
 const RESOLUTIONS: Array[Vector2i] = [
-	# 16:9 / 16:10 / 3:2 主流桌面与笔记本分辨率
 	Vector2i(1280, 720),
 	Vector2i(1280, 800),
 	Vector2i(1366, 768),
@@ -79,13 +97,24 @@ var _default_settings: Dictionary = {
 	"animation_speed": 1.0,
 }
 
+var _nav_buttons: Array[Button] = []
+var _pages: Array[Control] = []
+var _current_page_index: int = 0
+
 func _ready() -> void:
 	super._ready()
 	UiStylesClass.apply_dialog_surface(background_panel)
 	UiStylesClass.apply_button_primary(apply_btn)
 	UiStylesClass.apply_button_secondary(reset_btn)
 	UiStylesClass.apply_button_secondary(close_btn)
+	UiStylesClass.apply_panel_poster_alt(page_panel)
+
+	_nav_buttons = [audio_nav_btn, display_nav_btn, game_nav_btn, debug_nav_btn]
+	_pages = [audio_page, display_page, game_page, debug_page]
+
 	_apply_visual_styles()
+	_connect_nav_buttons()
+	_connect_slider_value_labels()
 
 	if close_btn != null:
 		close_btn.pressed.connect(_on_close_pressed)
@@ -96,20 +125,26 @@ func _ready() -> void:
 
 	_setup_resolution_options()
 	_load_settings()
+	_switch_page(0)
 
 func _apply_visual_styles() -> void:
 	UiStylesClass.apply_label_dark(title_label)
-	UiStylesClass.apply_tab_container_surface(tab_container)
-	_apply_label_style_recursive(tab_container)
+	_apply_section_label_styles()
 	_apply_form_control_styles()
 
-func _apply_label_style_recursive(root: Node) -> void:
-	if root == null:
-		return
-	if root is Label:
-		UiStylesClass.apply_label_dark(root)
-	for child in root.get_children():
-		_apply_label_style_recursive(child)
+func _apply_section_label_styles() -> void:
+	for page in _pages:
+		if page == null:
+			continue
+		for child in page.get_children():
+			if child is Label and child.name.ends_with("SectionLabel"):
+				UiStylesClass.apply_label_hint_dark(child)
+			elif child is Label:
+				UiStylesClass.apply_label_dark(child)
+			elif child is HBoxContainer:
+				for sub in child.get_children():
+					if sub is Label:
+						UiStylesClass.apply_label_dark(sub)
 
 func _apply_form_control_styles() -> void:
 	UiStylesClass.apply_check_box_field(mute_check)
@@ -122,14 +157,59 @@ func _apply_form_control_styles() -> void:
 	UiStylesClass.apply_check_box_field(show_hints_check)
 	UiStylesClass.apply_option_button_field(resolution_option)
 
+# ── 导航 ──────────────────────────────────────────────
+
+func _connect_nav_buttons() -> void:
+	for i in range(_nav_buttons.size()):
+		var btn := _nav_buttons[i]
+		if btn != null:
+			btn.pressed.connect(_on_nav_pressed.bind(i))
+
+func _on_nav_pressed(index: int) -> void:
+	_switch_page(index)
+
+func _switch_page(index: int) -> void:
+	_current_page_index = clampi(index, 0, _pages.size() - 1)
+	for i in range(_pages.size()):
+		if _pages[i] != null:
+			_pages[i].visible = (i == _current_page_index)
+	_update_nav_styles()
+
+func _update_nav_styles() -> void:
+	for i in range(_nav_buttons.size()):
+		var btn := _nav_buttons[i]
+		if btn == null:
+			continue
+		var selected := (i == _current_page_index)
+		UiStylesClass.apply_nav_button(btn, selected)
+
+# ── Slider 数值标签 ───────────────────────────────────
+
+func _connect_slider_value_labels() -> void:
+	_bind_slider_label(master_volume, master_value_label)
+	_bind_slider_label(music_volume, music_value_label)
+	_bind_slider_label(sfx_volume, sfx_value_label)
+	_bind_slider_label(ui_scale_slider, ui_scale_value_label)
+	_bind_slider_label(font_scale_slider, font_scale_value_label)
+	_bind_slider_label(log_font_scale_slider, log_font_scale_value_label)
+	_bind_slider_label(animation_speed_slider, anim_speed_value_label)
+
+func _bind_slider_label(slider: HSlider, label: Label) -> void:
+	if slider == null or label == null:
+		return
+	slider.value_changed.connect(func(val: float) -> void: label.text = "%d%%" % int(val))
+
+# ── 焦点 ─────────────────────────────────────────────
+
 func _grab_default_focus() -> void:
 	if close_btn != null:
 		close_btn.grab_focus()
 
+# ── 分辨率 ────────────────────────────────────────────
+
 func _setup_resolution_options() -> void:
 	if resolution_option == null:
 		return
-
 	resolution_option.clear()
 	for res in RESOLUTIONS:
 		resolution_option.add_item("%dx%d" % [res.x, res.y])
@@ -137,7 +217,6 @@ func _setup_resolution_options() -> void:
 func _rebuild_resolution_options(selected_res: Vector2i) -> void:
 	if resolution_option == null:
 		return
-
 	resolution_option.clear()
 	var found_index := -1
 	for i in range(RESOLUTIONS.size()):
@@ -145,17 +224,16 @@ func _rebuild_resolution_options(selected_res: Vector2i) -> void:
 		resolution_option.add_item("%dx%d" % [res.x, res.y])
 		if res == selected_res:
 			found_index = i
-
 	if found_index >= 0:
 		resolution_option.select(found_index)
 		return
-
 	if selected_res.x > 0 and selected_res.y > 0:
 		resolution_option.add_item("%dx%d（当前）" % [selected_res.x, selected_res.y])
 		resolution_option.select(resolution_option.item_count - 1)
 
+# ── 设置读写 ──────────────────────────────────────────
+
 func _load_settings() -> void:
-	# 尝试从配置文件加载
 	var config := ConfigFile.new()
 	var err := config.load("user://settings.cfg")
 
@@ -177,14 +255,12 @@ func _load_settings() -> void:
 	else:
 		_current_settings = _default_settings.duplicate()
 
-	# 音频设置：统一从 sound_settings.cfg 读取（若不存在则回退到 settings.cfg 或默认）
 	_load_audio_settings()
-
 	_update_ui_from_settings()
 
 func _save_settings() -> void:
 	var config := ConfigFile.new()
-	config.load("user://settings.cfg") # 保留其它系统写入的设置（例如玩家名称/模块选择）
+	config.load("user://settings.cfg")
 
 	config.set_value("display", "fullscreen", _current_settings.fullscreen)
 	config.set_value("display", "vsync", _current_settings.vsync)
@@ -202,6 +278,8 @@ func _save_settings() -> void:
 
 	config.save("user://settings.cfg")
 	_save_audio_settings()
+
+# ── UI ↔ 设置 ────────────────────────────────────────
 
 func _set_slider_percent(slider: HSlider, value_0_1: float) -> void:
 	if slider == null:
@@ -252,6 +330,22 @@ func _update_ui_from_settings() -> void:
 	if animation_speed_slider != null:
 		animation_speed_slider.value = float(_current_settings.get("animation_speed", _default_settings.animation_speed)) * 100
 
+	# 同步数值标签
+	_sync_all_value_labels()
+
+func _sync_all_value_labels() -> void:
+	_sync_value_label(master_volume, master_value_label)
+	_sync_value_label(music_volume, music_value_label)
+	_sync_value_label(sfx_volume, sfx_value_label)
+	_sync_value_label(ui_scale_slider, ui_scale_value_label)
+	_sync_value_label(font_scale_slider, font_scale_value_label)
+	_sync_value_label(log_font_scale_slider, log_font_scale_value_label)
+	_sync_value_label(animation_speed_slider, anim_speed_value_label)
+
+func _sync_value_label(slider: HSlider, label: Label) -> void:
+	if slider != null and label != null:
+		label.text = "%d%%" % int(slider.value)
+
 func _update_settings_from_ui() -> void:
 	# 音频
 	_current_settings["master_volume"] = _read_slider_percent(master_volume, float(_current_settings.get("master_volume", _default_settings.master_volume)))
@@ -282,20 +376,19 @@ func _update_settings_from_ui() -> void:
 	if animation_speed_slider != null:
 		_current_settings["animation_speed"] = float(animation_speed_slider.value) / 100.0
 
+# ── 应用设置 ──────────────────────────────────────────
+
 func _apply_settings() -> void:
-	# 应用全屏
 	if bool(_current_settings.fullscreen):
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	else:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 
-	# 应用垂直同步
 	if bool(_current_settings.vsync):
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
 	else:
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 
-	# 应用分辨率（仅窗口模式）
 	if not bool(_current_settings.fullscreen):
 		var res: Vector2i = _current_settings.resolution
 		DisplayServer.window_set_size(res)
@@ -334,13 +427,14 @@ func get_setting(key: String, default_value = null):
 func _apply_ui_scale() -> void:
 	if not _current_settings.has("ui_scale"):
 		return
-
 	var scale := clampf(float(_current_settings.ui_scale), 0.5, 2.0)
 	if get_tree() == null or get_tree().root == null:
 		return
 	if get_tree().root is Window:
 		var w: Window = get_tree().root
 		w.content_scale_factor = scale
+
+# ── 音频 ──────────────────────────────────────────────
 
 func _linear_to_db_safe(linear: float) -> float:
 	var v := clampf(linear, 0.0, 1.0)
@@ -349,7 +443,6 @@ func _linear_to_db_safe(linear: float) -> float:
 	return linear_to_db(v)
 
 func _load_audio_settings() -> void:
-	# 1) legacy: settings.cfg 的 audio（旧版本留下的字段）
 	if not _current_settings.has("master_volume"):
 		_current_settings.master_volume = _default_settings.master_volume
 	if not _current_settings.has("music_volume"):
@@ -366,7 +459,6 @@ func _load_audio_settings() -> void:
 		_current_settings.sfx_volume = legacy.get_value("audio", "sfx_volume", _current_settings.sfx_volume)
 		_current_settings.mute = legacy.get_value("audio", "mute", _current_settings.mute)
 
-	# 2) sound_settings.cfg：优先读取 mix（避免与 SoundManager/MusicManager 的 dB 存储冲突）
 	var sound_cfg := ConfigFile.new()
 	if sound_cfg.load("user://sound_settings.cfg") != OK:
 		return
@@ -378,7 +470,6 @@ func _load_audio_settings() -> void:
 		_current_settings.mute = sound_cfg.get_value("mix", "mute", _current_settings.mute)
 		return
 
-	# 兜底：从 dB 反推到线性（无法还原 master/music/sfx 的分解，仅用于迁移）
 	var sfx_db_val = sound_cfg.get_value("audio", "master_volume", null)
 	if sfx_db_val is int or sfx_db_val is float:
 		_current_settings.sfx_volume = clampf(db_to_linear(float(sfx_db_val)), 0.0, 1.0)
@@ -410,7 +501,6 @@ func _save_audio_settings() -> void:
 	cfg.set_value("mix", "sfx_volume", sfx)
 	cfg.set_value("mix", "mute", muted)
 
-	# 兼容：给现有音频系统写入 dB 字段
 	cfg.set_value("audio", "master_volume", sfx_db)
 	cfg.set_value("audio", "muted", muted)
 	cfg.set_value("music", "volume", music_db)
@@ -427,7 +517,6 @@ func _apply_audio_settings_runtime() -> void:
 	var music_db := _linear_to_db_safe(master * music)
 	var sfx_db := _linear_to_db_safe(master * sfx)
 
-	# 优先使用音频管理器（若未初始化则静默跳过）
 	var sm := SoundManager.get_instance()
 	if sm != null and is_instance_valid(sm):
 		sm.set_master_volume(sfx_db)
@@ -439,7 +528,6 @@ func _apply_audio_settings_runtime() -> void:
 		mm.set_muted(muted)
 
 func _sync_globals_runtime_settings() -> void:
-	# SettingsDialog 的设置项在运行时主要由 Globals 承载，供 Game/控制器读取。
 	if Globals == null:
 		return
 

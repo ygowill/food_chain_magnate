@@ -42,6 +42,7 @@ var _notes_label: Label = null
 var _action_buttons: Array = [] # BaseButton
 var _group_select_checkboxes: Dictionary = {} # group_id -> CheckBox
 var _group_module_ids: Dictionary = {} # group_id -> Array[String]
+var _group_count_labels: Dictionary = {} # group_id -> Label
 
 func _ready() -> void:
 	_ensure_base_ui()
@@ -175,8 +176,8 @@ func _ensure_base_ui() -> void:
 	_groups_container = GridContainer.new()
 	_groups_container.name = "Groups"
 	_groups_container.columns = 2
-	_groups_container.add_theme_constant_override("h_separation", 20)
-	_groups_container.add_theme_constant_override("v_separation", 20)
+	_groups_container.add_theme_constant_override("h_separation", 16)
+	_groups_container.add_theme_constant_override("v_separation", 14)
 	add_child(_groups_container)
 
 	_notes_label = Label.new()
@@ -241,6 +242,7 @@ func _build_modules_ui() -> void:
 	_module_checkboxes.clear()
 	_group_select_checkboxes.clear()
 	_group_module_ids.clear()
+	_group_count_labels.clear()
 	var kept: Array = []
 	for btn in _action_buttons:
 		if btn != null and is_instance_valid(btn) and btn.get_parent() == _header_row:
@@ -273,19 +275,19 @@ func _build_group_panel_style(bg: Color) -> StyleBoxFlat:
 func _build_module_group_box(group_id: String, title: String, module_ids: Array[String], bg_color: Color) -> Control:
 	var panel := PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.custom_minimum_size = Vector2(560, 0)
+	panel.custom_minimum_size = Vector2(480, 0)
 	panel.add_theme_stylebox_override("panel", _build_group_panel_style(bg_color))
 
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_bottom", 10)
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_bottom", 12)
 	panel.add_child(margin)
 
 	var box := VBoxContainer.new()
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	box.add_theme_constant_override("separation", 6)
+	box.add_theme_constant_override("separation", 8)
 	margin.add_child(box)
 
 	var header := HBoxContainer.new()
@@ -303,6 +305,14 @@ func _build_module_group_box(group_id: String, title: String, module_ids: Array[
 	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UiStylesClass.apply_label_dark(title_label)
 	header.add_child(title_label)
+
+	# 计数标签 (如 "2/4")
+	var count_label := Label.new()
+	count_label.text = "0/0"
+	count_label.add_theme_font_size_override("font_size", 13)
+	UiStylesClass.apply_label_hint_dark(count_label)
+	header.add_child(count_label)
+	_group_count_labels[group_id] = count_label
 
 	var mids_copy: Array[String] = module_ids.duplicate()
 	var select_all_check := CheckBox.new()
@@ -322,7 +332,7 @@ func _build_module_group_box(group_id: String, title: String, module_ids: Array[
 
 	var inner := VBoxContainer.new()
 	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	inner.add_theme_constant_override("separation", 4)
+	inner.add_theme_constant_override("separation", 6)
 	box.add_child(inner)
 
 	for mid in module_ids:
@@ -492,6 +502,10 @@ func _recompute_modules_and_apply_to_ui() -> void:
 		group_cb.button_pressed = total > 0 and selected == total
 		group_cb.disabled = (not _editable) or total <= 0
 		group_cb.tooltip_text = "选中全选本组，取消全不选"
+		# 更新计数标签
+		var count_lbl_val = _group_count_labels.get(gid, null)
+		if count_lbl_val is Label and is_instance_valid(count_lbl_val):
+			(count_lbl_val as Label).text = "%d/%d" % [selected, total]
 	_suppress_signals = false
 
 	_set_notes("\n".join(notes))

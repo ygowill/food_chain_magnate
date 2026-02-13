@@ -5,21 +5,32 @@ const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModuleSelectorClass = preload("res://ui/components/module_selector/module_selector.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
+const GameConfigDialogScene = preload("res://ui/dialogs/game_config_dialog.tscn")
 
 @onready var wall_background: ColorRect = $WallBackground
 @onready var vignette_overlay: ColorRect = $VignetteOverlay
 @onready var card: PanelContainer = $CenterContainer/ContentCenter/Card
 @onready var inner_border: PanelContainer = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder
-@onready var player_count_spinbox: SpinBox = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer/PlayerCountSpinBox
-@onready var seed_edit: LineEdit = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn/SeedContainer/SeedLineEdit
 @onready var root_vbox: VBoxContainer = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer
-@onready var spacer2: Control = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/Spacer2
 @onready var left_column: VBoxContainer = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn
 @onready var right_column: VBoxContainer = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/RightColumn
 @onready var back_button: Button = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/ButtonContainer/BackButton
+@onready var advanced_button: Button = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/ButtonContainer/AdvancedButton
 @onready var start_button: Button = $CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/ButtonContainer/StartButton
 
-var _players_section: VBoxContainer = null
+const PLAYER_COLORS: Array[Color] = [
+	Color(0.73, 0.23, 0.18),
+	Color(0.22, 0.45, 0.65),
+	Color(0.28, 0.55, 0.22),
+	Color(0.72, 0.58, 0.20),
+	Color(0.55, 0.30, 0.58),
+	Color(0.20, 0.55, 0.52),
+]
+
+var _selected_player_count: int = 2
+var _player_count_buttons: Array[Button] = []
+var _seed_edit: LineEdit = null
+
 var _players_container: VBoxContainer = null
 var _modules_section: VBoxContainer = null
 var _message_label: Label = null
@@ -30,8 +41,22 @@ var _player_logo_previews: Array[TextureRect] = []
 
 var _module_selector = null
 var _suppress_player_signals: bool = false
-
 var _logo_icons_small: Array[Texture2D] = []
+var _logo_piece_ids: Array[String] = []
+
+const LOGO_DISPLAY_NAMES: Dictionary = {
+	"restaurant_logo_fried_geese_donkey": "驴肉&烧鹅",
+	"restaurant_logo_gluttony_inc_burgers": "饕餮汉堡",
+	"restaurant_logo_golden_duck_diner": "金鸭小馆",
+	"restaurant_logo_santa_maria_pizza": "圣玛丽亚披萨",
+	"restaurant_logo_xango_blues_bar": "尚戈蓝调酒吧",
+	"restaurant_logo_sixth_chain": "好味来",
+}
+
+var _presets: Array = []
+var _preset_option: OptionButton = null
+var _suppress_preset_revert: bool = false
+var _game_config_dialog = null
 
 func _ready() -> void:
 	GameLog.info("GameSetup", "游戏设置界面已加载")
@@ -40,42 +65,212 @@ func _ready() -> void:
 	UiStylesClass.apply_dialog_surface(card)
 	UiStylesClass.apply_poster_inner_border(inner_border)
 	UiStylesClass.apply_button_secondary(back_button)
+	UiStylesClass.apply_button_secondary(advanced_button)
 	UiStylesClass.apply_button_primary(start_button)
-	UiStylesClass.apply_spin_box_field(player_count_spinbox)
-	UiStylesClass.apply_line_edit_field(seed_edit)
+	_update_advanced_button_label()
 
-	player_count_spinbox.value = Globals.player_count
-	if Globals.random_seed != 0:
-		seed_edit.text = str(Globals.random_seed)
+	_selected_player_count = Globals.player_count
 
-	if not player_count_spinbox.value_changed.is_connected(_on_player_count_changed):
-		player_count_spinbox.value_changed.connect(_on_player_count_changed)
+	_build_decorative_line()
+	_build_game_params_section()
+	_build_players_section()
+	_build_modules_section()
+	_build_message_label()
 
-	_ensure_sections()
-	_ensure_logo_icons_cache()
-	_ensure_module_selector()
 	_rebuild_player_rows()
 	_sync_globals_modules_to_module_selector()
 	_sync_player_count_module_constraints()
+
+# ── 装饰分隔线 ──────────────────────────────────────────
+
+func _build_decorative_line() -> void:
+	var title_node := root_vbox.get_node_or_null("Title")
+	if title_node == null:
+		return
+	var line := ColorRect.new()
+	line.name = "DecorativeLine"
+	line.custom_minimum_size = Vector2(320, 2)
+	line.color = Color(0.73, 0.23, 0.18, 0.5)
+	line.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	root_vbox.add_child(line)
+	root_vbox.move_child(line, title_node.get_index() + 1)
+
+# ── 区块面板构建器 ──────────────────────────────────────
+
+func _build_section_panel(bg_color: Color = Color(0.95, 0.91, 0.83, 0.55)) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var style := StyleBoxFlat.new()
+	style.bg_color = bg_color
+	style.border_color = Color(0.17, 0.13, 0.09, 0.15)
+	style.set_border_width_all(1)
+	style.corner_radius_top_left = 10
+	style.corner_radius_top_right = 10
+	style.corner_radius_bottom_right = 10
+	style.corner_radius_bottom_left = 10
+	style.content_margin_left = 16
+	style.content_margin_top = 14
+	style.content_margin_right = 16
+	style.content_margin_bottom = 14
+	panel.add_theme_stylebox_override("panel", style)
+	return panel
+
+# ── 游戏参数区块（玩家数量按钮组 + 种子） ──────────────
+
+func _build_game_params_section() -> void:
+	var panel := _build_section_panel()
+	left_column.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 14)
+	panel.add_child(vbox)
+
+	var header := Label.new()
+	header.text = "游戏参数"
+	header.add_theme_font_size_override("font_size", 16)
+	UiStylesClass.apply_label_dark(header)
+	vbox.add_child(header)
+
+	# 玩家数量标签
+	var count_label := Label.new()
+	count_label.text = "玩家数量"
+	UiStylesClass.apply_label_hint_dark(count_label)
+	vbox.add_child(count_label)
+
+	# 按钮组 [2] [3] [4] [5] [6]
+	var btn_row := HBoxContainer.new()
+	btn_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(btn_row)
+
+	_player_count_buttons.clear()
+	for i in range(2, 7):
+		var btn := Button.new()
+		btn.text = str(i)
+		btn.custom_minimum_size = Vector2(52, 40)
+		var count := i
+		btn.pressed.connect(func() -> void:
+			_on_player_count_button_pressed(count)
+		)
+		btn_row.add_child(btn)
+		_player_count_buttons.append(btn)
+	_update_player_count_button_styles()
+
+	# 随机种子
+	var seed_label := Label.new()
+	seed_label.text = "随机种子"
+	UiStylesClass.apply_label_hint_dark(seed_label)
+	vbox.add_child(seed_label)
+
+	_seed_edit = LineEdit.new()
+	_seed_edit.placeholder_text = "留空自动生成"
+	_seed_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_line_edit_field(_seed_edit)
+	vbox.add_child(_seed_edit)
+
+	if Globals.random_seed != 0:
+		_seed_edit.text = str(Globals.random_seed)
+
+func _on_player_count_button_pressed(count: int) -> void:
+	_selected_player_count = count
+	_update_player_count_button_styles()
+	_sync_player_count_module_constraints()
+	_rebuild_player_rows()
+
+func _update_player_count_button_styles() -> void:
+	for i in range(_player_count_buttons.size()):
+		var btn := _player_count_buttons[i]
+		var count := i + 2
+		if count == _selected_player_count:
+			UiStylesClass.apply_button_primary(btn)
+		else:
+			UiStylesClass.apply_button_secondary(btn)
+
+# ── 玩家配置区块 ────────────────────────────────────────
+
+func _build_players_section() -> void:
+	var panel := _build_section_panel()
+	left_column.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	panel.add_child(vbox)
+
+	var header := Label.new()
+	header.text = "玩家配置"
+	header.add_theme_font_size_override("font_size", 16)
+	UiStylesClass.apply_label_dark(header)
+	vbox.add_child(header)
+
+	_players_container = VBoxContainer.new()
+	_players_container.name = "PlayersContainer"
+	_players_container.add_theme_constant_override("separation", 6)
+	vbox.add_child(_players_container)
+
+# ── 模块选择区块 ────────────────────────────────────────
+
+func _build_modules_section() -> void:
+	_modules_section = VBoxContainer.new()
+	_modules_section.name = "ModulesSection"
+	_modules_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_modules_section.add_theme_constant_override("separation", 6)
+	right_column.add_child(_modules_section)
+
+	_load_presets()
+	if not _presets.is_empty():
+		_build_preset_row()
+
+	_ensure_module_selector()
+
+func _build_message_label() -> void:
+	_message_label = Label.new()
+	_message_label.name = "MessageLabel"
+	_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_message_label.visible = false
+	UiStylesClass.apply_label_error(_message_label)
+	var btn_container := root_vbox.get_node_or_null("ButtonContainer")
+	root_vbox.add_child(_message_label)
+	if btn_container != null:
+		root_vbox.move_child(_message_label, btn_container.get_index())
+
+# ── 导航与启动 ──────────────────────────────────────────
 
 func _on_back_pressed() -> void:
 	GameLog.info("GameSetup", "返回上一场景")
 	SceneManager.go_back()
 
+func _on_advanced_pressed() -> void:
+	if _game_config_dialog == null or not is_instance_valid(_game_config_dialog):
+		_game_config_dialog = GameConfigDialogScene.instantiate()
+		add_child(_game_config_dialog)
+		_game_config_dialog.config_confirmed.connect(_on_game_config_confirmed)
+	_game_config_dialog.load_overrides(Globals.game_config_overrides)
+	_game_config_dialog.open()
+
+func _on_game_config_confirmed(overrides: Dictionary) -> void:
+	Globals.game_config_overrides = overrides
+	_update_advanced_button_label()
+
+func _update_advanced_button_label() -> void:
+	if advanced_button == null or not is_instance_valid(advanced_button):
+		return
+	if Globals.game_config_overrides.is_empty():
+		advanced_button.text = "高级选项"
+	else:
+		advanced_button.text = "高级选项 ●"
+
 func _on_start_pressed() -> void:
 	_set_message("")
 
-	Globals.player_count = int(player_count_spinbox.value)
+	Globals.player_count = _selected_player_count
 
-	# 处理随机种子
-	if seed_edit.text.is_empty():
+	if _seed_edit == null or _seed_edit.text.is_empty():
 		Globals.generate_seed()
 		GameLog.info("GameSetup", "生成随机种子: %d" % Globals.random_seed)
 	else:
-		Globals.random_seed = seed_edit.text.to_int()
+		Globals.random_seed = _seed_edit.text.to_int()
 		GameLog.info("GameSetup", "使用指定种子: %d" % Globals.random_seed)
 
-	# 同步 UI 状态 -> Globals
 	if not _apply_module_selection_to_globals():
 		return
 
@@ -87,7 +282,6 @@ func _on_start_pressed() -> void:
 		Globals.random_seed
 	])
 
-	# 初始化新游戏（生成地图/模块装配）可能耗时：提前显示加载遮罩
 	if SceneManager != null and SceneManager.has_method("show_loading"):
 		SceneManager.show_loading("正在开始新游戏...")
 		await get_tree().process_frame
@@ -95,49 +289,7 @@ func _on_start_pressed() -> void:
 	Globals.set_current_game_engine(null)
 	SceneManager.goto_game()
 
-func _on_player_count_changed(_value: float) -> void:
-	_sync_player_count_module_constraints()
-	_rebuild_player_rows()
-
-func _ensure_sections() -> void:
-	if _players_section != null and is_instance_valid(_players_section):
-		return
-	if root_vbox == null or spacer2 == null:
-		return
-	if left_column == null or right_column == null:
-		return
-
-	_players_section = VBoxContainer.new()
-	_players_section.name = "PlayersSection"
-	_players_section.add_theme_constant_override("separation", 8)
-	left_column.add_child(_players_section)
-
-	var players_header := Label.new()
-	players_header.text = "玩家设置（与玩家数量联动）"
-	players_header.autowrap_mode = TextServer.AUTOWRAP_WORD
-	players_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	UiStylesClass.apply_label_dark(players_header)
-	_players_section.add_child(players_header)
-
-	_players_container = VBoxContainer.new()
-	_players_container.name = "PlayersContainer"
-	_players_container.add_theme_constant_override("separation", 6)
-	_players_section.add_child(_players_container)
-
-	_modules_section = VBoxContainer.new()
-	_modules_section.name = "ModulesSection"
-	_modules_section.add_theme_constant_override("separation", 6)
-	right_column.add_child(_modules_section)
-	_ensure_module_selector()
-
-	_message_label = Label.new()
-	_message_label.name = "MessageLabel"
-	_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_message_label.visible = false
-	UiStylesClass.apply_label_error(_message_label)
-	root_vbox.add_child(_message_label)
-	root_vbox.move_child(_message_label, spacer2.get_index())
+# ── 消息提示 ────────────────────────────────────────────
 
 func _set_message(text: String) -> void:
 	if _message_label == null or not is_instance_valid(_message_label):
@@ -145,6 +297,8 @@ func _set_message(text: String) -> void:
 	var s := str(text).strip_edges()
 	_message_label.text = s
 	_message_label.visible = not s.is_empty()
+
+# ── 模块选择器 ──────────────────────────────────────────
 
 func _ensure_module_selector() -> void:
 	if _modules_section == null or not is_instance_valid(_modules_section):
@@ -160,6 +314,11 @@ func _ensure_module_selector() -> void:
 	_module_selector.load_failed.connect(func(msg: String) -> void:
 		_set_message(msg)
 	)
+	_module_selector.selection_changed.connect(func(_modules: Array) -> void:
+		if _suppress_preset_revert:
+			return
+		_revert_preset_to_custom()
+	)
 
 func _sync_globals_modules_to_module_selector() -> void:
 	if _module_selector == null or not is_instance_valid(_module_selector):
@@ -174,10 +333,99 @@ func _sync_globals_modules_to_module_selector() -> void:
 func _sync_player_count_module_constraints() -> void:
 	if _module_selector == null or not is_instance_valid(_module_selector):
 		return
-
-	var count := int(player_count_spinbox.value)
 	if _module_selector.has_method("set_setup_player_count"):
-		_module_selector.call("set_setup_player_count", count)
+		_module_selector.call("set_setup_player_count", _selected_player_count)
+
+# ── 模块预设 ──────────────────────────────────────────
+
+func _load_presets() -> void:
+	var path := "res://data/config/module_presets.json"
+	if not FileAccess.file_exists(path):
+		GameLog.warn("GameSetup", "预设配置文件不存在: %s" % path)
+		return
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		GameLog.warn("GameSetup", "无法打开预设配置文件: %s" % path)
+		return
+	var json := JSON.new()
+	var err := json.parse(file.get_as_text())
+	file.close()
+	if err != OK:
+		GameLog.warn("GameSetup", "解析预设配置文件失败: %s" % json.get_error_message())
+		return
+	var data = json.data
+	if not (data is Dictionary) or not data.has("presets"):
+		return
+	_presets = Array(data["presets"])
+
+func _build_preset_row() -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_modules_section.add_child(row)
+
+	var label := Label.new()
+	label.text = "预设方案"
+	UiStylesClass.apply_label_hint_dark(label)
+	row.add_child(label)
+
+	_preset_option = OptionButton.new()
+	_preset_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_preset_option.add_item("自定义")
+	for preset in _presets:
+		if preset is Dictionary:
+			_preset_option.add_item(str(preset.get("name", "")))
+	UiStylesClass.apply_option_button_field(_preset_option)
+	_preset_option.item_selected.connect(_on_preset_selected)
+	row.add_child(_preset_option)
+
+func _on_preset_selected(idx: int) -> void:
+	if idx <= 0:
+		if _module_selector != null and is_instance_valid(_module_selector):
+			_module_selector.set_editable(true)
+		return
+	var preset_idx := idx - 1
+	if preset_idx < 0 or preset_idx >= _presets.size():
+		return
+	var preset: Dictionary = _presets[preset_idx]
+	var module_ids: Array[String] = _resolve_preset_modules(preset)
+
+	if _module_selector != null and is_instance_valid(_module_selector):
+		_suppress_preset_revert = true
+		_module_selector.set_editable(true)
+		_module_selector.set_initial_enabled_modules_v2(module_ids)
+		_module_selector.set_editable(false)
+		_suppress_preset_revert = false
+
+func _resolve_preset_modules(preset: Dictionary) -> Array[String]:
+	if preset.has("all_except") and preset.get("all_except") is Array:
+		var except_list: Array = Array(preset.get("all_except", []))
+		var all_optional: Array[String] = []
+		if _module_selector != null and is_instance_valid(_module_selector) and "_optional_module_ids" in _module_selector:
+			all_optional = Array(_module_selector._optional_module_ids, TYPE_STRING, "", null)
+		var out: Array[String] = []
+		for mid in all_optional:
+			if not except_list.has(mid):
+				out.append(mid)
+		return out
+
+	var raw: Array = Array(preset.get("modules", []))
+	var out: Array[String] = []
+	for val in raw:
+		var id := str(val).strip_edges()
+		if not id.is_empty():
+			out.append(id)
+	return out
+
+func _revert_preset_to_custom() -> void:
+	if _preset_option == null or not is_instance_valid(_preset_option):
+		return
+	if _preset_option.selected != 0:
+		_preset_option.select(0)
+		if _module_selector != null and is_instance_valid(_module_selector):
+			_module_selector.set_editable(true)
+
+# ── 玩家行重建（卡片布局） ──────────────────────────────
 
 func _rebuild_player_rows() -> void:
 	if _players_container == null or not is_instance_valid(_players_container):
@@ -192,60 +440,112 @@ func _rebuild_player_rows() -> void:
 	_player_logo_options.clear()
 	_player_logo_previews.clear()
 
-	var count := int(player_count_spinbox.value)
+	var count := _selected_player_count
 	for pid in range(count):
-		var row := HBoxContainer.new()
-		row.alignment = BoxContainer.ALIGNMENT_CENTER
-		row.add_theme_constant_override("separation", 10)
-		_players_container.add_child(row)
-
-		var label := Label.new()
-		label.text = "玩家 %d" % (pid + 1)
-		label.custom_minimum_size = Vector2(70, 0)
-		UiStylesClass.apply_label_dark(label)
-		row.add_child(label)
-
-		var name_edit := LineEdit.new()
-		name_edit.custom_minimum_size = Vector2(160, 0)
-		name_edit.placeholder_text = "玩家名称"
-		name_edit.text = Globals.get_player_name(pid)
-		UiStylesClass.apply_line_edit_field(name_edit)
-		row.add_child(name_edit)
-		_player_name_edits.append(name_edit)
-
-		var logo_preview := TextureRect.new()
-		logo_preview.custom_minimum_size = Vector2(20, 20)
-		logo_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		logo_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		row.add_child(logo_preview)
-		_player_logo_previews.append(logo_preview)
-
-		var logo_opt := OptionButton.new()
-		logo_opt.custom_minimum_size = Vector2(180, 0)
-		logo_opt.add_item("随机")
-		for i in range(logo_count):
-			var icon_tex := _logo_icons_small[i] if i < _logo_icons_small.size() else null
-			if icon_tex != null:
-				logo_opt.add_icon_item(icon_tex, "店铺 %d" % (i + 1))
-			else:
-				logo_opt.add_item("店铺 %d" % (i + 1))
-
-		var choice := Globals.get_player_restaurant_logo_choice(pid)
-		if choice >= 0 and choice < logo_count:
-			logo_opt.select(choice + 1)
-		else:
-			logo_opt.select(0)
-
-		logo_opt.item_selected.connect(func(_idx: int) -> void:
-			if _suppress_player_signals:
-				return
-			_refresh_player_logo_unique_constraints()
-		)
-		UiStylesClass.apply_option_button_field(logo_opt)
-		row.add_child(logo_opt)
-		_player_logo_options.append(logo_opt)
+		_players_container.add_child(_build_player_card(pid, logo_count))
 
 	_refresh_player_logo_unique_constraints()
+
+func _build_player_card(pid: int, logo_count: int) -> Control:
+	var player_color := PLAYER_COLORS[pid] if pid < PLAYER_COLORS.size() else PLAYER_COLORS[0]
+
+	# 卡片外壳（紧凑单行）
+	var card_panel := PanelContainer.new()
+	card_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var card_style := StyleBoxFlat.new()
+	card_style.bg_color = Color(0.95, 0.90, 0.80, 0.5)
+	card_style.border_color = Color(0.17, 0.13, 0.09, 0.12)
+	card_style.set_border_width_all(1)
+	card_style.corner_radius_top_left = 6
+	card_style.corner_radius_top_right = 6
+	card_style.corner_radius_bottom_right = 6
+	card_style.corner_radius_bottom_left = 6
+	card_style.content_margin_left = 0
+	card_style.content_margin_top = 0
+	card_style.content_margin_right = 0
+	card_style.content_margin_bottom = 0
+	card_panel.add_theme_stylebox_override("panel", card_style)
+	card_panel.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+
+	# 横向：色彩条 + 单行内容
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 0)
+	card_panel.add_child(row)
+
+	var color_bar := ColorRect.new()
+	color_bar.custom_minimum_size = Vector2(4, 0)
+	color_bar.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	color_bar.color = player_color
+	row.add_child(color_bar)
+
+	# 内容行（带内边距）
+	var content_margin := MarginContainer.new()
+	content_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_margin.add_theme_constant_override("margin_left", 10)
+	content_margin.add_theme_constant_override("margin_top", 6)
+	content_margin.add_theme_constant_override("margin_right", 10)
+	content_margin.add_theme_constant_override("margin_bottom", 6)
+	row.add_child(content_margin)
+
+	var content_row := HBoxContainer.new()
+	content_row.add_theme_constant_override("separation", 8)
+	content_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	content_margin.add_child(content_row)
+
+	# 玩家编号
+	var label := Label.new()
+	label.text = "P%d" % (pid + 1)
+	label.custom_minimum_size = Vector2(32, 0)
+	UiStylesClass.apply_label_dark(label)
+	content_row.add_child(label)
+
+	# 名称输入
+	var name_edit := LineEdit.new()
+	name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_edit.placeholder_text = "名称"
+	name_edit.text = Globals.get_player_name(pid)
+	UiStylesClass.apply_line_edit_field(name_edit)
+	content_row.add_child(name_edit)
+	_player_name_edits.append(name_edit)
+
+	# logo 预览
+	var logo_preview := TextureRect.new()
+	logo_preview.custom_minimum_size = Vector2(28, 28)
+	logo_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	logo_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	content_row.add_child(logo_preview)
+	_player_logo_previews.append(logo_preview)
+
+	# logo 选择
+	var logo_opt := OptionButton.new()
+	logo_opt.custom_minimum_size = Vector2(200, 0)
+	logo_opt.add_item("随机")
+	for i in range(logo_count):
+		var icon_tex := _logo_icons_small[i] if i < _logo_icons_small.size() else null
+		var logo_name := _get_logo_display_name(i)
+		if icon_tex != null:
+			logo_opt.add_icon_item(icon_tex, logo_name)
+		else:
+			logo_opt.add_item(logo_name)
+
+	var choice := Globals.get_player_restaurant_logo_choice(pid)
+	if choice >= 0 and choice < logo_count:
+		logo_opt.select(choice + 1)
+	else:
+		logo_opt.select(0)
+
+	logo_opt.item_selected.connect(func(_idx: int) -> void:
+		if _suppress_player_signals:
+			return
+		_refresh_player_logo_unique_constraints()
+	)
+	UiStylesClass.apply_option_button_field(logo_opt)
+	content_row.add_child(logo_opt)
+	_player_logo_options.append(logo_opt)
+
+	return card_panel
+
+# ── logo 唯一性约束 ─────────────────────────────────────
 
 func _refresh_player_logo_unique_constraints() -> void:
 	if _player_logo_options.is_empty():
@@ -255,7 +555,7 @@ func _refresh_player_logo_unique_constraints() -> void:
 	_ensure_logo_icons_cache()
 	var logo_count := _logo_icons_small.size()
 
-	var used_by: Dictionary = {} # logo_id -> player_id
+	var used_by: Dictionary = {}
 	var dup_pids: Array[int] = []
 	for pid in range(_player_logo_options.size()):
 		var opt := _player_logo_options[pid]
@@ -269,7 +569,6 @@ func _refresh_player_logo_unique_constraints() -> void:
 		else:
 			used_by[choice] = pid
 
-	# 若从 settings 恢复时存在重复选择，后面的玩家自动回退到“随机”。
 	for pid in dup_pids:
 		if pid >= 0 and pid < _player_logo_options.size() and is_instance_valid(_player_logo_options[pid]):
 			_player_logo_options[pid].select(0)
@@ -297,6 +596,8 @@ func _refresh_player_logo_unique_constraints() -> void:
 			else:
 				preview.texture = null
 
+# ── logo 图标缓存 ──────────────────────────────────────
+
 func _ensure_logo_icons_cache() -> void:
 	if not _logo_icons_small.is_empty():
 		return
@@ -321,9 +622,11 @@ func _ensure_logo_icons_cache() -> void:
 		var piece_id := str(piece_id_val).strip_edges()
 		if piece_id.is_empty():
 			_logo_icons_small.append(null)
+			_logo_piece_ids.append("")
 			continue
 		var tex: Texture2D = skin.get_piece_texture(piece_id)
 		_logo_icons_small.append(_scale_texture_square(tex, 20))
+		_logo_piece_ids.append(piece_id)
 
 func _scale_texture_square(tex: Texture2D, size_px: int) -> Texture2D:
 	if tex == null:
@@ -333,6 +636,15 @@ func _scale_texture_square(tex: Texture2D, size_px: int) -> Texture2D:
 		return tex
 	img.resize(size_px, size_px, Image.INTERPOLATE_LANCZOS)
 	return ImageTexture.create_from_image(img)
+
+func _get_logo_display_name(index: int) -> String:
+	if index >= 0 and index < _logo_piece_ids.size():
+		var piece_id := _logo_piece_ids[index]
+		if LOGO_DISPLAY_NAMES.has(piece_id):
+			return str(LOGO_DISPLAY_NAMES[piece_id])
+	return "店铺 %d" % (index + 1)
+
+# ── Globals 同步 ────────────────────────────────────────
 
 func _apply_module_selection_to_globals() -> bool:
 	if _module_selector == null or not is_instance_valid(_module_selector):
@@ -347,11 +659,11 @@ func _apply_module_selection_to_globals() -> bool:
 	return true
 
 func _apply_player_profiles_to_globals() -> void:
-	var count := int(player_count_spinbox.value)
+	var count := _selected_player_count
 	for pid in range(count):
 		if pid < _player_name_edits.size() and is_instance_valid(_player_name_edits[pid]):
 			Globals.set_player_name(pid, str(_player_name_edits[pid].text))
 		if pid < _player_logo_options.size() and is_instance_valid(_player_logo_options[pid]):
 			var sel := int(_player_logo_options[pid].selected)
-			var choice := sel - 1 # 0=随机
+			var choice := sel - 1
 			Globals.set_player_restaurant_logo_choice(pid, choice)

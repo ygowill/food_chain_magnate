@@ -56,6 +56,15 @@ static func initialize_new_game(
 	init_warnings.append_array(modules_v2_result.warnings)
 
 	var cfg = config_result.value
+
+	# 应用高级配置覆盖
+	var _globals_node = AutoloadAccessClass.get_autoload("Globals")
+	if _globals_node != null and "game_config_overrides" in _globals_node:
+		var overrides: Dictionary = _globals_node.game_config_overrides
+		if not overrides.is_empty():
+			cfg.apply_overrides(overrides)
+			AutoloadAccessClass.log_info("GameEngine", "已应用 %d 项高级配置覆盖" % overrides.size())
+
 	var span_inv := PerfTraceClass.begin_span("init:ModulesV2.validate_starting_inventory_products")
 	var inv_check := ModulesV2Class.validate_starting_inventory_products(cfg)
 	PerfTraceClass.end_span(span_inv)

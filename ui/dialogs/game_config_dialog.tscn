@@ -1,0 +1,168 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/dialogs/game_config_dialog.gd" id="1_gcfg"]
+
+[node name="GameConfigDialog" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+visible = false
+script = ExtResource("1_gcfg")
+
+[node name="Overlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="BackgroundPanel" type="Panel" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -440.0
+offset_top = -310.0
+offset_right = 440.0
+offset_bottom = 310.0
+mouse_filter = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -440.0
+offset_top = -310.0
+offset_right = 440.0
+offset_bottom = 310.0
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "高级游戏配置"
+horizontal_alignment = 1
+
+[node name="TitleSeparator" type="HSeparator" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ContentHBox" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 0
+
+[node name="NavPanel" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox"]
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="BankNavBtn" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/NavPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "  银行"
+flat = true
+alignment = 0
+
+[node name="RulesNavBtn" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/NavPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "  规则"
+flat = true
+alignment = 0
+
+[node name="PlayerNavBtn" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/NavPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "  玩家"
+flat = true
+alignment = 0
+
+[node name="NavSeparator" type="VSeparator" parent="MarginContainer/VBoxContainer/ContentHBox"]
+layout_mode = 2
+
+[node name="PagePanel" type="PanelContainer" parent="MarginContainer/VBoxContainer/ContentHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PageMargin" type="MarginContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 12
+
+[node name="BankScroll" type="ScrollContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="BankPage" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/BankScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="RulesScroll" type="ScrollContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="RulesPage" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/RulesScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="PlayerScroll" type="ScrollContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="PlayerPage" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/PlayerScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="ButtonRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 2
+
+[node name="ResetButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 32)
+layout_mode = 2
+text = "恢复默认"
+
+[node name="ConfirmButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 32)
+layout_mode = 2
+text = "确认"

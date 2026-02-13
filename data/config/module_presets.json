@@ -1,0 +1,50 @@
+{
+  "presets": [
+    {
+      "id": "korean_city",
+      "name": "韩国城",
+      "modules": ["new_districts", "kimchi"]
+    },
+    {
+      "id": "nightlife",
+      "name": "夜生活",
+      "modules": ["new_milestones", "night_shift_managers"]
+    },
+    {
+      "id": "sustenance",
+      "name": "果腹之道",
+      "modules": ["coffee", "fry_chefs"]
+    },
+    {
+      "id": "upmarket_area",
+      "name": "高档街区",
+      "modules": ["new_milestones", "new_districts", "gourmet_food_critics", "sushi"]
+    },
+    {
+      "id": "city_builder",
+      "name": "城市建造者",
+      "modules": ["lobbyists", "new_districts", "rural_marketeers"]
+    },
+    {
+      "id": "asian_fusion",
+      "name": "亚洲融合",
+      "modules": ["sushi", "kimchi", "noodles", "ketchup_mechanism"]
+    },
+    {
+      "id": "first_mover",
+      "name": "先发制人",
+      "modules": ["hard_choices", "ketchup_mechanism", "movie_stars", "lobbyists", "reserve_prices"]
+    },
+    {
+      "id": "overtime",
+      "name": "加班加点",
+      "modules": ["night_shift_managers", "mass_marketeers", "rural_marketeers", "new_districts", "noodles", "reserve_prices"]
+    },
+    {
+      "id": "henri_lo_menu",
+      "name": "Henri Lo 套餐",
+      "all_except": ["hard_choices"],
+      "modules": []
+    }
+  ]
+}

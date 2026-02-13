@@ -27,10 +27,10 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -360.0
-offset_top = -280.0
-offset_right = 360.0
-offset_bottom = 280.0
+offset_left = -420.0
+offset_top = -290.0
+offset_right = 420.0
+offset_bottom = 290.0
 mouse_filter = 2
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
@@ -39,13 +39,13 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -360.0
-offset_top = -280.0
-offset_right = 360.0
-offset_bottom = 280.0
-theme_override_constants/margin_left = 16
+offset_left = -420.0
+offset_top = -290.0
+offset_right = 420.0
+offset_bottom = 290.0
+theme_override_constants/margin_left = 20
 theme_override_constants/margin_top = 16
-theme_override_constants/margin_right = 16
+theme_override_constants/margin_right = 20
 theme_override_constants/margin_bottom = 16
 
 [node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
@@ -58,206 +58,358 @@ theme_override_font_sizes/font_size = 22
 text = "设置"
 horizontal_alignment = 1
 
-[node name="TabContainer" type="TabContainer" parent="MarginContainer/VBoxContainer"]
+[node name="TitleSeparator" type="HSeparator" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ContentHBox" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
-current_tab = 0
+theme_override_constants/separation = 0
 
-[node name="Audio" type="Control" parent="MarginContainer/VBoxContainer/TabContainer"]
+[node name="NavPanel" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox"]
+custom_minimum_size = Vector2(130, 0)
 layout_mode = 2
-metadata/_tab_index = 0
+theme_override_constants/separation = 4
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Audio"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 12
+[node name="AudioNavBtn" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/NavPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "  音频"
+flat = true
+alignment = 0
 
-[node name="MasterRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer"]
+[node name="DisplayNavBtn" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/NavPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "  显示"
+flat = true
+alignment = 0
+
+[node name="GameNavBtn" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/NavPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "  游戏"
+flat = true
+alignment = 0
+
+[node name="DebugNavBtn" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/NavPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "  调试"
+flat = true
+alignment = 0
+
+[node name="NavSeparator" type="VSeparator" parent="MarginContainer/VBoxContainer/ContentHBox"]
+layout_mode = 2
+
+[node name="PagePanel" type="PanelContainer" parent="MarginContainer/VBoxContainer/ContentHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PageMargin" type="MarginContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 12
+
+[node name="AudioPage" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer/MasterRow"]
-custom_minimum_size = Vector2(100, 0)
+[node name="VolumeSectionLabel" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/AudioPage"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "音量"
+
+[node name="MasterRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/AudioPage"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/AudioPage/MasterRow"]
+custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 text = "主音量"
 
-[node name="MasterSlider" type="HSlider" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer/MasterRow"]
+[node name="MasterSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/AudioPage/MasterRow"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 value = 80.0
 
-[node name="MusicRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer"]
+[node name="MasterValue" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/AudioPage/MasterRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(45, 0)
+layout_mode = 2
+text = "80%"
+horizontal_alignment = 2
+
+[node name="MusicRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/AudioPage"]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer/MusicRow"]
-custom_minimum_size = Vector2(100, 0)
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/AudioPage/MusicRow"]
+custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 text = "音乐音量"
 
-[node name="MusicSlider" type="HSlider" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer/MusicRow"]
+[node name="MusicSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/AudioPage/MusicRow"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 value = 70.0
 
-[node name="SFXRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer"]
+[node name="MusicValue" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/AudioPage/MusicRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(45, 0)
+layout_mode = 2
+text = "70%"
+horizontal_alignment = 2
+
+[node name="SFXRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/AudioPage"]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer/SFXRow"]
-custom_minimum_size = Vector2(100, 0)
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/AudioPage/SFXRow"]
+custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 text = "音效音量"
 
-[node name="SFXSlider" type="HSlider" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer/SFXRow"]
+[node name="SFXSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/AudioPage/SFXRow"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 value = 80.0
 
-[node name="MuteCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Audio/VBoxContainer"]
+[node name="SFXValue" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/AudioPage/SFXRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(45, 0)
+layout_mode = 2
+text = "80%"
+horizontal_alignment = 2
+
+[node name="AudioSep" type="HSeparator" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/AudioPage"]
+layout_mode = 2
+
+[node name="OtherSectionLabel" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/AudioPage"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "其他"
+
+[node name="MuteCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/AudioPage"]
+unique_name_in_owner = true
 layout_mode = 2
 text = "静音"
 
-[node name="Display" type="Control" parent="MarginContainer/VBoxContainer/TabContainer"]
+[node name="DisplayPage" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin"]
+unique_name_in_owner = true
 visible = false
 layout_mode = 2
-metadata/_tab_index = 1
+theme_override_constants/separation = 10
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Display"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 12
+[node name="WindowSectionLabel" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "窗口"
 
-[node name="FullscreenCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
+[node name="FullscreenCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage"]
+unique_name_in_owner = true
 layout_mode = 2
 text = "全屏模式"
 
-[node name="VsyncCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
+[node name="VsyncCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage"]
+unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 text = "垂直同步"
 
-[node name="ResolutionRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
+[node name="ResolutionRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage"]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/ResolutionRow"]
-custom_minimum_size = Vector2(100, 0)
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage/ResolutionRow"]
+custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 text = "分辨率"
 
-[node name="ResolutionOption" type="OptionButton" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/ResolutionRow"]
+[node name="ResolutionOption" type="OptionButton" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage/ResolutionRow"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="UIScaleRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
+[node name="DisplaySep1" type="HSeparator" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage"]
+layout_mode = 2
+
+[node name="ScaleSectionLabel" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "缩放"
+
+[node name="UIScaleRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage"]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/UIScaleRow"]
-custom_minimum_size = Vector2(100, 0)
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage/UIScaleRow"]
+custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 text = "UI缩放"
 
-[node name="UIScaleSlider" type="HSlider" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/UIScaleRow"]
+[node name="UIScaleSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage/UIScaleRow"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 min_value = 50.0
 max_value = 150.0
 value = 100.0
 
-[node name="FontScaleRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
+[node name="UIScaleValue" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage/UIScaleRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(45, 0)
+layout_mode = 2
+text = "100%"
+horizontal_alignment = 2
+
+[node name="FontScaleRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage"]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/FontScaleRow"]
-custom_minimum_size = Vector2(100, 0)
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage/FontScaleRow"]
+custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 text = "字体倍率"
 
-[node name="FontScaleSlider" type="HSlider" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/FontScaleRow"]
+[node name="FontScaleSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage/FontScaleRow"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 min_value = 80.0
 max_value = 200.0
 value = 110.0
 
-[node name="LogFontScaleRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
+[node name="FontScaleValue" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage/FontScaleRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(45, 0)
+layout_mode = 2
+text = "110%"
+horizontal_alignment = 2
+
+[node name="LogFontScaleRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage"]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/LogFontScaleRow"]
-custom_minimum_size = Vector2(100, 0)
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage/LogFontScaleRow"]
+custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 text = "日志字体倍率"
 
-[node name="LogFontScaleSlider" type="HSlider" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer/LogFontScaleRow"]
+[node name="LogFontScaleSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage/LogFontScaleRow"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 min_value = 80.0
 max_value = 200.0
 value = 135.0
 
-[node name="ShowTileIdsCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
+[node name="LogFontScaleValue" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DisplayPage/LogFontScaleRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(45, 0)
 layout_mode = 2
-text = "显示板块ID（调试）"
+text = "135%"
+horizontal_alignment = 2
 
-[node name="ShowCellHoverTooltipCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Display/VBoxContainer"]
-layout_mode = 2
-text = "显示格子悬停信息（调试）"
-
-[node name="Game" type="Control" parent="MarginContainer/VBoxContainer/TabContainer"]
+[node name="GamePage" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin"]
+unique_name_in_owner = true
 visible = false
 layout_mode = 2
-metadata/_tab_index = 2
+theme_override_constants/separation = 10
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Game"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 12
+[node name="GeneralSectionLabel" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/GamePage"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "通用"
 
-[node name="AutoSaveCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer"]
+[node name="AutoSaveCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/GamePage"]
+unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 text = "自动存档"
 
-[node name="ConfirmActionsCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer"]
+[node name="ConfirmActionsCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/GamePage"]
+unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 text = "操作前确认"
 
-[node name="ShowHintsCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer"]
+[node name="ShowHintsCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/GamePage"]
+unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 text = "显示提示"
 
-[node name="AnimSpeedRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer"]
+[node name="GameSep" type="HSeparator" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/GamePage"]
+layout_mode = 2
+
+[node name="PerfSectionLabel" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/GamePage"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "表现"
+
+[node name="AnimSpeedRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/GamePage"]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer/AnimSpeedRow"]
-custom_minimum_size = Vector2(100, 0)
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/GamePage/AnimSpeedRow"]
+custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 text = "动画速度"
 
-[node name="AnimSpeedSlider" type="HSlider" parent="MarginContainer/VBoxContainer/TabContainer/Game/VBoxContainer/AnimSpeedRow"]
+[node name="AnimSpeedSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/GamePage/AnimSpeedRow"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 min_value = 50.0
 max_value = 200.0
 value = 100.0
+
+[node name="AnimSpeedValue" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/GamePage/AnimSpeedRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(45, 0)
+layout_mode = 2
+text = "100%"
+horizontal_alignment = 2
+
+[node name="DebugPage" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="DebugSectionLabel" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DebugPage"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "调试选项"
+
+[node name="ShowTileIdsCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DebugPage"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "显示板块ID"
+
+[node name="ShowCellHoverTooltipCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/DebugPage"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "显示格子悬停信息"
 
 [node name="ButtonRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2

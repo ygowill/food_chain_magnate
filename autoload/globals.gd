@@ -19,6 +19,9 @@ var language: String = "zh"
 var random_seed: int = 0
 var reserve_card_selected_by_player: Array[int] = []
 
+# 高级游戏配置覆盖（GameConfigDialog 设置）
+var game_config_overrides: Dictionary = {}
+
 # 运行时状态
 var current_game_engine = null  # GameEngine 实例
 var is_game_active: bool = false

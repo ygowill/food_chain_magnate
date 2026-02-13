@@ -176,6 +176,42 @@ static func from_dict(data: Dictionary) -> Result:
 
 	return Result.success(cfg)
 
+func apply_overrides(overrides: Dictionary) -> void:
+	for key in overrides:
+		var val = overrides[key]
+		match key:
+			"bank.default_per_player":
+				bank_default_per_player = int(val)
+			"rules.base_unit_price":
+				rule_base_unit_price = int(val)
+			"rules.salary_cost":
+				rule_salary_cost = int(val)
+			"rules.waitress_tips":
+				rule_waitress_tips = int(val)
+			"rules.cfo_bonus_percent":
+				rule_cfo_bonus_percent = int(val)
+			"rules.demand_cap_normal":
+				rule_demand_cap_normal = int(val)
+			"rules.demand_cap_with_garden":
+				rule_demand_cap_with_garden = int(val)
+			"rules.fridge_capacity_per_product":
+				rule_fridge_capacity_per_product = int(val)
+			"rules.one_x_employee_copies_by_player_count":
+				if val is Dictionary:
+					rule_one_x_employee_copies_by_player_count = val.duplicate()
+			"player.starting_cash":
+				player_starting_cash = int(val)
+			"player.starting_company_structure.ceo_slots":
+				player_starting_company_structure["ceo_slots"] = int(val)
+			"player.reserve_card_selected":
+				player_reserve_card_selected = int(val)
+			"player.reserve_cards":
+				if val is Array:
+					player_reserve_cards = []
+					for item in val:
+						if item is Dictionary:
+							player_reserve_cards.append(item.duplicate())
+
 func build_reserve_cards() -> Array[Dictionary]:
 	return player_reserve_cards.duplicate(true)
 
