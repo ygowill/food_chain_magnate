@@ -10,6 +10,7 @@ var _toggle_game_log: Callable = Callable()
 var _game_log_panel: Control = null
 var _right_panel_default_stack: Control = null
 var _right_panel_dock_host: Control = null
+var _right_panel_header_row: Control = null
 var _right_panel_back_button: Button = null
 var _right_panel_title_label: Label = null
 var _right_panel_footer_row: Control = null
@@ -26,6 +27,7 @@ func _init(
 	game_log_panel: Control,
 	right_panel_default_stack: Control,
 	right_panel_dock_host: Control,
+	right_panel_header_row: Control,
 	right_panel_back_button: Button,
 	right_panel_title_label: Label,
 	right_panel_footer_row: Control,
@@ -39,6 +41,7 @@ func _init(
 	_game_log_panel = game_log_panel
 	_right_panel_default_stack = right_panel_default_stack
 	_right_panel_dock_host = right_panel_dock_host
+	_right_panel_header_row = right_panel_header_row
 	_right_panel_back_button = right_panel_back_button
 	_right_panel_title_label = right_panel_title_label
 	_right_panel_footer_row = right_panel_footer_row
@@ -79,13 +82,16 @@ func dock_popup(panel: Control) -> bool:
 func sync_docked_view() -> void:
 	var active := _get_active_docked_panel()
 	var has_docked := active != null
+	var hide_header_for_log := has_docked and is_instance_valid(_game_log_panel) and active == _game_log_panel
 
 	if is_instance_valid(_right_panel_default_stack):
 		_right_panel_default_stack.visible = not has_docked
 	if is_instance_valid(_right_panel_dock_host):
 		_right_panel_dock_host.visible = has_docked
+	if is_instance_valid(_right_panel_header_row):
+		_right_panel_header_row.visible = not hide_header_for_log
 	if is_instance_valid(_right_panel_back_button):
-		_right_panel_back_button.visible = has_docked
+		_right_panel_back_button.visible = has_docked and not hide_header_for_log
 	if is_instance_valid(_right_panel_title_label):
 		if has_docked and is_instance_valid(active):
 			var title := ""
@@ -210,4 +216,3 @@ func _sync_right_panel_footer(active_panel: Object) -> void:
 	_right_panel_footer_primary_button.visible = show_primary
 	_right_panel_footer_primary_button.text = primary_text
 	_right_panel_footer_primary_button.disabled = not primary_enabled
-

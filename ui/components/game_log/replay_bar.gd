@@ -3,19 +3,19 @@
 extends PanelContainer
 
 signal seek_requested(target_index: int)
-signal load_requested()
-signal close_requested()
-signal return_latest_requested()
 
-@onready var load_button: Button = $MarginContainer/HBox/LoadButton
-@onready var first_button: Button = $MarginContainer/HBox/FirstButton
-@onready var prev_button: Button = $MarginContainer/HBox/PrevButton
-@onready var next_button: Button = $MarginContainer/HBox/NextButton
-@onready var last_button: Button = $MarginContainer/HBox/LastButton
-@onready var latest_button: Button = $MarginContainer/HBox/LatestButton
-@onready var close_button: Button = $MarginContainer/HBox/CloseButton
-@onready var slider: HSlider = $MarginContainer/HBox/Slider
-@onready var status_label: Label = $MarginContainer/HBox/StatusLabel
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const COLOR_SLIDER_TRACK := Color(0.86, 0.81, 0.70, 0.95)
+const COLOR_SLIDER_BORDER := Color(0.17, 0.13, 0.09, 0.26)
+const COLOR_SLIDER_FILL := Color(0.73, 0.23, 0.18, 0.32)
+const COLOR_SLIDER_FILL_HOVER := Color(0.73, 0.23, 0.18, 0.45)
+
+@onready var first_button: Button = $MarginContainer/VBox/BottomRow/FirstButton
+@onready var prev_button: Button = $MarginContainer/VBox/BottomRow/PrevButton
+@onready var next_button: Button = $MarginContainer/VBox/BottomRow/NextButton
+@onready var last_button: Button = $MarginContainer/VBox/BottomRow/LastButton
+@onready var slider: HSlider = $MarginContainer/VBox/TopRow/Slider
+@onready var status_label: Label = $MarginContainer/VBox/TopRow/StatusLabel
 
 var _head_index: int = -1
 var _cursor_index: int = -1
@@ -24,6 +24,7 @@ var _status_extra: String = ""
 var _suppress_slider_signal: bool = false
 
 func _ready() -> void:
+	_apply_theme()
 	_connect_signals()
 	_update_ui()
 
@@ -38,18 +39,6 @@ func set_active(visible_active: bool) -> void:
 	visible = bool(visible_active)
 
 func _connect_signals() -> void:
-	if is_instance_valid(load_button):
-		load_button.pressed.connect(func() -> void:
-			load_requested.emit()
-		)
-	if is_instance_valid(close_button):
-		close_button.pressed.connect(func() -> void:
-			close_requested.emit()
-		)
-	if is_instance_valid(latest_button):
-		latest_button.pressed.connect(func() -> void:
-			return_latest_requested.emit()
-		)
 	if is_instance_valid(first_button):
 		first_button.pressed.connect(func() -> void:
 			seek_requested.emit(-1)
@@ -73,6 +62,59 @@ func _on_slider_value_changed(value: float) -> void:
 	if _suppress_slider_signal:
 		return
 	seek_requested.emit(int(value))
+
+func _apply_theme() -> void:
+	UiStylesClass.apply_panel_poster_alt(self)
+	var buttons: Array[Button] = [
+		first_button,
+		prev_button,
+		next_button,
+		last_button,
+	]
+	for btn in buttons:
+		if btn == null:
+			continue
+		UiStylesClass.apply_button_secondary(btn)
+		btn.add_theme_font_size_override("font_size", 12)
+
+	if status_label != null:
+		UiStylesClass.apply_label_dark(status_label)
+		status_label.add_theme_font_size_override("font_size", 12)
+
+	if slider != null:
+		slider.add_theme_stylebox_override("slider", _make_slider_track_style())
+		slider.add_theme_stylebox_override("grabber_area", _make_slider_fill_style(COLOR_SLIDER_FILL))
+		slider.add_theme_stylebox_override("grabber_area_highlight", _make_slider_fill_style(COLOR_SLIDER_FILL_HOVER))
+
+func _make_slider_track_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = COLOR_SLIDER_TRACK
+	style.border_color = COLOR_SLIDER_BORDER
+	style.set_border_width_all(1)
+	style.content_margin_left = 0
+	style.content_margin_top = 2
+	style.content_margin_right = 0
+	style.content_margin_bottom = 2
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_right = 3
+	style.corner_radius_bottom_left = 3
+	return style
+
+func _make_slider_fill_style(bg: Color) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = bg
+	style.border_color = Color(bg.r, bg.g, bg.b, 0.9)
+	style.set_border_width_all(1)
+	style.content_margin_left = 0
+	style.content_margin_top = 2
+	style.content_margin_right = 0
+	style.content_margin_bottom = 2
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_right = 3
+	style.corner_radius_bottom_left = 3
+	return style
 
 func _update_ui() -> void:
 	if status_label != null:
@@ -100,6 +142,3 @@ func _update_ui() -> void:
 		next_button.disabled = not has_timeline or at_last
 	if last_button != null:
 		last_button.disabled = not has_timeline or at_last
-
-	if latest_button != null:
-		latest_button.disabled = not has_timeline or (_cursor_index == _head_index)

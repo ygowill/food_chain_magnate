@@ -15,7 +15,6 @@ const ZoomControllerClass = preload("res://ui/scenes/game/game_overlay_zoom.gd")
 const DistanceOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_distance.gd")
 const MarketingRangeOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_marketing_range.gd")
 const ProcurementRouteOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_procurement_route.gd")
-const DinnertimeOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_dinnertime.gd")
 const DemandIndicatorControllerClass = preload("res://ui/scenes/game/game_overlay_demand_indicator.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
@@ -69,13 +68,11 @@ func _init(scene, map_view, map_canvas, game_log_panel) -> void:
 	_distance_overlay_controller = DistanceOverlayControllerClass.new(_scene, _map_canvas)
 	_marketing_range_controller = MarketingRangeOverlayControllerClass.new(_scene, _map_canvas)
 	_procurement_route_controller = ProcurementRouteOverlayControllerClass.new(_scene, _map_canvas)
-	_dinnertime_overlay_controller = DinnertimeOverlayControllerClass.new(_scene)
+	_dinnertime_overlay_controller = null
 	_demand_indicator_controller = DemandIndicatorControllerClass.new(_scene, _map_canvas)
 
 func set_bank_break_panel(panel) -> void:
 	_bank_break_panel = panel
-	if _dinnertime_overlay_controller != null:
-		_dinnertime_overlay_controller.set_bank_break_panel(panel)
 	if _demand_indicator_controller != null:
 		_demand_indicator_controller.set_bank_break_panel(panel)
 
@@ -543,24 +540,10 @@ func _show_toast(message: String) -> void:
 
 # === Dinnertime 可视化（只读）===
 
-func sync_dinnertime_overlay(state: GameState) -> void:
-	if _dinnertime_overlay_controller == null:
-		return
-
-	# 回放/复盘（只读时间线）时不显示晚餐时间覆盖层（用户反馈：回放步进时会干扰观察）。
-	var timeline_read_only := false
-	if _scene != null and _scene.has_method("is_timeline_read_only_active"):
-		var v = _scene.call("is_timeline_read_only_active")
-		if v is bool:
-			timeline_read_only = bool(v)
-	if timeline_read_only:
-		if _dinnertime_overlay_controller.has_method("hide"):
-			_dinnertime_overlay_controller.hide()
-		dinner_time_overlay = _dinnertime_overlay_controller.dinner_time_overlay
-		return
-
-	_dinnertime_overlay_controller.sync_dinnertime_overlay(state)
-	dinner_time_overlay = _dinnertime_overlay_controller.dinner_time_overlay
+func sync_dinnertime_overlay(_state: GameState) -> void:
+	# 已下线：晚餐“待处理订单”覆盖层（DinnerTimeOverlay）。
+	# 该组件在日志回放/复盘中会干扰时间线观察，这里统一禁用。
+	_disable_dinnertime_overlay()
 
 # === 需求指示器 ===
 
@@ -568,3 +551,18 @@ func sync_demand_indicator(state: GameState) -> void:
 	if _demand_indicator_controller != null:
 		_demand_indicator_controller.sync_demand_indicator(state)
 		demand_indicator = _demand_indicator_controller.demand_indicator
+
+func _disable_dinnertime_overlay() -> void:
+	if _dinnertime_overlay_controller == null:
+		dinner_time_overlay = null
+		return
+
+	if _dinnertime_overlay_controller.has_method("hide"):
+		_dinnertime_overlay_controller.hide()
+
+	var overlay = _dinnertime_overlay_controller.dinner_time_overlay if _dinnertime_overlay_controller != null else null
+	if is_instance_valid(overlay):
+		overlay.visible = false
+		overlay.queue_free()
+	dinner_time_overlay = null
+	_dinnertime_overlay_controller = null

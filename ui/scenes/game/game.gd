@@ -30,6 +30,7 @@ extends Control
 @onready var vignette_overlay: ColorRect = $VignetteOverlay
 
 # 新 UI 组件引用
+@onready var right_panel_header_row: Control = $UIRoot/MainContent/CenterSplit/RightPanel/HeaderRow
 @onready var right_panel_back_button: Button = $UIRoot/MainContent/CenterSplit/RightPanel/HeaderRow/BackButton
 @onready var right_panel_title_label: Label = $UIRoot/MainContent/CenterSplit/RightPanel/HeaderRow/TitleLabel
 @onready var right_panel_close_button: Button = $UIRoot/MainContent/CenterSplit/RightPanel/HeaderRow/CloseButton
@@ -200,6 +201,7 @@ func _ready() -> void:
 		game_log_panel,
 		right_panel_default_stack,
 		right_panel_dock_host,
+		right_panel_header_row,
 		right_panel_back_button,
 		right_panel_title_label,
 		right_panel_footer_row,
@@ -763,6 +765,17 @@ func _show_confirm(title: String, message: String, on_confirm: Callable, on_canc
 
 func _get_game_engine() -> GameEngine:
 	return game_engine
+
+func is_replay_mode_active() -> bool:
+	if _timeline_controller != null and _timeline_controller.has_method("is_replay_mode_active"):
+		return bool(_timeline_controller.call("is_replay_mode_active"))
+	return false
+
+func is_timeline_read_only_active() -> bool:
+	if _timeline_controller != null and _timeline_controller.has_method("is_timeline_read_only_active"):
+		var eng: GameEngine = _get_game_engine()
+		return bool(_timeline_controller.call("is_timeline_read_only_active", eng))
+	return false
 
 func _set_active_game_engine(engine: GameEngine) -> void:
 	if engine == null:

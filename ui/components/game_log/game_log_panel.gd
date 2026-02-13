@@ -11,9 +11,9 @@ signal log_entry_hovered(entry_id: int, hovering: bool)
 signal replay_toggle_changed(active: bool)
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleRow/TopRow/TitleLabel
+@onready var options_row: Control = $MarginContainer/VBoxContainer/TitleRow/OptionsRow
 @onready var show_phase_events_check: CheckBox = $MarginContainer/VBoxContainer/TitleRow/OptionsRow/ShowPhaseEventsCheck
 @onready var fold_details_check: CheckBox = $MarginContainer/VBoxContainer/TitleRow/OptionsRow/FoldDetailsCheck
-@onready var expand_btn: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/ExpandButton
 @onready var close_btn: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/CloseButton
 @onready var replay_toggle_button: Button = $MarginContainer/VBoxContainer/TitleRow/TopRow/ReplayToggleButton
 @onready var replay_bar: Control = $MarginContainer/VBoxContainer/TitleRow/ReplayBar
@@ -84,9 +84,6 @@ var _expanded_action_groups: Dictionary = {} # step_index -> true（当启用折
 var _timeline_head_index: int = -1
 var _timeline_cursor_index: int = -1
 
-const FULL_LOG_WINDOW_SCENE_PATH := "res://ui/components/game_log/full_log_window.tscn"
-
-var _full_log_window_scene: PackedScene = null
 var _details_controller = null
 
 func _ready() -> void:
@@ -97,8 +94,6 @@ func _ready() -> void:
 	if replay_toggle_button != null:
 		replay_toggle_button.toggled.connect(_on_replay_toggle_toggled)
 
-	if expand_btn != null:
-		expand_btn.pressed.connect(_on_expand_pressed)
 	if close_btn != null:
 		close_btn.pressed.connect(_on_close_pressed)
 
@@ -109,6 +104,13 @@ func _ready() -> void:
 	if fold_details_check != null:
 		fold_details_check.toggled.connect(_on_fold_details_toggled)
 		fold_details_check.button_pressed = _fold_details_enabled
+
+	if options_row != null:
+		options_row.visible = false
+	if show_phase_events_check != null:
+		show_phase_events_check.visible = false
+	if fold_details_check != null:
+		fold_details_check.visible = false
 
 	if title_label != null:
 		UiStylesClass.apply_label_dark(title_label)
@@ -122,8 +124,8 @@ func _ready() -> void:
 		UiStylesClass.apply_label_hint_dark(entry_count_label)
 
 	UiStylesClass.apply_button_secondary(close_btn)
-	UiStylesClass.apply_button_secondary(expand_btn)
 	UiStylesClass.apply_button_secondary(replay_toggle_button)
+	_sync_replay_toggle_button_text()
 
 func add_log(log_type: LogType, message: String, details: Dictionary = {}) -> int:
 	var entry_id := _entry_id_counter
@@ -243,9 +245,9 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 	_apply_timeline_state_to_items(true)
 	_update_entry_count()
 
-func set_expand_enabled(enabled: bool) -> void:
-	if expand_btn != null:
-		expand_btn.visible = enabled
+func set_expand_enabled(_enabled: bool) -> void:
+	# 保留接口兼容 FullLogWindow，当前日志面板已移除“全屏”按钮。
+	pass
 
 func set_timeline_head(head_index: int) -> void:
 	var h := int(head_index)
@@ -651,36 +653,19 @@ func set_replay_toggle_active(active: bool) -> void:
 	var v := bool(active)
 	if replay_toggle_button.button_pressed != v:
 		replay_toggle_button.button_pressed = v
+	_sync_replay_toggle_button_text()
 
 func _on_replay_toggle_toggled(toggled: bool) -> void:
+	_sync_replay_toggle_button_text()
 	replay_toggle_changed.emit(bool(toggled))
 
 func _on_close_pressed() -> void:
 	close_requested.emit()
 
-func _on_expand_pressed() -> void:
-	if OS.has_feature("headless"):
+func _sync_replay_toggle_button_text() -> void:
+	if replay_toggle_button == null:
 		return
-	var scene := _get_full_log_window_scene()
-	if scene == null:
-		return
-	var win = scene.instantiate()
-	if win == null:
-		return
-	get_tree().root.add_child(win)
-	if win.has_method("open_for"):
-		win.open_for(self)
-	else:
-		win.show()
-
-func _get_full_log_window_scene() -> PackedScene:
-	if _full_log_window_scene != null:
-		return _full_log_window_scene
-	var res = load(FULL_LOG_WINDOW_SCENE_PATH)
-	if res is PackedScene:
-		_full_log_window_scene = res
-		return _full_log_window_scene
-	return null
+	replay_toggle_button.text = "退出回放" if replay_toggle_button.button_pressed else "进入回放"
 
 func _on_entry_clicked(entry_id: int) -> void:
 	log_entry_clicked.emit(entry_id)

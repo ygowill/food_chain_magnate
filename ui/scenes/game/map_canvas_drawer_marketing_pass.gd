@@ -201,6 +201,18 @@ static func draw_marketing_placement(canvas, cell_size: int, placement: Dictiona
 	else:
 		TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, icon_rect, type_mod)
 
+	# Board number badge (top-right): draw before product icon so 1x1 boards keep token readable.
+	var bn := 0
+	var bn_val = placement.get("board_number", null)
+	if bn_val is int:
+		bn = int(bn_val)
+	elif bn_val is float:
+		var f2: float = float(bn_val)
+		if f2 == floor(f2):
+			bn = int(f2)
+	if bn > 0:
+		draw_marketing_board_number_badge(canvas, rect, bn, cell_size, a)
+
 	# Product icon centered on the board area (matches “product slot centered” requirement).
 	var product_id: String = str(placement.get("product", ""))
 	if not product_id.is_empty():
@@ -241,18 +253,6 @@ static func draw_marketing_placement(canvas, cell_size: int, placement: Dictiona
 			var baseline := Vector2(product_rect.position.x, product_rect.position.y + product_rect.size.y * 0.5 + float(font_size) * 0.35)
 			canvas.draw_string(font, baseline + Vector2(1, 1), remaining_text, HORIZONTAL_ALIGNMENT_CENTER, product_rect.size.x, font_size, Color(0, 0, 0, 0.85 * a))
 			canvas.draw_string(font, baseline, remaining_text, HORIZONTAL_ALIGNMENT_CENTER, product_rect.size.x, font_size, Color(1, 1, 1, 1.0 * a))
-
-	# Board number badge (top-right): white circle + black number (issue_tracker #37).
-	var bn := 0
-	var bn_val = placement.get("board_number", null)
-	if bn_val is int:
-		bn = int(bn_val)
-	elif bn_val is float:
-		var f2: float = float(bn_val)
-		if f2 == floor(f2):
-			bn = int(f2)
-	if bn > 0:
-		draw_marketing_board_number_badge(canvas, rect, bn, cell_size, a)
 
 static func draw_marketing_board_number_badge(canvas, rect: Rect2, board_number: int, cell_size: int, alpha: float) -> void:
 	var text := str(board_number).strip_edges()

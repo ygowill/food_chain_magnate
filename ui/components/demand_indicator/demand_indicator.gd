@@ -6,6 +6,10 @@ extends Control
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 
+const MARKER_BASE_TILE_SIZE := 40.0
+const MARKER_MIN_SCALE := 0.35
+const MARKER_MAX_SCALE := 1.0
+
 var _house_demands: Dictionary = {}  # house_id -> {demands, position, satisfied}
 var _demand_markers: Dictionary = {}  # house_id -> DemandMarker
 var _tile_size: Vector2 = Vector2(64, 64)
@@ -26,6 +30,10 @@ func set_visual_modules(modules: Array[String]) -> void:
 
 func set_tile_size(size: Vector2) -> void:
 	_tile_size = size
+	var scale := _get_marker_scale()
+	for marker in _demand_markers.values():
+		if is_instance_valid(marker):
+			marker.set_visual_scale(scale)
 	_update_marker_positions()
 
 func set_map_offset(offset: Vector2) -> void:
@@ -66,7 +74,6 @@ func _rebuild_markers() -> void:
 func _create_marker(house_id: String) -> void:
 	var data: Dictionary = _house_demands.get(house_id, {})
 	var demands: Dictionary = data.get("demands", {})
-	var grid_pos: Vector2i = data.get("position", Vector2i(0, 0))
 	var satisfied: bool = data.get("satisfied", false)
 
 	if demands.is_empty():
@@ -77,12 +84,12 @@ func _create_marker(house_id: String) -> void:
 	marker.demands = demands
 	marker.is_satisfied = satisfied
 	marker.skin = _skin
+	marker.set_visual_scale(_get_marker_scale())
+	marker.layout_changed.connect(_on_marker_layout_changed.bind(house_id))
 	add_child(marker)
 	_demand_markers[house_id] = marker
 
-	# 设置位置（在格子上方）
-	var pixel_pos := Vector2(grid_pos.x, grid_pos.y) * _tile_size + _map_offset
-	marker.position = pixel_pos + Vector2(_tile_size.x / 2, -10)
+	_position_marker(house_id, marker)
 
 func _update_marker(house_id: String) -> void:
 	if not _demand_markers.has(house_id):
@@ -100,7 +107,9 @@ func _update_marker(house_id: String) -> void:
 	marker.demands = data.get("demands", {})
 	marker.is_satisfied = data.get("satisfied", false)
 	marker.skin = _skin
+	marker.set_visual_scale(_get_marker_scale())
 	marker.update_display()
+	_position_marker(house_id, marker)
 
 func _update_marker_positions() -> void:
 	for house_id in _demand_markers.keys():
@@ -108,10 +117,33 @@ func _update_marker_positions() -> void:
 		if not is_instance_valid(marker):
 			continue
 
-		var data: Dictionary = _house_demands.get(house_id, {})
-		var grid_pos: Vector2i = data.get("position", Vector2i(0, 0))
-		var pixel_pos := Vector2(grid_pos.x, grid_pos.y) * _tile_size + _map_offset
-		marker.position = pixel_pos + Vector2(_tile_size.x / 2, -10)
+		_position_marker(house_id, marker)
+
+func _get_marker_scale() -> float:
+	var ref := minf(_tile_size.x, _tile_size.y)
+	if ref <= 0.0:
+		ref = MARKER_BASE_TILE_SIZE
+	return clampf(ref / MARKER_BASE_TILE_SIZE, MARKER_MIN_SCALE, MARKER_MAX_SCALE)
+
+func _position_marker(house_id: String, marker: DemandMarker) -> void:
+	if not is_instance_valid(marker):
+		return
+	var data: Dictionary = _house_demands.get(house_id, {})
+	var grid_pos: Vector2i = data.get("position", Vector2i.ZERO)
+	var pixel_pos := Vector2(float(grid_pos.x), float(grid_pos.y)) * _tile_size + _map_offset
+	var margin_top := maxf(2.0, _tile_size.y * 0.10)
+	marker.position = Vector2(
+		pixel_pos.x + (_tile_size.x - marker.size.x) * 0.5,
+		pixel_pos.y - marker.size.y - margin_top
+	)
+
+func _on_marker_layout_changed(house_id: String) -> void:
+	if not _demand_markers.has(house_id):
+		return
+	var marker: DemandMarker = _demand_markers[house_id]
+	if not is_instance_valid(marker):
+		return
+	_position_marker(house_id, marker)
 
 func _ensure_skin() -> void:
 	if _skin != null:
@@ -134,10 +166,14 @@ func _update_marker_skins() -> void:
 
 # === 内部类：需求标记 ===
 class DemandMarker extends Control:
+	signal layout_changed
+
 	var house_id: String = ""
 	var demands: Dictionary = {}
 	var is_satisfied: bool = false
 	var skin = null
+	var _visual_scale: float = 1.0
+	var _layout_version: int = 0
 
 	var _background: ColorRect
 	var _icons_container: HBoxContainer
@@ -145,11 +181,17 @@ class DemandMarker extends Control:
 	func _ready() -> void:
 		_build_ui()
 
+	func set_visual_scale(scale: float) -> void:
+		var s := clampf(float(scale), MARKER_MIN_SCALE, MARKER_MAX_SCALE)
+		if is_equal_approx(_visual_scale, s):
+			return
+		_visual_scale = s
+		update_display()
+
 	func _build_ui() -> void:
-		# 设置锚点使其居中显示
-		set_anchors_preset(Control.PRESET_CENTER_TOP)
-		size = Vector2(80, 24)
-		position -= size / 2
+		# marker 使用左上角定位，由外层 DemandIndicator 统一计算位置。
+		set_anchors_preset(Control.PRESET_TOP_LEFT)
+		size = Vector2(40, 20)
 
 		# 背景
 		_background = ColorRect.new()
@@ -169,6 +211,15 @@ class DemandMarker extends Control:
 	func update_display() -> void:
 		if _icons_container == null:
 			return
+		_layout_version += 1
+		var local_ver := _layout_version
+
+		var icon_px := maxi(6, int(round(16.0 * _visual_scale)))
+		var count_font_size := maxi(8, int(round(12.0 * _visual_scale)))
+		var row_gap := maxi(1, int(round(2.0 * _visual_scale)))
+		var padding_h := maxi(4, int(round(8.0 * _visual_scale)))
+		var padding_v := maxi(2, int(round(4.0 * _visual_scale)))
+		_icons_container.add_theme_constant_override("separation", row_gap)
 
 		# 清除旧图标
 		for child in _icons_container.get_children():
@@ -191,14 +242,14 @@ class DemandMarker extends Control:
 				tex = skin.get_product_icon_texture(pid)
 
 			var icon_rect := TextureRect.new()
-			icon_rect.custom_minimum_size = Vector2(16, 16)
+			icon_rect.custom_minimum_size = Vector2(float(icon_px), float(icon_px))
 			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			icon_rect.texture = tex
 			_icons_container.add_child(icon_rect)
 
 			if count > 1:
 				var count_label := Label.new()
-				count_label.add_theme_font_size_override("font_size", 12)
+				count_label.add_theme_font_size_override("font_size", count_font_size)
 				count_label.text = "×%d" % count
 				_icons_container.add_child(count_label)
 
@@ -211,6 +262,11 @@ class DemandMarker extends Control:
 
 		# 调整大小
 		await get_tree().process_frame
+		if local_ver != _layout_version:
+			return
+		if not is_inside_tree():
+			return
 		var content_width := _icons_container.get_combined_minimum_size().x
-		size.x = max(40, content_width + 16)
-		position.x = -size.x / 2
+		size.x = max(float(icon_px + padding_h * 2), content_width + float(padding_h * 2))
+		size.y = float(icon_px + padding_v * 2)
+		layout_changed.emit()

@@ -8,6 +8,12 @@ const GameLogPhaseHeaderItemClass = preload("res://ui/components/game_log/game_l
 const GameLogActionGroupHeaderItemClass = preload("res://ui/components/game_log/game_log_action_group_header_item.gd")
 const GameLogEventItemClass = preload("res://ui/components/game_log/game_log_event_item.gd")
 
+const _RESTRUCTURING_NOISE_ACTION_IDS: PackedStringArray = [
+	"restructure_employee",
+	"set_company_structure_direct",
+	"set_company_structure_report",
+]
+
 static func build(
 	log_container: VBoxContainer,
 	step_timeline: Dictionary,
@@ -82,6 +88,7 @@ static func build(
 		var phase_seg := str(step.get("phase", "")).strip_edges()
 		if phase_seg.is_empty():
 			phase_seg = "?"
+		var action_id := str(step.get("action_id", "")).strip_edges()
 
 		var round_changed := (round_num != prev_round)
 		if round_changed and round_num >= 1:
@@ -95,6 +102,13 @@ static func build(
 		var kind := str(step.get("kind", "")).strip_edges()
 		if kind == "phase":
 			# phase step：不再渲染“进入X”类 ActionGroup 行；阶段标题已足够承载该锚点。
+			_add_event_items_for_step(items, log_container, idx, entries_by_step, show_phase_events, 1, -1, timeline_cursor_index, timeline_head_index, on_entry_clicked, on_entry_double_clicked)
+		elif _is_hidden_restructuring_noise_action(action_id):
+			# 重组阶段拖拽调整动作（直属槽/下属/在岗待命）不再逐条显示日志。
+			# 仍保留 submit_restructuring（确认重组）的日志项。
+			continue
+		elif _is_flow_command_action_id(str(step.get("action_id", "")).strip_edges()):
+			# flow command（skip/end_turn/skip_sub_phase/advance_phase）不再显示“系统推进”分组行。
 			_add_event_items_for_step(items, log_container, idx, entries_by_step, show_phase_events, 1, -1, timeline_cursor_index, timeline_head_index, on_entry_clicked, on_entry_double_clicked)
 		else:
 			var step_entries: Array = entries_by_step.get(idx, [])
@@ -161,9 +175,15 @@ static func compute_visible_entry_count(
 			continue
 		var step: Dictionary = step_val
 		var kind := str(step.get("kind", "")).strip_edges()
+		var action_id := str(step.get("action_id", "")).strip_edges()
 		var step_entries: Array = entries_by_step.get(idx, [])
 		if kind == "phase":
 			# phase step 没有 ActionGroupHeader：只计可见子项（仍受“显示阶段事件”开关影响）。
+			visible += _count_event_items_for_action_group(step_entries, -1, show_phase_events)
+			continue
+		if _is_hidden_restructuring_noise_action(action_id):
+			continue
+		if _is_flow_command_action_id(str(step.get("action_id", "")).strip_edges()):
 			visible += _count_event_items_for_action_group(step_entries, -1, show_phase_events)
 			continue
 
@@ -267,6 +287,10 @@ static func _pick_primary_entry_for_action_group(entries: Array) -> Dictionary:
 static func _is_flow_command_action_id(action_id: String) -> bool:
 	var aid := str(action_id).strip_edges()
 	return aid == ActionIdsClass.SKIP or aid == ActionIdsClass.END_TURN or aid == ActionIdsClass.SKIP_SUB_PHASE or aid == ActionIdsClass.ADVANCE_PHASE
+
+static func _is_hidden_restructuring_noise_action(action_id: String) -> bool:
+	var aid := str(action_id).strip_edges()
+	return _RESTRUCTURING_NOISE_ACTION_IDS.has(aid)
 
 static func _build_action_group_fallback_summary(step_index: int, step: Dictionary) -> String:
 	# 兜底：系统摘要/命令元信息（用于“无可见事件 step”的可读性）

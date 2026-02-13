@@ -17,38 +17,24 @@ theme_override_constants/margin_top = 4
 theme_override_constants/margin_right = 6
 theme_override_constants/margin_bottom = 4
 
-[node name="HBox" type="HFlowContainer" parent="MarginContainer"]
+[node name="VBox" type="VBoxContainer" parent="MarginContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/h_separation = 6
-theme_override_constants/v_separation = 6
-alignment = 1
+theme_override_constants/separation = 6
 
-[node name="LoadButton" type="Button" parent="MarginContainer/HBox"]
+[node name="TopRow" type="HBoxContainer" parent="MarginContainer/VBox"]
 layout_mode = 2
-text = "加载回放..."
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
 
-[node name="FirstButton" type="Button" parent="MarginContainer/HBox"]
+[node name="StatusLabel" type="Label" parent="MarginContainer/VBox/TopRow"]
 layout_mode = 2
-custom_minimum_size = Vector2(32, 28)
-text = "<<"
+custom_minimum_size = Vector2(150, 0)
+text = "时间线：-1 / -1"
+theme_override_font_sizes/font_size = 11
+theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
 
-[node name="PrevButton" type="Button" parent="MarginContainer/HBox"]
-layout_mode = 2
-custom_minimum_size = Vector2(32, 28)
-text = "<"
-
-[node name="NextButton" type="Button" parent="MarginContainer/HBox"]
-layout_mode = 2
-custom_minimum_size = Vector2(32, 28)
-text = ">"
-
-[node name="LastButton" type="Button" parent="MarginContainer/HBox"]
-layout_mode = 2
-custom_minimum_size = Vector2(32, 28)
-text = ">>"
-
-[node name="Slider" type="HSlider" parent="MarginContainer/HBox"]
+[node name="Slider" type="HSlider" parent="MarginContainer/VBox/TopRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = -1.0
@@ -56,17 +42,28 @@ max_value = -1.0
 step = 1.0
 value = -1.0
 
-[node name="StatusLabel" type="Label" parent="MarginContainer/HBox"]
+[node name="BottomRow" type="HBoxContainer" parent="MarginContainer/VBox"]
 layout_mode = 2
-custom_minimum_size = Vector2(110, 0)
-text = "时间线：-1 / -1"
-theme_override_font_sizes/font_size = 11
-theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+alignment = 1
 
-[node name="LatestButton" type="Button" parent="MarginContainer/HBox"]
+[node name="FirstButton" type="Button" parent="MarginContainer/VBox/BottomRow"]
 layout_mode = 2
-text = "返回最新"
+custom_minimum_size = Vector2(32, 28)
+text = "<<"
 
-[node name="CloseButton" type="Button" parent="MarginContainer/HBox"]
+[node name="PrevButton" type="Button" parent="MarginContainer/VBox/BottomRow"]
 layout_mode = 2
-text = "退出"
+custom_minimum_size = Vector2(32, 28)
+text = "<"
+
+[node name="NextButton" type="Button" parent="MarginContainer/VBox/BottomRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(32, 28)
+text = ">"
+
+[node name="LastButton" type="Button" parent="MarginContainer/VBox/BottomRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(32, 28)
+text = ">>"

@@ -52,11 +52,7 @@ text = "游戏日志"
 [node name="ReplayToggleButton" type="Button" parent="MarginContainer/VBoxContainer/TitleRow/TopRow"]
 layout_mode = 2
 toggle_mode = true
-text = "回放"
-
-[node name="ExpandButton" type="Button" parent="MarginContainer/VBoxContainer/TitleRow/TopRow"]
-layout_mode = 2
-text = "全屏"
+text = "进入回放"
 
 [node name="CloseButton" type="Button" parent="MarginContainer/VBoxContainer/TitleRow/TopRow"]
 layout_mode = 2
@@ -66,6 +62,7 @@ text = "×"
 layout_mode = 2
 
 [node name="OptionsRow" type="HFlowContainer" parent="MarginContainer/VBoxContainer/TitleRow"]
+visible = false
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/h_separation = 8

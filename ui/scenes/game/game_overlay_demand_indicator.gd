@@ -22,6 +22,19 @@ func sync_demand_indicator(state: GameState) -> void:
 	if state == null:
 		_hide_demand_indicator()
 		return
+	# 回放/复盘（只读时间线）不显示晚餐需求指示器，避免遮挡与错位干扰。
+	var timeline_read_only := false
+	if _scene != null and _scene.has_method("is_timeline_read_only_active"):
+		var ro = _scene.call("is_timeline_read_only_active")
+		if ro is bool:
+			timeline_read_only = bool(ro)
+	elif _scene != null and _scene.has_method("is_replay_mode_active"):
+		var rm = _scene.call("is_replay_mode_active")
+		if rm is bool:
+			timeline_read_only = bool(rm)
+	if timeline_read_only:
+		_hide_demand_indicator()
+		return
 	if state.phase != DefsClass.PHASE_DINNERTIME:
 		_hide_demand_indicator()
 		return

@@ -72,6 +72,7 @@ func dispose() -> void:
 	_disconnect_replay_bar_signals()
 	_replay_mode_active = false
 	_manual_replay_enabled = false
+	_sync_log_panel_replay_toggle_state(false)
 	_replay_original_engine = null
 	_replay_original_log_entries.clear()
 	_replay_file_path = ""
@@ -98,9 +99,17 @@ func is_manual_replay_enabled() -> bool:
 
 func set_manual_replay_enabled(active: bool) -> void:
 	var v := bool(active)
+	if _replay_mode_active:
+		if not v:
+			_exit_replay_mode_with_restore()
+		else:
+			_sync_log_panel_replay_toggle_state(true)
+		return
 	if v == _manual_replay_enabled:
+		_sync_log_panel_replay_toggle_state(v)
 		return
 	_manual_replay_enabled = v
+	_sync_log_panel_replay_toggle_state(_manual_replay_enabled)
 
 	# 关闭手动回放：若当前处于“复盘”态，自动回到最新，避免被锁在历史快照中。
 	if not _manual_replay_enabled and not _replay_mode_active:
@@ -152,6 +161,8 @@ func get_ui_replay_suffix(engine: GameEngine, head_index: int, cursor_index: int
 
 func is_timeline_read_only_active(engine: GameEngine) -> bool:
 	if _replay_mode_active:
+		return true
+	if _manual_replay_enabled:
 		return true
 	if engine == null:
 		return false
@@ -251,14 +262,14 @@ func sync_timeline_ui(head_index: int, cursor_index: int, state: GameState) -> v
 
 	var show_bar := _replay_mode_active or cursor_index < head_index or _manual_replay_enabled
 	if show_bar:
-		_set_replay_bar_state(head_index, cursor_index, _replay_mode_active)
+		_set_replay_bar_state(head_index, cursor_index, _replay_mode_active or _manual_replay_enabled)
 	else:
 		_hide_replay_bar()
 
 	# 回放/查看历史：禁用 ActionPanel（避免时间线分支与误操作）。
 	if is_instance_valid(_action_panel) and _action_panel.has_method("set_globally_disabled"):
 		var reason := ""
-		if _replay_mode_active:
+		if _replay_mode_active or _manual_replay_enabled:
 			reason = "回放中不可操作"
 		elif cursor_index < head_index and not _timeline_edit_mode_active:
 			reason = "查看历史中不可操作"
@@ -304,12 +315,6 @@ func _connect_replay_bar_signals() -> void:
 
 	if rb.has_signal("seek_requested"):
 		UiSignalHelpersClass.safe_connect(rb, "seek_requested", Callable(self, "_on_replay_bar_seek_requested"))
-	if rb.has_signal("return_latest_requested"):
-		UiSignalHelpersClass.safe_connect(rb, "return_latest_requested", Callable(self, "_on_replay_bar_return_latest_requested"))
-	if rb.has_signal("load_requested"):
-		UiSignalHelpersClass.safe_connect(rb, "load_requested", Callable(self, "_on_replay_bar_load_requested"))
-	if rb.has_signal("close_requested"):
-		UiSignalHelpersClass.safe_connect(rb, "close_requested", Callable(self, "_on_replay_bar_close_requested"))
 
 	if rb.has_method("set_active"):
 		rb.call("set_active", false)
@@ -324,9 +329,6 @@ func _disconnect_replay_bar_signals() -> void:
 		return
 
 	_disconnect_rb_signal(rb, "seek_requested", "_on_replay_bar_seek_requested")
-	_disconnect_rb_signal(rb, "return_latest_requested", "_on_replay_bar_return_latest_requested")
-	_disconnect_rb_signal(rb, "load_requested", "_on_replay_bar_load_requested")
-	_disconnect_rb_signal(rb, "close_requested", "_on_replay_bar_close_requested")
 
 func _disconnect_rb_signal(rb: Object, signal_name: String, method_name: String) -> void:
 	if rb == null or not is_instance_valid(rb):
@@ -719,23 +721,7 @@ func _seek_to_replay_step(target_step_index: int) -> void:
 	if _update_ui.is_valid():
 		_update_ui.call()
 
-func _on_replay_bar_return_latest_requested() -> void:
-	var engine: GameEngine = _get_game_engine.call() if _get_game_engine.is_valid() else null
-	if engine == null:
-		return
-	if _replay_mode_active and _replay_step_timeline.has("steps"):
-		_on_replay_bar_seek_requested(_replay_head_step_index)
-		return
-	if _history_step_timeline_active and _history_step_timeline.has("steps"):
-		_exit_history_step_timeline()
-		return
-	_on_replay_bar_seek_requested(engine.command_history.size() - 1)
-
-func _on_replay_bar_load_requested() -> void:
-	if _open_replay_load_dialog.is_valid():
-		_open_replay_load_dialog.call()
-
-func _on_replay_bar_close_requested() -> void:
+func _exit_replay_mode_with_restore() -> void:
 	if _startup_replay_from_main_menu:
 		Globals.reset_game_config()
 		SceneManager.goto_main_menu()
@@ -743,7 +729,17 @@ func _on_replay_bar_close_requested() -> void:
 
 	# 对局内“查看历史”态：关闭等价于“返回最新”。
 	if not _replay_mode_active:
-		_on_replay_bar_return_latest_requested()
+		var engine: GameEngine = _get_game_engine.call() if _get_game_engine.is_valid() else null
+		if engine == null:
+			return
+		if _history_step_timeline_active and _history_step_timeline.has("steps"):
+			_exit_history_step_timeline()
+		else:
+			_on_replay_bar_seek_requested(engine.command_history.size() - 1)
+		_manual_replay_enabled = false
+		_sync_log_panel_replay_toggle_state(false)
+		if _update_ui.is_valid():
+			_update_ui.call()
 		return
 
 	_hide_replay_bar()
@@ -760,6 +756,7 @@ func _on_replay_bar_close_requested() -> void:
 		var cursor_index := int(engine.current_command_index)
 		_game_log_panel.call("set_timeline_head", head_index)
 		_game_log_panel.call("set_timeline_cursor", cursor_index)
+	_sync_log_panel_replay_toggle_state(false)
 
 func _enter_replay_mode(engine: GameEngine) -> void:
 	if engine == null:
@@ -769,6 +766,7 @@ func _enter_replay_mode(engine: GameEngine) -> void:
 		_replay_original_engine = current
 
 	_replay_mode_active = true
+	_sync_log_panel_replay_toggle_state(true)
 	if _set_active_game_engine.is_valid():
 		_set_active_game_engine.call(engine)
 	if _update_ui.is_valid():
@@ -782,6 +780,7 @@ func _exit_replay_mode() -> void:
 	_replay_step_timeline.clear()
 	_replay_head_step_index = -1
 	_replay_cursor_step_index = -1
+	_sync_log_panel_replay_toggle_state(false)
 
 	var restore_engine := _replay_original_engine
 	_replay_original_engine = null
@@ -790,3 +789,9 @@ func _exit_replay_mode() -> void:
 		_set_active_game_engine.call(restore_engine)
 	if _update_ui.is_valid():
 		_update_ui.call()
+
+func _sync_log_panel_replay_toggle_state(active: bool) -> void:
+	if not is_instance_valid(_game_log_panel):
+		return
+	if _game_log_panel.has_method("set_replay_toggle_active"):
+		_game_log_panel.call("set_replay_toggle_active", bool(active))

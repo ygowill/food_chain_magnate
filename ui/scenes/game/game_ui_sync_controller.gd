@@ -176,8 +176,6 @@ func update_ui(do_profile: bool) -> void:
 
 	if is_instance_valid(_overlay_controller):
 		var span_overlays := PerfTraceClass.begin_span("ui:overlay_controller.sync") if do_profile else -1
-		if _overlay_controller.has_method("sync_dinnertime_overlay"):
-			_overlay_controller.call("sync_dinnertime_overlay", state)
 		if _overlay_controller.has_method("sync_demand_indicator"):
 			_overlay_controller.call("sync_demand_indicator", state)
 		if do_profile:
