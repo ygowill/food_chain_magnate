@@ -16,6 +16,10 @@ func _ready() -> void:
 	set_confirm_text("确认选择")
 	set_cancel_text("关闭")
 	set_confirm_enabled(false)
+	if is_instance_valid(selection_label):
+		UiStylesClass.apply_label_dark(selection_label)
+	if is_instance_valid(hint_label):
+		UiStylesClass.apply_label_hint_dark(hint_label)
 
 	if is_instance_valid(display) and display.has_signal("position_selected"):
 		if not display.position_selected.is_connected(_on_position_selected):

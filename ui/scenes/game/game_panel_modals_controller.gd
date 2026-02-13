@@ -53,6 +53,8 @@ func dispose() -> void:
 	_scene = null
 
 func has_open_modal_ui() -> bool:
+	if _reserve_card_open_routine_running or _pending_reserve_card_open_player_id >= 0:
+		return true
 	if is_instance_valid(_turn_order_modal) and _turn_order_modal.visible:
 		return true
 	if is_instance_valid(_reserve_card_modal) and _reserve_card_modal.visible:

@@ -38,6 +38,7 @@ theme_override_constants/separation = 4
 [node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 text = "员工卡牌"
 horizontal_alignment = 1
 

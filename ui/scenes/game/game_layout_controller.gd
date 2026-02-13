@@ -3,8 +3,8 @@
 class_name GameLayoutController
 extends RefCounted
 
-const LEFT_AREA_MIN_WIDTH := 200
-const PLAYER_TAB_MIN_SIZE := 52
+const LEFT_AREA_MIN_WIDTH := 460
+const PLAYER_TAB_MIN_SIZE := 68
 const PLAYER_TAB_SEPARATION := 8
 const PLAYER_TAB_PANEL_H_PADDING := 16
 const PLAYER_TAB_PANEL_EXTRA_PADDING := 8
@@ -32,7 +32,7 @@ var _player_panel: Control = null
 var _inventory_panel: Control = null
 
 var _left_area_visible: bool = true
-var _main_content_default_split_offset: int = 360
+var _main_content_default_split_offset: int = 460
 var _left_area_user_resized: bool = false
 
 var _bottom_panel_visible: bool = true
@@ -91,16 +91,18 @@ func on_main_content_dragged(offset: int) -> void:
 		return
 	_left_area_user_resized = true
 	# 只限制最小宽度（issue_tracker #61）：避免把“用户拖到的宽度”写回 custom_minimum_size 导致无法再缩小。
-	var clamped := maxi(int(offset), LEFT_AREA_MIN_WIDTH)
+	var min_w := _get_left_area_min_width()
+	var clamped := maxi(int(offset), min_w)
 	_main_content_default_split_offset = clamped
 	if is_instance_valid(_main_content):
 		_main_content.split_offset = clamped
 	if is_instance_valid(_left_area):
-		_left_area.custom_minimum_size.x = LEFT_AREA_MIN_WIDTH
+		_left_area.custom_minimum_size.x = min_w
 
 func init_left_panel_toggle() -> void:
+	var min_w := _get_left_area_min_width()
 	if is_instance_valid(_main_content):
-		_main_content_default_split_offset = maxi(int(_main_content.split_offset), LEFT_AREA_MIN_WIDTH)
+		_main_content_default_split_offset = maxi(int(_main_content.split_offset), min_w)
 	_left_area_visible = is_instance_valid(_left_area) and _left_area.visible
 	_update_left_panel_toggle_button()
 
@@ -111,7 +113,7 @@ func ensure_left_area_visible() -> void:
 	if is_instance_valid(_left_area):
 		_left_area.visible = true
 	if is_instance_valid(_main_content):
-		_main_content.split_offset = _main_content_default_split_offset
+		_main_content.split_offset = maxi(_main_content_default_split_offset, _get_left_area_min_width())
 	_update_left_panel_toggle_button()
 
 func on_toggle_left_panel_pressed() -> void:
@@ -120,7 +122,7 @@ func on_toggle_left_panel_pressed() -> void:
 		_left_area.visible = _left_area_visible
 	if is_instance_valid(_main_content):
 		if _left_area_visible:
-			_main_content.split_offset = _main_content_default_split_offset
+			_main_content.split_offset = maxi(_main_content_default_split_offset, _get_left_area_min_width())
 		else:
 			_main_content.split_offset = 0
 	_update_left_panel_toggle_button()
@@ -262,39 +264,40 @@ func apply_responsive_layout() -> void:
 	_responsive_mode = mode
 	_responsive_font_scale = current_font_scale
 
-	var left_width := 360
+	var left_width := 420
 	var right_width := 340
 	var font_size := 18
 	var separation := 20
 
 	match mode:
 		"narrow":
-			left_width = 260
+			left_width = 360
 			right_width = 300
 			font_size = 14
 			separation = 12
 		"wide":
-			left_width = 320
+			left_width = 460
 			right_width = 380
 			font_size = 18
 			separation = 24
 		_:
-			left_width = 280
+			left_width = 420
 			right_width = 340
 			font_size = 18
 			separation = 20
 
 	var panel_tabs_min_width := _estimate_player_tabs_min_panel_width(_get_layout_player_count())
+	var min_left_width := _get_left_area_min_width()
 	right_width = maxi(int(right_width), panel_tabs_min_width)
 
 	if _left_area_user_resized:
-		left_width = maxi(int(_main_content_default_split_offset), LEFT_AREA_MIN_WIDTH)
+		left_width = maxi(int(_main_content_default_split_offset), min_left_width)
 	else:
-		left_width = maxi(int(left_width), LEFT_AREA_MIN_WIDTH)
+		left_width = maxi(int(left_width), min_left_width)
 		left_width = maxi(int(left_width), panel_tabs_min_width)
 
 	if is_instance_valid(_left_area):
-		_left_area.custom_minimum_size.x = LEFT_AREA_MIN_WIDTH
+		_left_area.custom_minimum_size.x = min_left_width
 	_main_content_default_split_offset = left_width
 	if _left_area_visible:
 		_main_content.split_offset = left_width
@@ -357,3 +360,11 @@ func _estimate_player_tabs_min_panel_width(player_count: int) -> int:
 	var tabs_width := int(player_count) * PLAYER_TAB_MIN_SIZE
 	tabs_width += maxi(0, int(player_count) - 1) * PLAYER_TAB_SEPARATION
 	return tabs_width + PLAYER_TAB_PANEL_H_PADDING + PLAYER_TAB_PANEL_EXTRA_PADDING
+
+func _get_left_area_min_width() -> int:
+	var min_w := LEFT_AREA_MIN_WIDTH
+	if is_instance_valid(_left_panel):
+		min_w = maxi(min_w, int(round(_left_panel.custom_minimum_size.x)))
+	if is_instance_valid(_left_area):
+		min_w = maxi(min_w, int(round(_left_area.custom_minimum_size.x)))
+	return min_w

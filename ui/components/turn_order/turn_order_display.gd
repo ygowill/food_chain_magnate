@@ -215,20 +215,25 @@ class OrderBadge extends PanelContainer:
 		_icon = TextureRect.new()
 		_icon.anchors_preset = Control.PRESET_FULL_RECT
 		_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		_icon.offset_left = BADGE_ICON_MARGIN
-		_icon.offset_top = BADGE_ICON_MARGIN
-		_icon.offset_right = -BADGE_ICON_MARGIN
-		_icon.offset_bottom = -BADGE_ICON_MARGIN
 		_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(_icon)
 		_label = Label.new()
+		_label.anchors_preset = Control.PRESET_FULL_RECT
+		_label.offset_left = 0.0
+		_label.offset_top = 0.0
+		_label.offset_right = 0.0
+		_label.offset_bottom = 0.0
 		_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		_label.add_theme_font_size_override("font_size", 24)
 		_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(_label)
 		_update()
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			_update()
 
 	func set_highlighted(highlighted: bool) -> void:
 		_highlighted = highlighted
@@ -270,24 +275,34 @@ class OrderBadge extends PanelContainer:
 				empty_color.a = 0.9
 				_label.add_theme_color_override("font_color", empty_color)
 
-			var style := StyleBoxFlat.new()
-			if _occupied:
-				var bg := RESTAURANT_BG_COLOR
-				bg.a = 0.95
-				style.bg_color = bg
-			elif _highlighted:
-				style.bg_color = Color(0.90, 0.93, 0.85, 0.9)
-			else:
-				style.bg_color = Color(0.95, 0.91, 0.82, 0.85)
-			style.border_color = CURRENT_BORDER_COLOR if _is_current else (_player_color if _occupied else Color(0.3, 0.3, 0.35, 0.6))
-			style.set_border_width_all(3 if _is_current else 1)
-			style.set_corner_radius_all(int(BADGE_SIZE / 2))
-			add_theme_stylebox_override("panel", style)
+		var style := StyleBoxFlat.new()
+		if _occupied:
+			var bg := RESTAURANT_BG_COLOR
+			bg.a = 0.95
+			style.bg_color = bg
+		elif _highlighted:
+			style.bg_color = Color(0.90, 0.93, 0.85, 0.9)
+		else:
+			style.bg_color = Color(0.95, 0.91, 0.82, 0.85)
+		style.border_color = CURRENT_BORDER_COLOR if _is_current else (_player_color if _occupied else Color(0.3, 0.3, 0.35, 0.6))
+		style.set_border_width_all(3 if _is_current else 1)
+		style.set_corner_radius_all(int(round(minf(size.x, size.y) * 0.5)))
+		add_theme_stylebox_override("panel", style)
 
-			if _occupied:
-				tooltip_text = "顺位 %d: %s" % [slot_position + 1, Globals.get_player_name(_player_id)]
-			else:
-				tooltip_text = "顺位 %d: （空）" % (slot_position + 1)
+		if _icon != null:
+			var icon_padding := float(BADGE_ICON_MARGIN)
+			var inner_size := minf(size.x, size.y)
+			var pad_x := ((size.x - inner_size) * 0.5) + icon_padding
+			var pad_y := ((size.y - inner_size) * 0.5) + icon_padding
+			_icon.offset_left = pad_x
+			_icon.offset_top = pad_y
+			_icon.offset_right = -pad_x
+			_icon.offset_bottom = -pad_y
+
+		if _occupied:
+			tooltip_text = "顺位 %d: %s" % [slot_position + 1, Globals.get_player_name(_player_id)]
+		else:
+			tooltip_text = "顺位 %d: （空）" % (slot_position + 1)
 
 	func _on_gui_input(event: InputEvent) -> void:
 		if not _clickable:

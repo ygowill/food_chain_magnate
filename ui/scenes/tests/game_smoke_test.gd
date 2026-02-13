@@ -64,9 +64,17 @@ func _run_test() -> int:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	if menu.get_node_or_null("CenterContainer/Card/Margin/VBoxContainer/NewGameButton") == null:
+	var new_game_paths: PackedStringArray = [
+		"CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/NewGameButton",
+		"CenterContainer/Card/Margin/VBoxContainer/NewGameButton",
+	]
+	if _find_first_existing_node(menu, new_game_paths) == null:
 		return await _fail("main_menu.tscn 缺少 NewGameButton 节点（节点路径漂移）")
-	if menu.get_node_or_null("CenterContainer/Card/Margin/VBoxContainer/OnlineButton") == null:
+	var online_paths: PackedStringArray = [
+		"CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/OnlineButton",
+		"CenterContainer/Card/Margin/VBoxContainer/OnlineButton",
+	]
+	if _find_first_existing_node(menu, online_paths) == null:
 		return await _fail("main_menu.tscn 缺少 OnlineButton 节点（节点路径漂移）")
 	if menu.get_node_or_null("VersionLabel") == null:
 		return await _fail("main_menu.tscn 缺少 VersionLabel 节点（节点路径漂移）")
@@ -91,19 +99,43 @@ func _run_test() -> int:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	if setup.get_node_or_null("CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer/BackButton") == null:
+	var setup_back_paths: PackedStringArray = [
+		"CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/ButtonContainer/BackButton",
+		"CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer/BackButton",
+	]
+	if _find_first_existing_node(setup, setup_back_paths) == null:
 		return await _fail("game_setup.tscn 缺少 BackButton 节点（节点路径漂移）")
-	if setup.get_node_or_null("CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer/StartButton") == null:
+	var setup_start_paths: PackedStringArray = [
+		"CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/ButtonContainer/StartButton",
+		"CenterContainer/ContentCenter/Card/Margin/VBoxContainer/ButtonContainer/StartButton",
+	]
+	if _find_first_existing_node(setup, setup_start_paths) == null:
 		return await _fail("game_setup.tscn 缺少 StartButton 节点（节点路径漂移）")
-	if setup.get_node_or_null("CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer/PlayerCountSpinBox") == null:
+	var setup_count_paths: PackedStringArray = [
+		"CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer/PlayerCountSpinBox",
+		"CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer/PlayerCountSpinBox",
+	]
+	if _find_first_existing_node(setup, setup_count_paths) == null:
 		return await _fail("game_setup.tscn 缺少 PlayerCountSpinBox 节点（节点路径漂移）")
-	if setup.get_node_or_null("CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/SeedContainer/SeedLineEdit") == null:
+	var setup_seed_paths: PackedStringArray = [
+		"CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn/SeedContainer/SeedLineEdit",
+		"CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/SeedContainer/SeedLineEdit",
+	]
+	if _find_first_existing_node(setup, setup_seed_paths) == null:
 		return await _fail("game_setup.tscn 缺少 SeedLineEdit 节点（节点路径漂移）")
 
 	# 关键：校验 game_setup.gd 的动态 UI 组装是否执行（避免 _ready/节点路径错误导致静默失败）
-	if setup.get_node_or_null("CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayersSection") == null:
+	var setup_players_section_paths: PackedStringArray = [
+		"CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn/PlayersSection",
+		"CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayersSection",
+	]
+	if _find_first_existing_node(setup, setup_players_section_paths) == null:
 		return await _fail("game_setup.tscn 缺少 PlayersSection（可能是 game_setup.gd 未正确运行）")
-	if setup.get_node_or_null("CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/RightColumn/ModulesSection") == null:
+	var setup_modules_section_paths: PackedStringArray = [
+		"CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/RightColumn/ModulesSection",
+		"CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/RightColumn/ModulesSection",
+	]
+	if _find_first_existing_node(setup, setup_modules_section_paths) == null:
 		return await _fail("game_setup.tscn 缺少 ModulesSection（可能是 game_setup.gd 未正确运行）")
 
 	var inst = GameScene.instantiate()
@@ -145,9 +177,17 @@ func _run_test() -> int:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	if lobby.get_node_or_null("Center/Panel/Margin/Root/TopBar/BackButton") == null:
+	var lobby_back_paths: PackedStringArray = [
+		"Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar/BackButton",
+		"Center/Panel/Margin/Root/TopBar/BackButton",
+	]
+	if _find_first_existing_node(lobby, lobby_back_paths) == null:
 		return await _fail("online_lobby.tscn 缺少 BackButton 节点（节点路径漂移）")
-	if lobby.get_node_or_null("Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/ConnectButton") == null:
+	var lobby_connect_paths: PackedStringArray = [
+		"Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ButtonsRow/ConnectButton",
+		"Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/ConnectButton",
+	]
+	if _find_first_existing_node(lobby, lobby_connect_paths) == null:
 		return await _fail("online_lobby.tscn 缺少 ConnectButton 节点（节点路径漂移）")
 	if lobby.get_node_or_null("ConfigDebounceTimer") == null:
 		return await _fail("online_lobby.tscn 缺少 ConfigDebounceTimer 节点（节点路径漂移）")
@@ -193,3 +233,12 @@ func _should_autorun() -> bool:
 	if args.has("autorun") or args.has("--autorun"):
 		return true
 	return OS.has_feature("headless")
+
+func _find_first_existing_node(root: Node, paths: PackedStringArray) -> Node:
+	if root == null:
+		return null
+	for path in paths:
+		var n = root.get_node_or_null(path)
+		if n != null:
+			return n
+	return null

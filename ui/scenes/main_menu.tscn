@@ -106,7 +106,8 @@ size_flags_horizontal = 4
 text = "载入游戏"
 
 [node name="PrimaryGroupGap" type="Control" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
-custom_minimum_size = Vector2(0, 12)
+visible = false
+custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
 
 [node name="OnlineButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
@@ -116,7 +117,7 @@ size_flags_horizontal = 4
 text = "联机"
 
 [node name="SystemGroupGap" type="Control" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
-custom_minimum_size = Vector2(0, 12)
+custom_minimum_size = Vector2(0, 18)
 layout_mode = 2
 
 [node name="SystemButtons" type="HBoxContainer" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]

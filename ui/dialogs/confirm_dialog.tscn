@@ -31,7 +31,7 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="Dialog" type="Control" parent="Center"]
-custom_minimum_size = Vector2(350, 180)
+custom_minimum_size = Vector2(420, 240)
 layout_mode = 2
 
 [node name="BackgroundPanel" type="Panel" parent="Center/Dialog"]

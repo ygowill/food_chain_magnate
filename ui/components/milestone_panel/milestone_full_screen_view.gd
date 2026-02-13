@@ -595,6 +595,7 @@ class MilestoneCard extends PanelContainer:
 		_name_label = Label.new()
 		_name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_name_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(14) if Globals != null else 14)
+		_name_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
 		vbox.add_child(_name_label)
 
 		_desc_label = Label.new()

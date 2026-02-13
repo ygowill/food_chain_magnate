@@ -33,6 +33,7 @@ func _ready() -> void:
 	UiStylesClass.apply_button_secondary(cancel_button)
 	if is_instance_valid(title_label):
 		title_label.text = title
+		UiStylesClass.apply_label_dark(title_label)
 	if is_instance_valid(confirm_button):
 		confirm_button.text = confirm_text
 		confirm_button.pressed.connect(_on_confirm_pressed)
@@ -40,12 +41,15 @@ func _ready() -> void:
 		cancel_button.text = cancel_text
 		cancel_button.pressed.connect(_on_cancel_pressed)
 	_update_hint()
+	if is_instance_valid(hint_label):
+		UiStylesClass.apply_label_hint_dark(hint_label)
 	_apply_overlay_alpha(_overlay_alpha_normal)
 
 func set_title_text(text: String) -> void:
 	title = text
 	if is_instance_valid(title_label):
 		title_label.text = title
+		UiStylesClass.apply_label_dark(title_label)
 
 func set_confirm_text(text: String) -> void:
 	confirm_text = text

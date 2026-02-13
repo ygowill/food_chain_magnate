@@ -39,7 +39,9 @@ var _show_notes: bool = true
 var _header_row: HBoxContainer = null
 var _groups_container: GridContainer = null
 var _notes_label: Label = null
-var _action_buttons: Array[Button] = []
+var _action_buttons: Array = [] # BaseButton
+var _group_select_checkboxes: Dictionary = {} # group_id -> CheckBox
+var _group_module_ids: Dictionary = {} # group_id -> Array[String]
 
 func _ready() -> void:
 	_ensure_base_ui()
@@ -237,7 +239,9 @@ func _build_modules_ui() -> void:
 	for child in _groups_container.get_children():
 		child.queue_free()
 	_module_checkboxes.clear()
-	var kept: Array[Button] = []
+	_group_select_checkboxes.clear()
+	_group_module_ids.clear()
+	var kept: Array = []
 	for btn in _action_buttons:
 		if btn != null and is_instance_valid(btn) and btn.get_parent() == _header_row:
 			kept.append(btn)
@@ -246,10 +250,11 @@ func _build_modules_ui() -> void:
 	var groups: Array[Dictionary] = _compute_module_groups()
 	for i in range(groups.size()):
 		var group: Dictionary = groups[i]
+		var group_id := str(group.get("id", "")).strip_edges()
 		var title := str(group.get("title", "")).strip_edges()
 		var mids: Array[String] = Array(group.get("modules", []), TYPE_STRING, "", null)
 		var bg := _GROUP_BG_COLORS[i] if i >= 0 and i < _GROUP_BG_COLORS.size() else _GROUP_BG_COLORS[_GROUP_BG_COLORS.size() - 1]
-		_groups_container.add_child(_build_module_group_box(title, mids, bg))
+		_groups_container.add_child(_build_module_group_box(group_id, title, mids, bg))
 
 func _build_group_panel_style(bg: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
@@ -265,7 +270,7 @@ func _build_group_panel_style(bg: Color) -> StyleBoxFlat:
 	sb.corner_radius_bottom_left = 12
 	return sb
 
-func _build_module_group_box(title: String, module_ids: Array[String], bg_color: Color) -> Control:
+func _build_module_group_box(group_id: String, title: String, module_ids: Array[String], bg_color: Color) -> Control:
 	var panel := PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.custom_minimum_size = Vector2(560, 0)
@@ -300,32 +305,20 @@ func _build_module_group_box(title: String, module_ids: Array[String], bg_color:
 	header.add_child(title_label)
 
 	var mids_copy: Array[String] = module_ids.duplicate()
-
-	var select_btn := Button.new()
-	select_btn.text = "组选"
-	select_btn.disabled = not _editable
-	select_btn.custom_minimum_size = Vector2(72, 28)
-	UiStylesClass.apply_button_secondary(select_btn)
-	select_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
-	select_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	select_btn.pressed.connect(func() -> void:
-		_on_select_group_pressed(mids_copy)
+	var select_all_check := CheckBox.new()
+	select_all_check.text = "全选"
+	select_all_check.tooltip_text = "选中全选本组，取消全不选"
+	select_all_check.disabled = not _editable
+	UiStylesClass.apply_check_box_field(select_all_check)
+	select_all_check.size_flags_horizontal = Control.SIZE_SHRINK_END
+	select_all_check.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	select_all_check.toggled.connect(func(pressed: bool) -> void:
+		_on_group_select_toggled(group_id, mids_copy, pressed)
 	)
-	header.add_child(select_btn)
-	_action_buttons.append(select_btn)
-
-	var clear_btn := Button.new()
-	clear_btn.text = "组不选"
-	clear_btn.disabled = not _editable
-	clear_btn.custom_minimum_size = Vector2(72, 28)
-	UiStylesClass.apply_button_secondary(clear_btn)
-	clear_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
-	clear_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	clear_btn.pressed.connect(func() -> void:
-		_on_clear_group_pressed(mids_copy)
-	)
-	header.add_child(clear_btn)
-	_action_buttons.append(clear_btn)
+	header.add_child(select_all_check)
+	_group_select_checkboxes[group_id] = select_all_check
+	_group_module_ids[group_id] = mids_copy.duplicate()
+	_action_buttons.append(select_all_check)
 
 	var inner := VBoxContainer.new()
 	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -376,6 +369,18 @@ func _on_select_all_modules_pressed() -> void:
 
 func _on_clear_all_modules_pressed() -> void:
 	_requested_optional_modules.clear()
+	_recompute_modules_and_apply_to_ui()
+
+func _on_group_select_toggled(_group_id: String, module_ids: Array[String], pressed: bool) -> void:
+	if _suppress_signals:
+		return
+	if pressed:
+		for mid in module_ids:
+			if _optional_module_ids.has(mid):
+				_requested_optional_modules[mid] = true
+	else:
+		for mid2 in module_ids:
+			_requested_optional_modules.erase(mid2)
 	_recompute_modules_and_apply_to_ui()
 
 func _on_select_group_pressed(module_ids: Array[String]) -> void:
@@ -463,6 +468,30 @@ func _recompute_modules_and_apply_to_ui() -> void:
 		if not _editable:
 			cb.disabled = true
 		cb.tooltip_text = tt if _show_tooltips else ""
+
+	for gid in _group_select_checkboxes.keys():
+		var group_cb_val = _group_select_checkboxes.get(gid, null)
+		if not (group_cb_val is CheckBox) or not is_instance_valid(group_cb_val):
+			continue
+		var group_cb: CheckBox = group_cb_val
+		var group_modules_val = _group_module_ids.get(gid, [])
+		if not (group_modules_val is Array):
+			group_cb.button_pressed = false
+			group_cb.disabled = true
+			continue
+		var group_modules: Array = group_modules_val
+		var total := 0
+		var selected := 0
+		for mid_val in group_modules:
+			var gid_mid := str(mid_val).strip_edges()
+			if gid_mid.is_empty() or not _optional_module_ids.has(gid_mid):
+				continue
+			total += 1
+			if effective.has(gid_mid):
+				selected += 1
+		group_cb.button_pressed = total > 0 and selected == total
+		group_cb.disabled = (not _editable) or total <= 0
+		group_cb.tooltip_text = "选中全选本组，取消全不选"
 	_suppress_signals = false
 
 	_set_notes("\n".join(notes))

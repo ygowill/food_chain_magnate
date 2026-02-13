@@ -110,6 +110,17 @@ func _ready() -> void:
 		fold_details_check.toggled.connect(_on_fold_details_toggled)
 		fold_details_check.button_pressed = _fold_details_enabled
 
+	if title_label != null:
+		UiStylesClass.apply_label_dark(title_label)
+	if show_phase_events_check != null:
+		UiStylesClass.apply_check_box_field(show_phase_events_check)
+	if fold_details_check != null:
+		UiStylesClass.apply_check_box_field(fold_details_check)
+	if auto_scroll_check != null:
+		UiStylesClass.apply_check_box_field(auto_scroll_check)
+	if entry_count_label != null:
+		UiStylesClass.apply_label_hint_dark(entry_count_label)
+
 	UiStylesClass.apply_button_secondary(close_btn)
 	UiStylesClass.apply_button_secondary(expand_btn)
 	UiStylesClass.apply_button_secondary(replay_toggle_button)

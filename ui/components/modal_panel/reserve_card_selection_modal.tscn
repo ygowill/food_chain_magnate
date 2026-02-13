@@ -72,7 +72,7 @@ theme_override_constants/separation = 12
 alignment = 1
 
 [node name="CardButton0" type="Button" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow"]
-custom_minimum_size = Vector2(0, 260)
+custom_minimum_size = Vector2(0, 156)
 layout_mode = 2
 size_flags_horizontal = 3
 toggle_mode = true
@@ -97,7 +97,8 @@ mouse_filter = 2
 theme_override_constants/separation = 8
 
 [node name="ImagePlaceholder" type="ColorRect" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0/Content/VBoxContainer"]
-custom_minimum_size = Vector2(0, 120)
+visible = false
+custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
@@ -114,12 +115,12 @@ horizontal_alignment = 1
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 12
-text = "图片占位\n起始现金：+$0\nCEO 卡槽：0"
+text = "起始现金：+$0\nCEO 卡槽：0"
 horizontal_alignment = 1
 autowrap_mode = 2
 
 [node name="CardButton1" type="Button" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow"]
-custom_minimum_size = Vector2(0, 260)
+custom_minimum_size = Vector2(0, 156)
 layout_mode = 2
 size_flags_horizontal = 3
 toggle_mode = true
@@ -144,7 +145,8 @@ mouse_filter = 2
 theme_override_constants/separation = 8
 
 [node name="ImagePlaceholder" type="ColorRect" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1/Content/VBoxContainer"]
-custom_minimum_size = Vector2(0, 120)
+visible = false
+custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
@@ -161,12 +163,12 @@ horizontal_alignment = 1
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 12
-text = "图片占位\n起始现金：+$0\nCEO 卡槽：0"
+text = "起始现金：+$0\nCEO 卡槽：0"
 horizontal_alignment = 1
 autowrap_mode = 2
 
 [node name="CardButton2" type="Button" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow"]
-custom_minimum_size = Vector2(0, 260)
+custom_minimum_size = Vector2(0, 156)
 layout_mode = 2
 size_flags_horizontal = 3
 toggle_mode = true
@@ -191,7 +193,8 @@ mouse_filter = 2
 theme_override_constants/separation = 8
 
 [node name="ImagePlaceholder" type="ColorRect" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2/Content/VBoxContainer"]
-custom_minimum_size = Vector2(0, 120)
+visible = false
+custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
@@ -208,7 +211,7 @@ horizontal_alignment = 1
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 12
-text = "图片占位\n起始现金：+$0\nCEO 卡槽：0"
+text = "起始现金：+$0\nCEO 卡槽：0"
 horizontal_alignment = 1
 autowrap_mode = 2
 

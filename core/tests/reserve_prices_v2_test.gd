@@ -58,6 +58,13 @@ static func _test_setup_uses_alternate_reserve_cards(seed_val: int) -> Result:
 				return Result.failure("players[%d].reserve_cards[%d].type 非法（期望 5/10/20），实际: %d" % [pid, i, t])
 			if c.has("cash") or c.has("ceo_slots"):
 				return Result.failure("players[%d].reserve_cards[%d] 不应包含 cash/ceo_slots（应为替代储备卡）" % [pid, i])
+		var expected_order: Array[int] = [5, 10, 20]
+		for i in range(expected_order.size()):
+			var c: Dictionary = cards[i]
+			var actual_t: int = int(c.get("type", -1))
+			var expected_t: int = expected_order[i]
+			if actual_t != expected_t:
+				return Result.failure("players[%d].reserve_cards 顺序应为 [5,10,20]，实际: %s" % [pid, str(cards)])
 
 		# 仍需在 Setup/ReserveCards 由玩家选择；开局不应自动选中
 		if int(p.get("reserve_card_selected", -999)) != -1:

@@ -1,7 +1,5 @@
 extends RefCounted
 
-const RandomManagerClass = preload("res://core/random/random_manager.gd")
-
 const MODULE_ID := "reserve_prices"
 const FIRST_BREAK_ADD_PER_PLAYER := 200
 const CARDS_PER_PLAYER := 3
@@ -19,26 +17,14 @@ func register(registrar) -> Result:
 	return Result.success()
 
 func _init_state(state: GameState, _rng_manager) -> Result:
-	# 规则：开局使用“替代储备卡”集合（每位玩家 3 张；仅包含 type=5/10/20）
+	# 规则：开局使用“替代储备卡”集合（每位玩家固定顺序：5,10,20）
 	if state == null:
 		return Result.failure("%s: state 为空" % MODULE_ID)
 	if not (state.players is Array):
 		return Result.failure("%s: state.players 类型错误（期望 Array）" % MODULE_ID)
+	if ALLOWED_TYPES.size() != CARDS_PER_PLAYER:
+		return Result.failure("%s: ALLOWED_TYPES 与 CARDS_PER_PLAYER 不一致（types=%d cards_per_player=%d）" % [MODULE_ID, ALLOWED_TYPES.size(), CARDS_PER_PLAYER])
 
-	var deck: Array[Dictionary] = []
-	for t in ALLOWED_TYPES:
-		# 18 张替代卡：每种类型 6 张（总计 18）
-		for _i in range(6):
-			deck.append({"type": int(t)})
-
-	var rng := RandomManagerClass.new(int(state.seed) + 14014)
-	rng.shuffle(deck)
-
-	var need := state.players.size() * CARDS_PER_PLAYER
-	if deck.size() < need:
-		return Result.failure("%s: 替代储备卡不足: need=%d deck=%d" % [MODULE_ID, need, deck.size()])
-
-	var cursor := 0
 	for pid in range(state.players.size()):
 		var p_val = state.players[pid]
 		if not (p_val is Dictionary):
@@ -46,9 +32,8 @@ func _init_state(state: GameState, _rng_manager) -> Result:
 		var player: Dictionary = p_val
 
 		var cards: Array = []
-		for _j in range(CARDS_PER_PLAYER):
-			cards.append(deck[cursor])
-			cursor += 1
+		for t in ALLOWED_TYPES:
+			cards.append({"type": int(t)})
 
 		player["reserve_cards"] = cards
 		var sel := -1

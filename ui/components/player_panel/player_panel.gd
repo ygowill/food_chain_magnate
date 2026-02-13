@@ -160,6 +160,9 @@ func _update_tab_styles() -> void:
 		btn.add_theme_stylebox_override("hover", pressed)
 
 		btn.add_theme_color_override("font_color", Color(0.15, 0.15, 0.15, 0.9))
+		btn.add_theme_color_override("font_hover_color", Color(0.15, 0.15, 0.15, 0.9))
+		btn.add_theme_color_override("font_pressed_color", Color(0.15, 0.15, 0.15, 0.9))
+		btn.add_theme_color_override("font_focus_color", Color(0.15, 0.15, 0.15, 0.9))
 
 func _refresh_selected_player() -> void:
 	if not is_instance_valid(name_label) or not is_instance_valid(stats_label):

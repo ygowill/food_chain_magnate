@@ -4,6 +4,8 @@ class_name ReserveCardSelectionModal
 extends "res://ui/components/modal_panel/modal_panel_base.gd"
 
 const ReserveUiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const FIXED_PANEL_HEIGHT := 440.0
+const MIN_PANEL_WIDTH := 720.0
 
 @onready var selection_label: Label = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/SelectionLabel
 @onready var card_button_0: Button = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0
@@ -25,6 +27,7 @@ var _card_button_group: ButtonGroup = ButtonGroup.new()
 func _ready() -> void:
 	allow_peek_map = false
 	super._ready()
+	set_process(false)
 	_apply_visual_styles()
 
 	set_title_text("选择银行储备卡")
@@ -63,6 +66,70 @@ func _apply_visual_styles() -> void:
 	for label in [card_desc_0, card_desc_1, card_desc_2]:
 		if label is Label and is_instance_valid(label):
 			ReserveUiStylesClass.apply_label_hint_dark(label)
+
+func open(_covered_rect: Rect2) -> void:
+	# 储备卡选择为强制弹窗，直接使用 viewport 区域，避免局部覆盖区坐标导致面板越界。
+	var viewport_rect := get_viewport_rect()
+	super.open(Rect2(Vector2.ZERO, viewport_rect.size))
+	set_process(true)
+
+func close() -> void:
+	set_process(false)
+	super.close()
+
+func _process(_delta: float) -> void:
+	if not visible:
+		return
+	_center_panel()
+
+func _center_panel() -> void:
+	var p := panel
+	if not is_instance_valid(p):
+		return
+
+	var viewport_size := get_viewport_rect().size
+	var viewport_max_w := maxf(0.0, viewport_size.x - 24.0)
+	var viewport_max_h := maxf(0.0, viewport_size.y - 24.0)
+
+	var panel_width := p.size.x
+	if panel_width <= 0.0:
+		panel_width = p.get_combined_minimum_size().x
+	if panel_width <= 0.0:
+		panel_width = p.custom_minimum_size.x
+	panel_width = maxf(panel_width, MIN_PANEL_WIDTH)
+
+	var panel_height := FIXED_PANEL_HEIGHT
+	var max_w := maxf(0.0, size.x - 24.0)
+	var max_h := maxf(0.0, size.y - 24.0)
+	if max_w > 0.0:
+		panel_width = min(panel_width, max_w)
+	if max_h > 0.0:
+		panel_height = min(panel_height, max_h)
+	# 绝对不允许超出 viewport 可视高度。
+	if viewport_max_w > 0.0:
+		panel_width = min(panel_width, viewport_max_w)
+	if viewport_max_h > 0.0:
+		panel_height = min(panel_height, viewport_max_h)
+
+	p.custom_minimum_size = Vector2(panel_width, panel_height)
+	p.size = Vector2(panel_width, panel_height)
+
+	var x := (size.x - panel_width) / 2.0
+	var y := (size.y - panel_height) / 2.0
+	x = clampf(x, 12.0, maxf(12.0, size.x - panel_width - 12.0))
+	y = clampf(y, 12.0, maxf(12.0, size.y - panel_height - 12.0))
+
+	# 二次夹紧到 viewport，避免覆盖区域偏移时面板溢出到屏幕外。
+	var global_x := position.x + x
+	var global_y := position.y + y
+	var max_global_x := maxf(12.0, viewport_size.x - panel_width - 12.0)
+	var max_global_y := maxf(12.0, viewport_size.y - panel_height - 12.0)
+	global_x = clampf(global_x, 12.0, max_global_x)
+	global_y = clampf(global_y, 12.0, max_global_y)
+	x = global_x - position.x
+	y = global_y - position.y
+
+	p.position = Vector2(x, y)
 
 func setup(state: GameState, current_player_id: int) -> void:
 	allow_peek_map = false
@@ -214,7 +281,7 @@ func _apply_card(index: int, cards: Array) -> void:
 
 	if not has_bank_fields:
 		title_label.text = "储备卡 %d（价格 $%d）" % [index + 1, t]
-		desc_label.text = "图片占位\n基础单价候选：$%d\n首次破产后按多数决定（平局 20 > 5 > 10）" % t
+		desc_label.text = "基础单价候选：$%d\n首次破产后按多数决定（平局 20 > 5 > 10）" % t
 
 		var summary := "储备卡 %d：基础单价候选 $%d" % [index + 1, t]
 		while _card_summaries.size() <= index:
@@ -225,7 +292,7 @@ func _apply_card(index: int, cards: Array) -> void:
 		var slots: int = int(c.get("ceo_slots", 0))
 
 		title_label.text = "储备卡 %d（类型 %d）" % [index + 1, t]
-		desc_label.text = "图片占位\n起始现金：+$%d\nCEO 卡槽：%d" % [cash, slots]
+		desc_label.text = "起始现金：+$%d\nCEO 卡槽：%d" % [cash, slots]
 
 		var summary := "储备卡 %d：类型 %d，+$%d，CEO 卡槽=%d" % [index + 1, t, cash, slots]
 		while _card_summaries.size() <= index:
@@ -241,13 +308,7 @@ func _on_card_pressed(index: int) -> void:
 	if not is_instance_valid(selection_label):
 		return
 
-	var summary := ""
-	if index >= 0 and index < _card_summaries.size():
-		summary = _card_summaries[index]
-	if summary.is_empty():
-		selection_label.text = "已选择储备卡 %d，请确认" % (index + 1)
-	else:
-		selection_label.text = "当前选择：%s\n（确认后不可更改）" % summary
+	selection_label.text = "已选择储备卡 %d。（确认后不可更改）" % (index + 1)
 
 func _get_card_button(index: int) -> Button:
 	match index:

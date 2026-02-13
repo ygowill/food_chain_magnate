@@ -1,11 +1,10 @@
-# LeftPanel：本回合日志小节（绑定 GameLogPanel + 过滤/截断）
+# LeftPanel：活动流（简化版：最多2条最近日志）
 extends RefCounted
 
 var _panel = null
 
 func setup(panel) -> void:
 	_panel = panel
-	_bind_ui_signals()
 
 func bind_log_panel(panel: Node) -> void:
 	if _panel == null or not is_instance_valid(_panel):
@@ -20,17 +19,7 @@ func bind_log_panel(panel: Node) -> void:
 func refresh() -> void:
 	if _panel == null or not is_instance_valid(_panel):
 		return
-	_refresh_turn_log()
-
-func _bind_ui_signals() -> void:
-	if _panel == null or not is_instance_valid(_panel):
-		return
-	if is_instance_valid(_panel.turn_log_toggle_button):
-		if not _panel.turn_log_toggle_button.toggled.is_connected(_on_turn_log_toggled):
-			_panel.turn_log_toggle_button.toggled.connect(_on_turn_log_toggled)
-	if is_instance_valid(_panel.turn_log_to_logs_button):
-		if not _panel.turn_log_to_logs_button.pressed.is_connected(_on_turn_log_to_logs_pressed):
-			_panel.turn_log_to_logs_button.pressed.connect(_on_turn_log_to_logs_pressed)
+	_refresh_activity_feed()
 
 func _attach_log_panel_signals() -> void:
 	if _panel._attached_log_panel == null or not is_instance_valid(_panel._attached_log_panel):
@@ -57,34 +46,34 @@ func _detach_log_panel_signals() -> void:
 func _on_log_added(_entry: Dictionary) -> void:
 	refresh()
 
-func _refresh_turn_log() -> void:
-	if not is_instance_valid(_panel.turn_log_lines):
+func _refresh_activity_feed() -> void:
+	if not is_instance_valid(_panel.activity_line1) or not is_instance_valid(_panel.activity_line2):
 		return
 
-	for c in _panel.turn_log_lines.get_children():
-		if is_instance_valid(c):
-			c.queue_free()
+	# 默认显示
+	_panel.activity_line1.text = "暂无活动记录"
+	_panel.activity_line2.text = ""
+	_panel.activity_line2.visible = false
 
 	if _panel._attached_log_panel == null or not is_instance_valid(_panel._attached_log_panel):
-		_add_turn_log_line("（未绑定日志面板）", Color(0.6, 0.6, 0.6, 0.9))
 		return
 	if not _panel._attached_log_panel.has_method("get_entries"):
-		_add_turn_log_line("（日志面板不支持 get_entries）", Color(0.6, 0.6, 0.6, 0.9))
 		return
 
 	var view_id: int = _panel._resolve_view_player_id()
 	var entries_val = _panel._attached_log_panel.call("get_entries")
 	if not (entries_val is Array):
-		_add_turn_log_line("（日志数据异常）", Color(0.6, 0.6, 0.6, 0.9))
 		return
 	var entries: Array = entries_val
 
+	# 找到当前回合起始位置
 	var start_idx := 0
 	var round_number := int(_panel._game_state.round_number) if _panel._game_state != null else -1
 	var round_start_idx := _find_round_start_entry_index(entries, round_number)
 	if round_start_idx >= 0:
 		start_idx = round_start_idx + 1
 
+	# 筛选当前玩家的日志
 	var matched: Array[Dictionary] = []
 	for i in range(start_idx, entries.size()):
 		var e_val = entries[i]
@@ -95,18 +84,30 @@ func _refresh_turn_log() -> void:
 			matched.append(e)
 
 	var n := matched.size()
-	var max_lines := 6
-	var start := maxi(0, n - max_lines)
 	if n <= 0:
-		_add_turn_log_line("（暂无该玩家日志）", Color(0.6, 0.6, 0.6, 0.9))
+		_panel.activity_line1.text = "（本回合暂无该玩家日志）"
 		return
-	for i in range(start, n):
-		var e: Dictionary = matched[i]
-		var msg := str(e.get("message", ""))
-		msg = msg.strip_edges()
-		if msg.is_empty():
-			continue
-		_add_turn_log_line(msg, Color(0.85, 0.85, 0.9, 1))
+
+	# 显示最近2条
+	var last1 := matched[n - 1]
+	var msg1 := _format_log_message(last1)
+	_panel.activity_line1.text = "● " + msg1
+
+	if n >= 2:
+		var last2 := matched[n - 2]
+		var msg2 := _format_log_message(last2)
+		_panel.activity_line2.text = "● " + msg2
+		_panel.activity_line2.visible = true
+	else:
+		_panel.activity_line2.text = ""
+		_panel.activity_line2.visible = false
+
+func _format_log_message(entry: Dictionary) -> String:
+	var msg := str(entry.get("message", "")).strip_edges()
+	# 限制长度
+	if msg.length() > 40:
+		msg = msg.substr(0, 37) + "..."
+	return msg
 
 func _find_round_start_entry_index(entries: Array, round_number: int) -> int:
 	if round_number < 0:
@@ -168,25 +169,3 @@ func _entry_matches_view_player(entry: Dictionary, view_id: int) -> bool:
 		return msg.begins_with("玩家%d:" % (view_id + 1))
 
 	return false
-
-func _add_turn_log_line(text: String, color: Color) -> void:
-	if not is_instance_valid(_panel.turn_log_lines):
-		return
-	var l := Label.new()
-	l.text = text
-	l.autowrap_mode = TextServer.AUTOWRAP_WORD
-	l.add_theme_font_size_override("font_size", 13)
-	l.add_theme_color_override("font_color", color)
-	_panel.turn_log_lines.add_child(l)
-
-func _on_turn_log_toggled(pressed: bool) -> void:
-	if is_instance_valid(_panel.turn_log_lines):
-		_panel.turn_log_lines.visible = pressed
-	if is_instance_valid(_panel.turn_log_toggle_button):
-		_panel.turn_log_toggle_button.text = ("▼ 本回合日志" if pressed else "▶ 本回合日志")
-
-func _on_turn_log_to_logs_pressed() -> void:
-	_panel.logs_requested.emit()
-	if is_instance_valid(_panel.turn_log_toggle_button) and not _panel.turn_log_toggle_button.button_pressed:
-		_panel.turn_log_toggle_button.button_pressed = true
-		_on_turn_log_toggled(true)

@@ -3,6 +3,8 @@
 class_name MilestonePreviewCard
 extends PanelContainer
 
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
 var milestone_id: String = ""
 var milestone_def = null # MilestoneDef | null
 var effect_text: String = ""
@@ -50,6 +52,7 @@ func _build_ui() -> void:
 	_name_label = Label.new()
 	_name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_name_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(14) if Globals != null else 14)
+	UiStylesClass.apply_label_dark(_name_label)
 	vbox.add_child(_name_label)
 
 	_desc_label = Label.new()

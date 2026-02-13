@@ -93,6 +93,7 @@ static func apply_button_primary(button: Button) -> void:
 	button.add_theme_color_override("font_color", Color(0.97, 0.93, 0.82))
 	button.add_theme_color_override("font_hover_color", Color(1, 0.96, 0.86))
 	button.add_theme_color_override("font_pressed_color", Color(0.97, 0.93, 0.82))
+	button.add_theme_color_override("font_focus_color", Color(0.97, 0.93, 0.82))
 	button.add_theme_color_override("font_disabled_color", Color(0.97, 0.93, 0.82, 0.55))
 
 static func apply_button_secondary(button: Button) -> void:
@@ -105,6 +106,7 @@ static func apply_button_secondary(button: Button) -> void:
 	button.add_theme_color_override("font_color", COLOR_TEXT_PRIMARY)
 	button.add_theme_color_override("font_hover_color", Color(0.12, 0.09, 0.06))
 	button.add_theme_color_override("font_pressed_color", COLOR_TEXT_PRIMARY)
+	button.add_theme_color_override("font_focus_color", COLOR_TEXT_PRIMARY)
 	button.add_theme_color_override("font_disabled_color", Color(COLOR_TEXT_PRIMARY.r, COLOR_TEXT_PRIMARY.g, COLOR_TEXT_PRIMARY.b, 0.5))
 
 static func apply_panel_poster(panel: Control) -> void:
@@ -189,6 +191,7 @@ static func apply_check_box_field(check: CheckBox) -> void:
 	check.add_theme_color_override("font_pressed_color", COLOR_TEXT_PRIMARY)
 	check.add_theme_color_override("font_hover_color", COLOR_TEXT_PRIMARY)
 	check.add_theme_color_override("font_hover_pressed_color", COLOR_TEXT_PRIMARY)
+	check.add_theme_color_override("font_focus_color", COLOR_TEXT_PRIMARY)
 	check.add_theme_color_override("font_disabled_color", Color(COLOR_TEXT_MUTED.r, COLOR_TEXT_MUTED.g, COLOR_TEXT_MUTED.b, 0.72))
 
 static func apply_tab_container_surface(tab_container: TabContainer) -> void:
