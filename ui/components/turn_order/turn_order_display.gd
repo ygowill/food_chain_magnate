@@ -266,6 +266,7 @@ class OrderBadge extends Control:
 	const MAP_FRAME_TOP := 14.0
 	const COMPACT_FRAME_TOP := 11.0
 	const CURRENT_FLAG_TEXTURE_PATH := "res://assets/images/flag_triangle.png"
+	const CURRENT_FLAG_TINT_COLOR := Color("#c9342f")
 
 	static var _flag_texture_cached: Texture2D = null
 
@@ -408,6 +409,7 @@ class OrderBadge extends Control:
 		_current_flag_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		_current_flag_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		_current_flag_icon.texture = _get_flag_texture()
+		_current_flag_icon.self_modulate = CURRENT_FLAG_TINT_COLOR
 		_current_flag_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_current_flag_icon.visible = false
 		_current_flag_icon.z_index = 4
