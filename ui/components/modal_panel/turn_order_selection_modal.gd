@@ -55,6 +55,9 @@ func setup(state: GameState, current_player_id: int, selections: Dictionary, int
 		display.call("set_player_count", state.players.size())
 	if display.has_method("set_current_selections"):
 		display.call("set_current_selections", selections)
+	if display.has_method("set_current_player"):
+		# 非当前玩家（等待态）也应能看到“当前玩家”指示。
+		display.call("set_current_player", current_player_id)
 	if display.has_method("set_selectable"):
 		display.call("set_selectable", _interactive)
 

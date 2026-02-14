@@ -394,6 +394,9 @@ class OrderBadge extends Control:
 		_current_flag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_current_flag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		_current_flag.text = CURRENT_MARKER_EMOJI
+		# 显式使用带 emoji fallback 的字体，避免某些平台/字体回退导致显示成“圈/方块”。
+		if Globals != null and Globals.FALLBACK_FONT != null:
+			_current_flag.add_theme_font_override("font", Globals.FALLBACK_FONT)
 		_current_flag.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_current_flag.visible = false
 		_current_flag.z_index = 4
