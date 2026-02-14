@@ -64,6 +64,77 @@ class IconToken extends PanelContainer:
 			_badge_label.text = badge_text
 
 
+# === 模块地图板块 token（文本展示 tile_id + 剩余数量）===
+class TileSupplyToken extends PanelContainer:
+	var tile_id: String = ""
+	var count: int = 0
+
+	var _cell_size: int = 40
+	var _title_label: Label
+	var _count_label: Label
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_PASS
+		_build_ui()
+		_update_layout()
+		_update_ui()
+
+	func set_cell_size(cell_size: int) -> void:
+		_cell_size = maxi(1, int(cell_size))
+		_update_layout()
+		_update_ui()
+
+	func _build_ui() -> void:
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.97, 0.94, 0.86, 0.95)
+		style.border_color = Color(0.73, 0.23, 0.18, 0.35)
+		style.set_border_width_all(1)
+		style.set_corner_radius_all(8)
+		add_theme_stylebox_override("panel", style)
+
+		var box := VBoxContainer.new()
+		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.set_anchors_preset(Control.PRESET_FULL_RECT)
+		box.offset_left = 6
+		box.offset_top = 6
+		box.offset_right = -6
+		box.offset_bottom = -6
+		box.add_theme_constant_override("separation", 2)
+		add_child(box)
+
+		_title_label = Label.new()
+		_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		box.add_child(_title_label)
+
+		_count_label = Label.new()
+		_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_count_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 0.9))
+		box.add_child(_count_label)
+
+	func _update_layout() -> void:
+		var w := float(maxi(90, _cell_size * 2))
+		var h := float(maxi(56, int(round(float(_cell_size) * 1.35))))
+		custom_minimum_size = Vector2(w, h)
+		if _title_label != null:
+			_title_label.add_theme_font_size_override("font_size", maxi(10, int(round(float(_cell_size) * 0.34))))
+		if _count_label != null:
+			_count_label.add_theme_font_size_override("font_size", maxi(10, int(round(float(_cell_size) * 0.30))))
+
+	func _update_ui() -> void:
+		var id_text := str(tile_id).strip_edges()
+		if _title_label != null:
+			_title_label.text = id_text
+		if _count_label != null:
+			_count_label.text = "×%d" % maxi(0, int(count))
+		if id_text.is_empty():
+			tooltip_text = "地图板块"
+		else:
+			tooltip_text = "地图板块 %s ×%d" % [id_text, maxi(0, int(count))]
+
+
 # === 房屋编号 token（按地图真实风格绘制：house_with_garden）===
 class HouseWithGardenNumberToken extends Control:
 	var house_number: int = -1
