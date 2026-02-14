@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://ui/components/reserve_area/reserve_area_full_screen_view.gd" id="1_reserve_area"]
+[ext_resource type="PackedScene" path="res://ui/components/common/panel_zoom_bar.tscn" id="2_panel_zoom_bar"]
 
 [node name="ReserveAreaFullScreenView" type="Control"]
 layout_mode = 3
@@ -49,26 +50,9 @@ theme_override_font_sizes/font_size = 12
 theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 0.95)
 text = "ESC 关闭"
 
-[node name="ZoomOutButton" type="Button" parent="MarginContainer/VBoxContainer/HeaderRow"]
+[node name="ZoomBar" parent="MarginContainer/VBoxContainer/HeaderRow" instance=ExtResource("2_panel_zoom_bar")]
+custom_minimum_size = Vector2(220, 0)
 layout_mode = 2
-text = "-"
-
-[node name="ZoomSlider" type="HSlider" parent="MarginContainer/VBoxContainer/HeaderRow"]
-layout_mode = 2
-custom_minimum_size = Vector2(200, 0)
-min_value = 50.0
-max_value = 200.0
-step = 10.0
-value = 100.0
-
-[node name="ZoomInButton" type="Button" parent="MarginContainer/VBoxContainer/HeaderRow"]
-layout_mode = 2
-text = "+"
-
-[node name="ZoomLabel" type="Label" parent="MarginContainer/VBoxContainer/HeaderRow"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "100%"
 
 [node name="CloseButton" type="Button" parent="MarginContainer/VBoxContainer/HeaderRow"]
 layout_mode = 2

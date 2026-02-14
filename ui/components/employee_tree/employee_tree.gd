@@ -10,7 +10,15 @@ const EmployeeDefClass = preload("res://core/data/employee_def.gd")
 const InfoDialogClass = preload("res://ui/dialogs/info_dialog.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
+const ZOOM_MIN := 0.5
+const ZOOM_MAX := 2.0
+const ZOOM_STEP := 0.1
+const ZOOM_MIN_PERCENT := 50
+const ZOOM_MAX_PERCENT := 200
+const ZOOM_STEP_PERCENT := 10
+
 @onready var close_button: Button = $MarginContainer/VBoxContainer/HeaderRow/CloseButton
+@onready var zoom_bar: PanelZoomBar = $MarginContainer/VBoxContainer/HeaderRow/ZoomBar
 @onready var fit_button: Button = $MarginContainer/VBoxContainer/HeaderRow/FitButton
 @onready var fit_width_button: Button = $MarginContainer/VBoxContainer/HeaderRow/FitWidthButton
 @onready var loading_center: Control = $MarginContainer/VBoxContainer/LoadingCenter
@@ -34,6 +42,10 @@ func _ready() -> void:
 		fit_button.pressed.connect(_fit_to_view)
 	if is_instance_valid(fit_width_button):
 		fit_width_button.pressed.connect(_fit_to_width)
+	if is_instance_valid(zoom_bar):
+		zoom_bar.configure(ZOOM_MIN_PERCENT, ZOOM_MAX_PERCENT, ZOOM_STEP_PERCENT, int(round(_zoom * 100.0)))
+		zoom_bar.zoom_changed.connect(_on_zoom_bar_changed)
+		zoom_bar.set_enabled(false)
 	if is_instance_valid(pan_background):
 		pan_background.gui_input.connect(_on_background_gui_input)
 	if is_instance_valid(graph):
@@ -85,6 +97,8 @@ func _set_loading_visible(loading: bool) -> void:
 		loading_center.visible = loading
 	if is_instance_valid(viewport):
 		viewport.visible = not loading
+	if is_instance_valid(zoom_bar):
+		zoom_bar.set_enabled((not loading) and _built)
 	if is_instance_valid(fit_button):
 		fit_button.disabled = loading
 	if is_instance_valid(fit_width_button):
@@ -169,14 +183,14 @@ func _try_apply_wheel_zoom(button_index: int, global_position: Vector2) -> bool:
 	if dir == 0:
 		return false
 
-	_set_zoom_at(_zoom + float(dir) * 0.1, local)
+	_set_zoom_at(_zoom + float(dir) * ZOOM_STEP, local)
 	return true
 
 func _set_zoom_at(target_zoom: float, viewport_local: Vector2) -> void:
 	if not is_instance_valid(graph):
 		return
 
-	var new_zoom := clampf(target_zoom, 0.5, 2.0)
+	var new_zoom := _normalize_zoom(target_zoom)
 	if is_equal_approx(new_zoom, _zoom):
 		return
 
@@ -187,6 +201,7 @@ func _set_zoom_at(target_zoom: float, viewport_local: Vector2) -> void:
 	graph.rebuild_from_registry(_zoom)
 	graph.position = viewport_local - world * _zoom
 	graph.position = Vector2(round(graph.position.x), round(graph.position.y))
+	_sync_zoom_bar()
 
 func _fit_to_view() -> void:
 	if not is_instance_valid(viewport) or not is_instance_valid(graph):
@@ -210,9 +225,10 @@ func _fit_to_view() -> void:
 		return
 
 	var s := minf(vp_size.x / base_size.x, vp_size.y / base_size.y)
-	s = clampf(s, 0.5, 2.0)
+	s = _normalize_zoom(s)
 	_zoom = s
 	graph.rebuild_from_registry(_zoom)
+	_sync_zoom_bar()
 
 	await get_tree().process_frame
 
@@ -244,9 +260,10 @@ func _fit_to_width() -> void:
 		return
 
 	var s := vp_size.x / base_size.x
-	s = clampf(s, 0.5, 2.0)
+	s = _normalize_zoom(s)
 	_zoom = s
 	graph.rebuild_from_registry(_zoom)
+	_sync_zoom_bar()
 
 	await get_tree().process_frame
 
@@ -258,6 +275,23 @@ func _fit_to_width() -> void:
 	if content_size.y > vp_size.y:
 		pos.y = 0.0
 	graph.position = Vector2(round(pos.x), round(pos.y))
+
+func _normalize_zoom(target_zoom: float) -> float:
+	var clamped := clampf(target_zoom, ZOOM_MIN, ZOOM_MAX)
+	var stepped := snappedf(clamped, ZOOM_STEP)
+	return clampf(stepped, ZOOM_MIN, ZOOM_MAX)
+
+func _sync_zoom_bar() -> void:
+	if is_instance_valid(zoom_bar):
+		zoom_bar.set_zoom_factor(_zoom, false)
+
+func _on_zoom_bar_changed(zoom_factor: float) -> void:
+	if not _built:
+		return
+	if not is_instance_valid(viewport):
+		return
+	var local_center := viewport.size * 0.5
+	_set_zoom_at(zoom_factor, local_center)
 
 func _ensure_detail_dialog() -> void:
 	if _detail_dialog != null and is_instance_valid(_detail_dialog):

@@ -12,10 +12,7 @@ signal build_finished()
 @onready var scroll_container: ScrollContainer = $MarginContainer/VBoxContainer/ScrollContainer
 @onready var loading_center: Control = $MarginContainer/VBoxContainer/LoadingCenter
 @onready var close_button: Button = $MarginContainer/VBoxContainer/HeaderRow/CloseButton
-@onready var zoom_out_button: Button = $MarginContainer/VBoxContainer/HeaderRow/ZoomOutButton
-@onready var zoom_slider: HSlider = $MarginContainer/VBoxContainer/HeaderRow/ZoomSlider
-@onready var zoom_in_button: Button = $MarginContainer/VBoxContainer/HeaderRow/ZoomInButton
-@onready var zoom_label: Label = $MarginContainer/VBoxContainer/HeaderRow/ZoomLabel
+@onready var zoom_bar: PanelZoomBar = $MarginContainer/VBoxContainer/HeaderRow/ZoomBar
 
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
 const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
@@ -45,15 +42,12 @@ func _ready() -> void:
 	set_process_unhandled_input(true)
 	if is_instance_valid(close_button):
 		close_button.pressed.connect(_on_close_pressed)
-	if is_instance_valid(zoom_out_button):
-		zoom_out_button.pressed.connect(_on_zoom_out_pressed)
-	if is_instance_valid(zoom_in_button):
-		zoom_in_button.pressed.connect(_on_zoom_in_pressed)
-	if is_instance_valid(zoom_slider):
-		zoom_slider.value_changed.connect(_on_zoom_slider_changed)
-		_apply_zoom_percent(int(round(zoom_slider.value)), false)
+	if is_instance_valid(zoom_bar):
+		zoom_bar.configure(ZOOM_MIN_PERCENT, ZOOM_MAX_PERCENT, ZOOM_STEP_PERCENT, _zoom_percent)
+		zoom_bar.zoom_changed.connect(_on_zoom_bar_changed)
+		_apply_zoom_percent(zoom_bar.get_zoom_percent())
 	else:
-		_apply_zoom_percent(_zoom_percent, false)
+		_apply_zoom_percent(_zoom_percent)
 	_set_loading_visible(false)
 	if not _opened:
 		visible = false
@@ -95,19 +89,15 @@ func _set_loading_visible(loading: bool) -> void:
 		loading_center.visible = loading
 	if is_instance_valid(scroll_container):
 		scroll_container.visible = not loading
+	if is_instance_valid(zoom_bar):
+		zoom_bar.set_enabled(not loading)
 
-func _apply_zoom_percent(pct: int, update_slider: bool = true) -> void:
+func _apply_zoom_percent(pct: int) -> void:
 	var p := clampi(int(pct), ZOOM_MIN_PERCENT, ZOOM_MAX_PERCENT)
-	if _zoom_percent == p and not update_slider:
+	if _zoom_percent == p:
 		return
 	_zoom_percent = p
 	_cell_size = maxi(1, int(round(float(BASE_CELL_SIZE) * float(_zoom_percent) / 100.0)))
-
-	if is_instance_valid(zoom_label):
-		zoom_label.text = "%d%%" % _zoom_percent
-	if update_slider and is_instance_valid(zoom_slider):
-		zoom_slider.value = float(_zoom_percent)
-
 	_apply_cell_size_to_existing_tokens()
 
 func _apply_cell_size_to_existing_tokens() -> void:
@@ -124,14 +114,8 @@ func _apply_cell_size_recursive(node: Node) -> void:
 		if c is Node:
 			_apply_cell_size_recursive(c)
 
-func _on_zoom_out_pressed() -> void:
-	_apply_zoom_percent(_zoom_percent - ZOOM_STEP_PERCENT, true)
-
-func _on_zoom_in_pressed() -> void:
-	_apply_zoom_percent(_zoom_percent + ZOOM_STEP_PERCENT, true)
-
-func _on_zoom_slider_changed(value: float) -> void:
-	_apply_zoom_percent(int(round(value)), false)
+func _on_zoom_bar_changed(zoom_factor: float) -> void:
+	_apply_zoom_percent(int(round(zoom_factor * 100.0)))
 
 func request_close() -> void:
 	if not visible:
