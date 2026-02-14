@@ -5,6 +5,9 @@ extends Control
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
+signal phase_hover_changed(phase_key: String, hover_global_pos: Vector2)
+signal phase_hover_exited()
+
 const PHASE_KEYS: PackedStringArray = [
 	"Restructuring", "OrderOfBusiness", "Working", "Dinnertime", "Payday", "Marketing", "Cleanup"
 ]
@@ -17,8 +20,9 @@ var _hover_index: int = -1
 var _font_size: int = 13
 var _h_padding: int = 10
 var _arrow_depth: int = 8
-var _v_padding: int = 6
+var _v_padding: int = 9
 var _v_inset: int = 3
+var _use_inline_tooltip: bool = false
 
 # 已过阶段
 var _bg_past := Color(0.50, 0.45, 0.35, 0.08)
@@ -57,7 +61,8 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_refresh_size()
-	_create_tip()
+	if _use_inline_tooltip:
+		_create_tip()
 
 func _exit_tree() -> void:
 	if _tip_panel != null and is_instance_valid(_tip_panel):
@@ -106,7 +111,9 @@ func _gui_input(event: InputEvent) -> void:
 		if new_idx != _hover_index:
 			_hover_index = new_idx
 			queue_redraw()
-		_sync_tip(event.position, new_idx)
+		_emit_phase_hover(new_idx, event.position)
+		if _use_inline_tooltip:
+			_sync_tip(event.position, new_idx)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_MOUSE_EXIT:
@@ -114,6 +121,15 @@ func _notification(what: int) -> void:
 			_hover_index = -1
 			queue_redraw()
 		_hide_tip()
+		phase_hover_exited.emit()
+
+func _emit_phase_hover(idx: int, local_pos: Vector2) -> void:
+	if idx < 0 or idx >= PHASE_KEYS.size():
+		phase_hover_exited.emit()
+		return
+	var phase_key := str(PHASE_KEYS[idx]).strip_edges()
+	var hover_global_pos := global_position + local_pos + Vector2(8, size.y + 2)
+	phase_hover_changed.emit(phase_key, hover_global_pos)
 
 func _sync_tip(local_pos: Vector2, idx: int) -> void:
 	if _tip_panel == null or not is_instance_valid(_tip_panel):
