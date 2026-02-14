@@ -338,12 +338,30 @@ func _auto_open_guided_action_ui(state: GameState) -> void:
 		_last_guided_action_id = ""
 		return
 
+	# 右侧 dock 里已有可见面板（例如日志）：不要抢占焦点自动弹出动作 UI。
+	# 关闭 dock 后（例如关闭日志）会触发一次 UI refresh，从而恢复自动打开。
+	if _has_visible_right_panel_docked_panel():
+		if _is_action_ui_open_for_action_id(guided):
+			_last_guided_action_id = guided
+		return
+
 	# 优先：若当前动作 UI 已打开且仍为该动作，不重复 show（避免 hide_all/选点被重置）
 	if guided == _last_guided_action_id and _is_action_ui_open_for_action_id(guided):
 		return
 
 	_open_action_ui_for_action_id(guided)
 	_last_guided_action_id = guided
+
+func _has_visible_right_panel_docked_panel() -> bool:
+	if _scene == null:
+		return false
+	var dock_host = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit/RightPanel/DockHost")
+	if dock_host == null or not is_instance_valid(dock_host):
+		return false
+	for ch in dock_host.get_children():
+		if ch is Control and (ch as Control).visible:
+			return true
+	return false
 
 func _is_action_ui_open_for_action_id(action_id: String) -> bool:
 	var aid := str(action_id).strip_edges()

@@ -1080,8 +1080,16 @@ func show_milestone_panel() -> void:
 		_panel_controller.show_milestone_panel()
 
 func toggle_game_log() -> void:
+	var was_visible := false
+	if is_instance_valid(game_log_panel):
+		was_visible = bool(game_log_panel.visible)
+
 	if _log_dock_controller != null and _log_dock_controller.has_method("toggle_game_log"):
 		_log_dock_controller.toggle_game_log()
+
+	# 关闭日志后：刷新 UI 以恢复“动作流自动打开”的默认体验（ActionPanel 已不再显示动作按钮列表）。
+	if was_visible:
+		_update_ui()
 
 func _show_game_log_panel_in_right_panel() -> void:
 	if _log_dock_controller != null and _log_dock_controller.has_method("show_game_log_panel_in_right_panel"):
