@@ -443,6 +443,10 @@ func _run_all() -> int:
 				"name": "MoveRestaurantDisplayLabelTest",
 				"fn": func() -> Result: return TestRefs.MoveRestaurantDisplayLabelTestClass.run(),
 			},
+			{
+				"name": "PlacementOverlayCancelResetsTest",
+				"fn": func() -> Result: return TestRefs.PlacementOverlayCancelResetsTestClass.run(),
+			},
 				{
 					"name": "LogRestoreAfterLoadTest",
 					"fn": func() -> Result: return TestRefs.LogRestoreAfterLoadTestClass.run(),

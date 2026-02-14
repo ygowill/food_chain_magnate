@@ -37,6 +37,12 @@ func _ready() -> void:
 func get_mode() -> String:
 	return _mode
 
+func get_action_panel_context_spec() -> Dictionary:
+	# 压平动作流后：取消不应退出上下文面板（否则 ActionPanel 变空白），仅重置选点输入。
+	return {
+		"clear_on_cancel": false
+	}
+
 func get_hint_text() -> String:
 	if hint_label != null:
 		return hint_label.text
@@ -218,11 +224,8 @@ func request_confirm() -> void:
 	house_placement_confirmed.emit(_selected_position, _selected_rotation, _selected_house_number)
 
 func request_cancel() -> void:
-	cancelled.emit()
-	visible = false
-	preview_cleared.emit()
-	_emit_highlight_request()
-	ui_state_changed.emit()
+	# “取消”在压平动作流中等价于“重置当前选点输入”，而不是退出整个动作面板。
+	clear_selection()
 
 func _normalize_rotation(rotation: int) -> int:
 	var r := int(rotation) % 360
