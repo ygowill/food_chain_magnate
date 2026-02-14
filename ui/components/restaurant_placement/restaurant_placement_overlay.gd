@@ -35,13 +35,6 @@ func _ready() -> void:
 func get_mode() -> String:
 	return _mode
 
-func get_action_panel_context_spec() -> Dictionary:
-	# 压平动作流后：右侧不再有“动作按钮列表”可回退；这里的取消应仅重置选点/旋转等输入，
-	# 而不应清空 ActionPanel 的上下文（否则面板会变空白）。
-	return {
-		"clear_on_cancel": false
-	}
-
 func get_hint_text() -> String:
 	if hint_label != null:
 		return hint_label.text
@@ -237,8 +230,11 @@ func request_confirm() -> void:
 	placement_confirmed.emit(_selected_position, _selected_rotation, rid)
 
 func request_cancel() -> void:
-	# “取消”在压平动作流中等价于“重置当前选点输入”，而不是退出整个动作面板。
-	clear_selection()
+	cancelled.emit()
+	visible = false
+	preview_cleared.emit()
+	_emit_highlight_request()
+	ui_state_changed.emit()
 
 func _normalize_rotation(rotation: int) -> int:
 	var r := int(rotation) % 360

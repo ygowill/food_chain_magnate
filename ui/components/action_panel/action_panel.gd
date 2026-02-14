@@ -4,6 +4,7 @@ class_name ActionPanel
 extends Control
 
 signal action_requested(action_id: String, params: Dictionary)
+signal guided_action_dismissed(action_id: String)
 
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
@@ -14,6 +15,10 @@ const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const ContextControllerClass = preload("res://ui/components/action_panel/action_panel_context_controller.gd")
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
+@onready var guided_action_panel: Control = $MarginContainer/VBoxContainer/GuidedActionPanel
+@onready var guided_action_title_label: Label = $MarginContainer/VBoxContainer/GuidedActionPanel/MarginContainer/VBoxContainer/GuidedActionTitleLabel
+@onready var guided_action_hint_label: Label = $MarginContainer/VBoxContainer/GuidedActionPanel/MarginContainer/VBoxContainer/GuidedActionHintLabel
+@onready var open_guided_action_button: Button = $MarginContainer/VBoxContainer/GuidedActionPanel/MarginContainer/VBoxContainer/OpenGuidedActionButton
 @onready var items_container: VBoxContainer = $MarginContainer/VBoxContainer/ItemsContainer
 @onready var context_panel: Control = $MarginContainer/VBoxContainer/ContextPanel
 @onready var context_title_label: Label = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/ContextTitleLabel
@@ -245,6 +250,9 @@ func _ready() -> void:
 	UiStylesClass.apply_button_secondary(cancel_context_button)
 	UiStylesClass.apply_button_secondary(rewind_phase_button)
 	_apply_context_visual_styles()
+	_apply_guided_action_visual_styles()
+	_connect_guided_action_signals()
+	_sync_guided_action_placeholder()
 
 func _build_ui() -> void:
 	if items_container != null:
@@ -263,6 +271,52 @@ func _apply_context_visual_styles() -> void:
 	UiStylesClass.apply_button_secondary(rotate_left_button)
 	UiStylesClass.apply_button_secondary(rotate_right_button)
 	UiStylesClass.apply_label_dark(rotation_value_label)
+
+func _apply_guided_action_visual_styles() -> void:
+	UiStylesClass.apply_panel_poster_alt(guided_action_panel)
+	UiStylesClass.apply_label_dark(guided_action_title_label)
+	UiStylesClass.apply_label_hint_dark(guided_action_hint_label)
+	UiStylesClass.apply_button_primary(open_guided_action_button)
+
+func _connect_guided_action_signals() -> void:
+	if is_instance_valid(open_guided_action_button):
+		UiSignalHelpersClass.safe_connect(open_guided_action_button, "pressed", _on_open_guided_action_pressed)
+	if is_instance_valid(context_panel):
+		UiSignalHelpersClass.safe_connect(context_panel, "visibility_changed", _on_context_panel_visibility_changed)
+
+func _on_context_panel_visibility_changed() -> void:
+	_sync_guided_action_placeholder()
+
+func _should_show_guided_action_placeholder() -> bool:
+	if _guided_action_id.strip_edges().is_empty():
+		return false
+	if is_instance_valid(context_panel) and context_panel.visible:
+		return false
+	return true
+
+func _sync_guided_action_placeholder() -> void:
+	if not is_instance_valid(guided_action_panel):
+		return
+
+	var show := _should_show_guided_action_placeholder()
+	guided_action_panel.visible = show
+	if not show:
+		return
+
+	var name := get_action_display_name(_guided_action_id)
+	var desc := get_action_description(_guided_action_id)
+	if is_instance_valid(guided_action_title_label):
+		guided_action_title_label.text = "当前操作：%s" % name if not name.is_empty() else "当前操作"
+	if is_instance_valid(guided_action_hint_label):
+		guided_action_hint_label.text = desc
+	if is_instance_valid(open_guided_action_button):
+		open_guided_action_button.text = "继续%s" % name if not name.is_empty() else "继续"
+
+func _on_open_guided_action_pressed() -> void:
+	var aid := _guided_action_id.strip_edges()
+	if aid.is_empty():
+		return
+	action_requested.emit(aid, {})
 
 func _apply_label_style_recursive(root: Node) -> void:
 	if root == null:
@@ -617,6 +671,7 @@ func _clear_actions_cache() -> void:
 	_guided_action_id = ""
 	_flow_confirm_end_visible = false
 	_flow_skip_step_visible = false
+	_sync_guided_action_placeholder()
 	if items_container != null and is_instance_valid(items_container):
 		UiRebuildHelpersClass.free_children(items_container)
 
@@ -642,6 +697,7 @@ func _set_visible_actions_from_list(action_ids: Array, initiatable_ids: Array) -
 		set_action_enabled(aid, true)
 		set_action_disabled_reason(aid, "")
 	_compute_guided_flow_visibility()
+	_sync_guided_action_placeholder()
 
 func _compute_guided_flow_visibility() -> void:
 	_guided_action_id = ""
@@ -675,6 +731,7 @@ func _compute_guided_flow_visibility() -> void:
 		show_skip = not has_any_other_initiatable
 
 	_flow_confirm_end_visible = show_skip
+	_sync_guided_action_placeholder()
 
 func _on_rewind_phase_pressed() -> void:
 	# 作为“面板工具”而非游戏动作：由 GamePanelController 接管该 action_id，并触发时间线回退。

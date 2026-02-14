@@ -444,8 +444,8 @@ func _run_all() -> int:
 				"fn": func() -> Result: return TestRefs.MoveRestaurantDisplayLabelTestClass.run(),
 			},
 			{
-				"name": "PlacementOverlayCancelResetsTest",
-				"fn": func() -> Result: return TestRefs.PlacementOverlayCancelResetsTestClass.run(),
+				"name": "ActionPanelGuidedActionPlaceholderTest",
+				"fn": func() -> Result: return await TestRefs.ActionPanelGuidedActionPlaceholderTestClass.run(),
 			},
 				{
 					"name": "LogRestoreAfterLoadTest",

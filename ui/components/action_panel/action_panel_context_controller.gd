@@ -8,6 +8,7 @@ const PiecePickerButtonClass = preload("res://ui/components/action_panel/piece_p
 
 var _action_registry = null
 var _map_skin = null # MapSkin (optional)
+var _panel: Object = null
 
 var _context_panel: Control = null
 var _context_title_label: Label = null
@@ -38,6 +39,7 @@ var _custom_context_scene_path: String = ""
 func setup(panel) -> void:
 	if panel == null or not is_instance_valid(panel):
 		return
+	_panel = panel
 	_context_panel = panel.context_panel
 	_context_title_label = panel.context_title_label
 	_context_hint_label = panel.context_hint_label
@@ -537,7 +539,24 @@ func _call_context_overlay_method(method: StringName, args: Array = []) -> bool:
 	_context_overlay.callv(method, args)
 	return true
 
+func _emit_guided_action_dismissed() -> void:
+	if _panel == null or not is_instance_valid(_panel):
+		return
+	if not _panel.has_signal("guided_action_dismissed"):
+		return
+
+	var aid := ""
+	if _context_overlay != null and is_instance_valid(_context_overlay) and _context_overlay.has_method("get_mode"):
+		aid = str(_context_overlay.call("get_mode")).strip_edges()
+	if aid.is_empty() and _panel.has_method("get_guided_action_id"):
+		aid = str(_panel.call("get_guided_action_id")).strip_edges()
+	if aid.is_empty():
+		return
+
+	_panel.emit_signal("guided_action_dismissed", aid)
+
 func _on_cancel_context_pressed() -> void:
+	_emit_guided_action_dismissed()
 	if not _call_context_overlay_method("request_cancel"):
 		clear_context_overlay()
 		return

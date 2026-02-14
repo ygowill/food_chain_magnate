@@ -37,6 +37,7 @@ var _views_controller = null
 
 var _view_player_id: int = -1
 var _last_guided_action_id: String = ""
+var _dismissed_guided_action_id: String = ""
 
 func _init(scene, map_controller, overlay_controller, execute_command: Callable, refresh_ui: Callable) -> void:
 	_scene = scene
@@ -66,6 +67,7 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 
 func connect_signals(action_panel, action_flow_controls, turn_order_track, hand_area, company_structure) -> void:
 	UiSignalHelpersClass.safe_connect(action_panel, "action_requested", on_action_requested)
+	UiSignalHelpersClass.safe_connect(action_panel, "guided_action_dismissed", _on_guided_action_dismissed)
 	UiSignalHelpersClass.safe_connect(action_flow_controls, "action_requested", on_action_requested)
 	UiSignalHelpersClass.safe_connect(turn_order_track, "position_selected", _on_turn_order_position_selected)
 	UiSignalHelpersClass.safe_connect(hand_area, "cards_selected", _on_hand_cards_selected)
@@ -119,7 +121,7 @@ func toggle_employee_tree() -> void:
 		_views_controller.hide_employee_tree()
 		return
 
-	_hide_all_phase_panels(true)
+	_hide_all_phase_panels(true, true)
 	_views_controller.show_employee_tree()
 
 func get_view_player_id() -> int:
@@ -336,12 +338,26 @@ func _auto_open_guided_action_ui(state: GameState) -> void:
 	var guided := str(_scene.action_panel.call("get_guided_action_id")).strip_edges()
 	if guided.is_empty():
 		_last_guided_action_id = ""
+		_dismissed_guided_action_id = ""
 		return
+
+	# 若 guided action 发生变化，则清除之前的“用户已关闭”标记（避免影响下一动作）
+	if not _dismissed_guided_action_id.is_empty() and guided != _dismissed_guided_action_id:
+		_dismissed_guided_action_id = ""
 
 	# 右侧 dock 里已有可见面板（例如日志）：不要抢占焦点自动弹出动作 UI。
 	# 关闭 dock 后（例如关闭日志）会触发一次 UI refresh，从而恢复自动打开。
 	if _has_visible_right_panel_docked_panel():
 		if _is_action_ui_open_for_action_id(guided):
+			_last_guided_action_id = guided
+			if guided == _dismissed_guided_action_id:
+				_dismissed_guided_action_id = ""
+		return
+
+	# 用户明确关闭当前动作 UI 后：不要立刻自动再次打开（避免“取消无效”）。
+	if guided == _dismissed_guided_action_id:
+		if _is_action_ui_open_for_action_id(guided):
+			_dismissed_guided_action_id = ""
 			_last_guided_action_id = guided
 		return
 
@@ -712,6 +728,10 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
 
+	var req_aid := str(action_id).strip_edges()
+	if not _dismissed_guided_action_id.is_empty() and req_aid == _dismissed_guided_action_id:
+		_dismissed_guided_action_id = ""
+
 	var state: GameState = _scene.game_engine.get_state()
 	if state == null:
 		return
@@ -742,44 +762,54 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 		"recruit":
 			if _working_panels != null:
 				_working_panels.show_recruit_panel()
+			_last_guided_action_id = str(action_id).strip_edges()
 		"train":
 			if _working_panels != null:
 				_working_panels.show_train_panel()
+			_last_guided_action_id = str(action_id).strip_edges()
 		"fire":
 			if _end_panels != null:
 				_end_panels.show_payday_panel()
+			_last_guided_action_id = str(action_id).strip_edges()
 
 		# P1 动作 - 需要弹出面板
 		"initiate_marketing":
 			if _marketing_panels != null:
 				_marketing_panels.show_marketing_panel()
+			_last_guided_action_id = str(action_id).strip_edges()
 		ActionIdsClass.SET_PRICE, ActionIdsClass.SET_LUXURY_PRICE, ActionIdsClass.SET_DISCOUNT:
 			if _working_panels != null:
 				_working_panels.show_price_panel(action_id)
 		"produce_food":
 			if _working_panels != null:
 				_working_panels.show_production_panel("food")
+			_last_guided_action_id = str(action_id).strip_edges()
 		"procure_drinks":
 			if _working_panels != null:
 				_working_panels.show_production_panel("drinks")
+			_last_guided_action_id = str(action_id).strip_edges()
 		"place_restaurant", "move_restaurant":
 			if _placement_overlays != null:
 				_placement_overlays.show_restaurant_placement(action_id, params)
 				_sync_action_panel_context()
+			_last_guided_action_id = str(action_id).strip_edges()
 		"place_house", "add_garden":
 			if _placement_overlays != null:
 				_placement_overlays.show_house_placement(action_id, params)
 				_sync_action_panel_context()
+			_last_guided_action_id = str(action_id).strip_edges()
 
 		# 其他动作直接创建命令
 		_:
 			if _placement_overlays != null and _placement_overlays.has_method("try_show_module_action_overlay"):
 				if bool(_placement_overlays.try_show_module_action_overlay(action_id, params)):
 					_sync_action_panel_context()
+					_last_guided_action_id = str(action_id).strip_edges()
 					return
 			if _placement_overlays != null and _placement_overlays.has_method("try_show_piece_placement"):
 				if bool(_placement_overlays.try_show_piece_placement(action_id, params)):
 					_sync_action_panel_context()
+					_last_guided_action_id = str(action_id).strip_edges()
 					return
 			_execute_command.call(Command.create(action_id, actor_id, params))
 
@@ -804,7 +834,15 @@ func _on_hand_card_dropped(employee_id: String, target: Control) -> void:
 func _on_company_structure_changed(new_structure: Dictionary) -> void:
 	GameLog.info("Game", "公司结构变更: %s" % str(new_structure))
 
-func _hide_all_phase_panels(keep_selection: bool = false) -> void:
+func _hide_all_phase_panels(keep_selection: bool = false, suppress_dismissal: bool = false) -> void:
+	# 用户主动关闭面板时（取消/返回/ESC）：记录“已关闭 guided action”，避免下一帧立刻自动弹出同一动作 UI。
+	if not suppress_dismissal:
+		var guided := ""
+		if _scene != null and is_instance_valid(_scene.action_panel) and _scene.action_panel.has_method("get_guided_action_id"):
+			guided = str(_scene.action_panel.call("get_guided_action_id")).strip_edges()
+		if not guided.is_empty() and _is_action_ui_open_for_action_id(guided):
+			_dismissed_guided_action_id = guided
+
 	if _working_panels != null:
 		_working_panels.hide()
 	if _end_panels != null:
@@ -825,6 +863,12 @@ func _hide_all_phase_panels(keep_selection: bool = false) -> void:
 	_sync_action_panel_context()
 	if _scene != null and _scene.has_method("_sync_right_panel_docked_view"):
 		_scene.call_deferred("_sync_right_panel_docked_view")
+
+func _on_guided_action_dismissed(action_id: String) -> void:
+	var aid := str(action_id).strip_edges()
+	if aid.is_empty():
+		return
+	_dismissed_guided_action_id = aid
 
 func _center_popup(panel: Control) -> void:
 	if panel == null:
