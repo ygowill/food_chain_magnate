@@ -6,6 +6,7 @@ const StructuresPassClass = preload("res://ui/scenes/game/map_canvas_drawer_stru
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
+const TilePreviewClass = preload("res://modules/lobbyists/ui/components/lobbyists_extra_tile/tile_preview.gd")
 
 
 # === 通用 token（贴图 + badge）===
@@ -70,8 +71,9 @@ class TileSupplyToken extends PanelContainer:
 	var count: int = 0
 
 	var _cell_size: int = 40
+	var _preview = null
+	var _badge_label: Label
 	var _title_label: Label
-	var _count_label: Label
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_PASS
@@ -92,43 +94,62 @@ class TileSupplyToken extends PanelContainer:
 		style.set_corner_radius_all(8)
 		add_theme_stylebox_override("panel", style)
 
-		var box := VBoxContainer.new()
-		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		box.set_anchors_preset(Control.PRESET_FULL_RECT)
-		box.offset_left = 6
-		box.offset_top = 6
-		box.offset_right = -6
-		box.offset_bottom = -6
-		box.add_theme_constant_override("separation", 2)
-		add_child(box)
+		var root := Control.new()
+		root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		root.set_anchors_preset(Control.PRESET_FULL_RECT)
+		add_child(root)
+
+		_preview = TilePreviewClass.new()
+		if _preview != null:
+			_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_preview.position = Vector2(6, 6)
+			root.add_child(_preview)
+
+		_badge_label = Label.new()
+		_badge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_badge_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+		_badge_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_badge_label.offset_left = 8
+		_badge_label.offset_top = 6
+		_badge_label.offset_right = -8
+		_badge_label.offset_bottom = -6
+		_badge_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 0.95))
+		root.add_child(_badge_label)
 
 		_title_label = Label.new()
 		_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_title_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 		_title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		box.add_child(_title_label)
-
-		_count_label = Label.new()
-		_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		_count_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 0.9))
-		box.add_child(_count_label)
+		_title_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+		root.add_child(_title_label)
 
 	func _update_layout() -> void:
-		var w := float(maxi(90, _cell_size * 2))
-		var h := float(maxi(56, int(round(float(_cell_size) * 1.35))))
+		var w := float(maxi(112, int(round(float(_cell_size) * 2.8))))
+		var preview_size := float(maxi(84, int(round(float(_cell_size) * 2.3))))
+		var label_h := float(maxi(18, int(round(float(_cell_size) * 0.52))))
+		var h := preview_size + label_h + 14.0
 		custom_minimum_size = Vector2(w, h)
+		if _preview != null:
+			_preview.position = Vector2((w - preview_size) * 0.5, 6.0)
+			_preview.custom_minimum_size = Vector2(preview_size, preview_size)
+			_preview.size = Vector2(preview_size, preview_size)
 		if _title_label != null:
+			_title_label.offset_left = 8
+			_title_label.offset_top = preview_size + 8.0
+			_title_label.offset_right = -8
+			_title_label.offset_bottom = -6
 			_title_label.add_theme_font_size_override("font_size", maxi(10, int(round(float(_cell_size) * 0.34))))
-		if _count_label != null:
-			_count_label.add_theme_font_size_override("font_size", maxi(10, int(round(float(_cell_size) * 0.30))))
+		if _badge_label != null:
+			_badge_label.add_theme_font_size_override("font_size", maxi(10, int(round(float(_cell_size) * 0.30))))
 
 	func _update_ui() -> void:
 		var id_text := str(tile_id).strip_edges()
 		if _title_label != null:
 			_title_label.text = id_text
-		if _count_label != null:
-			_count_label.text = "×%d" % maxi(0, int(count))
+		if _badge_label != null:
+			_badge_label.text = "×%d" % maxi(0, int(count))
+		if _preview != null and _preview.has_method("set_tile"):
+			_preview.set_tile(id_text, 0)
 		if id_text.is_empty():
 			tooltip_text = "地图板块"
 		else:
@@ -267,7 +288,10 @@ class PieceFootprintToken extends Control:
 	var _skin = null
 	var _cell_size: int = 40
 	var _size_cells: Vector2i = Vector2i.ONE
+	var _anchor_cell: Vector2i = Vector2i.ZERO
 	var _cell_offsets: Array[Vector2i] = []
+	var _player_restaurant_logo_ids: Dictionary = {} # pseudo player_id -> logo_id
+	var _structures_by_anchor: Dictionary = {}
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_PASS
@@ -286,7 +310,9 @@ class PieceFootprintToken extends Control:
 
 	func _recompute_footprint() -> void:
 		_size_cells = Vector2i.ONE
+		_anchor_cell = Vector2i.ZERO
 		_cell_offsets.clear()
+		_cell_offsets.append(Vector2i.ZERO)
 		if piece_id.is_empty():
 			return
 		if not PieceRegistryClass.is_loaded():
@@ -296,6 +322,8 @@ class PieceFootprintToken extends Control:
 			return
 		var def: PieceDef = def_val
 		var cells: Array[Vector2i] = MapUtilsClass.get_footprint_cells(def.footprint_mask, def.anchor, Vector2i.ZERO, 0)
+		if cells.is_empty():
+			return
 		var bounds: Dictionary = MapUtilsClass.get_footprint_bounds(cells)
 		var size_val = bounds.get("size", Vector2i.ONE)
 		var min_val = bounds.get("min", Vector2i.ZERO)
@@ -304,42 +332,62 @@ class PieceFootprintToken extends Control:
 			var s: Vector2i = size_val
 			if s.x > 0 and s.y > 0:
 				_size_cells = s
+		_anchor_cell = Vector2i.ZERO - min_pos
+		_cell_offsets.clear()
 		for c in cells:
 			_cell_offsets.append(c - min_pos)
+		if _cell_offsets.is_empty():
+			_cell_offsets.append(Vector2i.ZERO)
 
 	func _update_min_size() -> void:
 		custom_minimum_size = Vector2(float(maxi(1, _size_cells.x) * _cell_size), float(maxi(1, _size_cells.y) * _cell_size))
 
+	func _world_to_view(world_pos: Vector2i) -> Vector2i:
+		return world_pos
+
+	func _is_valid_world_pos(world_pos: Vector2i) -> bool:
+		return world_pos.x >= 0 and world_pos.x < _size_cells.x and world_pos.y >= 0 and world_pos.y < _size_cells.y
+
+	func _get_restaurant_logo_piece_ids() -> Array:
+		if _skin == null or not _skin.has_method("get_restaurant_logo_piece_ids"):
+			return []
+		var ids_val = _skin.get_restaurant_logo_piece_ids()
+		if ids_val is Array:
+			return ids_val
+		return []
+
+	func _draw_piece_with_map_style() -> void:
+		if _skin == null:
+			return
+		var pid := str(piece_id).strip_edges()
+		if pid.is_empty():
+			return
+
+		var owner := -1
+		_player_restaurant_logo_ids.clear()
+		if owner_logo_id >= 0:
+			owner = 0
+			_player_restaurant_logo_ids[owner] = owner_logo_id
+
+		var info := {
+			"piece_id": pid,
+			"rotation": 0,
+			"owner": owner,
+			"min": Vector2i.ZERO,
+			"max": _size_cells - Vector2i.ONE,
+			"cells": _cell_offsets.duplicate(),
+		}
+		_structures_by_anchor.clear()
+		_structures_by_anchor[_anchor_cell] = info
+		StructuresPassClass.draw_structures(self, _cell_size, _get_restaurant_logo_piece_ids())
+
 	func _draw() -> void:
 		var rect := Rect2(Vector2.ZERO, custom_minimum_size)
-		var bg := Color(0.97, 0.94, 0.86, 0.95)
-		draw_rect(rect, bg, true)
-		draw_rect(rect, Color(0.73, 0.23, 0.18, 0.35), false, 1.0)
-
-		# Footprint outline (supports non-rect shapes).
-		for off in _cell_offsets:
-			var cell_rect := Rect2(Vector2(off.x * _cell_size, off.y * _cell_size), Vector2(_cell_size, _cell_size))
-			draw_rect(cell_rect, Color(1, 1, 1, 0.06), true)
-			draw_rect(cell_rect, Color(1, 1, 1, 0.12), false, 1.0)
-
-		if _skin != null and not piece_id.is_empty():
-			var tex: Texture2D = _resolve_texture_for_draw()
-			var offset_px: Vector2i = _skin.get_piece_offset_px(piece_id)
-			var scale: Vector2 = _skin.get_piece_scale(piece_id)
-			if tex != null and tex.get_size() != Vector2.ZERO and _size_cells.x > 0 and _size_cells.y > 0:
-				var pos_px := Vector2(float(offset_px.x), float(offset_px.y))
-				var size_px := Vector2(float(_size_cells.x * _cell_size), float(_size_cells.y * _cell_size)) * scale
-				var full := Rect2(pos_px, size_px)
-				var mod := Color(1, 1, 1, 0.85)
-				var src_cell := tex.get_size() / Vector2(float(_size_cells.x), float(_size_cells.y))
-				var dst_cell := Vector2(float(_cell_size), float(_cell_size)) * scale
-				if _cell_offsets.size() >= _size_cells.x * _size_cells.y:
-					draw_texture_rect(tex, full, false, mod)
-				else:
-					for off2 in _cell_offsets:
-						var dst := Rect2(pos_px + Vector2(float(off2.x * _cell_size), float(off2.y * _cell_size)) * scale, dst_cell)
-						var src := Rect2(Vector2(float(off2.x) * src_cell.x, float(off2.y) * src_cell.y), src_cell)
-						draw_texture_rect_region(tex, dst, src, mod)
+		if _skin != null and not str(piece_id).strip_edges().is_empty():
+			_draw_piece_with_map_style()
+		else:
+			draw_rect(rect, Color(0.97, 0.94, 0.86, 0.95), true)
+			draw_rect(rect, Color(0.73, 0.23, 0.18, 0.35), false, 1.0)
 
 		if count > 0:
 			_draw_count_badge(rect, count)

@@ -140,8 +140,10 @@ static func run() -> Result:
 		var cnt := int(e.get("count", 0))
 		if not tid.is_empty() and cnt > 0:
 			tile_counts[tid] = cnt
+	if int(tile_counts.get("tile_b", 0)) != 1:
+		return Result.failure("地图板块供给应包含 tile_b ×1（非模块板块也应展示），实际: %s" % str(tile_counts))
 	if int(tile_counts.get("tile_z", 0)) != 2:
-		return Result.failure("模块地图板块供给应包含 tile_z ×2（lobbyists 额外板块），实际: %s" % str(tile_counts))
+		return Result.failure("地图板块供给应包含 tile_z ×2（模块板块），实际: %s" % str(tile_counts))
 
 	return Result.success({
 		"coffee_logo_key": expected_key,

@@ -51,7 +51,6 @@ const RURAL_BILLBOARD_SUPPLY_PSEUDO_KEY := "rural_billboard_supply_remaining"
 
 var _zoom_percent: int = 100
 var _cell_size: int = BASE_CELL_SIZE
-var _module_tile_ids_cache: Dictionary = {} # modules_key -> Dictionary(tile_id -> true)
 
 func _ready() -> void:
 	set_process_unhandled_input(true)
@@ -375,11 +374,11 @@ func _add_house_numbers_section(state: GameState) -> void:
 
 	var flow := _add_section("房屋编号（未使用 %d）" % nums.size())
 	for n in nums:
-			var token := TokensClass.HouseWithGardenNumberToken.new()
-			token.house_number = n
-			token.set_skin(_skin)
-			token.set_cell_size(_cell_size)
-			flow.add_child(token)
+		var token := TokensClass.HouseWithGardenNumberToken.new()
+		token.house_number = n
+		token.set_skin(_skin)
+		token.set_cell_size(_cell_size)
+		flow.add_child(token)
 
 func _add_garden_section(state: GameState) -> void:
 	if state == null or not (state.map is Dictionary):
@@ -585,12 +584,11 @@ func _get_rural_billboard_supply_remaining(state: GameState) -> int:
 	return maxi(0, RURAL_BILLBOARD_SUPPLY_TOTAL - occupied)
 
 func _add_module_tile_supplies_section(state: GameState) -> void:
-	var module_ids := _get_enabled_module_ids(state)
-	var entries := _collect_module_tile_supply_entries(state, module_ids)
+	var entries := _collect_module_tile_supply_entries(state, [])
 	if entries.is_empty():
 		return
 
-	var flow := _add_section("模块地图板块（全局供给）")
+	var flow := _add_section("地图板块（全局供给）")
 	for e in entries:
 		var tile_id := str(e.get("tile_id", ""))
 		var count := int(e.get("count", 0))
@@ -603,7 +601,7 @@ func _add_module_tile_supplies_section(state: GameState) -> void:
 		token.tooltip_text = "地图板块 %s ×%d" % [tile_id, count]
 		flow.add_child(token)
 
-func _collect_module_tile_supply_entries(state: GameState, module_ids: Array[String]) -> Array[Dictionary]:
+func _collect_module_tile_supply_entries(state: GameState, _module_ids: Array[String]) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if state == null or not (state.map is Dictionary):
 		return out
@@ -614,16 +612,10 @@ func _collect_module_tile_supply_entries(state: GameState, module_ids: Array[Str
 	if remaining.is_empty():
 		return out
 
-	var module_tile_ids := _get_module_tile_ids(module_ids)
-	if module_tile_ids.is_empty():
-		return out
-
 	var counts := {}
 	for v in remaining:
 		var tile_id := str(v).strip_edges()
 		if tile_id.is_empty():
-			continue
-		if not module_tile_ids.has(tile_id):
 			continue
 		counts[tile_id] = int(counts.get(tile_id, 0)) + 1
 
@@ -636,60 +628,6 @@ func _collect_module_tile_supply_entries(state: GameState, module_ids: Array[Str
 		if c > 0:
 			out.append({"tile_id": tid, "count": c})
 	return out
-
-func _get_module_tile_ids(module_ids: Array[String]) -> Dictionary:
-	var normalized: Array[String] = []
-	for mid_val in module_ids:
-		var mid := str(mid_val).strip_edges()
-		if mid.is_empty() or mid.begins_with("base_"):
-			continue
-		normalized.append(mid)
-	normalized.sort()
-
-	var cache_key := ",".join(normalized)
-	var cached_val = _module_tile_ids_cache.get(cache_key, null)
-	if cached_val is Dictionary:
-		return Dictionary(cached_val)
-
-	var out := {}
-	var base_dir := str(ModulesBaseDirClass.get_base_dir()).strip_edges()
-	if base_dir.is_empty():
-		_module_tile_ids_cache[cache_key] = out
-		return out
-
-	for mid in normalized:
-		var tiles_dir := ("%s/%s/content/tiles" % [base_dir, mid]).simplify_path()
-		var dir := DirAccess.open(tiles_dir)
-		if dir == null:
-			continue
-
-		dir.list_dir_begin()
-		var name := dir.get_next()
-		while not name.is_empty():
-			if not dir.current_is_dir() and name.to_lower().ends_with(".json"):
-				var path := tiles_dir.path_join(name)
-				var tile_id := _load_tile_id_from_json_file(path, name.trim_suffix(".json"))
-				if not tile_id.is_empty():
-					out[tile_id] = true
-			name = dir.get_next()
-		dir.list_dir_end()
-
-	_module_tile_ids_cache[cache_key] = out
-	return out
-
-func _load_tile_id_from_json_file(path: String, fallback_id: String) -> String:
-	var fallback := str(fallback_id).strip_edges()
-	var f := FileAccess.open(path, FileAccess.READ)
-	if f == null:
-		return fallback
-	var text := f.get_as_text()
-	f.close()
-	var parsed = JSON.parse_string(text)
-	if parsed is Dictionary:
-		var id := str(Dictionary(parsed).get("id", "")).strip_edges()
-		if not id.is_empty():
-			return id
-	return fallback
 
 func _is_excluded_piece_id(id_str: String) -> bool:
 	# 用户已澄清：不展示地图扩展 tile 与餐厅（但模块引入的新 piece 需要展示）。
