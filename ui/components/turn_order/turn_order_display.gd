@@ -21,38 +21,10 @@ signal position_selected(position: int)
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const STRIP_BG_COLOR := Color("#c9342f")
-
-class FlagMarker extends Control:
-	const POLE_COLOR := Color("#3d2413")
-	const PENNANT_COLOR := Color("#d83d30")
-	const PENNANT_BORDER_COLOR := Color("#5d150f")
-
-	func _ready() -> void:
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		queue_redraw()
-
-	func _notification(what: int) -> void:
-		if what == NOTIFICATION_RESIZED:
-			queue_redraw()
-
-	func _draw() -> void:
-		var w: float = size.x
-		var h: float = size.y
-		if w <= 0.0 or h <= 0.0:
-			return
-
-		var pole_w: float = maxf(2.0, floorf(w * 0.14))
-		draw_rect(Rect2(0.0, 0.0, pole_w, h), POLE_COLOR, true)
-
-		var pennant_top: float = floorf(h * 0.14)
-		var pennant_h: float = maxf(5.0, floorf(h * 0.56))
-		var pennant_w: float = maxf(8.0, w - pole_w - 1.0)
-		var p0 := Vector2(pole_w, pennant_top)
-		var p1 := Vector2(pole_w + pennant_w, pennant_top + pennant_h * 0.50)
-		var p2 := Vector2(pole_w, pennant_top + pennant_h)
-		var pts := PackedVector2Array([p0, p1, p2])
-		draw_colored_polygon(pts, PENNANT_COLOR)
-		draw_polyline(PackedVector2Array([p0, p1, p2, p0]), PENNANT_BORDER_COLOR, 1.0, true)
+const STRIP_SIDE_PAD := 10.0
+const STRIP_BOTTOM_PAD := 8.0
+const STRIP_TOP_TITLE_PAD := 30.0
+const STRIP_SLOT_GAP := 10.0
 
 var _game_state: GameState = null
 var _skin = null
@@ -97,29 +69,40 @@ func _apply_layout_style() -> void:
 	if not is_instance_valid(slots_container):
 		return
 
+	size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
 	slots_container.alignment = BoxContainer.ALIGNMENT_CENTER
-	slots_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slots_container.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	slots_container.anchor_left = 0.0
 	slots_container.anchor_top = 0.0
 	slots_container.anchor_right = 1.0
 	slots_container.anchor_bottom = 1.0
 
 	if use_map_strip_style:
-		custom_minimum_size = Vector2(620, 140)
-		slots_container.offset_left = 18.0
-		slots_container.offset_top = 40.0
-		slots_container.offset_right = -18.0
-		slots_container.offset_bottom = -12.0
-		slots_container.add_theme_constant_override("separation", 14)
+		var slot_count := maxi(1, _player_count)
+		var slot_w := OrderBadge.MAP_SLOT_SIDE
+		var slot_h := OrderBadge.MAP_SLOT_SIDE + OrderBadge.MAP_FRAME_TOP
+		var strip_w := STRIP_SIDE_PAD * 2.0 + slot_count * slot_w + maxi(0, slot_count - 1) * STRIP_SLOT_GAP
+		var strip_h := STRIP_TOP_TITLE_PAD + slot_h + STRIP_BOTTOM_PAD
+		custom_minimum_size = Vector2(strip_w, strip_h)
+		slots_container.offset_left = STRIP_SIDE_PAD
+		slots_container.offset_top = STRIP_TOP_TITLE_PAD
+		slots_container.offset_right = -STRIP_SIDE_PAD
+		slots_container.offset_bottom = -STRIP_BOTTOM_PAD
+		slots_container.add_theme_constant_override("separation", int(STRIP_SLOT_GAP))
 		if is_instance_valid(background):
 			background.visible = true
 			background.color = STRIP_BG_COLOR
 		if is_instance_valid(title_label):
 			title_label.visible = true
 			title_label.text = "回合顺位"
+			title_label.offset_left = 10.0
+			title_label.offset_top = 4.0
+			title_label.offset_right = -10.0
+			title_label.offset_bottom = 24.0
 		if is_instance_valid(hint_label):
-			hint_label.visible = true
-			hint_label.text = "数字越小越先行动 · 旗子标记表示当前玩家"
+			hint_label.visible = false
 	else:
 		custom_minimum_size = Vector2(220, 88)
 		slots_container.offset_left = 2.0
@@ -274,13 +257,15 @@ func _get_player_restaurant_logo_texture(player_id: int) -> Texture2D:
 	return _skin.get_restaurant_logo_texture_by_id(logo_id)
 
 
-class OrderBadge extends PanelContainer:
+class OrderBadge extends Control:
 	const RESTAURANT_BG_COLOR := Color("#f4edd1")
 	const CURRENT_BORDER_COLOR := Color("#d83d30")
 	const HIGHLIGHT_BORDER_COLOR := Color("#7f9f59")
 	const OUTLINE_COLOR := Color("#101010")
-	const MAP_SLOT_MIN_SIZE := Vector2(132, 102)
-	const COMPACT_SLOT_MIN_SIZE := Vector2(84, 90)
+	const MAP_SLOT_SIDE := 92.0
+	const COMPACT_SLOT_SIDE := 72.0
+	const MAP_FRAME_TOP := 14.0
+	const COMPACT_FRAME_TOP := 11.0
 
 	signal clicked(position: int)
 
@@ -295,12 +280,12 @@ class OrderBadge extends PanelContainer:
 	var _clickable: bool = false
 	var _map_strip_style: bool = false
 
-	var _frame: PanelContainer
-	var _number_badge: PanelContainer
+	var _frame: Panel
+	var _number_badge: Panel
 	var _number_label: Label
 	var _icon: TextureRect
 	var _fallback_label: Label
-	var _current_flag: FlagMarker
+	var _current_marker: Panel
 	var _content_pad: float = 2.0
 
 	func _ready() -> void:
@@ -349,74 +334,92 @@ class OrderBadge extends PanelContainer:
 		clip_contents = false
 		size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
-		_number_badge = PanelContainer.new()
+		_number_badge = Panel.new()
 		_number_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_number_badge.z_index = 3
 		add_child(_number_badge)
 
 		_number_label = Label.new()
-		_number_label.anchors_preset = Control.PRESET_FULL_RECT
+		_number_label.anchor_left = 0.0
+		_number_label.anchor_top = 0.0
+		_number_label.anchor_right = 1.0
+		_number_label.anchor_bottom = 1.0
+		_number_label.offset_left = 0.0
+		_number_label.offset_top = 0.0
+		_number_label.offset_right = 0.0
+		_number_label.offset_bottom = 0.0
 		_number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_number_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		_number_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_number_badge.add_child(_number_label)
 
-		_frame = PanelContainer.new()
+		_frame = Panel.new()
 		_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_frame.z_index = 1
 		add_child(_frame)
 
 		_icon = TextureRect.new()
-		_icon.anchors_preset = Control.PRESET_FULL_RECT
+		_icon.anchor_left = 0.0
+		_icon.anchor_top = 0.0
+		_icon.anchor_right = 1.0
+		_icon.anchor_bottom = 1.0
+		_icon.offset_left = 0.0
+		_icon.offset_top = 0.0
+		_icon.offset_right = 0.0
+		_icon.offset_bottom = 0.0
 		_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		_icon.stretch_mode = TextureRect.STRETCH_SCALE
+		_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_frame.add_child(_icon)
 
 		_fallback_label = Label.new()
-		_fallback_label.anchors_preset = Control.PRESET_FULL_RECT
+		_fallback_label.anchor_left = 0.0
+		_fallback_label.anchor_top = 0.0
+		_fallback_label.anchor_right = 1.0
+		_fallback_label.anchor_bottom = 1.0
+		_fallback_label.offset_left = 0.0
+		_fallback_label.offset_top = 0.0
+		_fallback_label.offset_right = 0.0
+		_fallback_label.offset_bottom = 0.0
 		_fallback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_fallback_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		_fallback_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_frame.add_child(_fallback_label)
 
-		_current_flag = FlagMarker.new()
-		_current_flag.anchor_left = 1.0
-		_current_flag.anchor_top = 0.0
-		_current_flag.anchor_right = 1.0
-		_current_flag.anchor_bottom = 0.0
-		_current_flag.offset_left = -16.0
-		_current_flag.offset_top = 0.0
-		_current_flag.offset_right = -2.0
-		_current_flag.offset_bottom = 24.0
-		_current_flag.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_current_flag.visible = false
-		_current_flag.z_index = 4
-		_frame.add_child(_current_flag)
+		_current_marker = Panel.new()
+		_current_marker.anchor_left = 1.0
+		_current_marker.anchor_top = 0.0
+		_current_marker.anchor_right = 1.0
+		_current_marker.anchor_bottom = 0.0
+		_current_marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_current_marker.visible = false
+		_current_marker.z_index = 4
+		_frame.add_child(_current_marker)
 
 	func _apply_metrics() -> void:
-		if not is_instance_valid(_frame) or not is_instance_valid(_number_badge) or not is_instance_valid(_current_flag):
+		if not is_instance_valid(_frame) or not is_instance_valid(_number_badge) or not is_instance_valid(_current_marker):
 			return
 
-		var slot_size := MAP_SLOT_MIN_SIZE if _map_strip_style else COMPACT_SLOT_MIN_SIZE
-		var badge_size := Vector2(38, 24) if _map_strip_style else Vector2(32, 20)
-		var frame_top := 24.0 if _map_strip_style else 20.0
-		var number_font_size := 19 if _map_strip_style else 16
-		var fallback_font_size := 20 if _map_strip_style else 16
-		var current_flag_size := Vector2(18, 22) if _map_strip_style else Vector2(14, 18)
+		var slot_side := MAP_SLOT_SIDE if _map_strip_style else COMPACT_SLOT_SIDE
+		var frame_top := MAP_FRAME_TOP if _map_strip_style else COMPACT_FRAME_TOP
+		var badge_size := 28.0 if _map_strip_style else 20.0
+		var number_font_size := 16 if _map_strip_style else 13
+		var fallback_font_size := 20 if _map_strip_style else 15
+		var current_marker_size := 12.0 if _map_strip_style else 10.0
 		_content_pad = 2.0 if _map_strip_style else 1.0
 
-		custom_minimum_size = slot_size
-		size_flags_horizontal = Control.SIZE_EXPAND_FILL if _map_strip_style else Control.SIZE_SHRINK_CENTER
+		custom_minimum_size = Vector2(slot_side, slot_side + frame_top)
+		size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 		_number_badge.anchor_left = 0.5
 		_number_badge.anchor_top = 0.0
 		_number_badge.anchor_right = 0.5
 		_number_badge.anchor_bottom = 0.0
-		_number_badge.offset_left = -badge_size.x * 0.5
-		_number_badge.offset_top = 0.0
-		_number_badge.offset_right = badge_size.x * 0.5
-		_number_badge.offset_bottom = badge_size.y
+		_number_badge.offset_left = -badge_size * 0.5
+		_number_badge.offset_top = frame_top - badge_size * 0.55
+		_number_badge.offset_right = badge_size * 0.5
+		_number_badge.offset_bottom = frame_top + badge_size * 0.45
 
 		_frame.anchor_left = 0.0
 		_frame.anchor_top = 0.0
@@ -429,11 +432,10 @@ class OrderBadge extends PanelContainer:
 
 		_number_label.add_theme_font_size_override("font_size", number_font_size)
 		_fallback_label.add_theme_font_size_override("font_size", fallback_font_size)
-		_current_flag.offset_left = -current_flag_size.x - 2.0
-		_current_flag.offset_top = 2.0
-		_current_flag.offset_right = -2.0
-		_current_flag.offset_bottom = 2.0 + current_flag_size.y
-		_current_flag.queue_redraw()
+		_current_marker.offset_left = -current_marker_size - 2.0
+		_current_marker.offset_top = 2.0
+		_current_marker.offset_right = -2.0
+		_current_marker.offset_bottom = 2.0 + current_marker_size
 
 		_layout_logo_square()
 
@@ -490,25 +492,27 @@ class OrderBadge extends PanelContainer:
 			frame_style.bg_color = Color(0.95, 0.91, 0.82, 1.0)
 		frame_style.border_color = frame_border
 		frame_style.set_border_width_all(3 if _is_current else 2)
-		frame_style.set_corner_radius_all(2 if _map_strip_style else 2)
+		frame_style.set_corner_radius_all(4 if _map_strip_style else 3)
 		if is_instance_valid(_frame):
 			_frame.add_theme_stylebox_override("panel", frame_style)
 
 		var badge_style := StyleBoxFlat.new()
-		if _occupied:
-			badge_style.bg_color = Color(0.82, 0.80, 0.76, 1.0)
-		elif _highlighted:
-			badge_style.bg_color = Color(0.86, 0.84, 0.79, 1.0)
-		else:
-			badge_style.bg_color = Color(0.82, 0.80, 0.76, 1.0)
-		badge_style.border_color = frame_border if _is_current else OUTLINE_COLOR
+		badge_style.bg_color = Color(0.74, 0.74, 0.74, 1.0)
+		badge_style.border_color = Color(0.28, 0.28, 0.28, 1.0)
 		badge_style.set_border_width_all(2)
-		badge_style.set_corner_radius_all(3 if _map_strip_style else 2)
+		badge_style.set_corner_radius_all(999)
 		if is_instance_valid(_number_badge):
 			_number_badge.add_theme_stylebox_override("panel", badge_style)
 
-		if is_instance_valid(_current_flag):
-			_current_flag.visible = _occupied and _is_current
+		if is_instance_valid(_current_marker):
+			_current_marker.visible = _occupied and _is_current
+			if _occupied and _is_current:
+				var marker_style := StyleBoxFlat.new()
+				marker_style.bg_color = Color(1, 1, 1, 0.95)
+				marker_style.border_color = CURRENT_BORDER_COLOR
+				marker_style.set_border_width_all(2)
+				marker_style.set_corner_radius_all(999)
+				_current_marker.add_theme_stylebox_override("panel", marker_style)
 
 		_layout_logo_square()
 
