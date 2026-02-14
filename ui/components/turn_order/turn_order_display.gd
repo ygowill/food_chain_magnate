@@ -259,13 +259,13 @@ func _get_player_restaurant_logo_texture(player_id: int) -> Texture2D:
 
 class OrderBadge extends Control:
 	const RESTAURANT_BG_COLOR := Color("#f4edd1")
-	const CURRENT_BORDER_COLOR := Color("#d83d30")
 	const HIGHLIGHT_BORDER_COLOR := Color("#7f9f59")
 	const OUTLINE_COLOR := Color("#101010")
 	const MAP_SLOT_SIDE := 92.0
 	const COMPACT_SLOT_SIDE := 72.0
 	const MAP_FRAME_TOP := 14.0
 	const COMPACT_FRAME_TOP := 11.0
+	const CURRENT_MARKER_EMOJI := "🚩"
 
 	signal clicked(position: int)
 
@@ -285,7 +285,7 @@ class OrderBadge extends Control:
 	var _number_label: Label
 	var _icon: TextureRect
 	var _fallback_label: Label
-	var _current_marker: Panel
+	var _current_flag: Label
 	var _content_pad: float = 2.0
 
 	func _ready() -> void:
@@ -386,18 +386,21 @@ class OrderBadge extends Control:
 		_fallback_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_frame.add_child(_fallback_label)
 
-		_current_marker = Panel.new()
-		_current_marker.anchor_left = 1.0
-		_current_marker.anchor_top = 0.0
-		_current_marker.anchor_right = 1.0
-		_current_marker.anchor_bottom = 0.0
-		_current_marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_current_marker.visible = false
-		_current_marker.z_index = 4
-		_frame.add_child(_current_marker)
+		_current_flag = Label.new()
+		_current_flag.anchor_left = 1.0
+		_current_flag.anchor_top = 0.0
+		_current_flag.anchor_right = 1.0
+		_current_flag.anchor_bottom = 0.0
+		_current_flag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_current_flag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_current_flag.text = CURRENT_MARKER_EMOJI
+		_current_flag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_current_flag.visible = false
+		_current_flag.z_index = 4
+		_frame.add_child(_current_flag)
 
 	func _apply_metrics() -> void:
-		if not is_instance_valid(_frame) or not is_instance_valid(_number_badge) or not is_instance_valid(_current_marker):
+		if not is_instance_valid(_frame) or not is_instance_valid(_number_badge) or not is_instance_valid(_current_flag):
 			return
 
 		var slot_side := MAP_SLOT_SIDE if _map_strip_style else COMPACT_SLOT_SIDE
@@ -405,7 +408,8 @@ class OrderBadge extends Control:
 		var badge_size := 28.0 if _map_strip_style else 20.0
 		var number_font_size := 16 if _map_strip_style else 13
 		var fallback_font_size := 20 if _map_strip_style else 15
-		var current_marker_size := 12.0 if _map_strip_style else 10.0
+		var current_flag_size := 20.0 if _map_strip_style else 16.0
+		var current_flag_font_size := 16 if _map_strip_style else 14
 		_content_pad = 2.0 if _map_strip_style else 1.0
 
 		custom_minimum_size = Vector2(slot_side, slot_side + frame_top)
@@ -432,10 +436,11 @@ class OrderBadge extends Control:
 
 		_number_label.add_theme_font_size_override("font_size", number_font_size)
 		_fallback_label.add_theme_font_size_override("font_size", fallback_font_size)
-		_current_marker.offset_left = -current_marker_size - 2.0
-		_current_marker.offset_top = 2.0
-		_current_marker.offset_right = -2.0
-		_current_marker.offset_bottom = 2.0 + current_marker_size
+		_current_flag.add_theme_font_size_override("font_size", current_flag_font_size)
+		_current_flag.offset_left = -current_flag_size - 2.0
+		_current_flag.offset_top = 2.0
+		_current_flag.offset_right = -2.0
+		_current_flag.offset_bottom = 2.0 + current_flag_size
 
 		_layout_logo_square()
 
@@ -478,9 +483,7 @@ class OrderBadge extends Control:
 			_fallback_label.add_theme_color_override("font_color", fallback_color)
 
 		var frame_border := OUTLINE_COLOR
-		if _is_current:
-			frame_border = CURRENT_BORDER_COLOR
-		elif _highlighted and _clickable:
+		if _highlighted and _clickable:
 			frame_border = HIGHLIGHT_BORDER_COLOR
 
 		var frame_style := StyleBoxFlat.new()
@@ -491,7 +494,7 @@ class OrderBadge extends Control:
 		else:
 			frame_style.bg_color = Color(0.95, 0.91, 0.82, 1.0)
 		frame_style.border_color = frame_border
-		frame_style.set_border_width_all(3 if _is_current else 2)
+		frame_style.set_border_width_all(2)
 		frame_style.set_corner_radius_all(4 if _map_strip_style else 3)
 		if is_instance_valid(_frame):
 			_frame.add_theme_stylebox_override("panel", frame_style)
@@ -504,15 +507,8 @@ class OrderBadge extends Control:
 		if is_instance_valid(_number_badge):
 			_number_badge.add_theme_stylebox_override("panel", badge_style)
 
-		if is_instance_valid(_current_marker):
-			_current_marker.visible = _occupied and _is_current
-			if _occupied and _is_current:
-				var marker_style := StyleBoxFlat.new()
-				marker_style.bg_color = Color(1, 1, 1, 0.95)
-				marker_style.border_color = CURRENT_BORDER_COLOR
-				marker_style.set_border_width_all(2)
-				marker_style.set_corner_radius_all(999)
-				_current_marker.add_theme_stylebox_override("panel", marker_style)
+		if is_instance_valid(_current_flag):
+			_current_flag.visible = _occupied and _is_current
 
 		_layout_logo_square()
 
