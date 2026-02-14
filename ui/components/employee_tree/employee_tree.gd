@@ -16,6 +16,10 @@ const ZOOM_STEP := 0.1
 const ZOOM_MIN_PERCENT := 50
 const ZOOM_MAX_PERCENT := 200
 const ZOOM_STEP_PERCENT := 10
+const COLOR_SLIDER_TRACK := Color(0.86, 0.81, 0.70, 0.95)
+const COLOR_SLIDER_BORDER := Color(0.17, 0.13, 0.09, 0.26)
+const COLOR_SLIDER_FILL := Color(0.73, 0.23, 0.18, 0.32)
+const COLOR_SLIDER_FILL_HOVER := Color(0.73, 0.23, 0.18, 0.45)
 
 @onready var close_button: Button = $MarginContainer/VBoxContainer/HeaderRow/CloseButton
 @onready var zoom_bar: PanelZoomBar = $MarginContainer/VBoxContainer/HeaderRow/ZoomBar
@@ -34,6 +38,7 @@ var _drag_start_pos: Vector2 = Vector2.ZERO
 var _detail_dialog = null
 var _built: bool = false
 var _build_in_progress: bool = false
+var _needs_fit_after_show: bool = false
 
 func _ready() -> void:
 	if is_instance_valid(close_button):
@@ -46,6 +51,7 @@ func _ready() -> void:
 		zoom_bar.configure(ZOOM_MIN_PERCENT, ZOOM_MAX_PERCENT, ZOOM_STEP_PERCENT, int(round(_zoom * 100.0)))
 		zoom_bar.zoom_changed.connect(_on_zoom_bar_changed)
 		zoom_bar.set_enabled(false)
+		_apply_zoom_bar_theme()
 	if is_instance_valid(pan_background):
 		pan_background.gui_input.connect(_on_background_gui_input)
 	if is_instance_valid(graph):
@@ -60,6 +66,8 @@ func _ready() -> void:
 func open() -> void:
 	if _built:
 		_set_loading_visible(false)
+		if _needs_fit_after_show:
+			call_deferred("_fit_to_view_after_open")
 		return
 	_set_loading_visible(true)
 	begin_background_build()
@@ -211,6 +219,7 @@ func _fit_to_view() -> void:
 
 	var vp_size := viewport.size
 	if vp_size.x <= 0.0 or vp_size.y <= 0.0:
+		_needs_fit_after_show = true
 		return
 
 	graph.scale = Vector2.ONE
@@ -222,6 +231,7 @@ func _fit_to_view() -> void:
 	if base_size == Vector2.ZERO:
 		base_size = graph.custom_minimum_size
 	if base_size.x <= 0.0 or base_size.y <= 0.0:
+		_needs_fit_after_show = true
 		return
 
 	var s := minf(vp_size.x / base_size.x, vp_size.y / base_size.y)
@@ -237,6 +247,7 @@ func _fit_to_view() -> void:
 		content_size = graph.custom_minimum_size
 	graph.position = (vp_size - content_size) * 0.5
 	graph.position = Vector2(round(graph.position.x), round(graph.position.y))
+	_needs_fit_after_show = false
 
 func _fit_to_width() -> void:
 	if not is_instance_valid(viewport) or not is_instance_valid(graph):
@@ -292,6 +303,55 @@ func _on_zoom_bar_changed(zoom_factor: float) -> void:
 		return
 	var local_center := viewport.size * 0.5
 	_set_zoom_at(zoom_factor, local_center)
+
+func _fit_to_view_after_open() -> void:
+	if not _built:
+		return
+	await _fit_to_view()
+
+func _apply_zoom_bar_theme() -> void:
+	if not is_instance_valid(zoom_bar):
+		return
+	if is_instance_valid(zoom_bar.zoom_out_button):
+		UiStylesClass.apply_button_secondary(zoom_bar.zoom_out_button)
+	if is_instance_valid(zoom_bar.zoom_in_button):
+		UiStylesClass.apply_button_secondary(zoom_bar.zoom_in_button)
+	if is_instance_valid(zoom_bar.zoom_label):
+		UiStylesClass.apply_label_dark(zoom_bar.zoom_label)
+	if is_instance_valid(zoom_bar.zoom_slider):
+		zoom_bar.zoom_slider.add_theme_stylebox_override("slider", _make_zoom_slider_track_style())
+		zoom_bar.zoom_slider.add_theme_stylebox_override("grabber_area", _make_zoom_slider_fill_style(COLOR_SLIDER_FILL))
+		zoom_bar.zoom_slider.add_theme_stylebox_override("grabber_area_highlight", _make_zoom_slider_fill_style(COLOR_SLIDER_FILL_HOVER))
+
+func _make_zoom_slider_track_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = COLOR_SLIDER_TRACK
+	style.border_color = COLOR_SLIDER_BORDER
+	style.set_border_width_all(1)
+	style.content_margin_left = 0
+	style.content_margin_top = 2
+	style.content_margin_right = 0
+	style.content_margin_bottom = 2
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_right = 3
+	style.corner_radius_bottom_left = 3
+	return style
+
+func _make_zoom_slider_fill_style(bg: Color) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = bg
+	style.border_color = Color(bg.r, bg.g, bg.b, 0.9)
+	style.set_border_width_all(1)
+	style.content_margin_left = 0
+	style.content_margin_top = 2
+	style.content_margin_right = 0
+	style.content_margin_bottom = 2
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_right = 3
+	style.corner_radius_bottom_left = 3
+	return style
 
 func _ensure_detail_dialog() -> void:
 	if _detail_dialog != null and is_instance_valid(_detail_dialog):
