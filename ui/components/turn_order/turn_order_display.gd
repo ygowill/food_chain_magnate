@@ -1,17 +1,26 @@
 # 顶部顺序显示（展示用）
-# 以紧凑形式显示玩家回合顺序位置，高亮当前行动玩家。
+# 默认紧凑模式用于弹窗，地图顶部可切换为“卡槽条”样式。
 class_name TurnOrderDisplay
 extends Control
 
 signal position_selected(position: int)
 
+@export var use_map_strip_style: bool = false:
+	set(value):
+		var enabled := bool(value)
+		if use_map_strip_style == enabled:
+			return
+		use_map_strip_style = enabled
+		_apply_layout_style()
+		_rebuild()
+
+@onready var background: ColorRect = $Background
 @onready var slots_container: HBoxContainer = $SlotsContainer
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
-const BADGE_SIZE := 78 # 26 * 3 (triple height for better logo readability)
-const BADGE_ICON_MARGIN := 6
+const STRIP_BG_COLOR := Color("#c9342f")
 
 var _game_state: GameState = null
 var _skin = null
@@ -27,6 +36,7 @@ var _slot_nodes: Array[OrderBadge] = []
 var _selectable: bool = false
 
 func _ready() -> void:
+	_apply_layout_style()
 	_rebuild()
 
 func set_player_count(count: int) -> void:
@@ -51,6 +61,37 @@ func set_selectable(can_select: bool) -> void:
 	_selectable = bool(can_select)
 	_update_display()
 
+func _apply_layout_style() -> void:
+	if not is_instance_valid(slots_container):
+		return
+
+	slots_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	slots_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slots_container.anchor_left = 0.0
+	slots_container.anchor_top = 0.0
+	slots_container.anchor_right = 1.0
+	slots_container.anchor_bottom = 1.0
+
+	if use_map_strip_style:
+		custom_minimum_size = Vector2(560, 112)
+		slots_container.offset_left = 18.0
+		slots_container.offset_top = 10.0
+		slots_container.offset_right = -18.0
+		slots_container.offset_bottom = -12.0
+		slots_container.add_theme_constant_override("separation", 16)
+		if is_instance_valid(background):
+			background.visible = true
+			background.color = STRIP_BG_COLOR
+	else:
+		custom_minimum_size = Vector2(220, 88)
+		slots_container.offset_left = 2.0
+		slots_container.offset_top = 0.0
+		slots_container.offset_right = -2.0
+		slots_container.offset_bottom = 0.0
+		slots_container.add_theme_constant_override("separation", 8)
+		if is_instance_valid(background):
+			background.visible = false
+
 func _rebuild() -> void:
 	for slot in _slot_nodes:
 		if is_instance_valid(slot):
@@ -60,9 +101,11 @@ func _rebuild() -> void:
 	if not is_instance_valid(slots_container):
 		return
 
+	_apply_layout_style()
 	for i in range(_player_count):
 		var badge := OrderBadge.new()
 		badge.slot_position = i
+		badge.set_map_strip_style(use_map_strip_style)
 		badge.clicked.connect(_on_badge_clicked)
 		slots_container.add_child(badge)
 		_slot_nodes.append(badge)
@@ -191,14 +234,16 @@ func _get_player_restaurant_logo_texture(player_id: int) -> Texture2D:
 
 class OrderBadge extends PanelContainer:
 	const RESTAURANT_BG_COLOR := Color("#f4edd1")
-	const CURRENT_BORDER_COLOR := Color("#e74c3c")
+	const CURRENT_BORDER_COLOR := Color("#d83d30")
+	const HIGHLIGHT_BORDER_COLOR := Color("#7f9f59")
+	const OUTLINE_COLOR := Color("#101010")
+	const MAP_SLOT_MIN_SIZE := Vector2(136, 94)
+	const COMPACT_SLOT_MIN_SIZE := Vector2(82, 90)
 
 	signal clicked(position: int)
 
 	var slot_position: int = 0
 
-	var _icon: TextureRect
-	var _label: Label
 	var _player_id: int = -1
 	var _player_color: Color = Color(0.7, 0.7, 0.7, 1)
 	var _is_current: bool = false
@@ -206,34 +251,29 @@ class OrderBadge extends PanelContainer:
 	var _logo_texture: Texture2D = null
 	var _highlighted: bool = false
 	var _clickable: bool = false
+	var _map_strip_style: bool = false
+
+	var _frame: PanelContainer
+	var _number_badge: PanelContainer
+	var _number_label: Label
+	var _icon: TextureRect
+	var _fallback_label: Label
+	var _player_strip: ColorRect
 
 	func _ready() -> void:
-		custom_minimum_size = Vector2(BADGE_SIZE, BADGE_SIZE)
-		size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		_build_ui()
+		_apply_metrics()
 		gui_input.connect(_on_gui_input)
-		_icon = TextureRect.new()
-		_icon.anchors_preset = Control.PRESET_FULL_RECT
-		_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(_icon)
-		_label = Label.new()
-		_label.anchors_preset = Control.PRESET_FULL_RECT
-		_label.offset_left = 0.0
-		_label.offset_top = 0.0
-		_label.offset_right = 0.0
-		_label.offset_bottom = 0.0
-		_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		_label.add_theme_font_size_override("font_size", 24)
-		_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(_label)
 		_update()
 
 	func _notification(what: int) -> void:
 		if what == NOTIFICATION_RESIZED:
-			_update()
+			_apply_metrics()
+
+	func set_map_strip_style(enabled: bool) -> void:
+		_map_strip_style = bool(enabled)
+		_apply_metrics()
+		_update()
 
 	func set_highlighted(highlighted: bool) -> void:
 		_highlighted = highlighted
@@ -259,45 +299,154 @@ class OrderBadge extends PanelContainer:
 		_logo_texture = null
 		_update()
 
+	func _build_ui() -> void:
+		if is_instance_valid(_frame):
+			return
+		mouse_filter = Control.MOUSE_FILTER_PASS
+		size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+		_number_badge = PanelContainer.new()
+		_number_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_number_badge)
+
+		_number_label = Label.new()
+		_number_label.anchors_preset = Control.PRESET_FULL_RECT
+		_number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_number_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_number_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_number_badge.add_child(_number_label)
+
+		_frame = PanelContainer.new()
+		_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_frame)
+
+		_icon = TextureRect.new()
+		_icon.anchors_preset = Control.PRESET_FULL_RECT
+		_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_frame.add_child(_icon)
+
+		_fallback_label = Label.new()
+		_fallback_label.anchors_preset = Control.PRESET_FULL_RECT
+		_fallback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_fallback_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_fallback_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_frame.add_child(_fallback_label)
+
+		_player_strip = ColorRect.new()
+		_player_strip.anchor_left = 0.0
+		_player_strip.anchor_top = 1.0
+		_player_strip.anchor_right = 1.0
+		_player_strip.anchor_bottom = 1.0
+		_player_strip.offset_left = 0.0
+		_player_strip.offset_top = -6.0
+		_player_strip.offset_right = 0.0
+		_player_strip.offset_bottom = 0.0
+		_player_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_player_strip.visible = false
+		_frame.add_child(_player_strip)
+
+	func _apply_metrics() -> void:
+		if not is_instance_valid(_frame) or not is_instance_valid(_number_badge):
+			return
+
+		var slot_size := MAP_SLOT_MIN_SIZE if _map_strip_style else COMPACT_SLOT_MIN_SIZE
+		var badge_size := Vector2(46, 32) if _map_strip_style else Vector2(34, 24)
+		var frame_top := 14.0 if _map_strip_style else 11.0
+		var content_pad := 7.0 if _map_strip_style else 5.0
+		var number_font_size := 30 if _map_strip_style else 20
+		var fallback_font_size := 21 if _map_strip_style else 18
+		var strip_height := 6.0 if _map_strip_style else 4.0
+
+		custom_minimum_size = slot_size
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL if _map_strip_style else Control.SIZE_SHRINK_CENTER
+
+		_number_badge.anchor_left = 0.5
+		_number_badge.anchor_top = 0.0
+		_number_badge.anchor_right = 0.5
+		_number_badge.anchor_bottom = 0.0
+		_number_badge.offset_left = -badge_size.x * 0.5
+		_number_badge.offset_top = 0.0
+		_number_badge.offset_right = badge_size.x * 0.5
+		_number_badge.offset_bottom = badge_size.y
+
+		_frame.anchor_left = 0.0
+		_frame.anchor_top = 0.0
+		_frame.anchor_right = 1.0
+		_frame.anchor_bottom = 1.0
+		_frame.offset_left = 0.0
+		_frame.offset_top = frame_top
+		_frame.offset_right = 0.0
+		_frame.offset_bottom = 0.0
+
+		_icon.offset_left = content_pad
+		_icon.offset_top = content_pad
+		_icon.offset_right = -content_pad
+		_icon.offset_bottom = -content_pad
+		_fallback_label.offset_left = content_pad
+		_fallback_label.offset_top = content_pad
+		_fallback_label.offset_right = -content_pad
+		_fallback_label.offset_bottom = -content_pad
+		_number_label.add_theme_font_size_override("font_size", number_font_size)
+		_fallback_label.add_theme_font_size_override("font_size", fallback_font_size)
+		_player_strip.offset_top = -strip_height
+
 	func _update() -> void:
-		if _icon != null:
+		if is_instance_valid(_number_label):
+			_number_label.text = str(slot_position + 1)
+			_number_label.add_theme_color_override("font_color", Color(0.12, 0.12, 0.12, 0.95))
+
+		if is_instance_valid(_icon):
 			_icon.texture = _logo_texture
 			_icon.visible = _occupied and _logo_texture != null
-		if _label != null:
-			if _occupied:
-				_label.text = "" if _logo_texture != null else str(_player_id + 1)
-				var occupied_color := UiStylesClass.COLOR_TEXT_PRIMARY
-				occupied_color.a = 0.9
-				_label.add_theme_color_override("font_color", occupied_color)
-			else:
-				_label.text = str(slot_position + 1)
-				var empty_color := UiStylesClass.COLOR_TEXT_MUTED
-				empty_color.a = 0.9
-				_label.add_theme_color_override("font_color", empty_color)
 
-		var style := StyleBoxFlat.new()
+		if is_instance_valid(_fallback_label):
+			_fallback_label.visible = _occupied and _logo_texture == null
+			_fallback_label.text = "P%d" % (_player_id + 1) if _occupied else ""
+			var fallback_color := _player_color if _occupied else Color(0.17, 0.13, 0.09, 0.9)
+			fallback_color.a = 0.95
+			_fallback_label.add_theme_color_override("font_color", fallback_color)
+
+		var frame_border := OUTLINE_COLOR
+		if _is_current:
+			frame_border = CURRENT_BORDER_COLOR
+		elif _highlighted and _clickable:
+			frame_border = HIGHLIGHT_BORDER_COLOR
+
+		var frame_style := StyleBoxFlat.new()
 		if _occupied:
 			var bg := RESTAURANT_BG_COLOR
-			bg.a = 0.95
-			style.bg_color = bg
+			bg.a = 0.96
+			frame_style.bg_color = bg
 		elif _highlighted:
-			style.bg_color = Color(0.90, 0.93, 0.85, 0.9)
+			frame_style.bg_color = Color(0.97, 0.95, 0.87, 0.98)
 		else:
-			style.bg_color = Color(0.95, 0.91, 0.82, 0.85)
-		style.border_color = CURRENT_BORDER_COLOR if _is_current else (_player_color if _occupied else Color(0.3, 0.3, 0.35, 0.6))
-		style.set_border_width_all(3 if _is_current else 1)
-		style.set_corner_radius_all(int(round(minf(size.x, size.y) * 0.5)))
-		add_theme_stylebox_override("panel", style)
+			frame_style.bg_color = Color(0.95, 0.91, 0.82, 0.90)
+		frame_style.border_color = frame_border
+		frame_style.set_border_width_all(3 if _is_current else 2)
+		frame_style.set_corner_radius_all(4 if _map_strip_style else 3)
+		if is_instance_valid(_frame):
+			_frame.add_theme_stylebox_override("panel", frame_style)
 
-		if _icon != null:
-			var icon_padding := float(BADGE_ICON_MARGIN)
-			var inner_size := minf(size.x, size.y)
-			var pad_x := ((size.x - inner_size) * 0.5) + icon_padding
-			var pad_y := ((size.y - inner_size) * 0.5) + icon_padding
-			_icon.offset_left = pad_x
-			_icon.offset_top = pad_y
-			_icon.offset_right = -pad_x
-			_icon.offset_bottom = -pad_y
+		var badge_style := StyleBoxFlat.new()
+		if _occupied:
+			badge_style.bg_color = Color(0.83, 0.80, 0.77, 0.98)
+		elif _highlighted:
+			badge_style.bg_color = Color(0.88, 0.86, 0.80, 0.98)
+		else:
+			badge_style.bg_color = Color(0.82, 0.80, 0.76, 0.98)
+		badge_style.border_color = frame_border if _is_current else OUTLINE_COLOR
+		badge_style.set_border_width_all(2)
+		badge_style.set_corner_radius_all(6 if _map_strip_style else 4)
+		if is_instance_valid(_number_badge):
+			_number_badge.add_theme_stylebox_override("panel", badge_style)
+
+		if is_instance_valid(_player_strip):
+			_player_strip.visible = _occupied
+			var strip_color := _player_color
+			strip_color.a = 0.90
+			_player_strip.color = strip_color
 
 		if _occupied:
 			tooltip_text = "顺位 %d: %s" % [slot_position + 1, Globals.get_player_name(_player_id)]

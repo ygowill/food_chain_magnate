@@ -200,6 +200,7 @@ offset_bottom = 120.0
 
 [node name="TurnOrderDisplay" parent="UIRoot/MainContent/CenterSplit/GameArea/TurnOrderOverlay" instance=ExtResource("14_turn_order_display")]
 layout_mode = 2
+use_map_strip_style = true
 
 [node name="RightPanel" type="VBoxContainer" parent="UIRoot/MainContent/CenterSplit"]
 custom_minimum_size = Vector2(320, 0)
