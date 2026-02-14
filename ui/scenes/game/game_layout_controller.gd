@@ -309,24 +309,7 @@ func apply_responsive_layout() -> void:
 		_center_split.split_offset = _center_split_default_split_offset
 
 	var top_bar = _scene.get_node_or_null("UIRoot/TopBar")
-	if top_bar is VBoxContainer:
-		var info_row = (top_bar as VBoxContainer).get_node_or_null("InfoRow")
-		if info_row is HBoxContainer:
-			(info_row as HBoxContainer).add_theme_constant_override("separation", separation)
-		var button_row = (top_bar as VBoxContainer).get_node_or_null("ButtonRow")
-		if button_row is HBoxContainer:
-			(button_row as HBoxContainer).add_theme_constant_override("separation", separation)
-	elif top_bar is FlowContainer:
-		# 单行布局（可自动换行）：InfoRow + ButtonRow。
-		top_bar.add_theme_constant_override("h_separation", separation)
-		top_bar.add_theme_constant_override("v_separation", 6)
-		var info_row = top_bar.get_node_or_null("InfoRow")
-		if info_row is HBoxContainer:
-			(info_row as HBoxContainer).add_theme_constant_override("separation", separation)
-		var button_row = top_bar.get_node_or_null("ButtonRow")
-		if button_row is HBoxContainer:
-			(button_row as HBoxContainer).add_theme_constant_override("separation", separation)
-	elif top_bar is HBoxContainer:
+	if top_bar is HBoxContainer:
 		(top_bar as HBoxContainer).add_theme_constant_override("separation", separation)
 
 	var scaled_font_size := font_size

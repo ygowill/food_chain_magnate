@@ -136,17 +136,15 @@ func update_ui(do_profile: bool) -> void:
 							if bool(v2):
 								submitted_count += 1
 
-			_current_player_label.text = "重组（同时）%s｜查看: %s｜提交: %d/%d" % [
+			_current_player_label.text = "重组（同时）%s｜提交: %d/%d" % [
 				replay_suffix,
-				view_name,
 				submitted_count,
 				total
 			]
 		else:
-			_current_player_label.text = "行动%s: %s｜查看: %s" % [
+			_current_player_label.text = "行动%s: %s" % [
 				replay_suffix,
-				current_name,
-				view_name
+				current_name
 			]
 
 	if is_instance_valid(_bank_label):

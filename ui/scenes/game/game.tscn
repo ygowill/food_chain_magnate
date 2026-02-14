@@ -54,94 +54,60 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 5
 
-[node name="TopBar" type="HFlowContainer" parent="UIRoot"]
+[node name="TopBar" type="HBoxContainer" parent="UIRoot"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/h_separation = 20
-theme_override_constants/v_separation = 6
-
-[node name="InfoRow" type="HBoxContainer" parent="UIRoot/TopBar"]
-layout_mode = 2
 theme_override_constants/separation = 20
 
-[node name="RoundLabel" type="Label" parent="UIRoot/TopBar/InfoRow"]
+[node name="StatusBar" type="HBoxContainer" parent="UIRoot/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 1
+theme_override_constants/separation = 20
+
+[node name="RoundLabel" type="Label" parent="UIRoot/TopBar/StatusBar"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 theme_override_font_sizes/font_size = 18
 text = "回合: 0"
 
-[node name="PhaseLabel" type="Label" parent="UIRoot/TopBar/InfoRow"]
+[node name="PhaseLabel" type="Label" parent="UIRoot/TopBar/StatusBar"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 theme_override_font_sizes/font_size = 18
 text = "阶段: Setup"
 
-[node name="BankLabel" type="Label" parent="UIRoot/TopBar/InfoRow"]
+[node name="BankLabel" type="Label" parent="UIRoot/TopBar/StatusBar"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 theme_override_font_sizes/font_size = 18
 text = "银行: $0"
 
-[node name="CurrentPlayerLabel" type="Label" parent="UIRoot/TopBar/InfoRow"]
+[node name="CurrentPlayerLabel" type="Label" parent="UIRoot/TopBar/StatusBar"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 theme_override_font_sizes/font_size = 18
 text = "玩家: -"
 
-[node name="ButtonRow" type="HBoxContainer" parent="UIRoot/TopBar"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 20
-
-[node name="AdvancePhaseButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+[node name="AdvancePhaseButton" type="Button" parent="UIRoot/TopBar"]
 visible = false
 layout_mode = 2
 text = "推进阶段"
 
-[node name="AdvanceSubPhaseButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+[node name="AdvanceSubPhaseButton" type="Button" parent="UIRoot/TopBar"]
 visible = false
 layout_mode = 2
 text = "推进子阶段"
 
-[node name="Spacer" type="Control" parent="UIRoot/TopBar/ButtonRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="EmployeeTreeButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
-layout_mode = 2
-text = "升级路线"
-
-[node name="LogButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
-layout_mode = 2
-text = "日志"
-
-[node name="MilestonesButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
-visible = false
-layout_mode = 2
-text = "里程碑"
-
-[node name="ReserveAreaButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
-layout_mode = 2
-text = "供应堆"
-
-[node name="DistanceToolButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
-layout_mode = 2
-text = "距离工具"
-
-[node name="SettingsButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
-visible = false
-layout_mode = 2
-text = "设置"
-
-[node name="ToggleLeftPanelButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+[node name="ToggleLeftPanelButton" type="Button" parent="UIRoot/TopBar"]
 layout_mode = 2
 text = "隐藏信息"
 
-[node name="ToggleRightPanelButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+[node name="ToggleRightPanelButton" type="Button" parent="UIRoot/TopBar"]
 layout_mode = 2
 text = "隐藏操作"
 
-[node name="MenuButton" type="Button" parent="UIRoot/TopBar/ButtonRow"]
+[node name="MenuButton" type="Button" parent="UIRoot/TopBar"]
 layout_mode = 2
 text = "菜单"
 
@@ -214,6 +180,36 @@ layout_mode = 2
 custom_minimum_size = Vector2(320, 0)
 layout_mode = 2
 theme_override_constants/separation = 8
+
+[node name="ToolBar" type="HBoxContainer" parent="UIRoot/MainContent/CenterSplit/RightPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="EmployeeTreeButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar"]
+layout_mode = 2
+text = "升级路线"
+
+[node name="LogButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar"]
+layout_mode = 2
+text = "日志"
+
+[node name="MilestonesButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar"]
+visible = false
+layout_mode = 2
+text = "里程碑"
+
+[node name="ReserveAreaButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar"]
+layout_mode = 2
+text = "供应堆"
+
+[node name="DistanceToolButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar"]
+layout_mode = 2
+text = "距离工具"
+
+[node name="SettingsButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar"]
+visible = false
+layout_mode = 2
+text = "设置"
 
 [node name="HeaderRow" type="HBoxContainer" parent="UIRoot/MainContent/CenterSplit/RightPanel"]
 layout_mode = 2
@@ -353,17 +349,17 @@ text = "显示/隐藏底部面板"
 layout_mode = 2
 text = "返回主菜单"
 
-[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/AdvancePhaseButton" to="." method="_on_advance_phase_pressed"]
-[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/AdvanceSubPhaseButton" to="." method="_on_advance_sub_phase_pressed"]
-[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/EmployeeTreeButton" to="." method="_on_employee_tree_button_pressed"]
-[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/LogButton" to="." method="_on_log_button_pressed"]
-[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/MilestonesButton" to="." method="_on_milestones_button_pressed"]
-[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/ReserveAreaButton" to="." method="_on_reserve_area_button_pressed"]
-[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/DistanceToolButton" to="." method="_on_distance_tool_button_pressed"]
-[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/SettingsButton" to="." method="_on_settings_button_pressed"]
-[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/ToggleLeftPanelButton" to="." method="_on_toggle_left_panel_pressed"]
-[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/ToggleRightPanelButton" to="." method="_on_toggle_right_panel_pressed"]
-[connection signal="pressed" from="UIRoot/TopBar/ButtonRow/MenuButton" to="." method="_on_menu_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/AdvancePhaseButton" to="." method="_on_advance_phase_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/AdvanceSubPhaseButton" to="." method="_on_advance_sub_phase_pressed"]
+[connection signal="pressed" from="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/EmployeeTreeButton" to="." method="_on_employee_tree_button_pressed"]
+[connection signal="pressed" from="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/LogButton" to="." method="_on_log_button_pressed"]
+[connection signal="pressed" from="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/MilestonesButton" to="." method="_on_milestones_button_pressed"]
+[connection signal="pressed" from="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/ReserveAreaButton" to="." method="_on_reserve_area_button_pressed"]
+[connection signal="pressed" from="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/DistanceToolButton" to="." method="_on_distance_tool_button_pressed"]
+[connection signal="pressed" from="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/SettingsButton" to="." method="_on_settings_button_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/ToggleLeftPanelButton" to="." method="_on_toggle_left_panel_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/ToggleRightPanelButton" to="." method="_on_toggle_right_panel_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/MenuButton" to="." method="_on_menu_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/ResumeButton" to="." method="_on_resume_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/SaveButton" to="." method="_on_save_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]

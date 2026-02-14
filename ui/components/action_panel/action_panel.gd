@@ -346,8 +346,7 @@ func _update_title() -> void:
 		title_label.text = base + suffix
 		return
 
-	var name := Globals.get_player_name(_current_player_id) if Globals != null else ("玩家%d" % (_current_player_id + 1))
-	title_label.text = "%s（行动: %s）%s" % [base, name, suffix]
+	title_label.text = base + suffix
 
 func set_available_actions(action_ids: Array[String]) -> void:
 	_rebuild_action_buttons(action_ids)

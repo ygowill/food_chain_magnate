@@ -3,13 +3,13 @@
 extends Control
 
 # UI 节点引用
-@onready var round_label: Label = $UIRoot/TopBar/InfoRow/RoundLabel
-@onready var phase_label: Label = $UIRoot/TopBar/InfoRow/PhaseLabel
+@onready var round_label: Label = $UIRoot/TopBar/StatusBar/RoundLabel
+@onready var phase_label: Label = $UIRoot/TopBar/StatusBar/PhaseLabel
 @onready var turn_order_display: Control = $UIRoot/MainContent/CenterSplit/GameArea/TurnOrderOverlay/TurnOrderDisplay
-@onready var bank_label: Label = $UIRoot/TopBar/InfoRow/BankLabel
-@onready var current_player_label: Label = $UIRoot/TopBar/InfoRow/CurrentPlayerLabel
-@onready var toggle_left_panel_button: Button = $UIRoot/TopBar/ButtonRow/ToggleLeftPanelButton
-@onready var toggle_right_panel_button: Button = $UIRoot/TopBar/ButtonRow/ToggleRightPanelButton
+@onready var bank_label: Label = $UIRoot/TopBar/StatusBar/BankLabel
+@onready var current_player_label: Label = $UIRoot/TopBar/StatusBar/CurrentPlayerLabel
+@onready var toggle_left_panel_button: Button = $UIRoot/TopBar/ToggleLeftPanelButton
+@onready var toggle_right_panel_button: Button = $UIRoot/TopBar/ToggleRightPanelButton
 @onready var toggle_bottom_panel_button: Button = $MenuDialog/VBoxContainer/ToggleBottomPanelButton
 @onready var menu_dialog: Control = $MenuDialog
 @onready var menu_dialog_overlay: ColorRect = $MenuDialog/Overlay
@@ -364,15 +364,17 @@ func _apply_menu_dialog_styles() -> void:
 
 func _apply_topbar_button_styles() -> void:
 	var button_paths := [
-		"UIRoot/TopBar/ButtonRow/AdvancePhaseButton",
-		"UIRoot/TopBar/ButtonRow/AdvanceSubPhaseButton",
-		"UIRoot/TopBar/ButtonRow/EmployeeTreeButton",
-		"UIRoot/TopBar/ButtonRow/LogButton",
-		"UIRoot/TopBar/ButtonRow/ReserveAreaButton",
-		"UIRoot/TopBar/ButtonRow/DistanceToolButton",
-		"UIRoot/TopBar/ButtonRow/ToggleLeftPanelButton",
-		"UIRoot/TopBar/ButtonRow/ToggleRightPanelButton",
-		"UIRoot/TopBar/ButtonRow/MenuButton",
+		"UIRoot/TopBar/AdvancePhaseButton",
+		"UIRoot/TopBar/AdvanceSubPhaseButton",
+		"UIRoot/TopBar/ToggleLeftPanelButton",
+		"UIRoot/TopBar/ToggleRightPanelButton",
+		"UIRoot/TopBar/MenuButton",
+		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/EmployeeTreeButton",
+		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/LogButton",
+		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/MilestonesButton",
+		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/ReserveAreaButton",
+		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/DistanceToolButton",
+		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/SettingsButton",
 	]
 	for path in button_paths:
 		var btn = get_node_or_null(path)

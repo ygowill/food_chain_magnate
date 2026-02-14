@@ -239,25 +239,25 @@ func _setup_help_tooltips() -> void:
 		bank_label.mouse_default_cursor_shape = Control.CURSOR_HELP
 		help_tooltip_manager.register_control(bank_label, "mechanic_bank")
 
-	var btn_log = _scene.get_node_or_null("UIRoot/TopBar/ButtonRow/LogButton")
+	var btn_log = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/LogButton")
 	if btn_log is Control:
 		var c1: Control = btn_log
 		c1.mouse_default_cursor_shape = Control.CURSOR_HELP
 		help_tooltip_manager.register_control(c1, "ui_topbar_log")
 
-	var btn_milestones = _scene.get_node_or_null("UIRoot/TopBar/ButtonRow/MilestonesButton")
+	var btn_milestones = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/MilestonesButton")
 	if btn_milestones is Control:
 		var c2: Control = btn_milestones
 		c2.mouse_default_cursor_shape = Control.CURSOR_HELP
 		help_tooltip_manager.register_control(c2, "ui_topbar_milestones")
 
-	var btn_distance = _scene.get_node_or_null("UIRoot/TopBar/ButtonRow/DistanceToolButton")
+	var btn_distance = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/DistanceToolButton")
 	if btn_distance is Control:
 		var c3: Control = btn_distance
 		c3.mouse_default_cursor_shape = Control.CURSOR_HELP
 		help_tooltip_manager.register_control(c3, "ui_topbar_distance_tool")
 
-	var btn_settings = _scene.get_node_or_null("UIRoot/TopBar/ButtonRow/SettingsButton")
+	var btn_settings = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/SettingsButton")
 	if btn_settings is Control:
 		var c4: Control = btn_settings
 		c4.mouse_default_cursor_shape = Control.CURSOR_HELP
