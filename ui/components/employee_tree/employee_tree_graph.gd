@@ -212,11 +212,15 @@ func _build_nodes(ids: Array[String]) -> void:
 		card.multiline_name = true
 		if card.has_method("set_display_scale"):
 			card.set_display_scale(_display_scale)
-			card.setup(def.to_dict())
+		card.setup(def.to_dict())
+		# 升级路线图中的卡片不在 Container 布局树内，需显式锁定尺寸。
+		# 否则导出端字体断词差异会反向影响 minimum size，造成文本右溢/节点挤压。
+		card.custom_minimum_size = _node_size
+		card.size = _node_size
 
-			var pos_val = _positions.get(id, Vector2.ZERO)
-			var p: Vector2 = pos_val if pos_val is Vector2 else Vector2.ZERO
-			card.position = Vector2(round(p.x), round(p.y))
+		var pos_val = _positions.get(id, Vector2.ZERO)
+		var p: Vector2 = pos_val if pos_val is Vector2 else Vector2.ZERO
+		card.position = Vector2(round(p.x), round(p.y))
 
 		add_child(card)
 		_nodes[id] = card

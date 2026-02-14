@@ -10,13 +10,19 @@ static func run() -> Result:
 	if compact._description_label == null:
 		compact.free()
 		return Result.failure("Compact 卡片未创建描述标签")
-	if compact._description_label.autowrap_mode != TextServer.AUTOWRAP_WORD_SMART:
+	if compact._description_label.autowrap_mode != TextServer.AUTOWRAP_ARBITRARY:
 		var got := compact._description_label.autowrap_mode
 		compact.free()
-		return Result.failure("Compact 描述换行模式错误: got=%s expect=%s" % [str(got), str(TextServer.AUTOWRAP_WORD_SMART)])
+		return Result.failure("Compact 描述换行模式错误: got=%s expect=%s" % [str(got), str(TextServer.AUTOWRAP_ARBITRARY)])
 	if not compact._description_label.clip_text:
 		compact.free()
 		return Result.failure("Compact 描述应启用 clip_text，避免导出端横向溢出")
+	if compact._description_label.size_flags_horizontal != Control.SIZE_EXPAND_FILL:
+		compact.free()
+		return Result.failure("Compact 描述应水平填充卡片宽度")
+	if not compact.clip_contents:
+		compact.free()
+		return Result.failure("EmployeeCard 应启用 clip_contents，避免导出端文本绘制越界")
 	compact.free()
 
 	var full := EmployeeCardClass.new()
