@@ -13,12 +13,14 @@
 
 ## 复核步骤
 
-1. 载入后应处于 Working/GetDrinks，且玩家 0 在岗包含 cart_operator。
-2. 执行「采购饮料」并在地图上选择饮料来源生成路线后确认执行。
+1. 载入后应处于 `Working/GetDrinks`，且玩家 0 在岗包含 `cart_operator`。
+2. 执行 `procure_drinks`，只选择 1 个饮料源完成一次采购。
+3. 记录本次新增库存数量（同一饮料源下，`cart_operator` 应体现每源 +2 的里程碑增量）。
 
 ## 预期结果
 
-- 玩家 0 获得里程碑 first_cart_operator_used（player.milestones）。
+- 玩家 0 获得里程碑 `first_cart_operator_used`（`player.milestones`）。
+- 对单一饮料源采购时，`cart_operator` 的新增饮料数量应高于基础值（体现 `drinks_per_source_delta`）。
 
 ## 关联单元测试
 

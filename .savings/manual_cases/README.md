@@ -82,13 +82,15 @@ godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- 
 - `waitress`: `employees/waitress.json` + `employees/waitress.md`
 - `zeppelin_pilot`: `employees/zeppelin_pilot.json` + `employees/zeppelin_pilot.md`
 
-## 里程碑（38）
+## 里程碑（40）
 
 - `first_airplane`: `milestones/first_airplane.json` + `milestones/first_airplane.md`
 - `first_beer_sold`: `milestones/first_beer_sold.json` + `milestones/first_beer_sold.md`
 - `first_billboard`: `milestones/first_billboard.json` + `milestones/first_billboard.md`
 - `first_brand_director_used`: `milestones/first_brand_director_used.json` + `milestones/first_brand_director_used.md`
 - `first_brand_manager_used`: `milestones/first_brand_manager_used.json` + `milestones/first_brand_manager_used.md`
+- `first_brand_manager_used_dual_ui`: `milestones/first_brand_manager_used_dual_ui.json` + `milestones/first_brand_manager_used_dual_ui.md`
+- `first_brand_manager_used_first_only`: `milestones/first_brand_manager_used_first_only.json` + `milestones/first_brand_manager_used_first_only.md`
 - `first_burger_marketed`: `milestones/first_burger_marketed.json` + `milestones/first_burger_marketed.md`
 - `first_burger_produced`: `milestones/first_burger_produced.json` + `milestones/first_burger_produced.md`
 - `first_burger_sold`: `milestones/first_burger_sold.json` + `milestones/first_burger_sold.md`

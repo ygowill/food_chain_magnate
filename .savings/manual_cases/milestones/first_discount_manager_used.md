@@ -13,13 +13,15 @@
 
 ## 复核步骤
 
-1. 载入后应处于 Working 阶段，且玩家 0 在岗包含 discount_manager。
-2. 执行强制动作 set_discount（-$3）。
-3. （后续）进入下一回合 Restructuring 并推进离开，观察 bank.total -100，且 bank_burn_pending 被清除。
+1. 载入后应处于 `Working` 阶段，且玩家 0 在岗包含 `discount_manager`。
+2. 执行强制动作 `set_discount`（`-$3`）。
+3. 立即检查玩家 0：应已获得里程碑，且 `bank_burn_pending=true`。
+4. 进入下一回合 `Restructuring` 并推进离开，观察银行与玩家标记变化。
 
 ## 预期结果
 
-- 玩家 0 获得里程碑 first_discount_manager_used（player.milestones），且 bank_burn_pending=true。
+- 玩家 0 获得里程碑 `first_discount_manager_used`（`player.milestones`），且 `bank_burn_pending=true`。
+- 下一回合离开 `Restructuring` 后：`bank.total` 扣减 `100`，且 `bank_burn_pending` 被清除。
 
 ## 推荐参数（可选）
 

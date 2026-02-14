@@ -13,13 +13,16 @@
 
 ## 复核步骤
 
-1. 载入后应处于 Working/Marketing，且玩家 0 在岗包含 campaign_manager。
-2. 执行「发起营销」放置 mailbox #7（参数见推荐）。
-3. （可选）推进到 Marketing/Dinnertime 结算，观察 cash +5/需求与负距离逻辑。
+1. 载入后应处于 `Working/Marketing`，且玩家 0 在岗包含 `campaign_manager`。
+2. 执行 `initiate_marketing` 放置 `mailbox #7`（参数见推荐）。
+3. 推进到 `Marketing` 结算，记录玩家 0 现金变化（每新增 1 个需求应给 `$5`）。
+4. 再推进到 `Dinnertime`，确认距离 `-2` 修正不会导致结算失败（允许负距离）。
 
 ## 预期结果
 
-- 玩家 0 获得里程碑 first_marketeer_used（player.milestones）。
+- 玩家 0 获得里程碑 `first_marketeer_used`（`player.milestones`）。
+- `Marketing` 结算时，玩家 0 现金按“每需求 +$5”增加（通常至少增加 `$5`）。
+- `Dinnertime` 在存在 `-2` 距离修正时仍能正常结算（包括负距离场景）。
 
 ## 推荐参数（可选）
 
