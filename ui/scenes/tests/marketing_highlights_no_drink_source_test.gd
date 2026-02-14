@@ -27,11 +27,11 @@ static func run() -> Result:
 	var engine := GameEngineClass.new()
 	var init := engine.initialize(2, 12345)
 	if not init.ok:
-		return Result.failure("初始化失败: %s" % init.error)
+		return _finish(Result.failure("初始化失败: %s" % init.error), null, engine)
 
 	var state: GameState = engine.get_state()
 	if state == null:
-		return Result.failure("无法获取 GameState")
+		return _finish(Result.failure("无法获取 GameState"), null, engine)
 
 	state.map = _build_empty_map_with_drink_source(Vector2i(3, 3), Vector2i(0, 0))
 	# Provide a road so non-edge marketing (e.g. radio) has at least one valid adjacent-to-road anchor.
@@ -56,11 +56,18 @@ static func run() -> Result:
 		set[v] = true
 
 	if set.has(Vector2i(0, 0)):
-		return Result.failure("highlights should exclude anchors that cover drink_source (found (0,0))")
+		return _finish(Result.failure("highlights should exclude anchors that cover drink_source (found (0,0))"), controller, engine)
 	if not set.has(Vector2i(1, 1)):
-		return Result.failure("expected at least one valid anchor (e.g. (1,1))")
+		return _finish(Result.failure("expected at least one valid anchor (e.g. (1,1))"), controller, engine)
 
-	return Result.success({})
+	return _finish(Result.success({}), controller, engine)
+
+static func _finish(result: Result, controller, engine) -> Result:
+	if controller != null and is_instance_valid(controller) and controller.has_method("dispose"):
+		controller.dispose()
+	if engine != null and engine.has_method("dispose"):
+		engine.dispose()
+	return result
 
 static func _build_empty_map_with_drink_source(grid_size: Vector2i, drink_pos: Vector2i) -> Dictionary:
 	var cells: Array = []

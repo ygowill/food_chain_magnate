@@ -233,3 +233,9 @@ func get_status() -> Dictionary:
 		"action_validator_count": action_validator_count,
 		"action_ids": _executors.keys()
 	}
+
+func clear_all() -> void:
+	_executors.clear()
+	_validators_by_action.clear()
+	_global_validators.clear()
+	_availability_registry = null

@@ -8,6 +8,10 @@ extends RefCounted
 var _primary_callback: Callable = Callable()
 var _primary_module_id: String = ""
 
+func clear() -> void:
+	_primary_callback = Callable()
+	_primary_module_id = ""
+
 func has_primary() -> bool:
 	return _primary_callback.is_valid()
 
@@ -28,4 +32,3 @@ func generate_map_def(player_count: int, catalog, map_option, rng_manager) -> Re
 	if not has_primary():
 		return Result.failure("MapGenerationRegistry: 缺少 primary map generator")
 	return _primary_callback.call(player_count, catalog, map_option, rng_manager)
-

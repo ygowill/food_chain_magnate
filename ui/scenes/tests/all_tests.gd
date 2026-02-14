@@ -3,18 +3,25 @@ extends Control
 
 const TestRefs = preload("res://ui/scenes/tests/all_tests_refs.gd")
 const CheckCompileScript = preload("res://tools/check_compile.gd")
+const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
+const StructuresPassClass = preload("res://ui/scenes/game/map_canvas_drawer_structures_pass.gd")
+const TilePreviewFactoryClass = preload("res://ui/components/reserve_area/tile_preview_factory.gd")
 
 @onready var output: RichTextLabel = $Root/Output
 @onready var run_button: Button = $Root/TopBar/RunButton
 
 var _exit_code: int = 0
+var _write_ui_log: bool = true
 
 func _ready() -> void:
-	output.clear()
-	output.append_text("全部测试聚合：按既定顺序依次运行所有 headless 测试。\n")
-	output.append_text("提示：CLI 可用 `-- --autorun` 自动执行并退出。\n")
+	_write_ui_log = not OS.has_feature("headless")
+	_clear_output()
+	_append_output("全部测试聚合：按既定顺序依次运行所有 headless 测试。\n")
+	_append_output("提示：CLI 可用 `-- --autorun` 自动执行并退出。\n")
 	if _should_autorun():
 		_exit_code = await _run_all()
+		await _prepare_runtime_cleanup_before_quit()
 		get_tree().quit(_exit_code)
 
 func _on_back_pressed() -> void:
@@ -28,7 +35,7 @@ func _on_run_pressed() -> void:
 		run_button.disabled = false
 
 func _run_all() -> int:
-	output.append_text("\n--- 开始运行全部测试 ---\n")
+	_append_output("\n--- 开始运行全部测试 ---\n")
 	print("[AllTests] START args=%s" % str(OS.get_cmdline_user_args()))
 
 	var tests: Array[Dictionary] = [
@@ -766,7 +773,7 @@ func _run_all() -> int:
 		var name: String = test_def.get("name", "UnknownTest")
 		var fn: Callable = test_def.get("fn", Callable())
 
-		output.append_text("\n== %s ==\n" % name)
+		_append_output("\n== %s ==\n" % name)
 		print("[AllTests] RUN %s" % name)
 
 		var start := Time.get_ticks_msec()
@@ -776,26 +783,29 @@ func _run_all() -> int:
 
 		if result.ok:
 			passed += 1
-			output.append_text("PASS (%dms)\n" % duration_ms)
+			_append_output("PASS (%dms)\n" % duration_ms)
 			print("[AllTests] PASS %s (%dms)" % [name, duration_ms])
 		else:
 			failed.append(name)
-			output.append_text("FAIL (%dms): %s\n" % [duration_ms, result.error])
+			_append_output("FAIL (%dms): %s\n" % [duration_ms, result.error])
 			push_error("[AllTests] FAIL %s: %s" % [name, result.error])
 			print("[AllTests] FAIL %s (%dms): %s" % [name, duration_ms, result.error])
 			if name == "GameSmokeTest":
 				var total_ms := Time.get_ticks_msec() - total_start
 				var skipped := tests.size() - passed - failed.size()
-				output.append_text("\n--- 汇总 ---\n")
-				output.append_text("通过: %d/%d, 总耗时: %dms\n" % [passed, tests.size(), total_ms])
-				output.append_text("Smoke test 失败：已跳过后续 %d 个测试。\n" % skipped)
+				_append_output("\n--- 汇总 ---\n")
+				_append_output("通过: %d/%d, 总耗时: %dms\n" % [passed, tests.size(), total_ms])
+				_append_output("Smoke test 失败：已跳过后续 %d 个测试。\n" % skipped)
 				print("[AllTests] FAIL_FAST skipped=%d" % skipped)
 				print("[AllTests] SUMMARY passed=%d/%d failed=%s total_ms=%d" % [passed, tests.size(), str(failed), total_ms])
+				await _cleanup_runtime_between_tests()
 				return 1
 
+		await _cleanup_runtime_between_tests()
+
 	var total_ms := Time.get_ticks_msec() - total_start
-	output.append_text("\n--- 汇总 ---\n")
-	output.append_text("通过: %d/%d, 总耗时: %dms\n" % [passed, tests.size(), total_ms])
+	_append_output("\n--- 汇总 ---\n")
+	_append_output("通过: %d/%d, 总耗时: %dms\n" % [passed, tests.size(), total_ms])
 	print("[AllTests] SUMMARY passed=%d/%d failed=%s total_ms=%d" % [passed, tests.size(), str(failed), total_ms])
 
 	return 0 if failed.is_empty() else 1
@@ -817,9 +827,55 @@ func _run_game_smoke_test() -> Result:
 		return Result.failure("GameSmokeTest 缺少 _run_test()")
 
 	var code = await smoke.call("_run_test")
+	await _cleanup_test_node(smoke)
 	if code is int and int(code) == 0:
 		return Result.success({})
 	return Result.failure("GameSmokeTest 失败: exit_code=%s" % str(code))
+
+func _cleanup_test_node(node: Node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	node.queue_free()
+	await _drain_frames(4)
+
+func _prepare_runtime_cleanup_before_quit() -> void:
+	_clear_output()
+	UiSkinCacheClass.clear_cache()
+	EmployeeCardClass.clear_icon_texture_cache()
+	StructuresPassClass.clear_drink_source_texture_cache()
+	TilePreviewFactoryClass.clear_cached_script()
+	if NetClient != null:
+		NetClient.shutdown()
+	if EventBus != null:
+		if EventBus.has_method("clear_all_subscribers"):
+			EventBus.clear_all_subscribers()
+		if EventBus.has_method("clear_history_and_reset_sequence"):
+			EventBus.clear_history_and_reset_sequence()
+		elif EventBus.has_method("clear_history"):
+			EventBus.clear_history()
+	if SceneManager != null and SceneManager.has_method("clear_stack"):
+		SceneManager.clear_stack()
+	Globals.reset_game_config()
+	await _drain_frames(6)
+
+func _cleanup_runtime_between_tests() -> void:
+	UiSkinCacheClass.clear_cache()
+	EmployeeCardClass.clear_icon_texture_cache()
+	StructuresPassClass.clear_drink_source_texture_cache()
+	TilePreviewFactoryClass.clear_cached_script()
+	if NetClient != null:
+		NetClient.shutdown()
+	if EventBus != null:
+		if EventBus.has_method("clear_all_subscribers"):
+			EventBus.clear_all_subscribers()
+		if EventBus.has_method("clear_history_and_reset_sequence"):
+			EventBus.clear_history_and_reset_sequence()
+		elif EventBus.has_method("clear_history"):
+			EventBus.clear_history()
+	if SceneManager != null and SceneManager.has_method("clear_stack"):
+		SceneManager.clear_stack()
+	Globals.reset_game_config()
+	await _drain_frames(2)
 
 func _run_check_compile_test() -> Result:
 	var scan_result: Result = CheckCompileScript.run_scan()
@@ -837,3 +893,20 @@ func _should_autorun() -> bool:
 	if args.has("autorun") or args.has("--autorun"):
 		return true
 	return OS.has_feature("headless")
+
+func _drain_frames(count: int) -> void:
+	var n := maxi(1, int(count))
+	for _i in range(n):
+		await get_tree().process_frame
+
+func _append_output(text: String) -> void:
+	if not _write_ui_log:
+		return
+	if is_instance_valid(output):
+		output.append_text(text)
+
+func _clear_output() -> void:
+	if not _write_ui_log:
+		return
+	if is_instance_valid(output):
+		output.clear()

@@ -3,7 +3,12 @@
 class_name GameEventLogController
 extends RefCounted
 
-const GameEventLogFormatterClass = preload("res://ui/scenes/game/game_event_log_formatter.gd")
+const GAME_EVENT_LOG_FORMATTER_SCRIPT_PATH := "res://ui/scenes/game/game_event_log_formatter.gd"
+const PRICE_ACTION_LOG_TEXT: Dictionary = {
+	"set_price": "设定价格（-$1）",
+	"set_discount": "设定折扣（-$3）",
+	"set_luxury_price": "设定奢侈品价格（+$10）",
+}
 
 const EVENT_TYPES_TO_LOG: Array[String] = [
 	EventBus.EventType.PHASE_CHANGED,
@@ -47,8 +52,7 @@ func setup(game_log_panel, restore_history: bool = true) -> void:
 	_game_log_panel = game_log_panel
 	if _eventbus_source.is_empty():
 		_eventbus_source = "GameScene:%s" % str(get_instance_id())
-	if _formatter == null:
-		_formatter = GameEventLogFormatterClass.new()
+	_ensure_formatter()
 
 	_game_log_panel.clear_logs()
 	var history_events: Array[Dictionary] = []
@@ -85,6 +89,9 @@ func dispose() -> void:
 		EventBus.unsubscribe_all_from_source(_eventbus_source)
 	_eventbus_source = ""
 	_game_log_panel = null
+	if _formatter != null and is_instance_valid(_formatter):
+		if _formatter.has_method("dispose"):
+			_formatter.dispose()
 	_formatter = null
 
 func _collect_history_events() -> Array[Dictionary]:
@@ -114,7 +121,7 @@ func _collect_history_events() -> Array[Dictionary]:
 			if not data.has("price_modifier"):
 				continue
 			var action_id := str(data.get("action_id", "")).strip_edges()
-			if not GameEventLogFormatterClass.PRICE_ACTION_LOG_TEXT.has(action_id):
+			if not PRICE_ACTION_LOG_TEXT.has(action_id):
 				continue
 		result.append(ev)
 
@@ -125,8 +132,9 @@ func _on_eventbus_event(event: Dictionary) -> void:
 		return
 	if not (event is Dictionary) or event.is_empty():
 		return
-	if _formatter == null:
-		_formatter = GameEventLogFormatterClass.new()
+	_ensure_formatter()
+	if _formatter == null or not is_instance_valid(_formatter):
+		return
 
 	var cmd_index := _infer_command_index(event)
 	var entries: Array = _formatter.format(event)
@@ -143,6 +151,18 @@ func _on_eventbus_event(event: Dictionary) -> void:
 		var entry_id: int = _game_log_panel.add_log(int(type_val), msg, details)
 		if _game_log_panel.has_method("set_entry_command_index"):
 			_game_log_panel.set_entry_command_index(entry_id, cmd_index)
+
+func _ensure_formatter() -> void:
+	if _formatter != null and is_instance_valid(_formatter):
+		return
+	var formatter_script = ResourceLoader.load(
+		GAME_EVENT_LOG_FORMATTER_SCRIPT_PATH,
+		"Script",
+		ResourceLoader.CACHE_MODE_IGNORE
+	)
+	if formatter_script == null:
+		return
+	_formatter = formatter_script.new()
 
 func _infer_command_index(event: Dictionary) -> int:
 	if event == null or not (event is Dictionary):

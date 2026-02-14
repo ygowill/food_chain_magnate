@@ -140,6 +140,34 @@ func reset_modules_v2() -> void:
 func apply_modules_v2(module_ids: Array[String], base_dir: String) -> Result:
 	return ModulesV2Class.apply(self, module_ids, base_dir)
 
+func dispose() -> void:
+	if action_registry != null and action_registry.has_method("clear_all"):
+		action_registry.clear_all()
+	reset_modules_v2()
+	if random_manager != null and random_manager.has_method("reset"):
+		random_manager.reset()
+	CommandRunnerClass.clear_event_build_provider_cache()
+
+	state = null
+	game_data = null
+	command_history.clear()
+	checkpoints.clear()
+	current_command_index = -1
+
+	module_plan_v2.clear()
+	module_manifests_v2.clear()
+	content_catalog_v2 = null
+	ruleset_v2 = null
+	modules_v2_base_dir = ""
+
+	_initial_total_cash = 0
+	_initial_employee_totals.clear()
+
+	event_sink = null
+	action_registry = null
+	phase_manager = null
+	random_manager = null
+
 # 执行命令
 func execute_command(command: Command, is_replay: bool = false) -> Result:
 	return CommandRunnerClass.execute_command(self, command, is_replay)

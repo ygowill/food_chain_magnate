@@ -24,6 +24,22 @@ var map_sources: Dictionary = {}        # map_id -> module_id
 var pieces: Dictionary = {}             # piece_id -> PieceDef
 var piece_sources: Dictionary = {}      # piece_id -> module_id
 
+func clear() -> void:
+	employees.clear()
+	employee_sources.clear()
+	milestones.clear()
+	milestone_sources.clear()
+	marketing.clear()
+	marketing_sources.clear()
+	products.clear()
+	product_sources.clear()
+	tiles.clear()
+	tile_sources.clear()
+	maps.clear()
+	map_sources.clear()
+	pieces.clear()
+	piece_sources.clear()
+
 func get_employee_def(employee_id: String) -> Variant:
 	return employees.get(employee_id, null)
 

@@ -43,15 +43,15 @@ static func run() -> Result:
 
 	controller._on_map_cell_hovered(Vector2i(0, 0))
 	if map_canvas.preview_calls <= 0:
-		return Result.failure("expected hover to call set_structure_preview at least once")
+		return _finish(Result.failure("expected hover to call set_structure_preview at least once"), controller)
 	if overlay.preview_calls <= 0:
-		return Result.failure("expected hover to call preview_marketing_range at least once")
+		return _finish(Result.failure("expected hover to call preview_marketing_range at least once"), controller)
 
 	# Click locks selection and prevents further hover updates.
 	controller._on_map_cell_selected(Vector2i(0, 0))
 	var selected_val = controller._payload.get("selected_target", null)
 	if not (selected_val is Vector2i) or Vector2i(selected_val) != Vector2i(0, 0):
-		return Result.failure("expected _payload.selected_target to be set after click")
+		return _finish(Result.failure("expected _payload.selected_target to be set after click"), controller)
 
 	var preview_calls_after_click := map_canvas.preview_calls
 	var range_calls_after_click := overlay.preview_calls
@@ -60,21 +60,25 @@ static func run() -> Result:
 	controller._on_map_cell_hovered(Vector2i(1, 0))
 	controller._on_map_cell_hovered(Vector2i(-1, -1))
 	if map_canvas.preview_calls != preview_calls_after_click:
-		return Result.failure("hover should not move preview after selection is locked")
+		return _finish(Result.failure("hover should not move preview after selection is locked"), controller)
 	if overlay.preview_calls != range_calls_after_click:
-		return Result.failure("hover should not update range after selection is locked")
+		return _finish(Result.failure("hover should not update range after selection is locked"), controller)
 	if map_canvas.clear_preview_calls != clear_calls_after_click:
-		return Result.failure("hover(-1,-1) should not clear preview after selection is locked")
+		return _finish(Result.failure("hover(-1,-1) should not clear preview after selection is locked"), controller)
 
 	# Clicking another valid point should allow changing selection and update preview again.
 	controller._on_map_cell_selected(Vector2i(1, 0))
 	var selected_val2 = controller._payload.get("selected_target", null)
 	if not (selected_val2 is Vector2i) or Vector2i(selected_val2) != Vector2i(1, 0):
-		return Result.failure("expected _payload.selected_target to update on second click")
+		return _finish(Result.failure("expected _payload.selected_target to update on second click"), controller)
 	if map_canvas.preview_calls <= preview_calls_after_click:
-		return Result.failure("expected clicking a new target to refresh the preview")
+		return _finish(Result.failure("expected clicking a new target to refresh the preview"), controller)
 	if overlay.preview_calls <= range_calls_after_click:
-		return Result.failure("expected clicking a new target to refresh the range overlay")
+		return _finish(Result.failure("expected clicking a new target to refresh the range overlay"), controller)
 
-	return Result.success({})
+	return _finish(Result.success({}), controller)
 
+static func _finish(result: Result, controller) -> Result:
+	if controller != null and is_instance_valid(controller) and controller.has_method("dispose"):
+		controller.dispose()
+	return result

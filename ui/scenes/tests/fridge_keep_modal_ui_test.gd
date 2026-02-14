@@ -25,7 +25,7 @@ static func run(seed_val: int = 12345) -> Result:
 		"base_marketing",
 	])
 	if not init.ok:
-		return Result.failure("初始化失败: %s" % init.error)
+		return _finish(Result.failure("初始化失败: %s" % init.error), null, engine)
 
 	var state := engine.get_state()
 	state.phase = "Cleanup"
@@ -45,7 +45,7 @@ static func run(seed_val: int = 12345) -> Result:
 
 	var modal = ModalScene.instantiate()
 	if modal == null or not is_instance_valid(modal):
-		return Result.failure("实例化 FridgeKeepModal 失败")
+		return _finish(Result.failure("实例化 FridgeKeepModal 失败"), modal, engine)
 	host.add_child(modal)
 	(modal as Control).visible = true
 
@@ -59,7 +59,7 @@ static func run(seed_val: int = 12345) -> Result:
 		var mb_ready: ModalPanelBase = modal
 		if is_instance_valid(mb_ready.confirm_button) and mb_ready.confirm_button.disabled:
 			await _cleanup_modal(modal)
-			return Result.failure("setup 后 confirm_button 应可用（默认选择应满足容量）")
+			return _finish(Result.failure("setup 后 confirm_button 应可用（默认选择应满足容量）"), modal, engine)
 
 	var results: Array[Dictionary] = []
 	if modal.has_signal("completed"):
@@ -69,34 +69,34 @@ static func run(seed_val: int = 12345) -> Result:
 		modal.call("_on_confirm_pressed")
 	else:
 		await _cleanup_modal(modal)
-		return Result.failure("FridgeKeepModal 缺少 _on_confirm_pressed（无法完成测试）")
+		return _finish(Result.failure("FridgeKeepModal 缺少 _on_confirm_pressed（无法完成测试）"), modal, engine)
 
 	if results.size() != 1:
 		await _cleanup_modal(modal)
-		return Result.failure("应 emit completed 一次，实际: %s" % str(results))
+		return _finish(Result.failure("应 emit completed 一次，实际: %s" % str(results)), modal, engine)
 
 	var keep_val = results[0].get("keep", null)
 	if not (keep_val is Dictionary):
 		await _cleanup_modal(modal)
-		return Result.failure("completed.keep 类型错误（期望 Dictionary），实际: %s" % str(keep_val))
+		return _finish(Result.failure("completed.keep 类型错误（期望 Dictionary），实际: %s" % str(keep_val)), modal, engine)
 	var keep: Dictionary = keep_val
 
 	# 默认策略：按产品 id 顺序尽量填满 cap=10，因此 burger=5, lemonade=5
 	if int(keep.get("burger", 0)) != 5:
 		await _cleanup_modal(modal)
-		return Result.failure("默认 keep.burger 应为 5，实际: %s" % str(keep.get("burger", null)))
+		return _finish(Result.failure("默认 keep.burger 应为 5，实际: %s" % str(keep.get("burger", null))), modal, engine)
 	if int(keep.get("lemonade", 0)) != 5:
 		await _cleanup_modal(modal)
-		return Result.failure("默认 keep.lemonade 应为 5，实际: %s" % str(keep.get("lemonade", null)))
+		return _finish(Result.failure("默认 keep.lemonade 应为 5，实际: %s" % str(keep.get("lemonade", null))), modal, engine)
 
 	if modal is ModalPanelBase:
 		var mb_done: ModalPanelBase = modal
 		if is_instance_valid(mb_done.confirm_button) and not mb_done.confirm_button.disabled:
 			await _cleanup_modal(modal)
-			return Result.failure("confirm 后 confirm_button 应被禁用（避免重复触发）")
+			return _finish(Result.failure("confirm 后 confirm_button 应被禁用（避免重复触发）"), modal, engine)
 
 	await _cleanup_modal(modal)
-	return Result.success({})
+	return _finish(Result.success({}), modal, engine)
 
 static func _cleanup_modal(modal: Node) -> void:
 	if modal != null and is_instance_valid(modal):
@@ -104,3 +104,10 @@ static func _cleanup_modal(modal: Node) -> void:
 	var tree = Engine.get_main_loop()
 	if tree is SceneTree:
 		await (tree as SceneTree).process_frame
+
+static func _finish(result: Result, modal, engine) -> Result:
+	if modal != null and is_instance_valid(modal) and modal is Node:
+		(modal as Node).free()
+	if engine != null and engine.has_method("dispose"):
+		engine.dispose()
+	return result

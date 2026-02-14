@@ -3,14 +3,14 @@
 class_name GameTimelineLogEntriesBuilder
 extends RefCounted
 
-const GameEventLogFormatterClass = preload("res://ui/scenes/game/game_event_log_formatter.gd")
+const GAME_EVENT_LOG_FORMATTER_SCRIPT_PATH := "res://ui/scenes/game/game_event_log_formatter.gd"
 
 static func build(events: Array) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if events == null or events.is_empty():
 		return out
 
-	var formatter = GameEventLogFormatterClass.new()
+	var formatter = _new_formatter()
 	var entry_id := 0
 
 	for ev_val in events:
@@ -66,4 +66,17 @@ static func build(events: Array) -> Array[Dictionary]:
 			})
 			entry_id += 1
 
+	if formatter != null and is_instance_valid(formatter) and formatter.has_method("dispose"):
+		formatter.dispose()
+
 	return out
+
+static func _new_formatter():
+	var formatter_script = ResourceLoader.load(
+		GAME_EVENT_LOG_FORMATTER_SCRIPT_PATH,
+		"Script",
+		ResourceLoader.CACHE_MODE_IGNORE
+	)
+	if formatter_script == null:
+		return null
+	return formatter_script.new()

@@ -61,6 +61,57 @@ func retain_entry_instance(inst) -> void:
 		return
 	_entry_instances.append(inst)
 
+func dispose() -> void:
+	if settlement_registry != null and settlement_registry.has_method("reset"):
+		settlement_registry.reset()
+	if effect_registry != null and effect_registry.has_method("reset"):
+		effect_registry.reset()
+	if milestone_effect_registry != null and milestone_effect_registry.has_method("reset"):
+		milestone_effect_registry.reset()
+	if map_generation_registry != null and map_generation_registry.has_method("clear"):
+		map_generation_registry.clear()
+
+	settlement_registry = null
+	effect_registry = null
+	milestone_effect_registry = null
+	map_generation_registry = null
+
+	employee_patches.clear()
+	milestone_patches.clear()
+	phase_hooks.clear()
+	sub_phase_hooks.clear()
+	named_sub_phase_hooks.clear()
+	action_executors.clear()
+	action_validators.clear()
+	global_action_validators.clear()
+	action_availability_overrides.clear()
+	marketing_type_registrations.clear()
+	marketing_initiation_providers.clear()
+	placement_conflict_providers.clear()
+	range_origin_providers.clear()
+	bankruptcy_handlers.clear()
+	dinnertime_demand_providers.clear()
+	dinnertime_route_purchase_providers.clear()
+	employee_pool_patches.clear()
+	working_sub_phase_insertions.clear()
+	working_sub_phase_name_hooks.clear()
+	cleanup_sub_phase_insertions.clear()
+	cleanup_sub_phase_name_hooks.clear()
+	settlement_triggers_override.clear()
+	phase_sub_phase_order_overrides.clear()
+	state_initializers.clear()
+	state_int_key_dict_schemas.clear()
+	phase_action_ui_modals.clear()
+	map_overlay_providers.clear()
+	piece_ui_hints.clear()
+	effect_ui_texts.clear()
+	milestone_effect_ui_texts.clear()
+	_entry_instances.clear()
+
+	phase_order_override = null
+	working_sub_phase_order_override = null
+	cleanup_sub_phase_order_override = null
+
 func register_employee_patch(target_employee_id: String, patch: Dictionary, source_module_id: String = "") -> Result:
 	return PatchesHelperClass.register_employee_patch(self, target_employee_id, patch, source_module_id)
 

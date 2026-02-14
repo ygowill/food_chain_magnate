@@ -161,6 +161,18 @@ func get_restaurant_logo_texture_by_id(logo_id: int) -> Texture2D:
 		return _get_placeholder("piece")
 	return get_piece_texture(pid)
 
+func dispose() -> void:
+	cell_textures.clear()
+	road_textures.clear()
+	piece_textures.clear()
+	product_icon_textures.clear()
+	marketing_textures.clear()
+	piece_offsets_px.clear()
+	piece_scales.clear()
+	restaurant_logo_piece_ids.clear()
+	_logo_textures_transparent_bg.clear()
+	_placeholders.clear()
+
 func _init_placeholders() -> void:
 	_placeholders.clear()
 	_placeholders["cell"] = _make_checker_texture(Vector2i(cell_size_px, cell_size_px), Color(0.18, 0.2, 0.22), Color(0.14, 0.16, 0.18))
@@ -192,7 +204,7 @@ func _load_texture_or_placeholder(path: String, kind: String, warnings: Array[St
 		warnings.append("MapSkin: 贴图不存在，使用占位: %s (%s)" % [label, path])
 		return _get_placeholder(kind)
 	PerfTraceClass.counter_add("skin:texture_load_attempt", 1)
-	var res = load(path)
+	var res = ResourceLoader.load(path, "Texture2D", ResourceLoader.CACHE_MODE_IGNORE)
 	if res is Texture2D:
 		PerfTraceClass.counter_add("skin:texture_load_ok", 1)
 		return res

@@ -22,19 +22,19 @@ static func run(seed_val: int = 12345) -> Result:
 	]
 	var init := e.initialize(2, seed_val, enabled_modules)
 	if not init.ok:
-		return Result.failure("初始化失败: %s" % init.error)
+		return _finish(Result.failure("初始化失败: %s" % init.error), null, e)
 	var s: GameState = e.get_state()
 
 	var road_graph = RoadGraphCacheClass.get_road_graph(s)
 	if road_graph == null:
-		return Result.failure("道路图未初始化")
+		return _finish(Result.failure("道路图未初始化"), null, e)
 
 	var pick := _pick_connected_road_path(s, road_graph)
 	if not pick.ok:
-		return pick
+		return _finish(pick, null, e)
 	var path: Array[Vector2i] = pick.value
 	if path.size() < 3:
-		return Result.failure("测试需要 >=3 的道路 path（实际: %d）" % path.size())
+		return _finish(Result.failure("测试需要 >=3 的道路 path（实际: %d）" % path.size()), null, e)
 
 	var from_pos: Vector2i = path[0]
 	var to_pos: Vector2i = path[path.size() - 1]
@@ -48,30 +48,29 @@ static func run(seed_val: int = 12345) -> Result:
 	var overlay := DistanceOverlayClass.new()
 	overlay.set_map_data(s.map)
 	if overlay._road_graph == null:
-		_safe_free(overlay)
-		return Result.failure("DistanceOverlay 未构建 RoadGraph（map_data 缺失关键字段）")
+		return _finish(Result.failure("DistanceOverlay 未构建 RoadGraph（map_data 缺失关键字段）"), overlay, e)
 
 	var base := int(overlay._road_graph.get_distance(from_pos, to_pos))
 	if base < 0:
-		_safe_free(overlay)
-		return Result.failure("测试期望道路可达（get_distance 返回 -1）")
+		return _finish(Result.failure("测试期望道路可达（get_distance 返回 -1）"), overlay, e)
 
 	overlay.show_distances(from_pos, [to_pos])
 	if overlay._paths.is_empty():
-		_safe_free(overlay)
-		return Result.failure("DistanceOverlay 未生成路径数据（_paths 为空）")
+		return _finish(Result.failure("DistanceOverlay 未生成路径数据（_paths 为空）"), overlay, e)
 
 	var d_val = overlay._paths[0].get("distance", null)
 	if not (d_val is int):
-		_safe_free(overlay)
-		return Result.failure("DistanceOverlay 距离类型错误（期望 int）: %s" % str(d_val))
+		return _finish(Result.failure("DistanceOverlay 距离类型错误（期望 int）: %s" % str(d_val)), overlay, e)
 	var d: int = int(d_val)
 	if d != base + 1:
-		_safe_free(overlay)
-		return Result.failure("DistanceOverlay 应包含 roadworks 惩罚：base=%d expected=%d actual=%d" % [base, base + 1, d])
+		return _finish(Result.failure("DistanceOverlay 应包含 roadworks 惩罚：base=%d expected=%d actual=%d" % [base, base + 1, d]), overlay, e)
 
+	return _finish(Result.success({}), overlay, e)
+
+static func _finish(result: Result, overlay, engine) -> Result:
 	_safe_free(overlay)
-	return Result.success({})
+	_safe_dispose_engine(engine)
+	return result
 
 static func _pick_connected_road_path(state: GameState, road_graph) -> Result:
 	if state == null or not (state.map is Dictionary):
@@ -130,3 +129,8 @@ static func _safe_free(node) -> void:
 	if node is Node:
 		(node as Node).free()
 
+static func _safe_dispose_engine(engine) -> void:
+	if engine == null:
+		return
+	if engine.has_method("dispose"):
+		engine.dispose()

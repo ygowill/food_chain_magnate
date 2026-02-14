@@ -10,6 +10,14 @@ const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 
 static var _skins: Dictionary = {} # key -> MapSkin
 
+static func clear_cache() -> void:
+	for skin_val in _skins.values():
+		if skin_val != null and skin_val is MapSkin:
+			var skin: MapSkin = skin_val
+			if skin.has_method("dispose"):
+				skin.dispose()
+	_skins.clear()
+
 static func get_skin_for_modules(base_dir: String, modules: Array[String], desired_cell_size_px: int = 40) -> MapSkin:
 	var mods: Array[String] = []
 	if modules is Array and not modules.is_empty():

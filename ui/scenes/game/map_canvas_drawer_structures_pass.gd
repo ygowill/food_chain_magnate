@@ -12,6 +12,10 @@ const GARDEN_BG_COLOR := Color("#699055")
 static var _drink_source_textures: Dictionary = {} # product_id -> Texture2D
 static var _drink_source_textures_base_dir: String = ""
 
+static func clear_drink_source_texture_cache() -> void:
+	_drink_source_textures.clear()
+	_drink_source_textures_base_dir = ""
+
 static func _read_color_hint(hints: Dictionary, key: String, fallback: Color) -> Color:
 	if hints == null or hints.is_empty():
 		return fallback

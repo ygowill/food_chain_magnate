@@ -39,6 +39,13 @@ static func reset(engine) -> void:
 	if engine == null:
 		return
 
+	var old_ruleset = engine.ruleset_v2
+	if old_ruleset != null and old_ruleset.has_method("dispose"):
+		old_ruleset.dispose()
+	var old_catalog = engine.content_catalog_v2
+	if old_catalog != null and old_catalog.has_method("clear"):
+		old_catalog.clear()
+
 	var empty_plan: Array[String] = []
 	engine.module_plan_v2 = empty_plan
 	engine.module_manifests_v2 = {}

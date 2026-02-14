@@ -3,6 +3,10 @@ extends RefCounted
 
 const GameScene: PackedScene = preload("res://ui/scenes/game/game.tscn")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
+const TilePreviewFactoryClass = preload("res://ui/components/reserve_area/tile_preview_factory.gd")
+const StructuresPassClass = preload("res://ui/scenes/game/map_canvas_drawer_structures_pass.gd")
 
 const FLOW_CONTROLLER_SCRIPT_PATH := "res://modules/lobbyists/ui/lobbyists_extra_tile_flow_controller.gd"
 const MANUAL_SAVE_RES_PATH := "res://.savings/manual_cases/milestones/first_lobbyist_used_multi_player_same_round.json"
@@ -162,12 +166,29 @@ static func _cleanup_game_instance(game: Node) -> void:
 		game.queue_free()
 	var tree = Engine.get_main_loop()
 	if tree is SceneTree:
-		await (tree as SceneTree).process_frame
+		for _i in range(6):
+			await (tree as SceneTree).process_frame
 	if NetClient != null:
 		NetClient.shutdown()
 	if NetContext != null and NetContext.has_method("reset"):
 		NetContext.reset()
+	UiSkinCacheClass.clear_cache()
+	EmployeeCardClass.clear_icon_texture_cache()
+	StructuresPassClass.clear_drink_source_texture_cache()
+	TilePreviewFactoryClass.clear_cached_script()
+	if EventBus != null:
+		if EventBus.has_method("clear_all_subscribers"):
+			EventBus.clear_all_subscribers()
+		if EventBus.has_method("clear_history_and_reset_sequence"):
+			EventBus.clear_history_and_reset_sequence()
+		elif EventBus.has_method("clear_history"):
+			EventBus.clear_history()
+	if SceneManager != null and SceneManager.has_method("clear_stack"):
+		SceneManager.clear_stack()
 	Globals.reset_game_config()
+	if tree is SceneTree:
+		for _j in range(4):
+			await (tree as SceneTree).process_frame
 
 static func _find_lobbyists_flow_controller(game: Node):
 	if game == null or not is_instance_valid(game):

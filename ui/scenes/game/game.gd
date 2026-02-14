@@ -492,6 +492,9 @@ func _dispose_runtime() -> void:
 		_command_controller.dispose()
 	_command_controller = null
 
+	if game_engine != null and game_engine.has_method("dispose"):
+		game_engine.dispose()
+
 	if Globals != null and Globals.current_game_engine == game_engine:
 		Globals.current_game_engine = null
 	if Globals != null:

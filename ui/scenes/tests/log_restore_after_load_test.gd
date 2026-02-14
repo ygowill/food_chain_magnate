@@ -36,7 +36,7 @@ static func run() -> Result:
 
 	var entries: Array[Dictionary] = panel.get_entries()
 	if entries.size() < 3:
-		_safe_free(panel)
+		_cleanup(panel, controller)
 		return Result.failure("日志条目数不足: %d (期望 >= 3: system + 2 restored)" % entries.size())
 
 	var has_restore_summary := false
@@ -51,10 +51,10 @@ static func run() -> Result:
 		if msg.contains("玩家1:") and msg.contains("招聘") and (msg.contains("ceo") or msg.contains("CEO")):
 			has_recruit = true
 		if msg.contains("command_executed"):
-			_safe_free(panel)
+			_cleanup(panel, controller)
 			return Result.failure("不应恢复/显示 command_executed（应被过滤），但发现: %s" % msg)
 
-	_safe_free(panel)
+	_cleanup(panel, controller)
 	if not has_restore_summary:
 		return Result.failure("缺少日志恢复汇总条目（应包含：已恢复 2 条历史日志）")
 	if not has_phase:
@@ -65,6 +65,12 @@ static func run() -> Result:
 	return Result.success({
 		"entries": entries.size(),
 	})
+
+static func _cleanup(panel: Node, controller) -> void:
+	if controller != null and is_instance_valid(controller):
+		if controller.has_method("dispose"):
+			controller.dispose()
+	_safe_free(panel)
 
 static func _safe_free(node: Node) -> void:
 	if node != null and is_instance_valid(node):

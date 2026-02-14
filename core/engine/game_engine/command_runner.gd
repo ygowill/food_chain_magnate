@@ -11,6 +11,9 @@ static var _event_build_provider_cache_path: String = ""
 
 static func set_event_build_provider_path(path: String) -> void:
 	event_build_provider_path_override = str(path).strip_edges()
+	clear_event_build_provider_cache()
+
+static func clear_event_build_provider_cache() -> void:
 	_event_build_provider_cache = null
 	_event_build_provider_cache_path = ""
 

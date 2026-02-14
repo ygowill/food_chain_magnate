@@ -43,7 +43,7 @@ static func run() -> Result:
 	var engine := GameEngineClass.new()
 	var init := engine.initialize(2, 12345)
 	if not init.ok:
-		return Result.failure("初始化失败: %s" % init.error)
+		return _finish(Result.failure("初始化失败: %s" % init.error), null, null, engine)
 
 	var scene := FakeScene.new()
 	scene.game_engine = engine
@@ -60,8 +60,7 @@ static func run() -> Result:
 
 	var state: GameState = engine.get_state()
 	if state == null or not (state.map is Dictionary):
-		_safe_free(panel)
-		return Result.failure("expected non-null GameState with map")
+		return _finish(Result.failure("expected non-null GameState with map"), panel, controller, engine)
 	var map_origin: Vector2i = state.map.get("map_origin", Vector2i.ZERO)
 	var grid_size: Vector2i = state.map.get("grid_size", Vector2i.ZERO)
 	var minp := -map_origin
@@ -73,8 +72,7 @@ static func run() -> Result:
 			has_outside = true
 			break
 	if not has_outside:
-		_safe_free(panel)
-		return Result.failure("expected at least one outside-ring highlight for airplane selection")
+		return _finish(Result.failure("expected at least one outside-ring highlight for airplane selection"), panel, controller, engine)
 
 	# Pick a specific outside position and verify it maps back to an inside anchor (x>=0,y>=0).
 	var pick := Vector2i(-1, 0)
@@ -112,11 +110,17 @@ static func run() -> Result:
 
 	var mapped := panel.last_target
 	if mapped.x < 0 or mapped.y < 0:
-		_safe_free(panel)
-		return Result.failure("outside click %s should map to inside anchor, got %s" % [str(pick), str(mapped)])
+		return _finish(Result.failure("outside click %s should map to inside anchor, got %s" % [str(pick), str(mapped)]), panel, controller, engine)
 
+	return _finish(Result.success({}), panel, controller, engine)
+
+static func _finish(result: Result, panel, controller, engine) -> Result:
 	_safe_free(panel)
-	return Result.success({})
+	if controller != null and is_instance_valid(controller) and controller.has_method("dispose"):
+		controller.dispose()
+	if engine != null and engine.has_method("dispose"):
+		engine.dispose()
+	return result
 
 static func _safe_free(node) -> void:
 	if node == null or not is_instance_valid(node):

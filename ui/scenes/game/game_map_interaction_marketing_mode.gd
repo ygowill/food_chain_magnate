@@ -16,6 +16,9 @@ var _controller = null
 func _init(controller) -> void:
 	_controller = controller
 
+func dispose() -> void:
+	_controller = null
+
 func on_cell_selected(world_pos: Vector2i) -> void:
 	if _controller == null:
 		return

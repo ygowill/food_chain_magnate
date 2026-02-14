@@ -58,6 +58,37 @@ func connect_signals() -> void:
 	if _map_canvas.has_signal("cell_hovered") and not _map_canvas.cell_hovered.is_connected(_on_map_cell_hovered):
 		_map_canvas.cell_hovered.connect(_on_map_cell_hovered)
 
+func dispose() -> void:
+	clear_selection()
+	_reset_custom_modes()
+	_custom_mode_handlers.clear()
+	_custom_mode_overlays.clear()
+	_module_modes_loaded = false
+	_restaurant_valid_anchors.clear()
+	_house_valid_anchors.clear()
+	_piece_valid_anchors.clear()
+	_marketing_valid_anchors.clear()
+	_marketing_outside_to_anchor.clear()
+	_distance_tool_from.clear()
+	_payload.clear()
+	_mode = ""
+	_procure_drinks_hover_restaurant_id = ""
+
+	if _marketing_mode != null and _marketing_mode.has_method("dispose"):
+		_marketing_mode.dispose()
+	if _placement_mode != null and _placement_mode.has_method("dispose"):
+		_placement_mode.dispose()
+	_marketing_mode = null
+	_placement_mode = null
+
+	marketing_panel = null
+	restaurant_placement_overlay = null
+	house_placement_overlay = null
+	piece_placement_overlay = null
+	_overlay_controller = null
+	_map_canvas = null
+	_scene = null
+
 func set_marketing_panel(panel) -> void:
 	marketing_panel = panel
 

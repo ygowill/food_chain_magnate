@@ -49,6 +49,9 @@ const FULL_SIZE := Vector2(180, 252)
 
 static var _icon_texture_cache: Dictionary = {} # path -> Texture2D|nil
 
+static func clear_icon_texture_cache() -> void:
+	_icon_texture_cache.clear()
+
 static func _load_icon_texture_cached(path: String) -> Texture2D:
 	var p := str(path).strip_edges()
 	if p.is_empty():

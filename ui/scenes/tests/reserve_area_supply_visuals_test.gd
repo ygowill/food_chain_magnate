@@ -7,6 +7,10 @@ const ReserveAreaViewClass = preload("res://ui/components/reserve_area/reserve_a
 const StructuresPassClass = preload("res://ui/scenes/game/map_canvas_drawer_structures_pass.gd")
 
 static func run() -> Result:
+	var engine: GameEngine = null
+	var engine2: GameEngine = null
+	var view: Node = null
+
 	var modules: Array[String] = [
 		"base_rules",
 		"base_products",
@@ -19,34 +23,34 @@ static func run() -> Result:
 		"coffee",
 	]
 
-	var engine := GameEngine.new()
+	engine = GameEngine.new()
 	var init_r := engine.initialize(2, 12345, modules)
 	if not init_r.ok:
-		return Result.failure("初始化失败: %s" % init_r.error)
+		return _finish(Result.failure("初始化失败: %s" % init_r.error), view, engine, engine2)
 	var state := engine.get_state()
 	if state == null:
-		return Result.failure("state 为空")
+		return _finish(Result.failure("state 为空"), view, engine, engine2)
 
 	var skin_r := MapSkinBuilderClass.build_for_modules("res://modules", modules, 40)
 	if not skin_r.ok:
-		return Result.failure("MapSkinBuilder.build_for_modules 失败: %s" % skin_r.error).with_warnings(skin_r.warnings)
+		return _finish(Result.failure("MapSkinBuilder.build_for_modules 失败: %s" % skin_r.error).with_warnings(skin_r.warnings), view, engine, engine2)
 	var skin = skin_r.value
 	if skin == null:
-		return Result.failure("MapSkinBuilder 返回空 skin").with_warnings(skin_r.warnings)
+		return _finish(Result.failure("MapSkinBuilder 返回空 skin").with_warnings(skin_r.warnings), view, engine, engine2)
 
 	var placeholder: Texture2D = skin.get_piece_texture("__missing__")
 	var coffee_piece_tex: Texture2D = skin.get_piece_texture("coffee_shop")
 	if coffee_piece_tex == null or coffee_piece_tex == placeholder:
-		return Result.failure("coffee_shop 贴图缺失或仍为占位（应来自 coffee 模组视觉资源）").with_warnings(skin_r.warnings)
+		return _finish(Result.failure("coffee_shop 贴图缺失或仍为占位（应来自 coffee 模组视觉资源）").with_warnings(skin_r.warnings), view, engine, engine2)
 
 	var logo_ids_val = skin.get_restaurant_logo_piece_ids() if skin.has_method("get_restaurant_logo_piece_ids") else null
 	if not (logo_ids_val is Array) or (logo_ids_val as Array).is_empty():
-		return Result.failure("缺少 restaurant_logo_piece_ids（无法推导 coffee_shop 的玩家 Logo 变体）").with_warnings(skin_r.warnings)
+		return _finish(Result.failure("缺少 restaurant_logo_piece_ids（无法推导 coffee_shop 的玩家 Logo 变体）").with_warnings(skin_r.warnings), view, engine, engine2)
 	var logo_ids: Array = logo_ids_val
 
 	var p0_val = state.players[0]
 	if not (p0_val is Dictionary):
-		return Result.failure("state.players[0] 类型错误")
+		return _finish(Result.failure("state.players[0] 类型错误"), view, engine, engine2)
 	var p0: Dictionary = p0_val
 	var logo_id := int(p0.get("restaurant_logo_id", -1))
 	if logo_id < 0 or logo_id >= logo_ids.size():
@@ -58,11 +62,13 @@ static func run() -> Result:
 	token.set_skin(skin)
 	var resolved_tex: Texture2D = token._resolve_texture_for_draw()
 	if resolved_tex == null:
-		return Result.failure("coffee_shop token 未解析到贴图")
+		_safe_free_node(token)
+		return _finish(Result.failure("coffee_shop token 未解析到贴图"), view, engine, engine2)
 
 	var base_key := str(logo_ids[logo_id]).strip_edges()
 	if base_key.is_empty():
-		return Result.failure("restaurant_logo_piece_ids[%d] 为空" % logo_id)
+		_safe_free_node(token)
+		return _finish(Result.failure("restaurant_logo_piece_ids[%d] 为空" % logo_id), view, engine, engine2)
 	var expected_key := base_key
 	var var_key := "%s_coffee" % base_key
 	var piece_textures_val = skin.get("piece_textures")
@@ -70,12 +76,16 @@ static func run() -> Result:
 		expected_key = var_key
 	var expected_tex: Texture2D = skin.get_piece_texture(expected_key)
 	if resolved_tex != expected_tex:
-		return Result.failure("coffee_shop token 应使用玩家 Logo 的 coffee 变体贴图: expected=%s" % expected_key)
+		_safe_free_node(token)
+		return _finish(Result.failure("coffee_shop token 应使用玩家 Logo 的 coffee 变体贴图: expected=%s" % expected_key), view, engine, engine2)
+	_safe_free_node(token)
 
 	var garden_token := TokensClass.GardenExtensionToken.new()
 	var garden_bg: Color = garden_token._get_garden_bg_color()
 	if garden_bg != StructuresPassClass.GARDEN_BG_COLOR:
-		return Result.failure("供应堆花园底色应与地图 house_with_garden 花园底色一致: got=%s expect=%s" % [str(garden_bg), str(StructuresPassClass.GARDEN_BG_COLOR)])
+		_safe_free_node(garden_token)
+		return _finish(Result.failure("供应堆花园底色应与地图 house_with_garden 花园底色一致: got=%s expect=%s" % [str(garden_bg), str(StructuresPassClass.GARDEN_BG_COLOR)]), view, engine, engine2)
+	_safe_free_node(garden_token)
 
 	var modules2: Array[String] = [
 		"base_rules",
@@ -89,29 +99,29 @@ static func run() -> Result:
 		"lobbyists",
 		"rural_marketeers",
 	]
-	var engine2 := GameEngine.new()
+	engine2 = GameEngine.new()
 	var init2_r := engine2.initialize(2, 12345, modules2)
 	if not init2_r.ok:
-		return Result.failure("初始化失败(lobbyists+rural_marketeers): %s" % init2_r.error)
+		return _finish(Result.failure("初始化失败(lobbyists+rural_marketeers): %s" % init2_r.error), view, engine, engine2)
 	var state2 := engine2.get_state()
 	if state2 == null:
-		return Result.failure("state2 为空")
+		return _finish(Result.failure("state2 为空"), view, engine, engine2)
 	if state2.map is Dictionary:
 		state2.map["tile_supply_remaining"] = ["tile_b", "tile_z", "tile_z"]
 
 	var skin2_r := MapSkinBuilderClass.build_for_modules("res://modules", modules2, 40)
 	if not skin2_r.ok:
-		return Result.failure("MapSkinBuilder.build_for_modules(lobbyists+rural_marketeers) 失败: %s" % skin2_r.error).with_warnings(skin2_r.warnings)
+		return _finish(Result.failure("MapSkinBuilder.build_for_modules(lobbyists+rural_marketeers) 失败: %s" % skin2_r.error).with_warnings(skin2_r.warnings), view, engine, engine2)
 	var skin2 = skin2_r.value
 	if skin2 == null:
-		return Result.failure("MapSkinBuilder 返回空 skin2").with_warnings(skin2_r.warnings)
+		return _finish(Result.failure("MapSkinBuilder 返回空 skin2").with_warnings(skin2_r.warnings), view, engine, engine2)
 	var placeholder2: Texture2D = skin2.get_piece_texture("__missing__")
 	for pid in ["lobbyists_road_straight", "lobbyists_park_line", "highway_offramp", "rural_billboard"]:
 		var tex: Texture2D = skin2.get_piece_texture(pid)
 		if tex == null or tex == placeholder2:
-			return Result.failure("模块 piece 贴图缺失或仍为占位: %s" % pid).with_warnings(skin2_r.warnings)
+			return _finish(Result.failure("模块 piece 贴图缺失或仍为占位: %s" % pid).with_warnings(skin2_r.warnings), view, engine, engine2)
 
-	var view := ReserveAreaViewClass.new()
+	view = ReserveAreaViewClass.new()
 	var module_supply_counts: Dictionary = view._collect_module_supply_counts(state2, modules2)
 	for key in [
 		"lobbyists_road_straight_supply_remaining",
@@ -124,14 +134,14 @@ static func run() -> Result:
 		"rural_billboard_supply_remaining",
 	]:
 		if not module_supply_counts.has(key):
-			return Result.failure("模块供给应展示该条目，但缺失: %s" % key)
+			return _finish(Result.failure("模块供给应展示该条目，但缺失: %s" % key), view, engine, engine2)
 
 	var piece_ids2: Array[String] = []
 	if PieceRegistry.is_loaded():
 		piece_ids2 = PieceRegistry.get_all_ids()
-	var offramp_piece_id := view._guess_piece_id_for_supply("rural_marketeers_offramp", modules2, piece_ids2)
+	var offramp_piece_id: String = str(view._guess_piece_id_for_supply("rural_marketeers_offramp", modules2, piece_ids2))
 	if offramp_piece_id != "highway_offramp":
-		return Result.failure("rural_marketeers_offramp 应映射到 highway_offramp，实际: %s" % offramp_piece_id)
+		return _finish(Result.failure("rural_marketeers_offramp 应映射到 highway_offramp，实际: %s" % offramp_piece_id), view, engine, engine2)
 
 	var tile_entries: Array[Dictionary] = view._collect_module_tile_supply_entries(state2, modules2)
 	var tile_counts := {}
@@ -141,12 +151,30 @@ static func run() -> Result:
 		if not tid.is_empty() and cnt > 0:
 			tile_counts[tid] = cnt
 	if int(tile_counts.get("tile_b", 0)) != 1:
-		return Result.failure("地图板块供给应包含 tile_b ×1（非模块板块也应展示），实际: %s" % str(tile_counts))
+		return _finish(Result.failure("地图板块供给应包含 tile_b ×1（非模块板块也应展示），实际: %s" % str(tile_counts)), view, engine, engine2)
 	if int(tile_counts.get("tile_z", 0)) != 2:
-		return Result.failure("地图板块供给应包含 tile_z ×2（模块板块），实际: %s" % str(tile_counts))
+		return _finish(Result.failure("地图板块供给应包含 tile_z ×2（模块板块），实际: %s" % str(tile_counts)), view, engine, engine2)
 
-	return Result.success({
+	return _finish(Result.success({
 		"coffee_logo_key": expected_key,
 		"garden_bg": str(garden_bg),
 		"module_tile_counts": str(tile_counts),
-	}).with_warnings(skin_r.warnings)
+	}).with_warnings(skin_r.warnings), view, engine, engine2)
+
+static func _finish(result: Result, view: Node, engine: GameEngine, engine2: GameEngine) -> Result:
+	if is_instance_valid(view):
+		view.free()
+	_safe_dispose_engine(engine)
+	_safe_dispose_engine(engine2)
+	return result
+
+static func _safe_dispose_engine(engine: GameEngine) -> void:
+	if engine == null:
+		return
+	engine.dispose()
+
+static func _safe_free_node(node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if node is Node:
+		(node as Node).free()

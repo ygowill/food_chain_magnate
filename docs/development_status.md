@@ -556,8 +556,8 @@
     - 唯一员工约束检查
 - 集成校验器到 `recruit_action.gd` 和 `train_action.gd`
 - 新增 headless 测试：
-  - `ui/scenes/tests/procure_drinks_test.tscn` + `core/tests/procure_drinks_test.gd`
-  - `ui/scenes/tests/company_structure_test.tscn` + `core/tests/company_structure_test.gd`
+  - `ui/scenes/tests/legacy/procure_drinks_test.tscn` + `core/tests/procure_drinks_test.gd`
+  - `ui/scenes/tests/legacy/company_structure_test.tscn` + `core/tests/company_structure_test.gd`
 - 更新 `mandatory_actions_test.gd` 以适应新增的 GetDrinks 子阶段
 - M3 进度从 45% 提升至 65%
 
@@ -576,7 +576,7 @@
   - 新增 `can_produce()` 和 `get_production_info()` 方法
 - 更新 `core/data/employee_registry.gd`：为 `get_def()` 添加返回类型
 - 修改 `core/engine/game_engine.gd`：注册生产食物动作执行器
-- 新增生产食物 headless 测试：`ui/scenes/tests/produce_food_test.tscn` + `core/tests/produce_food_test.gd`
+- 新增生产食物 headless 测试：`ui/scenes/tests/legacy/produce_food_test.tscn` + `core/tests/produce_food_test.gd`
 - M3 进度从 40% 提升至 45%
 
 ### 2025-12-29 - M3：强制动作框架 + 阻塞机制
@@ -590,7 +590,7 @@
   - 新增 `get_mandatory_actions_status()` 用于 UI 显示
   - 离开 Working 阶段前检查强制动作是否完成
 - 修改 `core/engine/game_engine.gd`：注册新的强制动作执行器
-- 新增强制动作 headless 测试：`ui/scenes/tests/mandatory_actions_test.tscn` + `core/tests/mandatory_actions_test.gd`
+- 新增强制动作 headless 测试：`ui/scenes/tests/legacy/mandatory_actions_test.tscn` + `core/tests/mandatory_actions_test.gd`
 - M3 进度从 30% 提升至 40%
 
 ### 2025-12-28 - M3：初始公司结构 + EmployeeDef/Registry 数据驱动
@@ -599,7 +599,7 @@
 - 新增 `core/data/employee_registry.gd`：员工注册表，懒加载 33 个员工定义
 - 修改 `core/state/game_state.gd`：玩家初始化时自动添加 CEO (`employees: ["ceo"]`)
 - 修改 `core/rules/employee_rules.gd`：`requires_salary()` 从 EmployeeRegistry 读取 JSON 定义
-- 新增初始公司结构 headless 测试：`ui/scenes/tests/initial_company_test.tscn` + `core/tests/initial_company_test.gd`
+- 新增初始公司结构 headless 测试：`ui/scenes/tests/legacy/initial_company_test.tscn` + `core/tests/initial_company_test.gd`
 - M3 进度从 15% 提升至 30%
 
 ### 2025-12-28 - 开始 M3：发薪/解雇/容量裁剪 + headless 测试
@@ -607,7 +607,7 @@
 - 新增解雇动作：`gameplay/actions/fire_action.gd`（Restructuring 阶段）
 - 进入 Payday 时自动结算薪水（最小实现）并写入 `round_state.payday`：`core/engine/phase_manager.gd`
 - 重组阶段激活待命员工后按 CEO 卡槽裁剪：`core/engine/phase_manager.gd`
-- 新增发薪日 headless 测试：`ui/scenes/tests/payday_salary_test.tscn` + `core/tests/payday_salary_test.gd`
+- 新增发薪日 headless 测试：`ui/scenes/tests/legacy/payday_salary_test.tscn` + `core/tests/payday_salary_test.gd`
 
 ### 2025-12-28 - 补齐 M1/M2 交付物与可验证用例
 

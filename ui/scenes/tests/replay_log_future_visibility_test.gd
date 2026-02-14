@@ -6,53 +6,59 @@ extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const EventTimelineBuildClass = preload("res://gameplay/replay/event_timeline_build.gd")
-const GameEventLogFormatterClass = preload("res://ui/scenes/game/game_event_log_formatter.gd")
 const GameLogPanelClass = preload("res://ui/components/game_log/game_log_panel.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const GAME_EVENT_LOG_FORMATTER_SCRIPT_PATH := "res://ui/scenes/game/game_event_log_formatter.gd"
 
 static func run(player_count: int = 2, seed_val: int = 12345, min_commands: int = 12) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(player_count, seed_val)
 	if not init.ok:
-		return Result.failure("初始化失败: %s" % init.error)
+		return _finish(Result.failure("初始化失败: %s" % init.error), null, null, engine)
 
 	var setup := TestPhaseUtilsClass.complete_setup(engine)
 	if not setup.ok:
-		return Result.failure("complete_setup 失败: %s" % setup.error)
+		return _finish(Result.failure("complete_setup 失败: %s" % setup.error), null, null, engine)
 
 	var safety := 0
 	while engine.command_history.size() < min_commands:
 		safety += 1
 		if safety > min_commands * 3:
-			return Result.failure("生成命令超出安全上限: %d" % safety)
+			return _finish(Result.failure("生成命令超出安全上限: %d" % safety), null, null, engine)
 		var pid := engine.get_state().get_current_player_id()
 		var r := engine.execute_command(Command.create(ActionIdsClass.END_TURN, pid))
 		if not r.ok:
-			return Result.failure("end_turn 失败: %s" % r.error)
+			return _finish(Result.failure("end_turn 失败: %s" % r.error), null, null, engine)
 
 	var head_index := engine.command_history.size() - 1
 	if head_index < 1:
-		return Result.failure("命令数量不足: %d" % engine.command_history.size())
+		return _finish(Result.failure("命令数量不足: %d" % engine.command_history.size()), null, null, engine)
 
 	var build_r: Result = EventTimelineBuildClass.build_full(engine)
 	if not build_r.ok:
-		return Result.failure("build_full 失败: %s" % build_r.error)
+		return _finish(Result.failure("build_full 失败: %s" % build_r.error), null, null, engine)
 
 	var events_val = build_r.value
 	if not (events_val is Array):
-		return Result.failure("build_full.value 类型错误（期望 Array）")
+		return _finish(Result.failure("build_full.value 类型错误（期望 Array）"), null, null, engine)
 	var events: Array = events_val
 	if events.is_empty():
-		return Result.failure("build_full 事件为空")
+		return _finish(Result.failure("build_full 事件为空"), null, null, engine)
 
 	var panel = GameLogPanelClass.new()
 	if panel == null or not is_instance_valid(panel):
-		return Result.failure("无法创建 GameLogPanel")
+		return _finish(Result.failure("无法创建 GameLogPanel"), panel, null, engine)
 
-	var formatter = GameEventLogFormatterClass.new()
+	var formatter_script = ResourceLoader.load(
+		GAME_EVENT_LOG_FORMATTER_SCRIPT_PATH,
+		"Script",
+		ResourceLoader.CACHE_MODE_IGNORE
+	)
+	if formatter_script == null:
+		return _finish(Result.failure("无法加载 GameEventLogFormatter 脚本"), panel, null, engine)
+	var formatter = formatter_script.new()
 	if formatter == null or not is_instance_valid(formatter):
-		_safe_free(panel)
-		return Result.failure("无法创建 GameEventLogFormatter")
+		return _finish(Result.failure("无法创建 GameEventLogFormatter"), panel, formatter, engine)
 
 	# 构建完整日志（一次性）；随后仅移动 cursor，不重建日志。
 	for ev_val in events:
@@ -74,8 +80,7 @@ static func run(player_count: int = 2, seed_val: int = 12345, min_commands: int 
 
 	var total := panel.get_entries().size()
 	if total <= 0:
-		_safe_free(panel)
-		return Result.failure("日志条目为空")
+		return _finish(Result.failure("日志条目为空"), panel, formatter, engine)
 
 	panel.set_timeline_head(head_index)
 
@@ -84,8 +89,7 @@ static func run(player_count: int = 2, seed_val: int = 12345, min_commands: int 
 
 	var total_after := panel.get_entries().size()
 	if total_after != total:
-		_safe_free(panel)
-		return Result.failure("移动 cursor 后日志总条目数不应变化: before=%d after=%d" % [total, total_after])
+		return _finish(Result.failure("移动 cursor 后日志总条目数不应变化: before=%d after=%d" % [total, total_after]), panel, formatter, engine)
 
 	var future := 0
 	var past := 0
@@ -96,20 +100,27 @@ static func run(player_count: int = 2, seed_val: int = 12345, min_commands: int 
 		elif ci >= -1:
 			past += 1
 
-	_safe_free(panel)
 	if future <= 0:
-		return Result.failure("cursor=%d head=%d 时应存在未来日志，但 future=0" % [cursor_index, head_index])
+		return _finish(Result.failure("cursor=%d head=%d 时应存在未来日志，但 future=0" % [cursor_index, head_index]), panel, formatter, engine)
 	if past <= 0:
-		return Result.failure("past 日志数量异常: %d" % past)
+		return _finish(Result.failure("past 日志数量异常: %d" % past), panel, formatter, engine)
 
-	return Result.success({
+	return _finish(Result.success({
 		"entries": total,
 		"future": future,
 		"past": past,
 		"cursor": cursor_index,
 		"head": head_index,
-	})
+	}), panel, formatter, engine)
 
 static func _safe_free(node: Node) -> void:
 	if node != null and is_instance_valid(node):
 		node.free()
+
+static func _finish(result: Result, panel, formatter, engine) -> Result:
+	_safe_free(panel)
+	if formatter != null and is_instance_valid(formatter) and formatter.has_method("dispose"):
+		formatter.dispose()
+	if engine != null and engine.has_method("dispose"):
+		engine.dispose()
+	return result

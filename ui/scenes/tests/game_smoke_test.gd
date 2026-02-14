@@ -6,6 +6,10 @@ const MainMenuScene: PackedScene = preload("res://ui/scenes/main_menu.tscn")
 const GameSetupScene: PackedScene = preload("res://ui/scenes/setup/game_setup.tscn")
 const GameScene: PackedScene = preload("res://ui/scenes/game/game.tscn")
 const OnlineLobbyScene: PackedScene = preload("res://ui/scenes/online/online_lobby.tscn")
+const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
+const StructuresPassClass = preload("res://ui/scenes/game/map_canvas_drawer_structures_pass.gd")
+const TilePreviewFactoryClass = preload("res://ui/components/reserve_area/tile_preview_factory.gd")
 
 @onready var output: RichTextLabel = $Root/Output
 @onready var run_button: Button = $Root/TopBar/RunButton
@@ -24,6 +28,7 @@ func _ready() -> void:
 
 	if _should_autorun():
 		_exit_code = await _run_test()
+		await _prepare_runtime_cleanup_before_quit()
 		get_tree().quit(_exit_code)
 
 func _on_back_pressed() -> void:
@@ -219,10 +224,26 @@ func _cleanup() -> void:
 	if is_instance_valid(_main_menu_instance):
 		_main_menu_instance.queue_free()
 		_main_menu_instance = null
-	await get_tree().process_frame
+	await _drain_frames(6)
 	if NetClient != null:
 		NetClient.shutdown()
 	Globals.reset_game_config()
+
+func _prepare_runtime_cleanup_before_quit() -> void:
+	UiSkinCacheClass.clear_cache()
+	EmployeeCardClass.clear_icon_texture_cache()
+	StructuresPassClass.clear_drink_source_texture_cache()
+	TilePreviewFactoryClass.clear_cached_script()
+	if EventBus != null:
+		if EventBus.has_method("clear_all_subscribers"):
+			EventBus.clear_all_subscribers()
+		if EventBus.has_method("clear_history_and_reset_sequence"):
+			EventBus.clear_history_and_reset_sequence()
+		elif EventBus.has_method("clear_history"):
+			EventBus.clear_history()
+	if SceneManager != null and SceneManager.has_method("clear_stack"):
+		SceneManager.clear_stack()
+	await _drain_frames(6)
 
 func _fail(msg: String) -> int:
 	if is_instance_valid(output):
@@ -240,6 +261,11 @@ func _should_autorun() -> bool:
 	if args.has("autorun") or args.has("--autorun"):
 		return true
 	return OS.has_feature("headless")
+
+func _drain_frames(count: int) -> void:
+	var n := maxi(1, int(count))
+	for _i in range(n):
+		await get_tree().process_frame
 
 func _find_first_existing_node(root: Node, paths: PackedStringArray) -> Node:
 	if root == null:

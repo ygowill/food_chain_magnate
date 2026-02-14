@@ -14,6 +14,9 @@ var _controller = null
 func _init(controller) -> void:
 	_controller = controller
 
+func dispose() -> void:
+	_controller = null
+
 func on_restaurant_preview_cleared() -> void:
 	if _controller == null:
 		return

@@ -8,7 +8,7 @@ const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
-const ReportsFormatterClass = preload("res://ui/scenes/game/game_event_log_reports_formatter.gd")
+const REPORTS_FORMATTER_SCRIPT_PATH := "res://ui/scenes/game/game_event_log_reports_formatter.gd"
 
 const PRICE_ACTION_LOG_TEXT: Dictionary = {
 	"set_price": "设定价格（-$1）",
@@ -511,16 +511,31 @@ func _debug(message: String, details: Dictionary) -> Dictionary:
 
 func _ensure_reports_formatter() -> void:
 	if _reports_formatter == null or not is_instance_valid(_reports_formatter):
-		_reports_formatter = ReportsFormatterClass.new()
-		_reports_formatter.setup(self)
+		var reports_formatter_script = ResourceLoader.load(
+			REPORTS_FORMATTER_SCRIPT_PATH,
+			"Script",
+			ResourceLoader.CACHE_MODE_IGNORE
+		)
+		if reports_formatter_script == null:
+			return
+		_reports_formatter = reports_formatter_script.new()
+		if _reports_formatter != null and is_instance_valid(_reports_formatter):
+			_reports_formatter.setup(self)
 
 func _format_payday_report(data: Dictionary) -> Array[Dictionary]:
 	_ensure_reports_formatter()
+	if _reports_formatter == null or not is_instance_valid(_reports_formatter):
+		return []
 	return _reports_formatter.format_payday_report(data)
 
 func _format_dinnertime_report(data: Dictionary) -> Array[Dictionary]:
 	_ensure_reports_formatter()
+	if _reports_formatter == null or not is_instance_valid(_reports_formatter):
+		return []
 	return _reports_formatter.format_dinnertime_report(data)
+
+func dispose() -> void:
+	_reports_formatter = null
 
 func _format_cash_income_breakdown_suffix(details: Dictionary) -> String:
 	if details == null or not (details is Dictionary):

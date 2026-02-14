@@ -11,6 +11,10 @@ const _TARGET_SCRIPT_SUBPATH := "ui/components/lobbyists_extra_tile/tile_preview
 static var _tile_preview_script: Script = null
 static var _tile_preview_script_loaded: bool = false
 
+static func clear_cached_script() -> void:
+	_tile_preview_script = null
+	_tile_preview_script_loaded = false
+
 static func create_preview() -> Control:
 	var script := _resolve_tile_preview_script()
 	if script == null:

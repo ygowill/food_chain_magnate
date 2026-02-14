@@ -119,6 +119,9 @@ func unsubscribe_all_from_source(source: String) -> int:
 		GameLog.info("EventBus", "取消来自 %s 的 %d 个订阅" % [source, count])
 	return count
 
+func clear_all_subscribers() -> void:
+	_subscribers.clear()
+
 # === 事件发射 ===
 
 # 发射事件

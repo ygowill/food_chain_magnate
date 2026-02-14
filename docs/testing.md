@@ -239,19 +239,19 @@ run_test "res://ui/scenes/tests/legacy/order_of_business_test.tscn" "OrderOfBusi
 现有 headless 测试场景：
 
 - 全部测试聚合：`ui/scenes/tests/all_tests.tscn`
-- 游戏场景地图视图接入：`ui/scenes/tests/game_map_view_test.tscn`（验证 GameArea 已渲染 `state.map.cells`）
+- 游戏场景地图视图接入：`ui/scenes/tests/legacy/game_map_view_test.tscn`（验证 GameArea 已渲染 `state.map.cells`）
 - 回放确定性：`ui/scenes/tests/replay_test.tscn`（纯逻辑：`core/tests/replay_determinism_test.gd`）
-- 员工额度 smoke test：`ui/scenes/tests/employee_test.tscn`（纯逻辑：`core/tests/employee_action_test.gd`）
-- 发薪日 smoke test：`ui/scenes/tests/payday_salary_test.tscn`（纯逻辑：`core/tests/payday_salary_test.gd`）
-- 初始公司结构：`ui/scenes/tests/initial_company_test.tscn`（纯逻辑：`core/tests/initial_company_test.gd`）
-- 强制动作测试：`ui/scenes/tests/mandatory_actions_test.tscn`（纯逻辑：`core/tests/mandatory_actions_test.gd`）
-- 生产食物测试：`ui/scenes/tests/produce_food_test.tscn`（纯逻辑：`core/tests/produce_food_test.gd`）
-- 采购饮料测试：`ui/scenes/tests/procure_drinks_test.tscn`（纯逻辑：`core/tests/procure_drinks_test.gd`）
+- 员工额度 smoke test：`ui/scenes/tests/legacy/employee_test.tscn`（纯逻辑：`core/tests/employee_action_test.gd`）
+- 发薪日 smoke test：`ui/scenes/tests/legacy/payday_salary_test.tscn`（纯逻辑：`core/tests/payday_salary_test.gd`）
+- 初始公司结构：`ui/scenes/tests/legacy/initial_company_test.tscn`（纯逻辑：`core/tests/initial_company_test.gd`）
+- 强制动作测试：`ui/scenes/tests/legacy/mandatory_actions_test.tscn`（纯逻辑：`core/tests/mandatory_actions_test.gd`）
+- 生产食物测试：`ui/scenes/tests/legacy/produce_food_test.tscn`（纯逻辑：`core/tests/produce_food_test.gd`）
+- 采购饮料测试：`ui/scenes/tests/legacy/procure_drinks_test.tscn`（纯逻辑：`core/tests/procure_drinks_test.gd`）
 - 采购饮料路线规则：已加入 `ui/scenes/tests/all_tests.tscn`（纯逻辑：`core/tests/procure_drinks_route_rules_test.gd`）
 - 清理阶段库存清理：已加入 `ui/scenes/tests/all_tests.tscn`（纯逻辑：`core/tests/cleanup_inventory_test.gd`）
 - 解雇动作：已加入 `ui/scenes/tests/all_tests.tscn`（纯逻辑：`core/tests/fire_action_test.gd`）
-- 公司结构测试：`ui/scenes/tests/company_structure_test.tscn`（纯逻辑：`core/tests/company_structure_test.gd`）
-- 决定顺序测试：`ui/scenes/tests/order_of_business_test.tscn`（纯逻辑：`core/tests/order_of_business_test.gd`）
+- 公司结构测试：`ui/scenes/tests/legacy/company_structure_test.tscn`（纯逻辑：`core/tests/company_structure_test.gd`）
+- 决定顺序测试：`ui/scenes/tests/legacy/order_of_business_test.tscn`（纯逻辑：`core/tests/order_of_business_test.gd`）
 - 里程碑系统测试：已加入 `ui/scenes/tests/all_tests.tscn`（纯逻辑：`core/tests/milestone_system_test.gd`）
 
 这些测试统一遵循：

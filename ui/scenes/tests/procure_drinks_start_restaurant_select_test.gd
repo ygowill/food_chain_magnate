@@ -56,31 +56,32 @@ static func run() -> Result:
 	var panel := DummyPanel.new()
 	var procure = ProcureControllerClass.new(scene, map_controller, null)
 	procure.set_production_panel(panel)
+	var input_controller = null
 
 	# 进入道路采购模式：默认选中第一家餐厅（按 id 升序确定性）。
 	procure.on_drinks_producer_changed(state, "truck_driver")
 	if map_controller.get_mode() != "procure_drinks":
-		return Result.failure("进入选点模式失败: mode=%s" % map_controller.get_mode())
+		return _finish(Result.failure("进入选点模式失败: mode=%s" % map_controller.get_mode()), map_controller, procure, input_controller, engine)
 	if panel.selected_restaurant_id != "rest_0":
-		return Result.failure("默认起点餐厅错误: expected=rest_0 got=%s" % panel.selected_restaurant_id)
+		return _finish(Result.failure("默认起点餐厅错误: expected=rest_0 got=%s" % panel.selected_restaurant_id), map_controller, procure, input_controller, engine)
 
 	# 数字快捷键：2 -> rest_1
-	var input_controller = InputControllerClass.new(null, null, null, map_controller, null, null, null, null)
+	input_controller = InputControllerClass.new(null, null, null, map_controller, null, null, null, null)
 	var key := InputEventKey.new()
 	key.pressed = true
 	key.keycode = KEY_2
 	if not input_controller.handle_unhandled_input(key):
-		return Result.failure("KEY_2 未被处理（预期应切换起点餐厅）")
+		return _finish(Result.failure("KEY_2 未被处理（预期应切换起点餐厅）"), map_controller, procure, input_controller, engine)
 	if panel.selected_restaurant_id != "rest_1":
-		return Result.failure("数字快捷键切换失败: expected=rest_1 got=%s" % panel.selected_restaurant_id)
+		return _finish(Result.failure("数字快捷键切换失败: expected=rest_1 got=%s" % panel.selected_restaurant_id), map_controller, procure, input_controller, engine)
 
 	# 地图点击：点击餐厅入口格应切换起点餐厅
 	map_controller._on_map_cell_selected(Vector2i(2, 2))
 	if panel.selected_restaurant_id != "rest_0":
-		return Result.failure("点击餐厅切换失败: expected=rest_0 got=%s" % panel.selected_restaurant_id)
+		return _finish(Result.failure("点击餐厅切换失败: expected=rest_0 got=%s" % panel.selected_restaurant_id), map_controller, procure, input_controller, engine)
 	map_controller._on_map_cell_selected(Vector2i(7, 2))
 	if panel.selected_restaurant_id != "rest_1":
-		return Result.failure("点击餐厅切换失败: expected=rest_1 got=%s" % panel.selected_restaurant_id)
+		return _finish(Result.failure("点击餐厅切换失败: expected=rest_1 got=%s" % panel.selected_restaurant_id), map_controller, procure, input_controller, engine)
 
 	# Hover 预览：至少选 1 个进货点后，悬停餐厅应写入 preview 文案；离开后清空
 	map_controller._on_map_cell_selected(Vector2i(1, 1))
@@ -89,11 +90,22 @@ static func run() -> Result:
 		hover_pos = Vector2i(7, 2)
 	map_controller._on_map_cell_hovered(hover_pos)
 	if panel.hover_preview_text.is_empty() or not panel.hover_preview_text.begins_with("预览："):
-		return Result.failure("hover 预览文案未写入: %s" % panel.hover_preview_text)
+		return _finish(Result.failure("hover 预览文案未写入: %s" % panel.hover_preview_text), map_controller, procure, input_controller, engine)
 	map_controller._on_map_cell_hovered(Vector2i(-1, -1))
 	if not panel.hover_preview_text.is_empty():
-		return Result.failure("离开 hover 后预览文案应清空: %s" % panel.hover_preview_text)
+		return _finish(Result.failure("离开 hover 后预览文案应清空: %s" % panel.hover_preview_text), map_controller, procure, input_controller, engine)
 
-	return Result.success({
+	return _finish(Result.success({
 		"selected_restaurant_id": panel.selected_restaurant_id,
-	})
+	}), map_controller, procure, input_controller, engine)
+
+static func _finish(result: Result, map_controller, procure_controller, input_controller, engine) -> Result:
+	if map_controller != null and is_instance_valid(map_controller) and map_controller.has_method("dispose"):
+		map_controller.dispose()
+	if procure_controller != null and is_instance_valid(procure_controller) and procure_controller.has_method("dispose"):
+		procure_controller.dispose()
+	if input_controller != null and is_instance_valid(input_controller) and input_controller.has_method("dispose"):
+		input_controller.dispose()
+	if engine != null and engine.has_method("dispose"):
+		engine.dispose()
+	return result

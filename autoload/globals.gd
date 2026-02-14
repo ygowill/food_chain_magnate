@@ -172,6 +172,8 @@ func save_settings() -> void:
 
 # 重置游戏配置
 func reset_game_config() -> void:
+	if current_game_engine != null and current_game_engine.has_method("dispose"):
+		current_game_engine.dispose()
 	player_count = 2
 	enabled_modules_v2 = GameDefaultsClass.build_default_enabled_modules_v2()
 	modules_v2_base_dir = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR

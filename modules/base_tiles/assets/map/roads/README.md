@@ -1,17 +1,11 @@
 # Base Tiles - Road Textures
 
-This module currently ships a minimal road texture set (PNG, 64x64):
+This module currently uses the `_new` road texture set (PNG, 64x64):
 
-- `road_straight.png`
-- `road_corner.png`
-- `road_tee.png`
-- `road_cross.png`
-- `bridge_default.png`
+- `road_straight_new.png`
+- `road_corner_new.png`
+- `road_tee_new.png`
+- `road_cross_new.png`
+- `bridge_default_new.png`
 
-Other road/bridge variants are intentionally omitted; the UI will fall back to placeholder textures when a key/texture is missing.
-
-Base orientations (as drawn in the PNGs):
-
-- `road_straight.png`: N-S
-- `road_corner.png`: W-S
-- `road_tee.png`: N-W-S (missing E)
+Legacy non-`_new` road textures were removed as unused assets.
