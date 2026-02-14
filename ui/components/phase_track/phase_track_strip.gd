@@ -17,17 +17,17 @@ const PHASE_NAMES: PackedStringArray = [
 
 var _current_phase: String = ""
 var _hover_index: int = -1
-var _font_size: int = 13
+var _font_size: int = 15
 var _h_padding: int = 10
 var _arrow_depth: int = 8
-var _v_padding: int = 9
+var _v_padding: int = 11
 var _v_inset: int = 3
 var _use_inline_tooltip: bool = false
 
 # 已过阶段
-var _bg_past := Color(0.50, 0.45, 0.35, 0.08)
-var _border_past := Color(0.50, 0.45, 0.35, 0.10)
-var _text_past := Color(0.55, 0.50, 0.40, 0.72)
+var _bg_past := Color(0.56, 0.17, 0.14, 0.28)
+var _border_past := Color(0.56, 0.17, 0.14, 0.60)
+var _text_past := UiStylesClass.COLOR_TEXT_PRIMARY
 # 未来阶段
 var _bg_future := Color(0.50, 0.45, 0.35, 0.14)
 var _border_future := Color(0.50, 0.45, 0.35, 0.18)

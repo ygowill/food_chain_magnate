@@ -398,7 +398,7 @@ func _apply_status_bar_styles() -> void:
 	# Bank title label - same size as value labels
 	var title_lbl = get_node_or_null("UIRoot/TopBar/StatusBar/StatusContent/BankSection/BankTitleLabel")
 	if title_lbl is Label:
-		UiStylesClass.apply_label_hint_dark(title_lbl)
+		UiStylesClass.apply_label_dark(title_lbl)
 		(title_lbl as Label).add_theme_font_size_override("font_size", 17)
 	# Value labels - primary, larger
 	for lbl in [round_label, bank_label]:
@@ -407,7 +407,7 @@ func _apply_status_bar_styles() -> void:
 			(lbl as Label).add_theme_font_size_override("font_size", 17)
 	# Phase track - 自定义绘制，初始字号
 	if is_instance_valid(phase_track) and phase_track.has_method("set_font_size"):
-		phase_track.set_font_size(13)
+		phase_track.set_font_size(16)
 
 func _report_startup_profile() -> void:
 	# 让首帧/次帧的 deferred/UI queue 跑完，避免漏掉 MapSkin 构建等同步耗时的尾部。

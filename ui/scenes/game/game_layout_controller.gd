@@ -316,9 +316,12 @@ func apply_responsive_layout() -> void:
 	if is_instance_valid(_round_label):
 		_round_label.add_theme_font_size_override("font_size", scaled_font_size)
 	if is_instance_valid(_phase_track) and _phase_track.has_method("set_font_size"):
-		_phase_track.set_font_size(maxi(11, scaled_font_size - 4))
+		_phase_track.set_font_size(maxi(13, scaled_font_size - 1))
 	if is_instance_valid(_bank_label):
 		_bank_label.add_theme_font_size_override("font_size", scaled_font_size)
+	var bank_title_label = _scene.get_node_or_null("UIRoot/TopBar/StatusBar/StatusContent/BankSection/BankTitleLabel")
+	if bank_title_label is Label:
+		(bank_title_label as Label).add_theme_font_size_override("font_size", scaled_font_size)
 
 func _get_layout_player_count() -> int:
 	var count := 0
