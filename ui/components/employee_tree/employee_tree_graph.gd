@@ -123,9 +123,12 @@ func clear_highlight() -> void:
 	_highlight_nodes.clear()
 	_highlight_edges.clear()
 	for id in _nodes.keys():
-		var card: EmployeeCard = _nodes[id]
-		if is_instance_valid(card):
-			card.set_selected(false)
+		var card_obj = _nodes.get(id, null)
+		if not is_instance_valid(card_obj):
+			_nodes.erase(id)
+			continue
+		var card: EmployeeCard = card_obj
+		card.set_selected(false)
 	queue_redraw()
 
 func _draw() -> void:
@@ -139,10 +142,12 @@ func _draw() -> void:
 			continue
 		if not _nodes.has(from_id) or not _nodes.has(to_id):
 			continue
-		var from_card: EmployeeCard = _nodes[from_id]
-		var to_card: EmployeeCard = _nodes[to_id]
-		if not is_instance_valid(from_card) or not is_instance_valid(to_card):
+		var from_obj = _nodes.get(from_id, null)
+		var to_obj = _nodes.get(to_id, null)
+		if not is_instance_valid(from_obj) or not is_instance_valid(to_obj):
 			continue
+		var from_card: EmployeeCard = from_obj
+		var to_card: EmployeeCard = to_obj
 
 		var from_pos := from_card.position
 		var to_pos := to_card.position
@@ -297,9 +302,12 @@ func _set_hover(employee_id: String) -> void:
 			stack_b.append(p)
 
 	for id in _nodes.keys():
-		var card: EmployeeCard = _nodes[id]
-		if is_instance_valid(card):
-			card.set_selected(_highlight_nodes.has(id))
+		var card_obj = _nodes.get(id, null)
+		if not is_instance_valid(card_obj):
+			_nodes.erase(id)
+			continue
+		var card: EmployeeCard = card_obj
+		card.set_selected(_highlight_nodes.has(id))
 
 	queue_redraw()
 
@@ -317,7 +325,9 @@ func _on_card_mouse_exited(employee_id: String) -> void:
 		clear_highlight()
 
 func _clear_all() -> void:
-	clear_highlight()
+	_hover_id = ""
+	_highlight_nodes.clear()
+	_highlight_edges.clear()
 	UiRebuildHelpersClass.free_children(self)
 	_nodes.clear()
 	_positions.clear()
