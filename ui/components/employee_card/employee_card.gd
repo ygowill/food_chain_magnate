@@ -179,21 +179,30 @@ func _build_ui() -> void:
 
 func _build_header_bar(parent: VBoxContainer) -> void:
 	# 顶部：类别色整行底色 + 名称（填满宽度并紧贴卡片上边缘）
+	var header_base_height := 24.0 if variant == CardVariant.FULL else 20.0
 	_role_color_rect = ColorRect.new()
-	_role_color_rect.custom_minimum_size = Vector2(0, _scaled(24.0 if variant == CardVariant.FULL else 20.0, 1))
+	_role_color_rect.custom_minimum_size = Vector2(0, _scaled(header_base_height, 1))
+	if multiline_name and variant == CardVariant.COMPACT:
+		# 升级路线图会在小缩放下显示；给标题条设置下限，避免导出端字体栅格化后“看不见名字”。
+		_role_color_rect.custom_minimum_size.y = maxf(_role_color_rect.custom_minimum_size.y, 16.0)
 	_role_color_rect.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_role_color_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(_role_color_rect)
 
 	_name_label = Label.new()
-	_name_label.add_theme_font_size_override("font_size", _scaled(16.0 if variant == CardVariant.FULL else 14.0, 1))
+	var header_font_base := 16.0 if variant == CardVariant.FULL else 14.0
+	var header_font_min := 1
+	if multiline_name and variant == CardVariant.COMPACT:
+		# 导出端小字号白字在色条上辨识度很差，这里限制最小字号保持可读性。
+		header_font_min = 9
+	_name_label.add_theme_font_size_override("font_size", _scaled(header_font_base, header_font_min))
 	_name_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	if multiline_name:
-		# 升级路线图中的卡片名称允许换行，避免导出端字体度量差异导致横向溢出。
+		# 升级路线图标题使用单行省略，避免导出端断词/度量差异导致“标题挤压后不可见”。
 		var header_margin := MarginContainer.new()
 		header_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, 0)
 		header_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -204,8 +213,8 @@ func _build_header_bar(parent: VBoxContainer) -> void:
 
 		_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_name_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		_name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_name_label.max_lines_visible = 2
+		_name_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+		_name_label.max_lines_visible = 1
 		_name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		_name_label.clip_text = true
 		header_margin.add_child(_name_label)
