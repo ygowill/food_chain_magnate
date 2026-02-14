@@ -5,22 +5,24 @@
 - JSON: `res://.savings/manual_cases/milestones/first_pizza_marketed.json`
 - 玩家数: 2
 - Seed: 12345
-- 当前位置: Payday/ (round=1 current_player=0)
+- 当前位置: Working/Marketing (round=1 current_player=0)
 
 ## 目的
 
-- 验证 Marketing 结算产生披萨需求时，会触发 DemandMarked(product=pizza)。
+- 验证发起营销动作 `InitiateMarketing(product=pizza)` 会触发里程碑 first_pizza_marketed。
 
 ## 复核步骤
 
-1. 载入后应处于 Payday 阶段。
-2. 点击「推进阶段」进入 Marketing（会自动结算并跳过到下一可停留阶段）。
+1. 载入后应处于 Working/Marketing，且玩家 0 在岗包含 marketing_trainee。
+2. 行动面板选择「发起营销」，执行一次营销：`board_number=14 product=pizza duration=1 position=[6,1] rotation=0`。
 
 ## 预期结果
 
 - 玩家 0 获得里程碑 first_pizza_marketed（player.milestones）。
-- state.map.houses['house_1'].demands 应新增 product=pizza 的需求。
+- `state.map.marketing_placements['14'].product == 'pizza'`。
+- 本场景使用 billboard #14，可能同时触发 first_billboard（属正常联动）。
 
 ## 关联单元测试
 
-- `core/rules/phase/marketing_settlement.gd`
+- `core/tests/milestone_system/milestone_system_triggers_test.gd`
+- `core/tests/marketing_campaigns_test.gd`

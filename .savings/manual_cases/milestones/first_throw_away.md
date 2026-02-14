@@ -9,7 +9,7 @@
 
 ## 目的
 
-- 验证进入 Cleanup 时若有库存被清空，会触发 CleanupDiscard -> first_throw_away。
+- 验证进入 Cleanup 时若有库存被清空，会触发 CleanupDiscard -> first_throw_away，并获得 freezer（容量 10）。
 
 ## 复核步骤
 
@@ -19,9 +19,10 @@
 ## 预期结果
 
 - 玩家 0 获得里程碑 first_throw_away（player.milestones）。
-- 进入 Cleanup 后库存被清空（无冰箱）。
+- 本次进入 Cleanup 后库存会被清空（触发条件成立）。
+- 里程碑效果生效后，后续 Cleanup 应按 freezer 容量 10 处理 food+drink 保留上限。
 
 ## 关联单元测试
 
-- `core/rules/phase/cleanup_settlement.gd`
-- `core/tests/cleanup_inventory_test.gd`
+- `modules/base_rules/rules/phase/cleanup_settlement.gd`
+- `core/tests/step_timeline_cleanup_discard_order_test.gd`
