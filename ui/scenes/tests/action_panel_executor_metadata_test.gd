@@ -10,9 +10,6 @@ const ActionExecutorClass = preload("res://core/actions/action_executor.gd")
 
 static func run() -> Result:
 	var panel := ActionPanelClass.new()
-	var container := VBoxContainer.new()
-	panel.add_child(container)
-	panel.items_container = container
 
 	var registry := ActionRegistryClass.new()
 	var ex := ActionExecutorClass.new()
@@ -22,23 +19,19 @@ static func run() -> Result:
 	registry.register_executor(ex)
 
 	panel.set_action_registry(registry)
-	panel.set_available_actions(["custom_action"])
+	var name := ""
+	var desc := ""
+	if panel.has_method("get_action_display_name"):
+		name = str(panel.call("get_action_display_name", "custom_action"))
+	if panel.has_method("get_action_description"):
+		desc = str(panel.call("get_action_description", "custom_action"))
 
-	if container.get_child_count() != 1:
+	if name != "自定义动作":
 		_safe_free(panel)
-		return Result.failure("expected 1 action button, got %d" % int(container.get_child_count()))
-
-	var btn = container.get_child(0)
-	if btn == null or not is_instance_valid(btn):
+		return Result.failure("display_name mismatch: %s" % name)
+	if desc != "这是一条描述":
 		_safe_free(panel)
-		return Result.failure("action button is invalid")
-
-	if str(btn.display_name) != "自定义动作":
-		_safe_free(panel)
-		return Result.failure("display_name mismatch: %s" % str(btn.display_name))
-	if str(btn.description) != "这是一条描述":
-		_safe_free(panel)
-		return Result.failure("description mismatch: %s" % str(btn.description))
+		return Result.failure("description mismatch: %s" % desc)
 
 	_safe_free(panel)
 	return Result.success({})
@@ -48,4 +41,3 @@ static func _safe_free(node) -> void:
 		return
 	if node is Node:
 		(node as Node).free()
-

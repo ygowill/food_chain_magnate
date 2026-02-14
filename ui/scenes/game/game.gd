@@ -41,6 +41,7 @@ extends Control
 @onready var right_panel_footer_cancel_button: Button = $UIRoot/MainContent/CenterSplit/RightPanel/FooterRow/CancelButton
 @onready var right_panel_footer_secondary_button: Button = $UIRoot/MainContent/CenterSplit/RightPanel/FooterRow/SecondaryButton
 @onready var right_panel_footer_primary_button: Button = $UIRoot/MainContent/CenterSplit/RightPanel/FooterRow/PrimaryButton
+@onready var action_flow_controls: Control = $UIRoot/MainContent/CenterSplit/RightPanel/ActionFlowControls
 
 @onready var player_panel: Control = $UIRoot/MainContent/CenterSplit/RightPanel/DefaultStack/PlayerPanel
 @onready var turn_order_track: Control = $UIRoot/MainContent/CenterSplit/RightPanel/DefaultStack/TurnOrderTrack
@@ -177,7 +178,7 @@ func _ready() -> void:
 		Callable(self, "_execute_command"),
 		Callable(self, "_update_ui")
 	)
-	_panel_controller.connect_signals(action_panel, turn_order_track, hand_area, company_structure)
+	_panel_controller.connect_signals(action_panel, action_flow_controls, turn_order_track, hand_area, company_structure)
 	_warmup_controller = GameBackgroundWarmupControllerClass.new(self, Callable(self, "_get_game_engine"), _panel_controller, map_canvas)
 
 	_menu_debug_controller = GameMenuDebugControllerClass.new(self, menu_dialog)

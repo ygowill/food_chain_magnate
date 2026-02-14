@@ -1,0 +1,31 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/components/action_flow_controls/action_flow_controls.gd" id="1_action_flow_controls"]
+
+[node name="ActionFlowControls" type="VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+script = ExtResource("1_action_flow_controls")
+
+[node name="ConfirmEndButton" type="Button" parent="."]
+visible = false
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "确认结束"
+
+[node name="SkipStepButton" type="Button" parent="."]
+visible = false
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "跳过"
+
+[node name="RewindButton" type="Button" parent="."]
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "回退到当前玩家回合开始"
+tooltip_text = "撤销当前玩家回合内操作并回到回合开始"
+

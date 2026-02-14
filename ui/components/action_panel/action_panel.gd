@@ -41,11 +41,18 @@ const ContextControllerClass = preload("res://ui/components/action_panel/action_
 var _action_registry = null  # ActionRegistry
 var _game_state: GameState = null
 var _current_player_id: int = -1
-var _action_buttons: Dictionary = {}  # action_id -> ActionButton
+var _action_buttons: Dictionary = {}  # Deprecated: action_id -> ActionButton（动作按钮列表已迁移至 ActionFlowControls）
 var _mandatory_action_ids: Dictionary = {}  # action_id -> true
 var _context_controller = null
 var _globally_disabled: bool = false
 var _globally_disabled_reason: String = ""
+var _visible_action_ids: Array[String] = []
+var _visible_initiatable_action_ids: Array[String] = []
+var _action_enabled: Dictionary = {} # action_id -> bool
+var _action_disabled_reason: Dictionary = {} # action_id -> String
+var _guided_action_id: String = ""
+var _flow_confirm_end_visible: bool = false
+var _flow_skip_step_visible: bool = false
 
 # 不在 UI 中展示的内部动作
 const BASE_HIDDEN_ACTION_IDS := {
@@ -349,19 +356,91 @@ func _update_title() -> void:
 	title_label.text = base + suffix
 
 func set_available_actions(action_ids: Array[String]) -> void:
-	_rebuild_action_buttons(action_ids)
+	# 测试/调试入口：不依赖 GameState/ActionRegistry 的简化路径
+	_set_visible_actions_from_list(action_ids, [])
 
 func set_action_enabled(action_id: String, enabled: bool) -> void:
-	if _action_buttons.has(action_id):
-		var btn: ActionButton = _action_buttons[action_id]
-		if is_instance_valid(btn):
-			btn.set_enabled(enabled)
+	var aid := str(action_id)
+	if aid.is_empty():
+		return
+	_action_enabled[aid] = bool(enabled)
 
 func set_action_disabled_reason(action_id: String, reason: String) -> void:
-	if _action_buttons.has(action_id):
-		var btn: ActionButton = _action_buttons[action_id]
-		if is_instance_valid(btn) and btn.has_method("set_disabled_reason"):
-			btn.set_disabled_reason(reason)
+	var aid := str(action_id)
+	if aid.is_empty():
+		return
+	_action_disabled_reason[aid] = str(reason).strip_edges()
+
+func get_guided_action_id() -> String:
+	return _guided_action_id
+
+func is_globally_disabled() -> bool:
+	return _globally_disabled
+
+func get_visible_action_ids() -> Array[String]:
+	return _visible_action_ids.duplicate()
+
+func get_flow_controls_config() -> Dictionary:
+	var skip_sub_visible := _flow_skip_step_visible and _visible_action_ids.has(ActionIdsClass.SKIP_SUB_PHASE)
+	var skip_visible := _flow_confirm_end_visible and _visible_action_ids.has(ActionIdsClass.SKIP)
+
+	var skip_sub_enabled := get_action_enabled(ActionIdsClass.SKIP_SUB_PHASE)
+	var skip_sub_reason := get_action_disabled_reason(ActionIdsClass.SKIP_SUB_PHASE)
+	var skip_enabled := get_action_enabled(ActionIdsClass.SKIP)
+	var skip_reason := get_action_disabled_reason(ActionIdsClass.SKIP)
+
+	# rewind：无 state 或全局禁用时不可用（与旧 ActionPanel 一致）
+	var rewind_enabled := (_game_state != null) and (not _globally_disabled)
+
+	return {
+		"confirm_end": {
+			"visible": skip_visible,
+			"text": ACTION_DISPLAY_NAMES.get(ActionIdsClass.SKIP, "确认结束"),
+			"enabled": skip_enabled,
+			"disabled_reason": skip_reason,
+		},
+		"skip_step": {
+			"visible": skip_sub_visible,
+			"text": _get_skip_sub_phase_display_name(),
+			"enabled": skip_sub_enabled,
+			"disabled_reason": skip_sub_reason,
+		},
+		"rewind": {
+			"enabled": rewind_enabled,
+		},
+	}
+
+func get_action_enabled(action_id: String) -> bool:
+	var aid := str(action_id).strip_edges()
+	if aid.is_empty():
+		return false
+	if _globally_disabled:
+		return false
+	return bool(_action_enabled.get(aid, false))
+
+func get_action_disabled_reason(action_id: String) -> String:
+	var aid := str(action_id).strip_edges()
+	if aid.is_empty():
+		return ""
+	if _globally_disabled and not _globally_disabled_reason.is_empty():
+		return _globally_disabled_reason
+	return str(_action_disabled_reason.get(aid, "")).strip_edges()
+
+func get_action_display_name(action_id: String) -> String:
+	var aid := str(action_id).strip_edges()
+	if aid.is_empty():
+		return ""
+	if aid == ActionIdsClass.SKIP_SUB_PHASE:
+		return _get_skip_sub_phase_display_name()
+	var ex_name := _get_executor_display_name(aid)
+	return ex_name if not ex_name.is_empty() else str(ACTION_DISPLAY_NAMES.get(aid, aid))
+
+func get_action_description(action_id: String) -> String:
+	var aid := str(action_id).strip_edges()
+	if aid.is_empty():
+		return ""
+	var ex_desc := _get_executor_description(aid)
+	return ex_desc if not ex_desc.is_empty() else str(ACTION_DESCRIPTIONS.get(aid, ""))
 
 func set_globally_disabled(reason: String) -> void:
 	var r := str(reason).strip_edges()
@@ -400,23 +479,14 @@ func _apply_global_disabled_state() -> void:
 			if child is BaseButton:
 				(child as BaseButton).disabled = _globally_disabled
 
-	for aid in _action_buttons.keys():
-		var btn_val = _action_buttons[aid]
-		if not is_instance_valid(btn_val):
-			continue
-		var btn: ActionButton = btn_val
-		if _globally_disabled:
-			btn.set_enabled(false)
-			btn.set_disabled_reason(_globally_disabled_reason)
-		else:
-			# 恢复由 refresh() 决定的 enabled 状态（这里不强行改回 true）。
-			btn.set_disabled_reason("")
+	# 动作可用性通过 get_action_enabled/get_action_disabled_reason 动态体现；
+	# 这里不再直接操作动作按钮（已改为压平动作流，按钮由外部 ActionFlowControls 承载）。
 
 func refresh() -> void:
 	if is_instance_valid(rewind_phase_button):
 		rewind_phase_button.disabled = (_game_state == null)
 	if _game_state == null:
-		_rebuild_action_buttons([])
+		_clear_actions_cache()
 		return
 
 	var available_ids: Array[String] = []
@@ -514,7 +584,7 @@ func refresh() -> void:
 				ordered.append(aidn)
 		visible_ids = ordered
 
-	_rebuild_action_buttons(visible_ids)
+	_set_visible_actions_from_list(visible_ids, visible_executable if has_player_executable_info else [])
 
 	# 若能计算“当前玩家可执行动作”，则对不可执行动作做灰显，并写入原因
 	if has_player_executable_info:
@@ -535,7 +605,76 @@ func refresh() -> void:
 			set_action_enabled(aid4, true)
 			set_action_disabled_reason(aid4, "")
 
+	_compute_guided_flow_visibility()
+
 	_apply_global_disabled_state()
+
+func _clear_actions_cache() -> void:
+	_visible_action_ids = []
+	_visible_initiatable_action_ids = []
+	_action_enabled.clear()
+	_action_disabled_reason.clear()
+	_guided_action_id = ""
+	_flow_confirm_end_visible = false
+	_flow_skip_step_visible = false
+	if items_container != null and is_instance_valid(items_container):
+		UiRebuildHelpersClass.free_children(items_container)
+
+func _sanitize_action_id_list(action_ids: Array) -> Array[String]:
+	var out: Array[String] = []
+	for v in action_ids:
+		var s := str(v).strip_edges()
+		if s.is_empty():
+			continue
+		out.append(s)
+	return out
+
+func _set_visible_actions_from_list(action_ids: Array, initiatable_ids: Array) -> void:
+	_visible_action_ids = _sort_action_ids_for_display(_sanitize_action_id_list(action_ids))
+	_visible_initiatable_action_ids = _sanitize_action_id_list(initiatable_ids)
+	if items_container != null and is_instance_valid(items_container):
+		# 压平动作流：ActionPanel 不再渲染动作按钮列表
+		UiRebuildHelpersClass.free_children(items_container)
+
+	_action_enabled.clear()
+	_action_disabled_reason.clear()
+	for aid in _visible_action_ids:
+		set_action_enabled(aid, true)
+		set_action_disabled_reason(aid, "")
+	_compute_guided_flow_visibility()
+
+func _compute_guided_flow_visibility() -> void:
+	_guided_action_id = ""
+	for aid in _visible_action_ids:
+		if aid == ActionIdsClass.SKIP_SUB_PHASE:
+			continue
+		if aid == ActionIdsClass.SKIP:
+			continue
+		_guided_action_id = aid
+		break
+
+	_flow_skip_step_visible = _visible_action_ids.has(ActionIdsClass.SKIP_SUB_PHASE)
+
+	# “确认结束(skip)”仅在没有其他可启动动作时显示；
+	# Working：若仍存在 skip_sub_phase，则永远不显示确认结束（避免误导）。
+	var show_skip := _visible_action_ids.has(ActionIdsClass.SKIP)
+	if show_skip and _flow_skip_step_visible:
+		show_skip = false
+	if show_skip:
+		var has_any_other_initiatable := false
+		var check_ids := _visible_initiatable_action_ids
+		if check_ids.is_empty():
+			# 无法计算“可启动动作”时：退化为“只要面板里还有非 skip 动作，就不显示确认结束”
+			check_ids = _visible_action_ids
+		for aid2 in check_ids:
+			var a := str(aid2)
+			if a == ActionIdsClass.SKIP or a == ActionIdsClass.SKIP_SUB_PHASE:
+				continue
+			has_any_other_initiatable = true
+			break
+		show_skip = not has_any_other_initiatable
+
+	_flow_confirm_end_visible = show_skip
 
 func _on_rewind_phase_pressed() -> void:
 	# 作为“面板工具”而非游戏动作：由 GamePanelController 接管该 action_id，并触发时间线回退。

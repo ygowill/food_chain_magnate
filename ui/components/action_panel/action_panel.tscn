@@ -201,11 +201,13 @@ layout_mode = 2
 text = "确认"
 
 [node name="ItemsContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+visible = false
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 4
 
 [node name="UtilityRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+visible = false
 layout_mode = 2
 alignment = 1
 theme_override_constants/separation = 8

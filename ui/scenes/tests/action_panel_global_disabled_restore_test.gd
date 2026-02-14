@@ -18,52 +18,40 @@ static func run() -> Result:
 	if panel == null or not is_instance_valid(panel):
 		return Result.failure("实例化 ActionPanel 失败")
 
-	# 不挂载到场景树：手动注入 items_container，确保 refresh() 能构建按钮。
-	var items := VBoxContainer.new()
-	panel.add_child(items)
-	panel.set("items_container", items)
-
 	panel.set_game_state(state)
-	var buttons_val = panel.get("_action_buttons")
-	if not (buttons_val is Dictionary):
+	var ids: Array[String] = []
+	if panel.has_method("get_visible_action_ids"):
+		ids = Array(panel.call("get_visible_action_ids"), TYPE_STRING, "", null)
+	if ids.is_empty():
 		_safe_free(panel)
-		return Result.failure("_action_buttons 类型错误（期望 Dictionary）")
-	var buttons: Dictionary = buttons_val
-	if buttons.is_empty():
+		return Result.failure("ActionPanel 未计算出任何可见动作")
+	if not _any_action_enabled(panel, ids):
 		_safe_free(panel)
-		return Result.failure("ActionPanel 未构建任何按钮")
-	if not _any_button_enabled(buttons):
-		_safe_free(panel)
-		return Result.failure("初始状态应至少有一个按钮 enabled")
+		return Result.failure("初始状态应至少有一个动作 enabled")
 
 	panel.set_globally_disabled("联机：等待其他玩家操作")
-	buttons_val = panel.get("_action_buttons")
-	buttons = buttons_val if (buttons_val is Dictionary) else {}
-	if _any_button_enabled(buttons):
+	if _any_action_enabled(panel, ids):
 		_safe_free(panel)
-		return Result.failure("全局禁用后按钮应全部 disabled")
+		return Result.failure("全局禁用后动作应全部 disabled")
 
 	panel.set_globally_disabled("")
-	buttons_val = panel.get("_action_buttons")
-	buttons = buttons_val if (buttons_val is Dictionary) else {}
-	if not _any_button_enabled(buttons):
+	if not _any_action_enabled(panel, ids):
 		_safe_free(panel)
-		return Result.failure("解除全局禁用后应恢复按钮 enabled（避免联机回合交接卡死）")
+		return Result.failure("解除全局禁用后应恢复动作 enabled（避免联机回合交接卡死）")
 
 	_safe_free(panel)
 	return Result.success()
 
-static func _any_button_enabled(buttons: Dictionary) -> bool:
-	for btn_val in buttons.values():
-		if not is_instance_valid(btn_val):
-			continue
-		if btn_val is Button:
-			var btn: Button = btn_val
-			if not btn.disabled:
-				return true
+static func _any_action_enabled(panel: Object, action_ids: Array[String]) -> bool:
+	if panel == null or not is_instance_valid(panel):
+		return false
+	if not panel.has_method("get_action_enabled"):
+		return false
+	for aid in action_ids:
+		if bool(panel.call("get_action_enabled", str(aid))):
+			return true
 	return false
 
 static func _safe_free(node: Node) -> void:
 	if node != null and is_instance_valid(node):
 		node.free()
-

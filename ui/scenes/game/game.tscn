@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3 uid="uid://dph5rwtgn6tq8"]
+[gd_scene load_steps=17 format=3 uid="uid://dph5rwtgn6tq8"]
 
 [ext_resource type="Script" uid="uid://ckmoescpu6tet" path="res://ui/scenes/game/game.gd" id="1_game"]
 [ext_resource type="Script" uid="uid://c7bjun5j7en8b" path="res://ui/scenes/game/map_view.gd" id="2_map_view"]
@@ -15,6 +15,7 @@
 [ext_resource type="PackedScene" path="res://ui/components/left_panel/left_panel.tscn" id="13_left_panel"]
 [ext_resource type="PackedScene" path="res://ui/components/turn_order/turn_order_display.tscn" id="14_turn_order_display"]
 [ext_resource type="Script" path="res://ui/components/phase_track/phase_track_strip.gd" id="15_phase_track"]
+[ext_resource type="PackedScene" path="res://ui/components/action_flow_controls/action_flow_controls.tscn" id="16_action_flow_controls"]
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -302,6 +303,9 @@ text = "次要"
 custom_minimum_size = Vector2(100, 36)
 layout_mode = 2
 text = "确认"
+
+[node name="ActionFlowControls" parent="UIRoot/MainContent/CenterSplit/RightPanel" instance=ExtResource("16_action_flow_controls")]
+layout_mode = 2
 
 [node name="BottomPanel" type="HSplitContainer" parent="UIRoot"]
 layout_mode = 2

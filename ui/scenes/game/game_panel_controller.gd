@@ -36,6 +36,7 @@ var _modals_controller = null
 var _views_controller = null
 
 var _view_player_id: int = -1
+var _last_guided_action_id: String = ""
 
 func _init(scene, map_controller, overlay_controller, execute_command: Callable, refresh_ui: Callable) -> void:
 	_scene = scene
@@ -63,8 +64,9 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 	_modals_controller = ModalsControllerClass.new(_scene, _execute_command)
 	_views_controller = ViewsControllerClass.new(_scene)
 
-func connect_signals(action_panel, turn_order_track, hand_area, company_structure) -> void:
+func connect_signals(action_panel, action_flow_controls, turn_order_track, hand_area, company_structure) -> void:
 	UiSignalHelpersClass.safe_connect(action_panel, "action_requested", on_action_requested)
+	UiSignalHelpersClass.safe_connect(action_flow_controls, "action_requested", on_action_requested)
 	UiSignalHelpersClass.safe_connect(turn_order_track, "position_selected", _on_turn_order_position_selected)
 	UiSignalHelpersClass.safe_connect(hand_area, "cards_selected", _on_hand_cards_selected)
 	UiSignalHelpersClass.safe_connect(hand_area, "card_dropped", _on_hand_card_dropped)
@@ -257,6 +259,8 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 		_end_panels.sync(state, force_full_refresh)
 	_sync_modals(state)
 	_sync_action_panel_context()
+	_sync_action_flow_controls()
+	_auto_open_guided_action_ui(state)
 
 func get_milestone_full_screen_view():
 	if _views_controller == null:
@@ -297,6 +301,155 @@ func _sync_action_panel_context() -> void:
 	else:
 		if _scene.action_panel.has_method("clear_context_overlay"):
 			_scene.action_panel.call("clear_context_overlay")
+
+func _sync_action_flow_controls() -> void:
+	if _scene == null:
+		return
+	if not is_instance_valid(_scene.action_panel):
+		return
+	if not is_instance_valid(_scene.action_flow_controls):
+		return
+	if not (_scene.action_panel.has_method("get_flow_controls_config")):
+		return
+	if not (_scene.action_flow_controls.has_method("apply_flow_config")):
+		return
+
+	var cfg_val = _scene.action_panel.call("get_flow_controls_config")
+	if cfg_val is Dictionary:
+		_scene.action_flow_controls.call("apply_flow_config", Dictionary(cfg_val))
+
+func _auto_open_guided_action_ui(state: GameState) -> void:
+	if state == null:
+		return
+	if _scene == null:
+		return
+	if not is_instance_valid(_scene.action_panel):
+		return
+	if not _scene.action_panel.has_method("get_guided_action_id"):
+		return
+	if _scene.action_panel.has_method("is_globally_disabled") and bool(_scene.action_panel.call("is_globally_disabled")):
+		return
+	# 有阻塞弹窗/浏览视图时不强制弹出动作面板，避免打断玩家
+	if has_open_modal_ui():
+		return
+
+	var guided := str(_scene.action_panel.call("get_guided_action_id")).strip_edges()
+	if guided.is_empty():
+		_last_guided_action_id = ""
+		return
+
+	# 优先：若当前动作 UI 已打开且仍为该动作，不重复 show（避免 hide_all/选点被重置）
+	if guided == _last_guided_action_id and _is_action_ui_open_for_action_id(guided):
+		return
+
+	_open_action_ui_for_action_id(guided)
+	_last_guided_action_id = guided
+
+func _is_action_ui_open_for_action_id(action_id: String) -> bool:
+	var aid := str(action_id).strip_edges()
+	if aid.is_empty():
+		return false
+
+	# Working panels（右侧 dock）
+	if _working_panels != null:
+		if aid == "recruit" and is_instance_valid(_working_panels.recruit_panel) and _working_panels.recruit_panel.visible:
+			return true
+		if aid == "train" and is_instance_valid(_working_panels.train_panel) and _working_panels.train_panel.visible:
+			return true
+		if (aid == "produce_food" or aid == "procure_drinks") and is_instance_valid(_working_panels.production_panel) and _working_panels.production_panel.visible:
+			return true
+		# Price 类动作不在 ActionPanel 中展示（auto mandatory），但为稳健起见仍保留判断
+		if (aid == "set_price" or aid == "set_discount" or aid == "set_luxury_price") and is_instance_valid(_working_panels.price_panel) and _working_panels.price_panel.visible:
+			return true
+
+	# Marketing（右侧 dock）
+	if _marketing_panels != null:
+		if aid == "initiate_marketing" and is_instance_valid(_marketing_panels.marketing_panel) and _marketing_panels.marketing_panel.visible:
+			return true
+
+	# Payday（右侧 dock）
+	if _end_panels != null:
+		if aid == "fire" and is_instance_valid(_end_panels.payday_panel) and _end_panels.payday_panel.visible:
+			return true
+
+	# Placement overlays（地图覆盖层 + ActionPanel ContextPanel）
+	if _placement_overlays != null:
+		if (aid == "place_restaurant" or aid == "move_restaurant") and is_instance_valid(_placement_overlays.restaurant_placement_overlay) and _placement_overlays.restaurant_placement_overlay.visible:
+			if _placement_overlays.restaurant_placement_overlay.has_method("get_mode"):
+				return str(_placement_overlays.restaurant_placement_overlay.get_mode()) == aid
+			return true
+		if (aid == "place_house" or aid == "add_garden") and is_instance_valid(_placement_overlays.house_placement_overlay) and _placement_overlays.house_placement_overlay.visible:
+			if _placement_overlays.house_placement_overlay.has_method("get_mode"):
+				return str(_placement_overlays.house_placement_overlay.get_mode()) == aid
+			return true
+		# piece placement / module overlays：无法精确判断，若有 active context overlay 则认为已打开
+		if _placement_overlays.has_method("get_active_context_overlay"):
+			var ov = _placement_overlays.get_active_context_overlay()
+			if ov != null and is_instance_valid(ov):
+				if ov.has_method("get_mode") and str(ov.get_mode()) == aid:
+					return true
+
+	return false
+
+func _open_action_ui_for_action_id(action_id: String) -> void:
+	var aid := str(action_id).strip_edges()
+	if aid.is_empty():
+		return
+
+	# P0/P1：打开 UI（不自动执行命令）
+	match aid:
+		"choose_turn_order":
+			if _scene != null and _scene.game_engine != null and _modals_controller != null:
+				var state: GameState = _scene.game_engine.get_state()
+				if state != null:
+					_modals_controller.show_turn_order_modal_for_state(state)
+			return
+
+		"recruit":
+			if _working_panels != null:
+				_working_panels.show_recruit_panel()
+			return
+		"train":
+			if _working_panels != null:
+				_working_panels.show_train_panel()
+			return
+		"initiate_marketing":
+			if _marketing_panels != null:
+				_marketing_panels.show_marketing_panel()
+			return
+		"produce_food":
+			if _working_panels != null:
+				_working_panels.show_production_panel("food")
+			return
+		"procure_drinks":
+			if _working_panels != null:
+				_working_panels.show_production_panel("drinks")
+			return
+		"fire":
+			if _end_panels != null:
+				_end_panels.show_payday_panel()
+			return
+		"place_restaurant", "move_restaurant":
+			if _placement_overlays != null:
+				_placement_overlays.show_restaurant_placement(aid, {})
+				_sync_action_panel_context()
+			return
+		"place_house", "add_garden":
+			if _placement_overlays != null:
+				_placement_overlays.show_house_placement(aid, {})
+				_sync_action_panel_context()
+			return
+		_:
+			# 模组动作：尝试打开 overlay / piece placement；若无法处理则不自动执行（避免无意中提交命令）。
+			if _placement_overlays != null and _placement_overlays.has_method("try_show_module_action_overlay"):
+				if bool(_placement_overlays.try_show_module_action_overlay(aid, {})):
+					_sync_action_panel_context()
+					return
+			if _placement_overlays != null and _placement_overlays.has_method("try_show_piece_placement"):
+				if bool(_placement_overlays.try_show_piece_placement(aid, {})):
+					_sync_action_panel_context()
+					return
+			return
 
 func _update_ui_components(state: GameState) -> void:
 	if _scene == null or state == null:

@@ -18,13 +18,10 @@ static func run() -> Result:
 
 static func _case_both_present() -> Result:
 	var panel := ActionPanelClass.new()
-	var container := VBoxContainer.new()
-	panel.add_child(container)
-	panel.items_container = container
 
 	panel.set_available_actions(["recruit", ActionIdsClass.SKIP, "train", ActionIdsClass.SKIP_SUB_PHASE])
 
-	var ids := _read_action_ids(container)
+	var ids := _read_action_ids(panel)
 	if ids.size() < 2 or ids[ids.size() - 2] != ActionIdsClass.SKIP_SUB_PHASE or ids[ids.size() - 1] != ActionIdsClass.SKIP:
 		_safe_free(panel)
 		return Result.failure("ActionPanel order mismatch (both): %s" % str(ids))
@@ -34,13 +31,10 @@ static func _case_both_present() -> Result:
 
 static func _case_skip_only() -> Result:
 	var panel := ActionPanelClass.new()
-	var container := VBoxContainer.new()
-	panel.add_child(container)
-	panel.items_container = container
 
 	panel.set_available_actions([ActionIdsClass.SKIP, "recruit"])
 
-	var ids := _read_action_ids(container)
+	var ids := _read_action_ids(panel)
 	if ids.is_empty() or ids[ids.size() - 1] != ActionIdsClass.SKIP:
 		_safe_free(panel)
 		return Result.failure("ActionPanel order mismatch (skip only): %s" % str(ids))
@@ -48,16 +42,12 @@ static func _case_skip_only() -> Result:
 	_safe_free(panel)
 	return Result.success({})
 
-static func _read_action_ids(container: VBoxContainer) -> Array[String]:
-	var ids: Array[String] = []
-	if container == null:
-		return ids
-	for child in container.get_children():
-		if not is_instance_valid(child):
-			continue
-		# ActionButton is an inner class; the script variable is still accessible.
-		ids.append(str(child.action_id))
-	return ids
+static func _read_action_ids(panel: Object) -> Array[String]:
+	if panel == null or not is_instance_valid(panel):
+		return []
+	if panel.has_method("get_visible_action_ids"):
+		return Array(panel.call("get_visible_action_ids"), TYPE_STRING, "", null)
+	return []
 
 static func _safe_free(node) -> void:
 	if node == null or not is_instance_valid(node):
