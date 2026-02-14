@@ -20,6 +20,34 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0.79, 0.2, 0.17, 1)
 
+[node name="TitleLabel" type="Label" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 12.0
+offset_top = 4.0
+offset_right = -12.0
+offset_bottom = 24.0
+mouse_filter = 2
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(1, 0.98, 0.93, 0.96)
+text = "回合顺位"
+
+[node name="HintLabel" type="Label" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 12.0
+offset_top = 20.0
+offset_right = -12.0
+offset_bottom = 38.0
+mouse_filter = 2
+theme_override_font_sizes/font_size = 11
+theme_override_colors/font_color = Color(1, 0.94, 0.88, 0.85)
+text = "数字越小越先行动 · 旗子标记表示当前玩家"
+
 [node name="SlotsContainer" type="HBoxContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
