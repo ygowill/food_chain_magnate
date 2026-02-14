@@ -265,7 +265,17 @@ class OrderBadge extends Control:
 	const COMPACT_SLOT_SIDE := 72.0
 	const MAP_FRAME_TOP := 14.0
 	const COMPACT_FRAME_TOP := 11.0
-	const CURRENT_MARKER_EMOJI := "🚩"
+	const CURRENT_FLAG_TEXTURE_PATH := "res://assets/images/flag_triangle.png"
+
+	static var _flag_texture_cached: Texture2D = null
+
+	static func _get_flag_texture() -> Texture2D:
+		if _flag_texture_cached != null:
+			return _flag_texture_cached
+		var res = ResourceLoader.load(CURRENT_FLAG_TEXTURE_PATH, "Texture2D", ResourceLoader.CACHE_MODE_REUSE)
+		if res is Texture2D:
+			_flag_texture_cached = res
+		return _flag_texture_cached
 
 	signal clicked(position: int)
 
@@ -285,7 +295,7 @@ class OrderBadge extends Control:
 	var _number_label: Label
 	var _icon: TextureRect
 	var _fallback_label: Label
-	var _current_flag: Label
+	var _current_flag_icon: TextureRect
 	var _content_pad: float = 2.0
 
 	func _ready() -> void:
@@ -386,24 +396,25 @@ class OrderBadge extends Control:
 		_fallback_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_frame.add_child(_fallback_label)
 
-		_current_flag = Label.new()
-		_current_flag.anchor_left = 1.0
-		_current_flag.anchor_top = 0.0
-		_current_flag.anchor_right = 1.0
-		_current_flag.anchor_bottom = 0.0
-		_current_flag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_current_flag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		_current_flag.text = CURRENT_MARKER_EMOJI
-		# 显式使用带 emoji fallback 的字体，避免某些平台/字体回退导致显示成“圈/方块”。
-		if Globals != null and Globals.FALLBACK_FONT != null:
-			_current_flag.add_theme_font_override("font", Globals.FALLBACK_FONT)
-		_current_flag.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_current_flag.visible = false
-		_current_flag.z_index = 4
-		_frame.add_child(_current_flag)
+		_current_flag_icon = TextureRect.new()
+		_current_flag_icon.anchor_left = 1.0
+		_current_flag_icon.anchor_top = 0.0
+		_current_flag_icon.anchor_right = 1.0
+		_current_flag_icon.anchor_bottom = 0.0
+		_current_flag_icon.offset_left = -18.0
+		_current_flag_icon.offset_top = 3.0
+		_current_flag_icon.offset_right = -3.0
+		_current_flag_icon.offset_bottom = 18.0
+		_current_flag_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_current_flag_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		_current_flag_icon.texture = _get_flag_texture()
+		_current_flag_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_current_flag_icon.visible = false
+		_current_flag_icon.z_index = 4
+		_frame.add_child(_current_flag_icon)
 
 	func _apply_metrics() -> void:
-		if not is_instance_valid(_frame) or not is_instance_valid(_number_badge) or not is_instance_valid(_current_flag):
+		if not is_instance_valid(_frame) or not is_instance_valid(_number_badge) or not is_instance_valid(_current_flag_icon):
 			return
 
 		var slot_side := MAP_SLOT_SIDE if _map_strip_style else COMPACT_SLOT_SIDE
@@ -412,7 +423,6 @@ class OrderBadge extends Control:
 		var number_font_size := 16 if _map_strip_style else 13
 		var fallback_font_size := 20 if _map_strip_style else 15
 		var current_flag_size := 20.0 if _map_strip_style else 16.0
-		var current_flag_font_size := 16 if _map_strip_style else 14
 		_content_pad = 2.0 if _map_strip_style else 1.0
 
 		custom_minimum_size = Vector2(slot_side, slot_side + frame_top)
@@ -439,11 +449,10 @@ class OrderBadge extends Control:
 
 		_number_label.add_theme_font_size_override("font_size", number_font_size)
 		_fallback_label.add_theme_font_size_override("font_size", fallback_font_size)
-		_current_flag.add_theme_font_size_override("font_size", current_flag_font_size)
-		_current_flag.offset_left = -current_flag_size - 2.0
-		_current_flag.offset_top = 2.0
-		_current_flag.offset_right = -2.0
-		_current_flag.offset_bottom = 2.0 + current_flag_size
+		_current_flag_icon.offset_left = -current_flag_size - 3.0
+		_current_flag_icon.offset_top = 3.0
+		_current_flag_icon.offset_right = -3.0
+		_current_flag_icon.offset_bottom = 3.0 + current_flag_size
 
 		_layout_logo_square()
 
@@ -510,8 +519,8 @@ class OrderBadge extends Control:
 		if is_instance_valid(_number_badge):
 			_number_badge.add_theme_stylebox_override("panel", badge_style)
 
-		if is_instance_valid(_current_flag):
-			_current_flag.visible = _occupied and _is_current
+		if is_instance_valid(_current_flag_icon):
+			_current_flag_icon.visible = _occupied and _is_current and _current_flag_icon.texture != null
 
 		_layout_logo_square()
 
