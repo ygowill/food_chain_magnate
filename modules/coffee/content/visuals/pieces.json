@@ -1,6 +1,7 @@
 {
 	"schema_version": 1,
 	"piece_visuals": {
+		"coffee_shop": {"texture": "res://modules/coffee/assets/map/icons/coffee.png", "offset_px": [0, 0], "scale": [1, 1]},
 		"restaurant_logo_fried_geese_donkey_coffee": {"texture": "res://modules/coffee/assets/map/logos/fried_geese_donkey_coffee.png", "offset_px": [0, 0], "scale": [1, 1]},
 		"restaurant_logo_gluttony_inc_burgers_coffee": {"texture": "res://modules/coffee/assets/map/logos/gluttony_inc_burgers_coffee.png", "offset_px": [0, 0], "scale": [1, 1]},
 		"restaurant_logo_golden_duck_diner_coffee": {"texture": "res://modules/coffee/assets/map/logos/golden_duck_diner_coffee.png", "offset_px": [0, 0], "scale": [1, 1]},

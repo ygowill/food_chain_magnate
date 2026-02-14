@@ -6,6 +6,8 @@ const OverlayUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_overla
 const RoadsPassClass = preload("res://ui/scenes/game/map_canvas_drawer_roads_pass.gd")
 const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
+const HOUSE_BG_COLOR := Color("#733651")
+const GARDEN_BG_COLOR := Color("#699055")
 
 static var _drink_source_textures: Dictionary = {} # product_id -> Texture2D
 static var _drink_source_textures_base_dir: String = ""
@@ -495,7 +497,7 @@ static func draw_house_and_garden(canvas, cell_size: int, anchor: Vector2i, info
 	var house_rect := Rect2(Vector2(house_min.x * cell_size, house_min.y * cell_size), Vector2(house_size_cells.x * cell_size, house_size_cells.y * cell_size))
 
 	# 底色：房屋
-	var house_bg := Color("#733651")
+	var house_bg := HOUSE_BG_COLOR
 	house_bg.a = clampf(alpha, 0.0, 1.0)
 	canvas.draw_rect(house_rect, house_bg, true)
 
@@ -519,7 +521,7 @@ static func draw_house_and_garden(canvas, cell_size: int, anchor: Vector2i, info
 		if any:
 			var garden_size_cells := (garden_max - garden_min) + Vector2i.ONE
 			garden_rect = Rect2(Vector2(garden_min.x * cell_size, garden_min.y * cell_size), Vector2(garden_size_cells.x * cell_size, garden_size_cells.y * cell_size))
-			var garden_bg := Color("#699055")
+			var garden_bg := GARDEN_BG_COLOR
 			canvas.draw_rect(garden_rect, garden_bg, true)
 
 	# 贴图：房屋主体

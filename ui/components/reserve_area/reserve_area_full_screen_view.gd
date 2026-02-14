@@ -505,13 +505,13 @@ func _add_module_supplies_section(state: GameState) -> void:
 		var piece_id := _guess_piece_id_for_supply(base, module_ids, piece_ids)
 		if _is_excluded_piece_id(piece_id):
 			continue
-			var token := TokensClass.PieceFootprintToken.new()
-			token.piece_id = piece_id
-			token.count = count
-			token.set_skin(_skin)
-			token.set_cell_size(_cell_size)
-			token.tooltip_text = "%s ×%d" % [base, count]
-			flow.add_child(token)
+		var token := TokensClass.PieceFootprintToken.new()
+		token.piece_id = piece_id
+		token.count = count
+		token.set_skin(_skin)
+		token.set_cell_size(_cell_size)
+		token.tooltip_text = "%s ×%d" % [base, count]
+		flow.add_child(token)
 
 func _is_excluded_piece_id(id_str: String) -> bool:
 	# 用户已澄清：不展示地图扩展 tile 与餐厅（但模块引入的新 piece 需要展示）。
@@ -627,6 +627,7 @@ func _add_player_token_supplies_section(state: GameState) -> void:
 
 		var name := Globals.get_player_name(pid2) if Globals != null else ("玩家%d" % (pid2 + 1))
 		var flow := _add_section("%s（玩家板件）" % name)
+		var owner_logo_id := _resolve_player_logo_id_for_supply(p2, pid2)
 		for it in items:
 			var pid_str := str(it.get("piece_id", ""))
 			var cnt := int(it.get("count", 0))
@@ -635,10 +636,35 @@ func _add_player_token_supplies_section(state: GameState) -> void:
 			var token := TokensClass.PieceFootprintToken.new()
 			token.piece_id = pid_str
 			token.count = cnt
+			token.owner_logo_id = owner_logo_id
 			token.set_skin(_skin)
 			token.set_cell_size(_cell_size)
 			token.tooltip_text = "%s ×%d" % [pid_str, cnt]
 			flow.add_child(token)
+
+func _resolve_player_logo_id_for_supply(player: Dictionary, player_id: int) -> int:
+	if _skin == null or not _skin.has_method("get_restaurant_logo_piece_ids"):
+		return -1
+
+	var logo_ids_val = _skin.get_restaurant_logo_piece_ids()
+	if not (logo_ids_val is Array):
+		return -1
+	var logo_ids: Array = logo_ids_val
+	if logo_ids.is_empty():
+		return -1
+
+	var logo_id := -1
+	var logo_val = player.get("restaurant_logo_id", null)
+	if logo_val is int:
+		logo_id = int(logo_val)
+	elif logo_val is float:
+		var f: float = float(logo_val)
+		if f == floor(f):
+			logo_id = int(f)
+
+	if logo_id < 0 or logo_id >= logo_ids.size():
+		logo_id = int(player_id % logo_ids.size())
+	return logo_id
 
 
 

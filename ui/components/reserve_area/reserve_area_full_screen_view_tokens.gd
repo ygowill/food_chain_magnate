@@ -4,6 +4,7 @@ extends RefCounted
 const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
 const StructuresPassClass = preload("res://ui/scenes/game/map_canvas_drawer_structures_pass.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
+const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 
 
@@ -128,8 +129,8 @@ class GardenExtensionToken extends Control:
 
 	func _draw() -> void:
 		var rect := Rect2(Vector2.ZERO, custom_minimum_size)
-		var bg := Color("#22C55E")
-		bg.a = 0.30
+		var bg := _get_garden_bg_color()
+		bg.a = 1.0
 		draw_rect(rect, bg, true)
 
 		if _skin != null:
@@ -141,6 +142,9 @@ class GardenExtensionToken extends Control:
 		if count > 0:
 			# 复用营销板件的编号角标样式（白底圆 + 黑字），用于展示剩余数量。
 			MapCanvasDrawerClass._draw_marketing_board_number_badge(self, rect, int(count), _cell_size, 1.0)
+
+	func _get_garden_bg_color() -> Color:
+		return StructuresPassClass.GARDEN_BG_COLOR
 
 
 # === 营销板件 token（复用 MapCanvasDrawer 的绘制风格）===
@@ -187,6 +191,7 @@ class MarketingBoardToken extends Control:
 class PieceFootprintToken extends Control:
 	var piece_id: String = ""
 	var count: int = 0
+	var owner_logo_id: int = -1
 
 	var _skin = null
 	var _cell_size: int = 40
@@ -247,7 +252,7 @@ class PieceFootprintToken extends Control:
 			draw_rect(cell_rect, Color(1, 1, 1, 0.12), false, 1.0)
 
 		if _skin != null and not piece_id.is_empty():
-			var tex: Texture2D = _skin.get_piece_texture(piece_id)
+			var tex: Texture2D = _resolve_texture_for_draw()
 			var offset_px: Vector2i = _skin.get_piece_offset_px(piece_id)
 			var scale: Vector2 = _skin.get_piece_scale(piece_id)
 			if tex != null and tex.get_size() != Vector2.ZERO and _size_cells.x > 0 and _size_cells.y > 0:
@@ -267,6 +272,33 @@ class PieceFootprintToken extends Control:
 
 		if count > 0:
 			_draw_count_badge(rect, count)
+
+	func _resolve_texture_for_draw() -> Texture2D:
+		if _skin == null:
+			return null
+		var pid := str(piece_id).strip_edges()
+		if pid.is_empty():
+			return null
+
+		var hints := PieceUiHintsRegistryClass.get_hints(pid)
+		var style := str(hints.get("structure_style", "")).strip_edges()
+		if (style == "player_logo" or style == "player_logo_bg") and owner_logo_id >= 0:
+			var logo_ids_val = _skin.get_restaurant_logo_piece_ids() if _skin.has_method("get_restaurant_logo_piece_ids") else null
+			if logo_ids_val is Array:
+				var logo_ids: Array = logo_ids_val
+				if owner_logo_id >= 0 and owner_logo_id < logo_ids.size():
+					var base_key := str(logo_ids[owner_logo_id]).strip_edges()
+					if not base_key.is_empty():
+						var logo_key := base_key
+						var suffix := str(hints.get("logo_variant_suffix", "")).strip_edges()
+						if not suffix.is_empty():
+							var var_key := "%s%s" % [base_key, suffix]
+							var piece_textures_val = _skin.get("piece_textures")
+							if piece_textures_val is Dictionary and Dictionary(piece_textures_val).has(var_key):
+								logo_key = var_key
+						return _skin.get_piece_texture(logo_key)
+
+		return _skin.get_piece_texture(pid)
 
 	func _draw_count_badge(rect: Rect2, c: int) -> void:
 		var text := "×%d" % int(c)

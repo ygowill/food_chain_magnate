@@ -529,6 +529,10 @@ func _run_all() -> int:
 				"fn": func() -> Result: return TestRefs.ModuleProductIconsLoadedTestClass.run(),
 			},
 			{
+				"name": "ReserveAreaSupplyVisualsTest",
+				"fn": func() -> Result: return TestRefs.ReserveAreaSupplyVisualsTestClass.run(),
+			},
+			{
 				"name": "ModulePlanBuilderV2Test",
 				"fn": func() -> Result: return TestRefs.ModulePlanBuilderV2TestClass.run(2, 12345),
 			},
