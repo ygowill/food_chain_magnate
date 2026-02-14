@@ -3,11 +3,12 @@
 extends Control
 
 # UI 节点引用
-@onready var round_label: Label = $UIRoot/TopBar/StatusBar/RoundLabel
-@onready var phase_label: Label = $UIRoot/TopBar/StatusBar/PhaseLabel
+@onready var status_bar: PanelContainer = $UIRoot/TopBar/StatusBar
+@onready var round_label: Label = $UIRoot/TopBar/StatusBar/StatusContent/RoundSection/RoundValueLabel
+@onready var phase_track: Control = $UIRoot/TopBar/StatusBar/StatusContent/PhaseTrack
 @onready var turn_order_display: Control = $UIRoot/MainContent/CenterSplit/GameArea/TurnOrderOverlay/TurnOrderDisplay
-@onready var bank_label: Label = $UIRoot/TopBar/StatusBar/BankLabel
-@onready var current_player_label: Label = $UIRoot/TopBar/StatusBar/CurrentPlayerLabel
+@onready var bank_label: Label = $UIRoot/TopBar/StatusBar/StatusContent/BankSection/BankValueLabel
+@onready var bank_break_tag: Label = $UIRoot/TopBar/StatusBar/StatusContent/BankSection/BankBreakTag
 @onready var toggle_left_panel_button: Button = $UIRoot/TopBar/ToggleLeftPanelButton
 @onready var toggle_right_panel_button: Button = $UIRoot/TopBar/ToggleRightPanelButton
 @onready var toggle_bottom_panel_button: Button = $MenuDialog/VBoxContainer/ToggleBottomPanelButton
@@ -136,12 +137,12 @@ func _ready() -> void:
 	UiStylesClass.apply_vignette(vignette_overlay, 0.25, 0.5)
 	_apply_menu_dialog_styles()
 	_apply_topbar_button_styles()
+	_apply_status_bar_styles()
 	_layout_controller = GameLayoutControllerClass.new(
 		self,
 		round_label,
-		phase_label,
+		phase_track,
 		bank_label,
-		current_player_label,
 		toggle_left_panel_button,
 		toggle_right_panel_button,
 		toggle_bottom_panel_button,
@@ -257,9 +258,9 @@ func _ready() -> void:
 		Callable(self, "_update_ui"),
 		Callable(self, "_sync_right_panel_docked_view"),
 		round_label,
-		phase_label,
+		phase_track,
 		bank_label,
-		current_player_label,
+		bank_break_tag,
 		game_log_panel,
 		map_view,
 		_panel_controller,
@@ -380,6 +381,33 @@ func _apply_topbar_button_styles() -> void:
 		var btn = get_node_or_null(path)
 		if btn is Button:
 			UiStylesClass.apply_button_secondary(btn)
+
+func _apply_status_bar_styles() -> void:
+	UiStylesClass.apply_status_panel(status_bar)
+	UiStylesClass.apply_break_tag(bank_break_tag)
+	# Icon labels - accent colors
+	var icon_styles: Array[Array] = [
+		["UIRoot/TopBar/StatusBar/StatusContent/BankSection/BankIconLabel", Color(0.72, 0.62, 0.25)],
+		["UIRoot/TopBar/StatusBar/StatusContent/RoundSection/RoundIconLabel", Color(0.35, 0.55, 0.75)],
+	]
+	for entry in icon_styles:
+		var lbl = get_node_or_null(str(entry[0]))
+		if lbl is Label:
+			(lbl as Label).add_theme_color_override("font_color", entry[1] as Color)
+			(lbl as Label).add_theme_font_size_override("font_size", 17)
+	# Bank title label - same size as value labels
+	var title_lbl = get_node_or_null("UIRoot/TopBar/StatusBar/StatusContent/BankSection/BankTitleLabel")
+	if title_lbl is Label:
+		UiStylesClass.apply_label_hint_dark(title_lbl)
+		(title_lbl as Label).add_theme_font_size_override("font_size", 17)
+	# Value labels - primary, larger
+	for lbl in [round_label, bank_label]:
+		if lbl is Label:
+			UiStylesClass.apply_label_dark(lbl)
+			(lbl as Label).add_theme_font_size_override("font_size", 17)
+	# Phase track - 自定义绘制，初始字号
+	if is_instance_valid(phase_track) and phase_track.has_method("set_font_size"):
+		phase_track.set_font_size(13)
 
 func _report_startup_profile() -> void:
 	# 让首帧/次帧的 deferred/UI queue 跑完，避免漏掉 MapSkin 构建等同步耗时的尾部。

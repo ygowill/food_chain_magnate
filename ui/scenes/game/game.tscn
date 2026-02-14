@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3 uid="uid://dph5rwtgn6tq8"]
+[gd_scene load_steps=16 format=3 uid="uid://dph5rwtgn6tq8"]
 
 [ext_resource type="Script" uid="uid://ckmoescpu6tet" path="res://ui/scenes/game/game.gd" id="1_game"]
 [ext_resource type="Script" uid="uid://c7bjun5j7en8b" path="res://ui/scenes/game/map_view.gd" id="2_map_view"]
@@ -14,6 +14,7 @@
 [ext_resource type="PackedScene" path="res://ui/audio/audio_system_initializer.tscn" id="12_audio_init"]
 [ext_resource type="PackedScene" path="res://ui/components/left_panel/left_panel.tscn" id="13_left_panel"]
 [ext_resource type="PackedScene" path="res://ui/components/turn_order/turn_order_display.tscn" id="14_turn_order_display"]
+[ext_resource type="Script" path="res://ui/components/phase_track/phase_track_strip.gd" id="15_phase_track"]
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -59,35 +60,59 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 20
 
-[node name="StatusBar" type="HBoxContainer" parent="UIRoot/TopBar"]
+[node name="LeftSpacer" type="Control" parent="UIRoot/TopBar"]
 layout_mode = 2
 size_flags_horizontal = 3
-alignment = 1
-theme_override_constants/separation = 20
 
-[node name="RoundLabel" type="Label" parent="UIRoot/TopBar/StatusBar"]
+[node name="StatusBar" type="PanelContainer" parent="UIRoot/TopBar"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
-theme_override_font_sizes/font_size = 18
-text = "回合: 0"
+mouse_filter = 2
 
-[node name="PhaseLabel" type="Label" parent="UIRoot/TopBar/StatusBar"]
+[node name="StatusContent" type="HBoxContainer" parent="UIRoot/TopBar/StatusBar"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
-theme_override_font_sizes/font_size = 18
-text = "阶段: Setup"
+theme_override_constants/separation = 12
 
-[node name="BankLabel" type="Label" parent="UIRoot/TopBar/StatusBar"]
+[node name="BankSection" type="HBoxContainer" parent="UIRoot/TopBar/StatusBar/StatusContent"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
-theme_override_font_sizes/font_size = 18
-text = "银行: $0"
+theme_override_constants/separation = 4
 
-[node name="CurrentPlayerLabel" type="Label" parent="UIRoot/TopBar/StatusBar"]
+[node name="BankIconLabel" type="Label" parent="UIRoot/TopBar/StatusBar/StatusContent/BankSection"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
-theme_override_font_sizes/font_size = 18
-text = "玩家: -"
+text = "◈"
+
+[node name="BankTitleLabel" type="Label" parent="UIRoot/TopBar/StatusBar/StatusContent/BankSection"]
+layout_mode = 2
+text = "银行"
+
+[node name="BankValueLabel" type="Label" parent="UIRoot/TopBar/StatusBar/StatusContent/BankSection"]
+layout_mode = 2
+text = "$0"
+
+[node name="BankBreakTag" type="Label" parent="UIRoot/TopBar/StatusBar/StatusContent/BankSection"]
+visible = false
+layout_mode = 2
+text = "已破产"
+
+[node name="RoundSection" type="HBoxContainer" parent="UIRoot/TopBar/StatusBar/StatusContent"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="RoundIconLabel" type="Label" parent="UIRoot/TopBar/StatusBar/StatusContent/RoundSection"]
+layout_mode = 2
+text = "◷"
+
+[node name="RoundValueLabel" type="Label" parent="UIRoot/TopBar/StatusBar/StatusContent/RoundSection"]
+layout_mode = 2
+text = "第 0 回合"
+
+[node name="PhaseTrack" type="Control" parent="UIRoot/TopBar/StatusBar/StatusContent"]
+layout_mode = 2
+size_flags_vertical = 4
+script = ExtResource("15_phase_track")
+
+[node name="Spacer" type="Control" parent="UIRoot/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
 
 [node name="AdvancePhaseButton" type="Button" parent="UIRoot/TopBar"]
 visible = false

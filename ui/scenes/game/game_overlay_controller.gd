@@ -263,15 +263,15 @@ func _setup_help_tooltips() -> void:
 		c4.mouse_default_cursor_shape = Control.CURSOR_HELP
 		help_tooltip_manager.register_control(c4, "ui_topbar_settings")
 
-	# 动态：PhaseLabel 根据当前 phase 显示不同帮助
-	var phase_label = _scene.get("phase_label")
-	if is_instance_valid(phase_label) and phase_label is Control:
-		phase_label.mouse_filter = Control.MOUSE_FILTER_STOP
-		phase_label.mouse_default_cursor_shape = Control.CURSOR_HELP
-		if not phase_label.mouse_entered.is_connected(_on_phase_label_mouse_entered):
-			phase_label.mouse_entered.connect(_on_phase_label_mouse_entered)
-		if not phase_label.mouse_exited.is_connected(_on_phase_label_mouse_exited):
-			phase_label.mouse_exited.connect(_on_phase_label_mouse_exited)
+	# 动态：PhaseTrack 根据当前 phase 显示不同帮助
+	var phase_track = _scene.get("phase_track")
+	if is_instance_valid(phase_track) and phase_track is Control:
+		phase_track.mouse_filter = Control.MOUSE_FILTER_STOP
+		phase_track.mouse_default_cursor_shape = Control.CURSOR_HELP
+		if not phase_track.mouse_entered.is_connected(_on_phase_label_mouse_entered):
+			phase_track.mouse_entered.connect(_on_phase_label_mouse_entered)
+		if not phase_track.mouse_exited.is_connected(_on_phase_label_mouse_exited):
+			phase_track.mouse_exited.connect(_on_phase_label_mouse_exited)
 
 func _on_phase_label_mouse_entered() -> void:
 	if help_tooltip_manager == null or not is_instance_valid(help_tooltip_manager):
@@ -281,8 +281,8 @@ func _on_phase_label_mouse_entered() -> void:
 	if not help_tooltip_manager.has_method("show_immediate"):
 		return
 
-	var phase_label = _scene.get("phase_label")
-	if not is_instance_valid(phase_label) or not (phase_label is Control):
+	var phase_track = _scene.get("phase_track")
+	if not is_instance_valid(phase_track) or not (phase_track is Control):
 		return
 
 	var engine = _scene.get("game_engine")
@@ -296,7 +296,7 @@ func _on_phase_label_mouse_entered() -> void:
 	if key.is_empty():
 		return
 
-	var phase_ctrl: Control = phase_label
+	var phase_ctrl: Control = phase_track
 	var pos: Vector2 = phase_ctrl.get_global_rect().position + (phase_ctrl.size / 2.0)
 	help_tooltip_manager.show_immediate(key, pos)
 

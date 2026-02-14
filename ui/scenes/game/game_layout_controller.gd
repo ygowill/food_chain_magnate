@@ -12,9 +12,8 @@ const PLAYER_TAB_PANEL_EXTRA_PADDING := 8
 var _scene = null
 
 var _round_label: Label = null
-var _phase_label: Label = null
+var _phase_track: Control = null
 var _bank_label: Label = null
-var _current_player_label: Label = null
 
 var _toggle_left_panel_button: Button = null
 var _toggle_right_panel_button: Button = null
@@ -46,9 +45,8 @@ var _responsive_font_scale: float = -1.0
 func _init(
 	scene,
 	round_label: Label,
-	phase_label: Label,
+	phase_track: Control,
 	bank_label: Label,
-	current_player_label: Label,
 	toggle_left_panel_button: Button,
 	toggle_right_panel_button: Button,
 	toggle_bottom_panel_button: Button,
@@ -64,9 +62,8 @@ func _init(
 ) -> void:
 	_scene = scene
 	_round_label = round_label
-	_phase_label = phase_label
+	_phase_track = phase_track
 	_bank_label = bank_label
-	_current_player_label = current_player_label
 	_toggle_left_panel_button = toggle_left_panel_button
 	_toggle_right_panel_button = toggle_right_panel_button
 	_toggle_bottom_panel_button = toggle_bottom_panel_button
@@ -318,12 +315,10 @@ func apply_responsive_layout() -> void:
 
 	if is_instance_valid(_round_label):
 		_round_label.add_theme_font_size_override("font_size", scaled_font_size)
-	if is_instance_valid(_phase_label):
-		_phase_label.add_theme_font_size_override("font_size", scaled_font_size)
+	if is_instance_valid(_phase_track) and _phase_track.has_method("set_font_size"):
+		_phase_track.set_font_size(maxi(11, scaled_font_size - 4))
 	if is_instance_valid(_bank_label):
 		_bank_label.add_theme_font_size_override("font_size", scaled_font_size)
-	if is_instance_valid(_current_player_label):
-		_current_player_label.add_theme_font_size_override("font_size", scaled_font_size)
 
 func _get_layout_player_count() -> int:
 	var count := 0

@@ -301,6 +301,37 @@ static func apply_nav_button(button: Button, selected: bool) -> void:
 		button.add_theme_color_override("font_pressed_color", COLOR_TEXT_MUTED)
 		button.add_theme_color_override("font_focus_color", COLOR_TEXT_MUTED)
 
+static func apply_status_panel(panel: PanelContainer) -> void:
+	if panel == null:
+		return
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.0, 0.0, 0.0, 0.0)
+	style.set_border_width_all(0)
+	style.content_margin_left = 8
+	style.content_margin_top = 2
+	style.content_margin_right = 8
+	style.content_margin_bottom = 2
+	panel.add_theme_stylebox_override("panel", style)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+static func apply_break_tag(label: Label) -> void:
+	if label == null:
+		return
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.73, 0.23, 0.18, 0.18)
+	style.border_color = Color(0.73, 0.23, 0.18, 0.55)
+	style.set_border_width_all(1)
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_right = 8
+	style.corner_radius_bottom_left = 8
+	style.content_margin_left = 6
+	style.content_margin_top = 1
+	style.content_margin_right = 6
+	style.content_margin_bottom = 1
+	label.add_theme_stylebox_override("normal", style)
+	label.add_theme_color_override("font_color", COLOR_TEXT_ERROR)
+
 static func _make_field_style(bg_color: Color, border_color: Color, border_width: int) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = bg_color

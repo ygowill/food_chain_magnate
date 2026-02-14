@@ -6,14 +6,27 @@ extends RefCounted
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
+# 阶段英文 → 中文映射（用于 toast 等）
+const PHASE_DISPLAY_NAMES: Dictionary = {
+	"Setup": "设置阶段",
+	"Restructuring": "重组结构",
+	"OrderOfBusiness": "商业秩序",
+	"Working": "工作时间",
+	"Dinnertime": "晚餐时间",
+	"Payday": "发薪日",
+	"Marketing": "营销结算",
+	"Cleanup": "清理阶段",
+	"GameOver": "游戏结束",
+}
+
 var _get_game_engine: Callable = Callable()
 var _refresh_ui: Callable = Callable()
 var _sync_right_panel_docked_view: Callable = Callable()
 
 var _round_label: Label = null
-var _phase_label: Label = null
+var _phase_track: Control = null
 var _bank_label: Label = null
-var _current_player_label: Label = null
+var _bank_break_tag: Label = null
 
 var _game_log_panel: Control = null
 var _map_view: Control = null
@@ -33,9 +46,9 @@ func _init(
 	refresh_ui: Callable,
 	sync_right_panel_docked_view: Callable,
 	round_label: Label,
-	phase_label: Label,
+	phase_track: Control,
 	bank_label: Label,
-	current_player_label: Label,
+	bank_break_tag: Label,
 	game_log_panel: Control,
 	map_view: Control,
 	panel_controller: Object,
@@ -46,9 +59,9 @@ func _init(
 	_refresh_ui = refresh_ui
 	_sync_right_panel_docked_view = sync_right_panel_docked_view
 	_round_label = round_label
-	_phase_label = phase_label
+	_phase_track = phase_track
 	_bank_label = bank_label
-	_current_player_label = current_player_label
+	_bank_break_tag = bank_break_tag
 	_game_log_panel = game_log_panel
 	_map_view = map_view
 	_panel_controller = panel_controller
@@ -60,9 +73,9 @@ func dispose() -> void:
 	_refresh_ui = Callable()
 	_sync_right_panel_docked_view = Callable()
 	_round_label = null
-	_phase_label = null
+	_phase_track = null
 	_bank_label = null
-	_current_player_label = null
+	_bank_break_tag = null
 	_game_log_panel = null
 	_map_view = null
 	_panel_controller = null
@@ -92,63 +105,23 @@ func update_ui(do_profile: bool) -> void:
 		if str(state.phase) == DefsClass.PHASE_SETUP:
 			_round_label.text = "准备阶段"
 		else:
-			_round_label.text = "回合: %d" % int(state.round_number)
-	if is_instance_valid(_phase_label):
-		_phase_label.text = "阶段: %s%s" % [
-			state.phase,
-			(" / %s" % state.sub_phase) if not str(state.sub_phase).is_empty() else ""
-		]
+			_round_label.text = "第 %d 回合" % int(state.round_number)
+	if is_instance_valid(_phase_track) and _phase_track.has_method("set_current_phase"):
+		_phase_track.set_current_phase(str(state.phase).strip_edges())
 
-	var pid := int(state.get_current_player_id())
-	var current_name := Globals.get_player_name(pid) if pid >= 0 else "-"
-	var view_id := pid
-	if is_instance_valid(_panel_controller) and _panel_controller.has_method("get_view_player_id"):
-		var v := int(_panel_controller.call("get_view_player_id"))
-		if v >= 0:
-			view_id = v
-	var view_name := Globals.get_player_name(view_id) if view_id >= 0 else "-"
+	if is_instance_valid(_bank_label):
+		_bank_label.text = "$%d" % int(state.bank.get("total", 0))
+	if is_instance_valid(_bank_break_tag):
+		var broke_count := int(state.bank.get("broke_count", 0))
+		_bank_break_tag.visible = broke_count >= 1
 
 	var head_index := int(game_engine.command_history.size() - 1)
 	var cursor_index := int(game_engine.current_command_index)
-	var replay_suffix := ""
 	if is_instance_valid(_timeline_controller):
 		var hc = _timeline_controller.call("get_ui_head_cursor", game_engine)
 		if hc is Vector2i:
 			head_index = int(hc.x)
 			cursor_index = int(hc.y)
-		replay_suffix = str(_timeline_controller.call("get_ui_replay_suffix", game_engine, head_index, cursor_index))
-
-	if is_instance_valid(_current_player_label):
-		if str(state.phase) == DefsClass.PHASE_RESTRUCTURING:
-			var submitted_count := 0
-			var total := int(state.players.size())
-			if state.round_state is Dictionary:
-				var r_val = state.round_state.get("restructuring", null)
-				if r_val is Dictionary:
-					var r: Dictionary = r_val
-					var submitted_val = r.get("submitted", null)
-					if submitted_val is Dictionary:
-						var submitted: Dictionary = submitted_val
-						for pid2 in range(total):
-							var v2 = submitted.get(pid2, null)
-							if v2 == null and submitted.has(str(pid2)):
-								v2 = submitted.get(str(pid2), null)
-							if bool(v2):
-								submitted_count += 1
-
-			_current_player_label.text = "重组（同时）%s｜提交: %d/%d" % [
-				replay_suffix,
-				submitted_count,
-				total
-			]
-		else:
-			_current_player_label.text = "行动%s: %s" % [
-				replay_suffix,
-				current_name
-			]
-
-	if is_instance_valid(_bank_label):
-		_bank_label.text = "银行: $%d" % int(state.bank.get("total", 0))
 
 	if is_instance_valid(_game_log_panel) and _game_log_panel.has_method("set_player_count"):
 		_game_log_panel.call("set_player_count", int(state.players.size()))
