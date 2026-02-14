@@ -6,7 +6,7 @@ const StructuresPassClass = preload("res://ui/scenes/game/map_canvas_drawer_stru
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
-const TilePreviewClass = preload("res://modules/lobbyists/ui/components/lobbyists_extra_tile/tile_preview.gd")
+const TilePreviewFactoryClass = preload("res://ui/components/reserve_area/tile_preview_factory.gd")
 
 
 # === 通用 token（贴图 + badge）===
@@ -85,7 +85,13 @@ class TileSupplyToken extends Control:
 		_update_ui()
 
 	func _build_ui() -> void:
-		_preview = TilePreviewClass.new()
+		_preview = TilePreviewFactoryClass.create_preview()
+		if _preview == null:
+			var fallback := Label.new()
+			fallback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			fallback.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			fallback.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			_preview = fallback
 		if _preview != null:
 			_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			add_child(_preview)
@@ -102,6 +108,9 @@ class TileSupplyToken extends Control:
 		var id_text := str(tile_id).strip_edges()
 		if _preview != null and _preview.has_method("set_tile"):
 			_preview.set_tile(id_text, 0)
+		elif _preview is Label:
+			var fallback_label: Label = _preview
+			fallback_label.text = id_text if not id_text.is_empty() else "tile"
 		if id_text.is_empty():
 			tooltip_text = "地图板块"
 		else:

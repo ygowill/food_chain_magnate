@@ -23,6 +23,7 @@ const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
+const ModuleSupplyFallbacksClass = preload("res://core/rules/module_supply_fallbacks.gd")
 const TokensClass = preload("res://ui/components/reserve_area/reserve_area_full_screen_view_tokens.gd")
 
 var _skin = null
@@ -36,18 +37,6 @@ const BASE_CELL_SIZE := 40
 const ZOOM_MIN_PERCENT := 50
 const ZOOM_MAX_PERCENT := 200
 const ZOOM_STEP_PERCENT := 10
-const RURAL_BILLBOARD_SUPPLY_TOTAL := 4
-const LOBBYISTS_SUPPLY_FALLBACKS := {
-	"lobbyists_road_straight_supply_remaining": 4,
-	"lobbyists_road_long_supply_remaining": 2,
-	"lobbyists_road_l_supply_remaining": 2,
-	"lobbyists_park_line_supply_remaining": 1,
-	"lobbyists_park_t_supply_remaining": 1,
-	"lobbyists_park_l_supply_remaining": 2,
-}
-const RURAL_OFFRAMP_SUPPLY_FALLBACK_KEY := "rural_marketeers_offramp_supply_remaining"
-const RURAL_OFFRAMP_SUPPLY_FALLBACK_TOTAL := 3
-const RURAL_BILLBOARD_SUPPLY_PSEUDO_KEY := "rural_billboard_supply_remaining"
 
 var _zoom_percent: int = 100
 var _cell_size: int = BASE_CELL_SIZE
@@ -553,14 +542,25 @@ func _collect_module_supply_counts(state: GameState, module_ids: Array[String]) 
 
 func _merge_module_supply_fallback_counts(state: GameState, module_ids: Array[String], supply_counts: Dictionary, seen_keys: Dictionary) -> void:
 	if module_ids.has("lobbyists"):
-		for key in LOBBYISTS_SUPPLY_FALLBACKS.keys():
-			var count := int(LOBBYISTS_SUPPLY_FALLBACKS.get(key, 0))
+		var fallback_counts := ModuleSupplyFallbacksClass.get_lobbyists_supply_fallbacks()
+		for key in fallback_counts.keys():
+			var count := int(fallback_counts.get(key, 0))
 			_append_supply_count_if_missing(supply_counts, seen_keys, str(key), count)
 
 	if module_ids.has("rural_marketeers"):
-		_append_supply_count_if_missing(supply_counts, seen_keys, RURAL_OFFRAMP_SUPPLY_FALLBACK_KEY, RURAL_OFFRAMP_SUPPLY_FALLBACK_TOTAL)
+		_append_supply_count_if_missing(
+			supply_counts,
+			seen_keys,
+			ModuleSupplyFallbacksClass.get_rural_offramp_supply_fallback_key(),
+			ModuleSupplyFallbacksClass.get_rural_offramp_supply_fallback_total()
+		)
 		var billboard_remaining := _get_rural_billboard_supply_remaining(state)
-		_append_supply_count_if_missing(supply_counts, seen_keys, RURAL_BILLBOARD_SUPPLY_PSEUDO_KEY, billboard_remaining)
+		_append_supply_count_if_missing(
+			supply_counts,
+			seen_keys,
+			ModuleSupplyFallbacksClass.get_rural_billboard_supply_pseudo_key(),
+			billboard_remaining
+		)
 
 func _append_supply_count_if_missing(supply_counts: Dictionary, seen_keys: Dictionary, key: String, count: int) -> void:
 	if key.is_empty() or count <= 0:
@@ -581,7 +581,7 @@ func _get_rural_billboard_supply_remaining(state: GameState) -> int:
 					for side in ["N", "E", "S", "W"]:
 						if Dictionary(boards_val).has(side):
 							occupied += 1
-	return maxi(0, RURAL_BILLBOARD_SUPPLY_TOTAL - occupied)
+	return maxi(0, ModuleSupplyFallbacksClass.get_rural_billboard_supply_total() - occupied)
 
 func _add_module_tile_supplies_section(state: GameState) -> void:
 	var entries := _collect_module_tile_supply_entries(state, [])
