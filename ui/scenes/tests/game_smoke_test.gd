@@ -115,21 +115,28 @@ func _run_test() -> int:
 		"CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer/PlayerCountSpinBox",
 		"CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayerCountContainer/PlayerCountSpinBox",
 	]
-	if _find_first_existing_node(setup, setup_count_paths) == null:
-		return await _fail("game_setup.tscn 缺少 PlayerCountSpinBox 节点（节点路径漂移）")
+	if _find_first_existing_node(setup, setup_count_paths) == null and not _has_player_count_button_group(setup):
+		return await _fail("game_setup.tscn 缺少玩家数量控件（旧版 SpinBox/新版按钮组）")
 	var setup_seed_paths: PackedStringArray = [
 		"CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn/SeedContainer/SeedLineEdit",
 		"CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/SeedContainer/SeedLineEdit",
 	]
-	if _find_first_existing_node(setup, setup_seed_paths) == null:
-		return await _fail("game_setup.tscn 缺少 SeedLineEdit 节点（节点路径漂移）")
+	if _find_first_existing_node(setup, setup_seed_paths) == null and _find_seed_line_edit_by_placeholder(setup) == null:
+		return await _fail("game_setup.tscn 缺少随机种子输入框（SeedLineEdit）")
 
 	# 关键：校验 game_setup.gd 的动态 UI 组装是否执行（避免 _ready/节点路径错误导致静默失败）
 	var setup_players_section_paths: PackedStringArray = [
 		"CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn/PlayersSection",
 		"CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayersSection",
+		"CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/LeftColumn/PlayersContainer",
+		"CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/LeftColumn/PlayersContainer",
 	]
-	if _find_first_existing_node(setup, setup_players_section_paths) == null:
+	var players_section = _find_first_existing_node(setup, setup_players_section_paths)
+	if players_section == null:
+		players_section = _find_node_by_name_recursive(setup, "PlayersSection")
+	if players_section == null:
+		players_section = _find_node_by_name_recursive(setup, "PlayersContainer")
+	if players_section == null:
 		return await _fail("game_setup.tscn 缺少 PlayersSection（可能是 game_setup.gd 未正确运行）")
 	var setup_modules_section_paths: PackedStringArray = [
 		"CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/RightColumn/ModulesSection",
@@ -241,4 +248,59 @@ func _find_first_existing_node(root: Node, paths: PackedStringArray) -> Node:
 		var n = root.get_node_or_null(path)
 		if n != null:
 			return n
+	return null
+
+func _has_player_count_button_group(root: Node) -> bool:
+	if root == null:
+		return false
+	var marks := {
+		"2": false,
+		"3": false,
+		"4": false,
+		"5": false,
+		"6": false,
+	}
+	_collect_player_count_button_marks(root, marks)
+	for key in marks.keys():
+		if not bool(marks[key]):
+			return false
+	return true
+
+func _collect_player_count_button_marks(node: Node, marks: Dictionary) -> void:
+	if node == null:
+		return
+	if node is Button:
+		var text := str((node as Button).text).strip_edges()
+		if marks.has(text):
+			marks[text] = true
+	for child in node.get_children():
+		if child is Node:
+			_collect_player_count_button_marks(child, marks)
+
+func _find_seed_line_edit_by_placeholder(node: Node) -> LineEdit:
+	if node == null:
+		return null
+	if node is LineEdit:
+		var edit: LineEdit = node
+		if str(edit.placeholder_text).strip_edges() == "留空自动生成":
+			return edit
+	for child in node.get_children():
+		if not (child is Node):
+			continue
+		var found := _find_seed_line_edit_by_placeholder(child)
+		if found != null:
+			return found
+	return null
+
+func _find_node_by_name_recursive(node: Node, target_name: String) -> Node:
+	if node == null:
+		return null
+	if str(node.name) == str(target_name):
+		return node
+	for child in node.get_children():
+		if not (child is Node):
+			continue
+		var found := _find_node_by_name_recursive(child, target_name)
+		if found != null:
+			return found
 	return null
