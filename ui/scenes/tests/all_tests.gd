@@ -456,6 +456,10 @@ func _run_all() -> int:
 					"fn": func() -> Result: return TestRefs.GameOverPanelReadOnlyTestClass.run(),
 				},
 				{
+					"name": "GameOverFreezeFullGameTest",
+					"fn": func() -> Result: return await TestRefs.GameOverFreezeFullGameTestClass.run(),
+				},
+				{
 					"name": "ProductionPanelUsedCountsSyncTest",
 					"fn": func() -> Result: return TestRefs.ProductionPanelUsedCountsSyncTestClass.run(),
 				},

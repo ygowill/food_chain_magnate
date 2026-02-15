@@ -81,9 +81,12 @@ func show_employee_tree() -> void:
 	_employee_tree_panel.visible = true
 
 func hide_employee_tree() -> void:
+	var was_visible := false
 	if is_instance_valid(_employee_tree_panel):
+		was_visible = bool(_employee_tree_panel.visible)
 		_employee_tree_panel.visible = false
-	if _scene != null and is_instance_valid(_scene) and _scene.has_method("_update_ui"):
+	# 仅当确实从“可见 -> 隐藏”时才刷新 UI；否则会在 hide_all/终局面板等流程中形成无限刷新循环。
+	if was_visible and _scene != null and is_instance_valid(_scene) and _scene.has_method("_update_ui"):
 		_scene.call_deferred("_update_ui")
 
 func get_employee_tree_panel():
