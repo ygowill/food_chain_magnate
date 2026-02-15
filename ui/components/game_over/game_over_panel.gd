@@ -9,15 +9,16 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 signal return_to_menu_requested()
 signal play_again_requested()
 
-@onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
-@onready var rankings_container: VBoxContainer = $MarginContainer/VBoxContainer/RankingsContainer
-@onready var stats_container: VBoxContainer = $MarginContainer/VBoxContainer/StatsContainer
-@onready var return_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/ReturnButton
-@onready var play_again_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/PlayAgainButton
+@onready var title_label: Label = $CenterContainer/Panel/MarginContainer/VBoxContainer/TitleLabel
+@onready var rankings_container: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBoxContainer/RankingsContainer
+@onready var stats_container: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBoxContainer/StatsContainer
+@onready var return_btn: Button = $CenterContainer/Panel/MarginContainer/VBoxContainer/ButtonRow/ReturnButton
+@onready var play_again_btn: Button = $CenterContainer/Panel/MarginContainer/VBoxContainer/ButtonRow/PlayAgainButton
 
 var _final_state: GameState = null
 var _player_rankings: Array[Dictionary] = []
 var _winner_player_id: int = -1
+var _pending_final_state_refresh: bool = false
 
 func _ready() -> void:
 	if return_btn != null:
@@ -30,11 +31,16 @@ func _ready() -> void:
 	UiStylesClass.apply_button_primary(play_again_btn)
 	UiStylesClass.apply_button_secondary(return_btn)
 
-	# 初始隐藏
-	visible = false
+	if _pending_final_state_refresh:
+		_pending_final_state_refresh = false
+		_calculate_rankings()
+		_rebuild_display()
 
 func set_final_state(state: GameState) -> void:
 	_final_state = state
+	if not is_node_ready():
+		_pending_final_state_refresh = true
+		return
 	_calculate_rankings()
 	_rebuild_display()
 
@@ -166,7 +172,7 @@ func _rebuild_stats() -> void:
 	stats_container.add_child(bank_stat)
 
 	# 银行破产次数
-	var bankruptcy_count: int = int(_final_state.bank.get("bankruptcy_count", 0))
+	var bankruptcy_count: int = int(_final_state.bank.get("broke_count", 0))
 	var bankruptcy_stat := _create_stat_row("银行破产次数", str(bankruptcy_count))
 	stats_container.add_child(bankruptcy_stat)
 

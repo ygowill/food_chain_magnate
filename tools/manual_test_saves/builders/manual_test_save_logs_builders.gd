@@ -8,6 +8,7 @@ func get_registry() -> Dictionary:
 		"logs_build_and_move": Callable(self, "_build_logs_build_and_move"),
 		"logs_produce_and_cleanup": Callable(self, "_build_logs_produce_and_cleanup"),
 		"logs_dinnertime_sale": Callable(self, "_build_logs_dinnertime_sale"),
+		"logs_game_over_bankruptcy": Callable(self, "_build_logs_game_over_bankruptcy"),
 	}
 
 func _build_logs_event_review(engine: GameEngine, _c: Dictionary) -> Result:
@@ -459,6 +460,88 @@ func _build_logs_dinnertime_sale(engine: GameEngine, _c: Dictionary) -> Result:
 			"h2：需求 soda（由玩家2售出）。",
 			"沿路购买：玩家2在 rest_1 持有 coffee 库存；玩家1从 rest_0 前往 h0/h1 的路径会路过 rest_1，触发咖啡沿路购买收入。",
 			"玩家1：waitress x2（tips + 平局）、cfo x1（+50%）、fry_chef x2（每房屋+$10）；里程碑 first_*_marketed 提供 sell_bonus。",
+		],
+	})
+
+func _build_logs_game_over_bankruptcy(engine: GameEngine, _c: Dictionary) -> Result:
+	# GameOver case:
+	# - Force a tiny map with 1 restaurant + 1 house.
+	# - Drain the bank to $0 and set small reserve cards so Dinnertime triggers 2nd bankruptcy.
+	# - Start at Working/PlaceHouses so the player can click:
+	#   1) skip_sub_phase -> PlaceRestaurants
+	#   2) skip -> Working -> Dinnertime -> GameOver
+	var adv := _advance_to_working_sub_phase(engine, "PlaceHouses")
+	if not adv.ok:
+		return adv
+
+	var state := engine.get_state()
+	_force_turn_order(state)
+	_apply_test_map_single_sale(state)
+
+	# Reserve cards (small): first bankruptcy injects $20 total, still not enough for $30 income -> triggers 2nd bankruptcy.
+	for pid in range(state.players.size()):
+		state.players[pid]["reserve_cards"] = [{"type": 10, "cash": 10, "ceo_slots": 4}]
+		state.players[pid]["reserve_card_selected"] = 0
+		state.players[pid]["reserve_card_revealed"] = false
+
+	# Drain bank to 0 (keep cash invariants: transfer to player 0).
+	var bank_before: int = int(state.bank.get("total", 0))
+	if bank_before <= 0:
+		return Result.failure("logs_game_over_bankruptcy: bank.total must be > 0, got: %d" % bank_before)
+	var drain := StateUpdater.player_receive_from_bank(state, 0, bank_before)
+	if not drain.ok:
+		return Result.failure("logs_game_over_bankruptcy: pre-drain bank failed: %s" % drain.error)
+	if int(state.bank.get("total", 0)) != 0:
+		return Result.failure("logs_game_over_bankruptcy: expected bank.total=0 after drain, got: %d" % int(state.bank.get("total", 0)))
+	state.bank["broke_count"] = 0
+
+	# Ensure a deterministic Dinnertime payment ($30): 3x burger demand, player 0 has 3 burgers.
+	if not (state.map is Dictionary):
+		return Result.failure("logs_game_over_bankruptcy: state.map is invalid")
+	var houses_val = state.map.get("houses", null)
+	if not (houses_val is Dictionary) or not (houses_val as Dictionary).has("h0"):
+		return Result.failure("logs_game_over_bankruptcy: test house missing (h0)")
+	var houses: Dictionary = houses_val
+	var h0_val = houses.get("h0", null)
+	if not (h0_val is Dictionary):
+		return Result.failure("logs_game_over_bankruptcy: test house invalid (h0)")
+	var demands: Array = []
+	for _i in range(3):
+		demands.append({"product": "burger"})
+	var h0: Dictionary = h0_val
+	h0["demands"] = demands
+	houses["h0"] = h0
+	state.map["houses"] = houses
+
+	if not (state.players[0] is Dictionary):
+		return Result.failure("logs_game_over_bankruptcy: players[0] is invalid")
+	if not state.players[0].has("inventory") or not (state.players[0]["inventory"] is Dictionary):
+		state.players[0]["inventory"] = {}
+	state.players[0]["inventory"]["burger"] = 3
+	if state.players.size() > 1:
+		if not state.players[1].has("inventory") or not (state.players[1]["inventory"] is Dictionary):
+			state.players[1]["inventory"] = {}
+		state.players[1]["inventory"]["burger"] = 0
+
+	# Pre-mark other players as "passed" so the final skip ends Working immediately.
+	if not (state.round_state is Dictionary):
+		return Result.failure("logs_game_over_bankruptcy: round_state is invalid")
+	if not state.round_state.has("sub_phase_passed") or not (state.round_state["sub_phase_passed"] is Dictionary):
+		_reset_sub_phase_passed(state)
+	var passed: Dictionary = state.round_state["sub_phase_passed"]
+	for pid in range(state.players.size()):
+		passed[pid] = true
+	var current_pid := int(state.get_current_player_id())
+	if current_pid >= 0:
+		passed[current_pid] = false
+	state.round_state["sub_phase_passed"] = passed
+
+	return Result.success({
+		"scenario": [
+			"预置：银行余额被清空为 $0；两名玩家储备卡均为 cash=$10（第一次破产注资总额=$20）。",
+			"地图：单餐厅 rest_0 + 单房屋 h0（3 个 burger 需求）。",
+			"玩家 1（P1）库存 burger=3，可在晚餐结算获得 $30；触发第二次破产并在晚餐结束后进入 GameOver。",
+			"起始位置：Working/PlaceHouses；先点「跳过放置房屋」，再点「确认结束」触发终局。",
 		],
 	})
 

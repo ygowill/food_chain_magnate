@@ -145,6 +145,28 @@ static func get_cases() -> Array[Dictionary]:
 		],
 	}))
 
+	cases.append(_case({
+		"kind": "logs",
+		"id": "event_log_game_over_bankruptcy",
+		"title": "游戏结束复核（银行二次破产 -> GameOver）",
+		"enabled_modules": [],
+		"builder": "logs_game_over_bankruptcy",
+		"purpose": "用于手工复核终局：第二次破产触发 Working -> Dinnertime -> GameOver，并弹出 GameOver 面板且按钮可用（返回主菜单/再来一局）。",
+		"steps": [
+			"载入后确认当前位置为 Working/PlaceHouses。",
+			"点击「跳过放置房屋」（skip_sub_phase），进入 PlaceRestaurants。",
+			"点击「确认结束」（skip），触发晚餐结算与二次破产，阶段自动推进到 GameOver。",
+			"确认弹出「游戏结束」面板，且「返回主菜单」「再来一局」按钮可点击并生效。",
+		],
+		"expected": [
+			"触发终局时游戏不应卡死；GameOver 面板可正常展示排名与统计。",
+			"可正常返回主菜单或重新开始游戏。",
+		],
+		"related_tests": [
+			"core/tests/bankruptcy_test.gd",
+		],
+	}))
+
 	return cases
 
 static func _case(overrides: Dictionary) -> Dictionary:
