@@ -1,7 +1,7 @@
 {
 	"checkpoints": [
 		{
-			"hash": "7655f0ebfc299d6a8b8da4938e282abd",
+			"hash": "0f0221db12e896c2bdca807691c987fe",
 			"index": 0,
 			"rng_calls": 29
 		}
@@ -129,67 +129,11 @@
 			"phase": "Payday",
 			"sub_phase": "",
 			"timestamp": 1500
-		},
-		{
-			"action_id": "submit_restructuring",
-			"actor": 0,
-			"index": 7,
-			"metadata": {
-
-			},
-			"params": {
-
-			},
-			"phase": "Restructuring",
-			"sub_phase": "",
-			"timestamp": 2100
-		},
-		{
-			"action_id": "submit_restructuring",
-			"actor": 1,
-			"index": 8,
-			"metadata": {
-
-			},
-			"params": {
-
-			},
-			"phase": "Restructuring",
-			"sub_phase": "",
-			"timestamp": 2100
-		},
-		{
-			"action_id": "choose_turn_order",
-			"actor": 1,
-			"index": 9,
-			"metadata": {
-
-			},
-			"params": {
-				"position": 1
-			},
-			"phase": "OrderOfBusiness",
-			"sub_phase": "",
-			"timestamp": 2200
-		},
-		{
-			"action_id": "choose_turn_order",
-			"actor": 0,
-			"index": 10,
-			"metadata": {
-
-			},
-			"params": {
-				"position": 0
-			},
-			"phase": "OrderOfBusiness",
-			"sub_phase": "",
-			"timestamp": 2200
 		}
 	],
-	"created_at": "2026-02-14T18:58:11",
-	"current_index": 10,
-	"final_hash": "3202a6435181130f648e23c32b65be17",
+	"created_at": "2026-02-15T18:11:18",
+	"current_index": 6,
+	"final_hash": "2bd966da9b519d30743a10f9900d10f7",
 	"game_version": "0.1.0",
 	"initial_state": {
 		"bank": {
@@ -257,7 +201,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "2",
-							"house_number": 2,
+							"house_number": 2.0,
 							"owner": -1,
 							"parent_anchor": [
 								0,
@@ -281,7 +225,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "2",
-							"house_number": 2,
+							"house_number": 2.0,
 							"owner": -1,
 							"parent_anchor": [
 								0,
@@ -552,7 +496,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "2",
-							"house_number": 2,
+							"house_number": 2.0,
 							"owner": -1,
 							"parent_anchor": [
 								0,
@@ -576,7 +520,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "2",
-							"house_number": 2,
+							"house_number": 2.0,
 							"owner": -1,
 							"parent_anchor": [
 								0,
@@ -2584,7 +2528,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "12",
-							"house_number": 12,
+							"house_number": 12.0,
 							"owner": -1,
 							"parent_anchor": [
 								9,
@@ -2608,7 +2552,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "12",
-							"house_number": 12,
+							"house_number": 12.0,
 							"owner": -1,
 							"parent_anchor": [
 								9,
@@ -2827,7 +2771,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "12",
-							"house_number": 12,
+							"house_number": 12.0,
 							"owner": -1,
 							"parent_anchor": [
 								9,
@@ -2851,7 +2795,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "12",
-							"house_number": 12,
+							"house_number": 12.0,
 							"owner": -1,
 							"parent_anchor": [
 								9,
@@ -3311,7 +3255,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "5",
-							"house_number": 5,
+							"house_number": 5.0,
 							"owner": -1,
 							"parent_anchor": [
 								7,
@@ -3335,7 +3279,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "5",
-							"house_number": 5,
+							"house_number": 5.0,
 							"owner": -1,
 							"parent_anchor": [
 								7,
@@ -3597,7 +3541,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "5",
-							"house_number": 5,
+							"house_number": 5.0,
 							"owner": -1,
 							"parent_anchor": [
 								7,
@@ -3621,7 +3565,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "5",
-							"house_number": 5,
+							"house_number": 5.0,
 							"owner": -1,
 							"parent_anchor": [
 								7,
@@ -3775,7 +3719,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "4",
-							"house_number": 4,
+							"house_number": 4.0,
 							"owner": -1,
 							"parent_anchor": [
 								1,
@@ -3799,7 +3743,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "4",
-							"house_number": 4,
+							"house_number": 4.0,
 							"owner": -1,
 							"parent_anchor": [
 								1,
@@ -3990,7 +3934,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "15",
-							"house_number": 15,
+							"house_number": 15.0,
 							"owner": -1,
 							"parent_anchor": [
 								13,
@@ -4014,7 +3958,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "15",
-							"house_number": 15,
+							"house_number": 15.0,
 							"owner": -1,
 							"parent_anchor": [
 								13,
@@ -4040,7 +3984,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "4",
-							"house_number": 4,
+							"house_number": 4.0,
 							"owner": -1,
 							"parent_anchor": [
 								1,
@@ -4064,7 +4008,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "4",
-							"house_number": 4,
+							"house_number": 4.0,
 							"owner": -1,
 							"parent_anchor": [
 								1,
@@ -4280,7 +4224,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "15",
-							"house_number": 15,
+							"house_number": 15.0,
 							"owner": -1,
 							"parent_anchor": [
 								13,
@@ -4304,7 +4248,7 @@
 							"dynamic": false,
 							"has_garden": false,
 							"house_id": "15",
-							"house_number": 15,
+							"house_number": 15.0,
 							"owner": -1,
 							"parent_anchor": [
 								13,
@@ -4446,7 +4390,7 @@
 					"demands": [],
 					"has_garden": false,
 					"house_id": "12",
-					"house_number": 12,
+					"house_number": 12.0,
 					"is_apartment": false,
 					"printed": true
 				},
@@ -4476,7 +4420,7 @@
 					"demands": [],
 					"has_garden": false,
 					"house_id": "15",
-					"house_number": 15,
+					"house_number": 15.0,
 					"is_apartment": false,
 					"printed": true
 				},
@@ -4506,7 +4450,7 @@
 					"demands": [],
 					"has_garden": false,
 					"house_id": "2",
-					"house_number": 2,
+					"house_number": 2.0,
 					"is_apartment": false,
 					"printed": true
 				},
@@ -4575,7 +4519,7 @@
 					"demands": [],
 					"has_garden": false,
 					"house_id": "4",
-					"house_number": 4,
+					"house_number": 4.0,
 					"is_apartment": false,
 					"printed": true
 				},
@@ -4605,7 +4549,7 @@
 					"demands": [],
 					"has_garden": false,
 					"house_id": "5",
-					"house_number": 5,
+					"house_number": 5.0,
 					"is_apartment": false,
 					"printed": true
 				}
@@ -4815,10 +4759,9 @@
 				"cash": 50,
 				"ceo_cfo_ability_start_round": -1,
 				"company_structure": {
-					"ceo_slots": 3,
+					"ceo_slots": 3.0,
 					"structure": []
 				},
-				"drive_thru_active": false,
 				"employees": [
 					"ceo",
 					"new_business_developer",
@@ -4826,6 +4769,7 @@
 					"brand_director",
 					"zeppelin_pilot"
 				],
+				"forfeited": false,
 				"id": 0,
 				"inventory": {
 					"beer": 0,
@@ -4856,7 +4800,7 @@
 					}
 				],
 				"reserve_employees": [],
-				"restaurant_logo_id": 2,
+				"restaurant_logo_id": 4,
 				"restaurants": [
 					"rest_1"
 				]
@@ -4868,13 +4812,13 @@
 				"cash": 50,
 				"ceo_cfo_ability_start_round": -1,
 				"company_structure": {
-					"ceo_slots": 3,
+					"ceo_slots": 3.0,
 					"structure": []
 				},
-				"drive_thru_active": false,
 				"employees": [
 					"ceo"
 				],
+				"forfeited": false,
 				"id": 1,
 				"inventory": {
 					"beer": 0,
@@ -4905,7 +4849,7 @@
 					}
 				],
 				"reserve_employees": [],
-				"restaurant_logo_id": 3,
+				"restaurant_logo_id": 0,
 				"restaurants": [
 					"rest_2"
 				]
@@ -4958,7 +4902,7 @@
 				}
 			},
 			"sub_phase_passed": {
-				"0": true,
+				"0": false,
 				"1": false
 			},
 			"train_employee_locks": {

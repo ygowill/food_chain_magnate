@@ -1,5 +1,7 @@
 # 重组阶段：调整员工在岗/待命
-# 将员工在 employees 与 reserve_employees 之间移动（CEO 不允许移动；忙碌营销员不参与）。
+# 新规则：只有放入 company_structure.structure 的员工才算“在岗”(player.employees)。
+# 因此本动作仅用于“转入待命”（从 employees 移到 reserve_employees，并同步移出 company_structure.structure）。
+# （CEO 不允许移动；忙碌营销员不参与）。
 class_name RestructureEmployeeAction
 extends ActionExecutor
 
@@ -74,11 +76,11 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 			return Result.success({"employee_id": employee_id, "to_reserve": true, "no_op": true})
 		return Result.failure("员工不在在岗区: %s" % employee_id)
 
-	if reserve.has(employee_id):
-		return Result.success({"employee_id": employee_id, "to_reserve": false})
 	if employees.has(employee_id):
 		return Result.success({"employee_id": employee_id, "to_reserve": false, "no_op": true})
-	return Result.failure("员工不在待命区: %s" % employee_id)
+	if reserve.has(employee_id):
+		return Result.failure("不允许直接激活待命员工：请将员工放入公司结构以激活（employee_id=%s）" % employee_id)
+	return Result.failure("员工不属于当前玩家: %s" % employee_id)
 
 func _apply_changes(state: GameState, command: Command) -> Result:
 	var employee_id_r := require_string_param(command, "employee_id")
@@ -91,6 +93,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var to_reserve_val = command.params["to_reserve"]
 	assert(to_reserve_val is bool, "restructure_employee: to_reserve 类型错误（期望 bool）")
 	var to_reserve: bool = bool(to_reserve_val)
+	if not to_reserve:
+		return Result.success({"employee_id": employee_id, "to_reserve": false, "no_op": true})
 
 	var player_id: int = command.actor
 	var key_from := "employees" if to_reserve else "reserve_employees"

@@ -91,6 +91,14 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("Marketing 后 house_left 应新增 1 个 burger 需求，实际: %s" % str(left_demands_after_marketing))
 
 	# 2) Restructuring -> OrderOfBusiness
+	# 新规则：只有放入公司结构的员工才算在岗；下一回合 Working 需要 burger_cook 生产食物。
+	var to_restructuring := TestPhaseUtilsClass.advance_until_phase(engine_a, DefsClass.PHASE_RESTRUCTURING, 50)
+	if not to_restructuring.ok:
+		return to_restructuring
+	var place_cook := engine_a.execute_command(Command.create("set_company_structure_direct", 0, {"slot_index": 0, "employee_id": "burger_cook"}))
+	if not place_cook.ok:
+		return Result.failure("重组放置 burger_cook 失败: %s" % place_cook.error)
+
 	var restruct := TestPhaseUtilsClass.complete_restructuring(engine_a)
 	if not restruct.ok:
 		return restruct

@@ -189,15 +189,29 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		if s2.has("opening_soon"):
 			return Result.failure("Cleanup 后餐厅格子不应保留 opening_soon 标志: %s" % str(cpos2))
 
-	# Cleanup 后仍在岗：入口点依旧应为四角（不依赖“本回合使用”）
+	# Cleanup 后进入重组：本地经理默认转入待命，入口点应恢复默认（不依赖“本回合使用”）
 	var opened_rest: Dictionary = state.map.get("restaurants", {}).get(placed_rest_id, {})
+	var ep_opened_default_r := StructuresClass.get_restaurant_entrance_points(state, placed_rest_id, opened_rest)
+	if not ep_opened_default_r.ok:
+		return ep_opened_default_r
+	var ep_opened_default: Array = ep_opened_default_r.value
+	if ep_opened_default.size() != 1:
+		return Result.failure("Cleanup 后默认入口点应为 1 个（local_manager 已转待命），实际: %s" % str(ep_opened_default))
+
+	# 在重组阶段将 local_manager 放入公司结构后，应恢复四角入口点
+	var re_enable := engine.execute_command(Command.create("set_company_structure_direct", actor, {"slot_index": 0, "employee_id": "local_manager"}))
+	if not re_enable.ok:
+		return Result.failure("重组放置 local_manager 失败: %s" % re_enable.error)
+
+	state = engine.get_state()
+	opened_rest = state.map.get("restaurants", {}).get(placed_rest_id, {})
 	var ep_opened_r := StructuresClass.get_restaurant_entrance_points(state, placed_rest_id, opened_rest)
 	if not ep_opened_r.ok:
 		return ep_opened_r
 	var opened_corners_r := _get_footprint_corners(opened_rest.get("cells", []), "开业餐厅")
 	if not opened_corners_r.ok:
 		return opened_corners_r
-	var ep_opened_check := _assert_entrance_points_match_corners(ep_opened_r.value, opened_corners_r.value, "Cleanup 后 local_manager 在岗")
+	var ep_opened_check := _assert_entrance_points_match_corners(ep_opened_r.value, opened_corners_r.value, "重组放置 local_manager 后在岗")
 	if not ep_opened_check.ok:
 		return ep_opened_check
 

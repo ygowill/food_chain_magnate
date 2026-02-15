@@ -36,25 +36,52 @@ static func run(player_count: int = 3, seed: int = 12345) -> Result:
 	# - P1: CEO + 1 名经理（executive_vice_president，提供 10 个经理卡槽） => 空位最大
 	# - P2: 仅 CEO => 3 空位
 	state = engine.get_state()
-	# 说明：这里直接改写 employees 用于构造局面，需要同步 employee_pool，
-	# 保证“员工供应池守恒”不变量不被测试用例破坏。
+	# 新规则：在岗员工由 company_structure.structure 决定；submit_restructuring 会从 structure 同步 employees/reserve。
+	# 因此这里构造：
+	# - 把目标员工放入 reserve_employees（表示“拥有但未激活”）
+	# - 同时写入 company_structure.structure（表示“本回合在岗”）
+	# 并同步 employee_pool，保证“员工供应池守恒”不变量不被测试用例破坏。
 	for pid0 in range(player_count):
-		var old_emps: Array = state.players[pid0].get("employees", [])
-		for emp in old_emps:
-			if state.employee_pool.has(emp):
-				state.employee_pool[emp] = int(state.employee_pool.get(emp, 0)) + 1
+		for key in ["employees", "reserve_employees"]:
+			var old_list: Array = state.players[pid0].get(key, [])
+			for emp in old_list:
+				if state.employee_pool.has(emp):
+					state.employee_pool[emp] = int(state.employee_pool.get(emp, 0)) + 1
+		state.players[pid0]["employees"] = ["ceo"]
+		state.players[pid0]["reserve_employees"] = []
 
-	var new_emps := {
-		0: ["ceo", "recruiting_girl", "trainer", "burger_cook"],
-		1: ["ceo", "executive_vice_president"],
-		2: ["ceo"]
+	var reserve_by_pid := {
+		0: ["recruiting_girl", "trainer", "burger_cook"],
+		1: ["executive_vice_president"],
+		2: []
 	}
-	for pid1 in new_emps:
-		var list: Array = new_emps[pid1]
-		state.players[pid1]["employees"] = list
-		for emp in list:
+
+	var structure_by_pid := {
+		0: [
+			{"employee_id": "recruiting_girl", "reports": []},
+			{"employee_id": "trainer", "reports": []},
+			{"employee_id": "burger_cook", "reports": []},
+		],
+		1: [
+			{"employee_id": "executive_vice_president", "reports": []},
+			{"employee_id": "", "reports": []},
+			{"employee_id": "", "reports": []},
+		],
+		2: []
+	}
+
+	for pid1 in reserve_by_pid:
+		var reserve_list: Array = reserve_by_pid[pid1]
+		state.players[pid1]["reserve_employees"] = reserve_list
+		for emp in reserve_list:
 			if state.employee_pool.has(emp):
 				state.employee_pool[emp] = int(state.employee_pool.get(emp, 0)) - 1
+
+		var cs_val = state.players[pid1].get("company_structure", null)
+		if cs_val is Dictionary:
+			var cs: Dictionary = cs_val
+			cs["structure"] = structure_by_pid.get(pid1, [])
+			state.players[pid1]["company_structure"] = cs
 
 	# Restructuring -> OrderOfBusiness：应计算 selection_order，并初始化 picks
 	for pid2 in range(player_count):

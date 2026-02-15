@@ -244,23 +244,27 @@ func on_hand_card_dropped(employee_id: String, target: Control) -> void:
 	if _scene != null:
 		var hand_area = _scene.get("hand_area")
 		if hand_area is HandArea:
-			var ha: HandArea = hand_area
-			var mode := ""
-			if ha.has_method("get_display_mode"):
-				mode = str(ha.call("get_display_mode"))
+				var ha: HandArea = hand_area
+				var mode := ""
+				if ha.has_method("get_display_mode"):
+					mode = str(ha.call("get_display_mode"))
 
-			# In restructuring, allow dropping anywhere within the reserve scroll area (issue_tracker #46).
-			if mode == "restructuring":
-				if target.is_in_group("hand_area_reserve_drop_target"):
-					to_reserve = true
-				elif is_instance_valid(ha.reserve_container):
-					to_reserve = (target == ha.reserve_container) or ha.reserve_container.is_ancestor_of(target) or target.is_ancestor_of(ha.reserve_container)
-			else:
-				if is_instance_valid(ha.reserve_container):
-					to_reserve = (target == ha.reserve_container) or ha.reserve_container.is_ancestor_of(target) or target.is_ancestor_of(ha.reserve_container)
-				if is_instance_valid(ha.active_container):
-					if (target == ha.active_container) or ha.active_container.is_ancestor_of(target) or target.is_ancestor_of(ha.active_container):
-						to_reserve = false
+				# In restructuring, allow dropping anywhere within the reserve scroll area (issue_tracker #46).
+				if mode == "restructuring":
+					if target.is_in_group("hand_area_reserve_drop_target"):
+						to_reserve = true
+					elif is_instance_valid(ha.reserve_container):
+						to_reserve = (target == ha.reserve_container) or ha.reserve_container.is_ancestor_of(target) or target.is_ancestor_of(ha.reserve_container)
+					# 新规则：不允许“把待命员工拖到 active 区”来激活；激活仅由放入 company_structure 完成。
+					# 因此在重组模式下，除了拖回待命区以外，其它落点一律忽略（卡片会回弹）。
+					if not to_reserve:
+						return
+				else:
+					if is_instance_valid(ha.reserve_container):
+						to_reserve = (target == ha.reserve_container) or ha.reserve_container.is_ancestor_of(target) or target.is_ancestor_of(ha.reserve_container)
+					if is_instance_valid(ha.active_container):
+						if (target == ha.active_container) or ha.active_container.is_ancestor_of(target) or target.is_ancestor_of(ha.active_container):
+							to_reserve = false
 
 	var move_r: Result = _execute_command.call(Command.create("restructure_employee", actor_id, {
 		"employee_id": employee_id,
@@ -535,4 +539,3 @@ func _get_effective_view_player_id(state: GameState, requested_view_id: int) -> 
 	if requested_view_id >= 0 and requested_view_id < state.players.size():
 		return requested_view_id
 	return state.get_current_player_id()
-

@@ -31,35 +31,26 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if r2.ok:
 		return Result.failure("无招聘员时不应允许第二次招聘（应受 CEO 1 次限制）")
 
-	# 2) 结束一整回合，进入下一回合 Restructuring：待命员工需要在重组阶段手动激活
+	# 2) 结束一整回合，进入下一回合 Restructuring：只有放入公司结构的员工才算在岗
 	var to_restructuring := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_RESTRUCTURING, 50)
 	if not to_restructuring.ok:
 		return to_restructuring
 
-	# 轮转到 first_actor（不写入 pass）
-	var safety2 := 0
-	while engine.get_state().get_current_player_id() != first_actor:
-		safety2 += 1
-		if safety2 > 20:
-			return Result.failure("轮转到目标玩家超出安全上限（Restructuring）")
-		var pid_turn := engine.get_state().get_current_player_id()
-		var end_turn := engine.execute_command(Command.create(ActionIdsClass.END_TURN, pid_turn))
-		if not end_turn.ok:
-			return Result.failure("end_turn 失败: %s" % end_turn.error)
-		if engine.get_state().phase != DefsClass.PHASE_RESTRUCTURING:
-			return Result.failure("轮转玩家时不应离开 Restructuring")
-
-	var activate := engine.execute_command(Command.create("restructure_employee", first_actor, {"employee_id": "recruiting_girl", "to_reserve": false}))
-	if not activate.ok:
-		return Result.failure("重组激活 recruiting_girl 失败: %s" % activate.error)
+	# 将 recruiting_girl 放入 CEO 直属槽，视为在岗（本回合公司结构的真值）
+	var place := engine.execute_command(Command.create("set_company_structure_direct", first_actor, {
+		"slot_index": 0,
+		"employee_id": "recruiting_girl"
+	}))
+	if not place.ok:
+		return Result.failure("重组放置 recruiting_girl 失败: %s" % place.error)
 
 	var p := engine.get_state().get_player(first_actor)
 	var active: Array = p.get("employees", [])
 	var reserve: Array = p.get("reserve_employees", [])
 	if not active.has("recruiting_girl"):
-		return Result.failure("重组后应激活待命员工 recruiting_girl")
+		return Result.failure("重组放置后 recruiting_girl 应在岗")
 	if reserve.has("recruiting_girl"):
-		return Result.failure("重组后 recruiting_girl 不应仍在待命区")
+		return Result.failure("重组放置后 recruiting_girl 不应仍在待命区")
 
 	# 3) 推进到下一次 Working / Recruit：人力资源专员应提供额外次数（共 2 次）
 	var to_working2 := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 50)

@@ -93,18 +93,65 @@ func _on_restructuring_before_enter(state: GameState) -> Result:
 		"finalized": false
 	}
 
-	# 进入重组时清空上一回合结构（本回合以提交时的结构为准）
+	# 进入重组时：
+	# - 清空上一回合结构（本回合以提交时的结构为准）
+	# - 将除 CEO 外的在岗员工全部转入待命区（只有放入公司结构中的员工才算“在岗”）
 	for pid2 in range(state.players.size()):
 		var p_val = state.players[pid2]
 		if not (p_val is Dictionary):
 			return Result.failure("base_rules:restructuring_before_enter: players[%d] 类型错误（期望 Dictionary）" % pid2)
 		var p: Dictionary = p_val
+
+		if not p.has("employees") or not (p["employees"] is Array):
+			return Result.failure("base_rules:restructuring_before_enter: player[%d].employees 缺失或类型错误（期望 Array）" % pid2)
+		if not p.has("reserve_employees") or not (p["reserve_employees"] is Array):
+			return Result.failure("base_rules:restructuring_before_enter: player[%d].reserve_employees 缺失或类型错误（期望 Array）" % pid2)
+		if not p.has("busy_marketers") or not (p["busy_marketers"] is Array):
+			return Result.failure("base_rules:restructuring_before_enter: player[%d].busy_marketers 缺失或类型错误（期望 Array）" % pid2)
+
+		var employees: Array = p["employees"]
+		var reserve: Array = p["reserve_employees"]
+		var busy: Array = p["busy_marketers"]
+
+		var has_ceo := false
+		var moved: Array[String] = []
+		for i in range(employees.size()):
+			var emp_val = employees[i]
+			if not (emp_val is String):
+				return Result.failure("base_rules:restructuring_before_enter: player[%d].employees[%d] 类型错误（期望 String）" % [pid2, i])
+			var emp_id: String = str(emp_val).strip_edges()
+			if emp_id.is_empty():
+				return Result.failure("base_rules:restructuring_before_enter: player[%d].employees[%d] 不能为空" % [pid2, i])
+			if emp_id == "ceo":
+				has_ceo = true
+				continue
+			# 忙碌营销员不参与在岗/待命切换（理论上不在 employees；此处仅做容错去重）
+			if busy.has(emp_id):
+				continue
+			moved.append(emp_id)
+
+		# CEO 必须存在：若被错误放入待命区，纠正回在岗
+		if not has_ceo:
+			if reserve.has("ceo"):
+				has_ceo = true
+			else:
+				return Result.failure("base_rules:restructuring_before_enter: player[%d] 缺少 CEO（在岗/待命均未找到）" % pid2)
+
+		# 确保 CEO 仅在在岗区
+		while reserve.has("ceo"):
+			reserve.erase("ceo")
+
+		# 重置在岗区为仅 CEO，其余全部进入待命区（按实例数搬运）
+		p["employees"] = ["ceo"]
+		reserve.append_array(moved)
+		p["reserve_employees"] = reserve
+
 		var cs_val = p.get("company_structure", null)
 		if cs_val is Dictionary:
 			var cs: Dictionary = cs_val
 			cs["structure"] = []
 			p["company_structure"] = cs
-			state.players[pid2] = p
+		state.players[pid2] = p
 
 	# 固定从 turn_order[0] 开始（重组为同时阶段；hotseat 顺序仅为 UI/输入便利）
 	state.current_player_index = 0
