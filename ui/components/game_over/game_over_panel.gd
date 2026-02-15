@@ -331,13 +331,6 @@ class RankingItem extends PanelContainer:
 	var _cash_label: Label
 	var _crown_label: Label
 
-	const RANK_COLORS: Array[Color] = [
-		Color("#ffd700"),  # 金色 - 第1名
-		Color("#c0c0c0"),  # 银色 - 第2名
-		Color("#cd7f32"),  # 铜色 - 第3名
-		Color("#808080"),  # 灰色 - 其他
-	]
-
 	func _ready() -> void:
 		_build_ui()
 
@@ -362,8 +355,7 @@ class RankingItem extends PanelContainer:
 		_rank_label = Label.new()
 		_rank_label.custom_minimum_size = Vector2(60, 0)
 		_rank_label.add_theme_font_size_override("font_size", 20)
-		var rank_color_idx := mini(rank - 1, RANK_COLORS.size() - 1)
-		_rank_label.add_theme_color_override("font_color", RANK_COLORS[rank_color_idx])
+		UiStylesClass.apply_label_dark(_rank_label)
 		_rank_label.text = "#%d" % rank
 		hbox.add_child(_rank_label)
 

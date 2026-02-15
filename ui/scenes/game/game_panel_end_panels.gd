@@ -7,6 +7,8 @@ const BankBreakPanelScene = preload("res://ui/components/bank_break/bank_break_p
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
+const REPLAY_SAVES_DIR := "user://saves"
+
 var _scene = null
 var _overlay_controller = null
 var _execute_command: Callable
@@ -20,6 +22,8 @@ var _last_bank_broke_count: int = 0
 var payday_panel = null
 var game_over_panel = null
 var bank_break_panel = null
+
+var _game_over_replay_save_path: String = ""
 
 func _init(scene, overlay_controller, execute_command: Callable, hide_all: Callable, center_popup: Callable, refresh_ui: Callable) -> void:
 	_scene = scene
@@ -242,6 +246,9 @@ func _show_game_over() -> void:
 	else:
 		game_over_panel.visible = true
 
+	if _game_over_replay_save_path.is_empty():
+		_game_over_replay_save_path = _build_game_over_replay_save_path()
+
 func _on_fire_employees(items: Array) -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
@@ -292,10 +299,47 @@ func _on_game_over_play_again() -> void:
 	SceneManager.goto_game()
 
 func _on_game_over_save_replay() -> void:
-	if _scene == null:
+	if _scene == null or _scene.game_engine == null:
 		return
-	if _scene.has_method("_open_replay_save_dialog"):
-		_scene.call("_open_replay_save_dialog")
+	var path := str(_game_over_replay_save_path).strip_edges()
+	if path.is_empty():
+		path = _build_game_over_replay_save_path()
+		_game_over_replay_save_path = path
+
+	if not _ensure_replay_saves_dir():
+		_toast("回放保存失败：无法创建存档目录")
+		return
+
+	var result: Result = _scene.game_engine.save_to_file(path)
+	if not result.ok:
+		_toast("回放保存失败：%s" % str(result.error))
+		return
+
+	_toast("回放已保存：%s" % path.get_file())
+
+func _build_game_over_replay_save_path() -> String:
+	var ts := str(Time.get_datetime_string_from_system()).strip_edges()
+	if ts.is_empty():
+		ts = "game_over"
+	ts = ts.replace(" ", "T")
+	ts = ts.replace(":", "-")
+	ts = ts.replace("/", "-")
+	ts = ts.replace("\\", "-")
+	ts = ts.replace("..", "_")
+	return "%s/%s.json" % [REPLAY_SAVES_DIR, ts]
+
+func _ensure_replay_saves_dir() -> bool:
+	var abs_dir := ProjectSettings.globalize_path(REPLAY_SAVES_DIR)
+	if DirAccess.dir_exists_absolute(abs_dir):
+		return true
+	var err := DirAccess.make_dir_recursive_absolute(abs_dir)
+	return err == OK and DirAccess.dir_exists_absolute(abs_dir)
+
+func _toast(msg: String) -> void:
+	if _overlay_controller == null:
+		return
+	if _overlay_controller.has_method("show_toast"):
+		_overlay_controller.call("show_toast", str(msg).strip_edges())
 
 func _on_bank_break_acknowledged() -> void:
 	if _hide_all.is_valid():
