@@ -228,6 +228,7 @@ func _show_game_over() -> void:
 
 	if game_over_panel == null:
 		game_over_panel = GameOverPanelScene.instantiate()
+		game_over_panel.z_index = 1400
 		game_over_panel.return_to_menu_requested.connect(_on_game_over_return)
 		game_over_panel.play_again_requested.connect(_on_game_over_play_again)
 		_scene.add_child(game_over_panel)

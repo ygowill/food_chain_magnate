@@ -46,10 +46,11 @@ func set_final_state(state: GameState) -> void:
 
 func show_with_animation() -> void:
 	visible = true
-	modulate = Color(1, 1, 1, 0)
+	# 先确保可见，避免 tween 未运行时出现“透明但吃输入”的软锁。
+	modulate = Color(1, 1, 1, 1)
 
 	var tween := create_tween()
-	tween.tween_property(self, "modulate", Color(1, 1, 1, 1), 0.5)
+	tween.tween_property(self, "modulate", Color(1, 1, 1, 1), 0.5).from(Color(1, 1, 1, 0))
 
 func _calculate_rankings() -> void:
 	_player_rankings.clear()
