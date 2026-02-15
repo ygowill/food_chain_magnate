@@ -122,6 +122,9 @@ func _sync_payday_panel(state: GameState, force_full_refresh: bool = false) -> v
 func show_payday_panel() -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
+	var cur_state = _scene.game_engine.get_state()
+	if cur_state == null or cur_state.phase != DefsClass.PHASE_PAYDAY:
+		return
 	if _hide_all.is_valid():
 		_hide_all.call()
 
@@ -134,7 +137,7 @@ func show_payday_panel() -> void:
 		payday_panel.pay_confirmed.connect(_on_pay_confirmed)
 		_scene.add_child(payday_panel)
 
-	var state = _scene.game_engine.get_state()
+	var state = cur_state
 	var current_player: Dictionary = state.get_current_player()
 	var current_player_id: int = int(state.get_current_player_id())
 
@@ -255,7 +258,15 @@ func _on_pay_confirmed() -> void:
 		return
 	if _hide_all.is_valid():
 		_hide_all.call()
-	_execute_command.call(Command.create_system(ActionIdsClass.ADVANCE_PHASE))
+	if _scene == null or _scene.game_engine == null:
+		return
+	var state = _scene.game_engine.get_state()
+	if state == null:
+		return
+	var current_player_id: int = int(state.get_current_player_id())
+	_execute_command.call(Command.create(ActionIdsClass.SKIP, current_player_id, {}))
+	if is_instance_valid(payday_panel):
+		show_payday_panel()
 
 func _on_game_over_return() -> void:
 	Globals.reset_game_config()

@@ -88,24 +88,23 @@ func set_display_mode(mode: String) -> void:
 
 func _sync_drop_target_groups() -> void:
 	# Drop targets are used by both HandArea and CompanyStructure drag logic via the shared group name.
-	# In restructuring mode, allow dropping within the reserve section area to send employees to reserve.
+	# In restructuring mode, allow dropping anywhere within the reserve scroll area to send employees to reserve.
 	if reserve_container != null:
 		reserve_container.add_to_group("employee_card_drop_target")
 
 	if active_container != null:
-		active_container.add_to_group("employee_card_drop_target")
-
-	if reserve_section != null:
 		if _display_mode == "restructuring":
-			reserve_section.add_to_group("employee_card_drop_target")
-			reserve_section.add_to_group("hand_area_reserve_drop_target")
+			active_container.remove_from_group("employee_card_drop_target")
 		else:
-			reserve_section.remove_from_group("employee_card_drop_target")
-			reserve_section.remove_from_group("hand_area_reserve_drop_target")
+			active_container.add_to_group("employee_card_drop_target")
 
 	if scroll_container != null:
-		scroll_container.remove_from_group("employee_card_drop_target")
-		scroll_container.remove_from_group("hand_area_reserve_drop_target")
+		if _display_mode == "restructuring":
+			scroll_container.add_to_group("employee_card_drop_target")
+			scroll_container.add_to_group("hand_area_reserve_drop_target")
+		else:
+			scroll_container.remove_from_group("employee_card_drop_target")
+			scroll_container.remove_from_group("hand_area_reserve_drop_target")
 
 func get_selected_employees() -> Array[String]:
 	return _selected_ids.duplicate()
@@ -123,9 +122,9 @@ func _rebuild_cards() -> void:
 	_clear_container_children(busy_container)
 	_cards.clear()
 
-	var show_active := true
+	var show_active := (_display_mode != "restructuring")
 	var show_reserve := true
-	var show_busy := (_display_mode != "restructuring")
+	var show_busy := true
 
 	# 创建在岗员工卡牌
 	if show_active:
@@ -133,6 +132,9 @@ func _rebuild_cards() -> void:
 
 	# 创建待命区员工卡牌
 	if show_reserve:
+		if _display_mode == "restructuring":
+			# 重组：把在岗员工与待命员工统一显示在待命区（公司结构面板才是“在岗归属”）
+			_build_cards_for_container(_active_employees, reserve_container, false)
 		_build_cards_for_container(_reserve_employees, reserve_container, false)
 
 	# 创建忙碌营销员卡牌

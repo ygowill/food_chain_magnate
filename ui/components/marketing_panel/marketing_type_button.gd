@@ -86,6 +86,10 @@ func update_display() -> void:
 
 	if _name_label != null:
 		_name_label.text = str(type_def.get("name", type_id))
+		if is_available:
+			_name_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
+		else:
+			_name_label.add_theme_color_override("font_color", Color(0.6, 0.5, 0.5, 1))
 
 	if _count_label != null:
 		if is_available:

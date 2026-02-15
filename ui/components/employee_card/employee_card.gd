@@ -562,22 +562,22 @@ func _update_style() -> void:
 		style.bg_color = bg
 		style.border_color = Color(0.55, 0.55, 0.6, 0.9)
 		style.set_border_width_all(1)
-		style.shadow_color = Color(0, 0, 0, 0.25)
-		style.shadow_size = 6
+		style.shadow_color = Color(0, 0, 0, 0)
+		style.shadow_size = 0
 		modulate = Color(0.8, 0.8, 0.8, 0.85)
 	elif _selected:
 		style.bg_color = bg
 		style.border_color = Color(0.5, 0.8, 1.0, 0.95)
 		style.set_border_width_all(2)
-		style.shadow_color = Color(0, 0, 0, 0.35)
-		style.shadow_size = 8
+		style.shadow_color = Color(0, 0, 0, 0)
+		style.shadow_size = 0
 		modulate = Color(1, 1, 1, 1)
 	else:
 		style.bg_color = bg
 		style.border_color = Color(base_color.r, base_color.g, base_color.b, 0.65)
 		style.set_border_width_all(1 if variant == CardVariant.COMPACT else 2)
-		style.shadow_color = Color(0, 0, 0, 0.25)
-		style.shadow_size = 6 if variant == CardVariant.COMPACT else 10
+		style.shadow_color = Color(0, 0, 0, 0)
+		style.shadow_size = 0
 		modulate = Color(1, 1, 1, 1)
 
 	style.set_corner_radius_all(8 if variant == CardVariant.FULL else 4)

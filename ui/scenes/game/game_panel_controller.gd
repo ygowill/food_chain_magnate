@@ -728,16 +728,70 @@ func _update_ui_components(state: GameState) -> void:
 
 	# 员工手牌区
 	if is_instance_valid(_scene.hand_area) and _scene.hand_area.has_method("set_employees"):
-		var employees: Array[String] = []
+		var employees_raw: Array[String] = []
 		var reserve: Array[String] = []
 		var busy: Array[String] = []
 
 		for e in Array(view_player.get("employees", [])):
-			employees.append(str(e))
+			var eid := str(e).strip_edges()
+			if not eid.is_empty():
+				employees_raw.append(eid)
 		for e in Array(view_player.get("reserve_employees", [])):
-			reserve.append(str(e))
+			var rid := str(e).strip_edges()
+			if not rid.is_empty():
+				reserve.append(rid)
 		for e in Array(view_player.get("busy_marketers", [])):
-			busy.append(str(e))
+			var bid := str(e).strip_edges()
+			if not bid.is_empty():
+				busy.append(bid)
+
+		# UI 展示规则：
+		# - CEO 不显示在手牌区（避免重复信息；CEO 始终可在公司结构视图中看到）
+		# - 忙碌营销员仅在 busy 区域展示，避免在 employees 与 busy 两处重复出现
+		# - 已放入 company_structure 的员工不在“在岗员工”区重复展示（他们属于公司结构而非待分配手牌）
+		var busy_remaining: Dictionary = {}
+		for bid2 in busy:
+			busy_remaining[bid2] = int(busy_remaining.get(bid2, 0)) + 1
+
+		var assigned_remaining: Dictionary = {}
+		var cs_val = view_player.get("company_structure", null)
+		if cs_val is Dictionary:
+			var cs: Dictionary = cs_val
+			var struct_val = cs.get("structure", null)
+			if struct_val is Array:
+				for entry_val in struct_val:
+					if not (entry_val is Dictionary):
+						continue
+					var entry: Dictionary = entry_val
+					var mid := str(entry.get("employee_id", "")).strip_edges()
+					if not mid.is_empty():
+						assigned_remaining[mid] = int(assigned_remaining.get(mid, 0)) + 1
+					var reps_val = entry.get("reports", null)
+					if reps_val is Array:
+						for rep_val in reps_val:
+							if not (rep_val is String):
+								continue
+							var rid2 := str(rep_val).strip_edges()
+							if rid2.is_empty():
+								continue
+							assigned_remaining[rid2] = int(assigned_remaining.get(rid2, 0)) + 1
+
+		var employees: Array[String] = []
+		for eid2 in employees_raw:
+			if eid2 == "ceo":
+				continue
+
+			var remain_busy := int(busy_remaining.get(eid2, 0))
+			if remain_busy > 0:
+				busy_remaining[eid2] = remain_busy - 1
+				continue
+
+			var remain_assigned := int(assigned_remaining.get(eid2, 0))
+			if remain_assigned > 0:
+				assigned_remaining[eid2] = remain_assigned - 1
+				continue
+
+			employees.append(eid2)
 
 		_scene.hand_area.set_employees(employees, reserve, busy)
 
