@@ -117,6 +117,13 @@ func _sync_payday_panel(state: GameState, force_full_refresh: bool = false) -> v
 		var discount: int = int(round_state.get("salary_discount", 0))
 		payday_panel.set_discount(discount)
 
+	# 薪资为 0：直接跳过，不展示面板。
+	if payday_panel.has_method("calculate_total"):
+		if int(payday_panel.calculate_total()) <= 0:
+			payday_panel.visible = false
+			_on_pay_confirmed()
+			return
+
 func show_payday_panel() -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
@@ -151,6 +158,12 @@ func show_payday_panel() -> void:
 		var round_state: Dictionary = state.round_state
 		var discount: int = int(round_state.get("salary_discount", 0))
 		payday_panel.set_discount(discount)
+
+	# 薪资为 0：直接跳过，不展示面板。
+	if payday_panel != null and is_instance_valid(payday_panel) and payday_panel.has_method("calculate_total"):
+		if int(payday_panel.calculate_total()) <= 0:
+			_on_pay_confirmed()
+			return
 
 	if _center_popup.is_valid():
 		_center_popup.call(payday_panel)

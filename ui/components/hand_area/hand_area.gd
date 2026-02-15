@@ -9,9 +9,7 @@ signal card_dropped(employee_id: String, target: Control)
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
-const RESTRUCTURING_TARGET_WIDTH := 520.0 # ~3x compact cards (scale 1.25) + spacing (issue_tracker #45)
-
-@export var card_display_scale: float = 1.0
+const RESTRUCTURING_TARGET_WIDTH := 440.0 # ~3x compact cards + spacing (issue_tracker #45)
 
 @onready var active_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ActiveSection/ActiveContainer
 @onready var reserve_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ReserveSection/ReserveContainer
@@ -164,7 +162,6 @@ func _build_cards_for_container(employee_ids: Array[String], container: Control,
 
 	for emp_id in employee_ids:
 		var card := EmployeeCardClass.new()
-		card.set_display_scale(card_display_scale)
 		card.employee_id = emp_id
 		card.draggable = (not is_busy) and _drag_enabled and emp_id != "ceo"
 
@@ -262,6 +259,16 @@ func _process(_delta: float) -> void:
 	if viewport == null:
 		return
 	var mouse_pos := viewport.get_mouse_position()
+
+	# 兜底：鼠标松开时可能不会再收到 source_card 的 gui_input（例如拖拽后光标不在卡上）。
+	# 这里统一在 HandArea 侧完成 drop + 清理，避免“卡片一直跟随鼠标/无法放置”。
+	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		var emp_id := _dragging_employee_id
+		var target := _find_drop_target(mouse_pos)
+		_end_drag_visuals()
+		if not emp_id.is_empty() and target != null:
+			card_dropped.emit(emp_id, target)
+		return
 	_drag_preview.position = mouse_pos - _drag_preview_offset
 
 	var target := _find_drop_target(mouse_pos)

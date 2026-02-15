@@ -11,7 +11,7 @@ signal player_selected(player_id: int)
 @onready var player_buttons_host: HBoxContainer = $Panel/MarginContainer/VBoxContainer/PlayerRow/PlayerButtons
 @onready var split: HSplitContainer = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split
 
-const RESTRUCTURING_HAND_TARGET_WIDTH := 520.0 # fits 3 compact cards/row at scale 1.25 (issue_tracker #45)
+const RESTRUCTURING_HAND_TARGET_WIDTH := 460.0 # fits 3 compact cards/row with margins (issue_tracker #45)
 const _MAX_SPLIT_ADJUST_ATTEMPTS := 6
 
 var _hand_area: Node = null
@@ -40,6 +40,8 @@ func open(_covered_rect: Rect2) -> void:
 		size_guess = Vector2(1280, 720)
 	var rect := Rect2(Vector2.ZERO, size_guess)
 	super.open(rect)
+	if is_instance_valid(hand_host):
+		hand_host.custom_minimum_size.x = RESTRUCTURING_HAND_TARGET_WIDTH
 	_queue_apply_split_target_width()
 
 func _center_panel() -> void:
@@ -158,6 +160,8 @@ func _apply_split_target_width() -> void:
 func attach_hand_area(panel: Node) -> void:
 	_hand_area = panel
 	_apply_hand_area_display_mode()
+	if is_instance_valid(hand_host):
+		hand_host.custom_minimum_size.x = RESTRUCTURING_HAND_TARGET_WIDTH
 	_attach_panel_to_host(panel, hand_host)
 
 func attach_company_structure(panel: Node) -> void:
