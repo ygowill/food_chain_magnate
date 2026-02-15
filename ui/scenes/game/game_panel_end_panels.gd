@@ -46,6 +46,12 @@ func reset_bank_break_tracking(state: GameState) -> void:
 func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	_sync_payday_panel(state, force_full_refresh)
 
+	var is_replay_mode := false
+	if _scene != null and _scene.has_method("is_replay_mode_active"):
+		var rm = _scene.call("is_replay_mode_active")
+		if rm is bool:
+			is_replay_mode = bool(rm)
+
 	var is_timeline_read_only := false
 	if _scene != null and _scene.has_method("is_timeline_read_only_active"):
 		var v = _scene.call("is_timeline_read_only_active")
@@ -53,9 +59,7 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 			is_timeline_read_only = bool(v)
 	elif _scene != null and _scene.has_method("is_replay_mode_active"):
 		# Backwards-compat fallback.
-		var v2 = _scene.call("is_replay_mode_active")
-		if v2 is bool:
-			is_timeline_read_only = bool(v2)
+		is_timeline_read_only = is_replay_mode
 
 	# 回放/复盘（只读时间线）：不要弹出 BankBreak/GameOver 这类“强提示”面板，避免阻塞时间线回放；
 	# 但仍保持 tracking 同步，防止返回最新后错误触发弹窗。
@@ -67,7 +71,11 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 
 		if is_instance_valid(bank_break_panel):
 			bank_break_panel.visible = false
-		if is_instance_valid(game_over_panel):
+		# 例外：手动回放导致的“只读时间线”下，若真实对局已到 GameOver，
+		# 仍应允许展示 GameOver 面板（提供返回主菜单/再来一局入口），避免软锁。
+		if not is_replay_mode and state != null and str(state.phase) == DefsClass.PHASE_GAME_OVER:
+			_show_game_over()
+		elif is_instance_valid(game_over_panel):
 			game_over_panel.visible = false
 		return
 

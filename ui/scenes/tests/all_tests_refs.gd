@@ -183,3 +183,4 @@ const DinnertimeDistanceEntryBoundaryTestClass = preload("res://core/tests/dinne
 const BankruptcyTestClass = preload("res://core/tests/bankruptcy_test.gd")
 const ModuleProductIconsLoadedTestClass = preload("res://ui/scenes/tests/module_product_icons_loaded_test.gd")
 const ReserveAreaSupplyVisualsTestClass = preload("res://ui/scenes/tests/reserve_area_supply_visuals_test.gd")
+const GameOverPanelReadOnlyTestClass = preload("res://ui/scenes/tests/game_over_panel_read_only_test.gd")

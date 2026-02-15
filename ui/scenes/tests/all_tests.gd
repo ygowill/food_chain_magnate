@@ -452,6 +452,10 @@ func _run_all() -> int:
 					"fn": func() -> Result: return TestRefs.LogRestoreAfterLoadTestClass.run(),
 				},
 				{
+					"name": "GameOverPanelReadOnlyTest",
+					"fn": func() -> Result: return TestRefs.GameOverPanelReadOnlyTestClass.run(),
+				},
+				{
 					"name": "ProductionPanelUsedCountsSyncTest",
 					"fn": func() -> Result: return TestRefs.ProductionPanelUsedCountsSyncTestClass.run(),
 				},
