@@ -295,6 +295,10 @@ func _get_display_structure() -> Array:
 
 	var structure_val = cs.get("structure", null)
 	if structure_val is Array:
+		# 若明确写入空结构（例如进入重组阶段时被清空），应展示为空；
+		# 不应再根据 employees 自动生成预览，否则看起来像“结构未清理”。
+		if (structure_val as Array).is_empty():
+			return []
 		var pref_arr: Array = structure_val
 		var preferred_direct: Array[String] = []
 		var preferred_reports_by_slot := {}

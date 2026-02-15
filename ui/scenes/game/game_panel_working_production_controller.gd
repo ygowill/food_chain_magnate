@@ -22,6 +22,8 @@ var _center_popup: Callable = Callable()
 var _procure_controller = null
 
 var production_panel = null
+var _last_context_token: String = ""
+var _last_production_type: String = ""
 
 func _init(scene, map_controller, overlay_controller, execute_command: Callable, hide_all: Callable, center_popup: Callable) -> void:
 	_scene = scene
@@ -37,6 +39,8 @@ func hide() -> void:
 		production_panel.visible = false
 	if _procure_controller != null and _procure_controller.has_method("clear_procure_restaurant_choice_ui_and_overlays"):
 		_procure_controller.call("clear_procure_restaurant_choice_ui_and_overlays")
+	_last_context_token = ""
+	_last_production_type = ""
 
 func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	if state == null:
@@ -56,23 +60,30 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 			_procure_controller.call("clear_procure_restaurant_choice_ui_and_overlays")
 		return
 
-	if force_full_refresh:
-		var current_player: Dictionary = state.get_current_player()
-		var production_type := "food" if state.sub_phase == DefsClass.SUB_PHASE_GET_FOOD else "drinks"
+	var current_player: Dictionary = state.get_current_player()
+	var production_type := "food" if state.sub_phase == DefsClass.SUB_PHASE_GET_FOOD else "drinks"
+	var context_token := "%d|%d|%s|%s" % [
+		int(state.get_current_player_id()),
+		int(state.round_number),
+		str(state.phase),
+		str(state.sub_phase),
+	]
+	var needs_refresh := force_full_refresh or (production_type != _last_production_type) or (context_token != _last_context_token)
+	_last_production_type = production_type
+	_last_context_token = context_token
+
+	# Always keep usage token in sync so the panel can reset per-round/per-subphase UI state when needed.
+	if production_panel.has_method("set_usage_token"):
+		production_panel.set_usage_token(context_token)
+
+	if needs_refresh:
 
 		# 记录“回合/子阶段/玩家”上下文：用于 ProductionPanel 跨关闭/重开保持“本次用了哪张卡”的禁用态；
 		# 当上下文变化（换人/换回合/换子阶段）时自动清空。
-		if production_panel.has_method("set_usage_token"):
-			var token := "%d|%d|%s|%s" % [
-				int(state.get_current_player_id()),
-				int(state.round_number),
-				str(state.phase),
-				str(state.sub_phase),
-			]
-			production_panel.set_usage_token(token)
-
 		if production_panel.has_method("set_production_type"):
 			production_panel.set_production_type(production_type)
+			if is_instance_valid(production_panel):
+				production_panel.set_meta("production_type", production_type)
 		if is_instance_valid(production_panel):
 			production_panel.set_meta("popup_title", "生产" if production_type == "food" else "采购")
 
@@ -147,6 +158,10 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 				production_panel.set_available_drink_types(_get_all_drink_types())
 			if production_panel.has_method("set_drinks_procurement_state"):
 				production_panel.set_drinks_procurement_state(0, false, "")
+
+	# Inventory changes frequently; keep it fresh even without a full refresh.
+	if production_panel != null and is_instance_valid(production_panel) and production_panel.has_method("set_current_inventory"):
+		production_panel.set_current_inventory(current_player.get("inventory", {}))
 
 	if state.sub_phase != DefsClass.SUB_PHASE_GET_DRINKS:
 		if _procure_controller != null:

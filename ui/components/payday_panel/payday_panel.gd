@@ -10,6 +10,8 @@ signal right_panel_footer_changed()
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
+const EffectIdsSegmentInvokerClass = preload("res://core/rules/effect_ids_segment_invoker.gd")
+const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
@@ -43,6 +45,7 @@ var _base_custom_minimum_size: Vector2 = Vector2.ZERO
 
 var _state: GameState = null
 var _player_id: int = -1
+var _effect_registry = null
 
 func set_embedded_in_right_panel(embedded: bool) -> void:
 	_embedded_in_right_panel = embedded
@@ -87,14 +90,18 @@ func _ready() -> void:
 	UiStylesClass.apply_button_primary(pay_btn)
 	UiStylesClass.apply_button_secondary(fire_btn)
 	_apply_embedding_layout()
+	# show_payday_panel 可能在节点 _ready 前调用 set_context/set_employees；
+	# 这里补一次 refresh，确保 summary/明细在首次显示时已正确渲染。
+	refresh()
 	right_panel_footer_changed.emit()
 
 func set_employee_registry(registry) -> void:
 	_employee_registry = registry
 
-func set_context(state: GameState, player_id: int) -> void:
+func set_context(state: GameState, player_id: int, effect_registry = null) -> void:
 	_state = state
 	_player_id = player_id
+	_effect_registry = effect_registry
 	if _state != null and _player_id >= 0:
 		var player := _state.get_player(_player_id)
 		if not player.is_empty():
@@ -292,34 +299,81 @@ func _compute_breakdown(player: Dictionary) -> Dictionary:
 	var paid_employee_count := EmployeeRulesClass.count_paid_employees(player)
 	var base_due_amount: int = paid_employee_count * maxi(0, salary_cost)
 
+	var milestones: Array = []
 	var milestones_read := PlayerStateAccessClass.require_milestones(player, "player", "PaydayPanel: ")
-	if not milestones_read.ok:
-		return {}
-	var milestones: Array = milestones_read.value
+	if milestones_read.ok:
+		milestones = milestones_read.value
+	elif player.has("milestones") and (player["milestones"] is Array):
+		milestones = player["milestones"]
 
 	var delta_entries: Array[Dictionary] = []
 	var delta_total := 0
-	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(milestones, "salary_total_delta", "PaydayPanel: ", "player.milestones")
-	if entries_read.ok:
-		for entry_val in Array(entries_read.value):
-			if not (entry_val is Dictionary):
-				continue
-			var entry: Dictionary = entry_val
-			var eff_val = entry.get("effect", null)
-			if not (eff_val is Dictionary):
-				continue
-			var eff: Dictionary = eff_val
-			var v_val = eff.get("value", 0)
-			if v_val is int:
-				var v := int(v_val)
-				delta_total += v
-				delta_entries.append({"milestone_id": str(entry.get("milestone_id", "")), "value": v})
-	else:
-		return {}
+	if not milestones.is_empty() and MilestoneRegistryClass.is_loaded():
+		var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(milestones, "salary_total_delta", "PaydayPanel: ", "player.milestones")
+		if entries_read.ok:
+			for entry_val in Array(entries_read.value):
+				if not (entry_val is Dictionary):
+					continue
+				var entry: Dictionary = entry_val
+				var eff_val = entry.get("effect", null)
+				if not (eff_val is Dictionary):
+					continue
+				var eff: Dictionary = eff_val
 
-	var discount_info := _collect_payday_salary_discount_capacity_from_active(player)
-	var discount_recruit_capacity: int = int(discount_info.get("total", 0))
-	var discount_sources: Dictionary = discount_info.get("sources", {})
+				var mid := str(entry.get("milestone_id", "")).strip_edges()
+				if mid.is_empty():
+					continue
+
+				var v_read := IntValueParseHelpersClass.parse_int_value(eff.get("value", 0), "%s.salary_total_delta.value" % mid)
+				if not v_read.ok:
+					continue
+				var v := int(v_read.value)
+				if v == 0:
+					continue
+				delta_total += v
+				delta_entries.append({"milestone_id": mid, "value": v})
+
+	# 折扣：优先使用 EffectRegistry（支持模块动态 effect）；缺失时退化为静态 EmployeeDef.effect_ids 扫描。
+	var discount_recruit_capacity := 0
+	var discount_sources: Dictionary = {}
+	if _effect_registry != null and (player.get("employees", null) is Array):
+		var ctx := {"salary_discount_recruit_capacity": 0}
+		for emp_val in Array(player.get("employees", [])):
+			if not (emp_val is String):
+				continue
+			var emp_id := str(emp_val).strip_edges()
+			if emp_id.is_empty():
+				continue
+			var def_val = EmployeeRegistryClass.get_def(emp_id)
+			if def_val == null or not (def_val is EmployeeDef):
+				continue
+			var def: EmployeeDef = def_val
+			var before := int(ctx.get("salary_discount_recruit_capacity", 0))
+			var inv := EffectIdsSegmentInvokerClass.invoke_effect_ids_by_segment(
+				_effect_registry,
+				def.effect_ids,
+				":payday:salary_discount:",
+				[_state, _player_id, ctx, emp_id],
+				"PaydayPanelSalaryDiscount",
+				"EmployeeDef[%s].effect_ids" % emp_id
+			)
+			if not inv.ok:
+				continue
+			var after := int(ctx.get("salary_discount_recruit_capacity", 0))
+			var delta := after - before
+			if delta > 0:
+				discount_sources[emp_id] = int(discount_sources.get(emp_id, 0)) + delta
+		var cap_val = ctx.get("salary_discount_recruit_capacity", 0)
+		if cap_val is int:
+			discount_recruit_capacity = int(cap_val)
+		elif cap_val is float:
+			var f: float = float(cap_val)
+			if f == floor(f):
+				discount_recruit_capacity = int(f)
+	else:
+		var discount_info := _collect_payday_salary_discount_capacity_from_active(player)
+		discount_recruit_capacity = int(discount_info.get("total", 0))
+		discount_sources = discount_info.get("sources", {})
 
 	var used_recruit := 0
 	if _state.round_state is Dictionary and _state.round_state.has("recruit_used"):
@@ -327,6 +381,8 @@ func _compute_breakdown(player: Dictionary) -> Dictionary:
 		if ru_val is Dictionary:
 			var ru: Dictionary = ru_val
 			var v2 = ru.get(_player_id, null)
+			if v2 == null and ru.has(str(_player_id)):
+				v2 = ru.get(str(_player_id), null)
 			if v2 is int:
 				used_recruit = int(v2)
 
@@ -344,10 +400,12 @@ func _compute_breakdown(player: Dictionary) -> Dictionary:
 	var pay_with_tokens := bool(player.get("salary_pay_with_tokens", false))
 	var allow_unpaid := bool(player.get("salary_allow_unpaid", false))
 
+	var inventory: Dictionary = {}
 	var inventory_read := PlayerStateAccessClass.require_inventory(player, "player", "PaydayPanel: ")
-	if not inventory_read.ok:
-		return {}
-	var inventory: Dictionary = inventory_read.value
+	if inventory_read.ok:
+		inventory = inventory_read.value
+	elif player.has("inventory") and (player["inventory"] is Dictionary):
+		inventory = player["inventory"]
 
 	var tokens_available := 0
 	if pay_with_tokens:

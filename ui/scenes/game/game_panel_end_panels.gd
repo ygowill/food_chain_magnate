@@ -100,9 +100,12 @@ func _sync_payday_panel(state: GameState, force_full_refresh: bool = false) -> v
 
 	var current_player: Dictionary = state.get_current_player()
 	var current_player_id: int = int(state.get_current_player_id())
+	var effect_registry = null
+	if _scene != null and _scene.game_engine != null and _scene.game_engine.phase_manager != null and _scene.game_engine.phase_manager.has_method("get_effect_registry"):
+		effect_registry = _scene.game_engine.phase_manager.get_effect_registry()
 
 	if payday_panel.has_method("set_context"):
-		payday_panel.set_context(state, current_player_id)
+		payday_panel.set_context(state, current_player_id, effect_registry)
 
 	if payday_panel.has_method("set_employees"):
 		var employees: Array[String] = []
@@ -140,9 +143,12 @@ func show_payday_panel() -> void:
 	var state = cur_state
 	var current_player: Dictionary = state.get_current_player()
 	var current_player_id: int = int(state.get_current_player_id())
+	var effect_registry = null
+	if _scene != null and _scene.game_engine != null and _scene.game_engine.phase_manager != null and _scene.game_engine.phase_manager.has_method("get_effect_registry"):
+		effect_registry = _scene.game_engine.phase_manager.get_effect_registry()
 
 	if payday_panel.has_method("set_context"):
-		payday_panel.set_context(state, current_player_id)
+		payday_panel.set_context(state, current_player_id, effect_registry)
 
 	if payday_panel.has_method("set_employees"):
 		var employees: Array[String] = []
