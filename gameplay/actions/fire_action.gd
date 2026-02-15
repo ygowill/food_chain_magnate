@@ -6,6 +6,9 @@ extends ActionExecutor
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const SalaryTokenPaymentClass = preload("res://modules/base_rules/rules/phase/payday/payday_salary_token_payment.gd")
 
 func _init() -> void:
 	action_id = "fire"
@@ -184,15 +187,112 @@ func _can_fire_busy_marketer(state: GameState, player_id: int, employee_id: Stri
 		if EmployeeRulesClass.requires_salary(emp_id2, player):
 			return false
 
-	# 仍无力支付所有忙碌营销员的薪水时，允许解雇其中一名
-	assert(player.has("cash") and (player["cash"] is int), "fire: player.cash 缺失或类型错误（期望 int）")
+	# 仍无力支付薪资时，允许解雇其中一名忙碌营销员（按 PaydaySettlement 的计算口径，含折扣/里程碑/token）。
+	if not (player.has("cash") and (player["cash"] is int)):
+		return false
 	var cash: int = int(player["cash"])
-	var salary_cost := state.get_rule_int("salary_cost")
-	var busy_due := 0
-	for i in range(busy.size()):
-		var emp_id3: String = busy[i]
-		assert(not emp_id3.is_empty(), "fire: player.busy_marketers[%d] 不应为空字符串" % i)
-		if EmployeeRulesClass.requires_salary(emp_id3, player):
-			busy_due += salary_cost
 
-	return cash < busy_due
+	var base_salary_cost: int = state.get_rule_int("salary_cost")
+	var salary_cost := base_salary_cost
+	if player.has("salary_cost_override"):
+		var override_val = player.get("salary_cost_override", null)
+		if not (override_val is int):
+			return false
+		var v := int(override_val)
+		if v < 0:
+			return false
+		salary_cost = v
+
+	var milestones_read := PlayerStateAccessClass.require_milestones(player, "player", "FireAction._can_fire_busy_marketer: ")
+	if not milestones_read.ok:
+		return false
+	var milestones: Array = milestones_read.value
+
+	var delta_read := MilestoneEffectQueriesClass.sum_int_values(
+		milestones,
+		"salary_total_delta",
+		"FireAction._can_fire_busy_marketer: ",
+		"player.milestones"
+	)
+	if not delta_read.ok:
+		return false
+	var milestone_delta_amount: int = int(delta_read.value)
+
+	var used_recruit := 0
+	if state.round_state is Dictionary and state.round_state.has("recruit_used"):
+		var ru_val = state.round_state.get("recruit_used", null)
+		if ru_val is Dictionary:
+			var ru: Dictionary = ru_val
+			var v2 = ru.get(player_id, null)
+			if v2 is int:
+				used_recruit = int(v2)
+
+	var discount_info := _collect_payday_salary_discount_capacity_from_active(player)
+	var discount_recruit_capacity: int = int(discount_info.get("total", 0))
+	var total_recruit_capacity: int = EmployeeRulesClass.get_recruit_limit(player)
+	var non_discount_recruit_capacity: int = total_recruit_capacity - discount_recruit_capacity
+	if non_discount_recruit_capacity < 0:
+		non_discount_recruit_capacity = 0
+	var used_from_discount: int = maxi(0, used_recruit - non_discount_recruit_capacity)
+	used_from_discount = mini(used_from_discount, discount_recruit_capacity)
+	var unused_discount_actions: int = maxi(0, discount_recruit_capacity - used_from_discount)
+	var discount_amount: int = unused_discount_actions * base_salary_cost
+
+	var paid_employee_count := EmployeeRulesClass.count_paid_employees(player)
+
+	var pay_with_tokens := bool(player.get("salary_pay_with_tokens", false))
+	var inventory_read := PlayerStateAccessClass.require_inventory(player, "player", "FireAction._can_fire_busy_marketer: ")
+	if not inventory_read.ok:
+		return false
+	var inventory: Dictionary = inventory_read.value
+
+	var tokens_available := 0
+	if pay_with_tokens:
+		tokens_available = SalaryTokenPaymentClass.count_food_drink_tokens(inventory)
+
+	var tokens_used := 0
+	if pay_with_tokens and tokens_available > 0 and paid_employee_count > 0:
+		var need := SalaryTokenPaymentClass.compute_min_tokens_needed(
+			paid_employee_count, salary_cost, milestone_delta_amount, discount_amount, cash
+		)
+		tokens_used = mini(tokens_available, need)
+
+	var due_cash_amount := maxi(0, (paid_employee_count - tokens_used) * salary_cost + milestone_delta_amount - discount_amount)
+	return cash < due_cash_amount
+
+static func _collect_payday_salary_discount_capacity_from_active(player: Dictionary) -> Dictionary:
+	# 等价于 PaydaySalaryDiscount.get_salary_discount_recruit_capacity（但这里不依赖 EffectRegistry，避免在 Action 中持有 phase_manager）。
+	var emp_val = player.get("employees", null)
+	if not (emp_val is Array):
+		return {"total": 0, "sources": {}}
+	var employees: Array = emp_val
+
+	var sources: Dictionary = {}
+	var total := 0
+	for v in employees:
+		if not (v is String):
+			continue
+		var emp_id: String = str(v)
+		if emp_id.is_empty():
+			continue
+		var def_val = EmployeeRegistryClass.get_def(emp_id)
+		if def_val == null or not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+
+		var has_discount := false
+		for eff_id in def.effect_ids:
+			var s: String = str(eff_id)
+			if s.find(":payday:salary_discount:") >= 0:
+				has_discount = true
+				break
+		if not has_discount:
+			continue
+
+		var cap := int(def.recruit_capacity)
+		if cap <= 0:
+			continue
+		total += cap
+		sources[emp_id] = int(sources.get(emp_id, 0)) + cap
+
+	return {"total": total, "sources": sources}

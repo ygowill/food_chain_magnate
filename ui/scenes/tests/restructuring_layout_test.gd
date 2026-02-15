@@ -1,7 +1,7 @@
 # 重组界面布局回归测试（UI 属性测试）
 # 覆盖 issue_tracker #25：
 # - RestructuringModal 必须全屏覆盖（忽略 covered_rect）
-# - HandArea 在重组模式仅显示 reserve（不显示 active/busy）
+# - HandArea 在重组模式显示 active+reserve（不显示 busy）
 # - CompanyStructure 下属卡槽使用 4 列网格（多行）
 class_name RestructuringLayoutTest
 extends RefCounted
@@ -77,7 +77,7 @@ static func run() -> Result:
 		_safe_free(company)
 		return Result.failure("CompanyHost.size_flags_vertical=%d (期望 3=EXPAND_FILL)" % int((company_host as Control).size_flags_vertical))
 
-	# attach HandArea：应切换到 restructuring 展示模式（仅 reserve）
+	# attach HandArea：应切换到 restructuring 展示模式（active+reserve）
 	if not hand.has_method("get_display_mode") or not hand.has_method("set_display_mode"):
 		_safe_free(modal)
 		_safe_free(hand)
@@ -105,11 +105,11 @@ static func run() -> Result:
 		return Result.failure("HandArea.custom_minimum_size.x=%s (重组模式期望 3 列≈440)" % str((hand as Control).custom_minimum_size.x))
 
 	var ha: HandArea = hand
-	if is_instance_valid(ha.active_section) and ha.active_section.visible:
+	if is_instance_valid(ha.active_section) and not ha.active_section.visible:
 		_safe_free(modal)
 		_safe_free(hand)
 		_safe_free(company)
-		return Result.failure("HandArea.active_section 不应可见（重组模式）")
+		return Result.failure("HandArea.active_section 应可见（重组模式）")
 	if is_instance_valid(ha.busy_section) and ha.busy_section.visible:
 		_safe_free(modal)
 		_safe_free(hand)

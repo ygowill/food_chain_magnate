@@ -88,23 +88,24 @@ func set_display_mode(mode: String) -> void:
 
 func _sync_drop_target_groups() -> void:
 	# Drop targets are used by both HandArea and CompanyStructure drag logic via the shared group name.
-	# In restructuring mode, allow dropping anywhere within the reserve scroll area to send employees to reserve.
+	# In restructuring mode, allow dropping within the reserve section area to send employees to reserve.
 	if reserve_container != null:
 		reserve_container.add_to_group("employee_card_drop_target")
 
 	if active_container != null:
+		active_container.add_to_group("employee_card_drop_target")
+
+	if reserve_section != null:
 		if _display_mode == "restructuring":
-			active_container.remove_from_group("employee_card_drop_target")
+			reserve_section.add_to_group("employee_card_drop_target")
+			reserve_section.add_to_group("hand_area_reserve_drop_target")
 		else:
-			active_container.add_to_group("employee_card_drop_target")
+			reserve_section.remove_from_group("employee_card_drop_target")
+			reserve_section.remove_from_group("hand_area_reserve_drop_target")
 
 	if scroll_container != null:
-		if _display_mode == "restructuring":
-			scroll_container.add_to_group("employee_card_drop_target")
-			scroll_container.add_to_group("hand_area_reserve_drop_target")
-		else:
-			scroll_container.remove_from_group("employee_card_drop_target")
-			scroll_container.remove_from_group("hand_area_reserve_drop_target")
+		scroll_container.remove_from_group("employee_card_drop_target")
+		scroll_container.remove_from_group("hand_area_reserve_drop_target")
 
 func get_selected_employees() -> Array[String]:
 	return _selected_ids.duplicate()
@@ -122,7 +123,7 @@ func _rebuild_cards() -> void:
 	_clear_container_children(busy_container)
 	_cards.clear()
 
-	var show_active := (_display_mode != "restructuring")
+	var show_active := true
 	var show_reserve := true
 	var show_busy := (_display_mode != "restructuring")
 

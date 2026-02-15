@@ -64,12 +64,23 @@ theme_override_constants/separation = 4
 [node name="Separator" type="HSeparator" parent="MarginContainer/VBoxContainer/SummarySection"]
 layout_mode = 2
 
+[node name="BaseLabel" type="Label" parent="MarginContainer/VBoxContainer/SummarySection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
+text = "薪资总额: $0"
+horizontal_alignment = 2
+
 [node name="DiscountLabel" type="Label" parent="MarginContainer/VBoxContainer/SummarySection"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 theme_override_colors/font_color = Color(0.3, 0.5, 0.3, 1)
-text = "招聘折扣: -$0"
+text = "减免明细"
 horizontal_alignment = 2
+
+[node name="DetailsContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/SummarySection"]
+layout_mode = 2
+theme_override_constants/separation = 2
 
 [node name="TotalLabel" type="Label" parent="MarginContainer/VBoxContainer/SummarySection"]
 layout_mode = 2

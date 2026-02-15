@@ -99,30 +99,25 @@ func _sync_payday_panel(state: GameState, force_full_refresh: bool = false) -> v
 		return
 
 	var current_player: Dictionary = state.get_current_player()
+	var current_player_id: int = int(state.get_current_player_id())
+
+	if payday_panel.has_method("set_context"):
+		payday_panel.set_context(state, current_player_id)
 
 	if payday_panel.has_method("set_employees"):
 		var employees: Array[String] = []
+		var reserve: Array[String] = []
 		var busy: Array[String] = []
 		for e in Array(current_player.get("employees", [])):
 			employees.append(str(e))
+		for e in Array(current_player.get("reserve_employees", [])):
+			reserve.append(str(e))
 		for e in Array(current_player.get("busy_marketers", [])):
 			busy.append(str(e))
-		payday_panel.set_employees(employees, busy)
+		payday_panel.set_employees(employees, reserve, busy)
 
 	if payday_panel.has_method("set_player_cash"):
 		payday_panel.set_player_cash(int(current_player.get("cash", 0)))
-
-	if payday_panel.has_method("set_discount") and (state.round_state is Dictionary):
-		var round_state: Dictionary = state.round_state
-		var discount: int = int(round_state.get("salary_discount", 0))
-		payday_panel.set_discount(discount)
-
-	# 薪资为 0：直接跳过，不展示面板。
-	if payday_panel.has_method("calculate_total"):
-		if int(payday_panel.calculate_total()) <= 0:
-			payday_panel.visible = false
-			_on_pay_confirmed()
-			return
 
 func show_payday_panel() -> void:
 	if _scene == null or _scene.game_engine == null:
@@ -141,29 +136,25 @@ func show_payday_panel() -> void:
 
 	var state = _scene.game_engine.get_state()
 	var current_player: Dictionary = state.get_current_player()
+	var current_player_id: int = int(state.get_current_player_id())
+
+	if payday_panel.has_method("set_context"):
+		payday_panel.set_context(state, current_player_id)
 
 	if payday_panel.has_method("set_employees"):
 		var employees: Array[String] = []
+		var reserve: Array[String] = []
 		var busy: Array[String] = []
 		for e in Array(current_player.get("employees", [])):
 			employees.append(str(e))
+		for e in Array(current_player.get("reserve_employees", [])):
+			reserve.append(str(e))
 		for e in Array(current_player.get("busy_marketers", [])):
 			busy.append(str(e))
-		payday_panel.set_employees(employees, busy)
+		payday_panel.set_employees(employees, reserve, busy)
 
 	if payday_panel.has_method("set_player_cash"):
 		payday_panel.set_player_cash(int(current_player.get("cash", 0)))
-
-	if payday_panel.has_method("set_discount"):
-		var round_state: Dictionary = state.round_state
-		var discount: int = int(round_state.get("salary_discount", 0))
-		payday_panel.set_discount(discount)
-
-	# 薪资为 0：直接跳过，不展示面板。
-	if payday_panel != null and is_instance_valid(payday_panel) and payday_panel.has_method("calculate_total"):
-		if int(payday_panel.calculate_total()) <= 0:
-			_on_pay_confirmed()
-			return
 
 	if _center_popup.is_valid():
 		_center_popup.call(payday_panel)
@@ -232,15 +223,29 @@ func _show_game_over() -> void:
 	else:
 		game_over_panel.visible = true
 
-func _on_fire_employees(employee_ids: Array[String]) -> void:
+func _on_fire_employees(items: Array) -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
 	if not _execute_command.is_valid():
 		return
 	var current_player_id = _scene.game_engine.get_state().get_current_player_id()
 
-	for emp_id in employee_ids:
-		_execute_command.call(Command.create("fire", current_player_id, {"employee_id": emp_id}))
+	for item in items:
+		if item is Dictionary:
+			var d: Dictionary = item
+			var emp_id := str(d.get("employee_id", "")).strip_edges()
+			if emp_id.is_empty():
+				continue
+			var location := str(d.get("location", "")).strip_edges()
+			var params := {"employee_id": emp_id}
+			if not location.is_empty():
+				params["location"] = location
+			_execute_command.call(Command.create("fire", current_player_id, params))
+		else:
+			var emp_id2 := str(item).strip_edges()
+			if emp_id2.is_empty():
+				continue
+			_execute_command.call(Command.create("fire", current_player_id, {"employee_id": emp_id2}))
 
 	if is_instance_valid(payday_panel):
 		show_payday_panel()
