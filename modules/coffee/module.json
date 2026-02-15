@@ -1,7 +1,7 @@
 {
 	"schema_version": 1,
 	"id": "coffee",
-	"name": "Coffee",
+	"name": "咖啡",
 	"version": "0.1.0",
 	"priority": 65,
 	"dependencies": ["base_rules", "base_products", "base_pieces", "base_employees"],

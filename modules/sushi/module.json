@@ -1,7 +1,7 @@
 {
 	"schema_version": 1,
 	"id": "sushi",
-	"name": "Sushi",
+	"name": "寿司",
 	"version": "0.1.0",
 	"priority": 76,
 	"dependencies": ["base_rules", "base_employees"],

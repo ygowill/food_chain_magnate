@@ -1,7 +1,7 @@
 {
 	"schema_version": 1,
 	"id": "lobbyists",
-	"name": "说客",
+	"name": "提案人模组",
 	"version": "0.1.0",
 	"priority": 120,
 	"dependencies": ["base_rules", "base_employees", "base_pieces", "base_tiles", "base_maps"],
@@ -38,7 +38,7 @@
 					{
 						"required_player_counts": [5, 6],
 						"module_ids": ["new_districts"],
-						"reason": "5/6 人局启用 Lobbyists 时强制启用 New Districts（新区域）模块，以提供额外地图板块。"
+						"reason": "5/6 人局启用提案人模组时强制启用新区域模组，以提供额外地图板块。"
 					}
 				]
 			}

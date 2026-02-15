@@ -1,7 +1,7 @@
 {
 	"schema_version": 1,
 	"id": "new_districts",
-	"name": "New Districts",
+	"name": "新区域",
 	"version": "0.1.0",
 	"priority": 70,
 	"dependencies": ["base_rules", "base_pieces", "base_tiles", "base_maps"],
@@ -18,7 +18,7 @@
 			},
 			"setup_constraints": {
 				"required_player_counts": [6],
-				"reason": "6 人局强制启用 New Districts（新区域）模块。"
+				"reason": "6 人局强制启用新区域模组。"
 			}
 		}
 	}

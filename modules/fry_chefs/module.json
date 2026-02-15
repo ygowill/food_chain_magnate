@@ -1,7 +1,7 @@
 {
 	"schema_version": 1,
 	"id": "fry_chefs",
-	"name": "Fry Chefs",
+	"name": "薯条主厨",
 	"version": "0.1.0",
 	"priority": 80,
 	"dependencies": ["base_rules", "base_employees", "base_products"],

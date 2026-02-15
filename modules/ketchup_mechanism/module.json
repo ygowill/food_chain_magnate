@@ -1,7 +1,7 @@
 {
 	"schema_version": 1,
 	"id": "ketchup_mechanism",
-	"name": "The Ketchup Mechanism",
+	"name": "番茄酱机制",
 	"version": "0.1.0",
 	"priority": 80,
 	"dependencies": ["base_rules"],

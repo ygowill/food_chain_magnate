@@ -1,7 +1,7 @@
 {
 	"schema_version": 1,
 	"id": "mass_marketeers",
-	"name": "Mass Marketeers",
+	"name": "大众营销员",
 	"version": "0.1.0",
 	"priority": 80,
 	"dependencies": ["base_rules", "base_employees"],

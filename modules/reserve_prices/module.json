@@ -1,7 +1,7 @@
 {
 	"schema_version": 1,
 	"id": "reserve_prices",
-	"name": "Reserve Prices",
+	"name": "储备价格",
 	"version": "0.1.0",
 	"priority": 100,
 	"dependencies": ["base_rules"],

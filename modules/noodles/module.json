@@ -1,7 +1,7 @@
 {
 	"schema_version": 1,
 	"id": "noodles",
-	"name": "Noodles",
+	"name": "面条",
 	"version": "0.1.0",
 	"priority": 75,
 	"dependencies": ["base_rules", "base_employees"],

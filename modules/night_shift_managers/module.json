@@ -1,7 +1,7 @@
 {
 	"schema_version": 1,
 	"id": "night_shift_managers",
-	"name": "Night Shift Managers",
+	"name": "夜班经理",
 	"version": "0.1.0",
 	"priority": 80,
 	"dependencies": ["base_rules", "base_employees"],

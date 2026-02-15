@@ -42,7 +42,7 @@
     },
     {
       "id": "henri_lo_menu",
-      "name": "Henri Lo 套餐",
+      "name": "一步到胃套餐",
       "all_except": ["hard_choices"],
       "modules": []
     }
