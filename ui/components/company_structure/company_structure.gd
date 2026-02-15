@@ -295,11 +295,31 @@ func _get_display_structure() -> Array:
 
 	var structure_val = cs.get("structure", null)
 	if structure_val is Array:
+		var saved: Array = structure_val
 		# 若明确写入空结构（例如进入重组阶段时被清空），应展示为空；
 		# 不应再根据 employees 自动生成预览，否则看起来像“结构未清理”。
-		if (structure_val as Array).is_empty():
+		if saved.is_empty():
 			return []
-		var pref_arr: Array = structure_val
+		# 重组阶段拖拽编辑时：应按 state.company_structure.structure 原样展示，
+		# 不能用 employees 自动补齐空位，否则会出现“右侧填满、左侧待命不变”的重复显示。
+		if _drag_enabled:
+			var out: Array = []
+			for i in range(_ceo_slots):
+				var entry := {"employee_id": "", "reports": []}
+				if i < saved.size():
+					var e_val = saved[i]
+					if e_val is Dictionary:
+						var e: Dictionary = e_val
+						var id_val = e.get("employee_id", null)
+						if id_val is String:
+							entry["employee_id"] = str(id_val)
+						var reps_val = e.get("reports", null)
+						if reps_val is Array:
+							entry["reports"] = Array(reps_val).duplicate()
+				out.append(entry)
+			return out
+
+		var pref_arr: Array = saved
 		var preferred_direct: Array[String] = []
 		var preferred_reports_by_slot := {}
 		for i in range(_ceo_slots):

@@ -526,6 +526,8 @@ func _add_detail_line(text: String, color: Color) -> void:
 		return
 	var l := Label.new()
 	l.text = str(text)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.add_theme_font_size_override("font_size", 12)
 	l.add_theme_color_override("font_color", color)

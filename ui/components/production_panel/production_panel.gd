@@ -48,8 +48,9 @@ var _food_type_label: Label = null
 var _available_food_types: Array[String] = []
 var _selected_food_type: String = ""
 
-var _drink_type_option: OptionButton = null
 var _drink_type_label: Label = null
+var _drink_type_container: HFlowContainer = null
+var _drink_type_items: Dictionary = {} # product_id -> FoodTypeItem
 var _drinks_restaurant_option: OptionButton = null
 var _drinks_restaurant_label: Label = null
 var _drinks_selection_label: Label = null
@@ -300,7 +301,8 @@ func _rebuild_content() -> void:
 	_selected_food_type = ""
 
 	_drink_type_label = null
-	_drink_type_option = null
+	_drink_type_container = null
+	_drink_type_items.clear()
 	_drinks_restaurant_label = null
 	_drinks_restaurant_option = null
 	_drinks_selection_label = null
@@ -328,8 +330,6 @@ func _apply_embedding_layout() -> void:
 	var embedded := is_embedded_in_right_panel()
 	if scroll_container != null:
 		scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if embedded else ScrollContainer.SCROLL_MODE_DISABLED
-	if _drink_type_option != null:
-		_drink_type_option.custom_minimum_size = Vector2.ZERO if embedded else Vector2(380, 0)
 	if _drinks_restaurant_option != null:
 		_drinks_restaurant_option.custom_minimum_size = Vector2.ZERO if embedded else Vector2(380, 0)
 
@@ -462,7 +462,7 @@ func _update_info() -> void:
 	var emp_name := _get_employee_display_name(_selected_employee_type)
 	if _production_type == "drinks":
 		if _selected_employee_type == "errand_boy":
-			var drink_text := _selected_drink_type if not _selected_drink_type.is_empty() else "（请选择）"
+			var drink_text := _get_product_display_name(_selected_drink_type) if not _selected_drink_type.is_empty() else "（请选择）"
 			_info_label.text = "%s：选择 1 种饮料并直接获得 1 瓶（%s）。" % [emp_name, drink_text]
 		else:
 			var start_text := ""
@@ -579,17 +579,19 @@ func _build_drinks_controls(parent: VBoxContainer) -> void:
 	_drink_type_label = Label.new()
 	_drink_type_label.text = "跑腿伙计：选择饮料"
 	_drink_type_label.add_theme_font_size_override("font_size", 12)
+	UiStylesClass.apply_label_hint_dark(_drink_type_label)
 	parent.add_child(_drink_type_label)
 
-	_drink_type_option = OptionButton.new()
-	_drink_type_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_drink_type_option.custom_minimum_size = Vector2.ZERO if is_embedded_in_right_panel() else Vector2(380, 0)
-	_drink_type_option.item_selected.connect(_on_drink_type_selected)
-	parent.add_child(_drink_type_option)
+	_drink_type_container = HFlowContainer.new()
+	_drink_type_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_drink_type_container.add_theme_constant_override("h_separation", 10)
+	_drink_type_container.add_theme_constant_override("v_separation", 10)
+	parent.add_child(_drink_type_container)
 
 	_drinks_restaurant_label = Label.new()
 	_drinks_restaurant_label.text = "起点餐厅"
 	_drinks_restaurant_label.add_theme_font_size_override("font_size", 12)
+	UiStylesClass.apply_label_hint_dark(_drinks_restaurant_label)
 	parent.add_child(_drinks_restaurant_label)
 
 	_drinks_restaurant_option = OptionButton.new()
@@ -597,6 +599,7 @@ func _build_drinks_controls(parent: VBoxContainer) -> void:
 	_drinks_restaurant_option.custom_minimum_size = Vector2.ZERO if is_embedded_in_right_panel() else Vector2(380, 0)
 	_drinks_restaurant_option.item_selected.connect(_on_drinks_restaurant_selected)
 	parent.add_child(_drinks_restaurant_option)
+	UiStylesClass.apply_option_button_field(_drinks_restaurant_option)
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
@@ -612,15 +615,17 @@ func _build_drinks_controls(parent: VBoxContainer) -> void:
 	_drinks_undo_btn.text = "撤销"
 	_drinks_undo_btn.pressed.connect(_on_drinks_undo_pressed)
 	row.add_child(_drinks_undo_btn)
+	UiStylesClass.apply_button_secondary(_drinks_undo_btn)
 
 	_drinks_clear_btn = Button.new()
 	_drinks_clear_btn.text = "清空"
 	_drinks_clear_btn.pressed.connect(_on_drinks_clear_pressed)
 	row.add_child(_drinks_clear_btn)
+	UiStylesClass.apply_button_secondary(_drinks_clear_btn)
 
 	_drinks_error_label = Label.new()
 	_drinks_error_label.add_theme_font_size_override("font_size", 12)
-	_drinks_error_label.add_theme_color_override("font_color", Color(1, 0.45, 0.45, 1))
+	UiStylesClass.apply_label_error(_drinks_error_label)
 	_drinks_error_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_drinks_error_label.visible = false
 	parent.add_child(_drinks_error_label)
@@ -632,6 +637,7 @@ func _build_food_controls(parent: VBoxContainer) -> void:
 	_food_type_label = Label.new()
 	_food_type_label.text = "见习厨师：选择食物"
 	_food_type_label.add_theme_font_size_override("font_size", 12)
+	UiStylesClass.apply_label_hint_dark(_food_type_label)
 	parent.add_child(_food_type_label)
 
 	_food_type_container = HFlowContainer.new()
@@ -714,6 +720,24 @@ func _select_food_type(product_id: String, update_ui: bool = true) -> void:
 func _on_food_type_item_pressed(product_id: String) -> void:
 	_select_food_type(product_id, true)
 
+func _select_drink_type(product_id: String, update_ui: bool = true) -> void:
+	var pid := str(product_id).strip_edges()
+	_selected_drink_type = pid if (not pid.is_empty() and _drink_type_items.has(pid)) else ""
+	for k in _drink_type_items.keys():
+		var item_val = _drink_type_items.get(k, null)
+		if not (item_val is FoodTypeItem):
+			continue
+		var item: FoodTypeItem = item_val
+		if is_instance_valid(item):
+			item.set_selected(str(k) == _selected_drink_type)
+
+	if update_ui:
+		_update_confirm_state()
+		_update_info()
+
+func _on_drink_type_item_pressed(product_id: String) -> void:
+	_select_drink_type(product_id, true)
+
 func _update_food_controls_visibility() -> void:
 	if _production_type != "food":
 		return
@@ -724,17 +748,30 @@ func _update_food_controls_visibility() -> void:
 		_food_type_container.visible = has_choice
 
 func _rebuild_drink_type_options() -> void:
+	var prev_selected := _selected_drink_type
 	_selected_drink_type = ""
-	if _drink_type_option == null:
+	_drink_type_items.clear()
+	if _drink_type_container == null:
 		return
-	_drink_type_option.clear()
+
+	UiRebuildHelpersClass.free_children(_drink_type_container)
+	_ensure_skin()
 	for t in _available_drink_types:
-		_drink_type_option.add_item(_get_product_display_name(t))
-		var idx := _drink_type_option.get_item_count() - 1
-		_drink_type_option.set_item_metadata(idx, t)
-	if _drink_type_option.get_item_count() > 0:
-		_drink_type_option.select(0)
-		_apply_selected_drink_type(0)
+		var item := FoodTypeItem.new()
+		item.product_id = t
+		item.display_name = _get_product_display_name(t)
+		item.icon_texture = _get_product_icon_texture(t)
+		item.pressed.connect(_on_drink_type_item_pressed)
+		_drink_type_container.add_child(item)
+		_drink_type_items[t] = item
+
+	var desired := ""
+	if not prev_selected.is_empty() and _drink_type_items.has(prev_selected):
+		desired = prev_selected
+	elif not _available_drink_types.is_empty():
+		desired = _available_drink_types[0]
+	if not desired.is_empty():
+		_select_drink_type(desired, false)
 
 func _rebuild_drinks_restaurant_options() -> void:
 	if _drinks_restaurant_option == null:
@@ -746,19 +783,6 @@ func _rebuild_drinks_restaurant_options() -> void:
 			"label": str(_drinks_restaurant_label_by_id.get(rid, rid)),
 		})
 	set_drinks_procure_restaurants(opts, _drinks_selected_restaurant_id, _drinks_restaurant_require_selection)
-
-func _apply_selected_drink_type(index: int) -> void:
-	if _drink_type_option == null:
-		return
-	if index < 0 or index >= _drink_type_option.get_item_count():
-		return
-	var meta = _drink_type_option.get_item_metadata(index)
-	_selected_drink_type = str(meta)
-
-func _on_drink_type_selected(index: int) -> void:
-	_apply_selected_drink_type(index)
-	_update_confirm_state()
-	_update_info()
 
 func _on_drinks_restaurant_selected(index: int) -> void:
 	if _suppress_drinks_restaurant_signal:
@@ -785,8 +809,8 @@ func _update_drinks_controls_visibility() -> void:
 	var is_errand := _selected_employee_type == "errand_boy"
 	if _drink_type_label != null:
 		_drink_type_label.visible = is_errand
-	if _drink_type_option != null:
-		_drink_type_option.visible = is_errand
+	if _drink_type_container != null:
+		_drink_type_container.visible = is_errand
 	if _drinks_restaurant_label != null:
 		_drinks_restaurant_label.visible = (not is_errand) and _drinks_restaurant_show_selector
 	if _drinks_restaurant_option != null:
@@ -899,6 +923,7 @@ class FoodTypeItem extends PanelContainer:
 		if Globals != null:
 			fs = int(Globals.get_scaled_font_size(12))
 		_label.add_theme_font_size_override("font_size", fs)
+		UiStylesClass.apply_label_dark(_label)
 		vbox.add_child(_label)
 
 		_update_display()
