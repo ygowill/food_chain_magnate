@@ -70,6 +70,11 @@ custom_minimum_size = Vector2(120, 40)
 layout_mode = 2
 text = "再来一局"
 
+[node name="SaveReplayButton" type="Button" parent="CenterContainer/Panel/MarginContainer/VBoxContainer/ButtonRow"]
+custom_minimum_size = Vector2(120, 40)
+layout_mode = 2
+text = "保存回放"
+
 [node name="ReturnButton" type="Button" parent="CenterContainer/Panel/MarginContainer/VBoxContainer/ButtonRow"]
 custom_minimum_size = Vector2(120, 40)
 layout_mode = 2

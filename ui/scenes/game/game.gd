@@ -842,6 +842,10 @@ func _open_replay_load_dialog() -> void:
 	if _save_load_controller != null:
 		_save_load_controller.open_for_replay()
 
+func _open_replay_save_dialog() -> void:
+	if _save_load_controller != null:
+		_save_load_controller.open_for_save(game_engine, "保存回放")
+
 func _is_online_resync_in_progress() -> bool:
 	if _online_resync_controller == null:
 		return false

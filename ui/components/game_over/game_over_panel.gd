@@ -5,34 +5,47 @@ extends Control
 
 const GameOverWinnerRulesClass = preload("res://core/rules/game_over_winner_rules.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 
 signal return_to_menu_requested()
 signal play_again_requested()
+signal save_replay_requested()
 
 @onready var title_label: Label = $CenterContainer/Panel/MarginContainer/VBoxContainer/TitleLabel
 @onready var rankings_container: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBoxContainer/RankingsContainer
 @onready var stats_container: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBoxContainer/StatsContainer
 @onready var return_btn: Button = $CenterContainer/Panel/MarginContainer/VBoxContainer/ButtonRow/ReturnButton
 @onready var play_again_btn: Button = $CenterContainer/Panel/MarginContainer/VBoxContainer/ButtonRow/PlayAgainButton
+@onready var save_replay_btn: Button = $CenterContainer/Panel/MarginContainer/VBoxContainer/ButtonRow/SaveReplayButton
 
 var _final_state: GameState = null
 var _player_rankings: Array[Dictionary] = []
 var _winner_player_id: int = -1
 var _pending_final_state_refresh: bool = false
+var _skin = null
+var _skin_modules_key: String = ""
+var _player_restaurant_logo_ids: Dictionary = {} # player_id -> logo_id
+var _fallback_logo_ids: Array[int] = []
+var _state_seed: int = 0
 
 func _ready() -> void:
 	if return_btn != null:
 		return_btn.pressed.connect(_on_return_pressed)
 	if play_again_btn != null:
 		play_again_btn.pressed.connect(_on_play_again_pressed)
+	if save_replay_btn != null:
+		save_replay_btn.pressed.connect(_on_save_replay_pressed)
 
 	# 应用 Diner Poster 风格
 	UiStylesClass.apply_dialog_surface($CenterContainer/Panel)
 	UiStylesClass.apply_button_primary(play_again_btn)
+	UiStylesClass.apply_button_secondary(save_replay_btn)
 	UiStylesClass.apply_button_secondary(return_btn)
 
 	if _pending_final_state_refresh:
 		_pending_final_state_refresh = false
+		_ensure_skin()
+		_rebuild_player_logo_ids()
 		_calculate_rankings()
 		_rebuild_display()
 
@@ -41,6 +54,8 @@ func set_final_state(state: GameState) -> void:
 	if not is_node_ready():
 		_pending_final_state_refresh = true
 		return
+	_ensure_skin()
+	_rebuild_player_logo_ids()
 	_calculate_rankings()
 	_rebuild_display()
 
@@ -143,6 +158,7 @@ func _rebuild_rankings() -> void:
 		rank_item.player_id = int(player_data.id)
 		rank_item.cash = int(player_data.cash)
 		rank_item.is_winner = (_winner_player_id >= 0 and int(player_data.id) == _winner_player_id)
+		rank_item.logo_texture = _get_player_restaurant_logo_texture(rank_item.player_id)
 		rankings_container.add_child(rank_item)
 
 func _rebuild_stats() -> void:
@@ -202,6 +218,104 @@ func _on_return_pressed() -> void:
 func _on_play_again_pressed() -> void:
 	play_again_requested.emit()
 
+func _on_save_replay_pressed() -> void:
+	save_replay_requested.emit()
+
+func _ensure_skin() -> void:
+	if _final_state == null:
+		_skin = null
+		_skin_modules_key = ""
+		return
+
+	var mods: Array[String] = Array(_final_state.modules, TYPE_STRING, "", null)
+	var key: String = str(mods)
+	if _skin != null and key == _skin_modules_key:
+		return
+	_skin_modules_key = key
+	_skin = UiSkinCacheClass.get_skin_for_modules(Globals.modules_v2_base_dir, mods, 40)
+
+func _read_logo_id(value, logo_count: int) -> int:
+	if logo_count <= 0:
+		return -1
+	var logo_id := -1
+	if value is int:
+		logo_id = int(value)
+	elif value is float:
+		var f: float = float(value)
+		if f == floor(f):
+			logo_id = int(f)
+	if logo_id < 0 or logo_id >= logo_count:
+		return -1
+	return logo_id
+
+func _build_fallback_logo_ids(logo_count: int) -> Array[int]:
+	if logo_count <= 0:
+		return []
+	var ids: Array[int] = []
+	for i in range(logo_count):
+		ids.append(i)
+
+	var rng := RandomNumberGenerator.new()
+	var logo_seed := int(_state_seed) ^ int(0x4C4F474F) # 'LOGO'
+	rng.seed = int(logo_seed)
+	rng.state = int(logo_seed)
+	for i in range(ids.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp := ids[i]
+		ids[i] = ids[j]
+		ids[j] = tmp
+
+	return ids
+
+func _fallback_logo_id_for_player(player_id: int, fallback_logo_ids: Array[int]) -> int:
+	if fallback_logo_ids.is_empty():
+		return -1
+	var pid := maxi(0, int(player_id))
+	return int(fallback_logo_ids[pid % fallback_logo_ids.size()])
+
+func _rebuild_player_logo_ids() -> void:
+	_player_restaurant_logo_ids.clear()
+	_fallback_logo_ids.clear()
+	_state_seed = 0
+	if _final_state == null:
+		return
+	_state_seed = int(_final_state.seed)
+
+	var logo_count := 0
+	if _skin != null and _skin.has_method("get_restaurant_logo_piece_ids"):
+		var ids_val = _skin.get_restaurant_logo_piece_ids()
+		if ids_val is Array:
+			logo_count = (ids_val as Array).size()
+
+	_fallback_logo_ids = _build_fallback_logo_ids(logo_count)
+	for i in range(_final_state.players.size()):
+		var p_val = _final_state.players[i]
+		if not (p_val is Dictionary):
+			continue
+		var p: Dictionary = p_val
+		var pid := int(p.get("id", i))
+		if pid < 0:
+			continue
+
+		var logo_id := _read_logo_id(p.get("restaurant_logo_id", null), logo_count)
+		if logo_id >= 0:
+			_player_restaurant_logo_ids[pid] = logo_id
+		else:
+			_player_restaurant_logo_ids[pid] = _fallback_logo_id_for_player(pid, _fallback_logo_ids)
+
+func _get_player_restaurant_logo_texture(player_id: int) -> Texture2D:
+	if _skin == null:
+		return null
+	if not (_skin.has_method("get_restaurant_logo_piece_ids")) or not (_skin.has_method("get_restaurant_logo_texture_by_id")):
+		return null
+	var logo_count := (_skin.get_restaurant_logo_piece_ids() as Array).size()
+	if logo_count <= 0:
+		return null
+	var logo_id := int(_player_restaurant_logo_ids.get(player_id, -1))
+	if logo_id < 0 or logo_id >= logo_count:
+		logo_id = _fallback_logo_id_for_player(player_id, _fallback_logo_ids)
+	return _skin.get_restaurant_logo_texture_by_id(logo_id)
+
 
 # === 内部类：排名项 ===
 class RankingItem extends PanelContainer:
@@ -209,8 +323,10 @@ class RankingItem extends PanelContainer:
 	var player_id: int = 0
 	var cash: int = 0
 	var is_winner: bool = false
+	var logo_texture: Texture2D = null
 
 	var _rank_label: Label
+	var _logo_rect: TextureRect
 	var _player_label: Label
 	var _cash_label: Label
 	var _crown_label: Label
@@ -220,14 +336,6 @@ class RankingItem extends PanelContainer:
 		Color("#c0c0c0"),  # 银色 - 第2名
 		Color("#cd7f32"),  # 铜色 - 第3名
 		Color("#808080"),  # 灰色 - 其他
-	]
-
-	const PLAYER_COLORS: Array[Color] = [
-		Color("#e74c3c"),  # 红色
-		Color("#3498db"),  # 蓝色
-		Color("#2ecc71"),  # 绿色
-		Color("#f1c40f"),  # 黄色
-		Color("#9b59b6"),  # 紫色
 	]
 
 	func _ready() -> void:
@@ -259,17 +367,21 @@ class RankingItem extends PanelContainer:
 		_rank_label.text = "#%d" % rank
 		hbox.add_child(_rank_label)
 
-		# 玩家颜色标记
-		var player_color := ColorRect.new()
-		player_color.custom_minimum_size = Vector2(8, 30)
-		var color_idx := player_id % PLAYER_COLORS.size()
-		player_color.color = PLAYER_COLORS[color_idx]
-		hbox.add_child(player_color)
+		# 餐厅 Logo
+		_logo_rect = TextureRect.new()
+		_logo_rect.custom_minimum_size = Vector2(34, 34)
+		_logo_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_logo_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		_logo_rect.texture = logo_texture
+		hbox.add_child(_logo_rect)
 
 		# 玩家名称
 		_player_label = Label.new()
 		_player_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_player_label.add_theme_font_size_override("font_size", 16)
+		UiStylesClass.apply_label_dark(_player_label)
+		if is_winner:
+			_player_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 1))
 		_player_label.text = "玩家 %d" % (player_id + 1)
 		hbox.add_child(_player_label)
 

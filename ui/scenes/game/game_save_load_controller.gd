@@ -14,14 +14,14 @@ func _init(scene, save_load_dialog_script: Script, on_replay_selected: Callable)
 	_save_load_dialog_script = save_load_dialog_script
 	_on_replay_selected = on_replay_selected
 
-func open_for_save(engine: GameEngine) -> void:
+func open_for_save(engine: GameEngine, title: String = "保存游戏") -> void:
 	if engine == null:
 		GameLog.warn("Game", "游戏引擎未初始化，无法打开存档对话框")
 		return
 	_ensure_dialog()
 	_context = "save"
 	if _save_load_dialog != null and is_instance_valid(_save_load_dialog):
-		_save_load_dialog.open_for_save(engine)
+		_save_load_dialog.open_for_save(engine, title)
 
 func open_for_replay() -> void:
 	_ensure_dialog()
@@ -64,4 +64,3 @@ func _on_save_completed(path: String) -> void:
 	if path.is_empty():
 		return
 	GameLog.info("Game", "存档已保存: %s" % path)
-

@@ -231,6 +231,7 @@ func _show_game_over() -> void:
 		game_over_panel.z_index = 1400
 		game_over_panel.return_to_menu_requested.connect(_on_game_over_return)
 		game_over_panel.play_again_requested.connect(_on_game_over_play_again)
+		game_over_panel.save_replay_requested.connect(_on_game_over_save_replay)
 		_scene.add_child(game_over_panel)
 
 	if game_over_panel.has_method("set_final_state"):
@@ -289,6 +290,12 @@ func _on_game_over_return() -> void:
 
 func _on_game_over_play_again() -> void:
 	SceneManager.goto_game()
+
+func _on_game_over_save_replay() -> void:
+	if _scene == null:
+		return
+	if _scene.has_method("_open_replay_save_dialog"):
+		_scene.call("_open_replay_save_dialog")
 
 func _on_bank_break_acknowledged() -> void:
 	if _hide_all.is_valid():

@@ -70,10 +70,10 @@ func open_for_replay() -> void:
 	open()
 	_prompt_web_file_upload()
 
-func open_for_save(engine: GameEngine) -> void:
+func open_for_save(engine: GameEngine, title: String = "保存游戏") -> void:
 	_dialog_mode = DialogMode.SAVE
 	_engine = engine
-	_set_title("保存游戏")
+	_set_title(title)
 	_refresh_slots()
 	_update_ui_state()
 	_prefer_file_tab_on_web()
