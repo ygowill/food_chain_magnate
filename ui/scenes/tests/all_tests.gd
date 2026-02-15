@@ -495,14 +495,18 @@ func _run_all() -> int:
 											"name": "EventTimelineBuildTest",
 											"fn": func() -> Result: return TestRefs.EventTimelineBuildTestClass.run(2, 12345, 20),
 										},
-						{
-							"name": "StepTimelineBuildTest",
-							"fn": func() -> Result: return TestRefs.StepTimelineBuildTestClass.run(),
-						},
 							{
-								"name": "StepTimelineMarketingMilestoneOrderTest",
-								"fn": func() -> Result: return TestRefs.StepTimelineMarketingMilestoneOrderTestClass.run(12345),
+								"name": "StepTimelineBuildTest",
+								"fn": func() -> Result: return TestRefs.StepTimelineBuildTestClass.run(),
 							},
+							{
+								"name": "StepTimelineForceExecuteActorMismatchTest",
+								"fn": func() -> Result: return TestRefs.StepTimelineForceExecuteActorMismatchTestClass.run(12345),
+							},
+								{
+									"name": "StepTimelineMarketingMilestoneOrderTest",
+									"fn": func() -> Result: return TestRefs.StepTimelineMarketingMilestoneOrderTestClass.run(12345),
+								},
 								{
 									"name": "StepTimelinePhaseBoundaryOrderTest",
 									"fn": func() -> Result: return TestRefs.StepTimelinePhaseBoundaryOrderTestClass.run(12345),

@@ -91,10 +91,10 @@ static func build_full_impl(engine: GameEngine) -> Result:
 
 		var force_execute := ReplayClass.should_force_execute_in_replay(cmd)
 		if force_execute and executor.requires_actor:
-			# 与 ReplayClass/EventHistoryRebuild 保持一致：强制命令仍要求 actor 为当前玩家，避免破坏时间线一致性。
-			var current_player_id := replay_state.get_current_player_id()
-			if cmd.actor != current_player_id:
-				return Result.failure("StepTimelineBuild: 回放强制命令 #%d actor 非当前玩家: actor=%d current=%d" % [i, cmd.actor, current_player_id]).with_warnings(warnings)
+			# 强制模式：允许“非当前玩家”执行（与 CommandRunner._validate_force_execute / ReplayClass 语义一致），但仍需保证 actor 合法。
+			var count := replay_state.players.size()
+			if cmd.actor < 0 or cmd.actor >= count:
+				return Result.failure("StepTimelineBuild: 回放强制命令 #%d actor 超出范围: actor=%d players=%d" % [i, cmd.actor, count]).with_warnings(warnings)
 
 		var step_result := executor.compute_new_state_force(replay_state, cmd) if force_execute else executor.compute_new_state(replay_state, cmd)
 		if not step_result.ok:
