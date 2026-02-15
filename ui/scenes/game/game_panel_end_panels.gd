@@ -50,6 +50,12 @@ func reset_bank_break_tracking(state: GameState) -> void:
 func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	_sync_payday_panel(state, force_full_refresh)
 
+	var suppress_game_over_modal := false
+	if _scene != null and _scene.has_method("should_suppress_game_over_modal"):
+		var v = _scene.call("should_suppress_game_over_modal")
+		if v is bool:
+			suppress_game_over_modal = bool(v)
+
 	var is_replay_mode := false
 	if _scene != null and _scene.has_method("is_replay_mode_active"):
 		var rm = _scene.call("is_replay_mode_active")
@@ -77,7 +83,7 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 			bank_break_panel.visible = false
 		# 例外：手动回放导致的“只读时间线”下，若真实对局已到 GameOver，
 		# 仍应允许展示 GameOver 面板（提供返回主菜单/再来一局入口），避免软锁。
-		if not is_replay_mode and state != null and str(state.phase) == DefsClass.PHASE_GAME_OVER:
+		if not suppress_game_over_modal and not is_replay_mode and state != null and str(state.phase) == DefsClass.PHASE_GAME_OVER:
 			_show_game_over()
 		elif is_instance_valid(game_over_panel):
 			game_over_panel.visible = false
@@ -94,7 +100,11 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 
 	_check_bank_break(state)
 	if state != null and state.phase == DefsClass.PHASE_GAME_OVER:
-		_show_game_over()
+		if suppress_game_over_modal:
+			if is_instance_valid(game_over_panel):
+				game_over_panel.visible = false
+		else:
+			_show_game_over()
 	elif is_instance_valid(game_over_panel):
 		game_over_panel.visible = false
 

@@ -101,6 +101,7 @@ var _log_dock_controller = null
 var _warmup_controller = null
 var _debug_panel_controller = null
 var _startup_profile_reported: bool = false
+var _startup_suppress_game_over_modal: bool = false
 
 var _procurement_log_preview_pinned_entry_id: int = -1
 var _procurement_log_preview_hover_entry_id: int = -1
@@ -642,11 +643,15 @@ func _apply_responsive_layout() -> void:
 		_layout_controller.apply_responsive_layout()
 
 func _initialize_game() -> void:
+	_startup_suppress_game_over_modal = false
 	# 载入游戏：主菜单可能已在 Globals 中准备好 GameEngine。
 	if Globals.current_game_engine != null and Globals.current_game_engine is GameEngine:
 		var existing: GameEngine = Globals.current_game_engine
 		if existing.get_state() != null:
 			game_engine = existing
+			var s: GameState = existing.get_state()
+			if s != null and str(s.phase) == DefsClass.PHASE_GAME_OVER:
+				_startup_suppress_game_over_modal = true
 			GameLog.info("Game", "复用已载入的游戏引擎")
 			return
 		Globals.current_game_engine = null
@@ -811,6 +816,9 @@ func _show_confirm(title: String, message: String, on_confirm: Callable, on_canc
 
 func _get_game_engine() -> GameEngine:
 	return game_engine
+
+func should_suppress_game_over_modal() -> bool:
+	return _startup_suppress_game_over_modal
 
 func is_replay_mode_active() -> bool:
 	if _timeline_controller != null and _timeline_controller.has_method("is_replay_mode_active"):

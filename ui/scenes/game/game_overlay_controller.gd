@@ -484,7 +484,8 @@ func _ensure_toast_panel() -> void:
 	_toast_panel = PanelContainer.new()
 	_toast_panel.name = "MilestoneToast"
 	_toast_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_toast_panel.z_index = 1000
+	# 需要高于 GameOver 等终局遮罩（GameOverPanel.z_index=1400），保证提示可见。
+	_toast_panel.z_index = 1600
 	_toast_panel.z_as_relative = false
 
 	_toast_panel.anchor_left = 0.5
