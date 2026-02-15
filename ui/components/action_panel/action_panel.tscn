@@ -226,17 +226,20 @@ theme_override_constants/separation = 10
 [node name="CancelContextButton" type="Button" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/ButtonsRow"]
 custom_minimum_size = Vector2(90, 34)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "取消"
 
 [node name="SkipContextButton" type="Button" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/ButtonsRow"]
 visible = false
 custom_minimum_size = Vector2(110, 34)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "跳过"
 
 [node name="ConfirmContextButton" type="Button" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/ButtonsRow"]
 custom_minimum_size = Vector2(110, 34)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "确认"
 
 [node name="ItemsContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]

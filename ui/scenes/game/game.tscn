@@ -301,11 +301,13 @@ text = "取消"
 visible = false
 custom_minimum_size = Vector2(100, 36)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "次要"
 
 [node name="PrimaryButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/FooterRow"]
 custom_minimum_size = Vector2(100, 36)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "确认"
 
 [node name="ActionFlowControls" parent="UIRoot/MainContent/CenterSplit/RightPanel" instance=ExtResource("16_action_flow_controls")]

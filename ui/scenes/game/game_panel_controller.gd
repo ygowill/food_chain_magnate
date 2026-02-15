@@ -267,6 +267,7 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	_sync_modals(state)
 	_sync_action_panel_context()
 	_sync_action_flow_controls()
+	_hide_open_guided_action_panels_if_not_initiatable(state)
 	_auto_open_guided_action_ui(state)
 
 func get_milestone_full_screen_view():
@@ -336,6 +337,8 @@ func _should_hide_action_flow_controls_skip_step() -> bool:
 	# 当“跳过子阶段”已在动作面板 UI 内展示时，隐藏 ActionFlowControls 的同款按钮，避免重复/层级感。
 	# - 右侧 dock 的 guided action 面板：跳过在 FooterRow（左），确认在 FooterRow（右）
 	# - 放置类 overlay：跳过在 ActionPanel ContextPanel（左），确认在 ContextPanel（右）
+	if _is_skip_sub_phase_shown_in_right_panel_footer():
+		return true
 	if _has_active_context_overlay():
 		return true
 
@@ -344,6 +347,19 @@ func _should_hide_action_flow_controls_skip_step() -> bool:
 		return true
 
 	return false
+
+func _is_skip_sub_phase_shown_in_right_panel_footer() -> bool:
+	if _scene == null:
+		return false
+	var btn = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit/RightPanel/FooterRow/SecondaryButton")
+	if btn == null or not (btn is Button):
+		return false
+	var b: Button = btn
+	if not b.visible:
+		return false
+	if not b.has_meta("action_id"):
+		return false
+	return str(b.get_meta("action_id")).strip_edges() == "skip_sub_phase"
 
 func _has_active_context_overlay() -> bool:
 	var overlay = null
@@ -409,6 +425,39 @@ func _auto_open_guided_action_ui(state: GameState) -> void:
 
 	_open_action_ui_for_action_id(guided)
 	_last_guided_action_id = guided
+	# 打开动作 UI 会改变“跳过/确认结束”按钮的承载位置（FooterRow / ContextPanel）；
+	# 立即同步一次 ActionFlowControls，避免出现“下面还残留一个跳过按钮”的重复层级感。
+	_sync_action_flow_controls()
+
+func _hide_open_guided_action_panels_if_not_initiatable(state: GameState) -> void:
+	if _scene == null or state == null:
+		return
+	if not is_instance_valid(_scene.action_panel):
+		return
+	if not _scene.action_panel.has_method("get_action_enabled"):
+		return
+
+	# Recruit / Train / Marketing：若动作不可启动则隐藏面板（避免“无可用员工/无可选项”时仍占屏）
+	if _working_panels != null:
+		if is_instance_valid(_working_panels.recruit_panel) and _working_panels.recruit_panel.visible:
+			if not bool(_scene.action_panel.call("get_action_enabled", "recruit")):
+				_working_panels.recruit_panel.visible = false
+		if is_instance_valid(_working_panels.train_panel) and _working_panels.train_panel.visible:
+			if not bool(_scene.action_panel.call("get_action_enabled", "train")):
+				_working_panels.train_panel.visible = false
+		if is_instance_valid(_working_panels.production_panel) and _working_panels.production_panel.visible:
+			var aid := ""
+			if str(state.sub_phase) == DefsClass.SUB_PHASE_GET_FOOD:
+				aid = "produce_food"
+			elif str(state.sub_phase) == DefsClass.SUB_PHASE_GET_DRINKS:
+				aid = "procure_drinks"
+			if not aid.is_empty() and not bool(_scene.action_panel.call("get_action_enabled", aid)):
+				_working_panels.production_panel.visible = false
+
+	if _marketing_panels != null:
+		if is_instance_valid(_marketing_panels.marketing_panel) and _marketing_panels.marketing_panel.visible:
+			if not bool(_scene.action_panel.call("get_action_enabled", "initiate_marketing")):
+				_marketing_panels.marketing_panel.visible = false
 
 func _has_visible_right_panel_docked_panel() -> bool:
 	if _scene == null:

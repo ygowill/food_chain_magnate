@@ -705,7 +705,10 @@ func _set_visible_actions_from_list(action_ids: Array, initiatable_ids: Array) -
 
 func _compute_guided_flow_visibility() -> void:
 	_guided_action_id = ""
-	for aid in _visible_action_ids:
+	var candidates := _visible_initiatable_action_ids
+	if candidates.is_empty():
+		candidates = _visible_action_ids
+	for aid in candidates:
 		if aid == ActionIdsClass.SKIP_SUB_PHASE:
 			continue
 		if aid == ActionIdsClass.SKIP:

@@ -32,6 +32,7 @@ var _right_panel_footer_primary_button: Button = null
 var _right_panel_footer_source: Object = null
 var _footer_secondary_action_id: String = ""
 var _footer_secondary_disabled_reason: String = ""
+var _footer_secondary_button_meta_key: StringName = &"action_id"
 
 func _init(
 	ensure_right_panel_visible: Callable,
@@ -275,6 +276,10 @@ func _sync_right_panel_footer(active_panel: Object) -> void:
 		_right_panel_footer_secondary_button.tooltip_text = "不可用：%s" % _footer_secondary_disabled_reason
 	else:
 		_right_panel_footer_secondary_button.tooltip_text = ""
+	if show_secondary and not _footer_secondary_action_id.is_empty():
+		_right_panel_footer_secondary_button.set_meta(_footer_secondary_button_meta_key, _footer_secondary_action_id)
+	elif _right_panel_footer_secondary_button.has_meta(_footer_secondary_button_meta_key):
+		_right_panel_footer_secondary_button.remove_meta(_footer_secondary_button_meta_key)
 
 	_right_panel_footer_primary_button.visible = show_primary
 	_right_panel_footer_primary_button.text = primary_text
