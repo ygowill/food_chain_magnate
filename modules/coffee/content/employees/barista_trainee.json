@@ -1,6 +1,6 @@
 {
   "id": "barista_trainee",
-  "name": "咖啡学徒",
+  "name": "见习咖啡师",
   "description": "生产1个咖啡",
   "salary": false,
   "unique": false,

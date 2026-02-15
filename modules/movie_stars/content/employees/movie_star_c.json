@@ -22,7 +22,6 @@
     "movie_stars:dinnertime:tiebreaker:movie_star_c"
   ],
   "pool": {
-    "type": "fixed",
-    "count": 1
+    "type": "one_x"
   }
 }

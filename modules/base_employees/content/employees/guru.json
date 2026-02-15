@@ -18,7 +18,6 @@
   ],
   "mandatory": false,
   "pool": {
-    "type": "fixed",
-    "count": 1
+    "type": "one_x"
   }
 }

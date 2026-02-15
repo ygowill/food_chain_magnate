@@ -22,6 +22,7 @@
   "usage_tags": [],
   "mandatory": false,
   "pool": {
-    "type": "one_x"
+    "type": "fixed",
+    "count": 12
   }
 }
