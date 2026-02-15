@@ -138,6 +138,7 @@ func _ready() -> void:
 	UiStylesClass.apply_vignette(vignette_overlay, 0.25, 0.5)
 	_apply_menu_dialog_styles()
 	_apply_topbar_button_styles()
+	_disable_removed_panel_toggles()
 	_apply_status_bar_styles()
 	_layout_controller = GameLayoutControllerClass.new(
 		self,
@@ -383,6 +384,15 @@ func _apply_topbar_button_styles() -> void:
 		if btn is Button:
 			UiStylesClass.apply_button_secondary(btn)
 
+func _disable_removed_panel_toggles() -> void:
+	# 改造：不允许隐藏信息/隐藏操作，也不允许关闭右侧动作区（只允许通过“跳过”推进动作流）。
+	for btn in [toggle_left_panel_button, toggle_right_panel_button, right_panel_back_button, right_panel_close_button]:
+		if btn == null or not is_instance_valid(btn):
+			continue
+		btn.visible = false
+		btn.disabled = true
+		btn.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
 func _apply_status_bar_styles() -> void:
 	UiStylesClass.apply_status_panel(status_bar)
 	UiStylesClass.apply_break_tag(bank_break_tag)
@@ -528,8 +538,8 @@ func _ensure_left_area_visible() -> void:
 		_layout_controller.ensure_left_area_visible()
 
 func _on_toggle_left_panel_pressed() -> void:
-	if _layout_controller != null:
-		_layout_controller.on_toggle_left_panel_pressed()
+	# 面板隐藏按钮已移除：保持信息区常驻可见
+	_ensure_left_area_visible()
 
 func _init_right_panel_toggle() -> void:
 	if _layout_controller != null:
@@ -588,8 +598,8 @@ func _on_right_panel_back_pressed() -> void:
 	_on_right_panel_footer_cancel_pressed()
 
 func _on_right_panel_close_pressed() -> void:
-	if _layout_controller != null and _layout_controller.is_right_panel_visible():
-		_on_toggle_right_panel_pressed()
+	# 右侧动作区不允许关闭（避免隐藏导致误操作/软锁）
+	_ensure_right_panel_visible()
 
 func _cancel_right_panel_docked_panel() -> void:
 	if _panel_controller == null:
@@ -610,8 +620,8 @@ func _cancel_right_panel_docked_panel() -> void:
 		_panel_controller.hide_all()
 
 func _on_toggle_right_panel_pressed() -> void:
-	if _layout_controller != null:
-		await _layout_controller.on_toggle_right_panel_pressed()
+	# 面板隐藏按钮已移除：保持右侧操作区常驻可见
+	_ensure_right_panel_visible()
 
 func _apply_ui_layout() -> void:
 	if _layout_controller != null:

@@ -157,26 +157,8 @@ func _handle_escape() -> bool:
 		if closed is bool and bool(closed):
 			return true
 
-	# 关闭阶段面板/取消地图模式
-	if not is_instance_valid(_panel_controller):
-		return false
-
-	var map_mode_active := false
-	if is_instance_valid(_map_controller) and _map_controller.has_method("get_mode"):
-		map_mode_active = not str(_map_controller.call("get_mode")).is_empty()
-
-	if map_mode_active:
-		if _panel_controller.has_method("hide_all"):
-			_panel_controller.call("hide_all")
-		return true
-
-	if _panel_controller.has_method("has_open_phase_ui") and bool(_panel_controller.call("has_open_phase_ui")):
-		if _panel_controller.has_method("hide_all_keep_selection"):
-			_panel_controller.call("hide_all_keep_selection")
-		elif _panel_controller.has_method("hide_all"):
-			_panel_controller.call("hide_all")
-		return true
-
+	# v2 guided action flow：ESC 不再用于“退出当前动作/关闭阶段面板/退出选点”，
+	# 交给上层统一打开菜单（避免玩家误退出当前动作）。
 	return false
 
 func _try_rotate_placement() -> bool:

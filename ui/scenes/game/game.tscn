@@ -126,10 +126,12 @@ layout_mode = 2
 text = "推进子阶段"
 
 [node name="ToggleLeftPanelButton" type="Button" parent="UIRoot/TopBar"]
+visible = false
 layout_mode = 2
 text = "隐藏信息"
 
 [node name="ToggleRightPanelButton" type="Button" parent="UIRoot/TopBar"]
+visible = false
 layout_mode = 2
 text = "隐藏操作"
 
@@ -254,6 +256,7 @@ theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
 text = "操作"
 
 [node name="CloseButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/HeaderRow"]
+visible = false
 layout_mode = 2
 text = "×"
 
@@ -289,6 +292,7 @@ theme_override_constants/separation = 10
 alignment = 2
 
 [node name="CancelButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/FooterRow"]
+visible = false
 custom_minimum_size = Vector2(100, 36)
 layout_mode = 2
 text = "取消"

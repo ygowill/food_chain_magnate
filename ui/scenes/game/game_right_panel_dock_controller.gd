@@ -91,7 +91,8 @@ func sync_docked_view() -> void:
 	if is_instance_valid(_right_panel_header_row):
 		_right_panel_header_row.visible = not hide_header_for_log
 	if is_instance_valid(_right_panel_back_button):
-		_right_panel_back_button.visible = has_docked and not hide_header_for_log
+		# v2 guided action flow：不允许通过“返回”退出当前动作
+		_right_panel_back_button.visible = false
 	if is_instance_valid(_right_panel_title_label):
 		if has_docked and is_instance_valid(active):
 			var title := ""
@@ -189,6 +190,8 @@ func _sync_right_panel_footer(active_panel: Object) -> void:
 	var show_cancel := bool(config.get("show_cancel", true))
 	var cancel_text := str(config.get("cancel_text", "取消"))
 	var cancel_enabled := bool(config.get("cancel_enabled", true))
+	# guided action flow：不允许通过 footer 取消退出当前动作
+	show_cancel = false
 
 	var show_secondary := bool(config.get("show_secondary", false))
 	var secondary_text := str(config.get("secondary_text", ""))

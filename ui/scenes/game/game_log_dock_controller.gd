@@ -12,6 +12,7 @@ var _dock_popup_into_right_panel: Callable = Callable()
 var _game_log_panel: Control = null
 var _right_panel_dock_host: Control = null
 var _timeline_controller: Object = null
+var _restore_panel_after_close: Control = null
 
 func _init(
 	ensure_left_area_visible: Callable,
@@ -58,13 +59,8 @@ func toggle_game_log() -> void:
 		if is_instance_valid(_timeline_controller) and _timeline_controller.has_method("apply_live_log_timeline_from_engine"):
 			_timeline_controller.call("apply_live_log_timeline_from_engine")
 
-		# 若右侧已有 docked 操作面板/弹窗，先关闭它们，避免日志被遮挡或出现多个 docked 视图竞争焦点。
-		var has_other_docked := _has_other_visible_docked_panels()
-		if has_other_docked:
-			if _cancel_right_panel_docked_panel.is_valid():
-				_cancel_right_panel_docked_panel.call()
-			if _sync_right_panel_docked_view.is_valid():
-				_sync_right_panel_docked_view.call()
+		# 若右侧 DockHost 内已有可见面板（例如当前动作 UI），先临时隐藏，避免多个 docked 视图竞争焦点。
+		_hide_other_visible_docked_panels()
 
 		# 将日志面板嵌入到 RightPanel 抽屉区域（覆盖 ActionPanel），并显示。
 		_game_log_panel.set_meta("popup_title", "日志")
@@ -73,6 +69,7 @@ func toggle_game_log() -> void:
 	else:
 		# 关闭日志：返回默认右侧动作区。
 		_game_log_panel.visible = false
+		_restore_hidden_docked_panels()
 		if _sync_right_panel_docked_view.is_valid():
 			_sync_right_panel_docked_view.call()
 
@@ -90,13 +87,8 @@ func show_game_log_panel_in_right_panel() -> void:
 	if _ensure_right_panel_visible.is_valid():
 		_ensure_right_panel_visible.call()
 
-	# 若右侧已有 docked 操作面板/弹窗，先关闭它们，避免多个 docked 视图竞争焦点。
-	var has_other_docked := _has_other_visible_docked_panels()
-	if has_other_docked:
-		if _cancel_right_panel_docked_panel.is_valid():
-			_cancel_right_panel_docked_panel.call()
-		if _sync_right_panel_docked_view.is_valid():
-			_sync_right_panel_docked_view.call()
+	# 若右侧 DockHost 内已有可见面板（例如当前动作 UI），先临时隐藏，避免多个 docked 视图竞争焦点。
+	_hide_other_visible_docked_panels()
 
 	_game_log_panel.set_meta("popup_title", "日志")
 	if _dock_popup_into_right_panel.is_valid():
@@ -111,3 +103,26 @@ func _has_other_visible_docked_panels() -> bool:
 		if ch is Control and (ch as Control).visible:
 			return true
 	return false
+
+func _hide_other_visible_docked_panels() -> void:
+	_restore_panel_after_close = null
+	if not is_instance_valid(_right_panel_dock_host):
+		return
+	for ch in _right_panel_dock_host.get_children():
+		if ch == _game_log_panel:
+			continue
+		if not (ch is Control):
+			continue
+		var c: Control = ch
+		if not c.visible:
+			continue
+		if _restore_panel_after_close == null:
+			_restore_panel_after_close = c
+		c.visible = false
+
+func _restore_hidden_docked_panels() -> void:
+	if _restore_panel_after_close == null or not is_instance_valid(_restore_panel_after_close):
+		_restore_panel_after_close = null
+		return
+	_restore_panel_after_close.visible = true
+	_restore_panel_after_close = null

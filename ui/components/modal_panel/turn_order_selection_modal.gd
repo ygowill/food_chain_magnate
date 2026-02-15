@@ -11,6 +11,7 @@ var _base_selections: Dictionary = {}
 var _acting_player_id: int = -1
 
 func _ready() -> void:
+	allow_cancel = false
 	super._ready()
 	set_title_text("选择顺序位置")
 	set_confirm_text("确认选择")

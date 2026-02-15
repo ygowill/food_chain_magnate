@@ -198,7 +198,7 @@ func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) 
 
 	_confirm_context_button.text = "确认移动" if mode == "move_restaurant" else "确认放置"
 	_confirm_context_button.disabled = not overlay.can_confirm()
-	_cancel_context_button.visible = true
+	_cancel_context_button.visible = false
 	_cancel_context_button.text = "取消"
 
 	_context_syncing = false
@@ -237,7 +237,7 @@ func _refresh_house_placement_context(overlay: HousePlacementOverlay) -> void:
 
 	_confirm_context_button.text = "确认添加花园" if mode == "add_garden" else "确认放置"
 	_confirm_context_button.disabled = not overlay.can_confirm()
-	_cancel_context_button.visible = true
+	_cancel_context_button.visible = false
 	_cancel_context_button.text = "取消"
 
 	_context_syncing = false
@@ -271,7 +271,7 @@ func _refresh_piece_placement_context(overlay) -> void:
 
 	_confirm_context_button.text = "确认放置"
 	_confirm_context_button.disabled = not overlay.can_confirm()
-	_cancel_context_button.visible = true
+	_cancel_context_button.visible = false
 	_cancel_context_button.text = "取消"
 
 	_context_syncing = false
@@ -321,7 +321,7 @@ func _refresh_custom_context(overlay: Node) -> void:
 	_sync_custom_context_node(overlay)
 
 	if is_instance_valid(_cancel_context_button):
-		_cancel_context_button.visible = bool(spec.get("cancel_visible", true))
+		_cancel_context_button.visible = false
 		_cancel_context_button.text = str(spec.get("cancel_text", "取消"))
 	if is_instance_valid(_confirm_context_button):
 		_confirm_context_button.text = str(spec.get("confirm_text", "确认"))

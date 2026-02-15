@@ -12,6 +12,7 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 @export var title: String = ""
 @export var confirm_text: String = "确认"
 @export var cancel_text: String = "取消"
+@export var allow_cancel: bool = true
 @export var allow_peek_map: bool = true
 
 @onready var overlay: ColorRect = $Overlay
@@ -39,7 +40,9 @@ func _ready() -> void:
 		confirm_button.pressed.connect(_on_confirm_pressed)
 	if is_instance_valid(cancel_button):
 		cancel_button.text = cancel_text
-		cancel_button.pressed.connect(_on_cancel_pressed)
+		cancel_button.visible = allow_cancel
+		if allow_cancel:
+			cancel_button.pressed.connect(_on_cancel_pressed)
 	_update_hint()
 	if is_instance_valid(hint_label):
 		UiStylesClass.apply_label_hint_dark(hint_label)
@@ -152,8 +155,11 @@ func _input(event: InputEvent) -> void:
 
 	match e.keycode:
 		KEY_ESCAPE:
-			if e.pressed:
-				get_viewport().set_input_as_handled()
+			if not e.pressed:
+				return
+			# 强制弹窗（allow_cancel=false）也应吞掉 ESC，避免穿透到上层触发其它 UI（例如菜单）。
+			get_viewport().set_input_as_handled()
+			if allow_cancel:
 				_on_cancel_pressed()
 		KEY_ENTER, KEY_KP_ENTER:
 			if e.pressed and is_instance_valid(confirm_button) and not confirm_button.disabled:
@@ -189,11 +195,18 @@ func _apply_overlay_alpha(alpha: float) -> void:
 func _update_hint() -> void:
 	if not is_instance_valid(hint_label):
 		return
-	hint_label.text = "ESC 取消" + (" | 按住 Space 查看地图" if allow_peek_map else "")
+	var parts: Array[String] = []
+	if allow_cancel:
+		parts.append("ESC 取消")
+	if allow_peek_map:
+		parts.append("按住 Space 查看地图")
+	hint_label.text = " | ".join(parts)
 
 func _on_confirm_pressed() -> void:
 	completed.emit({})
 
 func _on_cancel_pressed() -> void:
+	if not allow_cancel:
+		return
 	cancelled.emit()
 	close()

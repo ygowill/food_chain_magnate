@@ -23,6 +23,7 @@ var _split_adjust_attempts: int = 0
 var _split_adjusted: bool = false
 
 func _ready() -> void:
+	allow_cancel = false
 	super._ready()
 	set_title_text("公司结构重组")
 	set_confirm_text("确认重组")

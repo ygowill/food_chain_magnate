@@ -25,6 +25,7 @@ var _card_summaries: Array[String] = []
 var _card_button_group: ButtonGroup = ButtonGroup.new()
 
 func _ready() -> void:
+	allow_cancel = false
 	allow_peek_map = false
 	super._ready()
 	set_process(false)
@@ -34,10 +35,6 @@ func _ready() -> void:
 	set_confirm_text("确认选择")
 	set_cancel_text("")
 	set_confirm_enabled(false)
-
-	# 强制选择：隐藏取消按钮，并忽略 ESC
-	if is_instance_valid(cancel_button):
-		cancel_button.visible = false
 
 	if is_instance_valid(hint_label):
 		hint_label.text = "请确保其他玩家未看到你的选择；确认后不可更改。"

@@ -79,7 +79,8 @@ func refresh() -> void:
 func _update_close_visibility() -> void:
 	if not is_instance_valid(button_row):
 		return
-	button_row.visible = show_close_button and not _embedded_in_right_panel
+	# 右侧 Dock 面板中：不允许通过“关闭”退出当前动作流（只允许跳过推进）。
+	button_row.visible = show_close_button and (not embedded_in_player_panel) and (not _embedded_in_right_panel)
 
 func _apply_embedded_layout() -> void:
 	# 尺寸：嵌入布局时不要用自己的 custom_minimum_size 把父容器撑爆。

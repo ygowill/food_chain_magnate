@@ -109,10 +109,10 @@ var HELP_DATABASE: Dictionary = {
 		"title": "动作面板",
 		"content": "显示当前可执行的动作。灰色按钮表示该动作当前不可用。"
 	},
-	"ui_map_mode_bar": {
-		"title": "地图模式提示条",
-		"content": "当进入地图选点/工具模式时显示当前模式与下一步提示。\n可按 ESC 取消当前模式。"
-	},
+		"ui_map_mode_bar": {
+			"title": "地图模式提示条",
+			"content": "当进入地图选点/工具模式时显示当前模式与下一步提示。\n动作选点模式不提供取消入口，可通过底部“跳过”推进。"
+		},
 	"ui_topbar_log": {
 		"title": "日志",
 		"content": "一键显示/隐藏游戏日志，并支持过滤与搜索。"
