@@ -124,6 +124,8 @@ func toggle_employee_tree() -> void:
 		return
 	if _views_controller.is_employee_tree_visible():
 		_views_controller.hide_employee_tree()
+		if _refresh_ui.is_valid():
+			_refresh_ui.call()
 		return
 
 	_hide_all_phase_panels(true, true)

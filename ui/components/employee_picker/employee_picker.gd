@@ -9,6 +9,9 @@ signal employee_selected(employee_id: String)
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
+@export var card_variant: EmployeeCard.CardVariant = EmployeeCard.CardVariant.COMPACT
+@export var card_display_scale: float = 1.0
+
 var selected_employee_id: String = ""
 var selected_item_key: String = ""
 var _items_by_key: Dictionary = {} # item_key -> EmployeePickerItem
@@ -77,6 +80,8 @@ func set_items(items: Array[Dictionary], selected_id: String = "") -> void:
 		picker_item.employee_def = emp_def
 		picker_item.badge_text = badge_text
 		picker_item.tag_text = tag_text
+		picker_item.card_variant = card_variant
+		picker_item.card_scale = card_display_scale
 		picker_item.pressed.connect(_on_item_pressed)
 		picker_item.set_enabled(enabled)
 		add_child(picker_item)
@@ -196,6 +201,8 @@ class EmployeePickerItem extends Control:
 	var employee_def: Dictionary = {}
 	var badge_text: String = ""
 	var tag_text: String = ""
+	var card_variant: int = EmployeeCard.CardVariant.COMPACT
+	var card_scale: float = 1.0
 
 	var _enabled: bool = true
 	var _selected: bool = false
@@ -209,14 +216,24 @@ class EmployeePickerItem extends Control:
 	func _ready() -> void:
 		_build_ui()
 
+	func _sc_f(v: float) -> float:
+		return float(v) * clampf(float(card_scale), 0.5, 2.0)
+
+	func _sc_i(v: int, min_value: int = 1) -> int:
+		return maxi(min_value, int(round(float(v) * clampf(float(card_scale), 0.5, 2.0))))
+
 	func _build_ui() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var s := clampf(float(card_scale), 0.5, 2.0)
+		var base_size := EmployeeCard.FULL_SIZE if int(card_variant) == int(EmployeeCard.CardVariant.FULL) else EmployeeCard.COMPACT_SIZE
+		var badge_h := int(round(float(BADGE_BAR_HEIGHT) * s))
 		# FlowContainer 布局依赖子控件的 minimum size。EmployeeCard 的 min size 不会自动上推到父 Control。
 		# 这里额外预留顶部 badge 区域，避免数量/步数标记遮挡卡片标题（issue_tracker #34 / #ui-polish-10）。
-		custom_minimum_size = EmployeeCard.COMPACT_SIZE + Vector2(0, BADGE_BAR_HEIGHT)
+		custom_minimum_size = Vector2(round(base_size.x * s), round(base_size.y * s)) + Vector2(0, badge_h)
 
 		_card = EmployeeCardClass.new()
-		_card.variant = EmployeeCard.CardVariant.COMPACT
+		_card.variant = card_variant
+		_card.display_scale = s
 		_card.draggable = false
 		_card.employee_id = employee_id
 		_card.setup(employee_def)
@@ -224,16 +241,26 @@ class EmployeePickerItem extends Control:
 		add_child(_card)
 		_card.set_anchors_preset(Control.PRESET_FULL_RECT)
 		_card.offset_left = 0
-		_card.offset_top = BADGE_BAR_HEIGHT
+		_card.offset_top = badge_h
 		_card.offset_right = 0
 		_card.offset_bottom = 0
 
 		# Tag badge (left of count badge)
-		_tag_panel = _build_badge_panel(Vector2(40, 18), Vector2(-78, 4), Vector2(-32, 22), 10)
+		_tag_panel = _build_badge_panel(
+			Vector2(_sc_i(40), _sc_i(18)),
+			Vector2(-_sc_f(78), _sc_f(4)),
+			Vector2(-_sc_f(32), _sc_f(22)),
+			_sc_i(10, 7)
+		)
 		_tag_label = _get_badge_label(_tag_panel)
 
 		# Count badge (top-right)
-		_badge_panel = _build_badge_panel(Vector2(26, 18), Vector2(-28, 4), Vector2(-4, 22), 11)
+		_badge_panel = _build_badge_panel(
+			Vector2(_sc_i(26), _sc_i(18)),
+			Vector2(-_sc_f(28), _sc_f(4)),
+			Vector2(-_sc_f(4), _sc_f(22)),
+			_sc_i(11, 8)
+		)
 		_badge_label = _get_badge_label(_badge_panel)
 
 		_update_display()

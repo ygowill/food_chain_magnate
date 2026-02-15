@@ -83,6 +83,8 @@ func show_employee_tree() -> void:
 func hide_employee_tree() -> void:
 	if is_instance_valid(_employee_tree_panel):
 		_employee_tree_panel.visible = false
+	if _scene != null and is_instance_valid(_scene) and _scene.has_method("_update_ui"):
+		_scene.call_deferred("_update_ui")
 
 func get_employee_tree_panel():
 	_ensure_employee_tree_panel()
