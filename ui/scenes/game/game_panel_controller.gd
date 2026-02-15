@@ -971,9 +971,7 @@ func _center_popup(panel: Control) -> void:
 	if anim_manager == null:
 		return
 
-	if layout == POPUP_LAYOUT_DOCK_RIGHT and anim_manager.has_method("animate_slide_in"):
-		anim_manager.call("animate_slide_in", panel, "right")
-	elif anim_manager.has_method("animate_scale_bounce"):
+	if layout != POPUP_LAYOUT_DOCK_RIGHT and anim_manager.has_method("animate_scale_bounce"):
 		anim_manager.call("animate_scale_bounce", panel)
 
 func _center_popup_in_viewport(panel: Control) -> void:

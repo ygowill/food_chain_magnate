@@ -87,7 +87,20 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="CompanyHost" type="Control" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split"]
+[node name="CompanyHost" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 0
+
+[node name="Divider" type="ColorRect" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split/CompanyHost"]
+custom_minimum_size = Vector2(2, 0)
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+color = Color(0.55, 0.5, 0.4, 0.85)
+
+[node name="CompanyContentHost" type="Control" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split/CompanyHost"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3

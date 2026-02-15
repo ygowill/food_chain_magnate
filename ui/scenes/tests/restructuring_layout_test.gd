@@ -98,11 +98,11 @@ static func run() -> Result:
 
 	# Restructuring: left panel should fit 3 compact cards per row (issue_tracker #45).
 	var hand_min_w := float((hand as Control).custom_minimum_size.x)
-	if hand_min_w < 420.0 or hand_min_w > 460.0:
+	if hand_min_w < 500.0 or hand_min_w > 540.0:
 		_safe_free(modal)
 		_safe_free(hand)
 		_safe_free(company)
-		return Result.failure("HandArea.custom_minimum_size.x=%s (重组模式期望 3 列≈440)" % str((hand as Control).custom_minimum_size.x))
+		return Result.failure("HandArea.custom_minimum_size.x=%s (重组模式期望 3 列≈520)" % str((hand as Control).custom_minimum_size.x))
 
 	var ha: HandArea = hand
 	if is_instance_valid(ha.active_section) and ha.active_section.visible:

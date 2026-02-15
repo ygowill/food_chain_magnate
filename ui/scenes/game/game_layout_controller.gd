@@ -151,10 +151,7 @@ func on_toggle_right_panel_pressed() -> void:
 		_update_right_panel_toggle_button()
 		return
 
-	if OS.has_feature("headless"):
-		_right_panel.visible = _right_panel_visible
-	else:
-		await _animate_right_panel_visibility(_right_panel, _right_panel_visible)
+	_right_panel.visible = _right_panel_visible
 
 	if is_instance_valid(_center_split) and _right_panel_visible:
 		_center_split.split_offset = _center_split_default_split_offset
@@ -165,39 +162,6 @@ func _update_right_panel_toggle_button() -> void:
 	if not is_instance_valid(_toggle_right_panel_button):
 		return
 	_toggle_right_panel_button.text = "隐藏操作" if _right_panel_visible else "显示操作"
-
-func _animate_right_panel_visibility(right_panel: Control, make_visible: bool) -> void:
-	if not is_instance_valid(right_panel):
-		return
-	if OS.has_feature("headless"):
-		right_panel.visible = make_visible
-		return
-	if _scene == null or not (_scene.has_method("get_ui_animation_manager")):
-		right_panel.visible = make_visible
-		return
-	var anim_manager = _scene.get_ui_animation_manager()
-	if anim_manager == null:
-		right_panel.visible = make_visible
-		return
-
-	if make_visible:
-		right_panel.visible = true
-		if _scene != null and is_instance_valid(_scene):
-			await _scene.get_tree().process_frame
-		if anim_manager.has_method("animate_slide_in"):
-			anim_manager.call("animate_slide_in", right_panel, "right")
-	else:
-		if not anim_manager.has_method("animate_slide_out"):
-			right_panel.visible = false
-			return
-		var original_pos := right_panel.position
-		anim_manager.call("animate_slide_out", right_panel, "right", Callable(self, "_finish_hide_right_panel").bind(right_panel, original_pos))
-
-func _finish_hide_right_panel(right_panel: Control, original_pos: Vector2) -> void:
-	if not is_instance_valid(right_panel):
-		return
-	right_panel.visible = false
-	right_panel.position = original_pos
 
 func apply_ui_layout() -> void:
 	# 强制新布局（v2），不再支持 v1（issue_tracker #60）。

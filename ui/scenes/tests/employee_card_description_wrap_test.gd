@@ -48,11 +48,11 @@ static func run() -> Result:
 	if title_font_size < 9:
 		compact_title.free()
 		return Result.failure("Compact 标题字号下限错误: got=%d expect>=9" % title_font_size)
-	if compact_title._role_color_rect == null:
+	if compact_title._role_color_panel == null:
 		compact_title.free()
 		return Result.failure("Compact 标题栏未创建")
-	if compact_title._role_color_rect.custom_minimum_size.y < 16.0:
-		var header_h := compact_title._role_color_rect.custom_minimum_size.y
+	if compact_title._role_color_panel.custom_minimum_size.y < 16.0:
+		var header_h := compact_title._role_color_panel.custom_minimum_size.y
 		compact_title.free()
 		return Result.failure("Compact 标题栏高度下限错误: got=%s expect>=16" % str(header_h))
 	compact_title.free()

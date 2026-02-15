@@ -280,6 +280,7 @@ func _rebuild_content() -> void:
 	UiRebuildHelpersClass.free_children(products_container)
 
 	_employee_picker = EmployeePickerClass.new()
+	_employee_picker.card_display_scale = 1.25
 	_employee_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_employee_picker.add_theme_constant_override("h_separation", 10)
 	_employee_picker.add_theme_constant_override("v_separation", 10)

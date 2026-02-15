@@ -6,12 +6,12 @@ extends "res://ui/components/modal_panel/modal_panel_base.gd"
 signal player_selected(player_id: int)
 
 @onready var hand_host: Control = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split/HandHost
-@onready var company_host: Control = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split/CompanyHost
+@onready var company_host: Control = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split/CompanyHost/CompanyContentHost
 @onready var status_label: Label = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Hint
 @onready var player_buttons_host: HBoxContainer = $Panel/MarginContainer/VBoxContainer/PlayerRow/PlayerButtons
 @onready var split: HSplitContainer = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split
 
-const RESTRUCTURING_HAND_TARGET_WIDTH := 440.0 # fits 3 compact cards/row (issue_tracker #45)
+const RESTRUCTURING_HAND_TARGET_WIDTH := 520.0 # fits 3 compact cards/row at scale 1.25 (issue_tracker #45)
 const _MAX_SPLIT_ADJUST_ATTEMPTS := 6
 
 var _hand_area: Node = null

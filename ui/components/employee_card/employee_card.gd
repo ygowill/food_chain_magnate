@@ -29,7 +29,8 @@ var _dragging: bool = false
 var _drag_start_pos: Vector2 = Vector2.ZERO
 
 # UI 子节点
-var _role_color_rect: ColorRect
+var _role_color_panel: Panel
+var _role_color_style: StyleBoxFlat
 var _name_label: Label
 var _salary_indicator: Label
 var _description_label: Label
@@ -125,7 +126,8 @@ func _build_ui() -> void:
 			child.queue_free()
 	clip_contents = true
 
-	_role_color_rect = null
+	_role_color_panel = null
+	_role_color_style = null
 	_name_label = null
 	_salary_indicator = null
 	_description_label = null
@@ -183,14 +185,24 @@ func _build_ui() -> void:
 func _build_header_bar(parent: VBoxContainer) -> void:
 	# 顶部：类别色整行底色 + 名称（填满宽度并紧贴卡片上边缘）
 	var header_base_height := 24.0 if variant == CardVariant.FULL else 20.0
-	_role_color_rect = ColorRect.new()
-	_role_color_rect.custom_minimum_size = Vector2(0, _scaled(header_base_height, 1))
+	_role_color_panel = Panel.new()
+	_role_color_panel.custom_minimum_size = Vector2(0, _scaled(header_base_height, 1))
 	if multiline_name and variant == CardVariant.COMPACT:
 		# 升级路线图会在小缩放下显示；给标题条设置下限，避免导出端字体栅格化后“看不见名字”。
-		_role_color_rect.custom_minimum_size.y = maxf(_role_color_rect.custom_minimum_size.y, 16.0)
-	_role_color_rect.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_role_color_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(_role_color_rect)
+		_role_color_panel.custom_minimum_size.y = maxf(_role_color_panel.custom_minimum_size.y, 16.0)
+	_role_color_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_role_color_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(_role_color_panel)
+
+	_role_color_style = StyleBoxFlat.new()
+	_role_color_style.set_border_width_all(0)
+	var radius := 8 if variant == CardVariant.FULL else 4
+	_role_color_style.corner_radius_top_left = radius
+	_role_color_style.corner_radius_top_right = radius
+	_role_color_style.corner_radius_bottom_left = 0
+	_role_color_style.corner_radius_bottom_right = 0
+	_role_color_style.bg_color = Color(0, 0, 0, 1)
+	_role_color_panel.add_theme_stylebox_override("panel", _role_color_style)
 
 	_name_label = Label.new()
 	var header_font_base := 16.0 if variant == CardVariant.FULL else 14.0
@@ -212,7 +224,7 @@ func _build_header_bar(parent: VBoxContainer) -> void:
 		var hpad := _scaled(3.0, 0)
 		header_margin.add_theme_constant_override("margin_left", hpad)
 		header_margin.add_theme_constant_override("margin_right", hpad)
-		_role_color_rect.add_child(header_margin)
+		_role_color_panel.add_child(header_margin)
 
 		_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_name_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -226,7 +238,7 @@ func _build_header_bar(parent: VBoxContainer) -> void:
 		var header_center := CenterContainer.new()
 		header_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, 0)
 		header_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_role_color_rect.add_child(header_center)
+		_role_color_panel.add_child(header_center)
 		header_center.add_child(_name_label)
 
 func _build_compact_layout(vbox: VBoxContainer) -> void:
@@ -413,8 +425,8 @@ func _update_display() -> void:
 
 	var role: String = str(_employee_def.get("role", "special"))
 	var color: Color = Color(EmployeeRoleColorsClass.role_to_color_hex(role))
-	if _role_color_rect != null:
-		_role_color_rect.color = color
+	if _role_color_style != null:
+		_role_color_style.bg_color = color
 
 	# 工资
 	var salary: bool = bool(_employee_def.get("salary", true))

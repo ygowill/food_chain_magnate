@@ -67,6 +67,7 @@ size_flags_horizontal = 3
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 8
 script = ExtResource("2_employee_picker")
+card_display_scale = 1.25
 
 [node name="PathSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -91,6 +92,7 @@ size_flags_horizontal = 3
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 8
 script = ExtResource("2_employee_picker")
+card_display_scale = 1.25
 
 [node name="ConfirmButton" type="Button" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2

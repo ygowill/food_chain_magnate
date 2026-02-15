@@ -9,7 +9,9 @@ signal card_dropped(employee_id: String, target: Control)
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
-const RESTRUCTURING_TARGET_WIDTH := 440.0 # ~3x compact cards + spacing (issue_tracker #45)
+const RESTRUCTURING_TARGET_WIDTH := 520.0 # ~3x compact cards (scale 1.25) + spacing (issue_tracker #45)
+
+@export var card_display_scale: float = 1.0
 
 @onready var active_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ActiveSection/ActiveContainer
 @onready var reserve_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ReserveSection/ReserveContainer
@@ -162,6 +164,7 @@ func _build_cards_for_container(employee_ids: Array[String], container: Control,
 
 	for emp_id in employee_ids:
 		var card := EmployeeCardClass.new()
+		card.set_display_scale(card_display_scale)
 		card.employee_id = emp_id
 		card.draggable = (not is_busy) and _drag_enabled and emp_id != "ceo"
 
