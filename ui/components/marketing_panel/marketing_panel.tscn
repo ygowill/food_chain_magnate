@@ -202,4 +202,4 @@ text = "取消"
 [node name="ConfirmButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonRow"]
 custom_minimum_size = Vector2(100, 36)
 layout_mode = 2
-text = "确认"
+text = "确认营销"

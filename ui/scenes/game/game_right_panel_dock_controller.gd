@@ -3,9 +3,20 @@
 class_name GameRightPanelDockController
 extends RefCounted
 
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
+const _GUIDED_ACTION_FOOTER_SCRIPT_PATHS := {
+	"res://ui/components/recruit_panel/recruit_panel.gd": true,
+	"res://ui/components/train_panel/train_panel.gd": true,
+	"res://ui/components/marketing_panel/marketing_panel.gd": true,
+	"res://ui/components/production_panel/production_panel.gd": true,
+}
+
 var _ensure_right_panel_visible: Callable = Callable()
 var _cancel_docked_panel: Callable = Callable()
 var _toggle_game_log: Callable = Callable()
+var _request_action: Callable = Callable()
+var _get_flow_controls_config: Callable = Callable()
 
 var _game_log_panel: Control = null
 var _right_panel_default_stack: Control = null
@@ -19,6 +30,8 @@ var _right_panel_footer_secondary_button: Button = null
 var _right_panel_footer_primary_button: Button = null
 
 var _right_panel_footer_source: Object = null
+var _footer_secondary_action_id: String = ""
+var _footer_secondary_disabled_reason: String = ""
 
 func _init(
 	ensure_right_panel_visible: Callable,
@@ -33,11 +46,15 @@ func _init(
 	right_panel_footer_row: Control,
 	right_panel_footer_cancel_button: Button,
 	right_panel_footer_secondary_button: Button,
-	right_panel_footer_primary_button: Button
+	right_panel_footer_primary_button: Button,
+	request_action: Callable,
+	get_flow_controls_config: Callable
 ) -> void:
 	_ensure_right_panel_visible = ensure_right_panel_visible
 	_cancel_docked_panel = cancel_docked_panel
 	_toggle_game_log = toggle_game_log
+	_request_action = request_action
+	_get_flow_controls_config = get_flow_controls_config
 	_game_log_panel = game_log_panel
 	_right_panel_default_stack = right_panel_default_stack
 	_right_panel_dock_host = right_panel_dock_host
@@ -120,6 +137,9 @@ func on_footer_primary_pressed() -> void:
 		active.call("right_panel_footer_primary")
 
 func on_footer_secondary_pressed() -> void:
+	if _footer_secondary_action_id == "skip_sub_phase" and _request_action.is_valid():
+		_request_action.call("skip_sub_phase", {})
+		return
 	var active := _get_active_docked_panel()
 	if active == null or not is_instance_valid(active):
 		return
@@ -166,6 +186,28 @@ func _bind_right_panel_footer_source(active_panel: Object) -> void:
 func _on_right_panel_footer_changed() -> void:
 	sync_docked_view()
 
+func _is_guided_action_panel(active_panel: Object) -> bool:
+	if active_panel == null or not is_instance_valid(active_panel):
+		return false
+	if not (active_panel is Node):
+		return false
+	var scr = (active_panel as Node).get_script()
+	if scr == null or not (scr is Script):
+		return false
+	return _GUIDED_ACTION_FOOTER_SCRIPT_PATHS.has(str((scr as Script).resource_path))
+
+func _get_skip_step_config() -> Dictionary:
+	if not _get_flow_controls_config.is_valid():
+		return {}
+	var v = _get_flow_controls_config.call()
+	if not (v is Dictionary):
+		return {}
+	var cfg: Dictionary = v
+	var ss_val = cfg.get("skip_step", null)
+	if not (ss_val is Dictionary):
+		return {}
+	return Dictionary(ss_val)
+
 func _sync_right_panel_footer(active_panel: Object) -> void:
 	if not is_instance_valid(_right_panel_footer_row):
 		return
@@ -187,6 +229,10 @@ func _sync_right_panel_footer(active_panel: Object) -> void:
 		_right_panel_footer_row.visible = false
 		return
 
+	_footer_secondary_action_id = ""
+	_footer_secondary_disabled_reason = ""
+	var is_guided_action_panel := _is_guided_action_panel(active_panel)
+
 	var show_cancel := bool(config.get("show_cancel", true))
 	var cancel_text := str(config.get("cancel_text", "取消"))
 	var cancel_enabled := bool(config.get("cancel_enabled", true))
@@ -206,6 +252,16 @@ func _sync_right_panel_footer(active_panel: Object) -> void:
 	if primary_text.is_empty():
 		show_primary = false
 
+	# guided action flow：把“跳过子阶段”放入 footer，与确认在同一行（跳过在左，确认在右）。
+	if is_guided_action_panel and not show_secondary:
+		var ss_cfg := _get_skip_step_config()
+		if not ss_cfg.is_empty() and bool(ss_cfg.get("visible", false)):
+			show_secondary = true
+			secondary_text = str(ss_cfg.get("text", "")).strip_edges()
+			secondary_enabled = bool(ss_cfg.get("enabled", true))
+			_footer_secondary_action_id = "skip_sub_phase"
+			_footer_secondary_disabled_reason = str(ss_cfg.get("disabled_reason", "")).strip_edges()
+
 	_right_panel_footer_row.visible = show_cancel or show_secondary or show_primary
 
 	_right_panel_footer_cancel_button.visible = show_cancel
@@ -215,7 +271,19 @@ func _sync_right_panel_footer(active_panel: Object) -> void:
 	_right_panel_footer_secondary_button.visible = show_secondary
 	_right_panel_footer_secondary_button.text = secondary_text
 	_right_panel_footer_secondary_button.disabled = not secondary_enabled
+	if _right_panel_footer_secondary_button.disabled and not _footer_secondary_disabled_reason.is_empty():
+		_right_panel_footer_secondary_button.tooltip_text = "不可用：%s" % _footer_secondary_disabled_reason
+	else:
+		_right_panel_footer_secondary_button.tooltip_text = ""
 
 	_right_panel_footer_primary_button.visible = show_primary
 	_right_panel_footer_primary_button.text = primary_text
 	_right_panel_footer_primary_button.disabled = not primary_enabled
+
+	# 视觉样式：确认按钮使用“跳过”同款 secondary 样式；其它面板保持 primary 风格。
+	UiStylesClass.apply_button_secondary(_right_panel_footer_cancel_button)
+	UiStylesClass.apply_button_secondary(_right_panel_footer_secondary_button)
+	if is_guided_action_panel:
+		UiStylesClass.apply_button_secondary(_right_panel_footer_primary_button)
+	else:
+		UiStylesClass.apply_button_primary(_right_panel_footer_primary_button)

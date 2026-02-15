@@ -29,6 +29,7 @@ var _direction_row: Control = null
 var _direction_option: OptionButton = null
 var _custom_context_container: Control = null
 var _cancel_context_button: Button = null
+var _skip_context_button: Button = null
 var _confirm_context_button: Button = null
 
 var _context_overlay: Node = null
@@ -59,6 +60,7 @@ func setup(panel) -> void:
 	_direction_option = panel.direction_option
 	_custom_context_container = panel.custom_context_container
 	_cancel_context_button = panel.cancel_context_button
+	_skip_context_button = panel.skip_context_button
 	_confirm_context_button = panel.confirm_context_button
 
 	if not is_instance_valid(_context_panel):
@@ -66,6 +68,7 @@ func setup(panel) -> void:
 	_context_panel.visible = false
 
 	UiSignalHelpersClass.safe_connect(_cancel_context_button, "pressed", _on_cancel_context_pressed)
+	UiSignalHelpersClass.safe_connect(_skip_context_button, "pressed", _on_skip_context_pressed)
 	UiSignalHelpersClass.safe_connect(_confirm_context_button, "pressed", _on_confirm_context_pressed)
 	UiSignalHelpersClass.safe_connect(_restaurant_option, "item_selected", _on_restaurant_option_selected)
 	UiSignalHelpersClass.safe_connect(_employee_option, "employee_selected", _on_employee_option_selected)
@@ -126,6 +129,9 @@ func _on_overlay_ui_state_changed() -> void:
 func _hide_context_panel() -> void:
 	if is_instance_valid(_context_panel):
 		_context_panel.visible = false
+	if is_instance_valid(_skip_context_button):
+		_skip_context_button.visible = false
+		_skip_context_button.tooltip_text = ""
 
 func _show_context_panel() -> void:
 	if is_instance_valid(_context_panel):
@@ -166,6 +172,34 @@ func _set_custom_context_visible(show: bool) -> void:
 	if is_instance_valid(_custom_context_container):
 		_custom_context_container.visible = show
 
+func _sync_skip_sub_phase_button() -> void:
+	if not is_instance_valid(_skip_context_button):
+		return
+
+	var cfg: Dictionary = {}
+	if _panel != null and is_instance_valid(_panel) and _panel.has_method("get_flow_controls_config"):
+		var v = _panel.call("get_flow_controls_config")
+		if v is Dictionary:
+			var ss_val = (v as Dictionary).get("skip_step", null)
+			if ss_val is Dictionary:
+				cfg = Dictionary(ss_val)
+
+	var visible := bool(cfg.get("visible", false))
+	_skip_context_button.visible = visible
+	if not visible:
+		_skip_context_button.tooltip_text = ""
+		return
+
+	_skip_context_button.text = str(cfg.get("text", "跳过"))
+	var enabled := bool(cfg.get("enabled", true))
+	_skip_context_button.disabled = not enabled
+
+	var reason := str(cfg.get("disabled_reason", "")).strip_edges()
+	if _skip_context_button.disabled and not reason.is_empty():
+		_skip_context_button.tooltip_text = "不可用：%s" % reason
+	else:
+		_skip_context_button.tooltip_text = ""
+
 func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) -> void:
 	if overlay == null or not is_instance_valid(overlay):
 		clear_context_overlay()
@@ -200,6 +234,7 @@ func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) 
 	_confirm_context_button.disabled = not overlay.can_confirm()
 	_cancel_context_button.visible = false
 	_cancel_context_button.text = "取消"
+	_sync_skip_sub_phase_button()
 
 	_context_syncing = false
 
@@ -239,6 +274,7 @@ func _refresh_house_placement_context(overlay: HousePlacementOverlay) -> void:
 	_confirm_context_button.disabled = not overlay.can_confirm()
 	_cancel_context_button.visible = false
 	_cancel_context_button.text = "取消"
+	_sync_skip_sub_phase_button()
 
 	_context_syncing = false
 
@@ -273,6 +309,7 @@ func _refresh_piece_placement_context(overlay) -> void:
 	_confirm_context_button.disabled = not overlay.can_confirm()
 	_cancel_context_button.visible = false
 	_cancel_context_button.text = "取消"
+	_sync_skip_sub_phase_button()
 
 	_context_syncing = false
 
@@ -331,6 +368,7 @@ func _refresh_custom_context(overlay: Node) -> void:
 		elif spec.has("confirm_disabled"):
 			disabled = bool(spec.get("confirm_disabled", false))
 		_confirm_context_button.disabled = disabled
+	_sync_skip_sub_phase_button()
 
 	_context_syncing = false
 
@@ -562,6 +600,15 @@ func _on_cancel_context_pressed() -> void:
 		return
 	if _should_clear_context_on_cancel():
 		clear_context_overlay()
+
+func _on_skip_context_pressed() -> void:
+	if _skip_context_button != null and is_instance_valid(_skip_context_button) and _skip_context_button.disabled:
+		return
+	if _panel == null or not is_instance_valid(_panel):
+		return
+	if not _panel.has_signal("action_requested"):
+		return
+	_panel.emit_signal("action_requested", "skip_sub_phase", {})
 
 func _on_confirm_context_pressed() -> void:
 	if _context_overlay == null or not is_instance_valid(_context_overlay):

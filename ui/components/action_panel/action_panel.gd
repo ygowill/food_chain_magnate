@@ -40,6 +40,7 @@ const ContextControllerClass = preload("res://ui/components/action_panel/action_
 @onready var options_container: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer
 @onready var custom_context_container: Control = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/CustomContextContainer
 @onready var cancel_context_button: Button = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/ButtonsRow/CancelContextButton
+@onready var skip_context_button: Button = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/ButtonsRow/SkipContextButton
 @onready var confirm_context_button: Button = $MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/ButtonsRow/ConfirmContextButton
 @onready var rewind_phase_button: Button = $MarginContainer/VBoxContainer/UtilityRow/RewindPhaseButton
 
@@ -246,7 +247,8 @@ func _get_skip_sub_phase_display_name() -> String:
 
 func _ready() -> void:
 	_build_ui()
-	UiStylesClass.apply_button_primary(confirm_context_button)
+	UiStylesClass.apply_button_secondary(skip_context_button)
+	UiStylesClass.apply_button_secondary(confirm_context_button)
 	UiStylesClass.apply_button_secondary(cancel_context_button)
 	UiStylesClass.apply_button_secondary(rewind_phase_button)
 	_apply_context_visual_styles()
@@ -512,6 +514,8 @@ func _apply_global_disabled_state() -> void:
 	# 全局禁用用于“回放/查看历史”态，避免误操作产生时间线分支。
 	if is_instance_valid(rewind_phase_button):
 		rewind_phase_button.disabled = (_game_state == null) or _globally_disabled
+	if is_instance_valid(skip_context_button):
+		skip_context_button.disabled = _globally_disabled
 	if is_instance_valid(confirm_context_button):
 		confirm_context_button.disabled = _globally_disabled
 	if is_instance_valid(cancel_context_button):

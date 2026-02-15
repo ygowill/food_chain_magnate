@@ -20,6 +20,13 @@ const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const POPUP_LAYOUT_META_KEY := "popup_layout"
 const POPUP_LAYOUT_DOCK_RIGHT := "dock_right"
 
+const _GUIDED_ACTION_DOCK_SCRIPT_PATHS := {
+	"res://ui/components/recruit_panel/recruit_panel.gd": true,
+	"res://ui/components/train_panel/train_panel.gd": true,
+	"res://ui/components/marketing_panel/marketing_panel.gd": true,
+	"res://ui/components/production_panel/production_panel.gd": true,
+}
+
 var _scene = null
 var _map_controller = null
 var _overlay_controller = null
@@ -316,7 +323,60 @@ func _sync_action_flow_controls() -> void:
 
 	var cfg_val = _scene.action_panel.call("get_flow_controls_config")
 	if cfg_val is Dictionary:
-		_scene.action_flow_controls.call("apply_flow_config", Dictionary(cfg_val))
+		var cfg := Dictionary(cfg_val)
+		if _should_hide_action_flow_controls_skip_step():
+			var ss_val = cfg.get("skip_step", null)
+			if ss_val is Dictionary:
+				var ss := Dictionary(ss_val)
+				ss["visible"] = false
+				cfg["skip_step"] = ss
+		_scene.action_flow_controls.call("apply_flow_config", cfg)
+
+func _should_hide_action_flow_controls_skip_step() -> bool:
+	# 当“跳过子阶段”已在动作面板 UI 内展示时，隐藏 ActionFlowControls 的同款按钮，避免重复/层级感。
+	# - 右侧 dock 的 guided action 面板：跳过在 FooterRow（左），确认在 FooterRow（右）
+	# - 放置类 overlay：跳过在 ActionPanel ContextPanel（左），确认在 ContextPanel（右）
+	if _has_active_context_overlay():
+		return true
+
+	var active_docked := _get_active_right_panel_docked_panel()
+	if active_docked != null and _is_guided_action_dock_panel(active_docked):
+		return true
+
+	return false
+
+func _has_active_context_overlay() -> bool:
+	var overlay = null
+	if _placement_overlays != null:
+		if _placement_overlays.has_method("get_active_context_overlay"):
+			overlay = _placement_overlays.call("get_active_context_overlay")
+		else:
+			if is_instance_valid(_placement_overlays.restaurant_placement_overlay) and _placement_overlays.restaurant_placement_overlay.visible:
+				overlay = _placement_overlays.restaurant_placement_overlay
+			elif is_instance_valid(_placement_overlays.house_placement_overlay) and _placement_overlays.house_placement_overlay.visible:
+				overlay = _placement_overlays.house_placement_overlay
+			elif is_instance_valid(_placement_overlays.piece_placement_overlay) and _placement_overlays.piece_placement_overlay.visible:
+				overlay = _placement_overlays.piece_placement_overlay
+	return overlay != null and is_instance_valid(overlay)
+
+func _get_active_right_panel_docked_panel() -> Control:
+	if _scene == null:
+		return null
+	var dock_host = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit/RightPanel/DockHost")
+	if dock_host == null or not is_instance_valid(dock_host):
+		return null
+	for ch in dock_host.get_children():
+		if ch is Control and (ch as Control).visible:
+			return ch as Control
+	return null
+
+func _is_guided_action_dock_panel(panel: Control) -> bool:
+	if panel == null or not is_instance_valid(panel):
+		return false
+	var scr = panel.get_script()
+	if scr == null or not (scr is Script):
+		return false
+	return _GUIDED_ACTION_DOCK_SCRIPT_PATHS.has(str((scr as Script).resource_path))
 
 func _auto_open_guided_action_ui(state: GameState) -> void:
 	if state == null:

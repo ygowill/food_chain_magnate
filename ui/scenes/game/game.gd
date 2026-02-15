@@ -210,7 +210,9 @@ func _ready() -> void:
 		right_panel_footer_row,
 		right_panel_footer_cancel_button,
 		right_panel_footer_secondary_button,
-		right_panel_footer_primary_button
+		right_panel_footer_primary_button,
+		Callable(_panel_controller, "on_action_requested"),
+		Callable(action_panel, "get_flow_controls_config")
 	)
 	_input_controller = GameInputControllerClass.new(
 		_menu_controller,
