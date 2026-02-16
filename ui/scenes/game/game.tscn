@@ -370,12 +370,16 @@ layout_mode = 2
 text = "继续游戏"
 
 [node name="SaveButton" type="Button" parent="MenuDialog/VBoxContainer"]
-layout_mode = 2
-text = "保存游戏"
+	layout_mode = 2
+	text = "保存游戏"
+
+[node name="RulesButton" type="Button" parent="MenuDialog/VBoxContainer"]
+	layout_mode = 2
+	text = "规则"
 
 [node name="SettingsButton" type="Button" parent="MenuDialog/VBoxContainer"]
-layout_mode = 2
-text = "设置"
+	layout_mode = 2
+	text = "设置"
 
 [node name="ToggleBottomPanelButton" type="Button" parent="MenuDialog/VBoxContainer"]
 layout_mode = 2
@@ -398,6 +402,7 @@ text = "返回主菜单"
 [connection signal="pressed" from="UIRoot/TopBar/MenuButton" to="." method="_on_menu_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/ResumeButton" to="." method="_on_resume_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/SaveButton" to="." method="_on_save_pressed"]
+[connection signal="pressed" from="MenuDialog/VBoxContainer/RulesButton" to="." method="_on_rules_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/ToggleBottomPanelButton" to="." method="_on_toggle_bottom_panel_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/QuitToMenuButton" to="." method="_on_quit_to_menu_pressed"]

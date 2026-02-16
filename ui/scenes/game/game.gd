@@ -17,6 +17,7 @@ extends Control
 @onready var menu_dialog_background_panel: Panel = $MenuDialog/BackgroundPanel
 @onready var menu_resume_button: Button = $MenuDialog/VBoxContainer/ResumeButton
 @onready var menu_save_button: Button = $MenuDialog/VBoxContainer/SaveButton
+@onready var menu_rules_button: Button = $MenuDialog/VBoxContainer/RulesButton
 @onready var menu_settings_button: Button = $MenuDialog/VBoxContainer/SettingsButton
 @onready var menu_quit_to_menu_button: Button = $MenuDialog/VBoxContainer/QuitToMenuButton
 @onready var main_content: Control = $UIRoot/MainContent
@@ -78,6 +79,7 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const DrinksProcurementInputsClass = preload("res://core/rules/drinks_procurement/inputs.gd")
 const TileRouteUtilsClass = preload("res://core/rules/drinks_procurement/tile_route_utils.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const RulesDocsClass = preload("res://ui/utils/rules_docs.gd")
 
 # 游戏状态
 var game_engine: GameEngine = null
@@ -193,6 +195,7 @@ func _ready() -> void:
 		_save_load_controller,
 		Callable(self, "_get_game_engine"),
 		Callable(self, "show_settings_dialog"),
+		Callable(self, "show_rules_dialog"),
 		Callable(self, "toggle_game_log"),
 		Callable(self, "show_milestone_panel"),
 		Callable(self, "toggle_distance_tool"),
@@ -364,6 +367,7 @@ func _apply_menu_dialog_styles() -> void:
 	UiStylesClass.apply_dialog_surface(menu_dialog_background_panel)
 	UiStylesClass.apply_button_primary(menu_resume_button)
 	UiStylesClass.apply_button_primary(menu_save_button)
+	UiStylesClass.apply_button_primary(menu_rules_button)
 	UiStylesClass.apply_button_primary(menu_settings_button)
 	UiStylesClass.apply_button_primary(toggle_bottom_panel_button)
 	UiStylesClass.apply_button_primary(menu_quit_to_menu_button)
@@ -784,6 +788,10 @@ func _on_save_pressed() -> void:
 	if _menu_controller != null and _menu_controller.has_method("on_save_pressed"):
 		_menu_controller.call("on_save_pressed")
 
+func _on_rules_pressed() -> void:
+	if _menu_controller != null and _menu_controller.has_method("on_rules_pressed"):
+		_menu_controller.call("on_rules_pressed")
+
 func _on_settings_pressed() -> void:
 	if _menu_controller != null and _menu_controller.has_method("on_settings_pressed"):
 		_menu_controller.call("on_settings_pressed")
@@ -1122,6 +1130,9 @@ func _show_game_log_panel_in_right_panel() -> void:
 func show_settings_dialog() -> void:
 	if _overlay_controller != null:
 		_overlay_controller.show_settings_dialog()
+
+func show_rules_dialog() -> void:
+	RulesDocsClass.show_rules_dialog(self)
 
 func toggle_distance_tool() -> void:
 	if _map_controller != null:

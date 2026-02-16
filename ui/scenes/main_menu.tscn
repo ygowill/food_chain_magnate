@@ -111,14 +111,20 @@ custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
 
 [node name="OnlineButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
-custom_minimum_size = Vector2(420, 56)
-layout_mode = 2
-size_flags_horizontal = 4
-text = "联机"
+	custom_minimum_size = Vector2(420, 56)
+	layout_mode = 2
+	size_flags_horizontal = 4
+	text = "联机"
+
+[node name="RulesButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
+	custom_minimum_size = Vector2(420, 56)
+	layout_mode = 2
+	size_flags_horizontal = 4
+	text = "规则"
 
 [node name="SystemGroupGap" type="Control" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
-custom_minimum_size = Vector2(0, 18)
-layout_mode = 2
+	custom_minimum_size = Vector2(0, 18)
+	layout_mode = 2
 
 [node name="SystemButtons" type="HBoxContainer" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
 layout_mode = 2
@@ -154,6 +160,7 @@ horizontal_alignment = 2
 
 [connection signal="pressed" from="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/NewGameButton" to="." method="_on_new_game_pressed"]
 [connection signal="pressed" from="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/OnlineButton" to="." method="_on_online_pressed"]
+[connection signal="pressed" from="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/RulesButton" to="." method="_on_rules_pressed"]
 [connection signal="pressed" from="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/LoadGameButton" to="." method="_on_load_game_pressed"]
 [connection signal="pressed" from="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/SystemButtons/SettingsButton" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/SystemButtons/QuitButton" to="." method="_on_quit_pressed"]

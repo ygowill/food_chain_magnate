@@ -16,6 +16,7 @@ var _confirm_dialog_on_cancel: Callable = Callable()
 
 var _get_game_engine: Callable = Callable()
 var _show_settings_dialog: Callable = Callable()
+var _show_rules_dialog: Callable = Callable()
 var _toggle_game_log: Callable = Callable()
 var _show_milestone_panel: Callable = Callable()
 var _toggle_distance_tool: Callable = Callable()
@@ -29,6 +30,7 @@ func _init(
 	save_load_controller: Object,
 	get_game_engine: Callable,
 	show_settings_dialog: Callable,
+	show_rules_dialog: Callable,
 	toggle_game_log: Callable,
 	show_milestone_panel: Callable,
 	toggle_distance_tool: Callable,
@@ -41,6 +43,7 @@ func _init(
 	_save_load_controller = save_load_controller
 	_get_game_engine = get_game_engine
 	_show_settings_dialog = show_settings_dialog
+	_show_rules_dialog = show_rules_dialog
 	_toggle_game_log = toggle_game_log
 	_show_milestone_panel = show_milestone_panel
 	_toggle_distance_tool = toggle_distance_tool
@@ -57,6 +60,7 @@ func dispose() -> void:
 	_confirm_dialog_on_cancel = Callable()
 	_get_game_engine = Callable()
 	_show_settings_dialog = Callable()
+	_show_rules_dialog = Callable()
 	_toggle_game_log = Callable()
 	_show_milestone_panel = Callable()
 	_toggle_distance_tool = Callable()
@@ -115,6 +119,11 @@ func on_save_pressed() -> void:
 func on_settings_pressed() -> void:
 	if _show_settings_dialog.is_valid():
 		_show_settings_dialog.call()
+	on_menu_dialog_close_requested()
+
+func on_rules_pressed() -> void:
+	if _show_rules_dialog.is_valid():
+		_show_rules_dialog.call()
 	on_menu_dialog_close_requested()
 
 func on_toggle_log_pressed() -> void:

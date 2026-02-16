@@ -5,6 +5,7 @@ const SettingsDialogScene = preload("res://ui/dialogs/settings_dialog.tscn")
 const ConfirmDialogScene = preload("res://ui/dialogs/confirm_dialog.tscn")
 const SaveLoadDialogScript = preload("res://ui/dialogs/save_load_dialog.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const RulesDocsClass = preload("res://ui/utils/rules_docs.gd")
 const TITLE_LOGO_PATHS: PackedStringArray = [
 	"res://assets/main_title_logo_1080.png",
 	"res://assets/main_title_logo.png",
@@ -20,6 +21,7 @@ const TITLE_LOGO_PATHS: PackedStringArray = [
 @onready var decorative_line: Label = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/DecorativeLine
 @onready var new_game_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/NewGameButton
 @onready var online_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/OnlineButton
+@onready var rules_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/RulesButton
 @onready var load_game_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/LoadGameButton
 @onready var settings_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/SystemButtons/SettingsButton
 @onready var quit_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/SystemButtons/QuitButton
@@ -61,6 +63,7 @@ func _ready() -> void:
 	# 按钮样式
 	UiStylesClass.apply_button_primary(new_game_button)
 	UiStylesClass.apply_button_secondary(online_button)
+	UiStylesClass.apply_button_secondary(rules_button)
 	UiStylesClass.apply_button_secondary(load_game_button)
 	UiStylesClass.apply_button_secondary(settings_button)
 	UiStylesClass.apply_button_secondary(quit_button)
@@ -84,6 +87,10 @@ func _on_new_game_pressed() -> void:
 func _on_online_pressed() -> void:
 	GameLog.info("MainMenu", "点击联机")
 	SceneManager.goto_online_lobby()
+
+func _on_rules_pressed() -> void:
+	GameLog.info("MainMenu", "点击规则")
+	RulesDocsClass.show_rules_dialog(self)
 
 func _on_load_game_pressed() -> void:
 	GameLog.info("MainMenu", "点击载入游戏")

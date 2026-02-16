@@ -1,0 +1,55 @@
+{
+	"version": 1,
+	"books": [
+		{
+			"id": "base",
+			"title": "基础规则",
+			"page_count": 15,
+			"pages_path": "res://assets/rules/pages/base/page_%03d.png",
+			"tags": [
+				{ "label": "Introducing the game", "page": 4 },
+				{ "label": "Setting up", "page": 5 },
+				{ "label": "Phase by phase", "page": 7 },
+				{ "label": "Filling the bank", "page": 7 },
+				{ "label": "Phase 1: Restructuring", "page": 7 },
+				{ "label": "Phase 2: Order of business", "page": 7 },
+				{ "label": "Phase 3: Working 9:00–5:00", "page": 8 },
+				{ "label": "Initiate marketing campaigns", "page": 9 },
+				{ "label": "Get food & drinks", "page": 10 },
+				{ "label": "Phase 4: Dinnertime", "page": 11 },
+				{ "label": "Phase 5: Payday", "page": 12 },
+				{ "label": "Milestones", "page": 13 },
+				{ "label": "Strategy Guide", "page": 15 }
+			]
+		},
+		{
+			"id": "ketchup",
+			"title": "扩展规则",
+			"page_count": 17,
+			"pages_path": "res://assets/rules/pages/ketchup/page_%03d.png",
+			"tags": [
+				{ "label": "Game materials", "page": 3 },
+				{ "label": "General rules", "page": 5 },
+				{ "label": "New districts", "page": 5 },
+				{ "label": "Lobbyists", "page": 6 },
+				{ "label": "New milestones", "page": 7 },
+				{ "label": "First pizza sold", "page": 8 },
+				{ "label": "First lemonade sold", "page": 8 },
+				{ "label": "Coffee", "page": 9 },
+				{ "label": "Kimchi", "page": 10 },
+				{ "label": "Sushi", "page": 11 },
+				{ "label": "Noodles", "page": 11 },
+				{ "label": "Ketchup", "page": 12 },
+				{ "label": "Fry chefs", "page": 12 },
+				{ "label": "Night shift managers", "page": 13 },
+				{ "label": "Mass marketeers", "page": 13 },
+				{ "label": "Rural marketeers", "page": 14 },
+				{ "label": "Gourmet food critics", "page": 14 },
+				{ "label": "Movie stars", "page": 15 },
+				{ "label": "Reserve prices", "page": 15 },
+				{ "label": "Hard choices", "page": 16 },
+				{ "label": "6 Players", "page": 16 }
+			]
+		}
+	]
+}
