@@ -66,6 +66,9 @@ func toggle_game_log() -> void:
 		_game_log_panel.set_meta("popup_title", "日志")
 		if _dock_popup_into_right_panel.is_valid():
 			_dock_popup_into_right_panel.call(_game_log_panel)
+		# 兜底：若日志在 dock/reparent 过程中出现“构建为空”的时序问题，延后一帧自愈。
+		if _game_log_panel.has_method("ensure_display_ready"):
+			_game_log_panel.call_deferred("ensure_display_ready")
 	else:
 		# 关闭日志：返回默认右侧动作区。
 		_game_log_panel.visible = false
@@ -93,6 +96,8 @@ func show_game_log_panel_in_right_panel() -> void:
 	_game_log_panel.set_meta("popup_title", "日志")
 	if _dock_popup_into_right_panel.is_valid():
 		_dock_popup_into_right_panel.call(_game_log_panel)
+	if _game_log_panel.has_method("ensure_display_ready"):
+		_game_log_panel.call_deferred("ensure_display_ready")
 
 func _has_other_visible_docked_panels() -> bool:
 	if not is_instance_valid(_right_panel_dock_host):

@@ -85,6 +85,7 @@ var _timeline_head_index: int = -1
 var _timeline_cursor_index: int = -1
 
 var _details_controller = null
+var _blank_display_warned: bool = false
 
 func _ready() -> void:
 	if auto_scroll_check != null:
@@ -126,6 +127,9 @@ func _ready() -> void:
 	UiStylesClass.apply_button_secondary(close_btn)
 	UiStylesClass.apply_button_secondary(replay_toggle_button)
 	_sync_replay_toggle_button_text()
+
+	if not visibility_changed.is_connected(_on_visibility_changed):
+		visibility_changed.connect(_on_visibility_changed)
 
 func add_log(log_type: LogType, message: String, details: Dictionary = {}) -> int:
 	var entry_id := _entry_id_counter
@@ -198,6 +202,7 @@ func load_entries(entries: Array[Dictionary]) -> void:
 	_timeline_entries.clear()
 	_extra_entries.clear()
 	_entries_all.clear()
+	_blank_display_warned = false
 	_entry_id_counter = 0
 	_fold_details_enabled = false
 	_expanded_action_groups.clear()
@@ -225,6 +230,7 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 	# Unified timeline view (M4.3): structure comes from steps, contents come from formatted entries.
 	_step_timeline = timeline.duplicate(true) if (timeline is Dictionary) else {}
 	_timeline_entries.clear()
+	_blank_display_warned = false
 	if entries is Array:
 		for e in entries:
 			if e is Dictionary:
@@ -304,6 +310,7 @@ func clear_logs() -> void:
 	_timeline_entries.clear()
 	_extra_entries.clear()
 	_entries_all.clear()
+	_blank_display_warned = false
 	_fold_details_enabled = false
 	_expanded_action_groups.clear()
 	if fold_details_check != null:
@@ -322,6 +329,49 @@ func apply_font_settings() -> void:
 
 func set_player_count(count: int) -> void:
 	_player_count = maxi(0, count)
+
+func ensure_display_ready() -> void:
+	if not is_inside_tree():
+		return
+	if log_container == null or not is_instance_valid(log_container):
+		return
+
+	# 没有日志数据：不强行塞占位符，保持空面板（但仍显示 EntryCountLabel）。
+	var has_data := (not _entries_all.is_empty()) or _is_step_timeline_loaded()
+	if not has_data:
+		return
+
+	# UI 已有子节点：无需重复 rebuild。
+	if log_container.get_child_count() > 0:
+		_blank_display_warned = false
+		return
+
+	_rebuild_display()
+	_apply_timeline_state_to_items()
+	_update_entry_count()
+
+	# 若数据存在但仍构建为空：打一次 warning（便于用户反馈时定位）。
+	if log_container.get_child_count() <= 0 and not _entries_all.is_empty() and not _blank_display_warned:
+		_blank_display_warned = true
+		var steps_val = _step_timeline.get("steps", [])
+		var steps_count := int(steps_val.size()) if (steps_val is Array) else 0
+		var events_val = _step_timeline.get("events", [])
+		var events_count := int(events_val.size()) if (events_val is Array) else 0
+		GameLog.warn(
+			"GameLogPanel",
+			"日志面板构建为空（可能是初始化/布局时序问题）：entries=%d steps=%d events=%d visible_in_tree=%s" % [
+				_entries_all.size(),
+				steps_count,
+				events_count,
+				str(is_visible_in_tree()),
+			]
+		)
+
+func _on_visibility_changed() -> void:
+	if not is_visible_in_tree():
+		return
+	# 延后一帧：避免 dock/reparent 后 Container 尚未完成 layout 导致的“短暂空白”。
+	call_deferred("ensure_display_ready")
 
 func _is_step_timeline_loaded() -> bool:
 	if _step_timeline == null or _step_timeline.is_empty():
