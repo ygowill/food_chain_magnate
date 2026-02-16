@@ -5,10 +5,38 @@
 - actions：把玩家输入转换成“状态写入”，并触发必要的校验与缓存失效
 - rules：提供跨动作复用的领域规则、结算、以及可插拔的 registry/provider
 
+## 模块关系图（RulesetV2 注入 → registries → PhaseManager/Actions）
+
+```mermaid
+flowchart TB
+  Entry["modules/*/rules/entry.gd\n(register(registrar))"]
+  Registrar["RulesetRegistrarV2\n(core/modules/v2/ruleset_builder.gd)"]
+  Ruleset["RulesetV2\n(core/modules/v2/ruleset.gd)"]
+
+  PM["PhaseManager\n(core/engine/phase_manager.gd)"]
+  AR["ActionRegistry\n(core/actions/action_registry.gd)"]
+
+  Settle["SettlementRegistry\n(core/rules/settlement_registry.gd)"]
+  Effect["EffectRegistry\n(core/rules/effect_registry.gd)"]
+  MsEffect["MilestoneEffectRegistry\n(core/rules/milestone_effect_registry.gd)"]
+
+  Providers["Providers → core-owned registries\n(bankruptcy/demand/route/marketing/...)"]
+
+  Entry --> Registrar --> Ruleset
+  Ruleset --> Settle
+  Ruleset --> Effect
+  Ruleset --> MsEffect
+  Ruleset --> Providers
+
+  Settle -->|"enter/exit triggers"| PM
+  Ruleset -->|"hooks/orders/triggers"| PM
+  Ruleset -->|"executors/validators"| AR
+```
+
 ## 结算框架（SettlementRegistry）
 
 - 注册表：`core/rules/settlement_registry.gd`
-- 结算实现：例如 `core/rules/phase/dinnertime_settlement.gd`（内部再拆到子目录）
+- 结算实现：例如 `modules/base_rules/rules/phase/dinnertime_settlement.gd`（由 base_rules 模块提供；内部再拆到子目录）
 
 关键约束（Strict Mode）：
 
@@ -52,4 +80,3 @@ RulesetV2（`core/modules/v2/ruleset.gd`）是“模块注册规则的聚合容�
 - 用其 providers 配置上述各类 core registries
 
 因此：在 Strict Mode 下，规则与内容的存在性由“启用模块集合”决定，缺失应尽量在初始化阶段 fail-fast。
-

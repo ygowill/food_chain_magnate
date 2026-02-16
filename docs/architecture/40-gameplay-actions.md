@@ -4,6 +4,29 @@
 
 默认 provider：`res://gameplay/action_setup.gd`（由 `ProjectSettings["fcm/action_setup_provider_path"]` 指定）
 
+## 模块关系图（actions 如何进入引擎执行链）
+
+```mermaid
+flowchart TB
+  Provider["ActionSetup provider\n(gameplay/action_setup.gd)"]
+  Actions["gameplay/actions/*\n(ActionExecutor)"]
+  AR["ActionRegistry\n(core/actions/action_registry.gd)"]
+
+  UI["UI → Command"]
+  GE["GameEngine.execute_command"]
+  Runner["CommandRunner"]
+  GS["GameState"]
+  Regs["Registries\n(Employee/Product/Tile/Piece + core/rules)"]
+
+  Actions --> Provider
+  Provider -->|"register executors"| AR
+
+  UI --> GE --> Runner --> AR
+  AR -->|"dispatch"| Actions
+  Actions -->|"validate/compute_new_state"| GS
+  Actions -->|"query"| Regs
+```
+
 ## 当前内建动作（以 provider 注册列表为准）
 
 参见：`gameplay/action_setup.gd`
@@ -32,4 +55,3 @@
 ## 与模块系统 V2 的关系
 
 模块可以通过 `RulesetV2.register_action_executor(...)` 注册额外动作，或通过 validator/availability override 对内建动作做门禁与校验增强。
-

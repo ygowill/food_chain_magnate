@@ -9,6 +9,35 @@
 
 代码入口：`core/state/game_state.gd`
 
+## 模块关系图（GameState 的消费者与序列化）
+
+```mermaid
+flowchart TB
+  GE["GameEngine"]
+  UI["UI（只读渲染）"]
+  GS["GameState\n(core/state/game_state.gd)"]
+
+  Ser["GameStateSerialization\n(core/state/game_state_serialization.gd)"]
+  Archive["Archive\n(core/engine/game_engine/archive.gd)"]
+  Schema["StateSchemaRegistry\n(core/state/state_schema_registry.gd)"]
+
+  MapRt["MapRuntime\n(core/map/map_runtime/*)"]
+  RoadCache["RoadGraphCache\n(core/map/map_runtime/road_graph_cache.gd)"]
+
+  GE --> GS
+  UI -->|"read"| GS
+
+  GS -->|"to_dict/compute_hash"| Ser
+  Ser --> Archive
+  Archive --> Ser
+  Ser -->|"from_dict"| GS
+
+  Schema -->|"normalize int-key dicts\n(configured from RulesetV2)"| GS
+
+  MapRt -->|"owns state.map core keys"| GS
+  RoadCache <-->|"invalidate/rebuild"| GS
+```
+
 ## 关键字段（以当前 schema 为准）
 
 - 流程：`round_number`、`phase`、`sub_phase`
@@ -52,4 +81,3 @@ schema 版本：`GameState.SCHEMA_VERSION`（不兼容直接拒绝加载）
 详见：`docs/architecture/33a-core-state-schema-contract.md`
 
 序列化/反序列化与 StateSchemaRegistry 的细节见：`docs/architecture/33b-core-state-serialization.md`
-

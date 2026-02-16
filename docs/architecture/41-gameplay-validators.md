@@ -7,6 +7,25 @@
 - `gameplay/validators/base_validator.gd`：通用参数解析与组合调用
 - `gameplay/validators/company_structure_validator.gd`：公司结构约束（CEO 卡槽、唯一员工等）
 
+## 模块关系图（validators 在哪里运行）
+
+```mermaid
+flowchart TB
+  AR["ActionRegistry.run_validators\n(core/actions/action_registry.gd)"]
+  GV["global validators"]
+  AV["action validators"]
+  V["gameplay/validators/*"]
+  Regs["Registries\n(EmployeeRegistry etc.)"]
+  Result["Result(ok/fail)"]
+
+  AR --> GV
+  AR --> AV
+  GV --> V
+  AV --> V
+  V -->|"query"| Regs
+  V --> Result
+```
+
 ## 约定
 
 - 纯函数：不写 `GameState`、不触发随机、不发事件
@@ -18,4 +37,3 @@
 - “动作内部的领域约束”可以由 validators 复用（例如公司结构）
 - “跨动作的全局约束/门禁”更适合用 `ActionRegistry.register_global_validator` 或 `register_validator(action_id, ...)`
   - 模块系统 V2 也可以注入这些 validators（见 `RulesetV2.register_*_action_validator`）
-

@@ -11,6 +11,26 @@
 - 生成/读写：`core/engine/game_engine/archive.gd`
 - 加载：`core/engine/game_engine/loader.gd`
 
+## 模块关系图（存档加载的硬约束顺序）
+
+```mermaid
+flowchart TB
+  Archive["archive dict\n{initial_state,rng,commands,...}"]
+  Loader["Loader.load_from_archive\n(loader.gd)"]
+  ApplyMods["engine.apply_modules_v2\n(modules_v2.gd)"]
+  Ruleset["RulesetV2\n(ruleset.gd)"]
+  Schema["StateSchemaRegistry\n(configure_from_ruleset)"]
+  State["GameState.from_dict\n(game_state_serialization.gd)"]
+  Replay["execute_command(..., is_replay=true)\n(replay commands)"]
+
+  Archive --> Loader
+  Loader -->|"1) 先装配模块"| ApplyMods
+  ApplyMods --> Ruleset
+  ApplyMods --> Schema
+  Loader -->|"2) 再解析 state"| State
+  Loader -->|"3) 回放 commands"| Replay
+```
+
 ## archive 顶层字段（以当前实现为准）
 
 `Archive.create_archive(...)`（实现位于 `core/engine/game_engine/archive.gd`）生成的字典包含：

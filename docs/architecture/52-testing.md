@@ -7,6 +7,23 @@
 
 更完整的 CLI 约定与脚本化执行方式见：`docs/testing.md`
 
+## 模块关系图（core/tests 与 headless 场景的关系）
+
+```mermaid
+flowchart TB
+  Core["core/tests/*_test.gd\n(纯逻辑)"]
+  AllRefs["ui/scenes/tests/all_tests_refs.gd\n(preload 聚合)"]
+  AllScript["ui/scenes/tests/all_tests.gd\n(run + 输出)"]
+  Scene["ui/scenes/tests/all_tests.tscn\n(可运行入口)"]
+
+  Runner["tools/run_headless_test.sh"]
+  Godot["godot --headless --path ."]
+
+  Core --> AllRefs --> AllScript --> Scene
+  Runner --> Godot --> Scene
+  Scene -->|"autorun + quit(0|1)"| Exit["exit code"]
+```
+
 ## core/tests：纯逻辑测试
 
 特点：
@@ -48,4 +65,3 @@
 - 回放播放器与日志时间线 UI
 
 这类测试应避免依赖真实时间与帧率，并尽量把“规则判断”下沉到 `core/tests`。
-

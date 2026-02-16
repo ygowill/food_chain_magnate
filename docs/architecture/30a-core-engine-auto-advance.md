@@ -16,6 +16,30 @@
   - `core/engine/game_engine/command_runner.gd`：每条命令后 `_drain_auto_advances(...)`
   - `core/engine/game_engine/replay.gd`：重放时 `AutoAdvance.drain(...)`
 
+## 模块关系图（AutoAdvance 在调用链中的位置）
+
+```mermaid
+flowchart TB
+  CmdRunner["CommandRunner\n(command_runner.gd)"]
+  Replay["Replay\n(replay.gd)"]
+  Auto["AutoAdvance.drain\n(auto_advance*.gd)"]
+
+  PM["PhaseManager\n(advance_phase/advance_sub_phase)"]
+  AR["ActionRegistry\n(get_player_initiatable_actions)"]
+  Mandatory["WorkingMandatory\n(auto_advance_working_mandatory.gd)"]
+  Blocking["pending_phase_actions\n(round_state)"]
+
+  CmdRunner -->|"每条命令后"| Auto
+  Replay -->|"重放时"| Auto
+
+  Auto --> PM
+  Auto --> AR
+  Auto --> Mandatory
+  Mandatory --> AR
+
+  Blocking -.阻断阶段推进.-> Auto
+```
+
 ## 为什么必须独立于 UI
 
 AutoAdvance 的约束是：
@@ -47,4 +71,3 @@ AutoAdvance（单步）大致包括：
 - `core/engine/game_engine/auto_advance_phase_blocking.gd`
 
 约定：任何会在阶段边界引入“必须玩家确认/选择”的逻辑，应使用该门禁机制，避免阶段被自动跳过。
-

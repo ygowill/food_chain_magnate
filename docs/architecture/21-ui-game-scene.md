@@ -4,6 +4,53 @@
 
 本文件按“改 UI/交互/联机/回放时应该找哪层”来索引当前实现。
 
+## 模块关系图（game.gd 与 controller/引擎）
+
+```mermaid
+flowchart TB
+  GameGD["game.gd\n(Orchestrator)"]
+  Engine["GameEngine"]
+
+  Cmd["GameCommandController"]
+  UiSync["GameUiSyncController"]
+  Panels["GamePanelController"]
+  MapCtrl["GameMapInteractionController"]
+  Overlays["GameOverlayController"]
+  TimelineCtrl["GameTimelineController"]
+  InputCtrl["GameInputController"]
+  MenuCtrl["GameMenuController"]
+  OnlineCtrl["GameOnlineResyncController"]
+
+  StepTimeline["StepTimelineBuild\n(gameplay/replay)"]
+
+  GameGD --> Engine
+  GameGD --> Cmd
+  GameGD --> UiSync
+  GameGD --> Panels
+  GameGD --> MapCtrl
+  GameGD --> Overlays
+  GameGD --> TimelineCtrl
+  GameGD --> InputCtrl
+  GameGD --> MenuCtrl
+  GameGD --> OnlineCtrl
+
+  Panels -->|"构造 Command/参数"| Cmd
+  MapCtrl -->|"确认/提交 Command"| Cmd
+  InputCtrl -->|"快捷键触发"| Cmd
+  MenuCtrl -->|"保存/回放/退出"| Cmd
+  OnlineCtrl -->|"回放 CommandApplied/Resync"| Cmd
+
+  Cmd -->|"execute_command"| Engine
+  Engine -->|"get_state"| UiSync
+  UiSync --> Panels
+  UiSync --> MapCtrl
+  UiSync --> Overlays
+  UiSync --> TimelineCtrl
+
+  Engine -->|"命令历史 + 快照"| StepTimeline
+  StepTimeline -->|"steps/events"| TimelineCtrl
+```
+
 ## 顶层编排：game.gd
 
 代码：`ui/scenes/game/game.gd`
@@ -39,7 +86,7 @@
 
 常见子文件（节选）：
 
-- Working 子阶段：`ui/scenes/game/game_panel_working_panels.gd` + `ui/scenes/game/game_panel_working_*_controller.gd`
+- Working 子阶段：`ui/scenes/game/game_panel_working_panels.gd` + 同目录的 `game_panel_working_<feature>_controller.gd` 系列
 - 营销/结算：`ui/scenes/game/game_panel_marketing_panels.gd`、`ui/scenes/game/game_panel_end_panels.gd`
 - 放置叠层与地图协作：`ui/scenes/game/game_panel_placement_overlays.gd`
 - 顶层浏览视图：`ui/scenes/game/game_panel_views_controller.gd`（EmployeeTree/Milestone/ReserveArea 全屏）
@@ -90,7 +137,7 @@
 Overlay 的约束：
 
 - 尽量只读 `GameState`（渲染/提示）
-- 需要规则计算时调用 core/rules/core/map 提供的公共函数（避免复制规则）
+- 需要规则计算时调用 core 侧公共 helpers（例如 `core/map/map_utils.gd`、`core/map/road_graph.gd`、`core/rules/marketing_range_calculator.gd`），避免在 UI 复制规则
 
 ## 日志：StepTimeline（派生时间线）为主
 
@@ -103,4 +150,3 @@ Overlay 的约束：
 
 - `ui/scenes/game/game_event_log_controller.gd`
 - `ui/scenes/game/game_event_log_formatter.gd`
-

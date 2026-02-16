@@ -9,6 +9,68 @@
 - 状态扩展契约（map/round_state）：`docs/architecture/33a-core-state-schema-contract.md`
 - 序列化/读档归一化（int-key dict）：`docs/architecture/33b-core-state-serialization.md`
 
+## 模块关系图（从模块包到引擎装配/注入）
+
+```mermaid
+flowchart TB
+  subgraph PKG["模块包（module package）"]
+    Dir["modules/{module_id}/<br/>(res://modules/...)"]
+    Manifest["module.json<br/>(id / dependencies / priority / entry_script / provides.ui.*)"]
+    Content["content/*/*.json<br/>(products/employees/milestones/marketing/tiles/maps/pieces)"]
+    Visuals["content/visuals/*.json<br/>(UI 可选：VisualCatalog)"]
+    Rules["modules/{module_id}/rules/entry.gd<br/>register(registrar) -> Result"]
+  end
+
+  EngineInit["GameEngine.initialize / load_from_archive<br/>core/engine/game_engine/*.gd"]
+  Apply["ModulesV2.apply<br/>core/engine/game_engine/modules_v2.gd"]
+  LoadManifests["ModulePackageLoaderV2.load_all_from_dirs<br/>core/modules/v2/module_package_loader.gd"]
+  Plan["ModulePlanBuilderV2.build_plan<br/>依赖闭包/冲突/稳定排序"]
+  LoadCatalog["ContentCatalogLoader.load_for_modules_from_dirs<br/>core/modules/v2/content_catalog_loader.gd"]
+  LoadRuleset["RulesetLoaderV2.build_for_plan<br/>core/modules/v2/ruleset_loader.gd"]
+
+  Registrar["RulesetRegistrarV2<br/>core/modules/v2/ruleset_builder.gd"]
+  RulesetV2["RulesetV2<br/>(settlements/effects/hooks/actions/providers/schemas)"]
+
+  VisualLoader["VisualCatalogLoader<br/>core/modules/v2/visual_catalog_loader.gd"]
+  Skin["MapSkinBuilder / UISkinCache<br/>ui/visual/*.gd"]
+
+  EngineInit --> Apply --> LoadManifests --> Plan
+  Dir --> Manifest --> LoadManifests
+
+  Plan --> LoadCatalog
+  Content --> LoadCatalog
+
+  Plan --> LoadRuleset --> RulesetV2
+  Rules --> Registrar --> RulesetV2
+
+  Visuals --> VisualLoader --> Skin
+```
+
+## 模块关系图（UI 扩展点：module.json.provides.ui.* 被谁读取）
+
+```mermaid
+flowchart TB
+  Engine["GameEngine（current）<br/>Globals.current_game_engine"] --> Plan["module_plan_v2"]
+  Engine --> Manifests["module_manifests_v2<br/>(module_id -> ModuleManifest)"]
+  Manifests --> ProvidesUI["ModuleManifest.provides.ui<br/>(Dictionary)"]
+
+  Plan --> AP["ActionPanel<br/>ui/components/action_panel/action_panel.gd"]
+  ProvidesUI --> AP
+  AP --> KeyHidden["ui.hidden_action_ids<br/>隐藏动作按钮"]
+
+  Plan --> PO["GamePanelPlacementOverlays<br/>ui/scenes/game/game_panel_placement_overlays.gd"]
+  ProvidesUI --> PO
+  PO --> KeyOverlays["ui.placement_overlays<br/>注入 overlay controller"]
+
+  Plan --> MIC["GameMapInteractionController<br/>ui/scenes/game/game_map_interaction_controller.gd"]
+  ProvidesUI --> MIC
+  MIC --> KeyModes["ui.map_interaction_modes<br/>注入地图交互模式"]
+
+  Manifests --> MS["ModuleSelector<br/>ui/components/module_selector/module_selector.gd"]
+  MS --> KeyMeta["ui.module_selector<br/>分组/排序元信息"]
+  MS --> KeySetup["ui.setup_constraints<br/>开局约束（人数强制模块等）"]
+```
+
 ---
 
 ## 0. 先做选择：你要做哪一类模块？
@@ -16,7 +78,7 @@
 模块包可以是下面几种（可混合）：
 
 1. **内容模块（content-only）**：只提供 `content/*/*.json`，不写规则脚本（`entry_script=""`）。
-2. **规则模块（rules-only）**：主要提供 `rules/entry.gd` 注册结算/效果/providers/hooks 等，可不带 content。
+2. **规则模块（rules-only）**：主要提供 `modules/<module_id>/rules/entry.gd` 注册结算/效果/providers/hooks 等，可不带 content。
 3. **混合模块（content + rules）**：既提供内容，又提供规则/效果处理器（最常见）。
 4. **UI 扩展模块（可选）**：通过 `module.json.provides.ui.*` 注入一些 UI 行为（隐藏按钮/自定义放置 overlay/自定义地图交互模式）。
 5. **视觉模块（可选）**：通过 `content/visuals/*.json` 提供 VisualCatalog（贴图路径等，不影响 core 初始化）。
@@ -83,6 +145,7 @@
 - `entry_script`：规则入口脚本路径；内容模块可填 `""`。
 - `provides`：必须为 Dictionary，但 key 的语义由上层约定决定。
   - 当前仓库 **UI 会读取** `provides.ui.*`（见下文“UI 扩展点”）。
+  - `provides.content` 当前不参与 `ContentCatalogLoader` 的“选择”（loader 按目录约定加载）；可作为元信息用于 UI/文档提示。
 
 命名建议：
 
@@ -94,6 +157,8 @@
 ## 3. 添加 content（内容 JSON）
 
 内容入口由模块系统 V2 装配（loader：`core/modules/v2/content_catalog_loader.gd`）。
+
+> 注意：当前实现是“按目录约定扫描”；不会读取 `module.json.provides.content` 来决定加载哪些子目录。
 
 目录约定（不存在则跳过）：
 
@@ -149,6 +214,52 @@ func register(registrar) -> Result:
 	return ModuleEntryHelpers.register_parts(registrar, [
 		EffectsPart.new(),
 	])
+```
+
+### 4.1 重要：保活 entry/part 实例（避免 Callable 失效）
+
+GDScript 的 `Callable` **不会自动保活对象实例**。如果你注册的是“绑定到对象方法”的回调（例如 `Callable(self, "_on_settle")`），而该对象在 register 结束后被释放，就会在运行时报 `Callable target is null` 之类的问题。
+
+- 推荐做法：在注册前调用 `registrar.retain_entry_instance(obj)` 保活实例。
+- 若你使用 `ModuleEntryHelpers.register_parts(...)`，它会自动对每个 part 执行 `retain_entry_instance(part)`。
+
+### 4.2 模块注入点如何落到运行时系统？（RulesetRegistrarV2 → Engine）
+
+```mermaid
+flowchart TB
+  Entry["entry.gd.register(registrar)"] --> Registrar["RulesetRegistrarV2<br/>core/modules/v2/ruleset_builder.gd"]
+  Registrar --> Ruleset["RulesetV2<br/>core/modules/v2/ruleset.gd"]
+
+  Registrar -->|"register_primary/extension_settlement"| Sett["SettlementRegistry"]
+  Registrar -->|"register_effect / register_milestone_effect"| Eff["EffectRegistry + MilestoneEffectRegistry"]
+  Registrar -->|"register_phase_hook / sub_phase_hook<br/>+ named hooks + insertions"| Hooks["Phase/SubPhase Hooks"]
+  Registrar -->|"register_action_executor / validators<br/>+ availability_override"| Actions["Action injections"]
+  Registrar -->|"register_primary_map_generator"| MapGen["MapGenerationRegistry"]
+  Registrar -->|"register_state_initializer"| Initializers["state_initializers"]
+  Registrar -->|"register_*_int_key_dict_schema"| Schemas["state_int_key_dict_schemas"]
+  Registrar -->|"register_*_provider"| Providers["Providers<br/>(demand/route/conflict/range_origin/...)"]
+
+  subgraph Runtime["运行时消费点（谁在用这些注册）"]
+    PM["PhaseManager<br/>core/engine/phase_manager.gd"]
+    ActionWire["ActionWiring.setup_action_registry<br/>core/engine/game_engine/action_wiring.gd"]
+    Init["Initializer（新局）<br/>core/engine/game_engine/initializer.gd"]
+    Load["Loader（读档）<br/>core/engine/game_engine/loader.gd"]
+    CoreRegs["core-owned registries<br/>core/engine/game_engine/modules_v2.gd"]
+    SchemaReg["StateSchemaRegistry<br/>core/state/state_schema_registry.gd"]
+  end
+
+  Sett --> PM
+  Eff --> PM
+  Hooks --> PM
+
+  Actions --> ActionWire
+
+  MapGen --> Init
+  Initializers --> Init
+
+  Schemas --> SchemaReg
+  Providers --> CoreRegs
+  Ruleset --> Load
 ```
 
 ### registrar 能注册什么？（常用子集）
@@ -247,6 +358,75 @@ func register(registrar) -> Result:
   - `on_cell_selected(world_pos: Vector2i)`
   - `on_highlight_requested(tile_id: String, rotation: int)`
   - `get_outside_margin_override() -> int`（用于启用“地图外围 UI-only 空圈”）
+
+### 5.4 模块选择器分组/排序元信息：ui.module_selector
+
+读取位置：`ui/components/module_selector/module_selector.gd`
+
+示例：
+
+```json
+{
+	"provides": {
+		"ui": {
+			"module_selector": {
+				"group_id": "marketing",
+				"group_title": "营销相关",
+				"group_order": 200,
+				"order": 10
+			}
+		}
+	}
+}
+```
+
+语义（以当前实现为准）：
+
+- `group_id`：分组 id；空则落到 “其他”。
+- `group_title`：分组标题；空则使用 `group_id`。
+- `group_order`：分组排序（越小越靠前）。
+- `order`：组内排序（越小越靠前）。
+
+### 5.5 开局约束（人数强制模块等）：ui.setup_constraints
+
+读取位置：`ui/components/module_selector/module_selector.gd`
+
+支持两类约束（以当前实现为准）：
+
+1) **固定人数强制启用该模块本身**：`required_player_counts`
+
+```json
+{
+	"provides": {
+		"ui": {
+			"setup_constraints": {
+				"required_player_counts": [5, 6],
+				"reason": "5–6 人局需要该模块。"
+			}
+		}
+	}
+}
+```
+
+2) **当该模块启用且人数匹配时，强制启用其它可选模块**：`requires_optional_modules`
+
+```json
+{
+	"provides": {
+		"ui": {
+			"setup_constraints": {
+				"requires_optional_modules": [
+					{
+						"required_player_counts": [5, 6],
+						"module_ids": ["some_optional_module_id"],
+						"reason": "5–6 人局启用本模块时需要额外模块。"
+					}
+				]
+			}
+		}
+	}
+}
+```
 
 ---
 

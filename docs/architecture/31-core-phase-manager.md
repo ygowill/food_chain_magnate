@@ -1,4 +1,4 @@
-# 模块：core/engine/PhaseManager（阶段/子阶段推进 + 结算触发 + Hooks）
+# 模块：core/engine/phase_manager.gd（PhaseManager：阶段/子阶段推进 + 结算触发 + Hooks）
 
 `PhaseManager` 负责“主流程时间轴”的编排（阶段与子阶段推进），并在阶段边界触发结算与 hooks。
 
@@ -11,6 +11,34 @@
 - hooks：`core/engine/phase_manager/hooks.gd`
 - 顺序覆盖：`core/engine/phase_manager/order_config.gd`
 - 结算触发点：`core/engine/phase_manager/settlement_triggers.gd`
+
+## 模块关系图（PhaseManager 与注入点）
+
+```mermaid
+flowchart TB
+  PM["PhaseManager\n(core/engine/phase_manager.gd)"]
+  State["GameState\n(phase/sub_phase/round_state)"]
+  Hooks["Hooks\n(phase_manager/hooks.gd)"]
+  Orders["OrderConfig\n(phase_manager/order_config.gd)"]
+  Triggers["SettlementTriggers\n(phase_manager/settlement_triggers.gd)"]
+
+  Settle["SettlementRegistry\n(core/rules/settlement_registry.gd)"]
+  Effects["EffectRegistry\n(core/rules/effect_registry.gd)"]
+
+  Modules["ModulesV2.apply\n(core/engine/game_engine/modules_v2.gd)"]
+  Ruleset["RulesetV2\n(core/modules/v2/ruleset.gd)"]
+
+  PM -->|"advance_phase/advance_sub_phase"| State
+  PM --> Hooks
+  PM --> Orders
+  PM --> Triggers
+  PM -->|"run_settlement_triggers"| Settle
+  PM -->|"get_effect_registry (optional)"| Effects
+
+  Modules --> Ruleset
+  Ruleset -->|"inject settlement/effect registry"| PM
+  Ruleset -->|"apply hooks/orders/triggers overrides"| PM
+```
 
 ## 与模块系统 V2 的耦合方式（当前已落地）
 

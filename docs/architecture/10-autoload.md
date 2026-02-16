@@ -12,6 +12,41 @@ autoload 目录提供跨场景可用的单例节点（见 `project.godot` 的 `[
 - `autoload/event_bus.gd`：`EventBus`（事件发布/订阅 + 历史）
 - `autoload/debug_flags.gd`：`DebugFlags`（调试开关）
 
+## 模块关系图（谁在用这些单例）
+
+```mermaid
+flowchart TB
+  UI["ui/*（场景/Controller）"]
+  GE["core/engine/GameEngine"]
+  TOOLS["tools/* / ui/scenes/tests/*"]
+
+  subgraph AL["autoload（单例）"]
+    GL["GameLog"]
+    G["Globals"]
+    SM["SceneManager"]
+    EB["EventBus"]
+    DF["DebugFlags"]
+    NC["NetClient"]
+    NX["NetContext"]
+  end
+
+  UI -->|"读写配置/运行时引用"| G
+  UI -->|"切换场景/Loading"| SM
+  UI -->|"订阅/发射（UI 侧）"| EB
+  UI -->|"调试 UI/开关"| DF
+  UI -->|"联机请求/信号"| NC
+  UI -->|"房间/模式事实来源"| NX
+  UI -->|"日志输出"| GL
+
+  GE -->|"emit_event（默认转发）"| EB
+  GE -->|"可选：通过 AutoloadAccess 调用"| GL
+
+  NC -->|"复用 server/* 纯逻辑"| SVR["server/room_manager.gd / room.gd"]
+  NC -->|"更新/读取"| NX
+
+  TOOLS -->|"日志/调试输出"| GL
+```
+
 ## GameLog：统一日志
 
 代码：`tools/logger.gd`（autoload 名称：`GameLog`）

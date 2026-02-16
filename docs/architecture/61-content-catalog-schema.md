@@ -5,6 +5,31 @@
 - loader：`core/modules/v2/content_catalog_loader.gd`
 - catalog：`core/modules/v2/content_catalog.gd`
 
+## 模块关系图（content → catalog → registries → GameData/UI）
+
+```mermaid
+flowchart TB
+  Mods["modules/*/content/*.json"]
+  Loader["ContentCatalogLoader\n(core/modules/v2/content_catalog_loader.gd)"]
+  Catalog["ContentCatalog\n(core/modules/v2/content_catalog.gd)"]
+
+  RegData["core/data/*Registry\n(Employee/Product/Marketing/Milestone)"]
+  RegMap["core/map/*Registry\n(Tile/Piece)"]
+  GameData["GameData.from_catalog\n(core/data/game_data.gd)"]
+
+  Visuals["modules/*/content/visuals/*.json\n(可选)"]
+  VLoader["VisualCatalogLoader\n(core/modules/v2/visual_catalog_loader.gd)"]
+  VCat["VisualCatalog\n(core/modules/v2/visual_catalog.gd)"]
+  UI["UI（按需读取贴图/资源映射）"]
+
+  Mods --> Loader --> Catalog
+  Catalog -->|"configure_from_catalog"| RegData
+  Catalog -->|"configure_from_catalog"| RegMap
+  Catalog --> GameData
+
+  Visuals --> VLoader --> VCat --> UI
+```
+
 若你正在编写新模块，建议搭配阅读：
 
 - `docs/architecture/62-module-development-guide.md`

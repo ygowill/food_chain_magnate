@@ -9,6 +9,38 @@
 - `core/actions/action_availability_registry.gd`：`ActionAvailabilityRegistry`（phase/sub_phase 门禁）
 - `core/actions/action_ids.gd`：内建 action_id 常量
 
+## 模块关系图（Command → ActionRegistry → ActionExecutor）
+
+```mermaid
+flowchart TB
+  UI["UI（构造 Command）"]
+  Cmd["Command\n(core/types/command.gd)"]
+  GE["GameEngine.execute_command\n(core/engine/game_engine.gd)"]
+  Runner["CommandRunner\n(core/engine/game_engine/command_runner.gd)"]
+
+  AR["ActionRegistry\n(core/actions/action_registry.gd)"]
+  Exec["ActionExecutor\n(gameplay/actions 或 模块注入)"]
+  V["Validators\n(global + action)"]
+  GS["GameState"]
+  EB["EventBus\n(autoload, default sink)"]
+
+  Setup["ActionSetup provider\n(ProjectSettings fcm/action_setup_provider_path)\nres://gameplay/action_setup.gd"]
+  Ruleset["RulesetV2\n(register_action_executor/validator/availability)"]
+
+  UI --> Cmd
+  Cmd --> GE
+  GE --> Runner
+  Runner -->|"run_validators"| AR
+  AR -->|"global/action validators"| V
+  AR -->|"lookup executor"| Exec
+  Exec -->|"validate/compute_new_state"| GS
+  Exec -->|"generate_events"| GE
+  GE -->|"emit_event"| EB
+
+  Setup -->|"注册内建 executors"| AR
+  Ruleset -->|"注入 executors/validators/availability"| AR
+```
+
 ## ActionExecutor：动作接口
 
 `ActionExecutor`（RefCounted）提供三段式接口：
@@ -57,4 +89,3 @@ RulesetV2 支持模块注册：
 - action 可用性覆盖（phase/sub_phase points）
 
 参见：`core/modules/v2/ruleset/action_registration.gd`
-

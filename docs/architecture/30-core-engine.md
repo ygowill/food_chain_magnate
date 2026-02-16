@@ -9,6 +9,39 @@
 
 代码入口：`core/engine/game_engine.gd`
 
+## 模块关系图（GameEngine 组成与依赖）
+
+```mermaid
+flowchart TB
+  GE["GameEngine\n(core/engine/game_engine.gd)"]
+  PM["PhaseManager\n(core/engine/phase_manager.gd)"]
+  AR["ActionRegistry\n(core/actions/action_registry.gd)"]
+  GS["GameState\n(core/state/game_state.gd)"]
+  RNG["RandomManager\n(core/random/random_manager.gd)"]
+
+  Mods["ModulesV2.apply\n(core/engine/game_engine/modules_v2.gd)"]
+  CC["ContentCatalog\n(core/modules/v2/content_catalog.gd)"]
+  RS["RulesetV2\n(core/modules/v2/ruleset.gd)"]
+  Regs["Registries\n(core/data + core/map + core/rules)"]
+
+  EB["EventBus\n(autoload, default sink)"]
+
+  GE --> PM
+  GE --> AR
+  GE --> GS
+  GE --> RNG
+
+  GE -->|"initialize → apply_modules_v2"| Mods
+  Mods --> CC
+  Mods --> RS
+  CC -->|"configure_from_catalog"| Regs
+  RS -->|"configure_from_ruleset"| Regs
+  RS -->|"inject hooks/orders/triggers"| PM
+  RS -->|"register executors/validators"| AR
+
+  GE -->|"emit_event"| EB
+```
+
 ## 代码拆分（按文件职责）
 
 引擎实现被拆分到 `core/engine/game_engine/*`：

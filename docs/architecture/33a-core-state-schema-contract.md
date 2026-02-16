@@ -2,6 +2,38 @@
 
 目的：把“模块如何扩展状态结构”的隐式约定显式化，降低跨模块耦合与存档/读档后的类型漂移风险。
 
+## 模块关系图（状态扩展 + 归一化 + 跨模块协作）
+
+```mermaid
+flowchart TB
+  ModA["模块 A\n(写入 module-owned 状态)"]
+  ModB["模块 B\n(读/写 module-owned 状态)"]
+
+  GS["GameState"]
+  MapCore["core-owned\nstate.map"]
+  RoundCore["core-owned\nstate.round_state"]
+  MapExt["module-owned\nstate.map.{module_id}*"]
+  RoundExt["module-owned\nstate.round_state.{module_id}*"]
+
+  Schema["StateSchemaRegistry\n(core/state/state_schema_registry.gd)"]
+  Conflict["PlacementConflictRegistry\n(core/rules/placement_conflict_registry.gd)"]
+
+  MapCore --> GS
+  RoundCore --> GS
+  MapExt --> GS
+  RoundExt --> GS
+
+  ModA -->|"写入 namespaced key"| MapExt
+  ModB -->|"写入 namespaced key"| RoundExt
+
+  ModA -->|"register_*_int_key_dict_schema"| Schema
+  ModB -->|"register_*_int_key_dict_schema"| Schema
+  Schema -->|"读档时 normalize int-key dicts"| GS
+
+  ModA -->|"register_placement_conflict_provider"| Conflict
+  ModB -->|"查询冲突（避免窥探对方私有 key）"| Conflict
+```
+
 ## 总原则
 
 - **core-owned vs module-owned**：core 定义的 key 属于稳定 ABI；模块不得覆盖/重解释。
@@ -52,4 +84,3 @@
 
 - `core/rules/placement_conflict_registry.gd`：模块提供“world_pos 是否存在外部冲突”查询面，避免互相窥探 state key
 - `core/state/state_schema_registry.gd`：模块注册“int-key Dictionary 的归一化路径”，避免 JSON 字符串 key 漂移
-

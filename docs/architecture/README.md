@@ -2,6 +2,36 @@
 
 本文档集只描述**当前仓库已落地**的结构与约定（以 `core/` 的确定性引擎与模块系统 V2 为核心）。若某主题尚未实现，会在对应文档开头明确标注。
 
+## 总览关系图（目录级）
+
+```mermaid
+flowchart TB
+  UI["ui/（场景/Controller）"]
+  AL["autoload/（跨场景单例）"]
+  CORE["core/（确定性引擎与规则）"]
+  GP["gameplay/（内建 actions/validators + 时间线派生）"]
+  MV2["core/modules/v2（Strict 装配）"]
+  MODS["modules/ + modules_test/（module.json + content + rules）"]
+  REG["Registries（core/data + core/map + core/rules）"]
+  TOOLS["tools/（回放 runner / perf trace 等）"]
+  SERVER["server/（房间与协议；由 NetClient 复用）"]
+
+  UI -->|"读写配置/切换场景"| AL
+  UI -->|"execute Command"| CORE
+  CORE -->|"emit_event → EventBus（默认）"| AL
+
+  CORE -->|"apply_modules_v2"| MV2
+  MV2 -->|"加载/装配"| MODS
+  MV2 -->|"配置"| REG
+  REG -->|"被规则/动作查询"| CORE
+
+  GP -->|"提供 ActionExecutor/validators"| CORE
+  GP -->|"从引擎事实来源派生时间线"| UI
+
+  TOOLS -->|"headless 工具/诊断"| CORE
+  AL -->|"NetClient.start_server/connect_to_server"| SERVER
+```
+
 建议阅读顺序：
 
 1. `docs/architecture/00-system-overview.md`：系统总览（命令驱动、模块装配、回放/存档/倒带）

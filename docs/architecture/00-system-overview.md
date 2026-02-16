@@ -68,7 +68,7 @@ GE -> M : apply_modules_v2(enabled_modules_v2, base_dir)
 M --> GE : content_catalog_v2 + ruleset_v2 + registries configured
 
 GE -> F : GameState.create_initial_state_with_rng(...)
-F --> GE : state (含 rules/modules/players/bank/round_state...)
+F --> GE : state (含 rules, modules, map, round_state...；模块可扩展 map 与 round_state)
 
 GE -> MG : 生成 MapDef / tile placements（模块注册）
 GE -> MB : MapBaker.bake(map_def, TileRegistry, PieceRegistry)
@@ -94,6 +94,7 @@ GE -> GE : state.map = baked_data (apply_baked_map)\n+ state_initializers (模�
 
 ```mermaid
 stateDiagram-v2
+  %% 注意：Marketing 同时是 Working 子阶段名 & 独立阶段名；此图用别名避免 state id 冲突。
   [*] --> Setup
   state Setup {
     [*] --> ReserveCards
@@ -102,11 +103,14 @@ stateDiagram-v2
   Setup --> Restructuring
   Restructuring --> OrderOfBusiness
 
+  state "Marketing (Phase)" as MarketingPhase
+
   state Working {
+    state "Marketing (Working subphase)" as WorkingMarketing
     [*] --> Recruit
     Recruit --> Train
-    Train --> Marketing
-    Marketing --> GetFood
+    Train --> WorkingMarketing
+    WorkingMarketing --> GetFood
     GetFood --> GetDrinks
     GetDrinks --> PlaceHouses
     PlaceHouses --> PlaceRestaurants
@@ -116,10 +120,10 @@ stateDiagram-v2
   OrderOfBusiness --> Working
   Working --> Dinnertime
   Dinnertime --> Payday
-  Payday --> Marketing
-  Marketing --> Cleanup
+  Payday --> MarketingPhase
+  MarketingPhase --> Cleanup
   Cleanup --> Restructuring : new round
-  Dinnertime --> GameOver
+  Dinnertime --> GameOver : force_next_phase=GameOver
   GameOver --> [*]
 ```
 

@@ -8,6 +8,29 @@
 - 构建一条“完整事件时间线”，用于日志面板稳定排序与回放展示；
 - 保持确定性：时间线构建不依赖实时信号订阅，而是以引擎内部事实来源重建。
 
+## 模块关系图（从引擎事实来源派生时间线）
+
+```mermaid
+flowchart TB
+  Engine["GameEngine"]
+  Facts["事实来源\n(command_history + checkpoints + state)"]
+  PMTrace["PhaseManager trace\n(set_timeline_trace_enabled)"]
+
+  Step["StepTimelineBuild\n(gameplay/replay/step_timeline_build.gd)"]
+  EventTL["EventTimelineBuild\n(gameplay/replay/event_timeline_build.gd)"]
+  Rebuild["EventHistoryRebuild.build\n(core/engine/game_engine/event_history_rebuild.gd)"]
+
+  UI["UI 日志/回放视图\n(ui/scenes/game)"]
+
+  Engine --> Facts
+  Engine --> PMTrace
+  Facts --> Step
+  PMTrace --> Step
+  Step --> UI
+
+  Engine --> Rebuild --> EventTL --> UI
+```
+
 ## StepTimeline：语义步进时间线（step_index）
 
 入口：`gameplay/replay/step_timeline_build.gd`
@@ -64,4 +87,3 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
 
 - `core/tests/event_timeline_build_test.gd`
 - `core/tests/step_timeline_build_test.gd`
-

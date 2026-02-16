@@ -5,6 +5,26 @@
 - 脚本：`tools/replay_runner.gd`
 - replay 数据：`tools/replays/`（`*.json`）
 
+## 模块关系图（replay_runner 做了什么）
+
+```mermaid
+flowchart TB
+  ReplayFile["replay.json\n(tools/replays/*.json)"]
+  Runner["replay_runner.gd\n(tools)"]
+  Engine["GameEngine"]
+  Exec["execute_command*"]
+  Replay["full_replay()"]
+  Hash["GameState.compute_hash()"]
+  Checkpoints["verify_checkpoints()"]
+
+  ReplayFile --> Runner
+  Runner -->|"initialize"| Engine
+  Runner --> Exec --> Engine
+  Runner --> Replay --> Engine
+  Engine --> Hash
+  Runner --> Checkpoints --> Engine
+```
+
 ## 用法
 
 ```bash
@@ -25,4 +45,3 @@ runner 会：
   - `"system"`：系统命令（等价于 `Command.create_system`）
   - `"current"`：当前玩家（运行期从 `state.get_current_player_id()` 推导）
   - 数字：直接作为 player_id
-

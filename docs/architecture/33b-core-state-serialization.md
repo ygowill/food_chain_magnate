@@ -12,6 +12,31 @@
 - `core/state/serialization/*`
 - `core/state/state_schema_registry.gd`
 
+## 模块关系图（读档：先装配 schema，再反序列化）
+
+```mermaid
+flowchart TB
+  JSON["JSON.parse_string\n(数字默认 float)"]
+  NormalizeNums["Archive._normalize_json_numbers\n(core/engine/game_engine/archive.gd)"]
+
+  ApplyMods["engine.apply_modules_v2\n(core/engine/game_engine/modules_v2.gd)"]
+  Ruleset["RulesetV2\n(core/modules/v2/ruleset.gd)"]
+  SchemaCfg["StateSchemaRegistry.configure_from_ruleset"]
+
+  Decode["GameStateSerialization.apply_from_dict\n(game_state_serialization.gd)"]
+  DecodeMap["ValueDecoder.decode_map\n(把 [x,y] 解回 Vector2i)"]
+  ParseRS["RoundStateParser.parse_round_state\n(含 schema 归一化)"]
+  NormMap["StateSchemaRegistry.normalize_int_key_dicts_in_container(map)"]
+
+  GS["GameState（可运行）"]
+
+  JSON --> NormalizeNums --> Decode
+  ApplyMods --> Ruleset --> SchemaCfg
+  SchemaCfg --> Decode
+  Decode --> DecodeMap --> NormMap --> GS
+  Decode --> ParseRS --> GS
+```
+
 ## JSON-safe 输出（to_dict）
 
 `GameStateSerialization.to_dict` 会把部分嵌套结构转为 JSON-safe：
@@ -63,4 +88,3 @@
 实现入口：
 
 - `core/state/state_schema_registry.gd`
-

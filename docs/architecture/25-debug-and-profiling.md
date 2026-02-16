@@ -2,9 +2,34 @@
 
 本项目的调试与性能诊断分散在 `autoload/`、`ui/`、`core/debug/` 与 `tools/`，其中：
 
-- “开关与 UI 显示”以 `autoload/DebugFlags` 为中心；
+- “开关与 UI 显示”以 autoload 单例 `DebugFlags`（`autoload/debug_flags.gd`）为中心；
 - “调试命令行”以 `ui/debug/debug_command_registry.gd` 为中心；
 - “启动/开局性能打点”以 `PerfTrace` 为中心（core/debug 为 shim，真实实现位于 tools）。
+
+## 模块关系图（开关/命令/打点流向）
+
+```mermaid
+flowchart TB
+  DebugFlags["DebugFlags\n(autoload)"]
+  GameLog["GameLog\n(autoload)"]
+  DebugPanel["GameDebugPanelController\n(ui)"]
+  CmdReg["DebugCommandRegistry\n(ui/debug)"]
+  GameEngine["GameEngine\n(core)"]
+  PerfTrace["PerfTrace\n(core shim → tools/perf_trace.gd)"]
+  Init["Initializer/ModulesV2/MapBake\n(core/engine)"]
+  Logs["stdout / .godot logs"]
+
+  DebugFlags -->|"verbose_logging → 调整级别"| GameLog
+  DebugFlags -->|"validate_invariants → 引擎检查"| GameEngine
+  DebugFlags -->|"force_execute_commands"| DebugPanel
+
+  DebugPanel --> CmdReg
+  CmdReg -->|"handler 调用"| GameEngine
+
+  Init -->|"begin_span/end_span"| PerfTrace
+  PerfTrace --> Logs
+  GameLog --> Logs
+```
 
 ## DebugFlags（全局调试开关）
 
@@ -49,4 +74,3 @@ core shim：
 - `PerfTrace.begin_span/end_span` 被大量用于“启动/开局/模块装配/地图生成/首帧 UI”耗时定位；
 - 默认关闭，按 `tools/perf_trace.gd` 的实现约定可通过命令行 user args 启用（例如 `-- --profile_startup`）；
 - 输出以固定前缀（例如 `[StartupProfile]`）便于 grep 与机器解析。
-
