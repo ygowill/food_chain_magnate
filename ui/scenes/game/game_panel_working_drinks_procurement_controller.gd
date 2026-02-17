@@ -11,10 +11,12 @@ const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const AirHelpersClass = preload("res://ui/scenes/game/game_panel_working_drinks_procurement_air_helpers.gd")
+const HoverPreviewControllerClass = preload("res://ui/scenes/game/game_panel_working_drinks_procurement_hover_preview_controller.gd")
 
 var _scene = null
 var _map_controller = null
 var _overlay_controller = null
+var _hover_preview_controller = null
 
 var production_panel = null
 
@@ -33,6 +35,8 @@ func _init(scene, map_controller, overlay_controller) -> void:
 	_scene = scene
 	_map_controller = map_controller
 	_overlay_controller = overlay_controller
+	_hover_preview_controller = HoverPreviewControllerClass.new()
+	_hover_preview_controller.setup(self)
 
 	if _map_controller != null and _map_controller.has_signal("procure_drinks_source_selected"):
 		var sig := Signal(_map_controller, &"procure_drinks_source_selected")
@@ -403,159 +407,8 @@ func _on_procure_drinks_start_restaurant_hovered(restaurant_id: String) -> void:
 		return
 	if _procure_selected_employee_type.is_empty() or _procure_selected_employee_type == "errand_boy":
 		return
-	_set_procure_hover_start_restaurant_id(state, str(restaurant_id))
-
-func _set_procure_hover_start_restaurant_id(state: GameState, restaurant_id: String) -> void:
-	var next := str(restaurant_id).strip_edges()
-	if _procure_hover_start_restaurant_id == next:
-		return
-	_procure_hover_start_restaurant_id = next
-	_apply_procure_hover_preview(state, true)
-
-func _set_procure_hover_preview_text(text: String) -> void:
-	if not is_instance_valid(production_panel):
-		return
-	if production_panel.has_method("set_drinks_hover_preview_text"):
-		production_panel.call("set_drinks_hover_preview_text", str(text))
-
-func _sync_procure_hover_restaurant_anchor(state: GameState, restaurant_id: String) -> void:
-	var canvas = _get_map_canvas()
-	if canvas == null:
-		return
-	if state == null:
-		return
-	var rid := str(restaurant_id).strip_edges()
-	if rid.is_empty():
-		if canvas.has_method("clear_procure_drinks_hovered_restaurant_anchor"):
-			canvas.call("clear_procure_drinks_hovered_restaurant_anchor")
-		return
-
-	var restaurants_val = state.map.get("restaurants", null)
-	if not (restaurants_val is Dictionary):
-		return
-	var restaurants: Dictionary = restaurants_val
-	if not restaurants.has(rid) or not (restaurants[rid] is Dictionary):
-		return
-	var rest: Dictionary = restaurants[rid]
-	var ep = rest.get("entrance_pos", null)
-	if not (ep is Vector2i):
-		return
-	var anchor: Vector2i = Vector2i(ep)
-	if canvas.has_method("set_procure_drinks_hovered_restaurant_anchor"):
-		canvas.call("set_procure_drinks_hovered_restaurant_anchor", anchor)
-
-func _clear_procure_hover_preview_ui(state: GameState, restore_selected_overlay: bool) -> void:
-	_set_procure_hover_preview_text("")
-	_sync_procure_hover_restaurant_anchor(state, "")
-	if _procure_hover_preview_active and restore_selected_overlay:
-		_procure_hover_preview_active = false
-		_recompute_procurement_plan(state)
-	else:
-		_procure_hover_preview_active = false
-
-func _apply_procure_hover_preview(state: GameState, restore_selected_overlay_when_clearing: bool) -> void:
-	if state == null:
-		return
-	_sync_procure_hover_restaurant_anchor(state, _procure_hover_start_restaurant_id)
-
-	var hover_id := str(_procure_hover_start_restaurant_id).strip_edges()
-	var selected_id := str(_procure_selected_start_restaurant_id).strip_edges()
-	if hover_id.is_empty():
-		_clear_procure_hover_preview_ui(state, restore_selected_overlay_when_clearing)
-		return
-	if hover_id == selected_id:
-		# Hover 到当前选中起点：不改变 overlay，只显示预览信息；若之前在预览其它餐厅，则先恢复选中路线。
-		if _procure_hover_preview_active and restore_selected_overlay_when_clearing:
-			_procure_hover_preview_active = false
-			_recompute_procurement_plan(state)
-		else:
-			_procure_hover_preview_active = false
-		_set_procure_hover_preview_text("预览：当前起点（点击餐厅或按 1-9 切换）")
-		return
-
-	# 仅对“道路采购”提供悬停预览：起点餐厅会改变自动路径。
-	if _is_air_procure_employee_type(_procure_selected_employee_type):
-		_set_procure_hover_preview_text("提示：点击餐厅可选择起点")
-		_procure_hover_preview_active = false
-		return
-	if _procure_selected_sources.is_empty():
-		_set_procure_hover_preview_text("预览：请先选择至少 1 个进货点")
-		_procure_hover_preview_active = false
-		return
-
-	var emp_def: EmployeeDef = _get_procure_employee_def(_procure_selected_employee_type)
-	if emp_def == null:
-		var msg := "EmployeeRegistry 未初始化"
-		if EmployeeRegistryClass.is_loaded():
-			msg = "未知员工类型: %s" % _procure_selected_employee_type
-		_set_procure_hover_preview_text("预览：%s" % msg)
-		_procure_hover_preview_active = false
-		return
-
-	var preview_r := _build_road_procure_preview_plan(state, emp_def, hover_id, _procure_selected_sources)
-	if not preview_r.ok:
-		_set_procure_hover_preview_text("预览：%s" % preview_r.error)
-		if _procure_hover_preview_active and restore_selected_overlay_when_clearing:
-			_procure_hover_preview_active = false
-			_recompute_procurement_plan(state)
-		else:
-			_procure_hover_preview_active = false
-		return
-	if not (preview_r.value is Dictionary):
-		_set_procure_hover_preview_text("预览：路线解析失败")
-		if _procure_hover_preview_active and restore_selected_overlay_when_clearing:
-			_procure_hover_preview_active = false
-			_recompute_procurement_plan(state)
-		else:
-			_procure_hover_preview_active = false
-		return
-
-	var plan: Dictionary = preview_r.value
-	var entrance_pos := Vector2i(-1, -1)
-	var ep_val = plan.get("entrance_pos", null)
-	if ep_val is Vector2i:
-		entrance_pos = Vector2i(ep_val)
-
-	var route: Array[Vector2i] = []
-	var route_val = plan.get("route", null)
-	if route_val is Array:
-		for p in (route_val as Array):
-			if p is Vector2i:
-				route.append(Vector2i(p))
-
-	var picked_sources_pos: Array[Vector2i] = []
-	var picked_val = plan.get("picked_sources", null)
-	if picked_val is Array:
-		for s_val in (picked_val as Array):
-			if not (s_val is Dictionary):
-				continue
-			var s: Dictionary = s_val
-			var wp = s.get("world_pos", null)
-			if wp is Vector2i:
-				picked_sources_pos.append(Vector2i(wp))
-
-	var used := _count_road_boundary_crossings(route)
-	var max_dist := _get_road_procure_max_distance(state, emp_def)
-	var hover_idx := 0
-	var restaurant_ids := StructuresClass.get_player_restaurants(state, state.get_current_player_id())
-	restaurant_ids.sort()
-	var find_idx := restaurant_ids.find(hover_id)
-	if find_idx >= 0:
-		hover_idx = find_idx + 1
-	var start_label := ("餐厅 %d" % hover_idx) if hover_idx > 0 else hover_id
-	if entrance_pos != Vector2i(-1, -1):
-		start_label = "%s @ (%d,%d)" % [start_label, entrance_pos.x, entrance_pos.y]
-	_set_procure_hover_preview_text("预览：%s，距离=%d/%d（点击餐厅或按 1-9 选择起点）" % [start_label, used, max_dist])
-
-	if _overlay_controller != null and _overlay_controller.has_method("show_procurement_route_overlay"):
-		var opts := {
-			"preview": true,
-			"start_restaurant_cells": _get_restaurant_cells(state, hover_id),
-		}
-		_overlay_controller.call("show_procurement_route_overlay", entrance_pos, route, picked_sources_pos, opts)
-		_procure_hover_preview_active = true
-	else:
-		_procure_hover_preview_active = false
+	if _hover_preview_controller != null and is_instance_valid(_hover_preview_controller):
+		_hover_preview_controller.set_hover_start_restaurant_id(state, str(restaurant_id))
 
 func _build_road_procure_preview_plan(
 	state: GameState,
