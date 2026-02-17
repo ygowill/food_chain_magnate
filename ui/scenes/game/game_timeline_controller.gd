@@ -4,8 +4,7 @@ class_name GameTimelineController
 extends RefCounted
 
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
-const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
-const GameTimelineLogEntriesBuilderClass = preload("res://ui/scenes/game/game_timeline_log_entries_builder.gd")
+const StepTimelineBuildHelpersClass = preload("res://ui/scenes/game/game_timeline_step_timeline_build_helpers.gd")
 const GameTimelineStepSeekHelpersClass = preload("res://ui/scenes/game/game_timeline_step_seek_helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
@@ -183,29 +182,23 @@ func apply_live_log_timeline_from_engine() -> void:
 	if not is_instance_valid(_game_log_panel):
 		return
 
-	var build_r: Result = StepTimelineBuildClass.build_full(engine)
+	var build_r: Result = StepTimelineBuildHelpersClass.build_and_load(engine, _game_log_panel, false)
 	if not build_r.ok:
 		GameLog.warn("Game", "构建 step 时间线失败（实时日志将为空/不更新）: %s" % build_r.error)
 		return
 	if not (build_r.value is Dictionary):
 		GameLog.warn("Game", "构建 step 时间线失败（返回类型错误）")
 		return
+	var info: Dictionary = build_r.value
+	var timeline_val = info.get("timeline", null)
+	if not (timeline_val is Dictionary):
+		GameLog.warn("Game", "构建 step 时间线失败（返回结构错误）")
+		return
 
-	_history_step_timeline = Dictionary(build_r.value).duplicate(true)
+	_history_step_timeline = Dictionary(timeline_val)
 	_history_step_timeline_active = true
 
-	var events_val = _history_step_timeline.get("events", [])
-	var events: Array = events_val if (events_val is Array) else []
-	var entries := GameTimelineLogEntriesBuilderClass.build(events)
-	if _game_log_panel.has_method("load_step_timeline"):
-		# 保留 UI-only 日志（例如动作失败提示），避免 rebuild 覆盖用户可见反馈。
-		_game_log_panel.call("load_step_timeline", _history_step_timeline, entries, false)
-	else:
-		_game_log_panel.call("load_entries", entries)
-
-	var steps_val = _history_step_timeline.get("steps", [])
-	var steps: Array = steps_val if (steps_val is Array) else []
-	_history_head_step_index = steps.size() - 1
+	_history_head_step_index = int(info.get("head_step_index", -1))
 
 	# 默认定位到“当前引擎指针”的稳定落点：
 	# - 若在最新：cursor=head_step；
@@ -403,32 +396,26 @@ func _apply_full_replay_log_timeline(engine: GameEngine) -> void:
 		return
 
 	# M4.2：构建 step_index 时间线（阶段切分点 + 状态快照），用于回放步进与日志高亮。
-	var build_r: Result = StepTimelineBuildClass.build_full(engine)
+	var build_r: Result = StepTimelineBuildHelpersClass.build_and_load(engine, _game_log_panel, true)
 	if not build_r.ok:
 		GameLog.error("Game", "构建 step 时间线失败: %s" % build_r.error)
 		if _show_confirm.is_valid():
 			_show_confirm.call("回放加载失败", "构建 step 时间线失败: %s" % build_r.error, Callable(), Callable())
 		return
-
-	var timeline_val = build_r.value
-	if not (timeline_val is Dictionary):
+	if not (build_r.value is Dictionary):
 		if _show_confirm.is_valid():
 			_show_confirm.call("回放加载失败", "构建 step 时间线失败: 内部错误（返回类型错误）", Callable(), Callable())
 		return
+	var info: Dictionary = build_r.value
+	var timeline_val = info.get("timeline", null)
+	if not (timeline_val is Dictionary):
+		if _show_confirm.is_valid():
+			_show_confirm.call("回放加载失败", "构建 step 时间线失败: 内部错误（返回结构错误）", Callable(), Callable())
+		return
 
-	_replay_step_timeline = Dictionary(timeline_val).duplicate(true)
+	_replay_step_timeline = Dictionary(timeline_val)
 
-	var events_val = _replay_step_timeline.get("events", [])
-	var events: Array = events_val if (events_val is Array) else []
-	var entries := GameTimelineLogEntriesBuilderClass.build(events)
-	if _game_log_panel.has_method("load_step_timeline"):
-		_game_log_panel.call("load_step_timeline", _replay_step_timeline, entries, true)
-	else:
-		_game_log_panel.call("load_entries", entries)
-
-	var steps_val = _replay_step_timeline.get("steps", [])
-	var steps: Array = steps_val if (steps_val is Array) else []
-	_replay_head_step_index = steps.size() - 1
+	_replay_head_step_index = int(info.get("head_step_index", -1))
 	_replay_cursor_step_index = _replay_head_step_index
 
 	_game_log_panel.call("set_timeline_head", _replay_head_step_index)
@@ -543,28 +530,23 @@ func _enter_history_step_timeline_for_command(target_command_index: int) -> int:
 	if not is_instance_valid(_game_log_panel):
 		return -999
 
-	var build_r: Result = StepTimelineBuildClass.build_full(engine)
+	var build_r: Result = StepTimelineBuildHelpersClass.build_and_load(engine, _game_log_panel, false)
 	if not build_r.ok:
 		GameLog.warn("Game", "构建 step 时间线失败（复盘模式将回退到命令时间线）: %s" % build_r.error)
 		return -999
 	if not (build_r.value is Dictionary):
 		GameLog.warn("Game", "构建 step 时间线失败（返回类型错误）")
 		return -999
+	var info: Dictionary = build_r.value
+	var timeline_val = info.get("timeline", null)
+	if not (timeline_val is Dictionary):
+		GameLog.warn("Game", "构建 step 时间线失败（返回结构错误）")
+		return -999
 
-	_history_step_timeline = Dictionary(build_r.value).duplicate(true)
+	_history_step_timeline = Dictionary(timeline_val)
 	_history_step_timeline_active = true
 
-	var events_val = _history_step_timeline.get("events", [])
-	var events: Array = events_val if (events_val is Array) else []
-	var entries := GameTimelineLogEntriesBuilderClass.build(events)
-	if _game_log_panel.has_method("load_step_timeline"):
-		_game_log_panel.call("load_step_timeline", _history_step_timeline, entries, false)
-	else:
-		_game_log_panel.call("load_entries", entries)
-
-	var steps_val = _history_step_timeline.get("steps", [])
-	var steps: Array = steps_val if (steps_val is Array) else []
-	_history_head_step_index = steps.size() - 1
+	_history_head_step_index = int(info.get("head_step_index", -1))
 	_history_cursor_step_index = _history_head_step_index
 
 	_game_log_panel.call("set_timeline_head", _history_head_step_index)
