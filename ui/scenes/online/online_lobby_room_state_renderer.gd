@@ -2,6 +2,7 @@
 extends RefCounted
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const LobbyViewModelClass = preload("res://ui/scenes/online/online_lobby_view_model.gd")
 
 var _lobby = null
 
@@ -17,7 +18,8 @@ func render_room_state(room_state: Dictionary) -> void:
 		_lobby.room_code_label.text = "房间：-"
 		return
 
-	var code := str(room_state.get("room_code", "")).strip_edges()
+	var local_peer_id := int(_lobby.multiplayer.get_unique_id())
+	var code := LobbyViewModelClass.get_room_code(room_state)
 	if code.is_empty():
 		_lobby.room_code_label.text = "房间：-"
 	else:
@@ -30,12 +32,12 @@ func render_room_state(room_state: Dictionary) -> void:
 		child2.queue_free()
 
 	# Room 配置：host 自动同步 / 非 host 只读
-	var cfg: Dictionary = Dictionary(room_state.get("config", {}))
+	var cfg: Dictionary = LobbyViewModelClass.get_room_config(room_state)
 	var desired_player_count := int(cfg.get("desired_player_count", 0))
 
-	var host_peer_id := int(room_state.get("host_peer_id", 0))
+	var host_peer_id := LobbyViewModelClass.get_host_peer_id(room_state)
 	var player_by_seat: Dictionary = {}
-	var players: Array = Array(room_state.get("players", []))
+	var players: Array = LobbyViewModelClass.get_players(room_state)
 	for p_val in players:
 		if not (p_val is Dictionary):
 			continue
@@ -81,7 +83,7 @@ func render_room_state(room_state: Dictionary) -> void:
 			)
 			_lobby.players_list_container.add_child(empty_item)
 
-	var spectators: Array = Array(room_state.get("spectators", []))
+	var spectators: Array = LobbyViewModelClass.get_spectators(room_state)
 	if spectators.is_empty():
 		var none := Label.new()
 		none.text = "暂无旁观者"
@@ -106,7 +108,6 @@ func render_room_state(room_state: Dictionary) -> void:
 
 	# 我的餐厅/颜色选择（进入房间后才允许）
 	if _lobby.my_color_option != null and is_instance_valid(_lobby.my_color_option):
-		var local_peer_id := int(_lobby.multiplayer.get_unique_id())
 		var local_player_entry: Dictionary = {}
 		for p_val2 in players:
 			if not (p_val2 is Dictionary):
@@ -115,7 +116,7 @@ func render_room_state(room_state: Dictionary) -> void:
 			if int(p2.get("peer_id", 0)) == local_peer_id:
 				local_player_entry = p2
 				break
-		var can_edit_color := (not code.is_empty()) and (str(room_state.get("status", "")).strip_edges() == "Lobby") and (not local_player_entry.is_empty())
+		var can_edit_color := (not code.is_empty()) and (LobbyViewModelClass.get_room_status(room_state) == "Lobby") and (not local_player_entry.is_empty())
 		_lobby.my_color_option.disabled = not can_edit_color
 		if not local_player_entry.is_empty():
 			var local_color_index := int(local_player_entry.get("color_index", 0))
@@ -123,20 +124,15 @@ func render_room_state(room_state: Dictionary) -> void:
 			_lobby._apply_my_color_option_selection(local_color_index)
 
 	var in_room: bool = not code.is_empty()
-	var is_host: bool = in_room and _lobby._is_host(room_state)
-	if not is_host and _lobby._config_sync_state != "synced":
-		_lobby._set_config_sync_state("synced", "")
-	if _lobby._room_config_editor != null and is_instance_valid(_lobby._room_config_editor):
-		var editable: bool = is_host and str(room_state.get("status", "")).strip_edges() == "Lobby"
-		if not is_host or _lobby._config_sync_state == "synced" or _lobby._config_sync_state == "syncing":
-			_lobby._room_config_editor.set_from_room_config(cfg)
-			if is_host and _lobby._config_sync_state == "syncing":
-				_lobby._pending_config_patch = {}
-				_lobby._set_config_sync_state("synced", "")
-			_lobby._room_config_editor.set_editable(editable)
+	var is_host: bool = in_room and LobbyViewModelClass.is_host(room_state, local_peer_id)
+	if _lobby._room_config_sync_controller != null and is_instance_valid(_lobby._room_config_sync_controller):
+		_lobby._room_config_sync_controller.sync_editor_from_room_state(room_state, is_host, _lobby._room_config_editor)
 
 	# StartGame 按钮
-	_lobby.start_game_button.disabled = (not connected) or (not _lobby._can_start_game(room_state)) or _lobby._start_game_flow_in_progress or _lobby._config_sync_state == "error"
+	var config_error := false
+	if _lobby._room_config_sync_controller != null and is_instance_valid(_lobby._room_config_sync_controller):
+		config_error = bool(_lobby._room_config_sync_controller.is_error())
+	_lobby.start_game_button.disabled = (not connected) or (not LobbyViewModelClass.can_start_game(room_state, local_peer_id)) or _lobby._start_game_flow_in_progress or config_error
 
 	if in_room and _lobby._current_page != _lobby.LobbyPage.ROOM:
 		_lobby._show_page(_lobby.LobbyPage.ROOM, false)

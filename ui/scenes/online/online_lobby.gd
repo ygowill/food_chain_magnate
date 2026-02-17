@@ -8,6 +8,8 @@ const InfoDialogClass = preload("res://ui/dialogs/info_dialog.gd")
 const RoomListControllerClass = preload("res://ui/scenes/online/online_lobby_room_list_controller.gd")
 const RoomStateRendererClass = preload("res://ui/scenes/online/online_lobby_room_state_renderer.gd")
 const RequestRejectionMapperClass = preload("res://ui/scenes/online/online_lobby_request_rejection_mapper.gd")
+const LobbyViewModelClass = preload("res://ui/scenes/online/online_lobby_view_model.gd")
+const RoomConfigSyncControllerClass = preload("res://ui/scenes/online/online_lobby_room_config_sync_controller.gd")
 
 const _COLOR_NAME_HINTS: Array[String] = ["红", "蓝", "绿", "黄", "紫", "橙"]
 
@@ -70,9 +72,7 @@ var _room_config_editor = null
 var _room_list_controller = null
 var _room_state_renderer = null
 
-var _config_sync_state: String = "synced" # synced/dirty/syncing/error
-var _config_sync_message: String = ""
-var _pending_config_patch: Dictionary = {}
+var _room_config_sync_controller = null
 var _start_game_request_id: String = ""
 var _start_game_flow_in_progress: bool = false
 
@@ -104,6 +104,7 @@ func _ready() -> void:
 	_apply_password_mask_fallback()
 	_bind_net_signals()
 	_ensure_editors()
+	_ensure_config_sync_controller()
 	_ensure_password_dialog()
 	_ensure_info_dialog()
 	_ensure_room_renderers()
@@ -173,8 +174,15 @@ func _ensure_editors() -> void:
 		room_config_container.add_child(_room_config_editor)
 		_room_config_editor.changed.connect(_on_room_config_changed)
 		_room_config_editor.validation_failed.connect(func(msg: String) -> void:
-			_set_config_sync_state("error", msg)
+			_ensure_config_sync_controller()
+			if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
+				_room_config_sync_controller.on_room_config_editor_validation_failed(msg)
 		)
+
+func _ensure_config_sync_controller() -> void:
+	if _room_config_sync_controller == null or not is_instance_valid(_room_config_sync_controller):
+		_room_config_sync_controller = RoomConfigSyncControllerClass.new()
+		_room_config_sync_controller.setup(self, config_sync_status_label, config_debounce_timer)
 
 func _ensure_room_renderers() -> void:
 	if _room_list_controller == null or not is_instance_valid(_room_list_controller):
@@ -234,8 +242,9 @@ func _apply_defaults() -> void:
 	player_name_edit.text = profile_name
 	_write_local_player_profile(profile_name, profile_color_index)
 	_apply_my_color_option_selection(profile_color_index)
-
-	_set_config_sync_state("synced", "")
+	_ensure_config_sync_controller()
+	if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
+		_room_config_sync_controller.reset()
 
 	if create_players_spin != null and is_instance_valid(create_players_spin):
 		create_players_spin.min_value = float(Globals.MIN_PLAYERS)
@@ -368,24 +377,6 @@ func _on_password_dialog_submitted(password: String) -> void:
 	NetClient.request_join_room(code, str(password))
 	_set_rooms_status("")
 
-func _is_host(room_state: Dictionary) -> bool:
-	var host_peer_id := int(room_state.get("host_peer_id", 0))
-	if host_peer_id <= 0:
-		return false
-	return int(multiplayer.get_unique_id()) == host_peer_id
-
-func _can_start_game(room_state: Dictionary) -> bool:
-	if not _is_host(room_state):
-		return false
-	if str(room_state.get("status", "")).strip_edges() != "Lobby":
-		return false
-	var cfg: Dictionary = Dictionary(room_state.get("config", {}))
-	var desired := int(cfg.get("desired_player_count", 0))
-	if desired <= 0:
-		return false
-	var players: Array = Array(room_state.get("players", []))
-	return players.size() == desired
-
 func _set_connect_status(text: String) -> void:
 	connect_status_label.text = str(text).strip_edges()
 
@@ -400,23 +391,6 @@ func _set_create_status(text: String) -> void:
 
 func _set_room_status(text: String) -> void:
 	room_status_label.text = str(text).strip_edges()
-
-func _set_config_sync_state(state: String, message: String) -> void:
-	_config_sync_state = str(state)
-	_config_sync_message = str(message).strip_edges()
-	var s := ""
-	match _config_sync_state:
-		"synced":
-			s = "配置：已同步"
-		"dirty":
-			s = "配置：待同步..."
-		"syncing":
-			s = "配置：同步中..."
-		"error":
-			s = "配置：错误 - %s" % _config_sync_message
-		_:
-			s = "配置：%s" % _config_sync_state
-	config_sync_status_label.text = s
 
 func _get_current_room_code() -> String:
 	if NetContext == null:
@@ -445,7 +419,9 @@ func _on_net_disconnected(reason: String) -> void:
 	_set_join_by_code_status("")
 	_set_create_status("")
 	_set_room_status("")
-	_set_config_sync_state("synced", "")
+	_ensure_config_sync_controller()
+	if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
+		_room_config_sync_controller.reset()
 	_start_game_request_id = ""
 	_start_game_flow_in_progress = false
 	if SceneManager != null and SceneManager.has_method("hide_loading"):
@@ -470,7 +446,9 @@ func _on_room_state_updated(_room_state: Dictionary) -> void:
 
 func _on_request_rejected(request_id: String, code: String, message: String) -> void:
 	if str(code).begins_with("update_config"):
-		_set_config_sync_state("error", str(message))
+		_ensure_config_sync_controller()
+		if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
+			_room_config_sync_controller.on_request_rejected(code, message)
 		_refresh_ui()
 		# StartGame 预同步失败：停止 loading 并解锁按钮
 		if _start_game_flow_in_progress and _start_game_request_id.is_empty():
@@ -510,54 +488,18 @@ func _on_game_started(_payload: Dictionary) -> void:
 
 func _on_room_config_changed() -> void:
 	var room_state: Dictionary = NetContext.room_state if NetContext != null else {}
-	if not _is_host(room_state):
-		return
-	if str(room_state.get("status", "")).strip_edges() != "Lobby":
-		return
-	if _room_config_editor == null or not is_instance_valid(_room_config_editor):
-		return
-
-	var vr: Result = _room_config_editor.validate()
-	if not vr.ok:
-		_set_config_sync_state("error", vr.error)
-		return
-
-	_pending_config_patch = _room_config_editor.get_config_patch()
-	_set_config_sync_state("dirty", "")
-	config_debounce_timer.start()
+	_ensure_config_sync_controller()
+	var is_host := LobbyViewModelClass.is_host(room_state, int(multiplayer.get_unique_id()))
+	if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
+		_room_config_sync_controller.on_room_config_editor_changed(room_state, is_host, _room_config_editor)
 
 func _on_config_debounce_timeout() -> void:
 	var room_state: Dictionary = NetContext.room_state if NetContext != null else {}
-	if not _is_host(room_state):
-		return
-	if str(room_state.get("status", "")).strip_edges() != "Lobby":
-		return
-	if _pending_config_patch.is_empty():
-		return
-	if NetClient == null or not NetClient.is_online_client_connected():
-		return
-
-	_set_config_sync_state("syncing", "")
-	NetClient.request_update_room_config(_pending_config_patch)
+	_ensure_config_sync_controller()
+	var is_host := LobbyViewModelClass.is_host(room_state, int(multiplayer.get_unique_id()))
+	if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
+		_room_config_sync_controller.on_debounce_timeout(room_state, is_host, NetClient)
 	_set_room_status("")
-
-func _room_config_matches_patch(cfg: Dictionary, patch: Dictionary) -> bool:
-	if cfg == null or patch == null:
-		return false
-	for k in patch.keys():
-		if cfg.get(k, null) != patch.get(k, null):
-			return false
-	return true
-
-func _await_config_sync(timeout_sec: float = 5.0) -> bool:
-	var deadline_ms := int(Time.get_ticks_msec() + int(round(timeout_sec * 1000.0)))
-	while Time.get_ticks_msec() < deadline_ms:
-		if _config_sync_state == "synced":
-			return true
-		if _config_sync_state == "error":
-			return false
-		await get_tree().process_frame
-	return false
 
 func _apply_my_color_option_selection(color_index: int) -> void:
 	if my_color_option == null or not is_instance_valid(my_color_option):
@@ -680,9 +622,9 @@ func _on_leave_room_pressed() -> void:
 		_show_error_dialog("未连接到服务器", "请先连接服务器。")
 		_set_room_status("")
 		return
-	config_debounce_timer.stop()
-	_pending_config_patch = {}
-	_set_config_sync_state("synced", "")
+	_ensure_config_sync_controller()
+	if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
+		_room_config_sync_controller.reset()
 	_start_game_request_id = ""
 	_start_game_flow_in_progress = false
 	NetClient.request_leave_room()
@@ -694,7 +636,8 @@ func _on_start_game_pressed() -> void:
 		_set_room_status("")
 		return
 	var room_state: Dictionary = NetContext.room_state if NetContext != null else {}
-	if not _is_host(room_state):
+	var is_host := LobbyViewModelClass.is_host(room_state, int(multiplayer.get_unique_id()))
+	if not is_host:
 		_show_error_dialog("无法开始游戏", "仅房主可开始游戏。")
 		_set_room_status("")
 		return
@@ -707,7 +650,9 @@ func _on_start_game_pressed() -> void:
 
 	var vr: Result = _room_config_editor.validate()
 	if not vr.ok:
-		_set_config_sync_state("error", vr.error)
+		_ensure_config_sync_controller()
+		if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
+			_room_config_sync_controller.set_state("error", vr.error)
 		_show_error_dialog("无法开始游戏", vr.error)
 		_set_room_status("")
 		return
@@ -721,21 +666,10 @@ func _on_start_game_pressed() -> void:
 			await get_tree().process_frame
 
 	# StartGame：进入 loading 后主动触发一次同步（避免"光标仍在输入框中导致未同步"）。
-	config_debounce_timer.stop()
-	var patch: Dictionary = _room_config_editor.get_config_patch()
-	var cfg: Dictionary = Dictionary(room_state.get("config", {}))
-
-	if _room_config_matches_patch(cfg, patch):
-		_pending_config_patch = {}
-		_set_config_sync_state("synced", "")
-	else:
-		_pending_config_patch = patch
-		_set_config_sync_state("syncing", "")
-		NetClient.request_update_room_config(patch)
-		var synced := await _await_config_sync(5.0)
-		if not synced:
-			if _config_sync_state != "error":
-				_set_config_sync_state("error", "配置同步超时")
+	_ensure_config_sync_controller()
+	if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
+		var config_ok: bool = await _room_config_sync_controller.pre_sync_for_start_game(room_state, NetClient, _room_config_editor, 5.0)
+		if not config_ok:
 			_start_game_flow_in_progress = false
 			_refresh_ui()
 			if SceneManager != null and SceneManager.has_method("hide_loading"):
