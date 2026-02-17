@@ -1,0 +1,729 @@
+# core/ 代码审计报告（2026-02-17）
+
+## 范围与方法
+
+- 审计范围：`core/` 全部文件，共 709 个（`.gd` 318，`.json` 70，`.uid` 319）。
+- 方法：静态扫描（class_name/extends、路径引用、文本 token 引用、简单重复检测）。
+- 重要限制：GDScript/模块可能通过动态加载（`load()`/目录扫描/反射/字符串）使用；“未发现静态引用”不等于可安全删除。
+
+## 总览结论（重点问题）
+
+- core→ui 依赖：0 个脚本。
+- core→tools 依赖：1 个脚本。
+  - 代表文件：`core/debug/perf_trace.gd`
+- 可能未被使用的运行时代码（静态未发现引用）：0 个脚本。
+- 发现的“完全重复”(归一化后 hash 相同)脚本组：0 组。
+
+## 逐文件评估（不遗漏）
+
+说明：每行包含 `文件`、`元信息/用途线索`、`使用迹象(静态)`、`评估/建议`。
+
+- `core/README.md` — 文档；评估：无明显问题
+- `core/actions/action_availability_registry.gd` — ActionAvailabilityRegistry; extends RefCounted; 267 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/actions/action_availability_registry.gd.uid` — Godot 资源 UID 映射：`uid://b7vd407jbtqgl`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/actions/action_executor.gd` — ActionExecutor; extends RefCounted; 206 行；使用迹象：res:// 引用:1, class_name 引用:57；评估：无明显问题
+- `core/actions/action_executor.gd.uid` — Godot 资源 UID 映射：`uid://dr5sfkkggmxix`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/actions/action_ids.gd` — extends RefCounted; 14 行；使用迹象：res:// 引用:61；评估：无明显问题
+- `core/actions/action_ids.gd.uid` — Godot 资源 UID 映射：`uid://y5ukbul4o5r7`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/actions/action_registry.gd` — ActionRegistry; extends RefCounted; 242 行；使用迹象：res:// 引用:1, class_name 引用:23；评估：无明显问题
+- `core/actions/action_registry.gd.uid` — Godot 资源 UID 映射：`uid://34l1shqhfm63`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/actions/action_registry_queries.gd` — extends RefCounted; 117 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/actions/action_registry_queries.gd.uid` — Godot 资源 UID 映射：`uid://csf86upt6raus`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/employee_def.gd` — EmployeeDef; extends RefCounted; 184 行；使用迹象：res:// 引用:13, class_name 引用:63；评估：包含文件/资源 I/O
+- `core/data/employee_def.gd.uid` — Godot 资源 UID 映射：`uid://copfs31xuykl`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/employee_def/debug.gd` — extends RefCounted; 22 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/data/employee_def/debug.gd.uid` — Godot 资源 UID 映射：`uid://employee_def_debug0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/employee_def/parser.gd` — extends RefCounted; 14 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/data/employee_def/parser.gd.uid` — Godot 资源 UID 映射：`uid://employee_def_parser0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/employee_def/parser/core_fields.gd` — extends RefCounted; 116 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/data/employee_def/parser/core_fields.gd.uid` — Godot 资源 UID 映射：`uid://dcl4pjrnrbbip`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/employee_def/parser/optional_fields.gd` — extends RefCounted; 107 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/data/employee_def/parser/optional_fields.gd.uid` — Godot 资源 UID 映射：`uid://drmny7b2f2mxu`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/employee_def/serialization.gd` — extends RefCounted; 47 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/data/employee_def/serialization.gd.uid` — Godot 资源 UID 映射：`uid://employee_def_serialization0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/employee_registry.gd` — EmployeeRegistry; extends RefCounted; 93 行；使用迹象：res:// 引用:87, class_name 引用:36；评估：无明显问题
+- `core/data/employee_registry.gd.uid` — Godot 资源 UID 映射：`uid://bpohrgr5tmkxx`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/game_config.gd` — GameConfig; extends RefCounted; 245 行；使用迹象：res:// 引用:11, class_name 引用:18；评估：包含文件/资源 I/O
+- `core/data/game_config.gd.uid` — Godot 资源 UID 映射：`uid://c2hdo7wykvnga`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/game_data.gd` — GameData; extends RefCounted; 109 行；使用迹象：res:// 引用:1, class_name 引用:11；评估：无明显问题
+- `core/data/game_data.gd.uid` — Godot 资源 UID 映射：`uid://kj26541ht53e`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/marketing_def.gd` — MarketingDef; extends RefCounted; 105 行；使用迹象：res:// 引用:2, class_name 引用:17；评估：包含文件/资源 I/O
+- `core/data/marketing_def.gd.uid` — Godot 资源 UID 映射：`uid://ces00hkssgkpw`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/marketing_registry.gd` — MarketingRegistry; extends RefCounted; 71 行；使用迹象：res:// 引用:23, class_name 引用:5；评估：无明显问题
+- `core/data/marketing_registry.gd.uid` — Godot 资源 UID 映射：`uid://cfk6i15t4ti1d`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/milestone_def.gd` — MilestoneDef; extends RefCounted; 76 行；使用迹象：res:// 引用:14, class_name 引用:31；评估：包含文件/资源 I/O
+- `core/data/milestone_def.gd.uid` — Godot 资源 UID 映射：`uid://cqybcqcl7285g`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/milestone_def_parser.gd` — extends RefCounted; 107 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/data/milestone_def_parser.gd.uid` — Godot 资源 UID 映射：`uid://umm4ubdmxnv8`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/milestone_registry.gd` — MilestoneRegistry; extends RefCounted; 59 行；使用迹象：res:// 引用:28, class_name 引用:9；评估：无明显问题
+- `core/data/milestone_registry.gd.uid` — Godot 资源 UID 映射：`uid://dx3sh461ce4yx`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/milestone_trigger_filter.gd` — extends RefCounted; 76 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/data/milestone_trigger_filter.gd.uid` — Godot 资源 UID 映射：`uid://cv5i4t1l5pner`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/parse_helpers.gd` — DataParseHelpers; extends RefCounted; 66 行；使用迹象：res:// 引用:8；评估：无明显问题
+- `core/data/parse_helpers.gd.uid` — Godot 资源 UID 映射：`uid://co5j2rmnrtphr`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/product_def.gd` — ProductDef; extends RefCounted; 67 行；使用迹象：res:// 引用:5, class_name 引用:29；评估：包含文件/资源 I/O
+- `core/data/product_def.gd.uid` — Godot 资源 UID 映射：`uid://bmf0nou17ic5u`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/data/product_registry.gd` — ProductRegistry; extends RefCounted; 82 行；使用迹象：res:// 引用:40, class_name 引用:21；评估：无明显问题
+- `core/data/product_registry.gd.uid` — Godot 资源 UID 映射：`uid://b1ksem0dk867a`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/debug/perf_trace.gd` — extends RefCounted; 26 行；使用迹象：res:// 引用:10；评估：core→tools 依赖; shim/兼容层
+- `core/debug/perf_trace.gd.uid` — Godot 资源 UID 映射：`uid://b4o0ri5ws8qn`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_constants.gd` — GameConstants; extends RefCounted; 8 行；使用迹象：res:// 引用:3；评估：无明显问题
+- `core/engine/game_constants.gd.uid` — Godot 资源 UID 映射：`uid://dv2pcf0lw3qci`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_defaults.gd` — GameDefaults; extends RefCounted; 22 行；使用迹象：res:// 引用:17；评估：无明显问题
+- `core/engine/game_defaults.gd.uid` — Godot 资源 UID 映射：`uid://cewgdfycs53t6`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine.gd` — GameEngine; extends RefCounted; 314 行；使用迹象：res:// 引用:8, class_name 引用:229；评估：无明显问题
+- `core/engine/game_engine.gd.uid` — Godot 资源 UID 映射：`uid://dhusofkxkfauj`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/action_setup.gd` — extends RefCounted; 39 行；使用迹象：res:// 引用:5；评估：无明显问题
+- `core/engine/game_engine/action_setup.gd.uid` — Godot 资源 UID 映射：`uid://geng1neact10nsetup`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/action_wiring.gd` — extends RefCounted; 100 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/engine/game_engine/action_wiring.gd.uid` — Godot 资源 UID 映射：`uid://jmfrtjrtkflp`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/archive.gd` — extends RefCounted; 128 行；使用迹象：res:// 引用:5；评估：包含文件/资源 I/O
+- `core/engine/game_engine/archive.gd.uid` — Godot 资源 UID 映射：`uid://geng1nearch1ve0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/auto_advance.gd` — AutoAdvance; extends RefCounted; 15 行；使用迹象：res:// 引用:5, class_name 引用:5；评估：无明显问题
+- `core/engine/game_engine/auto_advance.gd.uid` — Godot 资源 UID 映射：`uid://bdaatpj5dy7mv`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/auto_advance_impl.gd` — extends RefCounted; 35 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/engine/game_engine/auto_advance_impl.gd.uid` — Godot 资源 UID 映射：`uid://jhk1sbjtvrct`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/auto_advance_order_of_business_round1.gd` — extends RefCounted; 52 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/engine/game_engine/auto_advance_order_of_business_round1.gd.uid` — Godot 资源 UID 映射：`uid://02d2st8uunc8`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/auto_advance_phase_blocking.gd` — extends RefCounted; 13 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/engine/game_engine/auto_advance_phase_blocking.gd.uid` — Godot 资源 UID 映射：`uid://1wkpfi3v8nrk`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/auto_advance_try_step.gd` — extends RefCounted; 147 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/engine/game_engine/auto_advance_try_step.gd.uid` — Godot 资源 UID 映射：`uid://dc6wv3l5tnlbe`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/auto_advance_working_mandatory.gd` — extends RefCounted; 56 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/engine/game_engine/auto_advance_working_mandatory.gd.uid` — Godot 资源 UID 映射：`uid://dyvm6pvabqfxd`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/checkpoints.gd` — extends RefCounted; 56 行；使用迹象：res:// 引用:5；评估：无明显问题
+- `core/engine/game_engine/checkpoints.gd.uid` — Godot 资源 UID 映射：`uid://geng1necheckp01nts`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/command_index_queries.gd` — extends RefCounted; 188 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/engine/game_engine/command_index_queries.gd.uid` — Godot 资源 UID 映射：`uid://sm4ly04gcqgl`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/command_runner.gd` — extends RefCounted; 283 行；使用迹象：res:// 引用:10；评估：无明显问题
+- `core/engine/game_engine/command_runner.gd.uid` — Godot 资源 UID 映射：`uid://l1a86x68r6i7`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/diagnostics.gd` — extends RefCounted; 48 行；使用迹象：res:// 引用:5；评估：无明显问题
+- `core/engine/game_engine/diagnostics.gd.uid` — Godot 资源 UID 映射：`uid://geng1nediagn0st1cs`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/event_history_rebuild.gd` — extends RefCounted; 97 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/engine/game_engine/event_history_rebuild.gd.uid` — Godot 资源 UID 映射：`uid://cmousf8u1ilbr`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/game_started_event_build.gd` — extends RefCounted; 35 行；使用迹象：res:// 引用:3；评估：无明显问题
+- `core/engine/game_engine/game_started_event_build.gd.uid` — Godot 资源 UID 映射：`uid://dttrdfl18qvwk`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/initializer.gd` — extends RefCounted; 281 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/engine/game_engine/initializer.gd.uid` — Godot 资源 UID 映射：`uid://bsk55r7lh8pva`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/invariants.gd` — extends RefCounted; 259 行；使用迹象：res:// 引用:8；评估：无明显问题
+- `core/engine/game_engine/invariants.gd.uid` — Godot 资源 UID 映射：`uid://geng1ne1nvar1ants`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/loader.gd` — extends RefCounted; 162 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/engine/game_engine/loader.gd.uid` — Godot 资源 UID 映射：`uid://g8nxegh56von`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/modules_v2.gd` — extends RefCounted; 269 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/engine/game_engine/modules_v2.gd.uid` — Godot 资源 UID 映射：`uid://bj5q6kjjnkpcd`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/modules_v2_validations.gd` — extends RefCounted; 192 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/engine/game_engine/modules_v2_validations.gd.uid` — Godot 资源 UID 映射：`uid://c8fi1cd0ca5pr`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/replay.gd` — extends RefCounted; 192 行；使用迹象：res:// 引用:8；评估：无明显问题
+- `core/engine/game_engine/replay.gd.uid` — Godot 资源 UID 映射：`uid://geng1nerep1ay0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/game_engine/rewind_ops.gd` — extends RefCounted; 83 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/engine/game_engine/rewind_ops.gd.uid` — Godot 资源 UID 映射：`uid://df7w43ax7c51k`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/phase_manager.gd` — PhaseManager; extends RefCounted; 270 行；使用迹象：res:// 引用:11, class_name 引用:61；评估：无明显问题
+- `core/engine/phase_manager.gd.uid` — Godot 资源 UID 映射：`uid://urlmma3lssus`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/phase_manager/advance_phase.gd` — extends RefCounted; 236 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/engine/phase_manager/advance_phase.gd.uid` — Godot 资源 UID 映射：`uid://dui6mcr00kkd`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/phase_manager/advance_sub_phase.gd` — extends RefCounted; 281 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/engine/phase_manager/advance_sub_phase.gd.uid` — Godot 资源 UID 映射：`uid://gsvfp11ekexa`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/phase_manager/advancement.gd` — PhaseManagerAdvancement; extends RefCounted; 13 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/engine/phase_manager/advancement.gd.uid` — Godot 资源 UID 映射：`uid://turhpoyghxx0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/phase_manager/definitions.gd` — extends RefCounted; 241 行；使用迹象：res:// 引用:188；评估：无明显问题
+- `core/engine/phase_manager/definitions.gd.uid` — Godot 资源 UID 映射：`uid://phasedefs0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/phase_manager/hooks.gd` — extends RefCounted; 221 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/engine/phase_manager/hooks.gd.uid` — Godot 资源 UID 映射：`uid://phasehooks0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/phase_manager/order_config.gd` — extends RefCounted; 152 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/engine/phase_manager/order_config.gd.uid` — Godot 资源 UID 映射：`uid://phase_manager_order_config0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/phase_manager/settlement_triggers.gd` — extends RefCounted; 127 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/engine/phase_manager/settlement_triggers.gd.uid` — Godot 资源 UID 映射：`uid://phase_manager_settlement_triggers0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/engine/phase_manager/working_flow.gd` — extends RefCounted; 193 行；使用迹象：res:// 引用:6；评估：无明显问题
+- `core/engine/phase_manager/working_flow.gd.uid` — Godot 资源 UID 映射：`uid://phaseworkfl0w0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/house_number_manager.gd` — HouseNumberManager; extends RefCounted; 252 行；使用迹象：res:// 引用:3；评估：无明显问题
+- `core/map/house_number_manager.gd.uid` — Godot 资源 UID 映射：`uid://ck5cey60q1ote`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/map_baker/bake.gd` — extends RefCounted; 80 行；使用迹象：res:// 引用:3；评估：无明显问题
+- `core/map/map_baker/bake.gd.uid` — Godot 资源 UID 映射：`uid://map_baker_bake0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/map_baker/boundary_index.gd` — extends RefCounted; 22 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/map/map_baker/boundary_index.gd.uid` — Godot 资源 UID 映射：`uid://map_baker_boundary_index0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/map_baker/cells.gd` — extends RefCounted; 22 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/map/map_baker/cells.gd.uid` — Godot 资源 UID 映射：`uid://map_baker_cells0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/map_baker/tile_baking.gd` — extends RefCounted; 295 行；使用迹象：res:// 引用:3；评估：无明显问题
+- `core/map/map_baker/tile_baking.gd.uid` — Godot 资源 UID 映射：`uid://map_baker_tile_baking0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/map_context_builder.gd` — MapContextBuilder; extends RefCounted; 21 行；使用迹象：res:// 引用:4；评估：无明显问题
+- `core/map/map_context_builder.gd.uid` — Godot 资源 UID 映射：`uid://cr6br5hqticp7`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/map_def.gd` — MapDef; extends RefCounted; 261 行；使用迹象：res:// 引用:6, class_name 引用:13；评估：包含文件/资源 I/O
+- `core/map/map_def.gd.uid` — Godot 资源 UID 映射：`uid://cc8lg25sbqhbe`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/map_def_parser.gd` — extends RefCounted; 74 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/map/map_def_parser.gd.uid` — Godot 资源 UID 映射：`uid://dkmc4cbls2apj`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/map_option_def.gd` — MapOptionDef; extends RefCounted; 131 行；使用迹象：res:// 引用:7, class_name 引用:9；评估：包含文件/资源 I/O
+- `core/map/map_option_def.gd.uid` — Godot 资源 UID 映射：`uid://cb3l3ouq5xy8g`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/map_runtime/baked_map.gd` — extends RefCounted; 154 行；使用迹象：res:// 引用:3；评估：无明显问题
+- `core/map/map_runtime/baked_map.gd.uid` — Godot 资源 UID 映射：`uid://map_runtime_baked_map0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/map_runtime/cells.gd` — extends RefCounted; 118 行；使用迹象：res:// 引用:23；评估：无明显问题
+- `core/map/map_runtime/cells.gd.uid` — Godot 资源 UID 映射：`uid://map_runtime_cells0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/map_runtime/coords.gd` — extends RefCounted; 59 行；使用迹象：res:// 引用:40；评估：无明显问题
+- `core/map/map_runtime/coords.gd.uid` — Godot 资源 UID 映射：`uid://map_runtime_coords0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/map_runtime/road_graph_cache.gd` — extends RefCounted; 57 行；使用迹象：res:// 引用:65；评估：无明显问题
+- `core/map/map_runtime/road_graph_cache.gd.uid` — Godot 资源 UID 映射：`uid://map_runtime_road_graph_cache0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/map_runtime/structures.gd` — extends RefCounted; 117 行；使用迹象：res:// 引用:20；评估：无明显问题
+- `core/map/map_runtime/structures.gd.uid` — Godot 资源 UID 映射：`uid://map_runtime_structures0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/map_runtime/tile_edit.gd` — extends RefCounted; 223 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/map/map_runtime/tile_edit.gd.uid` — Godot 资源 UID 映射：`uid://map_runtime_tile_edit0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/map_utils.gd` — MapUtils; extends RefCounted; 239 行；使用迹象：res:// 引用:24, class_name 引用:46；评估：无明显问题
+- `core/map/map_utils.gd.uid` — Godot 资源 UID 映射：`uid://do5i8uxgklqgy`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/marketing_placement_query.gd` — MarketingPlacementQuery; extends RefCounted; 245 行；使用迹象：res:// 引用:6；评估：无明显问题
+- `core/map/marketing_placement_query.gd.uid` — Godot 资源 UID 映射：`uid://cu65qbbcif653`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/parse_helpers.gd` — MapParseHelpers; extends RefCounted; 216 行；使用迹象：res:// 引用:5；评估：无明显问题
+- `core/map/parse_helpers.gd.uid` — Godot 资源 UID 映射：`uid://beoagj567c8fr`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/piece_def.gd` — PieceDef; extends RefCounted; 276 行；使用迹象：res:// 引用:10, class_name 引用:20；评估：包含文件/资源 I/O
+- `core/map/piece_def.gd.uid` — Godot 资源 UID 映射：`uid://u727xahpqx6k`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/piece_def_parser.gd` — extends RefCounted; 126 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/map/piece_def_parser.gd.uid` — Godot 资源 UID 映射：`uid://dqicow5liny8c`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/piece_registry.gd` — PieceRegistry; extends RefCounted; 67 行；使用迹象：res:// 引用:13, class_name 引用:9；评估：无明显问题
+- `core/map/piece_registry.gd.uid` — Godot 资源 UID 映射：`uid://dn14qsb61w7vc`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/placement_validator/garden_attachment.gd` — extends RefCounted; 124 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/map/placement_validator/garden_attachment.gd.uid` — Godot 资源 UID 映射：`uid://placement_validator_garden0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/placement_validator/map_access.gd` — extends RefCounted; 40 行；使用迹象：res:// 引用:3；评估：无明显问题
+- `core/map/placement_validator/map_access.gd.uid` — Godot 资源 UID 映射：`uid://placement_validator_map_access0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/placement_validator/placement.gd` — extends RefCounted; 95 行；使用迹象：res:// 引用:7；评估：无明显问题
+- `core/map/placement_validator/placement.gd.uid` — Godot 资源 UID 映射：`uid://placement_validator_placement0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/placement_validator/restaurant_placement.gd` — extends RefCounted; 79 行；使用迹象：res:// 引用:3；评估：无明显问题
+- `core/map/placement_validator/restaurant_placement.gd.uid` — Godot 资源 UID 映射：`uid://placement_validator_restaurant0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/placement_validator/validators.gd` — extends RefCounted; 286 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/map/placement_validator/validators.gd.uid` — Godot 资源 UID 映射：`uid://placement_validator_validators0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/road_graph.gd` — RoadGraph; extends RefCounted; 148 行；使用迹象：res:// 引用:3, class_name 引用:21；评估：无明显问题
+- `core/map/road_graph.gd.uid` — Godot 资源 UID 映射：`uid://cjimaghskg0t3`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/road_graph/blocks.gd` — extends RefCounted; 75 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/map/road_graph/blocks.gd.uid` — Godot 资源 UID 映射：`uid://road_graph_blocks0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/road_graph/builder.gd` — extends RefCounted; 179 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/map/road_graph/builder.gd.uid` — Godot 资源 UID 映射：`uid://road_graph_builder0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/road_graph/node_keys.gd` — extends RefCounted; 18 行；使用迹象：res:// 引用:3；评估：无明显问题
+- `core/map/road_graph/node_keys.gd.uid` — Godot 资源 UID 映射：`uid://road_graph_node_keys0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/road_graph/pathfinding.gd` — extends RefCounted; 160 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/map/road_graph/pathfinding.gd.uid` — Godot 资源 UID 映射：`uid://road_graph_pathfinding0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/road_graph/range_query.gd` — extends RefCounted; 46 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/map/road_graph/range_query.gd.uid` — Godot 资源 UID 映射：`uid://road_graph_range_query0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/tile_def.gd` — TileDef; extends RefCounted; 218 行；使用迹象：res:// 引用:5, class_name 引用:45；评估：包含文件/资源 I/O
+- `core/map/tile_def.gd.uid` — Godot 资源 UID 映射：`uid://dlfoodr6gsfqx`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/tile_def_parser.gd` — extends RefCounted; 78 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/map/tile_def_parser.gd.uid` — Godot 资源 UID 映射：`uid://ctgscqwkj3t3c`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/map/tile_registry.gd` — TileRegistry; extends RefCounted; 63 行；使用迹象：res:// 引用:5, class_name 引用:3；评估：无明显问题
+- `core/map/tile_registry.gd.uid` — Godot 资源 UID 映射：`uid://do47ij72eu62d`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/content_catalog.gd` — ContentCatalog; extends RefCounted; 84 行；使用迹象：res:// 引用:6, class_name 引用:12；评估：无明显问题
+- `core/modules/v2/content_catalog.gd.uid` — Godot 资源 UID 映射：`uid://ddhepndd750ve`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/content_catalog_loader.gd` — ContentCatalogLoader; extends RefCounted; 274 行；使用迹象：res:// 引用:3, class_name 引用:1；评估：包含文件/资源 I/O
+- `core/modules/v2/content_catalog_loader.gd.uid` — Godot 资源 UID 映射：`uid://cdc4pyg68uck1`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/module_dir_spec.gd` — ModuleDirSpec; extends RefCounted; 37 行；使用迹象：res:// 引用:14；评估：无明显问题
+- `core/modules/v2/module_dir_spec.gd.uid` — Godot 资源 UID 映射：`uid://d0l0bbk26hlvk`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/module_manifest.gd` — ModuleManifest; extends RefCounted; 109 行；使用迹象：res:// 引用:3, class_name 引用:11；评估：包含文件/资源 I/O
+- `core/modules/v2/module_manifest.gd.uid` — Godot 资源 UID 映射：`uid://c1444ifslmtg2`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/module_package_loader.gd` — ModulePackageLoader; extends RefCounted; 82 行；使用迹象：res:// 引用:9, class_name 引用:1；评估：包含文件/资源 I/O
+- `core/modules/v2/module_package_loader.gd.uid` — Godot 资源 UID 映射：`uid://cf3xlesihgfir`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/module_plan_builder.gd` — ModulePlanBuilder; extends RefCounted; 124 行；使用迹象：res:// 引用:6, class_name 引用:1；评估：无明显问题
+- `core/modules/v2/module_plan_builder.gd.uid` — Godot 资源 UID 映射：`uid://cpumihgbeo27w`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/pool_builder.gd` — PoolBuilder; extends RefCounted; 87 行；使用迹象：res:// 引用:2, class_name 引用:1；评估：无明显问题
+- `core/modules/v2/pool_builder.gd.uid` — Godot 资源 UID 映射：`uid://c535iiayxfhrg`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/ruleset.gd` — RulesetV2; extends RefCounted; 472 行；使用迹象：res:// 引用:3, class_name 引用:20；评估：无明显问题
+- `core/modules/v2/ruleset.gd.uid` — Godot 资源 UID 映射：`uid://xs50oaocl0n6`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/ruleset/action_registration.gd` — RulesetV2ActionRegistration; extends RefCounted; 146 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/modules/v2/ruleset/action_registration.gd.uid` — Godot 资源 UID 映射：`uid://b04lj8ga1ftnl`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/ruleset/content_validation.gd` — RulesetV2ContentValidation; extends RefCounted; 141 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/modules/v2/ruleset/content_validation.gd.uid` — Godot 资源 UID 映射：`uid://b8yd7lcwvn4qv`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/ruleset/patches.gd` — RulesetV2Patches; extends RefCounted; 166 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/modules/v2/ruleset/patches.gd.uid` — Godot 资源 UID 映射：`uid://d0fkjdol70wur`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/ruleset/phase_hooks.gd` — RulesetV2PhaseHooks; extends RefCounted; 267 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/modules/v2/ruleset/phase_hooks.gd.uid` — Godot 资源 UID 映射：`uid://b3sc2h1bsmkby`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/ruleset/provider_registration.gd` — RulesetV2ProviderRegistration; extends RefCounted; 168 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/modules/v2/ruleset/provider_registration.gd.uid` — Godot 资源 UID 映射：`uid://dtk1veh6nr53q`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/ruleset/state_and_order.gd` — RulesetV2StateAndOrder; extends RefCounted; 269 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/modules/v2/ruleset/state_and_order.gd.uid` — Godot 资源 UID 映射：`uid://c2ok5twvk4ufl`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/ruleset/sub_phase_registration.gd` — RulesetV2SubPhaseRegistration; extends RefCounted; 137 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/modules/v2/ruleset/sub_phase_registration.gd.uid` — Godot 资源 UID 映射：`uid://cqd1qrfxxlxdw`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/ruleset_builder.gd` — RulesetBuilderV2; extends RefCounted; 156 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/modules/v2/ruleset_builder.gd.uid` — Godot 资源 UID 映射：`uid://f44uu50ofcqn`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/ruleset_loader.gd` — RulesetLoaderV2; extends RefCounted; 48 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/modules/v2/ruleset_loader.gd.uid` — Godot 资源 UID 映射：`uid://wdbueqrq5mf`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/visual_catalog.gd` — VisualCatalog; extends RefCounted; 24 行；使用迹象：res:// 引用:1, class_name 引用:4；评估：无明显问题
+- `core/modules/v2/visual_catalog.gd.uid` — Godot 资源 UID 映射：`uid://dpf8bdififacn`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/modules/v2/visual_catalog_loader.gd` — VisualCatalogLoader; extends RefCounted; 300 行；使用迹象：res:// 引用:2, class_name 引用:2；评估：包含文件/资源 I/O
+- `core/modules/v2/visual_catalog_loader.gd.uid` — Godot 资源 UID 映射：`uid://dp1tyc8nvl0hl`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/random/random_manager.gd` — RandomManager; extends RefCounted; 235 行；使用迹象：class_name 引用:26；评估：无明显问题
+- `core/random/random_manager.gd.uid` — Godot 资源 UID 映射：`uid://csefgwy5wgoa`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/bankruptcy_registry.gd` — BankruptcyRegistry; extends RefCounted; 69 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/rules/bankruptcy_registry.gd.uid` — Godot 资源 UID 映射：`uid://bvbcn3o71t102`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/company_structure_rules.gd` — CompanyStructureRules; extends RefCounted; 193 行；使用迹象：res:// 引用:5；评估：无明显问题
+- `core/rules/company_structure_rules.gd.uid` — Godot 资源 UID 映射：`uid://b1inkgerbqg6r`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/dinnertime_demand_registry.gd` — DinnertimeDemandRegistry; extends RefCounted; 186 行；使用迹象：res:// 引用:3, class_name 引用:2；评估：无明显问题
+- `core/rules/dinnertime_demand_registry.gd.uid` — Godot 资源 UID 映射：`uid://lfxnvhrdfhr0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/dinnertime_route_purchase_registry.gd` — DinnertimeRoutePurchaseRegistry; extends RefCounted; 174 行；使用迹象：res:// 引用:3, class_name 引用:2；评估：无明显问题
+- `core/rules/dinnertime_route_purchase_registry.gd.uid` — Godot 资源 UID 映射：`uid://da4571x0vjxoh`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/drinks_procurement.gd` — DrinksProcurement; extends RefCounted; 33 行；使用迹象：res:// 引用:4, class_name 引用:1；评估：无明显问题
+- `core/rules/drinks_procurement.gd.uid` — Godot 资源 UID 映射：`uid://bdr1nkspr0c42`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/drinks_procurement/inputs.gd` — extends RefCounted; 59 行；使用迹象：res:// 引用:3；评估：无明显问题
+- `core/rules/drinks_procurement/inputs.gd.uid` — Godot 资源 UID 映射：`uid://bdr1nks1nputs0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/drinks_procurement/milestone_bonuses.gd` — extends RefCounted; 109 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/rules/drinks_procurement/milestone_bonuses.gd.uid` — Godot 资源 UID 映射：`uid://cye76i2l6abn6`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/drinks_procurement/picked_sources_finder.gd` — extends RefCounted; 45 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/rules/drinks_procurement/picked_sources_finder.gd.uid` — Godot 资源 UID 映射：`uid://bdr1nksp1ck3d0s`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/drinks_procurement/plan_resolver.gd` — extends RefCounted; 164 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/rules/drinks_procurement/plan_resolver.gd.uid` — Godot 资源 UID 映射：`uid://tyyjprvut4ta`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/drinks_procurement/route_validator.gd` — extends RefCounted; 134 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/rules/drinks_procurement/route_validator.gd.uid` — Godot 资源 UID 映射：`uid://bdr1nksr0ut3v4l`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/drinks_procurement/start_restaurant_resolver.gd` — extends RefCounted; 149 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/rules/drinks_procurement/start_restaurant_resolver.gd.uid` — Godot 资源 UID 映射：`uid://bdr1nksst4rtr3s`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/drinks_procurement/tile_route_utils.gd` — extends RefCounted; 83 行；使用迹象：res:// 引用:5；评估：无明显问题
+- `core/rules/drinks_procurement/tile_route_utils.gd.uid` — Godot 资源 UID 映射：`uid://u0vg47ghi2a1`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/economy/bankruptcy_rules.gd` — BankruptcyRules; extends RefCounted; 270 行；使用迹象：res:// 引用:7；评估：无明显问题
+- `core/rules/economy/bankruptcy_rules.gd.uid` — Godot 资源 UID 映射：`uid://b1n2k3r4u5p6t`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/effect_ids_segment_invoker.gd` — EffectIdsSegmentInvoker; extends RefCounted; 49 行；使用迹象：res:// 引用:4；评估：无明显问题
+- `core/rules/effect_ids_segment_invoker.gd.uid` — Godot 资源 UID 映射：`uid://dc2ufibj44jj`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/effect_registry.gd` — EffectRegistry; extends RefCounted; 67 行；使用迹象：res:// 引用:6, class_name 引用:18；评估：无明显问题
+- `core/rules/effect_registry.gd.uid` — Godot 资源 UID 映射：`uid://bx8gd6a77lfvc`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/effect_ui_text_registry.gd` — EffectUiTextRegistry; extends RefCounted; 119 行；使用迹象：res:// 引用:3, class_name 引用:1；评估：无明显问题
+- `core/rules/effect_ui_text_registry.gd.uid` — Godot 资源 UID 映射：`uid://cyl8o3hc5d8hn`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/employee_pool_patch_registry.gd` — EmployeePoolPatchRegistry; extends RefCounted; 113 行；使用迹象：res:// 引用:2, class_name 引用:1；评估：无明显问题
+- `core/rules/employee_pool_patch_registry.gd.uid` — Godot 资源 UID 映射：`uid://c54iiaiiciba1`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/employee_rules.gd` — EmployeeRules; extends RefCounted; 108 行；使用迹象：res:// 引用:42, class_name 引用:7；评估：无明显问题
+- `core/rules/employee_rules.gd.uid` — Godot 资源 UID 映射：`uid://cs37eid4p4axt`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/employee_rules/action_counts.gd` — extends RefCounted; 33 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/rules/employee_rules/action_counts.gd.uid` — Godot 资源 UID 映射：`uid://employee_rules_action_counts0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/employee_rules/counts.gd` — extends RefCounted; 69 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/rules/employee_rules/counts.gd.uid` — Godot 资源 UID 映射：`uid://employee_rules_counts0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/employee_rules/employee_array_helpers.gd` — extends RefCounted; 24 行；使用迹象：res:// 引用:3；评估：无明显问题
+- `core/rules/employee_rules/employee_array_helpers.gd.uid` — Godot 资源 UID 映射：`uid://ce1n368ipuhir`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/employee_rules/immediate_train_pending.gd` — extends RefCounted; 149 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/rules/employee_rules/immediate_train_pending.gd.uid` — Godot 资源 UID 映射：`uid://employee_rules_immediate_train_pending0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/employee_rules/limits.gd` — extends RefCounted; 46 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/rules/employee_rules/limits.gd.uid` — Godot 资源 UID 映射：`uid://employee_rules_limits0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/employee_rules/salary.gd` — extends RefCounted; 59 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/rules/employee_rules/salary.gd.uid` — Godot 资源 UID 映射：`uid://employee_rules_salary0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/employee_rules/train_slot_usage.gd` — extends RefCounted; 31 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/rules/employee_rules/train_slot_usage.gd.uid` — Godot 资源 UID 映射：`uid://d0aptls4dxsmk`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/employee_rules/train_slot_usage_allocator.gd` — extends RefCounted; 164 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/rules/employee_rules/train_slot_usage_allocator.gd.uid` — Godot 资源 UID 映射：`uid://iucoup1eoqx0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/employee_rules/train_slot_usage_impl.gd` — extends RefCounted; 32 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/rules/employee_rules/train_slot_usage_impl.gd.uid` — Godot 资源 UID 映射：`uid://cn2mr3ftma45y`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/employee_rules/train_slot_usage_providers.gd` — extends RefCounted; 56 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/rules/employee_rules/train_slot_usage_providers.gd.uid` — Godot 资源 UID 映射：`uid://b8se4xttb2dko`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/employee_rules/train_slot_usage_storage.gd` — extends RefCounted; 124 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/rules/employee_rules/train_slot_usage_storage.gd.uid` — Godot 资源 UID 映射：`uid://bsf2g5rgw5g34`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/employee_rules/working_multiplier.gd` — extends RefCounted; 29 行；使用迹象：res:// 引用:4；评估：无明显问题
+- `core/rules/employee_rules/working_multiplier.gd.uid` — Godot 资源 UID 映射：`uid://employee_rules_working_multiplier0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/game_over_winner_rules.gd` — GameOverWinnerRules; extends RefCounted; 56 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/rules/game_over_winner_rules.gd.uid` — Godot 资源 UID 映射：`uid://d10vavd32qudw`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/global_effect_list.gd` — GlobalEffectList; extends RefCounted; 112 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/rules/global_effect_list.gd.uid` — Godot 资源 UID 映射：`uid://cskksxsnmeva0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/map_generation_registry.gd` — MapGenerationRegistry; extends RefCounted; 35 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/rules/map_generation_registry.gd.uid` — Godot 资源 UID 映射：`uid://kvmgn8nirhmv`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/map_overlay_provider_registry.gd` — MapOverlayProviderRegistry; extends RefCounted; 157 行；使用迹象：res:// 引用:5, class_name 引用:1；评估：无明显问题
+- `core/rules/map_overlay_provider_registry.gd.uid` — Godot 资源 UID 映射：`uid://d2xgqlf4w0jhj`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/marketing_initiation_registry.gd` — MarketingInitiationRegistry; extends RefCounted; 104 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/rules/marketing_initiation_registry.gd.uid` — Godot 资源 UID 映射：`uid://dqbgmorkm7bk0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/marketing_range_calculator.gd` — MarketingRangeCalculator; extends RefCounted; 31 行；使用迹象：res:// 引用:7, class_name 引用:5；评估：无明显问题
+- `core/rules/marketing_range_calculator.gd.uid` — Godot 资源 UID 映射：`uid://b5cvj4t40cjad`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/marketing_rules.gd` — MarketingRules; extends RefCounted; 16 行；使用迹象：res:// 引用:4, class_name 引用:1；评估：无明显问题
+- `core/rules/marketing_rules.gd.uid` — Godot 资源 UID 映射：`uid://bmowigdqq8yj4`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/marketing_type_registry.gd` — MarketingTypeRegistry; extends RefCounted; 85 行；使用迹象：res:// 引用:8, class_name 引用:2；评估：无明显问题
+- `core/rules/marketing_type_registry.gd.uid` — Godot 资源 UID 映射：`uid://cipraabs3d56a`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/milestone_effect_queries.gd` — MilestoneEffectQueries; extends RefCounted; 145 行；使用迹象：res:// 引用:9；评估：无明显问题
+- `core/rules/milestone_effect_queries.gd.uid` — Godot 资源 UID 映射：`uid://bmtad08uy2123`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/milestone_effect_registry.gd` — MilestoneEffectRegistry; extends RefCounted; 71 行；使用迹象：res:// 引用:3, class_name 引用:2；评估：无明显问题
+- `core/rules/milestone_effect_registry.gd.uid` — Godot 资源 UID 映射：`uid://d1alb8fx1f574`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/milestone_system.gd` — MilestoneSystem; extends RefCounted; 120 行；使用迹象：res:// 引用:39；评估：无明显问题
+- `core/rules/milestone_system.gd.uid` — Godot 资源 UID 映射：`uid://4ysk7v0gxb1v`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/module_supply_fallbacks.gd` — ModuleSupplyFallbacks; extends RefCounted; 32 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/rules/module_supply_fallbacks.gd.uid` — Godot 资源 UID 映射：`uid://ccniq0v7x35gq`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/piece_ui_hints_registry.gd` — PieceUiHintsRegistry; extends RefCounted; 79 行；使用迹象：res:// 引用:6, class_name 引用:1；评估：无明显问题
+- `core/rules/piece_ui_hints_registry.gd.uid` — Godot 资源 UID 映射：`uid://b1tmbe0k5d4em`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/placement_conflict_registry.gd` — PlacementConflictRegistry; extends RefCounted; 133 行；使用迹象：res:// 引用:2, class_name 引用:1；评估：无明显问题
+- `core/rules/placement_conflict_registry.gd.uid` — Godot 资源 UID 映射：`uid://b7ft3hqpne0oo`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/pricing_pipeline.gd` — PricingPipeline; extends RefCounted; 166 行；使用迹象：res:// 引用:7, class_name 引用:4；评估：无明显问题
+- `core/rules/pricing_pipeline.gd.uid` — Godot 资源 UID 映射：`uid://d4b2dsojmomog`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/range_origin_registry.gd` — RangeOriginRegistry; extends RefCounted; 164 行；使用迹象：res:// 引用:3；评估：无明显问题
+- `core/rules/range_origin_registry.gd.uid` — Godot 资源 UID 映射：`uid://d1voyinrjj3r5`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/settlement_registry.gd` — SettlementRegistry; extends RefCounted; 160 行；使用迹象：res:// 引用:34, class_name 引用:18；评估：无明显问题
+- `core/rules/settlement_registry.gd.uid` — Godot 资源 UID 映射：`uid://b0tyr0el3xvqt`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/rules/working/mandatory_actions_rules.gd` — MandatoryActionsRules; extends RefCounted; 166 行；使用迹象：res:// 引用:9, class_name 引用:1；评估：无明显问题
+- `core/rules/working/mandatory_actions_rules.gd.uid` — Godot 资源 UID 映射：`uid://m4n6d0t9r2l5s`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/game_state.gd` — GameState; extends RefCounted; 230 行；使用迹象：res:// 引用:12, class_name 引用:411；评估：无明显问题
+- `core/state/game_state.gd.uid` — Godot 资源 UID 映射：`uid://bbwfp74gwwwbo`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/game_state_factory.gd` — GameStateFactory; extends RefCounted; 212 行；使用迹象：res:// 引用:4, class_name 引用:1；评估：无明显问题
+- `core/state/game_state_factory.gd.uid` — Godot 资源 UID 映射：`uid://gstatefactory000`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/game_state_serialization.gd` — GameStateSerialization; extends RefCounted; 227 行；使用迹象：res:// 引用:5, class_name 引用:3；评估：无明显问题
+- `core/state/game_state_serialization.gd.uid` — Godot 资源 UID 映射：`uid://gstateserialize0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/map_state_access.gd` — MapStateAccess; extends RefCounted; 62 行；使用迹象：res:// 引用:11；评估：无明显问题
+- `core/state/map_state_access.gd.uid` — Godot 资源 UID 映射：`uid://dxg8fkg3el4qx`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/player_state_access.gd` — PlayerStateAccess; extends RefCounted; 107 行；使用迹象：res:// 引用:20；评估：无明显问题
+- `core/state/player_state_access.gd.uid` — Godot 资源 UID 映射：`uid://dkkpgwdtreqa0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/serialization/json_safe.gd` — extends RefCounted; 25 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/state/serialization/json_safe.gd.uid` — Godot 资源 UID 映射：`uid://gstateserialize_jsonsafe0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/serialization/parse_helpers.gd` — extends RefCounted; 70 行；使用迹象：res:// 引用:8；评估：无明显问题
+- `core/state/serialization/parse_helpers.gd.uid` — Godot 资源 UID 映射：`uid://gstateserialize_parse0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/serialization/round_state_parser.gd` — extends RefCounted; 38 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/state/serialization/round_state_parser.gd.uid` — Godot 资源 UID 映射：`uid://gstateserialize_round0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/serialization/round_state_parser_optional_fields.gd` — extends RefCounted; 215 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/state/serialization/round_state_parser_optional_fields.gd.uid` — Godot 资源 UID 映射：`uid://4r0g7umgacst`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/serialization/round_state_parser_required_fields.gd` — extends RefCounted; 81 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/state/serialization/round_state_parser_required_fields.gd.uid` — Godot 资源 UID 映射：`uid://bv1gganwkru7m`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/serialization/round_state_player_id_keys.gd` — extends RefCounted; 11 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/state/serialization/round_state_player_id_keys.gd.uid` — Godot 资源 UID 映射：`uid://hdbmvtlq6vml`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/serialization/value_decoder.gd` — extends RefCounted; 92 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/state/serialization/value_decoder.gd.uid` — Godot 资源 UID 映射：`uid://gstateserialize_decode0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/state_schema_registry.gd` — StateSchemaRegistry; extends RefCounted; 263 行；使用迹象：res:// 引用:3, class_name 引用:3；评估：无明显问题
+- `core/state/state_schema_registry.gd.uid` — Godot 资源 UID 映射：`uid://c5727aao7lusr`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/state_updater.gd` — StateUpdater; extends RefCounted; 103 行；使用迹象：res:// 引用:48, class_name 引用:25；评估：无明显问题
+- `core/state/state_updater.gd.uid` — Godot 资源 UID 映射：`uid://ca1ge84q6dvhg`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/state_updater/batch.gd` — extends RefCounted; 103 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/state/state_updater/batch.gd.uid` — Godot 资源 UID 映射：`uid://state_updater_batch0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/state_updater/cash.gd` — extends RefCounted; 163 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/state/state_updater/cash.gd.uid` — Godot 资源 UID 映射：`uid://state_updater_cash0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/state_updater/collections.gd` — extends RefCounted; 72 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/state/state_updater/collections.gd.uid` — Godot 资源 UID 映射：`uid://state_updater_collections0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/state_updater/employees_and_milestones.gd` — extends RefCounted; 122 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/state/state_updater/employees_and_milestones.gd.uid` — Godot 资源 UID 映射：`uid://state_updater_people0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/state/state_updater/inventory.gd` — extends RefCounted; 91 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/state/state_updater/inventory.gd.uid` — Godot 资源 UID 映射：`uid://state_updater_inventory0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/action_availability_override_v2_test.gd` — ActionAvailabilityOverrideV2Test; extends RefCounted; 61 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/action_availability_override_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://cgese7ktge70g`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/add_garden_rules_test.gd` — AddGardenRulesTest; extends RefCounted; 176 行；使用迹象：res:// 引用:3, class_name 引用:3；评估：无明显问题
+- `core/tests/add_garden_rules_test.gd.uid` — Godot 资源 UID 映射：`uid://bv0lhga4bwtql`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/archive_fail_fast_test.gd` — ArchiveFailFastTest; extends RefCounted; 150 行；使用迹象：res:// 引用:3, class_name 引用:3；评估：无明显问题
+- `core/tests/archive_fail_fast_test.gd.uid` — Godot 资源 UID 映射：`uid://c7w0h6c2x1q9p`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/archive_file_roundtrip_test.gd` — ArchiveFileRoundtripTest; extends RefCounted; 99 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/archive_file_roundtrip_test.gd.uid` — Godot 资源 UID 映射：`uid://chktwbchxbh7r`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/bankruptcy_test.gd` — BankruptcyTest; extends RefCounted; 300 行；使用迹象：res:// 引用:3, class_name 引用:3；评估：无明显问题
+- `core/tests/bankruptcy_test.gd.uid` — Godot 资源 UID 映射：`uid://c28f43q4s6kdh`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/callback_result_contract_test.gd` — CallbackResultContractTest; extends RefCounted; 67 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/callback_result_contract_test.gd.uid` — Godot 资源 UID 映射：`uid://bx2sy7jsv8rhl`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/cleanup_inventory_test.gd` — CleanupInventoryTest; extends RefCounted; 147 行；使用迹象：res:// 引用:3, class_name 引用:3；评估：无明显问题
+- `core/tests/cleanup_inventory_test.gd.uid` — Godot 资源 UID 映射：`uid://c2h2spv3b4c5r`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/coffee_v2_test.gd` — CoffeeV2Test; extends RefCounted; 899 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/coffee_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://b11mxsdyoakso`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/command_privacy_test.gd` — extends RefCounted; 48 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/tests/command_privacy_test.gd.uid` — Godot 资源 UID 映射：`uid://c7ovqrf68oi1g`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/company_structure_test.gd` — CompanyStructureTest; extends RefCounted; 124 行；使用迹象：res:// 引用:4, class_name 引用:5；评估：无明显问题
+- `core/tests/company_structure_test.gd.uid` — Godot 资源 UID 映射：`uid://dy103hhgkul0n`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/content_catalog_v2_test.gd` — ContentCatalogV2Test; extends RefCounted; 39 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/content_catalog_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://p2h1vjmm1dir`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/dinnertime_demand_registry_v2_test.gd` — DinnertimeDemandRegistryV2Test; extends RefCounted; 117 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/dinnertime_demand_registry_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://uquwn5xe2eeg5`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/dinnertime_distance_entry_boundary_test.gd` — DinnertimeDistanceEntryBoundaryTest; extends RefCounted; 138 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/dinnertime_distance_entry_boundary_test.gd.uid` — Godot 资源 UID 映射：`uid://dhjdg3gf0nd65`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/dinnertime_route_purchase_registry_v2_test.gd` — DinnertimeRoutePurchaseRegistryV2Test; extends RefCounted; 252 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/dinnertime_route_purchase_registry_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://b1ulh1m5jop2m`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/dinnertime_settlement_test.gd` — DinnertimeSettlementTest; extends RefCounted; 449 行；使用迹象：res:// 引用:3, class_name 引用:7；评估：无明显问题
+- `core/tests/dinnertime_settlement_test.gd.uid` — Godot 资源 UID 映射：`uid://bslogx7awdtif`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/effect_registry_v2_test.gd` — EffectRegistryV2Test; extends RefCounted; 118 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/effect_registry_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://ctaims0qijseh`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/effect_ui_text_registry_test.gd` — EffectUiTextRegistryTest; extends RefCounted; 78 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/effect_ui_text_registry_test.gd.uid` — Godot 资源 UID 映射：`uid://em62yjhuuvo1`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/employee_action_test.gd` — EmployeeActionTest; extends RefCounted; 118 行；使用迹象：res:// 引用:3, class_name 引用:1；评估：无明显问题
+- `core/tests/employee_action_test.gd.uid` — Godot 资源 UID 映射：`uid://b48m5wrh1oc5p`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/event_history_rewind_test.gd` — EventHistoryRewindTest; extends RefCounted; 68 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/event_history_rewind_test.gd.uid` — Godot 资源 UID 映射：`uid://cswcobma2ewed`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/event_timeline_build_test.gd` — EventTimelineBuildTest; extends RefCounted; 96 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/event_timeline_build_test.gd.uid` — Godot 资源 UID 映射：`uid://c2o2k0vpq6b66`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/fail_fast_parsing_test.gd` — FailFastParsingTest; extends RefCounted; 160 行；使用迹象：res:// 引用:3, class_name 引用:3；评估：无明显问题
+- `core/tests/fail_fast_parsing_test.gd.uid` — Godot 资源 UID 映射：`uid://t1ffp7x2k9m4qv`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/fire_action_test.gd` — FireActionTest; extends RefCounted; 118 行；使用迹象：res:// 引用:3, class_name 引用:3；评估：无明显问题
+- `core/tests/fire_action_test.gd.uid` — Godot 资源 UID 映射：`uid://g0q2p5m1k8t9h`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/fixtures/modules_v2_content_invalid_duplicate/a/content/employees/dup.json` — JSON(id,name,description,salary,unique,role)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_content_invalid_duplicate/a/module.json` — JSON(schema_version,id,version,dependencies,conflicts,entry_script)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_content_invalid_duplicate/b/content/employees/dup.json` — JSON(id,name,description,salary,unique,role)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_content_invalid_duplicate/b/module.json` — JSON(schema_version,id,version,dependencies,conflicts,entry_script)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/bad_effect_id/content/employees/bad_emp.json` — JSON(id,name,description,salary,unique,role)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/bad_effect_id/module.json` — JSON(schema_version,id,version,priority,dependencies,conflicts)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/base_rules/content/maps/map_2p.json` — JSON(id,display_name,min_players,max_players,layout_mode,random_rotation)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/base_rules/content/pieces/house.json` — JSON(id,display_name,category,footprint_mask,anchor,allowed_rotations)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/base_rules/content/products/beer.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/base_rules/content/products/burger.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/base_rules/content/products/lemonade.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/base_rules/content/products/pizza.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/base_rules/content/products/soda.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/base_rules/content/tiles/tile_a1.json` — JSON(id,display_name,road_segments,printed_structures,drink_sources,blocked_cells)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/base_rules/content/tiles/tile_a2.json` — JSON(id,display_name,road_segments,printed_structures,drink_sources,blocked_cells)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/base_rules/content/tiles/tile_b1.json` — JSON(id,display_name,road_segments,printed_structures,drink_sources,blocked_cells)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/base_rules/module.json` — JSON(schema_version,id,version,priority,dependencies,conflicts)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/base_rules/rules/entry.gd` — extends RefCounted; 42 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/tests/fixtures/modules_v2_effects_validation/base_rules/rules/entry.gd.uid` — Godot 资源 UID 映射：`uid://cn6e45jobuf57`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/fixtures/modules_v2_effects_validation/good_effects/content/employees/good_emp.json` — JSON(id,name,description,salary,unique,role)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/good_effects/module.json` — JSON(schema_version,id,version,priority,dependencies,conflicts)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/good_effects/rules/entry.gd` — extends RefCounted; 12 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/tests/fixtures/modules_v2_effects_validation/good_effects/rules/entry.gd.uid` — Godot 资源 UID 映射：`uid://c0gh4ii5ii4ea`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/fixtures/modules_v2_effects_validation/missing_effects/content/employees/missing_emp.json` — JSON(id,name,description,salary,unique,role)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_effects_validation/missing_effects/module.json` — JSON(schema_version,id,version,priority,dependencies,conflicts)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_invalid_mismatch_id/alpha/module.json` — JSON(schema_version,id,version,dependencies,conflicts,entry_script)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_invalid_missing_manifest/alpha/module.json` — JSON(schema_version,id,version,dependencies,conflicts,entry_script)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_invalid_missing_manifest/missing/.gitkeep` — Git 占位文件；评估：用于保留空目录，无需逻辑审查
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/a/module.json` — JSON(schema_version,id,version,priority,dependencies,conflicts)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/a/rules/entry.gd` — extends RefCounted; 42 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/a/rules/entry.gd.uid` — Godot 资源 UID 映射：`uid://efjsejjffq2g`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/b/module.json` — JSON(schema_version,id,version,priority,dependencies,conflicts)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/b/rules/entry.gd` — extends RefCounted; 15 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/b/rules/entry.gd.uid` — Godot 资源 UID 映射：`uid://h75fgpiwrx73`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/content/content/employees/ceo.json` — JSON(id,name,description,salary,unique,role)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/content/content/maps/map_2p.json` — JSON(id,display_name,min_players,max_players,layout_mode,random_rotation)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/content/content/pieces/house.json` — JSON(id,display_name,category,footprint_mask,anchor,allowed_rotations)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/content/content/products/beer.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/content/content/products/burger.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/content/content/products/lemonade.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/content/content/products/pizza.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/content/content/products/soda.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/content/content/tiles/tile_a1.json` — JSON(id,display_name,road_segments,printed_structures,drink_sources,blocked_cells)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/content/content/tiles/tile_a2.json` — JSON(id,display_name,road_segments,printed_structures,drink_sources,blocked_cells)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/content/content/tiles/tile_b1.json` — JSON(id,display_name,road_segments,printed_structures,drink_sources,blocked_cells)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_duplicate_primary/content/module.json` — JSON(schema_version,id,version,priority,dependencies,conflicts)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_probe/probe_rules/content/employees/ceo.json` — JSON(id,name,description,salary,unique,role)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_probe/probe_rules/content/maps/map_2p.json` — JSON(id,display_name,min_players,max_players,layout_mode,random_rotation)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_probe/probe_rules/content/pieces/house.json` — JSON(id,display_name,category,footprint_mask,anchor,allowed_rotations)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_probe/probe_rules/content/products/beer.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_probe/probe_rules/content/products/burger.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_probe/probe_rules/content/products/lemonade.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_probe/probe_rules/content/products/pizza.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_probe/probe_rules/content/products/soda.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_probe/probe_rules/content/tiles/tile_a1.json` — JSON(id,display_name,road_segments,printed_structures,drink_sources,blocked_cells)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_probe/probe_rules/content/tiles/tile_a2.json` — JSON(id,display_name,road_segments,printed_structures,drink_sources,blocked_cells)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_probe/probe_rules/content/tiles/tile_b1.json` — JSON(id,display_name,road_segments,printed_structures,drink_sources,blocked_cells)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_probe/probe_rules/module.json` — JSON(schema_version,id,version,priority,dependencies,conflicts)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_rules_probe/probe_rules/rules/entry.gd` — extends RefCounted; 65 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/tests/fixtures/modules_v2_rules_probe/probe_rules/rules/entry.gd.uid` — Godot 资源 UID 映射：`uid://dgyd3vt35fga3`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/fixtures/modules_v2_valid/alpha/content/employees/alpha_emp.json` — JSON(id,name,description,salary,unique,role)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_valid/alpha/module.json` — JSON(schema_version,id,name,version,priority,dependencies)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_valid/base_rules/content/maps/map_2p.json` — JSON(id,display_name,min_players,max_players,layout_mode,random_rotation)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_valid/base_rules/content/pieces/house.json` — JSON(id,display_name,category,footprint_mask,anchor,allowed_rotations)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_valid/base_rules/content/products/beer.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_valid/base_rules/content/products/burger.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_valid/base_rules/content/products/lemonade.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_valid/base_rules/content/products/pizza.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_valid/base_rules/content/products/soda.json` — JSON(id,name,tags)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_valid/base_rules/content/tiles/tile_a1.json` — JSON(id,display_name,road_segments,printed_structures,drink_sources,blocked_cells)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_valid/base_rules/content/tiles/tile_a2.json` — JSON(id,display_name,road_segments,printed_structures,drink_sources,blocked_cells)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_valid/base_rules/content/tiles/tile_b1.json` — JSON(id,display_name,road_segments,printed_structures,drink_sources,blocked_cells)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_valid/base_rules/module.json` — JSON(schema_version,id,version,priority,dependencies,conflicts)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_valid/base_rules/rules/entry.gd` — extends RefCounted; 66 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/tests/fixtures/modules_v2_valid/base_rules/rules/entry.gd.uid` — Godot 资源 UID 映射：`uid://d1k2f1idjuulf`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/fixtures/modules_v2_valid/beta/content/employees/beta_emp.json` — JSON(id,name,description,salary,unique,role)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_valid/beta/content/milestones/beta_ms.json` — JSON(id,name,trigger,effects,exclusive_type,expires_at)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_valid/beta/module.json` — JSON(schema_version,id,version,priority,dependencies,conflicts)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_visuals_valid/alpha/content/visuals/alpha.json` — JSON(schema_version,cell_visuals,road_visuals,piece_visuals,product_icons)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_visuals_valid/alpha/module.json` — JSON(schema_version,id,name,version,priority,dependencies)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_visuals_valid/beta/content/visuals/beta.json` — JSON(schema_version,piece_visuals)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_visuals_valid/beta/module.json` — JSON(schema_version,id,name,version,priority,dependencies)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/fixtures/modules_v2_visuals_valid/gamma/module.json` — JSON(schema_version,id,name,version,priority,dependencies)；使用迹象：未发现静态引用；评估：测试 fixtures
+- `core/tests/forfeit_player_action_test.gd` — ForfeitPlayerActionTest; extends RefCounted; 220 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/forfeit_player_action_test.gd.uid` — Godot 资源 UID 映射：`uid://s87xdqhxihu8`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/fry_chefs_v2_test.gd` — FryChefsV2Test; extends RefCounted; 323 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/fry_chefs_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://dmq1nubvdx828`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/game_over_winner_rules_test.gd` — GameOverWinnerRulesTest; extends RefCounted; 59 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/game_over_winner_rules_test.gd.uid` — Godot 资源 UID 映射：`uid://cah0vbce4pp2m`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/game_state_factory_starting_inventory_test.gd` — GameStateFactoryStartingInventoryTest; extends RefCounted; 68 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/game_state_factory_starting_inventory_test.gd.uid` — Godot 资源 UID 映射：`uid://bvg7aujf5bcym`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/gourmet_food_critics_v2_test.gd` — GourmetFoodCriticsV2Test; extends RefCounted; 255 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/gourmet_food_critics_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://dca8ms7n60yi7`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/hard_choices_v2_test.gd` — HardChoicesV2Test; extends RefCounted; 185 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/hard_choices_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://c12ht77y1a4jn`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/initial_company_test.gd` — InitialCompanyTest; extends RefCounted; 75 行；使用迹象：res:// 引用:4, class_name 引用:5；评估：无明显问题
+- `core/tests/initial_company_test.gd.uid` — Godot 资源 UID 映射：`uid://dma0ukgg263d2`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/invariants_fail_fast_test.gd` — InvariantsFailFastTest; extends RefCounted; 90 行；使用迹象：res:// 引用:3, class_name 引用:3；评估：无明显问题
+- `core/tests/invariants_fail_fast_test.gd.uid` — Godot 资源 UID 映射：`uid://d8c0w4h2k3p7a`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/ketchup_mechanism_v2_test.gd` — KetchupMechanismV2Test; extends RefCounted; 581 行；使用迹象：res:// 引用:1, class_name 引用:2；评估：无明显问题
+- `core/tests/ketchup_mechanism_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://bmqn8bx0fkt72`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/kimchi_v2_test.gd` — KimchiV2Test; extends RefCounted; 972 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/kimchi_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://cv0ys74sv3mbp`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/lobbyists_v2_test.gd` — LobbyistsV2Test; extends RefCounted; 1301 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/lobbyists_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://b4j8i0sqayi5o`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/mandatory_actions_test.gd` — MandatoryActionsTest; extends RefCounted; 119 行；使用迹象：res:// 引用:4, class_name 引用:5；评估：无明显问题
+- `core/tests/mandatory_actions_test.gd.uid` — Godot 资源 UID 映射：`uid://sewlj6s5yeky`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/manual_log_save_test.gd` — ManualLogSaveTest; extends RefCounted; 77 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/manual_log_save_test.gd.uid` — Godot 资源 UID 映射：`uid://dbeo3sp4ag28x`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/manual_log_saves_coverage_test.gd.uid` — Godot 资源 UID 映射：`uid://b7ttla15wn720`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/map_overlay_provider_registry_test.gd` — MapOverlayProviderRegistryTest; extends RefCounted; 85 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/map_overlay_provider_registry_test.gd.uid` — Godot 资源 UID 映射：`uid://0t52jbwazf7wq`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/marketing_board_data_test.gd` — MarketingBoardDataTest; extends RefCounted; 58 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/marketing_board_data_test.gd.uid` — Godot 资源 UID 映射：`uid://cwjrlod3i6msg`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/marketing_campaigns_test.gd` — MarketingCampaignsTest; extends RefCounted; 787 行；使用迹象：res:// 引用:3, class_name 引用:5；评估：无明显问题
+- `core/tests/marketing_campaigns_test.gd.uid` — Godot 资源 UID 映射：`uid://d1w2bpb0gejj`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/marketing_demand_generated_event_test.gd` — MarketingDemandGeneratedEventTest; extends RefCounted; 77 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/marketing_demand_generated_event_test.gd.uid` — Godot 资源 UID 映射：`uid://c662c0rr4qc8s`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/marketing_dinnertime_golden_replay_test.gd` — MarketingDinnertimeGoldenReplayTest; extends RefCounted; 357 行；使用迹象：res:// 引用:3, class_name 引用:3；评估：无明显问题
+- `core/tests/marketing_dinnertime_golden_replay_test.gd.uid` — Godot 资源 UID 映射：`uid://v4w0x002f8bx`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/marketing_settlement_fail_fast_test.gd` — MarketingSettlementFailFastTest; extends RefCounted; 83 行；使用迹象：res:// 引用:3, class_name 引用:3；评估：无明显问题
+- `core/tests/marketing_settlement_fail_fast_test.gd.uid` — Godot 资源 UID 映射：`uid://u76uple6pt61`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/mass_marketeers_v2_test.gd` — MassMarketeersV2Test; extends RefCounted; 96 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/mass_marketeers_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://ddxi56fw4f5c6`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/milestone_effect_values_test.gd` — MilestoneEffectValuesTest; extends RefCounted; 188 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/milestone_effect_values_test.gd.uid` — Godot 资源 UID 映射：`uid://ctnvo7sepa4my`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/milestone_system/milestone_system_test_support.gd` — extends RefCounted; 57 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/tests/milestone_system/milestone_system_test_support.gd.uid` — Godot 资源 UID 映射：`uid://milestone_system_test_support0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/milestone_system/milestone_system_train_rules_test.gd` — extends RefCounted; 388 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/tests/milestone_system/milestone_system_train_rules_test.gd.uid` — Godot 资源 UID 映射：`uid://milestone_system_train_rules_test0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/milestone_system/milestone_system_triggers_test.gd` — extends RefCounted; 411 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/tests/milestone_system/milestone_system_triggers_test.gd.uid` — Godot 资源 UID 映射：`uid://milestone_system_triggers_test0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/milestone_system_test.gd` — MilestoneSystemTest; extends RefCounted; 32 行；使用迹象：res:// 引用:3, class_name 引用:6；评估：无明显问题
+- `core/tests/milestone_system_test.gd.uid` — Godot 资源 UID 映射：`uid://b6gepip7qf5n6`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/module_boundary_contract_test.gd` — ModuleBoundaryContractTest; extends RefCounted; 107 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/module_boundary_contract_test.gd.uid` — Godot 资源 UID 映射：`uid://c1vktq4y3h7xw`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/module_package_loader_v2_test.gd` — ModulePackageLoaderV2Test; extends RefCounted; 73 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/module_package_loader_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://bfx8j24aagb7v`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/module_plan_builder_v2_test.gd` — ModulePlanBuilderV2Test; extends RefCounted; 120 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/module_plan_builder_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://ep5h4ymym8y0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/module_system_v2_bootstrap_test.gd` — ModuleSystemV2BootstrapTest; extends RefCounted; 44 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/module_system_v2_bootstrap_test.gd.uid` — Godot 资源 UID 映射：`uid://cu38v75tklr3c`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/move_restaurant_rules_test.gd` — MoveRestaurantRulesTest; extends RefCounted; 255 行；使用迹象：res:// 引用:3, class_name 引用:3；评估：无明显问题
+- `core/tests/move_restaurant_rules_test.gd.uid` — Godot 资源 UID 映射：`uid://inb7fqcgxp3w`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/movie_stars_v2_test.gd` — MovieStarsV2Test; extends RefCounted; 191 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/movie_stars_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://bjg7lpov5lwsa`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/new_districts_v2_test.gd` — NewDistrictsV2Test; extends RefCounted; 96 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/new_districts_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://dglkh7l4enp4l`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/new_milestones_beer_trainer_payday_v2_test.gd` — NewMilestonesBeerTrainerPaydayV2Test; extends RefCounted; 93 行；使用迹象：res:// 引用:1, class_name 引用:3；评估：无明显问题
+- `core/tests/new_milestones_beer_trainer_payday_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://c4cb8wosmkr1`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/new_milestones_brand_director_v2_test.gd` — NewMilestonesBrandDirectorV2Test; extends RefCounted; 166 行；使用迹象：res:// 引用:1, class_name 引用:3；评估：无明显问题
+- `core/tests/new_milestones_brand_director_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://d0tmlftu2xda2`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/new_milestones_brand_manager_v2_test.gd` — NewMilestonesBrandManagerV2Test; extends RefCounted; 171 行；使用迹象：res:// 引用:1, class_name 引用:3；评估：无明显问题
+- `core/tests/new_milestones_brand_manager_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://dudpplmh4612g`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/new_milestones_burger_sold_v2_test.gd` — NewMilestonesBurgerSoldV2Test; extends RefCounted; 174 行；使用迹象：res:// 引用:1, class_name 引用:3；评估：无明显问题
+- `core/tests/new_milestones_burger_sold_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://csp6d5y76xnxu`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/new_milestones_campaign_manager_v2_test.gd` — NewMilestonesCampaignManagerV2Test; extends RefCounted; 208 行；使用迹象：res:// 引用:1, class_name 引用:3；评估：无明显问题
+- `core/tests/new_milestones_campaign_manager_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://mttj674b20fm`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/new_milestones_coke_sold_v2_test.gd` — NewMilestonesCokeSoldV2Test; extends RefCounted; 201 行；使用迹象：res:// 引用:1, class_name 引用:4；评估：无明显问题
+- `core/tests/new_milestones_coke_sold_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://drpqppbph0umc`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/new_milestones_discount_manager_bank_burn_v2_test.gd` — NewMilestonesDiscountManagerBankBurnV2Test; extends RefCounted; 101 行；使用迹象：res:// 引用:1, class_name 引用:3；评估：无明显问题
+- `core/tests/new_milestones_discount_manager_bank_burn_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://vlrqoxq07fup`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/new_milestones_lemonade_sold_v2_test.gd` — NewMilestonesLemonadeSoldV2Test; extends RefCounted; 114 行；使用迹象：res:// 引用:1, class_name 引用:3；评估：无明显问题
+- `core/tests/new_milestones_lemonade_sold_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://dfa4ti2mxa0d6`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/new_milestones_marketing_trainee_v2_test.gd` — NewMilestonesMarketingTraineeV2Test; extends RefCounted; 143 行；使用迹象：res:// 引用:1, class_name 引用:3；评估：无明显问题
+- `core/tests/new_milestones_marketing_trainee_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://c86gi1dbg4m4y`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/new_milestones_new_restaurant_v2_test.gd` — NewMilestonesNewRestaurantV2Test; extends RefCounted; 212 行；使用迹象：res:// 引用:1, class_name 引用:3；评估：无明显问题
+- `core/tests/new_milestones_new_restaurant_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://dhrsb0ydsquro`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/new_milestones_pizza_sold_v2_test.gd` — NewMilestonesPizzaSoldV2Test; extends RefCounted; 207 行；使用迹象：res:// 引用:1, class_name 引用:3；评估：无明显问题
+- `core/tests/new_milestones_pizza_sold_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://c52cax1sk1kp8`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/new_milestones_recruiter_waitress_v2_test.gd` — NewMilestonesRecruiterWaitressV2Test; extends RefCounted; 73 行；使用迹象：res:// 引用:1, class_name 引用:3；评估：无明显问题
+- `core/tests/new_milestones_recruiter_waitress_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://ug82nf3tbd0a`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/new_milestones_v2_test.gd` — NewMilestonesV2Test; extends RefCounted; 191 行；使用迹象：res:// 引用:1, class_name 引用:3；评估：无明显问题
+- `core/tests/new_milestones_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://c43valp4rtkp7`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/night_shift_managers_v2_test.gd` — NightShiftManagersV2Test; extends RefCounted; 421 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/night_shift_managers_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://co0kcl0hjhex0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/noodles_sushi_v2_test.gd` — NoodlesSushiV2Test; extends RefCounted; 695 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/noodles_sushi_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://sldieibg1dlc`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/online_resync_archive_test.gd` — OnlineResyncArchiveTest; extends RefCounted; 84 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/online_resync_archive_test.gd.uid` — Godot 资源 UID 映射：`uid://b26iow48bwua4`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/online_rewind_to_turn_start_test.gd` — extends RefCounted; 131 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/tests/online_rewind_to_turn_start_test.gd.uid` — Godot 资源 UID 映射：`uid://bh8rcjishci8r`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/online_room_list_test.gd` — OnlineRoomListTest; extends RefCounted; 70 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/online_room_list_test.gd.uid` — Godot 资源 UID 映射：`uid://d00eb8v3ogwbv`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/online_room_manager_test.gd` — OnlineRoomManagerTest; extends RefCounted; 76 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/online_room_manager_test.gd.uid` — Godot 资源 UID 映射：`uid://d1uu8x6snexib`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/online_room_seed_random_stable_test.gd` — OnlineRoomSeedRandomStableTest; extends RefCounted; 47 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/online_room_seed_random_stable_test.gd.uid` — Godot 资源 UID 映射：`uid://mq64gyyo7kaw`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/online_room_spectator_test.gd` — OnlineRoomSpectatorTest; extends RefCounted; 110 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/online_room_spectator_test.gd.uid` — Godot 资源 UID 映射：`uid://boqooee1hs3ov`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/online_start_game_replay_test.gd` — OnlineStartGameReplayTest; extends RefCounted; 116 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/online_start_game_replay_test.gd.uid` — Godot 资源 UID 映射：`uid://bqpm58wle80bl`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/order_of_business_test.gd` — OrderOfBusinessTest; extends RefCounted; 193 行；使用迹象：res:// 引用:3, class_name 引用:5；评估：无明显问题
+- `core/tests/order_of_business_test.gd.uid` — Godot 资源 UID 映射：`uid://b0t3chslmn5xo`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/payday_report_event_test.gd` — PaydayReportEventTest; extends RefCounted; 88 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/payday_report_event_test.gd.uid` — Godot 资源 UID 映射：`uid://3x9trpqbgsuup`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/payday_salary_test.gd` — PaydaySalaryTest; extends RefCounted; 298 行；使用迹象：res:// 引用:3, class_name 引用:5；评估：无明显问题
+- `core/tests/payday_salary_test.gd.uid` — Godot 资源 UID 映射：`uid://dxd4los3rwbma`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/payday_salary_token_eligibility_test.gd` — PaydaySalaryTokenEligibilityTest; extends RefCounted; 109 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/payday_salary_token_eligibility_test.gd.uid` — Godot 资源 UID 映射：`uid://dykv7l2tvvqm1`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/payday_sub_phase_v2_test.gd` — PaydaySubPhaseV2Test; extends RefCounted; 47 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/payday_sub_phase_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://cadlxj0vok24q`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/phase_order_override_v2_test.gd` — PhaseOrderOverrideV2Test; extends RefCounted; 52 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/phase_order_override_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://b2uakrkri2vqj`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/place_house_rules_test.gd` — PlaceHouseRulesTest; extends RefCounted; 125 行；使用迹象：res:// 引用:3, class_name 引用:3；评估：无明显问题
+- `core/tests/place_house_rules_test.gd.uid` — Godot 资源 UID 映射：`uid://cmbh62y4apgfm`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/place_restaurant_rules_test.gd` — PlaceRestaurantRulesTest; extends RefCounted; 358 行；使用迹象：res:// 引用:3, class_name 引用:3；评估：无明显问题
+- `core/tests/place_restaurant_rules_test.gd.uid` — Godot 资源 UID 映射：`uid://cqmfa7n4gfsnu`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/pool_builder_v2_test.gd` — PoolBuilderV2Test; extends RefCounted; 77 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/pool_builder_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://c4g8t7edn8otm`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/procure_drinks_route_rules_test.gd` — ProcureDrinksRouteRulesTest; extends RefCounted; 482 行；使用迹象：res:// 引用:3, class_name 引用:3；评估：无明显问题
+- `core/tests/procure_drinks_route_rules_test.gd.uid` — Godot 资源 UID 映射：`uid://bjudr5sfmeys8`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/procure_drinks_test.gd` — ProcureDrinksTest; extends RefCounted; 638 行；使用迹象：res:// 引用:4, class_name 引用:5；评估：无明显问题
+- `core/tests/procure_drinks_test.gd.uid` — Godot 资源 UID 映射：`uid://yjlqhnx28e58`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/produce_food_test.gd` — ProduceFoodTest; extends RefCounted; 183 行；使用迹象：res:// 引用:4, class_name 引用:5；评估：无明显问题
+- `core/tests/produce_food_test.gd.uid` — Godot 资源 UID 映射：`uid://c1a462d8ccsjh`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/random_map_generation_test.gd` — RandomMapGenerationTest; extends RefCounted; 96 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/random_map_generation_test.gd.uid` — Godot 资源 UID 映射：`uid://cq132eel3png3`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/recruit_on_credit_rules_test.gd` — RecruitOnCreditRulesTest; extends RefCounted; 137 行；使用迹象：res:// 引用:3, class_name 引用:3；评估：无明显问题
+- `core/tests/recruit_on_credit_rules_test.gd.uid` — Godot 资源 UID 映射：`uid://kn24stsm2rby`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/replay_determinism_test.gd` — ReplayDeterminismTest; extends RefCounted; 171 行；使用迹象：res:// 引用:4；评估：无明显问题
+- `core/tests/replay_determinism_test.gd.uid` — Godot 资源 UID 映射：`uid://cb4mmqbc4aml3`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/reserve_prices_v2_test.gd` — ReservePricesV2Test; extends RefCounted; 169 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/reserve_prices_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://cp2o003sv4slw`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/restaurant_logo_assignment_test.gd` — RestaurantLogoAssignmentTest; extends RefCounted; 115 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/restaurant_logo_assignment_test.gd.uid` — Godot 资源 UID 映射：`uid://dgm2hq68evl4v`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/restructuring_overflow_penalty_test.gd` — RestructuringOverflowPenaltyTest; extends RefCounted; 74 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/restructuring_overflow_penalty_test.gd.uid` — Godot 资源 UID 映射：`uid://y8eo54aenis1`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/rewind_turn_start_fallback_test.gd` — RewindTurnStartFallbackTest; extends RefCounted; 78 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/rewind_turn_start_fallback_test.gd.uid` — Godot 资源 UID 映射：`uid://c2h0bqj7y0r3p`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/rewind_turn_start_phase_change_test.gd` — RewindTurnStartPhaseChangeTest; extends RefCounted; 87 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/rewind_turn_start_phase_change_test.gd.uid` — Godot 资源 UID 映射：`uid://qy8khmtmdnybt`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/rewind_turn_start_reenter_test.gd` — RewindTurnStartReenterTest; extends RefCounted; 75 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/rewind_turn_start_reenter_test.gd.uid` — Godot 资源 UID 映射：`uid://n0omf9zy0wnvz`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/rewind_turn_start_setup_turn_switch_test.gd` — RewindTurnStartSetupTurnSwitchTest; extends RefCounted; 107 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/rewind_turn_start_setup_turn_switch_test.gd.uid` — Godot 资源 UID 映射：`uid://tqrj40aaz75y2`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/round_state_fail_fast_test.gd` — RoundStateFailFastTest; extends RefCounted; 185 行；使用迹象：res:// 引用:3, class_name 引用:3；评估：无明显问题
+- `core/tests/round_state_fail_fast_test.gd.uid` — Godot 资源 UID 映射：`uid://pety3boat98ia4`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/rural_marketeers_auto_advance_unblocked_test.gd` — RuralMarketeersAutoAdvanceUnblockedTest; extends RefCounted; 54 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/rural_marketeers_auto_advance_unblocked_test.gd.uid` — Godot 资源 UID 映射：`uid://camp0iqiex4k1`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/rural_marketeers_v2_test.gd` — RuralMarketeersV2Test; extends RefCounted; 268 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/rural_marketeers_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://mdux4pgpioul`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/settlement_registry_v2_test.gd` — SettlementRegistryV2Test; extends RefCounted; 107 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/settlement_registry_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://cicwiuar5sdea`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/settlement_trigger_override_extra_v2_test.gd` — SettlementTriggerOverrideExtraV2Test; extends RefCounted; 126 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/settlement_trigger_override_extra_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://cr8iq2g34hoyg`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/settlement_trigger_override_v2_test.gd` — SettlementTriggerOverrideV2Test; extends RefCounted; 67 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/settlement_trigger_override_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://byqnsnc40mhrg`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/six_players_setup_test.gd` — SixPlayersSetupTest; extends RefCounted; 69 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/six_players_setup_test.gd.uid` — Godot 资源 UID 映射：`uid://c4v1ludvi1ttj`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/state_schema_archive_load_test.gd` — StateSchemaArchiveLoadTest; extends RefCounted; 80 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/state_schema_archive_load_test.gd.uid` — Godot 资源 UID 映射：`uid://bpny2kkrn1xxo`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/state_schema_unregistered_module_key_warning_test.gd` — StateSchemaUnregisteredModuleKeyWarningTest; extends RefCounted; 61 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/state_schema_unregistered_module_key_warning_test.gd.uid` — Godot 资源 UID 映射：`uid://30gcrr6eff8an`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/step_timeline_build_test.gd` — StepTimelineBuildTest; extends RefCounted; 190 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/step_timeline_build_test.gd.uid` — Godot 资源 UID 映射：`uid://bryx62gr02ksl`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/step_timeline_cleanup_discard_order_test.gd` — StepTimelineCleanupDiscardOrderTest; extends RefCounted; 178 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/step_timeline_cleanup_discard_order_test.gd.uid` — Godot 资源 UID 映射：`uid://cq0i3flrrvdq6`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/step_timeline_force_execute_actor_mismatch_test.gd` — StepTimelineForceExecuteActorMismatchTest; extends RefCounted; 45 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/step_timeline_force_execute_actor_mismatch_test.gd.uid` — Godot 资源 UID 映射：`uid://dns8w81hytvve`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/step_timeline_ketchup_milestone_order_test.gd` — StepTimelineKetchupMilestoneOrderTest; extends RefCounted; 221 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/step_timeline_ketchup_milestone_order_test.gd.uid` — Godot 资源 UID 映射：`uid://bs0mmscngj7l2`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/step_timeline_marketing_milestone_order_test.gd` — StepTimelineMarketingMilestoneOrderTest; extends RefCounted; 176 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/step_timeline_marketing_milestone_order_test.gd.uid` — Godot 资源 UID 映射：`uid://bopb4w2ihqxye`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/step_timeline_phase_boundary_order_test.gd` — StepTimelinePhaseBoundaryOrderTest; extends RefCounted; 139 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/step_timeline_phase_boundary_order_test.gd.uid` — Godot 资源 UID 映射：`uid://c3f8k9p2w4x7z`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/test_phase_utils.gd` — TestPhaseUtils; extends RefCounted; 355 行；使用迹象：res:// 引用:33, class_name 引用:6；评估：无明显问题
+- `core/tests/test_phase_utils.gd.uid` — Godot 资源 UID 映射：`uid://bb0l545xa3auu`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/visual_catalog_loader_v2_test.gd` — VisualCatalogLoaderV2Test; extends RefCounted; 46 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/visual_catalog_loader_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://cmnukakgy6e1m`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/tests/working_sub_phase_order_override_v2_test.gd` — WorkingSubPhaseOrderOverrideV2Test; extends RefCounted; 42 行；使用迹象：res:// 引用:1, class_name 引用:1；评估：无明显问题
+- `core/tests/working_sub_phase_order_override_v2_test.gd.uid` — Godot 资源 UID 映射：`uid://5gauas22ftq3`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/types/command.gd` — Command; extends RefCounted; 203 行；使用迹象：res:// 引用:3, class_name 引用:221；评估：无明显问题
+- `core/types/command.gd.uid` — Godot 资源 UID 映射：`uid://n126v8bu1n26`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/types/result.gd` — Result; extends RefCounted; 132 行；使用迹象：class_name 引用:591；评估：无明显问题
+- `core/types/result.gd.uid` — Godot 资源 UID 映射：`uid://ck0pmmqbt6j8b`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/utils/autoload_access.gd` — AutoloadAccess; extends RefCounted; 74 行；使用迹象：res:// 引用:14, class_name 引用:1；评估：依赖 SceneTree/节点
+- `core/utils/autoload_access.gd.uid` — Godot 资源 UID 映射：`uid://c61o01csftqjk`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/utils/catalog_registry_helpers.gd` — CatalogRegistryHelpers; extends RefCounted; 40 行；使用迹象：res:// 引用:5；评估：无明显问题
+- `core/utils/catalog_registry_helpers.gd.uid` — Godot 资源 UID 映射：`uid://buta4y7lvktjn`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/utils/command_privacy.gd` — extends RefCounted; 64 行；使用迹象：res:// 引用:3；评估：无明显问题
+- `core/utils/command_privacy.gd.uid` — Godot 资源 UID 映射：`uid://dhmhlmy68cdbi`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/utils/int_value_parse_helpers.gd` — IntValueParseHelpers; extends RefCounted; 38 行；使用迹象：res:// 引用:8；评估：无明显问题
+- `core/utils/int_value_parse_helpers.gd.uid` — Godot 资源 UID 映射：`uid://ddxlf8sfbjovc`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/utils/json_value_parse_helpers.gd` — JsonValueParseHelpers; extends RefCounted; 24 行；使用迹象：res:// 引用:4；评估：无明显问题
+- `core/utils/json_value_parse_helpers.gd.uid` — Godot 资源 UID 映射：`uid://ci6ghdg6nbnr7`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/utils/range_utils.gd` — RangeUtils; extends RefCounted; 68 行；使用迹象：res:// 引用:12, class_name 引用:3；评估：无明显问题
+- `core/utils/range_utils.gd.uid` — Godot 资源 UID 映射：`uid://br4ngeut1ls9y`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/utils/range_utils_air.gd` — extends RefCounted; 127 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/utils/range_utils_air.gd.uid` — Godot 资源 UID 映射：`uid://wmme0n5cx7i0`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/utils/range_utils_road.gd` — extends RefCounted; 39 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/utils/range_utils_road.gd.uid` — Godot 资源 UID 映射：`uid://cn7w6b3tpdf47`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/utils/range_utils_road/adjacent_cells.gd` — extends RefCounted; 59 行；使用迹象：res:// 引用:2；评估：无明显问题
+- `core/utils/range_utils_road/adjacent_cells.gd.uid` — Godot 资源 UID 映射：`uid://dvhas6fpxikbs`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/utils/range_utils_road/distance_queries.gd` — extends RefCounted; 148 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/utils/range_utils_road/distance_queries.gd.uid` — Godot 资源 UID 映射：`uid://ccw2xv6nbmqam`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/utils/round_state_counters.gd` — RoundStateCounters; extends RefCounted; 150 行；使用迹象：res:// 引用:13, class_name 引用:3；评估：无明显问题
+- `core/utils/round_state_counters.gd.uid` — Godot 资源 UID 映射：`uid://br0undc0unt3rsq`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/utils/round_state_pending_phase_actions.gd` — RoundStatePendingPhaseActions; extends RefCounted; 67 行；使用迹象：res:// 引用:3；评估：无明显问题
+- `core/utils/round_state_pending_phase_actions.gd.uid` — Godot 资源 UID 映射：`uid://bq8g7gkncful6`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/utils/round_state_player_string_lists.gd` — RoundStatePlayerStringLists; extends RefCounted; 75 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/utils/round_state_player_string_lists.gd.uid` — Godot 资源 UID 映射：`uid://dqpc2sgerpd7a`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)
+- `core/utils/type_helpers.gd` — TypeHelpers; extends RefCounted; 34 行；使用迹象：res:// 引用:1；评估：无明显问题
+- `core/utils/type_helpers.gd.uid` — Godot 资源 UID 映射：`uid://dcxoyeyqf5pv`；评估：自动生成文件(建议继续纳入版本控制以稳定引用)

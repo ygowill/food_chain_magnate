@@ -1,4 +1,4 @@
-# Manual logs archives coverage test
+# Manual logs archives coverage test (UI rendering coverage)
 # Covers issue_tracker #50: provide multiple themed manual saves to review log rendering.
 class_name ManualLogSavesCoverageTest
 extends RefCounted

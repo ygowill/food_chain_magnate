@@ -1,5 +1,6 @@
 # 调试命令注册表（UI/开发工具）
 # 管理调试命令的注册、查找和执行
+class_name DebugCommandRegistry
 extends RefCounted
 
 # 命令定义

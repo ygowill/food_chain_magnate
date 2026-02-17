@@ -5,7 +5,7 @@ extends Window
 
 signal command_executed(command: String, result_text: String)
 
-const DebugCommandRegistryClass = preload("res://core/debug/debug_command_registry.gd")
+const DebugCommandRegistryClass = preload("res://ui/debug/debug_command_registry.gd")
 const StateCommandsClass = preload("res://ui/debug/debug_commands/state_commands.gd")
 const GameCommandsClass = preload("res://ui/debug/debug_commands/game_commands.gd")
 const UtilCommandsClass = preload("res://ui/debug/debug_commands/util_commands.gd")

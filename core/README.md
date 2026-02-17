@@ -6,9 +6,11 @@
 - `core/state/`：状态结构与更新工具（`GameState`、`StateUpdater`）
 - `core/engine/`：引擎与流程编排（`GameEngine`、`PhaseManager`）
 - `core/actions/`：动作执行框架（`ActionExecutor`、`ActionRegistry`）
-- `core/events/`：事件总线（`EventBus`）
 - `core/random/`：受控随机（`RandomManager`）
 - `core/data/`：数据加载与解析（`GameData`）
 - `core/rules/`：跨动作共享的规则/计算（例如 `EmployeeRules`）
+- `core/modules/`：模块系统（v2 content/ruleset/加载与校验）
 - `core/tests/`：纯逻辑 headless 测试入口（`*_test.gd`）
 - `core/map/`：地图系统（烘焙、道路图、放置校验等）
+- `core/utils/`：通用工具（解析 helper、范围/距离、类型 helper 等）
+- `core/debug/`：调试相关（少量 shim/工具封装；避免引入 core→ui 依赖）
