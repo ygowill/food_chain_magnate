@@ -52,36 +52,14 @@ extends Control
 @onready var company_structure: Control = $UIRoot/BottomPanel/CompanyStructure
 @onready var bottom_panel: Control = $UIRoot/BottomPanel
 
-const GameMenuDebugControllerClass = preload("res://ui/scenes/game/game_menu_debug_controller.gd")
-const GameMenuControllerClass = preload("res://ui/scenes/game/game_menu_controller.gd")
-const GameSaveLoadControllerClass = preload("res://ui/scenes/game/game_save_load_controller.gd")
-const GameLayoutControllerClass = preload("res://ui/scenes/game/game_layout_controller.gd")
-const GameRightPanelDockControllerClass = preload("res://ui/scenes/game/game_right_panel_dock_controller.gd")
-const GameUiSyncControllerClass = preload("res://ui/scenes/game/game_ui_sync_controller.gd")
-const GameCommandControllerClass = preload("res://ui/scenes/game/game_command_controller.gd")
-const GameInputControllerClass = preload("res://ui/scenes/game/game_input_controller.gd")
-const GameLogDockControllerClass = preload("res://ui/scenes/game/game_log_dock_controller.gd")
-const GameBackgroundWarmupControllerClass = preload("res://ui/scenes/game/game_background_warmup_controller.gd")
-const GameDebugPanelControllerClass = preload("res://ui/scenes/game/game_debug_panel_controller.gd")
-const GameOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_controller.gd")
-const GameMapInteractionControllerClass = preload("res://ui/scenes/game/game_map_interaction_controller.gd")
-const GameMapModeBarControllerClass = preload("res://ui/scenes/game/game_map_mode_bar_controller.gd")
-const GamePanelControllerClass = preload("res://ui/scenes/game/game_panel_controller.gd")
+const GameControllersBuilderClass = preload("res://ui/scenes/game/game_controllers_builder.gd")
 const GameOnlineResyncControllerClass = preload("res://ui/scenes/game/game_online_resync_controller.gd")
-const GameTimelineControllerClass = preload("res://ui/scenes/game/game_timeline_controller.gd")
-const GameProcurementLogPreviewControllerClass = preload("res://ui/scenes/game/game_procurement_log_preview_controller.gd")
 const GameUiStyleApplierClass = preload("res://ui/scenes/game/game_ui_style_applier.gd")
 const GameRuntimeDisposerClass = preload("res://ui/scenes/game/game_runtime_disposer.gd")
-const DebugPanelScene = preload("res://ui/scenes/debug/debug_panel.tscn")
-const ConfirmDialogScene = preload("res://ui/dialogs/confirm_dialog.tscn")
-const SaveLoadDialogScript = preload("res://ui/dialogs/save_load_dialog.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
-const DrinksProcurementInputsClass = preload("res://core/rules/drinks_procurement/inputs.gd")
-const TileRouteUtilsClass = preload("res://core/rules/drinks_procurement/tile_route_utils.gd")
-const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const RulesDocsClass = preload("res://ui/utils/rules_docs.gd")
 
 # 游戏状态
@@ -141,161 +119,88 @@ func _ready() -> void:
 	UiStylesClass.apply_tiled_texture(background, UiStylesClass.WALL_TEXTURE_PATHS, 3.0, Color(0.85, 0.80, 0.68, 1.0))
 	UiStylesClass.apply_vignette(vignette_overlay, 0.25, 0.5)
 	GameUiStyleApplierClass.apply_all(self)
-	_layout_controller = GameLayoutControllerClass.new(
-		self,
-		round_label,
-		phase_track,
-		bank_label,
-		toggle_left_panel_button,
-		toggle_right_panel_button,
-		toggle_bottom_panel_button,
-		main_content,
-		center_split,
-		left_area,
-		left_panel,
-		game_log_panel,
-		bottom_panel,
-		$UIRoot/MainContent/CenterSplit/RightPanel,
-		player_panel,
-		inventory_panel
-	)
+	var build := GameControllersBuilderClass.build(self, {
+		"round_label": round_label,
+		"phase_track": phase_track,
+		"bank_label": bank_label,
+		"bank_break_tag": bank_break_tag,
+		"toggle_left_panel_button": toggle_left_panel_button,
+		"toggle_right_panel_button": toggle_right_panel_button,
+		"toggle_bottom_panel_button": toggle_bottom_panel_button,
+		"main_content": main_content,
+		"center_split": center_split,
+		"left_area": left_area,
+		"left_panel": left_panel,
+		"game_log_panel": game_log_panel,
+		"bottom_panel": bottom_panel,
+		"right_panel_root": $UIRoot/MainContent/CenterSplit/RightPanel,
+		"right_panel_header_row": right_panel_header_row,
+		"right_panel_back_button": right_panel_back_button,
+		"right_panel_title_label": right_panel_title_label,
+		"right_panel_default_stack": right_panel_default_stack,
+		"right_panel_dock_host": right_panel_dock_host,
+		"right_panel_footer_row": right_panel_footer_row,
+		"right_panel_footer_cancel_button": right_panel_footer_cancel_button,
+		"right_panel_footer_secondary_button": right_panel_footer_secondary_button,
+		"right_panel_footer_primary_button": right_panel_footer_primary_button,
+		"action_flow_controls": action_flow_controls,
+		"player_panel": player_panel,
+		"turn_order_track": turn_order_track,
+		"inventory_panel": inventory_panel,
+		"action_panel": action_panel,
+		"hand_area": hand_area,
+		"company_structure": company_structure,
+		"map_view": map_view,
+		"map_canvas": map_canvas,
+		"map_mode_bar": map_mode_bar,
+		"menu_dialog": menu_dialog,
+	}, {
+		"execute_command": Callable(self, "_execute_command"),
+		"update_ui": Callable(self, "_update_ui"),
+		"get_game_engine": Callable(self, "_get_game_engine"),
+		"set_active_game_engine": Callable(self, "_set_active_game_engine"),
+		"show_confirm": Callable(self, "_show_confirm"),
+		"show_game_log_panel_in_right_panel": Callable(self, "_show_game_log_panel_in_right_panel"),
+		"open_replay_load_dialog": Callable(self, "_open_replay_load_dialog"),
+		"is_online_resync_in_progress": Callable(self, "_is_online_resync_in_progress"),
+		"start_replay_from_file": Callable(self, "_start_replay_from_file"),
+		"on_debug_command_executed": Callable(self, "_on_debug_command_executed"),
+		"ensure_right_panel_visible": Callable(self, "_ensure_right_panel_visible"),
+		"ensure_left_area_visible": Callable(self, "_ensure_left_area_visible"),
+		"cancel_right_panel_docked_panel": Callable(self, "_cancel_right_panel_docked_panel"),
+		"sync_right_panel_docked_view": Callable(self, "_sync_right_panel_docked_view"),
+		"dock_popup_into_right_panel": Callable(self, "dock_popup_into_right_panel"),
+		"toggle_game_log": Callable(self, "toggle_game_log"),
+		"show_settings_dialog": Callable(self, "show_settings_dialog"),
+		"show_rules_dialog": Callable(self, "show_rules_dialog"),
+		"show_milestone_panel": Callable(self, "show_milestone_panel"),
+		"toggle_distance_tool": Callable(self, "toggle_distance_tool"),
+		"can_open_menu": Callable(self, "_can_open_menu"),
+	}, startup_replay_from_main_menu)
+
+	_layout_controller = build.get("layout_controller", null)
+	_menu_debug_controller = build.get("menu_debug_controller", null)
+	_menu_controller = build.get("menu_controller", null)
+	_save_load_controller = build.get("save_load_controller", null)
+	_right_panel_dock_controller = build.get("right_panel_dock_controller", null)
+	_overlay_controller = build.get("overlay_controller", null)
+	_map_controller = build.get("map_controller", null)
+	_map_mode_bar_controller = build.get("map_mode_bar_controller", null)
+	_panel_controller = build.get("panel_controller", null)
+	_timeline_controller = build.get("timeline_controller", null)
+	_procurement_log_preview_controller = build.get("procurement_log_preview_controller", null)
+	_log_dock_controller = build.get("log_dock_controller", null)
+	_ui_sync_controller = build.get("ui_sync_controller", null)
+	_debug_panel_controller = build.get("debug_panel_controller", null)
+	_command_controller = build.get("command_controller", null)
+	_input_controller = build.get("input_controller", null)
+	_warmup_controller = build.get("warmup_controller", null)
+
 	_apply_ui_layout()
 	_init_left_panel_toggle()
 	_init_right_panel_toggle()
 	_init_right_panel_header()
 	_init_right_panel_footer()
-
-	_overlay_controller = GameOverlayControllerClass.new(self, map_view, map_canvas, game_log_panel)
-	_overlay_controller.initialize()
-
-	_map_controller = GameMapInteractionControllerClass.new(self, map_canvas, _overlay_controller)
-	_map_controller.connect_signals()
-	_map_mode_bar_controller = GameMapModeBarControllerClass.new(map_mode_bar)
-	UiSignalHelpersClass.safe_connect(_map_controller, "mode_changed", Callable(_map_mode_bar_controller, "on_map_mode_changed"))
-
-	_panel_controller = GamePanelControllerClass.new(
-		self,
-		_map_controller,
-		_overlay_controller,
-		Callable(self, "_execute_command"),
-		Callable(self, "_update_ui")
-	)
-	_panel_controller.connect_signals(action_panel, action_flow_controls, turn_order_track, hand_area, company_structure)
-	_warmup_controller = GameBackgroundWarmupControllerClass.new(self, Callable(self, "_get_game_engine"), _panel_controller, map_canvas)
-
-	_menu_debug_controller = GameMenuDebugControllerClass.new(self, menu_dialog)
-	_save_load_controller = GameSaveLoadControllerClass.new(self, SaveLoadDialogScript, Callable(self, "_start_replay_from_file"))
-	_menu_controller = GameMenuControllerClass.new(
-		self,
-		_menu_debug_controller,
-		menu_dialog,
-		ConfirmDialogScene,
-		_save_load_controller,
-		Callable(self, "_get_game_engine"),
-		Callable(self, "show_settings_dialog"),
-		Callable(self, "show_rules_dialog"),
-		Callable(self, "toggle_game_log"),
-		Callable(self, "show_milestone_panel"),
-		Callable(self, "toggle_distance_tool"),
-		Callable(self, "_can_open_menu")
-	)
-	_right_panel_dock_controller = GameRightPanelDockControllerClass.new(
-		Callable(self, "_ensure_right_panel_visible"),
-		Callable(self, "_cancel_right_panel_docked_panel"),
-		Callable(self, "toggle_game_log"),
-		game_log_panel,
-		right_panel_default_stack,
-		right_panel_dock_host,
-		right_panel_header_row,
-		right_panel_back_button,
-		right_panel_title_label,
-		right_panel_footer_row,
-		right_panel_footer_cancel_button,
-		right_panel_footer_secondary_button,
-		right_panel_footer_primary_button,
-		Callable(_panel_controller, "on_action_requested"),
-		Callable(action_panel, "get_flow_controls_config")
-	)
-	_input_controller = GameInputControllerClass.new(
-		_menu_controller,
-		_overlay_controller,
-		_panel_controller,
-		_map_controller,
-		_right_panel_dock_controller,
-		right_panel_footer_row,
-		right_panel_footer_secondary_button,
-		right_panel_footer_primary_button
-	)
-	# M4.3：日志面板统一使用 step 时间线视图（由 StepTimelineBuild.build_full 重建），
-	# 不再依赖 EventBus 订阅追加日志。
-	UiSignalHelpersClass.safe_connect(game_log_panel, "close_requested", toggle_game_log)
-
-	_timeline_controller = GameTimelineControllerClass.new(
-		self,
-		game_log_panel,
-		action_panel,
-		Callable(self, "_get_game_engine"),
-		Callable(self, "_set_active_game_engine"),
-		Callable(self, "_update_ui"),
-		Callable(self, "_show_confirm"),
-		Callable(self, "_show_game_log_panel_in_right_panel"),
-		Callable(self, "_open_replay_load_dialog"),
-		Callable(self, "_is_online_resync_in_progress")
-	)
-	_timeline_controller.set_startup_replay_from_main_menu(startup_replay_from_main_menu)
-	_timeline_controller.initialize()
-	_procurement_log_preview_controller = GameProcurementLogPreviewControllerClass.new(
-		Callable(self, "_get_game_engine"),
-		_overlay_controller,
-		game_log_panel,
-		_timeline_controller
-	)
-	UiSignalHelpersClass.safe_connect(game_log_panel, "replay_toggle_changed", Callable(_procurement_log_preview_controller, "on_replay_toggle_changed"))
-	UiSignalHelpersClass.safe_connect(game_log_panel, "log_entry_hovered", Callable(_procurement_log_preview_controller, "on_log_entry_hovered"))
-	UiSignalHelpersClass.safe_connect(game_log_panel, "log_entry_clicked", Callable(_procurement_log_preview_controller, "on_log_entry_clicked"))
-
-	_log_dock_controller = GameLogDockControllerClass.new(
-		Callable(self, "_ensure_left_area_visible"),
-		Callable(self, "_ensure_right_panel_visible"),
-		Callable(self, "_cancel_right_panel_docked_panel"),
-		Callable(self, "_sync_right_panel_docked_view"),
-		Callable(self, "dock_popup_into_right_panel"),
-		game_log_panel,
-		right_panel_dock_host,
-		_timeline_controller
-	)
-
-	_ui_sync_controller = GameUiSyncControllerClass.new(
-		Callable(self, "_get_game_engine"),
-		Callable(self, "_update_ui"),
-		Callable(self, "_sync_right_panel_docked_view"),
-		round_label,
-		phase_track,
-		bank_label,
-		bank_break_tag,
-		game_log_panel,
-		map_view,
-		_panel_controller,
-		_overlay_controller,
-		_timeline_controller
-	)
-
-	_debug_panel_controller = GameDebugPanelControllerClass.new(
-		self,
-		DebugPanelScene,
-		Callable(self, "_get_game_engine"),
-		Callable(self, "_on_debug_command_executed"),
-		_ui_sync_controller
-	)
-
-	_command_controller = GameCommandControllerClass.new(
-		Callable(self, "_get_game_engine"),
-		Callable(self, "_update_ui"),
-		Callable(self, "_show_confirm"),
-		_timeline_controller,
-		_panel_controller,
-		game_log_panel
-	)
 
 	PerfTraceClass.end_span(span_layout)
 
