@@ -401,9 +401,12 @@ func _apply_zoom() -> void:
 	var target := Vector2(float(_texture_size.x), float(_texture_size.y)) * _zoom
 	if page_content != null:
 		page_content.custom_minimum_size = target
+		page_content.size = target
 	if page_texture != null:
+		page_texture.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT, 0)
+		page_texture.position = Vector2.ZERO
 		page_texture.custom_minimum_size = target
-		page_texture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, 0)
+		page_texture.size = target
 		page_texture.stretch_mode = TextureRect.STRETCH_SCALE
 
 

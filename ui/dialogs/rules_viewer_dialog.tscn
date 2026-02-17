@@ -105,18 +105,14 @@ size_flags_vertical = 3
 
 [node name="PageContent" type="Control" parent="MarginContainer/VBoxContainer/Body/RightPanel/PageScroll"]
 layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
+size_flags_horizontal = 0
+size_flags_vertical = 0
 
 [node name="PageTexture" type="TextureRect" parent="MarginContainer/VBoxContainer/Body/RightPanel/PageScroll/PageContent"]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+layout_mode = 1
 mouse_filter = 2
 expand_mode = 1
-stretch_mode = 6
+stretch_mode = 0
 
 [node name="MissingLabel" type="Label" parent="MarginContainer/VBoxContainer/Body/RightPanel/PageScroll/PageContent"]
 layout_mode = 1
