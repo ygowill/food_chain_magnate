@@ -1,4 +1,5 @@
 # 联机会话层（Client/Server 共用 RPC 节点）
+# 日志分级：高频链路（如轮询/命令流）使用 DEBUG，关键状态迁移使用 INFO/WARN/ERROR。
 extends Node
 
 const RoomManagerClass = preload("res://server/room_manager.gd")
@@ -48,6 +49,7 @@ func start_server(port: int, bind_address: String = "0.0.0.0"):
 	var err := _peer.create_server(port, bind_address)
 	if err != OK:
 		_peer = null
+		GameLog.error("NetClient", "start_server failed bind=%s port=%d err=%s" % [bind_address, port, str(err)])
 		NetContext.reset()
 		return Result.failure("WebSocket server create_server failed: %s" % str(err))
 
@@ -70,6 +72,7 @@ func connect_to_server(url: String):
 	var err := _peer.create_client(url)
 	if err != OK:
 		_peer = null
+		GameLog.error("NetClient", "connect_to_server failed url=%s err=%s" % [url, str(err)])
 		NetContext.reset()
 		return Result.failure("WebSocket client create_client failed: %s" % str(err))
 
@@ -79,6 +82,16 @@ func connect_to_server(url: String):
 	return Result.success()
 
 func shutdown() -> void:
+	var prev_mode := _mode_name(int(NetContext.mode))
+	var prev_connected := _client_transport_connected
+	var prev_server_url := _safe_text(str(NetContext.server_url))
+	var prev_room_code := _safe_room_code(NetContext.room_state)
+	var prev_room_list_count := NetContext.room_list.size() if NetContext.room_list is Array else 0
+	var should_log := _peer != null \
+		or prev_mode != "HOTSEAT" \
+		or prev_connected \
+		or prev_room_code != "-" \
+		or prev_room_list_count > 0
 	if _peer != null:
 		_peer.close()
 	_peer = null
@@ -88,6 +101,12 @@ func shutdown() -> void:
 	_pending_resync_archive = {}
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	NetContext.reset()
+	if should_log:
+		GameLog.info(
+			"NetClient",
+			"Shutdown complete mode=%s connected=%s room=%s room_list=%d server=%s"
+				% [prev_mode, str(prev_connected), prev_room_code, prev_room_list_count, prev_server_url]
+		)
 
 func is_online_client_connected() -> bool:
 	return NetContext.mode == NetContext.Mode.ONLINE_CLIENT and _client_transport_connected
@@ -103,12 +122,23 @@ func request_create_room(desired_player_count: int, room_password: String, confi
 	for k in config.keys():
 		payload[str(k)] = config.get(k, null)
 	rpc_id(1, "rpc_create_room", payload)
+	GameLog.info(
+		"NetClient",
+		"TX CreateRoom request_id=%s desired_player_count=%d has_password=%s config_keys=%s"
+			% [
+				request_id,
+				desired_player_count,
+				str(not room_password.is_empty()),
+				str(Array(config.keys()))
+			]
+	)
 	return request_id
 
 func request_list_rooms() -> String:
 	var request_id := _next_request_id()
 	var payload := {"request_id": request_id}
 	rpc_id(1, "rpc_list_rooms", payload)
+	GameLog.debug("NetClient", "TX ListRooms request_id=%s" % request_id)
 	return request_id
 
 func request_join_room(room_code: String, room_password: String) -> String:
@@ -119,12 +149,18 @@ func request_join_room(room_code: String, room_password: String) -> String:
 		"room_password": room_password,
 	}
 	rpc_id(1, "rpc_join_room", payload)
+	GameLog.info(
+		"NetClient",
+		"TX JoinRoom request_id=%s room_code=%s has_password=%s"
+			% [request_id, _safe_text(str(room_code).to_upper()), str(not room_password.is_empty())]
+	)
 	return request_id
 
 func request_leave_room() -> String:
 	var request_id := _next_request_id()
 	var payload := {"request_id": request_id}
 	rpc_id(1, "rpc_leave_room", payload)
+	GameLog.info("NetClient", "TX LeaveRoom request_id=%s room=%s" % [request_id, _safe_room_code(NetContext.room_state)])
 	NetContext.room_state = {}
 	room_state_updated.emit(NetContext.room_state)
 	return request_id
@@ -136,6 +172,11 @@ func request_update_room_config(config_patch: Dictionary) -> String:
 		"config_patch": config_patch.duplicate(true),
 	}
 	rpc_id(1, "rpc_update_room_config", payload)
+	GameLog.info(
+		"NetClient",
+		"TX UpdateRoomConfig request_id=%s room=%s patch_keys=%s"
+			% [request_id, _safe_room_code(NetContext.room_state), str(Array(config_patch.keys()))]
+	)
 	return request_id
 
 func request_update_player_profile(profile: Dictionary) -> void:
@@ -145,12 +186,21 @@ func request_update_player_profile(profile: Dictionary) -> void:
 		return
 	if profile is Dictionary:
 		NetContext.player_profile = Dictionary(profile).duplicate(true)
+	GameLog.debug(
+		"NetClient",
+		"TX UpdatePlayerProfile name=%s color_index=%d"
+			% [
+				_safe_text(str(NetContext.player_profile.get("name", ""))),
+				int(NetContext.player_profile.get("color_index", -1))
+			]
+	)
 	_send_client_hello()
 
 func request_start_game() -> String:
 	var request_id := _next_request_id()
 	var payload := {"request_id": request_id}
 	rpc_id(1, "rpc_start_game", payload)
+	GameLog.info("NetClient", "TX StartGame request_id=%s room=%s" % [request_id, _safe_room_code(NetContext.room_state)])
 	return request_id
 
 func request_action(action_id: String, params: Dictionary) -> String:
@@ -161,6 +211,11 @@ func request_action(action_id: String, params: Dictionary) -> String:
 		"params": params.duplicate(true),
 	}
 	rpc_id(1, "rpc_action_request", payload)
+	GameLog.debug(
+		"NetClient",
+		"TX ActionRequest request_id=%s action=%s params_keys=%s"
+			% [request_id, _safe_text(action_id), str(Array(params.keys()))]
+	)
 	return request_id
 
 func request_resync() -> void:
@@ -169,6 +224,7 @@ func request_resync() -> void:
 	if not is_online_client_connected():
 		return
 	rpc_id(1, "rpc_resync_request", {})
+	GameLog.warn("NetClient", "TX ResyncRequest room=%s" % _safe_room_code(NetContext.room_state))
 
 func request_rewind_to_turn_start() -> String:
 	var request_id := _next_request_id()
@@ -177,11 +233,17 @@ func request_rewind_to_turn_start() -> String:
 	if not is_online_client_connected():
 		return request_id
 	rpc_id(1, "rpc_rewind_to_turn_start", {"request_id": request_id})
+	GameLog.warn(
+		"NetClient",
+		"TX RewindToTurnStart request_id=%s room=%s" % [request_id, _safe_room_code(NetContext.room_state)]
+	)
 	return request_id
 
 func take_pending_resync_archive() -> Dictionary:
 	var out: Dictionary = _pending_resync_archive.duplicate(true)
 	_pending_resync_archive = {}
+	if not out.is_empty():
+		GameLog.debug("NetClient", "take_pending_resync_archive keys=%s" % str(Array(out.keys())))
 	return out
 
 @rpc("any_peer", "reliable")
@@ -335,3 +397,24 @@ func _server_drain_forfeited_auto_steps(room) -> void:
 func _next_request_id() -> String:
 	_request_counter += 1
 	return "%d-%d" % [Time.get_unix_time_from_system(), _request_counter]
+
+func _mode_name(mode_value: int) -> String:
+	match mode_value:
+		NetContext.Mode.ONLINE_CLIENT:
+			return "ONLINE_CLIENT"
+		NetContext.Mode.ONLINE_SERVER:
+			return "ONLINE_SERVER"
+		_:
+			return "HOTSEAT"
+
+func _safe_text(value: String) -> String:
+	var s := str(value).strip_edges()
+	if s.is_empty():
+		return "-"
+	return s
+
+func _safe_room_code(room_state: Dictionary) -> String:
+	var code := str(room_state.get("room_code", "")).strip_edges().to_upper()
+	if code.is_empty():
+		return "-"
+	return code

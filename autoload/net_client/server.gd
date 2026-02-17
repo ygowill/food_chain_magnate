@@ -1,5 +1,6 @@
 # NetClient：Server-only 逻辑（room 管理 + 广播 + forfeit 自动推进）
 # 注意：不要在这里新增任何 @rpc 方法，以避免联机双方脚本 RPC 校验不一致。
+# 日志分级：广播与逐命令同步等热路径走 DEBUG，异常/回灌/拒绝请求保留 WARN/ERROR。
 extends RefCounted
 
 const CommandClass = preload("res://core/types/command.gd")
@@ -12,17 +13,72 @@ var _net = null
 func setup(net_client) -> void:
 	_net = net_client
 
+func _safe_text(value: String) -> String:
+	var out := str(value).strip_edges()
+	if out.is_empty():
+		return "-"
+	return out
+
+func _short_hash(hash_value: String) -> String:
+	var h := str(hash_value).strip_edges()
+	if h.is_empty():
+		return "-"
+	if h.length() <= 12:
+		return h
+	return "%s..." % h.substr(0, 12)
+
+func _request_tag(peer_id: int, request_id: String) -> String:
+	return "peer=%d request_id=%s" % [peer_id, _safe_text(request_id)]
+
+func _room_brief(room) -> String:
+	if room == null:
+		return "room=- status=- host=0 players=0 spectators=0 peers=0"
+	var room_code := _safe_text(str(room.room_code).to_upper())
+	var status := _safe_text(str(room.status))
+	var host_peer_id := int(room.host_peer_id)
+	var players := 0
+	var spectators := 0
+	if room.has_method("to_room_state_dict"):
+		var state: Dictionary = room.to_room_state_dict()
+		var players_val = state.get("players", null)
+		if players_val is Array:
+			players = Array(players_val).size()
+		var spectators_val = state.get("spectators", null)
+		if spectators_val is Array:
+			spectators = Array(spectators_val).size()
+	var peers := 0
+	if room.has_method("get_peer_ids"):
+		peers = Array(room.get_peer_ids()).size()
+	return "room=%s status=%s host=%d players=%d spectators=%d peers=%d" % [
+		room_code,
+		status,
+		host_peer_id,
+		players,
+		spectators,
+		peers
+	]
+
+func _command_brief(cmd) -> String:
+	if cmd == null:
+		return "action=- actor=-1 index=-1"
+	return "action=%s actor=%d index=%d" % [
+		_safe_text(str(cmd.action_id)),
+		int(cmd.actor),
+		int(cmd.index)
+	]
+
 func on_peer_connected(peer_id: int) -> void:
 	if _net == null or not is_instance_valid(_net):
 		return
 	if NetContext.mode == NetContext.Mode.ONLINE_SERVER:
-		GameLog.info("NetClient", "Peer connected: %d" % peer_id)
+		GameLog.info("NetClient", "Peer connected: peer=%d known_profiles=%d" % [peer_id, _net._profile_by_peer_id.size()])
 
 func on_peer_disconnected(peer_id: int) -> void:
 	if _net == null or not is_instance_valid(_net):
 		return
 	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
 		return
+	GameLog.warn("NetClient", "Peer disconnected: peer=%d" % peer_id)
 
 	_net._profile_by_peer_id.erase(peer_id)
 	var room = _net._room_manager.get_room_by_peer(peer_id)
@@ -40,25 +96,39 @@ func on_peer_disconnected(peer_id: int) -> void:
 	var rr = _net._room_manager.disconnect_peer(peer_id) if in_game else _net._room_manager.leave_room(peer_id)
 	if rr.ok:
 		removed = bool(rr.value.get("removed", false))
+	else:
+		GameLog.error(
+			"NetClient",
+			"disconnect handling failed peer=%d in_game=%s err=%s %s"
+				% [peer_id, str(in_game), rr.error, _room_brief(room)]
+		)
 
 	if in_game and actor_id >= 0 and room.game_engine != null:
 		var cmd = CommandClass.create("forfeit_player", actor_id, {})
 		var fr = room.game_engine.execute_command(cmd)
 		if fr.ok:
+			GameLog.warn("NetClient", "Applied forfeit after disconnect peer=%d actor=%d %s" % [peer_id, actor_id, _room_brief(room)])
 			broadcast_command_applied(room, cmd)
 			server_drain_forfeited_auto_steps(room)
 		else:
-			GameLog.error("NetClient", "forfeit_player failed: %s" % fr.error)
+			GameLog.error("NetClient", "forfeit_player failed peer=%d actor=%d err=%s" % [peer_id, actor_id, fr.error])
 
 	if rr.ok and room != null and not removed:
 		broadcast_room_state(room)
 		broadcast_room_list("")
+		GameLog.info("NetClient", "Disconnect handled keep-room peer=%d removed=%s %s" % [peer_id, str(removed), _room_brief(room)])
 	elif rr.ok and removed:
 		broadcast_room_list("")
+		GameLog.info("NetClient", "Disconnect handled room removed peer=%d" % peer_id)
 
 func send_request_rejected(peer_id: int, request_id: String, code: String, message: String) -> void:
 	if _net == null or not is_instance_valid(_net):
 		return
+	GameLog.warn(
+		"NetClient",
+		"TX RequestRejected %s code=%s message=%s"
+			% [_request_tag(peer_id, request_id), _safe_text(code), _safe_text(message)]
+	)
 	_net.rpc_id(peer_id, "rpc_request_rejected", {
 		"request_id": request_id,
 		"code": code,
@@ -68,9 +138,13 @@ func send_request_rejected(peer_id: int, request_id: String, code: String, messa
 func broadcast_room_state(room) -> void:
 	if _net == null or not is_instance_valid(_net):
 		return
+	if room == null:
+		return
 	var state: Dictionary = room.to_room_state_dict()
-	for peer_id in room.get_peer_ids():
+	var targets := Array(room.get_peer_ids())
+	for peer_id in targets:
 		_net.rpc_id(peer_id, "rpc_room_state", state)
+	GameLog.debug("NetClient", "TX RoomState %s recipients=%d" % [_room_brief(room), targets.size()])
 
 func empty_room_state() -> Dictionary:
 	return {
@@ -96,14 +170,21 @@ func send_room_list_to_peer(peer_id: int, request_id: String) -> void:
 		"request_id": request_id,
 		"rooms": rooms,
 	})
+	GameLog.debug(
+		"NetClient",
+		"TX RoomList %s rooms=%d" % [_request_tag(peer_id, request_id), rooms.size()]
+	)
 
 func broadcast_room_list(request_id: String) -> void:
 	if _net == null or not is_instance_valid(_net):
 		return
 	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
 		return
+	var targets := 0
 	for peer_id_val in _net._profile_by_peer_id.keys():
+		targets += 1
 		send_room_list_to_peer(int(peer_id_val), request_id)
+	GameLog.debug("NetClient", "TX BroadcastRoomList request_id=%s recipients=%d" % [_safe_text(request_id), targets])
 
 func handle_rpc_client_hello(request: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -114,11 +195,26 @@ func handle_rpc_client_hello(request: Dictionary) -> void:
 	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
 	var request_id := str(request.get("request_id", ""))
 	var protocol_version := int(request.get("protocol_version", 0))
+	var game_version := str(request.get("game_version", ""))
+	var schema_version := int(request.get("schema_version", 0))
+	var profile_preview: Dictionary = Dictionary(request.get("player_profile", {}))
+	GameLog.info(
+		"NetClient",
+		"RX ClientHello %s protocol=%d game_version=%s schema=%d profile_name=%s color=%d"
+			% [
+				_request_tag(peer_id, request_id),
+				protocol_version,
+				_safe_text(game_version),
+				schema_version,
+				_safe_text(str(profile_preview.get("name", ""))),
+				int(profile_preview.get("color_index", -1))
+			]
+	)
 	if protocol_version != NetContext.PROTOCOL_VERSION:
 		send_request_rejected(peer_id, request_id, "protocol_version_mismatch", "Protocol version mismatch")
 		return
 
-	var profile: Dictionary = Dictionary(request.get("player_profile", {}))
+	var profile: Dictionary = profile_preview
 	_net._profile_by_peer_id[peer_id] = {
 		"name": str(profile.get("name", "玩家")),
 		"color_index": int(profile.get("color_index", 0)),
@@ -131,7 +227,18 @@ func handle_rpc_client_hello(request: Dictionary) -> void:
 		if ur.ok:
 			broadcast_room_state(room)
 			broadcast_room_list("")
+		else:
+			GameLog.warn(
+				"NetClient",
+				"ClientHello profile update skipped %s err=%s %s"
+					% [_request_tag(peer_id, request_id), ur.error, _room_brief(room)]
+			)
 	send_room_list_to_peer(peer_id, "")
+	GameLog.info(
+		"NetClient",
+		"ClientHello accepted %s in_room=%s known_profiles=%d"
+			% [_request_tag(peer_id, request_id), str(room != null), _net._profile_by_peer_id.size()]
+	)
 
 func handle_rpc_list_rooms(request: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -141,6 +248,7 @@ func handle_rpc_list_rooms(request: Dictionary) -> void:
 
 	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
 	var request_id := str(request.get("request_id", ""))
+	GameLog.debug("NetClient", "RX ListRooms %s" % _request_tag(peer_id, request_id))
 	var profile: Dictionary = Dictionary(_net._profile_by_peer_id.get(peer_id, {}))
 	if profile.is_empty():
 		send_request_rejected(peer_id, request_id, "missing_client_hello", "ClientHello required before ListRooms")
@@ -157,11 +265,21 @@ func handle_rpc_create_room(request: Dictionary) -> void:
 	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
 	var request_id := str(request.get("request_id", ""))
 	var profile: Dictionary = Dictionary(_net._profile_by_peer_id.get(peer_id, {}))
+	var desired_player_count := int(request.get("desired_player_count", 0))
+	GameLog.info(
+		"NetClient",
+		"RX CreateRoom %s desired_player_count=%d has_password=%s keys=%s"
+			% [
+				_request_tag(peer_id, request_id),
+				desired_player_count,
+				str(not str(request.get("room_password", "")).is_empty()),
+				str(Array(request.keys()))
+			]
+	)
 	if profile.is_empty():
 		send_request_rejected(peer_id, request_id, "missing_client_hello", "ClientHello required before CreateRoom")
 		return
 
-	var desired_player_count := int(request.get("desired_player_count", 0))
 	if desired_player_count < Globals.MIN_PLAYERS or desired_player_count > Globals.MAX_PLAYERS:
 		send_request_rejected(peer_id, request_id, "invalid_player_count", "desired_player_count out of range")
 		return
@@ -242,6 +360,17 @@ func handle_rpc_create_room(request: Dictionary) -> void:
 
 	broadcast_room_state(room)
 	broadcast_room_list("")
+	GameLog.info(
+		"NetClient",
+		"CreateRoom success %s %s seed_mode=%s seed=%d modules=%d"
+			% [
+				_request_tag(peer_id, request_id),
+				_room_brief(room),
+				_safe_text(str(config.get("seed_mode", ""))),
+				int(config.get("seed", 0)),
+				Array(config.get("enabled_modules_v2", [])).size()
+			]
+	)
 
 func handle_rpc_join_room(request: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -252,11 +381,20 @@ func handle_rpc_join_room(request: Dictionary) -> void:
 	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
 	var request_id := str(request.get("request_id", ""))
 	var profile: Dictionary = Dictionary(_net._profile_by_peer_id.get(peer_id, {}))
+	var room_code := str(request.get("room_code", "")).strip_edges().to_upper()
+	GameLog.info(
+		"NetClient",
+		"RX JoinRoom %s room_code=%s has_password=%s"
+			% [
+				_request_tag(peer_id, request_id),
+				_safe_text(room_code),
+				str(not str(request.get("room_password", "")).is_empty())
+			]
+	)
 	if profile.is_empty():
 		send_request_rejected(peer_id, request_id, "missing_client_hello", "ClientHello required before JoinRoom")
 		return
 
-	var room_code := str(request.get("room_code", "")).strip_edges().to_upper()
 	var room_password := str(request.get("room_password", ""))
 
 	var jr = _net._room_manager.join_room(peer_id, profile, room_code, room_password)
@@ -269,8 +407,14 @@ func handle_rpc_join_room(request: Dictionary) -> void:
 		send_request_rejected(peer_id, request_id, "join_room_failed", "Missing room in result")
 		return
 
+	var role := str(Dictionary(jr.value).get("role", "player"))
 	broadcast_room_state(room)
 	broadcast_room_list("")
+	GameLog.info(
+		"NetClient",
+		"JoinRoom success %s role=%s %s"
+			% [_request_tag(peer_id, request_id), _safe_text(role), _room_brief(room)]
+	)
 	if str(room.status) == "InGame" and room.game_engine != null:
 		var payload := {
 			"player_id_by_peer_id": room.player_id_by_peer_id.duplicate(true),
@@ -282,6 +426,21 @@ func handle_rpc_join_room(request: Dictionary) -> void:
 			_net.rpc_id(peer_id, "rpc_resync_archive", {
 				"archive": Dictionary(archive_r.value).duplicate(true),
 			})
+			GameLog.warn(
+				"NetClient",
+				"JoinRoom in-game resync sent %s history_size=%d state_hash=%s"
+					% [
+						_request_tag(peer_id, request_id),
+						int(room.game_engine.command_history.size()),
+						_short_hash(str(room.game_engine.get_state().compute_hash() if room.game_engine.get_state() != null else ""))
+					]
+			)
+		else:
+			GameLog.error(
+				"NetClient",
+				"JoinRoom in-game archive create failed %s err=%s"
+					% [_request_tag(peer_id, request_id), archive_r.error]
+			)
 
 func handle_rpc_update_room_config(request: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -291,6 +450,15 @@ func handle_rpc_update_room_config(request: Dictionary) -> void:
 
 	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
 	var request_id := str(request.get("request_id", ""))
+	var patch_keys: Array = []
+	var patch_preview = request.get("config_patch", null)
+	if patch_preview is Dictionary:
+		patch_keys = Array(Dictionary(patch_preview).keys())
+	GameLog.debug(
+		"NetClient",
+		"RX UpdateRoomConfig %s patch_keys=%s"
+			% [_request_tag(peer_id, request_id), str(patch_keys)]
+	)
 	var room = _net._room_manager.get_room_by_peer(peer_id)
 	if room == null:
 		send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
@@ -391,6 +559,11 @@ func handle_rpc_update_room_config(request: Dictionary) -> void:
 
 	broadcast_room_state(room)
 	broadcast_room_list("")
+	GameLog.debug(
+		"NetClient",
+		"UpdateRoomConfig success %s %s patch_keys=%s"
+			% [_request_tag(peer_id, request_id), _room_brief(room), str(Array(patch.keys()))]
+	)
 
 func handle_rpc_leave_room(request: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -401,6 +574,7 @@ func handle_rpc_leave_room(request: Dictionary) -> void:
 	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
 	var request_id := str(request.get("request_id", ""))
 	var room = _net._room_manager.get_room_by_peer(peer_id)
+	GameLog.info("NetClient", "RX LeaveRoom %s %s" % [_request_tag(peer_id, request_id), _room_brief(room)])
 
 	var lr = _net._room_manager.leave_room(peer_id)
 	if not lr.ok:
@@ -413,6 +587,11 @@ func handle_rpc_leave_room(request: Dictionary) -> void:
 	broadcast_room_list("")
 
 	_net.rpc_id(peer_id, "rpc_room_state", empty_room_state())
+	GameLog.info(
+		"NetClient",
+		"LeaveRoom success %s removed=%s previous_room=%s"
+			% [_request_tag(peer_id, request_id), str(removed), _room_brief(room)]
+	)
 
 func handle_rpc_start_game(request: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -422,6 +601,7 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 
 	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
 	var request_id := str(request.get("request_id", ""))
+	GameLog.info("NetClient", "RX StartGame %s" % _request_tag(peer_id, request_id))
 	var room = _net._room_manager.get_room_by_peer(peer_id)
 	if room == null:
 		send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
@@ -446,6 +626,11 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 
 	for pid in room.get_peer_ids():
 		_net.rpc_id(int(pid), "rpc_game_started", payload)
+	GameLog.warn(
+		"NetClient",
+		"StartGame success %s %s mapped_players=%d"
+			% [_request_tag(peer_id, request_id), _room_brief(room), Dictionary(payload.get("player_id_by_peer_id", {})).size()]
+	)
 
 func handle_rpc_action_request(request: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -455,6 +640,14 @@ func handle_rpc_action_request(request: Dictionary) -> void:
 
 	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
 	var request_id := str(request.get("request_id", ""))
+	var action_id := str(request.get("action_id", "")).strip_edges()
+	var params_preview = request.get("params", null)
+	var params_keys: Array = Array(Dictionary(params_preview).keys()) if params_preview is Dictionary else []
+	GameLog.debug(
+		"NetClient",
+		"RX ActionRequest %s action=%s params_keys=%s"
+			% [_request_tag(peer_id, request_id), _safe_text(action_id), str(params_keys)]
+	)
 	var room = _net._room_manager.get_room_by_peer(peer_id)
 	if room == null:
 		send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
@@ -475,7 +668,6 @@ func handle_rpc_action_request(request: Dictionary) -> void:
 		send_request_rejected(peer_id, request_id, "actor_missing", "No player mapping for peer")
 		return
 
-	var action_id := str(request.get("action_id", "")).strip_edges()
 	if action_id.is_empty():
 		send_request_rejected(peer_id, request_id, "invalid_params", "action_id is empty")
 		return
@@ -495,6 +687,15 @@ func handle_rpc_action_request(request: Dictionary) -> void:
 		send_request_rejected(peer_id, request_id, "action_failed", r.error)
 		return
 
+	var state_hash := ""
+	var state_after = room.game_engine.get_state()
+	if state_after != null and state_after.has_method("compute_hash"):
+		state_hash = str(state_after.compute_hash())
+	GameLog.debug(
+		"NetClient",
+		"ActionRequest applied %s %s %s state_hash=%s"
+			% [_request_tag(peer_id, request_id), _command_brief(cmd), _room_brief(room), _short_hash(state_hash)]
+	)
 	broadcast_command_applied(room, cmd)
 	server_drain_forfeited_auto_steps(room)
 
@@ -505,6 +706,7 @@ func handle_rpc_resync_request(_request: Dictionary) -> void:
 		return
 
 	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
+	GameLog.warn("NetClient", "RX ResyncRequest peer=%d" % peer_id)
 	var room = _net._room_manager.get_room_by_peer(peer_id)
 	if room == null:
 		send_request_rejected(peer_id, "", "not_in_room", "Not in room")
@@ -524,6 +726,15 @@ func handle_rpc_resync_request(_request: Dictionary) -> void:
 	_net.rpc_id(peer_id, "rpc_resync_archive", {
 		"archive": Dictionary(archive_r.value).duplicate(true),
 	})
+	var state_hash := ""
+	var state = room.game_engine.get_state()
+	if state != null and state.has_method("compute_hash"):
+		state_hash = str(state.compute_hash())
+	GameLog.warn(
+		"NetClient",
+		"TX ResyncArchive peer=%d %s history_size=%d state_hash=%s"
+			% [peer_id, _room_brief(room), int(room.game_engine.command_history.size()), _short_hash(state_hash)]
+	)
 
 func handle_rpc_rewind_to_turn_start(request: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -533,6 +744,7 @@ func handle_rpc_rewind_to_turn_start(request: Dictionary) -> void:
 
 	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
 	var request_id := str(request.get("request_id", ""))
+	GameLog.warn("NetClient", "RX RewindToTurnStart %s" % _request_tag(peer_id, request_id))
 	var room = _net._room_manager.get_room_by_peer(peer_id)
 	if room == null:
 		send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
@@ -584,6 +796,20 @@ func handle_rpc_rewind_to_turn_start(request: Dictionary) -> void:
 		"state_hash": str(payload.get("state_hash", "")),
 		"noop": bool(payload.get("noop", false)),
 	}
+	GameLog.warn(
+		"NetClient",
+		"Rewind prepared %s actor=%d target=%d before=%d history=%d noop=%s state_hash=%s %s"
+			% [
+				_request_tag(peer_id, request_id),
+				actor_id,
+				int(out.get("target_index", -1)),
+				int(out.get("before_index", -1)),
+				int(out.get("history_size", -1)),
+				str(bool(out.get("noop", false))),
+				_short_hash(str(out.get("state_hash", ""))),
+				_room_brief(room)
+			]
+	)
 
 	# 广播元数据：各客户端本地 rewind + truncate，避免发送大 archive 导致 WebSocket buffer 溢出。
 	if room.has_method("get_peer_ids"):
@@ -612,8 +838,14 @@ func broadcast_command_applied(room, cmd) -> void:
 		"cmd": cmd.to_dict(),
 		"state_hash": state_hash,
 	}
-	for pid in room.get_peer_ids():
+	var targets := Array(room.get_peer_ids())
+	for pid in targets:
 		_net.rpc_id(int(pid), "rpc_command_applied", payload)
+	GameLog.debug(
+		"NetClient",
+		"TX CommandApplied %s state_hash=%s recipients=%d %s"
+			% [_command_brief(cmd), _short_hash(state_hash), targets.size(), _room_brief(room)]
+	)
 
 func server_is_player_forfeited(state, player_id: int) -> bool:
 	if state == null:
@@ -673,6 +905,7 @@ func server_try_auto_submit_forfeited_restructuring(room) -> bool:
 		if not exec_r.ok:
 			GameLog.error("NetClient", "auto submit_restructuring failed: %s" % exec_r.error)
 			return any
+		GameLog.debug("NetClient", "Auto submit_restructuring actor=%d %s" % [pid, _room_brief(room)])
 		broadcast_command_applied(room, cmd)
 		any = true
 	return any
@@ -716,6 +949,7 @@ func server_drain_forfeited_auto_steps(room) -> void:
 		if not exec_r2.ok:
 			GameLog.error("NetClient", "auto step failed: %s (action=%s)" % [exec_r2.error, str(cmd.action_id)])
 			return
+		GameLog.debug("NetClient", "Auto step executed %s %s" % [_command_brief(cmd), _room_brief(room)])
 		broadcast_command_applied(room, cmd)
 
 	GameLog.error("NetClient", "auto steps exceeded safety limit")
