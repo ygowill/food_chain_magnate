@@ -6,6 +6,7 @@ extends RefCounted
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 const GameTimelineLogEntriesBuilderClass = preload("res://ui/scenes/game/game_timeline_log_entries_builder.gd")
+const GameTimelineStepSeekHelpersClass = preload("res://ui/scenes/game/game_timeline_step_seek_helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 var _host: Control = null
@@ -614,39 +615,22 @@ func _seek_to_history_step(target_step_index: int) -> void:
 			_update_ui.call()
 		return
 
-	var state_dict: Dictionary = {}
-	var anchor_cmd := -1
-	if target < 0:
-		var init_val = _history_step_timeline.get("initial_state_dict", null)
-		if init_val is Dictionary:
-			state_dict = Dictionary(init_val)
-	else:
-		if target >= steps.size():
-			return
-		var step_val = steps[target]
-		if step_val is Dictionary:
-			var step: Dictionary = step_val
-			anchor_cmd = int(step.get("anchor_command_index", -1))
-			var sd_val = step.get("state_dict", null)
-			if sd_val is Dictionary:
-				state_dict = Dictionary(sd_val)
-
-	if state_dict.is_empty():
-		GameLog.warn("Game", "复盘 step seek 失败：缺少 state 快照: step=%d" % target)
-		return
-
-	var restore_r := GameState.from_dict(state_dict)
+	var restore_r: Result = GameTimelineStepSeekHelpersClass.restore_state_from_step_timeline(_history_step_timeline, steps, target)
 	if not restore_r.ok:
-		GameLog.warn("Game", "复盘 step seek 失败：恢复 state 失败: %s" % restore_r.error)
+		GameLog.warn("Game", "复盘 step seek 失败：%s" % restore_r.error)
 		return
-	var restored: GameState = restore_r.value
+	if not (restore_r.value is Dictionary):
+		GameLog.warn("Game", "复盘 step seek 失败：内部错误（返回类型错误）")
+		return
+	var info: Dictionary = restore_r.value
+	var restored: GameState = info.get("state", null)
 	if restored == null:
 		GameLog.warn("Game", "复盘 step seek 失败：恢复 state 为空")
 		return
 
 	# 复盘态：允许用 step 快照覆盖 state；动作面板仍保持禁用，避免产生新分支。
 	engine.state = restored
-	engine.current_command_index = anchor_cmd
+	engine.current_command_index = int(info.get("anchor_command_index", -1))
 	_history_cursor_step_index = target
 
 	_force_full_panel_sync_next_update = true
@@ -682,39 +666,22 @@ func _seek_to_replay_step(target_step_index: int) -> void:
 			_update_ui.call()
 		return
 
-	var state_dict: Dictionary = {}
-	var anchor_cmd := -1
-	if target < 0:
-		var init_val = _replay_step_timeline.get("initial_state_dict", null)
-		if init_val is Dictionary:
-			state_dict = Dictionary(init_val)
-	else:
-		if target >= steps.size():
-			return
-		var step_val = steps[target]
-		if step_val is Dictionary:
-			var step: Dictionary = step_val
-			anchor_cmd = int(step.get("anchor_command_index", -1))
-			var sd_val = step.get("state_dict", null)
-			if sd_val is Dictionary:
-				state_dict = Dictionary(sd_val)
-
-	if state_dict.is_empty():
-		GameLog.warn("Game", "回放 step seek 失败：缺少 state 快照: step=%d" % target)
-		return
-
-	var restore_r := GameState.from_dict(state_dict)
+	var restore_r: Result = GameTimelineStepSeekHelpersClass.restore_state_from_step_timeline(_replay_step_timeline, steps, target)
 	if not restore_r.ok:
-		GameLog.warn("Game", "回放 step seek 失败：恢复 state 失败: %s" % restore_r.error)
+		GameLog.warn("Game", "回放 step seek 失败：%s" % restore_r.error)
 		return
-	var restored: GameState = restore_r.value
+	if not (restore_r.value is Dictionary):
+		GameLog.warn("Game", "回放 step seek 失败：内部错误（返回类型错误）")
+		return
+	var info: Dictionary = restore_r.value
+	var restored: GameState = info.get("state", null)
 	if restored == null:
 		GameLog.warn("Game", "回放 step seek 失败：恢复 state 为空")
 		return
 
 	# 只读回放：允许直接覆盖 state（不改写 command_history/checkpoints）。
 	engine.state = restored
-	engine.current_command_index = anchor_cmd
+	engine.current_command_index = int(info.get("anchor_command_index", -1))
 	_replay_cursor_step_index = target
 
 	_force_full_panel_sync_next_update = true
