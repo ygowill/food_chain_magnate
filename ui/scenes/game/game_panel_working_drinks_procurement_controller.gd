@@ -6,17 +6,18 @@ extends RefCounted
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DrinksProcurementClass = preload("res://core/rules/drinks_procurement.gd")
 const TileRouteUtilsClass = preload("res://core/rules/drinks_procurement/tile_route_utils.gd")
-const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
-const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const AirHelpersClass = preload("res://ui/scenes/game/game_panel_working_drinks_procurement_air_helpers.gd")
 const HoverPreviewControllerClass = preload("res://ui/scenes/game/game_panel_working_drinks_procurement_hover_preview_controller.gd")
+const RoadHelpersClass = preload("res://ui/scenes/game/game_panel_working_drinks_procurement_road_helpers.gd")
+const RestaurantChoiceControllerClass = preload("res://ui/scenes/game/game_panel_working_drinks_procurement_restaurant_choice_controller.gd")
 
 var _scene = null
 var _map_controller = null
 var _overlay_controller = null
 var _hover_preview_controller = null
+var _restaurant_choice_controller = null
 
 var production_panel = null
 
@@ -37,6 +38,8 @@ func _init(scene, map_controller, overlay_controller) -> void:
 	_overlay_controller = overlay_controller
 	_hover_preview_controller = HoverPreviewControllerClass.new()
 	_hover_preview_controller.setup(self)
+	_restaurant_choice_controller = RestaurantChoiceControllerClass.new()
+	_restaurant_choice_controller.setup(self)
 
 	if _map_controller != null and _map_controller.has_signal("procure_drinks_source_selected"):
 		var sig := Signal(_map_controller, &"procure_drinks_source_selected")
@@ -372,7 +375,7 @@ func _validate_road_procure_sources_after_adding(state: GameState, emp_def: Empl
 		candidate_sources.append(p)
 	candidate_sources.append(new_source_world_pos)
 
-	var route_r := _build_road_route(state, entrance_pos, candidate_sources)
+	var route_r := RoadHelpersClass.build_road_route(state, entrance_pos, candidate_sources)
 	if not route_r.ok:
 		return route_r
 	var route: Array[Vector2i] = route_r.value
@@ -409,66 +412,6 @@ func _on_procure_drinks_start_restaurant_hovered(restaurant_id: String) -> void:
 		return
 	if _hover_preview_controller != null and is_instance_valid(_hover_preview_controller):
 		_hover_preview_controller.set_hover_start_restaurant_id(state, str(restaurant_id))
-
-func _build_road_procure_preview_plan(
-	state: GameState,
-	emp_def: EmployeeDef,
-	restaurant_id: String,
-	selected_sources: Array[Vector2i]
-) -> Result:
-	if state == null:
-		return Result.failure("state 为空")
-	if emp_def == null:
-		return Result.failure("员工缺失")
-	var player_id := state.get_current_player_id()
-	var restaurant_ids := StructuresClass.get_player_restaurants(state, player_id)
-	if restaurant_ids.is_empty() or not restaurant_ids.has(restaurant_id):
-		return Result.failure("餐厅不存在或不属于当前玩家: %s" % restaurant_id)
-
-	var restaurants_val = state.map.get("restaurants", null)
-	if not (restaurants_val is Dictionary):
-		return Result.failure("state.map.restaurants 缺失或类型错误")
-	var restaurants: Dictionary = restaurants_val
-	if not restaurants.has(restaurant_id) or not (restaurants[restaurant_id] is Dictionary):
-		return Result.failure("餐厅不存在: %s" % restaurant_id)
-	var rest: Dictionary = restaurants[restaurant_id]
-	var ep = rest.get("entrance_pos", null)
-	if not (ep is Vector2i):
-		return Result.failure("无法解析餐厅入口位置: %s" % restaurant_id)
-	var entrance_pos: Vector2i = Vector2i(ep)
-
-	var road_r := _build_road_route(state, entrance_pos, selected_sources)
-	if not road_r.ok:
-		return road_r
-	var route: Array[Vector2i] = road_r.value
-
-	var cmd := Command.create("procure_drinks", player_id, {
-		"employee_type": _procure_selected_employee_type,
-		"restaurant_id": restaurant_id,
-		"route": DrinksProcurementClass.serialize_route(route),
-		"selected_sources": DrinksProcurementClass.serialize_route(selected_sources)
-	})
-	return DrinksProcurementClass.resolve_procurement_plan(state, cmd, restaurant_ids, emp_def)
-
-func _get_road_procure_max_distance(state: GameState, emp_def: EmployeeDef) -> int:
-	if emp_def == null:
-		return 0
-	var max_dist := int(emp_def.range_value)
-	if state == null:
-		return max_dist
-	var bonus_read := DrinksProcurementClass._get_distance_range_bonus_from_milestones(
-		state, state.get_current_player_id(), str(emp_def.id)
-	)
-	if bonus_read.ok:
-		max_dist += int(bonus_read.value)
-	return max_dist
-
-func _count_road_boundary_crossings(route: Array[Vector2i]) -> int:
-	var count := 0
-	for i in range(1, route.size()):
-		if MapUtils.crosses_tile_boundary(route[i - 1], route[i]):
-			count += 1
-	return count
 
 func _recompute_procurement_plan(state: GameState) -> void:
 	_procure_error = ""
@@ -608,7 +551,7 @@ func _recompute_procurement_plan(state: GameState) -> void:
 				production_panel.set_drinks_procurement_state(selected_count, false, _procure_error)
 			return
 	else:
-		var road_r := _build_road_route(state, entrance_pos, _procure_selected_sources)
+		var road_r := RoadHelpersClass.build_road_route(state, entrance_pos, _procure_selected_sources)
 		if not road_r.ok:
 			_procure_error = road_r.error
 			hide_procurement_route_overlay()
@@ -679,89 +622,6 @@ func _recompute_procurement_plan(state: GameState) -> void:
 
 	if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
 		production_panel.set_drinks_procurement_state(selected_count, true, "")
-
-func _build_road_route(state: GameState, entrance_pos: Vector2i, sources: Array[Vector2i]) -> Result:
-	var road_graph = RoadGraphCacheClass.get_road_graph(state)
-	if road_graph == null:
-		return Result.failure("道路图未初始化")
-
-	var start_candidates_r := RangeUtilsClass.get_adjacent_road_cells(state, entrance_pos)
-	if not start_candidates_r.ok:
-		return start_candidates_r
-	var start_candidates: Array[Vector2i] = start_candidates_r.value
-	if start_candidates.is_empty():
-		return Result.failure("餐厅入口未邻接道路")
-
-	var route: Array[Vector2i] = []
-	var current_pos: Vector2i = Vector2i.ZERO
-
-	for src in sources:
-		var end_candidates_r := RangeUtilsClass.get_adjacent_road_cells(state, src)
-		if not end_candidates_r.ok:
-			return end_candidates_r
-		var end_candidates: Array[Vector2i] = end_candidates_r.value
-		if end_candidates.is_empty():
-			return Result.failure("饮料源未邻接道路: %s" % str(src))
-
-		var best_path: Array[Vector2i] = []
-		var best_dist := INF
-		var best_steps := INF
-
-		if route.is_empty():
-			for from_cell in start_candidates:
-				for to_cell in end_candidates:
-					var sp_r = road_graph.find_shortest_path(from_cell, to_cell)
-					if not sp_r.ok:
-						continue
-					var sp: Dictionary = sp_r.value
-					var d: int = int(sp.get("distance", INF))
-					var steps: int = int(sp.get("steps", INF))
-					var path_val = sp.get("path", null)
-					if not (path_val is Array):
-						continue
-					var path: Array = path_val
-					if d < best_dist or (d == best_dist and steps < best_steps):
-						best_dist = d
-						best_steps = steps
-						best_path = []
-						for p in path:
-							if p is Vector2i:
-								best_path.append(p)
-
-			if best_path.is_empty():
-				return Result.failure("找不到到饮料源的道路路径: %s" % str(src))
-			route = best_path
-			current_pos = route[route.size() - 1]
-			continue
-
-		for to_cell2 in end_candidates:
-			var sp_r2 = road_graph.find_shortest_path(current_pos, to_cell2)
-			if not sp_r2.ok:
-				continue
-			var sp2: Dictionary = sp_r2.value
-			var d2: int = int(sp2.get("distance", INF))
-			var steps2: int = int(sp2.get("steps", INF))
-			var path_val2 = sp2.get("path", null)
-			if not (path_val2 is Array):
-				continue
-			var path2: Array = path_val2
-			if d2 < best_dist or (d2 == best_dist and steps2 < best_steps):
-				best_dist = d2
-				best_steps = steps2
-				best_path = []
-				for p in path2:
-					if p is Vector2i:
-						best_path.append(p)
-
-		if best_path.is_empty():
-			return Result.failure("找不到到饮料源的道路路径: %s" % str(src))
-
-		# 拼接（避免重复 current_pos）
-		for j in range(1, best_path.size()):
-			route.append(best_path[j])
-		current_pos = route[route.size() - 1]
-
-	return Result.success(route)
 
 func _show_air_procure_start_tiles_overlay(state: GameState) -> void:
 	if state == null:
@@ -892,97 +752,9 @@ func _get_restaurant_cells(state: GameState, restaurant_id: String) -> Array[Vec
 	return out
 
 func _clear_procure_restaurant_choice_ui_and_overlays() -> void:
-	var canvas = _get_map_canvas()
-	if canvas != null and canvas.has_method("clear_procure_drinks_restaurant_indices"):
-		canvas.call("clear_procure_drinks_restaurant_indices")
-	elif canvas != null and canvas.has_method("clear_procure_drinks_selected_restaurant_anchor"):
-		canvas.call("clear_procure_drinks_selected_restaurant_anchor")
-	if canvas != null and canvas.has_method("clear_procure_drinks_hovered_restaurant_anchor"):
-		canvas.call("clear_procure_drinks_hovered_restaurant_anchor")
-
-	if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procure_restaurants"):
-		var empty: Array[Dictionary] = []
-		production_panel.set_drinks_procure_restaurants(empty, "", false)
-	if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_hover_preview_text"):
-		production_panel.call("set_drinks_hover_preview_text", "")
-
-	_procure_hover_start_restaurant_id = ""
-	_procure_hover_preview_active = false
+	if _restaurant_choice_controller != null and is_instance_valid(_restaurant_choice_controller):
+		_restaurant_choice_controller.clear_ui_and_overlays()
 
 func _sync_procure_restaurant_choice_ui_and_overlays(state: GameState) -> void:
-	if state == null:
-		return
-	if _procure_selected_employee_type.is_empty() or _procure_selected_employee_type == "errand_boy":
-		return
-
-	var player_id := state.get_current_player_id()
-	var restaurant_ids := StructuresClass.get_player_restaurants(state, player_id)
-	if restaurant_ids.is_empty():
-		return
-	restaurant_ids.sort()
-
-	var restaurants_val = state.map.get("restaurants", null)
-	if not (restaurants_val is Dictionary):
-		return
-	var restaurants: Dictionary = restaurants_val
-
-	var index_by_id: Dictionary = {}
-	for i in range(restaurant_ids.size()):
-		index_by_id[str(restaurant_ids[i])] = i + 1
-
-	var options: Array[Dictionary] = []
-	var index_by_anchor: Dictionary = {}
-	for rid in restaurant_ids:
-		if not restaurants.has(rid):
-			continue
-		var rest_val = restaurants[rid]
-		if not (rest_val is Dictionary):
-			continue
-		var rest: Dictionary = rest_val
-		var idx := int(index_by_id.get(rid, options.size() + 1))
-		var ep = rest.get("entrance_pos", null)
-		var entrance_pos: Vector2i = Vector2i(-1, -1)
-		if ep is Vector2i:
-			entrance_pos = Vector2i(ep)
-
-		var label := "餐厅 %d" % idx
-		if entrance_pos != Vector2i(-1, -1):
-			label = "餐厅 %d @ (%d,%d)" % [idx, entrance_pos.x, entrance_pos.y]
-		options.append({"id": rid, "label": label})
-
-		if restaurant_ids.size() > 1 and entrance_pos != Vector2i(-1, -1):
-			index_by_anchor[entrance_pos] = idx
-
-	var is_air := _is_air_procure_employee_type(_procure_selected_employee_type)
-	var require_selection := is_air and restaurant_ids.size() > 1
-
-	var selected_id := str(_procure_selected_start_restaurant_id).strip_edges()
-	if selected_id.is_empty() and is_air:
-		selected_id = str(_procure_air_start_restaurant_id).strip_edges()
-	if selected_id.is_empty() and (not is_air):
-		selected_id = str(restaurant_ids[0]).strip_edges()
-		_procure_selected_start_restaurant_id = selected_id
-
-	if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procure_restaurants"):
-		production_panel.set_drinks_procure_restaurants(options, selected_id, require_selection)
-
-	var canvas = _get_map_canvas()
-	if canvas != null:
-		if canvas.has_method("set_procure_drinks_restaurant_indices"):
-			if restaurant_ids.size() > 1:
-				canvas.call("set_procure_drinks_restaurant_indices", index_by_anchor)
-			elif canvas.has_method("clear_procure_drinks_restaurant_indices"):
-				canvas.call("clear_procure_drinks_restaurant_indices")
-
-		var selected_anchor := Vector2i(-1, -1)
-		if not selected_id.is_empty() and restaurants.has(selected_id) and (restaurants[selected_id] is Dictionary):
-			var rest2: Dictionary = restaurants[selected_id]
-			var ep2 = rest2.get("entrance_pos", null)
-			if ep2 is Vector2i:
-				selected_anchor = Vector2i(ep2)
-
-		if canvas.has_method("set_procure_drinks_selected_restaurant_anchor"):
-			if selected_anchor != Vector2i(-1, -1):
-				canvas.call("set_procure_drinks_selected_restaurant_anchor", selected_anchor)
-			elif canvas.has_method("clear_procure_drinks_selected_restaurant_anchor"):
-				canvas.call("clear_procure_drinks_selected_restaurant_anchor")
+	if _restaurant_choice_controller != null and is_instance_valid(_restaurant_choice_controller):
+		_restaurant_choice_controller.sync_ui_and_overlays(state)

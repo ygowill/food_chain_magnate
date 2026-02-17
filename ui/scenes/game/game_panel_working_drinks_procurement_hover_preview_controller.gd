@@ -4,6 +4,7 @@ extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
+const RoadHelpersClass = preload("res://ui/scenes/game/game_panel_working_drinks_procurement_road_helpers.gd")
 
 var _controller_ref: WeakRef = null
 
@@ -123,7 +124,7 @@ func apply_hover_preview(state: GameState, restore_selected_overlay_when_clearin
 			if p is Vector2i:
 				sources.append(Vector2i(p))
 
-	var preview_r = c._build_road_procure_preview_plan(state, emp_def, hover_id, sources)
+	var preview_r = RoadHelpersClass.build_road_procure_preview_plan(state, emp_def, str(c._procure_selected_employee_type), hover_id, sources)
 	if not preview_r.ok:
 		set_hover_preview_text("预览：%s" % preview_r.error)
 		if bool(c._procure_hover_preview_active) and restore_selected_overlay_when_clearing:
@@ -165,8 +166,8 @@ func apply_hover_preview(state: GameState, restore_selected_overlay_when_clearin
 			if wp is Vector2i:
 				picked_sources_pos.append(Vector2i(wp))
 
-	var used := int(c._count_road_boundary_crossings(route))
-	var max_dist := int(c._get_road_procure_max_distance(state, emp_def))
+	var used := RoadHelpersClass.count_road_boundary_crossings(route)
+	var max_dist := RoadHelpersClass.get_road_procure_max_distance(state, emp_def)
 	var hover_idx := 0
 	var restaurant_ids := StructuresClass.get_player_restaurants(state, state.get_current_player_id())
 	restaurant_ids.sort()
