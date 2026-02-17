@@ -186,44 +186,13 @@ func take_pending_resync_archive() -> Dictionary:
 
 @rpc("any_peer", "reliable")
 func rpc_client_hello(request: Dictionary) -> void:
-	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
-		return
-
-	var peer_id := multiplayer.get_remote_sender_id()
-	var request_id := str(request.get("request_id", ""))
-	var protocol_version := int(request.get("protocol_version", 0))
-	if protocol_version != NetContext.PROTOCOL_VERSION:
-		_send_request_rejected(peer_id, request_id, "protocol_version_mismatch", "Protocol version mismatch")
-		return
-
-	var profile: Dictionary = Dictionary(request.get("player_profile", {}))
-	_profile_by_peer_id[peer_id] = {
-		"name": str(profile.get("name", "玩家")),
-		"color_index": int(profile.get("color_index", 0)),
-	}
-	# 允许已在房间中的客户端更新自己的 profile（昵称/颜色）。
-	# 重要：不新增 @rpc 方法，避免 dedicated server 与客户端版本不一致时触发 checksum mismatch。
-	var room = _room_manager.get_room_by_peer(peer_id) if _room_manager != null else null
-	if room != null and room.has_method("update_peer_profile"):
-		var ur = room.update_peer_profile(peer_id, Dictionary(_profile_by_peer_id[peer_id]))
-		if ur.ok:
-			_broadcast_room_state(room)
-			_broadcast_room_list("")
-	_send_room_list_to_peer(peer_id, "")
+	_ensure_internal()
+	_internal.handle_rpc_client_hello(request)
 
 @rpc("any_peer", "reliable")
 func rpc_list_rooms(request: Dictionary) -> void:
-	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
-		return
-
-	var peer_id := multiplayer.get_remote_sender_id()
-	var request_id := str(request.get("request_id", ""))
-	var profile: Dictionary = Dictionary(_profile_by_peer_id.get(peer_id, {}))
-	if profile.is_empty():
-		_send_request_rejected(peer_id, request_id, "missing_client_hello", "ClientHello required before ListRooms")
-		return
-
-	_send_room_list_to_peer(peer_id, request_id)
+	_ensure_internal()
+	_internal.handle_rpc_list_rooms(request)
 
 @rpc("any_peer", "reliable")
 func rpc_create_room(request: Dictionary) -> void:
@@ -232,461 +201,68 @@ func rpc_create_room(request: Dictionary) -> void:
 
 @rpc("any_peer", "reliable")
 func rpc_join_room(request: Dictionary) -> void:
-	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
-		return
-
-	var peer_id := multiplayer.get_remote_sender_id()
-	var request_id := str(request.get("request_id", ""))
-	var profile: Dictionary = Dictionary(_profile_by_peer_id.get(peer_id, {}))
-	if profile.is_empty():
-		_send_request_rejected(peer_id, request_id, "missing_client_hello", "ClientHello required before JoinRoom")
-		return
-
-	var room_code := str(request.get("room_code", "")).strip_edges().to_upper()
-	var room_password := str(request.get("room_password", ""))
-
-	var jr = _room_manager.join_room(peer_id, profile, room_code, room_password)
-	if not jr.ok:
-		_send_request_rejected(peer_id, request_id, "join_room_failed", jr.error)
-		return
-
-	var room = Dictionary(jr.value).get("room", null)
-	if room == null:
-		_send_request_rejected(peer_id, request_id, "join_room_failed", "Missing room in result")
-		return
-
-	_broadcast_room_state(room)
-	_broadcast_room_list("")
-	if str(room.status) == "InGame" and room.game_engine != null:
-		var payload := {
-			"player_id_by_peer_id": room.player_id_by_peer_id.duplicate(true),
-			"config": room.config.duplicate(true),
-		}
-		rpc_id(peer_id, "rpc_game_started", payload)
-		var archive_r = room.game_engine.create_archive()
-		if archive_r.ok:
-			rpc_id(peer_id, "rpc_resync_archive", {
-				"archive": Dictionary(archive_r.value).duplicate(true),
-			})
+	_ensure_internal()
+	_internal.handle_rpc_join_room(request)
 
 @rpc("any_peer", "reliable")
 func rpc_update_room_config(request: Dictionary) -> void:
-	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
-		return
-
-	var peer_id := multiplayer.get_remote_sender_id()
-	var request_id := str(request.get("request_id", ""))
-	var room = _room_manager.get_room_by_peer(peer_id)
-	if room == null:
-		_send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
-		return
-	if int(room.host_peer_id) != int(peer_id):
-		_send_request_rejected(peer_id, request_id, "not_host", "Only host can update config")
-		return
-
-	var patch_raw = request.get("config_patch", null)
-	if not (patch_raw is Dictionary):
-		_send_request_rejected(peer_id, request_id, "invalid_params", "config_patch must be Dictionary")
-		return
-	var patch: Dictionary = Dictionary(patch_raw)
-
-	if patch.has("desired_player_count"):
-		var v = patch.get("desired_player_count", null)
-		if not (v is int or v is float):
-			_send_request_rejected(peer_id, request_id, "invalid_params", "desired_player_count must be int")
-			return
-		var n := int(v)
-		if n < Globals.MIN_PLAYERS or n > Globals.MAX_PLAYERS:
-			_send_request_rejected(peer_id, request_id, "invalid_params", "desired_player_count out of range")
-			return
-		if n < int(room.get_player_count()):
-			_send_request_rejected(peer_id, request_id, "invalid_params", "desired_player_count < current players")
-			return
-		patch["desired_player_count"] = n
-
-	if patch.has("seed_mode"):
-		var sm := str(patch.get("seed_mode", "")).strip_edges()
-		if sm != "random" and sm != "fixed":
-			_send_request_rejected(peer_id, request_id, "invalid_params", "seed_mode must be 'random' or 'fixed'")
-			return
-		patch["seed_mode"] = sm
-
-	if patch.has("seed"):
-		var sv = patch.get("seed", null)
-		if not (sv is int or sv is float):
-			_send_request_rejected(peer_id, request_id, "invalid_params", "seed must be int")
-			return
-		patch["seed"] = int(sv)
-
-	if patch.has("allow_spectators"):
-		var av = patch.get("allow_spectators", null)
-		if not (av is bool):
-			_send_request_rejected(peer_id, request_id, "invalid_params", "allow_spectators must be bool")
-			return
-		patch["allow_spectators"] = bool(av)
-
-	if patch.has("enabled_modules_v2"):
-		var mv = patch.get("enabled_modules_v2", null)
-		if not (mv is Array):
-			_send_request_rejected(peer_id, request_id, "invalid_params", "enabled_modules_v2 must be Array")
-			return
-		var mods: Array[String] = []
-		for it in Array(mv):
-			var s := str(it).strip_edges()
-			if s.is_empty():
-				continue
-			mods.append(s)
-		patch["enabled_modules_v2"] = mods
-
-	if patch.has("modules_v2_base_dir"):
-		var bd := str(patch.get("modules_v2_base_dir", "")).strip_edges()
-		if bd.is_empty():
-			_send_request_rejected(peer_id, request_id, "invalid_params", "modules_v2_base_dir is empty")
-			return
-		var bd_read := ModuleDirSpecClass.parse_base_dirs(bd)
-		if not bd_read.ok:
-			_send_request_rejected(peer_id, request_id, "invalid_params", "modules_v2_base_dir must use res:// paths")
-			return
-		patch["modules_v2_base_dir"] = bd
-
-	# seed_mode=random：保持一个 server 选定的 seed（不在 StartGame 时再重掷），便于大厅展示/复现。
-	var old_seed_mode := str(room.config.get("seed_mode", "random")).strip_edges()
-	var new_seed_mode := old_seed_mode
-	if patch.has("seed_mode"):
-		new_seed_mode = str(patch.get("seed_mode", "random")).strip_edges()
-
-	if new_seed_mode == "fixed":
-		if not patch.has("seed"):
-			_send_request_rejected(peer_id, request_id, "invalid_params", "seed required when seed_mode=fixed")
-			return
-	elif new_seed_mode == "random":
-		var seed_cur := int(room.config.get("seed", 0))
-		if old_seed_mode != "random":
-			seed_cur = 0
-		if seed_cur <= 0:
-			var rng := RandomNumberGenerator.new()
-			rng.randomize()
-			seed_cur = int(rng.randi())
-		patch["seed"] = seed_cur
-
-	var ur = room.update_config(patch)
-	if not ur.ok:
-		_send_request_rejected(peer_id, request_id, "update_config_failed", ur.error)
-		return
-
-	_broadcast_room_state(room)
-	_broadcast_room_list("")
+	_ensure_internal()
+	_internal.handle_rpc_update_room_config(request)
 
 @rpc("any_peer", "reliable")
 func rpc_leave_room(request: Dictionary) -> void:
-	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
-		return
-
-	var peer_id := multiplayer.get_remote_sender_id()
-	var request_id := str(request.get("request_id", ""))
-	var room = _room_manager.get_room_by_peer(peer_id)
-
-	var lr = _room_manager.leave_room(peer_id)
-	if not lr.ok:
-		_send_request_rejected(peer_id, request_id, "leave_room_failed", lr.error)
-		return
-
-	var removed := bool(lr.value.get("removed", false))
-	if room != null and not removed:
-		_broadcast_room_state(room)
-	_broadcast_room_list("")
-
-	rpc_id(peer_id, "rpc_room_state", _empty_room_state())
+	_ensure_internal()
+	_internal.handle_rpc_leave_room(request)
 
 @rpc("any_peer", "reliable")
 func rpc_start_game(request: Dictionary) -> void:
-	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
-		return
-
-	var peer_id := multiplayer.get_remote_sender_id()
-	var request_id := str(request.get("request_id", ""))
-	var room = _room_manager.get_room_by_peer(peer_id)
-	if room == null:
-		_send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
-		return
-	if int(room.host_peer_id) != int(peer_id):
-		_send_request_rejected(peer_id, request_id, "not_host", "Only host can start game")
-		return
-
-	var sr = room.start_game()
-	if not sr.ok:
-		_send_request_rejected(peer_id, request_id, "start_game_failed", sr.error)
-		return
-
-	_broadcast_room_state(room)
-	_broadcast_room_list("")
-
-	var payload_val: Dictionary = Dictionary(sr.value)
-	var payload := {
-		"player_id_by_peer_id": Dictionary(payload_val.get("player_id_by_peer_id", {})),
-		"config": Dictionary(payload_val.get("config", {})),
-	}
-
-	for pid in room.get_peer_ids():
-		rpc_id(int(pid), "rpc_game_started", payload)
+	_ensure_internal()
+	_internal.handle_rpc_start_game(request)
 
 @rpc("any_peer", "reliable")
 func rpc_action_request(request: Dictionary) -> void:
-	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
-		return
-
-	var peer_id := multiplayer.get_remote_sender_id()
-	var request_id := str(request.get("request_id", ""))
-	var room = _room_manager.get_room_by_peer(peer_id)
-	if room == null:
-		_send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
-		return
-	if str(room.status) != "InGame":
-		_send_request_rejected(peer_id, request_id, "not_in_game", "Room not in game")
-		return
-	if room.game_engine == null:
-		_send_request_rejected(peer_id, request_id, "engine_missing", "Room engine missing")
-		return
-
-	var actor_id := -1
-	if room.player_id_by_peer_id.has(peer_id):
-		actor_id = int(room.player_id_by_peer_id.get(peer_id, -1))
-	elif room.player_id_by_peer_id.has(str(peer_id)):
-		actor_id = int(room.player_id_by_peer_id.get(str(peer_id), -1))
-	if actor_id < 0:
-		_send_request_rejected(peer_id, request_id, "actor_missing", "No player mapping for peer")
-		return
-
-	var action_id := str(request.get("action_id", "")).strip_edges()
-	if action_id.is_empty():
-		_send_request_rejected(peer_id, request_id, "invalid_params", "action_id is empty")
-		return
-	var params_val = request.get("params", null)
-	var params: Dictionary = {}
-	if params_val is Dictionary:
-		params = Dictionary(params_val)
-
-	var state = room.game_engine.get_state()
-	if _server_is_player_forfeited(state, actor_id):
-		_send_request_rejected(peer_id, request_id, "forfeited_readonly", "Player has forfeited (spectator, read-only)")
-		return
-
-	var cmd = CommandClass.create(action_id, actor_id, params)
-	var r = room.game_engine.execute_command(cmd)
-	if not r.ok:
-		_send_request_rejected(peer_id, request_id, "action_failed", r.error)
-		return
-
-	_broadcast_command_applied(room, cmd)
-	_server_drain_forfeited_auto_steps(room)
+	_ensure_internal()
+	_internal.handle_rpc_action_request(request)
 
 @rpc("any_peer", "reliable")
 func rpc_resync_request(_request: Dictionary) -> void:
-	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
-		return
-
-	var peer_id := multiplayer.get_remote_sender_id()
-	var room = _room_manager.get_room_by_peer(peer_id)
-	if room == null:
-		_send_request_rejected(peer_id, "", "not_in_room", "Not in room")
-		return
-	if str(room.status) != "InGame":
-		_send_request_rejected(peer_id, "", "not_in_game", "Room not in game")
-		return
-	if room.game_engine == null:
-		_send_request_rejected(peer_id, "", "engine_missing", "Room engine missing")
-		return
-
-	var archive_r = room.game_engine.create_archive()
-	if not archive_r.ok:
-		_send_request_rejected(peer_id, "", "resync_failed", archive_r.error)
-		return
-
-	rpc_id(peer_id, "rpc_resync_archive", {
-		"archive": Dictionary(archive_r.value).duplicate(true),
-	})
+	_ensure_internal()
+	_internal.handle_rpc_resync_request(_request)
 
 @rpc("any_peer", "reliable")
 func rpc_rewind_to_turn_start(request: Dictionary) -> void:
-	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
-		return
-
-	var peer_id := multiplayer.get_remote_sender_id()
-	var request_id := str(request.get("request_id", ""))
-	var room = _room_manager.get_room_by_peer(peer_id)
-	if room == null:
-		_send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
-		return
-	if str(room.status) != "InGame":
-		_send_request_rejected(peer_id, request_id, "not_in_game", "Room not in game")
-		return
-	if room.game_engine == null:
-		_send_request_rejected(peer_id, request_id, "engine_missing", "Room engine missing")
-		return
-
-	# Spectator：只读，不允许发起回退（避免影响对局）
-	var actor_id := -1
-	if room.player_id_by_peer_id.has(peer_id):
-		actor_id = int(room.player_id_by_peer_id.get(peer_id, -1))
-	elif room.player_id_by_peer_id.has(str(peer_id)):
-		actor_id = int(room.player_id_by_peer_id.get(str(peer_id), -1))
-	if actor_id < 0:
-		_send_request_rejected(peer_id, request_id, "spectator_readonly", "Spectator cannot request rewind")
-		return
-
-	# 仅允许“当前玩家”发起回退（避免旁观/非当前回合玩家影响对局）。
-	var state = room.game_engine.get_state()
-	if state == null:
-		_send_request_rejected(peer_id, request_id, "state_missing", "Room state missing")
-		return
-	if str(state.phase) != DefsClass.PHASE_RESTRUCTURING and int(state.get_current_player_id()) != actor_id:
-		_send_request_rejected(peer_id, request_id, "not_current_player", "Only current player can request rewind")
-		return
-
-	if not room.has_method("rewind_to_current_player_turn_start"):
-		_send_request_rejected(peer_id, request_id, "not_supported", "Room does not support rewind")
-		return
-
-	var rr = room.rewind_to_current_player_turn_start(false)
-	if not rr.ok:
-		_send_request_rejected(peer_id, request_id, "rewind_failed", rr.error)
-		return
-	if not (rr.value is Dictionary):
-		_send_request_rejected(peer_id, request_id, "rewind_failed", "rewind result type invalid")
-		return
-
-	var payload: Dictionary = Dictionary(rr.value)
-	var out := {
-		"request_id": request_id,
-		"target_index": int(payload.get("target_index", -1)),
-		"before_index": int(payload.get("before_index", payload.get("current_index", -1))),
-		"history_size": int(payload.get("history_size", -1)),
-		"state_hash": str(payload.get("state_hash", "")),
-		"noop": bool(payload.get("noop", false)),
-	}
-
-	# 广播元数据：各客户端本地 rewind + truncate，避免发送大 archive 导致 WebSocket buffer 溢出。
-	if room.has_method("get_peer_ids"):
-		for pid in Array(room.get_peer_ids()):
-			var target_peer_id := int(pid)
-			if target_peer_id <= 0:
-				continue
-			rpc_id(target_peer_id, "rpc_resync_archive", {"archive": {"_rewind_to_turn_start": out}})
-	else:
-		rpc_id(peer_id, "rpc_resync_archive", {"archive": {"_rewind_to_turn_start": out}})
-
-	_broadcast_room_state(room)
+	_ensure_internal()
+	_internal.handle_rpc_rewind_to_turn_start(request)
 
 @rpc("authority", "reliable")
 func rpc_room_state(payload: Dictionary) -> void:
-	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
-		return
-	NetContext.room_state = payload.duplicate(true)
-	if Globals != null and Globals.has_method("apply_online_room_state"):
-		Globals.apply_online_room_state(NetContext.room_state)
-	room_state_updated.emit(NetContext.room_state)
+	_ensure_internal()
+	_internal.handle_rpc_room_state(payload)
 
 @rpc("authority", "reliable")
 func rpc_room_list(payload: Dictionary) -> void:
-	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
-		return
-	var rooms_val = payload.get("rooms", null)
-	if not (rooms_val is Array):
-		return
-	NetContext.room_list = Array(rooms_val).duplicate(true)
-	room_list_updated.emit(NetContext.room_list.duplicate(true))
+	_ensure_internal()
+	_internal.handle_rpc_room_list(payload)
 
 @rpc("authority", "reliable")
 func rpc_game_started(payload: Dictionary) -> void:
-	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
-		return
-	var mapping_val = payload.get("player_id_by_peer_id", null)
-	if not (mapping_val is Dictionary):
-		return
-	var cfg_val = payload.get("config", null)
-	if not (cfg_val is Dictionary):
-		return
-	var mapping: Dictionary = Dictionary(mapping_val)
-	var config: Dictionary = Dictionary(cfg_val)
-
-	var my_peer_id := int(multiplayer.get_unique_id())
-	var local_pid := -1
-	if mapping.has(my_peer_id):
-		local_pid = int(mapping.get(my_peer_id, -1))
-	elif mapping.has(str(my_peer_id)):
-		local_pid = int(mapping.get(str(my_peer_id), -1))
-	NetContext.local_player_id = local_pid
-
-	if EventBus != null:
-		if EventBus.has_method("clear_history_and_reset_sequence"):
-			EventBus.clear_history_and_reset_sequence()
-		elif EventBus.has_method("clear_history"):
-			EventBus.clear_history()
-
-	var player_count := int(config.get("desired_player_count", 0))
-	var seed := int(config.get("seed", 0))
-	var base_dir := str(config.get("modules_v2_base_dir", "")).strip_edges()
-	var base_dirs_read := ModuleDirSpecClass.parse_base_dirs(base_dir)
-	if not base_dirs_read.ok:
-		GameLog.warn("NetClient", "Online room modules_v2_base_dir 非 res://，已回退默认: %s" % base_dir)
-		base_dir = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
-	var enabled_modules: Array[String] = []
-	var mods_val = config.get("enabled_modules_v2", null)
-	if mods_val is Array:
-		for it in Array(mods_val):
-			var s := str(it).strip_edges()
-			if s.is_empty():
-				continue
-			enabled_modules.append(s)
-
-	var logo_choices: Array[int] = []
-	var lc_val = config.get("restaurant_logo_choices_by_player", null)
-	if lc_val is Array:
-		for it2 in Array(lc_val):
-			if it2 is int or it2 is float:
-				logo_choices.append(int(it2))
-	while logo_choices.size() < player_count:
-		logo_choices.append(-1)
-
-	var engine = GameEngineClass.new()
-	var init_r = engine.initialize(player_count, seed, enabled_modules, base_dir, [], logo_choices)
-	if not init_r.ok:
-		GameLog.error("NetClient", "Online client engine initialize failed: %s" % init_r.error)
-		return
-
-	Globals.set_current_game_engine(engine)
-	Globals.sync_runtime_config_from_engine(engine)
-	if Globals != null and Globals.has_method("apply_online_room_state"):
-		Globals.apply_online_room_state(NetContext.room_state if NetContext != null else {})
-
-	game_started.emit(payload.duplicate(true))
+	_ensure_internal()
+	_internal.handle_rpc_game_started(payload)
 
 @rpc("authority", "reliable")
 func rpc_command_applied(payload: Dictionary) -> void:
-	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
-		return
-	var cmd_dict_val = payload.get("cmd", null)
-	if not (cmd_dict_val is Dictionary):
-		return
-	var state_hash := str(payload.get("state_hash", ""))
-	command_applied.emit(Dictionary(cmd_dict_val), state_hash)
+	_ensure_internal()
+	_internal.handle_rpc_command_applied(payload)
 
 @rpc("authority", "reliable")
 func rpc_resync_archive(payload: Dictionary) -> void:
-	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
-		return
-	var archive_val = payload.get("archive", null)
-	if not (archive_val is Dictionary):
-		return
-	_pending_resync_archive = Dictionary(archive_val).duplicate(true)
-	resync_archive_received.emit(_pending_resync_archive.duplicate(true))
+	_ensure_internal()
+	_internal.handle_rpc_resync_archive(payload)
 
 @rpc("authority", "reliable")
 func rpc_request_rejected(payload: Dictionary) -> void:
-	var request_id := str(payload.get("request_id", ""))
-	var code := str(payload.get("code", ""))
-	var message := str(payload.get("message", ""))
-	request_rejected.emit(request_id, code, message)
+	_ensure_internal()
+	_internal.handle_rpc_request_rejected(payload)
 
 func _ensure_signal_connections() -> void:
 	_ensure_internal()

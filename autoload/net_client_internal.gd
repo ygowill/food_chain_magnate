@@ -67,6 +67,36 @@ func send_client_hello() -> void:
 	if _client != null and is_instance_valid(_client):
 		_client.send_client_hello()
 
+func handle_rpc_room_state(payload: Dictionary) -> void:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client):
+		_client.handle_rpc_room_state(payload)
+
+func handle_rpc_room_list(payload: Dictionary) -> void:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client):
+		_client.handle_rpc_room_list(payload)
+
+func handle_rpc_game_started(payload: Dictionary) -> void:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client):
+		_client.handle_rpc_game_started(payload)
+
+func handle_rpc_command_applied(payload: Dictionary) -> void:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client):
+		_client.handle_rpc_command_applied(payload)
+
+func handle_rpc_resync_archive(payload: Dictionary) -> void:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client):
+		_client.handle_rpc_resync_archive(payload)
+
+func handle_rpc_request_rejected(payload: Dictionary) -> void:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client):
+		_client.handle_rpc_request_rejected(payload)
+
 func send_request_rejected(peer_id: int, request_id: String, code: String, message: String) -> void:
 	_ensure_modules()
 	if _server != null and is_instance_valid(_server):
@@ -93,10 +123,55 @@ func broadcast_room_list(request_id: String) -> void:
 	if _server != null and is_instance_valid(_server):
 		_server.broadcast_room_list(request_id)
 
+func handle_rpc_client_hello(request: Dictionary) -> void:
+	_ensure_modules()
+	if _server != null and is_instance_valid(_server):
+		_server.handle_rpc_client_hello(request)
+
+func handle_rpc_list_rooms(request: Dictionary) -> void:
+	_ensure_modules()
+	if _server != null and is_instance_valid(_server):
+		_server.handle_rpc_list_rooms(request)
+
 func handle_rpc_create_room(request: Dictionary) -> void:
 	_ensure_modules()
 	if _server != null and is_instance_valid(_server):
 		_server.handle_rpc_create_room(request)
+
+func handle_rpc_join_room(request: Dictionary) -> void:
+	_ensure_modules()
+	if _server != null and is_instance_valid(_server):
+		_server.handle_rpc_join_room(request)
+
+func handle_rpc_update_room_config(request: Dictionary) -> void:
+	_ensure_modules()
+	if _server != null and is_instance_valid(_server):
+		_server.handle_rpc_update_room_config(request)
+
+func handle_rpc_leave_room(request: Dictionary) -> void:
+	_ensure_modules()
+	if _server != null and is_instance_valid(_server):
+		_server.handle_rpc_leave_room(request)
+
+func handle_rpc_start_game(request: Dictionary) -> void:
+	_ensure_modules()
+	if _server != null and is_instance_valid(_server):
+		_server.handle_rpc_start_game(request)
+
+func handle_rpc_action_request(request: Dictionary) -> void:
+	_ensure_modules()
+	if _server != null and is_instance_valid(_server):
+		_server.handle_rpc_action_request(request)
+
+func handle_rpc_resync_request(request: Dictionary) -> void:
+	_ensure_modules()
+	if _server != null and is_instance_valid(_server):
+		_server.handle_rpc_resync_request(request)
+
+func handle_rpc_rewind_to_turn_start(request: Dictionary) -> void:
+	_ensure_modules()
+	if _server != null and is_instance_valid(_server):
+		_server.handle_rpc_rewind_to_turn_start(request)
 
 func broadcast_command_applied(room, cmd) -> void:
 	_ensure_modules()
