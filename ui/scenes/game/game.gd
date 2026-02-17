@@ -70,6 +70,8 @@ const GamePanelControllerClass = preload("res://ui/scenes/game/game_panel_contro
 const GameOnlineResyncControllerClass = preload("res://ui/scenes/game/game_online_resync_controller.gd")
 const GameTimelineControllerClass = preload("res://ui/scenes/game/game_timeline_controller.gd")
 const GameProcurementLogPreviewControllerClass = preload("res://ui/scenes/game/game_procurement_log_preview_controller.gd")
+const GameUiStyleApplierClass = preload("res://ui/scenes/game/game_ui_style_applier.gd")
+const GameRuntimeDisposerClass = preload("res://ui/scenes/game/game_runtime_disposer.gd")
 const DebugPanelScene = preload("res://ui/scenes/debug/debug_panel.tscn")
 const ConfirmDialogScene = preload("res://ui/dialogs/confirm_dialog.tscn")
 const SaveLoadDialogScript = preload("res://ui/dialogs/save_load_dialog.gd")
@@ -138,10 +140,7 @@ func _ready() -> void:
 	var span_layout := PerfTraceClass.begin_span("game:layout+controllers_init")
 	UiStylesClass.apply_tiled_texture(background, UiStylesClass.WALL_TEXTURE_PATHS, 3.0, Color(0.85, 0.80, 0.68, 1.0))
 	UiStylesClass.apply_vignette(vignette_overlay, 0.25, 0.5)
-	_apply_menu_dialog_styles()
-	_apply_topbar_button_styles()
-	_disable_removed_panel_toggles()
-	_apply_status_bar_styles()
+	GameUiStyleApplierClass.apply_all(self)
 	_layout_controller = GameLayoutControllerClass.new(
 		self,
 		round_label,
@@ -362,76 +361,6 @@ func _ready() -> void:
 		_startup_profile_reported = true
 		call_deferred("_report_startup_profile")
 
-func _apply_menu_dialog_styles() -> void:
-	if is_instance_valid(menu_dialog):
-		menu_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
-		menu_dialog.z_index = 1200
-	if is_instance_valid(menu_dialog_overlay):
-		menu_dialog_overlay.color = Color(0.05, 0.04, 0.03, 0.75)
-		menu_dialog_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	UiStylesClass.apply_dialog_surface(menu_dialog_background_panel)
-	UiStylesClass.apply_button_primary(menu_resume_button)
-	UiStylesClass.apply_button_primary(menu_save_button)
-	UiStylesClass.apply_button_primary(menu_rules_button)
-	UiStylesClass.apply_button_primary(menu_settings_button)
-	UiStylesClass.apply_button_primary(toggle_bottom_panel_button)
-	UiStylesClass.apply_button_primary(menu_quit_to_menu_button)
-
-func _apply_topbar_button_styles() -> void:
-	var button_paths := [
-		"UIRoot/TopBar/AdvancePhaseButton",
-		"UIRoot/TopBar/AdvanceSubPhaseButton",
-		"UIRoot/TopBar/ToggleLeftPanelButton",
-		"UIRoot/TopBar/ToggleRightPanelButton",
-		"UIRoot/TopBar/MenuButton",
-		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/EmployeeTreeButton",
-		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/LogButton",
-		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/MilestonesButton",
-		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/ReserveAreaButton",
-		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/DistanceToolButton",
-		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/SettingsButton",
-	]
-	for path in button_paths:
-		var btn = get_node_or_null(path)
-		if btn is Button:
-			UiStylesClass.apply_button_secondary(btn)
-
-func _disable_removed_panel_toggles() -> void:
-	# 改造：不允许隐藏信息/隐藏操作，也不允许关闭右侧动作区（只允许通过“跳过”推进动作流）。
-	for btn in [toggle_left_panel_button, toggle_right_panel_button, right_panel_back_button, right_panel_close_button]:
-		if btn == null or not is_instance_valid(btn):
-			continue
-		btn.visible = false
-		btn.disabled = true
-		btn.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-func _apply_status_bar_styles() -> void:
-	UiStylesClass.apply_status_panel(status_bar)
-	UiStylesClass.apply_break_tag(bank_break_tag)
-	# Icon labels - accent colors
-	var icon_styles: Array[Array] = [
-		["UIRoot/TopBar/StatusBar/StatusContent/BankSection/BankIconLabel", Color(0.72, 0.62, 0.25)],
-		["UIRoot/TopBar/StatusBar/StatusContent/RoundSection/RoundIconLabel", Color(0.35, 0.55, 0.75)],
-	]
-	for entry in icon_styles:
-		var lbl = get_node_or_null(str(entry[0]))
-		if lbl is Label:
-			(lbl as Label).add_theme_color_override("font_color", entry[1] as Color)
-			(lbl as Label).add_theme_font_size_override("font_size", 17)
-	# Bank title label - same size as value labels
-	var title_lbl = get_node_or_null("UIRoot/TopBar/StatusBar/StatusContent/BankSection/BankTitleLabel")
-	if title_lbl is Label:
-		UiStylesClass.apply_label_dark(title_lbl)
-		(title_lbl as Label).add_theme_font_size_override("font_size", 17)
-	# Value labels - primary, larger
-	for lbl in [round_label, bank_label]:
-		if lbl is Label:
-			UiStylesClass.apply_label_dark(lbl)
-			(lbl as Label).add_theme_font_size_override("font_size", 17)
-	# Phase track - 自定义绘制，初始字号
-	if is_instance_valid(phase_track) and phase_track.has_method("set_font_size"):
-		phase_track.set_font_size(16)
-
 func _report_startup_profile() -> void:
 	# 让首帧/次帧的 deferred/UI queue 跑完，避免漏掉 MapSkin 构建等同步耗时的尾部。
 	await get_tree().process_frame
@@ -446,88 +375,7 @@ func _exit_tree() -> void:
 	_dispose_runtime()
 
 func _dispose_runtime() -> void:
-	# 释放 RefCounted 控制器（避免 headless 测试退出时资源泄漏）
-	if _panel_controller != null and _panel_controller.has_method("dispose"):
-		_panel_controller.dispose()
-	_panel_controller = null
-
-	if _map_controller != null and _map_controller.has_method("dispose"):
-		_map_controller.dispose()
-	_map_controller = null
-
-	if _overlay_controller != null and _overlay_controller.has_method("dispose"):
-		_overlay_controller.dispose()
-	_overlay_controller = null
-
-	if _input_controller != null and _input_controller.has_method("dispose"):
-		_input_controller.dispose()
-	_input_controller = null
-
-	if _map_mode_bar_controller != null and _map_mode_bar_controller.has_method("dispose"):
-		_map_mode_bar_controller.dispose()
-	_map_mode_bar_controller = null
-
-	if _menu_controller != null and _menu_controller.has_method("dispose"):
-		_menu_controller.dispose()
-	_menu_controller = null
-
-	if _log_dock_controller != null and _log_dock_controller.has_method("dispose"):
-		_log_dock_controller.dispose()
-	_log_dock_controller = null
-
-	if _procurement_log_preview_controller != null and _procurement_log_preview_controller.has_method("dispose"):
-		_procurement_log_preview_controller.dispose()
-	_procurement_log_preview_controller = null
-
-	if _warmup_controller != null and _warmup_controller.has_method("dispose"):
-		_warmup_controller.dispose()
-	_warmup_controller = null
-
-	if _menu_debug_controller != null and _menu_debug_controller.has_method("dispose"):
-		_menu_debug_controller.dispose()
-	_menu_debug_controller = null
-
-	if _save_load_controller != null and _save_load_controller.has_method("dispose"):
-		_save_load_controller.dispose()
-	_save_load_controller = null
-
-	if _layout_controller != null and _layout_controller.has_method("dispose"):
-		_layout_controller.dispose()
-	_layout_controller = null
-
-	if _right_panel_dock_controller != null and _right_panel_dock_controller.has_method("dispose"):
-		_right_panel_dock_controller.dispose()
-	_right_panel_dock_controller = null
-
-	if _online_resync_controller != null and _online_resync_controller.has_method("dispose"):
-		_online_resync_controller.dispose()
-	_online_resync_controller = null
-
-	if _timeline_controller != null and _timeline_controller.has_method("dispose"):
-		_timeline_controller.dispose()
-	_timeline_controller = null
-
-	if _debug_panel_controller != null and _debug_panel_controller.has_method("dispose"):
-		_debug_panel_controller.dispose()
-	_debug_panel_controller = null
-
-	if _ui_sync_controller != null and _ui_sync_controller.has_method("dispose"):
-		_ui_sync_controller.dispose()
-	_ui_sync_controller = null
-
-	if _command_controller != null and _command_controller.has_method("dispose"):
-		_command_controller.dispose()
-	_command_controller = null
-
-	if game_engine != null and game_engine.has_method("dispose"):
-		game_engine.dispose()
-
-	if Globals != null and Globals.current_game_engine == game_engine:
-		Globals.current_game_engine = null
-	if Globals != null:
-		Globals.is_game_active = false
-
-	game_engine = null
+	GameRuntimeDisposerClass.dispose_runtime(self)
 
 func _on_root_resized() -> void:
 	_apply_responsive_layout()
