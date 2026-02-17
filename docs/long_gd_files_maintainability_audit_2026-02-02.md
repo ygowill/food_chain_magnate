@@ -308,7 +308,7 @@
 实施结果（阶段性）：
 
 - 已完成：提取房间列表渲染与 RoomTab 渲染：新增 `ui/scenes/online/online_lobby_room_list_controller.gd` 与 `ui/scenes/online/online_lobby_room_state_renderer.gd`；`ui/scenes/online/online_lobby.gd` 改为委托渲染（行数 1019 -> 763）；并通过 `ui/scenes/tests/all_tests.tscn`。
-- 待执行：进一步提取 `RoomConfigSyncController`（debounce/dirty/syncing/error）与 `LobbyViewModel`（减少字典操作与 UI 耦合）。
+- 已完成：进一步提取 `RoomConfigSyncController`（debounce/dirty/syncing/error）与 `LobbyViewModel`：新增 `ui/scenes/online/online_lobby_room_config_sync_controller.gd` 与 `ui/scenes/online/online_lobby_view_model.gd`；`ui/scenes/online/online_lobby.gd` 行数 763 -> 688；并通过 `ui/scenes/tests/all_tests.tscn`。
 
 ### 9) `autoload/net_client.gd`
 
@@ -332,7 +332,7 @@
 实施结果（阶段性）：
 
 - 已完成：提取 NetClient 内部实现：新增 `autoload/net_client_internal.gd` 承载信号连接/连接回调/room 广播/forfeit 自动推进等；`autoload/net_client.gd` 保持 @rpc 接口不变并瘦身（行数 1006 -> 751）；并通过 `ui/scenes/tests/all_tests.tscn`。
-- 待执行：继续按 transport/protocol/room server/client 拆分（需要联机回归验证，避免破坏协议与兼容性）。
+- 已完成：继续按 server/client 拆分并将 @rpc 处理委托到模块：新增 `autoload/net_client/server.gd` 与 `autoload/net_client/client.gd`；`autoload/net_client.gd` 行数 751 -> 337；并通过 `ui/scenes/tests/all_tests.tscn`（仍建议手动联机回归验证）。
 
 ### 10) `ui/components/left_panel/left_panel.gd`
 
@@ -381,7 +381,7 @@
 实施结果（阶段性）：
 
 - 已完成：提取 report formatter：新增 `ui/scenes/game/game_event_log_reports_formatter.gd`；`ui/scenes/game/game_event_log_formatter.gd` 将 Payday/Dinnertime report 分支委托（行数 830 -> 699）；并通过 `ui/scenes/tests/all_tests.tscn`。
-- 待执行：继续按 phase/actions 等分域下沉更多 handler（以维持主文件长期不再膨胀）。
+- 已完成：继续按领域下沉更多 handler：新增 `ui/scenes/game/game_event_log_formatter_marketing_and_drinks_cases.gd` 并从 `ui/scenes/game/game_event_log_formatter_cases.gd` 抽离营销/采购饮料/需求用例；并通过 `ui/scenes/tests/all_tests.tscn`。
 
 ### 11) `ui/components/company_structure/company_structure.gd`
 
