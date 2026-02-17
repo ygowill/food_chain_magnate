@@ -29,6 +29,7 @@ const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const MarketingBoardButtonClass = preload("res://ui/components/marketing_panel/marketing_board_button.gd")
 const MarketingTypeButtonClass = preload("res://ui/components/marketing_panel/marketing_type_button.gd")
 const MarketingPanelIconCacheClass = preload("res://ui/components/marketing_panel/marketing_panel_icon_cache.gd")
+const MarketingPanelTypeSpecsBuilderClass = preload("res://ui/components/marketing_panel/marketing_panel_type_specs_builder.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
@@ -165,79 +166,35 @@ func _rebuild_type_buttons() -> void:
 	if type_container == null:
 		return
 
-	var marketers_by_type: Dictionary = {}
-	for marketer in _available_marketers:
-		var m_type: String = str(marketer.get("type", ""))
-		if not marketers_by_type.has(m_type):
-			marketers_by_type[m_type] = []
-		marketers_by_type[m_type].append(marketer)
+	var build_r: Dictionary = MarketingPanelTypeSpecsBuilderClass.build_type_specs(
+		_available_marketers,
+		_available_boards_by_type,
+		MARKETING_TYPES,
+		MARKETING_TYPE_NAME_OVERRIDES
+	)
+	var specs_val = build_r.get("specs", [])
+	var specs: Array = specs_val if (specs_val is Array) else []
+	var available_val = build_r.get("available_type_ids", [])
+	var available_type_ids: Array[String] = available_val if (available_val is Array) else []
 
-	# 兼容模块新增营销 type（如 gourmet_guide）。优先使用 MARKETING_TYPES 的 UI 定义，
-	# 未声明的 type 以 type_id 自身做兜底展示。
-	var base_defs_by_id: Dictionary = {}
-	var ordered_type_ids: Array[String] = []
-	for type_def in MARKETING_TYPES:
-		var tid := str(type_def.get("id", "")).strip_edges()
-		if tid.is_empty():
+	for spec_val in specs:
+		if not (spec_val is Dictionary):
 			continue
-		base_defs_by_id[tid] = type_def
-		ordered_type_ids.append(tid)
-
-	var extra_ids_set: Dictionary = {}
-	for k in marketers_by_type.keys():
-		var tid2 := str(k).strip_edges()
-		if tid2.is_empty():
+		var spec: Dictionary = spec_val
+		var type_id := str(spec.get("type_id", "")).strip_edges()
+		if type_id.is_empty():
 			continue
-		if base_defs_by_id.has(tid2):
-			continue
-		extra_ids_set[tid2] = true
-	for k2 in _available_boards_by_type.keys():
-		var tid3 := str(k2).strip_edges()
-		if tid3.is_empty():
-			continue
-		if base_defs_by_id.has(tid3):
-			continue
-		extra_ids_set[tid3] = true
 
-	var extra_ids: Array[String] = []
-	for k3 in extra_ids_set.keys():
-		extra_ids.append(str(k3))
-	extra_ids.sort()
-	ordered_type_ids.append_array(extra_ids)
-
-	var available_type_ids: Array[String] = []
-
-	for type_id in ordered_type_ids:
-		var marketer_count: int = Array(marketers_by_type.get(type_id, [])).size()
-		var board_count: int = Array(_available_boards_by_type.get(type_id, [])).size()
-		var is_available := marketer_count > 0 and board_count > 0
-		if is_available:
-			available_type_ids.append(type_id)
-
-		var type_def_use: Dictionary = {}
-		var known_def = base_defs_by_id.get(type_id, null)
-		if known_def is Dictionary:
-			type_def_use = known_def
-		else:
-			var display_name := str(MARKETING_TYPE_NAME_OVERRIDES.get(type_id, type_id))
-			var fallback_icon := "?"
-			if not type_id.is_empty():
-				fallback_icon = type_id.substr(0, 1).to_upper()
-			type_def_use = {
-				"id": type_id,
-				"name": display_name,
-				"icon": fallback_icon,
-				"color": Color("#9aa3ad"),
-				"range": 0,
-			}
+		var type_def_val = spec.get("type_def", {})
+		var type_def_use: Dictionary = type_def_val if (type_def_val is Dictionary) else {}
 
 		var btn = MarketingTypeButtonClass.new()
 		btn.type_id = type_id
 		btn.type_def = type_def_use
 		btn.icon_texture = _icon_cache.get_marketing_icon_texture(type_id, MARKETING_TYPE_ICON_SIZE)
-		btn.is_available = is_available
-		btn.marketer_count = marketer_count
-		btn.board_count = board_count
+		btn.is_available = bool(spec.get("is_available", false))
+		btn.marketer_count = int(spec.get("marketer_count", 0))
+		btn.board_count = int(spec.get("board_count", 0))
 		btn.type_selected.connect(_on_type_selected)
 		type_container.add_child(btn)
 		_type_buttons[type_id] = btn
