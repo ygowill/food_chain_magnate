@@ -13,13 +13,11 @@ const EndPanelsClass = preload("res://ui/scenes/game/game_panel_end_panels.gd")
 const RestructuringControllerClass = preload("res://ui/scenes/game/game_panel_restructuring_controller.gd")
 const ModalsControllerClass = preload("res://ui/scenes/game/game_panel_modals_controller.gd")
 const ViewsControllerClass = preload("res://ui/scenes/game/game_panel_views_controller.gd")
+const PopupLayoutControllerClass = preload("res://ui/scenes/game/game_panel_popup_layout_controller.gd")
 const UiComponentsBinderClass = preload("res://ui/scenes/game/game_panel_ui_components_binder.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
-
-const POPUP_LAYOUT_META_KEY := "popup_layout"
-const POPUP_LAYOUT_DOCK_RIGHT := "dock_right"
 
 const _GUIDED_ACTION_DOCK_SCRIPT_PATHS := {
 	"res://ui/components/recruit_panel/recruit_panel.gd": true,
@@ -43,6 +41,7 @@ var _restructuring_controller = null
 var _modals_controller = null
 var _views_controller = null
 var _ui_components_binder = null
+var _popup_layout_controller = null
 
 var _view_player_id: int = -1
 var _last_guided_action_id: String = ""
@@ -57,8 +56,9 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and NetContext.local_player_id >= 0:
 		_view_player_id = int(NetContext.local_player_id)
 
+	_popup_layout_controller = PopupLayoutControllerClass.new(_scene)
 	var hide_all := Callable(self, "_hide_all_phase_panels")
-	var center_popup := Callable(self, "_center_popup")
+	var center_popup := Callable(_popup_layout_controller, "center_popup")
 
 	_working_panels = WorkingPanelsClass.new(_scene, _map_controller, _execute_command, hide_all, center_popup, _overlay_controller)
 	_marketing_panels = MarketingPanelsClass.new(_scene, _map_controller, _overlay_controller, _execute_command, hide_all, center_popup)
@@ -190,6 +190,9 @@ func dispose() -> void:
 	if _ui_components_binder != null and _ui_components_binder.has_method("dispose"):
 		_ui_components_binder.dispose()
 	_ui_components_binder = null
+	if _popup_layout_controller != null and _popup_layout_controller.has_method("dispose"):
+		_popup_layout_controller.dispose()
+	_popup_layout_controller = null
 
 	_scene = null
 	_map_controller = null
@@ -715,140 +718,6 @@ func _hide_all_phase_panels(keep_selection: bool = false, suppress_dismissal: bo
 	_sync_action_panel_context()
 	if _scene != null and _scene.has_method("_sync_right_panel_docked_view"):
 		_scene.call_deferred("_sync_right_panel_docked_view")
-
-func _center_popup(panel: Control) -> void:
-	if panel == null:
-		return
-	if _scene == null:
-		return
-	var layout := ""
-	if panel.has_meta(POPUP_LAYOUT_META_KEY):
-		layout = str(panel.get_meta(POPUP_LAYOUT_META_KEY))
-
-	panel.z_index = 500
-
-	if layout == POPUP_LAYOUT_DOCK_RIGHT:
-		_dock_popup_right(panel)
-	else:
-		await _scene.get_tree().process_frame
-		_center_popup_in_viewport(panel)
-
-	# P2：弹窗动画（避免 headless 影响测试/资源回收）
-	if OS.has_feature("headless"):
-		return
-	if not (_scene.has_method("get_ui_animation_manager")):
-		return
-	var anim_manager = _scene.call("get_ui_animation_manager")
-	if anim_manager == null:
-		return
-
-	if layout != POPUP_LAYOUT_DOCK_RIGHT and anim_manager.has_method("animate_scale_bounce"):
-		anim_manager.call("animate_scale_bounce", panel)
-
-func _center_popup_in_viewport(panel: Control) -> void:
-	if panel == null or _scene == null:
-		return
-	var safe_rect := _get_map_area_rect_in_scene()
-	var panel_size := _get_panel_size(panel)
-
-	var x := safe_rect.position.x + (safe_rect.size.x - panel_size.x) / 2.0
-	var y := safe_rect.position.y + (safe_rect.size.y - panel_size.y) / 2.0
-
-	var margin := 8.0
-	var min_x := safe_rect.position.x + margin
-	var max_x := safe_rect.position.x + safe_rect.size.x - panel_size.x - margin
-	if max_x < min_x:
-		max_x = min_x
-	var min_y := safe_rect.position.y + margin
-	var max_y := safe_rect.position.y + safe_rect.size.y - panel_size.y - margin
-	if max_y < min_y:
-		max_y = min_y
-
-	panel.position = Vector2(
-		clampf(x, min_x, max_x),
-		clampf(y, min_y, max_y)
-	)
-
-func _dock_popup_right(panel: Control) -> void:
-	if panel == null or _scene == null:
-		return
-
-	# v2：优先嵌入到 RightPanel（抽屉式），而不是覆盖在视口右侧
-	if _scene.has_method("dock_popup_into_right_panel"):
-		var r = _scene.call("dock_popup_into_right_panel", panel)
-		if r is bool and bool(r):
-			return
-
-	var safe := _get_popup_safe_rect()
-	var panel_size := _get_panel_size(panel)
-
-	var margin := 12.0
-	var x := safe.position.x + safe.size.x - panel_size.x - margin
-	var y := safe.position.y + (safe.size.y - panel_size.y) / 2.0
-
-	# Clamp
-	x = maxf(margin, x)
-	var min_y := safe.position.y + margin
-	var max_y := safe.position.y + safe.size.y - panel_size.y - margin
-	if max_y < min_y:
-		max_y = min_y
-	y = clampf(y, min_y, max_y)
-
-	panel.position = Vector2(x, y)
-
-func _get_panel_size(panel: Control) -> Vector2:
-	var s := panel.size
-	if s == Vector2.ZERO:
-		s = panel.get_combined_minimum_size()
-	if s == Vector2.ZERO:
-		s = panel.custom_minimum_size
-	if s == Vector2.ZERO:
-		s = Vector2(420, 260)
-	return s
-
-func _get_map_area_rect_in_scene() -> Rect2:
-	if _scene == null:
-		return Rect2(Vector2.ZERO, Vector2.ZERO)
-
-	var map_area = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit/GameArea")
-	if map_area is Control:
-		var c: Control = map_area
-		var gr := c.get_global_rect()
-		var scene_global := Vector2.ZERO
-		if _scene is Control:
-			scene_global = (_scene as Control).global_position
-		var rect := Rect2(gr.position - scene_global, gr.size)
-		if rect.size.x > 1.0 and rect.size.y > 1.0:
-			return rect
-
-	return Rect2(Vector2.ZERO, _scene.get_viewport_rect().size)
-
-func _get_popup_safe_rect() -> Rect2:
-	if _scene == null:
-		return Rect2(Vector2.ZERO, Vector2.ZERO)
-
-	var viewport_size: Vector2 = _scene.get_viewport_rect().size
-	var top := 0.0
-	var bottom := viewport_size.y
-
-	var top_bar = _scene.get_node_or_null("UIRoot/TopBar")
-	if top_bar is Control:
-		var c: Control = top_bar
-		top = maxf(top, c.position.y + c.size.y)
-
-	var bottom_panel = _scene.get_node_or_null("UIRoot/BottomPanel")
-	if bottom_panel is Control:
-		var c2: Control = bottom_panel
-		bottom = minf(bottom, c2.position.y)
-
-	# 预留一点间距（避免贴边）
-	top += 5.0
-	bottom -= 5.0
-
-	if bottom < top:
-		bottom = top
-
-	return Rect2(Vector2(0, top), Vector2(viewport_size.x, bottom - top))
 
 func _sync_modals(state: GameState) -> void:
 	if _scene == null or state == null:
