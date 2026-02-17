@@ -15,12 +15,10 @@ signal build_finished()
 @onready var zoom_bar: PanelZoomBar = $MarginContainer/VBoxContainer/HeaderRow/ZoomBar
 
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
-const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
-const MapUtilsClass = preload("res://core/map/map_utils.gd")
-const ModuleSupplyFallbacksClass = preload("res://core/rules/module_supply_fallbacks.gd")
+const ReserveAreaSupplyHelpersClass = preload("res://ui/components/reserve_area/reserve_area_supply_helpers.gd")
 const TokensClass = preload("res://ui/components/reserve_area/reserve_area_full_screen_view_tokens.gd")
 
 var _skin = null
@@ -263,7 +261,7 @@ func _compute_build_key(state: GameState) -> String:
 			mk = ",".join(ks)
 		map_key += "|mp=" + mk
 
-		var supply_counts := _collect_module_supply_counts(state, module_ids)
+		var supply_counts := ReserveAreaSupplyHelpersClass.collect_module_supply_counts(state, module_ids)
 		var supply_parts: Array[String] = []
 		for key2 in supply_counts.keys():
 			var c2 := int(supply_counts.get(key2, 0))
@@ -272,7 +270,7 @@ func _compute_build_key(state: GameState) -> String:
 		supply_parts.sort()
 		map_key += "|sup=" + ";".join(supply_parts)
 
-		var module_tile_entries := _collect_module_tile_supply_entries(state, module_ids)
+		var module_tile_entries := ReserveAreaSupplyHelpersClass.collect_module_tile_supply_entries(state, module_ids)
 		var module_tile_parts: Array[String] = []
 		for e in module_tile_entries:
 			var tile_id := str(e.get("tile_id", ""))
@@ -458,8 +456,8 @@ func _add_module_supplies_section(state: GameState) -> void:
 	if state == null or not (state.map is Dictionary):
 		return
 
-	var module_ids := _get_enabled_module_ids(state)
-	var supply_counts := _collect_module_supply_counts(state, module_ids)
+	var module_ids := ReserveAreaSupplyHelpersClass.get_enabled_module_ids(state)
+	var supply_counts := ReserveAreaSupplyHelpersClass.collect_module_supply_counts(state, module_ids)
 	if supply_counts.is_empty():
 		return
 
@@ -491,84 +489,8 @@ func _add_module_supplies_section(state: GameState) -> void:
 		token.tooltip_text = "%s ×%d" % [base, count]
 		flow.add_child(token)
 
-func _get_enabled_module_ids(state: GameState) -> Array[String]:
-	var out: Array[String] = []
-	if state == null:
-		return out
-	if state.modules is Array:
-		out = Array(state.modules, TYPE_STRING, "", null)
-	return out
-
-func _collect_module_supply_counts(state: GameState, module_ids: Array[String]) -> Dictionary:
-	var out := {}
-	if state == null or not (state.map is Dictionary):
-		return out
-
-	var seen_keys := {}
-	for k in state.map.keys():
-		var key := str(k)
-		if not key.ends_with("_supply_remaining"):
-			continue
-		if key == "house_number_supply_remaining" or key == "garden_supply_remaining" or key == "tile_supply_remaining":
-			continue
-		seen_keys[key] = true
-		var v = state.map.get(k, null)
-		if v is int:
-			if int(v) > 0:
-				out[key] = int(v)
-		elif v is float:
-			var f: float = float(v)
-			if f == floor(f) and int(f) > 0:
-				out[key] = int(f)
-
-	_merge_module_supply_fallback_counts(state, module_ids, out, seen_keys)
-	return out
-
-func _merge_module_supply_fallback_counts(state: GameState, module_ids: Array[String], supply_counts: Dictionary, seen_keys: Dictionary) -> void:
-	if module_ids.has("lobbyists"):
-		var fallback_counts := ModuleSupplyFallbacksClass.get_lobbyists_supply_fallbacks()
-		for key in fallback_counts.keys():
-			var count := int(fallback_counts.get(key, 0))
-			_append_supply_count_if_missing(supply_counts, seen_keys, str(key), count)
-
-	if module_ids.has("rural_marketeers"):
-		_append_supply_count_if_missing(
-			supply_counts,
-			seen_keys,
-			ModuleSupplyFallbacksClass.get_rural_offramp_supply_fallback_key(),
-			ModuleSupplyFallbacksClass.get_rural_offramp_supply_fallback_total()
-		)
-		var billboard_remaining := _get_rural_billboard_supply_remaining(state)
-		_append_supply_count_if_missing(
-			supply_counts,
-			seen_keys,
-			ModuleSupplyFallbacksClass.get_rural_billboard_supply_pseudo_key(),
-			billboard_remaining
-		)
-
-func _append_supply_count_if_missing(supply_counts: Dictionary, seen_keys: Dictionary, key: String, count: int) -> void:
-	if key.is_empty() or count <= 0:
-		return
-	if supply_counts.has(key) or seen_keys.has(key):
-		return
-	supply_counts[key] = count
-
-func _get_rural_billboard_supply_remaining(state: GameState) -> int:
-	var occupied := 0
-	if state != null and (state.map is Dictionary):
-		var houses_val = state.map.get("houses", null)
-		if houses_val is Dictionary:
-			var rural_val = Dictionary(houses_val).get("rural_area", null)
-			if rural_val is Dictionary:
-				var boards_val = Dictionary(rural_val).get("giant_billboards", null)
-				if boards_val is Dictionary:
-					for side in ["N", "E", "S", "W"]:
-						if Dictionary(boards_val).has(side):
-							occupied += 1
-	return maxi(0, ModuleSupplyFallbacksClass.get_rural_billboard_supply_total() - occupied)
-
 func _add_module_tile_supplies_section(state: GameState) -> void:
-	var entries := _collect_module_tile_supply_entries(state, [])
+	var entries := ReserveAreaSupplyHelpersClass.collect_module_tile_supply_entries(state, [])
 	if entries.is_empty():
 		return
 
@@ -585,33 +507,17 @@ func _add_module_tile_supplies_section(state: GameState) -> void:
 		token.tooltip_text = "地图板块 %s ×%d" % [tile_id, count]
 		flow.add_child(token)
 
-func _collect_module_tile_supply_entries(state: GameState, _module_ids: Array[String]) -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	if state == null or not (state.map is Dictionary):
-		return out
-	var remaining_val = state.map.get("tile_supply_remaining", null)
-	if not (remaining_val is Array):
-		return out
-	var remaining: Array = remaining_val
-	if remaining.is_empty():
-		return out
+func _get_enabled_module_ids(state: GameState) -> Array[String]:
+	# 兼容测试/旧调用点：逻辑已下沉到 ReserveAreaSupplyHelpers。
+	return ReserveAreaSupplyHelpersClass.get_enabled_module_ids(state)
 
-	var counts := {}
-	for v in remaining:
-		var tile_id := str(v).strip_edges()
-		if tile_id.is_empty():
-			continue
-		counts[tile_id] = int(counts.get(tile_id, 0)) + 1
+func _collect_module_supply_counts(state: GameState, module_ids: Array[String]) -> Dictionary:
+	# 兼容测试：供给提取逻辑已下沉到 ReserveAreaSupplyHelpers。
+	return ReserveAreaSupplyHelpersClass.collect_module_supply_counts(state, module_ids)
 
-	var ids: Array[String] = []
-	for k in counts.keys():
-		ids.append(str(k))
-	ids.sort()
-	for tid in ids:
-		var c := int(counts.get(tid, 0))
-		if c > 0:
-			out.append({"tile_id": tid, "count": c})
-	return out
+func _collect_module_tile_supply_entries(state: GameState, module_ids: Array[String]) -> Array[Dictionary]:
+	# 兼容测试：地图板块供给提取逻辑已下沉到 ReserveAreaSupplyHelpers。
+	return ReserveAreaSupplyHelpersClass.collect_module_tile_supply_entries(state, module_ids)
 
 func _is_excluded_piece_id(id_str: String) -> bool:
 	# 用户已澄清：不展示地图扩展 tile 与餐厅（但模块引入的新 piece 需要展示）。
