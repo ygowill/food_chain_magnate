@@ -25,6 +25,8 @@ const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 const EmployeePickerClass = preload("res://ui/components/employee_picker/employee_picker.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const FoodControllerClass = preload("res://ui/components/production_panel/production_panel_food_controller.gd")
+const DrinksControllerClass = preload("res://ui/components/production_panel/production_panel_drinks_controller.gd")
 
 var _production_type: String = "food"  # food | drinks
 var _available_producers: Array[String] = []
@@ -71,6 +73,8 @@ var _drinks_hover_preview_text: String = ""
 var _suppress_drinks_restaurant_signal: bool = false
 
 var _skin = null
+var _food_controller = null
+var _drinks_controller = null
 
 func _get_confirm_button() -> Button:
 	return confirm_btn
@@ -126,12 +130,19 @@ func set_used_employee_counts(used_counts_by_employee_id: Dictionary) -> void:
 
 	_rebuild_employee_options()
 	if _production_type == "food":
-		_rebuild_food_type_options()
-		_update_food_controls_visibility()
-		_update_drinks_controls_visibility()
+		_ensure_food_controller()
+		if _food_controller != null and is_instance_valid(_food_controller):
+			_food_controller.rebuild_food_type_options()
+
+	_ensure_food_controller()
+	if _food_controller != null and is_instance_valid(_food_controller):
+		_food_controller.update_food_controls_visibility()
+
+	_ensure_drinks_controller()
+	if _drinks_controller != null and is_instance_valid(_drinks_controller):
+		_drinks_controller.update_drinks_controls_visibility()
 	else:
-		_update_food_controls_visibility()
-		_update_drinks_controls_visibility()
+		pass
 	_update_confirm_state()
 	_update_info()
 
@@ -152,7 +163,9 @@ func set_available_drink_types(types: Array[String]) -> void:
 			continue
 		_available_drink_types.append(t)
 	_available_drink_types.sort()
-	_rebuild_drink_type_options()
+	_ensure_drinks_controller()
+	if _drinks_controller != null and is_instance_valid(_drinks_controller):
+		_drinks_controller.rebuild_drink_type_options()
 	_update_confirm_state()
 	_update_info()
 
@@ -236,7 +249,9 @@ func set_drinks_procure_restaurants(restaurants: Array[Dictionary], selected_res
 
 		_suppress_drinks_restaurant_signal = false
 
-	_update_drinks_controls_visibility()
+	_ensure_drinks_controller()
+	if _drinks_controller != null and is_instance_valid(_drinks_controller):
+		_drinks_controller.update_drinks_controls_visibility()
 	_update_confirm_state()
 	_update_info()
 
@@ -249,7 +264,9 @@ func set_drinks_procurement_state(selected_sources_count: int, confirm_ready: bo
 	if _drinks_error_label != null:
 		_drinks_error_label.text = str(error_text).strip_edges()
 		_drinks_error_label.visible = not _drinks_error_label.text.is_empty()
-	_update_drinks_selection_label()
+	_ensure_drinks_controller()
+	if _drinks_controller != null and is_instance_valid(_drinks_controller):
+		_drinks_controller.update_drinks_selection_label()
 	_update_confirm_state()
 	_update_info()
 
@@ -314,16 +331,24 @@ func _rebuild_content() -> void:
 	_selected_drink_type = ""
 
 	if _production_type == "food":
-		_build_food_controls(products_container)
+		_ensure_food_controller()
+		if _food_controller != null and is_instance_valid(_food_controller):
+			_food_controller.build_food_controls(products_container)
 
 	if _production_type == "drinks":
-		_build_drinks_controls(products_container)
+		_ensure_drinks_controller()
+		if _drinks_controller != null and is_instance_valid(_drinks_controller):
+			_drinks_controller.build_drinks_controls(products_container)
 
+	_ensure_food_controller()
+	_ensure_drinks_controller()
 	_rebuild_employee_options()
-	_rebuild_food_type_options()
-	_update_food_controls_visibility()
-	_update_drinks_controls_visibility()
-	_update_drinks_selection_label()
+	if _food_controller != null and is_instance_valid(_food_controller):
+		_food_controller.rebuild_food_type_options()
+		_food_controller.update_food_controls_visibility()
+	if _drinks_controller != null and is_instance_valid(_drinks_controller):
+		_drinks_controller.update_drinks_controls_visibility()
+		_drinks_controller.update_drinks_selection_label()
 	_apply_embedding_layout()
 
 func _apply_embedding_layout() -> void:
@@ -332,6 +357,18 @@ func _apply_embedding_layout() -> void:
 		scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if embedded else ScrollContainer.SCROLL_MODE_DISABLED
 	if _drinks_restaurant_option != null:
 		_drinks_restaurant_option.custom_minimum_size = Vector2.ZERO if embedded else Vector2(380, 0)
+
+func _ensure_food_controller() -> void:
+	if _food_controller == null or not is_instance_valid(_food_controller):
+		_food_controller = FoodControllerClass.new()
+	if _food_controller != null and is_instance_valid(_food_controller):
+		_food_controller.setup(self)
+
+func _ensure_drinks_controller() -> void:
+	if _drinks_controller == null or not is_instance_valid(_drinks_controller):
+		_drinks_controller = DrinksControllerClass.new()
+	if _drinks_controller != null and is_instance_valid(_drinks_controller):
+		_drinks_controller.setup(self)
 
 func _rebuild_employee_options() -> void:
 	if _employee_picker == null:
@@ -413,9 +450,14 @@ func _on_employee_selected(employee_type: String) -> void:
 	if _employee_picker != null and _employee_picker.has_method("get_selected_key"):
 		_selected_employee_key = str(_employee_picker.call("get_selected_key")).strip_edges()
 	_selected_changed()
-	_rebuild_food_type_options()
-	_update_food_controls_visibility()
-	_update_drinks_controls_visibility()
+	_ensure_food_controller()
+	if _food_controller != null and is_instance_valid(_food_controller):
+		_food_controller.rebuild_food_type_options()
+		_food_controller.update_food_controls_visibility()
+
+	_ensure_drinks_controller()
+	if _drinks_controller != null and is_instance_valid(_drinks_controller):
+		_drinks_controller.update_drinks_controls_visibility()
 	_update_confirm_state()
 	_update_info()
 
@@ -566,9 +608,14 @@ func mark_selected_employee_used() -> void:
 	# 重新生成 items，以刷新 enabled/灰显，并尽量选中同类型的下一个可用实例。
 	_rebuild_employee_options()
 	if prev_type != _selected_employee_type:
-		_rebuild_food_type_options()
-		_update_food_controls_visibility()
-		_update_drinks_controls_visibility()
+		_ensure_food_controller()
+		if _food_controller != null and is_instance_valid(_food_controller):
+			_food_controller.rebuild_food_type_options()
+			_food_controller.update_food_controls_visibility()
+
+		_ensure_drinks_controller()
+		if _drinks_controller != null and is_instance_valid(_drinks_controller):
+			_drinks_controller.update_drinks_controls_visibility()
 	_update_confirm_state()
 	_update_info()
 
