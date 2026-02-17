@@ -11,12 +11,11 @@ extends Control
 signal logs_requested()
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
-const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
-const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const LeftPanelEmployeeIconsControllerClass = preload("res://ui/components/left_panel/left_panel_employee_icons_controller.gd")
 const LeftPanelTurnLogControllerClass = preload("res://ui/components/left_panel/left_panel_turn_log_controller.gd")
+const LeftPanelSummaryControllerClass = preload("res://ui/components/left_panel/left_panel_summary_controller.gd")
+const LeftPanelMilestonesControllerClass = preload("res://ui/components/left_panel/left_panel_milestones_controller.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
-const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 
 # === 玩家切换栏 ===
 @onready var restaurant_overview_section: PanelContainer = $MarginContainer/MainVBox/RestaurantOverviewSection
@@ -54,105 +53,6 @@ const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 @onready var activity_line2: Label = $MarginContainer/MainVBox/ActivityFeed/ActivityMargin/ActivityHBox/ActivityVBox/ActivityLine2
 @onready var view_logs_button: Button = $MarginContainer/MainVBox/ActivityFeed/ActivityMargin/ActivityHBox/ViewLogsButton
 
-const EMPLOYEE_CATEGORY_ORDER := ["管理", "厨房", "营销", "其他"]
-const EMPLOYEE_CATEGORY_ICON: Dictionary = {
-	"管理": "👔",
-	"厨房": "👨‍🍳",
-	"营销": "📢",
-	"其他": "⭐",
-}
-
-# 里程碑状态颜色
-const MILESTONE_COLOR_CLAIMED := Color(0.28, 0.55, 0.22, 1.0)  # 成功绿
-const MILESTONE_COLOR_AVAILABLE := Color(0.83, 0.63, 0.23, 1.0)  # 警告橙
-const MILESTONE_COLOR_GONE := Color(0.5, 0.45, 0.35, 1.0)  # hint灰
-const MILESTONE_PALETTE_PURPLE := Color(0.69, 0.57, 0.77, 1.0)
-const MILESTONE_PALETTE_GRAY := Color(0.76, 0.75, 0.74, 1.0)
-const MILESTONE_PALETTE_MARKETING_BLUE := Color(0.59, 0.77, 0.82, 1.0)
-const MILESTONE_PALETTE_PRODUCE_GREEN := Color(0.60, 0.71, 0.35, 1.0)
-const MILESTONE_PALETTE_PROCURE_GREEN := Color(0.70, 0.81, 0.58, 1.0)
-const MILESTONE_PALETTE_PRICE_ORANGE := Color(0.92, 0.66, 0.56, 1.0)
-const MILESTONE_PALETTE_COFFEE_MINT := Color(0.60, 0.80, 0.72, 1.0)
-const MILESTONE_PALETTE_KETCHUP_DARK := Color(0.15, 0.11, 0.10, 1.0)
-const MILESTONE_SCROLL_GUTTER := 16
-const MILESTONE_CATEGORY_COLORS: Dictionary = {
-	"employee": MILESTONE_PALETTE_PURPLE,
-	"marketing": MILESTONE_PALETTE_MARKETING_BLUE,
-	"finance": MILESTONE_PALETTE_PURPLE,
-	"ops": MILESTONE_PALETTE_PRODUCE_GREEN,
-	"expansion": MILESTONE_PALETTE_MARKETING_BLUE,
-	"general": MILESTONE_PALETTE_GRAY,
-}
-const MILESTONE_COLOR_BY_ID: Dictionary = {
-	# Base milestones（按规则书配色）
-	"first_hire_3": MILESTONE_PALETTE_PURPLE,
-	"first_throw_away": MILESTONE_PALETTE_PURPLE,
-	"first_waitress": MILESTONE_PALETTE_PURPLE,
-	"first_have_20": MILESTONE_PALETTE_PURPLE,
-	"first_have_100": MILESTONE_PALETTE_PURPLE,
-	"first_train": MILESTONE_PALETTE_GRAY,
-	"first_pay_20_salaries": MILESTONE_PALETTE_GRAY,
-	"first_billboard": MILESTONE_PALETTE_MARKETING_BLUE,
-	"first_burger_marketed": MILESTONE_PALETTE_MARKETING_BLUE,
-	"first_pizza_marketed": MILESTONE_PALETTE_MARKETING_BLUE,
-	"first_drink_marketed": MILESTONE_PALETTE_MARKETING_BLUE,
-	"first_airplane": MILESTONE_PALETTE_MARKETING_BLUE,
-	"first_radio": MILESTONE_PALETTE_MARKETING_BLUE,
-	"first_burger_produced": MILESTONE_PALETTE_PRODUCE_GREEN,
-	"first_pizza_produced": MILESTONE_PALETTE_PRODUCE_GREEN,
-	"first_errand_boy": MILESTONE_PALETTE_PROCURE_GREEN,
-	"first_cart_operator": MILESTONE_PALETTE_PROCURE_GREEN,
-	"first_lower_prices": MILESTONE_PALETTE_PRICE_ORANGE,
-	# Module milestones（规则书中的模块区）
-	"first_rural_marketeer_used": MILESTONE_PALETTE_MARKETING_BLUE,
-	"first_lobbyist_used": MILESTONE_PALETTE_PURPLE,
-	"first_coffee_sold": MILESTONE_PALETTE_COFFEE_MINT,
-	"ketchup_sold_your_demand": MILESTONE_PALETTE_KETCHUP_DARK,
-	# New milestones（按规则书分组）
-	"first_marketeer_used": MILESTONE_PALETTE_MARKETING_BLUE,
-	"first_marketing_trainee_used": MILESTONE_PALETTE_MARKETING_BLUE,
-	"first_campaign_manager_used": MILESTONE_PALETTE_MARKETING_BLUE,
-	"first_brand_manager_used": MILESTONE_PALETTE_MARKETING_BLUE,
-	"first_brand_director_used": MILESTONE_PALETTE_MARKETING_BLUE,
-	"first_new_restaurant": MILESTONE_PALETTE_MARKETING_BLUE,
-	"first_burger_sold": MILESTONE_PALETTE_PRODUCE_GREEN,
-	"first_pizza_sold": MILESTONE_PALETTE_PRODUCE_GREEN,
-	"first_beer_sold": MILESTONE_PALETTE_PROCURE_GREEN,
-	"first_coke_sold": MILESTONE_PALETTE_PROCURE_GREEN,
-	"first_lemonade_sold": MILESTONE_PALETTE_PROCURE_GREEN,
-	"first_recruiting_girl_used": MILESTONE_PALETTE_PURPLE,
-	"first_waitress_used": MILESTONE_PALETTE_PURPLE,
-	"first_trainer_used": MILESTONE_PALETTE_GRAY,
-	"first_house_built": MILESTONE_PALETTE_GRAY,
-	"first_discount_manager_used": MILESTONE_PALETTE_PRICE_ORANGE,
-	"first_cart_operator_used": MILESTONE_PALETTE_PROCURE_GREEN,
-}
-const MILESTONE_EFFECT_CATEGORY: Dictionary = {
-	"gain_card": "employee",
-	"gain_cards": "employee",
-	"ban_card": "employee",
-	"multi_trainer_on_one": "employee",
-	"train_from_active_same_color": "employee",
-	"employee_no_salary": "employee",
-	"peek_reserve_cards": "finance",
-	"base_price_delta": "finance",
-	"sell_bonus": "finance",
-	"salary_total_delta": "finance",
-	"turnorder_empty_slots": "finance",
-	"ceo_get_cfo": "finance",
-	"salary_pay_with_tokens": "finance",
-	"salary_allow_unpaid": "finance",
-	"salary_cost_override": "finance",
-	"bank_burn_on_discount_ge_3": "finance",
-	"marketing_no_salary": "marketing",
-	"marketing_permanent": "marketing",
-	"extra_marketing": "marketing",
-	"procure_plus_one": "ops",
-	"drinks_per_source_delta": "ops",
-	"distance_plus_one": "ops",
-	"gain_fridge": "ops",
-}
-
 var _game_state: GameState = null
 var _player_count: int = 0
 var _current_player_id: int = -1
@@ -169,8 +69,11 @@ var _attached_log_panel: Node = null
 var _attached_hand_area: Node = null
 var _attached_company_structure: Node = null
 var _last_phase: String = ""
+
 var _employee_icons_controller = null
 var _turn_log_controller = null
+var _summary_controller = null
+var _milestones_controller = null
 
 func _ready() -> void:
 	_ensure_controllers()
@@ -195,6 +98,16 @@ func _ensure_controllers() -> void:
 		_turn_log_controller = LeftPanelTurnLogControllerClass.new()
 	if _turn_log_controller != null and is_instance_valid(_turn_log_controller):
 		_turn_log_controller.setup(self)
+
+	if _summary_controller == null or not is_instance_valid(_summary_controller):
+		_summary_controller = LeftPanelSummaryControllerClass.new()
+	if _summary_controller != null and is_instance_valid(_summary_controller):
+		_summary_controller.setup(self)
+
+	if _milestones_controller == null or not is_instance_valid(_milestones_controller):
+		_milestones_controller = LeftPanelMilestonesControllerClass.new()
+	if _milestones_controller != null and is_instance_valid(_milestones_controller):
+		_milestones_controller.setup(self)
 
 func _apply_visual_styles() -> void:
 	# 餐厅概览区
@@ -310,10 +223,12 @@ func set_view_player(player_id: int) -> void:
 	_view_player_id = player_id
 	_update_tab_styles()
 	_refresh_restaurant_overview_cards()
-	_refresh_summary()
+	if _summary_controller != null and is_instance_valid(_summary_controller):
+		_summary_controller.refresh()
 	if _employee_icons_controller != null and is_instance_valid(_employee_icons_controller):
 		_employee_icons_controller.refresh()
-	_refresh_milestones_compact()
+	if _milestones_controller != null and is_instance_valid(_milestones_controller):
+		_milestones_controller.refresh()
 	if _turn_log_controller != null and is_instance_valid(_turn_log_controller):
 		_turn_log_controller.refresh()
 
@@ -531,60 +446,35 @@ func _update_tab_styles() -> void:
 func _refresh() -> void:
 	_ensure_controllers()
 	_refresh_restaurant_overview_cards()
-	_refresh_summary()
+	if _summary_controller != null and is_instance_valid(_summary_controller):
+		_summary_controller.refresh()
 	if _employee_icons_controller != null and is_instance_valid(_employee_icons_controller):
 		_employee_icons_controller.refresh()
-	_refresh_milestones_compact()
+	if _milestones_controller != null and is_instance_valid(_milestones_controller):
+		_milestones_controller.refresh()
 	_update_tab_styles()
 	if _turn_log_controller != null and is_instance_valid(_turn_log_controller):
 		_turn_log_controller.refresh()
 
-func _refresh_summary() -> void:
-	if _game_state == null:
-		_set_summary_empty()
-		return
+func _count_total_employees(player: Dictionary) -> int:
+	if _summary_controller != null and is_instance_valid(_summary_controller):
+		return int(_summary_controller.count_total_employees(player))
+	return 0
 
-	var view_id := _resolve_view_player_id()
-	if view_id < 0 or view_id >= _game_state.players.size():
-		_set_summary_empty()
-		return
+func _count_restaurants(player: Dictionary) -> int:
+	if _summary_controller != null and is_instance_valid(_summary_controller):
+		return int(_summary_controller.count_restaurants(player))
+	return 0
 
-	var player_val = _game_state.players[view_id]
-	var player: Dictionary = player_val if player_val is Dictionary else {}
+func _count_milestones(player: Dictionary) -> int:
+	if _summary_controller != null and is_instance_valid(_summary_controller):
+		return int(_summary_controller.count_milestones(player))
+	return 0
 
-	# 餐厅图标
-	if is_instance_valid(restaurant_icon):
-		var tex := _get_player_restaurant_logo_texture(view_id)
-		restaurant_icon.texture = tex
-
-	# 玩家名称
-	if is_instance_valid(player_name_label):
-		player_name_label.text = Globals.get_player_name(view_id)
-
-	# 现金
-	var cash := int(player.get("cash", 0))
-	if is_instance_valid(cash_label):
-		cash_label.text = "$%d" % cash
-
-	# 员工总数
-	var emp_count := _count_total_employees(player)
-	if is_instance_valid(employee_count_label):
-		employee_count_label.text = "👥%d人" % emp_count
-
-	# 餐厅数
-	var rest_count := _count_restaurants(player)
-	if is_instance_valid(restaurant_count_label):
-		restaurant_count_label.text = "🏠%d店" % rest_count
-
-	# 每回合薪资
-	var total_salary := _calculate_total_salary(player)
-	if is_instance_valid(salary_label):
-		salary_label.text = "💰$%d/回合" % total_salary
-
-	# 库存
-	var inv_val = player.get("inventory", {})
-	var inv: Dictionary = inv_val if inv_val is Dictionary else {}
-	_refresh_inventory_ui(inv, _get_fridge_capacity_for_player(player))
+func _get_player_salary_cost(player: Dictionary) -> int:
+	if _summary_controller != null and is_instance_valid(_summary_controller):
+		return int(_summary_controller.get_player_salary_cost(player))
+	return 0
 
 func _refresh_restaurant_overview_cards() -> void:
 	if not is_instance_valid(overview_grid):
@@ -704,663 +594,6 @@ func _create_restaurant_overview_card(player_id: int, player: Dictionary, is_sel
 	]
 	card.gui_input.connect(Callable(self, "_on_overview_card_gui_input").bind(player_id))
 	return card
-
-func _set_summary_empty() -> void:
-	if is_instance_valid(restaurant_icon):
-		restaurant_icon.texture = null
-	if is_instance_valid(player_name_label):
-		player_name_label.text = "-"
-	if is_instance_valid(cash_label):
-		cash_label.text = "$0"
-	if is_instance_valid(employee_count_label):
-		employee_count_label.text = "👥0人"
-	if is_instance_valid(restaurant_count_label):
-		restaurant_count_label.text = "🏠0店"
-	if is_instance_valid(salary_label):
-		salary_label.text = "💰$0/回合"
-	_refresh_inventory_ui({}, -1)
-
-func _count_total_employees(player: Dictionary) -> int:
-	if player == null:
-		return 0
-	var count := 0
-	var sources := [
-		player.get("employees", []),
-		player.get("reserve_employees", []),
-		player.get("busy_marketers", []),
-	]
-	for src_val in sources:
-		for e_val in Array(src_val):
-			var emp_id := str(e_val).strip_edges()
-			if not emp_id.is_empty():
-				count += 1
-	return count
-
-func _count_restaurants(player: Dictionary) -> int:
-	if player == null:
-		return 0
-
-	var restaurants_val = player.get("restaurants", [])
-	if not (restaurants_val is Array):
-		return 0
-
-	var count := 0
-	for rid_val in Array(restaurants_val):
-		var rid := str(rid_val).strip_edges()
-		if not rid.is_empty():
-			count += 1
-	return count
-
-func _count_milestones(player: Dictionary) -> int:
-	if player == null:
-		return 0
-	var milestones_val = player.get("milestones", [])
-	if not (milestones_val is Array):
-		return 0
-	var count := 0
-	for mid_val in Array(milestones_val):
-		var mid := str(mid_val).strip_edges()
-		if not mid.is_empty():
-			count += 1
-	return count
-
-func _calculate_total_salary(player: Dictionary) -> int:
-	if player == null:
-		return 0
-
-	if not EmployeeRegistry.is_loaded():
-		return 0
-	if not (player.get("employees", null) is Array):
-		return 0
-	if not (player.get("reserve_employees", null) is Array):
-		return 0
-	if not (player.get("busy_marketers", null) is Array):
-		return 0
-
-	var paid_employee_count := EmployeeRulesClass.count_paid_employees(player)
-	var salary_cost := _get_player_salary_cost(player)
-	return paid_employee_count * salary_cost
-
-func _get_player_salary_cost(player: Dictionary) -> int:
-	var salary_cost := 0
-	if _game_state != null and (_game_state.rules is Dictionary):
-		salary_cost = int((_game_state.rules as Dictionary).get("salary_cost", 0))
-
-	var override_val = player.get("salary_cost_override", null)
-	if override_val is int:
-		salary_cost = maxi(0, int(override_val))
-	elif override_val is float:
-		var f: float = float(override_val)
-		if f == floor(f):
-			salary_cost = maxi(0, int(f))
-
-	return maxi(0, salary_cost)
-
-func _refresh_inventory_ui(inv: Dictionary, fridge_capacity: int) -> void:
-	if not is_instance_valid(inventory_header) or not is_instance_valid(inventory_tokens_flow):
-		return
-
-	# 计算库存总量
-	var total_items := 0
-	for k in inv.keys():
-		total_items += int(inv.get(k, 0))
-
-	if fridge_capacity < 0:
-		inventory_header.text = "📦 库存 (%d)" % total_items
-	else:
-		inventory_header.text = "📦 库存 (%d/%d)" % [total_items, fridge_capacity]
-
-	for c in inventory_tokens_flow.get_children():
-		if is_instance_valid(c):
-			c.queue_free()
-
-	_ensure_skin()
-
-	var keys := inv.keys()
-	keys.sort()
-
-	var added := 0
-	for k in keys:
-		var product_id := str(k)
-		var count := int(inv.get(product_id, 0))
-		if count <= 0:
-			continue
-		inventory_tokens_flow.add_child(_build_inventory_token_item(product_id, count))
-		added += 1
-
-	if added <= 0:
-		var empty := Label.new()
-		empty.text = "无"
-		UiStylesClass.apply_label_hint_dark(empty)
-		var fs := 13
-		if Globals != null:
-			fs = int(Globals.get_scaled_font_size(13))
-		empty.add_theme_font_size_override("font_size", fs)
-		inventory_tokens_flow.add_child(empty)
-
-func _build_inventory_token_item(product_id: String, count: int) -> Control:
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 4)
-
-	var icon := TextureRect.new()
-	icon.custom_minimum_size = Vector2(22, 22)
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.texture = _get_product_icon_texture(product_id)
-	hbox.add_child(icon)
-
-	var label := Label.new()
-	label.text = "×%d" % count
-	var fs := 14
-	if Globals != null:
-		fs = int(Globals.get_scaled_font_size(14))
-	label.add_theme_font_size_override("font_size", fs)
-	label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
-	hbox.add_child(label)
-
-	var name := _get_product_display_name(product_id)
-	hbox.tooltip_text = "%s ×%d" % [name, count]
-	return hbox
-
-func _get_product_display_name(product_id: String) -> String:
-	if product_id.is_empty():
-		return ""
-	var pid := str(product_id)
-	if pid == "cola":
-		pid = "soda"
-	if ProductRegistryClass.is_loaded():
-		var def_val = ProductRegistryClass.get_def(pid)
-		if def_val != null and (def_val is ProductDef):
-			var def: ProductDef = def_val
-			if not def.name.is_empty():
-				return def.name
-	return pid
-
-func _get_product_icon_texture(product_id: String) -> Texture2D:
-	_ensure_skin()
-	if _skin == null or not _skin.has_method("get_product_icon_texture"):
-		return null
-	var pid := str(product_id)
-	if pid == "cola":
-		pid = "soda"
-	return _skin.get_product_icon_texture(pid)
-
-func _get_fridge_capacity_for_player(player: Dictionary) -> int:
-	if player == null:
-		return -1
-	var milestones_val = player.get("milestones", null)
-	if not (milestones_val is Array):
-		return -1
-	if not MilestoneRegistry.is_loaded():
-		return -1
-
-	var milestones: Array = milestones_val
-	var has_fridge := false
-	var capacity := 0
-
-	for i in range(milestones.size()):
-		var mid_val = milestones[i]
-		if not (mid_val is String):
-			continue
-		var mid: String = str(mid_val)
-		if mid.is_empty():
-			continue
-		var def_val = MilestoneRegistry.get_def(mid)
-		if not (def_val is MilestoneDef):
-			continue
-		var def: MilestoneDef = def_val
-		for e_i in range(def.effects.size()):
-			var eff_val = def.effects[e_i]
-			if not (eff_val is Dictionary):
-				continue
-			var eff: Dictionary = eff_val
-			var type_val = eff.get("type", null)
-			if not (type_val is String):
-				continue
-			if str(type_val) != "gain_fridge":
-				continue
-			var value_val = eff.get("value", null)
-			if value_val is int:
-				has_fridge = true
-				capacity = maxi(capacity, int(value_val))
-			elif value_val is float:
-				var f: float = float(value_val)
-				if f == int(f):
-					has_fridge = true
-					capacity = maxi(capacity, int(f))
-
-	return capacity if has_fridge else -1
-
-# === 里程碑紧凑显示 ===
-func _refresh_milestones_compact() -> void:
-	if not is_instance_valid(milestones_list):
-		return
-
-	var row_sep := 4
-	if Globals != null:
-		row_sep = maxi(2, int(Globals.get_scaled_font_size(4)))
-	milestones_list.add_theme_constant_override("separation", row_sep)
-
-	for c in milestones_list.get_children():
-		if is_instance_valid(c):
-			c.queue_free()
-
-	if _game_state == null:
-		_add_milestone_empty_label()
-		return
-
-	var view_id := _resolve_view_player_id()
-	if view_id < 0 or view_id >= _game_state.players.size():
-		_add_milestone_empty_label()
-		return
-
-	var player_val = _game_state.players[view_id]
-	var player: Dictionary = player_val if player_val is Dictionary else {}
-	var player_milestones: Array = Array(player.get("milestones", []))
-	var claimed_set := {}
-	for pm in player_milestones:
-		var pm_id := str(pm).strip_edges()
-		if pm_id.is_empty():
-			continue
-		claimed_set[pm_id] = true
-
-	# 构建里程碑池计数
-	var pool_counts := {}
-	for v in _game_state.milestone_pool:
-		var mid := str(v)
-		if mid.is_empty():
-			continue
-		pool_counts[mid] = int(pool_counts.get(mid, 0)) + 1
-
-	var all_ids := _get_all_milestone_ids_for_left_panel()
-	if all_ids.is_empty():
-		_add_milestone_empty_label()
-		return
-
-	var entries: Array[Dictionary] = []
-	for ms_id in all_ids:
-		var def = MilestoneRegistry.get_def(ms_id) if MilestoneRegistry.is_loaded() else null
-		var category := _get_milestone_category(ms_id, def)
-		var accent: Color = _get_milestone_accent_color(ms_id, category)
-		entries.append({
-			"id": ms_id,
-			"def": def,
-			"is_claimed": bool(claimed_set.get(ms_id, false)),
-			"in_pool": int(pool_counts.get(ms_id, 0)) > 0,
-			"color_rank": _get_milestone_color_sort_rank(accent),
-			"category_rank": _get_milestone_category_sort_rank(category),
-			"display_name": _get_milestone_display_name(ms_id, def),
-		})
-
-	if entries.size() > 1:
-		entries.sort_custom(Callable(self, "_sort_milestones_compact_entries"))
-
-	for entry in entries:
-		var row := _create_milestone_compact_row(
-			str(entry.get("id", "")),
-			entry.get("def", null),
-			bool(entry.get("is_claimed", false)),
-			bool(entry.get("in_pool", false))
-		)
-		milestones_list.add_child(row)
-
-func _add_milestone_empty_label() -> void:
-	var empty := Label.new()
-	empty.text = "暂无里程碑"
-	UiStylesClass.apply_label_hint_dark(empty)
-	var fs := 16
-	if Globals != null:
-		fs = int(Globals.get_scaled_font_size(16))
-	empty.add_theme_font_size_override("font_size", fs)
-	milestones_list.add_child(empty)
-
-func _create_milestone_compact_row(milestone_id: String, milestone_def, is_claimed: bool, in_pool: bool) -> Control:
-	var wrapper := Control.new()
-	var row_min_h := 36
-	if Globals != null:
-		row_min_h = maxi(32, int(Globals.get_scaled_font_size(36)))
-	wrapper.custom_minimum_size = Vector2(0, row_min_h)
-	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# 使用 PASS 让滚轮事件可以上传到 ScrollContainer，避免里程碑过多时无法滚动。
-	wrapper.mouse_filter = Control.MOUSE_FILTER_PASS
-	wrapper.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-
-	var category := _get_milestone_category(milestone_id, milestone_def)
-	var accent: Color = _get_milestone_accent_color(milestone_id, category)
-	var scroll_gutter := _get_milestone_scroll_gutter()
-
-	var card := PanelContainer.new()
-	card.anchor_right = 1.0
-	card.anchor_bottom = 1.0
-	card.offset_right = -scroll_gutter
-	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	card.add_theme_stylebox_override("panel", _build_milestone_row_style(accent, is_claimed, in_pool))
-	wrapper.add_child(card)
-
-	var margin := MarginContainer.new()
-	margin.anchor_right = 1.0
-	margin.anchor_bottom = 1.0
-	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	margin.add_theme_constant_override("margin_left", 7)
-	margin.add_theme_constant_override("margin_right", 6)
-	margin.add_theme_constant_override("margin_top", 2)
-	margin.add_theme_constant_override("margin_bottom", 2)
-	card.add_child(margin)
-
-	var row := HBoxContainer.new()
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_theme_constant_override("separation", 8)
-	margin.add_child(row)
-
-	# 状态图标
-	var icon_label := Label.new()
-	var fs_icon := 18
-	if Globals != null:
-		fs_icon = int(Globals.get_scaled_font_size(18))
-	icon_label.add_theme_font_size_override("font_size", fs_icon)
-
-	if is_claimed:
-		icon_label.text = "✓"
-		icon_label.add_theme_color_override("font_color", MILESTONE_COLOR_CLAIMED)
-	elif in_pool:
-		icon_label.text = "○"
-		icon_label.add_theme_color_override("font_color", MILESTONE_COLOR_AVAILABLE)
-	else:
-		icon_label.text = "○"
-		icon_label.add_theme_color_override("font_color", MILESTONE_COLOR_GONE)
-
-	row.add_child(icon_label)
-
-	# 里程碑名称
-	var name_label := Label.new()
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var fs_name := 18
-	if Globals != null:
-		fs_name = int(Globals.get_scaled_font_size(18))
-	name_label.add_theme_font_size_override("font_size", fs_name)
-
-	name_label.text = _get_milestone_display_name(milestone_id, milestone_def)
-	if is_claimed:
-		UiStylesClass.apply_label_dark(name_label)
-	elif in_pool:
-		UiStylesClass.apply_label_dark(name_label)
-	else:
-		UiStylesClass.apply_label_hint_dark(name_label)
-		name_label.modulate.a = 0.85
-
-	row.add_child(name_label)
-
-	if not is_claimed and not in_pool:
-		var strike := ColorRect.new()
-		strike.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		strike.anchor_right = 1.0
-		strike.anchor_top = 0.5
-		strike.anchor_bottom = 0.5
-		strike.offset_right = -scroll_gutter
-		strike.offset_top = -1
-		strike.offset_bottom = 1
-		strike.color = Color(MILESTONE_COLOR_GONE.r, MILESTONE_COLOR_GONE.g, MILESTONE_COLOR_GONE.b, 0.95)
-		wrapper.add_child(strike)
-
-	# Tooltip: 里程碑效果描述
-	var tip := _get_milestone_tooltip(milestone_id)
-	wrapper.tooltip_text = tip
-	row.tooltip_text = tip
-	icon_label.tooltip_text = tip
-	name_label.tooltip_text = tip
-	wrapper.mouse_entered.connect(Callable(self, "_on_milestone_mouse_entered").bind(milestone_id, wrapper))
-	wrapper.mouse_exited.connect(_on_milestone_mouse_exited)
-	wrapper.gui_input.connect(Callable(self, "_on_milestone_gui_input").bind(milestone_id, wrapper))
-
-	return wrapper
-
-func _build_milestone_row_style(accent: Color, is_claimed: bool, in_pool: bool) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	var bg_alpha := 0.18
-	var border_alpha := 0.72
-	if is_claimed:
-		bg_alpha = 0.24
-		border_alpha = 0.84
-	elif in_pool:
-		bg_alpha = 0.18
-		border_alpha = 0.72
-	else:
-		bg_alpha = 0.10
-		border_alpha = 0.36
-
-	style.bg_color = Color(accent.r, accent.g, accent.b, bg_alpha)
-	style.border_color = Color(accent.r, accent.g, accent.b, border_alpha)
-	style.border_width_left = 3
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.set_corner_radius_all(5)
-	return style
-
-func _sort_milestones_compact_entries(a: Dictionary, b: Dictionary) -> bool:
-	var color_a := int(a.get("color_rank", 999))
-	var color_b := int(b.get("color_rank", 999))
-	if color_a != color_b:
-		return color_a < color_b
-
-	var category_a := int(a.get("category_rank", 999))
-	var category_b := int(b.get("category_rank", 999))
-	if category_a != category_b:
-		return category_a < category_b
-
-	var name_a := str(a.get("display_name", ""))
-	var name_b := str(b.get("display_name", ""))
-	var name_cmp := name_a.naturalnocasecmp_to(name_b)
-	if name_cmp != 0:
-		return name_cmp < 0
-
-	var id_a := str(a.get("id", ""))
-	var id_b := str(b.get("id", ""))
-	return id_a.naturalnocasecmp_to(id_b) < 0
-
-func _get_milestone_color_sort_rank(accent: Color) -> int:
-	if accent.is_equal_approx(MILESTONE_PALETTE_PURPLE):
-		return 10
-	if accent.is_equal_approx(MILESTONE_PALETTE_GRAY):
-		return 20
-	if accent.is_equal_approx(MILESTONE_PALETTE_MARKETING_BLUE):
-		return 30
-	if accent.is_equal_approx(MILESTONE_PALETTE_PRODUCE_GREEN):
-		return 40
-	if accent.is_equal_approx(MILESTONE_PALETTE_PROCURE_GREEN):
-		return 50
-	if accent.is_equal_approx(MILESTONE_PALETTE_PRICE_ORANGE):
-		return 60
-	if accent.is_equal_approx(MILESTONE_PALETTE_COFFEE_MINT):
-		return 70
-	if accent.is_equal_approx(MILESTONE_PALETTE_KETCHUP_DARK):
-		return 80
-	return 999
-
-func _get_milestone_category_sort_rank(category: String) -> int:
-	match category:
-		"employee":
-			return 10
-		"finance":
-			return 20
-		"general":
-			return 30
-		"marketing":
-			return 40
-		"ops":
-			return 50
-		"expansion":
-			return 60
-		_:
-			return 99
-
-func _get_milestone_display_name(milestone_id: String, milestone_def) -> String:
-	if milestone_def != null and milestone_def is MilestoneDef:
-		var def: MilestoneDef = milestone_def
-		var name := str(def.name).strip_edges()
-		if not name.is_empty():
-			return name
-	return milestone_id
-
-func _get_milestone_scroll_gutter() -> int:
-	if Globals != null:
-		return maxi(12, int(Globals.get_scaled_font_size(MILESTONE_SCROLL_GUTTER)))
-	return MILESTONE_SCROLL_GUTTER
-
-func _get_milestone_accent_color(milestone_id: String, category: String) -> Color:
-	var mid := milestone_id.strip_edges()
-	if MILESTONE_COLOR_BY_ID.has(mid):
-		var c = MILESTONE_COLOR_BY_ID[mid]
-		if c is Color:
-			return c
-	return _get_milestone_category_color(category)
-
-func _get_milestone_category(milestone_id: String, milestone_def) -> String:
-	if milestone_def != null and milestone_def is MilestoneDef:
-		var def: MilestoneDef = milestone_def
-		for e_val in def.effects:
-			if not (e_val is Dictionary):
-				continue
-			var e: Dictionary = e_val
-			var eff_type := str(e.get("type", "")).strip_edges()
-			if eff_type.is_empty():
-				continue
-			var c := str(MILESTONE_EFFECT_CATEGORY.get(eff_type, "")).strip_edges()
-			if not c.is_empty():
-				return c
-		for eid_val in def.effect_ids:
-			var eid := str(eid_val).to_lower()
-			if eid.find(":marketing:") >= 0:
-				return "marketing"
-			if eid.find(":dinnertime:") >= 0:
-				return "ops"
-			if eid.find(":payday:") >= 0:
-				return "finance"
-
-	var id := milestone_id.to_lower()
-	if id.find("marketing") >= 0 or id.find("radio") >= 0 or id.find("billboard") >= 0 or id.find("airplane") >= 0:
-		return "marketing"
-	if id.find("hire") >= 0 or id.find("train") >= 0 or id.find("waitress") >= 0 or id.find("errand_boy") >= 0 or id.find("cart_operator") >= 0 or id.find("brand_") >= 0 or id.find("campaign_") >= 0 or id.find("recruit") >= 0:
-		return "employee"
-	if id.find("have_") >= 0 or id.find("pay_") >= 0 or id.find("price") >= 0 or id.find("discount") >= 0 or id.find("cfo") >= 0:
-		return "finance"
-	if id.find("new_restaurant") >= 0 or id.find("house") >= 0 or id.find("lobbyist") >= 0 or id.find("rural") >= 0:
-		return "expansion"
-	if id.find("produced") >= 0 or id.find("sold") >= 0 or id.find("drink") >= 0 or id.find("burger") >= 0 or id.find("pizza") >= 0 or id.find("lemonade") >= 0 or id.find("beer") >= 0 or id.find("coke") >= 0 or id.find("coffee") >= 0:
-		return "ops"
-	return "general"
-
-func _get_milestone_category_color(category: String) -> Color:
-	if MILESTONE_CATEGORY_COLORS.has(category):
-		var c = MILESTONE_CATEGORY_COLORS[category]
-		if c is Color:
-			return c
-	var fallback = MILESTONE_CATEGORY_COLORS.get("general", Color(0.42, 0.36, 0.28, 1.0))
-	return fallback if fallback is Color else Color(0.42, 0.36, 0.28, 1.0)
-
-func _get_all_milestone_ids_for_left_panel() -> Array[String]:
-	var set := {}
-	if MilestoneRegistry.is_loaded():
-		for mid0 in MilestoneRegistry.get_all_ids():
-			var mid_a := str(mid0).strip_edges()
-			if mid_a.is_empty():
-				continue
-			set[mid_a] = true
-
-	if _game_state != null:
-		if _game_state.milestone_pool is Array:
-			for v in Array(_game_state.milestone_pool):
-				var mid_p := str(v).strip_edges()
-				if mid_p.is_empty():
-					continue
-				set[mid_p] = true
-
-		if _game_state.players is Array:
-			for p_val in _game_state.players:
-				if not (p_val is Dictionary):
-					continue
-				var p: Dictionary = p_val
-				for m in Array(p.get("milestones", [])):
-					var mid_m := str(m).strip_edges()
-					if mid_m.is_empty():
-						continue
-					set[mid_m] = true
-
-	var ids: Array[String] = []
-	for k in set.keys():
-		ids.append(str(k))
-	ids.sort()
-	return ids
-
-func _get_milestone_tooltip(milestone_id: String) -> String:
-	if not MilestoneRegistry.is_loaded():
-		return milestone_id
-
-	var def_val = MilestoneRegistry.get_def(milestone_id)
-	if not (def_val is MilestoneDef):
-		return milestone_id
-
-	var def: MilestoneDef = def_val
-	var lines: Array[String] = []
-	lines.append(def.name if not def.name.is_empty() else milestone_id)
-
-	return "\n".join(lines)
-
-func _get_preview_manager():
-	var tree := get_tree()
-	if tree == null:
-		return null
-	for n in tree.get_nodes_in_group("employee_card_preview_manager"):
-		if n != null and is_instance_valid(n):
-			if n.has_method("request_milestone_preview") or n.has_method("show_milestone_immediate"):
-				return n
-	return null
-
-func _on_milestone_mouse_entered(milestone_id: String, control: Control) -> void:
-	var mgr = _get_preview_manager()
-	if mgr == null:
-		return
-	if control == null or not is_instance_valid(control):
-		return
-	if not mgr.has_method("request_milestone_preview"):
-		return
-	var pos: Vector2 = control.get_global_rect().position + (control.size / 2.0)
-	mgr.request_milestone_preview(str(milestone_id), pos)
-
-func _on_milestone_mouse_exited() -> void:
-	var mgr = _get_preview_manager()
-	if mgr == null:
-		return
-	if mgr.has_method("hide_preview"):
-		mgr.hide_preview()
-
-func _on_milestone_gui_input(event: InputEvent, milestone_id: String, control: Control) -> void:
-	if not (event is InputEventMouseButton):
-		return
-	var e: InputEventMouseButton = event
-	if e.button_index != MOUSE_BUTTON_LEFT or not e.pressed:
-		return
-	var mgr = _get_preview_manager()
-	if mgr == null:
-		return
-	if control == null or not is_instance_valid(control):
-		return
-	if not mgr.has_method("show_milestone_immediate"):
-		return
-	var pos: Vector2 = control.get_global_rect().position + (control.size / 2.0)
-	mgr.show_milestone_immediate(str(milestone_id), pos)
-
-func _role_to_category(role: String) -> String:
-	match role:
-		"manager", "recruit_train":
-			return "管理"
-		"produce_food", "procure_drink":
-			return "厨房"
-		"marketing":
-			return "营销"
-		_:
-			return "其他"
 
 func _resolve_view_player_id() -> int:
 	if _game_state == null:

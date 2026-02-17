@@ -7,12 +7,11 @@ signal action_requested(action_id: String, params: Dictionary)
 signal guided_action_dismissed(action_id: String)
 
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
-const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
-const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const ContextControllerClass = preload("res://ui/components/action_panel/action_panel_context_controller.gd")
+const ActionsControllerClass = preload("res://ui/components/action_panel/action_panel_actions_controller.gd")
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var guided_action_panel: Control = $MarginContainer/VBoxContainer/GuidedActionPanel
@@ -47,9 +46,9 @@ const ContextControllerClass = preload("res://ui/components/action_panel/action_
 var _action_registry = null  # ActionRegistry
 var _game_state: GameState = null
 var _current_player_id: int = -1
-var _action_buttons: Dictionary = {}  # Deprecated: action_id -> ActionButton（动作按钮列表已迁移至 ActionFlowControls）
 var _mandatory_action_ids: Dictionary = {}  # action_id -> true
 var _context_controller = null
+var _actions_controller = null
 var _globally_disabled: bool = false
 var _globally_disabled_reason: String = ""
 var _visible_action_ids: Array[String] = []
@@ -104,14 +103,6 @@ func _get_hidden_action_ids() -> Dictionary:
 				hidden[s] = true
 
 	return hidden
-
-# 定价类强制动作在 UI 中隐藏，并在执行 skip 前由 Game 自动补完（见 Game._maybe_auto_complete_mandatory_actions_before_skip）。
-# 为避免软锁：当 skip 仅因“缺少这些可自动补完的强制动作”而不可用时，ActionPanel 仍应允许点击 skip。
-const AUTO_MANDATORY_ACTION_IDS := {
-	ActionIdsClass.SET_PRICE: true,
-	ActionIdsClass.SET_DISCOUNT: true,
-	ActionIdsClass.SET_LUXURY_PRICE: true,
-}
 
 # 动作显示名称映射
 const ACTION_DISPLAY_NAMES: Dictionary = {
@@ -341,6 +332,12 @@ func _setup_context_ui() -> void:
 	_context_controller.setup(self)
 	_context_controller.set_action_registry(_action_registry)
 
+func _ensure_actions_controller() -> void:
+	if _actions_controller == null or not is_instance_valid(_actions_controller):
+		_actions_controller = ActionsControllerClass.new()
+	if _actions_controller != null and is_instance_valid(_actions_controller):
+		_actions_controller.setup(self)
+
 func bind_context_overlay(overlay: Node) -> void:
 	if _context_controller == null:
 		_setup_context_ui()
@@ -413,7 +410,9 @@ func _update_title() -> void:
 
 func set_available_actions(action_ids: Array[String]) -> void:
 	# 测试/调试入口：不依赖 GameState/ActionRegistry 的简化路径
-	_set_visible_actions_from_list(action_ids, [])
+	_ensure_actions_controller()
+	if _actions_controller != null and is_instance_valid(_actions_controller):
+		_actions_controller.set_available_actions(action_ids)
 
 func set_action_enabled(action_id: String, enabled: bool) -> void:
 	var aid := str(action_id)
@@ -541,432 +540,11 @@ func _apply_global_disabled_state() -> void:
 	# 这里不再直接操作动作按钮（已改为压平动作流，按钮由外部 ActionFlowControls 承载）。
 
 func refresh() -> void:
-	if is_instance_valid(rewind_phase_button):
-		rewind_phase_button.disabled = (_game_state == null)
-	if _game_state == null:
-		_clear_actions_cache()
-		return
-
-	var available_ids: Array[String] = []
-	var executable_ids: Array[String] = []
-	var has_player_executable_info := false
-	_mandatory_action_ids.clear()
-
-	# 通过 ActionRegistry 获取可用动作
-	if _action_registry != null and _action_registry.has_method("get_available_actions"):
-		available_ids = _action_registry.get_available_actions(_game_state)
-		if _action_registry.has_method("get_mandatory_actions"):
-			for mid in _action_registry.get_mandatory_actions(_game_state):
-				_mandatory_action_ids[str(mid)] = true
-		if _current_player_id >= 0:
-			# UI 侧需要“可启动”判定：允许先点击进入面板/选点，再补齐参数执行
-			if _action_registry.has_method("get_player_initiatable_actions"):
-				executable_ids = _action_registry.get_player_initiatable_actions(_game_state, _current_player_id)
-				has_player_executable_info = true
-			elif _action_registry.has_method("get_player_available_actions"):
-				executable_ids = _action_registry.get_player_available_actions(_game_state, _current_player_id)
-				has_player_executable_info = true
-	else:
-		# 备用：根据阶段硬编码部分常用动作
-		available_ids = _get_fallback_actions(_game_state.phase, _game_state.sub_phase)
-
-	var hidden_ids := _get_hidden_action_ids()
-
-	# 隐藏内部动作
-	var visible_ids: Array[String] = []
-	for aid in available_ids:
-		if hidden_ids.has(aid):
-			continue
-		visible_ids.append(aid)
-
-	var visible_executable: Array[String] = []
-	for aid2 in executable_ids:
-		if hidden_ids.has(aid2):
-			continue
-		visible_executable.append(aid2)
-
-	# Restructuring（hotseat 提交制）：隐藏“确认结束(skip)”，避免误解/误点造成卡住
-	if _game_state.phase == DefsClass.PHASE_RESTRUCTURING and int(_game_state.round_number) > 1:
-		var filtered_ids: Array[String] = []
-		for aid_skip in visible_ids:
-			if aid_skip == ActionIdsClass.SKIP:
-				continue
-			filtered_ids.append(aid_skip)
-		visible_ids = filtered_ids
-
-		var filtered_executable: Array[String] = []
-		for aid_skip2 in visible_executable:
-			if aid_skip2 == ActionIdsClass.SKIP:
-				continue
-			filtered_executable.append(aid_skip2)
-		visible_executable = filtered_executable
-
-	# Working：即使当前子阶段无任何可执行动作，也必须保留“跳过子阶段”，否则会造成软锁
-	# （例如 Train 子阶段没有可培训来源/次数时，skip 被 validate 拒绝，只能用 skip_sub_phase 推进）。
-	#
-	# 但当 skip_sub_phase 实际效果等于“结束回合/结束工作阶段”（例如最后子阶段），不应再展示该按钮以避免误导。
-	if visible_ids.has(ActionIdsClass.SKIP_SUB_PHASE) and not _should_show_skip_sub_phase_button():
-		var filtered_skip_sub: Array[String] = []
-		for v in visible_ids:
-			if v == ActionIdsClass.SKIP_SUB_PHASE:
-				continue
-			filtered_skip_sub.append(v)
-		visible_ids = filtered_skip_sub
-
-		if has_player_executable_info:
-			var filtered_exec_skip_sub: Array[String] = []
-			for v2 in visible_executable:
-				if v2 == ActionIdsClass.SKIP_SUB_PHASE:
-					continue
-				filtered_exec_skip_sub.append(v2)
-			visible_executable = filtered_exec_skip_sub
-
-	# P1：默认不再自动隐藏“玩家依赖动作”，改为灰显 + 原因（提升发现性）。
-	# 但对少数“模块/里程碑动作”，若对当前玩家不可启动则直接隐藏（issue_tracker #78）。
-	if has_player_executable_info:
-		var filtered_visible: Array[String] = []
-		for aid_hide in visible_ids:
-			if _should_auto_hide_if_not_initiatable(aid_hide) and not visible_executable.has(aid_hide):
-				continue
-			filtered_visible.append(aid_hide)
-		visible_ids = filtered_visible
-
-	# 强制动作优先显示
-	if not _mandatory_action_ids.is_empty():
-		var ordered: Array[String] = []
-		for aidm in visible_ids:
-			if _mandatory_action_ids.has(aidm):
-				ordered.append(aidm)
-		for aidn in visible_ids:
-			if not _mandatory_action_ids.has(aidn):
-				ordered.append(aidn)
-		visible_ids = ordered
-
-	_set_visible_actions_from_list(visible_ids, visible_executable if has_player_executable_info else [])
-
-	# 若能计算“当前玩家可执行动作”，则对不可执行动作做灰显，并写入原因
-	if has_player_executable_info:
-		for aid3 in visible_ids:
-			var enabled := visible_executable.has(aid3)
-			if (not enabled) and aid3 == ActionIdsClass.SKIP and _should_enable_skip_via_auto_mandatory_actions():
-				enabled = true
-			# 保留调试用强制推进按钮
-			if aid3 == ActionIdsClass.ADVANCE_PHASE:
-				enabled = true
-			set_action_enabled(aid3, enabled)
-			if enabled:
-				set_action_disabled_reason(aid3, "")
-			else:
-				set_action_disabled_reason(aid3, _compute_disabled_reason(aid3))
-	else:
-		for aid4 in visible_ids:
-			set_action_enabled(aid4, true)
-			set_action_disabled_reason(aid4, "")
-
-	_compute_guided_flow_visibility()
-
-	_apply_global_disabled_state()
-
-func _clear_actions_cache() -> void:
-	_visible_action_ids = []
-	_visible_initiatable_action_ids = []
-	_action_enabled.clear()
-	_action_disabled_reason.clear()
-	_guided_action_id = ""
-	_flow_confirm_end_visible = false
-	_flow_skip_step_visible = false
-	_sync_guided_action_placeholder()
-	if items_container != null and is_instance_valid(items_container):
-		UiRebuildHelpersClass.free_children(items_container)
-
-func _sanitize_action_id_list(action_ids: Array) -> Array[String]:
-	var out: Array[String] = []
-	for v in action_ids:
-		var s := str(v).strip_edges()
-		if s.is_empty():
-			continue
-		out.append(s)
-	return out
-
-func _set_visible_actions_from_list(action_ids: Array, initiatable_ids: Array) -> void:
-	_visible_action_ids = _sort_action_ids_for_display(_sanitize_action_id_list(action_ids))
-	_visible_initiatable_action_ids = _sanitize_action_id_list(initiatable_ids)
-	if items_container != null and is_instance_valid(items_container):
-		# 压平动作流：ActionPanel 不再渲染动作按钮列表
-		UiRebuildHelpersClass.free_children(items_container)
-
-	_action_enabled.clear()
-	_action_disabled_reason.clear()
-	for aid in _visible_action_ids:
-		set_action_enabled(aid, true)
-		set_action_disabled_reason(aid, "")
-	_compute_guided_flow_visibility()
-	_sync_guided_action_placeholder()
-
-func _compute_guided_flow_visibility() -> void:
-	_guided_action_id = ""
-	var candidates := _visible_initiatable_action_ids
-	if candidates.is_empty():
-		candidates = _visible_action_ids
-	for aid in candidates:
-		if aid == ActionIdsClass.SKIP_SUB_PHASE:
-			continue
-		if aid == ActionIdsClass.SKIP:
-			continue
-		_guided_action_id = aid
-		break
-
-	_flow_skip_step_visible = _visible_action_ids.has(ActionIdsClass.SKIP_SUB_PHASE)
-
-	# “确认结束(skip)”仅在没有其他可启动动作时显示；
-	# Working：若仍存在 skip_sub_phase，则永远不显示确认结束（避免误导）。
-	var show_skip := _visible_action_ids.has(ActionIdsClass.SKIP)
-	if show_skip and _flow_skip_step_visible:
-		show_skip = false
-	if show_skip:
-		var has_any_other_initiatable := false
-		var check_ids := _visible_initiatable_action_ids
-		if check_ids.is_empty():
-			# 无法计算“可启动动作”时：退化为“只要面板里还有非 skip 动作，就不显示确认结束”
-			check_ids = _visible_action_ids
-		for aid2 in check_ids:
-			var a := str(aid2)
-			if a == ActionIdsClass.SKIP or a == ActionIdsClass.SKIP_SUB_PHASE:
-				continue
-			has_any_other_initiatable = true
-			break
-		show_skip = not has_any_other_initiatable
-
-	_flow_confirm_end_visible = show_skip
-	_sync_guided_action_placeholder()
+	_ensure_actions_controller()
+	if _actions_controller != null and is_instance_valid(_actions_controller):
+		_actions_controller.refresh()
 
 func _on_rewind_phase_pressed() -> void:
 	# 作为“面板工具”而非游戏动作：由 GamePanelController 接管该 action_id，并触发时间线回退。
 	clear_context_overlay()
 	action_requested.emit("rewind_to_turn_start", {})
-
-func _get_fallback_actions(phase: String, sub_phase: String) -> Array[String]:
-	var result: Array[String] = [ActionIdsClass.SKIP]
-
-	match phase:
-		DefsClass.PHASE_SETUP:
-			result.append("place_restaurant")
-		DefsClass.PHASE_ORDER_OF_BUSINESS:
-			result.append("choose_turn_order")
-		DefsClass.PHASE_WORKING:
-			match sub_phase:
-				DefsClass.SUB_PHASE_RECRUIT:
-					result.append("recruit")
-				DefsClass.SUB_PHASE_TRAIN:
-					result.append("train")
-				DefsClass.SUB_PHASE_MARKETING:
-					result.append("initiate_marketing")
-				DefsClass.SUB_PHASE_GET_FOOD:
-					result.append("produce_food")
-				DefsClass.SUB_PHASE_GET_DRINKS:
-					result.append("procure_drinks")
-				DefsClass.SUB_PHASE_PLACE_HOUSES:
-					result.append("place_house")
-					result.append("add_garden")
-				DefsClass.SUB_PHASE_PLACE_RESTAURANTS:
-					result.append("place_restaurant")
-					result.append("move_restaurant")
-		DefsClass.PHASE_PAYDAY:
-			result.append("fire")
-
-	return result
-
-func _sort_action_ids_for_display(action_ids: Array[String]) -> Array[String]:
-	# 固定 UI 顺序：把“跳过子阶段/确认结束”放在列表底部，并保持 skip_sub_phase 在 skip 上方。
-	# 其它动作保持相对顺序不变（避免无关面板顺序抖动）。
-	var out: Array[String] = []
-	var has_skip_sub := false
-	var has_skip := false
-	for v in action_ids:
-		var aid := str(v)
-		if aid == ActionIdsClass.SKIP_SUB_PHASE:
-			has_skip_sub = true
-			continue
-		if aid == ActionIdsClass.SKIP:
-			has_skip = true
-			continue
-		out.append(aid)
-
-	if has_skip_sub:
-		out.append(ActionIdsClass.SKIP_SUB_PHASE)
-	if has_skip:
-		out.append(ActionIdsClass.SKIP)
-	return out
-
-func _rebuild_action_buttons(action_ids: Array[String]) -> void:
-	# 清除旧按钮
-	UiRebuildHelpersClass.free_nodes_dict(_action_buttons)
-
-	if items_container == null:
-		return
-
-	var ids := _sort_action_ids_for_display(action_ids)
-
-	# 创建新按钮
-	for action_id in ids:
-		var btn := ActionButton.new()
-		btn.action_id = action_id
-		if action_id == ActionIdsClass.SKIP_SUB_PHASE:
-			btn.display_name = _get_skip_sub_phase_display_name()
-		else:
-			var ex_name := _get_executor_display_name(action_id)
-			btn.display_name = ex_name if not ex_name.is_empty() else ACTION_DISPLAY_NAMES.get(action_id, action_id)
-		var ex_desc := _get_executor_description(action_id)
-		btn.description = ex_desc if not ex_desc.is_empty() else ACTION_DESCRIPTIONS.get(action_id, "")
-		btn.is_mandatory = _mandatory_action_ids.has(action_id)
-		btn.action_clicked.connect(_on_action_clicked)
-		items_container.add_child(btn)
-		_action_buttons[action_id] = btn
-
-func _on_action_clicked(action_id: String) -> void:
-	action_requested.emit(action_id, {})
-
-
-# === 内部类：动作按钮 ===
-class ActionButton extends Button:
-	signal action_clicked(action_id: String)
-
-	var action_id: String = ""
-	var display_name: String = ""
-	var description: String = ""
-	var disabled_reason: String = ""
-	var is_mandatory: bool = false
-
-	func _ready() -> void:
-		_build_ui()
-		pressed.connect(_on_pressed)
-		mouse_entered.connect(_on_mouse_entered)
-		mouse_exited.connect(_on_mouse_exited)
-
-	func _build_ui() -> void:
-		custom_minimum_size = Vector2(180, 36)
-		var base := display_name if not display_name.is_empty() else action_id
-		text = ("【强制】%s" % base) if is_mandatory else base
-		var fs := 14
-		if Globals != null:
-			fs = int(Globals.get_scaled_font_size(14))
-		add_theme_font_size_override("font_size", fs)
-
-	func set_enabled(enabled: bool) -> void:
-		disabled = not enabled
-		modulate = Color(1, 1, 1, 1) if enabled else Color(0.5, 0.5, 0.5, 0.7)
-
-	func set_disabled_reason(reason: String) -> void:
-		disabled_reason = str(reason).strip_edges()
-
-	func _on_pressed() -> void:
-		action_clicked.emit(action_id)
-
-	func _on_mouse_entered() -> void:
-		if disabled and not disabled_reason.is_empty():
-			tooltip_text = "不可用：%s" % disabled_reason
-		elif not description.is_empty():
-			tooltip_text = description
-
-	func _on_mouse_exited() -> void:
-		tooltip_text = ""
-
-func _get_missing_mandatory_actions_for_current_player() -> Array[String]:
-	if _game_state == null:
-		return []
-	if _current_player_id < 0:
-		return []
-
-	var player := _game_state.get_player(_current_player_id)
-	var required: Array[String] = MandatoryActionsRulesClass.get_required_mandatory_actions(player)
-	if required.is_empty():
-		return []
-
-	if not (_game_state.round_state is Dictionary):
-		return []
-	var mac_val = _game_state.round_state.get("mandatory_actions_completed", null)
-	if not (mac_val is Dictionary):
-		return []
-	var mac: Dictionary = mac_val
-
-	var completed_val = mac.get(_current_player_id, null)
-	if completed_val == null and mac.has(str(_current_player_id)):
-		completed_val = mac.get(str(_current_player_id), null)
-	if not (completed_val is Array):
-		return []
-	var completed: Array = completed_val
-
-	var missing: Array[String] = []
-	for action_id in required:
-		var aid := str(action_id).strip_edges()
-		if aid.is_empty():
-			continue
-		if completed.has(aid):
-			continue
-		missing.append(aid)
-
-	return missing
-
-func _is_missing_params_error(r: Result) -> bool:
-	if r == null or r.ok:
-		return false
-	return int(r.error_code) == Result.ErrorCode.MISSING_PARAMS
-
-func _should_enable_skip_via_auto_mandatory_actions() -> bool:
-	if _action_registry == null or _game_state == null:
-		return false
-	if _current_player_id < 0:
-		return false
-	if not _action_registry.has_method("get_executor"):
-		return false
-
-	# 仅当 skip 的失败原因是“缺少强制动作”时才考虑启用；其他原因（例如未到 Working 最后子阶段）不应放行。
-	var skip_exec = _action_registry.get_executor(ActionIdsClass.SKIP)
-	if skip_exec == null:
-		return false
-	var test_command := Command.create(ActionIdsClass.SKIP, _current_player_id)
-	test_command.phase = _game_state.phase
-	test_command.sub_phase = _game_state.sub_phase
-	var r = skip_exec.validate(_game_state, test_command)
-	if not (r is Result) or r.ok:
-		return false
-
-	var err := str(r.error).strip_edges()
-	if err.find("强制动作") == -1:
-		return false
-
-	var missing := _get_missing_mandatory_actions_for_current_player()
-	if missing.is_empty():
-		return false
-	for aid in missing:
-		if not AUTO_MANDATORY_ACTION_IDS.has(aid):
-			return false
-
-	return true
-
-func _compute_disabled_reason(action_id: String) -> String:
-	if _action_registry == null or _game_state == null:
-		return "当前不可用"
-	if _current_player_id < 0:
-		return "当前不可用"
-	if not _action_registry.has_method("get_executor"):
-		return "当前不可用"
-
-	var executor = _action_registry.get_executor(action_id)
-	if executor == null:
-		return "未注册动作：%s" % action_id
-
-	var test_command := Command.create(action_id, _current_player_id)
-	test_command.phase = _game_state.phase
-	test_command.sub_phase = _game_state.sub_phase
-
-	var r = executor.validate(_game_state, test_command)
-	if r is Result and not r.ok:
-		var msg := str(r.error)
-		if _is_missing_params_error(r) and executor.has_method("can_initiate"):
-			var can = executor.can_initiate(_game_state, _current_player_id)
-			if can is bool and not bool(can):
-				return "条件不足，无法启动该动作"
-		return msg
-
-	return "当前不可用"
