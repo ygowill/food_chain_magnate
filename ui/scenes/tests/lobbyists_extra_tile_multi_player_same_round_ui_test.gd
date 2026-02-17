@@ -9,7 +9,7 @@ const TilePreviewFactoryClass = preload("res://ui/components/reserve_area/tile_p
 const StructuresPassClass = preload("res://ui/scenes/game/map_canvas_drawer_structures_pass.gd")
 
 const FLOW_CONTROLLER_SCRIPT_PATH := "res://modules/lobbyists/ui/lobbyists_extra_tile_flow_controller.gd"
-const MANUAL_SAVE_RES_PATH := "res://.savings/manual_cases/milestones/first_lobbyist_used_multi_player_same_round.json"
+const MANUAL_SAVE_RES_PATH := "res://testdata/saves/manual_cases/milestones/first_lobbyist_used_multi_player_same_round.json"
 
 static func run() -> Result:
 	var tree = Engine.get_main_loop()

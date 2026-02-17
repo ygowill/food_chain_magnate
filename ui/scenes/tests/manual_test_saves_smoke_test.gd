@@ -1,9 +1,9 @@
 # Manual Test Saves Smoke Test（Headless / Autorun）
-# 目标：逐个加载 `.savings/manual_cases/**/*.json`，确保存档不损坏、可被 GameEngine.load_from_file 正常读取。
+# 目标：逐个加载 `testdata/saves/manual_cases/**/*.json`，确保存档不损坏、可被 GameEngine.load_from_file 正常读取。
 extends Control
 
 const NAME := "ManualTestSavesSmokeTest"
-const ROOT_DIR := "res://.savings/manual_cases"
+const ROOT_DIR := "res://testdata/saves/manual_cases"
 
 @onready var output: RichTextLabel = $Root/Output
 @onready var run_button: Button = $Root/TopBar/RunButton
@@ -13,7 +13,7 @@ var _exit_code: int = 0
 func _ready() -> void:
 	if is_instance_valid(output):
 		output.clear()
-		output.append_text("Manual Test Saves Smoke Test：逐个加载 .savings/manual_cases 下全部 JSON 存档。\n")
+		output.append_text("Manual Test Saves Smoke Test：逐个加载 testdata/saves/manual_cases 下全部 JSON 存档。\n")
 		output.append_text("提示：CLI 可用 `-- --autorun` 自动执行并退出。\n")
 
 	if _should_autorun():
@@ -92,4 +92,3 @@ func _should_autorun() -> bool:
 	if args.has("autorun") or args.has("--autorun"):
 		return true
 	return OS.has_feature("headless")
-

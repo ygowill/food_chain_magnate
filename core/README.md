@@ -14,3 +14,5 @@
 - `core/map/`：地图系统（烘焙、道路图、放置校验等）
 - `core/utils/`：通用工具（解析 helper、范围/距离、类型 helper 等）
 - `core/debug/`：调试相关（少量 shim/工具封装；避免引入 core→ui 依赖）
+
+> 说明：`EventBus` 是 autoload（见 `res://autoload/event_bus.gd`）。core 侧默认通过 `GameEngine.emit_event(...)` 输出事件（可注入 sink），必要时再通过 `core/utils/autoload_access.gd` 访问 autoload 单例以降低硬依赖。

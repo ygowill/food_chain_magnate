@@ -7,7 +7,7 @@ const GameScene: PackedScene = preload("res://ui/scenes/game/game.tscn")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
-const SAVE_RES_PATH := "res://.savings/manual_cases/logs/event_log_game_over_bankruptcy.json"
+const SAVE_RES_PATH := "res://testdata/saves/manual_cases/logs/event_log_game_over_bankruptcy.json"
 
 
 static func run() -> Result:
@@ -140,4 +140,3 @@ static func _clear_event_bus_history() -> void:
 		EventBus.clear_history_and_reset_sequence()
 	elif EventBus.has_method("clear_history"):
 		EventBus.clear_history()
-

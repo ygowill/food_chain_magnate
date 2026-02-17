@@ -9,7 +9,7 @@ extends SceneTree
 
 const ManifestClass = preload("res://tools/generate_manual_test_saves_manifest.gd")
 
-const OUTPUT_ROOT := "res://.savings/manual_cases"
+const OUTPUT_ROOT := "res://testdata/saves/manual_cases"
 
 const BASELINE_MODULES: Array[String] = [
 	"base_rules",

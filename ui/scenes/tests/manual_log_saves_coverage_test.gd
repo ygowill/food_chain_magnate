@@ -9,7 +9,7 @@ const GameLogUnifiedTimelineBuilderClass = preload("res://ui/components/game_log
 
 const CASES: Array[Dictionary] = [
 	{
-		"path": "res://.savings/manual_cases/logs/event_log_review.json",
+		"path": "res://testdata/saves/manual_cases/logs/event_log_review.json",
 		"required_types": [
 			EventBus.EventType.MARKETING_PLACED,
 			EventBus.EventType.DEMAND_GENERATED,
@@ -17,7 +17,7 @@ const CASES: Array[Dictionary] = [
 		],
 	},
 	{
-		"path": "res://.savings/manual_cases/logs/event_log_employee_recruit_train.json",
+		"path": "res://testdata/saves/manual_cases/logs/event_log_employee_recruit_train.json",
 		"required_types": [
 			EventBus.EventType.EMPLOYEE_RECRUITED,
 			EventBus.EventType.EMPLOYEE_TRAINED,
@@ -25,13 +25,13 @@ const CASES: Array[Dictionary] = [
 		"required_commands": ["set_price"],
 	},
 	{
-		"path": "res://.savings/manual_cases/logs/event_log_employee_fire.json",
+		"path": "res://testdata/saves/manual_cases/logs/event_log_employee_fire.json",
 		"required_types": [
 			EventBus.EventType.EMPLOYEE_FIRED,
 		],
 	},
 	{
-		"path": "res://.savings/manual_cases/logs/event_log_build_and_move.json",
+		"path": "res://testdata/saves/manual_cases/logs/event_log_build_and_move.json",
 		"required_types": [
 			EventBus.EventType.HOUSE_PLACED,
 			EventBus.EventType.GARDEN_ADDED,
@@ -40,14 +40,14 @@ const CASES: Array[Dictionary] = [
 		],
 	},
 	{
-		"path": "res://.savings/manual_cases/logs/event_log_produce_and_cleanup.json",
+		"path": "res://testdata/saves/manual_cases/logs/event_log_produce_and_cleanup.json",
 		"required_types": [
 			EventBus.EventType.FOOD_PRODUCED,
 			EventBus.EventType.FOOD_DISCARDED,
 		],
 	},
 	{
-		"path": "res://.savings/manual_cases/logs/event_log_dinnertime_sale.json",
+		"path": "res://testdata/saves/manual_cases/logs/event_log_dinnertime_sale.json",
 		"required_types": [
 			EventBus.EventType.DINNERTIME_REPORT,
 			EventBus.EventType.FOOD_SOLD,

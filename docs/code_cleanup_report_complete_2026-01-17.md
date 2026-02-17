@@ -2359,7 +2359,7 @@ func register(registrar) -> Result:
 **核查与整改记录（2026-01-17）**:
 
 - 核查结论：属实（三个 entry 的 parts 组装与循环 register 样板一致）
-- 整改结果：已完成（抽取 `modules/module_entry_helpers.gd` 的 `ModuleEntryHelpers.register_parts`）
+- 整改结果：已完成（抽取 `core/modules/v2/module_entry_helpers.gd` 的 `ModuleEntryHelpers.register_parts`）
 
 **补充核查与整改记录（2026-01-18）**:
 
@@ -2441,7 +2441,7 @@ func _get_demand_variants(_state: GameState, _house_id: String, _house: Dictiona
 **核查与整改记录（2026-01-17）**:
 
 - 核查结论：部分属实（noodles/sushi 结构高度相似；kimchi 额外分支较多）
-- 整改结果：已完成（抽取 `modules/dinnertime_demand_variant_helpers.gd`，统一 total 统计与 replace_all 组装）
+- 整改结果：已完成（抽取 `core/modules/v2/dinnertime_demand_variant_helpers.gd`，统一 total 统计与 replace_all 组装）
 
 **补充核查与整改记录（2026-01-18）**:
 

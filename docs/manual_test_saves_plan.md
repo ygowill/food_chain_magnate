@@ -29,20 +29,20 @@
 
 建议新增目录（放在仓库内，便于分享与版本管理）：
 
-- `/.savings/manual_cases/`
-	- `/.savings/manual_cases/employees/`：员工存档
-	- `/.savings/manual_cases/milestones/`：里程碑存档
+- `/testdata/saves/manual_cases/`
+	- `/testdata/saves/manual_cases/employees/`：员工存档
+	- `/testdata/saves/manual_cases/milestones/`：里程碑存档
 
 说明：
 
-- 当前项目已有 `/.savings/234.json` 可作为存档样例；主菜单“文件”页可以加载任意路径 JSON，因此放在仓库目录内可直接选取。
+- 当前项目已有 `/testdata/saves/234.json` 可作为存档样例；主菜单“文件”页可以加载任意路径 JSON，因此放在仓库目录内可直接选取。
 
 ### 2.2 命名规范
 
-- 员工存档：`/.savings/manual_cases/employees/<employee_id>.json`
-- 里程碑存档：`/.savings/manual_cases/milestones/<milestone_id>.json`
+- 员工存档：`/testdata/saves/manual_cases/employees/<employee_id>.json`
+- 里程碑存档：`/testdata/saves/manual_cases/milestones/<milestone_id>.json`
 -（可选但强烈建议）同名说明文件：`<id>.md`
-	- 例如：`/.savings/manual_cases/employees/marketing_trainee.md`
+	- 例如：`/testdata/saves/manual_cases/employees/marketing_trainee.md`
 	- 内容：复核步骤（Step-by-step）、预期结果、可观察字段（cash/inventory/round_state/marketing_instances 等）、关联单测。
 
 ### 2.3 生成脚本（建议）
@@ -51,7 +51,7 @@
 
 - `tools/generate_manual_test_saves.gd`
 	- 通过 Godot CLI 运行：`godot --headless --path . --script res://tools/generate_manual_test_saves.gd`
-	- 负责：按“场景清单”批量生成 JSON 存档到 `/.savings/manual_cases/`
+	- 负责：按“场景清单”批量生成 JSON 存档到 `/testdata/saves/manual_cases/`
 - `tools/generate_manual_test_saves_manifest.gd`（或 `.json`）
 	- 负责：声明每个场景的参数（模块列表/玩家数/seed/构造函数/输出文件名/说明文本）
 -（可选）`tools/verify_manual_test_saves.gd`
@@ -106,7 +106,7 @@
 
 ### 4.1 载入方式
 
-- 进入主菜单 → “载入游戏” → 切到 “文件” 页签 → 选择 `/.savings/manual_cases/.../*.json`。
+- 进入主菜单 → “载入游戏” → 切到 “文件” 页签 → 选择 `/testdata/saves/manual_cases/.../*.json`。
 
 ### 4.2 推荐配合 DebugPanel
 
@@ -931,7 +931,7 @@
 
 ### 阶段 A：基础设施（1～2 天）
 
-- 新增 `tools/generate_manual_test_saves.gd`：支持批量生成并写入 `/.savings/manual_cases/`。
+- 新增 `tools/generate_manual_test_saves.gd`：支持批量生成并写入 `/testdata/saves/manual_cases/`。
 - 定义 manifest（`tools/generate_manual_test_saves_manifest.gd` 或 JSON）：
 	- 每条记录包含：`kind(employee|milestone)`、`id`、`player_count`、`seed`、`enabled_modules`、`builder`、`expected_steps_md`。
 - 先实现 3～5 个示例场景（覆盖 produce / recruit / marketing / dinnertime / payday）。
@@ -952,9 +952,9 @@
 
 ### 阶段 D：维护性与验收（1～2 天）
 
-- 生成 `/.savings/manual_cases/README.md`（可选）：索引全部存档、快速搜索、以及推荐的复核顺序。
+- 生成 `/testdata/saves/manual_cases/README.md`（可选）：索引全部存档、快速搜索、以及推荐的复核顺序。
 - 补充一个 headless 冒烟测试：
-	- 逐个加载 `/.savings/manual_cases/**/*.json`，至少保证 `load_from_file` 成功。
+	- 逐个加载 `/testdata/saves/manual_cases/**/*.json`，至少保证 `load_from_file` 成功。
 	-（可选）检查每个场景的“关键字段存在性”（比如期待有某员工在岗/某里程碑在 pool）。
 
 ---

@@ -15,6 +15,7 @@
 - `autoload/`：跨场景单例（配置/场景切换/事件历史/调试开关）
 - `modules/`：模块系统 V2 的内容与规则脚本
 - `modules_test/`：测试专用模块包（只在开发/CI 中启用）
+- `testdata/`：测试/手工复核用的固定数据（例如可回放存档、对照用例）
 - `tools/`：开发工具（回放 runner、编译检查等）
 - `server/`：联机（Dedicated Server / Room 管理 / 协议与广播）
 

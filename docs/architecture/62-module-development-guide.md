@@ -199,7 +199,7 @@ func register(registrar) -> Result:
 
 推荐拆分方式：把“注册逻辑”拆成多个 part，然后在 entry 中组装（仓库已提供样板消除工具）：
 
-- 工具：`modules/module_entry_helpers.gd`
+- 工具：`core/modules/v2/module_entry_helpers.gd`
 - 示例：`modules/base_rules/rules/entry.gd`
 
 示例（entry 组装）：
@@ -208,7 +208,7 @@ func register(registrar) -> Result:
 extends RefCounted
 
 const EffectsPart = preload("res://modules/<module_id>/rules/effects.gd")
-const ModuleEntryHelpers = preload("res://modules/module_entry_helpers.gd")
+const ModuleEntryHelpers = preload("res://core/modules/v2/module_entry_helpers.gd")
 
 func register(registrar) -> Result:
 	return ModuleEntryHelpers.register_parts(registrar, [

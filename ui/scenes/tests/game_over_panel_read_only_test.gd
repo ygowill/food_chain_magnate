@@ -6,7 +6,7 @@ const EndPanelsClass = preload("res://ui/scenes/game/game_panel_end_panels.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
-const SAVE_RES_PATH := "res://.savings/manual_cases/logs/event_log_game_over_bankruptcy.json"
+const SAVE_RES_PATH := "res://testdata/saves/manual_cases/logs/event_log_game_over_bankruptcy.json"
 
 
 class DummyGameScene extends Control:

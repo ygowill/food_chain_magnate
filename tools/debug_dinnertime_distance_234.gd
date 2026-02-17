@@ -1,4 +1,4 @@
-# Debug helper: inspect dinnertime distance calculation for `.savings/234.json`.
+# Debug helper: inspect dinnertime distance calculation for `testdata/saves/234.json`.
 # Usage:
 #   mkdir -p .tmp_home .godot
 #   HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/DebugDinnertime234.log" --path . --script res://tools/debug_dinnertime_distance_234.gd
@@ -21,7 +21,7 @@ func _run() -> void:
 		quit(1)
 		return
 	var engine = GameEngineClass.new()
-	var load_result = engine.load_from_file("res://.savings/234.json")
+	var load_result = engine.load_from_file("res://testdata/saves/234.json")
 	if not load_result.ok:
 		push_error("[%s] FAIL load archive: %s" % [NAME, load_result.error])
 		quit(1)

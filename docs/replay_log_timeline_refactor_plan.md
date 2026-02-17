@@ -246,7 +246,7 @@
 
 ### 2.5 “点击日志跳转时整回合同时高亮 / 状态跳到回合末”的根因（读档恢复日志丢失 command_index）
 
-现象（来自手工复核存档 `res://.savings/manual_cases/logs/event_log_review.json`）：
+现象（来自手工复核存档 `res://testdata/saves/manual_cases/logs/event_log_review.json`）：
 
 - 复现路径：主菜单「载入游戏」加载该存档。
 - 日志里能看到多个玩家操作（例如“玩家1 放置营销 / 采购饮料”）。
@@ -506,7 +506,7 @@ ActionPanel 禁用策略：
 
 #### M4.3.4 验收要点（对用户可见）
 
-- 载入 `res://.savings/manual_cases/logs/event_log_review.json`：
+- 载入 `res://testdata/saves/manual_cases/logs/event_log_review.json`：
   - 可见 round/phase 分隔；阶段标题点击跳转正确；日志高亮与状态一致
   - 默认不出现“确认结束/开始回合/结束回合”等流程性噪声
   - 同一条玩家动作摘要不重复出现
@@ -546,7 +546,7 @@ ActionPanel 禁用策略：
 - [x] `core/tests/event_timeline_build_test.gd`：
   - 构造 20+ 命令的确定性用例，build_full() 返回 events 不为空且每条含 `command_index`（单调不减），并与命令数量一致性可验。
 - [x] `core/tests/step_timeline_build_test.gd`：
-  - 载入 `res://.savings/manual_cases/logs/event_log_review.json`，build_full() 返回 steps/events 且 events.step_index 单调不减，并包含至少一个 `phase` step（验证阶段切分）。
+  - 载入 `res://testdata/saves/manual_cases/logs/event_log_review.json`，build_full() 返回 steps/events 且 events.step_index 单调不减，并包含至少一个 `phase` step（验证阶段切分）。
 - [x] `ui/scenes/tests/replay_log_future_visibility_test.gd`（无需渲染）：
   - 加载回放并构建完整日志后，seek 到较早 cursor：
     - `GameLogPanel.get_entries()` 数量不变（仍包含未来）。
@@ -578,10 +578,10 @@ ActionPanel 禁用策略：
 
 ### 2026-01-24：event_log_review 复现与阶段切分定位
 
-- 复现存档：`.savings/manual_cases/logs/event_log_review.json`（archive schema_version=3，commands=7，current_index=6）。
+- 复现存档：`testdata/saves/manual_cases/logs/event_log_review.json`（archive schema_version=3，commands=7，current_index=6）。
 - 现象（用户反馈）：点击“玩家1 放置营销”时整回合日志同时高亮，且状态跳到整回合行动之后；可单步后退到正确状态，但日志高亮不同步。
 - 根因归类：日志条目缺少稳定的时间线索引（`command_index/step_index`），或 step 事件归属未在 phase 边界处拆分，导致多个阶段/整段 auto-advance 被压到同一个时间线点。
-- 额外观察（截图 `demo_image/log_demo.png`）：发薪日/广告/清理等大阶段在日志高亮上被“打包到一个 step”，提示 phase 边界仍存在归属/拆分缺口（需要用该截图持续回归验证）。
+- 额外观察（截图 `docs/demo_image/log_demo.png`）：发薪日/广告/清理等大阶段在日志高亮上被“打包到一个 step”，提示 phase 边界仍存在归属/拆分缺口（需要用该截图持续回归验证）。
 
 ### 2026-01-24：StepTimelineBuild 的关键补强点
 
@@ -677,8 +677,8 @@ ActionPanel 禁用策略：
 
 复现材料：
 
-- 存档：`res://.savings/manual_cases/logs/event_log_review.json`
-- 截图：`demo_image/log_screenshot1.png`、`demo_image/log_screenshot2.png`
+- 存档：`res://testdata/saves/manual_cases/logs/event_log_review.json`
+- 截图：`docs/demo_image/log_screenshot1.png`、`docs/demo_image/log_screenshot2.png`
 
 用户反馈问题（概括）：
 
@@ -723,7 +723,7 @@ ActionPanel 禁用策略：
 
 回归验证（建议）：
 
-- 手工回归：主菜单载入 `res://.savings/manual_cases/logs/event_log_review.json`，对照 `demo_image/log_screenshot1.png/2.png` 确认 4 项问题消失且阶段切分正确。
+- 手工回归：主菜单载入 `res://testdata/saves/manual_cases/logs/event_log_review.json`，对照 `docs/demo_image/log_screenshot1.png/2.png` 确认 4 项问题消失且阶段切分正确。
 - 自动化保护（现状）：`core/tests/step_timeline_build_test.gd`、`core/tests/manual_log_save_test.gd`、`ui/scenes/tests/replay_log_future_visibility_test.gd`，以及 `AllTests`。
 - 自动化增强（可选）：补充一个“确定性触发 MILESTONE_ACHIEVED 并断言 phase_segment”的核心测试用例（Payday/Cleanup/Marketing 至少覆盖 1 个）。
 

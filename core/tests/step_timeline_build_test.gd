@@ -8,7 +8,7 @@ extends RefCounted
 const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
-const SAVE_RES_PATH := "res://.savings/manual_cases/logs/event_log_review.json"
+const SAVE_RES_PATH := "res://testdata/saves/manual_cases/logs/event_log_review.json"
 
 static func run() -> Result:
 	var abs_path := ProjectSettings.globalize_path(SAVE_RES_PATH)

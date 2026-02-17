@@ -4,7 +4,7 @@ const CoffeeActionsAndStateClass = preload("res://modules/coffee/rules/coffee_ac
 const CoffeeCleanupClass = preload("res://modules/coffee/rules/coffee_cleanup.gd")
 const CoffeeDinnertimeRouteClass = preload("res://modules/coffee/rules/coffee_dinnertime_route.gd")
 const CoffeeFirstCoffeeSoldClass = preload("res://modules/coffee/rules/coffee_first_coffee_sold.gd")
-const ModuleEntryHelpersClass = preload("res://modules/module_entry_helpers.gd")
+const ModuleEntryHelpersClass = preload("res://core/modules/v2/module_entry_helpers.gd")
 
 const COFFEE_SHOP_TRIGGERS_USED_KEY := "coffee_shop_triggers_used"
 const STATE_SCHEMA_ID_COFFEE_SHOP_TRIGGERS_USED := "coffee:round_state_int_keys:coffee_shop_triggers_used"

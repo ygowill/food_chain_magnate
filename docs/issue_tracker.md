@@ -1840,7 +1840,7 @@
 	- 不可获得：保持目前的颜色状态
 - 布局：里程碑卡片适当缩小；每行显示 5 个。
 - 模组中存在会在一定回合数后过期的里程碑：相关信息与“是否已过期/不可获得”等状态需要写在里程碑卡片中。
-- 完成改动后，需要生成一个包含各个状态里程碑的测试存档，组织方式类似 `.savings/manual_cases/logs/*`，便于手工验收 UI。
+- 完成改动后，需要生成一个包含各个状态里程碑的测试存档，组织方式类似 `testdata/saves/manual_cases/logs/*`，便于手工验收 UI。
 
 **涉及代码（初步定位）**
 
@@ -1854,7 +1854,7 @@
 - 手工复核存档生成：
 	- `tools/generate_manual_test_saves.gd`
 	- `tools/generate_manual_test_saves_manifest.gd`
-	- `res://.savings/manual_cases/`
+	- `res://testdata/saves/manual_cases/`
 
 **初步根因**
 
@@ -1892,8 +1892,8 @@
 - 新增手工复核存档：
 	- 增加 case：`milestone/status_matrix`（启用 `hard_choices` 注入 expires_at）。
 	- Builder：`milestone_status_matrix` 构造三态+过期提示局面，并生成：
-		- `res://.savings/manual_cases/milestones/status_matrix.json`
-		- `res://.savings/manual_cases/milestones/status_matrix.md`
+		- `res://testdata/saves/manual_cases/milestones/status_matrix.json`
+		- `res://testdata/saves/manual_cases/milestones/status_matrix.md`
 
 **验证**
 
@@ -2089,7 +2089,7 @@
 **现象**
 
 - 使用折扣经理后无法结束回合（右侧确认结束不可点/顶部确认结束无反应），且没有提示文案。
-- 补充复现（`res://.savings/manual_cases/employees/discount_manager.json`）：Recruit 结束进入 Train 后，若无法培训，动作面板仅剩灰色“培训”与灰色“确认结束”，玩家无法推进流程。
+- 补充复现（`res://testdata/saves/manual_cases/employees/discount_manager.json`）：Recruit 结束进入 Train 后，若无法培训，动作面板仅剩灰色“培训”与灰色“确认结束”，玩家无法推进流程。
 
 **澄清（来自用户 #62）**
 
@@ -4136,7 +4136,7 @@
 - 手工复核存档生成：
 	- `tools/generate_manual_test_saves.gd`
 	- `tools/generate_manual_test_saves_manifest.gd`
-	- 输出目录：`res://.savings/manual_cases/...`
+	- 输出目录：`res://testdata/saves/manual_cases/...`
 
 **初步根因**
 
@@ -4157,11 +4157,11 @@
 
 - 已修改：`tools/generate_manual_test_saves.gd`：
 	- 支持 `case.freeze_as_initial=false`（允许某些用例保留命令历史用于回放）。
-	- 支持 `kind=="logs"` 输出到 `res://.savings/manual_cases/logs/`。
+	- 支持 `kind=="logs"` 输出到 `res://testdata/saves/manual_cases/logs/`。
 	- 新增 builder `logs_event_review`：构造 2 人基础局面并保留命令历史，使读档回放后自动产生日志事件（营销结算需求 + 采购路线摘要）。
 - 已修改：`tools/generate_manual_test_saves_manifest.gd`：新增 case `logs/event_log_review`（并设置 `freeze_as_initial=false`）。
-- 已新增：`res://.savings/manual_cases/logs/event_log_review.json` + `res://.savings/manual_cases/logs/event_log_review.md`（用于手工验收）。
-- 已修改：`.savings/manual_cases/README.md`：补充 logs 分类与入口。
+- 已新增：`res://testdata/saves/manual_cases/logs/event_log_review.json` + `res://testdata/saves/manual_cases/logs/event_log_review.md`（用于手工验收）。
+- 已修改：`testdata/saves/manual_cases/README.md`：补充 logs 分类与入口。
 - 已新增：`core/tests/manual_log_save_test.gd`：加载 `event_log_review.json` 后断言 EventBus.history 至少包含 `MARKETING_PLACED` / `DRINKS_PROCURED` / `DEMAND_GENERATED`，用于回归保护。
 - 已修改：`ui/scenes/tests/all_tests.gd`：纳入 `ManualLogSaveTest`。
 
@@ -4189,7 +4189,7 @@
 	- `ui/scenes/game/game_event_log_controller.gd`：`EVENT_TYPES_TO_LOG`
 - 测试存档生成/回放：
 	- `tools/generate_manual_test_saves.gd` / `tools/generate_manual_test_saves_manifest.gd`
-	- `res://.savings/manual_cases/logs/`
+	- `res://testdata/saves/manual_cases/logs/`
 
 **确认（来自你对 #50 的补充）**
 
@@ -4220,13 +4220,13 @@
 	- 在“非 auto_advance 的阶段推进路径”同样补齐上述事件生成（避免遗漏）
 - 已修改：`tools/generate_manual_test_saves_manifest.gd`：新增 logs 用例清单（分主题）
 - 已修改：`tools/generate_manual_test_saves.gd`：实现对应 builder（并修复 `PlaceHouses` 中 `place_house/add_garden` 互相占位与 Payday 薪资不足导致的生成失败）
-- 已新增：`res://.savings/manual_cases/logs/` 下 5 个新存档 + 说明：
+- 已新增：`res://testdata/saves/manual_cases/logs/` 下 5 个新存档 + 说明：
 	- `event_log_employee_recruit_train`
 	- `event_log_employee_fire`
 	- `event_log_build_and_move`
 	- `event_log_produce_and_cleanup`
 	- `event_log_dinnertime_sale`
-- 已修改：`.savings/manual_cases/README.md`：更新 logs 索引
+- 已修改：`testdata/saves/manual_cases/README.md`：更新 logs 索引
 - 已新增：`core/tests/manual_log_saves_coverage_test.gd` 并纳入 `ui/scenes/tests/all_tests.gd`
 
 **验证**

@@ -201,8 +201,8 @@
 - 状态：DONE
 - 目的：用于手动复核“同一回合内两名玩家先后使用说客后，都能获得 first_lobbyist_used，并在各自回合弹窗二选一并放置额外 tile”，同时便于肉眼确认“void 区域不显示红叉”。
 - 存档：
-	- `res://.savings/manual_cases/milestones/first_lobbyist_used_multi_player_same_round.json`
-	- `res://.savings/manual_cases/milestones/first_lobbyist_used_multi_player_same_round.md`
+	- `res://testdata/saves/manual_cases/milestones/first_lobbyist_used_multi_player_same_round.json`
+	- `res://testdata/saves/manual_cases/milestones/first_lobbyist_used_multi_player_same_round.md`
 - 生成逻辑：
 	- manifest：`tools/manual_test_saves/manifest_milestones_lobbyists.gd`
 	- builder：`tools/manual_test_saves/builders/manual_test_save_employee_placement_builders.gd`

@@ -1,6 +1,6 @@
 extends RefCounted
 
-const DemandVariantHelpersClass = preload("res://modules/dinnertime_demand_variant_helpers.gd")
+const DemandVariantHelpersClass = preload("res://core/modules/v2/dinnertime_demand_variant_helpers.gd")
 
 const MODULE_ID := "noodles"
 const PRODUCT_ID := "noodles"

@@ -4,7 +4,7 @@ const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const PhaseAndMapClass = preload("res://modules/base_rules/rules/phase_and_map.gd")
 const EffectsClass = preload("res://modules/base_rules/rules/effects.gd")
 const MilestoneEffectsClass = preload("res://modules/base_rules/rules/milestone_effects.gd")
-const ModuleEntryHelpersClass = preload("res://modules/module_entry_helpers.gd")
+const ModuleEntryHelpersClass = preload("res://core/modules/v2/module_entry_helpers.gd")
 
 const CLEANUP_KIND_FRIDGE_KEEP := "fridge_keep"
 

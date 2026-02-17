@@ -651,7 +651,7 @@
 ### 2024-01-XX - M0 完成
 
 - 创建项目基础结构
-- 实现日志系统 (`tools/logger.gd`)
+- 实现日志系统 (`autoload/game_log.gd`)
 - 实现调试开关 (`autoload/debug_flags.gd`)
 - 实现全局配置 (`autoload/globals.gd`)
 - 实现场景管理 (`autoload/scene_manager.gd`)

@@ -3,7 +3,7 @@ extends RefCounted
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const ProductRegistry = preload("res://core/data/product_registry.gd")
-const DemandVariantHelpersClass = preload("res://modules/dinnertime_demand_variant_helpers.gd")
+const DemandVariantHelpersClass = preload("res://core/modules/v2/dinnertime_demand_variant_helpers.gd")
 const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cleanup_settlement.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 

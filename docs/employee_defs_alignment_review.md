@@ -38,8 +38,8 @@
 
 ### 参考资料
 
-- 英文路线图/规则参考：`demo_image/FCM_All_Career_Paths_+_Round_Reference_v1.3.pdf`
-- 中文名参考：`demo_image/road_map.png`
+- 英文路线图/规则参考：`docs/demo_image/FCM_All_Career_Paths_+_Round_Reference_v1.3.pdf`
+- 中文名参考：`docs/demo_image/road_map.png`
 
 ### 落地策略（已确认）
 

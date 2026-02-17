@@ -4,7 +4,7 @@ autoload 目录提供跨场景可用的单例节点（见 `project.godot` 的 `[
 
 本项目实际包含：
 
-- `tools/logger.gd`：`GameLog`（全局日志；级别可由 DebugFlags 调整）
+- `autoload/game_log.gd`：`GameLog`（全局日志；级别可由 DebugFlags 调整）
 - `autoload/globals.gd`：`Globals`（配置、玩家资料、运行时引擎引用）
 - `autoload/net_context.gd`：`NetContext`（运行模式/房间信息/本地玩家 profile）
 - `autoload/net_client.gd`：`NetClient`（联机会话层：Client/Server 共用 RPC 节点）
@@ -49,7 +49,7 @@ flowchart TB
 
 ## GameLog：统一日志
 
-代码：`tools/logger.gd`（autoload 名称：`GameLog`）
+代码：`autoload/game_log.gd`（autoload 名称：`GameLog`）
 
 用途：
 

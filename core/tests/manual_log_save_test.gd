@@ -3,7 +3,7 @@
 class_name ManualLogSaveTest
 extends RefCounted
 
-const SAVE_RES_PATH := "res://.savings/manual_cases/logs/event_log_review.json"
+const SAVE_RES_PATH := "res://testdata/saves/manual_cases/logs/event_log_review.json"
 
 static func run() -> Result:
 	if EventBus == null:

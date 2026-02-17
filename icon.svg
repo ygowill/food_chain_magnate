@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+	<rect x="16" y="16" width="224" height="224" rx="48" fill="#f6f1d6"/>
+	<rect x="16" y="16" width="224" height="224" rx="48" fill="none" stroke="#2b2b2b" stroke-width="12"/>
+
+	<!-- Burger -->
+	<path
+		d="M56 122V112C56 72 88 40 128 40C168 40 200 72 200 112V122Z"
+		fill="#f4b55a"
+		stroke="#2b2b2b"
+		stroke-width="8"
+		stroke-linejoin="round"
+	/>
+	<path
+		d="M64 130C78 122 90 138 104 130C116 123 128 138 140 130C152 122 166 138 180 130C190 125 200 132 200 132V146H64Z"
+		fill="#5fbf6a"
+		stroke="#2b2b2b"
+		stroke-width="8"
+		stroke-linejoin="round"
+	/>
+	<path
+		d="M64 146H200V164L176 176H88L64 164Z"
+		fill="#f6e05e"
+		stroke="#2b2b2b"
+		stroke-width="8"
+		stroke-linejoin="round"
+	/>
+	<rect
+		x="64"
+		y="164"
+		width="136"
+		height="22"
+		rx="11"
+		fill="#6b3f2a"
+		stroke="#2b2b2b"
+		stroke-width="8"
+	/>
+	<path
+		d="M56 192C56 212 74 224 94 224H162C182 224 200 212 200 192V186H56Z"
+		fill="#f4b55a"
+		stroke="#2b2b2b"
+		stroke-width="8"
+		stroke-linejoin="round"
+	/>
+</svg>

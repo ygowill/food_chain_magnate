@@ -19,7 +19,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-GameLog="*res://tools/logger.gd"
+GameLog="*res://autoload/game_log.gd"
 DebugFlags="*res://autoload/debug_flags.gd"
 Globals="*res://autoload/globals.gd"
 SceneManager="*res://autoload/scene_manager.gd"
