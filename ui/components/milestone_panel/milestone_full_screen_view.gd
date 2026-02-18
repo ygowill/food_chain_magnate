@@ -12,14 +12,104 @@ signal build_finished()
 @onready var scroll_container: ScrollContainer = $MarginContainer/VBoxContainer/ScrollContainer
 @onready var loading_center: Control = $MarginContainer/VBoxContainer/LoadingCenter
 @onready var close_button: Button = $MarginContainer/VBoxContainer/HeaderRow/CloseButton
+@onready var title_label: Label = $MarginContainer/VBoxContainer/HeaderRow/TitleLabel
+@onready var hint_label: Label = $MarginContainer/VBoxContainer/HeaderRow/HintLabel
 
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const MilestonePanelClass = preload("res://ui/components/milestone_panel/milestone_panel.gd")
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 const MAX_COLUMNS := 5
 const CARD_MIN_WIDTH := 220
+
+# 里程碑分类色板（与 left_panel_milestones_controller 保持一致）
+const PALETTE_PURPLE := Color(0.69, 0.57, 0.77, 1.0)
+const PALETTE_GRAY := Color(0.76, 0.75, 0.74, 1.0)
+const PALETTE_MARKETING_BLUE := Color(0.59, 0.77, 0.82, 1.0)
+const PALETTE_PRODUCE_GREEN := Color(0.60, 0.71, 0.35, 1.0)
+const PALETTE_PROCURE_GREEN := Color(0.70, 0.81, 0.58, 1.0)
+const PALETTE_PRICE_ORANGE := Color(0.92, 0.66, 0.56, 1.0)
+const PALETTE_COFFEE_MINT := Color(0.60, 0.80, 0.72, 1.0)
+const PALETTE_KETCHUP_DARK := Color(0.15, 0.11, 0.10, 1.0)
+
+const MILESTONE_COLOR_BY_ID: Dictionary = {
+	"first_hire_3": PALETTE_PURPLE,
+	"first_throw_away": PALETTE_PURPLE,
+	"first_waitress": PALETTE_PURPLE,
+	"first_have_20": PALETTE_PURPLE,
+	"first_have_100": PALETTE_PURPLE,
+	"first_train": PALETTE_GRAY,
+	"first_pay_20_salaries": PALETTE_GRAY,
+	"first_billboard": PALETTE_MARKETING_BLUE,
+	"first_burger_marketed": PALETTE_MARKETING_BLUE,
+	"first_pizza_marketed": PALETTE_MARKETING_BLUE,
+	"first_drink_marketed": PALETTE_MARKETING_BLUE,
+	"first_airplane": PALETTE_MARKETING_BLUE,
+	"first_radio": PALETTE_MARKETING_BLUE,
+	"first_burger_produced": PALETTE_PRODUCE_GREEN,
+	"first_pizza_produced": PALETTE_PRODUCE_GREEN,
+	"first_errand_boy": PALETTE_PROCURE_GREEN,
+	"first_cart_operator": PALETTE_PROCURE_GREEN,
+	"first_lower_prices": PALETTE_PRICE_ORANGE,
+	"first_rural_marketeer_used": PALETTE_MARKETING_BLUE,
+	"first_lobbyist_used": PALETTE_PURPLE,
+	"first_coffee_sold": PALETTE_COFFEE_MINT,
+	"ketchup_sold_your_demand": PALETTE_KETCHUP_DARK,
+	"first_marketeer_used": PALETTE_MARKETING_BLUE,
+	"first_marketing_trainee_used": PALETTE_MARKETING_BLUE,
+	"first_campaign_manager_used": PALETTE_MARKETING_BLUE,
+	"first_brand_manager_used": PALETTE_MARKETING_BLUE,
+	"first_brand_director_used": PALETTE_MARKETING_BLUE,
+	"first_new_restaurant": PALETTE_MARKETING_BLUE,
+	"first_burger_sold": PALETTE_PRODUCE_GREEN,
+	"first_pizza_sold": PALETTE_PRODUCE_GREEN,
+	"first_beer_sold": PALETTE_PROCURE_GREEN,
+	"first_coke_sold": PALETTE_PROCURE_GREEN,
+	"first_lemonade_sold": PALETTE_PROCURE_GREEN,
+	"first_recruiting_girl_used": PALETTE_PURPLE,
+	"first_waitress_used": PALETTE_PURPLE,
+	"first_trainer_used": PALETTE_GRAY,
+	"first_house_built": PALETTE_GRAY,
+	"first_discount_manager_used": PALETTE_PRICE_ORANGE,
+	"first_cart_operator_used": PALETTE_PROCURE_GREEN,
+}
+
+const MILESTONE_CATEGORY_COLORS: Dictionary = {
+	"employee": PALETTE_PURPLE,
+	"marketing": PALETTE_MARKETING_BLUE,
+	"finance": PALETTE_PURPLE,
+	"ops": PALETTE_PRODUCE_GREEN,
+	"expansion": PALETTE_MARKETING_BLUE,
+	"general": PALETTE_GRAY,
+}
+
+const MILESTONE_EFFECT_CATEGORY: Dictionary = {
+	"gain_card": "employee",
+	"gain_cards": "employee",
+	"ban_card": "employee",
+	"multi_trainer_on_one": "employee",
+	"train_from_active_same_color": "employee",
+	"employee_no_salary": "employee",
+	"peek_reserve_cards": "finance",
+	"base_price_delta": "finance",
+	"sell_bonus": "finance",
+	"salary_total_delta": "finance",
+	"turnorder_empty_slots": "finance",
+	"ceo_get_cfo": "finance",
+	"salary_pay_with_tokens": "finance",
+	"salary_allow_unpaid": "finance",
+	"salary_cost_override": "finance",
+	"bank_burn_on_discount_ge_3": "finance",
+	"marketing_no_salary": "marketing",
+	"marketing_permanent": "marketing",
+	"extra_marketing": "marketing",
+	"procure_plus_one": "ops",
+	"drinks_per_source_delta": "ops",
+	"distance_plus_one": "ops",
+	"gain_fridge": "ops",
+}
 
 var _skin = null
 var _skin_key: String = ""
@@ -39,6 +129,11 @@ func _ready() -> void:
 	set_process_unhandled_input(true)
 	if is_instance_valid(close_button):
 		close_button.pressed.connect(_on_close_pressed)
+		UiStylesClass.apply_button_secondary(close_button)
+	if is_instance_valid(title_label):
+		title_label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_PRIMARY)
+	if is_instance_valid(hint_label):
+		hint_label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_MUTED)
 	_set_loading_visible(false)
 	if not _opened:
 		visible = false
@@ -250,10 +345,13 @@ func _run_background_rebuild(milestone_ids: Array[String], claimed_by: Dictionar
 
 		var pool_count := int(pool_counts.get(ms_id, 0))
 
+		var accent_color := _get_milestone_accent_color(ms_id, def)
+
 		var card := MilestoneCard.new()
 		card.milestone_id = ms_id
 		card.milestone_def = def
 		card.effect_text = effect_text
+		card.accent_color = accent_color
 		card.player_logo_textures = logo_textures
 		card.set_state(owners, pool_count, round_number, _viewer_player_id)
 		grid.add_child(card)
@@ -351,10 +449,13 @@ func _rebuild_from_state(state: GameState) -> void:
 
 		var pool_count := int(pool_counts.get(ms_id, 0))
 
+		var accent_color := _get_milestone_accent_color(ms_id, def)
+
 		var card := MilestoneCard.new()
 		card.milestone_id = ms_id
 		card.milestone_def = def
 		card.effect_text = effect_text
+		card.accent_color = accent_color
 		card.player_logo_textures = logo_textures
 		card.set_state(owners, pool_count, round_number, _viewer_player_id)
 		grid.add_child(card)
@@ -500,6 +601,24 @@ func _apply_responsive_grid_columns() -> void:
 	if grid.columns != columns:
 		grid.columns = columns
 
+func _get_milestone_category(milestone_id: String, def) -> String:
+	if def != null and def is MilestoneDef:
+		var effects: Array = def.effects if (def.effects is Array) else []
+		for eff in effects:
+			if eff is Dictionary:
+				var eff_type: String = str(eff.get("type", ""))
+				if MILESTONE_EFFECT_CATEGORY.has(eff_type):
+					return str(MILESTONE_EFFECT_CATEGORY[eff_type])
+	return "general"
+
+func _get_milestone_accent_color(milestone_id: String, def) -> Color:
+	if MILESTONE_COLOR_BY_ID.has(milestone_id):
+		return Color(MILESTONE_COLOR_BY_ID[milestone_id])
+	var cat := _get_milestone_category(milestone_id, def)
+	if MILESTONE_CATEGORY_COLORS.has(cat):
+		return Color(MILESTONE_CATEGORY_COLORS[cat])
+	return PALETTE_GRAY
+
 
 # === 内部类：里程碑卡片 ===
 class MilestoneCard extends PanelContainer:
@@ -512,6 +631,7 @@ class MilestoneCard extends PanelContainer:
 	var milestone_id: String = ""
 	var milestone_def = null # MilestoneDef | null
 	var effect_text: String = ""
+	var accent_color: Color = Color(0.76, 0.75, 0.74, 1.0)
 	var player_logo_textures: Dictionary = {} # player_id -> Texture2D
 
 	var _owners: Array[int] = []
@@ -520,6 +640,8 @@ class MilestoneCard extends PanelContainer:
 	var _viewer_player_id: int = -1
 
 	var _panel_style: StyleBoxFlat = null
+	var _header_panel: Panel = null
+	var _header_style: StyleBoxFlat = null
 	var _name_label: Label
 	var _desc_label: Label
 	var _status_label: Label
@@ -575,94 +697,107 @@ class MilestoneCard extends PanelContainer:
 		_update_display()
 
 	func _build_ui() -> void:
-		custom_minimum_size = Vector2(220, 150)
+		custom_minimum_size = Vector2(220, 160)
 
 		# IMPORTANT: never mutate a theme-shared StyleBox (would affect unrelated UI).
 		_ensure_panel_style()
 
-		var margin := MarginContainer.new()
-		margin.add_theme_constant_override("margin_left", 10)
-		margin.add_theme_constant_override("margin_top", 10)
-		margin.add_theme_constant_override("margin_right", 10)
-		margin.add_theme_constant_override("margin_bottom", 10)
-		add_child(margin)
+		var outer_vbox := VBoxContainer.new()
+		outer_vbox.add_theme_constant_override("separation", 0)
+		outer_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		add_child(outer_vbox)
 
-		var vbox := VBoxContainer.new()
-		vbox.add_theme_constant_override("separation", 6)
-		vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		margin.add_child(vbox)
+		# --- 头部色彩条 ---
+		_header_panel = Panel.new()
+		_header_panel.custom_minimum_size = Vector2(0, 28)
+		_header_style = StyleBoxFlat.new()
+		_header_style.bg_color = accent_color
+		_header_style.corner_radius_top_left = 4
+		_header_style.corner_radius_top_right = 4
+		_header_style.corner_radius_bottom_left = 0
+		_header_style.corner_radius_bottom_right = 0
+		_header_panel.add_theme_stylebox_override("panel", _header_style)
+		outer_vbox.add_child(_header_panel)
+
+		var header_margin := MarginContainer.new()
+		header_margin.add_theme_constant_override("margin_left", 8)
+		header_margin.add_theme_constant_override("margin_right", 8)
+		header_margin.add_theme_constant_override("margin_top", 0)
+		header_margin.add_theme_constant_override("margin_bottom", 0)
+		header_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_header_panel.add_child(header_margin)
 
 		_name_label = Label.new()
 		_name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_name_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(14) if Globals != null else 14)
-		_name_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
-		vbox.add_child(_name_label)
+		_name_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(13) if Globals != null else 13)
+		_name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_name_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		# 头部文字颜色在 _update_header_text_color 中根据亮度设置
+		header_margin.add_child(_name_label)
+
+		# --- 正文区域 ---
+		var body_margin := MarginContainer.new()
+		body_margin.add_theme_constant_override("margin_left", 10)
+		body_margin.add_theme_constant_override("margin_top", 8)
+		body_margin.add_theme_constant_override("margin_right", 10)
+		body_margin.add_theme_constant_override("margin_bottom", 8)
+		body_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		outer_vbox.add_child(body_margin)
+
+		var body_vbox := VBoxContainer.new()
+		body_vbox.add_theme_constant_override("separation", 4)
+		body_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		body_margin.add_child(body_vbox)
 
 		_desc_label = Label.new()
 		_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_desc_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(11) if Globals != null else 11)
-		_desc_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.95))
+		_desc_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1.0))
 		_desc_label.max_lines_visible = 4
 		_desc_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		_desc_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		vbox.add_child(_desc_label)
-
-		var bottom := HBoxContainer.new()
-		bottom.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		bottom.alignment = BoxContainer.ALIGNMENT_END
-		bottom.add_theme_constant_override("separation", 8)
-		vbox.add_child(bottom)
+		body_vbox.add_child(_desc_label)
 
 		_status_label = Label.new()
 		_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_status_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(11) if Globals != null else 11)
-		_status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		bottom.add_child(_status_label)
+		body_vbox.add_child(_status_label)
 
 		_icons_row = HBoxContainer.new()
 		_icons_row.alignment = BoxContainer.ALIGNMENT_END
 		_icons_row.add_theme_constant_override("separation", 6)
-		bottom.add_child(_icons_row)
+		body_vbox.add_child(_icons_row)
+
+	func _update_header_text_color() -> void:
+		if _name_label == null:
+			return
+		var lum := accent_color.r * 0.299 + accent_color.g * 0.587 + accent_color.b * 0.114
+		if lum > 0.65:
+			_name_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1.0))
+		else:
+			_name_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 
 	func _update_display() -> void:
 		if _name_label != null:
-			var name := milestone_id
+			var display_name := milestone_id
 			if milestone_def != null and milestone_def is MilestoneDef:
-				name = str((milestone_def as MilestoneDef).name)
-			name = _strip_id_suffix(name)
-			_name_label.text = name
-			_name_label.tooltip_text = name
+				display_name = str((milestone_def as MilestoneDef).name)
+			display_name = _strip_id_suffix(display_name)
+			_name_label.text = display_name
+			_name_label.tooltip_text = display_name
 
 		if _desc_label != null:
 			_desc_label.text = effect_text if not effect_text.is_empty() else milestone_id
-
-	func _strip_id_suffix(raw_name: String) -> String:
-		var s := str(raw_name).strip_edges()
-		var mid := str(milestone_id).strip_edges()
-		if mid.is_empty():
-			return s
-
-		var suffixes: Array[String] = [
-			" (" + mid + ")",
-			"(" + mid + ")",
-			" （" + mid + "）",
-			"（" + mid + "）",
-		]
-		for suffix in suffixes:
-			if s.ends_with(suffix):
-				s = s.substr(0, s.length() - suffix.length()).strip_edges()
-				break
-		return s
 
 		var expires_text := ""
 		var expired := false
 		if milestone_def != null and milestone_def is MilestoneDef:
 			var def: MilestoneDef = milestone_def
-			# 若里程碑已被领取且 supply 已耗尽，则不再展示“剩余回合”（避免与“已获得/不可获得”混淆）。
+			# 若里程碑已被领取且 supply 已耗尽，则不再展示"剩余回合"（避免与"已获得/不可获得"混淆）。
 			# 仍保留：未领取或 supply 仍有剩余时，展示过期倒计时。
 			if def.expires_at != null and (_owners.is_empty() or _pool_count > 0):
 				var exp_round := int(def.expires_at)
-				# 过期语义：在第 exp_round 回合的 Cleanup 被移除，因此倒计时应“包含本回合”。
+				# 过期语义：在第 exp_round 回合的 Cleanup 被移除，因此倒计时应"包含本回合"。
 				# 示例：exp_round=2
 				# - 回合1：剩余 2 回合（含本回合）
 				# - 回合2：剩余 1 回合（含本回合）
@@ -708,11 +843,11 @@ class MilestoneCard extends PanelContainer:
 
 		if _status_label != null:
 			_status_label.text = status_text + ("\n" + expires_text if not expires_text.is_empty() else "")
-			var color := Color(0.5, 0.45, 0.35, 1)
+			var color := Color(0.5, 0.45, 0.35, 1.0)
 			if status == CardStatus.OBTAINABLE:
-				color = Color(0.28, 0.55, 0.22, 1)
+				color = Color(0.83, 0.63, 0.23, 1.0)
 			elif status == CardStatus.CLAIMED:
-				color = Color(0.28, 0.55, 0.22, 1)
+				color = Color(0.28, 0.55, 0.22, 1.0)
 			_status_label.add_theme_color_override("font_color", color)
 
 		if _icons_row != null:
@@ -734,31 +869,72 @@ class MilestoneCard extends PanelContainer:
 
 		_update_style(status)
 
+	func _strip_id_suffix(raw_name: String) -> String:
+		var s := str(raw_name).strip_edges()
+		var mid := str(milestone_id).strip_edges()
+		if mid.is_empty():
+			return s
+
+		var suffixes: Array[String] = [
+			" (" + mid + ")",
+			"(" + mid + ")",
+			" （" + mid + "）",
+			"（" + mid + "）",
+		]
+		for suffix in suffixes:
+			if s.ends_with(suffix):
+				s = s.substr(0, s.length() - suffix.length()).strip_edges()
+				break
+		return s
+
 	func _ensure_panel_style() -> void:
 		if _panel_style == null:
 			_panel_style = StyleBoxFlat.new()
-			_panel_style.set_corner_radius_all(10)
+			_panel_style.set_corner_radius_all(4)
 		add_theme_stylebox_override("panel", _panel_style)
+
+	func _desaturate(c: Color, factor: float) -> Color:
+		var gray := c.r * 0.299 + c.g * 0.587 + c.b * 0.114
+		return Color(
+			lerpf(gray, c.r, factor),
+			lerpf(gray, c.g, factor),
+			lerpf(gray, c.b, factor),
+			c.a
+		)
 
 	func _update_style(status: int) -> void:
 		_ensure_panel_style()
 		var style: StyleBoxFlat = _panel_style
+		var ac := accent_color
 
 		match status:
 			CardStatus.OBTAINABLE:
-				# 可获得：浅绿色边框
-				style.bg_color = Color(0.97, 0.94, 0.86, 0.95)
-				style.border_color = Color(0.55, 0.9, 0.6, 0.8)
-				style.set_border_width_all(2)
+				# 可获得：奶油色背景，accent色边框
+				style.bg_color = Color(0.96, 0.93, 0.82, 1.0)  # #f4edd1
+				style.border_color = Color(ac.r, ac.g, ac.b, 0.72)
+				style.set_border_width_all(1)
+				if _header_style != null:
+					_header_style.bg_color = ac
+				self.modulate = Color(1, 1, 1, 1)
 			CardStatus.CLAIMED:
-				# 已获得：浅绿色背景
-				style.bg_color = Color(0.90, 0.93, 0.85, 0.95)
-				style.border_color = Color(0.55, 0.9, 0.6, 0.75)
-				style.set_border_width_all(1)
+				# 已获得：奶油色混入8% accent
+				var bg := Color(0.96, 0.93, 0.82, 1.0)
+				style.bg_color = bg.lerp(ac, 0.08)
+				style.border_color = Color(ac.r, ac.g, ac.b, 0.85)
+				style.set_border_width_all(2)
+				if _header_style != null:
+					_header_style.bg_color = ac
+				self.modulate = Color(1, 1, 1, 1)
 			_:
-				# 不可获得：保持默认颜色状态
-				style.bg_color = Color(0.92, 0.88, 0.78, 0.9)
-				style.border_color = Color(0.73, 0.23, 0.18, 0.35)
+				# 不可获得：灰暗奶油色，去饱和accent
+				style.bg_color = Color(0.92, 0.89, 0.80, 1.0)
+				var desat := _desaturate(ac, 0.35)
+				style.border_color = Color(desat.r, desat.g, desat.b, 0.36)
 				style.set_border_width_all(1)
-		style.set_corner_radius_all(10)
+				if _header_style != null:
+					_header_style.bg_color = desat
+				self.modulate = Color(1, 1, 1, 0.7)
+
+		style.set_corner_radius_all(4)
 		add_theme_stylebox_override("panel", style)
+		_update_header_text_color()

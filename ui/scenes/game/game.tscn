@@ -223,7 +223,6 @@ layout_mode = 2
 text = "日志"
 
 [node name="MilestonesButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar"]
-visible = false
 layout_mode = 2
 text = "里程碑"
 

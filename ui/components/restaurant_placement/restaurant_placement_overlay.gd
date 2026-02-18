@@ -11,10 +11,13 @@ signal preview_cleared()
 signal highlight_requested(mode: String, rotation: int, restaurant_id: String)
 signal ui_state_changed()
 
+const INVALID_POS := Vector2i(-1, -1)
+
+@onready var hint_margin: Control = $HintMargin
 @onready var hint_label: Label = $HintMargin/HintPanel/HintLabel
 
 var _mode: String = "place_restaurant"  # place_restaurant | move_restaurant
-var _selected_position: Vector2i = Vector2i(-1, -1)
+var _selected_position: Vector2i = INVALID_POS
 var _selected_rotation: int = 0
 var _available_restaurants: Array[String] = []
 var _selected_restaurant_id: String = ""
@@ -26,6 +29,7 @@ var _restaurant_index_by_id: Dictionary = {} # restaurant_id -> 1-based index (s
 
 var _validation_ok: bool = true
 var _validation_message: String = ""
+var _hint_text: String = ""
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -36,9 +40,7 @@ func get_mode() -> String:
 	return _mode
 
 func get_hint_text() -> String:
-	if hint_label != null:
-		return hint_label.text
-	return ""
+	return _hint_text
 
 func get_selected_position() -> Vector2i:
 	return _selected_position
@@ -201,7 +203,7 @@ func set_validation(valid: bool, message: String = "") -> void:
 	ui_state_changed.emit()
 
 func clear_selection() -> void:
-	_selected_position = Vector2i(-1, -1)
+	_selected_position = INVALID_POS
 	_selected_rotation = 0
 	_selected_restaurant_id = ""
 	_selected_employee_type = "" if _available_employees.is_empty() else _available_employees[0]
@@ -217,7 +219,7 @@ func rotate_cw() -> void:
 
 func can_confirm() -> bool:
 	var ok := true
-	ok = ok and (_selected_position != Vector2i(-1, -1))
+	ok = ok and (_selected_position != INVALID_POS)
 	if _mode == "move_restaurant":
 		ok = ok and not _selected_restaurant_id.is_empty()
 	ok = ok and _validation_ok
@@ -248,37 +250,41 @@ func _update_ui() -> void:
 	_update_hint()
 
 func _update_hint() -> void:
+	var next_hint := ""
+	if not _validation_ok and not _validation_message.is_empty():
+		next_hint = "无法放置：%s" % _validation_message
+	elif _mode == "move_restaurant":
+		if _selected_restaurant_id.is_empty():
+			next_hint = "请选择要移动的餐厅，并在地图上点击目标位置"
+		else:
+			var label := get_restaurant_display_label(_selected_restaurant_id)
+			if _selected_position == INVALID_POS:
+				next_hint = "已选择: %s，请在地图上点击目标位置" % label
+			else:
+				next_hint = "%s → (%d,%d) 旋转:%d°" % [
+					label,
+					_selected_position.x,
+					_selected_position.y,
+					_selected_rotation
+				]
+	else:
+		if _selected_position == INVALID_POS:
+			next_hint = "请在地图上点击放置位置"
+		else:
+			next_hint = "放置位置: (%d,%d) 旋转:%d°" % [_selected_position.x, _selected_position.y, _selected_rotation]
+
+	_hint_text = next_hint
 	if hint_label == null:
 		return
 
-	if not _validation_ok and not _validation_message.is_empty():
-		hint_label.text = "无法放置：%s" % _validation_message
-		return
-
-	if _mode == "move_restaurant":
-		if _selected_restaurant_id.is_empty():
-			hint_label.text = "请选择要移动的餐厅，并在地图上点击目标位置"
-			return
-		var label := get_restaurant_display_label(_selected_restaurant_id)
-		if _selected_position == Vector2i(-1, -1):
-			hint_label.text = "已选择: %s，请在地图上点击目标位置" % label
-			return
-		hint_label.text = "%s → (%d,%d) 旋转:%d°" % [
-			label,
-			_selected_position.x,
-			_selected_position.y,
-			_selected_rotation
-		]
-		return
-
-	# place_restaurant
-	if _selected_position == Vector2i(-1, -1):
-		hint_label.text = "请在地图上点击放置位置"
-	else:
-		hint_label.text = "放置位置: (%d,%d) 旋转:%d°" % [_selected_position.x, _selected_position.y, _selected_rotation]
+	# 开局「放置餐厅」时，提示文字已在右侧上下文面板展示；地图顶部不再重复显示纯文字条。
+	var show_inline_hint := not (_mode == "place_restaurant" and _validation_ok and _selected_position == INVALID_POS)
+	if hint_margin != null:
+		hint_margin.visible = show_inline_hint
+	hint_label.text = _hint_text if show_inline_hint else ""
 
 func _emit_preview() -> void:
-	if _selected_position == Vector2i(-1, -1):
+	if _selected_position == INVALID_POS:
 		preview_cleared.emit()
 		return
 	var rid := _selected_restaurant_id if _mode == "move_restaurant" else ""
