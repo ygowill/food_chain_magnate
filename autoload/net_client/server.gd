@@ -7,6 +7,7 @@ const CommandClass = preload("res://core/types/command.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
+const DEFAULT_RESTAURANT_LOGO_COUNT := 6
 
 var _net = null
 
@@ -200,14 +201,15 @@ func handle_rpc_client_hello(request: Dictionary) -> void:
 	var profile_preview: Dictionary = Dictionary(request.get("player_profile", {}))
 	GameLog.info(
 		"NetClient",
-		"RX ClientHello %s protocol=%d game_version=%s schema=%d profile_name=%s color=%d"
+		"RX ClientHello %s protocol=%d game_version=%s schema=%d profile_name=%s color=%d restaurant_logo_id=%d"
 			% [
 				_request_tag(peer_id, request_id),
 				protocol_version,
 				_safe_text(game_version),
 				schema_version,
 				_safe_text(str(profile_preview.get("name", ""))),
-				int(profile_preview.get("color_index", -1))
+				int(profile_preview.get("color_index", -1)),
+				int(profile_preview.get("restaurant_logo_id", -1))
 			]
 	)
 	if protocol_version != NetContext.PROTOCOL_VERSION:
@@ -218,8 +220,9 @@ func handle_rpc_client_hello(request: Dictionary) -> void:
 	_net._profile_by_peer_id[peer_id] = {
 		"name": str(profile.get("name", "玩家")),
 		"color_index": int(profile.get("color_index", 0)),
+		"restaurant_logo_id": int(profile.get("restaurant_logo_id", -1)),
 	}
-	# 允许已在房间中的客户端更新自己的 profile（昵称/颜色）。
+	# 允许已在房间中的客户端更新自己的 profile（昵称/颜色/logo）。
 	# 重要：不新增 @rpc 方法，避免 dedicated server 与客户端版本不一致时触发 checksum mismatch。
 	var room = _net._room_manager.get_room_by_peer(peer_id) if _net._room_manager != null else null
 	if room != null and room.has_method("update_peer_profile"):
@@ -531,6 +534,42 @@ func handle_rpc_update_room_config(request: Dictionary) -> void:
 			send_request_rejected(peer_id, request_id, "invalid_params", "modules_v2_base_dir must use res:// paths")
 			return
 		patch["modules_v2_base_dir"] = bd
+
+	if patch.has("restaurant_logo_choices_by_player"):
+		if str(room.status) != "Lobby":
+			send_request_rejected(peer_id, request_id, "invalid_state", "Room is not in Lobby")
+			return
+		var logos_val = patch.get("restaurant_logo_choices_by_player", null)
+		if not (logos_val is Array):
+			send_request_rejected(peer_id, request_id, "invalid_params", "restaurant_logo_choices_by_player must be Array")
+			return
+		var logos_src: Array = Array(logos_val)
+		var logo_limit := DEFAULT_RESTAURANT_LOGO_COUNT
+		var normalized_logos: Array[int] = []
+		for i in range(logos_src.size()):
+			var it = logos_src[i]
+			if not (it is int or it is float):
+				send_request_rejected(peer_id, request_id, "invalid_params", "restaurant_logo_choices_by_player item must be int")
+				return
+			var lid := int(it)
+			if lid < -1 or lid >= maxi(1, logo_limit):
+				send_request_rejected(peer_id, request_id, "invalid_params", "restaurant_logo_id out of range")
+				return
+			normalized_logos.append(lid)
+		patch["restaurant_logo_choices_by_player"] = normalized_logos
+
+		var seated_players := int(room.get_player_count()) if room.has_method("get_player_count") else 0
+		if not room.has_method("set_player_logo_by_seat"):
+			send_request_rejected(peer_id, request_id, "not_supported", "Room does not support seat logo assignment")
+			return
+		for seat_index in range(seated_players):
+			var seat_logo_id := -1
+			if seat_index < normalized_logos.size():
+				seat_logo_id = int(normalized_logos[seat_index])
+			var sr: Result = room.set_player_logo_by_seat(seat_index, seat_logo_id)
+			if not sr.ok:
+				send_request_rejected(peer_id, request_id, "invalid_params", sr.error)
+				return
 
 	# seed_mode=random：保持一个 server 选定的 seed（不在 StartGame 时再重掷），便于大厅展示/复现。
 	var old_seed_mode := str(room.config.get("seed_mode", "random")).strip_edges()

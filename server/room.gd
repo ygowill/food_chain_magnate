@@ -2,6 +2,7 @@ class_name OnlineRoom
 extends RefCounted
 
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
+const DEFAULT_RESTAURANT_LOGO_COUNT := 6
 
 const STATUS_LOBBY := "Lobby"
 const STATUS_IN_GAME := "InGame"
@@ -20,12 +21,12 @@ var game_engine = null
 var player_id_by_peer_id: Dictionary = {} # peer_id -> player_id
 
 # 玩家座位：seat_index -> profile（即便掉线/弃权也保留，用于“旁观者”占位）
-var _seat_profile_by_seat_index: Dictionary = {} # seat_index -> { name, color_index }
+var _seat_profile_by_seat_index: Dictionary = {} # seat_index -> { name, color_index, restaurant_logo_id }
 var _peer_id_by_seat_index: Dictionary = {} # seat_index -> peer_id（在线；掉线则不存在或为 0）
 
 # 在线成员：peer_id -> profile
-var _player_profile_by_peer_id: Dictionary = {} # peer_id -> { name, color_index }
-var _spectator_profile_by_peer_id: Dictionary = {} # peer_id -> { name, color_index }
+var _player_profile_by_peer_id: Dictionary = {} # peer_id -> { name, color_index, restaurant_logo_id }
+var _spectator_profile_by_peer_id: Dictionary = {} # peer_id -> { name, color_index, restaurant_logo_id }
 
 var _seat_by_player_peer_id: Dictionary = {} # peer_id -> seat_index
 var _desired_player_count: int = 0
@@ -200,6 +201,7 @@ func update_peer_profile(peer_id: int, profile: Dictionary) -> Result:
 	var normalized := {
 		"name": str(profile.get("name", "玩家")).strip_edges(),
 		"color_index": int(profile.get("color_index", 0)),
+		"restaurant_logo_id": int(profile.get("restaurant_logo_id", -1)),
 	}
 	if str(normalized.get("name", "")).is_empty():
 		normalized["name"] = "玩家"
@@ -218,6 +220,32 @@ func update_peer_profile(peer_id: int, profile: Dictionary) -> Result:
 		return Result.success()
 
 	return Result.failure("Peer not in room")
+
+func set_player_logo_by_seat(seat_index: int, restaurant_logo_id: int) -> Result:
+	if status != STATUS_LOBBY:
+		return Result.failure("Room is not in Lobby")
+	if seat_index < 0 or not _seat_profile_by_seat_index.has(seat_index):
+		return Result.failure("Seat not found")
+
+	var logo_limit := DEFAULT_RESTAURANT_LOGO_COUNT
+	var logo_id := int(restaurant_logo_id)
+	if logo_id < -1 or logo_id >= maxi(1, logo_limit):
+		return Result.failure("restaurant_logo_id out of range")
+
+	var seat_profile: Dictionary = Dictionary(_seat_profile_by_seat_index.get(seat_index, {}))
+	if seat_profile.is_empty():
+		return Result.failure("Seat profile missing")
+	seat_profile["restaurant_logo_id"] = logo_id
+	_seat_profile_by_seat_index[seat_index] = seat_profile.duplicate(true)
+
+	var peer_id := int(_peer_id_by_seat_index.get(seat_index, 0))
+	if peer_id > 0 and _player_profile_by_peer_id.has(peer_id):
+		var player_profile: Dictionary = Dictionary(_player_profile_by_peer_id.get(peer_id, {}))
+		player_profile["restaurant_logo_id"] = logo_id
+		_player_profile_by_peer_id[peer_id] = player_profile.duplicate(true)
+
+	_touch()
+	return Result.success()
 
 func to_room_state_dict() -> Dictionary:
 	return {
@@ -331,8 +359,9 @@ func start_game() -> Result:
 	var base_dir := str(config.get("modules_v2_base_dir", "")).strip_edges()
 
 	var logo_choices: Array[int] = []
-	for _i in range(player_count):
-		logo_choices.append(-1)
+	for seat_index in range(player_count):
+		var profile: Dictionary = Dictionary(_seat_profile_by_seat_index.get(seat_index, {}))
+		logo_choices.append(int(profile.get("restaurant_logo_id", -1)))
 	config["restaurant_logo_choices_by_player"] = logo_choices
 
 	var engine = GameEngineClass.new()
@@ -443,6 +472,7 @@ func _build_players_array() -> Array[Dictionary]:
 			"seat_index": seat_index,
 			"name": str(profile.get("name", "")),
 			"color_index": int(profile.get("color_index", 0)),
+			"restaurant_logo_id": int(profile.get("restaurant_logo_id", -1)),
 			"forfeited": bool(forfeited_by_player_id.get(seat_index, false)),
 		})
 	return out
@@ -459,5 +489,6 @@ func _build_spectators_array() -> Array[Dictionary]:
 			"peer_id": peer_id,
 			"name": str(profile.get("name", "")),
 			"color_index": int(profile.get("color_index", 0)),
+			"restaurant_logo_id": int(profile.get("restaurant_logo_id", -1)),
 		})
 	return out

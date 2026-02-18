@@ -14,7 +14,7 @@ static func run() -> Result:
 	var rm = RoomManagerClass.new(rng)
 
 	var host_peer_id := 10
-	var host_profile := {"name": "Host", "color_index": 1}
+	var host_profile := {"name": "Host", "color_index": 1, "restaurant_logo_id": 2}
 	var config := {
 		"desired_player_count": 2,
 		"seed_mode": "fixed",
@@ -32,9 +32,18 @@ static func run() -> Result:
 	if room == null:
 		return Result.failure("CreateRoom 未返回 room")
 
-	var jr: Result = rm.join_room(11, {"name": "P2", "color_index": 2}, room_code, "pw")
+	var jr: Result = rm.join_room(11, {"name": "P2", "color_index": 2, "restaurant_logo_id": 0}, room_code, "pw")
 	if not jr.ok:
 		return Result.failure("JoinRoom 失败: %s" % jr.error)
+
+	if not room.has_method("set_player_logo_by_seat"):
+		return Result.failure("room 缺少 set_player_logo_by_seat")
+	var set_logo_r0: Result = room.set_player_logo_by_seat(0, 1)
+	if not set_logo_r0.ok:
+		return Result.failure("set_player_logo_by_seat(0,1) 失败: %s" % set_logo_r0.error)
+	var set_logo_r1: Result = room.set_player_logo_by_seat(1, -1)
+	if not set_logo_r1.ok:
+		return Result.failure("set_player_logo_by_seat(1,-1) 失败: %s" % set_logo_r1.error)
 
 	var sr: Result = room.start_game()
 	if not sr.ok:
@@ -47,6 +56,11 @@ static func run() -> Result:
 	var payload: Dictionary = Dictionary(sr.value)
 	var mapping: Dictionary = Dictionary(payload.get("player_id_by_peer_id", {}))
 	var cfg: Dictionary = Dictionary(payload.get("config", {}))
+	var logo_choices_cfg: Array = Array(cfg.get("restaurant_logo_choices_by_player", []))
+	if logo_choices_cfg.size() < 2:
+		return Result.failure("StartGame 配置缺少 restaurant_logo_choices_by_player: %s" % str(logo_choices_cfg))
+	if int(logo_choices_cfg[0]) != 1 or int(logo_choices_cfg[1]) != -1:
+		return Result.failure("StartGame 未保留房主分配的 Logo: %s" % str(logo_choices_cfg))
 
 	var player_count := int(cfg.get("desired_player_count", 0))
 	var seed := int(cfg.get("seed", 0))

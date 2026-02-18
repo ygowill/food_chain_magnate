@@ -188,10 +188,11 @@ func request_update_player_profile(profile: Dictionary) -> void:
 		NetContext.player_profile = Dictionary(profile).duplicate(true)
 	GameLog.debug(
 		"NetClient",
-		"TX UpdatePlayerProfile name=%s color_index=%d"
+		"TX UpdatePlayerProfile name=%s color_index=%d restaurant_logo_id=%d"
 			% [
 				_safe_text(str(NetContext.player_profile.get("name", ""))),
-				int(NetContext.player_profile.get("color_index", -1))
+				int(NetContext.player_profile.get("color_index", -1)),
+				int(NetContext.player_profile.get("restaurant_logo_id", -1))
 			]
 	)
 	_send_client_hello()

@@ -1,17 +1,21 @@
-# 联机大厅（M5）：Connect/Rooms/Create/Room 页面导航 + 公开房间列表 + 配置自动同步 + 模块选择复用
+# 联机大厅：ConnectPage / BrowsePage / RoomPage 三页导航 + CreateRoomDialog 弹窗 + 配置自动同步
 extends Control
 
 const RoomConfigEditorClass = preload("res://ui/components/room_config_editor/room_config_editor.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
 const InfoDialogClass = preload("res://ui/dialogs/info_dialog.gd")
+const CreateRoomDialogClass = preload("res://ui/dialogs/create_room_dialog.gd")
 const RoomListControllerClass = preload("res://ui/scenes/online/online_lobby_room_list_controller.gd")
 const RoomStateRendererClass = preload("res://ui/scenes/online/online_lobby_room_state_renderer.gd")
 const RequestRejectionMapperClass = preload("res://ui/scenes/online/online_lobby_request_rejection_mapper.gd")
 const LobbyViewModelClass = preload("res://ui/scenes/online/online_lobby_view_model.gd")
 const RoomConfigSyncControllerClass = preload("res://ui/scenes/online/online_lobby_room_config_sync_controller.gd")
+const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
+const GameSetupClass = preload("res://ui/scenes/setup/game_setup.gd")
 
-const _COLOR_NAME_HINTS: Array[String] = ["红", "蓝", "绿", "黄", "紫", "橙"]
+const _LOGO_DISPLAY_NAMES: Dictionary = GameSetupClass.LOGO_DISPLAY_NAMES
+const _DEFAULT_LOGO_COUNT := 6
 
 @onready var wall_background: ColorRect = $WallBackground
 @onready var vignette_overlay: ColorRect = $VignetteOverlay
@@ -19,53 +23,43 @@ const _COLOR_NAME_HINTS: Array[String] = ["红", "蓝", "绿", "黄", "紫", "�
 @onready var inner_border: PanelContainer = $Center/Panel/OuterMargin/InnerBorder
 @onready var back_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar/BackButton
 @onready var top_title_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar/Title
-@onready var pages: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs
-@onready var page_connect: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab
-@onready var page_rooms: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab
-@onready var page_join_by_code: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab
-@onready var page_create: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab
-@onready var page_room: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab
+@onready var pages: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages
 
-@onready var server_url_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ServerRow/ServerUrlEdit
-@onready var player_name_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ProfileRow/PlayerNameEdit
-@onready var connect_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ButtonsRow/ConnectButton
-@onready var disconnect_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ButtonsRow/DisconnectButton
-@onready var connect_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ConnectStatus
+# ── ConnectPage ──
+@onready var page_connect: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage
+@onready var server_url_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ServerRow/ServerUrlEdit
+@onready var player_name_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ProfileRow/PlayerNameEdit
+@onready var connect_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ButtonsRow/ConnectButton
+@onready var disconnect_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ButtonsRow/DisconnectButton
+@onready var connect_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ConnectStatus
 
-@onready var open_create_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsHeader/OpenCreateButton
-@onready var open_join_by_code_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsHeader/OpenJoinByCodeButton
-@onready var refresh_rooms_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsHeader/RefreshRoomsButton
-@onready var rooms_list_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsScroll/RoomsList
-@onready var rooms_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomsTab/RoomsStatus
+# ── BrowsePage ──
+@onready var page_browse: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage
+@onready var open_create_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/BrowseHeader/OpenCreateButton
+@onready var refresh_rooms_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/BrowseHeader/RefreshRoomsButton
+@onready var quick_join_code_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/QuickJoinBar/QuickJoinCodeEdit
+@onready var quick_join_password_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/QuickJoinBar/QuickJoinPasswordEdit
+@onready var quick_join_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/QuickJoinBar/QuickJoinButton
+@onready var rooms_list_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/RoomsScroll/RoomsList
+@onready var browse_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/BrowseStatus
 
-@onready var join_by_code_back_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/JoinHeaderRow/BackToRoomsButton
-@onready var join_by_code_room_code_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/RoomCodeRow/RoomCodeEdit
-@onready var join_by_code_password_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/PasswordRow/RoomPasswordEdit
-@onready var join_by_code_hint_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/JoinHint
-@onready var join_by_code_submit_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/JoinRoomButton
-@onready var join_by_code_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/JoinByCodeTab/JoinStatus
-
-@onready var back_to_rooms_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreateHeaderRow/BackToRoomsButton
-@onready var create_password_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreatePasswordRow/CreateRoomPasswordEdit
-@onready var create_players_spin: SpinBox = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreatePlayersRow/CreatePlayersSpin
-@onready var create_hint_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreateHint
-@onready var create_room_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreateRoomButton
-@onready var create_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/CreateTab/CreateStatus
-
-@onready var room_code_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomHeader/RoomCodeLabel
-@onready var copy_room_code_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomHeader/CopyRoomCodeButton
-@onready var my_color_option: OptionButton = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/MyColorRow/MyColorOption
-@onready var players_list_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/PlayersList
-@onready var spectators_list_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/LeftColumn/SpectatorsList
-@onready var config_sync_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/RightColumn/ConfigSyncStatus
-@onready var room_config_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomBody/RightColumn/RoomConfigContainer
-@onready var leave_room_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomActionsRow/LeaveRoomButton
-@onready var start_game_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomActionsRow/StartGameButton
-@onready var room_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/RoomTab/RoomStatus
+# ── RoomPage ──
+@onready var page_room: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage
+@onready var room_code_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomHeader/RoomCodeLabel
+@onready var copy_room_code_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomHeader/CopyRoomCodeButton
+@onready var config_sync_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomHeader/ConfigSyncStatus
+@onready var my_logo_row: HBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/LeftColumn/MyColorRow
+@onready var my_color_option: OptionButton = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/LeftColumn/MyColorRow/MyColorOption
+@onready var players_list_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/LeftColumn/PlayersList
+@onready var spectators_list_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/LeftColumn/SpectatorsList
+@onready var room_config_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/RightColumn/RoomConfigContainer
+@onready var leave_room_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomActionsRow/LeaveRoomButton
+@onready var start_game_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomActionsRow/StartGameButton
+@onready var room_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomStatus
 
 @onready var config_debounce_timer: Timer = $ConfigDebounceTimer
 
-enum LobbyPage { CONNECT, ROOMS, JOIN_BY_CODE, CREATE, ROOM }
+enum LobbyPage { CONNECT, BROWSE, ROOM }
 var _current_page: int = LobbyPage.CONNECT
 
 var _room_config_editor = null
@@ -79,7 +73,10 @@ var _start_game_flow_in_progress: bool = false
 var _password_dialog = null
 var _password_dialog_room_code: String = ""
 var _info_dialog = null
+var _create_room_dialog = null
 var _suppress_profile_signals: bool = false
+var _logo_icons_small: Array[Texture2D] = []
+var _logo_piece_ids: Array[String] = []
 
 func _ready() -> void:
 	UiStylesClass.apply_tiled_texture(wall_background, UiStylesClass.WALL_TEXTURE_PATHS, 3.0, Color(0.93, 0.88, 0.75, 1.0))
@@ -90,12 +87,8 @@ func _ready() -> void:
 	UiStylesClass.apply_button_primary(connect_button)
 	UiStylesClass.apply_button_secondary(disconnect_button)
 	UiStylesClass.apply_button_primary(open_create_button)
-	UiStylesClass.apply_button_secondary(open_join_by_code_button)
 	UiStylesClass.apply_button_secondary(refresh_rooms_button)
-	UiStylesClass.apply_button_secondary(join_by_code_back_button)
-	UiStylesClass.apply_button_primary(join_by_code_submit_button)
-	UiStylesClass.apply_button_secondary(back_to_rooms_button)
-	UiStylesClass.apply_button_primary(create_room_button)
+	UiStylesClass.apply_button_primary(quick_join_button)
 	UiStylesClass.apply_button_secondary(copy_room_code_button)
 	UiStylesClass.apply_button_secondary(leave_room_button)
 	UiStylesClass.apply_button_primary(start_game_button)
@@ -107,27 +100,23 @@ func _ready() -> void:
 	_ensure_config_sync_controller()
 	_ensure_password_dialog()
 	_ensure_info_dialog()
+	_ensure_create_room_dialog()
 	_ensure_room_renderers()
-	_setup_my_color_selector()
+	if my_logo_row != null and is_instance_valid(my_logo_row):
+		my_logo_row.visible = false
 	_apply_defaults()
 	_refresh_ui()
 
 func _apply_visual_styles() -> void:
 	_apply_label_style_recursive(panel)
 	UiStylesClass.apply_label_hint_dark(connect_status_label)
-	UiStylesClass.apply_label_hint_dark(rooms_status_label)
-	UiStylesClass.apply_label_hint_dark(join_by_code_hint_label)
-	UiStylesClass.apply_label_hint_dark(join_by_code_status_label)
-	UiStylesClass.apply_label_hint_dark(create_hint_label)
-	UiStylesClass.apply_label_hint_dark(create_status_label)
+	UiStylesClass.apply_label_hint_dark(browse_status_label)
 	UiStylesClass.apply_label_hint_dark(config_sync_status_label)
 	UiStylesClass.apply_label_hint_dark(room_status_label)
 	UiStylesClass.apply_line_edit_field(server_url_edit)
 	UiStylesClass.apply_line_edit_field(player_name_edit)
-	UiStylesClass.apply_line_edit_field(join_by_code_room_code_edit)
-	UiStylesClass.apply_line_edit_field(join_by_code_password_edit)
-	UiStylesClass.apply_line_edit_field(create_password_edit)
-	UiStylesClass.apply_spin_box_field(create_players_spin)
+	UiStylesClass.apply_line_edit_field(quick_join_code_edit)
+	UiStylesClass.apply_line_edit_field(quick_join_password_edit)
 	UiStylesClass.apply_option_button_field(my_color_option)
 
 func _apply_label_style_recursive(root: Node) -> void:
@@ -139,10 +128,7 @@ func _apply_label_style_recursive(root: Node) -> void:
 		_apply_label_style_recursive(child)
 
 func _apply_password_mask_fallback() -> void:
-	# Some embedded fonts used in exports may miss the default bullet mask (U+2022),
-	# causing tofu squares. Force an ASCII mask for all password fields.
-	_apply_password_mask_to(join_by_code_password_edit)
-	_apply_password_mask_to(create_password_edit)
+	_apply_password_mask_to(quick_join_password_edit)
 
 func _apply_password_mask_to(edit: LineEdit) -> void:
 	if edit == null or not is_instance_valid(edit):
@@ -151,22 +137,84 @@ func _apply_password_mask_to(edit: LineEdit) -> void:
 		return
 	edit.secret_character = "*"
 
-func _setup_my_color_selector() -> void:
+func _setup_my_logo_selector() -> void:
 	if my_color_option == null or not is_instance_valid(my_color_option):
 		return
-	if my_color_option.item_selected.is_connected(_on_my_color_option_selected):
+	if my_color_option.item_selected.is_connected(_on_my_logo_option_selected):
 		return
+	_rebuild_my_logo_options()
+	my_color_option.item_selected.connect(_on_my_logo_option_selected)
+
+func _rebuild_my_logo_options() -> void:
 	my_color_option.clear()
-	var palette_size := 0
-	if Globals != null and (Globals.PLAYER_COLOR_PALETTE is Array):
-		palette_size = Array(Globals.PLAYER_COLOR_PALETTE).size()
-	if palette_size <= 0:
-		palette_size = _COLOR_NAME_HINTS.size()
-	for i in range(palette_size):
-		var label := _COLOR_NAME_HINTS[i] if i < _COLOR_NAME_HINTS.size() else ("颜色 %d" % i)
-		my_color_option.add_item(label, i)
-		my_color_option.set_item_metadata(i, i)
-	my_color_option.item_selected.connect(_on_my_color_option_selected)
+	_ensure_logo_icons_cache()
+
+	my_color_option.add_item("随机")
+	my_color_option.set_item_metadata(0, -1)
+
+	var logo_count := _logo_piece_ids.size()
+	if logo_count <= 0:
+		logo_count = _get_default_logo_count()
+		for i in range(logo_count):
+			my_color_option.add_item("店铺 %d" % (i + 1))
+			my_color_option.set_item_metadata(i + 1, i)
+		return
+
+	for i in range(logo_count):
+		var piece_id := str(_logo_piece_ids[i]).strip_edges()
+		var label := _get_logo_display_name(piece_id, i)
+		var icon_tex: Texture2D = _logo_icons_small[i] if i < _logo_icons_small.size() else null
+		if icon_tex != null:
+			my_color_option.add_icon_item(icon_tex, label)
+		else:
+			my_color_option.add_item(label)
+		my_color_option.set_item_metadata(i + 1, i)
+
+func _ensure_logo_icons_cache() -> void:
+	_logo_icons_small.clear()
+	_logo_piece_ids.clear()
+
+	var base_dir := str(Globals.modules_v2_base_dir) if Globals != null else ""
+	if base_dir.is_empty():
+		return
+	var read: Result = MapSkinBuilderClass.build_for_modules(base_dir, ["base_pieces"], 40)
+	if not read.ok:
+		GameLog.warn("OnlineLobby", "加载餐厅 Logo 贴图失败: %s" % read.error)
+		return
+	var skin = read.value
+	if skin == null or not skin.has_method("get_piece_texture") or not skin.has_method("get_restaurant_logo_piece_ids"):
+		GameLog.warn("OnlineLobby", "加载餐厅 Logo 贴图失败：skin 类型错误")
+		return
+	var logo_ids_val = skin.get_restaurant_logo_piece_ids()
+	if not (logo_ids_val is Array):
+		return
+	for piece_id_val in (logo_ids_val as Array):
+		var piece_id := str(piece_id_val).strip_edges()
+		if piece_id.is_empty():
+			continue
+		_logo_piece_ids.append(piece_id)
+		var tex: Texture2D = skin.get_piece_texture(piece_id)
+		_logo_icons_small.append(_scale_texture_square(tex, 20))
+
+func _scale_texture_square(tex: Texture2D, size_px: int) -> Texture2D:
+	if tex == null:
+		return null
+	var img := tex.get_image()
+	if img == null:
+		return tex
+	img.resize(size_px, size_px, Image.INTERPOLATE_LANCZOS)
+	return ImageTexture.create_from_image(img)
+
+func _get_logo_display_name(piece_id: String, index: int) -> String:
+	if _LOGO_DISPLAY_NAMES.has(piece_id):
+		return str(_LOGO_DISPLAY_NAMES[piece_id])
+	return "店铺 %d" % (index + 1)
+
+func _get_default_logo_count() -> int:
+	var fallback := _DEFAULT_LOGO_COUNT
+	if Globals != null:
+		fallback = int(Globals.DEFAULT_RESTAURANT_LOGO_COUNT)
+	return maxi(1, fallback)
 
 func _ensure_editors() -> void:
 	if _room_config_editor == null or not is_instance_valid(_room_config_editor):
@@ -206,6 +254,14 @@ func _ensure_info_dialog() -> void:
 	_info_dialog = InfoDialogClass.new()
 	add_child(_info_dialog)
 
+func _ensure_create_room_dialog() -> void:
+	if _create_room_dialog != null and is_instance_valid(_create_room_dialog):
+		return
+	_create_room_dialog = CreateRoomDialogClass.new()
+	add_child(_create_room_dialog)
+	if not _create_room_dialog.create_requested.is_connected(_on_create_room_dialog_confirmed):
+		_create_room_dialog.create_requested.connect(_on_create_room_dialog_confirmed)
+
 func _show_error_dialog(title_text: String, message: String) -> void:
 	if OS.has_feature("headless"):
 		return
@@ -217,9 +273,7 @@ func _show_error_dialog(title_text: String, message: String) -> void:
 
 func _apply_defaults() -> void:
 	_set_connect_status("")
-	_set_rooms_status("")
-	_set_join_by_code_status("")
-	_set_create_status("")
+	_set_browse_status("")
 	_set_room_status("")
 
 	if NetContext != null and not str(NetContext.server_url).is_empty():
@@ -228,28 +282,23 @@ func _apply_defaults() -> void:
 		server_url_edit.text = "ws://127.0.0.1:7000"
 
 	var profile_name := "玩家"
-	var profile_color_index := 0
+	var profile_logo_id := -1
 	if NetContext != null and NetContext.player_profile is Dictionary and not Dictionary(NetContext.player_profile).is_empty():
 		var p: Dictionary = Dictionary(NetContext.player_profile)
 		profile_name = str(p.get("name", "玩家"))
-		profile_color_index = int(p.get("color_index", 0))
+		profile_logo_id = int(p.get("restaurant_logo_id", -1))
 	elif Globals != null:
 		if Globals.player_names is Array and not Globals.player_names.is_empty():
 			profile_name = str(Globals.player_names[0])
-		if Globals.player_color_indices is Array and not Globals.player_color_indices.is_empty():
-			profile_color_index = int(Globals.player_color_indices[0])
+		if Globals.player_restaurant_logo_choices is Array and not Globals.player_restaurant_logo_choices.is_empty():
+			profile_logo_id = int(Globals.player_restaurant_logo_choices[0])
 
 	player_name_edit.text = profile_name
-	_write_local_player_profile(profile_name, profile_color_index)
-	_apply_my_color_option_selection(profile_color_index)
+	_write_local_player_profile(profile_name, profile_logo_id)
+	_apply_my_logo_option_selection(profile_logo_id)
 	_ensure_config_sync_controller()
 	if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
 		_room_config_sync_controller.reset()
-
-	if create_players_spin != null and is_instance_valid(create_players_spin):
-		create_players_spin.min_value = float(Globals.MIN_PLAYERS)
-		create_players_spin.max_value = float(Globals.MAX_PLAYERS)
-		create_players_spin.value = float(clampi(int(Globals.player_count), Globals.MIN_PLAYERS, Globals.MAX_PLAYERS))
 
 func _bind_net_signals() -> void:
 	if NetClient == null:
@@ -267,24 +316,28 @@ func _bind_net_signals() -> void:
 	if not NetClient.game_started.is_connected(_on_game_started):
 		NetClient.game_started.connect(_on_game_started)
 
+# ── 页面导航 ──
+
 func _show_page(page: int, request_rooms_on_entry: bool = true) -> void:
 	var prev := _current_page
 	_current_page = page
 
 	if is_instance_valid(page_connect):
 		page_connect.visible = page == LobbyPage.CONNECT
-	if is_instance_valid(page_rooms):
-		page_rooms.visible = page == LobbyPage.ROOMS
-	if is_instance_valid(page_join_by_code):
-		page_join_by_code.visible = page == LobbyPage.JOIN_BY_CODE
-	if is_instance_valid(page_create):
-		page_create.visible = page == LobbyPage.CREATE
+	if is_instance_valid(page_browse):
+		page_browse.visible = page == LobbyPage.BROWSE
 	if is_instance_valid(page_room):
 		page_room.visible = page == LobbyPage.ROOM
 
+	# RoomPage 需要更大面板
+	if page == LobbyPage.ROOM:
+		panel.custom_minimum_size = Vector2(1200, 720)
+	else:
+		panel.custom_minimum_size = Vector2(980, 720)
+
 	_update_top_title()
 
-	if request_rooms_on_entry and page == LobbyPage.ROOMS and page != prev:
+	if request_rooms_on_entry and page == LobbyPage.BROWSE and page != prev:
 		if NetClient != null and NetClient.is_online_client_connected():
 			NetClient.request_list_rooms()
 
@@ -300,15 +353,7 @@ func _sync_page_from_state() -> void:
 		_show_page(LobbyPage.ROOM, false)
 		return
 
-	if _current_page == LobbyPage.JOIN_BY_CODE:
-		_show_page(LobbyPage.JOIN_BY_CODE, false)
-		return
-
-	if _current_page == LobbyPage.CREATE:
-		_show_page(LobbyPage.CREATE, false)
-		return
-
-	_show_page(LobbyPage.ROOMS, true)
+	_show_page(LobbyPage.BROWSE, true)
 
 func _update_top_title() -> void:
 	if top_title_label == null or not is_instance_valid(top_title_label):
@@ -316,12 +361,8 @@ func _update_top_title() -> void:
 	match _current_page:
 		LobbyPage.CONNECT:
 			top_title_label.text = "连接服务器"
-		LobbyPage.ROOMS:
+		LobbyPage.BROWSE:
 			top_title_label.text = "房间列表"
-		LobbyPage.JOIN_BY_CODE:
-			top_title_label.text = "房间码加入"
-		LobbyPage.CREATE:
-			top_title_label.text = "创建房间"
 		LobbyPage.ROOM:
 			top_title_label.text = "房间内"
 
@@ -331,12 +372,8 @@ func _refresh_ui() -> void:
 	connect_button.disabled = connected
 	disconnect_button.disabled = not connected
 	open_create_button.disabled = not connected
-	open_join_by_code_button.disabled = not connected
 	refresh_rooms_button.disabled = not connected
-	join_by_code_back_button.disabled = not connected
-	join_by_code_submit_button.disabled = not connected
-	back_to_rooms_button.disabled = not connected
-	create_room_button.disabled = not connected
+	quick_join_button.disabled = not connected
 	leave_room_button.disabled = not connected
 	if not connected:
 		if connect_status_label.text.strip_edges().is_empty():
@@ -351,7 +388,7 @@ func _refresh_ui() -> void:
 func _join_room_from_list(room_code: String, password_required: bool) -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
 		_show_error_dialog("未连接到服务器", "请先连接服务器。")
-		_set_rooms_status("")
+		_set_browse_status("")
 		return
 	var code := str(room_code).strip_edges().to_upper()
 	if code.is_empty():
@@ -360,7 +397,7 @@ func _join_room_from_list(room_code: String, password_required: bool) -> void:
 		_prompt_password_and_join(code)
 		return
 	NetClient.request_join_room(code, "")
-	_set_rooms_status("")
+	_set_browse_status("")
 
 func _prompt_password_and_join(room_code: String) -> void:
 	_ensure_password_dialog()
@@ -375,19 +412,15 @@ func _on_password_dialog_submitted(password: String) -> void:
 	if code.is_empty():
 		return
 	NetClient.request_join_room(code, str(password))
-	_set_rooms_status("")
+	_set_browse_status("")
+
+# ── 状态文本 ──
 
 func _set_connect_status(text: String) -> void:
 	connect_status_label.text = str(text).strip_edges()
 
-func _set_rooms_status(text: String) -> void:
-	rooms_status_label.text = str(text).strip_edges()
-
-func _set_join_by_code_status(text: String) -> void:
-	join_by_code_status_label.text = str(text).strip_edges()
-
-func _set_create_status(text: String) -> void:
-	create_status_label.text = str(text).strip_edges()
+func _set_browse_status(text: String) -> void:
+	browse_status_label.text = str(text).strip_edges()
 
 func _set_room_status(text: String) -> void:
 	room_status_label.text = str(text).strip_edges()
@@ -397,14 +430,14 @@ func _get_current_room_code() -> String:
 		return ""
 	return str(NetContext.room_state.get("room_code", "")).strip_edges().to_upper()
 
+# ── 网络信号处理 ──
+
 func _on_net_connected() -> void:
 	_set_connect_status("已连接")
-	_set_rooms_status("")
-	_set_join_by_code_status("")
-	_set_create_status("")
+	_set_browse_status("")
 	_set_room_status("")
 	_refresh_ui()
-	_show_page(LobbyPage.ROOMS, true)
+	_show_page(LobbyPage.BROWSE, true)
 
 func _on_net_disconnected(reason: String) -> void:
 	var r := str(reason).strip_edges()
@@ -415,9 +448,7 @@ func _on_net_disconnected(reason: String) -> void:
 		_show_error_dialog("连接失败", "无法连接到服务器。\n\n若你尚未启动 Dedicated Server，可在项目根目录运行：\n%s" % cmd)
 	else:
 		_set_connect_status("已断开：%s" % reason)
-	_set_rooms_status("")
-	_set_join_by_code_status("")
-	_set_create_status("")
+	_set_browse_status("")
 	_set_room_status("")
 	_ensure_config_sync_controller()
 	if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
@@ -450,7 +481,6 @@ func _on_request_rejected(request_id: String, code: String, message: String) -> 
 		if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
 			_room_config_sync_controller.on_request_rejected(code, message)
 		_refresh_ui()
-		# StartGame 预同步失败：停止 loading 并解锁按钮
 		if _start_game_flow_in_progress and _start_game_request_id.is_empty():
 			_start_game_flow_in_progress = false
 			if SceneManager != null and SceneManager.has_method("hide_loading"):
@@ -486,6 +516,8 @@ func _on_game_started(_payload: Dictionary) -> void:
 		await get_tree().process_frame
 	SceneManager.goto_game()
 
+# ── 配置同步 ──
+
 func _on_room_config_changed() -> void:
 	var room_state: Dictionary = NetContext.room_state if NetContext != null else {}
 	_ensure_config_sync_controller()
@@ -501,41 +533,51 @@ func _on_config_debounce_timeout() -> void:
 		_room_config_sync_controller.on_debounce_timeout(room_state, is_host, NetClient)
 	_set_room_status("")
 
-func _apply_my_color_option_selection(color_index: int) -> void:
+# ── 餐厅 Logo 选择 ──
+
+func _apply_my_logo_option_selection(logo_id: int) -> void:
 	if my_color_option == null or not is_instance_valid(my_color_option):
 		return
 	if my_color_option.item_count <= 0:
 		return
-	var idx := clampi(int(color_index), 0, my_color_option.item_count - 1)
+	var idx := 0
+	for i in range(my_color_option.item_count):
+		var meta_val = my_color_option.get_item_metadata(i)
+		if int(meta_val) == int(logo_id):
+			idx = i
+			break
 	_suppress_profile_signals = true
 	my_color_option.select(idx)
 	_suppress_profile_signals = false
 
-func _write_local_player_profile(name: String, color_index: int) -> void:
+func _write_local_player_profile(name: String, restaurant_logo_id: int) -> void:
 	if NetContext == null:
 		return
 	var p: Dictionary = {}
 	if NetContext.player_profile is Dictionary:
 		p = Dictionary(NetContext.player_profile)
 	p["name"] = str(name).strip_edges()
-	p["color_index"] = int(color_index)
+	if not p.has("color_index"):
+		p["color_index"] = 0
+	p["restaurant_logo_id"] = int(restaurant_logo_id)
 	NetContext.player_profile = p
 
-func _on_my_color_option_selected(index: int) -> void:
+func _on_my_logo_option_selected(index: int) -> void:
 	if _suppress_profile_signals:
 		return
 	if my_color_option == null or not is_instance_valid(my_color_option):
 		return
 	var meta_val = my_color_option.get_item_metadata(index)
-	var palette_index := int(meta_val)
-	_write_local_player_profile(str(player_name_edit.text), palette_index)
+	var logo_id := int(meta_val)
+	_write_local_player_profile(str(player_name_edit.text), logo_id)
 	if NetClient == null or not NetClient.is_online_client_connected():
 		return
-	# 仅在进入房间后允许选择餐厅/颜色（联机大厅设计：避免入局前选择造成困惑/冲突）
 	if _get_current_room_code().is_empty():
 		return
 	if NetClient.has_method("request_update_player_profile"):
 		NetClient.request_update_player_profile(NetContext.player_profile)
+
+# ── 按钮回调 ──
 
 func _on_back_pressed() -> void:
 	if NetClient != null:
@@ -546,7 +588,10 @@ func _on_back_pressed() -> void:
 		SceneManager.goto_main_menu()
 
 func _on_connect_pressed() -> void:
-	_write_local_player_profile(str(player_name_edit.text), int(NetContext.player_profile.get("color_index", 0)) if (NetContext != null and NetContext.player_profile is Dictionary) else 0)
+	_write_local_player_profile(
+		str(player_name_edit.text),
+		int(NetContext.player_profile.get("restaurant_logo_id", -1)) if (NetContext != null and NetContext.player_profile is Dictionary) else -1
+	)
 	var url := str(server_url_edit.text).strip_edges()
 	var r: Result = NetClient.connect_to_server(url)
 	if not r.ok:
@@ -561,61 +606,39 @@ func _on_disconnect_pressed() -> void:
 func _on_open_create_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
 		_show_error_dialog("未连接到服务器", "请先连接服务器。")
-		_set_rooms_status("")
+		_set_browse_status("")
 		return
-	_set_create_status("")
-	_show_page(LobbyPage.CREATE, false)
+	_ensure_create_room_dialog()
+	if _create_room_dialog != null and is_instance_valid(_create_room_dialog):
+		_create_room_dialog.open_dialog()
 
-func _on_open_join_by_code_pressed() -> void:
+func _on_create_room_dialog_confirmed(desired_player_count: int, room_password: String, config_patch: Dictionary) -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
 		_show_error_dialog("未连接到服务器", "请先连接服务器。")
-		_set_rooms_status("")
 		return
-	_set_join_by_code_status("")
-	_show_page(LobbyPage.JOIN_BY_CODE, false)
-	if join_by_code_room_code_edit != null and is_instance_valid(join_by_code_room_code_edit):
-		join_by_code_room_code_edit.grab_focus()
-
-func _on_back_from_join_pressed() -> void:
-	_set_join_by_code_status("")
-	_show_page(LobbyPage.ROOMS, true)
-
-func _on_back_to_rooms_pressed() -> void:
-	_set_create_status("")
-	_show_page(LobbyPage.ROOMS, true)
+	NetClient.request_create_room(desired_player_count, room_password, config_patch)
+	_set_browse_status("")
 
 func _on_refresh_rooms_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
 		_show_error_dialog("未连接到服务器", "请先连接服务器。")
-		_set_rooms_status("")
+		_set_browse_status("")
 		return
 	NetClient.request_list_rooms()
-	_set_rooms_status("")
+	_set_browse_status("")
 
-func _on_join_by_code_submit_pressed() -> void:
+func _on_quick_join_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
 		_show_error_dialog("未连接到服务器", "请先连接服务器。")
-		_set_join_by_code_status("")
+		_set_browse_status("")
 		return
-	var room_code := str(join_by_code_room_code_edit.text).strip_edges().to_upper()
-	var room_password := str(join_by_code_password_edit.text)
+	var room_code := str(quick_join_code_edit.text).strip_edges().to_upper()
+	if room_code.is_empty():
+		_set_browse_status("请输入房间码。")
+		return
+	var room_password := str(quick_join_password_edit.text)
 	NetClient.request_join_room(room_code, room_password)
-	_set_join_by_code_status("")
-
-func _on_create_room_pressed() -> void:
-	if NetClient == null or not NetClient.is_online_client_connected():
-		_show_error_dialog("未连接到服务器", "请先连接服务器。")
-		_set_create_status("")
-		return
-	if create_players_spin == null or not is_instance_valid(create_players_spin):
-		_show_error_dialog("创建房间失败", "人数输入缺失。")
-		_set_create_status("")
-		return
-	var desired := clampi(int(create_players_spin.value), Globals.MIN_PLAYERS, Globals.MAX_PLAYERS)
-
-	var room_password := str(create_password_edit.text)
-	NetClient.request_create_room(desired, room_password, {})
-	_set_create_status("")
+	_set_browse_status("")
 
 func _on_leave_room_pressed() -> void:
 	if NetClient == null or not NetClient.is_online_client_connected():
@@ -665,7 +688,6 @@ func _on_start_game_pressed() -> void:
 			SceneManager.show_loading("正在开始游戏...")
 			await get_tree().process_frame
 
-	# StartGame：进入 loading 后主动触发一次同步（避免"光标仍在输入框中导致未同步"）。
 	_ensure_config_sync_controller()
 	if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
 		var config_ok: bool = await _room_config_sync_controller.pre_sync_for_start_game(room_state, NetClient, _room_config_editor, 5.0)

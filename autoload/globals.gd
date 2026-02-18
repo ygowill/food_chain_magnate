@@ -215,6 +215,7 @@ func apply_online_room_state(room_state: Dictionary) -> void:
 			continue
 		set_player_name(pid, str(p.get("name", "")))
 		set_player_color_index(pid, int(p.get("color_index", 0)))
+		set_player_restaurant_logo_choice(pid, int(p.get("restaurant_logo_id", -1)))
 
 func get_default_save_path() -> String:
 	return "user://savegame.json"

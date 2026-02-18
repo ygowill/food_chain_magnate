@@ -61,14 +61,15 @@ func send_client_hello() -> void:
 	_net.rpc_id(1, "rpc_client_hello", payload)
 	GameLog.debug(
 		"NetClient",
-		"TX ClientHello request_id=%s protocol=%d game_version=%s schema=%d profile_name=%s color=%d"
+		"TX ClientHello request_id=%s protocol=%d game_version=%s schema=%d profile_name=%s color=%d restaurant_logo_id=%d"
 			% [
 				request_id,
 				int(NetContext.PROTOCOL_VERSION),
 				str(Globals.get_version()),
 				int(Globals.SCHEMA_VERSION),
 				_safe_text(str(profile.get("name", ""))),
-				int(profile.get("color_index", -1))
+				int(profile.get("color_index", -1)),
+				int(profile.get("restaurant_logo_id", -1))
 			]
 	)
 
