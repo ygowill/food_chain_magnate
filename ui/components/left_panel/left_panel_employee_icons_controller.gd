@@ -9,6 +9,7 @@ const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 var _panel = null
 var _company_employee_count: int = 0
 var _hand_employee_count: int = 0
+var _busy_employee_count: int = 0
 
 func setup(panel) -> void:
 	_panel = panel
@@ -21,6 +22,7 @@ func refresh() -> void:
 func _refresh_employee_tags() -> void:
 	_company_employee_count = 0
 	_hand_employee_count = 0
+	_busy_employee_count = 0
 	_clear_tag_containers()
 
 	if _panel._game_state == null or not (_panel._game_state.players is Array) or _panel._game_state.players.is_empty():
@@ -37,12 +39,14 @@ func _refresh_employee_tags() -> void:
 
 	_build_company_employee_tags(player)
 	_build_hand_employee_tags(player)
+	_build_busy_marketer_tags(player)
 	_update_section_visibility()
 	_update_section_headers(player)
 
 func _clear_tag_containers() -> void:
 	_clear_container_children(_panel.company_tags_flow)
 	_clear_container_children(_panel.hand_tags_flow)
+	_clear_container_children(_panel.busy_tags_flow)
 
 func _clear_container_children(container: Node) -> void:
 	if container == null or not is_instance_valid(container):
@@ -80,32 +84,44 @@ func _build_hand_employee_tags(player: Dictionary) -> void:
 		return
 
 	var reserve: Array[String] = []
-	var busy: Array[String] = []
 
 	for e in Array(player.get("reserve_employees", [])):
 		var s := str(e).strip_edges()
 		if not s.is_empty():
 			reserve.append(s)
-	for e2 in Array(player.get("busy_marketers", [])):
-		var s2 := str(e2).strip_edges()
-		if not s2.is_empty():
-			busy.append(s2)
 
 	reserve.sort()
-	busy.sort()
-	_hand_employee_count = reserve.size() + busy.size()
+	_hand_employee_count = reserve.size()
 
 	if _hand_employee_count <= 0:
 		_panel.hand_tags_flow.add_child(_create_empty_hint("暂无手牌员工"))
 		return
 
-	# 先显示正常手牌，再显示忙碌的员工
 	for emp_id in reserve:
 		var tag := _create_employee_tag(emp_id, false, player)
 		_panel.hand_tags_flow.add_child(tag)
-	for emp_id2 in busy:
-		var tag2 := _create_employee_tag(emp_id2, true, player)
-		_panel.hand_tags_flow.add_child(tag2)
+
+func _build_busy_marketer_tags(player: Dictionary) -> void:
+	if player == null:
+		return
+	if not is_instance_valid(_panel.busy_tags_flow):
+		return
+
+	var busy: Array[String] = []
+	for e in Array(player.get("busy_marketers", [])):
+		var s := str(e).strip_edges()
+		if not s.is_empty():
+			busy.append(s)
+	busy.sort()
+	_busy_employee_count = busy.size()
+
+	if _busy_employee_count <= 0:
+		_panel.busy_tags_flow.add_child(_create_empty_hint("暂无忙碌中的营销人员"))
+		return
+
+	for emp_id in busy:
+		var tag := _create_employee_tag(emp_id, true, player)
+		_panel.busy_tags_flow.add_child(tag)
 
 func _create_employee_tag(emp_id: String, is_busy: bool, player: Dictionary) -> PanelContainer:
 	var tag := PanelContainer.new()
@@ -213,17 +229,24 @@ func _update_section_visibility() -> void:
 		_panel.company_section.visible = true
 	if is_instance_valid(_panel.hand_section):
 		_panel.hand_section.visible = true
+	if is_instance_valid(_panel.busy_section):
+		_panel.busy_section.visible = true
 
 func _update_section_headers(_player: Dictionary) -> void:
 	# 更新公司结构标题显示员工数量
 	if is_instance_valid(_panel.company_section_header) and is_instance_valid(_panel.company_tags_flow):
 		var count: int = _company_employee_count
-		_panel.company_section_header.text = "📋 公司结构 (%d)" % count if count > 0 else "📋 公司结构"
+		_panel.company_section_header.text = "公司结构 (%d)" % count if count > 0 else "公司结构"
 
 	# 更新手牌标题显示数量
 	if is_instance_valid(_panel.hand_section_header) and is_instance_valid(_panel.hand_tags_flow):
 		var count: int = _hand_employee_count
-		_panel.hand_section_header.text = "🃏 手牌 (%d)" % count if count > 0 else "🃏 手牌"
+		_panel.hand_section_header.text = "手牌 (%d)" % count if count > 0 else "手牌"
+
+	# 更新忙碌营销员标题显示数量
+	if is_instance_valid(_panel.busy_section_header) and is_instance_valid(_panel.busy_tags_flow):
+		var busy_count: int = _busy_employee_count
+		_panel.busy_section_header.text = "忙碌中的营销人员 (%d)" % busy_count if busy_count > 0 else "忙碌中的营销人员"
 
 # === 交互：员工卡片预览 ===
 func _get_preview_manager():

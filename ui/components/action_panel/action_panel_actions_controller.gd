@@ -231,16 +231,31 @@ func _compute_guided_flow_visibility() -> void:
 		show_skip = false
 	if show_skip:
 		var has_any_other_initiatable := false
-		var check_ids: Array = initiatable_ids
-		if check_ids.is_empty():
-			# 无法计算“可启动动作”时：退化为“只要面板里还有非 skip 动作，就不显示确认结束”
-			check_ids = visible_ids
-		for aid2 in check_ids:
-			var a := str(aid2)
-			if a == ActionIdsClass.SKIP or a == ActionIdsClass.SKIP_SUB_PHASE:
-				continue
-			has_any_other_initiatable = true
-			break
+		if not initiatable_ids.is_empty():
+			for aid2 in initiatable_ids:
+				var a2 := str(aid2)
+				if a2 == ActionIdsClass.SKIP or a2 == ActionIdsClass.SKIP_SUB_PHASE:
+					continue
+				has_any_other_initiatable = true
+				break
+		elif not p._action_enabled.is_empty():
+			# 当可启动列表为空时，优先使用“按钮启用态”判断，避免出现“仅剩不可启动动作却隐藏确认结束”的空白面板。
+			for aid3 in visible_ids:
+				var a3 := str(aid3)
+				if a3 == ActionIdsClass.SKIP or a3 == ActionIdsClass.SKIP_SUB_PHASE:
+					continue
+				if not p.get_action_enabled(a3):
+					continue
+				has_any_other_initiatable = true
+				break
+		else:
+			# 兜底：无启用态信息时按可见动作判断（保持旧行为）。
+			for aid4 in visible_ids:
+				var a4 := str(aid4)
+				if a4 == ActionIdsClass.SKIP or a4 == ActionIdsClass.SKIP_SUB_PHASE:
+					continue
+				has_any_other_initiatable = true
+				break
 		show_skip = not has_any_other_initiatable
 
 	p._flow_confirm_end_visible = show_skip

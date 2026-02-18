@@ -4,8 +4,18 @@ class_name MarketingPanelModuleTypesUiTest
 extends RefCounted
 
 const MarketingPanelClass = preload("res://ui/components/marketing_panel/marketing_panel.gd")
+const EmployeePickerClass = preload("res://ui/components/employee_picker/employee_picker.gd")
 
 static func run() -> Result:
+	var r1 := _case_module_type_visible()
+	if not r1.ok:
+		return r1
+	var r2 := _case_duplicate_marketers_render_multiple_items()
+	if not r2.ok:
+		return r2
+	return Result.success({})
+
+static func _case_module_type_visible() -> Result:
 	var panel := MarketingPanelClass.new()
 	var container := HFlowContainer.new()
 	panel.add_child(container)
@@ -15,7 +25,7 @@ static func run() -> Result:
 		{"id": "gourmet_food_critic", "type": "gourmet_guide", "max_duration": 3},
 	])
 	panel.set_available_boards({"gourmet_guide": [17, 18]})
-	
+
 	if str(panel._selected_type) != "gourmet_guide":
 		_safe_free(panel)
 		return Result.failure("MarketingPanel should auto-select the only available type gourmet_guide (selected=%s)" % str(panel._selected_type))
@@ -36,6 +46,33 @@ static func run() -> Result:
 	if not bool(btn.is_available):
 		_safe_free(panel)
 		return Result.failure("MarketingPanel gourmet_guide should be available when marketer+boards exist")
+
+	_safe_free(panel)
+	return Result.success({})
+
+static func _case_duplicate_marketers_render_multiple_items() -> Result:
+	var panel := MarketingPanelClass.new()
+	var type_container := HFlowContainer.new()
+	var picker := EmployeePickerClass.new()
+	panel.add_child(type_container)
+	panel.add_child(picker)
+	panel.type_container = type_container
+	panel.marketer_option = picker
+
+	panel.set_available_marketers([
+		{"id": "marketing_trainee", "type": "billboard", "max_duration": 1},
+		{"id": "marketing_trainee", "type": "billboard", "max_duration": 1},
+	])
+	panel.set_available_boards({"billboard": [11, 13]})
+
+	if str(panel._selected_type) != "billboard":
+		_safe_free(panel)
+		return Result.failure("MarketingPanel should auto-select billboard in duplicate marketer case (selected=%s)" % str(panel._selected_type))
+
+	var item_count := picker.get_child_count()
+	if item_count != 2:
+		_safe_free(panel)
+		return Result.failure("MarketingPanel should render 2 marketer items for duplicate marketers, got: %d" % item_count)
 
 	_safe_free(panel)
 	return Result.success({})

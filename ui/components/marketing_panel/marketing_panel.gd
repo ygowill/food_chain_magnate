@@ -238,14 +238,14 @@ func _rebuild_marketer_options() -> void:
 		_clear_duration_buttons()
 		return
 
-	var counts := {}
+	var instance_count_by_emp: Dictionary = {}
 	for marketer in _available_marketers:
 		if str(marketer.get("type", "")) != _selected_type:
 			continue
 		var emp_id: String = str(marketer.get("id", ""))
 		if emp_id.is_empty():
 			continue
-		counts[emp_id] = int(counts.get(emp_id, 0)) + 1
+		instance_count_by_emp[emp_id] = int(instance_count_by_emp.get(emp_id, 0)) + 1
 
 		var md := int(marketer.get("max_duration", 1))
 		if not _marketer_max_duration_by_id.has(emp_id):
@@ -254,24 +254,31 @@ func _rebuild_marketer_options() -> void:
 			_marketer_max_duration_by_id[emp_id] = maxi(int(_marketer_max_duration_by_id[emp_id]), md)
 
 	var ids: Array[String] = []
-	for k in counts.keys():
+	for k in instance_count_by_emp.keys():
 		ids.append(str(k))
 	ids.sort()
 
 	var items: Array[Dictionary] = []
+	var first_item_key := ""
+	var first_employee_id := ""
 	for emp_id in ids:
-		var count: int = int(counts.get(emp_id, 0))
-		items.append({
-			"id": emp_id,
-			"employee_def": _get_employee_def_for_card(emp_id),
-			"badge_text": str(count),
-			"enabled": true,
-		})
+		var count: int = int(instance_count_by_emp.get(emp_id, 0))
+		for idx in range(count):
+			var item_key := "%s#%d" % [emp_id, idx + 1]
+			items.append({
+				"id": emp_id,
+				"key": item_key,
+				"employee_def": _get_employee_def_for_card(emp_id),
+				"badge_text": "",
+				"enabled": true,
+			})
+			if first_item_key.is_empty():
+				first_item_key = item_key
+				first_employee_id = emp_id
 
-	if ids.size() > 0:
-		var first := str(ids[0])
-		marketer_option.set_items(items, first)
-		_apply_selected_marketer(first)
+	if not items.is_empty():
+		marketer_option.set_items(items, first_item_key)
+		_apply_selected_marketer(first_employee_id)
 	else:
 		marketer_option.clear()
 		_clear_duration_buttons()

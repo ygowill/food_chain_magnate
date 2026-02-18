@@ -5,6 +5,7 @@ class_name ActionPanelEndButtonsOrderTest
 extends RefCounted
 
 const ActionPanelClass = preload("res://ui/components/action_panel/action_panel.gd")
+const ActionsControllerClass = preload("res://ui/components/action_panel/action_panel_actions_controller.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run() -> Result:
@@ -14,6 +15,9 @@ static func run() -> Result:
 	var r2 := _case_skip_only()
 	if not r2.ok:
 		return r2
+	var r3 := _case_skip_visible_when_only_disabled_real_action()
+	if not r3.ok:
+		return r3
 	return Result.success({})
 
 static func _case_both_present() -> Result:
@@ -42,6 +46,22 @@ static func _case_skip_only() -> Result:
 	_safe_free(panel)
 	return Result.success({})
 
+static func _case_skip_visible_when_only_disabled_real_action() -> Result:
+	var panel := _FlowMockPanel.new()
+	panel._visible_action_ids = ["initiate_marketing", ActionIdsClass.SKIP]
+	panel._visible_initiatable_action_ids = []
+	panel._action_enabled["initiate_marketing"] = false
+	panel._action_enabled[ActionIdsClass.SKIP] = true
+
+	var controller := ActionsControllerClass.new()
+	controller.setup(panel)
+	controller._compute_guided_flow_visibility()
+
+	if not panel._flow_confirm_end_visible:
+		return Result.failure("ActionPanel flow should show skip when only disabled real action remains")
+
+	return Result.success({})
+
 static func _read_action_ids(panel: Object) -> Array[String]:
 	if panel == null or not is_instance_valid(panel):
 		return []
@@ -54,3 +74,19 @@ static func _safe_free(node) -> void:
 		return
 	if node is Node:
 		(node as Node).free()
+
+class _FlowMockPanel:
+	extends RefCounted
+
+	var _guided_action_id: String = ""
+	var _visible_initiatable_action_ids: Array[String] = []
+	var _visible_action_ids: Array[String] = []
+	var _flow_confirm_end_visible: bool = false
+	var _flow_skip_step_visible: bool = false
+	var _action_enabled: Dictionary = {}
+
+	func _sync_guided_action_placeholder() -> void:
+		pass
+
+	func get_action_enabled(action_id: String) -> bool:
+		return bool(_action_enabled.get(str(action_id), false))

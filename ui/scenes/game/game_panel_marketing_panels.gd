@@ -296,8 +296,48 @@ func _on_marketing_requested(employee_type: String, board_number: int, position:
 			_map_controller.clear_selection()
 		if _overlay_controller != null:
 			_overlay_controller.hide_marketing_range_overlay()
-		if _hide_all.is_valid():
-			_hide_all.call()
+		var state_after: GameState = _scene.game_engine.get_state()
+		if state_after == null:
+			if _hide_all.is_valid():
+				_hide_all.call()
+			return
+
+		# 营销成功后优先保持面板打开并刷新（若仍可继续发起），避免出现“动作面板瞬时空白”。
+		if is_instance_valid(marketing_panel) and marketing_panel.visible:
+			if state_after.phase != DefsClass.PHASE_WORKING or state_after.sub_phase != DefsClass.SUB_PHASE_MARKETING:
+				if _hide_all.is_valid():
+					_hide_all.call()
+				return
+
+			var current_player_after: Dictionary = state_after.get_current_player()
+			var marketer_entries := _build_marketing_marketer_entries(state_after, state_after.get_current_player_id(), current_player_after)
+			var boards_by_type := _build_available_marketing_boards_by_type(state_after)
+			var has_marketer := not marketer_entries.is_empty()
+			var has_board := false
+			for tid in boards_by_type.keys():
+				var arr_val = boards_by_type.get(tid, null)
+				if arr_val is Array and not (arr_val as Array).is_empty():
+					has_board = true
+					break
+
+			if not (has_marketer and has_board):
+				if _hide_all.is_valid():
+					_hide_all.call()
+				return
+
+			if marketing_panel.has_method("clear_selection"):
+				marketing_panel.clear_selection()
+			if marketing_panel.has_method("set_available_marketers"):
+				marketing_panel.set_available_marketers(marketer_entries)
+			if marketing_panel.has_method("set_available_boards"):
+				marketing_panel.set_available_boards(boards_by_type)
+			if marketing_panel.has_method("set_map_selection_callback") and _map_controller != null:
+				marketing_panel.set_map_selection_callback(Callable(_map_controller, "on_marketing_map_selection_requested"))
+			if marketing_panel.has_method("set_error"):
+				marketing_panel.set_error("")
+		else:
+			if _hide_all.is_valid():
+				_hide_all.call()
 	else:
 		if is_instance_valid(marketing_panel) and marketing_panel.visible:
 			if marketing_panel.has_method("set_error"):

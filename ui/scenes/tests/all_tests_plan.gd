@@ -218,6 +218,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"name": "LeftPanelSelectionIsolationTest",
 				"fn": func() -> Result: return TestRefs.LeftPanelSelectionIsolationTestClass.run(),
 			},
+			{
+				"name": "LeftPanelBusyMarketersGroupTest",
+				"fn": func() -> Result: return TestRefs.LeftPanelBusyMarketersGroupTestClass.run(),
+			},
 		{
 			"name": "InitialCompanyTest",
 			"fn": func() -> Result: return TestRefs.InitialCompanyTestClass.run(2, 12345),
@@ -561,6 +565,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			{
 				"name": "MarketingPanelModuleTypesUiTest",
 				"fn": func() -> Result: return TestRefs.MarketingPanelModuleTypesUiTestClass.run(),
+			},
+			{
+				"name": "MarketingPanelPostPlaceRefreshTest",
+				"fn": func() -> Result: return TestRefs.MarketingPanelPostPlaceRefreshTestClass.run(),
 			},
 						{
 							"name": "MarketingCampaignsTest",

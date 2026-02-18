@@ -57,7 +57,7 @@ visible = false
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
-text = "🏪 餐厅概览"
+text = "餐厅概览"
 
 [node name="OverviewGrid" type="GridContainer" parent="MarginContainer/MainVBox/RestaurantOverviewSection/OverviewMargin/OverviewVBox"]
 layout_mode = 2
@@ -122,19 +122,19 @@ theme_override_constants/separation = 12
 layout_mode = 2
 theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
-text = "👥0人"
+text = "0人"
 
 [node name="RestaurantCountLabel" type="Label" parent="MarginContainer/MainVBox/PlayerSummaryCard/SummaryMargin/SummaryVBox/MetricsRow"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
-text = "🏠0店"
+text = "0店"
 
 [node name="SalaryLabel" type="Label" parent="MarginContainer/MainVBox/PlayerSummaryCard/SummaryMargin/SummaryVBox/MetricsRow"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
-text = "💰$0/回合"
+text = "$0/回合"
 
 [node name="DualColumnArea" type="HBoxContainer" parent="MarginContainer/MainVBox"]
 layout_mode = 2
@@ -155,7 +155,7 @@ theme_override_constants/separation = 4
 layout_mode = 2
 theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
-text = "📦 库存"
+text = "库存"
 
 [node name="InventoryTokensFlow" type="HFlowContainer" parent="MarginContainer/MainVBox/DualColumnArea/LeftColumn/InventorySection"]
 layout_mode = 2
@@ -182,7 +182,7 @@ theme_override_constants/separation = 4
 layout_mode = 2
 theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(0.3, 0.5, 0.3, 1)
-text = "📋 公司结构"
+text = "公司结构"
 
 [node name="CompanyTagsFlow" type="VBoxContainer" parent="MarginContainer/MainVBox/DualColumnArea/LeftColumn/EmployeesScroll/EmployeesContent/CompanySection"]
 layout_mode = 2
@@ -193,13 +193,36 @@ theme_override_constants/separation = 4
 layout_mode = 2
 theme_override_constants/separation = 4
 
+[node name="HandTopSpacer" type="Control" parent="MarginContainer/MainVBox/DualColumnArea/LeftColumn/EmployeesScroll/EmployeesContent/HandSection"]
+custom_minimum_size = Vector2(0, 6)
+layout_mode = 2
+
 [node name="HandSectionHeader" type="Label" parent="MarginContainer/MainVBox/DualColumnArea/LeftColumn/EmployeesScroll/EmployeesContent/HandSection"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(0.5, 0.45, 0.3, 1)
-text = "🃏 手牌"
+text = "手牌"
 
 [node name="HandTagsFlow" type="VBoxContainer" parent="MarginContainer/MainVBox/DualColumnArea/LeftColumn/EmployeesScroll/EmployeesContent/HandSection"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="BusySection" type="VBoxContainer" parent="MarginContainer/MainVBox/DualColumnArea/LeftColumn/EmployeesScroll/EmployeesContent"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="BusyTopSpacer" type="Control" parent="MarginContainer/MainVBox/DualColumnArea/LeftColumn/EmployeesScroll/EmployeesContent/BusySection"]
+custom_minimum_size = Vector2(0, 6)
+layout_mode = 2
+
+[node name="BusySectionHeader" type="Label" parent="MarginContainer/MainVBox/DualColumnArea/LeftColumn/EmployeesScroll/EmployeesContent/BusySection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.5, 0.45, 0.3, 1)
+text = "忙碌中的营销人员"
+
+[node name="BusyTagsFlow" type="VBoxContainer" parent="MarginContainer/MainVBox/DualColumnArea/LeftColumn/EmployeesScroll/EmployeesContent/BusySection"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 4
@@ -219,7 +242,7 @@ theme_override_constants/separation = 4
 layout_mode = 2
 theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
-text = "🏆 里程碑"
+text = "里程碑"
 
 [node name="MilestonesScroll" type="ScrollContainer" parent="MarginContainer/MainVBox/DualColumnArea/RightColumn/MilestonesSection"]
 layout_mode = 2

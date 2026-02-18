@@ -104,17 +104,17 @@ func _refresh_summary() -> void:
 	# 员工总数
 	var emp_count := count_total_employees(player)
 	if is_instance_valid(_panel.employee_count_label):
-		_panel.employee_count_label.text = "👥%d人" % emp_count
+		_panel.employee_count_label.text = "%d人" % emp_count
 
 	# 餐厅数
 	var rest_count := count_restaurants(player)
 	if is_instance_valid(_panel.restaurant_count_label):
-		_panel.restaurant_count_label.text = "🏠%d店" % rest_count
+		_panel.restaurant_count_label.text = "%d店" % rest_count
 
 	# 每回合薪资
 	var total_salary := _calculate_total_salary(player)
 	if is_instance_valid(_panel.salary_label):
-		_panel.salary_label.text = "💰$%d/回合" % total_salary
+		_panel.salary_label.text = "$%d/回合" % total_salary
 
 	# 库存
 	var inv_val = player.get("inventory", {})
@@ -129,11 +129,11 @@ func _set_summary_empty() -> void:
 	if is_instance_valid(_panel.cash_label):
 		_panel.cash_label.text = "$0"
 	if is_instance_valid(_panel.employee_count_label):
-		_panel.employee_count_label.text = "👥0人"
+		_panel.employee_count_label.text = "0人"
 	if is_instance_valid(_panel.restaurant_count_label):
-		_panel.restaurant_count_label.text = "🏠0店"
+		_panel.restaurant_count_label.text = "0店"
 	if is_instance_valid(_panel.salary_label):
-		_panel.salary_label.text = "💰$0/回合"
+		_panel.salary_label.text = "$0/回合"
 	_refresh_inventory_ui({}, -1)
 
 func _calculate_total_salary(player: Dictionary) -> int:
@@ -163,9 +163,9 @@ func _refresh_inventory_ui(inv: Dictionary, fridge_capacity: int) -> void:
 		total_items += int(inv.get(k, 0))
 
 	if fridge_capacity < 0:
-		_panel.inventory_header.text = "📦 库存 (%d)" % total_items
+		_panel.inventory_header.text = "库存 (%d)" % total_items
 	else:
-		_panel.inventory_header.text = "📦 库存 (%d/%d)" % [total_items, fridge_capacity]
+		_panel.inventory_header.text = "库存 (%d/%d)" % [total_items, fridge_capacity]
 
 	for c in _panel.inventory_tokens_flow.get_children():
 		if is_instance_valid(c):

@@ -39,6 +39,9 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 @onready var hand_section: VBoxContainer = $MarginContainer/MainVBox/DualColumnArea/LeftColumn/EmployeesScroll/EmployeesContent/HandSection
 @onready var hand_section_header: Label = $MarginContainer/MainVBox/DualColumnArea/LeftColumn/EmployeesScroll/EmployeesContent/HandSection/HandSectionHeader
 @onready var hand_tags_flow: VBoxContainer = $MarginContainer/MainVBox/DualColumnArea/LeftColumn/EmployeesScroll/EmployeesContent/HandSection/HandTagsFlow
+@onready var busy_section: VBoxContainer = $MarginContainer/MainVBox/DualColumnArea/LeftColumn/EmployeesScroll/EmployeesContent/BusySection
+@onready var busy_section_header: Label = $MarginContainer/MainVBox/DualColumnArea/LeftColumn/EmployeesScroll/EmployeesContent/BusySection/BusySectionHeader
+@onready var busy_tags_flow: VBoxContainer = $MarginContainer/MainVBox/DualColumnArea/LeftColumn/EmployeesScroll/EmployeesContent/BusySection/BusyTagsFlow
 
 # === 双栏区域 - 库存与里程碑 ===
 @onready var inventory_header: Label = $MarginContainer/MainVBox/DualColumnArea/LeftColumn/InventorySection/InventoryHeader
@@ -135,6 +138,8 @@ func _apply_visual_styles() -> void:
 		UiStylesClass.apply_label_dark(company_section_header)
 	if is_instance_valid(hand_section_header):
 		UiStylesClass.apply_label_hint_dark(hand_section_header)
+	if is_instance_valid(busy_section_header):
+		UiStylesClass.apply_label_hint_dark(busy_section_header)
 	if is_instance_valid(inventory_header):
 		UiStylesClass.apply_label_hint_dark(inventory_header)
 	if is_instance_valid(milestones_header):
@@ -188,6 +193,8 @@ func apply_font_settings() -> void:
 		company_section_header.add_theme_font_size_override("font_size", fs_section)
 	if is_instance_valid(hand_section_header):
 		hand_section_header.add_theme_font_size_override("font_size", fs_section)
+	if is_instance_valid(busy_section_header):
+		busy_section_header.add_theme_font_size_override("font_size", fs_section)
 	if is_instance_valid(inventory_header):
 		inventory_header.add_theme_font_size_override("font_size", fs_section)
 	if is_instance_valid(milestones_header):
