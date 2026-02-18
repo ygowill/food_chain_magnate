@@ -414,6 +414,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"name": "ActionPanelGuidedActionPlaceholderTest",
 				"fn": func() -> Result: return await TestRefs.ActionPanelGuidedActionPlaceholderTestClass.run(),
 			},
+			{
+				"name": "GameLogDockControllerTimelineSyncTest",
+				"fn": func() -> Result: return await TestRefs.GameLogDockControllerTimelineSyncTestClass.run(),
+			},
 				{
 					"name": "LogRestoreAfterLoadTest",
 					"fn": func() -> Result: return TestRefs.LogRestoreAfterLoadTestClass.run(),

@@ -196,6 +196,7 @@ func _run_test() -> int:
 	if _find_first_existing_node(lobby, lobby_back_paths) == null:
 		return await _fail("online_lobby.tscn 缺少 BackButton 节点（节点路径漂移）")
 	var lobby_connect_paths: PackedStringArray = [
+		"Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ButtonsRow/ConnectButton",
 		"Center/Panel/OuterMargin/InnerBorder/Margin/Root/Tabs/ConnectTab/ButtonsRow/ConnectButton",
 		"Center/Panel/Margin/Root/Tabs/ConnectTab/ButtonsRow/ConnectButton",
 	]

@@ -281,11 +281,8 @@ func _on_context_panel_visibility_changed() -> void:
 	_sync_guided_action_placeholder()
 
 func _should_show_guided_action_placeholder() -> bool:
-	if _guided_action_id.strip_edges().is_empty():
-		return false
-	if is_instance_valid(context_panel) and context_panel.visible:
-		return false
-	return true
+	# 交互改版：不再显示“当前操作/继续xx”占位卡，始终直接进入实际动作页面。
+	return false
 
 func _sync_guided_action_placeholder() -> void:
 	if not is_instance_valid(guided_action_panel):
@@ -294,6 +291,7 @@ func _sync_guided_action_placeholder() -> void:
 	var show := _should_show_guided_action_placeholder()
 	guided_action_panel.visible = show
 	if not show:
+		_sync_guided_action_button_state()
 		return
 
 	var name := get_action_display_name(_guided_action_id)
@@ -304,10 +302,31 @@ func _sync_guided_action_placeholder() -> void:
 		guided_action_hint_label.text = desc
 	if is_instance_valid(open_guided_action_button):
 		open_guided_action_button.text = "继续%s" % name if not name.is_empty() else "继续"
+	_sync_guided_action_button_state()
+
+func _sync_guided_action_button_state() -> void:
+	if not is_instance_valid(open_guided_action_button):
+		return
+	var aid := _guided_action_id.strip_edges()
+	var enabled := (not aid.is_empty()) and get_action_enabled(aid)
+	open_guided_action_button.disabled = not enabled
+
+	var reason := ""
+	if not enabled and not aid.is_empty():
+		reason = get_action_disabled_reason(aid)
+	elif not enabled and _globally_disabled and not _globally_disabled_reason.is_empty():
+		reason = _globally_disabled_reason
+
+	if open_guided_action_button.disabled and not reason.is_empty():
+		open_guided_action_button.tooltip_text = "不可用：%s" % reason
+	else:
+		open_guided_action_button.tooltip_text = ""
 
 func _on_open_guided_action_pressed() -> void:
 	var aid := _guided_action_id.strip_edges()
 	if aid.is_empty():
+		return
+	if not get_action_enabled(aid):
 		return
 	action_requested.emit(aid, {})
 
@@ -535,6 +554,7 @@ func _apply_global_disabled_state() -> void:
 		for child in piece_flow.get_children():
 			if child is BaseButton:
 				(child as BaseButton).disabled = _globally_disabled
+	_sync_guided_action_button_state()
 
 	# 动作可用性通过 get_action_enabled/get_action_disabled_reason 动态体现；
 	# 这里不再直接操作动作按钮（已改为压平动作流，按钮由外部 ActionFlowControls 承载）。

@@ -97,8 +97,12 @@ func _run_background_build() -> void:
 	build_finished.emit()
 
 func _on_close_pressed() -> void:
-	visible = false
+	# 先通知外层控制器执行统一的“关闭 + UI 重建”流程，
+	# 避免先置 hidden 导致外层误判为“并未从可见态关闭”。
 	closed.emit()
+	# 兜底：若未被外层接管，仍保证面板可关闭。
+	if visible:
+		visible = false
 
 func _set_loading_visible(loading: bool) -> void:
 	if is_instance_valid(loading_center):

@@ -1,5 +1,5 @@
 # ActionPanel guided action placeholder regression test
-# 目标：当动作 UI 被取消/关闭后，右侧 ActionPanel 不应为空白，应显示“当前操作”占位卡片并可一键重新打开。
+# 目标：交互改版后不再显示“当前操作/继续xx”占位卡片，应始终保持隐藏。
 class_name ActionPanelGuidedActionPlaceholderTest
 extends RefCounted
 
@@ -27,7 +27,7 @@ static func run() -> Result:
 	# 等待一帧，确保 onready 节点已就绪
 	await st.process_frame
 
-	# 设置动作：应渲染 guided placeholder（当前操作=招聘）
+	# 设置动作：不应渲染 guided placeholder（当前操作卡片已移除）
 	if panel is ActionPanel:
 		var ap: ActionPanel = panel
 		var actions: Array[String] = ["recruit", "skip"]
@@ -40,28 +40,16 @@ static func run() -> Result:
 	if guided_panel == null or not is_instance_valid(guided_panel):
 		await _cleanup_panel(panel, st)
 		return Result.failure("GuidedActionPanel 节点缺失")
-	if not (guided_panel as Control).visible:
+	if (guided_panel as Control).visible:
 		await _cleanup_panel(panel, st)
-		return Result.failure("设置动作后 GuidedActionPanel 应可见（避免空白）")
+		return Result.failure("设置动作后 GuidedActionPanel 应保持隐藏")
 
 	var open_btn = panel.get_node_or_null("MarginContainer/VBoxContainer/GuidedActionPanel/MarginContainer/VBoxContainer/OpenGuidedActionButton")
 	if open_btn == null or not is_instance_valid(open_btn):
 		await _cleanup_panel(panel, st)
 		return Result.failure("OpenGuidedActionButton 节点缺失")
 
-	# 点击“继续”应 emit action_requested("recruit")
-	var requested: Array[Dictionary] = []
-	if panel.has_signal("action_requested"):
-		panel.action_requested.connect(func(aid: String, params: Dictionary) -> void:
-			requested.append({"action_id": aid, "params": params})
-		)
-	open_btn.emit_signal("pressed")
-
-	if requested.size() != 1 or str(requested[0].get("action_id", "")) != "recruit":
-		await _cleanup_panel(panel, st)
-		return Result.failure("点击继续应请求 recruit，实际=%s" % str(requested))
-
-	# 当 ContextPanel 显示（代表具体动作 UI 打开）时，占位卡片应隐藏
+	# 即使 ContextPanel 显示（代表具体动作 UI 打开），占位卡片也应保持隐藏。
 	var ctx = panel.get_node_or_null("MarginContainer/VBoxContainer/ContextPanel")
 	if ctx == null or not is_instance_valid(ctx):
 		await _cleanup_panel(panel, st)
@@ -71,7 +59,7 @@ static func run() -> Result:
 
 	if (guided_panel as Control).visible:
 		await _cleanup_panel(panel, st)
-		return Result.failure("ContextPanel 可见时 GuidedActionPanel 应隐藏")
+		return Result.failure("ContextPanel 可见时 GuidedActionPanel 仍应隐藏")
 
 	await _cleanup_panel(panel, st)
 	return Result.success({})

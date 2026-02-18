@@ -104,6 +104,7 @@ const MarketingSelectionFreezeTestClass = preload("res://ui/scenes/tests/marketi
 const AirplaneMarketingOutsideSelectionTestClass = preload("res://ui/scenes/tests/airplane_marketing_outside_selection_test.gd")
 const MoveRestaurantDisplayLabelTestClass = preload("res://ui/scenes/tests/move_restaurant_display_label_test.gd")
 const ActionPanelGuidedActionPlaceholderTestClass = preload("res://ui/scenes/tests/action_panel_guided_action_placeholder_test.gd")
+const GameLogDockControllerTimelineSyncTestClass = preload("res://ui/scenes/tests/game_log_dock_controller_timeline_sync_test.gd")
 const LogRestoreAfterLoadTestClass = preload("res://ui/scenes/tests/log_restore_after_load_test.gd")
 const ProductionPanelUsedCountsSyncTestClass = preload("res://ui/scenes/tests/production_panel_used_counts_sync_test.gd")
 const ManualLogSaveTestClass = preload("res://core/tests/manual_log_save_test.gd")

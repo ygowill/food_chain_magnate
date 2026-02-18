@@ -86,6 +86,8 @@ var _warmup_controller = null
 var _debug_panel_controller = null
 var _startup_profile_reported: bool = false
 var _startup_suppress_game_over_modal: bool = false
+var _online_waiting_log_auto_opened: bool = false
+var _online_waiting_action_ui_hidden: bool = false
 func _ready() -> void:
 	var span_ready := PerfTraceClass.begin_span("game:_ready")
 	GameLog.info("Game", "游戏场景已加载")
@@ -447,15 +449,85 @@ func _initialize_game() -> void:
 	GameLog.info("Game", "初始状态:\n%s" % state_dump)
 
 func _update_ui() -> void:
+	# 先执行一次联机等待态切换：确保“轮到自己时”先关闭日志，再进入面板同步，
+	# 避免本帧先出现“继续xx”占位卡，再下一帧才打开真实动作页面。
+	_sync_online_waiting_log_auto_switch()
 	var do_profile := PerfTraceClass.enabled() and not _startup_profile_reported
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("update_ui"):
 		_ui_sync_controller.update_ui(do_profile)
+	# 同步后再收敛一次，保证最终显示状态稳定。
+	_sync_online_waiting_log_auto_switch()
 
 func _on_debug_command_executed(command: String, _result: String) -> void:
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("on_debug_command_executed"):
 		_ui_sync_controller.on_debug_command_executed(command)
 	else:
 		_update_ui()
+
+func _is_online_waiting_for_other_player() -> bool:
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return false
+	if game_engine == null:
+		return false
+
+	var state: GameState = game_engine.get_state()
+	if state == null:
+		return false
+	if str(state.phase) == DefsClass.PHASE_RESTRUCTURING:
+		return false
+
+	var local_pid := int(NetContext.local_player_id)
+	if local_pid < 0:
+		return true
+	var current_pid := int(state.get_current_player_id())
+	if current_pid < 0:
+		return true
+	return current_pid != local_pid
+
+func _set_action_ui_visible(visible: bool) -> void:
+	if is_instance_valid(action_panel):
+		action_panel.visible = visible
+	if is_instance_valid(action_flow_controls):
+		action_flow_controls.visible = visible
+
+func _sync_online_waiting_log_auto_switch() -> void:
+	var waiting_others := _is_online_waiting_for_other_player()
+	if waiting_others:
+		if not _online_waiting_action_ui_hidden:
+			if _panel_controller != null and _panel_controller.has_method("hide_non_modal_action_ui_for_waiting"):
+				_panel_controller.call("hide_non_modal_action_ui_for_waiting")
+			_set_action_ui_visible(false)
+			_online_waiting_action_ui_hidden = true
+	else:
+		if _online_waiting_action_ui_hidden:
+			_set_action_ui_visible(true)
+			_online_waiting_action_ui_hidden = false
+
+	# 回放/复盘期间由时间线控制器主导日志显示，不做自动切换。
+	if is_timeline_read_only_active():
+		return
+	if _log_dock_controller == null:
+		_online_waiting_log_auto_opened = false
+		return
+	if not _log_dock_controller.has_method("is_game_log_visible_in_right_panel"):
+		_online_waiting_log_auto_opened = false
+		return
+
+	var log_visible := bool(_log_dock_controller.call("is_game_log_visible_in_right_panel"))
+
+	if waiting_others:
+		if not log_visible and _log_dock_controller.has_method("show_game_log_panel_in_right_panel"):
+			_log_dock_controller.call("show_game_log_panel_in_right_panel")
+			log_visible = bool(_log_dock_controller.call("is_game_log_visible_in_right_panel"))
+		if log_visible:
+			_online_waiting_log_auto_opened = true
+		return
+
+	if _online_waiting_log_auto_opened:
+		if log_visible and _log_dock_controller.has_method("hide_game_log_panel_in_right_panel"):
+			# 自动回到“默认动作区”（而不是恢复之前被隐藏的某个 docked 面板）。
+			_log_dock_controller.call("hide_game_log_panel_in_right_panel", false)
+		_online_waiting_log_auto_opened = false
 
 func rewind_to_turn_start() -> void:
 	if _command_controller != null and _command_controller.has_method("rewind_to_turn_start"):
@@ -670,8 +742,8 @@ func show_milestone_panel() -> void:
 
 func toggle_game_log() -> void:
 	var was_visible := false
-	if is_instance_valid(game_log_panel):
-		was_visible = bool(game_log_panel.visible)
+	if _log_dock_controller != null and _log_dock_controller.has_method("is_game_log_visible_in_right_panel"):
+		was_visible = bool(_log_dock_controller.call("is_game_log_visible_in_right_panel"))
 
 	if _log_dock_controller != null and _log_dock_controller.has_method("toggle_game_log"):
 		_log_dock_controller.toggle_game_log()

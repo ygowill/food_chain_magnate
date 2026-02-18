@@ -126,6 +126,11 @@ func update_ui(do_profile: bool) -> void:
 	if is_instance_valid(_game_log_panel) and _game_log_panel.has_method("set_player_count"):
 		_game_log_panel.call("set_player_count", int(state.players.size()))
 
+	# 回放/复盘/联机等待：先同步“是否可操作”的状态，再同步面板。
+	# 否则会出现“本帧先刷新出可点击面板，下一步才被禁用”的短暂交互窗口。
+	if is_instance_valid(_timeline_controller) and _timeline_controller.has_method("sync_timeline_ui"):
+		_timeline_controller.call("sync_timeline_ui", head_index, cursor_index, state)
+
 	# 地图渲染
 	if is_instance_valid(_map_view) and _map_view.has_method("set_game_state"):
 		var span_map := PerfTraceClass.begin_span("ui:map_view.set_game_state") if do_profile else -1
@@ -151,10 +156,6 @@ func update_ui(do_profile: bool) -> void:
 			_overlay_controller.call("sync_demand_indicator", state)
 		if do_profile:
 			PerfTraceClass.end_span(span_overlays)
-
-	# 回放/复盘：日志时间线指针 + ReplayBar 显示 + ActionPanel 禁用
-	if is_instance_valid(_timeline_controller) and _timeline_controller.has_method("sync_timeline_ui"):
-		_timeline_controller.call("sync_timeline_ui", head_index, cursor_index, state)
 
 	_maybe_show_online_turn_toast(head_index, cursor_index, state)
 	_maybe_show_phase_change_toast(head_index, cursor_index, state)

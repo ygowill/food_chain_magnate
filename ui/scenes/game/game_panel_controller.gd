@@ -169,6 +169,27 @@ func hide_all() -> void:
 func hide_all_keep_selection() -> void:
 	_hide_all_phase_panels(true)
 
+func hide_non_modal_action_ui_for_waiting() -> void:
+	# 联机等待他人操作：仅清理“本地动作相关 UI/选点高亮”，不关闭等待类模态。
+	if _working_panels != null:
+		_working_panels.hide()
+	if _end_panels != null:
+		_end_panels.hide()
+	if _marketing_panels != null:
+		_marketing_panels.hide()
+	if _placement_overlays != null:
+		_placement_overlays.hide()
+
+	if _overlay_controller != null:
+		_overlay_controller.hide_all_overlays()
+		_overlay_controller.hide_marketing_range_overlay()
+	if _map_controller != null:
+		_map_controller.clear_selection()
+
+	_sync_action_panel_context()
+	if _scene != null and _scene.has_method("_sync_right_panel_docked_view"):
+		_scene.call_deferred("_sync_right_panel_docked_view")
+
 func dispose() -> void:
 	_execute_command = Callable()
 	_refresh_ui = Callable()
@@ -600,6 +621,22 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 		return
 
 	var current_player_id := state.get_current_player_id()
+
+	var blocked_by_action_panel := false
+	if _scene != null and is_instance_valid(_scene.action_panel) and _scene.action_panel.has_method("is_globally_disabled"):
+		blocked_by_action_panel = bool(_scene.action_panel.call("is_globally_disabled"))
+
+	var blocked_by_online_turn := false
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		var local_pid := int(NetContext.local_player_id)
+		if local_pid < 0:
+			blocked_by_online_turn = true
+		elif str(state.phase) != DefsClass.PHASE_RESTRUCTURING and int(current_player_id) != local_pid:
+			blocked_by_online_turn = true
+
+	if blocked_by_action_panel or blocked_by_online_turn:
+		return
+
 	var actor_id := current_player_id
 	# 联机模式：所有玩家动作都应以本地玩家为 actor（避免误用 current_player_id 导致无法继续）
 	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and int(NetContext.local_player_id) >= 0:

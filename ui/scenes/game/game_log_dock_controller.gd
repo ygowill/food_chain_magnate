@@ -47,7 +47,7 @@ func toggle_game_log() -> void:
 	if not is_instance_valid(_game_log_panel):
 		return
 
-	var show_logs: bool = not bool(_game_log_panel.visible)
+	var show_logs: bool = not is_game_log_visible_in_right_panel()
 	if show_logs:
 		# 玩家信息与日志需要同屏：确保左侧信息区可见，同时确保右侧面板可见以承载日志。
 		if _ensure_left_area_visible.is_valid():
@@ -71,10 +71,27 @@ func toggle_game_log() -> void:
 			_game_log_panel.call_deferred("ensure_display_ready")
 	else:
 		# 关闭日志：返回默认右侧动作区。
-		_game_log_panel.visible = false
+		hide_game_log_panel_in_right_panel(true)
+
+func is_game_log_visible_in_right_panel() -> bool:
+	if not is_instance_valid(_game_log_panel):
+		return false
+	if not is_instance_valid(_right_panel_dock_host):
+		return false
+	return _game_log_panel.visible and _game_log_panel.get_parent() == _right_panel_dock_host
+
+func hide_game_log_panel_in_right_panel(restore_hidden_panels: bool = true) -> void:
+	if not is_game_log_visible_in_right_panel():
+		if not restore_hidden_panels:
+			_restore_panel_after_close = null
+		return
+	_game_log_panel.visible = false
+	if restore_hidden_panels:
 		_restore_hidden_docked_panels()
-		if _sync_right_panel_docked_view.is_valid():
-			_sync_right_panel_docked_view.call()
+	else:
+		_restore_panel_after_close = null
+	if _sync_right_panel_docked_view.is_valid():
+		_sync_right_panel_docked_view.call()
 
 func show_game_log_panel_in_right_panel() -> void:
 	# 回放/复盘默认显示日志：避免 ReplayBar/时间线功能“藏在被关闭的面板里”。
@@ -89,6 +106,11 @@ func show_game_log_panel_in_right_panel() -> void:
 		_ensure_left_area_visible.call()
 	if _ensure_right_panel_visible.is_valid():
 		_ensure_right_panel_visible.call()
+
+	# 自动打开日志（例如联机等待他人操作）也需要先重建一次时间线，
+	# 否则会出现“上一条动作直到下一次命令到来才显示”的滞后感。
+	if is_instance_valid(_timeline_controller) and _timeline_controller.has_method("apply_live_log_timeline_from_engine"):
+		_timeline_controller.call("apply_live_log_timeline_from_engine")
 
 	# 若右侧 DockHost 内已有可见面板（例如当前动作 UI），先临时隐藏，避免多个 docked 视图竞争焦点。
 	_hide_other_visible_docked_panels()
