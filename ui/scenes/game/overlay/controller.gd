@@ -59,6 +59,7 @@ var _toast_tween: Tween = null
 var _eventbus_source: String = ""
 var _execute_command: Callable = Callable()
 var _dinnertime_anim_controller = null  # DinnertimeAnimationController
+var _dinnertime_phase_player_id: int = -1
 var _ui_sync_controller = null  # GameUiSyncController (for bank_label)
 var _player_panel = null  # PlayerPanel
 
@@ -657,6 +658,9 @@ func _get_dinnertime_report(state: GameState) -> Dictionary:
 func _start_dinnertime_animation(dt_data: Dictionary, state: GameState) -> void:
 	if _scene == null:
 		return
+	_dinnertime_phase_player_id = -1
+	if state != null:
+		_dinnertime_phase_player_id = int(state.get_current_player_id())
 
 	hide_all_overlays()
 	if _demand_indicator_controller != null:
@@ -676,13 +680,28 @@ func _on_dinnertime_anim_completed() -> void:
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_skip_bank_sync"):
 		_ui_sync_controller.set_skip_bank_sync(false)
 	if _execute_command.is_valid():
-		_execute_command.call(CommandClass.create_system("confirm_dinnertime"))
+		var confirm_cmd = CommandClass.create_system("confirm_dinnertime")
+		if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+			var local_pid := int(NetContext.local_player_id)
+			if local_pid >= 0:
+				if _dinnertime_phase_player_id < 0 or local_pid == _dinnertime_phase_player_id:
+					confirm_cmd = CommandClass.create("confirm_dinnertime", local_pid, {})
+				else:
+					_disable_dinnertime_overlay()
+					return
+			else:
+				_disable_dinnertime_overlay()
+				return
+		var exec_r_val = _execute_command.call(confirm_cmd)
+		if exec_r_val is Result and not exec_r_val.ok:
+			GameLog.warn("Game", "确认晚餐结算失败: %s" % str(exec_r_val.error))
 	_disable_dinnertime_overlay()
 
 func _disable_dinnertime_overlay() -> void:
 	if _dinnertime_anim_controller != null:
 		_dinnertime_anim_controller.dispose()
 	_dinnertime_anim_controller = null
+	_dinnertime_phase_player_id = -1
 	dinner_time_overlay = null
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_skip_bank_sync"):
 		_ui_sync_controller.set_skip_bank_sync(false)
