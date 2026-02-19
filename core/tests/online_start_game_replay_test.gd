@@ -90,9 +90,9 @@ static func run() -> Result:
 		return Result.failure("Client GameEngine.initialize 失败: %s" % init_r.error)
 	var client_state = client_engine.get_state()
 	if client_state != null:
-		if not (client_state.round_state is Dictionary):
-			client_state.round_state = {}
-		client_state.round_state[ONLINE_DINNERTIME_CONFIRM_KEY] = true
+		if not (client_state.rules is Dictionary):
+			client_state.rules = {}
+		client_state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
 
 	for _i in range(player_count):
 		var server_state = server_engine.get_state()

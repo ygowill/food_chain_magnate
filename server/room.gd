@@ -371,9 +371,10 @@ func start_game() -> Result:
 		return Result.failure("GameEngine.initialize failed: %s" % init_r.error)
 	var state = engine.get_state()
 	if state != null:
-		if not (state.round_state is Dictionary):
-			state.round_state = {}
-		state.round_state[ONLINE_DINNERTIME_CONFIRM_KEY] = true
+		if not (state.rules is Dictionary):
+			state.rules = {}
+		# 写入持久规则区：round_state 会在每回合开始被重建。
+		state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
 
 	game_engine = engine
 	player_id_by_peer_id = build_player_id_by_peer_id()

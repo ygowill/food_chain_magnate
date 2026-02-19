@@ -24,12 +24,32 @@ static func _is_online_mode() -> bool:
 	return NetContext.mode == NetContext.Mode.ONLINE_CLIENT or NetContext.mode == NetContext.Mode.ONLINE_SERVER
 
 static func _is_online_dinnertime_confirm_enabled(state: GameState) -> bool:
-	if state != null and (state.round_state is Dictionary):
-		var rs: Dictionary = state.round_state
-		var v = rs.get(ONLINE_DINNERTIME_CONFIRM_KEY, null)
-		if v is bool and bool(v):
-			return true
+	# 兼容读取：
+	# - 优先读取持久化到 state.rules 的标记（round_state 每回合会重建，不可靠）
+	# - 同时兼容历史会话在 round_state 中的旧标记
+	var v = _read_online_dinnertime_confirm_marker(state)
+	if v is bool:
+		return bool(v)
+	if v is int:
+		return int(v) > 0
+	if v is float:
+		var f: float = float(v)
+		if f == floor(f):
+			return int(f) > 0
 	return _is_online_mode()
+
+static func _read_online_dinnertime_confirm_marker(state: GameState):
+	if state == null:
+		return null
+	if state.rules is Dictionary:
+		var rules: Dictionary = state.rules
+		if rules.has(ONLINE_DINNERTIME_CONFIRM_KEY):
+			return rules.get(ONLINE_DINNERTIME_CONFIRM_KEY, null)
+	if state.round_state is Dictionary:
+		var rs: Dictionary = state.round_state
+		if rs.has(ONLINE_DINNERTIME_CONFIRM_KEY):
+			return rs.get(ONLINE_DINNERTIME_CONFIRM_KEY, null)
+	return null
 
 static func _build_dinnertime_confirm_pending(state: GameState) -> Array:
 	if state == null or not (state.players is Array):

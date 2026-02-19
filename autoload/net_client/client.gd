@@ -172,9 +172,10 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 		return
 	var state = engine.get_state()
 	if state != null:
-		if not (state.round_state is Dictionary):
-			state.round_state = {}
-		state.round_state[ONLINE_DINNERTIME_CONFIRM_KEY] = true
+		if not (state.rules is Dictionary):
+			state.rules = {}
+		# 写入持久规则区：round_state 会在每回合开始被重建。
+		state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
 
 	Globals.set_current_game_engine(engine)
 	Globals.sync_runtime_config_from_engine(engine)
