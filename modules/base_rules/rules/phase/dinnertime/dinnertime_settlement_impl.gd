@@ -7,6 +7,8 @@ const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache
 const DinnertimeEffectsClass = preload("res://modules/base_rules/rules/phase/dinnertime/dinnertime_effects.gd")
 const DinnertimeHouseSalesClass = preload("res://modules/base_rules/rules/phase/dinnertime/dinnertime_house_sales.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 
 const EFFECT_SEG_DINNERTIME_TIEBREAK := ":dinnertime:tiebreaker:"
 const EFFECT_SEG_DINNERTIME_TIPS := ":dinnertime:tips:"
@@ -211,5 +213,13 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 		"total_income": total_income,
 		"sold_marketed_demand_events": sold_marketed_demand_events,
 	}
+
+	# 注入阻塞：非 headless DisplayServer 下等待玩家确认后才允许 auto-advance 离开 DINNERTIME
+	# 注意：`godot --headless` 运行在 editor binary 下时，OS.has_feature("headless") 仍可能为 false；
+	# 使用 DisplayServer.get_name() 更可靠。
+	if DisplayServer.get_name() != "headless":
+		RoundStatePendingPhaseActionsClass.set_phase_pending_players(
+			state.round_state, DefsClass.PHASE_DINNERTIME, ["confirm_dinnertime"], "晚餐结算"
+		)
 
 	return Result.success().with_warnings(warnings)

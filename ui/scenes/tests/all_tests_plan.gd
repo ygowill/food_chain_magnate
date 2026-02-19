@@ -747,8 +747,16 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.DinnertimeSettlementTestClass.run(2, 12345),
 			},
 			{
+				"name": "DinnertimeSkippedRequiredTest",
+				"fn": func() -> Result: return TestRefs.DinnertimeSkippedRequiredTestClass.run(2, 12345),
+			},
+			{
 				"name": "DinnertimeDistanceEntryBoundaryTest",
 				"fn": func() -> Result: return TestRefs.DinnertimeDistanceEntryBoundaryTestClass.run(2, 12345),
+			},
+			{
+				"name": "ConfirmDinnertimePendingPhaseActionsKeyTest",
+				"fn": func() -> Result: return TestRefs.ConfirmDinnertimePendingPhaseActionsKeyTestClass.run(2, 12345),
 			},
 			{
 				"name": "BankruptcyTest",

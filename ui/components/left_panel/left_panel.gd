@@ -56,6 +56,7 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 @onready var activity_line2: Label = $MarginContainer/MainVBox/ActivityFeed/ActivityMargin/ActivityHBox/ActivityVBox/ActivityLine2
 @onready var view_logs_button: Button = $MarginContainer/MainVBox/ActivityFeed/ActivityMargin/ActivityHBox/ViewLogsButton
 
+var cash_overrides: Dictionary = {}  # {player_id: int -> cash: int}
 var _game_state: GameState = null
 var _player_count: int = 0
 var _current_player_id: int = -1
@@ -463,6 +464,56 @@ func _refresh() -> void:
 	if _turn_log_controller != null and is_instance_valid(_turn_log_controller):
 		_turn_log_controller.refresh()
 
+func set_cash_overrides(overrides: Dictionary) -> void:
+	if overrides == null:
+		cash_overrides = {}
+	else:
+		cash_overrides = overrides.duplicate()
+	_update_cash_overrides_display()
+
+func clear_cash_overrides() -> void:
+	cash_overrides = {}
+	_update_cash_overrides_display()
+
+func _update_cash_overrides_display() -> void:
+	_update_summary_cash_label()
+	_update_overview_cash_labels()
+
+func _update_summary_cash_label() -> void:
+	if not is_instance_valid(cash_label):
+		return
+	if _game_state == null or not (_game_state.players is Array) or _game_state.players.is_empty():
+		return
+	var view_id := _resolve_view_player_id()
+	if view_id < 0 or view_id >= _game_state.players.size():
+		return
+	var player_val = _game_state.players[view_id]
+	var player: Dictionary = player_val if player_val is Dictionary else {}
+	var cash := int(cash_overrides.get(view_id, player.get("cash", 0)))
+	cash_label.text = "$%d" % cash
+
+func _update_overview_cash_labels() -> void:
+	if not is_instance_valid(overview_grid):
+		return
+	if _game_state == null or not (_game_state.players is Array) or _game_state.players.is_empty():
+		return
+
+	for node in overview_grid.get_children():
+		if not (node is Control) or not is_instance_valid(node):
+			continue
+		var card: Control = node
+		if not card.has_meta("player_id"):
+			continue
+		var pid := int(card.get_meta("player_id"))
+		if pid < 0 or pid >= _game_state.players.size():
+			continue
+		var player_val = _game_state.players[pid]
+		var player: Dictionary = player_val if player_val is Dictionary else {}
+		var cash := int(cash_overrides.get(pid, player.get("cash", 0)))
+		var cash_label_item: Label = card.find_child("CashLabel", true, false)
+		if cash_label_item != null:
+			cash_label_item.text = "$%d" % cash
+
 func _count_total_employees(player: Dictionary) -> int:
 	if _summary_controller != null and is_instance_valid(_summary_controller):
 		return int(_summary_controller.count_total_employees(player))
@@ -511,6 +562,7 @@ func _refresh_restaurant_overview_cards() -> void:
 
 func _create_restaurant_overview_card(player_id: int, player: Dictionary, is_selected: bool) -> Control:
 	var card := PanelContainer.new()
+	card.set_meta("player_id", player_id)
 	card.custom_minimum_size = Vector2(0, 96)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -542,7 +594,7 @@ func _create_restaurant_overview_card(player_id: int, player: Dictionary, is_sel
 	logo.texture = _get_player_restaurant_logo_texture(player_id)
 	root_row.add_child(logo)
 
-	var cash := int(player.get("cash", 0))
+	var cash := int(cash_overrides.get(player_id, player.get("cash", 0)))
 	var emp_count := _count_total_employees(player)
 	var rest_count := _count_restaurants(player)
 	var milestone_count := _count_milestones(player)
@@ -570,6 +622,7 @@ func _create_restaurant_overview_card(player_id: int, player: Dictionary, is_sel
 	first_row.add_child(player_id_label)
 
 	var cash_label_item := Label.new()
+	cash_label_item.name = "CashLabel"
 	cash_label_item.text = "$%d" % cash
 	UiStylesClass.apply_label_dark(cash_label_item)
 	var fs_cash := 16

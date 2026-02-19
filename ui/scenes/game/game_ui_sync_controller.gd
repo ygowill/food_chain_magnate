@@ -26,6 +26,13 @@ var _sync_right_panel_docked_view: Callable = Callable()
 var _round_label: Label = null
 var _phase_track: Control = null
 var _bank_label: Label = null
+var _skip_bank_sync: bool = false
+
+func get_bank_label() -> Label:
+	return _bank_label
+
+func set_skip_bank_sync(skip: bool) -> void:
+	_skip_bank_sync = skip
 var _bank_break_tag: Label = null
 
 var _game_log_panel: Control = null
@@ -109,7 +116,7 @@ func update_ui(do_profile: bool) -> void:
 	if is_instance_valid(_phase_track) and _phase_track.has_method("set_current_phase"):
 		_phase_track.set_current_phase(str(state.phase).strip_edges())
 
-	if is_instance_valid(_bank_label):
+	if is_instance_valid(_bank_label) and not _skip_bank_sync:
 		_bank_label.text = "$%d" % int(state.bank.get("total", 0))
 	if is_instance_valid(_bank_break_tag):
 		var broke_count := int(state.bank.get("broke_count", 0))
@@ -154,6 +161,8 @@ func update_ui(do_profile: bool) -> void:
 		var span_overlays := PerfTraceClass.begin_span("ui:overlay_controller.sync") if do_profile else -1
 		if _overlay_controller.has_method("sync_demand_indicator"):
 			_overlay_controller.call("sync_demand_indicator", state)
+		if _overlay_controller.has_method("sync_dinnertime_overlay"):
+			_overlay_controller.call("sync_dinnertime_overlay", state, head_index == cursor_index)
 		if do_profile:
 			PerfTraceClass.end_span(span_overlays)
 

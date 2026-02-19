@@ -33,6 +33,7 @@ const SubmitRestructuringActionClass = preload("res://gameplay/actions/submit_re
 const DebugGiveMoneyActionClass = preload("res://gameplay/actions/debug_give_money_action.gd")
 const DebugAddHouseDemandActionClass = preload("res://gameplay/actions/debug_add_house_demand_action.gd")
 const DebugAddInventoryActionClass = preload("res://gameplay/actions/debug_add_inventory_action.gd")
+const ConfirmDinnertimeActionClass = preload("res://gameplay/actions/confirm_dinnertime_action.gd")
 const ActionAvailabilityRegistryClass = preload("res://core/actions/action_availability_registry.gd")
 
 static func build_registry(phase_manager: PhaseManager, piece_registry: Dictionary = {}) -> ActionRegistry:
@@ -69,6 +70,7 @@ static func build_registry(phase_manager: PhaseManager, piece_registry: Dictiona
 		DebugGiveMoneyActionClass.new(),
 		DebugAddHouseDemandActionClass.new(),
 		DebugAddInventoryActionClass.new(),
+		ConfirmDinnertimeActionClass.new(),
 	])
 
 	# 默认动作可用性（phase/sub_phase -> action_ids），避免在非 GameEngine 场景下 ActionRegistry 缺少 gating。

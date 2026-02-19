@@ -149,6 +149,9 @@ static func apply(
 			skipped.append({
 				"house_id": house_id,
 				"house_number": house_number,
+				"required": base_required.duplicate(true),
+				"has_garden": bool(house.get("has_garden", false)),
+				"is_apartment": bool(house.get("is_apartment", false)),
 				"demands": demands.size(),
 			})
 			continue
@@ -290,6 +293,7 @@ static func apply(
 			"route_purchases": route_purchases.duplicate(true),
 			"score": int(winner["score"]),
 			"distance": int(winner["distance"]),
+			"steps": int(winner.get("steps", 0)),
 			"unit_price": int(winner["unit_price"]),
 			"decision_unit_price": int(winner["decision_unit_price"]),
 			"quantity": int(breakdown["quantity"]),

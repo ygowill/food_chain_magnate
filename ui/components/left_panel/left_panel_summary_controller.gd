@@ -97,7 +97,7 @@ func _refresh_summary() -> void:
 		_panel.player_name_label.text = Globals.get_player_name(view_id)
 
 	# 现金
-	var cash := int(player.get("cash", 0))
+	var cash := int(_panel.cash_overrides.get(view_id, player.get("cash", 0)))
 	if is_instance_valid(_panel.cash_label):
 		_panel.cash_label.text = "$%d" % cash
 

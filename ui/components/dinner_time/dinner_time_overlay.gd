@@ -12,6 +12,7 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 @onready var title_label: Label = $Layout/TopBarMargin/TopBar/TitleLabel
 @onready var progress_label: Label = $Layout/TopBarMargin/TopBar/ProgressLabel
+@onready var header_label: Label = $Layout/CenterMargin/CenterPanel/MarginContainer/VBoxContainer/HeaderLabel
 @onready var orders_container: VBoxContainer = $Layout/CenterMargin/CenterPanel/MarginContainer/VBoxContainer/ScrollContainer/OrdersContainer
 @onready var next_btn: Button = $Layout/BottomBarMargin/BottomBar/NextButton
 @onready var auto_btn: Button = $Layout/BottomBarMargin/BottomBar/AutoButton
@@ -26,6 +27,8 @@ var _order_items: Array[OrderItem] = []
 var _auto_mode: bool = false
 var _visual_modules: Array[String] = []
 var _skin = null
+var _summary_data: Dictionary = {}
+var _summary_shown: bool = false
 
 func _ready() -> void:
 	if next_btn != null:
@@ -36,6 +39,14 @@ func _ready() -> void:
 	# 应用对话框表面样式
 	if _center_panel != null:
 		UiStylesClass.apply_dialog_surface(_center_panel)
+
+	if header_label != null:
+		UiStylesClass.apply_label_dark(header_label)
+
+	if next_btn != null:
+		UiStylesClass.apply_button_primary(next_btn)
+	if auto_btn != null:
+		UiStylesClass.apply_button_secondary(auto_btn)
 
 	resized.connect(_on_overlay_resized)
 	_update_responsive_margins()
@@ -48,6 +59,82 @@ func set_pending_orders(orders: Array[Dictionary]) -> void:
 	_current_order_idx = 0
 	_rebuild_order_list()
 	_update_progress()
+
+func set_summary_data(dt: Dictionary) -> void:
+	_summary_data = dt
+
+static func build_orders_from_settlement(dt: Dictionary) -> Array[Dictionary]:
+	var orders: Array[Dictionary] = []
+	for sale in dt.get("sales", []):
+		if not (sale is Dictionary):
+			continue
+		var req: Dictionary = sale.get("required", {})
+		var house_id := str(sale.get("house_id", ""))
+		var house_number_val = sale.get("house_number", house_id)
+		orders.append({
+			"house_id": house_id,
+			"house_number": str(house_number_val),
+			"demands": req,
+			"matched_restaurant": str(sale.get("winner_restaurant_id", "")),
+			"products": req,
+			"revenue": int(sale.get("revenue", 0)),
+			"distance": int(sale.get("distance", 0)),
+			"steps": int(sale.get("steps", 0)),
+			"score": int(sale.get("score", 0)),
+			"unit_price": int(sale.get("unit_price", 0)),
+			"decision_unit_price": int(sale.get("decision_unit_price", sale.get("unit_price", 0))),
+			"quantity": int(sale.get("quantity", 0)),
+			"has_garden": bool(sale.get("has_garden", false)),
+			"price_part": int(sale.get("price_part", 0)),
+			"bonus": int(sale.get("bonus", 0)),
+			"house_bonus": int(sale.get("house_bonus", 0)),
+			"demand_variant_id": str(sale.get("demand_variant_id", "")),
+			"winner_owner": int(sale.get("winner_owner", -1)),
+			"is_skipped": false,
+		})
+	for skip in dt.get("skipped", []):
+		if not (skip is Dictionary):
+			continue
+		var house_id := str(skip.get("house_id", ""))
+		var house_number_val = skip.get("house_number", house_id)
+		orders.append({
+			"house_id": house_id,
+			"house_number": str(house_number_val),
+			"demands": skip.get("required", {}),
+			"matched_restaurant": "",
+			"products": {},
+			"revenue": 0,
+			"distance": 0,
+			"steps": 0,
+			"score": 0,
+			"winner_owner": -1,
+			"demand_cards": int(skip.get("demands", 0)),
+			"has_garden": bool(skip.get("has_garden", false)),
+			"is_apartment": bool(skip.get("is_apartment", false)),
+			"demand_variant_id": "",
+			"is_skipped": true,
+		})
+	orders.sort_custom(func(a, b):
+		var an: int = _parse_house_number(a.get("house_number", ""))
+		var bn: int = _parse_house_number(b.get("house_number", ""))
+		if an != bn:
+			return an < bn
+		return str(a.get("house_id", "")) < str(b.get("house_id", ""))
+	)
+	return orders
+
+static func _parse_house_number(value) -> int:
+	if value is int:
+		return int(value)
+	if value is float:
+		var f: float = float(value)
+		if f == floor(f):
+			return int(f)
+	if value is String:
+		var s: String = str(value)
+		if s.is_valid_int():
+			return s.to_int()
+	return 999999
 
 func set_visual_modules(modules: Array[String]) -> void:
 	_visual_modules = Array(modules, TYPE_STRING, "", null)
@@ -124,10 +211,14 @@ func _update_progress() -> void:
 			item.is_completed = (i < _current_order_idx)
 			item.update_display()
 
+	# 汇总：所有订单展示完后显示收入汇总
+	if _current_order_idx >= _pending_orders.size() and orders_container != null:
+		_show_summary()
+
 	# 更新按钮状态
 	if next_btn != null:
 		if _current_order_idx >= _pending_orders.size():
-			next_btn.text = "完成"
+			next_btn.text = "确认结算"
 		else:
 			next_btn.text = "下一个"
 
@@ -160,6 +251,37 @@ func _on_next_pressed() -> void:
 	if _auto_mode and _current_order_idx < _pending_orders.size():
 		await get_tree().create_timer(0.3).timeout
 		_on_next_pressed()
+
+func _show_summary() -> void:
+	if _summary_shown or orders_container == null:
+		return
+	_summary_shown = true
+
+	var sep := HSeparator.new()
+	orders_container.add_child(sep)
+
+	var total_income: Array = _summary_data.get("total_income", [])
+	var income_tips: Array = _summary_data.get("income_tips", [])
+	var income_cfo: Array = _summary_data.get("income_cfo_bonus", [])
+
+	var lbl := Label.new()
+	lbl.add_theme_font_size_override("font_size", 14)
+	UiStylesClass.apply_label_dark(lbl)
+	var lines := "--- 本轮收入汇总 ---"
+	for pid in range(total_income.size()):
+		var total_val := int(total_income[pid])
+		var tips_val := int(income_tips[pid]) if pid < income_tips.size() else 0
+		var cfo_val := int(income_cfo[pid]) if pid < income_cfo.size() else 0
+		if total_val <= 0 and tips_val <= 0:
+			continue
+		var line := "\n玩家 %d: $%d" % [pid, total_val]
+		if tips_val > 0:
+			line += " (小费 $%d)" % tips_val
+		if cfo_val > 0:
+			line += " (CFO +$%d)" % cfo_val
+		lines += line
+	lbl.text = lines
+	orders_container.add_child(lbl)
 
 func _on_auto_pressed() -> void:
 	_auto_mode = not _auto_mode
@@ -201,6 +323,7 @@ class OrderItem extends PanelContainer:
 
 	var _house_label: Label
 	var _restaurant_label: Label
+	var _details_label: Label
 	var _status_icon: Label
 	var _demands_container: HBoxContainer
 	var _products_container: HBoxContainer
@@ -237,6 +360,7 @@ class OrderItem extends PanelContainer:
 
 		_house_label = Label.new()
 		_house_label.add_theme_font_size_override("font_size", 14)
+		UiStylesClass.apply_label_dark(_house_label)
 		house_row.add_child(_house_label)
 
 		_demands_container = HBoxContainer.new()
@@ -247,8 +371,16 @@ class OrderItem extends PanelContainer:
 		# 餐厅信息
 		_restaurant_label = Label.new()
 		_restaurant_label.add_theme_font_size_override("font_size", 12)
-		_restaurant_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
+		_restaurant_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+		UiStylesClass.apply_label_dark(_restaurant_label)
 		info_box.add_child(_restaurant_label)
+
+		# 明细信息（价格/距离等）
+		_details_label = Label.new()
+		_details_label.add_theme_font_size_override("font_size", 11)
+		_details_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+		UiStylesClass.apply_label_hint_dark(_details_label)
+		info_box.add_child(_details_label)
 
 		# 产品列表（实际售出）
 		_products_container = HBoxContainer.new()
@@ -267,12 +399,35 @@ class OrderItem extends PanelContainer:
 
 	func update_display() -> void:
 		var house_id: String = str(order_data.get("house_id", ""))
+		var house_number: String = str(order_data.get("house_number", house_id))
 		var restaurant_id: String = str(order_data.get("matched_restaurant", ""))
 		var products: Dictionary = order_data.get("products", {})
 		var demands: Dictionary = order_data.get("demands", {})
+		var is_skipped: bool = bool(order_data.get("is_skipped", false))
+		var winner_owner: int = int(order_data.get("winner_owner", -1))
+		var distance: int = int(order_data.get("distance", 0))
+		var steps: int = int(order_data.get("steps", 0))
+		var score: int = int(order_data.get("score", 0))
+		var unit_price: int = int(order_data.get("unit_price", 0))
+		var decision_unit_price: int = int(order_data.get("decision_unit_price", unit_price))
+		var quantity: int = int(order_data.get("quantity", 0))
+		var has_garden: bool = bool(order_data.get("has_garden", false))
+		var is_apartment: bool = bool(order_data.get("is_apartment", false))
+		var demand_variant_id: String = str(order_data.get("demand_variant_id", ""))
 
 		if _house_label != null:
-			_house_label.text = "房屋 %s:" % house_id
+			var name := "房屋 %s" % house_number
+			if not house_id.is_empty() and house_id != house_number:
+				name += " (%s)" % house_id
+			var tags: Array[String] = []
+			if has_garden:
+				tags.append("花园")
+			if is_apartment:
+				tags.append("公寓")
+			if not tags.is_empty():
+				name += " · " + " / ".join(tags)
+			name += ":"
+			_house_label.text = name
 
 		if _demands_container != null:
 			for child in _demands_container.get_children():
@@ -286,12 +441,50 @@ class OrderItem extends PanelContainer:
 					continue
 				_add_product_icon_with_count(_demands_container, str(prod_type), count, 16)
 
+			# 兼容旧存档：skipped 可能缺少 required，仅保留 demands 计数
+			if _demands_container.get_child_count() <= 0 and is_skipped:
+				var demand_cards: int = int(order_data.get("demand_cards", 0))
+				if demand_cards > 0:
+					var hint := Label.new()
+					hint.add_theme_font_size_override("font_size", 12)
+					UiStylesClass.apply_label_hint_dark(hint)
+					hint.text = "(需求×%d)" % demand_cards
+					_demands_container.add_child(hint)
+
+		var revenue: int = int(order_data.get("revenue", 0))
+
 		if _restaurant_label != null:
-			if restaurant_id.is_empty():
-				_restaurant_label.text = "未匹配餐厅"
-				_restaurant_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 1))
+			if is_skipped or restaurant_id.is_empty():
+				_restaurant_label.text = "无餐厅满足需求"
+				UiStylesClass.apply_label_error(_restaurant_label)
 			else:
-				_restaurant_label.text = "餐厅: %s" % restaurant_id
+				var owner_txt := ("玩家 %d" % (winner_owner + 1)) if winner_owner >= 0 else "未知玩家"
+				var info := "餐厅: %s · %s" % [restaurant_id, owner_txt]
+				_restaurant_label.text = info
+				UiStylesClass.apply_label_dark(_restaurant_label)
+
+		if _details_label != null:
+			if is_skipped or restaurant_id.is_empty():
+				var demand_cards: int = int(order_data.get("demand_cards", 0))
+				var detail := ""
+				if demand_cards > 0:
+					detail = "需求卡: %d" % demand_cards
+				if not detail.is_empty():
+					_details_label.text = detail
+				else:
+					_details_label.text = ""
+			else:
+				var parts: Array[String] = []
+				if demand_variant_id != "" and demand_variant_id != "base":
+					parts.append("变体:%s" % demand_variant_id)
+				parts.append("距离:%d(步:%d)" % [distance, steps])
+				parts.append("得分:%d" % score)
+				parts.append("单价:$%d(判定:$%d) ×%d" % [unit_price, decision_unit_price, quantity])
+				parts.append("收入:$%d (单价部分:$%d + 奖励:$%d)" % [revenue, int(order_data.get("price_part", 0)), int(order_data.get("bonus", 0))])
+				var house_bonus: int = int(order_data.get("house_bonus", 0))
+				if house_bonus != 0:
+					parts.append("房屋奖金:$%d" % house_bonus)
+				_details_label.text = " · ".join(parts)
 
 		if _products_container != null:
 			for child in _products_container.get_children():
@@ -308,6 +501,7 @@ class OrderItem extends PanelContainer:
 			if _products_container.get_child_count() <= 0:
 				var dash := Label.new()
 				dash.add_theme_font_size_override("font_size", 14)
+				UiStylesClass.apply_label_hint_dark(dash)
 				dash.text = "-"
 				_products_container.add_child(dash)
 
@@ -336,19 +530,30 @@ class OrderItem extends PanelContainer:
 		if skin != null and skin.has_method("get_product_icon_texture"):
 			tex = skin.get_product_icon_texture(pid)
 
+		var slot := Control.new()
+		slot.custom_minimum_size = Vector2(float(size_px), float(size_px))
+		slot.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		slot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		parent.add_child(slot)
+
 		var icon_rect := TextureRect.new()
-		icon_rect.custom_minimum_size = Vector2(float(size_px), float(size_px))
+		icon_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+		icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon_rect.texture = tex
-		parent.add_child(icon_rect)
+		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		slot.add_child(icon_rect)
 
 		if count > 1:
 			var count_label := Label.new()
 			count_label.add_theme_font_size_override("font_size", 14)
+			UiStylesClass.apply_label_dark(count_label)
 			count_label.text = "×%d" % count
 			parent.add_child(count_label)
 
 	func _update_style() -> void:
+		var is_skipped: bool = bool(order_data.get("is_skipped", false))
 		var style := StyleBoxFlat.new()
 		if is_completed:
 			style.bg_color = Color(0.95, 0.91, 0.82, 0.9)
@@ -356,6 +561,10 @@ class OrderItem extends PanelContainer:
 			style.bg_color = Color(0.92, 0.88, 0.78, 0.95)
 			style.border_color = Color(0.8, 0.7, 0.3, 0.7)
 			style.set_border_width_all(2)
+		elif is_skipped:
+			style.bg_color = Color(0.97, 0.92, 0.90, 0.9)
+			style.border_color = Color(0.73, 0.23, 0.18, 0.35)
+			style.set_border_width_all(1)
 		else:
 			style.bg_color = Color(0.95, 0.91, 0.82, 0.85)
 		style.set_corner_radius_all(6)

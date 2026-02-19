@@ -57,6 +57,7 @@ static func build(host: Control, refs: Dictionary, callbacks: Dictionary, startu
 
 	var overlay_controller = GameOverlayControllerClass.new(host, map_view, map_canvas, game_log_panel)
 	overlay_controller.initialize()
+	overlay_controller.set_execute_command(callbacks.get("execute_command", Callable()))
 	out["overlay_controller"] = overlay_controller
 
 	var map_controller = GameMapInteractionControllerClass.new(host, map_canvas, overlay_controller)
@@ -200,6 +201,8 @@ static func build(host: Control, refs: Dictionary, callbacks: Dictionary, startu
 		overlay_controller,
 		timeline_controller
 	)
+	overlay_controller.set_ui_sync_controller(ui_sync_controller)
+	overlay_controller.set_player_panel(refs.get("left_panel", null))
 	out["ui_sync_controller"] = ui_sync_controller
 
 	var debug_panel_controller = GameDebugPanelControllerClass.new(

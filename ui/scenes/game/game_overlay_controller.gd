@@ -18,6 +18,8 @@ const ProcurementRouteOverlayControllerClass = preload("res://ui/scenes/game/gam
 const DemandIndicatorControllerClass = preload("res://ui/scenes/game/game_overlay_demand_indicator.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const DinnertimeAnimControllerClass = preload("res://ui/scenes/game/dinnertime_animation_controller.gd")
+const CommandClass = preload("res://core/types/command.gd")
 
 const TOAST_DESIRED_WIDTH := 520.0
 const TOAST_MIN_MARGIN := 12.0
@@ -46,7 +48,6 @@ var _zoom_controller = null
 var _distance_overlay_controller = null
 var _marketing_range_controller = null
 var _procurement_route_controller = null
-var _dinnertime_overlay_controller = null
 var _demand_indicator_controller = null
 var _help_tooltips_initialized: bool = false
 var _milestone_toast_initialized: bool = false
@@ -56,6 +57,10 @@ var _toast_panel: PanelContainer = null
 var _toast_label: Label = null
 var _toast_tween: Tween = null
 var _eventbus_source: String = ""
+var _execute_command: Callable = Callable()
+var _dinnertime_anim_controller = null  # DinnertimeAnimationController
+var _ui_sync_controller = null  # GameUiSyncController (for bank_label)
+var _player_panel = null  # PlayerPanel
 
 func _init(scene, map_view, map_canvas, game_log_panel) -> void:
 	_scene = scene
@@ -68,8 +73,16 @@ func _init(scene, map_view, map_canvas, game_log_panel) -> void:
 	_distance_overlay_controller = DistanceOverlayControllerClass.new(_scene, _map_canvas)
 	_marketing_range_controller = MarketingRangeOverlayControllerClass.new(_scene, _map_canvas)
 	_procurement_route_controller = ProcurementRouteOverlayControllerClass.new(_scene, _map_canvas)
-	_dinnertime_overlay_controller = null
 	_demand_indicator_controller = DemandIndicatorControllerClass.new(_scene, _map_canvas)
+
+func set_execute_command(callable: Callable) -> void:
+	_execute_command = callable
+
+func set_ui_sync_controller(ctrl) -> void:
+	_ui_sync_controller = ctrl
+
+func set_player_panel(panel) -> void:
+	_player_panel = panel
 
 func set_bank_break_panel(panel) -> void:
 	_bank_break_panel = panel
@@ -379,7 +392,7 @@ func dispose() -> void:
 	_distance_overlay_controller = null
 	_marketing_range_controller = null
 	_procurement_route_controller = null
-	_dinnertime_overlay_controller = null
+	_disable_dinnertime_overlay()
 	_demand_indicator_controller = null
 
 	_scene = null
@@ -578,29 +591,98 @@ func _show_toast(message: String) -> void:
 
 # === Dinnertime 可视化（只读）===
 
-func sync_dinnertime_overlay(_state: GameState) -> void:
-	# 已下线：晚餐“待处理订单”覆盖层（DinnerTimeOverlay）。
-	# 该组件在日志回放/复盘中会干扰时间线观察，这里统一禁用。
-	_disable_dinnertime_overlay()
+func sync_dinnertime_overlay(state: GameState, is_live: bool = true) -> void:
+	# 非 DINNERTIME 阶段 或 回放模式 → 隐藏
+	if str(state.phase) != DefsClass.PHASE_DINNERTIME or not is_live:
+		_disable_dinnertime_overlay()
+		return
+
+	# 检查是否还有 pending（已确认则不再显示）
+	# 仅当 pending 列表为 ["confirm_dinnertime"] 时展示结算弹层，避免与其它模块注入的 Dinnertime pending 冲突。
+	if not _is_confirm_dinnertime_pending(state):
+		_disable_dinnertime_overlay()
+		return
+
+	# 提取结算数据
+	var dt_data := _get_dinnertime_report(state)
+	if dt_data.is_empty():
+		_disable_dinnertime_overlay()
+		return
+
+	# 动画控制器已在运行则跳过
+	if _dinnertime_anim_controller != null:
+		return
+
+	_start_dinnertime_animation(dt_data, state)
 
 # === 需求指示器 ===
 
 func sync_demand_indicator(state: GameState) -> void:
-	if _demand_indicator_controller != null:
-		_demand_indicator_controller.sync_demand_indicator(state)
+	if _demand_indicator_controller == null:
+		return
+	# 晚餐结算面板是一个“模态”覆盖层：显示时不应继续在地图上渲染需求指示器，
+	# 否则会出现巨大图标/矩形块，干扰结算阅读。
+	if _is_confirm_dinnertime_pending(state) or _dinnertime_anim_controller != null:
+		_demand_indicator_controller.hide()
 		demand_indicator = _demand_indicator_controller.demand_indicator
-
-func _disable_dinnertime_overlay() -> void:
-	if _dinnertime_overlay_controller == null:
-		dinner_time_overlay = null
 		return
 
-	if _dinnertime_overlay_controller.has_method("hide"):
-		_dinnertime_overlay_controller.hide()
+	_demand_indicator_controller.sync_demand_indicator(state)
+	demand_indicator = _demand_indicator_controller.demand_indicator
 
-	var overlay = _dinnertime_overlay_controller.dinner_time_overlay if _dinnertime_overlay_controller != null else null
-	if is_instance_valid(overlay):
-		overlay.visible = false
-		overlay.queue_free()
+func _is_confirm_dinnertime_pending(state: GameState) -> bool:
+	if state == null:
+		return false
+	if not (state.round_state is Dictionary):
+		return false
+	var rs: Dictionary = state.round_state
+	var ppa_val = rs.get("pending_phase_actions", null)
+	if not (ppa_val is Dictionary):
+		return false
+	var ppa: Dictionary = ppa_val
+	var list_val = ppa.get(DefsClass.PHASE_DINNERTIME, null)
+	if not (list_val is Array):
+		return false
+	var list: Array = list_val
+	return list.size() == 1 and (list[0] is String) and str(list[0]) == "confirm_dinnertime"
+
+func _get_dinnertime_report(state: GameState) -> Dictionary:
+	if not (state.round_state is Dictionary):
+		return {}
+	var val = Dictionary(state.round_state).get("dinnertime", null)
+	if val is Dictionary:
+		return val
+	return {}
+
+func _start_dinnertime_animation(dt_data: Dictionary, state: GameState) -> void:
+	if _scene == null:
+		return
+
+	hide_all_overlays()
+	if _demand_indicator_controller != null:
+		_demand_indicator_controller.hide()
+
+	var bank_label: Label = null
+	if _ui_sync_controller != null and _ui_sync_controller.has_method("get_bank_label"):
+		bank_label = _ui_sync_controller.get_bank_label()
+
+	_dinnertime_anim_controller = DinnertimeAnimControllerClass.new()
+	_dinnertime_anim_controller.settlement_completed.connect(_on_dinnertime_anim_completed)
+	_dinnertime_anim_controller.start(dt_data, state, _scene, _map_canvas, bank_label, _player_panel)
+	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_skip_bank_sync"):
+		_ui_sync_controller.set_skip_bank_sync(true)
+
+func _on_dinnertime_anim_completed() -> void:
+	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_skip_bank_sync"):
+		_ui_sync_controller.set_skip_bank_sync(false)
+	if _execute_command.is_valid():
+		_execute_command.call(CommandClass.create_system("confirm_dinnertime"))
+	_disable_dinnertime_overlay()
+
+func _disable_dinnertime_overlay() -> void:
+	if _dinnertime_anim_controller != null:
+		_dinnertime_anim_controller.dispose()
+	_dinnertime_anim_controller = null
 	dinner_time_overlay = null
-	_dinnertime_overlay_controller = null
+	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_skip_bank_sync"):
+		_ui_sync_controller.set_skip_bank_sync(false)

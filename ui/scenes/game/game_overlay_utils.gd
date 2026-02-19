@@ -77,6 +77,24 @@ static func get_house_footprint_cells(state: GameState, house_id: String) -> Arr
 		out.append(anchor_val)
 	return out
 
+static func get_restaurant_anchor_world_pos(state: GameState, restaurant_id: String) -> Vector2i:
+	if state == null or restaurant_id.is_empty():
+		return Vector2i(-1, -1)
+	if not (state.map is Dictionary):
+		return Vector2i(-1, -1)
+	var rests_val = (state.map as Dictionary).get("restaurants", null)
+	if not (rests_val is Dictionary):
+		return Vector2i(-1, -1)
+	var rest_val = (rests_val as Dictionary).get(restaurant_id, null)
+	if not (rest_val is Dictionary):
+		return Vector2i(-1, -1)
+	var cells_val = (rest_val as Dictionary).get("cells", null)
+	if cells_val is Array and not (cells_val as Array).is_empty():
+		var first = (cells_val as Array)[0]
+		if first is Vector2i:
+			return first
+	return Vector2i(-1, -1)
+
 static func build_house_demand_counts_from_map(state: GameState, house_id: String) -> Dictionary:
 	var out: Dictionary = {}
 	if state == null:
