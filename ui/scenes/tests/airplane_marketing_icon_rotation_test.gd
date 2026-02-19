@@ -3,7 +3,7 @@
 class_name AirplaneMarketingIconRotationTest
 extends RefCounted
 
-const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
+const MapCanvasDrawerClass = preload("res://ui/scenes/game/map/drawer/drawer.gd")
 
 class FakeSkin extends RefCounted:
 	var _tex: Texture2D = null

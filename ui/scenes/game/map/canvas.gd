@@ -7,9 +7,9 @@ signal cell_hovered(world_pos: Vector2i)
 signal cell_selected(world_pos: Vector2i)
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
-const MapCanvasIndexerClass = preload("res://ui/scenes/game/map_canvas_indexer.gd")
-const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
-const MapCanvasTooltipClass = preload("res://ui/scenes/game/map_canvas_tooltip.gd")
+const MapCanvasIndexerClass = preload("res://ui/scenes/game/map/indexer.gd")
+const MapCanvasDrawerClass = preload("res://ui/scenes/game/map/drawer/drawer.gd")
+const MapCanvasTooltipClass = preload("res://ui/scenes/game/map/tooltip.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 

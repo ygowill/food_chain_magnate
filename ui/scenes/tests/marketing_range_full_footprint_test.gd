@@ -3,7 +3,7 @@
 class_name MarketingRangeFullFootprintTest
 extends RefCounted
 
-const GameOverlayMarketingRangeClass = preload("res://ui/scenes/game/game_overlay_marketing_range.gd")
+const GameOverlayMarketingRangeClass = preload("res://ui/scenes/game/overlay/marketing_range.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameStateClass = preload("res://core/state/game_state.gd")
 

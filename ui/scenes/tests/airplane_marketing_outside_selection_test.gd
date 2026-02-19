@@ -5,7 +5,7 @@ class_name AirplaneMarketingOutsideSelectionTest
 extends RefCounted
 
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
-const GameMapInteractionControllerClass = preload("res://ui/scenes/game/game_map_interaction_controller.gd")
+const GameMapInteractionControllerClass = preload("res://ui/scenes/game/map_interaction/controller.gd")
 
 class FakeMapCanvas extends RefCounted:
 	var highlighted: Array[Vector2i] = []

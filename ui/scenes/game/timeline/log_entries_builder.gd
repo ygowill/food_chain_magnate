@@ -3,7 +3,7 @@
 class_name GameTimelineLogEntriesBuilder
 extends RefCounted
 
-const GAME_EVENT_LOG_FORMATTER_SCRIPT_PATH := "res://ui/scenes/game/game_event_log_formatter.gd"
+const GAME_EVENT_LOG_FORMATTER_SCRIPT_PATH := "res://ui/scenes/game/event_log/formatter.gd"
 
 static func build(events: Array) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []

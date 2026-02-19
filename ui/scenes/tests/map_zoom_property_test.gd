@@ -3,7 +3,7 @@
 class_name MapZoomPropertyTest
 extends RefCounted
 
-const MapCanvasClass = preload("res://ui/scenes/game/map_canvas.gd")
+const MapCanvasClass = preload("res://ui/scenes/game/map/canvas.gd")
 
 static func run() -> Result:
 	var canvas = MapCanvasClass.new()

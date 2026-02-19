@@ -1,7 +1,7 @@
 # MapCanvasDrawer：饮料来源绘制下沉
 extends RefCounted
 
-const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
+const TextureUtilsClass = preload("res://ui/scenes/game/map/drawer/texture_utils.gd")
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 
 static var _drink_source_textures: Dictionary = {} # product_id -> Texture2D

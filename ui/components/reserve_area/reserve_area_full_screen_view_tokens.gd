@@ -1,8 +1,8 @@
 # ReserveAreaFullScreenView token helpers (moved out to keep the view script small).
 extends RefCounted
 
-const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
-const StructuresPassClass = preload("res://ui/scenes/game/map_canvas_drawer_structures_pass.gd")
+const MapCanvasDrawerClass = preload("res://ui/scenes/game/map/drawer/drawer.gd")
+const StructuresPassClass = preload("res://ui/scenes/game/map/drawer/passes/structures_pass.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")

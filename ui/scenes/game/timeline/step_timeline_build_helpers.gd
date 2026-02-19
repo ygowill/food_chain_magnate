@@ -2,7 +2,7 @@
 extends RefCounted
 
 const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
-const GameTimelineLogEntriesBuilderClass = preload("res://ui/scenes/game/game_timeline_log_entries_builder.gd")
+const GameTimelineLogEntriesBuilderClass = preload("res://ui/scenes/game/timeline/log_entries_builder.gd")
 
 static func build_step_timeline(engine: GameEngine) -> Result:
 	if engine == null or not is_instance_valid(engine):

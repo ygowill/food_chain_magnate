@@ -3,7 +3,7 @@
 class_name LogRestoreAfterLoadTest
 extends RefCounted
 
-const GameEventLogControllerClass = preload("res://ui/scenes/game/game_event_log_controller.gd")
+const GameEventLogControllerClass = preload("res://ui/scenes/game/event_log/controller.gd")
 const GameLogPanelClass = preload("res://ui/components/game_log/game_log_panel.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 

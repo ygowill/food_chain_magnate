@@ -4,7 +4,7 @@ class_name ManualLogSavesCoverageTest
 extends RefCounted
 
 const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
-const GameTimelineLogEntriesBuilderClass = preload("res://ui/scenes/game/game_timeline_log_entries_builder.gd")
+const GameTimelineLogEntriesBuilderClass = preload("res://ui/scenes/game/timeline/log_entries_builder.gd")
 const GameLogUnifiedTimelineBuilderClass = preload("res://ui/components/game_log/game_log_unified_timeline_builder.gd")
 
 const CASES: Array[Dictionary] = [

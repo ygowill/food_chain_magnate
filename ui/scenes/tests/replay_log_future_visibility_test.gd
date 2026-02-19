@@ -8,7 +8,7 @@ const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const EventTimelineBuildClass = preload("res://gameplay/replay/event_timeline_build.gd")
 const GameLogPanelClass = preload("res://ui/components/game_log/game_log_panel.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
-const GAME_EVENT_LOG_FORMATTER_SCRIPT_PATH := "res://ui/scenes/game/game_event_log_formatter.gd"
+const GAME_EVENT_LOG_FORMATTER_SCRIPT_PATH := "res://ui/scenes/game/event_log/formatter.gd"
 
 static func run(player_count: int = 2, seed_val: int = 12345, min_commands: int = 12) -> Result:
 	var engine := GameEngine.new()

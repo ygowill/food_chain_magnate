@@ -3,7 +3,7 @@
 class_name GameEventLogController
 extends RefCounted
 
-const GAME_EVENT_LOG_FORMATTER_SCRIPT_PATH := "res://ui/scenes/game/game_event_log_formatter.gd"
+const GAME_EVENT_LOG_FORMATTER_SCRIPT_PATH := "res://ui/scenes/game/event_log/formatter.gd"
 const PRICE_ACTION_LOG_TEXT: Dictionary = {
 	"set_price": "设定价格（-$1）",
 	"set_discount": "设定折扣（-$3）",

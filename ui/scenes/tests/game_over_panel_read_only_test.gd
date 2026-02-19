@@ -2,7 +2,7 @@
 class_name GameOverPanelReadOnlyTest
 extends RefCounted
 
-const EndPanelsClass = preload("res://ui/scenes/game/game_panel_end_panels.gd")
+const EndPanelsClass = preload("res://ui/scenes/game/panel/end_panels.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 

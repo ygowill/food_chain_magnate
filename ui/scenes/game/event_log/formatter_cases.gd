@@ -1,7 +1,7 @@
 # GameEventLogFormatter：事件类型分派（拆分自 game_event_log_formatter.gd）
 extends RefCounted
 
-const MarketingAndDrinksCasesClass = preload("res://ui/scenes/game/game_event_log_formatter_marketing_and_drinks_cases.gd")
+const MarketingAndDrinksCasesClass = preload("res://ui/scenes/game/event_log/formatter_marketing_and_drinks_cases.gd")
 
 const PRICE_ACTION_LOG_TEXT: Dictionary = {
 	"set_price": "设定价格（-$1）",

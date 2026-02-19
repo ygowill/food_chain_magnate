@@ -4,7 +4,7 @@ extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
-const RoadHelpersClass = preload("res://ui/scenes/game/game_panel_working_drinks_procurement_road_helpers.gd")
+const RoadHelpersClass = preload("res://ui/scenes/game/panel/working/procurement/road_helpers.gd")
 
 var _controller_ref: WeakRef = null
 

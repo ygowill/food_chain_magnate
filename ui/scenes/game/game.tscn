@@ -1,8 +1,8 @@
 [gd_scene load_steps=17 format=3 uid="uid://dph5rwtgn6tq8"]
 
 [ext_resource type="Script" uid="uid://ckmoescpu6tet" path="res://ui/scenes/game/game.gd" id="1_game"]
-[ext_resource type="Script" uid="uid://c7bjun5j7en8b" path="res://ui/scenes/game/map_view.gd" id="2_map_view"]
-[ext_resource type="Script" uid="uid://cyu0qql2ml0qt" path="res://ui/scenes/game/map_canvas.gd" id="3_map_canvas"]
+[ext_resource type="Script" uid="uid://c7bjun5j7en8b" path="res://ui/scenes/game/map/view.gd" id="2_map_view"]
+[ext_resource type="Script" uid="uid://cyu0qql2ml0qt" path="res://ui/scenes/game/map/canvas.gd" id="3_map_canvas"]
 [ext_resource type="PackedScene" uid="uid://tvgadoehsaau" path="res://ui/components/player_panel/player_panel.tscn" id="4_player_panel"]
 [ext_resource type="PackedScene" path="res://ui/components/action_panel/action_panel.tscn" id="5_action_panel"]
 [ext_resource type="PackedScene" path="res://ui/components/inventory_panel/inventory_panel.tscn" id="6_inventory_panel"]

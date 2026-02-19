@@ -3,7 +3,7 @@
 class_name MapIndexerStructuresRespectsMapOriginTest
 extends RefCounted
 
-const MapCanvasIndexerClass = preload("res://ui/scenes/game/map_canvas_indexer.gd")
+const MapCanvasIndexerClass = preload("res://ui/scenes/game/map/indexer.gd")
 
 class FakeCanvas extends RefCounted:
 	var _map_data: Dictionary = {}

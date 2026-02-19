@@ -3,7 +3,7 @@
 class_name MarketingSelectionFreezeTest
 extends RefCounted
 
-const GameMapInteractionControllerClass = preload("res://ui/scenes/game/game_map_interaction_controller.gd")
+const GameMapInteractionControllerClass = preload("res://ui/scenes/game/map_interaction/controller.gd")
 
 class FakeMapCanvas extends RefCounted:
 	var preview_calls: int = 0

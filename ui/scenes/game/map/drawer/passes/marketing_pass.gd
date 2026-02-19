@@ -1,7 +1,7 @@
 # MapCanvasDrawer：营销板件绘制下沉
 extends RefCounted
 
-const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
+const TextureUtilsClass = preload("res://ui/scenes/game/map/drawer/texture_utils.gd")
 
 static func draw_marketing(canvas, cell_size: int) -> void:
 	for pos_val in canvas._marketing_by_pos.keys():

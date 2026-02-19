@@ -10,7 +10,7 @@ const DrinksProcurementClass = preload("res://core/rules/drinks_procurement.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
-const DrinksProcurementControllerClass = preload("res://ui/scenes/game/game_panel_working_drinks_procurement_controller.gd")
+const DrinksProcurementControllerClass = preload("res://ui/scenes/game/panel/working/procurement/controller.gd")
 const ProductionPanelScene = preload("res://ui/components/production_panel/production_panel.tscn")
 
 var _scene = null

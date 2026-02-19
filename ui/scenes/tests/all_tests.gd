@@ -6,7 +6,7 @@ const TestRefs = preload("res://ui/scenes/tests/all_tests_refs.gd")
 const CheckCompileScript = preload("res://tools/check_compile.gd")
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
-const StructuresPassClass = preload("res://ui/scenes/game/map_canvas_drawer_structures_pass.gd")
+const StructuresPassClass = preload("res://ui/scenes/game/map/drawer/passes/structures_pass.gd")
 const TilePreviewFactoryClass = preload("res://ui/components/reserve_area/tile_preview_factory.gd")
 
 @onready var output: RichTextLabel = $Root/Output

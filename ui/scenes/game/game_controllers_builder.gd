@@ -3,8 +3,8 @@
 class_name GameControllersBuilder
 extends RefCounted
 
-const GameMenuDebugControllerClass = preload("res://ui/scenes/game/game_menu_debug_controller.gd")
-const GameMenuControllerClass = preload("res://ui/scenes/game/game_menu_controller.gd")
+const GameMenuDebugControllerClass = preload("res://ui/scenes/game/menu/debug_controller.gd")
+const GameMenuControllerClass = preload("res://ui/scenes/game/menu/controller.gd")
 const GameSaveLoadControllerClass = preload("res://ui/scenes/game/game_save_load_controller.gd")
 const GameLayoutControllerClass = preload("res://ui/scenes/game/game_layout_controller.gd")
 const GameRightPanelDockControllerClass = preload("res://ui/scenes/game/game_right_panel_dock_controller.gd")
@@ -14,12 +14,12 @@ const GameInputControllerClass = preload("res://ui/scenes/game/game_input_contro
 const GameLogDockControllerClass = preload("res://ui/scenes/game/game_log_dock_controller.gd")
 const GameBackgroundWarmupControllerClass = preload("res://ui/scenes/game/game_background_warmup_controller.gd")
 const GameDebugPanelControllerClass = preload("res://ui/scenes/game/game_debug_panel_controller.gd")
-const GameOverlayControllerClass = preload("res://ui/scenes/game/game_overlay_controller.gd")
-const GameMapInteractionControllerClass = preload("res://ui/scenes/game/game_map_interaction_controller.gd")
-const GameMapModeBarControllerClass = preload("res://ui/scenes/game/game_map_mode_bar_controller.gd")
-const GamePanelControllerClass = preload("res://ui/scenes/game/game_panel_controller.gd")
-const GameTimelineControllerClass = preload("res://ui/scenes/game/game_timeline_controller.gd")
-const GameProcurementLogPreviewControllerClass = preload("res://ui/scenes/game/game_procurement_log_preview_controller.gd")
+const GameOverlayControllerClass = preload("res://ui/scenes/game/overlay/controller.gd")
+const GameMapInteractionControllerClass = preload("res://ui/scenes/game/map_interaction/controller.gd")
+const GameMapModeBarControllerClass = preload("res://ui/scenes/game/map_interaction/mode_bar_controller.gd")
+const GamePanelControllerClass = preload("res://ui/scenes/game/panel/controller.gd")
+const GameTimelineControllerClass = preload("res://ui/scenes/game/timeline/controller.gd")
+const GameProcurementLogPreviewControllerClass = preload("res://ui/scenes/game/panel/procurement/log_preview_controller.gd")
 
 const DebugPanelScene = preload("res://ui/scenes/debug/debug_panel.tscn")
 const ConfirmDialogScene = preload("res://ui/dialogs/confirm_dialog.tscn")

@@ -1,5 +1,5 @@
 class_name TilePreview
-extends "res://ui/scenes/game/map_canvas.gd"
+extends "res://ui/scenes/game/map/canvas.gd"
 
 const CellsClass = preload("res://core/map/map_baker/cells.gd")
 const TileBakingClass = preload("res://core/map/map_baker/tile_baking.gd")

@@ -1,6 +1,6 @@
 extends RefCounted
 
-const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
+const TextureUtilsClass = preload("res://ui/scenes/game/map/drawer/texture_utils.gd")
 
 const PANEL_ID := "rural_marketeers:rural_area_panel"
 const RURAL_HOUSE_ID := "rural_area"

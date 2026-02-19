@@ -4,8 +4,8 @@ class_name GameTimelineController
 extends RefCounted
 
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
-const StepTimelineBuildHelpersClass = preload("res://ui/scenes/game/game_timeline_step_timeline_build_helpers.gd")
-const GameTimelineStepSeekHelpersClass = preload("res://ui/scenes/game/game_timeline_step_seek_helpers.gd")
+const StepTimelineBuildHelpersClass = preload("res://ui/scenes/game/timeline/step_timeline_build_helpers.gd")
+const GameTimelineStepSeekHelpersClass = preload("res://ui/scenes/game/timeline/step_seek_helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 var _host: Control = null

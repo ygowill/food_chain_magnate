@@ -3,7 +3,7 @@ class_name DinnertimeAnimationMapHelpers
 extends RefCounted
 
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
-const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
+const TextureUtilsClass = preload("res://ui/scenes/game/map/drawer/texture_utils.gd")
 
 static func compute_structure_rect_from_index(cell_size: float, info: Dictionary) -> Rect2:
 	var min_pos_val = info.get("min", null)

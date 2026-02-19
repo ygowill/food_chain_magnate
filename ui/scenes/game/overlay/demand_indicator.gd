@@ -2,7 +2,7 @@
 extends RefCounted
 
 const DemandIndicatorScene = preload("res://ui/components/demand_indicator/demand_indicator.tscn")
-const OverlayUtils = preload("res://ui/scenes/game/game_overlay_utils.gd")
+const OverlayUtils = preload("res://ui/scenes/game/overlay/utils.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 var _scene = null

@@ -3,7 +3,7 @@ extends RefCounted
 
 const MarketingRangeCalculatorClass = preload("res://core/rules/marketing_range_calculator.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
-const OverlayUtils = preload("res://ui/scenes/game/game_overlay_utils.gd")
+const OverlayUtils = preload("res://ui/scenes/game/overlay/utils.gd")
 
 var _scene = null
 var _map_canvas = null

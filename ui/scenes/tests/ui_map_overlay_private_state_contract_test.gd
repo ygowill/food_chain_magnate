@@ -2,7 +2,7 @@ class_name UiMapOverlayPrivateStateContractTest
 extends RefCounted
 
 const _FILES := [
-	"res://ui/scenes/game/map_canvas_drawer_roads_pass.gd",
+	"res://ui/scenes/game/map/drawer/passes/roads_pass.gd",
 	"res://ui/overlays/distance_overlay.gd",
 ]
 

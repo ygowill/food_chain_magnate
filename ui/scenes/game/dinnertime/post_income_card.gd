@@ -3,7 +3,7 @@ class_name DinnertimeAnimationPostIncomeCard
 extends RefCounted
 
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
-const IncomeUtilsClass = preload("res://ui/scenes/game/dinnertime_animation_income_utils.gd")
+const IncomeUtilsClass = preload("res://ui/scenes/game/dinnertime/income_utils.gd")
 
 static func create(anim_layer: Control, scene: Node, map_canvas, event: Dictionary, card_scale: float, speed: float, active_tweens: Array) -> Control:
 	if not is_instance_valid(anim_layer):

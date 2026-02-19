@@ -7,8 +7,8 @@ const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
-const REPORTS_FORMATTER_SCRIPT_PATH := "res://ui/scenes/game/game_event_log_reports_formatter.gd"
-const CASES_FORMATTER_SCRIPT_PATH := "res://ui/scenes/game/game_event_log_formatter_cases.gd"
+const REPORTS_FORMATTER_SCRIPT_PATH := "res://ui/scenes/game/event_log/reports_formatter.gd"
+const CASES_FORMATTER_SCRIPT_PATH := "res://ui/scenes/game/event_log/formatter_cases.gd"
 
 const CASH_INCOME_BREAKDOWN_LABELS: Dictionary = {
 	"food_price": "食物售价",

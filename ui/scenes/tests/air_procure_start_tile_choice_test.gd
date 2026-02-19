@@ -3,7 +3,7 @@
 class_name AirProcureStartTileChoiceTest
 extends RefCounted
 
-const WorkingPanelsClass = preload("res://ui/scenes/game/game_panel_working_panels.gd")
+const WorkingPanelsClass = preload("res://ui/scenes/game/panel/working/panels.gd")
 const GameStateClass = preload("res://core/state/game_state.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 

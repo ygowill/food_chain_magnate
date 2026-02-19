@@ -1,7 +1,7 @@
 class_name GamePanelModalsControllerKindContractTest
 extends RefCounted
 
-const _PATH := "res://ui/scenes/game/game_panel_modals_controller.gd"
+const _PATH := "res://ui/scenes/game/panel/modals_controller.gd"
 
 static func run() -> Result:
 	var read_r := _read_text(_PATH)

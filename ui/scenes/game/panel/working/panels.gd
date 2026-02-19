@@ -1,11 +1,11 @@
 # Game scene：Working 阶段面板（Recruit/Train/Price/Production/Milestone）
 extends RefCounted
 
-const RecruitControllerClass = preload("res://ui/scenes/game/game_panel_working_recruit_controller.gd")
-const PriceControllerClass = preload("res://ui/scenes/game/game_panel_working_price_controller.gd")
-const MilestoneControllerClass = preload("res://ui/scenes/game/game_panel_working_milestone_controller.gd")
-const TrainControllerClass = preload("res://ui/scenes/game/game_panel_working_train_controller.gd")
-const ProductionControllerClass = preload("res://ui/scenes/game/game_panel_working_production_controller.gd")
+const RecruitControllerClass = preload("res://ui/scenes/game/panel/working/recruit_controller.gd")
+const PriceControllerClass = preload("res://ui/scenes/game/panel/working/price_controller.gd")
+const MilestoneControllerClass = preload("res://ui/scenes/game/panel/working/milestone_controller.gd")
+const TrainControllerClass = preload("res://ui/scenes/game/panel/working/train_controller.gd")
+const ProductionControllerClass = preload("res://ui/scenes/game/panel/working/production_controller.gd")
 
 var _scene = null
 var _map_controller = null

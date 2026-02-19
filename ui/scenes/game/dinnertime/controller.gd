@@ -5,20 +5,20 @@ extends RefCounted
 
 signal settlement_completed()
 
-const OverlayUtilsClass = preload("res://ui/scenes/game/game_overlay_utils.gd")
+const OverlayUtilsClass = preload("res://ui/scenes/game/overlay/utils.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 const DinnerTimeOverlayClass = preload("res://ui/components/dinner_time/dinner_time_overlay.gd")
-const DinnertimeAnimationIncomeUtilsClass = preload("res://ui/scenes/game/dinnertime_animation_income_utils.gd")
-const DinnertimeAnimationPostIncomeCardClass = preload("res://ui/scenes/game/dinnertime_animation_post_income_card.gd")
-const DinnertimeAnimationMapHelpersClass = preload("res://ui/scenes/game/dinnertime_animation_map_helpers.gd")
-const DinnertimeAnimationRouteHelpersClass = preload("res://ui/scenes/game/dinnertime_animation_route_helpers.gd")
-const DinnertimeAnimationMoneyHelpersClass = preload("res://ui/scenes/game/dinnertime_animation_money_helpers.gd")
-const DinnertimeAnimationControlBarHelpersClass = preload("res://ui/scenes/game/dinnertime_animation_control_bar_helpers.gd")
-const DinnertimeAnimationPositionHelpersClass = preload("res://ui/scenes/game/dinnertime_animation_position_helpers.gd")
-const DinnertimeAnimationLayoutHelpersClass = preload("res://ui/scenes/game/dinnertime_animation_layout_helpers.gd")
-const DinnertimeAnimationTimelineHelpersClass = preload("res://ui/scenes/game/dinnertime_animation_timeline_helpers.gd")
+const DinnertimeAnimationIncomeUtilsClass = preload("res://ui/scenes/game/dinnertime/income_utils.gd")
+const DinnertimeAnimationPostIncomeCardClass = preload("res://ui/scenes/game/dinnertime/post_income_card.gd")
+const DinnertimeAnimationMapHelpersClass = preload("res://ui/scenes/game/dinnertime/map_helpers.gd")
+const DinnertimeAnimationRouteHelpersClass = preload("res://ui/scenes/game/dinnertime/route_helpers.gd")
+const DinnertimeAnimationMoneyHelpersClass = preload("res://ui/scenes/game/dinnertime/money_helpers.gd")
+const DinnertimeAnimationControlBarHelpersClass = preload("res://ui/scenes/game/dinnertime/control_bar_helpers.gd")
+const DinnertimeAnimationPositionHelpersClass = preload("res://ui/scenes/game/dinnertime/position_helpers.gd")
+const DinnertimeAnimationLayoutHelpersClass = preload("res://ui/scenes/game/dinnertime/layout_helpers.gd")
+const DinnertimeAnimationTimelineHelpersClass = preload("res://ui/scenes/game/dinnertime/timeline_helpers.gd")
 
 const COIN_TEXTURE_PATH = "res://assets/images/coin_gold.svg"
 const COIN_BASE_COUNT := 1

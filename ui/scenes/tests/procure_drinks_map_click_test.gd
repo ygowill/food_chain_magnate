@@ -1,7 +1,7 @@
 extends Node
 
-const WorkingPanelsClass = preload("res://ui/scenes/game/game_panel_working_panels.gd")
-const MapControllerClass = preload("res://ui/scenes/game/game_map_interaction_controller.gd")
+const WorkingPanelsClass = preload("res://ui/scenes/game/panel/working/panels.gd")
+const MapControllerClass = preload("res://ui/scenes/game/map_interaction/controller.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 class FakeEngine extends RefCounted:

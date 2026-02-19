@@ -1,7 +1,7 @@
 # MapCanvasDrawer：道路绘制下沉
 extends RefCounted
 
-const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
+const TextureUtilsClass = preload("res://ui/scenes/game/map/drawer/texture_utils.gd")
 const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
 const MapOverlayProviderRegistryClass = preload("res://core/rules/map_overlay_provider_registry.gd")
 const ROADWORK_MARKER_PIECE_SUFFIX := "roadworks_marker"

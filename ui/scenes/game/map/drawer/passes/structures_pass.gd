@@ -1,11 +1,11 @@
 # MapCanvasDrawer：结构（房屋/餐厅/道路 piece 等）绘制下沉
 extends RefCounted
 
-const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
-const OverlayUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_overlay_utils.gd")
-const RoadsPassClass = preload("res://ui/scenes/game/map_canvas_drawer_roads_pass.gd")
+const TextureUtilsClass = preload("res://ui/scenes/game/map/drawer/texture_utils.gd")
+const OverlayUtilsClass = preload("res://ui/scenes/game/map/drawer/overlay_utils.gd")
+const RoadsPassClass = preload("res://ui/scenes/game/map/drawer/passes/roads_pass.gd")
 const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
-const DrinkSourcesPassClass = preload("res://ui/scenes/game/map_canvas_drawer_drink_sources_pass.gd")
+const DrinkSourcesPassClass = preload("res://ui/scenes/game/map/drawer/passes/drink_sources_pass.gd")
 const HOUSE_BG_COLOR := Color("#733651")
 const GARDEN_BG_COLOR := Color("#699055")
 

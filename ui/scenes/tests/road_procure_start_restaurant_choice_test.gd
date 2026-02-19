@@ -3,7 +3,7 @@
 class_name RoadProcureStartRestaurantChoiceTest
 extends RefCounted
 
-const ProcureControllerClass = preload("res://ui/scenes/game/game_panel_working_drinks_procurement_controller.gd")
+const ProcureControllerClass = preload("res://ui/scenes/game/panel/working/procurement/controller.gd")
 const GameStateClass = preload("res://core/state/game_state.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 

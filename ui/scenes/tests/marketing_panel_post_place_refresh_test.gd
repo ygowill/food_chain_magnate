@@ -2,7 +2,7 @@
 # After a successful marketing placement, if the player can still market, keep panel open and refresh options.
 extends RefCounted
 
-const GamePanelMarketingPanelsClass = preload("res://ui/scenes/game/game_panel_marketing_panels.gd")
+const GamePanelMarketingPanelsClass = preload("res://ui/scenes/game/panel/marketing_panels.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run() -> Result:

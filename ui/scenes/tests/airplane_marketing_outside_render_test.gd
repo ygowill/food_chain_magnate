@@ -3,7 +3,7 @@
 class_name AirplaneMarketingOutsideRenderTest
 extends RefCounted
 
-const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
+const MapCanvasDrawerClass = preload("res://ui/scenes/game/map/drawer/drawer.gd")
 
 class FakeSkin extends RefCounted:
 	func get_marketing_texture(_key: String) -> Texture2D:

@@ -8,10 +8,10 @@ const DrinksProcurementClass = preload("res://core/rules/drinks_procurement.gd")
 const TileRouteUtilsClass = preload("res://core/rules/drinks_procurement/tile_route_utils.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
-const AirHelpersClass = preload("res://ui/scenes/game/game_panel_working_drinks_procurement_air_helpers.gd")
-const HoverPreviewControllerClass = preload("res://ui/scenes/game/game_panel_working_drinks_procurement_hover_preview_controller.gd")
-const RoadHelpersClass = preload("res://ui/scenes/game/game_panel_working_drinks_procurement_road_helpers.gd")
-const RestaurantChoiceControllerClass = preload("res://ui/scenes/game/game_panel_working_drinks_procurement_restaurant_choice_controller.gd")
+const AirHelpersClass = preload("res://ui/scenes/game/panel/working/procurement/air_helpers.gd")
+const HoverPreviewControllerClass = preload("res://ui/scenes/game/panel/working/procurement/hover_preview_controller.gd")
+const RoadHelpersClass = preload("res://ui/scenes/game/panel/working/procurement/road_helpers.gd")
+const RestaurantChoiceControllerClass = preload("res://ui/scenes/game/panel/working/procurement/restaurant_choice_controller.gd")
 
 var _scene = null
 var _map_controller = null

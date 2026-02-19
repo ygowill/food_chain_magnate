@@ -3,8 +3,8 @@
 class_name MapBlockedOverlaySkipsVoidCellsTest
 extends RefCounted
 
-const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
-const MapCanvasIndexerClass = preload("res://ui/scenes/game/map_canvas_indexer.gd")
+const MapCanvasDrawerClass = preload("res://ui/scenes/game/map/drawer/drawer.gd")
+const MapCanvasIndexerClass = preload("res://ui/scenes/game/map/indexer.gd")
 
 class FakeSkin extends RefCounted:
 	func get_blocked_overlay_texture() -> Texture2D:

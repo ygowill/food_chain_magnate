@@ -6,7 +6,7 @@ const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const TilePreviewFactoryClass = preload("res://ui/components/reserve_area/tile_preview_factory.gd")
-const StructuresPassClass = preload("res://ui/scenes/game/map_canvas_drawer_structures_pass.gd")
+const StructuresPassClass = preload("res://ui/scenes/game/map/drawer/passes/structures_pass.gd")
 
 const FLOW_CONTROLLER_SCRIPT_PATH := "res://modules/lobbyists/ui/lobbyists_extra_tile_flow_controller.gd"
 const MANUAL_SAVE_RES_PATH := "res://testdata/saves/manual_cases/milestones/first_lobbyist_used_multi_player_same_round.json"

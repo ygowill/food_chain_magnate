@@ -4,7 +4,7 @@ extends RefCounted
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
 const TokensClass = preload("res://ui/components/reserve_area/reserve_area_full_screen_view_tokens.gd")
 const ReserveAreaViewClass = preload("res://ui/components/reserve_area/reserve_area_full_screen_view.gd")
-const StructuresPassClass = preload("res://ui/scenes/game/map_canvas_drawer_structures_pass.gd")
+const StructuresPassClass = preload("res://ui/scenes/game/map/drawer/passes/structures_pass.gd")
 
 static func run() -> Result:
 	var engine: GameEngine = null

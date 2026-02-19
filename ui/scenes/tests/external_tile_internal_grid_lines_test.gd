@@ -3,7 +3,7 @@
 class_name ExternalTileInternalGridLinesTest
 extends RefCounted
 
-const MapCanvasDrawerClass = preload("res://ui/scenes/game/map_canvas_drawer.gd")
+const MapCanvasDrawerClass = preload("res://ui/scenes/game/map/drawer/drawer.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 
 class FakeCanvas extends RefCounted:

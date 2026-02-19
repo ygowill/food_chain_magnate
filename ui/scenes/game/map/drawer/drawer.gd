@@ -11,13 +11,13 @@ static func _get_restaurant_logo_piece_ids(canvas) -> Array:
 			return ids_val
 	return []
 
-const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
-const OverlayUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_overlay_utils.gd")
-const MarketingPassClass = preload("res://ui/scenes/game/map_canvas_drawer_marketing_pass.gd")
-const GroundPassClass = preload("res://ui/scenes/game/map_canvas_drawer_ground_pass.gd")
-const RoadsPassClass = preload("res://ui/scenes/game/map_canvas_drawer_roads_pass.gd")
-const StructuresPassClass = preload("res://ui/scenes/game/map_canvas_drawer_structures_pass.gd")
-const TilesPassClass = preload("res://ui/scenes/game/map_canvas_drawer_tiles_pass.gd")
+const TextureUtilsClass = preload("res://ui/scenes/game/map/drawer/texture_utils.gd")
+const OverlayUtilsClass = preload("res://ui/scenes/game/map/drawer/overlay_utils.gd")
+const MarketingPassClass = preload("res://ui/scenes/game/map/drawer/passes/marketing_pass.gd")
+const GroundPassClass = preload("res://ui/scenes/game/map/drawer/passes/ground_pass.gd")
+const RoadsPassClass = preload("res://ui/scenes/game/map/drawer/passes/roads_pass.gd")
+const StructuresPassClass = preload("res://ui/scenes/game/map/drawer/passes/structures_pass.gd")
+const TilesPassClass = preload("res://ui/scenes/game/map/drawer/passes/tiles_pass.gd")
 const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
 
 static func _draw_texture_aspect_fit(canvas, texture: Texture2D, rect: Rect2, modulate: Color = Color(1, 1, 1, 1), v_align: String = "center") -> void:
