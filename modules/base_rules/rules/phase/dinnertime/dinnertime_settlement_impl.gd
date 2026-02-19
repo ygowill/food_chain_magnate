@@ -16,16 +16,25 @@ const EFFECT_SEG_DINNERTIME_INCOME_BONUS := ":dinnertime:income_bonus:"
 const EFFECT_SEG_DINNERTIME_DISTANCE_DELTA := ":dinnertime:distance_delta:"
 const EFFECT_SEG_DINNERTIME_SALE_HOUSE_BONUS := ":dinnertime:sale_house_bonus:"
 const KIND_CONFIRM_DINNERTIME := "confirm_dinnertime"
+const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 
 static func _is_online_mode() -> bool:
 	if NetContext == null:
 		return false
 	return NetContext.mode == NetContext.Mode.ONLINE_CLIENT or NetContext.mode == NetContext.Mode.ONLINE_SERVER
 
+static func _is_online_dinnertime_confirm_enabled(state: GameState) -> bool:
+	if state != null and (state.round_state is Dictionary):
+		var rs: Dictionary = state.round_state
+		var v = rs.get(ONLINE_DINNERTIME_CONFIRM_KEY, null)
+		if v is bool and bool(v):
+			return true
+	return _is_online_mode()
+
 static func _build_dinnertime_confirm_pending(state: GameState) -> Array:
 	if state == null or not (state.players is Array):
 		return []
-	if not _is_online_mode():
+	if not _is_online_dinnertime_confirm_enabled(state):
 		return [KIND_CONFIRM_DINNERTIME]
 	var pending: Array[Dictionary] = []
 	for pid in range(state.players.size()):
@@ -233,10 +242,13 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 		"sold_marketed_demand_events": sold_marketed_demand_events,
 	}
 
-	# 注入阻塞：非 headless DisplayServer 下等待玩家确认后才允许 auto-advance 离开 DINNERTIME
+	# 注入阻塞：晚餐结算需等待玩家确认后才允许 auto-advance 离开 DINNERTIME。
+	# 离线/本地 headless 测试仍保持“自动跳过晚餐阶段”，避免影响既有测试与快速流程。
+	# 联机模式（包括 ONLINE_SERVER headless）必须注入 pending，确保与客户端状态一致，避免 state_hash 分叉触发 resync。
 	# 注意：`godot --headless` 运行在 editor binary 下时，OS.has_feature("headless") 仍可能为 false；
-	# 使用 DisplayServer.get_name() 更可靠。
-	if DisplayServer.get_name() != "headless":
+	# 使用 DisplayServer.get_name() 判断显示模式更可靠。
+	var should_inject_pending := (DisplayServer.get_name() != "headless") or _is_online_dinnertime_confirm_enabled(state)
+	if should_inject_pending:
 		var set_pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
 			state.round_state, DefsClass.PHASE_DINNERTIME, _build_dinnertime_confirm_pending(state), "晚餐结算"
 		)

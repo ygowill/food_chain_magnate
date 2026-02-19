@@ -3,6 +3,7 @@ extends RefCounted
 
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const DEFAULT_RESTAURANT_LOGO_COUNT := 6
+const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 
 const STATUS_LOBBY := "Lobby"
 const STATUS_IN_GAME := "InGame"
@@ -368,6 +369,11 @@ func start_game() -> Result:
 	var init_r: Result = engine.initialize(player_count, seed, enabled_modules, base_dir, [], logo_choices)
 	if not init_r.ok:
 		return Result.failure("GameEngine.initialize failed: %s" % init_r.error)
+	var state = engine.get_state()
+	if state != null:
+		if not (state.round_state is Dictionary):
+			state.round_state = {}
+		state.round_state[ONLINE_DINNERTIME_CONFIRM_KEY] = true
 
 	game_engine = engine
 	player_id_by_peer_id = build_player_id_by_peer_id()

@@ -731,9 +731,36 @@ func _start_dinnertime_animation(dt_data: Dictionary, state: GameState) -> void:
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_skip_bank_sync"):
 		_ui_sync_controller.set_skip_bank_sync(true)
 
+func _read_live_game_state() -> GameState:
+	if _scene == null or not is_instance_valid(_scene):
+		return null
+	if not _scene.has_method("get"):
+		return null
+	var engine_val = _scene.get("game_engine")
+	if engine_val == null or not engine_val.has_method("get_state"):
+		return null
+	var state_val = engine_val.get_state()
+	return state_val if state_val is GameState else null
+
+func _should_send_dinnertime_confirm() -> bool:
+	var live_state := _read_live_game_state()
+	if live_state == null:
+		return false
+	if str(live_state.phase) != DefsClass.PHASE_DINNERTIME:
+		return false
+	if not _is_confirm_dinnertime_pending_for_local(live_state):
+		return false
+	if _scene != null and is_instance_valid(_scene) and _scene.has_method("_is_online_resync_in_progress"):
+		if bool(_scene.call("_is_online_resync_in_progress")):
+			return false
+	return true
+
 func _on_dinnertime_anim_completed() -> void:
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_skip_bank_sync"):
 		_ui_sync_controller.set_skip_bank_sync(false)
+	if not _should_send_dinnertime_confirm():
+		_disable_dinnertime_overlay()
+		return
 	if _execute_command.is_valid():
 		var confirm_cmd = CommandClass.create_system("confirm_dinnertime")
 		if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:

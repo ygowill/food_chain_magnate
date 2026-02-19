@@ -6,6 +6,7 @@ const RoomManagerClass = preload("res://server/room_manager.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const CommandClass = preload("res://core/types/command.gd")
+const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 
 static func run() -> Result:
 	var rng := RandomNumberGenerator.new()
@@ -87,6 +88,11 @@ static func run() -> Result:
 	var init_r: Result = client_engine.initialize(player_count, seed, enabled_modules, base_dir, [], logo_choices)
 	if not init_r.ok:
 		return Result.failure("Client GameEngine.initialize 失败: %s" % init_r.error)
+	var client_state = client_engine.get_state()
+	if client_state != null:
+		if not (client_state.round_state is Dictionary):
+			client_state.round_state = {}
+		client_state.round_state[ONLINE_DINNERTIME_CONFIRM_KEY] = true
 
 	for _i in range(player_count):
 		var server_state = server_engine.get_state()

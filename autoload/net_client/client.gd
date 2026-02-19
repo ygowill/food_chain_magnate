@@ -6,6 +6,7 @@ extends RefCounted
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
+const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 
 var _net = null
 
@@ -169,6 +170,11 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 				% [player_count, seed, enabled_modules.size(), base_dir, init_r.error]
 		)
 		return
+	var state = engine.get_state()
+	if state != null:
+		if not (state.round_state is Dictionary):
+			state.round_state = {}
+		state.round_state[ONLINE_DINNERTIME_CONFIRM_KEY] = true
 
 	Globals.set_current_game_engine(engine)
 	Globals.sync_runtime_config_from_engine(engine)
