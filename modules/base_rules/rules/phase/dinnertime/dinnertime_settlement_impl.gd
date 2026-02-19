@@ -25,6 +25,10 @@ static func _is_online_mode() -> bool:
 	return NetContext.mode == NetContext.Mode.ONLINE_CLIENT or NetContext.mode == NetContext.Mode.ONLINE_SERVER
 
 static func _is_online_dinnertime_confirm_enabled(state: GameState) -> bool:
+	# 在线模式：必须启用（避免 server/client 在 headless 下状态分叉导致 resync 或错误跳过晚餐确认）。
+	if _is_online_mode():
+		return true
+
 	# 兼容读取：
 	# - 优先读取持久化到 state.rules 的标记（round_state 每回合会重建，不可靠）
 	# - 同时兼容历史会话在 round_state 中的旧标记

@@ -759,6 +759,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.ConfirmDinnertimePendingPhaseActionsKeyTestClass.run(2, 12345),
 			},
 			{
+				"name": "OnlineDinnertimeConfirmEnforcedTest",
+				"fn": func() -> Result: return TestRefs.OnlineDinnertimeConfirmEnforcedTestClass.run(2, 12345),
+			},
+			{
 				"name": "BankruptcyTest",
 				"fn": func() -> Result: return TestRefs.BankruptcyTestClass.run(2, 12345),
 			},

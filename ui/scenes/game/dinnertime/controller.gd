@@ -838,6 +838,8 @@ func _animate_player_income(player_id: int, amount: int, dur: float) -> void:
 	)
 
 func _finish() -> void:
+	if _state == State.DONE:
+		return
 	_state = State.DONE
 	_stop_layout_monitor()
 	_stop_layout_start_wait()

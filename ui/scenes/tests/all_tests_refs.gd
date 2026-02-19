@@ -185,6 +185,7 @@ const RandomMapGenerationTestClass = preload("res://core/tests/random_map_genera
 const DinnertimeSettlementTestClass = preload("res://core/tests/dinnertime_settlement_test.gd")
 const DinnertimeDistanceEntryBoundaryTestClass = preload("res://core/tests/dinnertime_distance_entry_boundary_test.gd")
 const ConfirmDinnertimePendingPhaseActionsKeyTestClass = preload("res://core/tests/confirm_dinnertime_pending_phase_actions_key_test.gd")
+const OnlineDinnertimeConfirmEnforcedTestClass = preload("res://core/tests/online_dinnertime_confirm_enforced_test.gd")
 const DinnertimeSkippedRequiredTestClass = preload("res://core/tests/dinnertime_skipped_required_test.gd")
 const BankruptcyTestClass = preload("res://core/tests/bankruptcy_test.gd")
 const ModuleProductIconsLoadedTestClass = preload("res://ui/scenes/tests/module_product_icons_loaded_test.gd")
