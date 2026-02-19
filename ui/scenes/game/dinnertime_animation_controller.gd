@@ -13,6 +13,7 @@ const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const DinnerTimeOverlayClass = preload("res://ui/components/dinner_time/dinner_time_overlay.gd")
+const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
 
 const COIN_TEXTURE_PATH = "res://assets/images/coin_gold.svg"
@@ -24,6 +25,8 @@ const COIN_SIZE_SCALE := 0.28
 const DEMAND_TOKEN_ICON_SCALE := 0.90
 const ROUTE_FLASH_ALPHA_MIN := 0.35
 const ROUTE_FLASH_ALPHA_MAX := 0.95
+const POST_INCOME_CARD_SCALE := 0.68
+const POST_INCOME_CARD_HOLD_SEC := 0.3
 
 enum State { IDLE, PLAYING, DONE }
 
@@ -61,6 +64,12 @@ var _layout_monitor_cell_size: int = -1
 var _layout_monitor_origin: Vector2i = Vector2i(2147483647, 2147483647)
 var _layout_start_wait_running: bool = false
 var _dinnertime_distance_script = null
+var _post_income_events: Array[Dictionary] = []
+var _post_income_by_player: Dictionary = {}  # player_id -> int
+var _post_income_started: bool = false
+var _post_income_playing: bool = false
+var _post_income_done: bool = false
+var _post_income_card: Control = null
 
 # 外部 UI 引用（用于动画目标位置）
 var _bank_label: Label = null
@@ -76,12 +85,20 @@ func start(settlement_data: Dictionary, state: GameState, scene: Node, map_canva
 
 	_orders = DinnerTimeOverlayClass.build_orders_from_settlement(settlement_data)
 	_current_idx = 0
+	_post_income_events = _build_post_house_income_events(settlement_data)
+	_post_income_by_player = _sum_post_income_by_player(_post_income_events)
+	_post_income_started = false
+	_post_income_playing = false
+	_post_income_done = _post_income_events.is_empty()
 
-	# 计算结算前银行值（当前值 + 所有订单收入总和）
+	# 计算结算前银行值（当前值 + 所有房屋订单收入总和 + 后置收入）
 	var total_revenue := 0
 	for o in _orders:
-		total_revenue += int(o.get("revenue", 0))
-	_running_bank_value = int(state.bank.get("total", 0)) + total_revenue
+		if bool(o.get("is_skipped", false)):
+			continue
+		total_revenue += _get_order_income_amount(o)
+	var total_post_income := _sum_income_dict(_post_income_by_player)
+	_running_bank_value = int(state.bank.get("total", 0)) + total_revenue + total_post_income
 	if is_instance_valid(_bank_label):
 		_bank_label.text = "$%d" % _running_bank_value
 
@@ -96,7 +113,14 @@ func start(settlement_data: Dictionary, state: GameState, scene: Node, map_canva
 				continue
 			var oid := int(o.get("winner_owner", -1))
 			if oid >= 0 and _player_running_cash.has(oid):
-				_player_running_cash[oid] -= int(o.get("revenue", 0))
+				_player_running_cash[oid] -= _get_order_income_amount(o)
+		for pid_val in _post_income_by_player.keys():
+			if not (pid_val is int):
+				continue
+			var pid := int(pid_val)
+			if pid < 0 or not _player_running_cash.has(pid):
+				continue
+			_player_running_cash[pid] -= int(_post_income_by_player.get(pid, 0))
 	_apply_cash_overrides()
 
 	_ensure_skin()
@@ -109,8 +133,12 @@ func start(settlement_data: Dictionary, state: GameState, scene: Node, map_canva
 	_stop_layout_monitor()
 	_stop_layout_start_wait()
 
-	if _orders.is_empty():
+	if _orders.is_empty() and _post_income_events.is_empty():
 		_finish()
+		return
+	if _orders.is_empty():
+		_preview_current()
+		_started_preview = true
 		return
 	# 等待 MapView auto-fit/zoom 应用完毕（避免 token/highlight 因 cell_size 变化而错位/缩放异常）。
 	_layout_last_cell_size = int(_get_cell_size())
@@ -202,7 +230,7 @@ func skip_all() -> void:
 	_finish()
 
 func advance() -> void:
-	if _state != State.PLAYING or not _previewing:
+	if _state != State.PLAYING or not _previewing or _post_income_playing:
 		return
 	if _current_idx >= _orders.size():
 		_finish()
@@ -225,6 +253,12 @@ func dispose() -> void:
 	_remove_highlight()
 	_house_tokens.clear()
 	_clear_cash_overrides()
+	_remove_post_income_card()
+	_post_income_events.clear()
+	_post_income_by_player.clear()
+	_post_income_started = false
+	_post_income_playing = false
+	_post_income_done = false
 	if is_instance_valid(_anim_layer):
 		_anim_layer.queue_free()
 	_anim_layer = null
@@ -331,7 +365,10 @@ func _update_control_bar() -> void:
 		lbl.text = "晚餐结算 (%d/%d)" % [_current_idx, _orders.size()]
 	var btn: Button = _control_bar.find_child("NextBtn", true, false)
 	if btn != null:
-		if _current_idx >= _orders.size() and not _previewing:
+		if _post_income_playing:
+			btn.text = "播放中…"
+			btn.disabled = true
+		elif _current_idx >= _orders.size() and not _previewing and _post_income_done:
 			btn.text = "确认结算"
 			btn.disabled = false
 		elif _previewing:
@@ -343,7 +380,9 @@ func _update_control_bar() -> void:
 
 func _on_next_pressed() -> void:
 	if _current_idx >= _orders.size() and not _previewing:
-		skip_all()
+		if _post_income_done:
+			skip_all()
+		return
 	else:
 		advance()
 
@@ -357,6 +396,9 @@ func _preview_current() -> void:
 		_current_idx += 1
 
 	if _current_idx >= _orders.size():
+		if not _post_income_started:
+			_post_income_started = true
+			_play_post_house_income_sequence()
 		_update_control_bar()
 		return
 
@@ -1354,7 +1396,7 @@ func _place_persistent_x_mark(order: Dictionary) -> void:
 
 func _play_sale_animation(sale: Dictionary) -> void:
 	var owner_id := int(sale.get("winner_owner", -1))
-	var revenue := int(sale.get("revenue", 0))
+	var revenue := _get_order_income_amount(sale)
 	var house_id := str(sale.get("house_id", ""))
 	_current_house_id = house_id
 	_house_tokens.erase(house_id)
@@ -1393,6 +1435,75 @@ func _play_sale_animation(sale: Dictionary) -> void:
 		_active_tweens.erase(tween)
 		_clear_route_highlight()
 		_preview_current()
+	)
+
+func _play_post_house_income_sequence() -> void:
+	if _post_income_done or _post_income_playing:
+		return
+	if _post_income_events.is_empty():
+		_post_income_done = true
+		_post_income_playing = false
+		_update_control_bar()
+		return
+	_post_income_playing = true
+	_update_control_bar()
+	_play_post_house_income_event(0)
+
+func _play_post_house_income_event(index: int) -> void:
+	if _state != State.PLAYING:
+		_post_income_playing = false
+		_post_income_done = true
+		_remove_post_income_card()
+		_update_control_bar()
+		return
+	if index < 0 or index >= _post_income_events.size():
+		_post_income_playing = false
+		_post_income_done = true
+		_remove_post_income_card()
+		_update_control_bar()
+		return
+	if not is_instance_valid(_anim_layer):
+		_post_income_playing = false
+		_post_income_done = true
+		_remove_post_income_card()
+		_update_control_bar()
+		return
+
+	var event: Dictionary = _post_income_events[index]
+	var player_id := int(event.get("player_id", -1))
+	var amount := int(event.get("amount", 0))
+	if player_id < 0 or amount <= 0:
+		_play_post_house_income_event(index + 1)
+		return
+
+	_create_post_income_employee_card(event)
+
+	var dur_fly := 0.80 / _speed
+	var coin_count := _compute_coin_count(amount)
+	var coin_delay_step := 0.0
+	if coin_count > 1:
+		var start_spread := dur_fly * 0.55
+		coin_delay_step = start_spread / float(coin_count - 1)
+		coin_delay_step = clampf(coin_delay_step, 0.04 / _speed, 0.14 / _speed)
+	var dur_fly_total := dur_fly + float(maxi(0, coin_count - 1)) * coin_delay_step
+
+	var bank_pos := _global_to_layer(_get_bank_label_global_center())
+	var target_pos := _global_to_layer(_get_player_tab_global_center(player_id))
+
+	var tween := _anim_layer.create_tween()
+	_active_tweens.append(tween)
+	tween.tween_interval(0.06 / _speed)
+	tween.tween_callback(func():
+		_spawn_flying_coins(bank_pos, target_pos, amount, player_id, dur_fly, coin_delay_step, coin_count)
+	)
+	tween.tween_interval(dur_fly_total + POST_INCOME_CARD_HOLD_SEC / _speed)
+	tween.tween_callback(func():
+		_remove_post_income_card()
+	)
+	tween.tween_interval(0.06 / _speed)
+	tween.finished.connect(func():
+		_active_tweens.erase(tween)
+		_play_post_house_income_event(index + 1)
 	)
 
 func _float_away_preview_tokens(dur: float) -> void:
@@ -1582,6 +1693,9 @@ func _finish() -> void:
 	_stop_layout_monitor()
 	_stop_layout_start_wait()
 	_clear_cash_overrides()
+	_remove_post_income_card()
+	_post_income_playing = false
+	_post_income_done = true
 	_remove_highlight()
 	if is_instance_valid(_control_bar):
 		_control_bar.queue_free()
@@ -1591,6 +1705,7 @@ func _finish() -> void:
 	settlement_completed.emit()
 
 func _clear_anim_layer() -> void:
+	_post_income_card = null
 	if is_instance_valid(_anim_layer):
 		for child in _anim_layer.get_children():
 			child.queue_free()
@@ -1609,6 +1724,8 @@ func _kill_all_tweens() -> void:
 		if is_instance_valid(tween):
 			tween.kill()
 	_active_tweens.clear()
+	_remove_post_income_card()
+	_post_income_playing = false
 	_clear_anim_layer()
 	_clear_map_anim_layer()
 
@@ -1716,6 +1833,241 @@ func _get_revenue_target_global_center(sale: Dictionary, owner_id: int) -> Vecto
 					return cash.global_position + cash.size * 0.5
 				return card.global_position + card.size * 0.5
 	return _get_player_tab_global_center(owner_id)
+
+func _build_post_house_income_events(settlement_data: Dictionary) -> Array[Dictionary]:
+	var events: Array[Dictionary] = []
+	if _game_state == null:
+		return events
+	if not (_game_state.players is Array):
+		return events
+
+	var tips_by_player := _read_income_by_player(settlement_data, "income_tips")
+	var cfo_by_player := _read_income_by_player(settlement_data, "income_cfo_bonus")
+	var order := _get_income_animation_player_order()
+
+	for player_id in order:
+		if player_id < 0 or player_id >= _game_state.players.size():
+			continue
+		var tips_amount := int(tips_by_player.get(player_id, 0))
+		if tips_amount > 0:
+			events.append({
+				"player_id": player_id,
+				"employee_id": "waitress",
+				"kind": "tips",
+				"amount": tips_amount,
+				"show_card": _player_has_active_employee(player_id, "waitress"),
+			})
+
+		var cfo_amount := int(cfo_by_player.get(player_id, 0))
+		if cfo_amount > 0:
+			events.append({
+				"player_id": player_id,
+				"employee_id": "cfo",
+				"kind": "cfo",
+				"amount": cfo_amount,
+				"show_card": _player_has_active_employee(player_id, "cfo"),
+			})
+
+	return events
+
+func _read_income_by_player(settlement_data: Dictionary, key: String) -> Dictionary:
+	var out: Dictionary = {}
+	if key.is_empty():
+		return out
+	var val = settlement_data.get(key, null)
+	if val is Array:
+		var arr: Array = val
+		for i in range(arr.size()):
+			out[i] = int(arr[i])
+		return out
+	if val is Dictionary:
+		var d: Dictionary = val
+		for k in d.keys():
+			var pid := int(k)
+			if pid < 0:
+				continue
+			out[pid] = int(d.get(k, 0))
+	return out
+
+func _sum_post_income_by_player(events: Array[Dictionary]) -> Dictionary:
+	var out: Dictionary = {}
+	for event in events:
+		var player_id := int(event.get("player_id", -1))
+		var amount := int(event.get("amount", 0))
+		if player_id < 0 or amount <= 0:
+			continue
+		out[player_id] = int(out.get(player_id, 0)) + amount
+	return out
+
+func _sum_income_dict(income: Dictionary) -> int:
+	var total := 0
+	for k in income.keys():
+		total += int(income.get(k, 0))
+	return total
+
+func _get_order_income_amount(order: Dictionary) -> int:
+	var revenue := int(order.get("revenue", 0))
+	var house_bonus := int(order.get("house_bonus", 0))
+	return revenue + house_bonus
+
+func _get_income_animation_player_order() -> Array[int]:
+	var out: Array[int] = []
+	if _game_state == null or not (_game_state.players is Array):
+		return out
+	var seen: Dictionary = {}
+	if _game_state.turn_order is Array:
+		for pid_val in _game_state.turn_order:
+			var pid := int(pid_val)
+			if pid < 0 or pid >= _game_state.players.size():
+				continue
+			if seen.has(pid):
+				continue
+			seen[pid] = true
+			out.append(pid)
+	for i in range(_game_state.players.size()):
+		if seen.has(i):
+			continue
+		out.append(i)
+	return out
+
+func _player_has_active_employee(player_id: int, employee_id: String) -> bool:
+	if _game_state == null:
+		return false
+	if employee_id.is_empty():
+		return false
+	if not (_game_state.players is Array):
+		return false
+	if player_id < 0 or player_id >= _game_state.players.size():
+		return false
+	var player_val = _game_state.players[player_id]
+	if not (player_val is Dictionary):
+		return false
+	var player: Dictionary = player_val
+	var employees_val = player.get("employees", null)
+	if not (employees_val is Array):
+		return false
+	for e in employees_val:
+		if str(e).strip_edges() == employee_id:
+			return true
+	return false
+
+func _employee_card_name(employee_id: String) -> String:
+	match employee_id:
+		"waitress":
+			return "女服务员"
+		"cfo":
+			return "CFO"
+		_:
+			return employee_id
+
+func _create_post_income_employee_card(event: Dictionary) -> void:
+	_remove_post_income_card()
+	if not is_instance_valid(_anim_layer):
+		return
+	if not bool(event.get("show_card", false)):
+		return
+
+	var employee_id := str(event.get("employee_id", "")).strip_edges()
+	if employee_id.is_empty():
+		return
+	var player_id := int(event.get("player_id", -1))
+
+	var holder := PanelContainer.new()
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.08, 0.07, 0.06, 0.90)
+	panel_style.set_corner_radius_all(8)
+	panel_style.set_content_margin_all(6)
+	panel_style.border_width_left = 1
+	panel_style.border_width_top = 1
+	panel_style.border_width_right = 1
+	panel_style.border_width_bottom = 1
+	panel_style.border_color = Color(0.95, 0.86, 0.62, 0.85)
+	holder.add_theme_stylebox_override("panel", panel_style)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	holder.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "%s · %s" % [_get_player_name(player_id), _employee_card_name(employee_id)]
+	title.add_theme_font_size_override("font_size", 12)
+	title.add_theme_color_override("font_color", Color(1, 0.95, 0.82, 1))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+
+	var card := EmployeeCardClass.new()
+	card.variant = EmployeeCardClass.CardVariant.COMPACT
+	card.draggable = false
+	card.show_salary_indicator = false
+	card.multiline_name = false
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.set_display_scale(POST_INCOME_CARD_SCALE)
+	card.setup({
+		"id": employee_id,
+		"name": _employee_card_name(employee_id),
+		"role": "special",
+		"description": "",
+		"salary": false,
+		"range": {"type": "none", "value": 0},
+		"train_to": [],
+	})
+	vbox.add_child(card)
+
+	_anim_layer.add_child(holder)
+	var card_size := holder.get_combined_minimum_size()
+	if card_size == Vector2.ZERO:
+		card_size = Vector2(126, 106)
+	holder.custom_minimum_size = card_size
+	holder.size = card_size
+	holder.position = _global_to_layer(_get_post_income_card_global_pos(card_size))
+	holder.modulate.a = 0.0
+	var fade := holder.create_tween()
+	_active_tweens.append(fade)
+	fade.tween_property(holder, "modulate:a", 1.0, 0.12 / _speed)
+	fade.tween_callback(func():
+		_active_tweens.erase(fade)
+	)
+	_post_income_card = holder
+
+func _get_post_income_card_global_pos(card_size: Vector2) -> Vector2:
+	var base := Vector2(16, 56)
+	var turn_order = _resolve_turn_order_display_control()
+	if is_instance_valid(turn_order):
+		var rect := Rect2(turn_order.global_position, turn_order.size)
+		base = Vector2(
+			rect.position.x - card_size.x - 14.0,
+			rect.position.y + maxf(0.0, (rect.size.y - card_size.y) * 0.5)
+		)
+	elif _map_canvas != null and is_instance_valid(_map_canvas) and _map_canvas is Control:
+		base = (_map_canvas as Control).global_position + Vector2(12, 12)
+	base.x = maxf(8.0, base.x)
+	base.y = maxf(8.0, base.y)
+	return base
+
+func _resolve_turn_order_display_control() -> Control:
+	if _scene == null or not is_instance_valid(_scene):
+		return null
+	var direct = _scene.get("turn_order_display")
+	if direct is Control and is_instance_valid(direct):
+		return direct
+	if _scene.has_node("UIRoot/MainContent/CenterSplit/GameArea/TurnOrderOverlay/TurnOrderDisplay"):
+		var node := _scene.get_node("UIRoot/MainContent/CenterSplit/GameArea/TurnOrderOverlay/TurnOrderDisplay")
+		if node is Control and is_instance_valid(node):
+			return node
+	return null
+
+func _get_player_name(player_id: int) -> String:
+	if player_id < 0:
+		return "玩家?"
+	if Globals != null and Globals.has_method("get_player_name"):
+		return str(Globals.get_player_name(player_id))
+	return "玩家 %d" % (player_id + 1)
+
+func _remove_post_income_card() -> void:
+	if is_instance_valid(_post_income_card):
+		_post_income_card.queue_free()
+	_post_income_card = null
 
 func _apply_cash_overrides() -> void:
 	if _player_panel != null and is_instance_valid(_player_panel):
