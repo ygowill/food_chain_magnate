@@ -15,6 +15,25 @@ const EFFECT_SEG_DINNERTIME_TIPS := ":dinnertime:tips:"
 const EFFECT_SEG_DINNERTIME_INCOME_BONUS := ":dinnertime:income_bonus:"
 const EFFECT_SEG_DINNERTIME_DISTANCE_DELTA := ":dinnertime:distance_delta:"
 const EFFECT_SEG_DINNERTIME_SALE_HOUSE_BONUS := ":dinnertime:sale_house_bonus:"
+const KIND_CONFIRM_DINNERTIME := "confirm_dinnertime"
+
+static func _is_online_mode() -> bool:
+	if NetContext == null:
+		return false
+	return NetContext.mode == NetContext.Mode.ONLINE_CLIENT or NetContext.mode == NetContext.Mode.ONLINE_SERVER
+
+static func _build_dinnertime_confirm_pending(state: GameState) -> Array:
+	if state == null or not (state.players is Array):
+		return []
+	if not _is_online_mode():
+		return [KIND_CONFIRM_DINNERTIME]
+	var pending: Array[Dictionary] = []
+	for pid in range(state.players.size()):
+		pending.append({
+			"kind": KIND_CONFIRM_DINNERTIME,
+			"player_id": pid,
+		})
+	return pending
 
 static func _validate_apply_inputs(state: GameState, phase_manager) -> Result:
 	var map_read := MapStateAccessClass.require_map(state, "DinnertimeSettlement")
@@ -218,8 +237,10 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 	# 注意：`godot --headless` 运行在 editor binary 下时，OS.has_feature("headless") 仍可能为 false；
 	# 使用 DisplayServer.get_name() 更可靠。
 	if DisplayServer.get_name() != "headless":
-		RoundStatePendingPhaseActionsClass.set_phase_pending_players(
-			state.round_state, DefsClass.PHASE_DINNERTIME, ["confirm_dinnertime"], "晚餐结算"
+		var set_pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
+			state.round_state, DefsClass.PHASE_DINNERTIME, _build_dinnertime_confirm_pending(state), "晚餐结算"
 		)
+		if not set_pending.ok:
+			return set_pending
 
 	return Result.success().with_warnings(warnings)

@@ -25,6 +25,7 @@ const TOAST_DESIRED_WIDTH := 520.0
 const TOAST_MIN_MARGIN := 12.0
 const TOAST_OFFSET_TOP := 16.0
 const TOAST_HEIGHT := 62.0
+const KIND_CONFIRM_DINNERTIME := "confirm_dinnertime"
 
 var _scene = null
 var _map_view = null
@@ -59,7 +60,6 @@ var _toast_tween: Tween = null
 var _eventbus_source: String = ""
 var _execute_command: Callable = Callable()
 var _dinnertime_anim_controller = null  # DinnertimeAnimationController
-var _dinnertime_phase_player_id: int = -1
 var _ui_sync_controller = null  # GameUiSyncController (for bank_label)
 var _player_panel = null  # PlayerPanel
 
@@ -598,9 +598,8 @@ func sync_dinnertime_overlay(state: GameState, is_live: bool = true) -> void:
 		_disable_dinnertime_overlay()
 		return
 
-	# 检查是否还有 pending（已确认则不再显示）
-	# 仅当 pending 列表为 ["confirm_dinnertime"] 时展示结算弹层，避免与其它模块注入的 Dinnertime pending 冲突。
-	if not _is_confirm_dinnertime_pending(state):
+	# 检查是否还有“本地玩家待确认”的晚餐结算 pending（避免与其它模块注入的 Dinnertime pending 冲突）
+	if not _is_confirm_dinnertime_pending_for_local(state):
 		_disable_dinnertime_overlay()
 		return
 
@@ -632,20 +631,79 @@ func sync_demand_indicator(state: GameState) -> void:
 	demand_indicator = _demand_indicator_controller.demand_indicator
 
 func _is_confirm_dinnertime_pending(state: GameState) -> bool:
+	var list := _read_dinnertime_pending_list(state)
+	if list.is_empty():
+		return false
+	if _is_legacy_confirm_dinnertime_pending(list):
+		return true
+	if not _is_only_player_confirm_dinnertime_pending(list):
+		return false
+	return true
+
+func _is_confirm_dinnertime_pending_for_local(state: GameState) -> bool:
+	var list := _read_dinnertime_pending_list(state)
+	if list.is_empty():
+		return false
+	if _is_legacy_confirm_dinnertime_pending(list):
+		return true
+	if not _is_only_player_confirm_dinnertime_pending(list):
+		return false
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		var local_pid := int(NetContext.local_player_id)
+		if local_pid < 0:
+			return false
+		return _list_has_player_confirm_dinnertime_pending(list, local_pid)
+	return true
+
+func _read_dinnertime_pending_list(state: GameState) -> Array:
 	if state == null:
-		return false
+		return []
 	if not (state.round_state is Dictionary):
-		return false
+		return []
 	var rs: Dictionary = state.round_state
 	var ppa_val = rs.get("pending_phase_actions", null)
 	if not (ppa_val is Dictionary):
-		return false
+		return []
 	var ppa: Dictionary = ppa_val
 	var list_val = ppa.get(DefsClass.PHASE_DINNERTIME, null)
 	if not (list_val is Array):
+		return []
+	return Array(list_val)
+
+func _is_legacy_confirm_dinnertime_pending(list: Array) -> bool:
+	return list.size() == 1 and (list[0] is String) and str(list[0]) == KIND_CONFIRM_DINNERTIME
+
+func _is_only_player_confirm_dinnertime_pending(list: Array) -> bool:
+	if list.is_empty():
 		return false
-	var list: Array = list_val
-	return list.size() == 1 and (list[0] is String) and str(list[0]) == "confirm_dinnertime"
+	for item_val in list:
+		if not (item_val is Dictionary):
+			return false
+		var item: Dictionary = item_val
+		if str(item.get("kind", "")).strip_edges() != KIND_CONFIRM_DINNERTIME:
+			return false
+		var pid_val = item.get("player_id", null)
+		if not (pid_val is int):
+			if not (pid_val is float and float(pid_val) == floor(float(pid_val))):
+				return false
+	return true
+
+func _list_has_player_confirm_dinnertime_pending(list: Array, player_id: int) -> bool:
+	for item_val in list:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if str(item.get("kind", "")).strip_edges() != KIND_CONFIRM_DINNERTIME:
+			continue
+		var pid_val = item.get("player_id", null)
+		var pid := -1
+		if pid_val is int:
+			pid = int(pid_val)
+		elif pid_val is float and float(pid_val) == floor(float(pid_val)):
+			pid = int(pid_val)
+		if pid == player_id:
+			return true
+	return false
 
 func _get_dinnertime_report(state: GameState) -> Dictionary:
 	if not (state.round_state is Dictionary):
@@ -658,9 +716,6 @@ func _get_dinnertime_report(state: GameState) -> Dictionary:
 func _start_dinnertime_animation(dt_data: Dictionary, state: GameState) -> void:
 	if _scene == null:
 		return
-	_dinnertime_phase_player_id = -1
-	if state != null:
-		_dinnertime_phase_player_id = int(state.get_current_player_id())
 
 	hide_all_overlays()
 	if _demand_indicator_controller != null:
@@ -683,15 +738,10 @@ func _on_dinnertime_anim_completed() -> void:
 		var confirm_cmd = CommandClass.create_system("confirm_dinnertime")
 		if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
 			var local_pid := int(NetContext.local_player_id)
-			if local_pid >= 0:
-				if _dinnertime_phase_player_id < 0 or local_pid == _dinnertime_phase_player_id:
-					confirm_cmd = CommandClass.create("confirm_dinnertime", local_pid, {})
-				else:
-					_disable_dinnertime_overlay()
-					return
-			else:
+			if local_pid < 0:
 				_disable_dinnertime_overlay()
 				return
+			confirm_cmd = CommandClass.create("confirm_dinnertime", local_pid, {})
 		var exec_r_val = _execute_command.call(confirm_cmd)
 		if exec_r_val is Result and not exec_r_val.ok:
 			GameLog.warn("Game", "确认晚餐结算失败: %s" % str(exec_r_val.error))
@@ -701,7 +751,6 @@ func _disable_dinnertime_overlay() -> void:
 	if _dinnertime_anim_controller != null:
 		_dinnertime_anim_controller.dispose()
 	_dinnertime_anim_controller = null
-	_dinnertime_phase_player_id = -1
 	dinner_time_overlay = null
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_skip_bank_sync"):
 		_ui_sync_controller.set_skip_bank_sync(false)

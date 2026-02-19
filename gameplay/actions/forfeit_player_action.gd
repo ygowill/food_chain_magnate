@@ -228,7 +228,20 @@ static func _remove_player_from_pending_phase_actions(state: GameState, player_i
 		if not (arr_val is Array):
 			continue
 		var arr: Array = arr_val
-		arr.erase(player_id)
-		ppa[phase_name] = arr
+		var filtered: Array = []
+		for item_val in arr:
+			if item_val is int and int(item_val) == player_id:
+				continue
+			if item_val is float and float(item_val) == floor(float(item_val)) and int(item_val) == player_id:
+				continue
+			if item_val is Dictionary:
+				var item: Dictionary = item_val
+				var pid_val = item.get("player_id", null)
+				if pid_val is int and int(pid_val) == player_id:
+					continue
+				if pid_val is float and float(pid_val) == floor(float(pid_val)) and int(pid_val) == player_id:
+					continue
+			filtered.append(item_val)
+		ppa[phase_name] = filtered
 	rs["pending_phase_actions"] = ppa
 	state.round_state = rs
