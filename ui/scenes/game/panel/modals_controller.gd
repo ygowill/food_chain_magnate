@@ -8,7 +8,7 @@ const ReserveCardSelectionModalScene = preload("res://ui/components/modal_panel/
 
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
-const PhaseActionUiRegistryClass = preload("res://ui/scenes/game/phase_action_ui_registry.gd")
+const PhaseActionUiRegistryClass = preload("res://ui/scenes/game/panel/phase_action_ui_registry.gd")
 
 var _scene = null
 var _execute_command: Callable = Callable()

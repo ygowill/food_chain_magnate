@@ -4,7 +4,7 @@ extends RefCounted
 
 const ProcureControllerClass = preload("res://ui/scenes/game/panel/working/procurement/controller.gd")
 const MapControllerClass = preload("res://ui/scenes/game/map_interaction/controller.gd")
-const InputControllerClass = preload("res://ui/scenes/game/game_input_controller.gd")
+const InputControllerClass = preload("res://ui/scenes/game/controllers/input_controller.gd")
 const GameStateClass = preload("res://core/state/game_state.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 

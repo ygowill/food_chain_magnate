@@ -1,7 +1,7 @@
 class_name PhaseActionUiRegistryCleanupTest
 extends RefCounted
 
-const PhaseActionUiRegistryClass = preload("res://ui/scenes/game/phase_action_ui_registry.gd")
+const PhaseActionUiRegistryClass = preload("res://ui/scenes/game/panel/phase_action_ui_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 class StubController:

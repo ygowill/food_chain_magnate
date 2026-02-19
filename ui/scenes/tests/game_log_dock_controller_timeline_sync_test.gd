@@ -2,7 +2,7 @@
 class_name GameLogDockControllerTimelineSyncTest
 extends RefCounted
 
-const GameLogDockControllerClass = preload("res://ui/scenes/game/game_log_dock_controller.gd")
+const GameLogDockControllerClass = preload("res://ui/scenes/game/controllers/log_dock_controller.gd")
 
 class _TimelineSpy:
 	extends RefCounted

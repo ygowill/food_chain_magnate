@@ -52,10 +52,10 @@ extends Control
 @onready var company_structure: Control = $UIRoot/BottomPanel/CompanyStructure
 @onready var bottom_panel: Control = $UIRoot/BottomPanel
 
-const GameControllersBuilderClass = preload("res://ui/scenes/game/game_controllers_builder.gd")
-const GameOnlineResyncControllerClass = preload("res://ui/scenes/game/game_online_resync_controller.gd")
-const GameUiStyleApplierClass = preload("res://ui/scenes/game/game_ui_style_applier.gd")
-const GameRuntimeDisposerClass = preload("res://ui/scenes/game/game_runtime_disposer.gd")
+const GameControllersBuilderClass = preload("res://ui/scenes/game/controllers/builder.gd")
+const GameOnlineResyncControllerClass = preload("res://ui/scenes/game/controllers/online_resync_controller.gd")
+const GameUiStyleApplierClass = preload("res://ui/scenes/game/controllers/ui_style_applier.gd")
+const GameRuntimeDisposerClass = preload("res://ui/scenes/game/controllers/runtime_disposer.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
