@@ -7,14 +7,18 @@ signal settlement_completed()
 
 const OverlayUtilsClass = preload("res://ui/scenes/game/game_overlay_utils.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
-const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
-const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
-const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const DinnerTimeOverlayClass = preload("res://ui/components/dinner_time/dinner_time_overlay.gd")
-const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
-const TextureUtilsClass = preload("res://ui/scenes/game/map_canvas_drawer_texture_utils.gd")
+const DinnertimeAnimationIncomeUtilsClass = preload("res://ui/scenes/game/dinnertime_animation_income_utils.gd")
+const DinnertimeAnimationPostIncomeCardClass = preload("res://ui/scenes/game/dinnertime_animation_post_income_card.gd")
+const DinnertimeAnimationMapHelpersClass = preload("res://ui/scenes/game/dinnertime_animation_map_helpers.gd")
+const DinnertimeAnimationRouteHelpersClass = preload("res://ui/scenes/game/dinnertime_animation_route_helpers.gd")
+const DinnertimeAnimationMoneyHelpersClass = preload("res://ui/scenes/game/dinnertime_animation_money_helpers.gd")
+const DinnertimeAnimationControlBarHelpersClass = preload("res://ui/scenes/game/dinnertime_animation_control_bar_helpers.gd")
+const DinnertimeAnimationPositionHelpersClass = preload("res://ui/scenes/game/dinnertime_animation_position_helpers.gd")
+const DinnertimeAnimationLayoutHelpersClass = preload("res://ui/scenes/game/dinnertime_animation_layout_helpers.gd")
+const DinnertimeAnimationTimelineHelpersClass = preload("res://ui/scenes/game/dinnertime_animation_timeline_helpers.gd")
 
 const COIN_TEXTURE_PATH = "res://assets/images/coin_gold.svg"
 const COIN_BASE_COUNT := 1
@@ -55,13 +59,7 @@ var _speed: float = 1.0
 var _running_bank_value: int = 0
 var _player_running_cash: Dictionary = {}  # player_id -> int
 var _started_preview: bool = false
-var _layout_last_cell_size: int = -1
-var _layout_last_origin: Vector2i = Vector2i(2147483647, 2147483647)
-var _layout_stable_ticks: int = 0
-var _layout_wait_ticks: int = 0
 var _layout_monitor_running: bool = false
-var _layout_monitor_cell_size: int = -1
-var _layout_monitor_origin: Vector2i = Vector2i(2147483647, 2147483647)
 var _layout_start_wait_running: bool = false
 var _dinnertime_distance_script = null
 var _post_income_events: Array[Dictionary] = []
@@ -85,8 +83,8 @@ func start(settlement_data: Dictionary, state: GameState, scene: Node, map_canva
 
 	_orders = DinnerTimeOverlayClass.build_orders_from_settlement(settlement_data)
 	_current_idx = 0
-	_post_income_events = _build_post_house_income_events(settlement_data)
-	_post_income_by_player = _sum_post_income_by_player(_post_income_events)
+	_post_income_events = DinnertimeAnimationIncomeUtilsClass.build_post_house_income_events(settlement_data, _game_state)
+	_post_income_by_player = DinnertimeAnimationIncomeUtilsClass.sum_post_income_by_player(_post_income_events)
 	_post_income_started = false
 	_post_income_playing = false
 	_post_income_done = _post_income_events.is_empty()
@@ -96,8 +94,8 @@ func start(settlement_data: Dictionary, state: GameState, scene: Node, map_canva
 	for o in _orders:
 		if bool(o.get("is_skipped", false)):
 			continue
-		total_revenue += _get_order_income_amount(o)
-	var total_post_income := _sum_income_dict(_post_income_by_player)
+		total_revenue += DinnertimeAnimationIncomeUtilsClass.get_order_income_amount(o)
+	var total_post_income := DinnertimeAnimationIncomeUtilsClass.sum_income_dict(_post_income_by_player)
 	_running_bank_value = int(state.bank.get("total", 0)) + total_revenue + total_post_income
 	if is_instance_valid(_bank_label):
 		_bank_label.text = "$%d" % _running_bank_value
@@ -113,7 +111,7 @@ func start(settlement_data: Dictionary, state: GameState, scene: Node, map_canva
 				continue
 			var oid := int(o.get("winner_owner", -1))
 			if oid >= 0 and _player_running_cash.has(oid):
-				_player_running_cash[oid] -= _get_order_income_amount(o)
+				_player_running_cash[oid] -= DinnertimeAnimationIncomeUtilsClass.get_order_income_amount(o)
 		for pid_val in _post_income_by_player.keys():
 			if not (pid_val is int):
 				continue
@@ -141,89 +139,37 @@ func start(settlement_data: Dictionary, state: GameState, scene: Node, map_canva
 		_started_preview = true
 		return
 	# 等待 MapView auto-fit/zoom 应用完毕（避免 token/highlight 因 cell_size 变化而错位/缩放异常）。
-	_layout_last_cell_size = int(_get_cell_size())
-	_layout_last_origin = Vector2i.ZERO
-	if _map_canvas != null and is_instance_valid(_map_canvas) and _map_canvas.has_method("get_world_origin"):
-		var ov = _map_canvas.get_world_origin()
-		if ov is Vector2i:
-			_layout_last_origin = ov
-	_layout_stable_ticks = 0
-	_layout_wait_ticks = 0
 	_start_when_layout_stable()
 
 func _start_when_layout_stable() -> void:
 	if _layout_start_wait_running:
 		return
 	_layout_start_wait_running = true
-	while true:
-		if _state != State.PLAYING or _started_preview:
-			_layout_start_wait_running = false
-			return
-		if _scene == null or not is_instance_valid(_scene) or _map_canvas == null or not is_instance_valid(_map_canvas):
-			_layout_start_wait_running = false
-			return
-
-		var cs := int(_get_cell_size())
-		var origin := _get_world_origin()
-
-		if cs != _layout_last_cell_size or origin != _layout_last_origin:
-			_layout_last_cell_size = cs
-			_layout_last_origin = origin
-			_layout_stable_ticks = 0
-		else:
-			_layout_stable_ticks += 1
-
-		_layout_wait_ticks += 1
-		var index_ready := _is_structure_index_ready_for_orders()
-		if (_layout_stable_ticks >= 4 and index_ready) or _layout_wait_ticks >= 40:
+	await DinnertimeAnimationLayoutHelpersClass.wait_until_layout_stable(
+		_scene,
+		_map_canvas,
+		func() -> bool:
+			return _state == State.PLAYING and _layout_start_wait_running,
+		func() -> bool:
+			return _started_preview,
+		func() -> float:
+			return _get_cell_size(),
+		func() -> Vector2i:
+			return _get_world_origin(),
+		func() -> bool:
+			return _is_structure_index_ready_for_orders(),
+		func() -> void:
 			_spawn_persistent_demand_tokens()
 			_preview_current()
 			_started_preview = true
-			_start_layout_monitor()
-			_layout_start_wait_running = false
-			return
-
-		var tree := _scene.get_tree()
-		if tree == null:
-			_layout_start_wait_running = false
-			return
-		await tree.process_frame
+			_start_layout_monitor(),
+		4,
+		40
+	)
+	_layout_start_wait_running = false
 
 func _is_structure_index_ready_for_orders() -> bool:
-	if _map_canvas == null or not is_instance_valid(_map_canvas):
-		return false
-	var by_anchor_val = _map_canvas.get("_structures_by_anchor")
-	if not (by_anchor_val is Dictionary):
-		return false
-	var by_anchor: Dictionary = by_anchor_val
-	if by_anchor.is_empty():
-		return false
-
-	var required: Dictionary = {}
-	for order in _orders:
-		if bool(order.get("is_skipped", false)):
-			continue
-		var hid := str(order.get("house_id", "")).strip_edges()
-		if not hid.is_empty():
-			required[hid] = true
-	if required.is_empty():
-		return true
-
-	var present: Dictionary = {}
-	for k in by_anchor.keys():
-		var info_val = by_anchor.get(k, null)
-		if not (info_val is Dictionary):
-			continue
-		var info: Dictionary = info_val
-		var hid2 := str(info.get("house_id", "")).strip_edges()
-		if not hid2.is_empty():
-			present[hid2] = true
-
-	for hid3 in required.keys():
-		if not present.has(hid3):
-			return false
-
-	return true
+	return DinnertimeAnimationLayoutHelpersClass.is_structure_index_ready_for_orders(_map_canvas, _orders)
 
 func skip_all() -> void:
 	_kill_all_tweens()
@@ -303,80 +249,24 @@ func _create_map_anim_layer() -> void:
 func _create_control_bar() -> void:
 	if _scene == null:
 		return
-	_control_bar = _build_control_bar()
+	_control_bar = DinnertimeAnimationControlBarHelpersClass.build_control_bar(
+		func(): _on_next_pressed(),
+		func(): skip_all()
+	)
 	_control_bar.z_as_relative = false
 	_control_bar.z_index = 1150
 	_scene.add_child(_control_bar)
 	_update_control_bar()
 
-func _build_control_bar() -> PanelContainer:
-	var bar := PanelContainer.new()
-	bar.name = "DinnertimeControlBar"
-	bar.anchor_left = 0.5
-	bar.anchor_right = 0.5
-	bar.anchor_top = 1.0
-	bar.anchor_bottom = 1.0
-	bar.offset_left = -200
-	bar.offset_right = 200
-	bar.offset_top = -56
-	bar.offset_bottom = -8
-
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.12, 0.10, 0.08, 0.88)
-	style.set_corner_radius_all(10)
-	style.set_content_margin_all(8)
-	bar.add_theme_stylebox_override("panel", style)
-
-	var hbox := HBoxContainer.new()
-	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	hbox.add_theme_constant_override("separation", 12)
-	bar.add_child(hbox)
-
-	var progress := Label.new()
-	progress.name = "ProgressLabel"
-	progress.add_theme_font_size_override("font_size", 14)
-	progress.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7, 1))
-	progress.text = "晚餐结算"
-	hbox.add_child(progress)
-
-	var next_btn := Button.new()
-	next_btn.name = "NextBtn"
-	next_btn.text = "下一笔"
-	next_btn.custom_minimum_size = Vector2(80, 32)
-	UiStylesClass.apply_button_primary(next_btn)
-	next_btn.pressed.connect(_on_next_pressed)
-	hbox.add_child(next_btn)
-
-	var skip_btn := Button.new()
-	skip_btn.name = "SkipBtn"
-	skip_btn.text = "跳过全部"
-	skip_btn.custom_minimum_size = Vector2(80, 32)
-	UiStylesClass.apply_button_secondary(skip_btn)
-	skip_btn.pressed.connect(skip_all)
-	hbox.add_child(skip_btn)
-
-	return bar
-
 func _update_control_bar() -> void:
-	if not is_instance_valid(_control_bar):
-		return
-	var lbl: Label = _control_bar.find_child("ProgressLabel", true, false)
-	if lbl != null:
-		lbl.text = "晚餐结算 (%d/%d)" % [_current_idx, _orders.size()]
-	var btn: Button = _control_bar.find_child("NextBtn", true, false)
-	if btn != null:
-		if _post_income_playing:
-			btn.text = "播放中…"
-			btn.disabled = true
-		elif _current_idx >= _orders.size() and not _previewing and _post_income_done:
-			btn.text = "确认结算"
-			btn.disabled = false
-		elif _previewing:
-			btn.text = "下一笔"
-			btn.disabled = false
-		else:
-			btn.text = "播放中…"
-			btn.disabled = true
+	DinnertimeAnimationControlBarHelpersClass.update_control_bar(
+		_control_bar,
+		_current_idx,
+		_orders.size(),
+		_previewing,
+		_post_income_playing,
+		_post_income_done
+	)
 
 func _on_next_pressed() -> void:
 	if _current_idx >= _orders.size() and not _previewing:
@@ -490,45 +380,10 @@ func _get_house_structure_index_info(house_id: String) -> Dictionary:
 	return {}
 
 func _compute_structure_rect_from_index(cell_size: float, info: Dictionary) -> Rect2:
-	var min_pos_val = info.get("min", null)
-	var max_pos_val = info.get("max", null)
-	if not (min_pos_val is Vector2i) or not (max_pos_val is Vector2i):
-		return Rect2()
-	var min_pos: Vector2i = min_pos_val
-	var max_pos: Vector2i = max_pos_val
-	var size_cells := (max_pos - min_pos) + Vector2i.ONE
-	return Rect2(
-		Vector2(float(min_pos.x) * cell_size, float(min_pos.y) * cell_size),
-		Vector2(float(size_cells.x) * cell_size, float(size_cells.y) * cell_size)
-	)
+	return DinnertimeAnimationMapHelpersClass.compute_structure_rect_from_index(cell_size, info)
 
 func _compute_house_rect_from_anchor(cell_size: float, anchor: Vector2i, rotation: int) -> Rect2:
-	if anchor == Vector2i(-1, -1):
-		return Rect2()
-	var origin := Vector2i.ZERO
-	if _map_canvas != null and is_instance_valid(_map_canvas) and _map_canvas.has_method("get_world_origin"):
-		var ov = _map_canvas.get_world_origin()
-		if ov is Vector2i:
-			origin = ov
-
-	var house_mask := [[1, 1], [1, 1]]
-	var house_cells_world: Array[Vector2i] = MapUtilsClass.get_footprint_cells(house_mask, Vector2i.ZERO, anchor, rotation)
-	if house_cells_world.is_empty():
-		return Rect2()
-
-	var hmin := Vector2i(2147483647, 2147483647)
-	var hmax := Vector2i(-2147483648, -2147483648)
-	for wpos in house_cells_world:
-		var vpos: Vector2i = wpos - origin
-		hmin.x = min(hmin.x, vpos.x)
-		hmin.y = min(hmin.y, vpos.y)
-		hmax.x = max(hmax.x, vpos.x)
-		hmax.y = max(hmax.y, vpos.y)
-	var hsize_cells := (hmax - hmin) + Vector2i.ONE
-	return Rect2(
-		Vector2(float(hmin.x) * cell_size, float(hmin.y) * cell_size),
-		Vector2(float(hsize_cells.x) * cell_size, float(hsize_cells.y) * cell_size)
-	)
+	return DinnertimeAnimationMapHelpersClass.compute_house_rect_from_anchor(cell_size, anchor, rotation, _get_world_origin())
 
 func _remove_highlight() -> void:
 	for token in _preview_tokens:
@@ -586,8 +441,6 @@ func _start_layout_monitor() -> void:
 	if _layout_monitor_running:
 		return
 	_layout_monitor_running = true
-	_layout_monitor_cell_size = int(_get_cell_size())
-	_layout_monitor_origin = _get_world_origin()
 	_monitor_layout_during_playback()
 
 func _stop_layout_monitor() -> void:
@@ -597,29 +450,21 @@ func _stop_layout_start_wait() -> void:
 	_layout_start_wait_running = false
 
 func _monitor_layout_during_playback() -> void:
-	while _layout_monitor_running:
-		if _state != State.PLAYING:
-			_layout_monitor_running = false
-			return
-		if _map_canvas == null or not is_instance_valid(_map_canvas):
-			_layout_monitor_running = false
-			return
-
-		var cs := int(_get_cell_size())
-		var origin := _get_world_origin()
-		if cs != _layout_monitor_cell_size or origin != _layout_monitor_origin:
-			_layout_monitor_cell_size = cs
-			_layout_monitor_origin = origin
+	await DinnertimeAnimationLayoutHelpersClass.monitor_layout_during_playback(
+		_scene,
+		_map_canvas,
+		func() -> bool:
+			return _layout_monitor_running,
+		func() -> bool:
+			return _state == State.PLAYING,
+		func() -> float:
+			return _get_cell_size(),
+		func() -> Vector2i:
+			return _get_world_origin(),
+		func() -> void:
 			_on_map_layout_changed()
-
-		if _scene == null or not is_instance_valid(_scene):
-			_layout_monitor_running = false
-			return
-		var tree := _scene.get_tree()
-		if tree == null:
-			_layout_monitor_running = false
-			return
-		await tree.process_frame
+	)
+	_layout_monitor_running = false
 
 func _on_map_layout_changed() -> void:
 	if not is_instance_valid(_map_anim_layer):
@@ -701,322 +546,32 @@ func _compute_house_rects_from_order(order: Dictionary) -> Dictionary:
 	}
 
 func _compute_house_rects_from_map_cells(house_id: String, cell_size: float) -> Dictionary:
-	if house_id.is_empty() or _game_state == null:
-		return {}
-	if not (_game_state.map is Dictionary):
-		return {}
-	if _map_canvas == null or not is_instance_valid(_map_canvas):
-		return {}
-
-	var map: Dictionary = _game_state.map
-	var map_origin := Vector2i.ZERO
-	var origin_val = map.get("map_origin", null)
-	if origin_val is Vector2i:
-		map_origin = origin_val
-
-	var cells_val = map.get("cells", null)
-	if not (cells_val is Array):
-		return {}
-	var cells: Array = cells_val
-
-	var world_origin := Vector2i.ZERO
-	if _map_canvas.has_method("get_world_origin"):
-		var wo = _map_canvas.get_world_origin()
-		if wo is Vector2i:
-			world_origin = wo
-
-	var found_any := false
-	var vmin := Vector2i(2147483647, 2147483647)
-	var vmax := Vector2i(-2147483648, -2147483648)
-	var anchor := Vector2i(-1, -1)
-	var rotation := 0
-	var piece_id := ""
-	var has_garden := false
-
-	for y in range(cells.size()):
-		var row_val = cells[y]
-		if not (row_val is Array):
-			continue
-		var row: Array = row_val
-		for x in range(row.size()):
-			var cell_val = row[x]
-			if not (cell_val is Dictionary):
-				continue
-			var cell: Dictionary = cell_val
-			var s_val = cell.get("structure", null)
-			if not (s_val is Dictionary):
-				continue
-			var structure: Dictionary = s_val
-			if str(structure.get("house_id", "")).strip_edges() != house_id:
-				continue
-
-			found_any = true
-			var world_pos := Vector2i(x, y) - map_origin
-			var view_pos := world_pos - world_origin
-			vmin.x = min(vmin.x, view_pos.x)
-			vmin.y = min(vmin.y, view_pos.y)
-			vmax.x = max(vmax.x, view_pos.x)
-			vmax.y = max(vmax.y, view_pos.y)
-
-			if anchor == Vector2i(-1, -1):
-				var a_val = structure.get("parent_anchor", null)
-				if a_val is Vector2i:
-					anchor = a_val
-				var r_val = structure.get("rotation", null)
-				if r_val is int:
-					rotation = int(r_val)
-				elif r_val is float:
-					var f: float = float(r_val)
-					if f == floor(f):
-						rotation = int(f)
-				piece_id = str(structure.get("piece_id", "")).strip_edges()
-				var hg_val = structure.get("has_garden", null)
-				if hg_val is bool:
-					has_garden = bool(hg_val)
-
-	if not found_any:
-		return {}
-
-	var size_cells := (vmax - vmin) + Vector2i.ONE
-	var structure_rect := Rect2(Vector2(float(vmin.x) * cell_size, float(vmin.y) * cell_size), Vector2(float(size_cells.x) * cell_size, float(size_cells.y) * cell_size))
-	if piece_id == "house_with_garden":
-		has_garden = true
-	elif piece_id == "house":
-		has_garden = false
-
-	var house_rect := Rect2()
-	if anchor != Vector2i(-1, -1):
-		var house_mask := [[1, 1], [1, 1]]
-		var house_cells_world: Array[Vector2i] = MapUtilsClass.get_footprint_cells(house_mask, Vector2i.ZERO, anchor, rotation)
-		if not house_cells_world.is_empty():
-			var hmin := Vector2i(2147483647, 2147483647)
-			var hmax := Vector2i(-2147483648, -2147483648)
-			for wpos in house_cells_world:
-				var vpos: Vector2i = wpos - world_origin
-				hmin.x = min(hmin.x, vpos.x)
-				hmin.y = min(hmin.y, vpos.y)
-				hmax.x = max(hmax.x, vpos.x)
-				hmax.y = max(hmax.y, vpos.y)
-			var hsize_cells := (hmax - hmin) + Vector2i.ONE
-			house_rect = Rect2(
-				Vector2(float(hmin.x) * cell_size, float(hmin.y) * cell_size),
-				Vector2(float(hsize_cells.x) * cell_size, float(hsize_cells.y) * cell_size)
-			)
-
-	if house_rect.size == Vector2.ZERO:
-		house_rect = structure_rect
-
-	return {
-		"house_rect": house_rect,
-		"structure_rect": structure_rect,
-		"has_garden": has_garden,
-	}
+	return DinnertimeAnimationMapHelpersClass.compute_house_rects_from_map_cells(_game_state, _get_world_origin(), house_id, cell_size)
 
 func _create_demand_token_nodes(order: Dictionary, house_id: String, house_rect: Rect2, structure_rect: Rect2, has_garden: bool) -> Array[Control]:
-	var out: Array[Control] = []
-	if not is_instance_valid(_map_anim_layer) or _skin == null:
-		return out
-	var demands_val = order.get("demands", null)
-	if not (demands_val is Dictionary):
-		return out
-	var demands: Dictionary = demands_val
-	if demands.is_empty():
-		return out
-
-	var cell_size := maxf(_get_cell_size(), 1.0)
-
-	var product_ids: Array[String] = []
-	for k in demands.keys():
-		var count := int(demands.get(k, 0))
-		if count <= 0:
-			continue
-		var pid := str(k)
-		if pid == "cola":
-			pid = "soda"
-		for _i in range(count):
-			product_ids.append(pid)
-	if product_ids.is_empty():
-		return out
-	product_ids.sort()
-	var draw_count: int = min(product_ids.size(), 6)
-	var draw_product_ids: Array[String] = product_ids.slice(0, draw_count)
-
-	var demand_key := ",".join(product_ids)
-	var seed := _compute_demand_scatter_seed(house_id)
-	seed = int((seed ^ _hash_string_32(demand_key)) & 0x7FFFFFFF)
-
-	var reserved: Array[Rect2] = []
-	var demand_area_rect := house_rect
-	if has_garden and structure_rect.size != Vector2.ZERO:
-		demand_area_rect = structure_rect
-	if demand_area_rect.size == Vector2.ZERO:
-		demand_area_rect = structure_rect
-
-	var house_id_rect_target := house_rect if house_rect.size != Vector2.ZERO else demand_area_rect
-	reserved.append(_compute_house_id_rect(cell_size, house_id_rect_target))
-
-	var base_icon_size := cell_size * DEMAND_TOKEN_ICON_SCALE
-	var base_min_spacing := maxf(1.0, cell_size * 0.04)
-
-	var slots: Array[Rect2] = []
-	var icon_size := base_icon_size
-	var min_spacing := base_min_spacing
-	var scales := [1.0, 0.86, 0.74, 0.62, 0.50]
-	for scale in scales:
-		icon_size = base_icon_size * float(scale)
-		min_spacing = base_min_spacing * float(scale)
-		var scatter_area_rect := demand_area_rect.grow(-cell_size * 0.05)
-		slots = _build_demand_token_slots(scatter_area_rect, icon_size, min_spacing, reserved)
-		if slots.size() < draw_count:
-			slots = _build_demand_token_slots(demand_area_rect, icon_size, min_spacing, reserved)
-		if slots.size() >= draw_count:
-			break
-	if slots.is_empty():
-		return out
-	var actual_draw_count: int = min(draw_count, slots.size())
-
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed
-	rng.state = int(seed)
-	_shuffle_rect2_array(rng, slots)
-
-	for i in range(actual_draw_count):
-		var pid2: String = str(draw_product_ids[i])
-		if pid2.is_empty():
-			continue
-		var tex: Texture2D = _skin.get_product_icon_texture(pid2)
-		if tex == null:
-			continue
-		var rect := slots[i]
-		var token := Control.new()
-		token.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		token.position = rect.position
-		token.size = rect.size
-		token.custom_minimum_size = rect.size
-		token.pivot_offset = rect.size * 0.5
-		token.modulate = Color(1, 1, 1, 0.95)
-		token.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_map_anim_layer.add_child(token)
-
-		# 与 MapCanvasDrawer._draw_house_demands 保持一致：使用 aspect_fit 后的实际绘制矩形。
-		var fit_rect := TextureUtilsClass.get_texture_aspect_fit_rect(tex, Rect2(Vector2.ZERO, rect.size))
-		if fit_rect.size == Vector2.ZERO:
-			fit_rect = Rect2(Vector2.ZERO, rect.size)
-
-		var icon := TextureRect.new()
-		icon.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		icon.position = fit_rect.position
-		icon.size = fit_rect.size
-		icon.custom_minimum_size = fit_rect.size
-		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon.stretch_mode = TextureRect.STRETCH_SCALE
-		icon.texture = tex
-		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		token.add_child(icon)
-
-		out.append(token)
-	return out
+	var state_seed := int(_game_state.seed) if _game_state != null else 0
+	return DinnertimeAnimationMapHelpersClass.create_demand_token_nodes(
+		_map_anim_layer,
+		_skin,
+		order,
+		house_id,
+		house_rect,
+		structure_rect,
+		has_garden,
+		maxf(_get_cell_size(), 1.0),
+		state_seed
+	)
 
 func _create_restaurant_demand_token_nodes(order: Dictionary, restaurant_rect: Rect2) -> Array[Control]:
-	var out: Array[Control] = []
-	if not is_instance_valid(_map_anim_layer) or _skin == null:
-		return out
-	if restaurant_rect.size == Vector2.ZERO:
-		return out
-	var demands_val = order.get("demands", null)
-	if not (demands_val is Dictionary):
-		return out
-	var demands: Dictionary = demands_val
-	if demands.is_empty():
-		return out
-
-	var cell_size := maxf(_get_cell_size(), 1.0)
-
-	var product_ids: Array[String] = []
-	for k in demands.keys():
-		var count := int(demands.get(k, 0))
-		if count <= 0:
-			continue
-		var pid := str(k)
-		if pid == "cola":
-			pid = "soda"
-		for _i in range(count):
-			product_ids.append(pid)
-	if product_ids.is_empty():
-		return out
-	product_ids.sort()
-	var draw_count: int = min(product_ids.size(), 6)
-	var draw_product_ids: Array[String] = product_ids.slice(0, draw_count)
-
-	var house_id := str(order.get("house_id", ""))
-	var restaurant_id := str(order.get("matched_restaurant", order.get("winner_restaurant_id", ""))).strip_edges()
-	var demand_key := ",".join(product_ids)
-	var seed := _compute_demand_scatter_seed("%s:%s:restaurant" % [house_id, restaurant_id])
-	seed = int((seed ^ _hash_string_32(demand_key)) & 0x7FFFFFFF)
-
-	var reserved: Array[Rect2] = []
-	var base_icon_size := cell_size * DEMAND_TOKEN_ICON_SCALE
-	var base_min_spacing := maxf(1.0, cell_size * 0.04)
-
-	var slots: Array[Rect2] = []
-	var icon_size := base_icon_size
-	var min_spacing := base_min_spacing
-	var scales := [1.0, 0.86, 0.74, 0.62, 0.50]
-	for scale in scales:
-		icon_size = base_icon_size * float(scale)
-		min_spacing = base_min_spacing * float(scale)
-		var scatter_area_rect := restaurant_rect.grow(-cell_size * 0.08)
-		slots = _build_demand_token_slots(scatter_area_rect, icon_size, min_spacing, reserved)
-		if slots.size() < draw_count:
-			slots = _build_demand_token_slots(restaurant_rect, icon_size, min_spacing, reserved)
-		if slots.size() >= draw_count:
-			break
-	if slots.is_empty():
-		return out
-	var actual_draw_count: int = min(draw_count, slots.size())
-
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed
-	rng.state = int(seed)
-	_shuffle_rect2_array(rng, slots)
-
-	for i in range(actual_draw_count):
-		var pid2: String = str(draw_product_ids[i])
-		if pid2.is_empty():
-			continue
-		var tex: Texture2D = _skin.get_product_icon_texture(pid2)
-		if tex == null:
-			continue
-		var rect := slots[i]
-		var token := Control.new()
-		token.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		token.position = rect.position
-		token.size = rect.size
-		token.custom_minimum_size = rect.size
-		token.pivot_offset = rect.size * 0.5
-		token.modulate = Color(1, 1, 1, 0.95)
-		token.visible = false
-		token.set_meta("show_on_float_only", true)
-		token.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_map_anim_layer.add_child(token)
-
-		var fit_rect := TextureUtilsClass.get_texture_aspect_fit_rect(tex, Rect2(Vector2.ZERO, rect.size))
-		if fit_rect.size == Vector2.ZERO:
-			fit_rect = Rect2(Vector2.ZERO, rect.size)
-
-		var icon := TextureRect.new()
-		icon.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		icon.position = fit_rect.position
-		icon.size = fit_rect.size
-		icon.custom_minimum_size = fit_rect.size
-		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon.stretch_mode = TextureRect.STRETCH_SCALE
-		icon.texture = tex
-		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		token.add_child(icon)
-
-		out.append(token)
-	return out
+	var state_seed := int(_game_state.seed) if _game_state != null else 0
+	return DinnertimeAnimationMapHelpersClass.create_restaurant_demand_token_nodes(
+		_map_anim_layer,
+		_skin,
+		order,
+		restaurant_rect,
+		maxf(_get_cell_size(), 1.0),
+		state_seed
+	)
 
 func _compute_restaurant_rect_from_order(order: Dictionary) -> Rect2:
 	var restaurant_id := str(order.get("matched_restaurant", order.get("winner_restaurant_id", ""))).strip_edges()
@@ -1028,59 +583,7 @@ func _compute_restaurant_rect_from_order(order: Dictionary) -> Rect2:
 	return _get_piece_canvas_rect(cells)
 
 func _get_restaurant_cells(restaurant_id: String) -> Array[Vector2i]:
-	var out: Array[Vector2i] = []
-	if restaurant_id.is_empty() or _game_state == null:
-		return out
-	if not (_game_state.map is Dictionary):
-		return out
-	var map: Dictionary = _game_state.map
-
-	var restaurants_val = map.get("restaurants", null)
-	if restaurants_val is Dictionary:
-		var rest_val = (restaurants_val as Dictionary).get(restaurant_id, null)
-		if rest_val is Dictionary:
-			var rest: Dictionary = rest_val
-			var cells_val = rest.get("cells", null)
-			if cells_val is Array:
-				for c in cells_val:
-					if c is Vector2i:
-						out.append(c)
-	if not out.is_empty():
-		return out
-
-	var map_origin := Vector2i.ZERO
-	var origin_val = map.get("map_origin", null)
-	if origin_val is Vector2i:
-		map_origin = origin_val
-
-	var cells_rows_val = map.get("cells", null)
-	if not (cells_rows_val is Array):
-		return out
-	var cells_rows: Array = cells_rows_val
-
-	var seen: Dictionary = {}
-	for y in range(cells_rows.size()):
-		var row_val = cells_rows[y]
-		if not (row_val is Array):
-			continue
-		var row: Array = row_val
-		for x in range(row.size()):
-			var cell_val = row[x]
-			if not (cell_val is Dictionary):
-				continue
-			var cell: Dictionary = cell_val
-			var s_val = cell.get("structure", null)
-			if not (s_val is Dictionary):
-				continue
-			var structure: Dictionary = s_val
-			if str(structure.get("restaurant_id", "")).strip_edges() != restaurant_id:
-				continue
-			var world_pos := Vector2i(x, y) - map_origin
-			if not seen.has(world_pos):
-				seen[world_pos] = true
-				out.append(world_pos)
-
-	return out
+	return DinnertimeAnimationMapHelpersClass.get_restaurant_cells(_game_state, restaurant_id)
 
 func _start_route_highlight_for_order(order: Dictionary) -> void:
 	_clear_route_highlight()
@@ -1091,176 +594,39 @@ func _start_route_highlight_for_order(order: Dictionary) -> void:
 	if path.is_empty():
 		return
 
-	var cell_size := maxf(_get_cell_size(), 1.0)
-	var origin := _get_world_origin()
-	for world_pos in path:
-		var view_pos := world_pos - origin
-		var cell := ColorRect.new()
-		cell.color = Color(0.15, 1.0, 0.85, 0.35)
-		cell.modulate.a = ROUTE_FLASH_ALPHA_MIN
-		cell.position = Vector2(float(view_pos.x) * cell_size, float(view_pos.y) * cell_size)
-		cell.size = Vector2(cell_size, cell_size)
-		cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_map_anim_layer.add_child(cell)
-		_route_highlight_nodes.append(cell)
-
-	if _route_highlight_nodes.is_empty():
-		return
-
-	_route_highlight_tween = _map_anim_layer.create_tween().set_loops()
-	var flash_dur := maxf(0.08, 0.40 / _speed)
-	_route_highlight_tween.tween_method(func(v: float):
-		for n in _route_highlight_nodes:
-			if n is ColorRect and is_instance_valid(n):
-				(n as ColorRect).modulate.a = v
-	, ROUTE_FLASH_ALPHA_MIN, ROUTE_FLASH_ALPHA_MAX, flash_dur).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
-	_route_highlight_tween.tween_method(func(v: float):
-		for n in _route_highlight_nodes:
-			if n is ColorRect and is_instance_valid(n):
-				(n as ColorRect).modulate.a = v
-	, ROUTE_FLASH_ALPHA_MAX, ROUTE_FLASH_ALPHA_MIN, flash_dur).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	var built: Dictionary = DinnertimeAnimationRouteHelpersClass.create_route_highlight(
+		_map_anim_layer,
+		path,
+		maxf(_get_cell_size(), 1.0),
+		_get_world_origin(),
+		_speed,
+		ROUTE_FLASH_ALPHA_MIN,
+		ROUTE_FLASH_ALPHA_MAX
+	)
+	_route_highlight_nodes.clear()
+	var nodes_val = built.get("nodes", null)
+	if nodes_val is Array:
+		for n in nodes_val:
+			if n is Control:
+				_route_highlight_nodes.append(n)
+	var tween_val = built.get("tween", null)
+	_route_highlight_tween = tween_val if tween_val is Tween else null
 
 func _clear_route_highlight() -> void:
-	if is_instance_valid(_route_highlight_tween):
-		_route_highlight_tween.kill()
+	DinnertimeAnimationRouteHelpersClass.clear_route_highlight(_route_highlight_nodes, _route_highlight_tween)
 	_route_highlight_tween = null
-
-	for n in _route_highlight_nodes:
-		if n is Control and is_instance_valid(n):
-			n.queue_free()
 	_route_highlight_nodes.clear()
 
 func _compute_route_path_for_order(order: Dictionary) -> Array[Vector2i]:
-	var out: Array[Vector2i] = []
-	if _game_state == null:
-		return out
-	if bool(order.get("is_skipped", false)):
-		return out
-	if not (_game_state.map is Dictionary):
-		return out
-
-	var house_id := str(order.get("house_id", "")).strip_edges()
-	var restaurant_id := str(order.get("matched_restaurant", order.get("winner_restaurant_id", ""))).strip_edges()
-	if house_id.is_empty() or restaurant_id.is_empty():
-		return out
-
-	var road_graph = RoadGraphCacheClass.get_road_graph(_game_state)
-	if road_graph == null:
-		return out
-
-	var map: Dictionary = _game_state.map
-	var grid_size_val = map.get("grid_size", null)
-	if not (grid_size_val is Vector2i):
-		return out
-	var grid_size: Vector2i = grid_size_val
-
-	var house := StructuresClass.get_house(_game_state, house_id)
-	var restaurant := StructuresClass.get_restaurant(_game_state, restaurant_id)
-	if house.is_empty() or restaurant.is_empty():
-		return out
-
-	var dinnertime_distance = _get_dinnertime_distance_script()
-	if dinnertime_distance == null:
-		return out
-
-	var route_read: Result = dinnertime_distance.get_restaurant_to_house_distance(
-		road_graph,
+	return DinnertimeAnimationRouteHelpersClass.compute_route_path_for_order(
 		_game_state,
-		grid_size,
-		restaurant_id,
-		restaurant,
-		house_id,
-		house
+		order,
+		_get_dinnertime_distance_script()
 	)
-	if not route_read.ok:
-		return out
-	if not (route_read.value is Dictionary):
-		return out
-	var route: Dictionary = route_read.value
-	var path_val = route.get("path", null)
-	if not (path_val is Array):
-		return out
-
-	for p in path_val:
-		if p is Vector2i:
-			out.append(p)
-
-	return out
 
 func _get_dinnertime_distance_script():
-	if _dinnertime_distance_script != null:
-		return _dinnertime_distance_script
-	var base_dir := ModulesBaseDirClass.get_base_dir()
-	if base_dir.is_empty():
-		return null
-	var script_path := base_dir.path_join("base_rules/rules/phase/dinnertime/dinnertime_distance.gd")
-	var script_val = load(script_path)
-	if script_val == null:
-		return null
-	_dinnertime_distance_script = script_val
+	_dinnertime_distance_script = DinnertimeAnimationRouteHelpersClass.get_dinnertime_distance_script(_dinnertime_distance_script)
 	return _dinnertime_distance_script
-
-func _hash_string_32(text: String) -> int:
-	var h: int = 2166136261
-	for i in range(text.length()):
-		h ^= text.unicode_at(i)
-		h = int((h * 16777619) & 0xFFFFFFFF)
-	return h
-
-func _compute_demand_scatter_seed(house_id: String) -> int:
-	var seed := _hash_string_32(house_id)
-	var state_seed := 0
-	if _game_state != null:
-		state_seed = int(_game_state.seed)
-	return int((seed ^ state_seed) & 0x7FFFFFFF)
-
-func _is_scatter_rect_free(candidate: Rect2, taken: Array[Rect2], min_spacing: float) -> bool:
-	var grow := maxf(min_spacing, 0.0)
-	var cand := candidate.grow(grow)
-	for r in taken:
-		if cand.intersects(r.grow(grow)):
-			return false
-	return true
-
-func _shuffle_rect2_array(rng: RandomNumberGenerator, arr: Array[Rect2]) -> void:
-	for i in range(arr.size() - 1, 0, -1):
-		var j := rng.randi_range(0, i)
-		var tmp := arr[i]
-		arr[i] = arr[j]
-		arr[j] = tmp
-
-func _build_demand_token_slots(area: Rect2, icon_size: float, min_spacing: float, reserved: Array[Rect2]) -> Array[Rect2]:
-	var margin := maxf(1.0, min_spacing)
-	var min_x := area.position.x + margin
-	var min_y := area.position.y + margin
-	var max_x := area.position.x + area.size.x - icon_size - margin
-	var max_y := area.position.y + area.size.y - icon_size - margin
-	if max_x < min_x:
-		max_x = min_x
-	if max_y < min_y:
-		max_y = min_y
-
-	var step := maxf(icon_size + min_spacing, 1.0)
-	var cols := maxi(1, int(floor(maxf(0.0, max_x - min_x) / step)) + 1)
-	var rows := maxi(1, int(floor(maxf(0.0, max_y - min_y) / step)) + 1)
-
-	var slots: Array[Rect2] = []
-	for row in range(rows):
-		for col in range(cols):
-			var x := min_x + float(col) * step
-			var y := min_y + float(row) * step
-			x = clampf(x, min_x, max_x)
-			y = clampf(y, min_y, max_y)
-			var rect := Rect2(Vector2(x, y), Vector2(icon_size, icon_size))
-			if _is_scatter_rect_free(rect, reserved, min_spacing):
-				slots.append(rect)
-	return slots
-
-func _compute_house_id_rect(cell_size: float, structure_rect: Rect2) -> Rect2:
-	var pad := maxf(3.0, cell_size * 0.10)
-	var bg_size := Vector2(cell_size * 0.90, cell_size * 0.58)
-	var pos := structure_rect.position + Vector2(structure_rect.size.x - bg_size.x - pad, pad)
-	return Rect2(pos, bg_size)
 
 func _get_house_core_cells(house_id: String) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
@@ -1274,77 +640,10 @@ func _get_house_core_cells(house_id: String) -> Array[Vector2i]:
 	return MapUtilsClass.get_footprint_cells(house_mask, Vector2i.ZERO, anchor, rotation)
 
 func _get_structure_rotation_at(world_anchor: Vector2i) -> int:
-	if _game_state == null or not (_game_state.map is Dictionary):
-		return 0
-	var map: Dictionary = _game_state.map
-
-	var map_origin := Vector2i.ZERO
-	var origin_val = map.get("map_origin", null)
-	if origin_val is Vector2i:
-		map_origin = origin_val
-
-	var cells_val = map.get("cells", null)
-	if not (cells_val is Array):
-		return 0
-	var cells: Array = cells_val
-	var idx := world_anchor + map_origin
-	if idx.y < 0 or idx.y >= cells.size():
-		return 0
-	var row_val = cells[idx.y]
-	if not (row_val is Array):
-		return 0
-	var row: Array = row_val
-	if idx.x < 0 or idx.x >= row.size():
-		return 0
-	var cell_val = row[idx.x]
-	if not (cell_val is Dictionary):
-		return 0
-	var cell: Dictionary = cell_val
-	var s_val = cell.get("structure", null)
-	if not (s_val is Dictionary):
-		return 0
-	var structure: Dictionary = s_val
-	var r_val = structure.get("rotation", 0)
-	if r_val is int:
-		return int(r_val)
-	if r_val is float:
-		var f: float = float(r_val)
-		if f == floor(f):
-			return int(f)
-	return 0
+	return DinnertimeAnimationMapHelpersClass.get_structure_rotation_at(_game_state, world_anchor)
 
 func _get_structure_piece_id_at(world_anchor: Vector2i) -> String:
-	if _game_state == null or not (_game_state.map is Dictionary):
-		return ""
-	var map: Dictionary = _game_state.map
-
-	var map_origin := Vector2i.ZERO
-	var origin_val = map.get("map_origin", null)
-	if origin_val is Vector2i:
-		map_origin = origin_val
-
-	var cells_val = map.get("cells", null)
-	if not (cells_val is Array):
-		return ""
-	var cells: Array = cells_val
-	var idx := world_anchor + map_origin
-	if idx.y < 0 or idx.y >= cells.size():
-		return ""
-	var row_val = cells[idx.y]
-	if not (row_val is Array):
-		return ""
-	var row: Array = row_val
-	if idx.x < 0 or idx.x >= row.size():
-		return ""
-	var cell_val = row[idx.x]
-	if not (cell_val is Dictionary):
-		return ""
-	var cell: Dictionary = cell_val
-	var s_val = cell.get("structure", null)
-	if not (s_val is Dictionary):
-		return ""
-	var structure: Dictionary = s_val
-	return str(structure.get("piece_id", "")).strip_edges()
+	return DinnertimeAnimationMapHelpersClass.get_structure_piece_id_at(_game_state, world_anchor)
 
 func _place_persistent_x_mark(order: Dictionary) -> void:
 	if not is_instance_valid(_map_anim_layer):
@@ -1368,35 +667,11 @@ func _place_persistent_x_mark(order: Dictionary) -> void:
 		if cells.is_empty():
 			cells = OverlayUtilsClass.get_house_footprint_cells(_game_state, house_id)
 		rect = _get_piece_canvas_rect(cells)
-	var pos := rect.position + rect.size * 0.5
-	var fs := int(round(maxf(46.0, cell_size * 1.25)))
-	var box := Vector2(float(fs) * 1.15, float(fs) * 1.15)
-
-	var shadow := Label.new()
-	shadow.text = "✕"
-	shadow.add_theme_font_size_override("font_size", fs)
-	shadow.add_theme_color_override("font_color", Color(0, 0, 0, 0.75))
-	shadow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	shadow.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	shadow.size = box
-	shadow.position = pos - box * 0.5 + Vector2(3, 3)
-	shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_map_anim_layer.add_child(shadow)
-
-	var mark := Label.new()
-	mark.text = "✕"
-	mark.add_theme_font_size_override("font_size", fs)
-	mark.add_theme_color_override("font_color", Color(0.95, 0.25, 0.18, 1))
-	mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	mark.size = box
-	mark.position = pos - box * 0.5
-	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_map_anim_layer.add_child(mark)
+	DinnertimeAnimationMapHelpersClass.place_persistent_x_mark(_map_anim_layer, rect, cell_size)
 
 func _play_sale_animation(sale: Dictionary) -> void:
 	var owner_id := int(sale.get("winner_owner", -1))
-	var revenue := _get_order_income_amount(sale)
+	var revenue := DinnertimeAnimationIncomeUtilsClass.get_order_income_amount(sale)
 	var house_id := str(sale.get("house_id", ""))
 	_current_house_id = house_id
 	_house_tokens.erase(house_id)
@@ -1406,14 +681,11 @@ func _play_sale_animation(sale: Dictionary) -> void:
 		return
 
 	var dur_float := 1.5 / _speed
-	var dur_fly := 0.80 / _speed
 	var coin_count := _compute_coin_count(revenue)
-	var coin_delay_step := 0.0
-	if coin_count > 1:
-		var start_spread := dur_fly * 0.55
-		coin_delay_step = start_spread / float(coin_count - 1)
-		coin_delay_step = clampf(coin_delay_step, 0.04 / _speed, 0.14 / _speed)
-	var dur_fly_total := dur_fly + float(maxi(0, coin_count - 1)) * coin_delay_step
+	var fly_timing := DinnertimeAnimationTimelineHelpersClass.compute_coin_flight_timing(_speed, coin_count)
+	var dur_fly := float(fly_timing.get("dur_fly", 0.80 / maxf(_speed, 0.01)))
+	var coin_delay_step := float(fly_timing.get("coin_delay_step", 0.0))
+	var dur_fly_total := float(fly_timing.get("dur_fly_total", dur_fly))
 
 	# 步骤1: 预览 token 向上漂浮消失
 	_float_away_preview_tokens(dur_float)
@@ -1422,19 +694,18 @@ func _play_sale_animation(sale: Dictionary) -> void:
 	var bank_pos := _global_to_layer(_get_bank_label_global_center())
 	var target_pos := _global_to_layer(_get_revenue_target_global_center(sale, owner_id))
 
-	var tween := _anim_layer.create_tween()
-	_active_tweens.append(tween)
-
 	# 先完成 token 漂浮，再开始金币与数字变化。
-	tween.tween_interval(dur_float)
-	tween.tween_callback(func():
-		_spawn_flying_coins(bank_pos, target_pos, revenue, owner_id, dur_fly, coin_delay_step, coin_count)
-	)
-	tween.tween_interval(dur_fly_total + 0.3 / _speed)
-	tween.finished.connect(func():
-		_active_tweens.erase(tween)
-		_clear_route_highlight()
-		_preview_current()
+	DinnertimeAnimationTimelineHelpersClass.schedule_sale_timeline(
+		_anim_layer,
+		_active_tweens,
+		_speed,
+		dur_float,
+		dur_fly_total,
+		func() -> void:
+			_spawn_flying_coins(bank_pos, target_pos, revenue, owner_id, dur_fly, coin_delay_step, coin_count),
+		func() -> void:
+			_clear_route_highlight()
+			_preview_current()
 	)
 
 func _play_post_house_income_sequence() -> void:
@@ -1478,32 +749,27 @@ func _play_post_house_income_event(index: int) -> void:
 
 	_create_post_income_employee_card(event)
 
-	var dur_fly := 0.80 / _speed
 	var coin_count := _compute_coin_count(amount)
-	var coin_delay_step := 0.0
-	if coin_count > 1:
-		var start_spread := dur_fly * 0.55
-		coin_delay_step = start_spread / float(coin_count - 1)
-		coin_delay_step = clampf(coin_delay_step, 0.04 / _speed, 0.14 / _speed)
-	var dur_fly_total := dur_fly + float(maxi(0, coin_count - 1)) * coin_delay_step
+	var fly_timing := DinnertimeAnimationTimelineHelpersClass.compute_coin_flight_timing(_speed, coin_count)
+	var dur_fly := float(fly_timing.get("dur_fly", 0.80 / maxf(_speed, 0.01)))
+	var coin_delay_step := float(fly_timing.get("coin_delay_step", 0.0))
+	var dur_fly_total := float(fly_timing.get("dur_fly_total", dur_fly))
 
 	var bank_pos := _global_to_layer(_get_bank_label_global_center())
 	var target_pos := _global_to_layer(_get_player_tab_global_center(player_id))
 
-	var tween := _anim_layer.create_tween()
-	_active_tweens.append(tween)
-	tween.tween_interval(0.06 / _speed)
-	tween.tween_callback(func():
-		_spawn_flying_coins(bank_pos, target_pos, amount, player_id, dur_fly, coin_delay_step, coin_count)
-	)
-	tween.tween_interval(dur_fly_total + POST_INCOME_CARD_HOLD_SEC / _speed)
-	tween.tween_callback(func():
-		_remove_post_income_card()
-	)
-	tween.tween_interval(0.06 / _speed)
-	tween.finished.connect(func():
-		_active_tweens.erase(tween)
-		_play_post_house_income_event(index + 1)
+	DinnertimeAnimationTimelineHelpersClass.schedule_post_income_event_timeline(
+		_anim_layer,
+		_active_tweens,
+		_speed,
+		dur_fly_total,
+		POST_INCOME_CARD_HOLD_SEC,
+		func() -> void:
+			_spawn_flying_coins(bank_pos, target_pos, amount, player_id, dur_fly, coin_delay_step, coin_count),
+		func() -> void:
+			_remove_post_income_card(),
+		func() -> void:
+			_play_post_house_income_event(index + 1)
 	)
 
 func _float_away_preview_tokens(dur: float) -> void:
@@ -1527,165 +793,48 @@ func _float_away_preview_tokens(dur: float) -> void:
 	_preview_tokens.clear()
 
 func _compute_coin_count(revenue: int) -> int:
-	var rev := int(revenue)
-	if rev <= 0:
-		return 0
-	var extra := int(floor(float(rev) / float(COIN_PER_AMOUNT)))
-	var count := COIN_BASE_COUNT + extra
-	return clampi(count, COIN_BASE_COUNT, COIN_MAX_COUNT)
+	return DinnertimeAnimationMoneyHelpersClass.compute_coin_count(revenue, COIN_BASE_COUNT, COIN_PER_AMOUNT, COIN_MAX_COUNT)
 
 func _spawn_flying_coins(from: Vector2, to: Vector2, revenue: int, owner_id: int, dur: float, coin_delay_step: float, coin_count: int) -> void:
-	if not is_instance_valid(_anim_layer):
-		return
-	if revenue <= 0:
-		return
-	var count := maxi(0, int(coin_count))
-	if count <= 0:
-		count = _compute_coin_count(revenue)
-	var coin_size := COIN_BASE_SIZE * COIN_SIZE_SCALE
-	var half := Vector2(coin_size * 0.5, coin_size * 0.5)
-
-	var dir := to - from
-	var dist := dir.length()
-	if dist < 0.001:
-		dir = Vector2(1, 0)
-		dist = 1.0
-	var arc_height := clampf(dist * 0.25, 36.0, 96.0)
-	var start_tl_base := from - half
-	var end_tl := to - half
-	var ctrl_base := (start_tl_base + end_tl) * 0.5 + Vector2(0, -arc_height)
-
-	for i in range(count):
-		var delay := float(i) * coin_delay_step
-		var start_tl := start_tl_base
-		var ctrl := ctrl_base
-
-		var coin_wrap := Control.new()
-		coin_wrap.custom_minimum_size = Vector2(coin_size, coin_size)
-		coin_wrap.size = Vector2(coin_size, coin_size)
-		coin_wrap.pivot_offset = Vector2(coin_size * 0.5, coin_size * 0.5)
-		coin_wrap.position = start_tl
-		coin_wrap.modulate.a = 0.0
-		coin_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_anim_layer.add_child(coin_wrap)
-
-		if _coin_tex != null:
-			var shadow := TextureRect.new()
-			shadow.texture = _coin_tex
-			shadow.custom_minimum_size = Vector2(coin_size, coin_size)
-			shadow.size = Vector2(coin_size, coin_size)
-			shadow.position = Vector2(1, 1)
-			shadow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			shadow.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			shadow.modulate = Color(0, 0, 0, 0.25)
-			shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			coin_wrap.add_child(shadow)
-
-			var coin := TextureRect.new()
-			coin.texture = _coin_tex
-			coin.custom_minimum_size = Vector2(coin_size, coin_size)
-			coin.size = Vector2(coin_size, coin_size)
-			coin.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			coin.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			coin_wrap.add_child(coin)
-
-		var flip_cycles := 1.0
-		var flip_phase := float(i) * 0.45
-		var base_rot := (float(i) - float(count - 1) * 0.5) * 0.06
-		var fade_in_t := 0.12
-		var fade_out_t := 0.10
-
-		var tw := _anim_layer.create_tween()
-		_active_tweens.append(tw)
-		if delay > 0.0:
-			tw.tween_interval(delay)
-
-		tw.tween_method(func(t: float):
-			if not is_instance_valid(coin_wrap):
-				return
-
-			var omt := 1.0 - t
-			var pos := (start_tl * omt * omt) + (ctrl * 2.0 * omt * t) + (end_tl * t * t)
-			coin_wrap.position = pos
-
-			var c := cos(t * TAU * flip_cycles + flip_phase)
-			var sx := lerpf(0.28, 1.0, absf(c))
-			coin_wrap.scale = Vector2(sx, 1.0)
-			coin_wrap.rotation = base_rot + sin(t * PI) * 0.08
-
-			var a := 1.0
-			if t < fade_in_t:
-				a = clampf(t / fade_in_t, 0.0, 1.0)
-			elif t > (1.0 - fade_out_t):
-				a = clampf((1.0 - t) / fade_out_t, 0.0, 1.0)
-			coin_wrap.modulate.a = a
-		, 0.0, 1.0, dur).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
-
-		tw.tween_callback(func():
-			if is_instance_valid(coin_wrap):
-				coin_wrap.queue_free()
-			_active_tweens.erase(tw)
-		)
-
-	# 数字动态变化
-	var number_dur := maxf(0.01, dur + float(maxi(0, count - 1)) * coin_delay_step)
-	_animate_bank_decrease(revenue, number_dur)
-	_animate_player_income(owner_id, revenue, number_dur)
+	DinnertimeAnimationMoneyHelpersClass.spawn_flying_coins(
+		_anim_layer,
+		_coin_tex,
+		from,
+		to,
+		revenue,
+		owner_id,
+		dur,
+		coin_delay_step,
+		coin_count,
+		COIN_BASE_SIZE,
+		COIN_SIZE_SCALE,
+		_active_tweens,
+		func(pid: int, amount: int, number_dur: float):
+			_animate_bank_decrease(amount, number_dur)
+			_animate_player_income(pid, amount, number_dur)
+	)
 
 func _animate_bank_decrease(amount: int, dur: float) -> void:
-	if not is_instance_valid(_bank_label):
-		return
-	var from_val := _running_bank_value
-	_running_bank_value -= amount
-	var to_val := _running_bank_value
-	var d := maxf(0.01, float(dur))
-
-	var tween := _bank_label.create_tween()
-	_active_tweens.append(tween)
-	tween.tween_method(func(v: float):
-		if is_instance_valid(_bank_label):
-			_bank_label.text = "$%d" % int(v)
-	, float(from_val), float(to_val), d)
-	tween.tween_callback(func():
-		_active_tweens.erase(tween)
+	_running_bank_value = DinnertimeAnimationMoneyHelpersClass.animate_bank_decrease(
+		_bank_label,
+		_active_tweens,
+		_running_bank_value,
+		amount,
+		dur
 	)
 
 func _animate_player_income(player_id: int, amount: int, dur: float) -> void:
-	if amount <= 0:
-		return
-	# 滚动概览卡片上的现金数字
-	var from_val := int(_player_running_cash.get(player_id, 0))
-	_player_running_cash[player_id] = from_val + amount
-	var to_val = _player_running_cash[player_id]
-	if is_instance_valid(_anim_layer):
-		var d := maxf(0.01, float(dur))
-		var tw := _anim_layer.create_tween()
-		_active_tweens.append(tw)
-		tw.tween_method(func(v: float):
-			_player_running_cash[player_id] = int(v)
-			_apply_cash_overrides()
-		, float(from_val), float(to_val), d)
-		tw.tween_callback(func(): _active_tweens.erase(tw))
-
-	# 浮动 +$X 标签
-	if not is_instance_valid(_anim_layer):
-		return
-	var pos := _global_to_layer(_get_player_tab_global_center(player_id))
-	var lbl := Label.new()
-	lbl.text = "+$%d" % amount
-	lbl.add_theme_font_size_override("font_size", 16)
-	lbl.add_theme_color_override("font_color", Color(0.2, 0.8, 0.2, 1))
-	lbl.position = pos - Vector2(20, 10)
-	_anim_layer.add_child(lbl)
-	var dur2 := 1.5 / _speed
-	var tween := _anim_layer.create_tween().set_parallel(true)
-	_active_tweens.append(tween)
-	tween.tween_property(lbl, "position:y", lbl.position.y - 40, dur2)
-	tween.tween_property(lbl, "modulate:a", 0.0, dur2).set_delay(dur2 * 0.5)
-	tween.chain().tween_callback(func():
-		lbl.queue_free()
-		_active_tweens.erase(tween)
+	DinnertimeAnimationMoneyHelpersClass.animate_player_income(
+		_anim_layer,
+		player_id,
+		amount,
+		dur,
+		_speed,
+		_active_tweens,
+		_player_running_cash,
+		func():
+			_apply_cash_overrides(),
+		_global_to_layer(_get_player_tab_global_center(player_id))
 	)
 
 func _finish() -> void:
@@ -1732,341 +881,50 @@ func _kill_all_tweens() -> void:
 func _world_to_screen(world_pos: Vector2i) -> Vector2:
 	if world_pos == Vector2i(-1, -1) or _map_canvas == null or not is_instance_valid(_map_canvas):
 		return Vector2(400, 300)
-	var cs := int(_map_canvas.get_cell_size())
+	var cs := int(DinnertimeAnimationPositionHelpersClass.get_cell_size(_map_canvas))
 	var view = world_pos - _get_world_origin()
 	var local_pos := Vector2(view) * float(cs) + Vector2(cs, cs) * 0.5
 	return (_map_canvas as Control).global_position + local_pos
 
 func _get_world_origin() -> Vector2i:
-	if _map_canvas != null and is_instance_valid(_map_canvas) and _map_canvas.has_method("get_world_origin"):
-		var ov = _map_canvas.get_world_origin()
-		if ov is Vector2i:
-			return ov
-	return Vector2i.ZERO
+	return DinnertimeAnimationPositionHelpersClass.get_world_origin(_map_canvas)
 
 func _get_cell_size() -> float:
-	if _map_canvas != null and is_instance_valid(_map_canvas):
-		return float(_map_canvas.get_cell_size())
-	return 40.0
+	return DinnertimeAnimationPositionHelpersClass.get_cell_size(_map_canvas)
 
 func _get_piece_screen_rect(cells: Array[Vector2i]) -> Rect2:
-	if cells.is_empty() or _map_canvas == null or not is_instance_valid(_map_canvas):
-		return Rect2(Vector2(400, 300), Vector2(40, 40))
-	var cs := int(_map_canvas.get_cell_size())
-	var origin: Vector2i = _get_world_origin()
-	var base: Vector2 = (_map_canvas as Control).global_position
-	var min_v := Vector2(INF, INF)
-	var max_v := Vector2(-INF, -INF)
-	for c in cells:
-		var view := c - origin
-		var tl := base + Vector2(view) * float(cs)
-		var br := tl + Vector2(cs, cs)
-		min_v = Vector2(minf(min_v.x, tl.x), minf(min_v.y, tl.y))
-		max_v = Vector2(maxf(max_v.x, br.x), maxf(max_v.y, br.y))
-	return Rect2(min_v, max_v - min_v)
+	return DinnertimeAnimationPositionHelpersClass.get_piece_screen_rect(_map_canvas, cells, _get_world_origin())
 
 func _get_piece_canvas_rect(cells: Array[Vector2i]) -> Rect2:
-	if cells.is_empty() or _map_canvas == null or not is_instance_valid(_map_canvas):
-		return Rect2()
-	var cs := int(_map_canvas.get_cell_size())
-	var origin: Vector2i = _get_world_origin()
-	var min_v := Vector2(INF, INF)
-	var max_v := Vector2(-INF, -INF)
-	for c in cells:
-		var view := c - origin
-		var tl := Vector2(view) * float(cs)
-		var br := tl + Vector2(cs, cs)
-		min_v = Vector2(minf(min_v.x, tl.x), minf(min_v.y, tl.y))
-		max_v = Vector2(maxf(max_v.x, br.x), maxf(max_v.y, br.y))
-	return Rect2(min_v, max_v - min_v)
+	return DinnertimeAnimationPositionHelpersClass.get_piece_canvas_rect(_map_canvas, cells, _get_world_origin())
 
 func _global_to_layer(global_pos: Vector2) -> Vector2:
-	if is_instance_valid(_anim_layer):
-		return global_pos - _anim_layer.global_position
-	return global_pos
+	return DinnertimeAnimationPositionHelpersClass.global_to_layer(_anim_layer, global_pos)
 
 func _get_bank_label_global_center() -> Vector2:
-	if is_instance_valid(_bank_label):
-		return _bank_label.global_position + _bank_label.size * 0.5
-	return Vector2(400, 30)
+	return DinnertimeAnimationPositionHelpersClass.get_bank_label_global_center(_bank_label)
 
 func _get_player_tab_global_center(player_id: int) -> Vector2:
-	if _player_panel != null and is_instance_valid(_player_panel):
-		var grid = _player_panel.get("overview_grid")
-		if grid is Control and is_instance_valid(grid):
-			for node in (grid as Control).get_children():
-				if not (node is Control) or not is_instance_valid(node):
-					continue
-				var card: Control = node
-				if card.has_meta("player_id") and int(card.get_meta("player_id")) == player_id:
-					var cash: Label = card.find_child("CashLabel", true, false)
-					if cash != null and is_instance_valid(cash):
-						return cash.global_position + cash.size * 0.5
-					return card.global_position + card.size * 0.5
-			var cards = (grid as Control).get_children()
-			if player_id >= 0 and player_id < cards.size():
-				var card2 = cards[player_id]
-				if card2 is Control and is_instance_valid(card2):
-					var cash2: Label = (card2 as Control).find_child("CashLabel", true, false)
-					if cash2 != null and is_instance_valid(cash2):
-						return cash2.global_position + cash2.size * 0.5
-					return (card2 as Control).global_position + (card2 as Control).size * 0.5
-	return Vector2(100, 200)
+	return DinnertimeAnimationPositionHelpersClass.get_player_tab_global_center(_player_panel, player_id)
 
 func _get_revenue_target_global_center(sale: Dictionary, owner_id: int) -> Vector2:
-	var restaurant_id := str(sale.get("matched_restaurant", sale.get("winner_restaurant_id", ""))).strip_edges()
-	if _player_panel != null and is_instance_valid(_player_panel):
-		var grid = _player_panel.get("overview_grid")
-		if grid is Control and is_instance_valid(grid):
-			for node in (grid as Control).get_children():
-				if not (node is Control) or not is_instance_valid(node):
-					continue
-				var card: Control = node
-				if not card.has_meta("player_id") or int(card.get_meta("player_id")) != owner_id:
-					continue
-				if card.has_meta("restaurant_id"):
-					var card_restaurant_id := str(card.get_meta("restaurant_id")).strip_edges()
-					if not restaurant_id.is_empty() and not card_restaurant_id.is_empty() and card_restaurant_id != restaurant_id:
-						continue
-				var cash: Label = card.find_child("CashLabel", true, false)
-				if cash != null and is_instance_valid(cash):
-					return cash.global_position + cash.size * 0.5
-				return card.global_position + card.size * 0.5
-	return _get_player_tab_global_center(owner_id)
-
-func _build_post_house_income_events(settlement_data: Dictionary) -> Array[Dictionary]:
-	var events: Array[Dictionary] = []
-	if _game_state == null:
-		return events
-	if not (_game_state.players is Array):
-		return events
-
-	var tips_by_player := _read_income_by_player(settlement_data, "income_tips")
-	var cfo_by_player := _read_income_by_player(settlement_data, "income_cfo_bonus")
-	var order := _get_income_animation_player_order()
-
-	for player_id in order:
-		if player_id < 0 or player_id >= _game_state.players.size():
-			continue
-		var tips_amount := int(tips_by_player.get(player_id, 0))
-		if tips_amount > 0:
-			events.append({
-				"player_id": player_id,
-				"employee_id": "waitress",
-				"kind": "tips",
-				"amount": tips_amount,
-				"show_card": _player_has_active_employee(player_id, "waitress"),
-			})
-
-		var cfo_amount := int(cfo_by_player.get(player_id, 0))
-		if cfo_amount > 0:
-			events.append({
-				"player_id": player_id,
-				"employee_id": "cfo",
-				"kind": "cfo",
-				"amount": cfo_amount,
-				"show_card": _player_has_active_employee(player_id, "cfo"),
-			})
-
-	return events
-
-func _read_income_by_player(settlement_data: Dictionary, key: String) -> Dictionary:
-	var out: Dictionary = {}
-	if key.is_empty():
-		return out
-	var val = settlement_data.get(key, null)
-	if val is Array:
-		var arr: Array = val
-		for i in range(arr.size()):
-			out[i] = int(arr[i])
-		return out
-	if val is Dictionary:
-		var d: Dictionary = val
-		for k in d.keys():
-			var pid := int(k)
-			if pid < 0:
-				continue
-			out[pid] = int(d.get(k, 0))
-	return out
-
-func _sum_post_income_by_player(events: Array[Dictionary]) -> Dictionary:
-	var out: Dictionary = {}
-	for event in events:
-		var player_id := int(event.get("player_id", -1))
-		var amount := int(event.get("amount", 0))
-		if player_id < 0 or amount <= 0:
-			continue
-		out[player_id] = int(out.get(player_id, 0)) + amount
-	return out
-
-func _sum_income_dict(income: Dictionary) -> int:
-	var total := 0
-	for k in income.keys():
-		total += int(income.get(k, 0))
-	return total
-
-func _get_order_income_amount(order: Dictionary) -> int:
-	var revenue := int(order.get("revenue", 0))
-	var house_bonus := int(order.get("house_bonus", 0))
-	return revenue + house_bonus
-
-func _get_income_animation_player_order() -> Array[int]:
-	var out: Array[int] = []
-	if _game_state == null or not (_game_state.players is Array):
-		return out
-	var seen: Dictionary = {}
-	if _game_state.turn_order is Array:
-		for pid_val in _game_state.turn_order:
-			var pid := int(pid_val)
-			if pid < 0 or pid >= _game_state.players.size():
-				continue
-			if seen.has(pid):
-				continue
-			seen[pid] = true
-			out.append(pid)
-	for i in range(_game_state.players.size()):
-		if seen.has(i):
-			continue
-		out.append(i)
-	return out
-
-func _player_has_active_employee(player_id: int, employee_id: String) -> bool:
-	if _game_state == null:
-		return false
-	if employee_id.is_empty():
-		return false
-	if not (_game_state.players is Array):
-		return false
-	if player_id < 0 or player_id >= _game_state.players.size():
-		return false
-	var player_val = _game_state.players[player_id]
-	if not (player_val is Dictionary):
-		return false
-	var player: Dictionary = player_val
-	var employees_val = player.get("employees", null)
-	if not (employees_val is Array):
-		return false
-	for e in employees_val:
-		if str(e).strip_edges() == employee_id:
-			return true
-	return false
-
-func _employee_card_name(employee_id: String) -> String:
-	match employee_id:
-		"waitress":
-			return "女服务员"
-		"cfo":
-			return "CFO"
-		_:
-			return employee_id
+	return DinnertimeAnimationPositionHelpersClass.get_revenue_target_global_center(_player_panel, sale, owner_id)
 
 func _create_post_income_employee_card(event: Dictionary) -> void:
 	_remove_post_income_card()
-	if not is_instance_valid(_anim_layer):
-		return
-	if not bool(event.get("show_card", false)):
-		return
-
-	var employee_id := str(event.get("employee_id", "")).strip_edges()
-	if employee_id.is_empty():
-		return
-	var player_id := int(event.get("player_id", -1))
-
-	var holder := PanelContainer.new()
-	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.08, 0.07, 0.06, 0.90)
-	panel_style.set_corner_radius_all(8)
-	panel_style.set_content_margin_all(6)
-	panel_style.border_width_left = 1
-	panel_style.border_width_top = 1
-	panel_style.border_width_right = 1
-	panel_style.border_width_bottom = 1
-	panel_style.border_color = Color(0.95, 0.86, 0.62, 0.85)
-	holder.add_theme_stylebox_override("panel", panel_style)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	holder.add_child(vbox)
-
-	var title := Label.new()
-	title.text = "%s · %s" % [_get_player_name(player_id), _employee_card_name(employee_id)]
-	title.add_theme_font_size_override("font_size", 12)
-	title.add_theme_color_override("font_color", Color(1, 0.95, 0.82, 1))
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
-
-	var card := EmployeeCardClass.new()
-	card.variant = EmployeeCardClass.CardVariant.COMPACT
-	card.draggable = false
-	card.show_salary_indicator = false
-	card.multiline_name = false
-	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	card.set_display_scale(POST_INCOME_CARD_SCALE)
-	card.setup({
-		"id": employee_id,
-		"name": _employee_card_name(employee_id),
-		"role": "special",
-		"description": "",
-		"salary": false,
-		"range": {"type": "none", "value": 0},
-		"train_to": [],
-	})
-	vbox.add_child(card)
-
-	_anim_layer.add_child(holder)
-	var card_size := holder.get_combined_minimum_size()
-	if card_size == Vector2.ZERO:
-		card_size = Vector2(126, 106)
-	holder.custom_minimum_size = card_size
-	holder.size = card_size
-	holder.position = _global_to_layer(_get_post_income_card_global_pos(card_size))
-	holder.modulate.a = 0.0
-	var fade := holder.create_tween()
-	_active_tweens.append(fade)
-	fade.tween_property(holder, "modulate:a", 1.0, 0.12 / _speed)
-	fade.tween_callback(func():
-		_active_tweens.erase(fade)
+	_post_income_card = DinnertimeAnimationPostIncomeCardClass.create(
+		_anim_layer,
+		_scene,
+		_map_canvas,
+		event,
+		POST_INCOME_CARD_SCALE,
+		_speed,
+		_active_tweens
 	)
-	_post_income_card = holder
-
-func _get_post_income_card_global_pos(card_size: Vector2) -> Vector2:
-	var base := Vector2(16, 56)
-	var turn_order = _resolve_turn_order_display_control()
-	if is_instance_valid(turn_order):
-		var rect := Rect2(turn_order.global_position, turn_order.size)
-		base = Vector2(
-			rect.position.x - card_size.x - 14.0,
-			rect.position.y + maxf(0.0, (rect.size.y - card_size.y) * 0.5)
-		)
-	elif _map_canvas != null and is_instance_valid(_map_canvas) and _map_canvas is Control:
-		base = (_map_canvas as Control).global_position + Vector2(12, 12)
-	base.x = maxf(8.0, base.x)
-	base.y = maxf(8.0, base.y)
-	return base
-
-func _resolve_turn_order_display_control() -> Control:
-	if _scene == null or not is_instance_valid(_scene):
-		return null
-	var direct = _scene.get("turn_order_display")
-	if direct is Control and is_instance_valid(direct):
-		return direct
-	if _scene.has_node("UIRoot/MainContent/CenterSplit/GameArea/TurnOrderOverlay/TurnOrderDisplay"):
-		var node := _scene.get_node("UIRoot/MainContent/CenterSplit/GameArea/TurnOrderOverlay/TurnOrderDisplay")
-		if node is Control and is_instance_valid(node):
-			return node
-	return null
-
-func _get_player_name(player_id: int) -> String:
-	if player_id < 0:
-		return "玩家?"
-	if Globals != null and Globals.has_method("get_player_name"):
-		return str(Globals.get_player_name(player_id))
-	return "玩家 %d" % (player_id + 1)
 
 func _remove_post_income_card() -> void:
 	if is_instance_valid(_post_income_card):
-		_post_income_card.queue_free()
+		DinnertimeAnimationPostIncomeCardClass.remove(_post_income_card)
 	_post_income_card = null
 
 func _apply_cash_overrides() -> void:
