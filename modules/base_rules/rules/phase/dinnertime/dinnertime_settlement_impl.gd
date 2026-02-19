@@ -17,6 +17,7 @@ const EFFECT_SEG_DINNERTIME_DISTANCE_DELTA := ":dinnertime:distance_delta:"
 const EFFECT_SEG_DINNERTIME_SALE_HOUSE_BONUS := ":dinnertime:sale_house_bonus:"
 const KIND_CONFIRM_DINNERTIME := "confirm_dinnertime"
 const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
+const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
 
 static func _is_online_mode() -> bool:
 	if NetContext == null:
@@ -56,13 +57,67 @@ static func _build_dinnertime_confirm_pending(state: GameState) -> Array:
 		return []
 	if not _is_online_dinnertime_confirm_enabled(state):
 		return [KIND_CONFIRM_DINNERTIME]
+	var confirmed_players := _read_online_dinnertime_confirmed_players(state)
+	if confirmed_players.is_empty():
+		confirmed_players = _build_online_dinnertime_confirmed_players(state)
 	var pending: Array[Dictionary] = []
 	for pid in range(state.players.size()):
+		var is_confirmed := false
+		if pid >= 0 and pid < confirmed_players.size():
+			is_confirmed = bool(confirmed_players[pid])
+		if is_confirmed:
+			continue
 		pending.append({
 			"kind": KIND_CONFIRM_DINNERTIME,
 			"player_id": pid,
 		})
 	return pending
+
+static func _build_online_dinnertime_confirmed_players(state: GameState) -> Array[bool]:
+	var confirmed: Array[bool] = []
+	if state == null or not (state.players is Array):
+		return confirmed
+	for pid in range(state.players.size()):
+		confirmed.append(_is_player_forfeited(state, pid))
+	return confirmed
+
+static func _read_online_dinnertime_confirmed_players(state: GameState) -> Array[bool]:
+	var out: Array[bool] = []
+	if state == null or not (state.players is Array):
+		return out
+	if not (state.round_state is Dictionary):
+		return out
+	var rs: Dictionary = state.round_state
+	var val = rs.get(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, null)
+	if not (val is Array):
+		return out
+	var raw: Array = Array(val)
+	if raw.size() != state.players.size():
+		return out
+	for v in raw:
+		if v is bool:
+			out.append(bool(v))
+			continue
+		if v is int:
+			out.append(int(v) != 0)
+			continue
+		if v is float:
+			var f: float = float(v)
+			if f == floor(f):
+				out.append(int(f) != 0)
+				continue
+		return []
+	return out
+
+static func _is_player_forfeited(state: GameState, player_id: int) -> bool:
+	if state == null or not (state.players is Array):
+		return false
+	if player_id < 0 or player_id >= state.players.size():
+		return false
+	var player_val = state.players[player_id]
+	if not (player_val is Dictionary):
+		return false
+	return bool(Dictionary(player_val).get("forfeited", false))
 
 static func _validate_apply_inputs(state: GameState, phase_manager) -> Result:
 	var map_read := MapStateAccessClass.require_map(state, "DinnertimeSettlement")
@@ -267,8 +322,11 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 	# 联机模式（包括 ONLINE_SERVER headless）必须注入 pending，确保与客户端状态一致，避免 state_hash 分叉触发 resync。
 	# 注意：`godot --headless` 运行在 editor binary 下时，OS.has_feature("headless") 仍可能为 false；
 	# 使用 DisplayServer.get_name() 判断显示模式更可靠。
-	var should_inject_pending := (DisplayServer.get_name() != "headless") or _is_online_dinnertime_confirm_enabled(state)
+	var online_dinnertime_confirm_enabled := _is_online_dinnertime_confirm_enabled(state)
+	var should_inject_pending := (DisplayServer.get_name() != "headless") or online_dinnertime_confirm_enabled
 	if should_inject_pending:
+		if online_dinnertime_confirm_enabled and state.round_state is Dictionary:
+			state.round_state[ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY] = _build_online_dinnertime_confirmed_players(state)
 		var set_pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
 			state.round_state, DefsClass.PHASE_DINNERTIME, _build_dinnertime_confirm_pending(state), "晚餐结算"
 		)

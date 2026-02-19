@@ -4,6 +4,7 @@ extends RefCounted
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ConfirmDinnertimeActionClass = preload("res://gameplay/actions/confirm_dinnertime_action.gd")
+const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var legacy_r := _case_legacy_global_confirm(player_count, seed_val)
@@ -12,6 +13,9 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var online_like_r := _case_per_player_confirm(player_count, seed_val)
 	if not online_like_r.ok:
 		return online_like_r
+	var recover_r := _case_confirmed_players_recovers_missing_pending(player_count, seed_val)
+	if not recover_r.ok:
+		return recover_r
 	return Result.success()
 
 static func _case_legacy_global_confirm(player_count: int, seed_val: int) -> Result:
@@ -76,6 +80,56 @@ static func _case_per_player_confirm(player_count: int, seed_val: int) -> Result
 
 	return _assert_dinnertime_pending_phase_key_cleared(second_r.value, "per_player")
 
+static func _case_confirmed_players_recovers_missing_pending(player_count: int, seed_val: int) -> Result:
+	if player_count < 2:
+		return Result.success()
+	var state_read := _build_dinnertime_state(player_count, seed_val)
+	if not state_read.ok:
+		return state_read
+	var state: GameState = state_read.value
+	var confirmed: Array = []
+	for _i in range(player_count):
+		confirmed.append(false)
+	state.round_state[ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY] = confirmed
+	state.round_state["pending_phase_actions"] = {
+		DefsClass.PHASE_DINNERTIME: [
+			{"kind": "confirm_dinnertime", "player_id": 0},
+		],
+	}
+
+	var action := ConfirmDinnertimeActionClass.new()
+	var first_r: Result = action.compute_new_state(state, Command.create("confirm_dinnertime", 0, {}))
+	if not first_r.ok:
+		return Result.failure("recover_missing_pending confirm_dinnertime(0) 失败: %s" % first_r.error)
+
+	var first_state: GameState = first_r.value
+	if not (first_state.round_state is Dictionary):
+		return Result.failure("recover_missing_pending 第一次确认后 round_state 类型错误（期望 Dictionary）")
+	var rs: Dictionary = first_state.round_state
+	var ppa_val = rs.get("pending_phase_actions", null)
+	if not (ppa_val is Dictionary):
+		return Result.failure("recover_missing_pending 第一次确认后 pending_phase_actions 类型错误（期望 Dictionary）")
+	var ppa: Dictionary = ppa_val
+	if not ppa.has(DefsClass.PHASE_DINNERTIME):
+		return Result.failure("recover_missing_pending 应恢复其它玩家的待确认项，但 Dinnertime key 缺失")
+	var list_val = ppa.get(DefsClass.PHASE_DINNERTIME, null)
+	if not (list_val is Array):
+		return Result.failure("recover_missing_pending pending_phase_actions[Dinnertime] 类型错误（期望 Array）")
+	var list: Array = list_val
+	if list.size() != player_count - 1:
+		return Result.failure(
+			"recover_missing_pending 恢复后的待确认数量错误（期望 %d，实际 %d）"
+				% [player_count - 1, list.size()]
+		)
+	for pid in range(1, player_count):
+		if not _list_has_player_pending_confirm(list, pid):
+			return Result.failure("recover_missing_pending 应包含 player_id=%d 的待确认项，实际: %s" % [pid, str(list)])
+
+	var second_r: Result = action.compute_new_state(first_state, Command.create("confirm_dinnertime", 1, {}))
+	if not second_r.ok:
+		return Result.failure("recover_missing_pending confirm_dinnertime(1) 失败: %s" % second_r.error)
+	return Result.success()
+
 static func _build_dinnertime_state(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(player_count, seed_val)
@@ -101,3 +155,14 @@ static func _assert_dinnertime_pending_phase_key_cleared(state: GameState, case_
 	if ppa.has("dinnertime"):
 		return Result.failure("%s: confirm_dinnertime 不应写入 pending_phase_actions[dinnertime]（大小写错误）" % case_name)
 	return Result.success()
+
+static func _list_has_player_pending_confirm(list: Array, player_id: int) -> bool:
+	for item_val in list:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if str(item.get("kind", "")) != "confirm_dinnertime":
+			continue
+		if int(item.get("player_id", -1)) == player_id:
+			return true
+	return false

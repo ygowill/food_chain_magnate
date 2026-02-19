@@ -6,6 +6,7 @@ extends ActionExecutor
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 const KIND_CONFIRM_DINNERTIME := "confirm_dinnertime"
+const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
 
 func _init() -> void:
 	action_id = "confirm_dinnertime"
@@ -31,6 +32,12 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not actor_read.ok:
 		return actor_read
 	var actor_id := int(actor_read.value)
+	var confirmed_read := _read_online_dinnertime_confirmed_players(state)
+	if confirmed_read.ok and (confirmed_read.value is Array):
+		var confirmed: Array = confirmed_read.value
+		if confirmed.size() == state.players.size():
+			if actor_id >= 0 and actor_id < confirmed.size() and bool(confirmed[actor_id]):
+				return Result.failure("玩家 %d 当前无需确认晚餐结算" % actor_id)
 	if not _has_player_pending_confirm(pending, actor_id):
 		return Result.failure("玩家 %d 当前无需确认晚餐结算" % actor_id)
 	return Result.success()
@@ -50,6 +57,20 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if not actor_read.ok:
 		return actor_read
 	var actor_id := int(actor_read.value)
+	var confirmed_read := _read_online_dinnertime_confirmed_players(state)
+	if confirmed_read.ok and (confirmed_read.value is Array):
+		var confirmed: Array = confirmed_read.value
+		if confirmed.size() == state.players.size():
+			if actor_id < 0 or actor_id >= confirmed.size():
+				return Result.failure("玩家 %d 当前无需确认晚餐结算" % actor_id)
+			if bool(confirmed[actor_id]):
+				return Result.failure("玩家 %d 当前无需确认晚餐结算" % actor_id)
+			confirmed[actor_id] = true
+			state.round_state[ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY] = confirmed
+			var remaining_by_confirmed := _build_pending_from_confirmed_players(confirmed)
+			return RoundStatePendingPhaseActionsClass.set_phase_pending_players(
+				state.round_state, DefsClass.PHASE_DINNERTIME, remaining_by_confirmed, KIND_CONFIRM_DINNERTIME
+			)
 	if not _has_player_pending_confirm(pending, actor_id):
 		return Result.failure("玩家 %d 当前无需确认晚餐结算" % actor_id)
 
@@ -121,6 +142,50 @@ static func _remove_player_pending_confirm(pending: Array, actor_id: int) -> Arr
 		if int(pid_read.value) == actor_id:
 			continue
 		remaining.append(item)
+	return remaining
+
+static func _read_online_dinnertime_confirmed_players(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("state 为空")
+	if not (state.players is Array):
+		return Result.failure("players 类型错误（期望 Array）")
+	if not (state.round_state is Dictionary):
+		return Result.failure("round_state 类型错误（期望 Dictionary）")
+	var rs: Dictionary = state.round_state
+	var val = rs.get(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, null)
+	if val == null:
+		return Result.success([])
+	if not (val is Array):
+		return Result.failure("round_state.%s 类型错误（期望 Array）" % ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY)
+	var raw: Array = Array(val)
+	if raw.size() != state.players.size():
+		return Result.success([])
+	var out: Array = []
+	for i in range(raw.size()):
+		var v = raw[i]
+		if v is bool:
+			out.append(bool(v))
+			continue
+		if v is int:
+			out.append(int(v) != 0)
+			continue
+		if v is float:
+			var f: float = float(v)
+			if f == floor(f):
+				out.append(int(f) != 0)
+				continue
+		return Result.failure("round_state.%s[%d] 类型错误（期望 bool/int/float）" % [ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, i])
+	return Result.success(out)
+
+static func _build_pending_from_confirmed_players(confirmed: Array) -> Array:
+	var remaining: Array[Dictionary] = []
+	for pid in range(confirmed.size()):
+		if bool(confirmed[pid]):
+			continue
+		remaining.append({
+			"kind": KIND_CONFIRM_DINNERTIME,
+			"player_id": pid,
+		})
 	return remaining
 
 static func _read_pending_player_id(value) -> Result:

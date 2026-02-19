@@ -8,6 +8,7 @@ extends ActionExecutor
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
 
 func _init() -> void:
 	action_id = "forfeit_player"
@@ -244,4 +245,11 @@ static func _remove_player_from_pending_phase_actions(state: GameState, player_i
 			filtered.append(item_val)
 		ppa[phase_name] = filtered
 	rs["pending_phase_actions"] = ppa
+	if rs.has(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY):
+		var confirmed_val = rs.get(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, null)
+		if confirmed_val is Array:
+			var confirmed: Array = Array(confirmed_val)
+			if player_id >= 0 and player_id < confirmed.size():
+				confirmed[player_id] = true
+				rs[ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY] = confirmed
 	state.round_state = rs
