@@ -19,6 +19,7 @@ var _room_file := "/tmp/fcm_room_code.txt"
 var _room_password := "123"
 var _confirm_delay_ms := 0
 var _timeout_ms := 120_000
+var _stop_round := 1
 
 var _net_client = null
 var _net_context = null
@@ -32,7 +33,8 @@ var _local_pid := -1
 
 var _action_in_flight := false
 var _entered_dinnertime_ms := -1
-var _sent_confirm := false
+var _entered_dinnertime_round := -1
+var _sent_confirm_rounds: Dictionary = {} # round_number -> true
 
 var _place_scan_world_min := Vector2i(0, 0)
 var _place_scan_world_max := Vector2i(0, 0)
@@ -56,6 +58,7 @@ func _run() -> void:
 		_confirm_delay_ms,
 		_timeout_ms,
 	])
+	print("[%s] stop_round=%d" % [NAME, _stop_round])
 
 	# Delay-load dependencies (see header note).
 	_CommandClass = load("res://core/types/command.gd")
@@ -236,20 +239,25 @@ func _maybe_send_next_action() -> void:
 		return
 
 	var phase := str(state.phase)
+	var round_num := int(state.round_number)
 	if phase == "Payday":
-		if not _sent_confirm:
-			push_error("[%s] FAIL entered Payday before sending confirm (local_pid=%d)" % [NAME, _local_pid])
-			quit(1)
+		if round_num == _stop_round:
+			if not _has_sent_dinnertime_confirm(round_num):
+				push_error("[%s] FAIL entered Payday before sending confirm (round=%d local_pid=%d)" % [NAME, round_num, _local_pid])
+				quit(1)
+				return
+			print("[%s] PASS reached Payday after confirm (round=%d local_pid=%d)" % [NAME, round_num, _local_pid])
+			quit(0)
 			return
-		print("[%s] PASS reached Payday after confirm (local_pid=%d)" % [NAME, _local_pid])
-		quit(0)
+		_try_play_payday(state)
 		return
 
 	if phase == "Dinnertime":
-		if _entered_dinnertime_ms < 0:
+		if _entered_dinnertime_round != round_num:
+			_entered_dinnertime_round = round_num
 			_entered_dinnertime_ms = Time.get_ticks_msec()
-			print("[%s] entered Dinnertime local_pid=%d" % [NAME, _local_pid])
-		if _sent_confirm:
+			print("[%s] entered Dinnertime round=%d local_pid=%d" % [NAME, round_num, _local_pid])
+		if _has_sent_dinnertime_confirm(round_num):
 			return
 		var elapsed := Time.get_ticks_msec() - _entered_dinnertime_ms
 		if elapsed < _confirm_delay_ms:
@@ -257,8 +265,8 @@ func _maybe_send_next_action() -> void:
 		if not _needs_dinnertime_confirm(state):
 			return
 		_send_action("confirm_dinnertime", {})
-		_sent_confirm = true
-		print("[%s] sent confirm_dinnertime local_pid=%d after_ms=%d" % [NAME, _local_pid, elapsed])
+		_mark_sent_dinnertime_confirm(round_num)
+		print("[%s] sent confirm_dinnertime round=%d local_pid=%d after_ms=%d" % [NAME, round_num, _local_pid, elapsed])
 		return
 
 	if phase == "Setup":
@@ -273,6 +281,14 @@ func _maybe_send_next_action() -> void:
 	if phase == "Working":
 		_try_play_working(state)
 		return
+
+func _try_play_payday(state) -> void:
+	if state == null:
+		return
+	var current := int(state.get_current_player_id())
+	if current != _local_pid:
+		return
+	_send_action("skip", {})
 
 func _try_play_setup(state) -> void:
 	if state == null:
@@ -518,4 +534,20 @@ func _parse_args(args: Array) -> void:
 			_timeout_ms = int(args[i + 1])
 			i += 2
 			continue
+		if a.begins_with("--stop-round="):
+			_stop_round = int(a.split("=", false, 1)[1])
+			i += 1
+			continue
+		if a == "--stop-round" and i + 1 < args.size():
+			_stop_round = int(args[i + 1])
+			i += 2
+			continue
 		i += 1
+
+func _has_sent_dinnertime_confirm(round_number: int) -> bool:
+	if _sent_confirm_rounds.has(round_number):
+		return bool(_sent_confirm_rounds.get(round_number, false))
+	return false
+
+func _mark_sent_dinnertime_confirm(round_number: int) -> void:
+	_sent_confirm_rounds[round_number] = true
