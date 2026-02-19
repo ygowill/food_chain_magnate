@@ -9,6 +9,7 @@ const DinnertimeHouseSalesClass = preload("res://modules/base_rules/rules/phase/
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
+const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 const EFFECT_SEG_DINNERTIME_TIEBREAK := ":dinnertime:tiebreaker:"
 const EFFECT_SEG_DINNERTIME_TIPS := ":dinnertime:tips:"
@@ -18,6 +19,42 @@ const EFFECT_SEG_DINNERTIME_SALE_HOUSE_BONUS := ":dinnertime:sale_house_bonus:"
 const KIND_CONFIRM_DINNERTIME := "confirm_dinnertime"
 const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
+
+static func _net_mode_name() -> String:
+	if NetContext == null:
+		return "NetContext:null"
+	match int(NetContext.mode):
+		NetContext.Mode.ONLINE_CLIENT:
+			return "ONLINE_CLIENT"
+		NetContext.Mode.ONLINE_SERVER:
+			return "ONLINE_SERVER"
+		_:
+			return "HOTSEAT"
+
+static func _bool_array_preview(arr: Array, limit: int = 12) -> String:
+	if arr == null:
+		return "null"
+	var parts: Array[String] = []
+	for i in range(min(arr.size(), limit)):
+		parts.append("1" if bool(arr[i]) else "0")
+	var suffix := "..." if arr.size() > parts.size() else ""
+	return "%d[%s%s]" % [arr.size(), "".join(parts), suffix]
+
+static func _pending_preview(pending: Array, limit: int = 6) -> String:
+	if pending == null:
+		return "null"
+	var parts: Array[String] = []
+	for i in range(min(pending.size(), limit)):
+		var it = pending[i]
+		if it is String:
+			parts.append(str(it))
+		elif it is Dictionary:
+			var d: Dictionary = it
+			parts.append("%s:%s" % [str(d.get("kind", "?")), str(d.get("player_id", "?"))])
+		else:
+			parts.append(str(typeof(it)))
+	var suffix := "..." if pending.size() > parts.size() else ""
+	return "len=%d [%s%s]" % [pending.size(), ", ".join(parts), suffix]
 
 static func _is_online_mode() -> bool:
 	if NetContext == null:
@@ -331,10 +368,43 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 	if should_inject_pending:
 		if online_dinnertime_confirm_enabled and state.round_state is Dictionary:
 			state.round_state[ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY] = _build_online_dinnertime_confirmed_players(state)
+		var pending := _build_dinnertime_confirm_pending(state)
 		var set_pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
-			state.round_state, DefsClass.PHASE_DINNERTIME, _build_dinnertime_confirm_pending(state), "晚餐结算"
+			state.round_state, DefsClass.PHASE_DINNERTIME, pending, "晚餐结算"
 		)
 		if not set_pending.ok:
 			return set_pending
+		if online_dinnertime_confirm_enabled:
+			var expected := 0
+			for pid in range(state.players.size()):
+				if _is_player_forfeited(state, pid):
+					continue
+				expected += 1
+			if pending.size() != expected:
+				AutoloadAccessClass.log_warn(
+					"Dinnertime",
+					"Online pending mismatch round=%d mode=%s display=%s expected=%d actual=%d confirmed=%s pending=%s"
+						% [
+							int(state.round_number),
+							_net_mode_name(),
+							str(DisplayServer.get_name()),
+							expected,
+							pending.size(),
+							_bool_array_preview(_read_online_dinnertime_confirmed_players(state)),
+							_pending_preview(pending),
+						]
+				)
+			else:
+				AutoloadAccessClass.log_info(
+					"Dinnertime",
+					"Online pending injected round=%d mode=%s display=%s confirmed=%s pending=%s"
+						% [
+							int(state.round_number),
+							_net_mode_name(),
+							str(DisplayServer.get_name()),
+							_bool_array_preview(_read_online_dinnertime_confirmed_players(state)),
+							_pending_preview(pending),
+						]
+				)
 
 	return Result.success().with_warnings(warnings)

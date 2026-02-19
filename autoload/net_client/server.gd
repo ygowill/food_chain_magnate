@@ -8,6 +8,7 @@ const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const DEFAULT_RESTAURANT_LOGO_COUNT := 6
+const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
 
 var _net = null
 
@@ -67,6 +68,47 @@ func _command_brief(cmd) -> String:
 		int(cmd.actor),
 		int(cmd.index)
 	]
+
+func _dinnertime_pending_brief(state) -> String:
+	if state == null or not (state.round_state is Dictionary):
+		return "-"
+	var rs: Dictionary = state.round_state
+	var ppa_val = rs.get("pending_phase_actions", null)
+	if not (ppa_val is Dictionary):
+		return "-"
+	var ppa: Dictionary = ppa_val
+	var list_val = ppa.get(DefsClass.PHASE_DINNERTIME, null)
+	if not (list_val is Array):
+		return "[]"
+	var list: Array = list_val
+	var parts: Array[String] = []
+	for item_val in list:
+		if item_val is String:
+			parts.append(str(item_val))
+			continue
+		if item_val is Dictionary:
+			var item: Dictionary = item_val
+			parts.append("%s:%s" % [str(item.get("kind", "?")), str(item.get("player_id", "?"))])
+			continue
+		parts.append(str(typeof(item_val)))
+		if parts.size() >= 6:
+			break
+	var suffix := "..." if list.size() > parts.size() else ""
+	return "len=%d [%s%s]" % [list.size(), ", ".join(parts), suffix]
+
+func _dinnertime_confirmed_brief(state) -> String:
+	if state == null or not (state.round_state is Dictionary):
+		return "-"
+	var rs: Dictionary = state.round_state
+	var v = rs.get(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, null)
+	if not (v is Array):
+		return "-"
+	var arr: Array = v
+	var parts: Array[String] = []
+	for i in range(min(arr.size(), 12)):
+		parts.append("1" if bool(arr[i]) else "0")
+	var suffix := "..." if arr.size() > parts.size() else ""
+	return "%d[%s%s]" % [arr.size(), "".join(parts), suffix]
 
 func on_peer_connected(peer_id: int) -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -716,6 +758,19 @@ func handle_rpc_action_request(request: Dictionary) -> void:
 		params = Dictionary(params_val)
 
 	var state = room.game_engine.get_state()
+	if action_id == "confirm_dinnertime":
+		GameLog.info(
+			"NetClient",
+			"RX confirm_dinnertime %s actor=%d phase=%s pending=%s confirmed=%s %s"
+				% [
+					_request_tag(peer_id, request_id),
+					actor_id,
+					_safe_text(str(state.phase)) if state != null else "-",
+					_dinnertime_pending_brief(state),
+					_dinnertime_confirmed_brief(state),
+					_room_brief(room),
+				]
+		)
 	if server_is_player_forfeited(state, actor_id):
 		send_request_rejected(peer_id, request_id, "forfeited_readonly", "Player has forfeited (spectator, read-only)")
 		return
@@ -723,6 +778,21 @@ func handle_rpc_action_request(request: Dictionary) -> void:
 	var cmd = CommandClass.create(action_id, actor_id, params)
 	var r = room.game_engine.execute_command(cmd)
 	if not r.ok:
+		if action_id == "confirm_dinnertime":
+			var phase := _safe_text(str(state.phase)) if state != null else "-"
+			GameLog.warn(
+				"NetClient",
+				"confirm_dinnertime rejected %s actor=%d phase=%s err=%s pending=%s confirmed=%s %s"
+					% [
+						_request_tag(peer_id, request_id),
+						actor_id,
+						phase,
+						_safe_text(str(r.error)),
+						_dinnertime_pending_brief(state),
+						_dinnertime_confirmed_brief(state),
+						_room_brief(room),
+					]
+			)
 		send_request_rejected(peer_id, request_id, "action_failed", r.error)
 		return
 
@@ -730,6 +800,20 @@ func handle_rpc_action_request(request: Dictionary) -> void:
 	var state_after = room.game_engine.get_state()
 	if state_after != null and state_after.has_method("compute_hash"):
 		state_hash = str(state_after.compute_hash())
+	if action_id == "confirm_dinnertime":
+		GameLog.info(
+			"NetClient",
+			"confirm_dinnertime applied %s actor=%d phase=%s pending=%s confirmed=%s state_hash=%s %s"
+				% [
+					_request_tag(peer_id, request_id),
+					actor_id,
+					_safe_text(str(state_after.phase)) if state_after != null else "-",
+					_dinnertime_pending_brief(state_after),
+					_dinnertime_confirmed_brief(state_after),
+					_short_hash(state_hash),
+					_room_brief(room),
+				]
+		)
 	GameLog.debug(
 		"NetClient",
 		"ActionRequest applied %s %s %s state_hash=%s"

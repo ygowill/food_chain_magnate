@@ -771,7 +771,16 @@ func _on_dinnertime_anim_completed() -> void:
 			confirm_cmd = CommandClass.create("confirm_dinnertime", local_pid, {})
 		var exec_r_val = _execute_command.call(confirm_cmd)
 		if exec_r_val is Result and not exec_r_val.ok:
-			GameLog.warn("Game", "确认晚餐结算失败: %s" % str(exec_r_val.error))
+			var live_state := _read_live_game_state()
+			var phase := str(live_state.phase) if live_state != null else "-"
+			var pending := _read_dinnertime_pending_list(live_state)
+			var mode := str(NetContext.mode) if NetContext != null else "NetContext:null"
+			var local_pid2 := int(NetContext.local_player_id) if NetContext != null else -1
+			GameLog.warn(
+				"Game",
+				"确认晚餐结算失败: %s phase=%s local_pid=%d mode=%s pending=%s"
+					% [str(exec_r_val.error), phase, local_pid2, mode, str(pending)]
+			)
 	_disable_dinnertime_overlay()
 
 func _disable_dinnertime_overlay() -> void:
