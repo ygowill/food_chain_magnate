@@ -146,7 +146,14 @@ func on_peer_disconnected(peer_id: int) -> void:
 				% [peer_id, str(in_game), rr.error, _room_brief(room)]
 		)
 
-	if in_game and actor_id >= 0 and room.game_engine != null:
+	# 房间已被清理（无任何在线成员）：直接关闭对局，不再执行 forfeit/auto step。
+	# 否则，服务器会在无人在线时继续自动推进（直到 safety limit）。
+	if in_game and removed and room != null and room.game_engine != null:
+		if room.game_engine.has_method("dispose"):
+			room.game_engine.dispose()
+		room.game_engine = null
+
+	if in_game and not removed and actor_id >= 0 and room.game_engine != null:
 		var cmd = CommandClass.create("forfeit_player", actor_id, {})
 		var fr = room.game_engine.execute_command(cmd)
 		if fr.ok:
@@ -1036,6 +1043,10 @@ func server_try_auto_submit_forfeited_restructuring(room) -> bool:
 func server_drain_forfeited_auto_steps(room) -> void:
 	if room == null or room.game_engine == null:
 		return
+	if room.has_method("get_peer_ids"):
+		var peers_val = room.get_peer_ids()
+		if peers_val is Array and (peers_val as Array).is_empty():
+			return
 
 	var safety := 0
 	while safety < 128:
