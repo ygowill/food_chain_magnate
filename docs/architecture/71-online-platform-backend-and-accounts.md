@@ -23,12 +23,13 @@
   - server 侧在 `autoload/net_client/server.gd`：执行命令并广播 `CommandApplied`
   - client 侧在 `autoload/net_client/client.gd`：接收命令并回放到本地 `GameEngine`
 - **存档/回放格式（Archive）**：`core/engine/game_engine/archive.gd`
-  - `initial_state + rng + commands (+ checkpoints metadata)` 是事实来源
+  - `create_archive()` 返回：`{ schema_version, game_version, modules_v2_base_dir, initial_state, rng, commands, checkpoints (仅元数据: index/hash/rng_calls), current_index, final_hash }`
   - 可用于：断线重连 resync、观战追平、历史回放文件
+  - 注意：`schema_version` 和 `game_version` 对回放兼容性至关重要
 - **房间与旁观者**（现有 dedicated server）：
   - `server/room_manager.gd`、`server/room.gd`
   - InGame 允许 JoinRoom 作为 spectator（只读）
-  - 断线处理当前会触发 `forfeit_player`（可在后续演进为“保座位+超时弃权”）
+  - 断线处理：`room.gd` 的 `disconnect_peer()` 会保留座位（`_seat_profile_by_seat_index` 不删除），仅移除在线映射；forfeit 是游戏层面的独立操作。当前已具备"保座位"雏形，后续需增加 grace period + 超时弃权
 
 本文只引入一个新概念：**平台后端（HTTP Backend）**，用于管理账号/会话/房间目录/历史索引等“平台能力”。
 
@@ -92,6 +93,14 @@ flowchart LR
    - 后端返回 `{ user_id, session_id, profile }`
 3. 客户端进入在线大厅（无需用户手动注册）。
 
+**关键语义**：同一 `device_id` 不重复创建用户。后端收到 `POST /v1/auth/guest` 时，若 `auth_identities` 中已存在 `(guest, device_id)` 记录，则直接返回对应 `user_id` 的新 session，而非创建新用户。
+
+**防滥用策略**：
+
+- `auth_identities` 的 `(provider, provider_user_id)` 唯一约束天然防止同一 `device_id` 创建多个 guest
+- IP 级别速率限制：同一 IP 每分钟最多 N 次 guest 创建（防止伪造 `device_id` 批量注册）
+- 可选：新 guest 账号加入房间需冷却期（如创建后 30s 才能加入，防刷房间）
+
 ### 4.3 注册/登录/绑定（Guest → 正式账号）
 
 最小闭环（先做 email+password 或 任一第三方）：
@@ -119,7 +128,15 @@ flowchart LR
 - `exp`（30–60s）
 - 可选：`seat_index`（若要固定座位）、`display_name`（防止客户端伪造昵称）、`ban_flags`
 
-> 安全要点：connect_token 只用于“连接/加入房间”，不要长期有效；长期会话仍由 Backend 的 `session_id` 负责。
+> 安全要点：connect_token 只用于"连接/加入房间"，不要长期有效；长期会话仍由 Backend 的 `session_id` 负责。
+
+**验签实现方案（推荐 HMAC-SHA256）**：
+
+当前 Game Server 是 Godot headless 进程，GDScript 无内置 JWT 库。推荐方案：
+
+- **首选：HMAC-SHA256 + 共享密钥**。token 格式为 `base64(payload).base64(hmac_sha256(payload, secret))`，Godot 的 `Crypto` / `HMACContext` 类原生支持 HMAC 计算，无需第三方依赖。
+- 备选：Game Server 回调 Backend 验证 token（`POST /internal/connect_tokens/verify`），实现最简单但增加一次网络往返。
+- 不推荐：在 GDScript 中实现完整 JWT（RS256/ES256），复杂度高且无成熟库。
 
 ## 6. 房间目录（Directory）与观战策略
 
@@ -131,6 +148,15 @@ flowchart LR
 - 管控权限（是否允许观战/是否需要密码/是否封禁）
 
 这就是 HTTP Backend 的 `rooms` 表与 API。
+
+**房间目录 GC 与心跳超时策略**：
+
+Game Server 崩溃时 Backend 无法被主动通知，因此需要基于心跳的 GC 机制：
+
+- Game Server 每 15s 发送 `POST /internal/game_servers/heartbeat`（携带 `game_server_id` + 当前活跃 `room_codes`）
+- Backend 记录 `game_servers.last_heartbeat_at`；超过 30s 无心跳标记为 `unhealthy`
+- 超过 60s 无心跳：将该 server 上所有 `rooms` 标记为 `Ended`（异常），清理目录
+- 可选：Backend 定时任务扫描 `status=Lobby` 且 `updated_at` 超过 1h 的空房间，自动清理
 
 ### 6.2 房间/观战相关数据模型（建议）
 
@@ -192,17 +218,35 @@ flowchart LR
 - spectator **不应**看到任何玩家的隐信息；
 - server 广播的 `CommandApplied`/事件必须按接收者裁剪（player vs spectator），或确保 payload 在客户端侧必经 `command_privacy` 脱敏并且 spectator 视为“非本人”。
 
-> 结论：观战不是“把所有消息广播给更多人”这么简单，必须把隐信息裁剪纳入协议与实现检查清单。
+> 结论：观战不是"把所有消息广播给更多人"这么简单，必须把隐信息裁剪纳入协议与实现检查清单。
 
-### 7.4 断线重连（建议比当前更成熟）
+**当前脱敏覆盖面与前置审计**：
 
-当前 server 侧掉线会 `forfeit_player`。若目标是“成熟线上体验”，建议演进为：
+当前 `core/utils/command_privacy.gd` 仅处理 `select_reserve_card` 一个 action（对非本人隐藏 `selected_index`）。在观战功能上线前，需完成一次完整的隐信息审计：
 
-- `grace_period_sec`：断线保座位（例如 120s）
-- grace 内同 `user_id` 重连可恢复 seat，并下发 `ResyncArchive`
-- 超时仍未回：再执行 `forfeit_player`
+- 逐一检查所有 action_id，确认哪些 params 含隐信息
+- 确认 `ResyncArchive` 下发给 spectator 时，state 中是否包含应隐藏的字段（如玩家手牌、未公开的选择）
+- 建议在 `command_privacy.gd` 中增加 `sanitize_for_spectator(cmd, state)` 方法，统一处理观战者视角的脱敏
+
+### 7.4 断线重连（在现有基础上演进）
+
+当前 `room.gd` 的 `disconnect_peer()` 已经会保留座位（`_seat_profile_by_seat_index` 不删除），仅移除在线映射（`_peer_id_by_seat_index`）。forfeit 是游戏层面的独立操作，不是断线的直接后果。这意味着"保座位"的雏形已经存在。
+
+建议在此基础上增加 grace period 机制：
+
+- `grace_period_sec`：断线后保留座位的超时时间（例如 120s）
+- grace 内同 `user_id`（通过 `connect_token` 验证身份）重连可恢复 seat，并下发 `ResyncArchive`
+- 超时仍未回：执行 `forfeit_player`
 
 这部分不影响本文的架构分层，只影响 game server 的房间状态机策略。
+
+### 7.5 回退操作与观战者（rewind_to_turn_start）
+
+当前实现中存在 `rpc_rewind_to_turn_start()` 功能，允许玩家回退到当前回合开始。引入观战后需明确：
+
+- 玩家触发 rewind 时，server 应同步通知观战者执行相同的 rewind（广播 `ResyncArchive` 含 `_rewind_to_turn_start` 元数据）
+- 观战者客户端收到后本地执行 `rewind_to_command` 追平状态
+- 回退不影响 archive 的最终完整性（archive 只记录最终时间线的 commands）
 
 ## 8. 历史对局与回放（沿用 archive）
 
@@ -232,15 +276,19 @@ Backend 对外提供：
   - `match_id`
   - `room_id`、`room_code`
   - `game_server_id`
+  - `status`（`completed` / `abandoned` / `crashed`）
   - `started_at` / `ended_at`
+  - `duration_sec`（对局时长，方便列表展示和统计）
+  - `player_count`（实际参与人数）
   - `seed`、`modules_json`、`schema_version`、`game_version`
   - `final_hash`
   - `summary_json`
-- `match_players`
+- `match_participants`（含玩家和观战者）
   - `match_id`
   - `user_id`
-  - `seat_index`
-  - `result`、`score_json`、`disconnect_count`
+  - `role`（`player` / `spectator`）
+  - `seat_index`（player 才有；spectator 为 null）
+  - `result`、`score_json`、`disconnect_count`（仅 player）
 - `match_replays`
   - `match_id`
   - `storage_uri`
@@ -249,8 +297,8 @@ Backend 对外提供：
 
 权限建议（默认安全）：
 
-- 只有 `match_players` 可访问 replay；
-- 若要支持“公开分享回放”，在后端增加 `share_id`（高熵随机）并可撤销。
+- `match_participants` 中的玩家和观战者均可访问 replay（观战者也应能回看自己观看过的对局）；
+- 若要支持"公开分享回放"，在后端增加 `share_id`（高熵随机）并可撤销。
 
 ## 9. 客户端账号注册/登录 UI：放在哪、怎么接（补齐缺失）
 
@@ -297,6 +345,14 @@ Backend 对外提供：
 - `autoload/platform_session.gd`：保存 session、负责 guest 自动登录、登出、持久化到 `user://`
 - `autoload/platform_api.gd`：封装 Backend HTTP 调用（`/auth/*`、`/rooms/*`、`/matches/*`）
 
+**与现有 `NetContext` 的整合**：
+
+当前 `autoload/net_context.gd` 已管理 `mode`（HOTSEAT/ONLINE_CLIENT/ONLINE_SERVER）、`room_state`、`player_profile`。新增 autoload 的职责边界：
+
+- `platform_session.gd` 管理 `user_id` / `session_id` / `is_guest`，登录成功后将 `display_name` 同步写入 `NetContext.player_profile.name`
+- `NetContext.player_profile` 继续作为"当前对局中的玩家身份"使用，`platform_session` 是其上游数据源
+- `online_lobby_view_model.gd` 已有复杂状态管理，账号状态变更通过 `EventBus` 广播（如 `account_state_changed`），view model 订阅即可，避免直接耦合
+
 UI 只订阅状态并触发调用：
 
 - 在线大厅进入时：确保 `platform_session.ensure_guest_or_login()` 已完成
@@ -327,4 +383,31 @@ UI 只订阅状态并触发调用：
 > 房间创建是否需要“backend → game server 预创建”取决于实现选型：
 > - 简化：room 仍由 game server 自己生成 code，backend 只做目录缓存（实现快，但多实例下更复杂）
 > - 推荐：backend 生成 room_code 并选择 server，再请求 server 创建（目录强一致、易扩容）
+
+### 10.3 API 补充说明
+
+- `POST /v1/auth/bind` 请求体需明确绑定目标类型：`{ provider: "email", email, password }` 或 `{ provider: "steam", oauth_token }`
+- `POST /v1/rooms/{room_code}/spectate` 保持独立端点（而非合并到 `/join?role=spectator`），因为观战的权限检查逻辑（`allow_spectators`、`spectator_policy`）与加入房间不同
+
+## 11. 迁移路径：直连模式与平台模式共存
+
+当前客户端通过 `NetClient.connect_to_server(url)` 直连 Game Server。引入平台后端后，需要两种模式共存：
+
+- **直连模式（保留）**：用于局域网/自建服务器场景。客户端直接输入 `ws://host:port` 连接，无需 Backend 参与，无账号体系，行为与当前完全一致。
+- **平台模式（新增）**：客户端先通过 Backend 获取 `{ ws_url, connect_token }`，再连接 Game Server。Game Server 验证 connect_token 后允许加入。
+
+实现建议：
+
+- `NetContext` 增加 `connection_mode`（`direct` / `platform`）标识当前连接方式
+- `NetClient.connect_to_server()` 增加可选的 `connect_token` 参数；Game Server 侧在 `rpc_client_hello` 中检查：若 server 配置了共享密钥则要求 token，否则跳过验签（兼容直连）
+- 在线大厅 UI 提供"直连服务器"入口（输入地址）和"平台房间"入口（走 Backend API），两条路径最终都调用 `NetClient.connect_to_server()`
+
+## 12. 部署与 TLS
+
+Game Server 的 WSS 连接建议通过反向代理（nginx / caddy）终止 TLS，Godot headless 进程本身只监听明文 WebSocket。部署拓扑：
+
+```
+Client --WSS--> nginx/caddy (TLS termination) --WS--> Godot Game Server (:7000)
+Client --HTTPS--> Backend (自带 TLS 或同样经反向代理)
+```
 
