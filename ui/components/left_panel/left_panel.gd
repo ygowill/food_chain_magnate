@@ -655,7 +655,7 @@ func _create_restaurant_overview_card(player_id: int, player: Dictionary, is_sel
 	var metrics := Label.new()
 	metrics.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	metrics.clip_text = true
-	metrics.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	metrics.autowrap_mode = TextServer.AUTOWRAP_OFF
 	metrics.max_lines_visible = 2
 	metrics.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	metrics.text = "员工%d  餐厅%d\n里程碑%d  薪资$%d" % [emp_count, rest_count, milestone_count, salary_level]
