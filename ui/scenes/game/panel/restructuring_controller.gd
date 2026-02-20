@@ -6,6 +6,7 @@ extends RefCounted
 const RestructuringModalScene = preload("res://ui/components/modal_panel/restructuring_modal.tscn")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
 var _scene = null
 var _execute_command: Callable = Callable()
@@ -288,6 +289,7 @@ func _show_restructuring_modal(covered: Rect2) -> void:
 
 		UiSignalHelpersClass.safe_connect(_restructuring_modal, "completed", _on_restructuring_modal_completed)
 		UiSignalHelpersClass.safe_connect(_restructuring_modal, "cancelled", _on_restructuring_modal_cancelled)
+		UiSignalHelpersClass.safe_connect(_restructuring_modal, "auto_fill_requested", _on_restructuring_modal_auto_fill_requested)
 		if _view_player_selected.is_valid():
 			UiSignalHelpersClass.safe_connect(_restructuring_modal, "player_selected", _view_player_selected)
 
@@ -401,6 +403,172 @@ func _on_restructuring_modal_completed(_result: Dictionary) -> void:
 
 func _on_restructuring_modal_cancelled() -> void:
 	_hide_restructuring_modal()
+
+func _on_restructuring_modal_auto_fill_requested() -> void:
+	if _scene == null or _scene.get("game_engine") == null:
+		return
+	if not is_instance_valid(_restructuring_modal):
+		return
+
+	var engine = _scene.get("game_engine")
+	if engine == null or not (engine is GameEngine):
+		return
+	var state: GameState = engine.get_state()
+	if state == null:
+		return
+	if state.phase != DefsClass.PHASE_RESTRUCTURING:
+		return
+
+	var stored_view_id := -1
+	if _get_view_player_id.is_valid():
+		var v = _get_view_player_id.call()
+		if v is int:
+			stored_view_id = int(v)
+		elif v is float:
+			var vf: float = float(v)
+			if vf == floor(vf):
+				stored_view_id = int(vf)
+
+	var actor_id := _get_effective_view_player_id(state, stored_view_id)
+	if actor_id < 0:
+		return
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		var local_pid := int(NetContext.local_player_id)
+		if local_pid < 0 or actor_id != local_pid:
+			GameLog.warn("Game", "联机模式下只能调整自己的公司结构")
+			return
+
+	# 已提交后禁止填充
+	var submitted := _get_restructuring_submitted_map(state)
+	if not submitted.is_empty() and _is_restructuring_player_submitted(submitted, actor_id):
+		return
+
+	var player := state.get_player(actor_id)
+	if player.is_empty():
+		return
+
+	var cs_val = player.get("company_structure", null)
+	if not (cs_val is Dictionary):
+		return
+	var cs: Dictionary = cs_val
+	var ceo_slots := int(cs.get("ceo_slots", 0))
+	if ceo_slots <= 0:
+		return
+
+	var busy_any: Array = Array(player.get("busy_marketers", []))
+	var busy := {}
+	for b in busy_any:
+		if b is String:
+			var bid := str(b).strip_edges()
+			if not bid.is_empty():
+				busy[bid] = true
+
+	var struct_any = cs.get("structure", null)
+	var structure: Array = struct_any if (struct_any is Array) else []
+	var direct_by_slot: Array[String] = []
+	var reports_by_slot: Array = [] # slot_index -> Array[String]
+	for i in range(ceo_slots):
+		var direct := ""
+		var reports: Array[String] = []
+		if i < structure.size():
+			var entry_val = structure[i]
+			if entry_val is Dictionary:
+				var entry: Dictionary = entry_val
+				direct = str(entry.get("employee_id", "")).strip_edges()
+				if direct == "ceo":
+					direct = ""
+				var reps_val = entry.get("reports", [])
+				if reps_val is Array:
+					for rep_val in Array(reps_val):
+						if not (rep_val is String):
+							continue
+						var rep_id := str(rep_val).strip_edges()
+						if rep_id.is_empty() or rep_id == "ceo":
+							continue
+						reports.append(rep_id)
+		direct_by_slot.append(direct)
+		reports_by_slot.append(reports)
+
+	var reserve_any: Array = Array(player.get("reserve_employees", []))
+	var reserve_ids: Array[String] = []
+	for r in reserve_any:
+		if not (r is String):
+			continue
+		var rid := str(r).strip_edges()
+		if rid.is_empty() or rid == "ceo":
+			continue
+		if busy.has(rid):
+			continue
+		reserve_ids.append(rid)
+
+	if reserve_ids.is_empty():
+		return
+
+	var reserve_managers: Array[String] = []
+	var reserve_non_managers: Array[String] = []
+	for emp_id in reserve_ids:
+		if _is_manager_employee(emp_id):
+			reserve_managers.append(emp_id)
+		else:
+			reserve_non_managers.append(emp_id)
+
+	if _restructuring_modal.has_method("set_auto_fill_enabled"):
+		_restructuring_modal.call("set_auto_fill_enabled", false)
+
+	var placed := 0
+	# 1) 填充空的 CEO 直属槽（优先经理）
+	for slot_index in range(ceo_slots):
+		if not str(direct_by_slot[slot_index]).is_empty():
+			continue
+		var pick := ""
+		if not reserve_managers.is_empty():
+			pick = str(reserve_managers.pop_front())
+		elif not reserve_non_managers.is_empty():
+			pick = str(reserve_non_managers.pop_front())
+		else:
+			break
+		var direct_r: Result = _execute_command.call(Command.create("set_company_structure_direct", actor_id, {
+			"slot_index": slot_index,
+			"employee_id": pick,
+		}))
+		if not direct_r.ok:
+			GameLog.warn("Game", "一键填充失败（直属槽）: %s" % direct_r.error)
+			break
+		direct_by_slot[slot_index] = pick
+		placed += 1
+
+	# 2) 填充经理下属槽（只放普通员工）
+	for manager_slot_index in range(ceo_slots):
+		if reserve_non_managers.is_empty():
+			break
+		var manager_id := str(direct_by_slot[manager_slot_index]).strip_edges()
+		if manager_id.is_empty():
+			continue
+		var cap := _get_employee_manager_slots(manager_id)
+		if cap <= 0:
+			continue
+		var current_reports: Array = reports_by_slot[manager_slot_index] if manager_slot_index < reports_by_slot.size() else []
+		var empty_slots := cap - int(current_reports.size())
+		if empty_slots <= 0:
+			continue
+		for _i in range(empty_slots):
+			if reserve_non_managers.is_empty():
+				break
+			var rep_pick := str(reserve_non_managers.pop_front())
+			var rep_r: Result = _execute_command.call(Command.create("set_company_structure_report", actor_id, {
+				"manager_slot_index": manager_slot_index,
+				"employee_id": rep_pick,
+			}))
+			if not rep_r.ok:
+				GameLog.warn("Game", "一键填充失败（下属槽）: %s" % rep_r.error)
+				break
+			current_reports.append(rep_pick)
+			placed += 1
+
+	if _restructuring_modal.has_method("set_auto_fill_enabled"):
+		_restructuring_modal.call("set_auto_fill_enabled", true)
+	if placed > 0 and _restructuring_modal.has_method("set_status_text"):
+		_restructuring_modal.call("set_status_text", "已一键填充 %d 名员工" % placed)
 
 func _get_restructuring_submitted_map(state: GameState) -> Dictionary:
 	if state == null:
@@ -530,6 +698,8 @@ func _sync_restructuring_modal_ui(state: GameState, view_player_id: int) -> void
 		_restructuring_modal.call("set_confirm_text", confirm_text)
 	if _restructuring_modal.has_method("set_confirm_enabled"):
 		_restructuring_modal.call("set_confirm_enabled", confirm_enabled)
+	if _restructuring_modal.has_method("set_auto_fill_enabled"):
+		_restructuring_modal.call("set_auto_fill_enabled", confirm_enabled and show_content)
 	if _restructuring_modal.has_method("set_status_text"):
 		_restructuring_modal.call("set_status_text", status_text)
 
@@ -539,3 +709,37 @@ func _get_effective_view_player_id(state: GameState, requested_view_id: int) -> 
 	if requested_view_id >= 0 and requested_view_id < state.players.size():
 		return requested_view_id
 	return state.get_current_player_id()
+
+func _get_employee_manager_slots(employee_id: String) -> int:
+	var emp_id := str(employee_id).strip_edges()
+	if emp_id.is_empty() or emp_id == "ceo":
+		return 0
+	if not EmployeeRegistryClass.is_loaded():
+		return 0
+	var def_val = EmployeeRegistryClass.get_def(emp_id)
+	if def_val is EmployeeDef:
+		return maxi(0, int((def_val as EmployeeDef).manager_slots))
+	if def_val != null and def_val.has_method("to_dict"):
+		var d_val = def_val.call("to_dict")
+		if d_val is Dictionary:
+			return maxi(0, int((d_val as Dictionary).get("manager_slots", 0)))
+	return 0
+
+func _is_manager_employee(employee_id: String) -> bool:
+	var emp_id := str(employee_id).strip_edges()
+	if emp_id.is_empty() or emp_id == "ceo":
+		return false
+	if not EmployeeRegistryClass.is_loaded():
+		return false
+	var def_val = EmployeeRegistryClass.get_def(emp_id)
+	if def_val is EmployeeDef:
+		var def: EmployeeDef = def_val
+		return str(def.role) == "manager" or maxi(0, int(def.manager_slots)) > 0
+	if def_val != null and def_val.has_method("to_dict"):
+		var d_val = def_val.call("to_dict")
+		if d_val is Dictionary:
+			var d: Dictionary = d_val
+			var role := str(d.get("role", "")).strip_edges()
+			var slots := maxi(0, int(d.get("manager_slots", 0)))
+			return role == "manager" or slots > 0
+	return false

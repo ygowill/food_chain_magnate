@@ -115,6 +115,11 @@ custom_minimum_size = Vector2(120, 38)
 layout_mode = 2
 text = "关闭"
 
+[node name="AutoFillButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ButtonRow"]
+custom_minimum_size = Vector2(140, 38)
+layout_mode = 2
+text = "一键填充"
+
 [node name="ConfirmButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ButtonRow"]
 custom_minimum_size = Vector2(120, 38)
 layout_mode = 2

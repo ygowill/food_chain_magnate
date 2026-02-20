@@ -4,12 +4,14 @@ class_name RestructuringModal
 extends "res://ui/components/modal_panel/modal_panel_base.gd"
 
 signal player_selected(player_id: int)
+signal auto_fill_requested()
 
 @onready var hand_host: Control = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split/HandHost
 @onready var company_host: Control = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split/CompanyHost/CompanyContentHost
 @onready var status_label: Label = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Hint
 @onready var player_buttons_host: HBoxContainer = $Panel/MarginContainer/VBoxContainer/PlayerRow/PlayerButtons
 @onready var split: HSplitContainer = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/Split
+@onready var auto_fill_button: Button = $Panel/MarginContainer/VBoxContainer/ButtonRow/AutoFillButton
 
 const RESTRUCTURING_HAND_TARGET_WIDTH := 460.0 # fits 3 compact cards/row with margins (issue_tracker #45)
 const _MAX_SPLIT_ADJUST_ATTEMPTS := 6
@@ -29,6 +31,10 @@ func _ready() -> void:
 	set_confirm_text("确认重组")
 	set_cancel_text("关闭")
 	set_confirm_enabled(true)
+	if is_instance_valid(auto_fill_button):
+		UiStylesClass.apply_button_secondary(auto_fill_button)
+		if not auto_fill_button.pressed.is_connected(_on_auto_fill_pressed):
+			auto_fill_button.pressed.connect(_on_auto_fill_pressed)
 
 func open(_covered_rect: Rect2) -> void:
 	# Restructuring needs a full-screen modal (covers left info panel as well).
@@ -62,6 +68,10 @@ func set_status_text(text: String) -> void:
 	if not is_instance_valid(status_label):
 		return
 	status_label.text = text
+
+func set_auto_fill_enabled(enabled: bool) -> void:
+	if is_instance_valid(auto_fill_button):
+		auto_fill_button.disabled = not bool(enabled)
 
 func set_player_switcher(player_count: int, view_player_id: int, submitted: Dictionary) -> void:
 	if not is_instance_valid(player_buttons_host):
@@ -237,3 +247,6 @@ func _detach_panel_to_parent(panel: Node, target_parent: Node) -> void:
 
 func _on_confirm_pressed() -> void:
 	completed.emit({"action": "submit_restructuring"})
+
+func _on_auto_fill_pressed() -> void:
+	auto_fill_requested.emit()
