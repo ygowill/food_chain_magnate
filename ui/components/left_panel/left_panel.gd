@@ -125,6 +125,10 @@ func _apply_visual_styles() -> void:
 		UiStylesClass.apply_panel_poster_alt(player_summary_card)
 	if is_instance_valid(player_name_label):
 		UiStylesClass.apply_label_dark(player_name_label)
+		player_name_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+		player_name_label.max_lines_visible = 1
+		player_name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		player_name_label.clip_text = true
 	if is_instance_valid(cash_label):
 		UiStylesClass.apply_label_dark(cash_label)
 	if is_instance_valid(employee_count_label):
@@ -154,8 +158,16 @@ func _apply_visual_styles() -> void:
 		UiStylesClass.apply_panel_poster_alt(activity_feed)
 	if is_instance_valid(activity_line1):
 		UiStylesClass.apply_label_dark(activity_line1)
+		activity_line1.autowrap_mode = TextServer.AUTOWRAP_OFF
+		activity_line1.max_lines_visible = 1
+		activity_line1.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		activity_line1.clip_text = true
 	if is_instance_valid(activity_line2):
 		UiStylesClass.apply_label_hint_dark(activity_line2)
+		activity_line2.autowrap_mode = TextServer.AUTOWRAP_OFF
+		activity_line2.max_lines_visible = 1
+		activity_line2.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		activity_line2.clip_text = true
 	if is_instance_valid(view_logs_button):
 		UiStylesClass.apply_button_secondary(view_logs_button)
 		view_logs_button.flat = false
@@ -633,9 +645,10 @@ func _create_restaurant_overview_card(player_id: int, player: Dictionary, is_sel
 
 	var metrics := Label.new()
 	metrics.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	metrics.clip_text = false
-	metrics.autowrap_mode = TextServer.AUTOWRAP_OFF
+	metrics.clip_text = true
+	metrics.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	metrics.max_lines_visible = 2
+	metrics.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	metrics.text = "员工%d  餐厅%d\n里程碑%d  薪资$%d" % [emp_count, rest_count, milestone_count, salary_level]
 	UiStylesClass.apply_label_hint_dark(metrics)
 	var fs_metrics := 13

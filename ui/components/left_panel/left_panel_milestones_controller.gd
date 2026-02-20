@@ -247,6 +247,10 @@ func _create_milestone_compact_row(milestone_id: String, milestone_def, is_claim
 	# 里程碑名称
 	var name_label := Label.new()
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	name_label.max_lines_visible = 1
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_label.clip_text = true
 	var fs_name := 18
 	if Globals != null:
 		fs_name = int(Globals.get_scaled_font_size(18))

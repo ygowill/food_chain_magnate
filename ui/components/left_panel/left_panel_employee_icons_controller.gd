@@ -164,6 +164,10 @@ func _create_employee_tag(emp_id: String, is_busy: bool, player: Dictionary) -> 
 	# 创建标签
 	var label := Label.new()
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	label.max_lines_visible = 1
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	label.clip_text = true
 	var level_suffix := _get_level_suffix(def)
 	label.text = display_name + level_suffix
 	var fs := 18
