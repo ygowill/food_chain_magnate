@@ -1,3 +1,4 @@
+import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -72,3 +73,71 @@ async def guest_login(req: GuestRequest, db: AsyncSession = Depends(get_db)):
     db.add(sess)
     await db.commit()
     return AuthResponse(user_id=user_id, session_id=sess.session_id)
+
+
+def _hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    h = hashlib.sha256((salt + password).encode()).hexdigest()
+    return f"{salt}${h}"
+
+
+def _verify_password(password: str, credential_hash: str) -> bool:
+    salt, h = credential_hash.split("$", 1)
+    return hashlib.sha256((salt + password).encode()).hexdigest() == h
+
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@router.post("/register", response_model=AuthResponse)
+async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    if not req.email or not req.password:
+        raise HTTPException(400, "email and password are required")
+
+    exists = (await db.execute(
+        select(AuthIdentity).where(
+            AuthIdentity.provider == "email",
+            AuthIdentity.provider_user_id == req.email,
+        )
+    )).scalar_one_or_none()
+    if exists:
+        raise HTTPException(409, "email already registered")
+
+    user = User()
+    db.add(user)
+    await db.flush()
+    db.add(AuthIdentity(
+        provider="email",
+        provider_user_id=req.email,
+        user_id=user.user_id,
+        credential_hash=_hash_password(req.password),
+        verified=False,
+    ))
+    sess = _new_session(user.user_id)
+    db.add(sess)
+    await db.commit()
+    return AuthResponse(user_id=user.user_id, session_id=sess.session_id)
+
+
+@router.post("/login", response_model=AuthResponse)
+async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
+    identity = (await db.execute(
+        select(AuthIdentity).where(
+            AuthIdentity.provider == "email",
+            AuthIdentity.provider_user_id == req.email,
+        )
+    )).scalar_one_or_none()
+    if not identity or not _verify_password(req.password, identity.credential_hash):
+        raise HTTPException(401, "invalid email or password")
+
+    sess = _new_session(identity.user_id)
+    db.add(sess)
+    await db.commit()
+    return AuthResponse(user_id=identity.user_id, session_id=sess.session_id)

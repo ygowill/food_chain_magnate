@@ -37,3 +37,40 @@ async def test_health(client: AsyncClient):
     resp = await client.get("/health")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_register_creates_user(client: AsyncClient):
+    resp = await client.post("/v1/auth/register", json={"email": "a@b.com", "password": "pass123"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "user_id" in data
+    assert "session_id" in data
+
+
+@pytest.mark.asyncio
+async def test_register_duplicate_email_rejected(client: AsyncClient):
+    await client.post("/v1/auth/register", json={"email": "dup@b.com", "password": "p1"})
+    resp = await client.post("/v1/auth/register", json={"email": "dup@b.com", "password": "p2"})
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_login_success(client: AsyncClient):
+    reg = await client.post("/v1/auth/register", json={"email": "login@b.com", "password": "secret"})
+    resp = await client.post("/v1/auth/login", json={"email": "login@b.com", "password": "secret"})
+    assert resp.status_code == 200
+    assert resp.json()["user_id"] == reg.json()["user_id"]
+
+
+@pytest.mark.asyncio
+async def test_login_wrong_password(client: AsyncClient):
+    await client.post("/v1/auth/register", json={"email": "wp@b.com", "password": "correct"})
+    resp = await client.post("/v1/auth/login", json={"email": "wp@b.com", "password": "wrong"})
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_login_nonexistent_email(client: AsyncClient):
+    resp = await client.post("/v1/auth/login", json={"email": "no@b.com", "password": "x"})
+    assert resp.status_code == 401
