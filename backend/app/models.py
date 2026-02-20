@@ -123,3 +123,11 @@ class MatchReplay(Base):
     checksum: Mapped[str | None] = mapped_column(String, nullable=True)
     size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class GameServer(Base):
+    __tablename__ = "game_servers"
+
+    game_server_id: Mapped[str] = mapped_column(String, primary_key=True)
+    last_heartbeat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    status: Mapped[str] = mapped_column(String, default="healthy")

@@ -6,6 +6,7 @@ from app.db import init_db
 from app.auth import router as auth_router
 from app.rooms import router as rooms_router
 from app.matches import router as matches_router
+from app.internal import router as internal_router
 
 
 @asynccontextmanager
@@ -18,6 +19,7 @@ app = FastAPI(title="FCM Platform Backend", lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(rooms_router)
 app.include_router(matches_router)
+app.include_router(internal_router)
 
 
 @app.get("/health")

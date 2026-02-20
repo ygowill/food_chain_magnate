@@ -1,0 +1,95 @@
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db import get_db
+from app.models import GameServer, Room, Match, MatchParticipant, MatchReplay
+
+router = APIRouter(prefix="/internal", tags=["internal"])
+
+
+class HeartbeatRequest(BaseModel):
+    game_server_id: str
+    room_codes: list[str] = []
+
+
+@router.post("/game_servers/heartbeat")
+async def heartbeat(req: HeartbeatRequest, db: AsyncSession = Depends(get_db)):
+    now = datetime.now(timezone.utc)
+    gs = (await db.execute(
+        select(GameServer).where(GameServer.game_server_id == req.game_server_id)
+    )).scalar_one_or_none()
+    if gs:
+        gs.last_heartbeat_at = now
+        gs.status = "healthy"
+    else:
+        db.add(GameServer(game_server_id=req.game_server_id, last_heartbeat_at=now))
+    # Update rooms with this game_server_id
+    if req.room_codes:
+        rooms = (await db.execute(
+            select(Room).where(Room.room_code.in_(req.room_codes))
+        )).scalars().all()
+        for r in rooms:
+            r.game_server_id = req.game_server_id
+    await db.commit()
+    return {"ok": True}
+
+
+class ParticipantIn(BaseModel):
+    user_id: str
+    role: str
+    seat_index: int | None = None
+    result: str | None = None
+    score_json: str | None = None
+
+
+class FinalizeRequest(BaseModel):
+    room_id: str | None = None
+    room_code: str | None = None
+    status: str = "completed"
+    started_at: str | None = None
+    ended_at: str | None = None
+    duration_sec: int | None = None
+    player_count: int = 0
+    seed: str | None = None
+    schema_version: str | None = None
+    game_version: str | None = None
+    final_hash: str | None = None
+    summary_json: str | None = None
+    participants: list[ParticipantIn] = []
+    replay_uri: str | None = None
+    replay_checksum: str | None = None
+    replay_size_bytes: int | None = None
+
+
+@router.post("/matches/finalize")
+async def finalize(req: FinalizeRequest, db: AsyncSession = Depends(get_db)):
+    started = datetime.fromisoformat(req.started_at) if req.started_at else None
+    ended = datetime.fromisoformat(req.ended_at) if req.ended_at else None
+    m = Match(
+        room_id=req.room_id, room_code=req.room_code, status=req.status,
+        started_at=started, ended_at=ended, duration_sec=req.duration_sec,
+        player_count=req.player_count, seed=req.seed,
+        schema_version=req.schema_version, game_version=req.game_version,
+        final_hash=req.final_hash, summary_json=req.summary_json,
+    )
+    db.add(m)
+    await db.flush()
+
+    for p in req.participants:
+        db.add(MatchParticipant(
+            match_id=m.match_id, user_id=p.user_id, role=p.role,
+            seat_index=p.seat_index, result=p.result, score_json=p.score_json,
+        ))
+
+    if req.replay_uri:
+        db.add(MatchReplay(
+            match_id=m.match_id, storage_uri=req.replay_uri,
+            checksum=req.replay_checksum, size_bytes=req.replay_size_bytes,
+        ))
+
+    await db.commit()
+    return {"match_id": m.match_id}
