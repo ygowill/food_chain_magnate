@@ -17,6 +17,8 @@ var _resync_in_progress: bool = false
 var _pending_cmds: Array[Dictionary] = [] # [{cmd_dict, state_hash}]
 var _rewind_request_id: String = ""
 var _resync_ticket: int = 0
+var _action_id_by_request_id: Dictionary = {} # request_id -> action_id
+var _action_request_ids: Array[String] = []
 
 func _init(
 	host: Node,
@@ -40,6 +42,8 @@ func _init(
 func dispose() -> void:
 	_disconnect_netclient_signals()
 	_pending_cmds.clear()
+	_action_id_by_request_id.clear()
+	_action_request_ids.clear()
 
 func is_resync_in_progress() -> bool:
 	return _resync_in_progress
@@ -68,8 +72,36 @@ func try_send_online_action(command: Command) -> Result:
 	if command.params is Dictionary:
 		params = Dictionary(command.params)
 	var request_id := NetClient.request_action(action_id, params)
+	_action_id_by_request_id[str(request_id)] = action_id
+	_action_request_ids.append(str(request_id))
+	if _action_request_ids.size() > 200:
+		var old_id := str(_action_request_ids.pop_front())
+		_action_id_by_request_id.erase(old_id)
 	GameLog.info("Game", "联机发送 ActionRequest: %s request_id=%s" % [action_id, request_id])
 	return Result.success({"request_id": request_id})
+
+func _take_action_id_for_request(request_id: String) -> String:
+	var rid := str(request_id).strip_edges()
+	if rid.is_empty():
+		return ""
+	var action_id := str(_action_id_by_request_id.get(rid, "")).strip_edges()
+	if not action_id.is_empty():
+		_action_id_by_request_id.erase(rid)
+	return action_id
+
+func _should_ignore_request_rejected(action_id: String, code: String, message: String) -> bool:
+	if str(code).strip_edges() != "action_failed":
+		return false
+	if str(action_id).strip_edges() != "confirm_dinnertime":
+		return false
+	var msg := str(message).strip_edges()
+	if msg == "当前不在晚餐阶段":
+		return true
+	if msg == "当前无需确认晚餐结算":
+		return true
+	if msg.begins_with("玩家") and msg.find("无需确认晚餐结算") != -1:
+		return true
+	return false
 
 func begin_rewind_to_turn_start_request() -> bool:
 	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
@@ -430,6 +462,7 @@ func _request_online_resync(reason: String) -> void:
 
 func _on_online_request_rejected(request_id: String, code: String, message: String) -> void:
 	GameLog.warn("Game", "联机请求被拒绝 request_id=%s: %s %s" % [str(request_id), code, message])
+	var action_id := _take_action_id_for_request(request_id)
 	if _resync_in_progress and not _rewind_request_id.is_empty() and str(request_id) == _rewind_request_id:
 		# 避免“回退请求失败但仍卡在同步中”，导致 ActionPanel 永久禁用与状态不一致。
 		_resync_in_progress = false
@@ -438,6 +471,8 @@ func _on_online_request_rejected(request_id: String, code: String, message: Stri
 		if _update_ui.is_valid():
 			_update_ui.call()
 	if OS.has_feature("headless"):
+		return
+	if _should_ignore_request_rejected(action_id, code, message):
 		return
 	if _show_confirm.is_valid():
 		_show_confirm.call("联机请求失败", "%s\n%s" % [code, message], Callable(), Callable(), "确定", "关闭")

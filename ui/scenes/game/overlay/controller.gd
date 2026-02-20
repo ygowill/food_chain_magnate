@@ -62,6 +62,11 @@ var _execute_command: Callable = Callable()
 var _dinnertime_anim_controller = null  # DinnertimeAnimationController
 var _ui_sync_controller = null  # GameUiSyncController (for bank_label)
 var _player_panel = null  # PlayerPanel
+var _dinnertime_confirm_in_flight: bool = false
+var _dinnertime_confirm_in_flight_round: int = -1
+var _dinnertime_confirm_in_flight_local_pid: int = -1
+var _dinnertime_confirm_in_flight_request_id: String = ""
+var _dinnertime_confirm_in_flight_since_ms: int = -1
 
 func _init(scene, map_view, map_canvas, game_log_panel) -> void:
 	_scene = scene
@@ -592,15 +597,56 @@ func _show_toast(message: String) -> void:
 
 # === Dinnertime 可视化（只读）===
 
+func _reset_dinnertime_confirm_in_flight() -> void:
+	_dinnertime_confirm_in_flight = false
+	_dinnertime_confirm_in_flight_round = -1
+	_dinnertime_confirm_in_flight_local_pid = -1
+	_dinnertime_confirm_in_flight_request_id = ""
+	_dinnertime_confirm_in_flight_since_ms = -1
+
+func _set_dinnertime_confirm_in_flight(state: GameState, request_id: String) -> void:
+	if state == null:
+		return
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	var local_pid := int(NetContext.local_player_id)
+	if local_pid < 0:
+		return
+	_dinnertime_confirm_in_flight = true
+	_dinnertime_confirm_in_flight_round = int(state.round_number)
+	_dinnertime_confirm_in_flight_local_pid = local_pid
+	_dinnertime_confirm_in_flight_request_id = str(request_id)
+	_dinnertime_confirm_in_flight_since_ms = int(Time.get_ticks_msec())
+
+func _is_dinnertime_confirm_in_flight_for_state(state: GameState) -> bool:
+	if not _dinnertime_confirm_in_flight:
+		return false
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return false
+	if state == null:
+		return false
+	if int(state.round_number) != _dinnertime_confirm_in_flight_round:
+		return false
+	var local_pid := int(NetContext.local_player_id)
+	if local_pid < 0:
+		return false
+	return local_pid == _dinnertime_confirm_in_flight_local_pid
+
 func sync_dinnertime_overlay(state: GameState, is_live: bool = true) -> void:
 	# 非 DINNERTIME 阶段 或 回放模式 → 隐藏
 	if str(state.phase) != DefsClass.PHASE_DINNERTIME or not is_live:
+		_reset_dinnertime_confirm_in_flight()
 		_disable_dinnertime_overlay()
 		return
 
 	# 检查是否还有“本地玩家待确认”的晚餐结算 pending（避免与其它模块注入的 Dinnertime pending 冲突）
 	if not _is_confirm_dinnertime_pending_for_local(state):
+		_reset_dinnertime_confirm_in_flight()
 		_disable_dinnertime_overlay()
+		return
+
+	# 联机模式：晚餐确认已发出但本地状态仍未更新时，避免重复播放/重复确认。
+	if _is_dinnertime_confirm_in_flight_for_state(state):
 		return
 
 	# 提取结算数据
@@ -750,6 +796,8 @@ func _should_send_dinnertime_confirm() -> bool:
 		return false
 	if not _is_confirm_dinnertime_pending_for_local(live_state):
 		return false
+	if _is_dinnertime_confirm_in_flight_for_state(live_state):
+		return false
 	if _scene != null and is_instance_valid(_scene) and _scene.has_method("_is_online_resync_in_progress"):
 		if bool(_scene.call("_is_online_resync_in_progress")):
 			return false
@@ -762,6 +810,7 @@ func _on_dinnertime_anim_completed() -> void:
 		_disable_dinnertime_overlay()
 		return
 	if _execute_command.is_valid():
+		var live_state := _read_live_game_state()
 		var confirm_cmd = CommandClass.create_system("confirm_dinnertime")
 		if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
 			var local_pid := int(NetContext.local_player_id)
@@ -770,17 +819,22 @@ func _on_dinnertime_anim_completed() -> void:
 				return
 			confirm_cmd = CommandClass.create("confirm_dinnertime", local_pid, {})
 		var exec_r_val = _execute_command.call(confirm_cmd)
-		if exec_r_val is Result and not exec_r_val.ok:
-			var live_state := _read_live_game_state()
-			var phase := str(live_state.phase) if live_state != null else "-"
-			var pending := _read_dinnertime_pending_list(live_state)
-			var mode := str(NetContext.mode) if NetContext != null else "NetContext:null"
-			var local_pid2 := int(NetContext.local_player_id) if NetContext != null else -1
-			GameLog.warn(
-				"Game",
-				"确认晚餐结算失败: %s phase=%s local_pid=%d mode=%s pending=%s"
-					% [str(exec_r_val.error), phase, local_pid2, mode, str(pending)]
-			)
+		if exec_r_val is Result:
+			if exec_r_val.ok:
+				var req_id := ""
+				if exec_r_val.value is Dictionary:
+					req_id = str(Dictionary(exec_r_val.value).get("request_id", ""))
+				_set_dinnertime_confirm_in_flight(live_state, req_id)
+			else:
+				var phase := str(live_state.phase) if live_state != null else "-"
+				var pending := _read_dinnertime_pending_list(live_state)
+				var mode := str(NetContext.mode) if NetContext != null else "NetContext:null"
+				var local_pid2 := int(NetContext.local_player_id) if NetContext != null else -1
+				GameLog.warn(
+					"Game",
+					"确认晚餐结算失败: %s phase=%s local_pid=%d mode=%s pending=%s"
+						% [str(exec_r_val.error), phase, local_pid2, mode, str(pending)]
+				)
 	_disable_dinnertime_overlay()
 
 func _disable_dinnertime_overlay() -> void:
