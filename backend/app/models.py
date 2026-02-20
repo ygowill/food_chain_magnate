@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, DateTime, ForeignKey, UniqueConstraint, Boolean, func
+from sqlalchemy import String, DateTime, ForeignKey, UniqueConstraint, Boolean, Integer, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -46,4 +46,80 @@ class Session(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     device_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+def _new_room_code() -> str:
+    import random
+    chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+    return "".join(random.choices(chars, k=6))
+
+
+class Room(Base):
+    __tablename__ = "rooms"
+
+    room_id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
+    room_code: Mapped[str] = mapped_column(String, unique=True, default=_new_room_code)
+    owner_user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id"), nullable=False)
+    game_server_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String, default="Lobby")
+    join_policy: Mapped[str] = mapped_column(String, default="public")
+    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    config_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ws_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+
+class RoomMember(Base):
+    __tablename__ = "room_members"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
+    room_id: Mapped[str] = mapped_column(ForeignKey("rooms.room_id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id"), nullable=False)
+    role: Mapped[str] = mapped_column(String, nullable=False)
+    seat_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    left_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Match(Base):
+    __tablename__ = "matches"
+
+    match_id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
+    room_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    room_code: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String, default="completed")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration_sec: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    player_count: Mapped[int] = mapped_column(Integer, default=0)
+    seed: Mapped[str | None] = mapped_column(String, nullable=True)
+    schema_version: Mapped[str | None] = mapped_column(String, nullable=True)
+    game_version: Mapped[str | None] = mapped_column(String, nullable=True)
+    final_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    summary_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class MatchParticipant(Base):
+    __tablename__ = "match_participants"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
+    match_id: Mapped[str] = mapped_column(ForeignKey("matches.match_id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id"), nullable=False)
+    role: Mapped[str] = mapped_column(String, nullable=False)
+    seat_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    result: Mapped[str | None] = mapped_column(String, nullable=True)
+    score_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class MatchReplay(Base):
+    __tablename__ = "match_replays"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
+    match_id: Mapped[str] = mapped_column(ForeignKey("matches.match_id"), nullable=False, unique=True)
+    storage_uri: Mapped[str] = mapped_column(String, nullable=False)
+    checksum: Mapped[str | None] = mapped_column(String, nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
