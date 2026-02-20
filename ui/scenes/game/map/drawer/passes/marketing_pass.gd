@@ -263,8 +263,13 @@ static func draw_marketing_board_number_badge(canvas, rect: Rect2, board_number:
 	if a <= 0.001:
 		return
 
-	var r := maxf(9.0, float(cell_size) * 0.28)
-	var pad := maxf(2.0, float(cell_size) * 0.06)
+	var r := maxf(1.0, float(cell_size) * 0.28)
+	var pad := maxf(1.0, float(cell_size) * 0.06)
+	# Clamp to available rect space (prevents oversized badge when zoomed out).
+	var max_r := minf((rect.size.x - pad) * 0.5, (rect.size.y - pad) * 0.5)
+	if max_r <= 0.5:
+		return
+	r = minf(r, max_r)
 	var center := rect.position + Vector2(rect.size.x - pad - r, pad + r)
 
 	var bg := Color(1, 1, 1, 1)
@@ -272,7 +277,7 @@ static func draw_marketing_board_number_badge(canvas, rect: Rect2, board_number:
 	canvas.draw_circle(center, r, bg)
 
 	var font: Font = ThemeDB.fallback_font
-	var font_size := maxi(10, int(round(r * 0.95)))
+	var font_size := maxi(1, int(round(r * 0.95)))
 	var box := Rect2(center - Vector2(r, r), Vector2(r * 2.0, r * 2.0))
 	# draw_string uses baseline; this places it close to vertical center for fallback font.
 	var baseline := Vector2(box.position.x, box.position.y + box.size.y * 0.5 + float(font_size) * 0.35)
