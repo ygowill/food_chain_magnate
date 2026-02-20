@@ -56,7 +56,7 @@ func format_event(t: String, data: Dictionary) -> Array[Dictionary]:
 			var parts: Array[String] = []
 			for pid_val in order:
 				var pid := int(pid_val)
-				parts.append("玩家%d" % (pid + 1))
+				parts.append(_player_name_compact(pid))
 			var text := "行动顺序"
 			if round >= 0:
 				text += "（回合 %d）" % round
@@ -64,16 +64,19 @@ func format_event(t: String, data: Dictionary) -> Array[Dictionary]:
 				text += "：" + " -> ".join(parts)
 			out.append(_event(text, data))
 		EventBus.EventType.PLAYER_TURN_STARTED:
-			out.append(_phase("玩家 %d 开始回合" % (int(data.get("player_id", -1)) + 1), data))
+			out.append(_phase("%s 开始回合" % _player_name(int(data.get("player_id", -1))), data))
 		EventBus.EventType.PLAYER_TURN_ENDED:
-			out.append(_phase("玩家 %d 结束回合 (%s)" % [
-				int(data.get("player_id", -1)) + 1,
+			var who := _player_name(int(data.get("player_id", -1)))
+			out.append(_phase("%s 结束回合 (%s)" % [
+				who,
 				str(data.get("action", "")),
 			], data))
 		EventBus.EventType.PLAYER_CASH_CHANGED:
 			var breakdown_suffix := _format_cash_income_breakdown_suffix(data)
-			var base_text := "玩家 %d 现金变化: %d -> %d (%+d)" % [
-				int(data.get("player_id", -1)) + 1,
+			var pid := int(data.get("player_id", -1))
+			var who := _player_name(pid)
+			var base_text := "%s 现金变化: %d -> %d (%+d)" % [
+				who,
 				int(data.get("old_cash", 0)),
 				int(data.get("new_cash", 0)),
 				int(data.get("delta", 0)),
@@ -83,7 +86,8 @@ func format_event(t: String, data: Dictionary) -> Array[Dictionary]:
 			var player_id := int(data.get("player_id", -1))
 			var reason := str(data.get("reason", "")).strip_edges()
 			var cash := int(data.get("cash", 0))
-			var text := "玩家 %d 破产（现金: %d）" % [player_id + 1, cash]
+			var who := _player_name(player_id)
+			var text := "%s 破产（现金: %d）" % [who, cash]
 			if not reason.is_empty():
 				text += "：" + reason
 			out.append(_event(text, data))
@@ -332,7 +336,7 @@ func format_event(t: String, data: Dictionary) -> Array[Dictionary]:
 			var milestone_id := str(data.get("milestone_id", "")).strip_edges()
 			var player_id := int(data.get("player_id", -1))
 			var name := _milestone_name(milestone_id)
-			var who := "玩家%d" % (player_id + 1) if player_id >= 0 else "未知玩家"
+			var who := _player_name(player_id)
 			var text := "%s 获得里程碑：%s" % [who, name if not name.is_empty() else milestone_id]
 			out.append(_event(text, data))
 		EventBus.EventType.GAME_STARTED:
@@ -351,6 +355,31 @@ func format_event(t: String, data: Dictionary) -> Array[Dictionary]:
 			out.append(_debug("%s: %s" % [t, str(data)], data))
 
 	return out
+
+func _player_name(player_id: int) -> String:
+	var pid := int(player_id)
+	if pid < 0:
+		return "未知玩家"
+	if Globals != null and Globals.has_method("get_player_name"):
+		var n := str(Globals.get_player_name(pid)).strip_edges()
+		if not n.is_empty():
+			return n
+	return "玩家 %d" % (pid + 1)
+
+func _player_name_compact(player_id: int) -> String:
+	var pid := int(player_id)
+	if pid < 0:
+		return "玩家?"
+	if Globals != null:
+		if Globals.has_method("get_player_name_compact"):
+			var n := str(Globals.get_player_name_compact(pid)).strip_edges()
+			if not n.is_empty():
+				return n
+		elif Globals.has_method("get_player_name"):
+			var n2 := str(Globals.get_player_name(pid)).strip_edges()
+			if not n2.is_empty():
+				return n2
+	return "玩家%d" % (pid + 1)
 
 func _system(message: String, details: Dictionary) -> Dictionary:
 	return _formatter._system(message, details)

@@ -84,8 +84,22 @@ func _phase(message: String, details: Dictionary) -> Dictionary:
 	return {"type": GameLogPanel.LogType.PHASE, "message": message, "details": details}
 
 func _player(player_id: int, message: String, details: Dictionary) -> Dictionary:
-	var full_message := "玩家%d: %s" % [player_id + 1, message]
-	return {"type": GameLogPanel.LogType.PLAYER, "message": full_message, "details": details}
+	var prefix := "玩家%d" % (player_id + 1)
+	if Globals != null:
+		if Globals.has_method("get_player_name_compact"):
+			prefix = str(Globals.get_player_name_compact(player_id)).strip_edges()
+		elif Globals.has_method("get_player_name"):
+			var n := str(Globals.get_player_name(player_id)).strip_edges()
+			if not n.is_empty():
+				prefix = n
+
+	var d: Dictionary = details if (details is Dictionary) else {}
+	if not d.has("player_id"):
+		d = d.duplicate(true)
+		d["player_id"] = player_id
+
+	var full_message := "%s: %s" % [prefix, message]
+	return {"type": GameLogPanel.LogType.PLAYER, "message": full_message, "details": d}
 
 func _event(message: String, details: Dictionary) -> Dictionary:
 	return {"type": GameLogPanel.LogType.GAME_EVENT, "message": message, "details": details}
@@ -326,6 +340,15 @@ func _format_route_purchases_short(route_purchases_val, max_items: int = 4) -> S
 
 		var seller := int(p.get("seller", -1))
 		var seller_text := ("玩家%d" % (seller + 1)) if seller >= 0 else "玩家?"
+		if Globals != null and seller >= 0:
+			if Globals.has_method("get_player_name_compact"):
+				var sn := str(Globals.get_player_name_compact(seller)).strip_edges()
+				if not sn.is_empty():
+					seller_text = sn
+			elif Globals.has_method("get_player_name"):
+				var sn2 := str(Globals.get_player_name(seller)).strip_edges()
+				if not sn2.is_empty():
+					seller_text = sn2
 
 		var kind_text := _product_name(kind)
 		if kind_text.is_empty():

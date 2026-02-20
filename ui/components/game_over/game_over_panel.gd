@@ -374,7 +374,12 @@ class RankingItem extends PanelContainer:
 		UiStylesClass.apply_label_dark(_player_label)
 		if is_winner:
 			_player_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 1))
-		_player_label.text = "玩家 %d" % (player_id + 1)
+		var pname := ""
+		if Globals != null and Globals.has_method("get_player_name"):
+			pname = str(Globals.get_player_name(player_id)).strip_edges()
+		if pname.is_empty():
+			pname = "玩家 %d" % (player_id + 1)
+		_player_label.text = pname
 		hbox.add_child(_player_label)
 
 		# 冠军标记

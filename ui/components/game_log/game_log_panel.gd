@@ -300,8 +300,24 @@ func add_phase_log(message: String, details: Dictionary = {}) -> int:
 	return add_log(LogType.PHASE, message, details)
 
 func add_player_log(player_id: int, message: String, details: Dictionary = {}) -> int:
-	var full_message := "玩家%d: %s" % [player_id + 1, message]
-	return add_log(LogType.PLAYER, full_message, details)
+	var prefix := "玩家%d" % (player_id + 1)
+	if Globals != null:
+		if Globals.has_method("get_player_name_compact"):
+			var s := str(Globals.get_player_name_compact(player_id)).strip_edges()
+			if not s.is_empty():
+				prefix = s
+		elif Globals.has_method("get_player_name"):
+			var s2 := str(Globals.get_player_name(player_id)).strip_edges()
+			if not s2.is_empty():
+				prefix = s2
+
+	var d: Dictionary = details if (details is Dictionary) else {}
+	if not d.has("player_id"):
+		d = d.duplicate(true)
+		d["player_id"] = player_id
+
+	var full_message := "%s: %s" % [prefix, message]
+	return add_log(LogType.PLAYER, full_message, d)
 
 func add_event_log(message: String, details: Dictionary = {}) -> int:
 	return add_log(LogType.GAME_EVENT, message, details)

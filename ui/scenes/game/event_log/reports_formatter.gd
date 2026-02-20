@@ -190,8 +190,19 @@ func format_dinnertime_report(data: Dictionary) -> Array[Dictionary]:
 		var cfo_amt := int(income_cfo[pid]) if pid < income_cfo.size() else 0
 		var tot_amt := int(total_income[pid]) if pid < total_income.size() else (s_amt + hb_amt + tips_amt + cfo_amt)
 
-		out.append(_formatter._event("晚餐总结 玩家%d: 总 $%d (售卖 $%d, 房屋奖 $%d, 服务员 $%d, CFO $%d)" % [
-			pid + 1, tot_amt, s_amt, hb_amt, tips_amt, cfo_amt
+		var who := "玩家%d" % (pid + 1)
+		if Globals != null:
+			if Globals.has_method("get_player_name_compact"):
+				var n := str(Globals.get_player_name_compact(pid)).strip_edges()
+				if not n.is_empty():
+					who = n
+			elif Globals.has_method("get_player_name"):
+				var n2 := str(Globals.get_player_name(pid)).strip_edges()
+				if not n2.is_empty():
+					who = n2
+
+		out.append(_formatter._event("晚餐总结 %s: 总 $%d (售卖 $%d, 房屋奖 $%d, 服务员 $%d, CFO $%d)" % [
+			who, tot_amt, s_amt, hb_amt, tips_amt, cfo_amt
 		], {"round": round, "player_id": pid}))
 
 	return out

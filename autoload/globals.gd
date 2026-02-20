@@ -333,3 +333,11 @@ func get_player_name(player_id: int) -> String:
 	if player_id >= 0 and player_id < player_names.size():
 		return str(player_names[player_id])
 	return "玩家 %d" % (player_id + 1)
+
+func get_player_name_compact(player_id: int) -> String:
+	var pid := int(player_id)
+	var name := str(get_player_name(pid)).strip_edges()
+	var default_name := "玩家 %d" % (pid + 1)
+	if name == default_name:
+		return "玩家%d" % (pid + 1)
+	return name

@@ -622,10 +622,19 @@ func _create_restaurant_overview_card(player_id: int, player: Dictionary, is_sel
 	first_row.add_theme_constant_override("separation", 6)
 	info_vbox.add_child(first_row)
 
+	var display_name := "玩家%d" % (player_id + 1)
+	if Globals != null and Globals.has_method("get_player_name"):
+		var n := str(Globals.get_player_name(player_id)).strip_edges()
+		if not n.is_empty():
+			display_name = n
+
 	var player_id_label := Label.new()
 	player_id_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	player_id_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	player_id_label.max_lines_visible = 1
+	player_id_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	player_id_label.clip_text = true
-	player_id_label.text = "玩家%d" % (player_id + 1)
+	player_id_label.text = display_name
 	UiStylesClass.apply_label_dark(player_id_label)
 	var fs_name := 14
 	if Globals != null:
@@ -657,8 +666,14 @@ func _create_restaurant_overview_card(player_id: int, player: Dictionary, is_sel
 	metrics.add_theme_font_size_override("font_size", fs_metrics)
 	info_vbox.add_child(metrics)
 
-	card.tooltip_text = "玩家%d\n现金: $%d\n员工: %d  餐厅: %d  里程碑: %d  薪资等级: $%d" % [
-		player_id + 1,
+	var id_label := "玩家%d" % (player_id + 1)
+	var default_name := "玩家 %d" % (player_id + 1)
+	var tooltip_header := display_name
+	if display_name != id_label and display_name != default_name:
+		tooltip_header = "%s (%s)" % [display_name, id_label]
+
+	card.tooltip_text = "%s\n现金: $%d\n员工: %d  餐厅: %d  里程碑: %d  薪资等级: $%d" % [
+		tooltip_header,
 		cash,
 		emp_count,
 		rest_count,

@@ -307,7 +307,19 @@ static func _build_action_group_fallback_summary(step_index: int, step: Dictiona
 			action_name = str(step.get("action_id", "")).strip_edges()
 		var actor := int(step.get("actor", -1))
 		if not action_name.is_empty():
-			return ("玩家%d: %s" % [actor + 1, action_name]) if actor >= 0 else action_name
+			if actor >= 0:
+				var actor_name := "玩家%d" % (actor + 1)
+				if Globals != null:
+					if Globals.has_method("get_player_name_compact"):
+						var s := str(Globals.get_player_name_compact(actor)).strip_edges()
+						if not s.is_empty():
+							actor_name = s
+					elif Globals.has_method("get_player_name"):
+						var s2 := str(Globals.get_player_name(actor)).strip_edges()
+						if not s2.is_empty():
+							actor_name = s2
+				return "%s: %s" % [actor_name, action_name]
+			return action_name
 	return "系统推进"
 
 static func _add_round_header_item(
