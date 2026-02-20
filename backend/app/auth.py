@@ -141,3 +141,47 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     db.add(sess)
     await db.commit()
     return AuthResponse(user_id=identity.user_id, session_id=sess.session_id)
+
+
+class BindRequest(BaseModel):
+    session_id: str
+    provider: str  # "email"
+    email: str
+    password: str
+
+
+@router.post("/bind", response_model=AuthResponse)
+async def bind(req: BindRequest, db: AsyncSession = Depends(get_db)):
+    sess = await get_current_user(db=db, session_id=req.session_id)
+
+    # Check email not already taken
+    exists = (await db.execute(
+        select(AuthIdentity).where(
+            AuthIdentity.provider == req.provider,
+            AuthIdentity.provider_user_id == req.email,
+        )
+    )).scalar_one_or_none()
+    if exists:
+        raise HTTPException(409, "email already registered")
+
+    db.add(AuthIdentity(
+        provider=req.provider,
+        provider_user_id=req.email,
+        user_id=sess.user_id,
+        credential_hash=_hash_password(req.password),
+        verified=False,
+    ))
+    await db.commit()
+    return AuthResponse(user_id=sess.user_id, session_id=sess.session_id)
+
+
+class LogoutRequest(BaseModel):
+    session_id: str
+
+
+@router.post("/logout")
+async def logout(req: LogoutRequest, db: AsyncSession = Depends(get_db)):
+    sess = await get_current_user(db=db, session_id=req.session_id)
+    sess.revoked_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"ok": True}

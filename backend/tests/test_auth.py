@@ -74,3 +74,50 @@ async def test_login_wrong_password(client: AsyncClient):
 async def test_login_nonexistent_email(client: AsyncClient):
     resp = await client.post("/v1/auth/login", json={"email": "no@b.com", "password": "x"})
     assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_bind_guest_to_email(client: AsyncClient):
+    guest = await client.post("/v1/auth/guest", json={"device_id": "bind-dev"})
+    sid = guest.json()["session_id"]
+    uid = guest.json()["user_id"]
+    resp = await client.post("/v1/auth/bind", json={
+        "session_id": sid, "provider": "email",
+        "email": "bind@b.com", "password": "pw",
+    })
+    assert resp.status_code == 200
+    assert resp.json()["user_id"] == uid
+    # Can now login with email
+    login = await client.post("/v1/auth/login", json={
+        "email": "bind@b.com", "password": "pw",
+    })
+    assert login.json()["user_id"] == uid
+
+
+@pytest.mark.asyncio
+async def test_bind_duplicate_email_rejected(client: AsyncClient):
+    await client.post("/v1/auth/register", json={
+        "email": "taken@b.com", "password": "p",
+    })
+    guest = await client.post("/v1/auth/guest", json={"device_id": "bind-dup"})
+    resp = await client.post("/v1/auth/bind", json={
+        "session_id": guest.json()["session_id"], "provider": "email",
+        "email": "taken@b.com", "password": "p2",
+    })
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_logout_revokes_session(client: AsyncClient):
+    reg = await client.post("/v1/auth/register", json={
+        "email": "out@b.com", "password": "p",
+    })
+    sid = reg.json()["session_id"]
+    resp = await client.post("/v1/auth/logout", json={"session_id": sid})
+    assert resp.status_code == 200
+    # Revoked session should fail auth
+    resp2 = await client.post("/v1/auth/bind", json={
+        "session_id": sid, "provider": "email",
+        "email": "x@b.com", "password": "p",
+    })
+    assert resp2.status_code == 401
