@@ -1,0 +1,93 @@
+# 平台 API 封装
+# 封装 Backend HTTP 调用
+extends Node
+
+var base_url: String = "http://localhost:8000"
+
+var _http: HTTPRequest
+
+func _ready() -> void:
+	_http = HTTPRequest.new()
+	add_child(_http)
+
+
+func _request(method: int, path: String, body: Dictionary = {}) -> Dictionary:
+	var url := base_url + path
+	var headers := ["Content-Type: application/json"]
+	var json_body := JSON.stringify(body) if not body.is_empty() else ""
+	var err := _http.request(url, headers, method, json_body)
+	if err != OK:
+		return {"error": "request_failed", "code": err}
+	var result: Array = await _http.request_completed
+	var response_code: int = result[1]
+	var response_body: PackedByteArray = result[3]
+	var parsed := JSON.parse_string(response_body.get_string_from_utf8())
+	if parsed == null:
+		parsed = {}
+	if response_code < 200 or response_code >= 300:
+		parsed["_http_status"] = response_code
+		return {"error": parsed}
+	return {"ok": parsed}
+
+
+# === Auth ===
+
+func guest_login(device_id: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_POST, "/v1/auth/guest", {"device_id": device_id})
+
+
+func register(email: String, password: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_POST, "/v1/auth/register", {"email": email, "password": password})
+
+
+func login(email: String, password: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_POST, "/v1/auth/login", {"email": email, "password": password})
+
+
+func bind(session_id: String, provider: String, email: String, password: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_POST, "/v1/auth/bind", {
+		"session_id": session_id, "provider": provider,
+		"email": email, "password": password,
+	})
+
+
+func logout(session_id: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_POST, "/v1/auth/logout", {"session_id": session_id})
+
+
+# === Rooms ===
+
+func create_room(session_id: String, config_json: String = "{}", password: String = "") -> Dictionary:
+	return await _request(HTTPClient.METHOD_POST, "/v1/rooms", {
+		"session_id": session_id, "config_json": config_json, "password": password,
+	})
+
+
+func join_room(room_code: String, session_id: String, password: String = "") -> Dictionary:
+	return await _request(HTTPClient.METHOD_POST, "/v1/rooms/%s/join" % room_code, {
+		"session_id": session_id, "password": password,
+	})
+
+
+func spectate_room(room_code: String, session_id: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_POST, "/v1/rooms/%s/spectate" % room_code, {
+		"session_id": session_id,
+	})
+
+
+func get_room(room_code: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_GET, "/v1/rooms/%s" % room_code)
+
+
+# === Matches ===
+
+func list_matches(session_id: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_GET, "/v1/matches?session_id=%s" % session_id)
+
+
+func get_match(match_id: String, session_id: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_GET, "/v1/matches/%s?session_id=%s" % [match_id, session_id])
+
+
+func get_replay(match_id: String, session_id: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_GET, "/v1/matches/%s/replay?session_id=%s" % [match_id, session_id])

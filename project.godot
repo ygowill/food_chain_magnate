@@ -26,6 +26,8 @@ SceneManager="*res://autoload/scene_manager.gd"
 EventBus="*res://autoload/event_bus.gd"
 NetContext="*res://autoload/net_context.gd"
 NetClient="*res://autoload/net_client.gd"
+PlatformApi="*res://autoload/platform_api.gd"
+PlatformSession="*res://autoload/platform_session.gd"
 
 [display]
 
