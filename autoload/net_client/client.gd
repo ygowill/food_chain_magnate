@@ -59,6 +59,8 @@ func send_client_hello() -> void:
 		"schema_version": Globals.SCHEMA_VERSION,
 		"player_profile": profile,
 	}
+	if NetContext.connect_token != "":
+		payload["connect_token"] = NetContext.connect_token
 	_net.rpc_id(1, "rpc_client_hello", payload)
 	GameLog.debug(
 		"NetClient",
