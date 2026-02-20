@@ -151,6 +151,7 @@ func add_log(log_type: LogType, message: String, details: Dictionary = {}) -> in
 		log_added.emit(entry)
 		_rebuild_display()
 		_apply_timeline_state_to_items()
+		_request_scroll_to_bottom()
 		_update_entry_count()
 		return entry_id
 
@@ -185,6 +186,7 @@ func append_entry(entry: Dictionary) -> void:
 		_rebuild_entries_all()
 		_rebuild_display()
 		_apply_timeline_state_to_items()
+		_request_scroll_to_bottom()
 		_update_entry_count()
 		return
 
@@ -224,6 +226,7 @@ func load_entries(entries: Array[Dictionary]) -> void:
 
 	_rebuild_display()
 	_apply_timeline_state_to_items(true)
+	_request_scroll_to_bottom()
 	_update_entry_count()
 
 func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_extra_entries: bool = false) -> void:
@@ -249,6 +252,7 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 	_rebuild_entries_all()
 	_rebuild_display()
 	_apply_timeline_state_to_items(true)
+	_request_scroll_to_bottom()
 	_update_entry_count()
 
 func set_expand_enabled(_enabled: bool) -> void:
@@ -348,6 +352,7 @@ func ensure_display_ready() -> void:
 
 	_rebuild_display()
 	_apply_timeline_state_to_items()
+	_request_scroll_to_bottom()
 	_update_entry_count()
 
 	# 若数据存在但仍构建为空：打一次 warning（便于用户反馈时定位）。
@@ -506,6 +511,9 @@ func _add_log_item(entry: Dictionary) -> void:
 func _request_scroll_to_bottom() -> void:
 	if not _auto_scroll:
 		return
+	# 时间旅行/回放等“光标不在 head”的情况下，避免新日志把视角强行拉回底部。
+	if _timeline_cursor_index < _timeline_head_index:
+		return
 	if _scroll_to_bottom_requested:
 		return
 	_scroll_to_bottom_requested = true
@@ -513,6 +521,17 @@ func _request_scroll_to_bottom() -> void:
 
 func _apply_scroll_to_bottom() -> void:
 	_scroll_to_bottom_requested = false
+	if scroll_container == null:
+		return
+	scroll_container.scroll_vertical = int(scroll_container.get_v_scroll_bar().max_value)
+	# 某些布局/重建时序下，ScrollBar 的 max_value 会在下一帧才更新；这里补一次确保落到底部。
+	call_deferred("_apply_scroll_to_bottom_final")
+
+func _apply_scroll_to_bottom_final() -> void:
+	if not _auto_scroll:
+		return
+	if _timeline_cursor_index < _timeline_head_index:
+		return
 	if scroll_container == null:
 		return
 	scroll_container.scroll_vertical = int(scroll_container.get_v_scroll_bar().max_value)
