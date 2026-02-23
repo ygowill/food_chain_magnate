@@ -110,6 +110,63 @@ func join_room(peer_id: int, profile: Dictionary, room_code: String, room_passwo
 		"role": role,
 	})
 
+func join_room_with_seat(peer_id: int, profile: Dictionary, room_code: String, seat_index: int, role_label: String = "player") -> Result:
+	if peer_to_room.has(peer_id):
+		return Result.failure("Peer already in a room")
+
+	var code := str(room_code).strip_edges().to_upper()
+	if code.is_empty():
+		return Result.failure("Missing room_code", Result.ErrorCode.MISSING_PARAMS)
+
+	var room = rooms.get(code, null)
+	if room == null:
+		return Result.failure("Room not found")
+
+	if str(room.status) != OnlineRoomClass.STATUS_LOBBY:
+		return Result.failure("Room is not in Lobby")
+	if room.is_full():
+		return Result.failure("Room is full")
+	if not room.has_method("add_peer_at_seat"):
+		return Result.failure("Room.add_peer_at_seat missing")
+
+	var ar: Result = room.add_peer_at_seat(peer_id, profile, seat_index)
+	if not ar.ok:
+		return ar
+
+	peer_to_room[peer_id] = code
+	return Result.success({
+		"room_code": code,
+		"room": room,
+		"room_state": room.to_room_state_dict(),
+		"role": str(role_label).strip_edges(),
+	})
+
+func reconnect_player(peer_id: int, profile: Dictionary, room_code: String, seat_index: int, user_id: String, role_label: String = "player") -> Result:
+	if peer_to_room.has(peer_id):
+		return Result.failure("Peer already in a room")
+
+	var code := str(room_code).strip_edges().to_upper()
+	if code.is_empty():
+		return Result.failure("Missing room_code", Result.ErrorCode.MISSING_PARAMS)
+
+	var room = rooms.get(code, null)
+	if room == null:
+		return Result.failure("Room not found")
+
+	if not room.has_method("reconnect_player"):
+		return Result.failure("Room.reconnect_player missing")
+	var rr: Result = room.reconnect_player(peer_id, profile, seat_index, user_id)
+	if not rr.ok:
+		return rr
+
+	peer_to_room[peer_id] = code
+	return Result.success({
+		"room_code": code,
+		"room": room,
+		"room_state": room.to_room_state_dict(),
+		"role": str(role_label).strip_edges(),
+	})
+
 func spectate_room(peer_id: int, profile: Dictionary, room_code: String) -> Result:
 	if peer_to_room.has(peer_id):
 		return Result.failure("Peer already in a room")

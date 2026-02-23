@@ -10,9 +10,12 @@ const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const ConnectTokenClass = preload("res://core/utils/connect_token.gd")
 const DEFAULT_RESTAURANT_LOGO_COUNT := 6
 const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
+const DEFAULT_DISCONNECT_GRACE_PERIOD_SEC := 120.0
 
 var _net = null
 var connect_token_secret_override: String = ""
+var disconnect_grace_period_sec_override: float = -1.0
+var _disconnect_forfeit_ticket_by_key: Dictionary = {} # "ROOM:actor_id" -> ticket (int)
 
 func setup(net_client) -> void:
 	_net = net_client
@@ -21,6 +24,101 @@ func _get_connect_token_secret() -> String:
 	if not connect_token_secret_override.is_empty():
 		return str(connect_token_secret_override)
 	return str(OS.get_environment("HMAC_SECRET"))
+
+func _get_disconnect_grace_period_sec() -> float:
+	if disconnect_grace_period_sec_override >= 0.0:
+		return float(disconnect_grace_period_sec_override)
+	var raw := str(OS.get_environment("DISCONNECT_GRACE_PERIOD_SEC")).strip_edges()
+	if not raw.is_empty() and raw.is_valid_float():
+		return maxf(0.0, float(raw))
+	return DEFAULT_DISCONNECT_GRACE_PERIOD_SEC
+
+func _disconnect_forfeit_key(room_code: String, actor_id: int) -> String:
+	return "%s:%d" % [str(room_code).strip_edges().to_upper(), int(actor_id)]
+
+func _is_actor_connected(room, actor_id: int) -> bool:
+	if room == null or not (room.player_id_by_peer_id is Dictionary):
+		return false
+	for v in Dictionary(room.player_id_by_peer_id).values():
+		var pid := -999999
+		if v is int:
+			pid = int(v)
+		elif v is float:
+			var f: float = float(v)
+			if f == floor(f):
+				pid = int(f)
+		if pid == actor_id:
+			return true
+	return false
+
+func _schedule_disconnect_forfeit(room, actor_id: int) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if room == null or room.game_engine == null:
+		return
+	if actor_id < 0:
+		return
+	var grace_sec := _get_disconnect_grace_period_sec()
+	var room_code := str(room.room_code).strip_edges().to_upper()
+	var key := _disconnect_forfeit_key(room_code, actor_id)
+	var ticket := int(_disconnect_forfeit_ticket_by_key.get(key, 0)) + 1
+	_disconnect_forfeit_ticket_by_key[key] = ticket
+
+	if grace_sec <= 0.0:
+		_on_disconnect_grace_timeout(room_code, actor_id, ticket)
+		return
+
+	var tree = _net.get_tree()
+	if tree == null or not (tree is SceneTree):
+		return
+	var timer = (tree as SceneTree).create_timer(grace_sec)
+	timer.timeout.connect(Callable(self, "_on_disconnect_grace_timeout").bind(room_code, actor_id, ticket))
+	GameLog.warn(
+		"NetClient",
+		"Disconnect grace scheduled room=%s actor=%d grace_sec=%.1f"
+			% [_safe_text(room_code), actor_id, grace_sec]
+	)
+
+func _clear_disconnect_forfeit(room_code: String, actor_id: int) -> void:
+	var key := _disconnect_forfeit_key(room_code, actor_id)
+	if _disconnect_forfeit_ticket_by_key.has(key):
+		_disconnect_forfeit_ticket_by_key.erase(key)
+
+func _on_disconnect_grace_timeout(room_code: String, actor_id: int, ticket: int) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+	var key := _disconnect_forfeit_key(room_code, actor_id)
+	if int(_disconnect_forfeit_ticket_by_key.get(key, 0)) != int(ticket):
+		return
+	_disconnect_forfeit_ticket_by_key.erase(key)
+
+	if _net._room_manager == null:
+		return
+	var rm = _net._room_manager
+	if not (rm.rooms is Dictionary):
+		return
+	var room = rm.rooms.get(str(room_code).strip_edges().to_upper(), null)
+	if room == null or room.game_engine == null or str(room.status) != "InGame":
+		return
+	if _is_actor_connected(room, actor_id):
+		return
+
+	var state = room.game_engine.get_state()
+	if server_is_player_forfeited(state, actor_id):
+		return
+
+	var cmd = CommandClass.create("forfeit_player", actor_id, {})
+	var fr = room.game_engine.execute_command(cmd)
+	if fr.ok:
+		GameLog.warn("NetClient", "Applied forfeit after disconnect grace room=%s actor=%d" % [_safe_text(room_code), actor_id])
+		broadcast_command_applied(room, cmd)
+		server_drain_forfeited_auto_steps(room)
+		broadcast_room_state(room)
+		broadcast_room_list("")
+	else:
+		GameLog.error("NetClient", "forfeit_player failed after disconnect grace room=%s actor=%d err=%s" % [_safe_text(room_code), actor_id, fr.error])
 
 func _safe_text(value: String) -> String:
 	var out := str(value).strip_edges()
@@ -161,14 +259,7 @@ func on_peer_disconnected(peer_id: int) -> void:
 		room.game_engine = null
 
 	if in_game and not removed and actor_id >= 0 and room.game_engine != null:
-		var cmd = CommandClass.create("forfeit_player", actor_id, {})
-		var fr = room.game_engine.execute_command(cmd)
-		if fr.ok:
-			GameLog.warn("NetClient", "Applied forfeit after disconnect peer=%d actor=%d %s" % [peer_id, actor_id, _room_brief(room)])
-			broadcast_command_applied(room, cmd)
-			server_drain_forfeited_auto_steps(room)
-		else:
-			GameLog.error("NetClient", "forfeit_player failed peer=%d actor=%d err=%s" % [peer_id, actor_id, fr.error])
+		_schedule_disconnect_forfeit(room, actor_id)
 
 	if rr.ok and room != null and not removed:
 		broadcast_room_state(room)
@@ -349,6 +440,17 @@ func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, 
 	var rm = _net._room_manager
 	var r: Result
 	if role == "host":
+		var seat_index_val = token_payload.get("seat_index", null)
+		var seat_index := -1
+		if seat_index_val is int:
+			seat_index = int(seat_index_val)
+		elif seat_index_val is float:
+			var f: float = float(seat_index_val)
+			if f == floor(f):
+				seat_index = int(f)
+		if seat_index < 0:
+			return Result.failure("connect_token missing seat_index")
+
 		var config: Dictionary = {}
 		var cfg_json := str(token_payload.get("config_json", "")).strip_edges()
 		if not cfg_json.is_empty():
@@ -357,11 +459,42 @@ func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, 
 				return Result.failure("connect_token config_json 类型错误（期望 JSON Dictionary）")
 			config = Dictionary(parsed)
 
-		if not rm.has_method("create_room_with_code"):
-			return Result.failure("RoomManager.create_room_with_code missing")
-		r = rm.create_room_with_code(peer_id, profile, room_code, config)
+		var existing = rm.rooms.get(room_code, null) if (rm.rooms is Dictionary) else null
+		if existing == null:
+			if not rm.has_method("create_room_with_code"):
+				return Result.failure("RoomManager.create_room_with_code missing")
+			r = rm.create_room_with_code(peer_id, profile, room_code, config)
+		elif str(existing.status) == "InGame":
+			if not rm.has_method("reconnect_player"):
+				return Result.failure("RoomManager.reconnect_player missing")
+			var user_id := str(token_payload.get("user_id", "")).strip_edges()
+			r = rm.reconnect_player(peer_id, profile, room_code, seat_index, user_id, "host")
+		else:
+			if not rm.has_method("join_room_with_seat"):
+				return Result.failure("RoomManager.join_room_with_seat missing")
+			r = rm.join_room_with_seat(peer_id, profile, room_code, seat_index, "host")
 	elif role == "player":
-		r = rm.join_room(peer_id, profile, room_code, "")
+		var seat_index_val2 = token_payload.get("seat_index", null)
+		var seat_index2 := -1
+		if seat_index_val2 is int:
+			seat_index2 = int(seat_index_val2)
+		elif seat_index_val2 is float:
+			var f2: float = float(seat_index_val2)
+			if f2 == floor(f2):
+				seat_index2 = int(f2)
+		if seat_index2 < 0:
+			return Result.failure("connect_token missing seat_index")
+
+		var existing2 = rm.rooms.get(room_code, null) if (rm.rooms is Dictionary) else null
+		if existing2 != null and str(existing2.status) == "InGame":
+			if not rm.has_method("reconnect_player"):
+				return Result.failure("RoomManager.reconnect_player missing")
+			var user_id2 := str(token_payload.get("user_id", "")).strip_edges()
+			r = rm.reconnect_player(peer_id, profile, room_code, seat_index2, user_id2)
+		else:
+			if not rm.has_method("join_room_with_seat"):
+				return Result.failure("RoomManager.join_room_with_seat missing")
+			r = rm.join_room_with_seat(peer_id, profile, room_code, seat_index2)
 	else:
 		if not rm.has_method("spectate_room"):
 			return Result.failure("RoomManager.spectate_room missing")
@@ -377,6 +510,37 @@ func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, 
 	var actual_role := str(payload.get("role", "")).strip_edges()
 	if not actual_role.is_empty() and actual_role != role:
 		return Result.failure("platform auto join role mismatch: token=%s actual=%s" % [role, actual_role])
+
+	# 断线重连：若 actor_id 对应的 pending forfeit 仍在 grace window 内，则清理。
+	if role == "host" or role == "player":
+		var seat_index_val3 = token_payload.get("seat_index", null)
+		var seat_index3 := -1
+		if seat_index_val3 is int:
+			seat_index3 = int(seat_index_val3)
+		elif seat_index_val3 is float:
+			var f3: float = float(seat_index_val3)
+			if f3 == floor(f3):
+				seat_index3 = int(f3)
+		if seat_index3 >= 0:
+			_clear_disconnect_forfeit(room_code, seat_index3)
+
+	# InGame：自动下发 GameStarted + ResyncArchive（与 JoinRoom in-game 行为对齐）
+	if str(room.status) == "InGame" and room.game_engine != null:
+		_net.rpc_id(peer_id, "rpc_game_started", {
+			"player_id_by_peer_id": room.player_id_by_peer_id.duplicate(true),
+			"config": room.config.duplicate(true),
+		})
+		var archive_r = room.game_engine.create_archive()
+		if archive_r.ok:
+			_net.rpc_id(peer_id, "rpc_resync_archive", {
+				"archive": Dictionary(archive_r.value).duplicate(true),
+			})
+		else:
+			GameLog.error(
+				"NetClient",
+				"Platform auto join in-game archive create failed %s err=%s"
+					% [_request_tag(peer_id, request_id), archive_r.error]
+			)
 
 	broadcast_room_state(room)
 	broadcast_room_list("")
