@@ -9,6 +9,8 @@ enum Mode {
 
 const PROTOCOL_VERSION := 1
 
+const COMMAND_PRIVACY_SPECTATOR_VIEWER_PLAYER_ID := 999999
+
 var mode: Mode = Mode.HOTSEAT
 var local_player_id: int = -1
 
@@ -21,6 +23,12 @@ var player_profile: Dictionary = {}
 
 func _ready() -> void:
 	_ensure_default_profile()
+
+func get_command_privacy_viewer_player_id() -> int:
+	# Hotseat/local：无需脱敏；联机 spectator：应视为“非本人”，避免 history/debug 误显示隐信息。
+	if mode == Mode.ONLINE_CLIENT and local_player_id < 0:
+		return COMMAND_PRIVACY_SPECTATOR_VIEWER_PLAYER_ID
+	return local_player_id
 
 func reset() -> void:
 	mode = Mode.HOTSEAT

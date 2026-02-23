@@ -47,8 +47,8 @@ func _update_history_list(engine: GameEngine) -> void:
 	var history := engine.get_command_history()
 	var state := engine.get_state()
 	var viewer_player_id := -1
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-		viewer_player_id = int(NetContext.local_player_id)
+	if NetContext != null:
+		viewer_player_id = int(NetContext.get_command_privacy_viewer_player_id())
 
 	history_list.push_color(Color(0.7, 0.7, 0.7))
 	history_list.append_text("═══ 命令历史 (%d 条) ═══\n" % history.size())
@@ -117,8 +117,8 @@ func _on_export_pressed() -> void:
 	var history := engine.get_command_history()
 	var state := engine.get_state()
 	var viewer_player_id := -1
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-		viewer_player_id = int(NetContext.local_player_id)
+	if NetContext != null:
+		viewer_player_id = int(NetContext.get_command_privacy_viewer_player_id())
 	var lines: Array[String] = ["# 命令历史导出", "# 时间: %s" % Time.get_datetime_string_from_system(), ""]
 
 	for cmd in history:

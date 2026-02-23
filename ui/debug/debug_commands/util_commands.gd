@@ -89,8 +89,8 @@ static func _cmd_history(args: Array, registry: DebugCommandRegistry) -> Result:
 	var history := engine.get_recent_commands(count)
 	var state := engine.get_state()
 	var viewer_player_id := -1
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-		viewer_player_id = int(NetContext.local_player_id)
+	if NetContext != null:
+		viewer_player_id = int(NetContext.get_command_privacy_viewer_player_id())
 	var lines: Array[String] = ["=== 命令历史 (最近 %d 条) ===" % count]
 
 	for cmd in history:

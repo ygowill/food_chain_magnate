@@ -20,6 +20,11 @@ static func run() -> Result:
 	if str(other_view.get("selected_index", "")) != "<hidden>":
 		return Result.failure("未揭示时应脱敏 selected_index，实际: %s" % str(other_view.get("selected_index", null)))
 
+	# Spectator/未知 viewer（非负、但不对应任何 player_id）：应视为“非本人”
+	var spectator_view: Dictionary = CommandPrivacyClass.sanitize_params("select_reserve_card", 0, params, 999999, state)
+	if str(spectator_view.get("selected_index", "")) != "<hidden>":
+		return Result.failure("spectator 视角未揭示时应脱敏 selected_index，实际: %s" % str(spectator_view.get("selected_index", null)))
+
 	# 本人可见
 	var self_view: Dictionary = CommandPrivacyClass.sanitize_params("select_reserve_card", 0, params, 0, state)
 	if int(self_view.get("selected_index", -1)) != 2:
@@ -44,4 +49,3 @@ static func run() -> Result:
 		"revealed": revealed_view,
 		"peek": peek_view,
 	})
-
