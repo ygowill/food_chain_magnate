@@ -4,14 +4,17 @@ extends RefCounted
 const EntityTabScript = preload("res://ui/scenes/debug/tabs/entity_tab.gd")
 
 static func run() -> Result:
+	var prev_mode = NetContext.mode if NetContext != null else NetContext.Mode.HOTSEAT
+	var prev_local_player_id := int(NetContext.local_player_id) if NetContext != null else -1
+
 	var engine := GameEngine.new()
 	var init: Result = engine.initialize(2, 12345)
 	if not init.ok:
-		return _finish(Result.failure("初始化失败: %s" % init.error), null, engine)
+		return _finish(Result.failure("初始化失败: %s" % init.error), null, engine, prev_mode, prev_local_player_id)
 
 	var state := engine.get_state()
 	if state == null:
-		return _finish(Result.failure("state 为空"), null, engine)
+		return _finish(Result.failure("state 为空"), null, engine, prev_mode, prev_local_player_id)
 
 	# 固定他人储备卡（便于断言）
 	state.players[1]["reserve_cards"] = [{"type": 5}, {"type": 10}, {"type": 20}]
@@ -21,57 +24,74 @@ static func run() -> Result:
 
 	var tab = EntityTabScript.new()
 	if tab == null or not is_instance_valid(tab):
-		return _finish(Result.failure("实例化 EntityTab 失败"), tab, engine)
+		return _finish(Result.failure("实例化 EntityTab 失败"), tab, engine, prev_mode, prev_local_player_id)
+
+	# Online spectator：viewer_id 不应退化为 current_player（否则会泄漏其隐信息）
+	state.players[0]["reserve_cards"] = [{"type": 5}, {"type": 10}, {"type": 20}]
+	state.players[0]["reserve_card_selected"] = 2
+	state.players[0]["reserve_card_revealed"] = false
+	if NetContext != null:
+		NetContext.mode = NetContext.Mode.ONLINE_CLIENT
+		NetContext.local_player_id = -1
+	var viewer_pid := tab._resolve_viewer_player_id(state)
+	if NetContext != null and viewer_pid != int(NetContext.get_command_privacy_viewer_player_id()):
+		return _finish(Result.failure("spectator viewer_id 解析错误: %d" % viewer_pid), tab, engine, prev_mode, prev_local_player_id)
+	var sanitized0: Dictionary = tab._sanitize_player_dict_for_viewer(state.players[0], 0, viewer_pid, state)
+	if str(sanitized0.get("reserve_card_selected", "")) != "<hidden>":
+		return _finish(Result.failure("spectator 视角未揭示时应隐藏 reserve_card_selected"), tab, engine, prev_mode, prev_local_player_id)
 
 	# 未揭示：应隐藏 reserve_cards 与 reserve_card_selected
 	var sanitized: Dictionary = tab._sanitize_player_dict_for_viewer(state.players[1], 1, 0, state)
 	if str(sanitized.get("reserve_card_selected", "")) != "<hidden>":
-		return _finish(Result.failure("未揭示时应隐藏他人 reserve_card_selected"), tab, engine)
+		return _finish(Result.failure("未揭示时应隐藏他人 reserve_card_selected"), tab, engine, prev_mode, prev_local_player_id)
 
 	var cards_val = sanitized.get("reserve_cards", null)
 	if not (cards_val is Array):
-		return _finish(Result.failure("sanitized.reserve_cards 类型错误（期望 Array）"), tab, engine)
+		return _finish(Result.failure("sanitized.reserve_cards 类型错误（期望 Array）"), tab, engine, prev_mode, prev_local_player_id)
 	var cards: Array = cards_val
 	if cards.size() != 3:
-		return _finish(Result.failure("sanitized.reserve_cards 张数应为 3，实际: %d" % cards.size()), tab, engine)
+		return _finish(Result.failure("sanitized.reserve_cards 张数应为 3，实际: %d" % cards.size()), tab, engine, prev_mode, prev_local_player_id)
 	for i in range(cards.size()):
 		if str(cards[i]) != "<hidden>":
-			return _finish(Result.failure("未揭示时应隐藏他人 reserve_cards[%d]" % i), tab, engine)
+			return _finish(Result.failure("未揭示时应隐藏他人 reserve_cards[%d]" % i), tab, engine, prev_mode, prev_local_player_id)
 
 	# 揭示后：仅公开已选择的那一张卡
 	state.players[1]["reserve_card_revealed"] = true
 	var sanitized2: Dictionary = tab._sanitize_player_dict_for_viewer(state.players[1], 1, 0, state)
 	var cards2_val = sanitized2.get("reserve_cards", null)
 	if not (cards2_val is Array):
-		return _finish(Result.failure("揭示后 sanitized.reserve_cards 类型错误（期望 Array）"), tab, engine)
+		return _finish(Result.failure("揭示后 sanitized.reserve_cards 类型错误（期望 Array）"), tab, engine, prev_mode, prev_local_player_id)
 	var cards2: Array = cards2_val
 	if cards2.size() != 3:
-		return _finish(Result.failure("揭示后 sanitized.reserve_cards 张数应为 3，实际: %d" % cards2.size()), tab, engine)
+		return _finish(Result.failure("揭示后 sanitized.reserve_cards 张数应为 3，实际: %d" % cards2.size()), tab, engine, prev_mode, prev_local_player_id)
 	if cards2[0] != "<hidden>" or cards2[2] != "<hidden>":
-		return _finish(Result.failure("揭示后未选择的 reserve_cards 应隐藏"), tab, engine)
+		return _finish(Result.failure("揭示后未选择的 reserve_cards 应隐藏"), tab, engine, prev_mode, prev_local_player_id)
 	if not (cards2[1] is Dictionary):
-		return _finish(Result.failure("揭示后选择卡应为 Dictionary"), tab, engine)
+		return _finish(Result.failure("揭示后选择卡应为 Dictionary"), tab, engine, prev_mode, prev_local_player_id)
 	if int(Dictionary(cards2[1]).get("type", -1)) != 10:
-		return _finish(Result.failure("揭示后选择卡应为 type=10，实际: %s" % str(Dictionary(cards2[1]).get("type", null))), tab, engine)
+		return _finish(Result.failure("揭示后选择卡应为 type=10，实际: %s" % str(Dictionary(cards2[1]).get("type", null))), tab, engine, prev_mode, prev_local_player_id)
 
 	# 里程碑能力：允许查看全部储备卡
 	state.players[0]["can_peek_all_reserve_cards"] = true
 	var sanitized3: Dictionary = tab._sanitize_player_dict_for_viewer(state.players[1], 1, 0, state)
 	var cards3_val = sanitized3.get("reserve_cards", null)
 	if not (cards3_val is Array):
-		return _finish(Result.failure("peek 后 sanitized.reserve_cards 类型错误（期望 Array）"), tab, engine)
+		return _finish(Result.failure("peek 后 sanitized.reserve_cards 类型错误（期望 Array）"), tab, engine, prev_mode, prev_local_player_id)
 	var cards3: Array = cards3_val
 	if cards3.size() != 3:
-		return _finish(Result.failure("peek 后 sanitized.reserve_cards 张数应为 3，实际: %d" % cards3.size()), tab, engine)
+		return _finish(Result.failure("peek 后 sanitized.reserve_cards 张数应为 3，实际: %d" % cards3.size()), tab, engine, prev_mode, prev_local_player_id)
 	for i in range(cards3.size()):
 		if not (cards3[i] is Dictionary):
-			return _finish(Result.failure("peek 后 reserve_cards[%d] 应为 Dictionary" % i), tab, engine)
+			return _finish(Result.failure("peek 后 reserve_cards[%d] 应为 Dictionary" % i), tab, engine, prev_mode, prev_local_player_id)
 
-	return _finish(Result.success(), tab, engine)
+	return _finish(Result.success(), tab, engine, prev_mode, prev_local_player_id)
 
-static func _finish(result: Result, tab, engine) -> Result:
+static func _finish(result: Result, tab, engine, prev_mode, prev_local_player_id: int) -> Result:
 	if tab != null and is_instance_valid(tab) and tab is Node:
 		(tab as Node).free()
 	if engine != null and engine.has_method("dispose"):
 		engine.dispose()
+	if NetContext != null:
+		NetContext.mode = prev_mode
+		NetContext.local_player_id = prev_local_player_id
 	return result

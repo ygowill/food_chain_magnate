@@ -160,9 +160,7 @@ func _show_details(metadata: Dictionary) -> void:
 
 func _resolve_viewer_player_id(state: GameState) -> int:
 	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-		var pid := int(NetContext.local_player_id)
-		if pid >= 0:
-			return pid
+		return int(NetContext.get_command_privacy_viewer_player_id())
 	if state != null:
 		var cur := int(state.get_current_player_id())
 		if cur >= 0:
