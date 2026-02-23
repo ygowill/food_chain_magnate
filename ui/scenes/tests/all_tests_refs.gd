@@ -35,6 +35,7 @@ const PhaseActionUiRegistryCleanupTestClass = preload("res://ui/scenes/tests/pha
 const PhaseActionUiModalRegistrationTestClass = preload("res://ui/scenes/tests/phase_action_ui_modal_registration_test.gd")
 const PieceUiHintsRegistryLobbyistsTestClass = preload("res://ui/scenes/tests/piece_ui_hints_registry_lobbyists_test.gd")
 const ModuleSelectorSetupConstraintsTestClass = preload("res://ui/scenes/tests/module_selector_setup_constraints_test.gd")
+const OnlineClientHelloConnectTokenTestClass = preload("res://core/tests/online_client_hello_connect_token_test.gd")
 const OnlineRoomManagerTestClass = preload("res://core/tests/online_room_manager_test.gd")
 const OnlineRoomListTestClass = preload("res://core/tests/online_room_list_test.gd")
 const OnlineStartGameReplayTestClass = preload("res://core/tests/online_start_game_replay_test.gd")
