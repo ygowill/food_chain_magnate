@@ -3,7 +3,10 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models import GameServer, Room, Match, MatchParticipant, MatchReplay
+
+INTERNAL_HEADERS = {"X-Internal-Secret": settings.internal_api_secret}
 
 
 async def _create_user(client: AsyncClient) -> dict:
@@ -13,10 +16,16 @@ async def _create_user(client: AsyncClient) -> dict:
 
 
 @pytest.mark.asyncio
+async def test_internal_requires_secret(client: AsyncClient):
+    resp = await client.post("/internal/game_servers/heartbeat", json={"game_server_id": "gs-auth"})
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_heartbeat_creates_server(client: AsyncClient, db_session: AsyncSession):
     resp = await client.post("/internal/game_servers/heartbeat", json={
         "game_server_id": "gs-1",
-    })
+    }, headers=INTERNAL_HEADERS)
     assert resp.status_code == 200
     gs = (await db_session.execute(select(GameServer).where(GameServer.game_server_id == "gs-1"))).scalar_one()
     assert gs.status == "healthy"
@@ -24,8 +33,8 @@ async def test_heartbeat_creates_server(client: AsyncClient, db_session: AsyncSe
 
 @pytest.mark.asyncio
 async def test_heartbeat_updates_existing(client: AsyncClient, db_session: AsyncSession):
-    await client.post("/internal/game_servers/heartbeat", json={"game_server_id": "gs-2"})
-    resp = await client.post("/internal/game_servers/heartbeat", json={"game_server_id": "gs-2"})
+    await client.post("/internal/game_servers/heartbeat", json={"game_server_id": "gs-2"}, headers=INTERNAL_HEADERS)
+    resp = await client.post("/internal/game_servers/heartbeat", json={"game_server_id": "gs-2"}, headers=INTERNAL_HEADERS)
     assert resp.status_code == 200
 
 
@@ -37,7 +46,7 @@ async def test_heartbeat_links_rooms(client: AsyncClient, db_session: AsyncSessi
 
     await client.post("/internal/game_servers/heartbeat", json={
         "game_server_id": "gs-3", "room_codes": [code],
-    })
+    }, headers=INTERNAL_HEADERS)
     room = (await db_session.execute(select(Room).where(Room.room_code == code))).scalar_one()
     assert room.game_server_id == "gs-3"
 
@@ -55,7 +64,7 @@ async def test_finalize_creates_match(client: AsyncClient, db_session: AsyncSess
         "replay_uri": "s3://bucket/replay.bin",
         "replay_checksum": "sha256abc",
         "replay_size_bytes": 2048,
-    })
+    }, headers=INTERNAL_HEADERS)
     assert resp.status_code == 200
     mid = resp.json()["match_id"]
 
@@ -79,7 +88,7 @@ async def test_finalize_without_replay(client: AsyncClient, db_session: AsyncSes
     resp = await client.post("/internal/matches/finalize", json={
         "status": "abandoned",
         "player_count": 1,
-    })
+    }, headers=INTERNAL_HEADERS)
     assert resp.status_code == 200
     mid = resp.json()["match_id"]
     replay = (await db_session.execute(

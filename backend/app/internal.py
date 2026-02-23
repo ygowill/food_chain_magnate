@@ -1,14 +1,24 @@
 from datetime import datetime, timezone
+import hmac
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db import get_db
 from app.models import GameServer, Room, Match, MatchParticipant, MatchReplay
 
 router = APIRouter(prefix="/internal", tags=["internal"])
+
+def _require_internal_secret(x_internal_secret: str | None = Header(default=None, alias="X-Internal-Secret")) -> None:
+    expected = str(settings.internal_api_secret).strip()
+    if expected == "":
+        raise HTTPException(status_code=500, detail="internal_api_secret not configured")
+    provided = str(x_internal_secret or "").strip()
+    if not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="unauthorized")
 
 
 class HeartbeatRequest(BaseModel):
@@ -16,7 +26,7 @@ class HeartbeatRequest(BaseModel):
     room_codes: list[str] = []
 
 
-@router.post("/game_servers/heartbeat")
+@router.post("/game_servers/heartbeat", dependencies=[Depends(_require_internal_secret)])
 async def heartbeat(req: HeartbeatRequest, db: AsyncSession = Depends(get_db)):
     now = datetime.now(timezone.utc)
     gs = (await db.execute(
@@ -65,7 +75,7 @@ class FinalizeRequest(BaseModel):
     replay_size_bytes: int | None = None
 
 
-@router.post("/matches/finalize")
+@router.post("/matches/finalize", dependencies=[Depends(_require_internal_secret)])
 async def finalize(req: FinalizeRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.fromisoformat(req.started_at) if req.started_at else None
     ended = datetime.fromisoformat(req.ended_at) if req.ended_at else None
