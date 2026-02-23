@@ -1,3 +1,4 @@
+import hmac
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -76,14 +77,45 @@ async def guest_login(req: GuestRequest, db: AsyncSession = Depends(get_db)):
 
 
 def _hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    h = hashlib.sha256((salt + password).encode()).hexdigest()
-    return f"{salt}${h}"
+    salt = secrets.token_bytes(16)
+    iterations = int(settings.password_hash_iterations)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    return f"pbkdf2_sha256${iterations}${salt.hex()}${dk.hex()}"
 
 
 def _verify_password(password: str, credential_hash: str) -> bool:
-    salt, h = credential_hash.split("$", 1)
-    return hashlib.sha256((salt + password).encode()).hexdigest() == h
+    if not credential_hash:
+        return False
+    parts = credential_hash.split("$")
+    if len(parts) == 4 and parts[0] == "pbkdf2_sha256":
+        _, iter_s, salt_hex, hash_hex = parts
+        if not iter_s.isdigit():
+            return False
+        try:
+            salt = bytes.fromhex(salt_hex)
+            expected = bytes.fromhex(hash_hex)
+        except ValueError:
+            return False
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, int(iter_s))
+        return hmac.compare_digest(dk, expected)
+
+    # Legacy: sha256(salt + password) in hex, stored as "{salt_hex}${hash_hex}"
+    if len(parts) == 2:
+        salt, h = parts
+        computed = hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
+        return hmac.compare_digest(computed, h)
+
+    return False
+
+
+def _is_legacy_password_hash(credential_hash: str) -> bool:
+    if not credential_hash:
+        return False
+    return credential_hash.count("$") == 1 and not credential_hash.startswith("pbkdf2_sha256$")
+
+
+def _normalize_email(email: str) -> str:
+    return str(email).strip().casefold()
 
 
 class RegisterRequest(BaseModel):
@@ -101,10 +133,13 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     if not req.email or not req.password:
         raise HTTPException(400, "email and password are required")
 
+    email = _normalize_email(req.email)
+    if not email:
+        raise HTTPException(400, "email is required")
     exists = (await db.execute(
         select(AuthIdentity).where(
             AuthIdentity.provider == "email",
-            AuthIdentity.provider_user_id == req.email,
+            AuthIdentity.provider_user_id == email,
         )
     )).scalar_one_or_none()
     if exists:
@@ -115,7 +150,7 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     await db.flush()
     db.add(AuthIdentity(
         provider="email",
-        provider_user_id=req.email,
+        provider_user_id=email,
         user_id=user.user_id,
         credential_hash=_hash_password(req.password),
         verified=False,
@@ -128,14 +163,19 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 @router.post("/login", response_model=AuthResponse)
 async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
+    email = _normalize_email(req.email)
     identity = (await db.execute(
         select(AuthIdentity).where(
             AuthIdentity.provider == "email",
-            AuthIdentity.provider_user_id == req.email,
+            AuthIdentity.provider_user_id == email,
         )
     )).scalar_one_or_none()
     if not identity or not _verify_password(req.password, identity.credential_hash):
         raise HTTPException(401, "invalid email or password")
+
+    # Lazy upgrade legacy hashes on successful login
+    if identity.credential_hash and _is_legacy_password_hash(identity.credential_hash):
+        identity.credential_hash = _hash_password(req.password)
 
     sess = _new_session(identity.user_id)
     db.add(sess)
@@ -154,11 +194,17 @@ class BindRequest(BaseModel):
 async def bind(req: BindRequest, db: AsyncSession = Depends(get_db)):
     sess = await get_current_user(db=db, session_id=req.session_id)
 
+    if str(req.provider).strip() != "email":
+        raise HTTPException(400, "unsupported provider")
+    email = _normalize_email(req.email)
+    if not email:
+        raise HTTPException(400, "email is required")
+
     # Check email not already taken
     exists = (await db.execute(
         select(AuthIdentity).where(
             AuthIdentity.provider == req.provider,
-            AuthIdentity.provider_user_id == req.email,
+            AuthIdentity.provider_user_id == email,
         )
     )).scalar_one_or_none()
     if exists:
@@ -166,7 +212,7 @@ async def bind(req: BindRequest, db: AsyncSession = Depends(get_db)):
 
     db.add(AuthIdentity(
         provider=req.provider,
-        provider_user_id=req.email,
+        provider_user_id=email,
         user_id=sess.user_id,
         credential_hash=_hash_password(req.password),
         verified=False,

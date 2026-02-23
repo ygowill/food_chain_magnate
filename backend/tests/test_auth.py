@@ -56,6 +56,13 @@ async def test_register_duplicate_email_rejected(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_register_duplicate_email_casefold_rejected(client: AsyncClient):
+    await client.post("/v1/auth/register", json={"email": "DUP@b.com", "password": "p1"})
+    resp = await client.post("/v1/auth/register", json={"email": "dup@b.com", "password": "p2"})
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
 async def test_login_success(client: AsyncClient):
     reg = await client.post("/v1/auth/register", json={"email": "login@b.com", "password": "secret"})
     resp = await client.post("/v1/auth/login", json={"email": "login@b.com", "password": "secret"})
@@ -92,6 +99,16 @@ async def test_bind_guest_to_email(client: AsyncClient):
         "email": "bind@b.com", "password": "pw",
     })
     assert login.json()["user_id"] == uid
+
+
+@pytest.mark.asyncio
+async def test_bind_unsupported_provider_rejected(client: AsyncClient):
+    guest = await client.post("/v1/auth/guest", json={"device_id": "bind-bad-provider"})
+    resp = await client.post("/v1/auth/bind", json={
+        "session_id": guest.json()["session_id"], "provider": "steam",
+        "email": "x@b.com", "password": "p",
+    })
+    assert resp.status_code == 400
 
 
 @pytest.mark.asyncio
