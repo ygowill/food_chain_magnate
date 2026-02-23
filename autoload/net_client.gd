@@ -64,22 +64,62 @@ func start_server(port: int, bind_address: String = "0.0.0.0"):
 func connect_to_server(url: String):
 	shutdown()
 	NetContext.mode = NetContext.Mode.ONLINE_CLIENT
-	NetContext.server_url = url
+	var parsed := _parse_connect_token_from_url(str(url))
+	var connect_url: String = str(parsed.get("url", str(url)))
+	var connect_token: String = str(parsed.get("connect_token", ""))
+	NetContext.server_url = connect_url
+	NetContext.connect_token = connect_token
+	NetContext.connection_mode = "platform" if not connect_token.is_empty() else "direct"
 
 	_peer = WebSocketMultiplayerPeer.new()
 	_peer.inbound_buffer_size = 4 * 1024 * 1024
 	_peer.outbound_buffer_size = 4 * 1024 * 1024
-	var err := _peer.create_client(url)
+	var err := _peer.create_client(connect_url)
 	if err != OK:
 		_peer = null
-		GameLog.error("NetClient", "connect_to_server failed url=%s err=%s" % [url, str(err)])
+		GameLog.error("NetClient", "connect_to_server failed url=%s err=%s" % [connect_url, str(err)])
 		NetContext.reset()
 		return Result.failure("WebSocket client create_client failed: %s" % str(err))
 
 	multiplayer.multiplayer_peer = _peer
 	_client_transport_connected = false
-	GameLog.info("NetClient", "Connecting to %s" % url)
+	GameLog.info("NetClient", "Connecting to %s" % connect_url)
 	return Result.success()
+
+func _parse_connect_token_from_url(url: String) -> Dictionary:
+	var out := {
+		"url": str(url),
+		"connect_token": "",
+	}
+	var s := str(url).strip_edges()
+	if s.is_empty():
+		return out
+
+	var q_idx := s.find("?")
+	if q_idx < 0:
+		return out
+	var base := s.substr(0, q_idx)
+	var query := s.substr(q_idx + 1)
+	if query.is_empty():
+		out["url"] = base
+		return out
+
+	var parts: Array[String] = query.split("&", false)
+	var kept: Array[String] = []
+	for part in parts:
+		var p := str(part).strip_edges()
+		if p.is_empty():
+			continue
+		var kv := p.split("=", false, 1)
+		var key := str(kv[0]).strip_edges()
+		var value := str(kv[1]) if kv.size() >= 2 else ""
+		if key == "token" or key == "connect_token":
+			out["connect_token"] = value.uri_decode()
+			continue
+		kept.append(p)
+
+	out["url"] = base + ("?" + "&".join(kept) if not kept.is_empty() else "")
+	return out
 
 func shutdown() -> void:
 	var prev_mode := _mode_name(int(NetContext.mode))
