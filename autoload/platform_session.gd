@@ -68,17 +68,16 @@ func _apply_auth(data: Dictionary, guest: bool) -> void:
 	session_id = str(data.get("session_id", ""))
 	is_guest = guest
 	_save()
-	# 同步到 NetContext
+	# 同步到 NetContext（不覆盖昵称：name 仍由用户/UI 控制）
 	if NetContext != null:
-		NetContext.player_profile["name"] = user_id.substr(0, 8) if is_guest else user_id
+		NetContext.player_profile["user_id"] = user_id
 	session_changed.emit()
 
 
 func _generate_device_id() -> String:
 	# 生成持久化的设备 ID
-	var bytes := PackedByteArray()
-	for i in range(16):
-		bytes.append(randi() % 256)
+	var crypto := Crypto.new()
+	var bytes: PackedByteArray = crypto.generate_random_bytes(16)
 	return bytes.hex_encode()
 
 

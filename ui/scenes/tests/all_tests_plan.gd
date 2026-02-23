@@ -83,6 +83,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.PlatformApiResponseParseTestClass.run(),
 		},
 		{
+			"name": "PlatformSessionProfileDeviceIdTest",
+			"fn": func() -> Result: return TestRefs.PlatformSessionProfileDeviceIdTestClass.run(),
+		},
+		{
 			"name": "UiLobbyistsRoadOverlaysHardRefContractTest",
 			"fn": func() -> Result: return TestRefs.UiLobbyistsRoadOverlaysHardRefContractTestClass.run(),
 		},
