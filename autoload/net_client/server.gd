@@ -7,13 +7,20 @@ const CommandClass = preload("res://core/types/command.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
+const ConnectTokenClass = preload("res://core/utils/connect_token.gd")
 const DEFAULT_RESTAURANT_LOGO_COUNT := 6
 const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
 
 var _net = null
+var connect_token_secret_override: String = ""
 
 func setup(net_client) -> void:
 	_net = net_client
+
+func _get_connect_token_secret() -> String:
+	if not connect_token_secret_override.is_empty():
+		return str(connect_token_secret_override)
+	return str(OS.get_environment("HMAC_SECRET"))
 
 func _safe_text(value: String) -> String:
 	var out := str(value).strip_edges()
@@ -265,17 +272,51 @@ func handle_rpc_client_hello(request: Dictionary) -> void:
 		send_request_rejected(peer_id, request_id, "protocol_version_mismatch", "Protocol version mismatch")
 		return
 
+	var secret := _get_connect_token_secret().strip_edges()
+	var connect_token := str(request.get("connect_token", "")).strip_edges()
+	var token_payload: Dictionary = {}
+	if not secret.is_empty():
+		if connect_token.is_empty():
+			send_request_rejected(peer_id, request_id, "missing_connect_token", "connect_token required")
+			return
+		var vr: Result = ConnectTokenClass.verify_token(connect_token, secret)
+		if not vr.ok:
+			send_request_rejected(peer_id, request_id, "invalid_connect_token", vr.error)
+			return
+		if not (vr.value is Dictionary):
+			send_request_rejected(peer_id, request_id, "invalid_connect_token", "connect_token payload type invalid")
+			return
+		token_payload = Dictionary(vr.value)
+
 	var profile: Dictionary = profile_preview
-	_net._profile_by_peer_id[peer_id] = {
+	var token_user_id := ""
+	if not token_payload.is_empty():
+		token_user_id = str(token_payload.get("user_id", "")).strip_edges()
+		var display_name := str(token_payload.get("display_name", "")).strip_edges()
+		if not display_name.is_empty():
+			profile["name"] = display_name
+
+	var normalized_profile := {
 		"name": str(profile.get("name", "玩家")),
 		"color_index": int(profile.get("color_index", 0)),
 		"restaurant_logo_id": int(profile.get("restaurant_logo_id", -1)),
 	}
+	if not token_user_id.is_empty():
+		normalized_profile["user_id"] = token_user_id
+	_net._profile_by_peer_id[peer_id] = normalized_profile
+
+	if not token_payload.is_empty():
+		var jr: Result = _platform_auto_join(peer_id, request_id, normalized_profile, token_payload)
+		if not jr.ok:
+			_net._profile_by_peer_id.erase(peer_id)
+			send_request_rejected(peer_id, request_id, "platform_join_failed", jr.error)
+			return
+
 	# 允许已在房间中的客户端更新自己的 profile（昵称/颜色/logo）。
 	# 重要：不新增 @rpc 方法，避免 dedicated server 与客户端版本不一致时触发 checksum mismatch。
 	var room = _net._room_manager.get_room_by_peer(peer_id) if _net._room_manager != null else null
 	if room != null and room.has_method("update_peer_profile"):
-		var ur = room.update_peer_profile(peer_id, Dictionary(_net._profile_by_peer_id[peer_id]))
+		var ur = room.update_peer_profile(peer_id, Dictionary(normalized_profile))
 		if ur.ok:
 			broadcast_room_state(room)
 			broadcast_room_list("")
@@ -291,6 +332,60 @@ func handle_rpc_client_hello(request: Dictionary) -> void:
 		"ClientHello accepted %s in_room=%s known_profiles=%d"
 			% [_request_tag(peer_id, request_id), str(room != null), _net._profile_by_peer_id.size()]
 	)
+
+func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, token_payload: Dictionary) -> Result:
+	if _net == null or not is_instance_valid(_net):
+		return Result.failure("NetClient missing")
+	if _net._room_manager == null or not is_instance_valid(_net._room_manager):
+		return Result.failure("RoomManager missing")
+
+	var room_code := str(token_payload.get("room_code", "")).strip_edges().to_upper()
+	var role := str(token_payload.get("role", "")).strip_edges()
+	if room_code.is_empty():
+		return Result.failure("connect_token missing room_code")
+	if role != "host" and role != "player" and role != "spectator":
+		return Result.failure("connect_token invalid role: %s" % role)
+
+	var rm = _net._room_manager
+	var r: Result
+	if role == "host":
+		var config: Dictionary = {}
+		var cfg_json := str(token_payload.get("config_json", "")).strip_edges()
+		if not cfg_json.is_empty():
+			var parsed: Variant = JSON.parse_string(cfg_json)
+			if not (parsed is Dictionary):
+				return Result.failure("connect_token config_json 类型错误（期望 JSON Dictionary）")
+			config = Dictionary(parsed)
+
+		if not rm.has_method("create_room_with_code"):
+			return Result.failure("RoomManager.create_room_with_code missing")
+		r = rm.create_room_with_code(peer_id, profile, room_code, config)
+	elif role == "player":
+		r = rm.join_room(peer_id, profile, room_code, "")
+	else:
+		if not rm.has_method("spectate_room"):
+			return Result.failure("RoomManager.spectate_room missing")
+		r = rm.spectate_room(peer_id, profile, room_code)
+
+	if not r.ok:
+		return r
+
+	var payload: Dictionary = Dictionary(r.value) if (r.value is Dictionary) else {}
+	var room = payload.get("room", null)
+	if room == null:
+		return Result.failure("platform auto join missing room")
+	var actual_role := str(payload.get("role", "")).strip_edges()
+	if not actual_role.is_empty() and actual_role != role:
+		return Result.failure("platform auto join role mismatch: token=%s actual=%s" % [role, actual_role])
+
+	broadcast_room_state(room)
+	broadcast_room_list("")
+	GameLog.info(
+		"NetClient",
+		"Platform auto join ok %s role=%s room=%s %s"
+			% [_request_tag(peer_id, request_id), _safe_text(role), _safe_text(room_code), _room_brief(room)]
+	)
+	return Result.success({"room_code": room_code, "role": role})
 
 func handle_rpc_list_rooms(request: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):

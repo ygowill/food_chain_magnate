@@ -151,6 +151,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.OnlineClientHelloConnectTokenTestClass.run(),
 		},
 		{
+			"name": "PlatformConnectTokenAutoJoinTest",
+			"fn": func() -> Result: return TestRefs.PlatformConnectTokenAutoJoinTestClass.run(),
+		},
+		{
 			"name": "OnlineRoomManagerTest",
 			"fn": func() -> Result: return TestRefs.OnlineRoomManagerTestClass.run(),
 		},

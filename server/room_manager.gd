@@ -44,6 +44,35 @@ func create_room(host_peer_id: int, profile: Dictionary, room_password: String, 
 		"room_state": room.to_room_state_dict(),
 	})
 
+func create_room_with_code(host_peer_id: int, profile: Dictionary, room_code: String, config: Dictionary) -> Result:
+	if peer_to_room.has(host_peer_id):
+		return Result.failure("Peer already in a room")
+
+	var code := str(room_code).strip_edges().to_upper()
+	if code.is_empty():
+		return Result.failure("Missing room_code", Result.ErrorCode.MISSING_PARAMS)
+	if rooms.has(code):
+		return Result.failure("Room already exists: %s" % code)
+
+	# 平台模式：后端已完成密码/权限校验；server 侧不再强依赖 room_password。
+	var join_policy := "password"
+	var password_hash := ""
+	var room = OnlineRoomClass.new(code, host_peer_id, join_policy, password_hash, config)
+
+	var ar: Result = room.add_peer(host_peer_id, profile)
+	if not ar.ok:
+		return ar
+
+	rooms[code] = room
+	peer_to_room[host_peer_id] = code
+
+	return Result.success({
+		"room_code": code,
+		"room": room,
+		"room_state": room.to_room_state_dict(),
+		"role": "host",
+	})
+
 func join_room(peer_id: int, profile: Dictionary, room_code: String, room_password: String) -> Result:
 	if peer_to_room.has(peer_id):
 		return Result.failure("Peer already in a room")
@@ -79,6 +108,31 @@ func join_room(peer_id: int, profile: Dictionary, room_code: String, room_passwo
 		"room": room,
 		"room_state": room.to_room_state_dict(),
 		"role": role,
+	})
+
+func spectate_room(peer_id: int, profile: Dictionary, room_code: String) -> Result:
+	if peer_to_room.has(peer_id):
+		return Result.failure("Peer already in a room")
+
+	var code := str(room_code).strip_edges().to_upper()
+	if code.is_empty():
+		return Result.failure("Missing room_code", Result.ErrorCode.MISSING_PARAMS)
+
+	var room = rooms.get(code, null)
+	if room == null:
+		return Result.failure("Room not found")
+
+	var ar: Result = room.add_spectator(peer_id, profile)
+	if not ar.ok:
+		return ar
+
+	peer_to_room[peer_id] = code
+
+	return Result.success({
+		"room_code": code,
+		"room": room,
+		"room_state": room.to_room_state_dict(),
+		"role": "spectator",
 	})
 
 func list_room_summaries() -> Array[Dictionary]:

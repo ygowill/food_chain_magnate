@@ -32,11 +32,18 @@ def verify_token(token: str) -> dict | None:
 def issue_connect_token(
     user_id: str, room_code: str, role: str,
     display_name: str = "", ttl: int = 60,
+    seat_index: int | None = None,
+    config_json: str | None = None,
 ) -> str:
-    return create_token({
+    payload = {
         "user_id": user_id,
         "room_code": room_code,
         "role": role,
         "display_name": display_name,
         "exp": int(time.time()) + ttl,
-    })
+    }
+    if seat_index is not None:
+        payload["seat_index"] = int(seat_index)
+    if config_json is not None:
+        payload["config_json"] = config_json
+    return create_token(payload)

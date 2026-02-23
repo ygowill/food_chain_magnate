@@ -51,7 +51,7 @@ async def create_room(req: CreateRoomRequest, db: AsyncSession = Depends(get_db)
     db.add(RoomMember(room_id=room.room_id, user_id=sess.user_id, role="host", seat_index=0))
     await db.commit()
 
-    token = issue_connect_token(sess.user_id, room.room_code, "host")
+    token = issue_connect_token(sess.user_id, room.room_code, "host", seat_index=0, config_json=req.config_json)
     return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
 
 
@@ -76,7 +76,10 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
         select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.user_id == sess.user_id, RoomMember.left_at.is_(None))
     )).scalar_one_or_none()
     if existing:
-        token = issue_connect_token(sess.user_id, room.room_code, existing.role)
+        token = issue_connect_token(
+            sess.user_id, room.room_code, existing.role,
+            seat_index=existing.seat_index,
+        )
         return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
 
     # Assign next seat
@@ -90,7 +93,7 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
 
     db.add(RoomMember(room_id=room.room_id, user_id=sess.user_id, role="player", seat_index=seat))
     await db.commit()
-    token = issue_connect_token(sess.user_id, room.room_code, "player")
+    token = issue_connect_token(sess.user_id, room.room_code, "player", seat_index=seat)
     return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
 
 
@@ -105,7 +108,10 @@ async def spectate_room(room_code: str, req: JoinRequest, db: AsyncSession = Dep
         select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.user_id == sess.user_id, RoomMember.left_at.is_(None))
     )).scalar_one_or_none()
     if existing:
-        token = issue_connect_token(sess.user_id, room.room_code, existing.role)
+        token = issue_connect_token(
+            sess.user_id, room.room_code, existing.role,
+            seat_index=existing.seat_index,
+        )
         return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
 
     db.add(RoomMember(room_id=room.room_id, user_id=sess.user_id, role="spectator", seat_index=None))
