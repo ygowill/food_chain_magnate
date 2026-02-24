@@ -86,6 +86,9 @@ func spectate_room(room_code: String, session_id: String) -> Dictionary:
 func get_room(room_code: String) -> Dictionary:
 	return await _request(HTTPClient.METHOD_GET, "/v1/rooms/%s" % room_code)
 
+func list_rooms(session_id: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_GET, "/v1/rooms?session_id=%s" % session_id)
+
 
 # === Matches ===
 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -31,6 +31,80 @@ class RoomInfo(BaseModel):
     owner_user_id: str
     join_policy: str
     config_json: str | None
+
+
+class RoomSummary(BaseModel):
+    room_code: str
+    status: str
+    join_policy: str
+    password_required: bool
+    desired_player_count: int
+    player_count: int
+    allow_spectators: bool
+    host_name: str
+
+
+@router.get("", response_model=list[RoomSummary])
+async def list_rooms(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    status: str | None = None,
+    limit: int = 50,
+):
+    # Auth required (avoid open directory enumeration)
+    await get_current_user(db=db, session_id=session_id)
+
+    lim = int(limit)
+    if lim <= 0:
+        lim = 50
+    lim = min(lim, 200)
+
+    stmt = select(Room).order_by(Room.updated_at.desc()).limit(lim)
+    if status:
+        stmt = stmt.where(Room.status == status)
+
+    rooms = (await db.execute(stmt)).scalars().all()
+
+    counts: dict[str, int] = {}
+    room_ids = [r.room_id for r in rooms]
+    if room_ids:
+        rows = (await db.execute(
+            select(RoomMember.room_id, func.count())
+            .where(
+                RoomMember.room_id.in_(room_ids),
+                RoomMember.left_at.is_(None),
+                RoomMember.seat_index.is_not(None),
+            )
+            .group_by(RoomMember.room_id)
+        )).all()
+        counts = {rid: int(c) for (rid, c) in rows}
+
+    import json
+    out: list[RoomSummary] = []
+    for r in rooms:
+        cfg = {}
+        if r.config_json:
+            try:
+                cfg = json.loads(r.config_json)
+            except Exception:
+                cfg = {}
+
+        desired = int(cfg.get("desired_player_count", 0) or 0)
+        allow_spectators = bool(cfg.get("allow_spectators", True))
+        password_required = r.join_policy == "password"
+        host_name = (r.owner_user_id or "")[:8]
+
+        out.append(RoomSummary(
+            room_code=r.room_code,
+            status=r.status,
+            join_policy=r.join_policy,
+            password_required=password_required,
+            desired_player_count=desired,
+            player_count=int(counts.get(r.room_id, 0)),
+            allow_spectators=allow_spectators,
+            host_name=host_name,
+        ))
+    return out
 
 
 @router.post("", response_model=RoomResponse)

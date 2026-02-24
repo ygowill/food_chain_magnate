@@ -36,6 +36,25 @@ async def test_get_room_not_found(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_list_rooms_requires_session(client: AsyncClient):
+    resp = await client.get("/v1/rooms")
+    assert resp.status_code == 422 or resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_list_rooms(client: AsyncClient):
+    user = await _create_user(client)
+    create = await client.post("/v1/rooms", json={"session_id": user["session_id"]})
+    code = create.json()["room_code"]
+
+    resp = await client.get(f"/v1/rooms?session_id={user['session_id']}")
+    assert resp.status_code == 200
+    rooms = resp.json()
+    assert isinstance(rooms, list)
+    assert any(r.get("room_code") == code for r in rooms)
+
+
+@pytest.mark.asyncio
 async def test_join_room(client: AsyncClient):
     host = await _create_user(client)
     create = await client.post("/v1/rooms", json={"session_id": host["session_id"]})

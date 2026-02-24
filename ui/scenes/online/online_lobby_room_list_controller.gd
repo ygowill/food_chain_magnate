@@ -20,10 +20,6 @@ func render_room_list(rooms: Array) -> void:
 	for child in _rooms_list_container.get_children():
 		child.queue_free()
 
-	var connected := NetClient != null and NetClient.is_online_client_connected()
-	if not connected:
-		return
-
 	if rooms.is_empty():
 		var hint := Label.new()
 		hint.text = "暂无房间"
@@ -167,7 +163,7 @@ func _build_room_card(code: String, status: String, desired: int, player_count: 
 		join_btn.disabled = not can_join
 		UiStylesClass.apply_button_primary(join_btn)
 		join_btn.pressed.connect(func() -> void:
-			_lobby._join_room_from_list(code, password_required)
+			_lobby._join_room_from_list(code, password_required, false)
 		)
 		action_vbox.add_child(join_btn)
 
@@ -176,7 +172,7 @@ func _build_room_card(code: String, status: String, desired: int, player_count: 
 			spectate_btn.text = "观战"
 			UiStylesClass.apply_button_secondary(spectate_btn)
 			spectate_btn.pressed.connect(func() -> void:
-				_lobby._join_room_from_list(code, password_required)
+				_lobby._join_room_from_list(code, password_required, true)
 			)
 			action_vbox.add_child(spectate_btn)
 

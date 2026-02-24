@@ -3,9 +3,11 @@ extends Control
 
 const RoomConfigEditorClass = preload("res://ui/components/room_config_editor/room_config_editor.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
 const InfoDialogClass = preload("res://ui/dialogs/info_dialog.gd")
 const CreateRoomDialogClass = preload("res://ui/dialogs/create_room_dialog.gd")
 const AuthDialogClass = preload("res://ui/dialogs/auth_dialog.gd")
+const RoomListControllerClass = preload("res://ui/scenes/online/online_lobby_room_list_controller.gd")
 const RoomStateRendererClass = preload("res://ui/scenes/online/online_lobby_room_state_renderer.gd")
 const RequestRejectionMapperClass = preload("res://ui/scenes/online/online_lobby_request_rejection_mapper.gd")
 const LobbyViewModelClass = preload("res://ui/scenes/online/online_lobby_view_model.gd")
@@ -37,10 +39,13 @@ const _DEFAULT_LOGO_COUNT := 6
 # ── BrowsePage ──
 @onready var page_browse: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage
 @onready var open_create_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/BrowseHeader/OpenCreateButton
+@onready var refresh_rooms_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/BrowseHeader/RefreshRoomsButton
 @onready var quick_join_code_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/QuickJoinBar/QuickJoinCodeEdit
 @onready var quick_join_password_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/QuickJoinBar/QuickJoinPasswordEdit
 @onready var quick_join_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/QuickJoinBar/QuickJoinButton
 @onready var quick_spectate_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/QuickJoinBar/QuickSpectateButton
+@onready var rooms_scroll: ScrollContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/RoomsScroll
+@onready var rooms_list_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/RoomsScroll/RoomsList
 @onready var browse_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/BrowseStatus
 
 # ── RoomPage ──
@@ -63,11 +68,16 @@ enum LobbyPage { CONNECT, BROWSE, ROOM }
 var _current_page: int = LobbyPage.CONNECT
 
 var _room_config_editor = null
+var _room_list_controller = null
 var _room_state_renderer = null
 
 var _room_config_sync_controller = null
 var _start_game_request_id: String = ""
 var _start_game_flow_in_progress: bool = false
+
+var _password_dialog = null
+var _password_dialog_room_code: String = ""
+var _password_dialog_spectate: bool = false
 
 var _info_dialog = null
 var _create_room_dialog = null
@@ -76,6 +86,7 @@ var _suppress_profile_signals: bool = false
 var _logo_icons_small: Array[Texture2D] = []
 var _logo_piece_ids: Array[String] = []
 
+var _platform_rooms: Array = []
 var _platform_busy: bool = false
 var _platform_entered: bool = false
 var _ws_connect_in_progress: bool = false
@@ -90,6 +101,7 @@ func _ready() -> void:
 	UiStylesClass.apply_button_primary(connect_button)
 	UiStylesClass.apply_button_secondary(disconnect_button)
 	UiStylesClass.apply_button_primary(open_create_button)
+	UiStylesClass.apply_button_secondary(refresh_rooms_button)
 	UiStylesClass.apply_button_primary(quick_join_button)
 	UiStylesClass.apply_button_secondary(quick_spectate_button)
 	UiStylesClass.apply_button_secondary(copy_room_code_button)
@@ -238,9 +250,20 @@ func _ensure_config_sync_controller() -> void:
 		_room_config_sync_controller.setup(self, config_sync_status_label, config_debounce_timer)
 
 func _ensure_room_renderers() -> void:
+	if _room_list_controller == null or not is_instance_valid(_room_list_controller):
+		_room_list_controller = RoomListControllerClass.new()
+		_room_list_controller.setup(self)
 	if _room_state_renderer == null or not is_instance_valid(_room_state_renderer):
 		_room_state_renderer = RoomStateRendererClass.new()
 		_room_state_renderer.setup(self)
+
+func _ensure_password_dialog() -> void:
+	if _password_dialog != null and is_instance_valid(_password_dialog):
+		return
+	_password_dialog = PasswordDialogClass.new()
+	add_child(_password_dialog)
+	if _password_dialog.has_signal("submitted") and not _password_dialog.submitted.is_connected(_on_password_dialog_submitted):
+		_password_dialog.submitted.connect(_on_password_dialog_submitted)
 
 func _ensure_info_dialog() -> void:
 	if _info_dialog != null and is_instance_valid(_info_dialog):
@@ -408,6 +431,41 @@ func _platform_enter() -> void:
 	_set_connect_status("平台已就绪：创建/加入房间将自动连接服务器。")
 	_refresh_ui()
 	_show_page(LobbyPage.BROWSE, false)
+	await _platform_refresh_rooms()
+
+func _platform_refresh_rooms() -> void:
+	if _platform_busy:
+		return
+	_platform_busy = true
+	_set_browse_status("正在刷新房间列表...")
+	_refresh_ui()
+	var lr: Result = await _platform_ensure_session()
+	if not lr.ok:
+		_platform_busy = false
+		_set_browse_status("")
+		_show_error_dialog("平台登录失败", lr.error)
+		_refresh_ui()
+		return
+	_platform_entered = true
+
+	var rr: Dictionary = await PlatformApi.list_rooms(PlatformSession.session_id)
+	_platform_busy = false
+	if rr.has("error"):
+		_platform_rooms = []
+		_set_browse_status("")
+		_show_error_dialog("获取房间列表失败", str(rr.get("error", "")))
+		_refresh_ui()
+		return
+	var ok_val = rr.get("ok", null)
+	if not (ok_val is Array):
+		_platform_rooms = []
+		_set_browse_status("")
+		_show_error_dialog("获取房间列表失败", "后端返回格式错误")
+		_refresh_ui()
+		return
+	_platform_rooms = Array(ok_val).duplicate(true)
+	_set_browse_status("")
+	_refresh_ui()
 
 func _platform_create_room(desired_player_count: int, room_password: String, config_patch: Dictionary) -> void:
 	if _platform_busy:
@@ -585,6 +643,7 @@ func _refresh_ui() -> void:
 	connect_button.disabled = busy or platform_ready
 	disconnect_button.disabled = busy or not platform_ready
 	open_create_button.disabled = busy or not platform_ready
+	refresh_rooms_button.disabled = busy or not platform_ready
 	quick_join_button.disabled = busy or not platform_ready
 	if quick_spectate_button != null and is_instance_valid(quick_spectate_button):
 		quick_spectate_button.disabled = busy or not platform_ready
@@ -596,9 +655,36 @@ func _refresh_ui() -> void:
 		if connect_status_label.text.strip_edges().is_empty():
 			_set_connect_status("平台已就绪：创建/加入房间将自动连接服务器。")
 
+	if _room_list_controller != null and is_instance_valid(_room_list_controller):
+		_room_list_controller.render_room_list(_platform_rooms)
 	if _room_state_renderer != null and is_instance_valid(_room_state_renderer):
 		_room_state_renderer.render_room_state(NetContext.room_state if NetContext != null else {})
 	_sync_page_from_state()
+
+func _join_room_from_list(room_code: String, password_required: bool, spectate: bool) -> void:
+	var code := str(room_code).strip_edges().to_upper()
+	if code.is_empty():
+		return
+	if password_required:
+		_prompt_password_and_join(code, spectate)
+		return
+	await _platform_join_room(code, "", spectate)
+
+func _prompt_password_and_join(room_code: String, spectate: bool) -> void:
+	_ensure_password_dialog()
+	_password_dialog_room_code = str(room_code).strip_edges().to_upper()
+	_password_dialog_spectate = spectate
+	if _password_dialog != null and is_instance_valid(_password_dialog) and _password_dialog.has_method("open_for_room"):
+		_password_dialog.call_deferred("open_for_room", room_code, "加入/观战")
+
+func _on_password_dialog_submitted(password: String) -> void:
+	var code := str(_password_dialog_room_code).strip_edges().to_upper()
+	var spectate := _password_dialog_spectate
+	_password_dialog_room_code = ""
+	_password_dialog_spectate = false
+	if code.is_empty():
+		return
+	await _platform_join_room(code, str(password), spectate)
 
 # ── 状态文本 ──
 
@@ -801,6 +887,9 @@ func _on_open_create_pressed() -> void:
 	_ensure_create_room_dialog()
 	if _create_room_dialog != null and is_instance_valid(_create_room_dialog):
 		_create_room_dialog.open_dialog()
+
+func _on_refresh_rooms_pressed() -> void:
+	await _platform_refresh_rooms()
 
 func _on_create_room_dialog_confirmed(desired_player_count: int, room_password: String, config_patch: Dictionary) -> void:
 	await _platform_create_room(desired_player_count, room_password, config_patch)
