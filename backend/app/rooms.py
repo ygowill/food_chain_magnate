@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -6,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.connect_token import issue_connect_token
 from app.db import get_db
-from app.models import Room, RoomMember, Session
+from app.models import GameServer, Room, RoomMember, Session
 
 router = APIRouter(prefix="/v1/rooms", tags=["rooms"])
 
@@ -50,6 +52,7 @@ async def list_rooms(
     db: AsyncSession = Depends(get_db),
     status: str | None = None,
     limit: int = 50,
+    active_only: bool = True,
 ):
     # Auth required (avoid open directory enumeration)
     await get_current_user(db=db, session_id=session_id)
@@ -59,7 +62,19 @@ async def list_rooms(
         lim = 50
     lim = min(lim, 200)
 
-    stmt = select(Room).order_by(Room.updated_at.desc()).limit(lim)
+    stmt = select(Room)
+    if active_only:
+        # Only show rooms that are confirmed alive by a recent game server heartbeat.
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=75)
+        stmt = (
+            stmt.join(GameServer, Room.game_server_id == GameServer.game_server_id)
+            .where(
+                Room.status != "Ended",
+                GameServer.last_heartbeat_at >= cutoff,
+            )
+        )
+
+    stmt = stmt.order_by(Room.updated_at.desc()).limit(lim)
     if status:
         stmt = stmt.where(Room.status == status)
 

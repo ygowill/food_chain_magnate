@@ -37,13 +37,26 @@ async def heartbeat(req: HeartbeatRequest, db: AsyncSession = Depends(get_db)):
         gs.status = "healthy"
     else:
         db.add(GameServer(game_server_id=req.game_server_id, last_heartbeat_at=now))
-    # Update rooms with this game_server_id
+
+    # Mark alive rooms (refresh updated_at, claim ownership).
     if req.room_codes:
-        rooms = (await db.execute(
-            select(Room).where(Room.room_code.in_(req.room_codes))
-        )).scalars().all()
+        rooms = (await db.execute(select(Room).where(Room.room_code.in_(req.room_codes)))).scalars().all()
         for r in rooms:
             r.game_server_id = req.game_server_id
+            # Allow revival if the room became active again.
+            if r.status == "Ended":
+                r.status = "Lobby"
+            r.updated_at = now
+
+    # GC: rooms previously on this game server but no longer present -> Ended.
+    stmt = select(Room).where(Room.game_server_id == req.game_server_id, Room.status != "Ended")
+    if req.room_codes:
+        stmt = stmt.where(~Room.room_code.in_(req.room_codes))
+    stale = (await db.execute(stmt)).scalars().all()
+    for r in stale:
+        r.status = "Ended"
+        r.updated_at = now
+
     await db.commit()
     return {"ok": True}
 

@@ -47,11 +47,30 @@ async def test_list_rooms(client: AsyncClient):
     create = await client.post("/v1/rooms", json={"session_id": user["session_id"]})
     code = create.json()["room_code"]
 
+    # Mark room as alive (directory should list only heartbeated rooms by default).
+    hb = await client.post(
+        "/internal/game_servers/heartbeat",
+        headers={"X-Internal-Secret": "dev-internal-secret-change-in-production"},
+        json={"game_server_id": "gs-test-1", "room_codes": [code]},
+    )
+    assert hb.status_code == 200
+
     resp = await client.get(f"/v1/rooms?session_id={user['session_id']}")
     assert resp.status_code == 200
     rooms = resp.json()
     assert isinstance(rooms, list)
     assert any(r.get("room_code") == code for r in rooms)
+
+    # When the room disappears from heartbeat, it should be delisted.
+    hb2 = await client.post(
+        "/internal/game_servers/heartbeat",
+        headers={"X-Internal-Secret": "dev-internal-secret-change-in-production"},
+        json={"game_server_id": "gs-test-1", "room_codes": []},
+    )
+    assert hb2.status_code == 200
+    resp2 = await client.get(f"/v1/rooms?session_id={user['session_id']}")
+    assert resp2.status_code == 200
+    assert not any(r.get("room_code") == code for r in resp2.json())
 
 
 @pytest.mark.asyncio
