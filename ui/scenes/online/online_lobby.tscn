@@ -101,31 +101,7 @@ layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 10
 
-[node name="ModeRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="ModeLabel" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ModeRow"]
-layout_mode = 2
-text = "连接方式"
-
-[node name="ModeOption" type="OptionButton" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ModeRow"]
-layout_mode = 2
-
-[node name="ServerRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="ServerUrlLabel" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ServerRow"]
-layout_mode = 2
-text = "服务器地址"
-
-[node name="ServerUrlEdit" type="LineEdit" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ServerRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-
 [node name="BackendRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage"]
-visible = false
 layout_mode = 2
 theme_override_constants/separation = 8
 
@@ -155,7 +131,7 @@ theme_override_constants/separation = 8
 
 [node name="ConnectButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ButtonsRow"]
 layout_mode = 2
-text = "连接"
+text = "进入"
 
 [node name="DisconnectButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ButtonsRow"]
 layout_mode = 2
@@ -185,10 +161,6 @@ text = "房间列表"
 layout_mode = 2
 text = "创建房间"
 
-[node name="RefreshRoomsButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/BrowseHeader"]
-layout_mode = 2
-text = "刷新"
-
 [node name="QuickJoinBar" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage"]
 layout_mode = 2
 theme_override_constants/separation = 8
@@ -211,16 +183,6 @@ text = "加入"
 [node name="QuickSpectateButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/QuickJoinBar"]
 layout_mode = 2
 text = "观战"
-
-[node name="RoomsScroll" type="ScrollContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage"]
-layout_mode = 2
-size_flags_vertical = 3
-horizontal_scroll_mode = 0
-
-[node name="RoomsList" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/RoomsScroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 8
 
 [node name="BrowseStatus" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage"]
 layout_mode = 2
@@ -327,7 +289,6 @@ wait_time = 0.5
 [connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ButtonsRow/ConnectButton" to="." method="_on_connect_pressed"]
 [connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ButtonsRow/DisconnectButton" to="." method="_on_disconnect_pressed"]
 [connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/BrowseHeader/OpenCreateButton" to="." method="_on_open_create_pressed"]
-[connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/BrowseHeader/RefreshRoomsButton" to="." method="_on_refresh_rooms_pressed"]
 [connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/QuickJoinBar/QuickJoinButton" to="." method="_on_quick_join_pressed"]
 [connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomHeader/CopyRoomCodeButton" to="." method="_on_copy_room_code_pressed"]
 [connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomActionsRow/LeaveRoomButton" to="." method="_on_leave_room_pressed"]

@@ -389,18 +389,19 @@ UI 只订阅状态并触发调用：
 - `POST /v1/auth/bind` 请求体需明确绑定目标类型：`{ provider: "email", email, password }` 或 `{ provider: "steam", oauth_token }`
 - `POST /v1/rooms/{room_code}/spectate` 保持独立端点（而非合并到 `/join?role=spectator`），因为观战的权限检查逻辑（`allow_spectators`、`spectator_policy`）与加入房间不同
 
-## 11. 迁移路径：直连模式与平台模式共存
+## 11. 当前实现：仅平台模式（已移除直连）
 
-当前客户端通过 `NetClient.connect_to_server(url)` 直连 Game Server。引入平台后端后，需要两种模式共存：
+本仓库当前实现已移除“直连服务器”入口，联机流程统一为：
 
-- **直连模式（保留）**：用于局域网/自建服务器场景。客户端直接输入 `ws://host:port` 连接，无需 Backend 参与，无账号体系，行为与当前完全一致。
-- **平台模式（新增）**：客户端先通过 Backend 获取 `{ ws_url, connect_token }`，再连接 Game Server。Game Server 验证 connect_token 后允许加入。
+1. Client 通过 Backend 获取 `{ ws_url, connect_token }`
+2. Client 使用 `NetClient.connect_to_server(ws_url + "?connect_token=...")` 连接 Game Server
+3. Game Server 在 `rpc_client_hello` 中强制校验 connect_token（需要配置 `HMAC_SECRET`），并根据 token 自动创建/加入指定 `room_code`
 
-实现建议：
+因此：
 
-- `NetContext` 增加 `connection_mode`（`direct` / `platform`）标识当前连接方式
-- `NetClient.connect_to_server()` 增加可选的 `connect_token` 参数；Game Server 侧在 `rpc_client_hello` 中检查：若 server 配置了共享密钥则要求 token，否则跳过验签（兼容直连）
-- 在线大厅 UI 提供"直连服务器"入口（输入地址）和"平台房间"入口（走 Backend API），两条路径最终都调用 `NetClient.connect_to_server()`
+- 不再需要 `NetContext.connection_mode`
+- `NetClient.connect_to_server()` 要求 URL 中包含 `connect_token`（或 `token`）query 参数
+- 若 Game Server 未设置 `HMAC_SECRET`，会拒绝连接（`server_misconfigured`）
 
 ## 12. 部署与 TLS
 
@@ -410,4 +411,3 @@ Game Server 的 WSS 连接建议通过反向代理（nginx / caddy）终止 TLS�
 Client --WSS--> nginx/caddy (TLS termination) --WS--> Godot Game Server (:7000)
 Client --HTTPS--> Backend (自带 TLS 或同样经反向代理)
 ```
-

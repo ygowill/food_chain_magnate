@@ -67,9 +67,12 @@ func connect_to_server(url: String):
 	var parsed := _parse_connect_token_from_url(str(url))
 	var connect_url: String = str(parsed.get("url", str(url)))
 	var connect_token: String = str(parsed.get("connect_token", ""))
+	if connect_token.is_empty():
+		GameLog.error("NetClient", "connect_to_server missing connect_token url=%s" % _safe_text(connect_url))
+		NetContext.reset()
+		return Result.failure("connect_token required")
 	NetContext.server_url = connect_url
 	NetContext.connect_token = connect_token
-	NetContext.connection_mode = "platform" if not connect_token.is_empty() else "direct"
 
 	_peer = WebSocketMultiplayerPeer.new()
 	_peer.inbound_buffer_size = 4 * 1024 * 1024

@@ -13,10 +13,14 @@ extends SceneTree
 
 const NAME := "OnlineDinnertimeRepro"
 
+const ROOM_CODE_ALPHABET := "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+const ROOM_CODE_LENGTH := 6
+
 var _role := "host"
 var _server_url := "ws://127.0.0.1:7000"
 var _room_file := "/tmp/fcm_room_code.txt"
 var _room_password := "123"
+var _hmac_secret := ""
 var _confirm_delay_ms := 0
 var _timeout_ms := 120_000
 var _stop_round := 1
@@ -27,6 +31,7 @@ var _globals = null
 
 var _CommandClass = null
 var _CoordsClass = null
+var _ConnectTokenClass = null
 
 var _engine = null
 var _local_pid := -1
@@ -63,7 +68,8 @@ func _run() -> void:
 	# Delay-load dependencies (see header note).
 	_CommandClass = load("res://core/types/command.gd")
 	_CoordsClass = load("res://core/map/map_runtime/coords.gd")
-	if _CommandClass == null or _CoordsClass == null:
+	_ConnectTokenClass = load("res://core/utils/connect_token.gd")
+	if _CommandClass == null or _CoordsClass == null or _ConnectTokenClass == null:
 		push_error("[%s] FAIL load core scripts" % NAME)
 		quit(1)
 		return
@@ -83,7 +89,45 @@ func _run() -> void:
 
 	_connect_net_signals()
 
-	var cr = _net_client.connect_to_server(_server_url)
+	var secret := str(_hmac_secret).strip_edges()
+	if secret.is_empty():
+		secret = str(OS.get_environment("HMAC_SECRET")).strip_edges()
+	if secret.is_empty():
+		push_error("[%s] FAIL missing HMAC_SECRET (use env HMAC_SECRET or --secret=...)" % NAME)
+		quit(1)
+		return
+
+	var room_code := ""
+	if _role == "host":
+		room_code = _generate_room_code()
+		var w0 := _write_text_file(_room_file, room_code)
+		if not w0.ok:
+			push_error("[%s] FAIL write room_file: %s" % [NAME, w0.error])
+			quit(1)
+			return
+	else:
+		var code_read := await _wait_until(func() -> bool:
+			return FileAccess.file_exists(_room_file)
+		, 15_000)
+		if not code_read:
+			push_error("[%s] FAIL room_file not found: %s" % [NAME, _room_file])
+			quit(1)
+			return
+		room_code = str(_read_text_file(_room_file)).strip_edges().to_upper()
+		if room_code.is_empty():
+			push_error("[%s] FAIL room_code empty from file" % NAME)
+			quit(1)
+			return
+
+	var payload: Dictionary = _build_connect_token_payload(room_code, _role)
+	var tr: Result = _ConnectTokenClass.create_token(payload, secret)
+	if not tr.ok:
+		push_error("[%s] FAIL create_token: %s" % [NAME, tr.error])
+		quit(1)
+		return
+	var connect_url := _append_connect_token(_server_url, str(tr.value))
+
+	var cr = _net_client.connect_to_server(connect_url)
 	if cr is Result and not cr.ok:
 		push_error("[%s] FAIL connect_to_server: %s" % [NAME, cr.error])
 		quit(1)
@@ -98,24 +142,12 @@ func _run() -> void:
 		return
 
 	if _role == "host":
-		var req_id = _net_client.request_create_room(2, _room_password, {"seed_mode": "fixed", "seed": 12345})
-		print("[%s] host create_room request_id=%s" % [NAME, str(req_id)])
-
 		var code_ok := await _wait_until(func() -> bool:
 			var rs: Dictionary = _net_context.room_state if _net_context.get("room_state") is Dictionary else {}
-			return not str(rs.get("room_code", "")).strip_edges().is_empty()
+			return str(rs.get("room_code", "")).strip_edges().to_upper() == room_code
 		, 10_000)
 		if not code_ok:
-			push_error("[%s] FAIL room_code timeout" % NAME)
-			quit(1)
-			return
-
-		var room_state: Dictionary = _net_context.room_state
-		var room_code := str(room_state.get("room_code", "")).strip_edges().to_upper()
-		print("[%s] host room_code=%s" % [NAME, room_code])
-		var w := _write_text_file(_room_file, room_code)
-		if not w.ok:
-			push_error("[%s] FAIL write room_file: %s" % [NAME, w.error])
+			push_error("[%s] FAIL room_state not ready for room_code=%s" % [NAME, room_code])
 			quit(1)
 			return
 
@@ -134,20 +166,14 @@ func _run() -> void:
 		var start_id = _net_client.request_start_game()
 		print("[%s] host start_game request_id=%s" % [NAME, str(start_id)])
 	else:
-		var code_read := await _wait_until(func() -> bool:
-			return FileAccess.file_exists(_room_file)
-		, 15_000)
-		if not code_read:
-			push_error("[%s] FAIL room_file not found: %s" % [NAME, _room_file])
+		var code_ok2 := await _wait_until(func() -> bool:
+			var rsj: Dictionary = _net_context.room_state if _net_context.get("room_state") is Dictionary else {}
+			return str(rsj.get("room_code", "")).strip_edges().to_upper() == room_code
+		, 10_000)
+		if not code_ok2:
+			push_error("[%s] FAIL room_state not ready for room_code=%s" % [NAME, room_code])
 			quit(1)
 			return
-		var room_code2 := str(_read_text_file(_room_file)).strip_edges().to_upper()
-		if room_code2.is_empty():
-			push_error("[%s] FAIL room_code empty from file" % NAME)
-			quit(1)
-			return
-		var join_id = _net_client.request_join_room(room_code2, _room_password)
-		print("[%s] join request_id=%s room_code=%s" % [NAME, str(join_id), room_code2])
 
 	var started_ok := await _wait_until(func() -> bool:
 		return _globals.get("current_game_engine") != null
@@ -486,6 +512,14 @@ func _parse_args(args: Array) -> void:
 	var i := 0
 	while i < args.size():
 		var a := str(args[i])
+		if a.begins_with("--secret="):
+			_hmac_secret = a.split("=", false, 1)[1]
+			i += 1
+			continue
+		if a == "--secret" and i + 1 < args.size():
+			_hmac_secret = str(args[i + 1])
+			i += 2
+			continue
 		if a.begins_with("--role="):
 			_role = a.split("=", false, 1)[1]
 			i += 1
@@ -543,6 +577,52 @@ func _parse_args(args: Array) -> void:
 			i += 2
 			continue
 		i += 1
+
+func _append_connect_token(base_url: String, connect_token: String) -> String:
+	var base := str(base_url).strip_edges()
+	var sep := "?" if base.find("?") < 0 else "&"
+	return base + sep + "connect_token=" + str(connect_token).uri_encode()
+
+func _generate_room_code() -> String:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var out := ""
+	for _i in range(ROOM_CODE_LENGTH):
+		out += ROOM_CODE_ALPHABET[rng.randi_range(0, ROOM_CODE_ALPHABET.length() - 1)]
+	return out
+
+func _build_connect_token_payload(room_code: String, role: String) -> Dictionary:
+	var now := int(Time.get_unix_time_from_system())
+	var code := str(room_code).strip_edges().to_upper()
+	var r := str(role).strip_edges()
+	if r != "host" and r != "join":
+		r = "join"
+	if r == "host":
+		var cfg := {
+			"desired_player_count": 2,
+			"seed_mode": "fixed",
+			"seed": 12345,
+			"allow_spectators": true,
+			"enabled_modules_v2": Array(_globals.enabled_modules_v2, TYPE_STRING, "", null) if _globals != null else [],
+			"modules_v2_base_dir": str(_globals.modules_v2_base_dir) if _globals != null else "",
+		}
+		return {
+			"user_id": "repro_host",
+			"room_code": code,
+			"role": "host",
+			"seat_index": 0,
+			"display_name": "ReproHost",
+			"config_json": JSON.stringify(cfg),
+			"exp": now + 60,
+		}
+	return {
+		"user_id": "repro_join",
+		"room_code": code,
+		"role": "player",
+		"seat_index": 1,
+		"display_name": "ReproJoin",
+		"exp": now + 60,
+	}
 
 func _has_sent_dinnertime_confirm(round_number: int) -> bool:
 	if _sent_confirm_rounds.has(round_number):

@@ -366,18 +366,20 @@ func handle_rpc_client_hello(request: Dictionary) -> void:
 	var secret := _get_connect_token_secret().strip_edges()
 	var connect_token := str(request.get("connect_token", "")).strip_edges()
 	var token_payload: Dictionary = {}
-	if not secret.is_empty():
-		if connect_token.is_empty():
-			send_request_rejected(peer_id, request_id, "missing_connect_token", "connect_token required")
-			return
-		var vr: Result = ConnectTokenClass.verify_token(connect_token, secret)
-		if not vr.ok:
-			send_request_rejected(peer_id, request_id, "invalid_connect_token", vr.error)
-			return
-		if not (vr.value is Dictionary):
-			send_request_rejected(peer_id, request_id, "invalid_connect_token", "connect_token payload type invalid")
-			return
-		token_payload = Dictionary(vr.value)
+	if secret.is_empty():
+		send_request_rejected(peer_id, request_id, "server_misconfigured", "HMAC_SECRET is not configured")
+		return
+	if connect_token.is_empty():
+		send_request_rejected(peer_id, request_id, "missing_connect_token", "connect_token required")
+		return
+	var vr: Result = ConnectTokenClass.verify_token(connect_token, secret)
+	if not vr.ok:
+		send_request_rejected(peer_id, request_id, "invalid_connect_token", vr.error)
+		return
+	if not (vr.value is Dictionary):
+		send_request_rejected(peer_id, request_id, "invalid_connect_token", "connect_token payload type invalid")
+		return
+	token_payload = Dictionary(vr.value)
 
 	var profile: Dictionary = profile_preview
 	var token_user_id := ""

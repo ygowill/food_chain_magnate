@@ -11,6 +11,18 @@ static func get_dialog_text(code: String, message: String) -> Dictionary:
 		"protocol_version_mismatch":
 			title = "协议版本不匹配"
 			body = "客户端与服务器版本不一致，请更新后重试。"
+		"server_misconfigured":
+			title = "服务器配置错误"
+			body = "Game Server 未配置 HMAC_SECRET，无法验证 connect_token。\n\n本地启动时请设置 HMAC_SECRET（需与后端一致；backend 默认值为 dev-secret-change-in-production）。"
+		"missing_connect_token":
+			title = "连接失败"
+			body = "缺少 connect_token：请通过平台后端创建/加入房间后再连接。"
+		"invalid_connect_token":
+			title = "连接失败"
+			body = "connect_token 无效或已过期。\n\n%s" % m
+		"platform_join_failed":
+			title = "加入房间失败"
+			body = m
 		"missing_client_hello":
 			title = "连接未完成"
 			body = "请先连接服务器后再重试。"
@@ -71,4 +83,3 @@ static func get_dialog_text(code: String, message: String) -> Dictionary:
 		"title": title,
 		"body": body,
 	}
-

@@ -3,11 +3,9 @@ extends Control
 
 const RoomConfigEditorClass = preload("res://ui/components/room_config_editor/room_config_editor.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
-const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
 const InfoDialogClass = preload("res://ui/dialogs/info_dialog.gd")
 const CreateRoomDialogClass = preload("res://ui/dialogs/create_room_dialog.gd")
 const AuthDialogClass = preload("res://ui/dialogs/auth_dialog.gd")
-const RoomListControllerClass = preload("res://ui/scenes/online/online_lobby_room_list_controller.gd")
 const RoomStateRendererClass = preload("res://ui/scenes/online/online_lobby_room_state_renderer.gd")
 const RequestRejectionMapperClass = preload("res://ui/scenes/online/online_lobby_request_rejection_mapper.gd")
 const LobbyViewModelClass = preload("res://ui/scenes/online/online_lobby_view_model.gd")
@@ -30,10 +28,6 @@ const _DEFAULT_LOGO_COUNT := 6
 
 # ── ConnectPage ──
 @onready var page_connect: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage
-@onready var mode_option: OptionButton = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ModeRow/ModeOption
-@onready var server_row: HBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ServerRow
-@onready var server_url_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ServerRow/ServerUrlEdit
-@onready var backend_row: HBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/BackendRow
 @onready var backend_url_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/BackendRow/BackendUrlEdit
 @onready var player_name_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ProfileRow/PlayerNameEdit
 @onready var connect_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ButtonsRow/ConnectButton
@@ -43,13 +37,10 @@ const _DEFAULT_LOGO_COUNT := 6
 # ── BrowsePage ──
 @onready var page_browse: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage
 @onready var open_create_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/BrowseHeader/OpenCreateButton
-@onready var refresh_rooms_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/BrowseHeader/RefreshRoomsButton
 @onready var quick_join_code_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/QuickJoinBar/QuickJoinCodeEdit
 @onready var quick_join_password_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/QuickJoinBar/QuickJoinPasswordEdit
 @onready var quick_join_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/QuickJoinBar/QuickJoinButton
 @onready var quick_spectate_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/QuickJoinBar/QuickSpectateButton
-@onready var rooms_scroll: ScrollContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/RoomsScroll
-@onready var rooms_list_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/RoomsScroll/RoomsList
 @onready var browse_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/BrowsePage/BrowseStatus
 
 # ── RoomPage ──
@@ -71,19 +62,13 @@ const _DEFAULT_LOGO_COUNT := 6
 enum LobbyPage { CONNECT, BROWSE, ROOM }
 var _current_page: int = LobbyPage.CONNECT
 
-const CONNECTION_MODE_DIRECT := "direct"
-const CONNECTION_MODE_PLATFORM := "platform"
-
 var _room_config_editor = null
-var _room_list_controller = null
 var _room_state_renderer = null
 
 var _room_config_sync_controller = null
 var _start_game_request_id: String = ""
 var _start_game_flow_in_progress: bool = false
 
-var _password_dialog = null
-var _password_dialog_room_code: String = ""
 var _info_dialog = null
 var _create_room_dialog = null
 var _auth_dialog = null
@@ -91,9 +76,9 @@ var _suppress_profile_signals: bool = false
 var _logo_icons_small: Array[Texture2D] = []
 var _logo_piece_ids: Array[String] = []
 
-var _selected_connection_mode: String = CONNECTION_MODE_DIRECT
-var _platform_entered: bool = false
 var _platform_busy: bool = false
+var _platform_entered: bool = false
+var _ws_connect_in_progress: bool = false
 
 func _ready() -> void:
 	UiStylesClass.apply_tiled_texture(wall_background, UiStylesClass.WALL_TEXTURE_PATHS, 3.0, Color(0.93, 0.88, 0.75, 1.0))
@@ -105,7 +90,6 @@ func _ready() -> void:
 	UiStylesClass.apply_button_primary(connect_button)
 	UiStylesClass.apply_button_secondary(disconnect_button)
 	UiStylesClass.apply_button_primary(open_create_button)
-	UiStylesClass.apply_button_secondary(refresh_rooms_button)
 	UiStylesClass.apply_button_primary(quick_join_button)
 	UiStylesClass.apply_button_secondary(quick_spectate_button)
 	UiStylesClass.apply_button_secondary(copy_room_code_button)
@@ -118,11 +102,9 @@ func _ready() -> void:
 	_bind_platform_signals()
 	_ensure_editors()
 	_ensure_config_sync_controller()
-	_ensure_password_dialog()
 	_ensure_info_dialog()
 	_ensure_create_room_dialog()
 	_ensure_room_renderers()
-	_setup_connection_mode_selector()
 	_setup_account_ui()
 	if my_logo_row != null and is_instance_valid(my_logo_row):
 		my_logo_row.visible = false
@@ -136,13 +118,11 @@ func _apply_visual_styles() -> void:
 	UiStylesClass.apply_label_hint_dark(config_sync_status_label)
 	UiStylesClass.apply_label_hint_dark(room_status_label)
 	UiStylesClass.apply_label_hint_dark(account_status_label)
-	UiStylesClass.apply_line_edit_field(server_url_edit)
 	UiStylesClass.apply_line_edit_field(backend_url_edit)
 	UiStylesClass.apply_line_edit_field(player_name_edit)
 	UiStylesClass.apply_line_edit_field(quick_join_code_edit)
 	UiStylesClass.apply_line_edit_field(quick_join_password_edit)
 	UiStylesClass.apply_option_button_field(my_color_option)
-	UiStylesClass.apply_option_button_field(mode_option)
 
 func _apply_label_style_recursive(root: Node) -> void:
 	if root == null:
@@ -258,20 +238,9 @@ func _ensure_config_sync_controller() -> void:
 		_room_config_sync_controller.setup(self, config_sync_status_label, config_debounce_timer)
 
 func _ensure_room_renderers() -> void:
-	if _room_list_controller == null or not is_instance_valid(_room_list_controller):
-		_room_list_controller = RoomListControllerClass.new()
-		_room_list_controller.setup(self)
 	if _room_state_renderer == null or not is_instance_valid(_room_state_renderer):
 		_room_state_renderer = RoomStateRendererClass.new()
 		_room_state_renderer.setup(self)
-
-func _ensure_password_dialog() -> void:
-	if _password_dialog != null and is_instance_valid(_password_dialog):
-		return
-	_password_dialog = PasswordDialogClass.new()
-	add_child(_password_dialog)
-	if _password_dialog.has_signal("submitted") and not _password_dialog.submitted.is_connected(_on_password_dialog_submitted):
-		_password_dialog.submitted.connect(_on_password_dialog_submitted)
 
 func _ensure_info_dialog() -> void:
 	if _info_dialog != null and is_instance_valid(_info_dialog):
@@ -301,11 +270,6 @@ func _apply_defaults() -> void:
 	_set_browse_status("")
 	_set_room_status("")
 
-	if NetContext != null and not str(NetContext.server_url).is_empty():
-		server_url_edit.text = str(NetContext.server_url)
-	else:
-		server_url_edit.text = "ws://127.0.0.1:7000"
-
 	if PlatformApi != null and backend_url_edit != null and is_instance_valid(backend_url_edit):
 		var bu := str(PlatformApi.base_url).strip_edges()
 		backend_url_edit.text = bu if not bu.is_empty() else "http://127.0.0.1:8000"
@@ -328,8 +292,6 @@ func _apply_defaults() -> void:
 	_ensure_config_sync_controller()
 	if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
 		_room_config_sync_controller.reset()
-
-	_apply_connection_mode_ui()
 	_update_account_status()
 
 func _bind_net_signals() -> void:
@@ -406,54 +368,6 @@ func _on_account_pressed() -> void:
 	else:
 		_auth_dialog.call("open")
 
-func _setup_connection_mode_selector() -> void:
-	if mode_option == null or not is_instance_valid(mode_option):
-		return
-	if mode_option.item_count <= 0:
-		mode_option.add_item("直连")
-		mode_option.set_item_metadata(0, CONNECTION_MODE_DIRECT)
-		mode_option.add_item("平台")
-		mode_option.set_item_metadata(1, CONNECTION_MODE_PLATFORM)
-	if not mode_option.item_selected.is_connected(_on_mode_selected):
-		mode_option.item_selected.connect(_on_mode_selected)
-	_apply_connection_mode_ui()
-
-func _on_mode_selected(index: int) -> void:
-	if mode_option == null or not is_instance_valid(mode_option):
-		return
-	var meta = mode_option.get_item_metadata(index)
-	var mode := str(meta).strip_edges()
-	if mode.is_empty():
-		mode = CONNECTION_MODE_DIRECT if index == 0 else CONNECTION_MODE_PLATFORM
-	if mode == _selected_connection_mode:
-		return
-	_selected_connection_mode = mode
-	_platform_entered = false
-	_set_connect_status("")
-	_set_browse_status("")
-	if NetContext != null:
-		NetContext.connection_mode = _selected_connection_mode
-	_apply_connection_mode_ui()
-	_refresh_ui()
-
-func _is_platform_mode_selected() -> bool:
-	return _selected_connection_mode == CONNECTION_MODE_PLATFORM
-
-func _apply_connection_mode_ui() -> void:
-	var platform := _is_platform_mode_selected()
-	if server_row != null and is_instance_valid(server_row):
-		server_row.visible = not platform
-	if backend_row != null and is_instance_valid(backend_row):
-		backend_row.visible = platform
-	if connect_button != null and is_instance_valid(connect_button):
-		connect_button.text = "连接" if not platform else "进入"
-	if refresh_rooms_button != null and is_instance_valid(refresh_rooms_button):
-		refresh_rooms_button.visible = not platform
-	if rooms_scroll != null and is_instance_valid(rooms_scroll):
-		rooms_scroll.visible = not platform
-	if quick_spectate_button != null and is_instance_valid(quick_spectate_button):
-		quick_spectate_button.visible = platform
-
 func _platform_set_base_url_from_ui() -> void:
 	if PlatformApi == null:
 		return
@@ -486,7 +400,6 @@ func _platform_enter() -> void:
 	var lr: Result = await _platform_ensure_session()
 	_platform_busy = false
 	if not lr.ok:
-		_platform_entered = false
 		_set_connect_status("平台登录失败：%s" % lr.error)
 		_refresh_ui()
 		return
@@ -589,19 +502,27 @@ func _platform_join_room(room_code: String, room_password: String, spectate: boo
 func _platform_connect_to_ws(ws_url: String, connect_token: String) -> void:
 	if NetClient == null:
 		_show_error_dialog("连接失败", "NetClient autoload missing")
+		_set_browse_status("")
+		_refresh_ui()
 		return
 	var url := _build_platform_connect_url(ws_url, connect_token)
 	if url.is_empty():
 		_show_error_dialog("连接失败", "无效的 ws_url")
+		_set_browse_status("")
+		_refresh_ui()
 		return
+	_ws_connect_in_progress = true
+	_refresh_ui()
 	_write_local_player_profile(
 		str(player_name_edit.text),
 		int(NetContext.player_profile.get("restaurant_logo_id", -1)) if (NetContext != null and NetContext.player_profile is Dictionary) else -1
 	)
 	var r: Result = NetClient.connect_to_server(url)
 	if not r.ok:
+		_ws_connect_in_progress = false
 		_set_connect_status("连接失败：%s" % r.error)
-	_set_browse_status("")
+		_show_error_dialog("连接失败", r.error)
+		_set_browse_status("")
 	_refresh_ui()
 
 func _build_platform_connect_url(ws_url: String, connect_token: String) -> String:
@@ -613,8 +534,7 @@ func _build_platform_connect_url(ws_url: String, connect_token: String) -> Strin
 
 # ── 页面导航 ──
 
-func _show_page(page: int, request_rooms_on_entry: bool = true) -> void:
-	var prev := _current_page
+func _show_page(page: int, _request_rooms_on_entry: bool = true) -> void:
 	_current_page = page
 
 	if is_instance_valid(page_connect):
@@ -632,13 +552,9 @@ func _show_page(page: int, request_rooms_on_entry: bool = true) -> void:
 
 	_update_top_title()
 
-	if request_rooms_on_entry and page == LobbyPage.BROWSE and page != prev:
-		if not _is_platform_mode_selected() and NetClient != null and NetClient.is_online_client_connected():
-			NetClient.request_list_rooms()
-
 func _sync_page_from_state() -> void:
 	var ws_connected := NetClient != null and NetClient.is_online_client_connected()
-	var platform_ready := _is_platform_mode_selected() and _platform_entered and PlatformSession != null and PlatformSession.is_logged_in
+	var platform_ready := _platform_entered and PlatformSession != null and PlatformSession.is_logged_in
 	var in_room := not _get_current_room_code().is_empty()
 
 	if not ws_connected and not platform_ready:
@@ -648,14 +564,14 @@ func _sync_page_from_state() -> void:
 		_show_page(LobbyPage.ROOM, false)
 		return
 
-	_show_page(LobbyPage.BROWSE, true)
+	_show_page(LobbyPage.BROWSE, false)
 
 func _update_top_title() -> void:
 	if top_title_label == null or not is_instance_valid(top_title_label):
 		return
 	match _current_page:
 		LobbyPage.CONNECT:
-			top_title_label.text = "平台入口" if _is_platform_mode_selected() else "连接服务器"
+			top_title_label.text = "平台入口"
 		LobbyPage.BROWSE:
 			top_title_label.text = "房间列表"
 		LobbyPage.ROOM:
@@ -664,62 +580,25 @@ func _update_top_title() -> void:
 func _refresh_ui() -> void:
 	_ensure_room_renderers()
 	var ws_connected := NetClient != null and NetClient.is_online_client_connected()
-	var platform_ready := _is_platform_mode_selected() and _platform_entered and PlatformSession != null and PlatformSession.is_logged_in
-	connect_button.disabled = _platform_busy or (ws_connected if not _is_platform_mode_selected() else platform_ready)
-	disconnect_button.disabled = not ws_connected
-	open_create_button.disabled = _platform_busy or (not ws_connected if not _is_platform_mode_selected() else not platform_ready)
-	refresh_rooms_button.disabled = not ws_connected
-	quick_join_button.disabled = _platform_busy or (not ws_connected if not _is_platform_mode_selected() else not platform_ready)
+	var platform_ready := _platform_entered and PlatformSession != null and PlatformSession.is_logged_in
+	var busy := _platform_busy or _ws_connect_in_progress
+	connect_button.disabled = busy or platform_ready
+	disconnect_button.disabled = busy or not platform_ready
+	open_create_button.disabled = busy or not platform_ready
+	quick_join_button.disabled = busy or not platform_ready
 	if quick_spectate_button != null and is_instance_valid(quick_spectate_button):
-		quick_spectate_button.disabled = _platform_busy or not platform_ready
-	leave_room_button.disabled = not ws_connected
+		quick_spectate_button.disabled = busy or not platform_ready
+	leave_room_button.disabled = busy or not ws_connected
 	if not ws_connected and not platform_ready:
 		if connect_status_label.text.strip_edges().is_empty():
-			_set_connect_status("未就绪：请选择连接方式并进入。")
+			_set_connect_status("未就绪：请进入平台（自动游客登录）。")
 	elif platform_ready and not ws_connected:
 		if connect_status_label.text.strip_edges().is_empty():
 			_set_connect_status("平台已就绪：创建/加入房间将自动连接服务器。")
 
-	if _room_list_controller != null and is_instance_valid(_room_list_controller):
-		_room_list_controller.render_room_list(NetContext.room_list if NetContext != null else [])
 	if _room_state_renderer != null and is_instance_valid(_room_state_renderer):
 		_room_state_renderer.render_room_state(NetContext.room_state if NetContext != null else {})
 	_sync_page_from_state()
-
-func _join_room_from_list(room_code: String, password_required: bool) -> void:
-	var code := str(room_code).strip_edges().to_upper()
-	if code.is_empty():
-		return
-	if password_required:
-		_prompt_password_and_join(code)
-		return
-	if _is_platform_mode_selected():
-		await _platform_join_room(code, "", false)
-		return
-	if NetClient == null or not NetClient.is_online_client_connected():
-		_show_error_dialog("未连接到服务器", "请先连接服务器。")
-		_set_browse_status("")
-		return
-	NetClient.request_join_room(code, "")
-	_set_browse_status("")
-
-func _prompt_password_and_join(room_code: String) -> void:
-	_ensure_password_dialog()
-	_password_dialog_room_code = room_code
-	if _password_dialog != null and is_instance_valid(_password_dialog) and _password_dialog.has_method("open_for_room"):
-		_password_dialog.call_deferred("open_for_room", room_code, "加入/观战")
-
-func _on_password_dialog_submitted(password: String) -> void:
-	var code := str(_password_dialog_room_code).strip_edges().to_upper()
-	if code.is_empty():
-		return
-	if _is_platform_mode_selected():
-		await _platform_join_room(code, str(password), false)
-		return
-	if NetClient == null or not NetClient.is_online_client_connected():
-		return
-	NetClient.request_join_room(code, str(password))
-	_set_browse_status("")
 
 # ── 状态文本 ──
 
@@ -740,19 +619,24 @@ func _get_current_room_code() -> String:
 # ── 网络信号处理 ──
 
 func _on_net_connected() -> void:
+	_ws_connect_in_progress = false
 	_set_connect_status("已连接")
 	_set_browse_status("")
 	_set_room_status("")
 	_refresh_ui()
-	_show_page(LobbyPage.BROWSE, not _is_platform_mode_selected())
+	_show_page(LobbyPage.BROWSE, false)
 
 func _on_net_disconnected(reason: String) -> void:
+	_ws_connect_in_progress = false
 	var r := str(reason).strip_edges()
 	if r == "connection_failed":
 		var project_path := ProjectSettings.globalize_path("res://")
-		var cmd := "godot --headless --path \"%s\" --scene res://server/dedicated_server.tscn -- --port=7000" % project_path
-		_set_connect_status("连接失败：无法连接到服务器（请先启动 dedicated server）")
-		_show_error_dialog("连接失败", "无法连接到服务器。\n\n若你尚未启动 Dedicated Server，可在项目根目录运行：\n%s" % cmd)
+		var secret := str(OS.get_environment("HMAC_SECRET")).strip_edges()
+		if secret.is_empty():
+			secret = "<YOUR_HMAC_SECRET>"
+		var cmd := "HMAC_SECRET=%s godot --headless --path \"%s\" --scene res://server/dedicated_server.tscn -- --port=7000" % [secret, project_path]
+		_set_connect_status("连接失败：无法连接到游戏服务器（请先启动 Dedicated Server）")
+		_show_error_dialog("连接失败", "无法连接到游戏服务器。\n\n若你尚未启动 Dedicated Server，请在项目根目录运行（HMAC_SECRET 需与后端一致）：\n%s" % cmd)
 	else:
 		_set_connect_status("已断开：%s" % reason)
 	_set_browse_status("")
@@ -813,6 +697,10 @@ func _on_request_rejected(request_id: String, code: String, message: String) -> 
 		body = "%s\n\n（请求号：%s）" % [body, request_id]
 
 	_show_error_dialog(title, body)
+	if c == "protocol_version_mismatch" or c == "missing_connect_token" or c == "invalid_connect_token" or c == "platform_join_failed" or c == "server_misconfigured":
+		if NetClient != null:
+			NetClient.shutdown()
+		_refresh_ui()
 
 func _on_game_started(_payload: Dictionary) -> void:
 	_start_game_request_id = ""
@@ -898,14 +786,7 @@ func _on_connect_pressed() -> void:
 		str(player_name_edit.text),
 		int(NetContext.player_profile.get("restaurant_logo_id", -1)) if (NetContext != null and NetContext.player_profile is Dictionary) else -1
 	)
-	if _is_platform_mode_selected():
-		await _platform_enter()
-		return
-	var url := str(server_url_edit.text).strip_edges()
-	var r: Result = NetClient.connect_to_server(url)
-	if not r.ok:
-		_set_connect_status("连接失败：%s" % r.error)
-	_refresh_ui()
+	await _platform_enter()
 
 func _on_disconnect_pressed() -> void:
 	if NetClient != null:
@@ -913,36 +794,16 @@ func _on_disconnect_pressed() -> void:
 	_refresh_ui()
 
 func _on_open_create_pressed() -> void:
-	if not _is_platform_mode_selected() and (NetClient == null or not NetClient.is_online_client_connected()):
-		_show_error_dialog("未连接到服务器", "请先连接服务器。")
+	if PlatformSession == null or not PlatformSession.is_logged_in:
+		_show_error_dialog("平台未就绪", "请先进入平台（自动游客登录）。")
 		_set_browse_status("")
 		return
-	if _is_platform_mode_selected():
-		if PlatformSession == null or not PlatformSession.is_logged_in:
-			_show_error_dialog("平台未就绪", "请先进入平台（自动游客登录）。")
-			_set_browse_status("")
-			return
 	_ensure_create_room_dialog()
 	if _create_room_dialog != null and is_instance_valid(_create_room_dialog):
 		_create_room_dialog.open_dialog()
 
 func _on_create_room_dialog_confirmed(desired_player_count: int, room_password: String, config_patch: Dictionary) -> void:
-	if _is_platform_mode_selected():
-		await _platform_create_room(desired_player_count, room_password, config_patch)
-		return
-	if NetClient == null or not NetClient.is_online_client_connected():
-		_show_error_dialog("未连接到服务器", "请先连接服务器。")
-		return
-	NetClient.request_create_room(desired_player_count, room_password, config_patch)
-	_set_browse_status("")
-
-func _on_refresh_rooms_pressed() -> void:
-	if NetClient == null or not NetClient.is_online_client_connected():
-		_show_error_dialog("未连接到服务器", "请先连接服务器。")
-		_set_browse_status("")
-		return
-	NetClient.request_list_rooms()
-	_set_browse_status("")
+	await _platform_create_room(desired_player_count, room_password, config_patch)
 
 func _on_quick_join_pressed() -> void:
 	var room_code := str(quick_join_code_edit.text).strip_edges().to_upper()
@@ -950,15 +811,7 @@ func _on_quick_join_pressed() -> void:
 		_set_browse_status("请输入房间码。")
 		return
 	var room_password := str(quick_join_password_edit.text)
-	if _is_platform_mode_selected():
-		await _platform_join_room(room_code, room_password, false)
-		return
-	if NetClient == null or not NetClient.is_online_client_connected():
-		_show_error_dialog("未连接到服务器", "请先连接服务器。")
-		_set_browse_status("")
-		return
-	NetClient.request_join_room(room_code, room_password)
-	_set_browse_status("")
+	await _platform_join_room(room_code, room_password, false)
 
 func _on_quick_spectate_pressed() -> void:
 	var room_code := str(quick_join_code_edit.text).strip_edges().to_upper()

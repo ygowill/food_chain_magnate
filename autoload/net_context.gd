@@ -16,7 +16,6 @@ var local_player_id: int = -1
 
 var server_url: String = ""
 var connect_token: String = ""
-var connection_mode: String = "direct"  # "direct" | "platform"
 var room_state: Dictionary = {}
 var room_list: Array = []
 var player_profile: Dictionary = {}
@@ -35,7 +34,6 @@ func reset() -> void:
 	local_player_id = -1
 	server_url = ""
 	connect_token = ""
-	connection_mode = "direct"
 	room_state = {}
 	room_list = []
 	_ensure_default_profile()
