@@ -31,6 +31,16 @@ static func run() -> Result:
 			_restore(prev_profile, prev_user_id, prev_session_id, prev_is_guest)
 			return Result.failure("device_id 非 hex: %s" % did)
 
+	var p0 := str(PlatformSession._build_save_path(""))
+	if p0 != "user://platform_session.cfg":
+		_restore(prev_profile, prev_user_id, prev_session_id, prev_is_guest)
+		return Result.failure("默认 profile save_path 错误：%s" % p0)
+
+	var p1 := str(PlatformSession._build_save_path("A"))
+	if p1 != "user://platform_session_A.cfg":
+		_restore(prev_profile, prev_user_id, prev_session_id, prev_is_guest)
+		return Result.failure("profile save_path 错误：%s" % p1)
+
 	_restore(prev_profile, prev_user_id, prev_session_id, prev_is_guest)
 	return Result.success()
 

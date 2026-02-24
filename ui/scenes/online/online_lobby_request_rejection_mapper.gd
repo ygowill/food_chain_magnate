@@ -22,7 +22,10 @@ static func get_dialog_text(code: String, message: String) -> Dictionary:
 			body = "connect_token 无效或已过期。\n\n%s" % m
 		"platform_join_failed":
 			title = "加入房间失败"
-			body = m
+			if m == "Seat already occupied":
+				body = "座位已被占用。\n\n常见原因：同一台机器多开时两个客户端共享了同一个游客账号。\n\n解决：启动客户端时指定不同 profile（例如：`-- --platform-profile=A` / `-- --platform-profile=B`），让它们使用不同的 user:// 会话文件。"
+			else:
+				body = m
 		"missing_client_hello":
 			title = "连接未完成"
 			body = "请先连接服务器后再重试。"

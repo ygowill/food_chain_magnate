@@ -4,7 +4,12 @@ extends Node
 
 signal session_changed
 
-const SAVE_PATH := "user://platform_session.cfg"
+const _SAVE_PATH_DEFAULT := "user://platform_session.cfg"
+const _SAVE_PATH_PREFIX := "user://platform_session_"
+const _MAX_PROFILE_ID_LEN := 24
+
+var profile_id: String = ""
+var _save_path: String = _SAVE_PATH_DEFAULT
 
 var user_id: String = ""
 var session_id: String = ""
@@ -16,10 +21,54 @@ var is_logged_in: bool:
 
 
 func _ready() -> void:
+	profile_id = _get_profile_id()
+	_save_path = _build_save_path(profile_id)
 	_load()
 	if device_id.is_empty():
 		device_id = _generate_device_id()
 		_save()
+
+func _get_profile_id() -> String:
+	# 同机多开：允许为不同客户端指定不同 profile，以避免共享 user:// 下的 session/device_id。
+	var env := str(OS.get_environment("FCM_PLATFORM_PROFILE")).strip_edges()
+	if not env.is_empty():
+		return _sanitize_profile_id(env)
+
+	var args: PackedStringArray = OS.get_cmdline_user_args()
+	for i in range(args.size()):
+		var a := str(args[i]).strip_edges()
+		if a.begins_with("--platform-profile=") or a.begins_with("--platform_profile="):
+			var kv: PackedStringArray = a.split("=", false, 1)
+			if kv.size() >= 2:
+				return _sanitize_profile_id(str(kv[1]))
+		if a == "--platform-profile" or a == "--platform_profile":
+			if i + 1 < args.size():
+				return _sanitize_profile_id(str(args[i + 1]))
+	return ""
+
+func _sanitize_profile_id(raw: String) -> String:
+	var s := str(raw).strip_edges()
+	if s.is_empty():
+		return ""
+	var out := ""
+	for i in range(s.length()):
+		var u := s.unicode_at(i)
+		var ch := s.substr(i, 1)
+		var ok := (u >= 48 and u <= 57) \
+			or (u >= 65 and u <= 90) \
+			or (u >= 97 and u <= 122) \
+			or ch == "_" \
+			or ch == "-"
+		out += ch if ok else "_"
+	if out.length() > _MAX_PROFILE_ID_LEN:
+		out = out.substr(0, _MAX_PROFILE_ID_LEN)
+	return out
+
+func _build_save_path(profile: String) -> String:
+	var p := _sanitize_profile_id(profile)
+	if p.is_empty():
+		return _SAVE_PATH_DEFAULT
+	return "%s%s.cfg" % [_SAVE_PATH_PREFIX, p]
 
 
 func auto_guest_login() -> Dictionary:
@@ -87,12 +136,12 @@ func _save() -> void:
 	cfg.set_value("session", "session_id", session_id)
 	cfg.set_value("session", "is_guest", is_guest)
 	cfg.set_value("session", "device_id", device_id)
-	cfg.save(SAVE_PATH)
+	cfg.save(_save_path)
 
 
 func _load() -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) != OK:
+	if cfg.load(_save_path) != OK:
 		return
 	user_id = cfg.get_value("session", "user_id", "")
 	session_id = cfg.get_value("session", "session_id", "")
