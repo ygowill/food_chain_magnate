@@ -107,7 +107,7 @@ func _parse_connect_token_from_url(url: String) -> Dictionary:
 		out["url"] = base
 		return out
 
-	var parts: Array[String] = query.split("&", false)
+	var parts: PackedStringArray = query.split("&", false)
 	var kept: Array[String] = []
 	for part in parts:
 		var p := str(part).strip_edges()

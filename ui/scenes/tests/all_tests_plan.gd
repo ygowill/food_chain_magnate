@@ -151,6 +151,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.PieceUiHintsRegistryLobbyistsTestClass.run(),
 		},
 		{
+			"name": "NetClientParseConnectTokenUrlTest",
+			"fn": func() -> Result: return TestRefs.NetClientParseConnectTokenUrlTestClass.run(),
+		},
+		{
 			"name": "OnlineClientHelloConnectTokenTest",
 			"fn": func() -> Result: return TestRefs.OnlineClientHelloConnectTokenTestClass.run(),
 		},
