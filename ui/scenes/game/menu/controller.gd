@@ -142,8 +142,7 @@ func on_distance_tool_pressed() -> void:
 	on_menu_dialog_close_requested()
 
 func on_replay_pressed() -> void:
-	if is_instance_valid(_save_load_controller) and _save_load_controller.has_method("open_for_replay"):
-		_save_load_controller.call("open_for_replay")
+	GameLog.info("Game", "游戏内载入已禁用（仅主菜单可载入）")
 	on_menu_dialog_close_requested()
 
 func on_quit_to_menu_pressed() -> void:

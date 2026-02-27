@@ -1,6 +1,6 @@
 # 存档/回放文件选择对话框
-# - 多存档槽：支持 user://savegame.json（快速存档）+ user://saves/*.json（命名槽位）
-# - 文件系统选择：FileDialog 选择任意 JSON 存档文件
+# - 载入/回放：桌面端使用 FileDialog；Web 端使用浏览器本地文件选择上传 JSON
+# - 保存：支持 user://savegame.json（快速存档）+ user://saves/*.json（命名槽位）+ 文件系统路径
 class_name SaveLoadDialog
 extends ModalDialogBase
 
@@ -14,6 +14,7 @@ enum DialogMode { LOAD, SAVE, REPLAY }
 
 const SAVES_DIR := "user://saves"
 const QUICK_SAVE_PATH := "user://savegame.json"
+const WEB_UPLOAD_DIR := "user://web_uploads"
 
 var _dialog_mode: DialogMode = DialogMode.LOAD
 var _engine: GameEngine = null
@@ -22,6 +23,7 @@ var _title_label: Label
 var _dialog_panel: PanelContainer
 
 var _tabs: TabContainer
+var _slot_tab_root: Control
 var _slot_list: ItemList
 var _slot_name_edit: LineEdit
 var _slot_refresh_btn: Button
@@ -38,6 +40,8 @@ var _file_dialog: FileDialog
 
 var _slot_paths: Array[String] = []
 var _suppress_slot_selection: bool = false
+var _direct_file_pick_mode: bool = false
+var _web_upload_callback = null
 
 func _ready() -> void:
 	super._ready()
@@ -53,26 +57,25 @@ func _is_web() -> bool:
 func open_for_load() -> void:
 	_dialog_mode = DialogMode.LOAD
 	_engine = null
+	_direct_file_pick_mode = true
 	_set_title("载入游戏")
-	_refresh_slots()
 	_update_ui_state()
-	_prefer_file_tab_on_web()
-	open()
-	_prompt_web_file_upload()
+	close()
+	_open_picker_for_load_mode()
 
 func open_for_replay() -> void:
 	_dialog_mode = DialogMode.REPLAY
 	_engine = null
+	_direct_file_pick_mode = true
 	_set_title("选择回放文件")
-	_refresh_slots()
 	_update_ui_state()
-	_prefer_file_tab_on_web()
-	open()
-	_prompt_web_file_upload()
+	close()
+	_open_picker_for_load_mode()
 
 func open_for_save(engine: GameEngine, title: String = "保存游戏") -> void:
 	_dialog_mode = DialogMode.SAVE
 	_engine = engine
+	_direct_file_pick_mode = false
 	_set_title(title)
 	_refresh_slots()
 	_update_ui_state()
@@ -85,19 +88,29 @@ func _prefer_file_tab_on_web() -> void:
 	if _tabs != null and is_instance_valid(_tabs):
 		_tabs.current_tab = 1
 
-func _prompt_web_file_upload() -> void:
-	if not _is_web():
+func _open_picker_for_load_mode() -> void:
+	if _is_web():
+		if not _try_open_web_file_picker():
+			GameLog.warn("SaveLoadDialog", "Web 文件选择器打开失败（已禁用回退到 FileDialog）")
 		return
-	if _dialog_mode == DialogMode.SAVE:
-		return
+	_open_file_dialog_popup()
+
+func _open_file_dialog_popup() -> void:
 	if _file_dialog == null or not is_instance_valid(_file_dialog):
 		return
 	_file_dialog.current_path = ""
+	# FileDialog.popup_file_dialog() 在可用时会优先走原生选择器（Web 下即浏览器本地文件选择）。
+	if _file_dialog.has_method("popup_file_dialog"):
+		_file_dialog.call("popup_file_dialog")
+		return
 	_file_dialog.popup_centered_clamped(Vector2i(900, 650))
 
 func _grab_default_focus() -> void:
 	if _dialog_mode == DialogMode.SAVE and _slot_name_edit != null:
 		_slot_name_edit.grab_focus()
+		return
+	if _file_path_edit != null:
+		_file_path_edit.grab_focus()
 		return
 	if _slot_list != null:
 		_slot_list.grab_focus()
@@ -153,6 +166,7 @@ func _build_ui() -> void:
 	var slot_tab := VBoxContainer.new()
 	slot_tab.add_theme_constant_override("separation", 8)
 	_tabs.add_child(slot_tab)
+	_slot_tab_root = slot_tab
 	_tabs.set_tab_title(_tabs.get_tab_count() - 1, "存档槽")
 
 	var name_row := HBoxContainer.new()
@@ -294,6 +308,12 @@ func _update_ui_state() -> void:
 	var primary_text := "保存" if is_save else "加载"
 	var file_primary_text := primary_text
 
+	if _slot_tab_root != null and is_instance_valid(_slot_tab_root):
+		_slot_tab_root.visible = is_save
+	if _tabs != null and is_instance_valid(_tabs):
+		_tabs.tabs_visible = is_save
+		_tabs.current_tab = 0 if is_save else 1
+
 	if _slot_primary_btn != null:
 		_slot_primary_btn.text = primary_text
 	if _file_primary_btn != null:
@@ -325,6 +345,107 @@ func _update_ui_state() -> void:
 
 	if _file_dialog != null and is_instance_valid(_file_dialog):
 		_file_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE if is_save else FileDialog.FILE_MODE_OPEN_FILE
+
+func _try_open_web_file_picker() -> bool:
+	if not _is_web():
+		return false
+
+	_web_upload_callback = JavaScriptBridge.create_callback(_on_web_file_picked)
+	var window = JavaScriptBridge.get_interface("window")
+	if window == null:
+		return false
+	window.__godot_save_load_upload_cb = _web_upload_callback
+
+	var ok_val = JavaScriptBridge.eval("""
+(() => {
+	const cb = window.__godot_save_load_upload_cb;
+	if (!cb) return false;
+	try {
+		const input = document.createElement("input");
+		input.type = "file";
+		input.accept = ".json,application/json";
+		input.style.display = "none";
+		const cleanup = () => {
+			if (input.parentNode) input.parentNode.removeChild(input);
+			try { delete window.__godot_save_load_upload_cb; } catch (_e) {}
+		};
+		input.addEventListener("change", () => {
+			const file = (input.files && input.files.length > 0) ? input.files[0] : null;
+			if (!file) {
+				cb("", "");
+				cleanup();
+				return;
+			}
+			const reader = new FileReader();
+			reader.onload = () => {
+				cb(String(reader.result || ""), String(file.name || ""));
+				cleanup();
+			};
+			reader.onerror = () => {
+				cb("", String(file.name || ""));
+				cleanup();
+			};
+			reader.readAsText(file);
+		}, { once: true });
+		document.body.appendChild(input);
+		input.click();
+		return true;
+	} catch (e) {
+		try { cb("", ""); } catch (_e) {}
+		try { delete window.__godot_save_load_upload_cb; } catch (_e) {}
+		return false;
+	}
+})()
+""", true)
+	if ok_val is bool:
+		return bool(ok_val)
+	if ok_val is int:
+		return int(ok_val) != 0
+	if ok_val is float:
+		return absf(float(ok_val)) > 0.0001
+	var ok_text := str(ok_val).to_lower()
+	return ok_text == "true" or ok_text == "1"
+
+func _on_web_file_picked(args: Array) -> void:
+	var json_text := ""
+	var source_name := ""
+	if args.size() > 0:
+		json_text = str(args[0])
+	if args.size() > 1:
+		source_name = str(args[1]).strip_edges()
+
+	if json_text.is_empty():
+		_set_status("未选择文件")
+		return
+
+	var parsed = JSON.parse_string(json_text)
+	if not (parsed is Dictionary):
+		_set_status("文件内容无效：不是存档 JSON")
+		return
+
+	var base_name := _sanitize_export_file_name(source_name)
+	if base_name.is_empty():
+		base_name = "upload_save.json"
+	base_name = _ensure_json_extension(base_name)
+	var stamp := int(Time.get_unix_time_from_system())
+	_ensure_dir(WEB_UPLOAD_DIR)
+	var path := "%s/%d_%s" % [WEB_UPLOAD_DIR, stamp, base_name]
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		_set_status("上传失败：无法写入临时文件")
+		return
+	file.store_string(json_text)
+	file.close()
+
+	if _file_path_edit != null:
+		_file_path_edit.text = path
+	if source_name.is_empty():
+		_set_status("已选择文件")
+	else:
+		_set_status("已选择: %s" % source_name)
+	close()
+	_direct_file_pick_mode = false
+	load_selected.emit(path)
 
 func _refresh_slots() -> void:
 	_ensure_saves_dir()
@@ -435,7 +556,10 @@ func _read_json_dict(path: String) -> Dictionary:
 	return parsed if (parsed is Dictionary) else {}
 
 func _ensure_saves_dir() -> void:
-	var abs_dir := ProjectSettings.globalize_path(SAVES_DIR)
+	_ensure_dir(SAVES_DIR)
+
+func _ensure_dir(dir_path: String) -> void:
+	var abs_dir := ProjectSettings.globalize_path(dir_path)
 	if DirAccess.dir_exists_absolute(abs_dir):
 		return
 	DirAccess.make_dir_recursive_absolute(abs_dir)
@@ -633,15 +757,19 @@ func _sanitize_slot_name(name: String) -> String:
 	return out
 
 func _on_browse_pressed() -> void:
-	if _file_dialog == null:
+	if _dialog_mode != DialogMode.SAVE and _is_web():
+		if not _try_open_web_file_picker():
+			_set_status("浏览器文件选择不可用，请检查浏览器弹窗权限后重试")
 		return
-	_file_dialog.current_path = ""
-	_file_dialog.popup_centered_clamped(Vector2i(900, 650))
+	_open_file_dialog_popup()
 
 func _on_file_dialog_selected(path: String) -> void:
 	if _file_path_edit != null:
 		_file_path_edit.text = path
 	_set_status(path)
+	if _direct_file_pick_mode and (_dialog_mode == DialogMode.LOAD or _dialog_mode == DialogMode.REPLAY):
+		_direct_file_pick_mode = false
+		load_selected.emit(path)
 
 func _set_status(msg: String) -> void:
 	if _status_label != null:

@@ -689,8 +689,7 @@ func _set_active_game_engine(engine: GameEngine) -> void:
 		_panel_controller.reset_bank_break_tracking(game_engine.get_state())
 
 func _open_replay_load_dialog() -> void:
-	if _save_load_controller != null:
-		_save_load_controller.open_for_replay()
+	GameLog.info("Game", "游戏内载入已禁用（仅主菜单可载入）")
 
 func _open_replay_save_dialog() -> void:
 	if _save_load_controller != null:

@@ -93,9 +93,9 @@ func _on_rules_pressed() -> void:
 	RulesDocsClass.show_rules_dialog(self)
 
 func _on_load_game_pressed() -> void:
-	GameLog.info("MainMenu", "点击载入游戏")
+	GameLog.info("MainMenu", "点击载入回放")
 	_ensure_save_load_dialog()
-	_save_load_dialog.open_for_load()
+	_save_load_dialog.open_for_replay()
 
 func _on_settings_pressed() -> void:
 	GameLog.info("MainMenu", "点击设置")
@@ -134,23 +134,16 @@ func _on_save_load_selected(path: String) -> void:
 	if EventBus != null:
 		EventBus.clear_history()
 
-	# 存档读取可能耗时：先显示加载遮罩，避免"卡住"的观感
+	# 回放文件读取可能耗时：先显示加载遮罩，避免"卡住"的观感
 	if SceneManager != null and SceneManager.has_method("show_loading"):
-		SceneManager.show_loading("正在载入存档...")
+		SceneManager.show_loading("正在载入回放...")
 		await get_tree().process_frame
 
-	var engine := GameEngine.new()
-	var load_result: Result = engine.load_from_file(path)
-	if not load_result.ok:
-		if SceneManager != null and SceneManager.has_method("hide_loading"):
-			SceneManager.hide_loading()
-		_show_message("载入失败", "存档读取失败：\n%s" % load_result.error)
-		return
-
-	Globals.set_current_game_engine(engine)
-	Globals.sync_runtime_config_from_engine(engine)
-
-	GameLog.info("MainMenu", "载入成功，进入游戏场景: %s" % path)
+	# 主菜单“载入”改为回放入口：将文件路径交给 Game 场景自动进入回放模式。
+	Globals.pending_replay_file_path = path
+	Globals.current_game_engine = null
+	Globals.is_game_active = false
+	GameLog.info("MainMenu", "回放文件已选择，进入游戏场景: %s" % path)
 	SceneManager.goto_game()
 
 func _show_message(title: String, message: String) -> void:

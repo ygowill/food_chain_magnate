@@ -103,7 +103,7 @@ text = "新游戏"
 custom_minimum_size = Vector2(420, 56)
 layout_mode = 2
 size_flags_horizontal = 4
-text = "载入游戏"
+text = "载入回放"
 
 [node name="PrimaryGroupGap" type="Control" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
 visible = false

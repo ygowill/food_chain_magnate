@@ -1,5 +1,5 @@
 # Game scene：存档/回放选择控制器
-# 负责：SaveLoadDialog 的生命周期与回调分发（保存/回放加载）
+# 负责：SaveLoadDialog 的生命周期与回调分发（当前仅保留“保存”）
 class_name GameSaveLoadController
 extends RefCounted
 
@@ -24,10 +24,9 @@ func open_for_save(engine: GameEngine, title: String = "保存游戏") -> void:
 		_save_load_dialog.open_for_save(engine, title)
 
 func open_for_replay() -> void:
-	_ensure_dialog()
-	_context = "replay"
-	if _save_load_dialog != null and is_instance_valid(_save_load_dialog):
-		_save_load_dialog.open_for_replay()
+	# 产品约束：游戏内禁用“载入/回放文件”，仅允许主菜单载入。
+	_context = ""
+	GameLog.info("Game", "游戏内载入已禁用（仅主菜单可载入）")
 
 func _ensure_dialog() -> void:
 	if _save_load_dialog != null and is_instance_valid(_save_load_dialog):
