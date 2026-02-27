@@ -20,6 +20,11 @@ var _confirm_group: VBoxContainer
 var _error_label: Label
 var _submit_btn: Button
 var _cancel_btn: Button
+var _browser_btn: Button
+var _device_auth_group: VBoxContainer
+var _device_status_label: Label
+var _device_cancel_btn: Button
+var _form_group: VBoxContainer
 
 func _ready() -> void:
 	super._ready()
@@ -89,18 +94,61 @@ func _build_ui() -> void:
 	line.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	root.add_child(line)
 
+	# 浏览器登录按钮（仅原生平台显示）
+	_browser_btn = Button.new()
+	_browser_btn.text = "在浏览器中登录/注册"
+	_browser_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_button_secondary(_browser_btn)
+	_browser_btn.pressed.connect(_on_browser_login)
+	root.add_child(_browser_btn)
+
+	# 设备授权等待区域（默认隐藏）
+	_device_auth_group = VBoxContainer.new()
+	_device_auth_group.add_theme_constant_override("separation", 10)
+	_device_auth_group.visible = false
+	root.add_child(_device_auth_group)
+
+	_device_status_label = Label.new()
+	_device_status_label.text = "已在浏览器中打开，请完成登录..."
+	_device_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UiStylesClass.apply_label_dark(_device_status_label)
+	_device_auth_group.add_child(_device_status_label)
+
+	_device_cancel_btn = Button.new()
+	_device_cancel_btn.text = "取消"
+	_device_cancel_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	UiStylesClass.apply_button_secondary(_device_cancel_btn)
+	_device_cancel_btn.pressed.connect(_on_device_cancel)
+	_device_auth_group.add_child(_device_cancel_btn)
+
+	# 分隔线
+	var sep := ColorRect.new()
+	sep.custom_minimum_size = Vector2(0, 1)
+	sep.color = Color(0.73, 0.23, 0.18, 0.3)
+	root.add_child(sep)
+
+	# Web 平台：隐藏浏览器登录相关 UI（认证由 Vue SPA 处理）
+	if OS.get_name() == "Web":
+		_browser_btn.visible = false
+		sep.visible = false
+
+	# 表单区域
+	_form_group = VBoxContainer.new()
+	_form_group.add_theme_constant_override("separation", 14)
+	root.add_child(_form_group)
+
 	# Tab bar
 	_tab_bar = TabBar.new()
 	_tab_bar.add_tab("登录")
 	_tab_bar.add_tab("注册")
 	_tab_bar.tab_changed.connect(_on_tab_changed)
 	_apply_tab_bar_style()
-	root.add_child(_tab_bar)
+	_form_group.add_child(_tab_bar)
 
 	# 邮箱
 	var email_group := VBoxContainer.new()
 	email_group.add_theme_constant_override("separation", 4)
-	root.add_child(email_group)
+	_form_group.add_child(email_group)
 
 	var email_label := Label.new()
 	email_label.text = "邮箱"
@@ -116,7 +164,7 @@ func _build_ui() -> void:
 	# 密码
 	var pw_group := VBoxContainer.new()
 	pw_group.add_theme_constant_override("separation", 4)
-	root.add_child(pw_group)
+	_form_group.add_child(pw_group)
 
 	var pw_label := Label.new()
 	pw_label.text = "密码"
@@ -135,7 +183,7 @@ func _build_ui() -> void:
 	_confirm_group = VBoxContainer.new()
 	_confirm_group.add_theme_constant_override("separation", 4)
 	_confirm_group.visible = false
-	root.add_child(_confirm_group)
+	_form_group.add_child(_confirm_group)
 
 	var confirm_label := Label.new()
 	confirm_label.text = "确认密码"
@@ -156,12 +204,12 @@ func _build_ui() -> void:
 	_error_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_error_label.visible = false
 	UiStylesClass.apply_label_error(_error_label)
-	root.add_child(_error_label)
+	_form_group.add_child(_error_label)
 
 	# 按钮行
 	var btn_row := HBoxContainer.new()
 	btn_row.add_theme_constant_override("separation", 12)
-	root.add_child(btn_row)
+	_form_group.add_child(btn_row)
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -241,6 +289,7 @@ func _on_tab_changed(idx: int) -> void:
 
 
 func _on_cancel() -> void:
+	PlatformSession.cancel_device_auth()
 	close()
 
 
@@ -300,6 +349,28 @@ func _get_submit_text() -> String:
 func _show_error(msg: String) -> void:
 	_error_label.text = msg
 	_error_label.visible = true
+
+
+func _on_browser_login() -> void:
+	_browser_btn.visible = false
+	_form_group.visible = false
+	_device_auth_group.visible = true
+	_device_status_label.text = "已在浏览器中打开，请完成登录..."
+	var result: Dictionary = await PlatformSession.start_device_auth()
+	_device_auth_group.visible = false
+	_browser_btn.visible = true
+	_form_group.visible = true
+	if result.has("ok"):
+		close()
+		auth_completed.emit(result["ok"])
+	elif result.get("error", "") == "expired":
+		_show_error("设备码已过期，请重试")
+	elif result.get("error", "") != "cancelled":
+		_show_error("浏览器登录失败")
+
+
+func _on_device_cancel() -> void:
+	PlatformSession.cancel_device_auth()
 
 
 func _grab_default_focus() -> void:

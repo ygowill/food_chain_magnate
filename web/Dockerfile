@@ -1,37 +1,19 @@
+# Stage 1: 构建 Vue Portal
+FROM node:20-alpine AS portal-builder
+WORKDIR /build
+COPY web/portal/package.json web/portal/package-lock.json* ./
+RUN npm ci --ignore-scripts
+COPY web/portal/ .
+RUN npm run build
+
+# Stage 2: nginx 服务
 FROM nginx:alpine
 
-COPY . /usr/share/nginx/html
+# Vue SPA 构建产物
+COPY --from=portal-builder /build/dist /usr/share/nginx/html
 
-RUN printf '%s\n' \
-	'server {' \
-	'  listen 80;' \
-	'  server_name _;' \
-	'  root /usr/share/nginx/html;' \
-	'' \
-	'  charset utf-8;' \
-	'' \
-	'  add_header X-Content-Type-Options nosniff always;' \
-	'' \
-	'  # This project reuses the same tag during iteration (e.g. v0.1.0), so avoid sticky browser caches.' \
-	'  # Otherwise users may keep running an older .pck/.wasm and think fixes did not apply.' \
-	'  location = /index.html {' \
-	'    add_header Cache-Control "no-store" always;' \
-	'    try_files $uri =404;' \
-	'  }' \
-	'' \
-	'  location ~* \\.(pck|wasm|js|data)$ {' \
-	'    add_header Cache-Control "no-cache" always;' \
-	'    try_files $uri =404;' \
-	'  }' \
-	'' \
-	'  # Force a correct MIME type for WebAssembly even in minimal/misconfigured environments.' \
-	'  location ~* \\.wasm$ {' \
-	'    default_type application/wasm;' \
-	'    try_files $uri =404;' \
-	'  }' \
-	'' \
-	'  location / {' \
-	'    try_files $uri $uri/ =404;' \
-	'  }' \
-	'}' \
-	> /etc/nginx/conf.d/default.conf
+# Godot HTML5 导出（由构建上下文提供，覆盖 public/game/ 占位文件）
+COPY build/client/web /usr/share/nginx/html/game
+
+# nginx 配置
+COPY web/nginx.conf /etc/nginx/conf.d/default.conf

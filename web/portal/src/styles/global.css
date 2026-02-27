@@ -1,0 +1,33 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+  font-weight: 400;
+  color: var(--fcm-text-primary);
+  background: var(--fcm-wall-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Vignette overlay on auth pages */
+.fcm-vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(18, 13, 8, 0.18) 100%);
+  z-index: 0;
+}
+
+/* Common link style */
+a {
+  color: var(--fcm-primary);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}

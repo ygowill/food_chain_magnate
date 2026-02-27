@@ -1,8 +1,10 @@
 # 平台会话管理
 # 管理 user_id、session_id、is_guest，持久化到 user://
+# Web 平台通过 JavaScriptBridge 与 Vue SPA 共享 localStorage
 extends Node
 
 signal session_changed
+signal device_auth_status(status: String)  # "waiting" | "success" | "expired" | "cancelled"
 
 const _SAVE_PATH_DEFAULT := "user://platform_session.cfg"
 const _SAVE_PATH_PREFIX := "user://platform_session_"
@@ -16,11 +18,15 @@ var session_id: String = ""
 var is_guest: bool = true
 var device_id: String = ""
 
+var _device_auth_cancelled: bool = false
+var _is_web: bool = false
+
 var is_logged_in: bool:
 	get: return session_id != ""
 
 
 func _ready() -> void:
+	_is_web = OS.get_name() == "Web"
 	profile_id = _get_profile_id()
 	_save_path = _build_save_path(profile_id)
 	_load()
@@ -112,6 +118,50 @@ func logout() -> void:
 	session_changed.emit()
 
 
+func start_device_auth() -> Dictionary:
+	_device_auth_cancelled = false
+	var code_result: Dictionary = await PlatformApi.request_device_code(device_id)
+	if code_result.has("error"):
+		device_auth_status.emit("error")
+		return code_result
+
+	var data: Dictionary = code_result["ok"]
+	var dc: String = str(data.get("device_code", ""))
+	var user_code: String = str(data.get("user_code", ""))
+	var uri: String = str(data.get("verification_uri", ""))
+	var interval: int = int(data.get("interval", 5))
+
+	OS.shell_open(uri)
+	device_auth_status.emit("waiting")
+
+	# 轮询直到成功、过期或取消
+	while not _device_auth_cancelled:
+		await get_tree().create_timer(interval).timeout
+		if _device_auth_cancelled:
+			break
+		var poll: Dictionary = await PlatformApi.poll_device_token(dc, device_id)
+		if poll.has("ok"):
+			_apply_auth(poll["ok"], false)
+			device_auth_status.emit("success")
+			return {"ok": poll["ok"], "user_code": user_code}
+		var err: Dictionary = poll.get("error", {})
+		var http_status: int = int(err.get("_http_status", 0))
+		if http_status == 428:
+			continue  # authorization_pending
+		if http_status == 410:
+			device_auth_status.emit("expired")
+			return {"error": "expired"}
+		device_auth_status.emit("error")
+		return poll
+
+	device_auth_status.emit("cancelled")
+	return {"error": "cancelled"}
+
+
+func cancel_device_auth() -> void:
+	_device_auth_cancelled = true
+
+
 func _apply_auth(data: Dictionary, guest: bool) -> void:
 	user_id = str(data.get("user_id", ""))
 	session_id = str(data.get("session_id", ""))
@@ -131,6 +181,9 @@ func _generate_device_id() -> String:
 
 
 func _save() -> void:
+	if _is_web:
+		_save_web()
+		return
 	var cfg := ConfigFile.new()
 	cfg.set_value("session", "user_id", user_id)
 	cfg.set_value("session", "session_id", session_id)
@@ -140,6 +193,9 @@ func _save() -> void:
 
 
 func _load() -> void:
+	if _is_web:
+		_load_web()
+		return
 	var cfg := ConfigFile.new()
 	if cfg.load(_save_path) != OK:
 		return
@@ -147,3 +203,21 @@ func _load() -> void:
 	session_id = cfg.get_value("session", "session_id", "")
 	is_guest = cfg.get_value("session", "is_guest", true)
 	device_id = cfg.get_value("session", "device_id", "")
+
+
+func _save_web() -> void:
+	JavaScriptBridge.eval("localStorage.setItem('fcm_session_id', '%s')" % session_id)
+	JavaScriptBridge.eval("localStorage.setItem('fcm_user_id', '%s')" % user_id)
+	JavaScriptBridge.eval("localStorage.setItem('fcm_is_guest', '%s')" % str(is_guest).to_lower())
+	JavaScriptBridge.eval("localStorage.setItem('fcm_device_id', '%s')" % device_id)
+
+
+func _load_web() -> void:
+	var sid = JavaScriptBridge.eval("localStorage.getItem('fcm_session_id') || ''")
+	var uid = JavaScriptBridge.eval("localStorage.getItem('fcm_user_id') || ''")
+	var guest_str = JavaScriptBridge.eval("localStorage.getItem('fcm_is_guest') || 'true'")
+	var did = JavaScriptBridge.eval("localStorage.getItem('fcm_device_id') || ''")
+	session_id = str(sid) if sid != null else ""
+	user_id = str(uid) if uid != null else ""
+	is_guest = str(guest_str) != "false"
+	device_id = str(did) if did != null else ""

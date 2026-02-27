@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,11 +13,17 @@ async def _create_user(client: AsyncClient) -> dict:
     return resp.json()
 
 
-async def _seed_match(db: AsyncSession, user_id: str) -> str:
+async def _seed_match(db: AsyncSession, user_id: str, score_json: str | None = None) -> str:
     m = Match(room_code="ABCD", status="completed", player_count=2)
     db.add(m)
     await db.flush()
-    db.add(MatchParticipant(match_id=m.match_id, user_id=user_id, role="player", seat_index=0))
+    db.add(MatchParticipant(
+        match_id=m.match_id,
+        user_id=user_id,
+        role="player",
+        seat_index=0,
+        score_json=score_json,
+    ))
     db.add(MatchReplay(match_id=m.match_id, storage_uri="file:///replays/test.bin", checksum="abc123", size_bytes=1024))
     await db.commit()
     return m.match_id
@@ -47,6 +55,55 @@ async def test_get_match_detail(client: AsyncClient, db_session: AsyncSession):
     assert resp.status_code == 200
     assert resp.json()["match_id"] == mid
     assert resp.json()["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_get_match_detail_stats(client: AsyncClient, db_session: AsyncSession):
+    user = await _create_user(client)
+    mid = await _seed_match(
+        db_session,
+        user["user_id"],
+        score_json=json.dumps({
+            "name": "测试昵称",
+            "restaurant_logo_id": 4,
+            "cash": 210,
+            "employees": ["ceo", "burger_cook"],
+            "reserve_employees": ["trainer"],
+            "busy_marketers": ["marketing_trainee", "brand_manager"],
+            "restaurants": [{}, {}],
+            "inventory": {"burger": 2},
+            "stats": {
+                "marketing_actions": 7,
+                "marketing_by_type": {"billboard": 3, "mailbox": 2},
+                "recruit_count": 5,
+                "train_count": 2,
+                "house_built": 4,
+                "restaurant_built": 2,
+                "production_counts": {"burger": 11, "pizza": 3, "cola": 1},
+                "sales_counts": {"lemonade": 4, "coke": 3, "soda": 2, "beer": 1},
+            },
+        }),
+    )
+    resp = await client.get(f"/v1/matches/{mid}", params={"session_id": user["session_id"]})
+    assert resp.status_code == 200
+    body = resp.json()
+    participant = body["participants"][0]
+    assert participant["display_name"] == "测试昵称"
+    assert participant["restaurant_logo_id"] == 4
+    assert participant["restaurant_logo_key"] == "restaurant_logo_xango_blues_bar"
+    score = body["participants"][0]["score"]
+    assert score["cash"] == 210
+    assert score["restaurants"] == 2
+    assert score["marketing_campaigns"] == 2
+    assert score["stats"]["marketing_actions"] == 7
+    assert score["stats"]["billboard_placements"] == 3
+    assert score["stats"]["marketing_by_type"] == {"billboard": 3, "mailbox": 2}
+    assert score["stats"]["hired_employees"] == 5
+    assert score["stats"]["trained_employees"] == 2
+    assert score["stats"]["metrics"]["house_built"] == 4
+    assert score["stats"]["metrics"]["restaurant_built"] == 2
+    assert score["stats"]["produced"] == {"burger": 11, "pizza": 3, "soda": 1}
+    assert score["stats"]["sold"] == {"lemonade": 4, "soda": 5, "beer": 1}
 
 
 @pytest.mark.asyncio

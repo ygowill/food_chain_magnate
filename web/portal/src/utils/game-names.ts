@@ -1,0 +1,153 @@
+/** 游戏数据 ID → 显示名称映射 */
+
+export const MODULE_NAMES: Record<string, string> = {
+  base_rules: '基础规则',
+  base_employees: '基础员工',
+  base_maps: '基础地图',
+  base_marketing: '基础营销',
+  base_milestones: '基础里程碑',
+  base_pieces: '基础棋子',
+  base_products: '基础产品',
+  base_tiles: '基础地块',
+  coffee: '咖啡',
+  fry_chefs: '油炸厨师',
+  gourmet_food_critics: '美食评论家',
+  hard_choices: '艰难抉择',
+  ketchup_mechanism: '番茄酱机制',
+  kimchi: '泡菜',
+  lobbyists: '游说者',
+  mass_marketeers: '大众营销员',
+  movie_stars: '电影明星',
+  new_districts: '新街区',
+  new_milestones: '新里程碑',
+  night_shift_managers: '夜班经理',
+  noodles: '面条',
+  reserve_prices: '底价机制',
+  rural_marketeers: '乡村营销员',
+  sushi: '寿司',
+}
+
+export const PRODUCT_NAMES: Record<string, string> = {
+  burger: '汉堡',
+  pizza: '披萨',
+  soda: '可乐',
+  coke: '可乐',
+  cola: '可乐',
+  lemonade: '柠檬水',
+  beer: '啤酒',
+  coffee: '咖啡',
+  kimchi: '泡菜',
+  noodles: '面条',
+  sushi: '寿司',
+}
+
+export const EMPLOYEE_NAMES: Record<string, string> = {
+  barista: '咖啡师',
+  barista_trainee: '见习咖啡师',
+  brand_director: '品牌总监',
+  brand_manager: '品牌经理',
+  burger_chef: '汉堡主厨',
+  burger_cook: '汉堡厨师',
+  campaign_manager: '营销经理',
+  cart_operator: '手推车操作员',
+  ceo: 'CEO',
+  cfo: '首席财务官',
+  coach: '培训指导员',
+  discount_manager: '折扣经理',
+  errand_boy: '跑腿伙计',
+  executive_vice_president: '执行副总裁',
+  fry_chef: '薯条主厨',
+  gourmet_food_critic: '美食评论家',
+  guru: '培训专家',
+  hr_director: '人力资源总监',
+  junior_vice_president: '总经理助理',
+  kimchi_master: '泡菜大师',
+  kitchen_trainee: '见习厨师',
+  lead_barista: '首席咖啡师',
+  lobbyist: '提案人',
+  local_manager: '区域经理',
+  luxury_manager: '奢侈品经理',
+  management_trainee: '管理培训生',
+  marketing_trainee: '营销实习生',
+  mass_marketeer: '大众营销员',
+  movie_star_b: '电影明星B',
+  movie_star_c: '电影明星C',
+  movie_star_d: '电影明星D',
+  new_business_developer: '新业务拓展经理',
+  night_shift_manager: '夜班经理',
+  noodle_chef: '面条主厨',
+  noodle_cook: '面条厨师',
+  pizza_chef: '披萨主厨',
+  pizza_cook: '披萨厨师',
+  pricing_manager: '定价经理',
+  recruiting_girl: '人力资源专员',
+  recruiting_manager: '人力资源经理',
+  regional_manager: '大区经理',
+  rural_marketeer: '乡村营销员',
+  senior_vice_president: '高级副总裁',
+  sushi_chef: '寿司主厨',
+  sushi_cook: '寿司厨师',
+  trainer: '培训讲师',
+  truck_driver: '货车驾驶员',
+  vice_president: '副总裁',
+  waitress: '服务员',
+  zeppelin_pilot: '飞艇驾驶员',
+}
+
+export const MILESTONE_NAMES: Record<string, string> = {
+  first_airplane: '首个进行飞机营销',
+  first_beer_sold: '首个卖出啤酒',
+  first_billboard: '首个放置广告牌',
+  first_brand_director_used: '首个使用品牌总监',
+  first_brand_manager_used: '首个使用品牌经理',
+  first_burger_marketed: '首个营销汉堡',
+  first_burger_produced: '首个生产汉堡',
+  first_burger_sold: '首个卖出汉堡',
+  first_campaign_manager_used: '首个使用营销经理',
+  first_cart_operator: '首个打出手推车操作员',
+  first_cart_operator_used: '首个使用手推车操作员',
+  first_coffee_sold: '首个卖出咖啡',
+  first_coke_sold: '首个卖出可乐',
+  first_discount_manager_used: '首个使用折扣经理',
+  first_drink_marketed: '首个营销饮料',
+  first_errand_boy: '首个打出跑腿伙计',
+  first_have_100: '首个拥有$100',
+  first_have_20: '首个拥有$20',
+  first_hire_3: '首个一回合雇佣三人',
+  first_house_built: '首个建造房屋',
+  first_lemonade_sold: '首个卖出柠檬水',
+  first_lobbyist_used: '首个使用说客',
+  first_lower_prices: '首个降价',
+  first_marketeer_used: '首个使用营销员',
+  first_marketing_trainee_used: '首个使用营销实习生',
+  first_new_restaurant: '首个新餐厅',
+  first_pay_20_salaries: '首个支付$20+薪水',
+  first_pizza_marketed: '首个营销披萨',
+  first_pizza_produced: '首个生产披萨',
+  first_pizza_sold: '首个卖出披萨',
+  first_radio: '首个进行电波营销',
+  first_recruiting_girl_used: '首个使用人力资源专员',
+  first_rural_marketeer_used: '首个使用乡村营销员',
+  first_throw_away: '首个丢弃食物/饮品',
+  first_train: '首个培训员工',
+  first_trainer_used: '首个使用培训讲师',
+  first_waitress: '首个使用女服务员',
+  first_waitress_used: '首个使用女服务员',
+  ketchup_sold_your_demand: '有人卖了你的需求',
+}
+
+export function moduleName(id: string): string {
+  return MODULE_NAMES[id] ?? id
+}
+
+export function productName(id: string): string {
+  return PRODUCT_NAMES[id] ?? id
+}
+
+export function employeeName(id: string): string {
+  return EMPLOYEE_NAMES[id] ?? id
+}
+
+export function milestoneName(id: string): string {
+  return MILESTONE_NAMES[id] ?? id
+}

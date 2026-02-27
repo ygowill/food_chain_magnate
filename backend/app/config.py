@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     internal_api_secret: str = "dev-internal-secret-change-in-production"
     password_hash_iterations: int = 200_000
     session_expire_days: int = 30
+    web_origin: str = "http://localhost:5173"
+    device_code_expire_seconds: int = 600
+    device_code_poll_interval: int = 5
 
 
 settings = Settings()

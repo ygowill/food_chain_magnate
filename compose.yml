@@ -1,6 +1,32 @@
 name: fcm
 
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: fcm-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${FCM_DB_USER:-fcm}
+      POSTGRES_PASSWORD: ${FCM_DB_PASSWORD:-fcm}
+      POSTGRES_DB: ${FCM_DB_NAME:-fcm}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    profiles:
+      - web
+
+  backend:
+    image: ${FCM_BACKEND_IMAGE:-ghcr.io/ygowill/food_chain_magnate/fcm-backend:${FCM_TAG:-latest}}
+    container_name: ${FCM_BACKEND_NAME:-fcm-backend}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://${FCM_DB_USER:-fcm}:${FCM_DB_PASSWORD:-fcm}@db:5432/${FCM_DB_NAME:-fcm}"
+      HMAC_SECRET: "${FCM_HMAC_SECRET:-change-me-in-production}"
+      WEB_ORIGIN: "${FCM_WEB_ORIGIN:-*}"
+    depends_on:
+      - db
+    profiles:
+      - web
+
   server:
     image: ${FCM_SERVER_IMAGE:-ghcr.io/ygowill/food_chain_magnate/fcm-server:${FCM_TAG:-latest}}
     container_name: ${FCM_SERVER_NAME:-fcm-server}
@@ -17,5 +43,10 @@ services:
     restart: unless-stopped
     ports:
       - "${FCM_WEB_PORT:-8080}:80"
+    depends_on:
+      - backend
     profiles:
       - web
+
+volumes:
+  pgdata:

@@ -17,6 +17,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://fcm:fcm@db:5432/fcm
       HMAC_SECRET: change-me-in-production
+      WEB_ORIGIN: "http://localhost:5173"
     depends_on:
       - db
 

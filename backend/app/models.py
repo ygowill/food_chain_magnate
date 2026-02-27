@@ -125,6 +125,19 @@ class MatchReplay(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class DeviceCode(Base):
+    __tablename__ = "device_codes"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
+    device_code: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    user_code: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    device_id: Mapped[str] = mapped_column(String, nullable=False)
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.user_id"), nullable=True)
+    status: Mapped[str] = mapped_column(String, default="pending")  # pending | authorized | consumed | expired
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
 class GameServer(Base):
     __tablename__ = "game_servers"
 

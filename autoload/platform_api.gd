@@ -4,6 +4,13 @@ extends Node
 
 var base_url: String = "http://localhost:8000"
 
+
+func _ready() -> void:
+	if OS.get_name() == "Web":
+		# Web 平台：同源部署，使用当前页面 origin
+		var origin = JavaScriptBridge.eval("window.location.origin")
+		base_url = str(origin) if origin != null else ""
+
 func _request(method: int, path: String, body: Dictionary = {}) -> Dictionary:
 	var url := base_url + path
 	var headers := ["Content-Type: application/json"]
@@ -102,3 +109,19 @@ func get_match(match_id: String, session_id: String) -> Dictionary:
 
 func get_replay(match_id: String, session_id: String) -> Dictionary:
 	return await _request(HTTPClient.METHOD_GET, "/v1/matches/%s/replay?session_id=%s" % [match_id, session_id])
+
+
+# === Device Auth ===
+
+func request_device_code(device_id: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_POST, "/v1/auth/device/code", {"device_id": device_id})
+
+
+func poll_device_token(device_code: String, device_id: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_POST, "/v1/auth/device/token", {
+		"device_code": device_code, "device_id": device_id,
+	})
+
+
+func get_me(session_id: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_GET, "/v1/auth/me?session_id=%s" % session_id)

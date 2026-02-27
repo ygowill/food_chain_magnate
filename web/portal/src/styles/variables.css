@@ -1,0 +1,32 @@
+:root {
+  --fcm-primary: rgb(186, 59, 46);
+  --fcm-primary-light: rgba(186, 59, 46, 0.15);
+  --fcm-primary-hover: rgb(166, 49, 38);
+  --fcm-primary-pressed: rgb(146, 42, 32);
+
+  --fcm-text-primary: rgb(43, 33, 23);
+  --fcm-text-muted: rgb(128, 115, 89);
+  --fcm-text-hint: rgba(186, 59, 46, 0.85);
+  --fcm-text-error: rgb(186, 59, 46);
+  --fcm-text-success: rgb(71, 140, 56);
+
+  --fcm-surface: rgb(247, 240, 219);
+  --fcm-surface-alt: rgba(235, 224, 199, 0.98);
+  --fcm-wall-bg: rgb(237, 224, 191);
+  --fcm-field-bg: rgba(242, 232, 209, 0.9);
+  --fcm-field-bg-disabled: rgba(235, 224, 199, 0.7);
+
+  --fcm-field-border: rgba(43, 33, 23, 0.26);
+  --fcm-field-border-focus: rgba(186, 59, 46, 0.72);
+  --fcm-dialog-border: rgba(43, 33, 23, 0.85);
+  --fcm-accent-line: rgba(186, 59, 46, 0.5);
+
+  --fcm-shadow-dialog: 3px 10px 28px rgba(18, 13, 8, 0.24);
+  --fcm-shadow-card: 2px 6px 18px rgba(18, 13, 8, 0.14);
+
+  --fcm-radius-sm: 2px;
+  --fcm-radius: 4px;
+
+  --fcm-btn-text: rgb(247, 237, 209);
+  --fcm-btn-text-hover: rgb(255, 245, 219);
+}

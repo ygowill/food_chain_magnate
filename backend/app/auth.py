@@ -221,6 +221,70 @@ async def bind(req: BindRequest, db: AsyncSession = Depends(get_db)):
     return AuthResponse(user_id=sess.user_id, session_id=sess.session_id)
 
 
+class MeResponse(BaseModel):
+    user_id: str
+    email: str | None
+    is_guest: bool
+    created_at: str
+
+
+@router.get("/me", response_model=MeResponse)
+async def get_me(session_id: str = "", db: AsyncSession = Depends(get_db)):
+    sess = await get_current_user(db=db, session_id=session_id)
+    user = (await db.execute(select(User).where(User.user_id == sess.user_id))).scalar_one()
+
+    email_identity = (await db.execute(
+        select(AuthIdentity).where(
+            AuthIdentity.user_id == sess.user_id,
+            AuthIdentity.provider == "email",
+        )
+    )).scalar_one_or_none()
+
+    has_guest = (await db.execute(
+        select(AuthIdentity).where(
+            AuthIdentity.user_id == sess.user_id,
+            AuthIdentity.provider == "guest",
+        )
+    )).scalar_one_or_none()
+
+    return MeResponse(
+        user_id=user.user_id,
+        email=email_identity.provider_user_id if email_identity else None,
+        is_guest=has_guest is not None and email_identity is None,
+        created_at=user.created_at.isoformat(),
+    )
+
+
+class ChangePasswordRequest(BaseModel):
+    session_id: str
+    old_password: str
+    new_password: str
+
+
+@router.put("/password")
+async def change_password(req: ChangePasswordRequest, db: AsyncSession = Depends(get_db)):
+    sess = await get_current_user(db=db, session_id=req.session_id)
+
+    identity = (await db.execute(
+        select(AuthIdentity).where(
+            AuthIdentity.user_id == sess.user_id,
+            AuthIdentity.provider == "email",
+        )
+    )).scalar_one_or_none()
+    if not identity:
+        raise HTTPException(400, "no email identity bound")
+
+    if not _verify_password(req.old_password, identity.credential_hash):
+        raise HTTPException(401, "incorrect old password")
+
+    if not req.new_password:
+        raise HTTPException(400, "new_password is required")
+
+    identity.credential_hash = _hash_password(req.new_password)
+    await db.commit()
+    return {"ok": True}
+
+
 class LogoutRequest(BaseModel):
     session_id: str
 

@@ -7,6 +7,9 @@ Usage:
   server/deploy.sh [--tag latest] [--port 7000] [--bind "0.0.0.0"]
                    [--name fcm-server] [--web-name fcm-web]
                    [--image <image:tag>] [--web-image <image:tag>]
+                   [--backend-image <image:tag>] [--backend-name fcm-backend]
+                   [--hmac-secret <secret>]
+                   [--db-user fcm] [--db-password fcm] [--db-name fcm]
                    [--docker-io-prefix <prefix>]
                    [--docker-api-version <version>]
                    [--pull] [--no-pull] [--foreground]
@@ -61,6 +64,12 @@ BIND="0.0.0.0"
 NAME="fcm-server"
 WEB_PORT="8080"
 WEB_NAME="fcm-web"
+BACKEND_IMAGE=""
+BACKEND_NAME="fcm-backend"
+HMAC_SECRET="change-me-in-production"
+DB_USER="fcm"
+DB_PASSWORD="fcm"
+DB_NAME="fcm"
 IMAGE=""
 WEB_IMAGE=""
 DOCKER_IO_PREFIX=""
@@ -122,6 +131,30 @@ while [[ $# -gt 0 ]]; do
 			;;
 		--web-image)
 			WEB_IMAGE="${2:-}"
+			shift 2
+			;;
+		--backend-image)
+			BACKEND_IMAGE="${2:-}"
+			shift 2
+			;;
+		--backend-name)
+			BACKEND_NAME="${2:-}"
+			shift 2
+			;;
+		--hmac-secret)
+			HMAC_SECRET="${2:-}"
+			shift 2
+			;;
+		--db-user)
+			DB_USER="${2:-}"
+			shift 2
+			;;
+		--db-password)
+			DB_PASSWORD="${2:-}"
+			shift 2
+			;;
+		--db-name)
+			DB_NAME="${2:-}"
 			shift 2
 			;;
 		--docker-io-prefix)
@@ -214,12 +247,17 @@ fi
 if [[ -z "${WEB_IMAGE}" ]]; then
 	WEB_IMAGE="ghcr.io/ygowill/food_chain_magnate/fcm-web:${TAG}"
 fi
+if [[ -z "${BACKEND_IMAGE}" ]]; then
+	BACKEND_IMAGE="ghcr.io/ygowill/food_chain_magnate/fcm-backend:${TAG}"
+fi
 
 if [[ "${ACTION}" == "up" ]]; then
 	echo "[deploy] tag=${TAG}"
 	echo "[deploy] server: name=${NAME} image=${IMAGE} port=${PORT} bind=${BIND}"
 	if [[ "${ENABLE_WEB}" -eq 1 ]]; then
 		echo "[deploy] web: name=${WEB_NAME} image=${WEB_IMAGE} port=${WEB_PORT}"
+		echo "[deploy] backend: name=${BACKEND_NAME} image=${BACKEND_IMAGE}"
+		echo "[deploy] db: user=${DB_USER} name=${DB_NAME}"
 	fi
 	if [[ "${ENABLE_HTTPS}" -eq 1 ]]; then
 		if [[ -z "${WEB_DOMAIN}" || -z "${WS_DOMAIN}" ]]; then
@@ -296,11 +334,13 @@ cat > "${env_file}" <<EOF
 FCM_TAG=${TAG}
 FCM_SERVER_IMAGE=${IMAGE}
 FCM_WEB_IMAGE=${WEB_IMAGE}
+FCM_BACKEND_IMAGE=${BACKEND_IMAGE}
 FCM_DOCKER_IO_PREFIX=${DOCKER_IO_PREFIX}
 FCM_DOCKER_API_VERSION=${DOCKER_API_VERSION}
 FCM_TRAEFIK_DYNAMIC_FILE=${traefik_dynamic_file}
 FCM_SERVER_NAME=${NAME}
 FCM_WEB_NAME=${WEB_NAME}
+FCM_BACKEND_NAME=${BACKEND_NAME}
 FCM_SERVER_PORT=${PORT}
 FCM_SERVER_BIND=${BIND}
 FCM_WEB_PORT=${WEB_PORT}
@@ -308,6 +348,10 @@ FCM_WEB_DOMAIN=${WEB_DOMAIN}
 FCM_WS_DOMAIN=${WS_DOMAIN}
 FCM_HTTP_PORT=${HTTP_PORT}
 FCM_HTTPS_PORT=${HTTPS_PORT}
+FCM_HMAC_SECRET=${HMAC_SECRET}
+FCM_DB_USER=${DB_USER}
+FCM_DB_PASSWORD=${DB_PASSWORD}
+FCM_DB_NAME=${DB_NAME}
 ACME_EMAIL=${ACME_EMAIL:-}
 CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN:-}
 EOF
