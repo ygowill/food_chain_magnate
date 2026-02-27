@@ -2,6 +2,7 @@ import json
 from collections.abc import Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.db import get_db
 from app.models import Match, MatchParticipant, MatchReplay
+from app.replay_storage import get_local_replay_path, parse_local_replay_filename
 
 router = APIRouter(prefix="/v1/matches", tags=["matches"])
 
@@ -193,6 +195,12 @@ def _parse_participant_profile(raw: str | None) -> tuple[str | None, int | None,
         logo_key = _logo_key_from_id(logo_id)
 
     return display_name, logo_id, logo_key
+
+
+def _to_public_replay_uri(match_id: str, storage_uri: str) -> str:
+    if parse_local_replay_filename(storage_uri) is not None:
+        return f"/v1/matches/{match_id}/replay/download"
+    return storage_uri
 
 
 def _pick_int(sources: list[dict], keys: tuple[str, ...]) -> int:
@@ -501,6 +509,34 @@ async def get_replay(match_id: str, session_id: str = Query(...), db: AsyncSessi
     if not replay:
         raise HTTPException(404, "replay not found")
     return ReplayInfo(
-        match_id=replay.match_id, storage_uri=replay.storage_uri,
+        match_id=replay.match_id, storage_uri=_to_public_replay_uri(match_id, replay.storage_uri),
         checksum=replay.checksum, size_bytes=replay.size_bytes,
     )
+
+
+@router.get("/{match_id}/replay/download")
+async def download_replay(match_id: str, session_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+    sess = await get_current_user(db=db, session_id=session_id)
+    part = (await db.execute(
+        select(MatchParticipant).where(MatchParticipant.match_id == match_id, MatchParticipant.user_id == sess.user_id)
+    )).scalar_one_or_none()
+    if not part:
+        raise HTTPException(403, "not a participant")
+
+    replay = (await db.execute(
+        select(MatchReplay).where(MatchReplay.match_id == match_id)
+    )).scalar_one_or_none()
+    if not replay:
+        raise HTTPException(404, "replay not found")
+
+    filename = parse_local_replay_filename(replay.storage_uri)
+    if filename is not None:
+        path = get_local_replay_path(filename)
+        if not path.exists() or not path.is_file():
+            raise HTTPException(404, "replay file missing")
+        return FileResponse(path, media_type="application/json", filename=filename)
+
+    storage_uri = str(replay.storage_uri or "").strip()
+    if storage_uri == "":
+        raise HTTPException(404, "replay uri missing")
+    return RedirectResponse(storage_uri, status_code=307)

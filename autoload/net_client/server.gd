@@ -8,6 +8,9 @@ const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const ConnectTokenClass = preload("res://core/utils/connect_token.gd")
+const GameOverWinnerRulesClass = preload("res://core/rules/game_over_winner_rules.gd")
+const DEFAULT_PLATFORM_BACKEND_URL := "http://127.0.0.1:8000"
+const DEFAULT_INTERNAL_API_SECRET := "dev-internal-secret-change-in-production"
 const DEFAULT_RESTAURANT_LOGO_COUNT := 6
 const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
 const DEFAULT_DISCONNECT_GRACE_PERIOD_SEC := 120.0
@@ -32,6 +35,359 @@ func _get_disconnect_grace_period_sec() -> float:
 	if not raw.is_empty() and raw.is_valid_float():
 		return maxf(0.0, float(raw))
 	return DEFAULT_DISCONNECT_GRACE_PERIOD_SEC
+
+func _get_platform_backend_url() -> String:
+	var url := str(OS.get_environment("PLATFORM_BACKEND_URL")).strip_edges()
+	if url.is_empty():
+		return DEFAULT_PLATFORM_BACKEND_URL
+	return url
+
+func _get_internal_api_secret() -> String:
+	var secret := str(OS.get_environment("INTERNAL_API_SECRET")).strip_edges()
+	if secret.is_empty():
+		return DEFAULT_INTERNAL_API_SECRET
+	return secret
+
+func _build_match_summary_payload(state) -> Dictionary:
+	var modules: Array[String] = []
+	if state != null and (state.modules is Array):
+		for module_val in Array(state.modules):
+			var module_id := str(module_val).strip_edges()
+			if module_id.is_empty():
+				continue
+			modules.append(module_id)
+
+	var bank: Dictionary = {}
+	if state != null and (state.bank is Dictionary):
+		var b: Dictionary = Dictionary(state.bank)
+		bank = {
+			"total": int(b.get("total", 0)),
+			"broke_count": int(b.get("broke_count", 0)),
+			"reserve_added_total": int(b.get("reserve_added_total", 0)),
+		}
+
+	var marketing_instances: Array = []
+	if state != null and (state.marketing_instances is Array):
+		marketing_instances = Array(state.marketing_instances).duplicate(true)
+
+	return {
+		"modules": modules,
+		"round_number": int(state.round_number) if state != null else 0,
+		"bank": bank,
+		"marketing_instances": marketing_instances,
+	}
+
+func _build_participant_score_payload(room, state, seat_index: int) -> Dictionary:
+	var seat_profile: Dictionary = {}
+	if room != null and (room._seat_profile_by_seat_index is Dictionary):
+		seat_profile = Dictionary(room._seat_profile_by_seat_index.get(seat_index, {}))
+
+	var player: Dictionary = {}
+	if state != null and (state.players is Array) and seat_index >= 0 and seat_index < state.players.size():
+		var player_val = state.players[seat_index]
+		if player_val is Dictionary:
+			player = Dictionary(player_val)
+
+	var employees: Array = []
+	var employees_val = player.get("employees", null)
+	if employees_val is Array:
+		employees = Array(employees_val).duplicate(true)
+
+	var reserve_employees: Array = []
+	var reserve_val = player.get("reserve_employees", null)
+	if reserve_val is Array:
+		reserve_employees = Array(reserve_val).duplicate(true)
+
+	var busy_marketers: Array = []
+	var busy_val = player.get("busy_marketers", null)
+	if busy_val is Array:
+		busy_marketers = Array(busy_val).duplicate(true)
+
+	var restaurants: Array = []
+	var restaurants_val = player.get("restaurants", null)
+	if restaurants_val is Array:
+		restaurants = Array(restaurants_val).duplicate(true)
+
+	var milestones: Array = []
+	var milestones_val = player.get("milestones", null)
+	if milestones_val is Array:
+		milestones = Array(milestones_val).duplicate(true)
+
+	var inventory: Dictionary = {}
+	var inventory_val = player.get("inventory", null)
+	if inventory_val is Dictionary:
+		inventory = Dictionary(inventory_val).duplicate(true)
+
+	return {
+		"display_name": str(seat_profile.get("name", "Player %d" % [seat_index + 1])),
+		"restaurant_logo_id": int(seat_profile.get("restaurant_logo_id", -1)),
+		"cash": int(player.get("cash", 0)),
+		"forfeited": bool(player.get("forfeited", false)),
+		"employees": employees,
+		"reserve_employees": reserve_employees,
+		"busy_marketers": busy_marketers,
+		"restaurants": restaurants,
+		"milestones": milestones,
+		"inventory": inventory,
+	}
+
+func _build_finalize_participants(room, state, winner_player_id: int) -> Array:
+	var participants: Array = []
+	if room == null:
+		return participants
+	if not (room._seat_profile_by_seat_index is Dictionary):
+		return participants
+
+	var seat_indices: Array[int] = []
+	for seat_key in room._seat_profile_by_seat_index.keys():
+		seat_indices.append(int(seat_key))
+	seat_indices.sort()
+
+	for seat_index in seat_indices:
+		var user_id := ""
+		if room._user_id_by_seat_index is Dictionary:
+			user_id = str(room._user_id_by_seat_index.get(seat_index, "")).strip_edges()
+		if user_id.is_empty():
+			GameLog.warn(
+				"NetClient",
+				"Finalize skip participant without user_id room=%s seat=%d"
+					% [_safe_text(str(room.room_code)), seat_index]
+			)
+			continue
+
+		var score_payload := _build_participant_score_payload(room, state, seat_index)
+		var forfeited := bool(score_payload.get("forfeited", false))
+		var result := "lose"
+		if forfeited:
+			result = "forfeit"
+		elif winner_player_id < 0:
+			result = "draw"
+		elif seat_index == winner_player_id:
+			result = "win"
+
+		participants.append({
+			"user_id": user_id,
+			"role": "player",
+			"seat_index": seat_index,
+			"result": result,
+			"score_json": JSON.stringify(score_payload),
+		})
+
+	return participants
+
+func _schedule_finalize_retry(room_code: String) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	var tree = _net.get_tree()
+	if tree == null or not (tree is SceneTree):
+		return
+	var timer = (tree as SceneTree).create_timer(5.0)
+	timer.timeout.connect(Callable(self, "_retry_finalize_room").bind(str(room_code).strip_edges().to_upper()))
+
+func _retry_finalize_room(room_code: String) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if _net._room_manager == null or not (_net._room_manager.rooms is Dictionary):
+		return
+	var room = _net._room_manager.rooms.get(str(room_code).strip_edges().to_upper(), null)
+	if room == null:
+		return
+	_try_finalize_match_if_game_over(room)
+
+func _try_finalize_match_if_game_over(room) -> void:
+	if room == null or room.game_engine == null:
+		return
+	var state = room.game_engine.get_state()
+	if state == null:
+		return
+	if str(state.phase) != DefsClass.PHASE_GAME_OVER:
+		return
+
+	if int(room.ended_at_unix_sec) <= 0:
+		room.ended_at_unix_sec = int(Time.get_unix_time_from_system())
+	if str(room.ended_at_iso).strip_edges().is_empty():
+		room.ended_at_iso = Time.get_datetime_string_from_system()
+
+	var status_changed := false
+	if str(room.status) != "Ended":
+		room.status = "Ended"
+		status_changed = true
+		if room.has_method("_touch"):
+			room._touch()
+	if status_changed:
+		broadcast_room_state(room)
+		broadcast_room_list("")
+
+	if bool(room.match_finalize_reported) or bool(room.match_finalize_in_flight):
+		return
+	room.match_finalize_in_flight = true
+	call_deferred("_post_finalize_match", room)
+
+func _post_finalize_match(room) -> void:
+	if room == null:
+		return
+	if room.game_engine == null:
+		room.match_finalize_in_flight = false
+		return
+
+	var backend_url := _get_platform_backend_url()
+	var internal_secret := _get_internal_api_secret()
+	if backend_url.is_empty() or internal_secret.is_empty():
+		room.match_finalize_in_flight = false
+		GameLog.warn(
+			"NetClient",
+			"Finalize skipped due to backend/internal secret missing room=%s"
+				% _safe_text(str(room.room_code))
+		)
+		_schedule_finalize_retry(str(room.room_code))
+		return
+
+	var state = room.game_engine.get_state()
+	if state == null:
+		room.match_finalize_in_flight = false
+		return
+
+	var winner_player_id := -1
+	var winner_r: Result = GameOverWinnerRulesClass.pick_winner_player_id(state)
+	if winner_r.ok:
+		winner_player_id = int(winner_r.value)
+	else:
+		GameLog.warn(
+			"NetClient",
+			"Finalize winner fallback room=%s err=%s"
+				% [_safe_text(str(room.room_code)), winner_r.error]
+		)
+
+	var started_unix := int(room.started_at_unix_sec)
+	var ended_unix := int(room.ended_at_unix_sec)
+	if ended_unix <= 0:
+		ended_unix = int(Time.get_unix_time_from_system())
+	if started_unix <= 0:
+		started_unix = ended_unix
+	var duration_sec := maxi(0, ended_unix - started_unix)
+	var started_at := str(room.started_at_iso).strip_edges()
+	if started_at.is_empty():
+		started_at = Time.get_datetime_string_from_system()
+	var ended_at := str(room.ended_at_iso).strip_edges()
+	if ended_at.is_empty():
+		ended_at = Time.get_datetime_string_from_system()
+
+	var participants := _build_finalize_participants(room, state, winner_player_id)
+	var summary_payload := _build_match_summary_payload(state)
+	var summary_json := JSON.stringify(summary_payload)
+
+	var game_version := str(ProjectSettings.get_setting("application/config/version", "0.0.0")).strip_edges()
+	if game_version.is_empty():
+		game_version = "0.0.0"
+	var schema_version := ""
+	var final_hash := str(state.compute_hash()) if state.has_method("compute_hash") else ""
+	var replay_archive_json := ""
+	var replay_size_bytes: Variant = null
+	var replay_checksum := ""
+
+	var archive_r = room.game_engine.create_archive()
+	if archive_r.ok and archive_r.value is Dictionary:
+		var archive: Dictionary = Dictionary(archive_r.value)
+		replay_archive_json = JSON.stringify(archive)
+		schema_version = str(archive.get("schema_version", ""))
+		game_version = str(archive.get("game_version", game_version)).strip_edges()
+		final_hash = str(archive.get("final_hash", final_hash)).strip_edges()
+		replay_size_bytes = replay_archive_json.to_utf8_buffer().size()
+		var ctx := HashingContext.new()
+		ctx.start(HashingContext.HASH_SHA256)
+		ctx.update(replay_archive_json.to_utf8_buffer())
+		replay_checksum = ctx.finish().hex_encode()
+	else:
+		GameLog.warn(
+			"NetClient",
+			"Finalize without replay archive room=%s err=%s"
+				% [_safe_text(str(room.room_code)), archive_r.error]
+		)
+
+	var seed_text := str(room.config.get("seed", "")).strip_edges()
+	if seed_text.is_empty():
+		seed_text = str(int(state.seed))
+
+	var payload := {
+		"room_code": str(room.room_code),
+		"status": "completed",
+		"started_at": started_at,
+		"ended_at": ended_at,
+		"duration_sec": duration_sec,
+		"player_count": int(room.get_player_count()) if room.has_method("get_player_count") else participants.size(),
+		"seed": seed_text,
+		"schema_version": schema_version,
+		"game_version": game_version,
+		"final_hash": final_hash,
+		"summary_json": summary_json,
+		"participants": participants,
+	}
+	if not replay_archive_json.is_empty():
+		payload["replay_archive_json"] = replay_archive_json
+	if replay_size_bytes != null:
+		payload["replay_size_bytes"] = int(replay_size_bytes)
+	if not replay_checksum.is_empty():
+		payload["replay_checksum"] = replay_checksum
+
+	var base := str(backend_url)
+	if base.ends_with("/"):
+		base = base.trim_suffix("/")
+	var url := base + "/internal/matches/finalize"
+	var headers := [
+		"Content-Type: application/json",
+		"X-Internal-Secret: " + internal_secret,
+	]
+
+	if _net == null or not is_instance_valid(_net):
+		room.match_finalize_in_flight = false
+		return
+
+	var http := HTTPRequest.new()
+	_net.add_child(http)
+	var err := http.request(url, headers, HTTPClient.METHOD_POST, JSON.stringify(payload))
+	if err != OK:
+		http.queue_free()
+		room.match_finalize_in_flight = false
+		GameLog.error(
+			"NetClient",
+			"Finalize request_failed room=%s err=%s"
+				% [_safe_text(str(room.room_code)), str(err)]
+		)
+		_schedule_finalize_retry(str(room.room_code))
+		return
+	var result: Array = await http.request_completed
+	http.queue_free()
+
+	var response_code: int = int(result[1])
+	var response_text := PackedByteArray(result[3]).get_string_from_utf8()
+	if response_code < 200 or response_code >= 300:
+		room.match_finalize_in_flight = false
+		GameLog.error(
+			"NetClient",
+			"Finalize failed room=%s status=%d body=%s"
+				% [_safe_text(str(room.room_code)), response_code, _safe_text(response_text)]
+		)
+		_schedule_finalize_retry(str(room.room_code))
+		return
+
+	var parsed = JSON.parse_string(response_text)
+	var match_id := ""
+	if parsed is Dictionary:
+		match_id = str(Dictionary(parsed).get("match_id", "")).strip_edges()
+
+	room.match_finalize_in_flight = false
+	room.match_finalize_reported = true
+	room.finalized_match_id = match_id
+	GameLog.warn(
+		"NetClient",
+		"Finalize success room=%s match_id=%s participants=%d history=%d"
+			% [
+				_safe_text(str(room.room_code)),
+				_safe_text(match_id),
+				participants.size(),
+				int(room.game_engine.command_history.size()) if room.game_engine != null else -1,
+			]
+	)
 
 func _disconnect_forfeit_key(room_code: String, actor_id: int) -> String:
 	return "%s:%d" % [str(room_code).strip_edges().to_upper(), int(actor_id)]
@@ -115,6 +471,7 @@ func _on_disconnect_grace_timeout(room_code: String, actor_id: int, ticket: int)
 		GameLog.warn("NetClient", "Applied forfeit after disconnect grace room=%s actor=%d" % [_safe_text(room_code), actor_id])
 		broadcast_command_applied(room, cmd)
 		server_drain_forfeited_auto_steps(room)
+		_try_finalize_match_if_game_over(room)
 		broadcast_room_state(room)
 		broadcast_room_list("")
 	else:
@@ -253,7 +610,7 @@ func on_peer_disconnected(peer_id: int) -> void:
 
 	# 房间已被清理（无任何在线成员）：直接关闭对局，不再执行 forfeit/auto step。
 	# 否则，服务器会在无人在线时继续自动推进（直到 safety limit）。
-	if in_game and removed and room != null and room.game_engine != null:
+	if removed and room != null and room.game_engine != null:
 		if room.game_engine.has_method("dispose"):
 			room.game_engine.dispose()
 		room.game_engine = null
@@ -1089,6 +1446,7 @@ func handle_rpc_action_request(request: Dictionary) -> void:
 	)
 	broadcast_command_applied(room, cmd)
 	server_drain_forfeited_auto_steps(room)
+	_try_finalize_match_if_game_over(room)
 
 func handle_rpc_resync_request(_request: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):

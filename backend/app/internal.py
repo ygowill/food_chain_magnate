@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import get_db
 from app.models import GameServer, Room, Match, MatchParticipant, MatchReplay
+from app.replay_storage import save_local_replay_archive
 
 router = APIRouter(prefix="/internal", tags=["internal"])
 
@@ -84,6 +85,7 @@ class FinalizeRequest(BaseModel):
     summary_json: str | None = None
     participants: list[ParticipantIn] = []
     replay_uri: str | None = None
+    replay_archive_json: str | None = None
     replay_checksum: str | None = None
     replay_size_bytes: int | None = None
 
@@ -108,9 +110,17 @@ async def finalize(req: FinalizeRequest, db: AsyncSession = Depends(get_db)):
             seat_index=p.seat_index, result=p.result, score_json=p.score_json,
         ))
 
-    if req.replay_uri:
+    replay_storage_uri: str | None = req.replay_uri
+    replay_archive_json = str(req.replay_archive_json or "")
+    if replay_archive_json.strip() != "":
+        try:
+            replay_storage_uri = save_local_replay_archive(m.match_id, replay_archive_json)
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"failed to persist replay archive: {exc}") from exc
+
+    if replay_storage_uri:
         db.add(MatchReplay(
-            match_id=m.match_id, storage_uri=req.replay_uri,
+            match_id=m.match_id, storage_uri=replay_storage_uri,
             checksum=req.replay_checksum, size_bytes=req.replay_size_bytes,
         ))
 

@@ -4,6 +4,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models import Match, MatchParticipant, MatchReplay
 
 
@@ -25,6 +26,24 @@ async def _seed_match(db: AsyncSession, user_id: str, score_json: str | None = N
         score_json=score_json,
     ))
     db.add(MatchReplay(match_id=m.match_id, storage_uri="file:///replays/test.bin", checksum="abc123", size_bytes=1024))
+    await db.commit()
+    return m.match_id
+
+
+async def _seed_local_replay_match(db: AsyncSession, user_id: str, replay_storage_dir: str) -> str:
+    m = Match(room_code="LOCAL1", status="completed", player_count=2)
+    db.add(m)
+    await db.flush()
+    db.add(MatchParticipant(
+        match_id=m.match_id,
+        user_id=user_id,
+        role="player",
+        seat_index=0,
+    ))
+    replay_file = f"{replay_storage_dir}/{m.match_id}.json"
+    with open(replay_file, "w", encoding="utf-8") as f:
+        f.write('{"schema_version":3,"commands":[]}')
+    db.add(MatchReplay(match_id=m.match_id, storage_uri=f"local_file://{m.match_id}.json", checksum="abc123", size_bytes=34))
     await db.commit()
     return m.match_id
 
@@ -122,6 +141,35 @@ async def test_get_replay(client: AsyncClient, db_session: AsyncSession):
     resp = await client.get(f"/v1/matches/{mid}/replay", params={"session_id": user["session_id"]})
     assert resp.status_code == 200
     assert resp.json()["storage_uri"] == "file:///replays/test.bin"
+
+
+@pytest.mark.asyncio
+async def test_get_replay_local_storage_uri(client: AsyncClient, db_session: AsyncSession, tmp_path):
+    old_replay_storage_dir = settings.replay_storage_dir
+    settings.replay_storage_dir = str(tmp_path)
+    try:
+        user = await _create_user(client)
+        mid = await _seed_local_replay_match(db_session, user["user_id"], str(tmp_path))
+        resp = await client.get(f"/v1/matches/{mid}/replay", params={"session_id": user["session_id"]})
+        assert resp.status_code == 200
+        assert resp.json()["storage_uri"] == f"/v1/matches/{mid}/replay/download"
+    finally:
+        settings.replay_storage_dir = old_replay_storage_dir
+
+
+@pytest.mark.asyncio
+async def test_download_replay_local(client: AsyncClient, db_session: AsyncSession, tmp_path):
+    old_replay_storage_dir = settings.replay_storage_dir
+    settings.replay_storage_dir = str(tmp_path)
+    try:
+        user = await _create_user(client)
+        mid = await _seed_local_replay_match(db_session, user["user_id"], str(tmp_path))
+        resp = await client.get(f"/v1/matches/{mid}/replay/download", params={"session_id": user["session_id"]})
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("application/json")
+        assert '"schema_version":3' in resp.text
+    finally:
+        settings.replay_storage_dir = old_replay_storage_dir
 
 
 @pytest.mark.asyncio

@@ -461,10 +461,27 @@ function inferReplayFileName(uri: string): string {
   return `match-${matchId}-replay.json`
 }
 
+function buildReplayDownloadUrl(uri: string): string {
+  try {
+    const url = new URL(uri, window.location.origin)
+    if (
+      url.pathname.startsWith('/v1/matches/')
+      && url.pathname.endsWith('/replay/download')
+      && !url.searchParams.has('session_id')
+      && auth.sessionId
+    ) {
+      url.searchParams.set('session_id', auth.sessionId)
+    }
+    return url.toString()
+  } catch {
+    return uri
+  }
+}
+
 function downloadReplay() {
   if (!replay.value?.storage_uri) return
   const link = document.createElement('a')
-  link.href = replay.value.storage_uri
+  link.href = buildReplayDownloadUrl(replay.value.storage_uri)
   link.download = inferReplayFileName(replay.value.storage_uri)
   link.rel = 'noopener'
   link.style.display = 'none'

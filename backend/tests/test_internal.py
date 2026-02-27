@@ -95,3 +95,32 @@ async def test_finalize_without_replay(client: AsyncClient, db_session: AsyncSes
         select(MatchReplay).where(MatchReplay.match_id == mid)
     )).scalar_one_or_none()
     assert replay is None
+
+
+@pytest.mark.asyncio
+async def test_finalize_with_replay_archive_json(client: AsyncClient, db_session: AsyncSession, tmp_path):
+    old_replay_storage_dir = settings.replay_storage_dir
+    settings.replay_storage_dir = str(tmp_path)
+    try:
+        user = await _create_user(client)
+        replay_archive_json = '{"schema_version":3,"commands":[]}'
+        resp = await client.post("/internal/matches/finalize", json={
+            "room_code": "TEST02",
+            "status": "completed",
+            "player_count": 1,
+            "participants": [
+                {"user_id": user["user_id"], "role": "player", "seat_index": 0, "result": "win"},
+            ],
+            "replay_archive_json": replay_archive_json,
+        }, headers=INTERNAL_HEADERS)
+        assert resp.status_code == 200
+        mid = resp.json()["match_id"]
+
+        replay = (await db_session.execute(
+            select(MatchReplay).where(MatchReplay.match_id == mid)
+        )).scalar_one()
+        assert replay.storage_uri == f"local_file://{mid}.json"
+        replay_file = tmp_path / f"{mid}.json"
+        assert replay_file.read_text(encoding="utf-8") == replay_archive_json
+    finally:
+        settings.replay_storage_dir = old_replay_storage_dir

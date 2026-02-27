@@ -17,6 +17,13 @@ var join_policy: String = "password"
 var password_hash: String = ""
 
 var updated_at_ms: int = 0
+var started_at_iso: String = ""
+var ended_at_iso: String = ""
+var started_at_unix_sec: int = 0
+var ended_at_unix_sec: int = 0
+var match_finalize_in_flight: bool = false
+var match_finalize_reported: bool = false
+var finalized_match_id: String = ""
 
 var game_engine = null
 var player_id_by_peer_id: Dictionary = {} # peer_id -> player_id
@@ -448,6 +455,13 @@ func start_game() -> Result:
 	game_engine = engine
 	player_id_by_peer_id = build_player_id_by_peer_id()
 	status = STATUS_IN_GAME
+	started_at_iso = Time.get_datetime_string_from_system()
+	ended_at_iso = ""
+	started_at_unix_sec = int(Time.get_unix_time_from_system())
+	ended_at_unix_sec = 0
+	match_finalize_in_flight = false
+	match_finalize_reported = false
+	finalized_match_id = ""
 	_touch()
 
 	return Result.success({
