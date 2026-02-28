@@ -273,6 +273,14 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 		return Result.failure("晚餐结算失败：内部错误（sold_marketed_demand_events 类型错误）")
 	var sold_marketed_demand_events: Array = sold_marketed_demand_events_val
 
+	var bankruptcy_events_val = house_sales.get("bankruptcy_events", null)
+	if bankruptcy_events_val == null:
+		bankruptcy_events_val = []
+	if not (bankruptcy_events_val is Array):
+		return Result.failure("晚餐结算失败：内部错误（bankruptcy_events 类型错误）")
+	var bankruptcy_events: Array = (bankruptcy_events_val as Array).duplicate(true)
+	var bankruptcy_event_cursor := _read_bankruptcy_events_count(state)
+
 	var income_tips: Array[int] = []
 	var income_cfo: Array[int] = []
 	var total_income: Array[int] = []
@@ -307,6 +315,18 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 		if not tips_result.ok:
 			return Result.failure("女服务员收入支付失败：玩家 %d：%s" % [player_id, tips_result.error])
 		warnings.append_array(tips_result.warnings)
+		var tips_breaks := _collect_new_bankruptcy_events(state, bankruptcy_event_cursor, {
+			"timeline_stage": "post_income",
+			"post_income_kind": "tips",
+			"player_id": player_id,
+			"payment_amount": tips_amount,
+		})
+		bankruptcy_event_cursor = int(tips_breaks.get("cursor", bankruptcy_event_cursor))
+		var tips_break_events_val = tips_breaks.get("events", [])
+		if tips_break_events_val is Array:
+			for evt_val in tips_break_events_val:
+				if evt_val is Dictionary:
+					bankruptcy_events.append(evt_val)
 
 		income_tips[player_id] += tips_amount
 		total_income_before_cfo[player_id] += tips_amount
@@ -342,6 +362,18 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 		if not cfo_result.ok:
 			return Result.failure("CFO 加成支付失败：玩家 %d：%s" % [player_id, cfo_result.error])
 		warnings.append_array(cfo_result.warnings)
+		var cfo_breaks := _collect_new_bankruptcy_events(state, bankruptcy_event_cursor, {
+			"timeline_stage": "post_income",
+			"post_income_kind": "cfo",
+			"player_id": player_id,
+			"payment_amount": extra,
+		})
+		bankruptcy_event_cursor = int(cfo_breaks.get("cursor", bankruptcy_event_cursor))
+		var cfo_break_events_val = cfo_breaks.get("events", [])
+		if cfo_break_events_val is Array:
+			for evt_val in cfo_break_events_val:
+				if evt_val is Dictionary:
+					bankruptcy_events.append(evt_val)
 		income_cfo[player_id] += extra
 
 	for player_id in range(state.players.size()):
@@ -356,6 +388,7 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 		"income_cfo_bonus": income_cfo,
 		"total_income": total_income,
 		"sold_marketed_demand_events": sold_marketed_demand_events,
+		"bankruptcy_events": bankruptcy_events,
 	}
 
 	# 注入阻塞：晚餐结算需等待玩家确认后才允许 auto-advance 离开 DINNERTIME。
@@ -408,3 +441,44 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 				)
 
 	return Result.success().with_warnings(warnings)
+
+static func _read_bankruptcy_events_count(state: GameState) -> int:
+	if state == null or not (state.round_state is Dictionary):
+		return 0
+	var bankruptcy_val = state.round_state.get("bankruptcy", null)
+	if not (bankruptcy_val is Dictionary):
+		return 0
+	var events_val = (bankruptcy_val as Dictionary).get("events", null)
+	if not (events_val is Array):
+		return 0
+	return (events_val as Array).size()
+
+static func _collect_new_bankruptcy_events(state: GameState, cursor: int, meta: Dictionary) -> Dictionary:
+	var out_events: Array[Dictionary] = []
+	if state == null or not (state.round_state is Dictionary):
+		return {"cursor": 0, "events": out_events}
+
+	var bankruptcy_val = state.round_state.get("bankruptcy", null)
+	if not (bankruptcy_val is Dictionary):
+		return {"cursor": 0, "events": out_events}
+
+	var events_val = (bankruptcy_val as Dictionary).get("events", null)
+	if not (events_val is Array):
+		return {"cursor": 0, "events": out_events}
+
+	var events: Array = events_val
+	var start := maxi(0, cursor)
+	for i in range(start, events.size()):
+		var evt_val = events[i]
+		if not (evt_val is Dictionary):
+			continue
+		var evt: Dictionary = (evt_val as Dictionary).duplicate(true)
+		for k in meta.keys():
+			if not (k is String):
+				continue
+			evt[str(k)] = meta[k]
+		out_events.append(evt)
+	return {
+		"cursor": events.size(),
+		"events": out_events,
+	}

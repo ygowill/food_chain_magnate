@@ -357,6 +357,11 @@ layout_mode = 2
 button_pressed = true
 text = "显示提示"
 
+[node name="ReplayLoadPlayableCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/GamePage"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "载入回放后可继续操作"
+
 [node name="GameSep" type="HSeparator" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/GamePage"]
 layout_mode = 2
 

@@ -68,35 +68,40 @@ var _post_income_started: bool = false
 var _post_income_playing: bool = false
 var _post_income_done: bool = false
 var _post_income_card: Control = null
+var _bank_break_panel = null
+var _bankruptcy_events_by_sale_index: Dictionary = {}  # sale_index -> Array[Dictionary]
 
 # 外部 UI 引用（用于动画目标位置）
 var _bank_label: Label = null
 var _player_panel = null  # LeftPanel
 
-func start(settlement_data: Dictionary, state: GameState, scene: Node, map_canvas, bank_label: Label, player_panel) -> void:
+func start(settlement_data: Dictionary, state: GameState, scene: Node, map_canvas, bank_label: Label, player_panel, bank_break_panel = null) -> void:
 	_game_state = state
 	_scene = scene
 	_map_canvas = map_canvas
 	_bank_label = bank_label
 	_player_panel = player_panel
+	_bank_break_panel = bank_break_panel
 	_speed = float(Globals.animation_speed) if Globals != null else 1.0
 
 	_orders = DinnerTimeOverlayClass.build_orders_from_settlement(settlement_data)
 	_current_idx = 0
 	_post_income_events = DinnertimeAnimationIncomeUtilsClass.build_post_house_income_events(settlement_data, _game_state)
 	_post_income_by_player = DinnertimeAnimationIncomeUtilsClass.sum_post_income_by_player(_post_income_events)
+	_bankruptcy_events_by_sale_index = _build_bankruptcy_events_by_sale_index(settlement_data)
 	_post_income_started = false
 	_post_income_playing = false
 	_post_income_done = _post_income_events.is_empty()
 
-	# 计算结算前银行值（当前值 + 所有房屋订单收入总和 + 后置收入）
+	# 计算结算前银行值（当前值 + 所有房屋订单收入总和 + 后置收入 - 破产注资）。
 	var total_revenue := 0
 	for o in _orders:
 		if bool(o.get("is_skipped", false)):
 			continue
 		total_revenue += DinnertimeAnimationIncomeUtilsClass.get_order_income_amount(o)
 	var total_post_income := DinnertimeAnimationIncomeUtilsClass.sum_income_dict(_post_income_by_player)
-	_running_bank_value = int(state.bank.get("total", 0)) + total_revenue + total_post_income
+	var total_break_added := _sum_bankruptcy_reserve_added(settlement_data)
+	_running_bank_value = int(state.bank.get("total", 0)) + total_revenue + total_post_income - total_break_added
 	if is_instance_valid(_bank_label):
 		_bank_label.text = "$%d" % _running_bank_value
 
@@ -202,6 +207,7 @@ func dispose() -> void:
 	_remove_post_income_card()
 	_post_income_events.clear()
 	_post_income_by_player.clear()
+	_bankruptcy_events_by_sale_index.clear()
 	_post_income_started = false
 	_post_income_playing = false
 	_post_income_done = false
@@ -219,6 +225,7 @@ func dispose() -> void:
 	_game_state = null
 	_bank_label = null
 	_player_panel = null
+	_bank_break_panel = null
 
 # === 内部方法 ===
 
@@ -704,9 +711,62 @@ func _play_sale_animation(sale: Dictionary) -> void:
 		func() -> void:
 			_spawn_flying_coins(bank_pos, target_pos, revenue, owner_id, dur_fly, coin_delay_step, coin_count),
 		func() -> void:
-			_clear_route_highlight()
-			_preview_current()
+			_on_sale_timeline_finished(sale)
 	)
+
+func _on_sale_timeline_finished(sale: Dictionary) -> void:
+	_clear_route_highlight()
+	await _play_sale_bankruptcy_events(sale)
+	_preview_current()
+
+func _play_sale_bankruptcy_events(sale: Dictionary) -> void:
+	var sale_index := int(sale.get("sale_index", -1))
+	if sale_index < 0:
+		return
+	var events := _consume_sale_bankruptcy_events(sale_index)
+	for event_val in events:
+		if not (event_val is Dictionary):
+			continue
+		await _show_bankruptcy_panel_for_event(event_val)
+
+func _consume_sale_bankruptcy_events(sale_index: int) -> Array:
+	if not _bankruptcy_events_by_sale_index.has(sale_index):
+		return []
+	var list_val = _bankruptcy_events_by_sale_index.get(sale_index, [])
+	_bankruptcy_events_by_sale_index.erase(sale_index)
+	if not (list_val is Array):
+		return []
+	return (list_val as Array).duplicate(true)
+
+func _show_bankruptcy_panel_for_event(event: Dictionary) -> void:
+	if _state != State.PLAYING:
+		return
+	if not is_instance_valid(_bank_break_panel):
+		return
+
+	var kind := str(event.get("kind", "")).strip_edges()
+	var count := 1
+	if kind == "second":
+		count = 2
+	elif kind == "first":
+		count = 1
+	elif int(event.get("broke_count", 0)) >= 2:
+		count = 2
+
+	var bank_before := int(event.get("bank_total_before", _running_bank_value))
+	var bank_after := int(event.get("bank_total_after", _running_bank_value))
+	if _bank_break_panel.has_method("set_bankruptcy_info"):
+		_bank_break_panel.call("set_bankruptcy_info", count, bank_before, bank_after, event.duplicate(true))
+
+	if _bank_break_panel.has_method("show_with_animation"):
+		_bank_break_panel.call("show_with_animation")
+	else:
+		_bank_break_panel.visible = true
+
+	while _state == State.PLAYING and is_instance_valid(_bank_break_panel) and bool(_bank_break_panel.visible):
+		if _scene == null or not is_instance_valid(_scene):
+			return
+		await _scene.get_tree().process_frame
 
 func _play_post_house_income_sequence() -> void:
 	if _post_income_done or _post_income_playing:
@@ -928,6 +988,45 @@ func _remove_post_income_card() -> void:
 	if is_instance_valid(_post_income_card):
 		DinnertimeAnimationPostIncomeCardClass.remove(_post_income_card)
 	_post_income_card = null
+
+func _build_bankruptcy_events_by_sale_index(settlement_data: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	var events_val = settlement_data.get("bankruptcy_events", null)
+	if not (events_val is Array):
+		return out
+	var events: Array = events_val
+	for evt_val in events:
+		if not (evt_val is Dictionary):
+			continue
+		var evt: Dictionary = evt_val
+		if str(evt.get("timeline_stage", "")).strip_edges() != "sale":
+			continue
+		var sale_index := int(evt.get("sale_index", -1))
+		if sale_index < 0:
+			continue
+		var bucket: Array = []
+		if out.has(sale_index):
+			var cur = out[sale_index]
+			if cur is Array:
+				bucket = cur
+		bucket.append(evt.duplicate(true))
+		out[sale_index] = bucket
+	return out
+
+func _sum_bankruptcy_reserve_added(settlement_data: Dictionary) -> int:
+	var total := 0
+	var events_val = settlement_data.get("bankruptcy_events", null)
+	if not (events_val is Array):
+		return total
+	var events: Array = events_val
+	for evt_val in events:
+		if not (evt_val is Dictionary):
+			continue
+		var evt: Dictionary = evt_val
+		if str(evt.get("kind", "")).strip_edges() != "first":
+			continue
+		total += int(evt.get("reserve_added", 0))
+	return total
 
 func _apply_cash_overrides() -> void:
 	if _player_panel != null and is_instance_valid(_player_panel):

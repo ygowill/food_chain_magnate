@@ -6,6 +6,7 @@ const GameOverPanelScene = preload("res://ui/components/game_over/game_over_pane
 const BankBreakPanelScene = preload("res://ui/components/bank_break/bank_break_panel.tscn")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const KIND_CONFIRM_DINNERTIME := "confirm_dinnertime"
 
 const REPLAY_SAVES_DIR := "user://saves"
 
@@ -202,37 +203,113 @@ func _check_bank_break(state: GameState) -> void:
 	var bank_total := int(bank.get("total", 0))
 
 	if broke_count > _last_bank_broke_count:
-		_show_bank_break_panel(broke_count, _last_bank_total, bank_total)
+		var latest_event := _find_latest_bankruptcy_event(state, broke_count)
+		var bank_before := _last_bank_total
+		var bank_after := bank_total
+		if not latest_event.is_empty():
+			if latest_event.has("bank_total_before"):
+				bank_before = int(latest_event.get("bank_total_before", bank_before))
+			if latest_event.has("bank_total_after"):
+				bank_after = int(latest_event.get("bank_total_after", bank_after))
+		if _should_defer_bank_break_to_dinnertime_overlay(state, latest_event):
+			_ensure_bank_break_panel()
+		else:
+			_show_bank_break_panel(broke_count, bank_before, bank_after, latest_event)
 
 	_last_bank_broke_count = broke_count
 	_last_bank_total = bank_total
 
-func _show_bank_break_panel(broke_count: int, bank_before: int, bank_after: int) -> void:
+func _ensure_bank_break_panel() -> void:
+	if _scene == null:
+		return
+	if bank_break_panel != null:
+		return
+	bank_break_panel = BankBreakPanelScene.instantiate()
+	if bank_break_panel.has_signal("bankruptcy_acknowledged"):
+		bank_break_panel.bankruptcy_acknowledged.connect(_on_bank_break_acknowledged)
+	if bank_break_panel.has_signal("game_end_triggered"):
+		bank_break_panel.game_end_triggered.connect(_on_bank_break_game_end_triggered)
+	_scene.add_child(bank_break_panel)
+	if _overlay_controller != null:
+		_overlay_controller.set_bank_break_panel(bank_break_panel)
+
+func _show_bank_break_panel(broke_count: int, bank_before: int, bank_after: int, event_data: Dictionary = {}) -> void:
 	if _scene == null:
 		return
 	if _hide_all.is_valid():
 		_hide_all.call()
 
-	if bank_break_panel == null:
-		bank_break_panel = BankBreakPanelScene.instantiate()
-		if bank_break_panel.has_signal("bankruptcy_acknowledged"):
-			bank_break_panel.bankruptcy_acknowledged.connect(_on_bank_break_acknowledged)
-		if bank_break_panel.has_signal("game_end_triggered"):
-			bank_break_panel.game_end_triggered.connect(_on_bank_break_game_end_triggered)
-		_scene.add_child(bank_break_panel)
-		if _overlay_controller != null:
-			_overlay_controller.set_bank_break_panel(bank_break_panel)
+	_ensure_bank_break_panel()
 
 	if bank_break_panel.has_method("set_bankruptcy_info"):
-		bank_break_panel.set_bankruptcy_info(broke_count, bank_before, bank_after)
+		bank_break_panel.set_bankruptcy_info(broke_count, bank_before, bank_after, event_data)
 
 	if bank_break_panel.has_method("show_with_animation"):
 		bank_break_panel.show_with_animation()
 	else:
 		bank_break_panel.visible = true
 
-	if _center_popup.is_valid():
-		_center_popup.call(bank_break_panel)
+func _find_latest_bankruptcy_event(state: GameState, broke_count: int) -> Dictionary:
+	if state == null or not (state.round_state is Dictionary):
+		return {}
+	var bankruptcy_val = state.round_state.get("bankruptcy", null)
+	if not (bankruptcy_val is Dictionary):
+		return {}
+	var events_val = (bankruptcy_val as Dictionary).get("events", null)
+	if not (events_val is Array):
+		return {}
+	var events: Array = events_val
+	if events.is_empty():
+		return {}
+
+	var target_kind := "first"
+	if broke_count >= 2:
+		target_kind = "second"
+	for i in range(events.size() - 1, -1, -1):
+		var evt_val = events[i]
+		if not (evt_val is Dictionary):
+			continue
+		var evt: Dictionary = evt_val
+		if str(evt.get("kind", "")).strip_edges() == target_kind:
+			return evt.duplicate(true)
+	var last_val = events[events.size() - 1]
+	if last_val is Dictionary:
+		return (last_val as Dictionary).duplicate(true)
+	return {}
+
+func _should_defer_bank_break_to_dinnertime_overlay(state: GameState, latest_event: Dictionary) -> bool:
+	if state == null:
+		return false
+	if str(state.phase) != DefsClass.PHASE_DINNERTIME:
+		return false
+	if latest_event.is_empty():
+		return false
+	if not (state.round_state is Dictionary):
+		return false
+
+	var dt_val = state.round_state.get("dinnertime", null)
+	if not (dt_val is Dictionary):
+		return false
+	var dt: Dictionary = dt_val
+	var dt_breaks_val = dt.get("bankruptcy_events", null)
+	if not (dt_breaks_val is Array):
+		return false
+
+	var pending_map_val = state.round_state.get("pending_phase_actions", null)
+	if not (pending_map_val is Dictionary):
+		return false
+	var pending_for_phase_val = (pending_map_val as Dictionary).get(DefsClass.PHASE_DINNERTIME, null)
+	if not (pending_for_phase_val is Array):
+		return false
+	var pending_for_phase: Array = pending_for_phase_val
+	for item_val in pending_for_phase:
+		if item_val is String and str(item_val) == KIND_CONFIRM_DINNERTIME:
+			return true
+		if item_val is Dictionary:
+			var item: Dictionary = item_val
+			if str(item.get("kind", "")).strip_edges() == KIND_CONFIRM_DINNERTIME:
+				return true
+	return false
 
 func _show_game_over() -> void:
 	if _scene == null or _scene.game_engine == null:

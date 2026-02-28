@@ -45,6 +45,8 @@ static func apply(
 	var sales: Array[Dictionary] = []
 	var skipped: Array[Dictionary] = []
 	var sold_marketed_demand_events: Array[Dictionary] = []
+	var bankruptcy_events: Array[Dictionary] = []
+	var bankruptcy_event_cursor := _read_bankruptcy_events_count(state)
 
 	var warnings: Array[String] = []
 
@@ -163,6 +165,7 @@ static func apply(
 		var owner_id: int = int(winner["owner"])
 		var breakdown: Dictionary = winner["breakdown"]
 		var revenue: int = int(breakdown["revenue"])
+		var sale_index: int = sales.size()
 
 		# 可插拔：路上购买/结算（例如 Coffee：沿路路过餐厅/咖啡店买咖啡）
 		var route_purchases: Array = []
@@ -268,6 +271,21 @@ static func apply(
 			if not pay_result.ok:
 				return Result.failure("晚餐收入支付失败：玩家 %d：%s" % [owner_id, pay_result.error])
 			warnings.append_array(pay_result.warnings)
+			var revenue_breaks := _collect_new_bankruptcy_events(state, bankruptcy_event_cursor, {
+				"timeline_stage": "sale",
+				"sale_index": sale_index,
+				"house_id": house_id,
+				"house_number": house["house_number"],
+				"winner_owner": owner_id,
+				"payment_kind": "revenue",
+				"payment_amount": revenue,
+			})
+			bankruptcy_event_cursor = int(revenue_breaks.get("cursor", bankruptcy_event_cursor))
+			var revenue_break_events_val = revenue_breaks.get("events", [])
+			if revenue_break_events_val is Array:
+				for evt_val in revenue_break_events_val:
+					if evt_val is Dictionary:
+						bankruptcy_events.append(evt_val)
 			income_sales[owner_id] += revenue
 			total_income_before_cfo[owner_id] += revenue
 
@@ -276,6 +294,21 @@ static func apply(
 			if not bonus_result.ok:
 				return Result.failure("晚餐额外奖金支付失败：玩家 %d：%s" % [owner_id, bonus_result.error])
 			warnings.append_array(bonus_result.warnings)
+			var bonus_breaks := _collect_new_bankruptcy_events(state, bankruptcy_event_cursor, {
+				"timeline_stage": "sale",
+				"sale_index": sale_index,
+				"house_id": house_id,
+				"house_number": house["house_number"],
+				"winner_owner": owner_id,
+				"payment_kind": "house_bonus",
+				"payment_amount": house_bonus,
+			})
+			bankruptcy_event_cursor = int(bonus_breaks.get("cursor", bankruptcy_event_cursor))
+			var bonus_break_events_val = bonus_breaks.get("events", [])
+			if bonus_break_events_val is Array:
+				for evt_val in bonus_break_events_val:
+					if evt_val is Dictionary:
+						bankruptcy_events.append(evt_val)
 			income_sale_house_bonus[owner_id] += house_bonus
 			total_income_before_cfo[owner_id] += house_bonus
 
@@ -315,4 +348,46 @@ static func apply(
 		"sales": sales,
 		"skipped": skipped,
 		"sold_marketed_demand_events": sold_marketed_demand_events,
+		"bankruptcy_events": bankruptcy_events,
 	}).with_warnings(warnings)
+
+static func _read_bankruptcy_events_count(state: GameState) -> int:
+	if state == null or not (state.round_state is Dictionary):
+		return 0
+	var bankruptcy_val = state.round_state.get("bankruptcy", null)
+	if not (bankruptcy_val is Dictionary):
+		return 0
+	var events_val = (bankruptcy_val as Dictionary).get("events", null)
+	if not (events_val is Array):
+		return 0
+	return (events_val as Array).size()
+
+static func _collect_new_bankruptcy_events(state: GameState, cursor: int, meta: Dictionary) -> Dictionary:
+	var out_events: Array[Dictionary] = []
+	if state == null or not (state.round_state is Dictionary):
+		return {"cursor": 0, "events": out_events}
+
+	var bankruptcy_val = state.round_state.get("bankruptcy", null)
+	if not (bankruptcy_val is Dictionary):
+		return {"cursor": 0, "events": out_events}
+
+	var events_val = (bankruptcy_val as Dictionary).get("events", null)
+	if not (events_val is Array):
+		return {"cursor": 0, "events": out_events}
+
+	var events: Array = events_val
+	var start := maxi(0, cursor)
+	for i in range(start, events.size()):
+		var evt_val = events[i]
+		if not (evt_val is Dictionary):
+			continue
+		var evt: Dictionary = (evt_val as Dictionary).duplicate(true)
+		for k in meta.keys():
+			if not (k is String):
+				continue
+			evt[str(k)] = meta[k]
+		out_events.append(evt)
+	return {
+		"cursor": events.size(),
+		"events": out_events,
+	}

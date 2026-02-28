@@ -23,6 +23,12 @@ static func pay_bank_to_player(state: GameState, player_id: int, amount: int, re
 	var warnings: Array[String] = []
 	warnings.append_array(ensure.warnings)
 
+	# 规则语义：银行“被耗尽（=0）”也应立即触发破产，而非必须等到下一次支付不足。
+	var depletion := _trigger_break_on_exact_depletion(state, amount, reason)
+	if not depletion.ok:
+		return depletion
+	warnings.append_array(depletion.warnings)
+
 	var cash_read := _get_player_cash(state, player_id)
 	if not cash_read.ok:
 		return cash_read
@@ -43,6 +49,27 @@ static func pay_bank_to_player(state: GameState, player_id: int, amount: int, re
 			warnings.append_array(ms100.warnings)
 
 	return Result.success().with_warnings(warnings)
+
+static func _trigger_break_on_exact_depletion(state: GameState, paid_amount: int, reason: String) -> Result:
+	if state == null:
+		return Result.failure("BankruptcyRules: state 为空")
+	if not (state.bank is Dictionary):
+		return Result.failure("BankruptcyRules: state.bank 类型错误（期望 Dictionary）")
+	if not state.bank.has("total") or not (state.bank["total"] is int):
+		return Result.failure("BankruptcyRules: state.bank.total 缺失或类型错误（期望 int）")
+	if not state.bank.has("broke_count") or not (state.bank["broke_count"] is int):
+		return Result.failure("BankruptcyRules: state.bank.broke_count 缺失或类型错误（期望 int）")
+
+	if int(state.bank["total"]) != 0:
+		return Result.success()
+
+	var trigger_reason := "%s（支付后耗尽）" % reason
+	var broke_count: int = int(state.bank["broke_count"])
+	if broke_count <= 0:
+		return _break_the_bank_first_time(state, trigger_reason, paid_amount)
+	if broke_count == 1:
+		return _break_the_bank_second_time(state, trigger_reason, paid_amount)
+	return Result.success()
 
 static func _get_player_cash(state: GameState, player_id: int) -> Result:
 	if state == null:

@@ -53,6 +53,7 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 @onready var auto_save_check: CheckBox = %AutoSaveCheck
 @onready var confirm_actions_check: CheckBox = %ConfirmActionsCheck
 @onready var show_hints_check: CheckBox = %ShowHintsCheck
+@onready var replay_load_playable_check: CheckBox = %ReplayLoadPlayableCheck
 @onready var animation_speed_slider: HSlider = %AnimSpeedSlider
 @onready var anim_speed_value_label: Label = %AnimSpeedValue
 
@@ -94,6 +95,7 @@ var _default_settings: Dictionary = {
 	"auto_save": true,
 	"confirm_actions": true,
 	"show_hints": true,
+	"replay_load_playable": false,
 	"animation_speed": 1.0,
 }
 
@@ -155,6 +157,7 @@ func _apply_form_control_styles() -> void:
 	UiStylesClass.apply_check_box_field(auto_save_check)
 	UiStylesClass.apply_check_box_field(confirm_actions_check)
 	UiStylesClass.apply_check_box_field(show_hints_check)
+	UiStylesClass.apply_check_box_field(replay_load_playable_check)
 	UiStylesClass.apply_option_button_field(resolution_option)
 
 # ── 导航 ──────────────────────────────────────────────
@@ -250,6 +253,7 @@ func _load_settings() -> void:
 			"auto_save": config.get_value("game", "auto_save", _default_settings.auto_save),
 			"confirm_actions": config.get_value("game", "confirm_actions", _default_settings.confirm_actions),
 			"show_hints": config.get_value("game", "show_hints", _default_settings.show_hints),
+			"replay_load_playable": config.get_value("game", "replay_load_playable", _default_settings.replay_load_playable),
 			"animation_speed": config.get_value("game", "animation_speed", _default_settings.animation_speed),
 		}
 	else:
@@ -274,6 +278,7 @@ func _save_settings() -> void:
 	config.set_value("game", "auto_save", _current_settings.auto_save)
 	config.set_value("game", "confirm_actions", _current_settings.confirm_actions)
 	config.set_value("game", "show_hints", _current_settings.show_hints)
+	config.set_value("game", "replay_load_playable", _current_settings.replay_load_playable)
 	config.set_value("game", "animation_speed", _current_settings.animation_speed)
 
 	config.save("user://settings.cfg")
@@ -327,6 +332,7 @@ func _update_ui_from_settings() -> void:
 	_set_checkbox(auto_save_check, bool(_current_settings.get("auto_save", _default_settings.auto_save)))
 	_set_checkbox(confirm_actions_check, bool(_current_settings.get("confirm_actions", _default_settings.confirm_actions)))
 	_set_checkbox(show_hints_check, bool(_current_settings.get("show_hints", _default_settings.show_hints)))
+	_set_checkbox(replay_load_playable_check, bool(_current_settings.get("replay_load_playable", _default_settings.replay_load_playable)))
 	if animation_speed_slider != null:
 		animation_speed_slider.value = float(_current_settings.get("animation_speed", _default_settings.animation_speed)) * 100
 
@@ -373,6 +379,7 @@ func _update_settings_from_ui() -> void:
 	_current_settings["auto_save"] = _read_checkbox(auto_save_check, bool(_current_settings.get("auto_save", _default_settings.auto_save)))
 	_current_settings["confirm_actions"] = _read_checkbox(confirm_actions_check, bool(_current_settings.get("confirm_actions", _default_settings.confirm_actions)))
 	_current_settings["show_hints"] = _read_checkbox(show_hints_check, bool(_current_settings.get("show_hints", _default_settings.show_hints)))
+	_current_settings["replay_load_playable"] = _read_checkbox(replay_load_playable_check, bool(_current_settings.get("replay_load_playable", _default_settings.replay_load_playable)))
 	if animation_speed_slider != null:
 		_current_settings["animation_speed"] = float(animation_speed_slider.value) / 100.0
 
@@ -538,6 +545,7 @@ func _sync_globals_runtime_settings() -> void:
 	Globals.log_font_scale = clampf(float(_current_settings.get("log_font_scale", Globals.log_font_scale)), 0.5, 3.0)
 	Globals.confirm_actions = bool(_current_settings.confirm_actions)
 	Globals.show_hints = bool(_current_settings.show_hints)
+	Globals.replay_load_playable = bool(_current_settings.get("replay_load_playable", Globals.replay_load_playable))
 	Globals.animation_speed = float(_current_settings.animation_speed)
 	if Globals.has_method("apply_font_scale"):
 		Globals.apply_font_scale()

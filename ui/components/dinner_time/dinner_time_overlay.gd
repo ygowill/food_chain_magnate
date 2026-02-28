@@ -65,7 +65,10 @@ func set_summary_data(dt: Dictionary) -> void:
 
 static func build_orders_from_settlement(dt: Dictionary) -> Array[Dictionary]:
 	var orders: Array[Dictionary] = []
-	for sale in dt.get("sales", []):
+	var sales_val = dt.get("sales", [])
+	var sales_arr: Array = sales_val if sales_val is Array else []
+	for i in range(sales_arr.size()):
+		var sale = sales_arr[i]
 		if not (sale is Dictionary):
 			continue
 		var req: Dictionary = sale.get("required", {})
@@ -90,6 +93,7 @@ static func build_orders_from_settlement(dt: Dictionary) -> Array[Dictionary]:
 			"house_bonus": int(sale.get("house_bonus", 0)),
 			"demand_variant_id": str(sale.get("demand_variant_id", "")),
 			"winner_owner": int(sale.get("winner_owner", -1)),
+			"sale_index": i,
 			"is_skipped": false,
 		})
 	for skip in dt.get("skipped", []):

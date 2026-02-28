@@ -18,6 +18,7 @@ var _bankruptcy_count: int = 0
 var _is_game_ending: bool = false
 var _bank_total_before: int = 0
 var _bank_total_after: int = 0
+var _event_data: Dictionary = {}
 
 func _ready() -> void:
 	if continue_btn != null:
@@ -30,10 +31,11 @@ func _ready() -> void:
 	# 初始隐藏
 	visible = false
 
-func set_bankruptcy_info(count: int, bank_before: int, bank_after: int) -> void:
+func set_bankruptcy_info(count: int, bank_before: int, bank_after: int, event_data: Dictionary = {}) -> void:
 	_bankruptcy_count = count
 	_bank_total_before = bank_before
 	_bank_total_after = bank_after
+	_event_data = event_data.duplicate(true)
 	_is_game_ending = count >= 2
 
 	_update_display()
@@ -76,18 +78,36 @@ func _rebuild_details() -> void:
 	for child in details_container.get_children():
 		child.queue_free()
 
+	var before_total := _bank_total_before
+	if _event_data.has("bank_total_before"):
+		before_total = int(_event_data.get("bank_total_before", before_total))
+	var after_total := _bank_total_after
+	if _event_data.has("bank_total_after"):
+		after_total = int(_event_data.get("bank_total_after", after_total))
+
 	# 添加详情行
-	var before_row := _create_detail_row("破产前银行余额", "$%d" % _bank_total_before)
+	var before_row := _create_detail_row("破产前银行余额", "$%d" % before_total)
 	details_container.add_child(before_row)
 
 	if not _is_game_ending:
-		# 首次破产：显示注资信息
-		var inject_amount := 50  # 默认注资金额，可从 GameState 获取
+		# 首次破产：显示注资和各玩家揭示的储备卡详情
+		var inject_amount := int(_event_data.get("reserve_added", maxi(0, after_total - before_total)))
 		var inject_row := _create_detail_row("银行注资", "+$%d" % inject_amount, Color(0.28, 0.55, 0.22, 1))
 		details_container.add_child(inject_row)
 
-		var after_row := _create_detail_row("破产后银行余额", "$%d" % _bank_total_after)
+		var after_row := _create_detail_row("破产后银行余额", "$%d" % after_total)
 		details_container.add_child(after_row)
+
+		var revealed_cards := _read_revealed_cards()
+		if not revealed_cards.is_empty():
+			details_container.add_child(HSeparator.new())
+			for item in revealed_cards:
+				var pid := int(item.get("player_id", -1))
+				var row := _create_detail_row(
+					"%s 储备卡" % _player_display_name(pid),
+					_format_revealed_card(item)
+				)
+				details_container.add_child(row)
 
 	# 破产次数
 	var sep := HSeparator.new()
@@ -104,6 +124,14 @@ func _rebuild_details() -> void:
 		warning_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		warning_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 		details_container.add_child(warning_label)
+
+	var trigger_reason := str(_event_data.get("trigger_reason", "")).strip_edges()
+	if not trigger_reason.is_empty():
+		details_container.add_child(_create_detail_row("触发原因", trigger_reason))
+
+	var required_payment := int(_event_data.get("required_payment", 0))
+	if required_payment > 0:
+		details_container.add_child(_create_detail_row("触发支付额", "$%d" % required_payment))
 
 func _create_detail_row(label_text: String, value_text: String, value_color: Color = Color(0.17, 0.13, 0.09, 1)) -> HBoxContainer:
 	var row := HBoxContainer.new()
@@ -136,3 +164,44 @@ func _hide_with_animation() -> void:
 	var tween := create_tween()
 	tween.tween_property(self, "modulate", Color(1, 1, 1, 0), 0.3)
 	tween.tween_callback(func(): visible = false)
+
+func _read_revealed_cards() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var revealed_val = _event_data.get("revealed_cards", null)
+	if not (revealed_val is Array):
+		return out
+	for item_val in revealed_val:
+		if not (item_val is Dictionary):
+			continue
+		out.append((item_val as Dictionary).duplicate(true))
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("player_id", -1)) < int(b.get("player_id", -1))
+	)
+	return out
+
+func _player_display_name(player_id: int) -> String:
+	if player_id >= 0 and Globals != null and Globals.has_method("get_player_name"):
+		var name := str(Globals.get_player_name(player_id)).strip_edges()
+		if not name.is_empty():
+			return name
+	if player_id >= 0:
+		return "玩家 %d" % (player_id + 1)
+	return "玩家 ?"
+
+func _format_revealed_card(item: Dictionary) -> String:
+	var card_val = item.get("card", null)
+	var card: Dictionary = card_val if card_val is Dictionary else {}
+
+	var selected_index := int(item.get("selected_index", -1))
+	var card_type := int(card.get("type", -1))
+	var cash := int(card.get("cash", 0))
+	var slots := int(card.get("ceo_slots", 0))
+
+	var parts: Array[String] = []
+	if selected_index >= 0:
+		parts.append("选项#%d" % (selected_index + 1))
+	if card_type >= 0:
+		parts.append("类型 %d" % card_type)
+	parts.append("注资 $%d" % cash)
+	parts.append("CEO 槽位 %d" % slots)
+	return "，".join(parts)

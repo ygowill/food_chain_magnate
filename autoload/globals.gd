@@ -52,6 +52,7 @@ var ui_layout_version: int = 2 # 仅支持新布局（v2）
 var confirm_actions: bool = true
 var show_hints: bool = true
 var animation_speed: float = 1.0
+var replay_load_playable: bool = false # 载入回放后直接进入可操作模式（非只读回放）
 var show_tile_ids: bool = false
 var show_cell_hover_tooltip: bool = false
 var font_scale: float = 1.1
@@ -105,6 +106,7 @@ func _load_settings() -> void:
 		confirm_actions = bool(config.get_value("game", "confirm_actions", true))
 		show_hints = bool(config.get_value("game", "show_hints", true))
 		animation_speed = float(config.get_value("game", "animation_speed", 1.0))
+		replay_load_playable = bool(config.get_value("game", "replay_load_playable", false))
 
 		var mods_val = config.get_value("game", "enabled_modules_v2", null)
 		if mods_val is Array and not Array(mods_val).is_empty():

@@ -199,6 +199,7 @@ func _on_settings_changed(settings: Dictionary) -> void:
 
 	Globals.confirm_actions = bool(settings.get("confirm_actions", Globals.confirm_actions))
 	Globals.show_hints = bool(settings.get("show_hints", Globals.show_hints))
+	Globals.replay_load_playable = bool(settings.get("replay_load_playable", Globals.replay_load_playable))
 	Globals.animation_speed = float(settings.get("animation_speed", Globals.animation_speed))
 
 	# 字体倍率：允许在运行时立即生效（主要用于调试可读性）。
@@ -773,7 +774,7 @@ func _start_dinnertime_animation(dt_data: Dictionary, state: GameState) -> void:
 
 	_dinnertime_anim_controller = DinnertimeAnimControllerClass.new()
 	_dinnertime_anim_controller.settlement_completed.connect(_on_dinnertime_anim_completed)
-	_dinnertime_anim_controller.start(dt_data, state, _scene, _map_canvas, bank_label, _player_panel)
+	_dinnertime_anim_controller.start(dt_data, state, _scene, _map_canvas, bank_label, _player_panel, _bank_break_panel)
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_skip_bank_sync"):
 		_ui_sync_controller.set_skip_bank_sync(true)
 

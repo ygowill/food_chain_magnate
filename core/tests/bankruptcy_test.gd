@@ -16,15 +16,75 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r1.ok:
 		return r1
 
-	var r2 := _test_second_bankruptcy_ends_game(seed_val)
+	var r2 := _test_first_bankruptcy_on_exact_zero(seed_val)
 	if not r2.ok:
 		return r2
+
+	var r3 := _test_second_bankruptcy_ends_game(seed_val)
+	if not r3.ok:
+		return r3
 
 	return Result.success({
 		"player_count": player_count,
 		"seed": seed_val,
-		"cases": 2,
+		"cases": 3,
 	})
+
+static func _test_first_bankruptcy_on_exact_zero(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := engine.get_state()
+	_force_turn_order(state)
+	_apply_test_map(state)
+
+	for pid in range(2):
+		state.players[pid]["reserve_cards"] = [{"type": 10, "cash": 20, "ceo_slots": 4}]
+		state.players[pid]["reserve_card_selected"] = 0
+		state.players[pid]["reserve_card_revealed"] = false
+
+	# 预置银行为 10，晚餐支付 10 后应“刚好耗尽”并立即触发首次破产。
+	var bank_before: int = int(state.bank.get("total", 0))
+	var drain := bank_before - 10
+	if drain <= 0:
+		return Result.failure("测试前置失败：银行初始资金过低: %d" % bank_before)
+	var drain_result := StateUpdaterClass.player_receive_from_bank(state, 1, drain)
+	if not drain_result.ok:
+		return Result.failure("预置转账失败: %s" % drain_result.error)
+	if int(state.bank.get("total", 0)) != 10:
+		return Result.failure("预置转账后银行应为 10，实际: %d" % int(state.bank.get("total", 0)))
+
+	_set_house_demands(state, "house_left", [{"product": "burger"}])
+	state.players[0]["inventory"]["burger"] = 1
+	state.players[1]["inventory"]["burger"] = 0
+
+	var adv := _advance_to_dinnertime(engine)
+	if not adv.ok:
+		return adv
+
+	state = engine.get_state()
+	if state.phase != DefsClass.PHASE_PAYDAY:
+		return Result.failure("当前应为 Payday（Dinnertime 已自动结算跳过），实际: %s" % state.phase)
+	if int(state.bank.get("broke_count", 0)) != 1:
+		return Result.failure("到 0 后应立即触发首次破产，实际 broke_count=%d" % int(state.bank.get("broke_count", 0)))
+	if int(state.bank.get("total", 0)) != 40:
+		return Result.failure("精确耗尽后首次破产余额不匹配: %d != 40" % int(state.bank.get("total", 0)))
+
+	var bankruptcy: Dictionary = state.round_state.get("bankruptcy", {})
+	var events: Array = bankruptcy.get("events", [])
+	if events.is_empty():
+		return Result.failure("round_state.bankruptcy.events 不应为空")
+	var first_event: Dictionary = events[0] if events[0] is Dictionary else {}
+	if str(first_event.get("kind", "")) != "first":
+		return Result.failure("首个破产事件 kind 应为 first，实际: %s" % str(first_event.get("kind", null)))
+	if int(first_event.get("bank_total_before", -1)) != 0:
+		return Result.failure("精确耗尽后首次破产 bank_total_before 应为 0，实际: %s" % str(first_event.get("bank_total_before", null)))
+	if int(first_event.get("required_payment", -1)) != 10:
+		return Result.failure("精确耗尽后 required_payment 应为 10，实际: %s" % str(first_event.get("required_payment", null)))
+
+	return Result.success()
 
 static func _test_first_bankruptcy(seed_val: int) -> Result:
 	var engine := GameEngine.new()

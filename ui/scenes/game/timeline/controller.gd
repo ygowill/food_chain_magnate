@@ -221,6 +221,10 @@ func start_replay_from_file(file_path: String) -> void:
 	if file_path.is_empty():
 		return
 	_replay_file_path = file_path
+	var started_from_main_menu := _startup_replay_from_main_menu
+	var replay_load_playable := false
+	if Globals != null:
+		replay_load_playable = bool(Globals.replay_load_playable)
 
 	# 若是从对局中进入回放：保留原日志，退出回放时可恢复。
 	if not _replay_mode_active and is_instance_valid(_game_log_panel) and _game_log_panel.has_method("get_entries"):
@@ -230,24 +234,80 @@ func start_replay_from_file(file_path: String) -> void:
 	var load_result: Result = engine.load_from_file(file_path)
 	if not load_result.ok:
 		GameLog.error("Game", "回放加载失败: %s" % load_result.error)
-		if _startup_replay_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
+		if started_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
 			SceneManager.hide_loading()
 		if _show_confirm.is_valid():
 			_show_confirm.call("回放加载失败", load_result.error, Callable(), Callable())
 		return
 
-	if _startup_replay_from_main_menu and Globals != null and Globals.has_method("sync_runtime_config_from_engine"):
+	if started_from_main_menu and Globals != null and Globals.has_method("sync_runtime_config_from_engine"):
 		Globals.sync_runtime_config_from_engine(engine)
+
+	if replay_load_playable:
+		var to_latest := _move_loaded_engine_to_latest_state(engine)
+		if not to_latest.ok:
+			GameLog.error("Game", "回放载入后进入可操作模式失败: %s" % to_latest.error)
+			if started_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
+				SceneManager.hide_loading()
+			if _show_confirm.is_valid():
+				_show_confirm.call("回放加载失败", to_latest.error, Callable(), Callable())
+			return
+		_enter_loaded_archive_as_playable(engine)
+		if started_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
+			SceneManager.hide_loading()
+		if started_from_main_menu and _host != null and is_instance_valid(_host):
+			_host.call_deferred("_start_background_ui_warmup")
+		return
 
 	_enter_replay_mode(engine)
 	_apply_full_replay_log_timeline(engine)
 	if _show_game_log_panel_in_right_panel.is_valid():
 		_show_game_log_panel_in_right_panel.call()
 
-	if _startup_replay_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
+	if started_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
 		SceneManager.hide_loading()
-	if _startup_replay_from_main_menu and _host != null and is_instance_valid(_host):
+	if started_from_main_menu and _host != null and is_instance_valid(_host):
 		_host.call_deferred("_start_background_ui_warmup")
+
+func _move_loaded_engine_to_latest_state(engine: GameEngine) -> Result:
+	if engine == null:
+		return Result.failure("回放载入后进入可操作模式失败：engine 为空")
+	var head_index := engine.command_history.size() - 1
+	if int(engine.current_command_index) == head_index:
+		return Result.success()
+	var rewind_r := engine.rewind_to_command(head_index)
+	if not rewind_r.ok:
+		return Result.failure("回放载入后进入可操作模式失败：无法定位到最新状态: %s" % rewind_r.error)
+	return Result.success()
+
+func _enter_loaded_archive_as_playable(engine: GameEngine) -> void:
+	if engine == null:
+		return
+
+	# “可继续操作”模式不是只读回放，不应再沿用“退出回放返回主菜单”的行为。
+	_startup_replay_from_main_menu = false
+
+	_replay_mode_active = false
+	_replay_original_engine = null
+	_replay_original_log_entries.clear()
+	_replay_step_timeline.clear()
+	_replay_head_step_index = -1
+	_replay_cursor_step_index = -1
+	_history_step_timeline_active = false
+	_history_step_timeline.clear()
+	_history_head_step_index = -1
+	_history_cursor_step_index = -1
+	_timeline_edit_mode_active = false
+	_manual_replay_enabled = false
+	_sync_log_panel_replay_toggle_state(false)
+	_hide_replay_bar()
+
+	if _set_active_game_engine.is_valid():
+		_set_active_game_engine.call(engine)
+	apply_live_log_timeline_from_engine()
+	_force_full_panel_sync_next_update = true
+	if _update_ui.is_valid():
+		_update_ui.call()
 
 func sync_timeline_ui(head_index: int, cursor_index: int, state: GameState) -> void:
 	if is_instance_valid(_game_log_panel):
