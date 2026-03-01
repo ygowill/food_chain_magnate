@@ -14,6 +14,7 @@ signal highlight_requested(action_id: String, rotation: int)
 signal ui_state_changed()
 
 @onready var hint_label: Label = $HintMargin/HintPanel/HintLabel
+@onready var hint_margin: Control = $HintMargin
 
 var _mode: String = "place_house"  # place_house | add_garden
 var _selected_position: Vector2i = Vector2i(-1, -1)
@@ -31,6 +32,8 @@ const DEFAULT_HOUSE_NUMBER_SUPPLY := [1, 3, 6, 9, 11, 14, 17, 19]
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if is_instance_valid(hint_margin):
+		hint_margin.visible = false
 	_update_ui()
 	visible = false
 

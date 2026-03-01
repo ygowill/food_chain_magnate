@@ -14,6 +14,7 @@ signal ui_state_changed()
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 
 @onready var hint_label: Label = $HintMargin/HintPanel/HintLabel
+@onready var hint_margin: Control = $HintMargin
 
 var _mode: String = "" # action_id
 var _selected_position: Vector2i = Vector2i(-1, -1)
@@ -26,6 +27,8 @@ var _validation_message: String = ""
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if is_instance_valid(hint_margin):
+		hint_margin.visible = false
 	_update_ui()
 	visible = false
 

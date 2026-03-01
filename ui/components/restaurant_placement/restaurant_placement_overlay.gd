@@ -33,6 +33,8 @@ var _hint_text: String = ""
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if hint_margin != null:
+		hint_margin.visible = false
 	_update_ui()
 	visible = false
 
@@ -274,14 +276,12 @@ func _update_hint() -> void:
 			next_hint = "放置位置: (%d,%d) 旋转:%d°" % [_selected_position.x, _selected_position.y, _selected_rotation]
 
 	_hint_text = next_hint
-	if hint_label == null:
-		return
 
-	# 开局「放置餐厅」时，提示文字已在右侧上下文面板展示；地图顶部不再重复显示纯文字条。
-	var show_inline_hint := not (_mode == "place_restaurant" and _validation_ok and _selected_position == INVALID_POS)
+	# 提示文字已在右侧动作面板的上下文区域展示；地图顶部不再重复显示纯文字条。
 	if hint_margin != null:
-		hint_margin.visible = show_inline_hint
-	hint_label.text = _hint_text if show_inline_hint else ""
+		hint_margin.visible = false
+	if hint_label != null:
+		hint_label.text = ""
 
 func _emit_preview() -> void:
 	if _selected_position == INVALID_POS:
