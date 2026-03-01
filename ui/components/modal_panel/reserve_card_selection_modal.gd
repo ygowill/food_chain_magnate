@@ -27,6 +27,8 @@ var _card_button_group: ButtonGroup = ButtonGroup.new()
 func _ready() -> void:
 	allow_cancel = false
 	allow_peek_map = false
+	# 储备卡选择属于“保密/开局”流程：遮罩应完全覆盖底下的地图与顺位条，避免提前泄露开局动画结果。
+	_overlay_alpha_normal = 1.0
 	super._ready()
 	set_process(false)
 	_apply_visual_styles()
