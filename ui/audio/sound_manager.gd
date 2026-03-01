@@ -134,6 +134,9 @@ func _ready() -> void:
 	_setup_eventbus_auto_sounds()
 	_setup_ui_button_auto_sounds()
 
+func _is_headless_runtime() -> bool:
+	return DisplayServer.get_name() == "headless" or AudioServer.get_driver_name() == "Dummy"
+
 func _create_player_pool() -> void:
 	for i in range(POOL_SIZE):
 		var player := AudioStreamPlayer.new()
@@ -233,7 +236,7 @@ func set_auto_event_sounds_enabled(enabled: bool) -> void:
 	_auto_event_sounds_enabled = enabled
 
 func _setup_eventbus_auto_sounds() -> void:
-	if OS.has_feature("headless"):
+	if _is_headless_runtime():
 		return
 	if not _auto_event_sounds_enabled:
 		return
@@ -262,7 +265,7 @@ func _teardown_eventbus_auto_sounds() -> void:
 	_eventbus_source = ""
 
 func _on_eventbus_auto_sound_event(_event: Dictionary) -> void:
-	if OS.has_feature("headless"):
+	if _is_headless_runtime():
 		return
 	if not _auto_event_sounds_enabled:
 		return
@@ -285,7 +288,7 @@ func set_auto_ui_button_sounds_enabled(enabled: bool) -> void:
 	_auto_ui_button_sounds_enabled = enabled
 
 func _setup_ui_button_auto_sounds() -> void:
-	if OS.has_feature("headless"):
+	if _is_headless_runtime():
 		return
 	if not _auto_ui_button_sounds_enabled:
 		return
@@ -314,7 +317,7 @@ func _teardown_ui_button_auto_sounds() -> void:
 			sig.disconnect(_auto_ui_tree_cb)
 
 func _on_scene_tree_node_added(node: Node) -> void:
-	if OS.has_feature("headless"):
+	if _is_headless_runtime():
 		return
 	if not _auto_ui_button_sounds_enabled:
 		return
@@ -340,7 +343,7 @@ func _hook_ui_button(btn: BaseButton) -> void:
 			sig.connect(_auto_ui_button_cb)
 
 func _on_auto_ui_button_pressed() -> void:
-	if OS.has_feature("headless"):
+	if _is_headless_runtime():
 		return
 	if not _auto_ui_button_sounds_enabled:
 		return

@@ -10,10 +10,22 @@ var _sound_manager: Node = null
 var _music_manager: Node = null
 
 func _ready() -> void:
+	# 注意：作为 Autoload 时，Root 仍可能处于“正在挂载子节点”的阶段，
+	# 直接 add_child 会失败。统一延迟一帧初始化可避免启动竞态。
+	call_deferred("_bootstrap")
+
+func _bootstrap() -> void:
 	_setup_audio_buses()
 	_initialize_managers()
-	call_deferred("_ensure_bgm_is_playing")
+	_ensure_bgm_is_playing()
 	set_process_input(true)
+
+func _notification(what: int) -> void:
+	# macOS 下，从 Editor 启动时游戏窗口可能先处于未聚焦状态；
+	# 首次点击往往只会聚焦窗口（不会触发 UI pressed 事件），导致“主菜单没声音”。
+	# 在获取焦点时再补一次播放，可显著提升首屏体验。
+	if what == Node.NOTIFICATION_APPLICATION_FOCUS_IN:
+		call_deferred("_ensure_bgm_is_playing")
 
 func _setup_audio_buses() -> void:
 	# 检查是否已有音频总线配置
@@ -74,7 +86,7 @@ func get_music_manager() -> Node:
 	return _music_manager
 
 func _ensure_bgm_is_playing() -> void:
-	if OS.has_feature("headless"):
+	if _is_headless_runtime():
 		return
 	var mm := MusicManager.get_instance()
 	if mm == null or not is_instance_valid(mm):
@@ -85,7 +97,7 @@ func _ensure_bgm_is_playing() -> void:
 		mm.call("play", MusicManager.MusicTrack.MENU, false)
 
 func _input(event: InputEvent) -> void:
-	if OS.has_feature("headless"):
+	if _is_headless_runtime():
 		return
 	if event == null:
 		return
@@ -108,3 +120,6 @@ func _input(event: InputEvent) -> void:
 	# 用第一次用户交互兜底触发 BGM 播放（尤其对 Web/平台音频解锁更稳健）
 	set_process_input(false)
 	_ensure_bgm_is_playing()
+
+func _is_headless_runtime() -> bool:
+	return DisplayServer.get_name() == "headless" or AudioServer.get_driver_name() == "Dummy"

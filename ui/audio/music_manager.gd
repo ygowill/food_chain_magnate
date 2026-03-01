@@ -74,7 +74,7 @@ func _ready() -> void:
 	call_deferred("_start_boot_autoplay")
 
 func _start_boot_autoplay() -> void:
-	if OS.has_feature("headless"):
+	if _is_headless_runtime():
 		return
 	if not ResourceLoader.exists(SINGLE_TRACK_PATH):
 		return
@@ -87,7 +87,7 @@ func _start_boot_autoplay() -> void:
 func _boot_autoplay_tick() -> void:
 	if not _boot_autoplay_active:
 		return
-	if OS.has_feature("headless"):
+	if _is_headless_runtime():
 		_boot_autoplay_active = false
 		return
 	if is_playing():
@@ -115,6 +115,9 @@ func _boot_autoplay_tick() -> void:
 		_boot_autoplay_active = false
 		return
 	tree.create_timer(BOOT_AUTOPLAY_INTERVAL_SEC).timeout.connect(_boot_autoplay_tick)
+
+func _is_headless_runtime() -> bool:
+	return DisplayServer.get_name() == "headless" or AudioServer.get_driver_name() == "Dummy"
 
 func _create_players() -> void:
 	if _player_a != null and is_instance_valid(_player_a) and _player_b != null and is_instance_valid(_player_b):

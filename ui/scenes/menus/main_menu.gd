@@ -71,12 +71,12 @@ func _ready() -> void:
 	_kick_bgm_autoplay()
 
 func _kick_bgm_autoplay() -> void:
-	if OS.has_feature("headless"):
+	if _is_headless_runtime():
 		return
 	call_deferred("_deferred_kick_bgm_autoplay")
 
 func _deferred_kick_bgm_autoplay() -> void:
-	if OS.has_feature("headless"):
+	if _is_headless_runtime():
 		return
 	# 避免启动时序导致的第一次播放无声：等待至少两帧再触发一次。
 	await get_tree().process_frame
@@ -85,6 +85,9 @@ func _deferred_kick_bgm_autoplay() -> void:
 	if mm == null or not is_instance_valid(mm):
 		return
 	mm.play(MusicManager.MusicTrack.MENU, false)
+
+func _is_headless_runtime() -> bool:
+	return DisplayServer.get_name() == "headless" or AudioServer.get_driver_name() == "Dummy"
 
 func _apply_title_logo_texture() -> void:
 	if title_logo == null:
