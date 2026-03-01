@@ -68,6 +68,23 @@ func _ready() -> void:
 	UiStylesClass.apply_button_secondary(settings_button)
 	UiStylesClass.apply_button_secondary(quit_button)
 	new_game_button.grab_focus()
+	_kick_bgm_autoplay()
+
+func _kick_bgm_autoplay() -> void:
+	if OS.has_feature("headless"):
+		return
+	call_deferred("_deferred_kick_bgm_autoplay")
+
+func _deferred_kick_bgm_autoplay() -> void:
+	if OS.has_feature("headless"):
+		return
+	# 避免启动时序导致的第一次播放无声：等待至少两帧再触发一次。
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var mm := MusicManager.get_instance()
+	if mm == null or not is_instance_valid(mm):
+		return
+	mm.play(MusicManager.MusicTrack.MENU, false)
 
 func _apply_title_logo_texture() -> void:
 	if title_logo == null:
