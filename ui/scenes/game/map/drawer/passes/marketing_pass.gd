@@ -17,6 +17,9 @@ static func draw_marketing(canvas, cell_size: int) -> void:
 		var anchor: Vector2i = anchor_val
 		if anchor != world_pos:
 			continue
+		if canvas != null and canvas.has_method("is_intro_world_pos_revealed"):
+			if not bool(canvas.call("is_intro_world_pos_revealed", anchor)):
+				continue
 		if not canvas._is_valid_world_pos(anchor):
 			continue
 

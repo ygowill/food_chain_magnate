@@ -32,6 +32,9 @@ static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: A
 		if not (anchor_val is Vector2i):
 			continue
 		var anchor: Vector2i = anchor_val
+		if canvas != null and canvas.has_method("is_intro_world_pos_revealed"):
+			if not bool(canvas.call("is_intro_world_pos_revealed", anchor)):
+				continue
 		var info: Dictionary = canvas._structures_by_anchor[anchor]
 		var piece_id: String = str(info.get("piece_id", "")).strip_edges()
 		if piece_id.is_empty():

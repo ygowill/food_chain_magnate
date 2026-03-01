@@ -38,31 +38,44 @@ var _current_selections: Dictionary = {} # position -> player_id
 var _current_player_id: int = -1
 var _slot_nodes: Array[OrderBadge] = []
 var _selectable: bool = false
+var _intro_roll_active: bool = false
+var _intro_roll_token: int = 0
 
 func _ready() -> void:
 	_apply_layout_style()
 	_rebuild()
 
 func set_player_count(count: int) -> void:
-	_player_count = clampi(count, 0, Globals.MAX_PLAYERS)
+	var c := clampi(count, 0, Globals.MAX_PLAYERS)
+	if _player_count == c:
+		return
+	_player_count = c
 	_rebuild()
 
 func set_game_state(state: GameState) -> void:
 	_game_state = state
 	_ensure_skin()
 	_rebuild_player_logo_ids()
+	if _intro_roll_active:
+		return
 	_update_display()
 
 func set_current_selections(selections: Dictionary) -> void:
 	_current_selections = selections.duplicate()
+	if _intro_roll_active:
+		return
 	_update_display()
 
 func set_current_player(player_id: int) -> void:
 	_current_player_id = player_id
+	if _intro_roll_active:
+		return
 	_update_display()
 
 func set_selectable(can_select: bool) -> void:
 	_selectable = true if can_select else false
+	if _intro_roll_active:
+		return
 	_update_display()
 
 func _apply_layout_style() -> void:
@@ -135,6 +148,8 @@ func _rebuild() -> void:
 		slots_container.add_child(badge)
 		_slot_nodes.append(badge)
 
+	if _intro_roll_active:
+		return
 	_update_display()
 
 func _update_display() -> void:
@@ -255,6 +270,136 @@ func _get_player_restaurant_logo_texture(player_id: int) -> Texture2D:
 	if logo_id < 0 or logo_id >= logo_count:
 		logo_id = _fallback_logo_id_for_player(player_id, _fallback_logo_ids)
 	return _skin.get_restaurant_logo_texture_by_id(logo_id)
+
+func play_intro_roll(final_order: Array, config: Dictionary = {}) -> void:
+	# 仅用于开局“抽顺位”动画；不影响实际 state.turn_order。
+	if OS.has_feature("headless"):
+		_intro_roll_active = false
+		_update_display()
+		return
+
+	var slot_count := _slot_nodes.size()
+	if slot_count <= 0 and _player_count > 0:
+		_intro_roll_active = true
+		_rebuild()
+		slot_count = _slot_nodes.size()
+	if slot_count <= 0:
+		_intro_roll_active = false
+		return
+
+	var final: Array[int] = []
+	for i in range(slot_count):
+		var pid := -1
+		if i < final_order.size():
+			var v = final_order[i]
+			if v is int:
+				pid = int(v)
+			elif v is float:
+				var f: float = float(v)
+				if f == floor(f):
+					pid = int(f)
+		if pid < 0 and _current_selections.has(i):
+			pid = int(_current_selections[i])
+		if pid < 0:
+			pid = i
+		final.append(pid)
+
+	var base_spin_sec := clampf(float(config.get("base_spin_sec", 1.10)), 0.20, 6.00)
+	var stop_gap_sec := clampf(float(config.get("stop_gap_sec", 0.25)), 0.00, 2.00)
+	var tick_min_sec := clampf(float(config.get("tick_min_sec", 0.05)), 0.01, 0.20)
+	var tick_max_sec := clampf(float(config.get("tick_max_sec", 0.18)), tick_min_sec, 0.60)
+
+	var candidates := _get_roll_candidates()
+	if candidates.is_empty():
+		_intro_roll_active = false
+		_update_display()
+		return
+
+	_intro_roll_active = true
+	_intro_roll_token += 1
+	var token := _intro_roll_token
+
+	for slot in _slot_nodes:
+		if not is_instance_valid(slot):
+			continue
+		slot.set_clickable(false)
+		slot.set_highlighted(false)
+		slot.set_empty()
+
+	var rngs: Array[RandomNumberGenerator] = []
+	for i in range(slot_count):
+		var rng := RandomNumberGenerator.new()
+		var seed := int(_state_seed) ^ int(0x524F4C4C) ^ int(i * 4099)
+		rng.seed = seed
+		rng.state = seed
+		rngs.append(rng)
+
+	var stop_at: Array[float] = []
+	var next_tick: Array[float] = []
+	var done: Array[bool] = []
+	for i in range(slot_count):
+		var s := maxf(0.05, base_spin_sec + float(i) * stop_gap_sec)
+		stop_at.append(s)
+		next_tick.append(0.0)
+		done.append(false)
+
+	var start_ms := int(Time.get_ticks_msec())
+	while token == _intro_roll_token:
+		var elapsed := float(int(Time.get_ticks_msec()) - start_ms) / 1000.0
+		var all_done := true
+
+		for i in range(slot_count):
+			if done[i]:
+				continue
+			all_done = false
+
+			var stop_sec := float(stop_at[i])
+			if elapsed >= stop_sec:
+				done[i] = true
+				_apply_slot_preview(_slot_nodes[i], final[i])
+				continue
+
+			if elapsed >= float(next_tick[i]):
+				var t := clampf(elapsed / stop_sec, 0.0, 1.0)
+				var interval := lerpf(tick_min_sec, tick_max_sec, t)
+				next_tick[i] = elapsed + interval
+				var pid := candidates[rngs[i].randi_range(0, candidates.size() - 1)]
+				_apply_slot_preview(_slot_nodes[i], pid)
+
+		if all_done:
+			break
+
+		await get_tree().process_frame
+
+	if token != _intro_roll_token:
+		return
+	_intro_roll_active = false
+	_update_display()
+
+func _get_roll_candidates() -> Array[int]:
+	var ids: Array[int] = []
+	if _game_state != null and (_game_state.players is Array):
+		for i in range(_game_state.players.size()):
+			var p_val = _game_state.players[i]
+			if not (p_val is Dictionary):
+				continue
+			var p: Dictionary = p_val
+			var pid := int(p.get("id", i))
+			if pid >= 0:
+				ids.append(pid)
+	if ids.is_empty():
+		for i in range(_player_count):
+			ids.append(i)
+	return ids
+
+func _apply_slot_preview(slot: OrderBadge, player_id: int) -> void:
+	if not is_instance_valid(slot):
+		return
+	var pid := int(player_id)
+	var tex := _get_player_restaurant_logo_texture(pid)
+	slot.set_player(pid, Globals.get_player_color(pid), false, tex)
+	slot.set_highlighted(false)
+	slot.set_clickable(false)
 
 
 class OrderBadge extends Control:

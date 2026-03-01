@@ -86,6 +86,8 @@ var _warmup_controller = null
 var _debug_panel_controller = null
 var _startup_profile_reported: bool = false
 var _startup_suppress_game_over_modal: bool = false
+var _startup_intro_played: bool = false
+var _startup_intro_running: bool = false
 var _online_waiting_log_auto_opened: bool = false
 var _online_waiting_action_ui_hidden: bool = false
 func _ready() -> void:
@@ -457,6 +459,87 @@ func _update_ui() -> void:
 		_ui_sync_controller.update_ui(do_profile)
 	# 同步后再收敛一次，保证最终显示状态稳定。
 	_sync_online_waiting_log_auto_switch()
+	_start_startup_intro_if_needed()
+
+func _start_startup_intro_if_needed() -> void:
+	if _startup_intro_played or _startup_intro_running:
+		return
+	if OS.has_feature("headless"):
+		_startup_intro_played = true
+		return
+	# 回放/时间线回退：不播放开局动画，避免干扰复盘/测试。
+	if is_replay_mode_active() or is_timeline_read_only_active():
+		_startup_intro_played = true
+		return
+	if _is_online_resync_in_progress():
+		return
+	if game_engine == null:
+		return
+	var state: GameState = game_engine.get_state()
+	if state == null:
+		return
+	# 仅在新开局（Setup，且 ReserveCards 已结束/跳过）播放一次。
+	if int(state.round_number) != 0:
+		_startup_intro_played = true
+		return
+	if str(state.phase) != DefsClass.PHASE_SETUP:
+		_startup_intro_played = true
+		return
+	if str(state.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS:
+		return
+	# 玩家已经开始放置起始餐厅后，不再播放开局动画。
+	for p_val in Array(state.players):
+		if not (p_val is Dictionary):
+			continue
+		var p: Dictionary = p_val
+		var r_val = p.get("restaurants", null)
+		if r_val is Array and not (r_val as Array).is_empty():
+			_startup_intro_played = true
+			return
+
+	_startup_intro_running = true
+	_run_startup_intro()
+
+func _run_startup_intro() -> void:
+	var map_locked := false
+	if is_instance_valid(map_canvas) and map_canvas.has_method("set_interaction_enabled"):
+		map_canvas.call("set_interaction_enabled", false)
+		map_locked = true
+	if is_instance_valid(map_canvas) and map_canvas.has_method("prepare_intro_reveal"):
+		map_canvas.call("prepare_intro_reveal")
+
+	# 先让“空地图”渲染一帧，再开始逐格生成（避免首帧直接看到完整地图）。
+	await get_tree().process_frame
+	if not is_instance_valid(self):
+		return
+
+	var speed := 1.0
+	if Globals != null and "animation_speed" in Globals:
+		speed = maxf(0.1, float(Globals.animation_speed))
+
+	var map_reveal_sec := 1.6 / speed
+	if is_instance_valid(map_canvas) and map_canvas.has_method("play_intro_reveal_animation"):
+		await map_canvas.call("play_intro_reveal_animation", map_reveal_sec)
+
+	if game_engine != null:
+		var state: GameState = game_engine.get_state()
+		if state != null and (state.turn_order is Array):
+			var roll_cfg := {
+				"base_spin_sec": 1.10 / speed,
+				"stop_gap_sec": 0.25 / speed,
+				"tick_min_sec": 0.05 / speed,
+				"tick_max_sec": 0.18 / speed,
+			}
+			if is_instance_valid(turn_order_display) and turn_order_display.has_method("play_intro_roll"):
+				await turn_order_display.call("play_intro_roll", Array(state.turn_order), roll_cfg)
+
+	if is_instance_valid(map_canvas) and map_canvas.has_method("reset_intro_reveal"):
+		map_canvas.call("reset_intro_reveal")
+	if map_locked and is_instance_valid(map_canvas) and map_canvas.has_method("set_interaction_enabled"):
+		map_canvas.call("set_interaction_enabled", true)
+
+	_startup_intro_running = false
+	_startup_intro_played = true
 
 func _on_debug_command_executed(command: String, _result: String) -> void:
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("on_debug_command_executed"):

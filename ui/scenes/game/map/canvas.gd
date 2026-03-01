@@ -69,6 +69,15 @@ var _procure_drinks_hovered_restaurant_anchor: Vector2i = Vector2i(-1, -1) # wor
 var _skin = null
 var _skin_modules_key: String = ""
 
+const _INTRO_VOID_CELL := {"tile_origin": Vector2i(-1, -1), "blocked": false}
+var _interaction_enabled: bool = true
+
+# === 开局动画：地图逐格生成（纯 UI，不影响 state.map）===
+var _intro_reveal_enabled: bool = false
+var _intro_reveal_count: int = 0 # 已揭示的 base cell 数（按 idx(y,x) 线性顺序）
+var _intro_reveal_total: int = 0
+var _intro_reveal_token: int = 0
+
 func _ready() -> void:
 	# 需要让 MapView（ScrollContainer）也能收到滚轮/拖拽等输入，用于缩放/平移。
 	mouse_filter = Control.MOUSE_FILTER_PASS
@@ -172,6 +181,7 @@ func set_map_data(map_data: Dictionary) -> void:
 	_cells = cells
 	_external_cells_by_pos = MapCanvasIndexerClass.parse_external_cells(map_data)
 	_ui_outside_margin_required = _compute_required_ui_outside_margin(map_data)
+	_refresh_intro_reveal_totals()
 
 	_apply_bounds_for_current_margin(true)
 	queue_redraw()
@@ -205,6 +215,11 @@ func clear() -> void:
 	_procure_drinks_restaurant_index_by_anchor.clear()
 	_procure_drinks_selected_restaurant_anchor = Vector2i(-1, -1)
 	_procure_drinks_hovered_restaurant_anchor = Vector2i(-1, -1)
+	_interaction_enabled = true
+	_intro_reveal_enabled = false
+	_intro_reveal_count = 0
+	_intro_reveal_total = 0
+	_intro_reveal_token += 1
 	custom_minimum_size = Vector2.ZERO
 	queue_redraw()
 
@@ -446,8 +461,91 @@ func get_skin():
 	# 供其它 UI（例如 TopBar 全屏面板）复用当前对局 MapSkin，避免重复构建/加载导致卡顿。
 	return _skin
 
+func set_interaction_enabled(enabled: bool) -> void:
+	_interaction_enabled = true if enabled else false
+	if _interaction_enabled:
+		return
+	_selected_pos = Vector2i(-1, -1)
+	_hover_pos = Vector2i(-1, -1)
+	tooltip_text = ""
+	cell_hovered.emit(Vector2i(-1, -1))
+	queue_redraw()
+
+func prepare_intro_reveal() -> void:
+	_refresh_intro_reveal_totals()
+	if _intro_reveal_total <= 0:
+		_intro_reveal_enabled = false
+		return
+	_intro_reveal_enabled = true
+	_intro_reveal_count = 0
+	_intro_reveal_token += 1
+	queue_redraw()
+
+func reset_intro_reveal() -> void:
+	_intro_reveal_enabled = false
+	_refresh_intro_reveal_totals()
+	_intro_reveal_token += 1
+	queue_redraw()
+
+func is_intro_world_pos_revealed(world_pos: Vector2i) -> bool:
+	if not _intro_reveal_enabled:
+		return true
+	if _base_grid_size == Vector2i.ZERO or _map_data.is_empty():
+		return true
+	var map_origin: Vector2i = _map_data.get("map_origin", Vector2i.ZERO)
+	var idx := world_pos + map_origin
+	if not MapUtils.is_valid_pos(idx, _base_grid_size):
+		return true
+	var linear := idx.y * _base_grid_size.x + idx.x
+	return linear < _intro_reveal_count
+
+func play_intro_reveal_animation(duration_sec: float = 1.6) -> void:
+	_refresh_intro_reveal_totals()
+	if _intro_reveal_total <= 0:
+		_intro_reveal_enabled = false
+		return
+
+	if OS.has_feature("headless") or duration_sec <= 0.001:
+		_intro_reveal_enabled = false
+		_intro_reveal_count = _intro_reveal_total
+		queue_redraw()
+		return
+
+	_intro_reveal_enabled = true
+	_intro_reveal_count = 0
+	_intro_reveal_token += 1
+	var token := _intro_reveal_token
+	var start_ms := int(Time.get_ticks_msec())
+	var dur := maxf(0.05, float(duration_sec))
+
+	while token == _intro_reveal_token and _intro_reveal_count < _intro_reveal_total:
+		var elapsed := float(int(Time.get_ticks_msec()) - start_ms) / 1000.0
+		var t := clampf(elapsed / dur, 0.0, 1.0)
+		var target := int(floor(t * float(_intro_reveal_total)))
+		if target <= _intro_reveal_count:
+			target = _intro_reveal_count + 1
+		_intro_reveal_count = mini(target, _intro_reveal_total)
+		queue_redraw()
+		await get_tree().process_frame
+
+	if token != _intro_reveal_token:
+		return
+
+	_intro_reveal_count = _intro_reveal_total
+	_intro_reveal_enabled = false
+	queue_redraw()
+
+func _refresh_intro_reveal_totals() -> void:
+	_intro_reveal_total = maxi(0, int(_base_grid_size.x)) * maxi(0, int(_base_grid_size.y))
+	if not _intro_reveal_enabled:
+		_intro_reveal_count = _intro_reveal_total
+	else:
+		_intro_reveal_count = clampi(_intro_reveal_count, 0, _intro_reveal_total)
+
 func _gui_input(event: InputEvent) -> void:
 	if _grid_size == Vector2i.ZERO:
+		return
+	if not _interaction_enabled:
 		return
 
 	if event is InputEventMouseMotion:
@@ -498,6 +596,8 @@ func _is_valid_world_pos(world_pos: Vector2i) -> bool:
 	return v.x >= 0 and v.x < _grid_size.x and v.y >= 0 and v.y < _grid_size.y
 
 func _is_interactive_world_pos(world_pos: Vector2i) -> bool:
+	if not _interaction_enabled:
+		return false
 	if not _is_valid_world_pos(world_pos):
 		return false
 	if is_world_pos_in_extension_panel(world_pos):
@@ -508,6 +608,10 @@ func _get_cell_world(world_pos: Vector2i) -> Dictionary:
 	var map_origin: Vector2i = _map_data.get("map_origin", Vector2i.ZERO)
 	var idx := world_pos + map_origin
 	if _base_grid_size != Vector2i.ZERO and MapUtils.is_valid_pos(idx, _base_grid_size):
+		if _intro_reveal_enabled:
+			var linear := idx.y * _base_grid_size.x + idx.x
+			if linear >= _intro_reveal_count:
+				return _INTRO_VOID_CELL
 		var row_val = _cells[idx.y]
 		if not (row_val is Array):
 			return {}
