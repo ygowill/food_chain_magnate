@@ -12,6 +12,8 @@ var _music_manager: Node = null
 func _ready() -> void:
 	_setup_audio_buses()
 	_initialize_managers()
+	call_deferred("_ensure_bgm_is_playing")
+	set_process_input(true)
 
 func _setup_audio_buses() -> void:
 	# 检查是否已有音频总线配置
@@ -70,3 +72,39 @@ func get_sound_manager() -> Node:
 
 func get_music_manager() -> Node:
 	return _music_manager
+
+func _ensure_bgm_is_playing() -> void:
+	if OS.has_feature("headless"):
+		return
+	var mm := MusicManager.get_instance()
+	if mm == null or not is_instance_valid(mm):
+		return
+	if mm.has_method("is_playing") and bool(mm.call("is_playing")):
+		return
+	if mm.has_method("play"):
+		mm.call("play", MusicManager.MusicTrack.MENU, false)
+
+func _input(event: InputEvent) -> void:
+	if OS.has_feature("headless"):
+		return
+	if event == null:
+		return
+
+	if event is InputEventMouseButton:
+		var e := event as InputEventMouseButton
+		if not e.pressed:
+			return
+	elif event is InputEventKey:
+		var e := event as InputEventKey
+		if not e.pressed:
+			return
+	elif event is InputEventJoypadButton:
+		var e := event as InputEventJoypadButton
+		if not e.pressed:
+			return
+	else:
+		return
+
+	# 用第一次用户交互兜底触发 BGM 播放（尤其对 Web/平台音频解锁更稳健）
+	set_process_input(false)
+	_ensure_bgm_is_playing()

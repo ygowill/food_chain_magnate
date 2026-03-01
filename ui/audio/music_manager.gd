@@ -18,12 +18,17 @@ enum MusicTrack {
 	GAME_OVER,      # 游戏结束
 }
 
+# 单曲模式：暂时不做多 BGM 切换
+const SINGLE_TRACK_PATH := "res://ui/audio/music/game_bgm.mp3"
+const BOOT_AUTOPLAY_MAX_ATTEMPTS: int = 30
+const BOOT_AUTOPLAY_INTERVAL_SEC: float = 0.25
+
 # 曲目配置
 var _track_config: Dictionary = {
-	MusicTrack.MENU: { "path": "res://ui/audio/music/menu.ogg", "loop": true, "volume": -6.0 },
-	MusicTrack.GAME_CALM: { "path": "res://ui/audio/music/game_calm.ogg", "loop": true, "volume": -9.0 },
-	MusicTrack.GAME_INTENSE: { "path": "res://ui/audio/music/game_intense.ogg", "loop": true, "volume": -6.0 },
-	MusicTrack.GAME_OVER: { "path": "res://ui/audio/music/game_over.ogg", "loop": false, "volume": -3.0 },
+	MusicTrack.MENU: { "path": SINGLE_TRACK_PATH, "loop": true, "volume": 0.0 },
+	MusicTrack.GAME_CALM: { "path": SINGLE_TRACK_PATH, "loop": true, "volume": 0.0 },
+	MusicTrack.GAME_INTENSE: { "path": SINGLE_TRACK_PATH, "loop": true, "volume": 0.0 },
+	MusicTrack.GAME_OVER: { "path": SINGLE_TRACK_PATH, "loop": true, "volume": 0.0 },
 }
 
 # 播放器
@@ -45,6 +50,10 @@ var _muted: bool = false
 var _fade_duration: float = 1.0
 var _fade_tween: Tween = null
 
+# 启动自动播放（增强：重试，避免首帧/音频系统就绪时序问题）
+var _boot_autoplay_attempts: int = 0
+var _boot_autoplay_active: bool = false
+
 # 单例
 static var _instance: MusicManager = null
 
@@ -62,8 +71,59 @@ func _exit_tree() -> void:
 func _ready() -> void:
 	_create_players()
 	_load_settings()
+	call_deferred("_start_boot_autoplay")
+
+func _start_boot_autoplay() -> void:
+	if OS.has_feature("headless"):
+		return
+	if not ResourceLoader.exists(SINGLE_TRACK_PATH):
+		return
+	if _boot_autoplay_active:
+		return
+	_boot_autoplay_active = true
+	_boot_autoplay_attempts = 0
+	_boot_autoplay_tick()
+
+func _boot_autoplay_tick() -> void:
+	if not _boot_autoplay_active:
+		return
+	if OS.has_feature("headless"):
+		_boot_autoplay_active = false
+		return
+	if is_playing():
+		_boot_autoplay_active = false
+		return
+
+	if not ResourceLoader.exists(SINGLE_TRACK_PATH):
+		_boot_autoplay_active = false
+		return
+
+	_boot_autoplay_attempts += 1
+	play(MusicTrack.MENU, false)
+
+	if is_playing():
+		_boot_autoplay_active = false
+		return
+
+	if _boot_autoplay_attempts >= BOOT_AUTOPLAY_MAX_ATTEMPTS:
+		_boot_autoplay_active = false
+		push_warning("MusicManager: BGM 自动播放失败（已重试 %d 次）" % _boot_autoplay_attempts)
+		return
+
+	var tree := get_tree()
+	if tree == null:
+		_boot_autoplay_active = false
+		return
+	tree.create_timer(BOOT_AUTOPLAY_INTERVAL_SEC).timeout.connect(_boot_autoplay_tick)
 
 func _create_players() -> void:
+	if _player_a != null and is_instance_valid(_player_a) and _player_b != null and is_instance_valid(_player_b):
+		if _active_player == null or not is_instance_valid(_active_player):
+			_active_player = _player_a
+		if _inactive_player == null or not is_instance_valid(_inactive_player):
+			_inactive_player = _player_b
+		return
+
 	_player_a = AudioStreamPlayer.new()
 	_player_a.bus = "Music"
 	_player_a.finished.connect(_on_player_finished.bind(_player_a))
@@ -80,7 +140,10 @@ func _create_players() -> void:
 # === 公共方法 ===
 
 func play(track: MusicTrack, crossfade: bool = true) -> void:
-	if track == _current_track and _current_state == MusicState.PLAYING:
+	if _active_player == null or not is_instance_valid(_active_player) or _inactive_player == null or not is_instance_valid(_inactive_player):
+		_create_players()
+
+	if track == _current_track and is_playing():
 		return
 
 	if track == MusicTrack.NONE:
@@ -134,7 +197,9 @@ func resume() -> void:
 	_current_state = MusicState.PLAYING
 
 func is_playing() -> bool:
-	return _current_state == MusicState.PLAYING
+	if _active_player == null or not is_instance_valid(_active_player):
+		return false
+	return _active_player.playing and not _active_player.stream_paused
 
 func get_current_track() -> MusicTrack:
 	return _current_track
