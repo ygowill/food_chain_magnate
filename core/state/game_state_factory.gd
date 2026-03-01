@@ -66,6 +66,8 @@ static func apply_initial_state(
 		"demand_cap_normal": int(cfg.rule_demand_cap_normal),
 		"demand_cap_with_garden": int(cfg.rule_demand_cap_with_garden),
 		"fridge_capacity_per_product": int(cfg.rule_fridge_capacity_per_product),
+		"bankruptcy_max_breaks": int(cfg.rule_bankruptcy_max_breaks),
+		"bankruptcy_extra_reserve_per_player": int(cfg.rule_bankruptcy_extra_reserve_per_player),
 	}
 	var one_x_map: Dictionary = cfg.rule_one_x_employee_copies_by_player_count
 	var pc_key := str(player_count)
@@ -113,7 +115,21 @@ static func apply_initial_state(
 	var milestone_pool_read := PoolBuilderClass.build_milestone_pool(milestones)
 	if not milestone_pool_read.ok:
 		return Result.failure("构建 milestone_pool 失败: %s" % milestone_pool_read.error)
-	state.milestone_pool = milestone_pool_read.value
+	var milestone_pool: Array[String] = milestone_pool_read.value
+	if not bool(cfg.milestones_enabled):
+		milestone_pool = []
+	elif not cfg.milestones_disabled_ids.is_empty():
+		var disabled := {}
+		for mid in cfg.milestones_disabled_ids:
+			var id := str(mid).strip_edges()
+			if not id.is_empty():
+				disabled[id] = true
+		var filtered: Array[String] = []
+		for id2 in milestone_pool:
+			if not disabled.has(id2):
+				filtered.append(id2)
+		milestone_pool = filtered
+	state.milestone_pool = milestone_pool
 
 	# MapRuntime 会在 GameEngine.initialize 时写入 baked map；这里只确保类型正确并清除运行时缓存。
 	state.map = {}

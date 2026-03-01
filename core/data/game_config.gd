@@ -20,6 +20,12 @@ var rule_demand_cap_normal: int = 3
 var rule_demand_cap_with_garden: int = 5
 var rule_fridge_capacity_per_product: int = 10
 var rule_one_x_employee_copies_by_player_count: Dictionary = {}
+var rule_bankruptcy_max_breaks: int = 2
+var rule_bankruptcy_extra_reserve_per_player: int = 0
+
+# === milestones ===
+var milestones_enabled: bool = true
+var milestones_disabled_ids: Array[String] = []
 
 # === player starting state ===
 var player_starting_cash: int = 0
@@ -199,6 +205,19 @@ func apply_overrides(overrides: Dictionary) -> void:
 			"rules.one_x_employee_copies_by_player_count":
 				if val is Dictionary:
 					rule_one_x_employee_copies_by_player_count = val.duplicate()
+			"rules.bankruptcy_max_breaks":
+				rule_bankruptcy_max_breaks = clampi(int(val), 1, 2)
+			"rules.bankruptcy_extra_reserve_per_player":
+				rule_bankruptcy_extra_reserve_per_player = maxi(0, int(val))
+			"milestones.enabled":
+				milestones_enabled = bool(val)
+			"milestones.disabled_ids":
+				if val is Array:
+					milestones_disabled_ids = []
+					for item in val:
+						var id := str(item).strip_edges()
+						if not id.is_empty():
+							milestones_disabled_ids.append(id)
 			"player.starting_cash":
 				player_starting_cash = int(val)
 			"player.starting_company_structure.ceo_slots":

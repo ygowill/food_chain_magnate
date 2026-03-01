@@ -11,6 +11,7 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 signal selection_changed(enabled_modules_v2: Array)
 signal notes_changed(text: String)
 signal load_failed(message: String)
+signal game_options_changed(options: Dictionary)
 
 const _GROUP_BG_COLORS: Array[Color] = [
 	Color(0.95, 0.90, 0.80, 0.62),
@@ -37,6 +38,28 @@ var _editable: bool = true
 
 var _show_tooltips: bool = true
 var _show_notes: bool = true
+var _show_game_options: bool = false
+var _options_editable: bool = true
+
+# 游戏选项（非模块）：用于在 Setup 前调整少量核心规则预设
+const _OPT_ID_SHORT_GAME := "short_game"
+const _OPT_ID_NO_MILESTONES := "no_milestones"
+const _OPT_ID_FIRST_TIME := "first_time_experience"
+const _OPT_ID_NO_CFO_MILESTONE := "no_cfo_milestone"
+const _OPT_ID_NO_BROADCAST_MILESTONE := "no_broadcast_milestone"
+
+var _opt_short_game: bool = false
+var _opt_no_milestones: bool = false
+var _opt_no_cfo_milestone: bool = false
+var _opt_no_broadcast_milestone: bool = false
+var _suppress_game_option_signals: bool = false
+
+var _opt_count_label: Label = null
+var _opt_short_game_cb: CheckBox = null
+var _opt_no_milestones_cb: CheckBox = null
+var _opt_first_time_cb: CheckBox = null
+var _opt_no_cfo_cb: CheckBox = null
+var _opt_no_broadcast_cb: CheckBox = null
 
 var _header_row: HBoxContainer = null
 var _groups_container: GridContainer = null
@@ -53,19 +76,72 @@ func set_show_tooltips(show: bool) -> void:
 	_ensure_base_ui()
 	_show_tooltips = bool(show)
 	_recompute_modules_and_apply_to_ui()
+	_refresh_game_options_ui()
 
 func set_show_notes(show: bool) -> void:
 	_ensure_base_ui()
 	_show_notes = bool(show)
 	_recompute_modules_and_apply_to_ui()
 
+func set_show_game_options(show: bool) -> void:
+	_ensure_base_ui()
+	_show_game_options = bool(show)
+	# 仅影响 UI 布局，不应影响模块选择
+	_build_modules_ui()
+	_recompute_modules_and_apply_to_ui()
+
 func set_editable(editable: bool) -> void:
 	_ensure_base_ui()
-	_editable = editable
+	_editable = bool(editable)
+	_options_editable = bool(editable)
 	for btn in _action_buttons:
 		if btn != null and is_instance_valid(btn):
 			btn.disabled = not editable
 	_recompute_modules_and_apply_to_ui()
+	_refresh_game_options_ui()
+
+func set_modules_editable(editable: bool) -> void:
+	_ensure_base_ui()
+	_editable = bool(editable)
+	for btn in _action_buttons:
+		if btn != null and is_instance_valid(btn):
+			btn.disabled = not _editable
+	_recompute_modules_and_apply_to_ui()
+
+func set_game_options_editable(editable: bool) -> void:
+	_ensure_base_ui()
+	_options_editable = bool(editable)
+	_refresh_game_options_ui()
+
+func get_game_options() -> Dictionary:
+	return {
+		_OPT_ID_SHORT_GAME: _opt_short_game,
+		_OPT_ID_NO_MILESTONES: _opt_no_milestones,
+		_OPT_ID_FIRST_TIME: _opt_short_game and _opt_no_milestones,
+		_OPT_ID_NO_CFO_MILESTONE: _opt_no_cfo_milestone,
+		_OPT_ID_NO_BROADCAST_MILESTONE: _opt_no_broadcast_milestone,
+	}
+
+func get_game_config_overrides_patch() -> Dictionary:
+	var out: Dictionary = {}
+
+	if _opt_short_game:
+		out["rules.salary_cost"] = 0
+		out["rules.bankruptcy_max_breaks"] = 1
+		out["rules.bankruptcy_extra_reserve_per_player"] = 75
+
+	if _opt_no_milestones:
+		out["milestones.enabled"] = false
+	else:
+		var disabled: Array[String] = []
+		if _opt_no_cfo_milestone:
+			disabled.append("first_have_100")
+		if _opt_no_broadcast_milestone:
+			disabled.append("first_radio")
+		if not disabled.is_empty():
+			out["milestones.disabled_ids"] = disabled
+
+	return out
 
 func set_modules_base_dir(base_dir_spec: String) -> Result:
 	_ensure_base_ui()
@@ -154,7 +230,7 @@ func _ensure_base_ui() -> void:
 	add_child(_header_row)
 
 	var modules_label := Label.new()
-	modules_label.text = "模块（分组）"
+	modules_label.text = "模块与选项"
 	modules_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UiStylesClass.apply_label_dark(modules_label)
 	_header_row.add_child(modules_label)
@@ -246,11 +322,21 @@ func _build_modules_ui() -> void:
 	_group_select_checkboxes.clear()
 	_group_module_ids.clear()
 	_group_count_labels.clear()
+	_opt_count_label = null
+	_opt_short_game_cb = null
+	_opt_no_milestones_cb = null
+	_opt_first_time_cb = null
+	_opt_no_cfo_cb = null
+	_opt_no_broadcast_cb = null
 	var kept: Array = []
 	for btn in _action_buttons:
 		if btn != null and is_instance_valid(btn) and btn.get_parent() == _header_row:
 			kept.append(btn)
 	_action_buttons = kept
+
+	if _show_game_options:
+		var bg_opt := _GROUP_BG_COLORS[_GROUP_BG_COLORS.size() - 1]
+		_groups_container.add_child(_build_game_options_group_box(bg_opt))
 
 	var groups: Array[Dictionary] = _logic.compute_module_groups()
 	for i in range(groups.size()):
@@ -260,6 +346,7 @@ func _build_modules_ui() -> void:
 		var mids: Array[String] = Array(group.get("modules", []), TYPE_STRING, "", null)
 		var bg := _GROUP_BG_COLORS[i] if i >= 0 and i < _GROUP_BG_COLORS.size() else _GROUP_BG_COLORS[_GROUP_BG_COLORS.size() - 1]
 		_groups_container.add_child(_build_module_group_box(group_id, title, mids, bg))
+	_refresh_game_options_ui()
 
 func _build_group_panel_style(bg: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
@@ -274,6 +361,182 @@ func _build_group_panel_style(bg: Color) -> StyleBoxFlat:
 	sb.corner_radius_bottom_right = 12
 	sb.corner_radius_bottom_left = 12
 	return sb
+
+func _build_game_options_group_box(bg_color: Color) -> Control:
+	var panel := PanelContainer.new()
+	panel.name = "GameOptionsGroup"
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.custom_minimum_size = Vector2(480, 0)
+	panel.add_theme_stylebox_override("panel", _build_group_panel_style(bg_color))
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	panel.add_child(margin)
+
+	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation", 8)
+	margin.add_child(box)
+
+	var header := HBoxContainer.new()
+	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.alignment = BoxContainer.ALIGNMENT_CENTER
+	header.add_theme_constant_override("separation", 8)
+	box.add_child(header)
+
+	var title_label := Label.new()
+	title_label.text = "游戏选项"
+	title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	title_label.clip_text = true
+	title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	title_label.tooltip_text = title_label.text
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_label_dark(title_label)
+	header.add_child(title_label)
+
+	_opt_count_label = Label.new()
+	_opt_count_label.text = "0/4"
+	_opt_count_label.add_theme_font_size_override("font_size", 13)
+	UiStylesClass.apply_label_hint_dark(_opt_count_label)
+	header.add_child(_opt_count_label)
+
+	var inner := VBoxContainer.new()
+	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	inner.add_theme_constant_override("separation", 6)
+	box.add_child(inner)
+
+	_opt_short_game_cb = CheckBox.new()
+	_opt_short_game_cb.text = "短游戏"
+	_opt_short_game_cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_check_box_field(_opt_short_game_cb)
+	_opt_short_game_cb.toggled.connect(_on_short_game_option_toggled)
+	inner.add_child(_opt_short_game_cb)
+
+	_opt_no_milestones_cb = CheckBox.new()
+	_opt_no_milestones_cb.text = "不使用任何里程碑"
+	_opt_no_milestones_cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_check_box_field(_opt_no_milestones_cb)
+	_opt_no_milestones_cb.toggled.connect(_on_no_milestones_option_toggled)
+	inner.add_child(_opt_no_milestones_cb)
+
+	_opt_first_time_cb = CheckBox.new()
+	_opt_first_time_cb.text = "初次体验（1+2）"
+	_opt_first_time_cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_check_box_field(_opt_first_time_cb)
+	_opt_first_time_cb.toggled.connect(_on_first_time_option_toggled)
+	inner.add_child(_opt_first_time_cb)
+
+	_opt_no_cfo_cb = CheckBox.new()
+	_opt_no_cfo_cb.text = "不使用 CFO 里程碑"
+	_opt_no_cfo_cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_check_box_field(_opt_no_cfo_cb)
+	_opt_no_cfo_cb.toggled.connect(_on_no_cfo_milestone_option_toggled)
+	inner.add_child(_opt_no_cfo_cb)
+
+	_opt_no_broadcast_cb = CheckBox.new()
+	_opt_no_broadcast_cb.text = "不使用广播里程碑"
+	_opt_no_broadcast_cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_check_box_field(_opt_no_broadcast_cb)
+	_opt_no_broadcast_cb.toggled.connect(_on_no_broadcast_milestone_option_toggled)
+	inner.add_child(_opt_no_broadcast_cb)
+
+	return panel
+
+func _refresh_game_options_ui() -> void:
+	if not _show_game_options:
+		return
+
+	_suppress_game_option_signals = true
+
+	var short_tt := "无薪水；银行只破产一次；首次破产额外注资 +$75/人"
+	var no_ms_tt := "本局不触发任何里程碑奖励"
+	var first_time_tt := "一键启用：短游戏 + 不使用任何里程碑"
+	var no_cfo_tt := "禁用里程碑：首个拥有$100（first_have_100）"
+	var no_radio_tt := "禁用里程碑：首个进行电波营销（first_radio）"
+
+	if _opt_short_game_cb != null and is_instance_valid(_opt_short_game_cb):
+		_opt_short_game_cb.button_pressed = _opt_short_game
+		_opt_short_game_cb.disabled = not _options_editable
+		_opt_short_game_cb.tooltip_text = short_tt if _show_tooltips else ""
+
+	if _opt_no_milestones_cb != null and is_instance_valid(_opt_no_milestones_cb):
+		_opt_no_milestones_cb.button_pressed = _opt_no_milestones
+		_opt_no_milestones_cb.disabled = not _options_editable
+		_opt_no_milestones_cb.tooltip_text = no_ms_tt if _show_tooltips else ""
+
+	var is_first_time := _opt_short_game and _opt_no_milestones
+	if _opt_first_time_cb != null and is_instance_valid(_opt_first_time_cb):
+		_opt_first_time_cb.button_pressed = is_first_time
+		_opt_first_time_cb.disabled = not _options_editable
+		_opt_first_time_cb.tooltip_text = first_time_tt if _show_tooltips else ""
+
+	var disable_specific := _opt_no_milestones
+	if _opt_no_cfo_cb != null and is_instance_valid(_opt_no_cfo_cb):
+		_opt_no_cfo_cb.button_pressed = _opt_no_cfo_milestone
+		_opt_no_cfo_cb.disabled = (not _options_editable) or disable_specific
+		_opt_no_cfo_cb.tooltip_text = no_cfo_tt if _show_tooltips else ""
+
+	if _opt_no_broadcast_cb != null and is_instance_valid(_opt_no_broadcast_cb):
+		_opt_no_broadcast_cb.button_pressed = _opt_no_broadcast_milestone
+		_opt_no_broadcast_cb.disabled = (not _options_editable) or disable_specific
+		_opt_no_broadcast_cb.tooltip_text = no_radio_tt if _show_tooltips else ""
+
+	if _opt_count_label != null and is_instance_valid(_opt_count_label):
+		var selected := 0
+		var total := 4
+		if _opt_short_game:
+			selected += 1
+		if _opt_no_milestones:
+			selected += 1
+		if _opt_no_cfo_milestone:
+			selected += 1
+		if _opt_no_broadcast_milestone:
+			selected += 1
+		_opt_count_label.text = "%d/%d" % [selected, total]
+
+	_suppress_game_option_signals = false
+
+func _emit_game_options_changed() -> void:
+	game_options_changed.emit(get_game_options())
+
+func _on_short_game_option_toggled(pressed: bool) -> void:
+	if _suppress_game_option_signals:
+		return
+	_opt_short_game = bool(pressed)
+	_refresh_game_options_ui()
+	_emit_game_options_changed()
+
+func _on_no_milestones_option_toggled(pressed: bool) -> void:
+	if _suppress_game_option_signals:
+		return
+	_opt_no_milestones = bool(pressed)
+	_refresh_game_options_ui()
+	_emit_game_options_changed()
+
+func _on_first_time_option_toggled(pressed: bool) -> void:
+	if _suppress_game_option_signals:
+		return
+	_opt_short_game = bool(pressed)
+	_opt_no_milestones = bool(pressed)
+	_refresh_game_options_ui()
+	_emit_game_options_changed()
+
+func _on_no_cfo_milestone_option_toggled(pressed: bool) -> void:
+	if _suppress_game_option_signals:
+		return
+	_opt_no_cfo_milestone = bool(pressed)
+	_refresh_game_options_ui()
+	_emit_game_options_changed()
+
+func _on_no_broadcast_milestone_option_toggled(pressed: bool) -> void:
+	if _suppress_game_option_signals:
+		return
+	_opt_no_broadcast_milestone = bool(pressed)
+	_refresh_game_options_ui()
+	_emit_game_options_changed()
 
 func _build_module_group_box(group_id: String, title: String, module_ids: Array[String], bg_color: Color) -> Control:
 	var panel := PanelContainer.new()

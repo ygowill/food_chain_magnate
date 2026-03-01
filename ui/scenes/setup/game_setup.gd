@@ -57,6 +57,8 @@ var _presets: Array = []
 var _preset_option: OptionButton = null
 var _suppress_preset_revert: bool = false
 var _game_config_dialog = null
+var _advanced_game_overrides: Dictionary = {}
+var _game_option_overrides: Dictionary = {}
 
 func _ready() -> void:
 	GameLog.info("GameSetup", "游戏设置界面已加载")
@@ -68,6 +70,10 @@ func _ready() -> void:
 	UiStylesClass.apply_button_secondary(advanced_button)
 	UiStylesClass.apply_button_primary(start_button)
 	_update_advanced_button_label()
+
+	_advanced_game_overrides = Globals.game_config_overrides.duplicate(true)
+	_game_option_overrides = {}
+	_sync_game_config_overrides()
 
 	_selected_player_count = Globals.player_count
 
@@ -248,8 +254,8 @@ func _on_advanced_pressed() -> void:
 	_game_config_dialog.open()
 
 func _on_game_config_confirmed(overrides: Dictionary) -> void:
-	Globals.game_config_overrides = overrides
-	_update_advanced_button_label()
+	_advanced_game_overrides = overrides.duplicate(true)
+	_sync_game_config_overrides()
 
 func _update_advanced_button_label() -> void:
 	if advanced_button == null or not is_instance_valid(advanced_button):
@@ -259,8 +265,16 @@ func _update_advanced_button_label() -> void:
 	else:
 		advanced_button.text = "高级选项 ●"
 
+func _sync_game_config_overrides() -> void:
+	var merged: Dictionary = _advanced_game_overrides.duplicate(true)
+	for k in _game_option_overrides.keys():
+		merged[k] = _game_option_overrides[k]
+	Globals.game_config_overrides = merged
+	_update_advanced_button_label()
+
 func _on_start_pressed() -> void:
 	_set_message("")
+	_sync_game_config_overrides()
 
 	Globals.player_count = _selected_player_count
 
@@ -311,6 +325,8 @@ func _ensure_module_selector() -> void:
 		_module_selector.call("set_show_tooltips", false)
 	if _module_selector.has_method("set_show_notes"):
 		_module_selector.call("set_show_notes", false)
+	if _module_selector.has_method("set_show_game_options"):
+		_module_selector.call("set_show_game_options", true)
 	_module_selector.load_failed.connect(func(msg: String) -> void:
 		_set_message(msg)
 	)
@@ -319,6 +335,15 @@ func _ensure_module_selector() -> void:
 			return
 		_revert_preset_to_custom()
 	)
+	if _module_selector.has_signal("game_options_changed"):
+		_module_selector.game_options_changed.connect(func(_opts: Dictionary) -> void:
+			_game_option_overrides = {}
+			if _module_selector != null and is_instance_valid(_module_selector) and _module_selector.has_method("get_game_config_overrides_patch"):
+				var v = _module_selector.call("get_game_config_overrides_patch")
+				if v is Dictionary:
+					_game_option_overrides = (v as Dictionary).duplicate(true)
+			_sync_game_config_overrides()
+		)
 
 func _sync_globals_modules_to_module_selector() -> void:
 	if _module_selector == null or not is_instance_valid(_module_selector):
@@ -382,7 +407,10 @@ func _build_preset_row() -> void:
 func _on_preset_selected(idx: int) -> void:
 	if idx <= 0:
 		if _module_selector != null and is_instance_valid(_module_selector):
-			_module_selector.set_editable(true)
+			if _module_selector.has_method("set_modules_editable"):
+				_module_selector.call("set_modules_editable", true)
+			else:
+				_module_selector.set_editable(true)
 		return
 	var preset_idx := idx - 1
 	if preset_idx < 0 or preset_idx >= _presets.size():
@@ -392,9 +420,15 @@ func _on_preset_selected(idx: int) -> void:
 
 	if _module_selector != null and is_instance_valid(_module_selector):
 		_suppress_preset_revert = true
-		_module_selector.set_editable(true)
+		if _module_selector.has_method("set_modules_editable"):
+			_module_selector.call("set_modules_editable", true)
+		else:
+			_module_selector.set_editable(true)
 		_module_selector.set_initial_enabled_modules_v2(module_ids)
-		_module_selector.set_editable(false)
+		if _module_selector.has_method("set_modules_editable"):
+			_module_selector.call("set_modules_editable", false)
+		else:
+			_module_selector.set_editable(false)
 		_suppress_preset_revert = false
 
 func _resolve_preset_modules(preset: Dictionary) -> Array[String]:
@@ -423,7 +457,10 @@ func _revert_preset_to_custom() -> void:
 	if _preset_option.selected != 0:
 		_preset_option.select(0)
 		if _module_selector != null and is_instance_valid(_module_selector):
-			_module_selector.set_editable(true)
+			if _module_selector.has_method("set_modules_editable"):
+				_module_selector.call("set_modules_editable", true)
+			else:
+				_module_selector.set_editable(true)
 
 # ── 玩家行重建（卡片布局） ──────────────────────────────
 

@@ -61,7 +61,18 @@ static func check_invariants(
 	if not bank_broke_count_read.ok:
 		return bank_broke_count_read
 	var bank_broke_count: int = int(bank_broke_count_read.value)
-	if bank_total < 0 and bank_broke_count < 2:
+
+	var overdraft_threshold := 2
+	if state.rules is Dictionary:
+		var v = (state.rules as Dictionary).get("bankruptcy_max_breaks", null)
+		if v is int:
+			overdraft_threshold = clampi(int(v), 1, 2)
+		elif v is float:
+			var f: float = float(v)
+			if f == floor(f):
+				overdraft_threshold = clampi(int(f), 1, 2)
+
+	if bank_total < 0 and bank_broke_count < overdraft_threshold:
 		return Result.failure("银行余额为负: $%d" % bank_total)
 
 	# 3.1 现金守恒（玩家现金 + 银行总额）

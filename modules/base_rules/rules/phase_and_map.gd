@@ -323,8 +323,17 @@ func _on_dinnertime_before_exit(state: GameState) -> Result:
 	if not (state.bank is Dictionary):
 		return Result.failure("base_rules:dinnertime_before_exit: state.bank 类型错误（期望 Dictionary）")
 
-	# 银行第二次破产：晚餐阶段结束后立刻终局（跳过 Payday 等后续阶段）
-	if int(state.bank.get("broke_count", 0)) >= 2:
+	# 银行破产达到上限：晚餐阶段结束后立刻终局（跳过 Payday 等后续阶段）
+	var max_breaks := 2
+	if state.rules is Dictionary:
+		var v = (state.rules as Dictionary).get("bankruptcy_max_breaks", null)
+		if v is int:
+			max_breaks = clampi(int(v), 1, 2)
+		elif v is float:
+			var f: float = float(v)
+			if f == floor(f):
+				max_breaks = clampi(int(f), 1, 2)
+	if int(state.bank.get("broke_count", 0)) >= max_breaks:
 		state.round_state["force_next_phase"] = "GameOver"
 	return Result.success()
 

@@ -25,6 +25,19 @@ static func _require_bank_total(state: GameState, caller: String) -> Result:
 		return Result.failure("%s: state.bank.total 缺失或类型错误（期望 int）" % caller)
 	return Result.success(int(state.bank["total"]))
 
+static func _get_bank_overdraft_threshold(state: GameState) -> int:
+	# 默认规则：第二次破产后允许透支；若配置为“只破产一次”，则首次破产后允许透支。
+	var max_breaks := 2
+	if state != null and (state.rules is Dictionary):
+		var v = (state.rules as Dictionary).get("bankruptcy_max_breaks", null)
+		if v is int:
+			max_breaks = clampi(int(v), 1, 2)
+		elif v is float:
+			var f: float = float(v)
+			if f == floor(f):
+				max_breaks = clampi(int(f), 1, 2)
+	return clampi(max_breaks, 1, 2)
+
 # 转账：从一方转到另一方
 # from_type: "player" | "bank"
 # to_type: "player" | "bank"
@@ -58,7 +71,7 @@ static func transfer_cash(
 	var from_balance: int = int(from_balance_read.value)
 	var allow_overdraft := false
 	if from_type == "bank":
-		allow_overdraft = int(state.bank["broke_count"]) >= 2
+		allow_overdraft = int(state.bank["broke_count"]) >= _get_bank_overdraft_threshold(state)
 	if not allow_overdraft and from_balance < amount:
 		return Result.failure("余额不足: 需要 $%d, 只有 $%d" % [amount, from_balance])
 

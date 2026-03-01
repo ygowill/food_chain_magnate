@@ -16,6 +16,8 @@ signal game_end_triggered()
 
 var _bankruptcy_count: int = 0
 var _is_game_ending: bool = false
+var _max_breaks: int = 2
+var _event_kind: String = ""
 var _bank_total_before: int = 0
 var _bank_total_after: int = 0
 var _event_data: Dictionary = {}
@@ -36,9 +38,21 @@ func set_bankruptcy_info(count: int, bank_before: int, bank_after: int, event_da
 	_bank_total_before = bank_before
 	_bank_total_after = bank_after
 	_event_data = event_data.duplicate(true)
-	_is_game_ending = count >= 2
+	_event_kind = str(_event_data.get("kind", "")).strip_edges()
+	_max_breaks = _read_max_breaks(_event_data)
+	_is_game_ending = count >= _max_breaks
 
 	_update_display()
+
+func _read_max_breaks(event_data: Dictionary) -> int:
+	var v = event_data.get("max_breaks", 2)
+	if v is int:
+		return clampi(int(v), 1, 2)
+	if v is float:
+		var f: float = float(v)
+		if f == floor(f):
+			return clampi(int(f), 1, 2)
+	return 2
 
 func show_with_animation() -> void:
 	visible = true
@@ -48,19 +62,29 @@ func show_with_animation() -> void:
 	tween.tween_property(self, "modulate", Color(1, 1, 1, 1), 0.4)
 
 func _update_display() -> void:
+	var kind := _event_kind
+	if kind.is_empty():
+		kind = "second" if _bankruptcy_count >= 2 else "first"
+	var is_first := kind == "first"
+	var is_second := kind == "second"
+
 	if title_label != null:
-		if _is_game_ending:
+		if is_second:
 			title_label.text = "银行二次破产！"
-			title_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 1))
+		elif is_first:
+			title_label.text = "银行首次破产！" if _is_game_ending else "银行首次破产"
 		else:
-			title_label.text = "银行首次破产"
-			title_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
+			title_label.text = "银行破产"
+		title_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 1) if _is_game_ending else Color(0.17, 0.13, 0.09, 1))
 
 	if message_label != null:
 		if _is_game_ending:
-			message_label.text = "银行已第二次破产，游戏即将结束！\n完成本回合后进行最终结算。"
+			if is_second:
+				message_label.text = "银行已第二次破产，游戏即将结束！\n完成本回合后进行最终结算。"
+			else:
+				message_label.text = "银行已破产且达到破产上限，游戏即将结束！\n完成本回合后进行最终结算。"
 		else:
-			message_label.text = "银行资金已耗尽，触发首次破产。\n银行将获得额外资金继续运营。"
+			message_label.text = "银行资金已耗尽，触发首次破产。\n银行将获得额外资金继续运营。" if is_first else "银行资金已耗尽，触发破产事件。"
 
 	_rebuild_details()
 
@@ -89,7 +113,10 @@ func _rebuild_details() -> void:
 	var before_row := _create_detail_row("破产前银行余额", "$%d" % before_total)
 	details_container.add_child(before_row)
 
-	if not _is_game_ending:
+	var kind := str(_event_data.get("kind", "")).strip_edges()
+	if kind.is_empty():
+		kind = "second" if _bankruptcy_count >= 2 else "first"
+	if kind == "first":
 		# 首次破产：显示注资和各玩家揭示的储备卡详情
 		var inject_amount := int(_event_data.get("reserve_added", maxi(0, after_total - before_total)))
 		var inject_row := _create_detail_row("银行注资", "+$%d" % inject_amount, Color(0.28, 0.55, 0.22, 1))
@@ -113,7 +140,7 @@ func _rebuild_details() -> void:
 	var sep := HSeparator.new()
 	details_container.add_child(sep)
 
-	var count_row := _create_detail_row("累计破产次数", "%d / 2" % _bankruptcy_count)
+	var count_row := _create_detail_row("累计破产次数", "%d / %d" % [_bankruptcy_count, _max_breaks])
 	details_container.add_child(count_row)
 
 	if _is_game_ending:

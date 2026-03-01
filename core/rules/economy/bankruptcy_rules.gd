@@ -65,9 +65,12 @@ static func _trigger_break_on_exact_depletion(state: GameState, paid_amount: int
 
 	var trigger_reason := "%s（支付后耗尽）" % reason
 	var broke_count: int = int(state.bank["broke_count"])
+	var max_breaks := _get_bankruptcy_max_breaks(state)
 	if broke_count <= 0:
 		return _break_the_bank_first_time(state, trigger_reason, paid_amount)
 	if broke_count == 1:
+		if max_breaks <= 1:
+			return Result.success()
 		return _break_the_bank_second_time(state, trigger_reason, paid_amount)
 	return Result.success()
 
@@ -104,6 +107,8 @@ static func ensure_bank_can_pay(state: GameState, amount: int, reason: String) -
 	if amount <= 0:
 		return Result.success()
 
+	var max_breaks := _get_bankruptcy_max_breaks(state)
+
 	var safety := 0
 	while safety < 3:
 		safety += 1
@@ -120,6 +125,9 @@ static func ensure_bank_can_pay(state: GameState, amount: int, reason: String) -
 			continue
 
 		if broke_count == 1:
+			if max_breaks <= 1:
+				# “短游戏”等规则：达到破产上限后直接允许透支，避免触发第二次破产事件。
+				return Result.success().with_warnings(warnings)
 			var second := _break_the_bank_second_time(state, reason, amount)
 			if not second.ok:
 				return second
@@ -142,12 +150,31 @@ static func _break_the_bank_first_time(state: GameState, trigger_reason: String,
 	if not state.bank.has("reserve_added_total") or not (state.bank["reserve_added_total"] is int):
 		return Result.failure("银行第一次破产失败：state.bank.reserve_added_total 缺失或类型错误（期望 int）")
 
+	var max_breaks := _get_bankruptcy_max_breaks(state)
+
 	# 允许模块替换“第一次破产”的规则（例如模块14：Reserve Prices）
 	if BankruptcyRegistryClass.is_loaded() and BankruptcyRegistryClass.has_first_break_handler():
 		var cb := BankruptcyRegistryClass.get_first_break_handler()
-		var r = cb.call(state, trigger_reason, required_payment)
-		if not (r is Result):
+		var r_any = cb.call(state, trigger_reason, required_payment)
+		if not (r_any is Result):
 			return Result.failure("银行第一次破产失败：模块 handler 必须返回 Result (%s)" % BankruptcyRegistryClass.get_first_break_source())
+		var r: Result = r_any
+		if not r.ok:
+			return r
+
+		# 叠加“额外储备金”选项（不要求模块 handler 关心该规则）。
+		var extra := _apply_extra_reserve_per_player_to_first_break(state)
+		if not extra.ok:
+			return extra
+		r.with_warnings(extra.warnings)
+
+		# 兼容：为模块 handler 记录的事件补齐 max_breaks 字段（用于 UI 展示）。
+		_patch_latest_bankruptcy_event_meta(state, "first", max_breaks)
+
+		if max_breaks <= 1:
+			_mark_bankruptcy_game_over(state)
+			r.with_warning("达到破产上限：本局游戏将在晚餐阶段结束后立刻结束（跳过 Payday）")
+
 		return r
 
 	var bank_before: int = int(state.bank["total"])
@@ -203,6 +230,12 @@ static func _break_the_bank_first_time(state: GameState, trigger_reason: String,
 			best_count = count_val
 			chosen_slots = slots_val
 
+	var extra_per_player := _get_bankruptcy_extra_reserve_per_player(state)
+	var extra_added := 0
+	if extra_per_player > 0:
+		extra_added = int(state.players.size()) * extra_per_player
+		total_added += extra_added
+
 	state.bank["broke_count"] = 1
 	state.bank["ceo_slots_after_first_break"] = chosen_slots
 	state.bank["total"] = bank_before + total_added
@@ -222,16 +255,24 @@ static func _break_the_bank_first_time(state: GameState, trigger_reason: String,
 
 	_record_bankruptcy_event(state, {
 		"kind": "first",
+		"max_breaks": max_breaks,
 		"trigger_reason": trigger_reason,
 		"required_payment": required_payment,
 		"bank_total_before": bank_before,
 		"reserve_added": total_added,
+		"extra_reserve_per_player": extra_per_player,
+		"extra_reserve_added": extra_added,
 		"bank_total_after": int(state.bank["total"]),
 		"ceo_slots": chosen_slots,
 		"revealed_cards": revealed,
 	})
 
-	return Result.success().with_warning("银行第一次破产：注入 $%d，CEO 新卡槽数=%d" % [total_added, chosen_slots])
+	var out := Result.success()
+	out.with_warning("银行第一次破产：注入 $%d，CEO 新卡槽数=%d" % [total_added, chosen_slots])
+	if max_breaks <= 1:
+		_mark_bankruptcy_game_over(state)
+		out.with_warning("达到破产上限：本局游戏将在晚餐阶段结束后立刻结束（跳过 Payday）")
+	return out
 
 static func _break_the_bank_second_time(state: GameState, trigger_reason: String, required_payment: int) -> Result:
 	if not state.bank.has("broke_count") or not (state.bank["broke_count"] is int):
@@ -241,23 +282,135 @@ static func _break_the_bank_second_time(state: GameState, trigger_reason: String
 	if not state.bank.has("total") or not (state.bank["total"] is int):
 		return Result.failure("银行第二次破产失败：state.bank.total 缺失或类型错误（期望 int）")
 
+	var max_breaks := _get_bankruptcy_max_breaks(state)
 	var bank_before: int = int(state.bank["total"])
 	state.bank["broke_count"] = 2
 
 	_record_bankruptcy_event(state, {
 		"kind": "second",
+		"max_breaks": max_breaks,
 		"trigger_reason": trigger_reason,
 		"required_payment": required_payment,
 		"bank_total_before": bank_before,
 	})
 
+	_mark_bankruptcy_game_over(state)
+
+	return Result.success().with_warning("银行第二次破产：本局游戏将在晚餐阶段结束后立刻结束（跳过 Payday）")
+
+static func _read_rule_int(state: GameState, rule_key: String, fallback: int) -> int:
+	if state == null or not (state.rules is Dictionary):
+		return fallback
+	var rules: Dictionary = state.rules
+	if not rules.has(rule_key):
+		return fallback
+	var v = rules.get(rule_key, null)
+	if v is int:
+		return int(v)
+	if v is float:
+		var f: float = float(v)
+		if f == floor(f):
+			return int(f)
+	return fallback
+
+static func _get_bankruptcy_max_breaks(state: GameState) -> int:
+	return clampi(_read_rule_int(state, "bankruptcy_max_breaks", 2), 1, 2)
+
+static func _get_bankruptcy_extra_reserve_per_player(state: GameState) -> int:
+	return maxi(0, _read_rule_int(state, "bankruptcy_extra_reserve_per_player", 0))
+
+static func _mark_bankruptcy_game_over(state: GameState) -> void:
+	if state == null or not (state.round_state is Dictionary):
+		return
+	# 不覆盖已有的 game_over（避免与其它终局条件冲突）
+	if state.round_state.has("game_over") and (state.round_state["game_over"] is Dictionary):
+		var existing: Dictionary = state.round_state["game_over"]
+		var reason := str(existing.get("reason", "")).strip_edges()
+		if not reason.is_empty():
+			return
 	state.round_state["game_over"] = {
 		"reason": "bankruptcy",
 		"round": state.round_number,
 		"phase": state.phase,
 	}
 
-	return Result.success().with_warning("银行第二次破产：本局游戏将在晚餐阶段结束后立刻结束（跳过 Payday）")
+static func _patch_latest_bankruptcy_event_meta(state: GameState, kind: String, max_breaks: int) -> void:
+	if state == null or not (state.round_state is Dictionary):
+		return
+	var bankruptcy_val = state.round_state.get("bankruptcy", null)
+	if not (bankruptcy_val is Dictionary):
+		return
+	var bankruptcy: Dictionary = bankruptcy_val
+	var events_val = bankruptcy.get("events", null)
+	if not (events_val is Array):
+		return
+	var events: Array = events_val
+	for i in range(events.size() - 1, -1, -1):
+		var evt_val = events[i]
+		if not (evt_val is Dictionary):
+			continue
+		var evt: Dictionary = evt_val
+		if str(evt.get("kind", "")).strip_edges() != str(kind).strip_edges():
+			continue
+		evt["max_breaks"] = int(max_breaks)
+		events[i] = evt
+		bankruptcy["events"] = events
+		state.round_state["bankruptcy"] = bankruptcy
+		return
+
+static func _apply_extra_reserve_per_player_to_first_break(state: GameState) -> Result:
+	var extra_per_player := _get_bankruptcy_extra_reserve_per_player(state)
+	if extra_per_player <= 0:
+		return Result.success()
+	if state == null:
+		return Result.failure("额外储备金注入失败：state 为空")
+	if not (state.bank is Dictionary):
+		return Result.failure("额外储备金注入失败：state.bank 类型错误（期望 Dictionary）")
+	if not (state.players is Array):
+		return Result.failure("额外储备金注入失败：state.players 类型错误（期望 Array）")
+	if not state.bank.has("total") or not (state.bank["total"] is int):
+		return Result.failure("额外储备金注入失败：state.bank.total 缺失或类型错误（期望 int）")
+	if not state.bank.has("reserve_added_total") or not (state.bank["reserve_added_total"] is int):
+		return Result.failure("额外储备金注入失败：state.bank.reserve_added_total 缺失或类型错误（期望 int）")
+
+	var pc := state.players.size()
+	if pc <= 0:
+		return Result.success()
+	var extra_total := pc * extra_per_player
+	if extra_total <= 0:
+		return Result.success()
+
+	state.bank["total"] = int(state.bank["total"]) + extra_total
+	state.bank["reserve_added_total"] = int(state.bank["reserve_added_total"]) + extra_total
+
+	# 兼容模块 handler：修正 event 数据（reserve_added/bank_total_after），保持 UI/日志一致。
+	if state.round_state is Dictionary:
+		var bankruptcy_val = state.round_state.get("bankruptcy", null)
+		if bankruptcy_val is Dictionary:
+			var bankruptcy: Dictionary = bankruptcy_val
+			var events_val = bankruptcy.get("events", null)
+			if events_val is Array:
+				var events: Array = events_val
+				for i in range(events.size() - 1, -1, -1):
+					var evt_val = events[i]
+					if not (evt_val is Dictionary):
+						continue
+					var evt: Dictionary = evt_val
+					if str(evt.get("kind", "")).strip_edges() != "first":
+						continue
+					var prev_added := 0
+					if evt.has("reserve_added") and (evt["reserve_added"] is int):
+						prev_added = int(evt["reserve_added"])
+					evt["reserve_added"] = prev_added + extra_total
+					evt["bank_total_after"] = int(state.bank["total"])
+					evt["extra_reserve_per_player"] = int(extra_per_player)
+					evt["extra_reserve_added"] = int(extra_total)
+					events[i] = evt
+					bankruptcy["events"] = events
+					state.round_state["bankruptcy"] = bankruptcy
+					break
+
+	return Result.success().with_warning("首次破产额外注资：+$%d（%d人×$%d）" % [extra_total, pc, extra_per_player])
 
 static func _get_selected_reserve_card(player: Dictionary, player_id: int) -> Result:
 	if not player.has("reserve_cards") or not (player["reserve_cards"] is Array):
