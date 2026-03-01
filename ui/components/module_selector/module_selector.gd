@@ -409,7 +409,7 @@ func _build_game_options_group_box(bg_color: Color) -> Control:
 	box.add_child(inner)
 
 	_opt_short_game_cb = CheckBox.new()
-	_opt_short_game_cb.text = "短游戏"
+	_opt_short_game_cb.text = "短游戏(没有薪水，银行只破产一次，初始储备金 75$每人)"
 	_opt_short_game_cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UiStylesClass.apply_check_box_field(_opt_short_game_cb)
 	_opt_short_game_cb.toggled.connect(_on_short_game_option_toggled)
@@ -423,7 +423,7 @@ func _build_game_options_group_box(bg_color: Color) -> Control:
 	inner.add_child(_opt_no_milestones_cb)
 
 	_opt_first_time_cb = CheckBox.new()
-	_opt_first_time_cb.text = "初次体验（1+2）"
+	_opt_first_time_cb.text = "初次体验(短游戏 + 不使用任何里程碑)"
 	_opt_first_time_cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UiStylesClass.apply_check_box_field(_opt_first_time_cb)
 	_opt_first_time_cb.toggled.connect(_on_first_time_option_toggled)

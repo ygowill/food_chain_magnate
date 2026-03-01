@@ -250,7 +250,7 @@ func _on_advanced_pressed() -> void:
 		_game_config_dialog = GameConfigDialogScene.instantiate()
 		add_child(_game_config_dialog)
 		_game_config_dialog.config_confirmed.connect(_on_game_config_confirmed)
-	_game_config_dialog.load_overrides(Globals.game_config_overrides)
+	_game_config_dialog.load_overrides(_advanced_game_overrides)
 	_game_config_dialog.open()
 
 func _on_game_config_confirmed(overrides: Dictionary) -> void:
@@ -266,10 +266,8 @@ func _update_advanced_button_label() -> void:
 		advanced_button.text = "高级选项 ●"
 
 func _sync_game_config_overrides() -> void:
-	var merged: Dictionary = _advanced_game_overrides.duplicate(true)
-	for k in _game_option_overrides.keys():
-		merged[k] = _game_option_overrides[k]
-	Globals.game_config_overrides = merged
+	Globals.game_config_overrides = _advanced_game_overrides.duplicate(true)
+	Globals.game_option_overrides = _game_option_overrides.duplicate(true)
 	_update_advanced_button_label()
 
 func _on_start_pressed() -> void:
