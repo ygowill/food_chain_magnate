@@ -6,9 +6,12 @@ static func compute_coin_count(revenue: int, base_count: int, per_amount: int, m
 	var rev := int(revenue)
 	if rev <= 0:
 		return 0
-	var extra := int(floor(float(rev) / float(maxi(1, per_amount))))
-	var count := int(base_count) + extra
-	return clampi(count, int(base_count), int(max_count))
+	var step := maxi(1, int(per_amount))
+	var count := int(ceil(float(rev) / float(step)))
+	count = maxi(count, int(base_count))
+	if int(max_count) > 0:
+		count = mini(count, int(max_count))
+	return count
 
 static func spawn_flying_coins(
 	anim_layer: Control,
@@ -31,7 +34,7 @@ static func spawn_flying_coins(
 		return
 	var count := maxi(0, int(coin_count))
 	if count <= 0:
-		count = compute_coin_count(revenue, 1, 5, 20)
+		count = compute_coin_count(revenue, 0, 2, 0)
 	var coin_size := float(coin_base_size) * float(coin_size_scale)
 	var half := Vector2(coin_size * 0.5, coin_size * 0.5)
 

@@ -73,6 +73,23 @@ mouse_filter = 2
 layout_mode = 2
 theme_override_constants/separation = 12
 
+[node name="RoundSection" type="HBoxContainer" parent="UIRoot/TopBar/StatusBar/StatusContent"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="RoundIconLabel" type="Label" parent="UIRoot/TopBar/StatusBar/StatusContent/RoundSection"]
+layout_mode = 2
+text = "🕒"
+
+[node name="RoundValueLabel" type="Label" parent="UIRoot/TopBar/StatusBar/StatusContent/RoundSection"]
+layout_mode = 2
+text = "第 0 回合"
+
+[node name="PhaseTrack" type="Control" parent="UIRoot/TopBar/StatusBar/StatusContent"]
+layout_mode = 2
+size_flags_vertical = 4
+script = ExtResource("15_phase_track")
+
 [node name="BankSection" type="HBoxContainer" parent="UIRoot/TopBar/StatusBar/StatusContent"]
 layout_mode = 2
 theme_override_constants/separation = 4
@@ -93,23 +110,6 @@ text = "$0"
 visible = false
 layout_mode = 2
 text = "已破产"
-
-[node name="RoundSection" type="HBoxContainer" parent="UIRoot/TopBar/StatusBar/StatusContent"]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="RoundIconLabel" type="Label" parent="UIRoot/TopBar/StatusBar/StatusContent/RoundSection"]
-layout_mode = 2
-text = "🕒"
-
-[node name="RoundValueLabel" type="Label" parent="UIRoot/TopBar/StatusBar/StatusContent/RoundSection"]
-layout_mode = 2
-text = "第 0 回合"
-
-[node name="PhaseTrack" type="Control" parent="UIRoot/TopBar/StatusBar/StatusContent"]
-layout_mode = 2
-size_flags_vertical = 4
-script = ExtResource("15_phase_track")
 
 [node name="Spacer" type="Control" parent="UIRoot/TopBar"]
 layout_mode = 2

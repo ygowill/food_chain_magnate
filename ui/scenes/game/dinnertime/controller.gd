@@ -23,16 +23,18 @@ const DinnertimeAnimationLayoutHelpersClass = preload("res://ui/scenes/game/dinn
 const DinnertimeAnimationTimelineHelpersClass = preload("res://ui/scenes/game/dinnertime/timeline_helpers.gd")
 
 const COIN_TEXTURE_PATH = "res://assets/images/coin_gold.svg"
-const COIN_BASE_COUNT := 1
-const COIN_PER_AMOUNT := 5
-const COIN_MAX_COUNT := 20
-const COIN_BASE_SIZE := 24.0
-const COIN_SIZE_SCALE := 0.28
+const COIN_BASE_COUNT := 0
+const COIN_PER_AMOUNT := 2
+const COIN_MAX_COUNT := 0
+const COIN_BASE_SIZE := 20.0
+const COIN_SIZE_SCALE := 0.20
 const DEMAND_TOKEN_ICON_SCALE := 0.90
 const ROUTE_FLASH_ALPHA_MIN := 0.35
 const ROUTE_FLASH_ALPHA_MAX := 0.95
 const POST_INCOME_CARD_SCALE := 0.68
-const POST_INCOME_CARD_HOLD_SEC := 0.3
+const POST_INCOME_CARD_HOLD_SEC := 0.20
+const PREVIEW_FLOAT_BASE_SEC := 1.05
+const BANK_INCREASE_BASE_SEC := 0.22
 
 enum State { IDLE, PLAYING, DONE }
 
@@ -710,10 +712,10 @@ func _play_sale_animation(sale: Dictionary) -> void:
 		_preview_current()
 		return
 
-	var dur_float := 1.5 / _speed
+	var dur_float := PREVIEW_FLOAT_BASE_SEC / _speed
 	var coin_count := _compute_coin_count(revenue)
 	var fly_timing := DinnertimeAnimationTimelineHelpersClass.compute_coin_flight_timing(_speed, coin_count)
-	var dur_fly := float(fly_timing.get("dur_fly", 0.80 / maxf(_speed, 0.01)))
+	var dur_fly := float(fly_timing.get("dur_fly", 0.56 / maxf(_speed, 0.01)))
 	var coin_delay_step := float(fly_timing.get("coin_delay_step", 0.0))
 	var dur_fly_total := float(fly_timing.get("dur_fly_total", dur_fly))
 
@@ -804,7 +806,7 @@ func _apply_bankruptcy_event_bank_increase_if_needed(event: Dictionary, kind: St
 			reserve_added = int(after_val) - int(before_val)
 	if reserve_added <= 0:
 		return
-	_animate_bank_increase(reserve_added, 0.32 / maxf(_speed, 0.01))
+	_animate_bank_increase(reserve_added, BANK_INCREASE_BASE_SEC / maxf(_speed, 0.01))
 
 func _play_post_house_income_sequence() -> void:
 	if _post_income_done or _post_income_playing:
@@ -849,7 +851,7 @@ func _play_post_house_income_event(index: int) -> void:
 
 	var coin_count := _compute_coin_count(amount)
 	var fly_timing := DinnertimeAnimationTimelineHelpersClass.compute_coin_flight_timing(_speed, coin_count)
-	var dur_fly := float(fly_timing.get("dur_fly", 0.80 / maxf(_speed, 0.01)))
+	var dur_fly := float(fly_timing.get("dur_fly", 0.56 / maxf(_speed, 0.01)))
 	var coin_delay_step := float(fly_timing.get("coin_delay_step", 0.0))
 	var dur_fly_total := float(fly_timing.get("dur_fly_total", dur_fly))
 
