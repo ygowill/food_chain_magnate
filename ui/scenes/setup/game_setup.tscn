@@ -106,6 +106,7 @@ text = "返回"
 [node name="AdvancedButton" type="Button" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/ButtonContainer"]
 custom_minimum_size = Vector2(150, 50)
 layout_mode = 2
+visible = false
 text = "高级选项"
 
 [node name="StartButton" type="Button" parent="CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/ButtonContainer"]
