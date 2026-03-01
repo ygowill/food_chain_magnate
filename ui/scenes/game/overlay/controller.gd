@@ -40,7 +40,6 @@ var marketing_range_overlay = null
 var procurement_route_overlay = null
 var demand_indicator = null
 var zoom_control = null
-var dinner_time_overlay = null
 var settings_dialog = null
 var help_tooltip_manager = null
 var employee_card_preview_manager = null
@@ -58,6 +57,7 @@ var _toast_showing: bool = false
 var _toast_panel: PanelContainer = null
 var _toast_label: Label = null
 var _toast_tween: Tween = null
+var _deferred_milestone_toasts: Array[Dictionary] = []
 var _eventbus_source: String = ""
 var _execute_command: Callable = Callable()
 var _dinnertime_anim_controller = null  # DinnertimeAnimationController
@@ -394,6 +394,7 @@ func dispose() -> void:
 	_toast_panel = null
 	_toast_label = null
 	_toast_queue.clear()
+	_deferred_milestone_toasts.clear()
 	_toast_showing = false
 
 	_zoom_controller = null
@@ -415,7 +416,6 @@ func dispose() -> void:
 	procurement_route_overlay = null
 	demand_indicator = null
 	zoom_control = null
-	dinner_time_overlay = null
 	settings_dialog = null
 	help_tooltip_manager = null
 	ui_animation_manager = null
@@ -436,9 +436,44 @@ func _on_milestone_achieved(event: Dictionary) -> void:
 		return
 	var data: Dictionary = data_val
 
-	var milestone_id := str(data.get("milestone_id", ""))
+	var milestone_id := str(data.get("milestone_id", "")).strip_edges()
 	var player_id := int(data.get("player_id", -1))
+	if milestone_id.is_empty():
+		return
 
+	if _should_defer_milestone_toast():
+		_deferred_milestone_toasts.append({
+			"player_id": player_id,
+			"milestone_id": milestone_id,
+		})
+		return
+	show_milestone_toast(player_id, milestone_id)
+
+func show_milestone_toast(player_id: int, milestone_id: String) -> void:
+	if OS.has_feature("headless"):
+		return
+	var mid := str(milestone_id).strip_edges()
+	if mid.is_empty():
+		return
+
+	# 去重：若该 toast 已在 Dinnertime 期间被 EventBus 暂存，则消费并避免结算结束后重复弹出。
+	for i in range(_deferred_milestone_toasts.size() - 1, -1, -1):
+		var item_val = _deferred_milestone_toasts[i]
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if int(item.get("player_id", -999)) != player_id:
+			continue
+		if str(item.get("milestone_id", "")).strip_edges() != mid:
+			continue
+		_deferred_milestone_toasts.remove_at(i)
+
+	var msg := _build_milestone_toast_message(player_id, mid)
+	if msg.is_empty():
+		return
+	_enqueue_toast(msg)
+
+func _build_milestone_toast_message(player_id: int, milestone_id: String) -> String:
 	var who := "玩家%d" % (player_id + 1) if player_id >= 0 else "未知玩家"
 	if Globals != null and player_id >= 0 and Globals.has_method("get_player_name"):
 		who = str(Globals.get_player_name(player_id))
@@ -450,9 +485,31 @@ func _on_milestone_achieved(event: Dictionary) -> void:
 			name = str((def_val as MilestoneDef).name)
 			name = _strip_milestone_id_suffix(name, milestone_id)
 
-	var msg := "%s 获得里程碑：%s" % [who, name]
+	return "%s 获得里程碑：%s" % [who, name]
 
-	_enqueue_toast(msg)
+func _should_defer_milestone_toast() -> bool:
+	# Dinnertime 的结算动画是“演示已结算的结果”，但事件本身会在命令执行结束后立刻发射。
+	# 为避免“刚进晚餐就弹里程碑”，在晚餐待确认/动画期间暂存提示；
+	# 动画过程中会按 timeline 在“本笔支付完成后”主动弹出里程碑，因此这里的暂存仅作为兜底与去重来源。
+	if _dinnertime_anim_controller != null:
+		return true
+	var live_state := _read_live_game_state()
+	if live_state == null:
+		return false
+	if str(live_state.phase) != DefsClass.PHASE_DINNERTIME:
+		return false
+	return _is_confirm_dinnertime_pending(live_state)
+
+func _flush_deferred_milestone_toasts() -> void:
+	if _deferred_milestone_toasts.is_empty():
+		return
+	var queued := _deferred_milestone_toasts.duplicate(true)
+	_deferred_milestone_toasts.clear()
+	for item_val in queued:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		show_milestone_toast(int(item.get("player_id", -1)), str(item.get("milestone_id", "")))
 
 func _strip_milestone_id_suffix(raw_name: String, milestone_id: String) -> String:
 	var s := str(raw_name).strip_edges()
@@ -774,7 +831,16 @@ func _start_dinnertime_animation(dt_data: Dictionary, state: GameState) -> void:
 
 	_dinnertime_anim_controller = DinnertimeAnimControllerClass.new()
 	_dinnertime_anim_controller.settlement_completed.connect(_on_dinnertime_anim_completed)
-	_dinnertime_anim_controller.start(dt_data, state, _scene, _map_canvas, bank_label, _player_panel, _bank_break_panel)
+	_dinnertime_anim_controller.start(
+		dt_data,
+		state,
+		_scene,
+		_map_canvas,
+		bank_label,
+		_player_panel,
+		_bank_break_panel,
+		Callable(self, "show_milestone_toast")
+	)
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_skip_bank_sync"):
 		_ui_sync_controller.set_skip_bank_sync(true)
 
@@ -842,6 +908,6 @@ func _disable_dinnertime_overlay() -> void:
 	if _dinnertime_anim_controller != null:
 		_dinnertime_anim_controller.dispose()
 	_dinnertime_anim_controller = null
-	dinner_time_overlay = null
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_skip_bank_sync"):
 		_ui_sync_controller.set_skip_bank_sync(false)
+	_flush_deferred_milestone_toasts()

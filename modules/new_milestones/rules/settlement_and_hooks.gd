@@ -6,6 +6,7 @@ const PhaseManagerClass = preload("res://core/engine/phase_manager.gd")
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const DinnertimeTimelineClass = preload("res://core/rules/dinnertime_timeline.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
@@ -70,7 +71,10 @@ func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -
 	if sales.is_empty():
 		return Result.success()
 
-	for s_val in sales:
+	var timeline_events := DinnertimeTimelineClass.ensure_state_timeline_events(state)
+
+	for sale_index in range(sales.size()):
+		var s_val = sales[sale_index]
 		if not (s_val is Dictionary):
 			continue
 		var s: Dictionary = s_val
@@ -96,6 +100,17 @@ func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -
 			})
 			if not r2.ok:
 				return r2
+			var v = r2.value
+			if v is Dictionary:
+				var claimed_val = Dictionary(v).get("claimed", [])
+				if claimed_val is Array:
+					for mid_val in Array(claimed_val):
+						if not (mid_val is String):
+							continue
+						var mid := str(mid_val).strip_edges()
+						if mid.is_empty():
+							continue
+						DinnertimeTimelineClass.append_sale_milestone(timeline_events, sale_index, owner, mid)
 
 	# FIRST PIZZA SOLD：本回合前 3 个“买披萨”的房屋，卖家需放置 2 回合 radio(pizza)（玩家选择落点；若无空间则跳过该房屋）
 	var pizza_awarded := false

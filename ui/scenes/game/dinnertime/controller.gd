@@ -7,10 +7,11 @@ signal settlement_completed()
 
 const OverlayUtilsClass = preload("res://ui/scenes/game/overlay/utils.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
+const DinnertimeTimelineClass = preload("res://core/rules/dinnertime_timeline.gd")
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 const UiZClass = preload("res://ui/utils/ui_z.gd")
-const DinnerTimeOverlayClass = preload("res://ui/components/dinner_time/dinner_time_overlay.gd")
+const DinnertimeAnimationOrdersBuilderClass = preload("res://ui/scenes/game/dinnertime/orders_builder.gd")
 const DinnertimeAnimationIncomeUtilsClass = preload("res://ui/scenes/game/dinnertime/income_utils.gd")
 const DinnertimeAnimationPostIncomeCardClass = preload("res://ui/scenes/game/dinnertime/post_income_card.gd")
 const DinnertimeAnimationMapHelpersClass = preload("res://ui/scenes/game/dinnertime/map_helpers.gd")
@@ -71,25 +72,44 @@ var _post_income_done: bool = false
 var _post_income_card: Control = null
 var _bank_break_panel = null
 var _bankruptcy_events_by_sale_index: Dictionary = {}  # sale_index -> Array[Dictionary]
+var _bankruptcy_events_by_post_income_key: Dictionary = {}  # key -> Array[Dictionary]
+var _milestone_toast_cb: Callable = Callable()
+var _milestone_events_by_sale_index: Dictionary = {}  # sale_index -> Array[Dictionary]
+var _milestone_events_by_post_income_key: Dictionary = {}  # key -> Array[Dictionary]
+var _milestone_events_end: Array[Dictionary] = []
 
 # 外部 UI 引用（用于动画目标位置）
 var _bank_label: Label = null
 var _player_panel = null  # LeftPanel
 
-func start(settlement_data: Dictionary, state: GameState, scene: Node, map_canvas, bank_label: Label, player_panel, bank_break_panel = null) -> void:
+func start(
+	settlement_data: Dictionary,
+	state: GameState,
+	scene: Node,
+	map_canvas,
+	bank_label: Label,
+	player_panel,
+	bank_break_panel = null,
+	milestone_toast_cb: Callable = Callable()
+) -> void:
 	_game_state = state
 	_scene = scene
 	_map_canvas = map_canvas
 	_bank_label = bank_label
 	_player_panel = player_panel
 	_bank_break_panel = bank_break_panel
+	_milestone_toast_cb = milestone_toast_cb
 	_speed = float(Globals.animation_speed) if Globals != null else 1.0
 
-	_orders = DinnerTimeOverlayClass.build_orders_from_settlement(settlement_data)
+	_orders = DinnertimeAnimationOrdersBuilderClass.build_orders_from_settlement(settlement_data)
 	_current_idx = 0
 	_post_income_events = DinnertimeAnimationIncomeUtilsClass.build_post_house_income_events(settlement_data, _game_state)
 	_post_income_by_player = DinnertimeAnimationIncomeUtilsClass.sum_post_income_by_player(_post_income_events)
 	_bankruptcy_events_by_sale_index = _build_bankruptcy_events_by_sale_index(settlement_data)
+	_bankruptcy_events_by_post_income_key = _build_bankruptcy_events_by_post_income_key(settlement_data)
+	_milestone_events_by_sale_index = _build_milestone_events_by_sale_index(settlement_data)
+	_milestone_events_by_post_income_key = _build_milestone_events_by_post_income_key(settlement_data)
+	_milestone_events_end = _build_end_milestone_events(settlement_data)
 	_post_income_started = false
 	_post_income_playing = false
 	_post_income_done = _post_income_events.is_empty()
@@ -209,6 +229,11 @@ func dispose() -> void:
 	_post_income_events.clear()
 	_post_income_by_player.clear()
 	_bankruptcy_events_by_sale_index.clear()
+	_bankruptcy_events_by_post_income_key.clear()
+	_milestone_events_by_sale_index.clear()
+	_milestone_events_by_post_income_key.clear()
+	_milestone_events_end.clear()
+	_milestone_toast_cb = Callable()
 	_post_income_started = false
 	_post_income_playing = false
 	_post_income_done = false
@@ -715,6 +740,7 @@ func _play_sale_animation(sale: Dictionary) -> void:
 func _on_sale_timeline_finished(sale: Dictionary) -> void:
 	_clear_route_highlight()
 	await _play_sale_bankruptcy_events(sale)
+	_play_sale_milestone_events(sale)
 	_preview_current()
 
 func _play_sale_bankruptcy_events(sale: Dictionary) -> void:
@@ -739,10 +765,11 @@ func _consume_sale_bankruptcy_events(sale_index: int) -> Array:
 func _show_bankruptcy_panel_for_event(event: Dictionary) -> void:
 	if _state != State.PLAYING:
 		return
-	if not is_instance_valid(_bank_break_panel):
-		return
 
 	var kind := str(event.get("kind", "")).strip_edges()
+	_apply_bankruptcy_event_bank_increase_if_needed(event, kind)
+	if not is_instance_valid(_bank_break_panel):
+		return
 	var count := 1
 	if kind == "second":
 		count = 2
@@ -765,6 +792,19 @@ func _show_bankruptcy_panel_for_event(event: Dictionary) -> void:
 		if _scene == null or not is_instance_valid(_scene):
 			return
 		await _scene.get_tree().process_frame
+
+func _apply_bankruptcy_event_bank_increase_if_needed(event: Dictionary, kind: String) -> void:
+	if kind != "first":
+		return
+	var reserve_added := int(event.get("reserve_added", 0))
+	if reserve_added <= 0:
+		var before_val = event.get("bank_total_before", null)
+		var after_val = event.get("bank_total_after", null)
+		if before_val is int and after_val is int:
+			reserve_added = int(after_val) - int(before_val)
+	if reserve_added <= 0:
+		return
+	_animate_bank_increase(reserve_added, 0.32 / maxf(_speed, 0.01))
 
 func _play_post_house_income_sequence() -> void:
 	if _post_income_done or _post_income_playing:
@@ -827,8 +867,25 @@ func _play_post_house_income_event(index: int) -> void:
 		func() -> void:
 			_remove_post_income_card(),
 		func() -> void:
-			_play_post_house_income_event(index + 1)
+			_on_post_income_timeline_finished(event, index)
 	)
+
+func _on_post_income_timeline_finished(event: Dictionary, index: int) -> void:
+	await _play_post_income_bankruptcy_events(event)
+	_play_post_income_milestone_events(event)
+	_play_post_house_income_event(index + 1)
+
+func _play_post_income_bankruptcy_events(event: Dictionary) -> void:
+	var player_id := int(event.get("player_id", -1))
+	var kind := str(event.get("kind", "")).strip_edges()
+	var amount := int(event.get("amount", 0))
+	if player_id < 0 or kind.is_empty() or amount <= 0:
+		return
+	var events := _consume_post_income_bankruptcy_events(kind, player_id, amount)
+	for event_val in events:
+		if not (event_val is Dictionary):
+			continue
+		await _show_bankruptcy_panel_for_event(event_val)
 
 func _float_away_preview_tokens(dur: float) -> void:
 	for token in _preview_tokens:
@@ -881,6 +938,15 @@ func _animate_bank_decrease(amount: int, dur: float) -> void:
 		dur
 	)
 
+func _animate_bank_increase(amount: int, dur: float) -> void:
+	_running_bank_value = DinnertimeAnimationMoneyHelpersClass.animate_bank_increase(
+		_bank_label,
+		_active_tweens,
+		_running_bank_value,
+		amount,
+		dur
+	)
+
 func _animate_player_income(player_id: int, amount: int, dur: float) -> void:
 	DinnertimeAnimationMoneyHelpersClass.animate_player_income(
 		_anim_layer,
@@ -898,6 +964,7 @@ func _animate_player_income(player_id: int, amount: int, dur: float) -> void:
 func _finish() -> void:
 	if _state == State.DONE:
 		return
+	_emit_all_remaining_milestone_events()
 	_state = State.DONE
 	_stop_layout_monitor()
 	_stop_layout_start_wait()
@@ -997,9 +1064,9 @@ func _build_bankruptcy_events_by_sale_index(settlement_data: Dictionary) -> Dict
 		if not (evt_val is Dictionary):
 			continue
 		var evt: Dictionary = evt_val
-		if str(evt.get("timeline_stage", "")).strip_edges() != "sale":
+		if str(evt.get(DinnertimeTimelineClass.KEY_STAGE, "")).strip_edges() != DinnertimeTimelineClass.STAGE_SALE:
 			continue
-		var sale_index := int(evt.get("sale_index", -1))
+		var sale_index := int(evt.get(DinnertimeTimelineClass.KEY_SALE_INDEX, -1))
 		if sale_index < 0:
 			continue
 		var bucket: Array = []
@@ -1010,6 +1077,178 @@ func _build_bankruptcy_events_by_sale_index(settlement_data: Dictionary) -> Dict
 		bucket.append(evt.duplicate(true))
 		out[sale_index] = bucket
 	return out
+
+func _build_bankruptcy_events_by_post_income_key(settlement_data: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	var events_val = settlement_data.get("bankruptcy_events", null)
+	if not (events_val is Array):
+		return out
+	var events: Array = events_val
+	for evt_val in events:
+		if not (evt_val is Dictionary):
+			continue
+		var evt: Dictionary = evt_val
+		if str(evt.get(DinnertimeTimelineClass.KEY_STAGE, "")).strip_edges() != DinnertimeTimelineClass.STAGE_POST_INCOME:
+			continue
+		var kind := str(evt.get(DinnertimeTimelineClass.KEY_POST_INCOME_KIND, "")).strip_edges()
+		var player_id := int(evt.get(DinnertimeTimelineClass.KEY_PLAYER_ID, -1))
+		var amount := int(evt.get(DinnertimeTimelineClass.KEY_PAYMENT_AMOUNT, 0))
+		if kind.is_empty() or player_id < 0 or amount <= 0:
+			continue
+		var key := _build_post_income_key(kind, player_id, amount)
+		var bucket: Array = []
+		if out.has(key):
+			var cur = out[key]
+			if cur is Array:
+				bucket = cur
+		bucket.append(evt.duplicate(true))
+		out[key] = bucket
+	return out
+
+func _build_milestone_events_by_sale_index(settlement_data: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	var events_val = settlement_data.get(DinnertimeTimelineClass.KEY_TIMELINE_EVENTS, null)
+	if not (events_val is Array):
+		return out
+	var events: Array = events_val
+	for evt_val in events:
+		if not (evt_val is Dictionary):
+			continue
+		var evt: Dictionary = evt_val
+		if str(evt.get(DinnertimeTimelineClass.KEY_KIND, "")).strip_edges() != DinnertimeTimelineClass.KIND_MILESTONE:
+			continue
+		if str(evt.get(DinnertimeTimelineClass.KEY_STAGE, "")).strip_edges() != DinnertimeTimelineClass.STAGE_SALE:
+			continue
+		var sale_index := int(evt.get(DinnertimeTimelineClass.KEY_SALE_INDEX, -1))
+		var player_id := int(evt.get(DinnertimeTimelineClass.KEY_PLAYER_ID, -1))
+		var milestone_id := str(evt.get(DinnertimeTimelineClass.KEY_MILESTONE_ID, "")).strip_edges()
+		if sale_index < 0 or player_id < 0 or milestone_id.is_empty():
+			continue
+
+		var bucket: Array = []
+		if out.has(sale_index):
+			var cur = out[sale_index]
+			if cur is Array:
+				bucket = cur
+		bucket.append({
+			"player_id": player_id,
+			"milestone_id": milestone_id,
+		})
+		out[sale_index] = bucket
+
+	for k in out.keys():
+		var arr_val = out.get(k, null)
+		if not (arr_val is Array):
+			continue
+		var arr: Array = arr_val
+		arr.sort_custom(func(a, b) -> bool:
+			if not (a is Dictionary and b is Dictionary):
+				return false
+			var da: Dictionary = a
+			var db: Dictionary = b
+			var pa := int(da.get("player_id", -1))
+			var pb := int(db.get("player_id", -1))
+			if pa != pb:
+				return pa < pb
+			return str(da.get("milestone_id", "")) < str(db.get("milestone_id", ""))
+		)
+	return out
+
+func _build_milestone_events_by_post_income_key(settlement_data: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	var events_val = settlement_data.get(DinnertimeTimelineClass.KEY_TIMELINE_EVENTS, null)
+	if not (events_val is Array):
+		return out
+	var events: Array = events_val
+	for evt_val in events:
+		if not (evt_val is Dictionary):
+			continue
+		var evt: Dictionary = evt_val
+		if str(evt.get(DinnertimeTimelineClass.KEY_KIND, "")).strip_edges() != DinnertimeTimelineClass.KIND_MILESTONE:
+			continue
+		if str(evt.get(DinnertimeTimelineClass.KEY_STAGE, "")).strip_edges() != DinnertimeTimelineClass.STAGE_POST_INCOME:
+			continue
+		var kind := str(evt.get(DinnertimeTimelineClass.KEY_POST_INCOME_KIND, "")).strip_edges()
+		var player_id := int(evt.get(DinnertimeTimelineClass.KEY_PLAYER_ID, -1))
+		var amount := int(evt.get(DinnertimeTimelineClass.KEY_PAYMENT_AMOUNT, 0))
+		var milestone_id := str(evt.get(DinnertimeTimelineClass.KEY_MILESTONE_ID, "")).strip_edges()
+		if kind.is_empty() or player_id < 0 or amount <= 0 or milestone_id.is_empty():
+			continue
+
+		var key := _build_post_income_key(kind, player_id, amount)
+		var bucket: Array = []
+		if out.has(key):
+			var cur = out[key]
+			if cur is Array:
+				bucket = cur
+		bucket.append({
+			"player_id": player_id,
+			"milestone_id": milestone_id,
+		})
+		out[key] = bucket
+
+	for k in out.keys():
+		var arr_val = out.get(k, null)
+		if not (arr_val is Array):
+			continue
+		var arr: Array = arr_val
+		arr.sort_custom(func(a, b) -> bool:
+			if not (a is Dictionary and b is Dictionary):
+				return false
+			var da: Dictionary = a
+			var db: Dictionary = b
+			var pa := int(da.get("player_id", -1))
+			var pb := int(db.get("player_id", -1))
+			if pa != pb:
+				return pa < pb
+			return str(da.get("milestone_id", "")) < str(db.get("milestone_id", ""))
+		)
+	return out
+
+func _build_end_milestone_events(settlement_data: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var events_val = settlement_data.get(DinnertimeTimelineClass.KEY_TIMELINE_EVENTS, null)
+	if not (events_val is Array):
+		return out
+	var events: Array = events_val
+	for evt_val in events:
+		if not (evt_val is Dictionary):
+			continue
+		var evt: Dictionary = evt_val
+		if str(evt.get(DinnertimeTimelineClass.KEY_KIND, "")).strip_edges() != DinnertimeTimelineClass.KIND_MILESTONE:
+			continue
+		if str(evt.get(DinnertimeTimelineClass.KEY_STAGE, "")).strip_edges() != DinnertimeTimelineClass.STAGE_END:
+			continue
+		var player_id := int(evt.get(DinnertimeTimelineClass.KEY_PLAYER_ID, -1))
+		var milestone_id := str(evt.get(DinnertimeTimelineClass.KEY_MILESTONE_ID, "")).strip_edges()
+		if player_id < 0 or milestone_id.is_empty():
+			continue
+		out.append({
+			"player_id": player_id,
+			"milestone_id": milestone_id,
+		})
+
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var pa := int(a.get("player_id", -1))
+		var pb := int(b.get("player_id", -1))
+		if pa != pb:
+			return pa < pb
+		return str(a.get("milestone_id", "")) < str(b.get("milestone_id", ""))
+	)
+	return out
+
+func _build_post_income_key(kind: String, player_id: int, amount: int) -> String:
+	return "%s:%d:%d" % [kind.strip_edges(), int(player_id), int(amount)]
+
+func _consume_post_income_bankruptcy_events(kind: String, player_id: int, amount: int) -> Array:
+	var key := _build_post_income_key(kind, player_id, amount)
+	if not _bankruptcy_events_by_post_income_key.has(key):
+		return []
+	var list_val = _bankruptcy_events_by_post_income_key.get(key, [])
+	_bankruptcy_events_by_post_income_key.erase(key)
+	if not (list_val is Array):
+		return []
+	return (list_val as Array).duplicate(true)
 
 func _sum_bankruptcy_reserve_added(settlement_data: Dictionary) -> int:
 	var total := 0
@@ -1025,6 +1264,83 @@ func _sum_bankruptcy_reserve_added(settlement_data: Dictionary) -> int:
 			continue
 		total += int(evt.get("reserve_added", 0))
 	return total
+
+func _play_sale_milestone_events(sale: Dictionary) -> void:
+	var sale_index := int(sale.get("sale_index", -1))
+	if sale_index < 0:
+		return
+	var events := _consume_sale_milestone_events(sale_index)
+	_emit_milestone_events(events)
+
+func _consume_sale_milestone_events(sale_index: int) -> Array:
+	if not _milestone_events_by_sale_index.has(sale_index):
+		return []
+	var list_val = _milestone_events_by_sale_index.get(sale_index, [])
+	_milestone_events_by_sale_index.erase(sale_index)
+	if not (list_val is Array):
+		return []
+	return (list_val as Array).duplicate(true)
+
+func _play_post_income_milestone_events(event: Dictionary) -> void:
+	var player_id := int(event.get("player_id", -1))
+	var kind := str(event.get("kind", "")).strip_edges()
+	var amount := int(event.get("amount", 0))
+	if player_id < 0 or kind.is_empty() or amount <= 0:
+		return
+	var events := _consume_post_income_milestone_events(kind, player_id, amount)
+	_emit_milestone_events(events)
+
+func _consume_post_income_milestone_events(kind: String, player_id: int, amount: int) -> Array:
+	var key := _build_post_income_key(kind, player_id, amount)
+	if not _milestone_events_by_post_income_key.has(key):
+		return []
+	var list_val = _milestone_events_by_post_income_key.get(key, [])
+	_milestone_events_by_post_income_key.erase(key)
+	if not (list_val is Array):
+		return []
+	return (list_val as Array).duplicate(true)
+
+func _emit_milestone_events(events: Array) -> void:
+	if not _milestone_toast_cb.is_valid():
+		return
+	for evt_val in events:
+		if not (evt_val is Dictionary):
+			continue
+		var evt: Dictionary = evt_val
+		var player_id := int(evt.get("player_id", -1))
+		var milestone_id := str(evt.get("milestone_id", "")).strip_edges()
+		if player_id < 0 or milestone_id.is_empty():
+			continue
+		_milestone_toast_cb.call(player_id, milestone_id)
+
+func _emit_all_remaining_milestone_events() -> void:
+	# sale
+	var sale_keys: Array[int] = []
+	for k in _milestone_events_by_sale_index.keys():
+		if k is int:
+			sale_keys.append(int(k))
+	sale_keys.sort()
+	for sale_index in sale_keys:
+		var list_val = _milestone_events_by_sale_index.get(sale_index, [])
+		if list_val is Array:
+			_emit_milestone_events(list_val as Array)
+	_milestone_events_by_sale_index.clear()
+
+	# post_income
+	var post_keys: Array[String] = []
+	for k in _milestone_events_by_post_income_key.keys():
+		if k is String:
+			post_keys.append(str(k))
+	post_keys.sort()
+	for key in post_keys:
+		var list_val = _milestone_events_by_post_income_key.get(key, [])
+		if list_val is Array:
+			_emit_milestone_events(list_val as Array)
+	_milestone_events_by_post_income_key.clear()
+
+	# end
+	_emit_milestone_events(_milestone_events_end)
+	_milestone_events_end.clear()
 
 func _apply_cash_overrides() -> void:
 	if _player_panel != null and is_instance_valid(_player_panel):

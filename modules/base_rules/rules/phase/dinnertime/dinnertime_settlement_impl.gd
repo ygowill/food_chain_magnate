@@ -3,6 +3,7 @@
 extends RefCounted
 
 const BankruptcyRulesClass = preload("res://core/rules/economy/bankruptcy_rules.gd")
+const DinnertimeTimelineClass = preload("res://core/rules/dinnertime_timeline.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const DinnertimeEffectsClass = preload("res://modules/base_rules/rules/phase/dinnertime/dinnertime_effects.gd")
 const DinnertimeHouseSalesClass = preload("res://modules/base_rules/rules/phase/dinnertime/dinnertime_house_sales.gd")
@@ -281,6 +282,13 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 	var bankruptcy_events: Array = (bankruptcy_events_val as Array).duplicate(true)
 	var bankruptcy_event_cursor := _read_bankruptcy_events_count(state)
 
+	var timeline_events_val = house_sales.get("timeline_events", null)
+	if timeline_events_val == null:
+		timeline_events_val = []
+	if not (timeline_events_val is Array):
+		return Result.failure("晚餐结算失败：内部错误（timeline_events 类型错误）")
+	var timeline_events: Array = (timeline_events_val as Array).duplicate(true)
+
 	var income_tips: Array[int] = []
 	var income_cfo: Array[int] = []
 	var total_income: Array[int] = []
@@ -311,15 +319,16 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 		if tips_amount <= 0:
 			continue
 
+		var ms_before := DinnertimeTimelineClass.snapshot_player_milestone_set(state, player_id)
 		var tips_result := BankruptcyRulesClass.pay_bank_to_player(state, player_id, tips_amount, "女服务员收入")
 		if not tips_result.ok:
 			return Result.failure("女服务员收入支付失败：玩家 %d：%s" % [player_id, tips_result.error])
 		warnings.append_array(tips_result.warnings)
 		var tips_breaks := _collect_new_bankruptcy_events(state, bankruptcy_event_cursor, {
-			"timeline_stage": "post_income",
-			"post_income_kind": "tips",
-			"player_id": player_id,
-			"payment_amount": tips_amount,
+			DinnertimeTimelineClass.KEY_STAGE: DinnertimeTimelineClass.STAGE_POST_INCOME,
+			DinnertimeTimelineClass.KEY_POST_INCOME_KIND: "tips",
+			DinnertimeTimelineClass.KEY_PLAYER_ID: player_id,
+			DinnertimeTimelineClass.KEY_PAYMENT_AMOUNT: tips_amount,
 		})
 		bankruptcy_event_cursor = int(tips_breaks.get("cursor", bankruptcy_event_cursor))
 		var tips_break_events_val = tips_breaks.get("events", [])
@@ -327,6 +336,19 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 			for evt_val in tips_break_events_val:
 				if evt_val is Dictionary:
 					bankruptcy_events.append(evt_val)
+
+		var ms_after := DinnertimeTimelineClass.snapshot_player_milestone_set(state, player_id)
+		DinnertimeTimelineClass.append_new_milestone_events_for_player_from_diff(
+			timeline_events,
+			player_id,
+			ms_before,
+			ms_after,
+			{
+				DinnertimeTimelineClass.KEY_STAGE: DinnertimeTimelineClass.STAGE_POST_INCOME,
+				DinnertimeTimelineClass.KEY_POST_INCOME_KIND: "tips",
+				DinnertimeTimelineClass.KEY_PAYMENT_AMOUNT: tips_amount,
+			}
+		)
 
 		income_tips[player_id] += tips_amount
 		total_income_before_cfo[player_id] += tips_amount
@@ -358,15 +380,16 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 		if extra <= 0:
 			continue
 
+		var ms_before := DinnertimeTimelineClass.snapshot_player_milestone_set(state, player_id)
 		var cfo_result := BankruptcyRulesClass.pay_bank_to_player(state, player_id, extra, "CFO 加成")
 		if not cfo_result.ok:
 			return Result.failure("CFO 加成支付失败：玩家 %d：%s" % [player_id, cfo_result.error])
 		warnings.append_array(cfo_result.warnings)
 		var cfo_breaks := _collect_new_bankruptcy_events(state, bankruptcy_event_cursor, {
-			"timeline_stage": "post_income",
-			"post_income_kind": "cfo",
-			"player_id": player_id,
-			"payment_amount": extra,
+			DinnertimeTimelineClass.KEY_STAGE: DinnertimeTimelineClass.STAGE_POST_INCOME,
+			DinnertimeTimelineClass.KEY_POST_INCOME_KIND: "cfo",
+			DinnertimeTimelineClass.KEY_PLAYER_ID: player_id,
+			DinnertimeTimelineClass.KEY_PAYMENT_AMOUNT: extra,
 		})
 		bankruptcy_event_cursor = int(cfo_breaks.get("cursor", bankruptcy_event_cursor))
 		var cfo_break_events_val = cfo_breaks.get("events", [])
@@ -375,6 +398,19 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 				if evt_val is Dictionary:
 					bankruptcy_events.append(evt_val)
 		income_cfo[player_id] += extra
+
+		var ms_after := DinnertimeTimelineClass.snapshot_player_milestone_set(state, player_id)
+		DinnertimeTimelineClass.append_new_milestone_events_for_player_from_diff(
+			timeline_events,
+			player_id,
+			ms_before,
+			ms_after,
+			{
+				DinnertimeTimelineClass.KEY_STAGE: DinnertimeTimelineClass.STAGE_POST_INCOME,
+				DinnertimeTimelineClass.KEY_POST_INCOME_KIND: "cfo",
+				DinnertimeTimelineClass.KEY_PAYMENT_AMOUNT: extra,
+			}
+		)
 
 	for player_id in range(state.players.size()):
 		total_income[player_id] = int(total_income_before_cfo[player_id]) + int(income_cfo[player_id])
@@ -389,6 +425,7 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 		"total_income": total_income,
 		"sold_marketed_demand_events": sold_marketed_demand_events,
 		"bankruptcy_events": bankruptcy_events,
+		"timeline_events": timeline_events,
 	}
 
 	# 注入阻塞：晚餐结算需等待玩家确认后才允许 auto-advance 离开 DINNERTIME。

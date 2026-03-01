@@ -139,6 +139,23 @@ static func animate_bank_decrease(bank_label: Label, active_tweens: Array[Tween]
 	)
 	return to_val
 
+static func animate_bank_increase(bank_label: Label, active_tweens: Array[Tween], from_val: int, amount: int, dur: float) -> int:
+	var to_val := int(from_val) + int(amount)
+	if not is_instance_valid(bank_label):
+		return to_val
+	var d := maxf(0.01, float(dur))
+
+	var tween := bank_label.create_tween()
+	active_tweens.append(tween)
+	tween.tween_method(func(v: float):
+		if is_instance_valid(bank_label):
+			bank_label.text = "$%d" % int(v)
+	, float(from_val), float(to_val), d)
+	tween.tween_callback(func():
+		active_tweens.erase(tween)
+	)
+	return to_val
+
 static func animate_player_income(
 	anim_layer: Control,
 	player_id: int,

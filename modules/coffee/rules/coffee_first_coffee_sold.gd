@@ -3,6 +3,7 @@ extends RefCounted
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const DinnertimeTimelineClass = preload("res://core/rules/dinnertime_timeline.gd")
 
 const Phase = PhaseDefsClass.Phase
 const Point = SettlementRegistryClass.Point
@@ -45,8 +46,11 @@ func _after_dinnertime_primary(state: GameState, _phase_manager) -> Result:
 	if sales.is_empty():
 		return Result.success()
 
-	var sellers := {}
-	for s_val in sales:
+	var timeline_events := DinnertimeTimelineClass.ensure_state_timeline_events(state)
+
+	var first_sale_index_by_seller := {}
+	for sale_index in range(sales.size()):
+		var s_val = sales[sale_index]
 		if not (s_val is Dictionary):
 			continue
 		var s: Dictionary = s_val
@@ -62,15 +66,19 @@ func _after_dinnertime_primary(state: GameState, _phase_manager) -> Result:
 			var seller: int = int(p.get("seller", -1))
 			if seller < 0 or seller >= state.players.size():
 				continue
-			sellers[seller] = true
+			if not first_sale_index_by_seller.has(seller) or sale_index < int(first_sale_index_by_seller[seller]):
+				first_sale_index_by_seller[seller] = sale_index
 
-	if sellers.is_empty():
+	if first_sale_index_by_seller.is_empty():
 		return Result.success()
 
 	var warnings: Array[String] = []
 	var bonus_sellers := {}
-	for k in sellers.keys():
-		var seller_id: int = int(k)
+	var seller_ids: Array[int] = []
+	for k in first_sale_index_by_seller.keys():
+		seller_ids.append(int(k))
+	seller_ids.sort()
+	for seller_id in seller_ids:
 		var r2 := MilestoneSystemClass.process_event(state, "ProductSold", {
 			"player_id": seller_id,
 			"product": COFFEE_ID,
@@ -82,8 +90,17 @@ func _after_dinnertime_primary(state: GameState, _phase_manager) -> Result:
 		var v = r2.value
 		if v is Dictionary:
 			var claimed_val = Dictionary(v).get("claimed", [])
-			if claimed_val is Array and Array(claimed_val).has(FIRST_COFFEE_SOLD_MILESTONE_ID):
-				bonus_sellers[seller_id] = true
+			if claimed_val is Array:
+				var sale_index := int(first_sale_index_by_seller.get(seller_id, -1))
+				for mid_val in Array(claimed_val):
+					if not (mid_val is String):
+						continue
+					var mid := str(mid_val).strip_edges()
+					if mid.is_empty():
+						continue
+					DinnertimeTimelineClass.append_sale_milestone(timeline_events, sale_index, seller_id, mid)
+				if Array(claimed_val).has(FIRST_COFFEE_SOLD_MILESTONE_ID):
+					bonus_sellers[seller_id] = true
 
 	if bonus_sellers.is_empty():
 		return Result.success().with_warnings(warnings)
@@ -206,4 +223,3 @@ func _on_cleanup_enter_after_primary(state: GameState, _phase_manager) -> Result
 
 	state.round_state.erase(BONUS_PENDING_PLAYERS_KEY)
 	return Result.success()
-

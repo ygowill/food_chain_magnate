@@ -1,6 +1,7 @@
 extends RefCounted
 
 const BankruptcyRulesClass = preload("res://core/rules/economy/bankruptcy_rules.gd")
+const DinnertimeTimelineClass = preload("res://core/rules/dinnertime_timeline.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const DinnertimeDemandRegistryClass = preload("res://core/rules/dinnertime_demand_registry.gd")
 const DinnertimeRoutePurchaseRegistryClass = preload("res://core/rules/dinnertime_route_purchase_registry.gd")
@@ -47,6 +48,7 @@ static func apply(
 	var sold_marketed_demand_events: Array[Dictionary] = []
 	var bankruptcy_events: Array[Dictionary] = []
 	var bankruptcy_event_cursor := _read_bankruptcy_events_count(state)
+	var timeline_events: Array[Dictionary] = []
 
 	var warnings: Array[String] = []
 
@@ -167,6 +169,8 @@ static func apply(
 		var revenue: int = int(breakdown["revenue"])
 		var sale_index: int = sales.size()
 
+		var milestones_before := DinnertimeTimelineClass.snapshot_milestones_by_player(state)
+
 		# 可插拔：路上购买/结算（例如 Coffee：沿路路过餐厅/咖啡店买咖啡）
 		var route_purchases: Array = []
 		var route_income_by_player: Dictionary = {}
@@ -272,8 +276,8 @@ static func apply(
 				return Result.failure("晚餐收入支付失败：玩家 %d：%s" % [owner_id, pay_result.error])
 			warnings.append_array(pay_result.warnings)
 			var revenue_breaks := _collect_new_bankruptcy_events(state, bankruptcy_event_cursor, {
-				"timeline_stage": "sale",
-				"sale_index": sale_index,
+				DinnertimeTimelineClass.KEY_STAGE: DinnertimeTimelineClass.STAGE_SALE,
+				DinnertimeTimelineClass.KEY_SALE_INDEX: sale_index,
 				"house_id": house_id,
 				"house_number": house["house_number"],
 				"winner_owner": owner_id,
@@ -295,8 +299,8 @@ static func apply(
 				return Result.failure("晚餐额外奖金支付失败：玩家 %d：%s" % [owner_id, bonus_result.error])
 			warnings.append_array(bonus_result.warnings)
 			var bonus_breaks := _collect_new_bankruptcy_events(state, bankruptcy_event_cursor, {
-				"timeline_stage": "sale",
-				"sale_index": sale_index,
+				DinnertimeTimelineClass.KEY_STAGE: DinnertimeTimelineClass.STAGE_SALE,
+				DinnertimeTimelineClass.KEY_SALE_INDEX: sale_index,
 				"house_id": house_id,
 				"house_number": house["house_number"],
 				"winner_owner": owner_id,
@@ -315,6 +319,17 @@ static func apply(
 		# 清空需求（已被完整满足）
 		house["demands"] = []
 		houses[house_id] = house
+
+		var milestones_after := DinnertimeTimelineClass.snapshot_milestones_by_player(state)
+		DinnertimeTimelineClass.append_new_milestone_events_from_diff(
+			timeline_events,
+			milestones_before,
+			milestones_after,
+			{
+				DinnertimeTimelineClass.KEY_STAGE: DinnertimeTimelineClass.STAGE_SALE,
+				DinnertimeTimelineClass.KEY_SALE_INDEX: sale_index,
+			}
+		)
 
 		sales.append({
 			"house_id": house_id,
@@ -349,6 +364,7 @@ static func apply(
 		"skipped": skipped,
 		"sold_marketed_demand_events": sold_marketed_demand_events,
 		"bankruptcy_events": bankruptcy_events,
+		"timeline_events": timeline_events,
 	}).with_warnings(warnings)
 
 static func _read_bankruptcy_events_count(state: GameState) -> int:

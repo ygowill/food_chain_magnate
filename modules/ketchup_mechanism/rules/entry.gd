@@ -3,6 +3,7 @@ extends RefCounted
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const DinnertimeTimelineClass = preload("res://core/rules/dinnertime_timeline.gd")
 
 const Phase = PhaseDefsClass.Phase
 
@@ -70,9 +71,27 @@ func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -
 	if events.is_empty():
 		return Result.success()
 
+	var timeline_events := DinnertimeTimelineClass.ensure_state_timeline_events(state)
+
+	# house_id -> sale_index（用于将里程碑提示对齐到“本笔售卖完成后”）
+	var house_to_sale_index := {}
+	var sales_val = ds.get("sales", null)
+	if sales_val is Array:
+		var sales: Array = sales_val
+		for sale_index in range(sales.size()):
+			var s_val = sales[sale_index]
+			if not (s_val is Dictionary):
+				continue
+			var s: Dictionary = s_val
+			var hid := str(s.get("house_id", "")).strip_edges()
+			if hid.is_empty():
+				continue
+			if not house_to_sale_index.has(hid):
+				house_to_sale_index[hid] = sale_index
+
 	# 同一晚餐可能有多名玩家的需求被“他人售出”（同一房屋多名 marketeer / 多个房屋）。
-	# 里程碑最多每名玩家获得一次；按 player_id 去重并确定性排序后逐个触发。
-	var unique_from_players := {}
+	# 里程碑最多每名玩家获得一次；取最早发生的 sale_index，用于时间线显示。
+	var first_sale_index_by_from_player := {}
 	for e_val in events:
 		if not (e_val is Dictionary):
 			continue
@@ -83,13 +102,22 @@ func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -
 		var from_player: int = int(from_val)
 		if from_player < 0 or from_player >= state.players.size():
 			return Result.failure("ketchup_mechanism: from_player 越界: %d" % from_player)
-		unique_from_players[from_player] = true
+		var house_id := str(e.get("house_id", "")).strip_edges()
+		var sale_index := -1
+		if not house_id.is_empty() and house_to_sale_index.has(house_id):
+			sale_index = int(house_to_sale_index[house_id])
+		if not first_sale_index_by_from_player.has(from_player):
+			first_sale_index_by_from_player[from_player] = sale_index
+		elif sale_index >= 0:
+			var prev := int(first_sale_index_by_from_player.get(from_player, -1))
+			if prev < 0 or sale_index < prev:
+				first_sale_index_by_from_player[from_player] = sale_index
 
-	if unique_from_players.is_empty():
+	if first_sale_index_by_from_player.is_empty():
 		return Result.success()
 
 	var from_players: Array[int] = []
-	for k in unique_from_players.keys():
+	for k in first_sale_index_by_from_player.keys():
 		from_players.append(int(k))
 	from_players.sort()
 
@@ -100,5 +128,20 @@ func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -
 		})
 		if not r.ok:
 			return r
+		var v = r.value
+		if v is Dictionary:
+			var claimed_val = Dictionary(v).get("claimed", [])
+			if claimed_val is Array:
+				var sale_index := int(first_sale_index_by_from_player.get(from_player, -1))
+				for mid_val in Array(claimed_val):
+					if not (mid_val is String):
+						continue
+					var mid := str(mid_val).strip_edges()
+					if mid.is_empty():
+						continue
+					if sale_index >= 0:
+						DinnertimeTimelineClass.append_sale_milestone(timeline_events, sale_index, from_player, mid)
+					else:
+						DinnertimeTimelineClass.append_end_milestone(timeline_events, from_player, mid)
 
 	return Result.success()
