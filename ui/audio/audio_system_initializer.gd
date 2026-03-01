@@ -44,17 +44,26 @@ func _setup_audio_buses() -> void:
 		AudioServer.set_bus_send(idx, "Master")
 
 func _initialize_managers() -> void:
-	# 创建音效管理器
-	if _sound_manager == null:
+	var root := get_tree().root
+	if root == null:
+		return
+
+	# 重要：SoundManager / MusicManager 需要跨场景持久化，否则切场景会截断正在播放的音效。
+	var existing_sm := SoundManager.get_instance()
+	if existing_sm != null and is_instance_valid(existing_sm):
+		_sound_manager = existing_sm
+	else:
 		_sound_manager = SoundManagerScene.instantiate()
 		_sound_manager.name = "SoundManager"
-		add_child(_sound_manager)
+		root.add_child(_sound_manager)
 
-	# 创建音乐管理器
-	if _music_manager == null:
+	var existing_mm := MusicManager.get_instance()
+	if existing_mm != null and is_instance_valid(existing_mm):
+		_music_manager = existing_mm
+	else:
 		_music_manager = MusicManagerScene.instantiate()
 		_music_manager.name = "MusicManager"
-		add_child(_music_manager)
+		root.add_child(_music_manager)
 
 func get_sound_manager() -> Node:
 	return _sound_manager

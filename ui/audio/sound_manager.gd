@@ -99,6 +99,19 @@ var _player_pool: Array[AudioStreamPlayer] = []
 const POOL_SIZE: int = 8
 var _current_player_index: int = 0
 
+# === 自动启用：动作/事件音效（用于快速验证/占位） ===
+var _eventbus_source: String = ""
+var _auto_event_sounds_enabled: bool = true
+var _auto_sound_last_play_msec: int = -999999
+const AUTO_SOUND_MIN_INTERVAL_MSEC: int = 80
+
+# === 自动启用：UI Button Press 音效（用于快速验证/占位） ===
+var _auto_ui_button_sounds_enabled: bool = true
+var _auto_ui_tree_cb: Callable = Callable()
+var _auto_ui_button_cb: Callable = Callable()
+var _auto_ui_last_click_msec: int = -999999
+const AUTO_EVENT_SUPPRESS_AFTER_UI_CLICK_MSEC: int = 250
+
 # 单例
 static var _instance: SoundManager = null
 
@@ -112,10 +125,14 @@ func _enter_tree() -> void:
 func _exit_tree() -> void:
 	if _instance == self:
 		_instance = null
+	_teardown_eventbus_auto_sounds()
+	_teardown_ui_button_auto_sounds()
 
 func _ready() -> void:
 	_create_player_pool()
 	_load_settings()
+	_setup_eventbus_auto_sounds()
+	_setup_ui_button_auto_sounds()
 
 func _create_player_pool() -> void:
 	for i in range(POOL_SIZE):
@@ -209,6 +226,126 @@ func play_feedback(success: bool) -> void:
 		play(SOUND_SUCCESS)
 	else:
 		play(SOUND_ERROR)
+
+# === 自动启用：EventBus → 占位音效（Button Press）===
+
+func set_auto_event_sounds_enabled(enabled: bool) -> void:
+	_auto_event_sounds_enabled = enabled
+
+func _setup_eventbus_auto_sounds() -> void:
+	if OS.has_feature("headless"):
+		return
+	if not _auto_event_sounds_enabled:
+		return
+	if EventBus == null:
+		return
+
+	if _eventbus_source.is_empty():
+		_eventbus_source = "SoundManager:%s" % str(get_instance_id())
+
+	# 只订阅少量关键事件：避免一个 command 触发多个事件导致过于吵闹。
+	var types: Array[String] = [
+		EventBus.EventType.COMMAND_EXECUTED,
+		EventBus.EventType.PHASE_CHANGED,
+		EventBus.EventType.SUB_PHASE_CHANGED,
+		EventBus.EventType.PLAYER_TURN_STARTED,
+		EventBus.EventType.PLAYER_TURN_ENDED,
+	]
+	for t in types:
+		EventBus.subscribe(t, Callable(self, "_on_eventbus_auto_sound_event"), 200, _eventbus_source)
+
+func _teardown_eventbus_auto_sounds() -> void:
+	if _eventbus_source.is_empty():
+		return
+	if EventBus != null and EventBus.has_method("unsubscribe_all_from_source"):
+		EventBus.unsubscribe_all_from_source(_eventbus_source)
+	_eventbus_source = ""
+
+func _on_eventbus_auto_sound_event(_event: Dictionary) -> void:
+	if OS.has_feature("headless"):
+		return
+	if not _auto_event_sounds_enabled:
+		return
+
+	# 简单节流：避免同一帧/短时间内连响多个 click。
+	var now_msec := Time.get_ticks_msec()
+	# 若刚刚发生过 UI 按键点击，则认为该事件由 UI 驱动，避免重复播放 “Button Press”。
+	if (now_msec - _auto_ui_last_click_msec) < AUTO_EVENT_SUPPRESS_AFTER_UI_CLICK_MSEC:
+		return
+	if (now_msec - _auto_sound_last_play_msec) < AUTO_SOUND_MIN_INTERVAL_MSEC:
+		return
+	_auto_sound_last_play_msec = now_msec
+
+	# 当前仅用于快速验证音效链路：统一播放 Button Press。
+	play_ui_click()
+
+# === 自动启用：UI Button Press → 占位音效（Button Press）===
+
+func set_auto_ui_button_sounds_enabled(enabled: bool) -> void:
+	_auto_ui_button_sounds_enabled = enabled
+
+func _setup_ui_button_auto_sounds() -> void:
+	if OS.has_feature("headless"):
+		return
+	if not _auto_ui_button_sounds_enabled:
+		return
+
+	var tree := get_tree()
+	if tree == null:
+		return
+
+	if not _auto_ui_tree_cb.is_valid():
+		_auto_ui_tree_cb = Callable(self, "_on_scene_tree_node_added")
+	if not _auto_ui_button_cb.is_valid():
+		_auto_ui_button_cb = Callable(self, "_on_auto_ui_button_pressed")
+
+	if tree.has_signal("node_added"):
+		var sig := Signal(tree, &"node_added")
+		if not sig.is_connected(_auto_ui_tree_cb):
+			sig.connect(_auto_ui_tree_cb)
+
+	_hook_ui_buttons_in_subtree(tree.root)
+
+func _teardown_ui_button_auto_sounds() -> void:
+	var tree := get_tree()
+	if tree != null and _auto_ui_tree_cb.is_valid() and tree.has_signal("node_added"):
+		var sig := Signal(tree, &"node_added")
+		if sig.is_connected(_auto_ui_tree_cb):
+			sig.disconnect(_auto_ui_tree_cb)
+
+func _on_scene_tree_node_added(node: Node) -> void:
+	if OS.has_feature("headless"):
+		return
+	if not _auto_ui_button_sounds_enabled:
+		return
+	if node == null:
+		return
+	_hook_ui_buttons_in_subtree(node)
+
+func _hook_ui_buttons_in_subtree(node: Node) -> void:
+	if node == null:
+		return
+	if node is BaseButton:
+		_hook_ui_button(node)
+	for child in node.get_children():
+		if child is Node:
+			_hook_ui_buttons_in_subtree(child)
+
+func _hook_ui_button(btn: BaseButton) -> void:
+	if btn == null:
+		return
+	if btn.has_signal("pressed"):
+		var sig := Signal(btn, &"pressed")
+		if _auto_ui_button_cb.is_valid() and not sig.is_connected(_auto_ui_button_cb):
+			sig.connect(_auto_ui_button_cb)
+
+func _on_auto_ui_button_pressed() -> void:
+	if OS.has_feature("headless"):
+		return
+	if not _auto_ui_button_sounds_enabled:
+		return
+	_auto_ui_last_click_msec = Time.get_ticks_msec()
+	play_ui_click()
 
 # === 音量控制 ===
 
