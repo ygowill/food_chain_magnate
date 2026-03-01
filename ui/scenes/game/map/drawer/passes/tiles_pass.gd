@@ -36,6 +36,9 @@ static func draw_tile_borders(canvas, cell_size: int) -> void:
 		if not (board_pos_val is Vector2i):
 			continue
 		var board_pos: Vector2i = board_pos_val
+		if canvas != null and canvas.has_method("is_intro_tile_revealed"):
+			if not bool(canvas.call("is_intro_tile_revealed", board_pos)):
+				continue
 		var world_min := board_pos * tile_size
 		var vmin = canvas._world_to_view(world_min)
 		var rect := Rect2(
@@ -91,6 +94,9 @@ static func draw_tile_id_labels(canvas, cell_size: int) -> void:
 		if not (board_pos_val is Vector2i):
 			continue
 		var board_pos: Vector2i = board_pos_val
+		if canvas != null and canvas.has_method("is_intro_tile_revealed"):
+			if not bool(canvas.call("is_intro_tile_revealed", board_pos)):
+				continue
 		var world_min := board_pos * tile_size
 		var vmin = canvas._world_to_view(world_min)
 		var rect := Rect2(

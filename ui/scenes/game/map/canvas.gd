@@ -74,9 +74,11 @@ var _interaction_enabled: bool = true
 
 # === 开局动画：地图逐格生成（纯 UI，不影响 state.map）===
 var _intro_reveal_enabled: bool = false
-var _intro_reveal_count: int = 0 # 已揭示的 base cell 数（按 idx(y,x) 线性顺序）
+var _intro_reveal_count: int = 0 # 已揭示的 tile 数（按 board_pos 的 y/x 排序）
 var _intro_reveal_total: int = 0
 var _intro_reveal_token: int = 0
+var _intro_reveal_tile_order: Array[Vector2i] = []
+var _intro_reveal_tile_index_by_origin: Dictionary = {} # Vector2i(board_pos) -> index(int)
 
 func _ready() -> void:
 	# 需要让 MapView（ScrollContainer）也能收到滚轮/拖拽等输入，用于缩放/平移。
@@ -472,10 +474,6 @@ func set_interaction_enabled(enabled: bool) -> void:
 	queue_redraw()
 
 func prepare_intro_reveal() -> void:
-	_refresh_intro_reveal_totals()
-	if _intro_reveal_total <= 0:
-		_intro_reveal_enabled = false
-		return
 	_intro_reveal_enabled = true
 	_intro_reveal_count = 0
 	_intro_reveal_token += 1
@@ -487,6 +485,21 @@ func reset_intro_reveal() -> void:
 	_intro_reveal_token += 1
 	queue_redraw()
 
+func is_intro_reveal_active() -> bool:
+	return _intro_reveal_enabled
+
+func is_intro_tile_revealed(board_pos: Vector2i) -> bool:
+	if not _intro_reveal_enabled:
+		return true
+	var idx_val = _intro_reveal_tile_index_by_origin.get(board_pos, null)
+	if idx_val is int:
+		return int(idx_val) < _intro_reveal_count
+	if idx_val is float:
+		var f: float = float(idx_val)
+		if f == floor(f):
+			return int(f) < _intro_reveal_count
+	return _intro_reveal_total > 0 and _intro_reveal_count >= _intro_reveal_total
+
 func is_intro_world_pos_revealed(world_pos: Vector2i) -> bool:
 	if not _intro_reveal_enabled:
 		return true
@@ -495,14 +508,41 @@ func is_intro_world_pos_revealed(world_pos: Vector2i) -> bool:
 	var map_origin: Vector2i = _map_data.get("map_origin", Vector2i.ZERO)
 	var idx := world_pos + map_origin
 	if not MapUtils.is_valid_pos(idx, _base_grid_size):
+		if _external_cells_by_pos.has(world_pos):
+			var ext_val = _external_cells_by_pos[world_pos]
+			if ext_val is Dictionary:
+				var ext_cell: Dictionary = ext_val
+				var tile_origin_val2 = ext_cell.get("tile_origin", null)
+				if tile_origin_val2 is Vector2i:
+					var tile_origin2: Vector2i = tile_origin_val2
+					if tile_origin2 == Vector2i(-1, -1):
+						return false
+					return is_intro_tile_revealed(tile_origin2)
 		return true
-	var linear := idx.y * _base_grid_size.x + idx.x
-	return linear < _intro_reveal_count
+
+	var row_val = _cells[idx.y]
+	if not (row_val is Array):
+		return true
+	var row: Array = row_val
+	if idx.x < 0 or idx.x >= row.size():
+		return true
+	var cell_val = row[idx.x]
+	if not (cell_val is Dictionary):
+		return true
+	var cell: Dictionary = cell_val
+	var tile_origin_val = cell.get("tile_origin", null)
+	if not (tile_origin_val is Vector2i):
+		return false
+	var tile_origin: Vector2i = tile_origin_val
+	if tile_origin == Vector2i(-1, -1):
+		return false
+	return is_intro_tile_revealed(tile_origin)
 
 func play_intro_reveal_animation(duration_sec: float = 1.6) -> void:
 	_refresh_intro_reveal_totals()
 	if _intro_reveal_total <= 0:
 		_intro_reveal_enabled = false
+		queue_redraw()
 		return
 
 	if OS.has_feature("headless") or duration_sec <= 0.001:
@@ -517,30 +557,94 @@ func play_intro_reveal_animation(duration_sec: float = 1.6) -> void:
 	var token := _intro_reveal_token
 	var start_ms := int(Time.get_ticks_msec())
 	var dur := maxf(0.05, float(duration_sec))
+	var interval := dur / float(_intro_reveal_total)
+	var next_reveal := 0.0
 
 	while token == _intro_reveal_token and _intro_reveal_count < _intro_reveal_total:
 		var elapsed := float(int(Time.get_ticks_msec()) - start_ms) / 1000.0
-		var t := clampf(elapsed / dur, 0.0, 1.0)
-		var target := int(floor(t * float(_intro_reveal_total)))
-		if target <= _intro_reveal_count:
-			target = _intro_reveal_count + 1
-		_intro_reveal_count = mini(target, _intro_reveal_total)
-		queue_redraw()
+		var updated := false
+		while elapsed >= next_reveal and _intro_reveal_count < _intro_reveal_total:
+			_intro_reveal_count += 1
+			next_reveal += interval
+			updated = true
+		if updated:
+			queue_redraw()
 		await get_tree().process_frame
 
 	if token != _intro_reveal_token:
 		return
 
 	_intro_reveal_count = _intro_reveal_total
-	_intro_reveal_enabled = false
 	queue_redraw()
 
 func _refresh_intro_reveal_totals() -> void:
-	_intro_reveal_total = maxi(0, int(_base_grid_size.x)) * maxi(0, int(_base_grid_size.y))
+	_rebuild_intro_reveal_tiles()
+	_intro_reveal_total = _intro_reveal_tile_order.size()
 	if not _intro_reveal_enabled:
 		_intro_reveal_count = _intro_reveal_total
 	else:
 		_intro_reveal_count = clampi(_intro_reveal_count, 0, _intro_reveal_total)
+
+func _rebuild_intro_reveal_tiles() -> void:
+	_intro_reveal_tile_order.clear()
+	_intro_reveal_tile_index_by_origin.clear()
+	if _map_data.is_empty():
+		return
+
+	var tps: Array = []
+	var base_val = _map_data.get("tile_placements", null)
+	if base_val is Array:
+		tps.append_array(base_val)
+	var ext_val = _map_data.get("external_tile_placements", null)
+	if ext_val is Array:
+		tps.append_array(ext_val)
+
+	var seen: Dictionary = {}
+	for tp_val in tps:
+		if not (tp_val is Dictionary):
+			continue
+		var tp: Dictionary = tp_val
+		var bp_val = tp.get("board_pos", null)
+		if not (bp_val is Vector2i):
+			continue
+		var bp: Vector2i = bp_val
+		if seen.has(bp):
+			continue
+		seen[bp] = true
+		_intro_reveal_tile_order.append(bp)
+
+	# Fallback：老数据可能缺少 tile_placements，改为从 cell.tile_origin 推断。
+	if _intro_reveal_tile_order.is_empty() and _base_grid_size != Vector2i.ZERO:
+		for y in range(_base_grid_size.y):
+			if y < 0 or y >= _cells.size():
+				continue
+			var row_val = _cells[y]
+			if not (row_val is Array):
+				continue
+			var row: Array = row_val
+			for x in range(_base_grid_size.x):
+				if x < 0 or x >= row.size():
+					continue
+				var cell_val = row[x]
+				if not (cell_val is Dictionary):
+					continue
+				var cell: Dictionary = cell_val
+				var tile_origin_val = cell.get("tile_origin", null)
+				if not (tile_origin_val is Vector2i):
+					continue
+				var bp2: Vector2i = tile_origin_val
+				if bp2 == Vector2i(-1, -1) or seen.has(bp2):
+					continue
+				seen[bp2] = true
+				_intro_reveal_tile_order.append(bp2)
+
+	_intro_reveal_tile_order.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		if a.y != b.y:
+			return a.y < b.y
+		return a.x < b.x
+	)
+	for i in range(_intro_reveal_tile_order.size()):
+		_intro_reveal_tile_index_by_origin[_intro_reveal_tile_order[i]] = i
 
 func _gui_input(event: InputEvent) -> void:
 	if _grid_size == Vector2i.ZERO:
@@ -608,10 +712,6 @@ func _get_cell_world(world_pos: Vector2i) -> Dictionary:
 	var map_origin: Vector2i = _map_data.get("map_origin", Vector2i.ZERO)
 	var idx := world_pos + map_origin
 	if _base_grid_size != Vector2i.ZERO and MapUtils.is_valid_pos(idx, _base_grid_size):
-		if _intro_reveal_enabled:
-			var linear := idx.y * _base_grid_size.x + idx.x
-			if linear >= _intro_reveal_count:
-				return _INTRO_VOID_CELL
 		var row_val = _cells[idx.y]
 		if not (row_val is Array):
 			return {}
@@ -619,10 +719,33 @@ func _get_cell_world(world_pos: Vector2i) -> Dictionary:
 		var cell_val = row[idx.x]
 		if not (cell_val is Dictionary):
 			return {}
-		return cell_val
+		var cell: Dictionary = cell_val
+
+		if _intro_reveal_enabled:
+			var tile_origin_val = cell.get("tile_origin", null)
+			if not (tile_origin_val is Vector2i):
+				return _INTRO_VOID_CELL
+			var tile_origin: Vector2i = tile_origin_val
+			if tile_origin == Vector2i(-1, -1):
+				return _INTRO_VOID_CELL
+			if not is_intro_tile_revealed(tile_origin):
+				return _INTRO_VOID_CELL
+
+		return cell
 	if _external_cells_by_pos.has(world_pos):
 		var cell_val = _external_cells_by_pos[world_pos]
-		return cell_val if cell_val is Dictionary else {}
+		if not (cell_val is Dictionary):
+			return {}
+		var cell: Dictionary = cell_val
+		if _intro_reveal_enabled:
+			var tile_origin_val = cell.get("tile_origin", null)
+			if tile_origin_val is Vector2i:
+				var tile_origin: Vector2i = tile_origin_val
+				if tile_origin == Vector2i(-1, -1):
+					return _INTRO_VOID_CELL
+				if not is_intro_tile_revealed(tile_origin):
+					return _INTRO_VOID_CELL
+		return cell
 	return {}
 
 func _world_to_view(world_pos: Vector2i) -> Vector2i:
@@ -633,6 +756,8 @@ func _draw() -> void:
 	_draw_extension_panels()
 
 func _draw_extension_panels() -> void:
+	if _intro_reveal_enabled:
+		return
 	if _extension_panels_by_id.is_empty():
 		return
 	var cell_size := int(get_cell_size())

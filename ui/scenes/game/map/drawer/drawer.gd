@@ -54,6 +54,9 @@ static func draw(canvas) -> void:
 		return
 
 	var cell_size: int = int(canvas.get_cell_size())
+	var intro_active := false
+	if canvas != null and canvas.has_method("is_intro_reveal_active"):
+		intro_active = bool(canvas.call("is_intro_reveal_active"))
 
 	_draw_ground_and_blocked(canvas, cell_size)
 	_draw_roads(canvas, cell_size)
@@ -66,10 +69,11 @@ static func draw(canvas) -> void:
 	_draw_marketing(canvas, cell_size)
 	# tile_id 文本属于调试信息，允许覆盖上层内容。
 	_draw_tile_id_labels(canvas, cell_size)
-	_draw_cell_highlights(canvas, cell_size)
-	_draw_piece_overlays(canvas, cell_size)
-	_draw_structure_preview(canvas, cell_size)
-	_draw_selection(canvas, cell_size)
+	if not intro_active:
+		_draw_cell_highlights(canvas, cell_size)
+		_draw_piece_overlays(canvas, cell_size)
+		_draw_structure_preview(canvas, cell_size)
+		_draw_selection(canvas, cell_size)
 
 static func _hash_string_32(text: String) -> int:
 	var h: int = 2166136261

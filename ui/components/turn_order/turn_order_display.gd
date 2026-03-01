@@ -304,8 +304,7 @@ func play_intro_roll(final_order: Array, config: Dictionary = {}) -> void:
 			pid = i
 		final.append(pid)
 
-	var base_spin_sec := clampf(float(config.get("base_spin_sec", 1.10)), 0.20, 6.00)
-	var stop_gap_sec := clampf(float(config.get("stop_gap_sec", 0.25)), 0.00, 2.00)
+	var spin_sec := clampf(float(config.get("spin_sec", config.get("base_spin_sec", 1.10))), 0.20, 6.00)
 	var tick_min_sec := clampf(float(config.get("tick_min_sec", 0.05)), 0.01, 0.20)
 	var tick_max_sec := clampf(float(config.get("tick_max_sec", 0.18)), tick_min_sec, 0.60)
 
@@ -334,45 +333,29 @@ func play_intro_roll(final_order: Array, config: Dictionary = {}) -> void:
 		rng.state = seed
 		rngs.append(rng)
 
-	var stop_at: Array[float] = []
-	var next_tick: Array[float] = []
-	var done: Array[bool] = []
-	for i in range(slot_count):
-		var s := maxf(0.05, base_spin_sec + float(i) * stop_gap_sec)
-		stop_at.append(s)
-		next_tick.append(0.0)
-		done.append(false)
-
 	var start_ms := int(Time.get_ticks_msec())
+	var next_tick := 0.0
 	while token == _intro_roll_token:
 		var elapsed := float(int(Time.get_ticks_msec()) - start_ms) / 1000.0
-		var all_done := true
+		if elapsed >= spin_sec:
+			break
 
-		for i in range(slot_count):
-			if done[i]:
-				continue
-			all_done = false
-
-			var stop_sec := float(stop_at[i])
-			if elapsed >= stop_sec:
-				done[i] = true
-				_apply_slot_preview(_slot_nodes[i], final[i])
-				continue
-
-			if elapsed >= float(next_tick[i]):
-				var t := clampf(elapsed / stop_sec, 0.0, 1.0)
-				var interval := lerpf(tick_min_sec, tick_max_sec, t)
-				next_tick[i] = elapsed + interval
+		if elapsed >= float(next_tick):
+			var t := clampf(elapsed / spin_sec, 0.0, 1.0)
+			var interval := lerpf(tick_min_sec, tick_max_sec, t)
+			next_tick = elapsed + interval
+			for i in range(slot_count):
 				var pid := candidates[rngs[i].randi_range(0, candidates.size() - 1)]
 				_apply_slot_preview(_slot_nodes[i], pid)
-
-		if all_done:
-			break
 
 		await get_tree().process_frame
 
 	if token != _intro_roll_token:
 		return
+
+	for i in range(slot_count):
+		_apply_slot_preview(_slot_nodes[i], final[i])
+
 	_intro_roll_active = false
 	_update_display()
 

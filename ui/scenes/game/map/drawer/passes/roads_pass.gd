@@ -188,6 +188,9 @@ static func draw_roadworks_markers(canvas, cell_size: int) -> void:
 	for world_pos in marker_positions:
 		if not (world_pos is Vector2i):
 			continue
+		if canvas != null and canvas.has_method("is_intro_world_pos_revealed"):
+			if not bool(canvas.call("is_intro_world_pos_revealed", world_pos)):
+				continue
 		if not canvas._is_valid_world_pos(world_pos):
 			continue
 		var vpos: Vector2i = canvas._world_to_view(world_pos)
