@@ -11,6 +11,7 @@ extends Control
 @onready var bank_break_tag: Label = $UIRoot/TopBar/StatusBar/StatusContent/BankSection/BankBreakTag
 @onready var toggle_left_panel_button: Button = $UIRoot/TopBar/ToggleLeftPanelButton
 @onready var toggle_right_panel_button: Button = $UIRoot/TopBar/ToggleRightPanelButton
+@onready var mute_icon: TextureRect = $UIRoot/TopBar/MuteIcon
 @onready var toggle_bottom_panel_button: Button = $MenuDialog/VBoxContainer/ToggleBottomPanelButton
 @onready var menu_dialog: Control = $MenuDialog
 @onready var menu_dialog_overlay: ColorRect = $MenuDialog/Overlay
@@ -61,6 +62,13 @@ const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const RulesDocsClass = preload("res://ui/utils/rules_docs.gd")
+
+const MUTE_ICON_ON_PATH := "res://assets/images/musicOn.png"
+const MUTE_ICON_OFF_PATH := "res://assets/images/musicOff.png"
+
+var _mute_icon_on: Texture2D = null
+var _mute_icon_off: Texture2D = null
+var _mute_icon_load_warned: bool = false
 
 # 游戏状态
 var game_engine: GameEngine = null
@@ -123,6 +131,14 @@ func _ready() -> void:
 	UiStylesClass.apply_tiled_texture(background, UiStylesClass.WALL_TEXTURE_PATHS, 3.0, Color(0.85, 0.80, 0.68, 1.0))
 	UiStylesClass.apply_vignette(vignette_overlay, 0.25, 0.5)
 	GameUiStyleApplierClass.apply_all(self)
+	if mute_icon != null:
+		mute_icon.gui_input.connect(_on_mute_icon_gui_input)
+		mute_icon.mouse_filter = Control.MOUSE_FILTER_STOP
+		mute_icon.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_ensure_mute_icon_textures_loaded()
+	_update_mute_icon_ui()
+	if Globals != null and not Globals.audio_muted_changed.is_connected(_on_audio_muted_changed):
+		Globals.audio_muted_changed.connect(_on_audio_muted_changed)
 	var build := GameControllersBuilderClass.build(self, {
 		"round_label": round_label,
 		"phase_track": phase_track,
@@ -707,6 +723,66 @@ func _ensure_game_menu_closed_for_blocking_modal() -> void:
 func _on_menu_pressed() -> void:
 	if _menu_controller != null and _menu_controller.has_method("on_menu_pressed"):
 		_menu_controller.call("on_menu_pressed")
+
+func _on_mute_icon_gui_input(event: InputEvent) -> void:
+	if event == null:
+		return
+
+	if event is InputEventMouseButton:
+		var e: InputEventMouseButton = event
+		if not e.pressed:
+			return
+		if e.button_index != MOUSE_BUTTON_LEFT:
+			return
+	elif event is InputEventScreenTouch:
+		var t: InputEventScreenTouch = event
+		if not t.pressed:
+			return
+	else:
+		return
+
+	if Globals != null and Globals.has_method("toggle_audio_muted"):
+		Globals.toggle_audio_muted()
+	_update_mute_icon_ui()
+	accept_event()
+
+func _on_audio_muted_changed(_muted: bool) -> void:
+	_update_mute_icon_ui()
+
+func _ensure_mute_icon_textures_loaded() -> void:
+	if _mute_icon_on != null and _mute_icon_off != null:
+		return
+
+	_mute_icon_on = _load_texture_if_exists(MUTE_ICON_ON_PATH)
+	_mute_icon_off = _load_texture_if_exists(MUTE_ICON_OFF_PATH)
+	if not _mute_icon_load_warned and (_mute_icon_on == null or _mute_icon_off == null):
+		_mute_icon_load_warned = true
+		GameLog.warn("Game", "静音图标缺失：请确保存在 %s 与 %s" % [MUTE_ICON_ON_PATH, MUTE_ICON_OFF_PATH])
+
+func _load_texture_if_exists(path: String) -> Texture2D:
+	var p := str(path).strip_edges()
+	if p.is_empty():
+		return null
+	if not ResourceLoader.exists(p):
+		return null
+	var res = load(p)
+	if res is Texture2D:
+		return res
+	return null
+
+func _update_mute_icon_ui() -> void:
+	if mute_icon == null:
+		return
+	_ensure_mute_icon_textures_loaded()
+
+	var muted := false
+	if Globals != null and Globals.has_method("is_audio_muted"):
+		muted = bool(Globals.is_audio_muted())
+
+	var tex: Texture2D = _mute_icon_off if muted else _mute_icon_on
+	if tex != null:
+		mute_icon.texture = tex
+	mute_icon.tooltip_text = "点击取消静音" if muted else "点击静音"
 
 func _on_menu_dialog_close_requested() -> void:
 	if _menu_controller != null and _menu_controller.has_method("on_menu_dialog_close_requested"):

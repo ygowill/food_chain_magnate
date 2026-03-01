@@ -12,7 +12,6 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
 @onready var page_panel: PanelContainer = $MarginContainer/VBoxContainer/ContentHBox/PagePanel
 @onready var close_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/CloseButton
-@onready var apply_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/ApplyButton
 @onready var reset_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/ResetButton
 
 # 导航按钮
@@ -81,7 +80,7 @@ const RESOLUTIONS: Array[Vector2i] = [
 var _current_settings: Dictionary = {}
 var _default_settings: Dictionary = {
 	"master_volume": 0.8,
-	"music_volume": 0.7,
+	"music_volume": 0.3,
 	"sfx_volume": 0.8,
 	"mute": false,
 	"fullscreen": false,
@@ -102,13 +101,13 @@ var _default_settings: Dictionary = {
 var _nav_buttons: Array[Button] = []
 var _pages: Array[Control] = []
 var _current_page_index: int = 0
+var _syncing_ui: bool = false
 
 func _ready() -> void:
 	super._ready()
 	UiStylesClass.apply_dialog_surface(background_panel)
-	UiStylesClass.apply_button_primary(apply_btn)
 	UiStylesClass.apply_button_secondary(reset_btn)
-	UiStylesClass.apply_button_secondary(close_btn)
+	UiStylesClass.apply_button_primary(close_btn)
 	UiStylesClass.apply_panel_poster_alt(page_panel)
 
 	_nav_buttons = [audio_nav_btn, display_nav_btn, game_nav_btn, debug_nav_btn]
@@ -120,14 +119,41 @@ func _ready() -> void:
 
 	if close_btn != null:
 		close_btn.pressed.connect(_on_close_pressed)
-	if apply_btn != null:
-		apply_btn.pressed.connect(_on_apply_pressed)
 	if reset_btn != null:
 		reset_btn.pressed.connect(_on_reset_pressed)
 
 	_setup_resolution_options()
 	_load_settings()
+	_connect_setting_change_signals()
 	_switch_page(0)
+
+func open() -> void:
+	_load_audio_settings()
+	_sync_display_ui_from_runtime()
+	super.open()
+
+func _is_headless_runtime() -> bool:
+	return DisplayServer.get_name() == "headless"
+
+func _sync_display_ui_from_runtime() -> void:
+	if _is_headless_runtime():
+		return
+
+	var mode := DisplayServer.window_get_mode()
+	var is_fullscreen := (
+		mode == DisplayServer.WINDOW_MODE_FULLSCREEN
+		or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+	)
+	var vsync_mode := DisplayServer.window_get_vsync_mode()
+	var vsync_enabled := (vsync_mode != DisplayServer.VSYNC_DISABLED)
+	var size := DisplayServer.window_get_size()
+
+	_current_settings["fullscreen"] = is_fullscreen
+	_current_settings["vsync"] = vsync_enabled
+	if not is_fullscreen and size.x > 0 and size.y > 0:
+		_current_settings["resolution"] = Vector2i(size.x, size.y)
+
+	_update_ui_from_settings()
 
 func _apply_visual_styles() -> void:
 	UiStylesClass.apply_label_dark(title_label)
@@ -307,6 +333,9 @@ func _read_checkbox(check: CheckBox, fallback: bool) -> bool:
 	return bool(check.button_pressed)
 
 func _update_ui_from_settings() -> void:
+	var prev_sync := _syncing_ui
+	_syncing_ui = true
+
 	# 音频
 	_set_slider_percent(master_volume, float(_current_settings.get("master_volume", _default_settings.master_volume)))
 	_set_slider_percent(music_volume, float(_current_settings.get("music_volume", _default_settings.music_volume)))
@@ -338,6 +367,16 @@ func _update_ui_from_settings() -> void:
 
 	# 同步数值标签
 	_sync_all_value_labels()
+	_update_resolution_ui_state()
+
+	_syncing_ui = prev_sync
+
+func _update_resolution_ui_state() -> void:
+	if resolution_option == null:
+		return
+	var is_fullscreen := _read_checkbox(fullscreen_check, false)
+	resolution_option.disabled = is_fullscreen
+	resolution_option.tooltip_text = "全屏模式下分辨率由系统决定" if is_fullscreen else ""
 
 func _sync_all_value_labels() -> void:
 	_sync_value_label(master_volume, master_value_label)
@@ -383,37 +422,55 @@ func _update_settings_from_ui() -> void:
 	if animation_speed_slider != null:
 		_current_settings["animation_speed"] = float(animation_speed_slider.value) / 100.0
 
-# ── 应用设置 ──────────────────────────────────────────
+func _connect_setting_change_signals() -> void:
+	_connect_slider_change(master_volume)
+	_connect_slider_change(music_volume)
+	_connect_slider_change(sfx_volume)
+	_connect_checkbox_change(mute_check)
 
-func _apply_settings() -> void:
-	if bool(_current_settings.fullscreen):
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-	else:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	_connect_checkbox_change(fullscreen_check)
+	_connect_checkbox_change(vsync_check)
+	if resolution_option != null:
+		resolution_option.item_selected.connect(func(_idx: int) -> void: _on_setting_changed())
+	_connect_slider_change(ui_scale_slider)
+	_connect_slider_change(font_scale_slider)
+	_connect_slider_change(log_font_scale_slider)
 
-	if bool(_current_settings.vsync):
-		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
-	else:
-		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	_connect_checkbox_change(auto_save_check)
+	_connect_checkbox_change(confirm_actions_check)
+	_connect_checkbox_change(show_hints_check)
+	_connect_checkbox_change(replay_load_playable_check)
+	_connect_slider_change(animation_speed_slider)
 
-	if not bool(_current_settings.fullscreen):
-		var res: Vector2i = _current_settings.resolution
-		DisplayServer.window_set_size(res)
+	_connect_checkbox_change(show_tile_ids_check)
+	_connect_checkbox_change(show_cell_hover_tooltip_check)
 
-	_apply_ui_scale()
-	_apply_audio_settings_runtime()
-	_sync_globals_runtime_settings()
+func _connect_slider_change(slider: HSlider) -> void:
+	if slider == null:
+		return
+	slider.value_changed.connect(func(_val: float) -> void: _on_setting_changed())
 
-	settings_changed.emit(_current_settings)
+func _connect_checkbox_change(check: CheckBox) -> void:
+	if check == null:
+		return
+	check.toggled.connect(func(_pressed: bool) -> void: _on_setting_changed())
 
-func _on_apply_pressed() -> void:
+func _on_setting_changed() -> void:
+	if _syncing_ui:
+		return
+
+	var prev := _current_settings.duplicate(true)
 	_update_settings_from_ui()
+	_update_resolution_ui_state()
 	_save_settings()
-	_apply_settings()
+	_apply_runtime_changes(prev)
 
 func _on_reset_pressed() -> void:
-	_current_settings = _default_settings.duplicate()
+	var prev := _current_settings.duplicate(true)
+	_current_settings = _default_settings.duplicate(true)
 	_update_ui_from_settings()
+	_save_settings()
+	_apply_runtime_changes(prev)
 
 func _on_close_pressed() -> void:
 	close()
@@ -440,6 +497,49 @@ func _apply_ui_scale() -> void:
 	if get_tree().root is Window:
 		var w: Window = get_tree().root
 		w.content_scale_factor = scale
+
+# ── 运行时应用 ──────────────────────────────────────────
+
+func _apply_runtime_changes(prev_settings: Dictionary) -> void:
+	_apply_display_settings_if_needed(prev_settings)
+
+	if prev_settings.get("ui_scale", null) != _current_settings.get("ui_scale", null):
+		_apply_ui_scale()
+
+	if (
+		prev_settings.get("master_volume", null) != _current_settings.get("master_volume", null)
+		or prev_settings.get("music_volume", null) != _current_settings.get("music_volume", null)
+		or prev_settings.get("sfx_volume", null) != _current_settings.get("sfx_volume", null)
+		or prev_settings.get("mute", null) != _current_settings.get("mute", null)
+	):
+		_apply_audio_settings_runtime()
+
+	_sync_globals_runtime_settings()
+	settings_changed.emit(_current_settings)
+
+func _apply_display_settings_if_needed(prev_settings: Dictionary) -> void:
+	if _is_headless_runtime():
+		return
+
+	var fullscreen_changed := bool(prev_settings.get("fullscreen", false)) != bool(_current_settings.get("fullscreen", false))
+	var vsync_changed := bool(prev_settings.get("vsync", true)) != bool(_current_settings.get("vsync", true))
+	var res_changed: bool = prev_settings.get("resolution", null) != _current_settings.get("resolution", null)
+
+	if not (fullscreen_changed or vsync_changed or res_changed):
+		return
+
+	if bool(_current_settings.fullscreen):
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		var res: Vector2i = _current_settings.resolution
+		if res.x > 0 and res.y > 0:
+			DisplayServer.window_set_size(res)
+
+	if bool(_current_settings.vsync):
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
+	else:
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 
 # ── 音频 ──────────────────────────────────────────────
 
@@ -527,18 +627,27 @@ func _apply_audio_settings_runtime() -> void:
 	var sm := SoundManager.get_instance()
 	if sm != null and is_instance_valid(sm):
 		sm.set_master_volume(sfx_db)
-		sm.set_muted(muted)
 
 	var mm := MusicManager.get_instance()
 	if mm != null and is_instance_valid(mm):
 		mm.set_volume(music_db)
-		mm.set_muted(muted)
+	if Globals != null and Globals.has_method("set_audio_muted"):
+		Globals.set_audio_muted(muted)
+	else:
+		if sm != null and is_instance_valid(sm):
+			sm.set_muted(muted)
+		if mm != null and is_instance_valid(mm):
+			mm.set_muted(muted)
 
 func _sync_globals_runtime_settings() -> void:
 	if Globals == null:
 		return
 
 	Globals.ui_scale = float(_current_settings.ui_scale)
+	Globals.display_fullscreen = bool(_current_settings.get("fullscreen", Globals.display_fullscreen))
+	Globals.display_vsync = bool(_current_settings.get("vsync", Globals.display_vsync))
+	if _current_settings.has("resolution"):
+		Globals.display_resolution = _current_settings.resolution
 	Globals.show_tile_ids = bool(_current_settings.get("show_tile_ids", false))
 	Globals.show_cell_hover_tooltip = bool(_current_settings.get("show_cell_hover_tooltip", false))
 	Globals.font_scale = clampf(float(_current_settings.get("font_scale", Globals.font_scale)), 0.5, 2.0)

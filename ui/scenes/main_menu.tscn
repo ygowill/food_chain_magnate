@@ -141,6 +141,20 @@ custom_minimum_size = Vector2(204, 48)
 layout_mode = 2
 text = "退出"
 
+[node name="MuteIcon" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -48.0
+offset_right = 48.0
+offset_bottom = -16.0
+grow_vertical = 0
+expand_mode = 1
+stretch_mode = 5
+tooltip_text = "点击静音"
+
 [node name="VersionLabel" type="Label" parent="."]
 layout_mode = 1
 anchors_preset = 3

@@ -22,6 +22,7 @@ enum MusicTrack {
 const SINGLE_TRACK_PATH := "res://ui/audio/music/game_bgm.mp3"
 const BOOT_AUTOPLAY_MAX_ATTEMPTS: int = 30
 const BOOT_AUTOPLAY_INTERVAL_SEC: float = 0.25
+const DEFAULT_MUSIC_VOLUME_LINEAR: float = 0.24 # 默认：主音量 80% * 音乐音量 30%
 
 # 曲目配置
 var _track_config: Dictionary = {
@@ -334,6 +335,8 @@ func _load_settings() -> void:
 	var config := ConfigFile.new()
 	var err := config.load("user://sound_settings.cfg")
 	if err != OK:
+		_master_volume = linear_to_db(clampf(DEFAULT_MUSIC_VOLUME_LINEAR, 0.0001, 1.0))
+		_muted = false
 		return
 
 	_master_volume = config.get_value("music", "volume", 0.0)

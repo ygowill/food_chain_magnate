@@ -61,6 +61,13 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 20
 
+[node name="MuteIcon" type="TextureRect" parent="UIRoot/TopBar"]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+tooltip_text = "点击静音"
+
 [node name="LeftSpacer" type="Control" parent="UIRoot/TopBar"]
 layout_mode = 2
 size_flags_horizontal = 3

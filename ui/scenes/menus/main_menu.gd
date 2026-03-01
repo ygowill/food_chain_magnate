@@ -10,6 +10,12 @@ const TITLE_LOGO_PATHS: PackedStringArray = [
 	"res://assets/main_title_logo_1080.png",
 	"res://assets/main_title_logo.png",
 ]
+const MUTE_ICON_ON_PATH := "res://assets/images/musicOn.png"
+const MUTE_ICON_OFF_PATH := "res://assets/images/musicOff.png"
+
+var _mute_icon_on: Texture2D = null
+var _mute_icon_off: Texture2D = null
+var _mute_icon_load_warned: bool = false
 
 @onready var version_label: Label = $VersionLabel
 @onready var wall_background: ColorRect = $WallBackground
@@ -25,6 +31,7 @@ const TITLE_LOGO_PATHS: PackedStringArray = [
 @onready var load_game_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/LoadGameButton
 @onready var settings_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/SystemButtons/SettingsButton
 @onready var quit_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/SystemButtons/QuitButton
+@onready var mute_icon: TextureRect = $MuteIcon
 
 var _message_dialog: Control = null
 var _settings_dialog: Control = null
@@ -67,6 +74,14 @@ func _ready() -> void:
 	UiStylesClass.apply_button_secondary(load_game_button)
 	UiStylesClass.apply_button_secondary(settings_button)
 	UiStylesClass.apply_button_secondary(quit_button)
+	if mute_icon != null:
+		mute_icon.gui_input.connect(_on_mute_icon_gui_input)
+		mute_icon.mouse_filter = Control.MOUSE_FILTER_STOP
+		mute_icon.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_ensure_mute_icon_textures_loaded()
+	_update_mute_icon_ui()
+	if Globals != null and not Globals.audio_muted_changed.is_connected(_on_audio_muted_changed):
+		Globals.audio_muted_changed.connect(_on_audio_muted_changed)
 	new_game_button.grab_focus()
 	_kick_bgm_autoplay()
 
@@ -128,6 +143,66 @@ func _on_settings_pressed() -> void:
 func _on_quit_pressed() -> void:
 	GameLog.info("MainMenu", "退出游戏")
 	get_tree().quit()
+
+func _on_mute_icon_gui_input(event: InputEvent) -> void:
+	if event == null:
+		return
+
+	if event is InputEventMouseButton:
+		var e: InputEventMouseButton = event
+		if not e.pressed:
+			return
+		if e.button_index != MOUSE_BUTTON_LEFT:
+			return
+	elif event is InputEventScreenTouch:
+		var t: InputEventScreenTouch = event
+		if not t.pressed:
+			return
+	else:
+		return
+
+	if Globals != null and Globals.has_method("toggle_audio_muted"):
+		Globals.toggle_audio_muted()
+	_update_mute_icon_ui()
+	accept_event()
+
+func _on_audio_muted_changed(_muted: bool) -> void:
+	_update_mute_icon_ui()
+
+func _ensure_mute_icon_textures_loaded() -> void:
+	if _mute_icon_on != null and _mute_icon_off != null:
+		return
+
+	_mute_icon_on = _load_texture_if_exists(MUTE_ICON_ON_PATH)
+	_mute_icon_off = _load_texture_if_exists(MUTE_ICON_OFF_PATH)
+	if not _mute_icon_load_warned and (_mute_icon_on == null or _mute_icon_off == null):
+		_mute_icon_load_warned = true
+		GameLog.warn("MainMenu", "静音图标缺失：请确保存在 %s 与 %s" % [MUTE_ICON_ON_PATH, MUTE_ICON_OFF_PATH])
+
+func _load_texture_if_exists(path: String) -> Texture2D:
+	var p := str(path).strip_edges()
+	if p.is_empty():
+		return null
+	if not ResourceLoader.exists(p):
+		return null
+	var res = load(p)
+	if res is Texture2D:
+		return res
+	return null
+
+func _update_mute_icon_ui() -> void:
+	if mute_icon == null:
+		return
+	_ensure_mute_icon_textures_loaded()
+
+	var muted := false
+	if Globals != null and Globals.has_method("is_audio_muted"):
+		muted = bool(Globals.is_audio_muted())
+
+	var tex: Texture2D = _mute_icon_off if muted else _mute_icon_on
+	if tex != null:
+		mute_icon.texture = tex
+	mute_icon.tooltip_text = "点击取消静音" if muted else "点击静音"
 
 func _ensure_settings_dialog() -> void:
 	if _settings_dialog != null and is_instance_valid(_settings_dialog):

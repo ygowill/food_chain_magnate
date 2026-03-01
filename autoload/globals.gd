@@ -2,6 +2,8 @@
 # 存储游戏版本、当前配置和运行时状态
 extends Node
 
+signal audio_muted_changed(muted: bool)
+
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const GameStateClass = preload("res://core/state/game_state.gd")
 const GameConstantsClass = preload("res://core/engine/game_constants.gd")
@@ -52,6 +54,9 @@ var player_restaurant_logo_choices: Array[int] = []  # player_id -> logo_id（-1
 # UI/游戏设置（SettingsDialog）
 var ui_scale: float = 1.0
 var ui_layout_version: int = 2 # 仅支持新布局（v2）
+var display_fullscreen: bool = false
+var display_vsync: bool = true
+var display_resolution: Vector2i = Vector2i(1920, 1080)
 var confirm_actions: bool = true
 var show_hints: bool = true
 var animation_speed: float = 1.0
@@ -76,6 +81,7 @@ func _ready() -> void:
 	GameLog.info("Globals", "全局配置初始化 v%s" % get_version())
 	_load_settings()
 	_ensure_player_profiles()
+	_apply_display_settings()
 	_apply_ui_scale()
 	_apply_font_scale()
 
@@ -101,6 +107,13 @@ func _load_settings() -> void:
 	var err := config.load("user://settings.cfg")
 	if err == OK:
 		language = config.get_value("game", "language", "zh")
+		display_fullscreen = bool(config.get_value("display", "fullscreen", display_fullscreen))
+		display_vsync = bool(config.get_value("display", "vsync", display_vsync))
+		var res_val = config.get_value("display", "resolution", display_resolution)
+		if res_val is Vector2i:
+			display_resolution = res_val
+		elif res_val is Vector2:
+			display_resolution = Vector2i(int((res_val as Vector2).x), int((res_val as Vector2).y))
 		ui_scale = float(config.get_value("display", "ui_scale", 1.0))
 		show_tile_ids = bool(config.get_value("display", "show_tile_ids", false))
 		show_cell_hover_tooltip = bool(config.get_value("display", "show_cell_hover_tooltip", false))
@@ -141,6 +154,22 @@ func _load_settings() -> void:
 	# 强制新布局（v2），忽略历史配置值（issue_tracker #60）。
 	ui_layout_version = 2
 
+func _apply_display_settings() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	if display_fullscreen:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		if display_resolution.x > 0 and display_resolution.y > 0:
+			DisplayServer.window_set_size(display_resolution)
+
+	if display_vsync:
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
+	else:
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+
 func _apply_ui_scale() -> void:
 	if get_tree() == null or get_tree().root == null:
 		return
@@ -160,6 +189,60 @@ func get_scaled_font_size(base_size: int) -> int:
 
 func get_log_font_size(base_size: int) -> int:
 	return maxi(1, int(round(float(base_size) * clampf(log_font_scale, 0.5, 3.0))))
+
+# 音频设置快捷操作（主菜单/游戏内一键静音）
+func is_audio_muted() -> bool:
+	var muted := false
+	var sm := SoundManager.get_instance()
+	if sm != null and is_instance_valid(sm):
+		muted = muted or bool(sm.is_muted())
+	var mm := MusicManager.get_instance()
+	if mm != null and is_instance_valid(mm):
+		muted = muted or bool(mm.is_muted())
+	if sm != null or mm != null:
+		return muted
+
+	var config := ConfigFile.new()
+	if config.load("user://sound_settings.cfg") == OK:
+		return bool(config.get_value("mix", "mute", false))
+	return false
+
+func set_audio_muted(muted: bool) -> void:
+	var target := bool(muted)
+	var prev := is_audio_muted()
+
+	var config := ConfigFile.new()
+	config.load("user://sound_settings.cfg") # 允许文件不存在；保留其它系统写入的设置
+	# 确保 mix/music 关键字段存在（避免仅写入 mute 导致下次启动音量回退到 100%）
+	if not config.has_section_key("mix", "master_volume"):
+		config.set_value("mix", "master_volume", 0.8)
+	if not config.has_section_key("mix", "music_volume"):
+		config.set_value("mix", "music_volume", 0.3)
+	if not config.has_section_key("mix", "sfx_volume"):
+		config.set_value("mix", "sfx_volume", 0.8)
+	if not config.has_section_key("music", "volume"):
+		var master := float(config.get_value("mix", "master_volume", 0.8))
+		var music := float(config.get_value("mix", "music_volume", 0.3))
+		config.set_value("music", "volume", linear_to_db(clampf(master * music, 0.0001, 1.0)))
+	config.set_value("mix", "mute", target)
+	config.set_value("audio", "muted", target)
+	config.set_value("music", "muted", target)
+	config.save("user://sound_settings.cfg")
+
+	var sm := SoundManager.get_instance()
+	if sm != null and is_instance_valid(sm):
+		sm.set_muted(target)
+	var mm := MusicManager.get_instance()
+	if mm != null and is_instance_valid(mm):
+		mm.set_muted(target)
+
+	if prev != target:
+		audio_muted_changed.emit(target)
+
+func toggle_audio_muted() -> bool:
+	var next := not is_audio_muted()
+	set_audio_muted(next)
+	return next
 
 # 保存用户设置
 func save_settings() -> void:
