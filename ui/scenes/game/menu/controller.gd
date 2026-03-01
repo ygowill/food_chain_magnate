@@ -3,6 +3,8 @@
 class_name GameMenuController
 extends RefCounted
 
+const UiZClass = preload("res://ui/utils/ui_z.gd")
+
 var _host: Node = null
 
 var _menu_debug_controller: Object = null
@@ -163,7 +165,7 @@ func show_confirm(title: String, message: String, on_confirm: Callable, on_cance
 		if is_instance_valid(_host) and _host.has_method("add_child"):
 			_host.add_child(_confirm_dialog)
 		if _confirm_dialog is Control:
-			(_confirm_dialog as Control).z_index = 1300
+			UiZClass.apply_absolute((_confirm_dialog as Control), UiZClass.CONFIRM_DIALOG)
 
 		var confirmed_cb := Callable(self, "_on_confirm_dialog_confirmed")
 		var cancelled_cb := Callable(self, "_on_confirm_dialog_cancelled")

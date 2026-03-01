@@ -9,6 +9,7 @@ const OverlayUtilsClass = preload("res://ui/scenes/game/overlay/utils.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
+const UiZClass = preload("res://ui/utils/ui_z.gd")
 const DinnerTimeOverlayClass = preload("res://ui/components/dinner_time/dinner_time_overlay.gd")
 const DinnertimeAnimationIncomeUtilsClass = preload("res://ui/scenes/game/dinnertime/income_utils.gd")
 const DinnertimeAnimationPostIncomeCardClass = preload("res://ui/scenes/game/dinnertime/post_income_card.gd")
@@ -236,8 +237,7 @@ func _create_anim_layer() -> void:
 	_anim_layer.name = "DinnertimeAnimLayer"
 	_anim_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_anim_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_anim_layer.z_as_relative = false
-	_anim_layer.z_index = 1100
+	UiZClass.apply_absolute(_anim_layer, UiZClass.DINNERTIME_OVERLAY)
 	_scene.add_child(_anim_layer)
 
 func _create_map_anim_layer() -> void:
@@ -249,8 +249,7 @@ func _create_map_anim_layer() -> void:
 	_map_anim_layer.name = "DinnertimeMapAnimLayer"
 	_map_anim_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_map_anim_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_map_anim_layer.z_as_relative = false
-	_map_anim_layer.z_index = 1100
+	UiZClass.apply_absolute(_map_anim_layer, UiZClass.DINNERTIME_OVERLAY)
 	(_map_canvas as Control).add_child(_map_anim_layer)
 
 func _create_control_bar() -> void:
@@ -260,8 +259,7 @@ func _create_control_bar() -> void:
 		func(): _on_next_pressed(),
 		func(): skip_all()
 	)
-	_control_bar.z_as_relative = false
-	_control_bar.z_index = 1150
+	UiZClass.apply_absolute(_control_bar, UiZClass.DINNERTIME_CONTROL_BAR)
 	_scene.add_child(_control_bar)
 	_update_control_bar()
 

@@ -3,6 +3,7 @@ class_name RulesViewerDialog
 extends ModalDialogBase
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const UiZClass = preload("res://ui/utils/ui_z.gd")
 const InfoDialogClass = preload("res://ui/dialogs/info_dialog.gd")
 
 const RULES_INDEX_PATH := "res://assets/rules/rules_index.json"
@@ -54,7 +55,7 @@ var _pending_open_page: int = 1
 func _ready() -> void:
 	super._ready()
 
-	z_index = 1500
+	UiZClass.apply_absolute(self, UiZClass.RULES_DIALOG)
 
 	UiStylesClass.apply_overlay_dim(overlay_rect)
 	UiStylesClass.apply_dialog_surface(background_panel)

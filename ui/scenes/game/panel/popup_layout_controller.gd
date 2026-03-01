@@ -3,6 +3,7 @@ extends RefCounted
 
 const POPUP_LAYOUT_META_KEY := "popup_layout"
 const POPUP_LAYOUT_DOCK_RIGHT := "dock_right"
+const UiZClass = preload("res://ui/utils/ui_z.gd")
 
 var _scene = null
 
@@ -21,7 +22,7 @@ func center_popup(panel: Control) -> void:
 	if panel.has_meta(POPUP_LAYOUT_META_KEY):
 		layout = str(panel.get_meta(POPUP_LAYOUT_META_KEY))
 
-	panel.z_index = 500
+	UiZClass.apply_absolute(panel, UiZClass.POPUP)
 
 	if layout == POPUP_LAYOUT_DOCK_RIGHT:
 		_dock_popup_right(panel)
@@ -145,4 +146,3 @@ func _get_popup_safe_rect() -> Rect2:
 		bottom = top
 
 	return Rect2(Vector2(0, top), Vector2(viewport_size.x, bottom - top))
-

@@ -4,6 +4,7 @@ class_name PhaseTrackStrip
 extends Control
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const UiZClass = preload("res://ui/utils/ui_z.gd")
 
 signal phase_hover_changed(phase_key: String, hover_global_pos: Vector2)
 signal phase_hover_exited()
@@ -73,7 +74,7 @@ func _exit_tree() -> void:
 func _create_tip() -> void:
 	_tip_panel = PanelContainer.new()
 	_tip_panel.top_level = true
-	_tip_panel.z_index = 1000
+	UiZClass.apply_absolute(_tip_panel, UiZClass.MAP_OVERLAY)
 	_tip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_tip_panel.visible = false
 

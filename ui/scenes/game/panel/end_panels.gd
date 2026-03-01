@@ -6,6 +6,7 @@ const GameOverPanelScene = preload("res://ui/components/game_over/game_over_pane
 const BankBreakPanelScene = preload("res://ui/components/bank_break/bank_break_panel.tscn")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const UiZClass = preload("res://ui/utils/ui_z.gd")
 const KIND_CONFIRM_DINNERTIME := "confirm_dinnertime"
 
 const REPLAY_SAVES_DIR := "user://saves"
@@ -225,6 +226,8 @@ func _ensure_bank_break_panel() -> void:
 	if bank_break_panel != null:
 		return
 	bank_break_panel = BankBreakPanelScene.instantiate()
+	if bank_break_panel is Control:
+		UiZClass.apply_absolute((bank_break_panel as Control), UiZClass.MODAL)
 	if bank_break_panel.has_signal("bankruptcy_acknowledged"):
 		bank_break_panel.bankruptcy_acknowledged.connect(_on_bank_break_acknowledged)
 	if bank_break_panel.has_signal("game_end_triggered"):
@@ -319,7 +322,10 @@ func _show_game_over() -> void:
 
 	if game_over_panel == null:
 		game_over_panel = GameOverPanelScene.instantiate()
-		game_over_panel.z_index = 1400
+		if game_over_panel is Control:
+			UiZClass.apply_absolute((game_over_panel as Control), UiZClass.GAME_OVER)
+		else:
+			game_over_panel.z_index = UiZClass.GAME_OVER
 		game_over_panel.return_to_menu_requested.connect(_on_game_over_return)
 		game_over_panel.play_again_requested.connect(_on_game_over_play_again)
 		game_over_panel.save_replay_requested.connect(_on_game_over_save_replay)

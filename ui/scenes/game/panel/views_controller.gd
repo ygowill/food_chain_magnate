@@ -7,6 +7,7 @@ const EmployeeTreeScene = preload("res://ui/components/employee_tree/employee_tr
 const MilestoneFullScreenViewScene = preload("res://ui/components/milestone_panel/milestone_full_screen_view.tscn")
 const ReserveAreaFullScreenViewScene = preload("res://ui/components/reserve_area/reserve_area_full_screen_view.tscn")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
+const UiZClass = preload("res://ui/utils/ui_z.gd")
 
 var _scene = null
 
@@ -162,7 +163,7 @@ func _ensure_employee_tree_panel() -> void:
 	_employee_tree_panel.visible = false
 	_scene.add_child(_employee_tree_panel)
 	if _employee_tree_panel is Control:
-		(_employee_tree_panel as Control).z_index = 900
+		UiZClass.apply_absolute((_employee_tree_panel as Control), UiZClass.FULLSCREEN_VIEW)
 	if _employee_tree_panel.has_signal("closed"):
 		if not _employee_tree_panel.closed.is_connected(hide_employee_tree):
 			_employee_tree_panel.closed.connect(hide_employee_tree)
@@ -180,8 +181,7 @@ func _ensure_milestone_full_screen_view() -> void:
 	_scene.add_child(_milestone_full_screen_view)
 
 	if _milestone_full_screen_view is Control:
-		var c: Control = _milestone_full_screen_view
-		c.z_index = 900
+		UiZClass.apply_absolute((_milestone_full_screen_view as Control), UiZClass.FULLSCREEN_VIEW)
 
 	UiSignalHelpersClass.safe_connect(_milestone_full_screen_view, "close_requested", hide_milestone_full_screen_view)
 
@@ -198,7 +198,6 @@ func _ensure_reserve_area_full_screen_view() -> void:
 	_scene.add_child(_reserve_area_full_screen_view)
 
 	if _reserve_area_full_screen_view is Control:
-		var c: Control = _reserve_area_full_screen_view
-		c.z_index = 900
+		UiZClass.apply_absolute((_reserve_area_full_screen_view as Control), UiZClass.FULLSCREEN_VIEW)
 
 	UiSignalHelpersClass.safe_connect(_reserve_area_full_screen_view, "close_requested", hide_reserve_area_full_screen_view)

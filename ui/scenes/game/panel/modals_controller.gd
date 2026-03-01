@@ -7,6 +7,7 @@ const TurnOrderSelectionModalScene = preload("res://ui/components/modal_panel/tu
 const ReserveCardSelectionModalScene = preload("res://ui/components/modal_panel/reserve_card_selection_modal.tscn")
 
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
+const UiZClass = preload("res://ui/utils/ui_z.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const PhaseActionUiRegistryClass = preload("res://ui/scenes/game/panel/phase_action_ui_registry.gd")
 
@@ -167,7 +168,7 @@ func _initialize_modal(modal_ref, scene: PackedScene, signal_map: Dictionary):
 
 	_scene.add_child(inst)
 	if inst is Control:
-		(inst as Control).z_index = 900
+		UiZClass.apply_absolute((inst as Control), UiZClass.MODAL)
 
 	for sig_name in signal_map.keys():
 		var cb = signal_map.get(sig_name, null)

@@ -4,6 +4,7 @@ class_name MapModeBar
 extends Control
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const UiZClass = preload("res://ui/utils/ui_z.gd")
 
 @onready var title_label: Label = $Bar/MarginContainer/VBoxContainer/TitleLabel
 @onready var hint_label: Label = $Bar/MarginContainer/VBoxContainer/HintLabel
@@ -11,7 +12,7 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 func _ready() -> void:
 	# Ensure the hint bar is always readable (draw above turn order overlay, etc.).
 	z_as_relative = false
-	z_index = 1000
+	z_index = UiZClass.MAP_OVERLAY
 	UiStylesClass.apply_label_dark(title_label)
 	UiStylesClass.apply_label_hint_dark(hint_label)
 

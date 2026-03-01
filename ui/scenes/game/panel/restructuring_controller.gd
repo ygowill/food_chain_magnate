@@ -5,6 +5,7 @@ extends RefCounted
 
 const RestructuringModalScene = preload("res://ui/components/modal_panel/restructuring_modal.tscn")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
+const UiZClass = preload("res://ui/utils/ui_z.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
@@ -284,7 +285,7 @@ func _show_restructuring_modal(covered: Rect2) -> void:
 			return
 		_scene.add_child(inst)
 		if inst is Control:
-			(inst as Control).z_index = 900
+			UiZClass.apply_absolute((inst as Control), UiZClass.MODAL)
 		_restructuring_modal = inst
 
 		UiSignalHelpersClass.safe_connect(_restructuring_modal, "completed", _on_restructuring_modal_completed)

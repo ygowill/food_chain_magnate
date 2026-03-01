@@ -2,6 +2,7 @@
 extends RefCounted
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const UiZClass = preload("res://ui/utils/ui_z.gd")
 
 static func apply_all(game) -> void:
 	if game == null:
@@ -14,7 +15,7 @@ static func apply_all(game) -> void:
 static func _apply_menu_dialog_styles(game) -> void:
 	if is_instance_valid(game.menu_dialog):
 		game.menu_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
-		game.menu_dialog.z_index = 1200
+		UiZClass.apply_absolute(game.menu_dialog, UiZClass.MENU)
 	if is_instance_valid(game.menu_dialog_overlay):
 		game.menu_dialog_overlay.color = Color(0.05, 0.04, 0.03, 0.75)
 		game.menu_dialog_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -80,4 +81,3 @@ static func _apply_status_bar_styles(game) -> void:
 	# Phase track - 自定义绘制，初始字号
 	if is_instance_valid(game.phase_track) and game.phase_track.has_method("set_font_size"):
 		game.phase_track.set_font_size(16)
-

@@ -17,6 +17,7 @@ const MarketingRangeOverlayControllerClass = preload("res://ui/scenes/game/overl
 const ProcurementRouteOverlayControllerClass = preload("res://ui/scenes/game/overlay/procurement_route.gd")
 const DemandIndicatorControllerClass = preload("res://ui/scenes/game/overlay/demand_indicator.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
+const UiZClass = preload("res://ui/utils/ui_z.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const DinnertimeAnimControllerClass = preload("res://ui/scenes/game/dinnertime/controller.gd")
 const CommandClass = preload("res://core/types/command.gd")
@@ -505,8 +506,7 @@ func _ensure_toast_panel() -> void:
 	_toast_panel.name = "MilestoneToast"
 	_toast_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# 需要高于 GameOver 等终局遮罩（GameOverPanel.z_index=1400），保证提示可见。
-	_toast_panel.z_index = 1600
-	_toast_panel.z_as_relative = false
+	UiZClass.apply_absolute(_toast_panel, UiZClass.TOAST)
 
 	_toast_panel.anchor_left = 0.5
 	_toast_panel.anchor_right = 0.5
