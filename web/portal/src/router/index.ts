@@ -47,16 +47,28 @@ const router = createRouter({
       meta: { auth: true },
     },
     {
+      path: '/admin',
+      name: 'admin',
+      component: () => import('../views/AdminView.vue'),
+      meta: { auth: true },
+    },
+    {
       path: '/',
       redirect: '/matches',
     },
   ],
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (to.meta.auth && !auth.isLoggedIn) {
     return { name: 'login', query: { redirect: to.fullPath } }
+  }
+  if (auth.isLoggedIn && auth.user == null) {
+    await auth.fetchUser()
+  }
+  if (to.name === 'admin' && !auth.isAdmin) {
+    return { name: 'matches' }
   }
   if (to.meta.guest && auth.isLoggedIn) {
     return { name: 'matches' }

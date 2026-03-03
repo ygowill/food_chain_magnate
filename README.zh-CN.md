@@ -16,6 +16,26 @@
 tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60
 ```
 
+## 管理后台（用户 / 房间 / 对局）
+
+网页登录后可访问 `/admin` 管理页。
+
+- 后端管理接口位于 `/v1/admin/*`
+- 管理员由 `ADMIN_USER_IDS` 控制（逗号分隔的 user_id）
+- 本地调试可临时使用：`ADMIN_USER_IDS=*`
+- 支持表格多选批量操作：
+  - `POST /v1/admin/users/batch/status`
+  - `POST /v1/admin/users/batch/delete`
+  - `POST /v1/admin/rooms/batch/end`
+  - `POST /v1/admin/rooms/batch/delete`
+  - `POST /v1/admin/matches/batch/delete`
+
+例如启动 backend 前设置：
+
+```bash
+export ADMIN_USER_IDS="your_user_id_1,your_user_id_2"
+```
+
 ## Dedicated Server（运行/部署）
 
 本机运行（Godot CLI）：

@@ -104,48 +104,16 @@ function participantDisplays(match: MatchSummary): Array<{ name: string; logoUrl
   })
 }
 
-// TODO: 删除测试数据
-const MOCK_MATCHES: MatchSummary[] = [
-  {
-    match_id: '1', room_code: 'ABC123', status: '已结束', player_count: 4,
-    started_at: '2026-02-25T14:00:00Z', ended_at: '2026-02-25T17:30:00Z', duration_sec: 12600,
-    participants: [
-      { user_id: 'a1b2c3d4e5f6', display_name: '老王', restaurant_logo_id: 0, role: 'player', seat_index: 0, result: 'win',
-        score: { cash: 320, restaurants: 3, forfeited: false, employees: ['ceo', 'burger_cook', 'pizza_cook'], milestones: ['first_burger_sold'], inventory: { burger: 3 }, marketing_campaigns: 2 } },
-      { user_id: 'f6e5d4c3b2a1', display_name: '小李', restaurant_logo_id: 3, role: 'player', seat_index: 1, result: 'lose',
-        score: { cash: 180, restaurants: 2, forfeited: false, employees: ['ceo', 'truck_driver'], milestones: [], inventory: { lemonade: 4 }, marketing_campaigns: 1 } },
-    ],
-  },
-  {
-    match_id: '2', room_code: 'XYZ789', status: '进行中', player_count: 3,
-    started_at: '2026-02-27T09:15:00Z', ended_at: null, duration_sec: null,
-    participants: [
-      { user_id: 'aabbccdd1122', display_name: '测试玩家', restaurant_logo_id: 2, role: 'player', seat_index: 0, result: null, score: null },
-    ],
-  },
-  {
-    match_id: '3', room_code: 'QWE456', status: '已结束', player_count: 5,
-    started_at: '2026-02-20T19:00:00Z', ended_at: '2026-02-20T22:45:00Z', duration_sec: 13500,
-    participants: [],
-  },
-  {
-    match_id: '4', room_code: 'RTY012', status: '等待中', player_count: 2,
-    started_at: null, ended_at: null, duration_sec: null,
-    participants: [],
-  },
-]
-
 onMounted(async () => {
   loading.value = true
   try {
     const { data } = await listMatches(auth.sessionId)
     matches.value = data
   } catch {
-    // silent
+    matches.value = []
   } finally {
     loading.value = false
   }
-  if (matches.value.length === 0) matches.value = MOCK_MATCHES
 })
 </script>
 

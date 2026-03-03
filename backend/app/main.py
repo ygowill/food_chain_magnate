@@ -10,6 +10,7 @@ from app.device_auth import router as device_auth_router
 from app.rooms import router as rooms_router
 from app.matches import router as matches_router
 from app.internal import router as internal_router
+from app.admin import router as admin_router
 
 
 @asynccontextmanager
@@ -33,6 +34,7 @@ app.include_router(device_auth_router)
 app.include_router(rooms_router)
 app.include_router(matches_router)
 app.include_router(internal_router)
+app.include_router(admin_router)
 
 
 @app.get("/health")

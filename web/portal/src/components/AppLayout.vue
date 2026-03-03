@@ -5,6 +5,7 @@
       <nav class="app-nav__links">
         <router-link to="/game" class="app-nav__link">游戏</router-link>
         <router-link to="/matches" class="app-nav__link">对局历史</router-link>
+        <router-link v-if="auth.isAdmin" to="/admin" class="app-nav__link">管理后台</router-link>
         <router-link to="/settings" class="app-nav__link">账号设置</router-link>
       </nav>
       <div class="app-nav__spacer" />
@@ -17,11 +18,18 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 
 const auth = useAuthStore()
 const router = useRouter()
+
+onMounted(() => {
+  if (auth.isLoggedIn && auth.user == null) {
+    void auth.fetchUser()
+  }
+})
 
 async function handleLogout() {
   auth.logout()

@@ -11,6 +11,7 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<MeResponse | null>(null)
 
   const isLoggedIn = computed(() => !!sessionId.value)
+  const isAdmin = computed(() => !!user.value?.is_admin)
 
   async function login(email: string, password: string) {
     const { data } = await apiLogin(email, password)
@@ -54,5 +55,5 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem(IS_GUEST_KEY)
   }
 
-  return { sessionId, user, isLoggedIn, login, register, guestLogin, fetchUser, logout }
+  return { sessionId, user, isLoggedIn, isAdmin, login, register, guestLogin, fetchUser, logout }
 })

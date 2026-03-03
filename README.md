@@ -35,6 +35,26 @@ Run a single test scene:
 tools/run_headless_test.sh res://ui/scenes/tests/replay_test.tscn ReplayTest 20
 ```
 
+## Admin Portal (Users / Rooms / Matches)
+
+The web portal now includes an admin page at `/admin` (after login).
+
+- Backend admin APIs are under `/v1/admin/*`
+- Admin access is controlled by `ADMIN_USER_IDS` (comma-separated user IDs)
+- Example (local dev only): `ADMIN_USER_IDS=*`
+- Supports bulk actions from admin tables (multi-select):
+  - `POST /v1/admin/users/batch/status`
+  - `POST /v1/admin/users/batch/delete`
+  - `POST /v1/admin/rooms/batch/end`
+  - `POST /v1/admin/rooms/batch/delete`
+  - `POST /v1/admin/matches/batch/delete`
+
+Set env when starting backend, for example:
+
+```bash
+export ADMIN_USER_IDS="your_user_id_1,your_user_id_2"
+```
+
 ## Run/Deploy Dedicated Server
 
 ### Option A: Run locally (Godot CLI)

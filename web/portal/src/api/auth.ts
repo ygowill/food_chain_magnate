@@ -9,6 +9,7 @@ export interface MeResponse {
   user_id: string
   email: string | null
   is_guest: boolean
+  is_admin: boolean
   created_at: string
 }
 

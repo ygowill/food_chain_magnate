@@ -237,180 +237,6 @@ function participantLogoLabel(participant: ParticipantInfo): string {
   return participantDisplayMetaByUserId.value[participant.user_id]?.logoLabel ?? '餐厅 Logo'
 }
 
-// TODO: 删除测试数据
-const MOCK_DETAILS: Record<string, MatchDetail> = {
-  '1': {
-    match_id: '1',
-    room_code: 'ABC123',
-    status: '已结束',
-    player_count: 4,
-    started_at: '2026-02-25T14:00:00Z',
-    ended_at: '2026-02-25T17:30:00Z',
-    duration_sec: 12600,
-    seed: '48291037',
-    game_version: '0.4.2',
-    schema_version: '2',
-    final_hash: null,
-    has_replay: true,
-    summary: {
-      modules: ['base_rules', 'base_employees', 'base_products', 'ketchup_mechanism', 'coffee', 'new_milestones'],
-      round_number: 18,
-      bank_total: 45,
-      bank_broke_count: 1,
-      bank_reserve_added: 50,
-      marketing_count: 6,
-    },
-    participants: [
-      {
-        user_id: 'a1b2c3d4e5f6',
-        display_name: '老王',
-        restaurant_logo_id: 0,
-        role: 'player',
-        seat_index: 0,
-        result: 'win',
-        score: {
-          cash: 320,
-          restaurants: 3,
-          forfeited: false,
-          employees: ['ceo', 'burger_cook', 'pizza_cook', 'errand_boy', 'cart_operator', 'burger_cook', 'management_trainee', 'kitchen_trainee', 'pricing_manager', 'discount_manager', 'waitress', 'trainer'],
-          milestones: ['first_burger_sold', 'first_pizza_sold'],
-          inventory: { burger: 3, pizza: 2, coffee: 1, soda: 1 },
-          marketing_campaigns: 2,
-          stats: {
-            marketing_actions: 9,
-            marketing_by_type: { billboard: 4, mailbox: 2, radio: 1 },
-            hired_employees: 8,
-            trained_employees: 5,
-            metrics: { house_built: 2, restaurant_built: 1, procurement_actions: 6 },
-            produced: { burger: 21, pizza: 8, coffee: 3, soda: 6, beer: 2 },
-            sold: { burger: 16, pizza: 5, coffee: 2, coke: 4, beer: 1 },
-          },
-        },
-      },
-      {
-        user_id: 'f6e5d4c3b2a1',
-        display_name: '小李',
-        restaurant_logo_id: 3,
-        role: 'player',
-        seat_index: 1,
-        result: 'lose',
-        score: {
-          cash: 180,
-          restaurants: 2,
-          forfeited: false,
-          employees: ['ceo', 'truck_driver', 'burger_cook', 'errand_boy', 'waitress', 'management_trainee', 'hr_director', 'regional_manager'],
-          milestones: ['first_lemonade_sold'],
-          inventory: { lemonade: 4, burger: 1, beer: 1 },
-          marketing_campaigns: 1,
-          stats: {
-            marketing_actions: 6,
-            marketing_by_type: { billboard: 2, mailbox: 3 },
-            hired_employees: 6,
-            trained_employees: 3,
-            metrics: { house_built: 1, restaurant_built: 2, procurement_actions: 5 },
-            produced: { lemonade: 18, burger: 6, beer: 3 },
-            sold: { lemonade: 13, burger: 5, beer: 2 },
-          },
-        },
-      },
-      {
-        user_id: '1122334455aa',
-        display_name: '阿陈',
-        restaurant_logo_id: 5,
-        role: 'player',
-        seat_index: 2,
-        result: 'lose',
-        score: {
-          cash: 95,
-          restaurants: 1,
-          forfeited: false,
-          employees: ['ceo', 'pizza_cook', 'errand_boy', 'cart_operator', 'kitchen_trainee', 'brand_director'],
-          milestones: [],
-          inventory: { pizza: 5 },
-          marketing_campaigns: 0,
-          stats: {
-            marketing_actions: 3,
-            marketing_by_type: { billboard: 1, mailbox: 1 },
-            hired_employees: 4,
-            trained_employees: 2,
-            metrics: { house_built: 1, procurement_actions: 2 },
-            produced: { pizza: 11 },
-            sold: { pizza: 6 },
-          },
-        },
-      },
-      {
-        user_id: 'bbccddee7788',
-        display_name: '赵老板',
-        restaurant_logo_key: 'restaurant_logo_xango_blues_bar',
-        role: 'player',
-        seat_index: 3,
-        result: 'lose',
-        score: {
-          cash: 0,
-          restaurants: 2,
-          forfeited: true,
-          employees: ['ceo', 'burger_cook', 'truck_driver', 'errand_boy', 'waitress'],
-          milestones: [],
-          inventory: {},
-          marketing_campaigns: 0,
-          stats: {
-            marketing_actions: 1,
-            marketing_by_type: { billboard: 0, mailbox: 0 },
-            hired_employees: 2,
-            trained_employees: 0,
-            metrics: { house_built: 0, restaurant_built: 1 },
-            produced: { burger: 4, lemonade: 2 },
-            sold: { burger: 1, lemonade: 1 },
-          },
-        },
-      },
-    ],
-  },
-  '2': {
-    match_id: '2',
-    room_code: 'XYZ789',
-    status: '进行中',
-    player_count: 3,
-    started_at: '2026-02-27T09:15:00Z',
-    ended_at: null,
-    duration_sec: null,
-    seed: '77120394',
-    game_version: '0.4.2',
-    schema_version: '2',
-    final_hash: null,
-    has_replay: false,
-    summary: {
-      modules: ['base_rules', 'base_employees', 'coffee'],
-      round_number: 7,
-      bank_total: 120,
-      bank_broke_count: 0,
-      bank_reserve_added: 0,
-      marketing_count: 2,
-    },
-    participants: [
-      {
-        user_id: 'aabbccdd1122',
-        display_name: '测试玩家',
-        restaurant_logo_id: 2,
-        role: 'player',
-        seat_index: 0,
-        result: null,
-        score: null,
-      },
-    ],
-  },
-}
-
-const MOCK_REPLAYS: Record<string, ReplayInfo> = {
-  '1': {
-    match_id: '1',
-    storage_uri: '/replays/archive_match_demo_20260228.json',
-    checksum: '026f34144c7a259022c412c33499837b9d185bc031c0a30905eac509ea3cb72f',
-    size_bytes: 70262,
-  },
-}
-
 function formatDuration(seconds: number | null | undefined): string {
   if (seconds == null) return '-'
   const hours = Math.floor(seconds / 3600)
@@ -444,9 +270,7 @@ async function loadReplay() {
     const { data } = await getReplay(matchId, auth.sessionId)
     replay.value = data
   } catch {
-    if (MOCK_REPLAYS[matchId]) {
-      replay.value = MOCK_REPLAYS[matchId]
-    }
+    replay.value = null
   }
 }
 
@@ -496,10 +320,7 @@ onMounted(async () => {
     const { data } = await getMatch(matchId, auth.sessionId)
     match.value = data
   } catch {
-    // fallback to local mock when backend is unavailable
-  }
-  if (!match.value && MOCK_DETAILS[matchId]) {
-    match.value = MOCK_DETAILS[matchId]
+    match.value = null
   }
   loading.value = false
 })

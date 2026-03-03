@@ -118,6 +118,18 @@ def _normalize_email(email: str) -> str:
     return str(email).strip().casefold()
 
 
+def _parse_admin_user_ids() -> set[str]:
+    raw = str(settings.admin_user_ids or "")
+    return {item.strip() for item in raw.split(",") if item.strip()}
+
+
+def is_admin_user_id(user_id: str) -> bool:
+    admin_user_ids = _parse_admin_user_ids()
+    if not admin_user_ids:
+        return False
+    return "*" in admin_user_ids or user_id in admin_user_ids
+
+
 class RegisterRequest(BaseModel):
     email: str
     password: str
@@ -225,6 +237,7 @@ class MeResponse(BaseModel):
     user_id: str
     email: str | None
     is_guest: bool
+    is_admin: bool
     created_at: str
 
 
@@ -251,6 +264,7 @@ async def get_me(session_id: str = "", db: AsyncSession = Depends(get_db)):
         user_id=user.user_id,
         email=email_identity.provider_user_id if email_identity else None,
         is_guest=has_guest is not None and email_identity is None,
+        is_admin=is_admin_user_id(user.user_id),
         created_at=user.created_at.isoformat(),
     )
 
