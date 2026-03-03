@@ -389,27 +389,15 @@ const engine = new Engine(GODOT_CONFIG);
 				}
 			},
 		});
-		Promise.all([
-			engine.init(exe),
-			engine.preloadFile(pack, pack),
-		]).then(() => {
-			if (hasUserActivation) {
+			Promise.all([
+				engine.init(exe),
+				engine.preloadFile(pack, pack),
+			]).then(() => {
+				// Start immediately after download. Audio will still be unlocked on first user interaction.
 				startWithGesture();
-				return;
-			}
-			// Keep the splash visible, but don't show a click-to-start prompt.
-			setStatusMode('wait');
-			window.addEventListener("pointerdown", startWithGesture, true);
-			window.addEventListener("touchstart", startWithGesture, true);
-			window.addEventListener("keydown", startWithGesture, true);
-			window.addEventListener("mousedown", startWithGesture, true);
-			window.addEventListener("click", startWithGesture, true);
-			if (statusOverlay) {
-				statusOverlay.addEventListener("click", startWithGesture, true);
-			}
-		}, displayFailureNotice);
-	}
-}());
-		</script>
-	</body>
+			}, displayFailureNotice);
+		}
+	}());
+			</script>
+		</body>
 </html>
