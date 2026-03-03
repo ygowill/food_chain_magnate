@@ -51,8 +51,12 @@ func guest_login(device_id: String) -> Dictionary:
 	return await _request(HTTPClient.METHOD_POST, "/v1/auth/guest", {"device_id": device_id})
 
 
-func register(email: String, password: String) -> Dictionary:
-	return await _request(HTTPClient.METHOD_POST, "/v1/auth/register", {"email": email, "password": password})
+func register(email: String, password: String, display_name: String = "") -> Dictionary:
+	var payload := {"email": email, "password": password}
+	var dn := str(display_name).strip_edges()
+	if not dn.is_empty():
+		payload["display_name"] = dn
+	return await _request(HTTPClient.METHOD_POST, "/v1/auth/register", payload)
 
 
 func login(email: String, password: String) -> Dictionary:
@@ -125,3 +129,10 @@ func poll_device_token(device_code: String, device_id: String) -> Dictionary:
 
 func get_me(session_id: String) -> Dictionary:
 	return await _request(HTTPClient.METHOD_GET, "/v1/auth/me?session_id=%s" % session_id)
+
+
+func update_profile(session_id: String, display_name: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_PUT, "/v1/auth/profile", {
+		"session_id": session_id,
+		"display_name": str(display_name),
+	})

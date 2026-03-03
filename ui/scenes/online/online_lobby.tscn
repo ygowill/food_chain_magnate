@@ -125,6 +125,10 @@ text = "昵称"
 layout_mode = 2
 size_flags_horizontal = 3
 
+[node name="RenameButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ProfileRow"]
+layout_mode = 2
+text = "修改"
+
 [node name="ButtonsRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage"]
 layout_mode = 2
 theme_override_constants/separation = 8

@@ -9,6 +9,9 @@ signal device_auth_status(status: String)  # "waiting" | "success" | "expired" |
 const _SAVE_PATH_DEFAULT := "user://platform_session.cfg"
 const _SAVE_PATH_PREFIX := "user://platform_session_"
 const _MAX_PROFILE_ID_LEN := 24
+const _GUEST_NAME_PREFIX := "游客#"
+const _ACCOUNT_NAME_PREFIX := "账号#"
+const _DEFAULT_NAME_SUFFIX := "0000"
 
 var profile_id: String = ""
 var _save_path: String = _SAVE_PATH_DEFAULT
@@ -16,6 +19,7 @@ var _save_path: String = _SAVE_PATH_DEFAULT
 var user_id: String = ""
 var session_id: String = ""
 var is_guest: bool = true
+var display_name: String = ""
 var device_id: String = ""
 
 var _device_auth_cancelled: bool = false
@@ -30,6 +34,8 @@ func _ready() -> void:
 	profile_id = _get_profile_id()
 	_save_path = _build_save_path(profile_id)
 	_load()
+	if is_logged_in:
+		_ensure_local_display_name()
 	if device_id.is_empty():
 		device_id = _generate_device_id()
 		_save()
@@ -76,10 +82,35 @@ func _build_save_path(profile: String) -> String:
 		return _SAVE_PATH_DEFAULT
 	return "%s%s.cfg" % [_SAVE_PATH_PREFIX, p]
 
+func _name_suffix(raw_id: String) -> String:
+	var s := str(raw_id).strip_edges()
+	if s.is_empty():
+		return _DEFAULT_NAME_SUFFIX
+	if s.length() >= 4:
+		return s.substr(s.length() - 4, 4)
+	while s.length() < 4:
+		s = "0" + s
+	return s
+
+func _default_display_name(uid: String, guest: bool) -> String:
+	var prefix := _GUEST_NAME_PREFIX if guest else _ACCOUNT_NAME_PREFIX
+	return "%s%s" % [prefix, _name_suffix(uid)]
+
+func _ensure_local_display_name() -> void:
+	var dn := str(display_name).strip_edges()
+	if dn.is_empty():
+		display_name = _default_display_name(user_id, is_guest)
+
 
 func auto_guest_login() -> Dictionary:
 	if is_logged_in:
-		return {"ok": {"user_id": user_id, "session_id": session_id}}
+		_ensure_local_display_name()
+		return {"ok": {
+			"user_id": user_id,
+			"session_id": session_id,
+			"display_name": display_name,
+			"is_guest": is_guest,
+		}}
 	var result: Dictionary = await PlatformApi.guest_login(device_id)
 	if result.has("ok"):
 		_apply_auth(result["ok"], true)
@@ -93,8 +124,8 @@ func login(email: String, password: String) -> Dictionary:
 	return result
 
 
-func register(email: String, password: String) -> Dictionary:
-	var result: Dictionary = await PlatformApi.register(email, password)
+func register(email: String, password: String, nickname: String = "") -> Dictionary:
+	var result: Dictionary = await PlatformApi.register(email, password, nickname)
 	if result.has("ok"):
 		_apply_auth(result["ok"], false)
 	return result
@@ -103,8 +134,23 @@ func register(email: String, password: String) -> Dictionary:
 func bind_email(email: String, password: String) -> Dictionary:
 	var result: Dictionary = await PlatformApi.bind(session_id, "email", email, password)
 	if result.has("ok"):
-		is_guest = false
-		_save()
+		_apply_auth(result["ok"], false)
+	return result
+
+
+func update_display_name(new_name: String) -> Dictionary:
+	if not is_logged_in:
+		return {"error": "not logged in"}
+	var result: Dictionary = await PlatformApi.update_profile(session_id, new_name)
+	if result.has("ok"):
+		var ok_val = result.get("ok", null)
+		if ok_val is Dictionary:
+			var ok: Dictionary = Dictionary(ok_val)
+			display_name = str(ok.get("display_name", "")).strip_edges()
+			is_guest = bool(ok.get("is_guest", is_guest))
+			_ensure_local_display_name()
+			_save()
+			session_changed.emit()
 	return result
 
 
@@ -114,6 +160,7 @@ func logout() -> void:
 	user_id = ""
 	session_id = ""
 	is_guest = true
+	display_name = ""
 	_save()
 	session_changed.emit()
 
@@ -165,7 +212,9 @@ func cancel_device_auth() -> void:
 func _apply_auth(data: Dictionary, guest: bool) -> void:
 	user_id = str(data.get("user_id", ""))
 	session_id = str(data.get("session_id", ""))
-	is_guest = guest
+	is_guest = bool(data.get("is_guest", guest))
+	display_name = str(data.get("display_name", "")).strip_edges()
+	_ensure_local_display_name()
 	_save()
 	# 同步到 NetContext（不覆盖昵称：name 仍由用户/UI 控制）
 	if NetContext != null:
@@ -188,6 +237,7 @@ func _save() -> void:
 	cfg.set_value("session", "user_id", user_id)
 	cfg.set_value("session", "session_id", session_id)
 	cfg.set_value("session", "is_guest", is_guest)
+	cfg.set_value("session", "display_name", display_name)
 	cfg.set_value("session", "device_id", device_id)
 	cfg.save(_save_path)
 
@@ -202,22 +252,26 @@ func _load() -> void:
 	user_id = cfg.get_value("session", "user_id", "")
 	session_id = cfg.get_value("session", "session_id", "")
 	is_guest = cfg.get_value("session", "is_guest", true)
+	display_name = cfg.get_value("session", "display_name", "")
 	device_id = cfg.get_value("session", "device_id", "")
 
 
 func _save_web() -> void:
-	JavaScriptBridge.eval("localStorage.setItem('fcm_session_id', '%s')" % session_id)
-	JavaScriptBridge.eval("localStorage.setItem('fcm_user_id', '%s')" % user_id)
-	JavaScriptBridge.eval("localStorage.setItem('fcm_is_guest', '%s')" % str(is_guest).to_lower())
-	JavaScriptBridge.eval("localStorage.setItem('fcm_device_id', '%s')" % device_id)
+	JavaScriptBridge.eval("localStorage.setItem('fcm_session_id', %s)" % JSON.stringify(session_id))
+	JavaScriptBridge.eval("localStorage.setItem('fcm_user_id', %s)" % JSON.stringify(user_id))
+	JavaScriptBridge.eval("localStorage.setItem('fcm_is_guest', %s)" % JSON.stringify(str(is_guest).to_lower()))
+	JavaScriptBridge.eval("localStorage.setItem('fcm_display_name', %s)" % JSON.stringify(display_name))
+	JavaScriptBridge.eval("localStorage.setItem('fcm_device_id', %s)" % JSON.stringify(device_id))
 
 
 func _load_web() -> void:
 	var sid = JavaScriptBridge.eval("localStorage.getItem('fcm_session_id') || ''")
 	var uid = JavaScriptBridge.eval("localStorage.getItem('fcm_user_id') || ''")
 	var guest_str = JavaScriptBridge.eval("localStorage.getItem('fcm_is_guest') || 'true'")
+	var dn = JavaScriptBridge.eval("localStorage.getItem('fcm_display_name') || ''")
 	var did = JavaScriptBridge.eval("localStorage.getItem('fcm_device_id') || ''")
 	session_id = str(sid) if sid != null else ""
 	user_id = str(uid) if uid != null else ""
 	is_guest = str(guest_str) != "false"
+	display_name = str(dn) if dn != null else ""
 	device_id = str(did) if did != null else ""

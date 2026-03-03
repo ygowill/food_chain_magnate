@@ -17,6 +17,9 @@ const GameSetupClass = preload("res://ui/scenes/setup/game_setup.gd")
 
 const _LOGO_DISPLAY_NAMES: Dictionary = GameSetupClass.LOGO_DISPLAY_NAMES
 const _DEFAULT_LOGO_COUNT := 6
+const _GUEST_NAME_PREFIX := "游客#"
+const _ACCOUNT_NAME_PREFIX := "账号#"
+const _DEFAULT_NAME_SUFFIX := "0000"
 
 @onready var wall_background: ColorRect = $WallBackground
 @onready var vignette_overlay: ColorRect = $VignetteOverlay
@@ -32,6 +35,7 @@ const _DEFAULT_LOGO_COUNT := 6
 @onready var page_connect: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage
 @onready var backend_url_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/BackendRow/BackendUrlEdit
 @onready var player_name_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ProfileRow/PlayerNameEdit
+@onready var rename_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ProfileRow/RenameButton
 @onready var connect_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ButtonsRow/ConnectButton
 @onready var disconnect_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ButtonsRow/DisconnectButton
 @onready var connect_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ConnectStatus
@@ -90,6 +94,7 @@ var _platform_rooms: Array = []
 var _platform_busy: bool = false
 var _platform_entered: bool = false
 var _ws_connect_in_progress: bool = false
+var _editing_display_name: bool = false
 
 func _ready() -> void:
 	UiStylesClass.apply_tiled_texture(wall_background, UiStylesClass.WALL_TEXTURE_PATHS, 3.0, Color(0.93, 0.88, 0.75, 1.0))
@@ -98,6 +103,7 @@ func _ready() -> void:
 	UiStylesClass.apply_poster_inner_border(inner_border)
 	UiStylesClass.apply_button_secondary(back_button)
 	UiStylesClass.apply_button_secondary(account_button)
+	UiStylesClass.apply_button_secondary(rename_button)
 	UiStylesClass.apply_button_primary(connect_button)
 	UiStylesClass.apply_button_secondary(disconnect_button)
 	UiStylesClass.apply_button_primary(open_create_button)
@@ -289,6 +295,7 @@ func _show_error_dialog(title_text: String, message: String) -> void:
 		_info_dialog.call("show_info", title_text, message, Vector2i(520, 320), "确定")
 
 func _apply_defaults() -> void:
+	_editing_display_name = false
 	_set_connect_status("")
 	_set_browse_status("")
 	_set_room_status("")
@@ -316,6 +323,8 @@ func _apply_defaults() -> void:
 	if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
 		_room_config_sync_controller.reset()
 	_update_account_status()
+	_sync_bound_player_profile_name(true)
+	_refresh_player_name_edit_state()
 
 func _bind_net_signals() -> void:
 	if NetClient == null:
@@ -340,13 +349,19 @@ func _bind_platform_signals() -> void:
 		PlatformSession.session_changed.connect(_on_platform_session_changed)
 
 func _on_platform_session_changed() -> void:
+	_editing_display_name = false
 	_update_account_status()
+	_sync_bound_player_profile_name(true)
+	_refresh_player_name_edit_state()
 	_refresh_ui()
 
 func _setup_account_ui() -> void:
 	if account_button != null and is_instance_valid(account_button):
 		if not account_button.pressed.is_connected(_on_account_pressed):
 			account_button.pressed.connect(_on_account_pressed)
+	if rename_button != null and is_instance_valid(rename_button):
+		if not rename_button.pressed.is_connected(_on_rename_pressed):
+			rename_button.pressed.connect(_on_rename_pressed)
 	if quick_spectate_button != null and is_instance_valid(quick_spectate_button):
 		if not quick_spectate_button.pressed.is_connected(_on_quick_spectate_pressed):
 			quick_spectate_button.pressed.connect(_on_quick_spectate_pressed)
@@ -376,7 +391,10 @@ func _ensure_auth_dialog() -> void:
 		_auth_dialog.auth_completed.connect(_on_auth_completed)
 
 func _on_auth_completed(_result: Dictionary) -> void:
+	_editing_display_name = false
 	_update_account_status()
+	_sync_bound_player_profile_name(true)
+	_refresh_player_name_edit_state()
 	_refresh_ui()
 
 func _on_account_pressed() -> void:
@@ -412,6 +430,8 @@ func _platform_ensure_session() -> Result:
 		return Result.failure(str(res.get("error", "platform login failed")))
 	if not PlatformSession.is_logged_in:
 		return Result.failure("platform login failed")
+	_sync_bound_player_profile_name(true)
+	_refresh_player_name_edit_state()
 	return Result.success()
 
 func _platform_enter() -> void:
@@ -571,10 +591,7 @@ func _platform_connect_to_ws(ws_url: String, connect_token: String) -> void:
 		return
 	_ws_connect_in_progress = true
 	_refresh_ui()
-	_write_local_player_profile(
-		str(player_name_edit.text),
-		int(NetContext.player_profile.get("restaurant_logo_id", -1)) if (NetContext != null and NetContext.player_profile is Dictionary) else -1
-	)
+	_sync_bound_player_profile_name(true)
 	var r: Result = NetClient.connect_to_server(url)
 	if not r.ok:
 		_ws_connect_in_progress = false
@@ -637,9 +654,13 @@ func _update_top_title() -> void:
 
 func _refresh_ui() -> void:
 	_ensure_room_renderers()
+	_refresh_player_name_edit_state()
+	_sync_bound_player_profile_name()
 	var ws_connected := NetClient != null and NetClient.is_online_client_connected()
 	var platform_ready := _platform_entered and PlatformSession != null and PlatformSession.is_logged_in
 	var busy := _platform_busy or _ws_connect_in_progress
+	if rename_button != null and is_instance_valid(rename_button):
+		rename_button.disabled = busy
 	connect_button.disabled = busy or platform_ready
 	disconnect_button.disabled = busy or not platform_ready
 	open_create_button.disabled = busy or not platform_ready
@@ -842,6 +863,69 @@ func _write_local_player_profile(name: String, restaurant_logo_id: int) -> void:
 	p["restaurant_logo_id"] = int(restaurant_logo_id)
 	NetContext.player_profile = p
 
+func _extract_name_suffix(raw_id: String) -> String:
+	var s := str(raw_id).strip_edges()
+	if s.is_empty() and PlatformSession != null:
+		s = str(PlatformSession.device_id).strip_edges()
+	if s.is_empty():
+		return _DEFAULT_NAME_SUFFIX
+	if s.length() >= 4:
+		return s.substr(s.length() - 4, 4)
+	while s.length() < 4:
+		s = "0" + s
+	return s
+
+func _resolve_bound_player_name(fallback_name: String = "玩家") -> String:
+	var fallback := str(fallback_name).strip_edges()
+	if fallback.is_empty():
+		fallback = "玩家"
+	if PlatformSession == null or not PlatformSession.is_logged_in:
+		return fallback
+	var display_name := str(PlatformSession.display_name).strip_edges()
+	if not PlatformSession.is_guest and not display_name.is_empty():
+		return display_name
+	var suffix := _extract_name_suffix(str(PlatformSession.user_id))
+	if PlatformSession.is_guest:
+		return "%s%s" % [_GUEST_NAME_PREFIX, suffix]
+	return "%s%s" % [_ACCOUNT_NAME_PREFIX, suffix]
+
+func _sync_bound_player_profile_name(force_write: bool = false) -> void:
+	if player_name_edit == null or not is_instance_valid(player_name_edit):
+		return
+	if _editing_display_name and not force_write:
+		return
+	var current_name := str(player_name_edit.text).strip_edges()
+	var resolved_name := _resolve_bound_player_name(current_name)
+	if force_write or current_name != resolved_name:
+		player_name_edit.text = resolved_name
+	var logo_id := int(NetContext.player_profile.get("restaurant_logo_id", -1)) if (NetContext != null and NetContext.player_profile is Dictionary) else -1
+	var profile_name := ""
+	if NetContext != null and NetContext.player_profile is Dictionary:
+		profile_name = str(NetContext.player_profile.get("name", "")).strip_edges()
+	if force_write or profile_name != resolved_name:
+		_write_local_player_profile(resolved_name, logo_id)
+
+func _refresh_player_name_edit_state() -> void:
+	if player_name_edit == null or not is_instance_valid(player_name_edit):
+		return
+	var logged_in := PlatformSession != null and PlatformSession.is_logged_in
+	var can_rename := logged_in and not PlatformSession.is_guest
+	player_name_edit.editable = _editing_display_name and can_rename
+	if rename_button != null and is_instance_valid(rename_button):
+		rename_button.visible = can_rename
+		rename_button.text = "保存" if _editing_display_name else "修改"
+	if PlatformSession == null or not PlatformSession.is_logged_in:
+		player_name_edit.placeholder_text = "进入平台后自动生成昵称"
+		if rename_button != null and is_instance_valid(rename_button):
+			rename_button.visible = false
+		return
+	if PlatformSession.is_guest:
+		player_name_edit.placeholder_text = "游客昵称自动生成"
+		if rename_button != null and is_instance_valid(rename_button):
+			rename_button.visible = false
+	else:
+		player_name_edit.placeholder_text = "昵称与账号绑定（可修改）"
+
 func _on_my_logo_option_selected(index: int) -> void:
 	if _suppress_profile_signals:
 		return
@@ -849,7 +933,10 @@ func _on_my_logo_option_selected(index: int) -> void:
 		return
 	var meta_val = my_color_option.get_item_metadata(index)
 	var logo_id := int(meta_val)
-	_write_local_player_profile(str(player_name_edit.text), logo_id)
+	var resolved_name := _resolve_bound_player_name(str(player_name_edit.text))
+	if player_name_edit != null and is_instance_valid(player_name_edit):
+		player_name_edit.text = resolved_name
+	_write_local_player_profile(resolved_name, logo_id)
 	if NetClient == null or not NetClient.is_online_client_connected():
 		return
 	if _get_current_room_code().is_empty():
@@ -858,6 +945,49 @@ func _on_my_logo_option_selected(index: int) -> void:
 		NetClient.request_update_player_profile(NetContext.player_profile)
 
 # ── 按钮回调 ──
+
+func _on_rename_pressed() -> void:
+	if PlatformSession == null or not PlatformSession.is_logged_in:
+		_show_error_dialog("平台未就绪", "请先登录账号。")
+		return
+	if PlatformSession.is_guest:
+		_show_error_dialog("无法修改昵称", "游客昵称自动生成，不支持手动修改。")
+		return
+	if not _editing_display_name:
+		_editing_display_name = true
+		_refresh_player_name_edit_state()
+		if player_name_edit != null and is_instance_valid(player_name_edit):
+			player_name_edit.grab_focus()
+			player_name_edit.caret_column = player_name_edit.text.length()
+		return
+	var new_name := str(player_name_edit.text).strip_edges()
+	if new_name.is_empty():
+		_show_error_dialog("修改昵称失败", "昵称不能为空。")
+		return
+	if new_name.length() > 24:
+		_show_error_dialog("修改昵称失败", "昵称长度不能超过 24。")
+		return
+	var result: Dictionary = await PlatformSession.update_display_name(new_name)
+	if result.has("error"):
+		var err_val = result.get("error", "")
+		var msg := ""
+		if err_val is Dictionary:
+			msg = str(Dictionary(err_val).get("detail", err_val))
+		else:
+			msg = str(err_val)
+		msg = msg.strip_edges()
+		if msg.is_empty():
+			msg = "未知错误"
+		_show_error_dialog("修改昵称失败", msg)
+		_sync_bound_player_profile_name(true)
+		_editing_display_name = false
+		_refresh_player_name_edit_state()
+		return
+	_editing_display_name = false
+	_sync_bound_player_profile_name(true)
+	_set_connect_status("昵称已更新。")
+	_refresh_player_name_edit_state()
+	_refresh_ui()
 
 func _on_back_pressed() -> void:
 	if NetClient != null:
@@ -868,10 +998,7 @@ func _on_back_pressed() -> void:
 		SceneManager.goto_main_menu()
 
 func _on_connect_pressed() -> void:
-	_write_local_player_profile(
-		str(player_name_edit.text),
-		int(NetContext.player_profile.get("restaurant_logo_id", -1)) if (NetContext != null and NetContext.player_profile is Dictionary) else -1
-	)
+	_sync_bound_player_profile_name(true)
 	await _platform_enter()
 
 func _on_disconnect_pressed() -> void:
