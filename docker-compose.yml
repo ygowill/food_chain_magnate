@@ -13,7 +13,7 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   backend:
-    build: ./backend
+    image: ${FCM_BACKEND_IMAGE:-ghcr.io/ygowill/food_chain_magnate/fcm-backend:${FCM_TAG:-latest}}
     container_name: fcm-backend
     restart: unless-stopped
     ports:
