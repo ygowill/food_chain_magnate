@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
 	cat <<'EOF'
 Usage:
-  tools/build_portal.sh [--skip-godot] [--out build/web]
+  tools/build_portal.sh [--skip-godot] [--out build/web] [--version <ver>]
 
 Assembles the complete web deployment:
   1. Builds Vue Portal (npm run build)
@@ -15,12 +15,14 @@ Options:
   --skip-godot    Skip Godot export (use existing build/client/web/)
   --out <dir>     Output directory (default: build/web)
   --install-templates  Pass through to export_web.sh
+  --version <ver>  Override `application/config/version` for this export
 EOF
 }
 
 SKIP_GODOT=0
 OUT_DIR="build/web"
 INSTALL_TEMPLATES=""
+VERSION_OVERRIDE=""
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -39,6 +41,10 @@ while [[ $# -gt 0 ]]; do
 		--install-templates)
 			INSTALL_TEMPLATES="--install-templates"
 			shift
+			;;
+		--version)
+			VERSION_OVERRIDE="${2:-}"
+			shift 2
 			;;
 		*)
 			echo "Unknown arg: $1" >&2
@@ -67,7 +73,14 @@ echo ""
 echo "[build_portal] === Step 2: Godot Web Export ==="
 
 if [[ "${SKIP_GODOT}" -eq 0 ]]; then
-	"$SCRIPT_DIR/export_web.sh" $INSTALL_TEMPLATES
+	export_args=()
+	if [[ -n "$INSTALL_TEMPLATES" ]]; then
+		export_args+=("$INSTALL_TEMPLATES")
+	fi
+	if [[ -n "$VERSION_OVERRIDE" ]]; then
+		export_args+=("--version" "$VERSION_OVERRIDE")
+	fi
+	"$SCRIPT_DIR/export_web.sh" "${export_args[@]}"
 	echo "[build_portal] Godot export complete."
 else
 	if [[ ! -d "$GODOT_WEB_DIR" ]]; then

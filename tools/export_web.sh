@@ -4,18 +4,23 @@ set -euo pipefail
 usage() {
 	cat <<'EOF'
 Usage:
-  tools/export_web.sh [--preset Web] [--out build/client/web/index.html] [--install-templates]
+  tools/export_web.sh [--preset Web] [--out build/client/web/index.html] [--install-templates] [--version <ver>]
 
 Notes:
   - Uses a project-local HOME (`.tmp_home/`) to avoid writing to your real user directory.
   - Requires Godot export templates installed for your Godot version.
   - `--install-templates` downloads official export templates (requires network access).
+  - Version override:
+      - Pass `--version <ver>`, or set env `FCM_BUILD_VERSION=<ver>`.
+      - The script temporarily patches `project.godot` (`application/config/version`) for this export,
+        then restores it afterwards.
 EOF
 }
 
 PRESET="Web"
 OUT="build/client/web/index.html"
 INSTALL_TEMPLATES=0
+VERSION_OVERRIDE="${FCM_BUILD_VERSION:-}"
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -35,6 +40,10 @@ while [[ $# -gt 0 ]]; do
 			INSTALL_TEMPLATES=1
 			shift
 			;;
+		--version)
+			VERSION_OVERRIDE="${2:-}"
+			shift 2
+			;;
 		*)
 			echo "Unknown arg: $1" >&2
 			usage >&2
@@ -53,6 +62,46 @@ LOG_FILE="$PROJECT_PATH/.godot/ExportWeb.log"
 : > "$LOG_FILE"
 
 HOME_DIR="$PROJECT_PATH/.tmp_home"
+
+PROJECT_GODOT="$PROJECT_PATH/project.godot"
+if [[ -n "${VERSION_OVERRIDE}" ]]; then
+	if [[ "${VERSION_OVERRIDE}" == *$'\n'* || "${VERSION_OVERRIDE}" == *$'\r'* || "${VERSION_OVERRIDE}" == *'"'* ]]; then
+		echo "[ExportWeb] FAIL invalid version (contains newline/CR/quote): ${VERSION_OVERRIDE}" >&2
+		exit 2
+	fi
+	if [[ ! -f "${PROJECT_GODOT}" ]]; then
+		echo "[ExportWeb] FAIL missing project.godot at: ${PROJECT_GODOT}" >&2
+		exit 2
+	fi
+
+	backup="$PROJECT_PATH/.godot/_project.godot.before_export_web"
+	tmp="$PROJECT_PATH/.godot/_project.godot.tmp"
+	cp "$PROJECT_GODOT" "$backup"
+	cleanup_version_override() {
+		if [[ -f "$backup" ]]; then
+			mv "$backup" "$PROJECT_GODOT"
+		fi
+		rm -f "$tmp"
+	}
+	trap cleanup_version_override EXIT
+
+	awk -v ver="${VERSION_OVERRIDE}" '
+		BEGIN { in_app = 0; replaced = 0 }
+		/^\[application\]$/ { in_app = 1; print; next }
+		/^\[/ { in_app = 0 }
+		{
+			if (in_app && $0 ~ /^config\/version=/) {
+				print "config/version=\"" ver "\""
+				replaced = 1
+				next
+			}
+			print
+		}
+		END { if (!replaced) exit 3 }
+	' "$PROJECT_GODOT" > "$tmp"
+	mv "$tmp" "$PROJECT_GODOT"
+	echo "[ExportWeb] INFO override application/config/version -> ${VERSION_OVERRIDE}"
+fi
 
 godot_version_raw="$(godot --version 2>/dev/null | head -n 1 || true)"
 godot_version=""
