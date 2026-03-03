@@ -65,7 +65,7 @@ Start server + web client together:
 Use Docker Compose directly (optional):
 
 ```bash
-FCM_TAG=v0.1.0 docker compose --profile web -f compose.yml up -d
+FCM_TAG=v0.4.2 docker compose --profile web -f compose.yml up -d
 ```
 
 ### HTTPS (required for Web client on the Internet)
@@ -93,7 +93,7 @@ This repo includes an HTTPS overlay using **Traefik + Let’s Encrypt** with **C
 export ACME_EMAIL="you@example.com"
 export CF_DNS_API_TOKEN="***"
 curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
-  --tag v0.1.0 --enable-web --https \
+  --tag v0.4.2 --enable-web --https \
   --web-domain game.example.com \
   --ws-domain ws.game.example.com
 ```
@@ -102,7 +102,7 @@ Optional: if your server pulls Docker Hub images slowly, you can use a mirror/pr
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
-  --tag v0.1.0 --https \
+  --tag v0.4.2 --https \
   --docker-io-prefix m.daocloud.io/docker.io/
 ```
 
@@ -110,7 +110,7 @@ Optional: if your server downloads GitHub raw files slowly, you can use a GitHub
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
-  --tag v0.1.0 --github-raw-prefix https://ghfast.top/
+  --tag v0.4.2 --github-raw-prefix https://ghfast.top/
 ```
 
 4) Ensure your firewall/security group allows inbound:
@@ -122,7 +122,7 @@ If you can’t (or don’t want to) use ports 80/443, you can change them:
 export ACME_EMAIL="you@example.com"
 export CF_DNS_API_TOKEN="***"
 curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
-  --tag v0.1.0 --enable-web --https \
+  --tag v0.4.2 --enable-web --https \
   --web-domain game.example.com \
   --ws-domain ws.game.example.com \
   --http-port 8080 \

@@ -39,7 +39,7 @@ Docker 一键部署脚本（从 GHCR 拉取镜像，并使用 Docker Compose 运
 也可以直接使用 Docker Compose（可选）：
 
 ```bash
-FCM_TAG=v0.1.0 docker compose --profile web -f compose.yml up -d
+FCM_TAG=v0.4.2 docker compose --profile web -f compose.yml up -d
 ```
 
 ### HTTPS（公网访问网页版必需）
@@ -67,7 +67,7 @@ Godot 的 Web 导出需要**安全上下文（Secure Context）**。如果你用
 export ACME_EMAIL="you@example.com"
 export CF_DNS_API_TOKEN="***"
 curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
-  --tag v0.1.0 --enable-web --https \
+  --tag v0.4.2 --enable-web --https \
   --web-domain game.example.com \
   --ws-domain ws.game.example.com
 ```
@@ -76,7 +76,7 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
-  --tag v0.1.0 --https \
+  --tag v0.4.2 --https \
   --docker-io-prefix m.daocloud.io/docker.io/
 ```
 
@@ -84,7 +84,7 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
-  --tag v0.1.0 --github-raw-prefix https://ghfast.top/
+  --tag v0.4.2 --github-raw-prefix https://ghfast.top/
 ```
 
 4) 确保防火墙/安全组放行：
@@ -96,7 +96,7 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
 export ACME_EMAIL="you@example.com"
 export CF_DNS_API_TOKEN="***"
 curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
-  --tag v0.1.0 --enable-web --https \
+  --tag v0.4.2 --enable-web --https \
   --web-domain game.example.com \
   --ws-domain ws.game.example.com \
   --http-port 8080 \
