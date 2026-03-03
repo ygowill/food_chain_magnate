@@ -20,6 +20,7 @@ var _status_label: Label
 var _location_label: Label
 
 const EmployeeRoleColorsClass = preload("res://ui/visual/employee_role_colors.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 func _ready() -> void:
 	_build_ui()
@@ -38,6 +39,7 @@ func _build_ui() -> void:
 
 	# 解雇复选框
 	_fire_checkbox = CheckBox.new()
+	UiStylesClass.apply_check_box_field(_fire_checkbox)
 	_fire_checkbox.toggled.connect(_on_checkbox_toggled)
 	hbox.add_child(_fire_checkbox)
 
@@ -51,6 +53,7 @@ func _build_ui() -> void:
 	# 员工名称
 	_name_label = Label.new()
 	_name_label.add_theme_font_size_override("font_size", 14)
+	UiStylesClass.apply_label_dark(_name_label)
 	_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hbox.add_child(_name_label)
 
@@ -62,6 +65,7 @@ func _build_ui() -> void:
 	# 状态标签（忙碌）
 	_status_label = Label.new()
 	_status_label.add_theme_font_size_override("font_size", 12)
+	UiStylesClass.apply_label_dark(_status_label)
 	hbox.add_child(_status_label)
 
 	# 薪资标签
@@ -113,4 +117,3 @@ func update_display() -> void:
 
 func _on_checkbox_toggled(toggled: bool) -> void:
 	fire_toggled.emit(item_key, toggled)
-

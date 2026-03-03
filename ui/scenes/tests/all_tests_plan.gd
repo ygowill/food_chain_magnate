@@ -431,6 +431,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.MarketingSelectionFreezeTestClass.run(),
 			},
 			{
+				"name": "MapHoverHelpTooltipTest",
+				"fn": func() -> Result: return TestRefs.MapHoverHelpTooltipTestClass.run(),
+			},
+			{
 				"name": "AirplaneMarketingOutsideSelectionTest",
 				"fn": func() -> Result: return TestRefs.AirplaneMarketingOutsideSelectionTestClass.run(),
 			},

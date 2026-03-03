@@ -3,6 +3,7 @@ extends Button
 
 const TilePreviewClass = preload("res://modules/lobbyists/ui/components/lobbyists_extra_tile/tile_preview.gd")
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 var tile_id: String = ""
 var tile_rotation: int = 0 # 0/90/180/270
@@ -80,7 +81,7 @@ func _ensure_children() -> void:
 	name_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	name_bg.custom_minimum_size = Vector2(0, 26)
 	name_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_bg.color = Color(0, 0, 0, 0.35)
+	name_bg.color = Color(0.92, 0.88, 0.78, 0.92)
 	content.add_child(name_bg)
 
 	var label := Label.new()
@@ -90,6 +91,7 @@ func _ensure_children() -> void:
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.clip_text = true
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_PRIMARY)
 	name_bg.add_child(label)
 	_name_label = label
 
@@ -100,7 +102,7 @@ func _ensure_children() -> void:
 	ov.offset_top = 4
 	ov.offset_right = -4
 	ov.offset_bottom = -4
-	ov.color = Color(0.2, 0.65, 1.0, 0.16)
+	ov.color = Color(0.73, 0.23, 0.18, 0.16)
 	ov.visible = false
 	add_child(ov)
 	_selected_overlay = ov
@@ -112,7 +114,7 @@ func _ensure_children() -> void:
 	badge_bg.offset_top = 6
 	badge_bg.offset_right = -6
 	badge_bg.offset_bottom = 30
-	badge_bg.color = Color(0.08, 0.10, 0.14, 0.75)
+	badge_bg.color = Color(0.73, 0.23, 0.18, 0.22)
 	badge_bg.visible = false
 	add_child(badge_bg)
 	_badge_bg = badge_bg
@@ -124,7 +126,7 @@ func _ensure_children() -> void:
 	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	badge.add_theme_font_size_override("font_size", 18)
-	badge.add_theme_color_override("font_color", Color(1, 1, 1, 0.95))
+	badge.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_PRIMARY)
 	badge_bg.add_child(badge)
 
 func _sync_preview() -> void:
@@ -173,10 +175,10 @@ func _update_selection_visual() -> void:
 	if is_instance_valid(_selected_overlay):
 		if pressed:
 			_selected_overlay.visible = true
-			_selected_overlay.color = Color(0.2, 0.65, 1.0, 0.16)
+			_selected_overlay.color = Color(0.73, 0.23, 0.18, 0.16)
 		elif hovered:
 			_selected_overlay.visible = true
-			_selected_overlay.color = Color(1, 1, 1, 0.06)
+			_selected_overlay.color = Color(0.17, 0.13, 0.09, 0.06)
 		else:
 			_selected_overlay.visible = false
 
@@ -188,15 +190,15 @@ func _draw() -> void:
 	if r.size.x <= 2.0 or r.size.y <= 2.0:
 		return
 
-	var bg := Color(0.10, 0.11, 0.14, 0.55)
-	var border_col := Color(1, 1, 1, 0.14)
+	var bg := Color(0.95, 0.91, 0.82, 0.96)
+	var border_col := Color(0.17, 0.13, 0.09, 0.20)
 	var border_w := 2.0
 	if button_pressed:
-		bg = Color(0.12, 0.20, 0.28, 0.75)
-		border_col = Color(0.2, 0.65, 1.0, 0.95)
+		bg = Color(0.92, 0.88, 0.78, 0.98)
+		border_col = Color(0.73, 0.23, 0.18, 0.85)
 		border_w = 3.0
 	elif is_hovered():
-		bg = Color(0.13, 0.14, 0.18, 0.70)
-		border_col = Color(1, 1, 1, 0.24)
+		bg = Color(0.97, 0.94, 0.86, 0.98)
+		border_col = Color(0.17, 0.13, 0.09, 0.35)
 	draw_rect(r, bg, true)
 	draw_rect(r.grow(-0.5), border_col, false, border_w)

@@ -77,22 +77,12 @@ func _create_tip() -> void:
 	UiZClass.apply_absolute(_tip_panel, UiZClass.MAP_OVERLAY)
 	_tip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_tip_panel.visible = false
-
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.97, 0.94, 0.86, 0.96)
-	style.border_color = Color(0.50, 0.45, 0.35, 0.30)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(3)
-	style.content_margin_left = 6
-	style.content_margin_top = 2
-	style.content_margin_right = 6
-	style.content_margin_bottom = 2
-	_tip_panel.add_theme_stylebox_override("panel", style)
+	UiStylesClass.apply_panel_poster_alt(_tip_panel)
 
 	_tip_label = Label.new()
 	_tip_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_tip_label.add_theme_font_size_override("font_size", 12)
-	_tip_label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_PRIMARY)
+	UiStylesClass.apply_label_dark(_tip_label)
 	_tip_panel.add_child(_tip_label)
 	add_child(_tip_panel)
 

@@ -130,6 +130,7 @@ func _ready() -> void:
 	var span_layout := PerfTraceClass.begin_span("game:layout+controllers_init")
 	UiStylesClass.apply_tiled_texture(background, UiStylesClass.WALL_TEXTURE_PATHS, 3.0, Color(0.85, 0.80, 0.68, 1.0))
 	UiStylesClass.apply_vignette(vignette_overlay, 0.25, 0.5)
+	UiStylesClass.apply_native_tooltip_theme(self)
 	GameUiStyleApplierClass.apply_all(self)
 	if mute_icon != null:
 		mute_icon.gui_input.connect(_on_mute_icon_gui_input)

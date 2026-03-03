@@ -1,5 +1,7 @@
 extends VBoxContainer
 
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
 @onready var tile_preview: Control = $TilePreview
 @onready var pick_button: Button = $ButtonsRow/PickButton
 @onready var rotate_left_button: Button = $ButtonsRow/RotateLeftButton
@@ -7,6 +9,16 @@ extends VBoxContainer
 @onready var rotate_right_button: Button = $ButtonsRow/RotateRightButton
 
 var _overlay: Node = null
+
+func _ready() -> void:
+	if is_instance_valid(pick_button):
+		UiStylesClass.apply_button_secondary(pick_button)
+	if is_instance_valid(rotate_left_button):
+		UiStylesClass.apply_button_secondary(rotate_left_button)
+	if is_instance_valid(rotate_right_button):
+		UiStylesClass.apply_button_secondary(rotate_right_button)
+	if is_instance_valid(rotation_value_label):
+		UiStylesClass.apply_label_dark(rotation_value_label)
 
 func bind_overlay(overlay: Node) -> void:
 	_overlay = overlay

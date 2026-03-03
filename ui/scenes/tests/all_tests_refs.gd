@@ -108,6 +108,7 @@ const MarketingHighlightsNoDrinkSourceTestClass = preload("res://ui/scenes/tests
 const MarketingBoardNumberBadgeTestClass = preload("res://ui/scenes/tests/marketing_board_number_badge_test.gd")
 const MarketingRemainingDurationLabelTestClass = preload("res://ui/scenes/tests/marketing_remaining_duration_label_test.gd")
 const MarketingSelectionFreezeTestClass = preload("res://ui/scenes/tests/marketing_selection_freeze_test.gd")
+const MapHoverHelpTooltipTestClass = preload("res://ui/scenes/tests/map_hover_help_tooltip_test.gd")
 const AirplaneMarketingOutsideSelectionTestClass = preload("res://ui/scenes/tests/airplane_marketing_outside_selection_test.gd")
 const MoveRestaurantDisplayLabelTestClass = preload("res://ui/scenes/tests/move_restaurant_display_label_test.gd")
 const ActionPanelGuidedActionPlaceholderTestClass = preload("res://ui/scenes/tests/action_panel_guided_action_placeholder_test.gd")

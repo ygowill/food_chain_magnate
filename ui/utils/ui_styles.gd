@@ -8,6 +8,7 @@ const _DIALOG_SURFACE: StyleBox = preload("res://ui/themes/dialog_surface.tres")
 const _POSTER_INNER_BORDER: StyleBox = preload("res://ui/themes/poster_inner_border.tres")
 const _PANEL_POSTER: StyleBox = preload("res://ui/themes/panel_poster.tres")
 const _PANEL_POSTER_ALT: StyleBox = preload("res://ui/themes/panel_poster_alt.tres")
+const _TOOLTIP_PANEL: StyleBox = preload("res://ui/themes/tooltip_panel_native.tres")
 const _OVERLAY_DIM: StyleBox = preload("res://ui/themes/overlay_dim.tres")
 
 const _BTN_PRIMARY_NORMAL: StyleBox = preload("res://ui/themes/button_primary_normal.tres")
@@ -118,6 +119,17 @@ static func apply_panel_poster_alt(panel: Control) -> void:
 	if panel == null:
 		return
 	panel.add_theme_stylebox_override("panel", _PANEL_POSTER_ALT)
+
+static func apply_native_tooltip_theme(root: Control) -> void:
+	if root == null:
+		return
+	var t: Theme = root.theme
+	if t == null:
+		t = Theme.new()
+		root.theme = t
+	t.set_stylebox("panel", "TooltipPanel", _TOOLTIP_PANEL)
+	t.set_color("font_color", "TooltipLabel", COLOR_TEXT_PRIMARY)
+	t.set_font_size("font_size", "TooltipLabel", 12)
 
 static func apply_overlay_dim(overlay: ColorRect) -> void:
 	if overlay == null:

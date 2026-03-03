@@ -66,6 +66,8 @@ func _ready() -> void:
 		UiStylesClass.apply_button_primary(confirm_button)
 	if skip_button != null:
 		UiStylesClass.apply_button_secondary(skip_button)
+	if rotation_option != null:
+		UiStylesClass.apply_option_button_field(rotation_option)
 	if controls_row != null:
 		controls_row.visible = false
 

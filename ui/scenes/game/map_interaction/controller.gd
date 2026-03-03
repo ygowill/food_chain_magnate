@@ -9,12 +9,18 @@ signal procure_drinks_start_restaurant_selected(restaurant_id: String)
 signal procure_drinks_start_restaurant_hovered(restaurant_id: String)
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const MarketingModeClass = preload("res://ui/scenes/game/map_interaction/marketing_mode.gd")
 const PlacementModeClass = preload("res://ui/scenes/game/map_interaction/placement_mode.gd")
 const DistanceToolControllerClass = preload("res://ui/scenes/game/map_interaction/distance_tool_controller.gd")
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
+
+const ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY := "opening_soon_restaurants"
+const MAP_TOOLTIP_KEY_HOUSE := "map_hover_house"
+const MAP_TOOLTIP_KEY_RESTAURANT := "map_hover_restaurant"
+const MAP_TOOLTIP_KEY_DRINK_SOURCE := "map_hover_drink_source"
 
 var _scene = null
 var _map_canvas = null
@@ -34,6 +40,9 @@ var _piece_valid_anchors: Dictionary = {} # Vector2i -> true
 var _marketing_valid_anchors: Dictionary = {} # Vector2i -> true
 var _marketing_outside_to_anchor: Dictionary = {} # outside_world_pos(Vector2i) -> {anchor: Vector2i, axis: String, attach: String} (outside marketing)
 var _procure_drinks_hover_restaurant_id: String = ""
+var _map_hover_tooltip_key: String = ""
+var _map_hover_tooltip_title: String = ""
+var _map_hover_tooltip_content: String = ""
 
 var marketing_panel = null
 var restaurant_placement_overlay = null
@@ -70,6 +79,7 @@ func dispose() -> void:
 	_payload.clear()
 	_mode = ""
 	_procure_drinks_hover_restaurant_id = ""
+	_hide_map_hover_tooltip()
 
 	if _marketing_mode != null and _marketing_mode.has_method("dispose"):
 		_marketing_mode.dispose()
@@ -166,6 +176,7 @@ func clear_selection() -> void:
 	_mode = ""
 	_payload.clear()
 	_reset_procure_drinks_restaurant_hover()
+	_hide_map_hover_tooltip()
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_structure_preview"):
 		_map_canvas.call("clear_structure_preview")
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_cell_highlights"):
@@ -198,7 +209,10 @@ func _ensure_module_modes_loaded() -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
 
-	var engine: GameEngine = _scene.game_engine
+	var engine_val = _scene.game_engine
+	if not (engine_val is GameEngine):
+		return
+	var engine: GameEngine = engine_val
 	var manifests: Dictionary = engine.module_manifests_v2
 	var plan: Array[String] = engine.get_module_plan_v2() if engine.has_method("get_module_plan_v2") else []
 
@@ -556,6 +570,7 @@ func _maybe_auto_confirm_placement(overlay: Node) -> void:
 # Distance tool helpers moved to `game_map_interaction_distance_tool_controller.gd`.
 
 func _on_map_cell_hovered(world_pos: Vector2i) -> void:
+	_sync_map_hover_tooltip(world_pos)
 	_ensure_module_modes_loaded()
 	var handler = _custom_mode_handlers.get(_mode, null)
 	if handler != null and is_instance_valid(handler) and handler.has_method("on_cell_hovered"):
@@ -618,3 +633,560 @@ func on_piece_preview_cleared() -> void:
 func on_piece_preview_requested(action_id: String, position: Vector2i, rotation: int, piece_id: String) -> void:
 	if _placement_mode != null:
 		_placement_mode.on_piece_preview_requested(action_id, position, rotation, piece_id)
+
+func _sync_map_hover_tooltip(world_pos: Vector2i) -> void:
+	if not _can_show_map_hover_tooltip():
+		_hide_map_hover_tooltip()
+		return
+	var mgr = _get_help_tooltip_manager()
+	if mgr == null or not is_instance_valid(mgr):
+		_map_hover_tooltip_key = ""
+		_map_hover_tooltip_title = ""
+		_map_hover_tooltip_content = ""
+		return
+	if world_pos == Vector2i(-1, -1):
+		_hide_map_hover_tooltip(mgr)
+		return
+
+	var tip := _build_map_hover_tooltip(world_pos)
+	if tip.is_empty():
+		_hide_map_hover_tooltip(mgr)
+		return
+
+	var key := str(tip.get("key", "")).strip_edges()
+	var title := str(tip.get("title", "")).strip_edges()
+	var content := str(tip.get("content", "")).strip_edges()
+	if key.is_empty() or title.is_empty() or content.is_empty():
+		_hide_map_hover_tooltip(mgr)
+		return
+
+	var changed := (key != _map_hover_tooltip_key or title != _map_hover_tooltip_title or content != _map_hover_tooltip_content)
+	if changed:
+		if mgr.has_method("add_help_entry"):
+			mgr.call("add_help_entry", key, title, content)
+		_map_hover_tooltip_key = key
+		_map_hover_tooltip_title = title
+		_map_hover_tooltip_content = content
+
+	var pos := _resolve_map_hover_tooltip_position(world_pos)
+	if mgr.has_method("show_immediate"):
+		mgr.call("show_immediate", key, pos)
+	elif mgr.has_method("request_tooltip"):
+		if changed:
+			mgr.call("request_tooltip", key, pos)
+
+func _hide_map_hover_tooltip(manager = null) -> void:
+	var mgr = manager
+	if mgr == null:
+		mgr = _get_help_tooltip_manager()
+	if mgr != null and is_instance_valid(mgr):
+		if mgr.has_method("hide_tooltip"):
+			mgr.call("hide_tooltip")
+	_map_hover_tooltip_key = ""
+	_map_hover_tooltip_title = ""
+	_map_hover_tooltip_content = ""
+
+func _can_show_map_hover_tooltip() -> bool:
+	if Globals == null:
+		return true
+	return bool(Globals.show_hints)
+
+func _get_help_tooltip_manager():
+	if _overlay_controller == null or not is_instance_valid(_overlay_controller):
+		return null
+	if _overlay_controller.has_method("get_help_tooltip_manager"):
+		return _overlay_controller.call("get_help_tooltip_manager")
+	return null
+
+func _resolve_map_hover_tooltip_position(world_pos: Vector2i) -> Vector2:
+	if _map_canvas != null and is_instance_valid(_map_canvas):
+		if _map_canvas.has_method("get_viewport"):
+			var viewport = _map_canvas.get_viewport()
+			if viewport != null and is_instance_valid(viewport):
+				return viewport.get_mouse_position()
+		if _map_canvas is Control:
+			var world_origin := Vector2i.ZERO
+			if _map_canvas.has_method("get_world_origin"):
+				var wo = _map_canvas.call("get_world_origin")
+				if wo is Vector2i:
+					world_origin = Vector2i(wo)
+			var cell_size := 40
+			if _map_canvas.has_method("get_cell_size"):
+				var cs = _map_canvas.call("get_cell_size")
+				if cs is int:
+					cell_size = int(cs)
+			var view_pos := world_pos - world_origin
+			var local_pos := Vector2((float(view_pos.x) + 0.5) * float(cell_size), (float(view_pos.y) + 0.5) * float(cell_size))
+			return (_map_canvas as Control).get_global_position() + local_pos
+	return Vector2.ZERO
+
+func _build_map_hover_tooltip(world_pos: Vector2i) -> Dictionary:
+	var state := _get_current_state()
+	if state == null:
+		return {}
+	var cell := _get_cell_world(state, world_pos)
+	if cell.is_empty():
+		return {}
+
+	var house_id := _resolve_house_id(state, world_pos, cell)
+	if not house_id.is_empty():
+		return _build_house_tooltip_data(state, house_id)
+
+	var restaurant_info := _resolve_restaurant_info(state, world_pos, cell)
+	if not restaurant_info.is_empty():
+		return _build_restaurant_tooltip_data(state, restaurant_info)
+
+	var drink_source_val = cell.get("drink_source", null)
+	if drink_source_val is Dictionary:
+		var drink_source: Dictionary = drink_source_val
+		if not drink_source.is_empty():
+			return _build_drink_source_tooltip_data(state, world_pos, drink_source)
+	return {}
+
+func _get_current_state() -> GameState:
+	if _scene == null or _scene.game_engine == null:
+		return null
+	if not _scene.game_engine.has_method("get_state"):
+		return null
+	var s = _scene.game_engine.get_state()
+	if s is GameState:
+		return s
+	return null
+
+func _get_cell_world(state: GameState, world_pos: Vector2i) -> Dictionary:
+	if _map_canvas != null and is_instance_valid(_map_canvas) and _map_canvas.has_method("_get_cell_world"):
+		var cell_val = _map_canvas.call("_get_cell_world", world_pos)
+		if cell_val is Dictionary:
+			return cell_val
+
+	if state == null or not (state.map is Dictionary):
+		return {}
+	var map_data: Dictionary = state.map
+	var map_origin: Vector2i = map_data.get("map_origin", Vector2i.ZERO)
+	var idx := world_pos + map_origin
+	var grid_size: Vector2i = map_data.get("grid_size", Vector2i.ZERO)
+	if grid_size != Vector2i.ZERO and MapUtilsClass.is_valid_pos(idx, grid_size):
+		var cells_val = map_data.get("cells", null)
+		if cells_val is Array:
+			var cells: Array = cells_val
+			if idx.y >= 0 and idx.y < cells.size():
+				var row_val = cells[idx.y]
+				if row_val is Array:
+					var row: Array = row_val
+					if idx.x >= 0 and idx.x < row.size():
+						var cell_val2 = row[idx.x]
+						if cell_val2 is Dictionary:
+							return cell_val2
+
+	var external_cells_val = map_data.get("external_cells", null)
+	if external_cells_val is Dictionary:
+		var external_cells: Dictionary = external_cells_val
+		var key := "%d,%d" % [world_pos.x, world_pos.y]
+		var ext_val = external_cells.get(key, null)
+		if ext_val is Dictionary:
+			return ext_val
+
+	return {}
+
+func _resolve_house_id(state: GameState, world_pos: Vector2i, cell: Dictionary) -> String:
+	var structure_val = cell.get("structure", null)
+	if structure_val is Dictionary:
+		var structure: Dictionary = structure_val
+		var hid := str(structure.get("house_id", "")).strip_edges()
+		if not hid.is_empty():
+			return hid
+
+	if state == null or not (state.map is Dictionary):
+		return ""
+	var houses_val = state.map.get("houses", null)
+	if not (houses_val is Dictionary):
+		return ""
+	var houses: Dictionary = houses_val
+	for hid_val in houses.keys():
+		var house_id := str(hid_val).strip_edges()
+		if house_id.is_empty():
+			continue
+		var house_val = houses.get(hid_val, null)
+		if not (house_val is Dictionary):
+			continue
+		var house: Dictionary = house_val
+		var cells_val = house.get("cells", null)
+		if not (cells_val is Array):
+			continue
+		for c in cells_val:
+			if c is Vector2i and Vector2i(c) == world_pos:
+				return house_id
+	return ""
+
+func _build_house_tooltip_data(state: GameState, house_id: String) -> Dictionary:
+	if state == null or not (state.map is Dictionary):
+		return {}
+	var houses_val = state.map.get("houses", null)
+	if not (houses_val is Dictionary):
+		return {}
+	var houses: Dictionary = houses_val
+	var house_val = houses.get(house_id, null)
+	if not (house_val is Dictionary):
+		return {}
+	var house: Dictionary = house_val
+
+	var house_number := _format_house_number(house.get("house_number", house_id))
+	var has_garden := bool(house.get("has_garden", false))
+	var demands: Array = []
+	var demands_val = house.get("demands", null)
+	if demands_val is Array:
+		demands = demands_val
+	var demand_cap_label := _get_house_demand_cap_label(state, house, has_garden)
+	var owner_label := _format_owner_label(_coerce_int(house.get("owner", -1), -1), state)
+	var source_label := "印刷建筑" if bool(house.get("printed", false)) else "放置建筑"
+
+	var lines: Array[String] = []
+	lines.append("编号：%s（ID: %s）" % [house_number, house_id])
+	lines.append("来源：%s" % source_label)
+	lines.append("归属：%s" % owner_label)
+	lines.append("花园：%s" % ("有" if has_garden else "无"))
+	lines.append("需求：%d/%s" % [demands.size(), demand_cap_label])
+	lines.append("当前需求：%s" % _format_demands_summary(demands))
+
+	return {
+		"key": MAP_TOOLTIP_KEY_HOUSE,
+		"title": "房屋 %s" % house_number,
+		"content": "\n".join(lines),
+	}
+
+func _get_house_demand_cap_label(state: GameState, house: Dictionary, has_garden: bool) -> String:
+	if bool(house.get("no_demand_cap", false)):
+		return "∞"
+	if state == null or not (state.rules is Dictionary):
+		return "?"
+	var rules: Dictionary = state.rules
+	var key := "demand_cap_with_garden" if has_garden else "demand_cap_normal"
+	var cap := _coerce_int(rules.get(key, null), -1)
+	if cap < 0:
+		return "?"
+	return str(cap)
+
+func _format_demands_summary(demands: Array) -> String:
+	if demands.is_empty():
+		return "无"
+	var counts: Dictionary = {}
+	for d_val in demands:
+		if not (d_val is Dictionary):
+			continue
+		var d: Dictionary = d_val
+		var pid := str(d.get("product", "")).strip_edges()
+		if pid.is_empty():
+			pid = "unknown"
+		counts[pid] = int(counts.get(pid, 0)) + 1
+	if counts.is_empty():
+		return "无"
+	var ids: Array[String] = []
+	for k in counts.keys():
+		ids.append(str(k))
+	ids.sort()
+	var parts: Array[String] = []
+	for pid in ids:
+		var c := int(counts.get(pid, 0))
+		parts.append("%s x%d" % [_get_product_display_name(pid), c])
+	return "、".join(parts)
+
+func _resolve_restaurant_info(state: GameState, world_pos: Vector2i, cell: Dictionary) -> Dictionary:
+	var structure_val = cell.get("structure", null)
+	if not (structure_val is Dictionary):
+		return {}
+	var structure: Dictionary = structure_val
+	if str(structure.get("piece_id", "")) != "restaurant":
+		return {}
+
+	var anchor := world_pos
+	var anchor_val = structure.get("parent_anchor", null)
+	if anchor_val is Vector2i:
+		anchor = anchor_val
+
+	var restaurant_id := str(structure.get("restaurant_id", "")).strip_edges()
+	if restaurant_id.is_empty():
+		restaurant_id = _find_restaurant_id_by_anchor(state, anchor)
+
+	var owner := _coerce_int(structure.get("owner", -1), -1)
+	var opening_soon := bool(structure.get("opening_soon", false))
+	var restaurant_data := {}
+
+	if not restaurant_id.is_empty():
+		var read := _get_restaurant_data_with_status(state, restaurant_id)
+		if not read.is_empty():
+			var data_val = read.get("data", null)
+			if data_val is Dictionary:
+				restaurant_data = data_val
+			opening_soon = opening_soon or bool(read.get("opening_soon", false))
+			if owner < 0:
+				owner = _coerce_int((restaurant_data as Dictionary).get("owner", -1), -1)
+
+	return {
+		"restaurant_id": restaurant_id,
+		"anchor": anchor,
+		"owner": owner,
+		"opening_soon": opening_soon,
+		"data": restaurant_data,
+	}
+
+func _build_restaurant_tooltip_data(state: GameState, info: Dictionary) -> Dictionary:
+	var restaurant_id := str(info.get("restaurant_id", "")).strip_edges()
+	var owner := _coerce_int(info.get("owner", -1), -1)
+	var opening_soon := bool(info.get("opening_soon", false))
+	var anchor := Vector2i(-1, -1)
+	var anchor_val = info.get("anchor", null)
+	if anchor_val is Vector2i:
+		anchor = anchor_val
+
+	var restaurant_data: Dictionary = {}
+	var data_val = info.get("data", null)
+	if data_val is Dictionary:
+		restaurant_data = data_val
+
+	var entrance_text := "未知"
+	var entrance_val = restaurant_data.get("entrance_pos", null)
+	if entrance_val is Vector2i:
+		var ep: Vector2i = entrance_val
+		entrance_text = "(%d,%d)" % [ep.x, ep.y]
+	elif anchor != Vector2i(-1, -1):
+		entrance_text = "(%d,%d)" % [anchor.x, anchor.y]
+
+	var cells_count := 0
+	var cells_val = restaurant_data.get("cells", null)
+	if cells_val is Array:
+		cells_count = (cells_val as Array).size()
+
+	var index_in_owner := _get_owner_restaurant_index(state, owner, restaurant_id, anchor)
+
+	var lines: Array[String] = []
+	lines.append("归属：%s" % _format_owner_label(owner, state))
+	if index_in_owner > 0:
+		lines.append("该玩家第 %d 家餐厅" % index_in_owner)
+	if not restaurant_id.is_empty():
+		lines.append("餐厅ID：%s" % restaurant_id)
+	lines.append("入口：%s" % entrance_text)
+	if cells_count > 0:
+		lines.append("占地：%d 格" % cells_count)
+	lines.append("状态：%s" % ("筹备中（本回合末开业）" if opening_soon else "营业中"))
+
+	var title := "餐厅"
+	if index_in_owner > 0:
+		title = "餐厅（第 %d 家）" % index_in_owner
+
+	return {
+		"key": MAP_TOOLTIP_KEY_RESTAURANT,
+		"title": title,
+		"content": "\n".join(lines),
+	}
+
+func _find_restaurant_id_by_anchor(state: GameState, anchor: Vector2i) -> String:
+	if state == null or not (state.map is Dictionary):
+		return ""
+	var restaurants_val = state.map.get("restaurants", null)
+	if restaurants_val is Dictionary:
+		var restaurants: Dictionary = restaurants_val
+		for rid_val in restaurants.keys():
+			var rid := str(rid_val).strip_edges()
+			if rid.is_empty():
+				continue
+			var rest_val = restaurants.get(rid_val, null)
+			if not (rest_val is Dictionary):
+				continue
+			var rest: Dictionary = rest_val
+			var ap = rest.get("anchor_pos", null)
+			if ap is Vector2i and Vector2i(ap) == anchor:
+				return rid
+
+	for p_val in _get_opening_soon_restaurants(state):
+		if not (p_val is Dictionary):
+			continue
+		var p: Dictionary = p_val
+		var rid2 := str(p.get("restaurant_id", "")).strip_edges()
+		if rid2.is_empty():
+			continue
+		var ap2 = p.get("anchor_pos", null)
+		if ap2 is Vector2i and Vector2i(ap2) == anchor:
+			return rid2
+	return ""
+
+func _get_restaurant_data_with_status(state: GameState, restaurant_id: String) -> Dictionary:
+	if state == null or not (state.map is Dictionary):
+		return {}
+	var restaurants_val = state.map.get("restaurants", null)
+	if restaurants_val is Dictionary:
+		var restaurants: Dictionary = restaurants_val
+		var rest_val = restaurants.get(restaurant_id, null)
+		if rest_val is Dictionary:
+			return {"data": rest_val, "opening_soon": false}
+
+	for p_val in _get_opening_soon_restaurants(state):
+		if not (p_val is Dictionary):
+			continue
+		var p: Dictionary = p_val
+		var rid := str(p.get("restaurant_id", "")).strip_edges()
+		if rid == restaurant_id:
+			return {"data": p, "opening_soon": true}
+	return {}
+
+func _get_opening_soon_restaurants(state: GameState) -> Array:
+	if state == null or not (state.round_state is Dictionary):
+		return []
+	var val = state.round_state.get(ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY, null)
+	if val is Array:
+		return val
+	return []
+
+func _get_owner_restaurant_index(state: GameState, owner: int, restaurant_id: String, anchor: Vector2i) -> int:
+	if owner < 0:
+		return -1
+	var ids: Array[String] = []
+	var id_by_anchor: Dictionary = {}
+
+	if state != null and (state.map is Dictionary):
+		var restaurants_val = state.map.get("restaurants", null)
+		if restaurants_val is Dictionary:
+			var restaurants: Dictionary = restaurants_val
+			for rid_val in restaurants.keys():
+				var rid := str(rid_val).strip_edges()
+				if rid.is_empty():
+					continue
+				var rest_val = restaurants.get(rid_val, null)
+				if not (rest_val is Dictionary):
+					continue
+				var rest: Dictionary = rest_val
+				if _coerce_int(rest.get("owner", -1), -1) != owner:
+					continue
+				if not ids.has(rid):
+					ids.append(rid)
+				var ap = rest.get("anchor_pos", null)
+				if ap is Vector2i:
+					id_by_anchor[Vector2i(ap)] = rid
+
+	for p_val in _get_opening_soon_restaurants(state):
+		if not (p_val is Dictionary):
+			continue
+		var p: Dictionary = p_val
+		if _coerce_int(p.get("owner", -1), -1) != owner:
+			continue
+		var rid2 := str(p.get("restaurant_id", "")).strip_edges()
+		if rid2.is_empty():
+			continue
+		if not ids.has(rid2):
+			ids.append(rid2)
+		var ap2 = p.get("anchor_pos", null)
+		if ap2 is Vector2i:
+			id_by_anchor[Vector2i(ap2)] = rid2
+
+	ids.sort()
+	if ids.is_empty():
+		return -1
+
+	var target_id := str(restaurant_id).strip_edges()
+	if target_id.is_empty() and anchor != Vector2i(-1, -1):
+		target_id = str(id_by_anchor.get(anchor, "")).strip_edges()
+	if target_id.is_empty():
+		return -1
+
+	var idx := ids.find(target_id)
+	if idx < 0:
+		return -1
+	return idx + 1
+
+func _build_drink_source_tooltip_data(state: GameState, world_pos: Vector2i, drink_source: Dictionary) -> Dictionary:
+	var source_type := str(drink_source.get("type", "")).strip_edges()
+	if source_type.is_empty():
+		source_type = "unknown"
+	var product_name := _get_product_display_name(source_type)
+	var tile_id := _find_drink_source_tile_id(state, world_pos, source_type)
+
+	var lines: Array[String] = []
+	if product_name == source_type:
+		lines.append("饮料类型：%s" % source_type)
+	else:
+		lines.append("饮料类型：%s（%s）" % [product_name, source_type])
+	lines.append("位置：(%d,%d)" % [world_pos.x, world_pos.y])
+	if not tile_id.is_empty():
+		lines.append("来源板块：%s" % tile_id)
+	lines.append("可用于采购饮料动作")
+
+	return {
+		"key": MAP_TOOLTIP_KEY_DRINK_SOURCE,
+		"title": "饮料进货点",
+		"content": "\n".join(lines),
+	}
+
+func _find_drink_source_tile_id(state: GameState, world_pos: Vector2i, source_type: String) -> String:
+	if state == null or not (state.map is Dictionary):
+		return ""
+	var sources_val = state.map.get("drink_sources", null)
+	if not (sources_val is Array):
+		return ""
+	for s_val in sources_val:
+		if not (s_val is Dictionary):
+			continue
+		var s: Dictionary = s_val
+		var wp = s.get("world_pos", null)
+		if not (wp is Vector2i) or Vector2i(wp) != world_pos:
+			continue
+		var t := str(s.get("type", "")).strip_edges()
+		if source_type.is_empty() or t == source_type:
+			return str(s.get("tile_id", "")).strip_edges()
+	return ""
+
+func _format_owner_label(owner: int, state: GameState) -> String:
+	if owner < 0:
+		return "地图中立"
+	var default_name := "玩家%d" % (owner + 1)
+	var display_name := default_name
+	if Globals != null:
+		var names_val = Globals.player_names
+		if names_val is Array:
+			var names: Array = names_val
+			if owner >= 0 and owner < names.size():
+				var n := str(names[owner]).strip_edges()
+				if not n.is_empty():
+					display_name = n
+	if display_name == default_name and state != null and state.players is Array:
+		var players: Array = state.players
+		if owner >= 0 and owner < players.size():
+			var p_val = players[owner]
+			if p_val is Dictionary:
+				var p: Dictionary = p_val
+				var n2 := str(p.get("name", "")).strip_edges()
+				if not n2.is_empty():
+					display_name = n2
+	if display_name == default_name:
+		return default_name
+	return "%s（%s）" % [default_name, display_name]
+
+func _get_product_display_name(product_id: String) -> String:
+	var pid := str(product_id).strip_edges()
+	if pid.is_empty():
+		return "未知"
+	if ProductRegistryClass.is_loaded():
+		var def_val = ProductRegistryClass.get_def(pid)
+		if def_val != null and def_val is ProductDef:
+			var name := str((def_val as ProductDef).name).strip_edges()
+			if not name.is_empty():
+				return name
+	return pid
+
+func _format_house_number(value) -> String:
+	if value is int:
+		return str(int(value))
+	if value is float:
+		var f: float = float(value)
+		if f == floor(f):
+			return str(int(f))
+		return str(f)
+	var s := str(value).strip_edges()
+	return s if not s.is_empty() else "?"
+
+func _coerce_int(value, fallback: int = 0) -> int:
+	if value is int:
+		return int(value)
+	if value is float:
+		var f: float = float(value)
+		if f == floor(f):
+			return int(f)
+	return fallback

@@ -1,5 +1,7 @@
 extends VBoxContainer
 
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
 var _overlay: Node = null
 var _syncing: bool = false
 
@@ -45,10 +47,12 @@ func _build_ui() -> void:
 	_shop_label = Label.new()
 	_shop_label.text = "移动哪一家"
 	_shop_label.size_flags_horizontal = Control.SIZE_FILL
+	UiStylesClass.apply_label_dark(_shop_label)
 	_shop_row.add_child(_shop_label)
 
 	_shop_option = OptionButton.new()
 	_shop_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_option_button_field(_shop_option)
 	_shop_row.add_child(_shop_option)
 	if not _shop_option.item_selected.is_connected(_on_shop_selected):
 		_shop_option.item_selected.connect(_on_shop_selected)
@@ -101,4 +105,3 @@ func _on_shop_selected(index: int) -> void:
 		return
 	var sid := str(_shop_option.get_item_metadata(index)).strip_edges()
 	_overlay.call("set_selected_from_shop_id", sid)
-

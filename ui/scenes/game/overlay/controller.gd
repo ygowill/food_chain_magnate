@@ -190,6 +190,11 @@ func show_settings_dialog() -> void:
 func get_ui_animation_manager():
 	return ui_animation_manager
 
+func get_help_tooltip_manager():
+	if help_tooltip_manager == null or not is_instance_valid(help_tooltip_manager):
+		return null
+	return help_tooltip_manager
+
 func _on_settings_changed(settings: Dictionary) -> void:
 	# 仅处理“运行时需要立即生效”的设置项
 	if settings == null:

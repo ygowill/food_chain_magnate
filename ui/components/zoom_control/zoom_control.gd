@@ -8,6 +8,8 @@ signal zoom_out_pressed()
 signal reset_pressed()
 signal fit_pressed()
 
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+
 @onready var zoom_in_btn: Button = $ZoomInButton
 @onready var zoom_out_btn: Button = $ZoomOutButton
 @onready var zoom_label: Label = $ZoomLabel
@@ -62,6 +64,20 @@ func _setup_ui() -> void:
 		fit_btn.custom_minimum_size = Vector2(32, 24)
 		fit_btn.add_theme_font_size_override("font_size", 10)
 		add_child(fit_btn)
+
+	_apply_theme()
+
+func _apply_theme() -> void:
+	if is_instance_valid(zoom_in_btn):
+		UiStylesClass.apply_button_secondary(zoom_in_btn)
+	if is_instance_valid(zoom_out_btn):
+		UiStylesClass.apply_button_secondary(zoom_out_btn)
+	if is_instance_valid(reset_btn):
+		UiStylesClass.apply_button_secondary(reset_btn)
+	if is_instance_valid(fit_btn):
+		UiStylesClass.apply_button_secondary(fit_btn)
+	if is_instance_valid(zoom_label):
+		UiStylesClass.apply_label_dark(zoom_label)
 
 func _connect_signals() -> void:
 	if is_instance_valid(zoom_in_btn):

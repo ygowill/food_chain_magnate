@@ -1,6 +1,7 @@
 extends VBoxContainer
 
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 var _overlay: Node = null
 var _syncing: bool = false
@@ -41,10 +42,12 @@ func _build_ui() -> void:
 	_side_label = Label.new()
 	_side_label.text = "方向"
 	_side_label.size_flags_horizontal = Control.SIZE_FILL
+	UiStylesClass.apply_label_dark(_side_label)
 	side_row.add_child(_side_label)
 
 	_side_option = OptionButton.new()
 	_side_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_option_button_field(_side_option)
 	side_row.add_child(_side_option)
 	if not _side_option.item_selected.is_connected(_on_side_selected):
 		_side_option.item_selected.connect(_on_side_selected)
@@ -56,10 +59,12 @@ func _build_ui() -> void:
 	_product_label = Label.new()
 	_product_label.text = "产品"
 	_product_label.size_flags_horizontal = Control.SIZE_FILL
+	UiStylesClass.apply_label_dark(_product_label)
 	product_row.add_child(_product_label)
 
 	_product_option = OptionButton.new()
 	_product_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_option_button_field(_product_option)
 	product_row.add_child(_product_option)
 	if not _product_option.item_selected.is_connected(_on_product_selected):
 		_product_option.item_selected.connect(_on_product_selected)
@@ -162,4 +167,3 @@ func _format_product(product_id: String) -> String:
 		if def_val is ProductDef:
 			name = str((def_val as ProductDef).name).strip_edges()
 	return "%s (%s)" % [name if not name.is_empty() else pid, pid]
-
