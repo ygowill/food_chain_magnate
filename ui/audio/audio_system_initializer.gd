@@ -8,6 +8,7 @@ const MusicManagerScene = preload("res://ui/audio/music_manager.tscn")
 
 var _sound_manager: Node = null
 var _music_manager: Node = null
+var _interaction_bootstrap_done: bool = false
 
 func _ready() -> void:
 	# 注意：作为 Autoload 时，Root 仍可能处于“正在挂载子节点”的阶段，
@@ -85,19 +86,25 @@ func get_sound_manager() -> Node:
 func get_music_manager() -> Node:
 	return _music_manager
 
-func _ensure_bgm_is_playing() -> void:
+func _ensure_bgm_is_playing(force_restart: bool = false) -> void:
 	if _is_headless_runtime():
 		return
 	var mm := MusicManager.get_instance()
 	if mm == null or not is_instance_valid(mm):
 		return
-	if mm.has_method("is_playing") and bool(mm.call("is_playing")):
+	if not force_restart and mm.has_method("is_playing") and bool(mm.call("is_playing")):
 		return
+	if force_restart and mm.has_method("stop"):
+		# Web 平台上自动播放被拦截时，播放器可能处于 playing=true 但实际无声；
+		# 交互后强制重播可确保音轨重新排入已解锁的音频上下文。
+		mm.call("stop", false)
 	if mm.has_method("play"):
 		mm.call("play", MusicManager.MusicTrack.MENU, false)
 
 func _input(event: InputEvent) -> void:
 	if _is_headless_runtime():
+		return
+	if _interaction_bootstrap_done:
 		return
 	if event == null:
 		return
@@ -114,12 +121,77 @@ func _input(event: InputEvent) -> void:
 		var e := event as InputEventJoypadButton
 		if not e.pressed:
 			return
+	elif event is InputEventScreenTouch:
+		var e := event as InputEventScreenTouch
+		if not e.pressed:
+			return
 	else:
 		return
 
-	# 用第一次用户交互兜底触发 BGM 播放（尤其对 Web/平台音频解锁更稳健）
+	# 用第一次用户交互兜底触发 BGM 播放（Web 需要显式解锁音频上下文）。
+	_interaction_bootstrap_done = true
+	_try_unlock_web_audio_context()
 	set_process_input(false)
-	_ensure_bgm_is_playing()
+	_ensure_bgm_is_playing(true)
+
+func _try_unlock_web_audio_context() -> void:
+	if not _is_web_runtime():
+		return
+	# 尽量兼容不同导出模板：恢复 Godot 挂载的上下文；若不可见则创建一次解锁上下文。
+	JavaScriptBridge.eval("""
+		(function () {
+			try {
+				var resumed = false;
+				var candidates = [];
+				if (typeof window !== "object") {
+					return false;
+				}
+				if (window.GodotAudio && window.GodotAudio.ctx) {
+					candidates.push(window.GodotAudio.ctx);
+				}
+				if (window.Module && window.Module.GodotAudio && window.Module.GodotAudio.ctx) {
+					candidates.push(window.Module.GodotAudio.ctx);
+				}
+				if (window.__godotAudioContext) {
+					candidates.push(window.__godotAudioContext);
+				}
+				for (var i = 0; i < candidates.length; i += 1) {
+					var ctx = candidates[i];
+					if (!ctx || typeof ctx.resume !== "function" || ctx.state === "running") {
+						continue;
+					}
+					try {
+						var p = ctx.resume();
+						if (p && typeof p.catch === "function") {
+							p.catch(function () {});
+						}
+						resumed = true;
+					} catch (_err1) {}
+				}
+				var CtxCtor = window.AudioContext || window.webkitAudioContext;
+				if (!resumed && CtxCtor) {
+					try {
+						if (!window.__fcm_audio_unlock_ctx) {
+							window.__fcm_audio_unlock_ctx = new CtxCtor();
+						}
+						var unlock_ctx = window.__fcm_audio_unlock_ctx;
+						if (unlock_ctx && typeof unlock_ctx.resume === "function" && unlock_ctx.state !== "running") {
+							var p2 = unlock_ctx.resume();
+							if (p2 && typeof p2.catch === "function") {
+								p2.catch(function () {});
+							}
+						}
+					} catch (_err2) {}
+				}
+				return true;
+			} catch (_err3) {
+				return false;
+			}
+		})();
+	""")
+
+func _is_web_runtime() -> bool:
+	return OS.has_feature("web")
 
 func _is_headless_runtime() -> bool:
 	return DisplayServer.get_name() == "headless" or AudioServer.get_driver_name() == "Dummy"
