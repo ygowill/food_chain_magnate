@@ -135,12 +135,17 @@ func _ready() -> void:
 	_setup_ui_button_auto_sounds()
 
 func _is_headless_runtime() -> bool:
-	return DisplayServer.get_name() == "headless" or AudioServer.get_driver_name() == "Dummy"
+	# Web 平台在 Godot 4.3+ 默认使用 sample playback（绕过 AudioServer 混音），
+	# AudioServer driver 可能为 Dummy，但这不等同于 headless。
+	return DisplayServer.get_name() == "headless"
 
 func _create_player_pool() -> void:
+	var is_web := OS.has_feature("web")
 	for i in range(POOL_SIZE):
 		var player := AudioStreamPlayer.new()
 		player.bus = "SFX"
+		if is_web:
+			player.playback_type = AudioServer.PLAYBACK_TYPE_SAMPLE
 		add_child(player)
 		_player_pool.append(player)
 

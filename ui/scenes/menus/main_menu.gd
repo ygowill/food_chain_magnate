@@ -102,7 +102,9 @@ func _deferred_kick_bgm_autoplay() -> void:
 	mm.play(MusicManager.MusicTrack.MENU, false)
 
 func _is_headless_runtime() -> bool:
-	return DisplayServer.get_name() == "headless" or AudioServer.get_driver_name() == "Dummy"
+	# Web 平台在 Godot 4.3+ 默认使用 sample playback（绕过 AudioServer 混音），
+	# AudioServer driver 可能为 Dummy，但这不等同于 headless。
+	return DisplayServer.get_name() == "headless"
 
 func _apply_title_logo_texture() -> void:
 	if title_logo == null:

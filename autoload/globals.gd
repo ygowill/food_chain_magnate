@@ -236,6 +236,10 @@ func set_audio_muted(muted: bool) -> void:
 	if mm != null and is_instance_valid(mm):
 		mm.set_muted(target)
 
+	var master_idx := AudioServer.get_bus_index("Master")
+	if master_idx >= 0:
+		AudioServer.set_bus_mute(master_idx, target)
+
 	if prev != target:
 		audio_muted_changed.emit(target)
 

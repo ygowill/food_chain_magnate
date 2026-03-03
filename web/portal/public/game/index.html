@@ -110,8 +110,107 @@ body {
 		</div>
 
 		<script src="index.js"></script>
+		<script id="fcm-web-audio-unlock">
+(() => {
+	if (typeof window !== "object") {
+		return;
+	}
+
+	if (window.__fcm_web_audio && window.__fcm_web_audio.installed) {
+		return;
+	}
+
+	const OriginalAudioContext = window.AudioContext || window.webkitAudioContext;
+	if (!OriginalAudioContext) {
+		window.__fcm_web_audio = { installed: true, supported: false };
+		return;
+	}
+
+	const state = window.__fcm_web_audio = {
+		installed: true,
+		supported: true,
+		contexts: [],
+		last_ctx: null,
+	};
+
+	const track = (ctx) => {
+		state.last_ctx = ctx;
+		state.contexts.push(ctx);
+		return ctx;
+	};
+
+	function WrappedAudioContext(opts) {
+		const ctx = new OriginalAudioContext(opts);
+		return track(ctx);
+	}
+	WrappedAudioContext.prototype = OriginalAudioContext.prototype;
+
+	// Best-effort override so we can grab the AudioContext Godot creates internally.
+	try {
+		window.AudioContext = WrappedAudioContext;
+	} catch (_err0) {}
+	try {
+		window.webkitAudioContext = WrappedAudioContext;
+	} catch (_err1) {}
+
+	const resumeCtx = (ctx) => {
+		if (!ctx || typeof ctx.resume !== "function") {
+			return;
+		}
+		if (ctx.state === "running") {
+			return;
+		}
+		try {
+			const p = ctx.resume();
+			if (p && typeof p.catch === "function") {
+				p.catch(() => {});
+			}
+		} catch (_err2) {}
+	};
+
+	const isAnyRunning = () => {
+		for (const ctx of state.contexts) {
+			if (ctx && ctx.state === "running") {
+				return true;
+			}
+		}
+		return false;
+	};
+
+	let unlocked = false;
+
+	const detach = () => {
+		window.removeEventListener("pointerdown", unlock, true);
+		window.removeEventListener("touchstart", unlock, true);
+		window.removeEventListener("keydown", unlock, true);
+		window.removeEventListener("mousedown", unlock, true);
+		window.removeEventListener("click", unlock, true);
+	};
+
+	const unlock = () => {
+		for (const ctx of state.contexts) {
+			resumeCtx(ctx);
+		}
+		resumeCtx(state.last_ctx);
+
+		if (!unlocked && isAnyRunning()) {
+			unlocked = true;
+			detach();
+		}
+	};
+
+	// Allow other scripts (engine start logic) to trigger a resume attempt.
+	window.__fcm_web_audio_unlock = unlock;
+
+	window.addEventListener("pointerdown", unlock, true);
+	window.addEventListener("touchstart", unlock, true);
+	window.addEventListener("keydown", unlock, true);
+	window.addEventListener("mousedown", unlock, true);
+	window.addEventListener("click", unlock, true);
+})();
+		</script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":46146476,"index.wasm":38034280},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":51264072,"index.wasm":38034280},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
@@ -198,8 +297,88 @@ const engine = new Engine(GODOT_CONFIG);
 			displayFailureNotice(missingMsg + missing.join('\n'));
 		}
 	} else {
+		// Many browsers block WebAudio until the page is started via user gesture.
+		// We preload (download) first, then start the engine on the first user interaction.
+		let started = false;
+
+		const detachGestureListeners = () => {
+			window.removeEventListener("pointerdown", startWithGesture, true);
+			window.removeEventListener("touchstart", startWithGesture, true);
+			window.removeEventListener("keydown", startWithGesture, true);
+			window.removeEventListener("mousedown", startWithGesture, true);
+			window.removeEventListener("click", startWithGesture, true);
+			if (statusOverlay) {
+				statusOverlay.removeEventListener("click", startWithGesture, true);
+			}
+		};
+
+		const startWithGesture = () => {
+			if (started || !initializing) {
+				return;
+			}
+			started = true;
+			detachGestureListeners();
+
+			// Best-effort attempt to unlock WebAudio immediately on this gesture.
+			try {
+				if (typeof window.__fcm_web_audio_unlock === "function") {
+					window.__fcm_web_audio_unlock();
+				}
+			} catch (_err0) {}
+
+			setStatusMode('progress');
+			engine.start().then(() => {
+				setStatusMode('hidden');
+			}, displayFailureNotice);
+
+			// If Godot creates the AudioContext during `engine.start()`, resume it in a microtask
+			// (still within this user activation in most browsers).
+			Promise.resolve().then(() => {
+				try {
+					if (typeof window.__fcm_web_audio_unlock === "function") {
+						window.__fcm_web_audio_unlock();
+					}
+				} catch (_err1) {}
+			});
+			Promise.resolve().then(() => {
+				try {
+					if (typeof window.__fcm_web_audio_unlock === "function") {
+						window.__fcm_web_audio_unlock();
+					}
+				} catch (_err2) {}
+			});
+		};
+
+		const hasUserActivation = (() => {
+			try {
+				if (!('userActivation' in navigator)) {
+					return false;
+				}
+				return !!(navigator.userActivation && (navigator.userActivation.isActive || navigator.userActivation.hasBeenActive));
+			} catch (_err) {
+				return false;
+			}
+		})();
+
+		// startGame() normally injects --main-pack; since we preload manually, add it ourselves.
+		const exe = engine.config.executable;
+		const pack = engine.config.mainPack || `${exe}.pck`;
+		const args = engine.config.args || [];
+		const hasMainPackArg = (() => {
+			for (let i = 0; i < args.length; i++) {
+				if (args[i] === "--main-pack") {
+					return true;
+				}
+			}
+			return false;
+		})();
+		if (!hasMainPackArg) {
+			engine.config.args = ["--main-pack", pack].concat(args);
+		}
+
+		// Preload wasm + pck first (download may take time), then require a gesture to start for audio.
 		setStatusMode('progress');
-		engine.startGame({
+		engine.config.update({
 			'onProgress': function (current, total) {
 				if (current > 0 && total > 0) {
 					statusProgress.value = current;
@@ -209,12 +388,28 @@ const engine = new Engine(GODOT_CONFIG);
 					statusProgress.removeAttribute('max');
 				}
 			},
-		}).then(() => {
-			setStatusMode('hidden');
+		});
+		Promise.all([
+			engine.init(exe),
+			engine.preloadFile(pack, pack),
+		]).then(() => {
+			if (hasUserActivation) {
+				startWithGesture();
+				return;
+			}
+			setStatusMode('notice');
+			setStatusNotice('Click anywhere to start.\n(Required to enable audio in most browsers.)');
+			window.addEventListener("pointerdown", startWithGesture, true);
+			window.addEventListener("touchstart", startWithGesture, true);
+			window.addEventListener("keydown", startWithGesture, true);
+			window.addEventListener("mousedown", startWithGesture, true);
+			window.addEventListener("click", startWithGesture, true);
+			if (statusOverlay) {
+				statusOverlay.addEventListener("click", startWithGesture, true);
+			}
 		}, displayFailureNotice);
 	}
 }());
 		</script>
 	</body>
 </html>
-

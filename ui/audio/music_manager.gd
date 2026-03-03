@@ -118,7 +118,9 @@ func _boot_autoplay_tick() -> void:
 	tree.create_timer(BOOT_AUTOPLAY_INTERVAL_SEC).timeout.connect(_boot_autoplay_tick)
 
 func _is_headless_runtime() -> bool:
-	return DisplayServer.get_name() == "headless" or AudioServer.get_driver_name() == "Dummy"
+	# Web 平台在 Godot 4.3+ 默认使用 sample playback（绕过 AudioServer 混音），
+	# AudioServer driver 可能为 Dummy，但这不等同于 headless。
+	return DisplayServer.get_name() == "headless"
 
 func _create_players() -> void:
 	if _player_a != null and is_instance_valid(_player_a) and _player_b != null and is_instance_valid(_player_b):
@@ -128,13 +130,19 @@ func _create_players() -> void:
 			_inactive_player = _player_b
 		return
 
+	var is_web := OS.has_feature("web")
+
 	_player_a = AudioStreamPlayer.new()
 	_player_a.bus = "Music"
+	if is_web:
+		_player_a.playback_type = AudioServer.PLAYBACK_TYPE_SAMPLE
 	_player_a.finished.connect(_on_player_finished.bind(_player_a))
 	add_child(_player_a)
 
 	_player_b = AudioStreamPlayer.new()
 	_player_b.bus = "Music"
+	if is_web:
+		_player_b.playback_type = AudioServer.PLAYBACK_TYPE_SAMPLE
 	_player_b.finished.connect(_on_player_finished.bind(_player_b))
 	add_child(_player_b)
 
@@ -204,6 +212,11 @@ func is_playing() -> bool:
 	if _active_player == null or not is_instance_valid(_active_player):
 		return false
 	return _active_player.playing and not _active_player.stream_paused
+
+func get_playback_position_sec() -> float:
+	if _active_player == null or not is_instance_valid(_active_player):
+		return 0.0
+	return float(_active_player.get_playback_position())
 
 func get_current_track() -> MusicTrack:
 	return _current_track
