@@ -11,10 +11,15 @@
 .venv
 .claude
 
-build
+# Build outputs
+# Keep the context small, but allow including the Godot Web export for `web/Dockerfile`.
+build/*
+!build/client/
+build/client/*
+!build/client/web/
+!build/client/web/**
 demo_image
 docs
 
 tools/migration/out_legacy_json
 .DS_Store
-
