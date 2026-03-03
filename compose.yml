@@ -21,6 +21,7 @@ services:
     environment:
       DATABASE_URL: "postgresql+asyncpg://${FCM_DB_USER:-fcm}:${FCM_DB_PASSWORD:-fcm}@db:5432/${FCM_DB_NAME:-fcm}"
       HMAC_SECRET: "${FCM_HMAC_SECRET:-change-me-in-production}"
+      INTERNAL_API_SECRET: "${FCM_INTERNAL_API_SECRET:-dev-internal-secret-change-in-production}"
       WEB_ORIGIN: "${FCM_WEB_ORIGIN:-*}"
     depends_on:
       - db
@@ -36,6 +37,9 @@ services:
     environment:
       PORT: "${FCM_SERVER_PORT:-7000}"
       BIND: "${FCM_SERVER_BIND:-0.0.0.0}"
+      PLATFORM_BACKEND_URL: "${FCM_PLATFORM_BACKEND_URL:-http://backend:8000}"
+      HMAC_SECRET: "${FCM_HMAC_SECRET:-change-me-in-production}"
+      INTERNAL_API_SECRET: "${FCM_INTERNAL_API_SECRET:-dev-internal-secret-change-in-production}"
 
   web:
     image: ${FCM_WEB_IMAGE:-ghcr.io/ygowill/food_chain_magnate/fcm-web:${FCM_TAG:-latest}}
