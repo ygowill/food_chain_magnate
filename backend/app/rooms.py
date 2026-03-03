@@ -5,10 +5,10 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user
+from app.auth import get_current_user, _is_guest_user, _resolve_display_name
 from app.connect_token import issue_connect_token
 from app.db import get_db
-from app.models import GameServer, Room, RoomMember, Session
+from app.models import GameServer, Room, RoomMember, Session, User
 
 router = APIRouter(prefix="/v1/rooms", tags=["rooms"])
 
@@ -81,6 +81,7 @@ async def list_rooms(
     rooms = (await db.execute(stmt)).scalars().all()
 
     counts: dict[str, int] = {}
+    owner_display_name: dict[str, str] = {}
     room_ids = [r.room_id for r in rooms]
     if room_ids:
         rows = (await db.execute(
@@ -93,6 +94,16 @@ async def list_rooms(
             .group_by(RoomMember.room_id)
         )).all()
         counts = {rid: int(c) for (rid, c) in rows}
+    owner_ids = list({str(r.owner_user_id) for r in rooms if str(r.owner_user_id).strip()})
+    if owner_ids:
+        owners = (await db.execute(
+            select(User.user_id, User.display_name).where(User.user_id.in_(owner_ids))
+        )).all()
+        owner_display_name = {
+            str(uid): str(display_name).strip()
+            for uid, display_name in owners
+            if str(display_name or "").strip()
+        }
 
     import json
     out: list[RoomSummary] = []
@@ -107,7 +118,7 @@ async def list_rooms(
         desired = int(cfg.get("desired_player_count", 0) or 0)
         allow_spectators = bool(cfg.get("allow_spectators", True))
         password_required = r.join_policy == "password"
-        host_name = (r.owner_user_id or "")[:8]
+        host_name = owner_display_name.get(str(r.owner_user_id), (r.owner_user_id or "")[:8])
 
         out.append(RoomSummary(
             room_code=r.room_code,
@@ -125,6 +136,11 @@ async def list_rooms(
 @router.post("", response_model=RoomResponse)
 async def create_room(req: CreateRoomRequest, db: AsyncSession = Depends(get_db)):
     sess = await get_current_user(db=db, session_id=req.session_id)
+    user = (await db.execute(select(User).where(User.user_id == sess.user_id))).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(404, "user not found")
+    is_guest = await _is_guest_user(db, user.user_id)
+    display_name, _ = _resolve_display_name(user, is_guest)
 
     from app.auth import _hash_password
     room = Room(
@@ -140,7 +156,14 @@ async def create_room(req: CreateRoomRequest, db: AsyncSession = Depends(get_db)
     db.add(RoomMember(room_id=room.room_id, user_id=sess.user_id, role="host", seat_index=0))
     await db.commit()
 
-    token = issue_connect_token(sess.user_id, room.room_code, "host", seat_index=0, config_json=req.config_json)
+    token = issue_connect_token(
+        sess.user_id,
+        room.room_code,
+        "host",
+        display_name=display_name,
+        seat_index=0,
+        config_json=req.config_json,
+    )
     return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
 
 
@@ -152,6 +175,11 @@ class JoinRequest(BaseModel):
 @router.post("/{room_code}/join", response_model=RoomResponse)
 async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends(get_db)):
     sess = await get_current_user(db=db, session_id=req.session_id)
+    user = (await db.execute(select(User).where(User.user_id == sess.user_id))).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(404, "user not found")
+    is_guest = await _is_guest_user(db, user.user_id)
+    display_name, name_changed = _resolve_display_name(user, is_guest)
     room = (await db.execute(select(Room).where(Room.room_code == room_code))).scalar_one_or_none()
     if not room:
         raise HTTPException(404, "room not found")
@@ -165,8 +193,11 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
         select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.user_id == sess.user_id, RoomMember.left_at.is_(None))
     )).scalar_one_or_none()
     if existing:
+        if name_changed:
+            await db.commit()
         token = issue_connect_token(
             sess.user_id, room.room_code, existing.role,
+            display_name=display_name,
             seat_index=existing.seat_index,
         )
         return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
@@ -182,13 +213,18 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
 
     db.add(RoomMember(room_id=room.room_id, user_id=sess.user_id, role="player", seat_index=seat))
     await db.commit()
-    token = issue_connect_token(sess.user_id, room.room_code, "player", seat_index=seat)
+    token = issue_connect_token(sess.user_id, room.room_code, "player", display_name=display_name, seat_index=seat)
     return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
 
 
 @router.post("/{room_code}/spectate", response_model=RoomResponse)
 async def spectate_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends(get_db)):
     sess = await get_current_user(db=db, session_id=req.session_id)
+    user = (await db.execute(select(User).where(User.user_id == sess.user_id))).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(404, "user not found")
+    is_guest = await _is_guest_user(db, user.user_id)
+    display_name, name_changed = _resolve_display_name(user, is_guest)
     room = (await db.execute(select(Room).where(Room.room_code == room_code))).scalar_one_or_none()
     if not room:
         raise HTTPException(404, "room not found")
@@ -197,15 +233,18 @@ async def spectate_room(room_code: str, req: JoinRequest, db: AsyncSession = Dep
         select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.user_id == sess.user_id, RoomMember.left_at.is_(None))
     )).scalar_one_or_none()
     if existing:
+        if name_changed:
+            await db.commit()
         token = issue_connect_token(
             sess.user_id, room.room_code, existing.role,
+            display_name=display_name,
             seat_index=existing.seat_index,
         )
         return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
 
     db.add(RoomMember(room_id=room.room_id, user_id=sess.user_id, role="spectator", seat_index=None))
     await db.commit()
-    token = issue_connect_token(sess.user_id, room.room_code, "spectator")
+    token = issue_connect_token(sess.user_id, room.room_code, "spectator", display_name=display_name)
     return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
 
 

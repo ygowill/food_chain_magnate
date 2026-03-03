@@ -9,6 +9,8 @@ async def test_guest_login_creates_user(client: AsyncClient):
     data = resp.json()
     assert "user_id" in data
     assert "session_id" in data
+    assert data["is_guest"] is True
+    assert str(data.get("display_name", "")).startswith("游客#")
 
 
 @pytest.mark.asyncio
@@ -17,6 +19,7 @@ async def test_guest_login_same_device_returns_same_user(client: AsyncClient):
     r2 = await client.post("/v1/auth/guest", json={"device_id": "device-dup"})
     assert r1.json()["user_id"] == r2.json()["user_id"]
     assert r1.json()["session_id"] != r2.json()["session_id"]
+    assert r1.json()["display_name"] == r2.json()["display_name"]
 
 
 @pytest.mark.asyncio
@@ -46,6 +49,8 @@ async def test_register_creates_user(client: AsyncClient):
     data = resp.json()
     assert "user_id" in data
     assert "session_id" in data
+    assert data["is_guest"] is False
+    assert str(data.get("display_name", "")).startswith("账号#")
 
 
 @pytest.mark.asyncio
@@ -68,6 +73,7 @@ async def test_login_success(client: AsyncClient):
     resp = await client.post("/v1/auth/login", json={"email": "login@b.com", "password": "secret"})
     assert resp.status_code == 200
     assert resp.json()["user_id"] == reg.json()["user_id"]
+    assert resp.json()["display_name"] == reg.json()["display_name"]
 
 
 @pytest.mark.asyncio
@@ -94,6 +100,8 @@ async def test_bind_guest_to_email(client: AsyncClient):
     })
     assert resp.status_code == 200
     assert resp.json()["user_id"] == uid
+    assert resp.json()["is_guest"] is False
+    assert str(resp.json().get("display_name", "")).startswith("账号#")
     # Can now login with email
     login = await client.post("/v1/auth/login", json={
         "email": "bind@b.com", "password": "pw",
@@ -138,3 +146,43 @@ async def test_logout_revokes_session(client: AsyncClient):
         "email": "x@b.com", "password": "p",
     })
     assert resp2.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_register_with_custom_display_name(client: AsyncClient):
+    resp = await client.post("/v1/auth/register", json={
+        "email": "nick@b.com", "password": "pw", "display_name": "Alice",
+    })
+    assert resp.status_code == 200
+    assert resp.json()["display_name"] == "Alice"
+
+
+@pytest.mark.asyncio
+async def test_me_returns_display_name(client: AsyncClient):
+    reg = await client.post("/v1/auth/register", json={
+        "email": "me@b.com", "password": "pw", "display_name": "MeName",
+    })
+    sid = reg.json()["session_id"]
+    me = await client.get("/v1/auth/me", params={"session_id": sid})
+    assert me.status_code == 200
+    assert me.json()["display_name"] == "MeName"
+
+
+@pytest.mark.asyncio
+async def test_update_profile_display_name(client: AsyncClient):
+    reg = await client.post("/v1/auth/register", json={"email": "upd@b.com", "password": "pw"})
+    sid = reg.json()["session_id"]
+    resp = await client.put("/v1/auth/profile", json={"session_id": sid, "display_name": "Renamed"})
+    assert resp.status_code == 200
+    assert resp.json()["display_name"] == "Renamed"
+    me = await client.get("/v1/auth/me", params={"session_id": sid})
+    assert me.status_code == 200
+    assert me.json()["display_name"] == "Renamed"
+
+
+@pytest.mark.asyncio
+async def test_update_profile_guest_forbidden(client: AsyncClient):
+    guest = await client.post("/v1/auth/guest", json={"device_id": "guest-profile"})
+    sid = guest.json()["session_id"]
+    resp = await client.put("/v1/auth/profile", json={"session_id": sid, "display_name": "Nope"})
+    assert resp.status_code == 403

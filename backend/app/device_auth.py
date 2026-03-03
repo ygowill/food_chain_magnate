@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_db
-from app.models import DeviceCode, Session
-from app.auth import get_current_user, _new_session
+from app.models import DeviceCode, Session, User
+from app.auth import get_current_user, _new_session, _build_auth_payload
 
 router = APIRouter(prefix="/v1/auth/device", tags=["device-auth"])
 
@@ -113,5 +113,9 @@ async def poll_device_token(req: TokenRequest, db: AsyncSession = Depends(get_db
     dc.status = "consumed"
     sess = _new_session(dc.user_id, dc.device_id)
     db.add(sess)
+    user = (await db.execute(select(User).where(User.user_id == dc.user_id))).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(404, "user not found")
+    payload = await _build_auth_payload(db, user, sess.session_id)
     await db.commit()
-    return {"user_id": dc.user_id, "session_id": sess.session_id}
+    return payload

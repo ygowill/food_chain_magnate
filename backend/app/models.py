@@ -22,6 +22,7 @@ class User(Base):
 
     user_id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
     status: Mapped[str] = mapped_column(String, default="active")
+    display_name: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 

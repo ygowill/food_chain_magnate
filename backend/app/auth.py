@@ -14,6 +14,11 @@ from app.models import User, AuthIdentity, Session
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
+_DISPLAY_NAME_MAX_LEN = 24
+_GUEST_NAME_PREFIX = "游客#"
+_ACCOUNT_NAME_PREFIX = "账号#"
+_DEFAULT_NAME_SUFFIX = "0000"
+
 
 class GuestRequest(BaseModel):
     device_id: str
@@ -22,6 +27,8 @@ class GuestRequest(BaseModel):
 class AuthResponse(BaseModel):
     user_id: str
     session_id: str
+    display_name: str
+    is_guest: bool
 
 
 def _new_session(user_id: str, device_id: str | None = None) -> Session:
@@ -31,6 +38,74 @@ def _new_session(user_id: str, device_id: str | None = None) -> Session:
         expires_at=datetime.now(timezone.utc) + timedelta(days=settings.session_expire_days),
         device_id=device_id,
     )
+
+
+def _name_suffix_from_user_id(user_id: str) -> str:
+    uid = str(user_id or "").strip()
+    if not uid:
+        return _DEFAULT_NAME_SUFFIX
+    if len(uid) >= 4:
+        return uid[-4:]
+    return uid.rjust(4, "0")
+
+
+def _default_display_name(user_id: str, is_guest: bool) -> str:
+    prefix = _GUEST_NAME_PREFIX if is_guest else _ACCOUNT_NAME_PREFIX
+    return f"{prefix}{_name_suffix_from_user_id(user_id)}"
+
+
+def _normalize_display_name(display_name: str) -> str:
+    name = str(display_name or "").strip()
+    if not name:
+        raise HTTPException(400, "display_name is required")
+    if len(name) > _DISPLAY_NAME_MAX_LEN:
+        raise HTTPException(400, f"display_name too long (max {_DISPLAY_NAME_MAX_LEN})")
+    return name
+
+
+async def _is_guest_user(db: AsyncSession, user_id: str) -> bool:
+    email_identity = (await db.execute(
+        select(AuthIdentity.id).where(
+            AuthIdentity.user_id == user_id,
+            AuthIdentity.provider == "email",
+        )
+    )).scalar_one_or_none()
+    if email_identity is not None:
+        return False
+    guest_identity = (await db.execute(
+        select(AuthIdentity.id).where(
+            AuthIdentity.user_id == user_id,
+            AuthIdentity.provider == "guest",
+        )
+    )).scalar_one_or_none()
+    return guest_identity is not None
+
+
+def _resolve_display_name(user: User, is_guest: bool) -> tuple[str, bool]:
+    existing = str(user.display_name or "").strip()
+    guest_default = _default_display_name(user.user_id, True)
+    if existing:
+        # 已升级账号若仍是旧游客默认名，自动切换为账号默认名。
+        if not is_guest and existing == guest_default:
+            upgraded = _default_display_name(user.user_id, False)
+            if upgraded != existing:
+                user.display_name = upgraded
+                return upgraded, True
+        return existing, False
+    default_name = _default_display_name(user.user_id, is_guest)
+    user.display_name = default_name
+    return default_name, True
+
+
+async def _build_auth_payload(db: AsyncSession, user: User, session_id: str) -> dict:
+    is_guest = await _is_guest_user(db, user.user_id)
+    display_name, _ = _resolve_display_name(user, is_guest)
+    return {
+        "user_id": user.user_id,
+        "session_id": session_id,
+        "display_name": display_name,
+        "is_guest": is_guest,
+    }
 
 
 async def get_current_user(
@@ -62,18 +137,22 @@ async def guest_login(req: GuestRequest, db: AsyncSession = Depends(get_db)):
     identity = (await db.execute(stmt)).scalar_one_or_none()
 
     if identity:
-        user_id = identity.user_id
+        user = (await db.execute(select(User).where(User.user_id == identity.user_id))).scalar_one_or_none()
+        if user is None:
+            user = User(user_id=identity.user_id)
+            db.add(user)
+            await db.flush()
     else:
         user = User()
         db.add(user)
         await db.flush()
         db.add(AuthIdentity(provider="guest", provider_user_id=req.device_id, user_id=user.user_id))
-        user_id = user.user_id
 
-    sess = _new_session(user_id, req.device_id)
+    sess = _new_session(user.user_id, req.device_id)
     db.add(sess)
+    payload = await _build_auth_payload(db, user, sess.session_id)
     await db.commit()
-    return AuthResponse(user_id=user_id, session_id=sess.session_id)
+    return AuthResponse(**payload)
 
 
 def _hash_password(password: str) -> str:
@@ -133,6 +212,7 @@ def is_admin_user_id(user_id: str) -> bool:
 class RegisterRequest(BaseModel):
     email: str
     password: str
+    display_name: str | None = None
 
 
 class LoginRequest(BaseModel):
@@ -157,9 +237,11 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     if exists:
         raise HTTPException(409, "email already registered")
 
+    normalized_display_name = _normalize_display_name(req.display_name) if req.display_name is not None else None
     user = User()
     db.add(user)
     await db.flush()
+    user.display_name = normalized_display_name if normalized_display_name else _default_display_name(user.user_id, False)
     db.add(AuthIdentity(
         provider="email",
         provider_user_id=email,
@@ -169,8 +251,9 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     ))
     sess = _new_session(user.user_id)
     db.add(sess)
+    payload = await _build_auth_payload(db, user, sess.session_id)
     await db.commit()
-    return AuthResponse(user_id=user.user_id, session_id=sess.session_id)
+    return AuthResponse(**payload)
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -189,10 +272,14 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     if identity.credential_hash and _is_legacy_password_hash(identity.credential_hash):
         identity.credential_hash = _hash_password(req.password)
 
+    user = (await db.execute(select(User).where(User.user_id == identity.user_id))).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(404, "user not found")
     sess = _new_session(identity.user_id)
     db.add(sess)
+    payload = await _build_auth_payload(db, user, sess.session_id)
     await db.commit()
-    return AuthResponse(user_id=identity.user_id, session_id=sess.session_id)
+    return AuthResponse(**payload)
 
 
 class BindRequest(BaseModel):
@@ -229,12 +316,17 @@ async def bind(req: BindRequest, db: AsyncSession = Depends(get_db)):
         credential_hash=_hash_password(req.password),
         verified=False,
     ))
+    user = (await db.execute(select(User).where(User.user_id == sess.user_id))).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(404, "user not found")
+    payload = await _build_auth_payload(db, user, sess.session_id)
     await db.commit()
-    return AuthResponse(user_id=sess.user_id, session_id=sess.session_id)
+    return AuthResponse(**payload)
 
 
 class MeResponse(BaseModel):
     user_id: str
+    display_name: str
     email: str | None
     is_guest: bool
     is_admin: bool
@@ -259,13 +351,48 @@ async def get_me(session_id: str = "", db: AsyncSession = Depends(get_db)):
             AuthIdentity.provider == "guest",
         )
     )).scalar_one_or_none()
+    is_guest = has_guest is not None and email_identity is None
+    old_display_name = str(user.display_name or "").strip()
+    display_name, changed = _resolve_display_name(user, is_guest)
+    if changed and display_name != old_display_name:
+        await db.commit()
 
     return MeResponse(
         user_id=user.user_id,
+        display_name=display_name,
         email=email_identity.provider_user_id if email_identity else None,
-        is_guest=has_guest is not None and email_identity is None,
+        is_guest=is_guest,
         is_admin=is_admin_user_id(user.user_id),
         created_at=user.created_at.isoformat(),
+    )
+
+
+class UpdateProfileRequest(BaseModel):
+    session_id: str
+    display_name: str
+
+
+class UpdateProfileResponse(BaseModel):
+    user_id: str
+    display_name: str
+    is_guest: bool
+
+
+@router.put("/profile", response_model=UpdateProfileResponse)
+async def update_profile(req: UpdateProfileRequest, db: AsyncSession = Depends(get_db)):
+    sess = await get_current_user(db=db, session_id=req.session_id)
+    is_guest = await _is_guest_user(db, sess.user_id)
+    if is_guest:
+        raise HTTPException(403, "guest profile is read-only")
+    user = (await db.execute(select(User).where(User.user_id == sess.user_id))).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(404, "user not found")
+    user.display_name = _normalize_display_name(req.display_name)
+    await db.commit()
+    return UpdateProfileResponse(
+        user_id=user.user_id,
+        display_name=str(user.display_name),
+        is_guest=is_guest,
     )
 
 

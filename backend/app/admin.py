@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user, is_admin_user_id
@@ -45,6 +45,7 @@ async def _require_admin_session(
 
 class AdminUserSummary(BaseModel):
     user_id: str
+    display_name: str
     status: str
     created_at: str
     email: str | None
@@ -122,6 +123,7 @@ def _build_user_summary(
 ) -> AdminUserSummary:
     return AdminUserSummary(
         user_id=user.user_id,
+        display_name=str(user.display_name or ""),
         status=str(user.status or "active"),
         created_at=_to_iso(user.created_at) or "",
         email=email_by_user_id.get(user.user_id),
@@ -212,7 +214,7 @@ async def list_users(
     if query:
         q = str(query).strip()
         if q:
-            stmt = stmt.where(User.user_id.contains(q))
+            stmt = stmt.where(or_(User.user_id.contains(q), User.display_name.contains(q)))
     stmt = stmt.order_by(User.created_at.desc()).offset(off).limit(lim)
     users = (await db.execute(stmt)).scalars().all()
     if not users:
@@ -318,6 +320,7 @@ async def update_user_status(
 
     return AdminUserSummary(
         user_id=user.user_id,
+        display_name=str(user.display_name or ""),
         status=str(user.status or "active"),
         created_at=_to_iso(user.created_at) or "",
         email=str(email_row) if email_row else None,

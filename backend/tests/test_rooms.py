@@ -1,6 +1,8 @@
 import pytest
 from httpx import AsyncClient
 
+from app.connect_token import verify_token
+
 
 async def _create_user(client: AsyncClient) -> dict:
     resp = await client.post("/v1/auth/guest", json={"device_id": f"dev-{id(client)}-{pytest.importorskip('random').randint(0,99999)}"})
@@ -16,6 +18,9 @@ async def test_create_room(client: AsyncClient):
     assert "room_code" in data
     assert "connect_token" in data
     assert data["ws_url"] == "ws://localhost:7000"
+    payload = verify_token(str(data["connect_token"]))
+    assert payload is not None
+    assert str(payload.get("display_name", "")).startswith("游客#")
 
 
 @pytest.mark.asyncio
@@ -83,6 +88,9 @@ async def test_join_room(client: AsyncClient):
     resp = await client.post(f"/v1/rooms/{code}/join", json={"session_id": player["session_id"]})
     assert resp.status_code == 200
     assert resp.json()["room_code"] == code
+    payload = verify_token(str(resp.json()["connect_token"]))
+    assert payload is not None
+    assert str(payload.get("display_name", "")).startswith("游客#")
 
 
 @pytest.mark.asyncio
