@@ -135,14 +135,15 @@ func _create_players() -> void:
 	_player_a = AudioStreamPlayer.new()
 	_player_a.bus = "Music"
 	if is_web:
-		_player_a.playback_type = AudioServer.PLAYBACK_TYPE_SAMPLE
+		# Web 上 sample playback 在部分环境可能出现“完全无声”，这里强制使用 Stream 走 Godot 混音链路。
+		_player_a.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	_player_a.finished.connect(_on_player_finished.bind(_player_a))
 	add_child(_player_a)
 
 	_player_b = AudioStreamPlayer.new()
 	_player_b.bus = "Music"
 	if is_web:
-		_player_b.playback_type = AudioServer.PLAYBACK_TYPE_SAMPLE
+		_player_b.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	_player_b.finished.connect(_on_player_finished.bind(_player_b))
 	add_child(_player_b)
 

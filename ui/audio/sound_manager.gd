@@ -145,7 +145,8 @@ func _create_player_pool() -> void:
 		var player := AudioStreamPlayer.new()
 		player.bus = "SFX"
 		if is_web:
-			player.playback_type = AudioServer.PLAYBACK_TYPE_SAMPLE
+			# Web 上 sample playback 在部分环境可能出现“完全无声”，这里强制使用 Stream 走 Godot 混音链路。
+			player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 		add_child(player)
 		_player_pool.append(player)
 
