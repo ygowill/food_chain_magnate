@@ -2,6 +2,7 @@ import client from './client'
 
 export interface AdminUserSummary {
   user_id: string
+  display_name: string
   status: string
   created_at: string
   email: string | null

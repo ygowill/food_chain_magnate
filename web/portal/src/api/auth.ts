@@ -3,10 +3,13 @@ import client from './client'
 export interface AuthResponse {
   user_id: string
   session_id: string
+  display_name: string
+  is_guest: boolean
 }
 
 export interface MeResponse {
   user_id: string
+  display_name: string
   email: string | null
   is_guest: boolean
   is_admin: boolean
@@ -17,8 +20,12 @@ export function login(email: string, password: string) {
   return client.post<AuthResponse>('/auth/login', { email, password })
 }
 
-export function register(email: string, password: string) {
-  return client.post<AuthResponse>('/auth/register', { email, password })
+export function register(email: string, password: string, displayName?: string) {
+  const payload: Record<string, string> = { email, password }
+  if (displayName && String(displayName).trim()) {
+    payload.display_name = String(displayName).trim()
+  }
+  return client.post<AuthResponse>('/auth/register', payload)
 }
 
 export function getMe(sessionId: string) {
@@ -43,6 +50,19 @@ export function bindEmail(sessionId: string, email: string, password: string) {
     provider: 'email',
     email,
     password,
+  })
+}
+
+export interface UpdateProfileResponse {
+  user_id: string
+  display_name: string
+  is_guest: boolean
+}
+
+export function updateDisplayName(sessionId: string, displayName: string) {
+  return client.put<UpdateProfileResponse>('/auth/profile', {
+    session_id: sessionId,
+    display_name: displayName,
   })
 }
 

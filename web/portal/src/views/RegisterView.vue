@@ -1,6 +1,9 @@
 <template>
   <AuthCard title="注册" width="460px">
     <el-form @submit.prevent="handleRegister" :disabled="loading">
+      <el-form-item label="昵称">
+        <el-input v-model="displayName" placeholder="可选，不填则自动生成" />
+      </el-form-item>
       <el-form-item label="邮箱">
         <el-input v-model="email" placeholder="请输入邮箱" />
       </el-form-item>
@@ -35,6 +38,7 @@ const router = useRouter()
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
+const displayName = ref('')
 const error = ref('')
 const loading = ref(false)
 
@@ -46,7 +50,7 @@ async function handleRegister() {
   }
   loading.value = true
   try {
-    await auth.register(email.value, password.value)
+    await auth.register(email.value, password.value, displayName.value)
     router.push('/matches')
   } catch (e: any) {
     error.value = e.response?.data?.detail || '注册失败'

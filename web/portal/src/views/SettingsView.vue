@@ -7,6 +7,7 @@
     <div class="poster-card" style="max-width: 500px">
       <h3 class="poster-card__title">账号信息</h3>
       <el-descriptions :column="1" border v-if="auth.user">
+        <el-descriptions-item label="昵称">{{ auth.user.display_name || '-' }}</el-descriptions-item>
         <el-descriptions-item label="用户 ID">{{ auth.user.user_id }}</el-descriptions-item>
         <el-descriptions-item label="邮箱">{{ auth.user.email || '未绑定' }}</el-descriptions-item>
         <el-descriptions-item label="账号类型">{{ auth.user.is_guest ? '游客' : '正式' }}</el-descriptions-item>
@@ -14,6 +15,21 @@
           {{ new Date(auth.user.created_at).toLocaleString('zh-CN') }}
         </el-descriptions-item>
       </el-descriptions>
+    </div>
+
+    <div class="poster-card" style="max-width: 500px; margin-top: 20px" v-if="auth.user && !auth.user.is_guest">
+      <h3 class="poster-card__title">昵称设置</h3>
+      <p class="poster-card__hint">联机昵称与账号绑定。修改后，游戏客户端将自动使用该昵称。</p>
+      <el-form @submit.prevent="handleUpdateDisplayName" :disabled="displayNameLoading">
+        <el-form-item label="昵称">
+          <el-input v-model="displayNameInput" maxlength="24" show-word-limit placeholder="请输入昵称（最多24字）" />
+        </el-form-item>
+        <el-alert v-if="displayNameError" :title="displayNameError" type="error" :closable="false" style="margin-bottom: 16px" />
+        <el-alert v-if="displayNameSuccess" title="昵称修改成功" type="success" :closable="false" style="margin-bottom: 16px" />
+        <el-form-item>
+          <el-button type="primary" native-type="submit" :loading="displayNameLoading">保存昵称</el-button>
+        </el-form-item>
+      </el-form>
     </div>
 
     <div class="poster-card" style="max-width: 500px; margin-top: 20px" v-if="auth.user && auth.user.is_guest">
@@ -62,7 +78,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import { changePassword, bindEmail as apiBindEmail } from '../api/auth'
+import { changePassword, bindEmail as apiBindEmail, updateDisplayName } from '../api/auth'
 import AppLayout from '../components/AppLayout.vue'
 
 const auth = useAuthStore()
@@ -79,9 +95,14 @@ const bindConfirm = ref('')
 const bindError = ref('')
 const bindSuccess = ref(false)
 const bindLoading = ref(false)
+const displayNameInput = ref('')
+const displayNameError = ref('')
+const displayNameSuccess = ref(false)
+const displayNameLoading = ref(false)
 
-onMounted(() => {
-  auth.fetchUser()
+onMounted(async () => {
+  await auth.fetchUser()
+  displayNameInput.value = auth.user?.display_name || ''
 })
 
 async function handleBind() {
@@ -100,10 +121,32 @@ async function handleBind() {
     await apiBindEmail(auth.sessionId, bindEmail.value, bindPassword.value)
     bindSuccess.value = true
     await auth.fetchUser()
+    displayNameInput.value = auth.user?.display_name || ''
   } catch (e: any) {
     bindError.value = e.response?.data?.detail || '绑定失败'
   } finally {
     bindLoading.value = false
+  }
+}
+
+async function handleUpdateDisplayName() {
+  displayNameError.value = ''
+  displayNameSuccess.value = false
+  const target = String(displayNameInput.value || '').trim()
+  if (!target) {
+    displayNameError.value = '昵称不能为空'
+    return
+  }
+  displayNameLoading.value = true
+  try {
+    await updateDisplayName(auth.sessionId, target)
+    displayNameSuccess.value = true
+    await auth.fetchUser()
+    displayNameInput.value = auth.user?.display_name || target
+  } catch (e: any) {
+    displayNameError.value = e.response?.data?.detail || '修改昵称失败'
+  } finally {
+    displayNameLoading.value = false
   }
 }
 

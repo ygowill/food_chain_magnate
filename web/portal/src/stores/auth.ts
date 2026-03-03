@@ -20,8 +20,8 @@ export const useAuthStore = defineStore('auth', () => {
     await fetchUser()
   }
 
-  async function register(email: string, password: string) {
-    const { data } = await apiRegister(email, password)
+  async function register(email: string, password: string, displayName?: string) {
+    const { data } = await apiRegister(email, password, displayName)
     sessionId.value = data.session_id
     localStorage.setItem(SESSION_KEY, data.session_id)
     await fetchUser()
