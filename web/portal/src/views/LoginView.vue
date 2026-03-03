@@ -45,7 +45,7 @@ async function handleGuestLogin() {
   guestLoading.value = true
   try {
     await auth.guestLogin()
-    const redirect = (route.query.redirect as string) || '/game'
+    const redirect = (route.query.redirect as string) || '/matches'
     router.push(redirect)
   } catch (e: any) {
     error.value = e.response?.data?.detail || '游客登录失败'

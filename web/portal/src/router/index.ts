@@ -48,7 +48,7 @@ const router = createRouter({
     },
     {
       path: '/',
-      redirect: '/game',
+      redirect: '/matches',
     },
   ],
 })
