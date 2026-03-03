@@ -210,7 +210,7 @@ body {
 })();
 		</script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":51264072,"index.wasm":38034280},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":51264168,"index.wasm":38034280},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
@@ -397,8 +397,8 @@ const engine = new Engine(GODOT_CONFIG);
 				startWithGesture();
 				return;
 			}
-			setStatusMode('notice');
-			setStatusNotice('Click anywhere to start.\n(Required to enable audio in most browsers.)');
+			// Keep the splash visible, but don't show a click-to-start prompt.
+			setStatusMode('wait');
 			window.addEventListener("pointerdown", startWithGesture, true);
 			window.addEventListener("touchstart", startWithGesture, true);
 			window.addEventListener("keydown", startWithGesture, true);
