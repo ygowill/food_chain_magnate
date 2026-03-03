@@ -17,9 +17,12 @@ const GameSetupClass = preload("res://ui/scenes/setup/game_setup.gd")
 
 const _LOGO_DISPLAY_NAMES: Dictionary = GameSetupClass.LOGO_DISPLAY_NAMES
 const _DEFAULT_LOGO_COUNT := 6
+const _DEFAULT_PLATFORM_BASE_URL := "http://127.0.0.1:8000"
 const _GUEST_NAME_PREFIX := "游客#"
 const _ACCOUNT_NAME_PREFIX := "账号#"
 const _DEFAULT_NAME_SUFFIX := "0000"
+# 后续新增分服时，在这里追加 { "name": "...", "url": "...", "desc": "..." }。
+const _EXTRA_PLATFORM_SERVERS: Array = []
 
 @onready var wall_background: ColorRect = $WallBackground
 @onready var vignette_overlay: ColorRect = $VignetteOverlay
@@ -33,7 +36,7 @@ const _DEFAULT_NAME_SUFFIX := "0000"
 
 # ── ConnectPage ──
 @onready var page_connect: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage
-@onready var backend_url_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/BackendRow/BackendUrlEdit
+@onready var server_cards_container: HFlowContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/BackendRow/ServerCards
 @onready var player_name_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ProfileRow/PlayerNameEdit
 @onready var rename_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ProfileRow/RenameButton
 @onready var connect_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ButtonsRow/ConnectButton
@@ -95,6 +98,8 @@ var _platform_busy: bool = false
 var _platform_entered: bool = false
 var _ws_connect_in_progress: bool = false
 var _editing_display_name: bool = false
+var _platform_servers: Array = []
+var _selected_server_url: String = ""
 
 func _ready() -> void:
 	UiStylesClass.apply_tiled_texture(wall_background, UiStylesClass.WALL_TEXTURE_PATHS, 3.0, Color(0.93, 0.88, 0.75, 1.0))
@@ -136,7 +141,6 @@ func _apply_visual_styles() -> void:
 	UiStylesClass.apply_label_hint_dark(config_sync_status_label)
 	UiStylesClass.apply_label_hint_dark(room_status_label)
 	UiStylesClass.apply_label_hint_dark(account_status_label)
-	UiStylesClass.apply_line_edit_field(backend_url_edit)
 	UiStylesClass.apply_line_edit_field(player_name_edit)
 	UiStylesClass.apply_line_edit_field(quick_join_code_edit)
 	UiStylesClass.apply_line_edit_field(quick_join_password_edit)
@@ -294,15 +298,135 @@ func _show_error_dialog(title_text: String, message: String) -> void:
 	if _info_dialog.has_method("show_info"):
 		_info_dialog.call("show_info", title_text, message, Vector2i(520, 320), "确定")
 
+func _normalize_platform_base_url(raw_url: String) -> String:
+	var url := str(raw_url).strip_edges()
+	while url.length() > 0 and url.ends_with("/"):
+		url = url.substr(0, url.length() - 1)
+	return url
+
+func _build_platform_servers() -> Array:
+	var out: Array = []
+	var seen: Dictionary = {}
+	var official_url := _DEFAULT_PLATFORM_BASE_URL
+	if PlatformApi != null:
+		var current := _normalize_platform_base_url(str(PlatformApi.base_url))
+		if not current.is_empty():
+			official_url = current
+	seen[official_url] = true
+	out.append({
+		"name": "官方服务器",
+		"url": official_url,
+		"desc": "当前推荐线路",
+	})
+	for item_val in _EXTRA_PLATFORM_SERVERS:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = Dictionary(item_val)
+		var name := str(item.get("name", "")).strip_edges()
+		var url := _normalize_platform_base_url(str(item.get("url", "")))
+		if name.is_empty() or url.is_empty():
+			continue
+		if seen.has(url):
+			continue
+		seen[url] = true
+		out.append({
+			"name": name,
+			"url": url,
+			"desc": str(item.get("desc", "")).strip_edges(),
+		})
+	return out
+
+func _build_server_card_text(server: Dictionary) -> String:
+	var name := str(server.get("name", "服务器")).strip_edges()
+	var desc := str(server.get("desc", "")).strip_edges()
+	var url := str(server.get("url", "")).strip_edges()
+	if desc.is_empty():
+		return "%s\n%s" % [name, url]
+	return "%s\n%s\n%s" % [name, desc, url]
+
+func _apply_selected_server_to_platform_api() -> void:
+	if PlatformApi == null:
+		return
+	var url := _normalize_platform_base_url(_selected_server_url)
+	if url.is_empty():
+		return
+	PlatformApi.base_url = url
+
+func _refresh_server_cards_state(busy: bool) -> void:
+	if server_cards_container == null or not is_instance_valid(server_cards_container):
+		return
+	var selected_url := _normalize_platform_base_url(_selected_server_url)
+	for child in server_cards_container.get_children():
+		if not (child is Button):
+			continue
+		var card := child as Button
+		if card == null:
+			continue
+		card.disabled = busy
+		var card_url := _normalize_platform_base_url(str(card.get_meta("server_url", "")))
+		if card_url == selected_url:
+			UiStylesClass.apply_button_primary(card)
+		else:
+			UiStylesClass.apply_button_secondary(card)
+
+func _rebuild_server_cards() -> void:
+	if server_cards_container == null or not is_instance_valid(server_cards_container):
+		return
+	for child in server_cards_container.get_children():
+		child.queue_free()
+	_platform_servers = _build_platform_servers()
+	var preferred_url := _normalize_platform_base_url(_selected_server_url)
+	if preferred_url.is_empty() and PlatformApi != null:
+		preferred_url = _normalize_platform_base_url(str(PlatformApi.base_url))
+	if preferred_url.is_empty() and not _platform_servers.is_empty():
+		preferred_url = _normalize_platform_base_url(str(Dictionary(_platform_servers[0]).get("url", "")))
+	_selected_server_url = preferred_url
+	for i in range(_platform_servers.size()):
+		var server: Dictionary = Dictionary(_platform_servers[i])
+		var url := _normalize_platform_base_url(str(server.get("url", "")))
+		var card := Button.new()
+		card.custom_minimum_size = Vector2(270, 92)
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		card.text = _build_server_card_text(server)
+		card.tooltip_text = str(server.get("url", ""))
+		card.set_meta("server_url", url)
+		card.pressed.connect(_on_server_card_pressed.bind(i))
+		server_cards_container.add_child(card)
+	_apply_selected_server_to_platform_api()
+	_refresh_server_cards_state(_platform_busy or _ws_connect_in_progress)
+
+func _on_server_card_pressed(index: int) -> void:
+	if _platform_busy or _ws_connect_in_progress:
+		return
+	if index < 0 or index >= _platform_servers.size():
+		return
+	var server: Dictionary = Dictionary(_platform_servers[index])
+	var next_url := _normalize_platform_base_url(str(server.get("url", "")))
+	if next_url.is_empty():
+		return
+	var current_url := _normalize_platform_base_url(_selected_server_url)
+	if next_url == current_url:
+		return
+	if PlatformSession != null and PlatformSession.is_logged_in and not current_url.is_empty():
+		if PlatformApi != null:
+			PlatformApi.base_url = current_url
+		await PlatformSession.logout()
+		_platform_entered = false
+		if NetClient != null and NetClient.is_online_client_connected():
+			NetClient.shutdown()
+	_selected_server_url = next_url
+	_apply_selected_server_to_platform_api()
+	_set_connect_status("已选择服务器：%s" % str(server.get("name", "服务器")))
+	_refresh_server_cards_state(_platform_busy or _ws_connect_in_progress)
+	_refresh_ui()
+
 func _apply_defaults() -> void:
 	_editing_display_name = false
 	_set_connect_status("")
 	_set_browse_status("")
 	_set_room_status("")
 
-	if PlatformApi != null and backend_url_edit != null and is_instance_valid(backend_url_edit):
-		var bu := str(PlatformApi.base_url).strip_edges()
-		backend_url_edit.text = bu if not bu.is_empty() else "http://127.0.0.1:8000"
+	_rebuild_server_cards()
 
 	var profile_name := "玩家"
 	var profile_logo_id := -1
@@ -410,14 +534,7 @@ func _on_account_pressed() -> void:
 		_auth_dialog.call("open")
 
 func _platform_set_base_url_from_ui() -> void:
-	if PlatformApi == null:
-		return
-	if backend_url_edit == null or not is_instance_valid(backend_url_edit):
-		return
-	var base_url := str(backend_url_edit.text).strip_edges()
-	if base_url.is_empty():
-		return
-	PlatformApi.base_url = base_url
+	_apply_selected_server_to_platform_api()
 
 func _platform_ensure_session() -> Result:
 	if PlatformSession == null:
@@ -659,6 +776,7 @@ func _refresh_ui() -> void:
 	var ws_connected := NetClient != null and NetClient.is_online_client_connected()
 	var platform_ready := _platform_entered and PlatformSession != null and PlatformSession.is_logged_in
 	var busy := _platform_busy or _ws_connect_in_progress
+	_refresh_server_cards_state(busy)
 	if rename_button != null and is_instance_valid(rename_button):
 		rename_button.disabled = busy
 	connect_button.disabled = busy or platform_ready
