@@ -96,10 +96,9 @@ func get_hint_text() -> String:
 
 func get_action_panel_context_spec() -> Dictionary:
 	return {
-		"title": "📣 放置巨型广告牌",
+		"title": "放置巨型广告牌",
 		"hint": get_hint_text(),
 		"confirm_text": "确认放置",
 		"cancel_text": "取消",
 		"custom_scene": ActionPanelContextScenePath,
 	}
-

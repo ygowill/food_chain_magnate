@@ -38,7 +38,7 @@ func _build_ui() -> void:
 	_verbose_logging_check = _create_checkbox("详细日志", _on_verbose_logging_toggled)
 	_validate_invariants_check = _create_checkbox("命令后校验不变量", _on_validate_invariants_toggled)
 	_force_execute_commands_check = _create_checkbox("强制执行命令（跳过校验）", _on_force_execute_commands_toggled)
-	_create_info_label("  ⚠️ 跳过动作可用性/校验器/回合阶段等限制；可能导致状态不一致，仅用于开发调试")
+	_create_info_label("注意：跳过动作可用性/校验器/回合阶段等限制；可能导致状态不一致，仅用于开发调试")
 	_profile_commands_check = _create_checkbox("性能分析", _on_profile_commands_toggled)
 	_show_console_check = _create_checkbox("显示控制台", _on_show_console_toggled)
 

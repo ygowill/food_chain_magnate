@@ -2,6 +2,7 @@
 extends RefCounted
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const CheckmarkIconTexture: Texture2D = preload("res://assets/images/ui_icons/kenney_game/checkmark.png")
 
 # 里程碑状态颜色
 const MILESTONE_COLOR_CLAIMED := Color(0.28, 0.55, 0.22, 1.0)  # 成功绿
@@ -226,23 +227,37 @@ func _create_milestone_compact_row(milestone_id: String, milestone_def, is_claim
 	margin.add_child(row)
 
 	# 状态图标
-	var icon_label := Label.new()
 	var fs_icon := 18
 	if Globals != null:
 		fs_icon = int(Globals.get_scaled_font_size(18))
-	icon_label.add_theme_font_size_override("font_size", fs_icon)
+	var icon_container := CenterContainer.new()
+	icon_container.custom_minimum_size = Vector2(fs_icon + 2, fs_icon + 2)
+	icon_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
+	var icon_label: Label = null
 	if is_claimed:
-		icon_label.text = "✓"
-		icon_label.add_theme_color_override("font_color", MILESTONE_COLOR_CLAIMED)
+		var icon_rect := TextureRect.new()
+		icon_rect.custom_minimum_size = Vector2(fs_icon, fs_icon)
+		icon_rect.texture = CheckmarkIconTexture
+		icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon_rect.modulate = MILESTONE_COLOR_CLAIMED
+		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon_container.add_child(icon_rect)
 	elif in_pool:
+		icon_label = Label.new()
+		icon_label.add_theme_font_size_override("font_size", fs_icon)
 		icon_label.text = "○"
 		icon_label.add_theme_color_override("font_color", MILESTONE_COLOR_AVAILABLE)
 	else:
+		icon_label = Label.new()
+		icon_label.add_theme_font_size_override("font_size", fs_icon)
 		icon_label.text = "○"
 		icon_label.add_theme_color_override("font_color", MILESTONE_COLOR_GONE)
+	if icon_label != null:
+		icon_container.add_child(icon_label)
 
-	row.add_child(icon_label)
+	row.add_child(icon_container)
 
 	# 里程碑名称
 	var name_label := Label.new()
@@ -283,7 +298,9 @@ func _create_milestone_compact_row(milestone_id: String, milestone_def, is_claim
 	var tip := _get_milestone_tooltip(milestone_id)
 	wrapper.tooltip_text = tip
 	row.tooltip_text = tip
-	icon_label.tooltip_text = tip
+	icon_container.tooltip_text = tip
+	if icon_label != null:
+		icon_label.tooltip_text = tip
 	name_label.tooltip_text = tip
 	wrapper.mouse_entered.connect(Callable(self, "_on_milestone_mouse_entered").bind(milestone_id, wrapper))
 	wrapper.mouse_exited.connect(_on_milestone_mouse_exited)

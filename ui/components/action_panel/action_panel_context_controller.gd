@@ -209,7 +209,7 @@ func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) 
 	_show_context_panel()
 
 	var mode := overlay.get_mode()
-	_context_title_label.text = "🏪 放置餐厅" if mode != "move_restaurant" else "🏪 移动餐厅"
+	_context_title_label.text = "放置餐厅" if mode != "move_restaurant" else "移动餐厅"
 	_context_hint_label.text = overlay.get_hint_text()
 
 	_restaurant_row.visible = (mode == "move_restaurant")
@@ -247,7 +247,7 @@ func _refresh_house_placement_context(overlay: HousePlacementOverlay) -> void:
 	_show_context_panel()
 
 	var mode := overlay.get_mode()
-	_context_title_label.text = "🌳 添加花园" if mode == "add_garden" else "🏠 放置房屋"
+	_context_title_label.text = "添加花园" if mode == "add_garden" else "放置房屋"
 	_context_hint_label.text = overlay.get_hint_text()
 
 	_restaurant_row.visible = false
@@ -289,9 +289,9 @@ func _refresh_piece_placement_context(overlay) -> void:
 	var mode := str(overlay.get_mode()).strip_edges()
 	var title := _get_executor_display_name(mode)
 	if title.is_empty():
-		_context_title_label.text = "🧩 放置板块"
+		_context_title_label.text = "放置板块"
 	else:
-		_context_title_label.text = "🧩 %s" % title
+		_context_title_label.text = title
 	_context_hint_label.text = overlay.get_hint_text()
 
 	_restaurant_row.visible = false

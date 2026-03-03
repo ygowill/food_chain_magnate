@@ -4,6 +4,7 @@ extends RefCounted
 
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const TextureUtilsClass = preload("res://ui/scenes/game/map/drawer/texture_utils.gd")
+const CrossIconTexture: Texture2D = preload("res://assets/images/ui_icons/kenney_game/cross.png")
 
 static func compute_structure_rect_from_index(cell_size: float, info: Dictionary) -> Rect2:
 	var min_pos_val = info.get("min", null)
@@ -542,25 +543,52 @@ static func place_persistent_x_mark(map_anim_layer: Control, rect: Rect2, cell_s
 	var pos := rect.position + rect.size * 0.5
 	var fs := int(round(maxf(46.0, cell_size * 1.25)))
 	var box := Vector2(float(fs) * 1.15, float(fs) * 1.15)
+	var shadow_pos := pos - box * 0.5 + Vector2(3, 3)
+	var mark_pos := pos - box * 0.5
 
-	var shadow := Label.new()
-	shadow.text = "✕"
-	shadow.add_theme_font_size_override("font_size", fs)
-	shadow.add_theme_color_override("font_color", Color(0, 0, 0, 0.75))
-	shadow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	shadow.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	shadow.size = box
-	shadow.position = pos - box * 0.5 + Vector2(3, 3)
-	shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	map_anim_layer.add_child(shadow)
+	if CrossIconTexture != null:
+		var shadow := TextureRect.new()
+		shadow.texture = CrossIconTexture
+		shadow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		shadow.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		shadow.custom_minimum_size = box
+		shadow.size = box
+		shadow.position = shadow_pos
+		shadow.modulate = Color(0, 0, 0, 0.72)
+		shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		map_anim_layer.add_child(shadow)
 
-	var mark := Label.new()
-	mark.text = "✕"
-	mark.add_theme_font_size_override("font_size", fs)
-	mark.add_theme_color_override("font_color", Color(0.95, 0.25, 0.18, 1))
-	mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	mark.size = box
-	mark.position = pos - box * 0.5
-	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	map_anim_layer.add_child(mark)
+		var mark := TextureRect.new()
+		mark.texture = CrossIconTexture
+		mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		mark.custom_minimum_size = box
+		mark.size = box
+		mark.position = mark_pos
+		mark.modulate = Color(0.95, 0.25, 0.18, 1)
+		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		map_anim_layer.add_child(mark)
+		return
+
+	# 资源异常兜底：仍显示 ASCII X，避免静默无提示。
+	var shadow_label := Label.new()
+	shadow_label.text = "X"
+	shadow_label.add_theme_font_size_override("font_size", fs)
+	shadow_label.add_theme_color_override("font_color", Color(0, 0, 0, 0.75))
+	shadow_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	shadow_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	shadow_label.size = box
+	shadow_label.position = shadow_pos
+	shadow_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	map_anim_layer.add_child(shadow_label)
+
+	var mark_label := Label.new()
+	mark_label.text = "X"
+	mark_label.add_theme_font_size_override("font_size", fs)
+	mark_label.add_theme_color_override("font_color", Color(0.95, 0.25, 0.18, 1))
+	mark_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mark_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	mark_label.size = box
+	mark_label.position = mark_pos
+	mark_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	map_anim_layer.add_child(mark_label)

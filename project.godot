@@ -45,7 +45,7 @@ restaurant_logo_assignment_provider_path="res://gameplay/setup/restaurant_logo_a
 
 [gui]
 
-theme/custom_font="res://assets/fonts/ui_font_with_emoji.tres"
+theme/custom_font="res://assets/fonts/NotoSansSC-Regular.otf"
 
 [internationalization]
 

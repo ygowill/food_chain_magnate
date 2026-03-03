@@ -4,6 +4,7 @@ extends Button
 const TilePreviewClass = preload("res://modules/lobbyists/ui/components/lobbyists_extra_tile/tile_preview.gd")
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const CheckmarkIconTexture: Texture2D = preload("res://assets/images/ui_icons/kenney_game/checkmark.png")
 
 var tile_id: String = ""
 var tile_rotation: int = 0 # 0/90/180/270
@@ -119,15 +120,18 @@ func _ensure_children() -> void:
 	add_child(badge_bg)
 	_badge_bg = badge_bg
 
-	var badge := Label.new()
-	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	badge.set_anchors_preset(Control.PRESET_FULL_RECT)
-	badge.text = "✓"
-	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	badge.add_theme_font_size_override("font_size", 18)
-	badge.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_PRIMARY)
-	badge_bg.add_child(badge)
+	var badge_icon := TextureRect.new()
+	badge_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	badge_icon.offset_left = 3
+	badge_icon.offset_top = 3
+	badge_icon.offset_right = -3
+	badge_icon.offset_bottom = -3
+	badge_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	badge_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	badge_icon.texture = CheckmarkIconTexture
+	badge_icon.modulate = UiStylesClass.COLOR_TEXT_PRIMARY
+	badge_bg.add_child(badge_icon)
 
 func _sync_preview() -> void:
 	if not _is_ready:

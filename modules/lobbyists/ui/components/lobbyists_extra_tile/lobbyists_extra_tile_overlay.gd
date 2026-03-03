@@ -479,7 +479,7 @@ func get_hint_text() -> String:
 
 func get_action_panel_context_spec() -> Dictionary:
 	return {
-		"title": "🗺️ 扩边放置板块",
+		"title": "扩边放置板块",
 		"hint": get_hint_text(),
 		"confirm_text": "确认放置",
 		"cancel_text": "放弃扩边",

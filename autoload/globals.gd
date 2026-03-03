@@ -8,7 +8,7 @@ const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const GameStateClass = preload("res://core/state/game_state.gd")
 const GameConstantsClass = preload("res://core/engine/game_constants.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
-const FALLBACK_FONT: Font = preload("res://assets/fonts/ui_font_with_emoji.tres")
+const FALLBACK_FONT: Font = preload("res://assets/fonts/NotoSansSC-Regular.otf")
 
 # 版本信息
 const SCHEMA_VERSION := GameStateClass.SCHEMA_VERSION

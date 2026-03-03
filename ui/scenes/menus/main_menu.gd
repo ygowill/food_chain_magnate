@@ -110,10 +110,10 @@ func _apply_title_logo_texture() -> void:
 	if title_logo == null:
 		return
 	for path in TITLE_LOGO_PATHS:
-		var image := Image.load_from_file(path)
-		if image == null or image.is_empty():
+		var tex := _load_texture_if_exists(path)
+		if tex == null:
 			continue
-		title_logo.texture = ImageTexture.create_from_image(image)
+		title_logo.texture = tex
 		return
 	GameLog.warn("MainMenu", "标题图片加载失败: %s" % str(TITLE_LOGO_PATHS))
 

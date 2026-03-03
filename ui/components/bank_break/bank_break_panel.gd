@@ -4,6 +4,7 @@ class_name BankBreakPanel
 extends Control
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const WarningIconTexture: Texture2D = preload("res://assets/images/ui_icons/kenney_game/warning.png")
 
 signal bankruptcy_acknowledged()
 signal game_end_triggered()
@@ -144,13 +145,27 @@ func _rebuild_details() -> void:
 	details_container.add_child(count_row)
 
 	if _is_game_ending:
+		var warning_row := HBoxContainer.new()
+		warning_row.add_theme_constant_override("separation", 8)
+		details_container.add_child(warning_row)
+
+		var warning_icon := TextureRect.new()
+		warning_icon.custom_minimum_size = Vector2(16, 16)
+		warning_icon.texture = WarningIconTexture
+		warning_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		warning_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		warning_icon.modulate = Color(0.73, 0.23, 0.18, 0.9)
+		warning_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		warning_row.add_child(warning_icon)
+
 		var warning_label := Label.new()
-		warning_label.text = "⚠ 达到破产上限，游戏将在本回合结束后结算"
+		warning_label.text = "达到破产上限，游戏将在本回合结束后结算"
+		warning_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		warning_label.add_theme_font_size_override("font_size", 14)
 		warning_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 0.9))
-		warning_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		warning_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		warning_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-		details_container.add_child(warning_label)
+		warning_row.add_child(warning_label)
 
 	var trigger_reason := str(_event_data.get("trigger_reason", "")).strip_edges()
 	if not trigger_reason.is_empty():

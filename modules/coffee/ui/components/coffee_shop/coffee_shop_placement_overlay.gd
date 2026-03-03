@@ -155,11 +155,11 @@ func get_hint_text() -> String:
 	return "咖啡店%s" % target_label
 
 func get_action_panel_context_spec() -> Dictionary:
-	var title := "☕ 放置/移动咖啡店"
+	var title := "放置/移动咖啡店"
 	if _action_id == "place_or_move_coffee_shop":
-		title = "☕ 培训：放置/移动咖啡店"
+		title = "培训：放置/移动咖啡店"
 	elif _action_id == "resolve_first_coffee_sold_bonus_coffee_shop":
-		title = "☕ 首杯咖啡：额外咖啡店"
+		title = "首杯咖啡：额外咖啡店"
 
 	var confirm_text := "确认放置" if _mode == "place" else "确认移动"
 	return {
@@ -197,4 +197,3 @@ func _has_shop_id(shop_id: String) -> bool:
 		if str(d.get("shop_id", "")) == sid:
 			return true
 	return false
-

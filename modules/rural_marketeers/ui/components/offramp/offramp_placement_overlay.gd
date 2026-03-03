@@ -55,10 +55,9 @@ func get_hint_text() -> String:
 
 func get_action_panel_context_spec() -> Dictionary:
 	return {
-		"title": "🛣️ 放置高速公路出口",
+		"title": "放置高速公路出口",
 		"hint": get_hint_text(),
 		"confirm_text": "确认放置",
 		"cancel_text": "重新选择",
 		"clear_on_cancel": false
 	}
-

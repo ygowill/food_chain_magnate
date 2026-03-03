@@ -30,4 +30,4 @@ func on_map_mode_changed(mode: String, payload: Dictionary) -> void:
 	if not _map_mode_bar.has_method("show_mode"):
 		return
 
-	_map_mode_bar.call("show_mode", "📏 距离工具", "支持道路↔道路，或房屋+餐厅｜点起点再点终点｜测完后点击任意目标重开｜D 关闭")
+	_map_mode_bar.call("show_mode", "距离工具", "支持道路↔道路，或房屋+餐厅｜点起点再点终点｜测完后点击任意目标重开｜D 关闭")

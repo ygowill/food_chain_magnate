@@ -86,7 +86,7 @@ theme_override_constants/separation = 4
 
 [node name="RoundIconLabel" type="Label" parent="UIRoot/TopBar/StatusBar/StatusContent/RoundSection"]
 layout_mode = 2
-text = "🕒"
+text = "R"
 
 [node name="RoundValueLabel" type="Label" parent="UIRoot/TopBar/StatusBar/StatusContent/RoundSection"]
 layout_mode = 2
@@ -103,7 +103,7 @@ theme_override_constants/separation = 4
 
 [node name="BankIconLabel" type="Label" parent="UIRoot/TopBar/StatusBar/StatusContent/BankSection"]
 layout_mode = 2
-text = "🏦"
+text = "$"
 
 [node name="BankTitleLabel" type="Label" parent="UIRoot/TopBar/StatusBar/StatusContent/BankSection"]
 layout_mode = 2
