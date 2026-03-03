@@ -196,6 +196,24 @@ func _try_unlock_web_audio_context() -> void:
 				if (typeof window !== "object") {
 					return false;
 				}
+				if (typeof window.__fcm_web_audio_unlock === "function") {
+					try {
+						window.__fcm_web_audio_unlock();
+						resumed = true;
+					} catch (_err_fcm0) {}
+				}
+				if (window.__fcm_web_audio) {
+					try {
+						if (window.__fcm_web_audio.last_ctx) {
+							candidates.push(window.__fcm_web_audio.last_ctx);
+						}
+						if (Array.isArray(window.__fcm_web_audio.contexts)) {
+							for (var j = 0; j < window.__fcm_web_audio.contexts.length; j += 1) {
+								candidates.push(window.__fcm_web_audio.contexts[j]);
+							}
+						}
+					} catch (_err_fcm1) {}
+				}
 				if (window.Module && typeof window.Module._godot_audio_resume === "function") {
 					try {
 						window.Module._godot_audio_resume();
