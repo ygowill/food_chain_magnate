@@ -115,6 +115,20 @@ size_flags_horizontal = 3
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 8
 
+[node name="CustomServerRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/BackendRow"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CustomServerUrlEdit" type="LineEdit" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/BackendRow/CustomServerRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "https://example.com:8443"
+
+[node name="CustomServerApplyButton" type="Button" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/BackendRow/CustomServerRow"]
+layout_mode = 2
+text = "应用"
+
 [node name="ProfileRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage"]
 layout_mode = 2
 theme_override_constants/separation = 8

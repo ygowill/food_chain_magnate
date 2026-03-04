@@ -74,6 +74,9 @@ Godot 的 Web 导出需要**安全上下文（Secure Context）**。如果你用
 
 本仓库提供 **Traefik + Let’s Encrypt**（通过 **Cloudflare DNS-01**）的 HTTPS 叠加配置：
 
+- ACME 证书密钥类型默认使用 `EC256`（对 Godot 客户端兼容性更好）。
+- 如需改回 RSA，可在部署脚本里传 `--acme-key-type RSA2048` 或 `RSA4096`。
+
 1) 在 Cloudflare 添加 DNS 记录：
    - `game.example.com` → A/AAAA 指向你的服务器 IP
    - `ws.game.example.com` → A/AAAA 指向你的服务器 IP
@@ -90,7 +93,8 @@ export CF_DNS_API_TOKEN="***"
 curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
   --tag v0.4.2 --enable-web --https \
   --web-domain game.example.com \
-  --ws-domain ws.game.example.com
+  --ws-domain ws.game.example.com \
+  --acme-key-type EC256
 ```
 
 可选：如果服务器拉取 Docker Hub 镜像很慢，可以配置镜像站前缀（GHCR 镜像不受影响）：
@@ -125,6 +129,7 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
   --tag v0.4.2 --enable-web --https \
   --web-domain game.example.com \
   --ws-domain ws.game.example.com \
+  --acme-key-type EC256 \
   --http-port 8080 \
   --https-port 8443
 ```
@@ -185,6 +190,23 @@ bash deploy.sh --port 7000
 ```bash
 ./server/deploy.sh --help
 ```
+
+### TLS 排障（`http_status: 0` / `cant_connect`）
+
+如果客户端联机入口提示：
+
+- `_http_status: 0`
+- `_http_result_name: cant_connect`
+
+通常表示 HTTPS/TLS 握手阶段失败（还没到业务接口）。建议按顺序检查：
+
+1. 服务端证书链是否完整（Nginx 必须用 `fullchain.pem`，不是 `cert.pem`）。
+2. 域名与证书 SAN/CN 是否匹配，服务器系统时间是否准确。
+3. 若你使用本仓库 `deploy.sh --https`，优先使用 `--acme-key-type EC256` 重新签发证书。
+4. 若此前已经签过不兼容证书，建议：
+   - 先执行 `./server/deploy.sh --down`
+   - 再执行 `docker volume rm fcm_traefik_letsencrypt`（仅清理证书缓存，不删数据库卷）
+   - 然后重新部署 HTTPS 以触发重签。
 
 ## Web 导出（本地）
 

@@ -68,8 +68,8 @@ func _ready() -> void:
 	)
 
 	# 按钮样式
-	UiStylesClass.apply_button_primary(new_game_button)
-	UiStylesClass.apply_button_secondary(online_button)
+	UiStylesClass.apply_button_secondary(new_game_button)
+	UiStylesClass.apply_button_primary(online_button)
 	UiStylesClass.apply_button_secondary(rules_button)
 	UiStylesClass.apply_button_secondary(load_game_button)
 	UiStylesClass.apply_button_secondary(settings_button)
@@ -82,7 +82,7 @@ func _ready() -> void:
 	_update_mute_icon_ui()
 	if Globals != null and not Globals.audio_muted_changed.is_connected(_on_audio_muted_changed):
 		Globals.audio_muted_changed.connect(_on_audio_muted_changed)
-	new_game_button.grab_focus()
+	online_button.grab_focus()
 	_kick_bgm_autoplay()
 
 func _kick_bgm_autoplay() -> void:
@@ -118,11 +118,11 @@ func _apply_title_logo_texture() -> void:
 	GameLog.warn("MainMenu", "标题图片加载失败: %s" % str(TITLE_LOGO_PATHS))
 
 func _on_new_game_pressed() -> void:
-	GameLog.info("MainMenu", "点击新游戏")
+	GameLog.info("MainMenu", "点击本地游戏")
 	SceneManager.goto_game_setup()
 
 func _on_online_pressed() -> void:
-	GameLog.info("MainMenu", "点击联机")
+	GameLog.info("MainMenu", "点击联机游戏")
 	SceneManager.goto_online_lobby()
 
 func _on_rules_pressed() -> void:

@@ -1,6 +1,7 @@
 # 房间配置编辑器（Create/Room 共用）— 双栏布局 + 按钮组 + 预设方案
 extends VBoxContainer
 
+const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModuleSelectorClass = preload("res://ui/components/module_selector/module_selector.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
@@ -18,10 +19,8 @@ var _seed_value_spin: SpinBox = null
 
 var _module_selector = null
 
-var _advanced_toggle_btn: Button = null
-var _advanced_section: VBoxContainer = null
-var _modules_base_dir_edit: LineEdit = null
 var _allow_spectators_check: CheckBox = null
+var _modules_base_dir: String = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
 
 var _error_label: Label = null
 
@@ -40,8 +39,6 @@ func set_editable(editable: bool) -> void:
 			btn.disabled = not editable
 	_seed_mode_option.disabled = not editable
 	_refresh_seed_editability()
-	if _modules_base_dir_edit != null and is_instance_valid(_modules_base_dir_edit):
-		_modules_base_dir_edit.editable = editable
 	if _allow_spectators_check != null and is_instance_valid(_allow_spectators_check):
 		_allow_spectators_check.disabled = not editable
 	if _module_selector != null and is_instance_valid(_module_selector):
@@ -67,18 +64,27 @@ func set_from_room_config(cfg: Dictionary) -> void:
 	_refresh_seed_editability()
 
 	var base_dir := str(cfg.get("modules_v2_base_dir", "")).strip_edges()
-	if not base_dir.is_empty():
-		_modules_base_dir_edit.text = base_dir
+	if base_dir.is_empty():
+		base_dir = str(_modules_base_dir).strip_edges()
+	if base_dir.is_empty():
+		base_dir = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
+	_modules_base_dir = base_dir
 
 	var allow_spectators := bool(cfg.get("allow_spectators", true))
 	_allow_spectators_check.button_pressed = allow_spectators
 
 	if _module_selector != null and is_instance_valid(_module_selector):
-		if not base_dir.is_empty():
-			_module_selector.set_modules_base_dir(base_dir)
+		if not _modules_base_dir.is_empty():
+			var load_r: Result = _module_selector.set_modules_base_dir(_modules_base_dir)
+			if not load_r.ok:
+				_set_error(load_r.error)
 		var enabled_val = cfg.get("enabled_modules_v2", [])
 		if enabled_val is Array:
 			_module_selector.set_initial_enabled_modules_v2(Array(enabled_val))
+		var opts_val = cfg.get("game_option_overrides", null)
+		var opts: Dictionary = Dictionary(opts_val) if opts_val is Dictionary else {}
+		if _module_selector.has_method("set_game_options_from_overrides_patch"):
+			_module_selector.call("set_game_options_from_overrides_patch", opts)
 
 	_sync_module_constraints_for_player_count()
 
@@ -89,20 +95,26 @@ func get_config_patch() -> Dictionary:
 	_ensure_ui()
 	var seed_mode := _get_seed_mode_value()
 	var enabled_modules: Array = []
+	var game_option_overrides: Dictionary = {}
 	if _module_selector != null and is_instance_valid(_module_selector):
 		enabled_modules = _module_selector.get_enabled_modules_v2()
+		if _module_selector.has_method("get_game_config_overrides_patch"):
+			var val = _module_selector.call("get_game_config_overrides_patch")
+			if val is Dictionary:
+				game_option_overrides = Dictionary(val)
 	return {
 		"desired_player_count": _selected_player_count,
 		"seed_mode": seed_mode,
 		"seed": _get_spinbox_int_value(_seed_value_spin),
 		"enabled_modules_v2": enabled_modules,
-		"modules_v2_base_dir": str(_modules_base_dir_edit.text).strip_edges(),
+		"modules_v2_base_dir": str(_modules_base_dir).strip_edges(),
 		"allow_spectators": bool(_allow_spectators_check.button_pressed),
+		"game_option_overrides": game_option_overrides,
 	}
 
 func validate() -> Result:
 	_clear_error()
-	var base_dir := str(_modules_base_dir_edit.text).strip_edges()
+	var base_dir := str(_modules_base_dir).strip_edges()
 	if base_dir.is_empty():
 		return Result.failure("modules_v2_base_dir 不能为空")
 
@@ -136,12 +148,11 @@ func validate() -> Result:
 func _load_default_modules() -> void:
 	if _module_selector == null or not is_instance_valid(_module_selector):
 		return
-	var base_dir := str(Globals.modules_v2_base_dir)
+	var base_dir := str(Globals.modules_v2_base_dir).strip_edges()
 	if base_dir.is_empty():
-		return
-	if _modules_base_dir_edit != null and is_instance_valid(_modules_base_dir_edit):
-		_modules_base_dir_edit.text = base_dir
-	var r: Result = _module_selector.set_modules_base_dir(base_dir)
+		base_dir = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
+	_modules_base_dir = base_dir
+	var r: Result = _module_selector.set_modules_base_dir(_modules_base_dir)
 	if not r.ok:
 		_set_error("加载模块列表失败：%s" % r.error)
 		return
@@ -271,6 +282,14 @@ func _ensure_ui() -> void:
 	UiStylesClass.apply_spin_box_field(_seed_value_spin)
 	seed_row.add_child(_seed_value_spin)
 
+	_allow_spectators_check = CheckBox.new()
+	_allow_spectators_check.text = "允许观战（spectator）"
+	_allow_spectators_check.toggled.connect(func(_pressed: bool) -> void:
+		_emit_changed()
+	)
+	UiStylesClass.apply_check_box_field(_allow_spectators_check)
+	params_vbox.add_child(_allow_spectators_check)
+
 	# ── 右栏：预设方案 + 模块选择 ──
 	var right_column := VBoxContainer.new()
 	right_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -283,53 +302,25 @@ func _ensure_ui() -> void:
 
 	_module_selector = ModuleSelectorClass.new()
 	right_column.add_child(_module_selector)
+	if _module_selector.has_method("set_show_tooltips"):
+		_module_selector.call("set_show_tooltips", false)
+	if _module_selector.has_method("set_show_notes"):
+		_module_selector.call("set_show_notes", false)
+	if _module_selector.has_method("set_show_game_options"):
+		_module_selector.call("set_show_game_options", true)
 	_module_selector.selection_changed.connect(func(_enabled: Array) -> void:
 		if _suppress_preset_revert:
 			return
 		_revert_preset_to_custom()
 		_emit_changed()
 	)
+	if _module_selector.has_signal("game_options_changed"):
+		_module_selector.game_options_changed.connect(func(_opts: Dictionary) -> void:
+			_emit_changed()
+		)
 	_module_selector.load_failed.connect(func(msg: String) -> void:
 		_set_error(msg)
 	)
-
-	# ── 高级/开发区域 ──
-	_advanced_toggle_btn = Button.new()
-	_advanced_toggle_btn.text = "高级/开发 ▼"
-	UiStylesClass.apply_button_secondary(_advanced_toggle_btn)
-	_advanced_toggle_btn.pressed.connect(_on_toggle_advanced_pressed)
-	add_child(_advanced_toggle_btn)
-
-	_advanced_section = VBoxContainer.new()
-	_advanced_section.visible = false
-	_advanced_section.add_theme_constant_override("separation", 8)
-	add_child(_advanced_section)
-
-	var base_dir_row := HBoxContainer.new()
-	base_dir_row.add_theme_constant_override("separation", 8)
-	_advanced_section.add_child(base_dir_row)
-
-	var base_dir_label := Label.new()
-	base_dir_label.text = "Modules Dir"
-	UiStylesClass.apply_label_dark(base_dir_label)
-	base_dir_row.add_child(base_dir_label)
-
-	_modules_base_dir_edit = LineEdit.new()
-	_modules_base_dir_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_modules_base_dir_edit.text_submitted.connect(func(_t: String) -> void:
-		_on_modules_base_dir_committed()
-	)
-	_modules_base_dir_edit.focus_exited.connect(_on_modules_base_dir_committed)
-	UiStylesClass.apply_line_edit_field(_modules_base_dir_edit)
-	base_dir_row.add_child(_modules_base_dir_edit)
-
-	_allow_spectators_check = CheckBox.new()
-	_allow_spectators_check.text = "允许观战（spectator）"
-	_allow_spectators_check.toggled.connect(func(_pressed: bool) -> void:
-		_emit_changed()
-	)
-	UiStylesClass.apply_check_box_field(_allow_spectators_check)
-	_advanced_section.add_child(_allow_spectators_check)
 
 	# ── 错误标签 ──
 	_error_label = Label.new()
@@ -446,31 +437,6 @@ func _revert_preset_to_custom() -> void:
 		_preset_option.select(0)
 		if _module_selector != null and is_instance_valid(_module_selector):
 			_module_selector.set_editable(true and _editable)
-
-# ── 高级区域 ──
-
-func _on_toggle_advanced_pressed() -> void:
-	if _advanced_section == null or not is_instance_valid(_advanced_section):
-		return
-	_advanced_section.visible = not _advanced_section.visible
-	_advanced_toggle_btn.text = "高级/开发 ▲" if _advanced_section.visible else "高级/开发 ▼"
-
-func _on_modules_base_dir_committed() -> void:
-	if _suppress_signals:
-		return
-	if _module_selector == null or not is_instance_valid(_module_selector):
-		return
-	var spec := str(_modules_base_dir_edit.text).strip_edges()
-	if spec.is_empty():
-		return
-
-	var prev_enabled: Array = _module_selector.get_enabled_modules_v2()
-	var r: Result = _module_selector.set_modules_base_dir(spec)
-	if not r.ok:
-		_set_error(r.error)
-		return
-	_module_selector.set_initial_enabled_modules_v2(prev_enabled)
-	_emit_changed()
 
 # ── 种子相关 ──
 

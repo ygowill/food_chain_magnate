@@ -100,6 +100,9 @@ Recommended setup:
 
 This repo includes an HTTPS overlay using **Traefik + Let’s Encrypt** with **Cloudflare DNS-01**:
 
+- ACME key type defaults to `EC256` (better Godot client compatibility).
+- If you need RSA certificates, pass `--acme-key-type RSA2048` or `RSA4096`.
+
 1) Create DNS records in Cloudflare:
    - `game.example.com` → A/AAAA to your server IP
    - `ws.game.example.com` → A/AAAA to your server IP
@@ -116,7 +119,8 @@ export CF_DNS_API_TOKEN="***"
 curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
   --tag v0.4.2 --enable-web --https \
   --web-domain game.example.com \
-  --ws-domain ws.game.example.com
+  --ws-domain ws.game.example.com \
+  --acme-key-type EC256
 ```
 
 Optional: if your server pulls Docker Hub images slowly, you can use a mirror/prefix (GHCR images are unchanged):
@@ -151,6 +155,7 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
   --tag v0.4.2 --enable-web --https \
   --web-domain game.example.com \
   --ws-domain ws.game.example.com \
+  --acme-key-type EC256 \
   --http-port 8080 \
   --https-port 8443
 ```
@@ -211,6 +216,23 @@ More options:
 ```bash
 ./server/deploy.sh --help
 ```
+
+### TLS Troubleshooting (`http_status: 0` / `cant_connect`)
+
+If the client shows:
+
+- `_http_status: 0`
+- `_http_result_name: cant_connect`
+
+that usually means TLS handshake failed before reaching backend APIs. Check in order:
+
+1. Certificate chain is complete (`fullchain.pem` on Nginx, not just `cert.pem`).
+2. Domain matches certificate SAN/CN, and server clock is correct.
+3. For this repo's `deploy.sh --https`, prefer `--acme-key-type EC256`.
+4. If old incompatible certs were already issued:
+   - run `./server/deploy.sh --down`
+   - run `docker volume rm fcm_traefik_letsencrypt` (clears cert cache only, keeps DB volume)
+   - deploy HTTPS again to force ACME re-issuance.
 
 ## Web export (local)
 

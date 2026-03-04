@@ -143,6 +143,27 @@ func get_game_config_overrides_patch() -> Dictionary:
 
 	return out
 
+func set_game_options_from_overrides_patch(overrides_patch: Dictionary) -> void:
+	_ensure_base_ui()
+	var patch: Dictionary = Dictionary(overrides_patch) if overrides_patch is Dictionary else {}
+	var salary_cost := int(patch.get("rules.salary_cost", -1))
+	var bankruptcy_breaks := int(patch.get("rules.bankruptcy_max_breaks", -1))
+	var bankruptcy_reserve := int(patch.get("rules.bankruptcy_extra_reserve_per_player", -1))
+	_opt_short_game = salary_cost == 0 and bankruptcy_breaks == 1 and bankruptcy_reserve == 75
+
+	var milestones_enabled := true
+	if patch.has("milestones.enabled"):
+		milestones_enabled = bool(patch.get("milestones.enabled", true))
+	_opt_no_milestones = not milestones_enabled
+
+	var disabled_ids: Array = []
+	var disabled_val = patch.get("milestones.disabled_ids", null)
+	if disabled_val is Array:
+		disabled_ids = Array(disabled_val)
+	_opt_no_cfo_milestone = disabled_ids.has("first_have_100")
+	_opt_no_broadcast_milestone = disabled_ids.has("first_radio")
+	_refresh_game_options_ui()
+
 func set_modules_base_dir(base_dir_spec: String) -> Result:
 	_ensure_base_ui()
 	_modules_base_dir_spec = str(base_dir_spec)

@@ -19,6 +19,8 @@ const _LOGO_DISPLAY_NAMES: Dictionary = GameSetupClass.LOGO_DISPLAY_NAMES
 const _DEFAULT_LOGO_COUNT := 6
 const _DEFAULT_PLATFORM_BASE_URL := "https://fcm.home.ygowill.net:8443"
 const _PROJECT_SETTING_PLATFORM_BACKEND_URL := "fcm/platform_backend_url"
+const _CUSTOM_SERVER_NAME := "自定义服务器"
+const _CUSTOM_SERVER_DESC := "手动填写地址"
 const _GUEST_NAME_PREFIX := "游客#"
 const _ACCOUNT_NAME_PREFIX := "账号#"
 const _DEFAULT_NAME_SUFFIX := "0000"
@@ -38,6 +40,9 @@ const _EXTRA_PLATFORM_SERVERS: Array = []
 # ── ConnectPage ──
 @onready var page_connect: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage
 @onready var server_cards_container: HFlowContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/BackendRow/ServerCards
+@onready var custom_server_row: HBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/BackendRow/CustomServerRow
+@onready var custom_server_url_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/BackendRow/CustomServerRow/CustomServerUrlEdit
+@onready var custom_server_apply_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/BackendRow/CustomServerRow/CustomServerApplyButton
 @onready var player_name_edit: LineEdit = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ProfileRow/PlayerNameEdit
 @onready var rename_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ProfileRow/RenameButton
 @onready var connect_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ButtonsRow/ConnectButton
@@ -101,6 +106,8 @@ var _ws_connect_in_progress: bool = false
 var _editing_display_name: bool = false
 var _platform_servers: Array = []
 var _selected_server_url: String = ""
+var _selected_server_is_custom: bool = false
+var _custom_server_url: String = ""
 
 func _ready() -> void:
 	UiStylesClass.apply_tiled_texture(wall_background, UiStylesClass.WALL_TEXTURE_PATHS, 3.0, Color(0.93, 0.88, 0.75, 1.0))
@@ -143,9 +150,11 @@ func _apply_visual_styles() -> void:
 	UiStylesClass.apply_label_hint_dark(room_status_label)
 	UiStylesClass.apply_label_hint_dark(account_status_label)
 	UiStylesClass.apply_line_edit_field(player_name_edit)
+	UiStylesClass.apply_line_edit_field(custom_server_url_edit)
 	UiStylesClass.apply_line_edit_field(quick_join_code_edit)
 	UiStylesClass.apply_line_edit_field(quick_join_password_edit)
 	UiStylesClass.apply_option_button_field(my_color_option)
+	UiStylesClass.apply_button_secondary(custom_server_apply_button)
 
 func _apply_label_style_recursive(root: Node) -> void:
 	if root == null:
@@ -305,6 +314,52 @@ func _normalize_platform_base_url(raw_url: String) -> String:
 		url = url.substr(0, url.length() - 1)
 	return url
 
+func _normalize_platform_base_url_input(raw_url: String) -> String:
+	var url := _normalize_platform_base_url(raw_url)
+	if url.is_empty():
+		return ""
+	if url.find("://") < 0:
+		url = _normalize_platform_base_url("https://" + url)
+	return url
+
+func _is_valid_platform_base_url(url: String) -> bool:
+	var normalized := _normalize_platform_base_url(url)
+	return normalized.begins_with("http://") or normalized.begins_with("https://")
+
+func _refresh_custom_server_input_state(busy: bool) -> void:
+	if custom_server_row == null or not is_instance_valid(custom_server_row):
+		return
+	custom_server_row.visible = _selected_server_is_custom
+	if custom_server_url_edit != null and is_instance_valid(custom_server_url_edit):
+		custom_server_url_edit.editable = _selected_server_is_custom and not busy
+		if _selected_server_is_custom and custom_server_url_edit.text.strip_edges().is_empty() and not _custom_server_url.is_empty():
+			custom_server_url_edit.text = _custom_server_url
+	if custom_server_apply_button != null and is_instance_valid(custom_server_apply_button):
+		custom_server_apply_button.disabled = (not _selected_server_is_custom) or busy
+
+func _switch_selected_server(next_url_raw: String, server_name: String, selected_custom: bool) -> void:
+	var next_url := _normalize_platform_base_url(next_url_raw)
+	if next_url.is_empty():
+		return
+	var current_url := _normalize_platform_base_url(_selected_server_url)
+	var url_changed := next_url != current_url
+	var selection_changed := (selected_custom != _selected_server_is_custom) or (next_url != current_url)
+	if not selection_changed:
+		_refresh_ui()
+		return
+	if PlatformSession != null and PlatformSession.is_logged_in and url_changed and not current_url.is_empty():
+		if PlatformApi != null:
+			PlatformApi.base_url = current_url
+		await PlatformSession.logout()
+		_platform_entered = false
+		if NetClient != null and NetClient.is_online_client_connected():
+			NetClient.shutdown()
+	_selected_server_is_custom = selected_custom
+	_selected_server_url = next_url
+	_apply_selected_server_to_platform_api()
+	_set_connect_status("已选择服务器：%s" % server_name)
+	_refresh_ui()
+
 func _build_platform_servers() -> Array:
 	var out: Array = []
 	var seen: Dictionary = {}
@@ -339,12 +394,25 @@ func _build_platform_servers() -> Array:
 			"url": url,
 			"desc": str(item.get("desc", "")).strip_edges(),
 		})
+	var custom_url := _normalize_platform_base_url(_custom_server_url)
+	out.append({
+		"name": _CUSTOM_SERVER_NAME,
+		"url": custom_url,
+		"desc": _CUSTOM_SERVER_DESC,
+		"is_custom": true,
+	})
 	return out
 
 func _build_server_card_text(server: Dictionary) -> String:
 	var name := str(server.get("name", "服务器")).strip_edges()
 	var desc := str(server.get("desc", "")).strip_edges()
 	var url := str(server.get("url", "")).strip_edges()
+	if bool(server.get("is_custom", false)):
+		if desc.is_empty():
+			desc = _CUSTOM_SERVER_DESC
+		if url.is_empty():
+			return "%s\n%s\n未设置" % [name, desc]
+		return "%s\n%s\n%s" % [name, desc, url]
 	if desc.is_empty():
 		return "%s\n%s" % [name, url]
 	return "%s\n%s\n%s" % [name, desc, url]
@@ -361,6 +429,7 @@ func _refresh_server_cards_state(busy: bool) -> void:
 	if server_cards_container == null or not is_instance_valid(server_cards_container):
 		return
 	var selected_url := _normalize_platform_base_url(_selected_server_url)
+	var selected_custom := _selected_server_is_custom
 	for child in server_cards_container.get_children():
 		if not (child is Button):
 			continue
@@ -368,8 +437,14 @@ func _refresh_server_cards_state(busy: bool) -> void:
 		if card == null:
 			continue
 		card.disabled = busy
-		var card_url := _normalize_platform_base_url(str(card.get_meta("server_url", "")))
-		if card_url == selected_url:
+		var card_is_custom := bool(card.get_meta("server_is_custom", false))
+		var is_selected := false
+		if card_is_custom:
+			is_selected = selected_custom
+		else:
+			var card_url := _normalize_platform_base_url(str(card.get_meta("server_url", "")))
+			is_selected = (not selected_custom) and card_url == selected_url
+		if is_selected:
 			UiStylesClass.apply_button_primary(card)
 		else:
 			UiStylesClass.apply_button_secondary(card)
@@ -381,20 +456,38 @@ func _rebuild_server_cards() -> void:
 		child.queue_free()
 	_platform_servers = _build_platform_servers()
 	var preferred_url := _normalize_platform_base_url(_selected_server_url)
-	if preferred_url.is_empty() and PlatformApi != null:
+	if _selected_server_is_custom and preferred_url.is_empty():
+		preferred_url = _normalize_platform_base_url(_custom_server_url)
+	if preferred_url.is_empty() and PlatformApi != null and not _selected_server_is_custom:
 		preferred_url = _normalize_platform_base_url(str(PlatformApi.base_url))
 	if preferred_url.is_empty() and not _platform_servers.is_empty():
-		preferred_url = _normalize_platform_base_url(str(Dictionary(_platform_servers[0]).get("url", "")))
+		for item_val in _platform_servers:
+			if not (item_val is Dictionary):
+				continue
+			var item: Dictionary = Dictionary(item_val)
+			if bool(item.get("is_custom", false)):
+				continue
+			preferred_url = _normalize_platform_base_url(str(item.get("url", "")))
+			if not preferred_url.is_empty():
+				break
+	if _selected_server_is_custom and preferred_url.is_empty():
+		_selected_server_is_custom = false
 	_selected_server_url = preferred_url
 	for i in range(_platform_servers.size()):
 		var server: Dictionary = Dictionary(_platform_servers[i])
 		var url := _normalize_platform_base_url(str(server.get("url", "")))
+		var is_custom := bool(server.get("is_custom", false))
 		var card := Button.new()
 		card.custom_minimum_size = Vector2(270, 92)
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.text = _build_server_card_text(server)
 		card.tooltip_text = str(server.get("url", ""))
+		if is_custom:
+			card.tooltip_text = "输入并应用自定义平台地址"
+			if not _custom_server_url.is_empty():
+				card.tooltip_text = _custom_server_url
 		card.set_meta("server_url", url)
+		card.set_meta("server_is_custom", is_custom)
 		card.pressed.connect(_on_server_card_pressed.bind(i))
 		server_cards_container.add_child(card)
 	_apply_selected_server_to_platform_api()
@@ -406,30 +499,35 @@ func _on_server_card_pressed(index: int) -> void:
 	if index < 0 or index >= _platform_servers.size():
 		return
 	var server: Dictionary = Dictionary(_platform_servers[index])
+	var server_name := str(server.get("name", "服务器"))
+	var is_custom := bool(server.get("is_custom", false))
+	if is_custom:
+		_selected_server_is_custom = true
+		_refresh_ui()
+		if custom_server_url_edit != null and is_instance_valid(custom_server_url_edit):
+			if custom_server_url_edit.text.strip_edges().is_empty() and not _custom_server_url.is_empty():
+				custom_server_url_edit.text = _custom_server_url
+			custom_server_url_edit.grab_focus()
+			custom_server_url_edit.caret_column = custom_server_url_edit.text.length()
+		if _custom_server_url.is_empty():
+			_set_connect_status("已选择自定义服务器：请填写地址并点击“应用”。")
+			return
+		await _switch_selected_server(_custom_server_url, server_name, true)
+		return
 	var next_url := _normalize_platform_base_url(str(server.get("url", "")))
 	if next_url.is_empty():
 		return
-	var current_url := _normalize_platform_base_url(_selected_server_url)
-	if next_url == current_url:
-		return
-	if PlatformSession != null and PlatformSession.is_logged_in and not current_url.is_empty():
-		if PlatformApi != null:
-			PlatformApi.base_url = current_url
-		await PlatformSession.logout()
-		_platform_entered = false
-		if NetClient != null and NetClient.is_online_client_connected():
-			NetClient.shutdown()
-	_selected_server_url = next_url
-	_apply_selected_server_to_platform_api()
-	_set_connect_status("已选择服务器：%s" % str(server.get("name", "服务器")))
-	_refresh_server_cards_state(_platform_busy or _ws_connect_in_progress)
-	_refresh_ui()
+	await _switch_selected_server(next_url, server_name, false)
 
 func _apply_defaults() -> void:
 	_editing_display_name = false
 	_set_connect_status("")
 	_set_browse_status("")
 	_set_room_status("")
+	_selected_server_is_custom = false
+	_custom_server_url = _normalize_platform_base_url(_custom_server_url)
+	if custom_server_url_edit != null and is_instance_valid(custom_server_url_edit):
+		custom_server_url_edit.text = _custom_server_url
 
 	_rebuild_server_cards()
 
@@ -494,6 +592,12 @@ func _setup_account_ui() -> void:
 	if quick_spectate_button != null and is_instance_valid(quick_spectate_button):
 		if not quick_spectate_button.pressed.is_connected(_on_quick_spectate_pressed):
 			quick_spectate_button.pressed.connect(_on_quick_spectate_pressed)
+	if custom_server_apply_button != null and is_instance_valid(custom_server_apply_button):
+		if not custom_server_apply_button.pressed.is_connected(_on_custom_server_apply_pressed):
+			custom_server_apply_button.pressed.connect(_on_custom_server_apply_pressed)
+	if custom_server_url_edit != null and is_instance_valid(custom_server_url_edit):
+		if not custom_server_url_edit.text_submitted.is_connected(_on_custom_server_url_submitted):
+			custom_server_url_edit.text_submitted.connect(_on_custom_server_url_submitted)
 
 func _update_account_status() -> void:
 	if account_status_label == null or not is_instance_valid(account_status_label):
@@ -781,10 +885,12 @@ func _refresh_ui() -> void:
 	var ws_connected := NetClient != null and NetClient.is_online_client_connected()
 	var platform_ready := _platform_entered and PlatformSession != null and PlatformSession.is_logged_in
 	var busy := _platform_busy or _ws_connect_in_progress
+	var custom_missing_url := _selected_server_is_custom and _normalize_platform_base_url(_custom_server_url).is_empty()
 	_refresh_server_cards_state(busy)
+	_refresh_custom_server_input_state(busy)
 	if rename_button != null and is_instance_valid(rename_button):
 		rename_button.disabled = busy
-	connect_button.disabled = busy or platform_ready
+	connect_button.disabled = busy or platform_ready or custom_missing_url
 	disconnect_button.disabled = busy or not platform_ready
 	open_create_button.disabled = busy or not platform_ready
 	refresh_rooms_button.disabled = busy or not platform_ready
@@ -793,7 +899,9 @@ func _refresh_ui() -> void:
 		quick_spectate_button.disabled = busy or not platform_ready
 	leave_room_button.disabled = busy or not ws_connected
 	if not ws_connected and not platform_ready:
-		if connect_status_label.text.strip_edges().is_empty():
+		if custom_missing_url and connect_status_label.text.strip_edges().is_empty():
+			_set_connect_status("请先填写并应用自定义服务器地址。")
+		elif connect_status_label.text.strip_edges().is_empty():
 			_set_connect_status("未就绪：请进入平台（自动游客登录）。")
 	elif platform_ready and not ws_connected:
 		if connect_status_label.text.strip_edges().is_empty():
@@ -1123,6 +1231,30 @@ func _on_back_pressed() -> void:
 func _on_connect_pressed() -> void:
 	_sync_bound_player_profile_name(true)
 	await _platform_enter()
+
+func _on_custom_server_apply_pressed() -> void:
+	if _platform_busy or _ws_connect_in_progress:
+		return
+	var next_url := ""
+	if custom_server_url_edit != null and is_instance_valid(custom_server_url_edit):
+		next_url = _normalize_platform_base_url_input(str(custom_server_url_edit.text))
+	if next_url.is_empty():
+		_set_connect_status("请输入自定义服务器地址。")
+		_selected_server_is_custom = true
+		_refresh_ui()
+		return
+	if not _is_valid_platform_base_url(next_url):
+		_set_connect_status("地址格式无效：请使用 http:// 或 https:// 开头。")
+		_selected_server_is_custom = true
+		_refresh_ui()
+		return
+	_custom_server_url = next_url
+	if custom_server_url_edit != null and is_instance_valid(custom_server_url_edit):
+		custom_server_url_edit.text = next_url
+	await _switch_selected_server(next_url, _CUSTOM_SERVER_NAME, true)
+
+func _on_custom_server_url_submitted(_text: String) -> void:
+	await _on_custom_server_apply_pressed()
 
 func _on_disconnect_pressed() -> void:
 	if NetClient != null:

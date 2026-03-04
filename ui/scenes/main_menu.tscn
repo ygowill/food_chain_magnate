@@ -93,11 +93,17 @@ horizontal_alignment = 1
 custom_minimum_size = Vector2(0, 8)
 layout_mode = 2
 
-[node name="NewGameButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
+[node name="OnlineButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
 custom_minimum_size = Vector2(420, 64)
 layout_mode = 2
 size_flags_horizontal = 4
-text = "新游戏"
+text = "联机游戏"
+
+[node name="NewGameButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
+custom_minimum_size = Vector2(420, 56)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "本地游戏"
 
 [node name="LoadGameButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
 custom_minimum_size = Vector2(420, 56)
@@ -109,12 +115,6 @@ text = "载入回放"
 visible = false
 custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
-
-[node name="OnlineButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
-	custom_minimum_size = Vector2(420, 56)
-	layout_mode = 2
-	size_flags_horizontal = 4
-	text = "联机"
 
 [node name="RulesButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
 	custom_minimum_size = Vector2(420, 56)

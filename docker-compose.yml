@@ -21,6 +21,7 @@ services:
       - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
       - --certificatesresolvers.le.acme.dnschallenge=true
       - --certificatesresolvers.le.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.le.acme.keytype=${FCM_ACME_KEY_TYPE:-EC256}
     environment:
       # Required (recommended token permissions: Zone.DNS:Edit for your zone).
       - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}

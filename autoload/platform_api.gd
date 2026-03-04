@@ -6,6 +6,7 @@ const _DEFAULT_PLATFORM_BASE_URL := "https://fcm.home.ygowill.net:8443"
 const _PROJECT_SETTING_PLATFORM_BACKEND_URL := "fcm/platform_backend_url"
 const _ENV_PLATFORM_BACKEND_URL := "FCM_PLATFORM_BACKEND_URL"
 const _ENV_WEB_ORIGIN := "FCM_WEB_ORIGIN"
+const _ENV_PLATFORM_TLS_INSECURE := "FCM_PLATFORM_TLS_INSECURE"
 
 var base_url: String = _DEFAULT_PLATFORM_BASE_URL
 
@@ -43,6 +44,8 @@ func _request(method: int, path: String, body: Dictionary = {}) -> Dictionary:
 	var headers := ["Content-Type: application/json"]
 	var json_body := JSON.stringify(body) if not body.is_empty() else ""
 	var http := HTTPRequest.new()
+	if _should_use_insecure_tls(url):
+		http.set_tls_options(TLSOptions.client_unsafe())
 	add_child(http)
 	var err := http.request(url, headers, method, json_body)
 	if err != OK:
@@ -50,9 +53,65 @@ func _request(method: int, path: String, body: Dictionary = {}) -> Dictionary:
 		return {"error": "request_failed", "code": err}
 	var result: Array = await http.request_completed
 	http.queue_free()
-	var response_code: int = result[1]
-	var response_body: PackedByteArray = result[3]
+	var request_result: int = int(result[0]) if result.size() > 0 else HTTPRequest.RESULT_REQUEST_FAILED
+	var response_code: int = int(result[1]) if result.size() > 1 else 0
+	var response_body: PackedByteArray = PackedByteArray(result[3]) if result.size() > 3 else PackedByteArray()
+	if request_result != HTTPRequest.RESULT_SUCCESS:
+		return {"error": _build_transport_error(url, request_result, response_code)}
 	return parse_http_json_response(response_code, response_body.get_string_from_utf8())
+
+func _should_use_insecure_tls(url: String) -> bool:
+	var normalized := str(url).strip_edges().to_lower()
+	if not normalized.begins_with("https://"):
+		return false
+	var raw := str(OS.get_environment(_ENV_PLATFORM_TLS_INSECURE)).strip_edges().to_lower()
+	return raw == "1" or raw == "true" or raw == "yes" or raw == "on"
+
+static func _http_request_result_name(code: int) -> String:
+	match int(code):
+		HTTPRequest.RESULT_SUCCESS:
+			return "success"
+		HTTPRequest.RESULT_CHUNKED_BODY_SIZE_MISMATCH:
+			return "chunked_body_size_mismatch"
+		HTTPRequest.RESULT_CANT_CONNECT:
+			return "cant_connect"
+		HTTPRequest.RESULT_CANT_RESOLVE:
+			return "cant_resolve"
+		HTTPRequest.RESULT_CONNECTION_ERROR:
+			return "connection_error"
+		HTTPRequest.RESULT_TLS_HANDSHAKE_ERROR:
+			return "tls_handshake_error"
+		HTTPRequest.RESULT_NO_RESPONSE:
+			return "no_response"
+		HTTPRequest.RESULT_BODY_SIZE_LIMIT_EXCEEDED:
+			return "body_size_limit_exceeded"
+		HTTPRequest.RESULT_BODY_DECOMPRESS_FAILED:
+			return "body_decompress_failed"
+		HTTPRequest.RESULT_REQUEST_FAILED:
+			return "request_failed"
+		HTTPRequest.RESULT_DOWNLOAD_FILE_CANT_OPEN:
+			return "download_file_cant_open"
+		HTTPRequest.RESULT_DOWNLOAD_FILE_WRITE_ERROR:
+			return "download_file_write_error"
+		HTTPRequest.RESULT_REDIRECT_LIMIT_REACHED:
+			return "redirect_limit_reached"
+		HTTPRequest.RESULT_TIMEOUT:
+			return "timeout"
+		_:
+			return "unknown_%d" % int(code)
+
+func _build_transport_error(url: String, request_result: int, response_code: int) -> Dictionary:
+	var result_name := _http_request_result_name(request_result)
+	var detail := "网络请求失败：%s（result=%d, http_status=%d）" % [result_name, int(request_result), int(response_code)]
+	if int(request_result) == HTTPRequest.RESULT_CANT_CONNECT and str(url).begins_with("https://"):
+		detail += "。若是自建 HTTPS 服务器，请优先检查证书链与域名匹配；排障时可临时设置 FCM_PLATFORM_TLS_INSECURE=1。"
+	return {
+		"_http_status": int(response_code),
+		"_http_result": int(request_result),
+		"_http_result_name": result_name,
+		"_url": str(url),
+		"detail": detail,
+	}
 
 static func parse_http_json_response(response_code: int, body_text: String) -> Dictionary:
 	var parsed: Variant = JSON.parse_string(str(body_text))

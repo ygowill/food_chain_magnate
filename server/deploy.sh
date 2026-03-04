@@ -17,6 +17,7 @@ Usage:
                    [--compose-ref main]
                    [--github-raw-prefix <prefix>]
                    [--https --web-domain <domain> [--ws-domain <domain>]]
+                   [--acme-key-type EC256|EC384|RSA2048|RSA4096]
                    [--http-port 80] [--https-port 443]
                    [--down] [--purge]
 
@@ -37,7 +38,7 @@ Examples:
 
   # HTTPS for Web client (Cloudflare DNS-01 + Let's Encrypt)
   # Requires env: ACME_EMAIL, CF_DNS_API_TOKEN
-  ./server/deploy.sh --tag v0.1.0 --enable-web --https --web-domain game.example.com --ws-domain ws.game.example.com
+  ./server/deploy.sh --tag v0.1.0 --enable-web --https --web-domain game.example.com --ws-domain ws.game.example.com --acme-key-type EC256
 
   # Use a Docker Hub mirror/prefix for faster pulls (only affects docker.io images like Traefik)
   ./server/deploy.sh --tag v0.1.0 --https --docker-io-prefix m.daocloud.io/docker.io/
@@ -48,7 +49,7 @@ Examples:
   # Stop & remove containers + network (keeps volumes by default)
   ./server/deploy.sh --down
 
-  # Stop & remove containers + network + volumes (including Let's Encrypt cache)
+  # Stop & remove containers + network + ALL volumes (including database and Let's Encrypt cache)
   ./server/deploy.sh --down --purge
 
 Notes:
@@ -84,6 +85,7 @@ WEB_DOMAIN=""
 WS_DOMAIN=""
 HTTP_PORT="80"
 HTTPS_PORT="443"
+ACME_KEY_TYPE="EC256"
 DEFAULT_WS_URL=""
 ACTION="up"
 PURGE=0
@@ -202,6 +204,10 @@ while [[ $# -gt 0 ]]; do
 			HTTPS_PORT="${2:-}"
 			shift 2
 			;;
+		--acme-key-type)
+			ACME_KEY_TYPE="${2:-}"
+			shift 2
+			;;
 		--web-domain)
 			WEB_DOMAIN="${2:-}"
 			shift 2
@@ -261,6 +267,13 @@ if [[ "${ACTION}" == "up" ]]; then
 		echo "[deploy] db: user=${DB_USER} name=${DB_NAME}"
 	fi
 	if [[ "${ENABLE_HTTPS}" -eq 1 ]]; then
+		case "${ACME_KEY_TYPE}" in
+			EC256|EC384|RSA2048|RSA4096) ;;
+			*)
+				echo "ERROR: --acme-key-type must be one of EC256|EC384|RSA2048|RSA4096" >&2
+				exit 2
+				;;
+		esac
 		if [[ -z "${WEB_DOMAIN}" ]]; then
 			echo "ERROR: --https requires --web-domain" >&2
 			exit 2
@@ -273,7 +286,7 @@ if [[ "${ACTION}" == "up" ]]; then
 			echo "ERROR: --https requires env vars ACME_EMAIL and CF_DNS_API_TOKEN" >&2
 			exit 2
 		fi
-		echo "[deploy] https enabled: web_domain=${WEB_DOMAIN} ws_domain=${WS_DOMAIN} http_port=${HTTP_PORT} https_port=${HTTPS_PORT}"
+		echo "[deploy] https enabled: web_domain=${WEB_DOMAIN} ws_domain=${WS_DOMAIN} http_port=${HTTP_PORT} https_port=${HTTPS_PORT} acme_key_type=${ACME_KEY_TYPE}"
 	fi
 else
 	echo "[deploy] stopping (docker compose down)..."
@@ -362,6 +375,7 @@ FCM_WEB_DOMAIN=${WEB_DOMAIN}
 FCM_WS_DOMAIN=${WS_DOMAIN}
 FCM_HTTP_PORT=${HTTP_PORT}
 FCM_HTTPS_PORT=${HTTPS_PORT}
+FCM_ACME_KEY_TYPE=${ACME_KEY_TYPE}
 FCM_DEFAULT_WS_URL=${DEFAULT_WS_URL}
 FCM_HMAC_SECRET=${HMAC_SECRET}
 FCM_DB_USER=${DB_USER}

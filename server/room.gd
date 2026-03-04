@@ -441,8 +441,29 @@ func start_game() -> Result:
 		logo_choices.append(int(profile.get("restaurant_logo_id", -1)))
 	config["restaurant_logo_choices_by_player"] = logo_choices
 
+	var restore_game_config_overrides := false
+	var restore_game_option_overrides := false
+	var prev_game_config_overrides: Dictionary = {}
+	var prev_game_option_overrides: Dictionary = {}
+	if Globals != null and "game_config_overrides" in Globals:
+		restore_game_config_overrides = true
+		prev_game_config_overrides = Dictionary(Globals.game_config_overrides).duplicate(true)
+		var config_overrides_val = config.get("game_config_overrides", null)
+		var config_overrides: Dictionary = Dictionary(config_overrides_val) if config_overrides_val is Dictionary else {}
+		Globals.game_config_overrides = config_overrides
+	if Globals != null and "game_option_overrides" in Globals:
+		restore_game_option_overrides = true
+		prev_game_option_overrides = Dictionary(Globals.game_option_overrides).duplicate(true)
+		var option_overrides_val = config.get("game_option_overrides", null)
+		var option_overrides: Dictionary = Dictionary(option_overrides_val) if option_overrides_val is Dictionary else {}
+		Globals.game_option_overrides = option_overrides
+
 	var engine = GameEngineClass.new()
 	var init_r: Result = engine.initialize(player_count, seed, enabled_modules, base_dir, [], logo_choices)
+	if restore_game_config_overrides:
+		Globals.game_config_overrides = prev_game_config_overrides
+	if restore_game_option_overrides:
+		Globals.game_option_overrides = prev_game_option_overrides
 	if not init_r.ok:
 		return Result.failure("GameEngine.initialize failed: %s" % init_r.error)
 	var state = engine.get_state()
