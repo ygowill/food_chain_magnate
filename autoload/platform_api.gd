@@ -2,14 +2,41 @@
 # 封装 Backend HTTP 调用
 extends Node
 
-var base_url: String = "http://localhost:8000"
+const _DEFAULT_PLATFORM_BASE_URL := "https://fcm.home.ygowill.net:8443"
+const _PROJECT_SETTING_PLATFORM_BACKEND_URL := "fcm/platform_backend_url"
+const _ENV_PLATFORM_BACKEND_URL := "FCM_PLATFORM_BACKEND_URL"
+const _ENV_WEB_ORIGIN := "FCM_WEB_ORIGIN"
+
+var base_url: String = _DEFAULT_PLATFORM_BASE_URL
 
 
 func _ready() -> void:
 	if OS.get_name() == "Web":
 		# Web 平台：同源部署，使用当前页面 origin
 		var origin = JavaScriptBridge.eval("window.location.origin")
-		base_url = str(origin) if origin != null else ""
+		var web_origin := _normalize_base_url(str(origin) if origin != null else "")
+		base_url = web_origin if not web_origin.is_empty() else _resolve_default_base_url()
+	else:
+		base_url = _resolve_default_base_url()
+
+func _normalize_base_url(raw_url: String) -> String:
+	var url := str(raw_url).strip_edges()
+	while url.length() > 0 and url.ends_with("/"):
+		url = url.substr(0, url.length() - 1)
+	return url
+
+func _resolve_default_base_url() -> String:
+	var env_url := _normalize_base_url(str(OS.get_environment(_ENV_PLATFORM_BACKEND_URL)))
+	if env_url.is_empty():
+		env_url = _normalize_base_url(str(OS.get_environment(_ENV_WEB_ORIGIN)))
+	if not env_url.is_empty():
+		return env_url
+	var configured := ""
+	if ProjectSettings.has_setting(_PROJECT_SETTING_PLATFORM_BACKEND_URL):
+		configured = _normalize_base_url(str(ProjectSettings.get_setting(_PROJECT_SETTING_PLATFORM_BACKEND_URL, "")))
+	if not configured.is_empty():
+		return configured
+	return _DEFAULT_PLATFORM_BASE_URL
 
 func _request(method: int, path: String, body: Dictionary = {}) -> Dictionary:
 	var url := base_url + path

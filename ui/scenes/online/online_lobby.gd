@@ -17,7 +17,8 @@ const GameSetupClass = preload("res://ui/scenes/setup/game_setup.gd")
 
 const _LOGO_DISPLAY_NAMES: Dictionary = GameSetupClass.LOGO_DISPLAY_NAMES
 const _DEFAULT_LOGO_COUNT := 6
-const _DEFAULT_PLATFORM_BASE_URL := "http://127.0.0.1:8000"
+const _DEFAULT_PLATFORM_BASE_URL := "https://fcm.home.ygowill.net:8443"
+const _PROJECT_SETTING_PLATFORM_BACKEND_URL := "fcm/platform_backend_url"
 const _GUEST_NAME_PREFIX := "游客#"
 const _ACCOUNT_NAME_PREFIX := "账号#"
 const _DEFAULT_NAME_SUFFIX := "0000"
@@ -307,11 +308,15 @@ func _normalize_platform_base_url(raw_url: String) -> String:
 func _build_platform_servers() -> Array:
 	var out: Array = []
 	var seen: Dictionary = {}
-	var official_url := _DEFAULT_PLATFORM_BASE_URL
+	var official_url := ""
 	if PlatformApi != null:
 		var current := _normalize_platform_base_url(str(PlatformApi.base_url))
 		if not current.is_empty():
 			official_url = current
+	if official_url.is_empty() and ProjectSettings.has_setting(_PROJECT_SETTING_PLATFORM_BACKEND_URL):
+		official_url = _normalize_platform_base_url(str(ProjectSettings.get_setting(_PROJECT_SETTING_PLATFORM_BACKEND_URL, "")))
+	if official_url.is_empty():
+		official_url = _DEFAULT_PLATFORM_BASE_URL
 	seen[official_url] = true
 	out.append({
 		"name": "官方服务器",
