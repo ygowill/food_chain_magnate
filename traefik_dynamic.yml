@@ -1,0 +1,29 @@
+http:
+  routers:
+    # WebSocket server (recommended: use a dedicated subdomain)
+    fcm-ws:
+      rule: Host(`ws.game.example.com`)
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: le
+      service: fcm-ws
+
+    # Web client
+    fcm-web:
+      rule: Host(`game.example.com`)
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: le
+      service: fcm-web
+
+  services:
+    fcm-ws:
+      loadBalancer:
+        servers:
+          - url: http://server:7000
+    fcm-web:
+      loadBalancer:
+        servers:
+          - url: http://web:80
