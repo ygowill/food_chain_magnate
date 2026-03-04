@@ -2,7 +2,7 @@
 extends RefCounted
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
-const CheckmarkIconTexture: Texture2D = preload("res://assets/images/ui_icons/kenney_game/checkmark.png")
+const CheckmarkIconClass = preload("res://ui/components/left_panel/checkmark_icon.gd")
 
 # 里程碑状态颜色
 const MILESTONE_COLOR_CLAIMED := Color(0.28, 0.55, 0.22, 1.0)  # 成功绿
@@ -237,14 +237,10 @@ func _create_milestone_compact_row(milestone_id: String, milestone_def, is_claim
 
 	var icon_label: Label = null
 	if is_claimed:
-		var icon_rect := TextureRect.new()
-		icon_rect.custom_minimum_size = Vector2(fs_icon, fs_icon)
-		icon_rect.texture = CheckmarkIconTexture
-		icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon_rect.modulate = MILESTONE_COLOR_CLAIMED
-		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		icon_container.add_child(icon_rect)
+		var icon_draw := CheckmarkIconClass.new()
+		icon_draw.custom_minimum_size = Vector2(fs_icon, fs_icon)
+		icon_draw.color = MILESTONE_COLOR_CLAIMED
+		icon_container.add_child(icon_draw)
 	elif in_pool:
 		icon_label = Label.new()
 		icon_label.add_theme_font_size_override("font_size", fs_icon)
