@@ -6,13 +6,19 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user, _is_guest_user, _resolve_display_name
+from app.config import settings
 from app.connect_token import issue_connect_token
 from app.db import get_db
 from app.models import GameServer, Room, RoomMember, Session, User
 
 router = APIRouter(prefix="/v1/rooms", tags=["rooms"])
 
-DEFAULT_WS_URL = "ws://localhost:7000"
+
+def _resolve_default_ws_url() -> str:
+    ws_url = str(settings.default_ws_url).strip()
+    if ws_url:
+        return ws_url
+    return "ws://localhost:7000"
 
 
 class CreateRoomRequest(BaseModel):
@@ -146,7 +152,7 @@ async def create_room(req: CreateRoomRequest, db: AsyncSession = Depends(get_db)
     room = Room(
         owner_user_id=sess.user_id,
         config_json=req.config_json,
-        ws_url=DEFAULT_WS_URL,
+        ws_url=_resolve_default_ws_url(),
         join_policy="password" if req.password else "public",
         password_hash=_hash_password(req.password) if req.password else None,
     )

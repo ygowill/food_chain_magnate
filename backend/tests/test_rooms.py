@@ -24,6 +24,18 @@ async def test_create_room(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_create_room_uses_configured_default_ws_url(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    import app.rooms as rooms_module
+
+    monkeypatch.setattr(rooms_module.settings, "default_ws_url", "wss://ws.fcmapp.ygowill.net:18443")
+
+    user = await _create_user(client)
+    resp = await client.post("/v1/rooms", json={"session_id": user["session_id"]})
+    assert resp.status_code == 200
+    assert resp.json()["ws_url"] == "wss://ws.fcmapp.ygowill.net:18443"
+
+
+@pytest.mark.asyncio
 async def test_get_room(client: AsyncClient):
     user = await _create_user(client)
     create = await client.post("/v1/rooms", json={"session_id": user["session_id"]})
