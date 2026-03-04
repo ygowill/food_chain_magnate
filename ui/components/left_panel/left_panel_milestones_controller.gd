@@ -231,7 +231,8 @@ func _create_milestone_compact_row(milestone_id: String, milestone_def, is_claim
 	if Globals != null:
 		fs_icon = int(Globals.get_scaled_font_size(18))
 	var icon_container := CenterContainer.new()
-	icon_container.custom_minimum_size = Vector2(fs_icon + 2, fs_icon + 2)
+	# Add padding so the checkmark icon never looks clipped at small sizes (esp. in Web export).
+	icon_container.custom_minimum_size = Vector2(fs_icon + 6, fs_icon + 6)
 	icon_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 	var icon_label: Label = null
