@@ -16,7 +16,7 @@ Usage:
                    [--enable-web] [--web-port 8080]
                    [--compose-ref main]
                    [--github-raw-prefix <prefix>]
-                   [--https --web-domain <domain> --ws-domain <domain>]
+                   [--https --web-domain <domain> [--ws-domain <domain>]]
                    [--http-port 80] [--https-port 443]
                    [--down] [--purge]
 
@@ -84,6 +84,7 @@ WEB_DOMAIN=""
 WS_DOMAIN=""
 HTTP_PORT="80"
 HTTPS_PORT="443"
+DEFAULT_WS_URL=""
 ACTION="up"
 PURGE=0
 
@@ -260,9 +261,13 @@ if [[ "${ACTION}" == "up" ]]; then
 		echo "[deploy] db: user=${DB_USER} name=${DB_NAME}"
 	fi
 	if [[ "${ENABLE_HTTPS}" -eq 1 ]]; then
-		if [[ -z "${WEB_DOMAIN}" || -z "${WS_DOMAIN}" ]]; then
-			echo "ERROR: --https requires --web-domain and --ws-domain" >&2
+		if [[ -z "${WEB_DOMAIN}" ]]; then
+			echo "ERROR: --https requires --web-domain" >&2
 			exit 2
+		fi
+		if [[ -z "${WS_DOMAIN}" ]]; then
+			WS_DOMAIN="ws.${WEB_DOMAIN}"
+			echo "[deploy] ws-domain not set, using default: ${WS_DOMAIN}"
 		fi
 		if [[ -z "${ACME_EMAIL:-}" || -z "${CF_DNS_API_TOKEN:-}" ]]; then
 			echo "ERROR: --https requires env vars ACME_EMAIL and CF_DNS_API_TOKEN" >&2
@@ -272,6 +277,15 @@ if [[ "${ACTION}" == "up" ]]; then
 	fi
 else
 	echo "[deploy] stopping (docker compose down)..."
+fi
+
+DEFAULT_WS_URL="ws://localhost:${PORT}"
+if [[ "${ENABLE_HTTPS}" -eq 1 ]]; then
+	ws_port_suffix=""
+	if [[ "${HTTPS_PORT}" != "443" ]]; then
+		ws_port_suffix=":${HTTPS_PORT}"
+	fi
+	DEFAULT_WS_URL="wss://${WEB_DOMAIN}${ws_port_suffix}/ws"
 fi
 
 script_src="${BASH_SOURCE[0]}"
@@ -348,6 +362,7 @@ FCM_WEB_DOMAIN=${WEB_DOMAIN}
 FCM_WS_DOMAIN=${WS_DOMAIN}
 FCM_HTTP_PORT=${HTTP_PORT}
 FCM_HTTPS_PORT=${HTTPS_PORT}
+FCM_DEFAULT_WS_URL=${DEFAULT_WS_URL}
 FCM_HMAC_SECRET=${HMAC_SECRET}
 FCM_DB_USER=${DB_USER}
 FCM_DB_PASSWORD=${DB_PASSWORD}
@@ -365,6 +380,14 @@ http:
       rule: Host(\`${WS_DOMAIN}\`)
       entryPoints:
         - websecure
+      tls:
+        certResolver: le
+      service: fcm-ws
+    fcm-ws-path:
+      rule: Host(\`${WEB_DOMAIN}\`) && PathPrefix(\`/ws\`)
+      entryPoints:
+        - websecure
+      priority: 100
       tls:
         certResolver: le
       service: fcm-ws
@@ -466,7 +489,8 @@ if [[ "${ENABLE_WEB}" -eq 1 ]]; then
 			web_port_suffix=":${HTTPS_PORT}"
 		fi
 		echo "[deploy] web: https://${WEB_DOMAIN}${web_port_suffix}/"
-		echo "[deploy] ws:  wss://${WS_DOMAIN}${web_port_suffix}/"
+		echo "[deploy] ws (preferred): wss://${WEB_DOMAIN}${web_port_suffix}/ws"
+		echo "[deploy] ws (alt):       wss://${WS_DOMAIN}${web_port_suffix}/"
 	else
 		echo "[deploy] web: http://localhost:${WEB_PORT} (or your server IP)"
 	fi

@@ -51,6 +51,7 @@ services:
       HMAC_SECRET: change-me-in-production
       INTERNAL_API_SECRET: dev-internal-secret-change-in-production
       WEB_ORIGIN: "http://localhost:5173"
+      DEFAULT_WS_URL: "${FCM_DEFAULT_WS_URL:-ws://localhost:7000}"
     depends_on:
       - db
 

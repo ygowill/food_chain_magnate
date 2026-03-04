@@ -9,6 +9,16 @@ http:
         certResolver: le
       service: fcm-ws
 
+    # WebSocket fallback on same host/path for clients that cannot resolve ws subdomain reliably.
+    fcm-ws-path:
+      rule: Host(`game.example.com`) && PathPrefix(`/ws`)
+      entryPoints:
+        - websecure
+      priority: 100
+      tls:
+        certResolver: le
+      service: fcm-ws
+
     # Web client
     fcm-web:
       rule: Host(`game.example.com`)

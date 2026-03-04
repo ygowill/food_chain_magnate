@@ -69,7 +69,8 @@ Godot 的 Web 导出需要**安全上下文（Secure Context）**。如果你用
 推荐部署方式：
 
 - 网页客户端：`https://game.example.com/`
-- WebSocket 服务：`wss://ws.game.example.com/`（用独立子域名最稳）
+- WebSocket 服务（推荐）：`wss://game.example.com/ws`
+- WebSocket 服务（备用）：`wss://ws.game.example.com/`
 
 本仓库提供 **Traefik + Let’s Encrypt**（通过 **Cloudflare DNS-01**）的 HTTPS 叠加配置：
 
@@ -110,6 +111,11 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
 4) 确保防火墙/安全组放行：
    - TCP 80 和 443（或你自定义的 `--http-port` / `--https-port`）
 
+部署完成后，后端房间接口会默认返回：
+
+- `wss://<web-domain>[:https-port]/ws`（推荐）
+- Traefik 同时保留 `wss://<ws-domain>[:https-port]/` 作为备用入口
+
 如果你不能（或不想）使用 80/443 端口，可以改成其他端口：
 
 ```bash
@@ -123,16 +129,30 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
   --https-port 8443
 ```
 
-客户端里把服务器地址填成：
+客户端里把服务器地址填成（推荐）：
 
 ```text
-wss://ws.game.example.com
+wss://game.example.com/ws
 ```
 
 如果你改了 `--https-port`（不是 443），需要把端口也带上：
 
 ```text
+wss://game.example.com:8443/ws
+```
+
+备用地址（如果你仍希望使用独立 WS 子域名）：
+
+```text
 wss://ws.game.example.com:8443
+```
+
+如果你在这次改动之前创建过房间，数据库里可能还存着旧地址（例如 `ws://localhost:7000`），可以执行一次迁移：
+
+```bash
+tools/migration/update_rooms_ws_url.sh \
+  --new-url "wss://game.example.com/ws" \
+  --old-url "ws://localhost:7000"
 ```
 
 一行命令部署（下载并直接执行部署脚本）：

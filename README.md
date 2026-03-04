@@ -95,7 +95,8 @@ Godot Web exports require a **secure context**. If you open the web client over 
 Recommended setup:
 
 - Web client: `https://game.example.com/`
-- WebSocket server: `wss://ws.game.example.com/` (separate subdomain is the safest)
+- WebSocket server (preferred): `wss://game.example.com/ws`
+- WebSocket server (alternate): `wss://ws.game.example.com/`
 
 This repo includes an HTTPS overlay using **Traefik + Let’s Encrypt** with **Cloudflare DNS-01**:
 
@@ -136,6 +137,11 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
 4) Ensure your firewall/security group allows inbound:
    - TCP 80 and 443 (or your custom `--http-port` / `--https-port`)
 
+After deployment, backend room API will default `ws_url` to:
+
+- `wss://<web-domain>[:https-port]/ws` (preferred)
+- Traefik also keeps the `wss://<ws-domain>[:https-port]/` route as an alternate entry.
+
 If you can’t (or don’t want to) use ports 80/443, you can change them:
 
 ```bash
@@ -149,16 +155,30 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
   --https-port 8443
 ```
 
-In the client, set server URL to:
+In the client, set server URL to (preferred):
 
 ```text
-wss://ws.game.example.com
+wss://game.example.com/ws
 ```
 
 If you changed `--https-port` (not 443), include it:
 
 ```text
+wss://game.example.com:8443/ws
+```
+
+Alternate URL (if you still want dedicated WS subdomain):
+
+```text
 wss://ws.game.example.com:8443
+```
+
+If you already created rooms before this change and they still store old URLs (for example `ws://localhost:7000`), migrate in-place:
+
+```bash
+tools/migration/update_rooms_ws_url.sh \
+  --new-url "wss://game.example.com/ws" \
+  --old-url "ws://localhost:7000"
 ```
 
 One-line deploy (downloads and runs the deploy script):

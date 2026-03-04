@@ -21,6 +21,7 @@ services:
       HMAC_SECRET: "${FCM_HMAC_SECRET:-change-me-in-production}"
       INTERNAL_API_SECRET: "${FCM_INTERNAL_API_SECRET:-dev-internal-secret-change-in-production}"
       WEB_ORIGIN: "${FCM_WEB_ORIGIN:-*}"
+      DEFAULT_WS_URL: "${FCM_DEFAULT_WS_URL:-ws://localhost:7000}"
     depends_on:
       - db
 
