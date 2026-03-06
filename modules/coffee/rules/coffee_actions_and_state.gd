@@ -70,15 +70,17 @@ func _get_extra_range_origins(state: GameState, ctx: Dictionary) -> Result:
 	var actor: int = int(actor_val)
 	if actor < 0:
 		return Result.success([] as Array[Vector2i])
-	if not (state.map is Dictionary):
-		return Result.failure("coffee:range_origins: state.map 类型错误（期望 Dictionary）")
+	var map_read := MapStateAccessClass.require_map(state, "coffee:range_origins")
+	if not map_read.ok:
+		return map_read
+	var map: Dictionary = map_read.value
 
-	var shops_val = state.map.get("coffee_shops", null)
-	if shops_val == null:
+	if not map.has("coffee_shops"):
 		return Result.success([] as Array[Vector2i])
-	if not (shops_val is Dictionary):
-		return Result.failure("coffee:range_origins: state.map.coffee_shops 类型错误（期望 Dictionary）")
-	var shops: Dictionary = shops_val
+	var shops_read := MapStateAccessClass.require_dict_field(state, "coffee_shops", "coffee:range_origins")
+	if not shops_read.ok:
+		return shops_read
+	var shops: Dictionary = shops_read.value
 
 	var out: Array[Vector2i] = []
 	var seen := {}
