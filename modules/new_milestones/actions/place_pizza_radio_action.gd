@@ -193,6 +193,11 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var product: String = str(info["product"])
 	var duration: int = int(info["duration"])
 
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, action_id)
+	if not placements_read.ok:
+		return placements_read
+	var placements: Dictionary = placements_read.value
+
 	var instance := {
 		"board_number": board_number,
 		"type": "radio",
@@ -209,7 +214,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	}
 	state.marketing_instances.append(instance)
 
-	state.map["marketing_placements"][str(board_number)] = {
+	placements[str(board_number)] = {
 		"board_number": board_number,
 		"type": "radio",
 		"owner": command.actor,
@@ -221,6 +226,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"axis": "",
 		"tile_index": -1,
 	}
+	state.map["marketing_placements"] = placements
 
 	# 消耗一个 pending
 	var pending: Array = state.round_state[PENDING_KEY]
