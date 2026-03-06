@@ -22,10 +22,16 @@ static func configure_from_ruleset(ruleset) -> Result:
 		return Result.failure("PieceUiHintsRegistry.configure_from_ruleset: ruleset 为空")
 	if not (ruleset is Object):
 		return Result.failure("PieceUiHintsRegistry.configure_from_ruleset: ruleset 类型错误（期望 Object）")
+	if not ruleset.has_method("get_ui_extensions"):
+		return Result.failure("PieceUiHintsRegistry.configure_from_ruleset: ruleset 缺少 get_ui_extensions")
 
-	var list_val = ruleset.get("piece_ui_hints")
+	var ui_extensions = ruleset.get_ui_extensions()
+	if ui_extensions == null or not (ui_extensions is Object):
+		return Result.failure("PieceUiHintsRegistry.configure_from_ruleset: ruleset.get_ui_extensions() 返回值类型错误（期望 Object）")
+
+	var list_val = ui_extensions.get("piece_ui_hints")
 	if not (list_val is Array):
-		return Result.failure("PieceUiHintsRegistry.configure_from_ruleset: ruleset.piece_ui_hints 缺失或类型错误（期望 Array）")
+		return Result.failure("PieceUiHintsRegistry.configure_from_ruleset: ui_extensions.piece_ui_hints 缺失或类型错误（期望 Array）")
 
 	_hints_by_piece_id.clear()
 	_priority_by_piece_id.clear()

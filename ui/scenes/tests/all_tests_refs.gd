@@ -18,6 +18,7 @@ const MapOverlayProviderRegistryTestClass = preload("res://core/tests/map_overla
 const CallbackResultContractTestClass = preload("res://core/tests/callback_result_contract_test.gd")
 const ModuleBoundaryContractTestClass = preload("res://core/tests/module_boundary_contract_test.gd")
 const CoreArchitectureBoundaryContractTestClass = preload("res://core/tests/core_architecture_boundary_contract_test.gd")
+const RulesetUiExtensionsFacadeTestClass = preload("res://core/tests/ruleset_ui_extensions_facade_test.gd")
 const PlatformApiResponseParseTestClass = preload("res://core/tests/platform_api_response_parse_test.gd")
 const PlatformSessionProfileDeviceIdTestClass = preload("res://core/tests/platform_session_profile_device_id_test.gd")
 const UiLobbyistsRoadOverlaysHardRefContractTestClass = preload("res://ui/scenes/tests/ui_lobbyists_road_overlays_hard_ref_contract_test.gd")

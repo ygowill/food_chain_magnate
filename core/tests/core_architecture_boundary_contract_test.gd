@@ -12,23 +12,22 @@ const _CORE_TESTS_PATH := "res://core/tests/"
 
 const _UI_METADATA_ALLOWLIST := {
 	"phase_action_ui_modals": {
-		"res://core/modules/v2/ruleset.gd": true,
+		"res://core/modules/v2/ruleset/ui_extensions.gd": true,
 	},
 	"piece_ui_hints": {
-		"res://core/engine/game_engine/modules_v2.gd": true,
-		"res://core/modules/v2/ruleset.gd": true,
+		"res://core/modules/v2/ruleset/ui_extensions.gd": true,
 		"res://core/rules/piece_ui_hints_registry.gd": true,
 	},
 	"effect_ui_texts": {
-		"res://core/modules/v2/ruleset.gd": true,
+		"res://core/modules/v2/ruleset/ui_extensions.gd": true,
 		"res://core/rules/effect_ui_text_registry.gd": true,
 	},
 	"milestone_effect_ui_texts": {
-		"res://core/modules/v2/ruleset.gd": true,
+		"res://core/modules/v2/ruleset/ui_extensions.gd": true,
 		"res://core/rules/effect_ui_text_registry.gd": true,
 	},
 	"map_overlay_providers": {
-		"res://core/modules/v2/ruleset.gd": true,
+		"res://core/modules/v2/ruleset/ui_extensions.gd": true,
 		"res://core/rules/map_overlay_provider_registry.gd": true,
 	},
 	"ui_hide_if_not_initiatable": {

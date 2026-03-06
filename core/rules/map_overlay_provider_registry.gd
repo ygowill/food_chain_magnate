@@ -1,5 +1,5 @@
 # Map Overlay Provider Registry (modules-v2 aware)
-# Purpose: keep module-private map overlay state parsing out of core UI drawing code.
+# Purpose: keep module-private map_data ->通用 overlay 指令 out of core UI drawing code.
 class_name MapOverlayProviderRegistry
 extends RefCounted
 
@@ -23,13 +23,21 @@ static func configure_from_ruleset(ruleset) -> Result:
 		return Result.failure("MapOverlayProviderRegistry.configure_from_ruleset: ruleset 为空")
 	if not (ruleset is RulesetV2):
 		return Result.failure("MapOverlayProviderRegistry.configure_from_ruleset: ruleset 类型错误（期望 RulesetV2）")
-	if not (ruleset.map_overlay_providers is Array):
-		return Result.failure("MapOverlayProviderRegistry.configure_from_ruleset: ruleset.map_overlay_providers 缺失或类型错误（期望 Array）")
+	if not ruleset.has_method("get_ui_extensions"):
+		return Result.failure("MapOverlayProviderRegistry.configure_from_ruleset: ruleset 缺少 get_ui_extensions")
+
+	var ui_extensions = ruleset.get_ui_extensions()
+	if ui_extensions == null or not (ui_extensions is Object):
+		return Result.failure("MapOverlayProviderRegistry.configure_from_ruleset: ruleset.get_ui_extensions() 返回值类型错误（期望 Object）")
+
+	var provider_items = ui_extensions.get("map_overlay_providers")
+	if not (provider_items is Array):
+		return Result.failure("MapOverlayProviderRegistry.configure_from_ruleset: ui_extensions.map_overlay_providers 缺失或类型错误（期望 Array）")
 
 	_providers = []
 
-	for i in range(ruleset.map_overlay_providers.size()):
-		var item_val = ruleset.map_overlay_providers[i]
+	for i in range(provider_items.size()):
+		var item_val = provider_items[i]
 		if not (item_val is Dictionary):
 			return Result.failure("MapOverlayProviderRegistry: map_overlay_providers[%d] 类型错误（期望 Dictionary）" % i)
 		var item: Dictionary = item_val
@@ -153,4 +161,3 @@ static func _build_overlays(map_data: Dictionary) -> Dictionary:
 	if not marker_positions.is_empty():
 		out[_OVERLAY_KEY_ROADWORK_MARKERS] = marker_positions
 	return out
-
