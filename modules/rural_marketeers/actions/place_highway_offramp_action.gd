@@ -7,6 +7,7 @@ const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 const ParseHelpers = preload("res://core/state/serialization/parse_helpers.gd")
 
 const MODULE_ID := "rural_marketeers"
@@ -314,14 +315,16 @@ static func _has_airplane_at_pos(state: GameState, pos: Vector2i) -> Result:
 
 static func _has_airplane_overlap_at_connection_cell(state: GameState, connect_pos: Vector2i, side: String) -> Result:
 	# Airplane marketing occupies a segment on the same side; its anchor world_pos does not fully describe the range.
-	if state == null or not (state.map is Dictionary):
+	var map_read := MapStateAccessClass.require_map(state, "_has_airplane_overlap_at_connection_cell")
+	if not map_read.ok:
 		return Result.failure("_has_airplane_overlap_at_connection_cell: state.map 类型错误")
-	var placements_val = state.map.get("marketing_placements", null)
-	if placements_val == null:
+	var map: Dictionary = map_read.value
+	if not map.has("marketing_placements"):
 		return Result.success(false)
-	if not (placements_val is Dictionary):
-		return Result.failure("_has_airplane_overlap_at_connection_cell: state.map.marketing_placements 类型错误（期望 Dictionary）")
-	var placements: Dictionary = placements_val
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, "_has_airplane_overlap_at_connection_cell")
+	if not placements_read.ok:
+		return placements_read
+	var placements: Dictionary = placements_read.value
 	if placements.is_empty():
 		return Result.success(false)
 
