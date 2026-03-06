@@ -255,11 +255,10 @@ func _on_marketing_enter_extension(state: GameState, phase_manager: PhaseManager
 func _on_dinnertime_enter_before_primary(state: GameState, _phase_manager: PhaseManager) -> Result:
 	if state == null:
 		return Result.failure("%s: state 为空" % MODULE_ID)
-	if not (state.map is Dictionary):
-		return Result.failure("%s: state.map 类型错误（期望 Dictionary）" % MODULE_ID)
-	if not state.map.has("houses") or not (state.map["houses"] is Dictionary):
-		return Result.failure("%s: state.map.houses 缺失或类型错误（期望 Dictionary）" % MODULE_ID)
-	var houses: Dictionary = state.map["houses"]
+	var houses_read := MapStateAccessClass.require_houses(state, MODULE_ID)
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
 	if not houses.has(RURAL_HOUSE_ID) or not (houses[RURAL_HOUSE_ID] is Dictionary):
 		return Result.failure("%s: 缺少 rural_area（模块未正确初始化）" % MODULE_ID)
 	var rural: Dictionary = houses[RURAL_HOUSE_ID]
