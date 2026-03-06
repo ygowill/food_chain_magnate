@@ -5,6 +5,8 @@ const BankruptcyRulesClass = preload("res://core/rules/economy/bankruptcy_rules.
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const MODULE_ID := "coffee"
 const COFFEE_ID := "coffee"
@@ -178,8 +180,14 @@ func _dinnertime_route_coffee(state: GameState, ctx: Dictionary) -> Result:
 		if seller < 0 or seller >= state.players.size():
 			return Result.failure("coffee: seller 越界: %d" % seller)
 
-		var player: Dictionary = state.players[seller]
-		var inv: Dictionary = player.get("inventory", {})
+		var player_read := PlayerStateAccessClass.require_player(state, seller, "coffee:route:apply")
+		if not player_read.ok:
+			return player_read
+		var player: Dictionary = player_read.value
+		var inv_read := PlayerStateAccessClass.require_inventory(player, "player[%d]" % seller, "coffee:route:apply")
+		if not inv_read.ok:
+			return inv_read
+		var inv: Dictionary = inv_read.value
 		var before: int = int(inv.get(COFFEE_ID, 0))
 		if before <= 0:
 			return Result.failure("coffee: 库存不足（应在模拟阶段避免）: player=%d" % seller)
@@ -202,8 +210,10 @@ func _dinnertime_route_coffee(state: GameState, ctx: Dictionary) -> Result:
 static func _simulate_coffee_purchases(state: GameState, path: Array[Vector2i], stop_index: Dictionary, cup_breakdowns: Dictionary) -> Result:
 	var inv_left := {}
 	for pid in range(state.players.size()):
-		var player: Dictionary = state.players[pid]
-		var inv: Dictionary = player.get("inventory", {})
+		var inv_read := PlayerStateAccessClass.require_player_inventory(state, pid, "coffee:route:simulate")
+		if not inv_read.ok:
+			return inv_read
+		var inv: Dictionary = inv_read.value
 		inv_left[pid] = int(inv.get(COFFEE_ID, 0))
 
 	var purchases: Array[Dictionary] = []
@@ -260,9 +270,10 @@ static func _build_coffee_stop_index(state: GameState, exclude_restaurant_id: St
 	var out: Dictionary = {}
 
 	# restaurants
-	if not (state.map is Dictionary) or not state.map.has("restaurants") or not (state.map["restaurants"] is Dictionary):
-		return Result.failure("coffee: state.map.restaurants 缺失或类型错误（期望 Dictionary）")
-	var restaurants: Dictionary = state.map["restaurants"]
+	var restaurants_read := MapStateAccessClass.require_restaurants(state, "coffee:route:build_stop_index")
+	if not restaurants_read.ok:
+		return restaurants_read
+	var restaurants: Dictionary = restaurants_read.value
 	for rid_val in restaurants.keys():
 		var rid: String = str(rid_val)
 		if rid.is_empty() or rid == exclude_restaurant_id:
@@ -297,9 +308,10 @@ static func _build_coffee_stop_index(state: GameState, exclude_restaurant_id: St
 			out[k] = list
 
 	# coffee shops
-	if not state.map.has("coffee_shops") or not (state.map["coffee_shops"] is Dictionary):
-		return Result.failure("coffee: state.map.coffee_shops 缺失或类型错误（期望 Dictionary）")
-	var shops: Dictionary = state.map["coffee_shops"]
+	var shops_read := MapStateAccessClass.require_dict_field(state, "coffee_shops", "coffee:route:build_stop_index")
+	if not shops_read.ok:
+		return shops_read
+	var shops: Dictionary = shops_read.value
 	for sid_val in shops.keys():
 		var sid: String = str(sid_val)
 		if sid.is_empty():
@@ -508,8 +520,10 @@ static func _simulate_coffee_purchases_filtered(
 ) -> Result:
 	var inv_left := {}
 	for pid in range(state.players.size()):
-		var player: Dictionary = state.players[pid]
-		var inv: Dictionary = player.get("inventory", {})
+		var inv_read := PlayerStateAccessClass.require_player_inventory(state, pid, "coffee:route:simulate_filtered")
+		if not inv_read.ok:
+			return inv_read
+		var inv: Dictionary = inv_read.value
 		inv_left[pid] = int(inv.get(COFFEE_ID, 0))
 
 	var purchases: Array[Dictionary] = []
