@@ -403,6 +403,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.InitiateMarketingAirplaneOverlapStateAccessTestClass.run(2, 12345),
 		},
 		{
+			"name": "MapContextBuilderStateAccessTest",
+			"fn": func() -> Result: return TestRefs.MapContextBuilderStateAccessTestClass.run(2, 12345),
+		},
+		{
 			"name": "StateUpdaterInventoryStateAccessTest",
 			"fn": func() -> Result: return TestRefs.StateUpdaterInventoryStateAccessTestClass.run(2, 12345),
 		},

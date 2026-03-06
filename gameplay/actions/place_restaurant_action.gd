@@ -112,7 +112,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var rotation: int = int(params["rotation"])
 
 	# 构建地图上下文
-	var map_ctx := MapContextBuilderClass.build_context(state)
+	var map_ctx_read := MapContextBuilderClass.build_context_result(state, action_id)
+	if not map_ctx_read.ok:
+		return map_ctx_read
+	var map_ctx: Dictionary = map_ctx_read.value
 
 	# 构建建筑件注册表
 	var piece_registry := _get_piece_registry()
@@ -151,7 +154,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var player_id: int = command.actor
 
 	# 构建地图上下文和建筑件注册表
-	var map_ctx := MapContextBuilderClass.build_context(state)
+	var map_ctx_read := MapContextBuilderClass.build_context_result(state, action_id)
+	if not map_ctx_read.ok:
+		return map_ctx_read
+	var map_ctx: Dictionary = map_ctx_read.value
 	var piece_registry := _get_piece_registry()
 	var is_initial := state.phase == DefsClass.PHASE_SETUP
 

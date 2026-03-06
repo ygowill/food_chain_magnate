@@ -140,7 +140,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if int(rest["owner"]) != command.actor:
 		return Result.failure("只能移动自己的餐厅")
 
-	var map_ctx := MapContextBuilderClass.build_context(state)
+	var map_ctx_read := MapContextBuilderClass.build_context_result(state, action_id)
+	if not map_ctx_read.ok:
+		return map_ctx_read
+	var map_ctx: Dictionary = map_ctx_read.value
 	var piece_registry := _get_piece_registry()
 
 	assert(rest.has("cells") and (rest["cells"] is Array), "move_restaurant: restaurants[%s].cells 缺失或类型错误（期望 Array）" % rest_id)
@@ -174,7 +177,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	assert(rest_val is Dictionary, "move_restaurant: restaurants[%s] 类型错误（期望 Dictionary）" % rest_id)
 	var rest: Dictionary = rest_val
 
-	var map_ctx := MapContextBuilderClass.build_context(state)
+	var map_ctx_read := MapContextBuilderClass.build_context_result(state, action_id)
+	if not map_ctx_read.ok:
+		return map_ctx_read
+	var map_ctx: Dictionary = map_ctx_read.value
 	var piece_registry := _get_piece_registry()
 
 	assert(rest.has("cells") and (rest["cells"] is Array), "move_restaurant: restaurants[%s].cells 缺失或类型错误（期望 Array）" % rest_id)

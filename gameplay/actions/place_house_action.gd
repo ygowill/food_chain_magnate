@@ -122,7 +122,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("放置房屋/花园本子阶段已用完: %d/%d" % [used, capacity])
 
 	# 构建地图上下文
-	var map_ctx := MapContextBuilderClass.build_context(state)
+	var map_ctx_read := MapContextBuilderClass.build_context_result(state, action_id)
+	if not map_ctx_read.ok:
+		return map_ctx_read
+	var map_ctx: Dictionary = map_ctx_read.value
 
 	# 构建建筑件注册表
 	var piece_registry := _get_piece_registry()
@@ -148,7 +151,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var player_id: int = command.actor
 
 	# 构建地图上下文和建筑件注册表
-	var map_ctx := MapContextBuilderClass.build_context(state)
+	var map_ctx_read := MapContextBuilderClass.build_context_result(state, action_id)
+	if not map_ctx_read.ok:
+		return map_ctx_read
+	var map_ctx: Dictionary = map_ctx_read.value
 	var piece_registry := _get_piece_registry()
 
 	# 获取验证结果 (包含 footprint_cells)
