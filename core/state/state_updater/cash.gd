@@ -1,23 +1,21 @@
 extends RefCounted
 
 const BankStateAccessClass = preload("res://core/state/bank_state_access.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 # === 现金操作 ===
 
 static func _require_player_cash(state: GameState, player_id: int, caller: String) -> Result:
-	if not (state.players is Array):
-		return Result.failure("%s: state.players 类型错误（期望 Array）" % caller)
-	if player_id < 0 or player_id >= state.players.size():
-		return Result.failure("%s: player_id 越界: %d" % [caller, player_id])
-	var player_val = state.players[player_id]
-	if not (player_val is Dictionary):
-		return Result.failure("%s: players[%d] 类型错误（期望 Dictionary）" % [caller, player_id])
-	var player: Dictionary = player_val
-	if not player.has("cash") or not (player["cash"] is int):
-		return Result.failure("%s: players[%d].cash 缺失或类型错误（期望 int）" % [caller, player_id])
+	var player_read := PlayerStateAccessClass.require_player(state, player_id, caller)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	var cash_read := PlayerStateAccessClass.require_int_field(player, "cash", "player[%d]" % player_id, caller)
+	if not cash_read.ok:
+		return cash_read
 	return Result.success({
 		"player": player,
-		"cash": int(player["cash"]),
+		"cash": int(cash_read.value),
 	})
 
 static func _require_bank_total(state: GameState, caller: String) -> Result:
@@ -152,22 +150,14 @@ static func player_pay_to_player(state: GameState, from_id: int, to_id: int, amo
 
 # 直接设置玩家现金（慎用，主要用于初始化）
 static func set_player_cash(state: GameState, player_id: int, amount: int) -> Result:
-	if state == null:
-		return Result.failure("set_player_cash: state 为空")
-	if not (state.players is Array):
-		return Result.failure("set_player_cash: state.players 类型错误（期望 Array）")
-	if player_id < 0 or player_id >= state.players.size():
-		return Result.failure("无效的玩家ID: %d" % player_id)
-
 	if amount < 0:
 		return Result.failure("现金不能为负: %d" % amount)
 
-	var player_val = state.players[player_id]
-	if not (player_val is Dictionary):
-		return Result.failure("set_player_cash: players[%d] 类型错误（期望 Dictionary）" % player_id)
-	var player: Dictionary = player_val
-	if not player.has("cash") or not (player["cash"] is int):
-		return Result.failure("set_player_cash: players[%d].cash 缺失或类型错误（期望 int）" % player_id)
-
-	state.players[player_id]["cash"] = amount
+	var ctx_read := _require_player_cash(state, player_id, "set_player_cash")
+	if not ctx_read.ok:
+		return ctx_read
+	var ctx: Dictionary = ctx_read.value
+	var player: Dictionary = ctx["player"]
+	player["cash"] = amount
+	state.players[player_id] = player
 	return Result.success()
