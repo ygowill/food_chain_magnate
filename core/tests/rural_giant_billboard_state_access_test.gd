@@ -15,7 +15,13 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_validate_specific_fails_fast_on_invalid_rural_area_type(seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_apply_changes_writes_giant_billboard(seed_val)
+	if not r.ok:
+		return r
+	r = _test_apply_changes_fails_fast_without_partial_mutation(seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 5})
 
 static func _make_state(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -96,4 +102,41 @@ static func _test_validate_specific_fails_fast_on_invalid_rural_area_type(seed_v
 	var err := str(result.error)
 	if err.find("缺少 rural_area") < 0:
 		return Result.failure("错误信息应提示 rural_area 无效，实际: %s" % err)
+	return Result.success()
+
+static func _test_apply_changes_writes_giant_billboard(seed_val: int) -> Result:
+	var state_r := _make_state(seed_val)
+	if not state_r.ok:
+		return Result.failure("初始化失败(case4): %s" % state_r.error)
+	var state: GameState = state_r.value
+	var action = ActionClass.new()
+	var result := action._apply_changes(state, _make_command())
+	if not result.ok:
+		return Result.failure("_apply_changes 不应失败: %s" % result.error)
+	var boards: Dictionary = state.map["houses"]["rural_area"]["giant_billboards"]
+	if not boards.has("N"):
+		return Result.failure("giant_billboards 应写入 N 边")
+	if Array(state.players[0].get("employees", [])).has("rural_marketeer"):
+		return Result.failure("成功后 employees 不应保留 rural_marketeer")
+	if not Array(state.players[0].get("busy_marketers", [])).has("rural_marketeer"):
+		return Result.failure("成功后 busy_marketers 应包含 rural_marketeer")
+	return Result.success()
+
+static func _test_apply_changes_fails_fast_without_partial_mutation(seed_val: int) -> Result:
+	var state_r := _make_state(seed_val)
+	if not state_r.ok:
+		return Result.failure("初始化失败(case5): %s" % state_r.error)
+	var state: GameState = state_r.value
+	state.map.erase("houses")
+	var action = ActionClass.new()
+	var result := action._apply_changes(state, _make_command())
+	if result.ok:
+		return Result.failure("缺失 houses 时应失败")
+	var err := str(result.error)
+	if err.find("state.map.houses") < 0:
+		return Result.failure("错误信息应包含 state.map.houses，实际: %s" % err)
+	if not Array(state.players[0].get("employees", [])).has("rural_marketeer"):
+		return Result.failure("失败时不应提前移除 rural_marketeer")
+	if Array(state.players[0].get("busy_marketers", [])).has("rural_marketeer"):
+		return Result.failure("失败时不应提前写入 busy_marketers")
 	return Result.success()

@@ -141,10 +141,15 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return product_read
 	var product: String = product_read.value
 
-	if not (state.map is Dictionary):
-		return Result.failure("state.map 类型错误（期望 Dictionary）")
-	var houses: Dictionary = state.map["houses"]
+	var houses_read := MapStateAccessClass.require_houses(state, action_id)
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
+	if not houses.has(RURAL_HOUSE_ID) or not (houses[RURAL_HOUSE_ID] is Dictionary):
+		return Result.failure("缺少 rural_area（模块未正确初始化）")
 	var rural: Dictionary = houses[RURAL_HOUSE_ID]
+	if not rural.has("giant_billboards") or not (rural["giant_billboards"] is Dictionary):
+		return Result.failure("rural_area.giant_billboards 缺失或类型错误（期望 Dictionary）")
 	var boards: Dictionary = rural["giant_billboards"]
 
 	# 将 rural_marketeer 从在岗移到忙碌（永久）
