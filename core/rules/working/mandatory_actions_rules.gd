@@ -5,14 +5,16 @@ extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const RoundStatePlayerStringListsClass = preload("res://core/utils/round_state_player_string_lists.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 # 查找提供某个强制动作的员工（用于 gameplay/actions 的强制动作执行器）
 static func find_provider_employee_id(player: Dictionary, mandatory_action_id: String) -> String:
 	if mandatory_action_id.is_empty():
 		return ""
 
-	assert(player.has("employees") and (player["employees"] is Array), "MandatoryActionsRules.find_provider_employee_id: player.employees 缺失或类型错误（期望 Array[String]）")
-	var employees: Array = player["employees"]
+	var employees_read := PlayerStateAccessClass.require_employees(player, "player", "MandatoryActionsRules.find_provider_employee_id")
+	assert(employees_read.ok, employees_read.error)
+	var employees: Array = employees_read.value
 	for i in range(employees.size()):
 		var emp_val = employees[i]
 		assert(emp_val is String, "MandatoryActionsRules.find_provider_employee_id: player.employees[%d] 类型错误（期望 String）" % i)
@@ -101,8 +103,9 @@ static func check_mandatory_actions_completed(state: GameState) -> Result:
 # 获取玩家必须执行的强制动作列表
 static func get_required_mandatory_actions(player: Dictionary) -> Array[String]:
 	var required: Array[String] = []
-	assert(player.has("employees") and (player["employees"] is Array), "MandatoryActionsRules.get_required_mandatory_actions: player.employees 缺失或类型错误（期望 Array[String]）")
-	var employees: Array = player["employees"]
+	var employees_read := PlayerStateAccessClass.require_employees(player, "player", "MandatoryActionsRules.get_required_mandatory_actions")
+	assert(employees_read.ok, employees_read.error)
+	var employees: Array = employees_read.value
 
 	for i in range(employees.size()):
 		var emp_val = employees[i]
