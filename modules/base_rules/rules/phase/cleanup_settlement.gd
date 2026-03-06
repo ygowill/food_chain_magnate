@@ -9,6 +9,7 @@ const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_q
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
@@ -170,12 +171,11 @@ static func _open_opening_soon_restaurants(state: GameState) -> Result:
 		return Result.failure("CleanupSettlement: state 为空")
 	if not (state.round_state is Dictionary):
 		return Result.failure("CleanupSettlement: state.round_state 类型错误（期望 Dictionary）")
-	if not (state.map is Dictionary):
-		return Result.failure("CleanupSettlement: state.map 类型错误（期望 Dictionary）")
-	if not state.map.has("restaurants") or not (state.map["restaurants"] is Dictionary):
-		return Result.failure("CleanupSettlement: state.map.restaurants 缺失或类型错误（期望 Dictionary）")
 	if not (state.players is Array):
 		return Result.failure("CleanupSettlement: state.players 类型错误（期望 Array）")
+	var restaurants_read := MapStateAccessClass.require_restaurants(state, "CleanupSettlement")
+	if not restaurants_read.ok:
+		return restaurants_read
 
 	var pending_val = state.round_state.get(ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY, null)
 	if pending_val == null:
@@ -187,7 +187,7 @@ static func _open_opening_soon_restaurants(state: GameState) -> Result:
 		return Result.success()
 
 	var warnings: Array[String] = []
-	var restaurants: Dictionary = state.map["restaurants"]
+	var restaurants: Dictionary = restaurants_read.value
 
 	for i in range(pending.size()):
 		var entry_val = pending[i]
@@ -236,13 +236,14 @@ static func _open_opening_soon_restaurants(state: GameState) -> Result:
 		}
 
 		# 玩家餐厅列表
-		var p_val = state.players[owner]
-		if not (p_val is Dictionary):
-			return Result.failure("CleanupSettlement: players[%d] 类型错误（期望 Dictionary）" % owner)
-		var player: Dictionary = p_val
-		if not player.has("restaurants") or not (player["restaurants"] is Array):
-			return Result.failure("CleanupSettlement: players[%d].restaurants 缺失或类型错误（期望 Array）" % owner)
-		var plist: Array = player["restaurants"]
+		var player_read := PlayerStateAccessClass.require_player(state, owner, "CleanupSettlement")
+		if not player_read.ok:
+			return player_read
+		var player: Dictionary = player_read.value
+		var plist_read := PlayerStateAccessClass.require_restaurants(player, "player[%d]" % owner, "CleanupSettlement")
+		if not plist_read.ok:
+			return plist_read
+		var plist: Array = plist_read.value
 		if not plist.has(rid):
 			plist.append(rid)
 		player["restaurants"] = plist
