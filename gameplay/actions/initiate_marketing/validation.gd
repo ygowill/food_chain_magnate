@@ -183,82 +183,9 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 				return Result.failure("飞机不能飞出棋盘：长度=%d start_x=%d (min=%d max=%d)" % [length, start_x, minp2.x, maxp2.x])
 
 		# Prevent airplane vs airplane overlap on the same side (outside area).
-		var placements2: Dictionary = state.map.get("marketing_placements", {})
-		if placements2 is Dictionary and not placements2.is_empty():
-			var side := ""
-			var seg_start := 0
-			var seg_end := 0
-			if axis == "row":
-				side = "W" if world_pos.x == minp2.x else "E"
-				seg_start = world_pos.y
-				seg_end = world_pos.y + length - 1
-			else:
-				side = "N" if world_pos.y == minp2.y else "S"
-				seg_start = world_pos.x
-				seg_end = world_pos.x + length - 1
-
-			for k2 in placements2.keys():
-				var pv = placements2[k2]
-				if not (pv is Dictionary):
-					continue
-				var p2: Dictionary = pv
-				if str(p2.get("type", "")) != "airplane":
-					continue
-				var wp2_val = p2.get("world_pos", null)
-				if not (wp2_val is Vector2i):
-					continue
-				var wp2: Vector2i = wp2_val
-				var axis2 := str(p2.get("axis", "")).strip_edges()
-				if axis2 != "row" and axis2 != "col":
-					axis2 = _infer_airplane_axis(state, wp2, Vector2i.ONE)
-				if axis2 != axis:
-					continue
-
-				var fs2_val = p2.get("footprint_size", null)
-				var fs2 := Vector2i.ONE
-				if fs2_val is Vector2i:
-					fs2 = Vector2i(fs2_val)
-				elif fs2_val is Array:
-					var a2: Array = fs2_val
-					if a2.size() == 2:
-						fs2 = Vector2i(int(a2[0]), int(a2[1]))
-				var len2 := 0
-				if fs2.x == 2 and fs2.y != 2:
-					len2 = fs2.y
-				elif fs2.y == 2 and fs2.x != 2:
-					len2 = fs2.x
-				else:
-					len2 = maxi(fs2.x, fs2.y)
-				if len2 <= 0:
-					continue
-
-				var side2 := ""
-				var start2 := 0
-				var end2 := 0
-				if axis2 == "row":
-					if wp2.x == minp2.x:
-						side2 = "W"
-					elif wp2.x == maxp2.x or wp2.x == (maxp2.x - (thickness - 1)):
-						side2 = "E"
-					else:
-						continue
-					start2 = wp2.y
-					end2 = wp2.y + len2 - 1
-				else:
-					if wp2.y == minp2.y:
-						side2 = "N"
-					elif wp2.y == maxp2.y or wp2.y == (maxp2.y - (thickness - 1)):
-						side2 = "S"
-					else:
-						continue
-					start2 = wp2.x
-					end2 = wp2.x + len2 - 1
-
-				if side2 != side:
-					continue
-				var overlaps := not (seg_end < start2 or seg_start > end2)
-				if overlaps:
-					return Result.failure("飞机与已有飞机占用同一边并重叠: %s" % side)
+		var airplane_overlap := _validate_airplane_overlap(state, world_pos, axis, thickness, length)
+		if not airplane_overlap.ok:
+			return airplane_overlap
 
 		return Result.success()
 
@@ -403,6 +330,99 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 			axis = _infer_airplane_axis(state, world_pos, size)
 		if axis != "row" and axis != "col":
 			return Result.failure("飞机缺少 axis（row/col）")
+
+	return Result.success()
+
+static func _validate_airplane_overlap(
+	state: GameState,
+	world_pos: Vector2i,
+	axis: String,
+	thickness: int,
+	length: int
+) -> Result:
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, "airplane overlap")
+	if not placements_read.ok:
+		return placements_read
+	var placements: Dictionary = placements_read.value
+	if placements.is_empty():
+		return Result.success()
+
+	var minp := CoordsClass.get_world_min(state)
+	var maxp := CoordsClass.get_world_max(state)
+	var side := ""
+	var seg_start := 0
+	var seg_end := 0
+	if axis == "row":
+		side = "W" if world_pos.x == minp.x else "E"
+		seg_start = world_pos.y
+		seg_end = world_pos.y + length - 1
+	else:
+		side = "N" if world_pos.y == minp.y else "S"
+		seg_start = world_pos.x
+		seg_end = world_pos.x + length - 1
+
+	for key in placements.keys():
+		var p_val = placements[key]
+		if not (p_val is Dictionary):
+			continue
+		var placement: Dictionary = p_val
+		if str(placement.get("type", "")) != "airplane":
+			continue
+		var wp_val = placement.get("world_pos", null)
+		if not (wp_val is Vector2i):
+			continue
+		var existing_world_pos: Vector2i = wp_val
+		var existing_axis := str(placement.get("axis", "")).strip_edges()
+		if existing_axis != "row" and existing_axis != "col":
+			existing_axis = _infer_airplane_axis(state, existing_world_pos, Vector2i.ONE)
+		if existing_axis != axis:
+			continue
+
+		var footprint_val = placement.get("footprint_size", null)
+		var footprint := Vector2i.ONE
+		if footprint_val is Vector2i:
+			footprint = Vector2i(footprint_val)
+		elif footprint_val is Array:
+			var footprint_arr: Array = footprint_val
+			if footprint_arr.size() == 2:
+				footprint = Vector2i(int(footprint_arr[0]), int(footprint_arr[1]))
+		var existing_length := 0
+		if footprint.x == 2 and footprint.y != 2:
+			existing_length = footprint.y
+		elif footprint.y == 2 and footprint.x != 2:
+			existing_length = footprint.x
+		else:
+			existing_length = maxi(footprint.x, footprint.y)
+		if existing_length <= 0:
+			continue
+
+		var existing_side := ""
+		var existing_start := 0
+		var existing_end := 0
+		if existing_axis == "row":
+			if existing_world_pos.x == minp.x:
+				existing_side = "W"
+			elif existing_world_pos.x == maxp.x or existing_world_pos.x == (maxp.x - (thickness - 1)):
+				existing_side = "E"
+			else:
+				continue
+			existing_start = existing_world_pos.y
+			existing_end = existing_world_pos.y + existing_length - 1
+		else:
+			if existing_world_pos.y == minp.y:
+				existing_side = "N"
+			elif existing_world_pos.y == maxp.y or existing_world_pos.y == (maxp.y - (thickness - 1)):
+				existing_side = "S"
+			else:
+				continue
+			existing_start = existing_world_pos.x
+			existing_end = existing_world_pos.x + existing_length - 1
+
+		if existing_side != side:
+			continue
+		var overlaps := not (seg_end < existing_start or seg_start > existing_end)
+		if overlaps:
+			return Result.failure("飞机与已有飞机占用同一边并重叠: %s" % side)
 
 	return Result.success()
 

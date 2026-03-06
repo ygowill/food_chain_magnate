@@ -88,6 +88,7 @@ const ChooseFridgeKeepStateAccessTestClass = preload("res://core/tests/choose_fr
 const ChooseKimchiStorageStateAccessTestClass = preload("res://core/tests/choose_kimchi_storage_state_access_test.gd")
 const InitiateMarketingActionStateAccessTestClass = preload("res://core/tests/initiate_marketing_action_state_access_test.gd")
 const InitiateMarketingOverlapStateAccessTestClass = preload("res://core/tests/initiate_marketing_overlap_state_access_test.gd")
+const InitiateMarketingAirplaneOverlapStateAccessTestClass = preload("res://core/tests/initiate_marketing_airplane_overlap_state_access_test.gd")
 const StateUpdaterInventoryStateAccessTestClass = preload("res://core/tests/state_updater_inventory_state_access_test.gd")
 const StateUpdaterCashStateAccessTestClass = preload("res://core/tests/state_updater_cash_state_access_test.gd")
 const TrainActionStateAccessTestClass = preload("res://core/tests/train_action_state_access_test.gd")
