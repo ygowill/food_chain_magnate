@@ -106,6 +106,7 @@ const NewRestaurantMailboxStateAccessTestClass = preload("res://core/tests/new_r
 const PizzaRadioStateAccessTestClass = preload("res://core/tests/pizza_radio_state_access_test.gd")
 const BrandManagerAirplaneSecondGoodStateAccessTestClass = preload("res://core/tests/brand_manager_airplane_second_good_state_access_test.gd")
 const CampaignManagerSecondTileStateAccessTestClass = preload("res://core/tests/campaign_manager_second_tile_state_access_test.gd")
+const NewMilestonesBrandDirectorStateAccessTestClass = preload("res://core/tests/new_milestones_brand_director_state_access_test.gd")
 const NewMilestonesPizzaPendingStateAccessTestClass = preload("res://core/tests/new_milestones_pizza_pending_state_access_test.gd")
 const CleanupInventoryTestClass = preload("res://core/tests/cleanup_inventory_test.gd")
 const FireActionTestClass = preload("res://core/tests/fire_action_test.gd")

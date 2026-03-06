@@ -1,6 +1,7 @@
 extends RefCounted
 
 const UtilsClass = preload("res://modules/new_milestones/rules/utils.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const MODULE_ID := "new_milestones"
 
@@ -209,9 +210,10 @@ func _on_marketing_initiated_brand_director(state: GameState, command: Command, 
 	if StateUpdater.player_has_milestone(state, int(command.actor), MILESTONE_ID_BRAND_DIRECTOR):
 		if str(marketing_instance.get("type", "")) == "radio":
 			marketing_instance["remaining_duration"] = -1
-			if state.map is Dictionary and state.map.has("marketing_placements") and state.map["marketing_placements"] is Dictionary:
-				var placements: Dictionary = state.map["marketing_placements"]
-				var key := str(int(marketing_instance.get("board_number", -1)))
+			var placements_read := MapStateAccessClass.require_marketing_placements(state, BD_PROVIDER_ID)
+			var key := str(int(marketing_instance.get("board_number", -1)))
+			if placements_read.ok:
+				var placements: Dictionary = placements_read.value
 				if placements.has(key) and (placements[key] is Dictionary):
 					var p: Dictionary = placements[key]
 					p["remaining_duration"] = -1

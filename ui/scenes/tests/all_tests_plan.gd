@@ -471,6 +471,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.CampaignManagerSecondTileStateAccessTestClass.run(2, 12345),
 		},
 		{
+			"name": "NewMilestonesBrandDirectorStateAccessTest",
+			"fn": func() -> Result: return TestRefs.NewMilestonesBrandDirectorStateAccessTestClass.run(2, 12345),
+		},
+		{
 			"name": "NewMilestonesPizzaPendingStateAccessTest",
 			"fn": func() -> Result: return TestRefs.NewMilestonesPizzaPendingStateAccessTestClass.run(2, 12345),
 		},
