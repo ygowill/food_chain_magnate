@@ -458,14 +458,10 @@ static func _infer_airplane_axis(state: GameState, pos: Vector2i, size: Vector2i
 
 static func _has_marketing_overlap_excluding_airplane(state: GameState, footprint_cells: Array[Vector2i]) -> Result:
 	# Keep UI/core rules consistent: airplane marketing is outside the board and should not block on-board marketing.
-	if state == null or not (state.map is Dictionary):
-		return Result.failure("marketing overlap: state.map 类型错误")
-	var placements_val = state.map.get("marketing_placements", null)
-	if placements_val == null:
-		return Result.success(false)
-	if not (placements_val is Dictionary):
-		return Result.failure("marketing overlap: state.map.marketing_placements 类型错误（期望 Dictionary）")
-	var placements: Dictionary = placements_val
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, "marketing overlap")
+	if not placements_read.ok:
+		return placements_read
+	var placements: Dictionary = placements_read.value
 	if placements.is_empty():
 		return Result.success(false)
 

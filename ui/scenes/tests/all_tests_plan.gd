@@ -395,6 +395,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.InitiateMarketingActionStateAccessTestClass.run(2, 12345),
 		},
 		{
+			"name": "InitiateMarketingOverlapStateAccessTest",
+			"fn": func() -> Result: return TestRefs.InitiateMarketingOverlapStateAccessTestClass.run(2, 12345),
+		},
+		{
 			"name": "StateUpdaterInventoryStateAccessTest",
 			"fn": func() -> Result: return TestRefs.StateUpdaterInventoryStateAccessTestClass.run(2, 12345),
 		},
