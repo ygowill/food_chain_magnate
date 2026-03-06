@@ -12,6 +12,7 @@ const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const Phase = PhaseDefsClass.Phase
 
@@ -159,9 +160,10 @@ func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -
 			var house_id: String = str(house_id_val)
 			if house_id.is_empty():
 				continue
-			if not (state.map is Dictionary and state.map.has("houses") and state.map["houses"] is Dictionary):
-				return Result.failure("new_milestones:pizza: state.map.houses 缺失或类型错误")
-			var houses: Dictionary = state.map["houses"]
+			var houses_read := MapStateAccessClass.require_houses(state, "new_milestones:pizza")
+			if not houses_read.ok:
+				return houses_read
+			var houses: Dictionary = houses_read.value
 			if not houses.has(house_id):
 				return Result.failure("new_milestones:pizza: houses 缺少 house_id: %s" % house_id)
 			var house_val = houses[house_id]
