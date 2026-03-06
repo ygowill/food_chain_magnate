@@ -21,18 +21,43 @@ static func _resolve_provider_path() -> String:
 	var p := str(v).strip_edges()
 	return p
 
-static func build_registry(phase_manager: PhaseManager, piece_registry: Dictionary = {}) -> ActionRegistry:
-	assert(phase_manager != null, "phase_manager 不能为空")
+static func _resolve_provider(provider_override = null):
+	if provider_override != null:
+		if provider_override is String:
+			var injected_path := str(provider_override).strip_edges()
+			if injected_path.is_empty():
+				AutoloadAccessClass.log_error("ActionSetup", "注入的动作注册 provider path 为空")
+				return null
+			var injected_provider = load(injected_path)
+			if injected_provider == null:
+				AutoloadAccessClass.log_error("ActionSetup", "缺少注入的动作注册 provider: %s" % injected_path)
+				return null
+			if not injected_provider.has_method("build_registry"):
+				AutoloadAccessClass.log_error("ActionSetup", "注入的动作注册 provider 缺少 build_registry: %s" % injected_path)
+				return null
+			return injected_provider
+		if provider_override.has_method("build_registry"):
+			return provider_override
+		AutoloadAccessClass.log_error("ActionSetup", "注入的动作注册 provider 类型错误（缺少 build_registry）")
+		return null
 
 	var provider_path := _resolve_provider_path()
 	if provider_path.is_empty():
 		AutoloadAccessClass.log_error("ActionSetup", "未配置动作注册 provider（override 或 ProjectSettings.%s）" % PROVIDER_PATH_SETTING)
-		return ActionRegistry.new()
+		return null
 	var provider = load(provider_path)
 	if provider == null:
 		AutoloadAccessClass.log_error("ActionSetup", "缺少动作注册 provider: %s" % provider_path)
-		return ActionRegistry.new()
+		return null
 	if provider.has_method("build_registry"):
-		return provider.build_registry(phase_manager, piece_registry)
+		return provider
 	AutoloadAccessClass.log_error("ActionSetup", "动作注册 provider 缺少 build_registry: %s" % provider_path)
-	return ActionRegistry.new()
+	return null
+
+static func build_registry(phase_manager: PhaseManager, piece_registry: Dictionary = {}, provider_override = null) -> ActionRegistry:
+	assert(phase_manager != null, "phase_manager 不能为空")
+
+	var provider = _resolve_provider(provider_override)
+	if provider == null:
+		return ActionRegistry.new()
+	return provider.build_registry(phase_manager, piece_registry)

@@ -20,6 +20,7 @@ const ModuleBoundaryContractTestClass = preload("res://core/tests/module_boundar
 const CoreArchitectureBoundaryContractTestClass = preload("res://core/tests/core_architecture_boundary_contract_test.gd")
 const RulesetUiExtensionsFacadeTestClass = preload("res://core/tests/ruleset_ui_extensions_facade_test.gd")
 const CatalogRegistryBundleIsolationTestClass = preload("res://core/tests/catalog_registry_bundle_isolation_test.gd")
+const EngineDependenciesInjectionTestClass = preload("res://core/tests/engine_dependencies_injection_test.gd")
 const PlatformApiResponseParseTestClass = preload("res://core/tests/platform_api_response_parse_test.gd")
 const PlatformSessionProfileDeviceIdTestClass = preload("res://core/tests/platform_session_profile_device_id_test.gd")
 const UiLobbyistsRoadOverlaysHardRefContractTestClass = preload("res://ui/scenes/tests/ui_lobbyists_road_overlays_hard_ref_contract_test.gd")

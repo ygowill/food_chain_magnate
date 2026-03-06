@@ -22,6 +22,7 @@ const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
+const GameEngineDependenciesClass = preload("res://core/engine/game_engine/dependencies.gd")
 
 # === 核心组件 ===
 var state: GameState
@@ -37,6 +38,7 @@ var content_catalog_v2 = null  # ContentCatalog
 var ruleset_v2 = null  # RulesetV2
 var modules_v2_base_dir: String = ""
 var catalog_registry_bundle = CatalogRegistryBundleClass.new()
+var dependencies = GameEngineDependenciesClass.new()
 
 # === 命令历史 ===
 var command_history: Array[Command] = []
@@ -73,6 +75,18 @@ func get_catalog_registry_bundle():
 	if catalog_registry_bundle == null:
 		catalog_registry_bundle = CatalogRegistryBundleClass.new()
 	return catalog_registry_bundle
+
+func get_dependencies():
+	if dependencies == null:
+		dependencies = GameEngineDependenciesClass.new()
+	return dependencies
+
+func set_action_setup_provider(provider) -> void:
+	get_dependencies().action_setup_provider = provider
+
+func set_command_runner_event_build_provider(provider) -> void:
+	get_dependencies().command_runner_event_build_provider = provider
+	CommandRunnerClass.clear_event_build_provider_cache()
 
 func ensure_initialized() -> Result:
 	activate_registry_bundles()
@@ -185,6 +199,7 @@ func dispose() -> void:
 	ruleset_v2 = null
 	modules_v2_base_dir = ""
 	catalog_registry_bundle = null
+	dependencies = null
 
 	_initial_total_cash = 0
 	_initial_employee_totals.clear()

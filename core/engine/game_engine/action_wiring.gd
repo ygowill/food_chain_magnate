@@ -11,7 +11,10 @@ static func setup_action_registry(engine, piece_registry: Dictionary = {}) -> Re
 	if engine.phase_manager == null:
 		return Result.failure("内部错误：PhaseManager 为空")
 
-	engine.action_registry = ActionSetupClass.build_registry(engine.phase_manager, piece_registry)
+	var action_setup_provider = null
+	if engine.has_method("get_dependencies") and engine.get_dependencies() != null:
+		action_setup_provider = engine.get_dependencies().action_setup_provider
+	engine.action_registry = ActionSetupClass.build_registry(engine.phase_manager, piece_registry, action_setup_provider)
 	var registry: ActionRegistry = engine.action_registry
 
 	var ruleset = engine.ruleset_v2

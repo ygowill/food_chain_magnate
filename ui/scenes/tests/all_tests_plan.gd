@@ -91,6 +91,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.CatalogRegistryBundleIsolationTestClass.run(),
 		},
 		{
+			"name": "EngineDependenciesInjectionTest",
+			"fn": func() -> Result: return TestRefs.EngineDependenciesInjectionTestClass.run(),
+		},
+		{
 			"name": "PlatformApiResponseParseTest",
 			"fn": func() -> Result: return TestRefs.PlatformApiResponseParseTestClass.run(),
 		},

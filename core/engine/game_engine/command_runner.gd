@@ -27,7 +27,33 @@ static func _resolve_event_build_provider_path() -> String:
 		return ""
 	return str(v).strip_edges()
 
-static func _get_event_build_provider():
+static func _resolve_injected_event_build_provider(provider_override):
+	if provider_override == null:
+		return null
+	if provider_override is String:
+		var injected_path := str(provider_override).strip_edges()
+		if injected_path.is_empty():
+			AutoloadAccessClass.log_error("CommandRunner", "注入的事件构建 provider path 为空")
+			return null
+		var injected_provider = load(injected_path)
+		if injected_provider == null:
+			AutoloadAccessClass.log_error("CommandRunner", "缺少注入的事件构建 provider: %s" % injected_path)
+			return null
+		if not injected_provider.has_method("build_player_cash_changed_events") or not injected_provider.has_method("build_milestone_achieved_events"):
+			AutoloadAccessClass.log_error("CommandRunner", "注入的事件构建 provider 缺少必需方法: %s" % injected_path)
+			return null
+		return injected_provider
+	if provider_override.has_method("build_player_cash_changed_events") and provider_override.has_method("build_milestone_achieved_events"):
+		return provider_override
+	AutoloadAccessClass.log_error("CommandRunner", "注入的事件构建 provider 类型错误（缺少必需方法）")
+	return null
+
+static func _get_event_build_provider(engine: GameEngine = null):
+	if engine != null and engine.has_method("get_dependencies") and engine.get_dependencies() != null:
+		var injected_provider = _resolve_injected_event_build_provider(engine.get_dependencies().command_runner_event_build_provider)
+		if injected_provider != null:
+			return injected_provider
+
 	var provider_path := _resolve_event_build_provider_path()
 	if provider_path.is_empty():
 		return null
@@ -96,7 +122,7 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 
 	# 生成事件
 	var events := executor.generate_events(old_state, new_state, command)
-	var event_build_provider = _get_event_build_provider()
+	var event_build_provider = _get_event_build_provider(engine)
 	if event_build_provider != null:
 		events.append_array(event_build_provider.build_player_cash_changed_events(old_state, new_state, command))
 
