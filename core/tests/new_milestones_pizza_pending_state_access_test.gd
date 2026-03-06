@@ -14,13 +14,19 @@ static func run(player_count: int = 2, seed_val: int = 880011) -> Result:
 	var r := _test_after_dinnertime_primary_builds_pizza_pending(seed_val)
 	if not r.ok:
 		return r
+	r = _test_after_dinnertime_primary_is_fail_soft_without_marketing_placements(seed_val)
+	if not r.ok:
+		return r
+	r = _test_after_dinnertime_primary_is_fail_soft_on_invalid_marketing_placements_type(seed_val)
+	if not r.ok:
+		return r
 	r = _test_after_dinnertime_primary_fails_fast_on_missing_houses(seed_val)
 	if not r.ok:
 		return r
 	r = _test_after_dinnertime_primary_fails_fast_on_invalid_anchor_pos(seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	return Result.success({"cases": 5})
 
 static func _make_engine_state(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -69,6 +75,42 @@ static func _test_after_dinnertime_primary_builds_pizza_pending(seed_val: int) -
 	var pending: Array = pending_val
 	if pending.size() != 1:
 		return Result.failure("pizza pending 应为 1，实际: %d" % pending.size())
+	return Result.success()
+
+static func _test_after_dinnertime_primary_is_fail_soft_without_marketing_placements(seed_val: int) -> Result:
+	var built := _make_engine_state(seed_val)
+	if not built.ok:
+		return built
+	var payload: Dictionary = built.value
+	var engine: GameEngine = payload["engine"]
+	var state: GameState = payload["state"]
+	state.map.erase("marketing_placements")
+	var entry = EntryClass.new()
+	var result := entry._after_dinnertime_primary(state, engine.phase_manager)
+	if not result.ok:
+		return Result.failure("缺失 marketing_placements 时应保持 fail-soft，实际: %s" % result.error)
+	if state.round_state.has(PIZZA_PENDING_KEY):
+		return Result.failure("缺失 marketing_placements 时不应写入 pizza pending，实际: %s" % str(state.round_state.get(PIZZA_PENDING_KEY, null)))
+	if state.round_state.has("pending_phase_actions"):
+		return Result.failure("缺失 marketing_placements 时不应写入 pending_phase_actions，实际: %s" % str(state.round_state.get("pending_phase_actions", null)))
+	return Result.success()
+
+static func _test_after_dinnertime_primary_is_fail_soft_on_invalid_marketing_placements_type(seed_val: int) -> Result:
+	var built := _make_engine_state(seed_val)
+	if not built.ok:
+		return built
+	var payload: Dictionary = built.value
+	var engine: GameEngine = payload["engine"]
+	var state: GameState = payload["state"]
+	state.map["marketing_placements"] = []
+	var entry = EntryClass.new()
+	var result := entry._after_dinnertime_primary(state, engine.phase_manager)
+	if not result.ok:
+		return Result.failure("marketing_placements 类型错误时应保持 fail-soft，实际: %s" % result.error)
+	if state.round_state.has(PIZZA_PENDING_KEY):
+		return Result.failure("marketing_placements 类型错误时不应写入 pizza pending，实际: %s" % str(state.round_state.get(PIZZA_PENDING_KEY, null)))
+	if state.round_state.has("pending_phase_actions"):
+		return Result.failure("marketing_placements 类型错误时不应写入 pending_phase_actions，实际: %s" % str(state.round_state.get("pending_phase_actions", null)))
 	return Result.success()
 
 static func _test_after_dinnertime_primary_fails_fast_on_missing_houses(seed_val: int) -> Result:

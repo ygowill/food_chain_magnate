@@ -125,8 +125,10 @@ func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -
 	if pizza_awarded:
 		var pending_list: Array = []
 		var used_radio_boards := {}
-		if state.map is Dictionary and state.map.has("marketing_placements") and state.map["marketing_placements"] is Dictionary:
-			for k in Dictionary(state.map["marketing_placements"]).keys():
+		var placements_read := MapStateAccessClass.require_marketing_placements(state, "new_milestones:pizza")
+		if placements_read.ok:
+			var placements: Dictionary = placements_read.value
+			for k in placements.keys():
 				if k is String:
 					used_radio_boards[str(k)] = true
 		for inst_val in state.marketing_instances:
