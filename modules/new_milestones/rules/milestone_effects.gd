@@ -4,6 +4,7 @@ const UtilsClass = preload("res://modules/new_milestones/rules/utils.gd")
 
 const PhaseManagerClass = preload("res://core/engine/phase_manager.gd")
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const BankStateAccessClass = preload("res://core/state/bank_state_access.gd")
 
 const Phase = PhaseDefsClass.Phase
 const HookType = PhaseManagerClass.HookType
@@ -176,10 +177,20 @@ func _on_restructuring_before_exit(state: GameState) -> Result:
 		if not bool(p.get("bank_burn_pending", false)):
 			continue
 
-		var bank_total := int(state.bank.get("total", 0))
+		var bank_total_read := BankStateAccessClass.require_total(state, "new_milestones:bank_burn")
+		if not bank_total_read.ok:
+			return bank_total_read
+		var removed_total_read := BankStateAccessClass.require_removed_total(state, "new_milestones:bank_burn")
+		if not removed_total_read.ok:
+			return removed_total_read
+		var bank_total := int(bank_total_read.value)
 		var burn := mini(100, maxi(0, bank_total))
-		state.bank["total"] = bank_total - burn
-		state.bank["removed_total"] = int(state.bank.get("removed_total", 0)) + burn
+		var deduct := BankStateAccessClass.add_to_total(state, -burn, "new_milestones:bank_burn")
+		if not deduct.ok:
+			return deduct
+		var removed_bank_total := BankStateAccessClass.add_removed_total(state, burn, "new_milestones:bank_burn")
+		if not removed_bank_total.ok:
+			return removed_bank_total
 		p["bank_burn_pending"] = false
 		state.players[pid] = p
 		removed.append({"player_id": pid, "amount": burn})

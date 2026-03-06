@@ -8,6 +8,7 @@ extends ActionExecutor
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const BankStateAccessClass = preload("res://core/state/bank_state_access.gd")
 const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
 
 func _init() -> void:
@@ -39,7 +40,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 	player["forfeited"] = true
 
-	_remove_player_cash(state, player)
+	var remove_cash := _remove_player_cash(state, player)
+	if not remove_cash.ok:
+		return remove_cash
 	_remove_player_employees(state, player)
 	_remove_player_inventory(player)
 	_remove_player_milestones(player)
@@ -51,17 +54,19 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	state.players[player_id] = player
 	return Result.success({"player_id": player_id})
 
-static func _remove_player_cash(state: GameState, player: Dictionary) -> void:
+static func _remove_player_cash(state: GameState, player: Dictionary) -> Result:
 	var cash := int(player.get("cash", 0))
 	if cash < 0:
 		cash = 0
 	player["cash"] = 0
 
-	if state != null and (state.bank is Dictionary):
-		var bank: Dictionary = state.bank
-		var removed := int(bank.get("removed_total", 0))
-		bank["removed_total"] = removed + cash
-		state.bank = bank
+	if cash <= 0:
+		return Result.success()
+
+	var removed := BankStateAccessClass.add_removed_total(state, cash, "forfeit_player")
+	if not removed.ok:
+		return removed
+	return Result.success()
 
 static func _remove_player_employees(state: GameState, player: Dictionary) -> void:
 	var removed_counts: Dictionary = {}

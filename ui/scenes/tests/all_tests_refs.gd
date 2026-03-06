@@ -76,6 +76,7 @@ const StateSchemaUnregisteredModuleKeyWarningTestClass = preload("res://core/tes
 const InvariantsFailFastTestClass = preload("res://core/tests/invariants_fail_fast_test.gd")
 const RoundStateFailFastTestClass = preload("res://core/tests/round_state_fail_fast_test.gd")
 const RoundStatePlayerBoolFlagsTestClass = preload("res://core/tests/round_state_player_bool_flags_test.gd")
+const BankStateAccessTestClass = preload("res://core/tests/bank_state_access_test.gd")
 const CleanupInventoryTestClass = preload("res://core/tests/cleanup_inventory_test.gd")
 const FireActionTestClass = preload("res://core/tests/fire_action_test.gd")
 const CompanyStructureTestClass = preload("res://core/tests/company_structure_test.gd")

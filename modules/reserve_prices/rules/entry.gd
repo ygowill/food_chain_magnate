@@ -1,5 +1,7 @@
 extends RefCounted
 
+const BankStateAccessClass = preload("res://core/state/bank_state_access.gd")
+
 const MODULE_ID := "reserve_prices"
 const FIRST_BREAK_ADD_PER_PLAYER := 200
 const CARDS_PER_PLAYER := 3
@@ -57,8 +59,6 @@ func _on_bank_first_break(state: GameState, trigger_reason: String, required_pay
 	# 规则：第一次破产固定注入 $200/玩家，并用储备卡多数决定 base_unit_price（20>5>10）
 	if state == null:
 		return Result.failure("%s: state 为空" % MODULE_ID)
-	if not (state.bank is Dictionary):
-		return Result.failure("%s: state.bank 类型错误（期望 Dictionary）" % MODULE_ID)
 	if not (state.players is Array):
 		return Result.failure("%s: state.players 类型错误（期望 Array）" % MODULE_ID)
 	if not (state.round_state is Dictionary):
@@ -66,16 +66,19 @@ func _on_bank_first_break(state: GameState, trigger_reason: String, required_pay
 	if not (state.rules is Dictionary):
 		return Result.failure("%s: state.rules 类型错误（期望 Dictionary）" % MODULE_ID)
 
-	if not state.bank.has("broke_count") or not (state.bank["broke_count"] is int):
-		return Result.failure("%s: bank.broke_count 缺失或类型错误（期望 int）" % MODULE_ID)
-	if int(state.bank["broke_count"]) != 0:
+	var broke_count_read := BankStateAccessClass.require_broke_count(state, MODULE_ID)
+	if not broke_count_read.ok:
+		return broke_count_read
+	if int(broke_count_read.value) != 0:
 		return Result.success()
-	if not state.bank.has("total") or not (state.bank["total"] is int):
-		return Result.failure("%s: bank.total 缺失或类型错误（期望 int）" % MODULE_ID)
-	if not state.bank.has("reserve_added_total") or not (state.bank["reserve_added_total"] is int):
-		return Result.failure("%s: bank.reserve_added_total 缺失或类型错误（期望 int）" % MODULE_ID)
+	var total_read := BankStateAccessClass.require_total(state, MODULE_ID)
+	if not total_read.ok:
+		return total_read
+	var reserve_added_total_read := BankStateAccessClass.require_reserve_added_total(state, MODULE_ID)
+	if not reserve_added_total_read.ok:
+		return reserve_added_total_read
 
-	var bank_before: int = int(state.bank["total"])
+	var bank_before: int = int(total_read.value)
 	var total_added: int = int(state.players.size()) * FIRST_BREAK_ADD_PER_PLAYER
 
 	var counts := {5: 0, 10: 0, 20: 0}
@@ -123,9 +126,13 @@ func _on_bank_first_break(state: GameState, trigger_reason: String, required_pay
 		return Result.failure("%s: 无法确定 base_unit_price" % MODULE_ID)
 
 	state.rules["base_unit_price"] = new_base
-	state.bank["broke_count"] = 1
-	state.bank["total"] = bank_before + total_added
-	state.bank["reserve_added_total"] = int(state.bank["reserve_added_total"]) + total_added
+	var set_broke := BankStateAccessClass.set_broke_count(state, 1, MODULE_ID)
+	if not set_broke.ok:
+		return set_broke
+	var inject := BankStateAccessClass.apply_reserve_injection(state, total_added, MODULE_ID)
+	if not inject.ok:
+		return inject
+	var bank_after_first_break: int = int((inject.value as Dictionary).get("total", bank_before + total_added))
 
 	_record_bankruptcy_event(state, {
 		"kind": "first",
@@ -134,7 +141,7 @@ func _on_bank_first_break(state: GameState, trigger_reason: String, required_pay
 		"required_payment": required_payment,
 		"bank_total_before": bank_before,
 		"reserve_added": total_added,
-		"bank_total_after": int(state.bank["total"]),
+		"bank_total_after": bank_after_first_break,
 		"base_unit_price": new_base,
 		"revealed_cards": revealed,
 	})

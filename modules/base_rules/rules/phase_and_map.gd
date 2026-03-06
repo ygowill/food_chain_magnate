@@ -15,6 +15,7 @@ const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const RoundStatePlayerBoolFlagsClass = preload("res://core/utils/round_state_player_bool_flags.gd")
+const BankStateAccessClass = preload("res://core/state/bank_state_access.gd")
 
 const Phase = PhaseDefsClass.Phase
 const WorkingSubPhase = PhaseDefsClass.WorkingSubPhase
@@ -341,7 +342,10 @@ func _on_dinnertime_before_exit(state: GameState) -> Result:
 			var f: float = float(v)
 			if f == floor(f):
 				max_breaks = clampi(int(f), 1, 2)
-	if int(state.bank.get("broke_count", 0)) >= max_breaks:
+	var broke_count_read := BankStateAccessClass.require_broke_count(state, "base_rules:dinnertime_before_exit")
+	if not broke_count_read.ok:
+		return broke_count_read
+	if int(broke_count_read.value) >= max_breaks:
 		state.round_state["force_next_phase"] = "GameOver"
 	return Result.success()
 

@@ -6,6 +6,7 @@ const InvariantsClass = preload("res://core/engine/game_engine/invariants.gd")
 const JsonValueParseHelpersClass = preload("res://core/utils/json_value_parse_helpers.gd")
 const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
+const BankStateAccessClass = preload("res://core/state/bank_state_access.gd")
 
 static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result:
 	engine.reset_modules_v2()
@@ -102,14 +103,14 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result
 	var total_cash_read := InvariantsClass.compute_total_cash(engine.state)
 	if not total_cash_read.ok:
 		return Result.failure("无效的 initial_state：无法计算初始现金总额: %s" % total_cash_read.error)
-	if not (engine.state.bank is Dictionary):
-		return Result.failure("无效的 initial_state：state.bank 类型错误（期望 Dictionary）")
-	if not engine.state.bank.has("reserve_added_total") or not (engine.state.bank["reserve_added_total"] is int):
-		return Result.failure("无效的 initial_state：state.bank.reserve_added_total 缺失或类型错误（期望 int）")
-	if not engine.state.bank.has("removed_total") or not (engine.state.bank["removed_total"] is int):
-		return Result.failure("无效的 initial_state：state.bank.removed_total 缺失或类型错误（期望 int）")
+	var reserve_added_total_read := BankStateAccessClass.require_reserve_added_total(engine.state, "无效的 initial_state")
+	if not reserve_added_total_read.ok:
+		return reserve_added_total_read
+	var removed_total_read := BankStateAccessClass.require_removed_total(engine.state, "无效的 initial_state")
+	if not removed_total_read.ok:
+		return removed_total_read
 	# _initial_total_cash 语义：不包含“后续注入/移除”的 delta（以便 invariant 使用 base + delta 计算）。
-	engine.set_initial_total_cash_for_invariants(int(total_cash_read.value) - int(engine.state.bank["reserve_added_total"]) + int(engine.state.bank["removed_total"]))
+	engine.set_initial_total_cash_for_invariants(int(total_cash_read.value) - int(reserve_added_total_read.value) + int(removed_total_read.value))
 	var employee_totals_read := InvariantsClass.compute_employee_totals(engine.state)
 	if not employee_totals_read.ok:
 		return Result.failure("无效的 initial_state：无法计算初始员工总量: %s" % employee_totals_read.error)

@@ -4,6 +4,7 @@ class_name DebugGiveMoneyAction
 extends ActionExecutor
 
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const BankStateAccessClass = preload("res://core/state/bank_state_access.gd")
 
 func _init() -> void:
 	action_id = "debug_give_money"
@@ -41,16 +42,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if amount == 0:
 		return Result.success()
 
-	if not (state.bank is Dictionary):
-		return Result.failure("state.bank 类型错误（期望 Dictionary）")
-	if not state.bank.has("total") or not (state.bank["total"] is int):
-		return Result.failure("state.bank.total 缺失或类型错误（期望 int）")
-	if not state.bank.has("reserve_added_total") or not (state.bank["reserve_added_total"] is int):
-		return Result.failure("state.bank.reserve_added_total 缺失或类型错误（期望 int）")
-
 	# 注入储备：增加 bank.total + reserve_added_total，再由银行转账给玩家
-	state.bank["total"] = int(state.bank["total"]) + amount
-	state.bank["reserve_added_total"] = int(state.bank["reserve_added_total"]) + amount
+	var inject := BankStateAccessClass.apply_reserve_injection(state, amount, "debug_give_money")
+	if not inject.ok:
+		return inject
 
 	var pay := StateUpdaterClass.player_receive_from_bank(state, player_id, amount)
 	if not pay.ok:

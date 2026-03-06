@@ -1,5 +1,7 @@
 extends RefCounted
 
+const BankStateAccessClass = preload("res://core/state/bank_state_access.gd")
+
 # === 现金操作 ===
 
 static func _require_player_cash(state: GameState, player_id: int, caller: String) -> Result:
@@ -19,11 +21,7 @@ static func _require_player_cash(state: GameState, player_id: int, caller: Strin
 	})
 
 static func _require_bank_total(state: GameState, caller: String) -> Result:
-	if not (state.bank is Dictionary):
-		return Result.failure("%s: state.bank 类型错误（期望 Dictionary）" % caller)
-	if not state.bank.has("total") or not (state.bank["total"] is int):
-		return Result.failure("%s: state.bank.total 缺失或类型错误（期望 int）" % caller)
-	return Result.success(int(state.bank["total"]))
+	return BankStateAccessClass.require_total(state, caller)
 
 static func _get_bank_overdraft_threshold(state: GameState) -> int:
 	# 默认规则：第二次破产后允许透支；若配置为“只破产一次”，则首次破产后允许透支。
@@ -55,8 +53,6 @@ static func transfer_cash(
 		return Result.failure("转账失败：state.bank 类型错误（期望 Dictionary）")
 	if not (state.players is Array):
 		return Result.failure("转账失败：state.players 类型错误（期望 Array）")
-	if not state.bank.has("broke_count") or not (state.bank["broke_count"] is int):
-		return Result.failure("转账失败：state.bank.broke_count 缺失或类型错误（期望 int）")
 
 	if amount < 0:
 		return Result.failure("转账金额不能为负: %d" % amount)
@@ -71,7 +67,10 @@ static func transfer_cash(
 	var from_balance: int = int(from_balance_read.value)
 	var allow_overdraft := false
 	if from_type == "bank":
-		allow_overdraft = int(state.bank["broke_count"]) >= _get_bank_overdraft_threshold(state)
+		var broke_count_read := BankStateAccessClass.require_broke_count(state, "转账失败")
+		if not broke_count_read.ok:
+			return broke_count_read
+		allow_overdraft = int(broke_count_read.value) >= _get_bank_overdraft_threshold(state)
 	if not allow_overdraft and from_balance < amount:
 		return Result.failure("余额不足: 需要 $%d, 只有 $%d" % [amount, from_balance])
 
@@ -127,10 +126,9 @@ static func _modify_balance(state: GameState, holder_type: String, holder_id: in
 		"bank":
 			if holder_id != -1:
 				return Result.failure("StateUpdater._modify_balance: bank holder_id 必须为 -1，实际: %d" % holder_id)
-			var total_read := _require_bank_total(state, "StateUpdater._modify_balance")
-			if not total_read.ok:
-				return total_read
-			state.bank["total"] = int(total_read.value) + delta
+			var adjust := BankStateAccessClass.add_to_total(state, delta, "StateUpdater._modify_balance")
+			if not adjust.ok:
+				return adjust
 			return Result.success()
 		_:
 			return Result.failure("StateUpdater._modify_balance: 未知 holder_type: %s" % holder_type)

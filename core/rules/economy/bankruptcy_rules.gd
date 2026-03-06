@@ -7,6 +7,7 @@ extends RefCounted
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const BankruptcyRegistryClass = preload("res://core/rules/bankruptcy_registry.gd")
+const BankStateAccessClass = preload("res://core/state/bank_state_access.gd")
 
 static func pay_bank_to_player(state: GameState, player_id: int, amount: int, reason: String) -> Result:
 	if amount <= 0:
@@ -53,18 +54,18 @@ static func pay_bank_to_player(state: GameState, player_id: int, amount: int, re
 static func _trigger_break_on_exact_depletion(state: GameState, paid_amount: int, reason: String) -> Result:
 	if state == null:
 		return Result.failure("BankruptcyRules: state 为空")
-	if not (state.bank is Dictionary):
-		return Result.failure("BankruptcyRules: state.bank 类型错误（期望 Dictionary）")
-	if not state.bank.has("total") or not (state.bank["total"] is int):
-		return Result.failure("BankruptcyRules: state.bank.total 缺失或类型错误（期望 int）")
-	if not state.bank.has("broke_count") or not (state.bank["broke_count"] is int):
-		return Result.failure("BankruptcyRules: state.bank.broke_count 缺失或类型错误（期望 int）")
+	var total_read := BankStateAccessClass.require_total(state, "BankruptcyRules")
+	if not total_read.ok:
+		return total_read
+	var broke_count_read := BankStateAccessClass.require_broke_count(state, "BankruptcyRules")
+	if not broke_count_read.ok:
+		return broke_count_read
 
-	if int(state.bank["total"]) != 0:
+	if int(total_read.value) != 0:
 		return Result.success()
 
 	var trigger_reason := "%s（支付后耗尽）" % reason
-	var broke_count: int = int(state.bank["broke_count"])
+	var broke_count: int = int(broke_count_read.value)
 	var max_breaks := _get_bankruptcy_max_breaks(state)
 	if broke_count <= 0:
 		return _break_the_bank_first_time(state, trigger_reason, paid_amount)
@@ -92,16 +93,10 @@ static func _get_player_cash(state: GameState, player_id: int) -> Result:
 static func ensure_bank_can_pay(state: GameState, amount: int, reason: String) -> Result:
 	if state == null:
 		return Result.failure("BankruptcyRules: state 为空")
-	if not (state.bank is Dictionary):
-		return Result.failure("BankruptcyRules: state.bank 类型错误（期望 Dictionary）")
 	if not (state.players is Array):
 		return Result.failure("BankruptcyRules: state.players 类型错误（期望 Array）")
 	if not (state.round_state is Dictionary):
 		return Result.failure("BankruptcyRules: state.round_state 类型错误（期望 Dictionary）")
-	if not state.bank.has("total") or not (state.bank["total"] is int):
-		return Result.failure("BankruptcyRules: state.bank.total 缺失或类型错误（期望 int）")
-	if not state.bank.has("broke_count") or not (state.bank["broke_count"] is int):
-		return Result.failure("BankruptcyRules: state.bank.broke_count 缺失或类型错误（期望 int）")
 
 	var warnings: Array[String] = []
 	if amount <= 0:
@@ -112,11 +107,17 @@ static func ensure_bank_can_pay(state: GameState, amount: int, reason: String) -
 	var safety := 0
 	while safety < 3:
 		safety += 1
-		var bank_total: int = int(state.bank["total"])
+		var bank_total_read := BankStateAccessClass.require_total(state, "BankruptcyRules")
+		if not bank_total_read.ok:
+			return bank_total_read
+		var bank_total: int = int(bank_total_read.value)
 		if bank_total >= amount:
 			return Result.success().with_warnings(warnings)
 
-		var broke_count: int = int(state.bank["broke_count"])
+		var broke_count_read := BankStateAccessClass.require_broke_count(state, "BankruptcyRules")
+		if not broke_count_read.ok:
+			return broke_count_read
+		var broke_count: int = int(broke_count_read.value)
 		if broke_count <= 0:
 			var first := _break_the_bank_first_time(state, reason, amount)
 			if not first.ok:
@@ -141,14 +142,17 @@ static func ensure_bank_can_pay(state: GameState, amount: int, reason: String) -
 	return Result.failure("银行破产处理超出安全上限")
 
 static func _break_the_bank_first_time(state: GameState, trigger_reason: String, required_payment: int) -> Result:
-	if not state.bank.has("broke_count") or not (state.bank["broke_count"] is int):
-		return Result.failure("银行第一次破产失败：state.bank.broke_count 缺失或类型错误（期望 int）")
-	if int(state.bank["broke_count"]) != 0:
+	var broke_count_read := BankStateAccessClass.require_broke_count(state, "银行第一次破产失败")
+	if not broke_count_read.ok:
+		return broke_count_read
+	if int(broke_count_read.value) != 0:
 		return Result.success()
-	if not state.bank.has("total") or not (state.bank["total"] is int):
-		return Result.failure("银行第一次破产失败：state.bank.total 缺失或类型错误（期望 int）")
-	if not state.bank.has("reserve_added_total") or not (state.bank["reserve_added_total"] is int):
-		return Result.failure("银行第一次破产失败：state.bank.reserve_added_total 缺失或类型错误（期望 int）")
+	var total_read := BankStateAccessClass.require_total(state, "银行第一次破产失败")
+	if not total_read.ok:
+		return total_read
+	var reserve_added_total_read := BankStateAccessClass.require_reserve_added_total(state, "银行第一次破产失败")
+	if not reserve_added_total_read.ok:
+		return reserve_added_total_read
 
 	var max_breaks := _get_bankruptcy_max_breaks(state)
 
@@ -177,7 +181,7 @@ static func _break_the_bank_first_time(state: GameState, trigger_reason: String,
 
 		return r
 
-	var bank_before: int = int(state.bank["total"])
+	var bank_before: int = int(total_read.value)
 	var total_added := 0
 	var slot_counts: Dictionary = {}
 	var revealed: Array[Dictionary] = []
@@ -236,10 +240,16 @@ static func _break_the_bank_first_time(state: GameState, trigger_reason: String,
 		extra_added = int(state.players.size()) * extra_per_player
 		total_added += extra_added
 
-	state.bank["broke_count"] = 1
-	state.bank["ceo_slots_after_first_break"] = chosen_slots
-	state.bank["total"] = bank_before + total_added
-	state.bank["reserve_added_total"] = int(state.bank["reserve_added_total"]) + total_added
+	var set_broke := BankStateAccessClass.set_broke_count(state, 1, "银行第一次破产失败")
+	if not set_broke.ok:
+		return set_broke
+	var set_slots := BankStateAccessClass.set_ceo_slots_after_first_break(state, chosen_slots, "银行第一次破产失败")
+	if not set_slots.ok:
+		return set_slots
+	var inject := BankStateAccessClass.apply_reserve_injection(state, total_added, "银行第一次破产失败")
+	if not inject.ok:
+		return inject
+	var bank_after_first_break: int = int((inject.value as Dictionary).get("total", bank_before))
 
 	for pid in range(state.players.size()):
 		var player_val = state.players[pid]
@@ -262,7 +272,7 @@ static func _break_the_bank_first_time(state: GameState, trigger_reason: String,
 		"reserve_added": total_added,
 		"extra_reserve_per_player": extra_per_player,
 		"extra_reserve_added": extra_added,
-		"bank_total_after": int(state.bank["total"]),
+		"bank_total_after": bank_after_first_break,
 		"ceo_slots": chosen_slots,
 		"revealed_cards": revealed,
 	})
@@ -275,16 +285,20 @@ static func _break_the_bank_first_time(state: GameState, trigger_reason: String,
 	return out
 
 static func _break_the_bank_second_time(state: GameState, trigger_reason: String, required_payment: int) -> Result:
-	if not state.bank.has("broke_count") or not (state.bank["broke_count"] is int):
-		return Result.failure("银行第二次破产失败：state.bank.broke_count 缺失或类型错误（期望 int）")
-	if int(state.bank["broke_count"]) >= 2:
+	var broke_count_read := BankStateAccessClass.require_broke_count(state, "银行第二次破产失败")
+	if not broke_count_read.ok:
+		return broke_count_read
+	if int(broke_count_read.value) >= 2:
 		return Result.success()
-	if not state.bank.has("total") or not (state.bank["total"] is int):
-		return Result.failure("银行第二次破产失败：state.bank.total 缺失或类型错误（期望 int）")
+	var total_read := BankStateAccessClass.require_total(state, "银行第二次破产失败")
+	if not total_read.ok:
+		return total_read
 
 	var max_breaks := _get_bankruptcy_max_breaks(state)
-	var bank_before: int = int(state.bank["total"])
-	state.bank["broke_count"] = 2
+	var bank_before: int = int(total_read.value)
+	var set_broke := BankStateAccessClass.set_broke_count(state, 2, "银行第二次破产失败")
+	if not set_broke.ok:
+		return set_broke
 
 	_record_bankruptcy_event(state, {
 		"kind": "second",
@@ -364,14 +378,14 @@ static func _apply_extra_reserve_per_player_to_first_break(state: GameState) -> 
 		return Result.success()
 	if state == null:
 		return Result.failure("额外储备金注入失败：state 为空")
-	if not (state.bank is Dictionary):
-		return Result.failure("额外储备金注入失败：state.bank 类型错误（期望 Dictionary）")
 	if not (state.players is Array):
 		return Result.failure("额外储备金注入失败：state.players 类型错误（期望 Array）")
-	if not state.bank.has("total") or not (state.bank["total"] is int):
-		return Result.failure("额外储备金注入失败：state.bank.total 缺失或类型错误（期望 int）")
-	if not state.bank.has("reserve_added_total") or not (state.bank["reserve_added_total"] is int):
-		return Result.failure("额外储备金注入失败：state.bank.reserve_added_total 缺失或类型错误（期望 int）")
+	var total_read := BankStateAccessClass.require_total(state, "额外储备金注入失败")
+	if not total_read.ok:
+		return total_read
+	var reserve_added_total_read := BankStateAccessClass.require_reserve_added_total(state, "额外储备金注入失败")
+	if not reserve_added_total_read.ok:
+		return reserve_added_total_read
 
 	var pc := state.players.size()
 	if pc <= 0:
@@ -380,8 +394,10 @@ static func _apply_extra_reserve_per_player_to_first_break(state: GameState) -> 
 	if extra_total <= 0:
 		return Result.success()
 
-	state.bank["total"] = int(state.bank["total"]) + extra_total
-	state.bank["reserve_added_total"] = int(state.bank["reserve_added_total"]) + extra_total
+	var inject := BankStateAccessClass.apply_reserve_injection(state, extra_total, "额外储备金注入失败")
+	if not inject.ok:
+		return inject
+	var bank_total_after_extra: int = int((inject.value as Dictionary).get("total", int(total_read.value) + extra_total))
 
 	# 兼容模块 handler：修正 event 数据（reserve_added/bank_total_after），保持 UI/日志一致。
 	if state.round_state is Dictionary:
@@ -402,7 +418,7 @@ static func _apply_extra_reserve_per_player_to_first_break(state: GameState) -> 
 					if evt.has("reserve_added") and (evt["reserve_added"] is int):
 						prev_added = int(evt["reserve_added"])
 					evt["reserve_added"] = prev_added + extra_total
-					evt["bank_total_after"] = int(state.bank["total"])
+					evt["bank_total_after"] = bank_total_after_extra
 					evt["extra_reserve_per_player"] = int(extra_per_player)
 					evt["extra_reserve_added"] = int(extra_total)
 					events[i] = evt

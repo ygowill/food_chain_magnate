@@ -13,6 +13,7 @@ const TileRegistryClass = preload("res://core/map/tile_registry.gd")
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 const GameStartedEventBuildClass = preload("res://core/engine/game_engine/game_started_event_build.gd")
 const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
+const BankStateAccessClass = preload("res://core/state/bank_state_access.gd")
 
 static func initialize_new_game(
 	engine: GameEngine,
@@ -167,13 +168,13 @@ static func initialize_new_game(
 	PerfTraceClass.end_span(span_cash)
 	if not total_cash_read.ok:
 		return Result.failure("初始化失败：无法计算初始现金总额: %s" % total_cash_read.error)
-	if not (state.bank is Dictionary):
-		return Result.failure("初始化失败：state.bank 类型错误（期望 Dictionary）")
-	if not state.bank.has("reserve_added_total") or not (state.bank["reserve_added_total"] is int):
-		return Result.failure("初始化失败：state.bank.reserve_added_total 缺失或类型错误（期望 int）")
-	if not state.bank.has("removed_total") or not (state.bank["removed_total"] is int):
-		return Result.failure("初始化失败：state.bank.removed_total 缺失或类型错误（期望 int）")
-	engine.set_initial_total_cash_for_invariants(int(total_cash_read.value) - int(state.bank["reserve_added_total"]) + int(state.bank["removed_total"]))
+	var reserve_added_total_read := BankStateAccessClass.require_reserve_added_total(state, "初始化失败")
+	if not reserve_added_total_read.ok:
+		return reserve_added_total_read
+	var removed_total_read := BankStateAccessClass.require_removed_total(state, "初始化失败")
+	if not removed_total_read.ok:
+		return removed_total_read
+	engine.set_initial_total_cash_for_invariants(int(total_cash_read.value) - int(reserve_added_total_read.value) + int(removed_total_read.value))
 
 	var span_emp_totals := PerfTraceClass.begin_span("init:Invariants.compute_employee_totals")
 	var employee_totals_read := InvariantsClass.compute_employee_totals(state)
