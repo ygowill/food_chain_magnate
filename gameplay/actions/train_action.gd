@@ -130,10 +130,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var used := EmployeeRulesClass.get_action_count(state, command.actor, action_id)
 
 	# 仅允许培训“待命”员工
-	assert(player.has("reserve_employees") and (player["reserve_employees"] is Array), "train: player.reserve_employees 缺失或类型错误（期望 Array[String]）")
-	var reserve: Array = player["reserve_employees"]
-	for i in range(reserve.size()):
-		assert(reserve[i] is String, "train: player.reserve_employees[%d] 类型错误（期望 String）" % i)
+	var reserve_read := TrainEmployeeLocksClass._require_player_string_array(player, "reserve_employees", "train: player.reserve_employees")
+	if not reserve_read.ok:
+		return reserve_read
+	var reserve: Array = reserve_read.value
 	var pending_total := EmployeeRulesClass.get_immediate_train_pending_total(state, command.actor)
 	var pending_count := EmployeeRulesClass.get_immediate_train_pending_count(state, command.actor, from_employee)
 	var has_reserve := reserve.find(from_employee) >= 0
