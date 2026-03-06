@@ -3,6 +3,7 @@ extends RefCounted
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const PhaseManagerClass = preload("res://core/engine/phase_manager.gd")
 const WorkingFlowClass = preload("res://core/engine/phase_manager/working_flow.gd")
+const RoundStateOrderOfBusinessClass = preload("res://core/utils/round_state_order_of_business.gd")
 
 const Phase = PhaseDefsClass.Phase
 const HookType = PhaseManagerClass.HookType
@@ -63,13 +64,17 @@ func _on_order_of_business_after_enter(state: GameState) -> Result:
 		return Result.success()
 	if not (state.round_state is Dictionary):
 		return Result.failure("%s: state.round_state 类型错误（期望 Dictionary）" % MODULE_ID)
-	if not state.round_state.has("order_of_business") or not (state.round_state["order_of_business"] is Dictionary):
-		return Result.failure("%s: order_of_business 未初始化" % MODULE_ID)
+	var oob_read := RoundStateOrderOfBusinessClass.require_order_of_business(state.round_state, MODULE_ID)
+	if not oob_read.ok:
+		return oob_read
 
-	var oob: Dictionary = state.round_state["order_of_business"]
-	var prev_turn: Array = oob.get("previous_turn_order", [])
-	if not (prev_turn is Array) or prev_turn.size() != state.players.size():
-		return Result.failure("%s: order_of_business.previous_turn_order 缺失或类型错误" % MODULE_ID)
+	var oob: Dictionary = oob_read.value
+	var prev_turn_read := RoundStateOrderOfBusinessClass.require_previous_turn_order(oob, MODULE_ID)
+	if not prev_turn_read.ok:
+		return prev_turn_read
+	var prev_turn: Array = prev_turn_read.value
+	if prev_turn.size() != state.players.size():
+		return Result.failure("%s: order_of_business.previous_turn_order 长度错误" % MODULE_ID)
 
 	# 1) 收集每位玩家的 star_rank（若同级别出现则报错）
 	var star_players: Array[Dictionary] = [] # {pid, rank, star_id}

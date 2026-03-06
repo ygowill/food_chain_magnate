@@ -77,6 +77,7 @@ const StateSchemaUnregisteredModuleKeyWarningTestClass = preload("res://core/tes
 const InvariantsFailFastTestClass = preload("res://core/tests/invariants_fail_fast_test.gd")
 const RoundStateFailFastTestClass = preload("res://core/tests/round_state_fail_fast_test.gd")
 const RoundStatePlayerBoolFlagsTestClass = preload("res://core/tests/round_state_player_bool_flags_test.gd")
+const RoundStateOrderOfBusinessTestClass = preload("res://core/tests/round_state_order_of_business_test.gd")
 const PlayerStateAccessTestClass = preload("res://core/tests/player_state_access_test.gd")
 const MapStateAccessTestClass = preload("res://core/tests/map_state_access_test.gd")
 const BankStateAccessTestClass = preload("res://core/tests/bank_state_access_test.gd")

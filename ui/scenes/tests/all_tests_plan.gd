@@ -355,6 +355,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.RoundStatePlayerBoolFlagsTestClass.run(2, 12345),
 		},
 		{
+			"name": "RoundStateOrderOfBusinessTest",
+			"fn": func() -> Result: return TestRefs.RoundStateOrderOfBusinessTestClass.run(2, 12345),
+		},
+		{
 			"name": "PlayerStateAccessTest",
 			"fn": func() -> Result: return TestRefs.PlayerStateAccessTestClass.run(2, 12345),
 		},

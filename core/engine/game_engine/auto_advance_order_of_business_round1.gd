@@ -1,22 +1,27 @@
 extends RefCounted
 
+const RoundStateOrderOfBusinessClass = preload("res://core/utils/round_state_order_of_business.gd")
+
 static func auto_finalize_order_of_business_round1(state_in: GameState) -> Result:
 	if state_in == null:
 		return Result.failure("OrderOfBusiness auto finalize: state 为空")
 	if not (state_in.round_state is Dictionary):
 		return Result.failure("OrderOfBusiness auto finalize: state.round_state 类型错误（期望 Dictionary）")
-	if not state_in.round_state.has("order_of_business") or not (state_in.round_state["order_of_business"] is Dictionary):
-		return Result.failure("OrderOfBusiness auto finalize: round_state.order_of_business 缺失或类型错误（期望 Dictionary）")
-	var oob: Dictionary = state_in.round_state["order_of_business"]
+	var oob_read := RoundStateOrderOfBusinessClass.require_order_of_business(state_in.round_state, "OrderOfBusiness auto finalize")
+	if not oob_read.ok:
+		return oob_read
+	var oob: Dictionary = oob_read.value
 
-	if not oob.has("finalized") or not (oob["finalized"] is bool):
-		return Result.failure("OrderOfBusiness auto finalize: finalized 缺失或类型错误（期望 bool）")
-	if bool(oob["finalized"]):
+	var finalized_read := RoundStateOrderOfBusinessClass.require_finalized(oob, "OrderOfBusiness auto finalize")
+	if not finalized_read.ok:
+		return finalized_read
+	if bool(finalized_read.value):
 		return Result.success()
 
-	if not oob.has("previous_turn_order") or not (oob["previous_turn_order"] is Array):
-		return Result.failure("OrderOfBusiness auto finalize: previous_turn_order 缺失或类型错误（期望 Array）")
-	var prev_val: Array = oob["previous_turn_order"]
+	var previous_turn_read := RoundStateOrderOfBusinessClass.require_previous_turn_order(oob, "OrderOfBusiness auto finalize")
+	if not previous_turn_read.ok:
+		return previous_turn_read
+	var prev_val: Array = previous_turn_read.value
 
 	var player_count := state_in.players.size()
 	if prev_val.size() != player_count:

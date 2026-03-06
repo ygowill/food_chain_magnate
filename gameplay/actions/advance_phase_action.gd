@@ -6,6 +6,7 @@ extends ActionExecutor
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const RoundStateOrderOfBusinessClass = preload("res://core/utils/round_state_order_of_business.gd")
 
 var phase_manager: PhaseManager = null
 
@@ -66,17 +67,16 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS:
 			if not (state.round_state is Dictionary):
 				return Result.failure("OrderOfBusiness 未初始化")
-			if not state.round_state.has("order_of_business"):
+			var oob_read := RoundStateOrderOfBusinessClass.require_order_of_business(state.round_state, "advance_phase")
+			if not oob_read.ok:
 				return Result.failure("OrderOfBusiness 未初始化")
-			var oob_val = state.round_state["order_of_business"]
-			if not (oob_val is Dictionary):
-				return Result.failure("OrderOfBusiness 未初始化")
-			var oob: Dictionary = oob_val
+			var oob: Dictionary = oob_read.value
 			if oob.is_empty():
 				return Result.failure("OrderOfBusiness 未初始化")
-			if not oob.has("finalized") or not (oob["finalized"] is bool):
-				return Result.failure("OrderOfBusiness finalized 缺失或类型错误")
-			if not bool(oob["finalized"]):
+			var finalized_read := RoundStateOrderOfBusinessClass.require_finalized(oob, "advance_phase")
+			if not finalized_read.ok:
+				return finalized_read
+			if not bool(finalized_read.value):
 				return Result.failure("OrderOfBusiness 未完成选择，无法推进到下一阶段")
 
 	return Result.success()

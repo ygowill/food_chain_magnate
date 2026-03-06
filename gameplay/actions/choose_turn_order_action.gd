@@ -5,6 +5,7 @@ extends ActionExecutor
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
+const RoundStateOrderOfBusinessClass = preload("res://core/utils/round_state_order_of_business.gd")
 
 var phase_manager: PhaseManager = null
 
@@ -28,18 +29,21 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not (state.round_state is Dictionary):
 		return Result.failure("round_state 格式错误")
 
-	if not state.round_state.has("order_of_business") or not (state.round_state["order_of_business"] is Dictionary):
-		return Result.failure("OrderOfBusiness 未初始化")
-	var oob: Dictionary = state.round_state["order_of_business"]
+	var oob_read := RoundStateOrderOfBusinessClass.require_order_of_business(state.round_state, "choose_turn_order")
+	if not oob_read.ok:
+		return oob_read
+	var oob: Dictionary = oob_read.value
 
-	if not oob.has("finalized") or not (oob["finalized"] is bool):
-		return Result.failure("OrderOfBusiness finalized 缺失或类型错误")
-	if bool(oob["finalized"]):
+	var finalized_read := RoundStateOrderOfBusinessClass.require_finalized(oob, "choose_turn_order")
+	if not finalized_read.ok:
+		return finalized_read
+	if bool(finalized_read.value):
 		return Result.failure("OrderOfBusiness 已完成选择")
 
-	if not oob.has("picks") or not (oob["picks"] is Array):
-		return Result.failure("OrderOfBusiness picks 缺失或类型错误")
-	var picks: Array = oob["picks"]
+	var picks_read := RoundStateOrderOfBusinessClass.require_picks(oob, "choose_turn_order")
+	if not picks_read.ok:
+		return picks_read
+	var picks: Array = picks_read.value
 	if picks.size() != player_count:
 		return Result.failure("OrderOfBusiness picks 长度不匹配")
 
@@ -68,12 +72,14 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 	if not (state.round_state is Dictionary):
 		return Result.failure("round_state 格式错误")
-	if not state.round_state.has("order_of_business") or not (state.round_state["order_of_business"] is Dictionary):
-		return Result.failure("OrderOfBusiness 未初始化")
-	var oob: Dictionary = state.round_state["order_of_business"]
-	if not oob.has("picks") or not (oob["picks"] is Array):
-		return Result.failure("OrderOfBusiness picks 缺失或类型错误")
-	var picks: Array = oob["picks"]
+	var oob_read := RoundStateOrderOfBusinessClass.require_order_of_business(state.round_state, "choose_turn_order")
+	if not oob_read.ok:
+		return oob_read
+	var oob: Dictionary = oob_read.value
+	var picks_read := RoundStateOrderOfBusinessClass.require_picks(oob, "choose_turn_order")
+	if not picks_read.ok:
+		return picks_read
+	var picks: Array = picks_read.value
 	picks[position] = command.actor
 	oob["picks"] = picks
 
