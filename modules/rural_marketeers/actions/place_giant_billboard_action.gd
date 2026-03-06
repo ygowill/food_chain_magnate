@@ -4,6 +4,7 @@ extends ActionExecutor
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const MODULE_ID := "rural_marketeers"
 const RURAL_HOUSE_ID := "rural_area"
@@ -114,11 +115,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not has_emp:
 		return Result.failure("你没有激活的 %s" % EMPLOYEE_ID)
 
-	if not (state.map is Dictionary):
-		return Result.failure("state.map 类型错误（期望 Dictionary）")
-	if not state.map.has("houses") or not (state.map["houses"] is Dictionary):
-		return Result.failure("state.map.houses 缺失或类型错误（期望 Dictionary）")
-	var houses: Dictionary = state.map["houses"]
+	var houses_read := MapStateAccessClass.require_houses(state, action_id)
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
 	if not houses.has(RURAL_HOUSE_ID) or not (houses[RURAL_HOUSE_ID] is Dictionary):
 		return Result.failure("缺少 rural_area（模块未正确初始化）")
 	var rural: Dictionary = houses[RURAL_HOUSE_ID]
