@@ -3,6 +3,17 @@ class_name BrandManagerAirplaneSecondGoodStateAccessTest
 extends RefCounted
 
 const ActionClass = preload("res://modules/new_milestones/actions/set_brand_manager_airplane_second_good_action.gd")
+const PENDING_KEY := "new_milestones_brand_manager_airplane_pending"
+
+class _FakeAirplaneApplyAction:
+	extends ActionClass
+
+	func _validate_specific(_state: GameState, _command: Command) -> Result:
+		return Result.success({
+			"board_number": 11,
+			"product_a": "burger",
+			"product_b": "pizza",
+		})
 
 static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var r := _test_validate_specific_reaches_milestone_check_with_valid_placements()
@@ -14,7 +25,13 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_validate_specific_fails_fast_on_invalid_marketing_placements_type()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_apply_changes_updates_instance_and_placement()
+	if not r.ok:
+		return r
+	r = _test_apply_changes_fails_fast_without_partial_mutation()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 5})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -36,6 +53,26 @@ static func _make_command() -> Command:
 		"product_b": "burger",
 	}
 	return command
+
+static func _make_apply_state() -> GameState:
+	var state := GameState.new()
+	state.players = [{}, {}]
+	state.marketing_instances = [{
+		"board_number": 11,
+		"owner": 0,
+		"type": "airplane",
+		"employee_type": "brand_manager",
+		"product": "burger",
+	}]
+	state.round_state = {
+		PENDING_KEY: {0: {"board_number": 11}},
+	}
+	state.map = {
+		"marketing_placements": {
+			"11": {"board_number": 11, "product": "burger"},
+		}
+	}
+	return state
 
 static func _test_validate_specific_reaches_milestone_check_with_valid_placements() -> Result:
 	var action = ActionClass.new()
@@ -69,4 +106,40 @@ static func _test_validate_specific_fails_fast_on_invalid_marketing_placements_t
 	var err := str(result.error)
 	if err.find("state.map.marketing_placements") < 0:
 		return Result.failure("错误信息应包含 state.map.marketing_placements，实际: %s" % err)
+	return Result.success()
+
+static func _test_apply_changes_updates_instance_and_placement() -> Result:
+	var action = _FakeAirplaneApplyAction.new()
+	var state := _make_apply_state()
+	var result := action._apply_changes(state, _make_command())
+	if not result.ok:
+		return Result.failure("_apply_changes 不应失败: %s" % result.error)
+	var inst: Dictionary = state.marketing_instances[0]
+	var products_val = inst.get("products", null)
+	if not (products_val is Array) or Array(products_val).size() != 2:
+		return Result.failure("marketing_instance.products 应写入两种商品，实际: %s" % str(inst))
+	var placement: Dictionary = state.map["marketing_placements"]["11"]
+	var placement_products_val = placement.get("products", null)
+	if not (placement_products_val is Array) or Array(placement_products_val).size() != 2:
+		return Result.failure("placement.products 应写入两种商品，实际: %s" % str(placement))
+	var pending: Dictionary = state.round_state.get(PENDING_KEY, {})
+	if pending.has(0):
+		return Result.failure("成功后应清除 actor pending，实际: %s" % str(pending))
+	return Result.success()
+
+static func _test_apply_changes_fails_fast_without_partial_mutation() -> Result:
+	var action = _FakeAirplaneApplyAction.new()
+	var state := _make_apply_state()
+	state.map.erase("marketing_placements")
+	var result := action._apply_changes(state, _make_command())
+	if result.ok:
+		return Result.failure("缺失 marketing_placements 时应失败")
+	var err := str(result.error)
+	if err.find("state.map.marketing_placements") < 0:
+		return Result.failure("错误信息应包含 state.map.marketing_placements，实际: %s" % err)
+	var inst: Dictionary = state.marketing_instances[0]
+	if inst.has("products"):
+		return Result.failure("失败时不应提前改写 marketing_instance.products")
+	if str(inst.get("product", "")) != "burger":
+		return Result.failure("失败时不应改写 marketing_instance.product，实际: %s" % str(inst))
 	return Result.success()

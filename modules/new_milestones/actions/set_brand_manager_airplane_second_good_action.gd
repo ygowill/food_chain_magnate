@@ -122,6 +122,15 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var product_a: String = str(info["product_a"])
 	var product_b: String = str(info["product_b"])
 
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, action_id)
+	if not placements_read.ok:
+		return placements_read
+	var placements: Dictionary = placements_read.value
+	var key := str(board_number)
+	if not placements.has(key) or not (placements[key] is Dictionary):
+		return Result.failure("marketing_placements[%s] 类型错误（期望 Dictionary）" % key)
+	var placement: Dictionary = placements[key]
+
 	for i in range(state.marketing_instances.size()):
 		var inst_val = state.marketing_instances[i]
 		if not (inst_val is Dictionary):
@@ -136,11 +145,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		state.marketing_instances[i] = inst
 		break
 
-	var key := str(board_number)
-	var placement: Dictionary = state.map["marketing_placements"][key]
 	placement["product"] = product_a
 	placement["products"] = [product_a, product_b]
-	state.map["marketing_placements"][key] = placement
+	placements[key] = placement
+	state.map["marketing_placements"] = placements
 
 	# 消耗本回合能力
 	var pending: Dictionary = state.round_state[PENDING_KEY]
