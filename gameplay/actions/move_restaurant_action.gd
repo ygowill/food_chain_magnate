@@ -9,6 +9,8 @@ const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 var _piece_registry: Dictionary = {}
 
@@ -29,9 +31,10 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 		return false
 
 	var player := state.get_player(player_id)
-	if not player.has("restaurants") or not (player["restaurants"] is Array):
+	var restaurants_read := PlayerStateAccessClass.require_restaurants(player, "player[%d]" % player_id, action_id)
+	if not restaurants_read.ok:
 		return true
-	var rest_list: Array = player["restaurants"]
+	var rest_list: Array = restaurants_read.value
 	if rest_list.is_empty():
 		return false
 
@@ -89,14 +92,17 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	# 需要至少有一个自己的餐厅（无需 restaurant_id）
 	var player0 := state.get_player(command.actor)
-	if player0.has("restaurants") and (player0["restaurants"] is Array):
-		if (player0["restaurants"] as Array).is_empty():
+	var own_restaurants_read := PlayerStateAccessClass.require_restaurants(player0, "player[%d]" % command.actor, action_id)
+	if own_restaurants_read.ok:
+		var own_restaurants: Array = own_restaurants_read.value
+		if own_restaurants.is_empty():
 			return Result.failure("你没有可移动的餐厅")
 
 	# 检查餐厅存在且归属当前玩家
-	assert(state.map is Dictionary, "move_restaurant: state.map 类型错误（期望 Dictionary）")
-	assert(state.map.has("restaurants") and (state.map["restaurants"] is Dictionary), "move_restaurant: state.map.restaurants 缺失或类型错误（期望 Dictionary）")
-	var restaurants: Dictionary = state.map["restaurants"]
+	var restaurants_read := MapStateAccessClass.require_restaurants(state, action_id)
+	if not restaurants_read.ok:
+		return restaurants_read
+	var restaurants: Dictionary = restaurants_read.value
 
 	# 规则：移动餐厅需要在岗的区域经理（data/employees/*.json usage_tags）
 	var player := state.get_player(command.actor)
@@ -158,9 +164,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var world_anchor: Vector2i = params["world_anchor"]
 	var rotation: int = int(params["rotation"])
 
-	assert(state.map is Dictionary, "move_restaurant: state.map 类型错误（期望 Dictionary）")
-	assert(state.map.has("restaurants") and (state.map["restaurants"] is Dictionary), "move_restaurant: state.map.restaurants 缺失或类型错误（期望 Dictionary）")
-	var restaurants: Dictionary = state.map["restaurants"]
+	var restaurants_read := MapStateAccessClass.require_restaurants(state, action_id)
+	if not restaurants_read.ok:
+		return restaurants_read
+	var restaurants: Dictionary = restaurants_read.value
 	if not restaurants.has(rest_id):
 		return Result.failure("餐厅不存在: %s" % rest_id)
 	var rest_val = restaurants[rest_id]
@@ -238,8 +245,11 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 	var rest_id_result := require_string_param(command, "restaurant_id")
 	assert(rest_id_result.ok, "move_restaurant 缺少/错误参数: restaurant_id")
 	var rest_id: String = rest_id_result.value
-	assert(_new_state.map.restaurants.has(rest_id), "move_restaurant 餐厅不存在: %s" % rest_id)
-	var rest: Dictionary = _new_state.map.restaurants[rest_id]
+	var restaurants_read := MapStateAccessClass.require_restaurants(_new_state, action_id)
+	assert(restaurants_read.ok, "move_restaurant: %s" % str(restaurants_read.error))
+	var restaurants: Dictionary = restaurants_read.value
+	assert(restaurants.has(rest_id), "move_restaurant 餐厅不存在: %s" % rest_id)
+	var rest: Dictionary = restaurants[rest_id]
 	assert(rest.has("anchor_pos") and rest["anchor_pos"] is Vector2i, "move_restaurant anchor_pos 缺失或类型错误")
 	var anchor_pos: Vector2i = rest["anchor_pos"]
 	assert(rest.has("rotation") and (rest["rotation"] is int or rest["rotation"] is float), "move_restaurant rotation 缺失或类型错误")

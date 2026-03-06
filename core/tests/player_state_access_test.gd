@@ -14,7 +14,10 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_require_player_int_field_reads_state_player()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_require_player_restaurants_reads_state_player()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 4})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -22,6 +25,7 @@ static func _make_state() -> GameState:
 		{
 			"cash": 12,
 			"coffee_shop_tokens_remaining": 3,
+			"restaurants": ["rest_0"],
 		},
 		{
 			"cash": 7,
@@ -55,4 +59,14 @@ static func _test_require_player_int_field_reads_state_player() -> Result:
 		return Result.failure("require_player_int_field 失败: %s" % read.error)
 	if int(read.value) != 12:
 		return Result.failure("player[0].cash 应为 12，实际: %s" % str(read.value))
+	return Result.success()
+
+static func _test_require_player_restaurants_reads_state_player() -> Result:
+	var state := _make_state()
+	var read := PlayerStateAccessClass.require_player_restaurants(state, 0, "PlayerStateAccessTest")
+	if not read.ok:
+		return Result.failure("require_player_restaurants 失败: %s" % read.error)
+	var restaurants: Array = read.value
+	if restaurants.size() != 1 or str(restaurants[0]) != "rest_0":
+		return Result.failure("player[0].restaurants 读取错误: %s" % str(restaurants))
 	return Result.success()
