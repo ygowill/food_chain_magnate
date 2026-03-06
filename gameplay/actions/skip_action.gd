@@ -8,6 +8,7 @@ const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_a
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 var phase_manager: PhaseManager = null
 
@@ -38,9 +39,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		if str(state.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS:
 			return Result.failure("请先选择银行储备卡")
 		var player := state.get_player(command.actor)
-		if not player.has("restaurants") or not (player["restaurants"] is Array):
-			return Result.failure("Setup: player.restaurants 缺失或类型错误（期望 Array）")
-		var restaurants: Array = player["restaurants"]
+		var restaurants_read := PlayerStateAccessClass.require_restaurants(player, "player", "Setup")
+		if not restaurants_read.ok:
+			return restaurants_read
+		var restaurants: Array = restaurants_read.value
 		if restaurants.is_empty() and not bool(player.get("forfeited", false)):
 			return Result.failure("设置阶段必须先放置餐厅才能确认结束")
 
