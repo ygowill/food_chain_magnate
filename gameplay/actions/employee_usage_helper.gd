@@ -6,6 +6,7 @@ extends RefCounted
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 static func append_use_employee_warning(warnings: Array[String], state: GameState, player_id: int, employee_id: String) -> void:
 	var use_r := MilestoneSystemClass.process_event(state, "UseEmployee", {"player_id": player_id, "id": employee_id})
@@ -20,11 +21,12 @@ static func get_active_employee_types_for_usage_tag(state: GameState, player_id:
 	var player := state.get_player(player_id)
 	if player.is_empty():
 		return []
-	var employees_val = player.get("employees", [])
-	if not (employees_val is Array):
+	var employees_read := PlayerStateAccessClass.require_employees(player, "player[%d]" % player_id, "EmployeeUsageHelper.get_active_employee_types_for_usage_tag")
+	if not employees_read.ok:
 		return []
+	var employees: Array = employees_read.value
 	var seen := {}
-	for emp_val in employees_val:
+	for emp_val in employees:
 		if not (emp_val is String):
 			continue
 		var emp_id := str(emp_val).strip_edges()
@@ -60,5 +62,14 @@ static func has_active_employee_with_usage_tag(state: GameState, player_id: int,
 	var def: EmployeeDef = def_val
 	if not def.has_usage_tag(usage_tag):
 		return false
+	var employees_read := PlayerStateAccessClass.require_employees(player, "player[%d]" % player_id, "EmployeeUsageHelper.has_active_employee_with_usage_tag")
+	if not employees_read.ok:
+		return false
+	var employees: Array = employees_read.value
+	for emp_val in employees:
+		if not (emp_val is String):
+			return false
+		if str(emp_val).strip_edges().is_empty():
+			return false
 	var active_count := EmployeeRulesClass.count_active_for_working(state, player, player_id, emp_id)
 	return active_count > 0
