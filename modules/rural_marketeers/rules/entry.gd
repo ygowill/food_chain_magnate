@@ -9,6 +9,7 @@ const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const ParseHelpers = preload("res://core/state/serialization/parse_helpers.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const PlaceGiantBillboardActionClass = preload("res://modules/rural_marketeers/actions/place_giant_billboard_action.gd")
 const PlaceHighwayOfframpActionClass = preload("res://modules/rural_marketeers/actions/place_highway_offramp_action.gd")
@@ -103,11 +104,10 @@ func _get_placement_conflicts_at_world_pos(state: GameState, world_pos: Vector2i
 func _on_restructuring_before_enter(state: GameState) -> Result:
 	if state == null:
 		return Result.failure("%s: state 为空" % MODULE_ID)
-	if not (state.map is Dictionary):
-		return Result.failure("%s: state.map 类型错误（期望 Dictionary）" % MODULE_ID)
-	if not state.map.has("houses") or not (state.map["houses"] is Dictionary):
-		return Result.failure("%s: state.map.houses 缺失或类型错误（期望 Dictionary）" % MODULE_ID)
-	var houses: Dictionary = state.map["houses"]
+	var houses_read := MapStateAccessClass.require_houses(state, MODULE_ID)
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
 
 	if not houses.has(RURAL_HOUSE_ID):
 		houses[RURAL_HOUSE_ID] = {
