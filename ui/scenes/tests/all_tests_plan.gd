@@ -131,6 +131,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.UiFryChefEmployeeIdContractTestClass.run(),
 		},
 		{
+			"name": "ModuleUiMetadataBootstrapTest",
+			"fn": func() -> Result: return TestRefs.ModuleUiMetadataBootstrapTestClass.run(),
+		},
+		{
 			"name": "EmployeeTreeLayoutBottomTagTest",
 			"fn": func() -> Result: return TestRefs.EmployeeTreeLayoutBottomTagTestClass.run(),
 		},

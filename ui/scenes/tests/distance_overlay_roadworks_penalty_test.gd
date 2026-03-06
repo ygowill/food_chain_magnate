@@ -4,6 +4,7 @@ class_name DistanceOverlayRoadworksPenaltyTest
 extends RefCounted
 
 const DistanceOverlayClass = preload("res://ui/overlays/distance_overlay.gd")
+const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 
@@ -23,6 +24,9 @@ static func run(seed_val: int = 12345) -> Result:
 	var init := e.initialize(2, seed_val, enabled_modules)
 	if not init.ok:
 		return _finish(Result.failure("初始化失败: %s" % init.error), null, e)
+	var ui_metadata_apply := ModuleUiMetadataBootstrapClass.apply(e)
+	if not ui_metadata_apply.ok:
+		return _finish(Result.failure("UI metadata 装配失败: %s" % ui_metadata_apply.error), null, e)
 	var s: GameState = e.get_state()
 
 	var road_graph = RoadGraphCacheClass.get_road_graph(s)

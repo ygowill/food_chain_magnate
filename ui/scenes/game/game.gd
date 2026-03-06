@@ -59,6 +59,7 @@ const GameUiStyleApplierClass = preload("res://ui/scenes/game/controllers/ui_sty
 const GameRuntimeDisposerClass = preload("res://ui/scenes/game/controllers/runtime_disposer.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
+const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const RulesDocsClass = preload("res://ui/utils/rules_docs.gd")
@@ -435,7 +436,7 @@ func _initialize_game() -> void:
 	if Globals.current_game_engine != null and Globals.current_game_engine is GameEngine:
 		var existing: GameEngine = Globals.current_game_engine
 		if existing.get_state() != null:
-			game_engine = existing
+			_set_active_game_engine(existing)
 			var s: GameState = existing.get_state()
 			if s != null and str(s.phase) == DefsClass.PHASE_GAME_OVER:
 				_startup_suppress_game_over_modal = true
@@ -454,8 +455,7 @@ func _initialize_game() -> void:
 		GameLog.error("Game", "游戏初始化失败: %s" % init_result.error)
 		return
 
-	Globals.current_game_engine = game_engine
-	Globals.is_game_active = true
+	_set_active_game_engine(game_engine)
 
 	GameLog.info("Game", "游戏初始化完成 - 玩家数: %d, 种子: %d" % [
 		Globals.player_count,
@@ -851,6 +851,9 @@ func is_timeline_read_only_active() -> bool:
 func _set_active_game_engine(engine: GameEngine) -> void:
 	if engine == null:
 		return
+	var ui_metadata_apply := ModuleUiMetadataBootstrapClass.apply(engine)
+	if not ui_metadata_apply.ok:
+		GameLog.error("Game", "模块 UI metadata 装配失败: %s" % ui_metadata_apply.error)
 
 	game_engine = engine
 	if Globals != null:

@@ -2,6 +2,7 @@ class_name ReserveAreaSupplyVisualsTest
 extends RefCounted
 
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
+const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
 const TokensClass = preload("res://ui/components/reserve_area/reserve_area_full_screen_view_tokens.gd")
 const ReserveAreaViewClass = preload("res://ui/components/reserve_area/reserve_area_full_screen_view.gd")
 const StructuresPassClass = preload("res://ui/scenes/game/map/drawer/passes/structures_pass.gd")
@@ -27,6 +28,9 @@ static func run() -> Result:
 	var init_r := engine.initialize(2, 12345, modules)
 	if not init_r.ok:
 		return _finish(Result.failure("初始化失败: %s" % init_r.error), view, engine, engine2)
+	var ui_metadata_apply := ModuleUiMetadataBootstrapClass.apply(engine)
+	if not ui_metadata_apply.ok:
+		return _finish(Result.failure("UI metadata 装配失败: %s" % ui_metadata_apply.error), view, engine, engine2)
 	var state := engine.get_state()
 	if state == null:
 		return _finish(Result.failure("state 为空"), view, engine, engine2)
@@ -103,6 +107,9 @@ static func run() -> Result:
 	var init2_r := engine2.initialize(2, 12345, modules2)
 	if not init2_r.ok:
 		return _finish(Result.failure("初始化失败(lobbyists+rural_marketeers): %s" % init2_r.error), view, engine, engine2)
+	var ui_metadata_apply2 := ModuleUiMetadataBootstrapClass.apply(engine2)
+	if not ui_metadata_apply2.ok:
+		return _finish(Result.failure("UI metadata 装配失败(lobbyists+rural_marketeers): %s" % ui_metadata_apply2.error), view, engine, engine2)
 	var state2 := engine2.get_state()
 	if state2 == null:
 		return _finish(Result.failure("state2 为空"), view, engine, engine2)

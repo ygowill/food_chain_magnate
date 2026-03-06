@@ -3,6 +3,7 @@ class_name MapOverlayProviderRegistryTest
 extends RefCounted
 
 const MapOverlayProviderRegistryClass = preload("res://core/rules/map_overlay_provider_registry.gd")
+const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
 
 static func run(seed_val: int = 12345) -> Result:
 	var engine := GameEngine.new()
@@ -19,9 +20,12 @@ static func run(seed_val: int = 12345) -> Result:
 	])
 	if not init.ok:
 		return Result.failure("初始化失败: %s" % init.error)
+	var ui_metadata_apply := ModuleUiMetadataBootstrapClass.apply(engine)
+	if not ui_metadata_apply.ok:
+		return Result.failure("UI metadata 装配失败: %s" % ui_metadata_apply.error)
 
 	if not MapOverlayProviderRegistryClass.is_loaded():
-		return Result.failure("MapOverlayProviderRegistry 未加载（engine.initialize 后应已配置）")
+		return Result.failure("MapOverlayProviderRegistry 未加载（ModuleUiMetadataBootstrap.apply 后应已配置）")
 
 	# 构造带 lobbyists 私有 key 的 map_data（不依赖模块逻辑），通过 provider 生成通用 overlay 指令。
 	var map_data := {
@@ -81,4 +85,3 @@ static func run(seed_val: int = 12345) -> Result:
 		"pending_cells": pending_dirs.size(),
 		"marker_count": marker_set.size(),
 	})
-

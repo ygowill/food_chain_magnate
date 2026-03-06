@@ -1,6 +1,8 @@
 class_name PieceUiHintsRegistryLobbyistsTest
 extends RefCounted
 
+const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
+
 static func run(seed_val: int = 12345) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(2, seed_val, [
@@ -16,9 +18,12 @@ static func run(seed_val: int = 12345) -> Result:
 	])
 	if not init.ok:
 		return Result.failure("初始化失败: %s" % init.error)
+	var ui_metadata_apply := ModuleUiMetadataBootstrapClass.apply(engine)
+	if not ui_metadata_apply.ok:
+		return Result.failure("UI metadata 装配失败: %s" % ui_metadata_apply.error)
 
 	if not PieceUiHintsRegistry.is_loaded():
-		return Result.failure("PieceUiHintsRegistry 未加载（engine.initialize 后应已配置）")
+		return Result.failure("PieceUiHintsRegistry 未加载（ModuleUiMetadataBootstrap.apply 后应已配置）")
 
 	var overlay := PieceUiHintsRegistry.get_road_overlay("lobbyists_road_straight")
 	if overlay.is_empty():
@@ -41,4 +46,3 @@ static func run(seed_val: int = 12345) -> Result:
 		"segments": Array(segments_val).size(),
 		"arrows": Array(arrows_val).size(),
 	})
-

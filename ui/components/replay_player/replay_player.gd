@@ -3,6 +3,8 @@
 class_name ReplayPlayer
 extends PanelContainer
 
+const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
+
 signal state_changed(command_index: int, state: GameState)
 signal playback_finished()
 signal error_occurred(message: String)
@@ -305,6 +307,11 @@ func load_from_engine(engine: GameEngine) -> Result:
 		return Result.failure("游戏引擎为空")
 
 	_clear_error()
+	var ui_metadata_apply := ModuleUiMetadataBootstrapClass.apply(engine)
+	if not ui_metadata_apply.ok:
+		_set_error(ui_metadata_apply.error)
+		error_occurred.emit(ui_metadata_apply.error)
+		return ui_metadata_apply
 
 	_game_engine = engine
 	_command_history = engine.get_command_history()

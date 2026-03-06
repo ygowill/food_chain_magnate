@@ -3,6 +3,7 @@ class_name EffectUiTextRegistryTest
 extends RefCounted
 
 const EffectUiTextRegistryClass = preload("res://core/rules/effect_ui_text_registry.gd")
+const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
 
 static func run(seed_val: int = 12345) -> Result:
 	var r1 := _test_base_milestones_bundle(seed_val)
@@ -32,6 +33,9 @@ static func _test_base_milestones_bundle(seed_val: int) -> Result:
 	])
 	if not init.ok:
 		return Result.failure("初始化失败（base_milestones bundle）: %s" % init.error)
+	var ui_metadata_apply := ModuleUiMetadataBootstrapClass.apply(engine)
+	if not ui_metadata_apply.ok:
+		return Result.failure("UI metadata 装配失败（base_milestones bundle）: %s" % ui_metadata_apply.error)
 
 	var t1 := EffectUiTextRegistryClass.get_effect_id_text("ketchup_mechanism:dinnertime:distance_delta:ketchup")
 	if t1.is_empty():
@@ -65,6 +69,9 @@ static func _test_new_milestones_bundle(seed_val: int) -> Result:
 	])
 	if not init.ok:
 		return Result.failure("初始化失败（new_milestones bundle）: %s" % init.error)
+	var ui_metadata_apply := ModuleUiMetadataBootstrapClass.apply(engine)
+	if not ui_metadata_apply.ok:
+		return Result.failure("UI metadata 装配失败（new_milestones bundle）: %s" % ui_metadata_apply.error)
 
 	var t1 := EffectUiTextRegistryClass.get_effect_id_text("new_milestones:dinnertime:distance_delta:first_marketeer_used")
 	if t1.is_empty():

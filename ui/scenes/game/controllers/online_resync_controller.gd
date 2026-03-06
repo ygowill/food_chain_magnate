@@ -3,6 +3,8 @@
 class_name GameOnlineResyncController
 extends RefCounted
 
+const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
+
 var _host: Node = null
 var _game_log_panel: Control = null
 
@@ -229,6 +231,10 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 			if _show_confirm.is_valid():
 				_show_confirm.call("联机同步失败", r.error, Callable(), Callable(), "确定", "关闭")
 		return
+
+	var ui_metadata_apply := ModuleUiMetadataBootstrapClass.apply(engine)
+	if not ui_metadata_apply.ok:
+		GameLog.error("Game", "联机 ResyncArchive UI metadata 装配失败: %s" % ui_metadata_apply.error)
 
 	GameLog.warn("Game", "联机 ResyncArchive 加载完成（命令数=%d）" % int(engine.command_history.size()))
 	_resync_in_progress = false

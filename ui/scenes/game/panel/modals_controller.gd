@@ -9,6 +9,7 @@ const ReserveCardSelectionModalScene = preload("res://ui/components/modal_panel/
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const UiZClass = preload("res://ui/utils/ui_z.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ModuleUiMetadataClass = preload("res://gameplay/module_ui_metadata.gd")
 const PhaseActionUiRegistryClass = preload("res://ui/scenes/game/panel/phase_action_ui_registry.gd")
 
 var _scene = null
@@ -180,14 +181,7 @@ func _initialize_modal(modal_ref, scene: PackedScene, signal_map: Dictionary):
 func _load_phase_action_ui_modal_scene(phase_name: String, kind: String) -> PackedScene:
 	if _scene == null:
 		return null
-	var engine = _scene.game_engine if _scene != null else null
-	if engine == null:
-		return null
-	var ruleset = engine.ruleset_v2
-	if ruleset == null or not ruleset.has_method("get_phase_action_ui_modal_scene_path"):
-		return null
-
-	var scene_path: String = str(ruleset.get_phase_action_ui_modal_scene_path(phase_name, kind)).strip_edges()
+	var scene_path: String = str(ModuleUiMetadataClass.get_phase_action_ui_modal_scene_path(phase_name, kind)).strip_edges()
 	if scene_path.is_empty():
 		GameLog.warn("GamePanelModalsController", "未注册 phase action UI modal: %s:%s" % [phase_name, kind])
 		return null

@@ -2,6 +2,8 @@ class_name PhaseActionUiModalRegistrationTest
 extends RefCounted
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ModuleUiMetadataClass = preload("res://gameplay/module_ui_metadata.gd")
+const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
 
 static func run(seed_val: int = 12345) -> Result:
 	var engine := GameEngine.new()
@@ -18,15 +20,18 @@ static func run(seed_val: int = 12345) -> Result:
 	])
 	if not init.ok:
 		return Result.failure("初始化失败: %s" % init.error)
+	var ui_metadata_apply := ModuleUiMetadataBootstrapClass.apply(engine)
+	if not ui_metadata_apply.ok:
+		return Result.failure("UI metadata 装配失败: %s" % ui_metadata_apply.error)
 
-	if engine.ruleset_v2 == null or not engine.ruleset_v2.has_method("get_phase_action_ui_modal_scene_path"):
-		return Result.failure("ruleset_v2 缺少 phase action UI modal 查询接口")
+	if not ModuleUiMetadataClass.is_loaded():
+		return Result.failure("ModuleUiMetadata 未加载")
 
-	var path: String = str(engine.ruleset_v2.get_phase_action_ui_modal_scene_path(DefsClass.PHASE_CLEANUP, "kimchi")).strip_edges()
+	var path: String = str(ModuleUiMetadataClass.get_phase_action_ui_modal_scene_path(DefsClass.PHASE_CLEANUP, "kimchi")).strip_edges()
 	if path.is_empty():
 		return Result.failure("kimchi phase action UI modal 未注册")
 
-	var base_path: String = str(engine.ruleset_v2.get_phase_action_ui_modal_scene_path(DefsClass.PHASE_CLEANUP, "fridge_keep")).strip_edges()
+	var base_path: String = str(ModuleUiMetadataClass.get_phase_action_ui_modal_scene_path(DefsClass.PHASE_CLEANUP, "fridge_keep")).strip_edges()
 	if base_path.is_empty():
 		return Result.failure("fridge_keep phase action UI modal 未注册")
 
