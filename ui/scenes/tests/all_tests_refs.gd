@@ -101,6 +101,7 @@ const RuralMarketeersStateAccessTestClass = preload("res://core/tests/rural_mark
 const RuralMarketeersMarketingStateAccessTestClass = preload("res://core/tests/rural_marketeers_marketing_state_access_test.gd")
 const RuralMarketeersDinnertimeStateAccessTestClass = preload("res://core/tests/rural_marketeers_dinnertime_state_access_test.gd")
 const RuralGiantBillboardStateAccessTestClass = preload("res://core/tests/rural_giant_billboard_state_access_test.gd")
+const DebugAddHouseDemandStateAccessTestClass = preload("res://core/tests/debug_add_house_demand_state_access_test.gd")
 const CleanupInventoryTestClass = preload("res://core/tests/cleanup_inventory_test.gd")
 const FireActionTestClass = preload("res://core/tests/fire_action_test.gd")
 const CompanyStructureTestClass = preload("res://core/tests/company_structure_test.gd")

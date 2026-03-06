@@ -451,6 +451,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.RuralGiantBillboardStateAccessTestClass.run(2, 12345),
 		},
 		{
+			"name": "DebugAddHouseDemandStateAccessTest",
+			"fn": func() -> Result: return TestRefs.DebugAddHouseDemandStateAccessTestClass.run(2, 12345),
+		},
+		{
 			"name": "CleanupInventoryTest",
 			"fn": func() -> Result: return TestRefs.CleanupInventoryTestClass.run(2, 12345),
 		},

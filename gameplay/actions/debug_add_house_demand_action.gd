@@ -4,6 +4,7 @@ class_name DebugAddHouseDemandAction
 extends ActionExecutor
 
 const MarketingSettlementHelpersClass = preload("res://modules/base_rules/rules/phase/marketing/settlement_helpers.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 func _init() -> void:
 	action_id = "debug_add_house_demand"
@@ -52,11 +53,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return marketing_type_read
 	var marketing_type: String = marketing_type_read.value
 
-	if not (state.map is Dictionary):
-		return Result.failure("state.map 类型错误（期望 Dictionary）")
-	if not state.map.has("houses") or not (state.map["houses"] is Dictionary):
-		return Result.failure("state.map.houses 类型错误（期望 Dictionary）")
-	var houses: Dictionary = state.map["houses"]
+	var houses_read := MapStateAccessClass.require_houses(state, action_id)
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
 	if not houses.has(house_id):
 		return Result.failure("房屋不存在: %s" % house_id)
 	var house_val = houses[house_id]
