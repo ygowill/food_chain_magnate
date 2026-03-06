@@ -3,6 +3,7 @@ extends RefCounted
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const PhaseManagerClass = preload("res://core/engine/phase_manager.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 const Phase = PhaseDefsClass.Phase
 const HookType = PhaseManagerClass.HookType
@@ -38,14 +39,10 @@ func _on_working_before_enter(state: GameState) -> Result:
 	var all: Dictionary = {}
 
 	for pid in range(state.players.size()):
-		var p_val = state.players[pid]
-		if not (p_val is Dictionary):
-			return Result.failure("night_shift_managers: players[%d] 类型错误（期望 Dictionary）" % pid)
-		var player: Dictionary = p_val
-		var employees_val = player.get("employees", null)
-		if not (employees_val is Array):
-			return Result.failure("night_shift_managers: players[%d].employees 类型错误（期望 Array[String]）" % pid)
-		var employees: Array = employees_val
+		var employees_read := PlayerStateAccessClass.require_player_employees(state, pid, "night_shift_managers")
+		if not employees_read.ok:
+			return employees_read
+		var employees: Array = employees_read.value
 
 		var has_nsm := false
 		for i in range(employees.size()):
