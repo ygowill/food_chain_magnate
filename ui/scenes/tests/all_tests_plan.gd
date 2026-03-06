@@ -407,6 +407,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.MandatoryActionsRulesStateAccessTestClass.run(2, 12345),
 		},
 		{
+			"name": "FireActionStateAccessTest",
+			"fn": func() -> Result: return TestRefs.FireActionStateAccessTestClass.run(2, 12345),
+		},
+		{
 			"name": "CleanupInventoryTest",
 			"fn": func() -> Result: return TestRefs.CleanupInventoryTestClass.run(2, 12345),
 		},

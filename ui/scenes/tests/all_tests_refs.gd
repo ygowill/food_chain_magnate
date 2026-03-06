@@ -90,6 +90,7 @@ const StateUpdaterCashStateAccessTestClass = preload("res://core/tests/state_upd
 const TrainActionStateAccessTestClass = preload("res://core/tests/train_action_state_access_test.gd")
 const EmployeeUsageHelperStateAccessTestClass = preload("res://core/tests/employee_usage_helper_state_access_test.gd")
 const MandatoryActionsRulesStateAccessTestClass = preload("res://core/tests/mandatory_actions_rules_state_access_test.gd")
+const FireActionStateAccessTestClass = preload("res://core/tests/fire_action_state_access_test.gd")
 const CleanupInventoryTestClass = preload("res://core/tests/cleanup_inventory_test.gd")
 const FireActionTestClass = preload("res://core/tests/fire_action_test.gd")
 const CompanyStructureTestClass = preload("res://core/tests/company_structure_test.gd")

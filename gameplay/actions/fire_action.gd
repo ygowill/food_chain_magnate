@@ -121,20 +121,23 @@ func _generate_specific_events(old_state: GameState, _new_state: GameState, comm
 	}]
 
 func _find_employee_location(player: Dictionary, employee_id: String) -> String:
-	assert(player.has("employees") and (player["employees"] is Array), "fire: player.employees 缺失或类型错误（期望 Array[String]）")
-	var active: Array = player["employees"]
+	var active_read := PlayerStateAccessClass.require_employees(player, "player", "fire")
+	assert(active_read.ok, active_read.error)
+	var active: Array = active_read.value
 	for i in range(active.size()):
 		assert(active[i] is String, "fire: player.employees[%d] 类型错误（期望 String）" % i)
 	if active.find(employee_id) >= 0:
 		return "active"
-	assert(player.has("reserve_employees") and (player["reserve_employees"] is Array), "fire: player.reserve_employees 缺失或类型错误（期望 Array[String]）")
-	var reserve: Array = player["reserve_employees"]
+	var reserve_read := PlayerStateAccessClass.require_reserve_employees(player, "player", "fire")
+	assert(reserve_read.ok, reserve_read.error)
+	var reserve: Array = reserve_read.value
 	for i in range(reserve.size()):
 		assert(reserve[i] is String, "fire: player.reserve_employees[%d] 类型错误（期望 String）" % i)
 	if reserve.find(employee_id) >= 0:
 		return "reserve"
-	assert(player.has("busy_marketers") and (player["busy_marketers"] is Array), "fire: player.busy_marketers 缺失或类型错误（期望 Array[String]）")
-	var busy: Array = player["busy_marketers"]
+	var busy_read := PlayerStateAccessClass.require_busy_marketers(player, "player", "fire")
+	assert(busy_read.ok, busy_read.error)
+	var busy: Array = busy_read.value
 	for i in range(busy.size()):
 		assert(busy[i] is String, "fire: player.busy_marketers[%d] 类型错误（期望 String）" % i)
 	if busy.find(employee_id) >= 0:
@@ -157,8 +160,10 @@ func _can_fire_busy_marketer(state: GameState, player_id: int, employee_id: Stri
 	if player.is_empty():
 		return false
 
-	assert(player.has("busy_marketers") and (player["busy_marketers"] is Array), "fire: player.busy_marketers 缺失或类型错误（期望 Array[String]）")
-	var busy: Array = player["busy_marketers"]
+	var busy_read := PlayerStateAccessClass.require_busy_marketers(player, "player", "FireAction._can_fire_busy_marketer")
+	if not busy_read.ok:
+		return false
+	var busy: Array = busy_read.value
 	for i in range(busy.size()):
 		assert(busy[i] is String, "fire: player.busy_marketers[%d] 类型错误（期望 String）" % i)
 	if busy.find(employee_id) < 0:
@@ -169,8 +174,10 @@ func _can_fire_busy_marketer(state: GameState, player_id: int, employee_id: Stri
 		return false
 
 	# 必须已解雇所有其他需要薪水的员工（在岗/待命）
-	assert(player.has("employees") and (player["employees"] is Array), "fire: player.employees 缺失或类型错误（期望 Array[String]）")
-	var active: Array = player["employees"]
+	var active_read := PlayerStateAccessClass.require_employees(player, "player", "FireAction._can_fire_busy_marketer")
+	if not active_read.ok:
+		return false
+	var active: Array = active_read.value
 	for i in range(active.size()):
 		assert(active[i] is String, "fire: player.employees[%d] 类型错误（期望 String）" % i)
 		var emp_id: String = active[i]
@@ -178,8 +185,10 @@ func _can_fire_busy_marketer(state: GameState, player_id: int, employee_id: Stri
 		if EmployeeRulesClass.requires_salary(emp_id, player):
 			return false
 
-	assert(player.has("reserve_employees") and (player["reserve_employees"] is Array), "fire: player.reserve_employees 缺失或类型错误（期望 Array[String]）")
-	var reserve: Array = player["reserve_employees"]
+	var reserve_read := PlayerStateAccessClass.require_reserve_employees(player, "player", "FireAction._can_fire_busy_marketer")
+	if not reserve_read.ok:
+		return false
+	var reserve: Array = reserve_read.value
 	for i in range(reserve.size()):
 		assert(reserve[i] is String, "fire: player.reserve_employees[%d] 类型错误（期望 String）" % i)
 		var emp_id2: String = reserve[i]
@@ -188,9 +197,10 @@ func _can_fire_busy_marketer(state: GameState, player_id: int, employee_id: Stri
 			return false
 
 	# 仍无力支付薪资时，允许解雇其中一名忙碌营销员（按 PaydaySettlement 的计算口径，含折扣/里程碑/token）。
-	if not (player.has("cash") and (player["cash"] is int)):
+	var cash_read := PlayerStateAccessClass.require_int_field(player, "cash", "player", "FireAction._can_fire_busy_marketer")
+	if not cash_read.ok:
 		return false
-	var cash: int = int(player["cash"])
+	var cash: int = int(cash_read.value)
 
 	var base_salary_cost: int = state.get_rule_int("salary_cost")
 	var salary_cost := base_salary_cost
