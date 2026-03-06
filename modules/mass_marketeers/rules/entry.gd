@@ -2,6 +2,7 @@ extends RefCounted
 
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 const Phase = PhaseDefsClass.Phase
 
@@ -25,14 +26,10 @@ func _on_marketing_before_primary(state: GameState, _phase_manager: PhaseManager
 
 	var active_count := 0
 	for i in range(state.players.size()):
-		var p_val = state.players[i]
-		if not (p_val is Dictionary):
-			return Result.failure("mass_marketeers: players[%d] 类型错误（期望 Dictionary）" % i)
-		var p: Dictionary = p_val
-		var employees_val = p.get("employees", null)
-		if not (employees_val is Array):
-			return Result.failure("mass_marketeers: players[%d].employees 类型错误（期望 Array[String]）" % i)
-		var employees: Array = employees_val
+		var employees_read := PlayerStateAccessClass.require_player_employees(state, i, "mass_marketeers")
+		if not employees_read.ok:
+			return employees_read
+		var employees: Array = employees_read.value
 		for e_i in range(employees.size()):
 			var emp_val = employees[e_i]
 			if not (emp_val is String):
