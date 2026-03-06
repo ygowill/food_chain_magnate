@@ -211,6 +211,11 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var rotation: int = int(info.get("rotation", 0))
 	var footprint_size: Vector2i = info.get("footprint_size", Vector2i.ONE)
 
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, action_id)
+	if not placements_read.ok:
+		return placements_read
+	var placements: Dictionary = placements_read.value
+
 	var instance := {
 		"board_number": board_number,
 		"type": marketing_type,
@@ -227,9 +232,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	}
 	state.marketing_instances.append(instance)
 
-	if not (state.map is Dictionary) or not state.map.has("marketing_placements") or not (state.map["marketing_placements"] is Dictionary):
-		return Result.failure("state.map.marketing_placements 缺失或类型错误")
-	state.map["marketing_placements"][str(board_number)] = {
+	placements[str(board_number)] = {
 		"board_number": board_number,
 		"type": marketing_type,
 		"owner": player_id,
@@ -241,6 +244,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"axis": "",
 		"tile_index": -1,
 	}
+	state.map["marketing_placements"] = placements
 
 	var player_val = state.players[player_id]
 	assert(player_val is Dictionary, "place_new_restaurant_mailbox: player 类型错误")
