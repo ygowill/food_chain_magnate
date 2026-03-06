@@ -87,6 +87,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.RulesetUiExtensionsFacadeTestClass.run(),
 		},
 		{
+			"name": "CatalogRegistryBundleIsolationTest",
+			"fn": func() -> Result: return TestRefs.CatalogRegistryBundleIsolationTestClass.run(),
+		},
+		{
 			"name": "PlatformApiResponseParseTest",
 			"fn": func() -> Result: return TestRefs.PlatformApiResponseParseTestClass.run(),
 		},

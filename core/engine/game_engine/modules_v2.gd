@@ -49,10 +49,11 @@ static func reset(engine) -> void:
 	engine.content_catalog_v2 = ContentCatalogClass.new()
 	engine.ruleset_v2 = null
 	engine.modules_v2_base_dir = ""
+	if engine.catalog_registry_bundle != null and engine.catalog_registry_bundle.has_method("clear"):
+		engine.catalog_registry_bundle.clear()
+	if engine.has_method("activate_registry_bundles"):
+		engine.activate_registry_bundles()
 
-	ProductRegistryClass.reset()
-	EmployeeRegistryClass.reset()
-	MarketingRegistryClass.reset()
 	MarketingTypeRegistryClass.reset()
 	BankruptcyRegistryClass.reset()
 	DinnertimeDemandRegistryClass.reset()
@@ -62,10 +63,7 @@ static func reset(engine) -> void:
 	PlacementConflictRegistryClass.reset()
 	RangeOriginRegistryClass.reset()
 	StateSchemaRegistryClass.reset()
-	MilestoneRegistryClass.reset()
 	MilestoneEffectRegistryClass.reset_current()
-	TileRegistryClass.reset()
-	PieceRegistryClass.reset()
 
 	if engine.phase_manager != null and engine.phase_manager.has_method("set_settlement_registry"):
 		engine.phase_manager.set_settlement_registry(null)
@@ -85,6 +83,10 @@ static func apply(engine, module_ids: Array[String], base_dir: String) -> Result
 	engine.module_manifests_v2 = {}
 	engine.content_catalog_v2 = ContentCatalogClass.new()
 	engine.ruleset_v2 = null
+	if engine.catalog_registry_bundle != null and engine.catalog_registry_bundle.has_method("clear"):
+		engine.catalog_registry_bundle.clear()
+	if engine.has_method("activate_registry_bundles"):
+		engine.activate_registry_bundles()
 
 	if module_ids.is_empty():
 		return Result.failure("模块系统 V2：enabled_modules_v2 不能为空（严格模式）")
@@ -209,7 +211,7 @@ static func apply(engine, module_ids: Array[String], base_dir: String) -> Result
 	PerfTraceClass.end_span(span_ruleset_apply)
 
 	var span_catalog_registries := PerfTraceClass.begin_span("modules_v2:configure_registries_from_catalog")
-	var prod_reg := ProductRegistryClass.configure_from_catalog(engine.content_catalog_v2)
+	var prod_reg := ProductRegistryClass.configure_from_catalog(engine.content_catalog_v2, engine.get_catalog_registry_bundle())
 	if not prod_reg.ok:
 		return Result.failure("模块系统 V2：配置 ProductRegistry 失败: %s" % prod_reg.error)
 
@@ -223,22 +225,24 @@ static func apply(engine, module_ids: Array[String], base_dir: String) -> Result
 	if not train_ref_check.ok:
 		return Result.failure("模块系统 V2：%s" % train_ref_check.error)
 
-	var emp_reg := EmployeeRegistryClass.configure_from_catalog(engine.content_catalog_v2)
+	var emp_reg := EmployeeRegistryClass.configure_from_catalog(engine.content_catalog_v2, engine.get_catalog_registry_bundle())
 	if not emp_reg.ok:
 		return Result.failure("模块系统 V2：配置 EmployeeRegistry 失败: %s" % emp_reg.error)
-	var mk_reg := MarketingRegistryClass.configure_from_catalog(engine.content_catalog_v2)
+	var mk_reg := MarketingRegistryClass.configure_from_catalog(engine.content_catalog_v2, engine.get_catalog_registry_bundle())
 	if not mk_reg.ok:
 		return Result.failure("模块系统 V2：配置 MarketingRegistry 失败: %s" % mk_reg.error)
-	var ms_reg := MilestoneRegistryClass.configure_from_catalog(engine.content_catalog_v2)
+	var ms_reg := MilestoneRegistryClass.configure_from_catalog(engine.content_catalog_v2, engine.get_catalog_registry_bundle())
 	if not ms_reg.ok:
 		return Result.failure("模块系统 V2：配置 MilestoneRegistry 失败: %s" % ms_reg.error)
-	var tile_reg := TileRegistryClass.configure_from_catalog(engine.content_catalog_v2)
+	var tile_reg := TileRegistryClass.configure_from_catalog(engine.content_catalog_v2, engine.get_catalog_registry_bundle())
 	if not tile_reg.ok:
 		return Result.failure("模块系统 V2：配置 TileRegistry 失败: %s" % tile_reg.error)
-	var piece_reg := PieceRegistryClass.configure_from_catalog(engine.content_catalog_v2)
+	var piece_reg := PieceRegistryClass.configure_from_catalog(engine.content_catalog_v2, engine.get_catalog_registry_bundle())
 	if not piece_reg.ok:
 		return Result.failure("模块系统 V2：配置 PieceRegistry 失败: %s" % piece_reg.error)
 
+	if engine.has_method("activate_registry_bundles"):
+		engine.activate_registry_bundles()
 	PerfTraceClass.end_span(span_catalog_registries)
 	PerfTraceClass.end_span(span_total)
 	return Result.success().with_warnings(ruleset_read.warnings)

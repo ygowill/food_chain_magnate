@@ -7,20 +7,34 @@ extends RefCounted
 
 const EmployeeDefClass = preload("res://core/data/employee_def.gd")
 const CatalogRegistryHelpersClass = preload("res://core/utils/catalog_registry_helpers.gd")
+const CatalogRegistryBundleClass = preload("res://core/engine/game_engine/catalog_registry_bundle.gd")
 
-# === 静态缓存 ===
-static var _employees: Dictionary = {}  # employee_id -> EmployeeDef
-static var _loaded: bool = false
+static var _current_bundle = CatalogRegistryBundleClass.new()
 
-# === 静态方法 ===
+static func _get_bundle():
+	if _current_bundle == null:
+		_current_bundle = CatalogRegistryBundleClass.new()
+	return _current_bundle
+
+static func _resolve_bundle(bundle = null):
+	if bundle != null:
+		return bundle
+	return _get_bundle()
+
+static func set_current_bundle(bundle) -> void:
+	_current_bundle = bundle if bundle != null else CatalogRegistryBundleClass.new()
+
+static func reset_current_bundle() -> void:
+	_current_bundle = CatalogRegistryBundleClass.new()
 
 static func is_loaded() -> bool:
-	return _loaded
+	return bool(_get_bundle().employee_loaded)
 
 static func _ensure_loaded() -> void:
-	assert(_loaded, "EmployeeRegistry 未初始化：请通过模块系统 V2 装配 ContentCatalog")
+	var bundle = _get_bundle()
+	assert(bool(bundle.employee_loaded), "EmployeeRegistry 未初始化：请通过模块系统 V2 装配 ContentCatalog")
 
-static func configure_from_catalog(catalog) -> Result:
+static func configure_from_catalog(catalog, bundle = null) -> Result:
 	if catalog == null:
 		return Result.failure("EmployeeRegistry.configure_from_catalog: catalog 为空")
 	if not (catalog.employees is Dictionary):
@@ -36,57 +50,50 @@ static func configure_from_catalog(catalog) -> Result:
 	if not out_read.ok:
 		return out_read
 
-	_employees = out_read.value
-	_loaded = true
-	return Result.success(_employees.size())
+	var target = _resolve_bundle(bundle)
+	target.employee_defs = out_read.value
+	target.employee_loaded = true
+	return Result.success(target.employee_defs.size())
 
-# 获取员工定义
-# 返回 EmployeeDef 或 null
 static func get_def(employee_id: String) -> Variant:
 	_ensure_loaded()
-	return _employees.get(employee_id, null)
+	return _get_bundle().employee_defs.get(employee_id, null)
 
-# 检查员工是否需要薪水
 static func check_requires_salary(employee_id: String) -> bool:
 	var emp = get_def(employee_id)
 	assert(emp != null, "未知员工: %s" % employee_id)
 	return emp.salary
 
-# 检查员工是否存在
 static func has(employee_id: String) -> bool:
 	_ensure_loaded()
-	return _employees.has(employee_id)
+	return _get_bundle().employee_defs.has(employee_id)
 
-# 获取所有员工 ID
 static func get_all_ids() -> Array[String]:
 	_ensure_loaded()
 	var ids: Array[String] = []
-	for id in _employees.keys():
+	for id in _get_bundle().employee_defs.keys():
 		ids.append(id)
 	ids.sort()
 	return ids
 
-# 获取员工数量
 static func get_count() -> int:
 	_ensure_loaded()
-	return _employees.size()
+	return _get_bundle().employee_defs.size()
 
-# 重置缓存（用于测试）
 static func reset() -> void:
-	_employees.clear()
-	_loaded = false
-
-# === 调试 ===
+	var target = _get_bundle()
+	target.employee_defs.clear()
+	target.employee_loaded = false
 
 static func dump() -> String:
 	_ensure_loaded()
 	var output := "=== EmployeeRegistry ===\n"
-	output += "Total employees: %d\n" % _employees.size()
+	output += "Total employees: %d\n" % _get_bundle().employee_defs.size()
 	output += "\nEmployees:\n"
 
 	var ids := get_all_ids()
 	for id in ids:
-		var emp = _employees[id]
+		var emp = _get_bundle().employee_defs[id]
 		output += "  - %s: %s (salary: %s)\n" % [id, emp.name, emp.salary]
 
 	return output

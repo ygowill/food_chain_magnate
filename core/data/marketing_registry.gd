@@ -6,17 +6,34 @@ class_name MarketingRegistry
 extends RefCounted
 
 const MarketingDefClass = preload("res://core/data/marketing_def.gd")
+const CatalogRegistryBundleClass = preload("res://core/engine/game_engine/catalog_registry_bundle.gd")
 
-static var _defs: Dictionary = {}  # board_number -> MarketingDef
-static var _loaded: bool = false
+static var _current_bundle = CatalogRegistryBundleClass.new()
+
+static func _get_bundle():
+	if _current_bundle == null:
+		_current_bundle = CatalogRegistryBundleClass.new()
+	return _current_bundle
+
+static func _resolve_bundle(bundle = null):
+	if bundle != null:
+		return bundle
+	return _get_bundle()
+
+static func set_current_bundle(bundle) -> void:
+	_current_bundle = bundle if bundle != null else CatalogRegistryBundleClass.new()
+
+static func reset_current_bundle() -> void:
+	_current_bundle = CatalogRegistryBundleClass.new()
 
 static func _ensure_loaded() -> void:
-	assert(_loaded, "MarketingRegistry 未初始化：请通过模块系统 V2 装配 ContentCatalog")
+	var bundle = _get_bundle()
+	assert(bool(bundle.marketing_loaded), "MarketingRegistry 未初始化：请通过模块系统 V2 装配 ContentCatalog")
 
 static func is_loaded() -> bool:
-	return _loaded
+	return bool(_get_bundle().marketing_loaded)
 
-static func configure_from_catalog(catalog) -> Result:
+static func configure_from_catalog(catalog, bundle = null) -> Result:
 	if catalog == null:
 		return Result.failure("MarketingRegistry.configure_from_catalog: catalog 为空")
 	if not (catalog.marketing is Dictionary):
@@ -41,30 +58,32 @@ static func configure_from_catalog(catalog) -> Result:
 
 		out[bn] = def
 
-	_defs = out
-	_loaded = true
-	return Result.success(_defs.size())
+	var target = _resolve_bundle(bundle)
+	target.marketing_defs = out
+	target.marketing_loaded = true
+	return Result.success(target.marketing_defs.size())
 
 static func get_def(board_number: int) -> Variant:
 	_ensure_loaded()
-	return _defs.get(board_number, null)
+	return _get_bundle().marketing_defs.get(board_number, null)
 
 static func has(board_number: int) -> bool:
 	_ensure_loaded()
-	return _defs.has(board_number)
+	return _get_bundle().marketing_defs.has(board_number)
 
 static func get_all_board_numbers() -> Array[int]:
 	_ensure_loaded()
 	var nums: Array[int] = []
-	for k in _defs.keys():
+	for k in _get_bundle().marketing_defs.keys():
 		nums.append(int(k))
 	nums.sort()
 	return nums
 
 static func get_count() -> int:
 	_ensure_loaded()
-	return _defs.size()
+	return _get_bundle().marketing_defs.size()
 
 static func reset() -> void:
-	_defs.clear()
-	_loaded = false
+	var target = _get_bundle()
+	target.marketing_defs.clear()
+	target.marketing_loaded = false

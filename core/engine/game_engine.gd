@@ -15,6 +15,13 @@ const DiagnosticsClass = preload("res://core/engine/game_engine/diagnostics.gd")
 const ModulesV2Class = preload("res://core/engine/game_engine/modules_v2.gd")
 const RewindOpsClass = preload("res://core/engine/game_engine/rewind_ops.gd")
 const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
+const CatalogRegistryBundleClass = preload("res://core/engine/game_engine/catalog_registry_bundle.gd")
+const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
+const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
+const TileRegistryClass = preload("res://core/map/tile_registry.gd")
+const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 
 # === 核心组件 ===
 var state: GameState
@@ -29,6 +36,7 @@ var module_manifests_v2: Dictionary = {}  # module_id -> ModuleManifest
 var content_catalog_v2 = null  # ContentCatalog
 var ruleset_v2 = null  # RulesetV2
 var modules_v2_base_dir: String = ""
+var catalog_registry_bundle = CatalogRegistryBundleClass.new()
 
 # === 命令历史 ===
 var command_history: Array[Command] = []
@@ -51,7 +59,23 @@ var _initial_employee_totals: Dictionary = {}  # employee_id -> total_count (poo
 
 # === 内部工具 ===
 
+func activate_registry_bundles() -> void:
+	if catalog_registry_bundle == null:
+		catalog_registry_bundle = CatalogRegistryBundleClass.new()
+	ProductRegistryClass.set_current_bundle(catalog_registry_bundle)
+	EmployeeRegistryClass.set_current_bundle(catalog_registry_bundle)
+	MarketingRegistryClass.set_current_bundle(catalog_registry_bundle)
+	MilestoneRegistryClass.set_current_bundle(catalog_registry_bundle)
+	TileRegistryClass.set_current_bundle(catalog_registry_bundle)
+	PieceRegistryClass.set_current_bundle(catalog_registry_bundle)
+
+func get_catalog_registry_bundle():
+	if catalog_registry_bundle == null:
+		catalog_registry_bundle = CatalogRegistryBundleClass.new()
+	return catalog_registry_bundle
+
 func ensure_initialized() -> Result:
+	activate_registry_bundles()
 	if state == null:
 		return Result.failure("游戏引擎未初始化")
 	if action_registry == null:
@@ -117,6 +141,7 @@ func _init() -> void:
 	reset_modules_v2()
 
 func setup_action_registry(piece_registry: Dictionary = {}) -> Result:
+	activate_registry_bundles()
 	return ActionWiringClass.setup_action_registry(self, piece_registry)
 
 # 初始化新游戏
@@ -159,6 +184,7 @@ func dispose() -> void:
 	content_catalog_v2 = null
 	ruleset_v2 = null
 	modules_v2_base_dir = ""
+	catalog_registry_bundle = null
 
 	_initial_total_cash = 0
 	_initial_employee_totals.clear()
@@ -170,6 +196,7 @@ func dispose() -> void:
 
 # 执行命令
 func execute_command(command: Command, is_replay: bool = false) -> Result:
+	activate_registry_bundles()
 	return CommandRunnerClass.execute_command(self, command, is_replay)
 
 # 批量执行命令
@@ -188,10 +215,12 @@ func execute_commands(commands: Array[Command]) -> Result:
 
 # 回退到指定命令
 func rewind_to_command(target_index: int) -> Result:
+	activate_registry_bundles()
 	return RewindOpsClass.rewind_to_command(self, target_index)
 
 # 完整重放（从头开始）
 func full_replay() -> Result:
+	activate_registry_bundles()
 	return RewindOpsClass.full_replay(self)
 
 # === 校验点管理 ===
@@ -291,15 +320,18 @@ func get_recent_commands(count: int) -> Array[Command]:
 
 # 获取可用动作
 func get_available_actions() -> Array[String]:
+	activate_registry_bundles()
 	if state == null or action_registry == null:
 		return []
 	return action_registry.get_available_actions(state)
 
 func get_action_registry() -> ActionRegistry:
+	activate_registry_bundles()
 	return action_registry
 
 # 获取玩家可用动作
 func get_player_actions(player_id: int) -> Array[String]:
+	activate_registry_bundles()
 	if state == null or action_registry == null:
 		return []
 	return action_registry.get_player_available_actions(state, player_id)
