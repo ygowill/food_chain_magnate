@@ -443,6 +443,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.LobbyistsRoadStateAccessTestClass.run(2, 12345),
 		},
 		{
+			"name": "LobbyistsExtraTileStateAccessTest",
+			"fn": func() -> Result: return TestRefs.LobbyistsExtraTileStateAccessTestClass.run(2, 12345),
+		},
+		{
 			"name": "LobbyistsParkStateAccessTest",
 			"fn": func() -> Result: return TestRefs.LobbyistsParkStateAccessTestClass.run(2, 12345),
 		},

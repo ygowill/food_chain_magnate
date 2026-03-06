@@ -7,6 +7,7 @@ const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 const RoundStatePlayerBoolFlagsClass = preload("res://core/utils/round_state_player_bool_flags.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const MODULE_ID := "lobbyists"
 const EXTRA_TILE_PENDING_KEY := "lobbyists_extra_tile_pending"
@@ -214,12 +215,10 @@ func _check_edge_conflicts(state: GameState, attach_board_pos: Vector2i, side: S
 			return Result.failure("该边缘包含棋盘外组件，禁止扩边: %s" % str(side))
 
 	# 2) airplane：其占用区域在棋盘外，需要根据 placement 推导出棋盘外占用矩形。
-	var mp_val = state.map.get("marketing_placements", null)
-	if mp_val == null:
-		return Result.success()
-	if not (mp_val is Dictionary):
-		return Result.failure("state.map.marketing_placements 类型错误（期望 Dictionary）")
-	var placements: Dictionary = mp_val
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, "place_lobbyists_extra_map_tile")
+	if not placements_read.ok:
+		return placements_read
+	var placements: Dictionary = placements_read.value
 
 	var minp := CoordsClass.get_world_min(state)
 	var maxp := CoordsClass.get_world_max(state)
