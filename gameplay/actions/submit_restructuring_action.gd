@@ -9,6 +9,7 @@ extends ActionExecutor
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const RoundStatePlayerBoolFlagsClass = preload("res://core/utils/round_state_player_bool_flags.gd")
 
 var phase_manager: PhaseManager = null
 
@@ -39,8 +40,15 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var r: Dictionary = r_val
 	if not r.has("submitted") or not (r["submitted"] is Dictionary):
 		return Result.failure("restructuring.submitted 缺失或类型错误（期望 Dictionary）")
-	var submitted: Dictionary = r["submitted"]
-	if bool(submitted.get(command.actor, false)):
+	var submitted_read := RoundStatePlayerBoolFlagsClass.get_player_flag(
+		state.round_state,
+		["restructuring", "submitted"],
+		command.actor,
+		"submit_restructuring"
+	)
+	if not submitted_read.ok:
+		return submitted_read
+	if bool(submitted_read.value):
 		return Result.failure("你已提交重组")
 
 	# 基础字段校验（提交时写入 structure，需要读取 company_structure.ceo_slots 与在岗员工列表）
@@ -266,11 +274,18 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 	# 标记已提交
 	assert(state.round_state is Dictionary, "submit_restructuring: round_state 类型错误（期望 Dictionary）")
-	var r: Dictionary = state.round_state.get("restructuring", {})
-	var submitted: Dictionary = r.get("submitted", {})
-	submitted[player_id] = true
-	r["submitted"] = submitted
-	state.round_state["restructuring"] = r
+	var mark_submitted := RoundStatePlayerBoolFlagsClass.set_player_flag(
+		state.round_state,
+		["restructuring", "submitted"],
+		player_id,
+		true,
+		"submit_restructuring"
+	)
+	if not mark_submitted.ok:
+		return mark_submitted
+	var r_val = state.round_state.get("restructuring", null)
+	assert(r_val is Dictionary, "submit_restructuring: round_state.restructuring 类型错误（期望 Dictionary）")
+	var r: Dictionary = r_val
 
 	# 更新阻断器
 	if state.round_state.has("pending_phase_actions"):
@@ -287,7 +302,15 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	# 计算是否全部提交（不依赖 pending_phase_actions 是否存在）
 	var all_submitted := true
 	for pid2 in range(state.players.size()):
-		if not bool(submitted.get(pid2, false)):
+		var submitted_read2 := RoundStatePlayerBoolFlagsClass.get_player_flag(
+			state.round_state,
+			["restructuring", "submitted"],
+			pid2,
+			"submit_restructuring"
+		)
+		if not submitted_read2.ok:
+			return submitted_read2
+		if not bool(submitted_read2.value):
 			all_submitted = false
 			break
 	r["finalized"] = all_submitted

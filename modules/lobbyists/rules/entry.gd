@@ -7,6 +7,7 @@ const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const GlobalEffectListClass = preload("res://core/rules/global_effect_list.gd")
+const RoundStatePlayerBoolFlagsClass = preload("res://core/utils/round_state_player_bool_flags.gd")
 const LobbyistsRoadOverlaysClass = preload("res://modules/lobbyists/road_overlays.gd")
 
 const PlaceLobbyistsRoadActionClass = preload("res://modules/lobbyists/actions/place_lobbyists_road_action.gd")
@@ -614,19 +615,17 @@ func _on_cleanup_enter_extension(state: GameState, _phase_manager) -> Result:
 func _on_lobbyists_before_exit(state: GameState) -> Result:
 	if state == null or not (state.round_state is Dictionary):
 		return Result.failure("%s: round_state 类型错误（期望 Dictionary）" % MODULE_ID)
-	if not state.round_state.has(EXTRA_TILE_PENDING_KEY):
-		return Result.success()
-	var pending_val = state.round_state.get(EXTRA_TILE_PENDING_KEY, null)
-	if not (pending_val is Dictionary):
-		return Result.failure("%s: round_state.%s 类型错误（期望 Dictionary）" % [MODULE_ID, EXTRA_TILE_PENDING_KEY])
-	var pending: Dictionary = pending_val
-	for pid_val in pending.keys():
-		var pid: int = int(pid_val)
-		var v = pending.get(pid, false)
-		if not (v is bool):
-			return Result.failure("%s: round_state.%s[%d] 类型错误（期望 bool）" % [MODULE_ID, EXTRA_TILE_PENDING_KEY, pid])
-		if bool(v):
-			return Result.failure("存在未处理的“额外地图板块”放置（必须先放置或放弃）: player=%d" % pid)
+	var pending_players_read := RoundStatePlayerBoolFlagsClass.list_true_players(
+		state.round_state,
+		[EXTRA_TILE_PENDING_KEY],
+		state.players.size(),
+		MODULE_ID
+	)
+	if not pending_players_read.ok:
+		return pending_players_read
+	var pending_players: Array = pending_players_read.value
+	if not pending_players.is_empty():
+		return Result.failure("存在未处理的“额外地图板块”放置（必须先放置或放弃）: player=%d" % int(pending_players[0]))
 	if state.round_state.has(EXTRA_TILE_LAST_PLACED_KEY):
 		state.round_state.erase(EXTRA_TILE_LAST_PLACED_KEY)
 	return Result.success()
@@ -643,24 +642,23 @@ func _milestone_effect_grant_extra_map_tile(state: GameState, player_id: int, _m
 		if arr.is_empty():
 			return Result.success()
 
-	# 兼容：旧存档/回放可能在进入 Restructuring hook 之前加载进来，导致 round_state 缺少该字段。
-	var pending: Dictionary = {}
-	if state.round_state.has(EXTRA_TILE_PENDING_KEY) and (state.round_state[EXTRA_TILE_PENDING_KEY] is Dictionary):
-		pending = state.round_state[EXTRA_TILE_PENDING_KEY]
-
-	var normalized := {}
-	for i in range(state.players.size()):
-		normalized[i] = false
-	for k in pending.keys():
-		var pid := int(k)
-		if pid < 0 or pid >= state.players.size():
-			continue
-		var v = pending.get(k, null)
-		if v is bool:
-			normalized[pid] = bool(v)
-
-	normalized[player_id] = true
-	state.round_state[EXTRA_TILE_PENDING_KEY] = normalized
+	var normalize_pending := RoundStatePlayerBoolFlagsClass.normalize_player_flags(
+		state.round_state,
+		[EXTRA_TILE_PENDING_KEY],
+		state.players.size(),
+		MODULE_ID
+	)
+	if not normalize_pending.ok:
+		return normalize_pending
+	var mark_pending := RoundStatePlayerBoolFlagsClass.set_player_flag(
+		state.round_state,
+		[EXTRA_TILE_PENDING_KEY],
+		player_id,
+		true,
+		MODULE_ID
+	)
+	if not mark_pending.ok:
+		return mark_pending
 	return Result.success()
 
 func _effect_dinnertime_distance_delta_roadworks(state: GameState, _player_id: int, ctx: Dictionary) -> Result:

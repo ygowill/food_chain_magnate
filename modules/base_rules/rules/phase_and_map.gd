@@ -14,6 +14,7 @@ const WorkingFlowClass = preload("res://core/engine/phase_manager/working_flow.g
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
+const RoundStatePlayerBoolFlagsClass = preload("res://core/utils/round_state_player_bool_flags.gd")
 
 const Phase = PhaseDefsClass.Phase
 const WorkingSubPhase = PhaseDefsClass.WorkingSubPhase
@@ -181,10 +182,17 @@ func _on_restructuring_before_exit(state: GameState) -> Result:
 		var r: Dictionary = state.round_state["restructuring"]
 		if not r.has("submitted") or not (r["submitted"] is Dictionary):
 			return Result.failure("base_rules:restructuring_before_exit: restructuring.submitted 缺失或类型错误（期望 Dictionary）")
-		var submitted: Dictionary = r["submitted"]
 		var missing: Array[int] = []
 		for pid in range(state.players.size()):
-			if not bool(submitted.get(pid, false)):
+			var submitted_read := RoundStatePlayerBoolFlagsClass.get_player_flag(
+				state.round_state,
+				["restructuring", "submitted"],
+				pid,
+				"base_rules:restructuring_before_exit"
+			)
+			if not submitted_read.ok:
+				return submitted_read
+			if not bool(submitted_read.value):
 				missing.append(pid)
 		if not missing.is_empty():
 			return Result.failure("重组尚未提交完成，无法离开阶段: %s" % str(missing))

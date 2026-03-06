@@ -1,6 +1,8 @@
 class_name SkipLobbyistsExtraMapTileAction
 extends ActionExecutor
 
+const RoundStatePlayerBoolFlagsClass = preload("res://core/utils/round_state_player_bool_flags.gd")
+
 const MODULE_ID := "lobbyists"
 const EXTRA_TILE_PENDING_KEY := "lobbyists_extra_tile_pending"
 
@@ -17,17 +19,26 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var current_player_id := state.get_current_player_id()
 	if command.actor != current_player_id:
 		return Result.failure("不是你的回合")
-	if not (state.round_state is Dictionary):
-		return Result.failure("state.round_state 类型错误（期望 Dictionary）")
-	if not state.round_state.has(EXTRA_TILE_PENDING_KEY) or not (state.round_state[EXTRA_TILE_PENDING_KEY] is Dictionary):
-		return Result.failure("当前没有可放弃的额外地图板块")
-	var pending: Dictionary = state.round_state[EXTRA_TILE_PENDING_KEY]
-	if not (pending.get(command.actor, false) is bool) or not bool(pending.get(command.actor, false)):
+	var pending_read := RoundStatePlayerBoolFlagsClass.get_player_flag(
+		state.round_state,
+		[EXTRA_TILE_PENDING_KEY],
+		command.actor,
+		MODULE_ID
+	)
+	if not pending_read.ok:
+		return pending_read
+	if not bool(pending_read.value):
 		return Result.failure("当前没有可放弃的额外地图板块")
 	return Result.success()
 
 func _apply_changes(state: GameState, command: Command) -> Result:
-	var pending: Dictionary = state.round_state[EXTRA_TILE_PENDING_KEY]
-	pending[command.actor] = false
-	state.round_state[EXTRA_TILE_PENDING_KEY] = pending
+	var clear_pending := RoundStatePlayerBoolFlagsClass.set_player_flag(
+		state.round_state,
+		[EXTRA_TILE_PENDING_KEY],
+		command.actor,
+		false,
+		MODULE_ID
+	)
+	if not clear_pending.ok:
+		return clear_pending
 	return Result.success({"player_id": int(command.actor)})
