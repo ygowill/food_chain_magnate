@@ -34,13 +34,16 @@ static func validate_air_route(
 ) -> Result:
 	if not restaurants.has(restaurant_id):
 		return Result.failure("餐厅不存在: %s" % restaurant_id)
-	var tile_bounds_read := TileRouteUtilsClass.get_tile_bounds(state)
+	var tile_bounds_read := TileRouteUtilsClass.get_tile_bounds(state, "DrinksProcurement")
 	if not tile_bounds_read.ok:
 		return tile_bounds_read
 	var tile_bounds: Dictionary = tile_bounds_read.value
 	var min_tile: Vector2i = tile_bounds.get("min", Vector2i.ZERO)
 	var max_tile: Vector2i = tile_bounds.get("max", Vector2i.ZERO)
-	var tiles_set := TileRouteUtilsClass.get_tile_positions_set(state)
+	var tiles_set_read := TileRouteUtilsClass.get_tile_positions_set_result(state, "DrinksProcurement")
+	if not tiles_set_read.ok:
+		return tiles_set_read
+	var tiles_set: Dictionary = tiles_set_read.value
 
 	var entrance_tiles := {}
 	var rest: Dictionary = restaurants[restaurant_id]
@@ -49,7 +52,7 @@ static func validate_air_route(
 		return points_read
 	var points: Array[Vector2i] = points_read.value
 	for ep in points:
-		var t_read := TileRouteUtilsClass.world_to_tile_pos(state, ep)
+		var t_read := TileRouteUtilsClass.world_to_tile_pos(state, ep, "DrinksProcurement")
 		if not t_read.ok:
 			return t_read
 		entrance_tiles[Vector2i(t_read.value)] = true

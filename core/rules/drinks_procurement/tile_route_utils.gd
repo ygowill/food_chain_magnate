@@ -2,17 +2,30 @@
 extends RefCounted
 
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
-static func get_tile_size(state: GameState) -> Result:
-	if state == null or not (state.map is Dictionary):
-		return Result.failure("state.map 缺失或类型错误")
-	var map: Dictionary = state.map
-	if not map.has("grid_size") or not (map["grid_size"] is Vector2i):
-		return Result.failure("state.map.grid_size 缺失或类型错误")
-	if not map.has("tile_grid_size") or not (map["tile_grid_size"] is Vector2i):
-		return Result.failure("state.map.tile_grid_size 缺失或类型错误")
-	var grid_size: Vector2i = map["grid_size"]
-	var tile_grid_size: Vector2i = map["tile_grid_size"]
+static func _prefix(label: String) -> String:
+	if label.is_empty():
+		return ""
+	if label.ends_with(": "):
+		return label
+	if label.ends_with("： "):
+		return label
+	if label.ends_with(":"):
+		return "%s " % label
+	if label.ends_with("："):
+		return "%s " % label
+	return "%s: " % label
+
+static func get_tile_size(state: GameState, prefix_label: String = "") -> Result:
+	var grid_size_read := MapStateAccessClass.require_grid_size(state, prefix_label)
+	if not grid_size_read.ok:
+		return grid_size_read
+	var tile_grid_size_read := MapStateAccessClass.require_tile_grid_size(state, prefix_label)
+	if not tile_grid_size_read.ok:
+		return tile_grid_size_read
+	var grid_size: Vector2i = grid_size_read.value
+	var tile_grid_size: Vector2i = tile_grid_size_read.value
 	if tile_grid_size.x <= 0 or tile_grid_size.y <= 0:
 		return Result.failure("state.map.tile_grid_size 非法: %s" % str(tile_grid_size))
 	if grid_size.x % tile_grid_size.x != 0 or grid_size.y % tile_grid_size.y != 0:
@@ -25,8 +38,8 @@ static func get_tile_size(state: GameState) -> Result:
 		return Result.failure("tile_size 非法: %d" % tile_size_x)
 	return Result.success(tile_size_x)
 
-static func world_to_tile_pos(state: GameState, world_pos: Vector2i) -> Result:
-	var tile_size_read := get_tile_size(state)
+static func world_to_tile_pos(state: GameState, world_pos: Vector2i, prefix_label: String = "") -> Result:
+	var tile_size_read := get_tile_size(state, prefix_label)
 	if not tile_size_read.ok:
 		return tile_size_read
 	var tile_size: int = int(tile_size_read.value)
@@ -34,8 +47,8 @@ static func world_to_tile_pos(state: GameState, world_pos: Vector2i) -> Result:
 	var by := _floor_div(world_pos.y, tile_size)
 	return Result.success(Vector2i(bx, by))
 
-static func get_tile_bounds(state: GameState) -> Result:
-	var tile_size_read := get_tile_size(state)
+static func get_tile_bounds(state: GameState, prefix_label: String = "") -> Result:
+	var tile_size_read := get_tile_size(state, prefix_label)
 	if not tile_size_read.ok:
 		return tile_size_read
 	var tile_size: int = int(tile_size_read.value)
@@ -49,32 +62,47 @@ static func get_tile_bounds(state: GameState) -> Result:
 		"max": max_tile
 	})
 
-static func get_tile_positions_set(state: GameState) -> Dictionary:
+static func get_tile_positions_set_result(state: GameState, prefix_label: String = "") -> Result:
+	var map_read := MapStateAccessClass.require_map(state, prefix_label)
+	if not map_read.ok:
+		return map_read
+	var map: Dictionary = map_read.value
 	var out := {}
-	if state == null or not (state.map is Dictionary):
-		return out
-	var map: Dictionary = state.map
-	var placements_val = map.get("tile_placements", null)
-	if placements_val is Array:
-		var placements: Array = placements_val
-		for p_val in placements:
-			if not (p_val is Dictionary):
-				continue
-			var p: Dictionary = p_val
-			var bp = p.get("board_pos", null)
-			if bp is Vector2i:
-				out[Vector2i(bp)] = true
-	var ext_val = map.get("external_tile_placements", null)
-	if ext_val is Array:
-		var ext: Array = ext_val
-		for p_val2 in ext:
-			if not (p_val2 is Dictionary):
-				continue
-			var p2: Dictionary = p_val2
-			var bp2 = p2.get("board_pos", null)
-			if bp2 is Vector2i:
-				out[Vector2i(bp2)] = true
-	return out
+
+	var placements_read := _read_optional_placements(map, "tile_placements", prefix_label)
+	if not placements_read.ok:
+		return placements_read
+	_append_tile_positions(out, placements_read.value)
+
+	var external_read := _read_optional_placements(map, "external_tile_placements", prefix_label)
+	if not external_read.ok:
+		return external_read
+	_append_tile_positions(out, external_read.value)
+
+	return Result.success(out)
+
+static func get_tile_positions_set(state: GameState) -> Dictionary:
+	var read := get_tile_positions_set_result(state)
+	if not read.ok:
+		return {}
+	return read.value
+
+static func _read_optional_placements(map: Dictionary, field_name: String, prefix_label: String) -> Result:
+	var prefix := _prefix(prefix_label)
+	if not map.has(field_name):
+		return Result.success([])
+	if not (map[field_name] is Array):
+		return Result.failure("%sstate.map.%s 类型错误（期望 Array）" % [prefix, field_name])
+	return Result.success(map[field_name])
+
+static func _append_tile_positions(out: Dictionary, placements: Array) -> void:
+	for p_val in placements:
+		if not (p_val is Dictionary):
+			continue
+		var placement: Dictionary = p_val
+		var board_pos = placement.get("board_pos", null)
+		if board_pos is Vector2i:
+			out[Vector2i(board_pos)] = true
 
 static func _floor_div(a: int, b: int) -> int:
 	if b == 0:

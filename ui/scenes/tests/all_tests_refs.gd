@@ -61,6 +61,7 @@ const RuralMarketeersAutoAdvanceUnblockedTestClass = preload("res://core/tests/r
 const ProduceFoodTestClass = preload("res://core/tests/produce_food_test.gd")
 const ProcureDrinksTestClass = preload("res://core/tests/procure_drinks_test.gd")
 const ProcureDrinksRouteRulesTestClass = preload("res://core/tests/procure_drinks_route_rules_test.gd")
+const DrinksProcurementStateAccessTestClass = preload("res://core/tests/drinks_procurement_state_access_test.gd")
 const AirProcureStartTileChoiceTestClass = preload("res://ui/scenes/tests/air_procure_start_tile_choice_test.gd")
 const RoadProcureStartRestaurantChoiceTestClass = preload("res://ui/scenes/tests/road_procure_start_restaurant_choice_test.gd")
 const ProcureDrinksStartRestaurantSelectTestClass = preload("res://ui/scenes/tests/procure_drinks_start_restaurant_select_test.gd")

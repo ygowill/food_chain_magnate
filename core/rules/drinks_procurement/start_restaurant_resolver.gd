@@ -41,7 +41,7 @@ static func resolve_start_restaurant(
 			if range_type == "air":
 				var start_tile: Vector2i = route[0]
 				for ep in points:
-					var tile_read := TileRouteUtilsClass.world_to_tile_pos(state, ep)
+					var tile_read := TileRouteUtilsClass.world_to_tile_pos(state, ep, "DrinksProcurement")
 					if not tile_read.ok:
 						return tile_read
 					var entrance_tile: Vector2i = tile_read.value
@@ -78,7 +78,7 @@ static func resolve_start_restaurant(
 					return points_read
 				var points: Array[Vector2i] = points_read.value
 				for ep in points:
-					var tile_read := TileRouteUtilsClass.world_to_tile_pos(state, ep)
+					var tile_read := TileRouteUtilsClass.world_to_tile_pos(state, ep, "DrinksProcurement")
 					if not tile_read.ok:
 						return tile_read
 					var entrance_tile: Vector2i = tile_read.value

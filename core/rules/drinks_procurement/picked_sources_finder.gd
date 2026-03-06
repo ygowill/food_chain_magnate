@@ -19,7 +19,7 @@ static func find_picked_sources_along_route(
 		var src: Vector2i = source["world_pos"]
 		var ok := false
 		if range_type == "air":
-			var tile_read := TileRouteUtilsClass.world_to_tile_pos(state, src)
+			var tile_read := TileRouteUtilsClass.world_to_tile_pos(state, src, "DrinksProcurement")
 			if not tile_read.ok:
 				return tile_read
 			var tile_pos: Vector2i = tile_read.value

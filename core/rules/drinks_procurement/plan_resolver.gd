@@ -35,11 +35,10 @@ static func resolve_procurement_plan(
 		return restaurants_read
 	var restaurants: Dictionary = restaurants_read.value
 
-	var map_data: Dictionary = state.map
-
-	if not map_data.has("drink_sources") or not (map_data["drink_sources"] is Array):
-		return Result.failure("state.map.drink_sources 缺失或类型错误")
-	var drink_sources: Array = map_data["drink_sources"]
+	var drink_sources_read := MapStateAccessClass.require_array_field(state, "drink_sources", "DrinksProcurement")
+	if not drink_sources_read.ok:
+		return drink_sources_read
+	var drink_sources: Array = drink_sources_read.value
 	if drink_sources.is_empty():
 		return Result.failure("地图上没有饮料源")
 
