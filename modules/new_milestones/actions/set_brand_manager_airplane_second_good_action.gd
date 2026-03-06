@@ -2,6 +2,7 @@ class_name SetBrandManagerAirplaneSecondGoodAction
 extends ActionExecutor
 
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const MILESTONE_ID := "first_brand_manager_used"
 const PENDING_KEY := "new_milestones_brand_manager_airplane_pending"
@@ -22,10 +23,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	if not (state.round_state is Dictionary):
 		return Result.failure("state.round_state 类型错误（期望 Dictionary）")
-	if not (state.map is Dictionary):
-		return Result.failure("state.map 类型错误（期望 Dictionary）")
-	if not state.map.has("marketing_placements") or not (state.map["marketing_placements"] is Dictionary):
-		return Result.failure("state.map.marketing_placements 缺失或类型错误")
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, action_id)
+	if not placements_read.ok:
+		return placements_read
 
 	var player := state.get_player(command.actor)
 	if player.is_empty():

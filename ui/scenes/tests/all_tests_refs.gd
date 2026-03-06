@@ -104,6 +104,7 @@ const RuralGiantBillboardStateAccessTestClass = preload("res://core/tests/rural_
 const DebugAddHouseDemandStateAccessTestClass = preload("res://core/tests/debug_add_house_demand_state_access_test.gd")
 const NewRestaurantMailboxStateAccessTestClass = preload("res://core/tests/new_restaurant_mailbox_state_access_test.gd")
 const PizzaRadioStateAccessTestClass = preload("res://core/tests/pizza_radio_state_access_test.gd")
+const BrandManagerAirplaneSecondGoodStateAccessTestClass = preload("res://core/tests/brand_manager_airplane_second_good_state_access_test.gd")
 const CleanupInventoryTestClass = preload("res://core/tests/cleanup_inventory_test.gd")
 const FireActionTestClass = preload("res://core/tests/fire_action_test.gd")
 const CompanyStructureTestClass = preload("res://core/tests/company_structure_test.gd")
