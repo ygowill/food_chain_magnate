@@ -99,7 +99,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not found:
 		return Result.failure("未找到对应的飞机营销实例（board #%d）" % board_number)
 
-	var placements: Dictionary = state.map["marketing_placements"]
+	var placements: Dictionary = placements_read.value
 	var key := str(board_number)
 	if not placements.has(key):
 		return Result.failure("marketing_placements 缺少 board_number: #%d" % board_number)
