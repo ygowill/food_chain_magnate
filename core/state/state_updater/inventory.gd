@@ -1,23 +1,20 @@
 extends RefCounted
 
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+
 # === 库存操作 ===
 
 static func _require_player_inventory(state: GameState, player_id: int, caller: String) -> Result:
-	if state == null:
-		return Result.failure("%s: state 为空" % caller)
-	if not (state.players is Array):
-		return Result.failure("%s: state.players 类型错误（期望 Array）" % caller)
-	if player_id < 0 or player_id >= state.players.size():
-		return Result.failure("无效的玩家ID: %d" % player_id)
-	var player_val = state.players[player_id]
-	if not (player_val is Dictionary):
-		return Result.failure("%s: players[%d] 类型错误（期望 Dictionary）" % [caller, player_id])
-	var player: Dictionary = player_val
-	if not player.has("inventory") or not (player["inventory"] is Dictionary):
-		return Result.failure("%s: players[%d].inventory 缺失或类型错误（期望 Dictionary）" % [caller, player_id])
+	var player_read := PlayerStateAccessClass.require_player(state, player_id, caller)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	var inventory_read := PlayerStateAccessClass.require_inventory(player, "player[%d]" % player_id, caller)
+	if not inventory_read.ok:
+		return inventory_read
 	return Result.success({
 		"player": player,
-		"inventory": player["inventory"],
+		"inventory": inventory_read.value,
 	})
 
 # 添加库存
@@ -73,17 +70,15 @@ static func remove_inventory(state: GameState, player_id: int, food_type: String
 
 # 检查库存是否足够
 static func has_inventory(state: GameState, player_id: int, food_type: String, amount: int) -> bool:
-	assert(state != null, "has_inventory: state 为空")
-	assert(state.players is Array, "has_inventory: state.players 类型错误（期望 Array）")
-	assert(player_id >= 0 and player_id < state.players.size(), "has_inventory: player_id 越界: %d" % player_id)
 	assert(not food_type.is_empty(), "has_inventory: food_type 不能为空")
 	assert(amount >= 0, "has_inventory: amount 不能为负: %d" % amount)
 
-	var player_val = state.players[player_id]
-	assert(player_val is Dictionary, "has_inventory: players[%d] 类型错误（期望 Dictionary）" % player_id)
-	var player: Dictionary = player_val
-	assert(player.has("inventory") and (player["inventory"] is Dictionary), "has_inventory: players[%d].inventory 缺失或类型错误（期望 Dictionary）" % player_id)
-	var inventory: Dictionary = player["inventory"]
+	var player_read := PlayerStateAccessClass.require_player(state, player_id, "has_inventory")
+	assert(player_read.ok, player_read.error)
+	var player: Dictionary = player_read.value
+	var inventory_read := PlayerStateAccessClass.require_inventory(player, "player[%d]" % player_id, "has_inventory")
+	assert(inventory_read.ok, inventory_read.error)
+	var inventory: Dictionary = inventory_read.value
 	if not inventory.has(food_type):
 		return 0 >= amount
 	assert(inventory[food_type] is int, "has_inventory: inventory[%s] 类型错误（期望 int）" % food_type)
