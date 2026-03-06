@@ -2,6 +2,7 @@ extends RefCounted
 
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 const Phase = PhaseDefsClass.Phase
 const Point = SettlementRegistryClass.Point
@@ -26,14 +27,14 @@ func _cleanup_discard_coffee(state: GameState, _phase_manager: PhaseManager) -> 
 
 	var discarded: Array[Dictionary] = []
 	for pid in range(state.players.size()):
-		var player_val = state.players[pid]
-		if not (player_val is Dictionary):
-			return Result.failure("coffee:cleanup: player[%d] 类型错误（期望 Dictionary）" % pid)
-		var player: Dictionary = player_val
-		var inv_val = player.get("inventory", null)
-		if not (inv_val is Dictionary):
-			return Result.failure("coffee:cleanup: player[%d].inventory 类型错误（期望 Dictionary）" % pid)
-		var inv: Dictionary = inv_val
+		var player_read := PlayerStateAccessClass.require_player(state, pid, "coffee:cleanup")
+		if not player_read.ok:
+			return player_read
+		var player: Dictionary = player_read.value
+		var inv_read := PlayerStateAccessClass.require_inventory(player, "player[%d]" % pid, "coffee:cleanup")
+		if not inv_read.ok:
+			return inv_read
+		var inv: Dictionary = inv_read.value
 		var before: int = int(inv.get(COFFEE_ID, 0))
 		if before > 0:
 			inv[COFFEE_ID] = 0
