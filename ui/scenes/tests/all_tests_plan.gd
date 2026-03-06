@@ -383,6 +383,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.ChooseKimchiStorageStateAccessTestClass.run(2, 12345),
 		},
 		{
+			"name": "InitiateMarketingActionStateAccessTest",
+			"fn": func() -> Result: return TestRefs.InitiateMarketingActionStateAccessTestClass.run(2, 12345),
+		},
+		{
 			"name": "CleanupInventoryTest",
 			"fn": func() -> Result: return TestRefs.CleanupInventoryTestClass.run(2, 12345),
 		},

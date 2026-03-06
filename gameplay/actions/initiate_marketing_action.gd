@@ -9,6 +9,8 @@ const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const ValidationClass = preload("res://gameplay/actions/initiate_marketing/validation.gd")
 const ApplyClass = preload("res://gameplay/actions/initiate_marketing/apply.gd")
@@ -29,10 +31,10 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 		return false
 
 	var player := state.get_player(player_id)
-	var employees_val = player.get("employees", [])
-	if not (employees_val is Array):
+	var employees_read := PlayerStateAccessClass.require_employees(player, "player[%d]" % player_id, action_id)
+	if not employees_read.ok:
 		return true
-	var employees: Array = employees_val
+	var employees: Array = employees_read.value
 
 	var has_marketer := false
 	var seen := {}
@@ -70,8 +72,9 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 			var bn = Dictionary(inst_val).get("board_number", null)
 			if bn is int:
 				used[str(int(bn))] = true
-	if state.map is Dictionary and state.map.has("marketing_placements") and (state.map["marketing_placements"] is Dictionary):
-		var placements: Dictionary = state.map["marketing_placements"]
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, action_id)
+	if placements_read.ok:
+		var placements: Dictionary = placements_read.value
 		for k in placements.keys():
 			used[str(k)] = true
 
@@ -97,8 +100,10 @@ func _has_reusable_busy_marketer_for_working(state: GameState, player_id: int) -
 	if player.is_empty():
 		return false
 
-	var busy_val = player.get("busy_marketers", null)
-	var busy: Array = busy_val if busy_val is Array else []
+	var busy_read := PlayerStateAccessClass.require_busy_marketers(player, "player[%d]" % player_id, action_id)
+	if not busy_read.ok:
+		return false
+	var busy: Array = busy_read.value
 	if busy.is_empty():
 		return false
 
