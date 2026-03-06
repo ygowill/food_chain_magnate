@@ -3,6 +3,7 @@ extends RefCounted
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const MODULE_ID := "base_marketing"
 
@@ -27,11 +28,7 @@ func register(registrar) -> Result:
 	return Result.success()
 
 func _require_state_map(state: GameState, label: String) -> Result:
-	if state == null:
-		return Result.failure("%s: %s: state 为空" % [MODULE_ID, label])
-	if not (state.map is Dictionary):
-		return Result.failure("%s: %s: state.map 类型错误（期望 Dictionary）" % [MODULE_ID, label])
-	return Result.success(state.map)
+	return MapStateAccessClass.require_map(state, "%s: %s" % [MODULE_ID, label])
 
 func _get_billboard_house_ids(state: GameState, marketing_instance: Dictionary) -> Result:
 	var map_read := _require_state_map(state, "billboard range")
@@ -43,13 +40,15 @@ func _get_billboard_house_ids(state: GameState, marketing_instance: Dictionary) 
 	var world_pos: Vector2i = world_pos_read.value
 
 	# 等同 core/MarketingRangeCalculator._get_adjacent_house_ids
-	if not state.map.has("grid_size") or not (state.map["grid_size"] is Vector2i):
-		return Result.failure("%s: billboard range: state.map.grid_size 缺失或类型错误（期望 Vector2i）" % MODULE_ID)
-	var grid_size: Vector2i = state.map["grid_size"]
+	var grid_size_read := MapStateAccessClass.require_grid_size(state, "%s: billboard range" % MODULE_ID)
+	if not grid_size_read.ok:
+		return grid_size_read
+	var grid_size: Vector2i = grid_size_read.value
 	if grid_size.x <= 0 or grid_size.y <= 0:
 		return Result.failure("%s: billboard range: state.map.grid_size 非法: %s" % [MODULE_ID, str(grid_size)])
-	if not state.map.has("cells") or not (state.map["cells"] is Array):
-		return Result.failure("%s: billboard range: state.map.cells 缺失或类型错误（期望 Array）" % MODULE_ID)
+	var cells_read := MapStateAccessClass.require_cells(state, "%s: billboard range" % MODULE_ID)
+	if not cells_read.ok:
+		return cells_read
 
 	var set := {}
 	for dir in MapUtils.DIRECTIONS:
@@ -79,12 +78,15 @@ func _get_mailbox_house_ids(state: GameState, marketing_instance: Dictionary) ->
 	var world_pos: Vector2i = world_pos_read.value
 
 	# 等同 core/MarketingRangeCalculator._get_block_house_ids
-	if not state.map.has("cells") or not (state.map["cells"] is Array):
-		return Result.failure("%s: mailbox range: state.map.cells 缺失或类型错误（期望 Array）" % MODULE_ID)
-	if not state.map.has("grid_size") or not (state.map["grid_size"] is Vector2i):
-		return Result.failure("%s: mailbox range: state.map.grid_size 缺失或类型错误（期望 Vector2i）" % MODULE_ID)
-	if not state.map.has("boundary_index") or not (state.map["boundary_index"] is Dictionary):
-		return Result.failure("%s: mailbox range: state.map.boundary_index 缺失或类型错误（期望 Dictionary）" % MODULE_ID)
+	var cells_read := MapStateAccessClass.require_cells(state, "%s: mailbox range" % MODULE_ID)
+	if not cells_read.ok:
+		return cells_read
+	var grid_size_read := MapStateAccessClass.require_grid_size(state, "%s: mailbox range" % MODULE_ID)
+	if not grid_size_read.ok:
+		return grid_size_read
+	var boundary_read := MapStateAccessClass.require_boundary_index(state, "%s: mailbox range" % MODULE_ID)
+	if not boundary_read.ok:
+		return boundary_read
 
 	var road_graph = RoadGraphCacheClass.get_road_graph(state)
 	var block_cells: Array[Vector2i] = road_graph.get_block_cells(world_pos)
@@ -118,20 +120,23 @@ func _get_radio_house_ids(state: GameState, marketing_instance: Dictionary) -> R
 	var world_pos: Vector2i = world_pos_read.value
 
 	# 等同 core/MarketingRangeCalculator._get_radio_house_ids
-	if not state.map.has("grid_size") or not (state.map["grid_size"] is Vector2i):
-		return Result.failure("%s: radio range: state.map.grid_size 缺失或类型错误（期望 Vector2i）" % MODULE_ID)
-	var grid_size: Vector2i = state.map["grid_size"]
+	var grid_size_read := MapStateAccessClass.require_grid_size(state, "%s: radio range" % MODULE_ID)
+	if not grid_size_read.ok:
+		return grid_size_read
+	var grid_size: Vector2i = grid_size_read.value
 	if grid_size.x <= 0 or grid_size.y <= 0:
 		return Result.failure("%s: radio range: state.map.grid_size 非法: %s" % [MODULE_ID, str(grid_size)])
 
-	if not state.map.has("tile_grid_size") or not (state.map["tile_grid_size"] is Vector2i):
-		return Result.failure("%s: radio range: state.map.tile_grid_size 缺失或类型错误（期望 Vector2i）" % MODULE_ID)
-	var tile_grid_size: Vector2i = state.map["tile_grid_size"]
+	var tile_grid_size_read := MapStateAccessClass.require_tile_grid_size(state, "%s: radio range" % MODULE_ID)
+	if not tile_grid_size_read.ok:
+		return tile_grid_size_read
+	var tile_grid_size: Vector2i = tile_grid_size_read.value
 	if tile_grid_size.x <= 0 or tile_grid_size.y <= 0:
 		return Result.failure("%s: radio range: state.map.tile_grid_size 非法: %s" % [MODULE_ID, str(tile_grid_size)])
 
-	if not state.map.has("cells") or not (state.map["cells"] is Array):
-		return Result.failure("%s: radio range: state.map.cells 缺失或类型错误（期望 Array）" % MODULE_ID)
+	var cells_read := MapStateAccessClass.require_cells(state, "%s: radio range" % MODULE_ID)
+	if not cells_read.ok:
+		return cells_read
 
 	var min_tile: Vector2i = MapUtils.world_to_tile(CoordsClass.get_world_min(state)).board_pos
 	var max_tile: Vector2i = MapUtils.world_to_tile(CoordsClass.get_world_max(state)).board_pos
@@ -178,14 +183,16 @@ func _get_airplane_house_ids(state: GameState, marketing_instance: Dictionary) -
 	# - Airplanes are placed outside the board.
 	# - Their length (1/3/5) indicates how many rows/cols they fly over ON the board.
 	# - The affected area is a stripe spanning the entire board width/height.
-	if not state.map.has("grid_size") or not (state.map["grid_size"] is Vector2i):
-		return Result.failure("%s: airplane range: state.map.grid_size 缺失或类型错误（期望 Vector2i）" % MODULE_ID)
-	var grid_size: Vector2i = state.map["grid_size"]
+	var grid_size_read := MapStateAccessClass.require_grid_size(state, "%s: airplane range" % MODULE_ID)
+	if not grid_size_read.ok:
+		return grid_size_read
+	var grid_size: Vector2i = grid_size_read.value
 	if grid_size.x <= 0 or grid_size.y <= 0:
 		return Result.failure("%s: airplane range: state.map.grid_size 非法: %s" % [MODULE_ID, str(grid_size)])
 
-	if not state.map.has("cells") or not (state.map["cells"] is Array):
-		return Result.failure("%s: airplane range: state.map.cells 缺失或类型错误（期望 Array）" % MODULE_ID)
+	var cells_read := MapStateAccessClass.require_cells(state, "%s: airplane range" % MODULE_ID)
+	if not cells_read.ok:
+		return cells_read
 
 	if not marketing_instance.has("axis") or not (marketing_instance["axis"] is String):
 		return Result.failure("%s: airplane range: marketing_instance.axis 缺失或类型错误（期望 String）" % MODULE_ID)

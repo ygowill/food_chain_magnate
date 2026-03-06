@@ -90,6 +90,7 @@ const InitiateMarketingActionStateAccessTestClass = preload("res://core/tests/in
 const InitiateMarketingOverlapStateAccessTestClass = preload("res://core/tests/initiate_marketing_overlap_state_access_test.gd")
 const InitiateMarketingAirplaneOverlapStateAccessTestClass = preload("res://core/tests/initiate_marketing_airplane_overlap_state_access_test.gd")
 const MapContextBuilderStateAccessTestClass = preload("res://core/tests/map_context_builder_state_access_test.gd")
+const BaseMarketingStateAccessTestClass = preload("res://core/tests/base_marketing_state_access_test.gd")
 const StateUpdaterInventoryStateAccessTestClass = preload("res://core/tests/state_updater_inventory_state_access_test.gd")
 const StateUpdaterCashStateAccessTestClass = preload("res://core/tests/state_updater_cash_state_access_test.gd")
 const TrainActionStateAccessTestClass = preload("res://core/tests/train_action_state_access_test.gd")
