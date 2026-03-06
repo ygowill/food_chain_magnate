@@ -8,6 +8,7 @@ const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cle
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 const PRODUCT_ID := "kimchi"
 const PENDING_KIND_KIMCHI := "kimchi"
@@ -54,11 +55,14 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not store_r.ok:
 		return store_r
 
-	var player: Dictionary = state.players[command.actor]
-	var inventory_val = player.get("inventory", null)
-	if not (inventory_val is Dictionary):
-		return Result.failure("player.inventory 类型错误（期望 Dictionary）")
-	var inventory: Dictionary = inventory_val
+	var player_read := PlayerStateAccessClass.require_player(state, command.actor, action_id)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	var inventory_read := PlayerStateAccessClass.require_inventory(player, "player[%d]" % command.actor, action_id)
+	if not inventory_read.ok:
+		return inventory_read
+	var inventory: Dictionary = inventory_read.value
 	var available_r := _get_kimchi_available(state, command.actor, inventory)
 	if not available_r.ok:
 		return available_r
@@ -76,8 +80,14 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return store_r
 	var store: bool = bool(store_r.value)
 
-	var player: Dictionary = state.players[command.actor]
-	var inventory: Dictionary = player.get("inventory", {})
+	var player_read := PlayerStateAccessClass.require_player(state, command.actor, action_id)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	var inventory_read := PlayerStateAccessClass.require_inventory(player, "player[%d]" % command.actor, action_id)
+	if not inventory_read.ok:
+		return inventory_read
+	var inventory: Dictionary = inventory_read.value
 
 	var available_r := _get_kimchi_available(state, command.actor, inventory)
 	if not available_r.ok:
