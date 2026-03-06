@@ -3,6 +3,7 @@ extends RefCounted
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const PlacementConflictRegistryClass = preload("res://core/rules/placement_conflict_registry.gd")
 const ParseHelpers = preload("res://core/state/serialization/parse_helpers.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const MODULE_ID := "gourmet_food_critics"
 const MARKETING_TYPE := "gourmet_guide"
@@ -36,12 +37,11 @@ func register(registrar) -> Result:
 func _get_gourmet_guide_house_ids(state: GameState, _marketing_instance: Dictionary) -> Result:
 	if state == null:
 		return Result.failure("%s: state 为空" % MODULE_ID)
-	if not (state.map is Dictionary):
-		return Result.failure("%s: state.map 类型错误（期望 Dictionary）" % MODULE_ID)
-	if not state.map.has("houses") or not (state.map["houses"] is Dictionary):
-		return Result.failure("%s: state.map.houses 缺失或类型错误（期望 Dictionary）" % MODULE_ID)
+	var houses_read := MapStateAccessClass.require_houses(state, MODULE_ID)
+	if not houses_read.ok:
+		return houses_read
 
-	var houses: Dictionary = state.map["houses"]
+	var houses: Dictionary = houses_read.value
 	var out: Array[String] = []
 
 	for house_id_val in houses.keys():
