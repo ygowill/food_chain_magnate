@@ -9,6 +9,7 @@ const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const MILESTONE_ID := "first_new_restaurant"
 const USED_KEY := "new_milestones_first_new_restaurant_mailbox_used"
@@ -30,11 +31,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	if not (state.players is Array):
 		return Result.failure("state.players 类型错误（期望 Array）")
-	if not (state.map is Dictionary):
-		return Result.failure("state.map 类型错误（期望 Dictionary）")
-	if not state.map.has("marketing_placements") or not (state.map["marketing_placements"] is Dictionary):
-		return Result.failure("state.map.marketing_placements 缺失或类型错误")
-	var placements: Dictionary = state.map["marketing_placements"]
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, action_id)
+	if not placements_read.ok:
+		return placements_read
+	var placements: Dictionary = placements_read.value
 
 	var player_val = state.players[command.actor]
 	if not (player_val is Dictionary):
