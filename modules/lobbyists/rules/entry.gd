@@ -8,6 +8,7 @@ const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const GlobalEffectListClass = preload("res://core/rules/global_effect_list.gd")
 const RoundStatePlayerBoolFlagsClass = preload("res://core/utils/round_state_player_bool_flags.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 const LobbyistsRoadOverlaysClass = preload("res://modules/lobbyists/road_overlays.gd")
 
 const PlaceLobbyistsRoadActionClass = preload("res://modules/lobbyists/actions/place_lobbyists_road_action.gd")
@@ -704,10 +705,10 @@ func _effect_dinnertime_sale_house_bonus_park(state: GameState, _player_id: int,
 	if not ctx.has("house_id") or not (ctx["house_id"] is String) or str(ctx["house_id"]).is_empty():
 		return Result.failure("%s: park: ctx.house_id 缺失或类型错误（期望 String）" % MODULE_ID)
 
-	var houses_val = state.map.get("houses", null)
-	if not (houses_val is Dictionary):
-		return Result.failure("%s: park: state.map.houses 缺失或类型错误（期望 Dictionary）" % MODULE_ID)
-	var houses: Dictionary = houses_val
+	var houses_read := MapStateAccessClass.require_houses(state, "%s: park" % MODULE_ID)
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
 	var house_id: String = str(ctx["house_id"])
 	if not houses.has(house_id) or not (houses[house_id] is Dictionary):
 		return Result.failure("%s: park: 未知房屋: %s" % [MODULE_ID, house_id])
