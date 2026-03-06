@@ -16,7 +16,13 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_validate_coffee_shop_placement_fails_fast_on_missing_restaurants(seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_validate_coffee_shop_placement_fails_fast_on_missing_marketing_placements(seed_val)
+	if not r.ok:
+		return r
+	r = _test_validate_coffee_shop_placement_fails_fast_on_invalid_marketing_placements_type(seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 5})
 
 static func _make_state(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -92,6 +98,36 @@ static func _test_validate_coffee_shop_placement_fails_fast_on_missing_restauran
 	var err := str(result.error)
 	if err.find("state.map.restaurants") < 0:
 		return Result.failure("错误信息应包含 state.map.restaurants，实际: %s" % err)
+	return Result.success()
+
+static func _test_validate_coffee_shop_placement_fails_fast_on_missing_marketing_placements(seed_val: int) -> Result:
+	var built := _make_state(seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.map.erase("marketing_placements")
+	var action = ActionClass.new()
+	var result := action._validate_coffee_shop_placement(state, Vector2i(2, 1))
+	if result.ok:
+		return Result.failure("缺失 marketing_placements 时应失败")
+	var err := str(result.error)
+	if err.find("state.map.marketing_placements") < 0:
+		return Result.failure("错误信息应包含 state.map.marketing_placements，实际: %s" % err)
+	return Result.success()
+
+static func _test_validate_coffee_shop_placement_fails_fast_on_invalid_marketing_placements_type(seed_val: int) -> Result:
+	var built := _make_state(seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.map["marketing_placements"] = []
+	var action = ActionClass.new()
+	var result := action._validate_coffee_shop_placement(state, Vector2i(2, 1))
+	if result.ok:
+		return Result.failure("marketing_placements 类型错误时应失败")
+	var err := str(result.error)
+	if err.find("state.map.marketing_placements") < 0:
+		return Result.failure("错误信息应包含 state.map.marketing_placements，实际: %s" % err)
 	return Result.success()
 
 static func _force_turn_order(state: GameState) -> void:

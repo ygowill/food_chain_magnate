@@ -204,6 +204,11 @@ func _validate_coffee_shop_placement(state: GameState, world_anchor: Vector2i) -
 		return restaurants_read
 	var restaurants: Dictionary = restaurants_read.value
 
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, action_id)
+	if not placements_read.ok:
+		return placements_read
+	var placements: Dictionary = placements_read.value
+
 	var map_ctx := {
 		"cells": state.map.cells,
 		"grid_size": state.map.grid_size,
@@ -211,7 +216,7 @@ func _validate_coffee_shop_placement(state: GameState, world_anchor: Vector2i) -
 		"houses": houses,
 		"restaurants": restaurants,
 		"drink_sources": state.map.get("drink_sources", []),
-		"marketing_placements": state.map.get("marketing_placements", {}),
+		"marketing_placements": placements,
 	}
 
 	var r := PlacementClass.validate_placement(map_ctx, PIECE_ID, world_anchor, 0, piece_defs, {})
