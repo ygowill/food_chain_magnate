@@ -2,6 +2,8 @@ extends RefCounted
 
 const PlaceOrMoveCoffeeShopActionClass = preload("res://modules/coffee/actions/place_or_move_coffee_shop_action.gd")
 const ResolveFirstCoffeeSoldBonusCoffeeShopActionClass = preload("res://modules/coffee/actions/resolve_first_coffee_sold_bonus_coffee_shop_action.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const MODULE_ID := "coffee"
 const RANGE_ORIGIN_PROVIDER_ID := "%s:range_origins:coffee_shops" % MODULE_ID
@@ -31,25 +33,29 @@ func _init_state(state: GameState, _rng_manager) -> Result:
 		return Result.failure("coffee:init_state: state 为空")
 	if not (state.players is Array):
 		return Result.failure("coffee:init_state: state.players 类型错误（期望 Array）")
-	if not (state.map is Dictionary):
-		return Result.failure("coffee:init_state: state.map 类型错误（期望 Dictionary）")
+	var map_read := MapStateAccessClass.require_map(state, "coffee:init_state")
+	if not map_read.ok:
+		return map_read
+	var map: Dictionary = map_read.value
 
 	for pid in range(state.players.size()):
-		var player_val = state.players[pid]
-		if not (player_val is Dictionary):
-			return Result.failure("coffee:init_state: player[%d] 类型错误（期望 Dictionary）" % pid)
-		var player: Dictionary = player_val
+		var player_read := PlayerStateAccessClass.require_player(state, pid, "coffee:init_state")
+		if not player_read.ok:
+			return player_read
+		var player: Dictionary = player_read.value
 		player["coffee_shop_tokens_remaining"] = 3
 		state.players[pid] = player
 
-	if not state.map.has("coffee_shops"):
-		state.map["coffee_shops"] = {}
-	if not (state.map["coffee_shops"] is Dictionary):
-		return Result.failure("coffee:init_state: state.map.coffee_shops 类型错误（期望 Dictionary）")
-	if not state.map.has("next_coffee_shop_id"):
-		state.map["next_coffee_shop_id"] = 1
-	if not (state.map["next_coffee_shop_id"] is int):
-		return Result.failure("coffee:init_state: state.map.next_coffee_shop_id 类型错误（期望 int）")
+	if not map.has("coffee_shops"):
+		map["coffee_shops"] = {}
+	var coffee_shops_read := MapStateAccessClass.require_dict_field(state, "coffee_shops", "coffee:init_state")
+	if not coffee_shops_read.ok:
+		return coffee_shops_read
+	if not map.has("next_coffee_shop_id"):
+		map["next_coffee_shop_id"] = 1
+	var next_shop_id_read := MapStateAccessClass.require_int_field(state, "next_coffee_shop_id", "coffee:init_state")
+	if not next_shop_id_read.ok:
+		return next_shop_id_read
 
 	return Result.success()
 

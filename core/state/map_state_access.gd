@@ -26,36 +26,34 @@ static func require_map(state: GameState, prefix_label: String) -> Result:
 		return Result.failure("%sstate.map 类型错误（期望 Dictionary）" % prefix)
 	return Result.success(state.map)
 
-static func require_marketing_placements(state: GameState, prefix_label: String) -> Result:
+static func require_dict_field(state: GameState, field_name: String, prefix_label: String) -> Result:
 	var prefix := _prefix(prefix_label)
 	var map_read := require_map(state, prefix_label)
 	if not map_read.ok:
 		return map_read
 	var map: Dictionary = map_read.value
 
-	if not map.has(KEY_MARKETING_PLACEMENTS) or not (map[KEY_MARKETING_PLACEMENTS] is Dictionary):
-		return Result.failure("%sstate.map.%s 缺失或类型错误（期望 Dictionary）" % [prefix, KEY_MARKETING_PLACEMENTS])
-	return Result.success(map[KEY_MARKETING_PLACEMENTS])
+	if not map.has(field_name) or not (map[field_name] is Dictionary):
+		return Result.failure("%sstate.map.%s 缺失或类型错误（期望 Dictionary）" % [prefix, field_name])
+	return Result.success(map[field_name])
+
+static func require_int_field(state: GameState, field_name: String, prefix_label: String) -> Result:
+	var prefix := _prefix(prefix_label)
+	var map_read := require_map(state, prefix_label)
+	if not map_read.ok:
+		return map_read
+	var map: Dictionary = map_read.value
+
+	if not map.has(field_name) or not (map[field_name] is int):
+		return Result.failure("%sstate.map.%s 缺失或类型错误（期望 int）" % [prefix, field_name])
+	return Result.success(map[field_name])
+
+static func require_marketing_placements(state: GameState, prefix_label: String) -> Result:
+	return require_dict_field(state, KEY_MARKETING_PLACEMENTS, prefix_label)
 
 static func require_restaurants(state: GameState, prefix_label: String) -> Result:
-	var prefix := _prefix(prefix_label)
-	var map_read := require_map(state, prefix_label)
-	if not map_read.ok:
-		return map_read
-	var map: Dictionary = map_read.value
-
-	if not map.has(KEY_RESTAURANTS) or not (map[KEY_RESTAURANTS] is Dictionary):
-		return Result.failure("%sstate.map.%s 缺失或类型错误（期望 Dictionary）" % [prefix, KEY_RESTAURANTS])
-	return Result.success(map[KEY_RESTAURANTS])
+	return require_dict_field(state, KEY_RESTAURANTS, prefix_label)
 
 static func require_houses(state: GameState, prefix_label: String) -> Result:
-	var prefix := _prefix(prefix_label)
-	var map_read := require_map(state, prefix_label)
-	if not map_read.ok:
-		return map_read
-	var map: Dictionary = map_read.value
-
-	if not map.has(KEY_HOUSES) or not (map[KEY_HOUSES] is Dictionary):
-		return Result.failure("%sstate.map.%s 缺失或类型错误（期望 Dictionary）" % [prefix, KEY_HOUSES])
-	return Result.success(map[KEY_HOUSES])
+	return require_dict_field(state, KEY_HOUSES, prefix_label)
 

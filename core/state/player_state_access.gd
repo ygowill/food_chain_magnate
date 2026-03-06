@@ -63,6 +63,12 @@ static func require_inventory(player: Dictionary, player_label: String, prefix_l
 		return Result.failure("%s%s.inventory 缺失或类型错误（期望 Dictionary）" % [prefix, player_label])
 	return Result.success(player["inventory"])
 
+static func require_int_field(player: Dictionary, field_name: String, player_label: String, prefix_label: String) -> Result:
+	var prefix := _prefix(prefix_label)
+	if not player.has(field_name) or not (player[field_name] is int):
+		return Result.failure("%s%s.%s 缺失或类型错误（期望 int）" % [prefix, player_label, field_name])
+	return Result.success(player[field_name])
+
 static func require_player_milestones(state: GameState, player_id: int, prefix_label: String) -> Result:
 	var player_read := require_player(state, player_id, prefix_label)
 	if not player_read.ok:
@@ -104,3 +110,10 @@ static func require_player_company_structure(state: GameState, player_id: int, p
 		return player_read
 	var player: Dictionary = player_read.value
 	return require_company_structure(player, "player[%d]" % player_id, prefix_label)
+
+static func require_player_int_field(state: GameState, player_id: int, field_name: String, prefix_label: String) -> Result:
+	var player_read := require_player(state, player_id, prefix_label)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	return require_int_field(player, field_name, "player[%d]" % player_id, prefix_label)

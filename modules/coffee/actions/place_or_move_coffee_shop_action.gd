@@ -7,6 +7,8 @@ const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const MODULE_ID := "coffee"
 const PIECE_ID := "coffee_shop"
@@ -41,21 +43,20 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if used_triggers >= total_triggers:
 		return Result.failure("当前没有可用的咖啡店放置/移动窗口（需要先培训咖啡师）")
 
-	if not (state.players is Array) or command.actor < 0 or command.actor >= state.players.size():
-		return Result.failure("player_id 越界: %d" % command.actor)
-	var player_val = state.players[command.actor]
-	if not (player_val is Dictionary):
-		return Result.failure("player 类型错误（期望 Dictionary）")
-	var player: Dictionary = player_val
+	var player_read := PlayerStateAccessClass.require_player(state, command.actor, action_id)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
 
-	if not player.has("coffee_shop_tokens_remaining") or not (player["coffee_shop_tokens_remaining"] is int):
+	var tokens_remaining_read := PlayerStateAccessClass.require_int_field(player, "coffee_shop_tokens_remaining", "player[%d]" % command.actor, action_id)
+	if not tokens_remaining_read.ok:
 		return Result.failure("coffee_shop_tokens_remaining 缺失或类型错误（模块未正确初始化）")
-	var tokens_remaining: int = int(player["coffee_shop_tokens_remaining"])
+	var tokens_remaining: int = int(tokens_remaining_read.value)
 
-	if not (state.map is Dictionary):
-		return Result.failure("state.map 类型错误（期望 Dictionary）")
-	if not state.map.has("coffee_shops") or not (state.map["coffee_shops"] is Dictionary):
+	var shops_read := MapStateAccessClass.require_dict_field(state, "coffee_shops", action_id)
+	if not shops_read.ok:
 		return Result.failure("state.map.coffee_shops 缺失或类型错误（模块未正确初始化）")
+	var shops: Dictionary = shops_read.value
 
 	var mode_read := require_string_param(command, "mode")
 	if not mode_read.ok:
@@ -85,7 +86,6 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		var from_shop_id: String = str(from_read.value)
 		if from_shop_id.is_empty():
 			return Result.failure("from_shop_id 不能为空")
-		var shops: Dictionary = state.map["coffee_shops"]
 		if not shops.has(from_shop_id) or not (shops[from_shop_id] is Dictionary):
 			return Result.failure("咖啡店不存在: %s" % from_shop_id)
 		var shop: Dictionary = shops[from_shop_id]
@@ -128,19 +128,31 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if not validate_result.ok:
 		return validate_result
 
-	var player: Dictionary = state.players[player_id]
-	var shops: Dictionary = state.map["coffee_shops"]
+	var player_read := PlayerStateAccessClass.require_player(state, player_id, action_id)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	var shops_read := MapStateAccessClass.require_dict_field(state, "coffee_shops", action_id)
+	if not shops_read.ok:
+		return shops_read
+	var shops: Dictionary = shops_read.value
 
 	var shop_id := ""
 	var old_anchor: Vector2i = Vector2i.ZERO
 
 	if mode == "place":
-		var tokens_remaining: int = int(player["coffee_shop_tokens_remaining"])
+		var tokens_remaining_read := PlayerStateAccessClass.require_int_field(player, "coffee_shop_tokens_remaining", "player[%d]" % player_id, action_id)
+		if not tokens_remaining_read.ok:
+			return tokens_remaining_read
+		var tokens_remaining: int = int(tokens_remaining_read.value)
 		if tokens_remaining <= 0:
 			return Result.failure("咖啡店 token 已用尽，必须移动已有咖啡店")
-		assert(state.map.has("next_coffee_shop_id") and (state.map["next_coffee_shop_id"] is int), "coffee: next_coffee_shop_id 缺失或类型错误（期望 int）")
-		shop_id = "coffee_shop_%d" % int(state.map["next_coffee_shop_id"])
-		state.map["next_coffee_shop_id"] = int(state.map["next_coffee_shop_id"]) + 1
+		var next_shop_id_read := MapStateAccessClass.require_int_field(state, "next_coffee_shop_id", action_id)
+		if not next_shop_id_read.ok:
+			return next_shop_id_read
+		var next_shop_id: int = int(next_shop_id_read.value)
+		shop_id = "coffee_shop_%d" % next_shop_id
+		state.map["next_coffee_shop_id"] = next_shop_id + 1
 		player["coffee_shop_tokens_remaining"] = tokens_remaining - 1
 	else:
 		var from_read := require_string_param(command, "from_shop_id")
@@ -274,11 +286,10 @@ static func _increment_used_triggers(round_state: Dictionary, player_id: int, de
 	return Result.success()
 
 func _validate_tile_has_no_other_shop(state: GameState, world_anchor: Vector2i, ignore_shop_id: String) -> Result:
-	if state == null or not (state.map is Dictionary):
-		return Result.failure("state.map 无效")
-	if not state.map.has("coffee_shops") or not (state.map["coffee_shops"] is Dictionary):
+	var shops_read := MapStateAccessClass.require_dict_field(state, "coffee_shops", action_id)
+	if not shops_read.ok:
 		return Result.failure("state.map.coffee_shops 缺失或类型错误")
-	var shops: Dictionary = state.map["coffee_shops"]
+	var shops: Dictionary = shops_read.value
 	var target_board: Vector2i = MapUtilsClass.world_to_tile(world_anchor).board_pos
 
 	for sid_val in shops.keys():
