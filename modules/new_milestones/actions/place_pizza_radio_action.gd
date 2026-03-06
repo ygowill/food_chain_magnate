@@ -7,6 +7,7 @@ const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
 const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const PENDING_KEY := "new_milestones_pizza_radios_pending"
 
@@ -24,11 +25,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("state 为空")
 	if not (state.round_state is Dictionary):
 		return Result.failure("state.round_state 类型错误（期望 Dictionary）")
-	if not (state.map is Dictionary):
-		return Result.failure("state.map 类型错误（期望 Dictionary）")
-	if not state.map.has("marketing_placements") or not (state.map["marketing_placements"] is Dictionary):
-		return Result.failure("state.map.marketing_placements 缺失或类型错误")
-	var placements: Dictionary = state.map["marketing_placements"]
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, action_id)
+	if not placements_read.ok:
+		return placements_read
+	var placements: Dictionary = placements_read.value
 
 	if not state.round_state.has(PENDING_KEY):
 		return Result.failure("当前没有待放置的披萨 radio")
