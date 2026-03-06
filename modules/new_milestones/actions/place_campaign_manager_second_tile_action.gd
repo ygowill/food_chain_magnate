@@ -253,6 +253,11 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var rotation: int = int(info.get("rotation", 0))
 	var footprint_size: Vector2i = info.get("footprint_size", Vector2i.ONE)
 
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, action_id)
+	if not placements_read.ok:
+		return placements_read
+	var placements: Dictionary = placements_read.value
+
 	var instance := {
 		"board_number": board_number,
 		"type": mk_type,
@@ -270,7 +275,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	}
 	state.marketing_instances.append(instance)
 
-	state.map["marketing_placements"][str(board_number)] = {
+	placements[str(board_number)] = {
 		"board_number": board_number,
 		"type": mk_type,
 		"owner": player_id,
@@ -282,6 +287,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"axis": "",
 		"tile_index": -1,
 	}
+	state.map["marketing_placements"] = placements
 
 	# 消耗本回合能力
 	var pending: Dictionary = state.round_state[PENDING_KEY]
