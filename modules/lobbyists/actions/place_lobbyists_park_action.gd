@@ -89,15 +89,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if PieceRegistryClass.get_def(piece_id) == null:
 		return Result.failure("未加载的 piece: %s" % piece_id)
 
-	var map_ctx := {
-		"cells": state.map.cells,
-		"grid_size": state.map.grid_size,
-		"map_origin": CoordsClass.get_map_origin(state),
-		"houses": state.map.houses,
-		"restaurants": state.map.restaurants,
-		"drink_sources": state.map.get("drink_sources", []),
-		"marketing_placements": state.map.get("marketing_placements", {}),
-	}
+	var map_ctx_read := _build_map_context(state)
+	if not map_ctx_read.ok:
+		return map_ctx_read
+	var map_ctx: Dictionary = map_ctx_read.value
 	var piece_registry := PieceRegistryClass.get_all_defs()
 	var validate := PlacementClass.validate_placement(map_ctx, piece_id, anchor_pos, rotation, piece_registry, {})
 	if not validate.ok:
@@ -168,6 +163,30 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if not ms.ok:
 		result.with_warning("里程碑触发失败(UseEmployee/lobbyist): %s" % ms.error)
 	return result
+
+func _build_map_context(state: GameState) -> Result:
+	var houses_read := MapStateAccessClass.require_houses(state, "place_lobbyists_park")
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
+	var restaurants_read := MapStateAccessClass.require_restaurants(state, "place_lobbyists_park")
+	if not restaurants_read.ok:
+		return restaurants_read
+	var restaurants: Dictionary = restaurants_read.value
+	var placements_read := MapStateAccessClass.require_marketing_placements(state, "place_lobbyists_park")
+	if not placements_read.ok:
+		return placements_read
+	var placements: Dictionary = placements_read.value
+
+	return Result.success({
+		"cells": state.map.cells,
+		"grid_size": state.map.grid_size,
+		"map_origin": CoordsClass.get_map_origin(state),
+		"houses": houses,
+		"restaurants": restaurants,
+		"drink_sources": state.map.get("drink_sources", []),
+		"marketing_placements": placements,
+	})
 
 func _is_adjacent_to_reachable_road(state: GameState, actor: int, piece_cells: Array[Vector2i], max_range: int) -> Result:
 	if max_range < 0:
