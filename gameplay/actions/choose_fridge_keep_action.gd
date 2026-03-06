@@ -6,6 +6,7 @@ const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cle
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 const PENDING_TASK_KIND := "fridge_keep"
 
@@ -57,16 +58,20 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 			if not kind.is_empty() and kind != "fridge":
 				return Result.failure("当前不是冰箱保留选择（kind=%s）" % kind)
 
-	var player: Dictionary = state.players[command.actor]
-	var inventory_val = player.get("inventory", null)
-	if not (inventory_val is Dictionary):
-		return Result.failure("player.inventory 类型错误（期望 Dictionary）")
-	var inventory: Dictionary = inventory_val
+	var player_read := PlayerStateAccessClass.require_player(state, command.actor, action_id)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	var inventory_read := PlayerStateAccessClass.require_inventory(player, "player[%d]" % command.actor, action_id)
+	if not inventory_read.ok:
+		return inventory_read
+	var inventory: Dictionary = inventory_read.value
 
-	var ms_val = player.get("milestones", null)
-	if not (ms_val is Array):
-		return Result.failure("player.milestones 类型错误（期望 Array）")
-	var fridge_r := CleanupSettlementClass.get_fridge_capacity_from_milestones(ms_val)
+	var milestones_read := PlayerStateAccessClass.require_milestones(player, "player[%d]" % command.actor, action_id)
+	if not milestones_read.ok:
+		return milestones_read
+	var milestones: Array = milestones_read.value
+	var fridge_r := CleanupSettlementClass.get_fridge_capacity_from_milestones(milestones)
 	if not fridge_r.ok:
 		return fridge_r
 	var fridge: Dictionary = fridge_r.value
@@ -96,11 +101,20 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 func _apply_changes(state: GameState, command: Command) -> Result:
 	var warnings: Array[String] = []
 
-	var player: Dictionary = state.players[command.actor]
-	var inventory: Dictionary = player.get("inventory", {})
+	var player_read := PlayerStateAccessClass.require_player(state, command.actor, action_id)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	var inventory_read := PlayerStateAccessClass.require_inventory(player, "player[%d]" % command.actor, action_id)
+	if not inventory_read.ok:
+		return inventory_read
+	var inventory: Dictionary = inventory_read.value
 
-	var ms_val = player.get("milestones", [])
-	var fridge_r := CleanupSettlementClass.get_fridge_capacity_from_milestones(ms_val)
+	var milestones_read := PlayerStateAccessClass.require_milestones(player, "player[%d]" % command.actor, action_id)
+	if not milestones_read.ok:
+		return milestones_read
+	var milestones: Array = milestones_read.value
+	var fridge_r := CleanupSettlementClass.get_fridge_capacity_from_milestones(milestones)
 	if not fridge_r.ok:
 		return fridge_r
 	var fridge: Dictionary = fridge_r.value

@@ -82,6 +82,7 @@ const BankStateAccessTestClass = preload("res://core/tests/bank_state_access_tes
 const CoffeeRouteStateAccessTestClass = preload("res://core/tests/coffee_route_state_access_test.gd")
 const CoffeeCleanupStateAccessTestClass = preload("res://core/tests/coffee_cleanup_state_access_test.gd")
 const CoffeeRangeOriginsStateAccessTestClass = preload("res://core/tests/coffee_range_origins_state_access_test.gd")
+const ChooseFridgeKeepStateAccessTestClass = preload("res://core/tests/choose_fridge_keep_state_access_test.gd")
 const CleanupInventoryTestClass = preload("res://core/tests/cleanup_inventory_test.gd")
 const FireActionTestClass = preload("res://core/tests/fire_action_test.gd")
 const CompanyStructureTestClass = preload("res://core/tests/company_structure_test.gd")
