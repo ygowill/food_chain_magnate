@@ -257,12 +257,21 @@ static func _validate_coffee_shop_placement(state: GameState, world_anchor: Vect
 	if piece_defs.is_empty() or not piece_defs.has(PIECE_ID):
 		return Result.failure("缺少 PieceDef: %s" % PIECE_ID)
 
+	var houses_read := MapStateAccessClass.require_houses(state, "resolve_first_coffee_sold_bonus_coffee_shop")
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
+	var restaurants_read := MapStateAccessClass.require_restaurants(state, "resolve_first_coffee_sold_bonus_coffee_shop")
+	if not restaurants_read.ok:
+		return restaurants_read
+	var restaurants: Dictionary = restaurants_read.value
+
 	var map_ctx := {
 		"cells": state.map.cells,
 		"grid_size": state.map.grid_size,
 		"map_origin": CoordsClass.get_map_origin(state),
-		"houses": state.map.houses,
-		"restaurants": state.map.restaurants,
+		"houses": houses,
+		"restaurants": restaurants,
 		"drink_sources": state.map.get("drink_sources", []),
 		"marketing_placements": state.map.get("marketing_placements", {}),
 	}
