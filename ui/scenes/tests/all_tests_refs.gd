@@ -94,6 +94,7 @@ const FireActionStateAccessTestClass = preload("res://core/tests/fire_action_sta
 const MassMarketeersStateAccessTestClass = preload("res://core/tests/mass_marketeers_state_access_test.gd")
 const NightShiftManagersStateAccessTestClass = preload("res://core/tests/night_shift_managers_state_access_test.gd")
 const CleanupSettlementOpeningSoonStateAccessTestClass = preload("res://core/tests/cleanup_settlement_opening_soon_state_access_test.gd")
+const LobbyistsRoadStateAccessTestClass = preload("res://core/tests/lobbyists_road_state_access_test.gd")
 const CleanupInventoryTestClass = preload("res://core/tests/cleanup_inventory_test.gd")
 const FireActionTestClass = preload("res://core/tests/fire_action_test.gd")
 const CompanyStructureTestClass = preload("res://core/tests/company_structure_test.gd")

@@ -11,6 +11,7 @@ const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 const LobbyistsRoadOverlaysClass = preload("res://modules/lobbyists/road_overlays.gd")
 
 const MODULE_ID := LobbyistsRoadOverlaysClass.MODULE_ID
@@ -274,9 +275,10 @@ func _is_adjacent_to_reachable_road(state: GameState, actor: int, piece_cells: A
 	var road_graph = RoadGraphCacheClass.get_road_graph(state)
 	if road_graph == null:
 		return Result.failure("道路图未初始化")
-	if not (state.map is Dictionary) or not state.map.has("restaurants") or not (state.map["restaurants"] is Dictionary):
-		return Result.failure("state.map.restaurants 缺失或类型错误")
-	var restaurants: Dictionary = state.map["restaurants"]
+	var restaurants_read := MapStateAccessClass.require_restaurants(state, "place_lobbyists_road")
+	if not restaurants_read.ok:
+		return restaurants_read
+	var restaurants: Dictionary = restaurants_read.value
 
 	var start_roads: Array[Vector2i] = []
 	for rest_id in restaurants.keys():
