@@ -1194,6 +1194,9 @@ GameSessionContext
 - `refactor(gameplay): tighten move restaurant placement payload access`
   - 为 `move_restaurant` 增补 placement payload 读取 helper，并让 apply 阶段在 `validate_restaurant_placement()` 返回值、`footprint_cells` 或 `entrance_pos` 契约损坏时显式 fail-fast，而不是触发硬断言。
   - 扩展 focused `move_restaurant` 状态访问测试，通过注入坏 payload 覆盖三类失败分支，确保不会提前改写玩家、`map` 或 `round_state`。
+- `refactor(gameplay): tighten place restaurant placement payload access`
+  - 为 `place_restaurant` 增补 placement payload 读取 helper，并让 apply 阶段在 `validate_restaurant_placement()` 返回值、`footprint_cells` 或 `entrance_pos` 契约损坏时显式 fail-fast，而不是在写入新餐厅前触发硬断言。
+  - 新增 focused `place_restaurant` 状态访问测试，通过注入坏 payload 覆盖三类失败分支，确保不会提前改写 `next_restaurant_id`、`player.restaurants`、`map` 或 `round_state`。
 
 当前阶段性结果：
 

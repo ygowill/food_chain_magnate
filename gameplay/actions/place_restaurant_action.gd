@@ -16,8 +16,9 @@ const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY := "opening_soon_restaurants"
 
 var _piece_registry: Dictionary = {}
+var _placement_validator = null
 
-func _init(piece_registry: Dictionary = {}) -> void:
+func _init(piece_registry: Dictionary = {}, placement_validator = null) -> void:
 	action_id = "place_restaurant"
 	display_name = "放置餐厅"
 	description = "在地图上放置餐厅"
@@ -26,6 +27,7 @@ func _init(piece_registry: Dictionary = {}) -> void:
 	allowed_phases = [DefsClass.PHASE_SETUP, DefsClass.PHASE_WORKING]
 	allowed_sub_phases = [DefsClass.SUB_PHASE_PLACE_RESTAURANTS]
 	_piece_registry = piece_registry
+	_placement_validator = placement_validator if placement_validator != null else RestaurantPlacementClass
 
 func can_initiate(state: GameState, player_id: int) -> bool:
 	if state == null:
@@ -55,6 +57,31 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 	var used_place := int(used_place_read.value)
 	var used_move := int(used_move_read.value)
 	return (used_place + used_move) < eligible
+
+static func _require_vector2i_array(value, path: String) -> Result:
+	if not (value is Array):
+		return Result.failure("%s 类型错误（期望 Array）" % path)
+	var arr: Array = value
+	for i in range(arr.size()):
+		if not (arr[i] is Vector2i):
+			return Result.failure("%s[%d] 类型错误（期望 Vector2i）" % [path, i])
+	return Result.success(arr)
+
+static func _require_restaurant_placement_payload(value, prefix: String) -> Result:
+	if not (value is Dictionary):
+		return Result.failure("%s: validate_restaurant_placement 返回值类型错误（期望 Dictionary）" % prefix)
+	var payload: Dictionary = value
+	if not payload.has("footprint_cells"):
+		return Result.failure("%s: validate_restaurant_placement 缺少 footprint_cells" % prefix)
+	var footprint_read := _require_vector2i_array(payload["footprint_cells"], "%s: validate_restaurant_placement.footprint_cells" % prefix)
+	if not footprint_read.ok:
+		return footprint_read
+	if not payload.has("entrance_pos") or not (payload["entrance_pos"] is Vector2i):
+		return Result.failure("%s: validate_restaurant_placement 缺少 entrance_pos" % prefix)
+	return Result.success({
+		"footprint_cells": footprint_read.value,
+		"entrance_pos": payload["entrance_pos"],
+	})
 
 func _parse_params(command: Command) -> Result:
 	var pos_result := require_vector2i_param(command, "position")
@@ -194,20 +221,20 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var is_initial := state.phase == DefsClass.PHASE_SETUP
 
 	# 获取验证结果 (包含 footprint_cells)
-	var validate_result := RestaurantPlacementClass.validate_restaurant_placement(
+	var validate_result := _validate_restaurant_placement(
 		map_ctx, world_anchor, rotation, piece_registry,
-		player_id, is_initial, {}
+		player_id, is_initial
 	)
 
 	if not validate_result.ok:
 		return validate_result
 
-	assert(validate_result.value is Dictionary, "place_restaurant: validate_restaurant_placement 返回值类型错误（期望 Dictionary）")
-	var validate_value: Dictionary = validate_result.value
-	assert(validate_value.has("footprint_cells") and (validate_value["footprint_cells"] is Array), "place_restaurant: validate_restaurant_placement 缺少 footprint_cells")
-	assert(validate_value.has("entrance_pos") and (validate_value["entrance_pos"] is Vector2i), "place_restaurant: validate_restaurant_placement 缺少 entrance_pos")
-	var footprint_cells: Array = validate_value["footprint_cells"]
-	var entrance_pos: Vector2i = validate_value["entrance_pos"]
+	var placement_read := _require_restaurant_placement_payload(validate_result.value, action_id)
+	if not placement_read.ok:
+		return placement_read
+	var placement: Dictionary = placement_read.value
+	var footprint_cells: Array = placement["footprint_cells"]
+	var entrance_pos: Vector2i = placement["entrance_pos"]
 
 	# 生成餐厅 ID
 	var restaurant_id := "rest_%d" % state.map.next_restaurant_id
@@ -362,6 +389,17 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 	return events
 
 # 辅助方法：获取建筑件注册表（优先使用注入的 modules/*/content/pieces）
+func _validate_restaurant_placement(map_ctx: Dictionary, world_anchor: Vector2i, rotation: int, piece_registry: Dictionary, player_id: int, is_initial: bool) -> Result:
+	return _placement_validator.validate_restaurant_placement(
+		map_ctx,
+		world_anchor,
+		rotation,
+		piece_registry,
+		player_id,
+		is_initial,
+		{}
+	)
+
 func _get_piece_registry() -> Dictionary:
 	if _piece_registry.is_empty():
 		const PieceDefClass = preload("res://core/map/piece_def.gd")
