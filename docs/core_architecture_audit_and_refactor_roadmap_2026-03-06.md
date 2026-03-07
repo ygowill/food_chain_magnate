@@ -1176,6 +1176,9 @@ GameSessionContext
 - `refactor(core): tighten train provider allocation access`
   - 为 `train_slot_usage_providers` 增补 `Result` 版 provider 读取 helper，并让 `train_slot_usage_allocator` 在 provider / max-step / slot allocation 链路上对损坏的 `working_employee_multipliers` 显式 fail-fast。
   - 扩展 focused `train` 状态访问测试，覆盖 provider 读取、max-step 计算、slot 规划与分配路径，确保非法 `working_employee_multipliers` 不会提前改写 `round_state`。
+- `refactor(core): tighten salary milestone access`
+  - 为 `salary` 增补 `Result` 版 `requires_salary` helper，并让布尔包装器在损坏的 `player.milestones` 上 fail-closed，避免营销免薪里程碑查询触发硬断言。
+  - 扩展 marketing focused 测试，确保非法 `player.milestones` 会让 `try_requires_salary()` 返回可诊断错误，而 `requires_salary()` 保持保守返回需薪。
 
 当前阶段性结果：
 

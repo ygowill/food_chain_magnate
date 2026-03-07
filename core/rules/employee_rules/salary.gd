@@ -5,26 +5,26 @@ const EmployeeArrayHelpers = preload("res://core/rules/employee_rules/employee_a
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
-static func requires_salary(employee_id: String, player: Dictionary = {}) -> bool:
+static func try_requires_salary(employee_id: String, player: Dictionary = {}) -> Result:
 	# 从 EmployeeRegistry 读取 salary 字段，并叠加里程碑效果。
 	if employee_id.is_empty():
-		return false
+		return Result.success(false)
 
 	var base_requires := EmployeeRegistryClass.check_requires_salary(employee_id)
 	if not base_requires:
-		return false
+		return Result.success(false)
 
 	# 持久效果：某些员工永久免薪（由里程碑 effects.type 设置到 player 上）
 	var no_salary_val = player.get("no_salary_employee_ids", null)
 	if no_salary_val is Array:
 		var no_salary: Array = no_salary_val
 		if no_salary.has(employee_id):
-			return false
+			return Result.success(false)
 
 	# 里程碑效果：marketing_no_salary -> 营销员不再需要支付薪水（避免硬编码 first_billboard）
 	var milestones_read := PlayerStateAccessClass.require_milestones(player, "player", "EmployeeRules.requires_salary: ")
 	if milestones_read.ok:
-		var milestones := EmployeeArrayHelpers.require_string_array_field(player, "milestones", "player")
+		var milestones: Array = milestones_read.value
 		var def_val = EmployeeRegistryClass.get_def(employee_id)
 		if def_val != null and (def_val is EmployeeDef) and is_marketing_employee_def(def_val):
 			var ms_read := MilestoneEffectQueriesClass.collect_effect_entries(
@@ -34,12 +34,17 @@ static func requires_salary(employee_id: String, player: Dictionary = {}) -> boo
 				"player.milestones"
 			)
 			if not ms_read.ok:
-				assert(false, ms_read.error)
-				return true
+				return ms_read
 			if not (ms_read.value as Array).is_empty():
-				return false
+				return Result.success(false)
 
-	return true
+	return Result.success(true)
+
+static func requires_salary(employee_id: String, player: Dictionary = {}) -> bool:
+	var read := try_requires_salary(employee_id, player)
+	if not read.ok:
+		return true
+	return bool(read.value)
 
 static func is_marketing_employee_def(def: EmployeeDef) -> bool:
 	for t in def.usage_tags:

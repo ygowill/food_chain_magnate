@@ -40,10 +40,14 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r5.ok:
 		return r5
 
+	var r6 := _test_requires_salary_fails_closed_on_invalid_marketing_milestones()
+	if not r6.ok:
+		return r6
+
 	return Result.success({
 		"player_count": player_count,
 		"seed": seed_val,
-		"cases": 5,
+		"cases": 6,
 	})
 
 static func _test_billboard_mailbox_and_expiry(player_count: int, seed_val: int) -> Result:
@@ -316,6 +320,23 @@ static func _test_radio_and_airplane_ranges(player_count: int, seed_val: int) ->
 	return Result.success({
 		"actor": actor,
 	})
+
+static func _test_requires_salary_fails_closed_on_invalid_marketing_milestones() -> Result:
+	var player := {
+		"employees": [],
+		"reserve_employees": [],
+		"busy_marketers": [],
+		"milestones": [123],
+	}
+	var read := EmployeeRulesClass.try_requires_salary("campaign_manager", player)
+	if read.ok:
+		return Result.failure("非法 player.milestones 时 try_requires_salary 应失败")
+	var err := str(read.error)
+	if err.find("player.milestones") < 0:
+		return Result.failure("错误信息应包含 player.milestones，实际: %s" % err)
+	if not EmployeeRulesClass.requires_salary("campaign_manager", player):
+		return Result.failure("requires_salary 包装器在非法 player.milestones 下应 fail-closed 返回 true")
+	return Result.success()
 
 static func _test_first_billboard_permanent_and_no_salary(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()

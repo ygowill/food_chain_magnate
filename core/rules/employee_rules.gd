@@ -14,6 +14,9 @@ const TrainSlotUsage = preload("res://core/rules/employee_rules/train_slot_usage
 static func is_entry_level(employee_id: String) -> bool:
 	return Counts.is_entry_level(employee_id)
 
+static func try_requires_salary(employee_id: String, player: Dictionary = {}) -> Result:
+	return Salary.try_requires_salary(employee_id, player)
+
 static func requires_salary(employee_id: String, player: Dictionary = {}) -> bool:
 	return Salary.requires_salary(employee_id, player)
 
