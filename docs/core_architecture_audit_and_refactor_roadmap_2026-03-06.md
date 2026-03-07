@@ -1073,6 +1073,9 @@ GameSessionContext
 - `refactor(gameplay): tighten forfeit pending access`
   - 将 `forfeit_player` 对 `pending_phase_actions` / `online_dinnertime_confirmed_players` 的更新改为先规划再落地，避免坏状态下先发生资产清理。
   - 新增 focused test，确保 `pending_phase_actions` 类型错误时不提前标记 forfeited、清空资产或改写银行累计。
+- `refactor(gameplay): tighten dinnertime confirmed access`
+  - 将 `confirm_dinnertime` 对 `online_dinnertime_confirmed_players` 的读取改为 fail-fast，并把 confirmed / pending 的写回顺序调整为先更新 pending 再落地 confirmed。
+  - 新增 focused test，确保 `online_dinnertime_confirmed_players` 元素类型错误时不提前改写 `pending_phase_actions` 或 confirmed 列表。
 
 当前阶段性结果：
 

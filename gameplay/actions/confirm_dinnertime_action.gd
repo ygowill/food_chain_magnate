@@ -33,7 +33,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return actor_read
 	var actor_id := int(actor_read.value)
 	var confirmed_read := _read_online_dinnertime_confirmed_players(state)
-	if confirmed_read.ok and (confirmed_read.value is Array):
+	if not confirmed_read.ok:
+		return confirmed_read
+	if confirmed_read.value is Array:
 		var confirmed: Array = confirmed_read.value
 		if confirmed.size() == state.players.size():
 			if actor_id >= 0 and actor_id < confirmed.size() and bool(confirmed[actor_id]):
@@ -58,7 +60,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return actor_read
 	var actor_id := int(actor_read.value)
 	var confirmed_read := _read_online_dinnertime_confirmed_players(state)
-	if confirmed_read.ok and (confirmed_read.value is Array):
+	if not confirmed_read.ok:
+		return confirmed_read
+	if confirmed_read.value is Array:
 		var confirmed: Array = confirmed_read.value
 		if confirmed.size() == state.players.size():
 			if actor_id < 0 or actor_id >= confirmed.size():
@@ -66,11 +70,14 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			if bool(confirmed[actor_id]):
 				return Result.failure("玩家 %d 当前无需确认晚餐结算" % actor_id)
 			confirmed[actor_id] = true
-			state.round_state[ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY] = confirmed
 			var remaining_by_confirmed := _build_pending_from_confirmed_players(confirmed)
-			return RoundStatePendingPhaseActionsClass.set_phase_pending_players(
+			var set_pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
 				state.round_state, DefsClass.PHASE_DINNERTIME, remaining_by_confirmed, KIND_CONFIRM_DINNERTIME
 			)
+			if not set_pending.ok:
+				return set_pending
+			state.round_state[ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY] = confirmed
+			return Result.success()
 	if not _has_player_pending_confirm(pending, actor_id):
 		return Result.failure("玩家 %d 当前无需确认晚餐结算" % actor_id)
 
