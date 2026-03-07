@@ -82,6 +82,9 @@ static func add_immediate_train_pending(state: GameState, player_id: int, employ
 static func consume_immediate_train_pending(state: GameState, player_id: int, employee_type: String) -> bool:
 	return ImmediateTrainPending.consume_immediate_train_pending(state, player_id, employee_type)
 
+static func try_get_max_train_steps_for_single_employee_for_working(state: GameState, player_id: int) -> Result:
+	return TrainSlotUsage.try_get_max_train_steps_for_single_employee_for_working(state, player_id)
+
 static func get_max_train_steps_for_single_employee_for_working(state: GameState, player_id: int) -> int:
 	return TrainSlotUsage.get_max_train_steps_for_single_employee_for_working(state, player_id)
 

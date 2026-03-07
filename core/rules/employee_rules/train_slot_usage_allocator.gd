@@ -17,16 +17,16 @@ static func _choose_instance_for_allocation(used_by_instance: Array[int], cap_pe
 			best_idx = i
 	return best_idx
 
-static func get_max_train_steps_for_single_employee_for_working(state: GameState, player_id: int) -> int:
+static func try_get_max_train_steps_for_single_employee_for_working(state: GameState, player_id: int) -> Result:
 	# 返回“当前还能对同一张员工卡在一次 Train 动作中提升的最大步数”。
 	# - trainer: 1
 	# - coach: 2
 	# - guru: 3
 	# - 若 coach/guru 已被消耗部分 slot，则相应下降。
 	if state == null:
-		return 0
+		return Result.failure("train_slot_usage: state 为空")
 	if not (state.round_state is Dictionary):
-		return 0
+		return Result.failure("train_slot_usage: round_state 类型错误（期望 Dictionary）")
 	var providers := ProvidersClass.get_train_providers_for_working(state, player_id)
 	var best := 0
 	for p in providers:
@@ -37,8 +37,7 @@ static func get_max_train_steps_for_single_employee_for_working(state: GameState
 			continue
 		var used_read := StorageClass.read_used_slots_by_instance(state, player_id, emp_id, instances, cap_per_instance)
 		if not used_read.ok:
-			assert(false, "train_slot_usage_instances 结构损坏: %s" % used_read.error)
-			continue
+			return Result.failure("train_slot_usage_instances 结构损坏: %s" % used_read.error)
 		var used_by_instance: Array[int] = used_read.value
 		var max_one := 0
 		for u in used_by_instance:
@@ -47,7 +46,13 @@ static func get_max_train_steps_for_single_employee_for_working(state: GameState
 				max_one = remaining
 		if max_one > best:
 			best = max_one
-	return best
+	return Result.success(best)
+
+static func get_max_train_steps_for_single_employee_for_working(state: GameState, player_id: int) -> int:
+	var read := try_get_max_train_steps_for_single_employee_for_working(state, player_id)
+	if not read.ok:
+		return 0
+	return int(read.value)
 
 static func can_allocate_train_slots_for_working(
 	state: GameState,

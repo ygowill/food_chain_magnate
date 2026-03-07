@@ -1149,6 +1149,9 @@ GameSessionContext
 - `refactor(gameplay): tighten train phase start array access`
   - 将 `train_phase_start_counts` 计算阶段对 `reserve_employees` / `employees` 元素类型检查从 `assert` 改为显式 `Result` 失败，避免坏玩家数组在建立起始计数时触发硬断言。
   - 扩展 focused 状态访问测试，确保非法 reserve/active 员工条目会 fail-fast，且不会提前写入 `train_phase_start_counts`。
+- `refactor(gameplay): tighten train max-step validation access`
+  - 为 `train_slot_usage` 增补 `Result` 版 max-step 读取 helper，并让 `train_action` 在计算多步培训上限时对损坏的 `train_slot_usage_instances` 显式 fail-fast，避免 query helper 内部硬断言。
+  - 扩展 focused `train` 状态访问测试，确保非法 `train_slot_usage_instances` 会在验证阶段失败，且不会提前改写玩家、`employee_pool` 或 `round_state`。
 
 当前阶段性结果：
 

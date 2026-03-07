@@ -153,7 +153,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	# 培训路径 + 多步培训（coach/guru）：
 	# - 默认 max_steps 为 1；coach=2、guru=3
 	# - max_steps 会随本子阶段已消耗的 trainer slots 下降（例如 coach 用掉 1 slot 后，本次最多只能 1 步）
-	var max_steps_one := EmployeeRulesClass.get_max_train_steps_for_single_employee_for_working(state, command.actor)
+	var max_steps_read := EmployeeRulesClass.try_get_max_train_steps_for_single_employee_for_working(state, command.actor)
+	if not max_steps_read.ok:
+		return max_steps_read
+	var max_steps_one := int(max_steps_read.value)
 	var steps_required := _compute_train_steps_within_limit(from_employee, to_employee, maxi(1, max_steps_one))
 	if steps_required <= 0:
 		return Result.failure("无法按培训路径培训: %s -> %s（本次最多 %d 步）" % [from_employee, to_employee, maxi(1, max_steps_one)])
