@@ -59,6 +59,32 @@ static func require_array_field(state: GameState, field_name: String, prefix_lab
 		return Result.failure("%sstate.map.%s 缺失或类型错误（期望 Array）" % [prefix, field_name])
 	return Result.success(map[field_name])
 
+static func require_optional_dict_field_or_empty(state: GameState, field_name: String, prefix_label: String) -> Result:
+	var prefix := _prefix(prefix_label)
+	var map_read := require_map(state, prefix_label)
+	if not map_read.ok:
+		return map_read
+	var map: Dictionary = map_read.value
+
+	if not map.has(field_name):
+		return Result.success({})
+	if not (map[field_name] is Dictionary):
+		return Result.failure("%sstate.map.%s 类型错误（期望 Dictionary）" % [prefix, field_name])
+	return Result.success(map[field_name])
+
+static func require_optional_array_field_or_empty(state: GameState, field_name: String, prefix_label: String) -> Result:
+	var prefix := _prefix(prefix_label)
+	var map_read := require_map(state, prefix_label)
+	if not map_read.ok:
+		return map_read
+	var map: Dictionary = map_read.value
+
+	if not map.has(field_name):
+		return Result.success([])
+	if not (map[field_name] is Array):
+		return Result.failure("%sstate.map.%s 类型错误（期望 Array）" % [prefix, field_name])
+	return Result.success(map[field_name])
+
 static func require_vector2i_field(state: GameState, field_name: String, prefix_label: String) -> Result:
 	var prefix := _prefix(prefix_label)
 	var map_read := require_map(state, prefix_label)

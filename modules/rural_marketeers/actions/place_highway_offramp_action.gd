@@ -43,14 +43,12 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not (pending.get(command.actor, false) is bool) or not bool(pending.get(command.actor, false)):
 		return Result.failure("当前没有可放置的 offramp")
 
-	if not (state.map is Dictionary):
-		return Result.failure("state.map 类型错误（期望 Dictionary）")
-	if not state.map.has("grid_size") or not (state.map["grid_size"] is Vector2i):
-		return Result.failure("state.map.grid_size 缺失或类型错误")
-	if not state.map.has("tile_grid_size") or not (state.map["tile_grid_size"] is Vector2i):
-		return Result.failure("state.map.tile_grid_size 缺失或类型错误")
-	var grid_size: Vector2i = state.map["grid_size"]
-	var tile_grid_size: Vector2i = state.map["tile_grid_size"]
+	var grid_size_read := MapStateAccessClass.require_grid_size(state, MODULE_ID)
+	if not grid_size_read.ok:
+		return grid_size_read
+	var tile_grid_size_read := MapStateAccessClass.require_tile_grid_size(state, MODULE_ID)
+	if not tile_grid_size_read.ok:
+		return tile_grid_size_read
 
 	if not (command.params is Dictionary):
 		return Result.failure("command.params 类型错误（期望 Dictionary）")
@@ -100,15 +98,18 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("offramp 必须连接到地图内道路（连接格道路必须同时连接至少一个内部方向）: %s" % str(connect_pos))
 
 	# 外部占用格子必须不冲突
+	var external_cells_read := MapStateAccessClass.require_optional_dict_field_or_empty(state, "external_cells", MODULE_ID)
+	if not external_cells_read.ok:
+		return external_cells_read
+	var external_cells: Dictionary = external_cells_read.value
 	var occupied := _get_external_cells_for_piece(connect_pos, side)
 	for i in range(occupied.size()):
 		var p: Vector2i = occupied[i]
 		if CoordsClass.is_world_pos_in_grid(state, p):
 			return Result.failure("内部错误：offramp 外部格计算错误（不应落在棋盘内）: %s" % str(p))
-		if state.map.has("external_cells") and (state.map["external_cells"] is Dictionary):
-			var key := "%d,%d" % [p.x, p.y]
-			if (state.map["external_cells"] as Dictionary).has(key):
-				return Result.failure("offramp 与已有棋盘外组件冲突: %s" % key)
+		var key := "%d,%d" % [p.x, p.y]
+		if external_cells.has(key):
+			return Result.failure("offramp 与已有棋盘外组件冲突: %s" % key)
 
 	return Result.success({
 		"piece_id": OFFRAMP_PIECE_ID,
@@ -144,12 +145,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 static func get_offramp_connection_cells(state: GameState) -> Result:
 	if state == null or not (state.map is Dictionary):
 		return Result.failure("get_offramp_connection_cells: state.map 类型错误")
-	if not state.map.has(OFFRAMP_PLACEMENTS_KEY):
-		return Result.success([])
-	var v = state.map.get(OFFRAMP_PLACEMENTS_KEY, null)
-	if not (v is Array):
-		return Result.failure("get_offramp_connection_cells: state.map.%s 类型错误（期望 Array）" % OFFRAMP_PLACEMENTS_KEY)
-	var placements: Array = v
+	var placements_read := MapStateAccessClass.require_optional_array_field_or_empty(state, OFFRAMP_PLACEMENTS_KEY, "get_offramp_connection_cells")
+	if not placements_read.ok:
+		return placements_read
+	var placements: Array = placements_read.value
 	var out: Array[Vector2i] = []
 	for i in range(placements.size()):
 		var p_val = placements[i]
@@ -167,15 +166,15 @@ static func get_offramp_connection_cells(state: GameState) -> Result:
 	return Result.success(out)
 
 func _apply_external_offramp_piece(state: GameState, owner_id: int, connect_pos: Vector2i, side: String) -> Result:
-	if not state.map.has("external_cells") or not (state.map["external_cells"] is Dictionary):
-		return Result.failure("state.map.external_cells 缺失或类型错误（期望 Dictionary）")
-	if not state.map.has(OFFRAMP_PLACEMENTS_KEY):
-		state.map[OFFRAMP_PLACEMENTS_KEY] = []
-	if not (state.map[OFFRAMP_PLACEMENTS_KEY] is Array):
-		return Result.failure("state.map.%s 类型错误（期望 Array）" % OFFRAMP_PLACEMENTS_KEY)
+	var external_cells_read := MapStateAccessClass.require_dict_field(state, "external_cells", MODULE_ID)
+	if not external_cells_read.ok:
+		return external_cells_read
+	var placements_read := MapStateAccessClass.require_optional_array_field_or_empty(state, OFFRAMP_PLACEMENTS_KEY, MODULE_ID)
+	if not placements_read.ok:
+		return placements_read
 
-	var external_cells: Dictionary = state.map["external_cells"]
-	var placements: Array = state.map[OFFRAMP_PLACEMENTS_KEY]
+	var external_cells: Dictionary = external_cells_read.value
+	var placements: Array = placements_read.value
 
 	var occupied := _get_external_cells_for_piece(connect_pos, side)
 	for i in range(occupied.size()):
