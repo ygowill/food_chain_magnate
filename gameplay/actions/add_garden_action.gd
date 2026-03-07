@@ -17,8 +17,9 @@ const GARDEN_SUPPLY_KEY := "garden_supply_remaining"
 const DEFAULT_GARDEN_SUPPLY := 8
 
 var _piece_registry: Dictionary = {}
+var _garden_attachment_validator = null
 
-func _init(piece_registry: Dictionary = {}) -> void:
+func _init(piece_registry: Dictionary = {}, garden_attachment_validator = null) -> void:
 	action_id = "add_garden"
 	display_name = "添加花园"
 	description = "为一个已有的房屋添加花园"
@@ -27,6 +28,7 @@ func _init(piece_registry: Dictionary = {}) -> void:
 	allowed_phases = [DefsClass.PHASE_WORKING]
 	allowed_sub_phases = [DefsClass.SUB_PHASE_PLACE_HOUSES]
 	_piece_registry = piece_registry
+	_garden_attachment_validator = garden_attachment_validator if garden_attachment_validator != null else GardenAttachmentClass
 
 func can_initiate(state: GameState, player_id: int) -> bool:
 	if state == null:
@@ -50,6 +52,34 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 		return true
 	var used := int(used_result.value)
 	return used < capacity
+
+static func _require_vector2i_array(value, path: String) -> Result:
+	if not (value is Array):
+		return Result.failure("%s 类型错误（期望 Array）" % path)
+	var arr: Array = value
+	for i in range(arr.size()):
+		if not (arr[i] is Vector2i):
+			return Result.failure("%s[%d] 类型错误（期望 Vector2i）" % [path, i])
+	return Result.success(arr)
+
+static func _require_garden_attachment_payload(value, prefix: String) -> Result:
+	if not (value is Dictionary):
+		return Result.failure("%s: validate_garden_attachment 返回值类型错误（期望 Dictionary）" % prefix)
+	var payload: Dictionary = value
+	if not payload.has("garden_cells"):
+		return Result.failure("%s: validate_garden_attachment 缺少 garden_cells" % prefix)
+	var garden_read := _require_vector2i_array(payload["garden_cells"], "%s: validate_garden_attachment.garden_cells" % prefix)
+	if not garden_read.ok:
+		return garden_read
+	if not payload.has("merged_cells"):
+		return Result.failure("%s: validate_garden_attachment 缺少 merged_cells" % prefix)
+	var merged_read := _require_vector2i_array(payload["merged_cells"], "%s: validate_garden_attachment.merged_cells" % prefix)
+	if not merged_read.ok:
+		return merged_read
+	return Result.success({
+		"garden_cells": garden_read.value,
+		"merged_cells": merged_read.value,
+	})
 
 func _validate_specific(state: GameState, command: Command) -> Result:
 	var house_id_result := require_string_param(command, "house_id")
@@ -104,8 +134,8 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var map_ctx: Dictionary = map_ctx_read.value
 	var piece_registry := _get_piece_registry()
 
-	var validate_result := GardenAttachmentClass.validate_garden_attachment(
-		map_ctx, house_id, direction, piece_registry, {}
+	var validate_result := _validate_garden_attachment(
+		map_ctx, house_id, direction, piece_registry
 	)
 	if not validate_result.ok:
 		return validate_result
@@ -185,8 +215,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var map_ctx: Dictionary = map_ctx_read.value
 	var piece_registry := _get_piece_registry()
 
-	var validate_result := GardenAttachmentClass.validate_garden_attachment(
-		map_ctx, house_id, direction, piece_registry, {}
+	var validate_result := _validate_garden_attachment(
+		map_ctx, house_id, direction, piece_registry
 	)
 	if not validate_result.ok:
 		return validate_result
@@ -196,12 +226,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if supply_before <= 0:
 		return Result.failure("花园板件已用完")
 
-	assert(validate_result.value is Dictionary, "add_garden: validate_garden_attachment 返回值类型错误（期望 Dictionary）")
-	var validate_value: Dictionary = validate_result.value
-	assert(validate_value.has("garden_cells") and (validate_value["garden_cells"] is Array), "add_garden: validate_garden_attachment 缺少 garden_cells")
-	assert(validate_value.has("merged_cells") and (validate_value["merged_cells"] is Array), "add_garden: validate_garden_attachment 缺少 merged_cells")
-	var garden_cells: Array = validate_value["garden_cells"]
-	var merged_cells: Array = validate_value["merged_cells"]
+	var payload_read := _require_garden_attachment_payload(validate_result.value, action_id)
+	if not payload_read.ok:
+		return payload_read
+	var payload: Dictionary = payload_read.value
+	var garden_cells: Array = payload["garden_cells"]
+	var merged_cells: Array = payload["merged_cells"]
 
 	var house_apply_read := _prepare_house_for_apply(state, house_id, player_id)
 	if not house_apply_read.ok:
@@ -307,6 +337,15 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 		"type": EventBus.EventType.GARDEN_ADDED,
 		"data": data
 	}]
+
+func _validate_garden_attachment(map_ctx: Dictionary, house_id: String, direction: String, piece_registry: Dictionary) -> Result:
+	return _garden_attachment_validator.validate_garden_attachment(
+		map_ctx,
+		house_id,
+		direction,
+		piece_registry,
+		{}
+	)
 
 func _get_piece_registry() -> Dictionary:
 	if _piece_registry.is_empty():

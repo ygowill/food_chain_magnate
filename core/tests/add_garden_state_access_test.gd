@@ -5,6 +5,17 @@ extends RefCounted
 const ActionClass = preload("res://gameplay/actions/add_garden_action.gd")
 const GARDEN_SUPPLY_KEY := "garden_supply_remaining"
 
+class FakeGardenAttachmentValidator:
+	extends RefCounted
+
+	var _value
+
+	func _init(value) -> void:
+		_value = value
+
+	func validate_garden_attachment(_map_ctx: Dictionary, _house_id: String, _direction: String, _piece_registry: Dictionary, _options: Dictionary) -> Result:
+		return Result.success(_value)
+
 static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var r := _test_apply_changes_updates_house_and_supply()
 	if not r.ok:
@@ -15,7 +26,13 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_apply_changes_fails_fast_on_invalid_house_placement_counts_without_partial_mutation()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_apply_changes_fails_fast_on_invalid_attachment_payload_without_partial_mutation()
+	if not r.ok:
+		return r
+	r = _test_apply_changes_fails_fast_on_invalid_merged_cells_without_partial_mutation()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 5})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -147,6 +164,40 @@ static func _test_apply_changes_fails_fast_on_invalid_house_placement_counts_wit
 	var counts_val = state.round_state.get("house_placement_counts", null)
 	if not (counts_val is Array):
 		return Result.failure("失败时不应改写非法 house_placement_counts")
+	return Result.success(true)
+
+static func _test_apply_changes_fails_fast_on_invalid_attachment_payload_without_partial_mutation() -> Result:
+	return _test_apply_changes_fails_fast_on_invalid_attachment_response_without_partial_mutation(
+		"bad",
+		"validate_garden_attachment 返回值类型错误"
+	)
+
+static func _test_apply_changes_fails_fast_on_invalid_merged_cells_without_partial_mutation() -> Result:
+	return _test_apply_changes_fails_fast_on_invalid_attachment_response_without_partial_mutation(
+		{"garden_cells": [Vector2i(1, 2)], "merged_cells": [Vector2i(1, 1), "bad"]},
+		"validate_garden_attachment.merged_cells[1] 类型错误"
+	)
+
+static func _test_apply_changes_fails_fast_on_invalid_attachment_response_without_partial_mutation(payload, expected_error: String) -> Result:
+	var action = ActionClass.new({}, FakeGardenAttachmentValidator.new(payload))
+	var state := _make_state()
+	var house_before: String = str(state.map["houses"]["h1"])
+	var supply_before: int = int(state.map.get(GARDEN_SUPPLY_KEY, -1))
+	var round_state_before := str(state.round_state)
+	var result := action._apply_changes(state, _make_command())
+	if result.ok:
+		return Result.failure("attachment payload 损坏时应失败")
+	var err := str(result.error)
+	if err.find(expected_error) < 0:
+		return Result.failure("错误信息应包含 %s，实际: %s" % [expected_error, err])
+	if str(state.map["houses"]["h1"]) != house_before:
+		return Result.failure("失败时不应提前改写房屋数据")
+	if int(state.map.get(GARDEN_SUPPLY_KEY, -1)) != supply_before:
+		return Result.failure("失败时不应提前消耗花园供给")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
+	if _piece_id_at(state, Vector2i(1, 2)) != "" or _piece_id_at(state, Vector2i(2, 2)) != "":
+		return Result.failure("失败时不应提前写入花园格子结构")
 	return Result.success(true)
 
 static func _piece_id_at(state: GameState, pos: Vector2i) -> String:
