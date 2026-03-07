@@ -1049,6 +1049,9 @@ GameSessionContext
 - `refactor(gameplay): tighten place house apply state access`
   - 收紧 `place_house` apply 阶段对 `state.map.houses` 和 `house_placement_counts` 的读取顺序。
   - 补 focused test，确保计数器类型异常时不提前消耗编号供给或写入房屋结构。
+- `refactor(modules): tighten rural billboard query access`
+  - 将 `place_giant_billboard.can_initiate()` 的 `houses` 读取收口到 `MapStateAccess`，保持 fail-closed。
+  - 扩 focused test，覆盖缺失 `houses` / 非法 `rural_area` 时 query 路径返回 `false`。
 
 当前阶段性结果：
 

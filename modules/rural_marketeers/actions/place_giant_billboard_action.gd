@@ -51,12 +51,11 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 	if not has_emp:
 		return false
 
-	if not (state.map is Dictionary):
+	var houses_read := MapStateAccessClass.require_houses(state, action_id)
+	if not houses_read.ok:
 		return false
-	var houses_val = state.map.get("houses", null)
-	if not (houses_val is Dictionary):
-		return false
-	var rural_val = houses_val.get(RURAL_HOUSE_ID, null)
+	var houses: Dictionary = houses_read.value
+	var rural_val = houses.get(RURAL_HOUSE_ID, null)
 	if not (rural_val is Dictionary):
 		return false
 	var boards_val = rural_val.get("giant_billboards", null)

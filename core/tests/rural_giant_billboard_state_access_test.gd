@@ -9,6 +9,12 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var r := _test_validate_specific_succeeds_with_initialized_houses(seed_val)
 	if not r.ok:
 		return r
+	r = _test_can_initiate_returns_false_on_missing_houses(seed_val)
+	if not r.ok:
+		return r
+	r = _test_can_initiate_returns_false_on_invalid_rural_area_type(seed_val)
+	if not r.ok:
+		return r
 	r = _test_validate_specific_fails_fast_on_missing_houses(seed_val)
 	if not r.ok:
 		return r
@@ -21,7 +27,7 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_apply_changes_fails_fast_without_partial_mutation(seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 5})
+	return Result.success({"cases": 7})
 
 static func _make_state(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -72,6 +78,28 @@ static func _test_validate_specific_succeeds_with_initialized_houses(seed_val: i
 	var result := action._validate_specific(state, _make_command())
 	if not result.ok:
 		return Result.failure("_validate_specific 不应失败: %s" % result.error)
+	return Result.success()
+
+static func _test_can_initiate_returns_false_on_missing_houses(seed_val: int) -> Result:
+	var state_r := _make_state(seed_val)
+	if not state_r.ok:
+		return Result.failure("初始化失败(case2): %s" % state_r.error)
+	var state: GameState = state_r.value
+	state.map.erase("houses")
+	var action = ActionClass.new()
+	if action.can_initiate(state, 0):
+		return Result.failure("缺失 houses 时 can_initiate 应返回 false")
+	return Result.success()
+
+static func _test_can_initiate_returns_false_on_invalid_rural_area_type(seed_val: int) -> Result:
+	var state_r := _make_state(seed_val)
+	if not state_r.ok:
+		return Result.failure("初始化失败(case3): %s" % state_r.error)
+	var state: GameState = state_r.value
+	state.map["houses"]["rural_area"] = []
+	var action = ActionClass.new()
+	if action.can_initiate(state, 0):
+		return Result.failure("rural_area 类型错误时 can_initiate 应返回 false")
 	return Result.success()
 
 static func _test_validate_specific_fails_fast_on_missing_houses(seed_val: int) -> Result:
