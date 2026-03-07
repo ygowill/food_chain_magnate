@@ -78,16 +78,14 @@ func register(registrar) -> Result:
 	return Result.success()
 
 func _get_placement_conflicts_at_world_pos(state: GameState, world_pos: Vector2i, _ctx: Dictionary) -> Result:
-	if state == null:
-		return Result.failure("%s: placement_conflicts: state 为空" % MODULE_ID)
-	if not (state.map is Dictionary):
-		return Result.failure("%s: placement_conflicts: state.map 类型错误（期望 Dictionary）" % MODULE_ID)
-	if not state.map.has("rural_marketeers_offramps"):
-		return Result.success([])
-	var offramps_val = state.map.get("rural_marketeers_offramps", null)
-	if not (offramps_val is Array):
-		return Result.failure("%s: placement_conflicts: state.map.rural_marketeers_offramps 类型错误（期望 Array）" % MODULE_ID)
-	var offramps: Array = offramps_val
+	var offramps_read := MapStateAccessClass.require_optional_array_field_or_empty(
+		state,
+		"rural_marketeers_offramps",
+		"%s: placement_conflicts" % MODULE_ID
+	)
+	if not offramps_read.ok:
+		return offramps_read
+	var offramps: Array = offramps_read.value
 	for i in range(offramps.size()):
 		var o_val = offramps[i]
 		if not (o_val is Dictionary):
@@ -353,12 +351,12 @@ func _validate_airplane_offramp_conflict(state: GameState, command: Command) -> 
 	if t != "airplane":
 		return Result.success()
 
-	if not state.map.has("grid_size") or not (state.map["grid_size"] is Vector2i):
-		return Result.failure("%s: state.map.grid_size 缺失或类型错误" % MODULE_ID)
-	var grid_size: Vector2i = state.map["grid_size"]
-	if not state.map.has("tile_grid_size") or not (state.map["tile_grid_size"] is Vector2i):
-		return Result.failure("%s: state.map.tile_grid_size 缺失或类型错误" % MODULE_ID)
-	var tile_grid_size: Vector2i = state.map["tile_grid_size"]
+	var grid_size_read := MapStateAccessClass.require_grid_size(state, MODULE_ID)
+	if not grid_size_read.ok:
+		return grid_size_read
+	var tile_grid_size_read := MapStateAccessClass.require_tile_grid_size(state, MODULE_ID)
+	if not tile_grid_size_read.ok:
+		return tile_grid_size_read
 
 	if not command.params.has("position"):
 		return Result.success()
@@ -403,12 +401,10 @@ func _validate_airplane_offramp_conflict(state: GameState, command: Command) -> 
 	var end := int(seg.get("end", -1))
 
 	# Check overlap against existing offramps.
-	if not state.map.has("rural_marketeers_offramps"):
-		return Result.success()
-	var offramps_val = state.map.get("rural_marketeers_offramps", null)
-	if not (offramps_val is Array):
-		return Result.failure("%s: state.map.rural_marketeers_offramps 类型错误（期望 Array）" % MODULE_ID)
-	var offramps: Array = offramps_val
+	var offramps_read := MapStateAccessClass.require_optional_array_field_or_empty(state, "rural_marketeers_offramps", MODULE_ID)
+	if not offramps_read.ok:
+		return offramps_read
+	var offramps: Array = offramps_read.value
 	for i in range(offramps.size()):
 		var o_val = offramps[i]
 		if not (o_val is Dictionary):
