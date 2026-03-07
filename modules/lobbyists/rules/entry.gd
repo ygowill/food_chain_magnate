@@ -213,25 +213,33 @@ func _on_restructuring_before_enter(state: GameState) -> Result:
 
 	for piece_id in ROAD_SUPPLY_BY_PIECE_ID.keys():
 		var supply_key := "%s_supply_remaining" % str(piece_id)
-		if not state.map.has(supply_key):
-			state.map[supply_key] = int(ROAD_SUPPLY_BY_PIECE_ID[piece_id])
-		else:
-			var v = state.map.get(supply_key, null)
-			if not (v is int):
-				return Result.failure("%s: state.map.%s 类型错误（期望 int）" % [MODULE_ID, supply_key])
-			if int(v) < 0:
-				return Result.failure("%s: state.map.%s 不能为负数: %d" % [MODULE_ID, supply_key, int(v)])
+		var supply_read := MapStateAccessClass.require_optional_int_field_or_default(
+			state,
+			supply_key,
+			int(ROAD_SUPPLY_BY_PIECE_ID[piece_id]),
+			MODULE_ID
+		)
+		if not supply_read.ok:
+			return supply_read
+		var supply_remaining: int = int(supply_read.value)
+		if supply_remaining < 0:
+			return Result.failure("%s: state.map.%s 不能为负数: %d" % [MODULE_ID, supply_key, supply_remaining])
+		state.map[supply_key] = supply_remaining
 
 	for park_piece_id in PARK_SUPPLY_BY_PIECE_ID.keys():
 		var park_supply_key := "%s_supply_remaining" % str(park_piece_id)
-		if not state.map.has(park_supply_key):
-			state.map[park_supply_key] = int(PARK_SUPPLY_BY_PIECE_ID[park_piece_id])
-		else:
-			var v2 = state.map.get(park_supply_key, null)
-			if not (v2 is int):
-				return Result.failure("%s: state.map.%s 类型错误（期望 int）" % [MODULE_ID, park_supply_key])
-			if int(v2) < 0:
-				return Result.failure("%s: state.map.%s 不能为负数: %d" % [MODULE_ID, park_supply_key, int(v2)])
+		var park_supply_read := MapStateAccessClass.require_optional_int_field_or_default(
+			state,
+			park_supply_key,
+			int(PARK_SUPPLY_BY_PIECE_ID[park_piece_id]),
+			MODULE_ID
+		)
+		if not park_supply_read.ok:
+			return park_supply_read
+		var park_supply_remaining: int = int(park_supply_read.value)
+		if park_supply_remaining < 0:
+			return Result.failure("%s: state.map.%s 不能为负数: %d" % [MODULE_ID, park_supply_key, park_supply_remaining])
+		state.map[park_supply_key] = park_supply_remaining
 	if not state.map.has(PENDING_ROADS_KEY):
 		state.map[PENDING_ROADS_KEY] = []
 	if not state.map.has(ROADWORK_MARKERS_KEY):

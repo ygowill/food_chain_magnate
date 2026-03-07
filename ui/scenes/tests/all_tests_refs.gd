@@ -107,6 +107,7 @@ const LobbyistsRoadStateAccessTestClass = preload("res://core/tests/lobbyists_ro
 const LobbyistsExtraTileStateAccessTestClass = preload("res://core/tests/lobbyists_extra_tile_state_access_test.gd")
 const LobbyistsParkStateAccessTestClass = preload("res://core/tests/lobbyists_park_state_access_test.gd")
 const LobbyistsParkBonusStateAccessTestClass = preload("res://core/tests/lobbyists_park_bonus_state_access_test.gd")
+const LobbyistsSupplyStateAccessTestClass = preload("res://core/tests/lobbyists_supply_state_access_test.gd")
 const GourmetFoodCriticsStateAccessTestClass = preload("res://core/tests/gourmet_food_critics_state_access_test.gd")
 const RuralMarketeersStateAccessTestClass = preload("res://core/tests/rural_marketeers_state_access_test.gd")
 const RuralMarketeersMarketingStateAccessTestClass = preload("res://core/tests/rural_marketeers_marketing_state_access_test.gd")
