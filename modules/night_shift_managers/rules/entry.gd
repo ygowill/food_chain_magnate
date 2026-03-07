@@ -4,6 +4,7 @@ const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const PhaseManagerClass = preload("res://core/engine/phase_manager.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const RoundStatePlayerIntMapsClass = preload("res://core/utils/round_state_player_int_maps.gd")
 
 const Phase = PhaseDefsClass.Phase
 const HookType = PhaseManagerClass.HookType
@@ -75,5 +76,12 @@ func _on_working_before_enter(state: GameState) -> Result:
 		if not per_player.is_empty():
 			all[pid] = per_player
 
-	state.round_state[WORKING_EMPLOYEE_MULTIPLIERS_KEY] = all
+	var multiplier_write := RoundStatePlayerIntMapsClass.set_all_player_int_maps(
+		state.round_state,
+		WORKING_EMPLOYEE_MULTIPLIERS_KEY,
+		all,
+		"night_shift_managers"
+	)
+	if not multiplier_write.ok:
+		return multiplier_write
 	return Result.success()

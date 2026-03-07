@@ -60,6 +60,21 @@ static func _validate_value_map(value_map: Dictionary, path: String) -> Result:
 			return Result.failure("%s.%s 类型错误（期望 int）" % [path, item_name])
 	return Result.success()
 
+static func _validate_all_player_value_maps(value_maps: Dictionary, path: String) -> Result:
+	if not (value_maps is Dictionary):
+		return Result.failure("%s 类型错误（期望 Dictionary）" % path)
+	for player_key in value_maps.keys():
+		if player_key is String:
+			return Result.failure("%s 不应包含字符串玩家 key: %s" % [path, str(player_key)])
+		if not (player_key is int):
+			return Result.failure("%s key 类型错误（期望 int）" % path)
+		var player_id := int(player_key)
+		var per_val = value_maps.get(player_key, null)
+		var validate_per := _validate_value_map(per_val, "%s[%d]" % [path, player_id])
+		if not validate_per.ok:
+			return validate_per
+	return Result.success()
+
 static func set_player_int_map(
 	round_state: Dictionary,
 	key: String,
@@ -88,6 +103,33 @@ static func set_player_int_map(
 	all[player_id] = value_map.duplicate(true)
 	round_state[key] = all
 	return Result.success(value_map)
+
+static func set_all_player_int_maps(
+	round_state: Dictionary,
+	key: String,
+	value_maps: Dictionary,
+	prefix_label: String
+) -> Result:
+	var prefix := _prefix(prefix_label)
+	if key.is_empty():
+		return Result.failure("%skey 不能为空" % prefix)
+	if not (round_state is Dictionary):
+		return Result.failure("%sround_state 类型错误（期望 Dictionary）" % prefix)
+	var path := "%sround_state.%s" % [prefix, key]
+	var validate_maps := _validate_all_player_value_maps(value_maps, path)
+	if not validate_maps.ok:
+		return validate_maps
+
+	if round_state.has(key):
+		var existing_val = round_state.get(key, null)
+		if not (existing_val is Dictionary):
+			return Result.failure("%s 类型错误（期望 Dictionary）" % path)
+		var validate_existing := _validate_all_player_value_maps(existing_val, path)
+		if not validate_existing.ok:
+			return validate_existing
+
+	round_state[key] = value_maps.duplicate(true)
+	return Result.success(value_maps)
 
 static func set_player_key_int(
 	round_state: Dictionary,

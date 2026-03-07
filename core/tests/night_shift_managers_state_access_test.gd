@@ -14,7 +14,10 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_invalid_employee_entry_fails_fast()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_invalid_existing_multiplier_string_player_key_fails_fast_without_overwrite()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 4})
 
 static func _make_state(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -84,4 +87,24 @@ static func _test_invalid_employee_entry_fails_fast() -> Result:
 	var err := str(result.error)
 	if err.find("players[0].employees[0]") < 0:
 		return Result.failure("错误信息应包含 players[0].employees[0]，实际: %s" % err)
+	return Result.success()
+
+static func _test_invalid_existing_multiplier_string_player_key_fails_fast_without_overwrite() -> Result:
+	var state_r := _make_state(12345)
+	if not state_r.ok:
+		return Result.failure("初始化失败(case4): %s" % state_r.error)
+	var state: GameState = state_r.value
+	state.round_state["working_employee_multipliers"] = {
+		"0": {"waitress": 2},
+	}
+	var before := str(state.round_state.get("working_employee_multipliers", null))
+	var entry = EntryClass.new()
+	var result := entry._on_working_before_enter(state)
+	if result.ok:
+		return Result.failure("working_employee_multipliers 使用字符串玩家 key 时应失败")
+	var err := str(result.error)
+	if err.find("working_employee_multipliers") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 working_employee_multipliers 与 字符串玩家 key，实际: %s" % err)
+	if str(state.round_state.get("working_employee_multipliers", null)) != before:
+		return Result.failure("失败时不应覆盖已有的 working_employee_multipliers")
 	return Result.success()

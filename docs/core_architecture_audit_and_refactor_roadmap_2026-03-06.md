@@ -1092,6 +1092,9 @@ GameSessionContext
 - `refactor(gameplay): tighten train lock target access`
   - 将 `train_employee_locks` 对 `to_employee` token 桶的校验前移到 `plan_training`，避免坏锁表在培训动作后半程才失败。
   - 扩展 focused `train` 状态访问测试，确保 `to_employee` token 桶类型错误时不提前改写玩家员工状态、`employee_pool` 或 `round_state`。
+- `refactor(modules): tighten night shift multiplier access`
+  - 扩展 `RoundStatePlayerIntMaps` 以支持整张 per-player int map 的 fail-fast 校验/写回，并将 `night_shift_managers` 的 `working_employee_multipliers` 写回统一收口到 helper。
+  - 新增 focused test，确保已有 `working_employee_multipliers` 使用字符串玩家 key 时 `_on_working_before_enter()` fail-fast，且不会静默覆盖坏状态。
 
 当前阶段性结果：
 
