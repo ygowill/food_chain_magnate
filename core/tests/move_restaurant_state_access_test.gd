@@ -17,7 +17,13 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_apply_fails_fast_on_invalid_restaurant_cells_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_validate_fails_fast_on_invalid_restaurant_cell_entry_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_apply_fails_fast_on_invalid_restaurant_cell_entry_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 5})
 
 static func _build_move_restaurant_working_engine(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -145,6 +151,94 @@ static func _test_apply_fails_fast_on_invalid_restaurant_cells_without_partial_m
 	var err := str(result.error)
 	if err.find("restaurants[%s].cells" % rest_id) < 0:
 		return Result.failure("错误信息应包含 cells 路径，实际: %s" % err)
+	state = engine.get_state()
+	if str(state.players[actor]) != player_before:
+		return Result.failure("失败时不应提前改写玩家状态")
+	if str(state.map) != map_before:
+		return Result.failure("失败时不应提前改写 map")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_validate_fails_fast_on_invalid_restaurant_cell_entry_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	var built := _build_move_restaurant_working_engine(player_count, seed_val)
+	if not built.ok:
+		return built
+	var engine: GameEngine = built.value
+	var state := engine.get_state()
+	var actor := state.get_current_player_id()
+	var rest_id := _get_first_restaurant_id(state, actor)
+	if rest_id.is_empty():
+		return Result.failure("玩家没有可移动餐厅")
+	var rest: Dictionary = state.map.get("restaurants", {}).get(rest_id, {})
+	var old_anchor: Vector2i = rest.get("anchor_pos", Vector2i(-1, -1))
+	var old_rotation: int = int(rest.get("rotation", 0))
+	var cmd := _find_first_valid_move(engine, actor, rest_id, old_anchor, old_rotation)
+	if cmd == null:
+		return Result.failure("找不到合法的餐厅移动点")
+	var source_cells: Array = Array(rest.get("cells", []))
+	if source_cells.is_empty():
+		return Result.failure("测试餐厅缺少 cells")
+	var bad_cells: Array = []
+	for i in range(source_cells.size()):
+		if i == 0:
+			bad_cells.append("bad")
+		else:
+			bad_cells.append(source_cells[i])
+	state.map["restaurants"][rest_id]["cells"] = bad_cells
+	var player_before := str(state.players[actor])
+	var map_before := str(state.map)
+	var round_state_before := str(state.round_state)
+	var executor = engine.action_registry.get_executor("move_restaurant")
+	var result := executor._validate_specific(state, cmd)
+	if result.ok:
+		return Result.failure("cells 元素类型错误时 move_restaurant validate 应失败")
+	var err := str(result.error)
+	if err.find("restaurants[%s].cells[0]" % rest_id) < 0:
+		return Result.failure("错误信息应包含 cells[0] 路径，实际: %s" % err)
+	if str(state.players[actor]) != player_before:
+		return Result.failure("失败时不应提前改写玩家状态")
+	if str(state.map) != map_before:
+		return Result.failure("失败时不应提前改写 map")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_apply_fails_fast_on_invalid_restaurant_cell_entry_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	var built := _build_move_restaurant_working_engine(player_count, seed_val)
+	if not built.ok:
+		return built
+	var engine: GameEngine = built.value
+	var state := engine.get_state()
+	var actor := state.get_current_player_id()
+	var rest_id := _get_first_restaurant_id(state, actor)
+	if rest_id.is_empty():
+		return Result.failure("玩家没有可移动餐厅")
+	var rest: Dictionary = state.map.get("restaurants", {}).get(rest_id, {})
+	var old_anchor: Vector2i = rest.get("anchor_pos", Vector2i(-1, -1))
+	var old_rotation: int = int(rest.get("rotation", 0))
+	var cmd := _find_first_valid_move(engine, actor, rest_id, old_anchor, old_rotation)
+	if cmd == null:
+		return Result.failure("找不到合法的餐厅移动点")
+	var source_cells: Array = Array(rest.get("cells", []))
+	if source_cells.is_empty():
+		return Result.failure("测试餐厅缺少 cells")
+	var bad_cells: Array = []
+	for i in range(source_cells.size()):
+		if i == 0:
+			bad_cells.append("bad")
+		else:
+			bad_cells.append(source_cells[i])
+	state.map["restaurants"][rest_id]["cells"] = bad_cells
+	var player_before := str(state.players[actor])
+	var map_before := str(state.map)
+	var round_state_before := str(state.round_state)
+	var result := engine.execute_command(cmd)
+	if result.ok:
+		return Result.failure("cells 元素类型错误时 move_restaurant apply 应失败")
+	var err := str(result.error)
+	if err.find("restaurants[%s].cells[0]" % rest_id) < 0:
+		return Result.failure("错误信息应包含 cells[0] 路径，实际: %s" % err)
 	state = engine.get_state()
 	if str(state.players[actor]) != player_before:
 		return Result.failure("失败时不应提前改写玩家状态")

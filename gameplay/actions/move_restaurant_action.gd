@@ -62,6 +62,15 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 
 	return true
 
+static func _require_vector2i_array(value, path: String) -> Result:
+	if not (value is Array):
+		return Result.failure("%s 类型错误（期望 Array）" % path)
+	var arr: Array = value
+	for i in range(arr.size()):
+		if not (arr[i] is Vector2i):
+			return Result.failure("%s[%d] 类型错误（期望 Vector2i）" % [path, i])
+	return Result.success(arr)
+
 static func _require_restaurant_record(restaurants: Dictionary, rest_id: String, prefix: String) -> Result:
 	if rest_id.is_empty():
 		return Result.failure("%srestaurant_id 不能为空" % prefix)
@@ -75,6 +84,9 @@ static func _require_restaurant_record(restaurants: Dictionary, rest_id: String,
 		return Result.failure("move_restaurant: restaurants[%s].owner 缺失或类型错误（期望 int）" % rest_id)
 	if not rest.has("cells") or not (rest["cells"] is Array):
 		return Result.failure("move_restaurant: restaurants[%s].cells 缺失或类型错误（期望 Array）" % rest_id)
+	var cells_read := _require_vector2i_array(rest["cells"], "move_restaurant: restaurants[%s].cells" % rest_id)
+	if not cells_read.ok:
+		return cells_read
 	return Result.success(rest)
 
 func _parse_params(command: Command) -> Result:
@@ -211,7 +223,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var map_ctx: Dictionary = map_ctx_read.value
 	var piece_registry := _get_piece_registry()
 
-	assert(rest.has("cells") and (rest["cells"] is Array), "move_restaurant: restaurants[%s].cells 缺失或类型错误（期望 Array）" % rest_id)
 	var ignore_cells: Array = rest["cells"]
 	var validate_result := RestaurantPlacementClass.validate_restaurant_placement(
 		map_ctx, world_anchor, rotation, piece_registry,
@@ -229,7 +240,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 	# 清空旧格
 	for cell_pos in ignore_cells:
-		assert(cell_pos is Vector2i, "move_restaurant: ignore_cells 元素类型错误（期望 Vector2i）")
 		var idx_old := CoordsClass.world_to_index(state, cell_pos)
 		state.map.cells[idx_old.y][idx_old.x]["structure"] = {}
 

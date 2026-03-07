@@ -1188,6 +1188,9 @@ GameSessionContext
 - `refactor(gameplay): tighten move restaurant record access`
   - 为 `move_restaurant` 增补显式餐厅记录读取 helper，并让 validate/apply 在 `state.map.restaurants[rest_id]` 的 `owner` / `cells` 结构损坏时返回可诊断错误，避免旧路径触发硬断言。
   - 新增 focused `move_restaurant` 状态访问测试，覆盖非法餐厅记录在 validate/apply 路径的 fail-fast 行为，确保不会提前改写玩家、`map` 或 `round_state`。
+- `refactor(gameplay): tighten move restaurant cell array access`
+  - 继续收紧 `move_restaurant` 对旧餐厅 `cells` 数组元素的读取，让 `Vector2i` 元素契约在 validate/apply 阶段走显式 `Result` 失败，而不是在清理旧格时触发硬断言。
+  - 扩展 focused `move_restaurant` 状态访问测试，覆盖 `cells` 数组元素损坏时的 validate/apply fail-fast 行为，确保不会提前改写玩家、`map` 或 `round_state`。
 
 当前阶段性结果：
 
