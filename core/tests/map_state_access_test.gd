@@ -20,7 +20,13 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_require_optional_array_field_fails_on_wrong_type()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 5})
+	r = _test_require_optional_int_field_returns_default_when_missing()
+	if not r.ok:
+		return r
+	r = _test_require_optional_int_field_fails_on_wrong_type()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 7})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -78,5 +84,25 @@ static func _test_require_optional_array_field_fails_on_wrong_type() -> Result:
 		return Result.failure("optional array 类型错误时应失败")
 	var err := str(read.error)
 	if err.find("state.map.rural_marketeers_offramps") < 0:
+		return Result.failure("错误信息应包含字段路径，实际: %s" % err)
+	return Result.success()
+
+static func _test_require_optional_int_field_returns_default_when_missing() -> Result:
+	var state := _make_state()
+	var read := MapStateAccessClass.require_optional_int_field_or_default(state, "rural_marketeers_offramp_supply_remaining", 3, "MapStateAccessTest")
+	if not read.ok:
+		return Result.failure("缺失 optional int 时不应失败: %s" % read.error)
+	if int(read.value) != 3:
+		return Result.failure("缺失 optional int 时应返回默认值 3，实际: %s" % str(read.value))
+	return Result.success()
+
+static func _test_require_optional_int_field_fails_on_wrong_type() -> Result:
+	var state := _make_state()
+	state.map["rural_marketeers_offramp_supply_remaining"] = "bad"
+	var read := MapStateAccessClass.require_optional_int_field_or_default(state, "rural_marketeers_offramp_supply_remaining", 3, "MapStateAccessTest")
+	if read.ok:
+		return Result.failure("optional int 类型错误时应失败")
+	var err := str(read.error)
+	if err.find("state.map.rural_marketeers_offramp_supply_remaining") < 0:
 		return Result.failure("错误信息应包含字段路径，实际: %s" % err)
 	return Result.success()

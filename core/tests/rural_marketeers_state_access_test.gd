@@ -15,6 +15,12 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_restructuring_fails_fast_on_invalid_rural_area_type()
 	if not r.ok:
 		return r
+	r = _test_restructuring_fails_fast_on_invalid_offramp_supply_type()
+	if not r.ok:
+		return r
+	r = _test_restructuring_fails_fast_on_negative_offramp_supply()
+	if not r.ok:
+		return r
 	r = _test_placement_conflicts_detects_offramp_connection()
 	if not r.ok:
 		return r
@@ -42,10 +48,13 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_milestone_effect_marks_pending_flag_and_consumes_supply()
 	if not r.ok:
 		return r
+	r = _test_milestone_effect_fails_fast_on_invalid_supply_type()
+	if not r.ok:
+		return r
 	r = _test_milestone_effect_fails_fast_on_invalid_pending_flag_type()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 13})
+	return Result.success({"cases": 16})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -111,6 +120,31 @@ static func _test_restructuring_fails_fast_on_invalid_rural_area_type() -> Resul
 	var err := str(result.error)
 	if err.find("houses[rural_area]") < 0:
 		return Result.failure("错误信息应包含 houses[rural_area]，实际: %s" % err)
+	return Result.success()
+
+
+static func _test_restructuring_fails_fast_on_invalid_offramp_supply_type() -> Result:
+	var entry = EntryClass.new()
+	var state := _make_state()
+	state.map["rural_marketeers_offramp_supply_remaining"] = "bad"
+	var result := entry._on_restructuring_before_enter(state)
+	if result.ok:
+		return Result.failure("offramp supply 类型错误时应失败")
+	var err := str(result.error)
+	if err.find("state.map.rural_marketeers_offramp_supply_remaining") < 0:
+		return Result.failure("错误信息应包含 state.map.rural_marketeers_offramp_supply_remaining，实际: %s" % err)
+	return Result.success()
+
+static func _test_restructuring_fails_fast_on_negative_offramp_supply() -> Result:
+	var entry = EntryClass.new()
+	var state := _make_state()
+	state.map["rural_marketeers_offramp_supply_remaining"] = -1
+	var result := entry._on_restructuring_before_enter(state)
+	if result.ok:
+		return Result.failure("负数 offramp supply 时应失败")
+	var err := str(result.error)
+	if err.find("不能为负数") < 0:
+		return Result.failure("错误信息应提示不能为负数，实际: %s" % err)
 	return Result.success()
 
 static func _test_placement_conflicts_detects_offramp_connection() -> Result:
@@ -259,6 +293,23 @@ static func _test_milestone_effect_marks_pending_flag_and_consumes_supply() -> R
 	var pending: Dictionary = pending_val
 	if not bool(pending.get(1, false)):
 		return Result.failure("玩家 1 应被标记为 pending")
+	return Result.success()
+
+
+static func _test_milestone_effect_fails_fast_on_invalid_supply_type() -> Result:
+	var entry = EntryClass.new()
+	var state := GameState.new()
+	state.players = [{}, {}]
+	state.map = {
+		"rural_marketeers_offramp_supply_remaining": "bad",
+	}
+	state.round_state = {}
+	var result := entry._milestone_effect_grant_offramp_placement(state, 1, "", {})
+	if result.ok:
+		return Result.failure("supply 类型错误时应失败")
+	var err := str(result.error)
+	if err.find("state.map.rural_marketeers_offramp_supply_remaining") < 0:
+		return Result.failure("错误信息应包含 state.map.rural_marketeers_offramp_supply_remaining，实际: %s" % err)
 	return Result.success()
 
 static func _test_milestone_effect_fails_fast_on_invalid_pending_flag_type() -> Result:

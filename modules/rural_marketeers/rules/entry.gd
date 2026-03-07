@@ -138,14 +138,18 @@ func _on_restructuring_before_enter(state: GameState) -> Result:
 
 	state.map["houses"] = houses
 
-	if not state.map.has(OFFRAMP_SUPPLY_KEY):
-		state.map[OFFRAMP_SUPPLY_KEY] = OFFRAMP_SUPPLY_TOTAL
-	else:
-		var v = state.map.get(OFFRAMP_SUPPLY_KEY, null)
-		if not (v is int):
-			return Result.failure("%s: state.map.%s 类型错误（期望 int）" % [MODULE_ID, OFFRAMP_SUPPLY_KEY])
-		if int(v) < 0:
-			return Result.failure("%s: state.map.%s 不能为负数: %d" % [MODULE_ID, OFFRAMP_SUPPLY_KEY, int(v)])
+	var supply_read := MapStateAccessClass.require_optional_int_field_or_default(
+		state,
+		OFFRAMP_SUPPLY_KEY,
+		OFFRAMP_SUPPLY_TOTAL,
+		MODULE_ID
+	)
+	if not supply_read.ok:
+		return supply_read
+	var supply_remaining: int = int(supply_read.value)
+	if supply_remaining < 0:
+		return Result.failure("%s: state.map.%s 不能为负数: %d" % [MODULE_ID, OFFRAMP_SUPPLY_KEY, supply_remaining])
+	state.map[OFFRAMP_SUPPLY_KEY] = supply_remaining
 
 	return Result.success()
 
@@ -303,9 +307,10 @@ func _milestone_effect_grant_offramp_placement(state: GameState, player_id: int,
 	if not (state.round_state is Dictionary):
 		return Result.failure("%s: state.round_state 类型错误（期望 Dictionary）" % MODULE_ID)
 
-	if not state.map.has(OFFRAMP_SUPPLY_KEY) or not (state.map[OFFRAMP_SUPPLY_KEY] is int):
-		return Result.failure("%s: state.map.%s 缺失或类型错误（期望 int）" % [MODULE_ID, OFFRAMP_SUPPLY_KEY])
-	var remaining: int = int(state.map[OFFRAMP_SUPPLY_KEY])
+	var supply_read := MapStateAccessClass.require_int_field(state, OFFRAMP_SUPPLY_KEY, MODULE_ID)
+	if not supply_read.ok:
+		return supply_read
+	var remaining: int = int(supply_read.value)
 	if remaining <= 0:
 		return Result.success().with_warning("高速公路出口已耗尽，无法放置 offramp")
 

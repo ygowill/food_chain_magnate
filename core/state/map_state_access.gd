@@ -85,6 +85,19 @@ static func require_optional_array_field_or_empty(state: GameState, field_name: 
 		return Result.failure("%sstate.map.%s 类型错误（期望 Array）" % [prefix, field_name])
 	return Result.success(map[field_name])
 
+static func require_optional_int_field_or_default(state: GameState, field_name: String, default_value: int, prefix_label: String) -> Result:
+	var prefix := _prefix(prefix_label)
+	var map_read := require_map(state, prefix_label)
+	if not map_read.ok:
+		return map_read
+	var map: Dictionary = map_read.value
+
+	if not map.has(field_name):
+		return Result.success(default_value)
+	if not (map[field_name] is int):
+		return Result.failure("%sstate.map.%s 类型错误（期望 int）" % [prefix, field_name])
+	return Result.success(map[field_name])
+
 static func require_vector2i_field(state: GameState, field_name: String, prefix_label: String) -> Result:
 	var prefix := _prefix(prefix_label)
 	var map_read := require_map(state, prefix_label)
