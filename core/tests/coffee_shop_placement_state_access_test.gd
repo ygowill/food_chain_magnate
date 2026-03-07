@@ -22,7 +22,10 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_validate_coffee_shop_placement_fails_fast_on_invalid_marketing_placements_type(seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 5})
+	r = _test_apply_changes_fails_fast_on_invalid_train_event_player_id_without_partial_mutation(seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 6})
 
 static func _make_state(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -206,3 +209,34 @@ static func _apply_train_test_map(state: GameState) -> void:
 	}
 	state.players[0]["restaurants"] = ["rest_0"]
 	RoadGraphCacheClass.invalidate_road_graph(state)
+
+static func _test_apply_changes_fails_fast_on_invalid_train_event_player_id_without_partial_mutation(seed_val: int) -> Result:
+	var built := _make_state(seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["train_events"] = [{
+		"player_id": "0",
+		"to_employee": "barista",
+	}]
+	var next_id_before = int(state.map.get("next_coffee_shop_id", -1))
+	var tokens_before = int(state.players[0].get("coffee_shop_tokens_remaining", -1))
+	var shops_before = str(state.map.get("coffee_shops", null))
+	var structure_before = str(state.map.cells[1][2].get("structure", null))
+
+	var action = ActionClass.new()
+	var result := action._apply_changes(state, _make_command())
+	if result.ok:
+		return Result.failure("train_events.player_id 非法时应失败")
+	var err := str(result.error)
+	if err.find("round_state.train_events[0].player_id") < 0:
+		return Result.failure("错误信息应包含非法 train_events.player_id 路径，实际: %s" % err)
+	if int(state.map.get("next_coffee_shop_id", -1)) != next_id_before:
+		return Result.failure("失败时不应提前递增 next_coffee_shop_id")
+	if int(state.players[0].get("coffee_shop_tokens_remaining", -1)) != tokens_before:
+		return Result.failure("失败时不应提前消耗 coffee_shop_tokens_remaining")
+	if str(state.map.get("coffee_shops", null)) != shops_before:
+		return Result.failure("失败时不应提前写入 coffee_shops")
+	if str(state.map.cells[1][2].get("structure", null)) != structure_before:
+		return Result.failure("失败时不应提前写入目标格 structure")
+	return Result.success()

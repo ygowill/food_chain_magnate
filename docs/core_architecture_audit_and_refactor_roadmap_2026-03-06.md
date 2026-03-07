@@ -1113,6 +1113,9 @@ GameSessionContext
 - `refactor(gameplay): tighten dinnertime pending item access`
   - 将 `confirm_dinnertime` 对 `pending_phase_actions[Dinnertime]` 项的解析改为显式校验，拒绝非法 `kind` / `player_id` 被静默跳过，并统一先规划 remaining pending 再落地。
   - 扩展 focused 状态访问测试，确保非法 pending player_id 会 fail-fast，且不会提前改写 `pending_phase_actions` 或 `online_dinnertime_confirmed_players`。
+- `refactor(modules): tighten coffee shop train event access`
+  - 将 `place_or_move_coffee_shop` 对 `round_state.train_events` 的读取改为显式校验，拒绝非法事件项或坏 `player_id` / `to_employee` 被静默忽略。
+  - 扩展 focused 状态访问测试，确保非法 `train_events` 会 fail-fast，且不会提前递增 `next_coffee_shop_id`、消耗 token 或写入咖啡店结构。
 
 当前阶段性结果：
 

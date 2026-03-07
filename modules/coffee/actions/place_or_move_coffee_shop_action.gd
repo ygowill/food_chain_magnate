@@ -254,14 +254,40 @@ static func _count_triggers_from_train_events(round_state: Dictionary, player_id
 	for i in range(train_events.size()):
 		var ev_val = train_events[i]
 		if not (ev_val is Dictionary):
-			continue
+			return Result.failure("round_state.train_events[%d] 类型错误（期望 Dictionary）" % i)
 		var ev: Dictionary = ev_val
-		if int(ev.get("player_id", -1)) != player_id:
+		var event_player_id_read := _read_train_event_player_id(ev, i)
+		if not event_player_id_read.ok:
+			return event_player_id_read
+		var to_employee_read := _read_train_event_to_employee(ev, i)
+		if not to_employee_read.ok:
+			return to_employee_read
+		if int(event_player_id_read.value) != player_id:
 			continue
-		var to_id: String = str(ev.get("to_employee", ""))
+		var to_id: String = str(to_employee_read.value)
 		if TRIGGER_TO_EMPLOYEES.has(to_id):
 			total += 1
 	return Result.success(total)
+
+
+static func _read_train_event_player_id(ev: Dictionary, index: int) -> Result:
+	var value = ev.get("player_id", null)
+	if value is int:
+		return Result.success(int(value))
+	if value is float:
+		var f: float = float(value)
+		if f == floor(f):
+			return Result.success(int(f))
+	return Result.failure("round_state.train_events[%d].player_id 类型错误（期望 int/float）" % index)
+
+static func _read_train_event_to_employee(ev: Dictionary, index: int) -> Result:
+	var value = ev.get("to_employee", null)
+	if not (value is String):
+		return Result.failure("round_state.train_events[%d].to_employee 类型错误（期望 String）" % index)
+	var employee_id := str(value).strip_edges()
+	if employee_id.is_empty():
+		return Result.failure("round_state.train_events[%d].to_employee 不能为空" % index)
+	return Result.success(employee_id)
 
 static func _get_used_triggers(round_state: Dictionary, player_id: int) -> Result:
 	if round_state == null or not (round_state is Dictionary):
