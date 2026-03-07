@@ -27,7 +27,7 @@ static func append_phase_transition_events(
 	pending_marketing_enter_anchor_command_index: int,
 	pending_cleanup_throw_away_milestone_events: Array[Dictionary],
 	seq_in: int
-) -> Dictionary:
+) -> Result:
 	var seq := int(seq_in)
 	var pending_anchor := int(pending_marketing_enter_anchor_command_index)
 
@@ -130,15 +130,18 @@ static func append_phase_transition_events(
 				seq = _sync_seq(out_events, seq)
 
 	# CleanupDiscard: 若进入 Cleanup 时无需 pending（无 choose_fridge_keep），则在该 step 末尾刷出 first_throw_away。
-	if new_phase_name == PhaseDefsClass.PHASE_CLEANUP and (not StepTimelineHelpersClass.has_pending_cleanup_actions(new_state)) and pending_cleanup_throw_away_milestone_events != null and not pending_cleanup_throw_away_milestone_events.is_empty():
+	var cleanup_pending_read := StepTimelineHelpersClass.read_has_pending_cleanup_actions(new_state)
+	if not cleanup_pending_read.ok:
+		return Result.failure("StepTimelineBuild: %s" % cleanup_pending_read.error)
+	if new_phase_name == PhaseDefsClass.PHASE_CLEANUP and (not bool(cleanup_pending_read.value)) and pending_cleanup_throw_away_milestone_events != null and not pending_cleanup_throw_away_milestone_events.is_empty():
 		StepTimelineHelpersClass.append_events(out_events, pending_cleanup_throw_away_milestone_events, command_index, new_step_index, PhaseDefsClass.PHASE_CLEANUP, seq)
 		seq = _sync_seq(out_events, seq)
 		pending_cleanup_throw_away_milestone_events.clear()
 
-	return {
+	return Result.success({
 		"seq": seq,
 		"pending_marketing_enter_anchor_command_index": pending_anchor,
-	}
+	})
 
 static func _sync_seq(out_events: Array[Dictionary], seq_fallback: int) -> int:
 	if out_events == null or out_events.is_empty():

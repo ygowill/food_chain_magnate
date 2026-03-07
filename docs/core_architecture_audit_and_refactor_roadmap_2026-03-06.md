@@ -1107,6 +1107,9 @@ GameSessionContext
 - `refactor(modules): tighten coffee cleanup metadata access`
   - 将 `coffee_cleanup` 对 `round_state.coffee` 既有元数据的校验前移到实际清空库存之前，避免坏状态被静默覆盖。
   - 扩展 focused test，确保 `round_state.coffee` 类型错误时 cleanup 会 fail-fast，且不会提前清空 `inventory.coffee` 或覆盖旧元数据。
+- `refactor(replay): tighten cleanup pending access`
+  - 为 `StepTimelineBuild` 增加 `read_has_pending_cleanup_actions()`，并将 replay 构建链路中对 `pending_phase_actions` / `pending_phase_actions[Cleanup]` 的坏状态改为显式失败传播。
+  - 新增 focused helper test，覆盖缺失 pending、合法 cleanup pending，以及两类非法 pending 结构。
 
 当前阶段性结果：
 

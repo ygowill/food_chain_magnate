@@ -146,7 +146,7 @@ static func build_full_impl(engine: GameEngine) -> Result:
 		# 这能避免 Payday/Marketing/Cleanup 等阶段被压到同一个 step。
 		var phase_changed_in_command := (str(old_state.phase) != str(state_in.phase))
 		if phase_changed_in_command and prev_step_index >= -1:
-			var update: Dictionary = PhaseTransitionClass.append_phase_transition_events(
+			var update_r := PhaseTransitionClass.append_phase_transition_events(
 				engine,
 				events_out,
 				i,
@@ -164,6 +164,11 @@ static func build_full_impl(engine: GameEngine) -> Result:
 				pending_cleanup_throw_away_milestone_events,
 				seq
 			)
+			if not update_r.ok:
+				return update_r.with_warnings(warnings)
+			if not (update_r.value is Dictionary):
+				return Result.failure("StepTimelineBuild: phase transition 返回值类型错误（期望 Dictionary）").with_warnings(warnings)
+			var update: Dictionary = update_r.value
 			seq = int(update.get("seq", seq))
 			pending_marketing_enter_anchor_command_index = int(update.get("pending_marketing_enter_anchor_command_index", pending_marketing_enter_anchor_command_index))
 		else:
@@ -177,7 +182,10 @@ static func build_full_impl(engine: GameEngine) -> Result:
 				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 
 			# CleanupDiscard: first_throw_away 必须在所有 choose_fridge_keep（清理库存）之后出现。
-			if str(cmd.action_id).strip_edges() == "choose_fridge_keep" and (not _has_pending_cleanup_actions(state_in)) and not pending_cleanup_throw_away_milestone_events.is_empty():
+			var cleanup_pending_read := _read_has_pending_cleanup_actions(state_in)
+			if not cleanup_pending_read.ok:
+				return Result.failure("StepTimelineBuild: %s" % cleanup_pending_read.error).with_warnings(warnings)
+			if str(cmd.action_id).strip_edges() == "choose_fridge_keep" and (not bool(cleanup_pending_read.value)) and not pending_cleanup_throw_away_milestone_events.is_empty():
 				_append_events(events_out, pending_cleanup_throw_away_milestone_events, i, command_step_index, str(state_in.phase), seq)
 				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 				pending_cleanup_throw_away_milestone_events.clear()
@@ -287,5 +295,5 @@ static func _override_events_phase_fields(events: Array[Dictionary], state: Game
 static func _filter_out_first_throw_away_milestone_events(events: Array[Dictionary], pending: Array[Dictionary]) -> Array[Dictionary]:
 	return StepTimelineHelpersClass.filter_out_first_throw_away_milestone_events(events, pending)
 
-static func _has_pending_cleanup_actions(state: GameState) -> bool:
-	return StepTimelineHelpersClass.has_pending_cleanup_actions(state)
+static func _read_has_pending_cleanup_actions(state: GameState) -> Result:
+	return StepTimelineHelpersClass.read_has_pending_cleanup_actions(state)

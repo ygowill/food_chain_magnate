@@ -759,6 +759,10 @@ static func build_tests(host) -> Array[Dictionary]:
 								"fn": func() -> Result: return TestRefs.StepTimelineBuildTestClass.run(),
 							},
 							{
+								"name": "StepTimelineCleanupPendingStateAccessTest",
+								"fn": func() -> Result: return TestRefs.StepTimelineCleanupPendingStateAccessTestClass.run(2, 12345),
+							},
+							{
 								"name": "StepTimelineForceExecuteActorMismatchTest",
 								"fn": func() -> Result: return TestRefs.StepTimelineForceExecuteActorMismatchTestClass.run(12345),
 							},

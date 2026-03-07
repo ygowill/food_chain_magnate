@@ -5,6 +5,7 @@ extends RefCounted
 const TimelineEventHelpersClass = preload("res://gameplay/replay/timeline_event_helpers.gd")
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
+const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 
 static func build_step_dict(kind: String, anchor_command_index: int, state: GameState, extra: Dictionary = {}) -> Dictionary:
 	var out: Dictionary = extra.duplicate(true) if (extra is Dictionary) else {}
@@ -112,18 +113,19 @@ static func filter_out_first_throw_away_milestone_events(events: Array[Dictionar
 		out.append(ev)
 	return out
 
-static func has_pending_cleanup_actions(state: GameState) -> bool:
+static func read_has_pending_cleanup_actions(state: GameState) -> Result:
 	if state == null:
-		return false
+		return Result.success(false)
 	if not (state.round_state is Dictionary):
+		return Result.failure("StepTimelineBuild: round_state 类型错误（期望 Dictionary）")
+	return RoundStatePendingPhaseActionsClass.is_phase_blocked(
+		state.round_state,
+		PhaseDefsClass.PHASE_CLEANUP,
+		"StepTimelineBuild"
+	)
+
+static func has_pending_cleanup_actions(state: GameState) -> bool:
+	var read := read_has_pending_cleanup_actions(state)
+	if not read.ok:
 		return false
-	var ppa_val = Dictionary(state.round_state).get("pending_phase_actions", null)
-	if not (ppa_val is Dictionary):
-		return false
-	var ppa: Dictionary = ppa_val
-	if not ppa.has(PhaseDefsClass.PHASE_CLEANUP):
-		return false
-	var list_val = ppa.get(PhaseDefsClass.PHASE_CLEANUP, null)
-	if not (list_val is Array):
-		return false
-	return not Array(list_val).is_empty()
+	return bool(read.value)

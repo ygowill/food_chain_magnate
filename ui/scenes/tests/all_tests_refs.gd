@@ -188,6 +188,7 @@ const RewindTurnStartReenterTestClass = preload("res://core/tests/rewind_turn_st
 const RewindTurnStartSetupTurnSwitchTestClass = preload("res://core/tests/rewind_turn_start_setup_turn_switch_test.gd")
 const EventTimelineBuildTestClass = preload("res://core/tests/event_timeline_build_test.gd")
 const StepTimelineBuildTestClass = preload("res://core/tests/step_timeline_build_test.gd")
+const StepTimelineCleanupPendingStateAccessTestClass = preload("res://core/tests/step_timeline_cleanup_pending_state_access_test.gd")
 const StepTimelineForceExecuteActorMismatchTestClass = preload("res://core/tests/step_timeline_force_execute_actor_mismatch_test.gd")
 const StepTimelineMarketingMilestoneOrderTestClass = preload("res://core/tests/step_timeline_marketing_milestone_order_test.gd")
 const StepTimelinePhaseBoundaryOrderTestClass = preload("res://core/tests/step_timeline_phase_boundary_order_test.gd")

@@ -55,7 +55,7 @@ static func drain(
 				"to_phase": str(state_in.phase),
 			}))
 
-			var update: Dictionary = PhaseTransitionClass.append_phase_transition_events(
+			var update_r := PhaseTransitionClass.append_phase_transition_events(
 				engine,
 				out_events,
 				command_index,
@@ -73,6 +73,11 @@ static func drain(
 				pending_cleanup_throw_away_milestone_events,
 				seq
 			)
+			if not update_r.ok:
+				return update_r
+			if not (update_r.value is Dictionary):
+				return Result.failure("StepTimelineBuild: phase transition 返回值类型错误（期望 Dictionary）")
+			var update: Dictionary = update_r.value
 			seq = int(update.get("seq", seq))
 			pending_anchor = int(update.get("pending_marketing_enter_anchor_command_index", pending_anchor))
 
