@@ -1,0 +1,129 @@
+# place_house 状态访问回归测试
+class_name PlaceHouseStateAccessTest
+extends RefCounted
+
+const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+
+static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
+	var r := _test_apply_changes_fails_fast_on_invalid_house_placement_counts_without_partial_mutation(seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 1})
+
+static func _test_apply_changes_fails_fast_on_invalid_house_placement_counts_without_partial_mutation(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
+	if not to_working.ok:
+		return to_working
+
+	var state := engine.get_state()
+	state.sub_phase = DefsClass.SUB_PHASE_PLACE_HOUSES
+	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_PLACE_HOUSES:
+		return Result.failure("应处于 Working/PlaceHouses，实际: %s/%s" % [state.phase, state.sub_phase])
+
+	var actor := state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("无法获取当前玩家")
+
+	var take := StateUpdaterClass.take_from_pool(state, "new_business_developer", 1)
+	if not take.ok:
+		return Result.failure("从员工池取出 new_business_developer 失败: %s" % take.error)
+	var add := StateUpdaterClass.add_employee(state, actor, "new_business_developer", false)
+	if not add.ok:
+		return Result.failure("添加 new_business_developer 失败: %s" % add.error)
+
+	var house_number := _pick_house_number(state)
+	if house_number <= 0:
+		return Result.failure("无法获取可用房屋编号")
+	var cmd := _find_first_valid_house_placement(engine, actor, house_number)
+	if cmd == null:
+		return Result.failure("找不到合法的房屋放置点")
+
+	var executor = engine.action_registry.get_executor("place_house")
+	if executor == null:
+		return Result.failure("缺少 place_house 执行器")
+
+	state = engine.get_state()
+	var predicted_house_id := str(house_number)
+	var supply_before: String = str(state.map.get("house_number_supply_remaining", []))
+	var houses_before: String = str(state.map.get("houses", {}))
+	state.round_state["house_placement_counts"] = []
+
+	var result := executor._apply_changes(state, cmd)
+	if result.ok:
+		return Result.failure("house_placement_counts 类型错误时应失败")
+	var err := str(result.error)
+	if err.find("round_state.house_placement_counts") < 0:
+		return Result.failure("错误信息应包含 round_state.house_placement_counts，实际: %s" % err)
+	if str(state.map.get("house_number_supply_remaining", [])) != supply_before:
+		return Result.failure("失败时不应提前消耗房屋编号供给")
+	if str(state.map.get("houses", {})) != houses_before:
+		return Result.failure("失败时不应提前改写 map.houses")
+	if state.map.get("houses", {}).has(predicted_house_id):
+		return Result.failure("失败时不应提前注册新房屋: %s" % predicted_house_id)
+	if _map_contains_house_id(state, predicted_house_id):
+		return Result.failure("失败时不应提前写入房屋格子结构: %s" % predicted_house_id)
+
+	return Result.success(true)
+
+static func _find_first_valid_house_placement(engine: GameEngine, actor: int, house_number: int) -> Command:
+	var state := engine.get_state()
+	var executor = engine.action_registry.get_executor("place_house")
+	if executor == null:
+		return null
+
+	var grid: Vector2i = state.map.get("grid_size", Vector2i.ZERO)
+	var rotations := [0, 90, 180, 270]
+	for y in range(grid.y):
+		for x in range(grid.x):
+			for r in rotations:
+				var cmd := Command.create("place_house", actor, {"position": [x, y], "rotation": r, "house_number": int(house_number)})
+				var vr := executor.validate(state, cmd)
+				if vr.ok:
+					return cmd
+	return null
+
+static func _pick_house_number(state: GameState) -> int:
+	if state == null or not (state.map is Dictionary):
+		return -1
+	var supply_val = state.map.get("house_number_supply_remaining", null)
+	if supply_val is Array:
+		var nums: Array[int] = []
+		for v in Array(supply_val):
+			if v is int:
+				nums.append(int(v))
+			elif v is float:
+				var f: float = float(v)
+				if f == floor(f):
+					nums.append(int(f))
+		nums.sort()
+		return int(nums[0]) if not nums.is_empty() else -1
+	return 1
+
+static func _map_contains_house_id(state: GameState, house_id: String) -> bool:
+	if state == null or house_id.is_empty() or not (state.map is Dictionary):
+		return false
+	var cells_val = state.map.get("cells", null)
+	if not (cells_val is Array):
+		return false
+	var cells: Array = cells_val
+	for y in range(cells.size()):
+		var row_val = cells[y]
+		if not (row_val is Array):
+			continue
+		var row: Array = row_val
+		for x in range(row.size()):
+			var cell_val = row[x]
+			if not (cell_val is Dictionary):
+				continue
+			var cell: Dictionary = cell_val
+			var structure_val = cell.get("structure", null)
+			if structure_val is Dictionary and str((structure_val as Dictionary).get("house_id", "")) == house_id:
+				return true
+	return false

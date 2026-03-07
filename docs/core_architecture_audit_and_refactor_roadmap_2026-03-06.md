@@ -1046,6 +1046,9 @@ GameSessionContext
 - `refactor(gameplay): tighten add garden apply state access`
   - 收紧 `add_garden` apply 阶段对 `state.map.houses`、房屋锚点结构和 `house_placement_counts` 的读取。
   - 补 focused test，确保 `anchor_pos` / 计数器类型异常时不提前改写房屋、格子或花园供给。
+- `refactor(gameplay): tighten place house apply state access`
+  - 收紧 `place_house` apply 阶段对 `state.map.houses` 和 `house_placement_counts` 的读取顺序。
+  - 补 focused test，确保计数器类型异常时不提前消耗编号供给或写入房屋结构。
 
 当前阶段性结果：
 

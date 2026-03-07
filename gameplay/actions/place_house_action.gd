@@ -6,6 +6,7 @@ extends ActionExecutor
 const PlacementClass = preload("res://core/map/placement_validator/placement.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MapContextBuilderClass = preload("res://core/map/map_context_builder.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
@@ -140,6 +141,14 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	return Result.success()
 
+func _preview_house_placement_increment(state: GameState, player_id: int) -> Result:
+	if not (state.round_state is Dictionary):
+		return Result.failure("round_state 类型错误（期望 Dictionary）")
+	var round_state_preview: Dictionary = state.round_state.duplicate(true)
+	return RoundStateCountersClass.increment_player_count(
+		round_state_preview, "house_placement_counts", player_id, 1
+	)
+
 func _apply_changes(state: GameState, command: Command) -> Result:
 	var params_result := _parse_params(command)
 	if not params_result.ok:
@@ -169,10 +178,16 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 	# 规则：玩家选择房屋编号，house_id 与编号保持一致（与印刷房屋一致，便于范围/日志/调试对齐）。
 	var house_id := str(house_number)
-	if state.map.has("houses") and (state.map["houses"] is Dictionary):
-		var houses: Dictionary = state.map["houses"]
-		if houses.has(house_id):
-			return Result.failure("房屋编号已被占用: %d" % house_number)
+	var houses_read := MapStateAccessClass.require_houses(state, action_id)
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
+	if houses.has(house_id):
+		return Result.failure("房屋编号已被占用: %d" % house_number)
+
+	var counter_preview = _preview_house_placement_increment(state, player_id)
+	if not counter_preview.ok:
+		return counter_preview
 
 	var consume_r := _consume_house_number(state.map, house_number)
 	if not consume_r.ok:
@@ -195,7 +210,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		}
 
 	# 注册房屋
-	state.map.houses[house_id] = {
+	houses[house_id] = {
 		"house_id": house_id,
 		"house_number": house_number,
 		"anchor_pos": world_anchor,
@@ -206,6 +221,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"owner": player_id,
 		"demands": []
 	}
+	state.map["houses"] = houses
 
 	# 使道路图缓存失效
 	RoadGraphCacheClass.invalidate_road_graph(state)
