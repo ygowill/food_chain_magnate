@@ -38,6 +38,13 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if bool(player.get("forfeited", false)):
 		return Result.success().with_warning("玩家已弃权: %d" % player_id)
 
+	var pending_update := _plan_pending_phase_actions_after_forfeit(state, player_id)
+	if not pending_update.ok:
+		return pending_update
+	var confirmed_update := _plan_online_dinnertime_confirmed_players_after_forfeit(state, player_id)
+	if not confirmed_update.ok:
+		return confirmed_update
+
 	player["forfeited"] = true
 
 	var remove_cash := _remove_player_cash(state, player)
@@ -49,9 +56,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	_remove_player_restaurants(state, player)
 	_remove_player_marketing(state, player_id)
 	_clear_player_misc_assets(player)
-	_remove_player_from_pending_phase_actions(state, player_id)
 
 	state.players[player_id] = player
+	if pending_update.value != null:
+		state.round_state["pending_phase_actions"] = pending_update.value
+	if confirmed_update.value != null:
+		state.round_state[ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY] = confirmed_update.value
 	return Result.success({"player_id": player_id})
 
 static func _remove_player_cash(state: GameState, player: Dictionary) -> Result:
@@ -222,39 +232,58 @@ static func _clear_player_misc_assets(player: Dictionary) -> void:
 	player["multi_trainer_on_one"] = false
 	player["ceo_cfo_ability_start_round"] = -1
 
-static func _remove_player_from_pending_phase_actions(state: GameState, player_id: int) -> void:
+static func _plan_pending_phase_actions_after_forfeit(state: GameState, player_id: int) -> Result:
 	if state == null or not (state.round_state is Dictionary):
-		return
+		return Result.success(null)
 	var rs: Dictionary = state.round_state
-	if not rs.has("pending_phase_actions") or not (rs["pending_phase_actions"] is Dictionary):
-		return
-	var ppa: Dictionary = rs["pending_phase_actions"]
+	if not rs.has("pending_phase_actions"):
+		return Result.success(null)
+	var ppa_val = rs.get("pending_phase_actions", null)
+	if not (ppa_val is Dictionary):
+		return Result.failure("forfeit_player: round_state.pending_phase_actions 类型错误（期望 Dictionary）")
+	var ppa: Dictionary = ppa_val
+	var filtered_all: Dictionary = {}
 	for phase_name in ppa.keys():
 		var arr_val = ppa.get(phase_name, null)
 		if not (arr_val is Array):
-			continue
+			return Result.failure("forfeit_player: round_state.pending_phase_actions[%s] 类型错误（期望 Array）" % str(phase_name))
 		var arr: Array = arr_val
 		var filtered: Array = []
-		for item_val in arr:
-			if item_val is int and int(item_val) == player_id:
+		for i in range(arr.size()):
+			var item_val = arr[i]
+			if item_val is int:
+				if int(item_val) != player_id:
+					filtered.append(int(item_val))
 				continue
-			if item_val is float and float(item_val) == floor(float(item_val)) and int(item_val) == player_id:
+			if item_val is float:
+				var f: float = float(item_val)
+				if f != floor(f):
+					return Result.failure("forfeit_player: round_state.pending_phase_actions[%s][%d] 类型错误（期望 int/float 整数）" % [str(phase_name), i])
+				if int(f) != player_id:
+					filtered.append(int(f))
 				continue
 			if item_val is Dictionary:
 				var item: Dictionary = item_val
 				var pid_val = item.get("player_id", null)
-				if pid_val is int and int(pid_val) == player_id:
-					continue
-				if pid_val is float and float(pid_val) == floor(float(pid_val)) and int(pid_val) == player_id:
-					continue
-			filtered.append(item_val)
-		ppa[phase_name] = filtered
-	rs["pending_phase_actions"] = ppa
-	if rs.has(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY):
-		var confirmed_val = rs.get(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, null)
-		if confirmed_val is Array:
-			var confirmed: Array = Array(confirmed_val)
-			if player_id >= 0 and player_id < confirmed.size():
-				confirmed[player_id] = true
-				rs[ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY] = confirmed
-	state.round_state = rs
+				if not (pid_val is int or pid_val is float):
+					return Result.failure("forfeit_player: round_state.pending_phase_actions[%s][%d].player_id 类型错误（期望 int/float）" % [str(phase_name), i])
+				if int(pid_val) != player_id:
+					filtered.append(item)
+				continue
+			return Result.failure("forfeit_player: round_state.pending_phase_actions[%s][%d] 类型错误（期望 int/float/Dictionary）" % [str(phase_name), i])
+		filtered_all[phase_name] = filtered
+	return Result.success(filtered_all)
+
+static func _plan_online_dinnertime_confirmed_players_after_forfeit(state: GameState, player_id: int) -> Result:
+	if state == null or not (state.round_state is Dictionary):
+		return Result.success(null)
+	var rs: Dictionary = state.round_state
+	if not rs.has(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY):
+		return Result.success(null)
+	var confirmed_val = rs.get(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, null)
+	if not (confirmed_val is Array):
+		return Result.failure("forfeit_player: round_state.%s 类型错误（期望 Array）" % ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY)
+	var confirmed: Array = Array(confirmed_val).duplicate(true)
+	if player_id >= 0 and player_id < confirmed.size():
+		confirmed[player_id] = true
+	return Result.success(confirmed)

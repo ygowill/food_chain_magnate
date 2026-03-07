@@ -1070,6 +1070,9 @@ GameSessionContext
 - `refactor(modules): tighten kimchi cleanup pending access`
   - 将 `kimchi` 模块 Cleanup 阶段的 pending 解析收口到 fail-fast helper，并统一使用 `RoundStatePendingPhaseActions` 切换到 kimchi pending。
   - 新增 focused test，覆盖 legacy fridge pending 提升与非法 pending 项时无 partial mutation。
+- `refactor(gameplay): tighten forfeit pending access`
+  - 将 `forfeit_player` 对 `pending_phase_actions` / `online_dinnertime_confirmed_players` 的更新改为先规划再落地，避免坏状态下先发生资产清理。
+  - 新增 focused test，确保 `pending_phase_actions` 类型错误时不提前标记 forfeited、清空资产或改写银行累计。
 
 当前阶段性结果：
 

@@ -207,6 +207,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.ForfeitPlayerActionTestClass.run(),
 		},
 		{
+			"name": "ForfeitPlayerStateAccessTest",
+			"fn": func() -> Result: return TestRefs.ForfeitPlayerStateAccessTestClass.run(2, 12345),
+		},
+		{
 			"name": "OnlineRoomSpectatorTest",
 			"fn": func() -> Result: return TestRefs.OnlineRoomSpectatorTestClass.run(),
 		},
