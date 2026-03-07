@@ -9,6 +9,7 @@ const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const TrainEmployeeUsageClass = preload("res://gameplay/actions/train/train_employee_usage.gd")
 const TrainEmployeeLocksClass = preload("res://gameplay/actions/train/train_employee_locks.gd")
 const TrainSlotUsageStorageClass = preload("res://core/rules/employee_rules/train_slot_usage_storage.gd")
+const RecruitActionClass = preload("res://gameplay/actions/recruit_action.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var r := _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count, seed_val)
@@ -53,7 +54,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_validate_fails_fast_on_invalid_train_slot_usage_instances_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 14})
+	r = _test_recruit_validate_fails_fast_on_invalid_train_slot_usage_instances_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 15})
 
 static func _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count: int, seed_val: int) -> Result:
 	var built := _build_train_state(player_count, seed_val)
@@ -293,6 +297,36 @@ static func _build_active_recruit_train_state(player_count: int, seed_val: int) 
 	state.round_state["train_events"] = []
 	return Result.success(state)
 
+static func _build_recruit_on_credit_validate_state(player_count: int, seed_val: int) -> Result:
+	if player_count < 2:
+		player_count = 2
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+	var state: GameState = engine.get_state()
+	state.turn_order = [0, 1]
+	state.current_player_index = 0
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_RECRUIT
+
+	var take_trainer := StateUpdaterClass.take_from_pool(state, "trainer", 1)
+	if not take_trainer.ok:
+		return Result.failure("从员工池取出 trainer 失败: %s" % take_trainer.error)
+	var add_trainer := StateUpdaterClass.add_employee(state, 0, "trainer", false)
+	if not add_trainer.ok:
+		return Result.failure("添加 trainer 失败: %s" % add_trainer.error)
+
+	var trainee_total := int(state.employee_pool.get("management_trainee", 0))
+	var take_all := StateUpdaterClass.take_from_pool(state, "management_trainee", trainee_total)
+	if not take_all.ok:
+		return Result.failure("清空 management_trainee 堆失败: %s" % take_all.error)
+	for _i in range(trainee_total):
+		var add_to_p1 := StateUpdaterClass.add_employee(state, 1, "management_trainee", true)
+		if not add_to_p1.ok:
+			return Result.failure("向 P1 待命区添加 management_trainee 失败: %s" % add_to_p1.error)
+	return Result.success(state)
+
 static func _test_read_employee_used_before_training_fails_fast_on_invalid_production_counts() -> Result:
 	var state := GameState.new()
 	state.round_state = {
@@ -466,6 +500,35 @@ static func _test_validate_fails_fast_on_invalid_train_slot_usage_instances_with
 	}))
 	if result.ok:
 		return Result.failure("train_slot_usage_instances 使用字符串玩家 key 时验证应失败")
+	var err := str(result.error)
+	if err.find("train_slot_usage_instances") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 train_slot_usage_instances 与 字符串玩家 key，实际: %s" % err)
+	if str(state.players[0]) != player_before:
+		return Result.failure("失败时不应提前改写玩家员工状态")
+	if str(state.employee_pool) != pool_before:
+		return Result.failure("失败时不应提前改写 employee_pool")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_recruit_validate_fails_fast_on_invalid_train_slot_usage_instances_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	var built := _build_recruit_on_credit_validate_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["train_slot_usage_instances"] = {
+		"0": {"trainer": [0]},
+	}
+	var player_before := str(state.players[0])
+	var pool_before := str(state.employee_pool)
+	var round_state_before := str(state.round_state)
+
+	var action = RecruitActionClass.new()
+	var result := action._validate_specific(state, Command.create("recruit", 0, {
+		"employee_type": "management_trainee",
+	}))
+	if result.ok:
+		return Result.failure("recruit 验证遇到非法 train_slot_usage_instances 时应失败")
 	var err := str(result.error)
 	if err.find("train_slot_usage_instances") < 0 or err.find("字符串玩家 key") < 0:
 		return Result.failure("错误信息应包含 train_slot_usage_instances 与 字符串玩家 key，实际: %s" % err)

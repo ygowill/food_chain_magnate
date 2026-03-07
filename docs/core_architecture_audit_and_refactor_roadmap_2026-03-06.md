@@ -1152,6 +1152,9 @@ GameSessionContext
 - `refactor(gameplay): tighten train max-step validation access`
   - 为 `train_slot_usage` 增补 `Result` 版 max-step 读取 helper，并让 `train_action` 在计算多步培训上限时对损坏的 `train_slot_usage_instances` 显式 fail-fast，避免 query helper 内部硬断言。
   - 扩展 focused `train` 状态访问测试，确保非法 `train_slot_usage_instances` 会在验证阶段失败，且不会提前改写玩家、`employee_pool` 或 `round_state`。
+- `refactor(gameplay): tighten recruit on-credit validation access`
+  - 复用 `train_slot_usage` 的安全 max-step helper，让 `recruit_action` 在缺货预支验证时对损坏的 `train_slot_usage_instances` 显式 fail-fast，避免旧 query 路径吞掉状态错误。
+  - 扩展 focused `train` 状态访问测试，确保非法 `train_slot_usage_instances` 会在 recruit 验证阶段失败，且不会提前改写玩家、`employee_pool` 或 `round_state`。
 
 当前阶段性结果：
 
