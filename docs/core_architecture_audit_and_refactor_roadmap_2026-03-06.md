@@ -1143,6 +1143,9 @@ GameSessionContext
 - `refactor(core): tighten train slot usage instance access`
   - 将 `train_slot_usage_storage` 对 `round_state.train_slot_usage_instances` 的字符串玩家 key 检查统一改为显式 `Result` 失败，避免坏状态在按实例读取或写回培训 slot 用量时触发硬断言。
   - 扩展 focused `train` 状态访问测试，确保非法 `train_slot_usage_instances` 在读取与写回路径都会 fail-fast，且不会覆盖既有坏状态。
+- `refactor(core): tighten train slot usage fallback access`
+  - 将 `train_slot_usage_storage` 对旧版 `round_state.train_slot_usage` fallback 读取从 `assert` 改为显式 `Result` 失败，避免坏计数结构在按实例补算 slot 用量时触发硬断言。
+  - 扩展 focused `train` 状态访问测试，确保非法 `train_slot_usage` 会沿 fallback 读取路径 fail-fast，并返回可诊断错误。
 
 当前阶段性结果：
 

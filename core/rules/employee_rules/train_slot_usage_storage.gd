@@ -17,14 +17,15 @@ static func reset_train_slot_usage(state: GameState) -> void:
 static func get_train_slot_usage_round_state_key() -> String:
 	return ROUND_STATE_KEY
 
-static func _read_used_slots_total(state: GameState, player_id: int, trainer_id: String) -> int:
+static func _read_used_slots_total(state: GameState, player_id: int, trainer_id: String) -> Result:
 	if trainer_id.is_empty():
-		return 0
+		return Result.success(0)
 	if state == null or not (state.round_state is Dictionary):
-		return 0
+		return Result.success(0)
 	var read := RoundStateCountersClass.get_player_key_count(state.round_state, ROUND_STATE_KEY, player_id, trainer_id)
-	assert(read.ok, "train_slot_usage 结构损坏: %s" % read.error)
-	return int(read.value)
+	if not read.ok:
+		return Result.failure("train_slot_usage 结构损坏: %s" % read.error)
+	return Result.success(int(read.value))
 
 static func _compute_used_by_instance_from_total(used_total: int, instances: int, cap_per_instance: int) -> Array[int]:
 	# 兼容旧版（仅记录 trainer_id 总用量）：将用量尽量集中到少数实例上，得到一个确定的 per-instance 分配。
@@ -90,7 +91,10 @@ static func read_used_slots_by_instance(state: GameState, player_id: int, traine
 				return Result.success(out)
 
 	# fallback：旧版 train_slot_usage（总用量）
-	var used_total := _read_used_slots_total(state, player_id, trainer_id)
+	var used_total_read := _read_used_slots_total(state, player_id, trainer_id)
+	if not used_total_read.ok:
+		return used_total_read
+	var used_total := int(used_total_read.value)
 	var used_by_instance := _compute_used_by_instance_from_total(used_total, instances, cap_per_instance)
 	return Result.success(used_by_instance)
 
