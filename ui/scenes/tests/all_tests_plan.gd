@@ -403,6 +403,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.ChooseFridgeKeepStateAccessTestClass.run(2, 12345),
 		},
 		{
+			"name": "KimchiCleanupStateAccessTest",
+			"fn": func() -> Result: return TestRefs.KimchiCleanupStateAccessTestClass.run(2, 12345),
+		},
+		{
 			"name": "ChooseKimchiStorageStateAccessTest",
 			"fn": func() -> Result: return TestRefs.ChooseKimchiStorageStateAccessTestClass.run(2, 12345),
 		},

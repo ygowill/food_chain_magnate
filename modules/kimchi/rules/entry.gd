@@ -6,6 +6,7 @@ const ProductRegistry = preload("res://core/data/product_registry.gd")
 const DemandVariantHelpersClass = preload("res://core/modules/v2/dinnertime_demand_variant_helpers.gd")
 const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cleanup_settlement.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 
 const MODULE_ID := "kimchi"
 const PRODUCT_ID := "kimchi"
@@ -14,6 +15,51 @@ const EXTRA_LUXURY_MANAGER_PATCH_ID := "extra_luxury_manager"
 
 const Phase = PhaseDefsClass.Phase
 const Point = SettlementRegistryClass.Point
+
+static func _get_cleanup_pending_tasks(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("%s: cleanup: state 为空" % MODULE_ID)
+	if not (state.round_state is Dictionary):
+		return Result.failure("%s: cleanup: state.round_state 类型错误（期望 Dictionary）" % MODULE_ID)
+	if not state.round_state.has("pending_phase_actions"):
+		return Result.success([] as Array[Dictionary])
+	var ppa_val = state.round_state.get("pending_phase_actions", null)
+	if not (ppa_val is Dictionary):
+		return Result.failure("%s: cleanup: pending_phase_actions 类型错误（期望 Dictionary）" % MODULE_ID)
+	var ppa: Dictionary = ppa_val
+	if not ppa.has(PhaseDefsClass.PHASE_CLEANUP):
+		return Result.success([] as Array[Dictionary])
+	var list_val = ppa.get(PhaseDefsClass.PHASE_CLEANUP, null)
+	if not (list_val is Array):
+		return Result.failure("%s: cleanup: pending_phase_actions[Cleanup] 类型错误（期望 Array）" % MODULE_ID)
+	var list: Array = list_val
+	var out: Array[Dictionary] = []
+	for i in range(list.size()):
+		var item_val = list[i]
+		if item_val is Dictionary:
+			var item: Dictionary = item_val
+			var kind_val = item.get("kind", null)
+			var pid_val = item.get("player_id", null)
+			if not (kind_val is String):
+				return Result.failure("%s: cleanup: pending_phase_actions[Cleanup][%d].kind 类型错误（期望 String）" % [MODULE_ID, i])
+			var kind: String = str(kind_val).strip_edges()
+			if kind.is_empty():
+				return Result.failure("%s: cleanup: pending_phase_actions[Cleanup][%d].kind 不能为空" % [MODULE_ID, i])
+			if not (pid_val is int or pid_val is float):
+				return Result.failure("%s: cleanup: pending_phase_actions[Cleanup][%d].player_id 类型错误（期望 int/float）" % [MODULE_ID, i])
+			out.append({
+				"kind": kind,
+				"player_id": int(pid_val),
+			})
+			continue
+		if item_val is int or item_val is float:
+			out.append({
+				"kind": "fridge_keep",
+				"player_id": int(item_val),
+			})
+			continue
+		return Result.failure("%s: cleanup: pending_phase_actions[Cleanup][%d] 类型错误（期望 Dictionary/int/float）" % [MODULE_ID, i])
+	return Result.success(out)
 
 func register(registrar) -> Result:
 	var r = registrar.register_dinnertime_demand_provider(
@@ -220,27 +266,16 @@ func _on_cleanup_enter_after_primary(state: GameState, _phase_manager) -> Result
 	# 2) 选择：若 cleanup 后存在 kimchi，则要求玩家选择是否存泡菜（存泡菜则其它库存不可保留）。
 	# - kimchi 选择优先于冰箱选择（若存泡菜，则冰箱选择不再需要）。
 	var fridge_pending_players: Array[int] = []
-	if state.round_state.has("pending_phase_actions"):
-		var ppa_val = state.round_state.get("pending_phase_actions", null)
-		if not (ppa_val is Dictionary):
-			return Result.failure("%s: cleanup: pending_phase_actions 类型错误（期望 Dictionary）" % MODULE_ID)
-		var ppa: Dictionary = ppa_val
-		if ppa.has(PhaseDefsClass.PHASE_CLEANUP):
-			var list_val = ppa.get(PhaseDefsClass.PHASE_CLEANUP, null)
-			if not (list_val is Array):
-				return Result.failure("%s: cleanup: pending_phase_actions[Cleanup] 类型错误（期望 Array）" % MODULE_ID)
-			for v in list_val:
-				if v is Dictionary:
-					var task: Dictionary = v
-					if str(task.get("kind", "")).strip_edges() != "fridge_keep":
-						continue
-					var pid: int = int(task.get("player_id", -1))
-					if pid >= 0 and pid < state.players.size():
-						fridge_pending_players.append(pid)
-				elif v is int or v is float:
-					var pid2: int = int(v)
-					if pid2 >= 0 and pid2 < state.players.size():
-						fridge_pending_players.append(pid2)
+	var existing_read := _get_cleanup_pending_tasks(state)
+	if not existing_read.ok:
+		return existing_read
+	var existing: Array[Dictionary] = existing_read.value
+	for task in existing:
+		if str(task.get("kind", "")).strip_edges() != "fridge_keep":
+			continue
+		var pid: int = int(task.get("player_id", -1))
+		if pid >= 0 and pid < state.players.size():
+			fridge_pending_players.append(pid)
 
 	var kimchi_pending_players: Array[int] = []
 	var order: Array[int] = []
@@ -268,14 +303,14 @@ func _on_cleanup_enter_after_primary(state: GameState, _phase_manager) -> Result
 	if not kimchi_pending_players.is_empty():
 		cleanup["pending_choice_kind"] = "kimchi"
 		state.round_state["cleanup"] = cleanup
-		if not state.round_state.has("pending_phase_actions"):
-			state.round_state["pending_phase_actions"] = {}
-		var ppa2_val = state.round_state.get("pending_phase_actions", null)
-		if not (ppa2_val is Dictionary):
-			return Result.failure("%s: cleanup: pending_phase_actions 类型错误（期望 Dictionary）" % MODULE_ID)
-		var ppa2: Dictionary = ppa2_val
-		ppa2[PhaseDefsClass.PHASE_CLEANUP] = kimchi_pending_players
-		state.round_state["pending_phase_actions"] = ppa2
+		var set_pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
+			state.round_state,
+			PhaseDefsClass.PHASE_CLEANUP,
+			kimchi_pending_players,
+			MODULE_ID
+		)
+		if not set_pending.ok:
+			return set_pending
 
 		var next_pid: int = int(kimchi_pending_players[0])
 		for idx2 in range(state.turn_order.size()):

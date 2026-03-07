@@ -89,6 +89,7 @@ const CoffeeShopPlacementStateAccessTestClass = preload("res://core/tests/coffee
 const CoffeeBonusShopPlacementStateAccessTestClass = preload("res://core/tests/coffee_bonus_shop_placement_state_access_test.gd")
 const CoffeeFirstCoffeeSoldStateAccessTestClass = preload("res://core/tests/coffee_first_coffee_sold_state_access_test.gd")
 const ChooseFridgeKeepStateAccessTestClass = preload("res://core/tests/choose_fridge_keep_state_access_test.gd")
+const KimchiCleanupStateAccessTestClass = preload("res://core/tests/kimchi_cleanup_state_access_test.gd")
 const ChooseKimchiStorageStateAccessTestClass = preload("res://core/tests/choose_kimchi_storage_state_access_test.gd")
 const InitiateMarketingActionStateAccessTestClass = preload("res://core/tests/initiate_marketing_action_state_access_test.gd")
 const InitiateMarketingOverlapStateAccessTestClass = preload("res://core/tests/initiate_marketing_overlap_state_access_test.gd")

@@ -1067,6 +1067,9 @@ GameSessionContext
 - `refactor(gameplay): tighten restructuring pending access`
   - 将重组阶段的 pending 写回统一到 `RoundStatePendingPhaseActions`，并在 `submit_restructuring` apply 前预检 `pending_phase_actions[Restructuring]`。
   - 新增 focused test，确保 pending 类型错误时不提前改写玩家结构、submitted 标记或 finalized。
+- `refactor(modules): tighten kimchi cleanup pending access`
+  - 将 `kimchi` 模块 Cleanup 阶段的 pending 解析收口到 fail-fast helper，并统一使用 `RoundStatePendingPhaseActions` 切换到 kimchi pending。
+  - 新增 focused test，覆盖 legacy fridge pending 提升与非法 pending 项时无 partial mutation。
 
 当前阶段性结果：
 
