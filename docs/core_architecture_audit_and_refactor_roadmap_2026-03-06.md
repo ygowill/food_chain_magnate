@@ -1206,6 +1206,9 @@ GameSessionContext
 - `refactor(gameplay): tighten submit restructuring player access`
   - 将 `submit_restructuring` 对玩家、`employees`、`reserve_employees`、`company_structure` 的 apply 读取统一改为走 `PlayerStateAccess`，让坏玩家结构返回可诊断错误，而不是在重组修复/归一化前触发硬断言。
   - 扩展 focused `submit_restructuring` 状态访问测试，覆盖非法 `player.employees` 与 `player.company_structure`，确保失败时不会提前改写玩家结构或 `round_state.restructuring`。
+- `refactor(gameplay): tighten submit restructuring round-state access`
+  - 将 `submit_restructuring` 对 `round_state.restructuring` 的 apply 读取前移到玩家改写之前，并改为显式 `Result` 失败，避免坏重组状态在标记提交阶段触发晚期硬断言。
+  - 扩展 focused `submit_restructuring` 状态访问测试，确保非法 `round_state.restructuring` 会 fail-fast，且不会提前改写玩家结构或 `round_state`。
 
 当前阶段性结果：
 

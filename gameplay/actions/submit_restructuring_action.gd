@@ -94,6 +94,16 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	return Result.success()
 
+static func _require_restructuring_state(state: GameState, prefix_label: String) -> Result:
+	if state == null:
+		return Result.failure("%s: state 为空" % prefix_label)
+	if not (state.round_state is Dictionary):
+		return Result.failure("%s: round_state 类型错误（期望 Dictionary）" % prefix_label)
+	var restructuring_val = state.round_state.get("restructuring", null)
+	if not (restructuring_val is Dictionary):
+		return Result.failure("%s: round_state.restructuring 类型错误（期望 Dictionary）" % prefix_label)
+	return Result.success(restructuring_val)
+
 func _apply_changes(state: GameState, command: Command) -> Result:
 	var warnings: Array[String] = []
 
@@ -103,6 +113,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		if not pending_read.ok:
 			return pending_read
 		pending = pending_read.value
+
+	var restructuring_read := _require_restructuring_state(state, action_id)
+	if not restructuring_read.ok:
+		return restructuring_read
 
 	var player_id: int = command.actor
 	var player_read := PlayerStateAccessClass.require_player(state, player_id, action_id)
@@ -285,7 +299,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	state.players[player_id] = player
 
 	# 标记已提交
-	assert(state.round_state is Dictionary, "submit_restructuring: round_state 类型错误（期望 Dictionary）")
 	var mark_submitted := RoundStatePlayerBoolFlagsClass.set_player_flag(
 		state.round_state,
 		["restructuring", "submitted"],
@@ -295,9 +308,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	)
 	if not mark_submitted.ok:
 		return mark_submitted
-	var r_val = state.round_state.get("restructuring", null)
-	assert(r_val is Dictionary, "submit_restructuring: round_state.restructuring 类型错误（期望 Dictionary）")
-	var r: Dictionary = r_val
+	var r: Dictionary = state.round_state.get("restructuring", {})
 
 	# 更新阻断器
 	if int(state.round_number) > 1:

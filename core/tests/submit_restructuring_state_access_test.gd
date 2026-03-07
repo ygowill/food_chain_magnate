@@ -15,7 +15,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_apply_changes_fails_fast_on_invalid_company_structure_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_apply_changes_fails_fast_on_invalid_restructuring_state_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 4})
 
 static func _build_submit_restructuring_state(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -112,4 +115,25 @@ static func _test_apply_changes_fails_fast_on_invalid_company_structure_without_
 		return Result.failure("失败时不应提前改写玩家结构或员工状态")
 	if str(state.round_state.get("restructuring", {})) != restructuring_before:
 		return Result.failure("失败时 restructuring 不应提前变化")
+	return Result.success()
+
+static func _test_apply_changes_fails_fast_on_invalid_restructuring_state_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	var built := _build_submit_restructuring_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["restructuring"] = []
+	var player_before := str(state.players[0])
+	var round_state_before := str(state.round_state)
+	var action = ActionClass.new()
+	var result := action._apply_changes(state, Command.create("submit_restructuring", 0, {}))
+	if result.ok:
+		return Result.failure("round_state.restructuring 类型错误时应失败")
+	var err := str(result.error)
+	if err.find("round_state.restructuring") < 0:
+		return Result.failure("错误信息应包含 round_state.restructuring，实际: %s" % err)
+	if str(state.players[0]) != player_before:
+		return Result.failure("失败时不应提前改写玩家结构或员工状态")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
 	return Result.success()
