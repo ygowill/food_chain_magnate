@@ -1161,6 +1161,9 @@ GameSessionContext
 - `refactor(gameplay): tighten train pending validation access`
   - 为 `immediate_train_pending` 增补 `Result` 版 count/total 读取 helper，并让 `train_action` 在验证阶段对损坏的 pending 结构显式 fail-fast，避免旧读取路径触发硬断言。
   - 扩展 focused `train` 状态访问测试，确保非法 `immediate_train_pending` 会在验证阶段失败，且不会提前改写玩家、`employee_pool` 或 `round_state`。
+- `refactor(gameplay): tighten recruit pending validation access`
+  - 复用 `immediate_train_pending` 的安全 total 读取 helper，让 `recruit_action` 在缺货预支验证时对损坏的 pending 结构显式 fail-fast，避免旧读取路径触发硬断言。
+  - 扩展 focused `train` 状态访问测试，确保非法 `immediate_train_pending` 会在 recruit 验证阶段失败，且不会提前改写玩家、`employee_pool` 或 `round_state`。
 
 当前阶段性结果：
 

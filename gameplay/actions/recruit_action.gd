@@ -149,7 +149,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		var steps_min := _compute_min_steps_to_any_in_stock_target(employee_type, maxi(1, max_steps_one), state.employee_pool, banned)
 		if steps_min <= 0:
 			return Result.failure("员工池中没有 %s，且无法找到可用培训目标用于缺货预支" % employee_type)
-		var pending_total := EmployeeRulesClass.get_immediate_train_pending_total(state, command.actor)
+		var pending_total_read := EmployeeRulesClass.try_get_immediate_train_pending_total(state, command.actor)
+		if not pending_total_read.ok:
+			return pending_total_read
+		var pending_total := int(pending_total_read.value)
 		if pending_total + steps_min > train_limit:
 			return Result.failure("员工池中没有 %s，且缺货预支数量已达可培训上限 (%d)" % [employee_type, train_limit])
 
