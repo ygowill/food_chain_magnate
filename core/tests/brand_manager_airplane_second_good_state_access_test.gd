@@ -31,7 +31,10 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_apply_changes_fails_fast_without_partial_mutation()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 5})
+	r = _test_apply_changes_fails_fast_on_invalid_pending_type_without_partial_mutation()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 6})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -142,4 +145,25 @@ static func _test_apply_changes_fails_fast_without_partial_mutation() -> Result:
 		return Result.failure("失败时不应提前改写 marketing_instance.products")
 	if str(inst.get("product", "")) != "burger":
 		return Result.failure("失败时不应改写 marketing_instance.product，实际: %s" % str(inst))
+	return Result.success()
+
+
+static func _test_apply_changes_fails_fast_on_invalid_pending_type_without_partial_mutation() -> Result:
+	var action = _FakeAirplaneApplyAction.new()
+	var state := _make_apply_state()
+	state.round_state[PENDING_KEY] = []
+	var result := action._apply_changes(state, _make_command())
+	if result.ok:
+		return Result.failure("pending 类型错误时应失败")
+	var err := str(result.error)
+	if err.find("round_state.%s" % PENDING_KEY) < 0:
+		return Result.failure("错误信息应包含 round_state.%s，实际: %s" % [PENDING_KEY, err])
+	var inst: Dictionary = state.marketing_instances[0]
+	if inst.has("products"):
+		return Result.failure("失败时不应提前改写 marketing_instance.products")
+	if str(inst.get("product", "")) != "burger":
+		return Result.failure("失败时不应改写 marketing_instance.product，实际: %s" % str(inst))
+	var placement: Dictionary = state.map["marketing_placements"]["11"]
+	if placement.has("products"):
+		return Result.failure("失败时不应提前改写 placement.products")
 	return Result.success()

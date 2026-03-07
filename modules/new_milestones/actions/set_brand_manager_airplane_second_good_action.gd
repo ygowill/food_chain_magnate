@@ -131,6 +131,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return Result.failure("marketing_placements[%s] 类型错误（期望 Dictionary）" % key)
 	var placement: Dictionary = placements[key]
 
+	var pending_val = state.round_state.get(PENDING_KEY, null)
+	if not (pending_val is Dictionary):
+		return Result.failure("round_state.%s 类型错误（期望 Dictionary）" % PENDING_KEY)
+	var pending: Dictionary = (pending_val as Dictionary).duplicate(true)
+	pending.erase(int(command.actor))
+
 	for i in range(state.marketing_instances.size()):
 		var inst_val = state.marketing_instances[i]
 		if not (inst_val is Dictionary):
@@ -149,10 +155,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	placement["products"] = [product_a, product_b]
 	placements[key] = placement
 	state.map["marketing_placements"] = placements
-
-	# 消耗本回合能力
-	var pending: Dictionary = state.round_state[PENDING_KEY]
-	pending.erase(int(command.actor))
 	state.round_state[PENDING_KEY] = pending
 
 	return Result.success({
