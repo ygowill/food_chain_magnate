@@ -74,9 +74,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("未知道路 piece_id: %s" % piece_id)
 
 	var supply_key := "%s_supply_remaining" % piece_id
-	if not state.map.has(supply_key) or not (state.map[supply_key] is int):
-		return Result.failure("缺少道路供应计数（模块未初始化）: %s" % supply_key)
-	if int(state.map[supply_key]) <= 0:
+	var supply_read := MapStateAccessClass.require_int_field(state, supply_key, "place_lobbyists_road")
+	if not supply_read.ok:
+		return supply_read
+	if int(supply_read.value) <= 0:
 		return Result.failure("道路已用尽: %s" % piece_id)
 
 	var pos_read := require_vector2i_param(command, "anchor_pos")
@@ -152,6 +153,11 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var piece_id: String = require_string_param(command, "piece_id").value
 	var anchor_pos: Vector2i = require_vector2i_param(command, "anchor_pos").value
 	var rotation: int = int(optional_int_param(command, "rotation", 0).value)
+	var supply_key := "%s_supply_remaining" % piece_id
+	var supply_read := MapStateAccessClass.require_int_field(state, supply_key, "place_lobbyists_road")
+	if not supply_read.ok:
+		return supply_read
+	var supply_remaining := int(supply_read.value)
 
 	var piece_def: PieceDef = PieceRegistryClass.get_def(piece_id)
 	var piece_cells: Array[Vector2i] = piece_def.get_world_cells(anchor_pos, rotation)
@@ -219,10 +225,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	state.map[PENDING_ROADS_KEY] = pending_roads
 
 	# 消耗供应
-	var supply_key := "%s_supply_remaining" % piece_id
-	if not state.map.has(supply_key) or not (state.map[supply_key] is int):
-		return Result.failure("缺少道路供应计数（模块未初始化）: %s" % supply_key)
-	state.map[supply_key] = int(state.map[supply_key]) - 1
+	state.map[supply_key] = supply_remaining - 1
 
 	# 计数：本子阶段使用次数（road/park 共用）
 	var inc := RoundStateCountersClass.increment_player_count(state.round_state, "lobbyists_place_counts", player_id, 1)
