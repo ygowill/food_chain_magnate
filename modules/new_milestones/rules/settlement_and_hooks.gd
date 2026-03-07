@@ -13,6 +13,7 @@ const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
+const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 
 const Phase = PhaseDefsClass.Phase
 
@@ -203,15 +204,15 @@ func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -
 			pizza_count += 1
 
 		if not pending_list.is_empty():
+			var pending_phase_actions_set := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
+				state.round_state,
+				"Dinnertime",
+				pending_list.duplicate(true),
+				"new_milestones:pizza"
+			)
+			if not pending_phase_actions_set.ok:
+				return pending_phase_actions_set
 			state.round_state[PIZZA_PENDING_KEY] = pending_list
-			if not state.round_state.has("pending_phase_actions"):
-				state.round_state["pending_phase_actions"] = {}
-			var ppa_val = state.round_state.get("pending_phase_actions", null)
-			if not (ppa_val is Dictionary):
-				return Result.failure("new_milestones:pizza: round_state.pending_phase_actions 类型错误（期望 Dictionary）")
-			var ppa: Dictionary = ppa_val
-			ppa["Dinnertime"] = pending_list.duplicate(true)
-			state.round_state["pending_phase_actions"] = ppa
 
 	# “FIRST BURGER SOLD”：从此 CEO 卡槽固定至少 4（不受储备卡影响）
 	for player_id in range(state.players.size()):
