@@ -8,6 +8,7 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 const SalaryTokenPaymentClass = preload("res://modules/base_rules/rules/phase/payday/payday_salary_token_payment.gd")
 
 func _init() -> void:
@@ -229,13 +230,11 @@ func _can_fire_busy_marketer(state: GameState, player_id: int, employee_id: Stri
 	var milestone_delta_amount: int = int(delta_read.value)
 
 	var used_recruit := 0
-	if state.round_state is Dictionary and state.round_state.has("recruit_used"):
-		var ru_val = state.round_state.get("recruit_used", null)
-		if ru_val is Dictionary:
-			var ru: Dictionary = ru_val
-			var v2 = ru.get(player_id, null)
-			if v2 is int:
-				used_recruit = int(v2)
+	if state.round_state is Dictionary:
+		var used_recruit_read := RoundStateCountersClass.get_player_count(state.round_state, "recruit_used", player_id)
+		if not used_recruit_read.ok:
+			return false
+		used_recruit = int(used_recruit_read.value)
 
 	var discount_info := _collect_payday_salary_discount_capacity_from_active(player)
 	var discount_recruit_capacity: int = int(discount_info.get("total", 0))

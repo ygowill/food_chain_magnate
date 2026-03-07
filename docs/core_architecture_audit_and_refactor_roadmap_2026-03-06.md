@@ -1128,6 +1128,9 @@ GameSessionContext
 - `refactor(gameplay): tighten train usage counter access`
   - 将 `train_employee_usage` 对 `production_counts`、`procurement_counts`、`marketing_used` 的读取统一收口到 `RoundStateCounters.get_player_key_count()`，拒绝坏的 per-player/per-item 计数结构被静默忽略。
   - 扩展 focused `train` 状态访问测试，覆盖三类非法计数结构，确保 helper 读取路径会显式 fail-fast。
+- `refactor(gameplay): tighten fire recruit-used access`
+  - 将 `fire_action` 的 Payday 忙碌营销员判定里对 `round_state.recruit_used` 的读取统一收口到 `RoundStateCounters.get_player_count()`，保持既有 fail-soft 语义。
+  - 扩展 focused 状态访问测试，确保 `recruit_used` 损坏时 `_can_fire_busy_marketer()` 仍安全返回 `false`。
 
 当前阶段性结果：
 

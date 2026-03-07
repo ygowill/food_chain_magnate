@@ -14,7 +14,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_can_fire_busy_marketer_tolerates_invalid_cash_field(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_can_fire_busy_marketer_tolerates_invalid_recruit_used(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 4})
 
 static func _test_find_employee_location_reads_player_arrays() -> Result:
 	var action = FireActionClass.new()
@@ -57,4 +60,25 @@ static func _test_can_fire_busy_marketer_tolerates_invalid_cash_field(player_cou
 	var action = FireActionClass.new()
 	if action._can_fire_busy_marketer(state, 0, "campaign_manager"):
 		return Result.failure("cash 字段损坏时应 fail-soft 返回 false")
+	return Result.success()
+
+static func _test_can_fire_busy_marketer_tolerates_invalid_recruit_used(player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+	var state := engine.get_state()
+	var player := state.players[0]
+	player["employees"] = []
+	player["reserve_employees"] = []
+	player["busy_marketers"] = ["campaign_manager"]
+	player["cash"] = 0
+	state.players[0] = player
+	state.round_state["recruit_used"] = {
+		"0": 1,
+		0: 0,
+	}
+	var action = FireActionClass.new()
+	if action._can_fire_busy_marketer(state, 0, "campaign_manager"):
+		return Result.failure("recruit_used 损坏时应 fail-soft 返回 false")
 	return Result.success()
