@@ -279,6 +279,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.MandatoryActionsTestClass.run(2, 12345),
 		},
 		{
+			"name": "TrainPhaseStartCountsStateAccessTest",
+			"fn": func() -> Result: return TestRefs.TrainPhaseStartCountsStateAccessTestClass.run(2, 12345),
+		},
+		{
 			"name": "TrainStateAccessTest",
 			"fn": func() -> Result: return TestRefs.TrainStateAccessTestClass.run(2, 12345),
 		},

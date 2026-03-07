@@ -1086,6 +1086,9 @@ GameSessionContext
 - `refactor(gameplay): tighten train event access`
   - 将 `train` 对 `round_state.train_events` 的预检前移到实际培训变更之前，避免坏状态下先改写员工、供应池或 `round_state` 其它字段后才失败。
   - 新增 focused test，确保 `train_events` 类型错误时不提前改写玩家员工状态、`employee_pool` 或 `round_state`。
+- `refactor(gameplay): tighten train phase start count access`
+  - 扩展 `RoundStatePlayerIntMaps` 以支持整张 per-player int map 写回，并将 `train_phase_start_counts` 的读写统一收口到 helper。
+  - 新增 focused test，确保 `train_phase_start_counts` 使用字符串玩家 key 时 fail-fast，且不补写 int-key 回填。
 
 当前阶段性结果：
 

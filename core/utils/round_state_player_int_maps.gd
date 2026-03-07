@@ -46,6 +46,49 @@ static func require_player_int_map(round_state: Dictionary, key: String, player_
 			return Result.failure("%sround_state.%s[%d].%s 类型错误（期望 int）" % [prefix, key, player_id, str(item_key)])
 	return Result.success(per)
 
+static func _validate_value_map(value_map: Dictionary, path: String) -> Result:
+	if not (value_map is Dictionary):
+		return Result.failure("%s 类型错误（期望 Dictionary）" % path)
+	for item_key in value_map.keys():
+		if not (item_key is String):
+			return Result.failure("%s key 类型错误（期望 String）" % path)
+		var item_name := str(item_key)
+		if item_name.is_empty():
+			return Result.failure("%s 不应包含空字符串 key" % path)
+		var value = value_map.get(item_key, null)
+		if not (value is int):
+			return Result.failure("%s.%s 类型错误（期望 int）" % [path, item_name])
+	return Result.success()
+
+static func set_player_int_map(
+	round_state: Dictionary,
+	key: String,
+	player_id: int,
+	value_map: Dictionary,
+	prefix_label: String
+) -> Result:
+	var prefix := _prefix(prefix_label)
+	if key.is_empty():
+		return Result.failure("%skey 不能为空" % prefix)
+	if not (round_state is Dictionary):
+		return Result.failure("%sround_state 类型错误（期望 Dictionary）" % prefix)
+	var validate_map := _validate_value_map(value_map, "%sround_state.%s[%d]" % [prefix, key, player_id])
+	if not validate_map.ok:
+		return validate_map
+
+	if not round_state.has(key):
+		round_state[key] = {}
+
+	var all_val = round_state.get(key, null)
+	if not (all_val is Dictionary):
+		return Result.failure("%sround_state.%s 类型错误（期望 Dictionary）" % [prefix, key])
+	var all: Dictionary = all_val
+	if all.has(str(player_id)):
+		return Result.failure("%sround_state.%s 不应包含字符串玩家 key: %s" % [prefix, key, str(player_id)])
+	all[player_id] = value_map.duplicate(true)
+	round_state[key] = all
+	return Result.success(value_map)
+
 static func set_player_key_int(
 	round_state: Dictionary,
 	key: String,

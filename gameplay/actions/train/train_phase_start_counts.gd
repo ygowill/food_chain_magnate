@@ -1,5 +1,7 @@
 extends RefCounted
 
+const RoundStatePlayerIntMapsClass = preload("res://core/utils/round_state_player_int_maps.gd")
+
 static func _require_player_string_array(player: Dictionary, key: String, path: String) -> Result:
 	if not player.has(key):
 		return Result.failure("%s 缺失" % path)
@@ -20,23 +22,34 @@ static func _ensure_train_phase_start_counts(state: GameState, player_id: int, r
 	if player_id < 0 or player_id >= state.players.size():
 		return Result.failure("train: player_id 越界: %d" % player_id)
 
-	if not state.round_state.has("train_phase_start_counts"):
-		state.round_state["train_phase_start_counts"] = {}
 	var all_val = state.round_state.get("train_phase_start_counts", null)
-	if not (all_val is Dictionary):
-		return Result.failure("train: round_state.train_phase_start_counts 类型错误（期望 Dictionary）")
-	var all: Dictionary = all_val
-	assert(not all.has(str(player_id)), "round_state.train_phase_start_counts 不应包含字符串玩家 key: %s" % str(player_id))
-
-	if all.has(player_id):
-		return Result.success()
+	if all_val != null:
+		if not (all_val is Dictionary):
+			return Result.failure("train: round_state.train_phase_start_counts 类型错误（期望 Dictionary）")
+		var all: Dictionary = all_val
+		if all.has(str(player_id)):
+			return Result.failure("train: round_state.train_phase_start_counts 不应包含字符串玩家 key: %s" % str(player_id))
+		if all.has(player_id):
+			var existing_read := RoundStatePlayerIntMapsClass.require_player_int_map(
+				state.round_state,
+				"train_phase_start_counts",
+				player_id,
+				"train"
+			)
+			if not existing_read.ok:
+				return existing_read
+			return Result.success()
 
 	var counts_read := _compute_train_phase_start_counts(state, player_id, reserve)
 	if not counts_read.ok:
 		return counts_read
-	all[player_id] = counts_read.value
-	state.round_state["train_phase_start_counts"] = all
-	return Result.success()
+	return RoundStatePlayerIntMapsClass.set_player_int_map(
+		state.round_state,
+		"train_phase_start_counts",
+		player_id,
+		counts_read.value,
+		"train"
+	)
 
 static func _get_train_phase_start_count(state: GameState, player_id: int, reserve: Array, employee_type: String) -> Result:
 	if employee_type.is_empty():
@@ -53,12 +66,18 @@ static func _get_train_phase_start_count(state: GameState, player_id: int, reser
 		if not (all_val is Dictionary):
 			return Result.failure("train: round_state.train_phase_start_counts 类型错误（期望 Dictionary）")
 		var all: Dictionary = all_val
-		assert(not all.has(str(player_id)), "round_state.train_phase_start_counts 不应包含字符串玩家 key: %s" % str(player_id))
+		if all.has(str(player_id)):
+			return Result.failure("train: round_state.train_phase_start_counts 不应包含字符串玩家 key: %s" % str(player_id))
 		if all.has(player_id):
-			var per_val = all.get(player_id, null)
-			if not (per_val is Dictionary):
-				return Result.failure("train: round_state.train_phase_start_counts[%d] 类型错误（期望 Dictionary）" % player_id)
-			var per: Dictionary = per_val
+			var per_read := RoundStatePlayerIntMapsClass.require_player_int_map(
+				state.round_state,
+				"train_phase_start_counts",
+				player_id,
+				"train"
+			)
+			if not per_read.ok:
+				return per_read
+			var per: Dictionary = per_read.value
 			if per.has(employee_type):
 				var v = per.get(employee_type, null)
 				if not (v is int):
