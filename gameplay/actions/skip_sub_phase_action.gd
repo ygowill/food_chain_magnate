@@ -8,6 +8,7 @@ const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_a
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const RoundStatePlayerStringListsClass = preload("res://core/utils/round_state_player_string_lists.gd")
 const RoundStateSubPhasePassedClass = preload("res://core/utils/round_state_sub_phase_passed.gd")
 
 var phase_manager: PhaseManager = null
@@ -47,18 +48,15 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		if not required.is_empty():
 			if not (state.round_state is Dictionary):
 				return Result.failure("round_state 类型错误（期望 Dictionary）")
-			if not state.round_state.has("mandatory_actions_completed"):
-				return Result.failure("skip_sub_phase: round_state.mandatory_actions_completed 缺失")
-			var mac_val = state.round_state["mandatory_actions_completed"]
-			if not (mac_val is Dictionary):
-				return Result.failure("skip_sub_phase: round_state.mandatory_actions_completed 类型错误（期望 Dictionary）")
-			var mac: Dictionary = mac_val
-			if not mac.has(command.actor):
-				return Result.failure("skip_sub_phase: mandatory_actions_completed 缺少玩家 key: %d" % command.actor)
-			var completed_val = mac[command.actor]
-			if not (completed_val is Array):
-				return Result.failure("skip_sub_phase: mandatory_actions_completed[%d] 类型错误（期望 Array）" % command.actor)
-			var completed: Array = completed_val
+			var completed_read := RoundStatePlayerStringListsClass.require_player_string_array(
+				state.round_state,
+				"mandatory_actions_completed",
+				command.actor,
+				"skip_sub_phase"
+			)
+			if not completed_read.ok:
+				return completed_read
+			var completed: Array = completed_read.value
 
 			var missing: Array[String] = []
 			for action_id in required:

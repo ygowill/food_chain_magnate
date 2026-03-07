@@ -279,6 +279,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.MandatoryActionsTestClass.run(2, 12345),
 		},
 		{
+			"name": "SkipMandatoryActionsStateAccessTest",
+			"fn": func() -> Result: return TestRefs.SkipMandatoryActionsStateAccessTestClass.run(2, 12345),
+		},
+		{
 			"name": "RuralMarketeersAutoAdvanceUnblockedTest",
 			"fn": func() -> Result: return TestRefs.RuralMarketeersAutoAdvanceUnblockedTestClass.run(2, 12345),
 		},

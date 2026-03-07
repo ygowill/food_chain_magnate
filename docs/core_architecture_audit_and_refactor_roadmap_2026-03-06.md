@@ -1076,6 +1076,9 @@ GameSessionContext
 - `refactor(gameplay): tighten dinnertime confirmed access`
   - 将 `confirm_dinnertime` 对 `online_dinnertime_confirmed_players` 的读取改为 fail-fast，并把 confirmed / pending 的写回顺序调整为先更新 pending 再落地 confirmed。
   - 新增 focused test，确保 `online_dinnertime_confirmed_players` 元素类型错误时不提前改写 `pending_phase_actions` 或 confirmed 列表。
+- `refactor(gameplay): tighten skip mandatory access`
+  - 将 `skip` / `skip_sub_phase` 对 `mandatory_actions_completed` 的读取统一收口到 `RoundStatePlayerStringLists`，拒绝字符串玩家 key。
+  - 新增 focused test，确保两条动作在 `mandatory_actions_completed` 使用字符串玩家 key 时都返回 fail-fast 错误。
 
 当前阶段性结果：
 
