@@ -1146,6 +1146,9 @@ GameSessionContext
 - `refactor(core): tighten train slot usage fallback access`
   - 将 `train_slot_usage_storage` 对旧版 `round_state.train_slot_usage` fallback 读取从 `assert` 改为显式 `Result` 失败，避免坏计数结构在按实例补算 slot 用量时触发硬断言。
   - 扩展 focused `train` 状态访问测试，确保非法 `train_slot_usage` 会沿 fallback 读取路径 fail-fast，并返回可诊断错误。
+- `refactor(gameplay): tighten train phase start array access`
+  - 将 `train_phase_start_counts` 计算阶段对 `reserve_employees` / `employees` 元素类型检查从 `assert` 改为显式 `Result` 失败，避免坏玩家数组在建立起始计数时触发硬断言。
+  - 扩展 focused 状态访问测试，确保非法 reserve/active 员工条目会 fail-fast，且不会提前写入 `train_phase_start_counts`。
 
 当前阶段性结果：
 

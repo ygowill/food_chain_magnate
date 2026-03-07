@@ -104,8 +104,10 @@ static func _compute_train_phase_start_counts(state: GameState, player_id: int, 
 
 	var counts: Dictionary = {}
 	# 待命区
-	for emp_val in reserve:
-		assert(emp_val is String, "train: reserve_employees 元素类型错误（期望 String）")
+	for i in range(reserve.size()):
+		var emp_val = reserve[i]
+		if not (emp_val is String):
+			return Result.failure("train: reserve_employees[%d] 类型错误（期望 String）" % i)
 		var emp_id: String = str(emp_val)
 		if emp_id.is_empty():
 			return Result.failure("train: reserve_employees 不应包含空字符串")
@@ -119,8 +121,10 @@ static func _compute_train_phase_start_counts(state: GameState, player_id: int, 
 	if not player.has("employees") or not (player["employees"] is Array):
 		return Result.failure("train: player.employees 缺失或类型错误（期望 Array）")
 	var employees: Array = player["employees"]
-	for emp_val in employees:
-		assert(emp_val is String, "train: employees 元素类型错误（期望 String）")
+	for i in range(employees.size()):
+		var emp_val = employees[i]
+		if not (emp_val is String):
+			return Result.failure("train: employees[%d] 类型错误（期望 String）" % i)
 		var emp_id: String = str(emp_val)
 		if emp_id.is_empty():
 			return Result.failure("train: employees 不应包含空字符串")

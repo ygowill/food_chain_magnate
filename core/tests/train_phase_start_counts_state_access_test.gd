@@ -14,7 +14,13 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_ensure_fails_fast_on_invalid_immediate_train_pending_string_player_key()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_compute_fails_fast_on_invalid_reserve_employee_entry()
+	if not r.ok:
+		return r
+	r = _test_compute_fails_fast_on_invalid_active_employee_entry()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 5})
 
 static func _test_ensure_fails_fast_on_string_player_key_without_backfill_int_key() -> Result:
 	var state := GameState.new()
@@ -80,6 +86,42 @@ static func _test_ensure_fails_fast_on_invalid_immediate_train_pending_string_pl
 	var err := str(result.error)
 	if err.find("immediate_train_pending") < 0 or err.find("字符串玩家 key") < 0:
 		return Result.failure("错误信息应包含 immediate_train_pending 与 字符串玩家 key，实际: %s" % err)
+	if state.round_state.has("train_phase_start_counts"):
+		return Result.failure("失败时不应提前写入 train_phase_start_counts")
+	return Result.success()
+
+static func _test_compute_fails_fast_on_invalid_reserve_employee_entry() -> Result:
+	var state := GameState.new()
+	state.players = [{
+		"employees": ["trainer"],
+		"reserve_employees": [],
+	}]
+	state.round_state = {}
+	var reserve: Array = [123]
+	var result := ActionClass._ensure_train_phase_start_counts(state, 0, reserve)
+	if result.ok:
+		return Result.failure("reserve_employees 元素类型错误时应失败")
+	var err := str(result.error)
+	if err.find("reserve_employees[0]") < 0:
+		return Result.failure("错误信息应包含 reserve_employees[0]，实际: %s" % err)
+	if state.round_state.has("train_phase_start_counts"):
+		return Result.failure("失败时不应提前写入 train_phase_start_counts")
+	return Result.success()
+
+static func _test_compute_fails_fast_on_invalid_active_employee_entry() -> Result:
+	var state := GameState.new()
+	state.players = [{
+		"employees": [123],
+		"reserve_employees": [],
+	}]
+	state.round_state = {}
+	var reserve: Array = []
+	var result := ActionClass._ensure_train_phase_start_counts(state, 0, reserve)
+	if result.ok:
+		return Result.failure("employees 元素类型错误时应失败")
+	var err := str(result.error)
+	if err.find("employees[0]") < 0:
+		return Result.failure("错误信息应包含 employees[0]，实际: %s" % err)
 	if state.round_state.has("train_phase_start_counts"):
 		return Result.failure("失败时不应提前写入 train_phase_start_counts")
 	return Result.success()
