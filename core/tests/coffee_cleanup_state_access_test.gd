@@ -11,7 +11,10 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_cleanup_requires_inventory_dict()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 2})
+	r = _test_cleanup_rejects_invalid_existing_coffee_metadata_without_partial_mutation()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 3})
 
 static func _test_cleanup_discards_coffee_and_preserves_other_inventory() -> Result:
 	var state := GameState.new()
@@ -54,4 +57,27 @@ static func _test_cleanup_requires_inventory_dict() -> Result:
 	var err := str(run_r.error)
 	if err.find("player[0].inventory") < 0:
 		return Result.failure("错误信息应包含 inventory 路径，实际: %s" % err)
+	return Result.success()
+
+static func _test_cleanup_rejects_invalid_existing_coffee_metadata_without_partial_mutation() -> Result:
+	var state := GameState.new()
+	state.players = [
+		{"inventory": {"coffee": 2, "burger": 1}},
+	]
+	state.round_state = {
+		"coffee": [],
+	}
+	var players_before := str(state.players)
+	var round_state_before := str(state.round_state)
+	var cleanup = CoffeeCleanupClass.new()
+	var run_r := cleanup._cleanup_discard_coffee(state, null)
+	if run_r.ok:
+		return Result.failure("round_state.coffee 类型错误时应失败")
+	var err := str(run_r.error)
+	if err.find("round_state.coffee") < 0:
+		return Result.failure("错误信息应包含 round_state.coffee，实际: %s" % err)
+	if str(state.players) != players_before:
+		return Result.failure("失败时不应提前清空 inventory.coffee")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应覆盖已有的 round_state.coffee")
 	return Result.success()

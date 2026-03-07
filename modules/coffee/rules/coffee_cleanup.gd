@@ -25,6 +25,10 @@ func _cleanup_discard_coffee(state: GameState, _phase_manager: PhaseManager) -> 
 	if not (state.round_state is Dictionary):
 		return Result.failure("coffee:cleanup: state.round_state 类型错误（期望 Dictionary）")
 
+	var metadata_check := _validate_cleanup_metadata_target(state.round_state)
+	if not metadata_check.ok:
+		return metadata_check
+
 	var discarded: Array[Dictionary] = []
 	for pid in range(state.players.size()):
 		var player_read := PlayerStateAccessClass.require_player(state, pid, "coffee:cleanup")
@@ -48,4 +52,17 @@ func _cleanup_discard_coffee(state: GameState, _phase_manager: PhaseManager) -> 
 	state.round_state["coffee"] = {
 		"discarded": discarded
 	}
+	return Result.success()
+
+static func _validate_cleanup_metadata_target(round_state: Dictionary) -> Result:
+	if not (round_state is Dictionary):
+		return Result.failure("coffee:cleanup: round_state 类型错误（期望 Dictionary）")
+	if not round_state.has("coffee"):
+		return Result.success()
+	var coffee_val = round_state.get("coffee", null)
+	if not (coffee_val is Dictionary):
+		return Result.failure("coffee:cleanup: round_state.coffee 类型错误（期望 Dictionary）")
+	var coffee_meta: Dictionary = coffee_val
+	if coffee_meta.has("discarded") and not (coffee_meta.get("discarded", null) is Array):
+		return Result.failure("coffee:cleanup: round_state.coffee.discarded 类型错误（期望 Array）")
 	return Result.success()
