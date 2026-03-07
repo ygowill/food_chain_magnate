@@ -9,6 +9,7 @@ const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
+const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 
 const MODULE_ID := "coffee"
 const PIECE_ID := "coffee_shop"
@@ -290,40 +291,10 @@ static func _read_train_event_to_employee(ev: Dictionary, index: int) -> Result:
 	return Result.success(employee_id)
 
 static func _get_used_triggers(round_state: Dictionary, player_id: int) -> Result:
-	if round_state == null or not (round_state is Dictionary):
-		return Result.failure("round_state 类型错误（期望 Dictionary）")
-	if not round_state.has("coffee_shop_triggers_used"):
-		return Result.success(0)
-	var used_val = round_state.get("coffee_shop_triggers_used", null)
-	if not (used_val is Dictionary):
-		return Result.failure("round_state.coffee_shop_triggers_used 类型错误（期望 Dictionary）")
-	var used: Dictionary = used_val
-	if used.has(str(player_id)):
-		return Result.failure("round_state.coffee_shop_triggers_used 不应包含字符串玩家 key: %s" % str(player_id))
-	var v = used.get(player_id, 0)
-	if not (v is int):
-		return Result.failure("round_state.coffee_shop_triggers_used[%d] 类型错误（期望 int）" % player_id)
-	return Result.success(int(v))
+	return RoundStateCountersClass.get_player_count(round_state, "coffee_shop_triggers_used", player_id)
 
 static func _increment_used_triggers(round_state: Dictionary, player_id: int, delta: int) -> Result:
-	if round_state == null or not (round_state is Dictionary):
-		return Result.failure("round_state 类型错误（期望 Dictionary）")
-	if delta <= 0:
-		return Result.failure("delta 必须 > 0")
-	if not round_state.has("coffee_shop_triggers_used"):
-		round_state["coffee_shop_triggers_used"] = {}
-	var used_val = round_state.get("coffee_shop_triggers_used", null)
-	if not (used_val is Dictionary):
-		return Result.failure("round_state.coffee_shop_triggers_used 类型错误（期望 Dictionary）")
-	var used: Dictionary = used_val
-	if used.has(str(player_id)):
-		return Result.failure("round_state.coffee_shop_triggers_used 不应包含字符串玩家 key: %s" % str(player_id))
-	var before_val = used.get(player_id, 0)
-	if not (before_val is int):
-		return Result.failure("round_state.coffee_shop_triggers_used[%d] 类型错误（期望 int）" % player_id)
-	used[player_id] = int(before_val) + delta
-	round_state["coffee_shop_triggers_used"] = used
-	return Result.success()
+	return RoundStateCountersClass.increment_player_count(round_state, "coffee_shop_triggers_used", player_id, delta)
 
 func _validate_tile_has_no_other_shop(state: GameState, world_anchor: Vector2i, ignore_shop_id: String) -> Result:
 	var shops_read := MapStateAccessClass.require_dict_field(state, "coffee_shops", action_id)

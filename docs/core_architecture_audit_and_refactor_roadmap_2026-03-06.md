@@ -1122,6 +1122,9 @@ GameSessionContext
 - `refactor(modules): tighten payday recruit-used access`
   - 将 `PaydaySettlement` 对 `round_state.recruit_used` 的读取统一收口到 `RoundStateCounters.get_player_count()`，避免手写 per-player int map 校验分叉。
   - 新增 focused 状态访问测试，确保 `recruit_used` 使用字符串玩家 key 时 `PaydaySettlement.apply()` 会 fail-fast，且不会提前改写 `players`、`bank` 或 `round_state`。
+- `refactor(modules): tighten coffee shop trigger usage access`
+  - 将 `place_or_move_coffee_shop` 对 `round_state.coffee_shop_triggers_used` 的读写统一收口到 `RoundStateCounters`，避免重复实现 per-player int 计数契约。
+  - 扩展 focused 状态访问测试，确保 `coffee_shop_triggers_used` 使用字符串玩家 key 时动作会 fail-fast，且不会提前递增 id、消耗 token 或写入咖啡店结构。
 
 当前阶段性结果：
 
