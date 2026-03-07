@@ -1043,6 +1043,9 @@ GameSessionContext
 - `refactor(gameplay): tighten restaurant opening-soon access`
   - 将 `place_restaurant` 的 `opening_soon_restaurants` 校验前移到 apply 变更之前。
   - 补 focused test，确保 key 类型错误时不提前写入格子、`player.restaurants` 或 `next_restaurant_id`。
+- `refactor(gameplay): tighten add garden apply state access`
+  - 收紧 `add_garden` apply 阶段对 `state.map.houses`、房屋锚点结构和 `house_placement_counts` 的读取。
+  - 补 focused test，确保 `anchor_pos` / 计数器类型异常时不提前改写房屋、格子或花园供给。
 
 当前阶段性结果：
 

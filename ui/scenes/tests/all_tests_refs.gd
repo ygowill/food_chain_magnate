@@ -104,6 +104,7 @@ const MassMarketeersStateAccessTestClass = preload("res://core/tests/mass_market
 const NightShiftManagersStateAccessTestClass = preload("res://core/tests/night_shift_managers_state_access_test.gd")
 const CleanupSettlementOpeningSoonStateAccessTestClass = preload("res://core/tests/cleanup_settlement_opening_soon_state_access_test.gd")
 const PlaceRestaurantOpeningSoonStateAccessTestClass = preload("res://core/tests/place_restaurant_opening_soon_state_access_test.gd")
+const AddGardenStateAccessTestClass = preload("res://core/tests/add_garden_state_access_test.gd")
 const LobbyistsRoadStateAccessTestClass = preload("res://core/tests/lobbyists_road_state_access_test.gd")
 const LobbyistsExtraTileStateAccessTestClass = preload("res://core/tests/lobbyists_extra_tile_state_access_test.gd")
 const LobbyistsParkStateAccessTestClass = preload("res://core/tests/lobbyists_park_state_access_test.gd")

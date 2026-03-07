@@ -5,6 +5,7 @@ extends ActionExecutor
 
 const GardenAttachmentClass = preload("res://core/map/placement_validator/garden_attachment.gd")
 const MapContextBuilderClass = preload("res://core/map/map_context_builder.gd")
+const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
@@ -111,6 +112,61 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	return Result.success()
 
+func _preview_house_placement_increment(state: GameState, player_id: int) -> Result:
+	if not (state.round_state is Dictionary):
+		return Result.failure("round_state 类型错误（期望 Dictionary）")
+	var round_state_preview: Dictionary = state.round_state.duplicate(true)
+	return RoundStateCountersClass.increment_player_count(
+		round_state_preview, "house_placement_counts", player_id, 1
+	)
+
+func _prepare_house_for_apply(state: GameState, house_id: String, player_id: int) -> Result:
+	var houses_read := MapStateAccessClass.require_houses(state, action_id)
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
+	if not houses.has(house_id):
+		return Result.failure("房屋不存在: %s" % house_id)
+	var house_val = houses.get(house_id, null)
+	if not (house_val is Dictionary):
+		return Result.failure("add_garden: houses[%s] 类型错误（期望 Dictionary）" % house_id)
+	var house: Dictionary = house_val
+
+	if not house.has("anchor_pos") or not (house["anchor_pos"] is Vector2i):
+		return Result.failure("add_garden: houses[%s].anchor_pos 缺失或类型错误（期望 Vector2i）" % house_id)
+	var old_anchor_pos: Vector2i = house["anchor_pos"]
+	if not house.has("house_number"):
+		return Result.failure("add_garden: houses[%s] 缺少 house_number" % house_id)
+	var house_number = house["house_number"]
+	if not (house_number is int or house_number is float or house_number is String):
+		return Result.failure("add_garden: houses[%s].house_number 类型错误（期望 int/float/String）" % house_id)
+
+	var anchor_cell: Dictionary = CellsClass.get_cell(state, old_anchor_pos)
+	if not anchor_cell.has("structure") or not (anchor_cell["structure"] is Dictionary):
+		return Result.failure("add_garden: anchor_cell.structure 缺失或类型错误: %s" % str(old_anchor_pos))
+	var structure: Dictionary = anchor_cell["structure"]
+	if structure.is_empty():
+		return Result.failure("add_garden: 房屋锚点格缺少 structure: %s" % str(old_anchor_pos))
+	if not structure.has("owner") or not (structure["owner"] is int):
+		return Result.failure("add_garden: 房屋 structure.owner 缺失或类型错误（期望 int）")
+	if not structure.has("rotation") or not (structure["rotation"] is int):
+		return Result.failure("add_garden: 房屋 structure.rotation 缺失或类型错误（期望 int）")
+	if not structure.has("dynamic") or not (structure["dynamic"] is bool):
+		return Result.failure("add_garden: 房屋 structure.dynamic 缺失或类型错误（期望 bool）")
+
+	var counter_preview = _preview_house_placement_increment(state, player_id)
+	if not counter_preview.ok:
+		return counter_preview
+
+	return Result.success({
+		"houses": houses,
+		"house": house,
+		"old_anchor_pos": old_anchor_pos,
+		"house_number": house_number,
+		"base_owner": int(structure["owner"]),
+		"base_dynamic": bool(structure["dynamic"]),
+	})
+
 func _apply_changes(state: GameState, command: Command) -> Result:
 	var player_id: int = command.actor
 	var house_id_result := require_string_param(command, "house_id")
@@ -147,32 +203,16 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var garden_cells: Array = validate_value["garden_cells"]
 	var merged_cells: Array = validate_value["merged_cells"]
 
-	assert(state.map.has("houses") and (state.map["houses"] is Dictionary), "add_garden: state.map.houses 缺失或类型错误（期望 Dictionary）")
-	var houses: Dictionary = state.map["houses"]
-	if not houses.has(house_id):
-		return Result.failure("房屋不存在: %s" % house_id)
-	var house_val = houses[house_id]
-	assert(house_val is Dictionary, "add_garden: houses[%s] 类型错误（期望 Dictionary）" % house_id)
-	var house: Dictionary = house_val
-
-	assert(house.has("anchor_pos") and (house["anchor_pos"] is Vector2i), "add_garden: houses[%s].anchor_pos 缺失或类型错误（期望 Vector2i）" % house_id)
-	var old_anchor_pos: Vector2i = house["anchor_pos"]
-	assert(house.has("house_number"), "add_garden: houses[%s] 缺少 house_number" % house_id)
-	var house_number = house["house_number"]
-	assert(house_number is int or house_number is float or house_number is String, "add_garden: houses[%s].house_number 类型错误（期望 int/float/String）" % house_id)
-
-	# 尽量继承房屋原有结构字段（owner/dynamic）
-	var base_owner: int = -1
-	var base_dynamic: bool = false
-	var anchor_cell: Dictionary = CellsClass.get_cell(state, old_anchor_pos)
-	assert(anchor_cell.has("structure") and (anchor_cell["structure"] is Dictionary), "add_garden: anchor_cell.structure 缺失或类型错误: %s" % str(old_anchor_pos))
-	var s: Dictionary = anchor_cell["structure"]
-	assert(not s.is_empty(), "add_garden: 房屋锚点格缺少 structure: %s" % str(old_anchor_pos))
-	assert(s.has("owner") and (s["owner"] is int), "add_garden: 房屋 structure.owner 缺失或类型错误（期望 int）")
-	assert(s.has("rotation") and (s["rotation"] is int), "add_garden: 房屋 structure.rotation 缺失或类型错误（期望 int）")
-	assert(s.has("dynamic") and (s["dynamic"] is bool), "add_garden: 房屋 structure.dynamic 缺失或类型错误（期望 bool）")
-	base_owner = int(s["owner"])
-	base_dynamic = bool(s["dynamic"])
+	var house_apply_read := _prepare_house_for_apply(state, house_id, player_id)
+	if not house_apply_read.ok:
+		return house_apply_read
+	var house_apply: Dictionary = house_apply_read.value
+	var houses: Dictionary = house_apply["houses"]
+	var house: Dictionary = house_apply["house"]
+	var old_anchor_pos: Vector2i = house_apply["old_anchor_pos"]
+	var house_number = house_apply["house_number"]
+	var base_owner: int = int(house_apply["base_owner"])
+	var base_dynamic: bool = bool(house_apply["base_dynamic"])
 
 	# house_with_garden 是非对称占地：rotation + anchor_cell 必须与 garden_direction 匹配，
 	# 否则在旋转板块上会出现确认位置错乱/可放置性判定错误。
