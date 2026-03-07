@@ -1185,6 +1185,9 @@ GameSessionContext
 - `refactor(gameplay): tighten restaurant action count access`
   - 复用 `action_counts` 的安全读写 helper，让 `place_restaurant` / `move_restaurant` 在 query、validate、apply 阶段对损坏的 `round_state.action_counts` 显式 fail-fast / fail-closed，避免共享次数统计吞掉状态错误。
   - 新增 focused 餐厅状态访问测试，覆盖放置/移动餐厅的 `can_initiate()`、validate、apply 路径，确保非法 `action_counts` 不会提前改写玩家、`map` 或 `round_state`。
+- `refactor(gameplay): tighten move restaurant record access`
+  - 为 `move_restaurant` 增补显式餐厅记录读取 helper，并让 validate/apply 在 `state.map.restaurants[rest_id]` 的 `owner` / `cells` 结构损坏时返回可诊断错误，避免旧路径触发硬断言。
+  - 新增 focused `move_restaurant` 状态访问测试，覆盖非法餐厅记录在 validate/apply 路径的 fail-fast 行为，确保不会提前改写玩家、`map` 或 `round_state`。
 
 当前阶段性结果：
 

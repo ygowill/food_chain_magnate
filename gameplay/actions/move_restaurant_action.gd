@@ -62,6 +62,21 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 
 	return true
 
+static func _require_restaurant_record(restaurants: Dictionary, rest_id: String, prefix: String) -> Result:
+	if rest_id.is_empty():
+		return Result.failure("%srestaurant_id 不能为空" % prefix)
+	if not restaurants.has(rest_id):
+		return Result.failure("餐厅不存在: %s" % rest_id)
+	var rest_val = restaurants[rest_id]
+	if not (rest_val is Dictionary):
+		return Result.failure("move_restaurant: restaurants[%s] 类型错误（期望 Dictionary）" % rest_id)
+	var rest: Dictionary = rest_val
+	if not rest.has("owner") or not (rest["owner"] is int):
+		return Result.failure("move_restaurant: restaurants[%s].owner 缺失或类型错误（期望 int）" % rest_id)
+	if not rest.has("cells") or not (rest["cells"] is Array):
+		return Result.failure("move_restaurant: restaurants[%s].cells 缺失或类型错误（期望 Array）" % rest_id)
+	return Result.success(rest)
+
 func _parse_params(command: Command) -> Result:
 	var rest_id_result := require_string_param(command, "restaurant_id")
 	if not rest_id_result.ok:
@@ -143,12 +158,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var world_anchor: Vector2i = params["world_anchor"]
 	var rotation: int = int(params["rotation"])
 
-	if not restaurants.has(rest_id):
-		return Result.failure("餐厅不存在: %s" % rest_id)
-	var rest_val = restaurants[rest_id]
-	assert(rest_val is Dictionary, "move_restaurant: restaurants[%s] 类型错误（期望 Dictionary）" % rest_id)
-	var rest: Dictionary = rest_val
-	assert(rest.has("owner") and (rest["owner"] is int), "move_restaurant: restaurants[%s].owner 缺失或类型错误（期望 int）" % rest_id)
+	var rest_read := _require_restaurant_record(restaurants, rest_id, action_id)
+	if not rest_read.ok:
+		return rest_read
+	var rest: Dictionary = rest_read.value
 	if int(rest["owner"]) != command.actor:
 		return Result.failure("只能移动自己的餐厅")
 
@@ -158,7 +171,6 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var map_ctx: Dictionary = map_ctx_read.value
 	var piece_registry := _get_piece_registry()
 
-	assert(rest.has("cells") and (rest["cells"] is Array), "move_restaurant: restaurants[%s].cells 缺失或类型错误（期望 Array）" % rest_id)
 	var ignore_cells: Array = rest["cells"]
 	var validate_result := RestaurantPlacementClass.validate_restaurant_placement(
 		map_ctx, world_anchor, rotation, piece_registry,
@@ -186,11 +198,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if not restaurants_read.ok:
 		return restaurants_read
 	var restaurants: Dictionary = restaurants_read.value
-	if not restaurants.has(rest_id):
-		return Result.failure("餐厅不存在: %s" % rest_id)
-	var rest_val = restaurants[rest_id]
-	assert(rest_val is Dictionary, "move_restaurant: restaurants[%s] 类型错误（期望 Dictionary）" % rest_id)
-	var rest: Dictionary = rest_val
+	var rest_read := _require_restaurant_record(restaurants, rest_id, action_id)
+	if not rest_read.ok:
+		return rest_read
+	var rest: Dictionary = rest_read.value
+	if int(rest["owner"]) != player_id:
+		return Result.failure("只能移动自己的餐厅")
 
 	var map_ctx_read := MapContextBuilderClass.build_context_result(state, action_id)
 	if not map_ctx_read.ok:

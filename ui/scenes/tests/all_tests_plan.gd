@@ -503,6 +503,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.RestaurantActionCountStateAccessTestClass.run(2, 12345),
 		},
 		{
+			"name": "MoveRestaurantStateAccessTest",
+			"fn": func() -> Result: return TestRefs.MoveRestaurantStateAccessTestClass.run(2, 12345),
+		},
+		{
 			"name": "AddGardenStateAccessTest",
 			"fn": func() -> Result: return TestRefs.AddGardenStateAccessTestClass.run(2, 12345),
 		},
