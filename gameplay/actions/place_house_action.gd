@@ -19,8 +19,9 @@ const HOUSE_NUMBER_SUPPLY_KEY := "house_number_supply_remaining"
 const DEFAULT_HOUSE_NUMBER_SUPPLY := [1, 3, 6, 9, 11, 14, 17, 19]
 
 var _piece_registry: Dictionary = {}
+var _placement_validator = null
 
-func _init(piece_registry: Dictionary = {}) -> void:
+func _init(piece_registry: Dictionary = {}, placement_validator = null) -> void:
 	action_id = "place_house"
 	display_name = "放置房屋"
 	description = "在地图上放置房屋"
@@ -29,6 +30,7 @@ func _init(piece_registry: Dictionary = {}) -> void:
 	allowed_phases = [DefsClass.PHASE_WORKING]
 	allowed_sub_phases = [DefsClass.SUB_PHASE_PLACE_HOUSES]
 	_piece_registry = piece_registry
+	_placement_validator = placement_validator if placement_validator != null else PlacementClass
 
 func can_initiate(state: GameState, player_id: int) -> bool:
 	if state == null:
@@ -52,6 +54,26 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 		return true
 	var used := int(used_result.value)
 	return used < capacity
+
+static func _require_vector2i_array(value, path: String) -> Result:
+	if not (value is Array):
+		return Result.failure("%s 类型错误（期望 Array）" % path)
+	var arr: Array = value
+	for i in range(arr.size()):
+		if not (arr[i] is Vector2i):
+			return Result.failure("%s[%d] 类型错误（期望 Vector2i）" % [path, i])
+	return Result.success(arr)
+
+static func _require_house_placement_payload(value, prefix: String) -> Result:
+	if not (value is Dictionary):
+		return Result.failure("%s: validate_placement 返回值类型错误（期望 Dictionary）" % prefix)
+	var payload: Dictionary = value
+	if not payload.has("footprint_cells"):
+		return Result.failure("%s: validate_placement 缺少 footprint_cells" % prefix)
+	var footprint_read := _require_vector2i_array(payload["footprint_cells"], "%s: validate_placement.footprint_cells" % prefix)
+	if not footprint_read.ok:
+		return footprint_read
+	return Result.success({"footprint_cells": footprint_read.value})
 
 func _parse_params(command: Command) -> Result:
 	var pos_result := require_vector2i_param(command, "position")
@@ -167,14 +189,18 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var piece_registry := _get_piece_registry()
 
 	# 获取验证结果 (包含 footprint_cells)
-	var validate_result := PlacementClass.validate_placement(
-		map_ctx, HOUSE_PIECE_ID, world_anchor, rotation, piece_registry, {}
+	var validate_result := _validate_placement(
+		map_ctx, world_anchor, rotation, piece_registry
 	)
 
 	if not validate_result.ok:
 		return validate_result
 
-	var footprint_cells: Array = validate_result.value.footprint_cells
+	var payload_read := _require_house_placement_payload(validate_result.value, action_id)
+	if not payload_read.ok:
+		return payload_read
+	var payload: Dictionary = payload_read.value
+	var footprint_cells: Array = payload["footprint_cells"]
 
 	# 规则：玩家选择房屋编号，house_id 与编号保持一致（与印刷房屋一致，便于范围/日志/调试对齐）。
 	var house_id := str(house_number)
@@ -296,6 +322,16 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 	return events
 
 # 辅助方法：获取建筑件注册表（优先使用注入的 modules/*/content/pieces）
+func _validate_placement(map_ctx: Dictionary, world_anchor: Vector2i, rotation: int, piece_registry: Dictionary) -> Result:
+	return _placement_validator.validate_placement(
+		map_ctx,
+		HOUSE_PIECE_ID,
+		world_anchor,
+		rotation,
+		piece_registry,
+		{}
+	)
+
 func _get_piece_registry() -> Dictionary:
 	if _piece_registry.is_empty():
 		const PieceDefClass = preload("res://core/map/piece_def.gd")

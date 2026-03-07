@@ -1200,6 +1200,9 @@ GameSessionContext
 - `refactor(gameplay): tighten place restaurant player access`
   - 将 `place_restaurant` 在立即开业路径上对 `player.restaurants` 的写回改为走 `PlayerStateAccess`，让坏玩家结构返回可诊断错误，而不是在追加餐厅 id 时触发硬断言。
   - 扩展 focused `place_restaurant` 状态访问测试，确保 `player.restaurants` 类型损坏时 apply 会 fail-fast，且不会提前改写 `next_restaurant_id`、`map` 或 `round_state`。
+- `refactor(gameplay): tighten place house placement payload access`
+  - 为 `place_house` 增补 placement payload 读取 helper，并让 apply 阶段在 `validate_placement()` 返回值或 `footprint_cells` 契约损坏时显式 fail-fast，而不是在消耗房屋编号前依赖隐式 payload 结构。
+  - 扩展 focused `place_house` 状态访问测试，通过注入坏 payload 覆盖两类失败分支，确保不会提前改写房屋编号供给、`map.houses`、格子结构或 `round_state`。
 
 当前阶段性结果：
 

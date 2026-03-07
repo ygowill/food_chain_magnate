@@ -5,12 +5,30 @@ extends RefCounted
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const PlaceHouseActionClass = preload("res://gameplay/actions/place_house_action.gd")
+
+class FakePlacementValidator:
+	extends RefCounted
+
+	var _value
+
+	func _init(value) -> void:
+		_value = value
+
+	func validate_placement(_map_ctx: Dictionary, _piece_id: String, _world_anchor: Vector2i, _rotation: int, _piece_registry: Dictionary, _options: Dictionary) -> Result:
+		return Result.success(_value)
 
 static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var r := _test_apply_changes_fails_fast_on_invalid_house_placement_counts_without_partial_mutation(seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 1})
+	r = _test_apply_changes_fails_fast_on_invalid_placement_payload_without_partial_mutation(seed_val)
+	if not r.ok:
+		return r
+	r = _test_apply_changes_fails_fast_on_invalid_footprint_cells_without_partial_mutation(seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 3})
 
 static func _test_apply_changes_fails_fast_on_invalid_house_placement_counts_without_partial_mutation(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -70,6 +88,80 @@ static func _test_apply_changes_fails_fast_on_invalid_house_placement_counts_wit
 	if _map_contains_house_id(state, predicted_house_id):
 		return Result.failure("失败时不应提前写入房屋格子结构: %s" % predicted_house_id)
 
+	return Result.success(true)
+
+static func _test_apply_changes_fails_fast_on_invalid_placement_payload_without_partial_mutation(seed_val: int) -> Result:
+	return _test_apply_changes_fails_fast_on_invalid_placement_response_without_partial_mutation(
+		seed_val,
+		"bad",
+		"validate_placement 返回值类型错误"
+	)
+
+static func _test_apply_changes_fails_fast_on_invalid_footprint_cells_without_partial_mutation(seed_val: int) -> Result:
+	return _test_apply_changes_fails_fast_on_invalid_placement_response_without_partial_mutation(
+		seed_val,
+		{"footprint_cells": [Vector2i.ZERO, "bad"]},
+		"validate_placement.footprint_cells[1] 类型错误"
+	)
+
+static func _test_apply_changes_fails_fast_on_invalid_placement_response_without_partial_mutation(seed_val: int, payload, expected_error: String) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
+	if not to_working.ok:
+		return to_working
+
+	var state := engine.get_state()
+	state.sub_phase = DefsClass.SUB_PHASE_PLACE_HOUSES
+	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_PLACE_HOUSES:
+		return Result.failure("应处于 Working/PlaceHouses，实际: %s/%s" % [state.phase, state.sub_phase])
+
+	var actor := state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("无法获取当前玩家")
+
+	var take := StateUpdaterClass.take_from_pool(state, "new_business_developer", 1)
+	if not take.ok:
+		return Result.failure("从员工池取出 new_business_developer 失败: %s" % take.error)
+	var add := StateUpdaterClass.add_employee(state, actor, "new_business_developer", false)
+	if not add.ok:
+		return Result.failure("添加 new_business_developer 失败: %s" % add.error)
+
+	var house_number := _pick_house_number(state)
+	if house_number <= 0:
+		return Result.failure("无法获取可用房屋编号")
+	var cmd := _find_first_valid_house_placement(engine, actor, house_number)
+	if cmd == null:
+		return Result.failure("找不到合法的房屋放置点")
+
+	var predicted_house_id := str(house_number)
+	var supply_before := str(state.map.get("house_number_supply_remaining", []))
+	var houses_before := str(state.map.get("houses", {}))
+	var round_state_before := str(state.round_state)
+	var original_executor = engine.action_registry.get_executor("place_house")
+	if original_executor == null:
+		return Result.failure("缺少 place_house 执行器")
+	engine.action_registry.register_executor(PlaceHouseActionClass.new(original_executor._piece_registry, FakePlacementValidator.new(payload)))
+	var result := engine.execute_command(cmd)
+	if result.ok:
+		return Result.failure("placement payload 损坏时 place_house apply 应失败")
+	var err := str(result.error)
+	if err.find(expected_error) < 0:
+		return Result.failure("错误信息应包含 %s，实际: %s" % [expected_error, err])
+	state = engine.get_state()
+	if str(state.map.get("house_number_supply_remaining", [])) != supply_before:
+		return Result.failure("失败时不应提前消耗房屋编号供给")
+	if str(state.map.get("houses", {})) != houses_before:
+		return Result.failure("失败时不应提前改写 map.houses")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
+	if state.map.get("houses", {}).has(predicted_house_id):
+		return Result.failure("失败时不应提前注册新房屋: %s" % predicted_house_id)
+	if _map_contains_house_id(state, predicted_house_id):
+		return Result.failure("失败时不应提前写入房屋格子结构: %s" % predicted_house_id)
 	return Result.success(true)
 
 static func _find_first_valid_house_placement(engine: GameEngine, actor: int, house_number: int) -> Command:
