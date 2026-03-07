@@ -57,7 +57,13 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_recruit_validate_fails_fast_on_invalid_train_slot_usage_instances_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 15})
+	r = _test_read_employee_used_before_training_fails_fast_on_invalid_working_employee_multipliers(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_apply_inferred_use_employee_train_fails_fast_on_invalid_working_employee_multipliers(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 17})
 
 static func _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count: int, seed_val: int) -> Result:
 	var built := _build_train_state(player_count, seed_val)
@@ -537,5 +543,41 @@ static func _test_recruit_validate_fails_fast_on_invalid_train_slot_usage_instan
 	if str(state.employee_pool) != pool_before:
 		return Result.failure("失败时不应提前改写 employee_pool")
 	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_read_employee_used_before_training_fails_fast_on_invalid_working_employee_multipliers(player_count: int, seed_val: int) -> Result:
+	var built := _build_active_recruit_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["working_employee_multipliers"] = {
+		"0": {"recruiting_girl": 2},
+	}
+	var read := TrainEmployeeUsageClass.read_employee_used_before_training(state, 0, "recruiting_girl")
+	if read.ok:
+		return Result.failure("working_employee_multipliers 使用字符串玩家 key 时读取应失败")
+	var err := str(read.error)
+	if err.find("working_employee_multipliers") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 working_employee_multipliers 与 字符串玩家 key，实际: %s" % err)
+	return Result.success()
+
+static func _test_apply_inferred_use_employee_train_fails_fast_on_invalid_working_employee_multipliers(player_count: int, seed_val: int) -> Result:
+	var built := _build_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["train_events"] = []
+	state.round_state["working_employee_multipliers"] = {
+		"0": {"trainer": 2},
+	}
+	var before := str(state.round_state)
+	var result := TrainEmployeeUsageClass.apply_inferred_use_employee_train(state, 0)
+	if result.ok:
+		return Result.failure("working_employee_multipliers 使用字符串玩家 key 时 apply_inferred_use_employee_train 应失败")
+	var err := str(result.error)
+	if err.find("working_employee_multipliers") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 working_employee_multipliers 与 字符串玩家 key，实际: %s" % err)
+	if str(state.round_state) != before:
 		return Result.failure("失败时不应提前改写 round_state")
 	return Result.success()

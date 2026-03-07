@@ -1155,6 +1155,9 @@ GameSessionContext
 - `refactor(gameplay): tighten recruit on-credit validation access`
   - 复用 `train_slot_usage` 的安全 max-step helper，让 `recruit_action` 在缺货预支验证时对损坏的 `train_slot_usage_instances` 显式 fail-fast，避免旧 query 路径吞掉状态错误。
   - 扩展 focused `train` 状态访问测试，确保非法 `train_slot_usage_instances` 会在 recruit 验证阶段失败，且不会提前改写玩家、`employee_pool` 或 `round_state`。
+- `refactor(gameplay): tighten train usage multiplier access`
+  - 为 `working_multiplier` 增补 `Result` 版读取 helper，并让 `train_employee_usage` 在招聘/培训推导与 inferred-use 写回前对损坏的 `working_employee_multipliers` 显式 fail-fast。
+  - 扩展 focused `train` 状态访问测试，确保非法 `working_employee_multipliers` 会在读取与 inferred-use 路径失败，且不会提前改写 `round_state`。
 
 当前阶段性结果：
 

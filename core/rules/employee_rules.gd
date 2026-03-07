@@ -29,6 +29,9 @@ static func count_active_by_usage_tag(player: Dictionary, usage_tag: String) -> 
 static func count_active_by_tag(player: Dictionary, tag: String) -> int:
 	return Counts.count_active_by_tag(player, tag)
 
+static func try_get_working_employee_multiplier(state: GameState, player_id: int, employee_id: String) -> Result:
+	return WorkingMultiplier.try_get_working_employee_multiplier(state, player_id, employee_id)
+
 static func get_working_employee_multiplier(state: GameState, player_id: int, employee_id: String) -> int:
 	return WorkingMultiplier.get_working_employee_multiplier(state, player_id, employee_id)
 

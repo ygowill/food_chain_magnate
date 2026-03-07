@@ -63,7 +63,10 @@ static func read_employee_used_before_training(state: GameState, player_id: int,
 				return used_read
 			var used := int(used_read.value)
 			var total_cap := EmployeeRulesClass.get_recruit_limit_for_working(state, player_id)
-			var mult := EmployeeRulesClass.get_working_employee_multiplier(state, player_id, employee_id)
+			var mult_read := EmployeeRulesClass.try_get_working_employee_multiplier(state, player_id, employee_id)
+			if not mult_read.ok:
+				return mult_read
+			var mult := int(mult_read.value)
 			var emp_cap := int(def.recruit_capacity) * mult * EmployeeRulesClass.count_active(state.get_player(player_id), employee_id)
 			var cap_without := total_cap - emp_cap
 			if used > cap_without:
@@ -73,7 +76,10 @@ static func read_employee_used_before_training(state: GameState, player_id: int,
 		if def.train_capacity > 0 and def.has_usage_tag("use:train"):
 			var used_train := EmployeeRulesClass.get_action_count(state, player_id, ACTION_ID)
 			var total_cap := EmployeeRulesClass.get_train_limit_for_working(state, player_id)
-			var mult := EmployeeRulesClass.get_working_employee_multiplier(state, player_id, employee_id)
+			var mult_read := EmployeeRulesClass.try_get_working_employee_multiplier(state, player_id, employee_id)
+			if not mult_read.ok:
+				return mult_read
+			var mult := int(mult_read.value)
 			var emp_cap := int(def.train_capacity) * mult * EmployeeRulesClass.count_active(state.get_player(player_id), employee_id)
 			var cap_without := total_cap - emp_cap
 			if used_train > cap_without:
@@ -123,7 +129,10 @@ static func apply_inferred_use_employee_train(state: GameState, player_id: int) 
 		var active_count := EmployeeRulesClass.count_active(player_now, emp_id)
 		if active_count <= 0:
 			continue
-		var mult := EmployeeRulesClass.get_working_employee_multiplier(state, player_id, emp_id)
+		var mult_read := EmployeeRulesClass.try_get_working_employee_multiplier(state, player_id, emp_id)
+		if not mult_read.ok:
+			return mult_read
+		var mult := int(mult_read.value)
 		var cap := active_count * int(def3.train_capacity) * mult
 		if cap <= 0:
 			continue
