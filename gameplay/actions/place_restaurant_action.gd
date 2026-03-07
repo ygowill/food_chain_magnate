@@ -46,8 +46,14 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 	var eligible := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, player_id, "use:place_restaurant")
 	if eligible <= 0:
 		return false
-	var used_place := EmployeeRulesClass.get_action_count(state, player_id, "place_restaurant")
-	var used_move := EmployeeRulesClass.get_action_count(state, player_id, "move_restaurant")
+	var used_place_read := EmployeeRulesClass.try_get_action_count(state, player_id, "place_restaurant")
+	if not used_place_read.ok:
+		return false
+	var used_move_read := EmployeeRulesClass.try_get_action_count(state, player_id, "move_restaurant")
+	if not used_move_read.ok:
+		return false
+	var used_place := int(used_place_read.value)
+	var used_move := int(used_move_read.value)
 	return (used_place + used_move) < eligible
 
 func _parse_params(command: Command) -> Result:
@@ -97,8 +103,14 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		if not employee_type.is_empty():
 			if not EmployeeUsageHelperClass.has_active_employee_with_usage_tag(state, command.actor, employee_type, "use:place_restaurant"):
 				return Result.failure("该员工不能放置餐厅或未在岗: %s" % employee_type)
-		var used_place := EmployeeRulesClass.get_action_count(state, command.actor, "place_restaurant")
-		var used_move := EmployeeRulesClass.get_action_count(state, command.actor, "move_restaurant")
+		var used_place_read := EmployeeRulesClass.try_get_action_count(state, command.actor, "place_restaurant")
+		if not used_place_read.ok:
+			return used_place_read
+		var used_move_read := EmployeeRulesClass.try_get_action_count(state, command.actor, "move_restaurant")
+		if not used_move_read.ok:
+			return used_move_read
+		var used_place := int(used_place_read.value)
+		var used_move := int(used_move_read.value)
 		var used_total := used_place + used_move
 		if used_total >= eligible:
 			return Result.failure("本地/大区经理本子阶段已用完: %d/%d" % [used_total, eligible])
@@ -154,6 +166,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		if not candidates.is_empty():
 			employee_type = candidates[0]
 	var opening_soon := (state.phase == DefsClass.PHASE_WORKING and employee_type == "local_manager")
+	if state.phase == DefsClass.PHASE_WORKING:
+		var used_place_read := EmployeeRulesClass.try_get_action_count(state, command.actor, action_id)
+		if not used_place_read.ok:
+			return used_place_read
 	var opening_soon_pending: Array = []
 	if opening_soon:
 		var pending_read = _prepare_opening_soon_restaurants(state)
@@ -242,7 +258,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	RoadGraphCacheClass.invalidate_road_graph(state)
 
 	if state.phase == DefsClass.PHASE_WORKING:
-		EmployeeRulesClass.increment_action_count(state, player_id, action_id)
+		var inc_action := EmployeeRulesClass.try_increment_action_count(state, player_id, action_id)
+		if not inc_action.ok:
+			return inc_action
 
 	var result := Result.success({
 		"restaurant_id": restaurant_id,

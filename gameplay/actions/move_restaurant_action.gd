@@ -46,8 +46,14 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 	if total_eligible <= 0:
 		return false
 
-	var used_place := EmployeeRulesClass.get_action_count(state, player_id, "place_restaurant")
-	var used_move := EmployeeRulesClass.get_action_count(state, player_id, "move_restaurant")
+	var used_place_read := EmployeeRulesClass.try_get_action_count(state, player_id, "place_restaurant")
+	if not used_place_read.ok:
+		return false
+	var used_move_read := EmployeeRulesClass.try_get_action_count(state, player_id, "move_restaurant")
+	if not used_move_read.ok:
+		return false
+	var used_place := int(used_place_read.value)
+	var used_move := int(used_move_read.value)
 	var used_total := used_place + used_move
 	if used_total >= total_eligible:
 		return false
@@ -115,8 +121,14 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	# PlaceRestaurants 子阶段：place/move 共享次数上限 = 可用的本地/大区经理总数
 	var total_eligible := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, command.actor, "use:place_restaurant")
-	var used_place := EmployeeRulesClass.get_action_count(state, command.actor, "place_restaurant")
-	var used_move := EmployeeRulesClass.get_action_count(state, command.actor, "move_restaurant")
+	var used_place_read := EmployeeRulesClass.try_get_action_count(state, command.actor, "place_restaurant")
+	if not used_place_read.ok:
+		return used_place_read
+	var used_move_read := EmployeeRulesClass.try_get_action_count(state, command.actor, "move_restaurant")
+	if not used_move_read.ok:
+		return used_move_read
+	var used_place := int(used_place_read.value)
+	var used_move := int(used_move_read.value)
 	var used_total := used_place + used_move
 	if used_total >= total_eligible:
 		return Result.failure("本地/大区经理本子阶段已用完: %d/%d" % [used_total, total_eligible])
@@ -163,6 +175,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return params_result
 	var params: Dictionary = params_result.value
 	var player_id: int = command.actor
+	var used_move_read := EmployeeRulesClass.try_get_action_count(state, player_id, action_id)
+	if not used_move_read.ok:
+		return used_move_read
 	var rest_id: String = params["restaurant_id"]
 	var world_anchor: Vector2i = params["world_anchor"]
 	var rotation: int = int(params["rotation"])
@@ -227,7 +242,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	restaurants[rest_id] = rest
 	state.map["restaurants"] = restaurants
 
-	EmployeeRulesClass.increment_action_count(state, player_id, action_id)
+	var inc_action := EmployeeRulesClass.try_increment_action_count(state, player_id, action_id)
+	if not inc_action.ok:
+		return inc_action
 
 	return Result.success({
 		"player_id": player_id,

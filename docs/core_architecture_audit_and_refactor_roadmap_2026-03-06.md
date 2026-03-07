@@ -1182,6 +1182,9 @@ GameSessionContext
 - `refactor(gameplay): tighten train recruit action count access`
   - 为 `action_counts` 增补 `Result` 版读写 helper，并让 `train_action` / `recruit_action` 及 `train_employee_usage` 在 query、validate、apply、推导用工路径上对损坏的 `round_state.action_counts` 显式 fail-fast / fail-closed。
   - 扩展 focused `train` 状态访问测试，覆盖 train/recruit 的 `can_initiate()`、validate、apply 以及训练用工推导路径，确保非法 `action_counts` 不会提前改写玩家、`employee_pool` 或 `round_state`。
+- `refactor(gameplay): tighten restaurant action count access`
+  - 复用 `action_counts` 的安全读写 helper，让 `place_restaurant` / `move_restaurant` 在 query、validate、apply 阶段对损坏的 `round_state.action_counts` 显式 fail-fast / fail-closed，避免共享次数统计吞掉状态错误。
+  - 新增 focused 餐厅状态访问测试，覆盖放置/移动餐厅的 `can_initiate()`、validate、apply 路径，确保非法 `action_counts` 不会提前改写玩家、`map` 或 `round_state`。
 
 当前阶段性结果：
 
