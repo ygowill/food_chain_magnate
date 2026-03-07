@@ -10,6 +10,7 @@ const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_q
 const SalaryDiscountClass = preload("res://modules/base_rules/rules/phase/payday/payday_salary_discount.gd")
 const SalaryTokenPaymentClass = preload("res://modules/base_rules/rules/phase/payday/payday_salary_token_payment.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 
 static func apply(state: GameState, phase_manager = null) -> Result:
 	if state == null:
@@ -36,15 +37,7 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 	var warnings: Array[String] = []
 
 	# 记录在 Recruit 子阶段累计的招聘次数（用于薪资折扣推导）
-	var recruit_used: Dictionary = {}
-	if state.round_state.has("recruit_used"):
-		if not (state.round_state["recruit_used"] is Dictionary):
-			return Result.failure("PaydaySettlement: round_state.recruit_used 类型错误（期望 Dictionary）")
-		recruit_used = state.round_state["recruit_used"]
-
 	for i in range(state.players.size()):
-		if recruit_used.has(str(i)):
-			return Result.failure("round_state.recruit_used 不应包含字符串玩家 key: %s" % str(i))
 		var player_val = state.players[i]
 		if not (player_val is Dictionary):
 			return Result.failure("PaydaySettlement: players[%d] 类型错误（期望 Dictionary）" % i)
@@ -65,11 +58,10 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 		var base_due_amount: int = paid_employee_count * salary_cost
 
 		# 折扣：招聘经理/HR 总监未使用的招聘次数（每次 $5，强制使用）
-		var used_recruit := 0
-		if recruit_used.has(i):
-			if not (recruit_used[i] is int):
-				return Result.failure("PaydaySettlement: round_state.recruit_used[%d] 类型错误（期望 int）" % i)
-			used_recruit = int(recruit_used[i])
+		var used_recruit_read := RoundStateCountersClass.get_player_count(state.round_state, "recruit_used", i)
+		if not used_recruit_read.ok:
+			return Result.failure("PaydaySettlement: %s" % used_recruit_read.error)
+		var used_recruit: int = int(used_recruit_read.value)
 
 		var cap_read := SalaryDiscountClass.get_salary_discount_recruit_capacity(state, i, player, effect_registry)
 		if not cap_read.ok:

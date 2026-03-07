@@ -1119,6 +1119,9 @@ GameSessionContext
 - `refactor(gameplay): tighten train recruit-used access`
   - 将 `train_employee_usage` 对 `round_state.recruit_used` 的读取统一收口到 `RoundStateCounters.get_player_count()`，拒绝字符串玩家 key 或坏计数被静默当作 0。
   - 扩展 focused `train` 状态访问测试，临时打开 `recruiting_girl -> recruiting_manager` 训练链，确保非法 `recruit_used` 会 fail-fast，且不会提前改写玩家、`employee_pool` 或 `round_state`。
+- `refactor(modules): tighten payday recruit-used access`
+  - 将 `PaydaySettlement` 对 `round_state.recruit_used` 的读取统一收口到 `RoundStateCounters.get_player_count()`，避免手写 per-player int map 校验分叉。
+  - 新增 focused 状态访问测试，确保 `recruit_used` 使用字符串玩家 key 时 `PaydaySettlement.apply()` 会 fail-fast，且不会提前改写 `players`、`bank` 或 `round_state`。
 
 当前阶段性结果：
 

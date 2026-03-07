@@ -63,6 +63,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.PaydaySalaryTokenEligibilityTestClass.run(),
 		},
 		{
+			"name": "PaydaySettlementStateAccessTest",
+			"fn": func() -> Result: return TestRefs.PaydaySettlementStateAccessTestClass.run(2, 12345),
+		},
+		{
 			"name": "EffectUiTextRegistryTest",
 			"fn": func() -> Result: return TestRefs.EffectUiTextRegistryTestClass.run(),
 		},

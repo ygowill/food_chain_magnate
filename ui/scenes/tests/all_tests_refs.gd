@@ -13,6 +13,7 @@ const RestaurantLogoAssignmentTestClass = preload("res://core/tests/restaurant_l
 const RestaurantLogoTexturesLoadedTestClass = preload("res://ui/scenes/tests/restaurant_logo_textures_loaded_test.gd")
 const SixPlayersSetupTestClass = preload("res://core/tests/six_players_setup_test.gd")
 const PaydaySalaryTokenEligibilityTestClass = preload("res://core/tests/payday_salary_token_eligibility_test.gd")
+const PaydaySettlementStateAccessTestClass = preload("res://core/tests/payday_settlement_state_access_test.gd")
 const EffectUiTextRegistryTestClass = preload("res://core/tests/effect_ui_text_registry_test.gd")
 const MapOverlayProviderRegistryTestClass = preload("res://core/tests/map_overlay_provider_registry_test.gd")
 const CallbackResultContractTestClass = preload("res://core/tests/callback_result_contract_test.gd")
