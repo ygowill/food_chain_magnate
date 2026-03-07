@@ -1095,6 +1095,9 @@ GameSessionContext
 - `refactor(modules): tighten night shift multiplier access`
   - 扩展 `RoundStatePlayerIntMaps` 以支持整张 per-player int map 的 fail-fast 校验/写回，并将 `night_shift_managers` 的 `working_employee_multipliers` 写回统一收口到 helper。
   - 新增 focused test，确保已有 `working_employee_multipliers` 使用字符串玩家 key 时 `_on_working_before_enter()` fail-fast，且不会静默覆盖坏状态。
+- `refactor(modules): tighten reserve price bankruptcy access`
+  - 将 `reserve_prices` 第一次破产对 `round_state.bankruptcy.events` 的校验前移到实际揭示储备卡、改写银行与规则状态之前，并把事件写回改为显式 `Result` 失败返回。
+  - 新增 focused test，确保 `bankruptcy.events` 类型错误时第一次破产会 fail-fast，且不会提前揭示储备卡、改写 bank、rules 或 `round_state`。
 
 当前阶段性结果：
 

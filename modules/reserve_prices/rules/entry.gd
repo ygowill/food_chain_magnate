@@ -78,6 +78,10 @@ func _on_bank_first_break(state: GameState, trigger_reason: String, required_pay
 	if not reserve_added_total_read.ok:
 		return reserve_added_total_read
 
+	var bankruptcy_target_check := _validate_bankruptcy_event_write_target(state)
+	if not bankruptcy_target_check.ok:
+		return bankruptcy_target_check
+
 	var bank_before: int = int(total_read.value)
 	var total_added: int = int(state.players.size()) * FIRST_BREAK_ADD_PER_PLAYER
 
@@ -134,7 +138,7 @@ func _on_bank_first_break(state: GameState, trigger_reason: String, required_pay
 		return inject
 	var bank_after_first_break: int = int((inject.value as Dictionary).get("total", bank_before + total_added))
 
-	_record_bankruptcy_event(state, {
+	var record_event := _record_bankruptcy_event(state, {
 		"kind": "first",
 		"variant": MODULE_ID,
 		"trigger_reason": trigger_reason,
@@ -145,6 +149,8 @@ func _on_bank_first_break(state: GameState, trigger_reason: String, required_pay
 		"base_unit_price": new_base,
 		"revealed_cards": revealed,
 	})
+	if not record_event.ok:
+		return record_event
 
 	return Result.success().with_warning("银行第一次破产(Reserve Prices)：注入 $%d，base_unit_price=%d" % [total_added, new_base])
 
@@ -173,20 +179,43 @@ static func _tie_break(candidate: int, current: int) -> bool:
 		return true
 	return false
 
-static func _record_bankruptcy_event(state: GameState, event: Dictionary) -> void:
-	assert(state != null, "%s: _record_bankruptcy_event state 为空" % MODULE_ID)
-	assert(state.round_state is Dictionary, "%s: _record_bankruptcy_event state.round_state 类型错误（期望 Dictionary）" % MODULE_ID)
-	assert(event is Dictionary, "%s: _record_bankruptcy_event event 类型错误（期望 Dictionary）" % MODULE_ID)
+static func _validate_bankruptcy_event_write_target(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("%s: _validate_bankruptcy_event_write_target state 为空" % MODULE_ID)
+	if not (state.round_state is Dictionary):
+		return Result.failure("%s: _validate_bankruptcy_event_write_target state.round_state 类型错误（期望 Dictionary）" % MODULE_ID)
+	if not state.round_state.has("bankruptcy"):
+		return Result.success()
+	var bankruptcy_val = state.round_state.get("bankruptcy", null)
+	if not (bankruptcy_val is Dictionary):
+		return Result.failure("%s: round_state.bankruptcy 类型错误（期望 Dictionary）" % MODULE_ID)
+	var bankruptcy: Dictionary = bankruptcy_val
+	if bankruptcy.has("events") and not (bankruptcy.get("events", null) is Array):
+		return Result.failure("%s: round_state.bankruptcy.events 类型错误（期望 Array）" % MODULE_ID)
+	return Result.success()
+
+static func _record_bankruptcy_event(state: GameState, event: Dictionary) -> Result:
+	if state == null:
+		return Result.failure("%s: _record_bankruptcy_event state 为空" % MODULE_ID)
+	if not (state.round_state is Dictionary):
+		return Result.failure("%s: _record_bankruptcy_event state.round_state 类型错误（期望 Dictionary）" % MODULE_ID)
+	if not (event is Dictionary):
+		return Result.failure("%s: _record_bankruptcy_event event 类型错误（期望 Dictionary）" % MODULE_ID)
 
 	var bankruptcy: Dictionary = {}
 	if state.round_state.has("bankruptcy"):
-		assert(state.round_state["bankruptcy"] is Dictionary, "%s: round_state.bankruptcy 类型错误（期望 Dictionary）" % MODULE_ID)
-		bankruptcy = state.round_state["bankruptcy"]
+		var bankruptcy_val = state.round_state.get("bankruptcy", null)
+		if not (bankruptcy_val is Dictionary):
+			return Result.failure("%s: round_state.bankruptcy 类型错误（期望 Dictionary）" % MODULE_ID)
+		bankruptcy = Dictionary(bankruptcy_val).duplicate(true)
 
 	var events: Array = []
 	if bankruptcy.has("events"):
-		assert(bankruptcy["events"] is Array, "%s: round_state.bankruptcy.events 类型错误（期望 Array）" % MODULE_ID)
-		events = bankruptcy["events"]
-	events.append(event)
+		var events_val = bankruptcy.get("events", null)
+		if not (events_val is Array):
+			return Result.failure("%s: round_state.bankruptcy.events 类型错误（期望 Array）" % MODULE_ID)
+		events = Array(events_val).duplicate(true)
+	events.append(event.duplicate(true))
 	bankruptcy["events"] = events
 	state.round_state["bankruptcy"] = bankruptcy
+	return Result.success()

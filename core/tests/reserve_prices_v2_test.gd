@@ -18,6 +18,9 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_first_break_sets_base_price_tie_5_wins_over_10(seed_val)
 	if not r.ok:
 		return r
+	r = _test_first_break_rejects_invalid_bankruptcy_events_without_partial_mutation(seed_val)
+	if not r.ok:
+		return r
 
 	return Result.success()
 
@@ -164,5 +167,45 @@ static func _test_first_break_sets_base_price_tie_5_wins_over_10(seed_val: int) 
 
 	if int(s.rules.get("base_unit_price", -1)) != 5:
 		return Result.failure("base_unit_price 应变为 5（平局 5 胜出 10），实际: %s" % str(s.rules.get("base_unit_price", null)))
+
+	return Result.success()
+
+static func _test_first_break_rejects_invalid_bankruptcy_events_without_partial_mutation(seed_val: int) -> Result:
+	var er := _make_engine(seed_val + 2)
+	if not er.ok:
+		return er
+	var e: GameEngine = er.value
+	var s: GameState = e.get_state()
+
+	s.players[0]["reserve_cards"] = [{"type": 5}, {"type": 10}, {"type": 20}]
+	s.players[0]["reserve_card_selected"] = 0
+	s.players[0]["reserve_card_revealed"] = false
+	s.players[1]["reserve_cards"] = [{"type": 20}, {"type": 10}, {"type": 5}]
+	s.players[1]["reserve_card_selected"] = 0
+	s.players[1]["reserve_card_revealed"] = false
+	s.round_state["bankruptcy"] = {
+		"events": {},
+	}
+	s.bank["total"] = 0
+
+	var players_before := str(s.players)
+	var bank_before := str(s.bank)
+	var rules_before := str(s.rules)
+	var round_state_before := str(s.round_state)
+
+	var r := BankruptcyRulesClass.ensure_bank_can_pay(s, 1, "test")
+	if r.ok:
+		return Result.failure("bankruptcy.events 类型错误时应失败")
+	var err := str(r.error)
+	if err.find("bankruptcy.events") < 0:
+		return Result.failure("错误信息应包含 bankruptcy.events，实际: %s" % err)
+	if str(s.players) != players_before:
+		return Result.failure("失败时不应提前揭示储备卡或改写玩家状态")
+	if str(s.bank) != bank_before:
+		return Result.failure("失败时不应提前改写 bank 状态")
+	if str(s.rules) != rules_before:
+		return Result.failure("失败时不应提前改写 rules")
+	if str(s.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
 
 	return Result.success()
