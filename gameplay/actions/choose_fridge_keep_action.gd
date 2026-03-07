@@ -125,6 +125,18 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return keep_r
 	var keep: Dictionary = keep_r.value
 
+	var pending_r := _get_pending_cleanup_tasks(state)
+	if not pending_r.ok:
+		return pending_r
+	var pending: Array[Dictionary] = pending_r.value
+	if pending.is_empty():
+		return Result.failure("内部错误：pending_phase_actions[Cleanup] 缺失")
+	var first: Dictionary = pending[0]
+	if str(first.get("kind", "")) != PENDING_TASK_KIND:
+		return Result.failure("内部错误：pending[0] 不是 fridge_keep")
+	if int(first.get("player_id", -1)) != int(command.actor):
+		return Result.failure("内部错误：当前玩家不是 pending[0]")
+
 	var discarded: Dictionary = {}
 	for product_key in inventory.keys():
 		var pid: String = str(product_key)
@@ -158,20 +170,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		else:
 			warnings.append_array(ms.warnings)
 
-	var pending_r := _get_pending_cleanup_tasks(state)
-	if not pending_r.ok:
-		return pending_r
-	var pending: Array[Dictionary] = pending_r.value
-	if pending.is_empty():
-		return Result.failure("内部错误：pending_phase_actions[Cleanup] 缺失")
-	var first: Dictionary = pending[0]
-	if str(first.get("kind", "")) != PENDING_TASK_KIND:
-		return Result.failure("内部错误：pending[0] 不是 fridge_keep")
-	if int(first.get("player_id", -1)) != int(command.actor):
-		return Result.failure("内部错误：当前玩家不是 pending[0]")
-
 	pending.remove_at(0)
-	_set_pending_cleanup_tasks(state, pending)
+	var set_pending_r := _set_pending_cleanup_tasks(state, pending)
+	if not set_pending_r.ok:
+		return set_pending_r
 
 	if not _has_pending_cleanup_task_kind(pending, PENDING_TASK_KIND):
 		var cleanup_val = Dictionary(state.round_state).get("cleanup", null)
@@ -386,20 +388,21 @@ static func _get_pending_cleanup_tasks(state: GameState) -> Result:
 
 	return Result.success(out)
 
-static func _set_pending_cleanup_tasks(state: GameState, pending: Array[Dictionary]) -> void:
+static func _set_pending_cleanup_tasks(state: GameState, pending: Array[Dictionary]) -> Result:
 	if state == null or not (state.round_state is Dictionary):
-		return
+		return Result.failure("round_state 类型错误（期望 Dictionary）")
 	if not state.round_state.has("pending_phase_actions"):
 		state.round_state["pending_phase_actions"] = {}
 	var ppa_val = state.round_state.get("pending_phase_actions", null)
 	if not (ppa_val is Dictionary):
-		return
+		return Result.failure("pending_phase_actions 类型错误（期望 Dictionary）")
 	var ppa: Dictionary = ppa_val
 	if pending.is_empty():
 		ppa.erase(DefsClass.PHASE_CLEANUP)
 	else:
 		ppa[DefsClass.PHASE_CLEANUP] = pending
 	state.round_state["pending_phase_actions"] = ppa
+	return Result.success()
 
 static func _upsert_cleanup_inventory_discarded(state: GameState, player_id: int, discarded: Dictionary, has_fridge: bool) -> void:
 	if state == null or not (state.round_state is Dictionary):

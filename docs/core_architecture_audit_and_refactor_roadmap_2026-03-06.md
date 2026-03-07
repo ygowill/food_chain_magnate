@@ -1055,6 +1055,9 @@ GameSessionContext
 - `refactor(gameplay): tighten kimchi cleanup pending access`
   - 将 `choose_kimchi_storage` 的 cleanup pending 预检前移到 inventory 变更之前，并让 pending setter 显式返回失败。
   - 补 focused test，确保 `pending_phase_actions` 类型错误时不提前改写 `inventory` 或 `cleanup.inventory_discarded`。
+- `refactor(gameplay): tighten fridge cleanup pending access`
+  - 将 `choose_fridge_keep` 的 cleanup pending 预检前移到 inventory 变更之前，并让 pending setter 显式返回失败。
+  - 补 focused test，确保 `pending_phase_actions` 类型错误时不提前改写 `inventory` 或 `cleanup.inventory_discarded`。
 
 当前阶段性结果：
 
