@@ -123,24 +123,30 @@ func _generate_specific_events(old_state: GameState, _new_state: GameState, comm
 
 func _find_employee_location(player: Dictionary, employee_id: String) -> String:
 	var active_read := PlayerStateAccessClass.require_employees(player, "player", "fire")
-	assert(active_read.ok, active_read.error)
+	if not active_read.ok:
+		return ""
 	var active: Array = active_read.value
 	for i in range(active.size()):
-		assert(active[i] is String, "fire: player.employees[%d] 类型错误（期望 String）" % i)
+		if not (active[i] is String):
+			return ""
 	if active.find(employee_id) >= 0:
 		return "active"
 	var reserve_read := PlayerStateAccessClass.require_reserve_employees(player, "player", "fire")
-	assert(reserve_read.ok, reserve_read.error)
+	if not reserve_read.ok:
+		return ""
 	var reserve: Array = reserve_read.value
 	for i in range(reserve.size()):
-		assert(reserve[i] is String, "fire: player.reserve_employees[%d] 类型错误（期望 String）" % i)
+		if not (reserve[i] is String):
+			return ""
 	if reserve.find(employee_id) >= 0:
 		return "reserve"
 	var busy_read := PlayerStateAccessClass.require_busy_marketers(player, "player", "fire")
-	assert(busy_read.ok, busy_read.error)
+	if not busy_read.ok:
+		return ""
 	var busy: Array = busy_read.value
 	for i in range(busy.size()):
-		assert(busy[i] is String, "fire: player.busy_marketers[%d] 类型错误（期望 String）" % i)
+		if not (busy[i] is String):
+			return ""
 	if busy.find(employee_id) >= 0:
 		return "busy"
 	return ""
@@ -166,7 +172,8 @@ func _can_fire_busy_marketer(state: GameState, player_id: int, employee_id: Stri
 		return false
 	var busy: Array = busy_read.value
 	for i in range(busy.size()):
-		assert(busy[i] is String, "fire: player.busy_marketers[%d] 类型错误（期望 String）" % i)
+		if not (busy[i] is String):
+			return false
 	if busy.find(employee_id) < 0:
 		return false
 
@@ -180,9 +187,11 @@ func _can_fire_busy_marketer(state: GameState, player_id: int, employee_id: Stri
 		return false
 	var active: Array = active_read.value
 	for i in range(active.size()):
-		assert(active[i] is String, "fire: player.employees[%d] 类型错误（期望 String）" % i)
+		if not (active[i] is String):
+			return false
 		var emp_id: String = active[i]
-		assert(not emp_id.is_empty(), "fire: player.employees[%d] 不应为空字符串" % i)
+		if emp_id.is_empty():
+			return false
 		if EmployeeRulesClass.requires_salary(emp_id, player):
 			return false
 
@@ -191,9 +200,11 @@ func _can_fire_busy_marketer(state: GameState, player_id: int, employee_id: Stri
 		return false
 	var reserve: Array = reserve_read.value
 	for i in range(reserve.size()):
-		assert(reserve[i] is String, "fire: player.reserve_employees[%d] 类型错误（期望 String）" % i)
+		if not (reserve[i] is String):
+			return false
 		var emp_id2: String = reserve[i]
-		assert(not emp_id2.is_empty(), "fire: player.reserve_employees[%d] 不应为空字符串" % i)
+		if emp_id2.is_empty():
+			return false
 		if EmployeeRulesClass.requires_salary(emp_id2, player):
 			return false
 

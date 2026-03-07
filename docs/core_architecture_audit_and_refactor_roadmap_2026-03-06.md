@@ -1212,6 +1212,9 @@ GameSessionContext
 - `refactor(gameplay): tighten add garden attachment payload access`
   - 为 `add_garden` 增补 attachment payload 读取 helper，并让 apply 阶段在 `validate_garden_attachment()` 返回值、`garden_cells` 或 `merged_cells` 契约损坏时显式 fail-fast，而不是在更新房屋/花园结构前触发硬断言。
   - 扩展 focused `add_garden` 状态访问测试，通过注入坏 attachment payload 覆盖两类失败分支，确保不会提前改写房屋数据、花园供给、格子结构或 `round_state`。
+- `refactor(gameplay): harden fire employee array access`
+  - 将 `fire_action` 对 `employees` / `reserve_employees` / `busy_marketers` 数组元素的读取从硬断言改为 fail-soft，避免坏玩家数组在位置推断与 Payday 忙碌营销员例外判断里触发崩溃。
+  - 扩展 focused `fire_action` 状态访问测试，确保数组元素损坏时 `_find_employee_location()` 返回空字符串、`_can_fire_busy_marketer()` 保守返回 `false`。
 
 当前阶段性结果：
 
