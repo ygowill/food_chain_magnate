@@ -16,6 +16,7 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const RoundStatePlayerBoolFlagsClass = preload("res://core/utils/round_state_player_bool_flags.gd")
 const BankStateAccessClass = preload("res://core/state/bank_state_access.gd")
+const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 
 const Phase = PhaseDefsClass.Phase
 const WorkingSubPhase = PhaseDefsClass.WorkingSubPhase
@@ -159,14 +160,14 @@ func _on_restructuring_before_enter(state: GameState) -> Result:
 	state.current_player_index = 0
 
 	if state.round_number > 1:
-		if not state.round_state.has("pending_phase_actions"):
-			state.round_state["pending_phase_actions"] = {}
-		var ppa_val = state.round_state.get("pending_phase_actions", null)
-		if not (ppa_val is Dictionary):
-			return Result.failure("base_rules:restructuring_before_enter: round_state.pending_phase_actions 类型错误（期望 Dictionary）")
-		var ppa: Dictionary = ppa_val
-		ppa["Restructuring"] = pending
-		state.round_state["pending_phase_actions"] = ppa
+		var set_pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
+			state.round_state,
+			PhaseDefsClass.PHASE_RESTRUCTURING,
+			pending,
+			"base_rules:restructuring_before_enter"
+		)
+		if not set_pending.ok:
+			return set_pending
 	return Result.success()
 
 func _on_restructuring_before_exit(state: GameState) -> Result:

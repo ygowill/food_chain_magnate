@@ -1064,6 +1064,9 @@ GameSessionContext
 - `refactor(modules): tighten coffee cleanup pending access`
   - 将 `coffee_first_coffee_sold` 的 Cleanup pending 解析收口到 fail-fast helper，并统一使用 `RoundStatePendingPhaseActions` 写回。
   - 新增 focused test，覆盖 legacy fridge pending 合并与非法 pending 项时无 partial mutation。
+- `refactor(gameplay): tighten restructuring pending access`
+  - 将重组阶段的 pending 写回统一到 `RoundStatePendingPhaseActions`，并在 `submit_restructuring` apply 前预检 `pending_phase_actions[Restructuring]`。
+  - 新增 focused test，确保 pending 类型错误时不提前改写玩家结构、submitted 标记或 finalized。
 
 当前阶段性结果：
 

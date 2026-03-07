@@ -10,6 +10,7 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 const RoundStatePlayerBoolFlagsClass = preload("res://core/utils/round_state_player_bool_flags.gd")
+const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 
 var phase_manager: PhaseManager = null
 
@@ -95,6 +96,13 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 func _apply_changes(state: GameState, command: Command) -> Result:
 	var warnings: Array[String] = []
+
+	var pending: Array[int] = []
+	if state != null and int(state.round_number) > 1:
+		var pending_read := _get_restructuring_pending_players(state)
+		if not pending_read.ok:
+			return pending_read
+		pending = pending_read.value
 
 	var player_id: int = command.actor
 	var player_val = state.players[player_id]
@@ -288,15 +296,16 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var r: Dictionary = r_val
 
 	# 更新阻断器
-	if state.round_state.has("pending_phase_actions"):
-		var ppa_val = state.round_state.get("pending_phase_actions", null)
-		if ppa_val is Dictionary:
-			var ppa: Dictionary = ppa_val
-			if ppa.has(DefsClass.PHASE_RESTRUCTURING) and (ppa[DefsClass.PHASE_RESTRUCTURING] is Array):
-				var pending: Array = ppa[DefsClass.PHASE_RESTRUCTURING]
-				pending.erase(player_id)
-				ppa[DefsClass.PHASE_RESTRUCTURING] = pending
-				state.round_state["pending_phase_actions"] = ppa
+	if int(state.round_number) > 1:
+		pending.erase(player_id)
+		var set_pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
+			state.round_state,
+			DefsClass.PHASE_RESTRUCTURING,
+			pending,
+			"submit_restructuring"
+		)
+		if not set_pending.ok:
+			return set_pending
 	state.round_state["restructuring"] = r
 
 	# 计算是否全部提交（不依赖 pending_phase_actions 是否存在）
@@ -316,15 +325,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	r["finalized"] = all_submitted
 	state.round_state["restructuring"] = r
 
-	# 若已全部提交，清理阻断器 key（避免残留空数组）
-	if all_submitted and state.round_state.has("pending_phase_actions"):
-		var ppa_val2 = state.round_state.get("pending_phase_actions", null)
-		if ppa_val2 is Dictionary:
-			var ppa2: Dictionary = ppa_val2
-			ppa2.erase(DefsClass.PHASE_RESTRUCTURING)
-			state.round_state["pending_phase_actions"] = ppa2
-
-		# Restructuring 为“同时进行”：不推进 current_player_index（避免隐式顺序/误导 UI）。
+	# 若已全部提交：Restructuring 为“同时进行”，不推进 current_player_index（避免隐式顺序/误导 UI）。
 
 	# 所有人都提交后，自动进入下一阶段
 	# NOTE: 阶段推进由 AutoAdvance 负责（确保“确认重组”日志先出现，再出现阶段标题切换）。
@@ -333,3 +334,28 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"player_id": player_id,
 		"overflow": false
 	}).with_warnings(warnings)
+
+static func _get_restructuring_pending_players(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("submit_restructuring: state 为空")
+	if not (state.round_state is Dictionary):
+		return Result.failure("submit_restructuring: round_state 类型错误（期望 Dictionary）")
+	if not state.round_state.has("pending_phase_actions"):
+		return Result.failure("submit_restructuring: round_state.pending_phase_actions 缺失")
+	var ppa_val = state.round_state.get("pending_phase_actions", null)
+	if not (ppa_val is Dictionary):
+		return Result.failure("submit_restructuring: round_state.pending_phase_actions 类型错误（期望 Dictionary）")
+	var ppa: Dictionary = ppa_val
+	if not ppa.has(DefsClass.PHASE_RESTRUCTURING):
+		return Result.failure("submit_restructuring: round_state.pending_phase_actions[Restructuring] 缺失")
+	var list_val = ppa.get(DefsClass.PHASE_RESTRUCTURING, null)
+	if not (list_val is Array):
+		return Result.failure("submit_restructuring: round_state.pending_phase_actions[Restructuring] 类型错误（期望 Array）")
+	var list: Array = list_val
+	var out: Array[int] = []
+	for i in range(list.size()):
+		var item_val = list[i]
+		if not (item_val is int or item_val is float):
+			return Result.failure("submit_restructuring: round_state.pending_phase_actions[Restructuring][%d] 类型错误（期望 int/float）" % i)
+		out.append(int(item_val))
+	return Result.success(out)
