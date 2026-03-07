@@ -1131,6 +1131,9 @@ GameSessionContext
 - `refactor(gameplay): tighten fire recruit-used access`
   - 将 `fire_action` 的 Payday 忙碌营销员判定里对 `round_state.recruit_used` 的读取统一收口到 `RoundStateCounters.get_player_count()`，保持既有 fail-soft 语义。
   - 扩展 focused 状态访问测试，确保 `recruit_used` 损坏时 `_can_fire_busy_marketer()` 仍安全返回 `false`。
+- `refactor(gameplay): tighten train phase pending baseline access`
+  - 将 `train_phase_start_counts` 对 `round_state.immediate_train_pending` 的字符串玩家 key 检查从 `assert` 改为显式 `Result` 失败，避免坏状态在读基线计数时触发硬断言。
+  - 扩展 focused 状态访问测试，确保非法 `immediate_train_pending` 会 fail-fast，且不会提前写入 `train_phase_start_counts`。
 
 当前阶段性结果：
 

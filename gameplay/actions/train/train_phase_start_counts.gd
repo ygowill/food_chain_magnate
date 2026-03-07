@@ -132,7 +132,8 @@ static func _compute_train_phase_start_counts(state: GameState, player_id: int, 
 		if not (pending_val is Dictionary):
 			return Result.failure("train: round_state.immediate_train_pending 类型错误（期望 Dictionary）")
 		var pending_all: Dictionary = pending_val
-		assert(not pending_all.has(str(player_id)), "round_state.immediate_train_pending 不应包含字符串玩家 key: %s" % str(player_id))
+		if pending_all.has(str(player_id)):
+			return Result.failure("train: round_state.immediate_train_pending 不应包含字符串玩家 key: %s" % str(player_id))
 		if pending_all.has(player_id):
 			var per_val = pending_all.get(player_id, null)
 			if not (per_val is Dictionary):

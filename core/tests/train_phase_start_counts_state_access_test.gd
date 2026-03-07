@@ -11,7 +11,10 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_get_fails_fast_on_string_player_key()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 2})
+	r = _test_ensure_fails_fast_on_invalid_immediate_train_pending_string_player_key()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 3})
 
 static func _test_ensure_fails_fast_on_string_player_key_without_backfill_int_key() -> Result:
 	var state := GameState.new()
@@ -57,4 +60,26 @@ static func _test_get_fails_fast_on_string_player_key() -> Result:
 	var err := str(result.error)
 	if err.find("train_phase_start_counts") < 0 or err.find("字符串玩家 key") < 0:
 		return Result.failure("错误信息应包含 train_phase_start_counts 与 字符串玩家 key，实际: %s" % err)
+	return Result.success()
+
+static func _test_ensure_fails_fast_on_invalid_immediate_train_pending_string_player_key() -> Result:
+	var state := GameState.new()
+	state.players = [{
+		"employees": ["trainer"],
+		"reserve_employees": [],
+	}]
+	state.round_state = {
+		"immediate_train_pending": {
+			"0": {"management_trainee": 1},
+		},
+	}
+	var reserve: Array = []
+	var result := ActionClass._ensure_train_phase_start_counts(state, 0, reserve)
+	if result.ok:
+		return Result.failure("字符串玩家 key 时 _ensure_train_phase_start_counts 应失败")
+	var err := str(result.error)
+	if err.find("immediate_train_pending") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 immediate_train_pending 与 字符串玩家 key，实际: %s" % err)
+	if state.round_state.has("train_phase_start_counts"):
+		return Result.failure("失败时不应提前写入 train_phase_start_counts")
 	return Result.success()
