@@ -159,7 +159,8 @@ static func plan_training(
 	steps_needed: int,
 	multi_trainer_on_one: bool,
 	reserve: Array,
-	init_if_missing: bool
+	init_if_missing: bool,
+	to_employee: String = ""
 ) -> Result:
 	if from_employee.is_empty():
 		return Result.failure("train_locks: from_employee 不能为空")
@@ -184,6 +185,10 @@ static func plan_training(
 	if locks_read.value == null:
 		return Result.failure("train_locks: locks 读取失败")
 	var locks: Dictionary = locks_read.value
+
+	var target_tokens_check := _validate_target_tokens_container(locks, to_employee)
+	if not target_tokens_check.ok:
+		return target_tokens_check
 
 	var tokens_val = locks.get(from_employee, null)
 	if not (tokens_val is Array):
@@ -259,6 +264,16 @@ static func plan_training(
 			return Result.failure("本子阶段同一名员工不能更换培训员继续培训（需要里程碑允许）: %s" % from_employee)
 
 	return Result.failure("培训员 slot 不足（需要 %d）" % steps_needed)
+
+static func _validate_target_tokens_container(locks: Dictionary, to_employee: String) -> Result:
+	if to_employee.is_empty():
+		return Result.success()
+	var to_tokens_val = locks.get(to_employee, null)
+	if to_tokens_val == null:
+		return Result.success()
+	if not (to_tokens_val is Array):
+		return Result.failure("train_locks: to_employee tokens 类型错误（期望 Array）: %s" % to_employee)
+	return Result.success()
 
 static func apply_move_token_and_lock(
 	state: GameState,

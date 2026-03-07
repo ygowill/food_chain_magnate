@@ -165,7 +165,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("train: player.multi_trainer_on_one 类型错误（期望 bool）")
 	var multi: bool = bool(multi_val)
 	var lock_check := TrainEmployeeLocksClass.plan_training(
-		state, command.actor, from_employee, steps_required, multi, reserve, false
+		state, command.actor, from_employee, steps_required, multi, reserve, false, to_employee
 	)
 	if not lock_check.ok:
 		return lock_check
@@ -245,7 +245,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var can_train_from_active := bool(player.get("train_from_active_same_color", false))
 
 	var lock_plan_read := TrainEmployeeLocksClass.plan_training(
-		state, player_id, from_employee, steps_required, multi, reserve, true
+		state, player_id, from_employee, steps_required, multi, reserve, true, to_employee
 	)
 	if not lock_plan_read.ok:
 		return lock_plan_read

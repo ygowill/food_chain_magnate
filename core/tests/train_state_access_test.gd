@@ -10,7 +10,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var r := _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 1})
+	r = _test_apply_changes_fails_fast_on_invalid_target_locks_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 2})
 
 static func _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count: int, seed_val: int) -> Result:
 	var built := _build_train_state(player_count, seed_val)
@@ -31,6 +34,43 @@ static func _test_apply_changes_fails_fast_on_invalid_train_events_without_parti
 	var err := str(result.error)
 	if err.find("train_events") < 0:
 		return Result.failure("错误信息应包含 train_events，实际: %s" % err)
+	if str(state.players[0]) != player_before:
+		return Result.failure("失败时不应提前改写玩家员工状态")
+	if str(state.employee_pool) != pool_before:
+		return Result.failure("失败时不应提前改写 employee_pool")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_apply_changes_fails_fast_on_invalid_target_locks_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	var built := _build_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["train_events"] = []
+	state.round_state["train_employee_locks"] = {
+		0: {
+			"management_trainee": [{
+				"trainer_id": "trainer",
+				"instance_idx": 0,
+			}],
+			"new_business_developer": {},
+		},
+	}
+	var player_before := str(state.players[0])
+	var pool_before := str(state.employee_pool)
+	var round_state_before := str(state.round_state)
+
+	var action = ActionClass.new()
+	var result := action._apply_changes(state, Command.create("train", 0, {
+		"from_employee": "management_trainee",
+		"to_employee": "new_business_developer",
+	}))
+	if result.ok:
+		return Result.failure("train_employee_locks 目标桶类型错误时应失败")
+	var err := str(result.error)
+	if err.find("to_employee tokens") < 0:
+		return Result.failure("错误信息应包含 to_employee tokens，实际: %s" % err)
 	if str(state.players[0]) != player_before:
 		return Result.failure("失败时不应提前改写玩家员工状态")
 	if str(state.employee_pool) != pool_before:
