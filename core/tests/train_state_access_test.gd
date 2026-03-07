@@ -8,6 +8,7 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const TrainEmployeeUsageClass = preload("res://gameplay/actions/train/train_employee_usage.gd")
 const TrainEmployeeLocksClass = preload("res://gameplay/actions/train/train_employee_locks.gd")
+const TrainSlotUsageStorageClass = preload("res://core/rules/employee_rules/train_slot_usage_storage.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var r := _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count, seed_val)
@@ -40,7 +41,13 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_ensure_player_locks_fails_fast_on_invalid_train_employee_locks_string_player_key()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 10})
+	r = _test_read_used_slots_by_instance_fails_fast_on_invalid_train_slot_usage_instances_string_player_key()
+	if not r.ok:
+		return r
+	r = _test_write_used_slots_by_instance_fails_fast_on_invalid_train_slot_usage_instances_string_player_key()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 12})
 
 static func _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count: int, seed_val: int) -> Result:
 	var built := _build_train_state(player_count, seed_val)
@@ -383,4 +390,37 @@ static func _test_ensure_player_locks_fails_fast_on_invalid_train_employee_locks
 		return Result.failure("错误信息应包含 train_employee_locks 与 字符串玩家 key，实际: %s" % err)
 	if str(state.round_state.get("train_employee_locks", null)) != before:
 		return Result.failure("失败时不应覆盖已有的 train_employee_locks")
+	return Result.success()
+
+static func _test_read_used_slots_by_instance_fails_fast_on_invalid_train_slot_usage_instances_string_player_key() -> Result:
+	var state := GameState.new()
+	state.round_state = {
+		"train_slot_usage_instances": {
+			"0": {"trainer": [1]},
+		},
+	}
+	var result := TrainSlotUsageStorageClass.read_used_slots_by_instance(state, 0, "trainer", 1, 1)
+	if result.ok:
+		return Result.failure("字符串玩家 key 时 read_used_slots_by_instance 应失败")
+	var err := str(result.error)
+	if err.find("train_slot_usage_instances") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 train_slot_usage_instances 与 字符串玩家 key，实际: %s" % err)
+	return Result.success()
+
+static func _test_write_used_slots_by_instance_fails_fast_on_invalid_train_slot_usage_instances_string_player_key() -> Result:
+	var state := GameState.new()
+	state.round_state = {
+		"train_slot_usage_instances": {
+			"0": {"trainer": [1]},
+		},
+	}
+	var before := str(state.round_state.get("train_slot_usage_instances", null))
+	var result := TrainSlotUsageStorageClass.write_used_slots_by_instance(state, 0, "trainer", [1])
+	if result.ok:
+		return Result.failure("字符串玩家 key 时 write_used_slots_by_instance 应失败")
+	var err := str(result.error)
+	if err.find("train_slot_usage_instances") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 train_slot_usage_instances 与 字符串玩家 key，实际: %s" % err)
+	if str(state.round_state.get("train_slot_usage_instances", null)) != before:
+		return Result.failure("失败时不应覆盖已有的 train_slot_usage_instances")
 	return Result.success()

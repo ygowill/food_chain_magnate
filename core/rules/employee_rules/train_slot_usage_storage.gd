@@ -38,6 +38,11 @@ static func _compute_used_by_instance_from_total(used_total: int, instances: int
 		remaining -= take
 	return out
 
+static func _fail_on_string_player_key(all: Dictionary, player_id: int) -> Result:
+	if all.has(str(player_id)):
+		return Result.failure("round_state.%s 不应包含字符串玩家 key: %s" % [ROUND_STATE_KEY_INSTANCES, str(player_id)])
+	return Result.success()
+
 static func read_used_slots_by_instance(state: GameState, player_id: int, trainer_id: String, instances: int, cap_per_instance: int) -> Result:
 	if trainer_id.is_empty():
 		return Result.failure("trainer_id 不能为空")
@@ -51,7 +56,9 @@ static func read_used_slots_by_instance(state: GameState, player_id: int, traine
 		if not (all_val is Dictionary):
 			return Result.failure("train_slot_usage_instances 类型错误（期望 Dictionary）")
 		var all: Dictionary = all_val
-		assert(not all.has(str(player_id)), "round_state.%s 不应包含字符串玩家 key: %s" % [ROUND_STATE_KEY_INSTANCES, str(player_id)])
+		var key_check := _fail_on_string_player_key(all, player_id)
+		if not key_check.ok:
+			return key_check
 		if all.has(player_id):
 			var per_val = all.get(player_id, null)
 			if not (per_val is Dictionary):
@@ -99,7 +106,9 @@ static func write_used_slots_by_instance(state: GameState, player_id: int, train
 	if not (all_val is Dictionary):
 		return Result.failure("round_state.%s 类型错误（期望 Dictionary）" % ROUND_STATE_KEY_INSTANCES)
 	var all: Dictionary = all_val
-	assert(not all.has(str(player_id)), "round_state.%s 不应包含字符串玩家 key: %s" % [ROUND_STATE_KEY_INSTANCES, str(player_id)])
+	var key_check := _fail_on_string_player_key(all, player_id)
+	if not key_check.ok:
+		return key_check
 
 	if not all.has(player_id):
 		all[player_id] = {}
