@@ -17,7 +17,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_apply_changes_fails_fast_on_invalid_mandatory_actions_completed_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_apply_changes_fails_fast_on_invalid_recruit_used_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 4})
 
 static func _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count: int, seed_val: int) -> Result:
 	var built := _build_train_state(player_count, seed_val)
@@ -154,6 +157,50 @@ static func _test_apply_changes_fails_fast_on_invalid_mandatory_actions_complete
 	pricing_def.train_to = original_train_to
 	return outcome
 
+
+static func _test_apply_changes_fails_fast_on_invalid_recruit_used_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	var outcome := Result.success()
+	var built := _build_active_recruit_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+
+	var recruiting_girl_def_val = EmployeeRegistryClass.get_def("recruiting_girl")
+	if not (recruiting_girl_def_val is EmployeeDef):
+		return Result.failure("无法读取 recruiting_girl 定义")
+	var recruiting_girl_def: EmployeeDef = recruiting_girl_def_val
+	var original_train_to: Array[String] = recruiting_girl_def.train_to.duplicate()
+	recruiting_girl_def.train_to = ["recruiting_manager"]
+
+	var state: GameState = built.value
+	state.round_state["recruit_used"] = {
+		"0": 2,
+		0: 0,
+	}
+	var player_before := str(state.players[0])
+	var pool_before := str(state.employee_pool)
+	var round_state_before := str(state.round_state)
+
+	var action = ActionClass.new()
+	var result := action._apply_changes(state, Command.create("train", 0, {
+		"from_employee": "recruiting_girl",
+		"to_employee": "recruiting_manager",
+	}))
+	if result.ok:
+		outcome = Result.failure("recruit_used 使用字符串玩家 key 时应失败")
+	else:
+		var err := str(result.error)
+		if err.find("recruit_used") < 0:
+			outcome = Result.failure("错误信息应包含 recruit_used，实际: %s" % err)
+		elif str(state.players[0]) != player_before:
+			outcome = Result.failure("失败时不应提前改写玩家员工状态")
+		elif str(state.employee_pool) != pool_before:
+			outcome = Result.failure("失败时不应提前改写 employee_pool")
+		elif str(state.round_state) != round_state_before:
+			outcome = Result.failure("失败时不应提前改写 round_state")
+
+	recruiting_girl_def.train_to = original_train_to
+	return outcome
+
 static func _build_active_price_train_state(player_count: int, seed_val: int) -> Result:
 	if player_count < 2:
 		player_count = 2
@@ -180,5 +227,35 @@ static func _build_active_price_train_state(player_count: int, seed_val: int) ->
 	var add_pricing := StateUpdaterClass.add_employee(state, 0, "pricing_manager", false)
 	if not add_pricing.ok:
 		return Result.failure("添加 pricing_manager 失败: %s" % add_pricing.error)
+	state.round_state["train_events"] = []
+	return Result.success(state)
+
+
+static func _build_active_recruit_train_state(player_count: int, seed_val: int) -> Result:
+	if player_count < 2:
+		player_count = 2
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+	var state: GameState = engine.get_state()
+	state.turn_order = [0, 1]
+	state.current_player_index = 0
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
+	state.players[0]["train_from_active_same_color"] = true
+
+	var take_trainer := StateUpdaterClass.take_from_pool(state, "trainer", 1)
+	if not take_trainer.ok:
+		return Result.failure("从员工池取出 trainer 失败: %s" % take_trainer.error)
+	var add_trainer := StateUpdaterClass.add_employee(state, 0, "trainer", false)
+	if not add_trainer.ok:
+		return Result.failure("添加 trainer 失败: %s" % add_trainer.error)
+	var take_recruiting_girl := StateUpdaterClass.take_from_pool(state, "recruiting_girl", 1)
+	if not take_recruiting_girl.ok:
+		return Result.failure("从员工池取出 recruiting_girl 失败: %s" % take_recruiting_girl.error)
+	var add_recruiting_girl := StateUpdaterClass.add_employee(state, 0, "recruiting_girl", false)
+	if not add_recruiting_girl.ok:
+		return Result.failure("添加 recruiting_girl 失败: %s" % add_recruiting_girl.error)
 	state.round_state["train_events"] = []
 	return Result.success(state)

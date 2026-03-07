@@ -1116,6 +1116,9 @@ GameSessionContext
 - `refactor(modules): tighten coffee shop train event access`
   - 将 `place_or_move_coffee_shop` 对 `round_state.train_events` 的读取改为显式校验，拒绝非法事件项或坏 `player_id` / `to_employee` 被静默忽略。
   - 扩展 focused 状态访问测试，确保非法 `train_events` 会 fail-fast，且不会提前递增 `next_coffee_shop_id`、消耗 token 或写入咖啡店结构。
+- `refactor(gameplay): tighten train recruit-used access`
+  - 将 `train_employee_usage` 对 `round_state.recruit_used` 的读取统一收口到 `RoundStateCounters.get_player_count()`，拒绝字符串玩家 key 或坏计数被静默当作 0。
+  - 扩展 focused `train` 状态访问测试，临时打开 `recruiting_girl -> recruiting_manager` 训练链，确保非法 `recruit_used` 会 fail-fast，且不会提前改写玩家、`employee_pool` 或 `round_state`。
 
 当前阶段性结果：
 

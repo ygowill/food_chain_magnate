@@ -64,10 +64,10 @@ static func read_employee_used_before_training(state: GameState, player_id: int,
 	if def_val is EmployeeDef:
 		var def: EmployeeDef = def_val
 		if def.recruit_capacity > 0 and def.has_usage_tag("use:recruit"):
-			var used := 0
-			var ru_val = state.round_state.get("recruit_used", null)
-			if ru_val is Dictionary and ru_val.has(player_id) and (ru_val[player_id] is int):
-				used = int(ru_val[player_id])
+			var used_read := RoundStateCountersClass.get_player_count(state.round_state, "recruit_used", player_id)
+			if not used_read.ok:
+				return used_read
+			var used := int(used_read.value)
 			var total_cap := EmployeeRulesClass.get_recruit_limit_for_working(state, player_id)
 			var mult := EmployeeRulesClass.get_working_employee_multiplier(state, player_id, employee_id)
 			var emp_cap := int(def.recruit_capacity) * mult * EmployeeRulesClass.count_active(state.get_player(player_id), employee_id)
