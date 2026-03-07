@@ -11,13 +11,16 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_validate_fails_fast_on_missing_tile_grid_size()
 	if not r.ok:
 		return r
+	r = _test_validate_fails_fast_on_invalid_pending_flag_type()
+	if not r.ok:
+		return r
 	r = _test_apply_external_piece_fails_fast_on_invalid_external_cells_type()
 	if not r.ok:
 		return r
 	r = _test_get_offramp_connection_cells_fails_fast_on_invalid_offramp_array_type()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 4})
+	return Result.success({"cases": 5})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -63,6 +66,18 @@ static func _test_validate_fails_fast_on_missing_tile_grid_size() -> Result:
 	var err := str(result.error)
 	if err.find("state.map.tile_grid_size") < 0:
 		return Result.failure("错误信息应包含 state.map.tile_grid_size，实际: %s" % err)
+	return Result.success()
+
+static func _test_validate_fails_fast_on_invalid_pending_flag_type() -> Result:
+	var action := ActionClass.new()
+	var state := _make_state()
+	state.round_state["rural_marketeers_offramp_pending"] = {0: "bad"}
+	var result := action._validate_specific(state, _make_command())
+	if result.ok:
+		return Result.failure("pending flag 类型错误时应失败")
+	var err := str(result.error)
+	if err.find("round_state.rural_marketeers_offramp_pending[0]") < 0:
+		return Result.failure("错误信息应包含 round_state.rural_marketeers_offramp_pending[0]，实际: %s" % err)
 	return Result.success()
 
 static func _test_apply_external_piece_fails_fast_on_invalid_external_cells_type() -> Result:

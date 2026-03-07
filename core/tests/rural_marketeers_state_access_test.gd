@@ -33,7 +33,19 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_airplane_conflict_validation_fails_fast_on_invalid_offramps_type(seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 9})
+	r = _test_marketing_before_exit_blocks_when_pending_player_exists()
+	if not r.ok:
+		return r
+	r = _test_marketing_before_exit_fails_fast_on_invalid_pending_flag_type()
+	if not r.ok:
+		return r
+	r = _test_milestone_effect_marks_pending_flag_and_consumes_supply()
+	if not r.ok:
+		return r
+	r = _test_milestone_effect_fails_fast_on_invalid_pending_flag_type()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 13})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -191,4 +203,80 @@ static func _test_airplane_conflict_validation_fails_fast_on_invalid_offramps_ty
 	var err := str(result.error)
 	if err.find("state.map.rural_marketeers_offramps") < 0:
 		return Result.failure("错误信息应包含 state.map.rural_marketeers_offramps，实际: %s" % err)
+	return Result.success()
+
+static func _test_marketing_before_exit_blocks_when_pending_player_exists() -> Result:
+	var entry = EntryClass.new()
+	var state := GameState.new()
+	state.players = [{}, {}]
+	state.round_state = {
+		"rural_marketeers_offramp_pending": {
+			0: true,
+			1: false,
+		}
+	}
+	var result := entry._on_working_marketing_before_exit(state)
+	if result.ok:
+		return Result.failure("存在 pending player 时应阻止离开 Marketing")
+	var err := str(result.error)
+	if err.find("[0]") < 0:
+		return Result.failure("错误信息应包含阻塞玩家列表，实际: %s" % err)
+	return Result.success()
+
+static func _test_marketing_before_exit_fails_fast_on_invalid_pending_flag_type() -> Result:
+	var entry = EntryClass.new()
+	var state := GameState.new()
+	state.players = [{}, {}]
+	state.round_state = {
+		"rural_marketeers_offramp_pending": {
+			0: "bad",
+		}
+	}
+	var result := entry._on_working_marketing_before_exit(state)
+	if result.ok:
+		return Result.failure("pending flag 类型错误时应失败")
+	var err := str(result.error)
+	if err.find("round_state.rural_marketeers_offramp_pending[0]") < 0:
+		return Result.failure("错误信息应包含 round_state.rural_marketeers_offramp_pending[0]，实际: %s" % err)
+	return Result.success()
+
+static func _test_milestone_effect_marks_pending_flag_and_consumes_supply() -> Result:
+	var entry = EntryClass.new()
+	var state := GameState.new()
+	state.players = [{}, {}]
+	state.map = {
+		"rural_marketeers_offramp_supply_remaining": 2,
+	}
+	state.round_state = {}
+	var result := entry._milestone_effect_grant_offramp_placement(state, 1, "", {})
+	if not result.ok:
+		return Result.failure("里程碑发放 offramp 失败: %s" % result.error)
+	if int(state.map.get("rural_marketeers_offramp_supply_remaining", -1)) != 1:
+		return Result.failure("offramp supply 应减为 1，实际: %s" % str(state.map.get("rural_marketeers_offramp_supply_remaining", null)))
+	var pending_val = state.round_state.get("rural_marketeers_offramp_pending", null)
+	if not (pending_val is Dictionary):
+		return Result.failure("应写入 round_state.rural_marketeers_offramp_pending")
+	var pending: Dictionary = pending_val
+	if not bool(pending.get(1, false)):
+		return Result.failure("玩家 1 应被标记为 pending")
+	return Result.success()
+
+static func _test_milestone_effect_fails_fast_on_invalid_pending_flag_type() -> Result:
+	var entry = EntryClass.new()
+	var state := GameState.new()
+	state.players = [{}, {}]
+	state.map = {
+		"rural_marketeers_offramp_supply_remaining": 2,
+	}
+	state.round_state = {
+		"rural_marketeers_offramp_pending": {
+			1: "bad",
+		}
+	}
+	var result := entry._milestone_effect_grant_offramp_placement(state, 1, "", {})
+	if result.ok:
+		return Result.failure("pending flag 类型错误时应失败")
+	var err := str(result.error)
+	if err.find("round_state.rural_marketeers_offramp_pending[1]") < 0:
+		return Result.failure("错误信息应包含 round_state.rural_marketeers_offramp_pending[1]，实际: %s" % err)
 	return Result.success()

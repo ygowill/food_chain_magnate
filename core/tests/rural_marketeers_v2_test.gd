@@ -109,6 +109,12 @@ static func _test_airplane_segment_overlap_rejected(seed_val: int) -> Result:
 	if not r3.ok:
 		return Result.failure("放置 offramp 失败: %s" % r3.error)
 	s = e.get_state()
+	var pending_after_val = s.round_state.get("rural_marketeers_offramp_pending", null)
+	if not (pending_after_val is Dictionary):
+		return Result.failure("放置 offramp 后缺少 round_state.rural_marketeers_offramp_pending")
+	var pending_after: Dictionary = pending_after_val
+	if bool(pending_after.get(0, true)):
+		return Result.failure("放置 offramp 后玩家 0 的 pending 应被清除")
 
 	# 再尝试在同一边放置 airplane（覆盖 y=0..4），应被模块 validator 拒绝（segment overlap, 非同格）
 	var cmd3 := Command.create("initiate_marketing", 0)

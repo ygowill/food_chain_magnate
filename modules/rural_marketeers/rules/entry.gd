@@ -10,6 +10,7 @@ const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const ParseHelpers = preload("res://core/state/serialization/parse_helpers.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
+const RoundStatePlayerBoolFlagsClass = preload("res://core/utils/round_state_player_bool_flags.gd")
 
 const PlaceGiantBillboardActionClass = preload("res://modules/rural_marketeers/actions/place_giant_billboard_action.gd")
 const PlaceHighwayOfframpActionClass = preload("res://modules/rural_marketeers/actions/place_highway_offramp_action.gd")
@@ -280,26 +281,18 @@ func _on_dinnertime_enter_before_primary(state: GameState, _phase_manager: Phase
 func _on_working_marketing_before_exit(state: GameState) -> Result:
 	if state == null:
 		return Result.failure("%s: state 为空" % MODULE_ID)
-	if not (state.round_state is Dictionary):
-		return Result.failure("%s: state.round_state 类型错误（期望 Dictionary）" % MODULE_ID)
-	if not state.round_state.has(OFFRAMP_PENDING_KEY):
-		return Result.success()
-	var pending_val = state.round_state[OFFRAMP_PENDING_KEY]
-	if not (pending_val is Dictionary):
-		return Result.failure("%s: round_state.%s 类型错误（期望 Dictionary）" % [MODULE_ID, OFFRAMP_PENDING_KEY])
-	var pending: Dictionary = pending_val
-
-	var blockers: Array[int] = []
-	for pid in pending.keys():
-		if not (pid is int):
-			continue
-		var v = pending.get(pid, false)
-		if v is bool and bool(v):
-			blockers.append(int(pid))
+	var pending_players_read := RoundStatePlayerBoolFlagsClass.list_true_players(
+		state.round_state,
+		[OFFRAMP_PENDING_KEY],
+		state.players.size(),
+		MODULE_ID
+	)
+	if not pending_players_read.ok:
+		return pending_players_read
+	var blockers: Array = pending_players_read.value
 	if blockers.is_empty():
 		return Result.success()
 
-	blockers.sort()
 	return Result.failure("必须先放置高速公路出口（offramp），否则不能离开 Marketing 子阶段: %s" % str(blockers))
 
 func _milestone_effect_grant_offramp_placement(state: GameState, player_id: int, _milestone_id: String, _effect: Dictionary) -> Result:
@@ -318,14 +311,15 @@ func _milestone_effect_grant_offramp_placement(state: GameState, player_id: int,
 
 	state.map[OFFRAMP_SUPPLY_KEY] = remaining - 1
 
-	if not state.round_state.has(OFFRAMP_PENDING_KEY):
-		state.round_state[OFFRAMP_PENDING_KEY] = {}
-	var pending_val = state.round_state[OFFRAMP_PENDING_KEY]
-	if not (pending_val is Dictionary):
-		return Result.failure("%s: round_state.%s 类型错误（期望 Dictionary）" % [MODULE_ID, OFFRAMP_PENDING_KEY])
-	var pending: Dictionary = pending_val
-	pending[player_id] = true
-	state.round_state[OFFRAMP_PENDING_KEY] = pending
+	var mark_pending := RoundStatePlayerBoolFlagsClass.set_player_flag(
+		state.round_state,
+		[OFFRAMP_PENDING_KEY],
+		player_id,
+		true,
+		MODULE_ID
+	)
+	if not mark_pending.ok:
+		return mark_pending
 
 	return Result.success()
 

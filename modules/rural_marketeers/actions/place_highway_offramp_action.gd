@@ -8,6 +8,7 @@ const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
+const RoundStatePlayerBoolFlagsClass = preload("res://core/utils/round_state_player_bool_flags.gd")
 const ParseHelpers = preload("res://core/state/serialization/parse_helpers.gd")
 
 const MODULE_ID := "rural_marketeers"
@@ -32,15 +33,15 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if command.actor != current_player_id:
 		return Result.failure("不是你的回合")
 
-	if not (state.round_state is Dictionary):
-		return Result.failure("state.round_state 类型错误（期望 Dictionary）")
-	if not state.round_state.has(OFFRAMP_PENDING_KEY):
-		return Result.failure("当前没有可放置的 offramp")
-	var pending_val = state.round_state[OFFRAMP_PENDING_KEY]
-	if not (pending_val is Dictionary):
-		return Result.failure("%s: round_state.%s 类型错误（期望 Dictionary）" % [MODULE_ID, OFFRAMP_PENDING_KEY])
-	var pending: Dictionary = pending_val
-	if not (pending.get(command.actor, false) is bool) or not bool(pending.get(command.actor, false)):
+	var pending_read := RoundStatePlayerBoolFlagsClass.get_player_flag(
+		state.round_state,
+		[OFFRAMP_PENDING_KEY],
+		command.actor,
+		MODULE_ID
+	)
+	if not pending_read.ok:
+		return pending_read
+	if not bool(pending_read.value):
 		return Result.failure("当前没有可放置的 offramp")
 
 	var grid_size_read := MapStateAccessClass.require_grid_size(state, MODULE_ID)
@@ -129,9 +130,15 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if not apply.ok:
 		return apply
 
-	var pending: Dictionary = state.round_state[OFFRAMP_PENDING_KEY]
-	pending[command.actor] = false
-	state.round_state[OFFRAMP_PENDING_KEY] = pending
+	var clear_pending := RoundStatePlayerBoolFlagsClass.set_player_flag(
+		state.round_state,
+		[OFFRAMP_PENDING_KEY],
+		command.actor,
+		false,
+		MODULE_ID
+	)
+	if not clear_pending.ok:
+		return clear_pending
 
 	RoadGraphCacheClass.invalidate_road_graph(state)
 
