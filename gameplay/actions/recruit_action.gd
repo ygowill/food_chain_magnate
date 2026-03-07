@@ -77,7 +77,10 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 	if state.get_current_player_id() != player_id:
 		return false
 
-	var limit := EmployeeRulesClass.get_recruit_limit_for_working(state, player_id)
+	var limit_read := EmployeeRulesClass.try_get_recruit_limit_for_working(state, player_id)
+	if not limit_read.ok:
+		return false
+	var limit := int(limit_read.value)
 	var used := EmployeeRulesClass.get_action_count(state, player_id, action_id)
 	if used >= limit:
 		return false
@@ -88,7 +91,10 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 	if banned_val is Array:
 		banned = banned_val
 
-	var train_limit := EmployeeRulesClass.get_train_limit_for_working(state, player_id)
+	var train_limit_read := EmployeeRulesClass.try_get_train_limit_for_working(state, player_id)
+	if not train_limit_read.ok:
+		return false
+	var train_limit := int(train_limit_read.value)
 	var pending_total := int(EmployeeRulesClass.get_immediate_train_pending_total(state, player_id))
 
 	for emp_val in state.employee_pool.keys():
@@ -139,7 +145,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if available <= 0:
 		# 允许“缺货预支”：当入门级员工堆为空时，仍可招聘，但必须在紧接的 Train 子阶段立刻培训。
 		# 这里不制造“幽灵员工卡”，仅登记待清账；Train 时直接拿目标卡且不归还原卡，以保持供应池守恒不变量。
-		var train_limit := EmployeeRulesClass.get_train_limit_for_working(state, command.actor)
+		var train_limit_read := EmployeeRulesClass.try_get_train_limit_for_working(state, command.actor)
+		if not train_limit_read.ok:
+			return train_limit_read
+		var train_limit := int(train_limit_read.value)
 		if train_limit <= 0:
 			return Result.failure("员工池中没有 %s，且没有可用的培训员进行缺货预支" % employee_type)
 		var max_steps_read := EmployeeRulesClass.try_get_max_train_steps_for_single_employee_for_working(state, command.actor)
@@ -166,7 +175,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if banned.find(employee_type) >= 0:
 		return Result.failure("该员工已被禁用，不能招聘: %s" % employee_type)
 
-	var limit := EmployeeRulesClass.get_recruit_limit_for_working(state, command.actor)
+	var limit_read := EmployeeRulesClass.try_get_recruit_limit_for_working(state, command.actor)
+	if not limit_read.ok:
+		return limit_read
+	var limit := int(limit_read.value)
 	var used := EmployeeRulesClass.get_action_count(state, command.actor, action_id)
 	if used >= limit:
 		return Result.failure("本子阶段招聘次数已用完: %d/%d" % [used, limit])

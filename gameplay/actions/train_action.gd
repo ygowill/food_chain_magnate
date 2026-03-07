@@ -73,7 +73,10 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 		return false
 
 	var pending_total := int(EmployeeRulesClass.get_immediate_train_pending_total(state, player_id))
-	var limit := EmployeeRulesClass.get_train_limit_for_working(state, player_id)
+	var limit_read := EmployeeRulesClass.try_get_train_limit_for_working(state, player_id)
+	if not limit_read.ok:
+		return false
+	var limit := int(limit_read.value)
 	var used := EmployeeRulesClass.get_action_count(state, player_id, action_id)
 
 	if limit <= 0:
@@ -124,7 +127,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		if banned.find(to_employee) >= 0:
 			return Result.failure("该员工已被禁用，不能培训: %s" % to_employee)
 
-	var limit := EmployeeRulesClass.get_train_limit_for_working(state, command.actor)
+	var limit_read := EmployeeRulesClass.try_get_train_limit_for_working(state, command.actor)
+	if not limit_read.ok:
+		return limit_read
+	var limit := int(limit_read.value)
 	if limit <= 0:
 		return Result.failure("没有可用的培训员")
 	var used := EmployeeRulesClass.get_action_count(state, command.actor, action_id)

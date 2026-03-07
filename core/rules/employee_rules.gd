@@ -44,11 +44,17 @@ static func count_active_by_usage_tag_for_working(state: GameState, player: Dict
 static func get_recruit_limit(player: Dictionary) -> int:
 	return Limits.get_recruit_limit(player)
 
+static func try_get_recruit_limit_for_working(state: GameState, player_id: int) -> Result:
+	return Limits.try_get_recruit_limit_for_working(state, player_id)
+
 static func get_recruit_limit_for_working(state: GameState, player_id: int) -> int:
 	return Limits.get_recruit_limit_for_working(state, player_id)
 
 static func get_train_limit(player: Dictionary) -> int:
 	return Limits.get_train_limit(player)
+
+static func try_get_train_limit_for_working(state: GameState, player_id: int) -> Result:
+	return Limits.try_get_train_limit_for_working(state, player_id)
 
 static func get_train_limit_for_working(state: GameState, player_id: int) -> int:
 	return Limits.get_train_limit_for_working(state, player_id)

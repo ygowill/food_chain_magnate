@@ -1170,6 +1170,9 @@ GameSessionContext
 - `refactor(gameplay): tighten pending apply access`
   - 为 `immediate_train_pending` 增补 `Result` 版 add/consume helper，并让 `recruit_action` / `train_action` 在缺货预支登记与清账阶段对损坏的 pending 结构显式 fail-fast。
   - 扩展 focused `train` 状态访问测试，确保非法 `immediate_train_pending` 会在 recruit/train apply 路径失败，且不会提前改写玩家、`employee_pool` 或 `round_state`。
+- `refactor(gameplay): tighten working limit validation access`
+  - 为 `employee_rules/limits` 增补 `Result` 版 recruit/train limit helper，并让 `train_action` / `recruit_action` 在 query / validation 阶段对损坏的 `working_employee_multipliers` 显式 fail-fast / fail-closed，避免旧限制计算路径吞掉状态错误。
+  - 扩展 focused `train` 状态访问测试，覆盖 `train` / `recruit` 的 `can_initiate()` 与 validate 路径，确保非法 `working_employee_multipliers` 不会提前改写玩家、`employee_pool` 或 `round_state`。
 
 当前阶段性结果：
 
