@@ -1110,6 +1110,9 @@ GameSessionContext
 - `refactor(replay): tighten cleanup pending access`
   - 为 `StepTimelineBuild` 增加 `read_has_pending_cleanup_actions()`，并将 replay 构建链路中对 `pending_phase_actions` / `pending_phase_actions[Cleanup]` 的坏状态改为显式失败传播。
   - 新增 focused helper test，覆盖缺失 pending、合法 cleanup pending，以及两类非法 pending 结构。
+- `refactor(gameplay): tighten dinnertime pending item access`
+  - 将 `confirm_dinnertime` 对 `pending_phase_actions[Dinnertime]` 项的解析改为显式校验，拒绝非法 `kind` / `player_id` 被静默跳过，并统一先规划 remaining pending 再落地。
+  - 扩展 focused 状态访问测试，确保非法 pending player_id 会 fail-fast，且不会提前改写 `pending_phase_actions` 或 `online_dinnertime_confirmed_players`。
 
 当前阶段性结果：
 
