@@ -2,6 +2,7 @@ extends RefCounted
 
 const UtilsClass = preload("res://modules/new_milestones/rules/utils.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
+const RoundStatePlayerBoolFlagsClass = preload("res://core/utils/round_state_player_bool_flags.gd")
 
 const MODULE_ID := "new_milestones"
 
@@ -82,13 +83,15 @@ func _on_marketing_initiated_campaign_manager(state: GameState, command: Command
 	if mk_type != "billboard" and mk_type != "mailbox":
 		return Result.success()
 
-	if not state.round_state.has(CM_USED_KEY):
-		state.round_state[CM_USED_KEY] = {}
-	var used_val = state.round_state.get(CM_USED_KEY, null)
-	if not (used_val is Dictionary):
-		return Result.failure("new_milestones:campaign_manager: round_state.%s 类型错误（期望 Dictionary）" % CM_USED_KEY)
-	var used: Dictionary = used_val
-	if used.has(command.actor):
+	var used_read := RoundStatePlayerBoolFlagsClass.get_player_flag(
+		state.round_state,
+		[CM_USED_KEY],
+		int(command.actor),
+		"new_milestones:campaign_manager"
+	)
+	if not used_read.ok:
+		return used_read
+	if bool(used_read.value):
 		return Result.success()
 
 	if not state.round_state.has(CM_PENDING_KEY):
@@ -125,8 +128,15 @@ func _on_marketing_initiated_campaign_manager(state: GameState, command: Command
 		"primary_board_number": board_number,
 	}
 	state.round_state[CM_PENDING_KEY] = pending
-	used[int(command.actor)] = true
-	state.round_state[CM_USED_KEY] = used
+	var used_set := RoundStatePlayerBoolFlagsClass.set_player_flag(
+		state.round_state,
+		[CM_USED_KEY],
+		int(command.actor),
+		true,
+		"new_milestones:campaign_manager"
+	)
+	if not used_set.ok:
+		return used_set
 	return Result.success()
 
 func _on_marketing_initiated_brand_manager(state: GameState, command: Command, marketing_instance: Dictionary) -> Result:
@@ -160,13 +170,15 @@ func _on_marketing_initiated_brand_manager(state: GameState, command: Command, m
 	if mk_type != "airplane":
 		return Result.success()
 
-	if not state.round_state.has(BM_USED_KEY):
-		state.round_state[BM_USED_KEY] = {}
-	var used_val = state.round_state.get(BM_USED_KEY, null)
-	if not (used_val is Dictionary):
-		return Result.failure("new_milestones:brand_manager: round_state.%s 类型错误（期望 Dictionary）" % BM_USED_KEY)
-	var used: Dictionary = used_val
-	if used.has(command.actor):
+	var used_read := RoundStatePlayerBoolFlagsClass.get_player_flag(
+		state.round_state,
+		[BM_USED_KEY],
+		int(command.actor),
+		"new_milestones:brand_manager"
+	)
+	if not used_read.ok:
+		return used_read
+	if bool(used_read.value):
 		return Result.success()
 
 	if not state.round_state.has(BM_PENDING_KEY):
@@ -194,8 +206,15 @@ func _on_marketing_initiated_brand_manager(state: GameState, command: Command, m
 		"product_a": product_a,
 	}
 	state.round_state[BM_PENDING_KEY] = pending
-	used[int(command.actor)] = true
-	state.round_state[BM_USED_KEY] = used
+	var used_set := RoundStatePlayerBoolFlagsClass.set_player_flag(
+		state.round_state,
+		[BM_USED_KEY],
+		int(command.actor),
+		true,
+		"new_milestones:brand_manager"
+	)
+	if not used_set.ok:
+		return used_set
 	return Result.success()
 
 func _on_marketing_initiated_brand_director(state: GameState, command: Command, marketing_instance: Dictionary) -> Result:
