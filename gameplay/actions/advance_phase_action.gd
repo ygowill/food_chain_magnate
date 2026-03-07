@@ -7,6 +7,7 @@ const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const RoundStateOrderOfBusinessClass = preload("res://core/utils/round_state_order_of_business.gd")
+const RoundStateSubPhasePassedClass = preload("res://core/utils/round_state_sub_phase_passed.gd")
 
 var phase_manager: PhaseManager = null
 
@@ -43,14 +44,12 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 			return Result.success()
 		if not (state.round_state is Dictionary):
 			return Result.failure("未初始化(round_state)")
-		assert(state.round_state.has("sub_phase_passed"), "advance_phase: round_state 缺少 sub_phase_passed")
-		var passed_val = state.round_state["sub_phase_passed"]
-		if not (passed_val is Dictionary):
-			return Result.failure("round_state.sub_phase_passed 类型错误（期望 Dictionary）")
-		var passed: Dictionary = passed_val
+		var passed_read := RoundStateSubPhasePassedClass.require_all_player_flags(state.round_state, state.players.size(), "advance_phase")
+		if not passed_read.ok:
+			return passed_read
+		var passed: Dictionary = passed_read.value
 		var missing: Array[int] = []
 		for pid in range(state.players.size()):
-			assert(passed.has(pid) and (passed[pid] is bool), "advance_phase: sub_phase_passed[%d] 缺失或类型错误（期望 bool）" % pid)
 			if not bool(passed[pid]):
 				missing.append(pid)
 		if not missing.is_empty():

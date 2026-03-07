@@ -9,6 +9,7 @@ const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const RoundStateSubPhasePassedClass = preload("res://core/utils/round_state_sub_phase_passed.gd")
 
 var phase_manager: PhaseManager = null
 
@@ -107,14 +108,13 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	# 注意：skip 不应写入 mandatory_actions_completed（强制动作完成记录）。
 	if not (state.round_state is Dictionary):
 		return Result.failure("round_state 类型错误（期望 Dictionary）")
-	assert(state.round_state.has("sub_phase_passed"), "skip: round_state 缺少 sub_phase_passed")
-	var passed_val = state.round_state["sub_phase_passed"]
-	if not (passed_val is Dictionary):
-		return Result.failure("round_state.sub_phase_passed 类型错误（期望 Dictionary）")
-	var passed: Dictionary = passed_val
-	assert(passed.has(player_id) and (passed[player_id] is bool), "skip: sub_phase_passed[%d] 缺失或类型错误（期望 bool）" % player_id)
-	passed[player_id] = true
-	state.round_state["sub_phase_passed"] = passed
+	var set_passed := RoundStateSubPhasePassedClass.set_player_passed(state.round_state, player_id, true, "skip")
+	if not set_passed.ok:
+		return set_passed
+	var passed_read := RoundStateSubPhasePassedClass.require_all_player_flags(state.round_state, state.players.size(), "skip")
+	if not passed_read.ok:
+		return passed_read
+	var passed: Dictionary = passed_read.value
 
 	# Working：确认结束当前玩家的 Working 回合（由 PhaseManager 负责：最后子阶段 -> 下一玩家回合 / 全员结束 -> 离开 Working）
 	if state.phase == DefsClass.PHASE_WORKING:
@@ -132,7 +132,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 	var all_passed := true
 	for pid in range(state.players.size()):
-		assert(passed.has(pid) and (passed[pid] is bool), "skip: sub_phase_passed[%d] 缺失或类型错误（期望 bool）" % pid)
 		if not bool(passed[pid]):
 			all_passed = false
 			break

@@ -8,6 +8,7 @@ const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_a
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const RoundStateSubPhasePassedClass = preload("res://core/utils/round_state_sub_phase_passed.gd")
 
 var phase_manager: PhaseManager = null
 
@@ -81,14 +82,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if state.sub_phase == last_sub_phase:
 		if not (state.round_state is Dictionary):
 			return Result.failure("round_state 类型错误（期望 Dictionary）")
-		assert(state.round_state.has("sub_phase_passed"), "skip_sub_phase: round_state 缺少 sub_phase_passed")
-		var passed_val = state.round_state["sub_phase_passed"]
-		if not (passed_val is Dictionary):
-			return Result.failure("round_state.sub_phase_passed 类型错误（期望 Dictionary）")
-		var passed: Dictionary = passed_val
-		assert(passed.has(command.actor) and (passed[command.actor] is bool), "skip_sub_phase: sub_phase_passed[%d] 缺失或类型错误（期望 bool）" % command.actor)
-		passed[command.actor] = true
-		state.round_state["sub_phase_passed"] = passed
+		var set_passed := RoundStateSubPhasePassedClass.set_player_passed(state.round_state, command.actor, true, "skip_sub_phase")
+		if not set_passed.ok:
+			return set_passed
 
 	return phase_manager.advance_sub_phase(state)
 

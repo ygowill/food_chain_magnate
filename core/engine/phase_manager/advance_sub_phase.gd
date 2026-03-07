@@ -3,6 +3,7 @@ extends RefCounted
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const WorkingFlowClass = preload("res://core/engine/phase_manager/working_flow.gd")
+const RoundStateSubPhasePassedClass = preload("res://core/utils/round_state_sub_phase_passed.gd")
 const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 enum HookType {
@@ -129,17 +130,13 @@ static func _advance_working_sub_phase(pm, state: GameState) -> Result:
 
 		if not (state.round_state is Dictionary):
 			return _rollback_and_return(state, snapshot, Result.failure("Working: round_state 类型错误（期望 Dictionary）"))
-		if not state.round_state.has("sub_phase_passed"):
-			return _rollback_and_return(state, snapshot, Result.failure("Working: round_state.sub_phase_passed 缺失"))
-		var passed_val = state.round_state["sub_phase_passed"]
-		if not (passed_val is Dictionary):
-			return _rollback_and_return(state, snapshot, Result.failure("Working: round_state.sub_phase_passed 类型错误（期望 Dictionary）"))
-		var passed: Dictionary = passed_val
+		var passed_read := RoundStateSubPhasePassedClass.require_all_player_flags(state.round_state, state.players.size(), "Working")
+		if not passed_read.ok:
+			return _rollback_and_return(state, snapshot, passed_read)
+		var passed: Dictionary = passed_read.value
 
 		var all_passed := true
 		for pid in range(state.players.size()):
-			if not passed.has(pid) or not (passed[pid] is bool):
-				return _rollback_and_return(state, snapshot, Result.failure("Working: sub_phase_passed[%d] 缺失或类型错误（期望 bool）" % pid))
 			if not bool(passed[pid]):
 				all_passed = false
 				break

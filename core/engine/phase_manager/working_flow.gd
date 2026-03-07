@@ -5,6 +5,7 @@ extends RefCounted
 const CompanyStructureRulesClass = preload("res://core/rules/company_structure_rules.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
+const RoundStateSubPhasePassedClass = preload("res://core/utils/round_state_sub_phase_passed.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 static func start_new_round(state: GameState) -> void:
@@ -108,10 +109,7 @@ static func reset_sub_phase_passed(state: GameState) -> void:
 		return
 	if not (state.round_state is Dictionary):
 		return
-	var passed := {}
-	for i in range(state.players.size()):
-		passed[i] = false
-	state.round_state["sub_phase_passed"] = passed
+	RoundStateSubPhasePassedClass.reset_flags(state.round_state, state.players.size(), "WorkingFlow.reset_sub_phase_passed")
 
 static func compute_order_of_business_empty_slots(state: GameState, player: Dictionary) -> Result:
 	return _compute_order_of_business_empty_slots(state, player)

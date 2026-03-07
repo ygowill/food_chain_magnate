@@ -5,6 +5,7 @@ extends ActionExecutor
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const RoundStateSubPhasePassedClass = preload("res://core/utils/round_state_sub_phase_passed.gd")
 
 func _init() -> void:
 	action_id = ActionIdsClass.END_TURN
@@ -34,9 +35,7 @@ func _apply_changes(state: GameState, _command: Command) -> Result:
 	if size <= 0:
 		return Result.failure("turn_order 为空")
 
-	var passed := {}
-	if state.round_state is Dictionary and state.round_state.has("sub_phase_passed") and (state.round_state["sub_phase_passed"] is Dictionary):
-		passed = state.round_state["sub_phase_passed"]
+	var passed := RoundStateSubPhasePassedClass.get_flags_or_empty(state.round_state)
 
 	# 找到下一位“未确认结束”的玩家；若全部已确认结束，则保持现状（等待自动推进阶段逻辑处理）
 	for offset in range(1, size + 1):
