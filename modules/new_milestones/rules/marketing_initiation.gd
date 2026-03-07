@@ -25,6 +25,57 @@ const STATE_SCHEMA_ID_CM_USED := "new_milestones:round_state_int_keys:new_milest
 const STATE_SCHEMA_ID_BM_PENDING := "new_milestones:round_state_int_keys:new_milestones_brand_manager_airplane_pending"
 const STATE_SCHEMA_ID_BM_USED := "new_milestones:round_state_int_keys:new_milestones_brand_manager_airplane_used_this_turn"
 
+static func _prefix(label: String) -> String:
+	if label.is_empty():
+		return ""
+	if label.ends_with(": "):
+		return label
+	if label.ends_with(":"):
+		return "%s " % label
+	return "%s: " % label
+
+static func _validate_player_pending_dict(pending: Dictionary, key: String, prefix: String) -> Result:
+	for raw_key in pending.keys():
+		if raw_key is String:
+			var key_str := str(raw_key)
+			if key_str.is_valid_int():
+				return Result.failure("%sround_state.%s 不应包含字符串玩家 key: %s" % [prefix, key, key_str])
+			return Result.failure("%sround_state.%s key 类型错误（期望 int），实际: %s" % [prefix, key, key_str])
+		if not (raw_key is int):
+			return Result.failure("%sround_state.%s key 类型错误（期望 int），实际: %s" % [prefix, key, typeof(raw_key)])
+		var player_id := int(raw_key)
+		if player_id < 0:
+			return Result.failure("%sround_state.%s key 不能为负数: %d" % [prefix, key, player_id])
+		var payload_val = pending.get(raw_key, null)
+		if not (payload_val is Dictionary):
+			return Result.failure("%sround_state.%s[%d] 类型错误（期望 Dictionary）" % [prefix, key, player_id])
+	return Result.success(pending)
+
+static func _get_player_pending_dict(round_state: Dictionary, key: String, label: String) -> Result:
+	var prefix := _prefix(label)
+	if not (round_state is Dictionary):
+		return Result.failure("%sround_state 类型错误（期望 Dictionary）" % prefix)
+	if not round_state.has(key):
+		return Result.success({})
+	var pending_val = round_state.get(key, null)
+	if not (pending_val is Dictionary):
+		return Result.failure("%sround_state.%s 类型错误（期望 Dictionary）" % [prefix, key])
+	var pending: Dictionary = pending_val
+	var validate_r := _validate_player_pending_dict(pending, key, prefix)
+	if not validate_r.ok:
+		return validate_r
+	return Result.success(pending)
+
+static func _set_player_pending_dict(round_state: Dictionary, key: String, pending: Dictionary, label: String) -> Result:
+	var prefix := _prefix(label)
+	if not (round_state is Dictionary):
+		return Result.failure("%sround_state 类型错误（期望 Dictionary）" % prefix)
+	var validate_r := _validate_player_pending_dict(pending, key, prefix)
+	if not validate_r.ok:
+		return validate_r
+	round_state[key] = pending
+	return Result.success(pending)
+
 func register(registrar) -> Result:
 	var r = registrar.register_marketing_initiation_provider(CM_PROVIDER_ID, Callable(self, "_on_marketing_initiated_campaign_manager"), 120)
 	if not r.ok:
@@ -94,13 +145,11 @@ func _on_marketing_initiated_campaign_manager(state: GameState, command: Command
 	if bool(used_read.value):
 		return Result.success()
 
-	if not state.round_state.has(CM_PENDING_KEY):
-		state.round_state[CM_PENDING_KEY] = {}
-	var pending_val = state.round_state.get(CM_PENDING_KEY, null)
-	if not (pending_val is Dictionary):
-		return Result.failure("new_milestones:campaign_manager: round_state.%s 类型错误（期望 Dictionary）" % CM_PENDING_KEY)
-	var pending: Dictionary = pending_val
-	if pending.has(command.actor):
+	var pending_read := _get_player_pending_dict(state.round_state, CM_PENDING_KEY, "new_milestones:campaign_manager")
+	if not pending_read.ok:
+		return pending_read
+	var pending: Dictionary = pending_read.value
+	if pending.has(int(command.actor)):
 		return Result.success()
 
 	var board_number_val = marketing_instance.get("board_number", null)
@@ -127,7 +176,9 @@ func _on_marketing_initiated_campaign_manager(state: GameState, command: Command
 		"remaining_duration": duration,
 		"primary_board_number": board_number,
 	}
-	state.round_state[CM_PENDING_KEY] = pending
+	var set_pending := _set_player_pending_dict(state.round_state, CM_PENDING_KEY, pending, "new_milestones:campaign_manager")
+	if not set_pending.ok:
+		return set_pending
 	var used_set := RoundStatePlayerBoolFlagsClass.set_player_flag(
 		state.round_state,
 		[CM_USED_KEY],
@@ -181,13 +232,11 @@ func _on_marketing_initiated_brand_manager(state: GameState, command: Command, m
 	if bool(used_read.value):
 		return Result.success()
 
-	if not state.round_state.has(BM_PENDING_KEY):
-		state.round_state[BM_PENDING_KEY] = {}
-	var pending_val = state.round_state.get(BM_PENDING_KEY, null)
-	if not (pending_val is Dictionary):
-		return Result.failure("new_milestones:brand_manager: round_state.%s 类型错误（期望 Dictionary）" % BM_PENDING_KEY)
-	var pending: Dictionary = pending_val
-	if pending.has(command.actor):
+	var pending_read := _get_player_pending_dict(state.round_state, BM_PENDING_KEY, "new_milestones:brand_manager")
+	if not pending_read.ok:
+		return pending_read
+	var pending: Dictionary = pending_read.value
+	if pending.has(int(command.actor)):
 		return Result.success()
 
 	var board_number_val = marketing_instance.get("board_number", null)
@@ -205,7 +254,9 @@ func _on_marketing_initiated_brand_manager(state: GameState, command: Command, m
 		"board_number": board_number,
 		"product_a": product_a,
 	}
-	state.round_state[BM_PENDING_KEY] = pending
+	var set_pending := _set_player_pending_dict(state.round_state, BM_PENDING_KEY, pending, "new_milestones:brand_manager")
+	if not set_pending.ok:
+		return set_pending
 	var used_set := RoundStatePlayerBoolFlagsClass.set_player_flag(
 		state.round_state,
 		[BM_USED_KEY],

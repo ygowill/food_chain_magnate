@@ -18,13 +18,19 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_campaign_manager_fails_fast_on_string_used_key()
 	if not r.ok:
 		return r
+	r = _test_campaign_manager_fails_fast_on_string_pending_key()
+	if not r.ok:
+		return r
 	r = _test_brand_manager_sets_used_flag_and_pending()
 	if not r.ok:
 		return r
 	r = _test_brand_manager_fails_fast_on_string_used_key()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 4})
+	r = _test_brand_manager_fails_fast_on_string_pending_key()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 6})
 
 static func _make_state(milestone_id: String) -> GameState:
 	var state := GameState.new()
@@ -97,6 +103,28 @@ static func _test_campaign_manager_fails_fast_on_string_used_key() -> Result:
 		return Result.failure("失败时不应提前写入 campaign manager pending")
 	return Result.success()
 
+static func _test_campaign_manager_fails_fast_on_string_pending_key() -> Result:
+	var rules = RulesClass.new()
+	var state := _make_state(MILESTONE_ID_CAMPAIGN_MANAGER)
+	state.round_state[CM_PENDING_KEY] = {
+		"0": {"link_id": "legacy"},
+	}
+	var result := rules._on_marketing_initiated_campaign_manager(state, _make_campaign_command(), _make_campaign_instance())
+	if result.ok:
+		return Result.failure("string pending key 时应失败")
+	var err := str(result.error)
+	if err.find("round_state.%s" % CM_PENDING_KEY) < 0:
+		return Result.failure("错误信息应包含 round_state.%s，实际: %s" % [CM_PENDING_KEY, err])
+	if state.round_state.has(CM_USED_KEY):
+		return Result.failure("失败时不应提前写入 campaign manager used flag")
+	var pending_val = state.round_state.get(CM_PENDING_KEY, null)
+	if not (pending_val is Dictionary):
+		return Result.failure("失败时应保留原始 pending 字典，实际: %s" % str(pending_val))
+	var pending: Dictionary = pending_val
+	if pending.has(0):
+		return Result.failure("失败时不应补写 int-key campaign manager pending")
+	return Result.success()
+
 static func _test_brand_manager_sets_used_flag_and_pending() -> Result:
 	var rules = RulesClass.new()
 	var state := _make_state(MILESTONE_ID_BRAND_MANAGER)
@@ -134,4 +162,26 @@ static func _test_brand_manager_fails_fast_on_string_used_key() -> Result:
 		return Result.failure("错误信息应包含 round_state.%s，实际: %s" % [BM_USED_KEY, err])
 	if state.round_state.has(BM_PENDING_KEY):
 		return Result.failure("失败时不应提前写入 brand manager pending")
+	return Result.success()
+
+static func _test_brand_manager_fails_fast_on_string_pending_key() -> Result:
+	var rules = RulesClass.new()
+	var state := _make_state(MILESTONE_ID_BRAND_MANAGER)
+	state.round_state[BM_PENDING_KEY] = {
+		"0": {"board_number": 3, "product_a": "burger"},
+	}
+	var result := rules._on_marketing_initiated_brand_manager(state, _make_brand_command(), _make_brand_instance())
+	if result.ok:
+		return Result.failure("string pending key 时应失败")
+	var err := str(result.error)
+	if err.find("round_state.%s" % BM_PENDING_KEY) < 0:
+		return Result.failure("错误信息应包含 round_state.%s，实际: %s" % [BM_PENDING_KEY, err])
+	if state.round_state.has(BM_USED_KEY):
+		return Result.failure("失败时不应提前写入 brand manager used flag")
+	var pending_val = state.round_state.get(BM_PENDING_KEY, null)
+	if not (pending_val is Dictionary):
+		return Result.failure("失败时应保留原始 pending 字典，实际: %s" % str(pending_val))
+	var pending: Dictionary = pending_val
+	if pending.has(0):
+		return Result.failure("失败时不应补写 int-key brand manager pending")
 	return Result.success()
