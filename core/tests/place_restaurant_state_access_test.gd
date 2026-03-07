@@ -28,7 +28,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_apply_fails_fast_on_invalid_placement_entrance_pos_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_apply_fails_fast_on_invalid_player_restaurants_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 4})
 
 static func _build_place_restaurant_working_engine(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -115,6 +118,46 @@ static func _test_apply_fails_fast_on_invalid_placement_response_without_partial
 	var player_restaurants_after: Array = Array(state.players[actor].get("restaurants", []))
 	if player_restaurants_after != player_restaurants_before:
 		return Result.failure("失败时不应提前写入 player.restaurants")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
+	if _map_contains_restaurant_id(state, predicted_rest_id):
+		return Result.failure("失败时不应提前写入餐厅格子结构: %s" % predicted_rest_id)
+	return Result.success()
+
+static func _test_apply_fails_fast_on_invalid_player_restaurants_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	var built := _build_place_restaurant_working_engine(player_count, seed_val)
+	if not built.ok:
+		return built
+	var engine: GameEngine = built.value
+	var state := engine.get_state()
+	var actor := state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("无法获取当前玩家")
+	var cmd := _find_first_valid_restaurant_placement(engine, actor, {"employee_type": "regional_manager"})
+	if cmd == null:
+		return Result.failure("找不到合法的餐厅放置点")
+	var next_id_val = state.map.get("next_restaurant_id", null)
+	if not (next_id_val is int):
+		return Result.failure("map.next_restaurant_id 类型错误（期望 int）")
+	var next_id_before: int = int(next_id_val)
+	var predicted_rest_id := "rest_%d" % next_id_before
+	state.players[actor]["restaurants"] = "bad"
+	var player_before := str(state.players[actor])
+	var round_state_before := str(state.round_state)
+	var exec_result := engine.execute_command(cmd)
+	if exec_result.ok:
+		return Result.failure("player.restaurants 类型错误时 place_restaurant apply 应失败")
+	var err := str(exec_result.error)
+	if err.find("player[%d].restaurants" % actor) < 0:
+		return Result.failure("错误信息应包含 player[%d].restaurants，实际: %s" % [actor, err])
+	state = engine.get_state()
+	var next_id_after = state.map.get("next_restaurant_id", null)
+	if not (next_id_after is int) or int(next_id_after) != next_id_before:
+		return Result.failure("失败时不应提前递增 next_restaurant_id，实际: %s" % str(next_id_after))
+	if state.map.get("restaurants", {}).has(predicted_rest_id):
+		return Result.failure("失败时不应提前写入 map.restaurants: %s" % predicted_rest_id)
+	if str(state.players[actor]) != player_before:
+		return Result.failure("失败时不应提前改写 player")
 	if str(state.round_state) != round_state_before:
 		return Result.failure("失败时不应提前改写 round_state")
 	if _map_contains_restaurant_id(state, predicted_rest_id):

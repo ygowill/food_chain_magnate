@@ -11,6 +11,7 @@ const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
+const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY := "opening_soon_restaurants"
@@ -274,10 +275,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		state.map.restaurants[restaurant_id] = restaurant_data
 
 		# 添加到玩家餐厅列表
-		var player := state.get_player(player_id)
-		assert(not player.is_empty(), "place_restaurant: player 不存在: %d" % player_id)
-		assert(player.has("restaurants") and (player["restaurants"] is Array), "place_restaurant: player.restaurants 缺失或类型错误（期望 Array）")
-		var restaurants: Array = player["restaurants"]
+		var restaurants_read := PlayerStateAccessClass.require_player_restaurants(state, player_id, action_id)
+		if not restaurants_read.ok:
+			return restaurants_read
+		var restaurants: Array = restaurants_read.value
 		restaurants.append(restaurant_id)
 		state.players[player_id]["restaurants"] = restaurants
 
