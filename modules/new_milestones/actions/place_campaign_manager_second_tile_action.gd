@@ -258,6 +258,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return placements_read
 	var placements: Dictionary = placements_read.value
 
+	var pending_val = state.round_state.get(PENDING_KEY, null)
+	if not (pending_val is Dictionary):
+		return Result.failure("round_state.%s 类型错误（期望 Dictionary）" % PENDING_KEY)
+	var pending: Dictionary = (pending_val as Dictionary).duplicate(true)
+	pending.erase(player_id)
+
 	var instance := {
 		"board_number": board_number,
 		"type": mk_type,
@@ -288,10 +294,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"tile_index": -1,
 	}
 	state.map["marketing_placements"] = placements
-
-	# 消耗本回合能力
-	var pending: Dictionary = state.round_state[PENDING_KEY]
-	pending.erase(player_id)
 	state.round_state[PENDING_KEY] = pending
 
 	return Result.success({
