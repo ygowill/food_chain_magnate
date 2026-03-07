@@ -14,7 +14,10 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_invalid_employee_entry_fails_fast()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_invalid_existing_marketing_rounds_fails_fast_without_overwrite()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 4})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -57,4 +60,19 @@ static func _test_invalid_employee_entry_fails_fast() -> Result:
 	var err := str(result.error)
 	if err.find("players[0].employees[0]") < 0:
 		return Result.failure("错误信息应包含 players[0].employees[0]，实际: %s" % err)
+	return Result.success()
+
+static func _test_invalid_existing_marketing_rounds_fails_fast_without_overwrite() -> Result:
+	var state := _make_state()
+	state.round_state["marketing_rounds"] = {}
+	var before := str(state.round_state)
+	var entry = EntryClass.new()
+	var result := entry._on_marketing_before_primary(state, null)
+	if result.ok:
+		return Result.failure("marketing_rounds 类型错误时应失败")
+	var err := str(result.error)
+	if err.find("marketing_rounds") < 0:
+		return Result.failure("错误信息应包含 marketing_rounds，实际: %s" % err)
+	if str(state.round_state) != before:
+		return Result.failure("失败时不应覆盖已有的 marketing_rounds")
 	return Result.success()

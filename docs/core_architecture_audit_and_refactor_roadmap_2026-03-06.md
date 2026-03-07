@@ -1098,6 +1098,9 @@ GameSessionContext
 - `refactor(modules): tighten reserve price bankruptcy access`
   - 将 `reserve_prices` 第一次破产对 `round_state.bankruptcy.events` 的校验前移到实际揭示储备卡、改写银行与规则状态之前，并把事件写回改为显式 `Result` 失败返回。
   - 新增 focused test，确保 `bankruptcy.events` 类型错误时第一次破产会 fail-fast，且不会提前揭示储备卡、改写 bank、rules 或 `round_state`。
+- `refactor(modules): tighten mass marketeers round access`
+  - 将 `mass_marketeers` 对 `round_state.marketing_rounds` 的覆盖写回改为先校验已有值，拒绝非法旧状态被静默覆盖。
+  - 新增 focused test，确保 `marketing_rounds` 类型错误时 `_on_marketing_before_primary()` fail-fast，且不会覆盖已有坏状态。
 
 当前阶段性结果：
 
