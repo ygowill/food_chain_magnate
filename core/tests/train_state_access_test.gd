@@ -34,7 +34,13 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_compute_initial_token_counts_fails_fast_on_invalid_immediate_train_pending_string_player_key()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 8})
+	r = _test_read_player_locks_fails_fast_on_invalid_train_employee_locks_string_player_key()
+	if not r.ok:
+		return r
+	r = _test_ensure_player_locks_fails_fast_on_invalid_train_employee_locks_string_player_key()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 10})
 
 static func _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count: int, seed_val: int) -> Result:
 	var built := _build_train_state(player_count, seed_val)
@@ -337,4 +343,44 @@ static func _test_compute_initial_token_counts_fails_fast_on_invalid_immediate_t
 	var err := str(result.error)
 	if err.find("immediate_train_pending") < 0 or err.find("字符串玩家 key") < 0:
 		return Result.failure("错误信息应包含 immediate_train_pending 与 字符串玩家 key，实际: %s" % err)
+	return Result.success()
+
+static func _test_read_player_locks_fails_fast_on_invalid_train_employee_locks_string_player_key() -> Result:
+	var state := GameState.new()
+	state.round_state = {
+		"train_employee_locks": {
+			"0": {},
+		},
+	}
+	var result := TrainEmployeeLocksClass._read_player_locks(state, 0)
+	if result.ok:
+		return Result.failure("字符串玩家 key 时 _read_player_locks 应失败")
+	var err := str(result.error)
+	if err.find("train_employee_locks") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 train_employee_locks 与 字符串玩家 key，实际: %s" % err)
+	return Result.success()
+
+static func _test_ensure_player_locks_fails_fast_on_invalid_train_employee_locks_string_player_key() -> Result:
+	var state := GameState.new()
+	state.players = [{
+		"employees": ["trainer"],
+		"reserve_employees": [],
+	}]
+	state.round_state = {
+		"train_employee_locks": {
+			"0": {
+				"management_trainee": [{"trainer_id": "trainer", "instance_idx": 0}],
+			},
+		},
+	}
+	var before := str(state.round_state.get("train_employee_locks", null))
+	var reserve: Array = []
+	var result := TrainEmployeeLocksClass._ensure_player_locks(state, 0, reserve)
+	if result.ok:
+		return Result.failure("字符串玩家 key 时 _ensure_player_locks 应失败")
+	var err := str(result.error)
+	if err.find("train_employee_locks") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 train_employee_locks 与 字符串玩家 key，实际: %s" % err)
+	if str(state.round_state.get("train_employee_locks", null)) != before:
+		return Result.failure("失败时不应覆盖已有的 train_employee_locks")
 	return Result.success()

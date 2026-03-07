@@ -111,6 +111,11 @@ static func _build_tokens_from_counts(counts: Dictionary) -> Dictionary:
 		out[emp_id] = tokens
 	return out
 
+static func _fail_on_string_player_key(all: Dictionary, player_id: int) -> Result:
+	if all.has(str(player_id)):
+		return Result.failure("round_state.%s 不应包含字符串玩家 key: %s" % [ROUND_STATE_KEY, str(player_id)])
+	return Result.success()
+
 static func _read_player_locks(state: GameState, player_id: int) -> Result:
 	if state == null or not (state.round_state is Dictionary):
 		return Result.failure("train_locks: state/round_state 无效")
@@ -121,7 +126,9 @@ static func _read_player_locks(state: GameState, player_id: int) -> Result:
 	if not (all_val is Dictionary):
 		return Result.failure("round_state.%s 类型错误（期望 Dictionary）" % ROUND_STATE_KEY)
 	var all: Dictionary = all_val
-	assert(not all.has(str(player_id)), "round_state.%s 不应包含字符串玩家 key: %s" % [ROUND_STATE_KEY, str(player_id)])
+	var key_check := _fail_on_string_player_key(all, player_id)
+	if not key_check.ok:
+		return key_check
 	if not all.has(player_id):
 		return Result.success(null)
 	var per_val = all.get(player_id, null)
@@ -139,7 +146,9 @@ static func _ensure_player_locks(state: GameState, player_id: int, reserve: Arra
 	if not (all_val is Dictionary):
 		return Result.failure("round_state.%s 类型错误（期望 Dictionary）" % ROUND_STATE_KEY)
 	var all: Dictionary = all_val
-	assert(not all.has(str(player_id)), "round_state.%s 不应包含字符串玩家 key: %s" % [ROUND_STATE_KEY, str(player_id)])
+	var key_check := _fail_on_string_player_key(all, player_id)
+	if not key_check.ok:
+		return key_check
 
 	if all.has(player_id):
 		return Result.success(all[player_id])
@@ -332,7 +341,9 @@ static func apply_move_token_and_lock(
 	if not (all_val is Dictionary):
 		return Result.failure("round_state.%s 类型错误（期望 Dictionary）" % ROUND_STATE_KEY)
 	var all: Dictionary = all_val
-	assert(not all.has(str(player_id)), "round_state.%s 不应包含字符串玩家 key: %s" % [ROUND_STATE_KEY, str(player_id)])
+	var key_check := _fail_on_string_player_key(all, player_id)
+	if not key_check.ok:
+		return key_check
 	all[player_id] = locks
 	state.round_state[ROUND_STATE_KEY] = all
 
