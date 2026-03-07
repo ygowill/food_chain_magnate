@@ -224,6 +224,11 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if steps_required <= 0:
 		return Result.failure("train: 无法按培训路径培训: %s -> %s" % [from_employee, to_employee])
 
+	var train_events_read := _read_train_events(state)
+	if not train_events_read.ok:
+		return train_events_read
+	var train_events: Array = train_events_read.value
+
 	var multi_val = player.get("multi_trainer_on_one", false)
 	if not (multi_val is bool):
 		return Result.failure("train: player.multi_trainer_on_one 类型错误（期望 bool）")
@@ -302,23 +307,16 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		EmployeeRulesClass.increment_action_count(state, player_id, action_id)
 
 	# 记录训练事件（供模块在 Train 子阶段注入“训练后可选动作窗口”等逻辑使用）
-	if state.round_state is Dictionary:
-		if not state.round_state.has("train_events"):
-			state.round_state["train_events"] = []
-		var te_val = state.round_state.get("train_events", null)
-		if not (te_val is Array):
-			return Result.failure("train: round_state.train_events 类型错误（期望 Array）")
-		var train_events: Array = te_val
-		train_events.append({
-			"player_id": player_id,
-			"from_employee": from_employee,
-			"to_employee": to_employee,
-			"from_pending": use_pending,
-			"steps": steps_required,
-			"trainer_id": trainer_id,
-			"trainer_instance_idx": trainer_instance_idx,
-		})
-		state.round_state["train_events"] = train_events
+	train_events.append({
+		"player_id": player_id,
+		"from_employee": from_employee,
+		"to_employee": to_employee,
+		"from_pending": use_pending,
+		"steps": steps_required,
+		"trainer_id": trainer_id,
+		"trainer_instance_idx": trainer_instance_idx,
+	})
+	state.round_state["train_events"] = train_events
 
 	var ms := MilestoneSystemClass.process_event(state, "Train", {"player_id": player_id})
 
@@ -339,6 +337,18 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		result.with_warning("里程碑触发失败(Train): %s" % ms.error)
 	result.with_warnings(warnings)
 	return result
+
+static func _read_train_events(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("train: state 为空")
+	if not (state.round_state is Dictionary):
+		return Result.failure("train: round_state 类型错误（期望 Dictionary）")
+	var te_val = state.round_state.get("train_events", null)
+	if te_val == null:
+		return Result.success([])
+	if not (te_val is Array):
+		return Result.failure("train: round_state.train_events 类型错误（期望 Array）")
+	return Result.success(Array(te_val).duplicate(true))
 
 func _generate_specific_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []

@@ -58,6 +58,7 @@ const GameOverWinnerRulesTestClass = preload("res://core/tests/game_over_winner_
 const CommandPrivacyTestClass = preload("res://core/tests/command_privacy_test.gd")
 const InitialCompanyTestClass = preload("res://core/tests/initial_company_test.gd")
 const MandatoryActionsTestClass = preload("res://core/tests/mandatory_actions_test.gd")
+const TrainStateAccessTestClass = preload("res://core/tests/train_state_access_test.gd")
 const PriceModifierStateAccessTestClass = preload("res://core/tests/price_modifier_state_access_test.gd")
 const SkipMandatoryActionsStateAccessTestClass = preload("res://core/tests/skip_mandatory_actions_state_access_test.gd")
 const RuralMarketeersAutoAdvanceUnblockedTestClass = preload("res://core/tests/rural_marketeers_auto_advance_unblocked_test.gd")

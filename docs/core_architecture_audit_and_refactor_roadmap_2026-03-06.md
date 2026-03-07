@@ -1083,6 +1083,9 @@ GameSessionContext
   - 新增 `RoundStatePlayerIntMaps`，并将 `set_price` / `set_discount` / `set_luxury_price` 的 `price_modifiers` 写入统一收口到 helper。
   - 调整三条动作的 apply 顺序，先校验并写入 `price_modifiers`，再标记 `mandatory_actions_completed`，避免坏状态下留下半提交。
   - 新增 focused test，确保 `price_modifiers` 使用字符串玩家 key 时不提前标记 mandatory action，也不补写 int-key modifier。
+- `refactor(gameplay): tighten train event access`
+  - 将 `train` 对 `round_state.train_events` 的预检前移到实际培训变更之前，避免坏状态下先改写员工、供应池或 `round_state` 其它字段后才失败。
+  - 新增 focused test，确保 `train_events` 类型错误时不提前改写玩家员工状态、`employee_pool` 或 `round_state`。
 
 当前阶段性结果：
 
