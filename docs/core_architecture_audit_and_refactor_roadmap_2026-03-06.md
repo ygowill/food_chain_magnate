@@ -1203,6 +1203,9 @@ GameSessionContext
 - `refactor(gameplay): tighten place house placement payload access`
   - 为 `place_house` 增补 placement payload 读取 helper，并让 apply 阶段在 `validate_placement()` 返回值或 `footprint_cells` 契约损坏时显式 fail-fast，而不是在消耗房屋编号前依赖隐式 payload 结构。
   - 扩展 focused `place_house` 状态访问测试，通过注入坏 payload 覆盖两类失败分支，确保不会提前改写房屋编号供给、`map.houses`、格子结构或 `round_state`。
+- `refactor(gameplay): tighten submit restructuring player access`
+  - 将 `submit_restructuring` 对玩家、`employees`、`reserve_employees`、`company_structure` 的 apply 读取统一改为走 `PlayerStateAccess`，让坏玩家结构返回可诊断错误，而不是在重组修复/归一化前触发硬断言。
+  - 扩展 focused `submit_restructuring` 状态访问测试，覆盖非法 `player.employees` 与 `player.company_structure`，确保失败时不会提前改写玩家结构或 `round_state.restructuring`。
 
 当前阶段性结果：
 

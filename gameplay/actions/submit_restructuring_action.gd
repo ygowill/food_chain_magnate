@@ -105,16 +105,19 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		pending = pending_read.value
 
 	var player_id: int = command.actor
-	var player_val = state.players[player_id]
-	assert(player_val is Dictionary, "submit_restructuring: player 类型错误（期望 Dictionary）")
-	var player: Dictionary = player_val
+	var player_read := PlayerStateAccessClass.require_player(state, player_id, action_id)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
 
-	var employees_val = player.get("employees", null)
-	assert(employees_val is Array, "submit_restructuring: player.employees 类型错误（期望 Array）")
-	var employees: Array = employees_val
-	var reserve_val = player.get("reserve_employees", null)
-	assert(reserve_val is Array, "submit_restructuring: player.reserve_employees 类型错误（期望 Array）")
-	var reserve: Array = reserve_val
+	var employees_read := PlayerStateAccessClass.require_employees(player, "player[%d]" % player_id, action_id)
+	if not employees_read.ok:
+		return employees_read
+	var employees: Array = employees_read.value
+	var reserve_read := PlayerStateAccessClass.require_reserve_employees(player, "player[%d]" % player_id, action_id)
+	if not reserve_read.ok:
+		return reserve_read
+	var reserve: Array = reserve_read.value
 
 	# 容错：若 CEO 在待命区，自动纠正回在岗（对齐 base_rules:restructuring_before_exit 的修复策略）
 	if employees.has("ceo") and reserve.has("ceo"):
@@ -135,9 +138,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		else:
 			return Result.failure("重组提交：玩家缺少 CEO（在岗/待命均未找到）")
 
-	var cs_val = player.get("company_structure", null)
-	assert(cs_val is Dictionary, "submit_restructuring: player.company_structure 类型错误（期望 Dictionary）")
-	var cs: Dictionary = cs_val
+	var cs_read := PlayerStateAccessClass.require_company_structure(player, "player[%d]" % player_id, action_id)
+	if not cs_read.ok:
+		return cs_read
+	var cs: Dictionary = cs_read.value
 
 	var slots_raw = cs.get("ceo_slots", 0)
 	var ceo_slots := 0
