@@ -7,6 +7,7 @@ const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const TrainEmployeeUsageClass = preload("res://gameplay/actions/train/train_employee_usage.gd")
+const TrainEmployeeLocksClass = preload("res://gameplay/actions/train/train_employee_locks.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var r := _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count, seed_val)
@@ -30,7 +31,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_read_employee_used_before_training_fails_fast_on_invalid_marketing_used()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 7})
+	r = _test_compute_initial_token_counts_fails_fast_on_invalid_immediate_train_pending_string_player_key()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 8})
 
 static func _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count: int, seed_val: int) -> Result:
 	var built := _build_train_state(player_count, seed_val)
@@ -313,4 +317,24 @@ static func _test_read_employee_used_before_training_fails_fast_on_invalid_marke
 	var err := str(read.error)
 	if err.find("marketing_used") < 0:
 		return Result.failure("错误信息应包含 marketing_used，实际: %s" % err)
+	return Result.success()
+
+static func _test_compute_initial_token_counts_fails_fast_on_invalid_immediate_train_pending_string_player_key() -> Result:
+	var state := GameState.new()
+	state.players = [{
+		"employees": ["trainer"],
+		"reserve_employees": [],
+	}]
+	state.round_state = {
+		"immediate_train_pending": {
+			"0": {"management_trainee": 1},
+		},
+	}
+	var reserve: Array = []
+	var result := TrainEmployeeLocksClass._compute_initial_token_counts(state, 0, reserve)
+	if result.ok:
+		return Result.failure("字符串玩家 key 时 _compute_initial_token_counts 应失败")
+	var err := str(result.error)
+	if err.find("immediate_train_pending") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 immediate_train_pending 与 字符串玩家 key，实际: %s" % err)
 	return Result.success()

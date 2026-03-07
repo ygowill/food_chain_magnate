@@ -1134,6 +1134,9 @@ GameSessionContext
 - `refactor(gameplay): tighten train phase pending baseline access`
   - 将 `train_phase_start_counts` 对 `round_state.immediate_train_pending` 的字符串玩家 key 检查从 `assert` 改为显式 `Result` 失败，避免坏状态在读基线计数时触发硬断言。
   - 扩展 focused 状态访问测试，确保非法 `immediate_train_pending` 会 fail-fast，且不会提前写入 `train_phase_start_counts`。
+- `refactor(gameplay): tighten train lock pending baseline access`
+  - 将 `train_employee_locks` 对 `round_state.immediate_train_pending` 的字符串玩家 key 检查从 `assert` 改为显式 `Result` 失败，避免坏状态在构建 token 基线时触发硬断言。
+  - 扩展 focused `train` 状态访问测试，确保非法 `immediate_train_pending` 会 fail-fast，并返回可诊断的契约错误。
 
 当前阶段性结果：
 
