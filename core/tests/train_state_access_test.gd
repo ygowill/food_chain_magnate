@@ -9,6 +9,8 @@ const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const TrainEmployeeUsageClass = preload("res://gameplay/actions/train/train_employee_usage.gd")
 const TrainEmployeeLocksClass = preload("res://gameplay/actions/train/train_employee_locks.gd")
 const TrainSlotUsageStorageClass = preload("res://core/rules/employee_rules/train_slot_usage_storage.gd")
+const TrainSlotUsageAllocatorClass = preload("res://core/rules/employee_rules/train_slot_usage_allocator.gd")
+const TrainSlotUsageProvidersClass = preload("res://core/rules/employee_rules/train_slot_usage_providers.gd")
 const RecruitActionClass = preload("res://gameplay/actions/recruit_action.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
@@ -69,6 +71,18 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_train_validate_fails_fast_on_invalid_working_employee_multipliers_limit_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
+	r = _test_try_get_train_providers_fails_fast_on_invalid_working_employee_multipliers(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_try_get_max_train_steps_fails_fast_on_invalid_working_employee_multipliers(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_can_allocate_train_slots_fails_fast_on_invalid_working_employee_multipliers_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_allocate_train_slots_fails_fast_on_invalid_working_employee_multipliers_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
 	r = _test_recruit_can_initiate_fails_closed_on_invalid_working_employee_multipliers(player_count, seed_val)
 	if not r.ok:
 		return r
@@ -87,7 +101,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_train_apply_fails_fast_on_invalid_immediate_train_pending_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 25})
+	return Result.success({"cases": 29})
 
 static func _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count: int, seed_val: int) -> Result:
 	var built := _build_train_state(player_count, seed_val)
@@ -646,6 +660,82 @@ static func _test_train_validate_fails_fast_on_invalid_working_employee_multipli
 	if str(state.employee_pool) != pool_before:
 		return Result.failure("失败时不应提前改写 employee_pool")
 	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_try_get_train_providers_fails_fast_on_invalid_working_employee_multipliers(player_count: int, seed_val: int) -> Result:
+	var built := _build_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["working_employee_multipliers"] = {
+		"0": {"trainer": 2},
+	}
+	var before := str(state.round_state)
+	var read := TrainSlotUsageProvidersClass.try_get_train_providers_for_working(state, 0)
+	if read.ok:
+		return Result.failure("working_employee_multipliers 使用字符串玩家 key 时读取培训员 providers 应失败")
+	var err := str(read.error)
+	if err.find("working_employee_multipliers") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 working_employee_multipliers 与 字符串玩家 key，实际: %s" % err)
+	if str(state.round_state) != before:
+		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_try_get_max_train_steps_fails_fast_on_invalid_working_employee_multipliers(player_count: int, seed_val: int) -> Result:
+	var built := _build_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["working_employee_multipliers"] = {
+		"0": {"trainer": 2},
+	}
+	var before := str(state.round_state)
+	var read := TrainSlotUsageAllocatorClass.try_get_max_train_steps_for_single_employee_for_working(state, 0)
+	if read.ok:
+		return Result.failure("working_employee_multipliers 使用字符串玩家 key 时读取 max train steps 应失败")
+	var err := str(read.error)
+	if err.find("working_employee_multipliers") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 working_employee_multipliers 与 字符串玩家 key，实际: %s" % err)
+	if str(state.round_state) != before:
+		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_can_allocate_train_slots_fails_fast_on_invalid_working_employee_multipliers_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	var built := _build_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["working_employee_multipliers"] = {
+		"0": {"trainer": 2},
+	}
+	var before := str(state.round_state)
+	var result := TrainSlotUsageAllocatorClass.can_allocate_train_slots_for_working(state, 0, 1)
+	if result.ok:
+		return Result.failure("working_employee_multipliers 使用字符串玩家 key 时 can_allocate_train_slots_for_working 应失败")
+	var err := str(result.error)
+	if err.find("working_employee_multipliers") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 working_employee_multipliers 与 字符串玩家 key，实际: %s" % err)
+	if str(state.round_state) != before:
+		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_allocate_train_slots_fails_fast_on_invalid_working_employee_multipliers_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	var built := _build_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["working_employee_multipliers"] = {
+		"0": {"trainer": 2},
+	}
+	var before := str(state.round_state)
+	var result := TrainSlotUsageAllocatorClass.allocate_train_slots_for_working(state, 0, 1)
+	if result.ok:
+		return Result.failure("working_employee_multipliers 使用字符串玩家 key 时 allocate_train_slots_for_working 应失败")
+	var err := str(result.error)
+	if err.find("working_employee_multipliers") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 working_employee_multipliers 与 字符串玩家 key，实际: %s" % err)
+	if str(state.round_state) != before:
 		return Result.failure("失败时不应提前改写 round_state")
 	return Result.success()
 

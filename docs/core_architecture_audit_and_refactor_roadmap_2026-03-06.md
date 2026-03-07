@@ -1173,6 +1173,9 @@ GameSessionContext
 - `refactor(gameplay): tighten working limit validation access`
   - 为 `employee_rules/limits` 增补 `Result` 版 recruit/train limit helper，并让 `train_action` / `recruit_action` 在 query / validation 阶段对损坏的 `working_employee_multipliers` 显式 fail-fast / fail-closed，避免旧限制计算路径吞掉状态错误。
   - 扩展 focused `train` 状态访问测试，覆盖 `train` / `recruit` 的 `can_initiate()` 与 validate 路径，确保非法 `working_employee_multipliers` 不会提前改写玩家、`employee_pool` 或 `round_state`。
+- `refactor(core): tighten train provider allocation access`
+  - 为 `train_slot_usage_providers` 增补 `Result` 版 provider 读取 helper，并让 `train_slot_usage_allocator` 在 provider / max-step / slot allocation 链路上对损坏的 `working_employee_multipliers` 显式 fail-fast。
+  - 扩展 focused `train` 状态访问测试，覆盖 provider 读取、max-step 计算、slot 规划与分配路径，确保非法 `working_employee_multipliers` 不会提前改写 `round_state`。
 
 当前阶段性结果：
 

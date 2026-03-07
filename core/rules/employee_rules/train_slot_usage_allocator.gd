@@ -27,7 +27,10 @@ static func try_get_max_train_steps_for_single_employee_for_working(state: GameS
 		return Result.failure("train_slot_usage: state 为空")
 	if not (state.round_state is Dictionary):
 		return Result.failure("train_slot_usage: round_state 类型错误（期望 Dictionary）")
-	var providers := ProvidersClass.get_train_providers_for_working(state, player_id)
+	var providers_read := ProvidersClass.try_get_train_providers_for_working(state, player_id)
+	if not providers_read.ok:
+		return providers_read
+	var providers: Array = providers_read.value
 	var best := 0
 	for p in providers:
 		var emp_id: String = str(p.get("id", ""))
@@ -66,7 +69,10 @@ static func can_allocate_train_slots_for_working(
 	if state == null or not (state.round_state is Dictionary):
 		return Result.failure("can_allocate_train_slots_for_working: state/round_state 无效")
 
-	var providers := ProvidersClass.get_train_providers_for_working(state, player_id)
+	var providers_read := ProvidersClass.try_get_train_providers_for_working(state, player_id)
+	if not providers_read.ok:
+		return providers_read
+	var providers: Array = providers_read.value
 	if providers.is_empty():
 		return Result.failure("没有可用的培训员")
 
