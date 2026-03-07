@@ -82,6 +82,9 @@ static func try_get_immediate_train_pending_total(state: GameState, player_id: i
 static func get_immediate_train_pending_total(state: GameState, player_id: int) -> int:
 	return ImmediateTrainPending.get_immediate_train_pending_total(state, player_id)
 
+static func try_has_any_immediate_train_pending(state: GameState) -> Result:
+	return ImmediateTrainPending.try_has_any_immediate_train_pending(state)
+
 static func has_any_immediate_train_pending(state: GameState) -> bool:
 	return ImmediateTrainPending.has_any_immediate_train_pending(state)
 

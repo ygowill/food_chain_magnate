@@ -309,7 +309,10 @@ func _on_working_before_exit(state: GameState) -> Result:
 		return Result.failure("base_rules:working_before_exit: state 为空")
 
 	# 招聘缺货预支约束：若存在待清账的“紧接培训”，则禁止跳过 Working 阶段。
-	if EmployeeRulesClass.has_any_immediate_train_pending(state):
+	var pending_any_read := EmployeeRulesClass.try_has_any_immediate_train_pending(state)
+	if not pending_any_read.ok:
+		return pending_any_read
+	if bool(pending_any_read.value):
 		return Result.failure("存在缺货预支待培训员工，必须在 Train 子阶段紧接完成培训")
 
 	# 强制动作检查：离开 Working 阶段前，检查所有玩家是否完成了必须的强制动作
@@ -321,7 +324,10 @@ func _on_working_before_exit(state: GameState) -> Result:
 func _on_train_before_exit(state: GameState) -> Result:
 	if state == null:
 		return Result.failure("base_rules:train_before_exit: state 为空")
-	if EmployeeRulesClass.has_any_immediate_train_pending(state):
+	var pending_any_read := EmployeeRulesClass.try_has_any_immediate_train_pending(state)
+	if not pending_any_read.ok:
+		return pending_any_read
+	if bool(pending_any_read.value):
 		return Result.failure("存在缺货预支待培训员工，无法推进子阶段（需先在 Train 完成培训）")
 	return Result.success()
 

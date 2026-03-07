@@ -63,6 +63,7 @@ const TrainPhaseStartCountsStateAccessTestClass = preload("res://core/tests/trai
 const TrainStateAccessTestClass = preload("res://core/tests/train_state_access_test.gd")
 const PriceModifierStateAccessTestClass = preload("res://core/tests/price_modifier_state_access_test.gd")
 const SkipMandatoryActionsStateAccessTestClass = preload("res://core/tests/skip_mandatory_actions_state_access_test.gd")
+const BaseRulesPhaseAndMapStateAccessTestClass = preload("res://core/tests/base_rules_phase_and_map_state_access_test.gd")
 const RuralMarketeersAutoAdvanceUnblockedTestClass = preload("res://core/tests/rural_marketeers_auto_advance_unblocked_test.gd")
 const ProduceFoodTestClass = preload("res://core/tests/produce_food_test.gd")
 const ProcureDrinksTestClass = preload("res://core/tests/procure_drinks_test.gd")
