@@ -1191,6 +1191,9 @@ GameSessionContext
 - `refactor(gameplay): tighten move restaurant cell array access`
   - 继续收紧 `move_restaurant` 对旧餐厅 `cells` 数组元素的读取，让 `Vector2i` 元素契约在 validate/apply 阶段走显式 `Result` 失败，而不是在清理旧格时触发硬断言。
   - 扩展 focused `move_restaurant` 状态访问测试，覆盖 `cells` 数组元素损坏时的 validate/apply fail-fast 行为，确保不会提前改写玩家、`map` 或 `round_state`。
+- `refactor(gameplay): tighten move restaurant placement payload access`
+  - 为 `move_restaurant` 增补 placement payload 读取 helper，并让 apply 阶段在 `validate_restaurant_placement()` 返回值、`footprint_cells` 或 `entrance_pos` 契约损坏时显式 fail-fast，而不是触发硬断言。
+  - 扩展 focused `move_restaurant` 状态访问测试，通过注入坏 payload 覆盖三类失败分支，确保不会提前改写玩家、`map` 或 `round_state`。
 
 当前阶段性结果：
 

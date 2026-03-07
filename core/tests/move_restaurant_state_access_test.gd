@@ -6,6 +6,18 @@ const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const MoveRestaurantActionClass = preload("res://gameplay/actions/move_restaurant_action.gd")
+
+class FakePlacementValidator:
+	extends RefCounted
+
+	var _value
+
+	func _init(value) -> void:
+		_value = value
+
+	func validate_restaurant_placement(_map_ctx: Dictionary, _world_anchor: Vector2i, _rotation: int, _piece_registry: Dictionary, _player_id: int, _is_initial: bool, _options: Dictionary) -> Result:
+		return Result.success(_value)
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var r := _test_validate_fails_fast_on_invalid_restaurant_owner_without_partial_mutation(player_count, seed_val)
@@ -23,7 +35,16 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_apply_fails_fast_on_invalid_restaurant_cell_entry_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 5})
+	r = _test_apply_fails_fast_on_invalid_placement_payload_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_apply_fails_fast_on_invalid_placement_footprint_cells_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_apply_fails_fast_on_invalid_placement_entrance_pos_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 8})
 
 static func _build_move_restaurant_working_engine(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -239,6 +260,65 @@ static func _test_apply_fails_fast_on_invalid_restaurant_cell_entry_without_part
 	var err := str(result.error)
 	if err.find("restaurants[%s].cells[0]" % rest_id) < 0:
 		return Result.failure("错误信息应包含 cells[0] 路径，实际: %s" % err)
+	state = engine.get_state()
+	if str(state.players[actor]) != player_before:
+		return Result.failure("失败时不应提前改写玩家状态")
+	if str(state.map) != map_before:
+		return Result.failure("失败时不应提前改写 map")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_apply_fails_fast_on_invalid_placement_payload_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	return _test_apply_fails_fast_on_invalid_placement_response_without_partial_mutation(
+		player_count,
+		seed_val,
+		"bad",
+		"validate_restaurant_placement 返回值类型错误"
+	)
+
+static func _test_apply_fails_fast_on_invalid_placement_footprint_cells_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	return _test_apply_fails_fast_on_invalid_placement_response_without_partial_mutation(
+		player_count,
+		seed_val,
+		{"footprint_cells": "bad", "entrance_pos": Vector2i.ZERO},
+		"validate_restaurant_placement.footprint_cells 类型错误"
+	)
+
+static func _test_apply_fails_fast_on_invalid_placement_entrance_pos_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	return _test_apply_fails_fast_on_invalid_placement_response_without_partial_mutation(
+		player_count,
+		seed_val,
+		{"footprint_cells": [Vector2i.ZERO], "entrance_pos": "bad"},
+		"validate_restaurant_placement 缺少 entrance_pos"
+	)
+
+static func _test_apply_fails_fast_on_invalid_placement_response_without_partial_mutation(player_count: int, seed_val: int, payload, expected_error: String) -> Result:
+	var built := _build_move_restaurant_working_engine(player_count, seed_val)
+	if not built.ok:
+		return built
+	var engine: GameEngine = built.value
+	var state := engine.get_state()
+	var actor := state.get_current_player_id()
+	var rest_id := _get_first_restaurant_id(state, actor)
+	if rest_id.is_empty():
+		return Result.failure("玩家没有可移动餐厅")
+	var rest: Dictionary = state.map.get("restaurants", {}).get(rest_id, {})
+	var old_anchor: Vector2i = rest.get("anchor_pos", Vector2i(-1, -1))
+	var old_rotation: int = int(rest.get("rotation", 0))
+	var cmd := _find_first_valid_move(engine, actor, rest_id, old_anchor, old_rotation)
+	if cmd == null:
+		return Result.failure("找不到合法的餐厅移动点")
+	engine.action_registry.register_executor(MoveRestaurantActionClass.new({}, FakePlacementValidator.new(payload)))
+	var player_before := str(state.players[actor])
+	var map_before := str(state.map)
+	var round_state_before := str(state.round_state)
+	var result := engine.execute_command(cmd)
+	if result.ok:
+		return Result.failure("placement payload 损坏时 move_restaurant apply 应失败")
+	var err := str(result.error)
+	if err.find(expected_error) < 0:
+		return Result.failure("错误信息应包含 %s，实际: %s" % [expected_error, err])
 	state = engine.get_state()
 	if str(state.players[actor]) != player_before:
 		return Result.failure("失败时不应提前改写玩家状态")

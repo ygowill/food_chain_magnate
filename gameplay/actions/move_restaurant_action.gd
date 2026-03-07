@@ -13,8 +13,9 @@ const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd"
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 var _piece_registry: Dictionary = {}
+var _placement_validator = null
 
-func _init(piece_registry: Dictionary = {}) -> void:
+func _init(piece_registry: Dictionary = {}, placement_validator = null) -> void:
 	action_id = "move_restaurant"
 	display_name = "移动餐厅"
 	description = "移动一个已有餐厅到新位置"
@@ -23,6 +24,7 @@ func _init(piece_registry: Dictionary = {}) -> void:
 	allowed_phases = [DefsClass.PHASE_WORKING]
 	allowed_sub_phases = [DefsClass.SUB_PHASE_PLACE_RESTAURANTS]
 	_piece_registry = piece_registry
+	_placement_validator = placement_validator if placement_validator != null else RestaurantPlacementClass
 
 func can_initiate(state: GameState, player_id: int) -> bool:
 	if state == null:
@@ -70,6 +72,22 @@ static func _require_vector2i_array(value, path: String) -> Result:
 		if not (arr[i] is Vector2i):
 			return Result.failure("%s[%d] 类型错误（期望 Vector2i）" % [path, i])
 	return Result.success(arr)
+
+static func _require_restaurant_placement_payload(value, prefix: String) -> Result:
+	if not (value is Dictionary):
+		return Result.failure("%s: validate_restaurant_placement 返回值类型错误（期望 Dictionary）" % prefix)
+	var payload: Dictionary = value
+	if not payload.has("footprint_cells"):
+		return Result.failure("%s: validate_restaurant_placement 缺少 footprint_cells" % prefix)
+	var footprint_read := _require_vector2i_array(payload["footprint_cells"], "%s: validate_restaurant_placement.footprint_cells" % prefix)
+	if not footprint_read.ok:
+		return footprint_read
+	if not payload.has("entrance_pos") or not (payload["entrance_pos"] is Vector2i):
+		return Result.failure("%s: validate_restaurant_placement 缺少 entrance_pos" % prefix)
+	return Result.success({
+		"footprint_cells": footprint_read.value,
+		"entrance_pos": payload["entrance_pos"],
+	})
 
 static func _require_restaurant_record(restaurants: Dictionary, rest_id: String, prefix: String) -> Result:
 	if rest_id.is_empty():
@@ -184,9 +202,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var piece_registry := _get_piece_registry()
 
 	var ignore_cells: Array = rest["cells"]
-	var validate_result := RestaurantPlacementClass.validate_restaurant_placement(
+	var validate_result := _validate_restaurant_placement(
 		map_ctx, world_anchor, rotation, piece_registry,
-		command.actor, false, {"ignore_structure_cells": ignore_cells}
+		command.actor, ignore_cells
 	)
 	if not validate_result.ok:
 		return validate_result
@@ -224,19 +242,19 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var piece_registry := _get_piece_registry()
 
 	var ignore_cells: Array = rest["cells"]
-	var validate_result := RestaurantPlacementClass.validate_restaurant_placement(
+	var validate_result := _validate_restaurant_placement(
 		map_ctx, world_anchor, rotation, piece_registry,
-		player_id, false, {"ignore_structure_cells": ignore_cells}
+		player_id, ignore_cells
 	)
 	if not validate_result.ok:
 		return validate_result
 
-	assert(validate_result.value is Dictionary, "move_restaurant: validate_restaurant_placement 返回值类型错误（期望 Dictionary）")
-	var validate_value: Dictionary = validate_result.value
-	assert(validate_value.has("footprint_cells") and (validate_value["footprint_cells"] is Array), "move_restaurant: validate_restaurant_placement 缺少 footprint_cells")
-	assert(validate_value.has("entrance_pos") and (validate_value["entrance_pos"] is Vector2i), "move_restaurant: validate_restaurant_placement 缺少 entrance_pos")
-	var new_cells: Array = validate_value["footprint_cells"]
-	var entrance_pos: Vector2i = validate_value["entrance_pos"]
+	var placement_read := _require_restaurant_placement_payload(validate_result.value, action_id)
+	if not placement_read.ok:
+		return placement_read
+	var placement: Dictionary = placement_read.value
+	var new_cells: Array = placement["footprint_cells"]
+	var entrance_pos: Vector2i = placement["entrance_pos"]
 
 	# 清空旧格
 	for cell_pos in ignore_cells:
@@ -311,6 +329,17 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 			"employee_type": employee_type,
 		}
 	}]
+
+func _validate_restaurant_placement(map_ctx: Dictionary, world_anchor: Vector2i, rotation: int, piece_registry: Dictionary, player_id: int, ignore_cells: Array) -> Result:
+	return _placement_validator.validate_restaurant_placement(
+		map_ctx,
+		world_anchor,
+		rotation,
+		piece_registry,
+		player_id,
+		false,
+		{"ignore_structure_cells": ignore_cells}
+	)
 
 func _get_piece_registry() -> Dictionary:
 	if _piece_registry.is_empty():
