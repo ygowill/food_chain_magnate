@@ -63,7 +63,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_apply_inferred_use_employee_train_fails_fast_on_invalid_working_employee_multipliers(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 17})
+	r = _test_validate_fails_fast_on_invalid_immediate_train_pending_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 18})
 
 static func _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count: int, seed_val: int) -> Result:
 	var built := _build_train_state(player_count, seed_val)
@@ -579,5 +582,35 @@ static func _test_apply_inferred_use_employee_train_fails_fast_on_invalid_workin
 	if err.find("working_employee_multipliers") < 0 or err.find("字符串玩家 key") < 0:
 		return Result.failure("错误信息应包含 working_employee_multipliers 与 字符串玩家 key，实际: %s" % err)
 	if str(state.round_state) != before:
+		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_validate_fails_fast_on_invalid_immediate_train_pending_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	var built := _build_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["immediate_train_pending"] = {
+		"0": {"management_trainee": 1},
+	}
+	var player_before := str(state.players[0])
+	var pool_before := str(state.employee_pool)
+	var round_state_before := str(state.round_state)
+
+	var action = ActionClass.new()
+	var result := action._validate_specific(state, Command.create("train", 0, {
+		"from_employee": "management_trainee",
+		"to_employee": "new_business_developer",
+	}))
+	if result.ok:
+		return Result.failure("immediate_train_pending 使用字符串玩家 key 时验证应失败")
+	var err := str(result.error)
+	if err.find("immediate_train_pending") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 immediate_train_pending 与 字符串玩家 key，实际: %s" % err)
+	if str(state.players[0]) != player_before:
+		return Result.failure("失败时不应提前改写玩家员工状态")
+	if str(state.employee_pool) != pool_before:
+		return Result.failure("失败时不应提前改写 employee_pool")
+	if str(state.round_state) != round_state_before:
 		return Result.failure("失败时不应提前改写 round_state")
 	return Result.success()

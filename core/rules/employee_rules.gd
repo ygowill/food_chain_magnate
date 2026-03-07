@@ -70,8 +70,14 @@ static func reset_train_slot_usage(state: GameState) -> void:
 
 # === Recruit 缺货预支 / 紧接培训约束（docs/design.md）===
 
+static func try_get_immediate_train_pending_count(state: GameState, player_id: int, employee_type: String) -> Result:
+	return ImmediateTrainPending.try_get_immediate_train_pending_count(state, player_id, employee_type)
+
 static func get_immediate_train_pending_count(state: GameState, player_id: int, employee_type: String) -> int:
 	return ImmediateTrainPending.get_immediate_train_pending_count(state, player_id, employee_type)
+
+static func try_get_immediate_train_pending_total(state: GameState, player_id: int) -> Result:
+	return ImmediateTrainPending.try_get_immediate_train_pending_total(state, player_id)
 
 static func get_immediate_train_pending_total(state: GameState, player_id: int) -> int:
 	return ImmediateTrainPending.get_immediate_train_pending_total(state, player_id)

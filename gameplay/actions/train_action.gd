@@ -134,8 +134,14 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not reserve_read.ok:
 		return reserve_read
 	var reserve: Array = reserve_read.value
-	var pending_total := EmployeeRulesClass.get_immediate_train_pending_total(state, command.actor)
-	var pending_count := EmployeeRulesClass.get_immediate_train_pending_count(state, command.actor, from_employee)
+	var pending_total_read := EmployeeRulesClass.try_get_immediate_train_pending_total(state, command.actor)
+	if not pending_total_read.ok:
+		return pending_total_read
+	var pending_count_read := EmployeeRulesClass.try_get_immediate_train_pending_count(state, command.actor, from_employee)
+	if not pending_count_read.ok:
+		return pending_count_read
+	var pending_total := int(pending_total_read.value)
+	var pending_count := int(pending_count_read.value)
 	var has_reserve := reserve.find(from_employee) >= 0
 	var has_pending := pending_count > 0
 	var has_active := EmployeeRulesClass.count_active(player, from_employee) > 0

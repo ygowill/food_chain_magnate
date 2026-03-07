@@ -1158,6 +1158,9 @@ GameSessionContext
 - `refactor(gameplay): tighten train usage multiplier access`
   - 为 `working_multiplier` 增补 `Result` 版读取 helper，并让 `train_employee_usage` 在招聘/培训推导与 inferred-use 写回前对损坏的 `working_employee_multipliers` 显式 fail-fast。
   - 扩展 focused `train` 状态访问测试，确保非法 `working_employee_multipliers` 会在读取与 inferred-use 路径失败，且不会提前改写 `round_state`。
+- `refactor(gameplay): tighten train pending validation access`
+  - 为 `immediate_train_pending` 增补 `Result` 版 count/total 读取 helper，并让 `train_action` 在验证阶段对损坏的 pending 结构显式 fail-fast，避免旧读取路径触发硬断言。
+  - 扩展 focused `train` 状态访问测试，确保非法 `immediate_train_pending` 会在验证阶段失败，且不会提前改写玩家、`employee_pool` 或 `round_state`。
 
 当前阶段性结果：
 
