@@ -180,7 +180,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var to_reserve := true
 	if can_train_from_active and has_active and not has_reserve and not has_pending:
 		# FIRST LEMONADE SOLD：在岗同色培训时，若旧员工未被使用，则新员工可立刻在岗
-		var from_used := TrainEmployeeUsageClass._is_employee_used_before_training(state, command.actor, from_employee)
+		var from_used_read := TrainEmployeeUsageClass.read_employee_used_before_training(state, command.actor, from_employee)
+		if not from_used_read.ok:
+			return from_used_read
+		var from_used := bool(from_used_read.value)
 		to_reserve = from_used
 
 		# 同色限制：不允许颜色变化
@@ -244,6 +247,13 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var has_active := EmployeeRulesClass.count_active(player, from_employee) > 0
 	var can_train_from_active := bool(player.get("train_from_active_same_color", false))
 
+	var from_used_before := false
+	if can_train_from_active and has_active and not has_reserve and not use_pending:
+		var from_used_before_read := TrainEmployeeUsageClass.read_employee_used_before_training(state, player_id, from_employee)
+		if not from_used_before_read.ok:
+			return from_used_before_read
+		from_used_before = bool(from_used_before_read.value)
+
 	var lock_plan_read := TrainEmployeeLocksClass.plan_training(
 		state, player_id, from_employee, steps_required, multi, reserve, true, to_employee
 	)
@@ -265,7 +275,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var trainer_id := str(alloc_info.get("trainer_id", "")).strip_edges()
 	var trainer_instance_idx := int(alloc_info.get("instance_idx", -1))
 
-	var from_used_before := TrainEmployeeUsageClass._is_employee_used_before_training(state, player_id, from_employee)
 	var target_to_reserve := true
 	if can_train_from_active and has_active and not has_reserve and not use_pending:
 		target_to_reserve = from_used_before

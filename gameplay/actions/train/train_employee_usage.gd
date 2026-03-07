@@ -5,14 +5,15 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
+const RoundStatePlayerStringListsClass = preload("res://core/utils/round_state_player_string_lists.gd")
 
 const ACTION_ID := "train"
 
-static func _is_employee_used_before_training(state: GameState, player_id: int, employee_id: String) -> bool:
+static func read_employee_used_before_training(state: GameState, player_id: int, employee_id: String) -> Result:
 	if state == null or not (state.round_state is Dictionary):
-		return false
+		return Result.success(false)
 	if employee_id.is_empty():
-		return false
+		return Result.success(false)
 
 	# 生产
 	var prod_val = state.round_state.get("production_counts", null)
@@ -21,7 +22,7 @@ static func _is_employee_used_before_training(state: GameState, player_id: int, 
 		if all.has(player_id) and all[player_id] is Dictionary:
 			var per: Dictionary = all[player_id]
 			if per.has(employee_id) and int(per.get(employee_id, 0)) > 0:
-				return true
+				return Result.success(true)
 
 	# 采购
 	var proc_val = state.round_state.get("procurement_counts", null)
@@ -30,7 +31,7 @@ static func _is_employee_used_before_training(state: GameState, player_id: int, 
 		if all.has(player_id) and all[player_id] is Dictionary:
 			var per: Dictionary = all[player_id]
 			if per.has(employee_id) and int(per.get(employee_id, 0)) > 0:
-				return true
+				return Result.success(true)
 
 	# 营销发起
 	var mk_val = state.round_state.get("marketing_used", null)
@@ -39,17 +40,24 @@ static func _is_employee_used_before_training(state: GameState, player_id: int, 
 		if all.has(player_id) and all[player_id] is Dictionary:
 			var per: Dictionary = all[player_id]
 			if per.has(employee_id) and int(per.get(employee_id, 0)) > 0:
-				return true
+				return Result.success(true)
 
 	# 价格强制动作
-	var mac_val = state.round_state.get("mandatory_actions_completed", null)
-	if mac_val is Dictionary and mac_val.has(player_id) and mac_val[player_id] is Array:
-		var completed: Array = mac_val[player_id]
-		var def_val_ma = EmployeeRegistryClass.get_def(employee_id)
-		if def_val_ma is EmployeeDef:
-			var def_ma: EmployeeDef = def_val_ma
-			if not def_ma.mandatory_action_id.is_empty() and completed.has(def_ma.mandatory_action_id):
-				return true
+	var def_val_ma = EmployeeRegistryClass.get_def(employee_id)
+	if def_val_ma is EmployeeDef:
+		var def_ma: EmployeeDef = def_val_ma
+		if not def_ma.mandatory_action_id.is_empty():
+			var completed_read := RoundStatePlayerStringListsClass.has_value(
+				state.round_state,
+				"mandatory_actions_completed",
+				player_id,
+				def_ma.mandatory_action_id,
+				"train: mandatory_actions_completed"
+			)
+			if not completed_read.ok:
+				return completed_read
+			if bool(completed_read.value):
+				return Result.success(true)
 
 	# 招聘：按“是否必然消耗了该员工的招聘容量”推导
 	var def_val = EmployeeRegistryClass.get_def(employee_id)
@@ -65,7 +73,7 @@ static func _is_employee_used_before_training(state: GameState, player_id: int, 
 			var emp_cap := int(def.recruit_capacity) * mult * EmployeeRulesClass.count_active(state.get_player(player_id), employee_id)
 			var cap_without := total_cap - emp_cap
 			if used > cap_without:
-				return true
+				return Result.success(true)
 
 		# 培训：同理推导（基于 Train 子阶段 action_count）
 		if def.train_capacity > 0 and def.has_usage_tag("use:train"):
@@ -75,9 +83,9 @@ static func _is_employee_used_before_training(state: GameState, player_id: int, 
 			var emp_cap := int(def.train_capacity) * mult * EmployeeRulesClass.count_active(state.get_player(player_id), employee_id)
 			var cap_without := total_cap - emp_cap
 			if used_train > cap_without:
-				return true
+				return Result.success(true)
 
-	return false
+	return Result.success(false)
 
 static func apply_inferred_use_employee_train(state: GameState, player_id: int) -> Result:
 	if state == null:

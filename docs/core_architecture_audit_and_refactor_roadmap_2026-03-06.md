@@ -1101,6 +1101,9 @@ GameSessionContext
 - `refactor(modules): tighten mass marketeers round access`
   - 将 `mass_marketeers` 对 `round_state.marketing_rounds` 的覆盖写回改为先校验已有值，拒绝非法旧状态被静默覆盖。
   - 新增 focused test，确保 `marketing_rounds` 类型错误时 `_on_marketing_before_primary()` fail-fast，且不会覆盖已有坏状态。
+- `refactor(gameplay): tighten train usage mandatory access`
+  - 将 `train_employee_usage` 的 mandatory action 使用判定改为显式 `Result` fail-fast，并把 `train` apply 路径的校验前移到 `train_employee_locks` 初始化与 slot 分配之前。
+  - 扩展 focused `train` 状态访问测试：临时打开 `pricing_manager -> luxury_manager` 训练路径，确保 `mandatory_actions_completed` 使用字符串玩家 key 时 fail-fast，且不会提前改写玩家、`employee_pool` 或 `round_state`。
 
 当前阶段性结果：
 
