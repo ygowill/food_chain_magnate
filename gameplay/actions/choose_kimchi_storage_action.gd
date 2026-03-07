@@ -96,6 +96,19 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if before_kimchi <= 0:
 		return Result.failure("内部错误：kimchi 可用数量为空")
 
+	var kind_r := _get_cleanup_pending_kind(state)
+	if not kind_r.ok:
+		return kind_r
+	var kind: String = str(kind_r.value)
+	if kind != PENDING_KIND_KIMCHI:
+		return Result.failure("当前不是泡菜储存选择（kind=%s）" % kind)
+	var pending_r := _get_pending_cleanup_players(state)
+	if not pending_r.ok:
+		return pending_r
+	var pending: Array[int] = pending_r.value
+	if pending.is_empty() or int(pending[0]) != int(command.actor):
+		return Result.failure("内部错误：pending_phase_actions[Cleanup] 异常")
+
 	var discarded: Dictionary = {}
 	if store:
 		var kept_kimchi: int = clampi(before_kimchi, 0, 10)
@@ -135,12 +148,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			warnings.append_array(ms.warnings)
 
 	# === pending 流转：先处理 kimchi 选择；结束后再进入 fridge 选择（若有） ===
-	var pending_r := _get_pending_cleanup_players(state)
-	if not pending_r.ok:
-		return pending_r
-	var pending: Array[int] = pending_r.value
-	if pending.is_empty() or int(pending[0]) != int(command.actor):
-		return Result.failure("内部错误：pending_phase_actions[Cleanup] 异常")
 	pending.remove_at(0)
 
 	var cleanup_val = state.round_state.get("cleanup", null)
@@ -161,7 +168,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if not pending.is_empty():
 		cleanup["pending_choice_kind"] = PENDING_KIND_KIMCHI
 		state.round_state["cleanup"] = cleanup
-		_set_pending_cleanup_players(state, pending)
+		var set_pending_r := _set_pending_cleanup_players(state, pending)
+		if not set_pending_r.ok:
+			return set_pending_r
 		_set_current_player_to_pid(state, int(pending[0]))
 		return Result.success().with_warnings(warnings)
 
@@ -177,7 +186,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		if cleanup.has("fridge_choice_pending"):
 			cleanup["fridge_choice_pending"] = true
 		state.round_state["cleanup"] = cleanup
-		_set_pending_cleanup_players(state, fridge_pending)
+		var set_fridge_pending_r := _set_pending_cleanup_players(state, fridge_pending)
+		if not set_fridge_pending_r.ok:
+			return set_fridge_pending_r
 		_set_current_player_to_pid(state, int(fridge_pending[0]))
 		return Result.success().with_warnings(warnings)
 
@@ -186,7 +197,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if cleanup.has("fridge_choice_pending"):
 		cleanup["fridge_choice_pending"] = false
 	state.round_state["cleanup"] = cleanup
-	_set_pending_cleanup_players(state, [] as Array[int])
+	var clear_pending_r := _set_pending_cleanup_players(state, [] as Array[int])
+	if not clear_pending_r.ok:
+		return clear_pending_r
 	if state.round_state.has("cleanup_defer_milestone_cleanup"):
 		state.round_state.erase("cleanup_defer_milestone_cleanup")
 
@@ -353,20 +366,21 @@ static func _get_pending_cleanup_players(state: GameState) -> Result:
 		out.append(int(v))
 	return Result.success(out)
 
-static func _set_pending_cleanup_players(state: GameState, pending: Array[int]) -> void:
+static func _set_pending_cleanup_players(state: GameState, pending: Array[int]) -> Result:
 	if state == null or not (state.round_state is Dictionary):
-		return
+		return Result.failure("round_state 类型错误（期望 Dictionary）")
 	if not state.round_state.has("pending_phase_actions"):
 		state.round_state["pending_phase_actions"] = {}
 	var ppa_val = state.round_state.get("pending_phase_actions", null)
 	if not (ppa_val is Dictionary):
-		return
+		return Result.failure("pending_phase_actions 类型错误（期望 Dictionary）")
 	var ppa: Dictionary = ppa_val
 	if pending.is_empty():
 		ppa.erase(DefsClass.PHASE_CLEANUP)
 	else:
 		ppa[DefsClass.PHASE_CLEANUP] = pending
 	state.round_state["pending_phase_actions"] = ppa
+	return Result.success()
 
 static func _set_current_player_to_pid(state: GameState, pid: int) -> void:
 	if state == null:

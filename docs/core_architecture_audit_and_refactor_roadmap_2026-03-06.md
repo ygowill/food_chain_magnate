@@ -1052,6 +1052,9 @@ GameSessionContext
 - `refactor(modules): tighten rural billboard query access`
   - 将 `place_giant_billboard.can_initiate()` 的 `houses` 读取收口到 `MapStateAccess`，保持 fail-closed。
   - 扩 focused test，覆盖缺失 `houses` / 非法 `rural_area` 时 query 路径返回 `false`。
+- `refactor(gameplay): tighten kimchi cleanup pending access`
+  - 将 `choose_kimchi_storage` 的 cleanup pending 预检前移到 inventory 变更之前，并让 pending setter 显式返回失败。
+  - 补 focused test，确保 `pending_phase_actions` 类型错误时不提前改写 `inventory` 或 `cleanup.inventory_discarded`。
 
 当前阶段性结果：
 
