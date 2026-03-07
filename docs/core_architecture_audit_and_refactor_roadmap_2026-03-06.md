@@ -1061,6 +1061,9 @@ GameSessionContext
 - `refactor(modules): tighten marketing initiation pending access`
   - 将 `new_milestones` 的 campaign / brand manager 发起营销 pending 读写收口到 fail-fast helper，拒绝字符串玩家 key。
   - 扩 focused test，确保 `round_state` pending 字典 key 非法时不提前写入 used flag 或补写 int-key pending。
+- `refactor(modules): tighten coffee cleanup pending access`
+  - 将 `coffee_first_coffee_sold` 的 Cleanup pending 解析收口到 fail-fast helper，并统一使用 `RoundStatePendingPhaseActions` 写回。
+  - 新增 focused test，覆盖 legacy fridge pending 合并与非法 pending 项时无 partial mutation。
 
 当前阶段性结果：
 

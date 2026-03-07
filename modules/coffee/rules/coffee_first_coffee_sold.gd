@@ -4,6 +4,7 @@ const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const DinnertimeTimelineClass = preload("res://core/rules/dinnertime_timeline.gd")
+const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 
 const Phase = PhaseDefsClass.Phase
 const Point = SettlementRegistryClass.Point
@@ -13,6 +14,51 @@ const FIRST_COFFEE_SOLD_MILESTONE_ID := "first_coffee_sold"
 
 const BONUS_PENDING_PLAYERS_KEY := "coffee_first_coffee_sold_bonus_pending_players"
 const CLEANUP_TASK_KIND := "coffee_first_coffee_sold_bonus_coffee_shop"
+
+static func _get_cleanup_pending_tasks(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("coffee:first_coffee_sold: cleanup: state 为空")
+	if not (state.round_state is Dictionary):
+		return Result.failure("coffee:first_coffee_sold: cleanup: state.round_state 类型错误（期望 Dictionary）")
+	if not state.round_state.has("pending_phase_actions"):
+		return Result.success([] as Array[Dictionary])
+	var ppa_val = state.round_state.get("pending_phase_actions", null)
+	if not (ppa_val is Dictionary):
+		return Result.failure("coffee:first_coffee_sold: pending_phase_actions 类型错误（期望 Dictionary）")
+	var ppa: Dictionary = ppa_val
+	if not ppa.has(PhaseDefsClass.PHASE_CLEANUP):
+		return Result.success([] as Array[Dictionary])
+	var list_val = ppa.get(PhaseDefsClass.PHASE_CLEANUP, null)
+	if not (list_val is Array):
+		return Result.failure("coffee:first_coffee_sold: pending_phase_actions[Cleanup] 类型错误（期望 Array）")
+	var list: Array = list_val
+	var out: Array[Dictionary] = []
+	for i in range(list.size()):
+		var item_val = list[i]
+		if item_val is Dictionary:
+			var item: Dictionary = item_val
+			var kind_val = item.get("kind", null)
+			var pid_val = item.get("player_id", null)
+			if not (kind_val is String):
+				return Result.failure("coffee:first_coffee_sold: pending_phase_actions[Cleanup][%d].kind 类型错误（期望 String）" % i)
+			var kind: String = str(kind_val).strip_edges()
+			if kind.is_empty():
+				return Result.failure("coffee:first_coffee_sold: pending_phase_actions[Cleanup][%d].kind 不能为空" % i)
+			if not (pid_val is int or pid_val is float):
+				return Result.failure("coffee:first_coffee_sold: pending_phase_actions[Cleanup][%d].player_id 类型错误（期望 int/float）" % i)
+			out.append({
+				"kind": kind,
+				"player_id": int(pid_val),
+			})
+			continue
+		if item_val is int or item_val is float:
+			out.append({
+				"kind": "fridge_keep",
+				"player_id": int(item_val),
+			})
+			continue
+		return Result.failure("coffee:first_coffee_sold: pending_phase_actions[Cleanup][%d] 类型错误（期望 Dictionary/int/float）" % i)
+	return Result.success(out)
 
 func register(registrar) -> Result:
 	# 晚餐结算后：按 route_purchases 触发 ProductSold(coffee) 事件，并记录“首杯咖啡奖励”待处理玩家列表
@@ -141,41 +187,20 @@ func _on_cleanup_enter_after_primary(state: GameState, _phase_manager) -> Result
 			bonus_set[pid] = true
 
 	# 读取现有 Cleanup pending（可能来自冰箱选择）
-	var existing: Array = []
-	var ppa: Dictionary = {}
-	if state.round_state.has("pending_phase_actions"):
-		var ppa_val = state.round_state.get("pending_phase_actions", null)
-		if not (ppa_val is Dictionary):
-			return Result.failure("coffee:first_coffee_sold: pending_phase_actions 类型错误（期望 Dictionary）")
-		ppa = ppa_val
-	if ppa.has(PhaseDefsClass.PHASE_CLEANUP):
-		var list_val = ppa.get(PhaseDefsClass.PHASE_CLEANUP, null)
-		if not (list_val is Array):
-			return Result.failure("coffee:first_coffee_sold: pending_phase_actions[Cleanup] 类型错误（期望 Array）")
-		existing = list_val
+	var existing_read := _get_cleanup_pending_tasks(state)
+	if not existing_read.ok:
+		return existing_read
+	var existing: Array[Dictionary] = existing_read.value
 
 	# tasks_by_player: pid -> Array[Dictionary]
 	var tasks_by_player := {}
-	for item_val in existing:
-		if item_val is Dictionary:
-			var d: Dictionary = item_val
-			var pid: int = int(d.get("player_id", -1))
-			if pid < 0 or pid >= state.players.size():
-				continue
-			if not tasks_by_player.has(pid):
-				tasks_by_player[pid] = []
-			(tasks_by_player[pid] as Array).append(d)
-		elif item_val is int or item_val is float:
-			# 兼容旧存档：Cleanup pending 列表为 [player_id(int)]（仅用于 fridge_keep）
-			var pid2: int = int(item_val)
-			if pid2 < 0 or pid2 >= state.players.size():
-				continue
-			if not tasks_by_player.has(pid2):
-				tasks_by_player[pid2] = []
-			(tasks_by_player[pid2] as Array).append({
-				"kind": "fridge_keep",
-				"player_id": pid2,
-			})
+	for d in existing:
+		var pid: int = int(d.get("player_id", -1))
+		if pid < 0 or pid >= state.players.size():
+			continue
+		if not tasks_by_player.has(pid):
+			tasks_by_player[pid] = []
+		(tasks_by_player[pid] as Array).append(d)
 
 	# 合并：按 turn_order，先追加原任务，再追加 coffee bonus
 	var merged: Array[Dictionary] = []
@@ -200,18 +225,14 @@ func _on_cleanup_enter_after_primary(state: GameState, _phase_manager) -> Result
 		state.round_state.erase(BONUS_PENDING_PLAYERS_KEY)
 		return Result.success()
 
-	if state.round_state.has("pending_phase_actions"):
-		var ppa_val2 = state.round_state.get("pending_phase_actions", null)
-		if ppa_val2 == null:
-			state.round_state["pending_phase_actions"] = {}
-		elif not (ppa_val2 is Dictionary):
-			return Result.failure("coffee:first_coffee_sold: pending_phase_actions 类型错误（期望 Dictionary）")
-	else:
-		state.round_state["pending_phase_actions"] = {}
-
-	var ppa2: Dictionary = state.round_state["pending_phase_actions"]
-	ppa2[PhaseDefsClass.PHASE_CLEANUP] = merged
-	state.round_state["pending_phase_actions"] = ppa2
+	var set_pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
+		state.round_state,
+		PhaseDefsClass.PHASE_CLEANUP,
+		merged,
+		"coffee:first_coffee_sold"
+	)
+	if not set_pending.ok:
+		return set_pending
 
 	# 将 current_player_index 对齐到第一位待处理玩家
 	var first_task: Dictionary = merged[0]
