@@ -131,6 +131,16 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	return Result.success()
 
+func _prepare_opening_soon_restaurants(state: GameState) -> Result:
+	if not (state.round_state is Dictionary):
+		return Result.failure("place_restaurant: state.round_state 类型错误（期望 Dictionary）")
+	if not state.round_state.has(ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY):
+		return Result.success([])
+	var pending_val = state.round_state.get(ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY, null)
+	if not (pending_val is Array):
+		return Result.failure("place_restaurant: state.round_state.%s 类型错误（期望 Array）" % ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY)
+	return Result.success(Array(pending_val))
+
 func _apply_changes(state: GameState, command: Command) -> Result:
 	var employee_type := ""
 	var employee_type_result := optional_string_param(command, "employee_type", "")
@@ -144,6 +154,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		if not candidates.is_empty():
 			employee_type = candidates[0]
 	var opening_soon := (state.phase == DefsClass.PHASE_WORKING and employee_type == "local_manager")
+	var opening_soon_pending: Array = []
+	if opening_soon:
+		var pending_read = _prepare_opening_soon_restaurants(state)
+		if not pending_read.ok:
+			return pending_read
+		opening_soon_pending = pending_read.value
 
 	var params_result := _parse_params(command)
 	if not params_result.ok:
@@ -208,13 +224,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	}
 
 	if opening_soon:
-		if not (state.round_state is Dictionary):
-			return Result.failure("place_restaurant: state.round_state 类型错误（期望 Dictionary）")
-		if not state.round_state.has(ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY) or not (state.round_state[ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY] is Array):
-			state.round_state[ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY] = []
-		var pending: Array = state.round_state[ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY]
-		pending.append(restaurant_data.duplicate(true))
-		state.round_state[ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY] = pending
+		opening_soon_pending.append(restaurant_data.duplicate(true))
+		state.round_state[ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY] = opening_soon_pending
 	else:
 		# 注册餐厅（立即开业）
 		state.map.restaurants[restaurant_id] = restaurant_data
