@@ -1079,6 +1079,10 @@ GameSessionContext
 - `refactor(gameplay): tighten skip mandatory access`
   - 将 `skip` / `skip_sub_phase` 对 `mandatory_actions_completed` 的读取统一收口到 `RoundStatePlayerStringLists`，拒绝字符串玩家 key。
   - 新增 focused test，确保两条动作在 `mandatory_actions_completed` 使用字符串玩家 key 时都返回 fail-fast 错误。
+- `refactor(gameplay): tighten price modifier access`
+  - 新增 `RoundStatePlayerIntMaps`，并将 `set_price` / `set_discount` / `set_luxury_price` 的 `price_modifiers` 写入统一收口到 helper。
+  - 调整三条动作的 apply 顺序，先校验并写入 `price_modifiers`，再标记 `mandatory_actions_completed`，避免坏状态下留下半提交。
+  - 新增 focused test，确保 `price_modifiers` 使用字符串玩家 key 时不提前标记 mandatory action，也不补写 int-key modifier。
 
 当前阶段性结果：
 

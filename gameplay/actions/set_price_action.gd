@@ -5,6 +5,7 @@ extends ActionExecutor
 
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const RoundStatePlayerIntMapsClass = preload("res://core/utils/round_state_player_int_maps.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 func _init() -> void:
@@ -42,16 +43,19 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if provider_id.is_empty():
 		return Result.failure("玩家没有定价经理")
 
+	var modifier_set := RoundStatePlayerIntMapsClass.set_player_key_int(
+		state.round_state,
+		"price_modifiers",
+		player_id,
+		provider_id,
+		-1,
+		action_id
+	)
+	if not modifier_set.ok:
+		return modifier_set
+
 	# 记录强制动作已完成
 	MandatoryActionsRulesClass.mark_completed(state, player_id, action_id)
-
-	# 设置价格修正（存储在 round_state 中）
-	if not state.round_state.has("price_modifiers"):
-		state.round_state["price_modifiers"] = {}
-	if not state.round_state.price_modifiers.has(player_id):
-		state.round_state.price_modifiers[player_id] = {}
-
-	state.round_state.price_modifiers[player_id][provider_id] = -1
 
 	var ms := MilestoneSystemClass.process_event(state, "LowerPrice", {"player_id": player_id})
 
