@@ -1125,6 +1125,9 @@ GameSessionContext
 - `refactor(modules): tighten coffee shop trigger usage access`
   - 将 `place_or_move_coffee_shop` 对 `round_state.coffee_shop_triggers_used` 的读写统一收口到 `RoundStateCounters`，避免重复实现 per-player int 计数契约。
   - 扩展 focused 状态访问测试，确保 `coffee_shop_triggers_used` 使用字符串玩家 key 时动作会 fail-fast，且不会提前递增 id、消耗 token 或写入咖啡店结构。
+- `refactor(gameplay): tighten train usage counter access`
+  - 将 `train_employee_usage` 对 `production_counts`、`procurement_counts`、`marketing_used` 的读取统一收口到 `RoundStateCounters.get_player_key_count()`，拒绝坏的 per-player/per-item 计数结构被静默忽略。
+  - 扩展 focused `train` 状态访问测试，覆盖三类非法计数结构，确保 helper 读取路径会显式 fail-fast。
 
 当前阶段性结果：
 

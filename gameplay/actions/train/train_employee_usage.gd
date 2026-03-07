@@ -16,31 +16,25 @@ static func read_employee_used_before_training(state: GameState, player_id: int,
 		return Result.success(false)
 
 	# 生产
-	var prod_val = state.round_state.get("production_counts", null)
-	if prod_val is Dictionary:
-		var all: Dictionary = prod_val
-		if all.has(player_id) and all[player_id] is Dictionary:
-			var per: Dictionary = all[player_id]
-			if per.has(employee_id) and int(per.get(employee_id, 0)) > 0:
-				return Result.success(true)
+	var production_read := RoundStateCountersClass.get_player_key_count(state.round_state, "production_counts", player_id, employee_id)
+	if not production_read.ok:
+		return production_read
+	if int(production_read.value) > 0:
+		return Result.success(true)
 
 	# 采购
-	var proc_val = state.round_state.get("procurement_counts", null)
-	if proc_val is Dictionary:
-		var all: Dictionary = proc_val
-		if all.has(player_id) and all[player_id] is Dictionary:
-			var per: Dictionary = all[player_id]
-			if per.has(employee_id) and int(per.get(employee_id, 0)) > 0:
-				return Result.success(true)
+	var procurement_read := RoundStateCountersClass.get_player_key_count(state.round_state, "procurement_counts", player_id, employee_id)
+	if not procurement_read.ok:
+		return procurement_read
+	if int(procurement_read.value) > 0:
+		return Result.success(true)
 
 	# 营销发起
-	var mk_val = state.round_state.get("marketing_used", null)
-	if mk_val is Dictionary:
-		var all: Dictionary = mk_val
-		if all.has(player_id) and all[player_id] is Dictionary:
-			var per: Dictionary = all[player_id]
-			if per.has(employee_id) and int(per.get(employee_id, 0)) > 0:
-				return Result.success(true)
+	var marketing_read := RoundStateCountersClass.get_player_key_count(state.round_state, "marketing_used", player_id, employee_id)
+	if not marketing_read.ok:
+		return marketing_read
+	if int(marketing_read.value) > 0:
+		return Result.success(true)
 
 	# 价格强制动作
 	var def_val_ma = EmployeeRegistryClass.get_def(employee_id)

@@ -6,6 +6,7 @@ const ActionClass = preload("res://gameplay/actions/train_action.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const TrainEmployeeUsageClass = preload("res://gameplay/actions/train/train_employee_usage.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var r := _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count, seed_val)
@@ -20,7 +21,16 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_apply_changes_fails_fast_on_invalid_recruit_used_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 4})
+	r = _test_read_employee_used_before_training_fails_fast_on_invalid_production_counts()
+	if not r.ok:
+		return r
+	r = _test_read_employee_used_before_training_fails_fast_on_invalid_procurement_counts()
+	if not r.ok:
+		return r
+	r = _test_read_employee_used_before_training_fails_fast_on_invalid_marketing_used()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 7})
 
 static func _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count: int, seed_val: int) -> Result:
 	var built := _build_train_state(player_count, seed_val)
@@ -259,3 +269,48 @@ static func _build_active_recruit_train_state(player_count: int, seed_val: int) 
 		return Result.failure("添加 recruiting_girl 失败: %s" % add_recruiting_girl.error)
 	state.round_state["train_events"] = []
 	return Result.success(state)
+
+static func _test_read_employee_used_before_training_fails_fast_on_invalid_production_counts() -> Result:
+	var state := GameState.new()
+	state.round_state = {
+		"production_counts": {
+			"0": {"pizza_cook": 1},
+		},
+	}
+	var read := TrainEmployeeUsageClass.read_employee_used_before_training(state, 0, "pizza_cook")
+	if read.ok:
+		return Result.failure("production_counts 使用字符串玩家 key 时应失败")
+	var err := str(read.error)
+	if err.find("production_counts") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 production_counts 与 字符串玩家 key，实际: %s" % err)
+	return Result.success()
+
+static func _test_read_employee_used_before_training_fails_fast_on_invalid_procurement_counts() -> Result:
+	var state := GameState.new()
+	state.round_state = {
+		"procurement_counts": {
+			0: [],
+		},
+	}
+	var read := TrainEmployeeUsageClass.read_employee_used_before_training(state, 0, "cart_operator")
+	if read.ok:
+		return Result.failure("procurement_counts[player] 类型错误时应失败")
+	var err := str(read.error)
+	if err.find("procurement_counts") < 0:
+		return Result.failure("错误信息应包含 procurement_counts，实际: %s" % err)
+	return Result.success()
+
+static func _test_read_employee_used_before_training_fails_fast_on_invalid_marketing_used() -> Result:
+	var state := GameState.new()
+	state.round_state = {
+		"marketing_used": {
+			0: {"campaign_manager": "bad"},
+		},
+	}
+	var read := TrainEmployeeUsageClass.read_employee_used_before_training(state, 0, "campaign_manager")
+	if read.ok:
+		return Result.failure("marketing_used[item] 类型错误时应失败")
+	var err := str(read.error)
+	if err.find("marketing_used") < 0:
+		return Result.failure("错误信息应包含 marketing_used，实际: %s" % err)
+	return Result.success()
