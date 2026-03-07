@@ -81,7 +81,10 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 	if not limit_read.ok:
 		return false
 	var limit := int(limit_read.value)
-	var used := EmployeeRulesClass.get_action_count(state, player_id, action_id)
+	var used_read := EmployeeRulesClass.try_get_action_count(state, player_id, action_id)
+	if not used_read.ok:
+		return false
+	var used := int(used_read.value)
 	if used >= limit:
 		return false
 
@@ -179,7 +182,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not limit_read.ok:
 		return limit_read
 	var limit := int(limit_read.value)
-	var used := EmployeeRulesClass.get_action_count(state, command.actor, action_id)
+	var used_read := EmployeeRulesClass.try_get_action_count(state, command.actor, action_id)
+	if not used_read.ok:
+		return used_read
+	var used := int(used_read.value)
 	if used >= limit:
 		return Result.failure("本子阶段招聘次数已用完: %d/%d" % [used, limit])
 
@@ -201,6 +207,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var employee_type: String = employee_type_result.value
 	var player_id: int = command.actor
 	var warnings: Array[String] = []
+	var action_count_read := EmployeeRulesClass.try_get_action_count(state, player_id, action_id)
+	if not action_count_read.ok:
+		return action_count_read
 
 	var on_credit := int(state.employee_pool.get(employee_type, 0)) <= 0
 	if on_credit:
@@ -218,7 +227,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		if not add_result.ok:
 			return add_result
 
-	EmployeeRulesClass.increment_action_count(state, player_id, action_id)
+	var inc_action := EmployeeRulesClass.try_increment_action_count(state, player_id, action_id)
+	if not inc_action.ok:
+		return inc_action
 
 	# 记录本回合 Recruit 子阶段的招聘次数（用于 Payday 薪资折扣计算；不会在子阶段切换时清空）
 	var inc_result := RoundStateCountersClass.increment_player_count(

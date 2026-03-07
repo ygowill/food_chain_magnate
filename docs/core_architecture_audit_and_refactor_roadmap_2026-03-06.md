@@ -1179,6 +1179,9 @@ GameSessionContext
 - `refactor(core): tighten salary milestone access`
   - 为 `salary` 增补 `Result` 版 `requires_salary` helper，并让布尔包装器在损坏的 `player.milestones` 上 fail-closed，避免营销免薪里程碑查询触发硬断言。
   - 扩展 marketing focused 测试，确保非法 `player.milestones` 会让 `try_requires_salary()` 返回可诊断错误，而 `requires_salary()` 保持保守返回需薪。
+- `refactor(gameplay): tighten train recruit action count access`
+  - 为 `action_counts` 增补 `Result` 版读写 helper，并让 `train_action` / `recruit_action` 及 `train_employee_usage` 在 query、validate、apply、推导用工路径上对损坏的 `round_state.action_counts` 显式 fail-fast / fail-closed。
+  - 扩展 focused `train` 状态访问测试，覆盖 train/recruit 的 `can_initiate()`、validate、apply 以及训练用工推导路径，确保非法 `action_counts` 不会提前改写玩家、`employee_pool` 或 `round_state`。
 
 当前阶段性结果：
 

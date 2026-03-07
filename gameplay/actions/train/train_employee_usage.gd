@@ -62,7 +62,10 @@ static func read_employee_used_before_training(state: GameState, player_id: int,
 			if not used_read.ok:
 				return used_read
 			var used := int(used_read.value)
-			var total_cap := EmployeeRulesClass.get_recruit_limit_for_working(state, player_id)
+			var total_cap_read := EmployeeRulesClass.try_get_recruit_limit_for_working(state, player_id)
+			if not total_cap_read.ok:
+				return total_cap_read
+			var total_cap := int(total_cap_read.value)
 			var mult_read := EmployeeRulesClass.try_get_working_employee_multiplier(state, player_id, employee_id)
 			if not mult_read.ok:
 				return mult_read
@@ -74,8 +77,14 @@ static func read_employee_used_before_training(state: GameState, player_id: int,
 
 		# 培训：同理推导（基于 Train 子阶段 action_count）
 		if def.train_capacity > 0 and def.has_usage_tag("use:train"):
-			var used_train := EmployeeRulesClass.get_action_count(state, player_id, ACTION_ID)
-			var total_cap := EmployeeRulesClass.get_train_limit_for_working(state, player_id)
+			var used_train_read := EmployeeRulesClass.try_get_action_count(state, player_id, ACTION_ID)
+			if not used_train_read.ok:
+				return used_train_read
+			var used_train := int(used_train_read.value)
+			var total_cap_read := EmployeeRulesClass.try_get_train_limit_for_working(state, player_id)
+			if not total_cap_read.ok:
+				return total_cap_read
+			var total_cap := int(total_cap_read.value)
 			var mult_read := EmployeeRulesClass.try_get_working_employee_multiplier(state, player_id, employee_id)
 			if not mult_read.ok:
 				return mult_read
@@ -96,9 +105,15 @@ static func apply_inferred_use_employee_train(state: GameState, player_id: int) 
 		return Result.failure("train: inferred_use: player_id 越界: %d" % player_id)
 
 	var warnings: Array[String] = []
-	var train_used_now := EmployeeRulesClass.get_action_count(state, player_id, ACTION_ID)
+	var train_used_now_read := EmployeeRulesClass.try_get_action_count(state, player_id, ACTION_ID)
+	if not train_used_now_read.ok:
+		return train_used_now_read
+	var train_used_now := int(train_used_now_read.value)
 	var player_now := state.get_player(player_id)
-	var total_cap := EmployeeRulesClass.get_train_limit_for_working(state, player_id)
+	var total_cap_read := EmployeeRulesClass.try_get_train_limit_for_working(state, player_id)
+	if not total_cap_read.ok:
+		return total_cap_read
+	var total_cap := int(total_cap_read.value)
 	var seen := {}
 	var candidates: Array[String] = []
 	for emp_val in Array(player_now.get("employees", [])):

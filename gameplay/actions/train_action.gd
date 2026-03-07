@@ -77,7 +77,10 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 	if not limit_read.ok:
 		return false
 	var limit := int(limit_read.value)
-	var used := EmployeeRulesClass.get_action_count(state, player_id, action_id)
+	var used_read := EmployeeRulesClass.try_get_action_count(state, player_id, action_id)
+	if not used_read.ok:
+		return false
+	var used := int(used_read.value)
 
 	if limit <= 0:
 		return pending_total > 0
@@ -133,7 +136,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var limit := int(limit_read.value)
 	if limit <= 0:
 		return Result.failure("没有可用的培训员")
-	var used := EmployeeRulesClass.get_action_count(state, command.actor, action_id)
+	var used_read := EmployeeRulesClass.try_get_action_count(state, command.actor, action_id)
+	if not used_read.ok:
+		return used_read
+	var used := int(used_read.value)
 
 	# 仅允许培训“待命”员工
 	var reserve_read := TrainEmployeeLocksClass._require_player_string_array(player, "reserve_employees", "train: player.reserve_employees")
@@ -241,6 +247,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var steps_required := _compute_train_steps_within_limit(from_employee, to_employee, 50)
 	if steps_required <= 0:
 		return Result.failure("train: 无法按培训路径培训: %s -> %s" % [from_employee, to_employee])
+	var action_count_read := EmployeeRulesClass.try_get_action_count(state, player_id, action_id)
+	if not action_count_read.ok:
+		return action_count_read
 
 	var train_events_read := _read_train_events(state)
 	if not train_events_read.ok:
@@ -333,7 +342,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return lock_apply
 
 	for _i in range(steps_required):
-		EmployeeRulesClass.increment_action_count(state, player_id, action_id)
+		var inc_action := EmployeeRulesClass.try_increment_action_count(state, player_id, action_id)
+		if not inc_action.ok:
+			return inc_action
 
 	# 记录训练事件（供模块在 Train 子阶段注入“训练后可选动作窗口”等逻辑使用）
 	train_events.append({

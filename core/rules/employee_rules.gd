@@ -65,8 +65,14 @@ static func get_train_limit_for_working(state: GameState, player_id: int) -> int
 static func count_paid_employees(player: Dictionary) -> int:
 	return Salary.count_paid_employees(player)
 
+static func try_get_action_count(state: GameState, player_id: int, action_id: String) -> Result:
+	return ActionCounts.try_get_action_count(state, player_id, action_id)
+
 static func get_action_count(state: GameState, player_id: int, action_id: String) -> int:
 	return ActionCounts.get_action_count(state, player_id, action_id)
+
+static func try_increment_action_count(state: GameState, player_id: int, action_id: String) -> Result:
+	return ActionCounts.try_increment_action_count(state, player_id, action_id)
 
 static func increment_action_count(state: GameState, player_id: int, action_id: String) -> int:
 	return ActionCounts.increment_action_count(state, player_id, action_id)

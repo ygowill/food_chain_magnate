@@ -59,6 +59,30 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_recruit_validate_fails_fast_on_invalid_train_slot_usage_instances_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
+	r = _test_train_can_initiate_fails_closed_on_invalid_action_counts(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_train_validate_fails_fast_on_invalid_action_counts_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_train_apply_fails_fast_on_invalid_action_counts_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_recruit_can_initiate_fails_closed_on_invalid_action_counts(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_recruit_validate_fails_fast_on_invalid_action_counts_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_recruit_apply_fails_fast_on_invalid_action_counts_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_read_employee_used_before_training_fails_fast_on_invalid_action_counts(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_apply_inferred_use_employee_train_fails_fast_on_invalid_action_counts(player_count, seed_val)
+	if not r.ok:
+		return r
 	r = _test_read_employee_used_before_training_fails_fast_on_invalid_working_employee_multipliers(player_count, seed_val)
 	if not r.ok:
 		return r
@@ -101,7 +125,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_train_apply_fails_fast_on_invalid_immediate_train_pending_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 29})
+	return Result.success({"cases": 37})
 
 static func _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count: int, seed_val: int) -> Result:
 	var built := _build_train_state(player_count, seed_val)
@@ -581,6 +605,186 @@ static func _test_recruit_validate_fails_fast_on_invalid_train_slot_usage_instan
 	if str(state.employee_pool) != pool_before:
 		return Result.failure("失败时不应提前改写 employee_pool")
 	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_train_can_initiate_fails_closed_on_invalid_action_counts(player_count: int, seed_val: int) -> Result:
+	var built := _build_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["action_counts"] = {
+		"0": {"train": 1},
+	}
+	var action = ActionClass.new()
+	if action.can_initiate(state, 0):
+		return Result.failure("action_counts 使用字符串玩家 key 时 train can_initiate 应 fail-closed")
+	return Result.success()
+
+static func _test_train_validate_fails_fast_on_invalid_action_counts_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	var built := _build_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["action_counts"] = {
+		"0": {"train": 1},
+	}
+	var player_before := str(state.players[0])
+	var pool_before := str(state.employee_pool)
+	var round_state_before := str(state.round_state)
+
+	var action = ActionClass.new()
+	var result := action._validate_specific(state, Command.create("train", 0, {
+		"from_employee": "management_trainee",
+		"to_employee": "new_business_developer",
+	}))
+	if result.ok:
+		return Result.failure("action_counts 使用字符串玩家 key 时 train 验证应失败")
+	var err := str(result.error)
+	if err.find("action_counts") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 action_counts 与 字符串玩家 key，实际: %s" % err)
+	if str(state.players[0]) != player_before:
+		return Result.failure("失败时不应提前改写玩家员工状态")
+	if str(state.employee_pool) != pool_before:
+		return Result.failure("失败时不应提前改写 employee_pool")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_train_apply_fails_fast_on_invalid_action_counts_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	var built := _build_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["action_counts"] = {
+		"0": {"train": 1},
+	}
+	var player_before := str(state.players[0])
+	var pool_before := str(state.employee_pool)
+	var round_state_before := str(state.round_state)
+
+	var action = ActionClass.new()
+	var result := action._apply_changes(state, Command.create("train", 0, {
+		"from_employee": "management_trainee",
+		"to_employee": "new_business_developer",
+	}))
+	if result.ok:
+		return Result.failure("action_counts 使用字符串玩家 key 时 train apply 应失败")
+	var err := str(result.error)
+	if err.find("action_counts") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 action_counts 与 字符串玩家 key，实际: %s" % err)
+	if str(state.players[0]) != player_before:
+		return Result.failure("失败时不应提前改写玩家员工状态")
+	if str(state.employee_pool) != pool_before:
+		return Result.failure("失败时不应提前改写 employee_pool")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_recruit_can_initiate_fails_closed_on_invalid_action_counts(player_count: int, seed_val: int) -> Result:
+	var built := _build_active_recruit_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["action_counts"] = {
+		"0": {"recruit": 1},
+	}
+	var action = RecruitActionClass.new()
+	if action.can_initiate(state, 0):
+		return Result.failure("action_counts 使用字符串玩家 key 时 recruit can_initiate 应 fail-closed")
+	return Result.success()
+
+static func _test_recruit_validate_fails_fast_on_invalid_action_counts_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	var built := _build_active_recruit_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["action_counts"] = {
+		"0": {"recruit": 1},
+	}
+	var player_before := str(state.players[0])
+	var pool_before := str(state.employee_pool)
+	var round_state_before := str(state.round_state)
+
+	var action = RecruitActionClass.new()
+	var result := action._validate_specific(state, Command.create("recruit", 0, {
+		"employee_type": "management_trainee",
+	}))
+	if result.ok:
+		return Result.failure("action_counts 使用字符串玩家 key 时 recruit 验证应失败")
+	var err := str(result.error)
+	if err.find("action_counts") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 action_counts 与 字符串玩家 key，实际: %s" % err)
+	if str(state.players[0]) != player_before:
+		return Result.failure("失败时不应提前改写玩家员工状态")
+	if str(state.employee_pool) != pool_before:
+		return Result.failure("失败时不应提前改写 employee_pool")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_recruit_apply_fails_fast_on_invalid_action_counts_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	var built := _build_active_recruit_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["action_counts"] = {
+		"0": {"recruit": 1},
+	}
+	var player_before := str(state.players[0])
+	var pool_before := str(state.employee_pool)
+	var round_state_before := str(state.round_state)
+
+	var action = RecruitActionClass.new()
+	var result := action._apply_changes(state, Command.create("recruit", 0, {
+		"employee_type": "management_trainee",
+	}))
+	if result.ok:
+		return Result.failure("action_counts 使用字符串玩家 key 时 recruit apply 应失败")
+	var err := str(result.error)
+	if err.find("action_counts") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 action_counts 与 字符串玩家 key，实际: %s" % err)
+	if str(state.players[0]) != player_before:
+		return Result.failure("失败时不应提前改写玩家员工状态")
+	if str(state.employee_pool) != pool_before:
+		return Result.failure("失败时不应提前改写 employee_pool")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_read_employee_used_before_training_fails_fast_on_invalid_action_counts(player_count: int, seed_val: int) -> Result:
+	var built := _build_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["action_counts"] = {
+		"0": {"train": 1},
+	}
+	var read := TrainEmployeeUsageClass.read_employee_used_before_training(state, 0, "trainer")
+	if read.ok:
+		return Result.failure("action_counts 使用字符串玩家 key 时读取训练前已用员工应失败")
+	var err := str(read.error)
+	if err.find("action_counts") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 action_counts 与 字符串玩家 key，实际: %s" % err)
+	return Result.success()
+
+static func _test_apply_inferred_use_employee_train_fails_fast_on_invalid_action_counts(player_count: int, seed_val: int) -> Result:
+	var built := _build_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.round_state["train_events"] = []
+	state.round_state["action_counts"] = {
+		"0": {"train": 1},
+	}
+	var before := str(state.round_state)
+	var result := TrainEmployeeUsageClass.apply_inferred_use_employee_train(state, 0)
+	if result.ok:
+		return Result.failure("action_counts 使用字符串玩家 key 时 apply_inferred_use_employee_train 应失败")
+	var err := str(result.error)
+	if err.find("action_counts") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 action_counts 与 字符串玩家 key，实际: %s" % err)
+	if str(state.round_state) != before:
 		return Result.failure("失败时不应提前改写 round_state")
 	return Result.success()
 
