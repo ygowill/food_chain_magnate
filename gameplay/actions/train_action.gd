@@ -251,7 +251,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return reserve_read
 	var reserve: Array = reserve_read.value
 
-	var use_pending := EmployeeRulesClass.get_immediate_train_pending_count(state, player_id, from_employee) > 0
+	var use_pending_read := EmployeeRulesClass.try_get_immediate_train_pending_count(state, player_id, from_employee)
+	if not use_pending_read.ok:
+		return use_pending_read
+	var use_pending := int(use_pending_read.value) > 0
 	var has_reserve := reserve.find(from_employee) >= 0
 	var has_active := EmployeeRulesClass.count_active(player, from_employee) > 0
 	var can_train_from_active := bool(player.get("train_from_active_same_color", false))
@@ -289,8 +292,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		target_to_reserve = from_used_before
 
 	if use_pending:
-		var consumed := EmployeeRulesClass.consume_immediate_train_pending(state, player_id, from_employee)
-		if not consumed:
+		var consumed_read := EmployeeRulesClass.try_consume_immediate_train_pending(state, player_id, from_employee)
+		if not consumed_read.ok:
+			return consumed_read
+		if not bool(consumed_read.value):
 			return Result.failure("缺货预支待清账员工不存在: %s" % from_employee)
 	else:
 		# 优先从待命区移除；否则允许从在岗移除（FIRST LEMONADE SOLD）

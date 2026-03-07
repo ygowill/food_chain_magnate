@@ -192,7 +192,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 	var on_credit := int(state.employee_pool.get(employee_type, 0)) <= 0
 	if on_credit:
-		EmployeeRulesClass.add_immediate_train_pending(state, player_id, employee_type)
+		var add_pending := EmployeeRulesClass.try_add_immediate_train_pending(state, player_id, employee_type)
+		if not add_pending.ok:
+			return add_pending
 	else:
 		# 从员工池取出
 		var take_result := StateUpdater.take_from_pool(state, employee_type, 1)

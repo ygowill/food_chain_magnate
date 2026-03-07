@@ -131,57 +131,83 @@ static func has_any_immediate_train_pending(state: GameState) -> bool:
 		return false
 	return bool(read.value)
 
-static func add_immediate_train_pending(state: GameState, player_id: int, employee_type: String) -> void:
-	assert(not employee_type.is_empty(), "employee_type 不能为空")
-	assert(state.round_state is Dictionary, "round_state 类型错误（期望 Dictionary）")
+static func try_add_immediate_train_pending(state: GameState, player_id: int, employee_type: String) -> Result:
+	if state == null:
+		return Result.failure("immediate_train_pending: state 为空")
+	if employee_type.is_empty():
+		return Result.failure("immediate_train_pending: employee_type 不能为空")
+	if not (state.round_state is Dictionary):
+		return Result.failure("round_state 类型错误（期望 Dictionary）")
 
 	var pending_val = state.round_state.get("immediate_train_pending", null)
 	var pending_all: Dictionary = {}
 	if pending_val != null:
-		assert(pending_val is Dictionary, "round_state.immediate_train_pending 类型错误（期望 Dictionary）")
+		if not (pending_val is Dictionary):
+			return Result.failure("round_state.immediate_train_pending 类型错误（期望 Dictionary）")
 		pending_all = pending_val
 
-	assert(not pending_all.has(str(player_id)), "round_state.immediate_train_pending 不应包含字符串玩家 key: %s" % str(player_id))
+	if pending_all.has(str(player_id)):
+		return Result.failure("round_state.immediate_train_pending 不应包含字符串玩家 key: %s" % str(player_id))
 
 	var per_val = pending_all.get(player_id, null)
 	var per_player: Dictionary = {}
 	if per_val != null:
-		assert(per_val is Dictionary, "round_state.immediate_train_pending[%d] 类型错误（期望 Dictionary）" % player_id)
+		if not (per_val is Dictionary):
+			return Result.failure("round_state.immediate_train_pending[%d] 类型错误（期望 Dictionary）" % player_id)
 		per_player = per_val
 
 	var current := 0
 	if per_player.has(employee_type):
 		var v = per_player[employee_type]
-		assert(v is int, "round_state.immediate_train_pending[%d].%s 类型错误（期望 int）" % [player_id, employee_type])
-		assert(int(v) >= 0, "round_state.immediate_train_pending[%d].%s 不能为负数: %d" % [player_id, employee_type, int(v)])
+		if not (v is int):
+			return Result.failure("round_state.immediate_train_pending[%d].%s 类型错误（期望 int）" % [player_id, employee_type])
+		if int(v) < 0:
+			return Result.failure("round_state.immediate_train_pending[%d].%s 不能为负数: %d" % [player_id, employee_type, int(v)])
 		current = int(v)
 	per_player[employee_type] = current + 1
 	pending_all[player_id] = per_player
 	state.round_state["immediate_train_pending"] = pending_all
+	return Result.success(current + 1)
 
-static func consume_immediate_train_pending(state: GameState, player_id: int, employee_type: String) -> bool:
-	assert(not employee_type.is_empty(), "employee_type 不能为空")
-	assert(state.round_state is Dictionary, "round_state 类型错误（期望 Dictionary）")
+static func add_immediate_train_pending(state: GameState, player_id: int, employee_type: String) -> void:
+	if state == null:
+		return
+	var r := try_add_immediate_train_pending(state, player_id, employee_type)
+	if not r.ok:
+		return
+
+static func try_consume_immediate_train_pending(state: GameState, player_id: int, employee_type: String) -> Result:
+	if state == null:
+		return Result.failure("immediate_train_pending: state 为空")
+	if employee_type.is_empty():
+		return Result.failure("immediate_train_pending: employee_type 不能为空")
+	if not (state.round_state is Dictionary):
+		return Result.failure("round_state 类型错误（期望 Dictionary）")
 
 	var pending_val = state.round_state.get("immediate_train_pending", null)
 	if pending_val == null:
-		return false
-	assert(pending_val is Dictionary, "round_state.immediate_train_pending 类型错误（期望 Dictionary）")
+		return Result.success(false)
+	if not (pending_val is Dictionary):
+		return Result.failure("round_state.immediate_train_pending 类型错误（期望 Dictionary）")
 	var pending_all: Dictionary = pending_val
-	assert(not pending_all.has(str(player_id)), "round_state.immediate_train_pending 不应包含字符串玩家 key: %s" % str(player_id))
+	if pending_all.has(str(player_id)):
+		return Result.failure("round_state.immediate_train_pending 不应包含字符串玩家 key: %s" % str(player_id))
 
 	if not pending_all.has(player_id):
-		return false
+		return Result.success(false)
 	var per_val = pending_all[player_id]
-	assert(per_val is Dictionary, "round_state.immediate_train_pending[%d] 类型错误（期望 Dictionary）" % player_id)
+	if not (per_val is Dictionary):
+		return Result.failure("round_state.immediate_train_pending[%d] 类型错误（期望 Dictionary）" % player_id)
 	var per_player: Dictionary = per_val
 
 	if not per_player.has(employee_type):
-		return false
+		return Result.success(false)
 	var current_val = per_player[employee_type]
-	assert(current_val is int, "round_state.immediate_train_pending[%d].%s 类型错误（期望 int）" % [player_id, employee_type])
+	if not (current_val is int):
+		return Result.failure("round_state.immediate_train_pending[%d].%s 类型错误（期望 int）" % [player_id, employee_type])
 	var current: int = int(current_val)
-	assert(current > 0, "round_state.immediate_train_pending[%d].%s 必须 > 0，实际: %d" % [player_id, employee_type, current])
+	if current <= 0:
+		return Result.failure("round_state.immediate_train_pending[%d].%s 必须 > 0，实际: %d" % [player_id, employee_type, current])
 
 	current -= 1
 	if current <= 0:
@@ -199,5 +225,13 @@ static func consume_immediate_train_pending(state: GameState, player_id: int, em
 	else:
 		state.round_state["immediate_train_pending"] = pending_all
 
-	return true
+	return Result.success(true)
+
+static func consume_immediate_train_pending(state: GameState, player_id: int, employee_type: String) -> bool:
+	if state == null:
+		return false
+	var read := try_consume_immediate_train_pending(state, player_id, employee_type)
+	if not read.ok:
+		return false
+	return bool(read.value)
 

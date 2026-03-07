@@ -88,8 +88,14 @@ static func try_has_any_immediate_train_pending(state: GameState) -> Result:
 static func has_any_immediate_train_pending(state: GameState) -> bool:
 	return ImmediateTrainPending.has_any_immediate_train_pending(state)
 
+static func try_add_immediate_train_pending(state: GameState, player_id: int, employee_type: String) -> Result:
+	return ImmediateTrainPending.try_add_immediate_train_pending(state, player_id, employee_type)
+
 static func add_immediate_train_pending(state: GameState, player_id: int, employee_type: String) -> void:
 	ImmediateTrainPending.add_immediate_train_pending(state, player_id, employee_type)
+
+static func try_consume_immediate_train_pending(state: GameState, player_id: int, employee_type: String) -> Result:
+	return ImmediateTrainPending.try_consume_immediate_train_pending(state, player_id, employee_type)
 
 static func consume_immediate_train_pending(state: GameState, player_id: int, employee_type: String) -> bool:
 	return ImmediateTrainPending.consume_immediate_train_pending(state, player_id, employee_type)
