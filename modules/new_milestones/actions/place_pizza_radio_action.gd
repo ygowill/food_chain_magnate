@@ -8,6 +8,7 @@ const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
 const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
+const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 
 const PENDING_KEY := "new_milestones_pizza_radios_pending"
 
@@ -198,6 +199,21 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return placements_read
 	var placements: Dictionary = placements_read.value
 
+	var pending_read = state.round_state.get(PENDING_KEY, null)
+	if not (pending_read is Array):
+		return Result.failure("round_state.%s 类型错误（期望 Array）" % PENDING_KEY)
+	var pending: Array = (pending_read as Array).duplicate(true)
+	pending.remove_at(0)
+	if state.round_state.has("pending_phase_actions") or not pending.is_empty():
+		var pending_phase_actions_set := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
+			state.round_state,
+			"Dinnertime",
+			pending.duplicate(true),
+			action_id
+		)
+		if not pending_phase_actions_set.ok:
+			return pending_phase_actions_set
+
 	var instance := {
 		"board_number": board_number,
 		"type": "radio",
@@ -227,22 +243,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"tile_index": -1,
 	}
 	state.map["marketing_placements"] = placements
-
-	# 消耗一个 pending
-	var pending: Array = state.round_state[PENDING_KEY]
-	pending.remove_at(0)
 	state.round_state[PENDING_KEY] = pending
-
-	# 更新推进阻塞器
-	if state.round_state.has("pending_phase_actions"):
-		var ppa_val = state.round_state.get("pending_phase_actions", null)
-		if ppa_val is Dictionary:
-			var ppa: Dictionary = ppa_val
-			if pending.is_empty():
-				ppa.erase("Dinnertime")
-			else:
-				ppa["Dinnertime"] = pending.duplicate(true)
-			state.round_state["pending_phase_actions"] = ppa
 
 	return Result.success({
 		"board_number": board_number,

@@ -34,7 +34,10 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_apply_changes_fails_fast_without_partial_mutation()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 5})
+	r = _test_apply_changes_fails_fast_on_invalid_pending_phase_actions_without_partial_mutation()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 6})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -127,4 +130,24 @@ static func _test_apply_changes_fails_fast_without_partial_mutation() -> Result:
 		return Result.failure("错误信息应包含 state.map.marketing_placements，实际: %s" % err)
 	if not state.marketing_instances.is_empty():
 		return Result.failure("失败时不应提前写入 marketing_instances")
+	return Result.success()
+
+static func _test_apply_changes_fails_fast_on_invalid_pending_phase_actions_without_partial_mutation() -> Result:
+	var action = _FakePizzaApplyAction.new()
+	var state := _make_apply_state()
+	state.round_state["pending_phase_actions"] = []
+	var result := action._apply_changes(state, _make_command())
+	if result.ok:
+		return Result.failure("pending_phase_actions 类型错误时应失败")
+	var err := str(result.error)
+	if err.find("round_state.pending_phase_actions") < 0:
+		return Result.failure("错误信息应包含 round_state.pending_phase_actions，实际: %s" % err)
+	if not state.marketing_instances.is_empty():
+		return Result.failure("失败时不应提前写入 marketing_instances")
+	var placements: Dictionary = state.map["marketing_placements"]
+	if not placements.is_empty():
+		return Result.failure("失败时不应提前写入 marketing_placements")
+	var pending: Array = state.round_state.get(PENDING_KEY, [])
+	if pending.size() != 1:
+		return Result.failure("失败时不应提前消耗 pending，实际: %s" % str(pending))
 	return Result.success()
