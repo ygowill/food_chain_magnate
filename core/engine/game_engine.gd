@@ -22,6 +22,7 @@ const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
+const MilestoneEffectRegistryClass = preload("res://core/rules/milestone_effect_registry.gd")
 const GameEngineDependenciesClass = preload("res://core/engine/game_engine/dependencies.gd")
 
 # === 核心组件 ===
@@ -67,6 +68,7 @@ func activate_registry_bundles() -> void:
 	MilestoneRegistryClass.set_current_bundle(catalog_registry_bundle)
 	TileRegistryClass.set_current_bundle(catalog_registry_bundle)
 	PieceRegistryClass.set_current_bundle(catalog_registry_bundle)
+	MilestoneEffectRegistryClass.set_current(ruleset_v2.milestone_effect_registry if ruleset_v2 != null else null)
 
 func get_catalog_registry_bundle():
 	if catalog_registry_bundle == null:

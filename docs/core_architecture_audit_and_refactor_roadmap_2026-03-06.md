@@ -926,6 +926,12 @@ GameSessionContext
 - 单进程内可并行创建两个 `GameEngine` 实例且 registry 不互相污染
 - 现有核心测试不回归
 
+### 实施进度（截至 2026-03-08）
+
+- `refactor(core): switch milestone effect registry with active engine bundle`
+  - 将 `MilestoneEffectRegistry` 的当前会话切换接入 `GameEngine.activate_registry_bundles()`，让多引擎场景下的里程碑 effect handler 会随当前激活引擎一起切换，减少 static current 在回放/联机并行场景中的串扰风险。
+  - 扩展 `catalog_registry_bundle_isolation_test`，补充 engine A / engine B 之间来回切换 milestone effect registry 的回归断言，确保多实例切换时不会继续残留上一局的里程碑 effect registry。
+
 ### 风险
 
 - 改动面较大
