@@ -1224,6 +1224,9 @@ GameSessionContext
 - `refactor(gameplay): tighten restructure employee access`
   - 将 `restructure_employee` 的 apply 阶段参数解析与玩家数组读取收口到显式失败返回，并改为通过 `PlayerStateAccess` 读取 `player[pid]` / `employees` / `reserve_employees`，避免在转入待命前触发硬断言。
   - 新增 focused `restructure_employee` 状态访问测试，覆盖缺失/错误 `to_reserve`、移动 CEO 与非法 `player.employees`，确保失败时不会提前改写玩家结构。
+- `refactor(gameplay): tighten produce food inventory payload access`
+  - 为 `produce_food` 增补 `StateUpdater.add_inventory()` 返回值读取 helper，并将库存写入器改成可注入依赖，避免在读取 `new_amount` 前触发硬断言。
+  - 新增 focused `produce_food` 状态访问测试，通过注入坏 inventory payload 覆盖返回值类型、缺失 `new_amount` 与坏 `new_amount` 类型三类失败分支，确保失败时不会提前改写 `inventory` 或 `round_state`。
 
 当前阶段性结果：
 

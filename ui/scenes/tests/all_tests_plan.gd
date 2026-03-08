@@ -311,6 +311,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.ProduceFoodTestClass.run(2, 12345),
 		},
 		{
+			"name": "ProduceFoodStateAccessTest",
+			"fn": func() -> Result: return TestRefs.ProduceFoodStateAccessTestClass.run(2, 12345),
+		},
+		{
 			"name": "ProcureDrinksTest",
 			"fn": func() -> Result: return TestRefs.ProcureDrinksTestClass.run(2, 12345),
 		},

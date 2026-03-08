@@ -11,7 +11,9 @@ const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
-func _init() -> void:
+var _inventory_adder = null
+
+func _init(inventory_adder = null) -> void:
 	action_id = "produce_food"
 	display_name = "生产食物"
 	description = "使用厨师/主厨生产食物"
@@ -19,6 +21,7 @@ func _init() -> void:
 	is_mandatory = false
 	allowed_phases = [DefsClass.PHASE_WORKING]
 	allowed_sub_phases = [DefsClass.SUB_PHASE_GET_FOOD]
+	_inventory_adder = inventory_adder if inventory_adder != null else StateUpdater
 
 func can_initiate(state: GameState, player_id: int) -> bool:
 	if state == null:
@@ -126,6 +129,17 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	return Result.success()
 
+static func _require_add_inventory_payload(value, prefix: String) -> Result:
+	if not (value is Dictionary):
+		return Result.failure("%s: StateUpdater.add_inventory 返回值类型错误（期望 Dictionary）" % prefix)
+	var payload: Dictionary = value
+	if not payload.has("new_amount"):
+		return Result.failure("%s: StateUpdater.add_inventory 缺少字段 new_amount" % prefix)
+	var new_amount_val = payload["new_amount"]
+	if not (new_amount_val is int):
+		return Result.failure("%s: StateUpdater.add_inventory.new_amount 类型错误（期望 int）" % prefix)
+	return Result.success({"new_amount": int(new_amount_val)})
+
 func _apply_changes(state: GameState, command: Command) -> Result:
 	var employee_type_result := require_string_param(command, "employee_type")
 	if not employee_type_result.ok:
@@ -160,15 +174,14 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		amount = 1
 
 	# 添加食物到玩家库存
-	var add_result := StateUpdater.add_inventory(state, player_id, food_type, amount)
+	var add_result = _inventory_adder.add_inventory(state, player_id, food_type, amount)
 	if not add_result.ok:
 		return add_result
-	assert(add_result.value is Dictionary, "StateUpdater.add_inventory: value 类型错误（期望 Dictionary）")
-	var add_payload: Dictionary = add_result.value
-	assert(add_payload.has("new_amount"), "StateUpdater.add_inventory: 缺少字段 new_amount")
-	var new_amount_val = add_payload["new_amount"]
-	assert(new_amount_val is int, "StateUpdater.add_inventory: new_amount 类型错误（期望 int）")
-	var new_amount: int = int(new_amount_val)
+	var add_payload_read := _require_add_inventory_payload(add_result.value, "produce_food")
+	if not add_payload_read.ok:
+		return add_payload_read
+	var add_payload: Dictionary = add_payload_read.value
+	var new_amount: int = int(add_payload.get("new_amount", 0))
 
 	# 增加生产计数
 	var inc_result := RoundStateCountersClass.increment_player_key_count(
