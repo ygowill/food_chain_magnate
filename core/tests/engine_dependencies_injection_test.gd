@@ -55,6 +55,12 @@ static func run(seed_val: int = 12345) -> Result:
 	engine.set_action_setup_provider(action_provider)
 	engine.set_command_runner_event_build_provider(event_provider)
 	engine.set_restaurant_logo_assignment_provider(logo_provider)
+	engine.set_game_config_overrides({
+		"rules.salary_cost": 8,
+	})
+	engine.set_game_option_overrides({
+		"player.starting_cash": 42,
+	})
 
 	var init_r := engine.initialize(2, seed_val)
 	if not init_r.ok:
@@ -71,6 +77,10 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("注入的 restaurant_logo_assignment_provider 结果未写入 pid=0")
 	if int(p1.get("restaurant_logo_id", -1)) != 4:
 		return Result.failure("注入的 restaurant_logo_assignment_provider 结果未写入 pid=1")
+	if engine.state.get_rule_int("salary_cost") != 8:
+		return Result.failure("注入的 game_config_overrides 未生效: salary_cost=%d" % engine.state.get_rule_int("salary_cost"))
+	if int(p0.get("cash", -1)) != 42 or int(p1.get("cash", -1)) != 42:
+		return Result.failure("注入的 game_option_overrides 未生效: cash=%s/%s" % [str(p0.get("cash", -1)), str(p1.get("cash", -1))])
 
 	var setup_r := TestPhaseUtilsClass.complete_setup(engine)
 	if not setup_r.ok:
@@ -84,9 +94,11 @@ static func run(seed_val: int = 12345) -> Result:
 	if event_provider.milestone_calls <= 0:
 		return Result.failure("注入的 command_runner_event_build_provider 未参与里程碑事件构建")
 
+	var final_salary_cost := engine.state.get_rule_int("salary_cost")
 	engine.dispose()
 	return Result.success({
 		"cash_calls": event_provider.cash_calls,
 		"milestone_calls": event_provider.milestone_calls,
 		"logo_provider_called": logo_provider.called,
+		"salary_cost": final_salary_cost,
 	})

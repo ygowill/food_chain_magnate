@@ -969,6 +969,10 @@ GameSessionContext
   - 将新局初始化的餐厅 Logo 分配接入 `GameEngineDependencies.restaurant_logo_assignment_provider`，让 `initializer` / `GameStateFactory` 优先消费显式注入的 provider，同时保留原有 `ProjectSettings` path 作为兼容桥。
   - 扩展 `engine_dependencies_injection_test`，补充 logo provider 的调用入参与 `restaurant_logo_id` 写回断言，确保 headless 初始化不必依赖全局 path 配置也能稳定完成 Logo 分配。
 
+- `refactor(core): inject config override dependencies`
+  - 将新局初始化对 `game_config_overrides` / `game_option_overrides` 的消费接入 `GameEngineDependencies`，让 `initializer` 优先使用显式注入的覆盖字典，并仅在未注入时回退到现有全局桥接。
+  - 扩展 `engine_dependencies_injection_test`，补充规则薪资与起始现金覆盖断言，确保 headless 初始化在不依赖 `Globals` 的情况下也能稳定应用配置覆盖。
+
 ---
 
 ## 阶段 4：强化状态契约（2~4 周）

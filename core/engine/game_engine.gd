@@ -91,6 +91,24 @@ func set_command_runner_event_build_provider(provider) -> void:
 func set_restaurant_logo_assignment_provider(provider) -> void:
 	get_dependencies().restaurant_logo_assignment_provider = provider
 
+func set_game_config_overrides(overrides) -> void:
+	if overrides == null:
+		get_dependencies().game_config_overrides = null
+		return
+	if overrides is Dictionary:
+		get_dependencies().game_config_overrides = Dictionary(overrides).duplicate(true)
+		return
+	get_dependencies().game_config_overrides = overrides
+
+func set_game_option_overrides(overrides) -> void:
+	if overrides == null:
+		get_dependencies().game_option_overrides = null
+		return
+	if overrides is Dictionary:
+		get_dependencies().game_option_overrides = Dictionary(overrides).duplicate(true)
+		return
+	get_dependencies().game_option_overrides = overrides
+
 func ensure_initialized() -> Result:
 	activate_registry_bundles()
 	if state == null:

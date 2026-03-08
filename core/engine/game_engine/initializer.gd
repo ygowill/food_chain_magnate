@@ -60,16 +60,45 @@ static func initialize_new_game(
 
 	# 应用高级配置覆盖 / 游戏选项覆盖
 	var _globals_node = AutoloadAccessClass.get_autoload("Globals")
-	if _globals_node != null and "game_config_overrides" in _globals_node:
-		var overrides: Dictionary = _globals_node.game_config_overrides
+	var injected_config_overrides = null
+	var injected_option_overrides = null
+	if engine.has_method("get_dependencies") and engine.get_dependencies() != null:
+		injected_config_overrides = engine.get_dependencies().game_config_overrides
+		injected_option_overrides = engine.get_dependencies().game_option_overrides
+
+	if injected_config_overrides != null:
+		if not (injected_config_overrides is Dictionary):
+			return Result.failure("初始化失败：GameEngineDependencies.game_config_overrides 类型错误（期望 Dictionary）")
+		var overrides: Dictionary = injected_config_overrides
 		if not overrides.is_empty():
 			cfg.apply_overrides(overrides)
-			AutoloadAccessClass.log_info("GameEngine", "已应用 %d 项高级配置覆盖" % overrides.size())
-	if _globals_node != null and "game_option_overrides" in _globals_node:
-		var opt_overrides: Dictionary = _globals_node.game_option_overrides
+			AutoloadAccessClass.log_info("GameEngine", "已应用 %d 项注入的高级配置覆盖" % overrides.size())
+	elif _globals_node != null and "game_config_overrides" in _globals_node:
+		var globals_overrides = _globals_node.game_config_overrides
+		if globals_overrides != null:
+			if not (globals_overrides is Dictionary):
+				return Result.failure("初始化失败：全局 game_config_overrides 类型错误（期望 Dictionary）")
+			var overrides: Dictionary = globals_overrides
+			if not overrides.is_empty():
+				cfg.apply_overrides(overrides)
+				AutoloadAccessClass.log_info("GameEngine", "已应用 %d 项高级配置覆盖" % overrides.size())
+
+	if injected_option_overrides != null:
+		if not (injected_option_overrides is Dictionary):
+			return Result.failure("初始化失败：GameEngineDependencies.game_option_overrides 类型错误（期望 Dictionary）")
+		var opt_overrides: Dictionary = injected_option_overrides
 		if not opt_overrides.is_empty():
 			cfg.apply_overrides(opt_overrides)
-			AutoloadAccessClass.log_info("GameEngine", "已应用 %d 项游戏选项覆盖" % opt_overrides.size())
+			AutoloadAccessClass.log_info("GameEngine", "已应用 %d 项注入的游戏选项覆盖" % opt_overrides.size())
+	elif _globals_node != null and "game_option_overrides" in _globals_node:
+		var globals_option_overrides = _globals_node.game_option_overrides
+		if globals_option_overrides != null:
+			if not (globals_option_overrides is Dictionary):
+				return Result.failure("初始化失败：全局 game_option_overrides 类型错误（期望 Dictionary）")
+			var opt_overrides: Dictionary = globals_option_overrides
+			if not opt_overrides.is_empty():
+				cfg.apply_overrides(opt_overrides)
+				AutoloadAccessClass.log_info("GameEngine", "已应用 %d 项游戏选项覆盖" % opt_overrides.size())
 
 	var span_inv := PerfTraceClass.begin_span("init:ModulesV2.validate_starting_inventory_products")
 	var inv_check := ModulesV2Class.validate_starting_inventory_products(cfg)

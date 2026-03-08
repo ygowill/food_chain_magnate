@@ -5,8 +5,12 @@ extends RefCounted
 var action_setup_provider = null
 var command_runner_event_build_provider = null
 var restaurant_logo_assignment_provider = null
+var game_config_overrides = null
+var game_option_overrides = null
 
 func clear() -> void:
 	action_setup_provider = null
 	command_runner_event_build_provider = null
 	restaurant_logo_assignment_provider = null
+	game_config_overrides = null
+	game_option_overrides = null
