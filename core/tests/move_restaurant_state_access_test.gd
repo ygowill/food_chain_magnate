@@ -44,7 +44,22 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_apply_fails_fast_on_invalid_placement_entrance_pos_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 8})
+	r = _test_generate_specific_events_returns_empty_on_invalid_employee_type_type()
+	if not r.ok:
+		return r
+	r = _test_generate_specific_events_returns_empty_on_invalid_restaurant_id_type()
+	if not r.ok:
+		return r
+	r = _test_generate_specific_events_returns_empty_when_restaurant_missing()
+	if not r.ok:
+		return r
+	r = _test_generate_specific_events_returns_empty_on_invalid_anchor_pos()
+	if not r.ok:
+		return r
+	r = _test_generate_specific_events_returns_empty_on_invalid_rotation()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 13})
 
 static func _build_move_restaurant_working_engine(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -326,6 +341,56 @@ static func _test_apply_fails_fast_on_invalid_placement_response_without_partial
 		return Result.failure("失败时不应提前改写 map")
 	if str(state.round_state) != round_state_before:
 		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _make_event_state(restaurants: Dictionary) -> GameState:
+	var state := GameState.new()
+	state.map = {"restaurants": restaurants}
+	return state
+
+static func _test_generate_specific_events_returns_empty_on_invalid_employee_type_type() -> Result:
+	var action = MoveRestaurantActionClass.new()
+	var old_state := _make_event_state({})
+	var new_state := _make_event_state({"r1": {"anchor_pos": Vector2i.ZERO, "rotation": 0}})
+	var events := action._generate_specific_events(old_state, new_state, Command.create("move_restaurant", 0, {"restaurant_id": "r1", "employee_type": 1}))
+	if not events.is_empty():
+		return Result.failure("employee_type 类型错误时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_on_invalid_restaurant_id_type() -> Result:
+	var action = MoveRestaurantActionClass.new()
+	var old_state := _make_event_state({})
+	var new_state := _make_event_state({"r1": {"anchor_pos": Vector2i.ZERO, "rotation": 0}})
+	var events := action._generate_specific_events(old_state, new_state, Command.create("move_restaurant", 0, {"restaurant_id": 1, "employee_type": "regional_manager"}))
+	if not events.is_empty():
+		return Result.failure("restaurant_id 类型错误时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_when_restaurant_missing() -> Result:
+	var action = MoveRestaurantActionClass.new()
+	var old_state := _make_event_state({})
+	var new_state := _make_event_state({})
+	var events := action._generate_specific_events(old_state, new_state, Command.create("move_restaurant", 0, {"restaurant_id": "r1", "employee_type": "regional_manager"}))
+	if not events.is_empty():
+		return Result.failure("未找到餐厅时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_on_invalid_anchor_pos() -> Result:
+	var action = MoveRestaurantActionClass.new()
+	var old_state := _make_event_state({})
+	var new_state := _make_event_state({"r1": {"rotation": 0}})
+	var events := action._generate_specific_events(old_state, new_state, Command.create("move_restaurant", 0, {"restaurant_id": "r1", "employee_type": "regional_manager"}))
+	if not events.is_empty():
+		return Result.failure("anchor_pos 损坏时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_on_invalid_rotation() -> Result:
+	var action = MoveRestaurantActionClass.new()
+	var old_state := _make_event_state({})
+	var new_state := _make_event_state({"r1": {"anchor_pos": Vector2i.ZERO, "rotation": "bad"}})
+	var events := action._generate_specific_events(old_state, new_state, Command.create("move_restaurant", 0, {"restaurant_id": "r1", "employee_type": "regional_manager"}))
+	if not events.is_empty():
+		return Result.failure("rotation 损坏时应返回空事件列表")
 	return Result.success()
 
 static func _get_first_restaurant_id(state: GameState, actor: int) -> String:

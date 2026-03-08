@@ -295,11 +295,13 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	})
 
 func _generate_specific_events(_old_state: GameState, _new_state: GameState, command: Command) -> Array[Dictionary]:
+	var events: Array[Dictionary] = []
 	var employee_type := ""
 	if command.params.has("employee_type"):
 		var employee_type_result := require_string_param(command, "employee_type")
-		assert(employee_type_result.ok, "move_restaurant 缺少/错误参数: employee_type")
-		employee_type = employee_type_result.value
+		if not employee_type_result.ok:
+			return events
+		employee_type = str(employee_type_result.value).strip_edges()
 	if employee_type.is_empty():
 		var candidates := EmployeeUsageHelperClass.get_active_employee_types_for_usage_tag(
 			_old_state, command.actor, "use:move_restaurant"
@@ -307,19 +309,29 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 		if not candidates.is_empty():
 			employee_type = candidates[0]
 	var rest_id_result := require_string_param(command, "restaurant_id")
-	assert(rest_id_result.ok, "move_restaurant 缺少/错误参数: restaurant_id")
-	var rest_id: String = rest_id_result.value
+	if not rest_id_result.ok:
+		return events
+	var rest_id: String = str(rest_id_result.value).strip_edges()
+	if rest_id.is_empty():
+		return events
 	var restaurants_read := MapStateAccessClass.require_restaurants(_new_state, action_id)
-	assert(restaurants_read.ok, "move_restaurant: %s" % str(restaurants_read.error))
+	if not restaurants_read.ok:
+		return events
 	var restaurants: Dictionary = restaurants_read.value
-	assert(restaurants.has(rest_id), "move_restaurant 餐厅不存在: %s" % rest_id)
-	var rest: Dictionary = restaurants[rest_id]
-	assert(rest.has("anchor_pos") and rest["anchor_pos"] is Vector2i, "move_restaurant anchor_pos 缺失或类型错误")
+	if not restaurants.has(rest_id):
+		return events
+	var rest_val = restaurants[rest_id]
+	if not (rest_val is Dictionary):
+		return events
+	var rest: Dictionary = rest_val
+	if not rest.has("anchor_pos") or not (rest["anchor_pos"] is Vector2i):
+		return events
 	var anchor_pos: Vector2i = rest["anchor_pos"]
-	assert(rest.has("rotation") and (rest["rotation"] is int or rest["rotation"] is float), "move_restaurant rotation 缺失或类型错误")
+	if not rest.has("rotation") or not (rest["rotation"] is int or rest["rotation"] is float):
+		return events
 	var rotation: int = int(rest["rotation"])
 	var p := [anchor_pos.x, anchor_pos.y]
-	return [{
+	events.append({
 		"type": EventBus.EventType.RESTAURANT_MOVED,
 		"data": {
 			"player_id": command.actor,
@@ -328,7 +340,8 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 			"rotation": rotation,
 			"employee_type": employee_type,
 		}
-	}]
+	})
+	return events
 
 func _validate_restaurant_placement(map_ctx: Dictionary, world_anchor: Vector2i, rotation: int, piece_registry: Dictionary, player_id: int, ignore_cells: Array) -> Result:
 	return _placement_validator.validate_restaurant_placement(
