@@ -1248,6 +1248,9 @@ GameSessionContext
 - `refactor(gameplay): harden add garden event and anchor access`
   - 将 `add_garden` 的事件生成参数读取从硬断言改为 fail-soft，并将 `_compute_anchor_for_merged_cells()` 从硬断言改成显式 `Result` 失败，避免坏 payload 在更新房屋结构前触发崩溃。
   - 扩展 focused `add_garden` 状态访问测试，覆盖空 `merged_cells`、非法 rotation、缺失 `house_id` 与错误 `employee_type`，确保 apply / 事件生成都不会提前改写状态。
+- `refactor(gameplay): harden place house event access`
+  - 将 `place_house` 的事件生成参数与新房屋读取从硬断言改为 fail-soft：错误 `employee_type`、缺失新房屋、坏 `house_number` / `anchor_pos` 时直接返回空事件列表，避免坏命令在日志路径触发崩溃。
+  - 扩展 focused `place_house` 状态访问测试，覆盖错误 `employee_type`、未找到新房屋与坏 `anchor_pos` 三类分支，确保 `_generate_specific_events()` 安全返回空列表。
 
 当前阶段性结果：
 

@@ -28,7 +28,16 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_apply_changes_fails_fast_on_invalid_footprint_cells_without_partial_mutation(seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_generate_specific_events_returns_empty_on_invalid_employee_type_type()
+	if not r.ok:
+		return r
+	r = _test_generate_specific_events_returns_empty_when_no_new_house_found()
+	if not r.ok:
+		return r
+	r = _test_generate_specific_events_returns_empty_on_invalid_anchor_pos()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 6})
 
 static func _test_apply_changes_fails_fast_on_invalid_house_placement_counts_without_partial_mutation(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -219,3 +228,35 @@ static func _map_contains_house_id(state: GameState, house_id: String) -> bool:
 			if structure_val is Dictionary and str((structure_val as Dictionary).get("house_id", "")) == house_id:
 				return true
 	return false
+
+static func _make_event_state(houses: Dictionary) -> GameState:
+	var state := GameState.new()
+	state.map = {"houses": houses}
+	return state
+
+static func _test_generate_specific_events_returns_empty_on_invalid_employee_type_type() -> Result:
+	var action = PlaceHouseActionClass.new()
+	var old_state := _make_event_state({})
+	var new_state := _make_event_state({})
+	var events := action._generate_specific_events(old_state, new_state, Command.create("place_house", 0, {"employee_type": 1}))
+	if not events.is_empty():
+		return Result.failure("employee_type 类型错误时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_when_no_new_house_found() -> Result:
+	var action = PlaceHouseActionClass.new()
+	var old_state := _make_event_state({"h1": {"house_number": 1, "anchor_pos": Vector2i.ZERO}})
+	var new_state := _make_event_state({"h1": {"house_number": 1, "anchor_pos": Vector2i.ZERO}})
+	var events := action._generate_specific_events(old_state, new_state, Command.create("place_house", 0, {"employee_type": "new_business_developer"}))
+	if not events.is_empty():
+		return Result.failure("未找到新房屋时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_on_invalid_anchor_pos() -> Result:
+	var action = PlaceHouseActionClass.new()
+	var old_state := _make_event_state({})
+	var new_state := _make_event_state({"h1": {"house_number": 1}})
+	var events := action._generate_specific_events(old_state, new_state, Command.create("place_house", 0, {"employee_type": "new_business_developer"}))
+	if not events.is_empty():
+		return Result.failure("anchor_pos 损坏时应返回空事件列表")
+	return Result.success()

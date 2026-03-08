@@ -276,8 +276,9 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 	var employee_type := ""
 	if command.params.has("employee_type"):
 		var employee_type_result := require_string_param(command, "employee_type")
-		assert(employee_type_result.ok, "place_house 缺少/错误参数: employee_type")
-		employee_type = employee_type_result.value
+		if not employee_type_result.ok:
+			return events
+		employee_type = str(employee_type_result.value).strip_edges()
 	if employee_type.is_empty():
 		var candidates := EmployeeUsageHelperClass.get_active_employee_types_for_usage_tag(
 			old_state, command.actor, "use:place_house"
@@ -285,26 +286,40 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 		if not candidates.is_empty():
 			employee_type = candidates[0]
 
+	if old_state == null or new_state == null:
+		return events
+	if not (old_state.map is Dictionary) or not (new_state.map is Dictionary):
+		return events
+	if not old_state.map.has("houses") or not (old_state.map["houses"] is Dictionary):
+		return events
+	if not new_state.map.has("houses") or not (new_state.map["houses"] is Dictionary):
+		return events
+
 	# 找到新创建的房屋
-	var new_houses = new_state.map.houses.keys()
-	var old_houses = old_state.map.houses.keys()
+	var new_houses: Dictionary = new_state.map["houses"]
+	var old_houses: Dictionary = old_state.map["houses"]
 	var house_id := ""
 	var house_number = 0
 
-	for h_id in new_houses:
+	for h_id in new_houses.keys():
 		if h_id not in old_houses:
-			house_id = h_id
-			assert(new_state.map.houses.has(h_id), "place_house 新房屋缺失: %s" % str(h_id))
-			var new_house_val = new_state.map.houses[h_id]
-			assert(new_house_val is Dictionary, "place_house 新房屋类型错误（期望 Dictionary）: %s" % str(h_id))
+			house_id = str(h_id)
+			var new_house_val = new_houses[h_id]
+			if not (new_house_val is Dictionary):
+				return events
 			var new_house: Dictionary = new_house_val
-			assert(new_house.has("house_number") and (new_house["house_number"] is int), "place_house 新房屋 house_number 缺失或类型错误（期望 int）: %s" % str(h_id))
+			if not new_house.has("house_number") or not (new_house["house_number"] is int):
+				return events
 			house_number = int(new_house["house_number"])
 			break
-	assert(not house_id.is_empty(), "place_house 未找到新创建的房屋")
-	assert(new_state.map.houses.has(house_id), "place_house 新房屋缺失: %s" % house_id)
-	var house: Dictionary = new_state.map.houses[house_id]
-	assert(house.has("anchor_pos") and house["anchor_pos"] is Vector2i, "place_house 房屋 anchor_pos 缺失或类型错误")
+	if house_id.is_empty() or not new_houses.has(house_id):
+		return events
+	var house_val = new_houses[house_id]
+	if not (house_val is Dictionary):
+		return events
+	var house: Dictionary = house_val
+	if not house.has("anchor_pos") or not (house["anchor_pos"] is Vector2i):
+		return events
 	var world_anchor: Vector2i = house["anchor_pos"]
 
 	events.append({
