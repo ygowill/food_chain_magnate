@@ -1218,6 +1218,9 @@ GameSessionContext
 - `refactor(gameplay): tighten direct company structure access`
   - 将 `set_company_structure_direct` 的 apply 阶段参数、玩家读取、`employees` / `reserve_employees` / `company_structure` 访问与 `ceo_slots` 校验统一收口到显式 helper，避免在直属槽写回前触发硬断言。
   - 新增 focused `company_structure` 状态访问测试，覆盖非法 `slot_index`、`player.employees`、`player.company_structure` 与 fractional `ceo_slots`，确保失败时不会提前改写玩家结构。
+- `refactor(gameplay): tighten report company structure access`
+  - 将 `set_company_structure_report` 的 apply 阶段参数、玩家读取、`employees` / `reserve_employees` / `company_structure` 访问与 `ceo_slots` 校验统一收口到显式 helper，避免在追加下属前触发硬断言。
+  - 扩展 focused `company_structure` 状态访问测试，覆盖非法 `manager_slot_index`、`player.employees`、`player.company_structure` 与 fractional `ceo_slots`，确保失败时不会提前改写玩家结构。
 
 当前阶段性结果：
 
