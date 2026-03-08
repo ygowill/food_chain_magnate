@@ -6,8 +6,8 @@ extends ActionExecutor
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
-const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
+const MarketingRulesClass = preload("res://core/rules/marketing_rules.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
@@ -179,7 +179,8 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 	if not product_result.ok:
 		return events
 	var product: String = str(product_result.value).strip_edges()
-	if not ProductRegistryClass.has(product):
+	var product_read := MarketingRulesClass.require_marketable_product(product)
+	if not product_read.ok:
 		return events
 
 	var world_pos_result := require_vector2i_param(command, "position")
@@ -195,30 +196,23 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 	if marketing_type.is_empty():
 		return events
 
-	var emp_def = EmployeeRegistryClass.get_def(employee_type)
-	if emp_def == null:
+	var employee_read := MarketingRulesClass.require_marketing_employee(employee_type, marketing_type)
+	if not employee_read.ok:
 		return events
-	var max_duration: int = int(emp_def.marketing_max_duration)
-	if max_duration <= 0:
-		return events
+	var employee_meta: Dictionary = employee_read.value
+	var max_duration: int = int(employee_meta.get("max_duration", 0))
 
-	var duration_result := optional_int_param(command, "duration", max_duration)
-	if not duration_result.ok:
+	var duration_read := MarketingRulesClass.require_marketing_duration(self, command, max_duration)
+	if not duration_read.ok:
 		return events
-	var duration: int = int(duration_result.value)
-	if duration <= 0 or duration > max_duration:
-		return events
+	var duration: int = int(duration_read.value)
 
 	var axis := ""
 	if marketing_type == "airplane":
-		var axis_result := optional_string_param(command, "axis", "")
-		if not axis_result.ok:
+		var axis_read := MarketingRulesClass.require_airplane_axis(self, command, _infer_airplane_axis(_new_state, world_pos))
+		if not axis_read.ok:
 			return events
-		axis = str(axis_result.value).strip_edges()
-		if axis.is_empty():
-			axis = _infer_airplane_axis(_new_state, world_pos)
-		if axis != "row" and axis != "col":
-			return events
+		axis = axis_read.value
 
 	# 真实持续时间：可能被里程碑效果改为永久（remaining_duration=-1）。
 	var remaining_duration := duration

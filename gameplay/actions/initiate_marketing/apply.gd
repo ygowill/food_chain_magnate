@@ -2,7 +2,6 @@
 extends RefCounted
 
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
-const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRulesClass = preload("res://core/rules/marketing_rules.gd")
 const MarketingInitiationRegistryClass = preload("res://core/rules/marketing_initiation_registry.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
@@ -54,18 +53,16 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 
 	var footprint_size: Vector2i = board_spec.get("footprint_size", Vector2i.ONE)
 
-	var emp_def = EmployeeRegistryClass.get_def(employee_type)
-	if emp_def == null:
-		return Result.failure("未知的员工类型: %s" % employee_type)
-	var max_duration := int(emp_def.marketing_max_duration)
-	var duration_result := action.optional_int_param(command, "duration", max_duration)
-	if not duration_result.ok:
-		return duration_result
-	var duration: int = duration_result.value
-	if duration <= 0:
-		return Result.failure("duration 必须 > 0")
-	if duration > max_duration:
-		return Result.failure("持续时间超出上限: %d > %d" % [duration, max_duration])
+	var employee_read := MarketingRulesClass.require_marketing_employee(employee_type, marketing_type)
+	if not employee_read.ok:
+		return employee_read
+	var employee_meta: Dictionary = employee_read.value
+	var emp_def = employee_meta.get("definition", null)
+	var max_duration := int(employee_meta.get("max_duration", 0))
+	var duration_read := MarketingRulesClass.require_marketing_duration(action, command, max_duration)
+	if not duration_read.ok:
+		return duration_read
+	var duration: int = int(duration_read.value)
 
 	var effective_duration := duration
 	var player := state.get_player(player_id)
@@ -146,14 +143,14 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 	var axis := ""
 	var tile_index := -1
 	if marketing_type == "airplane":
-		var axis_result := action.optional_string_param(command, "axis", "")
-		if not axis_result.ok:
-			return axis_result
-		axis = axis_result.value
-		if axis.is_empty():
-			axis = _infer_airplane_axis(state, world_pos, Vector2i.ONE)
-		if axis != "row" and axis != "col":
-			return Result.failure("飞机缺少 axis（row/col）")
+		var axis_read := MarketingRulesClass.require_airplane_axis(
+			action,
+			command,
+			_infer_airplane_axis(state, world_pos, Vector2i.ONE)
+		)
+		if not axis_read.ok:
+			return axis_read
+		axis = axis_read.value
 		# Keep a stable index for debugging/replays. Semantics: start row/col index (cell-level, not tile-level).
 		var idx := CoordsClass.world_to_index(state, world_pos)
 		tile_index = idx.y if axis == "row" else idx.x

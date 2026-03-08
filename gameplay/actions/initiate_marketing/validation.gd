@@ -77,25 +77,17 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 		return Result.failure("营销板件已在使用中: #%d" % board_number)
 
 	# 员工能力校验
-	var emp_def = EmployeeRegistryClass.get_def(employee_type)
-	if emp_def == null:
-		return Result.failure("未知的员工类型: %s" % employee_type)
-	var required_usage := "use:marketing:%s" % marketing_type
-	if not emp_def.has_usage_tag(required_usage):
-		return Result.failure("该员工无法发起 %s 营销" % marketing_type)
+	var employee_read := MarketingRulesClass.require_marketing_employee(employee_type, marketing_type)
+	if not employee_read.ok:
+		return employee_read
+	var employee_meta: Dictionary = employee_read.value
+	var emp_def = employee_meta.get("definition", null)
+	var max_duration := int(employee_meta.get("max_duration", 0))
 
-	var max_duration := int(emp_def.marketing_max_duration)
-	if max_duration <= 0:
-		return Result.failure("该员工无法发起营销")
-
-	var duration_result := action.optional_int_param(command, "duration", max_duration)
-	if not duration_result.ok:
-		return duration_result
-	var duration: int = duration_result.value
-	if duration <= 0:
-		return Result.failure("duration 必须 > 0")
-	if duration > max_duration:
-		return Result.failure("持续时间超出上限: %d > %d" % [duration, max_duration])
+	var duration_read := MarketingRulesClass.require_marketing_duration(action, command, max_duration)
+	if not duration_read.ok:
+		return duration_read
+	var duration: int = int(duration_read.value)
 
 	# 玩家必须有餐厅
 	var restaurant_ids := StructuresClass.get_player_restaurants(state, command.actor)
@@ -141,15 +133,14 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 		if not CoordsClass.is_on_map_edge(state, world_pos):
 			return Result.failure("飞机必须放置在地图边缘格子: %s" % str(world_pos))
 
-		var axis_result := action.optional_string_param(command, "axis", "")
-		if not axis_result.ok:
-			return axis_result
-		var axis: String = axis_result.value
-		if axis.is_empty():
-			axis = _infer_airplane_axis(state, world_pos, Vector2i.ONE)
-
-		if axis != "row" and axis != "col":
-			return Result.failure("飞机缺少 axis（row/col）")
+		var axis_read := MarketingRulesClass.require_airplane_axis(
+			action,
+			command,
+			_infer_airplane_axis(state, world_pos, Vector2i.ONE)
+		)
+		if not axis_read.ok:
+			return axis_read
+		var axis: String = axis_read.value
 
 		var minp2 := CoordsClass.get_world_min(state)
 		var maxp2 := CoordsClass.get_world_max(state)

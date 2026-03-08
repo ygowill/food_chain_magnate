@@ -5,6 +5,7 @@ extends RefCounted
 
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 
 static func get_removed_board_numbers(player_count: int) -> Array[int]:
@@ -27,6 +28,44 @@ static func require_marketable_product(product: String) -> Result:
 	if def.has_tag("no_marketing"):
 		return Result.failure("该产品不能被营销: %s" % product)
 	return Result.success(def)
+
+static func require_marketing_employee(employee_type: String, marketing_type: String = "") -> Result:
+	var emp_def = EmployeeRegistryClass.get_def(employee_type)
+	if emp_def == null:
+		return Result.failure("未知的员工类型: %s" % employee_type)
+	if not marketing_type.is_empty():
+		var required_usage := "use:marketing:%s" % marketing_type
+		if not emp_def.has_usage_tag(required_usage):
+			return Result.failure("该员工无法发起 %s 营销" % marketing_type)
+	var max_duration := int(emp_def.marketing_max_duration)
+	if max_duration <= 0:
+		return Result.failure("该员工无法发起营销")
+	return Result.success({
+		"definition": emp_def,
+		"max_duration": max_duration,
+	})
+
+static func require_marketing_duration(action: ActionExecutor, command: Command, max_duration: int) -> Result:
+	var duration_result := action.optional_int_param(command, "duration", max_duration)
+	if not duration_result.ok:
+		return duration_result
+	var duration: int = int(duration_result.value)
+	if duration <= 0:
+		return Result.failure("duration 必须 > 0")
+	if duration > max_duration:
+		return Result.failure("持续时间超出上限: %d > %d" % [duration, max_duration])
+	return Result.success(duration)
+
+static func require_airplane_axis(action: ActionExecutor, command: Command, fallback_axis: String = "") -> Result:
+	var axis_result := action.optional_string_param(command, "axis", "")
+	if not axis_result.ok:
+		return axis_result
+	var axis := str(axis_result.value).strip_edges()
+	if axis.is_empty():
+		axis = fallback_axis
+	if axis != "row" and axis != "col":
+		return Result.failure("飞机缺少 axis（row/col）")
+	return Result.success(axis)
 
 static func require_rotation(rotation: int) -> Result:
 	if not MapUtilsClass.VALID_ROTATIONS.has(rotation):

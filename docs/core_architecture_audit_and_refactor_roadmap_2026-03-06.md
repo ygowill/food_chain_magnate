@@ -1293,6 +1293,10 @@ GameSessionContext
   - 在 `MarketingRules` 中收口营销产品、板件定义、rotation 与 footprint helper，并先将 `initiate_marketing` 的 validation/apply 切到统一业务入口，减少营销发起主链路里的元数据分叉。
   - 新增 focused `marketing_rules_domain` 测试，覆盖板件移除、未知产品、rotation 与 footprint 旋转 helper，确保 marketing 领域元数据契约可直接回归。
 
+- `refactor(marketing): centralize initiation employee and axis helpers`
+  - 继续将 `initiate_marketing` 中散落的员工能力校验、duration 解析与 airplane axis 推断收口到 `MarketingRules`，让 validation / apply / event 生成共享同一份营销发起约束。
+  - 扩展 focused `marketing_rules_domain` 测试，覆盖未知员工、错误 usage、duration 溢出，以及 airplane axis fallback/坏类型，确保营销发起参数 helper 的失败语义稳定可回归。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）
