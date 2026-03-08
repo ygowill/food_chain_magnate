@@ -140,6 +140,7 @@ const NewMilestonesPizzaPendingStateAccessTestClass = preload("res://core/tests/
 const NewMilestonesMarketingInitiationStateAccessTestClass = preload("res://core/tests/new_milestones_marketing_initiation_state_access_test.gd")
 const SubmitRestructuringStateAccessTestClass = preload("res://core/tests/submit_restructuring_state_access_test.gd")
 const CompanyStructureStateAccessTestClass = preload("res://core/tests/company_structure_state_access_test.gd")
+const RestructureEmployeeStateAccessTestClass = preload("res://core/tests/restructure_employee_state_access_test.gd")
 const CleanupInventoryTestClass = preload("res://core/tests/cleanup_inventory_test.gd")
 const FireActionTestClass = preload("res://core/tests/fire_action_test.gd")
 const CompanyStructureTestClass = preload("res://core/tests/company_structure_test.gd")

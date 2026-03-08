@@ -83,56 +83,69 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	return Result.failure("员工不属于当前玩家: %s" % employee_id)
 
 func _apply_changes(state: GameState, command: Command) -> Result:
+	var payload_read := _require_apply_payload(command)
+	if not payload_read.ok:
+		return payload_read
+	var payload: Dictionary = payload_read.value
+	var employee_id: String = str(payload.get("employee_id", ""))
+	var to_reserve: bool = bool(payload.get("to_reserve", false))
+	if not to_reserve:
+		return Result.success({"employee_id": employee_id, "to_reserve": false, "no_op": true})
+
+	var player_read := PlayerStateAccessClass.require_player(state, command.actor, "restructure_employee")
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	var player_label := "player[%d]" % command.actor
+	var from_key := "employees"
+	var to_key := "reserve_employees"
+
+	var from_read := PlayerStateAccessClass.require_employees(player, player_label, "restructure_employee")
+	if not from_read.ok:
+		return from_read
+	var to_read := PlayerStateAccessClass.require_reserve_employees(player, player_label, "restructure_employee")
+	if not to_read.ok:
+		return to_read
+
+	var from_list: Array = from_read.value
+	if not from_list.has(employee_id):
+		return Result.success({"employee_id": employee_id, "to_reserve": to_reserve, "no_op": true})
+
+	var removed := StateUpdater.remove_from_array(player, from_key, employee_id)
+	if not removed:
+		return Result.failure("员工不在 %s: %s" % [from_key, employee_id])
+	StateUpdater.append_to_array(player, to_key, employee_id)
+
+	# 若员工被移动到待命区，则同步移出 company_structure.structure（避免出现“待命员工仍占用结构槽位”的隐式残留）。
+	var cs_val = player.get("company_structure", null)
+	if cs_val is Dictionary:
+		var cs: Dictionary = cs_val
+		var struct_val = cs.get("structure", null)
+		if struct_val is Array:
+			var structure: Array = struct_val
+			if _remove_one_employee_from_structure(structure, employee_id):
+				cs["structure"] = structure
+				player["company_structure"] = cs
+
+	state.players[command.actor] = player
+	return Result.success({"employee_id": employee_id, "to_reserve": to_reserve})
+
+func _require_apply_payload(command: Command) -> Result:
 	var employee_id_r := require_string_param(command, "employee_id")
 	if not employee_id_r.ok:
 		return employee_id_r
 	var employee_id: String = employee_id_r.value
-	assert(employee_id != "ceo", "restructure_employee: validate 应已阻止移动 CEO")
-
-	assert(command.params.has("to_reserve"), "restructure_employee: 缺少参数: to_reserve")
+	if employee_id == "ceo":
+		return Result.failure("restructure_employee: CEO 不能被移动到待命区")
+	if not command.params.has("to_reserve"):
+		return Result.failure("restructure_employee: 缺少参数: to_reserve", Result.ErrorCode.MISSING_PARAMS)
 	var to_reserve_val = command.params["to_reserve"]
-	assert(to_reserve_val is bool, "restructure_employee: to_reserve 类型错误（期望 bool）")
-	var to_reserve: bool = bool(to_reserve_val)
-	if not to_reserve:
-		return Result.success({"employee_id": employee_id, "to_reserve": false, "no_op": true})
-
-	var player_id: int = command.actor
-	var key_from := "employees" if to_reserve else "reserve_employees"
-	var key_to := "reserve_employees" if to_reserve else "employees"
-
-	var from_val = state.players[player_id].get(key_from, null)
-	var to_val = state.players[player_id].get(key_to, null)
-	if not (from_val is Array):
-		return Result.failure("player.%s 类型错误（期望 Array）" % key_from)
-	if not (to_val is Array):
-		return Result.failure("player.%s 类型错误（期望 Array）" % key_to)
-
-	var from_list: Array = from_val
-	if not from_list.has(employee_id):
-		return Result.success({"employee_id": employee_id, "to_reserve": to_reserve, "no_op": true})
-
-	var removed := StateUpdater.remove_from_array(state.players[player_id], key_from, employee_id)
-	if not removed:
-		return Result.failure("员工不在 %s: %s" % [key_from, employee_id])
-	StateUpdater.append_to_array(state.players[player_id], key_to, employee_id)
-
-	# 若员工被移动到待命区，则同步移出 company_structure.structure（避免出现“待命员工仍占用结构槽位”的隐式残留）。
-	if to_reserve:
-		var player_val = state.players[player_id]
-		if player_val is Dictionary:
-			var player: Dictionary = player_val
-			var cs_val = player.get("company_structure", null)
-			if cs_val is Dictionary:
-				var cs: Dictionary = cs_val
-				var struct_val = cs.get("structure", null)
-				if struct_val is Array:
-					var structure: Array = struct_val
-					if _remove_one_employee_from_structure(structure, employee_id):
-						cs["structure"] = structure
-						player["company_structure"] = cs
-						state.players[player_id] = player
-
-	return Result.success({"employee_id": employee_id, "to_reserve": to_reserve})
+	if not (to_reserve_val is bool):
+		return Result.failure("restructure_employee: to_reserve 类型错误（期望 bool）")
+	return Result.success({
+		"employee_id": employee_id,
+		"to_reserve": bool(to_reserve_val),
+	})
 
 static func _remove_one_employee_from_structure(structure: Array, employee_id: String) -> bool:
 	if structure == null:
