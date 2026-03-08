@@ -1,7 +1,7 @@
 class_name SetBrandManagerAirplaneSecondGoodAction
 extends ActionExecutor
 
-const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const MarketingRulesClass = preload("res://core/rules/marketing_rules.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const MILESTONE_ID := "first_brand_manager_used"
@@ -63,6 +63,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var product_a: String = str(product_a_val)
 	if product_a.is_empty():
 		return Result.failure("pending.product_a 不能为空")
+	var product_a_read := MarketingRulesClass.require_marketable_product(product_a)
+	if not product_a_read.ok:
+		return product_a_read
 
 	var product_b_r := require_string_param(command, "product_b")
 	if not product_b_r.ok:
@@ -72,8 +75,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("product_b 不能为空")
 	if product_b == product_a:
 		return Result.failure("第二种商品必须不同于第一种商品")
-	if not ProductRegistryClass.has(product_b):
-		return Result.failure("未知的产品: %s" % product_b)
+	var product_b_read := MarketingRulesClass.require_marketable_product(product_b)
+	if not product_b_read.ok:
+		return product_b_read
 
 	var found := false
 	for inst_val in state.marketing_instances:

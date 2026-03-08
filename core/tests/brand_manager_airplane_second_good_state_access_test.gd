@@ -25,6 +25,12 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_validate_specific_fails_fast_on_invalid_marketing_placements_type()
 	if not r.ok:
 		return r
+	r = _test_validate_specific_rejects_unknown_pending_product_a()
+	if not r.ok:
+		return r
+	r = _test_apply_changes_fails_fast_on_unknown_product_b_without_partial_mutation()
+	if not r.ok:
+		return r
 	r = _test_apply_changes_updates_instance_and_placement()
 	if not r.ok:
 		return r
@@ -34,7 +40,7 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_apply_changes_fails_fast_on_invalid_pending_type_without_partial_mutation()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 6})
+	return Result.success({"cases": 8})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -77,6 +83,31 @@ static func _make_apply_state() -> GameState:
 	}
 	return state
 
+static func _make_ready_state() -> GameState:
+	var state := GameState.new()
+	state.players = [
+		{"milestones": ["first_brand_manager_used"]},
+		{},
+	]
+	state.marketing_instances = [{
+		"board_number": 11,
+		"owner": 0,
+		"type": "airplane",
+		"employee_type": "brand_manager",
+		"product": "burger",
+	}]
+	state.round_state = {
+		PENDING_KEY: {0: {"board_number": 11, "product_a": "burger"}},
+	}
+	state.map = {
+		"marketing_placements": {
+			"11": {"board_number": 11, "product": "burger"},
+		}
+	}
+	state.turn_order = [0, 1]
+	state.current_player_index = 0
+	return state
+
 static func _test_validate_specific_reaches_milestone_check_with_valid_placements() -> Result:
 	var action = ActionClass.new()
 	var result := action._validate_specific(_make_state(), _make_command())
@@ -109,6 +140,48 @@ static func _test_validate_specific_fails_fast_on_invalid_marketing_placements_t
 	var err := str(result.error)
 	if err.find("state.map.marketing_placements") < 0:
 		return Result.failure("错误信息应包含 state.map.marketing_placements，实际: %s" % err)
+	return Result.success()
+
+static func _test_validate_specific_rejects_unknown_pending_product_a() -> Result:
+	var action = ActionClass.new()
+	var state := _make_ready_state()
+	var pending: Dictionary = state.round_state[PENDING_KEY]
+	var info: Dictionary = pending[0]
+	info["product_a"] = "ghost_product"
+	pending[0] = info
+	state.round_state[PENDING_KEY] = pending
+	var command := _make_command()
+	command.params["product_b"] = "pizza"
+	var result := action._validate_specific(state, command)
+	if result.ok:
+		return Result.failure("未知 pending.product_a 应失败")
+	var err := str(result.error)
+	if err.find("未知的产品") < 0:
+		return Result.failure("错误信息应包含未知产品，实际: %s" % err)
+	return Result.success()
+
+static func _test_apply_changes_fails_fast_on_unknown_product_b_without_partial_mutation() -> Result:
+	var action = ActionClass.new()
+	var state := _make_ready_state()
+	var command := _make_command()
+	command.params["product_b"] = "ghost_product"
+	var result := action._apply_changes(state, command)
+	if result.ok:
+		return Result.failure("未知 product_b 时 _apply_changes 应失败")
+	var err := str(result.error)
+	if err.find("未知的产品") < 0:
+		return Result.failure("错误信息应包含未知产品，实际: %s" % err)
+	var inst: Dictionary = state.marketing_instances[0]
+	if inst.has("products"):
+		return Result.failure("失败时不应提前改写 marketing_instance.products")
+	if str(inst.get("product", "")) != "burger":
+		return Result.failure("失败时不应改写 marketing_instance.product，实际: %s" % str(inst))
+	var placement: Dictionary = state.map["marketing_placements"]["11"]
+	if placement.has("products"):
+		return Result.failure("失败时不应提前改写 placement.products")
+	var pending: Dictionary = state.round_state.get(PENDING_KEY, {})
+	if not pending.has(0):
+		return Result.failure("失败时不应提前清除 actor pending")
 	return Result.success()
 
 static func _test_apply_changes_updates_instance_and_placement() -> Result:

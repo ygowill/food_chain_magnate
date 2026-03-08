@@ -1313,6 +1313,10 @@ GameSessionContext
   - 将 `place_giant_billboard` 的商品校验切到 `MarketingRules.require_marketable_product()`，并让 `_apply_changes()` 先复用 `_validate_specific()` 的结果，避免坏 product 在 apply 路径绕过营销约束并产生部分写入。
   - 扩展 focused `rural_giant_billboard_state_access` 测试，覆盖未知 product 的 validate/apply 早失败与无副作用路径，确保乡村广告牌动作在失败时不会提前写入 board 或迁移员工状态。
 
+- `refactor(marketing): harden brand manager second product validation`
+  - 将 `set_brand_manager_airplane_second_good` 对 pending.product_a 与命令 product_b 的校验切到 `MarketingRules.require_marketable_product()`，让飞机追加第二商品和主线营销共享同一份产品约束。
+  - 扩展 focused `brand_manager_airplane_second_good_state_access` 测试，覆盖未知 pending.product_a 与未知 product_b 的早失败/无副作用路径，确保失败时不会提前改写 marketing_instance、placement 或清空 pending。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）
