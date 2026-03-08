@@ -31,7 +31,8 @@ static func apply_initial_state(
 	rng_seed: int,
 	rng_manager,
 	config,
-	restaurant_logo_choices_by_player: Array[int] = []
+	restaurant_logo_choices_by_player: Array[int] = [],
+	restaurant_logo_assignment_provider = null
 ) -> Result:
 	if player_count < GameConstantsClass.MIN_PLAYERS or player_count > GameConstantsClass.MAX_PLAYERS:
 		return Result.failure("玩家数量超出范围: %d" % player_count)
@@ -82,7 +83,13 @@ static func apply_initial_state(
 	for i in range(player_count):
 		state.players.append(_create_player_from_config(i, cfg))
 
-	var assign_logo := _assign_restaurant_logo_ids(state.players, player_count, rng_seed, restaurant_logo_choices_by_player)
+	var assign_logo := _assign_restaurant_logo_ids(
+		state.players,
+		player_count,
+		rng_seed,
+		restaurant_logo_choices_by_player,
+		restaurant_logo_assignment_provider
+	)
 	if not assign_logo.ok:
 		return assign_logo
 
@@ -149,7 +156,28 @@ static func apply_initial_state(
 
 	return Result.success(state)
 
-static func _assign_restaurant_logo_ids(players: Array, player_count: int, rng_seed: int, restaurant_logo_choices_by_player) -> Result:
+static func _resolve_restaurant_logo_assignment_provider(provider_override = null) -> Result:
+	if provider_override != null:
+		if provider_override is String:
+			var injected_path := str(provider_override).strip_edges()
+			if injected_path.is_empty():
+				return Result.failure("注入的餐厅 Logo 分配 provider path 为空")
+			var injected_provider = load(injected_path)
+			if injected_provider == null:
+				return Result.failure("缺少注入的餐厅 Logo 分配 provider: %s" % injected_path)
+			if not injected_provider.has_method("assign_logo_ids"):
+				return Result.failure("注入的餐厅 Logo 分配 provider 缺少 assign_logo_ids: %s" % injected_path)
+			return Result.success({
+				"provider": injected_provider,
+				"label": injected_path,
+			})
+		if provider_override.has_method("assign_logo_ids"):
+			return Result.success({
+				"provider": provider_override,
+				"label": "<injected>",
+			})
+		return Result.failure("注入的餐厅 Logo 分配 provider 类型错误（缺少 assign_logo_ids）")
+
 	var provider_path := _resolve_restaurant_logo_assignment_provider_path()
 	if provider_path.is_empty():
 		return Result.failure("缺少餐厅 Logo 分配 provider（override 或 ProjectSettings.%s）" % RESTAURANT_LOGO_ASSIGNMENT_PROVIDER_PATH_SETTING)
@@ -158,15 +186,33 @@ static func _assign_restaurant_logo_ids(players: Array, player_count: int, rng_s
 		return Result.failure("缺少餐厅 Logo 分配 provider: %s" % provider_path)
 	if not provider.has_method("assign_logo_ids"):
 		return Result.failure("餐厅 Logo 分配 provider 缺少 assign_logo_ids: %s" % provider_path)
+	return Result.success({
+		"provider": provider,
+		"label": provider_path,
+	})
+
+static func _assign_restaurant_logo_ids(
+	players: Array,
+	player_count: int,
+	rng_seed: int,
+	restaurant_logo_choices_by_player,
+	provider_override = null
+) -> Result:
+	var provider_read := _resolve_restaurant_logo_assignment_provider(provider_override)
+	if not provider_read.ok:
+		return provider_read
+	var provider_info: Dictionary = provider_read.value
+	var provider = provider_info.get("provider", null)
+	var provider_label := str(provider_info.get("label", "")).strip_edges()
 
 	var ids_r = provider.assign_logo_ids(player_count, rng_seed, restaurant_logo_choices_by_player)
 	if not (ids_r is Result):
-		return Result.failure("餐厅 Logo 分配 provider 返回值类型错误（期望 Result）: %s" % provider_path)
+		return Result.failure("餐厅 Logo 分配 provider 返回值类型错误（期望 Result）: %s" % provider_label)
 	var r: Result = ids_r
 	if not r.ok:
 		return Result.failure("餐厅 Logo 分配失败: %s" % r.error)
 	if not (r.value is Array):
-		return Result.failure("餐厅 Logo 分配结果类型错误（期望 Array）: %s" % provider_path)
+		return Result.failure("餐厅 Logo 分配结果类型错误（期望 Array）: %s" % provider_label)
 	var ids: Array = Array(r.value)
 	if ids.size() < player_count:
 		return Result.failure("餐厅 Logo 分配结果长度不足: got=%d need=%d" % [ids.size(), player_count])

@@ -963,6 +963,12 @@ GameSessionContext
 - headless 启动不依赖 `Globals`
 - server-like 启动可在不挂 UI autoload 的条件下运行
 
+### 实施进度（截至 2026-03-08）
+
+- `refactor(core): inject restaurant logo assignment provider`
+  - 将新局初始化的餐厅 Logo 分配接入 `GameEngineDependencies.restaurant_logo_assignment_provider`，让 `initializer` / `GameStateFactory` 优先消费显式注入的 provider，同时保留原有 `ProjectSettings` path 作为兼容桥。
+  - 扩展 `engine_dependencies_injection_test`，补充 logo provider 的调用入参与 `restaurant_logo_id` 写回断言，确保 headless 初始化不必依赖全局 path 配置也能稳定完成 Logo 分配。
+
 ---
 
 ## 阶段 4：强化状态契约（2~4 周）

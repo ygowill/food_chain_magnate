@@ -88,6 +88,9 @@ func set_command_runner_event_build_provider(provider) -> void:
 	get_dependencies().command_runner_event_build_provider = provider
 	CommandRunnerClass.clear_event_build_provider_cache()
 
+func set_restaurant_logo_assignment_provider(provider) -> void:
+	get_dependencies().restaurant_logo_assignment_provider = provider
+
 func ensure_initialized() -> Result:
 	activate_registry_bundles()
 	if state == null:

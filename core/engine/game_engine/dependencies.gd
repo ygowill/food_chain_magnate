@@ -4,7 +4,9 @@ extends RefCounted
 
 var action_setup_provider = null
 var command_runner_event_build_provider = null
+var restaurant_logo_assignment_provider = null
 
 func clear() -> void:
 	action_setup_provider = null
 	command_runner_event_build_provider = null
+	restaurant_logo_assignment_provider = null

@@ -90,7 +90,17 @@ static func initialize_new_game(
 		return Result.failure("初始化失败：ActionRegistry 设置失败: %s" % setup_actions.error)
 
 	var span_state := PerfTraceClass.begin_span("init:GameState.create_initial_state_with_rng")
-	var state_result := GameState.create_initial_state_with_rng(player_count, seed_value, engine.random_manager, config_result.value, restaurant_logo_choices_by_player)
+	var logo_provider = null
+	if engine.has_method("get_dependencies") and engine.get_dependencies() != null:
+		logo_provider = engine.get_dependencies().restaurant_logo_assignment_provider
+	var state_result := GameState.create_initial_state_with_rng(
+		player_count,
+		seed_value,
+		engine.random_manager,
+		config_result.value,
+		restaurant_logo_choices_by_player,
+		logo_provider
+	)
 	PerfTraceClass.end_span(span_state)
 	if not state_result.ok:
 		return Result.failure("创建初始状态失败: %s" % state_result.error)

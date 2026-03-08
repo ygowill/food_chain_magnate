@@ -30,19 +30,47 @@ class StubEventBuildProvider:
 		milestone_calls += 1
 		return []
 
+class StubRestaurantLogoAssignmentProvider:
+	extends RefCounted
+
+	var called: bool = false
+	var last_player_count: int = -1
+	var last_seed: int = -1
+
+	func assign_logo_ids(player_count: int, rng_seed: int, _restaurant_logo_choices_by_player) -> Result:
+		called = true
+		last_player_count = player_count
+		last_seed = rng_seed
+		var ids: Array[int] = []
+		for i in range(player_count):
+			ids.append((i + 3) % 6)
+		return Result.success(ids)
+
 static func run(seed_val: int = 12345) -> Result:
 	var action_provider := StubActionSetupProvider.new()
 	var event_provider := StubEventBuildProvider.new()
+	var logo_provider := StubRestaurantLogoAssignmentProvider.new()
 
 	var engine := GameEngine.new()
 	engine.set_action_setup_provider(action_provider)
 	engine.set_command_runner_event_build_provider(event_provider)
+	engine.set_restaurant_logo_assignment_provider(logo_provider)
 
 	var init_r := engine.initialize(2, seed_val)
 	if not init_r.ok:
 		return Result.failure("initialize 失败: %s" % init_r.error)
 	if not action_provider.called:
 		return Result.failure("注入的 action_setup_provider 未被调用")
+	if not logo_provider.called:
+		return Result.failure("注入的 restaurant_logo_assignment_provider 未被调用")
+	if logo_provider.last_player_count != 2 or logo_provider.last_seed != seed_val:
+		return Result.failure("restaurant_logo_assignment_provider 入参不正确: count=%d seed=%d" % [logo_provider.last_player_count, logo_provider.last_seed])
+	var p0 := Dictionary(engine.state.players[0])
+	var p1 := Dictionary(engine.state.players[1])
+	if int(p0.get("restaurant_logo_id", -1)) != 3:
+		return Result.failure("注入的 restaurant_logo_assignment_provider 结果未写入 pid=0")
+	if int(p1.get("restaurant_logo_id", -1)) != 4:
+		return Result.failure("注入的 restaurant_logo_assignment_provider 结果未写入 pid=1")
 
 	var setup_r := TestPhaseUtilsClass.complete_setup(engine)
 	if not setup_r.ok:
@@ -60,4 +88,5 @@ static func run(seed_val: int = 12345) -> Result:
 	return Result.success({
 		"cash_calls": event_provider.cash_calls,
 		"milestone_calls": event_provider.milestone_calls,
+		"logo_provider_called": logo_provider.called,
 	})
