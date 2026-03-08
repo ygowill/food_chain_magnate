@@ -27,6 +27,9 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_generate_specific_events_returns_empty_on_unknown_board_number()
 	if not r.ok:
 		return r
+	r = _test_generate_specific_events_returns_empty_on_removed_board_number()
+	if not r.ok:
+		return r
 	r = _test_generate_specific_events_returns_empty_on_unknown_employee_type()
 	if not r.ok:
 		return r
@@ -45,7 +48,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_generate_specific_events_returns_empty_on_uninferrable_airplane_axis()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 13})
+	return Result.success({"cases": 14})
 
 static func _init_engine(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -86,6 +89,7 @@ static func _test_can_initiate_ignores_invalid_marketing_placements(player_count
 
 static func _make_event_state(grid_size: Vector2i = Vector2i(5, 5)) -> GameState:
 	var state := GameState.new()
+	state.players = [{}, {}]
 	state.map = {"grid_size": grid_size}
 	return state
 
@@ -133,6 +137,13 @@ static func _test_generate_specific_events_returns_empty_on_unknown_board_number
 	var events := action._generate_specific_events(null, _make_event_state(), _make_valid_event_command({"board_number": 9999}))
 	if not events.is_empty():
 		return Result.failure("未知 board_number 时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_on_removed_board_number() -> Result:
+	var action = InitiateMarketingActionClass.new()
+	var events := action._generate_specific_events(null, _make_event_state(), _make_valid_event_command({"board_number": 12}))
+	if not events.is_empty():
+		return Result.failure("2 人局已移除 board_number 时应返回空事件列表")
 	return Result.success()
 
 static func _test_generate_specific_events_returns_empty_on_unknown_employee_type() -> Result:

@@ -1317,6 +1317,10 @@ GameSessionContext
   - 将 `set_brand_manager_airplane_second_good` 对 pending.product_a 与命令 product_b 的校验切到 `MarketingRules.require_marketable_product()`，让飞机追加第二商品和主线营销共享同一份产品约束。
   - 扩展 focused `brand_manager_airplane_second_good_state_access` 测试，覆盖未知 pending.product_a 与未知 product_b 的早失败/无副作用路径，确保失败时不会提前改写 marketing_instance、placement 或清空 pending。
 
+- `refactor(marketing): reuse board helpers in action events`
+  - 将 `initiate_marketing_action` 的可发起判定与事件生成里残留的板件可用性读取切到 `MarketingRules.require_board_spec()`，让 UI 可发起判断、事件生成与 validation/apply 共用同一份板件可用性约束。
+  - 扩展 focused `initiate_marketing_action_state_access` 测试，覆盖 2 人局已移除 board_number 的空事件路径，确保事件生成不会为不可用营销板件写出日志事件。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）

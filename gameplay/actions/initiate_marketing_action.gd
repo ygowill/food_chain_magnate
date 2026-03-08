@@ -78,14 +78,11 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 		for k in placements.keys():
 			used[str(k)] = true
 
-	var player_count := state.players.size()
 	for bn2 in MarketingRegistryClass.get_all_board_numbers():
 		if used.has(str(bn2)):
 			continue
-		var def2 = MarketingRegistryClass.get_def(bn2)
-		if def2 == null or not def2.has_method("is_available_for_player_count"):
-			continue
-		if not def2.is_available_for_player_count(player_count):
+		var board_spec_read := MarketingRulesClass.require_board_spec(state, bn2)
+		if not board_spec_read.ok:
 			continue
 		return true
 
@@ -189,10 +186,11 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 	var world_pos: Vector2i = world_pos_result.value
 	var p := [world_pos.x, world_pos.y]
 
-	var def = MarketingRegistryClass.get_def(board_number)
-	if def == null:
+	var board_spec_read := MarketingRulesClass.require_board_spec(_new_state, board_number)
+	if not board_spec_read.ok:
 		return events
-	var marketing_type := str(def.type).strip_edges()
+	var board_spec: Dictionary = board_spec_read.value
+	var marketing_type := str(board_spec.get("marketing_type", "")).strip_edges()
 	if marketing_type.is_empty():
 		return events
 
