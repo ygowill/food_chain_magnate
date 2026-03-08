@@ -5,18 +5,47 @@
 class_name MarketingInitiationRegistry
 extends RefCounted
 
-static var _providers: Array = [] # Array[{id, callback, priority, source}]
-static var _loaded: bool = false
+const RulesRegistryBundleClass = preload("res://core/engine/game_engine/rules_registry_bundle.gd")
+
+static var _current_bundle = RulesRegistryBundleClass.new()
+
+static func _get_bundle():
+	if _current_bundle == null:
+		_current_bundle = RulesRegistryBundleClass.new()
+	return _current_bundle
+
+static func _resolve_bundle(bundle = null):
+	if bundle != null:
+		return bundle
+	return _get_bundle()
+
+static func set_current_bundle(bundle) -> void:
+	_current_bundle = bundle if bundle != null else RulesRegistryBundleClass.new()
+
+static func reset_current_bundle() -> void:
+	_current_bundle = RulesRegistryBundleClass.new()
 
 static func reset() -> void:
-	_providers = []
-	_loaded = true
+	var target = _get_bundle()
+	target.marketing_initiation_providers = []
+	target.marketing_initiation_loaded = true
 
 static func is_loaded() -> bool:
-	return _loaded
+	return bool(_get_bundle().marketing_initiation_loaded)
 
-static func configure_from_ruleset(ruleset) -> Result:
-	if not _loaded:
+static func get_provider_ids() -> Array[String]:
+	if not is_loaded():
+		return []
+	var ids: Array[String] = []
+	for item_val in _get_bundle().marketing_initiation_providers:
+		if item_val is Dictionary:
+			var provider_id := str((item_val as Dictionary).get("id", "")).strip_edges()
+			if not provider_id.is_empty():
+				ids.append(provider_id)
+	return ids
+
+static func configure_from_ruleset(ruleset, bundle = null) -> Result:
+	if not is_loaded() and bundle == null:
 		return Result.failure("MarketingInitiationRegistry 未初始化：请先调用 reset()")
 	if ruleset == null:
 		return Result.failure("MarketingInitiationRegistry.configure_from_ruleset: ruleset 为空")
@@ -24,6 +53,10 @@ static func configure_from_ruleset(ruleset) -> Result:
 		return Result.failure("MarketingInitiationRegistry.configure_from_ruleset: ruleset 类型错误（期望 RulesetV2）")
 	if not (ruleset.marketing_initiation_providers is Array):
 		return Result.failure("MarketingInitiationRegistry.configure_from_ruleset: ruleset.marketing_initiation_providers 缺失或类型错误（期望 Array）")
+
+	var target = _resolve_bundle(bundle)
+	target.marketing_initiation_providers = []
+	target.marketing_initiation_loaded = true
 
 	for i in range(ruleset.marketing_initiation_providers.size()):
 		var item_val = ruleset.marketing_initiation_providers[i]
@@ -48,31 +81,31 @@ static func configure_from_ruleset(ruleset) -> Result:
 		var prio: int = int(item.get("priority", 100))
 		var src: String = str(item.get("source", ""))
 
-		for prev_val in _providers:
+		for prev_val in target.marketing_initiation_providers:
 			if prev_val is Dictionary and str((prev_val as Dictionary).get("id", "")) == provider_id:
 				return Result.failure("MarketingInitiationRegistry: provider 重复注册: %s" % provider_id)
 
-		_providers.append({
+		target.marketing_initiation_providers.append({
 			"id": provider_id,
 			"callback": cb,
 			"priority": prio,
 			"source": src,
 		})
 
-	_providers.sort_custom(func(a, b) -> bool:
-		if int(a.priority) != int(b.priority):
-			return int(a.priority) < int(b.priority)
-		if str(a.id) != str(b.id):
-			return str(a.id) < str(b.id)
-		return str(a.source) < str(b.source)
-	)
+		target.marketing_initiation_providers.sort_custom(func(a, b) -> bool:
+			if int(a.priority) != int(b.priority):
+				return int(a.priority) < int(b.priority)
+			if str(a.id) != str(b.id):
+				return str(a.id) < str(b.id)
+			return str(a.source) < str(b.source)
+		)
 
-	return Result.success(_providers.size())
+	return Result.success(target.marketing_initiation_providers.size())
 
 static func apply(state: GameState, command: Command, marketing_instance: Dictionary) -> Result:
-	if not _loaded:
+	if not is_loaded():
 		return Result.failure("MarketingInitiationRegistry 未初始化")
-	if _providers.is_empty():
+	if _get_bundle().marketing_initiation_providers.is_empty():
 		return Result.success()
 	if state == null:
 		return Result.failure("MarketingInitiationRegistry.apply: state 为空")
@@ -82,8 +115,8 @@ static func apply(state: GameState, command: Command, marketing_instance: Dictio
 		return Result.failure("MarketingInitiationRegistry.apply: marketing_instance 类型错误（期望 Dictionary）")
 
 	var warnings: Array[String] = []
-	for i in range(_providers.size()):
-		var item_val = _providers[i]
+	for i in range(_get_bundle().marketing_initiation_providers.size()):
+		var item_val = _get_bundle().marketing_initiation_providers[i]
 		if not (item_val is Dictionary):
 			continue
 		var item: Dictionary = item_val
@@ -100,4 +133,3 @@ static func apply(state: GameState, command: Command, marketing_instance: Dictio
 		warnings.append_array(rr.warnings)
 
 	return Result.success().with_warnings(warnings)
-

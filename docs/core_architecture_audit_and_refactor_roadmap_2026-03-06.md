@@ -964,6 +964,11 @@ GameSessionContext
   - 调整 `modules_v2.apply`，在清空每局 rules bundle 后同步 `reset()` `BankruptcyRegistry`，避免 UI/Headless 启动链里出现“bundle 已清空但 registry 未重新置为 loaded”的顺序回归。
   - 扩展 `catalog_registry_bundle_isolation_test`，补充 `reserve_prices` 的 bankruptcy handler/source 在 engine A / engine B 间切换的隔离断言，确保多引擎并行场景下破产处理器不会串局。
 
+- `refactor(core): bundle marketing initiation registry per engine session`
+  - 继续扩展 `RulesRegistryBundle`，把 `MarketingInitiationRegistry` 的 provider 列表改为每局持有，并在 `GameEngine.activate_registry_bundles()` 中跟随当前引擎切换。
+  - 为 registry 增加 `get_provider_ids()` 调试查询，并在 `modules_v2.apply` 清空每局 rules bundle 后同步 `reset()` `MarketingInitiationRegistry`，避免 UI/Headless 启动链再出现 bundle 已清空但 registry 未重新置为 loaded 的顺序回归。
+  - 扩展 `catalog_registry_bundle_isolation_test`，补充 `new_milestones` 的 3 个 marketing initiation provider 在 engine A / engine B 间切换时的隔离断言，确保多引擎并行场景下发起营销扩展逻辑不会串局。
+
 ### 风险
 
 - 改动面较大

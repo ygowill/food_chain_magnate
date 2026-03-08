@@ -9,6 +9,9 @@ var bankruptcy_first_break_handler: Callable = Callable()
 var bankruptcy_first_break_source: String = ""
 var bankruptcy_loaded: bool = false
 
+var marketing_initiation_providers: Array = []
+var marketing_initiation_loaded: bool = false
+
 func clear() -> void:
 	marketing_types.clear()
 	marketing_type_loaded = false
@@ -16,3 +19,6 @@ func clear() -> void:
 	bankruptcy_first_break_handler = Callable()
 	bankruptcy_first_break_source = ""
 	bankruptcy_loaded = false
+
+	marketing_initiation_providers = []
+	marketing_initiation_loaded = false
