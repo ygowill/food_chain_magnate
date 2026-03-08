@@ -65,6 +65,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not required.has(ActionIdsClass.SET_PRICE):
 		return Result.failure("当前玩家应该需要执行 set_price 强制动作，实际需要: %s" % str(required))
 
+	var provider_employee_id := MandatoryActionsRulesClass.find_provider_employee_id(current_player, ActionIdsClass.SET_PRICE)
+	if provider_employee_id != "pricing_manager":
+		return Result.failure("set_price 的 provider 应为 pricing_manager，实际: %s" % provider_employee_id)
+
 	# 7) 测试 check_mandatory_actions_completed 失败（未完成强制动作）
 	var check_result := MandatoryActionsRulesClass.check_mandatory_actions_completed(state)
 	if check_result.ok:

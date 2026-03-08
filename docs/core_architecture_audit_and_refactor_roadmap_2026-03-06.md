@@ -1357,6 +1357,10 @@ GameSessionContext
   - 扩展 `EconomyRules` 增加 Result 风格的员工定义读取，并让 `payday_salary_discount` 复用同一份员工存在性/类型失败语义，避免薪资折扣计算继续直接触达员工 registry。
   - 扩展 `payday_salary_test`，补充未知 active employee 的早失败回归，确保发薪折扣路径在遇到坏员工 id 时稳定返回领域错误。
 
+- `refactor(working): reuse employee array helpers in mandatory actions`
+  - 将 `MandatoryActionsRules` 中 provider 查找与 required action 推导两处员工定义读取切到 `EmployeeArrayHelpers.require_employee_def()`，让 working 域的强制动作推导共享同一份 assert 风格员工契约。
+  - 扩展 `mandatory_actions_test`，补充 `find_provider_employee_id()` 的回归断言，确保强制动作 provider 查找与 required action 推导保持一致。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）

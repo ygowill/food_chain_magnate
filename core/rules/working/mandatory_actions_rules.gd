@@ -3,7 +3,7 @@
 class_name MandatoryActionsRules
 extends RefCounted
 
-const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const EmployeeArrayHelpersClass = preload("res://core/rules/employee_rules/employee_array_helpers.gd")
 const RoundStatePlayerStringListsClass = preload("res://core/utils/round_state_player_string_lists.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
@@ -21,11 +21,9 @@ static func find_provider_employee_id(player: Dictionary, mandatory_action_id: S
 		var emp_id: String = emp_val
 		assert(not emp_id.is_empty(), "MandatoryActionsRules.find_provider_employee_id: player.employees[%d] 不应为空字符串" % i)
 
-		var def = EmployeeRegistryClass.get_def(emp_id)
-		if def != null and def is EmployeeDef:
-			var emp_def: EmployeeDef = def
-			if emp_def.mandatory_action_id == mandatory_action_id:
-				return emp_id
+		var emp_def := EmployeeArrayHelpersClass.require_employee_def(emp_id)
+		if emp_def.mandatory_action_id == mandatory_action_id:
+			return emp_id
 
 	return ""
 
@@ -113,8 +111,7 @@ static func get_required_mandatory_actions(player: Dictionary) -> Array[String]:
 		var emp_id: String = emp_val
 		assert(not emp_id.is_empty(), "MandatoryActionsRules.get_required_mandatory_actions: player.employees[%d] 不应为空字符串" % i)
 
-		var emp_def = EmployeeRegistryClass.get_def(emp_id)
-		assert(emp_def != null, "MandatoryActionsRules.get_required_mandatory_actions: 未知员工类型: %s" % emp_id)
+		var emp_def := EmployeeArrayHelpersClass.require_employee_def(emp_id)
 
 		if emp_def.mandatory:
 			var action_id: String = str(emp_def.mandatory_action_id)
