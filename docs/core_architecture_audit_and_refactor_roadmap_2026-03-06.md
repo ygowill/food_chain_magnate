@@ -1349,6 +1349,10 @@ GameSessionContext
   - 将 `PricingPipeline.calculate_marketing_bonus()` 对产品定义的裸读取切到 `DinnertimeRules.require_product_def()`，让晚餐收入计算与 `dinnertime_inventory` 共享同一份产品存在性/类型失败语义。
   - 扩展 `milestone_effect_values` 测试，补充未知 product 的早失败回归，确保营销奖励计算在遇到坏产品 id 时会稳定返回领域错误。
 
+- `refactor(economy): centralize salary token eligibility helper`
+  - 新增 `EconomyRules.is_salary_token_eligible_product()`，并让 `payday_salary_token_payment` 的统计/扣减两条路径共享同一份 token 资格判定，避免 Payday 资格规则继续散落。
+  - 扩展 focused `payday_salary_token_eligibility` 测试，覆盖未知 product id 被忽略且不会被扣减的回归路径，确保经济域 helper 保持原有 fail-soft 语义。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）

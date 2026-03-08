@@ -1,19 +1,13 @@
 extends RefCounted
 
-const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const EconomyRulesClass = preload("res://core/rules/economy_rules.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 static func count_food_drink_tokens(inventory: Dictionary) -> int:
 	var total := 0
 	for k in inventory.keys():
 		var product_id: String = str(k)
-		var def = ProductRegistryClass.get_def(product_id)
-		if def == null or not (def is ProductDef):
-			continue
-		var product: ProductDef = def
-		if product.has_tag("salary_token_ineligible"):
-			continue
-		if not (product.has_tag("food") or product.has_tag("drink")):
+		if not EconomyRulesClass.is_salary_token_eligible_product(product_id):
 			continue
 		var v = inventory.get(k, 0)
 		if v is int and int(v) > 0:
@@ -64,13 +58,7 @@ static func pay_with_tokens(state: GameState, player_id: int, tokens_needed: int
 	for product_id in ids:
 		if remaining <= 0:
 			break
-		var def = ProductRegistryClass.get_def(product_id)
-		if def == null or not (def is ProductDef):
-			continue
-		var product: ProductDef = def
-		if product.has_tag("salary_token_ineligible"):
-			continue
-		if not (product.has_tag("food") or product.has_tag("drink")):
+		if not EconomyRulesClass.is_salary_token_eligible_product(product_id):
 			continue
 		var cur_val = inventory.get(product_id, 0)
 		if not (cur_val is int):

@@ -94,6 +94,32 @@ static func run() -> Result:
 				if paid.size() != 1 or not paid.has(eligible_id) or int(paid.get(eligible_id, 0)) != 2:
 					result = Result.failure("paid_with_tokens 结构不符合预期（应仅包含 eligible=2），实际: %s" % str(paid))
 
+	# Case C: 未知 product id 应被忽略，不参与统计也不被扣减。
+	if result.ok:
+		var state_c := GameState.new()
+		state_c.players = [
+			{
+				"inventory": {
+					eligible_id: 1,
+					"ghost_product": 9,
+				}
+			}
+		]
+		var inv_c: Dictionary = state_c.players[0]["inventory"]
+		var count_c := PaydaySettlementClass._count_food_drink_tokens(inv_c)
+		if count_c != 1:
+			result = Result.failure("count_food_drink_tokens 应忽略未知 product，仅统计 eligible=1，实际: %d" % count_c)
+		else:
+			var pay_c := PaydaySettlementClass._pay_with_tokens(state_c, 0, 1)
+			if not pay_c.ok:
+				result = Result.failure("支付 1 token 失败: %s" % pay_c.error)
+			else:
+				var after_c: Dictionary = state_c.players[0]["inventory"]
+				if int(after_c.get(eligible_id, -1)) != 0:
+					result = Result.failure("扣减后 eligible 库存应为 0，实际: %d" % int(after_c.get(eligible_id, -1)))
+				elif int(after_c.get("ghost_product", -1)) != 9:
+					result = Result.failure("未知 product 不应被扣减，实际: %d" % int(after_c.get("ghost_product", -1)))
+
 	# 恢复全局 ProductRegistry（避免影响后续测试）
 	if was_loaded:
 		var restore_catalog := ContentCatalogClass.new()
