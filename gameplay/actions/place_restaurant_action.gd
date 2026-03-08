@@ -314,40 +314,50 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 	var employee_type := ""
 	if command.params.has("employee_type"):
 		var employee_type_result := require_string_param(command, "employee_type")
-		assert(employee_type_result.ok, "place_restaurant 缺少/错误参数: employee_type")
-		employee_type = employee_type_result.value
-	if employee_type.is_empty() and old_state.phase == DefsClass.PHASE_WORKING:
+		if not employee_type_result.ok:
+			return events
+		employee_type = str(employee_type_result.value).strip_edges()
+	if employee_type.is_empty() and old_state != null and old_state.phase == DefsClass.PHASE_WORKING:
 		var candidates := EmployeeUsageHelperClass.get_active_employee_types_for_usage_tag(
 			old_state, command.actor, "use:place_restaurant"
 		)
 		if not candidates.is_empty():
 			employee_type = candidates[0]
 
-	# 找到新创建的餐厅
-	var new_restaurants = new_state.map.restaurants.keys()
-	var old_restaurants = old_state.map.restaurants.keys()
+	var old_restaurants: Dictionary = {}
+	if old_state != null and old_state.map is Dictionary and old_state.map.has("restaurants") and old_state.map["restaurants"] is Dictionary:
+		old_restaurants = old_state.map["restaurants"]
+	var new_restaurants: Dictionary = {}
+	if new_state != null and new_state.map is Dictionary and new_state.map.has("restaurants") and new_state.map["restaurants"] is Dictionary:
+		new_restaurants = new_state.map["restaurants"]
+
 	var restaurant_id := ""
 	var opening_soon := false
 	var world_anchor: Vector2i = Vector2i(-1, -1)
 
-	for rest_id in new_restaurants:
-		if rest_id not in old_restaurants:
-			restaurant_id = rest_id
-			break
-	if not restaurant_id.is_empty():
-		assert(new_state.map.restaurants.has(restaurant_id), "place_restaurant 新餐厅缺失: %s" % restaurant_id)
-		var rest: Dictionary = new_state.map.restaurants[restaurant_id]
-		assert(rest.has("anchor_pos") and rest["anchor_pos"] is Vector2i, "place_restaurant anchor_pos 缺失或类型错误")
+	for rest_id in new_restaurants.keys():
+		if rest_id in old_restaurants:
+			continue
+		restaurant_id = str(rest_id).strip_edges()
+		if restaurant_id.is_empty():
+			return events
+		var rest_val = new_restaurants[rest_id]
+		if not (rest_val is Dictionary):
+			return events
+		var rest: Dictionary = rest_val
+		if not rest.has("anchor_pos") or not (rest["anchor_pos"] is Vector2i):
+			return events
 		world_anchor = rest["anchor_pos"]
-	else:
+		break
+	if restaurant_id.is_empty():
 		# opening_soon: restaurant 不会立即加入 map.restaurants，改从 round_state 中推导
 		var old_pending: Array = []
 		var new_pending: Array = []
-		if old_state.round_state is Dictionary:
+		if old_state != null and old_state.round_state is Dictionary:
 			var ov = (old_state.round_state as Dictionary).get(ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY, null)
 			if ov is Array:
 				old_pending = ov
-		if new_state.round_state is Dictionary:
+		if new_state != null and new_state.round_state is Dictionary:
 			var nv = (new_state.round_state as Dictionary).get(ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY, null)
 			if nv is Array:
 				new_pending = nv
@@ -367,14 +377,15 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 			var rid2 := str(e2.get("restaurant_id", "")).strip_edges()
 			if rid2.is_empty() or old_ids.has(rid2):
 				continue
-			restaurant_id = rid2
 			var ap = e2.get("anchor_pos", null)
-			if ap is Vector2i:
-				world_anchor = Vector2i(ap)
+			if not (ap is Vector2i):
+				return events
+			restaurant_id = rid2
+			world_anchor = Vector2i(ap)
 			opening_soon = true
 			break
-
-	assert(not restaurant_id.is_empty(), "place_restaurant 未找到新创建的餐厅")
+	if restaurant_id.is_empty():
+		return events
 
 	events.append({
 		"type": EventBus.EventType.RESTAURANT_PLACED,

@@ -31,7 +31,19 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_apply_fails_fast_on_invalid_player_restaurants_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 4})
+	r = _test_generate_specific_events_returns_empty_on_invalid_employee_type_type()
+	if not r.ok:
+		return r
+	r = _test_generate_specific_events_returns_empty_when_no_new_restaurant_found()
+	if not r.ok:
+		return r
+	r = _test_generate_specific_events_returns_empty_on_invalid_anchor_pos()
+	if not r.ok:
+		return r
+	r = _test_generate_specific_events_returns_empty_on_opening_soon_missing_anchor_pos()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 8})
 
 static func _build_place_restaurant_working_engine(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -162,6 +174,49 @@ static func _test_apply_fails_fast_on_invalid_player_restaurants_without_partial
 		return Result.failure("失败时不应提前改写 round_state")
 	if _map_contains_restaurant_id(state, predicted_rest_id):
 		return Result.failure("失败时不应提前写入餐厅格子结构: %s" % predicted_rest_id)
+	return Result.success()
+
+static func _make_event_state(restaurants: Dictionary, round_state_val = {}, phase_val: String = "") -> GameState:
+	var state := GameState.new()
+	state.map = {"restaurants": restaurants}
+	state.round_state = round_state_val
+	state.phase = phase_val
+	return state
+
+static func _test_generate_specific_events_returns_empty_on_invalid_employee_type_type() -> Result:
+	var action = PlaceRestaurantActionClass.new()
+	var old_state := _make_event_state({})
+	var new_state := _make_event_state({"rest_1": {"anchor_pos": Vector2i.ZERO}})
+	var events := action._generate_specific_events(old_state, new_state, Command.create("place_restaurant", 0, {"employee_type": 1}))
+	if not events.is_empty():
+		return Result.failure("employee_type 类型错误时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_when_no_new_restaurant_found() -> Result:
+	var action = PlaceRestaurantActionClass.new()
+	var old_state := _make_event_state({"rest_1": {"anchor_pos": Vector2i.ZERO}})
+	var new_state := _make_event_state({"rest_1": {"anchor_pos": Vector2i.ZERO}})
+	var events := action._generate_specific_events(old_state, new_state, Command.create("place_restaurant", 0, {"employee_type": "regional_manager"}))
+	if not events.is_empty():
+		return Result.failure("未找到新餐厅时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_on_invalid_anchor_pos() -> Result:
+	var action = PlaceRestaurantActionClass.new()
+	var old_state := _make_event_state({})
+	var new_state := _make_event_state({"rest_1": {}})
+	var events := action._generate_specific_events(old_state, new_state, Command.create("place_restaurant", 0, {"employee_type": "regional_manager"}))
+	if not events.is_empty():
+		return Result.failure("anchor_pos 损坏时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_on_opening_soon_missing_anchor_pos() -> Result:
+	var action = PlaceRestaurantActionClass.new()
+	var old_state := _make_event_state({}, {"opening_soon_restaurants": []})
+	var new_state := _make_event_state({}, {"opening_soon_restaurants": [{"restaurant_id": "rest_1"}]})
+	var events := action._generate_specific_events(old_state, new_state, Command.create("place_restaurant", 0, {"employee_type": "regional_manager"}))
+	if not events.is_empty():
+		return Result.failure("opening_soon 缺少 anchor_pos 时应返回空事件列表")
 	return Result.success()
 
 static func _find_first_valid_restaurant_placement(engine: GameEngine, actor: int, extra_params: Dictionary = {}) -> Command:

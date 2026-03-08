@@ -1254,6 +1254,9 @@ GameSessionContext
 - `refactor(gameplay): harden move restaurant event access`
   - 将 `move_restaurant` 的事件生成参数与新餐厅读取从硬断言改为 fail-soft：错误 `employee_type` / `restaurant_id`、缺失餐厅或坏 `anchor_pos` / `rotation` 时直接返回空事件列表，避免坏命令在日志路径触发崩溃。
   - 扩展 focused `move_restaurant` 状态访问测试，覆盖错误 `employee_type`、错误 `restaurant_id`、缺失餐厅、坏 `anchor_pos` 与坏 `rotation` 五类分支，确保 `_generate_specific_events()` 安全返回空列表。
+- `refactor(gameplay): harden place restaurant event access`
+  - 将 `place_restaurant` 的事件生成参数与新餐厅读取从硬断言改为 fail-soft：错误 `employee_type`、未找到新餐厅、坏 `anchor_pos`，以及 opening-soon 记录缺失 `anchor_pos` 时直接返回空事件列表，避免坏命令在日志路径触发崩溃。
+  - 扩展 focused `place_restaurant` 状态访问测试，覆盖错误 `employee_type`、未找到新餐厅、坏 `anchor_pos` 与 opening-soon 缺失 `anchor_pos` 四类分支，确保 `_generate_specific_events()` 安全返回空列表。
 
 当前阶段性结果：
 
