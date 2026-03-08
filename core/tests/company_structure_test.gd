@@ -77,6 +77,13 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not non_unique_result.ok:
 		return Result.failure("非唯一员工应该可以重复添加: %s" % non_unique_result.error)
 
+	# 5.1) 未知员工应 fail-fast
+	var unknown_result: Result = validator.validate(validator_state, current_player_id, {"employee_id": "ghost_employee", "to_reserve": false})
+	if unknown_result.ok:
+		return Result.failure("未知员工时 validator 应该失败")
+	if not unknown_result.error.contains("未知的员工类型: ghost_employee"):
+		return Result.failure("错误消息应该包含未知员工类型，实际: %s" % unknown_result.error)
+
 	# === 测试 CEO 卡槽容量 ===
 
 	# 6) 设置 CEO 卡槽为 3，当前员工数 = 2 (cfo, recruiting_girl)

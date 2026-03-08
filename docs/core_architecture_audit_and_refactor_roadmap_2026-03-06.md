@@ -1365,6 +1365,10 @@ GameSessionContext
   - 为 `EmployeeArrayHelpers` 补充 Result 风格的 `lookup_employee_def()`，并让 `train_company_validation` 复用同一份员工存在性/类型失败语义，避免培训颜色校验继续散落员工 registry 读取。
   - 扩展 `train_action_state_access` 测试，补充未知 `to_employee` 的早失败回归，确保培训颜色校验在遇到坏员工 id 时稳定返回领域错误。
 
+- `refactor(working): reuse employee lookup in company structure validator`
+  - 将 `CompanyStructureValidator` 的卡槽/唯一员工校验中的 3 处员工定义读取切到 `EmployeeArrayHelpers.lookup_employee_def()`，同时保留原有“未知的员工类型”错误语义，减少招聘/培训共享校验里的重复 lookup 样板。
+  - 扩展 `company_structure_test`，补充未知 employee 的 fail-fast 回归，确保公司结构校验在遇到坏员工 id 时仍返回稳定错误。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）

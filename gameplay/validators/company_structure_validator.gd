@@ -5,7 +5,7 @@
 class_name CompanyStructureValidator
 extends "res://gameplay/validators/base_validator.gd"
 
-const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const EmployeeArrayHelpersClass = preload("res://core/rules/employee_rules/employee_array_helpers.gd")
 
 func validate(state: GameState, player_id: int, params: Dictionary) -> Result:
 	var player := state.get_player(player_id)
@@ -102,11 +102,12 @@ func _check_ceo_slots(player: Dictionary, _employee_id: String, employees: Array
 		if emp_id.is_empty() or emp_id == "ceo":
 			continue
 		used_slots += 1
-		var def = EmployeeRegistryClass.get_def(emp_id)
-		if def == null:
+		var def_read := EmployeeArrayHelpersClass.lookup_employee_def(emp_id)
+		if not def_read.ok:
 			return Result.failure("未知的员工类型: %s" % emp_id)
-		var slots := maxi(0, int(def.manager_slots))
-		var is_manager := (str(def.role) == "manager") or (slots > 0)
+		var emp_def: EmployeeDef = def_read.value
+		var slots := maxi(0, int(emp_def.manager_slots))
+		var is_manager := (str(emp_def.role) == "manager") or (slots > 0)
 		if is_manager:
 			manager_count += 1
 			manager_slots_total += slots
@@ -116,9 +117,10 @@ func _check_ceo_slots(player: Dictionary, _employee_id: String, employees: Array
 	var add_is_manager := false
 	var add_manager_slots := 0
 	if not employee_id.is_empty() and employee_id != "ceo":
-		var add_def = EmployeeRegistryClass.get_def(employee_id)
-		if add_def == null:
+		var add_def_read := EmployeeArrayHelpersClass.lookup_employee_def(employee_id)
+		if not add_def_read.ok:
 			return Result.failure("未知的员工类型: %s" % employee_id)
+		var add_def: EmployeeDef = add_def_read.value
 		add_manager_slots = maxi(0, int(add_def.manager_slots))
 		add_is_manager = (str(add_def.role) == "manager") or (add_manager_slots > 0)
 
@@ -138,9 +140,10 @@ func _check_ceo_slots(player: Dictionary, _employee_id: String, employees: Array
 
 # 检查唯一员工约束
 func _check_unique_constraint(employee_id: String, employees: Array, reserve_employees: Array, busy_marketers: Array) -> Result:
-	var emp_def = EmployeeRegistryClass.get_def(employee_id)
-	if emp_def == null:
+	var emp_def_read := EmployeeArrayHelpersClass.lookup_employee_def(employee_id)
+	if not emp_def_read.ok:
 		return Result.failure("未知的员工类型: %s" % employee_id)
+	var emp_def: EmployeeDef = emp_def_read.value
 
 	if not emp_def.unique:
 		return Result.success()  # 非唯一员工，无需检查
