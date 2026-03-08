@@ -1,6 +1,6 @@
 # core/ 架构审计与改造路线图
 
-最后更新：2026-03-07  
+最后更新：2026-03-08
 审计范围：`core/` 目录（含 `engine/ state/ actions/ modules/ rules/ map/ data/ utils/ random/ types/ debug/`）
 
 ---
@@ -988,7 +988,7 @@ GameSessionContext
 - 改动点多且分散
 - 要靠测试与小步提交控制风险
 
-### 实施进度（截至 2026-03-07）
+### 实施进度（截至 2026-03-08）
 
 已完成的阶段 4 小步收口如下：
 
@@ -1215,6 +1215,9 @@ GameSessionContext
 - `refactor(gameplay): harden fire employee array access`
   - 将 `fire_action` 对 `employees` / `reserve_employees` / `busy_marketers` 数组元素的读取从硬断言改为 fail-soft，避免坏玩家数组在位置推断与 Payday 忙碌营销员例外判断里触发崩溃。
   - 扩展 focused `fire_action` 状态访问测试，确保数组元素损坏时 `_find_employee_location()` 返回空字符串、`_can_fire_busy_marketer()` 保守返回 `false`。
+- `refactor(gameplay): tighten direct company structure access`
+  - 将 `set_company_structure_direct` 的 apply 阶段参数、玩家读取、`employees` / `reserve_employees` / `company_structure` 访问与 `ceo_slots` 校验统一收口到显式 helper，避免在直属槽写回前触发硬断言。
+  - 新增 focused `company_structure` 状态访问测试，覆盖非法 `slot_index`、`player.employees`、`player.company_structure` 与 fractional `ceo_slots`，确保失败时不会提前改写玩家结构。
 
 当前阶段性结果：
 

@@ -104,42 +104,22 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	})
 
 func _apply_changes(state: GameState, command: Command) -> Result:
-	var slot_index_r := require_int_param(command, "slot_index")
-	assert(slot_index_r.ok, "set_company_structure_direct: 缺少/错误参数: slot_index")
-	var slot_index: int = int(slot_index_r.value)
+	var payload_read := _require_apply_payload(command)
+	if not payload_read.ok:
+		return payload_read
+	var payload: Dictionary = payload_read.value
+	var slot_index: int = int(payload.get("slot_index", -1))
+	var employee_id: String = str(payload.get("employee_id", ""))
 
-	var employee_id_r := require_string_param(command, "employee_id")
-	assert(employee_id_r.ok, "set_company_structure_direct: 缺少/错误参数: employee_id")
-	var employee_id: String = employee_id_r.value
-	assert(employee_id != "ceo", "set_company_structure_direct: validate 应已阻止 CEO")
-
-	var player_id: int = command.actor
-	var player_val = state.players[player_id]
-	assert(player_val is Dictionary, "set_company_structure_direct: player 类型错误（期望 Dictionary）")
-	var player: Dictionary = player_val
-
-	# 确保员工在岗（放入直属槽视为在岗）
-	var employees_val = player.get("employees", null)
-	var reserve_val = player.get("reserve_employees", null)
-	assert(employees_val is Array, "set_company_structure_direct: player.employees 类型错误（期望 Array）")
-	assert(reserve_val is Array, "set_company_structure_direct: player.reserve_employees 类型错误（期望 Array）")
-	var employees: Array = employees_val
-	var reserve: Array = reserve_val
-
-	var cs_val = player.get("company_structure", null)
-	assert(cs_val is Dictionary, "set_company_structure_direct: player.company_structure 类型错误（期望 Dictionary）")
-	var cs: Dictionary = cs_val
-
-	var slots_raw = cs.get("ceo_slots", 0)
-	var ceo_slots := 0
-	if slots_raw is int:
-		ceo_slots = int(slots_raw)
-	elif slots_raw is float:
-		var f: float = float(slots_raw)
-		assert(f == floor(f), "set_company_structure_direct: ceo_slots 必须为整数")
-		ceo_slots = int(f)
-	assert(ceo_slots > 0, "set_company_structure_direct: ceo_slots 无效: %d" % ceo_slots)
-	assert(slot_index >= 0 and slot_index < ceo_slots, "set_company_structure_direct: slot_index 超出范围: %d" % slot_index)
+	var context_read := _require_apply_context(state, command.actor, slot_index)
+	if not context_read.ok:
+		return context_read
+	var context: Dictionary = context_read.value
+	var player: Dictionary = context.get("player", {})
+	var employees: Array = context.get("employees", [])
+	var reserve: Array = context.get("reserve", [])
+	var cs: Dictionary = context.get("company_structure", {})
+	var ceo_slots: int = int(context.get("ceo_slots", 0))
 
 	var struct_val = cs.get("structure", null)
 	var structure: Array = struct_val if struct_val is Array else []
@@ -189,13 +169,79 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 	cs["structure"] = normalized
 	player["company_structure"] = cs
-	state.players[player_id] = player
+	state.players[command.actor] = player
 
 	return Result.success({
-		"player_id": player_id,
+		"player_id": command.actor,
 		"slot_index": slot_index,
 		"employee_id": employee_id
 	})
+
+func _require_apply_payload(command: Command) -> Result:
+	var slot_index_r := require_int_param(command, "slot_index")
+	if not slot_index_r.ok:
+		return Result.failure("set_company_structure_direct: 缺少/错误参数: slot_index")
+	var slot_index: int = int(slot_index_r.value)
+	if slot_index < 0:
+		return Result.failure("set_company_structure_direct: slot_index 不能为负数: %d" % slot_index)
+
+	var employee_id_r := require_string_param(command, "employee_id")
+	if not employee_id_r.ok:
+		return Result.failure("set_company_structure_direct: 缺少/错误参数: employee_id")
+	var employee_id: String = employee_id_r.value
+	if employee_id == "ceo":
+		return Result.failure("set_company_structure_direct: CEO 不能被放入直属卡槽")
+
+	return Result.success({
+		"slot_index": slot_index,
+		"employee_id": employee_id
+	})
+
+func _require_apply_context(state: GameState, player_id: int, slot_index: int) -> Result:
+	var player_read := PlayerStateAccessClass.require_player(state, player_id, "set_company_structure_direct")
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	var player_label := "player[%d]" % player_id
+
+	var employees_read := PlayerStateAccessClass.require_employees(player, player_label, "set_company_structure_direct")
+	if not employees_read.ok:
+		return employees_read
+	var reserve_read := PlayerStateAccessClass.require_reserve_employees(player, player_label, "set_company_structure_direct")
+	if not reserve_read.ok:
+		return reserve_read
+	var cs_read := PlayerStateAccessClass.require_company_structure(player, player_label, "set_company_structure_direct")
+	if not cs_read.ok:
+		return cs_read
+	var ceo_slots_read := _require_apply_ceo_slots(cs_read.value)
+	if not ceo_slots_read.ok:
+		return ceo_slots_read
+	var ceo_slots: int = int(ceo_slots_read.value)
+	if slot_index >= ceo_slots:
+		return Result.failure("set_company_structure_direct: slot_index 超出范围: %d >= %d" % [slot_index, ceo_slots])
+
+	return Result.success({
+		"player": player,
+		"employees": employees_read.value,
+		"reserve": reserve_read.value,
+		"company_structure": cs_read.value,
+		"ceo_slots": ceo_slots,
+	})
+
+func _require_apply_ceo_slots(company_structure: Dictionary) -> Result:
+	if not company_structure.has("ceo_slots"):
+		return Result.failure("set_company_structure_direct: player.company_structure.ceo_slots 缺失")
+	var slots_raw = company_structure.get("ceo_slots", null)
+	if not (slots_raw is int) and not (slots_raw is float):
+		return Result.failure("set_company_structure_direct: player.company_structure.ceo_slots 类型错误（期望 int/float）")
+	if slots_raw is float:
+		var f: float = float(slots_raw)
+		if f != floor(f):
+			return Result.failure("set_company_structure_direct: player.company_structure.ceo_slots 必须为整数")
+	var ceo_slots := int(slots_raw)
+	if ceo_slots <= 0:
+		return Result.failure("set_company_structure_direct: ceo_slots 无效: %d" % ceo_slots)
+	return Result.success(ceo_slots)
 
 static func _count_employee_in_array(list: Array, employee_id: String) -> int:
 	if list == null:
