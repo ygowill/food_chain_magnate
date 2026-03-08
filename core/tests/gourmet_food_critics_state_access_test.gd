@@ -14,7 +14,10 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_get_gourmet_guide_house_ids_fails_fast_on_invalid_has_garden()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_validate_initiate_marketing_is_fail_soft_for_unknown_or_removed_board()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 4})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -62,4 +65,24 @@ static func _test_get_gourmet_guide_house_ids_fails_fast_on_invalid_has_garden()
 	var err := str(result.error)
 	if err.find("houses[house_1].has_garden") < 0:
 		return Result.failure("错误信息应包含 houses[house_1].has_garden，实际: %s" % err)
+	return Result.success()
+
+static func _test_validate_initiate_marketing_is_fail_soft_for_unknown_or_removed_board() -> Result:
+	var entry = EntryClass.new()
+	var state := _make_state()
+	state.players = [{}, {}]
+	state.marketing_instances = []
+
+	var removed_cmd := Command.create("initiate_marketing", 0)
+	removed_cmd.params = {"board_number": 12}
+	var removed_result := entry._validate_initiate_marketing(state, removed_cmd)
+	if not removed_result.ok:
+		return Result.failure("2 人局已移除 board_number=12 时应保持 fail-soft，实际: %s" % removed_result.error)
+
+	var unknown_cmd := Command.create("initiate_marketing", 0)
+	unknown_cmd.params = {"board_number": 9999}
+	var unknown_result := entry._validate_initiate_marketing(state, unknown_cmd)
+	if not unknown_result.ok:
+		return Result.failure("未知 board_number 时应保持 fail-soft，实际: %s" % unknown_result.error)
+
 	return Result.success()

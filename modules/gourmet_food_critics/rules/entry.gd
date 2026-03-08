@@ -1,6 +1,6 @@
 extends RefCounted
 
-const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
+const MarketingRulesClass = preload("res://core/rules/marketing_rules.gd")
 const PlacementConflictRegistryClass = preload("res://core/rules/placement_conflict_registry.gd")
 const ParseHelpers = preload("res://core/state/serialization/parse_helpers.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
@@ -73,10 +73,11 @@ func _validate_initiate_marketing(state: GameState, command: Command) -> Result:
 	if not bn_read.ok:
 		return bn_read
 	var board_number: int = int(bn_read.value)
-	var def = MarketingRegistryClass.get_def(board_number)
-	if def == null:
+	var board_spec_read := MarketingRulesClass.require_board_spec(state, board_number)
+	if not board_spec_read.ok:
 		return Result.success()
-	if str(def.type) != MARKETING_TYPE:
+	var board_spec: Dictionary = board_spec_read.value
+	if str(board_spec.get("marketing_type", "")) != MARKETING_TYPE:
 		return Result.success()
 
 	# 1) 全局最多 3 个同类 token
