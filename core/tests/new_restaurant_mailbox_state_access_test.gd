@@ -28,13 +28,19 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_validate_specific_fails_fast_on_invalid_marketing_placements_type()
 	if not r.ok:
 		return r
+	r = _test_validate_specific_rejects_unknown_product_before_map_checks()
+	if not r.ok:
+		return r
+	r = _test_validate_specific_rejects_invalid_rotation_before_map_checks()
+	if not r.ok:
+		return r
 	r = _test_apply_changes_writes_mailbox_placement()
 	if not r.ok:
 		return r
 	r = _test_apply_changes_fails_fast_without_partial_mutation()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 5})
+	return Result.success({"cases": 7})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -47,6 +53,12 @@ static func _make_state() -> GameState:
 	}
 	state.turn_order = [0, 1]
 	state.current_player_index = 0
+	return state
+
+static func _make_unlocked_state() -> GameState:
+	var state := _make_state()
+	state.players[0] = {"milestones": ["first_new_restaurant"]}
+	state.marketing_instances = []
 	return state
 
 static func _make_command() -> Command:
@@ -103,6 +115,30 @@ static func _test_validate_specific_fails_fast_on_invalid_marketing_placements_t
 	var err := str(result.error)
 	if err.find("state.map.marketing_placements") < 0:
 		return Result.failure("错误信息应包含 state.map.marketing_placements，实际: %s" % err)
+	return Result.success()
+
+static func _test_validate_specific_rejects_unknown_product_before_map_checks() -> Result:
+	var action = ActionClass.new()
+	var command := _make_command()
+	command.params["product"] = "ghost_product"
+	var result := action._validate_specific(_make_unlocked_state(), command)
+	if result.ok:
+		return Result.failure("未知产品应失败")
+	var err := str(result.error)
+	if err.find("未知的产品") < 0:
+		return Result.failure("错误信息应包含未知产品，实际: %s" % err)
+	return Result.success()
+
+static func _test_validate_specific_rejects_invalid_rotation_before_map_checks() -> Result:
+	var action = ActionClass.new()
+	var command := _make_command()
+	command.params["rotation"] = 45
+	var result := action._validate_specific(_make_unlocked_state(), command)
+	if result.ok:
+		return Result.failure("非法 rotation 应失败")
+	var err := str(result.error)
+	if err.find("rotation 非法") < 0:
+		return Result.failure("错误信息应包含 rotation 非法，实际: %s" % err)
 	return Result.success()
 
 static func _test_apply_changes_writes_mailbox_placement() -> Result:

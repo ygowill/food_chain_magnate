@@ -5,9 +5,8 @@ const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
-const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
-const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const MarketingRulesClass = preload("res://core/rules/marketing_rules.gd")
 const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
@@ -64,13 +63,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not product_result.ok:
 		return product_result
 	var product: String = product_result.value
-	if not ProductRegistryClass.has(product):
-		return Result.failure("未知的产品: %s" % product)
-	var p_def = ProductRegistryClass.get_def(product)
-	if p_def == null:
-		return Result.failure("未知的产品: %s" % product)
-	if p_def is ProductDef and (p_def as ProductDef).has_tag("no_marketing"):
-		return Result.failure("该产品不能被营销: %s" % product)
+	var product_read := MarketingRulesClass.require_marketable_product(product)
+	if not product_read.ok:
+		return product_read
 
 	var world_pos_result := require_vector2i_param(command, "position")
 	if not world_pos_result.ok:
@@ -81,19 +76,19 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not rotation_result.ok:
 		return rotation_result
 	var rotation: int = int(rotation_result.value)
-	if not rotation in [0, 90, 180, 270]:
-		return Result.failure("rotation 非法（期望 0/90/180/270），实际: %d" % rotation)
+	var rotation_read := MarketingRulesClass.require_rotation(rotation)
+	if not rotation_read.ok:
+		return rotation_read
 
-	var def = MarketingRegistryClass.get_def(board_number)
-	if def == null:
-		return Result.failure("未知的营销板件编号: %d" % board_number)
-	var marketing_type := str(def.type)
+	var board_spec_read := MarketingRulesClass.require_board_spec(state, board_number)
+	if not board_spec_read.ok:
+		return board_spec_read
+	var board_spec: Dictionary = board_spec_read.value
+	var marketing_type := str(board_spec.get("marketing_type", ""))
 	if marketing_type != "mailbox":
 		return Result.failure("该板件不是 mailbox: #%d (%s)" % [board_number, marketing_type])
 	if not MarketingTypeRegistryClass.has_type(marketing_type):
 		return Result.failure("未知的营销类型: %s" % marketing_type)
-	if not def.has_method("is_available_for_player_count") or not def.is_available_for_player_count(state.players.size()):
-		return Result.failure("该营销板件在当前玩家数下已移除: #%d" % board_number)
 
 	# 检查编号唯一占用
 	for inst_val in state.marketing_instances:
@@ -108,24 +103,13 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("营销板件已在使用中: #%d" % board_number)
 
 	# === 放置校验：占地/边界/阻塞/道路/边缘/重叠（对齐 initiate_marketing）===
-	var base_size := Vector2i.ONE
-	if def is MarketingDef:
-		base_size = (def as MarketingDef).footprint_size
-	elif def.has_method("get"):
-		var fs = def.get("footprint_size")
-		if fs is Vector2i:
-			base_size = fs
-	if base_size.x <= 0 or base_size.y <= 0:
-		return Result.failure("营销板件占地非法: %s" % str(base_size))
+	var base_size: Vector2i = board_spec.get("footprint_size", Vector2i.ONE)
+	var size_read := MarketingRulesClass.get_rotated_footprint_size(base_size, rotation)
+	if not size_read.ok:
+		return size_read
+	var size: Vector2i = size_read.value
 
-	var size := base_size
-	if rotation == 90 or rotation == 270:
-		size = Vector2i(base_size.y, base_size.x)
-
-	var footprint_cells: Array[Vector2i] = []
-	for dy in range(size.y):
-		for dx in range(size.x):
-			footprint_cells.append(world_pos + Vector2i(dx, dy))
+	var footprint_cells: Array[Vector2i] = MarketingRulesClass.build_footprint_cells(world_pos, size)
 
 	# 1) 越界/建筑占用检查（所有占地格）
 	for p in footprint_cells:

@@ -1297,6 +1297,10 @@ GameSessionContext
   - 继续将 `initiate_marketing` 中散落的员工能力校验、duration 解析与 airplane axis 推断收口到 `MarketingRules`，让 validation / apply / event 生成共享同一份营销发起约束。
   - 扩展 focused `marketing_rules_domain` 测试，覆盖未知员工、错误 usage、duration 溢出，以及 airplane axis fallback/坏类型，确保营销发起参数 helper 的失败语义稳定可回归。
 
+- `refactor(marketing): reuse mailbox domain helpers`
+  - 将 `place_new_restaurant_mailbox` 中重复的产品、板件、rotation 与 footprint 解析切到 `MarketingRules`，让永久邮箱动作和主线营销发起共享同一份营销元数据入口。
+  - 扩展 focused `new_restaurant_mailbox_state_access` 测试，覆盖未知产品与非法 rotation 的早失败路径，确保动作层仍会在进入地图校验前返回稳定错误。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）
