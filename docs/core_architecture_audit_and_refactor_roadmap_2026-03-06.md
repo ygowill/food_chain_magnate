@@ -1230,6 +1230,9 @@ GameSessionContext
 - `refactor(gameplay): tighten produce food inventory payload access`
   - 为 `produce_food` 增补 `StateUpdater.add_inventory()` 返回值读取 helper，并将库存写入器改成可注入依赖，避免在读取 `new_amount` 前触发硬断言。
   - 新增 focused `produce_food` 状态访问测试，通过注入坏 inventory payload 覆盖返回值类型、缺失 `new_amount` 与坏 `new_amount` 类型三类失败分支，确保失败时不会提前改写 `inventory` 或 `round_state`。
+- `refactor(gameplay): harden procure drinks event param access`
+  - 将 `procure_drinks` 的事件生成参数读取从硬断言改为 fail-soft：缺失/错误 `employee_type` 时直接返回空事件列表，避免坏命令在日志路径触发崩溃。
+  - 扩展 focused `drinks_procurement` 状态访问测试，覆盖缺失与错误 `employee_type` 两类分支，确保 `_generate_specific_events()` 安全返回空列表。
 
 当前阶段性结果：
 

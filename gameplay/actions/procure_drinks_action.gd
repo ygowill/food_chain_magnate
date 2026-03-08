@@ -280,10 +280,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 func _generate_specific_events(_old_state: GameState, _new_state: GameState, command: Command) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
-	assert(command.params.has("employee_type"), "procure_drinks 缺少参数: employee_type")
-	assert(command.params["employee_type"] is String, "procure_drinks employee_type 必须为字符串")
-	var employee_type: String = command.params["employee_type"]
-	assert(not employee_type.is_empty(), "procure_drinks employee_type 不能为空")
+	var employee_type_r := require_string_param(command, "employee_type")
+	if not employee_type_r.ok:
+		return events
+	var employee_type: String = str(employee_type_r.value).strip_edges()
+	if employee_type.is_empty():
+		return events
 
 	var data := {
 		"player_id": command.actor,

@@ -5,6 +5,7 @@ extends RefCounted
 const EmployeeDefClass = preload("res://core/data/employee_def.gd")
 const PlanResolverClass = preload("res://core/rules/drinks_procurement/plan_resolver.gd")
 const TileRouteUtilsClass = preload("res://core/rules/drinks_procurement/tile_route_utils.gd")
+const ActionClass = preload("res://gameplay/actions/procure_drinks_action.gd")
 
 static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var r := _test_resolve_procurement_plan_fails_fast_on_missing_drink_sources()
@@ -22,7 +23,13 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_get_tile_positions_set_result_fails_fast_on_invalid_external_tile_placements_type()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 5})
+	r = _test_generate_specific_events_returns_empty_on_missing_employee_type()
+	if not r.ok:
+		return r
+	r = _test_generate_specific_events_returns_empty_on_invalid_employee_type_type()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 7})
 
 static func _make_procurement_state() -> GameState:
 	var state := GameState.new()
@@ -132,4 +139,20 @@ static func _test_get_tile_positions_set_result_fails_fast_on_invalid_external_t
 	var err := str(result.error)
 	if err.find("state.map.external_tile_placements") < 0:
 		return Result.failure("错误信息应包含 state.map.external_tile_placements，实际: %s" % err)
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_on_missing_employee_type() -> Result:
+	var action = ActionClass.new()
+	var state := _make_procurement_state()
+	var events := action._generate_specific_events(state, state, Command.create("procure_drinks", 0, {}))
+	if not events.is_empty():
+		return Result.failure("缺失 employee_type 时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_on_invalid_employee_type_type() -> Result:
+	var action = ActionClass.new()
+	var state := _make_procurement_state()
+	var events := action._generate_specific_events(state, state, Command.create("procure_drinks", 0, {"employee_type": 1}))
+	if not events.is_empty():
+		return Result.failure("employee_type 类型错误时应返回空事件列表")
 	return Result.success()
