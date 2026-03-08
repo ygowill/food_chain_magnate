@@ -21,6 +21,9 @@ var range_origin_loaded: bool = false
 var employee_pool_patches: Array = []
 var employee_pool_patch_loaded: bool = false
 
+var dinnertime_route_purchase_providers: Array = []
+var dinnertime_route_purchase_loaded: bool = false
+
 func clear() -> void:
 	marketing_types.clear()
 	marketing_type_loaded = false
@@ -40,3 +43,6 @@ func clear() -> void:
 
 	employee_pool_patches = []
 	employee_pool_patch_loaded = false
+
+	dinnertime_route_purchase_providers = []
+	dinnertime_route_purchase_loaded = false

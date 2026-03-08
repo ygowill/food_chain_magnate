@@ -13,6 +13,7 @@ const MarketingInitiationRegistryClass = preload("res://core/rules/marketing_ini
 const PlacementConflictRegistryClass = preload("res://core/rules/placement_conflict_registry.gd")
 const RangeOriginRegistryClass = preload("res://core/rules/range_origin_registry.gd")
 const EmployeePoolPatchRegistryClass = preload("res://core/rules/employee_pool_patch_registry.gd")
+const DinnertimeRoutePurchaseRegistryClass = preload("res://core/rules/dinnertime_route_purchase_registry.gd")
 
 static func run(seed_val: int = 12345) -> Result:
 	var base_modules: Array[String] = [
@@ -69,6 +70,8 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("engine_a 不应看到 coffee range origin providers")
 	if not EmployeePoolPatchRegistryClass.get_patch_ids().is_empty():
 		return Result.failure("engine_a 不应看到 employee pool patches")
+	if not DinnertimeRoutePurchaseRegistryClass.get_provider_ids().is_empty():
+		return Result.failure("engine_a 不应看到 dinnertime route purchase providers")
 
 	var engine_b := GameEngine.new()
 	var init_b := engine_b.initialize(2, seed_val, optional_modules)
@@ -106,6 +109,8 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("engine_b range origin providers 不符合预期: %s" % str(RangeOriginRegistryClass.get_provider_ids()))
 	if EmployeePoolPatchRegistryClass.get_patch_ids() != ["extra_luxury_manager"]:
 		return Result.failure("engine_b employee pool patches 不符合预期: %s" % str(EmployeePoolPatchRegistryClass.get_patch_ids()))
+	if DinnertimeRoutePurchaseRegistryClass.get_provider_ids() != ["coffee:route:coffee"]:
+		return Result.failure("engine_b dinnertime route purchase providers 不符合预期: %s" % str(DinnertimeRoutePurchaseRegistryClass.get_provider_ids()))
 	if MilestoneEffectRegistryClass.get_current() != engine_b.ruleset_v2.milestone_effect_registry:
 		return Result.failure("engine_b 激活后应切换 milestone effect registry")
 
@@ -132,6 +137,8 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("切回 engine_a 后不应残留 coffee range origin providers")
 	if not EmployeePoolPatchRegistryClass.get_patch_ids().is_empty():
 		return Result.failure("切回 engine_a 后不应残留 employee pool patches")
+	if not DinnertimeRoutePurchaseRegistryClass.get_provider_ids().is_empty():
+		return Result.failure("切回 engine_a 后不应残留 dinnertime route purchase providers")
 	if MilestoneEffectRegistryClass.get_current() != engine_a.ruleset_v2.milestone_effect_registry:
 		return Result.failure("切回 engine_a 后应恢复其 milestone effect registry")
 
@@ -151,6 +158,8 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("engine_a dispose 后，engine_b range origin bundle 不应被清空")
 	if EmployeePoolPatchRegistryClass.get_patch_ids() != ["extra_luxury_manager"]:
 		return Result.failure("engine_a dispose 后，engine_b employee pool patch bundle 不应被清空")
+	if DinnertimeRoutePurchaseRegistryClass.get_provider_ids() != ["coffee:route:coffee"]:
+		return Result.failure("engine_a dispose 后，engine_b dinnertime route purchase bundle 不应被清空")
 	if MilestoneEffectRegistryClass.get_current() != engine_b.ruleset_v2.milestone_effect_registry:
 		return Result.failure("engine_a dispose 后，engine_b 重新激活应恢复其 milestone effect registry")
 	var engine_b_piece_count := PieceRegistryClass.get_count()
@@ -165,5 +174,6 @@ static func run(seed_val: int = 12345) -> Result:
 		"engine_b_placement_conflict_providers": 1,
 		"engine_b_range_origin_providers": 1,
 		"engine_b_employee_pool_patches": 1,
+		"engine_b_dinnertime_route_purchase_providers": 1,
 		"milestone_effect_registry_switched": true,
 	})

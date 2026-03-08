@@ -30,6 +30,7 @@ const MarketingInitiationRegistryClass = preload("res://core/rules/marketing_ini
 const PlacementConflictRegistryClass = preload("res://core/rules/placement_conflict_registry.gd")
 const RangeOriginRegistryClass = preload("res://core/rules/range_origin_registry.gd")
 const EmployeePoolPatchRegistryClass = preload("res://core/rules/employee_pool_patch_registry.gd")
+const DinnertimeRoutePurchaseRegistryClass = preload("res://core/rules/dinnertime_route_purchase_registry.gd")
 const GameEngineDependenciesClass = preload("res://core/engine/game_engine/dependencies.gd")
 
 # === 核心组件 ===
@@ -85,6 +86,7 @@ func activate_registry_bundles() -> void:
 	PlacementConflictRegistryClass.set_current_bundle(rules_registry_bundle)
 	RangeOriginRegistryClass.set_current_bundle(rules_registry_bundle)
 	EmployeePoolPatchRegistryClass.set_current_bundle(rules_registry_bundle)
+	DinnertimeRoutePurchaseRegistryClass.set_current_bundle(rules_registry_bundle)
 	MilestoneEffectRegistryClass.set_current(ruleset_v2.milestone_effect_registry if ruleset_v2 != null else null)
 
 func get_catalog_registry_bundle():
