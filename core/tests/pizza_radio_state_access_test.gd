@@ -28,6 +28,12 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_validate_specific_fails_fast_on_invalid_marketing_placements_type()
 	if not r.ok:
 		return r
+	r = _test_validate_specific_rejects_unknown_pending_product_before_map_checks()
+	if not r.ok:
+		return r
+	r = _test_validate_specific_rejects_invalid_rotation_before_map_checks()
+	if not r.ok:
+		return r
 	r = _test_apply_changes_writes_radio_placement()
 	if not r.ok:
 		return r
@@ -37,7 +43,7 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_apply_changes_fails_fast_on_invalid_pending_phase_actions_without_partial_mutation()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 6})
+	return Result.success({"cases": 8})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -46,6 +52,19 @@ static func _make_state() -> GameState:
 	state.map = {
 		"marketing_placements": {},
 	}
+	return state
+
+static func _make_pending_state() -> GameState:
+	var state := _make_state()
+	state.marketing_instances = []
+	state.round_state[PENDING_KEY] = [{
+		"seller": 0,
+		"board_number": 1,
+		"tile_min": Vector2i(0, 0),
+		"tile_max": Vector2i(1, 1),
+		"product": "pizza",
+		"duration": 2,
+	}]
 	return state
 
 static func _make_command() -> Command:
@@ -100,6 +119,34 @@ static func _test_validate_specific_fails_fast_on_invalid_marketing_placements_t
 	var err := str(result.error)
 	if err.find("state.map.marketing_placements") < 0:
 		return Result.failure("错误信息应包含 state.map.marketing_placements，实际: %s" % err)
+	return Result.success()
+
+static func _test_validate_specific_rejects_unknown_pending_product_before_map_checks() -> Result:
+	var action = ActionClass.new()
+	var state := _make_pending_state()
+	var pending: Array = state.round_state[PENDING_KEY]
+	var first: Dictionary = pending[0]
+	first["product"] = "ghost_product"
+	pending[0] = first
+	state.round_state[PENDING_KEY] = pending
+	var result := action._validate_specific(state, _make_command())
+	if result.ok:
+		return Result.failure("未知 pending.product 应失败")
+	var err := str(result.error)
+	if err.find("未知的产品") < 0:
+		return Result.failure("错误信息应包含未知产品，实际: %s" % err)
+	return Result.success()
+
+static func _test_validate_specific_rejects_invalid_rotation_before_map_checks() -> Result:
+	var action = ActionClass.new()
+	var command := _make_command()
+	command.params["rotation"] = 45
+	var result := action._validate_specific(_make_pending_state(), command)
+	if result.ok:
+		return Result.failure("非法 rotation 应失败")
+	var err := str(result.error)
+	if err.find("rotation 非法") < 0:
+		return Result.failure("错误信息应包含 rotation 非法，实际: %s" % err)
 	return Result.success()
 
 static func _test_apply_changes_writes_radio_placement() -> Result:

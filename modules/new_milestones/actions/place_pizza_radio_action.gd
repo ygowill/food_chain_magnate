@@ -4,8 +4,8 @@ extends ActionExecutor
 const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
-const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
+const MarketingRulesClass = preload("res://core/rules/marketing_rules.gd")
 const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
@@ -56,13 +56,15 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not (board_number_val is int):
 		return Result.failure("pending.board_number 缺失或类型错误（期望 int）")
 	var board_number: int = int(board_number_val)
-	var def = MarketingRegistryClass.get_def(board_number)
-	if def == null:
-		return Result.failure("未知的营销板件编号: %d" % board_number)
-	if str(def.type) != "radio":
+	var board_spec_read := MarketingRulesClass.require_board_spec(state, board_number)
+	if not board_spec_read.ok:
+		return board_spec_read
+	var board_spec: Dictionary = board_spec_read.value
+	var marketing_type := str(board_spec.get("marketing_type", ""))
+	if marketing_type != "radio":
 		return Result.failure("该板件不是 radio: #%d" % board_number)
-	if not def.has_method("is_available_for_player_count") or not def.is_available_for_player_count(state.players.size()):
-		return Result.failure("该营销板件在当前玩家数下已移除: #%d" % board_number)
+	if not MarketingTypeRegistryClass.has_type(marketing_type):
+		return Result.failure("未知的营销类型: %s" % marketing_type)
 
 	# board_number 唯一占用
 	for inst_val in state.marketing_instances:
@@ -73,6 +75,11 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 			return Result.failure("营销板件已被占用: #%d" % board_number)
 	if placements.has(str(board_number)):
 		return Result.failure("营销板件已被占用: #%d" % board_number)
+
+	var product: String = str(first.get("product", "pizza"))
+	var product_read := MarketingRulesClass.require_marketable_product(product)
+	if not product_read.ok:
+		return product_read
 
 	var tile_min_val = first.get("tile_min", null)
 	var tile_max_val = first.get("tile_max", null)
@@ -90,28 +97,18 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not rotation_read.ok:
 		return rotation_read
 	var rotation: int = int(rotation_read.value)
-	if not rotation in [0, 90, 180, 270]:
-		return Result.failure("rotation 非法（期望 0/90/180/270），实际: %d" % rotation)
+	var rotation_check := MarketingRulesClass.require_rotation(rotation)
+	if not rotation_check.ok:
+		return rotation_check
 
 	# === 放置校验：占地/边界/阻塞/道路/边缘/重叠（对齐 initiate_marketing）===
-	var base_size := Vector2i.ONE
-	if def is MarketingDef:
-		base_size = (def as MarketingDef).footprint_size
-	elif def.has_method("get"):
-		var fs = def.get("footprint_size")
-		if fs is Vector2i:
-			base_size = fs
-	if base_size.x <= 0 or base_size.y <= 0:
-		return Result.failure("营销板件占地非法: %s" % str(base_size))
+	var base_size: Vector2i = board_spec.get("footprint_size", Vector2i.ONE)
+	var size_read := MarketingRulesClass.get_rotated_footprint_size(base_size, rotation)
+	if not size_read.ok:
+		return size_read
+	var size: Vector2i = size_read.value
 
-	var size := base_size
-	if rotation == 90 or rotation == 270:
-		size = Vector2i(base_size.y, base_size.x)
-
-	var footprint_cells: Array[Vector2i] = []
-	for dy in range(size.y):
-		for dx in range(size.x):
-			footprint_cells.append(world_pos + Vector2i(dx, dy))
+	var footprint_cells: Array[Vector2i] = MarketingRulesClass.build_footprint_cells(world_pos, size)
 
 	# tile 约束：占地必须完全在 tile 内
 	for p0 in footprint_cells:
@@ -131,7 +128,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		if not structure.is_empty():
 			return Result.failure("该位置已有建筑，无法放置营销: %s" % str(p))
 
-	var requires_edge := MarketingTypeRegistryClass.requires_edge("radio")
+	var requires_edge := MarketingTypeRegistryClass.requires_edge(marketing_type)
 
 	# 2) 边缘营销：要求“整条边贴边”（不能超出）
 	if requires_edge:
