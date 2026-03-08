@@ -1,7 +1,7 @@
 # MarketingSettlement：marketing_instances 校验与归一化（抽离自 MarketingSettlement.apply）
 extends RefCounted
 
-const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
+const MarketingRulesClass = preload("res://core/rules/marketing_rules.gd")
 
 static func build_sorted_instances(state: GameState, placements: Dictionary) -> Result:
 	if state == null:
@@ -21,11 +21,12 @@ static func build_sorted_instances(state: GameState, placements: Dictionary) -> 
 		var board_number: int = inst["board_number"]
 		if board_number <= 0:
 			return Result.failure("MarketingSettlement: marketing_instances[%d].board_number 必须 > 0" % i)
-		var mk_def = MarketingRegistryClass.get_def(board_number)
-		if mk_def == null:
+		var board_spec_read := MarketingRulesClass.require_board_spec(state, board_number)
+		if not board_spec_read.ok:
+			var err := str(board_spec_read.error)
+			if err.find("已移除") >= 0:
+				return Result.failure("MarketingSettlement: marketing_instances[%d].board_number 在当前玩家数下已移除: #%d" % [i, board_number])
 			return Result.failure("MarketingSettlement: marketing_instances[%d].board_number 未知: #%d" % [i, board_number])
-		if not mk_def.has_method("is_available_for_player_count") or not mk_def.is_available_for_player_count(state.players.size()):
-			return Result.failure("MarketingSettlement: marketing_instances[%d].board_number 在当前玩家数下已移除: #%d" % [i, board_number])
 		if seen_board_numbers.has(board_number):
 			return Result.failure("MarketingSettlement: marketing_instances 出现重复 board_number: #%d" % board_number)
 		seen_board_numbers[board_number] = true

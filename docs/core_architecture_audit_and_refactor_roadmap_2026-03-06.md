@@ -1325,6 +1325,10 @@ GameSessionContext
   - 将 `rural_marketeers` 的 marketing enter 扩展里对 giant_billboards.product 的裸注册表校验切到 `MarketingRules.require_marketable_product()`，让乡村广告牌需求生成与动作层共享同一份营销商品约束。
   - 扩展 focused `rural_marketeers_marketing_state_access` 测试，覆盖未知 giant billboard product 的早失败路径，确保坏商品不会继续写入 rural demands。
 
+- `refactor(marketing): reuse board helpers in settlement validation`
+  - 将 `marketing_instances_validation` 对 board_number 的存在性/可用性判断切到 `MarketingRules.require_board_spec()`，让结算前的营销实例校验与发起阶段共享同一份板件可用性约束。
+  - 扩展 focused `marketing_settlement_fail_fast` 测试，覆盖未知 board_number 的 fail-fast 路径，确保结算不会静默吞掉非法营销实例。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）

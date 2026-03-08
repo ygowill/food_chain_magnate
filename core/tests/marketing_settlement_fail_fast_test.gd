@@ -55,7 +55,19 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if str(r2.error).find("移除") < 0:
 		return Result.failure("错误信息应包含'移除'，实际: %s" % str(r2.error))
 
-	# Case 3: 未知 marketing type -> 由 MarketingRangeCalculator 返回失败
+	# Case 3: 未知 board_number -> 直接失败
+	state.marketing_instances.clear()
+	placements.clear()
+	state.marketing_instances.append({
+		"board_number": 9999,
+	})
+	var r4 := MarketingSettlementClass.apply(state, pm.get_marketing_range_calculator(), 1, pm)
+	if r4.ok:
+		return Result.failure("使用未知 board_number 的 marketing_instance 应失败")
+	if str(r4.error).find("未知") < 0:
+		return Result.failure("错误信息应包含'未知'，实际: %s" % str(r4.error))
+
+	# Case 4: 未知 marketing type -> 由 MarketingRangeCalculator 返回失败
 	state.marketing_instances.clear()
 	placements.clear()
 	state.marketing_instances.append({
@@ -78,5 +90,5 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("错误信息应包含'未知'，实际: %s" % str(r3.error))
 
 	return Result.success({
-		"cases": 3,
+		"cases": 4,
 	})
