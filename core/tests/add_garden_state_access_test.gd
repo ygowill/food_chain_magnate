@@ -32,7 +32,19 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_apply_changes_fails_fast_on_invalid_merged_cells_without_partial_mutation()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 5})
+	r = _test_apply_changes_fails_fast_on_empty_merged_cells_without_partial_mutation()
+	if not r.ok:
+		return r
+	r = _test_compute_anchor_fails_fast_on_invalid_rotation()
+	if not r.ok:
+		return r
+	r = _test_generate_specific_events_returns_empty_on_missing_house_id()
+	if not r.ok:
+		return r
+	r = _test_generate_specific_events_returns_empty_on_invalid_employee_type_type()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 10})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -178,6 +190,12 @@ static func _test_apply_changes_fails_fast_on_invalid_merged_cells_without_parti
 		"validate_garden_attachment.merged_cells[1] 类型错误"
 	)
 
+static func _test_apply_changes_fails_fast_on_empty_merged_cells_without_partial_mutation() -> Result:
+	return _test_apply_changes_fails_fast_on_invalid_attachment_response_without_partial_mutation(
+		{"garden_cells": [Vector2i(1, 2)], "merged_cells": []},
+		"add_garden: merged_cells 为空"
+	)
+
 static func _test_apply_changes_fails_fast_on_invalid_attachment_response_without_partial_mutation(payload, expected_error: String) -> Result:
 	var action = ActionClass.new({}, FakeGardenAttachmentValidator.new(payload))
 	var state := _make_state()
@@ -223,3 +241,32 @@ static func _piece_id_at(state: GameState, pos: Vector2i) -> String:
 	if not (structure_val is Dictionary):
 		return ""
 	return str((structure_val as Dictionary).get("piece_id", ""))
+
+static func _test_compute_anchor_fails_fast_on_invalid_rotation() -> Result:
+	var result := ActionClass._compute_anchor_for_merged_cells([Vector2i(1, 1)], 45)
+	if result.ok:
+		return Result.failure("非法 rotation 时应失败")
+	var err := str(result.error)
+	if err.find("rotation 非法") < 0:
+		return Result.failure("错误信息应包含 rotation 非法，实际: %s" % err)
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_on_missing_house_id() -> Result:
+	var action = ActionClass.new()
+	var state := _make_state()
+	var events := action._generate_specific_events(state, state, Command.create("add_garden", 0, {"direction": "S"}))
+	if not events.is_empty():
+		return Result.failure("缺失 house_id 时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_on_invalid_employee_type_type() -> Result:
+	var action = ActionClass.new()
+	var state := _make_state()
+	var events := action._generate_specific_events(state, state, Command.create("add_garden", 0, {
+		"house_id": "h1",
+		"direction": "S",
+		"employee_type": 1,
+	}))
+	if not events.is_empty():
+		return Result.failure("employee_type 类型错误时应返回空事件列表")
+	return Result.success()

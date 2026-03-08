@@ -247,7 +247,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	# house_with_garden 是非对称占地：rotation + anchor_cell 必须与 garden_direction 匹配，
 	# 否则在旋转板块上会出现确认位置错乱/可放置性判定错误。
 	var new_rotation := _rotation_for_garden_direction(direction)
-	var new_anchor_pos := _compute_anchor_for_merged_cells(merged_cells, new_rotation)
+	var new_anchor_read := _compute_anchor_for_merged_cells(merged_cells, new_rotation)
+	if not new_anchor_read.ok:
+		return new_anchor_read
+	var new_anchor_pos: Vector2i = new_anchor_read.value
 
 	# 更新房屋：cells/has_garden
 	house["has_garden"] = true
@@ -289,16 +292,22 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 func _generate_specific_events(_old_state: GameState, _new_state: GameState, command: Command) -> Array[Dictionary]:
 	var house_id_result := require_string_param(command, "house_id")
-	assert(house_id_result.ok, "add_garden 缺少/错误参数: house_id")
+	if not house_id_result.ok:
+		return []
 	var direction_result := require_string_param(command, "direction")
-	assert(direction_result.ok, "add_garden 缺少/错误参数: direction")
+	if not direction_result.ok:
+		return []
 
-	var house_id: String = house_id_result.value
+	var house_id: String = str(house_id_result.value).strip_edges()
+	var direction: String = str(direction_result.value).strip_edges()
+	if house_id.is_empty() or direction.is_empty():
+		return []
 	var employee_type := ""
 	if command.params.has("employee_type"):
 		var employee_type_result := require_string_param(command, "employee_type")
-		assert(employee_type_result.ok, "add_garden 缺少/错误参数: employee_type")
-		employee_type = employee_type_result.value
+		if not employee_type_result.ok:
+			return []
+		employee_type = str(employee_type_result.value).strip_edges()
 	if employee_type.is_empty():
 		var candidates := EmployeeUsageHelperClass.get_active_employee_types_for_usage_tag(
 			_old_state, command.actor, "use:add_garden"
@@ -326,7 +335,7 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 	var data := {
 		"player_id": command.actor,
 		"house_id": house_id,
-		"direction": direction_result.value,
+		"direction": direction,
 		"employee_type": employee_type,
 	}
 	if house_number > 0:
@@ -365,8 +374,9 @@ static func _rotation_for_garden_direction(direction: String) -> int:
 			return 270
 	return 0
 
-static func _compute_anchor_for_merged_cells(merged_cells: Array, rotation: int) -> Vector2i:
-	assert(rotation == 0 or rotation == 90 or rotation == 180 or rotation == 270, "add_garden: rotation 非法: %s" % str(rotation))
+static func _compute_anchor_for_merged_cells(merged_cells: Array, rotation: int) -> Result:
+	if rotation != 0 and rotation != 90 and rotation != 180 and rotation != 270:
+		return Result.failure("add_garden: rotation 非法: %s" % str(rotation))
 
 	var min_x := 2147483647
 	var min_y := 2147483647
@@ -374,27 +384,29 @@ static func _compute_anchor_for_merged_cells(merged_cells: Array, rotation: int)
 	var max_y := -2147483648
 	var any := false
 	for p_val in merged_cells:
-		assert(p_val is Vector2i, "add_garden: merged_cells 元素类型错误（期望 Vector2i）")
+		if not (p_val is Vector2i):
+			return Result.failure("add_garden: merged_cells 元素类型错误（期望 Vector2i）")
 		var p: Vector2i = p_val
 		any = true
 		min_x = min(min_x, p.x)
 		min_y = min(min_y, p.y)
 		max_x = max(max_x, p.x)
 		max_y = max(max_y, p.y)
-	assert(any, "add_garden: merged_cells 为空")
+	if not any:
+		return Result.failure("add_garden: merged_cells 为空")
 
 	# PieceDef.create_house_with_garden() uses anchor at local (0,0). After rotation:
 	# - 0: anchor at top-left; 90: top-right; 180: bottom-right; 270: bottom-left (of merged bounds).
 	match rotation:
 		0:
-			return Vector2i(min_x, min_y)
+			return Result.success(Vector2i(min_x, min_y))
 		90:
-			return Vector2i(max_x, min_y)
+			return Result.success(Vector2i(max_x, min_y))
 		180:
-			return Vector2i(max_x, max_y)
+			return Result.success(Vector2i(max_x, max_y))
 		270:
-			return Vector2i(min_x, max_y)
-	return Vector2i(min_x, min_y)
+			return Result.success(Vector2i(min_x, max_y))
+	return Result.failure("add_garden: rotation 非法: %s" % str(rotation))
 
 static func _get_garden_supply_remaining(state_map: Dictionary) -> int:
 	if state_map == null or not (state_map is Dictionary):
