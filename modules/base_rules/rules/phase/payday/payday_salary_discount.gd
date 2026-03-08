@@ -1,6 +1,6 @@
 extends RefCounted
 
-const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const EconomyRulesClass = preload("res://core/rules/economy_rules.gd")
 const EffectIdsSegmentInvokerClass = preload("res://core/rules/effect_ids_segment_invoker.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
@@ -34,12 +34,10 @@ static func get_salary_discount_recruit_capacity(
 		if emp_id.is_empty():
 			return Result.failure("PaydaySalaryDiscount: employees 不应包含空字符串")
 
-		var def_val = EmployeeRegistryClass.get_def(emp_id)
-		if def_val == null:
-			return Result.failure("PaydaySalaryDiscount: 未知员工定义: %s" % emp_id)
-		if not (def_val is EmployeeDef):
-			return Result.failure("PaydaySalaryDiscount: 员工定义类型错误（期望 EmployeeDef）: %s" % emp_id)
-		var def: EmployeeDef = def_val
+		var employee_read := EconomyRulesClass.require_employee_def(emp_id, "PaydaySalaryDiscount: ")
+		if not employee_read.ok:
+			return employee_read
+		var def: EmployeeDef = employee_read.value
 
 		var inv := EffectIdsSegmentInvokerClass.invoke_effect_ids_by_segment(
 			effect_registry,

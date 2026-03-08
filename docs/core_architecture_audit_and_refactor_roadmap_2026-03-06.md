@@ -1353,6 +1353,10 @@ GameSessionContext
   - 新增 `EconomyRules.is_salary_token_eligible_product()`，并让 `payday_salary_token_payment` 的统计/扣减两条路径共享同一份 token 资格判定，避免 Payday 资格规则继续散落。
   - 扩展 focused `payday_salary_token_eligibility` 测试，覆盖未知 product id 被忽略且不会被扣减的回归路径，确保经济域 helper 保持原有 fail-soft 语义。
 
+- `refactor(economy): reuse employee helper in payday salary discount`
+  - 扩展 `EconomyRules` 增加 Result 风格的员工定义读取，并让 `payday_salary_discount` 复用同一份员工存在性/类型失败语义，避免薪资折扣计算继续直接触达员工 registry。
+  - 扩展 `payday_salary_test`，补充未知 active employee 的早失败回归，确保发薪折扣路径在遇到坏员工 id 时稳定返回领域错误。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）

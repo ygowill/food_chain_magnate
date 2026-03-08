@@ -4,6 +4,7 @@ extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const PaydaySettlementClass = preload("res://modules/base_rules/rules/phase/payday_settlement.gd")
+const SalaryDiscountClass = preload("res://modules/base_rules/rules/phase/payday/payday_salary_discount.gd")
 const EffectRegistryClass = preload("res://core/rules/effect_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
@@ -15,6 +16,10 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var r_discount := _test_payday_salary_discount_uses_recruit_capacity_and_active_only()
 	if not r_discount.ok:
 		return r_discount
+
+	var r_unknown := _test_payday_salary_discount_fails_fast_on_unknown_active_employee()
+	if not r_unknown.ok:
+		return r_unknown
 
 	var r0 := _test_salary_total_delta_uses_milestone_effect_value()
 	if not r0.ok:
@@ -218,6 +223,23 @@ static func _test_payday_salary_discount_uses_recruit_capacity_and_active_only()
 	if int(cap_b) != 3:
 		return Result.failure("%s(B) 折扣次数应来自 recruit_capacity=3，实际: %d" % [NAME, int(cap_b)])
 
+	return Result.success()
+
+static func _test_payday_salary_discount_fails_fast_on_unknown_active_employee() -> Result:
+	var state := GameState.new()
+	state.players = [{"employees": ["ghost_employee"]}]
+	var player: Dictionary = state.players[0]
+	var result := SalaryDiscountClass.get_salary_discount_recruit_capacity(
+		state,
+		0,
+		player,
+		EffectRegistryClass.new()
+	)
+	if result.ok:
+		return Result.failure("未知员工时应失败")
+	var err := str(result.error)
+	if err.find("未知员工定义: ghost_employee") < 0:
+		return Result.failure("错误信息应包含 ghost_employee，实际: %s" % err)
 	return Result.success()
 
 static func _test_salary_total_delta_uses_milestone_effect_value() -> Result:
