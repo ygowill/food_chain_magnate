@@ -44,4 +44,7 @@ static func build_for_plan(manifests: Dictionary, module_plan: Array[String]) ->
 		elif r != null:
 			return Result.failure("RulesetLoaderV2: entry_script.register 返回值类型错误（期望 Result 或 null）: %s (%s)" % [module_id, entry_path])
 
-	return Result.success(builder.ruleset).with_warnings(warnings)
+	return Result.success({
+		"ruleset": builder.ruleset,
+		"ui_extensions": builder.ui_extensions,
+	}).with_warnings(warnings)

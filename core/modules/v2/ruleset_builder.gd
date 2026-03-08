@@ -3,23 +3,28 @@ class_name RulesetBuilderV2
 extends RefCounted
 
 const RulesetV2Class = preload("res://core/modules/v2/ruleset.gd")
+const UiExtensionsClass = preload("res://core/modules/v2/ruleset/ui_extensions.gd")
 
 var ruleset = null
+var ui_extensions = null
 
 func _init() -> void:
 	ruleset = RulesetV2Class.new()
+	ui_extensions = UiExtensionsClass.new()
 
 func for_module(module_id: String) -> RulesetRegistrarV2:
-	return RulesetRegistrarV2.new(ruleset, module_id)
+	return RulesetRegistrarV2.new(ruleset, ui_extensions, module_id)
 
 class RulesetRegistrarV2:
 	extends RefCounted
 
 	var _ruleset = null
+	var _ui_extensions = null
 	var _module_id: String = ""
 
-	func _init(ruleset_in, module_id_in: String) -> void:
+	func _init(ruleset_in, ui_extensions_in, module_id_in: String) -> void:
 		_ruleset = ruleset_in
+		_ui_extensions = ui_extensions_in
 		_module_id = module_id_in
 
 	func retain_entry_instance(inst) -> void:
@@ -115,29 +120,29 @@ class RulesetRegistrarV2:
 		return _ruleset.register_range_origin_provider(provider_id, callback, priority, _module_id)
 
 	func register_phase_action_ui_modal(phase_name: String, kind: String, scene_path: String, priority: int = 100) -> Result:
-		if _ruleset == null or not _ruleset.has_method("register_phase_action_ui_modal"):
-			return Result.failure("RulesetRegistrarV2: ruleset 缺少 register_phase_action_ui_modal")
-		return _ruleset.register_phase_action_ui_modal(phase_name, kind, scene_path, priority, _module_id)
+		if _ui_extensions == null or not _ui_extensions.has_method("register_phase_action_ui_modal"):
+			return Result.failure("RulesetRegistrarV2: ui_extensions 缺少 register_phase_action_ui_modal")
+		return _ui_extensions.register_phase_action_ui_modal(phase_name, kind, scene_path, priority, _module_id)
 
 	func register_map_overlay_provider(provider_id: String, callback: Callable, priority: int = 100) -> Result:
-		if _ruleset == null or not _ruleset.has_method("register_map_overlay_provider"):
-			return Result.failure("RulesetRegistrarV2: ruleset 缺少 register_map_overlay_provider")
-		return _ruleset.register_map_overlay_provider(provider_id, callback, priority, _module_id)
+		if _ui_extensions == null or not _ui_extensions.has_method("register_map_overlay_provider"):
+			return Result.failure("RulesetRegistrarV2: ui_extensions 缺少 register_map_overlay_provider")
+		return _ui_extensions.register_map_overlay_provider(provider_id, callback, priority, _module_id)
 
 	func register_piece_ui_hint(piece_id: String, hints: Dictionary, priority: int = 100) -> Result:
-		if _ruleset == null or not _ruleset.has_method("register_piece_ui_hint"):
-			return Result.failure("RulesetRegistrarV2: ruleset 缺少 register_piece_ui_hint")
-		return _ruleset.register_piece_ui_hint(piece_id, hints, priority, _module_id)
+		if _ui_extensions == null or not _ui_extensions.has_method("register_piece_ui_hint"):
+			return Result.failure("RulesetRegistrarV2: ui_extensions 缺少 register_piece_ui_hint")
+		return _ui_extensions.register_piece_ui_hint(piece_id, hints, priority, _module_id)
 
 	func register_effect_ui_text(effect_id: String, text: String, priority: int = 100) -> Result:
-		if _ruleset == null or not _ruleset.has_method("register_effect_ui_text"):
-			return Result.failure("RulesetRegistrarV2: ruleset 缺少 register_effect_ui_text")
-		return _ruleset.register_effect_ui_text(effect_id, text, priority, _module_id)
+		if _ui_extensions == null or not _ui_extensions.has_method("register_effect_ui_text"):
+			return Result.failure("RulesetRegistrarV2: ui_extensions 缺少 register_effect_ui_text")
+		return _ui_extensions.register_effect_ui_text(effect_id, text, priority, _module_id)
 
 	func register_milestone_effect_ui_text(effect_type: String, text: String, priority: int = 100) -> Result:
-		if _ruleset == null or not _ruleset.has_method("register_milestone_effect_ui_text"):
-			return Result.failure("RulesetRegistrarV2: ruleset 缺少 register_milestone_effect_ui_text")
-		return _ruleset.register_milestone_effect_ui_text(effect_type, text, priority, _module_id)
+		if _ui_extensions == null or not _ui_extensions.has_method("register_milestone_effect_ui_text"):
+			return Result.failure("RulesetRegistrarV2: ui_extensions 缺少 register_milestone_effect_ui_text")
+		return _ui_extensions.register_milestone_effect_ui_text(effect_type, text, priority, _module_id)
 
 	func register_employee_pool_patch(patch_id: String, employee_id: String, delta: int) -> Result:
 		return _ruleset.register_employee_pool_patch(patch_id, employee_id, delta, _module_id)

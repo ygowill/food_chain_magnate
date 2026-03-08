@@ -29,7 +29,7 @@ static func run(seed_val: int = 12345) -> Result:
 	if not init.ok:
 		return Result.failure("初始化失败: %s" % init.error)
 
-	var r1 := _assert_engine_initialize_no_longer_populates_ui_metadata()
+	var r1 := _assert_engine_initialize_no_longer_populates_ui_metadata(engine)
 	if not r1.ok:
 		return r1
 
@@ -37,7 +37,7 @@ static func run(seed_val: int = 12345) -> Result:
 	if not apply_r.ok:
 		return Result.failure("UI metadata 装配失败: %s" % apply_r.error)
 
-	var r2 := _assert_bootstrap_populates_ui_metadata()
+	var r2 := _assert_bootstrap_populates_ui_metadata(engine)
 	if not r2.ok:
 		return r2
 
@@ -45,7 +45,7 @@ static func run(seed_val: int = 12345) -> Result:
 		"phase_action_modal": ModuleUiMetadataClass.get_phase_action_ui_modal_scene_path(DefsClass.PHASE_CLEANUP, "kimchi"),
 	})
 
-static func _assert_engine_initialize_no_longer_populates_ui_metadata() -> Result:
+static func _assert_engine_initialize_no_longer_populates_ui_metadata(engine: GameEngine) -> Result:
 	if not ModuleUiMetadataClass.get_phase_action_ui_modal_scene_path(DefsClass.PHASE_CLEANUP, "kimchi").is_empty():
 		return Result.failure("engine.initialize 后不应直接装配 phase action UI modal")
 	if not PieceUiHintsRegistryClass.get_kind("lobbyists_park_line").is_empty():
@@ -55,9 +55,22 @@ static func _assert_engine_initialize_no_longer_populates_ui_metadata() -> Resul
 	var overlays := MapOverlayProviderRegistryClass.get_pending_road_connection_dirs(_build_lobbyists_map_data())
 	if not overlays.is_empty():
 		return Result.failure("engine.initialize 后不应直接装配 map overlay providers")
+	if engine == null:
+		return Result.failure("engine 为空")
+	var ui_extensions = engine.get_module_ui_extensions_v2()
+	if ui_extensions == null or not (ui_extensions is Object):
+		return Result.failure("engine.initialize 后应保留独立的 module_ui_extensions_v2")
+	if str(ui_extensions.call("get_phase_action_ui_modal_scene_path", DefsClass.PHASE_CLEANUP, "kimchi")).strip_edges().is_empty():
+		return Result.failure("engine.module_ui_extensions_v2 未保留 kimchi modal 注册结果")
+	if engine.ruleset_v2 == null:
+		return Result.failure("engine.ruleset_v2 为空")
+	if not engine.ruleset_v2.get_phase_action_ui_modal_scene_path(DefsClass.PHASE_CLEANUP, "kimchi").is_empty():
+		return Result.failure("engine.initialize 后规则域 ruleset 不应继续承载 phase action modal")
 	return Result.success()
 
-static func _assert_bootstrap_populates_ui_metadata() -> Result:
+static func _assert_bootstrap_populates_ui_metadata(engine: GameEngine) -> Result:
+	if engine == null:
+		return Result.failure("engine 为空")
 	var kimchi_path := ModuleUiMetadataClass.get_phase_action_ui_modal_scene_path(DefsClass.PHASE_CLEANUP, "kimchi")
 	if kimchi_path.is_empty():
 		return Result.failure("bootstrap 后 kimchi phase action modal 未注册")

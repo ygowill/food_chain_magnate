@@ -901,6 +901,11 @@ GameSessionContext
   - 为 `PieceUiHintsRegistry`、`EffectUiTextRegistry`、`MapOverlayProviderRegistry` 增加 `configure_from_module_ui_metadata(...)`，并让 `ModuleUiMetadataBootstrap.apply()` 改走这条新链路，避免 UI registry 装配继续沿着 core protocol 直接读取 `ruleset.get_ui_extensions()`。
   - 扩展 `ruleset_ui_extensions_facade_test` 与 `module_ui_metadata_bootstrap_test`，补充 metadata 缓存与 bootstrap 装配回归，确保行为保持不变且 UI metadata 读取链已切到 gameplay bootstrap。
 
+- `refactor(core): separate module UI extensions from ruleset build output`
+  - 调整 `RulesetBuilderV2` / `RulesetLoaderV2`，让模块 entry 注册得到的 UI 扩展改为单独产出 `ui_extensions` bundle，并由 `GameEngine.module_ui_extensions_v2` 持有，而不是继续挂在正常初始化得到的 `ruleset_v2` 上。
+  - 扩展 `ModuleUiMetadata` 增加 `configure_from_ui_extensions(...)`，并让 `ModuleUiMetadataBootstrap.apply()` 优先消费 `engine.module_ui_extensions_v2`，进一步减少 gameplay UI bootstrap 对 `RulesetV2` 的直接依赖。
+  - 扩展 `module_ui_metadata_bootstrap_test`，补充“engine 持有独立 ui_extensions bundle、而 `ruleset_v2` 不再承载 kimchi modal”回归，确保阶段 1 的 UI 元数据存储边界继续外移。
+
 ### 风险
 
 - UI 读取路径要同步调整

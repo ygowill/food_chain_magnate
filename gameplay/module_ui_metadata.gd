@@ -30,29 +30,35 @@ static func configure_from_ruleset(ruleset) -> Result:
 	if not ruleset.has_method("get_ui_extensions"):
 		return Result.failure("ModuleUiMetadata.configure_from_ruleset: ruleset 缺少 get_ui_extensions")
 
-	var ui_extensions = ruleset.get_ui_extensions()
-	if ui_extensions == null or not (ui_extensions is Object):
-		return Result.failure("ModuleUiMetadata.configure_from_ruleset: ruleset.get_ui_extensions() 返回值类型错误（期望 Object）")
+	return configure_from_ui_extensions(ruleset.get_ui_extensions())
+
+static func configure_from_ui_extensions(ui_extensions) -> Result:
+	if not _loaded:
+		return Result.failure("ModuleUiMetadata 未初始化：请先调用 reset()")
+	if ui_extensions == null:
+		return Result.failure("ModuleUiMetadata.configure_from_ui_extensions: ui_extensions 为空")
+	if not (ui_extensions is Object):
+		return Result.failure("ModuleUiMetadata.configure_from_ui_extensions: ui_extensions 类型错误（期望 Object）")
 
 	var modal_items = ui_extensions.get("phase_action_ui_modals")
 	if not (modal_items is Array):
-		return Result.failure("ModuleUiMetadata.configure_from_ruleset: ui_extensions.phase_action_ui_modals 缺失或类型错误（期望 Array）")
+		return Result.failure("ModuleUiMetadata.configure_from_ui_extensions: ui_extensions.phase_action_ui_modals 缺失或类型错误（期望 Array）")
 
 	var piece_hint_items = ui_extensions.get("piece_ui_hints")
 	if not (piece_hint_items is Array):
-		return Result.failure("ModuleUiMetadata.configure_from_ruleset: ui_extensions.piece_ui_hints 缺失或类型错误（期望 Array）")
+		return Result.failure("ModuleUiMetadata.configure_from_ui_extensions: ui_extensions.piece_ui_hints 缺失或类型错误（期望 Array）")
 
 	var effect_text_items = ui_extensions.get("effect_ui_texts")
 	if not (effect_text_items is Array):
-		return Result.failure("ModuleUiMetadata.configure_from_ruleset: ui_extensions.effect_ui_texts 缺失或类型错误（期望 Array）")
+		return Result.failure("ModuleUiMetadata.configure_from_ui_extensions: ui_extensions.effect_ui_texts 缺失或类型错误（期望 Array）")
 
 	var milestone_effect_text_items = ui_extensions.get("milestone_effect_ui_texts")
 	if not (milestone_effect_text_items is Array):
-		return Result.failure("ModuleUiMetadata.configure_from_ruleset: ui_extensions.milestone_effect_ui_texts 缺失或类型错误（期望 Array）")
+		return Result.failure("ModuleUiMetadata.configure_from_ui_extensions: ui_extensions.milestone_effect_ui_texts 缺失或类型错误（期望 Array）")
 
 	var overlay_provider_items = ui_extensions.get("map_overlay_providers")
 	if not (overlay_provider_items is Array):
-		return Result.failure("ModuleUiMetadata.configure_from_ruleset: ui_extensions.map_overlay_providers 缺失或类型错误（期望 Array）")
+		return Result.failure("ModuleUiMetadata.configure_from_ui_extensions: ui_extensions.map_overlay_providers 缺失或类型错误（期望 Array）")
 
 	_phase_action_modal_by_key.clear()
 

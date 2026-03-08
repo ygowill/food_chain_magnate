@@ -42,12 +42,16 @@ static func reset(engine) -> void:
 	var old_catalog = engine.content_catalog_v2
 	if old_catalog != null and old_catalog.has_method("clear"):
 		old_catalog.clear()
+	var old_ui_extensions = engine.module_ui_extensions_v2
+	if old_ui_extensions != null and old_ui_extensions.has_method("clear"):
+		old_ui_extensions.clear()
 
 	var empty_plan: Array[String] = []
 	engine.module_plan_v2 = empty_plan
 	engine.module_manifests_v2 = {}
 	engine.content_catalog_v2 = ContentCatalogClass.new()
 	engine.ruleset_v2 = null
+	engine.module_ui_extensions_v2 = null
 	engine.modules_v2_base_dir = ""
 	if engine.catalog_registry_bundle != null and engine.catalog_registry_bundle.has_method("clear"):
 		engine.catalog_registry_bundle.clear()
@@ -83,6 +87,7 @@ static func apply(engine, module_ids: Array[String], base_dir: String) -> Result
 	engine.module_manifests_v2 = {}
 	engine.content_catalog_v2 = ContentCatalogClass.new()
 	engine.ruleset_v2 = null
+	engine.module_ui_extensions_v2 = null
 	if engine.catalog_registry_bundle != null and engine.catalog_registry_bundle.has_method("clear"):
 		engine.catalog_registry_bundle.clear()
 	if engine.has_method("activate_registry_bundles"):
@@ -124,7 +129,15 @@ static func apply(engine, module_ids: Array[String], base_dir: String) -> Result
 	PerfTraceClass.end_span(span_ruleset)
 	if not ruleset_read.ok:
 		return Result.failure("模块系统 V2：加载模块规则失败: %s" % ruleset_read.error)
-	engine.ruleset_v2 = ruleset_read.value
+	if not (ruleset_read.value is Dictionary):
+		return Result.failure("模块系统 V2：ruleset loader 返回值类型错误（期望 Dictionary）")
+	var ruleset_payload: Dictionary = ruleset_read.value
+	engine.ruleset_v2 = ruleset_payload.get("ruleset", null)
+	engine.module_ui_extensions_v2 = ruleset_payload.get("ui_extensions", null)
+	if engine.ruleset_v2 == null:
+		return Result.failure("模块系统 V2：ruleset loader 未返回 ruleset")
+	if engine.module_ui_extensions_v2 == null:
+		return Result.failure("模块系统 V2：ruleset loader 未返回 ui_extensions")
 
 	var span_ruleset_apply := PerfTraceClass.begin_span("modules_v2:apply_ruleset_registries")
 	# V2：模块注册的营销类型（供 MarketingRange/Placement 插拔）

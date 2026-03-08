@@ -37,6 +37,7 @@ var module_plan_v2: Array[String] = []
 var module_manifests_v2: Dictionary = {}  # module_id -> ModuleManifest
 var content_catalog_v2 = null  # ContentCatalog
 var ruleset_v2 = null  # RulesetV2
+var module_ui_extensions_v2 = null  # RulesetV2UiExtensions
 var modules_v2_base_dir: String = ""
 var catalog_registry_bundle = CatalogRegistryBundleClass.new()
 var dependencies = GameEngineDependenciesClass.new()
@@ -236,6 +237,7 @@ func dispose() -> void:
 	module_manifests_v2.clear()
 	content_catalog_v2 = null
 	ruleset_v2 = null
+	module_ui_extensions_v2 = null
 	modules_v2_base_dir = ""
 	catalog_registry_bundle = null
 	dependencies = null
@@ -336,6 +338,9 @@ func get_module_plan_v2() -> Array[String]:
 
 func get_content_catalog_v2():
 	return content_catalog_v2
+
+func get_module_ui_extensions_v2():
+	return module_ui_extensions_v2
 
 # 获取命令历史
 func get_command_history() -> Array[Command]:
