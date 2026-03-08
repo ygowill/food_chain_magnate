@@ -26,12 +26,16 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	if not r2.ok:
 		return r2
 
-	var r3 := _test_turnorder_empty_slots()
+	var r3 := _test_sell_bonus_rejects_unknown_product()
 	if not r3.ok:
 		return r3
 
+	var r4 := _test_turnorder_empty_slots()
+	if not r4.ok:
+		return r4
+
 	return Result.success({
-		"cases": 3,
+		"cases": 4,
 	})
 
 static func _configure_custom_milestones() -> Result:
@@ -158,6 +162,23 @@ static func _test_sell_bonus() -> Result:
 	var expected := 2 * 7 + 3 * 2
 	if int(b.value) != expected:
 		return Result.failure("sell_bonus 应按 effects.value 计算: 期望 %d，实际: %d" % [expected, int(b.value)])
+
+	return Result.success()
+
+static func _test_sell_bonus_rejects_unknown_product() -> Result:
+	var state := GameStateClass.new()
+	state.players = [
+		{
+			"milestones": ["ms_burger_bonus"],
+		}
+	]
+
+	var result := PricingPipelineClass.calculate_marketing_bonus(state, 0, {"ghost_product": 1})
+	if result.ok:
+		return Result.failure("未知产品时应失败")
+	var err := str(result.error)
+	if err.find("未知产品定义: ghost_product") < 0:
+		return Result.failure("错误信息应包含未知产品定义，实际: %s" % err)
 
 	return Result.success()
 

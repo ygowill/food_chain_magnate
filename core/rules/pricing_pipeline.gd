@@ -5,6 +5,7 @@ extends RefCounted
 
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const DinnertimeRulesClass = preload("res://core/rules/dinnertime_rules.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
@@ -73,9 +74,11 @@ static func calculate_marketing_bonus(state: GameState, player_id: int, required
 		var p := str(product)
 		if not ProductRegistryClass.is_loaded():
 			return Result.failure("PricingPipeline: ProductRegistry 未初始化")
-		if ProductRegistryClass.get_def(p) == null:
-			return Result.failure("PricingPipeline: 未知产品: %s" % p)
-		var category := "drink" if ProductRegistryClass.is_drink(p) else p
+		var product_read := DinnertimeRulesClass.require_product_def(p, "PricingPipeline: ")
+		if not product_read.ok:
+			return product_read
+		var product_def: ProductDef = product_read.value
+		var category := "drink" if product_def.is_drink() else p
 		if bonuses.has(category):
 			var per_val = bonuses.get(category, null)
 			if not (per_val is int):

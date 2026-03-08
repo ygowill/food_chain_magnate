@@ -1345,6 +1345,10 @@ GameSessionContext
   - 新增 `DinnertimeRules`，将晚餐结算里散落的产品、员工与里程碑定义读取统一收口，并让 `dinnertime_inventory` / `dinnertime_effects` 复用同一份 Result 风格失败语义。
   - 新增 focused `dinnertime_rules_domain` 测试并接入 `AllTests`，覆盖纯饮品需求、未知产品、未知员工与未知里程碑路径，确保晚餐域 helper 的早失败契约可独立回归。
 
+- `refactor(dinnertime): reuse product helper in pricing pipeline`
+  - 将 `PricingPipeline.calculate_marketing_bonus()` 对产品定义的裸读取切到 `DinnertimeRules.require_product_def()`，让晚餐收入计算与 `dinnertime_inventory` 共享同一份产品存在性/类型失败语义。
+  - 扩展 `milestone_effect_values` 测试，补充未知 product 的早失败回归，确保营销奖励计算在遇到坏产品 id 时会稳定返回领域错误。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）
