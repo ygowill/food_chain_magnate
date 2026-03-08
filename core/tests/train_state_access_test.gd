@@ -1125,3 +1125,25 @@ static func _test_recruit_generate_specific_events_returns_empty_on_invalid_empl
 	if not events.is_empty():
 		return Result.failure("employee_type 类型错误时应返回空事件列表")
 	return Result.success()
+
+static func _test_train_generate_specific_events_returns_empty_on_missing_from_employee(player_count: int, seed_val: int) -> Result:
+	var built := _build_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	var action = ActionClass.new()
+	var events := action._generate_specific_events(state, state, Command.create("train", 0, {"to_employee": "new_business_developer"}))
+	if not events.is_empty():
+		return Result.failure("缺失 from_employee 时应返回空事件列表")
+	return Result.success()
+
+static func _test_train_generate_specific_events_returns_empty_on_missing_to_employee(player_count: int, seed_val: int) -> Result:
+	var built := _build_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	var action = ActionClass.new()
+	var events := action._generate_specific_events(state, state, Command.create("train", 0, {"from_employee": "management_trainee"}))
+	if not events.is_empty():
+		return Result.failure("缺失 to_employee 时应返回空事件列表")
+	return Result.success()

@@ -393,12 +393,16 @@ static func _read_train_events(state: GameState) -> Result:
 func _generate_specific_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	var from_result := require_string_param(command, "from_employee")
-	assert(from_result.ok, "train 缺少/错误参数: from_employee")
+	if not from_result.ok:
+		return events
 	var to_result := require_string_param(command, "to_employee")
-	assert(to_result.ok, "train 缺少/错误参数: to_employee")
+	if not to_result.ok:
+		return events
 
-	var from_employee: String = from_result.value
-	var to_employee: String = to_result.value
+	var from_employee: String = str(from_result.value).strip_edges()
+	var to_employee: String = str(to_result.value).strip_edges()
+	if from_employee.is_empty() or to_employee.is_empty():
+		return events
 
 	# 优先从 new_state.round_state.train_events 中读取本次训练的细节（trainer/steps）。
 	var old_train_events: Array = []

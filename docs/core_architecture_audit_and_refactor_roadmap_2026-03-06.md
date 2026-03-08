@@ -1236,6 +1236,9 @@ GameSessionContext
 - `refactor(gameplay): harden recruit event param access`
   - 将 `recruit` 的事件生成参数读取从硬断言改为 fail-soft：缺失/错误 `employee_type` 时直接返回空事件列表，避免坏命令在日志路径触发崩溃。
   - 扩展 focused `train_state_access` 测试，覆盖缺失与错误 `employee_type` 两类分支，确保 `RecruitAction._generate_specific_events()` 安全返回空列表。
+- `refactor(gameplay): harden train event param access`
+  - 将 `train` 的事件生成参数读取从硬断言改为 fail-soft：缺失/错误 `from_employee` / `to_employee` 时直接返回空事件列表，避免坏命令在日志路径触发崩溃。
+  - 扩展 focused `train_state_access` 测试，覆盖缺失 `from_employee` 与缺失 `to_employee` 两类分支，确保 `TrainAction._generate_specific_events()` 安全返回空列表。
 
 当前阶段性结果：
 
