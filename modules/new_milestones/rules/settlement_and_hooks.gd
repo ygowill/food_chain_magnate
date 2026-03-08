@@ -11,7 +11,7 @@ const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
-const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
+const MarketingRulesClass = preload("res://core/rules/marketing_rules.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 
@@ -177,7 +177,7 @@ func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -
 				return Result.failure("new_milestones:pizza: houses[%s].anchor_pos 缺失或类型错误（期望 Vector2i）" % house_id)
 			var anchor: Vector2i = house["anchor_pos"]
 
-			var board_number := _pick_available_radio_board_number(used_radio_boards)
+			var board_number := _pick_available_radio_board_number(state, used_radio_boards)
 			if board_number <= 0:
 				break
 
@@ -246,13 +246,17 @@ func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -
 
 	return Result.success()
 
-func _pick_available_radio_board_number(used_board_numbers: Dictionary) -> int:
+func _pick_available_radio_board_number(state: GameState, used_board_numbers: Dictionary) -> int:
 	# base_marketing：radio #1-#3
 	for bn in [1, 2, 3]:
-		if not used_board_numbers.has(str(bn)):
-			var def = MarketingRegistryClass.get_def(bn)
-			if def != null and str(def.type) == "radio":
-				return bn
+		if used_board_numbers.has(str(bn)):
+			continue
+		var board_spec_read := MarketingRulesClass.require_board_spec(state, bn)
+		if not board_spec_read.ok:
+			continue
+		var board_spec: Dictionary = board_spec_read.value
+		if str(board_spec.get("marketing_type", "")) == "radio":
+			return bn
 	return -1
 
 func _has_any_legal_radio_position_in_tile(state: GameState, tile_min: Vector2i, tile_max: Vector2i) -> bool:

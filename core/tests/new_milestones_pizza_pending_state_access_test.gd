@@ -20,6 +20,9 @@ static func run(player_count: int = 2, seed_val: int = 880011) -> Result:
 	r = _test_after_dinnertime_primary_is_fail_soft_on_invalid_marketing_placements_type(seed_val)
 	if not r.ok:
 		return r
+	r = _test_after_dinnertime_primary_skips_pending_when_all_radio_boards_are_used(seed_val)
+	if not r.ok:
+		return r
 	r = _test_after_dinnertime_primary_fails_fast_on_missing_houses(seed_val)
 	if not r.ok:
 		return r
@@ -29,7 +32,7 @@ static func run(player_count: int = 2, seed_val: int = 880011) -> Result:
 	r = _test_after_dinnertime_primary_fails_fast_without_partial_mutation_on_invalid_pending_phase_actions(seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 6})
+	return Result.success({"cases": 7})
 
 static func _make_engine_state(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -114,6 +117,28 @@ static func _test_after_dinnertime_primary_is_fail_soft_on_invalid_marketing_pla
 		return Result.failure("marketing_placements 类型错误时不应写入 pizza pending，实际: %s" % str(state.round_state.get(PIZZA_PENDING_KEY, null)))
 	if state.round_state.has("pending_phase_actions"):
 		return Result.failure("marketing_placements 类型错误时不应写入 pending_phase_actions，实际: %s" % str(state.round_state.get("pending_phase_actions", null)))
+	return Result.success()
+
+static func _test_after_dinnertime_primary_skips_pending_when_all_radio_boards_are_used(seed_val: int) -> Result:
+	var built := _make_engine_state(seed_val)
+	if not built.ok:
+		return built
+	var payload: Dictionary = built.value
+	var engine: GameEngine = payload["engine"]
+	var state: GameState = payload["state"]
+	state.marketing_instances = [
+		{"board_number": 1},
+		{"board_number": 2},
+		{"board_number": 3},
+	]
+	var entry = EntryClass.new()
+	var result := entry._after_dinnertime_primary(state, engine.phase_manager)
+	if not result.ok:
+		return Result.failure("radio 板件已占满时应保持成功，实际: %s" % result.error)
+	if state.round_state.has(PIZZA_PENDING_KEY):
+		return Result.failure("radio 板件已占满时不应写入 pizza pending，实际: %s" % str(state.round_state.get(PIZZA_PENDING_KEY, null)))
+	if state.round_state.has("pending_phase_actions"):
+		return Result.failure("radio 板件已占满时不应写入 pending_phase_actions，实际: %s" % str(state.round_state.get("pending_phase_actions", null)))
 	return Result.success()
 
 static func _test_after_dinnertime_primary_fails_fast_on_missing_houses(seed_val: int) -> Result:

@@ -1333,6 +1333,10 @@ GameSessionContext
   - 将 `rural_marketeers` 的 airplane/offramp 冲突校验里残留的板件与 footprint 读取切到 `MarketingRules.require_board_spec()`，让模块级冲突校验与主线营销共享同一份 airplane 板件元数据约束。
   - 扩展 focused `rural_marketeers_state_access` 测试，覆盖已移除非 airplane board 的忽略路径，确保冲突校验不会在无关板件上额外触发地图字段校验。
 
+- `refactor(marketing): reuse board helpers in pizza milestone settlement`
+  - 将 `new_milestones` 的 pizza pending radio 选板逻辑从 `MarketingRegistry.get_def()` 切到 `MarketingRules.require_board_spec()`，让里程碑晚餐结算与主线营销共享同一份板件可用性与营销类型约束，并保持板件不可用时的 fail-soft 语义。
+  - 扩展 focused `new_milestones_pizza_pending_state_access` 测试，覆盖 radio 板件已占满时不写入 pending 的回归路径，确保晚餐阶段在无可用 radio 板件时不会产生部分状态写入。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）
