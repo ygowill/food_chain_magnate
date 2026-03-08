@@ -12,6 +12,9 @@ var bankruptcy_loaded: bool = false
 var marketing_initiation_providers: Array = []
 var marketing_initiation_loaded: bool = false
 
+var placement_conflict_providers: Array = []
+var placement_conflict_loaded: bool = false
+
 func clear() -> void:
 	marketing_types.clear()
 	marketing_type_loaded = false
@@ -22,3 +25,6 @@ func clear() -> void:
 
 	marketing_initiation_providers = []
 	marketing_initiation_loaded = false
+
+	placement_conflict_providers = []
+	placement_conflict_loaded = false

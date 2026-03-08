@@ -10,6 +10,7 @@ const MilestoneEffectRegistryClass = preload("res://core/rules/milestone_effect_
 const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
 const BankruptcyRegistryClass = preload("res://core/rules/bankruptcy_registry.gd")
 const MarketingInitiationRegistryClass = preload("res://core/rules/marketing_initiation_registry.gd")
+const PlacementConflictRegistryClass = preload("res://core/rules/placement_conflict_registry.gd")
 
 static func run(seed_val: int = 12345) -> Result:
 	var base_modules: Array[String] = [
@@ -34,6 +35,7 @@ static func run(seed_val: int = 12345) -> Result:
 		"new_milestones",
 		"gourmet_food_critics",
 		"reserve_prices",
+		"rural_marketeers",
 	]
 
 	var engine_a := GameEngine.new()
@@ -58,6 +60,8 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("engine_a bankruptcy source 应保持 builtin")
 	if not MarketingInitiationRegistryClass.get_provider_ids().is_empty():
 		return Result.failure("engine_a 不应看到 new_milestones marketing initiation providers")
+	if not PlacementConflictRegistryClass.get_provider_ids().is_empty():
+		return Result.failure("engine_a 不应看到 rural_marketeers placement conflict providers")
 
 	var engine_b := GameEngine.new()
 	var init_b := engine_b.initialize(2, seed_val, optional_modules)
@@ -89,6 +93,8 @@ static func run(seed_val: int = 12345) -> Result:
 		"new_milestones:brand_director:radio_permanent_and_busy_forever",
 	]:
 		return Result.failure("engine_b marketing initiation providers 不符合预期: %s" % str(init_provider_ids))
+	if PlacementConflictRegistryClass.get_provider_ids() != ["rural_marketeers:placement_conflicts"]:
+		return Result.failure("engine_b placement conflict providers 不符合预期: %s" % str(PlacementConflictRegistryClass.get_provider_ids()))
 	if MilestoneEffectRegistryClass.get_current() != engine_b.ruleset_v2.milestone_effect_registry:
 		return Result.failure("engine_b 激活后应切换 milestone effect registry")
 
@@ -109,6 +115,8 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("切回 engine_a 后 bankruptcy source 应恢复 builtin")
 	if not MarketingInitiationRegistryClass.get_provider_ids().is_empty():
 		return Result.failure("切回 engine_a 后不应残留 new_milestones marketing initiation providers")
+	if not PlacementConflictRegistryClass.get_provider_ids().is_empty():
+		return Result.failure("切回 engine_a 后不应残留 rural_marketeers placement conflict providers")
 	if MilestoneEffectRegistryClass.get_current() != engine_a.ruleset_v2.milestone_effect_registry:
 		return Result.failure("切回 engine_a 后应恢复其 milestone effect registry")
 
@@ -122,6 +130,8 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("engine_a dispose 后，engine_b bankruptcy bundle 不应被清空")
 	if MarketingInitiationRegistryClass.get_provider_ids().size() != 3:
 		return Result.failure("engine_a dispose 后，engine_b marketing initiation bundle 不应被清空")
+	if PlacementConflictRegistryClass.get_provider_ids() != ["rural_marketeers:placement_conflicts"]:
+		return Result.failure("engine_a dispose 后，engine_b placement conflict bundle 不应被清空")
 	if MilestoneEffectRegistryClass.get_current() != engine_b.ruleset_v2.milestone_effect_registry:
 		return Result.failure("engine_a dispose 后，engine_b 重新激活应恢复其 milestone effect registry")
 	var engine_b_piece_count := PieceRegistryClass.get_count()
@@ -133,5 +143,6 @@ static func run(seed_val: int = 12345) -> Result:
 		"engine_b_has_gourmet_guide": true,
 		"engine_b_has_reserve_prices_bankruptcy": true,
 		"engine_b_marketing_initiation_providers": 3,
+		"engine_b_placement_conflict_providers": 1,
 		"milestone_effect_registry_switched": true,
 	})
