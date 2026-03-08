@@ -51,9 +51,6 @@ var checkpoint_interval: int = 50  # 每 N 条命令创建校验点
 # === 配置 ===
 var validate_invariants: bool = true
 
-# 可注入的事件输出（默认使用 EventBus autoload）
-var event_sink = null
-
 # 用于不变量检查（现金守恒）
 var _initial_total_cash: int = 0
 # 用于不变量检查（员工供应池守恒）
@@ -118,6 +115,14 @@ func set_command_runner_debug_options(options) -> void:
 		return
 	get_dependencies().command_runner_debug_options = options
 
+func _get_event_sink():
+	if dependencies != null and dependencies.event_sink != null:
+		return dependencies.event_sink
+	return null
+
+func get_event_sink():
+	return _get_event_sink()
+
 func ensure_initialized() -> Result:
 	activate_registry_bundles()
 	if state == null:
@@ -150,12 +155,13 @@ func truncate_future_history() -> void:
 			checkpoints.remove_at(i)
 
 func clear_event_history_for_new_session() -> void:
-	if event_sink != null:
-		if event_sink.has_method("clear_history_and_reset_sequence"):
-			event_sink.clear_history_and_reset_sequence()
+	var sink = _get_event_sink()
+	if sink != null:
+		if sink.has_method("clear_history_and_reset_sequence"):
+			sink.clear_history_and_reset_sequence()
 			return
-		if event_sink.has_method("clear_history"):
-			event_sink.clear_history()
+		if sink.has_method("clear_history"):
+			sink.clear_history()
 			return
 
 	var bus = AutoloadAccessClass.get_autoload("EventBus")
@@ -167,11 +173,12 @@ func clear_event_history_for_new_session() -> void:
 		bus.clear_history()
 
 func set_event_sink(sink) -> void:
-	event_sink = sink
+	get_dependencies().event_sink = sink
 
 func emit_event(event_type: String, data: Dictionary) -> void:
-	if event_sink != null and event_sink.has_method("emit_event"):
-		event_sink.emit_event(event_type, data)
+	var sink = _get_event_sink()
+	if sink != null and sink.has_method("emit_event"):
+		sink.emit_event(event_type, data)
 		return
 	var bus = AutoloadAccessClass.get_autoload("EventBus")
 	if bus != null and bus.has_method("emit_event"):
@@ -234,7 +241,6 @@ func dispose() -> void:
 	_initial_total_cash = 0
 	_initial_employee_totals.clear()
 
-	event_sink = null
 	action_registry = null
 	phase_manager = null
 	random_manager = null

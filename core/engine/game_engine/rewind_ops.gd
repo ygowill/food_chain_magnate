@@ -30,7 +30,7 @@ static func rewind_to_command(engine, target_index: int) -> Result:
 
 	# 重要：回退会改变“当前时间线指针”，需要同步重建 EventBus.history，
 	# 否则 UI 日志/回放验证会残留未来事件（undo/redo 视觉上不会真的回到过去）。
-	var sink = engine.event_sink
+	var sink = engine.get_event_sink() if engine.has_method("get_event_sink") else null
 	if sink == null or (not sink.has_method("clear_history_and_reset_sequence")) or (not sink.has_method("record_event")):
 		sink = AutoloadAccessClass.get_autoload("EventBus")
 	if sink != null and sink.has_method("clear_history_and_reset_sequence") and sink.has_method("record_event"):

@@ -977,6 +977,10 @@ GameSessionContext
   - 将 `command_runner` 对 `debug_mode` / `force_execute_commands` / `validate_invariants` / `verbose_logging` 的读取接入 `GameEngineDependencies.command_runner_debug_options`，让运行时命令开关优先使用显式注入配置，并仅在未注入时回退到现有 debug bridge。
   - 扩展 `engine_dependencies_injection_test`，补充运行时 `debug_force` 命令的成功回归，确保 headless 场景无需依赖 `DebugFlags` autoload 也能稳定走强制执行路径。
 
+- `refactor(core): align event sink with engine dependencies`
+  - 将 `GameEngine` 的事件输出来源收口到 `GameEngineDependencies.event_sink`，并让 `rewind_ops` / 初始化历史清理 / 事件发送统一走同一条 sink 读取路径，减少显式依赖注入链里的双份状态。
+  - 扩展 `engine_dependencies_injection_test`，补充初始化清理、`game_started` 与 `command_executed` 事件写入断言，确保 headless 场景下自定义 sink 会稳定接管事件输出。
+
 ---
 
 ## 阶段 4：强化状态契约（2~4 周）

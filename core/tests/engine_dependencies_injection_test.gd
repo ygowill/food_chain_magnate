@@ -46,10 +46,23 @@ class StubRestaurantLogoAssignmentProvider:
 			ids.append((i + 3) % 6)
 		return Result.success(ids)
 
+class StubEventSink:
+	extends RefCounted
+
+	var clear_calls: int = 0
+	var emitted_types: Array[String] = []
+
+	func clear_history_and_reset_sequence() -> void:
+		clear_calls += 1
+
+	func emit_event(event_type: String, _data: Dictionary) -> void:
+		emitted_types.append(event_type)
+
 static func run(seed_val: int = 12345) -> Result:
 	var action_provider := StubActionSetupProvider.new()
 	var event_provider := StubEventBuildProvider.new()
 	var logo_provider := StubRestaurantLogoAssignmentProvider.new()
+	var event_sink := StubEventSink.new()
 
 	var engine := GameEngine.new()
 	engine.set_action_setup_provider(action_provider)
@@ -65,6 +78,7 @@ static func run(seed_val: int = 12345) -> Result:
 		"debug_mode": true,
 		"force_execute_commands": true,
 	})
+	engine.set_event_sink(event_sink)
 
 	var init_r := engine.initialize(2, seed_val)
 	if not init_r.ok:
@@ -85,6 +99,12 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("注入的 game_config_overrides 未生效: salary_cost=%d" % engine.state.get_rule_int("salary_cost"))
 	if int(p0.get("cash", -1)) != 42 or int(p1.get("cash", -1)) != 42:
 		return Result.failure("注入的 game_option_overrides 未生效: cash=%s/%s" % [str(p0.get("cash", -1)), str(p1.get("cash", -1))])
+	if engine.get_dependencies().event_sink != event_sink:
+		return Result.failure("event_sink 未写入 GameEngineDependencies")
+	if event_sink.clear_calls <= 0:
+		return Result.failure("注入的 event_sink 未参与初始化历史清理")
+	if event_sink.emitted_types.is_empty() or event_sink.emitted_types[0] != "game_started":
+		return Result.failure("注入的 event_sink 未收到 game_started 事件: %s" % str(event_sink.emitted_types))
 
 	var state: GameState = engine.get_state()
 	state.current_player_index = 1
@@ -105,6 +125,8 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("注入的 command_runner_event_build_provider 未参与现金事件构建")
 	if event_provider.milestone_calls <= 0:
 		return Result.failure("注入的 command_runner_event_build_provider 未参与里程碑事件构建")
+	if event_sink.emitted_types.find("command_executed") < 0:
+		return Result.failure("注入的 event_sink 未收到 command_executed 事件: %s" % str(event_sink.emitted_types))
 
 	var final_salary_cost := engine.state.get_rule_int("salary_cost")
 	engine.dispose()
@@ -114,4 +136,5 @@ static func run(seed_val: int = 12345) -> Result:
 		"logo_provider_called": logo_provider.called,
 		"salary_cost": final_salary_cost,
 		"force_execute_ok": true,
+		"event_sink_events": event_sink.emitted_types.size(),
 	})
