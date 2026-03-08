@@ -1329,6 +1329,10 @@ GameSessionContext
   - 将 `marketing_instances_validation` 对 board_number 的存在性/可用性判断切到 `MarketingRules.require_board_spec()`，让结算前的营销实例校验与发起阶段共享同一份板件可用性约束。
   - 扩展 focused `marketing_settlement_fail_fast` 测试，覆盖未知 board_number 的 fail-fast 路径，确保结算不会静默吞掉非法营销实例。
 
+- `refactor(marketing): reuse airplane board helpers in offramp conflict checks`
+  - 将 `rural_marketeers` 的 airplane/offramp 冲突校验里残留的板件与 footprint 读取切到 `MarketingRules.require_board_spec()`，让模块级冲突校验与主线营销共享同一份 airplane 板件元数据约束。
+  - 扩展 focused `rural_marketeers_state_access` 测试，覆盖已移除非 airplane board 的忽略路径，确保冲突校验不会在无关板件上额外触发地图字段校验。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）

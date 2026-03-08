@@ -344,10 +344,11 @@ func _validate_airplane_offramp_conflict(state: GameState, command: Command) -> 
 	if not board_number_read.ok:
 		return board_number_read
 	var board_number: int = int(board_number_read.value)
-	var def = MarketingRegistryClass.get_def(board_number)
-	if def == null:
+	var board_spec_read := MarketingRulesClass.require_board_spec(state, board_number)
+	if not board_spec_read.ok:
 		return Result.success()
-	var t: String = str(def.type)
+	var board_spec: Dictionary = board_spec_read.value
+	var t: String = str(board_spec.get("marketing_type", ""))
 	if t != "airplane":
 		return Result.success()
 
@@ -373,13 +374,7 @@ func _validate_airplane_offramp_conflict(state: GameState, command: Command) -> 
 	var world_pos := Vector2i(int(x_read.value), int(y_read.value))
 
 	# Determine airplane axis & segment range.
-	var footprint_size := Vector2i.ONE
-	if def is MarketingDef:
-		footprint_size = (def as MarketingDef).footprint_size
-	elif def != null and def.has_method("get"):
-		var fs = def.get("footprint_size")
-		if fs is Vector2i:
-			footprint_size = fs
+	var footprint_size: Vector2i = board_spec.get("footprint_size", Vector2i.ONE)
 
 	var axis := ""
 	if command.params.has("axis"):

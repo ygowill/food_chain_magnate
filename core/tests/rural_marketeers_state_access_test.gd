@@ -39,6 +39,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_airplane_conflict_validation_fails_fast_on_invalid_offramps_type(seed_val)
 	if not r.ok:
 		return r
+	r = _test_airplane_conflict_validation_ignores_removed_board_before_grid_checks(seed_val)
+	if not r.ok:
+		return r
 	r = _test_marketing_before_exit_blocks_when_pending_player_exists()
 	if not r.ok:
 		return r
@@ -54,7 +57,7 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_milestone_effect_fails_fast_on_invalid_pending_flag_type()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 16})
+	return Result.success({"cases": 17})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -237,6 +240,22 @@ static func _test_airplane_conflict_validation_fails_fast_on_invalid_offramps_ty
 	var err := str(result.error)
 	if err.find("state.map.rural_marketeers_offramps") < 0:
 		return Result.failure("错误信息应包含 state.map.rural_marketeers_offramps，实际: %s" % err)
+	return Result.success()
+
+static func _test_airplane_conflict_validation_ignores_removed_board_before_grid_checks(seed_val: int) -> Result:
+	var state_read := _make_airplane_validation_state(seed_val)
+	if not state_read.ok:
+		return state_read
+	var entry = EntryClass.new()
+	var state: GameState = state_read.value
+	state.map.erase("grid_size")
+	var command := Command.create("initiate_marketing", 0, {
+		"board_number": 12,
+		"position": [0, 0],
+	})
+	var result := entry._validate_airplane_offramp_conflict(state, command)
+	if not result.ok:
+		return Result.failure("已移除的非 airplane board 应被忽略，实际: %s" % result.error)
 	return Result.success()
 
 static func _test_marketing_before_exit_blocks_when_pending_player_exists() -> Result:
