@@ -213,11 +213,14 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 	var events: Array[Dictionary] = []
 
 	var employee_type_result := require_string_param(command, "employee_type")
-	assert(employee_type_result.ok, "produce_food 缺少/错误参数: employee_type")
-	var employee_type: String = employee_type_result.value
+	if not employee_type_result.ok:
+		return events
+	var employee_type: String = str(employee_type_result.value).strip_edges()
+	if employee_type.is_empty():
+		return events
 	var emp_def = EmployeeRegistryClass.get_def(employee_type)
-	assert(emp_def != null, "produce_food 未知的员工类型: %s" % employee_type)
-	assert(emp_def.can_produce(), "produce_food 该员工类型不能生产食物: %s" % employee_type)
+	if emp_def == null or not emp_def.can_produce():
+		return events
 
 	var food_type := ""
 	var amount := 0
@@ -229,8 +232,11 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 		amount = fixed_amount
 	else:
 		var food_type_result := require_string_param(command, "food_type")
-		assert(food_type_result.ok, "produce_food 缺少/错误参数: food_type")
+		if not food_type_result.ok:
+			return events
 		food_type = str(food_type_result.value).strip_edges()
+		if food_type.is_empty():
+			return events
 		amount = 1
 
 	events.append({

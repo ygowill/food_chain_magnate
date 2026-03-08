@@ -24,7 +24,16 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_apply_changes_fails_fast_on_invalid_new_amount_type_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_generate_specific_events_returns_empty_on_missing_employee_type(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_generate_specific_events_returns_empty_on_unknown_employee_type(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_generate_specific_events_returns_empty_on_missing_food_type_for_flexible_producer(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 6})
 
 static func _build_state(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -66,4 +75,37 @@ static func _test_apply_changes_fails_fast_on_invalid_payload(player_count: int,
 		return Result.failure("失败时不应提前改写 inventory")
 	if str(state.round_state) != round_state_before:
 		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_on_missing_employee_type(player_count: int, seed_val: int) -> Result:
+	var built := _build_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	var action = ActionClass.new()
+	var events := action._generate_specific_events(state, state, Command.create("produce_food", 0, {}))
+	if not events.is_empty():
+		return Result.failure("缺失 employee_type 时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_on_unknown_employee_type(player_count: int, seed_val: int) -> Result:
+	var built := _build_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	var action = ActionClass.new()
+	var events := action._generate_specific_events(state, state, Command.create("produce_food", 0, {"employee_type": "bad"}))
+	if not events.is_empty():
+		return Result.failure("未知 employee_type 时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_on_missing_food_type_for_flexible_producer(player_count: int, seed_val: int) -> Result:
+	var built := _build_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	var action = ActionClass.new()
+	var events := action._generate_specific_events(state, state, Command.create("produce_food", 0, {"employee_type": "kitchen_trainee"}))
+	if not events.is_empty():
+		return Result.failure("灵活生产者缺失 food_type 时应返回空事件列表")
 	return Result.success()
