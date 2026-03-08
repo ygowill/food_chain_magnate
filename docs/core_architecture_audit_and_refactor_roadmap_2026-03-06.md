@@ -1309,6 +1309,10 @@ GameSessionContext
   - 将 `place_campaign_manager_second_tile` 中对 pending 商品、campaign_manager 能力、板件、rotation 与 footprint 的重复校验切到 `MarketingRules`，让追加营销板件与主线营销共用同一份领域 helper。
   - 扩展 focused `campaign_manager_second_tile_state_access` 测试，覆盖未知 pending.product 与非法 rotation 的早失败路径，确保动作层先返回稳定业务错误，再进入地图与距离校验。
 
+- `refactor(marketing): harden giant billboard product validation`
+  - 将 `place_giant_billboard` 的商品校验切到 `MarketingRules.require_marketable_product()`，并让 `_apply_changes()` 先复用 `_validate_specific()` 的结果，避免坏 product 在 apply 路径绕过营销约束并产生部分写入。
+  - 扩展 focused `rural_giant_billboard_state_access` 测试，覆盖未知 product 的 validate/apply 早失败与无副作用路径，确保乡村广告牌动作在失败时不会提前写入 board 或迁移员工状态。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）

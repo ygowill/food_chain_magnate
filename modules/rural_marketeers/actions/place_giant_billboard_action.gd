@@ -2,8 +2,8 @@ class_name PlaceGiantBillboardAction
 extends ActionExecutor
 
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
-const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
+const MarketingRulesClass = preload("res://core/rules/marketing_rules.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const MODULE_ID := "rural_marketeers"
@@ -86,14 +86,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not product_read.ok:
 		return product_read
 	var product: String = product_read.value
-	if not ProductRegistryClass.has(product):
-		return Result.failure("未知的产品: %s" % product)
-	var def_val = ProductRegistryClass.get_def(product)
-	if def_val == null or not (def_val is ProductDef):
-		return Result.failure("未知的产品: %s" % product)
-	var def: ProductDef = def_val
-	if def.has_tag("no_marketing"):
-		return Result.failure("该产品不能被营销: %s" % product)
+	var product_rule_read := MarketingRulesClass.require_marketable_product(product)
+	if not product_rule_read.ok:
+		return product_rule_read
+	var def: ProductDef = product_rule_read.value
 	if not (def.has_tag("food") or def.has_tag("drink")):
 		return Result.failure("巨型广告牌只能营销食物或饮料: %s" % product)
 
@@ -127,18 +123,18 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if boards.has(side):
 		return Result.failure("该侧已放置巨型广告牌: %s" % side)
 
-	return Result.success()
+	return Result.success({
+		"side": side,
+		"product": product,
+	})
 
 func _apply_changes(state: GameState, command: Command) -> Result:
-	var side_read := require_string_param(command, "side")
-	if not side_read.ok:
-		return side_read
-	var side: String = side_read.value
-
-	var product_read := require_string_param(command, "product")
-	if not product_read.ok:
-		return product_read
-	var product: String = product_read.value
+	var validate := _validate_specific(state, command)
+	if not validate.ok:
+		return validate
+	var info: Dictionary = validate.value
+	var side: String = str(info.get("side", ""))
+	var product: String = str(info.get("product", ""))
 
 	var houses_read := MapStateAccessClass.require_houses(state, action_id)
 	if not houses_read.ok:

@@ -21,13 +21,19 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_validate_specific_fails_fast_on_invalid_rural_area_type(seed_val)
 	if not r.ok:
 		return r
+	r = _test_validate_specific_rejects_unknown_product(seed_val)
+	if not r.ok:
+		return r
 	r = _test_apply_changes_writes_giant_billboard(seed_val)
+	if not r.ok:
+		return r
+	r = _test_apply_changes_fails_fast_on_unknown_product_without_partial_mutation(seed_val)
 	if not r.ok:
 		return r
 	r = _test_apply_changes_fails_fast_without_partial_mutation(seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 7})
+	return Result.success({"cases": 9})
 
 static func _make_state(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -130,6 +136,45 @@ static func _test_validate_specific_fails_fast_on_invalid_rural_area_type(seed_v
 	var err := str(result.error)
 	if err.find("缺少 rural_area") < 0:
 		return Result.failure("错误信息应提示 rural_area 无效，实际: %s" % err)
+	return Result.success()
+
+static func _test_validate_specific_rejects_unknown_product(seed_val: int) -> Result:
+	var state_r := _make_state(seed_val)
+	if not state_r.ok:
+		return Result.failure("初始化失败(case4a): %s" % state_r.error)
+	var state: GameState = state_r.value
+	var action = ActionClass.new()
+	var command := _make_command()
+	command.params["product"] = "ghost_product"
+	var result := action._validate_specific(state, command)
+	if result.ok:
+		return Result.failure("未知产品应失败")
+	var err := str(result.error)
+	if err.find("未知的产品") < 0:
+		return Result.failure("错误信息应包含未知产品，实际: %s" % err)
+	return Result.success()
+
+static func _test_apply_changes_fails_fast_on_unknown_product_without_partial_mutation(seed_val: int) -> Result:
+	var state_r := _make_state(seed_val)
+	if not state_r.ok:
+		return Result.failure("初始化失败(case4b): %s" % state_r.error)
+	var state: GameState = state_r.value
+	var action = ActionClass.new()
+	var command := _make_command()
+	command.params["product"] = "ghost_product"
+	var result := action._apply_changes(state, command)
+	if result.ok:
+		return Result.failure("未知产品时 _apply_changes 应失败")
+	var err := str(result.error)
+	if err.find("未知的产品") < 0:
+		return Result.failure("错误信息应包含未知产品，实际: %s" % err)
+	var boards: Dictionary = state.map["houses"]["rural_area"]["giant_billboards"]
+	if not boards.is_empty():
+		return Result.failure("失败时不应提前写入 giant_billboards")
+	if not Array(state.players[0].get("employees", [])).has("rural_marketeer"):
+		return Result.failure("失败时不应提前移除 rural_marketeer")
+	if Array(state.players[0].get("busy_marketers", [])).has("rural_marketeer"):
+		return Result.failure("失败时不应提前写入 busy_marketers")
 	return Result.success()
 
 static func _test_apply_changes_writes_giant_billboard(seed_val: int) -> Result:
