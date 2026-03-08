@@ -18,6 +18,9 @@ var placement_conflict_loaded: bool = false
 var range_origin_providers: Array = []
 var range_origin_loaded: bool = false
 
+var employee_pool_patches: Array = []
+var employee_pool_patch_loaded: bool = false
+
 func clear() -> void:
 	marketing_types.clear()
 	marketing_type_loaded = false
@@ -34,3 +37,6 @@ func clear() -> void:
 
 	range_origin_providers = []
 	range_origin_loaded = false
+
+	employee_pool_patches = []
+	employee_pool_patch_loaded = false

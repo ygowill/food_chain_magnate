@@ -6,18 +6,47 @@ extends RefCounted
 # - Strict Mode：引用不存在的 employee_id 直接失败
 # - 支持“只加一次”的去重（同 patch_id 多次注册但内容一致 -> 去重；内容不一致 -> 失败）
 
-static var _patches: Array[Dictionary] = [] # [{id, employee_id, delta, source}]
-static var _loaded: bool = false
+const RulesRegistryBundleClass = preload("res://core/engine/game_engine/rules_registry_bundle.gd")
+
+static var _current_bundle = RulesRegistryBundleClass.new()
+
+static func _get_bundle():
+	if _current_bundle == null:
+		_current_bundle = RulesRegistryBundleClass.new()
+	return _current_bundle
+
+static func _resolve_bundle(bundle = null):
+	if bundle != null:
+		return bundle
+	return _get_bundle()
+
+static func set_current_bundle(bundle) -> void:
+	_current_bundle = bundle if bundle != null else RulesRegistryBundleClass.new()
+
+static func reset_current_bundle() -> void:
+	_current_bundle = RulesRegistryBundleClass.new()
 
 static func reset() -> void:
-	_patches = []
-	_loaded = true
+	var target = _get_bundle()
+	target.employee_pool_patches = []
+	target.employee_pool_patch_loaded = true
 
 static func is_loaded() -> bool:
-	return _loaded
+	return bool(_get_bundle().employee_pool_patch_loaded)
 
-static func configure_from_ruleset(ruleset) -> Result:
-	if not _loaded:
+static func get_patch_ids() -> Array[String]:
+	if not is_loaded():
+		return []
+	var ids: Array[String] = []
+	for patch_val in _get_bundle().employee_pool_patches:
+		if patch_val is Dictionary:
+			var patch_id := str((patch_val as Dictionary).get("id", "")).strip_edges()
+			if not patch_id.is_empty():
+				ids.append(patch_id)
+	return ids
+
+static func configure_from_ruleset(ruleset, bundle = null) -> Result:
+	if not is_loaded() and bundle == null:
 		return Result.failure("EmployeePoolPatchRegistry 未初始化：请先调用 reset()")
 	if ruleset == null:
 		return Result.failure("EmployeePoolPatchRegistry.configure_from_ruleset: ruleset 为空")
@@ -26,7 +55,8 @@ static func configure_from_ruleset(ruleset) -> Result:
 	if not (ruleset.employee_pool_patches is Array):
 		return Result.failure("EmployeePoolPatchRegistry.configure_from_ruleset: ruleset.employee_pool_patches 类型错误（期望 Array）")
 
-	_patches = []
+	var target = _resolve_bundle(bundle)
+	target.employee_pool_patches = []
 
 	var seen := {}
 	for i in range(ruleset.employee_pool_patches.size()):
@@ -65,27 +95,27 @@ static func configure_from_ruleset(ruleset) -> Result:
 			"employee_id": employee_id,
 			"delta": delta,
 		}
-		_patches.append({
+		target.employee_pool_patches.append({
 			"id": patch_id,
 			"employee_id": employee_id,
 			"delta": delta,
 			"source": str(item.get("source", "")),
 		})
 
-	return Result.success()
+	return Result.success(target.employee_pool_patches.size())
 
 static func apply_to_state(state: GameState) -> Result:
-	if not _loaded:
+	if not is_loaded():
 		return Result.failure("EmployeePoolPatchRegistry 未初始化：请先调用 reset()")
 	if state == null:
 		return Result.failure("EmployeePoolPatchRegistry.apply_to_state: state 为空")
 	if not (state.employee_pool is Dictionary):
 		return Result.failure("EmployeePoolPatchRegistry.apply_to_state: state.employee_pool 类型错误（期望 Dictionary）")
 
-	if _patches.is_empty():
+	if _get_bundle().employee_pool_patches.is_empty():
 		return Result.success()
 
-	for patch_val in _patches:
+	for patch_val in _get_bundle().employee_pool_patches:
 		if not (patch_val is Dictionary):
 			return Result.failure("EmployeePoolPatchRegistry.apply_to_state: patch 类型错误（期望 Dictionary）")
 		var patch: Dictionary = patch_val
