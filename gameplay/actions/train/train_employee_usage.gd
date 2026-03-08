@@ -1,7 +1,7 @@
 extends RefCounted
 
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
-const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const EmployeeArrayHelpersClass = preload("res://core/rules/employee_rules/employee_array_helpers.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
@@ -37,9 +37,9 @@ static func read_employee_used_before_training(state: GameState, player_id: int,
 		return Result.success(true)
 
 	# 价格强制动作
-	var def_val_ma = EmployeeRegistryClass.get_def(employee_id)
-	if def_val_ma is EmployeeDef:
-		var def_ma: EmployeeDef = def_val_ma
+	var def_ma_read := EmployeeArrayHelpersClass.lookup_employee_def(employee_id)
+	if def_ma_read.ok:
+		var def_ma: EmployeeDef = def_ma_read.value
 		if not def_ma.mandatory_action_id.is_empty():
 			var completed_read := RoundStatePlayerStringListsClass.has_value(
 				state.round_state,
@@ -54,9 +54,9 @@ static func read_employee_used_before_training(state: GameState, player_id: int,
 				return Result.success(true)
 
 	# 招聘：按“是否必然消耗了该员工的招聘容量”推导
-	var def_val = EmployeeRegistryClass.get_def(employee_id)
-	if def_val is EmployeeDef:
-		var def: EmployeeDef = def_val
+	var def_read := EmployeeArrayHelpersClass.lookup_employee_def(employee_id)
+	if def_read.ok:
+		var def: EmployeeDef = def_read.value
 		if def.recruit_capacity > 0 and def.has_usage_tag("use:recruit"):
 			var used_read := RoundStateCountersClass.get_player_count(state.round_state, "recruit_used", player_id)
 			if not used_read.ok:
@@ -125,10 +125,10 @@ static func apply_inferred_use_employee_train(state: GameState, player_id: int) 
 		if seen.has(emp_id):
 			continue
 		seen[emp_id] = true
-		var def_val2 = EmployeeRegistryClass.get_def(emp_id)
-		if def_val2 == null or not (def_val2 is EmployeeDef):
+		var def2_read := EmployeeArrayHelpersClass.lookup_employee_def(emp_id)
+		if not def2_read.ok:
 			continue
-		var def2: EmployeeDef = def_val2
+		var def2: EmployeeDef = def2_read.value
 		if int(def2.train_capacity) <= 0:
 			continue
 		if not def2.has_usage_tag("use:train"):
@@ -137,10 +137,10 @@ static func apply_inferred_use_employee_train(state: GameState, player_id: int) 
 	candidates.sort()
 
 	for emp_id in candidates:
-		var def_val3 = EmployeeRegistryClass.get_def(emp_id)
-		if def_val3 == null or not (def_val3 is EmployeeDef):
+		var def3_read := EmployeeArrayHelpersClass.lookup_employee_def(emp_id)
+		if not def3_read.ok:
 			continue
-		var def3: EmployeeDef = def_val3
+		var def3: EmployeeDef = def3_read.value
 		var active_count := EmployeeRulesClass.count_active(player_now, emp_id)
 		if active_count <= 0:
 			continue

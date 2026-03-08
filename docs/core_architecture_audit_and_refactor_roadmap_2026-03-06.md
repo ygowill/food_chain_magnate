@@ -1369,6 +1369,10 @@ GameSessionContext
   - 将 `CompanyStructureValidator` 的卡槽/唯一员工校验中的 3 处员工定义读取切到 `EmployeeArrayHelpers.lookup_employee_def()`，同时保留原有“未知的员工类型”错误语义，减少招聘/培训共享校验里的重复 lookup 样板。
   - 扩展 `company_structure_test`，补充未知 employee 的 fail-fast 回归，确保公司结构校验在遇到坏员工 id 时仍返回稳定错误。
 
+- `refactor(working): reuse employee lookup in train usage inference`
+  - 将 `train_employee_usage` 中培训前使用推导与 inferred-use 候选筛选里的 4 处员工定义读取切到 `EmployeeArrayHelpers.lookup_employee_def()`，让 working/train 域共享同一份 Result 风格 lookup，同时保留未知员工的既有 fail-soft/ignore 语义。
+  - 扩展 `train_state_access_test`，补充未知 `employee_id` 读取应返回 `ok=true/value=false` 的回归，确保培训前员工使用推断在坏员工 id 下不会误报已使用。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）

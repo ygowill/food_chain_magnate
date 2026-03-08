@@ -89,6 +89,9 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_apply_inferred_use_employee_train_fails_fast_on_invalid_working_employee_multipliers(player_count, seed_val)
 	if not r.ok:
 		return r
+	r = _test_read_employee_used_before_training_is_fail_soft_on_unknown_employee()
+	if not r.ok:
+		return r
 	r = _test_train_can_initiate_fails_closed_on_invalid_working_employee_multipliers(player_count, seed_val)
 	if not r.ok:
 		return r
@@ -125,7 +128,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_train_apply_fails_fast_on_invalid_immediate_train_pending_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 37})
+	return Result.success({"cases": 38})
 
 static func _test_apply_changes_fails_fast_on_invalid_train_events_without_partial_mutation(player_count: int, seed_val: int) -> Result:
 	var built := _build_train_state(player_count, seed_val)
@@ -822,6 +825,16 @@ static func _test_apply_inferred_use_employee_train_fails_fast_on_invalid_workin
 		return Result.failure("错误信息应包含 working_employee_multipliers 与 字符串玩家 key，实际: %s" % err)
 	if str(state.round_state) != before:
 		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_read_employee_used_before_training_is_fail_soft_on_unknown_employee() -> Result:
+	var state := GameState.new()
+	state.round_state = {}
+	var read := TrainEmployeeUsageClass.read_employee_used_before_training(state, 0, "ghost_employee")
+	if not read.ok:
+		return Result.failure("未知员工时应保持 fail-soft，实际: %s" % read.error)
+	if bool(read.value):
+		return Result.failure("未知员工不应被推断为已使用")
 	return Result.success()
 
 static func _test_train_can_initiate_fails_closed_on_invalid_working_employee_multipliers(player_count: int, seed_val: int) -> Result:
