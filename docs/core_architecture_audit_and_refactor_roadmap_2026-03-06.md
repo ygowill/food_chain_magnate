@@ -1209,6 +1209,9 @@ GameSessionContext
 - `refactor(gameplay): tighten submit restructuring round-state access`
   - 将 `submit_restructuring` 对 `round_state.restructuring` 的 apply 读取前移到玩家改写之前，并改为显式 `Result` 失败，避免坏重组状态在标记提交阶段触发晚期硬断言。
   - 扩展 focused `submit_restructuring` 状态访问测试，确保非法 `round_state.restructuring` 会 fail-fast，且不会提前改写玩家结构或 `round_state`。
+- `refactor(gameplay): tighten submit restructuring ceo slots access`
+  - 将 `submit_restructuring` 对 `player.company_structure.ceo_slots` 的 apply 读取收口到显式 helper，避免 fractional / negative `ceo_slots` 在结构归一化前触发硬断言。
+  - 扩展 focused `submit_restructuring` 状态访问测试，覆盖 fractional / negative `ceo_slots`，确保失败时不会提前改写玩家结构或 `round_state`。
 - `refactor(gameplay): tighten add garden attachment payload access`
   - 为 `add_garden` 增补 attachment payload 读取 helper，并让 apply 阶段在 `validate_garden_attachment()` 返回值、`garden_cells` 或 `merged_cells` 契约损坏时显式 fail-fast，而不是在更新房屋/花园结构前触发硬断言。
   - 扩展 focused `add_garden` 状态访问测试，通过注入坏 attachment payload 覆盖两类失败分支，确保不会提前改写房屋数据、花园供给、格子结构或 `round_state`。

@@ -6,6 +6,21 @@
 class_name SubmitRestructuringAction
 extends ActionExecutor
 
+static func _require_company_structure_ceo_slots(company_structure: Dictionary, path: String) -> Result:
+	if not company_structure.has("ceo_slots"):
+		return Result.failure("%s 缺失" % path)
+	var slots_raw = company_structure.get("ceo_slots", null)
+	if not (slots_raw is int) and not (slots_raw is float):
+		return Result.failure("%s 类型错误（期望 int/float）" % path)
+	if slots_raw is float:
+		var f: float = float(slots_raw)
+		if f != floor(f):
+			return Result.failure("%s 必须为整数" % path)
+	var ceo_slots := int(slots_raw)
+	if ceo_slots < 0:
+		return Result.failure("%s 不能为负数: %d" % [path, ceo_slots])
+	return Result.success(ceo_slots)
+
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
@@ -157,15 +172,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return cs_read
 	var cs: Dictionary = cs_read.value
 
-	var slots_raw = cs.get("ceo_slots", 0)
-	var ceo_slots := 0
-	if slots_raw is int:
-		ceo_slots = int(slots_raw)
-	elif slots_raw is float:
-		var f: float = float(slots_raw)
-		assert(f == floor(f), "submit_restructuring: ceo_slots 必须为整数")
-		ceo_slots = int(f)
-	assert(ceo_slots >= 0, "submit_restructuring: ceo_slots 不能为负数: %d" % ceo_slots)
+	var ceo_slots_read := _require_company_structure_ceo_slots(cs, "player[%d].company_structure.ceo_slots" % player_id)
+	if not ceo_slots_read.ok:
+		return ceo_slots_read
+	var ceo_slots: int = int(ceo_slots_read.value)
 
 	# === Normalize + prune structure based on manager capacity and owned employees ===
 	var owned_counts: Dictionary = {} # employee_id -> count (employees+reserve, excluding CEO)

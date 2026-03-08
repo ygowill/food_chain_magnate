@@ -18,7 +18,13 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_apply_changes_fails_fast_on_invalid_restructuring_state_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 4})
+	r = _test_apply_changes_fails_fast_on_fractional_ceo_slots_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_apply_changes_fails_fast_on_negative_ceo_slots_without_partial_mutation(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 6})
 
 static func _build_submit_restructuring_state(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -136,4 +142,46 @@ static func _test_apply_changes_fails_fast_on_invalid_restructuring_state_withou
 		return Result.failure("失败时不应提前改写玩家结构或员工状态")
 	if str(state.round_state) != round_state_before:
 		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_apply_changes_fails_fast_on_fractional_ceo_slots_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	var built := _build_submit_restructuring_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.players[0]["company_structure"]["ceo_slots"] = 1.5
+	var player_before := str(state.players[0])
+	var round_state_before := str(state.round_state)
+	var action = ActionClass.new()
+	var result := action._apply_changes(state, Command.create("submit_restructuring", 0, {}))
+	if result.ok:
+		return Result.failure("fractional ceo_slots 时应失败")
+	var err := str(result.error)
+	if err.find("player[0].company_structure.ceo_slots") < 0:
+		return Result.failure("错误信息应包含 player[0].company_structure.ceo_slots，实际: %s" % err)
+	if str(state.players[0]) != player_before:
+		return Result.failure("失败时不应提前改写玩家结构或员工状态")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时 round_state 不应提前变化")
+	return Result.success()
+
+static func _test_apply_changes_fails_fast_on_negative_ceo_slots_without_partial_mutation(player_count: int, seed_val: int) -> Result:
+	var built := _build_submit_restructuring_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.players[0]["company_structure"]["ceo_slots"] = -1
+	var player_before := str(state.players[0])
+	var round_state_before := str(state.round_state)
+	var action = ActionClass.new()
+	var result := action._apply_changes(state, Command.create("submit_restructuring", 0, {}))
+	if result.ok:
+		return Result.failure("negative ceo_slots 时应失败")
+	var err := str(result.error)
+	if err.find("player[0].company_structure.ceo_slots") < 0:
+		return Result.failure("错误信息应包含 player[0].company_structure.ceo_slots，实际: %s" % err)
+	if str(state.players[0]) != player_before:
+		return Result.failure("失败时不应提前改写玩家结构或员工状态")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时 round_state 不应提前变化")
 	return Result.success()
