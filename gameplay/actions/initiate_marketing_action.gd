@@ -162,47 +162,63 @@ func _is_employee_marketeer(emp_def: EmployeeDef) -> bool:
 	return false
 
 func _generate_specific_events(_old_state: GameState, _new_state: GameState, command: Command) -> Array[Dictionary]:
+	var events: Array[Dictionary] = []
 	var employee_type_result := require_string_param(command, "employee_type")
-	assert(employee_type_result.ok, "initiate_marketing 缺少/错误参数: employee_type")
-	var employee_type: String = employee_type_result.value
+	if not employee_type_result.ok:
+		return events
+	var employee_type: String = str(employee_type_result.value).strip_edges()
+	if employee_type.is_empty():
+		return events
 
 	var board_number_result := require_int_param(command, "board_number")
-	assert(board_number_result.ok, "initiate_marketing 缺少/错误参数: board_number")
-	var board_number: int = board_number_result.value
+	if not board_number_result.ok:
+		return events
+	var board_number: int = int(board_number_result.value)
 
 	var product_result := require_string_param(command, "product")
-	assert(product_result.ok, "initiate_marketing 缺少/错误参数: product")
-	var product: String = product_result.value
-	assert(ProductRegistryClass.has(product), "initiate_marketing 未知的产品: %s" % product)
+	if not product_result.ok:
+		return events
+	var product: String = str(product_result.value).strip_edges()
+	if not ProductRegistryClass.has(product):
+		return events
 
 	var world_pos_result := require_vector2i_param(command, "position")
-	assert(world_pos_result.ok, "initiate_marketing 缺少/错误参数: position")
+	if not world_pos_result.ok:
+		return events
 	var world_pos: Vector2i = world_pos_result.value
 	var p := [world_pos.x, world_pos.y]
 
 	var def = MarketingRegistryClass.get_def(board_number)
-	assert(def != null, "initiate_marketing 未知的营销板件编号: %d" % board_number)
-	var marketing_type := str(def.type)
+	if def == null:
+		return events
+	var marketing_type := str(def.type).strip_edges()
+	if marketing_type.is_empty():
+		return events
 
 	var emp_def = EmployeeRegistryClass.get_def(employee_type)
-	assert(emp_def != null, "initiate_marketing 未知的员工类型: %s" % employee_type)
+	if emp_def == null:
+		return events
 	var max_duration: int = int(emp_def.marketing_max_duration)
-	assert(max_duration > 0, "initiate_marketing 该员工无法发起营销")
+	if max_duration <= 0:
+		return events
 
 	var duration_result := optional_int_param(command, "duration", max_duration)
-	assert(duration_result.ok, "initiate_marketing 参数 duration 类型错误")
-	var duration: int = duration_result.value
-	assert(duration > 0, "initiate_marketing duration 必须 > 0")
-	assert(duration <= max_duration, "initiate_marketing 持续时间超出上限: %d > %d" % [duration, max_duration])
+	if not duration_result.ok:
+		return events
+	var duration: int = int(duration_result.value)
+	if duration <= 0 or duration > max_duration:
+		return events
 
 	var axis := ""
 	if marketing_type == "airplane":
 		var axis_result := optional_string_param(command, "axis", "")
-		assert(axis_result.ok, "initiate_marketing 参数 axis 类型错误")
-		axis = axis_result.value
+		if not axis_result.ok:
+			return events
+		axis = str(axis_result.value).strip_edges()
 		if axis.is_empty():
 			axis = _infer_airplane_axis(_new_state, world_pos)
-		assert(axis == "row" or axis == "col", "initiate_marketing 飞机缺少 axis（row/col）")
+		if axis != "row" and axis != "col":
+			return events
 
 	# 真实持续时间：可能被里程碑效果改为永久（remaining_duration=-1）。
 	var remaining_duration := duration
@@ -222,7 +238,7 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 					remaining_duration = int(f)
 			break
 
-	return [{
+	events.append({
 		"type": EventBus.EventType.MARKETING_PLACED,
 		"data": {
 			"player_id": command.actor,
@@ -235,7 +251,8 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 			"axis": axis,
 			"position": p,
 		}
-	}]
+	})
+	return events
 
 # === 内部：放置/距离校验 ===
 
