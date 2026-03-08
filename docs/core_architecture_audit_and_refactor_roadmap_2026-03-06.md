@@ -1305,6 +1305,10 @@ GameSessionContext
   - 将 `place_pizza_radio` 中对 pending 商品、radio 板件、rotation 与 footprint 的重复校验切到 `MarketingRules`，让晚餐阶段的里程碑营销与主线营销共享同一份领域约束。
   - 扩展 focused `pizza_radio_state_access` 测试，覆盖未知 pending.product 与非法 rotation 的早失败路径，确保动作层仍先返回稳定业务错误，再进入地图占地校验。
 
+- `refactor(marketing): reuse campaign manager domain helpers`
+  - 将 `place_campaign_manager_second_tile` 中对 pending 商品、campaign_manager 能力、板件、rotation 与 footprint 的重复校验切到 `MarketingRules`，让追加营销板件与主线营销共用同一份领域 helper。
+  - 扩展 focused `campaign_manager_second_tile_state_access` 测试，覆盖未知 pending.product 与非法 rotation 的早失败路径，确保动作层先返回稳定业务错误，再进入地图与距离校验。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）

@@ -5,9 +5,8 @@ const RangeUtilsClass = preload("res://core/utils/range_utils.gd")
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
-const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
-const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const MarketingRulesClass = preload("res://core/rules/marketing_rules.gd")
 const MarketingPlacementQueryClass = preload("res://core/map/marketing_placement_query.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
@@ -66,6 +65,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var product: String = str(info.get("product", ""))
 	if product.is_empty():
 		return Result.failure("pending.product 不能为空")
+	var product_read := MarketingRulesClass.require_marketable_product(product)
+	if not product_read.ok:
+		return product_read
 	var duration_val = info.get("remaining_duration", null)
 	if not (duration_val is int):
 		return Result.failure("pending.remaining_duration 缺失或类型错误（期望 int）")
@@ -78,6 +80,11 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var employee_type: String = str(info.get("employee_type", ""))
 	if employee_type != "campaign_manager":
 		return Result.failure("pending.employee_type 非法: %s" % employee_type)
+	var employee_read := MarketingRulesClass.require_marketing_employee(employee_type, mk_type)
+	if not employee_read.ok:
+		return employee_read
+	var employee_meta: Dictionary = employee_read.value
+	var emp_def = employee_meta.get("definition", null)
 
 	var board_number_result := require_int_param(command, "board_number")
 	if not board_number_result.ok:
@@ -95,19 +102,19 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not rotation_result.ok:
 		return rotation_result
 	var rotation: int = int(rotation_result.value)
-	if not rotation in [0, 90, 180, 270]:
-		return Result.failure("rotation 非法（期望 0/90/180/270），实际: %d" % rotation)
+	var rotation_read := MarketingRulesClass.require_rotation(rotation)
+	if not rotation_read.ok:
+		return rotation_read
 
-	var def = MarketingRegistryClass.get_def(board_number)
-	if def == null:
-		return Result.failure("未知的营销板件编号: %d" % board_number)
-	var def_type := str(def.type)
+	var board_spec_read := MarketingRulesClass.require_board_spec(state, board_number)
+	if not board_spec_read.ok:
+		return board_spec_read
+	var board_spec: Dictionary = board_spec_read.value
+	var def_type := str(board_spec.get("marketing_type", ""))
 	if def_type != mk_type:
 		return Result.failure("第二张板件类型必须为 %s，实际: %s" % [mk_type, def_type])
 	if not MarketingTypeRegistryClass.has_type(def_type):
 		return Result.failure("未知的营销类型: %s" % def_type)
-	if not def.has_method("is_available_for_player_count") or not def.is_available_for_player_count(state.players.size()):
-		return Result.failure("该营销板件在当前玩家数下已移除: #%d" % board_number)
 
 	# 检查编号唯一占用
 	for inst_val in state.marketing_instances:
@@ -122,24 +129,13 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("营销板件已在使用中: #%d" % board_number)
 
 	# === 放置校验：占地/边界/阻塞/道路/边缘/重叠（对齐 initiate_marketing）===
-	var base_size := Vector2i.ONE
-	if def is MarketingDef:
-		base_size = (def as MarketingDef).footprint_size
-	elif def.has_method("get"):
-		var fs = def.get("footprint_size")
-		if fs is Vector2i:
-			base_size = fs
-	if base_size.x <= 0 or base_size.y <= 0:
-		return Result.failure("营销板件占地非法: %s" % str(base_size))
+	var base_size: Vector2i = board_spec.get("footprint_size", Vector2i.ONE)
+	var size_read := MarketingRulesClass.get_rotated_footprint_size(base_size, rotation)
+	if not size_read.ok:
+		return size_read
+	var size: Vector2i = size_read.value
 
-	var size := base_size
-	if rotation == 90 or rotation == 270:
-		size = Vector2i(base_size.y, base_size.x)
-
-	var footprint_cells: Array[Vector2i] = []
-	for dy in range(size.y):
-		for dx in range(size.x):
-			footprint_cells.append(world_pos + Vector2i(dx, dy))
+	var footprint_cells: Array[Vector2i] = MarketingRulesClass.build_footprint_cells(world_pos, size)
 
 	# 1) 越界/建筑占用检查（所有占地格）
 	for p in footprint_cells:
@@ -196,9 +192,6 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("营销占地与其他营销板件重叠: %s" % str(world_pos))
 
 	# 距离校验：使用 campaign_manager 的 range
-	var emp_def = EmployeeRegistryClass.get_def(employee_type)
-	if emp_def == null:
-		return Result.failure("未知的员工类型: %s" % employee_type)
 	var range_type := str(emp_def.range_type)
 	var range_value := int(emp_def.range_value)
 	if range_value >= 0 and not range_type.is_empty():
