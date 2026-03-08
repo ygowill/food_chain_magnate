@@ -3,6 +3,7 @@ class_name TrainActionStateAccessTest
 extends RefCounted
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const TrainCompanyValidationClass = preload("res://gameplay/actions/train/train_company_validation.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
@@ -15,7 +16,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_valid_reserve_employees_still_allows_train(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_same_role_color_fails_fast_on_unknown_target_employee()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 4})
 
 static func _make_train_ready_engine(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -93,4 +97,13 @@ static func _test_valid_reserve_employees_still_allows_train(player_count: int, 
 	state = engine.get_state()
 	if not Array(state.players[0].get("reserve_employees", [])).has("campaign_manager"):
 		return Result.failure("训练后 campaign_manager 应进入 reserve_employees")
+	return Result.success()
+
+static func _test_same_role_color_fails_fast_on_unknown_target_employee() -> Result:
+	var result := TrainCompanyValidationClass._is_same_role_color("marketing_trainee", "ghost_employee")
+	if result.ok:
+		return Result.failure("未知 to_employee 时应失败")
+	var err := str(result.error)
+	if err.find("未知员工定义: ghost_employee") < 0:
+		return Result.failure("错误信息应包含 ghost_employee，实际: %s" % err)
 	return Result.success()

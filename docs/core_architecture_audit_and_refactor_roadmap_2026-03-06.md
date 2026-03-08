@@ -1361,6 +1361,10 @@ GameSessionContext
   - 将 `MandatoryActionsRules` 中 provider 查找与 required action 推导两处员工定义读取切到 `EmployeeArrayHelpers.require_employee_def()`，让 working 域的强制动作推导共享同一份 assert 风格员工契约。
   - 扩展 `mandatory_actions_test`，补充 `find_provider_employee_id()` 的回归断言，确保强制动作 provider 查找与 required action 推导保持一致。
 
+- `refactor(working): reuse result-style employee lookup in train validation`
+  - 为 `EmployeeArrayHelpers` 补充 Result 风格的 `lookup_employee_def()`，并让 `train_company_validation` 复用同一份员工存在性/类型失败语义，避免培训颜色校验继续散落员工 registry 读取。
+  - 扩展 `train_action_state_access` 测试，补充未知 `to_employee` 的早失败回归，确保培训颜色校验在遇到坏员工 id 时稳定返回领域错误。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）

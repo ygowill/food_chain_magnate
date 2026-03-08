@@ -1,19 +1,19 @@
 extends RefCounted
 
-const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const EmployeeArrayHelpersClass = preload("res://core/rules/employee_rules/employee_array_helpers.gd")
 const CompanyStructureValidatorClass = preload("res://gameplay/validators/company_structure_validator.gd")
 
 static func _is_same_role_color(from_employee: String, to_employee: String) -> Result:
 	if from_employee.is_empty() or to_employee.is_empty():
 		return Result.failure("train: employee_id 不能为空")
-	var from_def_val = EmployeeRegistryClass.get_def(from_employee)
-	if from_def_val == null or not (from_def_val is EmployeeDef):
-		return Result.failure("train: 未知员工定义: %s" % from_employee)
-	var to_def_val = EmployeeRegistryClass.get_def(to_employee)
-	if to_def_val == null or not (to_def_val is EmployeeDef):
-		return Result.failure("train: 未知员工定义: %s" % to_employee)
-	var from_def: EmployeeDef = from_def_val
-	var to_def: EmployeeDef = to_def_val
+	var from_def_read := EmployeeArrayHelpersClass.lookup_employee_def(from_employee, "train: ")
+	if not from_def_read.ok:
+		return from_def_read
+	var to_def_read := EmployeeArrayHelpersClass.lookup_employee_def(to_employee, "train: ")
+	if not to_def_read.ok:
+		return to_def_read
+	var from_def: EmployeeDef = from_def_read.value
+	var to_def: EmployeeDef = to_def_read.value
 	return Result.success(from_def.get_role() == to_def.get_role())
 
 static func _validate_company_structure_replacing_active(state: GameState, player_id: int, remove_employee_id: String, add_employee_id: String) -> Result:

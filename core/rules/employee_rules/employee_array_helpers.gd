@@ -15,6 +15,14 @@ static func require_string_array_field(container: Dictionary, key: String, conta
 		out.append(s)
 	return out
 
+static func lookup_employee_def(employee_id: String, prefix: String = "") -> Result:
+	var def_val = EmployeeRegistryClass.get_def(employee_id)
+	if def_val == null:
+		return Result.failure("%s未知员工定义: %s" % [prefix, employee_id])
+	if not (def_val is EmployeeDef):
+		return Result.failure("%s员工定义类型错误（期望 EmployeeDef）: %s" % [prefix, employee_id])
+	return Result.success(def_val)
+
 static func require_employee_def(employee_id: String) -> EmployeeDef:
 	var def_val = EmployeeRegistryClass.get_def(employee_id)
 	assert(def_val != null, "未知员工: %s" % employee_id)
