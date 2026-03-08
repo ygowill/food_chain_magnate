@@ -14,10 +14,14 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_marketing_enter_fails_fast_on_invalid_demands_type()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_marketing_enter_fails_fast_on_unknown_billboard_product()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 4})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
+	state.round_state = {}
 	state.map = {
 		"houses": {
 			"rural_area": {
@@ -61,4 +65,25 @@ static func _test_marketing_enter_fails_fast_on_invalid_demands_type() -> Result
 	var err := str(result.error)
 	if err.find("rural_area.demands") < 0:
 		return Result.failure("错误信息应包含 rural_area.demands，实际: %s" % err)
+	return Result.success()
+
+
+static func _test_marketing_enter_fails_fast_on_unknown_billboard_product() -> Result:
+	var entry = EntryClass.new()
+	var state := _make_state()
+	state.map["houses"]["rural_area"]["giant_billboards"] = {
+		"N": {
+			"product": "ghost_product",
+			"owner": 0,
+			"board_number": 5000,
+		}
+	}
+	var result := entry._on_marketing_enter_extension(state, null)
+	if result.ok:
+		return Result.failure("未知 giant billboard product 时应失败")
+	var err := str(result.error)
+	if err.find("giant_billboards[N].product") < 0:
+		return Result.failure("错误信息应包含 giant_billboards[N].product，实际: %s" % err)
+	if err.find("未知的产品") < 0:
+		return Result.failure("错误信息应包含未知产品语义，实际: %s" % err)
 	return Result.success()

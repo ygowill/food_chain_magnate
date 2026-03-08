@@ -5,7 +5,7 @@ const PhaseManagerClass = preload("res://core/engine/phase_manager.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
-const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const MarketingRulesClass = preload("res://core/rules/marketing_rules.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const ParseHelpers = preload("res://core/state/serialization/parse_helpers.gd")
@@ -203,8 +203,9 @@ func _on_marketing_enter_extension(state: GameState, phase_manager: PhaseManager
 		var product: String = str(product_val)
 		if product.is_empty():
 			return Result.failure("%s: giant_billboards[%s].product 不能为空" % [MODULE_ID, side])
-		if not ProductRegistryClass.has(product):
-			return Result.failure("%s: giant_billboards[%s].product 未知: %s" % [MODULE_ID, side, product])
+		var product_read := MarketingRulesClass.require_marketable_product(product)
+		if not product_read.ok:
+			return Result.failure("%s: giant_billboards[%s].product 非法: %s" % [MODULE_ID, side, product_read.error])
 
 		var owner_val = b.get("owner", null)
 		if not (owner_val is int):

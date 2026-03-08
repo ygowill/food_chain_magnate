@@ -1321,6 +1321,10 @@ GameSessionContext
   - 将 `initiate_marketing_action` 的可发起判定与事件生成里残留的板件可用性读取切到 `MarketingRules.require_board_spec()`，让 UI 可发起判断、事件生成与 validation/apply 共用同一份板件可用性约束。
   - 扩展 focused `initiate_marketing_action_state_access` 测试，覆盖 2 人局已移除 board_number 的空事件路径，确保事件生成不会为不可用营销板件写出日志事件。
 
+- `refactor(marketing): reuse billboard product helper in rural entry`
+  - 将 `rural_marketeers` 的 marketing enter 扩展里对 giant_billboards.product 的裸注册表校验切到 `MarketingRules.require_marketable_product()`，让乡村广告牌需求生成与动作层共享同一份营销商品约束。
+  - 扩展 focused `rural_marketeers_marketing_state_access` 测试，覆盖未知 giant billboard product 的早失败路径，确保坏商品不会继续写入 rural demands。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）
