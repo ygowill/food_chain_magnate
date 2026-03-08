@@ -16,6 +16,7 @@ const ModulesV2Class = preload("res://core/engine/game_engine/modules_v2.gd")
 const RewindOpsClass = preload("res://core/engine/game_engine/rewind_ops.gd")
 const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 const CatalogRegistryBundleClass = preload("res://core/engine/game_engine/catalog_registry_bundle.gd")
+const RulesRegistryBundleClass = preload("res://core/engine/game_engine/rules_registry_bundle.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
@@ -23,6 +24,7 @@ const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const TileRegistryClass = preload("res://core/map/tile_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 const MilestoneEffectRegistryClass = preload("res://core/rules/milestone_effect_registry.gd")
+const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
 const GameEngineDependenciesClass = preload("res://core/engine/game_engine/dependencies.gd")
 
 # === 核心组件 ===
@@ -40,6 +42,7 @@ var ruleset_v2 = null  # RulesetV2
 var module_ui_extensions_v2 = null  # RulesetV2UiExtensions
 var modules_v2_base_dir: String = ""
 var catalog_registry_bundle = CatalogRegistryBundleClass.new()
+var rules_registry_bundle = RulesRegistryBundleClass.new()
 var dependencies = GameEngineDependenciesClass.new()
 
 # === 命令历史 ===
@@ -63,18 +66,26 @@ var _initial_employee_totals: Dictionary = {}  # employee_id -> total_count (poo
 func activate_registry_bundles() -> void:
 	if catalog_registry_bundle == null:
 		catalog_registry_bundle = CatalogRegistryBundleClass.new()
+	if rules_registry_bundle == null:
+		rules_registry_bundle = RulesRegistryBundleClass.new()
 	ProductRegistryClass.set_current_bundle(catalog_registry_bundle)
 	EmployeeRegistryClass.set_current_bundle(catalog_registry_bundle)
 	MarketingRegistryClass.set_current_bundle(catalog_registry_bundle)
 	MilestoneRegistryClass.set_current_bundle(catalog_registry_bundle)
 	TileRegistryClass.set_current_bundle(catalog_registry_bundle)
 	PieceRegistryClass.set_current_bundle(catalog_registry_bundle)
+	MarketingTypeRegistryClass.set_current_bundle(rules_registry_bundle)
 	MilestoneEffectRegistryClass.set_current(ruleset_v2.milestone_effect_registry if ruleset_v2 != null else null)
 
 func get_catalog_registry_bundle():
 	if catalog_registry_bundle == null:
 		catalog_registry_bundle = CatalogRegistryBundleClass.new()
 	return catalog_registry_bundle
+
+func get_rules_registry_bundle():
+	if rules_registry_bundle == null:
+		rules_registry_bundle = RulesRegistryBundleClass.new()
+	return rules_registry_bundle
 
 func get_dependencies():
 	if dependencies == null:
@@ -240,6 +251,7 @@ func dispose() -> void:
 	module_ui_extensions_v2 = null
 	modules_v2_base_dir = ""
 	catalog_registry_bundle = null
+	rules_registry_bundle = null
 	dependencies = null
 
 	_initial_total_cash = 0

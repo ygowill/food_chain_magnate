@@ -7,6 +7,7 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 const MilestoneEffectRegistryClass = preload("res://core/rules/milestone_effect_registry.gd")
+const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
 
 static func run(seed_val: int = 12345) -> Result:
 	var base_modules: Array[String] = [
@@ -29,6 +30,7 @@ static func run(seed_val: int = 12345) -> Result:
 		"base_marketing",
 		"lobbyists",
 		"new_milestones",
+		"gourmet_food_critics",
 	]
 
 	var engine_a := GameEngine.new()
@@ -45,6 +47,8 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("engine_a 不应看到 new_milestones milestone")
 	if MilestoneEffectRegistryClass.get_current() != engine_a.ruleset_v2.milestone_effect_registry:
 		return Result.failure("engine_a 激活后应切换 milestone effect registry")
+	if MarketingTypeRegistryClass.has_type("gourmet_guide"):
+		return Result.failure("engine_a 不应看到 gourmet_guide marketing type")
 
 	var engine_b := GameEngine.new()
 	var init_b := engine_b.initialize(2, seed_val, optional_modules)
@@ -63,6 +67,8 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("engine_b 应看到 new_milestones milestone")
 	if not ProductRegistryClass.has("soda"):
 		return Result.failure("engine_b 应保持 base product 可见（soda）")
+	if not MarketingTypeRegistryClass.has_type("gourmet_guide"):
+		return Result.failure("engine_b 应看到 gourmet_guide marketing type")
 	if MilestoneEffectRegistryClass.get_current() != engine_b.ruleset_v2.milestone_effect_registry:
 		return Result.failure("engine_b 激活后应切换 milestone effect registry")
 
@@ -75,6 +81,8 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("切回 engine_a 后不应残留 new_milestones milestone")
 	if not ProductRegistryClass.has("soda"):
 		return Result.failure("切回 engine_a 后 base product 仍应可见")
+	if MarketingTypeRegistryClass.has_type("gourmet_guide"):
+		return Result.failure("切回 engine_a 后不应残留 gourmet_guide marketing type")
 	if MilestoneEffectRegistryClass.get_current() != engine_a.ruleset_v2.milestone_effect_registry:
 		return Result.failure("切回 engine_a 后应恢复其 milestone effect registry")
 
@@ -82,6 +90,8 @@ static func run(seed_val: int = 12345) -> Result:
 	engine_b.activate_registry_bundles()
 	if not PieceRegistryClass.has("lobbyists_road_straight"):
 		return Result.failure("engine_a dispose 后，engine_b bundle 不应被清空")
+	if not MarketingTypeRegistryClass.has_type("gourmet_guide"):
+		return Result.failure("engine_a dispose 后，engine_b marketing type bundle 不应被清空")
 	if MilestoneEffectRegistryClass.get_current() != engine_b.ruleset_v2.milestone_effect_registry:
 		return Result.failure("engine_a dispose 后，engine_b 重新激活应恢复其 milestone effect registry")
 	var engine_b_piece_count := PieceRegistryClass.get_count()
@@ -90,5 +100,6 @@ static func run(seed_val: int = 12345) -> Result:
 	return Result.success({
 		"engine_b_pieces": engine_b_piece_count,
 		"engine_b_has_lobbyists": true,
+		"engine_b_has_gourmet_guide": true,
 		"milestone_effect_registry_switched": true,
 	})

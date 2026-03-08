@@ -55,6 +55,8 @@ static func reset(engine) -> void:
 	engine.modules_v2_base_dir = ""
 	if engine.catalog_registry_bundle != null and engine.catalog_registry_bundle.has_method("clear"):
 		engine.catalog_registry_bundle.clear()
+	if engine.rules_registry_bundle != null and engine.rules_registry_bundle.has_method("clear"):
+		engine.rules_registry_bundle.clear()
 	if engine.has_method("activate_registry_bundles"):
 		engine.activate_registry_bundles()
 
@@ -90,8 +92,11 @@ static func apply(engine, module_ids: Array[String], base_dir: String) -> Result
 	engine.module_ui_extensions_v2 = null
 	if engine.catalog_registry_bundle != null and engine.catalog_registry_bundle.has_method("clear"):
 		engine.catalog_registry_bundle.clear()
+	if engine.rules_registry_bundle != null and engine.rules_registry_bundle.has_method("clear"):
+		engine.rules_registry_bundle.clear()
 	if engine.has_method("activate_registry_bundles"):
 		engine.activate_registry_bundles()
+	MarketingTypeRegistryClass.reset()
 
 	if module_ids.is_empty():
 		return Result.failure("模块系统 V2：enabled_modules_v2 不能为空（严格模式）")

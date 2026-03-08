@@ -954,6 +954,11 @@ GameSessionContext
   - 将 `MilestoneEffectRegistry` 的当前会话切换接入 `GameEngine.activate_registry_bundles()`，让多引擎场景下的里程碑 effect handler 会随当前激活引擎一起切换，减少 static current 在回放/联机并行场景中的串扰风险。
   - 扩展 `catalog_registry_bundle_isolation_test`，补充 engine A / engine B 之间来回切换 milestone effect registry 的回归断言，确保多实例切换时不会继续残留上一局的里程碑 effect registry。
 
+- `refactor(core): bundle marketing type registry per engine session`
+  - 新增 `RulesRegistryBundle` 并让 `GameEngine` 持有 `rules_registry_bundle`，再把 `MarketingTypeRegistry` 的当前会话切换接入 `activate_registry_bundles()`，让营销类型定义不再停留在进程级 static 字典。
+  - 调整 `modules_v2.reset/apply`，在清空每局 rules bundle 后重新 `reset()` `MarketingTypeRegistry`，确保 headless / UI 启动链里的模块装配顺序仍然稳定。
+  - 扩展 `catalog_registry_bundle_isolation_test`，补充 `gourmet_guide` marketing type 在 engine A / engine B 之间切换时的隔离断言，确保多引擎并行场景下营销类型注册不会串局。
+
 ### 风险
 
 - 改动面较大

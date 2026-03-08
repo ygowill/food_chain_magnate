@@ -1,43 +1,61 @@
 class_name MarketingTypeRegistry
 extends RefCounted
 
-static var _types: Dictionary = {} # type_id -> {requires_edge: bool, range_handler: Callable, source: String}
-static var _loaded: bool = false
+const RulesRegistryBundleClass = preload("res://core/engine/game_engine/rules_registry_bundle.gd")
+
+static var _current_bundle = RulesRegistryBundleClass.new()
+
+static func _get_bundle():
+	if _current_bundle == null:
+		_current_bundle = RulesRegistryBundleClass.new()
+	return _current_bundle
+
+static func _resolve_bundle(bundle = null):
+	if bundle != null:
+		return bundle
+	return _get_bundle()
+
+static func set_current_bundle(bundle) -> void:
+	_current_bundle = bundle if bundle != null else RulesRegistryBundleClass.new()
+
+static func reset_current_bundle() -> void:
+	_current_bundle = RulesRegistryBundleClass.new()
 
 static func reset() -> void:
-	_types.clear()
-	_loaded = true
+	var target = _get_bundle()
+	target.marketing_types.clear()
+	target.marketing_type_loaded = true
 
 static func is_loaded() -> bool:
-	return _loaded
+	return bool(_get_bundle().marketing_type_loaded)
 
 static func has_type(type_id: String) -> bool:
-	if not _loaded:
+	if not is_loaded():
 		return false
-	return _types.has(type_id)
+	return _get_bundle().marketing_types.has(type_id)
 
 static func requires_edge(type_id: String) -> bool:
-	if not _loaded:
+	if not is_loaded():
 		return false
-	if not _types.has(type_id):
+	if not _get_bundle().marketing_types.has(type_id):
 		return false
-	var item: Dictionary = _types[type_id]
+	var item: Dictionary = _get_bundle().marketing_types[type_id]
 	var v = item.get("requires_edge", false)
 	return v is bool and bool(v)
 
 static func get_range_handler(type_id: String) -> Callable:
-	if not _loaded:
+	if not is_loaded():
 		return Callable()
-	if not _types.has(type_id):
+	if not _get_bundle().marketing_types.has(type_id):
 		return Callable()
-	var item: Dictionary = _types[type_id]
+	var item: Dictionary = _get_bundle().marketing_types[type_id]
 	var cb = item.get("range_handler", Callable())
 	if cb is Callable:
 		return cb
 	return Callable()
 
-static func configure_from_ruleset(ruleset) -> Result:
-	if not _loaded:
+static func configure_from_ruleset(ruleset, bundle = null) -> Result:
+	if not is_loaded() and bundle == null:
 		return Result.failure("MarketingTypeRegistry 未初始化：请先调用 reset()")
 	if ruleset == null:
 		return Result.failure("MarketingTypeRegistry.configure_from_ruleset: ruleset 为空")
@@ -45,6 +63,10 @@ static func configure_from_ruleset(ruleset) -> Result:
 		return Result.failure("MarketingTypeRegistry.configure_from_ruleset: ruleset 类型错误（期望 RulesetV2）")
 	if not (ruleset.marketing_type_registrations is Array):
 		return Result.failure("MarketingTypeRegistry.configure_from_ruleset: ruleset.marketing_type_registrations 缺失或类型错误（期望 Array）")
+
+	var target = _resolve_bundle(bundle)
+	target.marketing_types.clear()
+	target.marketing_type_loaded = true
 
 	for i in range(ruleset.marketing_type_registrations.size()):
 		var item_val = ruleset.marketing_type_registrations[i]
@@ -58,8 +80,8 @@ static func configure_from_ruleset(ruleset) -> Result:
 		var type_id: String = str(type_val)
 		if type_id.is_empty():
 			return Result.failure("MarketingTypeRegistry: marketing_type_registrations[%d].type_id 不能为空" % i)
-		if _types.has(type_id):
-			var existing: Dictionary = _types[type_id]
+		if target.marketing_types.has(type_id):
+			var existing: Dictionary = target.marketing_types[type_id]
 			return Result.failure("MarketingTypeRegistry: marketing type 重复注册: %s (existing:%s)" % [type_id, str(existing.get("source", ""))])
 
 		var requires_edge_val = item.get("requires_edge", false)
@@ -75,10 +97,10 @@ static func configure_from_ruleset(ruleset) -> Result:
 			return Result.failure("MarketingTypeRegistry: marketing_type_registrations[%d].range_handler 无效: %s" % [i, type_id])
 
 		var src: String = str(item.get("source", ""))
-		_types[type_id] = {
+		target.marketing_types[type_id] = {
 			"requires_edge": requires_edge,
 			"range_handler": cb,
 			"source": src,
 		}
 
-	return Result.success(_types.size())
+	return Result.success(target.marketing_types.size())
