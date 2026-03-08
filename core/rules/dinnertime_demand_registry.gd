@@ -20,20 +20,47 @@ extends RefCounted
 #     "required": Dictionary, # product_id -> count（int）
 #   }
 
-static var _providers: Array[Dictionary] = [] # [{id, priority, callback, source, seq}]
-static var _loaded: bool = false
-static var _seq: int = 0
+const RulesRegistryBundleClass = preload("res://core/engine/game_engine/rules_registry_bundle.gd")
+
+static var _current_bundle = RulesRegistryBundleClass.new()
+
+static func _get_bundle():
+	if _current_bundle == null:
+		_current_bundle = RulesRegistryBundleClass.new()
+	return _current_bundle
+
+static func _resolve_bundle(bundle = null):
+	if bundle != null:
+		return bundle
+	return _get_bundle()
+
+static func set_current_bundle(bundle) -> void:
+	_current_bundle = bundle if bundle != null else RulesRegistryBundleClass.new()
+
+static func reset_current_bundle() -> void:
+	_current_bundle = RulesRegistryBundleClass.new()
 
 static func reset() -> void:
-	_providers = []
-	_loaded = true
-	_seq = 0
+	var target = _get_bundle()
+	target.dinnertime_demand_providers = []
+	target.dinnertime_demand_loaded = true
 
 static func is_loaded() -> bool:
-	return _loaded
+	return bool(_get_bundle().dinnertime_demand_loaded)
 
-static func configure_from_ruleset(ruleset) -> Result:
-	if not _loaded:
+static func get_provider_ids() -> Array[String]:
+	if not is_loaded():
+		return []
+	var ids: Array[String] = []
+	for item_val in _get_bundle().dinnertime_demand_providers:
+		if item_val is Dictionary:
+			var provider_id := str((item_val as Dictionary).get("id", "")).strip_edges()
+			if not provider_id.is_empty():
+				ids.append(provider_id)
+	return ids
+
+static func configure_from_ruleset(ruleset, bundle = null) -> Result:
+	if not is_loaded() and bundle == null:
 		return Result.failure("DinnertimeDemandRegistry 未初始化：请先调用 reset()")
 	if ruleset == null:
 		return Result.failure("DinnertimeDemandRegistry.configure_from_ruleset: ruleset 为空")
@@ -43,8 +70,10 @@ static func configure_from_ruleset(ruleset) -> Result:
 		return Result.failure("DinnertimeDemandRegistry.configure_from_ruleset: ruleset.dinnertime_demand_providers 类型错误（期望 Array）")
 
 	var seen := {}
-	_providers = []
-	_seq = 0
+	var target = _resolve_bundle(bundle)
+	target.dinnertime_demand_providers = []
+	target.dinnertime_demand_loaded = true
+	var seq: int = 0
 
 	for i in range(ruleset.dinnertime_demand_providers.size()):
 		var item_val = ruleset.dinnertime_demand_providers[i]
@@ -74,16 +103,16 @@ static func configure_from_ruleset(ruleset) -> Result:
 			return Result.failure("DinnertimeDemandRegistry: dinnertime_demand_providers[%d].priority 类型错误（期望 int）" % i)
 		var priority: int = int(prio_val)
 
-		_providers.append({
+		target.dinnertime_demand_providers.append({
 			"id": provider_id,
 			"priority": priority,
 			"callback": cb,
 			"source": str(item.get("source", "")),
-			"seq": _seq,
+			"seq": seq,
 		})
-		_seq += 1
+		seq += 1
 
-	_providers.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+	target.dinnertime_demand_providers.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var ap: int = int(a.get("priority", 100))
 		var bp: int = int(b.get("priority", 100))
 		if ap != bp:
@@ -91,10 +120,10 @@ static func configure_from_ruleset(ruleset) -> Result:
 		return int(a.get("seq", 0)) < int(b.get("seq", 0))
 	)
 
-	return Result.success()
+	return Result.success(target.dinnertime_demand_providers.size())
 
 static func get_variants(state: GameState, house_id: String, house: Dictionary, base_required: Dictionary) -> Result:
-	if not _loaded:
+	if not is_loaded():
 		return Result.failure("DinnertimeDemandRegistry 未初始化：请先调用 reset()")
 	if state == null:
 		return Result.failure("DinnertimeDemandRegistry.get_variants: state 为空")
@@ -109,8 +138,8 @@ static func get_variants(state: GameState, house_id: String, house: Dictionary, 
 	var out: Array[Dictionary] = []
 	var seq_local := 0
 
-	for i in range(_providers.size()):
-		var p_val = _providers[i]
+	for i in range(_get_bundle().dinnertime_demand_providers.size()):
+		var p_val = _get_bundle().dinnertime_demand_providers[i]
 		if not (p_val is Dictionary):
 			return Result.failure("DinnertimeDemandRegistry: provider 类型错误（期望 Dictionary）")
 		var p: Dictionary = p_val

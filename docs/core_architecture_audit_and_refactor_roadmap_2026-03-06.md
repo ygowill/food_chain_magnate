@@ -989,6 +989,11 @@ GameSessionContext
   - 为 registry 增加 `get_provider_ids()` 调试查询，并在 `modules_v2.apply` 清空每局 rules bundle 后同步 `reset()` `DinnertimeRoutePurchaseRegistry`，保证模块重新装配后 route purchase provider 仍能稳定进入 loaded 状态。
   - 扩展 `catalog_registry_bundle_isolation_test`，补充 `coffee:route:coffee` provider 在 engine A / engine B 间切换、以及 engine A dispose 后 engine B 重新激活时的隔离断言，确保多引擎并行场景下晚餐 route provider 不会串局。
 
+- `refactor(core): bundle dinnertime demand registry per engine session`
+  - 继续扩展 `RulesRegistryBundle`，把 `DinnertimeDemandRegistry` 的 provider 列表改为每局持有，并在 `GameEngine.activate_registry_bundles()` 中跟随当前引擎切换，避免 sushi / noodles / kimchi 这类晚餐需求变体继续依赖进程级 static 当前会话态。
+  - 为 registry 增加 `get_provider_ids()` 调试查询，并在 `modules_v2.apply` 清空每局 rules bundle 后同步 `reset()` `DinnertimeDemandRegistry`，保证模块重新装配后 demand provider 仍能稳定进入 loaded 状态。
+  - 扩展 `catalog_registry_bundle_isolation_test`，补充 `sushi:demand_variants` provider 在 engine A / engine B 间切换、以及 engine A dispose 后 engine B 重新激活时的隔离断言，并把测试模块集补齐 `sushi` 以命中真实注册链路。
+
 ### 风险
 
 - 改动面较大
