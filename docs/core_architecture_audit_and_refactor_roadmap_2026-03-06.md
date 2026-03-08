@@ -1287,6 +1287,12 @@ GameSessionContext
 - 同一业务闭环中的计算、provider、settlement、报告写入尽量靠拢
 - 新人可以按业务主题定位代码，而不是先理解所有 registry
 
+### 实施进度（截至 2026-03-08）
+
+- `refactor(marketing): centralize marketing initiation board helpers`
+  - 在 `MarketingRules` 中收口营销产品、板件定义、rotation 与 footprint helper，并先将 `initiate_marketing` 的 validation/apply 切到统一业务入口，减少营销发起主链路里的元数据分叉。
+  - 新增 focused `marketing_rules_domain` 测试，覆盖板件移除、未知产品、rotation 与 footprint 旋转 helper，确保 marketing 领域元数据契约可直接回归。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）

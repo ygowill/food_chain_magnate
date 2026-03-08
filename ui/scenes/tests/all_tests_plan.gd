@@ -883,6 +883,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.MarketingBoardDataTestClass.run(2, 12345),
 			},
 			{
+				"name": "MarketingRulesDomainTest",
+				"fn": func() -> Result: return TestRefs.MarketingRulesDomainTestClass.run(2, 12345),
+			},
+			{
 				"name": "MarketingPanelModuleTypesUiTest",
 				"fn": func() -> Result: return TestRefs.MarketingPanelModuleTypesUiTestClass.run(),
 			},

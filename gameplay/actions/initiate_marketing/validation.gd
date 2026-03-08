@@ -3,9 +3,8 @@ extends RefCounted
 
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
-const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
-const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const MarketingRulesClass = preload("res://core/rules/marketing_rules.gd")
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
@@ -36,13 +35,9 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 	if not product_result.ok:
 		return product_result
 	var product: String = product_result.value
-	if not ProductRegistryClass.has(product):
-		return Result.failure("未知的产品: %s" % product)
-	var p_def = ProductRegistryClass.get_def(product)
-	if p_def == null:
-		return Result.failure("未知的产品: %s" % product)
-	if p_def is ProductDef and (p_def as ProductDef).has_tag("no_marketing"):
-		return Result.failure("该产品不能被营销: %s" % product)
+	var product_read := MarketingRulesClass.require_marketable_product(product)
+	if not product_read.ok:
+		return product_read
 
 	var world_pos_result := action.require_vector2i_param(command, "position")
 	if not world_pos_result.ok:
@@ -53,18 +48,17 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 	if not rotation_result.ok:
 		return rotation_result
 	var rotation: int = int(rotation_result.value)
-	if not MapUtilsClass.VALID_ROTATIONS.has(rotation):
-		return Result.failure("rotation 非法（期望 0/90/180/270），实际: %d" % rotation)
+	var rotation_read := MarketingRulesClass.require_rotation(rotation)
+	if not rotation_read.ok:
+		return rotation_read
 
-	var def = MarketingRegistryClass.get_def(board_number)
-	if def == null:
-		return Result.failure("未知的营销板件编号: %d" % board_number)
-	var marketing_type := str(def.type)
+	var board_spec_read := MarketingRulesClass.require_board_spec(state, board_number)
+	if not board_spec_read.ok:
+		return board_spec_read
+	var board_spec: Dictionary = board_spec_read.value
+	var marketing_type := str(board_spec.get("marketing_type", ""))
 	if not MarketingTypeRegistryClass.has_type(marketing_type):
 		return Result.failure("未知的营销类型: %s" % marketing_type)
-
-	if not def.has_method("is_available_for_player_count") or not def.is_available_for_player_count(state.players.size()):
-		return Result.failure("该营销板件在当前玩家数下已移除: #%d" % board_number)
 
 	# 检查是否已被占用（同一编号唯一）
 	for inst_val in state.marketing_instances:
@@ -119,15 +113,7 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 		return Result.failure("你没有可用的 %s" % employee_type)
 
 	# === 放置校验：占地/边界/阻塞/道路/边缘/重叠 ===
-	var base_size := Vector2i.ONE
-	if def is MarketingDef:
-		base_size = (def as MarketingDef).footprint_size
-	elif def.has_method("get"):
-		var fs = def.get("footprint_size")
-		if fs is Vector2i:
-			base_size = fs
-	if base_size.x <= 0 or base_size.y <= 0:
-		return Result.failure("营销板件占地非法: %s" % str(base_size))
+	var base_size: Vector2i = board_spec.get("footprint_size", Vector2i.ONE)
 
 	# Airplane is placed outside the board:
 	# - It is NOT blocked by structures/roads/drink_sources.
@@ -189,14 +175,12 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 
 		return Result.success()
 
-	var size := base_size
-	if rotation == 90 or rotation == 270:
-		size = Vector2i(base_size.y, base_size.x)
+	var size_read := MarketingRulesClass.get_rotated_footprint_size(base_size, rotation)
+	if not size_read.ok:
+		return size_read
+	var size: Vector2i = size_read.value
 
-	var footprint_cells: Array[Vector2i] = []
-	for dy in range(size.y):
-		for dx in range(size.x):
-			footprint_cells.append(world_pos + Vector2i(dx, dy))
+	var footprint_cells: Array[Vector2i] = MarketingRulesClass.build_footprint_cells(world_pos, size)
 
 	# 饮品进货点集合（用于“禁止覆盖 drink_source”校验，issue_tracker #35）。
 	var drink_source_pos_set := {}

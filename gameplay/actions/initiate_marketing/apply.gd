@@ -3,7 +3,7 @@ extends RefCounted
 
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
-const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
+const MarketingRulesClass = preload("res://core/rules/marketing_rules.gd")
 const MarketingInitiationRegistryClass = preload("res://core/rules/marketing_initiation_registry.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const MilestoneDefClass = preload("res://core/data/milestone_def.gd")
@@ -11,7 +11,6 @@ const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
-const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 static func apply(action: ActionExecutor, state: GameState, command: Command) -> Result:
@@ -40,28 +39,20 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 	if not rotation_result.ok:
 		return rotation_result
 	var rotation: int = int(rotation_result.value)
-	if not MapUtilsClass.VALID_ROTATIONS.has(rotation):
-		return Result.failure("rotation 非法（期望 0/90/180/270），实际: %d" % rotation)
+	var rotation_read := MarketingRulesClass.require_rotation(rotation)
+	if not rotation_read.ok:
+		return rotation_read
 
-	var def = MarketingRegistryClass.get_def(board_number)
-	if def == null:
-		return Result.failure("未知的营销板件编号: %d" % board_number)
-	var marketing_type := str(def.type)
+	var board_spec_read := MarketingRulesClass.require_board_spec(state, board_number)
+	if not board_spec_read.ok:
+		return board_spec_read
+	var board_spec: Dictionary = board_spec_read.value
+	var marketing_type := str(board_spec.get("marketing_type", ""))
 	# Airplane rotation has no meaning; orientation is determined by the attached edge (issue_tracker #40).
 	if marketing_type == "airplane":
 		rotation = 0
 
-	var footprint_size := Vector2i.ONE
-	if def is MarketingDef:
-		footprint_size = (def as MarketingDef).footprint_size
-	elif def.has_method("get"):
-		var fs = def.get("footprint_size")
-		if fs is Vector2i:
-			footprint_size = fs
-
-	var rotated_size := footprint_size
-	if rotation == 90 or rotation == 270:
-		rotated_size = Vector2i(footprint_size.y, footprint_size.x)
+	var footprint_size: Vector2i = board_spec.get("footprint_size", Vector2i.ONE)
 
 	var emp_def = EmployeeRegistryClass.get_def(employee_type)
 	if emp_def == null:
