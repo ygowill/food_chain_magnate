@@ -894,6 +894,13 @@ GameSessionContext
 - 行为保持不变
 - 全量 headless 测试通过
 
+### 实施进度（截至 2026-03-08）
+
+- `refactor(gameplay): route UI registries through module metadata bootstrap`
+  - 扩展 `ModuleUiMetadata`，让 `piece_ui_hints`、`effect_ui_texts`、`milestone_effect_ui_texts` 与 `map_overlay_providers` 也随 phase action modal 一并从 `RulesetV2.ui_extensions` 提取并缓存到 gameplay 层容器。
+  - 为 `PieceUiHintsRegistry`、`EffectUiTextRegistry`、`MapOverlayProviderRegistry` 增加 `configure_from_module_ui_metadata(...)`，并让 `ModuleUiMetadataBootstrap.apply()` 改走这条新链路，避免 UI registry 装配继续沿着 core protocol 直接读取 `ruleset.get_ui_extensions()`。
+  - 扩展 `ruleset_ui_extensions_facade_test` 与 `module_ui_metadata_bootstrap_test`，补充 metadata 缓存与 bootstrap 装配回归，确保行为保持不变且 UI metadata 读取链已切到 gameplay bootstrap。
+
 ### 风险
 
 - UI 读取路径要同步调整

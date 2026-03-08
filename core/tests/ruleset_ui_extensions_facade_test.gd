@@ -5,6 +5,7 @@ extends RefCounted
 const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
 const EffectUiTextRegistryClass = preload("res://core/rules/effect_ui_text_registry.gd")
 const MapOverlayProviderRegistryClass = preload("res://core/rules/map_overlay_provider_registry.gd")
+const ModuleUiMetadataClass = preload("res://gameplay/module_ui_metadata.gd")
 
 static func run() -> Result:
 	var ruleset := RulesetV2.new()
@@ -57,31 +58,45 @@ static func run() -> Result:
 	if not (phase_modals_val is Array) or phase_modals_val.size() != 1:
 		return Result.failure("ui_extensions.phase_action_ui_modals 未收到 facade 注册结果")
 
+	ModuleUiMetadataClass.reset()
+	var metadata_r := ModuleUiMetadataClass.configure_from_ruleset(ruleset)
+	if not metadata_r.ok:
+		return Result.failure("ModuleUiMetadata.configure_from_ruleset 失败: %s" % metadata_r.error)
+
+	if ModuleUiMetadataClass.get_piece_ui_hint_entries().size() != 1:
+		return Result.failure("ModuleUiMetadata 未缓存 piece_ui_hints")
+	if ModuleUiMetadataClass.get_effect_ui_text_entries().size() != 1:
+		return Result.failure("ModuleUiMetadata 未缓存 effect_ui_texts")
+	if ModuleUiMetadataClass.get_milestone_effect_ui_text_entries().size() != 1:
+		return Result.failure("ModuleUiMetadata 未缓存 milestone_effect_ui_texts")
+	if ModuleUiMetadataClass.get_map_overlay_provider_entries().size() != 1:
+		return Result.failure("ModuleUiMetadata 未缓存 map_overlay_providers")
+
 	PieceUiHintsRegistryClass.reset()
 	EffectUiTextRegistryClass.reset()
 	MapOverlayProviderRegistryClass.reset()
 
-	var piece_registry_r := PieceUiHintsRegistryClass.configure_from_ruleset(ruleset)
+	var piece_registry_r := PieceUiHintsRegistryClass.configure_from_module_ui_metadata(ModuleUiMetadataClass)
 	if not piece_registry_r.ok:
-		return Result.failure("PieceUiHintsRegistry.configure_from_ruleset 失败: %s" % piece_registry_r.error)
+		return Result.failure("PieceUiHintsRegistry.configure_from_module_ui_metadata 失败: %s" % piece_registry_r.error)
 	if PieceUiHintsRegistryClass.get_kind("test_module:road") != "road":
-		return Result.failure("PieceUiHintsRegistry 未能从 ui_extensions 读取 hints")
+		return Result.failure("PieceUiHintsRegistry 未能从 ModuleUiMetadata 读取 hints")
 
-	var effect_registry_r := EffectUiTextRegistryClass.configure_from_ruleset(ruleset)
+	var effect_registry_r := EffectUiTextRegistryClass.configure_from_module_ui_metadata(ModuleUiMetadataClass)
 	if not effect_registry_r.ok:
-		return Result.failure("EffectUiTextRegistry.configure_from_ruleset 失败: %s" % effect_registry_r.error)
+		return Result.failure("EffectUiTextRegistry.configure_from_module_ui_metadata 失败: %s" % effect_registry_r.error)
 	if EffectUiTextRegistryClass.get_effect_id_text("test_module:effect") != "effect text":
-		return Result.failure("EffectUiTextRegistry 未能从 ui_extensions 读取 effect 文案")
+		return Result.failure("EffectUiTextRegistry 未能从 ModuleUiMetadata 读取 effect 文案")
 	if EffectUiTextRegistryClass.get_milestone_effect_type_text("test_module:milestone") != "milestone text":
-		return Result.failure("EffectUiTextRegistry 未能从 ui_extensions 读取 milestone 文案")
+		return Result.failure("EffectUiTextRegistry 未能从 ModuleUiMetadata 读取 milestone 文案")
 
-	var overlay_registry_r := MapOverlayProviderRegistryClass.configure_from_ruleset(ruleset)
+	var overlay_registry_r := MapOverlayProviderRegistryClass.configure_from_module_ui_metadata(ModuleUiMetadataClass)
 	if not overlay_registry_r.ok:
-		return Result.failure("MapOverlayProviderRegistry.configure_from_ruleset 失败: %s" % overlay_registry_r.error)
+		return Result.failure("MapOverlayProviderRegistry.configure_from_module_ui_metadata 失败: %s" % overlay_registry_r.error)
 	var pending_dirs := MapOverlayProviderRegistryClass.get_pending_road_connection_dirs({"ok": true})
 	var dirs_val = pending_dirs.get(Vector2i(1, 2), null)
 	if not (dirs_val is Dictionary) or not (dirs_val as Dictionary).has("N"):
-		return Result.failure("MapOverlayProviderRegistry 未能从 ui_extensions 读取 overlay provider")
+		return Result.failure("MapOverlayProviderRegistry 未能从 ModuleUiMetadata 读取 overlay provider")
 	var markers := MapOverlayProviderRegistryClass.get_roadworks_marker_world_positions({"ok": true})
 	if markers.size() != 1 or markers[0] != Vector2i(3, 4):
 		return Result.failure("MapOverlayProviderRegistry overlay 输出不符合预期")

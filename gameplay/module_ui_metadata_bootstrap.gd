@@ -25,25 +25,26 @@ static func apply(engine) -> Result:
 	if ruleset == null:
 		return Result.failure("ModuleUiMetadataBootstrap.apply: engine.ruleset_v2 为空")
 
-	var modal_apply := ModuleUiMetadataClass.configure_from_ruleset(ruleset)
-	if not modal_apply.ok:
-		return Result.failure("ModuleUiMetadataBootstrap: %s" % modal_apply.error)
+	var metadata_apply := ModuleUiMetadataClass.configure_from_ruleset(ruleset)
+	if not metadata_apply.ok:
+		return Result.failure("ModuleUiMetadataBootstrap: %s" % metadata_apply.error)
 
-	var piece_apply := PieceUiHintsRegistryClass.configure_from_ruleset(ruleset)
+	var piece_apply := PieceUiHintsRegistryClass.configure_from_module_ui_metadata(ModuleUiMetadataClass)
 	if not piece_apply.ok:
 		return Result.failure("ModuleUiMetadataBootstrap: %s" % piece_apply.error)
 
-	var effect_apply := EffectUiTextRegistryClass.configure_from_ruleset(ruleset)
+	var effect_apply := EffectUiTextRegistryClass.configure_from_module_ui_metadata(ModuleUiMetadataClass)
 	if not effect_apply.ok:
 		return Result.failure("ModuleUiMetadataBootstrap: %s" % effect_apply.error)
 
-	var overlay_apply := MapOverlayProviderRegistryClass.configure_from_ruleset(ruleset)
+	var overlay_apply := MapOverlayProviderRegistryClass.configure_from_module_ui_metadata(ModuleUiMetadataClass)
 	if not overlay_apply.ok:
 		return Result.failure("ModuleUiMetadataBootstrap: %s" % overlay_apply.error)
 
 	var phase_action_modal_count := 0
-	if modal_apply.value is Dictionary:
-		phase_action_modal_count = int((modal_apply.value as Dictionary).get("phase_action_modals", 0))
+	var metadata_counts = metadata_apply.value if (metadata_apply.value is Dictionary) else {}
+	if metadata_counts is Dictionary:
+		phase_action_modal_count = int((metadata_counts as Dictionary).get("phase_action_modals", 0))
 
 	var piece_hint_count := 0
 	if piece_apply.value is int:

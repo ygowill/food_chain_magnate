@@ -61,6 +61,14 @@ static func _assert_bootstrap_populates_ui_metadata() -> Result:
 	var kimchi_path := ModuleUiMetadataClass.get_phase_action_ui_modal_scene_path(DefsClass.PHASE_CLEANUP, "kimchi")
 	if kimchi_path.is_empty():
 		return Result.failure("bootstrap 后 kimchi phase action modal 未注册")
+	if ModuleUiMetadataClass.get_piece_ui_hint_entries().is_empty():
+		return Result.failure("bootstrap 后 ModuleUiMetadata 未缓存 piece_ui_hints")
+	if ModuleUiMetadataClass.get_effect_ui_text_entries().is_empty():
+		return Result.failure("bootstrap 后 ModuleUiMetadata 未缓存 effect_ui_texts")
+	if ModuleUiMetadataClass.get_milestone_effect_ui_text_entries().is_empty():
+		return Result.failure("bootstrap 后 ModuleUiMetadata 未缓存 milestone_effect_ui_texts")
+	if ModuleUiMetadataClass.get_map_overlay_provider_entries().is_empty():
+		return Result.failure("bootstrap 后 ModuleUiMetadata 未缓存 map_overlay_providers")
 	if PieceUiHintsRegistryClass.get_kind("lobbyists_park_line") != "park":
 		return Result.failure("bootstrap 后 lobbyists_park_line kind 未注册")
 	if EffectUiTextRegistryClass.get_effect_id_text("ketchup_mechanism:dinnertime:distance_delta:ketchup").is_empty():

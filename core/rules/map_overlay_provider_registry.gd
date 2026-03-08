@@ -1,5 +1,4 @@
-# Map Overlay Provider Registry (modules-v2 aware)
-# Purpose: keep module-private map_data ->通用 overlay 指令 out of core UI drawing code.
+# 模块系统 V2：MapOverlayProviderRegistry（模块私有 map_data ->通用 overlay 指令 out of core UI drawing code.
 class_name MapOverlayProviderRegistry
 extends RefCounted
 
@@ -34,51 +33,23 @@ static func configure_from_ruleset(ruleset) -> Result:
 	if not (provider_items is Array):
 		return Result.failure("MapOverlayProviderRegistry.configure_from_ruleset: ui_extensions.map_overlay_providers 缺失或类型错误（期望 Array）")
 
-	_providers = []
+	return _configure_from_entries(provider_items)
 
-	for i in range(provider_items.size()):
-		var item_val = provider_items[i]
-		if not (item_val is Dictionary):
-			return Result.failure("MapOverlayProviderRegistry: map_overlay_providers[%d] 类型错误（期望 Dictionary）" % i)
-		var item: Dictionary = item_val
+static func configure_from_module_ui_metadata(module_ui_metadata) -> Result:
+	if not _loaded:
+		return Result.failure("MapOverlayProviderRegistry 未初始化：请先调用 reset()")
+	if module_ui_metadata == null:
+		return Result.failure("MapOverlayProviderRegistry.configure_from_module_ui_metadata: module_ui_metadata 为空")
+	if not (module_ui_metadata is Object):
+		return Result.failure("MapOverlayProviderRegistry.configure_from_module_ui_metadata: module_ui_metadata 类型错误（期望 Object）")
+	if not module_ui_metadata.has_method("get_map_overlay_provider_entries"):
+		return Result.failure("MapOverlayProviderRegistry.configure_from_module_ui_metadata: module_ui_metadata 缺少 get_map_overlay_provider_entries")
 
-		var id_val = item.get("id", null)
-		if not (id_val is String):
-			return Result.failure("MapOverlayProviderRegistry: map_overlay_providers[%d].id 类型错误（期望 String）" % i)
-		var provider_id: String = str(id_val).strip_edges()
-		if provider_id.is_empty():
-			return Result.failure("MapOverlayProviderRegistry: map_overlay_providers[%d].id 不能为空" % i)
+	var provider_items = module_ui_metadata.get_map_overlay_provider_entries()
+	if not (provider_items is Array):
+		return Result.failure("MapOverlayProviderRegistry.configure_from_module_ui_metadata: map_overlay_provider_entries 缺失或类型错误（期望 Array）")
 
-		var cb_val = item.get("callback", Callable())
-		if not (cb_val is Callable):
-			return Result.failure("MapOverlayProviderRegistry: map_overlay_providers[%d].callback 类型错误（期望 Callable）" % i)
-		var cb: Callable = cb_val
-		if not cb.is_valid():
-			return Result.failure("MapOverlayProviderRegistry: map_overlay_providers[%d].callback 无效: %s" % [i, provider_id])
-
-		var prio: int = int(item.get("priority", 100))
-		var src: String = str(item.get("source", ""))
-
-		for prev_val in _providers:
-			if prev_val is Dictionary and str((prev_val as Dictionary).get("id", "")) == provider_id:
-				return Result.failure("MapOverlayProviderRegistry: provider 重复注册: %s" % provider_id)
-
-		_providers.append({
-			"id": provider_id,
-			"callback": cb,
-			"priority": prio,
-			"source": src,
-		})
-
-	_providers.sort_custom(func(a, b) -> bool:
-		if int(a.priority) != int(b.priority):
-			return int(a.priority) < int(b.priority)
-		if str(a.id) != str(b.id):
-			return str(a.id) < str(b.id)
-		return str(a.source) < str(b.source)
-	)
-
-	return Result.success(_providers.size())
+	return _configure_from_entries(provider_items)
 
 static func get_pending_road_connection_dirs(map_data: Dictionary) -> Dictionary:
 	var overlays := _build_overlays(map_data)
@@ -161,3 +132,53 @@ static func _build_overlays(map_data: Dictionary) -> Dictionary:
 	if not marker_positions.is_empty():
 		out[_OVERLAY_KEY_ROADWORK_MARKERS] = marker_positions
 	return out
+
+static func _configure_from_entries(provider_items) -> Result:
+	if not (provider_items is Array):
+		return Result.failure("MapOverlayProviderRegistry: map_overlay_providers 缺失或类型错误（期望 Array）")
+
+	_providers = []
+
+	for i in range(provider_items.size()):
+		var item_val = provider_items[i]
+		if not (item_val is Dictionary):
+			return Result.failure("MapOverlayProviderRegistry: map_overlay_providers[%d] 类型错误（期望 Dictionary）" % i)
+		var item: Dictionary = item_val
+
+		var id_val = item.get("id", null)
+		if not (id_val is String):
+			return Result.failure("MapOverlayProviderRegistry: map_overlay_providers[%d].id 类型错误（期望 String）" % i)
+		var provider_id: String = str(id_val).strip_edges()
+		if provider_id.is_empty():
+			return Result.failure("MapOverlayProviderRegistry: map_overlay_providers[%d].id 不能为空" % i)
+
+		var cb_val = item.get("callback", Callable())
+		if not (cb_val is Callable):
+			return Result.failure("MapOverlayProviderRegistry: map_overlay_providers[%d].callback 类型错误（期望 Callable）" % i)
+		var cb: Callable = cb_val
+		if not cb.is_valid():
+			return Result.failure("MapOverlayProviderRegistry: map_overlay_providers[%d].callback 无效: %s" % [i, provider_id])
+
+		var prio: int = int(item.get("priority", 100))
+		var src: String = str(item.get("source", ""))
+
+		for prev_val in _providers:
+			if prev_val is Dictionary and str((prev_val as Dictionary).get("id", "")) == provider_id:
+				return Result.failure("MapOverlayProviderRegistry: provider 重复注册: %s" % provider_id)
+
+		_providers.append({
+			"id": provider_id,
+			"callback": cb,
+			"priority": prio,
+			"source": src,
+		})
+
+	_providers.sort_custom(func(a, b) -> bool:
+		if int(a.priority) != int(b.priority):
+			return int(a.priority) < int(b.priority)
+		if str(a.id) != str(b.id):
+			return str(a.id) < str(b.id)
+		return str(a.source) < str(b.source)
+	)
+
+	return Result.success(_providers.size())
