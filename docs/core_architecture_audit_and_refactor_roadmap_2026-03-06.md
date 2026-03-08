@@ -1520,6 +1520,146 @@ GameSessionContext
 - 阶段 3 汇总主题：显式注入 engine adapters
 - 阶段 4 汇总主题：收紧 round_state access contract
 
+### 路线图条目与提交对照（截至 2026-03-08）
+
+- 说明：下表按各阶段 `实施进度` 中已经落盘的条目生成，便于把路线图与仓库历史一一对照。
+- 说明：`Commit` 列使用当前仓库中的短哈希；若未来发生 rebase / squash，哈希可能变化，但提交主题仍可作为稳定检索键。
+
+| 阶段 | 条目 | Commit |
+| --- | --- | --- |
+| 阶段 1：拆分 UI 扩展职责（1~2 周） | `refactor(gameplay): route UI registries through module metadata bootstrap` | `0d81c5f4` |
+| 阶段 1：拆分 UI 扩展职责（1~2 周） | `refactor(core): separate module UI extensions from ruleset build output` | `4b7296df` |
+| 阶段 1：拆分 UI 扩展职责（1~2 周） | `refactor(core): remove UI facade from ruleset` | `f1df6dc5` |
+| 阶段 1：拆分 UI 扩展职责（1~2 周） | `refactor(core): drop legacy UI registry ruleset loaders` | `ffa1db7f` |
+| 阶段 2：引入 `GameSessionContext`（2~3 周） | `refactor(core): switch milestone effect registry with active engine bundle` | `caab2c1f` |
+| 阶段 2：引入 `GameSessionContext`（2~3 周） | `refactor(core): bundle marketing type registry per engine session` | `66828e56` |
+| 阶段 2：引入 `GameSessionContext`（2~3 周） | `refactor(core): bundle bankruptcy registry per engine session` | `0e322b3f` |
+| 阶段 2：引入 `GameSessionContext`（2~3 周） | `refactor(core): bundle marketing initiation registry per engine session` | `3ba848b9` |
+| 阶段 2：引入 `GameSessionContext`（2~3 周） | `refactor(core): bundle placement conflict registry per engine session` | `6de8ac9b` |
+| 阶段 2：引入 `GameSessionContext`（2~3 周） | `refactor(core): bundle range origin registry per engine session` | `00d9e5f0` |
+| 阶段 2：引入 `GameSessionContext`（2~3 周） | `refactor(core): bundle employee pool patch registry per engine session` | `3f4895dd` |
+| 阶段 2：引入 `GameSessionContext`（2~3 周） | `refactor(core): bundle dinnertime route purchase registry per engine session` | `fd0e8a01` |
+| 阶段 2：引入 `GameSessionContext`（2~3 周） | `refactor(core): bundle dinnertime demand registry per engine session` | `0ce75616` |
+| 阶段 2：引入 `GameSessionContext`（2~3 周） | `refactor(core): bundle state schema registry per engine session` | `ea864534` |
+| 阶段 3：显式依赖注入（1~2 周） | `refactor(core): make action setup provider injectable` | `570df554` |
+| 阶段 3：显式依赖注入（1~2 周） | `refactor(engine): load command event build provider` | `e5c5fbe8` |
+| 阶段 3：显式依赖注入（1~2 周） | `refactor(core): inject restaurant logo assignment provider` | `a0e36421` |
+| 阶段 3：显式依赖注入（1~2 周） | `refactor(core): inject config override dependencies` | `521a23df` |
+| 阶段 3：显式依赖注入（1~2 周） | `refactor(core): inject command runner debug options` | `44f58894` |
+| 阶段 3：显式依赖注入（1~2 周） | `refactor(core): align event sink with engine dependencies` | `cdb637cc` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(core): harden map context builder contract` | `a3520472` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(core): tighten base marketing map access` | `68e00750` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(core): tighten drinks procurement state access` | `b0772eb3` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(core): tighten order of business state access` | `91ac67ad` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(core): tighten sub phase passed access` | `da221216` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten rural offramp state access` | `50796c1a` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten rural module entry state access` | `effcb38d` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): unify rural offramp pending flags` | `958c48ae` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(core): tighten rural offramp supply access` | `240cd931` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten lobbyists supply initialization` | `3716aa8c` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten lobbyists action supply access` | `864a8d82` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten milestone marketing used flags` | `e8d5491a` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten pizza pending phase actions` | `b32986b6` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten pizza radio pending updates` | `dbc9f5e8` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten campaign manager pending access` | `077b3c01` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten brand manager pending access` | `8c53c4f2` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten restaurant opening-soon access` | `fafebee4` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten add garden apply state access` | `2f9eaf8c` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten place house apply state access` | `861a7a00` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten rural billboard query access` | `8a50fd6f` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten kimchi cleanup pending access` | `5377a7ee` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten fridge cleanup pending access` | `3c395053` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten marketing initiation pending access` | `399cbfb8` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten coffee cleanup pending access` | `577d1777` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten restructuring pending access` | `a4b5b1b6` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten kimchi cleanup pending access` | `14a98751` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten forfeit pending access` | `da55d900` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten dinnertime confirmed access` | `4097bc2a` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten skip mandatory access` | `ffcf22bf` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten price modifier access` | `9b5e876e` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten train event access` | `196e552a` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten train phase start count access` | `c3bd33d8` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten train lock target access` | `233f5df6` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten night shift multiplier access` | `f665f30c` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten reserve price bankruptcy access` | `235d7786` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten mass marketeers round access` | `4322f34a` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten train usage mandatory access` | `316d6c9c` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten coffee cleanup metadata access` | `82c50e79` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(replay): tighten cleanup pending access` | `1e49604c` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten dinnertime pending item access` | `5eef322d` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten coffee shop train event access` | `76478553` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten train recruit-used access` | `a61701e5` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten payday recruit-used access` | `9d78933f` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten coffee shop trigger usage access` | `aac57ad0` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten train usage counter access` | `a00bea69` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten fire recruit-used access` | `66a218d4` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten train phase pending baseline access` | `f0705425` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten train lock pending baseline access` | `c0da949f` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten train lock round-state access` | `d61a4e63` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(core): tighten train slot usage instance access` | `1e2b2576` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(core): tighten train slot usage fallback access` | `cc52e18b` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten train phase start array access` | `85de0146` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten train max-step validation access` | `01170ad5` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten recruit on-credit validation access` | `24ac4e22` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten train usage multiplier access` | `ffa575fa` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten train pending validation access` | `37d32d13` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten recruit pending validation access` | `91882543` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(modules): tighten base rules pending exit access` | `93af071d` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten pending apply access` | `4d717e63` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten working limit validation access` | `a055eac4` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(core): tighten train provider allocation access` | `018809fb` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(core): tighten salary milestone access` | `3e9785f2` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten train recruit action count access` | `41d56b21` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten restaurant action count access` | `84f8b59b` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten move restaurant record access` | `9fdc917c` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten move restaurant cell array access` | `7d9a8034` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten move restaurant placement payload access` | `b608a79d` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten place restaurant placement payload access` | `2b35c406` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten place restaurant player access` | `ad24bf82` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten place house placement payload access` | `f8765e8c` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten submit restructuring player access` | `1ba4dd6b` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten submit restructuring round-state access` | `632f1b77` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten submit restructuring ceo slots access` | `182a5c46` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten add garden attachment payload access` | `baac977d` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): harden fire employee array access` | `82522b31` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten direct company structure access` | `78716aae` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten report company structure access` | `57adcd79` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten restructure employee access` | `0e8dc84e` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): tighten produce food inventory payload access` | `d023a6c1` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): harden procure drinks event param access` | `e365bf4c` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): harden recruit event param access` | `96e43833` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): harden train event param access` | `712558b7` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): harden fire event param access` | `325679d2` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): harden produce food event param access` | `d5c2679e` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): harden add garden event and anchor access` | `7d6ae0e1` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): harden place house event access` | `9df6730f` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): harden move restaurant event access` | `7c759b55` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): harden place restaurant event access` | `bcc5b14c` |
+| 阶段 4：强化状态契约（2~4 周） | `refactor(gameplay): harden initiate marketing event access` | `4bf17278` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(marketing): centralize marketing initiation board helpers` | `5b829082` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(marketing): centralize initiation employee and axis helpers` | `c188c25d` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(marketing): reuse mailbox domain helpers` | `f2d21fc1` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(marketing): reuse pizza radio domain helpers` | `1a6d3e44` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(marketing): reuse campaign manager domain helpers` | `d4c638da` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(marketing): harden giant billboard product validation` | `76f27861` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(marketing): harden brand manager second product validation` | `a84915f7` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(marketing): reuse board helpers in action events` | `e164eab7` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(marketing): reuse billboard product helper in rural entry` | `259c2943` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(marketing): reuse board helpers in settlement validation` | `6adbe632` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(marketing): reuse airplane board helpers in offramp conflict checks` | `3cff4296` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(marketing): reuse board helpers in pizza milestone settlement` | `c94d55f2` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(marketing): reuse board helpers in gourmet guide validator` | `a2ad2937` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(dinnertime): centralize settlement definition helpers` | `0cb66774` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(dinnertime): reuse product helper in pricing pipeline` | `f311009b` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(economy): centralize salary token eligibility helper` | `3e1269ab` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(economy): reuse employee helper in payday salary discount` | `8ea96a8d` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(working): reuse employee array helpers in mandatory actions` | `62889d69` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(working): reuse result-style employee lookup in train validation` | `64e1f1d8` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(working): reuse employee lookup in company structure validator` | `f8baa19a` |
+| 阶段 5：按业务边界重组规则域（3~6 周，可并行推进） | `refactor(working): reuse employee lookup in train usage inference` | `be93d45d` |
+
+- 备注：文末“每个阶段的 commit 建议”中的 `docs(core): add architecture audit and roadmap` 属于建档建议，不是本轮代码优化条目，因此未纳入本对照表。
+
 ### 每阶段验收问题
 
 在合并前至少回答以下问题：
