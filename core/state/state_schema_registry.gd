@@ -3,18 +3,50 @@
 class_name StateSchemaRegistry
 extends RefCounted
 
-static var _int_key_dict_schemas: Array = [] # Array[{id, root, path, priority, source}]
-static var _loaded: bool = false
+const RulesRegistryBundleClass = preload("res://core/engine/game_engine/rules_registry_bundle.gd")
+
+static var _current_bundle = RulesRegistryBundleClass.new()
+
+static func _get_bundle():
+	if _current_bundle == null:
+		_current_bundle = RulesRegistryBundleClass.new()
+	return _current_bundle
+
+static func _resolve_bundle(bundle = null):
+	if bundle != null:
+		return bundle
+	return _get_bundle()
+
+static func _get_schemas() -> Array:
+	return _get_bundle().state_int_key_dict_schemas
+
+static func set_current_bundle(bundle) -> void:
+	_current_bundle = bundle if bundle != null else RulesRegistryBundleClass.new()
+
+static func reset_current_bundle() -> void:
+	_current_bundle = RulesRegistryBundleClass.new()
 
 static func reset() -> void:
-	_int_key_dict_schemas = []
-	_loaded = true
+	var target = _get_bundle()
+	target.state_int_key_dict_schemas = []
+	target.state_schema_loaded = true
 
 static func is_loaded() -> bool:
-	return _loaded
+	return bool(_get_bundle().state_schema_loaded)
 
-static func configure_from_ruleset(ruleset) -> Result:
-	if not _loaded:
+static func get_schema_ids() -> Array[String]:
+	if not is_loaded():
+		return []
+	var ids: Array[String] = []
+	for item_val in _get_schemas():
+		if item_val is Dictionary:
+			var schema_id := str((item_val as Dictionary).get("id", "")).strip_edges()
+			if not schema_id.is_empty():
+				ids.append(schema_id)
+	return ids
+
+static func configure_from_ruleset(ruleset, bundle = null) -> Result:
+	if not is_loaded() and bundle == null:
 		return Result.failure("StateSchemaRegistry 未初始化：请先调用 reset()")
 	if ruleset == null:
 		return Result.failure("StateSchemaRegistry.configure_from_ruleset: ruleset 为空")
@@ -22,6 +54,10 @@ static func configure_from_ruleset(ruleset) -> Result:
 		return Result.failure("StateSchemaRegistry.configure_from_ruleset: ruleset 类型错误（期望 RulesetV2）")
 	if not (ruleset.state_int_key_dict_schemas is Array):
 		return Result.failure("StateSchemaRegistry.configure_from_ruleset: ruleset.state_int_key_dict_schemas 缺失或类型错误（期望 Array）")
+
+	var target = _resolve_bundle(bundle)
+	target.state_int_key_dict_schemas = []
+	target.state_schema_loaded = true
 
 	for i in range(ruleset.state_int_key_dict_schemas.size()):
 		var item_val = ruleset.state_int_key_dict_schemas[i]
@@ -62,11 +98,11 @@ static func configure_from_ruleset(ruleset) -> Result:
 		var prio: int = int(item.get("priority", 100))
 		var src: String = str(item.get("source", ""))
 
-		for prev_val in _int_key_dict_schemas:
+		for prev_val in target.state_int_key_dict_schemas:
 			if prev_val is Dictionary and str((prev_val as Dictionary).get("id", "")) == schema_id:
 				return Result.failure("StateSchemaRegistry: schema 重复注册: %s" % schema_id)
 
-		_int_key_dict_schemas.append({
+		target.state_int_key_dict_schemas.append({
 			"id": schema_id,
 			"root": root,
 			"path": path,
@@ -74,7 +110,7 @@ static func configure_from_ruleset(ruleset) -> Result:
 			"source": src,
 		})
 
-	_int_key_dict_schemas.sort_custom(func(a, b) -> bool:
+	target.state_int_key_dict_schemas.sort_custom(func(a, b) -> bool:
 		if int(a.priority) != int(b.priority):
 			return int(a.priority) < int(b.priority)
 		if str(a.id) != str(b.id):
@@ -82,15 +118,15 @@ static func configure_from_ruleset(ruleset) -> Result:
 		return str(a.source) < str(b.source)
 	)
 
-	return Result.success(_int_key_dict_schemas.size())
+	return Result.success(target.state_int_key_dict_schemas.size())
 
 static func get_int_key_dict_schemas() -> Array:
-	return _int_key_dict_schemas.duplicate(true)
+	return _get_schemas().duplicate(true)
 
 # 将指定 root 下已注册的“int-key Dictionary schema”应用到容器（就地修改）。
 # 用于：从 JSON-safe 反序列化后，把 "0"/"1" 这类数字字符串 key 归一化回 int key。
 static func normalize_int_key_dicts_in_container(root: String, container: Dictionary, path_prefix: String) -> Result:
-	if not _loaded:
+	if not is_loaded():
 		# 允许在非模块系统场景（纯 GameState.from_dict）下直接跳过
 		return Result.success(container)
 	if root != "map" and root != "round_state":
@@ -100,7 +136,7 @@ static func normalize_int_key_dicts_in_container(root: String, container: Dictio
 	if path_prefix.is_empty():
 		return Result.failure("StateSchemaRegistry.normalize_int_key_dicts_in_container: path_prefix 不能为空")
 
-	for item_val in _int_key_dict_schemas:
+	for item_val in _get_schemas():
 		if not (item_val is Dictionary):
 			continue
 		var item: Dictionary = item_val
@@ -190,7 +226,7 @@ static func warn_if_module_owned_has_string_player_keys(
 	player_count: int,
 	path_prefix: String
 ) -> Result:
-	if not _loaded:
+	if not is_loaded():
 		return Result.success()
 	if modules == null:
 		return Result.failure("StateSchemaRegistry.warn_if_module_owned_has_string_player_keys: modules 为空")

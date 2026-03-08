@@ -27,6 +27,9 @@ var dinnertime_route_purchase_loaded: bool = false
 var dinnertime_demand_providers: Array = []
 var dinnertime_demand_loaded: bool = false
 
+var state_int_key_dict_schemas: Array = []
+var state_schema_loaded: bool = false
+
 func clear() -> void:
 	marketing_types.clear()
 	marketing_type_loaded = false
@@ -52,3 +55,6 @@ func clear() -> void:
 
 	dinnertime_demand_providers = []
 	dinnertime_demand_loaded = false
+
+	state_int_key_dict_schemas = []
+	state_schema_loaded = false

@@ -104,6 +104,7 @@ static func apply(engine, module_ids: Array[String], base_dir: String) -> Result
 	EmployeePoolPatchRegistryClass.reset()
 	DinnertimeRoutePurchaseRegistryClass.reset()
 	DinnertimeDemandRegistryClass.reset()
+	StateSchemaRegistryClass.reset()
 
 	if module_ids.is_empty():
 		return Result.failure("模块系统 V2：enabled_modules_v2 不能为空（严格模式）")

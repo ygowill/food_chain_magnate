@@ -994,6 +994,11 @@ GameSessionContext
   - 为 registry 增加 `get_provider_ids()` 调试查询，并在 `modules_v2.apply` 清空每局 rules bundle 后同步 `reset()` `DinnertimeDemandRegistry`，保证模块重新装配后 demand provider 仍能稳定进入 loaded 状态。
   - 扩展 `catalog_registry_bundle_isolation_test`，补充 `sushi:demand_variants` provider 在 engine A / engine B 间切换、以及 engine A dispose 后 engine B 重新激活时的隔离断言，并把测试模块集补齐 `sushi` 以命中真实注册链路。
 
+- `refactor(core): bundle state schema registry per engine session`
+  - 继续扩展 `RulesRegistryBundle`，把 `StateSchemaRegistry` 的 int-key schema 列表改为每局持有，并在 `GameEngine.activate_registry_bundles()` 中跟随当前引擎切换，避免存档/读档归一化与未注册模块字段告警继续依赖进程级 static 会话态。
+  - 为 registry 增加 `get_schema_ids()` 调试查询，并在 `modules_v2.apply` 清空每局 rules bundle 后同步 `reset()` `StateSchemaRegistry`，保证模块重新装配后 schema 列表与 loaded 状态始终一致。
+  - 扩展 `catalog_registry_bundle_isolation_test`，补充 base_rules 基线 schema 与 `coffee` / `lobbyists` / `new_milestones` / `rural_marketeers` 的附加 schema 在 engine A / engine B 间切换、以及 engine A dispose 后 engine B 重新激活时的隔离断言，确保多引擎并行场景下 state schema 不会串局。
+
 ### 风险
 
 - 改动面较大

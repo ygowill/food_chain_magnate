@@ -15,6 +15,7 @@ const RangeOriginRegistryClass = preload("res://core/rules/range_origin_registry
 const EmployeePoolPatchRegistryClass = preload("res://core/rules/employee_pool_patch_registry.gd")
 const DinnertimeRoutePurchaseRegistryClass = preload("res://core/rules/dinnertime_route_purchase_registry.gd")
 const DinnertimeDemandRegistryClass = preload("res://core/rules/dinnertime_demand_registry.gd")
+const StateSchemaRegistryClass = preload("res://core/state/state_schema_registry.gd")
 
 static func run(seed_val: int = 12345) -> Result:
 	var base_modules: Array[String] = [
@@ -76,6 +77,8 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("engine_a 不应看到 dinnertime route purchase providers")
 	if not DinnertimeDemandRegistryClass.get_provider_ids().is_empty():
 		return Result.failure("engine_a 不应看到 dinnertime demand providers")
+	if StateSchemaRegistryClass.get_schema_ids() != ["base_rules:round_state_int_keys:restructuring.submitted"]:
+		return Result.failure("engine_a state schema ids 不符合预期: %s" % str(StateSchemaRegistryClass.get_schema_ids()))
 
 	var engine_b := GameEngine.new()
 	var init_b := engine_b.initialize(2, seed_val, optional_modules)
@@ -117,6 +120,17 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("engine_b dinnertime route purchase providers 不符合预期: %s" % str(DinnertimeRoutePurchaseRegistryClass.get_provider_ids()))
 	if DinnertimeDemandRegistryClass.get_provider_ids() != ["sushi:demand_variants"]:
 		return Result.failure("engine_b dinnertime demand providers 不符合预期: %s" % str(DinnertimeDemandRegistryClass.get_provider_ids()))
+	if StateSchemaRegistryClass.get_schema_ids() != [
+		"base_rules:round_state_int_keys:restructuring.submitted",
+		"coffee:round_state_int_keys:coffee_shop_triggers_used",
+		"lobbyists:round_state_int_keys:lobbyists_extra_tile_pending",
+		"new_milestones:round_state_int_keys:new_milestones_brand_manager_airplane_pending",
+		"new_milestones:round_state_int_keys:new_milestones_brand_manager_airplane_used_this_turn",
+		"new_milestones:round_state_int_keys:new_milestones_campaign_manager_pending",
+		"new_milestones:round_state_int_keys:new_milestones_campaign_manager_used_this_turn",
+		"rural_marketeers:round_state_int_keys:rural_marketeers_offramp_pending",
+	]:
+		return Result.failure("engine_b state schema ids 不符合预期: %s" % str(StateSchemaRegistryClass.get_schema_ids()))
 	if MilestoneEffectRegistryClass.get_current() != engine_b.ruleset_v2.milestone_effect_registry:
 		return Result.failure("engine_b 激活后应切换 milestone effect registry")
 
@@ -147,6 +161,8 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("切回 engine_a 后不应残留 dinnertime route purchase providers")
 	if not DinnertimeDemandRegistryClass.get_provider_ids().is_empty():
 		return Result.failure("切回 engine_a 后不应残留 dinnertime demand providers")
+	if StateSchemaRegistryClass.get_schema_ids() != ["base_rules:round_state_int_keys:restructuring.submitted"]:
+		return Result.failure("切回 engine_a 后 state schema ids 不符合预期: %s" % str(StateSchemaRegistryClass.get_schema_ids()))
 	if MilestoneEffectRegistryClass.get_current() != engine_a.ruleset_v2.milestone_effect_registry:
 		return Result.failure("切回 engine_a 后应恢复其 milestone effect registry")
 
@@ -170,6 +186,17 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("engine_a dispose 后，engine_b dinnertime route purchase bundle 不应被清空")
 	if DinnertimeDemandRegistryClass.get_provider_ids() != ["sushi:demand_variants"]:
 		return Result.failure("engine_a dispose 后，engine_b dinnertime demand bundle 不应被清空")
+	if StateSchemaRegistryClass.get_schema_ids() != [
+		"base_rules:round_state_int_keys:restructuring.submitted",
+		"coffee:round_state_int_keys:coffee_shop_triggers_used",
+		"lobbyists:round_state_int_keys:lobbyists_extra_tile_pending",
+		"new_milestones:round_state_int_keys:new_milestones_brand_manager_airplane_pending",
+		"new_milestones:round_state_int_keys:new_milestones_brand_manager_airplane_used_this_turn",
+		"new_milestones:round_state_int_keys:new_milestones_campaign_manager_pending",
+		"new_milestones:round_state_int_keys:new_milestones_campaign_manager_used_this_turn",
+		"rural_marketeers:round_state_int_keys:rural_marketeers_offramp_pending",
+	]:
+		return Result.failure("engine_a dispose 后，engine_b state schema bundle 不应被清空: %s" % str(StateSchemaRegistryClass.get_schema_ids()))
 	if MilestoneEffectRegistryClass.get_current() != engine_b.ruleset_v2.milestone_effect_registry:
 		return Result.failure("engine_a dispose 后，engine_b 重新激活应恢复其 milestone effect registry")
 	var engine_b_piece_count := PieceRegistryClass.get_count()
@@ -186,5 +213,6 @@ static func run(seed_val: int = 12345) -> Result:
 		"engine_b_employee_pool_patches": 1,
 		"engine_b_dinnertime_route_purchase_providers": 1,
 		"engine_b_dinnertime_demand_providers": 1,
+		"engine_b_state_schema_ids": 8,
 		"milestone_effect_registry_switched": true,
 	})
