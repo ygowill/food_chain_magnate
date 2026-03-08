@@ -1103,3 +1103,25 @@ static func _test_train_apply_fails_fast_on_invalid_immediate_train_pending_with
 	if str(state.round_state) != round_state_before:
 		return Result.failure("失败时不应提前改写 round_state")
 	return Result.success()
+
+static func _test_recruit_generate_specific_events_returns_empty_on_missing_employee_type(player_count: int, seed_val: int) -> Result:
+	var built := _build_active_recruit_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	var action = RecruitActionClass.new()
+	var events := action._generate_specific_events(state, state, Command.create("recruit", 0, {}))
+	if not events.is_empty():
+		return Result.failure("缺失 employee_type 时应返回空事件列表")
+	return Result.success()
+
+static func _test_recruit_generate_specific_events_returns_empty_on_invalid_employee_type_type(player_count: int, seed_val: int) -> Result:
+	var built := _build_active_recruit_train_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	var action = RecruitActionClass.new()
+	var events := action._generate_specific_events(state, state, Command.create("recruit", 0, {"employee_type": 1}))
+	if not events.is_empty():
+		return Result.failure("employee_type 类型错误时应返回空事件列表")
+	return Result.success()

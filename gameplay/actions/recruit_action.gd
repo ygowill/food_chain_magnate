@@ -313,8 +313,11 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 func _generate_specific_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	var employee_type_result := require_string_param(command, "employee_type")
-	assert(employee_type_result.ok, "recruit 缺少/错误参数: employee_type")
-	var employee_type: String = employee_type_result.value
+	if not employee_type_result.ok:
+		return events
+	var employee_type: String = str(employee_type_result.value).strip_edges()
+	if employee_type.is_empty():
+		return events
 	var on_credit := int(old_state.employee_pool.get(employee_type, 0)) <= 0
 
 	events.append({
