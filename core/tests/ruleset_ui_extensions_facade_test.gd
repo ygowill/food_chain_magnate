@@ -1,7 +1,8 @@
-# RulesetV2 facade -> ui_extensions 回归测试
+# RulesetV2 UI 扩展 holder 回归测试
 class_name RulesetUiExtensionsFacadeTest
 extends RefCounted
 
+const RulesetUiExtensionsClass = preload("res://core/modules/v2/ruleset/ui_extensions.gd")
 const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
 const EffectUiTextRegistryClass = preload("res://core/rules/effect_ui_text_registry.gd")
 const MapOverlayProviderRegistryClass = preload("res://core/rules/map_overlay_provider_registry.gd")
@@ -9,11 +10,14 @@ const ModuleUiMetadataClass = preload("res://gameplay/module_ui_metadata.gd")
 
 static func run() -> Result:
 	var ruleset := RulesetV2.new()
-	var ui_extensions = ruleset.get_ui_extensions()
-	if ui_extensions == null or not (ui_extensions is Object):
-		return Result.failure("RulesetV2.get_ui_extensions() 未返回有效对象")
+	if ruleset.has_method("get_ui_extensions"):
+		return Result.failure("RulesetV2 不应继续暴露 get_ui_extensions facade")
+	if ruleset.has_method("register_phase_action_ui_modal"):
+		return Result.failure("RulesetV2 不应继续暴露 register_phase_action_ui_modal facade")
 
-	var modal_r := ruleset.register_phase_action_ui_modal(
+	var ui_extensions := RulesetUiExtensionsClass.new()
+
+	var modal_r := ui_extensions.register_phase_action_ui_modal(
 		"cleanup",
 		"kimchi",
 		"res://ui/scenes/game/modals/kimchi_modal.tscn",
@@ -21,21 +25,21 @@ static func run() -> Result:
 		"test_module"
 	)
 	if not modal_r.ok:
-		return Result.failure("register_phase_action_ui_modal 失败: %s" % modal_r.error)
-	if ruleset.get_phase_action_ui_modal_scene_path("cleanup", "kimchi") != "res://ui/scenes/game/modals/kimchi_modal.tscn":
-		return Result.failure("RulesetV2 facade 未透传 phase_action_ui_modal 查询")
+		return Result.failure("ui_extensions.register_phase_action_ui_modal 失败: %s" % modal_r.error)
+	if ui_extensions.get_phase_action_ui_modal_scene_path("cleanup", "kimchi") != "res://ui/scenes/game/modals/kimchi_modal.tscn":
+		return Result.failure("RulesetV2UiExtensions 未透传 phase_action_ui_modal 查询")
 
-	var hint_r := ruleset.register_piece_ui_hint("test_module:road", {"kind": "road"}, 100, "test_module")
+	var hint_r := ui_extensions.register_piece_ui_hint("test_module:road", {"kind": "road"}, 100, "test_module")
 	if not hint_r.ok:
-		return Result.failure("register_piece_ui_hint 失败: %s" % hint_r.error)
+		return Result.failure("ui_extensions.register_piece_ui_hint 失败: %s" % hint_r.error)
 
-	var effect_r := ruleset.register_effect_ui_text("test_module:effect", "effect text", 100, "test_module")
+	var effect_r := ui_extensions.register_effect_ui_text("test_module:effect", "effect text", 100, "test_module")
 	if not effect_r.ok:
-		return Result.failure("register_effect_ui_text 失败: %s" % effect_r.error)
+		return Result.failure("ui_extensions.register_effect_ui_text 失败: %s" % effect_r.error)
 
-	var milestone_r := ruleset.register_milestone_effect_ui_text("test_module:milestone", "milestone text", 100, "test_module")
+	var milestone_r := ui_extensions.register_milestone_effect_ui_text("test_module:milestone", "milestone text", 100, "test_module")
 	if not milestone_r.ok:
-		return Result.failure("register_milestone_effect_ui_text 失败: %s" % milestone_r.error)
+		return Result.failure("ui_extensions.register_milestone_effect_ui_text 失败: %s" % milestone_r.error)
 
 	var overlay_provider := func(_map_data: Dictionary) -> Dictionary:
 		return {
@@ -45,23 +49,23 @@ static func run() -> Result:
 			"roadworks_marker_world_positions": [Vector2i(3, 4)],
 		}
 
-	var overlay_r := ruleset.register_map_overlay_provider(
+	var overlay_r := ui_extensions.register_map_overlay_provider(
 		"test_overlay",
 		overlay_provider,
 		100,
 		"test_module"
 	)
 	if not overlay_r.ok:
-		return Result.failure("register_map_overlay_provider 失败: %s" % overlay_r.error)
+		return Result.failure("ui_extensions.register_map_overlay_provider 失败: %s" % overlay_r.error)
 
 	var phase_modals_val = ui_extensions.get("phase_action_ui_modals")
 	if not (phase_modals_val is Array) or phase_modals_val.size() != 1:
-		return Result.failure("ui_extensions.phase_action_ui_modals 未收到 facade 注册结果")
+		return Result.failure("ui_extensions.phase_action_ui_modals 未收到注册结果")
 
 	ModuleUiMetadataClass.reset()
-	var metadata_r := ModuleUiMetadataClass.configure_from_ruleset(ruleset)
+	var metadata_r := ModuleUiMetadataClass.configure_from_ui_extensions(ui_extensions)
 	if not metadata_r.ok:
-		return Result.failure("ModuleUiMetadata.configure_from_ruleset 失败: %s" % metadata_r.error)
+		return Result.failure("ModuleUiMetadata.configure_from_ui_extensions 失败: %s" % metadata_r.error)
 
 	if ModuleUiMetadataClass.get_piece_ui_hint_entries().size() != 1:
 		return Result.failure("ModuleUiMetadata 未缓存 piece_ui_hints")
@@ -101,11 +105,12 @@ static func run() -> Result:
 	if markers.size() != 1 or markers[0] != Vector2i(3, 4):
 		return Result.failure("MapOverlayProviderRegistry overlay 输出不符合预期")
 
-	ruleset.dispose()
+	ui_extensions.clear()
 	var disposed_modals = ui_extensions.get("phase_action_ui_modals")
 	if not (disposed_modals is Array) or not disposed_modals.is_empty():
-		return Result.failure("RulesetV2.dispose() 未清空 ui_extensions")
+		return Result.failure("RulesetV2UiExtensions.clear() 未清空 ui_extensions")
 
+	ruleset.dispose()
 	return Result.success({
 		"phase_action_modals": 1,
 		"piece_ui_hints": 1,

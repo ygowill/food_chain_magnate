@@ -23,11 +23,6 @@ static func apply(engine) -> Result:
 
 	var ui_extensions = engine.get_module_ui_extensions_v2() if engine != null and engine.has_method("get_module_ui_extensions_v2") else null
 	if ui_extensions == null:
-		var ruleset = engine.ruleset_v2 if engine != null else null
-		if ruleset == null:
-			return Result.failure("ModuleUiMetadataBootstrap.apply: engine.ruleset_v2 为空")
-		ui_extensions = ruleset.get_ui_extensions() if ruleset.has_method("get_ui_extensions") else null
-	if ui_extensions == null:
 		return Result.failure("ModuleUiMetadataBootstrap.apply: engine.module_ui_extensions_v2 为空")
 
 	var metadata_apply := ModuleUiMetadataClass.configure_from_ui_extensions(ui_extensions)

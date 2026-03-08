@@ -906,6 +906,11 @@ GameSessionContext
   - 扩展 `ModuleUiMetadata` 增加 `configure_from_ui_extensions(...)`，并让 `ModuleUiMetadataBootstrap.apply()` 优先消费 `engine.module_ui_extensions_v2`，进一步减少 gameplay UI bootstrap 对 `RulesetV2` 的直接依赖。
   - 扩展 `module_ui_metadata_bootstrap_test`，补充“engine 持有独立 ui_extensions bundle、而 `ruleset_v2` 不再承载 kimchi modal”回归，确保阶段 1 的 UI 元数据存储边界继续外移。
 
+- `refactor(core): remove UI facade from ruleset`
+  - 删除 `RulesetV2` 中残留的 `get_ui_extensions()`、phase action modal / piece hint / effect text / overlay provider facade，让 ruleset 重新聚焦领域规则与状态扩展职责。
+  - 将 `ModuleUiMetadataBootstrap.apply()` 收紧为只消费 `engine.module_ui_extensions_v2`，并让 `ModuleUiMetadata` 的独立入口仅保留 `configure_from_ui_extensions(...)`，不再沿 gameplay 链路回退到 ruleset。
+  - 重写 `ruleset_ui_extensions_facade_test`，改为校验独立 `RulesetV2UiExtensions` holder 仍保持原有注册/查询/清理行为，同时断言 `RulesetV2` 不再暴露对应 UI facade。
+
 ### 风险
 
 - UI 读取路径要同步调整

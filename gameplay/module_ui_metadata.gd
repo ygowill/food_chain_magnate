@@ -20,18 +20,6 @@ static func reset() -> void:
 static func is_loaded() -> bool:
 	return _loaded
 
-static func configure_from_ruleset(ruleset) -> Result:
-	if not _loaded:
-		return Result.failure("ModuleUiMetadata 未初始化：请先调用 reset()")
-	if ruleset == null:
-		return Result.failure("ModuleUiMetadata.configure_from_ruleset: ruleset 为空")
-	if not (ruleset is Object):
-		return Result.failure("ModuleUiMetadata.configure_from_ruleset: ruleset 类型错误（期望 Object）")
-	if not ruleset.has_method("get_ui_extensions"):
-		return Result.failure("ModuleUiMetadata.configure_from_ruleset: ruleset 缺少 get_ui_extensions")
-
-	return configure_from_ui_extensions(ruleset.get_ui_extensions())
-
 static func configure_from_ui_extensions(ui_extensions) -> Result:
 	if not _loaded:
 		return Result.failure("ModuleUiMetadata 未初始化：请先调用 reset()")

@@ -64,8 +64,8 @@ static func _assert_engine_initialize_no_longer_populates_ui_metadata(engine: Ga
 		return Result.failure("engine.module_ui_extensions_v2 未保留 kimchi modal 注册结果")
 	if engine.ruleset_v2 == null:
 		return Result.failure("engine.ruleset_v2 为空")
-	if not engine.ruleset_v2.get_phase_action_ui_modal_scene_path(DefsClass.PHASE_CLEANUP, "kimchi").is_empty():
-		return Result.failure("engine.initialize 后规则域 ruleset 不应继续承载 phase action modal")
+	if engine.ruleset_v2.has_method("get_phase_action_ui_modal_scene_path"):
+		return Result.failure("engine.initialize 后规则域 ruleset 不应继续暴露 phase action modal 查询")
 	return Result.success()
 
 static func _assert_bootstrap_populates_ui_metadata(engine: GameEngine) -> Result:

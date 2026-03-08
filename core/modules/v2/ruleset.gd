@@ -16,7 +16,6 @@ const StateAndOrderHelperClass = preload("res://core/modules/v2/ruleset/state_an
 
 const PhaseHooksHelperClass = preload("res://core/modules/v2/ruleset/phase_hooks.gd")
 const ContentValidationHelperClass = preload("res://core/modules/v2/ruleset/content_validation.gd")
-const UiExtensionsClass = preload("res://core/modules/v2/ruleset/ui_extensions.gd")
 
 var settlement_registry = SettlementRegistryClass.new()
 var effect_registry = EffectRegistryClass.new()
@@ -50,16 +49,12 @@ var settlement_triggers_override: Array[Dictionary] = []  # [{phase, timing, poi
 var phase_sub_phase_order_overrides: Array[Dictionary] = []  # [{phase, order, priority, source}]
 var state_initializers: Array[Dictionary] = []  # [{id, callback, priority, source}]
 var state_int_key_dict_schemas: Array[Dictionary] = []  # [{id, root, path, priority, source}]
-var ui_extensions = UiExtensionsClass.new()
 var _entry_instances: Array = []
 
 func retain_entry_instance(inst) -> void:
 	if inst == null:
 		return
 	_entry_instances.append(inst)
-
-func get_ui_extensions():
-	return ui_extensions
 
 func dispose() -> void:
 	if settlement_registry != null and settlement_registry.has_method("reset"):
@@ -101,11 +96,8 @@ func dispose() -> void:
 	phase_sub_phase_order_overrides.clear()
 	state_initializers.clear()
 	state_int_key_dict_schemas.clear()
-	if ui_extensions != null and ui_extensions.has_method("clear"):
-		ui_extensions.clear()
 	_entry_instances.clear()
 
-	ui_extensions = null
 	phase_order_override = null
 	working_sub_phase_order_override = null
 	cleanup_sub_phase_order_override = null
@@ -264,42 +256,6 @@ func register_placement_conflict_provider(provider_id: String, callback: Callabl
 
 func register_range_origin_provider(provider_id: String, callback: Callable, priority: int = 100, source_module_id: String = "") -> Result:
 	return ProviderRegistrationHelperClass.register_range_origin_provider(self, provider_id, callback, priority, source_module_id)
-
-func register_phase_action_ui_modal(
-	phase_name: String,
-	kind: String,
-	scene_path: String,
-	priority: int = 100,
-	source_module_id: String = ""
-) -> Result:
-	if ui_extensions == null:
-		return Result.failure("RulesetV2: ui_extensions 未初始化")
-	return ui_extensions.register_phase_action_ui_modal(phase_name, kind, scene_path, priority, source_module_id)
-
-func get_phase_action_ui_modal_scene_path(phase_name: String, kind: String) -> String:
-	if ui_extensions == null:
-		return ""
-	return ui_extensions.get_phase_action_ui_modal_scene_path(phase_name, kind)
-
-func register_map_overlay_provider(provider_id: String, callback: Callable, priority: int = 100, source_module_id: String = "") -> Result:
-	if ui_extensions == null:
-		return Result.failure("RulesetV2: ui_extensions 未初始化")
-	return ui_extensions.register_map_overlay_provider(provider_id, callback, priority, source_module_id)
-
-func register_piece_ui_hint(piece_id: String, hints: Dictionary, priority: int = 100, source_module_id: String = "") -> Result:
-	if ui_extensions == null:
-		return Result.failure("RulesetV2: ui_extensions 未初始化")
-	return ui_extensions.register_piece_ui_hint(piece_id, hints, priority, source_module_id)
-
-func register_effect_ui_text(effect_id: String, text: String, priority: int = 100, source_module_id: String = "") -> Result:
-	if ui_extensions == null:
-		return Result.failure("RulesetV2: ui_extensions 未初始化")
-	return ui_extensions.register_effect_ui_text(effect_id, text, priority, source_module_id)
-
-func register_milestone_effect_ui_text(effect_type: String, text: String, priority: int = 100, source_module_id: String = "") -> Result:
-	if ui_extensions == null:
-		return Result.failure("RulesetV2: ui_extensions 未初始化")
-	return ui_extensions.register_milestone_effect_ui_text(effect_type, text, priority, source_module_id)
 
 func register_state_initializer(initializer_id: String, callback: Callable, priority: int = 100, source_module_id: String = "") -> Result:
 	return StateAndOrderHelperClass.register_state_initializer(self, initializer_id, callback, priority, source_module_id)
