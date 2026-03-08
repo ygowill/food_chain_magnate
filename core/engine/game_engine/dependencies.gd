@@ -7,6 +7,7 @@ var command_runner_event_build_provider = null
 var restaurant_logo_assignment_provider = null
 var game_config_overrides = null
 var game_option_overrides = null
+var command_runner_debug_options = null
 
 func clear() -> void:
 	action_setup_provider = null
@@ -14,3 +15,4 @@ func clear() -> void:
 	restaurant_logo_assignment_provider = null
 	game_config_overrides = null
 	game_option_overrides = null
+	command_runner_debug_options = null

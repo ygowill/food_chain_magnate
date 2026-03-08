@@ -48,6 +48,33 @@ static func _resolve_injected_event_build_provider(provider_override):
 	AutoloadAccessClass.log_error("CommandRunner", "注入的事件构建 provider 类型错误（缺少必需方法）")
 	return null
 
+static func _get_injected_debug_option(engine: GameEngine, key: String, default_value: bool) -> bool:
+	if engine == null or not engine.has_method("get_dependencies") or engine.get_dependencies() == null:
+		return default_value
+	var debug_options = engine.get_dependencies().command_runner_debug_options
+	if debug_options == null:
+		return default_value
+	if not (debug_options is Dictionary):
+		return default_value
+	if not debug_options.has(key):
+		return default_value
+	var value = debug_options.get(key, default_value)
+	if value is bool:
+		return bool(value)
+	return default_value
+
+static func _is_verbose_logging(engine: GameEngine) -> bool:
+	return _get_injected_debug_option(engine, "verbose_logging", AutoloadAccessClass.is_verbose_logging())
+
+static func _validate_invariants_enabled(engine: GameEngine) -> bool:
+	return _get_injected_debug_option(engine, "validate_invariants", AutoloadAccessClass.validate_invariants_enabled())
+
+static func _is_debug_mode(engine: GameEngine) -> bool:
+	return _get_injected_debug_option(engine, "debug_mode", AutoloadAccessClass.is_debug_mode())
+
+static func _force_execute_commands_enabled(engine: GameEngine) -> bool:
+	return _get_injected_debug_option(engine, "force_execute_commands", AutoloadAccessClass.force_execute_commands_enabled())
+
 static func _get_event_build_provider(engine: GameEngine = null):
 	if engine != null and engine.has_method("get_dependencies") and engine.get_dependencies() != null:
 		var injected_provider = _resolve_injected_event_build_provider(engine.get_dependencies().command_runner_event_build_provider)
@@ -150,7 +177,7 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 	engine.current_command_index = command.index
 
 	# 校验不变量
-	if engine.validate_invariants and AutoloadAccessClass.validate_invariants_enabled():
+	if engine.validate_invariants and _validate_invariants_enabled(engine):
 		var invariant_result := engine.check_invariants()
 		if not invariant_result.ok:
 			AutoloadAccessClass.log_error("GameEngine", "不变量校验失败: %s" % invariant_result.error)
@@ -188,7 +215,7 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 		"actor": command.actor
 	})
 
-	if AutoloadAccessClass.is_verbose_logging():
+	if _is_verbose_logging(engine):
 		AutoloadAccessClass.log_debug("GameEngine", "执行命令 #%d: %s" % [command.index, command.action_id])
 
 	var all_warnings: Array[String] = []
@@ -250,7 +277,7 @@ static func _should_force_execute(engine: GameEngine, command: Command, is_repla
 		return false
 	if is_replay:
 		return true
-	return AutoloadAccessClass.is_debug_mode() and AutoloadAccessClass.force_execute_commands_enabled()
+	return _is_debug_mode(engine) and _force_execute_commands_enabled(engine)
 
 static func _is_force_execute_requested(command: Command) -> bool:
 	if command == null:

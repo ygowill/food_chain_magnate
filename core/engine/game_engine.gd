@@ -109,6 +109,15 @@ func set_game_option_overrides(overrides) -> void:
 		return
 	get_dependencies().game_option_overrides = overrides
 
+func set_command_runner_debug_options(options) -> void:
+	if options == null:
+		get_dependencies().command_runner_debug_options = null
+		return
+	if options is Dictionary:
+		get_dependencies().command_runner_debug_options = Dictionary(options).duplicate(true)
+		return
+	get_dependencies().command_runner_debug_options = options
+
 func ensure_initialized() -> Result:
 	activate_registry_bundles()
 	if state == null:

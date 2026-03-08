@@ -61,6 +61,10 @@ static func run(seed_val: int = 12345) -> Result:
 	engine.set_game_option_overrides({
 		"player.starting_cash": 42,
 	})
+	engine.set_command_runner_debug_options({
+		"debug_mode": true,
+		"force_execute_commands": true,
+	})
 
 	var init_r := engine.initialize(2, seed_val)
 	if not init_r.ok:
@@ -82,6 +86,14 @@ static func run(seed_val: int = 12345) -> Result:
 	if int(p0.get("cash", -1)) != 42 or int(p1.get("cash", -1)) != 42:
 		return Result.failure("注入的 game_option_overrides 未生效: cash=%s/%s" % [str(p0.get("cash", -1)), str(p1.get("cash", -1))])
 
+	var state: GameState = engine.get_state()
+	state.current_player_index = 1
+	var force_cmd := Command.create("select_reserve_card", 0, {"selected_index": 0})
+	force_cmd.metadata = {"debug_force": true}
+	var force_r := engine.execute_command(force_cmd)
+	if not force_r.ok:
+		return Result.failure("注入的 command_runner_debug_options 未使 debug_force 生效: %s" % force_r.error)
+
 	var setup_r := TestPhaseUtilsClass.complete_setup(engine)
 	if not setup_r.ok:
 		return Result.failure("complete_setup 失败: %s" % setup_r.error)
@@ -101,4 +113,5 @@ static func run(seed_val: int = 12345) -> Result:
 		"milestone_calls": event_provider.milestone_calls,
 		"logo_provider_called": logo_provider.called,
 		"salary_cost": final_salary_cost,
+		"force_execute_ok": true,
 	})

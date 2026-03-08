@@ -973,6 +973,10 @@ GameSessionContext
   - 将新局初始化对 `game_config_overrides` / `game_option_overrides` 的消费接入 `GameEngineDependencies`，让 `initializer` 优先使用显式注入的覆盖字典，并仅在未注入时回退到现有全局桥接。
   - 扩展 `engine_dependencies_injection_test`，补充规则薪资与起始现金覆盖断言，确保 headless 初始化在不依赖 `Globals` 的情况下也能稳定应用配置覆盖。
 
+- `refactor(core): inject command runner debug options`
+  - 将 `command_runner` 对 `debug_mode` / `force_execute_commands` / `validate_invariants` / `verbose_logging` 的读取接入 `GameEngineDependencies.command_runner_debug_options`，让运行时命令开关优先使用显式注入配置，并仅在未注入时回退到现有 debug bridge。
+  - 扩展 `engine_dependencies_injection_test`，补充运行时 `debug_force` 命令的成功回归，确保 headless 场景无需依赖 `DebugFlags` autoload 也能稳定走强制执行路径。
+
 ---
 
 ## 阶段 4：强化状态契约（2~4 周）
