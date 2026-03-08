@@ -21,6 +21,7 @@ services:
       - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
       - --certificatesresolvers.le.acme.dnschallenge=true
       - --certificatesresolvers.le.acme.dnschallenge.provider=cloudflare
+      # Keep EC256 as the default for better Godot native client TLS compatibility.
       - --certificatesresolvers.le.acme.keytype=${FCM_ACME_KEY_TYPE:-EC256}
     environment:
       # Required (recommended token permissions: Zone.DNS:Edit for your zone).

@@ -20,7 +20,9 @@ services:
       DATABASE_URL: "postgresql+asyncpg://${FCM_DB_USER:-fcm}:${FCM_DB_PASSWORD:-fcm}@db:5432/${FCM_DB_NAME:-fcm}"
       HMAC_SECRET: "${FCM_HMAC_SECRET:-change-me-in-production}"
       INTERNAL_API_SECRET: "${FCM_INTERNAL_API_SECRET:-dev-internal-secret-change-in-production}"
-      WEB_ORIGIN: "${FCM_WEB_ORIGIN:-*}"
+      # Production should set FCM_WEB_ORIGIN to the public HTTPS origin.
+      # Avoid wildcard defaults here so TLS/origin misconfiguration is visible earlier.
+      WEB_ORIGIN: "${FCM_WEB_ORIGIN:-http://localhost:8080}"
       DEFAULT_WS_URL: "${FCM_DEFAULT_WS_URL:-ws://localhost:7000}"
     depends_on:
       - db

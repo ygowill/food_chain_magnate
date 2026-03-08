@@ -97,6 +97,22 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
   --acme-key-type EC256
 ```
 
+如果你是手动 build 镜像并打算直接使用 `docker compose` 部署，可以：
+
+```bash
+cp .env.example .env
+# 编辑 .env，至少设置镜像名、域名、Origin、WS 地址、密钥、数据库密码、ACME_EMAIL、CF_DNS_API_TOKEN
+docker compose -f compose.yml -f compose.https.yml down
+docker volume rm fcm_traefik_letsencrypt 2>/dev/null || true
+docker compose -f compose.yml -f compose.https.yml up -d
+```
+
+说明：
+- `.env.example` 在仓库根目录，复制为 `.env` 后再改。
+- 若你要使用本地镜像，把 `.env` 里的 `FCM_SERVER_IMAGE`、`FCM_WEB_IMAGE`、`FCM_BACKEND_IMAGE` 改成你的 tag。
+- 如果这是从旧的 RSA 证书切换到 `EC256`，删除 `fcm_traefik_letsencrypt` 是为了强制重新签发证书。
+
+
 可选：如果服务器拉取 Docker Hub 镜像很慢，可以配置镜像站前缀（GHCR 镜像不受影响）：
 
 ```bash

@@ -17,7 +17,7 @@ const GameSetupClass = preload("res://ui/scenes/setup/game_setup.gd")
 
 const _LOGO_DISPLAY_NAMES: Dictionary = GameSetupClass.LOGO_DISPLAY_NAMES
 const _DEFAULT_LOGO_COUNT := 6
-const _DEFAULT_PLATFORM_BASE_URL := "https://fcm.home.ygowill.net:8443"
+const _DEFAULT_PLATFORM_BASE_URL := "https://fcmapp.ygowill.net:18443"
 const _PROJECT_SETTING_PLATFORM_BACKEND_URL := "fcm/platform_backend_url"
 const _CUSTOM_SERVER_NAME := "自定义服务器"
 const _CUSTOM_SERVER_DESC := "手动填写地址"

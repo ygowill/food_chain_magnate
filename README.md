@@ -123,6 +123,22 @@ curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/ser
   --acme-key-type EC256
 ```
 
+If you build images manually and prefer deploying with `docker compose` directly, you can use the root `.env.example` as a template:
+
+```bash
+cp .env.example .env
+# Edit .env: at minimum set image tags, domains, origin, WS URL, secrets, DB password, ACME_EMAIL, CF_DNS_API_TOKEN
+docker compose -f compose.yml -f compose.https.yml down
+docker volume rm fcm_traefik_letsencrypt 2>/dev/null || true
+docker compose -f compose.yml -f compose.https.yml up -d
+```
+
+Notes:
+- `.env.example` lives at the repo root; copy it to `.env` and fill in real values.
+- If you want to use local images, change `FCM_SERVER_IMAGE`, `FCM_WEB_IMAGE`, and `FCM_BACKEND_IMAGE` to your local tags.
+- When switching from an old RSA certificate to `EC256`, removing `fcm_traefik_letsencrypt` forces Traefik to request a fresh certificate.
+
+
 Optional: if your server pulls Docker Hub images slowly, you can use a mirror/prefix (GHCR images are unchanged):
 
 ```bash

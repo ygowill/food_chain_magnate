@@ -9,6 +9,7 @@ Usage:
                    [--image <image:tag>] [--web-image <image:tag>]
                    [--backend-image <image:tag>] [--backend-name fcm-backend]
                    [--hmac-secret <secret>]
+                   [--internal-api-secret <secret>]
                    [--db-user fcm] [--db-password fcm] [--db-name fcm]
                    [--docker-io-prefix <prefix>]
                    [--docker-api-version <version>]
@@ -18,6 +19,7 @@ Usage:
                    [--github-raw-prefix <prefix>]
                    [--https --web-domain <domain> [--ws-domain <domain>]]
                    [--acme-key-type EC256|EC384|RSA2048|RSA4096]
+                   [--web-origin <origin>]
                    [--http-port 80] [--https-port 443]
                    [--down] [--purge]
 
@@ -68,6 +70,7 @@ WEB_NAME="fcm-web"
 BACKEND_IMAGE=""
 BACKEND_NAME="fcm-backend"
 HMAC_SECRET="change-me-in-production"
+INTERNAL_API_SECRET="dev-internal-secret-change-in-production"
 DB_USER="fcm"
 DB_PASSWORD="fcm"
 DB_NAME="fcm"
@@ -87,6 +90,7 @@ HTTP_PORT="80"
 HTTPS_PORT="443"
 ACME_KEY_TYPE="EC256"
 DEFAULT_WS_URL=""
+WEB_ORIGIN=""
 ACTION="up"
 PURGE=0
 
@@ -148,6 +152,10 @@ while [[ $# -gt 0 ]]; do
 			HMAC_SECRET="${2:-}"
 			shift 2
 			;;
+		--internal-api-secret)
+			INTERNAL_API_SECRET="${2:-}"
+			shift 2
+			;;
 		--db-user)
 			DB_USER="${2:-}"
 			shift 2
@@ -206,6 +214,10 @@ while [[ $# -gt 0 ]]; do
 			;;
 		--acme-key-type)
 			ACME_KEY_TYPE="${2:-}"
+			shift 2
+			;;
+		--web-origin)
+			WEB_ORIGIN="${2:-}"
 			shift 2
 			;;
 		--web-domain)
@@ -299,6 +311,9 @@ if [[ "${ENABLE_HTTPS}" -eq 1 ]]; then
 		ws_port_suffix=":${HTTPS_PORT}"
 	fi
 	DEFAULT_WS_URL="wss://${WEB_DOMAIN}${ws_port_suffix}/ws"
+	if [[ -z "${WEB_ORIGIN}" ]]; then
+		WEB_ORIGIN="https://${WEB_DOMAIN}${ws_port_suffix}"
+	fi
 fi
 
 script_src="${BASH_SOURCE[0]}"
@@ -378,6 +393,8 @@ FCM_HTTPS_PORT=${HTTPS_PORT}
 FCM_ACME_KEY_TYPE=${ACME_KEY_TYPE}
 FCM_DEFAULT_WS_URL=${DEFAULT_WS_URL}
 FCM_HMAC_SECRET=${HMAC_SECRET}
+FCM_INTERNAL_API_SECRET=${INTERNAL_API_SECRET}
+FCM_WEB_ORIGIN=${WEB_ORIGIN}
 FCM_DB_USER=${DB_USER}
 FCM_DB_PASSWORD=${DB_PASSWORD}
 FCM_DB_NAME=${DB_NAME}

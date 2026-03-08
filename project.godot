@@ -42,7 +42,7 @@ window/stretch/aspect="expand"
 action_setup_provider_path="res://gameplay/action_setup.gd"
 command_runner_event_build_provider_path="res://gameplay/replay/command_runner_event_build.gd"
 restaurant_logo_assignment_provider_path="res://gameplay/setup/restaurant_logo_assignment.gd"
-platform_backend_url="https://fcm.home.ygowill.net:8443"
+platform_backend_url="https://fcmapp.ygowill.net:18443"
 
 [gui]
 
