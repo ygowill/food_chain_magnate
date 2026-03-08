@@ -1038,6 +1038,14 @@ GameSessionContext
 
 ### 实施进度（截至 2026-03-08）
 
+- `refactor(core): make action setup provider injectable`
+  - 将动作注册装配入口收口到 `GameEngineDependencies.action_setup_provider`，并通过 `GameEngine.set_action_setup_provider(...)` 显式注入，让 `ActionWiring` / `ActionSetup` 优先消费注入 provider，仅在未注入时回退到原有 provider path bridge。
+  - 扩展 `engine_dependencies_injection_test`，补充自定义 action setup provider 的调用断言，确保 headless 初始化无需依赖全局 provider path 也能稳定完成动作注册装配。
+
+- `refactor(engine): load command event build provider`
+  - 将 `CommandRunner` 的派生事件构建入口收口到可注入 provider，并通过 `GameEngine.set_command_runner_event_build_provider(...)` 写入 `GameEngineDependencies.command_runner_event_build_provider`，让现金变化 / 里程碑事件构建优先使用显式依赖。
+  - 扩展 `engine_dependencies_injection_test`，补充自定义 command event build provider 在现金与里程碑事件链路中的参与断言，确保 headless 场景无需依赖全局 provider path 也能稳定完成派生事件构建。
+
 - `refactor(core): inject restaurant logo assignment provider`
   - 将新局初始化的餐厅 Logo 分配接入 `GameEngineDependencies.restaurant_logo_assignment_provider`，让 `initializer` / `GameStateFactory` 优先消费显式注入的 provider，同时保留原有 `ProjectSettings` path 作为兼容桥。
   - 扩展 `engine_dependencies_injection_test`，补充 logo provider 的调用入参与 `restaurant_logo_id` 写回断言，确保 headless 初始化不必依赖全局 path 配置也能稳定完成 Logo 分配。
@@ -1507,10 +1515,10 @@ GameSessionContext
 ### 每个阶段的 commit 建议
 
 - `docs(core): add architecture audit and roadmap`
-- `refactor(core): split module ui metadata from ruleset`
-- `refactor(core): introduce session registry bundle`
-- `refactor(core): inject engine adapters explicitly`
-- `refactor(core): tighten round_state access contract`
+- 阶段 1 汇总主题：拆分 module UI metadata 与 ruleset
+- 阶段 2 汇总主题：引入 session registry bundle
+- 阶段 3 汇总主题：显式注入 engine adapters
+- 阶段 4 汇总主题：收紧 round_state access contract
 
 ### 每阶段验收问题
 
