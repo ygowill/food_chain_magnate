@@ -15,29 +15,6 @@ static func reset() -> void:
 static func is_loaded() -> bool:
 	return _loaded
 
-static func configure_from_ruleset(ruleset) -> Result:
-	if not _loaded:
-		return Result.failure("EffectUiTextRegistry 未初始化：请先调用 reset()")
-	if ruleset == null:
-		return Result.failure("EffectUiTextRegistry.configure_from_ruleset: ruleset 为空")
-	if not (ruleset is RulesetV2):
-		return Result.failure("EffectUiTextRegistry.configure_from_ruleset: ruleset 类型错误（期望 RulesetV2）")
-	if not ruleset.has_method("get_ui_extensions"):
-		return Result.failure("EffectUiTextRegistry.configure_from_ruleset: ruleset 缺少 get_ui_extensions")
-
-	var ui_extensions = ruleset.get_ui_extensions()
-	if ui_extensions == null or not (ui_extensions is Object):
-		return Result.failure("EffectUiTextRegistry.configure_from_ruleset: ruleset.get_ui_extensions() 返回值类型错误（期望 Object）")
-
-	var effect_items = ui_extensions.get("effect_ui_texts")
-	if not (effect_items is Array):
-		return Result.failure("EffectUiTextRegistry.configure_from_ruleset: ui_extensions.effect_ui_texts 缺失或类型错误（期望 Array）")
-	var milestone_items = ui_extensions.get("milestone_effect_ui_texts")
-	if not (milestone_items is Array):
-		return Result.failure("EffectUiTextRegistry.configure_from_ruleset: ui_extensions.milestone_effect_ui_texts 缺失或类型错误（期望 Array）")
-
-	return _configure_from_entries(effect_items, milestone_items)
-
 static func configure_from_module_ui_metadata(module_ui_metadata) -> Result:
 	if not _loaded:
 		return Result.failure("EffectUiTextRegistry 未初始化：请先调用 reset()")

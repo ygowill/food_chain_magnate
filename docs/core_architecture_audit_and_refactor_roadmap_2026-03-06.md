@@ -911,6 +911,11 @@ GameSessionContext
   - 将 `ModuleUiMetadataBootstrap.apply()` 收紧为只消费 `engine.module_ui_extensions_v2`，并让 `ModuleUiMetadata` 的独立入口仅保留 `configure_from_ui_extensions(...)`，不再沿 gameplay 链路回退到 ruleset。
   - 重写 `ruleset_ui_extensions_facade_test`，改为校验独立 `RulesetV2UiExtensions` holder 仍保持原有注册/查询/清理行为，同时断言 `RulesetV2` 不再暴露对应 UI facade。
 
+- `refactor(core): drop legacy UI registry ruleset loaders`
+  - 删除 `PieceUiHintsRegistry`、`EffectUiTextRegistry`、`MapOverlayProviderRegistry` 中已无调用的 `configure_from_ruleset(...)` 兼容入口，彻底切断 UI registry 对 ruleset UI holder 的旧依赖。
+  - 让阶段 1 的 gameplay UI 链路统一收口到 `ModuleUiMetadata` / `module_ui_extensions_v2`，避免后续改动再绕回 core ruleset。
+  - 通过 headless compile、`GameSmokeTest` 与 `AllTests` 复核删兼容入口后无残留静态调用，确保 phase 1 的 UI metadata 装配边界完整闭合。
+
 ### 风险
 
 - UI 读取路径要同步调整

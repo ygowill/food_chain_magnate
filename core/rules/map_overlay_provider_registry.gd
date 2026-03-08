@@ -15,26 +15,6 @@ static func reset() -> void:
 static func is_loaded() -> bool:
 	return _loaded
 
-static func configure_from_ruleset(ruleset) -> Result:
-	if not _loaded:
-		return Result.failure("MapOverlayProviderRegistry 未初始化：请先调用 reset()")
-	if ruleset == null:
-		return Result.failure("MapOverlayProviderRegistry.configure_from_ruleset: ruleset 为空")
-	if not (ruleset is RulesetV2):
-		return Result.failure("MapOverlayProviderRegistry.configure_from_ruleset: ruleset 类型错误（期望 RulesetV2）")
-	if not ruleset.has_method("get_ui_extensions"):
-		return Result.failure("MapOverlayProviderRegistry.configure_from_ruleset: ruleset 缺少 get_ui_extensions")
-
-	var ui_extensions = ruleset.get_ui_extensions()
-	if ui_extensions == null or not (ui_extensions is Object):
-		return Result.failure("MapOverlayProviderRegistry.configure_from_ruleset: ruleset.get_ui_extensions() 返回值类型错误（期望 Object）")
-
-	var provider_items = ui_extensions.get("map_overlay_providers")
-	if not (provider_items is Array):
-		return Result.failure("MapOverlayProviderRegistry.configure_from_ruleset: ui_extensions.map_overlay_providers 缺失或类型错误（期望 Array）")
-
-	return _configure_from_entries(provider_items)
-
 static func configure_from_module_ui_metadata(module_ui_metadata) -> Result:
 	if not _loaded:
 		return Result.failure("MapOverlayProviderRegistry 未初始化：请先调用 reset()")
