@@ -16,20 +16,47 @@
 class_name RangeOriginRegistry
 extends RefCounted
 
-static var _providers: Array[Dictionary] = [] # [{id, priority, callback, source, seq}]
-static var _loaded: bool = false
-static var _seq: int = 0
+const RulesRegistryBundleClass = preload("res://core/engine/game_engine/rules_registry_bundle.gd")
+
+static var _current_bundle = RulesRegistryBundleClass.new()
+
+static func _get_bundle():
+	if _current_bundle == null:
+		_current_bundle = RulesRegistryBundleClass.new()
+	return _current_bundle
+
+static func _resolve_bundle(bundle = null):
+	if bundle != null:
+		return bundle
+	return _get_bundle()
+
+static func set_current_bundle(bundle) -> void:
+	_current_bundle = bundle if bundle != null else RulesRegistryBundleClass.new()
+
+static func reset_current_bundle() -> void:
+	_current_bundle = RulesRegistryBundleClass.new()
 
 static func reset() -> void:
-	_providers = []
-	_loaded = true
-	_seq = 0
+	var target = _get_bundle()
+	target.range_origin_providers = []
+	target.range_origin_loaded = true
 
 static func is_loaded() -> bool:
-	return _loaded
+	return bool(_get_bundle().range_origin_loaded)
 
-static func configure_from_ruleset(ruleset) -> Result:
-	if not _loaded:
+static func get_provider_ids() -> Array[String]:
+	if not is_loaded():
+		return []
+	var ids: Array[String] = []
+	for item_val in _get_bundle().range_origin_providers:
+		if item_val is Dictionary:
+			var provider_id := str((item_val as Dictionary).get("id", "")).strip_edges()
+			if not provider_id.is_empty():
+				ids.append(provider_id)
+	return ids
+
+static func configure_from_ruleset(ruleset, bundle = null) -> Result:
+	if not is_loaded() and bundle == null:
 		return Result.failure("RangeOriginRegistry 未初始化：请先调用 reset()")
 	if ruleset == null:
 		return Result.failure("RangeOriginRegistry.configure_from_ruleset: ruleset 为空")
@@ -39,8 +66,10 @@ static func configure_from_ruleset(ruleset) -> Result:
 		return Result.failure("RangeOriginRegistry.configure_from_ruleset: ruleset.range_origin_providers 缺失或类型错误（期望 Array）")
 
 	var seen := {}
-	_providers = []
-	_seq = 0
+	var target = _resolve_bundle(bundle)
+	target.range_origin_providers = []
+	target.range_origin_loaded = true
+	var seq: int = 0
 
 	for i in range(ruleset.range_origin_providers.size()):
 		var item_val = ruleset.range_origin_providers[i]
@@ -70,16 +99,16 @@ static func configure_from_ruleset(ruleset) -> Result:
 			return Result.failure("RangeOriginRegistry: range_origin_providers[%d].priority 类型错误（期望 int）" % i)
 		var priority: int = int(prio_val)
 
-		_providers.append({
+		target.range_origin_providers.append({
 			"id": provider_id,
 			"priority": priority,
 			"callback": cb,
 			"source": str(item.get("source", "")),
-			"seq": _seq,
+			"seq": seq,
 		})
-		_seq += 1
+		seq += 1
 
-	_providers.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+	target.range_origin_providers.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var ap: int = int(a.get("priority", 100))
 		var bp: int = int(b.get("priority", 100))
 		if ap != bp:
@@ -87,7 +116,7 @@ static func configure_from_ruleset(ruleset) -> Result:
 		return int(a.get("seq", 0)) < int(b.get("seq", 0))
 	)
 
-	return Result.success(_providers.size())
+	return Result.success(target.range_origin_providers.size())
 
 static func get_extra_origin_positions(
 	state: GameState,
@@ -96,9 +125,9 @@ static func get_extra_origin_positions(
 	kind: String = ""
 ) -> Result:
 	# 允许 RangeUtils 在 registry 未初始化时退化为“无额外起点”，避免无关场景硬失败。
-	if not _loaded:
+	if not is_loaded():
 		return Result.success([] as Array[Vector2i])
-	if _providers.is_empty():
+	if _get_bundle().range_origin_providers.is_empty():
 		return Result.success([] as Array[Vector2i])
 	if state == null:
 		return Result.failure("RangeOriginRegistry.get_extra_origin_positions: state 为空")
@@ -115,8 +144,8 @@ static func get_extra_origin_positions(
 	var out_set := {}
 	var out: Array[Vector2i] = []
 
-	for i in range(_providers.size()):
-		var item_val = _providers[i]
+	for i in range(_get_bundle().range_origin_providers.size()):
+		var item_val = _get_bundle().range_origin_providers[i]
 		if not (item_val is Dictionary):
 			continue
 		var item: Dictionary = item_val

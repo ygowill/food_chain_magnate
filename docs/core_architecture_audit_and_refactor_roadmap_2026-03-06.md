@@ -974,6 +974,11 @@ GameSessionContext
   - 调整 `modules_v2.reset/apply`，在清空每局 rules bundle 后同步 `reset()` `PlacementConflictRegistry`，修复 headless / UI 启动链里 bundle 已清空但 registry 未重新置为 loaded 时的初始化顺序回归。
   - 扩展 `catalog_registry_bundle_isolation_test`，补充 `rural_marketeers:placement_conflicts` provider 在 engine A / engine B 间切换、以及 engine A dispose 后 engine B 重新激活时的隔离断言；同时把测试模块集补齐 `rural_marketeers`，确保这条新增覆盖真正命中放置冲突 provider 的注册链路。
 
+- `refactor(core): bundle range origin registry per engine session`
+  - 继续扩展 `RulesRegistryBundle`，把 `RangeOriginRegistry` 的 provider 列表改为每局持有，并在 `GameEngine.activate_registry_bundles()` 中跟随当前引擎切换，避免 coffee 等模块扩展的额外 range 起点继续依赖进程级 static 当前会话态。
+  - 调整 `modules_v2.apply`，在清空每局 rules bundle 后同步 `reset()` `RangeOriginRegistry`，保证 headless / UI 启动链在 bundle 已清空后仍能按既定顺序重新装配 range origin provider。
+  - 扩展 `catalog_registry_bundle_isolation_test`，补充 `coffee:range_origins:coffee_shops` provider 在 engine A / engine B 间切换、以及 engine A dispose 后 engine B 重新激活时的隔离断言，并把测试模块集补齐 `coffee` 以命中真实注册链路。
+
 ### 风险
 
 - 改动面较大
