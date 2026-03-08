@@ -100,17 +100,22 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 func _generate_specific_events(old_state: GameState, _new_state: GameState, command: Command) -> Array[Dictionary]:
 	var employee_id_result := require_string_param(command, "employee_id")
-	assert(employee_id_result.ok, "fire 缺少/错误参数: employee_id")
-	var employee_id: String = employee_id_result.value
+	if not employee_id_result.ok:
+		return []
+	var employee_id: String = str(employee_id_result.value).strip_edges()
+	if employee_id.is_empty():
+		return []
 
 	var location := ""
 	if command.params.has("location"):
 		var location_result := require_string_param(command, "location")
-		assert(location_result.ok, "fire 参数 location 类型错误")
-		location = location_result.value
+		if not location_result.ok:
+			return []
+		location = str(location_result.value).strip_edges()
 	if location.is_empty():
 		location = _find_employee_location(old_state.get_player(command.actor), employee_id)
-	assert(not location.is_empty(), "fire 无法推断 location: %s" % employee_id)
+	if location.is_empty():
+		return []
 
 	return [{
 		"type": EventBus.EventType.EMPLOYEE_FIRED,

@@ -23,7 +23,16 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_can_fire_busy_marketer_tolerates_invalid_busy_marketer_entries(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 6})
+	r = _test_generate_specific_events_returns_empty_on_missing_employee_id()
+	if not r.ok:
+		return r
+	r = _test_generate_specific_events_returns_empty_on_invalid_location_type()
+	if not r.ok:
+		return r
+	r = _test_generate_specific_events_returns_empty_when_location_cannot_be_inferred()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 9})
 
 static func _test_find_employee_location_reads_player_arrays() -> Result:
 	var action = FireActionClass.new()
@@ -115,4 +124,42 @@ static func _test_can_fire_busy_marketer_tolerates_invalid_busy_marketer_entries
 	var action = FireActionClass.new()
 	if action._can_fire_busy_marketer(state, 0, "campaign_manager"):
 		return Result.failure("busy_marketers 条目损坏时应 fail-soft 返回 false")
+	return Result.success()
+
+static func _make_event_state() -> GameState:
+	var state := GameState.new()
+	state.players = [{
+		"employees": ["pizza_cook"],
+		"reserve_employees": [],
+		"busy_marketers": [],
+	}]
+	return state
+
+static func _test_generate_specific_events_returns_empty_on_missing_employee_id() -> Result:
+	var action = FireActionClass.new()
+	var state := _make_event_state()
+	var events := action._generate_specific_events(state, state, Command.create("fire", 0, {}))
+	if not events.is_empty():
+		return Result.failure("缺失 employee_id 时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_on_invalid_location_type() -> Result:
+	var action = FireActionClass.new()
+	var state := _make_event_state()
+	var events := action._generate_specific_events(state, state, Command.create("fire", 0, {
+		"employee_id": "pizza_cook",
+		"location": 1,
+	}))
+	if not events.is_empty():
+		return Result.failure("location 类型错误时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_returns_empty_when_location_cannot_be_inferred() -> Result:
+	var action = FireActionClass.new()
+	var state := _make_event_state()
+	var events := action._generate_specific_events(state, state, Command.create("fire", 0, {
+		"employee_id": "trainer",
+	}))
+	if not events.is_empty():
+		return Result.failure("无法推断 location 时应返回空事件列表")
 	return Result.success()
