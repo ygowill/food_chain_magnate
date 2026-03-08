@@ -2,7 +2,7 @@
 class_name DinnertimeInventory
 extends RefCounted
 
-const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const DinnertimeRulesClass = preload("res://core/rules/dinnertime_rules.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 static func build_demand_requirements(demands: Array) -> Result:
@@ -29,12 +29,10 @@ static func required_has_non_drink_food(required: Dictionary) -> Result:
 		var product_id: String = str(product_id_val)
 		if product_id.is_empty():
 			return Result.failure("晚餐结算失败：required key 不能为空")
-		var def_val = ProductRegistryClass.get_def(product_id)
-		if def_val == null:
-			return Result.failure("晚餐结算失败：未知产品定义: %s" % product_id)
-		if not (def_val is ProductDef):
-			return Result.failure("晚餐结算失败：产品定义类型错误（期望 ProductDef）: %s" % product_id)
-		var def: ProductDef = def_val
+		var product_read := DinnertimeRulesClass.require_product_def(product_id)
+		if not product_read.ok:
+			return product_read
+		var def: ProductDef = product_read.value
 		if def.has_tag("food") and not def.is_drink():
 			return Result.success(true)
 	return Result.success(false)

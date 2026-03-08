@@ -214,6 +214,7 @@ const ModuleSystemV2BootstrapTestClass = preload("res://core/tests/module_system
 const SettlementRegistryV2TestClass = preload("res://core/tests/settlement_registry_v2_test.gd")
 const DinnertimeDemandRegistryV2TestClass = preload("res://core/tests/dinnertime_demand_registry_v2_test.gd")
 const DinnertimeRoutePurchaseRegistryV2TestClass = preload("res://core/tests/dinnertime_route_purchase_registry_v2_test.gd")
+const DinnertimeRulesDomainTestClass = preload("res://core/tests/dinnertime_rules_domain_test.gd")
 const EffectRegistryV2TestClass = preload("res://core/tests/effect_registry_v2_test.gd")
 const PoolBuilderV2TestClass = preload("res://core/tests/pool_builder_v2_test.gd")
 const MarketingBoardDataTestClass = preload("res://core/tests/marketing_board_data_test.gd")

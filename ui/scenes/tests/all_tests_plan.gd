@@ -871,6 +871,10 @@ static func build_tests(host) -> Array[Dictionary]:
 					"fn": func() -> Result: return TestRefs.DinnertimeRoutePurchaseRegistryV2TestClass.run(2, 12345),
 				},
 				{
+					"name": "DinnertimeRulesDomainTest",
+					"fn": func() -> Result: return TestRefs.DinnertimeRulesDomainTestClass.run(2, 12345),
+				},
+				{
 					"name": "EffectRegistryV2Test",
 					"fn": func() -> Result: return TestRefs.EffectRegistryV2TestClass.run(2, 12345),
 				},

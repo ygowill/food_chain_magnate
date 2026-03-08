@@ -2,8 +2,7 @@
 class_name DinnertimeEffects
 extends RefCounted
 
-const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
-const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
+const DinnertimeRulesClass = preload("res://core/rules/dinnertime_rules.gd")
 const GlobalEffectListClass = preload("res://core/rules/global_effect_list.gd")
 const EffectIdsSegmentInvokerClass = preload("res://core/rules/effect_ids_segment_invoker.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
@@ -44,12 +43,10 @@ static func apply_employee_effects_by_segment(
 		if emp_id.is_empty():
 			return Result.failure("晚餐结算失败：player[%d].employees[%d] 不能为空" % [player_id, i])
 
-		var def_val = EmployeeRegistryClass.get_def(emp_id)
-		if def_val == null:
-			return Result.failure("晚餐结算失败：未知员工定义: %s" % emp_id)
-		if not (def_val is EmployeeDef):
-			return Result.failure("晚餐结算失败：员工定义类型错误（期望 EmployeeDef）: %s" % emp_id)
-		var def: EmployeeDef = def_val
+		var employee_read := DinnertimeRulesClass.require_employee_def(emp_id)
+		if not employee_read.ok:
+			return employee_read
+		var def: EmployeeDef = employee_read.value
 
 		var mult := maxi(1, WorkingMultiplierClass.get_working_employee_multiplier(state, player_id, emp_id))
 		for _k in range(mult):
@@ -102,12 +99,10 @@ static func apply_milestone_effects_by_segment(
 		if ms_id.is_empty():
 			return Result.failure("晚餐结算失败：player[%d].milestones[%d] 不能为空" % [player_id, i])
 
-		var def_val = MilestoneRegistryClass.get_def(ms_id)
-		if def_val == null:
-			return Result.failure("晚餐结算失败：未知里程碑定义: %s" % ms_id)
-		if not (def_val is MilestoneDef):
-			return Result.failure("晚餐结算失败：里程碑定义类型错误（期望 MilestoneDef）: %s" % ms_id)
-		var def: MilestoneDef = def_val
+		var milestone_read := DinnertimeRulesClass.require_milestone_def(ms_id)
+		if not milestone_read.ok:
+			return milestone_read
+		var def: MilestoneDef = milestone_read.value
 
 		var inv := EffectIdsSegmentInvokerClass.invoke_effect_ids_by_segment(
 			effect_registry,

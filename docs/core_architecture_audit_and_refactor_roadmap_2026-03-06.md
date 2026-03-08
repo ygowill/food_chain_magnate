@@ -1341,6 +1341,10 @@ GameSessionContext
   - 将 `gourmet_food_critics` 的 `_validate_initiate_marketing()` 从 `MarketingRegistry.get_def()` 切到 `MarketingRules.require_board_spec()`，让模块级 gourmet board 识别与主线营销共享同一份板件可用性与类型约束，并继续保持非法/已移除 board 的 fail-soft 语义。
   - 扩展 focused `gourmet_food_critics_state_access` 测试，覆盖未知 board 与 2 人局已移除 board 的忽略路径，确保模块 validator 不会因领域 helper 的早失败而误拒绝无关命令。
 
+- `refactor(dinnertime): centralize settlement definition helpers`
+  - 新增 `DinnertimeRules`，将晚餐结算里散落的产品、员工与里程碑定义读取统一收口，并让 `dinnertime_inventory` / `dinnertime_effects` 复用同一份 Result 风格失败语义。
+  - 新增 focused `dinnertime_rules_domain` 测试并接入 `AllTests`，覆盖纯饮品需求、未知产品、未知员工与未知里程碑路径，确保晚餐域 helper 的早失败契约可独立回归。
+
 ---
 
 ## 10. 快速收益项（建议尽快做）
