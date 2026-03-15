@@ -357,7 +357,7 @@ func _sync_reserve_cards_overview_access(state: GameState) -> void:
 		var btn = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/ReserveCardsButton")
 		if btn is Button:
 			var button: Button = btn
-			button.visible = can_open
+			button.visible = true
 			button.disabled = not can_open
 	if not can_open and _views_controller != null and _views_controller.has_method("hide_reserve_cards_full_screen_view"):
 		_views_controller.hide_reserve_cards_full_screen_view()
