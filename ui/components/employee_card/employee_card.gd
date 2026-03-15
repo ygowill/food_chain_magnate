@@ -4,6 +4,7 @@ class_name EmployeeCard
 extends PanelContainer
 
 const EmployeeRoleColorsClass = preload("res://ui/visual/employee_role_colors.gd")
+const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
 
 signal card_clicked(employee_id: String)
 signal card_drag_started(employee_id: String)
@@ -26,6 +27,7 @@ var _employee_def: Dictionary = {}
 var _selected: bool = false
 var _busy: bool = false
 var _dragging: bool = false
+var _pointer_pressed: bool = false
 var _drag_start_pos: Vector2 = Vector2.ZERO
 
 # UI 子节点
@@ -601,25 +603,26 @@ func _draw() -> void:
 	draw_colored_polygon(points, base_color)
 
 func _on_gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		var e: InputEventMouseButton = event
-		if e.button_index == MOUSE_BUTTON_LEFT:
-			if e.pressed:
-				_drag_start_pos = e.position
-				_dragging = false
-				card_clicked.emit(employee_id)
-			else:
-				if _dragging and draggable:
-					_dragging = false
-					card_drag_ended.emit(employee_id, get_global_mouse_position())
+	if UiPointerInputClass.is_primary_press(event):
+		_pointer_pressed = true
+		_drag_start_pos = UiPointerInputClass.get_position(event)
+		_dragging = false
+		card_clicked.emit(employee_id)
+		return
 
-	if event is InputEventMouseMotion and draggable:
-		var e2: InputEventMouseMotion = event
-		if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-			var distance := e2.position.distance_to(_drag_start_pos)
-			if distance > 5.0 and not _dragging:
-				_dragging = true
-				card_drag_started.emit(employee_id)
+	if UiPointerInputClass.is_primary_release(event):
+		_pointer_pressed = false
+		if _dragging and draggable:
+			_dragging = false
+			card_drag_ended.emit(employee_id, global_position + UiPointerInputClass.get_position(event))
+		return
+
+	if _pointer_pressed and draggable and (event is InputEventMouseMotion or event is InputEventScreenDrag):
+		var pointer_pos := UiPointerInputClass.get_position(event)
+		var distance := pointer_pos.distance_to(_drag_start_pos)
+		if distance > 5.0 and not _dragging:
+			_dragging = true
+			card_drag_started.emit(employee_id)
 
 func _get_tooltip_manager():
 	if get_tree() == null:

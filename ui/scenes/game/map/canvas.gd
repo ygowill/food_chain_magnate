@@ -12,6 +12,7 @@ const MapCanvasDrawerClass = preload("res://ui/scenes/game/map/drawer/drawer.gd"
 const MapCanvasTooltipClass = preload("res://ui/scenes/game/map/tooltip.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
+const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
 
 const BASE_CELL_SIZE := 40
 const UI_OUTSIDE_RING_MARGIN := 2
@@ -665,14 +666,25 @@ func _gui_input(event: InputEvent) -> void:
 			queue_redraw()
 		return
 
-	if event is InputEventMouseButton:
-		var e2: InputEventMouseButton = event
-		if e2.button_index == MOUSE_BUTTON_LEFT and e2.pressed:
-			var pos2 := _local_to_world_cell(e2.position)
-			if _is_interactive_world_pos(pos2):
-				_selected_pos = pos2
-				cell_selected.emit(_selected_pos)
-				queue_redraw()
+	if event is InputEventScreenDrag:
+		var drag_event: InputEventScreenDrag = event
+		var drag_pos := _local_to_world_cell(drag_event.position)
+		if drag_pos != _hover_pos:
+			_hover_pos = drag_pos
+			if _is_interactive_world_pos(_hover_pos):
+				cell_hovered.emit(_hover_pos)
+			else:
+				cell_hovered.emit(Vector2i(-1, -1))
+			_update_tooltip_for_hover()
+			queue_redraw()
+		return
+
+	if UiPointerInputClass.is_primary_press(event):
+		var pointer_pos := _local_to_world_cell(UiPointerInputClass.get_position(event))
+		if _is_interactive_world_pos(pointer_pos):
+			_selected_pos = pointer_pos
+			cell_selected.emit(_selected_pos)
+			queue_redraw()
 		return
 
 func _update_tooltip_for_hover() -> void:

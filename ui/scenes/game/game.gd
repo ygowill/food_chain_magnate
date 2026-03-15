@@ -62,6 +62,7 @@ const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
 const RulesDocsClass = preload("res://ui/utils/rules_docs.gd")
 
 const MUTE_ICON_ON_PATH := "res://assets/images/musicOn.png"
@@ -732,17 +733,7 @@ func _on_mute_icon_gui_input(event: InputEvent) -> void:
 	if event == null:
 		return
 
-	if event is InputEventMouseButton:
-		var e: InputEventMouseButton = event
-		if not e.pressed:
-			return
-		if e.button_index != MOUSE_BUTTON_LEFT:
-			return
-	elif event is InputEventScreenTouch:
-		var t: InputEventScreenTouch = event
-		if not t.pressed:
-			return
-	else:
+	if not UiPointerInputClass.is_primary_press(event):
 		return
 
 	if Globals != null and Globals.has_method("toggle_audio_muted"):

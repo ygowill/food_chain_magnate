@@ -1,6 +1,8 @@
 # MarketingPanel：营销类型按钮
 extends PanelContainer
 
+const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
+
 signal type_selected(type_id: String)
 
 var type_id: String = ""
@@ -63,10 +65,10 @@ func _build_ui() -> void:
 	_update_style()
 
 func _gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			if is_available:
-				type_selected.emit(type_id)
+	if not UiPointerInputClass.is_primary_press(event):
+		return
+	if is_available:
+		type_selected.emit(type_id)
 
 func update_display() -> void:
 	if _icon_rect != null:

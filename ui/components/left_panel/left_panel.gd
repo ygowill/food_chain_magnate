@@ -16,6 +16,7 @@ const LeftPanelTurnLogControllerClass = preload("res://ui/components/left_panel/
 const LeftPanelSummaryControllerClass = preload("res://ui/components/left_panel/left_panel_summary_controller.gd")
 const LeftPanelMilestonesControllerClass = preload("res://ui/components/left_panel/left_panel_milestones_controller.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
 
 # === 玩家切换栏 ===
 @onready var restaurant_overview_section: PanelContainer = $MarginContainer/MainVBox/RestaurantOverviewSection
@@ -706,10 +707,7 @@ func _on_player_tab_toggled(pressed: bool, player_id: int) -> void:
 	set_view_player(player_id)
 
 func _on_overview_card_gui_input(event: InputEvent, player_id: int) -> void:
-	if not (event is InputEventMouseButton):
-		return
-	var e: InputEventMouseButton = event
-	if e.button_index != MOUSE_BUTTON_LEFT or not e.pressed:
+	if not UiPointerInputClass.is_primary_press(event):
 		return
 	set_view_player(player_id)
 

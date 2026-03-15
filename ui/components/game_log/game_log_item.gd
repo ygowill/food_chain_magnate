@@ -15,6 +15,7 @@ var _timeline_is_future: bool = false
 var _timeline_is_cursor: bool = false
 
 const EmployeeLinksClass = preload("res://ui/components/game_log/game_log_employee_preview_links.gd")
+const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
 
 const LOG_TYPE_COLORS: Dictionary = {
 	0: Color(0.5, 0.45, 0.35, 1),  # SYSTEM
@@ -154,15 +155,15 @@ func apply_font_settings() -> void:
 		_message_label.add_theme_font_size_override("normal_font_size", maxi(10, int(round(12.0 * scale))))
 
 func _gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			var entry_id: int = int(entry_data.get("id", -1))
-			if entry_id < 0:
-				return
-			if event.double_click:
-				entry_double_clicked.emit(entry_id)
-			else:
-				entry_clicked.emit(entry_id)
+	if not UiPointerInputClass.is_primary_press(event):
+		return
+	var entry_id: int = int(entry_data.get("id", -1))
+	if entry_id < 0:
+		return
+	if UiPointerInputClass.is_primary_double_press(event):
+		entry_double_clicked.emit(entry_id)
+	else:
+		entry_clicked.emit(entry_id)
 
 func update_display() -> void:
 	if _time_label != null:
@@ -230,10 +231,7 @@ func _on_message_meta_clicked(meta) -> void:
 
 func _on_message_gui_input(event: InputEvent) -> void:
 	# 员工名字点击：显示预览并阻止行点击（不影响其它区域的行点击/双击）。
-	if not (event is InputEventMouseButton):
-		return
-	var mb: InputEventMouseButton = event
-	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
+	if not UiPointerInputClass.is_primary_press(event):
 		return
 	if _message_label == null or not is_instance_valid(_message_label):
 		return

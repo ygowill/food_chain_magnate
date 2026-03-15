@@ -55,12 +55,33 @@ func _gui_input(event: InputEvent) -> void:
 				accept_event()
 				return
 
+	if event is InputEventScreenTouch:
+		var touch := event as InputEventScreenTouch
+		if touch.pressed:
+			_is_dragging = true
+			_drag_start_pos = touch.position
+			_scroll_start = Vector2(scroll_horizontal, scroll_vertical)
+			accept_event()
+			return
+		if _is_dragging:
+			_is_dragging = false
+			accept_event()
+			return
+
 	# 拖拽平移
 	if event is InputEventMouseMotion and _is_dragging:
 		var mm := event as InputEventMouseMotion
 		var delta := _drag_start_pos - mm.position
 		scroll_horizontal = int(_scroll_start.x + delta.x)
 		scroll_vertical = int(_scroll_start.y + delta.y)
+		accept_event()
+		return
+
+	if event is InputEventScreenDrag and _is_dragging:
+		var drag := event as InputEventScreenDrag
+		var delta_touch := _drag_start_pos - drag.position
+		scroll_horizontal = int(_scroll_start.x + delta_touch.x)
+		scroll_vertical = int(_scroll_start.y + delta_touch.y)
 		accept_event()
 
 func _zoom_at(screen_pos: Vector2, delta: float) -> void:

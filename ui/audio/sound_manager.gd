@@ -3,6 +3,8 @@
 class_name SoundManager
 extends Node
 
+const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
+
 # 音效类别
 enum SoundCategory {
 	UI,        # 界面音效
@@ -110,7 +112,9 @@ var _auto_ui_button_sounds_enabled: bool = true
 var _auto_ui_tree_cb: Callable = Callable()
 var _auto_ui_button_cb: Callable = Callable()
 var _auto_ui_last_click_msec: int = -999999
+var _last_local_input_msec: int = -999999
 const AUTO_EVENT_SUPPRESS_AFTER_UI_CLICK_MSEC: int = 250
+const AUTO_UI_INPUT_MAX_AGE_MSEC: int = 250
 
 # 单例
 static var _instance: SoundManager = null
@@ -133,6 +137,7 @@ func _ready() -> void:
 	_load_settings()
 	_setup_eventbus_auto_sounds()
 	_setup_ui_button_auto_sounds()
+	set_process_input(true)
 
 func _is_headless_runtime() -> bool:
 	# Web 平台在 Godot 4.3+ 默认使用 sample playback（绕过 AudioServer 混音），
@@ -281,6 +286,9 @@ func _on_eventbus_auto_sound_event(_event: Dictionary) -> void:
 	# 若刚刚发生过 UI 按键点击，则认为该事件由 UI 驱动，避免重复播放 “Button Press”。
 	if (now_msec - _auto_ui_last_click_msec) < AUTO_EVENT_SUPPRESS_AFTER_UI_CLICK_MSEC:
 		return
+	# 仅在最近存在本地真实输入时才播放自动占位音效，避免联机/程序驱动的状态更新误响。
+	if not _has_recent_local_input(now_msec):
+		return
 	if (now_msec - _auto_sound_last_play_msec) < AUTO_SOUND_MIN_INTERVAL_MSEC:
 		return
 	_auto_sound_last_play_msec = now_msec
@@ -353,8 +361,35 @@ func _on_auto_ui_button_pressed() -> void:
 		return
 	if not _auto_ui_button_sounds_enabled:
 		return
+	if not _has_recent_local_input():
+		return
 	_auto_ui_last_click_msec = Time.get_ticks_msec()
 	play_ui_click()
+
+func _input(event: InputEvent) -> void:
+	if _is_headless_runtime():
+		return
+	if event == null:
+		return
+	if UiPointerInputClass.is_primary_press(event):
+		_record_local_input()
+		return
+	if event is InputEventKey:
+		var key_event: InputEventKey = event
+		if key_event.pressed and not key_event.echo:
+			_record_local_input()
+		return
+	if event is InputEventJoypadButton:
+		var joypad_event: InputEventJoypadButton = event
+		if joypad_event.pressed:
+			_record_local_input()
+
+func _record_local_input(now_msec: int = -1) -> void:
+	_last_local_input_msec = now_msec if now_msec >= 0 else Time.get_ticks_msec()
+
+func _has_recent_local_input(now_msec: int = -1) -> bool:
+	var now := now_msec if now_msec >= 0 else Time.get_ticks_msec()
+	return (now - _last_local_input_msec) <= AUTO_UI_INPUT_MAX_AGE_MSEC
 
 # === 音量控制 ===
 

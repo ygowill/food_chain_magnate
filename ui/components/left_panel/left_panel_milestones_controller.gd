@@ -4,6 +4,7 @@ extends RefCounted
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const CheckmarkIconClass = preload("res://ui/components/left_panel/checkmark_icon.gd")
 const StatusDotIconClass = preload("res://ui/components/common/status_dot_icon.gd")
+const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
 
 # 里程碑状态颜色
 const MILESTONE_COLOR_CLAIMED := Color(0.28, 0.55, 0.22, 1.0)  # 成功绿
@@ -526,10 +527,7 @@ func _on_milestone_mouse_exited() -> void:
 		mgr.hide_preview()
 
 func _on_milestone_gui_input(event: InputEvent, milestone_id: String, control: Control) -> void:
-	if not (event is InputEventMouseButton):
-		return
-	var e: InputEventMouseButton = event
-	if e.button_index != MOUSE_BUTTON_LEFT or not e.pressed:
+	if not UiPointerInputClass.is_primary_press(event):
 		return
 	var mgr = _get_preview_manager()
 	if mgr == null:

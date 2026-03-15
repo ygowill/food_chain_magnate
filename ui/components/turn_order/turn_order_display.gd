@@ -20,6 +20,7 @@ signal position_selected(position: int)
 @onready var slots_container: HBoxContainer = $SlotsContainer
 
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
 const STRIP_BG_COLOR := Color("#c9342f")
 const STRIP_SIDE_PAD := 10.0
 const STRIP_BOTTOM_PAD := 8.0
@@ -662,7 +663,5 @@ class OrderBadge extends Control:
 	func _on_gui_input(event: InputEvent) -> void:
 		if not _clickable:
 			return
-		if event is InputEventMouseButton:
-			var e: InputEventMouseButton = event
-			if e.button_index == MOUSE_BUTTON_LEFT and e.pressed:
-				clicked.emit(slot_position)
+		if UiPointerInputClass.is_primary_press(event):
+			clicked.emit(slot_position)

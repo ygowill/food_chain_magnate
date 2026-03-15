@@ -1,6 +1,8 @@
 # GameLogPanel：阶段标题行（时间线视图）
 extends PanelContainer
 
+const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
+
 signal clicked(timeline_index: int)
 
 var phase_segment: String = ""
@@ -85,6 +87,5 @@ func apply_font_settings() -> void:
 		_label.add_theme_font_size_override("font_size", maxi(10, int(round(12.0 * scale))))
 
 func _gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+	if UiPointerInputClass.is_primary_press(event):
 		clicked.emit(get_timeline_index())
-

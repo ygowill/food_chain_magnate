@@ -2,6 +2,8 @@
 class_name PlayerInfoItem
 extends PanelContainer
 
+const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
+
 signal item_clicked(player_id: int)
 
 var player_id: int = -1
@@ -165,7 +167,5 @@ func _update_style() -> void:
 	add_theme_stylebox_override("panel", style)
 
 func _on_gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		var e: InputEventMouseButton = event
-		if e.button_index == MOUSE_BUTTON_LEFT and e.pressed:
-			item_clicked.emit(player_id)
+	if UiPointerInputClass.is_primary_press(event):
+		item_clicked.emit(player_id)

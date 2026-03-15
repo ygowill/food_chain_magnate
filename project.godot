@@ -37,6 +37,10 @@ window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[input_devices]
+
+pointing/emulate_mouse_from_touch=true
+
 [fcm]
 
 action_setup_provider_path="res://gameplay/action_setup.gd"

@@ -121,6 +121,7 @@ class ProductItem extends PanelContainer:
 	signal item_clicked(product_id: String)
 
 	const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+	const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
 
 	var product_id: String = ""
 	var count: int = 0
@@ -213,7 +214,5 @@ class ProductItem extends PanelContainer:
 		add_theme_stylebox_override("panel", style)
 
 	func _on_gui_input(event: InputEvent) -> void:
-		if event is InputEventMouseButton:
-			var e: InputEventMouseButton = event
-			if e.button_index == MOUSE_BUTTON_LEFT and e.pressed:
-				item_clicked.emit(product_id)
+		if UiPointerInputClass.is_primary_press(event):
+			item_clicked.emit(product_id)

@@ -5,6 +5,7 @@ extends RefCounted
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const EmployeeRoleColorsClass = preload("res://ui/visual/employee_role_colors.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
+const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
 
 var _panel = null
 var _company_employee_count: int = 0
@@ -281,10 +282,7 @@ func _on_tag_mouse_exited() -> void:
 		mgr.hide_preview()
 
 func _on_tag_gui_input(event: InputEvent, employee_id: String, control: Control) -> void:
-	if not (event is InputEventMouseButton):
-		return
-	var e: InputEventMouseButton = event
-	if e.button_index != MOUSE_BUTTON_LEFT or not e.pressed:
+	if not UiPointerInputClass.is_primary_press(event):
 		return
 	var mgr = _get_preview_manager()
 	if mgr == null:

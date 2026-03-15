@@ -135,10 +135,26 @@ func _on_background_gui_input(event: InputEvent) -> void:
 				_dragging = false
 		return
 
+	if event is InputEventScreenTouch:
+		var touch_event: InputEventScreenTouch = event
+		if touch_event.pressed:
+			_dragging = true
+			_drag_start_mouse = touch_event.position
+			_drag_start_pos = graph.position if is_instance_valid(graph) else Vector2.ZERO
+		else:
+			_dragging = false
+		return
+
 	if event is InputEventMouseMotion:
 		var m: InputEventMouseMotion = event
 		if _dragging and is_instance_valid(graph):
 			graph.position = _drag_start_pos + (m.position - _drag_start_mouse)
+		return
+
+	if event is InputEventScreenDrag:
+		var drag_event: InputEventScreenDrag = event
+		if _dragging and is_instance_valid(graph):
+			graph.position = _drag_start_pos + (drag_event.position - _drag_start_mouse)
 		return
 
 func _input(event: InputEvent) -> void:

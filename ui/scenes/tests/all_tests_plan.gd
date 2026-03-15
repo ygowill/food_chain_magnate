@@ -734,18 +734,26 @@ static func build_tests(host) -> Array[Dictionary]:
 				"name": "MarketingSelectionFreezeTest",
 				"fn": func() -> Result: return TestRefs.MarketingSelectionFreezeTestClass.run(),
 			},
-			{
-				"name": "MapHoverHelpTooltipTest",
-				"fn": func() -> Result: return TestRefs.MapHoverHelpTooltipTestClass.run(),
-			},
-			{
-				"name": "AirplaneMarketingOutsideSelectionTest",
-				"fn": func() -> Result: return TestRefs.AirplaneMarketingOutsideSelectionTestClass.run(),
-			},
-			{
-				"name": "MoveRestaurantDisplayLabelTest",
-				"fn": func() -> Result: return TestRefs.MoveRestaurantDisplayLabelTestClass.run(),
-			},
+		{
+			"name": "MapHoverHelpTooltipTest",
+			"fn": func() -> Result: return TestRefs.MapHoverHelpTooltipTestClass.run(),
+		},
+		{
+			"name": "MapTouchSelectionTest",
+			"fn": func() -> Result: return TestRefs.MapTouchSelectionTestClass.run(),
+		},
+		{
+			"name": "AirplaneMarketingOutsideSelectionTest",
+			"fn": func() -> Result: return TestRefs.AirplaneMarketingOutsideSelectionTestClass.run(),
+		},
+		{
+			"name": "SoundManagerLocalInputGateTest",
+			"fn": func() -> Result: return TestRefs.SoundManagerLocalInputGateTestClass.run(),
+		},
+		{
+			"name": "MoveRestaurantDisplayLabelTest",
+			"fn": func() -> Result: return TestRefs.MoveRestaurantDisplayLabelTestClass.run(),
+		},
 			{
 				"name": "ActionPanelGuidedActionPlaceholderTest",
 				"fn": func() -> Result: return await TestRefs.ActionPanelGuidedActionPlaceholderTestClass.run(),

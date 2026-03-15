@@ -3,6 +3,8 @@
 class_name TurnOrderTrack
 extends Control
 
+const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
+
 signal position_selected(position: int)
 
 @onready var slots_container: HBoxContainer = $MarginContainer/VBoxContainer/SlotsContainer
@@ -180,7 +182,5 @@ class OrderSlot extends PanelContainer:
 		add_theme_stylebox_override("panel", style)
 
 	func _on_gui_input(event: InputEvent) -> void:
-		if event is InputEventMouseButton:
-			var e: InputEventMouseButton = event
-			if e.button_index == MOUSE_BUTTON_LEFT and e.pressed and _clickable:
-				slot_clicked.emit(slot_position)
+		if UiPointerInputClass.is_primary_press(event) and _clickable:
+			slot_clicked.emit(slot_position)

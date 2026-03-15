@@ -21,6 +21,7 @@ var _timeline_is_future: bool = false
 var _timeline_is_cursor: bool = false
 
 const EmployeeLinksClass = preload("res://ui/components/game_log/game_log_employee_preview_links.gd")
+const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
 
 func _ready() -> void:
 	_build_ui()
@@ -136,12 +137,9 @@ func apply_font_settings() -> void:
 	_update_text()
 
 func _gui_input(event: InputEvent) -> void:
-	if not (event is InputEventMouseButton):
+	if not UiPointerInputClass.is_primary_press(event):
 		return
-	var mb: InputEventMouseButton = event
-	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
-		return
-	if mb.double_click:
+	if UiPointerInputClass.is_primary_double_press(event):
 		if primary_entry_id >= 0:
 			primary_entry_double_clicked.emit(primary_entry_id)
 			return
@@ -195,10 +193,7 @@ func _on_label_meta_clicked(meta) -> void:
 
 func _on_label_gui_input(event: InputEvent) -> void:
 	# 员工名字点击：显示预览并阻止时间线定位/详情双击。
-	if not (event is InputEventMouseButton):
-		return
-	var mb: InputEventMouseButton = event
-	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
+	if not UiPointerInputClass.is_primary_press(event):
 		return
 	if _label == null or not is_instance_valid(_label):
 		return

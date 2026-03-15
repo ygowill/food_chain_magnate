@@ -4,6 +4,7 @@ extends PanelContainer
 signal pressed(product_id: String)
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
 
 var product_id: String = ""
 var display_name: String = ""
@@ -69,7 +70,5 @@ func _update_style() -> void:
 	_style.border_color = Color(0.35, 0.55, 0.95, 0.95) if _selected else Color(1, 1, 1, 0.15)
 
 func _on_gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		var mb: InputEventMouseButton = event
-		if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
-			pressed.emit(product_id)
+	if UiPointerInputClass.is_primary_press(event):
+		pressed.emit(product_id)
