@@ -20,13 +20,40 @@ class FakePanelController:
 	func get_reserve_cards_full_screen_view():
 		return reserve_view
 
+class FakeTimelineController:
+	extends RefCounted
+
+	func get_ui_head_cursor(_engine: GameEngine) -> Vector2i:
+		return Vector2i(-1, -1)
+
+	func sync_timeline_ui(_head_index: int, _cursor_index: int, _state: GameState) -> void:
+		return
+
+	func is_history_step_timeline_active() -> bool:
+		return true
+
+	func is_replay_mode_active() -> bool:
+		return false
+
+	func is_timeline_read_only_active(_engine: GameEngine) -> bool:
+		return false
+
+	func consume_force_full_panel_sync_next_update() -> bool:
+		return false
+
 static func run(seed_val: int = 12345) -> Result:
+	var prev_mode = NetContext.mode if NetContext != null else 0
+	var prev_local_player_id := int(NetContext.local_player_id) if NetContext != null else -1
 	var engine := GameEngine.new()
 	var init := engine.initialize(2, seed_val)
 	if not init.ok:
-		return _finish(Result.failure("初始化失败: %s" % init.error), null, engine)
+		return _finish(Result.failure("初始化失败: %s" % init.error), null, engine, prev_mode, prev_local_player_id)
+	if NetContext != null:
+		NetContext.mode = NetContext.Mode.HOTSEAT
+		NetContext.local_player_id = -1
 
 	var panel := FakePanelController.new()
+	var timeline := FakeTimelineController.new()
 	var ctrl := GameUiSyncControllerClass.new(
 		func() -> GameEngine: return engine,
 		Callable(),
@@ -39,27 +66,30 @@ static func run(seed_val: int = 12345) -> Result:
 		null,
 		panel,
 		null,
-		null
+		timeline
 	)
 
 	ctrl.update_ui(false)
 	if not panel.shown_focus_ids.is_empty():
-		return _finish(Result.failure("初始同步不应弹出储备卡总览"), ctrl, engine)
+		return _finish(Result.failure("初始同步不应弹出储备卡总览"), ctrl, engine, prev_mode, prev_local_player_id)
 
 	engine.get_state().players[0]["can_peek_all_reserve_cards"] = true
 	ctrl.update_ui(false)
 	if panel.shown_focus_ids.size() != 1 or int(panel.shown_focus_ids[0]) != 0:
-		return _finish(Result.failure("peek 权限从 false->true 时应弹出玩家0 的储备卡总览，实际: %s" % str(panel.shown_focus_ids)), ctrl, engine)
+		return _finish(Result.failure("peek 权限从 false->true 时应弹出玩家0 的储备卡总览，实际: %s" % str(panel.shown_focus_ids)), ctrl, engine, prev_mode, prev_local_player_id)
 
 	ctrl.update_ui(false)
 	if panel.shown_focus_ids.size() != 1:
-		return _finish(Result.failure("同一状态不应重复弹出储备卡总览，实际: %s" % str(panel.shown_focus_ids)), ctrl, engine)
+		return _finish(Result.failure("同一状态不应重复弹出储备卡总览，实际: %s" % str(panel.shown_focus_ids)), ctrl, engine, prev_mode, prev_local_player_id)
 
-	return _finish(Result.success({}), ctrl, engine)
+	return _finish(Result.success({}), ctrl, engine, prev_mode, prev_local_player_id)
 
-static func _finish(result: Result, ctrl, engine) -> Result:
+static func _finish(result: Result, ctrl, engine, prev_mode, prev_local_player_id: int) -> Result:
 	if ctrl != null and ctrl.has_method("dispose"):
 		ctrl.dispose()
 	if engine != null and engine.has_method("dispose"):
 		engine.dispose()
+	if NetContext != null:
+		NetContext.mode = prev_mode
+		NetContext.local_player_id = prev_local_player_id
 	return result

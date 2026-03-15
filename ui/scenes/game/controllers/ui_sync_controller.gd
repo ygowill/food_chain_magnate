@@ -170,17 +170,17 @@ func update_ui(do_profile: bool) -> void:
 
 	_maybe_show_online_turn_toast(head_index, cursor_index, state)
 	_maybe_show_phase_change_toast(head_index, cursor_index, state)
-	_maybe_open_first_have_20_overview(state)
+	_maybe_open_first_have_20_overview(game_engine, state)
 
 	# 同步调试面板
 	if _debug_panel != null and is_instance_valid(_debug_panel) and _debug_panel.visible and _debug_panel.has_method("refresh_state"):
 		_debug_panel.call("refresh_state")
 
-func _maybe_open_first_have_20_overview(state: GameState) -> void:
+func _maybe_open_first_have_20_overview(game_engine: GameEngine, state: GameState) -> void:
 	if state == null or not (state.players is Array):
 		_last_can_peek_all_reserve_cards_by_player.clear()
 		return
-	if _is_timeline_read_only():
+	if _is_timeline_read_only(game_engine):
 		_last_can_peek_all_reserve_cards_by_player = _read_can_peek_flags(state)
 		return
 
@@ -229,12 +229,14 @@ func _is_reserve_cards_overview_visible() -> bool:
 	var view = _panel_controller.call("get_reserve_cards_full_screen_view")
 	return view != null and is_instance_valid(view) and bool(view.visible)
 
-func _is_timeline_read_only() -> bool:
+func _is_timeline_read_only(game_engine: GameEngine) -> bool:
 	if not is_instance_valid(_timeline_controller):
 		return false
+	if _timeline_controller.has_method("is_timeline_read_only_active"):
+		var ro = _timeline_controller.call("is_timeline_read_only_active", game_engine)
+		if ro is bool:
+			return bool(ro)
 	if _timeline_controller.has_method("is_replay_mode_active") and bool(_timeline_controller.call("is_replay_mode_active")):
-		return true
-	if _timeline_controller.has_method("is_history_step_timeline_active") and bool(_timeline_controller.call("is_history_step_timeline_active")):
 		return true
 	return false
 
