@@ -35,7 +35,7 @@ func on_connection_failed() -> void:
 	_net._client_transport_connected = false
 	GameLog.error("NetClient", "Connection failed url=%s" % _safe_text(str(NetContext.server_url)))
 	_net.disconnected.emit("connection_failed")
-	_net.shutdown()
+	_net.shutdown(not _should_preserve_online_context_on_disconnect())
 
 func on_server_disconnected() -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -45,7 +45,7 @@ func on_server_disconnected() -> void:
 	_net._client_transport_connected = false
 	GameLog.warn("NetClient", "Server disconnected url=%s" % _safe_text(str(NetContext.server_url)))
 	_net.disconnected.emit("server_disconnected")
-	_net.shutdown()
+	_net.shutdown(not _should_preserve_online_context_on_disconnect())
 
 func send_client_hello() -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -80,6 +80,7 @@ func handle_rpc_room_state(payload: Dictionary) -> void:
 	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
 		return
 	NetContext.room_state = payload.duplicate(true)
+	_sync_online_resume_state_from_room_state(NetContext.room_state)
 	if Globals != null and Globals.has_method("apply_online_room_state"):
 		Globals.apply_online_room_state(NetContext.room_state)
 	GameLog.debug("NetClient", "RX RoomState %s" % _room_state_brief(NetContext.room_state))
@@ -131,6 +132,21 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 				mapping.size()
 			]
 	)
+
+	var reusing_existing_engine := false
+	if NetContext != null and NetContext.has_method("is_online_reconnecting"):
+		if NetContext.is_online_reconnecting():
+			if Globals != null and Globals.current_game_engine != null and Globals.current_game_engine is GameEngine:
+				var existing_engine: GameEngine = Globals.current_game_engine
+				if existing_engine.get_state() != null:
+					reusing_existing_engine = true
+
+	if reusing_existing_engine:
+		if Globals != null and Globals.has_method("apply_online_room_state"):
+			Globals.apply_online_room_state(NetContext.room_state if NetContext != null else {})
+		GameLog.info("NetClient", "Online client reconnect ready: reusing existing engine")
+		_net.game_started.emit(payload.duplicate(true))
+		return
 
 	if EventBus != null:
 		if EventBus.has_method("clear_history_and_reset_sequence"):
@@ -252,6 +268,31 @@ func handle_rpc_request_rejected(payload: Dictionary) -> void:
 			% [_safe_text(request_id), _safe_text(code), _safe_text(message)]
 	)
 	_net.request_rejected.emit(request_id, code, message)
+
+func _should_preserve_online_context_on_disconnect() -> bool:
+	if _net == null or not is_instance_valid(_net):
+		return false
+	if not _net.has_method("should_preserve_online_context_on_disconnect"):
+		return false
+	return bool(_net.should_preserve_online_context_on_disconnect())
+
+func _sync_online_resume_state_from_room_state(room_state: Dictionary) -> void:
+	if NetContext == null:
+		return
+	if not NetContext.has_method("clear_online_resume_context"):
+		return
+	var room_code := str(room_state.get("room_code", "")).strip_edges().to_upper()
+	if room_code.is_empty():
+		NetContext.clear_online_resume_context()
+		return
+	if not NetContext.has_method("has_online_resume_context"):
+		return
+	if not NetContext.has_online_resume_context():
+		return
+	if room_code != NetContext.get_online_resume_room_code():
+		return
+	if NetContext.has_method("mark_online_resume_in_game"):
+		NetContext.mark_online_resume_in_game(str(room_state.get("status", "")).strip_edges() == "InGame")
 
 func _safe_text(value: String) -> String:
 	var out := str(value).strip_edges()

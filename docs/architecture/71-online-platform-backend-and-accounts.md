@@ -228,17 +228,28 @@ Game Server 崩溃时 Backend 无法被主动通知，因此需要基于心跳�
 - 确认 `ResyncArchive` 下发给 spectator 时，state 中是否包含应隐藏的字段（如玩家手牌、未公开的选择）
 - 建议在 `command_privacy.gd` 中增加 `sanitize_for_spectator(cmd, state)` 方法，统一处理观战者视角的脱敏
 
-### 7.4 断线重连（在现有基础上演进）
+### 7.4 断线重连（当前实现）
 
-当前 `room.gd` 的 `disconnect_peer()` 已经会保留座位（`_seat_profile_by_seat_index` 不删除），仅移除在线映射（`_peer_id_by_seat_index`）。forfeit 是游戏层面的独立操作，不是断线的直接后果。这意味着"保座位"的雏形已经存在。
+当前实现已经支持“同进程内的联机掉线重连”：
 
-建议在此基础上增加 grace period 机制：
+- game server 在 `disconnect_peer()` 后保留 seat，仅移除在线 peer 映射
+- server 维护 `grace_period_sec`，在宽限期内允许同 `user_id + seat_index` 重新绑定到原 seat
+- grace 内恢复时，server 会清理 pending forfeit，并重新下发 `GameStarted + ResyncArchive`
+- grace 超时仍未恢复时，server 执行 `forfeit_player`
 
-- `grace_period_sec`：断线后保留座位的超时时间（例如 120s）
-- grace 内同 `user_id`（通过 `connect_token` 验证身份）重连可恢复 seat，并下发 `ResyncArchive`
-- 超时仍未回：执行 `forfeit_player`
+客户端当前行为：
 
-这部分不影响本文的架构分层，只影响 game server 的房间状态机策略。
+- 非预期断线时保留在线 resume 上下文，不再立即清空 `NetContext`
+- 游戏场景保持当前 scene，显示“正在重连/正在恢复对局” loading，而不是立即返回大厅
+- 客户端通过平台后端 `POST /v1/rooms/{room_code}/resume` 获取新的 `connect_token`
+- WebSocket 重新连通后，客户端在原场景内复用现有 `GameEngine`，等待 `ResyncArchive` 覆盖恢复
+- 若多次尝试后仍失败，才回退到联机大厅
+
+当前范围仍有限制：
+
+- 仅覆盖同一进程中的自动重连
+- 不覆盖 game server 重启后的房间恢复
+- 不覆盖冷启动后自动恢复到旧对局
 
 ### 7.5 回退操作与观战者（rewind_to_turn_start）
 

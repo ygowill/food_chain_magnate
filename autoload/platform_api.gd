@@ -174,6 +174,12 @@ func join_room(room_code: String, session_id: String, password: String = "") -> 
 	})
 
 
+func resume_room(room_code: String, session_id: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_POST, "/v1/rooms/%s/resume" % room_code, {
+		"session_id": session_id,
+	})
+
+
 func spectate_room(room_code: String, session_id: String) -> Dictionary:
 	return await _request(HTTPClient.METHOD_POST, "/v1/rooms/%s/spectate" % room_code, {
 		"session_id": session_id,

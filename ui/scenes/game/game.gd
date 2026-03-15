@@ -240,7 +240,13 @@ func _ready() -> void:
 			Callable(self, "_update_ui"),
 			Callable(self, "_reset_timeline_state_after_online_resync"),
 			Callable(self, "_show_confirm"),
-			Callable(self, "_goto_online_lobby")
+			Callable(self, "_goto_online_lobby"),
+			Callable(self, "_show_online_reconnect_loading"),
+			Callable(self, "_hide_online_reconnect_loading"),
+			Callable(self, "_request_online_resume_room"),
+			Callable(self, "_connect_online_resume_url"),
+			Callable(self, "_shutdown_online_net"),
+			Callable(self, "_request_online_resync_from_net")
 		)
 		_online_resync_controller.initialize()
 		if _ui_sync_controller != null and _ui_sync_controller.has_method("set_online_resync_controller"):
@@ -878,6 +884,38 @@ func _reset_timeline_state_after_online_resync() -> void:
 	if _timeline_controller != null:
 		_timeline_controller.set_timeline_edit_mode_active(false)
 		_timeline_controller.request_force_full_panel_sync_next_update()
+
+func _show_online_reconnect_loading(message: String) -> void:
+	if SceneManager != null and SceneManager.has_method("show_loading"):
+		SceneManager.show_loading(message)
+
+func _hide_online_reconnect_loading() -> void:
+	if SceneManager != null and SceneManager.has_method("hide_loading"):
+		SceneManager.hide_loading()
+
+func _request_online_resume_room(room_code: String) -> Dictionary:
+	if PlatformApi == null:
+		return {"error": "PlatformApi autoload missing"}
+	if PlatformSession == null or not PlatformSession.is_logged_in:
+		return {"error": "PlatformSession unavailable"}
+	if NetContext != null and NetContext.has_method("get_online_resume_platform_base_url"):
+		var base_url := NetContext.get_online_resume_platform_base_url()
+		if not str(base_url).is_empty():
+			PlatformApi.base_url = str(base_url)
+	return await PlatformApi.resume_room(str(room_code).strip_edges().to_upper(), PlatformSession.session_id)
+
+func _connect_online_resume_url(url: String) -> Result:
+	if NetClient == null:
+		return Result.failure("NetClient autoload missing")
+	return NetClient.connect_to_server(url, true)
+
+func _shutdown_online_net(reset_context: bool = false) -> void:
+	if NetClient != null:
+		NetClient.shutdown(bool(reset_context))
+
+func _request_online_resync_from_net() -> void:
+	if NetClient != null:
+		NetClient.request_resync()
 
 func _goto_online_lobby() -> void:
 	if SceneManager != null and SceneManager.has_method("goto_online_lobby"):

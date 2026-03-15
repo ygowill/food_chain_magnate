@@ -755,6 +755,7 @@ func _platform_create_room(desired_player_count: int, room_password: String, con
 		return
 
 	_set_browse_status("创建成功，正在连接...")
+	_remember_online_resume_context(str(ok.get("room_code", "")).strip_edges().to_upper(), "host")
 	_platform_connect_to_ws(ws_url, connect_token)
 
 func _platform_join_room(room_code: String, room_password: String, spectate: bool) -> void:
@@ -801,6 +802,7 @@ func _platform_join_room(room_code: String, room_password: String, spectate: boo
 		return
 
 	_set_browse_status("正在连接...")
+	_remember_online_resume_context(code, "spectator" if spectate else "player")
 	_platform_connect_to_ws(ws_url, connect_token)
 
 func _platform_connect_to_ws(ws_url: String, connect_token: String) -> void:
@@ -954,6 +956,19 @@ func _get_current_room_code() -> String:
 		return ""
 	return str(NetContext.room_state.get("room_code", "")).strip_edges().to_upper()
 
+func _remember_online_resume_context(room_code: String, role: String) -> void:
+	if NetContext == null or not NetContext.has_method("set_online_resume_context"):
+		return
+	var base_url := ""
+	if PlatformApi != null:
+		base_url = str(PlatformApi.base_url).strip_edges()
+	NetContext.set_online_resume_context(room_code, role, base_url)
+
+func _clear_online_resume_context() -> void:
+	if NetContext == null or not NetContext.has_method("clear_online_resume_context"):
+		return
+	NetContext.clear_online_resume_context()
+
 # ── 网络信号处理 ──
 
 func _on_net_connected() -> void:
@@ -966,6 +981,8 @@ func _on_net_connected() -> void:
 
 func _on_net_disconnected(reason: String) -> void:
 	_ws_connect_in_progress = false
+	if NetContext == null or not NetContext.has_method("is_online_reconnecting") or not NetContext.is_online_reconnecting():
+		_clear_online_resume_context()
 	var r := str(reason).strip_edges()
 	if r == "connection_failed":
 		var project_path := ProjectSettings.globalize_path("res://")
@@ -996,6 +1013,9 @@ func _on_room_state_updated(_room_state: Dictionary) -> void:
 	if OS.has_feature("headless"):
 		return
 	var room_state: Dictionary = NetContext.room_state if NetContext != null else {}
+	if NetContext != null and NetContext.has_method("has_online_resume_context"):
+		if NetContext.has_online_resume_context() and NetContext.has_method("mark_online_resume_in_game"):
+			NetContext.mark_online_resume_in_game(str(room_state.get("status", "")).strip_edges() == "InGame")
 	if str(room_state.get("status", "")).strip_edges() != "InGame":
 		return
 	if SceneManager != null and SceneManager.has_method("is_loading_visible") and SceneManager.is_loading_visible():
@@ -1036,11 +1056,14 @@ func _on_request_rejected(request_id: String, code: String, message: String) -> 
 
 	_show_error_dialog(title, body)
 	if c == "protocol_version_mismatch" or c == "missing_connect_token" or c == "invalid_connect_token" or c == "platform_join_failed" or c == "server_misconfigured":
+		_clear_online_resume_context()
 		if NetClient != null:
 			NetClient.shutdown()
 		_refresh_ui()
 
 func _on_game_started(_payload: Dictionary) -> void:
+	if NetContext != null and NetContext.has_method("mark_online_resume_in_game"):
+		NetContext.mark_online_resume_in_game(true)
 	_start_game_request_id = ""
 	_start_game_flow_in_progress = false
 	if SceneManager != null and SceneManager.has_method("show_loading"):
@@ -1221,6 +1244,7 @@ func _on_rename_pressed() -> void:
 	_refresh_ui()
 
 func _on_back_pressed() -> void:
+	_clear_online_resume_context()
 	if NetClient != null:
 		NetClient.shutdown()
 	if SceneManager != null and SceneManager.has_method("go_back") and SceneManager.go_back():
@@ -1257,6 +1281,7 @@ func _on_custom_server_url_submitted(_text: String) -> void:
 	await _on_custom_server_apply_pressed()
 
 func _on_disconnect_pressed() -> void:
+	_clear_online_resume_context()
 	if NetClient != null:
 		NetClient.shutdown()
 	_refresh_ui()

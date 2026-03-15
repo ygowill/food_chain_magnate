@@ -17,7 +17,7 @@
 - 房间加入：`room_password`（可空；空=无密码）。
 - 观战：InGame 允许作为 spectator 加入；若房间有密码则需输入密码；房主可关闭观战（`allow_spectators=false`）。
 - 保密范围：仅银行储备卡（UI/日志/导出不得泄露 `select_reserve_card.selected_index` 给非本人且未揭示时）。
-- 断线重连：阶段 1 不要求。
+- 断线重连：已支持同进程内自动重连（保留 seat + grace period + resume token + archive 恢复）。
 - 掉线处理（InGame）：其余玩家继续；掉线玩家弃权：
   - 移除：餐厅 + 营销板件（`marketing_instances` / `marketing_placements`）+ 员工/库存/里程碑等玩家资产
   - 现金也属于玩家资产：弃权时清零（并计入 `bank.removed_total`）

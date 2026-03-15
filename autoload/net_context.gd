@@ -19,6 +19,7 @@ var connect_token: String = ""
 var room_state: Dictionary = {}
 var room_list: Array = []
 var player_profile: Dictionary = {}
+var online_resume_state: Dictionary = {}
 
 func _ready() -> void:
 	_ensure_default_profile()
@@ -29,6 +30,52 @@ func get_command_privacy_viewer_player_id() -> int:
 		return COMMAND_PRIVACY_SPECTATOR_VIEWER_PLAYER_ID
 	return local_player_id
 
+func set_online_resume_context(room_code: String, role: String, platform_base_url: String) -> void:
+	var code := str(room_code).strip_edges().to_upper()
+	if code.is_empty():
+		online_resume_state = {}
+		return
+	online_resume_state = {
+		"room_code": code,
+		"role": str(role).strip_edges(),
+		"platform_base_url": str(platform_base_url).strip_edges(),
+		"in_game": false,
+		"reconnecting": false,
+	}
+
+func clear_online_resume_context() -> void:
+	online_resume_state = {}
+
+func has_online_resume_context() -> bool:
+	return not get_online_resume_room_code().is_empty()
+
+func get_online_resume_room_code() -> String:
+	return str(online_resume_state.get("room_code", "")).strip_edges().to_upper()
+
+func get_online_resume_role() -> String:
+	return str(online_resume_state.get("role", "")).strip_edges()
+
+func get_online_resume_platform_base_url() -> String:
+	return str(online_resume_state.get("platform_base_url", "")).strip_edges()
+
+func mark_online_resume_in_game(active: bool) -> void:
+	if not has_online_resume_context():
+		return
+	online_resume_state["in_game"] = bool(active)
+	if not bool(active):
+		online_resume_state["reconnecting"] = false
+
+func is_online_resume_in_game() -> bool:
+	return has_online_resume_context() and bool(online_resume_state.get("in_game", false))
+
+func set_online_reconnecting(active: bool) -> void:
+	if not has_online_resume_context():
+		return
+	online_resume_state["reconnecting"] = bool(active)
+
+func is_online_reconnecting() -> bool:
+	return has_online_resume_context() and bool(online_resume_state.get("reconnecting", false))
+
 func reset() -> void:
 	mode = Mode.HOTSEAT
 	local_player_id = -1
@@ -36,6 +83,7 @@ func reset() -> void:
 	connect_token = ""
 	room_state = {}
 	room_list = []
+	online_resume_state = {}
 	_ensure_default_profile()
 
 func _ensure_default_profile() -> void:

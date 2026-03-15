@@ -61,16 +61,17 @@ func start_server(port: int, bind_address: String = "0.0.0.0"):
 	GameLog.info("NetClient", "Server started on %s:%d" % [bind_address, port])
 	return Result.success()
 
-func connect_to_server(url: String):
-	shutdown()
-	NetContext.mode = NetContext.Mode.ONLINE_CLIENT
+func connect_to_server(url: String, preserve_context: bool = false):
+	shutdown(not preserve_context)
 	var parsed := _parse_connect_token_from_url(str(url))
 	var connect_url: String = str(parsed.get("url", str(url)))
 	var connect_token: String = str(parsed.get("connect_token", ""))
 	if connect_token.is_empty():
 		GameLog.error("NetClient", "connect_to_server missing connect_token url=%s" % _safe_text(connect_url))
-		NetContext.reset()
+		if not preserve_context:
+			NetContext.reset()
 		return Result.failure("connect_token required")
+	NetContext.mode = NetContext.Mode.ONLINE_CLIENT
 	NetContext.server_url = connect_url
 	NetContext.connect_token = connect_token
 
@@ -81,7 +82,8 @@ func connect_to_server(url: String):
 	if err != OK:
 		_peer = null
 		GameLog.error("NetClient", "connect_to_server failed url=%s err=%s" % [connect_url, str(err)])
-		NetContext.reset()
+		if not preserve_context:
+			NetContext.reset()
 		return Result.failure("WebSocket client create_client failed: %s" % str(err))
 
 	multiplayer.multiplayer_peer = _peer
@@ -124,7 +126,7 @@ func _parse_connect_token_from_url(url: String) -> Dictionary:
 	out["url"] = base + ("?" + "&".join(kept) if not kept.is_empty() else "")
 	return out
 
-func shutdown() -> void:
+func shutdown(reset_context: bool = true) -> void:
 	var prev_mode := _mode_name(int(NetContext.mode))
 	var prev_connected := _client_transport_connected
 	var prev_server_url := _safe_text(str(NetContext.server_url))
@@ -143,7 +145,8 @@ func shutdown() -> void:
 	_client_transport_connected = false
 	_pending_resync_archive = {}
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
-	NetContext.reset()
+	if reset_context:
+		NetContext.reset()
 	if should_log:
 		GameLog.info(
 			"NetClient",
@@ -153,6 +156,13 @@ func shutdown() -> void:
 
 func is_online_client_connected() -> bool:
 	return NetContext.mode == NetContext.Mode.ONLINE_CLIENT and _client_transport_connected
+
+func should_preserve_online_context_on_disconnect() -> bool:
+	if NetContext == null or not NetContext.has_method("has_online_resume_context"):
+		return false
+	if not NetContext.has_online_resume_context():
+		return false
+	return NetContext.is_online_resume_in_game() or NetContext.is_online_reconnecting()
 
 func request_create_room(desired_player_count: int, room_password: String, config: Dictionary = {}) -> String:
 	var request_id := _next_request_id()
@@ -204,6 +214,8 @@ func request_leave_room() -> String:
 	var payload := {"request_id": request_id}
 	rpc_id(1, "rpc_leave_room", payload)
 	GameLog.info("NetClient", "TX LeaveRoom request_id=%s room=%s" % [request_id, _safe_room_code(NetContext.room_state)])
+	if NetContext != null and NetContext.has_method("clear_online_resume_context"):
+		NetContext.clear_online_resume_context()
 	NetContext.room_state = {}
 	room_state_updated.emit(NetContext.room_state)
 	return request_id

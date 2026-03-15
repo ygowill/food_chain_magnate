@@ -4,6 +4,10 @@ class_name GameOnlineResyncController
 extends RefCounted
 
 const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
+const RECONNECT_MAX_ATTEMPTS := 6
+const RECONNECT_CONNECT_TIMEOUT_SEC := 3.0
+const RECONNECT_RESTORE_TIMEOUT_SEC := 6.0
+const RECONNECT_RETRY_DELAY_SEC := 1.0
 
 var _host: Node = null
 var _game_log_panel: Control = null
@@ -14,6 +18,12 @@ var _update_ui: Callable = Callable()
 var _reset_timeline_state_after_resync: Callable = Callable()
 var _show_confirm: Callable = Callable()
 var _goto_online_lobby: Callable = Callable()
+var _show_loading: Callable = Callable()
+var _hide_loading: Callable = Callable()
+var _resume_room_request: Callable = Callable()
+var _connect_to_server: Callable = Callable()
+var _shutdown_net: Callable = Callable()
+var _request_resync: Callable = Callable()
 
 var _resync_in_progress: bool = false
 var _pending_cmds: Array[Dictionary] = [] # [{cmd_dict, state_hash}]
@@ -21,6 +31,12 @@ var _rewind_request_id: String = ""
 var _resync_ticket: int = 0
 var _action_id_by_request_id: Dictionary = {} # request_id -> action_id
 var _action_request_ids: Array[String] = []
+var _reconnect_flow_active: bool = false
+var _reconnect_ticket: int = 0
+var _reconnect_transport_connected: bool = false
+var _reconnect_restore_completed: bool = false
+var _reconnect_attempt_failed: bool = false
+var _reconnect_attempt_failure_reason: String = ""
 
 func _init(
 	host: Node,
@@ -30,7 +46,13 @@ func _init(
 	update_ui: Callable,
 	reset_timeline_state_after_resync: Callable,
 	show_confirm: Callable,
-	goto_online_lobby: Callable
+	goto_online_lobby: Callable,
+	show_loading: Callable,
+	hide_loading: Callable,
+	resume_room_request: Callable,
+	connect_to_server: Callable,
+	shutdown_net: Callable,
+	request_resync: Callable
 ) -> void:
 	_host = host
 	_game_log_panel = game_log_panel
@@ -40,6 +62,12 @@ func _init(
 	_reset_timeline_state_after_resync = reset_timeline_state_after_resync
 	_show_confirm = show_confirm
 	_goto_online_lobby = goto_online_lobby
+	_show_loading = show_loading
+	_hide_loading = hide_loading
+	_resume_room_request = resume_room_request
+	_connect_to_server = connect_to_server
+	_shutdown_net = shutdown_net
+	_request_resync = request_resync
 
 func dispose() -> void:
 	_disconnect_netclient_signals()
@@ -137,6 +165,7 @@ func _setup_online_client_bindings() -> void:
 	var cb_applied := Callable(self, "_on_online_command_applied")
 	var cb_archive := Callable(self, "_on_online_resync_archive_received")
 	var cb_rejected := Callable(self, "_on_online_request_rejected")
+	var cb_connected := Callable(self, "_on_online_connected")
 	var cb_disconnected := Callable(self, "_on_online_disconnected")
 	if not NetClient.command_applied.is_connected(cb_applied):
 		NetClient.command_applied.connect(cb_applied)
@@ -144,6 +173,8 @@ func _setup_online_client_bindings() -> void:
 		NetClient.resync_archive_received.connect(cb_archive)
 	if not NetClient.request_rejected.is_connected(cb_rejected):
 		NetClient.request_rejected.connect(cb_rejected)
+	if not NetClient.connected.is_connected(cb_connected):
+		NetClient.connected.connect(cb_connected)
 	if not NetClient.disconnected.is_connected(cb_disconnected):
 		NetClient.disconnected.connect(cb_disconnected)
 
@@ -158,6 +189,7 @@ func _disconnect_netclient_signals() -> void:
 	var cb_applied := Callable(self, "_on_online_command_applied")
 	var cb_archive := Callable(self, "_on_online_resync_archive_received")
 	var cb_rejected := Callable(self, "_on_online_request_rejected")
+	var cb_connected := Callable(self, "_on_online_connected")
 	var cb_disconnected := Callable(self, "_on_online_disconnected")
 	if NetClient.command_applied.is_connected(cb_applied):
 		NetClient.command_applied.disconnect(cb_applied)
@@ -165,6 +197,8 @@ func _disconnect_netclient_signals() -> void:
 		NetClient.resync_archive_received.disconnect(cb_archive)
 	if NetClient.request_rejected.is_connected(cb_rejected):
 		NetClient.request_rejected.disconnect(cb_rejected)
+	if NetClient.connected.is_connected(cb_connected):
+		NetClient.connected.disconnect(cb_connected)
 	if NetClient.disconnected.is_connected(cb_disconnected):
 		NetClient.disconnected.disconnect(cb_disconnected)
 
@@ -222,6 +256,9 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 	var r: Result = engine.load_from_archive(archive)
 	if not r.ok:
 		GameLog.error("Game", "联机 ResyncArchive 加载失败: %s" % r.error)
+		if _reconnect_flow_active:
+			_reconnect_attempt_failed = true
+			_reconnect_attempt_failure_reason = "联机同步失败：%s" % r.error
 		_resync_in_progress = false
 		_rewind_request_id = ""
 		_pending_cmds.clear()
@@ -248,6 +285,8 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 		_update_ui.call()
 
 	_flush_online_pending_commands_after_resync()
+	if _reconnect_flow_active or (NetContext != null and NetContext.has_method("is_online_reconnecting") and NetContext.is_online_reconnecting()):
+		_reconnect_restore_completed = true
 
 func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 	var engine = _get_engine()
@@ -466,9 +505,22 @@ func _request_online_resync(reason: String) -> void:
 	GameLog.warn("Game", "联机触发 resync: %s" % str(reason))
 	NetClient.request_resync()
 
+func _on_online_connected() -> void:
+	if not _reconnect_flow_active:
+		return
+	_reconnect_transport_connected = true
+	_reconnect_attempt_failed = false
+	_reconnect_attempt_failure_reason = ""
+	if _show_loading.is_valid():
+		_show_loading.call("已重新连接，正在恢复对局...")
+
 func _on_online_request_rejected(request_id: String, code: String, message: String) -> void:
 	GameLog.warn("Game", "联机请求被拒绝 request_id=%s: %s %s" % [str(request_id), code, message])
 	var action_id := _take_action_id_for_request(request_id)
+	if _reconnect_flow_active:
+		_reconnect_attempt_failed = true
+		_reconnect_attempt_failure_reason = "%s: %s" % [str(code), str(message)]
+		return
 	if _resync_in_progress and not _rewind_request_id.is_empty() and str(request_id) == _rewind_request_id:
 		# 避免“回退请求失败但仍卡在同步中”，导致 ActionPanel 永久禁用与状态不一致。
 		_resync_in_progress = false
@@ -487,6 +539,23 @@ func _on_online_disconnected(reason: String) -> void:
 	if OS.has_feature("headless"):
 		return
 	GameLog.warn("Game", "联机断开: %s" % reason)
+	if _reconnect_flow_active:
+		_reconnect_attempt_failed = true
+		_reconnect_attempt_failure_reason = str(reason)
+		return
+	if _can_attempt_online_reconnect():
+		_reconnect_ticket += 1
+		_reconnect_flow_active = true
+		_reconnect_transport_connected = false
+		_reconnect_restore_completed = false
+		_reconnect_attempt_failed = false
+		_reconnect_attempt_failure_reason = ""
+		if NetContext != null and NetContext.has_method("set_online_reconnecting"):
+			NetContext.set_online_reconnecting(true)
+		if _show_loading.is_valid():
+			_show_loading.call("联机已断开，正在尝试重连...")
+		call_deferred("_run_online_reconnect_flow", _reconnect_ticket, str(reason))
+		return
 	if _show_confirm.is_valid():
 		_show_confirm.call("联机已断开", "原因：%s\n将返回联机大厅。" % reason, Callable(), Callable(), "确定", "关闭")
 	if _host == null or not is_instance_valid(_host):
@@ -496,3 +565,231 @@ func _on_online_disconnected(reason: String) -> void:
 		return
 	if _goto_online_lobby.is_valid():
 		_goto_online_lobby.call()
+
+func _can_attempt_online_reconnect() -> bool:
+	if _host == null or not is_instance_valid(_host):
+		return false
+	if NetContext == null or not NetContext.has_method("has_online_resume_context"):
+		return false
+	if not NetContext.has_online_resume_context():
+		return false
+	if not NetContext.has_method("is_online_resume_in_game") or not NetContext.is_online_resume_in_game():
+		return false
+	if PlatformSession == null or not PlatformSession.is_logged_in:
+		return false
+	if not _resume_room_request.is_valid():
+		return false
+	if not _connect_to_server.is_valid():
+		return false
+	return true
+
+func _run_online_reconnect_flow(ticket: int, initial_reason: String) -> void:
+	if ticket != _reconnect_ticket:
+		return
+	if _host == null or not is_instance_valid(_host):
+		return
+
+	var final_error := "联机已断开：%s" % initial_reason
+	for attempt in range(1, RECONNECT_MAX_ATTEMPTS + 1):
+		if ticket != _reconnect_ticket or not _reconnect_flow_active:
+			return
+		_reconnect_transport_connected = false
+		_reconnect_restore_completed = false
+		_reconnect_attempt_failed = false
+		_reconnect_attempt_failure_reason = ""
+		if _show_loading.is_valid():
+			_show_loading.call("联机已断开，正在重连（%d/%d）..." % [attempt, RECONNECT_MAX_ATTEMPTS])
+
+		var resume_r: Result = await _request_resume_ticket()
+		if not resume_r.ok:
+			final_error = resume_r.error
+			GameLog.warn("Game", "联机重连获取 token 失败 attempt=%d err=%s" % [attempt, resume_r.error])
+			if attempt < RECONNECT_MAX_ATTEMPTS:
+				await _wait_seconds(RECONNECT_RETRY_DELAY_SEC)
+				continue
+			await _finish_online_reconnect_failure(ticket, final_error)
+			return
+
+		var payload: Dictionary = Dictionary(resume_r.value)
+		var url := _build_connect_url(
+			str(payload.get("ws_url", "")),
+			str(payload.get("connect_token", ""))
+		)
+		if url.is_empty():
+			final_error = "resume_room 返回了无效的 ws_url/connect_token"
+			if attempt < RECONNECT_MAX_ATTEMPTS:
+				await _wait_seconds(RECONNECT_RETRY_DELAY_SEC)
+				continue
+			await _finish_online_reconnect_failure(ticket, final_error)
+			return
+
+		var connect_r = _connect_to_server.call(url)
+		if not (connect_r is Result) or not connect_r.ok:
+			final_error = connect_r.error if connect_r is Result else "connect_to_server 返回类型错误"
+			GameLog.warn("Game", "联机重连发起连接失败 attempt=%d err=%s" % [attempt, final_error])
+			if attempt < RECONNECT_MAX_ATTEMPTS:
+				await _wait_seconds(RECONNECT_RETRY_DELAY_SEC)
+				continue
+			await _finish_online_reconnect_failure(ticket, final_error)
+			return
+
+		var transport_ok := await _wait_for_reconnect_transport(ticket, RECONNECT_CONNECT_TIMEOUT_SEC)
+		if not transport_ok:
+			final_error = _reconnect_attempt_failure_reason if not _reconnect_attempt_failure_reason.is_empty() else "连接服务器超时"
+			GameLog.warn("Game", "联机重连 transport 失败 attempt=%d err=%s" % [attempt, final_error])
+			if _shutdown_net.is_valid():
+				_shutdown_net.call(false)
+			if attempt < RECONNECT_MAX_ATTEMPTS:
+				await _wait_seconds(RECONNECT_RETRY_DELAY_SEC)
+				continue
+			await _finish_online_reconnect_failure(ticket, final_error)
+			return
+
+		if _show_loading.is_valid():
+			_show_loading.call("已重新连接，正在恢复对局...")
+
+		var restore_ok := await _wait_for_reconnect_restore(ticket, RECONNECT_RESTORE_TIMEOUT_SEC)
+		if not restore_ok and _request_resync.is_valid():
+			_request_resync.call()
+			if _show_loading.is_valid():
+				_show_loading.call("正在请求对局快照恢复...")
+			restore_ok = await _wait_for_reconnect_restore(ticket, RECONNECT_RESTORE_TIMEOUT_SEC)
+
+		if restore_ok:
+			_finish_online_reconnect_success(ticket)
+			return
+
+		final_error = _reconnect_attempt_failure_reason if not _reconnect_attempt_failure_reason.is_empty() else "恢复对局超时"
+		GameLog.warn("Game", "联机重连恢复失败 attempt=%d err=%s" % [attempt, final_error])
+		if _shutdown_net.is_valid():
+			_shutdown_net.call(false)
+		if attempt < RECONNECT_MAX_ATTEMPTS:
+			await _wait_seconds(RECONNECT_RETRY_DELAY_SEC)
+			continue
+		await _finish_online_reconnect_failure(ticket, final_error)
+		return
+
+func _request_resume_ticket() -> Result:
+	if NetContext == null or not NetContext.has_method("get_online_resume_room_code"):
+		return Result.failure("联机恢复状态缺失")
+	var room_code := NetContext.get_online_resume_room_code()
+	if room_code.is_empty():
+		return Result.failure("联机恢复 room_code 缺失")
+	var resume_resp = await _resume_room_request.call(room_code)
+	if not (resume_resp is Dictionary):
+		return Result.failure("resume_room 返回格式错误")
+	var resume_dict: Dictionary = Dictionary(resume_resp)
+	if resume_dict.has("error"):
+		return Result.failure(_stringify_platform_error(resume_dict.get("error", "")))
+	var ok_val = resume_dict.get("ok", null)
+	if not (ok_val is Dictionary):
+		return Result.failure("resume_room 响应缺少 ok")
+	var ok: Dictionary = Dictionary(ok_val)
+	var ws_url := str(ok.get("ws_url", "")).strip_edges()
+	var connect_token := str(ok.get("connect_token", "")).strip_edges()
+	if ws_url.is_empty() or connect_token.is_empty():
+		return Result.failure("resume_room 缺少 ws_url/connect_token")
+	return Result.success({
+		"room_code": room_code,
+		"ws_url": ws_url,
+		"connect_token": connect_token,
+	})
+
+func _wait_for_reconnect_transport(ticket: int, timeout_sec: float) -> bool:
+	if _host == null or not is_instance_valid(_host):
+		return false
+	var deadline := Time.get_ticks_msec() + int(timeout_sec * 1000.0)
+	while Time.get_ticks_msec() <= deadline:
+		if ticket != _reconnect_ticket or not _reconnect_flow_active:
+			return false
+		if _reconnect_transport_connected:
+			return true
+		if _reconnect_attempt_failed:
+			return false
+		await _host.get_tree().process_frame
+	return false
+
+func _wait_for_reconnect_restore(ticket: int, timeout_sec: float) -> bool:
+	if _host == null or not is_instance_valid(_host):
+		return false
+	var deadline := Time.get_ticks_msec() + int(timeout_sec * 1000.0)
+	while Time.get_ticks_msec() <= deadline:
+		if ticket != _reconnect_ticket or not _reconnect_flow_active:
+			return false
+		if _reconnect_restore_completed:
+			return true
+		if _reconnect_attempt_failed:
+			return false
+		await _host.get_tree().process_frame
+	return false
+
+func _wait_seconds(duration_sec: float) -> void:
+	if _host == null or not is_instance_valid(_host):
+		return
+	var tree := _host.get_tree()
+	if tree == null:
+		return
+	await tree.create_timer(duration_sec).timeout
+
+func _finish_online_reconnect_success(ticket: int) -> void:
+	if ticket != _reconnect_ticket:
+		return
+	_reconnect_flow_active = false
+	_reconnect_transport_connected = false
+	_reconnect_restore_completed = false
+	_reconnect_attempt_failed = false
+	_reconnect_attempt_failure_reason = ""
+	if NetContext != null and NetContext.has_method("set_online_reconnecting"):
+		NetContext.set_online_reconnecting(false)
+	if _hide_loading.is_valid():
+		_hide_loading.call()
+	if _update_ui.is_valid():
+		_update_ui.call()
+	GameLog.info("Game", "联机重连恢复成功")
+
+func _finish_online_reconnect_failure(ticket: int, error_message: String) -> void:
+	if ticket != _reconnect_ticket:
+		return
+	_reconnect_flow_active = false
+	_reconnect_transport_connected = false
+	_reconnect_restore_completed = false
+	_reconnect_attempt_failed = false
+	_reconnect_attempt_failure_reason = ""
+	if NetContext != null and NetContext.has_method("set_online_reconnecting"):
+		NetContext.set_online_reconnecting(false)
+	if _hide_loading.is_valid():
+		_hide_loading.call()
+	if _shutdown_net.is_valid():
+		_shutdown_net.call(true)
+	if _show_confirm.is_valid():
+		_show_confirm.call("重连失败", "%s\n将返回联机大厅。" % error_message, Callable(), Callable(), "确定", "关闭")
+	if _host == null or not is_instance_valid(_host):
+		return
+	await _host.get_tree().process_frame
+	if _host == null or not is_instance_valid(_host):
+		return
+	if _goto_online_lobby.is_valid():
+		_goto_online_lobby.call()
+
+func _build_connect_url(ws_url: String, connect_token: String) -> String:
+	var base := str(ws_url).strip_edges()
+	var token := str(connect_token).strip_edges()
+	if base.is_empty() or token.is_empty():
+		return ""
+	var sep := "?" if base.find("?") < 0 else "&"
+	return base + sep + "connect_token=" + token.uri_encode()
+
+func _stringify_platform_error(error_val) -> String:
+	if error_val is Dictionary:
+		var err_dict: Dictionary = Dictionary(error_val)
+		var detail := str(err_dict.get("detail", "")).strip_edges()
+		if not detail.is_empty():
+			return detail
+		var body: Variant = err_dict.get("body", null)
+		if body != null:
+			return str(body)
+		return JSON.stringify(err_dict)
+	var text := str(error_val).strip_edges()
+	if text.is_empty():
+		return "未知错误"
+	return text

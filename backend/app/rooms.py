@@ -178,6 +178,10 @@ class JoinRequest(BaseModel):
     password: str = ""
 
 
+class ResumeRequest(BaseModel):
+    session_id: str
+
+
 @router.post("/{room_code}/join", response_model=RoomResponse)
 async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends(get_db)):
     sess = await get_current_user(db=db, session_id=req.session_id)
@@ -220,6 +224,49 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
     db.add(RoomMember(room_id=room.room_id, user_id=sess.user_id, role="player", seat_index=seat))
     await db.commit()
     token = issue_connect_token(sess.user_id, room.room_code, "player", display_name=display_name, seat_index=seat)
+    return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
+
+
+@router.post("/{room_code}/resume", response_model=RoomResponse)
+async def resume_room(room_code: str, req: ResumeRequest, db: AsyncSession = Depends(get_db)):
+    sess = await get_current_user(db=db, session_id=req.session_id)
+    user = (await db.execute(select(User).where(User.user_id == sess.user_id))).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(404, "user not found")
+    is_guest = await _is_guest_user(db, user.user_id)
+    display_name, name_changed = _resolve_display_name(user, is_guest)
+
+    room = (await db.execute(select(Room).where(Room.room_code == room_code))).scalar_one_or_none()
+    if not room:
+        raise HTTPException(404, "room not found")
+    if str(room.status) == "Ended":
+        raise HTTPException(409, "room already ended")
+
+    existing = (await db.execute(
+        select(RoomMember).where(
+            RoomMember.room_id == room.room_id,
+            RoomMember.user_id == sess.user_id,
+            RoomMember.left_at.is_(None),
+        )
+    )).scalar_one_or_none()
+    if existing is None:
+        raise HTTPException(403, "room membership not found")
+
+    role = str(existing.role)
+    seat_index = existing.seat_index
+    if role in {"host", "player"} and seat_index is None:
+        raise HTTPException(409, "seat missing for resumable role")
+
+    if name_changed:
+        await db.commit()
+
+    token = issue_connect_token(
+        sess.user_id,
+        room.room_code,
+        role,
+        display_name=display_name,
+        seat_index=seat_index,
+    )
     return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
 
 

@@ -119,6 +119,24 @@ async def test_join_room_idempotent(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_resume_room_existing_member(client: AsyncClient):
+    host = await _create_user(client)
+    create = await client.post("/v1/rooms", json={"session_id": host["session_id"]})
+    code = create.json()["room_code"]
+
+    player = await _create_user(client)
+    joined = await client.post(f"/v1/rooms/{code}/join", json={"session_id": player["session_id"]})
+    assert joined.status_code == 200
+
+    resumed = await client.post(f"/v1/rooms/{code}/resume", json={"session_id": player["session_id"]})
+    assert resumed.status_code == 200
+    payload = verify_token(str(resumed.json()["connect_token"]))
+    assert payload is not None
+    assert payload.get("role") == "player"
+    assert int(payload.get("seat_index", -1)) == 1
+
+
+@pytest.mark.asyncio
 async def test_join_password_room(client: AsyncClient):
     host = await _create_user(client)
     create = await client.post("/v1/rooms", json={
@@ -136,6 +154,26 @@ async def test_join_password_room(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_resume_password_room_without_password(client: AsyncClient):
+    host = await _create_user(client)
+    create = await client.post("/v1/rooms", json={
+        "session_id": host["session_id"], "password": "secret",
+    })
+    code = create.json()["room_code"]
+
+    player = await _create_user(client)
+    joined = await client.post(f"/v1/rooms/{code}/join", json={"session_id": player["session_id"], "password": "secret"})
+    assert joined.status_code == 200
+
+    resumed = await client.post(f"/v1/rooms/{code}/resume", json={"session_id": player["session_id"]})
+    assert resumed.status_code == 200
+    payload = verify_token(str(resumed.json()["connect_token"]))
+    assert payload is not None
+    assert payload.get("role") == "player"
+    assert int(payload.get("seat_index", -1)) == 1
+
+
+@pytest.mark.asyncio
 async def test_spectate_room(client: AsyncClient):
     host = await _create_user(client)
     create = await client.post("/v1/rooms", json={"session_id": host["session_id"]})
@@ -145,6 +183,17 @@ async def test_spectate_room(client: AsyncClient):
     resp = await client.post(f"/v1/rooms/{code}/spectate", json={"session_id": spectator["session_id"]})
     assert resp.status_code == 200
     assert resp.json()["room_code"] == code
+
+
+@pytest.mark.asyncio
+async def test_resume_room_requires_membership(client: AsyncClient):
+    host = await _create_user(client)
+    create = await client.post("/v1/rooms", json={"session_id": host["session_id"]})
+    code = create.json()["room_code"]
+
+    outsider = await _create_user(client)
+    resp = await client.post(f"/v1/rooms/{code}/resume", json={"session_id": outsider["session_id"]})
+    assert resp.status_code == 403
 
 
 @pytest.mark.asyncio

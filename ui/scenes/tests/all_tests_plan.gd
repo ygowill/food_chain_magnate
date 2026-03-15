@@ -107,6 +107,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.PlatformSessionProfileDeviceIdTestClass.run(),
 		},
 		{
+			"name": "NetContextOnlineResumeTest",
+			"fn": func() -> Result: return TestRefs.NetContextOnlineResumeTestClass.run(),
+		},
+		{
 			"name": "UiLobbyistsRoadOverlaysHardRefContractTest",
 			"fn": func() -> Result: return TestRefs.UiLobbyistsRoadOverlaysHardRefContractTestClass.run(),
 		},
@@ -187,6 +191,14 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.PlatformConnectTokenAutoJoinTestClass.run(),
 		},
 		{
+			"name": "OnlineClientDisconnectPreserveContextTest",
+			"fn": func() -> Result: return TestRefs.OnlineClientDisconnectPreserveContextTestClass.run(),
+		},
+		{
+			"name": "OnlineClientGameStartedReconnectTest",
+			"fn": func() -> Result: return TestRefs.OnlineClientGameStartedReconnectTestClass.run(),
+		},
+		{
 			"name": "OnlineRoomManagerTest",
 			"fn": func() -> Result: return TestRefs.OnlineRoomManagerTestClass.run(),
 		},
@@ -221,6 +233,10 @@ static func build_tests(host) -> Array[Dictionary]:
 		{
 			"name": "OnlineDisconnectGraceReconnectTest",
 			"fn": func() -> Result: return await TestRefs.OnlineDisconnectGraceReconnectTestClass.run(),
+		},
+		{
+			"name": "GameOnlineResyncReconnectFlowTest",
+			"fn": func() -> Result: return await TestRefs.GameOnlineResyncReconnectFlowTestClass.run(),
 		},
 		{
 			"name": "OnlineRoomSeedRandomStableTest",
