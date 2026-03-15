@@ -247,6 +247,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.EntityTabReserveCardPrivacyTestClass.run(),
 			},
 			{
+				"name": "ReserveCardsOverviewAccessTest",
+				"fn": func() -> Result: return TestRefs.ReserveCardsOverviewAccessTestClass.run(),
+			},
+			{
 				"name": "ReserveCardsFullScreenViewPrivacyTest",
 				"fn": func() -> Result: return await TestRefs.ReserveCardsFullScreenViewPrivacyTestClass.run(),
 			},

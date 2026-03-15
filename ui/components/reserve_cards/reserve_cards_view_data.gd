@@ -10,6 +10,25 @@ static func resolve_viewer_player_id(state: GameState) -> int:
 			return cur
 	return -1
 
+static func viewer_has_overview_access(state: GameState, viewer_player_id: int = -999) -> bool:
+	if state == null or not (state.players is Array):
+		return false
+	if str(state.phase) == "Dinnertime":
+		return false
+
+	var viewer_id := viewer_player_id
+	if viewer_id == -999:
+		viewer_id = resolve_viewer_player_id(state)
+	if viewer_id < 0 or viewer_id >= state.players.size():
+		return false
+
+	var viewer_val = state.players[viewer_id]
+	if not (viewer_val is Dictionary):
+		return false
+	var viewer: Dictionary = viewer_val
+	var v = viewer.get("can_peek_all_reserve_cards", false)
+	return (v is bool) and bool(v)
+
 static func build_player_sections(state: GameState, viewer_player_id: int = -999) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if state == null or not (state.players is Array):

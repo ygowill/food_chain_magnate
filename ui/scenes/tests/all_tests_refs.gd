@@ -155,6 +155,7 @@ const HandAreaViewSwitchTestClass = preload("res://ui/scenes/tests/hand_area_vie
 const ReserveCardSelectionModalPrivacyTestClass = preload("res://ui/scenes/tests/reserve_card_selection_modal_privacy_test.gd")
 const ReserveCardSelectionModalPresentationTestClass = preload("res://ui/scenes/tests/reserve_card_selection_modal_presentation_test.gd")
 const EntityTabReserveCardPrivacyTestClass = preload("res://ui/scenes/tests/entity_tab_reserve_card_privacy_test.gd")
+const ReserveCardsOverviewAccessTestClass = preload("res://ui/scenes/tests/reserve_cards_overview_access_test.gd")
 const ReserveCardsFullScreenViewPrivacyTestClass = preload("res://ui/scenes/tests/reserve_cards_full_screen_view_privacy_test.gd")
 const GameOverlayFirstHave20PopupTestClass = preload("res://ui/scenes/tests/game_overlay_first_have_20_popup_test.gd")
 const UiSyncFirstHave20PopupTestClass = preload("res://ui/scenes/tests/ui_sync_first_have_20_popup_test.gd")

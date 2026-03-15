@@ -18,6 +18,7 @@ const UiComponentsBinderClass = preload("res://ui/scenes/game/panel/ui_component
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const ReserveCardsViewDataClass = preload("res://ui/components/reserve_cards/reserve_cards_view_data.gd")
 
 const _GUIDED_ACTION_DOCK_SCRIPT_PATHS := {
 	"res://ui/components/recruit_panel/recruit_panel.gd": true,
@@ -125,8 +126,23 @@ func show_reserve_cards_overview(focus_player_id: int = -1) -> void:
 	var state: GameState = engine.get_state()
 	if state == null:
 		return
+	if not can_open_reserve_cards_overview(state):
+		return
 	if _views_controller != null:
 		_views_controller.show_reserve_cards_full_screen_view(state, focus_player_id)
+
+func can_open_reserve_cards_overview(state: GameState = null) -> bool:
+	var live_state := state
+	if live_state == null:
+		if _scene == null:
+			return false
+		var engine = _scene.get("game_engine")
+		if engine == null or not (engine is GameEngine):
+			return false
+		live_state = engine.get_state()
+	if live_state == null:
+		return false
+	return ReserveCardsViewDataClass.viewer_has_overview_access(live_state)
 
 func show_payday_panel() -> void:
 	if _end_panels != null:
@@ -300,6 +316,7 @@ func has_open_phase_ui() -> bool:
 
 func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	_update_ui_components(state)
+	_sync_reserve_cards_overview_access(state)
 	if _working_panels != null:
 		_working_panels.sync(state, force_full_refresh)
 	if _marketing_panels != null:
@@ -333,6 +350,17 @@ func get_employee_tree_panel():
 	if _views_controller == null:
 		return null
 	return _views_controller.get_employee_tree_panel()
+
+func _sync_reserve_cards_overview_access(state: GameState) -> void:
+	var can_open := can_open_reserve_cards_overview(state)
+	if _scene != null:
+		var btn = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/ReserveCardsButton")
+		if btn is Button:
+			var button: Button = btn
+			button.visible = can_open
+			button.disabled = not can_open
+	if not can_open and _views_controller != null and _views_controller.has_method("hide_reserve_cards_full_screen_view"):
+		_views_controller.hide_reserve_cards_full_screen_view()
 
 func _sync_action_panel_context() -> void:
 	if _scene == null:
