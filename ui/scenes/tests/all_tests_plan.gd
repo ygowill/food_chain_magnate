@@ -255,6 +255,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return await TestRefs.GameOverlayFirstHave20PopupTestClass.run(),
 			},
 			{
+				"name": "UiSyncFirstHave20PopupTest",
+				"fn": func() -> Result: return TestRefs.UiSyncFirstHave20PopupTestClass.run(),
+			},
+			{
 				"name": "TurnOrderSelectionModalOnlineVisibilityTest",
 				"fn": func() -> Result: return TestRefs.TurnOrderSelectionModalOnlineVisibilityTestClass.run(),
 			},

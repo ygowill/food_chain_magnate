@@ -157,6 +157,7 @@ const ReserveCardSelectionModalPresentationTestClass = preload("res://ui/scenes/
 const EntityTabReserveCardPrivacyTestClass = preload("res://ui/scenes/tests/entity_tab_reserve_card_privacy_test.gd")
 const ReserveCardsFullScreenViewPrivacyTestClass = preload("res://ui/scenes/tests/reserve_cards_full_screen_view_privacy_test.gd")
 const GameOverlayFirstHave20PopupTestClass = preload("res://ui/scenes/tests/game_overlay_first_have_20_popup_test.gd")
+const UiSyncFirstHave20PopupTestClass = preload("res://ui/scenes/tests/ui_sync_first_have_20_popup_test.gd")
 const TurnOrderSelectionModalOnlineVisibilityTestClass = preload("res://ui/scenes/tests/turn_order_selection_modal_online_visibility_test.gd")
 const RoomConfigEditorEditableSignalTestClass = preload("res://ui/scenes/tests/room_config_editor_editable_signal_test.gd")
 const LeftPanelSelectionIsolationTestClass = preload("res://ui/scenes/tests/left_panel_selection_isolation_test.gd")

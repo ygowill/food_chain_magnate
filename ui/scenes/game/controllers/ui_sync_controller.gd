@@ -47,6 +47,7 @@ var _debug_panel: Window = null
 
 var _online_turn_toast_last_player_id: int = -999
 var _phase_toast_last_phase: String = ""
+var _last_can_peek_all_reserve_cards_by_player: Array[bool] = []
 
 func _init(
 	get_game_engine: Callable,
@@ -90,6 +91,7 @@ func dispose() -> void:
 	_timeline_controller = null
 	_online_resync_controller = null
 	_debug_panel = null
+	_last_can_peek_all_reserve_cards_by_player.clear()
 
 func set_online_resync_controller(controller: Object) -> void:
 	_online_resync_controller = controller
@@ -168,10 +170,73 @@ func update_ui(do_profile: bool) -> void:
 
 	_maybe_show_online_turn_toast(head_index, cursor_index, state)
 	_maybe_show_phase_change_toast(head_index, cursor_index, state)
+	_maybe_open_first_have_20_overview(state)
 
 	# 同步调试面板
 	if _debug_panel != null and is_instance_valid(_debug_panel) and _debug_panel.visible and _debug_panel.has_method("refresh_state"):
 		_debug_panel.call("refresh_state")
+
+func _maybe_open_first_have_20_overview(state: GameState) -> void:
+	if state == null or not (state.players is Array):
+		_last_can_peek_all_reserve_cards_by_player.clear()
+		return
+	if _is_timeline_read_only():
+		_last_can_peek_all_reserve_cards_by_player = _read_can_peek_flags(state)
+		return
+
+	var current_flags := _read_can_peek_flags(state)
+	if _last_can_peek_all_reserve_cards_by_player.size() != current_flags.size():
+		_last_can_peek_all_reserve_cards_by_player = current_flags
+		return
+
+	for pid in range(current_flags.size()):
+		var had_before := bool(_last_can_peek_all_reserve_cards_by_player[pid])
+		var has_now := bool(current_flags[pid])
+		if had_before or not has_now:
+			continue
+		if not _should_auto_open_first_have_20_for_player(pid):
+			continue
+		if _is_reserve_cards_overview_visible():
+			break
+		if is_instance_valid(_panel_controller) and _panel_controller.has_method("show_reserve_cards_overview"):
+			_panel_controller.call("show_reserve_cards_overview", pid)
+		break
+
+	_last_can_peek_all_reserve_cards_by_player = current_flags
+
+func _read_can_peek_flags(state: GameState) -> Array[bool]:
+	var out: Array[bool] = []
+	if state == null or not (state.players is Array):
+		return out
+	for player_val in state.players:
+		if not (player_val is Dictionary):
+			out.append(false)
+			continue
+		var player: Dictionary = player_val
+		out.append(bool(player.get("can_peek_all_reserve_cards", false)))
+	return out
+
+func _should_auto_open_first_have_20_for_player(player_id: int) -> bool:
+	if player_id < 0:
+		return false
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		return int(NetContext.local_player_id) == player_id
+	return true
+
+func _is_reserve_cards_overview_visible() -> bool:
+	if not is_instance_valid(_panel_controller) or not _panel_controller.has_method("get_reserve_cards_full_screen_view"):
+		return false
+	var view = _panel_controller.call("get_reserve_cards_full_screen_view")
+	return view != null and is_instance_valid(view) and bool(view.visible)
+
+func _is_timeline_read_only() -> bool:
+	if not is_instance_valid(_timeline_controller):
+		return false
+	if _timeline_controller.has_method("is_replay_mode_active") and bool(_timeline_controller.call("is_replay_mode_active")):
+		return true
+	if _timeline_controller.has_method("is_history_step_timeline_active") and bool(_timeline_controller.call("is_history_step_timeline_active")):
+		return true
+	return false
 
 func on_debug_command_executed(command: String) -> void:
 	# undo/redo/restore/load 会“改写时间线”；
