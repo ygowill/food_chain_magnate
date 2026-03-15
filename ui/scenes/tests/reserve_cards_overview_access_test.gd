@@ -22,8 +22,8 @@ static func run(seed_val: int = 12345) -> Result:
 	state.players[0]["can_peek_all_reserve_cards"] = false
 	state.players[1]["can_peek_all_reserve_cards"] = false
 
-	if ReserveCardsViewDataClass.viewer_has_overview_access(state):
-		return _finish(Result.failure("未触发里程碑时不应允许打开储备卡总览"), engine, prev_mode, prev_local_player_id)
+	if not ReserveCardsViewDataClass.viewer_has_overview_access(state):
+		return _finish(Result.failure("非晚餐阶段应允许打开储备卡总览"), engine, prev_mode, prev_local_player_id)
 
 	state.players[0]["can_peek_all_reserve_cards"] = true
 	if not ReserveCardsViewDataClass.viewer_has_overview_access(state):
@@ -38,8 +38,8 @@ static func run(seed_val: int = 12345) -> Result:
 		NetContext.local_player_id = 1
 	state.phase = "Payday"
 	state.players[1]["can_peek_all_reserve_cards"] = false
-	if ReserveCardsViewDataClass.viewer_has_overview_access(state):
-		return _finish(Result.failure("联机下本地玩家未触发里程碑时不应允许打开储备卡总览"), engine, prev_mode, prev_local_player_id)
+	if not ReserveCardsViewDataClass.viewer_has_overview_access(state):
+		return _finish(Result.failure("联机下本地玩家未触发里程碑时仍应允许打开储备卡总览"), engine, prev_mode, prev_local_player_id)
 
 	if NetContext != null:
 		NetContext.local_player_id = 0

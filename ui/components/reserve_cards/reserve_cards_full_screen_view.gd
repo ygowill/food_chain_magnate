@@ -108,7 +108,7 @@ func _update_header_text(state: GameState, viewer_player_id: int) -> void:
 	if can_peek_all:
 		hint_label.text = "已解锁：可查看全部玩家已选择的储备卡。ESC 关闭"
 	else:
-		hint_label.text = "仅显示你自己的已选储备卡，或其他玩家已公开的已选项。ESC 关闭"
+		hint_label.text = "所有玩家都可查看总览；未解锁时，他人的未公开储备卡显示为问号。ESC 关闭"
 
 func _clear_sections() -> void:
 	if not is_instance_valid(sections):
@@ -213,7 +213,7 @@ func _build_card_panel(card_entry: Dictionary) -> Control:
 		footer_label.text = "已选择"
 		footer_label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_SUCCESS)
 	elif not visible_card:
-		footer_label.text = "未公开"
+		footer_label.text = "?"
 		footer_label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_MUTED)
 	else:
 		footer_label.text = ""

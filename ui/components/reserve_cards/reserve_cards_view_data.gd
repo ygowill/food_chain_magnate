@@ -19,15 +19,9 @@ static func viewer_has_overview_access(state: GameState, viewer_player_id: int =
 	var viewer_id := viewer_player_id
 	if viewer_id == -999:
 		viewer_id = resolve_viewer_player_id(state)
-	if viewer_id < 0 or viewer_id >= state.players.size():
-		return false
-
-	var viewer_val = state.players[viewer_id]
-	if not (viewer_val is Dictionary):
-		return false
-	var viewer: Dictionary = viewer_val
-	var v = viewer.get("can_peek_all_reserve_cards", false)
-	return (v is bool) and bool(v)
+	if viewer_id < 0:
+		return true
+	return viewer_id < state.players.size()
 
 static func build_player_sections(state: GameState, viewer_player_id: int = -999) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -76,9 +70,9 @@ static func build_card_entry(card_val, index: int, visible: bool, selected: bool
 			"index": index,
 			"visible": false,
 			"selected": false,
-			"title": "未公开",
+			"title": "?",
 			"desc": "",
-			"summary": "未公开",
+			"summary": "?",
 		}
 
 	var card: Dictionary = card_val if (card_val is Dictionary) else {}
@@ -136,7 +130,7 @@ static func _build_selection_text(player_id: int, viewer_player_id: int, can_vie
 		if selected_index >= 0:
 			return "仅公开已选项：储备卡 %d" % (selected_index + 1)
 		return "已公开选中的储备卡"
-	return "未公开"
+	return "已选择：?"
 
 static func _can_view_all_reserve_cards(viewer_player_id: int, player_id: int, state: GameState) -> bool:
 	if viewer_player_id < 0:
