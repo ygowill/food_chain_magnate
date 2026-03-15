@@ -66,6 +66,23 @@ async def test_admin_requires_allowlist(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_admin_env_credentials_enable_admin_access(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "admin_user_ids", "")
+    monkeypatch.setattr(settings, "admin_email", "admin-env@fcm.test")
+    monkeypatch.setattr(settings, "admin_password", "env-secret")
+    monkeypatch.setattr(settings, "admin_display_name", "EnvAdmin")
+
+    login = await client.post("/v1/auth/login", json={
+        "email": "admin-env@fcm.test",
+        "password": "env-secret",
+    })
+    assert login.status_code == 200
+
+    resp = await client.get("/v1/admin/users", params={"session_id": login.json()["session_id"]})
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_admin_endpoints_manage_entities(client: AsyncClient, db_session: AsyncSession, tmp_path: Path):
     admin_user = await _create_user(client)
     normal_user = await _create_user(client)

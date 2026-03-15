@@ -42,20 +42,6 @@ class AuthIdentity(Base):
     __table_args__ = (UniqueConstraint("provider", "provider_user_id"),)
 
 
-class EmailVerificationToken(Base):
-    __tablename__ = "email_verification_tokens"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
-    auth_identity_id: Mapped[str] = mapped_column(ForeignKey("auth_identities.id"), nullable=False)
-    purpose: Mapped[str] = mapped_column(String, nullable=False)
-    token_hash: Mapped[str] = mapped_column(String, unique=True, nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    consumed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    last_sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    send_count: Mapped[int] = mapped_column(Integer, default=1)
-
-
 class Session(Base):
     __tablename__ = "sessions"
 

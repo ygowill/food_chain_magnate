@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user, is_admin_user_id
+from app.auth import get_current_user, has_admin_access_configured, is_admin_user
 from app.config import settings
 from app.db import get_db
 from app.models import AuthIdentity, Match, MatchParticipant, MatchReplay, Room, RoomMember, Session, User
@@ -39,9 +39,9 @@ async def _require_admin_session(
     db: AsyncSession = Depends(get_db),
 ) -> Session:
     sess = await get_current_user(db=db, session_id=session_id)
-    if str(settings.admin_user_ids or "").strip() == "":
+    if not has_admin_access_configured():
         raise HTTPException(status_code=403, detail="admin disabled")
-    if not is_admin_user_id(sess.user_id):
+    if not await is_admin_user(db, sess.user_id):
         raise HTTPException(status_code=403, detail="admin only")
     return sess
 

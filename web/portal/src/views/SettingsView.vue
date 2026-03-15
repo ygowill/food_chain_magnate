@@ -10,15 +10,6 @@
         <el-descriptions-item label="昵称">{{ auth.user.display_name || '-' }}</el-descriptions-item>
         <el-descriptions-item label="用户 ID">{{ auth.user.user_id }}</el-descriptions-item>
         <el-descriptions-item label="邮箱">{{ auth.user.email || '未绑定' }}</el-descriptions-item>
-        <el-descriptions-item label="邮箱状态">
-          {{
-            auth.user.email == null
-              ? '未绑定'
-              : auth.user.email_verified
-                ? '已验证'
-                : '待验证'
-          }}
-        </el-descriptions-item>
         <el-descriptions-item label="账号类型">{{ auth.user.is_guest ? '游客' : '正式' }}</el-descriptions-item>
         <el-descriptions-item label="注册时间">
           {{ new Date(auth.user.created_at).toLocaleString('zh-CN') }}
@@ -43,10 +34,7 @@
 
     <div class="poster-card" style="max-width: 500px; margin-top: 20px" v-if="auth.user && auth.user.is_guest">
       <h3 class="poster-card__title">绑定邮箱</h3>
-      <p class="poster-card__hint">
-        绑定邮箱后可使用邮箱登录，游戏数据将保留。
-        <span v-if="auth.user.email_verification_pending">当前邮箱待验证：{{ auth.user.email }}</span>
-      </p>
+      <p class="poster-card__hint">绑定邮箱后可使用邮箱登录，游戏数据将保留。</p>
       <el-form @submit.prevent="handleBind" :disabled="bindLoading">
         <el-form-item label="邮箱">
           <el-input v-model="bindEmail" placeholder="请输入邮箱" />
@@ -58,24 +46,27 @@
           <el-input v-model="bindConfirm" type="password" placeholder="请再次输入密码" show-password />
         </el-form-item>
         <el-alert v-if="bindError" :title="bindError" type="error" :closable="false" style="margin-bottom: 16px" />
-        <el-alert
-          v-if="bindSuccess"
-          title="验证邮件已发送，请打开邮箱中的链接完成绑定"
-          type="success"
-          :closable="false"
-          style="margin-bottom: 16px"
-        />
+        <el-alert v-if="bindSuccess" title="绑定成功，账号已升级" type="success" :closable="false" style="margin-bottom: 16px" />
         <el-form-item>
-          <el-button type="primary" native-type="submit" :loading="bindLoading">
-            {{ auth.user.email_verification_pending ? '更新并重发验证邮件' : '绑定邮箱' }}
-          </el-button>
-          <el-button
-            v-if="auth.user.email_verification_pending"
-            :loading="bindResendLoading"
-            @click="handleResendBindVerification"
-          >
-            重新发送
-          </el-button>
+          <el-button type="primary" native-type="submit" :loading="bindLoading">绑定邮箱</el-button>
+        </el-form-item>
+      </el-form>
+    </div>
+
+    <div class="poster-card" style="max-width: 500px; margin-top: 20px" v-if="auth.user && !auth.user.is_guest">
+      <h3 class="poster-card__title">修改邮箱</h3>
+      <p class="poster-card__hint">修改后，后续请使用新邮箱登录。</p>
+      <el-form @submit.prevent="handleUpdateEmail" :disabled="emailLoading">
+        <el-form-item label="新邮箱">
+          <el-input v-model="emailInput" placeholder="请输入新邮箱" />
+        </el-form-item>
+        <el-form-item label="当前密码">
+          <el-input v-model="emailPassword" type="password" show-password placeholder="请输入当前密码" />
+        </el-form-item>
+        <el-alert v-if="emailError" :title="emailError" type="error" :closable="false" style="margin-bottom: 16px" />
+        <el-alert v-if="emailSuccess" title="邮箱修改成功" type="success" :closable="false" style="margin-bottom: 16px" />
+        <el-form-item>
+          <el-button type="primary" native-type="submit" :loading="emailLoading">保存邮箱</el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -108,7 +99,7 @@ import { useAuthStore } from '../stores/auth'
 import {
   changePassword,
   bindEmail as apiBindEmail,
-  resendEmailVerification,
+  updateEmail,
   updateDisplayName,
 } from '../api/auth'
 import AppLayout from '../components/AppLayout.vue'
@@ -127,7 +118,11 @@ const bindConfirm = ref('')
 const bindError = ref('')
 const bindSuccess = ref(false)
 const bindLoading = ref(false)
-const bindResendLoading = ref(false)
+const emailInput = ref('')
+const emailPassword = ref('')
+const emailError = ref('')
+const emailSuccess = ref(false)
+const emailLoading = ref(false)
 const displayNameInput = ref('')
 const displayNameError = ref('')
 const displayNameSuccess = ref(false)
@@ -137,6 +132,7 @@ onMounted(async () => {
   await auth.fetchUser()
   displayNameInput.value = auth.user?.display_name || ''
   bindEmail.value = auth.user?.email || ''
+  emailInput.value = auth.user?.email || ''
 })
 
 async function handleBind() {
@@ -152,31 +148,15 @@ async function handleBind() {
   }
   bindLoading.value = true
   try {
-    const { data } = await apiBindEmail(auth.sessionId, bindEmail.value, bindPassword.value)
+    await apiBindEmail(auth.sessionId, bindEmail.value, bindPassword.value)
     bindSuccess.value = true
     await auth.fetchUser()
-    bindEmail.value = data.email
+    bindEmail.value = auth.user?.email || ''
     displayNameInput.value = auth.user?.display_name || ''
   } catch (e: any) {
     bindError.value = e.response?.data?.detail || '绑定失败'
   } finally {
     bindLoading.value = false
-  }
-}
-
-async function handleResendBindVerification() {
-  bindError.value = ''
-  bindSuccess.value = false
-  bindResendLoading.value = true
-  try {
-    const { data } = await resendEmailVerification({ sessionId: auth.sessionId })
-    bindSuccess.value = true
-    bindEmail.value = data.email
-    await auth.fetchUser()
-  } catch (e: any) {
-    bindError.value = e.response?.data?.detail || '重新发送失败'
-  } finally {
-    bindResendLoading.value = false
   }
 }
 
@@ -198,6 +178,31 @@ async function handleUpdateDisplayName() {
     displayNameError.value = e.response?.data?.detail || '修改昵称失败'
   } finally {
     displayNameLoading.value = false
+  }
+}
+
+async function handleUpdateEmail() {
+  emailError.value = ''
+  emailSuccess.value = false
+  if (!emailInput.value.trim()) {
+    emailError.value = '邮箱不能为空'
+    return
+  }
+  if (!emailPassword.value) {
+    emailError.value = '请输入当前密码'
+    return
+  }
+  emailLoading.value = true
+  try {
+    await updateEmail(auth.sessionId, emailInput.value, emailPassword.value)
+    emailSuccess.value = true
+    emailPassword.value = ''
+    await auth.fetchUser()
+    emailInput.value = auth.user?.email || emailInput.value
+  } catch (e: any) {
+    emailError.value = e.response?.data?.detail || '邮箱修改失败'
+  } finally {
+    emailLoading.value = false
   }
 }
 

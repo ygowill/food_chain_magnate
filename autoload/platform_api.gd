@@ -228,3 +228,11 @@ func update_profile(session_id: String, display_name: String) -> Dictionary:
 		"session_id": session_id,
 		"display_name": str(display_name),
 	})
+
+
+func update_email(session_id: String, email: String, password: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_PUT, "/v1/auth/email", {
+		"session_id": session_id,
+		"email": str(email),
+		"password": str(password),
+	})

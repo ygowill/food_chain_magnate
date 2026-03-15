@@ -7,12 +7,6 @@ export interface AuthResponse {
   is_guest: boolean
 }
 
-export interface PendingVerificationResponse {
-  status: 'pending_verification'
-  email: string
-  resend_after_sec: number
-}
-
 export interface MeResponse {
   user_id: string
   display_name: string
@@ -33,7 +27,7 @@ export function register(email: string, password: string, displayName?: string) 
   if (displayName && String(displayName).trim()) {
     payload.display_name = String(displayName).trim()
   }
-  return client.post<PendingVerificationResponse>('/auth/register', payload)
+  return client.post<AuthResponse>('/auth/register', payload)
 }
 
 export function getMe(sessionId: string) {
@@ -53,22 +47,11 @@ export function guestLogin(deviceId: string) {
 }
 
 export function bindEmail(sessionId: string, email: string, password: string) {
-  return client.post<PendingVerificationResponse>('/auth/bind', {
+  return client.post<AuthResponse>('/auth/bind', {
     session_id: sessionId,
     provider: 'email',
     email,
     password,
-  })
-}
-
-export function confirmEmailVerification(token: string) {
-  return client.post<AuthResponse>('/auth/email-verification/confirm', { token })
-}
-
-export function resendEmailVerification(payload: { email?: string; sessionId?: string }) {
-  return client.post<PendingVerificationResponse>('/auth/email-verification/resend', {
-    email: payload.email,
-    session_id: payload.sessionId,
   })
 }
 
@@ -82,6 +65,20 @@ export function updateDisplayName(sessionId: string, displayName: string) {
   return client.put<UpdateProfileResponse>('/auth/profile', {
     session_id: sessionId,
     display_name: displayName,
+  })
+}
+
+export interface UpdateEmailResponse {
+  user_id: string
+  email: string
+  is_guest: boolean
+}
+
+export function updateEmail(sessionId: string, email: string, password: string) {
+  return client.put<UpdateEmailResponse>('/auth/email', {
+    session_id: sessionId,
+    email,
+    password,
   })
 }
 

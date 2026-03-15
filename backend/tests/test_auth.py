@@ -1,36 +1,7 @@
-from urllib.parse import parse_qs, urlparse
-
 import pytest
 from httpx import AsyncClient
 
 import app.auth as auth_module
-
-
-def _extract_token(verification_url: str) -> str:
-    parsed = urlparse(str(verification_url))
-    return str(parse_qs(parsed.query)["token"][0])
-
-
-@pytest.fixture
-def sent_verifications(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
-    sent: list[dict] = []
-
-    async def _fake_send(recipient: str, verification_url: str, purpose: str) -> None:
-        sent.append({
-            "recipient": recipient,
-            "verification_url": verification_url,
-            "purpose": purpose,
-        })
-
-    monkeypatch.setattr(auth_module, "send_verification_email", _fake_send)
-    return sent
-
-
-async def _confirm_latest_verification(client: AsyncClient, sent_verifications: list[dict]) -> dict:
-    token = _extract_token(sent_verifications[-1]["verification_url"])
-    resp = await client.post("/v1/auth/email-verification/confirm", json={"token": token})
-    assert resp.status_code == 200
-    return resp.json()
 
 
 @pytest.mark.asyncio
@@ -74,62 +45,57 @@ async def test_health(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_register_creates_pending_verification(client: AsyncClient, sent_verifications: list[dict]):
+async def test_register_creates_user_and_session(client: AsyncClient):
     resp = await client.post("/v1/auth/register", json={"email": "a@b.com", "password": "pass123"})
-    assert resp.status_code == 202
+    assert resp.status_code == 200
     data = resp.json()
-    assert data["status"] == "pending_verification"
-    assert data["email"] == "a@b.com"
-    assert data["resend_after_sec"] == 60
-    assert len(sent_verifications) == 1
-    assert sent_verifications[0]["recipient"] == "a@b.com"
-    assert sent_verifications[0]["purpose"] == "register"
+    assert "user_id" in data
+    assert "session_id" in data
+    assert data["is_guest"] is False
+    assert str(data.get("display_name", "")).startswith("账号#")
 
 
 @pytest.mark.asyncio
-async def test_register_duplicate_email_reuses_pending_verification(client: AsyncClient, sent_verifications: list[dict]):
-    first = await client.post("/v1/auth/register", json={"email": "dup@b.com", "password": "p1"})
-    second = await client.post("/v1/auth/register", json={"email": "dup@b.com", "password": "p2"})
-    assert first.status_code == 202
-    assert second.status_code == 202
-    assert len(sent_verifications) == 1
+async def test_register_duplicate_email_rejected(client: AsyncClient):
+    await client.post("/v1/auth/register", json={"email": "dup@b.com", "password": "p1"})
+    resp = await client.post("/v1/auth/register", json={"email": "dup@b.com", "password": "p2"})
+    assert resp.status_code == 409
 
 
 @pytest.mark.asyncio
-async def test_register_duplicate_email_casefold_reuses_pending_verification(client: AsyncClient, sent_verifications: list[dict]):
+async def test_register_duplicate_email_casefold_rejected(client: AsyncClient):
     await client.post("/v1/auth/register", json={"email": "DUP@b.com", "password": "p1"})
     resp = await client.post("/v1/auth/register", json={"email": "dup@b.com", "password": "p2"})
-    assert resp.status_code == 202
-    assert len(sent_verifications) == 1
+    assert resp.status_code == 409
 
 
 @pytest.mark.asyncio
-async def test_login_success_after_email_verification(client: AsyncClient, sent_verifications: list[dict]):
+async def test_register_duplicate_display_name_rejected(client: AsyncClient):
+    await client.post("/v1/auth/register", json={
+        "email": "nick1@b.com",
+        "password": "pw",
+        "display_name": "Alice",
+    })
+    resp = await client.post("/v1/auth/register", json={
+        "email": "nick2@b.com",
+        "password": "pw",
+        "display_name": "alice",
+    })
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_login_success(client: AsyncClient):
     reg = await client.post("/v1/auth/register", json={"email": "login@b.com", "password": "secret"})
-    assert reg.status_code == 202
-    confirmed = await _confirm_latest_verification(client, sent_verifications)
     resp = await client.post("/v1/auth/login", json={"email": "login@b.com", "password": "secret"})
     assert resp.status_code == 200
-    assert resp.json()["user_id"] == confirmed["user_id"]
-    assert resp.json()["display_name"] == confirmed["display_name"]
+    assert resp.json()["user_id"] == reg.json()["user_id"]
+    assert resp.json()["display_name"] == reg.json()["display_name"]
 
 
 @pytest.mark.asyncio
-async def test_login_unverified_email_rejected(client: AsyncClient, sent_verifications: list[dict]):
-    await client.post("/v1/auth/register", json={"email": "pending@b.com", "password": "correct"})
-    resp = await client.post("/v1/auth/login", json={"email": "pending@b.com", "password": "correct"})
-    assert resp.status_code == 403
-    detail = resp.json()["detail"]
-    assert detail["code"] == "EMAIL_NOT_VERIFIED"
-    assert detail["email"] == "pending@b.com"
-    assert detail["resend_after_sec"] >= 0
-    assert len(sent_verifications) == 1
-
-
-@pytest.mark.asyncio
-async def test_login_wrong_password(client: AsyncClient, sent_verifications: list[dict]):
+async def test_login_wrong_password(client: AsyncClient):
     await client.post("/v1/auth/register", json={"email": "wp@b.com", "password": "correct"})
-    await _confirm_latest_verification(client, sent_verifications)
     resp = await client.post("/v1/auth/login", json={"email": "wp@b.com", "password": "wrong"})
     assert resp.status_code == 401
 
@@ -141,7 +107,23 @@ async def test_login_nonexistent_email(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_bind_guest_to_email_requires_verification(client: AsyncClient, sent_verifications: list[dict]):
+async def test_admin_env_login_bootstraps_account_without_registration(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(auth_module.settings, "admin_email", "admin@fcm.test")
+    monkeypatch.setattr(auth_module.settings, "admin_password", "super-secret")
+    monkeypatch.setattr(auth_module.settings, "admin_display_name", "SystemAdmin")
+    monkeypatch.setattr(auth_module.settings, "admin_user_ids", "")
+    resp = await client.post("/v1/auth/login", json={"email": "admin@fcm.test", "password": "super-secret"})
+    assert resp.status_code == 200
+    assert resp.json()["display_name"] == "SystemAdmin"
+
+    me = await client.get("/v1/auth/me", params={"session_id": resp.json()["session_id"]})
+    assert me.status_code == 200
+    assert me.json()["is_admin"] is True
+    assert me.json()["email"] == "admin@fcm.test"
+
+
+@pytest.mark.asyncio
+async def test_bind_guest_to_email_upgrades_account_immediately(client: AsyncClient):
     guest = await client.post("/v1/auth/guest", json={"device_id": "bind-dev"})
     sid = guest.json()["session_id"]
     uid = guest.json()["user_id"]
@@ -151,31 +133,17 @@ async def test_bind_guest_to_email_requires_verification(client: AsyncClient, se
         "email": "bind@b.com",
         "password": "pw",
     })
-    assert resp.status_code == 202
-    assert resp.json()["status"] == "pending_verification"
+    assert resp.status_code == 200
+    assert resp.json()["user_id"] == uid
+    assert resp.json()["is_guest"] is False
+    assert str(resp.json().get("display_name", "")).startswith("账号#")
 
-    me_before = await client.get("/v1/auth/me", params={"session_id": sid})
-    assert me_before.status_code == 200
-    assert me_before.json()["is_guest"] is True
-    assert me_before.json()["email"] == "bind@b.com"
-    assert me_before.json()["email_verified"] is False
-    assert me_before.json()["email_verification_pending"] is True
-
-    confirmed = await _confirm_latest_verification(client, sent_verifications)
-    assert confirmed["user_id"] == uid
-    assert confirmed["is_guest"] is False
-
-    login = await client.post("/v1/auth/login", json={
-        "email": "bind@b.com",
-        "password": "pw",
-    })
-    assert login.status_code == 200
-    assert login.json()["user_id"] == uid
-
-    me_after = await client.get("/v1/auth/me", params={"session_id": confirmed["session_id"]})
-    assert me_after.status_code == 200
-    assert me_after.json()["is_guest"] is False
-    assert me_after.json()["email_verified"] is True
+    me = await client.get("/v1/auth/me", params={"session_id": sid})
+    assert me.status_code == 200
+    assert me.json()["is_guest"] is False
+    assert me.json()["email"] == "bind@b.com"
+    assert me.json()["email_verified"] is True
+    assert me.json()["email_verification_pending"] is False
 
 
 @pytest.mark.asyncio
@@ -191,10 +159,8 @@ async def test_bind_unsupported_provider_rejected(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_bind_duplicate_email_rejected(client: AsyncClient, sent_verifications: list[dict]):
+async def test_bind_duplicate_email_rejected(client: AsyncClient):
     await client.post("/v1/auth/register", json={"email": "taken@b.com", "password": "p"})
-    await _confirm_latest_verification(client, sent_verifications)
-
     guest = await client.post("/v1/auth/guest", json={"device_id": "bind-dup"})
     resp = await client.post("/v1/auth/bind", json={
         "session_id": guest.json()["session_id"],
@@ -222,42 +188,52 @@ async def test_logout_revokes_session(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_register_with_custom_display_name(client: AsyncClient, sent_verifications: list[dict]):
+async def test_register_with_custom_display_name(client: AsyncClient):
     resp = await client.post("/v1/auth/register", json={
         "email": "nick@b.com",
         "password": "pw",
         "display_name": "Alice",
     })
-    assert resp.status_code == 202
-    confirmed = await _confirm_latest_verification(client, sent_verifications)
-    assert confirmed["display_name"] == "Alice"
+    assert resp.status_code == 200
+    assert resp.json()["display_name"] == "Alice"
 
 
 @pytest.mark.asyncio
-async def test_me_returns_display_name(client: AsyncClient, sent_verifications: list[dict]):
-    await client.post("/v1/auth/register", json={
+async def test_me_returns_display_name(client: AsyncClient):
+    reg = await client.post("/v1/auth/register", json={
         "email": "me@b.com",
         "password": "pw",
         "display_name": "MeName",
     })
-    confirmed = await _confirm_latest_verification(client, sent_verifications)
-    sid = confirmed["session_id"]
+    sid = reg.json()["session_id"]
     me = await client.get("/v1/auth/me", params={"session_id": sid})
     assert me.status_code == 200
     assert me.json()["display_name"] == "MeName"
 
 
 @pytest.mark.asyncio
-async def test_update_profile_display_name(client: AsyncClient, sent_verifications: list[dict]):
-    await client.post("/v1/auth/register", json={"email": "upd@b.com", "password": "pw"})
-    confirmed = await _confirm_latest_verification(client, sent_verifications)
-    sid = confirmed["session_id"]
+async def test_update_profile_display_name(client: AsyncClient):
+    reg = await client.post("/v1/auth/register", json={"email": "upd@b.com", "password": "pw"})
+    sid = reg.json()["session_id"]
     resp = await client.put("/v1/auth/profile", json={"session_id": sid, "display_name": "Renamed"})
     assert resp.status_code == 200
     assert resp.json()["display_name"] == "Renamed"
     me = await client.get("/v1/auth/me", params={"session_id": sid})
     assert me.status_code == 200
     assert me.json()["display_name"] == "Renamed"
+
+
+@pytest.mark.asyncio
+async def test_update_profile_duplicate_display_name_rejected(client: AsyncClient):
+    await client.post("/v1/auth/register", json={
+        "email": "dup-name-1@b.com",
+        "password": "pw",
+        "display_name": "Bob",
+    })
+    reg = await client.post("/v1/auth/register", json={"email": "dup-name-2@b.com", "password": "pw"})
+    sid = reg.json()["session_id"]
+    resp = await client.put("/v1/auth/profile", json={"session_id": sid, "display_name": "bob"})
+    assert resp.status_code == 409
 
 
 @pytest.mark.asyncio
@@ -269,35 +245,42 @@ async def test_update_profile_guest_forbidden(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_resend_verification_email_by_email(
-    client: AsyncClient,
-    sent_verifications: list[dict],
-    monkeypatch: pytest.MonkeyPatch,
-):
-    await client.post("/v1/auth/register", json={"email": "resend@b.com", "password": "pw"})
-    monkeypatch.setattr(auth_module.settings, "email_verify_resend_cooldown_seconds", 0)
-    resp = await client.post("/v1/auth/email-verification/resend", json={"email": "resend@b.com"})
-    assert resp.status_code == 202
-    assert len(sent_verifications) == 2
+async def test_update_email_success(client: AsyncClient):
+    reg = await client.post("/v1/auth/register", json={"email": "email-old@b.com", "password": "pw"})
+    sid = reg.json()["session_id"]
+    resp = await client.put("/v1/auth/email", json={
+        "session_id": sid,
+        "email": "email-new@b.com",
+        "password": "pw",
+    })
+    assert resp.status_code == 200
+    assert resp.json()["email"] == "email-new@b.com"
+
+    login = await client.post("/v1/auth/login", json={"email": "email-new@b.com", "password": "pw"})
+    assert login.status_code == 200
+    assert login.json()["user_id"] == reg.json()["user_id"]
 
 
 @pytest.mark.asyncio
-async def test_resend_verification_email_by_session(
-    client: AsyncClient,
-    sent_verifications: list[dict],
-    monkeypatch: pytest.MonkeyPatch,
-):
-    guest = await client.post("/v1/auth/guest", json={"device_id": "bind-resend"})
-    sid = guest.json()["session_id"]
-    bind = await client.post("/v1/auth/bind", json={
+async def test_update_email_duplicate_rejected(client: AsyncClient):
+    await client.post("/v1/auth/register", json={"email": "email-a@b.com", "password": "pw"})
+    reg = await client.post("/v1/auth/register", json={"email": "email-b@b.com", "password": "pw"})
+    sid = reg.json()["session_id"]
+    resp = await client.put("/v1/auth/email", json={
         "session_id": sid,
-        "provider": "email",
-        "email": "bind-resend@b.com",
+        "email": "email-a@b.com",
         "password": "pw",
     })
-    assert bind.status_code == 202
+    assert resp.status_code == 409
 
-    monkeypatch.setattr(auth_module.settings, "email_verify_resend_cooldown_seconds", 0)
-    resp = await client.post("/v1/auth/email-verification/resend", json={"session_id": sid})
-    assert resp.status_code == 202
-    assert len(sent_verifications) == 2
+
+@pytest.mark.asyncio
+async def test_update_email_wrong_password_rejected(client: AsyncClient):
+    reg = await client.post("/v1/auth/register", json={"email": "email-pass@b.com", "password": "pw"})
+    sid = reg.json()["session_id"]
+    resp = await client.put("/v1/auth/email", json={
+        "session_id": sid,
+        "email": "email-pass-new@b.com",
+        "password": "wrong",
+    })
+    assert resp.status_code == 401

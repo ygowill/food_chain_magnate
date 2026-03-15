@@ -5,7 +5,6 @@ import {
   register as apiRegister,
   guestLogin as apiGuestLogin,
   getMe,
-  confirmEmailVerification as apiConfirmEmailVerification,
   type MeResponse,
 } from '../api/auth'
 
@@ -33,11 +32,6 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function register(email: string, password: string, displayName?: string) {
     const { data } = await apiRegister(email, password, displayName)
-    return data
-  }
-
-  async function completeEmailVerification(token: string) {
-    const { data } = await apiConfirmEmailVerification(token)
     applySession(data.session_id)
     await fetchUser()
     return data
@@ -77,7 +71,6 @@ export const useAuthStore = defineStore('auth', () => {
     isAdmin,
     login,
     register,
-    completeEmailVerification,
     guestLogin,
     fetchUser,
     logout,
