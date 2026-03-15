@@ -272,17 +272,18 @@ func _apply_card(index: int, cards: Array) -> void:
 		return
 	var c: Dictionary = c_val
 
-	var t: int = int(c.get("type", 0))
+	var option_text := "储备卡 %d" % (index + 1)
 	var has_bank_fields := (
 		c.has("cash") and (c.get("cash", null) is int)
 		and c.has("ceo_slots") and (c.get("ceo_slots", null) is int)
 	)
 
 	if not has_bank_fields:
-		title_label.text = "储备卡 %d（价格 $%d）" % [index + 1, t]
-		desc_label.text = "基础单价候选：$%d\n首次破产后按多数决定（平局 20 > 5 > 10）" % t
+		var price: int = int(c.get("type", 0))
+		title_label.text = option_text
+		desc_label.text = "基础单价候选：$%d\n首次破产后按多数决定（平局 20 > 5 > 10）" % price
 
-		var summary := "储备卡 %d：基础单价候选 $%d" % [index + 1, t]
+		var summary := "储备卡 %d：基础单价候选 $%d" % [index + 1, price]
 		while _card_summaries.size() <= index:
 			_card_summaries.append("")
 		_card_summaries[index] = summary
@@ -290,10 +291,10 @@ func _apply_card(index: int, cards: Array) -> void:
 		var cash: int = int(c.get("cash", 0))
 		var slots: int = int(c.get("ceo_slots", 0))
 
-		title_label.text = "储备卡 %d（类型 %d）" % [index + 1, t]
+		title_label.text = option_text
 		desc_label.text = "起始现金：+$%d\nCEO 卡槽：%d" % [cash, slots]
 
-		var summary := "储备卡 %d：类型 %d，+$%d，CEO 卡槽=%d" % [index + 1, t, cash, slots]
+		var summary := "储备卡 %d：+$%d，CEO 卡槽=%d" % [index + 1, cash, slots]
 		while _card_summaries.size() <= index:
 			_card_summaries.append("")
 		_card_summaries[index] = summary

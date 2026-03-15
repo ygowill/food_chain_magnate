@@ -23,6 +23,15 @@ static func run() -> Result:
 		return Result.failure("ReserveCardSelectionModal 缺少 setup")
 	modal_base.call("setup", base_state, 0)
 
+	var base_title0 = modal_base.get("card_title_0")
+	if not (base_title0 is Label):
+		_safe_free(modal_base)
+		return Result.failure("base: card_title_0 无效（节点结构变更）")
+	var base_title_text := str((base_title0 as Label).text)
+	if base_title_text.find("类型") >= 0:
+		_safe_free(modal_base)
+		return Result.failure("base: 卡片标题不应显示类型信息，实际: %s" % base_title_text)
+
 	var base_desc0 = modal_base.get("card_desc_0")
 	if not (base_desc0 is Label):
 		_safe_free(modal_base)
@@ -57,6 +66,15 @@ static func run() -> Result:
 	if modal_rp.has_method("_ready"):
 		modal_rp.call("_ready")
 	modal_rp.call("setup", rp_state, 0)
+
+	var rp_title0 = modal_rp.get("card_title_0")
+	if not (rp_title0 is Label):
+		_safe_free(modal_rp)
+		return Result.failure("reserve_prices: card_title_0 无效（节点结构变更）")
+	var rp_title_text := str((rp_title0 as Label).text)
+	if rp_title_text.find("价格") >= 0 or rp_title_text.find("类型") >= 0:
+		_safe_free(modal_rp)
+		return Result.failure("reserve_prices: 卡片标题不应显示内部字段，实际: %s" % rp_title_text)
 
 	var rp_desc0 = modal_rp.get("card_desc_0")
 	if not (rp_desc0 is Label):
@@ -108,4 +126,3 @@ static func _bind_modal_nodes(modal) -> void:
 static func _safe_free(node: Node) -> void:
 	if node != null and is_instance_valid(node):
 		node.free()
-
