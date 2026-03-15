@@ -450,7 +450,7 @@ func _update_details_ui(breakdown: Dictionary, preview_breakdown: Dictionary = {
 		var base_due := int(breakdown.get("base_due", 0))
 		var paid_count := int(breakdown.get("paid_employee_count", 0))
 		var salary_cost := int(breakdown.get("salary_cost", 0))
-		base_label.text = "薪资总额: $%d（%d人 × $%d）" % [base_due, paid_count, salary_cost]
+		base_label.text = "薪资总额: $%d（%d人 x $%d）" % [base_due, paid_count, salary_cost]
 
 	if discount_label != null:
 		discount_label.visible = true
@@ -466,7 +466,7 @@ func _update_details_ui(breakdown: Dictionary, preview_breakdown: Dictionary = {
 		var base_salary_cost := int(breakdown.get("base_salary_cost", 0))
 		var discount_sources: Dictionary = breakdown.get("discount_sources", {})
 		if discount_amount > 0:
-			_add_detail_line("招聘折扣: -$%d（未用 %d 次 × $%d）" % [discount_amount, unused_discount_actions, base_salary_cost], Color(0.28, 0.55, 0.22, 1))
+			_add_detail_line("招聘折扣: -$%d（未用 %d 次 x $%d）" % [discount_amount, unused_discount_actions, base_salary_cost], Color(0.28, 0.55, 0.22, 1))
 			var keys: Array[String] = []
 			for k in discount_sources.keys():
 				keys.append(str(k))

@@ -263,7 +263,7 @@ func _update_hint() -> void:
 			if _selected_position == INVALID_POS:
 				next_hint = "已选择: %s，请在地图上点击目标位置" % label
 			else:
-				next_hint = "%s → (%d,%d) 旋转:%d°" % [
+				next_hint = "%s -> (%d,%d) 旋转:%d度" % [
 					label,
 					_selected_position.x,
 					_selected_position.y,
@@ -273,7 +273,7 @@ func _update_hint() -> void:
 		if _selected_position == INVALID_POS:
 			next_hint = "请在地图上点击放置位置"
 		else:
-			next_hint = "放置位置: (%d,%d) 旋转:%d°" % [_selected_position.x, _selected_position.y, _selected_rotation]
+			next_hint = "放置位置: (%d,%d) 旋转:%d度" % [_selected_position.x, _selected_position.y, _selected_rotation]
 
 	_hint_text = next_hint
 

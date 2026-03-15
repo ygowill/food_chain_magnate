@@ -242,7 +242,7 @@ static func draw_marketing_placement(canvas, cell_size: int, placement: Dictiona
 			if f3 == floor(f3):
 				rd = int(f3)
 		if rd == -1:
-			remaining_text = "∞"
+			remaining_text = "无限"
 		elif rd > 0:
 			remaining_text = str(rd)
 		if not remaining_text.is_empty():

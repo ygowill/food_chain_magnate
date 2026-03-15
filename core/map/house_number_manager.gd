@@ -134,6 +134,55 @@ static func _compare_sort_keys(a: Dictionary, b: Dictionary) -> bool:
 
 # === 查询 ===
 
+static func format_display_number(value, fallback: String = "?") -> String:
+	if value is int:
+		return str(int(value))
+	if value is float:
+		var f: float = float(value)
+		if f == floor(f):
+			return str(int(f))
+		var rounded := snappedf(f, 0.01)
+		var text := "%.2f" % rounded
+		while text.ends_with("0"):
+			text = text.left(text.length() - 1)
+		if text.ends_with("."):
+			text = text.left(text.length() - 1)
+		return text if not text.is_empty() else fallback
+	if value is String:
+		var s := str(value).strip_edges()
+		if s.is_empty():
+			return fallback
+		var aliases := {
+			"π": "3.14",
+			"pi": "3.14",
+			"9¾": "9.75",
+			"√2": "1.41",
+			"sqrt2": "1.41",
+			"e": "2.72",
+		}
+		if aliases.has(s):
+			return str(aliases[s])
+		if s.is_valid_float():
+			return format_display_number(s.to_float(), fallback)
+		var ascii_only := true
+		for i in range(s.length()):
+			if s.unicode_at(i) > 127:
+				ascii_only = false
+				break
+		return s if ascii_only else fallback
+	return fallback
+
+static func format_display_label(house_number, house_id: String = "", fallback: String = "?") -> String:
+	var hid := str(house_id).strip_edges()
+	var special_labels := {
+		"π": "π",
+		"9¾": "9¾",
+		"√2": "√2",
+	}
+	if special_labels.has(hid):
+		return str(special_labels[hid])
+	return format_display_number(house_number, fallback)
+
 # 获取编号最小的房屋 ID
 static func get_first_house_id(houses: Dictionary) -> Result:
 	var sorted_read := get_sorted_house_ids(houses)

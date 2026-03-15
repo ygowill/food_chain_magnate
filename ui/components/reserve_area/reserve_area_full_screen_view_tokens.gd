@@ -114,7 +114,7 @@ class TileSupplyToken extends Control:
 		if id_text.is_empty():
 			tooltip_text = "地图板块"
 		else:
-			tooltip_text = "地图板块 %s ×%d" % [id_text, maxi(0, int(count))]
+			tooltip_text = "地图板块 %s x%d" % [id_text, maxi(0, int(count))]
 
 
 # === 房屋编号 token（按地图真实风格绘制：house_with_garden）===
@@ -409,7 +409,7 @@ class PieceFootprintToken extends Control:
 		return _skin.get_piece_texture(pid)
 
 	func _draw_count_badge(rect: Rect2, c: int) -> void:
-		var text := "×%d" % int(c)
+		var text := "x%d" % int(c)
 		var pad := maxf(2.0, float(_cell_size) * 0.06)
 		var font: Font = ThemeDB.fallback_font
 		var font_size := maxi(10, int(round(float(_cell_size) * 0.32)))

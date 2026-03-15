@@ -6,6 +6,7 @@ const ModuleSelectorClass = preload("res://ui/components/module_selector/module_
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
 const GameConfigDialogScene = preload("res://ui/dialogs/game_config_dialog.tscn")
+const GearIcon = preload("res://assets/ui/icons/kenney/game/gear.png")
 
 @onready var wall_background: ColorRect = $WallBackground
 @onready var vignette_overlay: ColorRect = $VignetteOverlay
@@ -69,6 +70,10 @@ func _ready() -> void:
 	UiStylesClass.apply_button_secondary(back_button)
 	UiStylesClass.apply_button_secondary(advanced_button)
 	UiStylesClass.apply_button_primary(start_button)
+	advanced_button.icon = GearIcon
+	advanced_button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	advanced_button.expand_icon = false
+	advanced_button.add_theme_constant_override("icon_max_width", 16)
 	_update_advanced_button_label()
 
 	_advanced_game_overrides = Globals.game_config_overrides.duplicate(true)
@@ -263,7 +268,7 @@ func _update_advanced_button_label() -> void:
 	if Globals.game_config_overrides.is_empty():
 		advanced_button.text = "高级选项"
 	else:
-		advanced_button.text = "高级选项 ●"
+		advanced_button.text = "高级选项（已设）"
 
 func _sync_game_config_overrides() -> void:
 	Globals.game_config_overrides = _advanced_game_overrides.duplicate(true)

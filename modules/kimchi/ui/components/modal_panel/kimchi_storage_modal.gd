@@ -17,7 +17,7 @@ func _ready() -> void:
 	set_cancel_text("不存泡菜")
 
 	if is_instance_valid(hint_label):
-		hint_label.text = "存泡菜：最多保留 10 个泡菜，并丢弃其它食物/饮料。｜不存泡菜：丢弃所有泡菜。"
+		hint_label.text = "存泡菜：最多保留 10 个泡菜，并丢弃其它食物/饮料。 | 不存泡菜：丢弃所有泡菜。"
 
 func setup(state: GameState, current_player_id: int) -> void:
 	_set_buttons_enabled(true)
@@ -81,7 +81,7 @@ func setup(state: GameState, current_player_id: int) -> void:
 
 	var name := Globals.get_player_name(current_player_id) if Globals != null else ("玩家%d" % (current_player_id + 1))
 	if is_instance_valid(info_label):
-		info_label.text = "当前玩家：%s｜泡菜库存：%d" % [name, count]
+		info_label.text = "当前玩家：%s | 泡菜库存：%d" % [name, count]
 
 	var clamp_note := ""
 	if count > 10:

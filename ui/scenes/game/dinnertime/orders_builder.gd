@@ -2,6 +2,8 @@
 class_name DinnertimeAnimationOrdersBuilder
 extends RefCounted
 
+const HouseNumberManagerClass = preload("res://core/map/house_number_manager.gd")
+
 static func build_orders_from_settlement(dt: Dictionary) -> Array[Dictionary]:
 	var orders: Array[Dictionary] = []
 	var sales_val = dt.get("sales", [])
@@ -15,7 +17,8 @@ static func build_orders_from_settlement(dt: Dictionary) -> Array[Dictionary]:
 		var house_number_val = sale.get("house_number", house_id)
 		orders.append({
 			"house_id": house_id,
-			"house_number": str(house_number_val),
+			"house_number": HouseNumberManagerClass.format_display_label(house_number_val, house_id, str(house_number_val)),
+			"house_sort_value": house_number_val,
 			"demands": req,
 			"matched_restaurant": str(sale.get("winner_restaurant_id", "")),
 			"products": req,
@@ -42,7 +45,8 @@ static func build_orders_from_settlement(dt: Dictionary) -> Array[Dictionary]:
 		var house_number_val = skip.get("house_number", house_id)
 		orders.append({
 			"house_id": house_id,
-			"house_number": str(house_number_val),
+			"house_number": HouseNumberManagerClass.format_display_label(house_number_val, house_id, str(house_number_val)),
+			"house_sort_value": house_number_val,
 			"demands": skip.get("required", {}),
 			"matched_restaurant": "",
 			"products": {},
@@ -58,8 +62,8 @@ static func build_orders_from_settlement(dt: Dictionary) -> Array[Dictionary]:
 			"is_skipped": true,
 		})
 	orders.sort_custom(func(a, b):
-		var an: int = _parse_house_number(a.get("house_number", ""))
-		var bn: int = _parse_house_number(b.get("house_number", ""))
+		var an: int = _parse_house_number(a.get("house_sort_value", a.get("house_number", "")))
+		var bn: int = _parse_house_number(b.get("house_sort_value", b.get("house_number", "")))
 		if an != bn:
 			return an < bn
 		return str(a.get("house_id", "")) < str(b.get("house_id", ""))
@@ -78,4 +82,3 @@ static func _parse_house_number(value) -> int:
 		if s.is_valid_int():
 			return s.to_int()
 	return 999999
-

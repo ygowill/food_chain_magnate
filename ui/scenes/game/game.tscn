@@ -1,4 +1,4 @@
-[gd_scene load_steps=17 format=3 uid="uid://dph5rwtgn6tq8"]
+[gd_scene load_steps=19 format=3 uid="uid://dph5rwtgn6tq8"]
 
 [ext_resource type="Script" uid="uid://ckmoescpu6tet" path="res://ui/scenes/game/game.gd" id="1_game"]
 [ext_resource type="Script" uid="uid://c7bjun5j7en8b" path="res://ui/scenes/game/map/view.gd" id="2_map_view"]
@@ -16,6 +16,8 @@
 [ext_resource type="PackedScene" path="res://ui/components/turn_order/turn_order_display.tscn" id="14_turn_order_display"]
 [ext_resource type="Script" path="res://ui/components/phase_track/phase_track_strip.gd" id="15_phase_track"]
 [ext_resource type="PackedScene" path="res://ui/components/action_flow_controls/action_flow_controls.tscn" id="16_action_flow_controls"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/kenney/game/arrow_left.png" id="17_arrow_left"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/kenney/game/close_cross.png" id="18_close_cross"]
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -259,7 +261,9 @@ theme_override_constants/separation = 8
 [node name="BackButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/HeaderRow"]
 visible = false
 layout_mode = 2
-text = "← 返回"
+theme_override_constants/icon_max_width = 14
+icon = ExtResource("17_arrow_left")
+text = "返回"
 
 [node name="TitleLabel" type="Label" parent="UIRoot/MainContent/CenterSplit/RightPanel/HeaderRow"]
 layout_mode = 2
@@ -269,8 +273,26 @@ text = "操作"
 
 [node name="CloseButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/HeaderRow"]
 visible = false
+custom_minimum_size = Vector2(36, 36)
 layout_mode = 2
-text = "×"
+text = ""
+
+[node name="IconCenter" type="CenterContainer" parent="UIRoot/MainContent/CenterSplit/RightPanel/HeaderRow/CloseButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Icon" type="TextureRect" parent="UIRoot/MainContent/CenterSplit/RightPanel/HeaderRow/CloseButton/IconCenter"]
+custom_minimum_size = Vector2(14, 14)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+texture = ExtResource("18_close_cross")
+mouse_filter = 2
 
 [node name="DefaultStack" type="VBoxContainer" parent="UIRoot/MainContent/CenterSplit/RightPanel"]
 layout_mode = 2

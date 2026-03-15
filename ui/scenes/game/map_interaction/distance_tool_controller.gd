@@ -6,6 +6,7 @@ const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const RoadGraphClass = preload("res://core/map/road_graph.gd")
 const MapOverlayProviderRegistryClass = preload("res://core/rules/map_overlay_provider_registry.gd")
+const HouseNumberManagerClass = preload("res://core/map/house_number_manager.gd")
 
 const _POINTS_OVERLAY_ID := "distance_tool_points"
 
@@ -48,7 +49,7 @@ func toggle_distance_tool() -> void:
 	_from_pick.clear()
 	if _overlay_controller != null and _overlay_controller.has_method("hide_distance_overlay"):
 		_overlay_controller.hide_distance_overlay()
-	GameLog.info("Game", "距离工具已启用：支持道路↔道路，或房屋+餐厅")
+	GameLog.info("Game", "距离工具已启用：支持道路到道路，或房屋到餐厅")
 
 func on_mode_cleared() -> void:
 	_from_pick.clear()
@@ -220,7 +221,10 @@ func _get_pick_label(pick: Dictionary) -> String:
 		"road":
 			return "道路%s" % str(pos)
 		"house":
-			return "房屋%s" % (" #%s" % id if not id.is_empty() else "")
+			var display_number := str(pick.get("display_number", "")).strip_edges()
+			if display_number.is_empty():
+				display_number = HouseNumberManagerClass.format_display_label(null, id, "")
+			return "房屋%s" % (" #%s" % display_number if not display_number.is_empty() else "")
 		"restaurant":
 			return "餐厅%s" % (" %s" % id if not id.is_empty() else "")
 		_:
@@ -249,6 +253,7 @@ func _find_house_at(state: GameState, world_pos: Vector2i) -> Dictionary:
 		return {
 			"kind": "house",
 			"id": hid,
+			"display_number": HouseNumberManagerClass.format_display_label(house.get("house_number", null), hid, ""),
 			"pos": world_pos,
 			"cells": cells,
 			"structure": house.duplicate(true),

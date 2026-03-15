@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://ui/components/game_log/game_log_panel.gd" id="1_log"]
 [ext_resource type="PackedScene" path="res://ui/components/game_log/replay_bar.tscn" id="2_replay_bar"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/kenney/game/close_cross.png" id="3_close_cross"]
 
 [node name="GameLogPanel" type="Control"]
 custom_minimum_size = Vector2(0, 240)
@@ -55,8 +56,26 @@ toggle_mode = true
 text = "进入回放"
 
 [node name="CloseButton" type="Button" parent="MarginContainer/VBoxContainer/TitleRow/TopRow"]
+custom_minimum_size = Vector2(36, 36)
 layout_mode = 2
-text = "×"
+text = ""
+
+[node name="IconCenter" type="CenterContainer" parent="MarginContainer/VBoxContainer/TitleRow/TopRow/CloseButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Icon" type="TextureRect" parent="MarginContainer/VBoxContainer/TitleRow/TopRow/CloseButton/IconCenter"]
+custom_minimum_size = Vector2(14, 14)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+texture = ExtResource("3_close_cross")
+mouse_filter = 2
 
 [node name="ReplayBar" parent="MarginContainer/VBoxContainer/TitleRow" instance=ExtResource("2_replay_bar")]
 layout_mode = 2

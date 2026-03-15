@@ -65,7 +65,7 @@ static func update_control_bar(control_bar: Control, current_idx: int, total_ord
 		return
 
 	if post_income_playing:
-		btn.text = "播放中…"
+		btn.text = "播放中..."
 		btn.disabled = true
 	elif current_idx >= total_orders and not previewing and post_income_done:
 		btn.text = "确认结算"
@@ -74,5 +74,5 @@ static func update_control_bar(control_bar: Control, current_idx: int, total_ord
 		btn.text = "下一笔"
 		btn.disabled = false
 	else:
-		btn.text = "播放中…"
+		btn.text = "播放中..."
 		btn.disabled = true

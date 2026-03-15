@@ -141,7 +141,7 @@ func setup(state: GameState, current_player_id: int) -> void:
 		hint_label.text = "请确保其他玩家未看到你的选择；确认后不可更改。"
 
 	var name := Globals.get_player_name(current_player_id) if Globals != null else ("玩家%d" % (current_player_id + 1))
-	set_title_text("选择银行储备卡｜当前: %s" % name)
+	set_title_text("选择银行储备卡 | 当前: %s" % name)
 	if is_instance_valid(selection_label):
 		selection_label.text = "当前玩家：%s，请选择一张储备卡（其他玩家不应看到）" % name
 
@@ -201,7 +201,7 @@ func setup_waiting(current_player_id: int) -> void:
 		hint_label.text = "该选择对其他玩家保密。请等待对方完成。（Space 可暂时查看地图）"
 
 	var name := Globals.get_player_name(current_player_id) if Globals != null else ("玩家%d" % (current_player_id + 1))
-	set_title_text("选择银行储备卡｜等待: %s" % name)
+	set_title_text("选择银行储备卡 | 等待: %s" % name)
 	if is_instance_valid(selection_label):
 		selection_label.text = "等待玩家：%s 选择储备卡..." % name
 

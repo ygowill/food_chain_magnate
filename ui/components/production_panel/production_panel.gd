@@ -522,11 +522,11 @@ func _update_info() -> void:
 				suffix = "（从餐厅开始选择相连板块）"
 				if _drinks_selected_sources_count > 0:
 					suffix = "（已选板块: %d）" % _drinks_selected_sources_count
-				_info_label.text = "%s：%s从餐厅所在板块开始，连续选择相连板块 → 系统生成路线 → 确认后开始采购%s" % [emp_name, start_text, suffix]
+				_info_label.text = "%s：%s从餐厅所在板块开始，连续选择相连板块 -> 系统生成路线 -> 确认后开始采购%s" % [emp_name, start_text, suffix]
 			else:
 				if _drinks_selected_sources_count > 0:
 					suffix = "（已选进货点: %d）" % _drinks_selected_sources_count
-				_info_label.text = "%s：%s点击地图饮料点逐个选择 → 系统生成路线 → 确认后开始采购%s" % [emp_name, start_text, suffix]
+				_info_label.text = "%s：%s点击地图饮料点逐个选择 -> 系统生成路线 -> 确认后开始采购%s" % [emp_name, start_text, suffix]
 			if _drinks_restaurant_show_selector:
 				_info_label.text = "%s（可点击餐厅或按 1-9 切换起点）" % _info_label.text
 			if not _drinks_hover_preview_text.is_empty():
@@ -557,7 +557,7 @@ func _update_info() -> void:
 		if not chosen.is_empty():
 			chosen_text = _get_product_display_name(chosen)
 			current2 = int(_current_inventory.get(chosen, 0))
-		_info_label.text = "%s：选择生产 %s ×%d（当前库存: %d）。" % [emp_name, chosen_text, amount2, current2]
+		_info_label.text = "%s：选择生产 %s x%d（当前库存: %d）。" % [emp_name, chosen_text, amount2, current2]
 		return
 
 	var food_type := str(info.get("food_type", ""))
@@ -568,7 +568,7 @@ func _update_info() -> void:
 		if p_def_val != null and (p_def_val is ProductDef):
 			food_name = str((p_def_val as ProductDef).name)
 	var current := int(_current_inventory.get(food_type, 0))
-	_info_label.text = "%s 将生产：%s ×%d（当前库存: %d）。" % [emp_name, food_name, amount, current]
+	_info_label.text = "%s 将生产：%s x%d（当前库存: %d）。" % [emp_name, food_name, amount, current]
 
 func _get_employee_display_name(employee_type: String) -> String:
 	if employee_type.is_empty():

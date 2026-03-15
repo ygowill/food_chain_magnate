@@ -6,6 +6,8 @@ const OverlayUtilsClass = preload("res://ui/scenes/game/map/drawer/overlay_utils
 const RoadsPassClass = preload("res://ui/scenes/game/map/drawer/passes/roads_pass.gd")
 const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
 const DrinkSourcesPassClass = preload("res://ui/scenes/game/map/drawer/passes/drink_sources_pass.gd")
+const HouseNumberManagerClass = preload("res://core/map/house_number_manager.gd")
+const HOUSE_ID_FONT: Font = preload("res://assets/fonts/NotoSansSC-Regular.otf")
 const HOUSE_BG_COLOR := Color("#733651")
 const GARDEN_BG_COLOR := Color("#699055")
 
@@ -151,8 +153,7 @@ static func draw_house_id_structure(canvas, cell_size: int, info: Dictionary, st
 	tex_rect.size.y = maxf(0.0, tex_rect.size.y - bottom_gap)
 	TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, tex_rect, Color(1, 1, 1, 0.9 * a), "bottom")
 
-	var house_id: String = str(info.get("house_id", ""))
-	draw_house_id(canvas, cell_size, structure_rect, house_id)
+	draw_house_id(canvas, cell_size, structure_rect, _get_house_display_label(canvas, info))
 
 static func draw_player_logo_structure(
 	canvas,
@@ -494,8 +495,7 @@ static func draw_house_and_garden(canvas, cell_size: int, anchor: Vector2i, info
 			TextureUtilsClass.draw_texture_aspect_fit(canvas, garden_tex, garden_rect, mod)
 
 	# 房屋 ID：右上角（仅房屋 2x2 区域）
-	var house_id: String = str(info.get("house_id", ""))
-	draw_house_id(canvas, cell_size, house_rect, house_id)
+	draw_house_id(canvas, cell_size, house_rect, _get_house_display_label(canvas, info))
 
 static func compute_house_id_rect(cell_size: int, structure_rect: Rect2) -> Rect2:
 	var pad := maxf(3.0, float(cell_size) * 0.10)
@@ -503,18 +503,31 @@ static func compute_house_id_rect(cell_size: int, structure_rect: Rect2) -> Rect
 	var pos := structure_rect.position + Vector2(structure_rect.size.x - bg_size.x - pad, pad)
 	return Rect2(pos, bg_size)
 
-static func draw_house_id(canvas, cell_size: int, structure_rect: Rect2, house_id) -> void:
-	var text := str(house_id).strip_edges()
+static func draw_house_id(canvas, cell_size: int, structure_rect: Rect2, display_label) -> void:
+	var text := str(display_label).strip_edges()
 	if text.is_empty():
 		return
 	var pad := maxf(3.0, float(cell_size) * 0.12)
 	var font_size := maxi(11, int(round(float(cell_size) * 0.34)))
 	var label_rect := compute_house_id_rect(cell_size, structure_rect)
 
-	var font: Font = ThemeDB.fallback_font
+	var font: Font = HOUSE_ID_FONT if HOUSE_ID_FONT != null else ThemeDB.fallback_font
 	var baseline := label_rect.position + Vector2(0.0, label_rect.size.y - pad)
 	canvas.draw_string(font, baseline + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_RIGHT, label_rect.size.x, font_size, Color(0, 0, 0, 0.85))
 	canvas.draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_RIGHT, label_rect.size.x, font_size, Color(1, 1, 1, 1))
+
+static func _get_house_display_label(canvas, info: Dictionary) -> String:
+	if info == null:
+		return ""
+	var house_number = info.get("house_number", null)
+	var house_id := str(info.get("house_id", "")).strip_edges()
+	if house_number == null:
+		if not house_id.is_empty() and canvas != null and canvas.has_method("_get_house_info"):
+			var house_val = canvas.call("_get_house_info", house_id)
+			if house_val is Dictionary:
+				var house: Dictionary = house_val
+				house_number = house.get("house_number", null)
+	return HouseNumberManagerClass.format_display_label(house_number, house_id, "")
 
 static func _draw_dir_arrow(canvas, rect: Rect2, dir: String, col: Color) -> void:
 	var d := str(dir)

@@ -250,7 +250,7 @@ class DemandMarker extends Control:
 			if count > 1:
 				var count_label := Label.new()
 				count_label.add_theme_font_size_override("font_size", count_font_size)
-				count_label.text = "×%d" % count
+				count_label.text = "x%d" % count
 				_icons_container.add_child(count_label)
 
 		# 更新背景颜色

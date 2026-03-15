@@ -119,7 +119,7 @@ func _make_slider_fill_style(bg: Color) -> StyleBoxFlat:
 func _update_ui() -> void:
 	if status_label != null:
 		var mode := "只读回放" if _read_only else "时间线"
-		var extra := ("｜%s" % _status_extra) if not _status_extra.is_empty() else ""
+		var extra := (" | %s" % _status_extra) if not _status_extra.is_empty() else ""
 		status_label.text = "%s：%d / %d%s" % [mode, _cursor_index, _head_index, extra]
 
 	if slider != null:

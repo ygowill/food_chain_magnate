@@ -256,7 +256,7 @@ func _update_hint() -> void:
 	if _selected_position == Vector2i(-1, -1):
 		hint_label.text = "房屋编号: %d（请在地图上点击放置位置）" % _selected_house_number
 	else:
-		hint_label.text = "房屋编号: %d | 位置:(%d,%d) | 旋转:%d°" % [
+		hint_label.text = "房屋编号: %d | 位置:(%d,%d) | 旋转:%d度" % [
 			_selected_house_number, _selected_position.x, _selected_position.y, _selected_rotation
 		]
 

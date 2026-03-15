@@ -34,7 +34,7 @@ static func create(anim_layer: Control, scene: Node, map_canvas, event: Dictiona
 	holder.add_child(vbox)
 
 	var title := Label.new()
-	title.text = "%s · %s" % [_get_player_name(player_id), IncomeUtilsClass.get_employee_card_name(employee_id)]
+	title.text = "%s - %s" % [_get_player_name(player_id), IncomeUtilsClass.get_employee_card_name(employee_id)]
 	title.add_theme_font_size_override("font_size", 12)
 	title.add_theme_color_override("font_color", Color(1, 0.95, 0.82, 1))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

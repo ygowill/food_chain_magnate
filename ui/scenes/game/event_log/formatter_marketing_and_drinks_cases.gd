@@ -89,7 +89,7 @@ func format_event(t: String, data: Dictionary) -> Array[Dictionary]:
 			if not axis2.is_empty():
 				parts2.append(axis2)
 			if before_duration > 0 or after_duration > 0:
-				parts2.append("剩余%d→%d" % [before_duration, after_duration])
+				parts2.append("剩余%d->%d" % [before_duration, after_duration])
 			if not pos_text2.is_empty():
 				parts2.append(pos_text2)
 			var text := "营销到期"

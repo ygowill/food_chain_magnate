@@ -113,22 +113,22 @@ theme_override_constants/separation = 10
 [node name="Rot0Button" type="Button" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow"]
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
-text = "0°"
+text = "0度"
 
 [node name="Rot90Button" type="Button" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow"]
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
-text = "90°"
+text = "90度"
 
 [node name="Rot180Button" type="Button" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow"]
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
-text = "180°"
+text = "180度"
 
 [node name="Rot270Button" type="Button" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow"]
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
-text = "270°"
+text = "270度"
 
 [node name="ProductSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox"]
 layout_mode = 2

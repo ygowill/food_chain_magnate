@@ -602,7 +602,7 @@ class MilestoneItem extends PanelContainer:
 						names.append(n)
 					parts.append("已获得：%s" % "、".join(names))
 				if pool_count > 0:
-					parts.append("供应×%d" % pool_count)
+					parts.append("供应x%d" % pool_count)
 				_status_label.text = "\n".join(parts)
 				UiStylesClass.apply_label_hint_dark(_status_label)
 				_status_label.visible = not parts.is_empty()
@@ -612,7 +612,7 @@ class MilestoneItem extends PanelContainer:
 					UiStylesClass.apply_label_success(_status_label)
 					_status_label.visible = true
 				elif pool_count > 0:
-					_status_label.text = "供应×%d" % pool_count
+					_status_label.text = "供应x%d" % pool_count
 					UiStylesClass.apply_label_hint_dark(_status_label)
 					_status_label.visible = true
 				else:

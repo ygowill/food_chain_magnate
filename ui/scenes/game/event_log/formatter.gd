@@ -7,6 +7,7 @@ const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
+const HouseNumberManagerClass = preload("res://core/map/house_number_manager.gd")
 const REPORTS_FORMATTER_SCRIPT_PATH := "res://ui/scenes/game/event_log/reports_formatter.gd"
 const CASES_FORMATTER_SCRIPT_PATH := "res://ui/scenes/game/event_log/formatter_cases.gd"
 
@@ -378,7 +379,7 @@ func _format_route_purchases_short(route_purchases_val, max_items: int = 4) -> S
 	var suffix := ""
 	if parts.size() > shown.size():
 		suffix = " 等%d次" % parts.size()
-	return "沿路购买×%d：" % parts.size() + "，".join(shown) + suffix
+	return "沿路购买 x%d：" % parts.size() + "，".join(shown) + suffix
 
 func _format_picked_drink_sources_short(picked_sources_val, max_items: int = 3) -> String:
 	if picked_sources_val == null or not (picked_sources_val is Array):
@@ -431,15 +432,19 @@ func _format_house_numbers_short(house_numbers_val, max_items: int = 4) -> Strin
 	var arr: Array = house_numbers_val
 	if arr.is_empty():
 		return ""
-	var nums: Array[int] = []
+	var nums: Array[String] = []
 	for v in arr:
 		if v is int:
 			if int(v) > 0:
-				nums.append(int(v))
+				nums.append(str(int(v)))
 		elif v is float:
-			var f: float = float(v)
-			if f == floor(f) and int(f) > 0:
-				nums.append(int(f))
+			var text := HouseNumberManagerClass.format_display_number(v, "")
+			if not text.is_empty():
+				nums.append(text)
+		elif v is String:
+			var text2 := HouseNumberManagerClass.format_display_label(null, str(v).strip_edges(), "")
+			if not text2.is_empty():
+				nums.append(text2)
 	if nums.is_empty():
 		return ""
 	nums.sort()
@@ -447,10 +452,10 @@ func _format_house_numbers_short(house_numbers_val, max_items: int = 4) -> Strin
 	var shown := mini(nums.size(), maxi(1, max_items))
 	var parts: Array[String] = []
 	for i in range(shown):
-		parts.append("#%d" % nums[i])
+		parts.append("#%s" % nums[i])
 	var text := "房屋" + ",".join(parts)
 	if nums.size() > shown:
-		text += "…(共%d)" % nums.size()
+		text += "...(共%d)" % nums.size()
 	return text
 
 func _format_drinks_procured(drinks_procured_val) -> String:

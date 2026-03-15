@@ -635,7 +635,7 @@ func _get_marketing_effect_hint(type_id: String) -> String:
 		"airplane":
 			return "影响：整行/列（角落需选择方向）"
 		"radio":
-			return "影响：周围 3×3 板块内房屋"
+			return "影响：周围 3x3 板块内房屋"
 		"gourmet_guide":
 			return "影响：所有有花园的房屋"
 		_:

@@ -91,12 +91,12 @@ func _refresh_activity_feed() -> void:
 	# 显示最近2条
 	var last1 := matched[n - 1]
 	var msg1 := _format_log_message(last1)
-	_panel.activity_line1.text = "● " + msg1
+	_panel.activity_line1.text = "- " + msg1
 
 	if n >= 2:
 		var last2 := matched[n - 2]
 		var msg2 := _format_log_message(last2)
-		_panel.activity_line2.text = "● " + msg2
+		_panel.activity_line2.text = "- " + msg2
 		_panel.activity_line2.visible = true
 	else:
 		_panel.activity_line2.text = ""

@@ -16,6 +16,7 @@ const DistanceToolControllerClass = preload("res://ui/scenes/game/map_interactio
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
+const HouseNumberManagerClass = preload("res://core/map/house_number_manager.gd")
 
 const ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY := "opening_soon_restaurants"
 const MAP_TOOLTIP_KEY_HOUSE := "map_hover_house"
@@ -830,7 +831,7 @@ func _build_house_tooltip_data(state: GameState, house_id: String) -> Dictionary
 		return {}
 	var house: Dictionary = house_val
 
-	var house_number := _format_house_number(house.get("house_number", house_id))
+	var house_number := HouseNumberManagerClass.format_display_label(house.get("house_number", null), house_id, "?")
 	var has_garden := bool(house.get("has_garden", false))
 	var demands: Array = []
 	var demands_val = house.get("demands", null)
@@ -841,7 +842,7 @@ func _build_house_tooltip_data(state: GameState, house_id: String) -> Dictionary
 	var source_label := "印刷建筑" if bool(house.get("printed", false)) else "放置建筑"
 
 	var lines: Array[String] = []
-	lines.append("编号：%s（ID: %s）" % [house_number, house_id])
+	lines.append("编号：%s" % house_number)
 	lines.append("来源：%s" % source_label)
 	lines.append("归属：%s" % owner_label)
 	lines.append("花园：%s" % ("有" if has_garden else "无"))
@@ -856,7 +857,7 @@ func _build_house_tooltip_data(state: GameState, house_id: String) -> Dictionary
 
 func _get_house_demand_cap_label(state: GameState, house: Dictionary, has_garden: bool) -> String:
 	if bool(house.get("no_demand_cap", false)):
-		return "∞"
+		return "无限"
 	if state == null or not (state.rules is Dictionary):
 		return "?"
 	var rules: Dictionary = state.rules
@@ -1172,15 +1173,7 @@ func _get_product_display_name(product_id: String) -> String:
 	return pid
 
 func _format_house_number(value) -> String:
-	if value is int:
-		return str(int(value))
-	if value is float:
-		var f: float = float(value)
-		if f == floor(f):
-			return str(int(f))
-		return str(f)
-	var s := str(value).strip_edges()
-	return s if not s.is_empty() else "?"
+	return HouseNumberManagerClass.format_display_number(value, "?")
 
 func _coerce_int(value, fallback: int = 0) -> int:
 	if value is int:

@@ -188,7 +188,7 @@ func _update_hint() -> void:
 		hint_label.text = "已选择: %s，请在地图上点击放置位置" % label
 		return
 
-	hint_label.text = "%s @ (%d,%d) 旋转:%d°" % [
+	hint_label.text = "%s @ (%d,%d) 旋转:%d度" % [
 		label,
 		_selected_position.x,
 		_selected_position.y,

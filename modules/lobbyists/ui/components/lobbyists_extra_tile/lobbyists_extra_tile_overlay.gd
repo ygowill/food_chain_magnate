@@ -249,7 +249,7 @@ func _rebuild_rotation_options() -> void:
 		return
 	rotation_option.clear()
 	for r in [0, 90, 180, 270]:
-		rotation_option.add_item("%d°" % int(r), int(r))
+		rotation_option.add_item("%d度" % int(r), int(r))
 	rotation_option.select(0)
 
 func _rebuild_tile_buttons() -> void:
@@ -468,9 +468,9 @@ func get_hint_text() -> String:
 		return "请选择要扩边放置的地图板块"
 
 	if not _has_selected_target:
-		return "已选择 tile=%s 旋转:%d°，请点击地图上高亮的边缘格选择扩边位置" % [_selected_tile_id, _selected_rotation]
+		return "已选择 tile=%s 旋转:%d度，请点击地图上高亮的边缘格选择扩边位置" % [_selected_tile_id, _selected_rotation]
 
-	return "tile=%s 旋转:%d° | attach=%s side=%s" % [
+	return "tile=%s 旋转:%d度 | attach=%s side=%s" % [
 		_selected_tile_id,
 		_selected_rotation,
 		str(_selected_attach_board_pos),

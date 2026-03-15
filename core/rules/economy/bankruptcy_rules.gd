@@ -426,7 +426,7 @@ static func _apply_extra_reserve_per_player_to_first_break(state: GameState) -> 
 					state.round_state["bankruptcy"] = bankruptcy
 					break
 
-	return Result.success().with_warning("首次破产额外注资：+$%d（%d人×$%d）" % [extra_total, pc, extra_per_player])
+	return Result.success().with_warning("首次破产额外注资：+$%d（%d人 x $%d）" % [extra_total, pc, extra_per_player])
 
 static func _get_selected_reserve_card(player: Dictionary, player_id: int) -> Result:
 	if not player.has("reserve_cards") or not (player["reserve_cards"] is Array):

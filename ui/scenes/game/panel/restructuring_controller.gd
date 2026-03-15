@@ -655,7 +655,7 @@ func _sync_restructuring_modal_ui(state: GameState, view_player_id: int) -> void
 	if _restructuring_modal.has_method("set_title_text"):
 		var title := "公司结构重组（同时）"
 		if view_player_id >= 0:
-			title = "公司结构重组（同时）｜查看: %s" % view_name
+			title = "公司结构重组（同时） | 查看: %s" % view_name
 		_restructuring_modal.call("set_title_text", title)
 
 	var is_online := false
@@ -682,13 +682,13 @@ func _sync_restructuring_modal_ui(state: GameState, view_player_id: int) -> void
 		if local_pid < 0:
 			confirm_text = "只读"
 			confirm_enabled = false
-			status_text = "旁观者：重组阶段不可查看玩家公司结构｜提交进度: %d/%d" % [submitted_count, total]
+			status_text = "旁观者：重组阶段不可查看玩家公司结构 | 提交进度: %d/%d" % [submitted_count, total]
 		else:
 			confirm_text = "已提交" if view_submitted else "确认重组"
 			confirm_enabled = not view_submitted
-			status_text = "联机：重组阶段不可查看其他玩家｜你的状态: %s｜提交进度: %d/%d" % [view_status, submitted_count, total]
+			status_text = "联机：重组阶段不可查看其他玩家 | 你的状态: %s | 提交进度: %d/%d" % [view_status, submitted_count, total]
 	else:
-		status_text = "当前查看: %s（%s）｜提交进度: %d/%d｜上方仅可切换未提交玩家（已提交将锁定）" % [
+		status_text = "当前查看: %s（%s） | 提交进度: %d/%d | 上方仅可切换未提交玩家（已提交将锁定）" % [
 			view_name,
 			view_status,
 			submitted_count,

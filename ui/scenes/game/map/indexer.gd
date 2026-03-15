@@ -178,6 +178,7 @@ static func _index_structure_cell(canvas, world_pos: Vector2i, cell_val) -> void
 	var owner: int = int(structure.get("owner", -1))
 	var rotation: int = int(structure.get("rotation", 0))
 	var house_id: String = str(structure.get("house_id", ""))
+	var house_number = structure.get("house_number", null)
 	var opening_soon := false
 	var os_val = structure.get("opening_soon", null)
 	if os_val is bool:
@@ -190,6 +191,7 @@ static func _index_structure_cell(canvas, world_pos: Vector2i, cell_val) -> void
 			"owner": owner,
 			"rotation": rotation,
 			"house_id": house_id,
+			"house_number": house_number,
 			"opening_soon": opening_soon,
 			"cells": [pos],
 			"min": pos,
@@ -199,6 +201,8 @@ static func _index_structure_cell(canvas, world_pos: Vector2i, cell_val) -> void
 		var info: Dictionary = canvas._structures_by_anchor[anchor]
 		if not house_id.is_empty():
 			info["house_id"] = house_id
+		if house_number != null:
+			info["house_number"] = house_number
 		var min_pos: Vector2i = info.get("min", pos)
 		var max_pos: Vector2i = info.get("max", pos)
 		min_pos.x = min(min_pos.x, pos.x)

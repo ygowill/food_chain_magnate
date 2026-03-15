@@ -207,7 +207,7 @@ func _build_inventory_token_item(product_id: String, count: int) -> Control:
 	hbox.add_child(icon)
 
 	var label := Label.new()
-	label.text = "×%d" % count
+	label.text = "x%d" % count
 	var fs := 14
 	if Globals != null:
 		fs = int(Globals.get_scaled_font_size(14))
@@ -216,7 +216,7 @@ func _build_inventory_token_item(product_id: String, count: int) -> Control:
 	hbox.add_child(label)
 
 	var name := _get_product_display_name(product_id)
-	hbox.tooltip_text = "%s ×%d" % [name, count]
+	hbox.tooltip_text = "%s x%d" % [name, count]
 	return hbox
 
 func _get_product_display_name(product_id: String) -> String:

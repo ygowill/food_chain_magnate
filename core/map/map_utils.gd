@@ -231,8 +231,8 @@ static func pos_to_string(pos: Vector2i) -> String:
 
 static func direction_to_arrow(dir: String) -> String:
 	match dir:
-		"N": return "↑"
-		"E": return "→"
-		"S": return "↓"
-		"W": return "←"
+		"N": return "N"
+		"E": return "E"
+		"S": return "S"
+		"W": return "W"
 	return "?"

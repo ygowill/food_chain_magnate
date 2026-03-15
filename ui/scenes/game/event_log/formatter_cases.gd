@@ -2,6 +2,7 @@
 extends RefCounted
 
 const MarketingAndDrinksCasesClass = preload("res://ui/scenes/game/event_log/formatter_marketing_and_drinks_cases.gd")
+const HouseNumberManagerClass = preload("res://core/map/house_number_manager.gd")
 
 const PRICE_ACTION_LOG_TEXT: Dictionary = {
 	"set_price": "设定价格（-$1）",
@@ -189,7 +190,7 @@ func format_event(t: String, data: Dictionary) -> Array[Dictionary]:
 			if not pos_text.is_empty():
 				parts3.append(pos_text)
 			if rotation != 0:
-				parts3.append("旋转%d°" % rotation)
+				parts3.append("旋转%d度" % rotation)
 			if not parts3.is_empty():
 				text += "：" + " ".join(parts3)
 			out.append(_player(player_id, text, data))
@@ -197,13 +198,13 @@ func format_event(t: String, data: Dictionary) -> Array[Dictionary]:
 			var player_id := int(data.get("player_id", -1))
 			var employee_type := str(data.get("employee_type", "")).strip_edges()
 			var employee_name := _employee_name(employee_type)
-			var house_number := int(data.get("house_number", -1))
+			var house_number_text := HouseNumberManagerClass.format_display_label(data.get("house_number", null), str(data.get("house_id", "")).strip_edges(), "")
 			var pos_text := _format_position(data.get("position", null))
 			var text := "放置房屋"
 			if not employee_name.is_empty():
 				text += "（%s）" % employee_name
-			if house_number > 0:
-				text += " #%d" % house_number
+			if not house_number_text.is_empty():
+				text += " #%s" % house_number_text
 			if not pos_text.is_empty():
 				text += " %s" % pos_text
 			if bool(data.get("has_garden", false)):
@@ -213,15 +214,19 @@ func format_event(t: String, data: Dictionary) -> Array[Dictionary]:
 			var player_id := int(data.get("player_id", -1))
 			var employee_type := str(data.get("employee_type", "")).strip_edges()
 			var employee_name := _employee_name(employee_type)
-			var house_number := int(data.get("house_number", -1))
+			var house_number_text := HouseNumberManagerClass.format_display_label(data.get("house_number", null), str(data.get("house_id", "")).strip_edges(), "")
 			var house_id := str(data.get("house_id", "")).strip_edges()
 			var direction := _format_direction(str(data.get("direction", "")).strip_edges())
 			var pos_text := _format_position(data.get("position", null))
 			var details2: Array[String] = []
-			if house_number > 0:
-				details2.append("房屋#%d" % house_number)
+			if not house_number_text.is_empty():
+				details2.append("房屋#%s" % house_number_text)
 			elif not house_id.is_empty():
-				details2.append("房屋%s" % house_id)
+				var house_id_text := HouseNumberManagerClass.format_display_label(null, house_id, "")
+				if not house_id_text.is_empty():
+					details2.append("房屋#%s" % house_id_text)
+				else:
+					details2.append("房屋")
 			if not direction.is_empty():
 				details2.append(direction)
 			if not pos_text.is_empty():

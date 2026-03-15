@@ -49,7 +49,7 @@ func sync_from_overlay() -> void:
 		pick_button.text = "重新选择板块" if not tile_id.is_empty() else "选择板块"
 
 	if is_instance_valid(rotation_value_label):
-		rotation_value_label.text = "%d°" % rot
+		rotation_value_label.text = "%d度" % rot
 	if is_instance_valid(rotate_left_button):
 		rotate_left_button.disabled = tile_id.is_empty()
 	if is_instance_valid(rotate_right_button):

@@ -1,7 +1,9 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://ui/components/action_panel/action_panel.gd" id="1_panel"]
 [ext_resource type="Script" path="res://ui/components/employee_picker/employee_picker.gd" id="2_employee_picker"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/kenney/board/arrow_counterclockwise.png" id="3_rotate_ccw"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/kenney/board/arrow_clockwise.png" id="4_rotate_cw"]
 
 [node name="ActionPanel" type="Control"]
 custom_minimum_size = Vector2(200, 0)
@@ -170,20 +172,56 @@ theme_override_constants/separation = 6
 [node name="RotateLeftButton" type="Button" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationControls"]
 custom_minimum_size = Vector2(40, 34)
 layout_mode = 2
-text = "↺"
-tooltip_text = "向左旋转 90°"
+text = ""
+tooltip_text = "向左旋转 90度"
+
+[node name="IconCenter" type="CenterContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationControls/RotateLeftButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Icon" type="TextureRect" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationControls/RotateLeftButton/IconCenter"]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+texture = ExtResource("3_rotate_ccw")
+modulate = Color(0.07, 0.07, 0.07, 1)
+mouse_filter = 2
 
 [node name="RotationValueLabel" type="Label" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationControls"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "0°"
+text = "0度"
 horizontal_alignment = 1
 
 [node name="RotateRightButton" type="Button" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationControls"]
 custom_minimum_size = Vector2(40, 34)
 layout_mode = 2
-text = "↻"
-tooltip_text = "向右旋转 90°"
+text = ""
+tooltip_text = "向右旋转 90度"
+
+[node name="IconCenter" type="CenterContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationControls/RotateRightButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Icon" type="TextureRect" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer/RotationRow/RotationControls/RotateRightButton/IconCenter"]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+texture = ExtResource("4_rotate_cw")
+modulate = Color(0.07, 0.07, 0.07, 1)
+mouse_filter = 2
 
 [node name="HouseNumberRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ContextPanel/MarginContainer/VBoxContainer/OptionsContainer"]
 layout_mode = 2

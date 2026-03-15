@@ -172,6 +172,9 @@ func _apply_visual_styles() -> void:
 		UiStylesClass.apply_button_secondary(view_logs_button)
 		view_logs_button.flat = false
 		view_logs_button.focus_mode = Control.FOCUS_NONE
+		view_logs_button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		view_logs_button.expand_icon = false
+		view_logs_button.add_theme_constant_override("icon_max_width", 16)
 		view_logs_button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 
 func apply_font_settings() -> void:

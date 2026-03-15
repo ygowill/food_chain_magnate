@@ -2,6 +2,8 @@
 # 用途：从 round_state.marketing.processed 中推导营销需求/到期事件（日志/展示语义）。
 extends RefCounted
 
+const HouseNumberManagerClass = preload("res://core/map/house_number_manager.gd")
+
 static func build_marketing_demand_generated_events(marketing_state: GameState) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if marketing_state == null:
@@ -36,7 +38,7 @@ static func build_marketing_demand_generated_events(marketing_state: GameState) 
 		var demands_added := int(p.get("demands_added", 0))
 
 		var affected_ids: Array[String] = []
-		var affected_numbers: Array[int] = []
+		var affected_numbers: Array[String] = []
 		var affected_val = p.get("affected_houses", null)
 		if affected_val is Array:
 			for hid_val in Array(affected_val):
@@ -45,7 +47,7 @@ static func build_marketing_demand_generated_events(marketing_state: GameState) 
 					continue
 				affected_ids.append(hid)
 				var hn := _try_get_house_number(houses_by_id, hid)
-				if hn > 0:
+				if not hn.is_empty():
 					affected_numbers.append(hn)
 
 		var pos_arr: Array = []
@@ -131,23 +133,16 @@ static func build_marketing_expired_events(marketing_state: GameState) -> Array[
 
 	return out
 
-static func _try_get_house_number(houses_by_id: Dictionary, house_id: String) -> int:
+static func _try_get_house_number(houses_by_id: Dictionary, house_id: String) -> String:
 	if houses_by_id == null or houses_by_id.is_empty():
-		return -1
+		return ""
 	var hid := str(house_id).strip_edges()
 	if hid.is_empty():
-		return -1
+		return ""
 	if not houses_by_id.has(hid):
-		return -1
+		return ""
 	var h_val = houses_by_id.get(hid, null)
 	if not (h_val is Dictionary):
-		return -1
+		return ""
 	var h: Dictionary = h_val
-	var n_val = h.get("house_number", null)
-	if n_val is int:
-		return int(n_val)
-	if n_val is float:
-		var f: float = float(n_val)
-		if f == floor(f):
-			return int(f)
-	return -1
+	return HouseNumberManagerClass.format_display_label(h.get("house_number", null), hid, "")

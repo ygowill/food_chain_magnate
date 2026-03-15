@@ -248,10 +248,10 @@ func dump() -> String:
 				var rotation: int = tile.get("rotation", 0)
 				var rot_char := ""
 				match rotation:
-					0: rot_char = "↑"
-					90: rot_char = "→"
-					180: rot_char = "↓"
-					270: rot_char = "←"
+					0: rot_char = "N"
+					90: rot_char = "E"
+					180: rot_char = "S"
+					270: rot_char = "W"
 				row_str += "[%s%s] " % [tile_id.left(3), rot_char]
 		output += row_str + "\n"
 

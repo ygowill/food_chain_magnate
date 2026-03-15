@@ -365,7 +365,7 @@ func _add_garden_section(state: GameState) -> void:
 	token.count = count
 	token.set_skin(_skin)
 	token.set_cell_size(_cell_size)
-	token.tooltip_text = "花园 ×%d" % count
+	token.tooltip_text = "花园 x%d" % count
 	flow.add_child(token)
 
 func _add_marketing_boards_section(state: GameState) -> void:
@@ -486,7 +486,7 @@ func _add_module_supplies_section(state: GameState) -> void:
 		token.count = count
 		token.set_skin(_skin)
 		token.set_cell_size(_cell_size)
-		token.tooltip_text = "%s ×%d" % [base, count]
+		token.tooltip_text = "%s x%d" % [base, count]
 		flow.add_child(token)
 
 func _add_module_tile_supplies_section(state: GameState) -> void:
@@ -504,7 +504,7 @@ func _add_module_tile_supplies_section(state: GameState) -> void:
 		token.tile_id = tile_id
 		token.count = count
 		token.set_cell_size(_cell_size)
-		token.tooltip_text = "地图板块 %s ×%d" % [tile_id, count]
+		token.tooltip_text = "地图板块 %s x%d" % [tile_id, count]
 		flow.add_child(token)
 
 func _get_enabled_module_ids(state: GameState) -> Array[String]:
@@ -645,7 +645,7 @@ func _add_player_token_supplies_section(state: GameState) -> void:
 			token.owner_logo_id = owner_logo_id
 			token.set_skin(_skin)
 			token.set_cell_size(_cell_size)
-			token.tooltip_text = "%s ×%d" % [pid_str, cnt]
+			token.tooltip_text = "%s x%d" % [pid_str, cnt]
 			flow.add_child(token)
 
 func _resolve_player_logo_id_for_supply(player: Dictionary, player_id: int) -> int:

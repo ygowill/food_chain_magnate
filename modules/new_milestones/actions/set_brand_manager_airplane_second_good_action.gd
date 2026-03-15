@@ -10,7 +10,7 @@ const PENDING_KEY := "new_milestones_brand_manager_airplane_pending"
 func _init() -> void:
 	action_id = "set_brand_manager_airplane_second_good"
 	display_name = "飞机追加第二种商品（品牌经理）"
-	description = "同回合内可为本次飞机营销追加第二种商品（A→B 顺序结算）；仅在获得里程碑的本回合可用一次"
+	description = "同回合内可为本次飞机营销追加第二种商品（A->B 顺序结算）；仅在获得里程碑的本回合可用一次"
 	requires_actor = true
 	is_mandatory = false
 	allowed_phases = ["Working"]
@@ -165,4 +165,3 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"board_number": board_number,
 		"products": [product_a, product_b],
 	})
-

@@ -528,7 +528,7 @@ func _update_display() -> void:
 				# Road SVG already has the number; show fallback text only when icon is missing.
 				_range_label.text = "" if range_tex != null else "R%d" % range_value
 			elif rt == "air":
-				var label := "∞" if range_value < 0 else str(range_value)
+				var label := "无限" if range_value < 0 else str(range_value)
 				# Zeppelin "with N/∞" artwork already contains the value.
 				_range_label.text = "" if icon_has_value else label
 			else:

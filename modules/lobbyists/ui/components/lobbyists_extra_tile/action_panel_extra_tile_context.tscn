@@ -1,7 +1,9 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://modules/lobbyists/ui/components/lobbyists_extra_tile/action_panel_extra_tile_context.gd" id="1_context"]
 [ext_resource type="Script" path="res://modules/lobbyists/ui/components/lobbyists_extra_tile/tile_preview.gd" id="2_tile_preview"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/kenney/board/arrow_counterclockwise.png" id="3_rotate_ccw"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/kenney/board/arrow_clockwise.png" id="4_rotate_cw"]
 
 [node name="LobbyistsExtraTileContext" type="VBoxContainer"]
 layout_mode = 2
@@ -28,17 +30,53 @@ text = "选择板块"
 [node name="RotateLeftButton" type="Button" parent="ButtonsRow"]
 custom_minimum_size = Vector2(40, 34)
 layout_mode = 2
-text = "↺"
-tooltip_text = "向左旋转 90°"
+text = ""
+tooltip_text = "向左旋转 90度"
+
+[node name="IconCenter" type="CenterContainer" parent="ButtonsRow/RotateLeftButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Icon" type="TextureRect" parent="ButtonsRow/RotateLeftButton/IconCenter"]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+texture = ExtResource("3_rotate_ccw")
+modulate = Color(0.07, 0.07, 0.07, 1)
+mouse_filter = 2
 
 [node name="RotationValueLabel" type="Label" parent="ButtonsRow"]
 custom_minimum_size = Vector2(56, 0)
 layout_mode = 2
-text = "0°"
+text = "0度"
 horizontal_alignment = 1
 
 [node name="RotateRightButton" type="Button" parent="ButtonsRow"]
 custom_minimum_size = Vector2(40, 34)
 layout_mode = 2
-text = "↻"
-tooltip_text = "向右旋转 90°"
+text = ""
+tooltip_text = "向右旋转 90度"
+
+[node name="IconCenter" type="CenterContainer" parent="ButtonsRow/RotateRightButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Icon" type="TextureRect" parent="ButtonsRow/RotateRightButton/IconCenter"]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+texture = ExtResource("4_rotate_cw")
+modulate = Color(0.07, 0.07, 0.07, 1)
+mouse_filter = 2

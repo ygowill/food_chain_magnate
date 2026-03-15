@@ -88,7 +88,7 @@ func setup(state: GameState, current_player_id: int) -> void:
 
 	var name := Globals.get_player_name(current_player_id) if Globals != null else ("玩家%d" % (current_player_id + 1))
 	if is_instance_valid(info_label):
-		info_label.text = "当前玩家：%s｜冰箱容量：%d｜当前总量：%d" % [name, _fridge_cap, total]
+		info_label.text = "当前玩家：%s | 冰箱容量：%d | 当前总量：%d" % [name, _fridge_cap, total]
 
 	# 默认策略：按产品 id 顺序尽量填满 cap（玩家可再调整）
 	var remaining := maxi(0, _fridge_cap)

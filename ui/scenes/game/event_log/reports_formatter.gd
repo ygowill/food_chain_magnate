@@ -1,6 +1,8 @@
 # GameEventLogFormatter：报表类事件拆分（Payday/Dinnertime）
 extends RefCounted
 
+const HouseNumberManagerClass = preload("res://core/map/house_number_manager.gd")
+
 var _formatter = null
 
 func setup(formatter) -> void:
@@ -104,7 +106,7 @@ func format_dinnertime_report(data: Dictionary) -> Array[Dictionary]:
 			continue
 		var s: Dictionary = s_val
 		var owner := int(s.get("winner_owner", -1))
-		var house_number := str(s.get("house_number", "")).strip_edges()
+		var house_number := HouseNumberManagerClass.format_display_label(s.get("house_number", null), str(s.get("house_id", "")).strip_edges(), "")
 		var rest_text: String = _formatter._format_restaurant_id_short(str(s.get("winner_restaurant_id", "")).strip_edges())
 		var required_val = s.get("required", null)
 		var required: Dictionary = required_val if (required_val is Dictionary) else {}
@@ -171,7 +173,7 @@ func format_dinnertime_report(data: Dictionary) -> Array[Dictionary]:
 		if not (sk_val is Dictionary):
 			continue
 		var sk: Dictionary = sk_val
-		var hn := str(sk.get("house_number", "")).strip_edges()
+		var hn := HouseNumberManagerClass.format_display_label(sk.get("house_number", null), str(sk.get("house_id", "")).strip_edges(), "")
 		var dcnt := int(sk.get("demands", 0))
 		out.append(_formatter._event("晚餐结算：房屋#%s 未满足（需求 %d）" % [hn, dcnt], sk))
 

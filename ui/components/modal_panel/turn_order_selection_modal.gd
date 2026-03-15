@@ -35,7 +35,7 @@ func setup(state: GameState, current_player_id: int, selections: Dictionary, int
 	if is_instance_valid(confirm_button):
 		confirm_button.visible = _interactive
 	var current_name := Globals.get_player_name(current_player_id) if Globals != null else ("玩家%d" % (current_player_id + 1))
-	set_title_text("选择顺序位置｜当前: %s" % current_name)
+	set_title_text("选择顺序位置 | 当前: %s" % current_name)
 	if is_instance_valid(selection_label):
 		if _interactive:
 			selection_label.text = "轮到你行动：请选择一个空位"

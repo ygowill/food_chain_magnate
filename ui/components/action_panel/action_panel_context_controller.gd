@@ -417,7 +417,7 @@ func _sync_custom_context_node(overlay: Node) -> void:
 
 func _sync_rotation_controls(selected_rotation: int) -> void:
 	if is_instance_valid(_rotation_value_label):
-		_rotation_value_label.text = "%d°" % int(selected_rotation)
+		_rotation_value_label.text = "%d度" % int(selected_rotation)
 
 	var can_rotate := _context_overlay != null and is_instance_valid(_context_overlay) and _context_overlay.has_method("set_selected_rotation")
 	if not can_rotate:

@@ -107,7 +107,7 @@ func _build_bank_page() -> void:
 	var section_label := _make_section_label("银行设置")
 	bank_page.add_child(section_label)
 
-	_spin_bank_per_player = _add_spin_row(bank_page, "每人银行资金", _default_cfg.bank_default_per_player, 0, 500, 5, "银行总额 = 玩家数 × 此值")
+	_spin_bank_per_player = _add_spin_row(bank_page, "每人银行资金", _default_cfg.bank_default_per_player, 0, 500, 5, "银行总额 = 玩家数 x 此值")
 
 # ── 规则页面 ──────────────────────────────────────────
 

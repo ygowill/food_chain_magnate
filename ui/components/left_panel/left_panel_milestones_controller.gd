@@ -3,6 +3,7 @@ extends RefCounted
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const CheckmarkIconClass = preload("res://ui/components/left_panel/checkmark_icon.gd")
+const StatusDotIconClass = preload("res://ui/components/common/status_dot_icon.gd")
 
 # 里程碑状态颜色
 const MILESTONE_COLOR_CLAIMED := Color(0.28, 0.55, 0.22, 1.0)  # 成功绿
@@ -235,24 +236,23 @@ func _create_milestone_compact_row(milestone_id: String, milestone_def, is_claim
 	icon_container.custom_minimum_size = Vector2(fs_icon + 6, fs_icon + 6)
 	icon_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
-	var icon_label: Label = null
 	if is_claimed:
 		var icon_draw := CheckmarkIconClass.new()
 		icon_draw.custom_minimum_size = Vector2(fs_icon, fs_icon)
 		icon_draw.color = MILESTONE_COLOR_CLAIMED
 		icon_container.add_child(icon_draw)
 	elif in_pool:
-		icon_label = Label.new()
-		icon_label.add_theme_font_size_override("font_size", fs_icon)
-		icon_label.text = "○"
-		icon_label.add_theme_color_override("font_color", MILESTONE_COLOR_AVAILABLE)
+		var icon_draw := StatusDotIconClass.new()
+		icon_draw.custom_minimum_size = Vector2(fs_icon, fs_icon)
+		icon_draw.color = MILESTONE_COLOR_AVAILABLE
+		icon_draw.filled = false
+		icon_container.add_child(icon_draw)
 	else:
-		icon_label = Label.new()
-		icon_label.add_theme_font_size_override("font_size", fs_icon)
-		icon_label.text = "○"
-		icon_label.add_theme_color_override("font_color", MILESTONE_COLOR_GONE)
-	if icon_label != null:
-		icon_container.add_child(icon_label)
+		var icon_draw := StatusDotIconClass.new()
+		icon_draw.custom_minimum_size = Vector2(fs_icon, fs_icon)
+		icon_draw.color = MILESTONE_COLOR_GONE
+		icon_draw.filled = false
+		icon_container.add_child(icon_draw)
 
 	row.add_child(icon_container)
 
@@ -296,8 +296,6 @@ func _create_milestone_compact_row(milestone_id: String, milestone_def, is_claim
 	wrapper.tooltip_text = tip
 	row.tooltip_text = tip
 	icon_container.tooltip_text = tip
-	if icon_label != null:
-		icon_label.tooltip_text = tip
 	name_label.tooltip_text = tip
 	wrapper.mouse_entered.connect(Callable(self, "_on_milestone_mouse_entered").bind(milestone_id, wrapper))
 	wrapper.mouse_exited.connect(_on_milestone_mouse_exited)
