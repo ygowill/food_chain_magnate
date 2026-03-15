@@ -38,6 +38,7 @@ static func _apply_topbar_button_styles(game) -> void:
 		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/LogButton",
 		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/MilestonesButton",
 		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/ReserveAreaButton",
+		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/ReserveCardsButton",
 		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/DistanceToolButton",
 		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/SettingsButton",
 	]

@@ -682,6 +682,9 @@ func _on_left_panel_logs_requested() -> void:
 func _on_milestones_button_pressed() -> void:
 	show_milestone_panel()
 
+func _on_reserve_cards_button_pressed() -> void:
+	show_reserve_cards_overview()
+
 func _on_reserve_area_button_pressed() -> void:
 	if _panel_controller != null and _panel_controller.has_method("show_reserve_area_panel"):
 		_panel_controller.call("show_reserve_area_panel")
@@ -916,6 +919,10 @@ func preview_marketing_range(position: Vector2i, range_val: int, marketing_type:
 func show_milestone_panel() -> void:
 	if _panel_controller != null:
 		_panel_controller.show_milestone_panel()
+
+func show_reserve_cards_overview(focus_player_id: int = -1) -> void:
+	if _panel_controller != null and _panel_controller.has_method("show_reserve_cards_overview"):
+		_panel_controller.call("show_reserve_cards_overview", focus_player_id)
 
 func toggle_game_log() -> void:
 	var was_visible := false

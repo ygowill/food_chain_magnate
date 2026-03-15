@@ -116,6 +116,18 @@ func show_reserve_area_panel() -> void:
 	if _views_controller != null:
 		_views_controller.show_reserve_area_full_screen_view(state, _get_current_map_skin())
 
+func show_reserve_cards_overview(focus_player_id: int = -1) -> void:
+	if _scene == null:
+		return
+	var engine = _scene.get("game_engine")
+	if engine == null or not (engine is GameEngine):
+		return
+	var state: GameState = engine.get_state()
+	if state == null:
+		return
+	if _views_controller != null:
+		_views_controller.show_reserve_cards_full_screen_view(state, focus_player_id)
+
 func show_payday_panel() -> void:
 	if _end_panels != null:
 		_end_panels.show_payday_panel()
@@ -311,6 +323,11 @@ func get_reserve_area_full_screen_view():
 	if _views_controller == null:
 		return null
 	return _views_controller.get_reserve_area_full_screen_view()
+
+func get_reserve_cards_full_screen_view():
+	if _views_controller == null:
+		return null
+	return _views_controller.get_reserve_cards_full_screen_view()
 
 func get_employee_tree_panel():
 	if _views_controller == null:

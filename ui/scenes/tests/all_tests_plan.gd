@@ -247,6 +247,14 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.EntityTabReserveCardPrivacyTestClass.run(),
 			},
 			{
+				"name": "ReserveCardsFullScreenViewPrivacyTest",
+				"fn": func() -> Result: return await TestRefs.ReserveCardsFullScreenViewPrivacyTestClass.run(),
+			},
+			{
+				"name": "GameOverlayFirstHave20PopupTest",
+				"fn": func() -> Result: return await TestRefs.GameOverlayFirstHave20PopupTestClass.run(),
+			},
+			{
 				"name": "TurnOrderSelectionModalOnlineVisibilityTest",
 				"fn": func() -> Result: return TestRefs.TurnOrderSelectionModalOnlineVisibilityTestClass.run(),
 			},

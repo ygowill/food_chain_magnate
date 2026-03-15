@@ -4,6 +4,7 @@ class_name BankBreakPanel
 extends Control
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const ReserveCardsViewDataClass = preload("res://ui/components/reserve_cards/reserve_cards_view_data.gd")
 const WarningIconTexture: Texture2D = preload("res://assets/images/ui_icons/kenney_game/warning.png")
 
 signal bankruptcy_acknowledged()
@@ -233,17 +234,5 @@ func _player_display_name(player_id: int) -> String:
 func _format_revealed_card(item: Dictionary) -> String:
 	var card_val = item.get("card", null)
 	var card: Dictionary = card_val if card_val is Dictionary else {}
-
 	var selected_index := int(item.get("selected_index", -1))
-	var card_type := int(card.get("type", -1))
-	var cash := int(card.get("cash", 0))
-	var slots := int(card.get("ceo_slots", 0))
-
-	var parts: Array[String] = []
-	if selected_index >= 0:
-		parts.append("选项#%d" % (selected_index + 1))
-	if card_type >= 0:
-		parts.append("类型 %d" % card_type)
-	parts.append("注资 $%d" % cash)
-	parts.append("CEO 槽位 %d" % slots)
-	return "，".join(parts)
+	return ReserveCardsViewDataClass.format_revealed_card_summary(card, selected_index)

@@ -239,6 +239,10 @@ text = "里程碑"
 layout_mode = 2
 text = "供应堆"
 
+[node name="ReserveCardsButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar"]
+layout_mode = 2
+text = "储备卡"
+
 [node name="DistanceToolButton" type="Button" parent="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar"]
 layout_mode = 2
 text = "距离工具"
@@ -403,6 +407,7 @@ text = "返回主菜单"
 [connection signal="pressed" from="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/LogButton" to="." method="_on_log_button_pressed"]
 [connection signal="pressed" from="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/MilestonesButton" to="." method="_on_milestones_button_pressed"]
 [connection signal="pressed" from="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/ReserveAreaButton" to="." method="_on_reserve_area_button_pressed"]
+[connection signal="pressed" from="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/ReserveCardsButton" to="." method="_on_reserve_cards_button_pressed"]
 [connection signal="pressed" from="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/DistanceToolButton" to="." method="_on_distance_tool_button_pressed"]
 [connection signal="pressed" from="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/SettingsButton" to="." method="_on_settings_button_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ToggleLeftPanelButton" to="." method="_on_toggle_left_panel_pressed"]

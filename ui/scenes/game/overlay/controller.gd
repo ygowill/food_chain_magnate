@@ -27,6 +27,7 @@ const TOAST_MIN_MARGIN := 12.0
 const TOAST_OFFSET_TOP := 16.0
 const TOAST_HEIGHT := 62.0
 const KIND_CONFIRM_DINNERTIME := "confirm_dinnertime"
+const MILESTONE_ID_FIRST_HAVE_20 := "first_have_20"
 
 var _scene = null
 var _map_view = null
@@ -453,6 +454,7 @@ func _on_milestone_achieved(event: Dictionary) -> void:
 		})
 		return
 	show_milestone_toast(player_id, milestone_id)
+	_maybe_show_milestone_reward_view(player_id, milestone_id)
 
 func show_milestone_toast(player_id: int, milestone_id: String) -> void:
 	if OS.has_feature("headless"):
@@ -514,7 +516,37 @@ func _flush_deferred_milestone_toasts() -> void:
 		if not (item_val is Dictionary):
 			continue
 		var item: Dictionary = item_val
-		show_milestone_toast(int(item.get("player_id", -1)), str(item.get("milestone_id", "")))
+		var player_id := int(item.get("player_id", -1))
+		var milestone_id := str(item.get("milestone_id", ""))
+		show_milestone_toast(player_id, milestone_id)
+		_maybe_show_milestone_reward_view(player_id, milestone_id)
+
+func _maybe_show_milestone_reward_view(player_id: int, milestone_id: String) -> void:
+	var mid := str(milestone_id).strip_edges()
+	if mid != MILESTONE_ID_FIRST_HAVE_20:
+		return
+
+	var live_state := _read_live_game_state()
+	if live_state == null or not (live_state.players is Array):
+		return
+	if player_id < 0 or player_id >= live_state.players.size():
+		return
+
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		var local_player_id := int(NetContext.local_player_id)
+		if local_player_id < 0 or local_player_id != player_id:
+			return
+
+	var player_val = live_state.players[player_id]
+	if not (player_val is Dictionary):
+		return
+	var player: Dictionary = player_val
+	var can_peek = player.get("can_peek_all_reserve_cards", false)
+	if not (can_peek is bool and bool(can_peek)):
+		return
+
+	if _scene != null and is_instance_valid(_scene) and _scene.has_method("show_reserve_cards_overview"):
+		_scene.call_deferred("show_reserve_cards_overview", player_id)
 
 func _strip_milestone_id_suffix(raw_name: String, milestone_id: String) -> String:
 	var s := str(raw_name).strip_edges()

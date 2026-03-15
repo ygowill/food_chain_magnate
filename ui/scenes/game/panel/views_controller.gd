@@ -1,10 +1,11 @@
 # Game scene：顶层浏览视图控制器
-# 负责：EmployeeTree / MilestoneFullScreenView / ReserveAreaFullScreenView 的创建、显示/隐藏与生命周期管理。
+# 负责：EmployeeTree / MilestoneFullScreenView / ReserveCardsFullScreenView / ReserveAreaFullScreenView 的创建、显示/隐藏与生命周期管理。
 class_name GamePanelViewsController
 extends RefCounted
 
 const EmployeeTreeScene = preload("res://ui/components/employee_tree/employee_tree.tscn")
 const MilestoneFullScreenViewScene = preload("res://ui/components/milestone_panel/milestone_full_screen_view.tscn")
+const ReserveCardsFullScreenViewScene = preload("res://ui/components/reserve_cards/reserve_cards_full_screen_view.tscn")
 const ReserveAreaFullScreenViewScene = preload("res://ui/components/reserve_area/reserve_area_full_screen_view.tscn")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const UiZClass = preload("res://ui/utils/ui_z.gd")
@@ -13,6 +14,7 @@ var _scene = null
 
 var _employee_tree_panel = null
 var _milestone_full_screen_view = null
+var _reserve_cards_full_screen_view = null
 var _reserve_area_full_screen_view = null
 
 func _init(scene) -> void:
@@ -27,6 +29,10 @@ func dispose() -> void:
 		_milestone_full_screen_view.queue_free()
 	_milestone_full_screen_view = null
 
+	if is_instance_valid(_reserve_cards_full_screen_view):
+		_reserve_cards_full_screen_view.queue_free()
+	_reserve_cards_full_screen_view = null
+
 	if is_instance_valid(_reserve_area_full_screen_view):
 		_reserve_area_full_screen_view.queue_free()
 	_reserve_area_full_screen_view = null
@@ -38,6 +44,8 @@ func has_open_view_ui() -> bool:
 		return true
 	if is_instance_valid(_milestone_full_screen_view) and _milestone_full_screen_view.visible:
 		return true
+	if is_instance_valid(_reserve_cards_full_screen_view) and _reserve_cards_full_screen_view.visible:
+		return true
 	if is_instance_valid(_reserve_area_full_screen_view) and _reserve_area_full_screen_view.visible:
 		return true
 	return false
@@ -45,9 +53,13 @@ func has_open_view_ui() -> bool:
 func hide() -> void:
 	hide_employee_tree()
 	hide_milestone_full_screen_view()
+	hide_reserve_cards_full_screen_view()
 	hide_reserve_area_full_screen_view()
 
 func hide_top_overlays_if_open() -> bool:
+	if is_instance_valid(_reserve_cards_full_screen_view) and _reserve_cards_full_screen_view.visible:
+		hide_reserve_cards_full_screen_view()
+		return true
 	if is_instance_valid(_reserve_area_full_screen_view) and _reserve_area_full_screen_view.visible:
 		hide_reserve_area_full_screen_view()
 		return true
@@ -115,6 +127,27 @@ func hide_milestone_full_screen_view() -> void:
 func get_milestone_full_screen_view():
 	_ensure_milestone_full_screen_view()
 	return _milestone_full_screen_view
+
+func show_reserve_cards_full_screen_view(state: GameState, focus_player_id: int = -1) -> void:
+	if state == null:
+		return
+	_ensure_reserve_cards_full_screen_view()
+	if not is_instance_valid(_reserve_cards_full_screen_view):
+		return
+	if _reserve_cards_full_screen_view.has_method("open_with_state"):
+		_reserve_cards_full_screen_view.call("open_with_state", state, focus_player_id)
+
+	if _scene != null and _reserve_cards_full_screen_view is Control:
+		_apply_full_rect(_reserve_cards_full_screen_view as Control)
+	_reserve_cards_full_screen_view.visible = true
+
+func hide_reserve_cards_full_screen_view() -> void:
+	if is_instance_valid(_reserve_cards_full_screen_view):
+		_reserve_cards_full_screen_view.visible = false
+
+func get_reserve_cards_full_screen_view():
+	_ensure_reserve_cards_full_screen_view()
+	return _reserve_cards_full_screen_view
 
 func show_reserve_area_full_screen_view(state: GameState, map_skin) -> void:
 	if state == null:
@@ -184,6 +217,23 @@ func _ensure_milestone_full_screen_view() -> void:
 		UiZClass.apply_absolute((_milestone_full_screen_view as Control), UiZClass.FULLSCREEN_VIEW)
 
 	UiSignalHelpersClass.safe_connect(_milestone_full_screen_view, "close_requested", hide_milestone_full_screen_view)
+
+func _ensure_reserve_cards_full_screen_view() -> void:
+	if _scene == null:
+		return
+	if is_instance_valid(_reserve_cards_full_screen_view):
+		return
+
+	_reserve_cards_full_screen_view = ReserveCardsFullScreenViewScene.instantiate()
+	if not is_instance_valid(_reserve_cards_full_screen_view):
+		return
+	_reserve_cards_full_screen_view.visible = false
+	_scene.add_child(_reserve_cards_full_screen_view)
+
+	if _reserve_cards_full_screen_view is Control:
+		UiZClass.apply_absolute((_reserve_cards_full_screen_view as Control), UiZClass.FULLSCREEN_VIEW)
+
+	UiSignalHelpersClass.safe_connect(_reserve_cards_full_screen_view, "close_requested", hide_reserve_cards_full_screen_view)
 
 func _ensure_reserve_area_full_screen_view() -> void:
 	if _scene == null:
