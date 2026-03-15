@@ -18,14 +18,14 @@ var warnings: Array[String] = []
 
 # 静态工厂方法：创建成功结果
 static func success(val = null) -> Result:
-	var r := Result.new()
+	var r := new()
 	r.ok = true
 	r.value = val
 	return r
 
 # 静态工厂方法：创建失败结果
 static func failure(err: String, code: int = 0) -> Result:
-	var r := Result.new()
+	var r := new()
 	r.ok = false
 	r.error = err
 	r.error_code = int(code)
@@ -66,7 +66,7 @@ func to_dict() -> Dictionary:
 
 # 从字典创建
 static func from_dict(data: Dictionary) -> Result:
-	var r := Result.new()
+	var r := new()
 	r.ok = data.get("ok", false)
 	r.value = data.get("value", null)
 	r.error = data.get("error", "")
@@ -99,7 +99,7 @@ func unwrap_or_error():
 # 映射成功值
 func map(transform: Callable) -> Result:
 	if ok:
-		return Result.success(transform.call(value))
+		return success(transform.call(value))
 	return self
 
 # 链式处理
@@ -109,7 +109,7 @@ func and_then(next_fn: Callable) -> Result:
 	return self
 
 # 合并多个 Result
-static func all(results: Array[Result]) -> Result:
+static func all(results: Array):
 	var values := []
 	var all_warnings: Array[String] = []
 
@@ -119,13 +119,13 @@ static func all(results: Array[Result]) -> Result:
 		values.append(r.value)
 		all_warnings.append_array(r.warnings)
 
-	return Result.success(values).with_warnings(all_warnings)
+	return success(values).with_warnings(all_warnings)
 
 # 返回第一个成功的结果
-static func first_ok(results: Array[Result]) -> Result:
+static func first_ok(results: Array):
 	for r in results:
 		if r.ok:
 			return r
 	if results.size() > 0:
 		return results[-1]
-	return Result.failure("No results provided")
+	return failure("No results provided")

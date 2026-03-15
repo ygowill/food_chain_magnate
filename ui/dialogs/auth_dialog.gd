@@ -324,7 +324,16 @@ func _on_submit() -> void:
 			result = await PlatformSession.bind_email(email, password)
 	_set_submitting(false)
 	if result.has("error"):
-		_show_error(str(result["error"]))
+		_show_error(_extract_error_text(result))
+		return
+	if _is_pending_verification_result(result):
+		var pending_msg := "验证邮件已发送，请打开邮箱中的链接完成验证，然后返回登录"
+		_password_edit.text = ""
+		_confirm_edit.text = ""
+		if _tab != Tab.LOGIN:
+			_tab_bar.current_tab = Tab.LOGIN
+			_on_tab_changed(Tab.LOGIN)
+		_show_error(pending_msg)
 		return
 	close()
 	auth_completed.emit(result)
@@ -349,6 +358,46 @@ func _get_submit_text() -> String:
 func _show_error(msg: String) -> void:
 	_error_label.text = msg
 	_error_label.visible = true
+
+
+func _extract_error_text(result: Dictionary) -> String:
+	var err_val = result.get("error", null)
+	if err_val is Dictionary:
+		var err: Dictionary = Dictionary(err_val)
+		var detail_val = err.get("detail", null)
+		if detail_val is Dictionary:
+			var detail: Dictionary = Dictionary(detail_val)
+			if str(detail.get("code", "")) == "EMAIL_NOT_VERIFIED":
+				return "邮箱尚未验证，请先完成邮箱验证"
+			var message := str(detail.get("message", "")).strip_edges()
+			if not message.is_empty():
+				return message
+		elif detail_val != null:
+			var detail_text := str(detail_val).strip_edges()
+			if not detail_text.is_empty():
+				return detail_text
+		if err.has("body"):
+			var body_text := str(err.get("body", "")).strip_edges()
+			if not body_text.is_empty():
+				return body_text
+		if err.has("detail"):
+			var raw_detail := str(err.get("detail", "")).strip_edges()
+			if not raw_detail.is_empty():
+				return raw_detail
+		var fallback := str(err).strip_edges()
+		if not fallback.is_empty():
+			return fallback
+	return str(err_val)
+
+
+func _is_pending_verification_result(result: Dictionary) -> bool:
+	if not result.has("ok"):
+		return false
+	var ok_val = result.get("ok", null)
+	if not (ok_val is Dictionary):
+		return false
+	var ok: Dictionary = Dictionary(ok_val)
+	return str(ok.get("status", "")) == "pending_verification"
 
 
 func _on_browser_login() -> void:

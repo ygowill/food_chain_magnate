@@ -61,19 +61,19 @@ static func from_dict(data: Dictionary) -> Result:
 	out.version = version_read.value
 
 	var priority_val = data.get("priority", 100)
-	var priority_read := Result.success(0) if priority_val == null else DataParseHelpersClass.parse_int(priority_val, "priority")
+	var priority_read = Result.success(0) if priority_val == null else DataParseHelpersClass.parse_int(priority_val, "priority")
 	if not priority_read.ok:
 		return priority_read
 	out.priority = int(priority_read.value)
 
 	var deps_val = data.get("dependencies", [])
-	var deps_read := Result.success([]) if deps_val == null else DataParseHelpersClass.parse_string_array(deps_val, "dependencies", true)
+	var deps_read = Result.success([]) if deps_val == null else DataParseHelpersClass.parse_string_array(deps_val, "dependencies", true)
 	if not deps_read.ok:
 		return deps_read
 	out.dependencies = deps_read.value
 
 	var conflicts_val = data.get("conflicts", [])
-	var conflicts_read := Result.success([]) if conflicts_val == null else DataParseHelpersClass.parse_string_array(conflicts_val, "conflicts", true)
+	var conflicts_read = Result.success([]) if conflicts_val == null else DataParseHelpersClass.parse_string_array(conflicts_val, "conflicts", true)
 	if not conflicts_read.ok:
 		return conflicts_read
 	out.conflicts = conflicts_read.value

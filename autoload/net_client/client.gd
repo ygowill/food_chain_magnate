@@ -157,7 +157,7 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 	var player_count := int(config.get("desired_player_count", 0))
 	var seed := int(config.get("seed", 0))
 	var base_dir := str(config.get("modules_v2_base_dir", "")).strip_edges()
-	var base_dirs_read := ModuleDirSpecClass.parse_base_dirs(base_dir)
+	var base_dirs_read = ModuleDirSpecClass.parse_base_dirs(base_dir)
 	if not base_dirs_read.ok:
 		GameLog.warn("NetClient", "Online room modules_v2_base_dir 非 res://，已回退默认: %s" % base_dir)
 		base_dir = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR

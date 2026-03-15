@@ -35,7 +35,7 @@ static func _resolve_tile_preview_script() -> Script:
 	if base_dir_spec.is_empty():
 		base_dir_spec = str(GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR).strip_edges()
 
-	var base_dirs_read := ModuleDirSpecClass.parse_base_dirs(base_dir_spec)
+	var base_dirs_read = ModuleDirSpecClass.parse_base_dirs(base_dir_spec)
 	if not base_dirs_read.ok:
 		return null
 	var base_dirs: Array = base_dirs_read.value

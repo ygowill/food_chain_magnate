@@ -1,6 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { login as apiLogin, register as apiRegister, guestLogin as apiGuestLogin, getMe, type MeResponse } from '../api/auth'
+import {
+  login as apiLogin,
+  register as apiRegister,
+  guestLogin as apiGuestLogin,
+  getMe,
+  confirmEmailVerification as apiConfirmEmailVerification,
+  type MeResponse,
+} from '../api/auth'
 
 const SESSION_KEY = 'fcm_session_id'
 const USER_ID_KEY = 'fcm_user_id'
@@ -13,25 +20,33 @@ export const useAuthStore = defineStore('auth', () => {
   const isLoggedIn = computed(() => !!sessionId.value)
   const isAdmin = computed(() => !!user.value?.is_admin)
 
+  function applySession(nextSessionId: string) {
+    sessionId.value = nextSessionId
+    localStorage.setItem(SESSION_KEY, nextSessionId)
+  }
+
   async function login(email: string, password: string) {
     const { data } = await apiLogin(email, password)
-    sessionId.value = data.session_id
-    localStorage.setItem(SESSION_KEY, data.session_id)
+    applySession(data.session_id)
     await fetchUser()
   }
 
   async function register(email: string, password: string, displayName?: string) {
     const { data } = await apiRegister(email, password, displayName)
-    sessionId.value = data.session_id
-    localStorage.setItem(SESSION_KEY, data.session_id)
+    return data
+  }
+
+  async function completeEmailVerification(token: string) {
+    const { data } = await apiConfirmEmailVerification(token)
+    applySession(data.session_id)
     await fetchUser()
+    return data
   }
 
   async function guestLogin() {
     const deviceId = crypto.randomUUID()
     const { data } = await apiGuestLogin(deviceId)
-    sessionId.value = data.session_id
-    localStorage.setItem(SESSION_KEY, data.session_id)
+    applySession(data.session_id)
     await fetchUser()
   }
 
@@ -55,5 +70,16 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem(IS_GUEST_KEY)
   }
 
-  return { sessionId, user, isLoggedIn, isAdmin, login, register, guestLogin, fetchUser, logout }
+  return {
+    sessionId,
+    user,
+    isLoggedIn,
+    isAdmin,
+    login,
+    register,
+    completeEmailVerification,
+    guestLogin,
+    fetchUser,
+    logout,
+  }
 })

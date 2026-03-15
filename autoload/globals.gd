@@ -8,7 +8,9 @@ const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const GameStateClass = preload("res://core/state/game_state.gd")
 const GameConstantsClass = preload("res://core/engine/game_constants.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
-const FALLBACK_FONT: Font = preload("res://assets/fonts/NotoSansSC-Regular.otf")
+const SoundManagerClass = preload("res://ui/audio/sound_manager.gd")
+const MusicManagerClass = preload("res://ui/audio/music_manager.gd")
+const FALLBACK_FONT_PATH := "res://assets/fonts/NotoSansSC-Regular.otf"
 
 # 版本信息
 const SCHEMA_VERSION := GameStateClass.SCHEMA_VERSION
@@ -86,9 +88,12 @@ func _ready() -> void:
 	_apply_font_scale()
 
 func _apply_fallback_font() -> void:
-	if FALLBACK_FONT == null:
+	if DisplayServer.get_name() == "headless":
 		return
-	ThemeDB.fallback_font = FALLBACK_FONT
+	var fallback_font: Font = load(FALLBACK_FONT_PATH)
+	if fallback_font == null:
+		return
+	ThemeDB.fallback_font = fallback_font
 	_log_font_probe()
 
 func _log_font_probe() -> void:
@@ -193,10 +198,10 @@ func get_log_font_size(base_size: int) -> int:
 # 音频设置快捷操作（主菜单/游戏内一键静音）
 func is_audio_muted() -> bool:
 	var muted := false
-	var sm := SoundManager.get_instance()
+	var sm := SoundManagerClass.get_instance()
 	if sm != null and is_instance_valid(sm):
 		muted = muted or bool(sm.is_muted())
-	var mm := MusicManager.get_instance()
+	var mm := MusicManagerClass.get_instance()
 	if mm != null and is_instance_valid(mm):
 		muted = muted or bool(mm.is_muted())
 	if sm != null or mm != null:
@@ -229,10 +234,10 @@ func set_audio_muted(muted: bool) -> void:
 	config.set_value("music", "muted", target)
 	config.save("user://sound_settings.cfg")
 
-	var sm := SoundManager.get_instance()
+	var sm := SoundManagerClass.get_instance()
 	if sm != null and is_instance_valid(sm):
 		sm.set_muted(target)
-	var mm := MusicManager.get_instance()
+	var mm := MusicManagerClass.get_instance()
 	if mm != null and is_instance_valid(mm):
 		mm.set_muted(target)
 
@@ -368,7 +373,7 @@ func _normalize_modules_base_dir(spec: String) -> String:
 	var s := str(spec).strip_edges()
 	if s.is_empty():
 		return GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
-	var read := ModuleDirSpecClass.parse_base_dirs(s)
+	var read = ModuleDirSpecClass.parse_base_dirs(s)
 	if read.ok:
 		return s
 	GameLog.warn("Globals", "modules_v2_base_dir 非 res:// 目录，已回退默认: %s" % s)

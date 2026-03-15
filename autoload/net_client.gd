@@ -6,6 +6,7 @@ const RoomManagerClass = preload("res://server/room_manager.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const CommandClass = preload("res://core/types/command.gd")
+const ResultClass = preload("res://core/types/result.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
@@ -51,7 +52,7 @@ func start_server(port: int, bind_address: String = "0.0.0.0"):
 		_peer = null
 		GameLog.error("NetClient", "start_server failed bind=%s port=%d err=%s" % [bind_address, port, str(err)])
 		NetContext.reset()
-		return Result.failure("WebSocket server create_server failed: %s" % str(err))
+		return ResultClass.failure("WebSocket server create_server failed: %s" % str(err))
 
 	multiplayer.multiplayer_peer = _peer
 	_room_manager = RoomManagerClass.new()
@@ -59,7 +60,7 @@ func start_server(port: int, bind_address: String = "0.0.0.0"):
 	_client_transport_connected = false
 
 	GameLog.info("NetClient", "Server started on %s:%d" % [bind_address, port])
-	return Result.success()
+	return ResultClass.success()
 
 func connect_to_server(url: String, preserve_context: bool = false):
 	shutdown(not preserve_context)
@@ -70,7 +71,7 @@ func connect_to_server(url: String, preserve_context: bool = false):
 		GameLog.error("NetClient", "connect_to_server missing connect_token url=%s" % _safe_text(connect_url))
 		if not preserve_context:
 			NetContext.reset()
-		return Result.failure("connect_token required")
+		return ResultClass.failure("connect_token required")
 	NetContext.mode = NetContext.Mode.ONLINE_CLIENT
 	NetContext.server_url = connect_url
 	NetContext.connect_token = connect_token
@@ -84,12 +85,12 @@ func connect_to_server(url: String, preserve_context: bool = false):
 		GameLog.error("NetClient", "connect_to_server failed url=%s err=%s" % [connect_url, str(err)])
 		if not preserve_context:
 			NetContext.reset()
-		return Result.failure("WebSocket client create_client failed: %s" % str(err))
+		return ResultClass.failure("WebSocket client create_client failed: %s" % str(err))
 
 	multiplayer.multiplayer_peer = _peer
 	_client_transport_connected = false
 	GameLog.info("NetClient", "Connecting to %s" % connect_url)
-	return Result.success()
+	return ResultClass.success()
 
 func _parse_connect_token_from_url(url: String) -> Dictionary:
 	var out := {

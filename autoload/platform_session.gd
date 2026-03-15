@@ -119,21 +119,21 @@ func auto_guest_login() -> Dictionary:
 
 func login(email: String, password: String) -> Dictionary:
 	var result: Dictionary = await PlatformApi.login(email, password)
-	if result.has("ok"):
+	if _should_apply_auth_result(result):
 		_apply_auth(result["ok"], false)
 	return result
 
 
 func register(email: String, password: String, nickname: String = "") -> Dictionary:
 	var result: Dictionary = await PlatformApi.register(email, password, nickname)
-	if result.has("ok"):
+	if _should_apply_auth_result(result):
 		_apply_auth(result["ok"], false)
 	return result
 
 
 func bind_email(email: String, password: String) -> Dictionary:
 	var result: Dictionary = await PlatformApi.bind(session_id, "email", email, password)
-	if result.has("ok"):
+	if _should_apply_auth_result(result):
 		_apply_auth(result["ok"], false)
 	return result
 
@@ -207,6 +207,16 @@ func start_device_auth() -> Dictionary:
 
 func cancel_device_auth() -> void:
 	_device_auth_cancelled = true
+
+
+func _should_apply_auth_result(result: Dictionary) -> bool:
+	if not result.has("ok"):
+		return false
+	var ok_val = result.get("ok", null)
+	if not (ok_val is Dictionary):
+		return false
+	var ok: Dictionary = Dictionary(ok_val)
+	return not str(ok.get("session_id", "")).is_empty()
 
 
 func _apply_auth(data: Dictionary, guest: bool) -> void:

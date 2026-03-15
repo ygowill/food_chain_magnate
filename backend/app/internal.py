@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
 import hmac
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
@@ -13,7 +16,7 @@ from app.replay_storage import save_local_replay_archive
 
 router = APIRouter(prefix="/internal", tags=["internal"])
 
-def _require_internal_secret(x_internal_secret: str | None = Header(default=None, alias="X-Internal-Secret")) -> None:
+def _require_internal_secret(x_internal_secret: Optional[str] = Header(default=None, alias="X-Internal-Secret")) -> None:
     expected = str(settings.internal_api_secret).strip()
     if expected == "":
         raise HTTPException(status_code=500, detail="internal_api_secret not configured")
@@ -65,29 +68,29 @@ async def heartbeat(req: HeartbeatRequest, db: AsyncSession = Depends(get_db)):
 class ParticipantIn(BaseModel):
     user_id: str
     role: str
-    seat_index: int | None = None
-    result: str | None = None
-    score_json: str | None = None
+    seat_index: Optional[int] = None
+    result: Optional[str] = None
+    score_json: Optional[str] = None
 
 
 class FinalizeRequest(BaseModel):
-    room_id: str | None = None
-    room_code: str | None = None
+    room_id: Optional[str] = None
+    room_code: Optional[str] = None
     status: str = "completed"
-    started_at: str | None = None
-    ended_at: str | None = None
-    duration_sec: int | None = None
+    started_at: Optional[str] = None
+    ended_at: Optional[str] = None
+    duration_sec: Optional[int] = None
     player_count: int = 0
-    seed: str | None = None
-    schema_version: str | None = None
-    game_version: str | None = None
-    final_hash: str | None = None
-    summary_json: str | None = None
+    seed: Optional[str] = None
+    schema_version: Optional[str] = None
+    game_version: Optional[str] = None
+    final_hash: Optional[str] = None
+    summary_json: Optional[str] = None
     participants: list[ParticipantIn] = []
-    replay_uri: str | None = None
-    replay_archive_json: str | None = None
-    replay_checksum: str | None = None
-    replay_size_bytes: int | None = None
+    replay_uri: Optional[str] = None
+    replay_archive_json: Optional[str] = None
+    replay_checksum: Optional[str] = None
+    replay_size_bytes: Optional[int] = None
 
 
 @router.post("/matches/finalize", dependencies=[Depends(_require_internal_secret)])
@@ -110,7 +113,7 @@ async def finalize(req: FinalizeRequest, db: AsyncSession = Depends(get_db)):
             seat_index=p.seat_index, result=p.result, score_json=p.score_json,
         ))
 
-    replay_storage_uri: str | None = req.replay_uri
+    replay_storage_uri: Optional[str] = req.replay_uri
     replay_archive_json = str(req.replay_archive_json or "")
     if replay_archive_json.strip() != "":
         try:

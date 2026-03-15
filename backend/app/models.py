@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from sqlalchemy import String, DateTime, ForeignKey, UniqueConstraint, Boolean, Integer, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -22,7 +25,7 @@ class User(Base):
 
     user_id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
     status: Mapped[str] = mapped_column(String, default="active")
-    display_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    display_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
@@ -33,10 +36,24 @@ class AuthIdentity(Base):
     provider: Mapped[str] = mapped_column(String, nullable=False)
     provider_user_id: Mapped[str] = mapped_column(String, nullable=False)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id"), nullable=False)
-    credential_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    credential_hash: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
 
     __table_args__ = (UniqueConstraint("provider", "provider_user_id"),)
+
+
+class EmailVerificationToken(Base):
+    __tablename__ = "email_verification_tokens"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
+    auth_identity_id: Mapped[str] = mapped_column(ForeignKey("auth_identities.id"), nullable=False)
+    purpose: Mapped[str] = mapped_column(String, nullable=False)
+    token_hash: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    send_count: Mapped[int] = mapped_column(Integer, default=1)
 
 
 class Session(Base):
@@ -45,8 +62,8 @@ class Session(Base):
     session_id: Mapped[str] = mapped_column(String, primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id"), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    device_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    device_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
@@ -62,12 +79,12 @@ class Room(Base):
     room_id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
     room_code: Mapped[str] = mapped_column(String, unique=True, default=_new_room_code)
     owner_user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id"), nullable=False)
-    game_server_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    game_server_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="Lobby")
     join_policy: Mapped[str] = mapped_column(String, default="public")
-    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
-    config_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    ws_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    password_hash: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    config_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ws_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 
@@ -79,27 +96,27 @@ class RoomMember(Base):
     room_id: Mapped[str] = mapped_column(ForeignKey("rooms.room_id"), nullable=False)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id"), nullable=False)
     role: Mapped[str] = mapped_column(String, nullable=False)
-    seat_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    seat_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    left_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    left_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Match(Base):
     __tablename__ = "matches"
 
     match_id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
-    room_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    room_code: Mapped[str | None] = mapped_column(String, nullable=True)
+    room_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    room_code: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="completed")
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    duration_sec: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration_sec: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     player_count: Mapped[int] = mapped_column(Integer, default=0)
-    seed: Mapped[str | None] = mapped_column(String, nullable=True)
-    schema_version: Mapped[str | None] = mapped_column(String, nullable=True)
-    game_version: Mapped[str | None] = mapped_column(String, nullable=True)
-    final_hash: Mapped[str | None] = mapped_column(String, nullable=True)
-    summary_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    seed: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    schema_version: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    game_version: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    final_hash: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    summary_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
@@ -110,9 +127,9 @@ class MatchParticipant(Base):
     match_id: Mapped[str] = mapped_column(ForeignKey("matches.match_id"), nullable=False)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id"), nullable=False)
     role: Mapped[str] = mapped_column(String, nullable=False)
-    seat_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    result: Mapped[str | None] = mapped_column(String, nullable=True)
-    score_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    seat_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    result: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    score_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class MatchReplay(Base):
@@ -121,8 +138,8 @@ class MatchReplay(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
     match_id: Mapped[str] = mapped_column(ForeignKey("matches.match_id"), nullable=False, unique=True)
     storage_uri: Mapped[str] = mapped_column(String, nullable=False)
-    checksum: Mapped[str | None] = mapped_column(String, nullable=True)
-    size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    checksum: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
@@ -133,7 +150,7 @@ class DeviceCode(Base):
     device_code: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     user_code: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     device_id: Mapped[str] = mapped_column(String, nullable=False)
-    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.user_id"), nullable=True)
+    user_id: Mapped[Optional[str]] = mapped_column(ForeignKey("users.user_id"), nullable=True)
     status: Mapped[str] = mapped_column(String, default="pending")  # pending | authorized | consumed | expired
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

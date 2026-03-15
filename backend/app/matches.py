@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import json
 from collections.abc import Callable
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, RedirectResponse
@@ -49,39 +52,39 @@ class GameSummary(BaseModel):
 class ParticipantInfo(BaseModel):
     user_id: str
     role: str
-    seat_index: int | None
-    result: str | None
-    display_name: str | None = None
-    restaurant_logo_id: int | None = None
-    restaurant_logo_key: str | None = None
-    score: PlayerScore | None
+    seat_index: Optional[int]
+    result: Optional[str]
+    display_name: Optional[str] = None
+    restaurant_logo_id: Optional[int] = None
+    restaurant_logo_key: Optional[str] = None
+    score: Optional[PlayerScore]
 
 
 class MatchSummary(BaseModel):
     match_id: str
-    room_code: str | None
+    room_code: Optional[str]
     status: str
     player_count: int
-    started_at: str | None
-    ended_at: str | None
-    duration_sec: int | None
+    started_at: Optional[str]
+    ended_at: Optional[str]
+    duration_sec: Optional[int]
     participants: list[ParticipantInfo]
 
 
 class MatchDetail(MatchSummary):
-    seed: str | None
-    schema_version: str | None
-    game_version: str | None
-    final_hash: str | None
-    summary: GameSummary | None
+    seed: Optional[str]
+    schema_version: Optional[str]
+    game_version: Optional[str]
+    final_hash: Optional[str]
+    summary: Optional[GameSummary]
     has_replay: bool
 
 
 class ReplayInfo(BaseModel):
     match_id: str
     storage_uri: str
-    checksum: str | None
-    size_bytes: int | None
+    checksum: Optional[str]
+    size_bytes: Optional[int]
 
 
 RESTAURANT_LOGO_KEYS = [
@@ -112,7 +115,7 @@ def _canonicalize_product_key(value: str) -> str:
     return PRODUCT_KEY_ALIASES.get(normalized, normalized)
 
 
-def _parse_count_map(value: object, normalize_key: Callable[[str], str] | None = None) -> dict[str, int]:
+def _parse_count_map(value: object, normalize_key: Optional[Callable[[str], str]] = None) -> dict[str, int]:
     if not isinstance(value, dict):
         return {}
     out: dict[str, int] = {}
@@ -129,7 +132,7 @@ def _parse_count_map(value: object, normalize_key: Callable[[str], str] | None =
     return out
 
 
-def _logo_key_from_id(logo_id: int | None) -> str | None:
+def _logo_key_from_id(logo_id: Optional[int]) -> Optional[str]:
     if logo_id is None:
         return None
     if logo_id < 0 or logo_id >= len(RESTAURANT_LOGO_KEYS):
@@ -137,7 +140,7 @@ def _logo_key_from_id(logo_id: int | None) -> str | None:
     return RESTAURANT_LOGO_KEYS[logo_id]
 
 
-def _parse_participant_profile(raw: str | None) -> tuple[str | None, int | None, str | None]:
+def _parse_participant_profile(raw: Optional[str]) -> tuple[Optional[str], Optional[int], Optional[str]]:
     if not raw:
         return None, None, None
     try:
@@ -153,7 +156,7 @@ def _parse_participant_profile(raw: str | None) -> tuple[str | None, int | None,
         if isinstance(nested, dict):
             sources.append(nested)
 
-    display_name: str | None = None
+    display_name: Optional[str] = None
     for src in sources:
         for key in ("display_name", "player_name", "nickname", "name"):
             value = src.get(key)
@@ -166,7 +169,7 @@ def _parse_participant_profile(raw: str | None) -> tuple[str | None, int | None,
         if display_name:
             break
 
-    logo_id: int | None = None
+    logo_id: Optional[int] = None
     for src in sources:
         for key in ("restaurant_logo_id", "restaurantLogoId", "logo_id"):
             if key not in src:
@@ -178,7 +181,7 @@ def _parse_participant_profile(raw: str | None) -> tuple[str | None, int | None,
         if logo_id is not None:
             break
 
-    logo_key: str | None = None
+    logo_key: Optional[str] = None
     for src in sources:
         for key in ("restaurant_logo_key", "restaurant_logo_piece_id", "restaurantLogoKey", "logo_key"):
             value = src.get(key)
@@ -215,7 +218,7 @@ def _pick_int(sources: list[dict], keys: tuple[str, ...]) -> int:
 def _pick_count_map(
     sources: list[dict],
     keys: tuple[str, ...],
-    normalize_key: Callable[[str], str] | None = None,
+    normalize_key: Optional[Callable[[str], str]] = None,
 ) -> dict[str, int]:
     for src in sources:
         for key in keys:
@@ -354,7 +357,7 @@ def _parse_player_stats(data: dict, marketing_campaigns: int) -> PlayerStats:
     )
 
 
-def _parse_score(raw: str | None) -> PlayerScore | None:
+def _parse_score(raw: Optional[str]) -> Optional[PlayerScore]:
     if not raw:
         return None
     try:
@@ -398,7 +401,7 @@ def _parse_score(raw: str | None) -> PlayerScore | None:
     )
 
 
-def _parse_summary(raw: str | None) -> GameSummary | None:
+def _parse_summary(raw: Optional[str]) -> Optional[GameSummary]:
     if not raw:
         return None
     try:

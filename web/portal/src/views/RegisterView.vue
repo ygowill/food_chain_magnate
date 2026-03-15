@@ -50,8 +50,11 @@ async function handleRegister() {
   }
   loading.value = true
   try {
-    await auth.register(email.value, password.value, displayName.value)
-    router.push('/matches')
+    const pending = await auth.register(email.value, password.value, displayName.value)
+    router.push({
+      name: 'register-pending',
+      query: { email: pending.email },
+    })
   } catch (e: any) {
     error.value = e.response?.data?.detail || '注册失败'
   } finally {

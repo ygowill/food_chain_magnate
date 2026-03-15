@@ -9,6 +9,7 @@ const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const ConnectTokenClass = preload("res://core/utils/connect_token.gd")
 const GameOverWinnerRulesClass = preload("res://core/rules/game_over_winner_rules.gd")
+const ResultClass = preload("res://core/types/result.gd")
 const DEFAULT_PLATFORM_BACKEND_URL := "http://127.0.0.1:8000"
 const DEFAULT_INTERNAL_API_SECRET := "dev-internal-secret-change-in-production"
 const DEFAULT_RESTAURANT_LOGO_COUNT := 6
@@ -785,16 +786,16 @@ func handle_rpc_client_hello(request: Dictionary) -> void:
 
 func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, token_payload: Dictionary) -> Result:
 	if _net == null or not is_instance_valid(_net):
-		return Result.failure("NetClient missing")
+		return ResultClass.failure("NetClient missing")
 	if _net._room_manager == null or not is_instance_valid(_net._room_manager):
-		return Result.failure("RoomManager missing")
+		return ResultClass.failure("RoomManager missing")
 
 	var room_code := str(token_payload.get("room_code", "")).strip_edges().to_upper()
 	var role := str(token_payload.get("role", "")).strip_edges()
 	if room_code.is_empty():
-		return Result.failure("connect_token missing room_code")
+		return ResultClass.failure("connect_token missing room_code")
 	if role != "host" and role != "player" and role != "spectator":
-		return Result.failure("connect_token invalid role: %s" % role)
+		return ResultClass.failure("connect_token invalid role: %s" % role)
 
 	var rm = _net._room_manager
 	var r: Result
@@ -808,29 +809,29 @@ func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, 
 			if f == floor(f):
 				seat_index = int(f)
 		if seat_index < 0:
-			return Result.failure("connect_token missing seat_index")
+			return ResultClass.failure("connect_token missing seat_index")
 
 		var config: Dictionary = {}
 		var cfg_json := str(token_payload.get("config_json", "")).strip_edges()
 		if not cfg_json.is_empty():
 			var parsed: Variant = JSON.parse_string(cfg_json)
 			if not (parsed is Dictionary):
-				return Result.failure("connect_token config_json 类型错误（期望 JSON Dictionary）")
+				return ResultClass.failure("connect_token config_json 类型错误（期望 JSON Dictionary）")
 			config = Dictionary(parsed)
 
 		var existing = rm.rooms.get(room_code, null) if (rm.rooms is Dictionary) else null
 		if existing == null:
 			if not rm.has_method("create_room_with_code"):
-				return Result.failure("RoomManager.create_room_with_code missing")
+				return ResultClass.failure("RoomManager.create_room_with_code missing")
 			r = rm.create_room_with_code(peer_id, profile, room_code, config)
 		elif str(existing.status) == "InGame":
 			if not rm.has_method("reconnect_player"):
-				return Result.failure("RoomManager.reconnect_player missing")
+				return ResultClass.failure("RoomManager.reconnect_player missing")
 			var user_id := str(token_payload.get("user_id", "")).strip_edges()
 			r = rm.reconnect_player(peer_id, profile, room_code, seat_index, user_id, "host")
 		else:
 			if not rm.has_method("join_room_with_seat"):
-				return Result.failure("RoomManager.join_room_with_seat missing")
+				return ResultClass.failure("RoomManager.join_room_with_seat missing")
 			r = rm.join_room_with_seat(peer_id, profile, room_code, seat_index, "host")
 	elif role == "player":
 		var seat_index_val2 = token_payload.get("seat_index", null)
@@ -842,21 +843,21 @@ func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, 
 			if f2 == floor(f2):
 				seat_index2 = int(f2)
 		if seat_index2 < 0:
-			return Result.failure("connect_token missing seat_index")
+			return ResultClass.failure("connect_token missing seat_index")
 
 		var existing2 = rm.rooms.get(room_code, null) if (rm.rooms is Dictionary) else null
 		if existing2 != null and str(existing2.status) == "InGame":
 			if not rm.has_method("reconnect_player"):
-				return Result.failure("RoomManager.reconnect_player missing")
+				return ResultClass.failure("RoomManager.reconnect_player missing")
 			var user_id2 := str(token_payload.get("user_id", "")).strip_edges()
 			r = rm.reconnect_player(peer_id, profile, room_code, seat_index2, user_id2)
 		else:
 			if not rm.has_method("join_room_with_seat"):
-				return Result.failure("RoomManager.join_room_with_seat missing")
+				return ResultClass.failure("RoomManager.join_room_with_seat missing")
 			r = rm.join_room_with_seat(peer_id, profile, room_code, seat_index2)
 	else:
 		if not rm.has_method("spectate_room"):
-			return Result.failure("RoomManager.spectate_room missing")
+			return ResultClass.failure("RoomManager.spectate_room missing")
 		r = rm.spectate_room(peer_id, profile, room_code)
 
 	if not r.ok:
@@ -865,10 +866,10 @@ func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, 
 	var payload: Dictionary = Dictionary(r.value) if (r.value is Dictionary) else {}
 	var room = payload.get("room", null)
 	if room == null:
-		return Result.failure("platform auto join missing room")
+		return ResultClass.failure("platform auto join missing room")
 	var actual_role := str(payload.get("role", "")).strip_edges()
 	if not actual_role.is_empty() and actual_role != role:
-		return Result.failure("platform auto join role mismatch: token=%s actual=%s" % [role, actual_role])
+		return ResultClass.failure("platform auto join role mismatch: token=%s actual=%s" % [role, actual_role])
 
 	# 断线重连：若 actor_id 对应的 pending forfeit 仍在 grace window 内，则清理。
 	if role == "host" or role == "player":
@@ -908,7 +909,7 @@ func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, 
 		"Platform auto join ok %s role=%s room=%s %s"
 			% [_request_tag(peer_id, request_id), _safe_text(role), _safe_text(room_code), _room_brief(room)]
 	)
-	return Result.success({"room_code": room_code, "role": role})
+	return ResultClass.success({"room_code": room_code, "role": role})
 
 func handle_rpc_list_rooms(request: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -1006,7 +1007,7 @@ func handle_rpc_create_room(request: Dictionary) -> void:
 		if bd.is_empty():
 			send_request_rejected(peer_id, request_id, "invalid_params", "modules_v2_base_dir is empty")
 			return
-		var bd_read := ModuleDirSpecClass.parse_base_dirs(bd)
+		var bd_read = ModuleDirSpecClass.parse_base_dirs(bd)
 		if not bd_read.ok:
 			send_request_rejected(peer_id, request_id, "invalid_params", "modules_v2_base_dir must use res:// paths")
 			return
@@ -1196,7 +1197,7 @@ func handle_rpc_update_room_config(request: Dictionary) -> void:
 		if bd.is_empty():
 			send_request_rejected(peer_id, request_id, "invalid_params", "modules_v2_base_dir is empty")
 			return
-		var bd_read := ModuleDirSpecClass.parse_base_dirs(bd)
+		var bd_read = ModuleDirSpecClass.parse_base_dirs(bd)
 		if not bd_read.ok:
 			send_request_rejected(peer_id, request_id, "invalid_params", "modules_v2_base_dir must use res:// paths")
 			return

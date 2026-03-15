@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -14,7 +17,7 @@ from app.replay_storage import get_local_replay_path, parse_local_replay_filenam
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 
 
-def _to_iso(value: datetime | None) -> str | None:
+def _to_iso(value: Optional[datetime]) -> Optional[str]:
     if value is None:
         return None
     return value.isoformat()
@@ -48,7 +51,7 @@ class AdminUserSummary(BaseModel):
     display_name: str
     status: str
     created_at: str
-    email: str | None
+    email: Optional[str]
     is_guest: bool
     active_sessions: int
     room_count: int
@@ -73,8 +76,8 @@ class AdminRoomSummary(BaseModel):
     status: str
     owner_user_id: str
     join_policy: str
-    game_server_id: str | None
-    ws_url: str | None
+    game_server_id: Optional[str]
+    ws_url: Optional[str]
     player_count: int
     spectator_count: int
     created_at: str
@@ -83,13 +86,13 @@ class AdminRoomSummary(BaseModel):
 
 class AdminMatchSummary(BaseModel):
     match_id: str
-    room_code: str | None
+    room_code: Optional[str]
     status: str
     player_count: int
     participant_count: int
     has_replay: bool
-    started_at: str | None
-    ended_at: str | None
+    started_at: Optional[str]
+    ended_at: Optional[str]
     created_at: str
 
 
@@ -115,7 +118,7 @@ class BatchActionResult(BaseModel):
 
 def _build_user_summary(
     user: User,
-    email_by_user_id: dict[str, str | None],
+    email_by_user_id: dict[str, Optional[str]],
     has_guest_identity: dict[str, bool],
     active_sessions_by_user_id: dict[str, int],
     room_count_by_user_id: dict[str, int],
@@ -201,8 +204,8 @@ async def _delete_rooms_by_codes(db: AsyncSession, room_codes: list[str]) -> lis
 async def list_users(
     _status: Session = Depends(_require_admin_session),
     db: AsyncSession = Depends(get_db),
-    status: str | None = None,
-    query: str | None = None,
+    status: Optional[str] = None,
+    query: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
 ):
@@ -226,7 +229,7 @@ async def list_users(
             AuthIdentity.user_id.in_(user_ids)
         )
     )).all()
-    email_by_user_id: dict[str, str | None] = {}
+    email_by_user_id: dict[str, Optional[str]] = {}
     has_guest_identity: dict[str, bool] = {}
     for uid, provider, provider_user_id in identity_rows:
         if str(provider) == "email" and uid not in email_by_user_id:
@@ -433,8 +436,8 @@ async def batch_delete_users(
 async def list_rooms(
     _status: Session = Depends(_require_admin_session),
     db: AsyncSession = Depends(get_db),
-    status: str | None = None,
-    room_code: str | None = None,
+    status: Optional[str] = None,
+    room_code: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
 ):
@@ -590,8 +593,8 @@ async def end_room(
 async def list_matches(
     _status: Session = Depends(_require_admin_session),
     db: AsyncSession = Depends(get_db),
-    status: str | None = None,
-    room_code: str | None = None,
+    status: Optional[str] = None,
+    room_code: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
 ):

@@ -48,10 +48,6 @@ command_runner_event_build_provider_path="res://gameplay/replay/command_runner_e
 restaurant_logo_assignment_provider_path="res://gameplay/setup/restaurant_logo_assignment.gd"
 platform_backend_url="https://fcmapp.ygowill.net:18443"
 
-[gui]
-
-theme/custom_font="res://assets/fonts/NotoSansSC-Regular.otf"
-
 [internationalization]
 
 locale/fallback="zh"

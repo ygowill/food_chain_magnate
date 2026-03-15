@@ -4,9 +4,11 @@
 class_name ModuleDirSpec
 extends RefCounted
 
-static func parse_base_dirs(spec: String) -> Result:
+const ResultClass = preload("res://core/types/result.gd")
+
+static func parse_base_dirs(spec: String):
 	if spec.is_empty():
-		return Result.failure("ModuleDirSpec: base_dir_spec 不能为空")
+		return ResultClass.failure("ModuleDirSpec: base_dir_spec 不能为空")
 
 	var parts := spec.split(";", false)
 	var out: Array[String] = []
@@ -17,18 +19,18 @@ static func parse_base_dirs(spec: String) -> Result:
 		if s.is_empty():
 			continue
 		if not s.begins_with("res://"):
-			return Result.failure("ModuleDirSpec: 仅支持打包内目录（res://），不允许系统路径: %s" % s)
+			return ResultClass.failure("ModuleDirSpec: 仅支持打包内目录（res://），不允许系统路径: %s" % s)
 		if seen.has(s):
 			continue
 		seen[s] = true
 		out.append(s)
 
 	if out.is_empty():
-		return Result.failure("ModuleDirSpec: base_dir_spec 不能为空")
-	return Result.success(out)
+		return ResultClass.failure("ModuleDirSpec: base_dir_spec 不能为空")
+	return ResultClass.success(out)
 
 static func primary_base_dir(spec: String, fallback: String) -> String:
-	var read := parse_base_dirs(spec)
+	var read = parse_base_dirs(spec)
 	if read.ok:
 		var base_dirs: Array = read.value
 		if not base_dirs.is_empty():

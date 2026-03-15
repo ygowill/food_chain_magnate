@@ -7,12 +7,15 @@ const RoadsPassClass = preload("res://ui/scenes/game/map/drawer/passes/roads_pas
 const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
 const DrinkSourcesPassClass = preload("res://ui/scenes/game/map/drawer/passes/drink_sources_pass.gd")
 const HouseNumberManagerClass = preload("res://core/map/house_number_manager.gd")
-const HOUSE_ID_FONT: Font = preload("res://assets/fonts/NotoSansSC-Regular.otf")
+const HOUSE_ID_FONT_PATH := "res://assets/fonts/NotoSansSC-Regular.otf"
 const HOUSE_BG_COLOR := Color("#733651")
 const GARDEN_BG_COLOR := Color("#699055")
 
 static func clear_drink_source_texture_cache() -> void:
 	DrinkSourcesPassClass.clear_drink_source_texture_cache()
+
+static func _get_house_id_font() -> Font:
+	return load(HOUSE_ID_FONT_PATH)
 
 static func _read_color_hint(hints: Dictionary, key: String, fallback: Color) -> Color:
 	if hints == null or hints.is_empty():
@@ -511,7 +514,8 @@ static func draw_house_id(canvas, cell_size: int, structure_rect: Rect2, display
 	var font_size := maxi(11, int(round(float(cell_size) * 0.34)))
 	var label_rect := compute_house_id_rect(cell_size, structure_rect)
 
-	var font: Font = HOUSE_ID_FONT if HOUSE_ID_FONT != null else ThemeDB.fallback_font
+	var house_id_font := _get_house_id_font()
+	var font: Font = house_id_font if house_id_font != null else ThemeDB.fallback_font
 	var baseline := label_rect.position + Vector2(0.0, label_rect.size.y - pad)
 	canvas.draw_string(font, baseline + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_RIGHT, label_rect.size.x, font_size, Color(0, 0, 0, 0.85))
 	canvas.draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_RIGHT, label_rect.size.x, font_size, Color(1, 1, 1, 1))

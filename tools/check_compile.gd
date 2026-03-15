@@ -9,6 +9,7 @@
 
 extends SceneTree
 
+const ResultClass = preload("res://core/types/result.gd")
 const NAME := "CheckCompile"
 const DEFAULT_ROOTS: Array[String] = [
 	"res://autoload",
@@ -20,7 +21,7 @@ const DEFAULT_ROOTS: Array[String] = [
 	"res://ui",
 ]
 
-static func run_scan(roots: Array[String] = []) -> Result:
+static func run_scan(roots: Array[String] = []):
 	var scan_roots: Array[String] = []
 	if roots.is_empty():
 		scan_roots = DEFAULT_ROOTS.duplicate()
@@ -40,7 +41,7 @@ static func run_scan(roots: Array[String] = []) -> Result:
 		files_checked += _scan_dir_static(root, errors)
 
 	if errors.is_empty():
-		return Result.success({
+		return ResultClass.success({
 			"roots": normalized_roots,
 			"files_checked": files_checked,
 			"errors": [],
@@ -50,7 +51,7 @@ static func run_scan(roots: Array[String] = []) -> Result:
 	for i in range(min(errors.size(), 50)):
 		preview.append(errors[i])
 
-	return Result.failure("检查到 %d 个编译/预加载错误（files=%d）" % [errors.size(), files_checked]).with_value({
+	return ResultClass.failure("检查到 %d 个编译/预加载错误（files=%d）" % [errors.size(), files_checked]).with_value({
 		"roots": normalized_roots,
 		"files_checked": files_checked,
 		"errors": errors,
@@ -58,10 +59,11 @@ static func run_scan(roots: Array[String] = []) -> Result:
 	})
 
 func _initialize() -> void:
+	_register_core_global_classes()
 	var roots := _get_roots()
 	print("[%s] START roots=%s" % [NAME, str(roots)])
 
-	var scan_result := run_scan(roots)
+	var scan_result = run_scan(roots)
 	var details: Dictionary = scan_result.value if (scan_result.value is Dictionary) else {}
 	var files_checked := int(details.get("files_checked", 0))
 	var errors: Array[String] = Array(details.get("errors", []), TYPE_STRING, "", null)
@@ -75,6 +77,21 @@ func _initialize() -> void:
 	for i in range(min(errors.size(), 50)):
 		push_error(errors[i])
 	quit(1)
+
+func _register_core_global_classes() -> void:
+	# 在干净工作区中运行 headless 脚本时，class_name 缓存可能尚未生成。
+	# 先显式加载常用全局脚本，避免后续 scan 因类型解析顺序报伪错误。
+	var bootstrap_paths := [
+		"res://core/types/result.gd",
+		"res://core/modules/v2/module_dir_spec.gd",
+		"res://ui/audio/sound_manager.gd",
+		"res://ui/audio/music_manager.gd",
+		"res://ui/components/modal_dialog/modal_dialog_base.gd",
+	]
+	for path in bootstrap_paths:
+		var script = load(path)
+		if script == null:
+			push_warning("预注册全局脚本失败: %s" % path)
 
 func _get_roots() -> Array[String]:
 	var args := OS.get_cmdline_user_args()

@@ -8,6 +8,11 @@
         <el-input v-model="password" type="password" placeholder="请输入密码" show-password />
       </el-form-item>
       <el-alert v-if="error" :title="error" type="error" :closable="false" style="margin-bottom: 16px" />
+      <el-form-item v-if="pendingEmail">
+        <el-button :loading="resendLoading" style="width: 100%" @click="handleResendVerification">
+          重新发送验证邮件
+        </el-button>
+      </el-form-item>
       <el-form-item>
         <el-button type="primary" native-type="submit" :loading="loading" style="width: 100%">
           登录
@@ -28,6 +33,7 @@
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { resendEmailVerification } from '../api/auth'
 import AuthCard from '../components/AuthCard.vue'
 
 const auth = useAuthStore()
@@ -39,9 +45,24 @@ const password = ref('')
 const error = ref('')
 const loading = ref(false)
 const guestLoading = ref(false)
+const resendLoading = ref(false)
+const pendingEmail = ref('')
+
+function extractErrorMessage(err: any) {
+  const detail = err?.response?.data?.detail
+  if (detail && typeof detail === 'object') {
+    if (detail.code === 'EMAIL_NOT_VERIFIED') {
+      pendingEmail.value = String(detail.email || '').trim()
+      return '该邮箱尚未完成验证，请先查收验证邮件'
+    }
+    return detail.message || '登录失败'
+  }
+  return detail || '登录失败'
+}
 
 async function handleGuestLogin() {
   error.value = ''
+  pendingEmail.value = ''
   guestLoading.value = true
   try {
     await auth.guestLogin()
@@ -56,15 +77,33 @@ async function handleGuestLogin() {
 
 async function handleLogin() {
   error.value = ''
+  pendingEmail.value = ''
   loading.value = true
   try {
     await auth.login(email.value, password.value)
     const redirect = (route.query.redirect as string) || '/matches'
     router.push(redirect)
   } catch (e: any) {
-    error.value = e.response?.data?.detail || '登录失败'
+    error.value = extractErrorMessage(e)
   } finally {
     loading.value = false
+  }
+}
+
+async function handleResendVerification() {
+  if (!pendingEmail.value) return
+  error.value = ''
+  resendLoading.value = true
+  try {
+    const { data } = await resendEmailVerification({ email: pendingEmail.value })
+    router.push({
+      name: 'register-pending',
+      query: { email: data.email },
+    })
+  } catch (e: any) {
+    error.value = e.response?.data?.detail || '重新发送失败'
+  } finally {
+    resendLoading.value = false
   }
 }
 </script>

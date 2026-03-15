@@ -62,7 +62,7 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary) -> Result
 		if base_dir_read.is_empty():
 			return Result.failure("无效的存档格式: modules_v2_base_dir 不能为空")
 		base_dir = base_dir_read
-	var base_dirs_read := ModuleDirSpecClass.parse_base_dirs(base_dir)
+	var base_dirs_read = ModuleDirSpecClass.parse_base_dirs(base_dir)
 	if not base_dirs_read.ok:
 		all_warnings.append("存档中的 modules_v2_base_dir 非 res:// 目录，已回退默认: %s" % base_dir)
 		base_dir = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR

@@ -304,7 +304,7 @@ func _load_modules_and_build_ui() -> Result:
 	_available_modules.clear()
 	_optional_module_ids.clear()
 
-	var base_dirs_read := ModuleDirSpecClass.parse_base_dirs(_modules_base_dir_spec)
+	var base_dirs_read = ModuleDirSpecClass.parse_base_dirs(_modules_base_dir_spec)
 	if not base_dirs_read.ok:
 		var msg := "解析 modules_v2_base_dir 失败：%s" % base_dirs_read.error
 		load_failed.emit(msg)

@@ -5,6 +5,8 @@ extends Node
 
 const SoundManagerScene = preload("res://ui/audio/sound_manager.tscn")
 const MusicManagerScene = preload("res://ui/audio/music_manager.tscn")
+const SoundManagerClass = preload("res://ui/audio/sound_manager.gd")
+const MusicManagerClass = preload("res://ui/audio/music_manager.gd")
 
 var _sound_manager: Node = null
 var _music_manager: Node = null
@@ -74,7 +76,7 @@ func _initialize_managers() -> void:
 		return
 
 	# 重要：SoundManager / MusicManager 需要跨场景持久化，否则切场景会截断正在播放的音效。
-	var existing_sm := SoundManager.get_instance()
+	var existing_sm := SoundManagerClass.get_instance()
 	if existing_sm != null and is_instance_valid(existing_sm):
 		_sound_manager = existing_sm
 	else:
@@ -82,7 +84,7 @@ func _initialize_managers() -> void:
 		_sound_manager.name = "SoundManager"
 		root.add_child(_sound_manager)
 
-	var existing_mm := MusicManager.get_instance()
+	var existing_mm := MusicManagerClass.get_instance()
 	if existing_mm != null and is_instance_valid(existing_mm):
 		_music_manager = existing_mm
 	else:
@@ -99,7 +101,7 @@ func get_music_manager() -> Node:
 func _ensure_bgm_is_playing(force_restart: bool = false) -> void:
 	if _is_headless_runtime():
 		return
-	var mm := MusicManager.get_instance()
+	var mm := MusicManagerClass.get_instance()
 	if mm == null or not is_instance_valid(mm):
 		return
 	if not force_restart and mm.has_method("is_playing") and bool(mm.call("is_playing")):
@@ -109,7 +111,7 @@ func _ensure_bgm_is_playing(force_restart: bool = false) -> void:
 		# 交互后强制重播可确保音轨重新排入已解锁的音频上下文。
 		mm.call("stop", false)
 	if mm.has_method("play"):
-		mm.call("play", MusicManager.MusicTrack.MENU, false)
+		mm.call("play", MusicManagerClass.MusicTrack.MENU, false)
 
 func _process(_delta: float) -> void:
 	if _is_headless_runtime() or not _is_web_runtime() or _audio_unlock_confirmed:
@@ -120,7 +122,7 @@ func _process(_delta: float) -> void:
 		return
 	_next_probe_msec = now_msec + WEB_AUDIO_PROBE_INTERVAL_MSEC
 
-	var mm := MusicManager.get_instance()
+	var mm := MusicManagerClass.get_instance()
 	if mm == null or not is_instance_valid(mm):
 		return
 
@@ -275,11 +277,11 @@ func _sync_audio_server_mute_from_settings() -> void:
 
 	var muted := false
 
-	var sm := SoundManager.get_instance()
+	var sm := SoundManagerClass.get_instance()
 	if sm != null and is_instance_valid(sm) and sm.has_method("is_muted"):
 		muted = muted or bool(sm.call("is_muted"))
 
-	var mm := MusicManager.get_instance()
+	var mm := MusicManagerClass.get_instance()
 	if mm != null and is_instance_valid(mm) and mm.has_method("is_muted"):
 		muted = muted or bool(mm.call("is_muted"))
 

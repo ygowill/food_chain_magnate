@@ -17,6 +17,16 @@ const router = createRouter({
       meta: { guest: true },
     },
     {
+      path: '/register/pending',
+      name: 'register-pending',
+      component: () => import('../views/RegisterPendingView.vue'),
+    },
+    {
+      path: '/verify-email',
+      name: 'verify-email',
+      component: () => import('../views/VerifyEmailView.vue'),
+    },
+    {
       path: '/device',
       name: 'device',
       component: () => import('../views/DeviceAuthView.vue'),

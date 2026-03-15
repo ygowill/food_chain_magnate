@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import json
+from typing import Optional
 
 import pytest
 from httpx import AsyncClient
@@ -14,7 +17,7 @@ async def _create_user(client: AsyncClient) -> dict:
     return resp.json()
 
 
-async def _seed_match(db: AsyncSession, user_id: str, score_json: str | None = None) -> str:
+async def _seed_match(db: AsyncSession, user_id: str, score_json: Optional[str] = None) -> str:
     m = Match(room_code="ABCD", status="completed", player_count=2)
     db.add(m)
     await db.flush()

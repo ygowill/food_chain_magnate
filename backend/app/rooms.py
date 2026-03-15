@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -38,7 +41,7 @@ class RoomInfo(BaseModel):
     status: str
     owner_user_id: str
     join_policy: str
-    config_json: str | None
+    config_json: Optional[str]
 
 
 class RoomSummary(BaseModel):
@@ -56,7 +59,7 @@ class RoomSummary(BaseModel):
 async def list_rooms(
     session_id: str,
     db: AsyncSession = Depends(get_db),
-    status: str | None = None,
+    status: Optional[str] = None,
     limit: int = 50,
     active_only: bool = True,
 ):

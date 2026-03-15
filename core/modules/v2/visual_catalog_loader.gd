@@ -16,7 +16,7 @@ static func load_for_modules(base_dir: String, module_ids: Array[String]) -> Res
 	if base_dir.is_empty():
 		return Result.failure("VisualCatalogLoader: base_dir 不能为空")
 
-	var read := ModuleDirSpecClass.parse_base_dirs(base_dir)
+	var read = ModuleDirSpecClass.parse_base_dirs(base_dir)
 	if not read.ok:
 		return Result.failure("VisualCatalogLoader: base_dir 解析失败: %s" % read.error)
 
