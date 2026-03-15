@@ -59,14 +59,19 @@ static func run(seed_val: int = 12345) -> Result:
 	if str((hidden_selection as Label).text).find("未公开") < 0:
 		return _finish(Result.failure("未获得能力时，玩家1 的选择应保持未公开，实际: %s" % str((hidden_selection as Label).text)), view, engine)
 
-	var card0 = player1_section.find_child("Card0", true, false)
+	var cards_row = player1_section.find_child("CardsRow", true, false)
+	if cards_row == null or not is_instance_valid(cards_row):
+		return _finish(Result.failure("玩家1 CardsRow 节点缺失"), view, engine)
+	if cards_row.get_child_count() != 1:
+		return _finish(Result.failure("面板应仅展示每位玩家已选储备卡，实际卡片数: %d" % cards_row.get_child_count()), view, engine)
+	var card0 = cards_row.get_child(0)
 	if card0 == null or not is_instance_valid(card0):
-		return _finish(Result.failure("玩家1 第一张卡节点缺失"), view, engine)
+		return _finish(Result.failure("玩家1 已选卡节点缺失"), view, engine)
 	var hidden_title: Node = card0.find_child("TitleLabel", true, false)
 	if not (hidden_title is Label):
-		return _finish(Result.failure("玩家1 第一张卡标题节点缺失"), view, engine)
-	if str((hidden_title as Label).text) != "保密中":
-		return _finish(Result.failure("未获得能力时，其他玩家第一张卡应隐藏，实际: %s" % str((hidden_title as Label).text)), view, engine)
+		return _finish(Result.failure("玩家1 已选卡标题节点缺失"), view, engine)
+	if str((hidden_title as Label).text) != "未公开":
+		return _finish(Result.failure("未获得能力时，其他玩家已选卡应隐藏，实际: %s" % str((hidden_title as Label).text)), view, engine)
 
 	state.players[0]["can_peek_all_reserve_cards"] = true
 	view.call("open_with_state", state, 0)
@@ -87,14 +92,19 @@ static func run(seed_val: int = 12345) -> Result:
 	if str((revealed_selection as Label).text).find("储备卡 3") < 0:
 		return _finish(Result.failure("获得能力后应看到玩家1 的已选项，实际: %s" % str((revealed_selection as Label).text)), view, engine)
 
-	var card2 = player1_section.find_child("Card2", true, false)
+	cards_row = player1_section.find_child("CardsRow", true, false)
+	if cards_row == null or not is_instance_valid(cards_row):
+		return _finish(Result.failure("玩家1 CardsRow 节点缺失（peek 后）"), view, engine)
+	if cards_row.get_child_count() != 1:
+		return _finish(Result.failure("peek 后面板应仅展示每位玩家已选储备卡，实际卡片数: %d" % cards_row.get_child_count()), view, engine)
+	var card2 = cards_row.get_child(0)
 	if card2 == null or not is_instance_valid(card2):
-		return _finish(Result.failure("玩家1 第三张卡节点缺失（peek 后）"), view, engine)
+		return _finish(Result.failure("玩家1 已选卡节点缺失（peek 后）"), view, engine)
 	var visible_title: Node = card2.find_child("TitleLabel", true, false)
 	if not (visible_title is Label):
-		return _finish(Result.failure("玩家1 第三张卡标题节点缺失（peek 后）"), view, engine)
-	if str((visible_title as Label).text).find("储备卡 3") < 0:
-		return _finish(Result.failure("获得能力后应显示玩家1 的完整卡片标题，实际: %s" % str((visible_title as Label).text)), view, engine)
+		return _finish(Result.failure("玩家1 已选卡标题节点缺失（peek 后）"), view, engine)
+	if str((visible_title as Label).text).find("类型") >= 0:
+		return _finish(Result.failure("已选卡标题不应显示类型信息，实际: %s" % str((visible_title as Label).text)), view, engine)
 
 	return _finish(Result.success({}), view, engine)
 

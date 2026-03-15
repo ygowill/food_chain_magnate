@@ -41,6 +41,15 @@ class FakeTimelineController:
 	func consume_force_full_panel_sync_next_update() -> bool:
 		return false
 
+class FakeOverlayController:
+	extends RefCounted
+
+	func sync_demand_indicator(_state: GameState) -> void:
+		return
+
+	func sync_dinnertime_overlay(_state: GameState, _is_live: bool = true) -> void:
+		return
+
 static func run(seed_val: int = 12345) -> Result:
 	var prev_mode = NetContext.mode if NetContext != null else 0
 	var prev_local_player_id := int(NetContext.local_player_id) if NetContext != null else -1
@@ -54,6 +63,7 @@ static func run(seed_val: int = 12345) -> Result:
 
 	var panel := FakePanelController.new()
 	var timeline := FakeTimelineController.new()
+	var overlay := FakeOverlayController.new()
 	var ctrl := GameUiSyncControllerClass.new(
 		func() -> GameEngine: return engine,
 		Callable(),
@@ -65,7 +75,7 @@ static func run(seed_val: int = 12345) -> Result:
 		null,
 		null,
 		panel,
-		null,
+		overlay,
 		timeline
 	)
 
@@ -74,6 +84,13 @@ static func run(seed_val: int = 12345) -> Result:
 		return _finish(Result.failure("初始同步不应弹出储备卡总览"), ctrl, engine, prev_mode, prev_local_player_id)
 
 	engine.get_state().players[0]["can_peek_all_reserve_cards"] = true
+	engine.get_state().phase = "Dinnertime"
+	ctrl.update_ui(false)
+	if not panel.shown_focus_ids.is_empty():
+		return _finish(Result.failure("晚餐阶段中不应立刻弹出储备卡总览，实际: %s" % str(panel.shown_focus_ids)), ctrl, engine, prev_mode, prev_local_player_id)
+
+	engine.get_state().phase = "Payday"
+	panel.reserve_view.visible = false
 	ctrl.update_ui(false)
 	if panel.shown_focus_ids.size() != 1 or int(panel.shown_focus_ids[0]) != 0:
 		return _finish(Result.failure("peek 权限从 false->true 时应弹出玩家0 的储备卡总览，实际: %s" % str(panel.shown_focus_ids)), ctrl, engine, prev_mode, prev_local_player_id)

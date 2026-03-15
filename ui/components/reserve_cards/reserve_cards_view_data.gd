@@ -35,10 +35,9 @@ static func build_player_sections(state: GameState, viewer_player_id: int = -999
 		var visible_selected := can_view_all or revealed_selected or viewer_id == player_id
 
 		var card_entries: Array[Dictionary] = []
-		for i in range(cards.size()):
-			var card_val = cards[i]
-			var show_card := can_view_all or viewer_id == player_id or (revealed_selected and i == selected_index)
-			card_entries.append(build_card_entry(card_val, i, show_card, visible_selected and i == selected_index))
+		var selected_card_val = cards[selected_index] if selected_index >= 0 and selected_index < cards.size() else null
+		var show_selected_card := can_view_all or viewer_id == player_id or revealed_selected
+		card_entries.append(build_card_entry(selected_card_val, selected_index, show_selected_card, visible_selected))
 
 		out.append({
 			"player_id": player_id,
@@ -58,9 +57,9 @@ static func build_card_entry(card_val, index: int, visible: bool, selected: bool
 			"index": index,
 			"visible": false,
 			"selected": false,
-			"title": "保密中",
+			"title": "未公开",
 			"desc": "",
-			"summary": "保密中",
+			"summary": "未公开",
 		}
 
 	var card: Dictionary = card_val if (card_val is Dictionary) else {}
@@ -70,8 +69,7 @@ static func build_card_entry(card_val, index: int, visible: bool, selected: bool
 	return details
 
 static func describe_card(card: Dictionary, index: int) -> Dictionary:
-	var option_text := "储备卡 %d" % (index + 1)
-	var card_type := _read_int(card.get("type", null), -1)
+	var option_text := "已选储备卡"
 	var has_bank_fields := (
 		card.has("cash") and (card.get("cash", null) is int)
 		and card.has("ceo_slots") and (card.get("ceo_slots", null) is int)
@@ -81,12 +79,10 @@ static func describe_card(card: Dictionary, index: int) -> Dictionary:
 		var cash := int(card.get("cash", 0))
 		var slots := int(card.get("ceo_slots", 0))
 		var title := option_text
-		if card_type >= 0:
-			title += "｜类型 %d" % card_type
 		var desc := "起始现金：+$%d\nCEO 卡槽：%d" % [cash, slots]
-		var summary_parts: Array[String] = ["选项#%d" % (index + 1)]
-		if card_type >= 0:
-			summary_parts.append("类型 %d" % card_type)
+		var summary_parts: Array[String] = []
+		if index >= 0:
+			summary_parts.append("选项#%d" % (index + 1))
 		summary_parts.append("注资 $%d" % cash)
 		summary_parts.append("CEO 槽位 %d" % slots)
 		return {
@@ -95,12 +91,11 @@ static func describe_card(card: Dictionary, index: int) -> Dictionary:
 			"desc": desc,
 			"summary": "，".join(summary_parts),
 		}
-
-	var price := card_type
+	var price := _read_int(card.get("type", null), -1)
 	var price_text := "$?" if price < 0 else "$%d" % price
 	return {
 		"index": index,
-		"title": "%s｜价格 %s" % [option_text, price_text],
+		"title": option_text,
 		"desc": "基础单价候选：%s\n首次破产后按多数决定（平局 20 > 5 > 10）" % price_text,
 		"summary": "选项#%d，基础单价候选 %s" % [index + 1, price_text],
 	}

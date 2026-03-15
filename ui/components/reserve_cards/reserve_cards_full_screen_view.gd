@@ -105,9 +105,9 @@ func _update_header_text(state: GameState, viewer_player_id: int) -> void:
 			can_peek_all = bool(player.get("can_peek_all_reserve_cards", false))
 
 	if can_peek_all:
-		hint_label.text = "已解锁：可查看全部玩家的储备卡与已选项。ESC 关闭"
+		hint_label.text = "已解锁：可查看全部玩家已选择的储备卡。ESC 关闭"
 	else:
-		hint_label.text = "仅显示你自己的储备卡，或其他玩家已公开的已选项。ESC 关闭"
+		hint_label.text = "仅显示你自己的已选储备卡，或其他玩家已公开的已选项。ESC 关闭"
 
 func _clear_sections() -> void:
 	if not is_instance_valid(sections):
