@@ -8,6 +8,7 @@ Usage:
                    [--name fcm-server] [--web-name fcm-web]
                    [--image <image:tag>] [--web-image <image:tag>]
                    [--backend-image <image:tag>] [--backend-name fcm-backend]
+                   [--default-ws-url <ws://...|wss://...>]
                    [--hmac-secret <secret>]
                    [--internal-api-secret <secret>]
                    [--db-user fcm] [--db-password fcm] [--db-name fcm]
@@ -89,8 +90,8 @@ WS_DOMAIN=""
 HTTP_PORT="80"
 HTTPS_PORT="443"
 ACME_KEY_TYPE="EC256"
-DEFAULT_WS_URL=""
-WEB_ORIGIN=""
+DEFAULT_WS_URL="${FCM_DEFAULT_WS_URL:-}"
+WEB_ORIGIN="${FCM_WEB_ORIGIN:-}"
 ACTION="up"
 PURGE=0
 
@@ -146,6 +147,10 @@ while [[ $# -gt 0 ]]; do
 			;;
 		--backend-name)
 			BACKEND_NAME="${2:-}"
+			shift 2
+			;;
+		--default-ws-url)
+			DEFAULT_WS_URL="${2:-}"
 			shift 2
 			;;
 		--hmac-secret)
@@ -304,16 +309,23 @@ else
 	echo "[deploy] stopping (docker compose down)..."
 fi
 
-DEFAULT_WS_URL="ws://localhost:${PORT}"
-if [[ "${ENABLE_HTTPS}" -eq 1 ]]; then
-	ws_port_suffix=""
+if [[ -z "${DEFAULT_WS_URL}" ]]; then
+	DEFAULT_WS_URL="ws://localhost:${PORT}"
+	if [[ "${ENABLE_HTTPS}" -eq 1 ]]; then
+		ws_port_suffix=""
+		if [[ "${HTTPS_PORT}" != "443" ]]; then
+			ws_port_suffix=":${HTTPS_PORT}"
+		fi
+		DEFAULT_WS_URL="wss://${WEB_DOMAIN}${ws_port_suffix}/ws"
+	fi
+fi
+
+if [[ "${ENABLE_HTTPS}" -eq 1 && -z "${WEB_ORIGIN}" ]]; then
+	web_port_suffix=""
 	if [[ "${HTTPS_PORT}" != "443" ]]; then
-		ws_port_suffix=":${HTTPS_PORT}"
+		web_port_suffix=":${HTTPS_PORT}"
 	fi
-	DEFAULT_WS_URL="wss://${WEB_DOMAIN}${ws_port_suffix}/ws"
-	if [[ -z "${WEB_ORIGIN}" ]]; then
-		WEB_ORIGIN="https://${WEB_DOMAIN}${ws_port_suffix}"
-	fi
+	WEB_ORIGIN="https://${WEB_DOMAIN}${web_port_suffix}"
 fi
 
 script_src="${BASH_SOURCE[0]}"

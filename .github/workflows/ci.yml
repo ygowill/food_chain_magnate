@@ -364,6 +364,9 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_ENV"
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -381,6 +384,7 @@ jobs:
           file: server/Dockerfile
           build-args: |
             GODOT_TAG=${{ env.GODOT_TAG }}
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.IMAGE_TAGS }}
 
@@ -420,6 +424,9 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_ENV"
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -435,6 +442,7 @@ jobs:
         with:
           context: ./backend
           file: backend/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.IMAGE_TAGS }}
 
@@ -480,6 +488,9 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_ENV"
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -495,6 +506,7 @@ jobs:
         with:
           context: .
           file: web/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.IMAGE_TAGS }}
 

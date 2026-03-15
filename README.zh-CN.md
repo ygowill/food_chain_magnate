@@ -56,6 +56,25 @@ Docker 一键部署脚本（从 GHCR 拉取镜像，并使用 Docker Compose 运
 ./server/deploy.sh --port 7000 --enable-web --web-port 8080
 ```
 
+如果你已经有外部反代（例如 Nginx Proxy Manager），并且不希望由本仓库管理 HTTPS，部署前应显式设置公网地址，避免 backend 默认把房间 `ws_url` 写成 `localhost`：
+
+```bash
+export FCM_WEB_ORIGIN="https://game.example.com"
+export FCM_DEFAULT_WS_URL="wss://game.example.com/ws"
+./server/deploy.sh --port 7000 --enable-web --web-port 8080
+```
+
+也可以直接通过参数传入 WebSocket 地址：
+
+```bash
+./server/deploy.sh \
+  --port 7000 \
+  --enable-web \
+  --web-port 8080 \
+  --default-ws-url "wss://game.example.com/ws" \
+  --web-origin "https://game.example.com"
+```
+
 也可以直接使用 Docker Compose（可选）：
 
 ```bash

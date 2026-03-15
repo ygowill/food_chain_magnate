@@ -82,6 +82,25 @@ Start server + web client together:
 ./server/deploy.sh --port 7000 --enable-web --web-port 8080
 ```
 
+If you already have an external reverse proxy such as Nginx Proxy Manager and do not want this repo to manage HTTPS, set the public origins explicitly before deploying. This avoids the backend defaulting room `ws_url` to `localhost`:
+
+```bash
+export FCM_WEB_ORIGIN="https://game.example.com"
+export FCM_DEFAULT_WS_URL="wss://game.example.com/ws"
+./server/deploy.sh --port 7000 --enable-web --web-port 8080
+```
+
+You can also pass the WebSocket address directly:
+
+```bash
+./server/deploy.sh \
+  --port 7000 \
+  --enable-web \
+  --web-port 8080 \
+  --default-ws-url "wss://game.example.com/ws" \
+  --web-origin "https://game.example.com"
+```
+
 Use Docker Compose directly (optional):
 
 ```bash
