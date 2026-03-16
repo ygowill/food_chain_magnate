@@ -118,6 +118,17 @@ func _set_restaurant(cells: Array, restaurant_id: String, owner: int, footprint:
 			"dynamic": true
 		}
 
+func _set_coffee_shop(cells: Array, shop_id: String, owner: int, pos: Vector2i) -> void:
+	cells[pos.y][pos.x]["structure"] = {
+		"piece_id": "coffee_shop",
+		"owner": owner,
+		"anchor_cell": true,
+		"parent_anchor": pos,
+		"rotation": 0,
+		"shop_id": shop_id,
+		"dynamic": true
+	}
+
 func _apply_test_map_single_sale(state: GameState) -> void:
 	var grid_size := Vector2i(5, 5)
 	var cells := _build_empty_cells(grid_size)
@@ -409,6 +420,109 @@ func _apply_test_map_new_restaurant_mailbox(state: GameState) -> void:
 
 	state.players[0]["restaurants"] = ["rest_0"]
 	state.players[1]["restaurants"] = ["rest_1"]
+	_invalidate_road_graph(state)
+
+func _apply_test_map_first_coffee_sold(state: GameState) -> void:
+	var grid_size := Vector2i(9, 7)
+	var tile_grid_size := Vector2i(1, 1)
+	var cells := _build_empty_cells(grid_size)
+
+	for x in range(grid_size.x):
+		var dirs_top: Array = []
+		if x > 0:
+			dirs_top.append("W")
+		if x < grid_size.x - 1:
+			dirs_top.append("E")
+		_set_road_segment(cells, Vector2i(x, 2), dirs_top)
+
+	for x2 in range(grid_size.x):
+		var dirs_bottom: Array = []
+		if x2 > 0:
+			dirs_bottom.append("W")
+		if x2 < grid_size.x - 1:
+			dirs_bottom.append("E")
+		_set_road_segment(cells, Vector2i(x2, 4), dirs_bottom)
+
+	_set_road_segment(cells, Vector2i(2, 3), ["N", "S"])
+	_set_road_segment(cells, Vector2i(6, 3), ["N", "S"])
+	cells[2][2]["road_segments"] = [{"dirs": ["W", "E", "S"]}]
+	cells[4][2]["road_segments"] = [{"dirs": ["W", "E", "N"]}]
+	cells[2][6]["road_segments"] = [{"dirs": ["W", "E", "S"]}]
+	cells[4][6]["road_segments"] = [{"dirs": ["W", "E", "N"]}]
+
+	var house_cells: Array[Vector2i] = [
+		Vector2i(0, 0), Vector2i(1, 0),
+		Vector2i(0, 1), Vector2i(1, 1),
+	]
+	_set_house(cells, "house_left", 1, house_cells)
+
+	var dest_rest_cells: Array[Vector2i] = [
+		Vector2i(7, 5), Vector2i(8, 5),
+		Vector2i(7, 6), Vector2i(8, 6),
+	]
+	_set_restaurant(cells, "rest_dest", 0, dest_rest_cells)
+
+	var side_rest_cells: Array[Vector2i] = [
+		Vector2i(2, 5), Vector2i(3, 5),
+		Vector2i(2, 6), Vector2i(3, 6),
+	]
+	_set_restaurant(cells, "rest_side", 1, side_rest_cells)
+	_set_coffee_shop(cells, "coffee_shop_side", 2, Vector2i(6, 5))
+
+	state.map = {
+		"grid_size": grid_size,
+		"tile_grid_size": tile_grid_size,
+		"cells": cells,
+		"houses": {
+			"house_left": {
+				"house_id": "house_left",
+				"house_number": 1,
+				"anchor_pos": Vector2i(0, 0),
+				"cells": house_cells,
+				"has_garden": false,
+				"is_apartment": false,
+				"printed": false,
+				"owner": -1,
+				"demands": [],
+			},
+		},
+		"restaurants": {
+			"rest_dest": {
+				"restaurant_id": "rest_dest",
+				"owner": 0,
+				"anchor_pos": Vector2i(7, 5),
+				"entrance_pos": Vector2i(7, 5),
+				"cells": dest_rest_cells,
+			},
+			"rest_side": {
+				"restaurant_id": "rest_side",
+				"owner": 1,
+				"anchor_pos": Vector2i(2, 5),
+				"entrance_pos": Vector2i(2, 5),
+				"cells": side_rest_cells,
+			},
+		},
+		"coffee_shops": {
+			"coffee_shop_side": {
+				"shop_id": "coffee_shop_side",
+				"owner": 2,
+				"anchor_pos": Vector2i(6, 5),
+				"entrance_pos": Vector2i(6, 5),
+			},
+		},
+		"next_coffee_shop_id": 2,
+		"drink_sources": [],
+		"next_house_number": 2,
+		"next_restaurant_id": 2,
+		"boundary_index": _build_boundary_index(tile_grid_size),
+		"marketing_placements": {},
+	}
+
+	for pid in range(state.players.size()):
+		state.players[pid]["coffee_shop_tokens_remaining"] = 3
+	state.players[0]["restaurants"] = ["rest_dest"]
+	state.players[1]["restaurants"] = ["rest_side"]
+	state.players[2]["restaurants"] = []
 	_invalidate_road_graph(state)
 
 func _build_billboard_map_for_demand_marked() -> Dictionary:

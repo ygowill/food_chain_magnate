@@ -9,7 +9,7 @@
 
 ## 目的
 
-- 验证 `CashReached(value=20)` 会触发 first_have_20，并启用查看全部储备卡能力。
+- 验证 pay_bank_to_player 后 cash>=20 会触发 first_have_20。
 
 ## 复核步骤
 
@@ -20,8 +20,7 @@
 
 - 玩家 0 获得里程碑 first_have_20（player.milestones）。
 - 玩家 0 现金应 >= 20。
-- `player.can_peek_all_reserve_cards == true`。
 
 ## 关联单元测试
 
-- `core/tests/milestone_system/milestone_system_triggers_test.gd`
+- `core/tests/milestone_system_test.gd`

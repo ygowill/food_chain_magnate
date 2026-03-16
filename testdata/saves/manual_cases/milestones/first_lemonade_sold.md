@@ -13,14 +13,12 @@
 
 ## 复核步骤
 
-1. 载入后应处于 `Working/PlaceRestaurants`（已预置 `lemonade` 需求与库存）。
-2. 点击「推进子阶段」离开 `Working`，完成晚餐结算并进入 `Payday`（里程碑应在此过程中获得）。
-3. 打开调试状态（如 `player 0`），检查玩家字段 `train_from_active_same_color`。
+1. 载入后应处于 Working/PlaceRestaurants（已预置 lemonade 需求与库存）。
+2. 点击「推进子阶段」离开 Working，完成晚餐结算并进入 Payday（里程碑应在此过程中获得）。
 
 ## 预期结果
 
-- 玩家 0 获得里程碑 `first_lemonade_sold`（`player.milestones`）。
-- 玩家 0 的 `train_from_active_same_color == true`。
+- 玩家 0 获得里程碑 first_lemonade_sold（player.milestones）。
 
 ## 关联单元测试
 

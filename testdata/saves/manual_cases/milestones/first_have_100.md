@@ -9,7 +9,7 @@
 
 ## 目的
 
-- 验证 first_have_100 在 Dinnertime 结算末尾（CashReached/100）触发，并应用 `ceo_get_cfo + ban_card(cfo)`。
+- 验证 pay_bank_to_player 后 cash>=100 会触发 first_have_100（可能同时触发 first_have_20）。
 
 ## 复核步骤
 
@@ -20,10 +20,7 @@
 
 - 玩家 0 获得里程碑 first_have_100（player.milestones）。
 - 玩家 0 现金应 >= 100。
-- `player.banned_employee_ids` 包含 `cfo`，且玩家手牌/待命/忙碌区均不应再持有 `cfo`。
-- `player.ceo_cfo_ability_start_round == state.round_number + 1`（本存档在 round=1 触发后应为 2）。
 
 ## 关联单元测试
 
-- `core/tests/milestone_system/milestone_system_triggers_test.gd`
-- `modules/base_rules/rules/phase/dinnertime/dinnertime_settlement_impl.gd`
+- `core/tests/milestone_system_test.gd`

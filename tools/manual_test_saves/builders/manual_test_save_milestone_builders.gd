@@ -16,6 +16,7 @@ func get_registry() -> Dictionary:
 		"milestone_first_have_100": Callable(self, "_build_milestone_first_have_100"),
 		"milestone_ketchup_sold_your_demand": Callable(self, "_build_milestone_ketchup_sold_your_demand"),
 		"milestone_first_beer_sold": Callable(self, "_build_milestone_first_beer_sold"),
+		"milestone_first_coffee_sold": Callable(self, "_build_milestone_first_coffee_sold"),
 		"milestone_first_coke_sold": Callable(self, "_build_milestone_first_coke_sold"),
 		"milestone_first_lemonade_sold": Callable(self, "_build_milestone_first_lemonade_sold"),
 		"milestone_first_burger_sold": Callable(self, "_build_milestone_first_burger_sold"),
@@ -243,6 +244,31 @@ func _build_milestone_first_beer_sold(engine: GameEngine, _c: Dictionary) -> Res
 	inv["pizza"] = 2
 	state.players[0]["inventory"] = inv
 	state.players[0]["cash"] = 0
+
+	return _mark_all_players_passed_for_working(state)
+
+func _build_milestone_first_coffee_sold(engine: GameEngine, _c: Dictionary) -> Result:
+	var adv := _advance_to_working_sub_phase(engine, "PlaceRestaurants")
+	if not adv.ok:
+		return adv
+
+	var state := engine.get_state()
+	if state.players.size() < 3:
+		return Result.failure("first_coffee_sold 需要至少 3 名玩家")
+	_force_turn_order(state)
+	_apply_test_map_first_coffee_sold(state)
+
+	var houses: Dictionary = state.map["houses"]
+	var house: Dictionary = houses["house_left"]
+	house["demands"] = [{"product": "burger"}]
+	houses["house_left"] = house
+	state.map["houses"] = houses
+
+	state.players[0]["inventory"]["burger"] = 1
+	state.players[1]["inventory"]["burger"] = 0
+	state.players[2]["inventory"]["burger"] = 0
+	state.players[1]["inventory"]["coffee"] = 1
+	state.players[2]["inventory"]["coffee"] = 1
 
 	return _mark_all_players_passed_for_working(state)
 
@@ -494,4 +520,3 @@ func _build_milestone_status_matrix(engine: GameEngine, _c: Dictionary) -> Resul
 		state.milestone_pool.append(expiring_id)
 
 	return Result.success()
-

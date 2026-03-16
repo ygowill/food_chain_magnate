@@ -82,7 +82,7 @@ godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- 
 - `waitress`: `employees/waitress.json` + `employees/waitress.md`
 - `zeppelin_pilot`: `employees/zeppelin_pilot.json` + `employees/zeppelin_pilot.md`
 
-## 里程碑（40）
+## 里程碑（41）
 
 - `first_airplane`: `milestones/first_airplane.json` + `milestones/first_airplane.md`
 - `first_beer_sold`: `milestones/first_beer_sold.json` + `milestones/first_beer_sold.md`
@@ -97,6 +97,7 @@ godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- 
 - `first_campaign_manager_used`: `milestones/first_campaign_manager_used.json` + `milestones/first_campaign_manager_used.md`
 - `first_cart_operator_used`: `milestones/first_cart_operator_used.json` + `milestones/first_cart_operator_used.md`
 - `first_cart_operator`: `milestones/first_cart_operator.json` + `milestones/first_cart_operator.md`
+- `first_coffee_sold`: `milestones/first_coffee_sold.json` + `milestones/first_coffee_sold.md`
 - `first_coke_sold`: `milestones/first_coke_sold.json` + `milestones/first_coke_sold.md`
 - `first_discount_manager_used`: `milestones/first_discount_manager_used.json` + `milestones/first_discount_manager_used.md`
 - `first_drink_marketed`: `milestones/first_drink_marketed.json` + `milestones/first_drink_marketed.md`
