@@ -94,6 +94,9 @@ func _apply_fallback_font() -> void:
 	if fallback_font == null:
 		return
 	ThemeDB.fallback_font = fallback_font
+	var default_theme := ThemeDB.get_default_theme()
+	if default_theme != null:
+		default_theme.set_default_font(fallback_font)
 	_log_font_probe()
 
 func _log_font_probe() -> void:
