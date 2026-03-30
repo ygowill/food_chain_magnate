@@ -2,6 +2,8 @@
 class_name OnlineLobbyResumeController
 extends RefCounted
 
+const ResumeErrorPolicyClass = preload("res://ui/scenes/online/online_resume_error_policy.gd")
+
 var _ensure_session: Callable = Callable()
 var _resume_room: Callable = Callable()
 var _connect_to_ws: Callable = Callable()
@@ -69,6 +71,14 @@ func attempt_auto_resume_if_needed() -> void:
 		return
 	if _mark_platform_ready.is_valid():
 		_mark_platform_ready.call()
+	var user_policy := ResumeErrorPolicyClass.classify_user_mismatch(
+		NetContext.get_online_resume_user_id() if NetContext != null and NetContext.has_method("get_online_resume_user_id") else "",
+		PlatformSession.user_id if PlatformSession != null else ""
+	)
+	if bool(user_policy.get("clear_resume_context", false)):
+		_clear_resume_context_if_needed()
+		_fail("自动恢复已取消", str(user_policy.get("user_message", "账号不匹配")))
+		return
 
 	var room_code := NetContext.get_online_resume_room_code() if NetContext != null else ""
 	var resume_resp = await _resume_room.call(room_code)
@@ -77,7 +87,10 @@ func attempt_auto_resume_if_needed() -> void:
 		return
 	var resume_dict: Dictionary = Dictionary(resume_resp)
 	if resume_dict.has("error"):
-		_fail("自动恢复失败", _stringify_platform_error(resume_dict.get("error", "")))
+		var policy := ResumeErrorPolicyClass.classify_resume_failure(resume_dict.get("error", ""))
+		if bool(policy.get("clear_resume_context", false)):
+			_clear_resume_context_if_needed()
+		_fail("自动恢复失败", str(policy.get("user_message", _stringify_platform_error(resume_dict.get("error", "")))))
 		return
 	var ok_val = resume_dict.get("ok", null)
 	if not (ok_val is Dictionary):
@@ -103,6 +116,11 @@ func _fail(title: String, message: String) -> void:
 		_refresh_ui.call()
 	if not OS.has_feature("headless") and _show_error.is_valid():
 		_show_error.call(title, message)
+
+func _clear_resume_context_if_needed() -> void:
+	if NetContext == null or not NetContext.has_method("clear_online_resume_context"):
+		return
+	NetContext.clear_online_resume_context()
 
 func _stringify_platform_error(error_val) -> String:
 	if error_val is Dictionary:

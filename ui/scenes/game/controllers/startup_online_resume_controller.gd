@@ -3,6 +3,7 @@ class_name GameStartupOnlineResumeController
 extends RefCounted
 
 const STARTUP_RESUME_TIMEOUT_SEC := 6.0
+const ResumeErrorPolicyClass = preload("res://ui/scenes/online/online_resume_error_policy.gd")
 
 var _host: Node = null
 var _ensure_session: Callable = Callable()
@@ -63,6 +64,15 @@ func attempt_startup_resume_if_needed() -> bool:
 		var err_text: String = str(ensure_r.error) if ensure_r is Result else "平台登录返回类型错误"
 		_fail("平台登录失败：%s" % err_text)
 		return false
+	var user_policy := ResumeErrorPolicyClass.classify_user_mismatch(
+		NetContext.get_online_resume_user_id() if NetContext != null and NetContext.has_method("get_online_resume_user_id") else "",
+		PlatformSession.user_id if PlatformSession != null else ""
+	)
+	if bool(user_policy.get("clear_resume_context", false)):
+		_disconnect_net_signals()
+		_clear_resume_context_if_needed()
+		_fail(str(user_policy.get("user_message", "账号不匹配")))
+		return false
 
 	var room_code := NetContext.get_online_resume_room_code() if NetContext != null else ""
 	var resume_resp = await _resume_room.call(room_code)
@@ -73,7 +83,10 @@ func attempt_startup_resume_if_needed() -> bool:
 	var resume_dict: Dictionary = Dictionary(resume_resp)
 	if resume_dict.has("error"):
 		_disconnect_net_signals()
-		_fail(_stringify_platform_error(resume_dict.get("error", "")))
+		var policy := ResumeErrorPolicyClass.classify_resume_failure(resume_dict.get("error", ""))
+		if bool(policy.get("clear_resume_context", false)):
+			_clear_resume_context_if_needed()
+		_fail(str(policy.get("user_message", _stringify_platform_error(resume_dict.get("error", "")))))
 		return false
 	var ok_val = resume_dict.get("ok", null)
 	if not (ok_val is Dictionary):
@@ -171,6 +184,11 @@ func _fail(message: String) -> void:
 	_failure_message = str(message)
 	if _on_failure.is_valid():
 		_on_failure.call(str(message))
+
+func _clear_resume_context_if_needed() -> void:
+	if NetContext == null or not NetContext.has_method("clear_online_resume_context"):
+		return
+	NetContext.clear_online_resume_context()
 
 func _stringify_platform_error(error_val) -> String:
 	if error_val is Dictionary:

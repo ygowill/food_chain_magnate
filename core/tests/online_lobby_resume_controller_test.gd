@@ -9,9 +9,12 @@ static func run() -> Result:
 		return Result.failure("NetContext autoload missing")
 	if Globals == null:
 		return Result.failure("Globals autoload missing")
+	if PlatformSession == null:
+		return Result.failure("PlatformSession autoload missing")
 
 	var prev_resume_state := Dictionary(NetContext.online_resume_state).duplicate(true)
 	var prev_pending_replay := str(Globals.pending_replay_file_path)
+	var prev_user_id := str(PlatformSession.user_id)
 
 	NetContext.online_resume_state = {}
 	Globals.pending_replay_file_path = ""
@@ -19,7 +22,7 @@ static func run() -> Result:
 	var controller_idle: RefCounted = _build_controller(harness_idle)
 	await controller_idle.attempt_auto_resume_if_needed()
 	if harness_idle.ensure_calls != 0 or harness_idle.resume_calls != 0 or harness_idle.connect_calls != 0:
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, "无 resume 上下文时不应发起自动恢复")
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "无 resume 上下文时不应发起自动恢复")
 
 	NetContext.set_online_resume_context("ROOM88", "player", "https://platform.example.test")
 	var harness := _Harness.new()
@@ -27,19 +30,28 @@ static func run() -> Result:
 	await controller.attempt_auto_resume_if_needed()
 
 	if harness.ensure_calls != 1:
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, "ensure_session 调用次数错误: %d" % harness.ensure_calls)
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "ensure_session 调用次数错误: %d" % harness.ensure_calls)
 	if harness.resume_calls != 1:
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, "resume_room 调用次数错误: %d" % harness.resume_calls)
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "resume_room 调用次数错误: %d" % harness.resume_calls)
 	if harness.connect_calls != 1:
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, "connect_to_ws 调用次数错误: %d" % harness.connect_calls)
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "connect_to_ws 调用次数错误: %d" % harness.connect_calls)
 	if harness.last_room_code != "ROOM88":
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, "resume_room room_code 错误: %s" % harness.last_room_code)
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "resume_room room_code 错误: %s" % harness.last_room_code)
 	if harness.last_ws_url != "ws://resume.example.test" or harness.last_connect_token != "resume-token":
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, "connect_to_ws 参数错误")
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "connect_to_ws 参数错误")
 	if not harness.platform_marked_ready:
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, "成功恢复前应标记 platform ready")
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "成功恢复前应标记 platform ready")
 
-	_restore(prev_resume_state, prev_pending_replay)
+	NetContext.set_online_resume_context("ROOM89", "player", "https://platform.example.test")
+	NetContext.online_resume_state["user_id"] = "u_expected"
+	PlatformSession.user_id = "u_other"
+	var mismatch_harness := _Harness.new()
+	var mismatch_controller: RefCounted = _build_controller(mismatch_harness)
+	await mismatch_controller.attempt_auto_resume_if_needed()
+	if NetContext.has_online_resume_context():
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "账号不匹配时应清理 resume 上下文")
+
+	_restore(prev_resume_state, prev_pending_replay, prev_user_id)
 	return Result.success()
 
 static func _build_controller(harness: _Harness) -> RefCounted:
@@ -57,12 +69,13 @@ static func _build_controller(harness: _Harness) -> RefCounted:
 	)
 	return controller
 
-static func _restore(prev_resume_state: Dictionary, prev_pending_replay: String) -> void:
+static func _restore(prev_resume_state: Dictionary, prev_pending_replay: String, prev_user_id: String) -> void:
 	NetContext.online_resume_state = prev_resume_state.duplicate(true)
 	Globals.pending_replay_file_path = prev_pending_replay
+	PlatformSession.user_id = prev_user_id
 
-static func _restore_and_fail(prev_resume_state: Dictionary, prev_pending_replay: String, message: String) -> Result:
-	_restore(prev_resume_state, prev_pending_replay)
+static func _restore_and_fail(prev_resume_state: Dictionary, prev_pending_replay: String, prev_user_id: String, message: String) -> Result:
+	_restore(prev_resume_state, prev_pending_replay, prev_user_id)
 	return Result.failure(message)
 
 class _Harness:

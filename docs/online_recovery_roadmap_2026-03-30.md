@@ -298,3 +298,26 @@
 - 仍未完成：
   - 冷启动恢复失败后的分级提示与更细粒度重试
   - 冷启动恢复成功时的 loading/切场体验进一步打磨
+
+### 2026-03-30（第八次更新）
+
+- 恢复失败分级处理第一刀已完成：
+  - 新增 `OnlineResumeErrorPolicy`，统一分类恢复失败错误。
+  - 现在以下错误会被视为“永久失效”，并自动清理本地 resume 上下文，避免每次启动都重复自动恢复失败：
+    - `room not found`
+    - `room already ended`
+    - `room membership not found`
+    - `unauthorized / missing session_id`
+    - 持久化 `user_id` 与当前登录 `user_id` 不一致
+  - 网络类/接口格式类失败仍按“可重试”保留 resume 上下文。
+  - `OnlineLobbyResumeController` 与 `GameStartupOnlineResumeController` 都已经接入这套策略。
+- 新增测试：
+  - `OnlineResumeErrorPolicyTest`
+  - 扩展 `OnlineLobbyResumeControllerTest`
+  - 扩展 `GameStartupOnlineResumeControllerTest`
+- 当前验证结果：
+  - `godot --headless --script res://tools/check_compile.gd`：`PASS files=941`
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：`passed=291/291 failed=[]`
+- 仍未完成：
+  - 恢复失败后的自动重试退避策略
+  - 成功恢复时的 loading/切场体验进一步打磨

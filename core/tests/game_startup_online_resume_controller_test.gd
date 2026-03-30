@@ -11,6 +11,8 @@ static func run() -> Result:
 		return Result.failure("Globals autoload missing")
 	if NetClient == null:
 		return Result.failure("NetClient autoload missing")
+	if PlatformSession == null:
+		return Result.failure("PlatformSession autoload missing")
 
 	var loop = Engine.get_main_loop()
 	if not (loop is SceneTree):
@@ -21,6 +23,7 @@ static func run() -> Result:
 
 	var prev_resume_state := Dictionary(NetContext.online_resume_state).duplicate(true)
 	var prev_pending_replay := str(Globals.pending_replay_file_path)
+	var prev_user_id := str(PlatformSession.user_id)
 
 	NetContext.online_resume_state = {}
 	Globals.pending_replay_file_path = ""
@@ -36,7 +39,7 @@ static func run() -> Result:
 	var idle_started = await idle_controller.attempt_startup_resume_if_needed()
 	if idle_started:
 		host.queue_free()
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, "无恢复上下文时不应启动 Game 冷启动恢复")
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "无恢复上下文时不应启动 Game 冷启动恢复")
 
 	NetContext.set_online_resume_context("ROOM99", "player", "https://platform.example.test")
 	NetContext.mark_online_resume_in_game(true)
@@ -53,24 +56,46 @@ static func run() -> Result:
 	var started = await controller.attempt_startup_resume_if_needed()
 	if not started:
 		host.queue_free()
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, "有恢复上下文时应启动成功: %s" % harness.failure_message)
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "有恢复上下文时应启动成功: %s" % harness.failure_message)
 	if harness.ensure_calls != 1 or harness.resume_calls != 1 or harness.connect_calls != 1:
 		host.queue_free()
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, "冷启动恢复调用次数错误")
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "冷启动恢复调用次数错误")
 	if harness.game_started_calls != 1:
 		host.queue_free()
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, "on_game_started 应被调用一次")
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "on_game_started 应被调用一次")
+
+	NetContext.set_online_resume_context("ROOM100", "player", "https://platform.example.test")
+	NetContext.mark_online_resume_in_game(true)
+	NetContext.online_resume_state["user_id"] = "u_expected"
+	PlatformSession.user_id = "u_other"
+	var mismatch_harness := _Harness.new(host)
+	var mismatch_controller = ControllerClass.new(
+		host,
+		Callable(mismatch_harness, "ensure_session"),
+		Callable(mismatch_harness, "resume_room"),
+		Callable(mismatch_harness, "connect_to_server"),
+		Callable(mismatch_harness, "on_game_started"),
+		Callable(mismatch_harness, "on_failure")
+	)
+	var mismatch_started = await mismatch_controller.attempt_startup_resume_if_needed()
+	if mismatch_started:
+		host.queue_free()
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "账号不匹配时不应继续启动恢复")
+	if NetContext.has_online_resume_context():
+		host.queue_free()
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "账号不匹配时应清理 resume 上下文")
 
 	host.queue_free()
-	_restore(prev_resume_state, prev_pending_replay)
+	_restore(prev_resume_state, prev_pending_replay, prev_user_id)
 	return Result.success()
 
-static func _restore(prev_resume_state: Dictionary, prev_pending_replay: String) -> void:
+static func _restore(prev_resume_state: Dictionary, prev_pending_replay: String, prev_user_id: String) -> void:
 	NetContext.online_resume_state = prev_resume_state.duplicate(true)
 	Globals.pending_replay_file_path = prev_pending_replay
+	PlatformSession.user_id = prev_user_id
 
-static func _restore_and_fail(prev_resume_state: Dictionary, prev_pending_replay: String, message: String) -> Result:
-	_restore(prev_resume_state, prev_pending_replay)
+static func _restore_and_fail(prev_resume_state: Dictionary, prev_pending_replay: String, prev_user_id: String, message: String) -> Result:
+	_restore(prev_resume_state, prev_pending_replay, prev_user_id)
 	return Result.failure(message)
 
 class _Harness:
