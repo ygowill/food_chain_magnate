@@ -10,6 +10,7 @@ enum Mode {
 const PROTOCOL_VERSION := 1
 
 const COMMAND_PRIVACY_SPECTATOR_VIEWER_PLAYER_ID := 999999
+const ONLINE_RESUME_SAVE_PATH := "user://online_resume_state.cfg"
 
 var mode: Mode = Mode.HOTSEAT
 var local_player_id: int = -1
@@ -20,9 +21,11 @@ var room_state: Dictionary = {}
 var room_list: Array = []
 var player_profile: Dictionary = {}
 var online_resume_state: Dictionary = {}
+var _online_resume_save_path := ONLINE_RESUME_SAVE_PATH
 
 func _ready() -> void:
 	_ensure_default_profile()
+	reload_online_resume_state_from_disk()
 
 func get_command_privacy_viewer_player_id() -> int:
 	# Hotseat/local：无需脱敏；联机 spectator：应视为“非本人”，避免 history/debug 误显示隐信息。
@@ -34,6 +37,7 @@ func set_online_resume_context(room_code: String, role: String, platform_base_ur
 	var code := str(room_code).strip_edges().to_upper()
 	if code.is_empty():
 		online_resume_state = {}
+		save_online_resume_state_to_disk()
 		return
 	online_resume_state = {
 		"room_code": code,
@@ -41,10 +45,14 @@ func set_online_resume_context(room_code: String, role: String, platform_base_ur
 		"platform_base_url": str(platform_base_url).strip_edges(),
 		"in_game": false,
 		"reconnecting": false,
+		"session_id": str(PlatformSession.session_id).strip_edges() if PlatformSession != null else "",
+		"user_id": str(PlatformSession.user_id).strip_edges() if PlatformSession != null else "",
 	}
+	save_online_resume_state_to_disk()
 
 func clear_online_resume_context() -> void:
 	online_resume_state = {}
+	save_online_resume_state_to_disk()
 
 func has_online_resume_context() -> bool:
 	return not get_online_resume_room_code().is_empty()
@@ -58,12 +66,19 @@ func get_online_resume_role() -> String:
 func get_online_resume_platform_base_url() -> String:
 	return str(online_resume_state.get("platform_base_url", "")).strip_edges()
 
+func get_online_resume_session_id() -> String:
+	return str(online_resume_state.get("session_id", "")).strip_edges()
+
+func get_online_resume_user_id() -> String:
+	return str(online_resume_state.get("user_id", "")).strip_edges()
+
 func mark_online_resume_in_game(active: bool) -> void:
 	if not has_online_resume_context():
 		return
 	online_resume_state["in_game"] = bool(active)
 	if not bool(active):
 		online_resume_state["reconnecting"] = false
+	save_online_resume_state_to_disk()
 
 func is_online_resume_in_game() -> bool:
 	return has_online_resume_context() and bool(online_resume_state.get("in_game", false))
@@ -72,6 +87,7 @@ func set_online_reconnecting(active: bool) -> void:
 	if not has_online_resume_context():
 		return
 	online_resume_state["reconnecting"] = bool(active)
+	save_online_resume_state_to_disk()
 
 func is_online_reconnecting() -> bool:
 	return has_online_resume_context() and bool(online_resume_state.get("reconnecting", false))
@@ -85,6 +101,46 @@ func reset() -> void:
 	room_list = []
 	online_resume_state = {}
 	_ensure_default_profile()
+	save_online_resume_state_to_disk()
+
+func get_online_resume_save_path() -> String:
+	return _online_resume_save_path
+
+func set_online_resume_save_path_for_test(path: String) -> void:
+	var next_path := str(path).strip_edges()
+	_online_resume_save_path = ONLINE_RESUME_SAVE_PATH if next_path.is_empty() else next_path
+
+func save_online_resume_state_to_disk() -> Result:
+	var cfg := ConfigFile.new()
+	if not online_resume_state.is_empty():
+		for key in online_resume_state.keys():
+			cfg.set_value("resume", str(key), online_resume_state.get(key, null))
+	var err := cfg.save(_online_resume_save_path)
+	if err != OK:
+		return Result.failure("save online resume state failed: %s" % str(err))
+	return Result.success()
+
+func reload_online_resume_state_from_disk() -> Result:
+	var cfg := ConfigFile.new()
+	if cfg.load(_online_resume_save_path) != OK:
+		online_resume_state = {}
+		return Result.success()
+
+	var room_code := str(cfg.get_value("resume", "room_code", "")).strip_edges().to_upper()
+	if room_code.is_empty():
+		online_resume_state = {}
+		return Result.success()
+
+	online_resume_state = {
+		"room_code": room_code,
+		"role": str(cfg.get_value("resume", "role", "")).strip_edges(),
+		"platform_base_url": str(cfg.get_value("resume", "platform_base_url", "")).strip_edges(),
+		"in_game": bool(cfg.get_value("resume", "in_game", false)),
+		"reconnecting": bool(cfg.get_value("resume", "reconnecting", false)),
+		"session_id": str(cfg.get_value("resume", "session_id", "")).strip_edges(),
+		"user_id": str(cfg.get_value("resume", "user_id", "")).strip_edges(),
+	}
+	return Result.success()
 
 func _ensure_default_profile() -> void:
 	var name := "玩家"

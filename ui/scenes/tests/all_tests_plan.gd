@@ -111,6 +111,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.NetContextOnlineResumeTestClass.run(),
 		},
 		{
+			"name": "NetContextOnlineResumePersistenceTest",
+			"fn": func() -> Result: return TestRefs.NetContextOnlineResumePersistenceTestClass.run(),
+		},
+		{
 			"name": "UiLobbyistsRoadOverlaysHardRefContractTest",
 			"fn": func() -> Result: return TestRefs.UiLobbyistsRoadOverlaysHardRefContractTestClass.run(),
 		},

@@ -186,3 +186,19 @@
   - 客户端重启后的自动恢复
   - command log 增量恢复
   - 平台后端对 room -> game_server 的持久分配
+
+### 2026-03-30（第二次更新）
+
+- Phase 2 基础设施第一刀已完成：
+  - `NetContext` 新增 `user://online_resume_state.cfg` 持久化。
+  - `set_online_resume_context` / `clear_online_resume_context` / `mark_online_resume_in_game` / `set_online_reconnecting` 现在会同步写盘。
+  - 启动时 `NetContext._ready()` 会尝试从磁盘恢复上次的 resume 状态。
+  - 额外持久化 `session_id` / `user_id`，为后续“客户端重启后自动 resume_room”做准备。
+  - 新增 `NetContextOnlineResumePersistenceTest`，覆盖“写盘 -> 清空内存 -> 重新加载 -> clear 后不再恢复”的流程。
+- 当前验证结果：
+  - `godot --headless --script res://tools/check_compile.gd`：`PASS files=933`
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：`passed=286/286 failed=[]`
+- Phase 2 仍未完成：
+  - 启动后的自动恢复入口
+  - 自动切回 Lobby / Game 正确场景
+  - 对 `resume_room` 的冷启动编排
