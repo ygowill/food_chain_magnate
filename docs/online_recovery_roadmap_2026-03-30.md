@@ -28,6 +28,10 @@
 
 ## 总体架构
 
+### 当前部署假设
+
+当前实现按“单点 Dedicated Server”推进，不考虑多实例负载均衡与 failover 调度。
+
 ### 1. 服务端权威持久化
 
 服务端需要把“房间元数据 + 对局权威快照 + 恢复索引”落到持久层。
@@ -259,3 +263,19 @@
   - backend 真正的“active room 重新分配 / failover”调度
   - 不同 game server 间迁移房间时的权威恢复流程
   - 客户端恢复失败后的更细粒度分级重试
+
+### 2026-03-30（第六次更新）
+
+- 单点模式下的 backend 房间目录继续收口：
+  - `create_room` 现在会优先选择“最新健康 heartbeat 的唯一 game server”的 `ws_url`，而不是一律回退到静态默认地址。
+  - `join_room` / `resume_room` / `spectate_room` 会在返回前尝试用当前健康 server 的 `ws_url` 刷新房间目录，确保客户端拿到的是最新连接入口。
+  - 这一步让“单点 server 重启后目录地址同步”更稳，不依赖人工同步 `default_ws_url`。
+- 新增 backend 测试：
+  - `test_create_room_prefers_latest_healthy_game_server_ws_url`
+  - `test_resume_room_refreshes_ws_url_from_healthy_game_server`
+- 当前验证结果：
+  - `backend/.venv/bin/python -m pytest -q backend/tests/test_rooms.py`：`16 passed`
+  - `backend/.venv/bin/python -m pytest -q backend/tests/test_internal.py`：`9 passed`
+- 仍未完成：
+  - 单点 server 启动时主动把 backend 房间目录状态和本地快照做更强一致性校对
+  - 冷启动恢复直接进入游戏场景后的细节 UX 收口

@@ -36,6 +36,21 @@ async def test_create_room_uses_configured_default_ws_url(client: AsyncClient, m
 
 
 @pytest.mark.asyncio
+async def test_create_room_prefers_latest_healthy_game_server_ws_url(client: AsyncClient):
+    hb = await client.post(
+        "/internal/game_servers/heartbeat",
+        headers={"X-Internal-Secret": "dev-internal-secret-change-in-production"},
+        json={"game_server_id": "gs-single-1", "ws_url": "wss://single.example.test", "room_codes": []},
+    )
+    assert hb.status_code == 200
+
+    user = await _create_user(client)
+    resp = await client.post("/v1/rooms", json={"session_id": user["session_id"]})
+    assert resp.status_code == 200
+    assert resp.json()["ws_url"] == "wss://single.example.test"
+
+
+@pytest.mark.asyncio
 async def test_get_room(client: AsyncClient):
     user = await _create_user(client)
     create = await client.post("/v1/rooms", json={"session_id": user["session_id"]})
@@ -134,6 +149,28 @@ async def test_resume_room_existing_member(client: AsyncClient):
     assert payload is not None
     assert payload.get("role") == "player"
     assert int(payload.get("seat_index", -1)) == 1
+
+
+@pytest.mark.asyncio
+async def test_resume_room_refreshes_ws_url_from_healthy_game_server(client: AsyncClient):
+    host = await _create_user(client)
+    create = await client.post("/v1/rooms", json={"session_id": host["session_id"]})
+    code = create.json()["room_code"]
+
+    hb = await client.post(
+        "/internal/game_servers/heartbeat",
+        headers={"X-Internal-Secret": "dev-internal-secret-change-in-production"},
+        json={"game_server_id": "gs-single-2", "ws_url": "wss://recover.example.test", "room_codes": [code]},
+    )
+    assert hb.status_code == 200
+
+    player = await _create_user(client)
+    joined = await client.post(f"/v1/rooms/{code}/join", json={"session_id": player["session_id"]})
+    assert joined.status_code == 200
+
+    resumed = await client.post(f"/v1/rooms/{code}/resume", json={"session_id": player["session_id"]})
+    assert resumed.status_code == 200
+    assert resumed.json()["ws_url"] == "wss://recover.example.test"
 
 
 @pytest.mark.asyncio

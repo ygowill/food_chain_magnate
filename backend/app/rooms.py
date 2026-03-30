@@ -24,6 +24,52 @@ def _resolve_default_ws_url() -> str:
     return "ws://localhost:7000"
 
 
+def _healthy_game_server_cutoff() -> datetime:
+    return datetime.now(timezone.utc) - timedelta(seconds=75)
+
+
+async def _get_latest_healthy_game_server(db: AsyncSession) -> Optional[GameServer]:
+    return (await db.execute(
+        select(GameServer)
+        .where(GameServer.last_heartbeat_at >= _healthy_game_server_cutoff())
+        .order_by(GameServer.last_heartbeat_at.desc())
+        .limit(1)
+    )).scalar_one_or_none()
+
+
+async def _resolve_room_connection_target(db: AsyncSession, room: Room) -> tuple[Optional[str], str]:
+    ws_url = str(room.ws_url or "").strip()
+    game_server_id = str(room.game_server_id or "").strip()
+
+    if game_server_id:
+        gs = (await db.execute(
+            select(GameServer).where(
+                GameServer.game_server_id == game_server_id,
+                GameServer.last_heartbeat_at >= _healthy_game_server_cutoff(),
+            )
+        )).scalar_one_or_none()
+        if gs is not None:
+            latest_ws_url = str(gs.ws_url or "").strip()
+            if latest_ws_url and latest_ws_url != ws_url:
+                room.ws_url = latest_ws_url
+                ws_url = latest_ws_url
+            return game_server_id, ws_url or _resolve_default_ws_url()
+
+    latest = await _get_latest_healthy_game_server(db)
+    if latest is None:
+        return (game_server_id or None), ws_url or _resolve_default_ws_url()
+
+    room.game_server_id = str(latest.game_server_id)
+    latest_ws_url = str(latest.ws_url or "").strip()
+    if latest_ws_url:
+        room.ws_url = latest_ws_url
+        ws_url = latest_ws_url
+    elif not ws_url:
+        ws_url = _resolve_default_ws_url()
+        room.ws_url = ws_url
+    return str(room.game_server_id), ws_url or _resolve_default_ws_url()
+
+
 class CreateRoomRequest(BaseModel):
     session_id: str
     config_json: str = "{}"
@@ -151,11 +197,18 @@ async def create_room(req: CreateRoomRequest, db: AsyncSession = Depends(get_db)
     is_guest = await _is_guest_user(db, user.user_id)
     display_name, _ = _resolve_display_name(user, is_guest)
 
+    preferred_server = await _get_latest_healthy_game_server(db)
+    preferred_server_id = str(preferred_server.game_server_id) if preferred_server is not None else None
+    preferred_ws_url = str(preferred_server.ws_url or "").strip() if preferred_server is not None else ""
+    if not preferred_ws_url:
+        preferred_ws_url = _resolve_default_ws_url()
+
     from app.auth import _hash_password
     room = Room(
         owner_user_id=sess.user_id,
+        game_server_id=preferred_server_id,
         config_json=req.config_json,
-        ws_url=_resolve_default_ws_url(),
+        ws_url=preferred_ws_url,
         join_policy="password" if req.password else "public",
         password_hash=_hash_password(req.password) if req.password else None,
     )
@@ -173,7 +226,7 @@ async def create_room(req: CreateRoomRequest, db: AsyncSession = Depends(get_db)
         seat_index=0,
         config_json=req.config_json,
     )
-    return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
+    return RoomResponse(room_code=room.room_code, ws_url=str(room.ws_url), connect_token=token)
 
 
 class JoinRequest(BaseModel):
@@ -200,6 +253,7 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
         from app.auth import _verify_password
         if not room.password_hash or not _verify_password(req.password, room.password_hash):
             raise HTTPException(403, "wrong password")
+    _, room_ws_url = await _resolve_room_connection_target(db, room)
 
     # Check already joined
     existing = (await db.execute(
@@ -213,7 +267,8 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
             display_name=display_name,
             seat_index=existing.seat_index,
         )
-        return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
+        await db.commit()
+        return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
 
     # Assign next seat
     members = (await db.execute(
@@ -227,7 +282,7 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
     db.add(RoomMember(room_id=room.room_id, user_id=sess.user_id, role="player", seat_index=seat))
     await db.commit()
     token = issue_connect_token(sess.user_id, room.room_code, "player", display_name=display_name, seat_index=seat)
-    return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
+    return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
 
 
 @router.post("/{room_code}/resume", response_model=RoomResponse)
@@ -244,6 +299,7 @@ async def resume_room(room_code: str, req: ResumeRequest, db: AsyncSession = Dep
         raise HTTPException(404, "room not found")
     if str(room.status) == "Ended":
         raise HTTPException(409, "room already ended")
+    _, room_ws_url = await _resolve_room_connection_target(db, room)
 
     existing = (await db.execute(
         select(RoomMember).where(
@@ -270,7 +326,8 @@ async def resume_room(room_code: str, req: ResumeRequest, db: AsyncSession = Dep
         display_name=display_name,
         seat_index=seat_index,
     )
-    return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
+    await db.commit()
+    return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
 
 
 @router.post("/{room_code}/spectate", response_model=RoomResponse)
@@ -284,6 +341,7 @@ async def spectate_room(room_code: str, req: JoinRequest, db: AsyncSession = Dep
     room = (await db.execute(select(Room).where(Room.room_code == room_code))).scalar_one_or_none()
     if not room:
         raise HTTPException(404, "room not found")
+    _, room_ws_url = await _resolve_room_connection_target(db, room)
 
     existing = (await db.execute(
         select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.user_id == sess.user_id, RoomMember.left_at.is_(None))
@@ -296,12 +354,13 @@ async def spectate_room(room_code: str, req: JoinRequest, db: AsyncSession = Dep
             display_name=display_name,
             seat_index=existing.seat_index,
         )
-        return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
+        await db.commit()
+        return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
 
     db.add(RoomMember(room_id=room.room_id, user_id=sess.user_id, role="spectator", seat_index=None))
     await db.commit()
     token = issue_connect_token(sess.user_id, room.room_code, "spectator", display_name=display_name)
-    return RoomResponse(room_code=room.room_code, ws_url=room.ws_url, connect_token=token)
+    return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
 
 
 @router.get("/{room_code}", response_model=RoomInfo)
