@@ -34,7 +34,8 @@ static func run() -> Result:
 		Callable(idle_harness, "resume_room"),
 		Callable(idle_harness, "connect_to_server"),
 		Callable(idle_harness, "on_game_started"),
-		Callable(idle_harness, "on_failure")
+		Callable(idle_harness, "on_failure"),
+		Callable(idle_harness, "on_status")
 	)
 	var idle_started = await idle_controller.attempt_startup_resume_if_needed()
 	if idle_started:
@@ -50,7 +51,8 @@ static func run() -> Result:
 		Callable(harness, "resume_room"),
 		Callable(harness, "connect_to_server"),
 		Callable(harness, "on_game_started"),
-		Callable(harness, "on_failure")
+		Callable(harness, "on_failure"),
+		Callable(harness, "on_status")
 	)
 
 	var started = await controller.attempt_startup_resume_if_needed()
@@ -63,6 +65,9 @@ static func run() -> Result:
 	if harness.game_started_calls != 1:
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "on_game_started 应被调用一次")
+	if harness.statuses.is_empty():
+		host.queue_free()
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "恢复过程中应产生状态文案")
 
 	NetContext.set_online_resume_context("ROOM101", "player", "https://platform.example.test")
 	NetContext.mark_online_resume_in_game(true)
@@ -74,7 +79,8 @@ static func run() -> Result:
 		Callable(retry_harness, "resume_room"),
 		Callable(retry_harness, "connect_to_server"),
 		Callable(retry_harness, "on_game_started"),
-		Callable(retry_harness, "on_failure")
+		Callable(retry_harness, "on_failure"),
+		Callable(retry_harness, "on_status")
 	)
 	var retry_started = await retry_controller.attempt_startup_resume_if_needed()
 	if not retry_started:
@@ -95,7 +101,8 @@ static func run() -> Result:
 		Callable(mismatch_harness, "resume_room"),
 		Callable(mismatch_harness, "connect_to_server"),
 		Callable(mismatch_harness, "on_game_started"),
-		Callable(mismatch_harness, "on_failure")
+		Callable(mismatch_harness, "on_failure"),
+		Callable(mismatch_harness, "on_status")
 	)
 	var mismatch_started = await mismatch_controller.attempt_startup_resume_if_needed()
 	if mismatch_started:
@@ -128,6 +135,7 @@ class _Harness:
 	var game_started_calls: int = 0
 	var failure_message: String = ""
 	var resume_failures_before_success: int = 0
+	var statuses: Array[String] = []
 
 	func _init(p_host: Node) -> void:
 		host = p_host
@@ -158,3 +166,6 @@ class _Harness:
 
 	func on_failure(message: String) -> void:
 		failure_message = str(message)
+
+	func on_status(message: String) -> void:
+		statuses.append(str(message))

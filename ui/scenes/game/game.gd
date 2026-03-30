@@ -3,6 +3,7 @@
 extends Control
 
 # UI 节点引用
+@onready var ui_root: Control = $UIRoot
 @onready var status_bar: PanelContainer = $UIRoot/TopBar/StatusBar
 @onready var round_label: Label = $UIRoot/TopBar/StatusBar/StatusContent/RoundSection/RoundValueLabel
 @onready var phase_track: Control = $UIRoot/TopBar/StatusBar/StatusContent/PhaseTrack
@@ -102,9 +103,13 @@ var _startup_intro_played: bool = false
 var _startup_intro_running: bool = false
 var _online_waiting_log_auto_opened: bool = false
 var _online_waiting_action_ui_hidden: bool = false
+var _startup_online_resume_ui_hidden: bool = false
 func _ready() -> void:
 	var span_ready := PerfTraceClass.begin_span("game:_ready")
 	GameLog.info("Game", "游戏场景已加载")
+	var startup_direct_resume := _should_startup_online_resume_direct_to_game()
+	if startup_direct_resume:
+		_set_startup_online_resume_ui_hidden(true)
 	# 初始化/读档可能耗时：确保加载遮罩至少绘制一帧，避免“卡住”的观感。
 	var need_show_loading := true
 	if SceneManager != null and SceneManager.has_method("is_loading_visible"):
@@ -236,14 +241,15 @@ func _ready() -> void:
 		if _panel_controller != null:
 			_panel_controller.reset_bank_break_tracking(game_engine.get_state())
 		_ensure_online_resync_controller()
-	elif _should_startup_online_resume_direct_to_game():
+	elif startup_direct_resume:
 		_startup_online_resume_controller = GameStartupOnlineResumeControllerClass.new(
 			self,
 			Callable(self, "_ensure_platform_session_for_startup_resume"),
 			Callable(self, "_request_online_resume_room"),
 			Callable(self, "_connect_online_resume_url"),
 			Callable(self, "_on_startup_online_game_started"),
-			Callable(self, "_on_startup_online_resume_failed")
+			Callable(self, "_on_startup_online_resume_failed"),
+			Callable(self, "_on_startup_online_resume_status")
 		)
 		var startup_resumed: bool = await _startup_online_resume_controller.attempt_startup_resume_if_needed()
 		if not startup_resumed and game_engine == null:
@@ -286,6 +292,7 @@ func _ready() -> void:
 		if not keep_loading_until_reserve_modal:
 			if SceneManager != null and SceneManager.has_method("hide_loading"):
 				SceneManager.hide_loading()
+		_set_startup_online_resume_ui_hidden(false)
 
 		# 非关键面板后台预热（issue_tracker #71）：不阻塞首帧交互；未完成时打开面板显示“加载中...”。
 		call_deferred("_start_background_ui_warmup")
@@ -540,6 +547,7 @@ func _on_startup_online_game_started(_payload: Dictionary) -> void:
 			_ensure_online_resync_controller()
 
 func _on_startup_online_resume_failed(message: String) -> void:
+	_set_startup_online_resume_ui_hidden(false)
 	_hide_online_reconnect_loading()
 	_show_confirm(
 		"联机恢复失败",
@@ -549,6 +557,14 @@ func _on_startup_online_resume_failed(message: String) -> void:
 		"确定",
 		"关闭"
 	)
+
+func _on_startup_online_resume_status(message: String) -> void:
+	_show_online_reconnect_loading(str(message))
+
+func _set_startup_online_resume_ui_hidden(hidden: bool) -> void:
+	_startup_online_resume_ui_hidden = bool(hidden)
+	if ui_root != null and is_instance_valid(ui_root):
+		ui_root.visible = not _startup_online_resume_ui_hidden
 
 func _update_ui() -> void:
 	# 先执行一次联机等待态切换：确保“轮到自己时”先关闭日志，再进入面板同步，

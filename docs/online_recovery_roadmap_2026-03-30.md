@@ -338,3 +338,21 @@
 - 仍未完成：
   - 成功恢复时的 loading/切场体验进一步打磨
   - 更细粒度的重试预算/指标统计
+
+### 2026-03-30（第十次更新）
+
+- 成功恢复时的 loading/切场体验继续收口：
+  - `GameStartupOnlineResumeController` 现在会持续上报阶段状态：
+    - 正在恢复联机对局
+    - 正在请求对局恢复凭据
+    - 正在重新连接服务器
+    - 已连接，正在同步对局
+    - 已收到对局快照，正在应用
+    - 恢复完成，正在进入对局
+  - `Game` 场景在“直接恢复到 InGame”路径下，会先隐藏主 UI，仅保留 loading，直到恢复完成后再显示 UI，进一步减少闪屏。
+- 测试已扩展：
+  - `GameStartupOnlineResumeControllerTest` 现在校验状态文案链路
+- 当前验证结果：
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：`passed=291/291 failed=[]`
+- 仍未完成：
+  - 更细粒度的重试预算/指标统计

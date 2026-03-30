@@ -12,6 +12,7 @@ var _resume_room: Callable = Callable()
 var _connect_to_server: Callable = Callable()
 var _on_game_started: Callable = Callable()
 var _on_failure: Callable = Callable()
+var _on_status_changed: Callable = Callable()
 
 var _game_started_received: bool = false
 var _archive_received: bool = false
@@ -24,7 +25,8 @@ func _init(
 	resume_room: Callable,
 	connect_to_server: Callable,
 	on_game_started: Callable,
-	on_failure: Callable
+	on_failure: Callable,
+	on_status_changed: Callable = Callable()
 ) -> void:
 	_host = host
 	_ensure_session = ensure_session
@@ -32,6 +34,7 @@ func _init(
 	_connect_to_server = connect_to_server
 	_on_game_started = on_game_started
 	_on_failure = on_failure
+	_on_status_changed = on_status_changed
 
 func should_attempt_startup_resume() -> bool:
 	if _host == null or not is_instance_valid(_host):
@@ -56,6 +59,9 @@ func attempt_startup_resume_if_needed() -> bool:
 	for attempt_index in range(RETRY_DELAYS_SEC.size()):
 		if attempt_index > 0:
 			await _wait_seconds(float(RETRY_DELAYS_SEC[attempt_index]))
+			_emit_status("恢复失败，正在重试（%d/%d）..." % [attempt_index + 1, RETRY_DELAYS_SEC.size()])
+		else:
+			_emit_status("正在恢复联机对局...")
 
 		_game_started_received = false
 		_archive_received = false
@@ -86,6 +92,7 @@ func attempt_startup_resume_if_needed() -> bool:
 			_fail(str(user_policy.get("user_message", "账号不匹配")))
 			return false
 
+		_emit_status("正在请求对局恢复凭据...")
 		var room_code := NetContext.get_online_resume_room_code() if NetContext != null else ""
 		var resume_resp = await _resume_room.call(room_code)
 		if not (resume_resp is Dictionary):
@@ -123,6 +130,7 @@ func attempt_startup_resume_if_needed() -> bool:
 				return false
 			continue
 
+		_emit_status("正在重新连接服务器...")
 		var connect_r = _connect_to_server.call(_build_connect_url(ws_url, connect_token))
 		if not (connect_r is Result) or not connect_r.ok:
 			_disconnect_net_signals()
@@ -135,6 +143,7 @@ func attempt_startup_resume_if_needed() -> bool:
 		var ok_startup := await _wait_for_startup_resume()
 		_disconnect_net_signals()
 		if ok_startup:
+			_emit_status("恢复完成，正在进入对局...")
 			return true
 		if attempt_index == RETRY_DELAYS_SEC.size() - 1:
 			_fail(_failure_message if not _failure_message.is_empty() else "联机恢复超时")
@@ -194,11 +203,13 @@ func _wait_seconds(duration_sec: float) -> void:
 
 func _on_net_game_started(payload: Dictionary) -> void:
 	_game_started_received = true
+	_emit_status("已连接，正在同步对局...")
 	if _on_game_started.is_valid():
 		_on_game_started.call(payload)
 
 func _on_net_resync_archive_received(_archive: Dictionary) -> void:
 	_archive_received = true
+	_emit_status("已收到对局快照，正在应用...")
 
 func _on_net_request_rejected(_request_id: String, code: String, message: String) -> void:
 	_failed = true
@@ -219,6 +230,10 @@ func _fail(message: String) -> void:
 	_failure_message = str(message)
 	if _on_failure.is_valid():
 		_on_failure.call(str(message))
+
+func _emit_status(message: String) -> void:
+	if _on_status_changed.is_valid():
+		_on_status_changed.call(str(message))
 
 func _clear_resume_context_if_needed() -> void:
 	if NetContext == null or not NetContext.has_method("clear_online_resume_context"):
