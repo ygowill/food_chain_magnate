@@ -39,16 +39,20 @@ var _spectator_profile_by_peer_id: Dictionary = {} # peer_id -> { name, color_in
 var _seat_by_player_peer_id: Dictionary = {} # peer_id -> seat_index
 var _desired_player_count: int = 0
 var _user_id_by_seat_index: Dictionary = {} # seat_index -> user_id（用于断线重连鉴权；不对客户端广播）
+var _host_seat_index: int = -1
 
 func to_persistence_dict() -> Result:
-	if str(status) != STATUS_IN_GAME:
-		return Result.failure("只支持持久化 InGame 房间")
-	if game_engine == null:
-		return Result.failure("InGame 房间缺少 game_engine")
+	if str(status) != STATUS_IN_GAME and str(status) != STATUS_LOBBY:
+		return Result.failure("只支持持久化 Lobby/InGame 房间")
 
-	var archive_r: Result = game_engine.create_archive()
-	if not archive_r.ok:
-		return Result.failure("create_archive failed: %s" % archive_r.error)
+	var archive: Dictionary = {}
+	if str(status) == STATUS_IN_GAME:
+		if game_engine == null:
+			return Result.failure("InGame 房间缺少 game_engine")
+		var archive_r: Result = game_engine.create_archive()
+		if not archive_r.ok:
+			return Result.failure("create_archive failed: %s" % archive_r.error)
+		archive = Dictionary(archive_r.value).duplicate(true)
 
 	return Result.success({
 		"room_code": room_code,
@@ -65,7 +69,8 @@ func to_persistence_dict() -> Result:
 		"finalized_match_id": finalized_match_id,
 		"seat_profiles": _seat_profile_by_seat_index.duplicate(true),
 		"user_ids_by_seat": _user_id_by_seat_index.duplicate(true),
-		"archive": Dictionary(archive_r.value).duplicate(true),
+		"host_seat_index": _host_seat_index,
+		"archive": archive,
 	})
 
 static func from_persistence_dict(data: Dictionary) -> Result:
@@ -73,13 +78,13 @@ static func from_persistence_dict(data: Dictionary) -> Result:
 	if room_code_read.is_empty():
 		return Result.failure("持久化房间缺少 room_code")
 	var status_read := str(data.get("status", "")).strip_edges()
-	if status_read != STATUS_IN_GAME:
-		return Result.failure("当前仅支持恢复 InGame 房间: %s" % status_read)
+	if status_read != STATUS_IN_GAME and status_read != STATUS_LOBBY:
+		return Result.failure("当前仅支持恢复 Lobby/InGame 房间: %s" % status_read)
 	var config_val = data.get("config", null)
 	if not (config_val is Dictionary):
 		return Result.failure("持久化房间 config 类型错误（期望 Dictionary）")
 	var archive_val = data.get("archive", null)
-	if not (archive_val is Dictionary):
+	if status_read == STATUS_IN_GAME and not (archive_val is Dictionary):
 		return Result.failure("持久化房间 archive 类型错误（期望 Dictionary）")
 
 	var room := OnlineRoom.new(
@@ -106,12 +111,15 @@ static func from_persistence_dict(data: Dictionary) -> Result:
 	room._seat_by_player_peer_id = {}
 	room.player_id_by_peer_id = {}
 	room._desired_player_count = int(room.config.get("desired_player_count", room._seat_profile_by_seat_index.size()))
+	room._host_seat_index = int(data.get("host_seat_index", -1))
+	room.host_peer_id = 0
 
-	var engine := GameEngineClass.new()
-	var load_r: Result = engine.load_from_archive(Dictionary(archive_val).duplicate(true))
-	if not load_r.ok:
-		return Result.failure("恢复房间 archive 失败: %s" % load_r.error)
-	room.game_engine = engine
+	if status_read == STATUS_IN_GAME:
+		var engine := GameEngineClass.new()
+		var load_r: Result = engine.load_from_archive(Dictionary(archive_val).duplicate(true))
+		if not load_r.ok:
+			return Result.failure("恢复房间 archive 失败: %s" % load_r.error)
+		room.game_engine = engine
 
 	return Result.success(room)
 
@@ -215,6 +223,8 @@ func add_peer(peer_id: int, profile: Dictionary) -> Result:
 	_seat_by_player_peer_id[peer_id] = seat_index
 	_seat_profile_by_seat_index[seat_index] = profile.duplicate(true)
 	_peer_id_by_seat_index[seat_index] = peer_id
+	if peer_id == host_peer_id:
+		_host_seat_index = seat_index
 	var user_id := str(profile.get("user_id", "")).strip_edges()
 	if not user_id.is_empty():
 		_user_id_by_seat_index[seat_index] = user_id
@@ -241,9 +251,45 @@ func add_peer_at_seat(peer_id: int, profile: Dictionary, seat_index: int) -> Res
 	_seat_by_player_peer_id[peer_id] = idx
 	_seat_profile_by_seat_index[idx] = profile.duplicate(true)
 	_peer_id_by_seat_index[idx] = peer_id
+	if peer_id == host_peer_id:
+		_host_seat_index = idx
 	var user_id := str(profile.get("user_id", "")).strip_edges()
 	if not user_id.is_empty():
 		_user_id_by_seat_index[idx] = user_id
+
+	_touch()
+	return Result.success()
+
+func reclaim_peer_at_seat(peer_id: int, profile: Dictionary, seat_index: int, user_id: String = "") -> Result:
+	if has_peer(peer_id):
+		return Result.failure("Peer already in room")
+	if status != STATUS_LOBBY:
+		return Result.failure("Room is not in Lobby")
+
+	var idx := int(seat_index)
+	if idx < 0:
+		return Result.failure("Invalid seat_index")
+	if not _seat_profile_by_seat_index.has(idx):
+		return Result.failure("Seat not found")
+
+	var current_peer_id := int(_peer_id_by_seat_index.get(idx, 0))
+	if current_peer_id > 0:
+		return Result.failure("Seat already connected")
+
+	var uid := str(user_id).strip_edges()
+	var existing_uid := str(_user_id_by_seat_index.get(idx, "")).strip_edges()
+	if not uid.is_empty():
+		if not existing_uid.is_empty() and existing_uid != uid:
+			return Result.failure("user_id mismatch for seat")
+		if existing_uid.is_empty():
+			_user_id_by_seat_index[idx] = uid
+
+	_player_profile_by_peer_id[peer_id] = profile.duplicate(true)
+	_seat_by_player_peer_id[peer_id] = idx
+	_peer_id_by_seat_index[idx] = peer_id
+	_seat_profile_by_seat_index[idx] = profile.duplicate(true)
+	if idx == _host_seat_index:
+		host_peer_id = peer_id
 
 	_touch()
 	return Result.success()
@@ -320,6 +366,7 @@ func remove_peer(peer_id: int) -> Result:
 	var host_changed := false
 	if host_peer_id == peer_id:
 		host_peer_id = _pick_new_host_peer_id()
+		_refresh_host_seat_index_from_host_peer()
 		host_changed = true
 
 	_touch()
@@ -351,6 +398,7 @@ func disconnect_peer(peer_id: int) -> Result:
 	var host_changed := false
 	if host_peer_id == peer_id:
 		host_peer_id = _pick_new_host_peer_id()
+		_refresh_host_seat_index_from_host_peer()
 		host_changed = true
 
 	_touch()
@@ -649,6 +697,12 @@ func _pick_new_host_peer_id() -> int:
 	if peer_ids.is_empty():
 		return 0
 	return int(peer_ids[0])
+
+func _refresh_host_seat_index_from_host_peer() -> void:
+	if host_peer_id <= 0:
+		_host_seat_index = -1
+		return
+	_host_seat_index = int(_seat_by_player_peer_id.get(host_peer_id, -1))
 
 func _build_players_array() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []

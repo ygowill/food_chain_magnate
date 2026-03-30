@@ -830,9 +830,16 @@ func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, 
 			var user_id := str(token_payload.get("user_id", "")).strip_edges()
 			r = rm.reconnect_player(peer_id, profile, room_code, seat_index, user_id, "host")
 		else:
-			if not rm.has_method("join_room_with_seat"):
-				return ResultClass.failure("RoomManager.join_room_with_seat missing")
-			r = rm.join_room_with_seat(peer_id, profile, room_code, seat_index, "host")
+			var host_uid := str(token_payload.get("user_id", "")).strip_edges()
+			var host_seat_taken: bool = existing != null and existing._seat_profile_by_seat_index is Dictionary and existing._seat_profile_by_seat_index.has(seat_index)
+			if host_seat_taken:
+				if not rm.has_method("reclaim_room_seat"):
+					return ResultClass.failure("RoomManager.reclaim_room_seat missing")
+				r = rm.reclaim_room_seat(peer_id, profile, room_code, seat_index, host_uid, "host")
+			else:
+				if not rm.has_method("join_room_with_seat"):
+					return ResultClass.failure("RoomManager.join_room_with_seat missing")
+				r = rm.join_room_with_seat(peer_id, profile, room_code, seat_index, "host")
 	elif role == "player":
 		var seat_index_val2 = token_payload.get("seat_index", null)
 		var seat_index2 := -1
@@ -852,9 +859,16 @@ func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, 
 			var user_id2 := str(token_payload.get("user_id", "")).strip_edges()
 			r = rm.reconnect_player(peer_id, profile, room_code, seat_index2, user_id2)
 		else:
-			if not rm.has_method("join_room_with_seat"):
-				return ResultClass.failure("RoomManager.join_room_with_seat missing")
-			r = rm.join_room_with_seat(peer_id, profile, room_code, seat_index2)
+			var player_uid := str(token_payload.get("user_id", "")).strip_edges()
+			var player_seat_taken: bool = existing2 != null and existing2._seat_profile_by_seat_index is Dictionary and existing2._seat_profile_by_seat_index.has(seat_index2)
+			if player_seat_taken:
+				if not rm.has_method("reclaim_room_seat"):
+					return ResultClass.failure("RoomManager.reclaim_room_seat missing")
+				r = rm.reclaim_room_seat(peer_id, profile, room_code, seat_index2, player_uid)
+			else:
+				if not rm.has_method("join_room_with_seat"):
+					return ResultClass.failure("RoomManager.join_room_with_seat missing")
+				r = rm.join_room_with_seat(peer_id, profile, room_code, seat_index2)
 	else:
 		if not rm.has_method("spectate_room"):
 			return ResultClass.failure("RoomManager.spectate_room missing")

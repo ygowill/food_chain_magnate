@@ -167,6 +167,32 @@ func reconnect_player(peer_id: int, profile: Dictionary, room_code: String, seat
 		"role": str(role_label).strip_edges(),
 	})
 
+func reclaim_room_seat(peer_id: int, profile: Dictionary, room_code: String, seat_index: int, user_id: String, role_label: String = "player") -> Result:
+	if peer_to_room.has(peer_id):
+		return Result.failure("Peer already in a room")
+
+	var code := str(room_code).strip_edges().to_upper()
+	if code.is_empty():
+		return Result.failure("Missing room_code", Result.ErrorCode.MISSING_PARAMS)
+
+	var room = rooms.get(code, null)
+	if room == null:
+		return Result.failure("Room not found")
+
+	if not room.has_method("reclaim_peer_at_seat"):
+		return Result.failure("Room.reclaim_peer_at_seat missing")
+	var rr: Result = room.reclaim_peer_at_seat(peer_id, profile, seat_index, user_id)
+	if not rr.ok:
+		return rr
+
+	peer_to_room[peer_id] = code
+	return Result.success({
+		"room_code": code,
+		"room": room,
+		"room_state": room.to_room_state_dict(),
+		"role": str(role_label).strip_edges(),
+	})
+
 func spectate_room(peer_id: int, profile: Dictionary, room_code: String) -> Result:
 	if peer_to_room.has(peer_id):
 		return Result.failure("Peer already in a room")
@@ -224,7 +250,7 @@ func create_persistence_snapshot() -> Result:
 		var room = rooms.get(room_code, null)
 		if room == null:
 			continue
-		if str(room.status) != OnlineRoomClass.STATUS_IN_GAME:
+		if str(room.status) != OnlineRoomClass.STATUS_IN_GAME and str(room.status) != OnlineRoomClass.STATUS_LOBBY:
 			continue
 		if not room.has_method("to_persistence_dict"):
 			return Result.failure("Room.to_persistence_dict missing")

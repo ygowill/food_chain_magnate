@@ -251,6 +251,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.OnlineRoomPersistenceRecoveryTestClass.run(),
 		},
 		{
+			"name": "OnlineLobbyPersistenceRecoveryTest",
+			"fn": func() -> Result: return TestRefs.OnlineLobbyPersistenceRecoveryTestClass.run(),
+		},
+		{
 			"name": "OnlineRoomSeedRandomStableTest",
 			"fn": func() -> Result: return TestRefs.OnlineRoomSeedRandomStableTestClass.run(),
 		},

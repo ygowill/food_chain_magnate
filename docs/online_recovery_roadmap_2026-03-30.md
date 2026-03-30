@@ -222,3 +222,19 @@
   - 冷启动后直接恢复到 Game 场景的完整 UX 打磨（目前复用现有 Lobby -> Game 事件链路）
   - `resume_room` 失败后的分级处理与更细的错误恢复策略
   - Lobby 房间在 server restart 后的 reclaim 语义
+
+### 2026-03-30（第四次更新）
+
+- Phase 1 范围进一步扩大：
+  - 服务端快照恢复不再只支持 `InGame`，现在 `Lobby` 房间也会持久化。
+  - `OnlineRoom` / `RoomManager` 新增 Lobby reclaim 路径：server 重启后，host/player 可以按 `seat_index + user_id` 重新认领原座位。
+  - 平台 `connect_token + ClientHello` 自动入房链路已接到这条 reclaim 路径，恢复后的 Lobby 房间可继续正常使用。
+- 新增测试：
+  - `OnlineLobbyPersistenceRecoveryTest`
+- 当前验证结果：
+  - `godot --headless --script res://tools/check_compile.gd`：`PASS files=936`
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：`passed=288/288 failed=[]`
+- 仍未完成：
+  - 平台后端对 room -> game_server 的持久分配
+  - server 重启后的 active room 自动认领
+  - 客户端恢复过程中的更细粒度错误恢复策略
