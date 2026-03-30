@@ -265,7 +265,7 @@ func create_persistence_snapshot() -> Result:
 		"rooms": persisted_rooms,
 	})
 
-func restore_from_persistence(snapshot: Dictionary) -> Result:
+func restore_from_persistence(snapshot: Dictionary, allowed_room_codes: Array[String] = []) -> Result:
 	var rooms_val = snapshot.get("rooms", null)
 	if rooms_val == null:
 		return Result.success({
@@ -276,11 +276,22 @@ func restore_from_persistence(snapshot: Dictionary) -> Result:
 
 	rooms = {}
 	peer_to_room = {}
+	var allow_all := allowed_room_codes.is_empty()
+	var allowed_lookup: Dictionary = {}
+	for code in allowed_room_codes:
+		var normalized := str(code).strip_edges().to_upper()
+		if normalized.is_empty():
+			continue
+		allowed_lookup[normalized] = true
 
 	for item in Array(rooms_val):
 		if not (item is Dictionary):
 			return Result.failure("snapshot.rooms 元素类型错误（期望 Dictionary）")
-		var restore_r: Result = OnlineRoomClass.from_persistence_dict(Dictionary(item))
+		var room_dict: Dictionary = Dictionary(item)
+		var room_code := str(room_dict.get("room_code", "")).strip_edges().to_upper()
+		if not allow_all and not allowed_lookup.has(room_code):
+			continue
+		var restore_r: Result = OnlineRoomClass.from_persistence_dict(room_dict)
 		if not restore_r.ok:
 			return Result.failure("restore room 失败: %s" % restore_r.error)
 		var room = restore_r.value

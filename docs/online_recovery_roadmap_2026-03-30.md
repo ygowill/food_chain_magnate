@@ -238,3 +238,24 @@
   - 平台后端对 room -> game_server 的持久分配
   - server 重启后的 active room 自动认领
   - 客户端恢复过程中的更细粒度错误恢复策略
+
+### 2026-03-30（第五次更新）
+
+- 平台后端 / Dedicated Server 协调能力继续前推：
+  - backend heartbeat 现在支持携带并刷新 `ws_url`。
+  - backend 新增内部接口：按 `game_server_id` 查询当前 active rooms。
+  - Dedicated Server 在未显式配置 `GAME_SERVER_ID` 时，会把生成的 `game_server_id` 持久化到 `user://dedicated_server/server_identity.cfg`，跨重启保持稳定。
+  - Dedicated Server 恢复本地房间快照时，会优先参考 backend 返回的 active room 列表做筛选，避免恢复 backend 已不认的旧房间。
+- 新增测试：
+  - `ServerIdentityStoreTest`
+  - backend `test_heartbeat_updates_room_ws_url`
+  - backend `test_list_active_rooms_for_server`
+- 当前验证结果：
+  - `godot --headless --script res://tools/check_compile.gd`：`PASS files=937`
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：`passed=289/289 failed=[]`
+  - `backend/.venv/bin/python -m pytest -q backend/tests/test_internal.py`：`9 passed`
+  - `backend/.venv/bin/python -m pytest -q backend/tests/test_rooms.py`：`14 passed`
+- 仍未完成：
+  - backend 真正的“active room 重新分配 / failover”调度
+  - 不同 game server 间迁移房间时的权威恢复流程
+  - 客户端恢复失败后的更细粒度分级重试

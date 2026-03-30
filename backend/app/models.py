@@ -146,5 +146,6 @@ class GameServer(Base):
     __tablename__ = "game_servers"
 
     game_server_id: Mapped[str] = mapped_column(String, primary_key=True)
+    ws_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     last_heartbeat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     status: Mapped[str] = mapped_column(String, default="healthy")

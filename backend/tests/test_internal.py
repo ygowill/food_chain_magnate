@@ -52,6 +52,43 @@ async def test_heartbeat_links_rooms(client: AsyncClient, db_session: AsyncSessi
 
 
 @pytest.mark.asyncio
+async def test_heartbeat_updates_room_ws_url(client: AsyncClient, db_session: AsyncSession):
+    user = await _create_user(client)
+    create = await client.post("/v1/rooms", json={"session_id": user["session_id"]})
+    code = create.json()["room_code"]
+
+    hb = await client.post("/internal/game_servers/heartbeat", json={
+        "game_server_id": "gs-ws-1",
+        "ws_url": "wss://ws.example.test",
+        "room_codes": [code],
+    }, headers=INTERNAL_HEADERS)
+    assert hb.status_code == 200
+
+    room = (await db_session.execute(select(Room).where(Room.room_code == code))).scalar_one()
+    assert room.ws_url == "wss://ws.example.test"
+
+
+@pytest.mark.asyncio
+async def test_list_active_rooms_for_server(client: AsyncClient):
+    user = await _create_user(client)
+    create = await client.post("/v1/rooms", json={"session_id": user["session_id"]})
+    code = create.json()["room_code"]
+
+    hb = await client.post("/internal/game_servers/heartbeat", json={
+        "game_server_id": "gs-active-1",
+        "ws_url": "ws://127.0.0.1:7000",
+        "room_codes": [code],
+    }, headers=INTERNAL_HEADERS)
+    assert hb.status_code == 200
+
+    resp = await client.get("/internal/game_servers/gs-active-1/rooms/active", headers=INTERNAL_HEADERS)
+    assert resp.status_code == 200
+    data = resp.json()["ok"]
+    assert isinstance(data, list)
+    assert any(item["room_code"] == code and item["status"] == "Lobby" for item in data)
+
+
+@pytest.mark.asyncio
 async def test_finalize_creates_match(client: AsyncClient, db_session: AsyncSession):
     user = await _create_user(client)
     resp = await client.post("/internal/matches/finalize", json={

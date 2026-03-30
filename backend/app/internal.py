@@ -27,6 +27,7 @@ def _require_internal_secret(x_internal_secret: Optional[str] = Header(default=N
 
 class HeartbeatRequest(BaseModel):
     game_server_id: str
+    ws_url: Optional[str] = None
     room_codes: list[str] = []
 
 
@@ -39,14 +40,21 @@ async def heartbeat(req: HeartbeatRequest, db: AsyncSession = Depends(get_db)):
     if gs:
         gs.last_heartbeat_at = now
         gs.status = "healthy"
+        gs.ws_url = str(req.ws_url).strip() or gs.ws_url
     else:
-        db.add(GameServer(game_server_id=req.game_server_id, last_heartbeat_at=now))
+        db.add(GameServer(
+            game_server_id=req.game_server_id,
+            ws_url=str(req.ws_url).strip() or None,
+            last_heartbeat_at=now,
+        ))
 
     # Mark alive rooms (refresh updated_at, claim ownership).
     if req.room_codes:
         rooms = (await db.execute(select(Room).where(Room.room_code.in_(req.room_codes)))).scalars().all()
         for r in rooms:
             r.game_server_id = req.game_server_id
+            if str(req.ws_url or "").strip():
+                r.ws_url = str(req.ws_url).strip()
             # Allow revival if the room became active again.
             if r.status == "Ended":
                 r.status = "Lobby"
@@ -63,6 +71,34 @@ async def heartbeat(req: HeartbeatRequest, db: AsyncSession = Depends(get_db)):
 
     await db.commit()
     return {"ok": True}
+
+
+class ActiveRoomOut(BaseModel):
+    room_code: str
+    status: str
+    ws_url: Optional[str] = None
+
+
+@router.get("/game_servers/{game_server_id}/rooms/active", dependencies=[Depends(_require_internal_secret)])
+async def list_active_rooms_for_server(game_server_id: str, db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(
+        select(Room)
+        .where(
+            Room.game_server_id == game_server_id,
+            Room.status != "Ended",
+        )
+        .order_by(Room.updated_at.desc())
+    )).scalars().all()
+    return {
+        "ok": [
+            ActiveRoomOut(
+                room_code=str(room.room_code),
+                status=str(room.status),
+                ws_url=str(room.ws_url) if room.ws_url else None,
+            ).model_dump()
+            for room in rows
+        ]
+    }
 
 
 class ParticipantIn(BaseModel):
