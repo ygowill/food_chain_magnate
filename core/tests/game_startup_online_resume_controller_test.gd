@@ -64,6 +64,26 @@ static func run() -> Result:
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "on_game_started 应被调用一次")
 
+	NetContext.set_online_resume_context("ROOM101", "player", "https://platform.example.test")
+	NetContext.mark_online_resume_in_game(true)
+	var retry_harness := _Harness.new(host)
+	retry_harness.resume_failures_before_success = 1
+	var retry_controller = ControllerClass.new(
+		host,
+		Callable(retry_harness, "ensure_session"),
+		Callable(retry_harness, "resume_room"),
+		Callable(retry_harness, "connect_to_server"),
+		Callable(retry_harness, "on_game_started"),
+		Callable(retry_harness, "on_failure")
+	)
+	var retry_started = await retry_controller.attempt_startup_resume_if_needed()
+	if not retry_started:
+		host.queue_free()
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "可重试失败后应最终恢复成功")
+	if retry_harness.resume_calls != 2:
+		host.queue_free()
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "冷启动可重试失败后应再次调用 resume_room")
+
 	NetContext.set_online_resume_context("ROOM100", "player", "https://platform.example.test")
 	NetContext.mark_online_resume_in_game(true)
 	NetContext.online_resume_state["user_id"] = "u_expected"
@@ -107,6 +127,7 @@ class _Harness:
 	var connect_calls: int = 0
 	var game_started_calls: int = 0
 	var failure_message: String = ""
+	var resume_failures_before_success: int = 0
 
 	func _init(p_host: Node) -> void:
 		host = p_host
@@ -117,6 +138,8 @@ class _Harness:
 
 	func resume_room(_room_code: String) -> Dictionary:
 		resume_calls += 1
+		if resume_calls <= resume_failures_before_success:
+			return {"error": {"detail": "request_failed", "_http_result_name": "cant_connect"}}
 		return {
 			"ok": {
 				"ws_url": "ws://resume.example.test",

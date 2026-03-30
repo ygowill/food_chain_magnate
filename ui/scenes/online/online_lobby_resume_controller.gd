@@ -3,6 +3,7 @@ class_name OnlineLobbyResumeController
 extends RefCounted
 
 const ResumeErrorPolicyClass = preload("res://ui/scenes/online/online_resume_error_policy.gd")
+const RETRY_DELAYS_SEC := [0.0, 0.5, 1.5]
 
 var _ensure_session: Callable = Callable()
 var _resume_room: Callable = Callable()
@@ -57,53 +58,86 @@ func attempt_auto_resume_if_needed() -> void:
 		return
 	_attempted = true
 
-	if _set_connect_status.is_valid():
-		_set_connect_status.call("检测到未完成联机对局，正在恢复...")
-	if _set_browse_status.is_valid():
-		_set_browse_status.call("正在恢复房间...")
-	if _refresh_ui.is_valid():
-		_refresh_ui.call()
+	var last_message := "自动恢复失败"
+	for attempt_index in range(RETRY_DELAYS_SEC.size()):
+		if attempt_index == 0:
+			_set_retry_status("检测到未完成联机对局，正在恢复...")
+		else:
+			await _wait_seconds(float(RETRY_DELAYS_SEC[attempt_index]))
+			_set_retry_status("恢复失败，正在重试（%d/%d）..." % [attempt_index + 1, RETRY_DELAYS_SEC.size()])
 
-	var ensure_r = await _ensure_session.call()
-	if not (ensure_r is Result) or not ensure_r.ok:
-		var err_text: String = str(ensure_r.error) if ensure_r is Result else "平台登录返回类型错误"
-		_fail("自动恢复失败", "平台登录失败：%s" % str(err_text))
-		return
-	if _mark_platform_ready.is_valid():
-		_mark_platform_ready.call()
-	var user_policy := ResumeErrorPolicyClass.classify_user_mismatch(
-		NetContext.get_online_resume_user_id() if NetContext != null and NetContext.has_method("get_online_resume_user_id") else "",
-		PlatformSession.user_id if PlatformSession != null else ""
-	)
-	if bool(user_policy.get("clear_resume_context", false)):
-		_clear_resume_context_if_needed()
-		_fail("自动恢复已取消", str(user_policy.get("user_message", "账号不匹配")))
-		return
+		var ensure_r = await _ensure_session.call()
+		if not (ensure_r is Result) or not ensure_r.ok:
+			var err_text: String = str(ensure_r.error) if ensure_r is Result else "平台登录返回类型错误"
+			var ensure_policy := ResumeErrorPolicyClass.classify_resume_failure("平台登录失败：%s" % err_text)
+			last_message = str(ensure_policy.get("user_message", err_text))
+			if bool(ensure_policy.get("clear_resume_context", false)):
+				_clear_resume_context_if_needed()
+				_fail("自动恢复失败", last_message)
+				return
+			if attempt_index == RETRY_DELAYS_SEC.size() - 1:
+				_fail("自动恢复失败", last_message)
+				return
+			continue
 
-	var room_code := NetContext.get_online_resume_room_code() if NetContext != null else ""
-	var resume_resp = await _resume_room.call(room_code)
-	if not (resume_resp is Dictionary):
-		_fail("自动恢复失败", "resume_room 返回格式错误")
-		return
-	var resume_dict: Dictionary = Dictionary(resume_resp)
-	if resume_dict.has("error"):
-		var policy := ResumeErrorPolicyClass.classify_resume_failure(resume_dict.get("error", ""))
-		if bool(policy.get("clear_resume_context", false)):
+		if _mark_platform_ready.is_valid():
+			_mark_platform_ready.call()
+		var user_policy := ResumeErrorPolicyClass.classify_user_mismatch(
+			NetContext.get_online_resume_user_id() if NetContext != null and NetContext.has_method("get_online_resume_user_id") else "",
+			PlatformSession.user_id if PlatformSession != null else ""
+		)
+		if bool(user_policy.get("clear_resume_context", false)):
 			_clear_resume_context_if_needed()
-		_fail("自动恢复失败", str(policy.get("user_message", _stringify_platform_error(resume_dict.get("error", "")))))
-		return
-	var ok_val = resume_dict.get("ok", null)
-	if not (ok_val is Dictionary):
-		_fail("自动恢复失败", "resume_room 响应缺少 ok")
-		return
-	var ok: Dictionary = Dictionary(ok_val)
-	var ws_url := str(ok.get("ws_url", "")).strip_edges()
-	var connect_token := str(ok.get("connect_token", "")).strip_edges()
-	if ws_url.is_empty() or connect_token.is_empty():
-		_fail("自动恢复失败", "resume_room 缺少 ws_url/connect_token")
+			_fail("自动恢复已取消", str(user_policy.get("user_message", "账号不匹配")))
+			return
+
+		var room_code := NetContext.get_online_resume_room_code() if NetContext != null else ""
+		var resume_resp = await _resume_room.call(room_code)
+		if not (resume_resp is Dictionary):
+			last_message = "resume_room 返回格式错误"
+			if attempt_index == RETRY_DELAYS_SEC.size() - 1:
+				_fail("自动恢复失败", last_message)
+				return
+			continue
+		var resume_dict: Dictionary = Dictionary(resume_resp)
+		if resume_dict.has("error"):
+			var policy := ResumeErrorPolicyClass.classify_resume_failure(resume_dict.get("error", ""))
+			last_message = str(policy.get("user_message", _stringify_platform_error(resume_dict.get("error", ""))))
+			if bool(policy.get("clear_resume_context", false)):
+				_clear_resume_context_if_needed()
+				_fail("自动恢复失败", last_message)
+				return
+			if attempt_index == RETRY_DELAYS_SEC.size() - 1:
+				_fail("自动恢复失败", last_message)
+				return
+			continue
+		var ok_val = resume_dict.get("ok", null)
+		if not (ok_val is Dictionary):
+			last_message = "resume_room 响应缺少 ok"
+			if attempt_index == RETRY_DELAYS_SEC.size() - 1:
+				_fail("自动恢复失败", last_message)
+				return
+			continue
+		var ok: Dictionary = Dictionary(ok_val)
+		var ws_url := str(ok.get("ws_url", "")).strip_edges()
+		var connect_token := str(ok.get("connect_token", "")).strip_edges()
+		if ws_url.is_empty() or connect_token.is_empty():
+			last_message = "resume_room 缺少 ws_url/connect_token"
+			if attempt_index == RETRY_DELAYS_SEC.size() - 1:
+				_fail("自动恢复失败", last_message)
+				return
+			continue
+
+		var connect_r = _connect_to_ws.call(ws_url, connect_token)
+		if connect_r is Result and not connect_r.ok:
+			last_message = str(connect_r.error)
+			if attempt_index == RETRY_DELAYS_SEC.size() - 1:
+				_fail("自动恢复失败", last_message)
+				return
+			continue
 		return
 
-	_connect_to_ws.call(ws_url, connect_token)
+	_fail("自动恢复失败", last_message)
 
 func _fail(title: String, message: String) -> void:
 	if _hide_loading.is_valid():
@@ -121,6 +155,20 @@ func _clear_resume_context_if_needed() -> void:
 	if NetContext == null or not NetContext.has_method("clear_online_resume_context"):
 		return
 	NetContext.clear_online_resume_context()
+
+func _set_retry_status(message: String) -> void:
+	if _set_connect_status.is_valid():
+		_set_connect_status.call(str(message))
+	if _set_browse_status.is_valid():
+		_set_browse_status.call("正在恢复房间...")
+	if _refresh_ui.is_valid():
+		_refresh_ui.call()
+
+func _wait_seconds(duration_sec: float) -> void:
+	var loop = Engine.get_main_loop()
+	if not (loop is SceneTree):
+		return
+	await (loop as SceneTree).create_timer(duration_sec).timeout
 
 func _stringify_platform_error(error_val) -> String:
 	if error_val is Dictionary:

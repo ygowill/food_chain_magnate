@@ -4,6 +4,7 @@ extends RefCounted
 
 const STARTUP_RESUME_TIMEOUT_SEC := 6.0
 const ResumeErrorPolicyClass = preload("res://ui/scenes/online/online_resume_error_policy.gd")
+const RETRY_DELAYS_SEC := [0.0, 0.5, 1.5]
 
 var _host: Node = null
 var _ensure_session: Callable = Callable()
@@ -52,68 +53,94 @@ func attempt_startup_resume_if_needed() -> bool:
 		_fail("NetClient autoload missing")
 		return false
 
-	_game_started_received = false
-	_archive_received = false
-	_failed = false
-	_failure_message = ""
-	_connect_net_signals()
+	for attempt_index in range(RETRY_DELAYS_SEC.size()):
+		if attempt_index > 0:
+			await _wait_seconds(float(RETRY_DELAYS_SEC[attempt_index]))
 
-	var ensure_r = await _ensure_session.call()
-	if not (ensure_r is Result) or not ensure_r.ok:
-		_disconnect_net_signals()
-		var err_text: String = str(ensure_r.error) if ensure_r is Result else "平台登录返回类型错误"
-		_fail("平台登录失败：%s" % err_text)
-		return false
-	var user_policy := ResumeErrorPolicyClass.classify_user_mismatch(
-		NetContext.get_online_resume_user_id() if NetContext != null and NetContext.has_method("get_online_resume_user_id") else "",
-		PlatformSession.user_id if PlatformSession != null else ""
-	)
-	if bool(user_policy.get("clear_resume_context", false)):
-		_disconnect_net_signals()
-		_clear_resume_context_if_needed()
-		_fail(str(user_policy.get("user_message", "账号不匹配")))
-		return false
+		_game_started_received = false
+		_archive_received = false
+		_failed = false
+		_failure_message = ""
+		_connect_net_signals()
 
-	var room_code := NetContext.get_online_resume_room_code() if NetContext != null else ""
-	var resume_resp = await _resume_room.call(room_code)
-	if not (resume_resp is Dictionary):
-		_disconnect_net_signals()
-		_fail("resume_room 返回格式错误")
-		return false
-	var resume_dict: Dictionary = Dictionary(resume_resp)
-	if resume_dict.has("error"):
-		_disconnect_net_signals()
-		var policy := ResumeErrorPolicyClass.classify_resume_failure(resume_dict.get("error", ""))
-		if bool(policy.get("clear_resume_context", false)):
+		var ensure_r = await _ensure_session.call()
+		if not (ensure_r is Result) or not ensure_r.ok:
+			_disconnect_net_signals()
+			var err_text: String = str(ensure_r.error) if ensure_r is Result else "平台登录返回类型错误"
+			var ensure_policy := ResumeErrorPolicyClass.classify_resume_failure("平台登录失败：%s" % err_text)
+			if bool(ensure_policy.get("clear_resume_context", false)):
+				_clear_resume_context_if_needed()
+				_fail(str(ensure_policy.get("user_message", err_text)))
+				return false
+			if attempt_index == RETRY_DELAYS_SEC.size() - 1:
+				_fail(str(ensure_policy.get("user_message", err_text)))
+				return false
+			continue
+		var user_policy := ResumeErrorPolicyClass.classify_user_mismatch(
+			NetContext.get_online_resume_user_id() if NetContext != null and NetContext.has_method("get_online_resume_user_id") else "",
+			PlatformSession.user_id if PlatformSession != null else ""
+		)
+		if bool(user_policy.get("clear_resume_context", false)):
+			_disconnect_net_signals()
 			_clear_resume_context_if_needed()
-		_fail(str(policy.get("user_message", _stringify_platform_error(resume_dict.get("error", "")))))
-		return false
-	var ok_val = resume_dict.get("ok", null)
-	if not (ok_val is Dictionary):
-		_disconnect_net_signals()
-		_fail("resume_room 响应缺少 ok")
-		return false
-	var ok: Dictionary = Dictionary(ok_val)
-	var ws_url := str(ok.get("ws_url", "")).strip_edges()
-	var connect_token := str(ok.get("connect_token", "")).strip_edges()
-	if ws_url.is_empty() or connect_token.is_empty():
-		_disconnect_net_signals()
-		_fail("resume_room 缺少 ws_url/connect_token")
-		return false
+			_fail(str(user_policy.get("user_message", "账号不匹配")))
+			return false
 
-	var connect_r = _connect_to_server.call(_build_connect_url(ws_url, connect_token))
-	if not (connect_r is Result) or not connect_r.ok:
-		_disconnect_net_signals()
-		var connect_err: String = str(connect_r.error) if connect_r is Result else "connect_to_server 返回类型错误"
-		_fail(connect_err)
-		return false
+		var room_code := NetContext.get_online_resume_room_code() if NetContext != null else ""
+		var resume_resp = await _resume_room.call(room_code)
+		if not (resume_resp is Dictionary):
+			_disconnect_net_signals()
+			if attempt_index == RETRY_DELAYS_SEC.size() - 1:
+				_fail("resume_room 返回格式错误")
+				return false
+			continue
+		var resume_dict: Dictionary = Dictionary(resume_resp)
+		if resume_dict.has("error"):
+			_disconnect_net_signals()
+			var policy := ResumeErrorPolicyClass.classify_resume_failure(resume_dict.get("error", ""))
+			if bool(policy.get("clear_resume_context", false)):
+				_clear_resume_context_if_needed()
+				_fail(str(policy.get("user_message", _stringify_platform_error(resume_dict.get("error", "")))))
+				return false
+			if attempt_index == RETRY_DELAYS_SEC.size() - 1:
+				_fail(str(policy.get("user_message", _stringify_platform_error(resume_dict.get("error", "")))))
+				return false
+			continue
+		var ok_val = resume_dict.get("ok", null)
+		if not (ok_val is Dictionary):
+			_disconnect_net_signals()
+			if attempt_index == RETRY_DELAYS_SEC.size() - 1:
+				_fail("resume_room 响应缺少 ok")
+				return false
+			continue
+		var ok: Dictionary = Dictionary(ok_val)
+		var ws_url := str(ok.get("ws_url", "")).strip_edges()
+		var connect_token := str(ok.get("connect_token", "")).strip_edges()
+		if ws_url.is_empty() or connect_token.is_empty():
+			_disconnect_net_signals()
+			if attempt_index == RETRY_DELAYS_SEC.size() - 1:
+				_fail("resume_room 缺少 ws_url/connect_token")
+				return false
+			continue
 
-	var ok_startup := await _wait_for_startup_resume()
-	_disconnect_net_signals()
-	if not ok_startup:
-		_fail(_failure_message if not _failure_message.is_empty() else "联机恢复超时")
-		return false
-	return true
+		var connect_r = _connect_to_server.call(_build_connect_url(ws_url, connect_token))
+		if not (connect_r is Result) or not connect_r.ok:
+			_disconnect_net_signals()
+			var connect_err: String = str(connect_r.error) if connect_r is Result else "connect_to_server 返回类型错误"
+			if attempt_index == RETRY_DELAYS_SEC.size() - 1:
+				_fail(connect_err)
+				return false
+			continue
+
+		var ok_startup := await _wait_for_startup_resume()
+		_disconnect_net_signals()
+		if ok_startup:
+			return true
+		if attempt_index == RETRY_DELAYS_SEC.size() - 1:
+			_fail(_failure_message if not _failure_message.is_empty() else "联机恢复超时")
+			return false
+
+	return false
 
 func _connect_net_signals() -> void:
 	var cb_game_started := Callable(self, "_on_net_game_started")
@@ -156,6 +183,14 @@ func _wait_for_startup_resume() -> bool:
 			return true
 		await _host.get_tree().process_frame
 	return false
+
+func _wait_seconds(duration_sec: float) -> void:
+	if _host == null or not is_instance_valid(_host):
+		return
+	var tree := _host.get_tree()
+	if tree == null:
+		return
+	await tree.create_timer(duration_sec).timeout
 
 func _on_net_game_started(payload: Dictionary) -> void:
 	_game_started_received = true

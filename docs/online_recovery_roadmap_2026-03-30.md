@@ -321,3 +321,20 @@
 - 仍未完成：
   - 恢复失败后的自动重试退避策略
   - 成功恢复时的 loading/切场体验进一步打磨
+
+### 2026-03-30（第九次更新）
+
+- 恢复失败后的自动重试退避策略第一刀已完成：
+  - `OnlineLobbyResumeController` 对可重试失败引入了有限次退避重试。
+  - `GameStartupOnlineResumeController` 对可重试失败也引入了有限次退避重试。
+  - 当前策略为有限次数、短退避，只覆盖“恢复入口级”的 ensure session / resume room / connect 失败，不做无限重试。
+  - 永久失效错误仍然立即停止，不参与重试。
+- 测试已扩展：
+  - `OnlineLobbyResumeControllerTest` 增加“首次失败后重试成功”
+  - `GameStartupOnlineResumeControllerTest` 增加“首次失败后重试成功”
+- 当前验证结果：
+  - `godot --headless --script res://tools/check_compile.gd`：`PASS files=941`
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：`passed=291/291 failed=[]`
+- 仍未完成：
+  - 成功恢复时的 loading/切场体验进一步打磨
+  - 更细粒度的重试预算/指标统计

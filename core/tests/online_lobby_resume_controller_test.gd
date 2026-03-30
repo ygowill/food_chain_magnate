@@ -42,6 +42,16 @@ static func run() -> Result:
 	if not harness.platform_marked_ready:
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "成功恢复前应标记 platform ready")
 
+	NetContext.set_online_resume_context("ROOM90", "player", "https://platform.example.test")
+	var retry_harness := _Harness.new()
+	retry_harness.resume_failures_before_success = 1
+	var retry_controller: RefCounted = _build_controller(retry_harness)
+	await retry_controller.attempt_auto_resume_if_needed()
+	if retry_harness.resume_calls != 2:
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "可重试失败后应再次调用 resume_room")
+	if retry_harness.connect_calls != 1:
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "重试成功后应连接一次")
+
 	NetContext.set_online_resume_context("ROOM89", "player", "https://platform.example.test")
 	NetContext.online_resume_state["user_id"] = "u_expected"
 	PlatformSession.user_id = "u_other"
@@ -88,6 +98,7 @@ class _Harness:
 	var last_room_code: String = ""
 	var last_ws_url: String = ""
 	var last_connect_token: String = ""
+	var resume_failures_before_success: int = 0
 
 	func ensure_session() -> Result:
 		ensure_calls += 1
@@ -96,6 +107,8 @@ class _Harness:
 	func resume_room(room_code: String) -> Dictionary:
 		resume_calls += 1
 		last_room_code = str(room_code)
+		if resume_calls <= resume_failures_before_success:
+			return {"error": {"detail": "request_failed", "_http_result_name": "cant_connect"}}
 		return {
 			"ok": {
 				"ws_url": "ws://resume.example.test",
