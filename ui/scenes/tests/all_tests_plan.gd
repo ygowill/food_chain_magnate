@@ -243,6 +243,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return await TestRefs.GameOnlineResyncReconnectFlowTestClass.run(),
 		},
 		{
+			"name": "OnlineLobbyResumeControllerTest",
+			"fn": func() -> Result: return await TestRefs.OnlineLobbyResumeControllerTestClass.run(),
+		},
+		{
 			"name": "OnlineRoomPersistenceRecoveryTest",
 			"fn": func() -> Result: return TestRefs.OnlineRoomPersistenceRecoveryTestClass.run(),
 		},

@@ -12,6 +12,7 @@ const RoomStateRendererClass = preload("res://ui/scenes/online/online_lobby_room
 const RequestRejectionMapperClass = preload("res://ui/scenes/online/online_lobby_request_rejection_mapper.gd")
 const LobbyViewModelClass = preload("res://ui/scenes/online/online_lobby_view_model.gd")
 const RoomConfigSyncControllerClass = preload("res://ui/scenes/online/online_lobby_room_config_sync_controller.gd")
+const ResumeControllerClass = preload("res://ui/scenes/online/online_lobby_resume_controller.gd")
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
 const GameSetupClass = preload("res://ui/scenes/setup/game_setup.gd")
 
@@ -83,6 +84,7 @@ var _current_page: int = LobbyPage.CONNECT
 var _room_config_editor = null
 var _room_list_controller = null
 var _room_state_renderer = null
+var _resume_controller = null
 
 var _room_config_sync_controller = null
 var _start_game_request_id: String = ""
@@ -141,6 +143,8 @@ func _ready() -> void:
 		my_logo_row.visible = false
 	_apply_defaults()
 	_refresh_ui()
+	_ensure_resume_controller()
+	call_deferred("_attempt_auto_resume_if_needed")
 
 func _apply_visual_styles() -> void:
 	_apply_label_style_recursive(panel)
@@ -268,6 +272,22 @@ func _ensure_config_sync_controller() -> void:
 	if _room_config_sync_controller == null or not is_instance_valid(_room_config_sync_controller):
 		_room_config_sync_controller = RoomConfigSyncControllerClass.new()
 		_room_config_sync_controller.setup(self, config_sync_status_label, config_debounce_timer)
+
+func _ensure_resume_controller() -> void:
+	if _resume_controller != null and is_instance_valid(_resume_controller):
+		return
+	_resume_controller = ResumeControllerClass.new()
+	_resume_controller.setup(
+		Callable(self, "_platform_ensure_session"),
+		Callable(self, "_platform_resume_room"),
+		Callable(self, "_platform_connect_to_ws"),
+		Callable(self, "_mark_platform_ready"),
+		Callable(self, "_set_connect_status"),
+		Callable(self, "_set_browse_status"),
+		Callable(self, "_show_error_dialog"),
+		Callable(self, "_hide_scene_loading"),
+		Callable(self, "_refresh_ui")
+	)
 
 func _ensure_room_renderers() -> void:
 	if _room_list_controller == null or not is_instance_valid(_room_list_controller):
@@ -526,6 +546,7 @@ func _apply_defaults() -> void:
 	_set_room_status("")
 	_selected_server_is_custom = false
 	_custom_server_url = _normalize_platform_base_url(_custom_server_url)
+	_apply_resume_server_preference()
 	if custom_server_url_edit != null and is_instance_valid(custom_server_url_edit):
 		custom_server_url_edit.text = _custom_server_url
 
@@ -552,6 +573,32 @@ func _apply_defaults() -> void:
 	_update_account_status()
 	_sync_bound_player_profile_name(true)
 	_refresh_player_name_edit_state()
+
+func _apply_resume_server_preference() -> void:
+	if NetContext == null or not NetContext.has_method("has_online_resume_context"):
+		return
+	if not NetContext.has_online_resume_context():
+		return
+	var resume_url := _normalize_platform_base_url(NetContext.get_online_resume_platform_base_url())
+	if resume_url.is_empty():
+		return
+	_selected_server_url = resume_url
+	var matched_known := false
+	for item_val in _platform_servers:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = Dictionary(item_val)
+		if bool(item.get("is_custom", false)):
+			continue
+		if _normalize_platform_base_url(str(item.get("url", ""))) == resume_url:
+			matched_known = true
+			break
+	if matched_known:
+		_selected_server_is_custom = false
+	else:
+		_selected_server_is_custom = true
+		_custom_server_url = resume_url
+	_apply_selected_server_to_platform_api()
 
 func _bind_net_signals() -> void:
 	if NetClient == null:
@@ -645,6 +692,11 @@ func _on_account_pressed() -> void:
 func _platform_set_base_url_from_ui() -> void:
 	_apply_selected_server_to_platform_api()
 
+func _mark_platform_ready() -> void:
+	_platform_entered = true
+	_update_account_status()
+	_refresh_ui()
+
 func _platform_ensure_session() -> Result:
 	if PlatformSession == null:
 		return Result.failure("PlatformSession autoload missing")
@@ -678,6 +730,17 @@ func _platform_enter() -> void:
 	_refresh_ui()
 	_show_page(LobbyPage.BROWSE, false)
 	await _platform_refresh_rooms()
+
+func _platform_resume_room(room_code: String) -> Dictionary:
+	if PlatformApi == null:
+		return {"error": "PlatformApi autoload missing"}
+	if PlatformSession == null or not PlatformSession.is_logged_in:
+		return {"error": "PlatformSession unavailable"}
+	if NetContext != null and NetContext.has_method("get_online_resume_platform_base_url"):
+		var base_url := _normalize_platform_base_url(NetContext.get_online_resume_platform_base_url())
+		if not base_url.is_empty():
+			PlatformApi.base_url = base_url
+	return await PlatformApi.resume_room(str(room_code).strip_edges().to_upper(), PlatformSession.session_id)
 
 func _platform_refresh_rooms() -> void:
 	if _platform_busy:
@@ -827,6 +890,16 @@ func _platform_connect_to_ws(ws_url: String, connect_token: String) -> void:
 		_show_error_dialog("连接失败", r.error)
 		_set_browse_status("")
 	_refresh_ui()
+
+func _hide_scene_loading() -> void:
+	if SceneManager != null and SceneManager.has_method("hide_loading"):
+		SceneManager.hide_loading()
+
+func _attempt_auto_resume_if_needed() -> void:
+	_ensure_resume_controller()
+	if _resume_controller == null or not is_instance_valid(_resume_controller):
+		return
+	await _resume_controller.attempt_auto_resume_if_needed()
 
 func _build_platform_connect_url(ws_url: String, connect_token: String) -> String:
 	var base := str(ws_url).strip_edges()

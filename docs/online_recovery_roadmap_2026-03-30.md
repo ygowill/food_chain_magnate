@@ -202,3 +202,23 @@
   - 启动后的自动恢复入口
   - 自动切回 Lobby / Game 正确场景
   - 对 `resume_room` 的冷启动编排
+
+### 2026-03-30（第三次更新）
+
+- Phase 2 主链路第一刀已完成：
+  - 主菜单启动时若发现本地存在可恢复联机会话，会自动跳转到联机大厅。
+  - 联机大厅新增冷启动恢复控制器，负责：
+    - 自动登录平台
+    - 调用 `resume_room`
+    - 使用返回的 `ws_url/connect_token` 自动连接
+    - 让现有 `RoomState/GameStarted` 流程继续决定留在 Lobby 还是进入 Game
+  - 这一步已经把“客户端重启后自动开始恢复”接上。
+- 新增测试：
+  - `OnlineLobbyResumeControllerTest`
+- 当前验证结果：
+  - `godot --headless --script res://tools/check_compile.gd`：`PASS files=935`
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：`passed=287/287 failed=[]`
+- 仍未完成：
+  - 冷启动后直接恢复到 Game 场景的完整 UX 打磨（目前复用现有 Lobby -> Game 事件链路）
+  - `resume_room` 失败后的分级处理与更细的错误恢复策略
+  - Lobby 房间在 server restart 后的 reclaim 语义
