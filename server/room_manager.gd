@@ -210,6 +210,67 @@ func list_room_summaries() -> Array[Dictionary]:
 	)
 	return out
 
+func create_persistence_snapshot() -> Result:
+	var room_codes: Array[String] = []
+	for code_val in rooms.keys():
+		var code := str(code_val).strip_edges().to_upper()
+		if code.is_empty():
+			continue
+		room_codes.append(code)
+	room_codes.sort()
+
+	var persisted_rooms: Array[Dictionary] = []
+	for room_code in room_codes:
+		var room = rooms.get(room_code, null)
+		if room == null:
+			continue
+		if str(room.status) != OnlineRoomClass.STATUS_IN_GAME:
+			continue
+		if not room.has_method("to_persistence_dict"):
+			return Result.failure("Room.to_persistence_dict missing")
+		var snapshot_r: Result = room.to_persistence_dict()
+		if not snapshot_r.ok:
+			return Result.failure("persist room %s 失败: %s" % [room_code, snapshot_r.error])
+		persisted_rooms.append(Dictionary(snapshot_r.value).duplicate(true))
+
+	return Result.success({
+		"version": 1,
+		"saved_at_unix_sec": int(Time.get_unix_time_from_system()),
+		"rooms": persisted_rooms,
+	})
+
+func restore_from_persistence(snapshot: Dictionary) -> Result:
+	var rooms_val = snapshot.get("rooms", null)
+	if rooms_val == null:
+		return Result.success({
+			"restored_rooms": 0,
+		})
+	if not (rooms_val is Array):
+		return Result.failure("snapshot.rooms 类型错误（期望 Array）")
+
+	rooms = {}
+	peer_to_room = {}
+
+	for item in Array(rooms_val):
+		if not (item is Dictionary):
+			return Result.failure("snapshot.rooms 元素类型错误（期望 Dictionary）")
+		var restore_r: Result = OnlineRoomClass.from_persistence_dict(Dictionary(item))
+		if not restore_r.ok:
+			return Result.failure("restore room 失败: %s" % restore_r.error)
+		var room = restore_r.value
+		if room == null:
+			return Result.failure("restore room 返回空对象")
+		var code := str(room.room_code).strip_edges().to_upper()
+		if code.is_empty():
+			return Result.failure("restore room 返回空 room_code")
+		if rooms.has(code):
+			return Result.failure("restore room 重复 room_code: %s" % code)
+		rooms[code] = room
+
+	return Result.success({
+		"restored_rooms": rooms.size(),
+	})
+
 func leave_room(peer_id: int) -> Result:
 	if not peer_to_room.has(peer_id):
 		return Result.success({

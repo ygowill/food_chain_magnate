@@ -40,6 +40,93 @@ var _seat_by_player_peer_id: Dictionary = {} # peer_id -> seat_index
 var _desired_player_count: int = 0
 var _user_id_by_seat_index: Dictionary = {} # seat_index -> user_id（用于断线重连鉴权；不对客户端广播）
 
+func to_persistence_dict() -> Result:
+	if str(status) != STATUS_IN_GAME:
+		return Result.failure("只支持持久化 InGame 房间")
+	if game_engine == null:
+		return Result.failure("InGame 房间缺少 game_engine")
+
+	var archive_r: Result = game_engine.create_archive()
+	if not archive_r.ok:
+		return Result.failure("create_archive failed: %s" % archive_r.error)
+
+	return Result.success({
+		"room_code": room_code,
+		"status": status,
+		"config": config.duplicate(true),
+		"join_policy": join_policy,
+		"password_hash": password_hash,
+		"updated_at_ms": updated_at_ms,
+		"started_at_iso": started_at_iso,
+		"ended_at_iso": ended_at_iso,
+		"started_at_unix_sec": started_at_unix_sec,
+		"ended_at_unix_sec": ended_at_unix_sec,
+		"match_finalize_reported": match_finalize_reported,
+		"finalized_match_id": finalized_match_id,
+		"seat_profiles": _seat_profile_by_seat_index.duplicate(true),
+		"user_ids_by_seat": _user_id_by_seat_index.duplicate(true),
+		"archive": Dictionary(archive_r.value).duplicate(true),
+	})
+
+static func from_persistence_dict(data: Dictionary) -> Result:
+	var room_code_read := str(data.get("room_code", "")).strip_edges().to_upper()
+	if room_code_read.is_empty():
+		return Result.failure("持久化房间缺少 room_code")
+	var status_read := str(data.get("status", "")).strip_edges()
+	if status_read != STATUS_IN_GAME:
+		return Result.failure("当前仅支持恢复 InGame 房间: %s" % status_read)
+	var config_val = data.get("config", null)
+	if not (config_val is Dictionary):
+		return Result.failure("持久化房间 config 类型错误（期望 Dictionary）")
+	var archive_val = data.get("archive", null)
+	if not (archive_val is Dictionary):
+		return Result.failure("持久化房间 archive 类型错误（期望 Dictionary）")
+
+	var room := OnlineRoom.new(
+		room_code_read,
+		0,
+		str(data.get("join_policy", "password")).strip_edges(),
+		str(data.get("password_hash", "")).strip_edges(),
+		Dictionary(config_val).duplicate(true)
+	)
+	room.status = status_read
+	room.updated_at_ms = int(data.get("updated_at_ms", 0))
+	room.started_at_iso = str(data.get("started_at_iso", "")).strip_edges()
+	room.ended_at_iso = str(data.get("ended_at_iso", "")).strip_edges()
+	room.started_at_unix_sec = int(data.get("started_at_unix_sec", 0))
+	room.ended_at_unix_sec = int(data.get("ended_at_unix_sec", 0))
+	room.match_finalize_in_flight = false
+	room.match_finalize_reported = bool(data.get("match_finalize_reported", false))
+	room.finalized_match_id = str(data.get("finalized_match_id", "")).strip_edges()
+	room._seat_profile_by_seat_index = _normalize_int_key_dict(data.get("seat_profiles", null))
+	room._user_id_by_seat_index = _normalize_int_key_dict(data.get("user_ids_by_seat", null))
+	room._peer_id_by_seat_index = {}
+	room._player_profile_by_peer_id = {}
+	room._spectator_profile_by_peer_id = {}
+	room._seat_by_player_peer_id = {}
+	room.player_id_by_peer_id = {}
+	room._desired_player_count = int(room.config.get("desired_player_count", room._seat_profile_by_seat_index.size()))
+
+	var engine := GameEngineClass.new()
+	var load_r: Result = engine.load_from_archive(Dictionary(archive_val).duplicate(true))
+	if not load_r.ok:
+		return Result.failure("恢复房间 archive 失败: %s" % load_r.error)
+	room.game_engine = engine
+
+	return Result.success(room)
+
+static func _normalize_int_key_dict(value) -> Dictionary:
+	var out: Dictionary = {}
+	if not (value is Dictionary):
+		return out
+	var src: Dictionary = Dictionary(value)
+	for key in src.keys():
+		var key_text := str(key).strip_edges()
+		if key_text.is_empty():
+			continue
+		out[int(key_text)] = src.get(key, null)
+	return out
+
 func _init(p_room_code: String, p_host_peer_id: int, p_join_policy: String, p_password_hash: String, p_config: Dictionary) -> void:
 	room_code = p_room_code
 	host_peer_id = p_host_peer_id
@@ -472,6 +559,11 @@ func start_game() -> Result:
 			state.rules = {}
 		# 写入持久规则区：round_state 会在每回合开始被重建。
 		state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
+		if engine.checkpoints.size() > 0 and (engine.checkpoints[0] is Dictionary):
+			var checkpoint0: Dictionary = engine.checkpoints[0]
+			checkpoint0["state_dict"] = state.to_dict().duplicate(true)
+			checkpoint0["hash"] = state.compute_hash()
+			engine.checkpoints[0] = checkpoint0
 
 	game_engine = engine
 	player_id_by_peer_id = build_player_id_by_peer_id()

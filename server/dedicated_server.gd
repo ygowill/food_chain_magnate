@@ -5,13 +5,19 @@ const DEFAULT_PORT := 7000
 const DEFAULT_BIND_ADDRESS := "0.0.0.0"
 const DEFAULT_PLATFORM_BACKEND_URL := "http://127.0.0.1:8000"
 const DEFAULT_INTERNAL_API_SECRET := "dev-internal-secret-change-in-production"
+const DEFAULT_ROOM_PERSIST_PATH := "user://dedicated_server/online_room_snapshots.json"
 const HEARTBEAT_INTERVAL_SEC := 15.0
+const PERSIST_INTERVAL_SEC := 2.0
+
+const RoomPersistenceStoreClass = preload("res://server/room_persistence_store.gd")
 
 var _backend_url: String = ""
 var _internal_api_secret: String = ""
 var _game_server_id: String = ""
 var _heartbeat_in_flight: bool = false
 var _heartbeat_timer: Timer = null
+var _room_persistence_store = null
+var _persist_timer: Timer = null
 
 func _ready() -> void:
 	var port := DEFAULT_PORT
@@ -35,8 +41,61 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 
+	var persist_r: Result = _setup_persistence()
+	if not persist_r.ok:
+		GameLog.error("DedicatedServer", persist_r.error)
+		get_tree().quit(1)
+		return
+
 	_setup_heartbeat(port)
 	GameLog.info("DedicatedServer", "Running. args=%s" % str(args))
+
+func _exit_tree() -> void:
+	_persist_rooms()
+
+func _setup_persistence() -> Result:
+	var snapshot_path := str(OS.get_environment("FCM_ROOM_PERSIST_PATH")).strip_edges()
+	if snapshot_path.is_empty():
+		snapshot_path = DEFAULT_ROOM_PERSIST_PATH
+	_room_persistence_store = RoomPersistenceStoreClass.new(snapshot_path)
+
+	if NetClient == null or NetClient._room_manager == null or not is_instance_valid(NetClient._room_manager):
+		return Result.failure("DedicatedServer persistence setup failed: RoomManager missing")
+
+	var load_r: Result = _room_persistence_store.load_snapshot()
+	if not load_r.ok:
+		return Result.failure("加载房间快照失败: %s" % load_r.error)
+	var restore_r: Result = NetClient._room_manager.restore_from_persistence(Dictionary(load_r.value))
+	if not restore_r.ok:
+		return Result.failure("恢复房间快照失败: %s" % restore_r.error)
+
+	_persist_timer = Timer.new()
+	_persist_timer.one_shot = false
+	_persist_timer.wait_time = PERSIST_INTERVAL_SEC
+	add_child(_persist_timer)
+	_persist_timer.timeout.connect(_on_persist_timeout)
+	_persist_timer.start()
+
+	var restored_rooms := int(restore_r.value.get("restored_rooms", 0)) if restore_r.value is Dictionary else 0
+	GameLog.info(
+		"DedicatedServer",
+		"Persistence enabled path=%s restored_rooms=%d interval=%.1fs"
+			% [ProjectSettings.globalize_path(snapshot_path), restored_rooms, PERSIST_INTERVAL_SEC]
+	)
+	_persist_rooms()
+	return Result.success()
+
+func _on_persist_timeout() -> void:
+	_persist_rooms()
+
+func _persist_rooms() -> void:
+	if _room_persistence_store == null:
+		return
+	if NetClient == null or NetClient._room_manager == null or not is_instance_valid(NetClient._room_manager):
+		return
+	var save_r: Result = _room_persistence_store.save_room_manager(NetClient._room_manager)
+	if not save_r.ok:
+		GameLog.warn("DedicatedServer", "Persist rooms failed: %s" % save_r.error)
 
 func _setup_heartbeat(port: int) -> void:
 	_backend_url = str(OS.get_environment("PLATFORM_BACKEND_URL")).strip_edges()

@@ -239,6 +239,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return await TestRefs.GameOnlineResyncReconnectFlowTestClass.run(),
 		},
 		{
+			"name": "OnlineRoomPersistenceRecoveryTest",
+			"fn": func() -> Result: return TestRefs.OnlineRoomPersistenceRecoveryTestClass.run(),
+		},
+		{
 			"name": "OnlineRoomSeedRandomStableTest",
 			"fn": func() -> Result: return TestRefs.OnlineRoomSeedRandomStableTestClass.run(),
 		},
