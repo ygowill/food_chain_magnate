@@ -279,3 +279,22 @@
 - 仍未完成：
   - 单点 server 启动时主动把 backend 房间目录状态和本地快照做更强一致性校对
   - 冷启动恢复直接进入游戏场景后的细节 UX 收口
+
+### 2026-03-30（第七次更新）
+
+- 冷启动恢复 UX 继续收口：
+  - 主菜单若检测到 `InGame` 恢复态，不再先进入联机大厅，而是直接进入 `Game` 场景。
+  - `Game` 场景新增冷启动恢复控制器，负责在没有现成 `GameEngine` 时：
+    - 自动确保平台 session
+    - 调用 `resume_room`
+    - 连接 websocket
+    - 等待 `GameStarted + ResyncArchive`
+  - `game.gd` 在冷启动恢复收到 `GameStarted` 后，会接管 `Globals.current_game_engine` 并初始化现有 `online_resync_controller`，继续复用已有 archive 恢复流程。
+- 新增测试：
+  - `GameStartupOnlineResumeControllerTest`
+- 当前验证结果：
+  - `godot --headless --script res://tools/check_compile.gd`：`PASS files=939`
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：`passed=290/290 failed=[]`
+- 仍未完成：
+  - 冷启动恢复失败后的分级提示与更细粒度重试
+  - 冷启动恢复成功时的 loading/切场体验进一步打磨

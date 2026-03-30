@@ -55,6 +55,7 @@ extends Control
 
 const GameControllersBuilderClass = preload("res://ui/scenes/game/controllers/builder.gd")
 const GameOnlineResyncControllerClass = preload("res://ui/scenes/game/controllers/online_resync_controller.gd")
+const GameStartupOnlineResumeControllerClass = preload("res://ui/scenes/game/controllers/startup_online_resume_controller.gd")
 const GameUiStyleApplierClass = preload("res://ui/scenes/game/controllers/ui_style_applier.gd")
 const GameRuntimeDisposerClass = preload("res://ui/scenes/game/controllers/runtime_disposer.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
@@ -86,6 +87,7 @@ var _map_controller = null
 var _map_mode_bar_controller = null
 var _panel_controller = null
 var _online_resync_controller = null
+var _startup_online_resume_controller = null
 var _timeline_controller = null
 var _ui_sync_controller = null
 var _command_controller = null
@@ -231,28 +233,26 @@ func _ready() -> void:
 	_initialize_game()
 	PerfTraceClass.end_span(span_init_game)
 	if game_engine != null:
-		_panel_controller.reset_bank_break_tracking(game_engine.get_state())
-		_online_resync_controller = GameOnlineResyncControllerClass.new(
+		if _panel_controller != null:
+			_panel_controller.reset_bank_break_tracking(game_engine.get_state())
+		_ensure_online_resync_controller()
+	elif _should_startup_online_resume_direct_to_game():
+		_startup_online_resume_controller = GameStartupOnlineResumeControllerClass.new(
 			self,
-			game_log_panel,
-			Callable(self, "_get_game_engine"),
-			Callable(_timeline_controller, "apply_live_log_timeline_from_engine"),
-			Callable(self, "_update_ui"),
-			Callable(self, "_reset_timeline_state_after_online_resync"),
-			Callable(self, "_show_confirm"),
-			Callable(self, "_goto_online_lobby"),
-			Callable(self, "_show_online_reconnect_loading"),
-			Callable(self, "_hide_online_reconnect_loading"),
+			Callable(self, "_ensure_platform_session_for_startup_resume"),
 			Callable(self, "_request_online_resume_room"),
 			Callable(self, "_connect_online_resume_url"),
-			Callable(self, "_shutdown_online_net"),
-			Callable(self, "_request_online_resync_from_net")
+			Callable(self, "_on_startup_online_game_started"),
+			Callable(self, "_on_startup_online_resume_failed")
 		)
-		_online_resync_controller.initialize()
-		if _ui_sync_controller != null and _ui_sync_controller.has_method("set_online_resync_controller"):
-			_ui_sync_controller.set_online_resync_controller(_online_resync_controller)
-		if _command_controller != null and _command_controller.has_method("set_online_resync_controller"):
-			_command_controller.set_online_resync_controller(_online_resync_controller)
+		var startup_resumed: bool = await _startup_online_resume_controller.attempt_startup_resume_if_needed()
+		if not startup_resumed and game_engine == null:
+			PerfTraceClass.end_span(span_ready)
+			return
+		if game_engine != null:
+			if _panel_controller != null:
+				_panel_controller.reset_bank_break_tracking(game_engine.get_state())
+			_ensure_online_resync_controller()
 
 	# 初始化调试面板
 	if _debug_panel_controller != null and _debug_panel_controller.has_method("setup_debug_panel"):
@@ -473,6 +473,82 @@ func _initialize_game() -> void:
 	if PerfTraceClass.enabled():
 		PerfTraceClass.end_span(dump_span)
 	GameLog.info("Game", "初始状态:\n%s" % state_dump)
+
+func _should_startup_online_resume_direct_to_game() -> bool:
+	if Globals != null and str(Globals.pending_replay_file_path).strip_edges() != "":
+		return false
+	if NetContext == null or not NetContext.has_method("has_online_resume_context"):
+		return false
+	if not NetContext.has_online_resume_context():
+		return false
+	if not NetContext.has_method("is_online_resume_in_game") or not NetContext.is_online_resume_in_game():
+		return false
+	if Globals.current_game_engine != null:
+		return false
+	return true
+
+func _ensure_online_resync_controller() -> void:
+	if game_engine == null:
+		return
+	if _online_resync_controller != null:
+		return
+	_online_resync_controller = GameOnlineResyncControllerClass.new(
+		self,
+		game_log_panel,
+		Callable(self, "_get_game_engine"),
+		Callable(_timeline_controller, "apply_live_log_timeline_from_engine"),
+		Callable(self, "_update_ui"),
+		Callable(self, "_reset_timeline_state_after_online_resync"),
+		Callable(self, "_show_confirm"),
+		Callable(self, "_goto_online_lobby"),
+		Callable(self, "_show_online_reconnect_loading"),
+		Callable(self, "_hide_online_reconnect_loading"),
+		Callable(self, "_request_online_resume_room"),
+		Callable(self, "_connect_online_resume_url"),
+		Callable(self, "_shutdown_online_net"),
+		Callable(self, "_request_online_resync_from_net")
+	)
+	_online_resync_controller.initialize()
+	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_online_resync_controller"):
+		_ui_sync_controller.set_online_resync_controller(_online_resync_controller)
+	if _command_controller != null and _command_controller.has_method("set_online_resync_controller"):
+		_command_controller.set_online_resync_controller(_online_resync_controller)
+
+func _ensure_platform_session_for_startup_resume() -> Result:
+	if PlatformSession == null:
+		return Result.failure("PlatformSession autoload missing")
+	if PlatformApi == null:
+		return Result.failure("PlatformApi autoload missing")
+	if PlatformSession.is_logged_in:
+		return Result.success()
+	if NetContext != null and NetContext.has_method("get_online_resume_platform_base_url"):
+		var base_url := NetContext.get_online_resume_platform_base_url()
+		if not str(base_url).is_empty():
+			PlatformApi.base_url = str(base_url)
+	var res: Dictionary = await PlatformSession.auto_guest_login()
+	if res.has("error"):
+		return Result.failure(str(res.get("error", "platform login failed")))
+	if not PlatformSession.is_logged_in:
+		return Result.failure("platform login failed")
+	return Result.success()
+
+func _on_startup_online_game_started(_payload: Dictionary) -> void:
+	if Globals.current_game_engine != null and Globals.current_game_engine is GameEngine:
+		var existing: GameEngine = Globals.current_game_engine
+		if existing.get_state() != null:
+			_set_active_game_engine(existing)
+			_ensure_online_resync_controller()
+
+func _on_startup_online_resume_failed(message: String) -> void:
+	_hide_online_reconnect_loading()
+	_show_confirm(
+		"联机恢复失败",
+		"%s\n将返回联机大厅。" % str(message),
+		Callable(self, "_goto_online_lobby"),
+		Callable(self, "_goto_online_lobby"),
+		"确定",
+		"关闭"
+	)
 
 func _update_ui() -> void:
 	# 先执行一次联机等待态切换：确保“轮到自己时”先关闭日志，再进入面板同步，

@@ -63,6 +63,7 @@ const OnlineRoomPersistenceRecoveryTestClass = preload("res://core/tests/online_
 const OnlineLobbyResumeControllerTestClass = preload("res://core/tests/online_lobby_resume_controller_test.gd")
 const OnlineLobbyPersistenceRecoveryTestClass = preload("res://core/tests/online_lobby_persistence_recovery_test.gd")
 const ServerIdentityStoreTestClass = preload("res://core/tests/server_identity_store_test.gd")
+const GameStartupOnlineResumeControllerTestClass = preload("res://core/tests/game_startup_online_resume_controller_test.gd")
 const OnlineRoomSeedRandomStableTestClass = preload("res://core/tests/online_room_seed_random_stable_test.gd")
 const GameOverWinnerRulesTestClass = preload("res://core/tests/game_over_winner_rules_test.gd")
 const CommandPrivacyTestClass = preload("res://core/tests/command_privacy_test.gd")

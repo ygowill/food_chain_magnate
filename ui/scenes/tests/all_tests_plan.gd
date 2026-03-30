@@ -259,6 +259,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.ServerIdentityStoreTestClass.run(),
 		},
 		{
+			"name": "GameStartupOnlineResumeControllerTest",
+			"fn": func() -> Result: return await TestRefs.GameStartupOnlineResumeControllerTestClass.run(),
+		},
+		{
 			"name": "OnlineRoomSeedRandomStableTest",
 			"fn": func() -> Result: return TestRefs.OnlineRoomSeedRandomStableTestClass.run(),
 		},

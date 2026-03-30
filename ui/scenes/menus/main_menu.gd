@@ -85,7 +85,7 @@ func _ready() -> void:
 		Globals.audio_muted_changed.connect(_on_audio_muted_changed)
 	online_button.grab_focus()
 	_kick_bgm_autoplay()
-	call_deferred("_attempt_auto_resume_to_online_lobby")
+	call_deferred("_attempt_auto_resume_on_startup")
 
 func _kick_bgm_autoplay() -> void:
 	if _is_headless_runtime():
@@ -127,14 +127,17 @@ func _on_online_pressed() -> void:
 	GameLog.info("MainMenu", "点击联机游戏")
 	SceneManager.goto_online_lobby()
 
-func _attempt_auto_resume_to_online_lobby() -> void:
-	if not _should_auto_resume_to_online_lobby():
+func _attempt_auto_resume_on_startup() -> void:
+	if not _should_auto_resume_on_startup():
 		return
 	if SceneManager != null and SceneManager.has_method("show_loading"):
 		SceneManager.show_loading("检测到未完成联机对局，正在恢复...")
+	if NetContext != null and NetContext.has_method("is_online_resume_in_game") and NetContext.is_online_resume_in_game():
+		SceneManager.goto_game()
+		return
 	SceneManager.goto_online_lobby()
 
-func _should_auto_resume_to_online_lobby() -> bool:
+func _should_auto_resume_on_startup() -> bool:
 	if Globals != null and str(Globals.pending_replay_file_path).strip_edges() != "":
 		return false
 	if NetContext == null or not NetContext.has_method("has_online_resume_context"):
