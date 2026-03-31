@@ -280,7 +280,7 @@ func _ensure_resume_controller() -> void:
 	_resume_controller.setup(
 		Callable(self, "_platform_ensure_session"),
 		Callable(self, "_platform_resume_room"),
-		Callable(self, "_platform_connect_to_ws"),
+		Callable(self, "_platform_connect_to_ws_for_auto_resume"),
 		Callable(self, "_mark_platform_ready"),
 		Callable(self, "_set_connect_status"),
 		Callable(self, "_set_browse_status"),
@@ -869,17 +869,25 @@ func _platform_join_room(room_code: String, room_password: String, spectate: boo
 	_platform_connect_to_ws(ws_url, connect_token)
 
 func _platform_connect_to_ws(ws_url: String, connect_token: String) -> void:
+	_platform_connect_to_ws_internal(ws_url, connect_token, true)
+
+func _platform_connect_to_ws_for_auto_resume(ws_url: String, connect_token: String) -> Result:
+	return _platform_connect_to_ws_internal(ws_url, connect_token, false)
+
+func _platform_connect_to_ws_internal(ws_url: String, connect_token: String, show_error_dialog_on_failure: bool) -> Result:
 	if NetClient == null:
-		_show_error_dialog("连接失败", "NetClient autoload missing")
+		if show_error_dialog_on_failure:
+			_show_error_dialog("连接失败", "NetClient autoload missing")
 		_set_browse_status("")
 		_refresh_ui()
-		return
+		return Result.failure("NetClient autoload missing")
 	var url := _build_platform_connect_url(ws_url, connect_token)
 	if url.is_empty():
-		_show_error_dialog("连接失败", "无效的 ws_url")
+		if show_error_dialog_on_failure:
+			_show_error_dialog("连接失败", "无效的 ws_url")
 		_set_browse_status("")
 		_refresh_ui()
-		return
+		return Result.failure("无效的 ws_url")
 	_ws_connect_in_progress = true
 	_refresh_ui()
 	_sync_bound_player_profile_name(true)
@@ -887,9 +895,13 @@ func _platform_connect_to_ws(ws_url: String, connect_token: String) -> void:
 	if not r.ok:
 		_ws_connect_in_progress = false
 		_set_connect_status("连接失败：%s" % r.error)
-		_show_error_dialog("连接失败", r.error)
+		if show_error_dialog_on_failure:
+			_show_error_dialog("连接失败", r.error)
 		_set_browse_status("")
+		_refresh_ui()
+		return r
 	_refresh_ui()
+	return Result.success()
 
 func _hide_scene_loading() -> void:
 	if SceneManager != null and SceneManager.has_method("hide_loading"):

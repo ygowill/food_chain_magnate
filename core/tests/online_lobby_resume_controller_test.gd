@@ -52,6 +52,16 @@ static func run() -> Result:
 	if retry_harness.connect_calls != 1:
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "重试成功后应连接一次")
 
+	NetContext.set_online_resume_context("ROOM91", "player", "https://platform.example.test")
+	var connect_retry_harness := _Harness.new()
+	connect_retry_harness.connect_failures_before_success = 1
+	var connect_retry_controller: RefCounted = _build_controller(connect_retry_harness)
+	await connect_retry_controller.attempt_auto_resume_if_needed()
+	if connect_retry_harness.resume_calls != 2:
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "同步建连失败后应重新走完整恢复流程")
+	if connect_retry_harness.connect_calls != 2:
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "同步建连失败后应再次尝试连接")
+
 	NetContext.set_online_resume_context("ROOM89", "player", "https://platform.example.test")
 	NetContext.online_resume_state["user_id"] = "u_expected"
 	PlatformSession.user_id = "u_other"
@@ -99,6 +109,7 @@ class _Harness:
 	var last_ws_url: String = ""
 	var last_connect_token: String = ""
 	var resume_failures_before_success: int = 0
+	var connect_failures_before_success: int = 0
 
 	func ensure_session() -> Result:
 		ensure_calls += 1
@@ -116,10 +127,13 @@ class _Harness:
 			}
 		}
 
-	func connect_to_ws(ws_url: String, connect_token: String) -> void:
+	func connect_to_ws(ws_url: String, connect_token: String) -> Result:
 		connect_calls += 1
 		last_ws_url = str(ws_url)
 		last_connect_token = str(connect_token)
+		if connect_calls <= connect_failures_before_success:
+			return Result.failure("connect_failed")
+		return Result.success()
 
 	func mark_platform_ready() -> void:
 		platform_marked_ready = true

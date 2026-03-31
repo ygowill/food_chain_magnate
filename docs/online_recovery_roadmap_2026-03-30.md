@@ -397,3 +397,12 @@
   - 扩展 `backend/tests/test_internal.py::test_sync_room_directory_creates_room_and_members`
   - `backend/.venv/bin/python -m pytest -q backend/tests/test_internal.py`：`12 passed`
   - `godot --headless --script res://tools/check_compile.gd -- res://server res://core/tests`：`PASS files=222`
+
+### 2026-03-31（Review Fix 3）
+
+- 修复“大厅冷启动恢复对同步建连失败不重试”：
+  - `online_lobby.gd` 新增 `Result` 语义的自动恢复专用连接入口。
+  - `OnlineLobbyResumeController` 现在能识别同步 websocket 建连失败，并继续进入退避重试流程。
+- 新增验证：
+  - 扩展 `OnlineLobbyResumeControllerTest`，覆盖“resume 成功但 connect 立即失败后仍会重试”
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：`passed=291/291 failed=[]`
