@@ -108,6 +108,8 @@ async def test_sync_room_directory_creates_room_and_members(client: AsyncClient,
     }
     resp = await client.post("/internal/game_servers/gs-sync-1/rooms/sync", json=payload, headers=INTERNAL_HEADERS)
     assert resp.status_code == 200
+    assert resp.json()["accepted_room_codes"] == ["SYNC01"]
+    assert resp.json()["skipped_ended_room_codes"] == []
 
     room = (await db_session.execute(select(Room).where(Room.room_code == "SYNC01"))).scalar_one()
     assert room.game_server_id == "gs-sync-1"
@@ -141,6 +143,42 @@ async def test_sync_room_directory_marks_missing_rooms_ended(client: AsyncClient
 
     room = (await db_session.execute(select(Room).where(Room.room_code == "SYNC02"))).scalar_one()
     assert room.status == "Ended"
+
+
+@pytest.mark.asyncio
+async def test_sync_room_directory_does_not_revive_ended_room(client: AsyncClient, db_session: AsyncSession):
+    room = Room(
+        room_code="SYNC03",
+        owner_user_id="u_owner_sync3",
+        game_server_id="gs-sync-3",
+        status="Ended",
+        join_policy="public",
+        config_json="{}",
+        ws_url="wss://old.example.test",
+    )
+    db_session.add(room)
+    await db_session.commit()
+
+    resp = await client.post("/internal/game_servers/gs-sync-3/rooms/sync", json={
+        "ws_url": "wss://single.example.test",
+        "rooms": [
+            {
+                "room_code": "SYNC03",
+                "owner_user_id": "u_owner_sync3_new",
+                "status": "Lobby",
+                "join_policy": "public",
+                "config_json": "{}",
+                "members": [{"user_id": "u_owner_sync3_new", "role": "host", "seat_index": 0}],
+            }
+        ],
+    }, headers=INTERNAL_HEADERS)
+    assert resp.status_code == 200
+    assert resp.json()["accepted_room_codes"] == []
+    assert resp.json()["skipped_ended_room_codes"] == ["SYNC03"]
+
+    room_after = (await db_session.execute(select(Room).where(Room.room_code == "SYNC03"))).scalar_one()
+    assert room_after.status == "Ended"
+    assert room_after.owner_user_id == "u_owner_sync3"
 
 
 @pytest.mark.asyncio

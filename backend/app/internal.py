@@ -127,6 +127,8 @@ class RoomDirectorySyncRequest(BaseModel):
 async def sync_room_directory(game_server_id: str, req: RoomDirectorySyncRequest, db: AsyncSession = Depends(get_db)):
     now = datetime.now(timezone.utc)
     server_ws_url = str(req.ws_url or "").strip() or None
+    accepted_room_codes: list[str] = []
+    skipped_ended_room_codes: list[str] = []
 
     gs = (await db.execute(
         select(GameServer).where(GameServer.game_server_id == game_server_id)
@@ -152,6 +154,9 @@ async def sync_room_directory(game_server_id: str, req: RoomDirectorySyncRequest
         room = (await db.execute(
             select(Room).where(Room.room_code == room_code)
         )).scalar_one_or_none()
+        if room is not None and str(room.status) == "Ended":
+            skipped_ended_room_codes.append(room_code)
+            continue
         if room is None:
             room = Room(
                 room_code=room_code,
@@ -174,6 +179,7 @@ async def sync_room_directory(game_server_id: str, req: RoomDirectorySyncRequest
             room.config_json = str(item.config_json)
             room.ws_url = str(item.ws_url or "").strip() or server_ws_url or room.ws_url
             room.updated_at = now
+        accepted_room_codes.append(room_code)
 
         existing_members = (await db.execute(
             select(RoomMember).where(
@@ -222,7 +228,11 @@ async def sync_room_directory(game_server_id: str, req: RoomDirectorySyncRequest
         room.updated_at = now
 
     await db.commit()
-    return {"ok": True}
+    return {
+        "ok": True,
+        "accepted_room_codes": accepted_room_codes,
+        "skipped_ended_room_codes": skipped_ended_room_codes,
+    }
 
 
 class ParticipantIn(BaseModel):

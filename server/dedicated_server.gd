@@ -102,7 +102,10 @@ func _setup_persistence() -> Result:
 	var sync_r: Result = await _sync_room_directory_snapshot(snapshot)
 	if not sync_r.ok:
 		GameLog.warn("DedicatedServer", "Sync room directory failed: %s" % sync_r.error)
-	var restore_r: Result = NetClient._room_manager.restore_from_persistence(snapshot)
+	var restore_snapshot: Dictionary = snapshot
+	if sync_r.value is Dictionary:
+		restore_snapshot = Dictionary(sync_r.value)
+	var restore_r: Result = NetClient._room_manager.restore_from_persistence(restore_snapshot)
 	if not restore_r.ok:
 		return Result.failure("恢复房间快照失败: %s" % restore_r.error)
 
@@ -187,7 +190,40 @@ func _sync_room_directory_snapshot(snapshot: Dictionary) -> Result:
 	var response_code: int = int(result[1]) if result.size() > 1 else 0
 	if response_code < 200 or response_code >= 300:
 		return Result.failure("room directory sync failed status=%d url=%s" % [response_code, url])
-	return Result.success()
+	var body_text := PackedByteArray(result[3]).get_string_from_utf8() if result.size() > 3 else ""
+	var parsed: Variant = JSON.parse_string(body_text)
+	if not (parsed is Dictionary):
+		return Result.success(snapshot)
+	var response_dict: Dictionary = Dictionary(parsed)
+	var accepted_val: Variant = response_dict.get("accepted_room_codes", null)
+	if not (accepted_val is Array):
+		return Result.success(snapshot)
+	return Result.success(_filter_snapshot_by_room_codes(snapshot, Array(accepted_val)))
+
+func _filter_snapshot_by_room_codes(snapshot: Dictionary, accepted_room_codes: Array) -> Dictionary:
+	var allowed_lookup: Dictionary = {}
+	for code_val in accepted_room_codes:
+		var code := str(code_val).strip_edges().to_upper()
+		if code.is_empty():
+			continue
+		allowed_lookup[code] = true
+
+	var out: Dictionary = snapshot.duplicate(true)
+	var filtered_rooms: Array[Dictionary] = []
+	var rooms_val = out.get("rooms", null)
+	if rooms_val is Array:
+		for item in Array(rooms_val):
+			if not (item is Dictionary):
+				continue
+			var room: Dictionary = Dictionary(item)
+			var room_code := str(room.get("room_code", "")).strip_edges().to_upper()
+			if room_code.is_empty():
+				continue
+			if not allowed_lookup.has(room_code):
+				continue
+			filtered_rooms.append(room.duplicate(true))
+	out["rooms"] = filtered_rooms
+	return out
 
 func _on_persist_timeout() -> void:
 	_persist_rooms()

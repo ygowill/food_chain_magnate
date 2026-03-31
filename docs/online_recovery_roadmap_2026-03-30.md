@@ -373,3 +373,14 @@
   - `godot --headless --script res://tools/check_compile.gd -- res://server res://core/tests`：`PASS files=222`
 - 仍未完成：
   - 更细粒度的重试预算/指标统计
+
+### 2026-03-31（Review Fix 1）
+
+- 修复“启动同步会复活已结束房间”：
+  - backend `rooms/sync` 现在不会复活已经是 `Ended` 的房间。
+  - `rooms/sync` 会返回 `accepted_room_codes` / `skipped_ended_room_codes`。
+  - Dedicated Server 启动恢复时只会恢复 backend 接受的房间集合，避免把已结束房间从本地旧快照重新带回来。
+- 新增验证：
+  - `backend/tests/test_internal.py::test_sync_room_directory_does_not_revive_ended_room`
+  - `backend/.venv/bin/python -m pytest -q backend/tests/test_internal.py`：`12 passed`
+  - `godot --headless --script res://tools/check_compile.gd -- res://server res://core/tests`：`PASS files=222`
