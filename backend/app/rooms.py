@@ -249,6 +249,8 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
     room = (await db.execute(select(Room).where(Room.room_code == room_code))).scalar_one_or_none()
     if not room:
         raise HTTPException(404, "room not found")
+    if str(room.status) == "Ended":
+        raise HTTPException(409, "room already ended")
     if room.join_policy == "password":
         from app.auth import _verify_password
         if not room.password_hash or not _verify_password(req.password, room.password_hash):
@@ -341,6 +343,8 @@ async def spectate_room(room_code: str, req: JoinRequest, db: AsyncSession = Dep
     room = (await db.execute(select(Room).where(Room.room_code == room_code))).scalar_one_or_none()
     if not room:
         raise HTTPException(404, "room not found")
+    if str(room.status) == "Ended":
+        raise HTTPException(409, "room already ended")
     _, room_ws_url = await _resolve_room_connection_target(db, room)
 
     existing = (await db.execute(

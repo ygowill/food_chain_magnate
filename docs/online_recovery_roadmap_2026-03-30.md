@@ -406,3 +406,14 @@
 - 新增验证：
   - 扩展 `OnlineLobbyResumeControllerTest`，覆盖“resume 成功但 connect 立即失败后仍会重试”
   - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：`passed=291/291 failed=[]`
+
+### 2026-03-31（Review Fix 4）
+
+- 修复“Ended 房间仍能签出 join/spectate token”：
+  - `join_room` 现在会拒绝 `Ended` 房间。
+  - `spectate_room` 现在也会拒绝 `Ended` 房间。
+  - 这样 backend 房间目录一旦进入 `Ended`，所有恢复/加入/观战入口就统一封口。
+- 新增验证：
+  - `backend/tests/test_rooms.py::test_join_room_rejects_ended_room`
+  - `backend/tests/test_rooms.py::test_spectate_room_rejects_ended_room`
+  - `backend/.venv/bin/python -m pytest -q backend/tests/test_rooms.py`：`18 passed`
