@@ -81,6 +81,8 @@ static func run() -> Result:
 		return Result.failure("restored player_count 错误: %d" % restored_room.get_player_count())
 	if restored_room.get_connected_player_count() != 0:
 		return Result.failure("恢复后 connected_player_count 应为 0，实际: %d" % restored_room.get_connected_player_count())
+	if str(restored_room.owner_user_id) != "u_host_persist":
+		return Result.failure("恢复后 owner_user_id 错误: %s" % str(restored_room.owner_user_id))
 
 	var restored_hash := ""
 	if restored_room.game_engine != null and restored_room.game_engine.get_state() != null:

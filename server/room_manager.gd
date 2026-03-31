@@ -30,6 +30,7 @@ func create_room(host_peer_id: int, profile: Dictionary, room_password: String, 
 	var password_hash := _sha256_hex(room_password)
 	var join_policy := "password"
 	var room = OnlineRoomClass.new(room_code, host_peer_id, join_policy, password_hash, config)
+	room.owner_user_id = str(profile.get("user_id", "")).strip_edges()
 
 	var ar: Result = room.add_peer(host_peer_id, profile)
 	if not ar.ok:
@@ -58,6 +59,7 @@ func create_room_with_code(host_peer_id: int, profile: Dictionary, room_code: St
 	var join_policy := "password"
 	var password_hash := ""
 	var room = OnlineRoomClass.new(code, host_peer_id, join_policy, password_hash, config)
+	room.owner_user_id = str(profile.get("user_id", "")).strip_edges()
 
 	var ar: Result = room.add_peer(host_peer_id, profile)
 	if not ar.ok:

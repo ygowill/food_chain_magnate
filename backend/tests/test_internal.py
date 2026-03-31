@@ -114,6 +114,7 @@ async def test_sync_room_directory_creates_room_and_members(client: AsyncClient,
     room = (await db_session.execute(select(Room).where(Room.room_code == "SYNC01"))).scalar_one()
     assert room.game_server_id == "gs-sync-1"
     assert room.ws_url == "wss://single.example.test"
+    assert room.owner_user_id == "u_host_sync"
     members = (await db_session.execute(
         select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.left_at.is_(None))
     )).scalars().all()

@@ -161,7 +161,9 @@ func _sync_room_directory_snapshot(snapshot: Dictionary) -> Result:
 					"role": "host" if seat_index == host_seat_index else "player",
 					"seat_index": seat_index,
 				})
-			var owner_user_id := str(user_ids_by_seat.get(host_seat_index, "")).strip_edges()
+			var owner_user_id := str(room.get("owner_user_id", "")).strip_edges()
+			if owner_user_id.is_empty():
+				owner_user_id = str(user_ids_by_seat.get(host_seat_index, "")).strip_edges()
 			if owner_user_id.is_empty() and not members.is_empty():
 				owner_user_id = str(members[0].get("user_id", "")).strip_edges()
 			rooms_payload.append({

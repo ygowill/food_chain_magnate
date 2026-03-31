@@ -40,6 +40,7 @@ var _seat_by_player_peer_id: Dictionary = {} # peer_id -> seat_index
 var _desired_player_count: int = 0
 var _user_id_by_seat_index: Dictionary = {} # seat_index -> user_id（用于断线重连鉴权；不对客户端广播）
 var _host_seat_index: int = -1
+var owner_user_id: String = ""
 
 func to_persistence_dict() -> Result:
 	if str(status) != STATUS_IN_GAME and str(status) != STATUS_LOBBY:
@@ -57,6 +58,7 @@ func to_persistence_dict() -> Result:
 	return Result.success({
 		"room_code": room_code,
 		"status": status,
+		"owner_user_id": owner_user_id,
 		"config": config.duplicate(true),
 		"join_policy": join_policy,
 		"password_hash": password_hash,
@@ -95,6 +97,7 @@ static func from_persistence_dict(data: Dictionary) -> Result:
 		Dictionary(config_val).duplicate(true)
 	)
 	room.status = status_read
+	room.owner_user_id = str(data.get("owner_user_id", "")).strip_edges()
 	room.updated_at_ms = int(data.get("updated_at_ms", 0))
 	room.started_at_iso = str(data.get("started_at_iso", "")).strip_edges()
 	room.ended_at_iso = str(data.get("ended_at_iso", "")).strip_edges()

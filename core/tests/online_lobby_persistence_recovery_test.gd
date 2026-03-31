@@ -63,6 +63,8 @@ static func run() -> Result:
 		return Result.failure("restored room status 错误: %s" % str(restored_room.status))
 	if restored_room.get_connected_player_count() != 0:
 		return Result.failure("Lobby 恢复后 connected_player_count 应为 0，实际: %d" % restored_room.get_connected_player_count())
+	if str(restored_room.owner_user_id) != "u_host_lobby_restore":
+		return Result.failure("Lobby 恢复后 owner_user_id 错误: %s" % str(restored_room.owner_user_id))
 
 	var mock_net := _MockNetClient.new(rm2)
 	var server := ServerLogicClass.new()

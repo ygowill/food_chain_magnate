@@ -384,3 +384,16 @@
   - `backend/tests/test_internal.py::test_sync_room_directory_does_not_revive_ended_room`
   - `backend/.venv/bin/python -m pytest -q backend/tests/test_internal.py`：`12 passed`
   - `godot --headless --script res://tools/check_compile.gd -- res://server res://core/tests`：`PASS files=222`
+
+### 2026-03-31（Review Fix 2）
+
+- 修复“持久化丢失稳定房主身份”：
+  - `OnlineRoom` 持久化快照新增 `owner_user_id`。
+  - `RoomManager.create_room*` 在建房时会写入稳定的 `owner_user_id`。
+  - Dedicated Server 启动目录同步优先使用持久化的 `owner_user_id`，不再从当前 `host_seat_index` 反推房主。
+- 新增验证：
+  - 扩展 `OnlineRoomPersistenceRecoveryTest`
+  - 扩展 `OnlineLobbyPersistenceRecoveryTest`
+  - 扩展 `backend/tests/test_internal.py::test_sync_room_directory_creates_room_and_members`
+  - `backend/.venv/bin/python -m pytest -q backend/tests/test_internal.py`：`12 passed`
+  - `godot --headless --script res://tools/check_compile.gd -- res://server res://core/tests`：`PASS files=222`
