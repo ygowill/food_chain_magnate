@@ -356,3 +356,20 @@
   - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：`passed=291/291 failed=[]`
 - 仍未完成：
   - 更细粒度的重试预算/指标统计
+
+### 2026-03-31（第十一次更新）
+
+- 单点 server 启动时的 backend 目录一致性校对已加强：
+  - Dedicated Server 启动时不再只“读取 backend active rooms 做过滤”，而是会把本地持久化快照先同步回 backend 房间目录。
+  - backend 新增内部接口 `POST /internal/game_servers/{game_server_id}/rooms/sync`。
+  - 同步内容包括房间基本目录信息与 host/player 成员占位；对该 server 目录下但本地快照不存在的房间，会在 backend 侧标记为 `Ended`。
+  - 单点模式下，这让“本地快照是权威源”真正闭环：即使 backend 丢目录，只要本地快照还在，server 重启后也能重建房间目录和成员关系。
+- 新增 backend 测试：
+  - `test_sync_room_directory_creates_room_and_members`
+  - `test_sync_room_directory_marks_missing_rooms_ended`
+- 当前验证结果：
+  - `backend/.venv/bin/python -m pytest -q backend/tests/test_internal.py`：`11 passed`
+  - `backend/.venv/bin/python -m pytest -q backend/tests/test_rooms.py`：`16 passed`
+  - `godot --headless --script res://tools/check_compile.gd -- res://server res://core/tests`：`PASS files=222`
+- 仍未完成：
+  - 更细粒度的重试预算/指标统计

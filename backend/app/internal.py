@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_db
-from app.models import GameServer, Room, Match, MatchParticipant, MatchReplay
+from app.models import GameServer, Room, RoomMember, Match, MatchParticipant, MatchReplay
 from app.replay_storage import save_local_replay_archive
 
 router = APIRouter(prefix="/internal", tags=["internal"])
@@ -99,6 +99,130 @@ async def list_active_rooms_for_server(game_server_id: str, db: AsyncSession = D
             for room in rows
         ]
     }
+
+
+class RoomMemberSyncIn(BaseModel):
+    user_id: str
+    role: str
+    seat_index: Optional[int] = None
+
+
+class RoomDirectorySyncIn(BaseModel):
+    room_code: str
+    owner_user_id: str
+    status: str
+    join_policy: str
+    password_hash: Optional[str] = None
+    config_json: str = "{}"
+    ws_url: Optional[str] = None
+    members: list[RoomMemberSyncIn] = []
+
+
+class RoomDirectorySyncRequest(BaseModel):
+    ws_url: Optional[str] = None
+    rooms: list[RoomDirectorySyncIn] = []
+
+
+@router.post("/game_servers/{game_server_id}/rooms/sync", dependencies=[Depends(_require_internal_secret)])
+async def sync_room_directory(game_server_id: str, req: RoomDirectorySyncRequest, db: AsyncSession = Depends(get_db)):
+    now = datetime.now(timezone.utc)
+    server_ws_url = str(req.ws_url or "").strip() or None
+
+    gs = (await db.execute(
+        select(GameServer).where(GameServer.game_server_id == game_server_id)
+    )).scalar_one_or_none()
+    if gs:
+        gs.last_heartbeat_at = now
+        gs.status = "healthy"
+        gs.ws_url = server_ws_url or gs.ws_url
+    else:
+        db.add(GameServer(
+            game_server_id=game_server_id,
+            ws_url=server_ws_url,
+            last_heartbeat_at=now,
+        ))
+
+    payload_codes: set[str] = set()
+    for item in req.rooms:
+        room_code = str(item.room_code).strip().upper()
+        if not room_code:
+            continue
+        payload_codes.add(room_code)
+
+        room = (await db.execute(
+            select(Room).where(Room.room_code == room_code)
+        )).scalar_one_or_none()
+        if room is None:
+            room = Room(
+                room_code=room_code,
+                owner_user_id=str(item.owner_user_id),
+                game_server_id=game_server_id,
+                status=str(item.status),
+                join_policy=str(item.join_policy),
+                password_hash=str(item.password_hash) if item.password_hash else None,
+                config_json=str(item.config_json),
+                ws_url=str(item.ws_url or "").strip() or server_ws_url,
+            )
+            db.add(room)
+            await db.flush()
+        else:
+            room.owner_user_id = str(item.owner_user_id)
+            room.game_server_id = game_server_id
+            room.status = str(item.status)
+            room.join_policy = str(item.join_policy)
+            room.password_hash = str(item.password_hash) if item.password_hash else None
+            room.config_json = str(item.config_json)
+            room.ws_url = str(item.ws_url or "").strip() or server_ws_url or room.ws_url
+            room.updated_at = now
+
+        existing_members = (await db.execute(
+            select(RoomMember).where(
+                RoomMember.room_id == room.room_id,
+                RoomMember.left_at.is_(None),
+                RoomMember.role != "spectator",
+            )
+        )).scalars().all()
+        existing_by_user = {str(member.user_id): member for member in existing_members}
+        payload_users: set[str] = set()
+
+        for member_in in item.members:
+            user_id = str(member_in.user_id).strip()
+            if not user_id:
+                continue
+            payload_users.add(user_id)
+            member = existing_by_user.get(user_id)
+            if member is None:
+                db.add(RoomMember(
+                    room_id=room.room_id,
+                    user_id=user_id,
+                    role=str(member_in.role),
+                    seat_index=member_in.seat_index,
+                    left_at=None,
+                ))
+                continue
+            member.role = str(member_in.role)
+            member.seat_index = member_in.seat_index
+            member.left_at = None
+
+        for member in existing_members:
+            if str(member.user_id) in payload_users:
+                continue
+            member.left_at = now
+
+    stale_rooms = (await db.execute(
+        select(Room).where(
+            Room.game_server_id == game_server_id,
+            Room.status != "Ended",
+        )
+    )).scalars().all()
+    for room in stale_rooms:
+        if str(room.room_code) in payload_codes:
+            continue
+        room.status = "Ended"
+        room.updated_at = now
+
+    await db.commit()
+    return {"ok": True}
 
 
 class ParticipantIn(BaseModel):

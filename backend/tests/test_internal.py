@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models import GameServer, Room, Match, MatchParticipant, MatchReplay
+from app.models import GameServer, Room, RoomMember, Match, MatchParticipant, MatchReplay
 
 INTERNAL_HEADERS = {"X-Internal-Secret": settings.internal_api_secret}
 
@@ -86,6 +86,61 @@ async def test_list_active_rooms_for_server(client: AsyncClient):
     data = resp.json()["ok"]
     assert isinstance(data, list)
     assert any(item["room_code"] == code and item["status"] == "Lobby" for item in data)
+
+
+@pytest.mark.asyncio
+async def test_sync_room_directory_creates_room_and_members(client: AsyncClient, db_session: AsyncSession):
+    payload = {
+        "ws_url": "wss://single.example.test",
+        "rooms": [
+            {
+                "room_code": "SYNC01",
+                "owner_user_id": "u_host_sync",
+                "status": "Lobby",
+                "join_policy": "public",
+                "config_json": "{\"desired_player_count\":2}",
+                "members": [
+                    {"user_id": "u_host_sync", "role": "host", "seat_index": 0},
+                    {"user_id": "u_p2_sync", "role": "player", "seat_index": 1},
+                ],
+            }
+        ],
+    }
+    resp = await client.post("/internal/game_servers/gs-sync-1/rooms/sync", json=payload, headers=INTERNAL_HEADERS)
+    assert resp.status_code == 200
+
+    room = (await db_session.execute(select(Room).where(Room.room_code == "SYNC01"))).scalar_one()
+    assert room.game_server_id == "gs-sync-1"
+    assert room.ws_url == "wss://single.example.test"
+    members = (await db_session.execute(
+        select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.left_at.is_(None))
+    )).scalars().all()
+    assert len(members) == 2
+
+
+@pytest.mark.asyncio
+async def test_sync_room_directory_marks_missing_rooms_ended(client: AsyncClient, db_session: AsyncSession):
+    initial = await client.post("/internal/game_servers/gs-sync-2/rooms/sync", json={
+        "rooms": [
+            {
+                "room_code": "SYNC02",
+                "owner_user_id": "u_host_sync",
+                "status": "Lobby",
+                "join_policy": "public",
+                "config_json": "{}",
+                "members": [{"user_id": "u_host_sync", "role": "host", "seat_index": 0}],
+            }
+        ],
+    }, headers=INTERNAL_HEADERS)
+    assert initial.status_code == 200
+
+    second = await client.post("/internal/game_servers/gs-sync-2/rooms/sync", json={
+        "rooms": [],
+    }, headers=INTERNAL_HEADERS)
+    assert second.status_code == 200
+
+    room = (await db_session.execute(select(Room).where(Room.room_code == "SYNC02"))).scalar_one()
+    assert room.status == "Ended"
 
 
 @pytest.mark.asyncio
