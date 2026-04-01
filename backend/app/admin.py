@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user, has_admin_access_configured, is_admin_user
 from app.config import settings
 from app.db import get_db
-from app.models import AuthIdentity, Match, MatchParticipant, MatchReplay, Room, RoomMember, Session, User
+from app.models import AuthIdentity, Match, MatchParticipant, MatchReplay, Room, RoomMember, RoomTombstone, Session, User
 from app.replay_storage import get_local_replay_path, parse_local_replay_filename
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
@@ -195,6 +195,14 @@ async def _delete_rooms_by_codes(db: AsyncSession, room_codes: list[str]) -> lis
 
     room_ids = [str(room.room_id) for room in rooms]
     existing_room_codes = [str(room.room_code) for room in rooms]
+    existing_tombstones = (await db.execute(
+        select(RoomTombstone).where(RoomTombstone.room_code.in_(existing_room_codes))
+    )).scalars().all()
+    tombstone_codes = {str(t.room_code) for t in existing_tombstones}
+    for room_code in existing_room_codes:
+        if room_code in tombstone_codes:
+            continue
+        db.add(RoomTombstone(room_code=room_code))
     await db.execute(delete(RoomMember).where(RoomMember.room_id.in_(room_ids)))
     await db.execute(delete(Room).where(Room.room_id.in_(room_ids)))
     return existing_room_codes

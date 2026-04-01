@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models import GameServer, Room, RoomMember, Match, MatchParticipant, MatchReplay
+from app.models import GameServer, Room, RoomMember, RoomTombstone, Match, MatchParticipant, MatchReplay
 
 INTERNAL_HEADERS = {"X-Internal-Secret": settings.internal_api_secret}
 
@@ -180,6 +180,32 @@ async def test_sync_room_directory_does_not_revive_ended_room(client: AsyncClien
     room_after = (await db_session.execute(select(Room).where(Room.room_code == "SYNC03"))).scalar_one()
     assert room_after.status == "Ended"
     assert room_after.owner_user_id == "u_owner_sync3"
+
+
+@pytest.mark.asyncio
+async def test_sync_room_directory_does_not_recreate_deleted_room(client: AsyncClient, db_session: AsyncSession):
+    db_session.add(RoomTombstone(room_code="SYNC04"))
+    await db_session.commit()
+
+    resp = await client.post("/internal/game_servers/gs-sync-4/rooms/sync", json={
+        "ws_url": "wss://single.example.test",
+        "rooms": [
+            {
+                "room_code": "SYNC04",
+                "owner_user_id": "u_owner_sync4",
+                "status": "Lobby",
+                "join_policy": "public",
+                "config_json": "{}",
+                "members": [{"user_id": "u_owner_sync4", "role": "host", "seat_index": 0}],
+            }
+        ],
+    }, headers=INTERNAL_HEADERS)
+    assert resp.status_code == 200
+    assert resp.json()["accepted_room_codes"] == []
+    assert resp.json()["skipped_ended_room_codes"] == ["SYNC04"]
+
+    room_after = (await db_session.execute(select(Room).where(Room.room_code == "SYNC04"))).scalar_one_or_none()
+    assert room_after is None
 
 
 @pytest.mark.asyncio

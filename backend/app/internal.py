@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_db
-from app.models import GameServer, Room, RoomMember, Match, MatchParticipant, MatchReplay
+from app.models import GameServer, Room, RoomMember, RoomTombstone, Match, MatchParticipant, MatchReplay
 from app.replay_storage import save_local_replay_archive
 
 router = APIRouter(prefix="/internal", tags=["internal"])
@@ -154,6 +154,12 @@ async def sync_room_directory(game_server_id: str, req: RoomDirectorySyncRequest
         room = (await db.execute(
             select(Room).where(Room.room_code == room_code)
         )).scalar_one_or_none()
+        tombstone = (await db.execute(
+            select(RoomTombstone).where(RoomTombstone.room_code == room_code)
+        )).scalar_one_or_none()
+        if tombstone is not None:
+            skipped_ended_room_codes.append(room_code)
+            continue
         if room is not None and str(room.status) == "Ended":
             skipped_ended_room_codes.append(room_code)
             continue

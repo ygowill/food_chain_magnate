@@ -87,6 +87,13 @@ class RoomMember(Base):
     left_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class RoomTombstone(Base):
+    __tablename__ = "room_tombstones"
+
+    room_code: Mapped[str] = mapped_column(String, primary_key=True)
+    deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
 class Match(Base):
     __tablename__ = "matches"
 

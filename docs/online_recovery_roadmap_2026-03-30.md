@@ -427,3 +427,14 @@
 - 新增验证：
   - 扩展 `OnlineLobbyResumeControllerTest`，覆盖“connect 返回成功，但随后异步 `disconnected(connection_failed)` 时仍会重试且保留 resume 上下文”
   - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：`passed=291/291 failed=[]`
+
+### 2026-04-01（Review Fix 6）
+
+- 修复“本地快照会重建 backend 已删除的房间目录”：
+  - backend 新增 `RoomTombstone`。
+  - 管理端批量删除房间时会写入 tombstone。
+  - `rooms/sync` 遇到 tombstone 会跳过该房间，不再从本地快照重建 backend 目录。
+- 新增验证：
+  - `backend/tests/test_internal.py::test_sync_room_directory_does_not_recreate_deleted_room`
+  - `backend/.venv/bin/python -m pytest -q backend/tests/test_internal.py`：`13 passed`
+  - `backend/.venv/bin/python -m pytest -q backend/tests/test_admin.py`：`4 passed`
