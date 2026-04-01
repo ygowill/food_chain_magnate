@@ -19,6 +19,8 @@ var _attempted: bool = false
 var _connected: bool = false
 var _disconnected: bool = false
 var _disconnect_reason: String = ""
+var _room_state_ready: bool = false
+var _target_room_code: String = ""
 
 func setup(
 	ensure_session: Callable,
@@ -98,6 +100,7 @@ func attempt_auto_resume_if_needed() -> void:
 			return
 
 		var room_code := NetContext.get_online_resume_room_code() if NetContext != null else ""
+		_target_room_code = str(room_code).strip_edges().to_upper()
 		var resume_resp = await _resume_room.call(room_code)
 		if not (resume_resp is Dictionary):
 			last_message = "resume_room 返回格式错误"
@@ -200,25 +203,32 @@ func _connect_netclient_signals() -> void:
 		return
 	var cb_connected := Callable(self, "_on_net_connected")
 	var cb_disconnected := Callable(self, "_on_net_disconnected")
+	var cb_room_state := Callable(self, "_on_net_room_state_updated")
 	if not NetClient.connected.is_connected(cb_connected):
 		NetClient.connected.connect(cb_connected)
 	if not NetClient.disconnected.is_connected(cb_disconnected):
 		NetClient.disconnected.connect(cb_disconnected)
+	if not NetClient.room_state_updated.is_connected(cb_room_state):
+		NetClient.room_state_updated.connect(cb_room_state)
 
 func _disconnect_netclient_signals() -> void:
 	if NetClient == null:
 		return
 	var cb_connected := Callable(self, "_on_net_connected")
 	var cb_disconnected := Callable(self, "_on_net_disconnected")
+	var cb_room_state := Callable(self, "_on_net_room_state_updated")
 	if NetClient.connected.is_connected(cb_connected):
 		NetClient.connected.disconnect(cb_connected)
 	if NetClient.disconnected.is_connected(cb_disconnected):
 		NetClient.disconnected.disconnect(cb_disconnected)
+	if NetClient.room_state_updated.is_connected(cb_room_state):
+		NetClient.room_state_updated.disconnect(cb_room_state)
 
 func _reset_connect_wait_state() -> void:
 	_connected = false
 	_disconnected = false
 	_disconnect_reason = ""
+	_room_state_ready = false
 
 func _wait_for_connect_result() -> bool:
 	var loop = Engine.get_main_loop()
@@ -226,7 +236,7 @@ func _wait_for_connect_result() -> bool:
 		return false
 	var deadline := Time.get_ticks_msec() + int(CONNECT_TIMEOUT_SEC * 1000.0)
 	while Time.get_ticks_msec() <= deadline:
-		if _connected:
+		if _room_state_ready:
 			return true
 		if _disconnected:
 			return false
@@ -239,6 +249,16 @@ func _on_net_connected() -> void:
 func _on_net_disconnected(reason: String) -> void:
 	_disconnected = true
 	_disconnect_reason = str(reason)
+
+func _on_net_room_state_updated(room_state: Dictionary) -> void:
+	var room_code := str(room_state.get("room_code", "")).strip_edges().to_upper()
+	if room_code.is_empty():
+		return
+	if _target_room_code.is_empty():
+		return
+	if room_code != _target_room_code:
+		return
+	_room_state_ready = true
 
 func _set_auto_resume_reconnecting(active: bool) -> void:
 	if NetContext == null or not NetContext.has_method("set_online_reconnecting"):

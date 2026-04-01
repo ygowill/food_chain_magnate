@@ -147,9 +147,11 @@ class _Harness:
 		if connect_calls <= connect_failures_before_success:
 			return Result.failure("connect_failed")
 		if connect_calls <= async_disconnects_before_success:
+			NetClient.call_deferred("emit_signal", "connected")
 			NetClient.call_deferred("emit_signal", "disconnected", "connection_failed")
 			return Result.success()
 		NetClient.call_deferred("emit_signal", "connected")
+		NetClient.call_deferred("emit_signal", "room_state_updated", {"room_code": last_room_code})
 		return Result.success()
 
 	func mark_platform_ready() -> void:

@@ -438,3 +438,13 @@
   - `backend/tests/test_internal.py::test_sync_room_directory_does_not_recreate_deleted_room`
   - `backend/.venv/bin/python -m pytest -q backend/tests/test_internal.py`：`13 passed`
   - `backend/.venv/bin/python -m pytest -q backend/tests/test_admin.py`：`4 passed`
+
+### 2026-04-01（Review Fix 7）
+
+- 修复“大厅自动恢复把 transport-only connect 当成功”：
+  - `OnlineLobbyResumeController` 的成功判定从“收到 `connected`”提升为“收到目标房间的 `room_state_updated`”。
+  - transport 建连成功但房间握手失败的情况，现在会继续走恢复失败/重试路径，而不会过早退出自动恢复流程。
+- 新增验证：
+  - 扩展 `OnlineLobbyResumeControllerTest`，现在 success path 需要显式收到匹配 `room_code` 的 `room_state_updated`
+  - 扩展 `OnlineLobbyResumeControllerTest`，覆盖“transport 连上但随后异步失败”仍会重试
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：`passed=291/291 failed=[]`
