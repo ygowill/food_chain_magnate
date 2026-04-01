@@ -891,7 +891,7 @@ func _platform_connect_to_ws_internal(ws_url: String, connect_token: String, sho
 	_ws_connect_in_progress = true
 	_refresh_ui()
 	_sync_bound_player_profile_name(true)
-	var r: Result = NetClient.connect_to_server(url)
+	var r: Result = NetClient.connect_to_server(url, true)
 	if not r.ok:
 		_ws_connect_in_progress = false
 		_set_connect_status("连接失败：%s" % r.error)

@@ -115,6 +115,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.NetContextOnlineResumePersistenceTestClass.run(),
 		},
 		{
+			"name": "NetClientConnectPreserveContextTest",
+			"fn": func() -> Result: return TestRefs.NetClientConnectPreserveContextTestClass.run(),
+		},
+		{
 			"name": "OnlineResumeErrorPolicyTest",
 			"fn": func() -> Result: return TestRefs.OnlineResumeErrorPolicyTestClass.run(),
 		},
