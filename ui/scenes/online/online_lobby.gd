@@ -1066,8 +1066,21 @@ func _on_net_connected() -> void:
 
 func _on_net_disconnected(reason: String) -> void:
 	_ws_connect_in_progress = false
-	if NetContext == null or not NetContext.has_method("is_online_reconnecting") or not NetContext.is_online_reconnecting():
+	var auto_resuming := NetContext != null and NetContext.has_method("is_online_reconnecting") and NetContext.is_online_reconnecting()
+	if not auto_resuming:
 		_clear_online_resume_context()
+	if auto_resuming:
+		_set_browse_status("")
+		_set_room_status("")
+		_ensure_config_sync_controller()
+		if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
+			_room_config_sync_controller.reset()
+		_start_game_request_id = ""
+		_start_game_flow_in_progress = false
+		if SceneManager != null and SceneManager.has_method("hide_loading"):
+			SceneManager.hide_loading()
+		_refresh_ui()
+		return
 	var r := str(reason).strip_edges()
 	if r == "connection_failed":
 		var project_path := ProjectSettings.globalize_path("res://")

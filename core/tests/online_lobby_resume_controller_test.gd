@@ -62,6 +62,18 @@ static func run() -> Result:
 	if connect_retry_harness.connect_calls != 2:
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "同步建连失败后应再次尝试连接")
 
+	NetContext.set_online_resume_context("ROOM92", "player", "https://platform.example.test")
+	var async_retry_harness := _Harness.new()
+	async_retry_harness.async_disconnects_before_success = 1
+	var async_retry_controller: RefCounted = _build_controller(async_retry_harness)
+	await async_retry_controller.attempt_auto_resume_if_needed()
+	if async_retry_harness.resume_calls != 2:
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "异步 connection_failed 后应重新走完整恢复流程")
+	if async_retry_harness.connect_calls != 2:
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "异步 connection_failed 后应再次尝试连接")
+	if not NetContext.has_online_resume_context():
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "异步 connection_failed 不应清理 resume 上下文")
+
 	NetContext.set_online_resume_context("ROOM89", "player", "https://platform.example.test")
 	NetContext.online_resume_state["user_id"] = "u_expected"
 	PlatformSession.user_id = "u_other"
@@ -110,6 +122,7 @@ class _Harness:
 	var last_connect_token: String = ""
 	var resume_failures_before_success: int = 0
 	var connect_failures_before_success: int = 0
+	var async_disconnects_before_success: int = 0
 
 	func ensure_session() -> Result:
 		ensure_calls += 1
@@ -133,6 +146,10 @@ class _Harness:
 		last_connect_token = str(connect_token)
 		if connect_calls <= connect_failures_before_success:
 			return Result.failure("connect_failed")
+		if connect_calls <= async_disconnects_before_success:
+			NetClient.call_deferred("emit_signal", "disconnected", "connection_failed")
+			return Result.success()
+		NetClient.call_deferred("emit_signal", "connected")
 		return Result.success()
 
 	func mark_platform_ready() -> void:

@@ -417,3 +417,13 @@
   - `backend/tests/test_rooms.py::test_join_room_rejects_ended_room`
   - `backend/tests/test_rooms.py::test_spectate_room_rejects_ended_room`
   - `backend/.venv/bin/python -m pytest -q backend/tests/test_rooms.py`：`18 passed`
+
+### 2026-04-01（Review Fix 5）
+
+- 修复“大厅冷启动恢复遇到异步 `connection_failed` 会清空 resume 上下文”：
+  - `OnlineLobbyResumeController` 现在会在整个自动恢复尝试窗口内显式设置 `online_reconnecting=true`。
+  - 自动恢复控制器会订阅 `NetClient.connected/disconnected`，把异步 `connection_failed/server_disconnected` 也纳入重试判定，而不是只覆盖同步 connect 返回失败。
+  - `online_lobby.gd` 在 `online_reconnecting=true` 时不会清空 resume 上下文，也不会弹出同步连接失败对话框干扰自动恢复重试。
+- 新增验证：
+  - 扩展 `OnlineLobbyResumeControllerTest`，覆盖“connect 返回成功，但随后异步 `disconnected(connection_failed)` 时仍会重试且保留 resume 上下文”
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`：`passed=291/291 failed=[]`

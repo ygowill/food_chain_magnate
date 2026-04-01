@@ -4,6 +4,7 @@ extends RefCounted
 
 const ResumeErrorPolicyClass = preload("res://ui/scenes/online/online_resume_error_policy.gd")
 const RETRY_DELAYS_SEC := [0.0, 0.5, 1.5]
+const CONNECT_TIMEOUT_SEC := 3.0
 
 var _ensure_session: Callable = Callable()
 var _resume_room: Callable = Callable()
@@ -15,6 +16,9 @@ var _show_error: Callable = Callable()
 var _hide_loading: Callable = Callable()
 var _refresh_ui: Callable = Callable()
 var _attempted: bool = false
+var _connected: bool = false
+var _disconnected: bool = false
+var _disconnect_reason: String = ""
 
 func setup(
 	ensure_session: Callable,
@@ -57,6 +61,8 @@ func attempt_auto_resume_if_needed() -> void:
 	if not should_attempt_auto_resume():
 		return
 	_attempted = true
+	_set_auto_resume_reconnecting(true)
+	_connect_netclient_signals()
 
 	var last_message := "自动恢复失败"
 	for attempt_index in range(RETRY_DELAYS_SEC.size()):
@@ -128,15 +134,34 @@ func attempt_auto_resume_if_needed() -> void:
 				return
 			continue
 
+		_reset_connect_wait_state()
 		var connect_r = _connect_to_ws.call(ws_url, connect_token)
 		if connect_r is Result and not connect_r.ok:
 			last_message = str(connect_r.error)
 			if attempt_index == RETRY_DELAYS_SEC.size() - 1:
+				_set_auto_resume_reconnecting(false)
+				_disconnect_netclient_signals()
 				_fail("自动恢复失败", last_message)
 				return
 			continue
-		return
 
+		var connected_ok := await _wait_for_connect_result()
+		if connected_ok:
+			_set_auto_resume_reconnecting(false)
+			_disconnect_netclient_signals()
+			return
+
+		last_message = _disconnect_reason if not _disconnect_reason.is_empty() else "连接服务器超时"
+		if NetClient != null:
+			NetClient.shutdown(false)
+		if attempt_index == RETRY_DELAYS_SEC.size() - 1:
+			_set_auto_resume_reconnecting(false)
+			_disconnect_netclient_signals()
+			_fail("自动恢复失败", last_message)
+			return
+
+	_set_auto_resume_reconnecting(false)
+	_disconnect_netclient_signals()
 	_fail("自动恢复失败", last_message)
 
 func _fail(title: String, message: String) -> void:
@@ -169,6 +194,58 @@ func _wait_seconds(duration_sec: float) -> void:
 	if not (loop is SceneTree):
 		return
 	await (loop as SceneTree).create_timer(duration_sec).timeout
+
+func _connect_netclient_signals() -> void:
+	if NetClient == null:
+		return
+	var cb_connected := Callable(self, "_on_net_connected")
+	var cb_disconnected := Callable(self, "_on_net_disconnected")
+	if not NetClient.connected.is_connected(cb_connected):
+		NetClient.connected.connect(cb_connected)
+	if not NetClient.disconnected.is_connected(cb_disconnected):
+		NetClient.disconnected.connect(cb_disconnected)
+
+func _disconnect_netclient_signals() -> void:
+	if NetClient == null:
+		return
+	var cb_connected := Callable(self, "_on_net_connected")
+	var cb_disconnected := Callable(self, "_on_net_disconnected")
+	if NetClient.connected.is_connected(cb_connected):
+		NetClient.connected.disconnect(cb_connected)
+	if NetClient.disconnected.is_connected(cb_disconnected):
+		NetClient.disconnected.disconnect(cb_disconnected)
+
+func _reset_connect_wait_state() -> void:
+	_connected = false
+	_disconnected = false
+	_disconnect_reason = ""
+
+func _wait_for_connect_result() -> bool:
+	var loop = Engine.get_main_loop()
+	if not (loop is SceneTree):
+		return false
+	var deadline := Time.get_ticks_msec() + int(CONNECT_TIMEOUT_SEC * 1000.0)
+	while Time.get_ticks_msec() <= deadline:
+		if _connected:
+			return true
+		if _disconnected:
+			return false
+		await (loop as SceneTree).process_frame
+	return false
+
+func _on_net_connected() -> void:
+	_connected = true
+
+func _on_net_disconnected(reason: String) -> void:
+	_disconnected = true
+	_disconnect_reason = str(reason)
+
+func _set_auto_resume_reconnecting(active: bool) -> void:
+	if NetContext == null or not NetContext.has_method("set_online_reconnecting"):
+		return
+	if not NetContext.has_online_resume_context():
+		return
+	NetContext.set_online_reconnecting(bool(active))
 
 func _stringify_platform_error(error_val) -> String:
 	if error_val is Dictionary:
