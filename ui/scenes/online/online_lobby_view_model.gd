@@ -21,6 +21,11 @@ static func get_host_peer_id(room_state: Dictionary) -> int:
 		return 0
 	return int(room_state.get("host_peer_id", 0))
 
+static func get_host_seat_index(room_state: Dictionary) -> int:
+	if room_state == null:
+		return -1
+	return int(room_state.get("host_seat_index", -1))
+
 static func get_players(room_state: Dictionary) -> Array:
 	if room_state == null:
 		return []
@@ -50,5 +55,12 @@ static func can_start_game(room_state: Dictionary, local_peer_id: int) -> bool:
 	if desired <= 0:
 		return false
 	var players: Array = get_players(room_state)
-	return players.size() == desired
-
+	if players.size() != desired:
+		return false
+	var connected_players := 0
+	for p_val in players:
+		if not (p_val is Dictionary):
+			continue
+		if bool(Dictionary(p_val).get("connected", false)):
+			connected_players += 1
+	return connected_players == desired

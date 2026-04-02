@@ -11,6 +11,7 @@ const PROTOCOL_VERSION := 1
 
 const COMMAND_PRIVACY_SPECTATOR_VIEWER_PLAYER_ID := 999999
 const ONLINE_RESUME_SAVE_PATH := "user://online_resume_state.cfg"
+const ONLINE_RESUME_WEB_STORAGE_KEY := "fcm_online_resume_state"
 
 var mode: Mode = Mode.HOTSEAT
 var local_player_id: int = -1
@@ -22,8 +23,10 @@ var room_list: Array = []
 var player_profile: Dictionary = {}
 var online_resume_state: Dictionary = {}
 var _online_resume_save_path := ONLINE_RESUME_SAVE_PATH
+var _is_web: bool = false
 
 func _ready() -> void:
+	_is_web = OS.get_name() == "Web"
 	_ensure_default_profile()
 	reload_online_resume_state_from_disk()
 
@@ -111,6 +114,8 @@ func set_online_resume_save_path_for_test(path: String) -> void:
 	_online_resume_save_path = ONLINE_RESUME_SAVE_PATH if next_path.is_empty() else next_path
 
 func save_online_resume_state_to_disk() -> Result:
+	if _is_web:
+		return _save_online_resume_state_web()
 	var cfg := ConfigFile.new()
 	if not online_resume_state.is_empty():
 		for key in online_resume_state.keys():
@@ -121,26 +126,60 @@ func save_online_resume_state_to_disk() -> Result:
 	return Result.success()
 
 func reload_online_resume_state_from_disk() -> Result:
+	if _is_web:
+		return _load_online_resume_state_web()
 	var cfg := ConfigFile.new()
 	if cfg.load(_online_resume_save_path) != OK:
 		online_resume_state = {}
 		return Result.success()
 
-	var room_code := str(cfg.get_value("resume", "room_code", "")).strip_edges().to_upper()
-	if room_code.is_empty():
+	online_resume_state = _normalize_online_resume_state({
+		"room_code": cfg.get_value("resume", "room_code", ""),
+		"role": cfg.get_value("resume", "role", ""),
+		"platform_base_url": cfg.get_value("resume", "platform_base_url", ""),
+		"in_game": cfg.get_value("resume", "in_game", false),
+		"reconnecting": cfg.get_value("resume", "reconnecting", false),
+		"session_id": cfg.get_value("resume", "session_id", ""),
+		"user_id": cfg.get_value("resume", "user_id", ""),
+	})
+	return Result.success()
+
+func _save_online_resume_state_web() -> Result:
+	if online_resume_state.is_empty():
+		JavaScriptBridge.eval("localStorage.removeItem('fcm_online_resume_state')")
+		return Result.success()
+	var encoded := JSON.stringify(online_resume_state)
+	JavaScriptBridge.eval(
+		"localStorage.setItem('%s', %s)" % [ONLINE_RESUME_WEB_STORAGE_KEY, JSON.stringify(encoded)]
+	)
+	return Result.success()
+
+func _load_online_resume_state_web() -> Result:
+	var raw = JavaScriptBridge.eval("localStorage.getItem('%s') || ''" % ONLINE_RESUME_WEB_STORAGE_KEY)
+	var text := str(raw).strip_edges()
+	if text.is_empty():
 		online_resume_state = {}
 		return Result.success()
-
-	online_resume_state = {
-		"room_code": room_code,
-		"role": str(cfg.get_value("resume", "role", "")).strip_edges(),
-		"platform_base_url": str(cfg.get_value("resume", "platform_base_url", "")).strip_edges(),
-		"in_game": bool(cfg.get_value("resume", "in_game", false)),
-		"reconnecting": bool(cfg.get_value("resume", "reconnecting", false)),
-		"session_id": str(cfg.get_value("resume", "session_id", "")).strip_edges(),
-		"user_id": str(cfg.get_value("resume", "user_id", "")).strip_edges(),
-	}
+	var parsed: Variant = JSON.parse_string(text)
+	online_resume_state = _normalize_online_resume_state(parsed)
 	return Result.success()
+
+func _normalize_online_resume_state(value) -> Dictionary:
+	if not (value is Dictionary):
+		return {}
+	var src: Dictionary = Dictionary(value)
+	var room_code := str(src.get("room_code", "")).strip_edges().to_upper()
+	if room_code.is_empty():
+		return {}
+	return {
+		"room_code": room_code,
+		"role": str(src.get("role", "")).strip_edges(),
+		"platform_base_url": str(src.get("platform_base_url", "")).strip_edges(),
+		"in_game": bool(src.get("in_game", false)),
+		"reconnecting": bool(src.get("reconnecting", false)),
+		"session_id": str(src.get("session_id", "")).strip_edges(),
+		"user_id": str(src.get("user_id", "")).strip_edges(),
+	}
 
 func _ensure_default_profile() -> void:
 	var name := "玩家"

@@ -163,7 +163,7 @@ func should_preserve_online_context_on_disconnect() -> bool:
 		return false
 	if not NetContext.has_online_resume_context():
 		return false
-	return NetContext.is_online_resume_in_game() or NetContext.is_online_reconnecting()
+	return true
 
 func request_create_room(desired_player_count: int, room_password: String, config: Dictionary = {}) -> String:
 	var request_id := _next_request_id()

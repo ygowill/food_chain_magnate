@@ -19,6 +19,34 @@ static func run() -> Result:
 
 	var client = ClientLogicClass.new()
 
+	NetContext.reset()
+	NetContext.set_online_resume_context("ROOM_LOBBY", "player", "https://platform.example.test")
+	if NetClient == null or not NetClient.should_preserve_online_context_on_disconnect():
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			"Lobby resume 上下文存在时应保留联机上下文"
+		)
+	NetContext.clear_online_resume_context()
+	if NetClient != null and NetClient.should_preserve_online_context_on_disconnect():
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			"无 resume 上下文时不应保留联机上下文"
+		)
+
 	var resumable_net := _MockNet.new()
 	var resumable_reasons: Array[String] = []
 	resumable_net.disconnected.connect(func(reason: String) -> void:

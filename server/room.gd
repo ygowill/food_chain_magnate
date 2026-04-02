@@ -399,10 +399,15 @@ func disconnect_peer(peer_id: int) -> Result:
 		_peer_id_by_seat_index.erase(seat_index)
 
 	var host_changed := false
-	if host_peer_id == peer_id:
-		host_peer_id = _pick_new_host_peer_id()
-		_refresh_host_seat_index_from_host_peer()
-		host_changed = true
+	if status == STATUS_LOBBY:
+		if host_peer_id == peer_id:
+			host_peer_id = 0
+			host_changed = true
+	else:
+		if host_peer_id == peer_id:
+			host_peer_id = _pick_new_host_peer_id()
+			_refresh_host_seat_index_from_host_peer()
+			host_changed = true
 
 	_touch()
 	return Result.success({
@@ -466,6 +471,7 @@ func to_room_state_dict() -> Dictionary:
 	return {
 		"room_code": room_code,
 		"host_peer_id": host_peer_id,
+		"host_seat_index": _host_seat_index,
 		"players": _build_players_array(),
 		"spectators": _build_spectators_array(),
 		"config": config.duplicate(true),
@@ -485,6 +491,8 @@ func to_room_summary_dict() -> Dictionary:
 
 	var host_name := ""
 	var host_profile: Dictionary = Dictionary(_player_profile_by_peer_id.get(host_peer_id, {}))
+	if host_profile.is_empty() and _host_seat_index >= 0:
+		host_profile = Dictionary(_seat_profile_by_seat_index.get(_host_seat_index, {}))
 	if not host_profile.is_empty():
 		host_name = str(host_profile.get("name", ""))
 
@@ -530,6 +538,8 @@ func can_start_game() -> Result:
 		return Result.failure("desired_player_count not set")
 	if get_player_count() != desired:
 		return Result.failure("players not ready: have=%d need=%d" % [get_player_count(), desired])
+	if get_connected_player_count() != desired:
+		return Result.failure("players not connected: have=%d need=%d" % [get_connected_player_count(), desired])
 
 	var seed_mode := str(config.get("seed_mode", "random")).strip_edges()
 	if seed_mode != "random" and seed_mode != "fixed":

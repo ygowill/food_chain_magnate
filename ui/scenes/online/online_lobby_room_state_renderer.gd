@@ -47,6 +47,7 @@ func render_room_state(room_state: Dictionary) -> void:
 	var is_lobby_status: bool = LobbyViewModelClass.get_room_status(room_state) == "Lobby"
 
 	var host_peer_id := LobbyViewModelClass.get_host_peer_id(room_state)
+	var host_seat_index := LobbyViewModelClass.get_host_seat_index(room_state)
 	var player_by_seat: Dictionary = {}
 	var players: Array = LobbyViewModelClass.get_players(room_state)
 	for p_val in players:
@@ -85,7 +86,7 @@ func render_room_state(room_state: Dictionary) -> void:
 			var peer_id := int(p.get("peer_id", 0))
 
 			var tag := ""
-			if peer_id > 0 and peer_id == host_peer_id:
+			if seat_index == host_seat_index or (peer_id > 0 and peer_id == host_peer_id):
 				tag = "房主"
 			elif not connected_flag:
 				tag = "掉线"

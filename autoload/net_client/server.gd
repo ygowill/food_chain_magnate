@@ -588,7 +588,9 @@ func on_peer_disconnected(peer_id: int) -> void:
 
 	_net._profile_by_peer_id.erase(peer_id)
 	var room = _net._room_manager.get_room_by_peer(peer_id)
-	var in_game := room != null and str(room.status) == "InGame"
+	var room_status := str(room.status) if room != null else ""
+	var in_game := room != null and room_status == "InGame"
+	var preserve_room_on_disconnect := room != null and (room_status == "InGame" or room_status == "Lobby")
 	var actor_id := -1
 	if room != null and (room.player_id_by_peer_id is Dictionary):
 		if room.player_id_by_peer_id.has(peer_id):
@@ -599,14 +601,14 @@ func on_peer_disconnected(peer_id: int) -> void:
 			room.player_id_by_peer_id.erase(str(peer_id))
 
 	var removed := false
-	var rr = _net._room_manager.disconnect_peer(peer_id) if in_game else _net._room_manager.leave_room(peer_id)
+	var rr = _net._room_manager.disconnect_peer(peer_id) if preserve_room_on_disconnect else _net._room_manager.leave_room(peer_id)
 	if rr.ok:
 		removed = bool(rr.value.get("removed", false))
 	else:
 		GameLog.error(
 			"NetClient",
-			"disconnect handling failed peer=%d in_game=%s err=%s %s"
-				% [peer_id, str(in_game), rr.error, _room_brief(room)]
+			"disconnect handling failed peer=%d preserve_room=%s err=%s %s"
+				% [peer_id, str(preserve_room_on_disconnect), rr.error, _room_brief(room)]
 		)
 
 	# 房间已被清理（无任何在线成员）：直接关闭对局，不再执行 forfeit/auto step。
@@ -656,6 +658,7 @@ func empty_room_state() -> Dictionary:
 	return {
 		"room_code": "",
 		"host_peer_id": 0,
+		"host_seat_index": -1,
 		"players": [],
 		"spectators": [],
 		"password_required": false,

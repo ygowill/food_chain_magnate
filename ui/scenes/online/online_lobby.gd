@@ -1066,8 +1066,10 @@ func _on_net_connected() -> void:
 
 func _on_net_disconnected(reason: String) -> void:
 	_ws_connect_in_progress = false
+	var has_resume_context := NetContext != null and NetContext.has_method("has_online_resume_context") and NetContext.has_online_resume_context()
 	var auto_resuming := NetContext != null and NetContext.has_method("is_online_reconnecting") and NetContext.is_online_reconnecting()
-	if not auto_resuming:
+	var recoverable_disconnect := has_resume_context
+	if not auto_resuming and not recoverable_disconnect:
 		_clear_online_resume_context()
 	if auto_resuming:
 		_set_browse_status("")
@@ -1080,6 +1082,21 @@ func _on_net_disconnected(reason: String) -> void:
 		if SceneManager != null and SceneManager.has_method("hide_loading"):
 			SceneManager.hide_loading()
 		_refresh_ui()
+		return
+	if recoverable_disconnect:
+		_set_connect_status("连接已中断，正在恢复房间...")
+		_set_browse_status("")
+		_set_room_status("")
+		_ensure_config_sync_controller()
+		if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
+			_room_config_sync_controller.reset()
+		_start_game_request_id = ""
+		_start_game_flow_in_progress = false
+		if SceneManager != null and SceneManager.has_method("hide_loading"):
+			SceneManager.hide_loading()
+		_resume_controller = null
+		_refresh_ui()
+		call_deferred("_attempt_auto_resume_if_needed")
 		return
 	var r := str(reason).strip_edges()
 	if r == "connection_failed":

@@ -59,6 +59,7 @@ const OnlineRewindToTurnStartTestClass = preload("res://core/tests/online_rewind
 const ForfeitPlayerActionTestClass = preload("res://core/tests/forfeit_player_action_test.gd")
 const ForfeitPlayerStateAccessTestClass = preload("res://core/tests/forfeit_player_state_access_test.gd")
 const OnlineRoomSpectatorTestClass = preload("res://core/tests/online_room_spectator_test.gd")
+const OnlineLobbyDisconnectReclaimTestClass = preload("res://core/tests/online_lobby_disconnect_reclaim_test.gd")
 const OnlineDisconnectGraceReconnectTestClass = preload("res://core/tests/online_disconnect_grace_reconnect_test.gd")
 const GameOnlineResyncReconnectFlowTestClass = preload("res://core/tests/game_online_resync_reconnect_flow_test.gd")
 const OnlineRoomPersistenceRecoveryTestClass = preload("res://core/tests/online_room_persistence_recovery_test.gd")
