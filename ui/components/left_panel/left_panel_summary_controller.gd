@@ -91,6 +91,8 @@ func _refresh_summary() -> void:
 	if is_instance_valid(_panel.restaurant_icon):
 		var tex = _panel._get_player_restaurant_logo_texture(view_id)
 		_panel.restaurant_icon.texture = tex
+	if _panel != null and _panel.has_method("_update_summary_status_badge"):
+		_panel._update_summary_status_badge(view_id, player)
 
 	# 玩家名称
 	if is_instance_valid(_panel.player_name_label):
@@ -134,6 +136,8 @@ func _set_summary_empty() -> void:
 		_panel.restaurant_count_label.text = "0店"
 	if is_instance_valid(_panel.salary_label):
 		_panel.salary_label.text = "$0/回合"
+	if _panel != null and _panel.has_method("_update_summary_status_badge"):
+		_panel._update_summary_status_badge()
 	_refresh_inventory_ui({}, -1)
 
 func _calculate_total_salary(player: Dictionary) -> int:

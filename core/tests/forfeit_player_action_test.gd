@@ -7,6 +7,15 @@ extends RefCounted
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
+	var r := _test_forfeit_removes_assets(player_count, seed)
+	if not r.ok:
+		return r
+	r = _test_last_player_standing_enters_game_over_immediately(seed)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 2})
+
+static func _test_forfeit_removes_assets(player_count: int, seed: int) -> Result:
 	var engine := GameEngine.new()
 	var init_r := engine.initialize(player_count, seed)
 	if not init_r.ok:
@@ -216,4 +225,36 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		if str(sd.get("piece_id", "")) != "house_with_garden" or int(sd.get("owner", -1)) != target_id:
 			return Result.failure("house cell 被错误移除/修改: %s" % str(sd))
 
+	return Result.success()
+
+static func _test_last_player_standing_enters_game_over_immediately(seed: int) -> Result:
+	var engine := GameEngine.new()
+	var init_r := engine.initialize(2, seed)
+	if not init_r.ok:
+		return Result.failure("last_player_standing initialize 失败: %s" % init_r.error)
+
+	var setup_r := TestPhaseUtilsClass.complete_setup(engine)
+	if not setup_r.ok:
+		return Result.failure("last_player_standing complete_setup 失败: %s" % setup_r.error)
+
+	var cmd := Command.create("forfeit_player", 0, {})
+	var fr: Result = engine.execute_command(cmd)
+	if not fr.ok:
+		return Result.failure("last_player_standing forfeit_player 失败: %s" % fr.error)
+
+	var state: GameState = engine.get_state()
+	if state == null:
+		return Result.failure("last_player_standing state 为空")
+	if str(state.phase) != "GameOver":
+		return Result.failure("仅剩一名玩家时应立即进入 GameOver，实际: %s" % str(state.phase))
+	var game_over_val = state.round_state.get("game_over", null) if state.round_state is Dictionary else null
+	if not (game_over_val is Dictionary):
+		return Result.failure("last_player_standing 应写入 round_state.game_over")
+	var game_over: Dictionary = Dictionary(game_over_val)
+	if str(game_over.get("reason", "")) != "last_player_standing":
+		return Result.failure("game_over.reason 应为 last_player_standing，实际: %s" % str(game_over))
+	if int(game_over.get("winner_player_id", -1)) != 1:
+		return Result.failure("winner_player_id 应为 1，实际: %s" % str(game_over.get("winner_player_id", null)))
+	if int(state.get_current_player_id()) != 1:
+		return Result.failure("current_player_id 应切换到剩余玩家 1，实际: %d" % int(state.get_current_player_id()))
 	return Result.success()

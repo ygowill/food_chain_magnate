@@ -62,6 +62,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		state.round_state["pending_phase_actions"] = pending_update.value
 	if confirmed_update.value != null:
 		state.round_state[ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY] = confirmed_update.value
+	_maybe_finish_game_if_last_active_player_remains(state, player_id)
 	return Result.success({"player_id": player_id})
 
 static func _remove_player_cash(state: GameState, player: Dictionary) -> Result:
@@ -287,3 +288,47 @@ static func _plan_online_dinnertime_confirmed_players_after_forfeit(state: GameS
 	if player_id >= 0 and player_id < confirmed.size():
 		confirmed[player_id] = true
 	return Result.success(confirmed)
+
+static func _maybe_finish_game_if_last_active_player_remains(state: GameState, forfeited_player_id: int) -> void:
+	if state == null or not (state.players is Array):
+		return
+
+	var active_player_ids: Array[int] = []
+	for pid in range(state.players.size()):
+		var player_val = state.players[pid]
+		if not (player_val is Dictionary):
+			continue
+		var live_player: Dictionary = player_val
+		if bool(live_player.get("forfeited", false)):
+			continue
+		active_player_ids.append(pid)
+		if active_player_ids.size() > 1:
+			return
+
+	var phase_before := str(state.phase)
+	state.phase = DefsClass.PHASE_GAME_OVER
+	state.sub_phase = ""
+	if not (state.round_state is Dictionary):
+		state.round_state = {}
+
+	var winner_player_id := -1
+	if active_player_ids.size() == 1:
+		winner_player_id = int(active_player_ids[0])
+		var winner_turn_index := state.turn_order.find(winner_player_id)
+		if winner_turn_index >= 0:
+			state.current_player_index = winner_turn_index
+	elif not state.turn_order.is_empty():
+		state.current_player_index = clampi(int(state.current_player_index), 0, state.turn_order.size() - 1)
+
+	var game_over: Dictionary = {}
+	if state.round_state.has("game_over") and (state.round_state["game_over"] is Dictionary):
+		game_over = Dictionary(state.round_state["game_over"]).duplicate(true)
+	game_over["reason"] = "last_player_standing"
+	game_over["round"] = int(state.round_number)
+	game_over["phase"] = phase_before
+	game_over["forfeited_player_id"] = int(forfeited_player_id)
+	if winner_player_id >= 0:
+		game_over["winner_player_id"] = winner_player_id
+	else:
+		game_over.erase("winner_player_id")
+	state.round_state["game_over"] = game_over

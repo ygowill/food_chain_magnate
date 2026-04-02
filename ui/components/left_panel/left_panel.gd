@@ -17,6 +17,14 @@ const LeftPanelSummaryControllerClass = preload("res://ui/components/left_panel/
 const LeftPanelMilestonesControllerClass = preload("res://ui/components/left_panel/left_panel_milestones_controller.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
+const WarningIconTexture = preload("res://assets/images/ui_icons/kenney_game/warning.png")
+const ForfeitIconTexture = preload("res://assets/ui/icons/kenney/game/close_cross_white.png")
+
+const STATUS_NONE := ""
+const STATUS_DISCONNECTED := "disconnected"
+const STATUS_FORFEITED := "forfeited"
+const STATUS_BADGE_NAME := "StatusBadge"
+const STATUS_BADGE_ICON_NAME := "StatusBadgeIcon"
 
 # === 玩家切换栏 ===
 @onready var restaurant_overview_section: PanelContainer = $MarginContainer/MainVBox/RestaurantOverviewSection
@@ -92,6 +100,10 @@ func _connect_signals() -> void:
 	if is_instance_valid(view_logs_button):
 		if not view_logs_button.pressed.is_connected(_on_view_logs_pressed):
 			view_logs_button.pressed.connect(_on_view_logs_pressed)
+	if NetClient != null:
+		var cb := Callable(self, "_on_room_state_updated")
+		if not NetClient.room_state_updated.is_connected(cb):
+			NetClient.room_state_updated.connect(cb)
 
 func _ensure_controllers() -> void:
 	if _employee_icons_controller == null or not is_instance_valid(_employee_icons_controller):
@@ -604,10 +616,13 @@ func _create_restaurant_overview_card(player_id: int, player: Dictionary, is_sel
 	margin.add_child(root_row)
 
 	var logo := TextureRect.new()
+	logo.name = "RestaurantLogo"
 	logo.custom_minimum_size = Vector2(58, 58)
 	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	logo.texture = _get_player_restaurant_logo_texture(player_id)
+	var status_kind := _get_player_status_kind(player_id, player)
+	_apply_player_status_badge(logo, status_kind)
 	root_row.add_child(logo)
 
 	var cash := int(cash_overrides.get(player_id, player.get("cash", 0)))
@@ -684,8 +699,142 @@ func _create_restaurant_overview_card(player_id: int, player: Dictionary, is_sel
 		milestone_count,
 		salary_level
 	]
+	var status_text := _get_player_status_text(status_kind)
+	if not status_text.is_empty():
+		card.tooltip_text += "\n状态: %s" % status_text
+	card.set_meta("status_kind", status_kind)
 	card.gui_input.connect(Callable(self, "_on_overview_card_gui_input").bind(player_id))
 	return card
+
+func _on_room_state_updated(_room_state: Dictionary) -> void:
+	if not is_inside_tree():
+		return
+	_refresh_restaurant_overview_cards()
+	if _summary_controller != null and is_instance_valid(_summary_controller):
+		_summary_controller.refresh()
+
+func _get_player_status_kind(player_id: int, player: Dictionary = {}) -> String:
+	var live_player := player
+	if live_player.is_empty() and _game_state != null and (_game_state.players is Array):
+		if player_id >= 0 and player_id < _game_state.players.size():
+			var player_val = _game_state.players[player_id]
+			if player_val is Dictionary:
+				live_player = Dictionary(player_val)
+
+	if bool(live_player.get("forfeited", false)):
+		return STATUS_FORFEITED
+
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return STATUS_NONE
+	var room_state := Dictionary(NetContext.room_state)
+	var players_val = room_state.get("players", null)
+	if not (players_val is Array):
+		return STATUS_NONE
+
+	for p_val in Array(players_val):
+		if not (p_val is Dictionary):
+			continue
+		var room_player: Dictionary = Dictionary(p_val)
+		if int(room_player.get("seat_index", -1)) != player_id:
+			continue
+		if bool(room_player.get("forfeited", false)):
+			return STATUS_FORFEITED
+		if not bool(room_player.get("connected", true)):
+			return STATUS_DISCONNECTED
+		return STATUS_NONE
+	return STATUS_NONE
+
+func _get_player_status_text(status_kind: String) -> String:
+	match status_kind:
+		STATUS_DISCONNECTED:
+			return "网络连接不佳"
+		STATUS_FORFEITED:
+			return "已弃权"
+		_:
+			return ""
+
+func _ensure_player_status_badge(host: Control) -> PanelContainer:
+	if host == null or not is_instance_valid(host):
+		return null
+	var badge := host.get_node_or_null(STATUS_BADGE_NAME) as PanelContainer
+	if badge != null and is_instance_valid(badge):
+		return badge
+
+	badge = PanelContainer.new()
+	badge.name = STATUS_BADGE_NAME
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.visible = false
+	badge.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	badge.offset_left = -20.0
+	badge.offset_top = 0.0
+	badge.offset_right = 0.0
+	badge.offset_bottom = 20.0
+	host.add_child(badge)
+
+	var icon := TextureRect.new()
+	icon.name = STATUS_BADGE_ICON_NAME
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.layout_mode = 1
+	icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon.anchor_right = 1.0
+	icon.anchor_bottom = 1.0
+	icon.offset_left = 3.0
+	icon.offset_top = 3.0
+	icon.offset_right = -3.0
+	icon.offset_bottom = -3.0
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	badge.add_child(icon)
+	return badge
+
+func _apply_player_status_badge(host: Control, status_kind: String) -> void:
+	var badge := _ensure_player_status_badge(host)
+	if badge == null or not is_instance_valid(badge):
+		return
+	var icon := badge.get_node_or_null(STATUS_BADGE_ICON_NAME) as TextureRect
+	if status_kind.is_empty():
+		badge.visible = false
+		badge.set_meta("status_kind", STATUS_NONE)
+		if icon != null:
+			icon.texture = null
+		return
+
+	var style := StyleBoxFlat.new()
+	style.set_corner_radius_all(10)
+	style.set_border_width_all(1)
+	match status_kind:
+		STATUS_DISCONNECTED:
+			style.bg_color = Color(0.95, 0.75, 0.18, 0.98)
+			style.border_color = Color(0.42, 0.24, 0.08, 0.95)
+			if icon != null:
+				icon.texture = WarningIconTexture
+				icon.modulate = Color(0.24, 0.18, 0.08, 1.0)
+		STATUS_FORFEITED:
+			style.bg_color = Color(0.78, 0.22, 0.18, 0.98)
+			style.border_color = Color(0.42, 0.08, 0.08, 0.95)
+			if icon != null:
+				icon.texture = ForfeitIconTexture
+				icon.modulate = Color(1, 1, 1, 1)
+		_:
+			badge.visible = false
+			badge.set_meta("status_kind", STATUS_NONE)
+			if icon != null:
+				icon.texture = null
+			return
+
+	badge.add_theme_stylebox_override("panel", style)
+	badge.visible = true
+	badge.set_meta("status_kind", status_kind)
+
+func _update_summary_status_badge(player_id: int = -1, player: Dictionary = {}) -> void:
+	if not is_instance_valid(restaurant_icon):
+		return
+	var status_kind := STATUS_NONE
+	if player_id >= 0:
+		status_kind = _get_player_status_kind(player_id, player)
+	restaurant_icon.set_meta("status_kind", status_kind)
+	restaurant_icon.tooltip_text = _get_player_status_text(status_kind)
+	_apply_player_status_badge(restaurant_icon, status_kind)
 
 func _resolve_view_player_id() -> int:
 	if _game_state == null:

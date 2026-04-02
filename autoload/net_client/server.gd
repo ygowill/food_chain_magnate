@@ -358,6 +358,14 @@ func _post_finalize_match(room) -> void:
 	if _net == null or not is_instance_valid(_net):
 		room.match_finalize_in_flight = false
 		return
+	if not (_net is Node):
+		room.match_finalize_in_flight = false
+		GameLog.warn(
+			"NetClient",
+			"Finalize skipped: transport is not a Node room=%s"
+				% _safe_text(str(room.room_code))
+		)
+		return
 
 	var http := HTTPRequest.new()
 	_net.add_child(http)
@@ -1793,6 +1801,8 @@ func server_drain_forfeited_auto_steps(room) -> void:
 		safety += 1
 		var state = room.game_engine.get_state()
 		if state == null:
+			return
+		if str(state.phase) == DefsClass.PHASE_GAME_OVER:
 			return
 
 		if server_try_auto_submit_forfeited_restructuring(room):
