@@ -211,6 +211,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.OnlineClientGameStartedReconnectTestClass.run(),
 		},
 		{
+			"name": "GameMenuDebugControllerOnlineQuitTest",
+			"fn": func() -> Result: return TestRefs.GameMenuDebugControllerOnlineQuitTestClass.run(),
+		},
+		{
 			"name": "OnlineRoomManagerTest",
 			"fn": func() -> Result: return TestRefs.OnlineRoomManagerTestClass.run(),
 		},
@@ -269,6 +273,10 @@ static func build_tests(host) -> Array[Dictionary]:
 		{
 			"name": "ServerIdentityStoreTest",
 			"fn": func() -> Result: return TestRefs.ServerIdentityStoreTestClass.run(),
+		},
+		{
+			"name": "GameStartupDirectResumeGuardTest",
+			"fn": func() -> Result: return TestRefs.GameStartupDirectResumeGuardTestClass.run(),
 		},
 		{
 			"name": "GameStartupOnlineResumeControllerTest",

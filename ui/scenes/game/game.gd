@@ -234,9 +234,10 @@ func _ready() -> void:
 
 	PerfTraceClass.end_span(span_layout)
 
-	var span_init_game := PerfTraceClass.begin_span("game:_initialize_game")
-	_initialize_game()
-	PerfTraceClass.end_span(span_init_game)
+	if not _should_defer_local_game_init(startup_direct_resume):
+		var span_init_game := PerfTraceClass.begin_span("game:_initialize_game")
+		_initialize_game()
+		PerfTraceClass.end_span(span_init_game)
 	if game_engine != null:
 		if _panel_controller != null:
 			_panel_controller.reset_bank_break_tracking(game_engine.get_state())
@@ -493,6 +494,16 @@ func _should_startup_online_resume_direct_to_game() -> bool:
 	if Globals.current_game_engine != null:
 		return false
 	return true
+
+func _should_defer_local_game_init(startup_direct_resume: bool) -> bool:
+	if not bool(startup_direct_resume):
+		return false
+	if Globals == null:
+		return true
+	if Globals.current_game_engine == null or not (Globals.current_game_engine is GameEngine):
+		return true
+	var existing_engine: GameEngine = Globals.current_game_engine
+	return existing_engine.get_state() == null
 
 func _ensure_online_resync_controller() -> void:
 	if game_engine == null:

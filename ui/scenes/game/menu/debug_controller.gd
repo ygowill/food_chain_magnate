@@ -41,7 +41,22 @@ func save_game() -> void:
 		GameLog.info("Game", "已保存到: %s" % path)
 	close_menu()
 
+static func cleanup_online_state_before_quit() -> void:
+	var should_reset := false
+	if NetContext != null:
+		should_reset = int(NetContext.mode) == int(NetContext.Mode.ONLINE_CLIENT)
+		if not should_reset and NetContext.has_method("has_online_resume_context"):
+			should_reset = bool(NetContext.has_online_resume_context())
+	if not should_reset:
+		return
+	if NetClient != null:
+		NetClient.shutdown(true)
+		return
+	if NetContext != null and NetContext.has_method("reset"):
+		NetContext.reset()
+
 func quit_to_menu() -> void:
 	GameLog.info("Game", "返回主菜单")
+	cleanup_online_state_before_quit()
 	Globals.reset_game_config()
 	SceneManager.goto_main_menu()
