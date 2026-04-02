@@ -41,6 +41,8 @@ static func run() -> Result:
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "connect_to_ws 参数错误")
 	if not harness.platform_marked_ready:
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "成功恢复前应标记 platform ready")
+	if harness.hide_loading_calls != 1:
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "成功恢复后应关闭 loading: %d" % harness.hide_loading_calls)
 
 	NetContext.set_online_resume_context("ROOM90", "player", "https://platform.example.test")
 	var retry_harness := _Harness.new()
@@ -123,6 +125,7 @@ class _Harness:
 	var resume_failures_before_success: int = 0
 	var connect_failures_before_success: int = 0
 	var async_disconnects_before_success: int = 0
+	var hide_loading_calls: int = 0
 
 	func ensure_session() -> Result:
 		ensure_calls += 1
@@ -167,7 +170,7 @@ class _Harness:
 		pass
 
 	func hide_loading() -> void:
-		pass
+		hide_loading_calls += 1
 
 	func refresh_ui() -> void:
 		pass

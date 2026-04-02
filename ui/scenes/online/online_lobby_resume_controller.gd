@@ -152,6 +152,12 @@ func attempt_auto_resume_if_needed() -> void:
 		if connected_ok:
 			_set_auto_resume_reconnecting(false)
 			_disconnect_netclient_signals()
+			if _hide_loading.is_valid():
+				_hide_loading.call()
+			if _set_browse_status.is_valid():
+				_set_browse_status.call("")
+			if _refresh_ui.is_valid():
+				_refresh_ui.call()
 			return
 
 		last_message = _disconnect_reason if not _disconnect_reason.is_empty() else "连接服务器超时"
