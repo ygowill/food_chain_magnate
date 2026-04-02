@@ -114,6 +114,31 @@ static func run() -> Result:
 		_reset_net_context()
 		return Result.failure("平台入房失败：get_peer_ids=%s" % str(peers))
 
+	# Same user reopens the lobby before old transport closes: new peer should take over the seat.
+	mock_net.multiplayer.remote_sender_id = 12
+	server.handle_rpc_client_hello({
+		"request_id": "r_p2_takeover",
+		"protocol_version": NetContext.PROTOCOL_VERSION,
+		"game_version": "0.0.0",
+		"schema_version": 0,
+		"player_profile": {"name": "P2Takeover", "color_index": 2, "restaurant_logo_id": -1},
+		"connect_token": str(player_token_r.value),
+	})
+
+	if str(rm.peer_to_room.get(12, "")) != room_code:
+		_reset_net_context()
+		return Result.failure("平台接管失败：new peer_to_room 未绑定到 %s" % room_code)
+	if rm.peer_to_room.has(11):
+		_reset_net_context()
+		return Result.failure("平台接管失败：old peer_to_room 未清理")
+	var peers_after: Array[int] = room.get_peer_ids()
+	if peers_after.size() != 2 or not peers_after.has(10) or not peers_after.has(12) or peers_after.has(11):
+		_reset_net_context()
+		return Result.failure("平台接管失败：get_peer_ids=%s" % str(peers_after))
+	if not _has_empty_room_state_push(mock_net.sent, 11):
+		_reset_net_context()
+		return Result.failure("平台接管失败：old peer 未收到 empty room_state")
+
 	_reset_net_context()
 	return Result.success()
 
@@ -145,3 +170,17 @@ class _MockNetClient:
 			"method": str(method),
 			"payload": payload.duplicate(true),
 		})
+
+static func _has_empty_room_state_push(sent: Array[Dictionary], peer_id: int) -> bool:
+	for item in sent:
+		if int(item.get("peer_id", -1)) != int(peer_id):
+			continue
+		if str(item.get("method", "")) != "rpc_room_state":
+			continue
+		var payload = item.get("payload", null)
+		if not (payload is Dictionary):
+			continue
+		var room_state: Dictionary = Dictionary(payload)
+		if str(room_state.get("room_code", "")).strip_edges().is_empty():
+			return true
+	return false

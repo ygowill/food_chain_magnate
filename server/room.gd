@@ -275,12 +275,15 @@ func reclaim_peer_at_seat(peer_id: int, profile: Dictionary, seat_index: int, us
 	if not _seat_profile_by_seat_index.has(idx):
 		return Result.failure("Seat not found")
 
+	var replaced_peer_id := 0
 	var current_peer_id := int(_peer_id_by_seat_index.get(idx, 0))
-	if current_peer_id > 0:
-		return Result.failure("Seat already connected")
-
 	var uid := str(user_id).strip_edges()
 	var existing_uid := str(_user_id_by_seat_index.get(idx, "")).strip_edges()
+	if current_peer_id > 0:
+		if uid.is_empty() or existing_uid.is_empty() or existing_uid != uid:
+			return Result.failure("Seat already connected")
+		_evict_connected_player_peer(current_peer_id)
+		replaced_peer_id = current_peer_id
 	if not uid.is_empty():
 		if not existing_uid.is_empty() and existing_uid != uid:
 			return Result.failure("user_id mismatch for seat")
@@ -295,7 +298,9 @@ func reclaim_peer_at_seat(peer_id: int, profile: Dictionary, seat_index: int, us
 		host_peer_id = peer_id
 
 	_touch()
-	return Result.success()
+	return Result.success({
+		"replaced_peer_id": replaced_peer_id,
+	})
 
 func reconnect_player(peer_id: int, profile: Dictionary, seat_index: int, user_id: String = "") -> Result:
 	if has_peer(peer_id):
@@ -309,13 +314,16 @@ func reconnect_player(peer_id: int, profile: Dictionary, seat_index: int, user_i
 	if not _seat_profile_by_seat_index.has(idx):
 		return Result.failure("Seat not found")
 
+	var replaced_peer_id := 0
 	var current_peer_id := int(_peer_id_by_seat_index.get(idx, 0))
-	if current_peer_id > 0:
-		return Result.failure("Seat already connected")
-
 	var uid := str(user_id).strip_edges()
+	var existing_uid := str(_user_id_by_seat_index.get(idx, "")).strip_edges()
+	if current_peer_id > 0:
+		if uid.is_empty() or existing_uid.is_empty() or existing_uid != uid:
+			return Result.failure("Seat already connected")
+		_evict_connected_player_peer(current_peer_id)
+		replaced_peer_id = current_peer_id
 	if not uid.is_empty():
-		var existing_uid := str(_user_id_by_seat_index.get(idx, "")).strip_edges()
 		if not existing_uid.is_empty() and existing_uid != uid:
 			return Result.failure("user_id mismatch for seat")
 		if existing_uid.is_empty():
@@ -330,9 +338,20 @@ func reconnect_player(peer_id: int, profile: Dictionary, seat_index: int, user_i
 
 	# InGame：恢复 peer->player_id 映射（actor_id == seat_index）
 	player_id_by_peer_id[peer_id] = idx
+	if idx == _host_seat_index:
+		host_peer_id = peer_id
 
 	_touch()
-	return Result.success()
+	return Result.success({
+		"replaced_peer_id": replaced_peer_id,
+	})
+
+func _evict_connected_player_peer(peer_id: int) -> void:
+	_player_profile_by_peer_id.erase(peer_id)
+	_seat_by_player_peer_id.erase(peer_id)
+	player_id_by_peer_id.erase(peer_id)
+	if host_peer_id == peer_id:
+		host_peer_id = 0
 
 func add_spectator(peer_id: int, profile: Dictionary) -> Result:
 	if has_peer(peer_id):

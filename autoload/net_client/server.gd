@@ -56,6 +56,15 @@ func _mark_room_directory_dirty() -> void:
 		return
 	_net.mark_server_room_directory_dirty()
 
+func _handle_replaced_peer(payload: Dictionary) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	var replaced_peer_id := int(payload.get("replaced_peer_id", 0))
+	if replaced_peer_id <= 0:
+		return
+	_net._profile_by_peer_id.erase(replaced_peer_id)
+	_net.rpc_id(replaced_peer_id, "rpc_room_state", empty_room_state())
+
 func _build_match_summary_payload(state) -> Dictionary:
 	var modules: Array[String] = []
 	if state != null and (state.modules is Array):
@@ -892,6 +901,7 @@ func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, 
 		return r
 
 	var payload: Dictionary = Dictionary(r.value) if (r.value is Dictionary) else {}
+	_handle_replaced_peer(payload)
 	var room = payload.get("room", null)
 	if room == null:
 		return ResultClass.failure("platform auto join missing room")

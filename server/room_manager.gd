@@ -172,6 +172,10 @@ func reconnect_player(peer_id: int, profile: Dictionary, room_code: String, seat
 	var rr: Result = room.reconnect_player(peer_id, profile, seat_index, user_id)
 	if not rr.ok:
 		return rr
+	var rr_value: Dictionary = Dictionary(rr.value) if rr.value is Dictionary else {}
+	var replaced_peer_id := int(rr_value.get("replaced_peer_id", 0))
+	if replaced_peer_id > 0:
+		peer_to_room.erase(replaced_peer_id)
 
 	peer_to_room[peer_id] = code
 	return Result.success({
@@ -179,6 +183,7 @@ func reconnect_player(peer_id: int, profile: Dictionary, room_code: String, seat
 		"room": room,
 		"room_state": room.to_room_state_dict(),
 		"role": str(role_label).strip_edges(),
+		"replaced_peer_id": replaced_peer_id,
 	})
 
 func reclaim_room_seat(peer_id: int, profile: Dictionary, room_code: String, seat_index: int, user_id: String, role_label: String = "player") -> Result:
@@ -198,6 +203,10 @@ func reclaim_room_seat(peer_id: int, profile: Dictionary, room_code: String, sea
 	var rr: Result = room.reclaim_peer_at_seat(peer_id, profile, seat_index, user_id)
 	if not rr.ok:
 		return rr
+	var rr_value: Dictionary = Dictionary(rr.value) if rr.value is Dictionary else {}
+	var replaced_peer_id := int(rr_value.get("replaced_peer_id", 0))
+	if replaced_peer_id > 0:
+		peer_to_room.erase(replaced_peer_id)
 
 	peer_to_room[peer_id] = code
 	return Result.success({
@@ -205,6 +214,7 @@ func reclaim_room_seat(peer_id: int, profile: Dictionary, room_code: String, sea
 		"room": room,
 		"room_state": room.to_room_state_dict(),
 		"role": str(role_label).strip_edges(),
+		"replaced_peer_id": replaced_peer_id,
 	})
 
 func spectate_room(peer_id: int, profile: Dictionary, room_code: String) -> Result:
