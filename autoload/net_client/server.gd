@@ -49,6 +49,13 @@ func _get_internal_api_secret() -> String:
 		return DEFAULT_INTERNAL_API_SECRET
 	return secret
 
+func _mark_room_directory_dirty() -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if not _net.has_method("mark_server_room_directory_dirty"):
+		return
+	_net.mark_server_room_directory_dirty()
+
 func _build_match_summary_payload(state) -> Dictionary:
 	var modules: Array[String] = []
 	if state != null and (state.modules is Array):
@@ -622,10 +629,12 @@ func on_peer_disconnected(peer_id: int) -> void:
 		_schedule_disconnect_forfeit(room, actor_id)
 
 	if rr.ok and room != null and not removed:
+		_mark_room_directory_dirty()
 		broadcast_room_state(room)
 		broadcast_room_list("")
 		GameLog.info("NetClient", "Disconnect handled keep-room peer=%d removed=%s %s" % [peer_id, str(removed), _room_brief(room)])
 	elif rr.ok and removed:
+		_mark_room_directory_dirty()
 		broadcast_room_list("")
 		GameLog.info("NetClient", "Disconnect handled room removed peer=%d" % peer_id)
 
@@ -919,6 +928,7 @@ func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, 
 					% [_request_tag(peer_id, request_id), archive_r.error]
 			)
 
+	_mark_room_directory_dirty()
 	broadcast_room_state(room)
 	broadcast_room_list("")
 	GameLog.info(
@@ -1046,6 +1056,7 @@ func handle_rpc_create_room(request: Dictionary) -> void:
 		send_request_rejected(peer_id, request_id, "create_room_failed", "Missing room in result")
 		return
 
+	_mark_room_directory_dirty()
 	broadcast_room_state(room)
 	broadcast_room_list("")
 	GameLog.info(
@@ -1096,6 +1107,7 @@ func handle_rpc_join_room(request: Dictionary) -> void:
 		return
 
 	var role := str(Dictionary(jr.value).get("role", "player"))
+	_mark_room_directory_dirty()
 	broadcast_room_state(room)
 	broadcast_room_list("")
 	GameLog.info(
@@ -1281,6 +1293,7 @@ func handle_rpc_update_room_config(request: Dictionary) -> void:
 		send_request_rejected(peer_id, request_id, "update_config_failed", ur.error)
 		return
 
+	_mark_room_directory_dirty()
 	broadcast_room_state(room)
 	broadcast_room_list("")
 	GameLog.debug(
@@ -1307,7 +1320,10 @@ func handle_rpc_leave_room(request: Dictionary) -> void:
 
 	var removed := bool(lr.value.get("removed", false))
 	if room != null and not removed:
+		_mark_room_directory_dirty()
 		broadcast_room_state(room)
+	elif removed:
+		_mark_room_directory_dirty()
 	broadcast_room_list("")
 
 	_net.rpc_id(peer_id, "rpc_room_state", empty_room_state())
@@ -1339,6 +1355,7 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 		send_request_rejected(peer_id, request_id, "start_game_failed", sr.error)
 		return
 
+	_mark_room_directory_dirty()
 	broadcast_room_state(room)
 	broadcast_room_list("")
 

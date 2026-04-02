@@ -3,10 +3,23 @@ from httpx import AsyncClient
 
 from app.connect_token import verify_token
 
+INTERNAL_HEADERS = {"X-Internal-Secret": "dev-internal-secret-change-in-production"}
+
 
 async def _create_user(client: AsyncClient) -> dict:
     resp = await client.post("/v1/auth/guest", json={"device_id": f"dev-{id(client)}-{pytest.importorskip('random').randint(0,99999)}"})
     return resp.json()
+
+
+async def _heartbeat_room(client: AsyncClient, game_server_id: str, room_code: str, ws_url: str | None = None) -> None:
+    payload: dict = {
+        "game_server_id": game_server_id,
+        "room_codes": [room_code],
+    }
+    if ws_url is not None:
+        payload["ws_url"] = ws_url
+    resp = await client.post("/internal/game_servers/heartbeat", headers=INTERNAL_HEADERS, json=payload)
+    assert resp.status_code == 200
 
 
 @pytest.mark.asyncio
@@ -58,7 +71,7 @@ async def test_get_room(client: AsyncClient):
     resp = await client.get(f"/v1/rooms/{code}")
     assert resp.status_code == 200
     assert resp.json()["room_code"] == code
-    assert resp.json()["status"] == "Lobby"
+    assert resp.json()["status"] == "Pending"
 
 
 @pytest.mark.asyncio
@@ -82,7 +95,7 @@ async def test_list_rooms(client: AsyncClient):
     # Mark room as alive (directory should list only heartbeated rooms by default).
     hb = await client.post(
         "/internal/game_servers/heartbeat",
-        headers={"X-Internal-Secret": "dev-internal-secret-change-in-production"},
+        headers=INTERNAL_HEADERS,
         json={"game_server_id": "gs-test-1", "room_codes": [code]},
     )
     assert hb.status_code == 200
@@ -96,7 +109,7 @@ async def test_list_rooms(client: AsyncClient):
     # When the room disappears from heartbeat, it should be delisted.
     hb2 = await client.post(
         "/internal/game_servers/heartbeat",
-        headers={"X-Internal-Secret": "dev-internal-secret-change-in-production"},
+        headers=INTERNAL_HEADERS,
         json={"game_server_id": "gs-test-1", "room_codes": []},
     )
     assert hb2.status_code == 200
@@ -106,10 +119,33 @@ async def test_list_rooms(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_pending_room_is_hidden_and_rejects_join(client: AsyncClient):
+    hb = await client.post(
+        "/internal/game_servers/heartbeat",
+        headers=INTERNAL_HEADERS,
+        json={"game_server_id": "gs-pending-1", "ws_url": "wss://pending.example.test", "room_codes": []},
+    )
+    assert hb.status_code == 200
+
+    host = await _create_user(client)
+    create = await client.post("/v1/rooms", json={"session_id": host["session_id"], "password": "secret"})
+    code = create.json()["room_code"]
+
+    rooms_resp = await client.get(f"/v1/rooms?session_id={host['session_id']}")
+    assert rooms_resp.status_code == 200
+    assert not any(r.get("room_code") == code for r in rooms_resp.json())
+
+    player = await _create_user(client)
+    join_resp = await client.post(f"/v1/rooms/{code}/join", json={"session_id": player["session_id"], "password": "secret"})
+    assert join_resp.status_code == 409
+
+
+@pytest.mark.asyncio
 async def test_join_room(client: AsyncClient):
     host = await _create_user(client)
     create = await client.post("/v1/rooms", json={"session_id": host["session_id"]})
     code = create.json()["room_code"]
+    await _heartbeat_room(client, "gs-join-1", code)
 
     player = await _create_user(client)
     resp = await client.post(f"/v1/rooms/{code}/join", json={"session_id": player["session_id"]})
@@ -125,6 +161,7 @@ async def test_join_room_idempotent(client: AsyncClient):
     host = await _create_user(client)
     create = await client.post("/v1/rooms", json={"session_id": host["session_id"]})
     code = create.json()["room_code"]
+    await _heartbeat_room(client, "gs-join-2", code)
 
     player = await _create_user(client)
     r1 = await client.post(f"/v1/rooms/{code}/join", json={"session_id": player["session_id"]})
@@ -138,6 +175,7 @@ async def test_resume_room_existing_member(client: AsyncClient):
     host = await _create_user(client)
     create = await client.post("/v1/rooms", json={"session_id": host["session_id"]})
     code = create.json()["room_code"]
+    await _heartbeat_room(client, "gs-resume-1", code)
 
     player = await _create_user(client)
     joined = await client.post(f"/v1/rooms/{code}/join", json={"session_id": player["session_id"]})
@@ -159,7 +197,7 @@ async def test_resume_room_refreshes_ws_url_from_healthy_game_server(client: Asy
 
     hb = await client.post(
         "/internal/game_servers/heartbeat",
-        headers={"X-Internal-Secret": "dev-internal-secret-change-in-production"},
+        headers=INTERNAL_HEADERS,
         json={"game_server_id": "gs-single-2", "ws_url": "wss://recover.example.test", "room_codes": [code]},
     )
     assert hb.status_code == 200
@@ -180,6 +218,7 @@ async def test_join_password_room(client: AsyncClient):
         "session_id": host["session_id"], "password": "secret",
     })
     code = create.json()["room_code"]
+    await _heartbeat_room(client, "gs-password-1", code)
 
     player = await _create_user(client)
     # Wrong password
@@ -197,6 +236,7 @@ async def test_resume_password_room_without_password(client: AsyncClient):
         "session_id": host["session_id"], "password": "secret",
     })
     code = create.json()["room_code"]
+    await _heartbeat_room(client, "gs-password-2", code)
 
     player = await _create_user(client)
     joined = await client.post(f"/v1/rooms/{code}/join", json={"session_id": player["session_id"], "password": "secret"})
@@ -215,6 +255,7 @@ async def test_spectate_room(client: AsyncClient):
     host = await _create_user(client)
     create = await client.post("/v1/rooms", json={"session_id": host["session_id"]})
     code = create.json()["room_code"]
+    await _heartbeat_room(client, "gs-spectate-1", code)
 
     spectator = await _create_user(client)
     resp = await client.post(f"/v1/rooms/{code}/spectate", json={"session_id": spectator["session_id"]})
@@ -241,12 +282,12 @@ async def test_join_room_rejects_ended_room(client: AsyncClient):
 
     await client.post(
         "/internal/game_servers/heartbeat",
-        headers={"X-Internal-Secret": "dev-internal-secret-change-in-production"},
+        headers=INTERNAL_HEADERS,
         json={"game_server_id": "gs-ended-join", "room_codes": [code]},
     )
     await client.post(
         "/internal/game_servers/heartbeat",
-        headers={"X-Internal-Secret": "dev-internal-secret-change-in-production"},
+        headers=INTERNAL_HEADERS,
         json={"game_server_id": "gs-ended-join", "room_codes": []},
     )
 
@@ -263,12 +304,12 @@ async def test_spectate_room_rejects_ended_room(client: AsyncClient):
 
     await client.post(
         "/internal/game_servers/heartbeat",
-        headers={"X-Internal-Secret": "dev-internal-secret-change-in-production"},
+        headers=INTERNAL_HEADERS,
         json={"game_server_id": "gs-ended-spectate", "room_codes": [code]},
     )
     await client.post(
         "/internal/game_servers/heartbeat",
-        headers={"X-Internal-Secret": "dev-internal-secret-change-in-production"},
+        headers=INTERNAL_HEADERS,
         json={"game_server_id": "gs-ended-spectate", "room_codes": []},
     )
 

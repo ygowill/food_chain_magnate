@@ -15,6 +15,21 @@ from app.models import GameServer, Room, RoomMember, RoomTombstone, Match, Match
 from app.replay_storage import save_local_replay_archive
 
 router = APIRouter(prefix="/internal", tags=["internal"])
+ACTIVE_ROOM_STATUSES = ("Lobby", "InGame")
+
+
+async def _mark_room_members_left(db: AsyncSession, room_ids: list[str], now: datetime) -> None:
+    if not room_ids:
+        return
+    members = (await db.execute(
+        select(RoomMember).where(
+            RoomMember.room_id.in_(room_ids),
+            RoomMember.left_at.is_(None),
+        )
+    )).scalars().all()
+    for member in members:
+        member.left_at = now
+
 
 def _require_internal_secret(x_internal_secret: Optional[str] = Header(default=None, alias="X-Internal-Secret")) -> None:
     expected = str(settings.internal_api_secret).strip()
@@ -56,7 +71,7 @@ async def heartbeat(req: HeartbeatRequest, db: AsyncSession = Depends(get_db)):
             if str(req.ws_url or "").strip():
                 r.ws_url = str(req.ws_url).strip()
             # Allow revival if the room became active again.
-            if r.status == "Ended":
+            if r.status in {"Ended", "Pending"}:
                 r.status = "Lobby"
             r.updated_at = now
 
@@ -65,9 +80,12 @@ async def heartbeat(req: HeartbeatRequest, db: AsyncSession = Depends(get_db)):
     if req.room_codes:
         stmt = stmt.where(~Room.room_code.in_(req.room_codes))
     stale = (await db.execute(stmt)).scalars().all()
+    stale_room_ids: list[str] = []
     for r in stale:
         r.status = "Ended"
         r.updated_at = now
+        stale_room_ids.append(str(r.room_id))
+    await _mark_room_members_left(db, stale_room_ids, now)
 
     await db.commit()
     return {"ok": True}
@@ -85,7 +103,7 @@ async def list_active_rooms_for_server(game_server_id: str, db: AsyncSession = D
         select(Room)
         .where(
             Room.game_server_id == game_server_id,
-            Room.status != "Ended",
+            Room.status.in_(ACTIVE_ROOM_STATUSES),
         )
         .order_by(Room.updated_at.desc())
     )).scalars().all()
@@ -227,11 +245,14 @@ async def sync_room_directory(game_server_id: str, req: RoomDirectorySyncRequest
             Room.status != "Ended",
         )
     )).scalars().all()
+    stale_room_ids: list[str] = []
     for room in stale_rooms:
         if str(room.room_code) in payload_codes:
             continue
         room.status = "Ended"
         room.updated_at = now
+        stale_room_ids.append(str(room.room_id))
+    await _mark_room_members_left(db, stale_room_ids, now)
 
     await db.commit()
     return {

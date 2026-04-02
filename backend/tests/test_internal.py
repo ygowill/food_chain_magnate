@@ -122,6 +122,54 @@ async def test_sync_room_directory_creates_room_and_members(client: AsyncClient,
 
 
 @pytest.mark.asyncio
+async def test_sync_room_directory_marks_missing_members_left(client: AsyncClient, db_session: AsyncSession):
+    first = await client.post("/internal/game_servers/gs-sync-members-1/rooms/sync", json={
+        "rooms": [
+            {
+                "room_code": "SYNCM1",
+                "owner_user_id": "u_host_sync",
+                "status": "Lobby",
+                "join_policy": "public",
+                "config_json": "{\"desired_player_count\":2}",
+                "members": [
+                    {"user_id": "u_host_sync", "role": "host", "seat_index": 0},
+                    {"user_id": "u_p2_sync", "role": "player", "seat_index": 1},
+                ],
+            }
+        ],
+    }, headers=INTERNAL_HEADERS)
+    assert first.status_code == 200
+
+    second = await client.post("/internal/game_servers/gs-sync-members-1/rooms/sync", json={
+        "rooms": [
+            {
+                "room_code": "SYNCM1",
+                "owner_user_id": "u_host_sync",
+                "status": "Lobby",
+                "join_policy": "public",
+                "config_json": "{\"desired_player_count\":2}",
+                "members": [
+                    {"user_id": "u_host_sync", "role": "host", "seat_index": 0},
+                ],
+            }
+        ],
+    }, headers=INTERNAL_HEADERS)
+    assert second.status_code == 200
+
+    room = (await db_session.execute(select(Room).where(Room.room_code == "SYNCM1"))).scalar_one()
+    active_members = (await db_session.execute(
+        select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.left_at.is_(None))
+    )).scalars().all()
+    assert len(active_members) == 1
+    assert str(active_members[0].user_id) == "u_host_sync"
+
+    left_member = (await db_session.execute(
+        select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.user_id == "u_p2_sync")
+    )).scalar_one()
+    assert left_member.left_at is not None
+
+
+@pytest.mark.asyncio
 async def test_sync_room_directory_marks_missing_rooms_ended(client: AsyncClient, db_session: AsyncSession):
     initial = await client.post("/internal/game_servers/gs-sync-2/rooms/sync", json={
         "rooms": [
@@ -144,6 +192,39 @@ async def test_sync_room_directory_marks_missing_rooms_ended(client: AsyncClient
 
     room = (await db_session.execute(select(Room).where(Room.room_code == "SYNC02"))).scalar_one()
     assert room.status == "Ended"
+
+
+@pytest.mark.asyncio
+async def test_sync_room_directory_marks_stale_room_members_left(client: AsyncClient, db_session: AsyncSession):
+    initial = await client.post("/internal/game_servers/gs-sync-rooms-3/rooms/sync", json={
+        "rooms": [
+            {
+                "room_code": "SYNC05",
+                "owner_user_id": "u_host_sync",
+                "status": "Lobby",
+                "join_policy": "public",
+                "config_json": "{}",
+                "members": [
+                    {"user_id": "u_host_sync", "role": "host", "seat_index": 0},
+                    {"user_id": "u_p2_sync", "role": "player", "seat_index": 1},
+                ],
+            }
+        ],
+    }, headers=INTERNAL_HEADERS)
+    assert initial.status_code == 200
+
+    second = await client.post("/internal/game_servers/gs-sync-rooms-3/rooms/sync", json={
+        "rooms": [],
+    }, headers=INTERNAL_HEADERS)
+    assert second.status_code == 200
+
+    room = (await db_session.execute(select(Room).where(Room.room_code == "SYNC05"))).scalar_one()
+    assert room.status == "Ended"
+    members = (await db_session.execute(
+        select(RoomMember).where(RoomMember.room_id == room.room_id)
+    )).scalars().all()
+    assert len(members) == 2
+    assert all(member.left_at is not None for member in members)
 
 
 @pytest.mark.asyncio
@@ -206,6 +287,38 @@ async def test_sync_room_directory_does_not_recreate_deleted_room(client: AsyncC
 
     room_after = (await db_session.execute(select(Room).where(Room.room_code == "SYNC04"))).scalar_one_or_none()
     assert room_after is None
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_marks_stale_room_members_left(client: AsyncClient, db_session: AsyncSession):
+    room = Room(
+        room_code="HBEAT1",
+        owner_user_id="u_owner_h1",
+        game_server_id="gs-hb-members-1",
+        status="Lobby",
+        join_policy="public",
+        config_json="{}",
+        ws_url="wss://old.example.test",
+    )
+    db_session.add(room)
+    await db_session.flush()
+    db_session.add(RoomMember(room_id=room.room_id, user_id="u_owner_h1", role="host", seat_index=0))
+    db_session.add(RoomMember(room_id=room.room_id, user_id="u_player_h1", role="player", seat_index=1))
+    await db_session.commit()
+
+    resp = await client.post("/internal/game_servers/heartbeat", json={
+        "game_server_id": "gs-hb-members-1",
+        "room_codes": [],
+    }, headers=INTERNAL_HEADERS)
+    assert resp.status_code == 200
+
+    room_after = (await db_session.execute(select(Room).where(Room.room_code == "HBEAT1"))).scalar_one()
+    assert room_after.status == "Ended"
+    members = (await db_session.execute(
+        select(RoomMember).where(RoomMember.room_id == room_after.room_id)
+    )).scalars().all()
+    assert len(members) == 2
+    assert all(member.left_at is not None for member in members)
 
 
 @pytest.mark.asyncio

@@ -9,6 +9,7 @@ const DEFAULT_ROOM_PERSIST_PATH := "user://dedicated_server/online_room_snapshot
 const DEFAULT_SERVER_IDENTITY_PATH := "user://dedicated_server/server_identity.cfg"
 const HEARTBEAT_INTERVAL_SEC := 15.0
 const PERSIST_INTERVAL_SEC := 2.0
+const ROOM_DIRECTORY_SYNC_DEBOUNCE_SEC := 0.2
 
 const RoomPersistenceStoreClass = preload("res://server/room_persistence_store.gd")
 const ServerIdentityStoreClass = preload("res://server/server_identity_store.gd")
@@ -22,6 +23,9 @@ var _heartbeat_timer: Timer = null
 var _room_persistence_store = null
 var _persist_timer: Timer = null
 var _server_identity_store = null
+var _room_directory_sync_timer: Timer = null
+var _room_directory_sync_in_flight: bool = false
+var _room_directory_sync_pending: bool = false
 
 func _ready() -> void:
 	var port := DEFAULT_PORT
@@ -57,6 +61,7 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 
+	_setup_room_directory_sync()
 	_setup_heartbeat(port)
 	GameLog.info("DedicatedServer", "Running. args=%s" % str(args))
 
@@ -201,6 +206,60 @@ func _sync_room_directory_snapshot(snapshot: Dictionary) -> Result:
 	if not (accepted_val is Array):
 		return Result.success(snapshot)
 	return Result.success(_filter_snapshot_by_room_codes(snapshot, Array(accepted_val)))
+
+func _setup_room_directory_sync() -> void:
+	if _room_directory_sync_timer == null or not is_instance_valid(_room_directory_sync_timer):
+		_room_directory_sync_timer = Timer.new()
+		_room_directory_sync_timer.one_shot = true
+		_room_directory_sync_timer.wait_time = ROOM_DIRECTORY_SYNC_DEBOUNCE_SEC
+		add_child(_room_directory_sync_timer)
+		_room_directory_sync_timer.timeout.connect(_on_room_directory_sync_timeout)
+
+	if NetClient == null or not is_instance_valid(NetClient):
+		return
+	var cb := Callable(self, "_on_room_directory_dirty")
+	if not NetClient.server_room_directory_dirty.is_connected(cb):
+		NetClient.server_room_directory_dirty.connect(cb)
+
+func _on_room_directory_dirty() -> void:
+	_request_room_directory_sync()
+
+func _request_room_directory_sync() -> void:
+	if _room_directory_sync_in_flight:
+		_room_directory_sync_pending = true
+		return
+	if _room_directory_sync_timer == null or not is_instance_valid(_room_directory_sync_timer):
+		return
+	if _room_directory_sync_timer.is_stopped():
+		_room_directory_sync_timer.start()
+
+func _on_room_directory_sync_timeout() -> void:
+	await _flush_room_directory_sync()
+
+func _flush_room_directory_sync() -> void:
+	if _room_directory_sync_in_flight:
+		_room_directory_sync_pending = true
+		return
+	if NetClient == null or NetClient._room_manager == null or not is_instance_valid(NetClient._room_manager):
+		return
+	if not NetClient._room_manager.has_method("create_persistence_snapshot"):
+		return
+
+	var snapshot_r: Result = NetClient._room_manager.create_persistence_snapshot()
+	if not snapshot_r.ok:
+		GameLog.warn("DedicatedServer", "Create room directory snapshot failed: %s" % snapshot_r.error)
+		return
+
+	_room_directory_sync_in_flight = true
+	var sync_r: Result = await _sync_room_directory_snapshot(Dictionary(snapshot_r.value))
+	_room_directory_sync_in_flight = false
+	if not sync_r.ok:
+		GameLog.warn("DedicatedServer", "Immediate room directory sync failed: %s" % sync_r.error)
+
+	if _room_directory_sync_pending:
+		_room_directory_sync_pending = false
+		if _room_directory_sync_timer != null and is_instance_valid(_room_directory_sync_timer):
+			_room_directory_sync_timer.start()
 
 func _filter_snapshot_by_room_codes(snapshot: Dictionary, accepted_room_codes: Array) -> Dictionary:
 	var allowed_lookup: Dictionary = {}

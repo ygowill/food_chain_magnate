@@ -20,6 +20,7 @@ signal request_rejected(request_id: String, code: String, message: String)
 signal game_started(payload: Dictionary)
 signal command_applied(cmd_dict: Dictionary, state_hash: String)
 signal resync_archive_received(archive: Dictionary)
+signal server_room_directory_dirty()
 
 var _peer: WebSocketMultiplayerPeer = null
 
@@ -164,6 +165,11 @@ func should_preserve_online_context_on_disconnect() -> bool:
 	if not NetContext.has_online_resume_context():
 		return false
 	return true
+
+func mark_server_room_directory_dirty() -> void:
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+	server_room_directory_dirty.emit()
 
 func request_create_room(desired_player_count: int, room_password: String, config: Dictionary = {}) -> String:
 	var request_id := _next_request_id()

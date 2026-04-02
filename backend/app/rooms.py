@@ -16,6 +16,9 @@ from app.models import GameServer, Room, RoomMember, Session, User
 
 router = APIRouter(prefix="/v1/rooms", tags=["rooms"])
 
+ROOM_STATUS_PENDING = "Pending"
+ROOM_LISTABLE_STATUSES = ("Lobby", "InGame")
+
 
 def _resolve_default_ws_url() -> str:
     ws_url = str(settings.default_ws_url).strip()
@@ -124,7 +127,7 @@ async def list_rooms(
         stmt = (
             stmt.join(GameServer, Room.game_server_id == GameServer.game_server_id)
             .where(
-                Room.status != "Ended",
+                Room.status.in_(ROOM_LISTABLE_STATUSES),
                 GameServer.last_heartbeat_at >= cutoff,
             )
         )
@@ -207,6 +210,7 @@ async def create_room(req: CreateRoomRequest, db: AsyncSession = Depends(get_db)
     room = Room(
         owner_user_id=sess.user_id,
         game_server_id=preferred_server_id,
+        status=ROOM_STATUS_PENDING,
         config_json=req.config_json,
         ws_url=preferred_ws_url,
         join_policy="password" if req.password else "public",
@@ -249,6 +253,8 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
     room = (await db.execute(select(Room).where(Room.room_code == room_code))).scalar_one_or_none()
     if not room:
         raise HTTPException(404, "room not found")
+    if str(room.status) == ROOM_STATUS_PENDING:
+        raise HTTPException(409, "room not ready")
     if str(room.status) == "Ended":
         raise HTTPException(409, "room already ended")
     if room.join_policy == "password":
@@ -343,6 +349,8 @@ async def spectate_room(room_code: str, req: JoinRequest, db: AsyncSession = Dep
     room = (await db.execute(select(Room).where(Room.room_code == room_code))).scalar_one_or_none()
     if not room:
         raise HTTPException(404, "room not found")
+    if str(room.status) == ROOM_STATUS_PENDING:
+        raise HTTPException(409, "room not ready")
     if str(room.status) == "Ended":
         raise HTTPException(409, "room already ended")
     _, room_ws_url = await _resolve_room_connection_target(db, room)
