@@ -380,6 +380,7 @@ func remove_peer(peer_id: int) -> Result:
 	var seat_index := int(_seat_by_player_peer_id.get(peer_id, -1))
 	_player_profile_by_peer_id.erase(peer_id)
 	_seat_by_player_peer_id.erase(peer_id)
+	player_id_by_peer_id.erase(peer_id)
 	if seat_index >= 0:
 		_peer_id_by_seat_index.erase(seat_index)
 		_seat_profile_by_seat_index.erase(seat_index)
@@ -414,6 +415,7 @@ func disconnect_peer(peer_id: int) -> Result:
 	var seat_index := int(_seat_by_player_peer_id.get(peer_id, -1))
 	_player_profile_by_peer_id.erase(peer_id)
 	_seat_by_player_peer_id.erase(peer_id)
+	player_id_by_peer_id.erase(peer_id)
 	if seat_index >= 0:
 		_peer_id_by_seat_index.erase(seat_index)
 

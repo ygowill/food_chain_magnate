@@ -40,6 +40,10 @@ const TESTS: Array[Dictionary] = [
 		"path": "res://core/tests/game_menu_debug_controller_online_quit_test.gd",
 	},
 	{
+		"name": "GameMenuDebugControllerOnlineSurrenderQuitTest",
+		"path": "res://core/tests/game_menu_debug_controller_online_surrender_quit_test.gd",
+	},
+	{
 		"name": "OnlineRoomManagerTest",
 		"path": "res://core/tests/online_room_manager_test.gd",
 	},
@@ -58,6 +62,10 @@ const TESTS: Array[Dictionary] = [
 	{
 		"name": "OnlineDisconnectGraceReconnectTest",
 		"path": "res://core/tests/online_disconnect_grace_reconnect_test.gd",
+	},
+	{
+		"name": "OnlineForfeitAndLeaveRoomTest",
+		"path": "res://core/tests/online_forfeit_and_leave_room_test.gd",
 	},
 	{
 		"name": "GameOnlineResyncReconnectFlowTest",

@@ -153,6 +153,11 @@ func handle_rpc_leave_room(request: Dictionary) -> void:
 	if _server != null and is_instance_valid(_server):
 		_server.handle_rpc_leave_room(request)
 
+func handle_rpc_forfeit_and_leave_room(request: Dictionary) -> void:
+	_ensure_modules()
+	if _server != null and is_instance_valid(_server):
+		_server.handle_rpc_forfeit_and_leave_room(request)
+
 func handle_rpc_start_game(request: Dictionary) -> void:
 	_ensure_modules()
 	if _server != null and is_instance_valid(_server):

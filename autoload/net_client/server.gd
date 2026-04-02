@@ -1345,6 +1345,84 @@ func handle_rpc_leave_room(request: Dictionary) -> void:
 			% [_request_tag(peer_id, request_id), str(removed), _room_brief(room)]
 	)
 
+func _resolve_actor_id_for_peer(room, peer_id: int) -> int:
+	if room == null or not (room.player_id_by_peer_id is Dictionary):
+		return -1
+	if room.player_id_by_peer_id.has(peer_id):
+		return int(room.player_id_by_peer_id.get(peer_id, -1))
+	if room.player_id_by_peer_id.has(str(peer_id)):
+		return int(room.player_id_by_peer_id.get(str(peer_id), -1))
+	return -1
+
+func _finalize_forfeit_and_leave_room_request(peer_id: int, request_id: String, room, leave_result: Result) -> void:
+	var removed := false
+	if leave_result != null and leave_result.ok and leave_result.value is Dictionary:
+		removed = bool(Dictionary(leave_result.value).get("removed", false))
+
+	if removed and room != null and room.game_engine != null:
+		if room.game_engine.has_method("dispose"):
+			room.game_engine.dispose()
+		room.game_engine = null
+
+	_mark_room_directory_dirty()
+	if room != null and not removed:
+		broadcast_room_state(room)
+	broadcast_room_list("")
+	_net.rpc_id(peer_id, "rpc_room_state", empty_room_state())
+	GameLog.info(
+		"NetClient",
+		"ForfeitAndLeaveRoom success %s removed=%s previous_room=%s"
+			% [_request_tag(peer_id, request_id), str(removed), _room_brief(room)]
+	)
+
+func handle_rpc_forfeit_and_leave_room(request: Dictionary) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+
+	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
+	var request_id := str(request.get("request_id", ""))
+	var room = _net._room_manager.get_room_by_peer(peer_id)
+	GameLog.info("NetClient", "RX ForfeitAndLeaveRoom %s %s" % [_request_tag(peer_id, request_id), _room_brief(room)])
+
+	if room == null:
+		send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
+		return
+
+	var room_status := str(room.status)
+	if room_status == "InGame":
+		if room.game_engine == null:
+			send_request_rejected(peer_id, request_id, "engine_missing", "Room engine missing")
+			return
+
+		var actor_id := _resolve_actor_id_for_peer(room, peer_id)
+		if actor_id >= 0:
+			var state = room.game_engine.get_state()
+			if not server_is_player_forfeited(state, actor_id):
+				var cmd = CommandClass.create("forfeit_player", actor_id, {})
+				var fr = room.game_engine.execute_command(cmd)
+				if not fr.ok:
+					send_request_rejected(peer_id, request_id, "action_failed", fr.error)
+					return
+				_clear_disconnect_forfeit(str(room.room_code), actor_id)
+				broadcast_command_applied(room, cmd)
+				server_drain_forfeited_auto_steps(room)
+				_try_finalize_match_if_game_over(room)
+		else:
+			GameLog.info(
+				"NetClient",
+				"ForfeitAndLeaveRoom spectator exit %s %s"
+					% [_request_tag(peer_id, request_id), _room_brief(room)]
+			)
+
+	var lr = _net._room_manager.leave_room(peer_id)
+	if not lr.ok:
+		send_request_rejected(peer_id, request_id, "leave_room_failed", lr.error)
+		return
+
+	_finalize_forfeit_and_leave_room_request(peer_id, request_id, room, lr)
+
 func handle_rpc_start_game(request: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):
 		return
@@ -1412,11 +1490,7 @@ func handle_rpc_action_request(request: Dictionary) -> void:
 		send_request_rejected(peer_id, request_id, "engine_missing", "Room engine missing")
 		return
 
-	var actor_id := -1
-	if room.player_id_by_peer_id.has(peer_id):
-		actor_id = int(room.player_id_by_peer_id.get(peer_id, -1))
-	elif room.player_id_by_peer_id.has(str(peer_id)):
-		actor_id = int(room.player_id_by_peer_id.get(str(peer_id), -1))
+	var actor_id := _resolve_actor_id_for_peer(room, peer_id)
 	if actor_id < 0:
 		send_request_rejected(peer_id, request_id, "actor_missing", "No player mapping for peer")
 		return

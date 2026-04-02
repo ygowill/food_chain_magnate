@@ -227,6 +227,17 @@ func request_leave_room() -> String:
 	room_state_updated.emit(NetContext.room_state)
 	return request_id
 
+func request_forfeit_and_leave_room() -> String:
+	var request_id := _next_request_id()
+	var payload := {"request_id": request_id}
+	rpc_id(1, "rpc_forfeit_and_leave_room", payload)
+	GameLog.info(
+		"NetClient",
+		"TX ForfeitAndLeaveRoom request_id=%s room=%s"
+			% [request_id, _safe_room_code(NetContext.room_state)]
+	)
+	return request_id
+
 func request_update_room_config(config_patch: Dictionary) -> String:
 	var request_id := _next_request_id()
 	var payload := {
@@ -338,6 +349,11 @@ func rpc_update_room_config(request: Dictionary) -> void:
 func rpc_leave_room(request: Dictionary) -> void:
 	_ensure_internal()
 	_internal.handle_rpc_leave_room(request)
+
+@rpc("any_peer", "reliable")
+func rpc_forfeit_and_leave_room(request: Dictionary) -> void:
+	_ensure_internal()
+	_internal.handle_rpc_forfeit_and_leave_room(request)
 
 @rpc("any_peer", "reliable")
 func rpc_start_game(request: Dictionary) -> void:
