@@ -34,6 +34,8 @@ async def test_create_room(client: AsyncClient):
     payload = verify_token(str(data["connect_token"]))
     assert payload is not None
     assert str(payload.get("display_name", "")).startswith("游客#")
+    assert str(payload.get("join_policy", "")) == "public"
+    assert not payload.get("password_hash")
 
 
 @pytest.mark.asyncio
@@ -238,6 +240,36 @@ async def test_join_password_room(client: AsyncClient):
     # Correct password
     good = await client.post(f"/v1/rooms/{code}/join", json={"session_id": player["session_id"], "password": "secret"})
     assert good.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_create_password_room_token_preserves_password_metadata(client: AsyncClient):
+    host = await _create_user(client)
+    create = await client.post("/v1/rooms", json={
+        "session_id": host["session_id"], "password": "secret",
+    })
+    assert create.status_code == 200
+    payload = verify_token(str(create.json()["connect_token"]))
+    assert payload is not None
+    assert str(payload.get("join_policy", "")) == "password"
+    assert str(payload.get("password_hash", "")).strip() != ""
+
+
+@pytest.mark.asyncio
+async def test_resume_host_room_token_preserves_password_metadata(client: AsyncClient):
+    host = await _create_user(client)
+    create = await client.post("/v1/rooms", json={
+        "session_id": host["session_id"], "password": "secret",
+    })
+    code = create.json()["room_code"]
+
+    resumed = await client.post(f"/v1/rooms/{code}/resume", json={"session_id": host["session_id"]})
+    assert resumed.status_code == 200
+    payload = verify_token(str(resumed.json()["connect_token"]))
+    assert payload is not None
+    assert str(payload.get("role", "")) == "host"
+    assert str(payload.get("join_policy", "")) == "password"
+    assert str(payload.get("password_hash", "")).strip() != ""
 
 
 @pytest.mark.asyncio

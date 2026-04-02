@@ -229,6 +229,8 @@ async def create_room(req: CreateRoomRequest, db: AsyncSession = Depends(get_db)
         display_name=display_name,
         seat_index=0,
         config_json=req.config_json,
+        join_policy=str(room.join_policy),
+        password_hash=str(room.password_hash) if room.password_hash else None,
     )
     return RoomResponse(room_code=room.room_code, ws_url=str(room.ws_url), connect_token=token)
 
@@ -333,6 +335,8 @@ async def resume_room(room_code: str, req: ResumeRequest, db: AsyncSession = Dep
         role,
         display_name=display_name,
         seat_index=seat_index,
+        join_policy=str(room.join_policy) if role == "host" else None,
+        password_hash=str(room.password_hash) if role == "host" and room.password_hash else None,
     )
     await db.commit()
     return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)

@@ -36,6 +36,8 @@ def issue_connect_token(
     display_name: str = "", ttl: int = 60,
     seat_index: int | None = None,
     config_json: str | None = None,
+    join_policy: str | None = None,
+    password_hash: str | None = None,
 ) -> str:
     payload = {
         "user_id": user_id,
@@ -48,4 +50,8 @@ def issue_connect_token(
         payload["seat_index"] = int(seat_index)
     if config_json is not None:
         payload["config_json"] = config_json
+    if join_policy is not None:
+        payload["join_policy"] = str(join_policy)
+    if password_hash:
+        payload["password_hash"] = str(password_hash)
     return create_token(payload)

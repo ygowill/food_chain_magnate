@@ -830,12 +830,14 @@ func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, 
 			if not (parsed is Dictionary):
 				return ResultClass.failure("connect_token config_json 类型错误（期望 JSON Dictionary）")
 			config = Dictionary(parsed)
+		var join_policy := str(token_payload.get("join_policy", "public")).strip_edges()
+		var password_hash := str(token_payload.get("password_hash", "")).strip_edges()
 
 		var existing = rm.rooms.get(room_code, null) if (rm.rooms is Dictionary) else null
 		if existing == null:
 			if not rm.has_method("create_room_with_code"):
 				return ResultClass.failure("RoomManager.create_room_with_code missing")
-			r = rm.create_room_with_code(peer_id, profile, room_code, config)
+			r = rm.create_room_with_code(peer_id, profile, room_code, config, join_policy, password_hash)
 		elif str(existing.status) == "InGame":
 			if not rm.has_method("reconnect_player"):
 				return ResultClass.failure("RoomManager.reconnect_player missing")

@@ -9,6 +9,8 @@ def test_issue_and_verify():
         display_name="Alice",
         seat_index=1,
         config_json='{"desired_player_count":2}',
+        join_policy="password",
+        password_hash="hashed-password",
     )
     payload = verify_token(token)
     assert payload is not None
@@ -18,6 +20,8 @@ def test_issue_and_verify():
     assert payload["display_name"] == "Alice"
     assert payload["seat_index"] == 1
     assert payload["config_json"] == '{"desired_player_count":2}'
+    assert payload["join_policy"] == "password"
+    assert payload["password_hash"] == "hashed-password"
 
 
 def test_expired_token_rejected():

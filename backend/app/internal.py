@@ -185,24 +185,30 @@ async def sync_room_directory(game_server_id: str, req: RoomDirectorySyncRequest
             skipped_ended_room_codes.append(room_code)
             continue
         if room is None:
+            incoming_password_hash = str(item.password_hash) if item.password_hash else None
             room = Room(
                 room_code=room_code,
                 owner_user_id=str(item.owner_user_id),
                 game_server_id=game_server_id,
                 status=str(item.status),
                 join_policy=str(item.join_policy),
-                password_hash=str(item.password_hash) if item.password_hash else None,
+                password_hash=incoming_password_hash,
                 config_json=str(item.config_json),
                 ws_url=str(item.ws_url or "").strip() or server_ws_url,
             )
             db.add(room)
             await db.flush()
         else:
+            incoming_join_policy = str(item.join_policy)
+            incoming_password_hash = str(item.password_hash) if item.password_hash else None
             room.owner_user_id = str(item.owner_user_id)
             room.game_server_id = game_server_id
             room.status = str(item.status)
-            room.join_policy = str(item.join_policy)
-            room.password_hash = str(item.password_hash) if item.password_hash else None
+            room.join_policy = incoming_join_policy
+            if incoming_password_hash is not None:
+                room.password_hash = incoming_password_hash
+            elif incoming_join_policy != "password":
+                room.password_hash = None
             room.config_json = str(item.config_json)
             room.ws_url = str(item.ws_url or "").strip() or server_ws_url or room.ws_url
             room.updated_at = now

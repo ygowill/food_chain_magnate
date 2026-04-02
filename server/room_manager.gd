@@ -27,8 +27,8 @@ func create_room(host_peer_id: int, profile: Dictionary, room_password: String, 
 	if room_code.is_empty():
 		return Result.failure("Failed to generate room code")
 
-	var password_hash := _sha256_hex(room_password)
-	var join_policy := "password"
+	var join_policy := "password" if not str(room_password).is_empty() else "public"
+	var password_hash := _sha256_hex(room_password) if join_policy == "password" else ""
 	var room = OnlineRoomClass.new(room_code, host_peer_id, join_policy, password_hash, config)
 	room.owner_user_id = str(profile.get("user_id", "")).strip_edges()
 
@@ -45,7 +45,14 @@ func create_room(host_peer_id: int, profile: Dictionary, room_password: String, 
 		"room_state": room.to_room_state_dict(),
 	})
 
-func create_room_with_code(host_peer_id: int, profile: Dictionary, room_code: String, config: Dictionary) -> Result:
+func create_room_with_code(
+	host_peer_id: int,
+	profile: Dictionary,
+	room_code: String,
+	config: Dictionary,
+	join_policy: String = "public",
+	password_hash: String = ""
+) -> Result:
 	if peer_to_room.has(host_peer_id):
 		return Result.failure("Peer already in a room")
 
@@ -55,10 +62,15 @@ func create_room_with_code(host_peer_id: int, profile: Dictionary, room_code: St
 	if rooms.has(code):
 		return Result.failure("Room already exists: %s" % code)
 
-	# 平台模式：后端已完成密码/权限校验；server 侧不再强依赖 room_password。
-	var join_policy := "password"
-	var password_hash := ""
-	var room = OnlineRoomClass.new(code, host_peer_id, join_policy, password_hash, config)
+	var normalized_join_policy := str(join_policy).strip_edges()
+	if normalized_join_policy != "password":
+		normalized_join_policy = "public"
+	var normalized_password_hash := str(password_hash).strip_edges()
+	if normalized_join_policy != "password":
+		normalized_password_hash = ""
+	elif normalized_password_hash.is_empty():
+		return Result.failure("Missing password_hash for password room")
+	var room = OnlineRoomClass.new(code, host_peer_id, normalized_join_policy, normalized_password_hash, config)
 	room.owner_user_id = str(profile.get("user_id", "")).strip_edges()
 
 	var ar: Result = room.add_peer(host_peer_id, profile)
@@ -86,9 +98,9 @@ func join_room(peer_id: int, profile: Dictionary, room_code: String, room_passwo
 	if room == null:
 		return Result.failure("Room not found")
 
-	if room.join_policy != "password":
+	if room.join_policy != "password" and room.join_policy != "public":
 		return Result.failure("Unsupported join_policy: %s" % room.join_policy)
-	if room.is_password_required() and room.password_hash != _sha256_hex(room_password):
+	if room.join_policy == "password" and room.is_password_required() and room.password_hash != _sha256_hex(room_password):
 		return Result.failure("Invalid room_password")
 
 	var ar: Result

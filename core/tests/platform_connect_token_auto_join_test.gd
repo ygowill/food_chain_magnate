@@ -40,6 +40,8 @@ static func run() -> Result:
 		"display_name": "HostUser",
 		"seat_index": 0,
 		"config_json": JSON.stringify(cfg),
+		"join_policy": "password",
+		"password_hash": "platform-password-hash",
 		"exp": int(Time.get_unix_time_from_system()) + 3600,
 	}
 	var host_token_r: Result = ConnectTokenClass.create_token(host_payload, server.connect_token_secret_override)
@@ -70,6 +72,15 @@ static func run() -> Result:
 	if int(room.host_peer_id) != 10:
 		_reset_net_context()
 		return Result.failure("平台建房失败：host_peer_id 错误: %d" % int(room.host_peer_id))
+	if str(room.join_policy) != "password":
+		_reset_net_context()
+		return Result.failure("平台建房失败：join_policy 错误: %s" % str(room.join_policy))
+	if str(room.password_hash) != "platform-password-hash":
+		_reset_net_context()
+		return Result.failure("平台建房失败：password_hash 未透传")
+	if not room.is_password_required():
+		_reset_net_context()
+		return Result.failure("平台建房失败：密码房间应标记为需要密码")
 
 	# Player: auto join existing room
 	var player_payload := {
@@ -134,4 +145,3 @@ class _MockNetClient:
 			"method": str(method),
 			"payload": payload.duplicate(true),
 		})
-

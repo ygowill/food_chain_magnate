@@ -13,7 +13,7 @@ var room_code: String = ""
 var host_peer_id: int = 0
 var status: String = STATUS_LOBBY
 var config: Dictionary = {}
-var join_policy: String = "password"
+var join_policy: String = "public"
 var password_hash: String = ""
 
 var updated_at_ms: int = 0
@@ -92,7 +92,7 @@ static func from_persistence_dict(data: Dictionary) -> Result:
 	var room := OnlineRoom.new(
 		room_code_read,
 		0,
-		str(data.get("join_policy", "password")).strip_edges(),
+		str(data.get("join_policy", "public")).strip_edges(),
 		str(data.get("password_hash", "")).strip_edges(),
 		Dictionary(config_val).duplicate(true)
 	)
@@ -152,7 +152,7 @@ func _touch() -> void:
 
 func is_password_required() -> bool:
 	if join_policy != "password":
-		return true
+		return false
 	return password_hash != _sha256_hex("")
 
 func get_allow_spectators() -> bool:

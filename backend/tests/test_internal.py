@@ -264,6 +264,41 @@ async def test_sync_room_directory_does_not_revive_ended_room(client: AsyncClien
 
 
 @pytest.mark.asyncio
+async def test_sync_room_directory_preserves_existing_password_hash_when_omitted(client: AsyncClient, db_session: AsyncSession):
+    room = Room(
+        room_code="SYNCP1",
+        owner_user_id="u_owner_syncp1",
+        game_server_id="gs-sync-pass-1",
+        status="Lobby",
+        join_policy="password",
+        password_hash="persisted-password-hash",
+        config_json="{}",
+        ws_url="wss://old.example.test",
+    )
+    db_session.add(room)
+    await db_session.commit()
+
+    resp = await client.post("/internal/game_servers/gs-sync-pass-1/rooms/sync", json={
+        "ws_url": "wss://single.example.test",
+        "rooms": [
+            {
+                "room_code": "SYNCP1",
+                "owner_user_id": "u_owner_syncp1",
+                "status": "Lobby",
+                "join_policy": "password",
+                "config_json": "{}",
+                "members": [{"user_id": "u_owner_syncp1", "role": "host", "seat_index": 0}],
+            }
+        ],
+    }, headers=INTERNAL_HEADERS)
+    assert resp.status_code == 200
+
+    room_after = (await db_session.execute(select(Room).where(Room.room_code == "SYNCP1"))).scalar_one()
+    assert room_after.join_policy == "password"
+    assert room_after.password_hash == "persisted-password-hash"
+
+
+@pytest.mark.asyncio
 async def test_sync_room_directory_does_not_recreate_deleted_room(client: AsyncClient, db_session: AsyncSession):
     db_session.add(RoomTombstone(room_code="SYNC04"))
     await db_session.commit()
