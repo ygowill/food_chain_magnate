@@ -135,6 +135,17 @@ async def test_pending_room_is_hidden_and_rejects_join(client: AsyncClient):
     assert rooms_resp.status_code == 200
     assert not any(r.get("room_code") == code for r in rooms_resp.json())
 
+    hb2 = await client.post(
+        "/internal/game_servers/heartbeat",
+        headers=INTERNAL_HEADERS,
+        json={"game_server_id": "gs-pending-1", "ws_url": "wss://pending.example.test", "room_codes": []},
+    )
+    assert hb2.status_code == 200
+
+    room_resp = await client.get(f"/v1/rooms/{code}")
+    assert room_resp.status_code == 200
+    assert room_resp.json()["status"] == "Pending"
+
     player = await _create_user(client)
     join_resp = await client.post(f"/v1/rooms/{code}/join", json={"session_id": player["session_id"], "password": "secret"})
     assert join_resp.status_code == 409

@@ -76,7 +76,10 @@ async def heartbeat(req: HeartbeatRequest, db: AsyncSession = Depends(get_db)):
             r.updated_at = now
 
     # GC: rooms previously on this game server but no longer present -> Ended.
-    stmt = select(Room).where(Room.game_server_id == req.game_server_id, Room.status != "Ended")
+    stmt = select(Room).where(
+        Room.game_server_id == req.game_server_id,
+        Room.status.in_(ACTIVE_ROOM_STATUSES),
+    )
     if req.room_codes:
         stmt = stmt.where(~Room.room_code.in_(req.room_codes))
     stale = (await db.execute(stmt)).scalars().all()
@@ -242,7 +245,7 @@ async def sync_room_directory(game_server_id: str, req: RoomDirectorySyncRequest
     stale_rooms = (await db.execute(
         select(Room).where(
             Room.game_server_id == game_server_id,
-            Room.status != "Ended",
+            Room.status.in_(ACTIVE_ROOM_STATUSES),
         )
     )).scalars().all()
     stale_room_ids: list[str] = []
