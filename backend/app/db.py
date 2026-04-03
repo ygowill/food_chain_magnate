@@ -14,6 +14,24 @@ def _ensure_schema_migrations(sync_conn) -> None:
     if "display_name" not in user_columns:
         sync_conn.execute(text("ALTER TABLE users ADD COLUMN display_name VARCHAR"))
 
+    room_member_columns = {str(col.get("name", "")).strip() for col in inspector.get_columns("room_members")}
+    if "member_status" not in room_member_columns:
+        sync_conn.execute(text("ALTER TABLE room_members ADD COLUMN member_status VARCHAR DEFAULT 'active'"))
+        sync_conn.execute(text("UPDATE room_members SET member_status = 'active' WHERE member_status IS NULL"))
+
+    room_member_indexes = {str(idx.get("name", "")).strip() for idx in inspector.get_indexes("room_members")}
+    if "ix_room_members_active_user_unique" not in room_member_indexes:
+        sync_conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_room_members_active_user_unique "
+            "ON room_members (room_id, user_id) WHERE left_at IS NULL"
+        ))
+    if "ix_room_members_active_seat_unique" not in room_member_indexes:
+        sync_conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_room_members_active_seat_unique "
+            "ON room_members (room_id, seat_index) "
+            "WHERE left_at IS NULL AND seat_index IS NOT NULL"
+        ))
+
 
 async def init_db():
     async with engine.begin() as conn:

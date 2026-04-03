@@ -9,6 +9,10 @@ const STATUS_LOBBY := "Lobby"
 const STATUS_IN_GAME := "InGame"
 const STATUS_ENDED := "Ended"
 
+const SEAT_CONNECTED := "CONNECTED"
+const SEAT_RECONNECTING := "RECONNECTING"
+const SEAT_FORFEITED := "FORFEITED"
+
 var room_code: String = ""
 var host_peer_id: int = 0
 var status: String = STATUS_LOBBY
@@ -28,23 +32,24 @@ var finalized_match_id: String = ""
 var game_engine = null
 var player_id_by_peer_id: Dictionary = {} # peer_id -> player_id
 
-# 玩家座位：seat_index -> profile（即便掉线/弃权也保留，用于“旁观者”占位）
-var _seat_profile_by_seat_index: Dictionary = {} # seat_index -> { name, color_index, restaurant_logo_id }
-var _peer_id_by_seat_index: Dictionary = {} # seat_index -> peer_id（在线；掉线则不存在或为 0）
-
-# 在线成员：peer_id -> profile
-var _player_profile_by_peer_id: Dictionary = {} # peer_id -> { name, color_index, restaurant_logo_id }
-var _spectator_profile_by_peer_id: Dictionary = {} # peer_id -> { name, color_index, restaurant_logo_id }
-
+# 兼容外部现有调用：以下字段由 _seat_slot_by_index 派生，不再作为权威状态。
+var _seat_profile_by_seat_index: Dictionary = {} # seat_index -> profile
+var _peer_id_by_seat_index: Dictionary = {} # seat_index -> peer_id
+var _player_profile_by_peer_id: Dictionary = {} # peer_id -> profile
+var _spectator_profile_by_peer_id: Dictionary = {} # peer_id -> profile
 var _seat_by_player_peer_id: Dictionary = {} # peer_id -> seat_index
 var _desired_player_count: int = 0
-var _user_id_by_seat_index: Dictionary = {} # seat_index -> user_id（用于断线重连鉴权；不对客户端广播）
+var _user_id_by_seat_index: Dictionary = {} # seat_index -> user_id
 var _host_seat_index: int = -1
 var owner_user_id: String = ""
 
-func to_persistence_dict() -> Result:
+var _seat_slot_by_index: Dictionary = {} # seat_index -> slot
+
+func to_persistence_dict(include_runtime_membership: bool = false) -> Result:
 	if str(status) != STATUS_IN_GAME and str(status) != STATUS_LOBBY:
 		return Result.failure("只支持持久化 Lobby/InGame 房间")
+
+	_sync_seat_states_from_engine()
 
 	var archive: Dictionary = {}
 	if str(status) == STATUS_IN_GAME:
@@ -55,7 +60,7 @@ func to_persistence_dict() -> Result:
 			return Result.failure("create_archive failed: %s" % archive_r.error)
 		archive = Dictionary(archive_r.value).duplicate(true)
 
-	return Result.success({
+	var out := {
 		"room_code": room_code,
 		"status": status,
 		"owner_user_id": owner_user_id,
@@ -69,11 +74,15 @@ func to_persistence_dict() -> Result:
 		"ended_at_unix_sec": ended_at_unix_sec,
 		"match_finalize_reported": match_finalize_reported,
 		"finalized_match_id": finalized_match_id,
+		"host_seat_index": _host_seat_index,
+		"seat_slots": _seat_slot_by_index.duplicate(true),
 		"seat_profiles": _seat_profile_by_seat_index.duplicate(true),
 		"user_ids_by_seat": _user_id_by_seat_index.duplicate(true),
-		"host_seat_index": _host_seat_index,
 		"archive": archive,
-	})
+	}
+	if include_runtime_membership:
+		out["spectators"] = _build_directory_spectators_array()
+	return Result.success(out)
 
 static func from_persistence_dict(data: Dictionary) -> Result:
 	var room_code_read := str(data.get("room_code", "")).strip_edges().to_upper()
@@ -106,16 +115,36 @@ static func from_persistence_dict(data: Dictionary) -> Result:
 	room.match_finalize_in_flight = false
 	room.match_finalize_reported = bool(data.get("match_finalize_reported", false))
 	room.finalized_match_id = str(data.get("finalized_match_id", "")).strip_edges()
-	room._seat_profile_by_seat_index = _normalize_int_key_dict(data.get("seat_profiles", null))
-	room._user_id_by_seat_index = _normalize_int_key_dict(data.get("user_ids_by_seat", null))
-	room._peer_id_by_seat_index = {}
-	room._player_profile_by_peer_id = {}
-	room._spectator_profile_by_peer_id = {}
-	room._seat_by_player_peer_id = {}
-	room.player_id_by_peer_id = {}
-	room._desired_player_count = int(room.config.get("desired_player_count", room._seat_profile_by_seat_index.size()))
 	room._host_seat_index = int(data.get("host_seat_index", -1))
 	room.host_peer_id = 0
+
+	var slots_val = data.get("seat_slots", null)
+	if slots_val is Dictionary:
+		room._seat_slot_by_index = _normalize_seat_slots(Dictionary(slots_val))
+	else:
+		var seat_profiles := _normalize_int_key_dict(data.get("seat_profiles", null))
+		var user_ids := _normalize_int_key_dict(data.get("user_ids_by_seat", null))
+		var seat_indices: Array[int] = []
+		for key in seat_profiles.keys():
+			seat_indices.append(int(key))
+		seat_indices.sort()
+		for seat_index in seat_indices:
+			var profile: Dictionary = Dictionary(seat_profiles.get(seat_index, {})).duplicate(true)
+			var user_id := str(user_ids.get(seat_index, "")).strip_edges()
+			var state := SEAT_FORFEITED if bool(Dictionary(profile).get("forfeited", false)) else SEAT_RECONNECTING
+			room._seat_slot_by_index[seat_index] = room._make_seat_slot(
+				seat_index,
+				"host" if seat_index == room._host_seat_index else "player",
+				user_id,
+				profile,
+				state,
+				0,
+				0
+			)
+
+	room._player_profile_by_peer_id = {}
+	room._spectator_profile_by_peer_id = {}
+	room._desired_player_count = int(room.config.get("desired_player_count", room._seat_slot_by_index.size()))
 
 	if status_read == STATUS_IN_GAME:
 		var engine := GameEngineClass.new()
@@ -124,6 +153,7 @@ static func from_persistence_dict(data: Dictionary) -> Result:
 			return Result.failure("恢复房间 archive 失败: %s" % load_r.error)
 		room.game_engine = engine
 
+	room._rebuild_runtime_views()
 	return Result.success(room)
 
 static func _normalize_int_key_dict(value) -> Dictionary:
@@ -138,6 +168,32 @@ static func _normalize_int_key_dict(value) -> Dictionary:
 		out[int(key_text)] = src.get(key, null)
 	return out
 
+static func _normalize_seat_slots(value: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for key in value.keys():
+		var key_text := str(key).strip_edges()
+		if key_text.is_empty():
+			continue
+		var seat_index := int(key_text)
+		var raw = value.get(key, null)
+		if not (raw is Dictionary):
+			continue
+		var slot_src: Dictionary = Dictionary(raw)
+		var slot := {
+			"seat_index": seat_index,
+			"role": str(slot_src.get("role", "player")).strip_edges(),
+			"user_id": str(slot_src.get("user_id", "")).strip_edges(),
+			"profile": Dictionary(slot_src.get("profile", {})).duplicate(true),
+			"seat_state": str(slot_src.get("seat_state", SEAT_RECONNECTING)).strip_edges(),
+			"peer_id": 0,
+			"generation": int(slot_src.get("generation", 0)),
+			"reconnect_deadline_ms": int(slot_src.get("reconnect_deadline_ms", 0)),
+		}
+		if slot["seat_state"] != SEAT_CONNECTED and slot["seat_state"] != SEAT_RECONNECTING and slot["seat_state"] != SEAT_FORFEITED:
+			slot["seat_state"] = SEAT_RECONNECTING
+		out[seat_index] = slot
+	return out
+
 func _init(p_room_code: String, p_host_peer_id: int, p_join_policy: String, p_password_hash: String, p_config: Dictionary) -> void:
 	room_code = p_room_code
 	host_peer_id = p_host_peer_id
@@ -149,6 +205,87 @@ func _init(p_room_code: String, p_host_peer_id: int, p_join_policy: String, p_pa
 
 func _touch() -> void:
 	updated_at_ms = int(Time.get_unix_time_from_system() * 1000.0)
+
+func _make_seat_slot(
+	seat_index: int,
+	role: String,
+	user_id: String,
+	profile: Dictionary,
+	seat_state: String,
+	peer_id: int,
+	generation: int
+) -> Dictionary:
+	var normalized_profile: Dictionary = Dictionary(profile).duplicate(true)
+	if str(normalized_profile.get("name", "")).strip_edges().is_empty():
+		normalized_profile["name"] = "玩家 %d" % [seat_index + 1]
+	if not normalized_profile.has("color_index"):
+		normalized_profile["color_index"] = 0
+	if not normalized_profile.has("restaurant_logo_id"):
+		normalized_profile["restaurant_logo_id"] = -1
+	return {
+		"seat_index": int(seat_index),
+		"role": "host" if str(role).strip_edges() == "host" else "player",
+		"user_id": str(user_id).strip_edges(),
+		"profile": normalized_profile,
+		"seat_state": str(seat_state).strip_edges(),
+		"peer_id": int(peer_id),
+		"generation": int(generation),
+		"reconnect_deadline_ms": 0,
+	}
+
+func _occupied_seat_indices() -> Array[int]:
+	var out: Array[int] = []
+	for key in _seat_slot_by_index.keys():
+		out.append(int(key))
+	out.sort()
+	return out
+
+func _get_slot(seat_index: int) -> Dictionary:
+	if not _seat_slot_by_index.has(seat_index):
+		return {}
+	return Dictionary(_seat_slot_by_index.get(seat_index, {}))
+
+func _set_slot(seat_index: int, slot: Dictionary) -> void:
+	_seat_slot_by_index[seat_index] = Dictionary(slot).duplicate(true)
+
+func _erase_slot(seat_index: int) -> void:
+	if _seat_slot_by_index.has(seat_index):
+		_seat_slot_by_index.erase(seat_index)
+
+func _is_slot_connected(slot: Dictionary) -> bool:
+	return int(slot.get("peer_id", 0)) > 0 and str(slot.get("seat_state", "")).strip_edges() == SEAT_CONNECTED
+
+func _rebuild_runtime_views() -> void:
+	_seat_profile_by_seat_index = {}
+	_peer_id_by_seat_index = {}
+	_player_profile_by_peer_id = {}
+	_spectator_profile_by_peer_id = _spectator_profile_by_peer_id.duplicate(true)
+	_seat_by_player_peer_id = {}
+	_user_id_by_seat_index = {}
+	player_id_by_peer_id = {}
+
+	for seat_index in _occupied_seat_indices():
+		var slot: Dictionary = _get_slot(seat_index)
+		var profile: Dictionary = Dictionary(slot.get("profile", {})).duplicate(true)
+		var peer_id := int(slot.get("peer_id", 0))
+		var user_id := str(slot.get("user_id", "")).strip_edges()
+
+		_seat_profile_by_seat_index[seat_index] = profile
+		if not user_id.is_empty():
+			_user_id_by_seat_index[seat_index] = user_id
+		if peer_id > 0:
+			_peer_id_by_seat_index[seat_index] = peer_id
+			_player_profile_by_peer_id[peer_id] = profile.duplicate(true)
+			_seat_by_player_peer_id[peer_id] = seat_index
+
+		var slot_state := str(slot.get("seat_state", "")).strip_edges()
+		if peer_id > 0 and slot_state == SEAT_CONNECTED and slot_state != SEAT_FORFEITED and not _is_seat_forfeited_from_engine(seat_index):
+			player_id_by_peer_id[peer_id] = seat_index
+
+	if _host_seat_index >= 0:
+		host_peer_id = int(_peer_id_by_seat_index.get(_host_seat_index, 0))
+	else:
+		host_peer_id = 0
 
 func is_password_required() -> bool:
 	if join_policy != "password":
@@ -172,7 +309,6 @@ func update_config(patch: Dictionary) -> Result:
 		_desired_player_count = n
 		config["desired_player_count"] = n
 
-	# 其它字段按原样覆盖；校验在 server RPC 层完成。
 	for k in patch.keys():
 		var key := str(k)
 		if key == "desired_player_count":
@@ -187,23 +323,28 @@ func has_peer(peer_id: int) -> bool:
 
 func get_peer_ids() -> Array[int]:
 	var peer_ids: Array[int] = []
-	for k in _player_profile_by_peer_id.keys():
-		peer_ids.append(int(k))
-	peer_ids.sort_custom(func(a: int, b: int) -> bool:
-		return int(_seat_by_player_peer_id.get(a, 999999)) < int(_seat_by_player_peer_id.get(b, 999999))
-	)
+	for seat_index in _occupied_seat_indices():
+		var slot: Dictionary = _get_slot(seat_index)
+		var peer_id := int(slot.get("peer_id", 0))
+		if peer_id > 0:
+			peer_ids.append(peer_id)
 	var spectator_ids: Array[int] = []
-	for k2 in _spectator_profile_by_peer_id.keys():
-		spectator_ids.append(int(k2))
+	for k in _spectator_profile_by_peer_id.keys():
+		spectator_ids.append(int(k))
 	spectator_ids.sort()
 	peer_ids.append_array(spectator_ids)
 	return peer_ids
 
 func get_player_count() -> int:
-	return _seat_profile_by_seat_index.size()
+	return _seat_slot_by_index.size()
 
 func get_connected_player_count() -> int:
-	return _player_profile_by_peer_id.size()
+	var count := 0
+	for seat_index in _occupied_seat_indices():
+		var slot: Dictionary = _get_slot(seat_index)
+		if _is_slot_connected(slot):
+			count += 1
+	return count
 
 func is_full() -> bool:
 	if _desired_player_count <= 0:
@@ -211,7 +352,7 @@ func is_full() -> bool:
 	return get_player_count() >= _desired_player_count
 
 func is_empty() -> bool:
-	return _seat_profile_by_seat_index.is_empty() and _spectator_profile_by_peer_id.is_empty()
+	return _seat_slot_by_index.is_empty() and _spectator_profile_by_peer_id.is_empty()
 
 func add_peer(peer_id: int, profile: Dictionary) -> Result:
 	if has_peer(peer_id):
@@ -222,15 +363,13 @@ func add_peer(peer_id: int, profile: Dictionary) -> Result:
 		return Result.failure("Room is full")
 
 	var seat_index := _pick_seat_index()
-	_player_profile_by_peer_id[peer_id] = profile.duplicate(true)
-	_seat_by_player_peer_id[peer_id] = seat_index
-	_seat_profile_by_seat_index[seat_index] = profile.duplicate(true)
-	_peer_id_by_seat_index[seat_index] = peer_id
-	if peer_id == host_peer_id:
-		_host_seat_index = seat_index
+	var role := "host" if _host_seat_index < 0 else "player"
 	var user_id := str(profile.get("user_id", "")).strip_edges()
-	if not user_id.is_empty():
-		_user_id_by_seat_index[seat_index] = user_id
+	var slot := _make_seat_slot(seat_index, role, user_id, profile, SEAT_CONNECTED, peer_id, 1)
+	_set_slot(seat_index, slot)
+	if role == "host":
+		_host_seat_index = seat_index
+	_rebuild_runtime_views()
 	_touch()
 	return Result.success()
 
@@ -247,19 +386,16 @@ func add_peer_at_seat(peer_id: int, profile: Dictionary, seat_index: int) -> Res
 		return Result.failure("Invalid seat_index")
 	if _desired_player_count > 0 and idx >= _desired_player_count:
 		return Result.failure("seat_index out of range")
-	if _seat_profile_by_seat_index.has(idx):
+	if _seat_slot_by_index.has(idx):
 		return Result.failure("Seat already occupied")
 
-	_player_profile_by_peer_id[peer_id] = profile.duplicate(true)
-	_seat_by_player_peer_id[peer_id] = idx
-	_seat_profile_by_seat_index[idx] = profile.duplicate(true)
-	_peer_id_by_seat_index[idx] = peer_id
-	if peer_id == host_peer_id:
-		_host_seat_index = idx
+	var role := "host" if idx == _host_seat_index or _host_seat_index < 0 else "player"
 	var user_id := str(profile.get("user_id", "")).strip_edges()
-	if not user_id.is_empty():
-		_user_id_by_seat_index[idx] = user_id
-
+	var slot := _make_seat_slot(idx, role, user_id, profile, SEAT_CONNECTED, peer_id, 1)
+	_set_slot(idx, slot)
+	if role == "host":
+		_host_seat_index = idx
+	_rebuild_runtime_views()
 	_touch()
 	return Result.success()
 
@@ -272,37 +408,36 @@ func reclaim_peer_at_seat(peer_id: int, profile: Dictionary, seat_index: int, us
 	var idx := int(seat_index)
 	if idx < 0:
 		return Result.failure("Invalid seat_index")
-	if not _seat_profile_by_seat_index.has(idx):
+	if not _seat_slot_by_index.has(idx):
 		return Result.failure("Seat not found")
 
-	var replaced_peer_id := 0
-	var current_peer_id := int(_peer_id_by_seat_index.get(idx, 0))
+	var slot := _get_slot(idx)
 	var uid := str(user_id).strip_edges()
-	var existing_uid := str(_user_id_by_seat_index.get(idx, "")).strip_edges()
-	if current_peer_id > 0:
-		if uid.is_empty() or existing_uid.is_empty() or existing_uid != uid:
-			return Result.failure("Seat already connected")
-		_evict_connected_player_peer(current_peer_id)
-		replaced_peer_id = current_peer_id
-	if not uid.is_empty():
-		if not existing_uid.is_empty() and existing_uid != uid:
-			return Result.failure("user_id mismatch for seat")
-		if existing_uid.is_empty():
-			_user_id_by_seat_index[idx] = uid
+	var existing_uid := str(slot.get("user_id", "")).strip_edges()
+	if not uid.is_empty() and not existing_uid.is_empty() and existing_uid != uid:
+		return Result.failure("user_id mismatch for seat")
+	if existing_uid.is_empty():
+		existing_uid = uid
+		slot["user_id"] = uid
+	if existing_uid.is_empty():
+		return Result.failure("user_id required for reclaim")
 
-	_player_profile_by_peer_id[peer_id] = profile.duplicate(true)
-	_seat_by_player_peer_id[peer_id] = idx
-	_peer_id_by_seat_index[idx] = peer_id
-	_seat_profile_by_seat_index[idx] = profile.duplicate(true)
-	if idx == _host_seat_index:
-		host_peer_id = peer_id
+	var replaced_peer_id := int(slot.get("peer_id", 0))
+	if replaced_peer_id > 0 and replaced_peer_id != peer_id:
+		_evict_connected_player_peer(replaced_peer_id)
 
+	slot["profile"] = Dictionary(profile).duplicate(true)
+	slot["peer_id"] = peer_id
+	slot["seat_state"] = SEAT_CONNECTED
+	slot["generation"] = int(slot.get("generation", 0)) + 1
+	_set_slot(idx, slot)
+	_rebuild_runtime_views()
 	_touch()
 	return Result.success({
 		"replaced_peer_id": replaced_peer_id,
 	})
 
-func reconnect_player(peer_id: int, profile: Dictionary, seat_index: int, user_id: String = "") -> Result:
+func reconnect_player(peer_id: int, profile: Dictionary, seat_index: int, user_id: String = "", restore_host: bool = false) -> Result:
 	if has_peer(peer_id):
 		return Result.failure("Peer already in room")
 	if status != STATUS_IN_GAME:
@@ -311,47 +446,56 @@ func reconnect_player(peer_id: int, profile: Dictionary, seat_index: int, user_i
 	var idx := int(seat_index)
 	if idx < 0:
 		return Result.failure("Invalid seat_index")
-	if not _seat_profile_by_seat_index.has(idx):
+	if not _seat_slot_by_index.has(idx):
 		return Result.failure("Seat not found")
 
-	var replaced_peer_id := 0
-	var current_peer_id := int(_peer_id_by_seat_index.get(idx, 0))
+	_sync_seat_states_from_engine()
+	var slot := _get_slot(idx)
+	if str(slot.get("seat_state", "")).strip_edges() == SEAT_FORFEITED:
+		return Result.failure("Seat forfeited")
+
 	var uid := str(user_id).strip_edges()
-	var existing_uid := str(_user_id_by_seat_index.get(idx, "")).strip_edges()
-	if current_peer_id > 0:
-		if uid.is_empty() or existing_uid.is_empty() or existing_uid != uid:
-			return Result.failure("Seat already connected")
-		_evict_connected_player_peer(current_peer_id)
-		replaced_peer_id = current_peer_id
-	if not uid.is_empty():
-		if not existing_uid.is_empty() and existing_uid != uid:
-			return Result.failure("user_id mismatch for seat")
-		if existing_uid.is_empty():
-			_user_id_by_seat_index[idx] = uid
+	var existing_uid := str(slot.get("user_id", "")).strip_edges()
+	if not uid.is_empty() and not existing_uid.is_empty() and existing_uid != uid:
+		return Result.failure("user_id mismatch for seat")
+	if existing_uid.is_empty():
+		existing_uid = uid
+		slot["user_id"] = uid
+	if existing_uid.is_empty():
+		return Result.failure("user_id required for reconnect")
 
-	_player_profile_by_peer_id[peer_id] = profile.duplicate(true)
-	_seat_by_player_peer_id[peer_id] = idx
-	_peer_id_by_seat_index[idx] = peer_id
+	var replaced_peer_id := int(slot.get("peer_id", 0))
+	if replaced_peer_id > 0 and replaced_peer_id != peer_id:
+		_evict_connected_player_peer(replaced_peer_id)
 
-	# 更新座位展示信息（昵称/颜色/logo）
-	_seat_profile_by_seat_index[idx] = profile.duplicate(true)
-
-	# InGame：恢复 peer->player_id 映射（actor_id == seat_index）
-	player_id_by_peer_id[peer_id] = idx
-	if idx == _host_seat_index:
-		host_peer_id = peer_id
-
+	slot["profile"] = Dictionary(profile).duplicate(true)
+	slot["peer_id"] = peer_id
+	slot["seat_state"] = SEAT_CONNECTED
+	slot["generation"] = int(slot.get("generation", 0)) + 1
+	if restore_host:
+		slot["role"] = "host"
+		_host_seat_index = idx
+	_set_slot(idx, slot)
+	_rebuild_runtime_views()
 	_touch()
 	return Result.success({
 		"replaced_peer_id": replaced_peer_id,
 	})
 
 func _evict_connected_player_peer(peer_id: int) -> void:
-	_player_profile_by_peer_id.erase(peer_id)
-	_seat_by_player_peer_id.erase(peer_id)
-	player_id_by_peer_id.erase(peer_id)
-	if host_peer_id == peer_id:
-		host_peer_id = 0
+	if _spectator_profile_by_peer_id.has(peer_id):
+		_spectator_profile_by_peer_id.erase(peer_id)
+	for seat_index in _occupied_seat_indices():
+		var slot := _get_slot(seat_index)
+		if int(slot.get("peer_id", 0)) != peer_id:
+			continue
+		slot["peer_id"] = 0
+		if str(slot.get("seat_state", "")).strip_edges() == SEAT_CONNECTED:
+			slot["seat_state"] = SEAT_RECONNECTING
+		slot["generation"] = int(slot.get("generation", 0)) + 1
+		_set_slot(seat_index, slot)
+		break
+	_rebuild_runtime_views()
 
 func add_spectator(peer_id: int, profile: Dictionary) -> Result:
 	if has_peer(peer_id):
@@ -361,7 +505,7 @@ func add_spectator(peer_id: int, profile: Dictionary) -> Result:
 	if not get_allow_spectators():
 		return Result.failure("Spectators not allowed")
 
-	_spectator_profile_by_peer_id[peer_id] = profile.duplicate(true)
+	_spectator_profile_by_peer_id[peer_id] = Dictionary(profile).duplicate(true)
 	_touch()
 	return Result.success()
 
@@ -374,24 +518,31 @@ func remove_peer(peer_id: int) -> Result:
 			"host_peer_id": host_peer_id,
 		})
 
-	if not _player_profile_by_peer_id.has(peer_id):
+	if not _seat_by_player_peer_id.has(peer_id):
 		return Result.failure("Peer not in room")
 
 	var seat_index := int(_seat_by_player_peer_id.get(peer_id, -1))
-	_player_profile_by_peer_id.erase(peer_id)
-	_seat_by_player_peer_id.erase(peer_id)
-	player_id_by_peer_id.erase(peer_id)
-	if seat_index >= 0:
-		_peer_id_by_seat_index.erase(seat_index)
-		_seat_profile_by_seat_index.erase(seat_index)
-		_user_id_by_seat_index.erase(seat_index)
+	if seat_index < 0 or not _seat_slot_by_index.has(seat_index):
+		return Result.failure("Seat not found")
 
+	var slot := _get_slot(seat_index)
 	var host_changed := false
-	if host_peer_id == peer_id:
-		host_peer_id = _pick_new_host_peer_id()
-		_refresh_host_seat_index_from_host_peer()
-		host_changed = true
+	if status == STATUS_LOBBY:
+		_erase_slot(seat_index)
+		if seat_index == _host_seat_index:
+			_promote_new_host_after_lobby_leave()
+			host_changed = true
+	else:
+		_sync_seat_states_from_engine()
+		slot["peer_id"] = 0
+		slot["generation"] = int(slot.get("generation", 0)) + 1
+		if _is_seat_forfeited_from_engine(seat_index):
+			slot["seat_state"] = SEAT_FORFEITED
+		else:
+			slot["seat_state"] = SEAT_RECONNECTING
+		_set_slot(seat_index, slot)
 
+	_rebuild_runtime_views()
 	_touch()
 	return Result.success({
 		"host_changed": host_changed,
@@ -399,7 +550,6 @@ func remove_peer(peer_id: int) -> Result:
 	})
 
 func disconnect_peer(peer_id: int) -> Result:
-	# Spectator：直接移除（无座位）
 	if _spectator_profile_by_peer_id.has(peer_id):
 		_spectator_profile_by_peer_id.erase(peer_id)
 		_touch()
@@ -408,31 +558,27 @@ func disconnect_peer(peer_id: int) -> Result:
 			"host_peer_id": host_peer_id,
 		})
 
-	# Player：保留 seat_profile（作为旁观者占位），但移除在线 peer 映射
-	if not _player_profile_by_peer_id.has(peer_id):
+	if not _seat_by_player_peer_id.has(peer_id):
 		return Result.failure("Peer not in room")
 
 	var seat_index := int(_seat_by_player_peer_id.get(peer_id, -1))
-	_player_profile_by_peer_id.erase(peer_id)
-	_seat_by_player_peer_id.erase(peer_id)
-	player_id_by_peer_id.erase(peer_id)
-	if seat_index >= 0:
-		_peer_id_by_seat_index.erase(seat_index)
+	if seat_index < 0 or not _seat_slot_by_index.has(seat_index):
+		return Result.failure("Seat not found")
 
-	var host_changed := false
-	if status == STATUS_LOBBY:
-		if host_peer_id == peer_id:
-			host_peer_id = 0
-			host_changed = true
+	_sync_seat_states_from_engine()
+	var slot := _get_slot(seat_index)
+	slot["peer_id"] = 0
+	slot["generation"] = int(slot.get("generation", 0)) + 1
+	if _is_seat_forfeited_from_engine(seat_index):
+		slot["seat_state"] = SEAT_FORFEITED
 	else:
-		if host_peer_id == peer_id:
-			host_peer_id = _pick_new_host_peer_id()
-			_refresh_host_seat_index_from_host_peer()
-			host_changed = true
+		slot["seat_state"] = SEAT_RECONNECTING
+	_set_slot(seat_index, slot)
 
+	_rebuild_runtime_views()
 	_touch()
 	return Result.success({
-		"host_changed": host_changed,
+		"host_changed": seat_index == _host_seat_index,
 		"host_peer_id": host_peer_id,
 	})
 
@@ -447,13 +593,15 @@ func update_peer_profile(peer_id: int, profile: Dictionary) -> Result:
 	if str(normalized.get("name", "")).is_empty():
 		normalized["name"] = "玩家"
 
-	if _player_profile_by_peer_id.has(peer_id):
-		_player_profile_by_peer_id[peer_id] = normalized.duplicate(true)
+	if _seat_by_player_peer_id.has(peer_id):
 		var seat_index := int(_seat_by_player_peer_id.get(peer_id, -1))
-		if seat_index >= 0 and _seat_profile_by_seat_index.has(seat_index):
-			_seat_profile_by_seat_index[seat_index] = normalized.duplicate(true)
-		_touch()
-		return Result.success()
+		if seat_index >= 0 and _seat_slot_by_index.has(seat_index):
+			var slot := _get_slot(seat_index)
+			slot["profile"] = normalized.duplicate(true)
+			_set_slot(seat_index, slot)
+			_rebuild_runtime_views()
+			_touch()
+			return Result.success()
 
 	if _spectator_profile_by_peer_id.has(peer_id):
 		_spectator_profile_by_peer_id[peer_id] = normalized.duplicate(true)
@@ -465,7 +613,7 @@ func update_peer_profile(peer_id: int, profile: Dictionary) -> Result:
 func set_player_logo_by_seat(seat_index: int, restaurant_logo_id: int) -> Result:
 	if status != STATUS_LOBBY:
 		return Result.failure("Room is not in Lobby")
-	if seat_index < 0 or not _seat_profile_by_seat_index.has(seat_index):
+	if seat_index < 0 or not _seat_slot_by_index.has(seat_index):
 		return Result.failure("Seat not found")
 
 	var logo_limit := DEFAULT_RESTAURANT_LOGO_COUNT
@@ -473,22 +621,20 @@ func set_player_logo_by_seat(seat_index: int, restaurant_logo_id: int) -> Result
 	if logo_id < -1 or logo_id >= maxi(1, logo_limit):
 		return Result.failure("restaurant_logo_id out of range")
 
-	var seat_profile: Dictionary = Dictionary(_seat_profile_by_seat_index.get(seat_index, {}))
+	var slot := _get_slot(seat_index)
+	var seat_profile: Dictionary = Dictionary(slot.get("profile", {}))
 	if seat_profile.is_empty():
 		return Result.failure("Seat profile missing")
 	seat_profile["restaurant_logo_id"] = logo_id
-	_seat_profile_by_seat_index[seat_index] = seat_profile.duplicate(true)
+	slot["profile"] = seat_profile.duplicate(true)
+	_set_slot(seat_index, slot)
 
-	var peer_id := int(_peer_id_by_seat_index.get(seat_index, 0))
-	if peer_id > 0 and _player_profile_by_peer_id.has(peer_id):
-		var player_profile: Dictionary = Dictionary(_player_profile_by_peer_id.get(peer_id, {}))
-		player_profile["restaurant_logo_id"] = logo_id
-		_player_profile_by_peer_id[peer_id] = player_profile.duplicate(true)
-
+	_rebuild_runtime_views()
 	_touch()
 	return Result.success()
 
 func to_room_state_dict() -> Dictionary:
+	_sync_seat_states_from_engine()
 	return {
 		"room_code": room_code,
 		"host_peer_id": host_peer_id,
@@ -501,7 +647,14 @@ func to_room_state_dict() -> Dictionary:
 		"status": status,
 	}
 
+func to_room_state_dict_for_peer(peer_id: int) -> Dictionary:
+	var state := to_room_state_dict()
+	state["self_seat_index"] = get_seat_index_for_peer(peer_id)
+	state["self_role"] = get_role_for_peer(peer_id)
+	return state
+
 func to_room_summary_dict() -> Dictionary:
+	_sync_seat_states_from_engine()
 	var cfg: Dictionary = config.duplicate(true)
 	var seed_mode := str(cfg.get("seed_mode", "")).strip_edges()
 	var seed := int(cfg.get("seed", 0))
@@ -511,9 +664,9 @@ func to_room_summary_dict() -> Dictionary:
 		mods_count = Array(mv).size()
 
 	var host_name := ""
-	var host_profile: Dictionary = Dictionary(_player_profile_by_peer_id.get(host_peer_id, {}))
-	if host_profile.is_empty() and _host_seat_index >= 0:
-		host_profile = Dictionary(_seat_profile_by_seat_index.get(_host_seat_index, {}))
+	var host_profile: Dictionary = {}
+	if _host_seat_index >= 0 and _seat_slot_by_index.has(_host_seat_index):
+		host_profile = Dictionary(_get_slot(_host_seat_index).get("profile", {}))
 	if not host_profile.is_empty():
 		host_name = str(host_profile.get("name", ""))
 
@@ -522,6 +675,7 @@ func to_room_summary_dict() -> Dictionary:
 		"status": status,
 		"desired_player_count": int(cfg.get("desired_player_count", 0)),
 		"player_count": get_player_count(),
+		"connected_player_count": get_connected_player_count(),
 		"spectator_count": _spectator_profile_by_peer_id.size(),
 		"password_required": is_password_required(),
 		"allow_spectators": get_allow_spectators(),
@@ -536,18 +690,25 @@ func to_room_summary_dict() -> Dictionary:
 
 func build_player_id_by_peer_id() -> Dictionary:
 	var out: Dictionary = {}
-	var peer_ids := get_player_peer_ids()
-	for i in range(peer_ids.size()):
-		out[int(peer_ids[i])] = i
+	for seat_index in _occupied_seat_indices():
+		var slot: Dictionary = _get_slot(seat_index)
+		var peer_id := int(slot.get("peer_id", 0))
+		if peer_id <= 0:
+			continue
+		if str(slot.get("seat_state", "")).strip_edges() != SEAT_CONNECTED:
+			continue
+		if _is_seat_forfeited_from_engine(seat_index):
+			continue
+		out[peer_id] = seat_index
 	return out
 
 func get_player_peer_ids() -> Array[int]:
 	var peer_ids: Array[int] = []
-	for k in _player_profile_by_peer_id.keys():
-		peer_ids.append(int(k))
-	peer_ids.sort_custom(func(a: int, b: int) -> bool:
-		return int(_seat_by_player_peer_id.get(a, 999999)) < int(_seat_by_player_peer_id.get(b, 999999))
-	)
+	for seat_index in _occupied_seat_indices():
+		var slot: Dictionary = _get_slot(seat_index)
+		var peer_id := int(slot.get("peer_id", 0))
+		if peer_id > 0:
+			peer_ids.append(peer_id)
 	return peer_ids
 
 func can_start_game() -> Result:
@@ -561,6 +722,12 @@ func can_start_game() -> Result:
 		return Result.failure("players not ready: have=%d need=%d" % [get_player_count(), desired])
 	if get_connected_player_count() != desired:
 		return Result.failure("players not connected: have=%d need=%d" % [get_connected_player_count(), desired])
+	for seat_index in range(desired):
+		if not _seat_slot_by_index.has(seat_index):
+			return Result.failure("seat %d missing" % seat_index)
+		var slot := _get_slot(seat_index)
+		if not _is_slot_connected(slot):
+			return Result.failure("seat %d not connected" % seat_index)
 
 	var seed_mode := str(config.get("seed_mode", "random")).strip_edges()
 	if seed_mode != "random" and seed_mode != "fixed":
@@ -606,7 +773,8 @@ func start_game() -> Result:
 
 	var logo_choices: Array[int] = []
 	for seat_index in range(player_count):
-		var profile: Dictionary = Dictionary(_seat_profile_by_seat_index.get(seat_index, {}))
+		var slot: Dictionary = _get_slot(seat_index)
+		var profile: Dictionary = Dictionary(slot.get("profile", {}))
 		logo_choices.append(int(profile.get("restaurant_logo_id", -1)))
 	config["restaurant_logo_choices_by_player"] = logo_choices
 
@@ -635,11 +803,11 @@ func start_game() -> Result:
 		Globals.game_option_overrides = prev_game_option_overrides
 	if not init_r.ok:
 		return Result.failure("GameEngine.initialize failed: %s" % init_r.error)
+
 	var state = engine.get_state()
 	if state != null:
 		if not (state.rules is Dictionary):
 			state.rules = {}
-		# 写入持久规则区：round_state 会在每回合开始被重建。
 		state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
 		if engine.checkpoints.size() > 0 and (engine.checkpoints[0] is Dictionary):
 			var checkpoint0: Dictionary = engine.checkpoints[0]
@@ -648,7 +816,6 @@ func start_game() -> Result:
 			engine.checkpoints[0] = checkpoint0
 
 	game_engine = engine
-	player_id_by_peer_id = build_player_id_by_peer_id()
 	status = STATUS_IN_GAME
 	started_at_iso = Time.get_datetime_string_from_system()
 	ended_at_iso = ""
@@ -657,6 +824,14 @@ func start_game() -> Result:
 	match_finalize_in_flight = false
 	match_finalize_reported = false
 	finalized_match_id = ""
+	for seat_index in _occupied_seat_indices():
+		var slot := _get_slot(seat_index)
+		if int(slot.get("peer_id", 0)) > 0:
+			slot["seat_state"] = SEAT_CONNECTED
+		else:
+			slot["seat_state"] = SEAT_RECONNECTING
+		_set_slot(seat_index, slot)
+	_rebuild_runtime_views()
 	_touch()
 
 	return Result.success({
@@ -683,13 +858,11 @@ func rewind_to_current_player_turn_start(include_archive: bool = true) -> Result
 		var rewind_r: Result = game_engine.rewind_to_command(target_index)
 		if not rewind_r.ok:
 			return Result.failure("rewind_to_command failed: %s" % rewind_r.error)
-
-		# 在线对局：保持线性时间线，丢弃未来命令（与本地执行新命令的 truncate 规则一致）。
 		if game_engine.has_method("truncate_future_history"):
 			game_engine.truncate_future_history()
 
 	var state_hash := ""
-	var state: GameState = game_engine.get_state()
+	var state = game_engine.get_state()
 	if state != null:
 		state_hash = str(state.compute_hash())
 
@@ -711,6 +884,25 @@ func rewind_to_current_player_turn_start(include_archive: bool = true) -> Result
 	_touch()
 	return Result.success(out)
 
+func get_seat_index_for_peer(peer_id: int) -> int:
+	if _seat_by_player_peer_id.has(peer_id):
+		return int(_seat_by_player_peer_id.get(peer_id, -1))
+	return -1
+
+func get_role_for_peer(peer_id: int) -> String:
+	if _spectator_profile_by_peer_id.has(peer_id):
+		return "spectator"
+	var seat_index := get_seat_index_for_peer(peer_id)
+	if seat_index < 0:
+		return ""
+	var slot := _get_slot(seat_index)
+	return str(slot.get("role", "player")).strip_edges()
+
+func get_seat_state(seat_index: int) -> String:
+	if not _seat_slot_by_index.has(seat_index):
+		return ""
+	return str(_get_slot(seat_index).get("seat_state", "")).strip_edges()
+
 func _sha256_hex(secret: String) -> String:
 	if secret.is_empty():
 		return ""
@@ -722,49 +914,74 @@ func _sha256_hex(secret: String) -> String:
 func _pick_seat_index() -> int:
 	var max_seats := maxi(1, _desired_player_count)
 	for i in range(max_seats):
-		if not _seat_profile_by_seat_index.has(i):
+		if not _seat_slot_by_index.has(i):
 			return i
 	return max_seats
 
 func _pick_new_host_peer_id() -> int:
-	var peer_ids := get_player_peer_ids()
-	if peer_ids.is_empty():
-		return 0
-	return int(peer_ids[0])
+	for seat_index in _occupied_seat_indices():
+		var slot := _get_slot(seat_index)
+		var peer_id := int(slot.get("peer_id", 0))
+		if peer_id > 0:
+			return peer_id
+	return 0
 
-func _refresh_host_seat_index_from_host_peer() -> void:
-	if host_peer_id <= 0:
-		_host_seat_index = -1
+func _promote_new_host_after_lobby_leave() -> void:
+	_host_seat_index = -1
+	for seat_index in _occupied_seat_indices():
+		var slot := _get_slot(seat_index)
+		slot["role"] = "host"
+		_set_slot(seat_index, slot)
+		_host_seat_index = seat_index
+		break
+
+func _sync_seat_states_from_engine() -> void:
+	if status != STATUS_IN_GAME or game_engine == null:
 		return
-	_host_seat_index = int(_seat_by_player_peer_id.get(host_peer_id, -1))
+	var changed := false
+	for seat_index in _occupied_seat_indices():
+		var slot := _get_slot(seat_index)
+		if _is_seat_forfeited_from_engine(seat_index):
+			if str(slot.get("seat_state", "")).strip_edges() != SEAT_FORFEITED:
+				slot["seat_state"] = SEAT_FORFEITED
+				_set_slot(seat_index, slot)
+				changed = true
+	if changed:
+		_rebuild_runtime_views()
+
+func _is_seat_forfeited_from_engine(seat_index: int) -> bool:
+	if game_engine == null:
+		return false
+	var state = game_engine.get_state()
+	if state == null:
+		return false
+	if not (state.players is Array):
+		return false
+	if seat_index < 0 or seat_index >= state.players.size():
+		return false
+	var player_val = state.players[seat_index]
+	if not (player_val is Dictionary):
+		return false
+	return bool(Dictionary(player_val).get("forfeited", false))
 
 func _build_players_array() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	var seat_indices: Array[int] = []
-	for k in _seat_profile_by_seat_index.keys():
-		seat_indices.append(int(k))
-	seat_indices.sort()
-
-	var forfeited_by_player_id: Dictionary = {}
-	if status == STATUS_IN_GAME and game_engine != null:
-		var state = game_engine.get_state()
-		if state != null and (state.players is Array):
-			for pid in range(state.players.size()):
-				var pv = state.players[pid]
-				if pv is Dictionary:
-					forfeited_by_player_id[pid] = bool(Dictionary(pv).get("forfeited", false))
-
-	for seat_index in seat_indices:
-		var profile: Dictionary = Dictionary(_seat_profile_by_seat_index.get(seat_index, {}))
-		var peer_id := int(_peer_id_by_seat_index.get(seat_index, 0))
+	for seat_index in _occupied_seat_indices():
+		var slot: Dictionary = _get_slot(seat_index)
+		var profile: Dictionary = Dictionary(slot.get("profile", {}))
+		var peer_id := int(slot.get("peer_id", 0))
+		var slot_state := str(slot.get("seat_state", "")).strip_edges()
 		out.append({
 			"peer_id": peer_id,
-			"connected": peer_id > 0,
+			"connected": peer_id > 0 and slot_state == SEAT_CONNECTED,
 			"seat_index": seat_index,
 			"name": str(profile.get("name", "")),
 			"color_index": int(profile.get("color_index", 0)),
 			"restaurant_logo_id": int(profile.get("restaurant_logo_id", -1)),
-			"forfeited": bool(forfeited_by_player_id.get(seat_index, false)),
+			"forfeited": slot_state == SEAT_FORFEITED or _is_seat_forfeited_from_engine(seat_index),
+			"state": slot_state,
+			"generation": int(slot.get("generation", 0)),
+			"role": str(slot.get("role", "player")).strip_edges(),
 		})
 	return out
 
@@ -782,4 +999,46 @@ func _build_spectators_array() -> Array[Dictionary]:
 			"color_index": int(profile.get("color_index", 0)),
 			"restaurant_logo_id": int(profile.get("restaurant_logo_id", -1)),
 		})
+	return out
+
+func _build_directory_spectators_array() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var peer_ids: Array[int] = []
+	for k in _spectator_profile_by_peer_id.keys():
+		peer_ids.append(int(k))
+	peer_ids.sort()
+	for peer_id in peer_ids:
+		var profile: Dictionary = Dictionary(_spectator_profile_by_peer_id.get(peer_id, {}))
+		var user_id := str(profile.get("user_id", "")).strip_edges()
+		if user_id.is_empty():
+			continue
+		out.append({
+			"user_id": user_id,
+			"role": "spectator",
+			"seat_index": null,
+			"member_status": "active",
+		})
+	return out
+
+func build_member_directory_entries() -> Array[Dictionary]:
+	_sync_seat_states_from_engine()
+	var out: Array[Dictionary] = []
+	for seat_index in _occupied_seat_indices():
+		var slot := _get_slot(seat_index)
+		var user_id := str(slot.get("user_id", "")).strip_edges()
+		if user_id.is_empty():
+			continue
+		var slot_state := str(slot.get("seat_state", "")).strip_edges()
+		var member_status := "active"
+		if slot_state == SEAT_RECONNECTING:
+			member_status = "reconnecting"
+		elif slot_state == SEAT_FORFEITED:
+			member_status = "forfeited"
+		out.append({
+			"user_id": user_id,
+			"role": str(slot.get("role", "player")).strip_edges(),
+			"seat_index": seat_index,
+			"member_status": member_status,
+		})
+	out.append_array(_build_directory_spectators_array())
 	return out

@@ -16,9 +16,14 @@ from app.replay_storage import save_local_replay_archive
 
 router = APIRouter(prefix="/internal", tags=["internal"])
 ACTIVE_ROOM_STATUSES = ("Lobby", "InGame")
+RESUMABLE_MEMBER_STATUSES = ("active", "reconnecting")
 
-
-async def _mark_room_members_left(db: AsyncSession, room_ids: list[str], now: datetime) -> None:
+async def _mark_room_members_left(
+    db: AsyncSession,
+    room_ids: list[str],
+    now: datetime,
+    member_status: str = "left",
+) -> None:
     if not room_ids:
         return
     members = (await db.execute(
@@ -29,6 +34,7 @@ async def _mark_room_members_left(db: AsyncSession, room_ids: list[str], now: da
     )).scalars().all()
     for member in members:
         member.left_at = now
+        member.member_status = member_status
 
 
 def _require_internal_secret(x_internal_secret: Optional[str] = Header(default=None, alias="X-Internal-Secret")) -> None:
@@ -70,8 +76,10 @@ async def heartbeat(req: HeartbeatRequest, db: AsyncSession = Depends(get_db)):
             r.game_server_id = req.game_server_id
             if str(req.ws_url or "").strip():
                 r.ws_url = str(req.ws_url).strip()
-            # Allow revival if the room became active again.
-            if r.status in {"Ended", "Pending"}:
+            # Pending rooms may become active after the game server claims them.
+            # Ended rooms must never be revived by heartbeat alone, otherwise stale
+            # in-memory room codes can resurrect finished rooms into the directory.
+            if r.status == "Pending":
                 r.status = "Lobby"
             r.updated_at = now
 
@@ -88,7 +96,7 @@ async def heartbeat(req: HeartbeatRequest, db: AsyncSession = Depends(get_db)):
         r.status = "Ended"
         r.updated_at = now
         stale_room_ids.append(str(r.room_id))
-    await _mark_room_members_left(db, stale_room_ids, now)
+    await _mark_room_members_left(db, stale_room_ids, now, "ended")
 
     await db.commit()
     return {"ok": True}
@@ -126,6 +134,7 @@ class RoomMemberSyncIn(BaseModel):
     user_id: str
     role: str
     seat_index: Optional[int] = None
+    member_status: str = "active"
 
 
 class RoomDirectorySyncIn(BaseModel):
@@ -218,7 +227,6 @@ async def sync_room_directory(game_server_id: str, req: RoomDirectorySyncRequest
             select(RoomMember).where(
                 RoomMember.room_id == room.room_id,
                 RoomMember.left_at.is_(None),
-                RoomMember.role != "spectator",
             )
         )).scalars().all()
         existing_by_user = {str(member.user_id): member for member in existing_members}
@@ -236,17 +244,20 @@ async def sync_room_directory(game_server_id: str, req: RoomDirectorySyncRequest
                     user_id=user_id,
                     role=str(member_in.role),
                     seat_index=member_in.seat_index,
+                    member_status=str(member_in.member_status or "active"),
                     left_at=None,
                 ))
                 continue
             member.role = str(member_in.role)
             member.seat_index = member_in.seat_index
+            member.member_status = str(member_in.member_status or "active")
             member.left_at = None
 
         for member in existing_members:
             if str(member.user_id) in payload_users:
                 continue
             member.left_at = now
+            member.member_status = "left"
 
     stale_rooms = (await db.execute(
         select(Room).where(
@@ -261,7 +272,7 @@ async def sync_room_directory(game_server_id: str, req: RoomDirectorySyncRequest
         room.status = "Ended"
         room.updated_at = now
         stale_room_ids.append(str(room.room_id))
-    await _mark_room_members_left(db, stale_room_ids, now)
+    await _mark_room_members_left(db, stale_room_ids, now, "ended")
 
     await db.commit()
     return {

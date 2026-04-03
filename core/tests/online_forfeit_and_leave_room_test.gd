@@ -67,9 +67,24 @@ static func run() -> Result:
 	if peers.size() != 1 or peers[0] != 10:
 		_reset_net_context()
 		return Result.failure("主动退出后房间在线 peer 应只剩 host: %s" % str(peers))
-	if int(room.get_player_count()) != 1:
+	if int(room.get_player_count()) != 2:
 		_reset_net_context()
-		return Result.failure("主动退出后 room.get_player_count 应更新为 1，实际: %d" % int(room.get_player_count()))
+		return Result.failure("主动退出后被弃权 seat 应保留，room.get_player_count 应仍为 2，实际: %d" % int(room.get_player_count()))
+	var room_state: Dictionary = room.to_room_state_dict()
+	var players: Array = Array(room_state.get("players", []))
+	var forfeited_disconnected_found := false
+	for player_val in players:
+		if not (player_val is Dictionary):
+			continue
+		var player: Dictionary = Dictionary(player_val)
+		if int(player.get("seat_index", -1)) != 1:
+			continue
+		if bool(player.get("forfeited", false)) and not bool(player.get("connected", true)):
+			forfeited_disconnected_found = true
+			break
+	if not forfeited_disconnected_found:
+		_reset_net_context()
+		return Result.failure("主动退出后应保留 forfeited 且 disconnected 的 seat 状态: %s" % str(players))
 	if not _has_empty_room_state_push(mock_net.sent, 11):
 		_reset_net_context()
 		return Result.failure("主动退出后 quitter 未收到 empty room_state")

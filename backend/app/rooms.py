@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user, _is_guest_user, _resolve_display_name
@@ -18,6 +19,7 @@ router = APIRouter(prefix="/v1/rooms", tags=["rooms"])
 
 ROOM_STATUS_PENDING = "Pending"
 ROOM_LISTABLE_STATUSES = ("Lobby", "InGame")
+RESUMABLE_MEMBER_STATUSES = ("active", "reconnecting")
 
 
 def _resolve_default_ws_url() -> str:
@@ -43,6 +45,7 @@ async def _get_latest_healthy_game_server(db: AsyncSession) -> Optional[GameServ
 async def _resolve_room_connection_target(db: AsyncSession, room: Room) -> tuple[Optional[str], str]:
     ws_url = str(room.ws_url or "").strip()
     game_server_id = str(room.game_server_id or "").strip()
+    room_status = str(room.status or "").strip()
 
     if game_server_id:
         gs = (await db.execute(
@@ -56,6 +59,11 @@ async def _resolve_room_connection_target(db: AsyncSession, room: Room) -> tuple
             if latest_ws_url and latest_ws_url != ws_url:
                 room.ws_url = latest_ws_url
                 ws_url = latest_ws_url
+            return game_server_id, ws_url or _resolve_default_ws_url()
+        # Active rooms must stay pinned to their assigned game server. Falling
+        # back to another healthy server would issue a valid token for a room
+        # that does not actually exist on that process.
+        if room_status != ROOM_STATUS_PENDING:
             return game_server_id, ws_url or _resolve_default_ws_url()
 
     latest = await _get_latest_healthy_game_server(db)
@@ -71,6 +79,24 @@ async def _resolve_room_connection_target(db: AsyncSession, room: Room) -> tuple
         ws_url = _resolve_default_ws_url()
         room.ws_url = ws_url
     return str(room.game_server_id), ws_url or _resolve_default_ws_url()
+
+
+async def _get_room_for_update(db: AsyncSession, room_code: str) -> Optional[Room]:
+    return (await db.execute(
+        select(Room).where(Room.room_code == room_code).with_for_update()
+    )).scalar_one_or_none()
+
+
+async def _get_active_room_member(db: AsyncSession, room_id: str, user_id: str) -> Optional[RoomMember]:
+    return (await db.execute(
+        select(RoomMember).where(
+            RoomMember.room_id == room_id,
+            RoomMember.user_id == user_id,
+            RoomMember.left_at.is_(None),
+            RoomMember.member_status != "left",
+            RoomMember.member_status != "ended",
+        )
+    )).scalar_one_or_none()
 
 
 class CreateRoomRequest(BaseModel):
@@ -175,7 +201,7 @@ async def list_rooms(
 
         desired = int(cfg.get("desired_player_count", 0) or 0)
         allow_spectators = bool(cfg.get("allow_spectators", True))
-        password_required = r.join_policy == "password"
+        password_required = r.join_policy == "password" and bool(str(r.password_hash or "").strip())
         host_name = owner_display_name.get(str(r.owner_user_id), (r.owner_user_id or "")[:8])
 
         out.append(RoomSummary(
@@ -219,7 +245,13 @@ async def create_room(req: CreateRoomRequest, db: AsyncSession = Depends(get_db)
     db.add(room)
     await db.flush()
 
-    db.add(RoomMember(room_id=room.room_id, user_id=sess.user_id, role="host", seat_index=0))
+    db.add(RoomMember(
+        room_id=room.room_id,
+        user_id=sess.user_id,
+        role="host",
+        seat_index=0,
+        member_status="active",
+    ))
     await db.commit()
 
     token = issue_connect_token(
@@ -252,7 +284,7 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
         raise HTTPException(404, "user not found")
     is_guest = await _is_guest_user(db, user.user_id)
     display_name, name_changed = _resolve_display_name(user, is_guest)
-    room = (await db.execute(select(Room).where(Room.room_code == room_code))).scalar_one_or_none()
+    room = await _get_room_for_update(db, room_code)
     if not room:
         raise HTTPException(404, "room not found")
     if str(room.status) == ROOM_STATUS_PENDING:
@@ -266,10 +298,10 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
     _, room_ws_url = await _resolve_room_connection_target(db, room)
 
     # Check already joined
-    existing = (await db.execute(
-        select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.user_id == sess.user_id, RoomMember.left_at.is_(None))
-    )).scalar_one_or_none()
+    existing = await _get_active_room_member(db, room.room_id, sess.user_id)
     if existing:
+        if str(existing.member_status or "").strip() == "forfeited":
+            raise HTTPException(409, "room membership forfeited; use spectate")
         if name_changed:
             await db.commit()
         token = issue_connect_token(
@@ -280,19 +312,62 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
         await db.commit()
         return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
 
-    # Assign next seat
-    members = (await db.execute(
-        select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.left_at.is_(None))
-    )).scalars().all()
-    taken = {m.seat_index for m in members if m.seat_index is not None}
-    seat = 0
-    while seat in taken:
-        seat += 1
+    if str(room.status) != "Lobby":
+        raise HTTPException(409, "room already in game")
 
-    db.add(RoomMember(room_id=room.room_id, user_id=sess.user_id, role="player", seat_index=seat))
-    await db.commit()
-    token = issue_connect_token(sess.user_id, room.room_code, "player", display_name=display_name, seat_index=seat)
-    return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
+    desired_player_count = 0
+    if room.config_json:
+        import json
+        try:
+            cfg = json.loads(room.config_json)
+            desired_player_count = int((cfg or {}).get("desired_player_count", 0) or 0)
+        except Exception:
+            desired_player_count = 0
+
+    last_integrity_error = False
+    for _attempt in range(2):
+        members = (await db.execute(
+            select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.left_at.is_(None))
+        )).scalars().all()
+        taken = {m.seat_index for m in members if m.seat_index is not None}
+        if desired_player_count > 0 and len(taken) >= desired_player_count:
+            raise HTTPException(409, "room is full")
+        seat = 0
+        while seat in taken:
+            seat += 1
+        if desired_player_count > 0 and seat >= desired_player_count:
+            raise HTTPException(409, "room is full")
+
+        db.add(RoomMember(
+            room_id=room.room_id,
+            user_id=sess.user_id,
+            role="player",
+            seat_index=seat,
+            member_status="active",
+        ))
+        try:
+            await db.commit()
+            token = issue_connect_token(sess.user_id, room.room_code, "player", display_name=display_name, seat_index=seat)
+            return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
+        except IntegrityError:
+            await db.rollback()
+            last_integrity_error = True
+            room = await _get_room_for_update(db, room_code)
+            if room is None:
+                raise HTTPException(404, "room not found")
+            existing = await _get_active_room_member(db, room.room_id, sess.user_id)
+            if existing is not None:
+                token = issue_connect_token(
+                    sess.user_id, room.room_code, existing.role,
+                    display_name=display_name,
+                    seat_index=existing.seat_index,
+                )
+                await db.commit()
+                return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
+
+    if last_integrity_error:
+        raise HTTPException(409, "room is full")
+    raise HTTPException(409, "join failed")
 
 
 @router.post("/{room_code}/resume", response_model=RoomResponse)
@@ -304,22 +379,18 @@ async def resume_room(room_code: str, req: ResumeRequest, db: AsyncSession = Dep
     is_guest = await _is_guest_user(db, user.user_id)
     display_name, name_changed = _resolve_display_name(user, is_guest)
 
-    room = (await db.execute(select(Room).where(Room.room_code == room_code))).scalar_one_or_none()
+    room = await _get_room_for_update(db, room_code)
     if not room:
         raise HTTPException(404, "room not found")
     if str(room.status) == "Ended":
         raise HTTPException(409, "room already ended")
     _, room_ws_url = await _resolve_room_connection_target(db, room)
 
-    existing = (await db.execute(
-        select(RoomMember).where(
-            RoomMember.room_id == room.room_id,
-            RoomMember.user_id == sess.user_id,
-            RoomMember.left_at.is_(None),
-        )
-    )).scalar_one_or_none()
+    existing = await _get_active_room_member(db, room.room_id, sess.user_id)
     if existing is None:
         raise HTTPException(403, "room membership not found")
+    if str(existing.member_status or "").strip() not in RESUMABLE_MEMBER_STATUSES:
+        raise HTTPException(409, "room membership is not resumable")
 
     role = str(existing.role)
     seat_index = existing.seat_index
@@ -350,7 +421,7 @@ async def spectate_room(room_code: str, req: JoinRequest, db: AsyncSession = Dep
         raise HTTPException(404, "user not found")
     is_guest = await _is_guest_user(db, user.user_id)
     display_name, name_changed = _resolve_display_name(user, is_guest)
-    room = (await db.execute(select(Room).where(Room.room_code == room_code))).scalar_one_or_none()
+    room = await _get_room_for_update(db, room_code)
     if not room:
         raise HTTPException(404, "room not found")
     if str(room.status) == ROOM_STATUS_PENDING:
@@ -359,12 +430,20 @@ async def spectate_room(room_code: str, req: JoinRequest, db: AsyncSession = Dep
         raise HTTPException(409, "room already ended")
     _, room_ws_url = await _resolve_room_connection_target(db, room)
 
-    existing = (await db.execute(
-        select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.user_id == sess.user_id, RoomMember.left_at.is_(None))
-    )).scalar_one_or_none()
+    existing = await _get_active_room_member(db, room.room_id, sess.user_id)
     if existing:
         if name_changed:
             await db.commit()
+        if str(existing.member_status or "").strip() == "forfeited":
+            token = issue_connect_token(
+                sess.user_id,
+                room.room_code,
+                "spectator",
+                display_name=display_name,
+                seat_index=None,
+            )
+            await db.commit()
+            return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
         token = issue_connect_token(
             sess.user_id, room.room_code, existing.role,
             display_name=display_name,
@@ -373,8 +452,44 @@ async def spectate_room(room_code: str, req: JoinRequest, db: AsyncSession = Dep
         await db.commit()
         return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
 
-    db.add(RoomMember(room_id=room.room_id, user_id=sess.user_id, role="spectator", seat_index=None))
-    await db.commit()
+    if str(room.status) != "InGame":
+        raise HTTPException(409, "room is not in game")
+
+    allow_spectators = True
+    if room.config_json:
+        import json
+        try:
+            cfg = json.loads(room.config_json)
+            allow_spectators = bool((cfg or {}).get("allow_spectators", True))
+        except Exception:
+            allow_spectators = True
+    if not allow_spectators:
+        raise HTTPException(403, "spectators not allowed")
+
+    db.add(RoomMember(
+        room_id=room.room_id,
+        user_id=sess.user_id,
+        role="spectator",
+        seat_index=None,
+        member_status="active",
+    ))
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        room = await _get_room_for_update(db, room_code)
+        if room is None:
+            raise HTTPException(404, "room not found")
+        existing = await _get_active_room_member(db, room.room_id, sess.user_id)
+        if existing is None:
+            raise HTTPException(409, "spectate failed")
+        token = issue_connect_token(
+            sess.user_id, room.room_code, existing.role,
+            display_name=display_name,
+            seat_index=existing.seat_index,
+        )
+        await db.commit()
+        return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
     token = issue_connect_token(sess.user_id, room.room_code, "spectator", display_name=display_name)
     return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
 

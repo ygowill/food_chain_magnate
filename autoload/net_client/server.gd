@@ -15,11 +15,14 @@ const DEFAULT_INTERNAL_API_SECRET := "dev-internal-secret-change-in-production"
 const DEFAULT_RESTAURANT_LOGO_COUNT := 6
 const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
 const DEFAULT_DISCONNECT_GRACE_PERIOD_SEC := 120.0
+const DEFAULT_RESYNC_REQUEST_COOLDOWN_MSEC := 1000
+const RESYNC_ARCHIVE_BUFFER_HEADROOM_RATIO := 0.75
 
 var _net = null
 var connect_token_secret_override: String = ""
 var disconnect_grace_period_sec_override: float = -1.0
 var _disconnect_forfeit_ticket_by_key: Dictionary = {} # "ROOM:actor_id" -> ticket (int)
+var _last_resync_request_msec_by_peer: Dictionary = {} # peer_id -> last accepted resync request msec
 
 func setup(net_client) -> void:
 	_net = net_client
@@ -37,6 +40,12 @@ func _get_disconnect_grace_period_sec() -> float:
 		return maxf(0.0, float(raw))
 	return DEFAULT_DISCONNECT_GRACE_PERIOD_SEC
 
+func _get_resync_request_cooldown_msec() -> int:
+	var raw := str(OS.get_environment("RESYNC_REQUEST_COOLDOWN_MSEC")).strip_edges()
+	if not raw.is_empty() and raw.is_valid_int():
+		return maxi(0, int(raw))
+	return DEFAULT_RESYNC_REQUEST_COOLDOWN_MSEC
+
 func _get_platform_backend_url() -> String:
 	var url := str(OS.get_environment("PLATFORM_BACKEND_URL")).strip_edges()
 	if url.is_empty():
@@ -48,6 +57,79 @@ func _get_internal_api_secret() -> String:
 	if secret.is_empty():
 		return DEFAULT_INTERNAL_API_SECRET
 	return secret
+
+func _get_resync_archive_soft_limit_bytes() -> int:
+	var buffer_size := 0
+	if _net != null and is_instance_valid(_net) and _net is Object:
+		var peer = (_net as Object).get("_peer")
+		if peer != null and peer is Object:
+			buffer_size = int((peer as Object).get("outbound_buffer_size"))
+	if buffer_size <= 0:
+		buffer_size = 4 * 1024 * 1024
+	return maxi(1024, int(floor(float(buffer_size) * RESYNC_ARCHIVE_BUFFER_HEADROOM_RATIO)))
+
+func _build_full_resync_archive_transfer(room) -> Result:
+	if room == null:
+		return Result.failure("Room missing")
+	if room.game_engine == null:
+		return Result.failure("Room engine missing")
+
+	var archive_r = room.game_engine.create_archive()
+	if not archive_r.ok:
+		return Result.failure("create_archive failed: %s" % archive_r.error)
+
+	var archive: Dictionary = Dictionary(archive_r.value).duplicate(true)
+	var payload := {
+		"archive": archive,
+	}
+	var payload_bytes := int(var_to_bytes(payload).size())
+	var soft_limit_bytes := _get_resync_archive_soft_limit_bytes()
+	if soft_limit_bytes > 0 and payload_bytes > soft_limit_bytes:
+		return Result.failure(
+			"Resync archive too large (%d bytes > %d bytes soft limit)"
+				% [payload_bytes, soft_limit_bytes]
+		)
+
+	var state_hash := ""
+	var state = room.game_engine.get_state()
+	if state != null and state.has_method("compute_hash"):
+		state_hash = str(state.compute_hash())
+
+	return Result.success({
+		"payload": payload,
+		"payload_bytes": payload_bytes,
+		"history_size": int(room.game_engine.command_history.size()),
+		"state_hash": state_hash,
+	})
+
+func _send_prebuilt_resync_archive(peer_id: int, request_id: String, room, transfer: Dictionary, source: String) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	var payload: Dictionary = Dictionary(transfer.get("payload", {})).duplicate(true)
+	_net.rpc_id(peer_id, "rpc_resync_archive", payload)
+	GameLog.warn(
+		"NetClient",
+		"TX ResyncArchive source=%s %s %s history_size=%d state_hash=%s payload_bytes=%d"
+			% [
+				_safe_text(source),
+				_request_tag(peer_id, request_id),
+				_room_brief(room),
+				int(transfer.get("history_size", -1)),
+				_short_hash(str(transfer.get("state_hash", ""))),
+				int(transfer.get("payload_bytes", -1)),
+			]
+	)
+
+func _is_resync_request_rate_limited(peer_id: int) -> bool:
+	var cooldown_msec := _get_resync_request_cooldown_msec()
+	if cooldown_msec <= 0:
+		return false
+	var now_msec := int(Time.get_ticks_msec())
+	var last_msec := int(_last_resync_request_msec_by_peer.get(peer_id, 0))
+	if last_msec > 0 and now_msec - last_msec < cooldown_msec:
+		return true
+	_last_resync_request_msec_by_peer[peer_id] = now_msec
+	return false
 
 func _mark_room_directory_dirty() -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -62,6 +144,7 @@ func _handle_replaced_peer(payload: Dictionary) -> void:
 	var replaced_peer_id := int(payload.get("replaced_peer_id", 0))
 	if replaced_peer_id <= 0:
 		return
+	_last_resync_request_msec_by_peer.erase(replaced_peer_id)
 	_net._profile_by_peer_id.erase(replaced_peer_id)
 	_net.rpc_id(replaced_peer_id, "rpc_room_state", empty_room_state())
 
@@ -610,6 +693,7 @@ func on_peer_disconnected(peer_id: int) -> void:
 		return
 	GameLog.warn("NetClient", "Peer disconnected: peer=%d" % peer_id)
 
+	_last_resync_request_msec_by_peer.erase(peer_id)
 	_net._profile_by_peer_id.erase(peer_id)
 	var room = _net._room_manager.get_room_by_peer(peer_id)
 	var room_status := str(room.status) if room != null else ""
@@ -674,9 +758,9 @@ func broadcast_room_state(room) -> void:
 		return
 	if room == null:
 		return
-	var state: Dictionary = room.to_room_state_dict()
 	var targets := Array(room.get_peer_ids())
 	for peer_id in targets:
+		var state: Dictionary = room.to_room_state_dict_for_peer(int(peer_id)) if room.has_method("to_room_state_dict_for_peer") else room.to_room_state_dict()
 		_net.rpc_id(peer_id, "rpc_room_state", state)
 	GameLog.debug("NetClient", "TX RoomState %s recipients=%d" % [_room_brief(room), targets.size()])
 
@@ -691,6 +775,8 @@ func empty_room_state() -> Dictionary:
 		"allow_spectators": true,
 		"config": {},
 		"status": "Lobby",
+		"self_seat_index": -1,
+		"self_role": "",
 	}
 
 func send_room_list_to_peer(peer_id: int, request_id: String) -> void:
@@ -827,6 +913,13 @@ func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, 
 		return ResultClass.failure("connect_token invalid role: %s" % role)
 
 	var rm = _net._room_manager
+	var existing_room = rm.rooms.get(room_code, null) if (rm.rooms is Dictionary) else null
+	var in_game_resync_transfer: Dictionary = {}
+	if existing_room != null and str(existing_room.status) == "InGame":
+		var transfer_r: Result = _build_full_resync_archive_transfer(existing_room)
+		if not transfer_r.ok:
+			return ResultClass.failure(transfer_r.error)
+		in_game_resync_transfer = Dictionary(transfer_r.value)
 	var r: Result
 	if role == "host":
 		var seat_index_val = token_payload.get("seat_index", null)
@@ -850,19 +943,18 @@ func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, 
 		var join_policy := str(token_payload.get("join_policy", "public")).strip_edges()
 		var password_hash := str(token_payload.get("password_hash", "")).strip_edges()
 
-		var existing = rm.rooms.get(room_code, null) if (rm.rooms is Dictionary) else null
-		if existing == null:
+		if existing_room == null:
 			if not rm.has_method("create_room_with_code"):
 				return ResultClass.failure("RoomManager.create_room_with_code missing")
 			r = rm.create_room_with_code(peer_id, profile, room_code, config, join_policy, password_hash)
-		elif str(existing.status) == "InGame":
+		elif str(existing_room.status) == "InGame":
 			if not rm.has_method("reconnect_player"):
 				return ResultClass.failure("RoomManager.reconnect_player missing")
 			var user_id := str(token_payload.get("user_id", "")).strip_edges()
 			r = rm.reconnect_player(peer_id, profile, room_code, seat_index, user_id, "host")
 		else:
 			var host_uid := str(token_payload.get("user_id", "")).strip_edges()
-			var host_seat_taken: bool = existing != null and existing._seat_profile_by_seat_index is Dictionary and existing._seat_profile_by_seat_index.has(seat_index)
+			var host_seat_taken: bool = existing_room != null and existing_room._seat_profile_by_seat_index is Dictionary and existing_room._seat_profile_by_seat_index.has(seat_index)
 			if host_seat_taken:
 				if not rm.has_method("reclaim_room_seat"):
 					return ResultClass.failure("RoomManager.reclaim_room_seat missing")
@@ -883,15 +975,14 @@ func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, 
 		if seat_index2 < 0:
 			return ResultClass.failure("connect_token missing seat_index")
 
-		var existing2 = rm.rooms.get(room_code, null) if (rm.rooms is Dictionary) else null
-		if existing2 != null and str(existing2.status) == "InGame":
+		if existing_room != null and str(existing_room.status) == "InGame":
 			if not rm.has_method("reconnect_player"):
 				return ResultClass.failure("RoomManager.reconnect_player missing")
 			var user_id2 := str(token_payload.get("user_id", "")).strip_edges()
 			r = rm.reconnect_player(peer_id, profile, room_code, seat_index2, user_id2)
 		else:
 			var player_uid := str(token_payload.get("user_id", "")).strip_edges()
-			var player_seat_taken: bool = existing2 != null and existing2._seat_profile_by_seat_index is Dictionary and existing2._seat_profile_by_seat_index.has(seat_index2)
+			var player_seat_taken: bool = existing_room != null and existing_room._seat_profile_by_seat_index is Dictionary and existing_room._seat_profile_by_seat_index.has(seat_index2)
 			if player_seat_taken:
 				if not rm.has_method("reclaim_room_seat"):
 					return ResultClass.failure("RoomManager.reclaim_room_seat missing")
@@ -935,18 +1026,15 @@ func _platform_auto_join(peer_id: int, request_id: String, profile: Dictionary, 
 		_net.rpc_id(peer_id, "rpc_game_started", {
 			"player_id_by_peer_id": room.player_id_by_peer_id.duplicate(true),
 			"config": room.config.duplicate(true),
+			"local_player_id": room.get_seat_index_for_peer(peer_id) if room.has_method("get_seat_index_for_peer") else -1,
 		})
-		var archive_r = room.game_engine.create_archive()
-		if archive_r.ok:
-			_net.rpc_id(peer_id, "rpc_resync_archive", {
-				"archive": Dictionary(archive_r.value).duplicate(true),
-			})
-		else:
-			GameLog.error(
-				"NetClient",
-				"Platform auto join in-game archive create failed %s err=%s"
-					% [_request_tag(peer_id, request_id), archive_r.error]
-			)
+		var transfer_to_send := in_game_resync_transfer
+		if transfer_to_send.is_empty():
+			var transfer_r2: Result = _build_full_resync_archive_transfer(room)
+			if not transfer_r2.ok:
+				return ResultClass.failure(transfer_r2.error)
+			transfer_to_send = Dictionary(transfer_r2.value)
+		_send_prebuilt_resync_archive(peer_id, request_id, room, transfer_to_send, "platform_auto_join")
 
 	_mark_room_directory_dirty()
 	broadcast_room_state(room)
@@ -1115,6 +1203,15 @@ func handle_rpc_join_room(request: Dictionary) -> void:
 		return
 
 	var room_password := str(request.get("room_password", ""))
+	var in_game_resync_transfer: Dictionary = {}
+	if _net._room_manager != null and _net._room_manager.rooms is Dictionary:
+		var target_room = _net._room_manager.rooms.get(room_code, null)
+		if target_room != null and str(target_room.status) == "InGame":
+			var transfer_r: Result = _build_full_resync_archive_transfer(target_room)
+			if not transfer_r.ok:
+				send_request_rejected(peer_id, request_id, "join_room_failed", transfer_r.error)
+				return
+			in_game_resync_transfer = Dictionary(transfer_r.value)
 
 	var jr = _net._room_manager.join_room(peer_id, profile, room_code, room_password)
 	if not jr.ok:
@@ -1139,28 +1236,17 @@ func handle_rpc_join_room(request: Dictionary) -> void:
 		var payload := {
 			"player_id_by_peer_id": room.player_id_by_peer_id.duplicate(true),
 			"config": room.config.duplicate(true),
+			"local_player_id": room.get_seat_index_for_peer(peer_id) if room.has_method("get_seat_index_for_peer") else -1,
 		}
 		_net.rpc_id(peer_id, "rpc_game_started", payload)
-		var archive_r = room.game_engine.create_archive()
-		if archive_r.ok:
-			_net.rpc_id(peer_id, "rpc_resync_archive", {
-				"archive": Dictionary(archive_r.value).duplicate(true),
-			})
-			GameLog.warn(
-				"NetClient",
-				"JoinRoom in-game resync sent %s history_size=%d state_hash=%s"
-					% [
-						_request_tag(peer_id, request_id),
-						int(room.game_engine.command_history.size()),
-						_short_hash(str(room.game_engine.get_state().compute_hash() if room.game_engine.get_state() != null else ""))
-					]
-			)
-		else:
-			GameLog.error(
-				"NetClient",
-				"JoinRoom in-game archive create failed %s err=%s"
-					% [_request_tag(peer_id, request_id), archive_r.error]
-			)
+		var transfer_to_send := in_game_resync_transfer
+		if transfer_to_send.is_empty():
+			var transfer_r2: Result = _build_full_resync_archive_transfer(room)
+			if not transfer_r2.ok:
+				send_request_rejected(peer_id, request_id, "join_room_failed", transfer_r2.error)
+				return
+			transfer_to_send = Dictionary(transfer_r2.value)
+		_send_prebuilt_resync_archive(peer_id, request_id, room, transfer_to_send, "join_room")
 
 func handle_rpc_update_room_config(request: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -1464,7 +1550,9 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 	}
 
 	for pid in room.get_peer_ids():
-		_net.rpc_id(int(pid), "rpc_game_started", payload)
+		var per_peer_payload := payload.duplicate(true)
+		per_peer_payload["local_player_id"] = room.get_seat_index_for_peer(int(pid)) if room.has_method("get_seat_index_for_peer") else -1
+		_net.rpc_id(int(pid), "rpc_game_started", per_peer_payload)
 	GameLog.warn(
 		"NetClient",
 		"StartGame success %s %s mapped_players=%d"
@@ -1584,35 +1672,27 @@ func handle_rpc_resync_request(_request: Dictionary) -> void:
 		return
 
 	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
-	GameLog.warn("NetClient", "RX ResyncRequest peer=%d" % peer_id)
+	var request_id := str(_request.get("request_id", ""))
+	GameLog.warn("NetClient", "RX ResyncRequest %s" % _request_tag(peer_id, request_id))
 	var room = _net._room_manager.get_room_by_peer(peer_id)
 	if room == null:
-		send_request_rejected(peer_id, "", "not_in_room", "Not in room")
+		send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
 		return
 	if str(room.status) != "InGame":
-		send_request_rejected(peer_id, "", "not_in_game", "Room not in game")
+		send_request_rejected(peer_id, request_id, "not_in_game", "Room not in game")
 		return
 	if room.game_engine == null:
-		send_request_rejected(peer_id, "", "engine_missing", "Room engine missing")
+		send_request_rejected(peer_id, request_id, "engine_missing", "Room engine missing")
 		return
-
-	var archive_r = room.game_engine.create_archive()
-	if not archive_r.ok:
-		send_request_rejected(peer_id, "", "resync_failed", archive_r.error)
+	if _is_resync_request_rate_limited(peer_id):
+		send_request_rejected(peer_id, request_id, "resync_rate_limited", "Resync requested too frequently")
 		return
-
-	_net.rpc_id(peer_id, "rpc_resync_archive", {
-		"archive": Dictionary(archive_r.value).duplicate(true),
-	})
-	var state_hash := ""
-	var state = room.game_engine.get_state()
-	if state != null and state.has_method("compute_hash"):
-		state_hash = str(state.compute_hash())
-	GameLog.warn(
-		"NetClient",
-		"TX ResyncArchive peer=%d %s history_size=%d state_hash=%s"
-			% [peer_id, _room_brief(room), int(room.game_engine.command_history.size()), _short_hash(state_hash)]
-	)
+	var transfer_r: Result = _build_full_resync_archive_transfer(room)
+	if not transfer_r.ok:
+		var error_code := "resync_archive_too_large" if str(transfer_r.error).begins_with("Resync archive too large") else "resync_failed"
+		send_request_rejected(peer_id, request_id, error_code, transfer_r.error)
+		return
+	_send_prebuilt_resync_archive(peer_id, request_id, room, Dictionary(transfer_r.value), "resync_request")
 
 func handle_rpc_rewind_to_turn_start(request: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):

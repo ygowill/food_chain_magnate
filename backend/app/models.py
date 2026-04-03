@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import String, DateTime, ForeignKey, UniqueConstraint, Boolean, Integer, Text, func
+from sqlalchemy import String, DateTime, ForeignKey, UniqueConstraint, Boolean, Integer, Text, func, Index, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -77,12 +77,31 @@ class Room(Base):
 
 class RoomMember(Base):
     __tablename__ = "room_members"
+    __table_args__ = (
+        Index(
+            "ix_room_members_active_user_unique",
+            "room_id",
+            "user_id",
+            unique=True,
+            sqlite_where=text("left_at IS NULL"),
+            postgresql_where=text("left_at IS NULL"),
+        ),
+        Index(
+            "ix_room_members_active_seat_unique",
+            "room_id",
+            "seat_index",
+            unique=True,
+            sqlite_where=text("left_at IS NULL AND seat_index IS NOT NULL"),
+            postgresql_where=text("left_at IS NULL AND seat_index IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
     room_id: Mapped[str] = mapped_column(ForeignKey("rooms.room_id"), nullable=False)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id"), nullable=False)
     role: Mapped[str] = mapped_column(String, nullable=False)
     seat_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    member_status: Mapped[str] = mapped_column(String, nullable=False, default="active")
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     left_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 

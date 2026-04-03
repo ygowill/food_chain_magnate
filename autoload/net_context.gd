@@ -15,6 +15,7 @@ const ONLINE_RESUME_WEB_STORAGE_KEY := "fcm_online_resume_state"
 
 var mode: Mode = Mode.HOTSEAT
 var local_player_id: int = -1
+var local_role: String = ""
 
 var server_url: String = ""
 var connect_token: String = ""
@@ -98,6 +99,7 @@ func is_online_reconnecting() -> bool:
 func reset() -> void:
 	mode = Mode.HOTSEAT
 	local_player_id = -1
+	local_role = ""
 	server_url = ""
 	connect_token = ""
 	room_state = {}

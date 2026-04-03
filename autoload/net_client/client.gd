@@ -80,6 +80,11 @@ func handle_rpc_room_state(payload: Dictionary) -> void:
 	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
 		return
 	NetContext.room_state = payload.duplicate(true)
+	var self_seat_val = NetContext.room_state.get("self_seat_index", null)
+	if self_seat_val is int or self_seat_val is float:
+		NetContext.local_player_id = int(self_seat_val)
+	var self_role := str(NetContext.room_state.get("self_role", "")).strip_edges()
+	NetContext.local_role = self_role
 	_sync_online_resume_state_from_room_state(NetContext.room_state)
 	if Globals != null and Globals.has_method("apply_online_room_state"):
 		Globals.apply_online_room_state(NetContext.room_state)
@@ -117,7 +122,12 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 
 	var my_peer_id := int(_net.multiplayer.get_unique_id())
 	var local_pid := -1
-	if mapping.has(my_peer_id):
+	var payload_local_pid = payload.get("local_player_id", null)
+	if payload_local_pid is int or payload_local_pid is float:
+		local_pid = int(payload_local_pid)
+	elif NetContext.room_state.get("self_seat_index", null) is int or NetContext.room_state.get("self_seat_index", null) is float:
+		local_pid = int(NetContext.room_state.get("self_seat_index", -1))
+	elif mapping.has(my_peer_id):
 		local_pid = int(mapping.get(my_peer_id, -1))
 	elif mapping.has(str(my_peer_id)):
 		local_pid = int(mapping.get(str(my_peer_id), -1))

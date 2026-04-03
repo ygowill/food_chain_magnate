@@ -1,5 +1,6 @@
 # 联机房间：旁观者（spectator）与断线保留座位（M4）
 # - InGame 断线：保留玩家座位占位（connected=false, peer_id=0）
+# - InGame 主机 seat 保持稳定，不因断线迁移 host 身份
 # - InGame JoinRoom：允许以 spectator 加入（不占用玩家席位）
 class_name OnlineRoomSpectatorTest
 extends RefCounted
@@ -41,12 +42,14 @@ static func run() -> Result:
 	if str(room.status) != "InGame":
 		return Result.failure("StartGame 后状态错误: %s" % str(room.status))
 
-	# 断线：保留 seat（并迁移 host）
+	# 断线：保留 seat，host seat 不迁移，只清空当前 host_peer_id
 	var dr: Result = rm.disconnect_peer(host_peer_id)
 	if not dr.ok:
 		return Result.failure("disconnect_peer(host) 失败: %s" % dr.error)
-	if int(room.host_peer_id) != 11:
-		return Result.failure("host 未迁移: %d" % int(room.host_peer_id))
+	if int(room.host_peer_id) != 0:
+		return Result.failure("host 断线后 host_peer_id 应清空: %d" % int(room.host_peer_id))
+	if int(room.to_room_state_dict().get("host_seat_index", -1)) != 0:
+		return Result.failure("host 断线后 host_seat_index 应保持为 0")
 
 	if int(room.get_player_count()) != 2:
 		return Result.failure("player_count 应保持不变: %d" % int(room.get_player_count()))

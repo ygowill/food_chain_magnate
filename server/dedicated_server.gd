@@ -149,26 +149,73 @@ func _sync_room_directory_snapshot(snapshot: Dictionary) -> Result:
 			if not (item is Dictionary):
 				continue
 			var room: Dictionary = Dictionary(item)
-			var user_ids_by_seat_val = room.get("user_ids_by_seat", null)
-			var user_ids_by_seat: Dictionary = Dictionary(user_ids_by_seat_val) if user_ids_by_seat_val is Dictionary else {}
 			var members: Array[Dictionary] = []
 			var host_seat_index := int(room.get("host_seat_index", -1))
-			var seat_keys: Array[int] = []
-			for seat_key in user_ids_by_seat.keys():
-				seat_keys.append(int(seat_key))
-			seat_keys.sort()
-			for seat_index in seat_keys:
-				var user_id := str(user_ids_by_seat.get(seat_index, "")).strip_edges()
-				if user_id.is_empty():
-					continue
-				members.append({
-					"user_id": user_id,
-					"role": "host" if seat_index == host_seat_index else "player",
-					"seat_index": seat_index,
-				})
+			var seat_slots_val = room.get("seat_slots", null)
+			if seat_slots_val is Dictionary:
+				var seat_slots: Dictionary = Dictionary(seat_slots_val)
+				var seat_keys: Array[int] = []
+				for seat_key in seat_slots.keys():
+					seat_keys.append(int(seat_key))
+				seat_keys.sort()
+				for seat_index in seat_keys:
+					var slot_val = seat_slots.get(seat_index, seat_slots.get(str(seat_index), null))
+					if not (slot_val is Dictionary):
+						continue
+					var slot: Dictionary = Dictionary(slot_val)
+					var user_id := str(slot.get("user_id", "")).strip_edges()
+					if user_id.is_empty():
+						continue
+					var member_status := "active"
+					var seat_state := str(slot.get("seat_state", "")).strip_edges()
+					if seat_state == "RECONNECTING":
+						member_status = "reconnecting"
+					elif seat_state == "FORFEITED":
+						member_status = "forfeited"
+					members.append({
+						"user_id": user_id,
+						"role": str(slot.get("role", "player")).strip_edges(),
+						"seat_index": seat_index,
+						"member_status": member_status,
+					})
+			else:
+				var user_ids_by_seat_val = room.get("user_ids_by_seat", null)
+				var user_ids_by_seat: Dictionary = Dictionary(user_ids_by_seat_val) if user_ids_by_seat_val is Dictionary else {}
+				var seat_keys: Array[int] = []
+				for seat_key in user_ids_by_seat.keys():
+					seat_keys.append(int(seat_key))
+				seat_keys.sort()
+				for seat_index in seat_keys:
+					var user_id := str(user_ids_by_seat.get(seat_index, "")).strip_edges()
+					if user_id.is_empty():
+						continue
+					members.append({
+						"user_id": user_id,
+						"role": "host" if seat_index == host_seat_index else "player",
+						"seat_index": seat_index,
+						"member_status": "active",
+					})
+			var spectators_val = room.get("spectators", null)
+			if spectators_val is Array:
+				for spectator_val in Array(spectators_val):
+					if not (spectator_val is Dictionary):
+						continue
+					var spectator: Dictionary = Dictionary(spectator_val)
+					var spectator_user_id := str(spectator.get("user_id", "")).strip_edges()
+					if spectator_user_id.is_empty():
+						continue
+					members.append({
+						"user_id": spectator_user_id,
+						"role": "spectator",
+						"seat_index": null,
+						"member_status": str(spectator.get("member_status", "active")).strip_edges(),
+					})
 			var owner_user_id := str(room.get("owner_user_id", "")).strip_edges()
 			if owner_user_id.is_empty():
-				owner_user_id = str(user_ids_by_seat.get(host_seat_index, "")).strip_edges()
+				for member in members:
+					if int(member.get("seat_index", -1)) == host_seat_index:
+						owner_user_id = str(member.get("user_id", "")).strip_edges()
+						break
 			if owner_user_id.is_empty() and not members.is_empty():
 				owner_user_id = str(members[0].get("user_id", "")).strip_edges()
 			rooms_payload.append({
@@ -245,7 +292,7 @@ func _flush_room_directory_sync() -> void:
 	if not NetClient._room_manager.has_method("create_persistence_snapshot"):
 		return
 
-	var snapshot_r: Result = NetClient._room_manager.create_persistence_snapshot()
+	var snapshot_r: Result = NetClient._room_manager.create_persistence_snapshot(true)
 	if not snapshot_r.ok:
 		GameLog.warn("DedicatedServer", "Create room directory snapshot failed: %s" % snapshot_r.error)
 		return
@@ -337,6 +384,12 @@ func _send_heartbeat() -> void:
 			for code_val in NetClient._room_manager.rooms.keys():
 				var code := str(code_val).strip_edges().to_upper()
 				if code.is_empty():
+					continue
+				var room = NetClient._room_manager.rooms.get(code_val, null)
+				if room == null:
+					continue
+				var room_status := str(room.status).strip_edges()
+				if room_status != "Lobby" and room_status != "InGame":
 					continue
 				room_codes.append(code)
 
