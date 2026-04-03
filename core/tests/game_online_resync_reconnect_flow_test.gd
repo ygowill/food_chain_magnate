@@ -88,12 +88,12 @@ static func run() -> Result:
 		"players": [],
 		"spectators": [],
 	}
-	NetContext.set_online_resume_context("ROOM03", "player", "https://platform.example.test")
-	NetContext.mark_online_resume_in_game(true)
 	PlatformSession.session_id = "sess_reconnect_test"
 	PlatformSession.user_id = "u_reconnect_test"
 	PlatformSession.is_guest = true
 	PlatformSession.display_name = "游客#1234"
+	NetContext.set_online_resume_context("ROOM03", "player", "https://platform.example.test")
+	NetContext.mark_online_resume_in_game(true)
 
 	var harness := _Harness.new(host, engine, Dictionary(archive_r.value).duplicate(true))
 	var controller = ControllerClass.new(
@@ -367,5 +367,6 @@ class _Harness:
 	func shutdown_net(reset_context: bool = false) -> void:
 		shutdown_reset_args.append(bool(reset_context))
 
-	func request_resync() -> void:
+	func request_resync() -> String:
 		request_resync_calls += 1
+		return "mock_resync_%d" % request_resync_calls

@@ -56,6 +56,10 @@ const TESTS: Array[Dictionary] = [
 		"path": "res://core/tests/online_start_game_replay_test.gd",
 	},
 	{
+		"name": "ServerResyncGuardTest",
+		"path": "res://core/tests/server_resync_guard_test.gd",
+	},
+	{
 		"name": "OnlineLobbyDisconnectReclaimTest",
 		"path": "res://core/tests/online_lobby_disconnect_reclaim_test.gd",
 	},
@@ -64,12 +68,20 @@ const TESTS: Array[Dictionary] = [
 		"path": "res://core/tests/online_disconnect_grace_reconnect_test.gd",
 	},
 	{
+		"name": "OnlineInGameLastPeerDisconnectRecoveryTest",
+		"path": "res://core/tests/online_in_game_last_peer_disconnect_recovery_test.gd",
+	},
+	{
 		"name": "OnlineForfeitAndLeaveRoomTest",
 		"path": "res://core/tests/online_forfeit_and_leave_room_test.gd",
 	},
 	{
 		"name": "GameOnlineResyncReconnectFlowTest",
 		"path": "res://core/tests/game_online_resync_reconnect_flow_test.gd",
+	},
+	{
+		"name": "GameOnlineResyncRequestRejectionTest",
+		"path": "res://core/tests/game_online_resync_request_rejection_test.gd",
 	},
 	{
 		"name": "OnlineRoomPersistenceRecoveryTest",

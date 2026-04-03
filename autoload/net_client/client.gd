@@ -301,7 +301,9 @@ func _sync_online_resume_state_from_room_state(room_state: Dictionary) -> void:
 		return
 	if room_code != NetContext.get_online_resume_room_code():
 		return
-	if NetContext.has_method("mark_online_resume_in_game"):
+	if NetContext.has_method("sync_online_resume_context_from_room_state"):
+		NetContext.sync_online_resume_context_from_room_state(room_state)
+	elif NetContext.has_method("mark_online_resume_in_game"):
 		NetContext.mark_online_resume_in_game(str(room_state.get("status", "")).strip_edges() == "InGame")
 
 func _safe_text(value: String) -> String:

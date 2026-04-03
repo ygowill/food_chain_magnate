@@ -117,7 +117,10 @@ func _begin_online_forfeit_quit_to_menu() -> void:
 	close_menu()
 	_connect_online_quit_signals()
 	_show_loading("正在认输并退出对局...")
-	_online_quit_request_id = str(net.request_forfeit_and_leave_room())
+	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("request_forfeit_and_leave_room"):
+		_online_quit_request_id = str(OnlineSessionCoordinator.request_forfeit_and_leave_room(net))
+	else:
+		_online_quit_request_id = str(net.request_forfeit_and_leave_room())
 	if _online_quit_request_id.is_empty():
 		GameLog.warn("Game", "联机主动退出未生成 request_id，回退为本地清理")
 		_fail_online_forfeit_quit_to_menu("request_id_empty")

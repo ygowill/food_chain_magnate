@@ -130,6 +130,85 @@ static func run() -> Result:
 			prev_user_id,
 			"user_id 持久化恢复失败: %s" % NetContext.get_online_resume_user_id()
 		)
+	if NetContext.get_online_resume_target_scene() != NetContext.ONLINE_RESUME_TARGET_GAME:
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_save_path,
+			prev_session_id,
+			prev_user_id,
+			"target_scene 持久化恢复失败: %s" % NetContext.get_online_resume_target_scene()
+		)
+
+	NetContext.set_online_resume_terminal("manual_leave")
+	NetContext.online_resume_state = {}
+	var reload_terminal_r: Result = NetContext.reload_online_resume_state_from_disk()
+	if not reload_terminal_r.ok:
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_save_path,
+			prev_session_id,
+			prev_user_id,
+			"reload terminal 状态失败: %s" % reload_terminal_r.error
+		)
+	if NetContext.has_online_resume_context():
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_save_path,
+			prev_session_id,
+			prev_user_id,
+			"terminal 状态不应再被视为可恢复"
+		)
+	if NetContext.get_online_resume_room_code() != "AB12CD":
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_save_path,
+			prev_session_id,
+			prev_user_id,
+			"terminal 状态应保留 room_code"
+		)
+	if NetContext.get_online_resume_terminal_reason() != "manual_leave":
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_save_path,
+			prev_session_id,
+			prev_user_id,
+			"terminal_reason 持久化恢复失败: %s" % NetContext.get_online_resume_terminal_reason()
+		)
 
 	NetContext.clear_online_resume_context()
 	NetContext.online_resume_state = {

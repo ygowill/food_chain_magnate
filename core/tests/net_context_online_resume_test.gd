@@ -133,6 +133,45 @@ static func run() -> Result:
 			"离开 in_game 时应同步清理 reconnecting"
 		)
 
+	NetContext.mark_online_resume_in_game(true)
+	NetContext.set_online_resume_terminal("explicit_leave")
+	if NetContext.has_online_resume_context():
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			"set_online_resume_terminal 后不应再视为可恢复上下文"
+		)
+	if NetContext.get_online_resume_room_code() != "AB12CD":
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			"terminal 记录应保留 room_code"
+		)
+	if NetContext.get_online_resume_terminal_reason() != "explicit_leave":
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			"terminal_reason 写入失败: %s" % NetContext.get_online_resume_terminal_reason()
+		)
+
 	NetContext.clear_online_resume_context()
 	if NetContext.has_online_resume_context():
 		return _restore_and_fail(

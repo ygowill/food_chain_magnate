@@ -73,6 +73,20 @@ static func run() -> Result:
 			prev_resume_state,
 			"quit_to_menu 应发起一次 forfeit_and_leave，请求记录=%s" % str(mock_net.forfeit_and_leave_requests)
 		)
+	if NetContext.has_method("has_online_resume_context") and NetContext.has_online_resume_context():
+		return await _cleanup_and_fail(
+			controller,
+			host,
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			"发起即时 surrender 后，本地不应再保留可恢复上下文"
+		)
 	if mock_scene_manager.show_loading_messages.size() != 1:
 		return await _cleanup_and_fail(
 			controller,

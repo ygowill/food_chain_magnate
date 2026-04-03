@@ -12,6 +12,8 @@ const PROTOCOL_VERSION := 1
 const COMMAND_PRIVACY_SPECTATOR_VIEWER_PLAYER_ID := 999999
 const ONLINE_RESUME_SAVE_PATH := "user://online_resume_state.cfg"
 const ONLINE_RESUME_WEB_STORAGE_KEY := "fcm_online_resume_state"
+const ONLINE_RESUME_TARGET_LOBBY := "online_lobby"
+const ONLINE_RESUME_TARGET_GAME := "game"
 
 var mode: Mode = Mode.HOTSEAT
 var local_player_id: int = -1
@@ -37,20 +39,30 @@ func get_command_privacy_viewer_player_id() -> int:
 		return COMMAND_PRIVACY_SPECTATOR_VIEWER_PLAYER_ID
 	return local_player_id
 
-func set_online_resume_context(room_code: String, role: String, platform_base_url: String) -> void:
+func set_online_resume_context(
+	room_code: String,
+	role: String,
+	platform_base_url: String,
+	target_scene: String = ONLINE_RESUME_TARGET_LOBBY
+) -> void:
 	var code := str(room_code).strip_edges().to_upper()
 	if code.is_empty():
 		online_resume_state = {}
 		save_online_resume_state_to_disk()
 		return
+	var normalized_target := _normalize_online_resume_target_scene(target_scene, false)
 	online_resume_state = {
 		"room_code": code,
 		"role": str(role).strip_edges(),
+		"seat_index": -1,
 		"platform_base_url": str(platform_base_url).strip_edges(),
-		"in_game": false,
+		"in_game": normalized_target == ONLINE_RESUME_TARGET_GAME,
 		"reconnecting": false,
 		"session_id": str(PlatformSession.session_id).strip_edges() if PlatformSession != null else "",
 		"user_id": str(PlatformSession.user_id).strip_edges() if PlatformSession != null else "",
+		"target_scene": normalized_target,
+		"resume_allowed": true,
+		"terminal_reason": "",
 	}
 	save_online_resume_state_to_disk()
 
@@ -59,13 +71,19 @@ func clear_online_resume_context() -> void:
 	save_online_resume_state_to_disk()
 
 func has_online_resume_context() -> bool:
-	return not get_online_resume_room_code().is_empty()
+	return _has_online_resume_record() and is_online_resume_allowed()
 
 func get_online_resume_room_code() -> String:
 	return str(online_resume_state.get("room_code", "")).strip_edges().to_upper()
 
 func get_online_resume_role() -> String:
 	return str(online_resume_state.get("role", "")).strip_edges()
+
+func get_online_resume_seat_index() -> int:
+	var seat_index_val = online_resume_state.get("seat_index", null)
+	if seat_index_val is int or seat_index_val is float:
+		return int(seat_index_val)
+	return -1
 
 func get_online_resume_platform_base_url() -> String:
 	return str(online_resume_state.get("platform_base_url", "")).strip_edges()
@@ -76,25 +94,70 @@ func get_online_resume_session_id() -> String:
 func get_online_resume_user_id() -> String:
 	return str(online_resume_state.get("user_id", "")).strip_edges()
 
+func get_online_resume_target_scene() -> String:
+	return _normalize_online_resume_target_scene(
+		str(online_resume_state.get("target_scene", "")),
+		bool(online_resume_state.get("in_game", false))
+	)
+
+func get_online_resume_terminal_reason() -> String:
+	return str(online_resume_state.get("terminal_reason", "")).strip_edges()
+
+func has_online_resume_record() -> bool:
+	return _has_online_resume_record()
+
+func is_online_resume_allowed() -> bool:
+	return _has_online_resume_record() and bool(online_resume_state.get("resume_allowed", true))
+
 func mark_online_resume_in_game(active: bool) -> void:
-	if not has_online_resume_context():
+	if not _has_online_resume_record():
 		return
-	online_resume_state["in_game"] = bool(active)
-	if not bool(active):
+	var in_game := bool(active)
+	online_resume_state["in_game"] = in_game
+	online_resume_state["target_scene"] = ONLINE_RESUME_TARGET_GAME if in_game else ONLINE_RESUME_TARGET_LOBBY
+	if not in_game:
 		online_resume_state["reconnecting"] = false
 	save_online_resume_state_to_disk()
 
 func is_online_resume_in_game() -> bool:
-	return has_online_resume_context() and bool(online_resume_state.get("in_game", false))
+	return _has_online_resume_record() and bool(online_resume_state.get("in_game", false))
 
 func set_online_reconnecting(active: bool) -> void:
-	if not has_online_resume_context():
+	if not _has_online_resume_record():
+		return
+	if not is_online_resume_allowed():
+		online_resume_state["reconnecting"] = false
+		save_online_resume_state_to_disk()
 		return
 	online_resume_state["reconnecting"] = bool(active)
 	save_online_resume_state_to_disk()
 
 func is_online_reconnecting() -> bool:
-	return has_online_resume_context() and bool(online_resume_state.get("reconnecting", false))
+	return is_online_resume_allowed() and bool(online_resume_state.get("reconnecting", false))
+
+func set_online_resume_terminal(reason: String) -> void:
+	if not _has_online_resume_record():
+		return
+	online_resume_state["resume_allowed"] = false
+	online_resume_state["terminal_reason"] = str(reason).strip_edges()
+	online_resume_state["reconnecting"] = false
+	save_online_resume_state_to_disk()
+
+func sync_online_resume_context_from_room_state(room_state_dict: Dictionary) -> void:
+	if not _has_online_resume_record():
+		return
+	var room_code := str(room_state_dict.get("room_code", "")).strip_edges().to_upper()
+	if room_code.is_empty():
+		return
+	if room_code != get_online_resume_room_code():
+		return
+	var self_seat_val = room_state_dict.get("self_seat_index", null)
+	if self_seat_val is int or self_seat_val is float:
+		online_resume_state["seat_index"] = int(self_seat_val)
+	var self_role := str(room_state_dict.get("self_role", "")).strip_edges()
+	if not self_role.is_empty():
+		online_resume_state["role"] = self_role
+	mark_online_resume_in_game(str(room_state_dict.get("status", "")).strip_edges() == "InGame")
 
 func reset() -> void:
 	mode = Mode.HOTSEAT
@@ -138,11 +201,15 @@ func reload_online_resume_state_from_disk() -> Result:
 	online_resume_state = _normalize_online_resume_state({
 		"room_code": cfg.get_value("resume", "room_code", ""),
 		"role": cfg.get_value("resume", "role", ""),
+		"seat_index": cfg.get_value("resume", "seat_index", -1),
 		"platform_base_url": cfg.get_value("resume", "platform_base_url", ""),
 		"in_game": cfg.get_value("resume", "in_game", false),
 		"reconnecting": cfg.get_value("resume", "reconnecting", false),
 		"session_id": cfg.get_value("resume", "session_id", ""),
 		"user_id": cfg.get_value("resume", "user_id", ""),
+		"target_scene": cfg.get_value("resume", "target_scene", ""),
+		"resume_allowed": cfg.get_value("resume", "resume_allowed", true),
+		"terminal_reason": cfg.get_value("resume", "terminal_reason", ""),
 	})
 	return Result.success()
 
@@ -176,12 +243,30 @@ func _normalize_online_resume_state(value) -> Dictionary:
 	return {
 		"room_code": room_code,
 		"role": str(src.get("role", "")).strip_edges(),
+		"seat_index": int(src.get("seat_index", -1)),
 		"platform_base_url": str(src.get("platform_base_url", "")).strip_edges(),
 		"in_game": bool(src.get("in_game", false)),
 		"reconnecting": bool(src.get("reconnecting", false)),
 		"session_id": str(src.get("session_id", "")).strip_edges(),
 		"user_id": str(src.get("user_id", "")).strip_edges(),
+		"target_scene": _normalize_online_resume_target_scene(
+			str(src.get("target_scene", "")),
+			bool(src.get("in_game", false))
+		),
+		"resume_allowed": bool(src.get("resume_allowed", true)),
+		"terminal_reason": str(src.get("terminal_reason", "")).strip_edges(),
 	}
+
+func _has_online_resume_record() -> bool:
+	return not get_online_resume_room_code().is_empty()
+
+func _normalize_online_resume_target_scene(target_scene: String, in_game: bool) -> String:
+	var normalized := str(target_scene).strip_edges()
+	if normalized == ONLINE_RESUME_TARGET_GAME:
+		return ONLINE_RESUME_TARGET_GAME
+	if normalized == ONLINE_RESUME_TARGET_LOBBY:
+		return ONLINE_RESUME_TARGET_LOBBY
+	return ONLINE_RESUME_TARGET_GAME if bool(in_game) else ONLINE_RESUME_TARGET_LOBBY
 
 func _ensure_default_profile() -> void:
 	var name := "玩家"

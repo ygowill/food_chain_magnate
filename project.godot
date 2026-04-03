@@ -27,6 +27,7 @@ SceneManager="*res://autoload/scene_manager.gd"
 EventBus="*res://autoload/event_bus.gd"
 NetContext="*res://autoload/net_context.gd"
 NetClient="*res://autoload/net_client.gd"
+OnlineSessionCoordinator="*res://autoload/online_session_coordinator.gd"
 PlatformApi="*res://autoload/platform_api.gd"
 PlatformSession="*res://autoload/platform_session.gd"
 
@@ -36,10 +37,6 @@ window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-
-[input_devices]
-
-pointing/emulate_mouse_from_touch=true
 
 [fcm]
 

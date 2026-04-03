@@ -1042,17 +1042,17 @@ func _get_current_room_code() -> String:
 	return str(NetContext.room_state.get("room_code", "")).strip_edges().to_upper()
 
 func _remember_online_resume_context(room_code: String, role: String) -> void:
-	if NetContext == null or not NetContext.has_method("set_online_resume_context"):
+	if OnlineSessionCoordinator == null or not OnlineSessionCoordinator.has_method("remember_online_room"):
 		return
 	var base_url := ""
 	if PlatformApi != null:
 		base_url = str(PlatformApi.base_url).strip_edges()
-	NetContext.set_online_resume_context(room_code, role, base_url)
+	OnlineSessionCoordinator.remember_online_room(room_code, role, base_url)
 
 func _clear_online_resume_context() -> void:
-	if NetContext == null or not NetContext.has_method("clear_online_resume_context"):
+	if OnlineSessionCoordinator == null or not OnlineSessionCoordinator.has_method("clear_online_resume_context"):
 		return
-	NetContext.clear_online_resume_context()
+	OnlineSessionCoordinator.clear_online_resume_context()
 
 # ── 网络信号处理 ──
 
@@ -1128,9 +1128,8 @@ func _on_room_state_updated(_room_state: Dictionary) -> void:
 	if OS.has_feature("headless"):
 		return
 	var room_state: Dictionary = NetContext.room_state if NetContext != null else {}
-	if NetContext != null and NetContext.has_method("has_online_resume_context"):
-		if NetContext.has_online_resume_context() and NetContext.has_method("mark_online_resume_in_game"):
-			NetContext.mark_online_resume_in_game(str(room_state.get("status", "")).strip_edges() == "InGame")
+	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("sync_room_state"):
+		OnlineSessionCoordinator.sync_room_state(room_state)
 	if str(room_state.get("status", "")).strip_edges() != "InGame":
 		return
 	if SceneManager != null and SceneManager.has_method("is_loading_visible") and SceneManager.is_loading_visible():
@@ -1177,8 +1176,8 @@ func _on_request_rejected(request_id: String, code: String, message: String) -> 
 		_refresh_ui()
 
 func _on_game_started(_payload: Dictionary) -> void:
-	if NetContext != null and NetContext.has_method("mark_online_resume_in_game"):
-		NetContext.mark_online_resume_in_game(true)
+	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("mark_game_started"):
+		OnlineSessionCoordinator.mark_game_started()
 	_start_game_request_id = ""
 	_start_game_flow_in_progress = false
 	if SceneManager != null and SceneManager.has_method("show_loading"):
@@ -1441,7 +1440,10 @@ func _on_leave_room_pressed() -> void:
 		_room_config_sync_controller.reset()
 	_start_game_request_id = ""
 	_start_game_flow_in_progress = false
-	NetClient.request_leave_room()
+	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("request_leave_room"):
+		OnlineSessionCoordinator.request_leave_room(NetClient)
+	else:
+		NetClient.request_leave_room()
 	_set_room_status("")
 
 func _on_start_game_pressed() -> void:

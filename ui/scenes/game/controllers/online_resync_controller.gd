@@ -28,6 +28,7 @@ var _request_resync: Callable = Callable()
 var _resync_in_progress: bool = false
 var _pending_cmds: Array[Dictionary] = [] # [{cmd_dict, state_hash}]
 var _rewind_request_id: String = ""
+var _resync_request_id: String = ""
 var _resync_ticket: int = 0
 var _action_id_by_request_id: Dictionary = {} # request_id -> action_id
 var _action_request_ids: Array[String] = []
@@ -74,6 +75,7 @@ func dispose() -> void:
 	_pending_cmds.clear()
 	_action_id_by_request_id.clear()
 	_action_request_ids.clear()
+	_resync_request_id = ""
 
 func is_resync_in_progress() -> bool:
 	return _resync_in_progress
@@ -133,6 +135,43 @@ func _should_ignore_request_rejected(action_id: String, code: String, message: S
 		return true
 	return false
 
+func _begin_full_resync_request(reason: String, force: bool = false) -> bool:
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return false
+	if NetClient == null or not NetClient.is_online_client_connected():
+		return false
+	if _resync_in_progress and not force:
+		return false
+	_resync_in_progress = true
+	_rewind_request_id = ""
+	var request_id := ""
+	if _request_resync.is_valid():
+		var request_result = _request_resync.call()
+		request_id = str(request_result).strip_edges() if request_result != null else ""
+	else:
+		request_id = str(NetClient.request_resync()).strip_edges()
+	_resync_request_id = request_id
+	GameLog.warn(
+		"Game",
+		"联机触发 resync: %s request_id=%s"
+			% [str(reason), request_id if not request_id.is_empty() else "-"]
+	)
+	return true
+
+func _is_matching_resync_rejection(request_id: String, code: String) -> bool:
+	var rid := str(request_id).strip_edges()
+	if not _resync_request_id.is_empty():
+		return rid == _resync_request_id
+	if not rid.is_empty():
+		return false
+	var c := str(code).strip_edges()
+	return c == "resync_failed" \
+		or c == "resync_archive_too_large" \
+		or c == "resync_rate_limited" \
+		or c == "not_in_room" \
+		or c == "not_in_game" \
+		or c == "engine_missing"
+
 func begin_rewind_to_turn_start_request() -> bool:
 	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
 		return false
@@ -142,6 +181,7 @@ func begin_rewind_to_turn_start_request() -> bool:
 		GameLog.warn("Game", "联机模式下回退失败：未连接到服务器")
 		return false
 	_resync_in_progress = true
+	_resync_request_id = ""
 	var request_id := NetClient.request_rewind_to_turn_start()
 	_rewind_request_id = str(request_id)
 	GameLog.warn("Game", "联机请求回退到回合开始 request_id=%s" % str(request_id))
@@ -253,6 +293,7 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 			_on_online_rewind_to_turn_start_meta(Dictionary(meta_val))
 			return
 	_resync_in_progress = true
+	_resync_request_id = ""
 	var r: Result = engine.load_from_archive(archive)
 	if not r.ok:
 		GameLog.error("Game", "联机 ResyncArchive 加载失败: %s" % r.error)
@@ -261,6 +302,7 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 			_reconnect_attempt_failure_reason = "联机同步失败：%s" % r.error
 		_resync_in_progress = false
 		_rewind_request_id = ""
+		_resync_request_id = ""
 		_pending_cmds.clear()
 		if _update_ui.is_valid():
 			_update_ui.call()
@@ -276,6 +318,7 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 	GameLog.warn("Game", "联机 ResyncArchive 加载完成（命令数=%d）" % int(engine.command_history.size()))
 	_resync_in_progress = false
 	_rewind_request_id = ""
+	_resync_request_id = ""
 	if _reset_timeline_state_after_resync.is_valid():
 		_reset_timeline_state_after_resync.call()
 	if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
@@ -308,9 +351,11 @@ func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 		_resync_ticket += 1
 
 	_resync_in_progress = true
+	_resync_request_id = ""
 
 	if noop:
 		_resync_in_progress = false
+		_resync_request_id = ""
 		if _reset_timeline_state_after_resync.is_valid():
 			_reset_timeline_state_after_resync.call()
 		if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
@@ -336,8 +381,7 @@ func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 			"联机回退应用失败：本地历史不足（local=%d target=%d），触发 resync"
 				% [engine.command_history.size(), target_index]
 		)
-		_rewind_request_id = ""
-		NetClient.request_resync()
+		_begin_full_resync_request("rewind_local_history_shortage", true)
 		if _update_ui.is_valid():
 			_update_ui.call()
 		return
@@ -345,8 +389,7 @@ func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 	var rewind_r: Result = engine.rewind_to_command(target_index)
 	if not rewind_r.ok:
 		GameLog.error("Game", "联机回退应用失败：%s（触发 resync）" % rewind_r.error)
-		_rewind_request_id = ""
-		NetClient.request_resync()
+		_begin_full_resync_request("rewind_apply_failed", true)
 		if _update_ui.is_valid():
 			_update_ui.call()
 		return
@@ -359,7 +402,7 @@ func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 			"联机回退后历史长度不一致（local=%d server=%d），触发 resync"
 				% [engine.command_history.size(), history_size]
 		)
-		NetClient.request_resync()
+		_begin_full_resync_request("rewind_history_size_mismatch", true)
 		if _update_ui.is_valid():
 			_update_ui.call()
 		return
@@ -374,13 +417,14 @@ func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 					"联机回退后 state_hash 不一致（local=%s server=%s），触发 resync"
 						% [local_hash, expected_hash]
 				)
-				NetClient.request_resync()
+				_begin_full_resync_request("rewind_state_hash_mismatch", true)
 				if _update_ui.is_valid():
 					_update_ui.call()
 				return
 
 	_resync_in_progress = false
 	_rewind_request_id = ""
+	_resync_request_id = ""
 	if _reset_timeline_state_after_resync.is_valid():
 		_reset_timeline_state_after_resync.call()
 	if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
@@ -416,7 +460,7 @@ func _on_online_resync_timeout(ticket: int, request_id: String) -> void:
 
 	# 若回退请求迟迟未回灌（例如网络抖动/包丢失），主动发起 resync 兜底，避免 UI 看起来“没反应”。
 	GameLog.warn("Game", "联机回退未收到回灌，触发 resync request_id=%s" % str(request_id))
-	NetClient.request_resync()
+	_begin_full_resync_request("rewind_timeout", true)
 
 func _flush_online_pending_commands_after_resync() -> void:
 	var engine = _get_engine()
@@ -494,16 +538,7 @@ func _flush_online_pending_commands_after_resync() -> void:
 		_update_ui.call()
 
 func _request_online_resync(reason: String) -> void:
-	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
-		return
-	if NetClient == null or not NetClient.is_online_client_connected():
-		return
-	if _resync_in_progress:
-		return
-	_resync_in_progress = true
-	_rewind_request_id = ""
-	GameLog.warn("Game", "联机触发 resync: %s" % str(reason))
-	NetClient.request_resync()
+	_begin_full_resync_request(reason)
 
 func _on_online_connected() -> void:
 	if not _reconnect_flow_active:
@@ -517,7 +552,13 @@ func _on_online_connected() -> void:
 func _on_online_request_rejected(request_id: String, code: String, message: String) -> void:
 	GameLog.warn("Game", "联机请求被拒绝 request_id=%s: %s %s" % [str(request_id), code, message])
 	var action_id := _take_action_id_for_request(request_id)
+	var matched_resync_rejection := _resync_in_progress \
+		and _rewind_request_id.is_empty() \
+		and _is_matching_resync_rejection(request_id, code)
 	if _reconnect_flow_active:
+		if matched_resync_rejection:
+			_resync_in_progress = false
+			_resync_request_id = ""
 		_reconnect_attempt_failed = true
 		_reconnect_attempt_failure_reason = "%s: %s" % [str(code), str(message)]
 		return
@@ -525,9 +566,17 @@ func _on_online_request_rejected(request_id: String, code: String, message: Stri
 		# 避免“回退请求失败但仍卡在同步中”，导致 ActionPanel 永久禁用与状态不一致。
 		_resync_in_progress = false
 		_rewind_request_id = ""
+		_resync_request_id = ""
 		_flush_online_pending_commands_after_resync()
 		if _update_ui.is_valid():
 			_update_ui.call()
+	elif matched_resync_rejection:
+		_resync_in_progress = false
+		_resync_request_id = ""
+		if _update_ui.is_valid():
+			_update_ui.call()
+		if str(code).strip_edges() == "resync_rate_limited":
+			return
 	if OS.has_feature("headless"):
 		return
 	if _should_ignore_request_rejected(action_id, code, message):
@@ -550,7 +599,9 @@ func _on_online_disconnected(reason: String) -> void:
 		_reconnect_restore_completed = false
 		_reconnect_attempt_failed = false
 		_reconnect_attempt_failure_reason = ""
-		if NetContext != null and NetContext.has_method("set_online_reconnecting"):
+		if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("begin_in_game_reconnect"):
+			OnlineSessionCoordinator.begin_in_game_reconnect()
+		elif NetContext != null and NetContext.has_method("set_online_reconnecting"):
 			NetContext.set_online_reconnecting(true)
 		if _show_loading.is_valid():
 			_show_loading.call("联机已断开，正在尝试重连...")
@@ -569,17 +620,17 @@ func _on_online_disconnected(reason: String) -> void:
 func _can_attempt_online_reconnect() -> bool:
 	if _host == null or not is_instance_valid(_host):
 		return false
+	if not _resume_room_request.is_valid():
+		return false
+	if not _connect_to_server.is_valid():
+		return false
+	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("can_attempt_in_game_resume"):
+		return bool(OnlineSessionCoordinator.can_attempt_in_game_resume())
 	if NetContext == null or not NetContext.has_method("has_online_resume_context"):
 		return false
 	if not NetContext.has_online_resume_context():
 		return false
 	if not NetContext.has_method("is_online_resume_in_game") or not NetContext.is_online_resume_in_game():
-		return false
-	if PlatformSession == null or not PlatformSession.is_logged_in:
-		return false
-	if not _resume_room_request.is_valid():
-		return false
-	if not _connect_to_server.is_valid():
 		return false
 	return true
 
@@ -649,8 +700,8 @@ func _run_online_reconnect_flow(ticket: int, initial_reason: String) -> void:
 			_show_loading.call("已重新连接，正在恢复对局...")
 
 		var restore_ok := await _wait_for_reconnect_restore(ticket, RECONNECT_RESTORE_TIMEOUT_SEC)
-		if not restore_ok and _request_resync.is_valid():
-			_request_resync.call()
+		if not restore_ok:
+			_begin_full_resync_request("reconnect_restore_timeout", true)
 			if _show_loading.is_valid():
 				_show_loading.call("正在请求对局快照恢复...")
 			restore_ok = await _wait_for_reconnect_restore(ticket, RECONNECT_RESTORE_TIMEOUT_SEC)
@@ -670,6 +721,10 @@ func _run_online_reconnect_flow(ticket: int, initial_reason: String) -> void:
 		return
 
 func _request_resume_ticket() -> Result:
+	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("request_resume_ticket"):
+		return await OnlineSessionCoordinator.request_resume_ticket({
+			"resume_room": _resume_room_request,
+		})
 	if NetContext == null or not NetContext.has_method("get_online_resume_room_code"):
 		return Result.failure("联机恢复状态缺失")
 	var room_code := NetContext.get_online_resume_room_code()
@@ -739,7 +794,10 @@ func _finish_online_reconnect_success(ticket: int) -> void:
 	_reconnect_restore_completed = false
 	_reconnect_attempt_failed = false
 	_reconnect_attempt_failure_reason = ""
-	if NetContext != null and NetContext.has_method("set_online_reconnecting"):
+	_resync_request_id = ""
+	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("finish_in_game_reconnect"):
+		OnlineSessionCoordinator.finish_in_game_reconnect(true)
+	elif NetContext != null and NetContext.has_method("set_online_reconnecting"):
 		NetContext.set_online_reconnecting(false)
 	if _hide_loading.is_valid():
 		_hide_loading.call()
@@ -755,7 +813,10 @@ func _finish_online_reconnect_failure(ticket: int, error_message: String) -> voi
 	_reconnect_restore_completed = false
 	_reconnect_attempt_failed = false
 	_reconnect_attempt_failure_reason = ""
-	if NetContext != null and NetContext.has_method("set_online_reconnecting"):
+	_resync_request_id = ""
+	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("finish_in_game_reconnect"):
+		OnlineSessionCoordinator.finish_in_game_reconnect(false, error_message)
+	elif NetContext != null and NetContext.has_method("set_online_reconnecting"):
 		NetContext.set_online_reconnecting(false)
 	if _hide_loading.is_valid():
 		_hide_loading.call()

@@ -11,6 +11,7 @@ const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const NetClientInternalClass = preload("res://autoload/net_client_internal.gd")
+const WEBSOCKET_BUFFER_SIZE_BYTES := 16 * 1024 * 1024
 
 signal connected()
 signal disconnected(reason: String)
@@ -46,8 +47,8 @@ func start_server(port: int, bind_address: String = "0.0.0.0"):
 	NetContext.mode = NetContext.Mode.ONLINE_SERVER
 
 	_peer = WebSocketMultiplayerPeer.new()
-	_peer.inbound_buffer_size = 4 * 1024 * 1024
-	_peer.outbound_buffer_size = 4 * 1024 * 1024
+	_peer.inbound_buffer_size = WEBSOCKET_BUFFER_SIZE_BYTES
+	_peer.outbound_buffer_size = WEBSOCKET_BUFFER_SIZE_BYTES
 	var err := _peer.create_server(port, bind_address)
 	if err != OK:
 		_peer = null
@@ -78,8 +79,8 @@ func connect_to_server(url: String, preserve_context: bool = false):
 	NetContext.connect_token = connect_token
 
 	_peer = WebSocketMultiplayerPeer.new()
-	_peer.inbound_buffer_size = 4 * 1024 * 1024
-	_peer.outbound_buffer_size = 4 * 1024 * 1024
+	_peer.inbound_buffer_size = WEBSOCKET_BUFFER_SIZE_BYTES
+	_peer.outbound_buffer_size = WEBSOCKET_BUFFER_SIZE_BYTES
 	var err := _peer.create_client(connect_url)
 	if err != OK:
 		_peer = null
@@ -219,6 +220,8 @@ func request_join_room(room_code: String, room_password: String) -> String:
 func request_leave_room() -> String:
 	var request_id := _next_request_id()
 	var payload := {"request_id": request_id}
+	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("mark_resume_terminal"):
+		OnlineSessionCoordinator.mark_resume_terminal("leave_room")
 	rpc_id(1, "rpc_leave_room", payload)
 	GameLog.info("NetClient", "TX LeaveRoom request_id=%s room=%s" % [request_id, _safe_room_code(NetContext.room_state)])
 	if NetContext != null and NetContext.has_method("clear_online_resume_context"):
@@ -230,6 +233,8 @@ func request_leave_room() -> String:
 func request_forfeit_and_leave_room() -> String:
 	var request_id := _next_request_id()
 	var payload := {"request_id": request_id}
+	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("mark_resume_terminal"):
+		OnlineSessionCoordinator.mark_resume_terminal("forfeit_and_leave_room")
 	rpc_id(1, "rpc_forfeit_and_leave_room", payload)
 	GameLog.info(
 		"NetClient",
@@ -292,13 +297,18 @@ func request_action(action_id: String, params: Dictionary) -> String:
 	)
 	return request_id
 
-func request_resync() -> void:
+func request_resync() -> String:
+	var request_id := _next_request_id()
 	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
-		return
+		return request_id
 	if not is_online_client_connected():
-		return
-	rpc_id(1, "rpc_resync_request", {})
-	GameLog.warn("NetClient", "TX ResyncRequest room=%s" % _safe_room_code(NetContext.room_state))
+		return request_id
+	rpc_id(1, "rpc_resync_request", {"request_id": request_id})
+	GameLog.warn(
+		"NetClient",
+		"TX ResyncRequest request_id=%s room=%s" % [request_id, _safe_room_code(NetContext.room_state)]
+	)
+	return request_id
 
 func request_rewind_to_turn_start() -> String:
 	var request_id := _next_request_id()

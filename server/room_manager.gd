@@ -169,7 +169,8 @@ func reconnect_player(peer_id: int, profile: Dictionary, room_code: String, seat
 
 	if not room.has_method("reconnect_player"):
 		return Result.failure("Room.reconnect_player missing")
-	var rr: Result = room.reconnect_player(peer_id, profile, seat_index, user_id)
+	var restore_host: bool = str(role_label).strip_edges() == "host"
+	var rr: Result = room.reconnect_player(peer_id, profile, seat_index, user_id, restore_host)
 	if not rr.ok:
 		return rr
 	var rr_value: Dictionary = Dictionary(rr.value) if rr.value is Dictionary else {}
@@ -260,7 +261,7 @@ func list_room_summaries() -> Array[Dictionary]:
 	)
 	return out
 
-func create_persistence_snapshot() -> Result:
+func create_persistence_snapshot(include_runtime_membership: bool = false) -> Result:
 	var room_codes: Array[String] = []
 	for code_val in rooms.keys():
 		var code := str(code_val).strip_edges().to_upper()
@@ -278,7 +279,7 @@ func create_persistence_snapshot() -> Result:
 			continue
 		if not room.has_method("to_persistence_dict"):
 			return Result.failure("Room.to_persistence_dict missing")
-		var snapshot_r: Result = room.to_persistence_dict()
+		var snapshot_r: Result = room.to_persistence_dict(include_runtime_membership)
 		if not snapshot_r.ok:
 			return Result.failure("persist room %s 失败: %s" % [room_code, snapshot_r.error])
 		persisted_rooms.append(Dictionary(snapshot_r.value).duplicate(true))
@@ -400,10 +401,13 @@ func disconnect_peer(peer_id: int) -> Result:
 	if not dr.ok:
 		return dr
 
-	# 若房间内已无任何在线成员（玩家/旁观者），则直接清理房间，避免目录残留。
-	# 注意：InGame 模式会保留掉线玩家的座位信息（用于占位/重连），因此不能仅用 is_empty() 判断。
+	# 若房间内已无任何在线成员（玩家/旁观者），优先按房间状态决定是否保留：
+	# - Lobby：保留已占座房间，支持刷新/重连 reclaim。
+	# - InGame：保留已开局房间，支持最后一名在线玩家掉线后的恢复。
+	# 只有真正无保留价值的空房间才立刻清理，避免把进行中的恢复窗口直接删掉。
 	var keep_reserved_lobby_room: bool = str(room.status) == OnlineRoomClass.STATUS_LOBBY and room.get_player_count() > 0
-	if room.get_peer_ids().is_empty() and not keep_reserved_lobby_room:
+	var keep_reserved_in_game_room: bool = str(room.status) == OnlineRoomClass.STATUS_IN_GAME and room.get_player_count() > 0
+	if room.get_peer_ids().is_empty() and not keep_reserved_lobby_room and not keep_reserved_in_game_room:
 		rooms.erase(room_code)
 		return Result.success({
 			"room_code": room_code,
