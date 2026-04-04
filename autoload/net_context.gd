@@ -60,6 +60,9 @@ func set_online_resume_context(
 		"reconnecting": false,
 		"session_id": str(PlatformSession.session_id).strip_edges() if PlatformSession != null else "",
 		"user_id": str(PlatformSession.user_id).strip_edges() if PlatformSession != null else "",
+		"checkpoint_id": "",
+		"last_applied_sequence": 0,
+		"last_state_hash": "",
 		"target_scene": normalized_target,
 		"resume_allowed": true,
 		"terminal_reason": "",
@@ -93,6 +96,18 @@ func get_online_resume_session_id() -> String:
 
 func get_online_resume_user_id() -> String:
 	return str(online_resume_state.get("user_id", "")).strip_edges()
+
+func get_online_resume_checkpoint_id() -> String:
+	return str(online_resume_state.get("checkpoint_id", "")).strip_edges()
+
+func get_online_resume_last_applied_sequence() -> int:
+	var sequence_val = online_resume_state.get("last_applied_sequence", 0)
+	if sequence_val is int or sequence_val is float:
+		return maxi(0, int(sequence_val))
+	return 0
+
+func get_online_resume_last_state_hash() -> String:
+	return str(online_resume_state.get("last_state_hash", "")).strip_edges()
 
 func get_online_resume_target_scene() -> String:
 	return _normalize_online_resume_target_scene(
@@ -142,6 +157,46 @@ func set_online_resume_terminal(reason: String) -> void:
 	online_resume_state["terminal_reason"] = str(reason).strip_edges()
 	online_resume_state["reconnecting"] = false
 	save_online_resume_state_to_disk()
+
+func set_online_resume_progress(last_applied_sequence: int, last_state_hash: String, checkpoint_id: String = "") -> void:
+	if not _has_online_resume_record():
+		return
+	online_resume_state["last_applied_sequence"] = maxi(0, int(last_applied_sequence))
+	online_resume_state["last_state_hash"] = str(last_state_hash).strip_edges()
+	var normalized_checkpoint_id := str(checkpoint_id).strip_edges()
+	if not normalized_checkpoint_id.is_empty():
+		online_resume_state["checkpoint_id"] = normalized_checkpoint_id
+	elif not online_resume_state.has("checkpoint_id"):
+		online_resume_state["checkpoint_id"] = ""
+	save_online_resume_state_to_disk()
+
+func sync_online_resume_progress_from_engine(engine, checkpoint_id: String = "") -> void:
+	if not _has_online_resume_record():
+		return
+	if engine == null:
+		return
+	var state = engine.get_state() if engine.has_method("get_state") else null
+	if state == null or not state.has_method("compute_hash"):
+		return
+	var sequence := 0
+	var history_val = engine.get("command_history") if engine is Object else null
+	if history_val is Array:
+		sequence = Array(history_val).size()
+	set_online_resume_progress(sequence, str(state.compute_hash()), checkpoint_id)
+
+func build_online_resume_cursor(force_snapshot: bool = false) -> Dictionary:
+	if not _has_online_resume_record():
+		return {}
+	if not bool(online_resume_state.get("in_game", false)):
+		return {}
+	var cursor := {
+		"checkpoint_id": get_online_resume_checkpoint_id(),
+		"last_applied_sequence": get_online_resume_last_applied_sequence(),
+		"last_state_hash": get_online_resume_last_state_hash(),
+	}
+	if bool(force_snapshot):
+		cursor["force_snapshot"] = true
+	return cursor
 
 func sync_online_resume_context_from_room_state(room_state_dict: Dictionary) -> void:
 	if not _has_online_resume_record():
@@ -207,6 +262,9 @@ func reload_online_resume_state_from_disk() -> Result:
 		"reconnecting": cfg.get_value("resume", "reconnecting", false),
 		"session_id": cfg.get_value("resume", "session_id", ""),
 		"user_id": cfg.get_value("resume", "user_id", ""),
+		"checkpoint_id": cfg.get_value("resume", "checkpoint_id", ""),
+		"last_applied_sequence": cfg.get_value("resume", "last_applied_sequence", 0),
+		"last_state_hash": cfg.get_value("resume", "last_state_hash", ""),
 		"target_scene": cfg.get_value("resume", "target_scene", ""),
 		"resume_allowed": cfg.get_value("resume", "resume_allowed", true),
 		"terminal_reason": cfg.get_value("resume", "terminal_reason", ""),
@@ -249,6 +307,9 @@ func _normalize_online_resume_state(value) -> Dictionary:
 		"reconnecting": bool(src.get("reconnecting", false)),
 		"session_id": str(src.get("session_id", "")).strip_edges(),
 		"user_id": str(src.get("user_id", "")).strip_edges(),
+		"checkpoint_id": str(src.get("checkpoint_id", "")).strip_edges(),
+		"last_applied_sequence": maxi(0, int(src.get("last_applied_sequence", 0))),
+		"last_state_hash": str(src.get("last_state_hash", "")).strip_edges(),
 		"target_scene": _normalize_online_resume_target_scene(
 			str(src.get("target_scene", "")),
 			bool(src.get("in_game", false))

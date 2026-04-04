@@ -3,9 +3,11 @@
 # 日志分级：RoomState/RoomList/CommandApplied 等高频收包走 DEBUG。
 extends RefCounted
 
+const CommandClass = preload("res://core/types/command.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
+const ResyncSnapshotTransferClass = preload("res://core/utils/resync_snapshot_transfer.gd")
 const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 
 var _net = null
@@ -61,6 +63,18 @@ func send_client_hello() -> void:
 	}
 	if NetContext.connect_token != "":
 		payload["connect_token"] = NetContext.connect_token
+	if Globals != null and Globals.current_game_engine != null:
+		if NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
+			NetContext.sync_online_resume_progress_from_engine(Globals.current_game_engine)
+	if NetContext != null and NetContext.has_method("build_online_resume_cursor"):
+		var force_snapshot := false
+		if _net != null and is_instance_valid(_net):
+			force_snapshot = bool(_net._resume_force_snapshot_once)
+			if force_snapshot:
+				_net._resume_force_snapshot_once = false
+		var resume_cursor: Dictionary = NetContext.build_online_resume_cursor(force_snapshot)
+		if not resume_cursor.is_empty():
+			payload["resume_cursor"] = resume_cursor
 	_net.rpc_id(1, "rpc_client_hello", payload)
 	GameLog.debug(
 		"NetClient",
@@ -79,6 +93,11 @@ func send_client_hello() -> void:
 func handle_rpc_room_state(payload: Dictionary) -> void:
 	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
 		return
+	var previous_room_code := str(NetContext.room_state.get("room_code", "")).strip_edges().to_upper()
+	var next_room_code := str(payload.get("room_code", "")).strip_edges().to_upper()
+	if not previous_room_code.is_empty() and previous_room_code != next_room_code and _net != null and is_instance_valid(_net):
+		if _net.has_method("clear_pending_online_resync_state"):
+			_net.clear_pending_online_resync_state()
 	NetContext.room_state = payload.duplicate(true)
 	var self_seat_val = NetContext.room_state.get("self_seat_index", null)
 	if self_seat_val is int or self_seat_val is float:
@@ -144,18 +163,22 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 	)
 
 	var reusing_existing_engine := false
+	var existing_engine: GameEngine = null
 	if NetContext != null and NetContext.has_method("is_online_reconnecting"):
 		if NetContext.is_online_reconnecting():
 			if Globals != null and Globals.current_game_engine != null and Globals.current_game_engine is GameEngine:
-				var existing_engine: GameEngine = Globals.current_game_engine
+				existing_engine = Globals.current_game_engine
 				if existing_engine.get_state() != null:
 					reusing_existing_engine = true
 
 	if reusing_existing_engine:
+		if NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
+			NetContext.sync_online_resume_progress_from_engine(existing_engine)
 		if Globals != null and Globals.has_method("apply_online_room_state"):
 			Globals.apply_online_room_state(NetContext.room_state if NetContext != null else {})
 		GameLog.info("NetClient", "Online client reconnect ready: reusing existing engine")
 		_net.game_started.emit(payload.duplicate(true))
+		_try_apply_pending_resync_delta()
 		return
 
 	if EventBus != null:
@@ -207,6 +230,8 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 
 	Globals.set_current_game_engine(engine)
 	Globals.sync_runtime_config_from_engine(engine)
+	if NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
+		NetContext.sync_online_resume_progress_from_engine(engine)
 	if Globals != null and Globals.has_method("apply_online_room_state"):
 		Globals.apply_online_room_state(NetContext.room_state if NetContext != null else {})
 	GameLog.info(
@@ -216,6 +241,7 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 	)
 
 	_net.game_started.emit(payload.duplicate(true))
+	_try_apply_pending_resync_delta()
 
 func handle_rpc_command_applied(payload: Dictionary) -> void:
 	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
@@ -245,28 +271,128 @@ func handle_rpc_resync_archive(payload: Dictionary) -> void:
 	if not (archive_val is Dictionary):
 		GameLog.warn("NetClient", "RX ResyncArchive ignored: archive type invalid")
 		return
-	_net._pending_resync_archive = Dictionary(archive_val).duplicate(true)
-	if _net._pending_resync_archive.has("_rewind_to_turn_start"):
-		var meta_val = _net._pending_resync_archive.get("_rewind_to_turn_start", null)
-		var meta: Dictionary = Dictionary(meta_val) if meta_val is Dictionary else {}
+	_set_pending_resync_archive(Dictionary(archive_val))
+	var pending_archive := _get_pending_resync_archive()
+	GameLog.warn(
+		"NetClient",
+		"RX ResyncArchive snapshot keys=%s" % str(Array(pending_archive.keys()))
+	)
+	_net.resync_archive_received.emit(pending_archive.duplicate(true))
+
+func handle_rpc_rewind_to_turn_start_meta(payload: Dictionary) -> void:
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	if not _matches_payload_room_code(payload, "RewindMeta"):
+		return
+	var rewind_meta := Dictionary(payload).duplicate(true)
+	_set_pending_rewind_to_turn_start_meta(rewind_meta)
+	var pending_meta := _get_pending_rewind_to_turn_start_meta()
+	GameLog.warn(
+		"NetClient",
+		"RX RewindMeta request_id=%s target=%d before=%d history=%d noop=%s state_hash=%s"
+			% [
+				_safe_text(str(pending_meta.get("request_id", ""))),
+				int(pending_meta.get("target_index", -1)),
+				int(pending_meta.get("before_index", -1)),
+				int(pending_meta.get("history_size", -1)),
+				str(bool(pending_meta.get("noop", false))),
+				_short_hash(str(pending_meta.get("state_hash", "")))
+			]
+	)
+	_net.rewind_to_turn_start_meta_received.emit(pending_meta.duplicate(true))
+
+func handle_rpc_resync_snapshot_manifest(payload: Dictionary) -> void:
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	var manifest: Dictionary = Dictionary(payload).duplicate(true)
+	if not _matches_payload_room_code(manifest, "ResyncSnapshot manifest"):
+		return
+	var transfer_id := str(manifest.get("transfer_id", "")).strip_edges()
+	var chunk_count := int(manifest.get("chunk_count", 0))
+	if transfer_id.is_empty() or chunk_count <= 0:
+		GameLog.warn("NetClient", "RX ResyncSnapshot manifest ignored: invalid manifest")
+		return
+	_set_pending_resync_snapshot_manifest(manifest)
+	_set_pending_resync_snapshot_chunks({})
+	GameLog.warn(
+		"NetClient",
+		"RX ResyncSnapshot manifest request_id=%s transfer_id=%s chunks=%d total_bytes=%d"
+			% [
+				_safe_text(str(manifest.get("request_id", ""))),
+				_safe_text(transfer_id),
+				chunk_count,
+				int(manifest.get("total_bytes", -1)),
+			]
+	)
+
+func handle_rpc_resync_snapshot_chunk(payload: Dictionary) -> void:
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	var manifest := _get_pending_resync_snapshot_manifest()
+	if manifest.is_empty():
+		GameLog.warn("NetClient", "RX ResyncSnapshot chunk ignored: manifest missing")
+		return
+	var transfer_id := str(payload.get("transfer_id", "")).strip_edges()
+	if transfer_id != str(manifest.get("transfer_id", "")).strip_edges():
 		GameLog.warn(
 			"NetClient",
-			"RX RewindMeta request_id=%s target=%d before=%d history=%d noop=%s state_hash=%s"
+			"RX ResyncSnapshot chunk ignored: transfer mismatch current=%s incoming=%s"
+				% [_safe_text(str(manifest.get("transfer_id", ""))), _safe_text(transfer_id)]
+		)
+		return
+	var chunk_index := int(payload.get("chunk_index", -1))
+	var chunk_count := int(manifest.get("chunk_count", 0))
+	if chunk_index < 0 or chunk_index >= chunk_count:
+		GameLog.warn("NetClient", "RX ResyncSnapshot chunk ignored: index invalid=%d" % chunk_index)
+		return
+	var bytes_val = payload.get("bytes", null)
+	if not (bytes_val is PackedByteArray):
+		GameLog.warn("NetClient", "RX ResyncSnapshot chunk ignored: bytes invalid index=%d" % chunk_index)
+		return
+	var chunks := _get_pending_resync_snapshot_chunks()
+	var chunk_bytes: PackedByteArray = bytes_val
+	chunks[chunk_index] = chunk_bytes
+	_set_pending_resync_snapshot_chunks(chunks)
+	if chunks.size() < chunk_count:
+		return
+
+	var assemble_r: Result = ResyncSnapshotTransferClass.assemble_snapshot(manifest, chunks)
+	_clear_pending_resync_snapshot_state()
+	if not assemble_r.ok:
+		GameLog.error("NetClient", "ResyncSnapshot assemble failed: %s" % assemble_r.error)
+		return
+	var archive: Dictionary = Dictionary(assemble_r.value).duplicate(true)
+	_set_pending_resync_archive(archive)
+	GameLog.warn(
+		"NetClient",
+		"RX ResyncSnapshot assembled transfer_id=%s chunks=%d total_bytes=%d"
+			% [
+				_safe_text(transfer_id),
+				chunk_count,
+				int(manifest.get("total_bytes", -1)),
+			]
+	)
+	_net.resync_archive_received.emit(archive.duplicate(true))
+
+func handle_rpc_resync_delta(payload: Dictionary) -> void:
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	var delta_payload: Dictionary = Dictionary(payload).duplicate(true)
+	if not _matches_payload_room_code(delta_payload, "ResyncDelta"):
+		return
+	if _get_active_resume_engine() == null:
+		_set_pending_resync_delta(delta_payload)
+		GameLog.warn(
+			"NetClient",
+			"RX ResyncDelta buffered from=%d to=%d entries=%d"
 				% [
-					_safe_text(str(meta.get("request_id", ""))),
-					int(meta.get("target_index", -1)),
-					int(meta.get("before_index", -1)),
-					int(meta.get("history_size", -1)),
-					str(bool(meta.get("noop", false))),
-					_short_hash(str(meta.get("state_hash", "")))
+					int(delta_payload.get("from_sequence", -1)),
+					int(delta_payload.get("to_sequence", -1)),
+					Array(delta_payload.get("entries", [])).size()
 				]
 		)
-	else:
-		GameLog.warn(
-			"NetClient",
-			"RX ResyncArchive snapshot keys=%s" % str(Array(_net._pending_resync_archive.keys()))
-		)
-	_net.resync_archive_received.emit(Dictionary(_net._pending_resync_archive).duplicate(true))
+		return
+	_apply_resync_delta(delta_payload)
 
 func handle_rpc_request_rejected(payload: Dictionary) -> void:
 	var request_id := str(payload.get("request_id", ""))
@@ -305,6 +431,259 @@ func _sync_online_resume_state_from_room_state(room_state: Dictionary) -> void:
 		NetContext.sync_online_resume_context_from_room_state(room_state)
 	elif NetContext.has_method("mark_online_resume_in_game"):
 		NetContext.mark_online_resume_in_game(str(room_state.get("status", "")).strip_edges() == "InGame")
+
+func _matches_payload_room_code(payload: Dictionary, channel_name: String) -> bool:
+	var payload_room_code := str(payload.get("room_code", "")).strip_edges().to_upper()
+	if payload_room_code.is_empty():
+		GameLog.warn("NetClient", "RX %s ignored: room_code missing" % _safe_text(channel_name))
+		return false
+	var expected_room_code := _get_expected_online_room_code()
+	if expected_room_code.is_empty():
+		return true
+	if payload_room_code != expected_room_code:
+		GameLog.warn(
+			"NetClient",
+			"RX %s ignored: room mismatch expected=%s incoming=%s"
+				% [_safe_text(channel_name), _safe_text(expected_room_code), _safe_text(payload_room_code)]
+		)
+		return false
+	return true
+
+func _get_expected_online_room_code() -> String:
+	var room_code := str(NetContext.room_state.get("room_code", "")).strip_edges().to_upper()
+	if not room_code.is_empty():
+		return room_code
+	if NetContext != null and NetContext.has_method("has_online_resume_context") and NetContext.has_online_resume_context():
+		room_code = str(NetContext.get_online_resume_room_code()).strip_edges().to_upper()
+		if not room_code.is_empty():
+			return room_code
+	return _get_connect_token_room_code_hint()
+
+func _get_connect_token_room_code_hint() -> String:
+	if NetContext == null:
+		return ""
+	var token := str(NetContext.connect_token).strip_edges()
+	if token.is_empty():
+		return ""
+	var dot := token.find(".")
+	if dot <= 0:
+		return ""
+	var encoded := token.substr(0, dot).replace("-", "+").replace("_", "/")
+	var pad := encoded.length() % 4
+	if pad != 0:
+		encoded += "=".repeat(4 - pad)
+	var raw := Marshalls.base64_to_raw(encoded)
+	if raw.is_empty():
+		return ""
+	var parsed: Variant = JSON.parse_string(raw.get_string_from_utf8())
+	if not (parsed is Dictionary):
+		return ""
+	return str(Dictionary(parsed).get("room_code", "")).strip_edges().to_upper()
+
+func _get_active_resume_engine():
+	if Globals == null:
+		return null
+	var engine = Globals.current_game_engine
+	if engine == null or not (engine is GameEngine):
+		return null
+	return engine
+
+func _try_apply_pending_resync_delta() -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	var pending_delta := _get_pending_resync_delta()
+	if pending_delta.is_empty():
+		return
+	var engine = _get_active_resume_engine()
+	if engine == null:
+		return
+	var payload: Dictionary = pending_delta.duplicate(true)
+	_set_pending_resync_delta({})
+	_apply_resync_delta(payload)
+
+func _get_pending_resync_delta() -> Dictionary:
+	if _net == null or not is_instance_valid(_net) or not (_net is Object):
+		return {}
+	var pending_val = (_net as Object).get("_pending_resync_delta")
+	if pending_val is Dictionary:
+		return Dictionary(pending_val)
+	return {}
+
+func _set_pending_resync_delta(payload: Dictionary) -> void:
+	if _net == null or not is_instance_valid(_net) or not (_net is Object):
+		return
+	(_net as Object).set("_pending_resync_delta", Dictionary(payload).duplicate(true))
+
+func _get_pending_resync_archive() -> Dictionary:
+	if _net == null or not is_instance_valid(_net) or not (_net is Object):
+		return {}
+	var archive_val = (_net as Object).get("_pending_resync_archive")
+	if archive_val is Dictionary:
+		return Dictionary(archive_val)
+	return {}
+
+func _set_pending_resync_archive(archive: Dictionary) -> void:
+	if _net == null or not is_instance_valid(_net) or not (_net is Object):
+		return
+	(_net as Object).set("_pending_resync_archive", Dictionary(archive).duplicate(true))
+
+func _get_pending_rewind_to_turn_start_meta() -> Dictionary:
+	if _net == null or not is_instance_valid(_net) or not (_net is Object):
+		return {}
+	var meta_val = (_net as Object).get("_pending_rewind_to_turn_start_meta")
+	if meta_val is Dictionary:
+		return Dictionary(meta_val)
+	return {}
+
+func _set_pending_rewind_to_turn_start_meta(payload: Dictionary) -> void:
+	if _net == null or not is_instance_valid(_net) or not (_net is Object):
+		return
+	(_net as Object).set("_pending_rewind_to_turn_start_meta", Dictionary(payload).duplicate(true))
+
+func _get_pending_resync_snapshot_manifest() -> Dictionary:
+	if _net == null or not is_instance_valid(_net) or not (_net is Object):
+		return {}
+	var manifest_val = (_net as Object).get("_pending_resync_snapshot_manifest")
+	if manifest_val is Dictionary:
+		return Dictionary(manifest_val)
+	return {}
+
+func _set_pending_resync_snapshot_manifest(manifest: Dictionary) -> void:
+	if _net == null or not is_instance_valid(_net) or not (_net is Object):
+		return
+	(_net as Object).set("_pending_resync_snapshot_manifest", Dictionary(manifest).duplicate(true))
+
+func _get_pending_resync_snapshot_chunks() -> Dictionary:
+	if _net == null or not is_instance_valid(_net) or not (_net is Object):
+		return {}
+	var chunks_val = (_net as Object).get("_pending_resync_snapshot_chunks")
+	if chunks_val is Dictionary:
+		return Dictionary(chunks_val)
+	return {}
+
+func _set_pending_resync_snapshot_chunks(chunks: Dictionary) -> void:
+	if _net == null or not is_instance_valid(_net) or not (_net is Object):
+		return
+	(_net as Object).set("_pending_resync_snapshot_chunks", Dictionary(chunks).duplicate(true))
+
+func _clear_pending_resync_snapshot_state() -> void:
+	_set_pending_resync_snapshot_manifest({})
+	_set_pending_resync_snapshot_chunks({})
+
+func _apply_resync_delta(payload: Dictionary) -> void:
+	var engine = _get_active_resume_engine()
+	if engine == null:
+		_emit_resync_delta_failure("delta 恢复失败：当前没有可恢复的 engine")
+		return
+	var entries_val = payload.get("entries", null)
+	if not (entries_val is Array):
+		_emit_resync_delta_failure("delta 恢复失败：entries 类型错误")
+		return
+
+	var from_sequence := int(payload.get("from_sequence", -1))
+	var final_sequence := int(payload.get("final_sequence", payload.get("to_sequence", -1)))
+	var final_hash := str(payload.get("final_hash", "")).strip_edges()
+	var checkpoint_id := str(payload.get("checkpoint_id", "")).strip_edges()
+	var entries: Array = Array(entries_val)
+	var current_sequence: int = int(engine.command_history.size())
+	var state = engine.get_state()
+	var current_hash := str(state.compute_hash()) if state != null and state.has_method("compute_hash") else ""
+
+	if current_sequence != from_sequence:
+		if current_sequence == final_sequence and not final_hash.is_empty() and current_hash == final_hash:
+			if NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
+				NetContext.sync_online_resume_progress_from_engine(engine, checkpoint_id)
+			_net.resync_delta_applied.emit({
+				"from_sequence": from_sequence,
+				"final_sequence": final_sequence,
+				"final_hash": final_hash,
+				"entry_count": entries.size(),
+				"checkpoint_id": checkpoint_id,
+			})
+			return
+		_emit_resync_delta_failure(
+			"delta 恢复失败：本地序列与服务端基线不一致（local=%d server=%d）"
+				% [current_sequence, from_sequence]
+		)
+		return
+
+	for item in entries:
+		if not (item is Dictionary):
+			_emit_resync_delta_failure("delta 恢复失败：entry 类型错误")
+			return
+		var entry: Dictionary = Dictionary(item)
+		var expected_sequence: int = current_sequence + 1
+		var entry_sequence := int(entry.get("sequence", -1))
+		if entry_sequence != expected_sequence:
+			_emit_resync_delta_failure(
+				"delta 恢复失败：序列不连续（expected=%d actual=%d）"
+					% [expected_sequence, entry_sequence]
+			)
+			return
+		var cmd_val = entry.get("cmd", null)
+		if not (cmd_val is Dictionary):
+			_emit_resync_delta_failure("delta 恢复失败：cmd 类型错误")
+			return
+		var parsed: Result = CommandClass.from_dict(Dictionary(cmd_val))
+		if not parsed.ok:
+			_emit_resync_delta_failure("delta 恢复失败：命令解析失败：%s" % parsed.error)
+			return
+		var cmd: Command = parsed.value
+		if int(cmd.index) != current_sequence:
+			_emit_resync_delta_failure(
+				"delta 恢复失败：cmd.index 不匹配（expected=%d actual=%d）"
+					% [current_sequence, int(cmd.index)]
+			)
+			return
+		var exec_r: Result = engine.execute_command(cmd, true)
+		if not exec_r.ok:
+			_emit_resync_delta_failure("delta 恢复失败：命令回放失败：%s" % exec_r.error)
+			return
+		current_sequence = engine.command_history.size()
+		state = engine.get_state()
+		current_hash = str(state.compute_hash()) if state != null and state.has_method("compute_hash") else ""
+		var entry_hash := str(entry.get("post_state_hash", "")).strip_edges()
+		if not entry_hash.is_empty() and current_hash != entry_hash:
+			_emit_resync_delta_failure(
+				"delta 恢复失败：state_hash 不匹配（local=%s server=%s）"
+					% [_short_hash(current_hash), _short_hash(entry_hash)]
+			)
+			return
+
+	if final_sequence >= 0 and current_sequence != final_sequence:
+		_emit_resync_delta_failure(
+			"delta 恢复失败：最终序列不匹配（local=%d server=%d）"
+				% [current_sequence, final_sequence]
+		)
+		return
+	if not final_hash.is_empty() and current_hash != final_hash:
+		_emit_resync_delta_failure(
+			"delta 恢复失败：最终 hash 不匹配（local=%s server=%s）"
+				% [_short_hash(current_hash), _short_hash(final_hash)]
+		)
+		return
+
+	if NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
+		NetContext.sync_online_resume_progress_from_engine(engine, checkpoint_id)
+	GameLog.warn(
+		"NetClient",
+		"RX ResyncDelta applied from=%d to=%d entries=%d final_hash=%s"
+			% [from_sequence, current_sequence, entries.size(), _short_hash(current_hash)]
+	)
+	_net.resync_delta_applied.emit({
+		"from_sequence": from_sequence,
+		"final_sequence": current_sequence,
+		"final_hash": current_hash,
+		"entry_count": entries.size(),
+		"checkpoint_id": checkpoint_id,
+	})
+
+func _emit_resync_delta_failure(message: String) -> void:
+	if _net != null and is_instance_valid(_net):
+		if _net.has_method("request_resume_force_snapshot_once"):
+			_net.request_resume_force_snapshot_once()
+		_net.resync_delta_failed.emit(str(message))
+	GameLog.warn("NetClient", str(message))
 
 func _safe_text(value: String) -> String:
 	var out := str(value).strip_edges()

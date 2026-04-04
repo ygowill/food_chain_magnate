@@ -1016,9 +1016,9 @@ func _shutdown_online_net(reset_context: bool = false) -> void:
 	if NetClient != null:
 		NetClient.shutdown(bool(reset_context))
 
-func _request_online_resync_from_net() -> String:
+func _request_online_resync_from_net(force_snapshot: bool = false) -> String:
 	if NetClient != null:
-		return str(NetClient.request_resync())
+		return str(NetClient.request_resync(bool(force_snapshot)))
 	return ""
 
 func _goto_online_lobby() -> void:

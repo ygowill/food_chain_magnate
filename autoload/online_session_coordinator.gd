@@ -26,6 +26,9 @@ class _ResumeWaitState:
 	var room_state_ready: bool = false
 	var game_started_received: bool = false
 	var archive_received: bool = false
+	var delta_applied: bool = false
+	var delta_failed: bool = false
+	var delta_error: String = ""
 
 func remember_online_room(
 	room_code: String,
@@ -336,7 +339,7 @@ func _wait_for_resume_ready(
 
 	while Time.get_ticks_msec() <= deadline:
 		if mode == "startup_game":
-			if wait_state.game_started_received and wait_state.archive_received:
+			if wait_state.game_started_received and (wait_state.archive_received or wait_state.delta_applied):
 				_disconnect_resume_wait_signals(callbacks)
 				return {"ok": true}
 		elif wait_state.room_state_ready:
@@ -349,6 +352,14 @@ func _wait_for_resume_ready(
 				"ok": false,
 				"message": "%s: %s" % [wait_state.rejection_code, wait_state.rejection_message],
 				"terminal": _is_terminal_resume_rejection(wait_state.rejection_code),
+			}
+
+		if wait_state.delta_failed:
+			_disconnect_resume_wait_signals(callbacks)
+			return {
+				"ok": false,
+				"message": wait_state.delta_error if not wait_state.delta_error.is_empty() else "delta 恢复失败",
+				"terminal": false,
 			}
 
 		if wait_state.disconnected:
@@ -376,6 +387,8 @@ func _connect_resume_wait_signals(wait_state: _ResumeWaitState, on_game_started:
 		"room_state_updated": Callable(self, "_on_wait_room_state_updated").bind(wait_state),
 		"game_started": Callable(self, "_on_wait_game_started").bind(wait_state, on_game_started, on_status_changed),
 		"resync_archive_received": Callable(self, "_on_wait_resync_archive_received").bind(wait_state, on_status_changed),
+		"resync_delta_applied": Callable(self, "_on_wait_resync_delta_applied").bind(wait_state, on_status_changed),
+		"resync_delta_failed": Callable(self, "_on_wait_resync_delta_failed").bind(wait_state),
 	}
 	if not NetClient.connected.is_connected(callbacks["connected"]):
 		NetClient.connected.connect(callbacks["connected"])
@@ -389,6 +402,10 @@ func _connect_resume_wait_signals(wait_state: _ResumeWaitState, on_game_started:
 		NetClient.game_started.connect(callbacks["game_started"])
 	if not NetClient.resync_archive_received.is_connected(callbacks["resync_archive_received"]):
 		NetClient.resync_archive_received.connect(callbacks["resync_archive_received"])
+	if not NetClient.resync_delta_applied.is_connected(callbacks["resync_delta_applied"]):
+		NetClient.resync_delta_applied.connect(callbacks["resync_delta_applied"])
+	if not NetClient.resync_delta_failed.is_connected(callbacks["resync_delta_failed"]):
+		NetClient.resync_delta_failed.connect(callbacks["resync_delta_failed"])
 	return callbacks
 
 func _disconnect_resume_wait_signals(callbacks: Dictionary) -> void:
@@ -406,6 +423,10 @@ func _disconnect_resume_wait_signals(callbacks: Dictionary) -> void:
 		NetClient.game_started.disconnect(callbacks["game_started"])
 	if callbacks.has("resync_archive_received") and NetClient.resync_archive_received.is_connected(callbacks["resync_archive_received"]):
 		NetClient.resync_archive_received.disconnect(callbacks["resync_archive_received"])
+	if callbacks.has("resync_delta_applied") and NetClient.resync_delta_applied.is_connected(callbacks["resync_delta_applied"]):
+		NetClient.resync_delta_applied.disconnect(callbacks["resync_delta_applied"])
+	if callbacks.has("resync_delta_failed") and NetClient.resync_delta_failed.is_connected(callbacks["resync_delta_failed"]):
+		NetClient.resync_delta_failed.disconnect(callbacks["resync_delta_failed"])
 
 func _on_wait_connected(wait_state: _ResumeWaitState) -> void:
 	if wait_state == null:
@@ -461,6 +482,22 @@ func _on_wait_resync_archive_received(
 		return
 	wait_state.archive_received = true
 	_emit_status(on_status_changed, "已收到对局快照，正在应用...")
+
+func _on_wait_resync_delta_applied(
+	_payload: Dictionary,
+	wait_state: _ResumeWaitState,
+	on_status_changed: Callable
+) -> void:
+	if wait_state == null:
+		return
+	wait_state.delta_applied = true
+	_emit_status(on_status_changed, "已完成增量恢复，正在进入对局...")
+
+func _on_wait_resync_delta_failed(message: String, wait_state: _ResumeWaitState) -> void:
+	if wait_state == null:
+		return
+	wait_state.delta_failed = true
+	wait_state.delta_error = str(message)
 
 func _default_ensure_session() -> Result:
 	if PlatformSession == null:

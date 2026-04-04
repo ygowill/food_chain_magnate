@@ -21,6 +21,9 @@ signal request_rejected(request_id: String, code: String, message: String)
 signal game_started(payload: Dictionary)
 signal command_applied(cmd_dict: Dictionary, state_hash: String)
 signal resync_archive_received(archive: Dictionary)
+signal rewind_to_turn_start_meta_received(payload: Dictionary)
+signal resync_delta_applied(payload: Dictionary)
+signal resync_delta_failed(message: String)
 signal server_room_directory_dirty()
 
 var _peer: WebSocketMultiplayerPeer = null
@@ -31,6 +34,11 @@ var _profile_by_peer_id: Dictionary = {} # peer_id -> profile
 var _client_transport_connected: bool = false
 var _request_counter: int = 0
 var _pending_resync_archive: Dictionary = {}
+var _pending_rewind_to_turn_start_meta: Dictionary = {}
+var _pending_resync_snapshot_manifest: Dictionary = {}
+var _pending_resync_snapshot_chunks: Dictionary = {}
+var _pending_resync_delta: Dictionary = {}
+var _resume_force_snapshot_once: bool = false
 var _internal = null
 
 func _ready() -> void:
@@ -147,6 +155,11 @@ func shutdown(reset_context: bool = true) -> void:
 	_profile_by_peer_id = {}
 	_client_transport_connected = false
 	_pending_resync_archive = {}
+	_pending_rewind_to_turn_start_meta = {}
+	_pending_resync_snapshot_manifest = {}
+	_pending_resync_snapshot_chunks = {}
+	_pending_resync_delta = {}
+	_resume_force_snapshot_once = false
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	if reset_context:
 		NetContext.reset()
@@ -222,6 +235,7 @@ func request_leave_room() -> String:
 	var payload := {"request_id": request_id}
 	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("mark_resume_terminal"):
 		OnlineSessionCoordinator.mark_resume_terminal("leave_room")
+	clear_pending_online_resync_state()
 	rpc_id(1, "rpc_leave_room", payload)
 	GameLog.info("NetClient", "TX LeaveRoom request_id=%s room=%s" % [request_id, _safe_room_code(NetContext.room_state)])
 	if NetContext != null and NetContext.has_method("clear_online_resume_context"):
@@ -235,6 +249,7 @@ func request_forfeit_and_leave_room() -> String:
 	var payload := {"request_id": request_id}
 	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("mark_resume_terminal"):
 		OnlineSessionCoordinator.mark_resume_terminal("forfeit_and_leave_room")
+	clear_pending_online_resync_state()
 	rpc_id(1, "rpc_forfeit_and_leave_room", payload)
 	GameLog.info(
 		"NetClient",
@@ -297,16 +312,30 @@ func request_action(action_id: String, params: Dictionary) -> String:
 	)
 	return request_id
 
-func request_resync() -> String:
+func request_resume_force_snapshot_once() -> void:
+	_resume_force_snapshot_once = true
+
+func request_resync(force_snapshot: bool = false) -> String:
 	var request_id := _next_request_id()
 	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
 		return request_id
 	if not is_online_client_connected():
 		return request_id
-	rpc_id(1, "rpc_resync_request", {"request_id": request_id})
+	if Globals != null and Globals.current_game_engine != null:
+		if NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
+			NetContext.sync_online_resume_progress_from_engine(Globals.current_game_engine)
+	var use_force_snapshot := bool(force_snapshot) or _resume_force_snapshot_once
+	_resume_force_snapshot_once = false
+	var payload := {"request_id": request_id}
+	if NetContext != null and NetContext.has_method("build_online_resume_cursor"):
+		var cursor: Dictionary = NetContext.build_online_resume_cursor(use_force_snapshot)
+		if not cursor.is_empty():
+			payload["resume_cursor"] = cursor
+	rpc_id(1, "rpc_resync_request", payload)
 	GameLog.warn(
 		"NetClient",
-		"TX ResyncRequest request_id=%s room=%s" % [request_id, _safe_room_code(NetContext.room_state)]
+		"TX ResyncRequest request_id=%s room=%s force_snapshot=%s"
+			% [request_id, _safe_room_code(NetContext.room_state), str(use_force_snapshot)]
 	)
 	return request_id
 
@@ -329,6 +358,43 @@ func take_pending_resync_archive() -> Dictionary:
 	if not out.is_empty():
 		GameLog.debug("NetClient", "take_pending_resync_archive keys=%s" % str(Array(out.keys())))
 	return out
+
+func clear_pending_resync_archive() -> void:
+	if not _pending_resync_archive.is_empty():
+		GameLog.debug("NetClient", "clear_pending_resync_archive keys=%s" % str(Array(_pending_resync_archive.keys())))
+	_pending_resync_archive = {}
+
+func take_pending_rewind_to_turn_start_meta() -> Dictionary:
+	var out: Dictionary = _pending_rewind_to_turn_start_meta.duplicate(true)
+	_pending_rewind_to_turn_start_meta = {}
+	if not out.is_empty():
+		GameLog.debug("NetClient", "take_pending_rewind_to_turn_start_meta keys=%s" % str(Array(out.keys())))
+	return out
+
+func clear_pending_rewind_to_turn_start_meta() -> void:
+	if not _pending_rewind_to_turn_start_meta.is_empty():
+		GameLog.debug(
+			"NetClient",
+			"clear_pending_rewind_to_turn_start_meta keys=%s"
+				% str(Array(_pending_rewind_to_turn_start_meta.keys()))
+		)
+	_pending_rewind_to_turn_start_meta = {}
+
+func clear_pending_online_resync_state() -> void:
+	var should_log := not _pending_resync_archive.is_empty() \
+		or not _pending_rewind_to_turn_start_meta.is_empty() \
+		or not _pending_resync_snapshot_manifest.is_empty() \
+		or not _pending_resync_snapshot_chunks.is_empty() \
+		or not _pending_resync_delta.is_empty() \
+		or _resume_force_snapshot_once
+	if should_log:
+		GameLog.debug("NetClient", "clear_pending_online_resync_state")
+	clear_pending_resync_archive()
+	clear_pending_rewind_to_turn_start_meta()
+	_pending_resync_snapshot_manifest = {}
+	_pending_resync_snapshot_chunks = {}
+	_pending_resync_delta = {}
+	_resume_force_snapshot_once = false
 
 @rpc("any_peer", "reliable")
 func rpc_client_hello(request: Dictionary) -> void:
@@ -409,6 +475,26 @@ func rpc_command_applied(payload: Dictionary) -> void:
 func rpc_resync_archive(payload: Dictionary) -> void:
 	_ensure_internal()
 	_internal.handle_rpc_resync_archive(payload)
+
+@rpc("authority", "reliable")
+func rpc_rewind_to_turn_start_meta(payload: Dictionary) -> void:
+	_ensure_internal()
+	_internal.handle_rpc_rewind_to_turn_start_meta(payload)
+
+@rpc("authority", "reliable")
+func rpc_resync_snapshot_manifest(payload: Dictionary) -> void:
+	_ensure_internal()
+	_internal.handle_rpc_resync_snapshot_manifest(payload)
+
+@rpc("authority", "reliable")
+func rpc_resync_snapshot_chunk(payload: Dictionary) -> void:
+	_ensure_internal()
+	_internal.handle_rpc_resync_snapshot_chunk(payload)
+
+@rpc("authority", "reliable")
+func rpc_resync_delta(payload: Dictionary) -> void:
+	_ensure_internal()
+	_internal.handle_rpc_resync_delta(payload)
 
 @rpc("authority", "reliable")
 func rpc_request_rejected(payload: Dictionary) -> void:

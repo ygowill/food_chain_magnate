@@ -92,6 +92,26 @@ func handle_rpc_resync_archive(payload: Dictionary) -> void:
 	if _client != null and is_instance_valid(_client):
 		_client.handle_rpc_resync_archive(payload)
 
+func handle_rpc_rewind_to_turn_start_meta(payload: Dictionary) -> void:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client):
+		_client.handle_rpc_rewind_to_turn_start_meta(payload)
+
+func handle_rpc_resync_snapshot_manifest(payload: Dictionary) -> void:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client):
+		_client.handle_rpc_resync_snapshot_manifest(payload)
+
+func handle_rpc_resync_snapshot_chunk(payload: Dictionary) -> void:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client):
+		_client.handle_rpc_resync_snapshot_chunk(payload)
+
+func handle_rpc_resync_delta(payload: Dictionary) -> void:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client):
+		_client.handle_rpc_resync_delta(payload)
+
 func handle_rpc_request_rejected(payload: Dictionary) -> void:
 	_ensure_modules()
 	if _client != null and is_instance_valid(_client):

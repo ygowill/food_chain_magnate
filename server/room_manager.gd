@@ -433,6 +433,49 @@ func disconnect_peer(peer_id: int) -> Result:
 		"room_state": room.to_room_state_dict(),
 	})
 
+func release_reconnecting_seat(room_code: String, seat_index: int) -> Result:
+	var code := str(room_code).strip_edges().to_upper()
+	if code.is_empty():
+		return Result.failure("Missing room_code", Result.ErrorCode.MISSING_PARAMS)
+
+	var room = rooms.get(code, null)
+	if room == null:
+		return Result.success({
+			"room_code": code,
+			"room": null,
+			"removed": true,
+			"released": false,
+			"room_state": null,
+		})
+
+	if not room.has_method("release_reconnecting_seat"):
+		return Result.failure("Room.release_reconnecting_seat missing")
+	var rr: Result = room.release_reconnecting_seat(seat_index)
+	if not rr.ok:
+		return rr
+
+	var rr_value: Dictionary = Dictionary(rr.value) if rr.value is Dictionary else {}
+	var released := bool(rr_value.get("released", false))
+	if room.is_empty():
+		rooms.erase(code)
+		return Result.success({
+			"room_code": code,
+			"room": null,
+			"removed": true,
+			"released": released,
+			"room_state": null,
+		})
+
+	return Result.success({
+		"room_code": code,
+		"room": room,
+		"removed": false,
+		"released": released,
+		"room_state": room.to_room_state_dict(),
+		"host_changed": bool(rr_value.get("host_changed", false)),
+		"host_peer_id": int(rr_value.get("host_peer_id", 0)),
+	})
+
 func get_room_by_peer(peer_id: int):
 	var room_code := str(peer_to_room.get(peer_id, ""))
 	if room_code.is_empty():

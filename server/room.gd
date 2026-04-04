@@ -12,6 +12,7 @@ const STATUS_ENDED := "Ended"
 const SEAT_CONNECTED := "CONNECTED"
 const SEAT_RECONNECTING := "RECONNECTING"
 const SEAT_FORFEITED := "FORFEITED"
+const RESUME_DELTA_ROTATE_COMMAND_THRESHOLD := 32
 
 var room_code: String = ""
 var host_peer_id: int = 0
@@ -44,6 +45,12 @@ var _host_seat_index: int = -1
 var owner_user_id: String = ""
 
 var _seat_slot_by_index: Dictionary = {} # seat_index -> slot
+var _resume_checkpoint_id: String = ""
+var _resume_checkpoint_sequence: int = 0
+var _resume_checkpoint_state_hash: String = ""
+var _resume_checkpoint_archive: Dictionary = {}
+var _resume_delta_log: Array[Dictionary] = []
+var _resume_checkpoint_counter: int = 0
 
 func to_persistence_dict(include_runtime_membership: bool = false) -> Result:
 	if str(status) != STATUS_IN_GAME and str(status) != STATUS_LOBBY:
@@ -152,6 +159,9 @@ static func from_persistence_dict(data: Dictionary) -> Result:
 		if not load_r.ok:
 			return Result.failure("恢复房间 archive 失败: %s" % load_r.error)
 		room.game_engine = engine
+		var checkpoint_r: Result = room._reset_recovery_store_from_current_engine("restore")
+		if not checkpoint_r.ok:
+			return Result.failure("恢复房间 recovery store 失败: %s" % checkpoint_r.error)
 
 	room._rebuild_runtime_views()
 	return Result.success(room)
@@ -205,6 +215,153 @@ func _init(p_room_code: String, p_host_peer_id: int, p_join_policy: String, p_pa
 
 func _touch() -> void:
 	updated_at_ms = int(Time.get_unix_time_from_system() * 1000.0)
+
+func _current_resume_sequence() -> int:
+	if game_engine == null:
+		return 0
+	var history_val = game_engine.get("command_history") if game_engine is Object else null
+	return Array(history_val).size() if history_val is Array else 0
+
+func _current_resume_state_hash() -> String:
+	if game_engine == null or not game_engine.has_method("get_state"):
+		return ""
+	var state = game_engine.get_state()
+	if state == null or not state.has_method("compute_hash"):
+		return ""
+	return str(state.compute_hash())
+
+func _reset_recovery_store_from_current_engine(reason: String = "") -> Result:
+	if status != STATUS_IN_GAME:
+		_resume_checkpoint_id = ""
+		_resume_checkpoint_sequence = 0
+		_resume_checkpoint_state_hash = ""
+		_resume_checkpoint_archive = {}
+		_resume_delta_log.clear()
+		return Result.success()
+	if game_engine == null:
+		return Result.failure("Room engine missing")
+	var archive_r: Result = game_engine.create_archive()
+	if not archive_r.ok:
+		return Result.failure("create_archive failed: %s" % archive_r.error)
+	_resume_checkpoint_counter += 1
+	var suffix := str(reason).strip_edges()
+	if suffix.is_empty():
+		suffix = "checkpoint"
+	_resume_checkpoint_id = "%s_%d_%d" % [suffix, _current_resume_sequence(), _resume_checkpoint_counter]
+	_resume_checkpoint_sequence = _current_resume_sequence()
+	_resume_checkpoint_state_hash = _current_resume_state_hash()
+	_resume_checkpoint_archive = Dictionary(archive_r.value).duplicate(true)
+	_resume_delta_log.clear()
+	return Result.success({
+		"checkpoint_id": _resume_checkpoint_id,
+		"sequence": _resume_checkpoint_sequence,
+		"state_hash": _resume_checkpoint_state_hash,
+	})
+
+func get_resume_cursor() -> Dictionary:
+	return {
+		"checkpoint_id": _resume_checkpoint_id,
+		"last_applied_sequence": _current_resume_sequence(),
+		"last_state_hash": _current_resume_state_hash(),
+	}
+
+func build_delta_resume_payload(cursor: Dictionary, max_commands: int = 0, soft_limit_bytes: int = 0) -> Result:
+	if status != STATUS_IN_GAME:
+		return Result.failure("Room is not in game")
+	if game_engine == null:
+		return Result.failure("Room engine missing")
+	if cursor.is_empty():
+		return Result.failure("resume cursor missing")
+	if _resume_checkpoint_archive.is_empty():
+		var checkpoint_r: Result = _reset_recovery_store_from_current_engine("resume_init")
+		if not checkpoint_r.ok:
+			return checkpoint_r
+
+	var from_sequence := int(cursor.get("last_applied_sequence", -1))
+	var from_hash := str(cursor.get("last_state_hash", "")).strip_edges()
+	var current_sequence := _current_resume_sequence()
+	var current_hash := _current_resume_state_hash()
+	if from_sequence < 0 or from_sequence > current_sequence:
+		return Result.failure("resume cursor sequence invalid")
+
+	var expected_hash := ""
+	if from_sequence == current_sequence:
+		expected_hash = current_hash
+	elif from_sequence == _resume_checkpoint_sequence:
+		expected_hash = _resume_checkpoint_state_hash
+	else:
+		for item in _resume_delta_log:
+			var entry: Dictionary = Dictionary(item)
+			if int(entry.get("sequence", -1)) != from_sequence:
+				continue
+			expected_hash = str(entry.get("post_state_hash", "")).strip_edges()
+			break
+	if expected_hash.is_empty():
+		return Result.failure("delta gap")
+	if from_hash.is_empty() or expected_hash != from_hash:
+		return Result.failure("resume cursor hash mismatch")
+
+	var entries: Array[Dictionary] = []
+	for item2 in _resume_delta_log:
+		var entry2: Dictionary = Dictionary(item2)
+		if int(entry2.get("sequence", -1)) <= from_sequence:
+			continue
+		entries.append(entry2.duplicate(true))
+	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("sequence", -1)) < int(b.get("sequence", -1))
+	)
+
+	if from_sequence < current_sequence:
+		var expected_sequence := from_sequence + 1
+		for entry3 in entries:
+			if int(entry3.get("sequence", -1)) != expected_sequence:
+				return Result.failure("delta gap")
+			expected_sequence += 1
+		if expected_sequence - 1 != current_sequence:
+			return Result.failure("delta incomplete")
+
+	if max_commands > 0 and entries.size() > max_commands:
+		return Result.failure("delta too long")
+
+	var payload := {
+		"room_code": str(room_code).strip_edges().to_upper(),
+		"checkpoint_id": _resume_checkpoint_id,
+		"from_sequence": from_sequence,
+		"to_sequence": current_sequence,
+		"final_sequence": current_sequence,
+		"final_hash": current_hash,
+		"entries": entries,
+	}
+	var payload_bytes := int(var_to_bytes(payload).size())
+	if soft_limit_bytes > 0 and payload_bytes > soft_limit_bytes:
+		return Result.failure("delta too large")
+
+	return Result.success({
+		"payload": payload,
+		"payload_bytes": payload_bytes,
+		"entry_count": entries.size(),
+		"from_sequence": from_sequence,
+		"to_sequence": current_sequence,
+		"final_hash": current_hash,
+	})
+
+func record_resume_delta(cmd: Command, post_state_hash: String = "") -> void:
+	if status != STATUS_IN_GAME or game_engine == null or cmd == null:
+		return
+	if _resume_checkpoint_archive.is_empty():
+		var checkpoint_r: Result = _reset_recovery_store_from_current_engine("delta_init")
+		if not checkpoint_r.ok:
+			return
+	var normalized_hash := str(post_state_hash).strip_edges()
+	if normalized_hash.is_empty():
+		normalized_hash = _current_resume_state_hash()
+	_resume_delta_log.append({
+		"sequence": _current_resume_sequence(),
+		"cmd": cmd.to_dict(),
+		"post_state_hash": normalized_hash,
+	})
+	if _current_resume_sequence() - _resume_checkpoint_sequence >= RESUME_DELTA_ROTATE_COMMAND_THRESHOLD:
+		_reset_recovery_store_from_current_engine("delta_rotate")
 
 func _make_seat_slot(
 	seat_index: int,
@@ -582,6 +739,36 @@ func disconnect_peer(peer_id: int) -> Result:
 		"host_peer_id": host_peer_id,
 	})
 
+func release_reconnecting_seat(seat_index: int) -> Result:
+	if status != STATUS_LOBBY:
+		return Result.failure("Room is not in Lobby")
+
+	var idx := int(seat_index)
+	if idx < 0 or not _seat_slot_by_index.has(idx):
+		return Result.failure("Seat not found")
+
+	var slot := _get_slot(idx)
+	var slot_state := str(slot.get("seat_state", "")).strip_edges()
+	if int(slot.get("peer_id", 0)) > 0 or slot_state != SEAT_RECONNECTING:
+		return Result.success({
+			"released": false,
+			"host_changed": false,
+			"host_peer_id": host_peer_id,
+		})
+
+	var host_changed := idx == _host_seat_index
+	_erase_slot(idx)
+	if host_changed:
+		_promote_new_host_after_lobby_leave()
+
+	_rebuild_runtime_views()
+	_touch()
+	return Result.success({
+		"released": true,
+		"host_changed": host_changed,
+		"host_peer_id": host_peer_id,
+	})
+
 func update_peer_profile(peer_id: int, profile: Dictionary) -> Result:
 	if profile == null:
 		return Result.failure("Invalid profile")
@@ -833,6 +1020,9 @@ func start_game() -> Result:
 		_set_slot(seat_index, slot)
 	_rebuild_runtime_views()
 	_touch()
+	var checkpoint_r: Result = _reset_recovery_store_from_current_engine("start_game")
+	if not checkpoint_r.ok:
+		return Result.failure("初始化 recovery store 失败: %s" % checkpoint_r.error)
 
 	return Result.success({
 		"player_id_by_peer_id": player_id_by_peer_id.duplicate(true),
@@ -881,6 +1071,9 @@ func rewind_to_current_player_turn_start(include_archive: bool = true) -> Result
 			return Result.failure("create_archive failed: %s" % archive_r.error)
 		out["archive"] = Dictionary(archive_r.value).duplicate(true)
 
+	var checkpoint_r: Result = _reset_recovery_store_from_current_engine("rewind")
+	if not checkpoint_r.ok:
+		return Result.failure("reset recovery store failed: %s" % checkpoint_r.error)
 	_touch()
 	return Result.success(out)
 

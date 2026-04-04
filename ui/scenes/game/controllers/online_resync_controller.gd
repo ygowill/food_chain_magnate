@@ -1,5 +1,5 @@
 # Game scene：联机 Resync/Rewind 控制器
-# 负责：联机客户端命令回放、ResyncArchive 应用、回退到回合开始的回灌与超时兜底。
+# 负责：联机客户端命令回放、ResyncArchive 应用、回退元数据处理与超时兜底。
 class_name GameOnlineResyncController
 extends RefCounted
 
@@ -146,15 +146,15 @@ func _begin_full_resync_request(reason: String, force: bool = false) -> bool:
 	_rewind_request_id = ""
 	var request_id := ""
 	if _request_resync.is_valid():
-		var request_result = _request_resync.call()
+		var request_result = _request_resync.call(bool(force))
 		request_id = str(request_result).strip_edges() if request_result != null else ""
 	else:
-		request_id = str(NetClient.request_resync()).strip_edges()
+		request_id = str(NetClient.request_resync(bool(force))).strip_edges()
 	_resync_request_id = request_id
 	GameLog.warn(
 		"Game",
-		"联机触发 resync: %s request_id=%s"
-			% [str(reason), request_id if not request_id.is_empty() else "-"]
+		"联机触发 resync: %s request_id=%s force_snapshot=%s"
+			% [str(reason), request_id if not request_id.is_empty() else "-", str(bool(force))]
 	)
 	return true
 
@@ -204,6 +204,9 @@ func _setup_online_client_bindings() -> void:
 
 	var cb_applied := Callable(self, "_on_online_command_applied")
 	var cb_archive := Callable(self, "_on_online_resync_archive_received")
+	var cb_rewind_meta := Callable(self, "_on_online_rewind_to_turn_start_meta")
+	var cb_delta_applied := Callable(self, "_on_online_resync_delta_applied")
+	var cb_delta_failed := Callable(self, "_on_online_resync_delta_failed")
 	var cb_rejected := Callable(self, "_on_online_request_rejected")
 	var cb_connected := Callable(self, "_on_online_connected")
 	var cb_disconnected := Callable(self, "_on_online_disconnected")
@@ -211,6 +214,12 @@ func _setup_online_client_bindings() -> void:
 		NetClient.command_applied.connect(cb_applied)
 	if not NetClient.resync_archive_received.is_connected(cb_archive):
 		NetClient.resync_archive_received.connect(cb_archive)
+	if not NetClient.rewind_to_turn_start_meta_received.is_connected(cb_rewind_meta):
+		NetClient.rewind_to_turn_start_meta_received.connect(cb_rewind_meta)
+	if not NetClient.resync_delta_applied.is_connected(cb_delta_applied):
+		NetClient.resync_delta_applied.connect(cb_delta_applied)
+	if not NetClient.resync_delta_failed.is_connected(cb_delta_failed):
+		NetClient.resync_delta_failed.connect(cb_delta_failed)
 	if not NetClient.request_rejected.is_connected(cb_rejected):
 		NetClient.request_rejected.connect(cb_rejected)
 	if not NetClient.connected.is_connected(cb_connected):
@@ -218,16 +227,23 @@ func _setup_online_client_bindings() -> void:
 	if not NetClient.disconnected.is_connected(cb_disconnected):
 		NetClient.disconnected.connect(cb_disconnected)
 
-	var pending = NetClient.take_pending_resync_archive()
-	if pending is Dictionary and not pending.is_empty():
+	var pending_archive = NetClient.take_pending_resync_archive()
+	var pending_rewind_meta = NetClient.take_pending_rewind_to_turn_start_meta()
+	if pending_archive is Dictionary and not pending_archive.is_empty():
 		_resync_in_progress = true
-		_on_online_resync_archive_received(Dictionary(pending))
+		_on_online_resync_archive_received(Dictionary(pending_archive))
+	elif pending_rewind_meta is Dictionary and not pending_rewind_meta.is_empty():
+		_resync_in_progress = true
+		_on_online_rewind_to_turn_start_meta(Dictionary(pending_rewind_meta))
 
 func _disconnect_netclient_signals() -> void:
 	if NetClient == null:
 		return
 	var cb_applied := Callable(self, "_on_online_command_applied")
 	var cb_archive := Callable(self, "_on_online_resync_archive_received")
+	var cb_rewind_meta := Callable(self, "_on_online_rewind_to_turn_start_meta")
+	var cb_delta_applied := Callable(self, "_on_online_resync_delta_applied")
+	var cb_delta_failed := Callable(self, "_on_online_resync_delta_failed")
 	var cb_rejected := Callable(self, "_on_online_request_rejected")
 	var cb_connected := Callable(self, "_on_online_connected")
 	var cb_disconnected := Callable(self, "_on_online_disconnected")
@@ -235,6 +251,12 @@ func _disconnect_netclient_signals() -> void:
 		NetClient.command_applied.disconnect(cb_applied)
 	if NetClient.resync_archive_received.is_connected(cb_archive):
 		NetClient.resync_archive_received.disconnect(cb_archive)
+	if NetClient.rewind_to_turn_start_meta_received.is_connected(cb_rewind_meta):
+		NetClient.rewind_to_turn_start_meta_received.disconnect(cb_rewind_meta)
+	if NetClient.resync_delta_applied.is_connected(cb_delta_applied):
+		NetClient.resync_delta_applied.disconnect(cb_delta_applied)
+	if NetClient.resync_delta_failed.is_connected(cb_delta_failed):
+		NetClient.resync_delta_failed.disconnect(cb_delta_failed)
 	if NetClient.request_rejected.is_connected(cb_rejected):
 		NetClient.request_rejected.disconnect(cb_rejected)
 	if NetClient.connected.is_connected(cb_connected):
@@ -268,6 +290,7 @@ func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> voi
 	if not r.ok:
 		GameLog.error("Game", "联机回放命令失败: %s" % r.error)
 		return
+	var should_sync_resume_progress := true
 	if not state_hash.is_empty():
 		var state = engine.get_state()
 		if state != null and state.has_method("compute_hash"):
@@ -275,6 +298,10 @@ func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> voi
 			if local_hash != state_hash:
 				GameLog.warn("Game", "联机 state_hash 不一致: local=%s server=%s" % [local_hash, state_hash])
 				_request_online_resync("state_hash_mismatch")
+				should_sync_resume_progress = false
+
+	if should_sync_resume_progress and NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
+		NetContext.sync_online_resume_progress_from_engine(engine)
 
 	if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
 		if _apply_live_log_timeline_from_engine.is_valid():
@@ -286,12 +313,8 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 	var engine = _get_engine()
 	if engine == null:
 		return
-	# 联机回退：server 通过 ResyncArchive 通道下发“元数据”（避免发送大 archive 导致 WebSocket buffer 溢出）。
-	if archive.has("_rewind_to_turn_start"):
-		var meta_val = archive.get("_rewind_to_turn_start", null)
-		if meta_val is Dictionary:
-			_on_online_rewind_to_turn_start_meta(Dictionary(meta_val))
-			return
+	if NetClient != null and NetClient.has_method("clear_pending_resync_archive"):
+		NetClient.clear_pending_resync_archive()
 	_resync_in_progress = true
 	_resync_request_id = ""
 	var r: Result = engine.load_from_archive(archive)
@@ -315,6 +338,9 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 	if not ui_metadata_apply.ok:
 		GameLog.error("Game", "联机 ResyncArchive UI metadata 装配失败: %s" % ui_metadata_apply.error)
 
+	if NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
+		NetContext.sync_online_resume_progress_from_engine(engine)
+
 	GameLog.warn("Game", "联机 ResyncArchive 加载完成（命令数=%d）" % int(engine.command_history.size()))
 	_resync_in_progress = false
 	_rewind_request_id = ""
@@ -331,6 +357,46 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 	if _reconnect_flow_active or (NetContext != null and NetContext.has_method("is_online_reconnecting") and NetContext.is_online_reconnecting()):
 		_reconnect_restore_completed = true
 
+func _on_online_resync_delta_applied(payload: Dictionary) -> void:
+	GameLog.warn(
+		"Game",
+		"联机 DeltaResync 应用完成 from=%d to=%d entries=%d final_hash=%s"
+			% [
+				int(payload.get("from_sequence", -1)),
+				int(payload.get("final_sequence", -1)),
+				int(payload.get("entry_count", -1)),
+				_short_hash(str(payload.get("final_hash", "")))
+			]
+	)
+	_resync_in_progress = false
+	_rewind_request_id = ""
+	_resync_request_id = ""
+	if _reset_timeline_state_after_resync.is_valid():
+		_reset_timeline_state_after_resync.call()
+	if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
+		if _apply_live_log_timeline_from_engine.is_valid():
+			_apply_live_log_timeline_from_engine.call()
+	if _update_ui.is_valid():
+		_update_ui.call()
+	_flush_online_pending_commands_after_resync()
+	if _reconnect_flow_active or (NetContext != null and NetContext.has_method("is_online_reconnecting") and NetContext.is_online_reconnecting()):
+		_reconnect_restore_completed = true
+
+func _on_online_resync_delta_failed(message: String) -> void:
+	GameLog.warn("Game", "联机 DeltaResync 失败：%s" % str(message))
+	if _reconnect_flow_active:
+		_reconnect_attempt_failed = true
+		_reconnect_attempt_failure_reason = str(message)
+		return
+	if not _resync_in_progress:
+		return
+	_resync_in_progress = false
+	_resync_request_id = ""
+	_pending_cmds.clear()
+	if _update_ui.is_valid():
+		_update_ui.call()
+	_begin_full_resync_request("delta_apply_failed", true)
+
 func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 	var engine = _get_engine()
 	if engine == null:
@@ -339,6 +405,8 @@ func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 		return
 	if NetClient == null or not NetClient.is_online_client_connected():
 		return
+	if NetClient.has_method("clear_pending_rewind_to_turn_start_meta"):
+		NetClient.clear_pending_rewind_to_turn_start_meta()
 
 	var request_id := str(payload.get("request_id", ""))
 	var target_index := int(payload.get("target_index", -999))
@@ -854,3 +922,11 @@ func _stringify_platform_error(error_val) -> String:
 	if text.is_empty():
 		return "未知错误"
 	return text
+
+func _short_hash(hash_value: String) -> String:
+	var h := str(hash_value).strip_edges()
+	if h.is_empty():
+		return "-"
+	if h.length() <= 12:
+		return h
+	return "%s..." % h.substr(0, 12)
