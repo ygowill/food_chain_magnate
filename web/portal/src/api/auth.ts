@@ -11,8 +11,6 @@ export interface MeResponse {
   user_id: string
   display_name: string
   email: string | null
-  email_verified: boolean | null
-  email_verification_pending: boolean
   is_guest: boolean
   is_admin: boolean
   created_at: string

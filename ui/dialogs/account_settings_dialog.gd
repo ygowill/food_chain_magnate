@@ -243,8 +243,6 @@ func _get_email_status_text() -> String:
 	var bound_email := str(PlatformSession.email).strip_edges()
 	if bound_email.is_empty():
 		return "未绑定"
-	if PlatformSession.email_verification_pending:
-		return "待验证"
 	return "已绑定"
 
 

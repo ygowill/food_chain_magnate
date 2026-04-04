@@ -142,8 +142,6 @@ async def test_bind_guest_to_email_upgrades_account_immediately(client: AsyncCli
     assert me.status_code == 200
     assert me.json()["is_guest"] is False
     assert me.json()["email"] == "bind@b.com"
-    assert me.json()["email_verified"] is True
-    assert me.json()["email_verification_pending"] is False
 
 
 @pytest.mark.asyncio

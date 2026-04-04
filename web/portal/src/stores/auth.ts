@@ -16,10 +16,10 @@ const IS_GUEST_KEY = 'fcm_is_guest'
 const DISPLAY_NAME_KEY = 'fcm_display_name'
 const DEVICE_ID_KEY = 'fcm_device_id'
 const EMAIL_KEY = 'fcm_email'
-const EMAIL_VERIFIED_KEY = 'fcm_email_verified'
-const EMAIL_VERIFICATION_PENDING_KEY = 'fcm_email_verification_pending'
 const IS_ADMIN_KEY = 'fcm_is_admin'
 const CREATED_AT_KEY = 'fcm_created_at'
+const LEGACY_EMAIL_VERIFIED_KEY = 'fcm_email_verified'
+const LEGACY_EMAIL_VERIFICATION_PENDING_KEY = 'fcm_email_verification_pending'
 
 const SHARED_AUTH_KEYS = new Set([
   SESSION_KEY,
@@ -27,8 +27,6 @@ const SHARED_AUTH_KEYS = new Set([
   IS_GUEST_KEY,
   DISPLAY_NAME_KEY,
   EMAIL_KEY,
-  EMAIL_VERIFIED_KEY,
-  EMAIL_VERIFICATION_PENDING_KEY,
   IS_ADMIN_KEY,
   CREATED_AT_KEY,
 ])
@@ -57,10 +55,10 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem(DISPLAY_NAME_KEY, data.display_name || '')
   }
 
-  function syncStoredAccountDetails(data: Pick<MeResponse, 'email' | 'email_verified' | 'email_verification_pending' | 'is_admin' | 'created_at'>) {
+  function syncStoredAccountDetails(data: Pick<MeResponse, 'email' | 'is_admin' | 'created_at'>) {
     localStorage.setItem(EMAIL_KEY, data.email || '')
-    localStorage.setItem(EMAIL_VERIFIED_KEY, String(!!data.email_verified))
-    localStorage.setItem(EMAIL_VERIFICATION_PENDING_KEY, String(!!data.email_verification_pending))
+    localStorage.removeItem(LEGACY_EMAIL_VERIFIED_KEY)
+    localStorage.removeItem(LEGACY_EMAIL_VERIFICATION_PENDING_KEY)
     localStorage.setItem(IS_ADMIN_KEY, String(!!data.is_admin))
     localStorage.setItem(CREATED_AT_KEY, data.created_at || '')
   }
@@ -70,8 +68,8 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem(IS_GUEST_KEY)
     localStorage.removeItem(DISPLAY_NAME_KEY)
     localStorage.removeItem(EMAIL_KEY)
-    localStorage.removeItem(EMAIL_VERIFIED_KEY)
-    localStorage.removeItem(EMAIL_VERIFICATION_PENDING_KEY)
+    localStorage.removeItem(LEGACY_EMAIL_VERIFIED_KEY)
+    localStorage.removeItem(LEGACY_EMAIL_VERIFICATION_PENDING_KEY)
     localStorage.removeItem(IS_ADMIN_KEY)
     localStorage.removeItem(CREATED_AT_KEY)
   }
@@ -97,8 +95,6 @@ export const useAuthStore = defineStore('auth', () => {
     syncStoredIdentity(data)
     syncStoredAccountDetails({
       email: null,
-      email_verified: null,
-      email_verification_pending: false,
       is_admin: false,
       created_at: '',
     })

@@ -18,6 +18,12 @@
 - 邮箱绑定状态是否可见且一致
 - 网站与游戏共享登录态时是否会产生错配
 
+补充说明：
+
+- 当前产品定义中，邮箱仅作为登录凭据与绑定信息使用
+- 不引入邮箱验证流程，也不再区分 `email_verified` / `email_verification_pending`
+- 因此账号一致性的检查重点是“是否已绑定邮箱”，而不是“邮箱验证进度”
+
 ## 结论概览
 
 当前四个面的账号语义并不完全一致，问题主要集中在三类：
@@ -33,8 +39,6 @@
 - `user_id`
 - `display_name`
 - `email`
-- `email_verified`
-- `email_verification_pending`
 - `is_guest`
 - `is_admin`
 - `created_at`
@@ -91,7 +95,6 @@ Portal 设置页当前会显示：
 
 - 绑定邮箱是什么
 - 是否已经绑定邮箱
-- 是否正式账号但未验证邮箱
 - 注册时间
 
 ## 4. 明确不一致：游戏端根本没有消费 `/auth/me`
@@ -107,8 +110,6 @@ Portal 设置页当前会显示：
 结果：
 
 - 游戏端拿不到 `email`
-- 游戏端拿不到 `email_verified`
-- 游戏端拿不到 `email_verification_pending`
 - 游戏端也不会用它来校验已有 session 是否仍有效
 
 因此就目前实现来说，游戏端不可能与网站“账号设置”页在邮箱绑定状态上保持一致，因为游戏端根本不知道这个状态。
@@ -305,7 +306,6 @@ Portal 的退出登录只是本地清空 store 与 localStorage：
 
 - bind 后 `is_guest` 变为 `false`
 - `/auth/me` 会返回 `email`
-- `/auth/me` 会返回 `email_verified`
 
 代码位置：
 
@@ -336,7 +336,6 @@ Portal 的退出登录只是本地清空 store 与 localStorage：
 
 - Portal 与游戏的注册流程能力不一致
 - Portal 与游戏的 logout 语义不一致
-- Portal 未展示 `email_verified/email_verification_pending`
 
 ## 15. 建议修复顺序
 

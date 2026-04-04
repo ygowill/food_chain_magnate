@@ -697,10 +697,6 @@ func _get_platform_email_status_text() -> String:
 	var bound_email := str(PlatformSession.email).strip_edges()
 	if bound_email.is_empty():
 		return "邮箱未绑定"
-	if PlatformSession.email_verification_pending:
-		return "邮箱待验证：%s" % bound_email
-	if PlatformSession.email_verified:
-		return "邮箱已绑定：%s" % bound_email
 	return "邮箱已绑定：%s" % bound_email
 
 func _ensure_auth_dialog() -> void:

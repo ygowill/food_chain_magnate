@@ -56,8 +56,6 @@ class MeResponse(BaseModel):
     user_id: str
     display_name: str
     email: Optional[str]
-    email_verified: Optional[bool]
-    email_verification_pending: bool
     is_guest: bool
     is_admin: bool
     created_at: str
@@ -526,8 +524,6 @@ async def get_me(session_id: str = "", db: AsyncSession = Depends(get_db)):
         user_id=user.user_id,
         display_name=display_name,
         email=email_identity.provider_user_id if email_identity else None,
-        email_verified=(True if email_identity else None),
-        email_verification_pending=False,
         is_guest=is_guest,
         is_admin=await is_admin_user(db, user.user_id),
         created_at=user.created_at.isoformat(),
