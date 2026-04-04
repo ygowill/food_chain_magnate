@@ -178,6 +178,23 @@ func update_display_name(new_name: String) -> Dictionary:
 	return result
 
 
+func update_email(new_email: String, password: String) -> Dictionary:
+	if not is_logged_in:
+		return {"error": "not logged in"}
+	var result: Dictionary = await PlatformApi.update_email(session_id, new_email, password)
+	if result.has("ok"):
+		var profile_result: Dictionary = await refresh_account_profile()
+		if profile_result.has("ok"):
+			return profile_result
+	return result
+
+
+func change_password(old_password: String, new_password: String) -> Dictionary:
+	if not is_logged_in:
+		return {"error": "not logged in"}
+	return await PlatformApi.change_password(session_id, old_password, new_password)
+
+
 func logout() -> void:
 	if session_id != "":
 		await PlatformApi.logout(session_id)

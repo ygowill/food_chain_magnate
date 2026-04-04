@@ -7,6 +7,7 @@ const PasswordDialogClass = preload("res://ui/dialogs/password_dialog.gd")
 const InfoDialogClass = preload("res://ui/dialogs/info_dialog.gd")
 const CreateRoomDialogClass = preload("res://ui/dialogs/create_room_dialog.gd")
 const AuthDialogClass = preload("res://ui/dialogs/auth_dialog.gd")
+const AccountSettingsDialogClass = preload("res://ui/dialogs/account_settings_dialog.gd")
 const RoomListControllerClass = preload("res://ui/scenes/online/online_lobby_room_list_controller.gd")
 const RoomStateRendererClass = preload("res://ui/scenes/online/online_lobby_room_state_renderer.gd")
 const RequestRejectionMapperClass = preload("res://ui/scenes/online/online_lobby_request_rejection_mapper.gd")
@@ -97,6 +98,7 @@ var _password_dialog_spectate: bool = false
 var _info_dialog = null
 var _create_room_dialog = null
 var _auth_dialog = null
+var _account_settings_dialog = null
 var _suppress_profile_signals: bool = false
 var _logo_icons_small: Array[Texture2D] = []
 var _logo_piece_ids: Array[String] = []
@@ -623,6 +625,10 @@ func _bind_platform_signals() -> void:
 		PlatformSession.session_changed.connect(_on_platform_session_changed)
 
 func _on_platform_session_changed() -> void:
+	if PlatformSession == null or not PlatformSession.is_logged_in:
+		_platform_entered = false
+		_set_connect_status("")
+		_set_browse_status("")
 	_editing_display_name = false
 	_update_account_status()
 	_sync_bound_player_profile_name(true)
@@ -705,8 +711,34 @@ func _ensure_auth_dialog() -> void:
 	if _auth_dialog.has_signal("auth_completed") and not _auth_dialog.auth_completed.is_connected(_on_auth_completed):
 		_auth_dialog.auth_completed.connect(_on_auth_completed)
 
+
+func _ensure_account_settings_dialog() -> void:
+	if _account_settings_dialog != null and is_instance_valid(_account_settings_dialog):
+		return
+	_account_settings_dialog = AccountSettingsDialogClass.new()
+	add_child(_account_settings_dialog)
+	if _account_settings_dialog.has_signal("account_updated") and not _account_settings_dialog.account_updated.is_connected(_on_account_settings_updated):
+		_account_settings_dialog.account_updated.connect(_on_account_settings_updated)
+	if _account_settings_dialog.has_signal("logout_requested") and not _account_settings_dialog.logout_requested.is_connected(_on_account_logout_requested):
+		_account_settings_dialog.logout_requested.connect(_on_account_logout_requested)
+
 func _on_auth_completed(_result: Dictionary) -> void:
 	_editing_display_name = false
+	_update_account_status()
+	_sync_bound_player_profile_name(true)
+	_refresh_player_name_edit_state()
+	_refresh_ui()
+
+
+func _on_account_settings_updated() -> void:
+	_update_account_status()
+	_sync_bound_player_profile_name(true)
+	_refresh_player_name_edit_state()
+	_refresh_ui()
+
+
+func _on_account_logout_requested() -> void:
+	_platform_entered = false
 	_update_account_status()
 	_sync_bound_player_profile_name(true)
 	_refresh_player_name_edit_state()
@@ -716,13 +748,23 @@ func _on_account_pressed() -> void:
 	if OS.has_feature("headless"):
 		return
 	_ensure_auth_dialog()
+	if PlatformSession == null or not PlatformSession.is_logged_in:
+		if _auth_dialog != null and is_instance_valid(_auth_dialog):
+			_auth_dialog.call("open")
+		return
 	if _auth_dialog == null or not is_instance_valid(_auth_dialog):
 		return
-	# Guest 默认走“绑定邮箱”升级；非 guest 则打开登录/注册（也可切换账号）。
-	if PlatformSession != null and PlatformSession.is_logged_in and PlatformSession.is_guest and _auth_dialog.has_method("open_for_bind"):
+	# Guest 默认走“绑定邮箱”升级；正式账号打开账号设置。
+	if PlatformSession.is_guest and _auth_dialog.has_method("open_for_bind"):
 		_auth_dialog.call("open_for_bind")
 	else:
-		_auth_dialog.call("open")
+		_ensure_account_settings_dialog()
+		if _account_settings_dialog == null or not is_instance_valid(_account_settings_dialog):
+			return
+		var can_logout := (NetClient == null or not NetClient.is_online_client_connected()) and _get_current_room_code().is_empty()
+		var logout_hint := "请先离开房间后再退出登录。"
+		if _account_settings_dialog.has_method("open_for_account"):
+			_account_settings_dialog.call("open_for_account", can_logout, logout_hint)
 
 func _platform_set_base_url_from_ui() -> void:
 	_apply_selected_server_to_platform_api()

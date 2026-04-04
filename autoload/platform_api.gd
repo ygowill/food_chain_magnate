@@ -236,3 +236,11 @@ func update_email(session_id: String, email: String, password: String) -> Dictio
 		"email": str(email),
 		"password": str(password),
 	})
+
+
+func change_password(session_id: String, old_password: String, new_password: String) -> Dictionary:
+	return await _request(HTTPClient.METHOD_PUT, "/v1/auth/password", {
+		"session_id": session_id,
+		"old_password": str(old_password),
+		"new_password": str(new_password),
+	})
