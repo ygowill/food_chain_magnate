@@ -13,6 +13,8 @@ var _dialog_panel: PanelContainer
 var _inner_border: PanelContainer
 var _title_label: Label
 var _tab_bar: TabBar
+var _display_name_group: VBoxContainer
+var _display_name_edit: LineEdit
 var _email_edit: LineEdit
 var _password_edit: LineEdit
 var _confirm_edit: LineEdit
@@ -144,6 +146,24 @@ func _build_ui() -> void:
 	_tab_bar.tab_changed.connect(_on_tab_changed)
 	_apply_tab_bar_style()
 	_form_group.add_child(_tab_bar)
+
+	# 昵称（仅注册时显示，可选）
+	_display_name_group = VBoxContainer.new()
+	_display_name_group.add_theme_constant_override("separation", 4)
+	_display_name_group.visible = false
+	_form_group.add_child(_display_name_group)
+
+	var display_name_label := Label.new()
+	display_name_label.text = "昵称（可选）"
+	UiStylesClass.apply_label_dark(display_name_label)
+	_display_name_group.add_child(display_name_label)
+
+	_display_name_edit = LineEdit.new()
+	_display_name_edit.placeholder_text = "请输入昵称（最多24字）"
+	_display_name_edit.max_length = 24
+	_display_name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_line_edit_field(_display_name_edit)
+	_display_name_group.add_child(_display_name_edit)
 
 	# 邮箱
 	var email_group := VBoxContainer.new()
@@ -283,6 +303,7 @@ func _prepare_standard_open() -> void:
 	if _tab_bar.current_tab != int(Tab.LOGIN):
 		_tab_bar.current_tab = int(Tab.LOGIN)
 	_title_label.text = "账户"
+	_display_name_group.visible = false
 	_confirm_group.visible = false
 	_reset_view_state()
 
@@ -291,6 +312,7 @@ func _prepare_bind_open() -> void:
 	_tab = Tab.BIND
 	_tab_bar.visible = false
 	_title_label.text = "绑定邮箱"
+	_display_name_group.visible = false
 	_confirm_group.visible = true
 	_reset_view_state()
 
@@ -302,6 +324,7 @@ func _reset_view_state() -> void:
 		_browser_btn.visible = true
 	_submit_btn.disabled = false
 	_cancel_btn.disabled = false
+	_display_name_edit.editable = true
 	_email_edit.editable = true
 	_password_edit.editable = true
 	_confirm_edit.editable = true
@@ -315,9 +338,11 @@ func _on_tab_changed(idx: int) -> void:
 	_tab_bar.visible = true
 	if _tab == Tab.REGISTER:
 		_submit_btn.text = "注册"
+		_display_name_group.visible = true
 		_confirm_group.visible = true
 	else:
 		_submit_btn.text = "登录"
+		_display_name_group.visible = false
 		_confirm_group.visible = false
 	_clear_fields()
 
@@ -328,6 +353,7 @@ func _on_cancel() -> void:
 
 
 func _clear_fields() -> void:
+	_display_name_edit.text = ""
 	_email_edit.text = ""
 	_password_edit.text = ""
 	_confirm_edit.text = ""
@@ -335,6 +361,7 @@ func _clear_fields() -> void:
 
 
 func _on_submit() -> void:
+	var nickname := _display_name_edit.text.strip_edges()
 	var email := _email_edit.text.strip_edges()
 	var password := _password_edit.text
 	if email.is_empty() or password.is_empty():
@@ -353,7 +380,7 @@ func _on_submit() -> void:
 		Tab.LOGIN:
 			result = await PlatformSession.login(email, password)
 		Tab.REGISTER:
-			result = await PlatformSession.register(email, password)
+			result = await PlatformSession.register(email, password, nickname)
 		Tab.BIND:
 			result = await PlatformSession.bind_email(email, password)
 	_set_submitting(false)
@@ -367,6 +394,7 @@ func _on_submit() -> void:
 func _set_submitting(submitting: bool) -> void:
 	_submit_btn.disabled = submitting
 	_cancel_btn.disabled = submitting
+	_display_name_edit.editable = not submitting
 	_email_edit.editable = not submitting
 	_password_edit.editable = not submitting
 	_confirm_edit.editable = not submitting
