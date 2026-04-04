@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
 	cat <<'EOF'
 Usage:
-  bash tools/run_local_online_server.sh [--port 7010] [--bind 127.0.0.1]
+  bash tools/run_local_online_server.sh [--port 7000] [--bind 127.0.0.1]
 
 Description:
   Starts the local Godot dedicated online server for manual browser testing.
@@ -27,12 +27,12 @@ Examples:
   PATH="/Applications/Godot.app/Contents/MacOS:$PATH" bash tools/run_local_online_server.sh
   GODOT_BIN="/Applications/Godot.app/Contents/MacOS/godot" \
   PLATFORM_BACKEND_URL="https://your-backend.example.com" \
-  GAME_SERVER_WS_URL="ws://127.0.0.1:7010" \
-  bash tools/run_local_online_server.sh --port 7010
+  GAME_SERVER_WS_URL="ws://127.0.0.1:7000" \
+  bash tools/run_local_online_server.sh --port 7000
 EOF
 }
 
-PORT=7010
+PORT=7000
 BIND="127.0.0.1"
 
 while [[ $# -gt 0 ]]; do
@@ -68,6 +68,11 @@ PLATFORM_BACKEND_URL="${PLATFORM_BACKEND_URL:-http://127.0.0.1:8000}"
 INTERNAL_API_SECRET="${INTERNAL_API_SECRET:-dev-internal-secret-change-in-production}"
 HMAC_SECRET="${HMAC_SECRET:-local-dev-secret}"
 GAME_SERVER_ID="${GAME_SERVER_ID:-local-manual}"
+PUBLIC_HOST="$BIND"
+if [[ -z "$PUBLIC_HOST" || "$PUBLIC_HOST" == "0.0.0.0" || "$PUBLIC_HOST" == "::" || "$PUBLIC_HOST" == "*" ]]; then
+	PUBLIC_HOST="127.0.0.1"
+fi
+GAME_SERVER_WS_URL="${GAME_SERVER_WS_URL:-ws://$PUBLIC_HOST:$PORT}"
 
 mkdir -p "$HOME_DIR" "$LOG_DIR"
 
@@ -79,6 +84,7 @@ fi
 
 echo "[LocalOnlineServer] START port=$PORT bind=$BIND"
 echo "[LocalOnlineServer] backend=$PLATFORM_BACKEND_URL"
+echo "[LocalOnlineServer] public_ws=$GAME_SERVER_WS_URL"
 echo "[LocalOnlineServer] log=$LOG_FILE"
 
 HOME="$HOME_DIR" \
@@ -86,6 +92,7 @@ PLATFORM_BACKEND_URL="$PLATFORM_BACKEND_URL" \
 INTERNAL_API_SECRET="$INTERNAL_API_SECRET" \
 HMAC_SECRET="$HMAC_SECRET" \
 GAME_SERVER_ID="$GAME_SERVER_ID" \
+GAME_SERVER_WS_URL="$GAME_SERVER_WS_URL" \
 "$GODOT_BIN" --headless \
 	--log-file "$LOG_FILE" \
 	--path "$PROJECT_PATH" \

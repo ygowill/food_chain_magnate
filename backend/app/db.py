@@ -14,6 +14,10 @@ def _ensure_schema_migrations(sync_conn) -> None:
     if "display_name" not in user_columns:
         sync_conn.execute(text("ALTER TABLE users ADD COLUMN display_name VARCHAR"))
 
+    room_columns = {str(col.get("name", "")).strip() for col in inspector.get_columns("rooms")}
+    if "ws_url" not in room_columns:
+        sync_conn.execute(text("ALTER TABLE rooms ADD COLUMN ws_url VARCHAR"))
+
     room_member_columns = {str(col.get("name", "")).strip() for col in inspector.get_columns("room_members")}
     if "member_status" not in room_member_columns:
         sync_conn.execute(text("ALTER TABLE room_members ADD COLUMN member_status VARCHAR DEFAULT 'active'"))
@@ -31,6 +35,10 @@ def _ensure_schema_migrations(sync_conn) -> None:
             "ON room_members (room_id, seat_index) "
             "WHERE left_at IS NULL AND seat_index IS NOT NULL"
         ))
+
+    game_server_columns = {str(col.get("name", "")).strip() for col in inspector.get_columns("game_servers")}
+    if "ws_url" not in game_server_columns:
+        sync_conn.execute(text("ALTER TABLE game_servers ADD COLUMN ws_url VARCHAR"))
 
 
 async def init_db():
