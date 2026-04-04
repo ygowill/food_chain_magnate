@@ -90,6 +90,9 @@ func quit_to_menu() -> void:
 		return
 	_finalize_quit_to_menu()
 
+func will_forfeit_online_match_on_quit() -> bool:
+	return _should_forfeit_online_match_before_quit()
+
 func _should_forfeit_online_match_before_quit() -> bool:
 	if _online_quit_pending:
 		return false

@@ -110,6 +110,27 @@ def _safe_int(value: object) -> int:
     return max(0, n)
 
 
+def _parse_optional_int(value: object) -> Optional[int]:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else None
+    if isinstance(value, str):
+        text = value.strip()
+        if text == "":
+            return None
+        try:
+            return int(text)
+        except ValueError:
+            return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _canonicalize_product_key(value: str) -> str:
     normalized = value.strip().lower()
     return PRODUCT_KEY_ALIASES.get(normalized, normalized)
@@ -174,8 +195,8 @@ def _parse_participant_profile(raw: Optional[str]) -> tuple[Optional[str], Optio
         for key in ("restaurant_logo_id", "restaurantLogoId", "logo_id"):
             if key not in src:
                 continue
-            parsed = _safe_int(src.get(key))
-            if parsed >= 0:
+            parsed = _parse_optional_int(src.get(key))
+            if parsed is not None and parsed >= 0:
                 logo_id = parsed
                 break
         if logo_id is not None:
@@ -198,6 +219,37 @@ def _parse_participant_profile(raw: Optional[str]) -> tuple[Optional[str], Optio
         logo_key = _logo_key_from_id(logo_id)
 
     return display_name, logo_id, logo_key
+
+
+def _load_local_replay_logo_overrides(storage_uri: Optional[str]) -> dict[int, int]:
+    filename = parse_local_replay_filename(storage_uri)
+    if filename is None:
+        return {}
+    path = get_local_replay_path(filename)
+    if not path.exists() or not path.is_file():
+        return {}
+    try:
+        archive = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+    if not isinstance(archive, dict):
+        return {}
+    initial_state = archive.get("initial_state")
+    if not isinstance(initial_state, dict):
+        return {}
+    players = initial_state.get("players")
+    if not isinstance(players, list):
+        return {}
+
+    out: dict[int, int] = {}
+    for seat_index, player in enumerate(players):
+        if not isinstance(player, dict):
+            continue
+        logo_id = _parse_optional_int(player.get("restaurant_logo_id"))
+        if logo_id is None or logo_id < 0:
+            continue
+        out[seat_index] = logo_id
+    return out
 
 
 def _to_public_replay_uri(match_id: str, storage_uri: str) -> str:
@@ -424,8 +476,16 @@ def _parse_summary(raw: Optional[str]) -> Optional[GameSummary]:
     )
 
 
-def _build_participant(p: MatchParticipant) -> ParticipantInfo:
+def _build_participant(
+    p: MatchParticipant,
+    replay_logo_overrides: Optional[dict[int, int]] = None,
+) -> ParticipantInfo:
     display_name, restaurant_logo_id, restaurant_logo_key = _parse_participant_profile(p.score_json)
+    if replay_logo_overrides and p.seat_index is not None:
+        override_logo_id = replay_logo_overrides.get(int(p.seat_index))
+        if override_logo_id is not None:
+            restaurant_logo_id = override_logo_id
+            restaurant_logo_key = _logo_key_from_id(override_logo_id)
     return ParticipantInfo(
         user_id=p.user_id, role=p.role,
         seat_index=p.seat_index, result=p.result,
@@ -452,9 +512,21 @@ async def list_matches(
     match_ids = [m.match_id for m in rows]
     parts_stmt = select(MatchParticipant).where(MatchParticipant.match_id.in_(match_ids))
     parts = (await db.execute(parts_stmt)).scalars().all()
+    replay_rows = (
+        await db.execute(select(MatchReplay).where(MatchReplay.match_id.in_(match_ids)))
+    ).scalars().all()
+    replay_logo_overrides_by_match_id = {
+        str(replay.match_id): _load_local_replay_logo_overrides(replay.storage_uri)
+        for replay in replay_rows
+    }
     parts_by_match: dict[str, list[ParticipantInfo]] = {}
     for p in parts:
-        parts_by_match.setdefault(p.match_id, []).append(_build_participant(p))
+        parts_by_match.setdefault(p.match_id, []).append(
+            _build_participant(
+                p,
+                replay_logo_overrides_by_match_id.get(str(p.match_id)),
+            )
+        )
     return [
         MatchSummary(
             match_id=m.match_id, room_code=m.room_code, status=m.status,
@@ -482,10 +554,11 @@ async def get_match(match_id: str, session_id: str = Query(...), db: AsyncSessio
     parts = (await db.execute(
         select(MatchParticipant).where(MatchParticipant.match_id == match_id)
     )).scalars().all()
-    participants = [_build_participant(p) for p in parts]
     replay = (await db.execute(
-        select(MatchReplay.id).where(MatchReplay.match_id == match_id)
+        select(MatchReplay).where(MatchReplay.match_id == match_id)
     )).scalar_one_or_none()
+    replay_logo_overrides = _load_local_replay_logo_overrides(replay.storage_uri) if replay else {}
+    participants = [_build_participant(p, replay_logo_overrides) for p in parts]
     return MatchDetail(
         match_id=match.match_id, room_code=match.room_code, status=match.status,
         player_count=match.player_count,

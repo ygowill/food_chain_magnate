@@ -149,11 +149,20 @@ func on_replay_pressed() -> void:
 
 func on_quit_to_menu_pressed() -> void:
 	on_menu_dialog_close_requested()
+	var message := "确定要返回主菜单吗？\n未保存的进度将丢失。"
+	var confirm_text := "确认"
+	if is_instance_valid(_menu_debug_controller) and _menu_debug_controller.has_method("will_forfeit_online_match_on_quit"):
+		var will_forfeit_val = _menu_debug_controller.call("will_forfeit_online_match_on_quit")
+		if will_forfeit_val is bool and bool(will_forfeit_val):
+			message = "确定要返回主菜单吗？\n这将会认输并退出当前联机对局。"
+			confirm_text = "认输并退出"
 	show_confirm(
 		"返回主菜单",
-		"确定要返回主菜单吗？\n未保存的进度将丢失。",
+		message,
 		Callable(self, "_confirm_quit_to_menu"),
-		Callable(self, "_cancel_quit_to_menu")
+		Callable(self, "_cancel_quit_to_menu"),
+		confirm_text,
+		"取消"
 	)
 
 func show_confirm(title: String, message: String, on_confirm: Callable, on_cancel: Callable = Callable(), confirm_text: String = "确认", cancel_text: String = "取消") -> void:

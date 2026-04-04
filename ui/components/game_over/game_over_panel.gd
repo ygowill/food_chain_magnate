@@ -107,8 +107,24 @@ func _calculate_rankings() -> void:
 		_winner_player_id = int(winner_r.value)
 
 func _rebuild_display() -> void:
+	_update_title()
 	_rebuild_rankings()
 	_rebuild_stats()
+
+func _update_title() -> void:
+	if title_label == null:
+		return
+	title_label.text = "游戏结束"
+	if _final_state == null or not (_final_state.round_state is Dictionary):
+		return
+	var game_over_val = _final_state.round_state.get("game_over", null)
+	if not (game_over_val is Dictionary):
+		return
+	var game_over: Dictionary = Dictionary(game_over_val)
+	if str(game_over.get("reason", "")) != "last_player_standing":
+		return
+	if int(game_over.get("forfeited_player_id", -1)) >= 0:
+		title_label.text = "玩家弃权，游戏结束"
 
 func _rebuild_rankings() -> void:
 	if rankings_container == null:
@@ -157,6 +173,7 @@ func _rebuild_rankings() -> void:
 		rank_item.rank = rank_idx + 1
 		rank_item.player_id = int(player_data.id)
 		rank_item.cash = int(player_data.cash)
+		rank_item.is_forfeited = bool(player_data.get("forfeited", false))
 		rank_item.is_winner = (_winner_player_id >= 0 and int(player_data.id) == _winner_player_id)
 		rank_item.logo_texture = _get_player_restaurant_logo_texture(rank_item.player_id)
 		rankings_container.add_child(rank_item)
@@ -322,12 +339,14 @@ class RankingItem extends PanelContainer:
 	var rank: int = 0
 	var player_id: int = 0
 	var cash: int = 0
+	var is_forfeited: bool = false
 	var is_winner: bool = false
 	var logo_texture: Texture2D = null
 
 	var _rank_label: Label
 	var _logo_rect: TextureRect
 	var _player_label: Label
+	var _status_label: Label
 	var _cash_label: Label
 	var _crown_label: Label
 
@@ -342,6 +361,10 @@ class RankingItem extends PanelContainer:
 			style.bg_color = Color(0.95, 0.90, 0.78, 0.95)
 			style.border_color = Color(1, 0.84, 0, 0.5)
 			style.set_border_width_all(2)
+		elif is_forfeited:
+			style.bg_color = Color(0.90, 0.86, 0.82, 0.92)
+			style.border_color = Color(0.73, 0.23, 0.18, 0.28)
+			style.set_border_width_all(1)
 		else:
 			style.bg_color = Color(0.92, 0.88, 0.78, 0.9)
 		style.set_corner_radius_all(6)
@@ -382,6 +405,13 @@ class RankingItem extends PanelContainer:
 		_player_label.text = pname
 		hbox.add_child(_player_label)
 
+		if is_forfeited:
+			_status_label = Label.new()
+			_status_label.text = "弃权"
+			_status_label.add_theme_font_size_override("font_size", 13)
+			_status_label.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 1))
+			hbox.add_child(_status_label)
+
 		# 冠军标记
 		if is_winner:
 			_crown_label = Label.new()
@@ -395,6 +425,9 @@ class RankingItem extends PanelContainer:
 		_cash_label.custom_minimum_size = Vector2(100, 0)
 		_cash_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		_cash_label.add_theme_font_size_override("font_size", 18)
-		_cash_label.add_theme_color_override("font_color", Color(0.28, 0.55, 0.22, 1))
+		if is_forfeited:
+			_cash_label.add_theme_color_override("font_color", Color(0.45, 0.42, 0.39, 1))
+		else:
+			_cash_label.add_theme_color_override("font_color", Color(0.28, 0.55, 0.22, 1))
 		_cash_label.text = "$%d" % cash
 		hbox.add_child(_cash_label)

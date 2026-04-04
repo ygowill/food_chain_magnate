@@ -219,6 +219,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return await TestRefs.GameMenuDebugControllerOnlineSurrenderQuitTestClass.run(),
 		},
 		{
+			"name": "GameMenuControllerOnlineForfeitConfirmTest",
+			"fn": func() -> Result: return await TestRefs.GameMenuControllerOnlineForfeitConfirmTestClass.run(),
+		},
+		{
 			"name": "OnlineRoomManagerTest",
 			"fn": func() -> Result: return TestRefs.OnlineRoomManagerTestClass.run(),
 		},
@@ -229,6 +233,10 @@ static func build_tests(host) -> Array[Dictionary]:
 		{
 			"name": "OnlineStartGameReplayTest",
 			"fn": func() -> Result: return TestRefs.OnlineStartGameReplayTestClass.run(),
+		},
+		{
+			"name": "MatchFinalizeParticipantLogoPayloadTest",
+			"fn": func() -> Result: return TestRefs.MatchFinalizeParticipantLogoPayloadTestClass.run(),
 		},
 		{
 			"name": "OnlineResyncArchiveTest",
@@ -881,6 +889,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				{
 					"name": "GameOverLastPlayerStandingTest",
 					"fn": func() -> Result: return await TestRefs.GameOverLastPlayerStandingTestClass.run(),
+				},
+				{
+					"name": "GameOverForfeitBadgeTest",
+					"fn": func() -> Result: return await TestRefs.GameOverForfeitBadgeTestClass.run(),
 				},
 				{
 					"name": "ProductionPanelUsedCountsSyncTest",

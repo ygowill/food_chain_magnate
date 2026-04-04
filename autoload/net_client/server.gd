@@ -371,9 +371,20 @@ func _build_participant_score_payload(room, state, seat_index: int) -> Dictionar
 	if inventory_val is Dictionary:
 		inventory = Dictionary(inventory_val).duplicate(true)
 
+	var restaurant_logo_id := -1
+	var player_logo_val = player.get("restaurant_logo_id", null)
+	if player_logo_val is int:
+		restaurant_logo_id = int(player_logo_val)
+	elif player_logo_val is float:
+		var player_logo_float: float = float(player_logo_val)
+		if player_logo_float == floor(player_logo_float):
+			restaurant_logo_id = int(player_logo_float)
+	if restaurant_logo_id < 0:
+		restaurant_logo_id = int(seat_profile.get("restaurant_logo_id", -1))
+
 	return {
 		"display_name": str(seat_profile.get("name", "Player %d" % [seat_index + 1])),
-		"restaurant_logo_id": int(seat_profile.get("restaurant_logo_id", -1)),
+		"restaurant_logo_id": restaurant_logo_id,
 		"cash": int(player.get("cash", 0)),
 		"forfeited": bool(player.get("forfeited", false)),
 		"employees": employees,

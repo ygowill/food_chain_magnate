@@ -51,6 +51,31 @@ async def _seed_local_replay_match(db: AsyncSession, user_id: str, replay_storag
     return m.match_id
 
 
+async def _seed_local_replay_match_with_archive(
+    db: AsyncSession,
+    user_id: str,
+    replay_storage_dir: str,
+    score_json: Optional[str],
+    replay_archive_json: str,
+) -> str:
+    m = Match(room_code="LOCAL2", status="completed", player_count=2)
+    db.add(m)
+    await db.flush()
+    db.add(MatchParticipant(
+        match_id=m.match_id,
+        user_id=user_id,
+        role="player",
+        seat_index=0,
+        score_json=score_json,
+    ))
+    replay_file = f"{replay_storage_dir}/{m.match_id}.json"
+    with open(replay_file, "w", encoding="utf-8") as f:
+        f.write(replay_archive_json)
+    db.add(MatchReplay(match_id=m.match_id, storage_uri=f"local_file://{m.match_id}.json", checksum="abc123", size_bytes=len(replay_archive_json)))
+    await db.commit()
+    return m.match_id
+
+
 @pytest.mark.asyncio
 async def test_list_matches_empty(client: AsyncClient):
     user = await _create_user(client)
@@ -127,6 +152,63 @@ async def test_get_match_detail_stats(client: AsyncClient, db_session: AsyncSess
     assert score["stats"]["produced"] == {"burger": 11, "pizza": 3, "soda": 1}
     assert score["stats"]["sold"] == {"lemonade": 4, "soda": 5, "beer": 1}
 
+
+@pytest.mark.asyncio
+async def test_get_match_detail_negative_logo_id_stays_unset(client: AsyncClient, db_session: AsyncSession):
+    user = await _create_user(client)
+    mid = await _seed_match(
+        db_session,
+        user["user_id"],
+        score_json=json.dumps({
+            "name": "未选 Logo",
+            "restaurant_logo_id": -1,
+        }),
+    )
+    resp = await client.get(f"/v1/matches/{mid}", params={"session_id": user["session_id"]})
+    assert resp.status_code == 200
+    participant = resp.json()["participants"][0]
+    assert participant["restaurant_logo_id"] is None
+    assert participant["restaurant_logo_key"] is None
+
+
+@pytest.mark.asyncio
+async def test_matches_prefer_local_replay_logo_over_legacy_score_json(client: AsyncClient, db_session: AsyncSession, tmp_path):
+    old_replay_storage_dir = settings.replay_storage_dir
+    settings.replay_storage_dir = str(tmp_path)
+    try:
+        user = await _create_user(client)
+        mid = await _seed_local_replay_match_with_archive(
+            db_session,
+            user["user_id"],
+            str(tmp_path),
+            score_json=json.dumps({
+                "name": "旧记录玩家",
+                "restaurant_logo_id": -1,
+            }),
+            replay_archive_json=json.dumps({
+                "initial_state": {
+                    "players": [
+                        {"restaurant_logo_id": 4},
+                    ],
+                },
+                "commands": [],
+            }),
+        )
+
+        list_resp = await client.get("/v1/matches", params={"session_id": user["session_id"]})
+        assert list_resp.status_code == 200
+        list_match = next(item for item in list_resp.json() if item["match_id"] == mid)
+        list_participant = list_match["participants"][0]
+        assert list_participant["restaurant_logo_id"] == 4
+        assert list_participant["restaurant_logo_key"] == "restaurant_logo_xango_blues_bar"
+
+        detail_resp = await client.get(f"/v1/matches/{mid}", params={"session_id": user["session_id"]})
+        assert detail_resp.status_code == 200
+        detail_participant = detail_resp.json()["participants"][0]
+        assert detail_participant["restaurant_logo_id"] == 4
+        assert detail_participant["restaurant_logo_key"] == "restaurant_logo_xango_blues_bar"
+    finally:
+        settings.replay_storage_dir = old_replay_storage_dir
 
 @pytest.mark.asyncio
 async def test_get_match_forbidden(client: AsyncClient, db_session: AsyncSession):
