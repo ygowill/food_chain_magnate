@@ -139,9 +139,6 @@ const emailStatusText = computed(() => {
   if (currentUser.email_verification_pending) {
     return '待验证'
   }
-  if (currentUser.email_verified) {
-    return '已验证'
-  }
   return '已绑定'
 })
 
