@@ -239,6 +239,22 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.ServerResyncGuardTestClass.run(),
 		},
 		{
+			"name": "OnlineClientResyncSnapshotChunkTest",
+			"fn": func() -> Result: return TestRefs.OnlineClientResyncSnapshotChunkTestClass.run(),
+		},
+		{
+			"name": "OnlineClientRewindToTurnStartMetaTest",
+			"fn": func() -> Result: return TestRefs.OnlineClientRewindToTurnStartMetaTestClass.run(),
+		},
+		{
+			"name": "OnlineClientResyncDeltaApplyTest",
+			"fn": func() -> Result: return TestRefs.OnlineClientResyncDeltaApplyTestClass.run(),
+		},
+		{
+			"name": "OnlineClientResyncRoomIsolationTest",
+			"fn": func() -> Result: return TestRefs.OnlineClientResyncRoomIsolationTestClass.run(),
+		},
+		{
 			"name": "OnlineRewindToTurnStartTest",
 			"fn": func() -> Result: return TestRefs.OnlineRewindToTurnStartTestClass.run(),
 		},
@@ -259,6 +275,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.OnlineLobbyDisconnectReclaimTestClass.run(),
 		},
 		{
+			"name": "OnlineLobbyDisconnectGraceReleaseTest",
+			"fn": func() -> Result: return await TestRefs.OnlineLobbyDisconnectGraceReleaseTestClass.run(),
+		},
+		{
 			"name": "OnlineDisconnectGraceReconnectTest",
 			"fn": func() -> Result: return await TestRefs.OnlineDisconnectGraceReconnectTestClass.run(),
 		},
@@ -269,6 +289,10 @@ static func build_tests(host) -> Array[Dictionary]:
 		{
 			"name": "GameOnlineResyncReconnectFlowTest",
 			"fn": func() -> Result: return await TestRefs.GameOnlineResyncReconnectFlowTestClass.run(),
+		},
+		{
+			"name": "GameOnlineResumeProgressSyncTest",
+			"fn": func() -> Result: return await TestRefs.GameOnlineResumeProgressSyncTestClass.run(),
 		},
 		{
 			"name": "GameOnlineResyncRequestRejectionTest",

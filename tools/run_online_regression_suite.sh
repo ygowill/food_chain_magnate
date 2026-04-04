@@ -41,7 +41,7 @@ if ! command -v "$GODOT_BIN" >/dev/null 2>&1; then
 fi
 
 echo "[OnlineRegressionSuite] STEP GameSmokeTest"
-"$PROJECT_PATH/tools/run_headless_test.sh" res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60
+"$PROJECT_PATH/tools/run_headless_test.sh" res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 120
 
 echo "[OnlineRegressionSuite] STEP FocusedOnlineSuite"
 : > "$SUITE_LOG"

@@ -69,6 +69,27 @@ static func run() -> Result:
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "恢复过程中应产生状态文案")
 
+	NetContext.set_online_resume_context("ROOM98", "player", "https://platform.example.test")
+	NetContext.mark_online_resume_in_game(true)
+	var delta_harness := _Harness.new(host)
+	delta_harness.use_delta_restore_signal = true
+	var delta_controller = ControllerClass.new(
+		host,
+		Callable(delta_harness, "ensure_session"),
+		Callable(delta_harness, "resume_room"),
+		Callable(delta_harness, "connect_to_server"),
+		Callable(delta_harness, "on_game_started"),
+		Callable(delta_harness, "on_failure"),
+		Callable(delta_harness, "on_status")
+	)
+	var delta_started = await delta_controller.attempt_startup_resume_if_needed()
+	if not delta_started:
+		host.queue_free()
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "delta 恢复路径应判定为启动成功")
+	if delta_harness.game_started_calls != 1:
+		host.queue_free()
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "delta 恢复路径应触发 on_game_started")
+
 	NetContext.set_online_resume_context("ROOM101", "player", "https://platform.example.test")
 	NetContext.mark_online_resume_in_game(true)
 	var retry_harness := _Harness.new(host)
@@ -136,6 +157,7 @@ class _Harness:
 	var failure_message: String = ""
 	var resume_failures_before_success: int = 0
 	var statuses: Array[String] = []
+	var use_delta_restore_signal: bool = false
 
 	func _init(p_host: Node) -> void:
 		host = p_host
@@ -158,7 +180,10 @@ class _Harness:
 	func connect_to_server(_url: String) -> Result:
 		connect_calls += 1
 		NetClient.call_deferred("emit_signal", "game_started", {})
-		NetClient.call_deferred("emit_signal", "resync_archive_received", {})
+		if use_delta_restore_signal:
+			NetClient.call_deferred("emit_signal", "resync_delta_applied", {})
+		else:
+			NetClient.call_deferred("emit_signal", "resync_archive_received", {})
 		return Result.success()
 
 	func on_game_started(_payload: Dictionary) -> void:

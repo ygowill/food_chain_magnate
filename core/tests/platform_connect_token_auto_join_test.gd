@@ -139,6 +139,41 @@ static func run() -> Result:
 		_reset_net_context()
 		return Result.failure("平台接管失败：old peer 未收到 empty room_state")
 
+	var start_r: Result = room.start_game()
+	if not start_r.ok:
+		_reset_net_context()
+		return Result.failure("平台自动入房测试开局失败: %s" % start_r.error)
+
+	mock_net._peer = _MockPeer.new(128)
+	mock_net.multiplayer.remote_sender_id = 13
+	server.handle_rpc_client_hello({
+		"request_id": "r_p2_ingame_fail",
+		"protocol_version": NetContext.PROTOCOL_VERSION,
+		"game_version": "0.0.0",
+		"schema_version": 0,
+		"player_profile": {"name": "P2ReconnectFail", "color_index": 2, "restaurant_logo_id": -1},
+		"connect_token": str(player_token_r.value),
+	})
+
+	if rm.peer_to_room.has(13):
+		_reset_net_context()
+		return Result.failure("InGame 自动恢复快照构建失败时不应绑定新 peer")
+	if str(rm.peer_to_room.get(12, "")) != room_code:
+		_reset_net_context()
+		return Result.failure("InGame 自动恢复快照构建失败时不应破坏旧 peer 绑定")
+	if int(room.player_id_by_peer_id.get(12, -1)) != 1:
+		_reset_net_context()
+		return Result.failure("InGame 自动恢复快照构建失败时旧 seat 控制权丢失")
+	if room.player_id_by_peer_id.has(13):
+		_reset_net_context()
+		return Result.failure("InGame 自动恢复快照构建失败时不应留下新 peer 的 player_id 映射")
+	if _find_request_rejected(mock_net.sent, 13, "r_p2_ingame_fail", "platform_join_failed") < 0:
+		_reset_net_context()
+		return Result.failure("InGame 自动恢复快照构建失败时应返回 platform_join_failed")
+	if _find_sent_method(mock_net.sent, 13, "rpc_game_started") >= 0:
+		_reset_net_context()
+		return Result.failure("InGame 自动恢复快照构建失败时不应提前发送 GameStarted")
+
 	_reset_net_context()
 	return Result.success()
 
@@ -153,6 +188,14 @@ class _MockMultiplayer:
 	func get_remote_sender_id() -> int:
 		return int(remote_sender_id)
 
+class _MockPeer:
+	extends RefCounted
+
+	var outbound_buffer_size: int = 0
+
+	func _init(buffer_size: int) -> void:
+		outbound_buffer_size = int(buffer_size)
+
 class _MockNetClient:
 	extends RefCounted
 
@@ -160,6 +203,7 @@ class _MockNetClient:
 	var _room_manager = null
 	var _profile_by_peer_id: Dictionary = {}
 	var sent: Array[Dictionary] = []
+	var _peer = _MockPeer.new(16 * 1024 * 1024)
 
 	func _init(room_manager) -> void:
 		_room_manager = room_manager
@@ -184,3 +228,31 @@ static func _has_empty_room_state_push(sent: Array[Dictionary], peer_id: int) ->
 		if str(room_state.get("room_code", "")).strip_edges().is_empty():
 			return true
 	return false
+
+static func _find_sent_method(sent: Array[Dictionary], peer_id: int, method: String) -> int:
+	for i in range(sent.size()):
+		var item: Dictionary = Dictionary(sent[i])
+		if int(item.get("peer_id", -1)) != int(peer_id):
+			continue
+		if str(item.get("method", "")) != str(method):
+			continue
+		return i
+	return -1
+
+static func _find_request_rejected(sent: Array[Dictionary], peer_id: int, request_id: String, code: String) -> int:
+	for i in range(sent.size()):
+		var item: Dictionary = Dictionary(sent[i])
+		if int(item.get("peer_id", -1)) != int(peer_id):
+			continue
+		if str(item.get("method", "")) != "rpc_request_rejected":
+			continue
+		var payload_val = item.get("payload", null)
+		if not (payload_val is Dictionary):
+			continue
+		var payload: Dictionary = Dictionary(payload_val)
+		if str(payload.get("request_id", "")) != str(request_id):
+			continue
+		if str(payload.get("code", "")) != str(code):
+			continue
+		return i
+	return -1

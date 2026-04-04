@@ -367,6 +367,6 @@ class _Harness:
 	func shutdown_net(reset_context: bool = false) -> void:
 		shutdown_reset_args.append(bool(reset_context))
 
-	func request_resync() -> String:
+	func request_resync(_force_snapshot: bool = false) -> String:
 		request_resync_calls += 1
 		return "mock_resync_%d" % request_resync_calls

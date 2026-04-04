@@ -57,6 +57,10 @@ static func run() -> Result:
 		host.queue_free()
 		_restore(prev_mode, prev_room_state, prev_connected)
 		return Result.failure("发送 resync 后应进入同步中状态")
+	if harness.request_resync_force_flags.size() != 1 or bool(harness.request_resync_force_flags[0]):
+		host.queue_free()
+		_restore(prev_mode, prev_room_state, prev_connected)
+		return Result.failure("普通 resync 不应携带 force_snapshot")
 	controller._on_online_request_rejected(first_request_id, "resync_archive_too_large", "too large")
 	if controller.is_resync_in_progress():
 		host.queue_free()
@@ -87,6 +91,21 @@ static func run() -> Result:
 		_restore(prev_mode, prev_room_state, prev_connected)
 		return Result.failure("拒绝 resync 后应刷新 UI: %d" % harness.update_ui_calls)
 
+	controller._resync_in_progress = true
+	controller._on_online_resync_delta_failed("delta mismatch")
+	if harness.request_resync_calls != 3:
+		host.queue_free()
+		_restore(prev_mode, prev_room_state, prev_connected)
+		return Result.failure("delta 失败后应立刻发起 snapshot fallback: %d" % harness.request_resync_calls)
+	if harness.request_resync_force_flags.size() != 3 or not bool(harness.request_resync_force_flags[2]):
+		host.queue_free()
+		_restore(prev_mode, prev_room_state, prev_connected)
+		return Result.failure("delta 失败后的 fallback 应携带 force_snapshot")
+	if not controller.is_resync_in_progress():
+		host.queue_free()
+		_restore(prev_mode, prev_room_state, prev_connected)
+		return Result.failure("delta 失败后重新发起 snapshot fallback 时应保持同步中状态")
+
 	host.queue_free()
 	_restore(prev_mode, prev_room_state, prev_connected)
 	return Result.success()
@@ -100,11 +119,13 @@ class _Harness:
 	extends RefCounted
 
 	var request_resync_calls: int = 0
+	var request_resync_force_flags: Array[bool] = []
 	var update_ui_calls: int = 0
 	var show_confirm_calls: int = 0
 
-	func request_resync() -> String:
+	func request_resync(force_snapshot: bool = false) -> String:
 		request_resync_calls += 1
+		request_resync_force_flags.append(bool(force_snapshot))
 		return "mock_resync_%d" % request_resync_calls
 
 	func update_ui() -> void:

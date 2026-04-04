@@ -60,8 +60,28 @@ const TESTS: Array[Dictionary] = [
 		"path": "res://core/tests/server_resync_guard_test.gd",
 	},
 	{
+		"name": "OnlineClientResyncSnapshotChunkTest",
+		"path": "res://core/tests/online_client_resync_snapshot_chunk_test.gd",
+	},
+	{
+		"name": "OnlineClientRewindToTurnStartMetaTest",
+		"path": "res://core/tests/online_client_rewind_to_turn_start_meta_test.gd",
+	},
+	{
+		"name": "OnlineClientResyncDeltaApplyTest",
+		"path": "res://core/tests/online_client_resync_delta_apply_test.gd",
+	},
+	{
+		"name": "OnlineClientResyncRoomIsolationTest",
+		"path": "res://core/tests/online_client_resync_room_isolation_test.gd",
+	},
+	{
 		"name": "OnlineLobbyDisconnectReclaimTest",
 		"path": "res://core/tests/online_lobby_disconnect_reclaim_test.gd",
+	},
+	{
+		"name": "OnlineLobbyDisconnectGraceReleaseTest",
+		"path": "res://core/tests/online_lobby_disconnect_grace_release_test.gd",
 	},
 	{
 		"name": "OnlineDisconnectGraceReconnectTest",
@@ -78,6 +98,10 @@ const TESTS: Array[Dictionary] = [
 	{
 		"name": "GameOnlineResyncReconnectFlowTest",
 		"path": "res://core/tests/game_online_resync_reconnect_flow_test.gd",
+	},
+	{
+		"name": "GameOnlineResumeProgressSyncTest",
+		"path": "res://core/tests/game_online_resume_progress_sync_test.gd",
 	},
 	{
 		"name": "GameOnlineResyncRequestRejectionTest",

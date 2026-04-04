@@ -170,6 +170,62 @@ async def test_sync_room_directory_marks_missing_members_left(client: AsyncClien
 
 
 @pytest.mark.asyncio
+async def test_sync_room_directory_marks_missing_spectators_left(client: AsyncClient, db_session: AsyncSession):
+    initial = await client.post("/internal/game_servers/gs-sync-spec-1/rooms/sync", json={
+        "rooms": [
+            {
+                "room_code": "SPCT01",
+                "owner_user_id": "u_host_sync_spec",
+                "status": "InGame",
+                "join_policy": "public",
+                "config_json": "{\"desired_player_count\":2,\"allow_spectators\":true}",
+                "members": [
+                    {"user_id": "u_host_sync_spec", "role": "host", "seat_index": 0},
+                    {"user_id": "u_p2_sync_spec", "role": "player", "seat_index": 1},
+                    {"user_id": "u_spec_sync", "role": "spectator", "seat_index": None},
+                ],
+            }
+        ],
+    }, headers=INTERNAL_HEADERS)
+    assert initial.status_code == 200
+
+    room = (await db_session.execute(select(Room).where(Room.room_code == "SPCT01"))).scalar_one()
+    active_spec = (await db_session.execute(
+        select(RoomMember).where(
+            RoomMember.room_id == room.room_id,
+            RoomMember.user_id == "u_spec_sync",
+            RoomMember.left_at.is_(None),
+        )
+    )).scalar_one()
+    assert active_spec.role == "spectator"
+
+    second = await client.post("/internal/game_servers/gs-sync-spec-1/rooms/sync", json={
+        "rooms": [
+            {
+                "room_code": "SPCT01",
+                "owner_user_id": "u_host_sync_spec",
+                "status": "InGame",
+                "join_policy": "public",
+                "config_json": "{\"desired_player_count\":2,\"allow_spectators\":true}",
+                "members": [
+                    {"user_id": "u_host_sync_spec", "role": "host", "seat_index": 0},
+                    {"user_id": "u_p2_sync_spec", "role": "player", "seat_index": 1},
+                ],
+            }
+        ],
+    }, headers=INTERNAL_HEADERS)
+    assert second.status_code == 200
+
+    left_spec = (await db_session.execute(
+        select(RoomMember).where(
+            RoomMember.room_id == room.room_id,
+            RoomMember.user_id == "u_spec_sync",
+        )
+    )).scalar_one()
+    assert left_spec.left_at is not None
+
+
+@pytest.mark.asyncio
 async def test_sync_room_directory_marks_missing_rooms_ended(client: AsyncClient, db_session: AsyncSession):
     initial = await client.post("/internal/game_servers/gs-sync-2/rooms/sync", json={
         "rooms": [
@@ -354,6 +410,30 @@ async def test_heartbeat_marks_stale_room_members_left(client: AsyncClient, db_s
     )).scalars().all()
     assert len(members) == 2
     assert all(member.left_at is not None for member in members)
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_does_not_revive_ended_room_even_if_room_code_reported(client: AsyncClient, db_session: AsyncSession):
+    room = Room(
+        room_code="HBEAT2",
+        owner_user_id="u_owner_h2",
+        game_server_id="gs-hb-ended-1",
+        status="Ended",
+        join_policy="public",
+        config_json="{}",
+        ws_url="wss://old.example.test",
+    )
+    db_session.add(room)
+    await db_session.commit()
+
+    resp = await client.post("/internal/game_servers/heartbeat", json={
+        "game_server_id": "gs-hb-ended-1",
+        "room_codes": ["HBEAT2"],
+    }, headers=INTERNAL_HEADERS)
+    assert resp.status_code == 200
+
+    room_after = (await db_session.execute(select(Room).where(Room.room_code == "HBEAT2"))).scalar_one()
+    assert room_after.status == "Ended"
 
 
 @pytest.mark.asyncio

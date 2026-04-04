@@ -82,6 +82,7 @@ static func run() -> Result:
 
 	NetContext.mark_online_resume_in_game(true)
 	NetContext.set_online_reconnecting(true)
+	NetContext.set_online_resume_progress(7, "hash_007", "cp_007")
 	if not NetContext.is_online_resume_in_game():
 		return _restore_and_fail(
 			prev_mode,
@@ -105,6 +106,55 @@ static func run() -> Result:
 			prev_player_profile,
 			prev_resume_state,
 			"set_online_reconnecting(true) 未生效"
+		)
+	if NetContext.get_online_resume_checkpoint_id() != "cp_007":
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			"checkpoint_id 写入失败: %s" % NetContext.get_online_resume_checkpoint_id()
+		)
+	if NetContext.get_online_resume_last_applied_sequence() != 7:
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			"last_applied_sequence 写入失败: %d" % NetContext.get_online_resume_last_applied_sequence()
+		)
+	if NetContext.get_online_resume_last_state_hash() != "hash_007":
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			"last_state_hash 写入失败: %s" % NetContext.get_online_resume_last_state_hash()
+		)
+	var resume_cursor: Dictionary = NetContext.build_online_resume_cursor()
+	if int(resume_cursor.get("last_applied_sequence", -1)) != 7:
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			"build_online_resume_cursor.sequence 错误: %s" % str(resume_cursor)
 		)
 
 	NetContext.mark_online_resume_in_game(false)

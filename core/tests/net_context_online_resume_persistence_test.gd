@@ -36,6 +36,7 @@ static func run() -> Result:
 	NetContext.set_online_resume_context("ab12cd", "player", "https://platform.example.test")
 	NetContext.mark_online_resume_in_game(true)
 	NetContext.set_online_reconnecting(true)
+	NetContext.set_online_resume_progress(12, "hash_resume_persist", "cp_resume_persist")
 
 	NetContext.online_resume_state = {}
 	var reload_r: Result = NetContext.reload_online_resume_state_from_disk()
@@ -144,6 +145,51 @@ static func run() -> Result:
 			prev_session_id,
 			prev_user_id,
 			"target_scene 持久化恢复失败: %s" % NetContext.get_online_resume_target_scene()
+		)
+	if NetContext.get_online_resume_checkpoint_id() != "cp_resume_persist":
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_save_path,
+			prev_session_id,
+			prev_user_id,
+			"checkpoint_id 持久化恢复失败: %s" % NetContext.get_online_resume_checkpoint_id()
+		)
+	if NetContext.get_online_resume_last_applied_sequence() != 12:
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_save_path,
+			prev_session_id,
+			prev_user_id,
+			"last_applied_sequence 持久化恢复失败: %d" % NetContext.get_online_resume_last_applied_sequence()
+		)
+	if NetContext.get_online_resume_last_state_hash() != "hash_resume_persist":
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_save_path,
+			prev_session_id,
+			prev_user_id,
+			"last_state_hash 持久化恢复失败: %s" % NetContext.get_online_resume_last_state_hash()
 		)
 
 	NetContext.set_online_resume_terminal("manual_leave")

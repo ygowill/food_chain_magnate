@@ -31,6 +31,7 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_PATH="$(cd "$SCRIPT_DIR/.." && pwd)"
+GODOT_BIN="${GODOT_BIN:-godot}"
 
 HOME_DIR="$PROJECT_PATH/.tmp_home"
 LOG_DIR="$PROJECT_PATH/.godot"
@@ -63,10 +64,20 @@ else
 	done < <(grep -E '\"path\": \"res://' "$CACHE_FILE" 2>/dev/null || true)
 fi
 
+if [[ "$GODOT_BIN" == */* ]]; then
+	if [[ ! -x "$GODOT_BIN" ]]; then
+		echo "[$NAME] FAIL Godot binary not executable: $GODOT_BIN"
+		exit 127
+	fi
+elif ! command -v "$GODOT_BIN" >/dev/null 2>&1; then
+	echo "[$NAME] FAIL Godot binary not found: $GODOT_BIN"
+	exit 127
+fi
+
 if [[ $needs_cache_refresh -eq 1 ]]; then
 	: > "$PREFLIGHT_LOG"
 	echo "[$NAME] INFO refreshing Godot global script class cache"
-	HOME="$HOME_DIR" godot --headless --editor --quit \
+	HOME="$HOME_DIR" "$GODOT_BIN" --headless --editor --quit \
 		--path "$PROJECT_PATH" --log-file "$PREFLIGHT_LOG" >/dev/null 2>&1 || {
 			echo "[$NAME] FAIL cache refresh failed"
 			echo "[$NAME] LOG TAIL (last 120 lines)"
@@ -97,7 +108,7 @@ done < <(grep -R --line-number '^path="res://.godot/imported/' "$PROJECT_PATH" \
 if [[ $needs_import -eq 1 ]]; then
 	: > "$IMPORT_LOG"
 	echo "[$NAME] INFO importing project assets (missing: ${missing_import_path:-unknown})"
-	HOME="$HOME_DIR" godot --headless --import --path "$PROJECT_PATH" --log-file "$IMPORT_LOG" >/dev/null 2>&1 || {
+	HOME="$HOME_DIR" "$GODOT_BIN" --headless --import --path "$PROJECT_PATH" --log-file "$IMPORT_LOG" >/dev/null 2>&1 || {
 		echo "[$NAME] FAIL import failed"
 		echo "[$NAME] LOG TAIL (last 120 lines)"
 		tail -n 120 "$IMPORT_LOG" 2>/dev/null || true
@@ -109,9 +120,9 @@ fi
 
 echo "[$NAME] START scene=$SCENE timeout=${TIMEOUT_SECONDS}s log=$LOG_FILE"
 
-HOME="$HOME_DIR" godot --headless \
+nohup env HOME="$HOME_DIR" "$GODOT_BIN" --headless \
 	--path "$PROJECT_PATH" \
-	--scene "$SCENE" -- --autorun >"$LOG_FILE" 2>&1 &
+	--scene "$SCENE" -- --autorun >"$LOG_FILE" 2>&1 </dev/null &
 
 PID=$!
 
