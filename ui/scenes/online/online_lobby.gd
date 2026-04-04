@@ -717,6 +717,8 @@ func _ensure_account_settings_dialog() -> void:
 		_account_settings_dialog.account_updated.connect(_on_account_settings_updated)
 	if _account_settings_dialog.has_signal("logout_requested") and not _account_settings_dialog.logout_requested.is_connected(_on_account_logout_requested):
 		_account_settings_dialog.logout_requested.connect(_on_account_logout_requested)
+	if _account_settings_dialog.has_signal("bind_requested") and not _account_settings_dialog.bind_requested.is_connected(_on_account_bind_requested):
+		_account_settings_dialog.bind_requested.connect(_on_account_bind_requested)
 
 func _on_auth_completed(_result: Dictionary) -> void:
 	_editing_display_name = false
@@ -740,6 +742,13 @@ func _on_account_logout_requested() -> void:
 	_refresh_player_name_edit_state()
 	_refresh_ui()
 
+
+func _on_account_bind_requested() -> void:
+	_ensure_auth_dialog()
+	if _auth_dialog != null and is_instance_valid(_auth_dialog) and _auth_dialog.has_method("open_for_bind"):
+		_auth_dialog.call("open_for_bind")
+
+
 func _on_account_pressed() -> void:
 	if OS.has_feature("headless"):
 		return
@@ -748,19 +757,14 @@ func _on_account_pressed() -> void:
 		if _auth_dialog != null and is_instance_valid(_auth_dialog):
 			_auth_dialog.call("open")
 		return
-	if _auth_dialog == null or not is_instance_valid(_auth_dialog):
+	# 统一打开账号详情；游客在详情中升级绑定，正式账号可修改邮箱/密码与切换账号。
+	_ensure_account_settings_dialog()
+	if _account_settings_dialog == null or not is_instance_valid(_account_settings_dialog):
 		return
-	# Guest 默认走“绑定邮箱”升级；正式账号打开账号设置。
-	if PlatformSession.is_guest and _auth_dialog.has_method("open_for_bind"):
-		_auth_dialog.call("open_for_bind")
-	else:
-		_ensure_account_settings_dialog()
-		if _account_settings_dialog == null or not is_instance_valid(_account_settings_dialog):
-			return
-		var can_logout := (NetClient == null or not NetClient.is_online_client_connected()) and _get_current_room_code().is_empty()
-		var logout_hint := "请先离开房间后再退出登录。"
-		if _account_settings_dialog.has_method("open_for_account"):
-			_account_settings_dialog.call("open_for_account", can_logout, logout_hint)
+	var can_logout := (NetClient == null or not NetClient.is_online_client_connected()) and _get_current_room_code().is_empty()
+	var logout_hint := "请先离开房间后再退出登录。"
+	if _account_settings_dialog.has_method("open_for_account"):
+		_account_settings_dialog.call("open_for_account", can_logout, logout_hint)
 
 func _platform_set_base_url_from_ui() -> void:
 	_apply_selected_server_to_platform_api()

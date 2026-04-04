@@ -1,9 +1,11 @@
 # 账号设置对话框
-# 正式账号：修改邮箱、修改密码、退出登录
+# 游客账号：查看详情、绑定邮箱
+# 正式账号：查看详情、修改邮箱、修改密码、退出登录
 extends ModalDialogBase
 
 signal account_updated
 signal logout_requested
+signal bind_requested
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
@@ -11,14 +13,20 @@ var _allow_logout: bool = true
 var _logout_hint: String = ""
 var _title_label: Label
 var _account_summary_label: Label
+var _bind_section: VBoxContainer
+var _bind_hint_label: Label
+var _bind_btn: Button
+var _email_section: VBoxContainer
 var _email_edit: LineEdit
 var _email_password_edit: LineEdit
 var _email_submit_btn: Button
+var _password_section: VBoxContainer
 var _password_old_edit: LineEdit
 var _password_new_edit: LineEdit
 var _password_confirm_edit: LineEdit
 var _password_submit_btn: Button
 var _status_label: Label
+var _logout_section: VBoxContainer
 var _logout_hint_label: Label
 var _logout_btn: Button
 var _close_btn: Button
@@ -95,9 +103,17 @@ func _build_ui() -> void:
 	UiStylesClass.apply_label_dark(_account_summary_label)
 	root.add_child(_account_summary_label)
 
-	root.add_child(_build_email_section())
-	root.add_child(_build_password_section())
-	root.add_child(_build_logout_section())
+	_bind_section = _build_bind_section()
+	root.add_child(_bind_section)
+
+	_email_section = _build_email_section()
+	root.add_child(_email_section)
+
+	_password_section = _build_password_section()
+	root.add_child(_password_section)
+
+	_logout_section = _build_logout_section()
+	root.add_child(_logout_section)
 
 	_status_label = Label.new()
 	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD
@@ -118,6 +134,30 @@ func _build_ui() -> void:
 	UiStylesClass.apply_button_secondary(_close_btn)
 	_close_btn.pressed.connect(_on_close_pressed)
 	button_row.add_child(_close_btn)
+
+
+func _build_bind_section() -> VBoxContainer:
+	var section := VBoxContainer.new()
+	section.add_theme_constant_override("separation", 8)
+
+	var title := Label.new()
+	title.text = "绑定邮箱"
+	UiStylesClass.apply_label_dark(title)
+	section.add_child(title)
+
+	_bind_hint_label = Label.new()
+	_bind_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_bind_hint_label.text = "绑定邮箱后可使用邮箱登录，游戏数据将保留。"
+	UiStylesClass.apply_label_hint_dark(_bind_hint_label)
+	section.add_child(_bind_hint_label)
+
+	_bind_btn = Button.new()
+	_bind_btn.text = "绑定邮箱"
+	UiStylesClass.apply_button_primary(_bind_btn)
+	_bind_btn.pressed.connect(_on_bind_pressed)
+	section.add_child(_bind_btn)
+
+	return section
 
 
 func _build_email_section() -> Control:
@@ -216,26 +256,41 @@ func _reset_view_state() -> void:
 	_refresh_account_summary()
 	_status_label.visible = false
 	_status_label.text = ""
+	var is_guest_account := PlatformSession != null and bool(PlatformSession.is_guest)
+	_bind_section.visible = is_guest_account
+	_email_section.visible = not is_guest_account
+	_password_section.visible = not is_guest_account
+	_logout_section.visible = not is_guest_account
 	_email_edit.text = str(PlatformSession.email).strip_edges()
 	_email_password_edit.text = ""
 	_password_old_edit.text = ""
 	_password_new_edit.text = ""
 	_password_confirm_edit.text = ""
-	_logout_btn.disabled = not _allow_logout
-	if _allow_logout:
-		_logout_hint_label.text = "退出后可重新登录其他账号。"
-	else:
-		_logout_hint_label.text = _logout_hint if not _logout_hint.is_empty() else "请先离开房间后再退出登录。"
+	if not is_guest_account:
+		_logout_btn.disabled = not _allow_logout
+		if _allow_logout:
+			_logout_hint_label.text = "退出后可重新登录其他账号。"
+		else:
+			_logout_hint_label.text = _logout_hint if not _logout_hint.is_empty() else "请先离开房间后再退出登录。"
 
 
 func _refresh_account_summary() -> void:
+	var display_name_text := str(PlatformSession.display_name).strip_edges()
+	if display_name_text.is_empty():
+		display_name_text = "-"
+	var user_id_text := str(PlatformSession.user_id).strip_edges()
+	if user_id_text.is_empty():
+		user_id_text = "-"
 	var email_text := str(PlatformSession.email).strip_edges()
 	if email_text.is_empty():
 		email_text = "未绑定"
-	_account_summary_label.text = "当前昵称：%s\n账号类型：正式\n当前邮箱：%s\n邮箱状态：%s" % [
-		str(PlatformSession.display_name).strip_edges(),
+	_account_summary_label.text = "当前昵称：%s\n用户 ID：%s\n账号类型：%s\n当前邮箱：%s\n邮箱状态：%s\n注册时间：%s" % [
+		display_name_text,
+		user_id_text,
+		"游客" if PlatformSession != null and bool(PlatformSession.is_guest) else "正式",
 		email_text,
 		_get_email_status_text(),
+		_get_created_at_text(),
 	]
 
 
@@ -246,7 +301,17 @@ func _get_email_status_text() -> String:
 	return "已绑定"
 
 
+func _get_created_at_text() -> String:
+	if PlatformSession == null:
+		return "未知"
+	var created_at_text := str(PlatformSession.created_at).strip_edges()
+	if created_at_text.is_empty():
+		return "未知"
+	return created_at_text.replace("T", " ")
+
+
 func _set_busy(busy: bool) -> void:
+	_bind_btn.disabled = busy
 	_email_edit.editable = not busy
 	_email_password_edit.editable = not busy
 	_password_old_edit.editable = not busy
@@ -265,6 +330,11 @@ func _show_status(text: String, is_error: bool = false) -> void:
 		UiStylesClass.apply_label_error(_status_label)
 	else:
 		UiStylesClass.apply_label_hint_dark(_status_label)
+
+
+func _on_bind_pressed() -> void:
+	close()
+	bind_requested.emit()
 
 
 func _on_update_email_pressed() -> void:
