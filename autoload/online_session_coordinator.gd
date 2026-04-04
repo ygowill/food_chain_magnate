@@ -504,8 +504,6 @@ func _default_ensure_session() -> Result:
 		return Result.failure("PlatformSession autoload missing")
 	if PlatformApi == null:
 		return Result.failure("PlatformApi autoload missing")
-	if PlatformSession.is_logged_in:
-		return Result.success()
 	if NetContext != null and NetContext.has_method("get_online_resume_platform_base_url"):
 		var base_url := NetContext.get_online_resume_platform_base_url()
 		if not str(base_url).is_empty():

@@ -651,16 +651,51 @@ func _update_account_status() -> void:
 		return
 	if PlatformSession == null:
 		account_status_label.text = "账号：-"
+		if account_button != null and is_instance_valid(account_button):
+			account_button.text = "登录"
 		return
 	if not PlatformSession.is_logged_in:
 		account_status_label.text = "账号：未登录"
+		if account_button != null and is_instance_valid(account_button):
+			account_button.text = "登录"
 		return
-	var uid := str(PlatformSession.user_id).strip_edges()
-	var short_uid := uid.substr(0, 8) if uid.length() >= 8 else uid
+	var account_name := _get_platform_account_display_name()
+	var account_type := "游客" if PlatformSession.is_guest else "正式"
+	var email_status := _get_platform_email_status_text()
+	var status_line := "状态：%s，%s" % [account_type, email_status]
+	if PlatformSession.is_admin:
+		status_line += "，管理员"
+	account_status_label.text = "账号：%s\n%s" % [account_name, status_line]
+	if account_button != null and is_instance_valid(account_button):
+		if PlatformSession.is_guest:
+			account_button.text = "绑定邮箱"
+		else:
+			account_button.text = "切换账号"
+
+
+func _get_platform_account_display_name() -> String:
+	if PlatformSession == null:
+		return "-"
+	var display_name := str(PlatformSession.display_name).strip_edges()
+	if not display_name.is_empty():
+		return display_name
+	var suffix := _extract_name_suffix(str(PlatformSession.user_id))
 	if PlatformSession.is_guest:
-		account_status_label.text = "账号：游客 %s" % short_uid
-	else:
-		account_status_label.text = "账号：已登录 %s" % short_uid
+		return "%s%s" % [_GUEST_NAME_PREFIX, suffix]
+	return "%s%s" % [_ACCOUNT_NAME_PREFIX, suffix]
+
+
+func _get_platform_email_status_text() -> String:
+	if PlatformSession == null:
+		return "邮箱未知"
+	var bound_email := str(PlatformSession.email).strip_edges()
+	if bound_email.is_empty():
+		return "邮箱未绑定"
+	if PlatformSession.email_verification_pending:
+		return "邮箱待验证：%s" % bound_email
+	if PlatformSession.email_verified:
+		return "邮箱已绑定：%s" % bound_email
+	return "邮箱已绑定：%s" % bound_email
 
 func _ensure_auth_dialog() -> void:
 	if _auth_dialog != null and is_instance_valid(_auth_dialog):
@@ -1250,7 +1285,7 @@ func _resolve_bound_player_name(fallback_name: String = "玩家") -> String:
 	if PlatformSession == null or not PlatformSession.is_logged_in:
 		return fallback
 	var display_name := str(PlatformSession.display_name).strip_edges()
-	if not PlatformSession.is_guest and not display_name.is_empty():
+	if not display_name.is_empty():
 		return display_name
 	var suffix := _extract_name_suffix(str(PlatformSession.user_id))
 	if PlatformSession.is_guest:

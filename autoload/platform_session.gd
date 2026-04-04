@@ -21,6 +21,11 @@ var session_id: String = ""
 var is_guest: bool = true
 var display_name: String = ""
 var device_id: String = ""
+var email: String = ""
+var email_verified: bool = false
+var email_verification_pending: bool = false
+var is_admin: bool = false
+var created_at: String = ""
 
 var _device_auth_cancelled: bool = false
 var _is_web: bool = false
@@ -104,38 +109,46 @@ func _ensure_local_display_name() -> void:
 
 func auto_guest_login() -> Dictionary:
 	if is_logged_in:
-		_ensure_local_display_name()
-		return {"ok": {
-			"user_id": user_id,
-			"session_id": session_id,
-			"display_name": display_name,
-			"is_guest": is_guest,
-		}}
+		var profile_result: Dictionary = await refresh_account_profile()
+		if profile_result.has("ok"):
+			return profile_result
+		var was_guest := is_guest
+		var http_status := _extract_http_status(profile_result)
+		if http_status != 401:
+			return profile_result
+		_clear_auth_state(false)
+		if not was_guest:
+			return {"error": "登录已失效，请重新登录账号。"}
 	var result: Dictionary = await PlatformApi.guest_login(device_id)
-	if result.has("ok"):
-		_apply_auth(result["ok"], true)
-	return result
+	return await _apply_auth_and_refresh(result, true)
 
 
 func login(email: String, password: String) -> Dictionary:
 	var result: Dictionary = await PlatformApi.login(email, password)
-	if _should_apply_auth_result(result):
-		_apply_auth(result["ok"], false)
-	return result
+	return await _apply_auth_and_refresh(result, false)
 
 
 func register(email: String, password: String, nickname: String = "") -> Dictionary:
 	var result: Dictionary = await PlatformApi.register(email, password, nickname)
-	if _should_apply_auth_result(result):
-		_apply_auth(result["ok"], false)
-	return result
+	return await _apply_auth_and_refresh(result, false)
 
 
 func bind_email(email: String, password: String) -> Dictionary:
 	var result: Dictionary = await PlatformApi.bind(session_id, "email", email, password)
-	if _should_apply_auth_result(result):
-		_apply_auth(result["ok"], false)
-	return result
+	return await _apply_auth_and_refresh(result, false)
+
+
+func refresh_account_profile() -> Dictionary:
+	if session_id.is_empty():
+		return {"error": "missing session"}
+	var result: Dictionary = await PlatformApi.get_me(session_id)
+	if not result.has("ok"):
+		return result
+	var ok_val = result.get("ok", null)
+	if not (ok_val is Dictionary):
+		return {"error": "invalid profile response"}
+	_apply_account_profile(Dictionary(ok_val))
+	return {"ok": _build_session_snapshot()}
 
 
 func update_display_name(new_name: String) -> Dictionary:
@@ -157,12 +170,7 @@ func update_display_name(new_name: String) -> Dictionary:
 func logout() -> void:
 	if session_id != "":
 		await PlatformApi.logout(session_id)
-	user_id = ""
-	session_id = ""
-	is_guest = true
-	display_name = ""
-	_save()
-	session_changed.emit()
+	_clear_auth_state()
 
 
 func start_device_auth() -> Dictionary:
@@ -188,8 +196,10 @@ func start_device_auth() -> Dictionary:
 			break
 		var poll: Dictionary = await PlatformApi.poll_device_token(dc, device_id)
 		if poll.has("ok"):
-			_apply_auth(poll["ok"], false)
+			var applied: Dictionary = await _apply_auth_and_refresh(poll, false)
 			device_auth_status.emit("success")
+			if applied.has("ok"):
+				return {"ok": applied["ok"], "user_code": user_code}
 			return {"ok": poll["ok"], "user_code": user_code}
 		var err: Dictionary = poll.get("error", {})
 		var http_status: int = int(err.get("_http_status", 0))
@@ -224,12 +234,87 @@ func _apply_auth(data: Dictionary, guest: bool) -> void:
 	session_id = str(data.get("session_id", ""))
 	is_guest = bool(data.get("is_guest", guest))
 	display_name = str(data.get("display_name", "")).strip_edges()
+	_clear_account_metadata()
 	_ensure_local_display_name()
 	_save()
-	# 同步到 NetContext（不覆盖昵称：name 仍由用户/UI 控制）
-	if NetContext != null:
-		NetContext.player_profile["user_id"] = user_id
+	_sync_net_context_user_id()
 	session_changed.emit()
+
+
+func _apply_account_profile(data: Dictionary) -> void:
+	user_id = str(data.get("user_id", user_id)).strip_edges()
+	display_name = str(data.get("display_name", display_name)).strip_edges()
+	is_guest = bool(data.get("is_guest", is_guest))
+	email = str(data.get("email", "")).strip_edges()
+	email_verified = bool(data.get("email_verified", false))
+	email_verification_pending = bool(data.get("email_verification_pending", false))
+	is_admin = bool(data.get("is_admin", false))
+	created_at = str(data.get("created_at", "")).strip_edges()
+	_ensure_local_display_name()
+	_save()
+	_sync_net_context_user_id()
+	session_changed.emit()
+
+
+func _apply_auth_and_refresh(result: Dictionary, guest: bool) -> Dictionary:
+	if not _should_apply_auth_result(result):
+		return result
+	_apply_auth(result["ok"], guest)
+	var profile_result: Dictionary = await refresh_account_profile()
+	if profile_result.has("ok"):
+		return profile_result
+	return result
+
+
+func _build_session_snapshot() -> Dictionary:
+	return {
+		"user_id": user_id,
+		"session_id": session_id,
+		"display_name": display_name,
+		"is_guest": is_guest,
+		"email": email,
+		"email_verified": email_verified,
+		"email_verification_pending": email_verification_pending,
+		"is_admin": is_admin,
+		"created_at": created_at,
+	}
+
+
+func _clear_auth_state(emit_signal: bool = true) -> void:
+	user_id = ""
+	session_id = ""
+	is_guest = true
+	display_name = ""
+	_clear_account_metadata()
+	_save()
+	_sync_net_context_user_id()
+	if emit_signal:
+		session_changed.emit()
+
+
+func _clear_account_metadata() -> void:
+	email = ""
+	email_verified = false
+	email_verification_pending = false
+	is_admin = false
+	created_at = ""
+
+
+func _sync_net_context_user_id() -> void:
+	if NetContext == null or not (NetContext.player_profile is Dictionary):
+		return
+	if user_id.is_empty():
+		NetContext.player_profile.erase("user_id")
+		return
+	NetContext.player_profile["user_id"] = user_id
+
+
+func _extract_http_status(result: Dictionary) -> int:
+	var err_val = result.get("error", null)
+	if err_val is Dictionary:
+		var err: Dictionary = Dictionary(err_val)
+		return int(err.get("_http_status", 0))
+	return 0
 
 
 func _generate_device_id() -> String:
@@ -249,6 +334,11 @@ func _save() -> void:
 	cfg.set_value("session", "is_guest", is_guest)
 	cfg.set_value("session", "display_name", display_name)
 	cfg.set_value("session", "device_id", device_id)
+	cfg.set_value("session", "email", email)
+	cfg.set_value("session", "email_verified", email_verified)
+	cfg.set_value("session", "email_verification_pending", email_verification_pending)
+	cfg.set_value("session", "is_admin", is_admin)
+	cfg.set_value("session", "created_at", created_at)
 	cfg.save(_save_path)
 
 
@@ -264,6 +354,16 @@ func _load() -> void:
 	is_guest = cfg.get_value("session", "is_guest", true)
 	display_name = cfg.get_value("session", "display_name", "")
 	device_id = cfg.get_value("session", "device_id", "")
+	email = cfg.get_value("session", "email", "")
+	email_verified = cfg.get_value("session", "email_verified", false)
+	email_verification_pending = cfg.get_value("session", "email_verification_pending", false)
+	is_admin = cfg.get_value("session", "is_admin", false)
+	created_at = cfg.get_value("session", "created_at", "")
+	if session_id.is_empty():
+		user_id = ""
+		is_guest = true
+		display_name = ""
+		_clear_account_metadata()
 
 
 func _save_web() -> void:
@@ -272,6 +372,11 @@ func _save_web() -> void:
 	JavaScriptBridge.eval("localStorage.setItem('fcm_is_guest', %s)" % JSON.stringify(str(is_guest).to_lower()))
 	JavaScriptBridge.eval("localStorage.setItem('fcm_display_name', %s)" % JSON.stringify(display_name))
 	JavaScriptBridge.eval("localStorage.setItem('fcm_device_id', %s)" % JSON.stringify(device_id))
+	JavaScriptBridge.eval("localStorage.setItem('fcm_email', %s)" % JSON.stringify(email))
+	JavaScriptBridge.eval("localStorage.setItem('fcm_email_verified', %s)" % JSON.stringify(str(email_verified).to_lower()))
+	JavaScriptBridge.eval("localStorage.setItem('fcm_email_verification_pending', %s)" % JSON.stringify(str(email_verification_pending).to_lower()))
+	JavaScriptBridge.eval("localStorage.setItem('fcm_is_admin', %s)" % JSON.stringify(str(is_admin).to_lower()))
+	JavaScriptBridge.eval("localStorage.setItem('fcm_created_at', %s)" % JSON.stringify(created_at))
 
 
 func _load_web() -> void:
@@ -280,8 +385,23 @@ func _load_web() -> void:
 	var guest_str = JavaScriptBridge.eval("localStorage.getItem('fcm_is_guest') || 'true'")
 	var dn = JavaScriptBridge.eval("localStorage.getItem('fcm_display_name') || ''")
 	var did = JavaScriptBridge.eval("localStorage.getItem('fcm_device_id') || ''")
+	var email_val = JavaScriptBridge.eval("localStorage.getItem('fcm_email') || ''")
+	var email_verified_val = JavaScriptBridge.eval("localStorage.getItem('fcm_email_verified') || 'false'")
+	var email_pending_val = JavaScriptBridge.eval("localStorage.getItem('fcm_email_verification_pending') || 'false'")
+	var is_admin_val = JavaScriptBridge.eval("localStorage.getItem('fcm_is_admin') || 'false'")
+	var created_at_val = JavaScriptBridge.eval("localStorage.getItem('fcm_created_at') || ''")
 	session_id = str(sid) if sid != null else ""
 	user_id = str(uid) if uid != null else ""
 	is_guest = str(guest_str) != "false"
 	display_name = str(dn) if dn != null else ""
 	device_id = str(did) if did != null else ""
+	email = str(email_val) if email_val != null else ""
+	email_verified = str(email_verified_val) == "true"
+	email_verification_pending = str(email_pending_val) == "true"
+	is_admin = str(is_admin_val) == "true"
+	created_at = str(created_at_val) if created_at_val != null else ""
+	if session_id.is_empty():
+		user_id = ""
+		is_guest = true
+		display_name = ""
+		_clear_account_metadata()

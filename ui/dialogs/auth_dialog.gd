@@ -267,18 +267,52 @@ func _apply_tab_bar_style() -> void:
 	_tab_bar.add_theme_color_override("font_hovered_color", UiStylesClass.COLOR_TEXT_PRIMARY)
 
 
+func open() -> void:
+	_prepare_standard_open()
+	super.open()
+
+
 func open_for_bind() -> void:
+	_prepare_bind_open()
+	super.open()
+
+
+func _prepare_standard_open() -> void:
+	_tab = Tab.LOGIN
+	_tab_bar.visible = true
+	if _tab_bar.current_tab != int(Tab.LOGIN):
+		_tab_bar.current_tab = int(Tab.LOGIN)
+	_title_label.text = "账户"
+	_confirm_group.visible = false
+	_reset_view_state()
+
+
+func _prepare_bind_open() -> void:
 	_tab = Tab.BIND
 	_tab_bar.visible = false
 	_title_label.text = "绑定邮箱"
-	_submit_btn.text = "绑定"
 	_confirm_group.visible = true
+	_reset_view_state()
+
+
+func _reset_view_state() -> void:
+	_device_auth_group.visible = false
+	_form_group.visible = true
+	if OS.get_name() != "Web":
+		_browser_btn.visible = true
+	_submit_btn.disabled = false
+	_cancel_btn.disabled = false
+	_email_edit.editable = true
+	_password_edit.editable = true
+	_confirm_edit.editable = true
+	_submit_btn.text = _get_submit_text()
 	_clear_fields()
-	open()
 
 
 func _on_tab_changed(idx: int) -> void:
 	_tab = idx as Tab
+	_title_label.text = "账户"
+	_tab_bar.visible = true
 	if _tab == Tab.REGISTER:
 		_submit_btn.text = "注册"
 		_confirm_group.visible = true

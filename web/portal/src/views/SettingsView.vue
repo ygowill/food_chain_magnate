@@ -10,6 +10,7 @@
         <el-descriptions-item label="昵称">{{ auth.user.display_name || '-' }}</el-descriptions-item>
         <el-descriptions-item label="用户 ID">{{ auth.user.user_id }}</el-descriptions-item>
         <el-descriptions-item label="邮箱">{{ auth.user.email || '未绑定' }}</el-descriptions-item>
+        <el-descriptions-item label="邮箱状态">{{ emailStatusText }}</el-descriptions-item>
         <el-descriptions-item label="账号类型">{{ auth.user.is_guest ? '游客' : '正式' }}</el-descriptions-item>
         <el-descriptions-item label="注册时间">
           {{ new Date(auth.user.created_at).toLocaleString('zh-CN') }}
@@ -94,7 +95,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import {
   changePassword,
@@ -127,6 +128,22 @@ const displayNameInput = ref('')
 const displayNameError = ref('')
 const displayNameSuccess = ref(false)
 const displayNameLoading = ref(false)
+const emailStatusText = computed(() => {
+  const currentUser = auth.user
+  if (!currentUser) {
+    return '-'
+  }
+  if (!currentUser.email) {
+    return '未绑定'
+  }
+  if (currentUser.email_verification_pending) {
+    return '待验证'
+  }
+  if (currentUser.email_verified) {
+    return '已验证'
+  }
+  return '已绑定'
+})
 
 onMounted(async () => {
   await auth.fetchUser()

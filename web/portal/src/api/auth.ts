@@ -46,6 +46,10 @@ export function guestLogin(deviceId: string) {
   return client.post<AuthResponse>('/auth/guest', { device_id: deviceId })
 }
 
+export function logout(sessionId: string) {
+  return client.post('/auth/logout', { session_id: sessionId })
+}
+
 export function bindEmail(sessionId: string, email: string, password: string) {
   return client.post<AuthResponse>('/auth/bind', {
     session_id: sessionId,

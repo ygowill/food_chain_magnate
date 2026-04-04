@@ -20,6 +20,7 @@ var _show_confirm: Callable = Callable()
 var _goto_online_lobby: Callable = Callable()
 var _show_loading: Callable = Callable()
 var _hide_loading: Callable = Callable()
+var _ensure_platform_session: Callable = Callable()
 var _resume_room_request: Callable = Callable()
 var _connect_to_server: Callable = Callable()
 var _shutdown_net: Callable = Callable()
@@ -53,7 +54,8 @@ func _init(
 	resume_room_request: Callable,
 	connect_to_server: Callable,
 	shutdown_net: Callable,
-	request_resync: Callable
+	request_resync: Callable,
+	ensure_platform_session: Callable = Callable()
 ) -> void:
 	_host = host
 	_game_log_panel = game_log_panel
@@ -65,6 +67,7 @@ func _init(
 	_goto_online_lobby = goto_online_lobby
 	_show_loading = show_loading
 	_hide_loading = hide_loading
+	_ensure_platform_session = ensure_platform_session
 	_resume_room_request = resume_room_request
 	_connect_to_server = connect_to_server
 	_shutdown_net = shutdown_net
@@ -789,8 +792,9 @@ func _run_online_reconnect_flow(ticket: int, initial_reason: String) -> void:
 		return
 
 func _request_resume_ticket() -> Result:
-	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("request_resume_ticket"):
+	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("request_resume_ticket") and _ensure_platform_session.is_valid():
 		return await OnlineSessionCoordinator.request_resume_ticket({
+			"ensure_session": _ensure_platform_session,
 			"resume_room": _resume_room_request,
 		})
 	if NetContext == null or not NetContext.has_method("get_online_resume_room_code"):

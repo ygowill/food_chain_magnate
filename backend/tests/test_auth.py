@@ -147,6 +147,29 @@ async def test_bind_guest_to_email_upgrades_account_immediately(client: AsyncCli
 
 
 @pytest.mark.asyncio
+async def test_guest_login_after_bind_creates_new_guest_user(client: AsyncClient):
+    guest = await client.post("/v1/auth/guest", json={"device_id": "bind-reuse-device"})
+    sid = guest.json()["session_id"]
+    original_user_id = guest.json()["user_id"]
+
+    bind = await client.post("/v1/auth/bind", json={
+        "session_id": sid,
+        "provider": "email",
+        "email": "bind-reuse@b.com",
+        "password": "pw",
+    })
+    assert bind.status_code == 200
+    assert bind.json()["user_id"] == original_user_id
+    assert bind.json()["is_guest"] is False
+
+    relogin = await client.post("/v1/auth/guest", json={"device_id": "bind-reuse-device"})
+    assert relogin.status_code == 200
+    assert relogin.json()["user_id"] != original_user_id
+    assert relogin.json()["is_guest"] is True
+    assert str(relogin.json().get("display_name", "")).startswith("游客#")
+
+
+@pytest.mark.asyncio
 async def test_bind_unsupported_provider_rejected(client: AsyncClient):
     guest = await client.post("/v1/auth/guest", json={"device_id": "bind-bad-provider"})
     resp = await client.post("/v1/auth/bind", json={

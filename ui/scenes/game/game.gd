@@ -524,7 +524,8 @@ func _ensure_online_resync_controller() -> void:
 		Callable(self, "_request_online_resume_room"),
 		Callable(self, "_connect_online_resume_url"),
 		Callable(self, "_shutdown_online_net"),
-		Callable(self, "_request_online_resync_from_net")
+		Callable(self, "_request_online_resync_from_net"),
+		Callable(self, "_ensure_platform_session_for_startup_resume")
 	)
 	_online_resync_controller.initialize()
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_online_resync_controller"):
@@ -537,8 +538,6 @@ func _ensure_platform_session_for_startup_resume() -> Result:
 		return Result.failure("PlatformSession autoload missing")
 	if PlatformApi == null:
 		return Result.failure("PlatformApi autoload missing")
-	if PlatformSession.is_logged_in:
-		return Result.success()
 	if NetContext != null and NetContext.has_method("get_online_resume_platform_base_url"):
 		var base_url := NetContext.get_online_resume_platform_base_url()
 		if not str(base_url).is_empty():

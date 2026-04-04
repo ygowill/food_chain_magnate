@@ -225,6 +225,17 @@ async def _get_email_identity_by_user(db: AsyncSession, user_id: str) -> Optiona
     )).scalar_one_or_none()
 
 
+async def _delete_guest_identities_by_user(db: AsyncSession, user_id: str) -> None:
+    identities = (await db.execute(
+        select(AuthIdentity).where(
+            AuthIdentity.user_id == user_id,
+            AuthIdentity.provider == "guest",
+        )
+    )).scalars().all()
+    for identity in identities:
+        await db.delete(identity)
+
+
 async def _ensure_configured_admin_account(db: AsyncSession, email: str) -> tuple[Optional[User], Optional[AuthIdentity]]:
     normalized_email = _normalize_email(email)
     configured_email = _configured_admin_email()
@@ -488,10 +499,12 @@ async def bind(req: BindRequest, db: AsyncSession = Depends(get_db)):
         identity.provider_user_id = email
         identity.verified = True
     identity.credential_hash = _hash_password(req.password)
+    await _delete_guest_identities_by_user(db, sess.user_id)
 
     user = await _get_user_by_id(db, sess.user_id)
     if user is None:
         raise HTTPException(404, "user not found")
+    await db.flush()
     payload = await _build_auth_payload(db, user, sess.session_id)
     await db.commit()
     return AuthResponse(**payload)
