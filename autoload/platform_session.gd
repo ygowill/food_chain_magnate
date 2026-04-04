@@ -12,6 +12,7 @@ const _MAX_PROFILE_ID_LEN := 24
 const _GUEST_NAME_PREFIX := "游客#"
 const _ACCOUNT_NAME_PREFIX := "账号#"
 const _DEFAULT_NAME_SUFFIX := "0000"
+const _ONLINE_RESUME_WEB_STORAGE_KEY := "fcm_online_resume_state"
 
 var profile_id: String = ""
 var _save_path: String = _SAVE_PATH_DEFAULT
@@ -29,6 +30,7 @@ var created_at: String = ""
 
 var _device_auth_cancelled: bool = false
 var _is_web: bool = false
+var _web_storage_callback = null
 
 var is_logged_in: bool:
 	get: return session_id != ""
@@ -44,6 +46,15 @@ func _ready() -> void:
 	if device_id.is_empty():
 		device_id = _generate_device_id()
 		_save()
+	if _is_web:
+		_install_web_storage_sync()
+
+
+func _notification(what: int) -> void:
+	if not _is_web:
+		return
+	if what == Node.NOTIFICATION_APPLICATION_FOCUS_IN:
+		call_deferred("_sync_from_web_storage_if_changed")
 
 func _get_profile_id() -> String:
 	# 同机多开：允许为不同客户端指定不同 profile，以避免共享 user:// 下的 session/device_id。
@@ -377,6 +388,51 @@ func _save_web() -> void:
 	JavaScriptBridge.eval("localStorage.setItem('fcm_email_verification_pending', %s)" % JSON.stringify(str(email_verification_pending).to_lower()))
 	JavaScriptBridge.eval("localStorage.setItem('fcm_is_admin', %s)" % JSON.stringify(str(is_admin).to_lower()))
 	JavaScriptBridge.eval("localStorage.setItem('fcm_created_at', %s)" % JSON.stringify(created_at))
+
+
+func _install_web_storage_sync() -> void:
+	if not _is_web or _web_storage_callback != null:
+		return
+	_web_storage_callback = JavaScriptBridge.create_callback(_on_web_storage_changed)
+	var window = JavaScriptBridge.get_interface("window")
+	if window == null:
+		return
+	window.__fcm_platform_session_storage_cb = _web_storage_callback
+	JavaScriptBridge.eval("""
+(() => {
+	if (window.__fcm_platform_session_storage_listener_installed) return true;
+	const cb = window.__fcm_platform_session_storage_cb;
+	if (!cb) return false;
+	window.addEventListener("storage", (event) => {
+		const key = String((event && event.key) || "");
+		if (key !== "" && !key.startsWith("fcm_")) return;
+		cb(key);
+	});
+	window.__fcm_platform_session_storage_listener_installed = true;
+	return true;
+})()
+""")
+
+
+func _on_web_storage_changed(args: Array) -> void:
+	var key := str(args[0]) if args.size() > 0 else ""
+	if key == _ONLINE_RESUME_WEB_STORAGE_KEY:
+		return
+	call_deferred("_sync_from_web_storage_if_changed")
+
+
+func _sync_from_web_storage_if_changed() -> void:
+	if not _is_web:
+		return
+	var before := _build_session_snapshot()
+	_load_web()
+	var after := _build_session_snapshot()
+	if before == after:
+		return
+	if is_logged_in:
+		_ensure_local_display_name()
+	_sync_net_context_user_id()
+	session_changed.emit()
 
 
 func _load_web() -> void:

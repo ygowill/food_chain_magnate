@@ -18,6 +18,22 @@ const DEVICE_ID_KEY = 'fcm_device_id'
 const EMAIL_KEY = 'fcm_email'
 const EMAIL_VERIFIED_KEY = 'fcm_email_verified'
 const EMAIL_VERIFICATION_PENDING_KEY = 'fcm_email_verification_pending'
+const IS_ADMIN_KEY = 'fcm_is_admin'
+const CREATED_AT_KEY = 'fcm_created_at'
+
+const SHARED_AUTH_KEYS = new Set([
+  SESSION_KEY,
+  USER_ID_KEY,
+  IS_GUEST_KEY,
+  DISPLAY_NAME_KEY,
+  EMAIL_KEY,
+  EMAIL_VERIFIED_KEY,
+  EMAIL_VERIFICATION_PENDING_KEY,
+  IS_ADMIN_KEY,
+  CREATED_AT_KEY,
+])
+
+let browserSyncInstalled = false
 
 export const useAuthStore = defineStore('auth', () => {
   const sessionId = ref(localStorage.getItem(SESSION_KEY) || '')
@@ -41,10 +57,12 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem(DISPLAY_NAME_KEY, data.display_name || '')
   }
 
-  function syncStoredAccountDetails(data: Pick<MeResponse, 'email' | 'email_verified' | 'email_verification_pending'>) {
+  function syncStoredAccountDetails(data: Pick<MeResponse, 'email' | 'email_verified' | 'email_verification_pending' | 'is_admin' | 'created_at'>) {
     localStorage.setItem(EMAIL_KEY, data.email || '')
     localStorage.setItem(EMAIL_VERIFIED_KEY, String(!!data.email_verified))
     localStorage.setItem(EMAIL_VERIFICATION_PENDING_KEY, String(!!data.email_verification_pending))
+    localStorage.setItem(IS_ADMIN_KEY, String(!!data.is_admin))
+    localStorage.setItem(CREATED_AT_KEY, data.created_at || '')
   }
 
   function clearStoredIdentity() {
@@ -54,6 +72,8 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem(EMAIL_KEY)
     localStorage.removeItem(EMAIL_VERIFIED_KEY)
     localStorage.removeItem(EMAIL_VERIFICATION_PENDING_KEY)
+    localStorage.removeItem(IS_ADMIN_KEY)
+    localStorage.removeItem(CREATED_AT_KEY)
   }
 
   function clearAuthState() {
@@ -79,6 +99,47 @@ export const useAuthStore = defineStore('auth', () => {
       email: null,
       email_verified: null,
       email_verification_pending: false,
+      is_admin: false,
+      created_at: '',
+    })
+  }
+
+  async function syncFromSharedStorage() {
+    const nextSessionId = localStorage.getItem(SESSION_KEY) || ''
+    if (!nextSessionId) {
+      clearAuthState()
+      return
+    }
+    if (nextSessionId !== sessionId.value) {
+      applySession(nextSessionId)
+    }
+    await fetchUser()
+  }
+
+  function installBrowserSync() {
+    if (browserSyncInstalled || typeof window === 'undefined') {
+      return
+    }
+    browserSyncInstalled = true
+
+    window.addEventListener('storage', (event) => {
+      if (event.storageArea !== localStorage) {
+        return
+      }
+      if (event.key && !SHARED_AUTH_KEYS.has(event.key)) {
+        return
+      }
+      void syncFromSharedStorage()
+    })
+
+    window.addEventListener('focus', () => {
+      void syncFromSharedStorage()
+    })
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        void syncFromSharedStorage()
+      }
     })
   }
 
@@ -128,6 +189,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
     clearAuthState()
   }
+
+  installBrowserSync()
 
   return {
     sessionId,
