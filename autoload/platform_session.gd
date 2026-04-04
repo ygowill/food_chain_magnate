@@ -116,7 +116,7 @@ func auto_guest_login() -> Dictionary:
 		var http_status := _extract_http_status(profile_result)
 		if http_status != 401:
 			return profile_result
-		_clear_auth_state(false)
+		_clear_auth_state(was_guest == false)
 		if not was_guest:
 			return {"error": "登录已失效，请重新登录账号。"}
 	var result: Dictionary = await PlatformApi.guest_login(device_id)
