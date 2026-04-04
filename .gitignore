@@ -2,12 +2,15 @@
 .godot/
 .godot_home/
 .tmp_home/
+.tmp_home*/
+.tmp_npm_cache/
 
 # Editor/local environment
 .history/
 .obsidian/
 .vscode/
 .venv/
+.playwright-cli/
 
 # Migration tool outputs / runtime artifacts
 tools/migration/out_legacy_json/
