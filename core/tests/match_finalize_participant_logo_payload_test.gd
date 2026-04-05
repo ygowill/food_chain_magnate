@@ -9,6 +9,7 @@ class _DummyRoom:
 	extends RefCounted
 
 	var _seat_profile_by_seat_index: Dictionary = {}
+	var _user_id_by_seat_index: Dictionary = {}
 
 
 class _DummyState:
@@ -18,6 +19,15 @@ class _DummyState:
 
 
 static func run() -> Result:
+	var r := _test_prefers_state_logo_over_seat_profile()
+	if not r.ok:
+		return r
+	r = _test_sparse_seat_indices_fall_back_to_player_order()
+	if not r.ok:
+		return r
+	return Result.success()
+
+static func _test_prefers_state_logo_over_seat_profile() -> Result:
 	var server = ServerLogicClass.new()
 	var room := _DummyRoom.new()
 	room._seat_profile_by_seat_index = {
@@ -45,4 +55,58 @@ static func run() -> Result:
 		return Result.failure("结算上报应使用 state.players 中的餐厅 Logo，实际: %s" % str(payload))
 	if str(payload.get("display_name", "")) != "Host":
 		return Result.failure("结算上报应保留玩家显示名，实际: %s" % str(payload))
+	return Result.success()
+
+static func _test_sparse_seat_indices_fall_back_to_player_order() -> Result:
+	var server = ServerLogicClass.new()
+	var room := _DummyRoom.new()
+	room._seat_profile_by_seat_index = {
+		1: {"name": "Seat1", "restaurant_logo_id": 0},
+		3: {"name": "Seat3", "restaurant_logo_id": 1},
+	}
+	room._user_id_by_seat_index = {
+		1: "u1",
+		3: "u3",
+	}
+
+	var state := _DummyState.new()
+	state.players = [
+		{
+			"cash": 12,
+			"forfeited": false,
+			"employees": ["ceo"],
+			"reserve_employees": ["trainer"],
+			"busy_marketers": [],
+			"restaurants": ["rest_a"],
+			"milestones": ["first_have_20"],
+			"inventory": {"burger": 1},
+		},
+		{
+			"cash": 18,
+			"forfeited": false,
+			"employees": ["brand_manager"],
+			"reserve_employees": [],
+			"busy_marketers": ["marketing_trainee"],
+			"restaurants": ["rest_b"],
+			"milestones": ["first_billboard"],
+			"inventory": {"lemonade": 2},
+		},
+	]
+
+	var participants: Array = server._build_finalize_participants(room, state, 0)
+	if participants.size() != 2:
+		return Result.failure("sparse seats fallback 应保留 2 名参与者，实际: %s" % str(participants))
+
+	var score_1: Variant = JSON.parse_string(str(Dictionary(participants[0]).get("score_json", "")))
+	var score_2: Variant = JSON.parse_string(str(Dictionary(participants[1]).get("score_json", "")))
+	if not (score_1 is Dictionary) or not (score_2 is Dictionary):
+		return Result.failure("score_json 解析失败: %s" % str(participants))
+	if not Array(Dictionary(score_1).get("employees", [])).has("ceo"):
+		return Result.failure("seat=1 应回退到 players[0]，实际: %s" % str(score_1))
+	if not Array(Dictionary(score_2).get("milestones", [])).has("first_billboard"):
+		return Result.failure("seat=3 应回退到 players[1]，实际: %s" % str(score_2))
+	if str(Dictionary(participants[0]).get("result", "")) != "win":
+		return Result.failure("seat=1 应映射为 winner_player_id=0 的获胜者，实际: %s" % str(participants[0]))
+	if str(Dictionary(participants[1]).get("result", "")) != "lose":
+		return Result.failure("seat=3 应映射为失败者，实际: %s" % str(participants[1]))
 	return Result.success()

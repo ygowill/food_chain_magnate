@@ -83,6 +83,7 @@ func dock_popup(panel: Control) -> bool:
 		if is_instance_valid(old_parent):
 			old_parent.remove_child(panel)
 		_right_panel_dock_host.add_child(panel)
+	_hide_other_visible_docked_panels(panel)
 
 	if panel.has_method("set_embedded_in_right_panel"):
 		panel.call("set_embedded_in_right_panel", true)
@@ -96,6 +97,18 @@ func dock_popup(panel: Control) -> bool:
 	panel.visible = true
 	sync_docked_view()
 	return true
+
+func _hide_other_visible_docked_panels(active_panel: Control) -> void:
+	if not is_instance_valid(_right_panel_dock_host):
+		return
+	for ch in _right_panel_dock_host.get_children():
+		if ch == active_panel:
+			continue
+		if not (ch is Control):
+			continue
+		var c: Control = ch
+		if c.visible:
+			c.visible = false
 
 func sync_docked_view() -> void:
 	var active := _get_active_docked_panel()
